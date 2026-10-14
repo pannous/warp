@@ -668,6 +668,18 @@ pub(crate) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 	}
 }
 
+/// A rewritten declaration and the items after it, as they were grouped
+fn followed(declared: Node, rest: &[Node], bracket: &Bracket, separator: &Separator) -> Node {
+	match rest {
+		[] => declared,
+		rest => Node::List(
+			[vec![declared], rest.to_vec()].concat(),
+			bracket.clone(),
+			separator.clone(),
+		),
+	}
+}
+
 /// `xs:float list = [0.5]` (parsed as the items `xs:float`, `list = [0.5]`) is `xs:"list of float" = [0.5]`
 fn postfix_list_declaration(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
 	let [declaration, list, rest @ ..] = items else {
@@ -693,14 +705,7 @@ fn postfix_list_declaration(items: &[Node], bracket: &Bracket, separator: &Separ
 		}
 		_ => return None,
 	};
-	Some(match rest {
-		[] => declared,
-		rest => Node::List(
-			[vec![declared], rest.to_vec()].concat(),
-			bracket.clone(),
-			separator.clone(),
-		),
-	})
+	Some(followed(declared, rest, bracket, separator))
 }
 
 /// `x:list of int=[1 2]` (parsed as the items `x:list`, `of`, `int=[1 2]`) is `x:"list of int"=[1 2]`, the same type as `x:list<int>`;
@@ -745,14 +750,7 @@ pub(crate) fn of_type_declaration(items: &[Node], bracket: &Bracket, separator: 
 		Some((op, value)) => Node::Key(Box::new(typed_name), op, value),
 		None => typed_name,
 	};
-	match &items[next..] {
-		[] => Some(declared),
-		rest => Some(Node::List(
-			[vec![declared], rest.to_vec()].concat(),
-			bracket.clone(),
-			separator.clone(),
-		)),
-	}
+	Some(followed(declared, &items[next..], bracket, separator))
 }
 
 /// `x: maybe int = 1`, `x: maybe int`: the optional type `int?`
@@ -780,14 +778,7 @@ fn maybe_type_declaration(items: &[Node], bracket: &Bracket, separator: &Separat
 		}
 		word => optional(word)?,
 	};
-	Some(match rest {
-		[] => declared,
-		rest => Node::List(
-			[vec![declared], rest.to_vec()].concat(),
-			bracket.clone(),
-			separator.clone(),
-		),
-	})
+	Some(followed(declared, rest, bracket, separator))
 }
 
 /// `{a:1 b:2}(key)`: applying an object to a key looks it up, like `{a:1 b:2}[key]`
@@ -840,11 +831,7 @@ pub(crate) const AT_WORD: &str = "at";
 /// the runtime error for its miss is a function named after it (`no_field_x`), and the trace of the trap carries the name.
 /// A symbol key `p[k]` is evaluated when `k` is a variable, so it is not a constant.
 pub fn constant_field_name(key: &Node) -> Option<String> {
-	let name = match key.drop_meta() {
-		Node::Text(name) => name.clone(),
-		Node::Char(letter) => letter.to_string(),
-		_ => return None,
-	};
+	let name = key.text_value()?;
 	(!name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-')).then_some(name)
 }
 
@@ -876,28 +863,22 @@ fn is_place(node: &Node) -> bool {
 
 /// The element of `x.add(v)` when x is a variable or a field of one
 pub(crate) fn appended_element<'a>(list: &Node, call: &'a Node) -> Option<&'a Node> {
-	if !is_place(list) {
-		return None;
-	}
-	match call.drop_meta() {
-		Node::List(items, _, _)
-			if items.len() == 2
-				&& matches!(items[0].drop_meta(), Node::Symbol(method) if APPEND_METHODS.contains(&method.as_str())) =>
-		{
-			Some(&items[1])
-		}
+	match called_on_place(list, call)? {
+		(method, [element]) if APPEND_METHODS.contains(&method) => Some(element),
 		_ => None,
 	}
+}
+
+/// The method and the arguments of a call on a place
+fn called_on_place<'a>(place: &Node, call: &'a Node) -> Option<(&'a str, &'a [Node])> {
+	is_place(place).then(|| call.call_parts()).flatten()
 }
 
 /// `xs.pop()` when xs is a variable or a field of one (`s.items`): the last item, removed from xs in place, so every
 /// holder of the list sees it (Python's list.pop(), P200b)
 pub(crate) fn popped_list(list: &Node, call: &Node) -> Option<Node> {
-	if !is_place(list) {
-		return None;
-	}
-	match call.drop_meta() {
-		Node::List(items, _, _) if matches!(items.as_slice(), [method] if method.is_symbol(POP_METHOD)) => {
+	match called_on_place(list, call)? {
+		(POP_METHOD, []) => {
 			let template = format!(
 				"({POP_TEMPORARY} = {POP_PLACE}#count({POP_PLACE}); {POP_PLACE} = {LIST_DROP_LAST}({POP_PLACE}); {POP_TEMPORARY})"
 			);
@@ -914,11 +895,9 @@ pub(crate) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
 	let Node::Symbol(name) = map.drop_meta() else {
 		return None;
 	};
-	let Node::List(items, _, _) = call.drop_meta() else {
+	let (method, [key]) = call.call_parts()? else {
 		return None;
 	};
-	let [method, key] = items.as_slice() else { return None };
-	let method = method.symbol_name()?;
 	let (value_word, rest_word) = match method {
 		name if is_removal_method(name) => {
 			if name == DELETE_METHOD {
@@ -953,11 +932,7 @@ fn cleared_collection(collection: &Node, call: &Node) -> Option<Node> {
 	let Node::Symbol(_) = collection.drop_meta() else {
 		return None;
 	};
-	let Node::List(items, _, _) = call.drop_meta() else {
-		return None;
-	};
-	let [method] = items.as_slice() else { return None };
-	method.is_symbol(CLEAR_METHOD).then(|| {
+	matches!(call.call_parts()?, (CLEAR_METHOD, [])).then(|| {
 		Node::Key(
 			Box::new(collection.clone()),
 			Op::Assign,
@@ -988,18 +963,9 @@ fn prelude_call(word: &str, arguments: Vec<Node>) -> Node {
 /// `xs.insert(a, b)` when xs is a variable. Warp writes `insert(value, position)`, Python `insert(position, value)`:
 /// the order is never guessed (wiki/Footguns.md "Guessing intent"), `at:` or the kinds decide
 pub(crate) fn inserted_element(list: &Node, call: &Node) -> Option<Inserted> {
-	if !is_place(list) {
-		return None;
-	}
-	let Node::List(items, _, _) = call.drop_meta() else {
+	let (INSERT_METHOD, [first, second]) = called_on_place(list, call)? else {
 		return None;
 	};
-	let [method, first, second] = items.as_slice() else {
-		return None;
-	};
-	if !method.is_symbol(INSERT_METHOD) {
-		return None;
-	}
 	Some(match insert_arguments(call) {
 		Some((value, position)) => Inserted::At(position.clone(), value.clone()),
 		None => Inserted::EitherOrder(first.clone(), second.clone()),
@@ -1008,13 +974,8 @@ pub(crate) fn inserted_element(list: &Node, call: &Node) -> Option<Inserted> {
 
 /// The value a and the position i of the call `insert(a, at: i)`, in either order
 pub(crate) fn insert_arguments(call: &Node) -> Option<(&Node, &Node)> {
-	let Node::List(items, _, _) = call.drop_meta() else {
-		return None;
-	};
-	match items.as_slice() {
-		[method, value, at] | [method, at, value]
-			if method.is_symbol(INSERT_METHOD) && insert_position(value).is_none() =>
-		{
+	match call.call_parts()? {
+		(INSERT_METHOD, [value, at] | [at, value]) if insert_position(value).is_none() => {
 			Some((value, insert_position(at)?))
 		}
 		_ => None,
@@ -1158,14 +1119,7 @@ pub(crate) fn list_times(key: &Node, positioned: &Node) -> Option<Node> {
 	Some(match crate::diagnostic::ask(&question) {
 		Ok(0) => filled_list(count.clone(), list)
 			.unwrap_or_else(|| crate::node::error("`n times [x]` repeats one element: `3 times [0]`")),
-		Ok(_) => {
-			let mapped = crate::warp_parser::parse(&format!(
-				"({}).map(item => item * ({}))",
-				list.serialize(),
-				count.serialize()
-			));
-			lower_list_times(mapped)
-		}
+		Ok(_) => lower_list_times(element_wise(list.clone(), Op::Mul, count.clone())),
 		Err(error) => error,
 	})
 }

@@ -99,7 +99,6 @@ fn substituted(node: Node, patterns: &Patterns) -> Node {
 	let node = children_rewritten(node, |child| substituted(child, patterns));
 	match node {
 		Node::Key(subject, Op::Eq, pattern) => Node::Key(subject, Op::Eq, Box::new(resolved(*pattern, patterns))),
-		Node::Key(arm, Op::FatArrow, body) => Node::Key(Box::new(resolved(*arm, patterns)), Op::FatArrow, body),
 		Node::Key(subject, Op::As, target) => match pattern_named(&target, patterns).and_then(schema_fields) {
 			Some(fields) => cast_to_schema(*subject, &target.name(), &fields),
 			None => Node::Key(subject, Op::As, target),
@@ -229,10 +228,7 @@ fn with_case_keys(item: Node, patterns: &Patterns) -> Node {
 			bracket,
 			separator,
 		),
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_case_keys(*node, patterns)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_case_keys(node, patterns)),
 		other => other,
 	}
 }

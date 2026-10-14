@@ -17,11 +17,7 @@ const PRINT_WORDS: [&str; 2] = ["print", "puts"];
 pub fn lower_negated_calls(node: Node) -> Node {
 	let mut ctx = Context::new();
 	extract_user_functions_inner(&mut ctx, &node);
-	let mut bound: HashSet<String> = ctx
-		.user_functions
-		.values()
-		.flat_map(|function| function.params.iter().map(|param| param.name.clone()))
-		.collect();
+	let mut bound = ctx.parameter_names();
 	crate::library_words::collect_assigned_names(&node, &mut bound);
 	bound.extend(crate::soft_keywords::names_given(&node)); // fields and lambda parameters too: `size -1` of a field size
 	negate_calls(node, &ctx.user_functions, &bound, &HashSet::new())

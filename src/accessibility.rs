@@ -103,11 +103,6 @@ const INPUT_TYPES: [&str; 22] = [
 	"week",
 ];
 
-thread_local! {
-	/// The problems of the markup as written, said where it is written: the markup a run hands back does not repeat them
-	static WRITTEN_PROBLEMS: std::cell::RefCell<HashSet<String>> = std::cell::RefCell::new(HashSet::new());
-}
-
 /// An element's problem: where, what, and its fix
 type Problem<'a> = (&'a Node, String, String);
 
@@ -137,7 +132,7 @@ pub fn warnings(program: &Node) -> Vec<Diagnostic> {
 		.map(|(_, message, _)| message.clone())
 		.chain(rendered_as_attributes)
 		.collect();
-	WRITTEN_PROBLEMS.with(|problems| *problems.borrow_mut() = written);
+	crate::compile_context::change(|context| context.written_problems = written);
 	problems
 		.into_iter()
 		.map(|(node, message, fix)| Diagnostic::at(node, message).fix(fix))
@@ -150,7 +145,7 @@ pub fn check_rendered(markup: &Node) {
 	let mut elements = vec![];
 	collect(&markup, &HashSet::new(), false, None, &mut elements);
 	for (_, message, fix) in problems(&elements, &HashSet::new()) {
-		if !WRITTEN_PROBLEMS.with(|written| written.borrow().contains(&message)) {
+		if !crate::compile_context::read(|context| context.written_problems.contains(&message)) {
 			crate::diagnostic::report_runtime_warning_once(&format!("{RUN_TIME_NOTICE}: {message}; fix"), &fix);
 		}
 	}
@@ -508,7 +503,7 @@ fn collect<'a>(
 	parent: Option<&str>,
 	found: &mut Vec<Element<'a>>,
 ) {
-	if let Some(fields) = class_literal_fields(node, classes) {
+	if let Some(fields) = class_literal_fields(node, classes).or_else(|| data_map_fields(node, parent)) {
 		return fields
 			.iter()
 			.map(|field| match field.drop_meta() {
@@ -590,6 +585,38 @@ fn class_literal_fields<'a>(node: &'a Node, classes: &HashSet<String>) -> Option
 		(Node::Symbol(class), Node::List(fields, Bracket::Curly, _)) if classes.contains(class) => Some(fields),
 		_ => None,
 	}
+}
+
+/// `{status: 200, body: {…}}` outside markup: a map with a key named like no element, at any depth of its maps
+/// (`{body: {user: {age}}}`), is data, its keys no elements (cards data-map, body-key-markup)
+fn data_map_fields<'a>(node: &'a Node, parent: Option<&str>) -> Option<&'a [Node]> {
+	let fields = map_fields(node)?;
+	(parent.is_none() && names_no_element(fields)).then_some(fields)
+}
+
+/// The fields of `{a: 1, b: 2}`: a curly list of colon keys only
+fn map_fields(node: &Node) -> Option<&[Node]> {
+	match node.drop_meta() {
+		Node::List(fields, Bracket::Curly, _)
+			if fields
+				.iter()
+				.all(|field| matches!(field.drop_meta(), Node::Key(_, Op::Colon, _))) =>
+		{
+			Some(fields)
+		}
+		_ => None,
+	}
+}
+
+fn names_no_element(fields: &[Node]) -> bool {
+	fields.iter().any(|field| match field.drop_meta() {
+		Node::Key(name, _, value) => {
+			name.symbol_name()
+				.is_some_and(|name| !crate::markup::is_element_tag(name))
+				|| map_fields(value).is_some_and(names_no_element)
+		}
+		_ => false,
+	})
 }
 
 fn element_problem<'a>(element: &Element<'a>, labeled_ids: &HashSet<String>) -> Option<Problem<'a>> {

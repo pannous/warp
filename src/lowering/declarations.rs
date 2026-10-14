@@ -29,9 +29,15 @@ const COLLECTION_DECLARATION_WORDS: [(&str, &str); 5] = [
 
 /// `tuple`, the annotation `tuple t = (…)` lowers to, and the other collection words a declaration takes
 pub(crate) fn is_collection_type_word(word: &str) -> bool {
+	collection_type_meant(word).is_some()
+}
+
+/// The collection type a declaration word means: `dict` means map, `array` list
+pub(crate) fn collection_type_meant(word: &str) -> Option<&'static str> {
 	COLLECTION_DECLARATION_WORDS
 		.iter()
-		.any(|(written, meant)| *written == word || *meant == word)
+		.find(|(written, meant)| *written == word || *meant == word)
+		.map(|(_, meant)| *meant)
 }
 
 const SELF_WORD: &str = "self";
@@ -594,10 +600,7 @@ fn applied_to_last(body: Node, extra: &[Node]) -> Node {
 	}
 	match body {
 		Node::Key(left, op, right) => Node::Key(left, op, Box::new(applied_to_last(*right, extra))),
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(applied_to_last(*node, extra)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| applied_to_last(node, extra)),
 		last => Node::List([vec![last], extra.to_vec()].concat(), Bracket::Round, Separator::None),
 	}
 }
@@ -790,7 +793,7 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 		// Python's `def apply(f, x): return f(x)`, early, so the function value passes see a definition; without
 		// parameters it stays a def form for late_binding, which would read `z() := e` as a getter (P71); a generator
 		// (`def numbers(): yield 1`) is no getter
-		Node::Key(head, Op::Colon, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if (items.len() > 1 || crate::ruby_blocks::contains_yield(&body)) && matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) => {
+		Node::Key(head, Op::Colon, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if (items.len() > 1 || crate::blocks::contains_yield(&body)) && matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) => {
 			(*head, Op::Define, *body)
 		}
 		Node::List(parts, Bracket::Round, _)
@@ -1113,20 +1116,6 @@ fn c_parameter(parameter: &Node) -> Option<Node> {
 			}
 			[kind, name] if matches!((kind.drop_meta(), name.drop_meta()), (Node::Symbol(_), Node::Symbol(_))) => {
 				Some(key(name.clone(), Op::Colon, kind.clone()))
-			}
-			// `int b = 2` as the parser groups it, the type then the assignment
-			[kind, assignment]
-				if matches!(assignment.drop_meta(), Node::Key(name, Op::Assign, _) if matches!(name.drop_meta(), Node::Symbol(_)))
-					&& matches!(kind.drop_meta(), Node::Symbol(_)) =>
-			{
-				let Node::Key(name, _, default) = assignment.drop_meta() else {
-					unreachable!("guarded")
-				};
-				Some(Node::Key(
-					Box::new(Node::Key(name.clone(), Op::Colon, Box::new(kind.clone()))),
-					Op::Assign,
-					default.clone(),
-				))
 			}
 			_ => None,
 		},

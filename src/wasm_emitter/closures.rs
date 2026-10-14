@@ -58,6 +58,8 @@ pub(super) struct ClosureTypes {
 	apply: Option<u32>,
 	/// The written forms of the closure targets (function_equality::written_form), class n at n - 1
 	written_forms: Vec<String>,
+	/// Target function capturing nothing → the global holding its one closure, made on first use
+	constants: HashMap<String, u32>,
 }
 
 impl ClosureTypes {
@@ -249,14 +251,10 @@ impl WasmGcEmitter {
 						.user_functions
 						.get(&crate::closures::closure_call_name(arity))
 						.cloned();
+					s.emit_closure_entry(func, closure_local, closure);
 					Self::emit_list(
 						func,
 						&[
-							I::LocalGet(closure_local),
-							I::StructGet {
-								struct_type_index: closure,
-								field_index: ENTRY_FIELD,
-							},
 							I::RefTestNonNull(HeapType::Concrete(entry)),
 							I::If(BlockType::Empty),
 							I::LocalGet(closure_local),
@@ -273,18 +271,8 @@ impl WasmGcEmitter {
 							s.emit_node_as_kind(func, param_kind(&helper.params[1 + index]));
 						}
 					}
-					Self::emit_list(
-						func,
-						&[
-							I::LocalGet(closure_local),
-							I::StructGet {
-								struct_type_index: closure,
-								field_index: ENTRY_FIELD,
-							},
-							I::RefCastNonNull(HeapType::Concrete(entry)),
-							I::CallRef(entry),
-						],
-					);
+					s.emit_closure_entry(func, closure_local, closure);
+					Self::emit_list(func, &[I::RefCastNonNull(HeapType::Concrete(entry)), I::CallRef(entry)]);
 					if let Some(helper) = helper.filter(|_| typed) {
 						s.emit_primitive_as_node(func, helper.return_kind);
 					}
@@ -292,6 +280,19 @@ impl WasmGcEmitter {
 				}
 				s.emit_runtime_error(func, WRONG_ARGUMENT_COUNT);
 			},
+		);
+	}
+
+	fn emit_closure_entry(&self, func: &mut Function, closure: u32, closure_type: u32) {
+		Self::emit_list(
+			func,
+			&[
+				I::LocalGet(closure),
+				I::StructGet {
+					struct_type_index: closure_type,
+					field_index: ENTRY_FIELD,
+				},
+			],
 		);
 	}
 
@@ -548,14 +549,11 @@ impl WasmGcEmitter {
 							field_index: NODE_DATA_FIELD,
 						},
 						I::RefCastNonNull(HeapType::Concrete(closure)),
-						I::LocalTee(closure_local),
-						I::StructGet {
-							struct_type_index: closure,
-							field_index: ENTRY_FIELD,
-						},
-						I::RefTestNonNull(HeapType::Concrete(entry)),
+						I::LocalSet(closure_local),
 					],
 				);
+				s.emit_closure_entry(func, closure_local, closure);
+				func.instruction(&I::RefTestNonNull(HeapType::Concrete(entry)));
 				s.emit_fail_unless(func, WRONG_ARGUMENT_COUNT);
 				Self::emit_list(
 					func,
@@ -570,18 +568,8 @@ impl WasmGcEmitter {
 				for argument in 1..=arity {
 					func.instruction(&I::LocalGet(argument as u32));
 				}
-				Self::emit_list(
-					func,
-					&[
-						I::LocalGet(closure_local),
-						I::StructGet {
-							struct_type_index: closure,
-							field_index: ENTRY_FIELD,
-						},
-						I::RefCastNonNull(HeapType::Concrete(entry)),
-						I::CallRef(entry),
-					],
-				);
+				s.emit_closure_entry(func, closure_local, closure);
+				Self::emit_list(func, &[I::RefCastNonNull(HeapType::Concrete(entry)), I::CallRef(entry)]);
 				if !s.typed_entry(arity) {
 					func.instruction(&I::RefAsNonNull);
 					s.emit_node_as_kind(func, function.return_kind);
@@ -756,22 +744,50 @@ impl WasmGcEmitter {
 			self.emit_type_error(func, format!("{target} is not a function value"));
 			return;
 		};
-		let closure = self.closure_type();
 		let captured = match captured.is_empty() {
 			true => self.nested_captures_now(func, target),
 			false => captured.to_vec(),
 		};
+		if !captured.is_empty() {
+			self.emit_new_closure(func, entry_function, target, &captured);
+			return;
+		}
+		// a closure capturing nothing is the same value every time: made once, so a loop passing a function allocates none
+		let constant = self.closure_constant(target);
+		Self::emit_list(func, &[I::GlobalGet(constant), I::RefIsNull, I::If(BlockType::Empty)]);
+		self.emit_new_closure(func, entry_function, target, &[]);
+		Self::emit_list(
+			func,
+			&[I::GlobalSet(constant), I::End, I::GlobalGet(constant), I::RefAsNonNull],
+		);
+	}
+
+	fn closure_constant(&mut self, target: &str) -> u32 {
+		if let Some(global) = self.closures.constants.get(target) {
+			return *global;
+		}
+		let node = HeapType::Concrete(self.type_manager.node_type);
+		let global = self.declare_named_global(
+			Ref(self.node_ref(true)),
+			ConstExpr::ref_null(node),
+			format!("closure·{target}"),
+		);
+		self.closures.constants.insert(target.to_string(), global);
+		global
+	}
+
+	fn emit_new_closure(&mut self, func: &mut Function, entry_function: u32, target: &str, captured: &[Node]) {
 		let kind = self.function_kind(target);
 		Self::emit_list(func, &[I::I64Const(kind), I::RefFunc(entry_function)]);
 		if captured.is_empty() {
 			self.emit_node_null(func);
 		} else {
-			self.emit_node_instructions(func, &Node::List(captured.clone(), Bracket::Square, Separator::Space));
+			self.emit_node_instructions(func, &Node::List(captured.to_vec(), Bracket::Square, Separator::Space));
 		}
 		self.ctx
 			.user_globals
 			.retain(|name, _| !name.starts_with(CAPTURE_VALUE_PREFIX));
-		func.instruction(&I::StructNew(closure));
+		func.instruction(&I::StructNew(self.closure_type()));
 		self.emit_string_call(func, target, "new_symbol");
 		func.instruction(&I::StructNew(self.type_manager.node_type));
 	}

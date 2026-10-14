@@ -106,3 +106,10 @@
 - Keep the documented contract that a word uses the comment line directly above its definition.
 - Reuse the existing single pending-comment slot; do not add module-specific exceptions or rewrite library comments.
 - Run the focused documentation tests, formatting, clippy, and the wasm32 check.
+
+# Repeated text-construction instruction cleanup
+
+- Preserve the exact emitted instruction order while extracting the repeated pointer/length `new_text` sequences.
+- Reuse helpers on `WasmEmitter`; keep callers responsible for computing any nonstandard pointer or length expression.
+- Extract the repeated closure entry-field load into one helper without changing closure layout or call behavior.
+- Establish and rerun focused text and closure test baselines, then run formatting, clippy, and the wasm32 check.

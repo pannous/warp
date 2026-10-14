@@ -103,3 +103,24 @@ fn a_class_literal_field_named_like_an_element_is_no_markup() {
 		"img takes no content: it is dropped",
 	);
 }
+
+/// cards data-map, body-key-markup: a data map's keys are no elements, even named like one (`body`, `title`), when it
+/// has a field named like no element; a field's value is still markup
+#[test]
+fn a_data_map_key_named_like_an_element_is_no_markup() {
+	let code = "{status: 200, body: {user: {name: \"Ann\"}}}";
+	assert_eq!(warnings_of(code), Vec::<String>::new(), "{code}");
+	let assigned = "r = {status: 200, body: {user: 1}}\nr.body.user";
+	assert_eq!(warnings_of(assigned), Vec::<String>::new(), "{assigned}");
+	warns(
+		"r = {status: 200, page: img{ alt: \"a\" \"text inside\" }}",
+		"img takes no content: it is dropped",
+	);
+}
+
+/// card data-map: a map pattern whose element-named key holds a map with a plain key is data too
+#[test]
+fn a_nested_data_map_is_no_markup() {
+	let code = "response = {status: 200, body: {user: {age: 31}}}\nif response is {body: {user: {age}}} then age";
+	assert_eq!(warnings_of(code), Vec::<String>::new(), "{code}");
+}

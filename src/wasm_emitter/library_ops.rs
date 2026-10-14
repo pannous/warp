@@ -112,17 +112,8 @@ impl WasmGcEmitter {
 		self.runtime_function(CODEPOINT_OF, vec![node_ref], vec![node_ref], vec![], |s, f| {
 			// ord("a"): a one-character text, as an untyped parameter holds it (card char-text), is its character
 			s.emit_field(f, 0, 0);
-			Self::emit_list(
-				f,
-				&[
-					I::I64Const(KIND_MASK),
-					I::I64And,
-					I::I64Const(Kind::Text as i64),
-					I::I64Eq,
-					I::If(BlockType::Empty),
-					I::LocalGet(0),
-				],
-			);
+			Self::emit_kind_test(f, Kind::Text as i64, I::I64Eq);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(0)]);
 			s.call(f, "text_grapheme_count");
 			Self::emit_list(
 				f,
@@ -180,15 +171,7 @@ impl WasmGcEmitter {
 	fn emit_require_list(&self, func: &mut Function) {
 		Self::emit_list(func, &[I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty), I::Else]);
 		self.emit_field(func, 0, 0);
-		Self::emit_list(
-			func,
-			&[
-				I::I64Const(KIND_MASK),
-				I::I64And,
-				I::I64Const(Kind::List as i64),
-				I::I64Ne,
-			],
-		);
+		Self::emit_kind_test(func, Kind::List as i64, I::I64Ne);
 		self.emit_fail_if(func, "not_a_list");
 		func.instruction(&I::End);
 	}
@@ -222,17 +205,8 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::LocalGet(0), I::RefIsNull, I::I32Eqz, I::If(BlockType::Empty)]);
 				for kind in [Kind::Text, Kind::Codepoint] {
 					s.emit_field(f, 0, 0);
-					Self::emit_list(
-						f,
-						&[
-							I::I64Const(KIND_MASK),
-							I::I64And,
-							I::I64Const(kind as i64),
-							I::I64Eq,
-							I::If(BlockType::Empty),
-						],
-					);
-					Self::emit_list(f, &[I::LocalGet(0), I::RefAsNonNull]);
+					Self::emit_kind_test(f, kind as i64, I::I64Eq);
+					Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(0), I::RefAsNonNull]);
 					s.call(f, "text_reverse");
 					Self::emit_list(f, &[I::Return, I::End]);
 				}
@@ -280,11 +254,11 @@ impl WasmGcEmitter {
 				let walk_cells = |f: &mut Function| {
 					Self::emit_list(
 						f,
-						&[I::LocalGet(list), I::LocalSet(cell), I::I64Const(0), I::LocalSet(index)],
-					);
-					Self::emit_list(
-						f,
 						&[
+							I::LocalGet(list),
+							I::LocalSet(cell),
+							I::I64Const(0),
+							I::LocalSet(index),
 							I::Block(BlockType::Empty),
 							I::Loop(BlockType::Empty),
 							I::LocalGet(cell),
@@ -358,10 +332,13 @@ impl WasmGcEmitter {
 				clamped_bound(f, end, length, to);
 				// the cells from…to-1, collected backwards
 				walk_cells(f);
-				Self::emit_list(f, &[I::LocalGet(index), I::LocalGet(to), I::I64GeS, I::BrIf(1)]);
 				Self::emit_list(
 					f,
 					&[
+						I::LocalGet(index),
+						I::LocalGet(to),
+						I::I64GeS,
+						I::BrIf(1),
 						I::LocalGet(index),
 						I::LocalGet(from),
 						I::I64GeS,
@@ -396,17 +373,8 @@ impl WasmGcEmitter {
 		);
 		for kind in [Kind::Text, Kind::Codepoint] {
 			self.emit_field(f, local, 0);
-			Self::emit_list(
-				f,
-				&[
-					I::I64Const(KIND_MASK),
-					I::I64And,
-					I::I64Const(kind as i64),
-					I::I64Eq,
-					I::If(BlockType::Empty),
-				],
-			);
-			Self::emit_list(f, &[I::LocalGet(local), I::RefAsNonNull]);
+			Self::emit_kind_test(f, kind as i64, I::I64Eq);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(local), I::RefAsNonNull]);
 			self.call(f, "text_chars");
 			Self::emit_list(f, &[I::LocalSet(local), I::I32Const(1), I::LocalSet(is_text), I::End]);
 		}
@@ -491,23 +459,27 @@ impl WasmGcEmitter {
 				I::I64Const(CURLY_LIST_KIND),
 				I::I64Eq,
 				I::If(BlockType::Result(Ref(self.node_ref(false)))),
+				I::I64Const(KEY_KIND),
 			],
 		);
-		Self::emit_list(f, &[I::I64Const(KEY_KIND)]);
 		self.emit_field(f, local, 1);
 		self.emit_field(f, local, 2);
-		Self::emit_list(f, &[I::StructNew(node_type), I::Else]);
 		Self::emit_list(
 			f,
 			&[
+				I::StructNew(node_type),
+				I::Else,
 				I::I64Const(CURLY_LIST_KIND),
 				I::LocalGet(local),
 				I::RefNull(HeapType::Concrete(node_type)),
 				I::StructNew(node_type),
 				I::End,
+				I::Else,
+				I::LocalGet(local),
+				I::RefAsNonNull,
+				I::End,
 			],
 		);
-		Self::emit_list(f, &[I::Else, I::LocalGet(local), I::RefAsNonNull, I::End]);
 	}
 }
 

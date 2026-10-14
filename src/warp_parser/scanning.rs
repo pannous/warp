@@ -73,26 +73,6 @@ impl WarpParser {
 		*self.chars.get(self.pos + offset).unwrap_or(&'\0')
 	}
 
-	/// `else => …` at the cursor: the catch-all arm of a match on its own line, no else branch of the line before
-	pub(super) fn else_arm_key(&self) -> bool {
-		let after: String = self.chars[(self.pos + 4).min(self.chars.len())..]
-			.iter()
-			.skip_while(|ch| matches!(ch, ' ' | '\t'))
-			.take(2)
-			.collect();
-		after == "=>"
-	}
-
-	/// The cursor is in the key of a match arm: `=>` follows before the statement or block ends (`1 | 2 | 3 => …`)
-	pub(super) fn in_arm_key(&self) -> bool {
-		let rest = &self.chars[self.pos.min(self.chars.len())..];
-		let end = rest
-			.iter()
-			.position(|ch| matches!(ch, ';' | '\n' | '{' | '}'))
-			.unwrap_or(rest.len());
-		rest[..end].windows(2).any(|pair| pair == ['=', '>'])
-	}
-
 	/// The operator a block holds alone, the cursor at its start: `{++}`, `{ * }`, and its length up to the `}`
 	pub(super) fn bare_operator_in_block(&self) -> Option<(String, usize)> {
 		const OPERATOR_CHARS: &str = "+-*/%^<>=!&|";
@@ -224,17 +204,6 @@ impl WarpParser {
 		self.current_char() == '/' && self.peek_char(1) == '/' && divisor_follows && self.follows_operand_on_its_line()
 	}
 
-	/// `.+ .- .* ./` at the cursor: the element-wise form of the arithmetic operator (`./mozart.mp3` is a path)
-	pub(super) fn element_wise_operator(&self) -> Option<Op> {
-		if self.current_char() != '.' || self.starts_path_literal() {
-			return None;
-		}
-		let glyph = self.peek_char(1).to_string();
-		crate::operators::ELEMENT_WISE_OPERATORS
-			.into_iter()
-			.find(|op| op.as_str() == glyph)
-	}
-
 	/// `1 -1`, `[1 +1]`: a number, a space, then a sign glued to a number (D13). Asked: the list `[1 -1]` (the default,
 	/// a warning when unanswered) or the arithmetic `1 - 1`. Variables, calls and words keep subtracting: `x -1`.
 	/// Inside a list literal a space and a glued sign start the next item after anything (decision list-sign):
@@ -344,17 +313,11 @@ impl WarpParser {
 		before.ends_with(&['\t']) || before.ends_with(&[' ', ' '])
 	}
 
-	/// The `//` at the cursor is followed by what a divisor could be: a number or short name (`// 2`, `// n`) or an
-	/// expression (`// n + 1`), not prose (`// property with value list`) nor a word (`// Hz`, `// peaks`)
+	/// The `//` at the cursor is followed by what a divisor could be: a number or short name (`// 2`, `// n`), not a
+	/// word (`// Hz`) or prose
 	fn comment_reads_like_divisor(&self) -> bool {
 		let rest: String = self.chars[self.pos + 2..].iter().take_while(|&&c| c != '\n').collect();
-		let rest = rest.trim();
-		let has_operator = rest.contains(DIVISOR_OPERATORS);
-		if rest.contains(char::is_whitespace) {
-			has_operator && !has_adjacent_words(rest)
-		} else {
-			has_operator || is_number_or_short_name(rest)
-		}
+		is_number_or_short_name(rest.trim())
 	}
 
 	pub(super) fn is_at_line_start(&self) -> bool {
@@ -659,20 +622,15 @@ impl WarpParser {
 			self.advance();
 		}
 	}
+
+	pub(super) fn at_identifier_start(&self) -> bool {
+		self.current_char().is_alphabetic() || self.current_char() == '_'
+	}
 }
 
-const DIVISOR_OPERATORS: [char; 7] = ['+', '-', '*', '/', '%', '(', '^'];
 const MAX_DIVISOR_NAME_LENGTH: usize = 2;
 
 fn is_number_or_short_name(word: &str) -> bool {
 	let is_name = word.len() <= MAX_DIVISOR_NAME_LENGTH && word.chars().all(|c| c.is_ascii_lowercase() || c == '_');
 	is_name || word.parse::<f64>().is_ok()
-}
-
-/// Prose, not an expression: two words side by side with no operator between them (`data for`, `GET /api` stays one)
-fn has_adjacent_words(text: &str) -> bool {
-	let words: Vec<&str> = text.split_whitespace().collect();
-	words
-		.windows(2)
-		.any(|pair| pair[0].ends_with(char::is_alphanumeric) && pair[1].starts_with(char::is_alphanumeric))
 }

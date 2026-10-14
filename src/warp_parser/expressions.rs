@@ -1,12 +1,9 @@
 //! Expressions: the Pratt loop, special infix operators, prefix operators, if as a prefix
 
 use super::*;
-use crate::words::{EMIT_ALIASES, EMIT_WORDS};
 
 /// Characters that end a statement: a body cannot start with them
 const BODY_ENDS: [char; 7] = ['\0', ';', ',', '\n', '}', ')', ']'];
-/// The type words of a text: `k:text` names a key in `m[k]` (card text-key)
-const TEXT_TYPE_WORDS: [&str; 3] = ["text", "string", "str"];
 
 impl WarpParser {
 	/// The head of a definition, `f`, `f x` or `f(x)`, makes f a function the rest of the source calls
@@ -155,109 +152,6 @@ impl WarpParser {
 		Some(Node::Key(Box::new(Node::Empty), op, Box::new(Node::Empty)))
 	}
 
-	/// `await a + await b`: `await` takes its operand like a unary minus, so each task is awaited before the sum.
-	/// `await(x)` (a call or a definition of a function `await`) and `await = …` stay as they are
-	pub(super) fn try_parse_await(&mut self) -> Option<Node> {
-		if !self.matches_keyword(AWAIT_KEYWORD) {
-			return None;
-		}
-		let before_keyword = self.mark();
-		self.advance_by(AWAIT_KEYWORD.len());
-		let called = self.current_char() == '(';
-		self.skip_spaces();
-		let names_a_variable = self
-			.peek_operator()
-			.is_some_and(|(op, _)| matches!(op, Op::Assign | Op::Define | Op::Colon) || op.is_compound_assign());
-		if called || names_a_variable || matches!(self.current_char(), '}' | ';' | '\n' | '\r' | '\0' | ')') {
-			self.rewind(before_keyword);
-			return None;
-		}
-		// `await all jobs` (P47): every task of a list
-		if self.matches_keyword(AWAIT_ALL_WORD)
-			&& self.peek_char(AWAIT_ALL_WORD.len()) == ' '
-			&& (self.is_identifier_start(AWAIT_ALL_WORD.len() + 1)
-				|| matches!(self.peek_char(AWAIT_ALL_WORD.len() + 1), '[' | '('))
-		{
-			self.advance_by(AWAIT_ALL_WORD.len());
-			self.skip_spaces();
-			let list = self.parse_expr(AWAIT_OPERAND_BP);
-			let all = Node::List(
-				vec![Symbol(AWAIT_ALL_WORD.to_string()), list],
-				Bracket::None,
-				Separator::Space,
-			);
-			return Some(Node::List(
-				vec![Symbol(AWAIT_KEYWORD.to_string()), all],
-				Bracket::None,
-				Separator::Space,
-			));
-		}
-		let operand = self.parse_expr(AWAIT_OPERAND_BP);
-		Some(Node::List(
-			vec![Symbol(AWAIT_KEYWORD.to_string()), operand],
-			Bracket::None,
-			Separator::Space,
-		))
-	}
-
-	/// `1 + emit ask`, `net * (1 + ask tax_rate)` (card price-net), `2 * emit stop the machine{reason: "x"} + 1`: the phrase `emit ask` is one operand, the words
-	/// of the event and its data bind like the operand of a unary minus; the same Space list a statement `emit ask` is
-	pub(super) fn try_parse_emit(&mut self) -> Option<Node> {
-		let keyword = EMIT_WORDS
-			.into_iter()
-			.chain(EMIT_ALIASES)
-			.find(|keyword| self.matches_keyword(keyword))?;
-		let before_keyword = self.mark();
-		self.advance_by(keyword.len());
-		self.skip_spaces();
-		if !self.is_identifier_start(0) || self.peek_operator().is_some() {
-			self.rewind(before_keyword);
-			return None;
-		}
-		let mut phrase = vec![Symbol(keyword.to_string())];
-		while self.is_identifier_start(0) || (phrase.len() > 1 && matches!(self.current_char(), '0'..='9' | '"' | '\''))
-		{
-			// `send alarm{} to "x"`: a word operator takes the whole phrase, as without this
-			if self.peek_operator().is_some() {
-				self.rewind(before_keyword);
-				return None;
-			}
-			phrase.push(self.parse_expr(AWAIT_OPERAND_BP));
-			self.skip_spaces();
-		}
-		Some(Node::List(phrase, Bracket::None, Separator::Space))
-	}
-
-	/// `return` takes the whole expression after it: `return -1` is no subtraction from `return`
-	pub(super) fn try_parse_return(&mut self) -> Option<Node> {
-		if !self.matches_keyword(RETURN_KEYWORD) {
-			return None;
-		}
-		let before_keyword = self.mark();
-		self.advance_by(RETURN_KEYWORD.len());
-		self.skip_spaces();
-		let names_a_variable = self
-			.peek_operator()
-			.is_some_and(|(op, _)| matches!(op, Op::Assign | Op::Define | Op::Colon) || op.is_compound_assign());
-		// a bare `return` at the end of a statement returns ø: `if t == ø { return }`
-		let value = if matches!(self.current_char(), '}' | ';' | '\n' | '\r' | '\0') && !names_a_variable {
-			Node::Empty
-		} else if !self.at_body_start() || names_a_variable {
-			self.rewind(before_keyword); // `return := …` as a name
-			return None;
-		} else {
-			// the binding of an assigned value: `return square n` returns the braceless call, like `x = square n`; then
-			// what binds looser, Python's `return a if c else b`
-			let value = self.parse_expr(Op::Assign.binding_power().1);
-			self.continue_expr(value, 0)
-		};
-		Some(Node::List(
-			vec![Symbol(RETURN_KEYWORD.to_string()), value],
-			Bracket::None,
-			Separator::Space,
-		))
-	}
-
 	/// `data a and b` is the data `a and b`, also as an operand (`x = data a and b`, `string(data a and b)`); parentheses
 	/// around all of it only group it (`data (a and b)`). `data = …`, `data.x`, glued `data(x)` and `data class` stay
 	pub(super) fn try_parse_data(&mut self) -> Option<Node> {
@@ -288,62 +182,6 @@ impl WarpParser {
 			Bracket::None,
 			Separator::Space,
 		))
-	}
-
-	/// The operator after `lhs` that the infix table does not hold, its width in characters and its binding power
-	pub(super) fn special_infix(&self, lhs: &Node) -> Option<(SpecialInfix, usize, (u8, u8))> {
-		// `def div(a,b) = …`: the word after a function keyword is the name, never an operator
-		if matches!(lhs.drop_meta(), Node::Symbol(keyword) if crate::operators::is_function_keyword(keyword)) {
-			return None;
-		}
-		// `a mod b` (`a modulo b`) is `a % b` (Euclidean, 0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the
-		// dividend, as C)
-		for (word, op) in [("mod", Op::Mod), ("modulo", Op::Mod), ("rem", Op::Rem)] {
-			if self.matches_keyword(word) {
-				return Some((SpecialInfix::Keyword(op), word.len(), op.binding_power()));
-			}
-		}
-		// Python floor division glued to its operand, `7//2` and `x//=2` (`x // note` stays a comment), and `7 div 2`;
-		// `div{…}` and `div {…}` are the html tag, and data never computes
-		let word_division = self.matches_keyword("div") && !self.options.data_mode && !self.word_opens_block("div");
-		if word_division || self.at_floor_division() {
-			let compound = !word_division && self.peek_char(2) == '=';
-			let op = if compound { Op::Assign } else { Op::Div };
-			return Some((
-				SpecialInfix::FloorDivision { compound },
-				if compound || word_division { 3 } else { 2 },
-				op.binding_power(),
-			));
-		}
-		// the pipeline `xs |> f(a)` is the call `f(xs, a)`, `xs |> f` is `f(xs)` (F#, Elixir); it binds below arithmetic
-		// and above comparison: `xs |> sum > 3` is `sum(xs) > 3`
-		if self.at_pipeline() {
-			return Some((SpecialInfix::Pipeline, 2, PIPELINE_BINDING_POWER));
-		}
-		// Julia's dot call `f.(xs)`: a name, a dot, an opening parenthesis
-		let is_name = matches!(lhs.drop_meta(), Node::Symbol(_));
-		if is_name && self.current_char() == '.' && self.peek_char(1) == '(' && !self.options.data_mode {
-			return Some((SpecialInfix::DotCall, 1, Op::Dot.binding_power()));
-		}
-		// element-wise arithmetic `xs .+ 4` maps the operator over the list (D3: `xs + 4` asks, `xs + [4]` joins)
-		if let Some(op) = self.element_wise_operator() {
-			return Some((SpecialInfix::ElementWise(op), 2, op.binding_power()));
-		}
-		// membership `x in xs` binds like `==`, kept as the list [x in xs]: `if "Z" in v {…}`, `found = x in xs`;
-		// a unit word stays in the flat counting phrase: `number of chars in t`
-		let counts_units = matches!(lhs.drop_meta(), Node::Symbol(word) if crate::analyzer::text_unit(word).is_some());
-		// `item is in basket` reads as `item in basket`
-		let membership = [IS_IN_PHRASE, IN_KEYWORD]
-			.into_iter()
-			.find(|word| self.matches_keyword(word));
-		if let (Some(word), false) = (membership, counts_units) {
-			return Some((SpecialInfix::Membership(IN_KEYWORD), word.len(), Op::Eq.binding_power()));
-		}
-		// `xs contains x` binds like `x in xs`, in code only (data keeps the words as they are)
-		let containment = CONTAINMENT_WORDS
-			.into_iter()
-			.find(|word| !self.options.data_mode && self.matches_keyword(word) && self.operand_after(word.len()));
-		containment.map(|word| (SpecialInfix::Membership(word), word.len(), Op::Eq.binding_power()))
 	}
 
 	/// The right operand of a special infix operator, None when it binds looser than `min_bp` (nothing consumed)
@@ -415,9 +253,8 @@ impl WarpParser {
 
 			if let Some(updated) = self
 				.try_parse_evaluate_bang(&lhs, min_bp)
-				.or_else(|| self.try_parse_control_suffix(&lhs, min_bp))
+				.or_else(|| self.try_parse_times(&lhs, min_bp))
 				.or_else(|| self.try_parse_test_word(&lhs, min_bp))
-				.or_else(|| self.try_parse_nand(&lhs, min_bp))
 				.or_else(|| self.try_parse_elvis(&lhs, min_bp))
 			{
 				lhs = updated;
@@ -428,12 +265,13 @@ impl WarpParser {
 			if self.pipe_takes_call && self.at_pipeline() {
 				break;
 			}
-			// Step 3a–e: the operators the infix table does not hold (`mod`, `//`, `|>`, `.+`, `in`, see SpecialInfix)
-			if let Some((infix, width, binding)) = self.special_infix(&lhs) {
-				let Some(operand) = self.special_operand(width, binding, min_bp) else {
+			// Julia's dot call `f.(xs)`: a name, a dot, an opening parenthesis
+			let is_name = matches!(lhs.drop_meta(), Node::Symbol(_));
+			if is_name && self.current_char() == '.' && self.peek_char(1) == '(' && !self.options.data_mode {
+				let Some(arguments) = self.special_operand(1, Op::Dot.binding_power(), min_bp) else {
 					break;
 				};
-				lhs = infix.applied(lhs, operand);
+				lhs = dot_call(lhs, arguments);
 				previous_comparand = None;
 				continue;
 			}
@@ -470,12 +308,17 @@ impl WarpParser {
 			};
 
 			let (l_bp, r_bp) = op.binding_power();
+			// a unit word stays in the flat counting phrase `number of chars in t`; `def contains(a,b) = …` names the
+			// function after its keyword
+			let membership_word = op == Op::In
+				&& matches!(lhs.drop_meta(), Node::Symbol(word)
+					if crate::analyzer::text_unit(word).is_some() || crate::operators::is_function_keyword(word));
 
 			// `sleep 1s and print "x"`: the statement ends before the `and`, the statement list runs both (parse_list_with_separators)
 			let ends_command =
 				op == Op::And && (self.in_command || (min_bp == 0 && is_command(&lhs))) && self.and_starts_statement();
 			// Stop if operator binds less tightly than our minimum
-			if ends_command || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
+			if ends_command || membership_word || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
 				break;
 			}
 			// `xs where #it > 1`, `[i for i in xs where -i < 0]`, `where to#i == n`: after `where` a glued `#` or `-`, or an
@@ -515,6 +358,9 @@ impl WarpParser {
 			} else {
 				self.hint_operator(chars, false)
 			};
+			// `a nand b` is `not (a and b)`, `x is not int` is `not (x is int)`
+			let negated = crate::operators::negated_spelling(&written);
+			let written = negated.map_or(written, str::to_string);
 			let (op_line, op_column) = self.get_position();
 			let bare_symbol = Some(self.current_char()).filter(|symbol| chars == 1 && matches!(symbol, '&' | '|'));
 			let glued_before = !self.prev_char().is_whitespace();
@@ -666,6 +512,9 @@ impl WarpParser {
 				lhs
 			};
 			lhs = combined(lhs_operand, op, &written, rhs.clone(), previous_comparand.take());
+			if negated.is_some() {
+				lhs = Node::Key(Box::new(Empty), Op::Not, Box::new(lhs));
+			}
 			if op.is_ordering() {
 				previous_comparand = Some(rhs);
 			}
@@ -676,7 +525,9 @@ impl WarpParser {
 
 	/// The right operand of `op` without a block: a branch, a glued pair's value or an expression
 	fn parse_right_operand(&mut self, op: Op, glued_pair: bool, r_bp: u8) -> Node {
-		if matches!(op, Op::Then | Op::Else) {
+		if matches!(op, Op::If | Op::While) {
+			self.parse_condition()
+		} else if matches!(op, Op::Then | Op::Else) {
 			let outer = self.branch_bp.replace(r_bp);
 			let branch = self.parse_branch(r_bp);
 			let branch = self.branch_assignment(branch, r_bp);
@@ -696,22 +547,6 @@ impl WarpParser {
 		} else {
 			self.parse_expr(r_bp)
 		}
-	}
-
-	/// A branch without braces takes the whole statement: `if c then s += 5 else s = 0` assigns in the branch, where
-	/// assignment's weaker binding would end the branch at `s` and assign to the whole if. The value stops at `else`.
-	pub(super) fn branch_assignment(&mut self, target: Node, branch_bp: u8) -> Node {
-		self.skip_spaces();
-		let Some((assignment, chars)) = self
-			.peek_operator()
-			.filter(|(op, _)| *op == Op::Assign || op.is_compound_assign())
-		else {
-			return target;
-		};
-		self.advance_by(chars);
-		self.skip_whitespace();
-		let value = self.parse_expr(branch_bp);
-		Node::Key(Box::new(target), assignment, Box::new(value))
 	}
 
 	/// `‖x‖` brackets a whole expression like parentheses: `‖3-5‖*2` → 4
@@ -742,23 +577,6 @@ impl WarpParser {
 		}
 	}
 
-	/// The condition of `if` and `while`: `=` compares, and a braceless call takes a variable argument as in a branch
-	/// (`if area certainly > 10 then`, `while square i < 10`)
-	pub(super) fn parse_condition(&mut self) -> Node {
-		let condition_bp = Op::If.binding_power().1;
-		let outer = self.branch_bp.replace(condition_bp);
-		let condition = self.with_equals_comparing(true, |parser| parser.parse_expr(condition_bp));
-		self.branch_bp = outer;
-		condition
-	}
-
-	pub(super) fn with_equals_comparing<T>(&mut self, compares: bool, parse: impl FnOnce(&mut Self) -> T) -> T {
-		let outer = std::mem::replace(&mut self.equals_compares, compares);
-		let node = parse(self);
-		self.equals_compares = outer;
-		node
-	}
-
 	pub(super) fn finish_prefix(&mut self, op: Op, rhs: Node) -> Node {
 		match (op, rhs.drop_meta()) {
 			(Op::If, _) => self.finish_if_prefix(rhs),
@@ -768,49 +586,6 @@ impl WarpParser {
 			(Op::Inc | Op::Dec, _) => Node::Key(Box::new(rhs), op, Box::new(Empty)), // ++i is i++: increment is immediate
 			_ => Node::Key(Box::new(Empty), op, Box::new(rhs)),
 		}
-	}
-
-	pub(super) fn finish_if_prefix(&mut self, rhs: Node) -> Node {
-		self.skip_spaces();
-		if self.current_char() == '{' {
-			let then_block = self.parse_atom(); // parse { block }
-			let if_cond = Node::Key(Box::new(Empty), Op::If, Box::new(rhs));
-			let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_block));
-			return self.parse_optional_else(if_then, ElseParseMode::Atom);
-		}
-
-		if let Node::Key(cond, Op::Colon, then_expr) = &rhs {
-			let if_cond = Node::Key(Box::new(Empty), Op::If, cond.clone());
-			// the body runs to the end of the statement, `if c: x+=1`, but not into the `else`
-			let outer = std::mem::replace(&mut self.stops_at_else, true);
-			let then_expr = self.continue_colon_body(then_expr);
-			self.stops_at_else = outer;
-			let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_expr));
-			return self.parse_optional_else(if_then, ElseParseMode::Expr);
-		}
-
-		if let Some((condition, then_block)) = split_trailing_block(&rhs, false) {
-			self.skip_spaces();
-			let if_cond = Node::Key(Box::new(Empty), Op::If, Box::new(condition));
-			let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_block));
-			return self.parse_optional_else(if_then, ElseParseMode::Atom);
-		}
-
-		// `if (x < 0) return -1`: C's parenthesized condition, then the statement on the same line
-		let is_grouped = matches!(rhs.drop_meta(), Node::List(_, Bracket::Round, _));
-		if is_grouped && self.at_body_start() && !self.matches_keyword("then") && !self.matches_keyword("else") {
-			let outer = std::mem::replace(&mut self.stops_at_else, true);
-			let then_expr = self.parse_expr(0);
-			self.stops_at_else = outer;
-			let if_then = Node::Key(
-				Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(rhs))),
-				Op::Then,
-				Box::new(then_expr),
-			);
-			return self.parse_optional_else(if_then, ElseParseMode::Expr);
-		}
-
-		Node::Key(Box::new(Empty), Op::If, Box::new(rhs))
 	}
 
 	/// The rest of the body after `if c:` or `while c:`, of which the colon took only the first word or words
@@ -889,7 +664,7 @@ impl WarpParser {
 		}
 		let holds_text = match (op, rhs.drop_meta()) {
 			(Op::Assign | Op::Define, Node::Text(_)) => true,
-			(Op::Colon, Node::Symbol(type_word)) => TEXT_TYPE_WORDS.contains(&type_word.as_str()),
+			(Op::Colon, Node::Symbol(type_word)) => crate::type_tests::is_text_type_word(type_word),
 			_ => false,
 		};
 		if holds_text {
@@ -907,18 +682,44 @@ fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Option<Node>) -
 			Node::Key(Box::new(lhs), Op::And, Box::new(next_comparison))
 		}
 		(_, Some((start, end))) if op == Op::Hash => call(SLICE_WORD, vec![lhs, start, end]),
+		// membership `x in xs` is kept as the list [x in xs]: `if "Z" in v {…}`, `found = x in xs`, `xs contains x`
+		_ if op == Op::In => {
+			let word = if written.ends_with(IN_KEYWORD) {
+				IN_KEYWORD
+			} else {
+				written
+			};
+			Node::List(
+				vec![lhs, Symbol(word.to_string()), rhs],
+				Bracket::None,
+				Separator::Space,
+			)
+		}
+		_ if op == Op::Pipe => piped(lhs, rhs),
+		_ if matches!(op, Op::If | Op::While) => guarded_statement(lhs, op, written, rhs),
+		// Java's and Scala's `import math.*`: a glob, nothing after the `*`, is the module whole
+		_ if written == ".*" && matches!(rhs, Empty) => {
+			crate::normalize::hint(
+				&format!("{}.*", lhs.serialize()),
+				&lhs.serialize(),
+				"warp imports a module whole",
+			);
+			lhs
+		}
+		// kept as written, lowering/broadcasting.rs lower_element_wise_operators gives it its meaning
+		_ if crate::operators::element_wise_operator(written).is_some() => Node::List(
+			vec![lhs, Symbol(written.to_string()), rhs],
+			Bracket::None,
+			Separator::Space,
+		),
+		_ if FLOOR_DIVISION_SPELLINGS.contains(&written) => call(FLOOR_QUOTIENT, vec![lhs, rhs]),
+		_ if written == FLOOR_DIVISION_ASSIGNMENT => {
+			let quotient = call(FLOOR_QUOTIENT, vec![lhs.clone(), rhs]);
+			Node::Key(Box::new(lhs), Op::Assign, Box::new(quotient))
+		}
 		_ if op == Op::To && written.starts_with(DOWN_WORD) => {
 			call(REVERSE_WORD, vec![Node::Key(Box::new(rhs), Op::To, Box::new(lhs))])
 		}
 		_ => Node::Key(Box::new(lhs), op, Box::new(rhs)),
-	}
-}
-
-/// `where`, alone or the last word of `for i in xs where`: a word whose condition follows
-fn ends_with_clause_word(node: &Node) -> bool {
-	match node.drop_meta() {
-		Node::Symbol(word) => CLAUSE_WORDS.contains(&word.as_str()),
-		Node::List(items, Bracket::None, _) => items.last().is_some_and(ends_with_clause_word),
-		_ => false,
 	}
 }

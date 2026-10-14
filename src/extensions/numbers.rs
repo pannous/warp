@@ -357,15 +357,6 @@ impl Operation {
 		}
 	}
 
-	fn of_bigint(self, a: BigInt, b: BigInt) -> BigInt {
-		match self {
-			Operation::Add => a + b,
-			Operation::Sub => a - b,
-			Operation::Mul => a * b,
-			Operation::Div => unreachable!("an integer quotient is a ratio: Number::ratio"),
-		}
-	}
-
 	fn of_rational(self, a: &Rational, b: &Rational) -> Rational {
 		match self {
 			Operation::Add => a.add(b),
@@ -457,14 +448,11 @@ impl Neg for Number {
 /// BigInt), f64 for floats (an infinite or NaN result stays a Float), else mixed
 fn arithmetic(a: Number, b: Number, operation: Operation) -> Number {
 	match (a, b) {
-		(Number::Int(n1), Number::Int(n2)) => operation
-			.of_i64(n1, n2)
-			.map(Number::Int)
-			.unwrap_or_else(|| Number::from_bigint(operation.of_bigint(BigInt::from(n1), BigInt::from(n2)))),
-		(a, b) if a.is_integer() && b.is_integer() => {
-			Number::from_bigint(operation.of_bigint(a.to_bigint(), b.to_bigint()))
+		(Number::Int(n1), Number::Int(n2)) if operation.of_i64(n1, n2).is_some() => {
+			Number::Int(operation.of_i64(n1, n2).expect("guarded"))
 		}
-		(a, b) if (a.is_ratio() || b.is_ratio()) && a.is_rational() && b.is_rational() => {
+		// beyond i64 and ratios: exact in Q, an integral result back to an integer
+		(a, b) if a.is_rational() && b.is_rational() => {
 			Number::from_rational(operation.of_rational(&a.to_rational(), &b.to_rational()))
 		}
 		(Number::Float(n1), Number::Float(n2)) => Number::Float(operation.of_f64(n1, n2)),

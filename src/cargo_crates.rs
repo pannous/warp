@@ -21,14 +21,16 @@ const WRAPPERS: &str = "wrappers";
 const FAILED: &str = "failed";
 /// raise when the generated wrappers change: the components of older generators stay unused (components-<generation>,
 /// and the release crates-<generation> that hosts prebuilt ones)
-const GENERATION: &str = "v3";
-/// prebuilt components: the assets `<crate>.<version>.wasm` of this release, built by .github/workflows/crates.yml
+const GENERATION: &str = "v4";
+/// prebuilt components: the assets `<crate>.<version>.wasm` (and `.debug.wasm`) of this release, built by .github/workflows/crates.yml
 const HOSTED_RELEASES: &str = "https://api.github.com/repos/pannous/warp/releases/tags/crates-";
 /// set: build every crate locally, never download (the workflow that builds the hosted ones)
 const BUILD_LOCALLY: &str = "WARP_BUILD_CRATES";
+/// set: the debug build of each crate component, with DWARF (file and line in traps; 10 to 45 times the size)
+const DEBUG_BUILDS: &str = "WARP_DEBUG_CRATES";
 const SHA256_PREFIX: &str = "sha256:";
-const WORKSPACE_MANIFEST: &str =
-	"[workspace]\nmembers = [\"wrappers/*\"]\nresolver = \"2\"\n\n[profile.release]\nopt-level = \"s\"\nstrip = true\n";
+/// release keeps the name section (`strip = "debuginfo"`): traps name the Rust functions, for about 20% more bytes
+const WORKSPACE_MANIFEST: &str = "[workspace]\nmembers = [\"wrappers/*\"]\nresolver = \"2\"\n\n[profile.release]\nopt-level = \"s\"\nstrip = \"debuginfo\"\n\n[profile.debugging]\ninherits = \"release\"\ndebug = true\nstrip = false\n";
 const WIT_BINDGEN: &str = "0.46";
 const TARGET: &str = "wasm32-wasip2";
 const WRAPPER_PREFIX: &str = "warp-crate-";
@@ -37,6 +39,36 @@ const BUILD_ROUNDS: usize = 12;
 const MISSING_TARGET_SIGN: &str = "target may not be installed";
 /// one wrapper build at a time within a process; cargo locks the target directory across processes
 static BUILDING: Mutex<()> = Mutex::new(());
+
+/// A cargo profile of the wrappers and the file name ending of its components
+struct Variant {
+	profile: &'static str,
+	ending: &'static str,
+}
+const RELEASE: Variant = Variant {
+	profile: "release",
+	ending: ".wasm",
+};
+const DEBUG: Variant = Variant {
+	profile: "debugging",
+	ending: ".debug.wasm",
+};
+
+fn variant() -> &'static Variant {
+	match std::env::var_os(DEBUG_BUILDS) {
+		Some(_) => &DEBUG,
+		None => &RELEASE,
+	}
+}
+
+/// The version in a component file name `<crate><separator><version><ending>` of the variant
+fn version_in<'a>(file: &'a str, name: &str, separator: char) -> Option<&'a str> {
+	let version = file
+		.strip_prefix(name)?
+		.strip_prefix(separator)?
+		.strip_suffix(variant().ending)?;
+	(!version.ends_with(".debug")).then_some(version)
+}
 
 /// The component file of the crate `name`: the newest cached build, else the newest hosted one, else generated and
 /// built now
@@ -63,7 +95,7 @@ fn downloaded_or_built(name: &str) -> Result<PathBuf, String> {
 }
 
 /// The newest prebuilt component of the crate `name`, checked against its SHA-256, saved into `directory` as
-/// `<crate>@<version>.wasm`
+/// `<crate>@<version>.wasm` (`.debug.wasm` for WARP_DEBUG_CRATES)
 pub fn download(name: &str, directory: &Path) -> Result<PathBuf, String> {
 	let releases = format!("{HOSTED_RELEASES}{GENERATION}");
 	let release: Value = serde_json::from_slice(&download_bytes(&releases)?).map_err(|e| format!("{releases}: {e}"))?;
@@ -71,10 +103,7 @@ pub fn download(name: &str, directory: &Path) -> Result<PathBuf, String> {
 	let (version, asset) = assets
 		.iter()
 		.filter_map(|asset| {
-			let (crate_name, version) = asset["name"].as_str()?.strip_suffix(".wasm")?.split_once('.')?;
-			if crate_name != name {
-				return None;
-			}
+			let version = version_in(asset["name"].as_str()?, name, '.')?;
 			Some((Version::parse(version)?, version.to_string(), asset))
 		})
 		.max_by(|a, b| a.0.cmp(&b.0))
@@ -89,7 +118,7 @@ pub fn download(name: &str, directory: &Path) -> Result<PathBuf, String> {
 	if expected != Some(actual.as_str()) {
 		return Err(format!("{url}: SHA-256 {actual} is not the published {expected:?}"));
 	}
-	let path = directory.join(format!("{name}@{version}.wasm"));
+	let path = directory.join(format!("{name}@{version}{}", variant().ending));
 	write_atomically(&path, &bytes)?;
 	eprintln!("use cargo {name}: downloaded the prebuilt component of {name} {version}");
 	Ok(path)
@@ -122,14 +151,12 @@ fn cache() -> PathBuf {
 }
 
 fn newest_cached(name: &str) -> Option<PathBuf> {
-	let prefix = format!("{name}@");
 	std::fs::read_dir(components())
 		.ok()?
 		.flatten()
 		.filter_map(|entry| {
 			let file = entry.file_name().to_string_lossy().into_owned();
-			let version = file.strip_prefix(&prefix)?.strip_suffix(".wasm")?;
-			Some((Version::parse(version)?, entry.path()))
+			Some((Version::parse(version_in(&file, name, '@')?)?, entry.path()))
 		})
 		.max_by(|a, b| a.0.cmp(&b.0))
 		.map(|(_, path)| path)
@@ -174,7 +201,7 @@ fn build(name: &str) -> Result<PathBuf, String> {
 	let doc: Value = serde_json::from_str(&doc).map_err(|e| format!("rustdoc JSON of {name}: {e}"))?;
 	let mut api = Api::of(&doc, &rust_name(name));
 	let wasm = compile_dropping_refused(&wrapper, name, &mut api, &target)?;
-	let built = components().join(format!("{name}@{version}.wasm"));
+	let built = components().join(format!("{name}@{version}{}", variant().ending));
 	write_atomically(
 		&built,
 		&std::fs::read(&wasm).map_err(|e| format!("{}: {e}", wasm.display()))?,
@@ -274,7 +301,8 @@ fn compile_dropping_refused(wrapper: &Path, name: &str, api: &mut Api, target: &
 	let package = format!("{WRAPPER_PREFIX}{name}");
 	let arguments = [
 		"build",
-		"--release",
+		"--profile",
+		variant().profile,
 		"--target",
 		TARGET,
 		"-p",
@@ -296,7 +324,7 @@ fn compile_dropping_refused(wrapper: &Path, name: &str, api: &mut Api, target: &
 		if output.status.success() {
 			return Ok(target
 				.join(TARGET)
-				.join("release")
+				.join(variant().profile)
 				.join(format!("{}.wasm", rust_name(&package))));
 		}
 		let messages = String::from_utf8_lossy(&output.stdout).into_owned();

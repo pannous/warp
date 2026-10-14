@@ -279,7 +279,7 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, 
 	let page_routes: Vec<String> = match exports(&rendering.bytes, crate::routes::PAGE_ROUTES) {
 		true => items_of(&read_after_main(crate::routes::PAGE_ROUTES)?)
 			.iter()
-			.map(crate::routes::pattern_text)
+			.map(Node::text_or_name)
 			.collect(),
 		false => vec![],
 	};

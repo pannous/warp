@@ -40,8 +40,6 @@ pub const TRAIT_KEYWORDS: [&str; 8] = [
 ];
 pub const WITNESS_SEPARATOR: char = '·';
 const SORT_WORD: &str = "sort";
-/// The annotation `xs: T list` (analyzer::with_list_annotation)
-const LIST_OF_PREFIX: &str = "list of ";
 /// The parameter name a fix shows for an operation declared without parameters, `trait shape{area}`
 const DEFAULT_PARAMETER: &str = "x";
 /// The word after a trait in a list annotation `xs: shape list`
@@ -191,6 +189,11 @@ impl Traits {
 
 	fn named(&self, name: &str) -> Option<&Trait> {
 		self.0.iter().find(|candidate| candidate.name == name)
+	}
+
+	/// The trait the elements of a list annotation need, Comparable of `xs: Comparable list` (`list of Comparable`)
+	fn element_trait(&self, type_name: &str) -> Option<&Trait> {
+		self.named(type_name.strip_prefix(crate::analyzer::LIST_OF_PREFIX)?)
 	}
 
 	fn operation(&self, name: &str) -> Option<(&Trait, &Operation)> {
@@ -956,15 +959,20 @@ fn without_claims(node: Node, traits: &Traits) -> Node {
 	children_rewritten(node, |child| without_claims(child, traits))
 }
 
-/// Every function's parameters with the declared type each one takes, for the functions that take any
-fn instance_signatures(node: &Node, registry: &TypeRegistry) -> HashMap<String, Vec<(String, Option<String>)>> {
+/// Every function's parameters with the declared type each one takes (a class, a list of a trait), for the
+/// functions that take any
+fn instance_signatures(
+	node: &Node,
+	registry: &TypeRegistry,
+	traits: &Traits,
+) -> HashMap<String, Vec<(String, Option<String>)>> {
 	let context = crate::analyzer::function_definitions(node);
 	let declared = |param: &crate::context::Param| {
 		param
 			.annotation
 			.as_ref()
 			.map(Node::name)
-			.filter(|type_name| names_classes(type_name, registry))
+			.filter(|type_name| names_classes(type_name, registry) || traits.element_trait(type_name).is_some())
 	};
 	let signature = |function: &crate::context::UserFunctionDef| {
 		function
@@ -978,34 +986,6 @@ fn instance_signatures(node: &Node, registry: &TypeRegistry) -> HashMap<String, 
 		.values()
 		.map(|function| (function.name.clone(), signature(function)))
 		.filter(|(_, params)| params.iter().any(|(_, declared)| declared.is_some()))
-		.collect()
-}
-
-/// Every function's parameters annotated `list of <trait>` (`xs: Comparable list`): their positions and traits
-fn trait_constraints(node: &Node, traits: &Traits) -> HashMap<String, Vec<(usize, String)>> {
-	let context = crate::analyzer::function_definitions(node);
-	let constraint = |param: &crate::context::Param| {
-		param
-			.annotation
-			.as_ref()?
-			.name()
-			.strip_prefix(LIST_OF_PREFIX)
-			.filter(|element| traits.is_trait(element))
-			.map(str::to_string)
-	};
-	context
-		.user_functions
-		.values()
-		.map(|function| {
-			let constrained = function
-				.params
-				.iter()
-				.enumerate()
-				.filter_map(|(index, param)| Some((index, constraint(param)?)))
-				.collect::<Vec<_>>();
-			(function.name.clone(), constrained)
-		})
-		.filter(|(_, constrained)| !constrained.is_empty())
 		.collect()
 }
 

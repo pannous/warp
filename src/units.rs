@@ -1,11 +1,8 @@
 //! Unit words as values (wiki/unit.md): `3km` is `3*km`, `1 m + 1km` is `1001 m`.
-//! Programs made of integers and units are evaluated here at compile time; sums convert to the finer unit.
-//! `1950 ± 50` is a value with tolerance, `1900 - 2000 AD` a range; both print back in the form they were written.
-//! The canonical unit of a result is the smallest unit involved: `3km+10m` is `3010 m`.
-//! A quantity is an amount times units to powers: `6 m²`, `6 m·kg`, `5 km/h` (km·h⁻¹), `1 kg·m/s²`.
-//! Anything else (floats, variables, functions) takes the normal path, where a unit word is an ordinary symbol.
+//! The units and their scales, the words a program writes them in, and the lowerings around them; static_units checks
+//! the units of a program and runs its amounts as exact SI numbers. The unit shown is the finest one written:
+//! `3km+10m` is `3010m`. A quantity is an amount times units to powers: `6 m²`, `6 m·kg`, `5 km/h` (km·h⁻¹), `1 kg·m/s²`.
 
-use crate::compile_time::{fail, Stop};
 use crate::extensions::numbers::Number;
 use crate::meta::DataValue;
 use crate::node::{error, Bracket, Node, Separator};
@@ -195,21 +192,13 @@ const LONG_NAMES: [(&str, &str); 19] = [
 	("pound", "lb"),
 	("lbs", "lb"),
 ];
-/// `100 cm in m`: the word of a conversion written with spaces (`as` is an operator)
-const IN_WORD: &str = "in";
-/// `for g in 0 to 2 {…}`, `for each g in …`: a loop variable named like a unit is the variable (card loop-variable)
-const FOR_WORD: &str = "for";
-const EACH_WORD: &str = "each";
+// `100 cm in m`: the word of a conversion written with spaces (`as` is an operator)
+use crate::words::IN_WORD;
 /// The local time of day, unless the program names something so (card time-day-value)
 const TIME_WORD: &str = "time";
 
-thread_local! {
-	/// The unit words the program being lowered defines itself (`m = 2`, `g(x) := …`): no units while it is lowered
-	static SHADOWED_UNITS: std::cell::RefCell<std::collections::HashSet<String>> = std::cell::RefCell::new(Default::default());
-}
-
 fn unit_named(name: &str) -> Option<&'static Unit> {
-	if SHADOWED_UNITS.with(|shadowed| shadowed.borrow().contains(name)) {
+	if crate::compile_context::read(|context| context.shadowed_units.contains(name)) {
 		return None;
 	}
 	UNITS.iter().find(|unit| unit.name == name)
@@ -217,7 +206,7 @@ fn unit_named(name: &str) -> Option<&'static Unit> {
 
 /// `run` with the unit words `program` defines as its names, not units: `g(x) := x + 1 m` keeps m a unit
 fn shadowing<T>(program: &Node, run: impl FnOnce() -> T) -> T {
-	crate::util::scoped(&SHADOWED_UNITS, defined_unit_names(program), run)
+	crate::compile_context::scoped(|context| &mut context.shadowed_units, defined_unit_names(program), run)
 }
 
 /// A conversion target: a unit by its short name or its long name, `minute` or `minutes`
@@ -436,15 +425,12 @@ fn run_time_quantity(amount: Node, unit: String) -> Node {
 	)
 }
 
-/// `5 m ± 1 cm` in a program the compile-time evaluation cannot answer (arithmetic with it, a function given it) as the
-/// run-time `quantity(5 ± 1/100, "m")`: its amount an interval in the unit of the value (card plus-minus-units). A
-/// tolerance the evaluation answers (`2m ± 5cm`, `1950 AD ± 50 == 1900 - 2000 AD`) stays the compile-time Tolerance
+/// `5 m ± 1 cm` as the run-time `quantity(5 ± 1/100, "m")`: its amount an interval in the unit of the value (card
+/// plus-minus-units)
 pub fn lower_run_time_tolerances(program: Node) -> Node {
-	shadowing(&program.clone(), || {
-		match !has_unit_tolerance(&program) || answers_at_compile_time(&program) {
-			true => program,
-			false => with_run_time_tolerances(program),
-		}
+	shadowing(&program.clone(), || match has_unit_tolerance(&program) {
+		true => with_run_time_tolerances(program),
+		false => program,
 	})
 }
 
@@ -454,16 +440,6 @@ fn has_unit_tolerance(node: &Node) -> bool {
 			true
 		}
 		other => other.parts().into_iter().any(has_unit_tolerance),
-	}
-}
-
-fn answers_at_compile_time(program: &Node) -> bool {
-	match evaluate(program) {
-		Ok(_) => true,
-		Err(Stop::Error(message)) => !RUN_TIME_TOLERANCE_ERRORS
-			.iter()
-			.any(|refusal| message.starts_with(refusal)),
-		Err(Stop::Unsupported) => false,
 	}
 }
 
@@ -482,31 +458,33 @@ fn with_run_time_tolerances(node: Node) -> Node {
 fn run_time_tolerance(value: &Node, spread: &Node) -> Result<Node, String> {
 	let interval = |amount: Node, spread: Node| Node::Key(Box::new(amount), Op::PlusMinus, Box::new(spread));
 	let (amount, unit) = match (unit_literal(value), unit_literal(spread)) {
+		// `5 m ± 1 cm`: the spread counts in the value's unit, value·spread/value in SI amounts
 		(Some((amount, unit)), Some(_)) => {
-			let (Ok(Value::Quantity(value)), Ok(Value::Quantity(spread))) = (evaluate(value), evaluate(spread)) else {
-				return Err(format!(
+			let si = |quantity: &Node| match static_units::constant(quantity) {
+				Ok(Some((si_amount, signature))) => Ok((static_units::exact_amount(&si_amount), signature)),
+				_ => Err(format!(
 					"a tolerance applies to numbers and quantities: {}",
+					quantity.serialize()
+				)),
+			};
+			let ((value_si, value_signature), (spread_si, spread_signature)) = (si(value)?, si(spread)?);
+			if value_signature != spread_signature {
+				return Err("incompatible units".to_string());
+			}
+			let spread_in_unit = match (static_units::exact_amount(&amount), value_si, spread_si) {
+				(Some(amount), Some(value_si), Some(spread_si)) => value_si
+					.inverse()
+					.map(|per_value| amount.mul(&spread_si).mul(&per_value)),
+				_ => None,
+			}
+			.ok_or_else(|| {
+				format!(
+					"{} ± {}: write the spread in the value's unit",
+					value.serialize(),
 					spread.serialize()
-				));
-			};
-			aligned(&value, &spread).map_err(|stop| match stop {
-				Stop::Error(message) => message,
-				Stop::Unsupported => "incompatible units".to_string(),
+				)
 			})?;
-			let unit_of = |factor: &Factor| {
-				value
-					.factors
-					.iter()
-					.find(|own| own.unit.dimension == factor.unit.dimension)
-					.map_or(factor.unit, |own| own.unit)
-			};
-			(
-				interval(
-					amount,
-					quotient_node(&spread.amount.mul(&scale(&spread.factors, unit_of))),
-				),
-				unit,
-			)
+			(interval(amount, quotient_node(&spread_in_unit)), unit)
 		}
 		(Some((amount, unit)), None) => (interval(amount, spread.clone()), unit),
 		(None, Some((amount, unit))) => (interval(value.clone(), amount), unit),
@@ -632,31 +610,9 @@ impl fmt::Display for UncertainQuantity {
 }
 
 impl Quantity {
-	fn of(amount: i64, unit: &'static Unit) -> Quantity {
-		Quantity {
-			amount: Rational::integer(amount),
-			factors: vec![Factor { unit, power: 1 }],
-		}
-	}
-
 	/// Is the amount the whole number n: a quantity equals the bare number of its own unit (`3km+10m == 3010`)
 	pub fn is_amount(&self, n: i64) -> bool {
 		self.amount == Rational::integer(n)
-	}
-
-	fn with_amount(&self, amount: Rational) -> Quantity {
-		Quantity {
-			amount,
-			factors: self.factors.clone(),
-		}
-	}
-
-	/// The one unit of a plain quantity (`3 m`), None for a power or a product
-	fn single_unit(&self) -> Option<&'static Unit> {
-		match self.factors.as_slice() {
-			[Factor { unit, power: 1 }] => Some(unit),
-			_ => None,
-		}
 	}
 }
 
@@ -677,42 +633,10 @@ fn signature(factors: &[Factor]) -> Vec<(Dimension, i32)> {
 	powers
 }
 
-/// `1950 ± 50 cm`: the unit is absent for plain numbers
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Tolerance {
-	value: i64,
-	tolerance: i64,
-	unit: Option<&'static Unit>,
-}
-
-impl fmt::Display for Tolerance {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{} ± {}", self.value, self.tolerance)?;
-		self.unit.map_or(Ok(()), |unit| write!(f, "{}", unit.name))
-	}
-}
-
-/// `1900 - 2000 AD`: both ends in one unit
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Range {
-	from: i64,
-	to: i64,
-	unit: &'static Unit,
-}
-
-impl fmt::Display for Range {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{} - {}{}", self.from, self.to, self.unit.name)
-	}
-}
-
 /// The text of a unit result held in a `Node::Data`, None for any other data
 pub fn describe(data: &DataValue) -> Option<String> {
 	if let Some(quantity) = data.downcast_ref::<Quantity>() {
 		return Some(quantity.to_string());
-	}
-	if let Some(tolerance) = data.downcast_ref::<Tolerance>() {
-		return Some(tolerance.to_string());
 	}
 	if let Some(uncertain) = data.downcast_ref::<crate::uncertain::Uncertain>() {
 		return Some(uncertain.to_string());
@@ -723,29 +647,8 @@ pub fn describe(data: &DataValue) -> Option<String> {
 	if let Some(duration) = data.downcast_ref::<crate::time::Duration>() {
 		return Some(duration.to_string());
 	}
-	if let Some(time) = data.downcast_ref::<crate::time::Time>() {
-		return Some(time.to_string());
-	}
-	data.downcast_ref::<Range>().map(|range| range.to_string())
+	data.downcast_ref::<crate::time::Time>().map(|time| time.to_string())
 }
-
-#[derive(Clone, Debug)]
-enum Value {
-	Number(i64),
-	/// a comparison's answer, yes or no as a plain comparison's (card units-compare)
-	Bool(bool),
-	Quantity(Quantity),
-	Tolerance(Tolerance),
-	Range(Range),
-}
-
-type Evaluated = Result<Value, Stop>;
-
-/// The refusals of the compile-time evaluation that a run-time quantity answers (lower_run_time_tolerances)
-const TOLERANCE_ARITHMETIC: &str = "arithmetic on a value with tolerance or a range is not supported";
-const WHOLE_TOLERANCE: &str = "a tolerance counts whole numbers";
-const PLAIN_TOLERANCE: &str = "a tolerance applies to numbers and plain quantities";
-const RUN_TIME_TOLERANCE_ERRORS: [&str; 3] = [TOLERANCE_ARITHMETIC, WHOLE_TOLERANCE, PLAIN_TOLERANCE];
 
 /// `sleep(1000 ms)`, `sleep 1 s`, `sleep(2 seconds)`: a constant duration is its milliseconds, what the host word takes
 /// (async agent, 2026-10-06: quantities do not reach run time yet, notes/units_runtime.md)
@@ -808,8 +711,8 @@ fn quantity_comparisons_folded(program: Node) -> Node {
 	without_unread_constants(folded, &constants)
 }
 
-/// The main-level variables assigned a quantity once, and nowhere else: `x = 2 km`
-fn constant_quantities(program: &Node) -> Variables {
+/// The main-level variables assigned a quantity once, and nowhere else: `x = 2 km`, each with its value
+fn constant_quantities(program: &Node) -> Constants {
 	let mut assignments: HashMap<String, usize> = HashMap::new();
 	program.visit(&mut |part| {
 		if let Node::Key(target, Op::Assign | Op::Define | Op::Arrow | Op::FatArrow, _)
@@ -820,7 +723,7 @@ fn constant_quantities(program: &Node) -> Variables {
 				.for_each(|name| *assignments.entry(name).or_default() += 1);
 		}
 	});
-	let mut constants = Variables::new();
+	let mut constants = Constants::new();
 	for statement in crate::variable_signals::main_statements(program).0 {
 		let Node::Key(target, Op::Assign, value) = statement.drop_meta() else {
 			continue;
@@ -828,16 +731,27 @@ fn constant_quantities(program: &Node) -> Variables {
 		let Node::Symbol(name) = target.drop_meta() else {
 			continue;
 		};
-		if assignments.get(name) == Some(&1) && needs_quantities(value) {
-			if let Ok(quantity @ Value::Quantity(_)) = evaluate_in(value, &mut constants.clone()) {
-				constants.insert(name.clone(), quantity);
+		let value = with_constants(value, &constants);
+		if assignments.get(name) == Some(&1) && needs_quantities(&value) {
+			if let Ok(Some((_, signature))) = static_units::constant(&value) {
+				if !signature.is_empty() {
+					constants.insert(name.clone(), value);
+				}
 			}
 		}
 	}
 	constants
 }
 
-fn fold_comparisons(node: Node, constants: &Variables, clock: bool) -> Node {
+/// `x > 1500 m` of `x = 2 km`: the expression with the constants' values in place of their names
+fn with_constants(node: &Node, constants: &Constants) -> Node {
+	constants.iter().fold(node.clone(), |node, (name, value)| {
+		let grouped = Node::List(vec![value.clone()], Bracket::Round, Separator::None);
+		crate::lowering::library_words::substitute(node, name, &grouped)
+	})
+}
+
+fn fold_comparisons(node: Node, constants: &Constants, clock: bool) -> Node {
 	let Node::Key(left, op, right) = node.drop_meta() else {
 		return node.map_children(|child| fold_comparisons(child, constants, clock));
 	};
@@ -847,7 +761,7 @@ fn fold_comparisons(node: Node, constants: &Variables, clock: bool) -> Node {
 	let is_clock = |side: &Node| clock && matches!(side.drop_meta(), Node::Symbol(name) if name == TIME_WORD);
 	if is_clock(left) || is_clock(right) {
 		let (duration, clock_left) = if is_clock(left) { (right, true) } else { (left, false) };
-		return match clock_milliseconds(duration, constants) {
+		return match clock_milliseconds(&with_constants(duration, constants)) {
 			Ok(Some(amount)) => {
 				let time_of_day = Node::Symbol(format!(
 					"{}{}",
@@ -867,43 +781,32 @@ fn fold_comparisons(node: Node, constants: &Variables, clock: bool) -> Node {
 	}
 	let reads_quantities =
 		needs_quantities(&node) || constants.keys().any(|name| crate::warp_parser::mentions(&node, name));
-	match evaluate_in(&node, &mut constants.clone())
-		.ok()
-		.filter(|_| reads_quantities)
-	{
-		Some(Value::Number(answer)) => Node::int(answer),
-		Some(Value::Bool(truth)) => Node::from(truth),
-		_ => match evaluate_in(&node, &mut constants.clone()) {
-			Err(Stop::Error(message)) if reads_quantities => error(&message),
-			_ => node.map_children(|child| fold_comparisons(child, constants, clock)),
-		},
+	match static_units::constant(&with_constants(&node, constants)) {
+		Ok(Some((truth @ (Node::True | Node::False), _))) if reads_quantities => truth,
+		Err(message) if reads_quantities => error(&message),
+		_ => node.map_children(|child| fold_comparisons(child, constants, clock)),
 	}
 }
 
 /// What the time of day is compared with, in milliseconds; None when it is no constant (left as written, loud later)
-fn clock_milliseconds(duration: &Node, constants: &Variables) -> Result<Option<i64>, String> {
+fn clock_milliseconds(duration: &Node) -> Result<Option<i64>, String> {
 	if let Some(amount) = milliseconds(duration) {
 		return Ok(Some(amount));
 	}
-	match evaluate_in(duration, &mut constants.clone()) {
-		Ok(Value::Quantity(quantity)) => match quantity.factors.as_slice() {
-			[factor] if factor.unit.dimension == Dimension::Time && factor.power == 1 => {
-				Ok(whole(&quantity.amount.mul(&Rational::integer(factor.unit.factor))))
-			}
-			_ => Err(format!(
-				"DimensionError: the time of day is a duration, {quantity} is none"
-			)),
-		},
-		Ok(Value::Number(amount)) => Err(format!(
-			"the time of day is a duration: compare it with one, e.g. time < {amount}h"
+	match static_units::constant(duration) {
+		Ok(Some((amount, signature))) if signature.is_empty() => Err(format!(
+			"the time of day is a duration: compare it with one, e.g. time < {}h",
+			amount.serialize()
+		)),
+		Ok(Some(_)) => Err(format!(
+			"DimensionError: the time of day is a duration, {} is none",
+			duration.serialize()
 		)),
 		_ => Ok(None),
 	}
 }
 
-/// The program without the assignments of constant quantities no other statement reads (all compared away); the last
-/// statement stays, it is the program's value
-fn without_unread_constants(program: Node, constants: &Variables) -> Node {
+fn without_unread_constants(program: Node, constants: &Constants) -> Node {
 	if constants.is_empty() {
 		return program;
 	}
@@ -947,16 +850,12 @@ pub(crate) fn milliseconds(node: &Node) -> Option<i64> {
 			.ok()
 			.flatten();
 	}
-	let Ok(Value::Quantity(quantity)) = evaluate(node) else {
-		return None;
-	};
-	let [factor] = quantity.factors.as_slice() else {
-		return None;
-	};
-	if factor.unit.dimension != Dimension::Time || factor.power != 1 {
-		return None;
+	match static_units::constant(&with_written_amount(node.clone())) {
+		Ok(Some((seconds, signature))) if signature == [(Dimension::Time, 1)] => {
+			whole(&static_units::exact_amount(&seconds)?.mul(&Rational::integer(1000)))
+		}
+		_ => None,
 	}
-	whole(&quantity.amount.mul(&Rational::integer(factor.unit.factor)))
 }
 
 fn needs_quantities(node: &Node) -> bool {
@@ -978,16 +877,6 @@ fn defined_unit_names(node: &Node) -> std::collections::HashSet<String> {
 	names
 }
 
-/// The variable a loop binds, `g` of `for g in 0 to 2 {…}` and of `for each g in …`
-fn loop_variable(words: &[Node]) -> Option<&Node> {
-	let word = |index: usize| words.get(index).map(|word| word.drop_meta().name());
-	match (word(0)?.as_str(), word(1)?.as_str()) {
-		(FOR_WORD, EACH_WORD) => words.get(2),
-		(FOR_WORD, _) => words.get(1),
-		_ => None,
-	}
-}
-
 fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet<String>) {
 	let mut add_unit = |node: &Node| {
 		if let Node::Symbol(name) = node.drop_meta() {
@@ -1003,15 +892,19 @@ fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet
 		}),
 		other => add_unit(other),
 	};
+	if let Some(definition) = crate::lowering::function_head(node) {
+		definition.written_parameters.iter().for_each(&mut add_parameters);
+	}
 	match node.drop_meta() {
 		Node::Key(head, Op::Assign | Op::Define, _) if matches!(head.drop_meta(), Node::List(..)) => {
 			add_parameters(head)
 		}
 		Node::Key(target, Op::Assign | Op::Define | Op::Colon, _) => add_parameters(target),
 		Node::Key(parameters, Op::Arrow | Op::FatArrow, _) => add_parameters(parameters),
+		// `for g in 0 to 2 {…}`: a loop variable named like a unit is the variable (card loop-variable)
 		Node::List(words, _, _) => {
-			if let Some(variable) = loop_variable(words) {
-				add_unit(variable)
+			if let Some(variable) = crate::lowering::nodes::for_in_variable(words) {
+				add_unit(&Node::Symbol(variable))
 			}
 		}
 		_ => {}
@@ -1022,162 +915,5 @@ fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet
 		.for_each(|child| collect_defined_unit_names(child, names));
 }
 
-/// `f(s) := s * 2; f(3 s)`: a parameter named like a unit the program also writes outside the function is a name clash
-/// (card static-units-parameter); the parameter shadows the unit, so `3 s` would be an undefined variable
-pub fn check_unit_parameter_clashes(program: &Node) -> Option<crate::diagnostic::Diagnostic> {
-	let mut parameter_of = HashMap::new();
-	program.visit(&mut |node| {
-		if let Some((function, parameters)) = function_head(node) {
-			for parameter in parameters.iter().map(Node::name).filter(|name| is_unit(name)) {
-				parameter_of.insert(parameter, function.name());
-			}
-		}
-	});
-	let outside = without_function_definitions(program.clone());
-	let names_outside = defined_unit_names(&outside);
-	parameter_of.retain(|parameter, _| !names_outside.contains(parameter));
-	let used = first_word_of(&outside, &parameter_of)?;
-	let name = used.drop_meta().name();
-	Some(crate::diagnostic::Diagnostic::at(
-		used,
-		format!(
-			"{name} is a parameter of {} and a unit here: rename the parameter",
-			parameter_of[&name]
-		),
-	))
-}
-
-/// The name and parameters of a function definition `f(a, b) := …`
-fn function_head(node: &Node) -> Option<(&Node, &[Node])> {
-	let Node::Key(head, Op::Define | Op::Assign, _) = node.drop_meta() else {
-		return None;
-	};
-	let Node::List(items, Bracket::Round, _) = head.drop_meta() else {
-		return None;
-	};
-	items.split_first()
-}
-
-fn without_function_definitions(node: Node) -> Node {
-	match function_head(&node) {
-		Some(_) => Node::Empty,
-		None => node.map_children(without_function_definitions),
-	}
-}
-
-/// The first of `words` the code writes, not as a field name (`q.s`)
-fn first_word_of<'a>(node: &'a Node, words: &HashMap<String, String>) -> Option<&'a Node> {
-	match node.drop_meta() {
-		Node::Symbol(name) if words.contains_key(name) => Some(node),
-		Node::Key(object, Op::Dot, _) => first_word_of(object, words),
-		_ => node
-			.drop_meta()
-			.parts()
-			.into_iter()
-			.find_map(|child| first_word_of(child, words)),
-	}
-}
-
-/// Quantities assigned to variables earlier in the program: `x = 2 km; x + 1 m`
-type Variables = HashMap<String, Value>;
-
-fn evaluate(node: &Node) -> Evaluated {
-	evaluate_in(node, &mut Variables::new())
-}
-
-fn evaluate_in(node: &Node, variables: &mut Variables) -> Evaluated {
-	match node.drop_meta() {
-		Node::Number(Number::Int(n)) => Ok(Value::Number(*n)),
-		Node::Symbol(name) => match variables.get(name) {
-			Some(value) => Ok(value.clone()),
-			None => unit_named(name)
-				.map(|unit| Value::Quantity(Quantity::of(1, unit)))
-				.ok_or(Stop::Unsupported),
-		},
-		Node::Key(target, Op::Assign | Op::Define, value) => {
-			let Node::Symbol(name) = target.drop_meta() else {
-				return Err(Stop::Unsupported);
-			};
-			let value = evaluate_in(value, variables)?;
-			if let Some(earlier) = variables.get(name) {
-				same_dimension_kept(name, earlier, &value)?;
-			}
-			variables.insert(name.clone(), value.clone());
-			Ok(value)
-		}
-		Node::Key(keyword, Op::Colon, declaration) if is_global_keyword(keyword) => evaluate_in(declaration, variables),
-		Node::Key(left, Op::Neg, right) if matches!(left.as_ref(), Node::Empty) => {
-			negate(evaluate_in(right, variables)?)
-		}
-		// `6 m² as cm²` reads `(6 m² as cm)²`: the power belongs to the target unit
-		Node::Key(conversion, op @ (Op::Square | Op::Cube), nothing)
-			if matches!(nothing.drop_meta(), Node::Empty) && powered_conversion(conversion, *op).is_some() =>
-		{
-			let (quantity, target) = powered_conversion(conversion, *op).expect("guarded");
-			convert(evaluate_in(quantity, variables)?, target)
-		}
-		Node::Key(base, op @ (Op::Square | Op::Cube), nothing) if matches!(nothing.drop_meta(), Node::Empty) => {
-			arithmetic(
-				evaluate_in(base, variables)?,
-				Op::Pow,
-				Value::Number(exponent_of(*op).into()),
-			)
-		}
-		Node::Key(quantity, Op::As, unit) if unit_expression(unit).is_some() => convert(
-			evaluate_in(quantity, variables)?,
-			unit_expression(unit).expect("guarded"),
-		),
-		Node::Key(amount, Op::Mul, unit) if is_unit_word(unit) => {
-			amount_times(amount, evaluate_in(unit, variables)?, variables)
-		}
-		Node::Key(left, op, right) => arithmetic(evaluate_in(left, variables)?, *op, evaluate_in(right, variables)?),
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => evaluate_in(&items[0], variables),
-		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) if items.len() > 1 => items
-			.iter()
-			.try_fold(Value::Number(0), |_, item| evaluate_in(item, variables)),
-		Node::List(items, Bracket::None, _) => match items.as_slice() {
-			[single] => evaluate_in(single, variables),
-			[count, unit] if is_unit_word(unit) => amount_times(count, evaluate_in(unit, variables)?, variables),
-			// `3010 meters`, and a unit after an expression belongs to its last amount: `3km+10m == 3010 meters`
-			[amount, unit] if target_unit(unit).is_some() => match amount.drop_meta() {
-				Node::Key(..) => evaluate_in(&with_unit(amount, unit), variables),
-				_ => amount_times(
-					amount,
-					Value::Quantity(Quantity::of(1, target_unit(unit).expect("guarded"))),
-					variables,
-				),
-			},
-			// `(23/18)m/s`, as a fraction amount shows: the amount in parentheses, then compound units
-			[amount, unit]
-				if matches!(amount.drop_meta(), Node::List(_, Bracket::Round, _))
-					&& unit_expression(unit).is_some() =>
-			{
-				let factors = unit_expression(unit).expect("guarded");
-				match written_fraction(amount) {
-					Some(fraction) => Ok(Value::Quantity(Quantity {
-						amount: fraction,
-						factors,
-					})),
-					None => amount_times(
-						amount,
-						Value::Quantity(Quantity {
-							amount: Rational::integer(1),
-							factors,
-						}),
-						variables,
-					),
-				}
-			}
-			[quantity, word, unit]
-				if matches!(word.drop_meta(), Node::Symbol(w) if w == IN_WORD) && unit_expression(unit).is_some() =>
-			{
-				convert(
-					evaluate_in(quantity, variables)?,
-					unit_expression(unit).expect("guarded"),
-				)
-			}
-			_ => Err(Stop::Unsupported),
-		},
-		_ => Err(Stop::Unsupported),
-	}
-}
+/// Main-level variables holding a constant quantity, and its value: `x = 2 km`
+type Constants = HashMap<String, Node>;

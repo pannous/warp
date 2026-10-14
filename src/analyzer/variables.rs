@@ -170,14 +170,6 @@ pub(super) fn collect_variables_inner(
 			.iter()
 			.map(|item| collect_variables_inner(item, scope, false, false))
 			.sum(),
-		// `ran_without_abort(i, {…})` keeps the try depth of its start in a temp local (try_guard.rs)
-		Node::List(items, Bracket::Round, Separator::None)
-			if items
-				.first()
-				.is_some_and(|head| head.is_symbol(crate::wasm_emitter::RAN_WITHOUT_ABORT)) =>
-		{
-			1 + items.iter().map(|item| visit(item, scope)).sum::<u32>()
-		}
 		Node::List(items, _, _) => items.iter().map(|item| visit(item, scope)).sum(),
 		_ => 0,
 	}
@@ -407,15 +399,10 @@ pub(super) fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
 			|| [a, b].iter().all(|kind| matches!(kind, Kind::Int | Kind::Float))
 			|| [a, b].iter().all(|kind| matches!(kind, Kind::Text | Kind::Codepoint))
 	};
-	// an element of unknown kind may be an object: `item = 2` earlier, then `for item in basket` (samples/natural.warp)
-	let unknown_element = assigned == Kind::Empty && matches!(value.drop_meta(), Node::Key(_, Op::Hash, _));
-	// a number of run-time kind may be a float: `out = out + x` of an element of unknown kind, `total = total + run.load`
-	let run_time_number = local.kind == Kind::Int
-		&& crate::analyzer::inference::is_run_time_kind(&assigned)
-		&& !matches!(value.drop_meta(), Node::Empty)
-		|| assigned == Kind::Data && matches!(value.drop_meta(), Node::Key(_, op, _) if op.is_arithmetic());
-	let other_kind =
-		unknown_element || run_time_number || CONCRETE_KINDS.contains(&assigned) && !mixes(local.kind, assigned);
+	// a value of run-time kind may be anything: `for item in basket` after `item = 2`, `total = total + run.load`
+	let run_time_value =
+		crate::analyzer::inference::is_run_time_kind(&assigned) && !matches!(value.drop_meta(), Node::Empty);
+	let other_kind = run_time_value || CONCRETE_KINDS.contains(&assigned) && !mixes(local.kind, assigned);
 	if CONCRETE_KINDS.contains(&local.kind) && other_kind {
 		local.kind = Kind::Empty;
 		local.type_node = None;
@@ -745,7 +732,7 @@ pub fn resolve_main_variable_assignments(program: Node) -> Result<Node, Node> {
 	// a used module's functions never see the program's variables (card module-locals)
 	for function in functions
 		.into_iter()
-		.filter(|function| !crate::modules::is_module_definition(&function.name))
+		.filter(|function| !crate::compile_context::read(|context| context.module_definitions.contains(&function.name)))
 	{
 		let looped = crate::lowering::for_loop::loop_variables(&function.body);
 		let is_main_variable = |name: &String| {

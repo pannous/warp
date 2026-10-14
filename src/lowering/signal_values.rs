@@ -20,7 +20,7 @@ use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::variable_signals::{assign, is_round_head, listener_parts, symbols, with_old, with_value, ListenerWord};
 use crate::wasm_emitter::cells::{CELL_GET, CELL_NEW, CELL_SET, SIGNAL_LISTENERS, SIGNAL_LISTENERS_SET, SIGNAL_NEW};
-use crate::words::{COUNT_WORD, FROM_WORD, GLOBAL_WORD, OF_WORD, ONCE_WORD, ON_WORD, WHENEVER_WORD};
+use crate::words::{COUNT_WORD, FROM_WORD, GLOBAL_WORD, ONCE_WORD, ON_WORD, WHENEVER_WORD};
 use std::collections::HashSet;
 
 /// `signal·set(s, v)`: store v in the signal s, then call its listeners
@@ -341,68 +341,55 @@ fn without_function() -> Node {
 /// reflected so
 fn reflections(program: Node) -> (Node, HashSet<String>) {
 	let mut reflected = HashSet::new();
-	let program = reflected_lists(program, &mut reflected);
+	let objects = main_object_literals(&program)
+		.into_iter()
+		.map(|(name, _)| name)
+		.collect();
+	let program = reflected_lists(program, &objects, &mut reflected);
 	(program, reflected)
 }
 
-/// `for f in listeners of x {…}` arrives grouped `(listeners of) (x {…})`: its parts in one row
-pub(crate) fn ungrouped_reflection(items: Vec<Node>) -> Vec<Node> {
-	let grouped_reflection = |item: &Node| matches!(item.drop_meta(), Node::List(parts, Bracket::None, _) if parts.last().is_some_and(|last| word(last) == OF_WORD) && parts.iter().any(|part| word(part) == LISTENERS_WORD));
-	if !items.iter().any(grouped_reflection) {
-		return items;
+/// `x.listeners`, `listeners of x`: x
+pub(crate) fn listeners_subject(node: &Node) -> Option<&Node> {
+	match node.drop_meta() {
+		Node::Key(subject, Op::Dot, member) if member.is_symbol(LISTENERS_WORD) => Some(subject),
+		_ => None,
 	}
-	items
-		.into_iter()
-		.flat_map(|item| match item.drop_meta() {
-			Node::List(parts, Bracket::None, _) => parts.clone(),
-			_ => vec![item],
-		})
-		.collect()
 }
 
-fn reflected_lists(node: Node, reflected: &mut HashSet<String>) -> Node {
-	let Node::List(items, bracket, separator) = node else {
-		return children_rewritten(node, |child| reflected_lists(child, reflected));
+/// a map's own field `listeners` stays its field: `p = {listeners: 7}; p.listeners` is 7
+fn reflected_lists(node: Node, objects: &HashSet<String>, reflected: &mut HashSet<String>) -> Node {
+	let listeners_subject = |node| listeners_subject(node).filter(|subject| !objects.contains(&word(subject)));
+	let mut listeners_of = |subject: &Node| {
+		reflected.insert(word(subject));
+		call(SIGNAL_LISTENERS, vec![subject.clone()])
 	};
-	let mut out: Vec<Node> = vec![];
-	let items: Vec<Node> = ungrouped_reflection(items)
-		.into_iter()
-		.map(|item| reflected_lists(item, reflected))
-		.collect();
-	let mut rest = items.into_iter().peekable();
-	while let Some(item) = rest.next() {
-		if word(&item) == LISTENERS_WORD && rest.peek().is_some_and(|next| word(next) == OF_WORD) {
-			rest.next();
-			// C#'s `listeners of x -= alarm` is `remove alarm from listeners of x`
-			if let Some(Node::Key(variable, Op::SubAssign, name)) = rest.peek().map(|next| next.drop_meta().clone()) {
-				rest.next();
-				reflected.insert(word(&variable));
-				out.extend([
-					symbol(REMOVE_WORD),
-					*name,
-					symbol(FROM_WORD),
-					call(SIGNAL_LISTENERS, vec![*variable]),
-				]);
-				continue;
-			}
-			if let Some(variable) = rest.next() {
-				reflected.insert(word(&variable));
-				let list = call(SIGNAL_LISTENERS, vec![variable.clone()]);
-				match out.last().map(word) {
-					Some(clear) if clear == CLEAR_WORD => {
-						out.pop();
-						out.push(call(SIGNAL_LISTENERS_SET, vec![variable, Node::Empty]));
-					}
-					_ => out.push(list),
-				}
-				continue;
-			}
-		}
-		out.push(item);
+	if let Some(subject) = listeners_subject(&node) {
+		return listeners_of(subject);
 	}
-	match (out.len(), &bracket) {
-		(1, Bracket::None) => out.remove(0),
-		_ => Node::List(out, bracket, separator),
+	match node.drop_meta() {
+		// C#'s `listeners of x -= alarm` is `remove alarm from listeners of x`
+		Node::Key(target, Op::SubAssign, name) if let Some(subject) = listeners_subject(target) => {
+			let listeners = listeners_of(subject);
+			Node::List(
+				vec![symbol(REMOVE_WORD), name.as_ref().clone(), symbol(FROM_WORD), listeners],
+				Bracket::None,
+				Separator::Space,
+			)
+		}
+		Node::List(items, _, _)
+			if let [clear, target] = items.as_slice()
+				&& word(clear) == CLEAR_WORD
+				&& let Some(subject) = listeners_subject(target) =>
+		{
+			reflected.insert(word(subject));
+			call(SIGNAL_LISTENERS_SET, vec![subject.clone(), Node::Empty])
+		}
+		// a one-item phrase is its item: `func add(_ a: T)` reads its parameter `a`, not `(a)`
+		_ => match children_rewritten(node, |child| reflected_lists(child, objects, reflected)) {
+			Node::List(mut items, Bracket::None, _) if items.len() == 1 => items.remove(0),
+			other => other,
+		},
 	}
 }
 
@@ -1193,10 +1180,7 @@ fn parameter_names(param: &Node) -> Vec<String> {
 /// The definition with another body (the last part of it)
 fn with_body(node: Node, body: Node) -> Node {
 	match node {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_body(*node, body)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_body(node, body)),
 		Node::Key(head, op, _) => Node::Key(head, op, Box::new(body)),
 		Node::List(mut items, bracket, separator) => {
 			let last = items.pop().expect("a definition has a body");

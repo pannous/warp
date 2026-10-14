@@ -7,8 +7,6 @@ pub(super) const TASK_WORDS: [&str; 2] = ["go", "await"];
 /// What a task signals when it is done, and the controls that would interrupt one
 pub(super) const FINISH_EVENTS: [&str; 5] = ["finishes", "finished", "completes", "ends", "done"];
 pub(super) const TASK_CONTROLS: [&str; 4] = ["stop", "pause", "cancel", "resume"];
-/// `dir(job)` of a task: the words it takes (card g_oOJs), no read of its value
-pub(super) const DIR_WORD: &str = "dir";
 /// `go f(x)` of a user function and a read of its task variable, until resolve_tasks knows whether f runs on a thread
 pub(crate) const TASK_GO: &str = "task·go";
 pub(super) const TASK_VALUE: &str = "task·value";
@@ -108,10 +106,8 @@ pub fn lower_tasks(node: Node) -> Node {
 	});
 	started.retain(|_, function| functions.contains(function));
 	let job_lists = job_lists(&node, &functions);
-	let own_dir = defined.contains(DIR_WORD);
 	Tasks {
 		words,
-		own_dir,
 		tasks,
 		started,
 		functions,
@@ -345,10 +341,7 @@ pub(super) fn awaited(node: Node) -> Node {
 			items[0] = symbol(named);
 			Node::List(items, bracket, separator)
 		}
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(awaited(*node)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(awaited),
 		other => other,
 	}
 }
@@ -368,8 +361,6 @@ pub(super) fn marker(word: &str, parts: Vec<Node>) -> Node {
 #[derive(Clone)]
 pub(super) struct Tasks<'a> {
 	words: Vec<&'a str>,
-	/// the program defines its own `dir`
-	own_dir: bool,
 	/// task variables and the functions `go` starts
 	tasks: std::collections::HashSet<String>,
 	/// task variable → the user function its `go` started
@@ -381,18 +372,6 @@ pub(super) struct Tasks<'a> {
 }
 
 impl Tasks<'_> {
-	/// `dir(job)`: await, the controls and the finish event, as texts
-	pub(super) fn task_dir(&self, items: &[Node]) -> Option<Node> {
-		let [dir, subject] = items else { return None };
-		let names: Vec<String> = [TASK_WORDS[1]]
-			.iter()
-			.chain(&TASK_CONTROLS)
-			.chain(&[FINISH_EVENT])
-			.map(|name| name.to_string())
-			.collect();
-		(word(dir) == DIR_WORD && !self.own_dir && self.is_task(subject)).then(|| crate::reflection::text_list(&names))
-	}
-
 	pub(super) fn is_task(&self, node: &Node) -> bool {
 		match node.drop_meta() {
 			Node::Symbol(name) => self.tasks.contains(name),
@@ -523,9 +502,6 @@ impl Tasks<'_> {
 				{
 					return race;
 				}
-				if let Some(names) = self.task_dir(&items) {
-					return names;
-				}
 				let items: Vec<Node> = items.into_iter().map(|item| self.lower(item)).collect();
 				match self.task_statement(&items) {
 					// `{ go f(x) }` stays a block: a body in braces is no getter
@@ -639,7 +615,12 @@ impl Tasks<'_> {
 		let awaited_job = self.value_of(&word(&job_name))?;
 		let result = if_then_else(
 			runs,
-			block(vec![self.control(job, TASK_CONTROLS[0]), timed_out]),
+			// a sequence, not a block: a Node result would take `{stop; 0}` as data
+			Node::List(
+				vec![self.control(job, TASK_CONTROLS[0]), timed_out],
+				Bracket::None,
+				Separator::Semicolon,
+			),
 			awaited_job,
 		);
 		Some(Node::List(
@@ -828,10 +809,9 @@ impl Tasks<'_> {
 	}
 }
 
-/// How a started function runs: on a thread with Int words, on a thread with value words, or where it starts
+/// How a started function runs: on a thread, or where it starts
 #[derive(Clone, PartialEq)]
 pub(super) enum TaskPath {
-	Ints,
 	/// with the kinds of the parameters (a Float parameter gets its argument converted, as a call does) and of the result
 	Values(Vec<crate::type_kinds::Kind>, crate::type_kinds::Kind),
 	Inline,
@@ -845,9 +825,8 @@ pub(super) const CROSSING_KINDS: [crate::type_kinds::Kind; 8] = {
 };
 
 /// `task·go(f, args)`, `task·value(job, f)` and `task·control(job, f, word)` (lower_tasks). A function runs in a fresh
-/// instance, natively on the fixed worker pool (tasks.rs), in the browser through host.js: one of at most four surely-Int
-/// arguments that gives an Int through task_spawn / task_await, one of numbers, texts, characters and lists through
-/// task_spawn_values / task_await_value. Any other runs where it starts, as a plain call, and its task variable is its
+/// instance, natively on the fixed worker pool (tasks.rs), in the browser through host.js: one of numbers, texts, characters
+/// and lists through task_spawn_values / task_await_value. Any other runs where it starts, as a plain call, and its task variable is its
 /// value
 pub fn resolve_tasks(node: Node) -> Node {
 	use crate::type_kinds::Kind;
@@ -859,7 +838,6 @@ pub fn resolve_tasks(node: Node) -> Node {
 	let mut context = crate::context::Context::new();
 	crate::analyzer::extract_user_functions(&mut context, &node);
 	crate::analyzer::note_bool_functions(context.user_functions.values());
-	let int_starts = int_starts(&node, &crate::analyzer::literal_variable_kinds(&node, &context));
 	let path = |function: &str| {
 		let Some(definition) = context.user_functions.get(function) else {
 			return TaskPath::Inline;
@@ -871,15 +849,7 @@ pub fn resolve_tasks(node: Node) -> Node {
 		{
 			return TaskPath::Inline;
 		}
-		let ints = definition.return_kind == Kind::Int
-			&& parameters.len() <= crate::host::MAX_TASK_ARGUMENTS
-			&& parameters.iter().all(|kind| *kind == Kind::Int)
-			&& int_starts.get(function).copied().unwrap_or(false);
-		if ints {
-			TaskPath::Ints
-		} else {
-			TaskPath::Values(parameters, definition.return_kind)
-		}
+		TaskPath::Values(parameters, definition.return_kind)
 	};
 	let node = TaskHandlers {
 		path: &path,
@@ -903,39 +873,6 @@ pub fn resolve_tasks(node: Node) -> Node {
 	let node = resolved(node, &path, &wrapped);
 	let node = forwarded_raises(node, &wrapped);
 	with_node_wrappers(node, &wrapped.into_inner())
-}
-
-/// Per started function: whether every `go` of it passes surely Ints (Int literals, variables only ever assigned Int
-/// literals, arithmetic of them), which the Int words carry raw; anything else, like a list a `.map` gives, takes the
-/// value words
-pub(super) fn int_starts(
-	node: &Node,
-	literal_kinds: &std::collections::HashMap<String, crate::type_kinds::Kind>,
-) -> std::collections::HashMap<String, bool> {
-	pub(super) fn surely_int(
-		argument: &Node,
-		literal_kinds: &std::collections::HashMap<String, crate::type_kinds::Kind>,
-	) -> bool {
-		match argument.drop_meta() {
-			Node::Number(crate::extensions::numbers::Number::Int(_)) => true,
-			Node::Symbol(name) => literal_kinds.get(name) == Some(&crate::type_kinds::Kind::Int),
-			Node::Key(left, Op::Add | Op::Sub | Op::Mul, right) => {
-				surely_int(left, literal_kinds) && surely_int(right, literal_kinds)
-			}
-			_ => false,
-		}
-	}
-	let mut starts = std::collections::HashMap::new();
-	node.visit(&mut |part| {
-		if let Node::List(items, _, _) = part {
-			if word(items.first().unwrap_or(&Node::Empty)) == TASK_GO {
-				let all_int = items[2..].iter().all(|argument| surely_int(argument, literal_kinds));
-				let entry = starts.entry(word(&items[1])).or_insert(true);
-				*entry &= all_int;
-			}
-		}
-	});
-	starts
 }
 
 /// A handler of a task on a thread: after every later statement of its block (loop bodies too) it runs once the task's
@@ -1179,9 +1116,9 @@ pub(super) fn forwarded_raises(
 pub(super) const FORWARD_PLACEHOLDER: &str = "forwarded_raise_placeholder";
 pub(super) const BODY_PLACEHOLDER: &str = "handler_body_placeholder";
 
-/// `task·check(task_join(job), task_failure(job)); task_await(job)`: a failed task raises its error from wasm, which
+/// `task·check(task_join(job), task_failure(job)); task_await_value(job)`: a failed task raises its error from wasm, which
 /// `try` catches, before the result is read
-pub(super) fn checked_await(await_word: &str, job: &Node, crossing: Crossing) -> Node {
+pub(super) fn checked_await(job: &Node, crossing: Crossing) -> Node {
 	use crate::host::{TASK_CHECK, TASK_FAILURE, TASK_JOIN};
 	let check = marker(
 		TASK_CHECK,
@@ -1190,7 +1127,7 @@ pub(super) fn checked_await(await_word: &str, job: &Node, crossing: Crossing) ->
 			marker(TASK_FAILURE, vec![job.clone()]),
 		],
 	);
-	let result = marker(await_word, vec![job.clone()]);
+	let result = marker(crate::host::TASK_AWAIT_VALUE, vec![job.clone()]);
 	let result = match crossing {
 		Crossing::AsIs => result,
 		Crossing::Bool => key(result, Op::Ne, Node::Number(crate::extensions::numbers::Number::Int(0))),
@@ -1269,11 +1206,10 @@ pub(super) fn guarded_calls(
 
 /// Every result of a job list: `jobs.map(awaited_job => <checked await of awaited_job>)`
 pub(super) fn awaited_jobs(list: &Node, crossing: Crossing) -> Node {
-	use crate::host::TASK_AWAIT_VALUE;
 	let template = crate::warp_parser::parse(&format!(
 		"{TASK_LIST_PLACEHOLDER}.map({AWAITED_JOB} => {AWAITED_PLACEHOLDER})"
 	));
-	let awaited = checked_await(TASK_AWAIT_VALUE, &symbol(AWAITED_JOB), crossing);
+	let awaited = checked_await(&symbol(AWAITED_JOB), crossing);
 	let template = crate::library_words::substitute(template, TASK_LIST_PLACEHOLDER, list);
 	crate::library_words::substitute(template, AWAITED_PLACEHOLDER, &awaited)
 }
@@ -1286,7 +1222,7 @@ pub(super) fn resolved(
 	path: &dyn Fn(&str) -> TaskPath,
 	wrapped: &std::cell::RefCell<std::collections::BTreeMap<String, usize>>,
 ) -> Node {
-	use crate::host::{TASK_AWAIT, TASK_AWAIT_VALUE, TASK_CONTROL, TASK_SPAWN, TASK_SPAWN_VALUES};
+	use crate::host::{TASK_CONTROL, TASK_SPAWN_VALUES};
 	match node {
 		Node::List(items, bracket, separator) => {
 			let items: Vec<Node> = items.into_iter().map(|item| resolved(item, path, wrapped)).collect();
@@ -1300,7 +1236,6 @@ pub(super) fn resolved(
 					let function = word(&items[1]);
 					let arguments = items[2..].to_vec();
 					match path(&function) {
-						TaskPath::Ints => marker(TASK_SPAWN, [vec![Node::Text(function)], arguments].concat()),
 						TaskPath::Values(parameters, _) => {
 							let float = |argument: Node| key(argument, Op::As, symbol("float"));
 							// a character crosses as a one-character text, as a variable holds it
@@ -1334,8 +1269,7 @@ pub(super) fn resolved(
 				TASK_VALUE => {
 					let crossing = crossing(&items[2..3], path);
 					match path(&word(&items[2])) {
-						TaskPath::Ints => checked_await(TASK_AWAIT, &items[1], crossing),
-						TaskPath::Values(..) => checked_await(TASK_AWAIT_VALUE, &items[1], crossing),
+						TaskPath::Values(..) => checked_await(&items[1], crossing),
 						TaskPath::Inline => items[1].clone(),
 					}
 				}
@@ -1346,7 +1280,7 @@ pub(super) fn resolved(
 					let crossing = crossing(&items[2..], path);
 					match (threaded, read == TASK_LIST) {
 						(false, _) => items[1].clone(),
-						(true, false) => checked_await(TASK_AWAIT_VALUE, &items[1], crossing),
+						(true, false) => checked_await(&items[1], crossing),
 						(true, true) => awaited_jobs(&items[1], crossing),
 					}
 				}

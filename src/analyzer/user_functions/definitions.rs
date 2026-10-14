@@ -135,10 +135,7 @@ pub(in crate::analyzer) fn lift_nested_defs_walk(
 	renames: &mut HashMap<String, String>,
 ) -> Node {
 	match node {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(lift_nested_defs_walk(ctx, *node, parent, renames)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| lift_nested_defs_walk(ctx, node, parent, renames)),
 		Node::Key(left, op @ (Op::Assign | Op::Define), body) => {
 			if let Node::List(items, bracket, separator) = left.drop_meta() {
 				if let Some(Node::Symbol(short)) = items.first().map(Node::drop_meta) {
@@ -307,6 +304,14 @@ pub(in crate::analyzer) fn extract_param(item: &Node) -> Option<Param> {
 			} else {
 				None
 			}
+		}
+		// `f: (Int) -> Int` parses as `(f: (Int)) -> Int`: a function
+		Node::Key(typed, Op::Arrow | Op::FatArrow, _) if matches!(typed.drop_meta(), Node::Key(_, Op::Colon, _)) => {
+			let param = extract_param(typed)?;
+			Some(Param {
+				annotation: Some(Node::Symbol(Kind::Function.to_string())),
+				..param
+			})
 		}
 		// `b=2` and the typed `b:int=2`
 		Node::Key(declared, Op::Assign, default) => {

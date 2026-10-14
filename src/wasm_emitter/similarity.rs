@@ -11,7 +11,7 @@ use super::uncertain::UNCERTAIN_SIMILAR;
 use super::{WasmGcEmitter, IS_TRUTHY, VALUES_EQUAL};
 use crate::library_words::{VALUES_ROUGH, VALUES_SIMILAR};
 use crate::node::Node;
-use crate::type_kinds::{Kind, BOOL_KIND, CURLY_LIST_KIND, KIND_MASK};
+use crate::type_kinds::{Kind, BOOL_KIND, CURLY_LIST_KIND};
 use wasm_encoder::*;
 use Instruction as I;
 
@@ -104,12 +104,9 @@ impl WasmGcEmitter {
 						I::F64Sub,
 						I::F64Abs,
 						I::LocalSet(difference),
-					],
-				);
-				Self::emit_list(f, &[I::LocalGet(a), I::LocalGet(b), I::F64Eq]);
-				Self::emit_list(
-					f,
-					&[
+						I::LocalGet(a),
+						I::LocalGet(b),
+						I::F64Eq,
 						I::LocalGet(difference),
 						I::F64Const(ABSOLUTE_TOLERANCE.into()),
 						I::F64Le,
@@ -197,9 +194,9 @@ impl WasmGcEmitter {
 						I::I64Const(BOOL_KIND),
 						I::I64Eq,
 						I::I32Or,
+						I::If(BlockType::Empty),
 					],
 				);
-				f.instruction(&I::If(BlockType::Empty));
 				for side in [a, b] {
 					f.instruction(&I::LocalGet(side));
 					s.call(f, IS_TRUTHY);
@@ -208,16 +205,8 @@ impl WasmGcEmitter {
 				// an uncertain value: alike within the uncertainty of the difference
 				if s.should_emit_function(UNCERTAIN_SIMILAR) {
 					for kind in [kind_a, kind_b] {
-						Self::emit_list(
-							f,
-							&[
-								I::LocalGet(kind),
-								I::I64Const(KIND_MASK),
-								I::I64And,
-								I::I64Const(Kind::Uncertain as i64),
-								I::I64Eq,
-							],
-						);
+						Self::emit_list(f, &[I::LocalGet(kind)]);
+						Self::emit_kind_test(f, Kind::Uncertain as i64, I::I64Eq);
 					}
 					Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty)]);
 					for side in [a, b] {
@@ -238,16 +227,8 @@ impl WasmGcEmitter {
 				// texts and characters: alike folded
 				for kind in [kind_a, kind_b] {
 					for (index, text_kind) in TEXT_KINDS.iter().enumerate() {
-						Self::emit_list(
-							f,
-							&[
-								I::LocalGet(kind),
-								I::I64Const(KIND_MASK),
-								I::I64And,
-								I::I64Const(*text_kind as i64),
-								I::I64Eq,
-							],
-						);
+						Self::emit_list(f, &[I::LocalGet(kind)]);
+						Self::emit_kind_test(f, *text_kind as i64, I::I64Eq);
 						if index > 0 {
 							f.instruction(&I::I32Or);
 						}
@@ -263,8 +244,10 @@ impl WasmGcEmitter {
 					s.call(f, TEXT_FOLD);
 				}
 				s.call(f, VALUES_EQUAL);
-				Self::emit_list(f, &[I::Return, I::End]);
-				Self::emit_list(f, &[I::LocalGet(kind_a), I::LocalGet(kind_b), I::I64Ne]);
+				Self::emit_list(
+					f,
+					&[I::Return, I::End, I::LocalGet(kind_a), I::LocalGet(kind_b), I::I64Ne],
+				);
 				Self::return_if(f, 0);
 				// `{…}` objects are maps: their entries may come in any order
 				Self::emit_list(
@@ -289,8 +272,7 @@ impl WasmGcEmitter {
 				s.is_number_payload(f, b);
 				Self::emit_list(f, &[I::I32And, I::If(BlockType::Empty)]);
 				numbers_similar(s, f, a, b);
-				f.instruction(&I::End);
-				Self::emit_list(f, &[I::LocalGet(a), I::LocalGet(b)]);
+				Self::emit_list(f, &[I::End, I::LocalGet(a), I::LocalGet(b)]);
 				s.call(f, VALUES_EQUAL);
 			},
 		);

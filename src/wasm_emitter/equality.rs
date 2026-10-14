@@ -201,8 +201,7 @@ impl WasmGcEmitter {
 			Self::emit_list(func, &[I::F64Const(Ieee64::new(0.0f64.to_bits())), I::F64Ne]);
 		} else {
 			emit_number(self, func, condition);
-			func.instruction(&I::I64Const(0));
-			func.instruction(&I::I64Ne); // not I32WrapI64: 2^32 is truthy
+			Self::emit_list(func, &[I::I64Const(0), I::I64Ne]); // not I32WrapI64: 2^32 is truthy
 		}
 	}
 
@@ -277,21 +276,11 @@ impl WasmGcEmitter {
 						I::LocalTee(kind),
 						I::I64Const(Kind::Key as i64),
 						I::I64Eq,
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(kind),
 						I::I64Const(Kind::List as i64),
 						I::I64Eq,
 						I::I32Or,
 						I::If(BlockType::Empty),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(left),
 						I::LocalGet(right),
 						I::RefEq,
@@ -331,10 +320,7 @@ impl WasmGcEmitter {
 					f.instruction(&I::I32Eqz);
 					Self::return_if(f, 0);
 					Self::field(f, local, node, 0);
-					Self::emit_list(
-						f,
-						&[I::I64Const(KIND_MASK), I::I64And, I::I64Const(kind as i64), I::I64Ne],
-					);
+					Self::emit_kind_test(f, kind as i64, I::I64Ne);
 					Self::return_if(f, 0);
 				};
 				is_node_of_kind(f, entry, Kind::Key);
@@ -380,16 +366,8 @@ impl WasmGcEmitter {
 		Self::test(f, cell, HeapType::Concrete(node));
 		f.instruction(&I::If(BlockType::Empty));
 		Self::field(f, cell, node, 0);
-		Self::emit_list(
-			f,
-			&[
-				I::I64Const(KIND_MASK),
-				I::I64And,
-				I::I64Const(Kind::List as i64),
-				I::I64Eq,
-				I::If(BlockType::Empty),
-			],
-		);
+		Self::emit_kind_test(f, Kind::List as i64, I::I64Eq);
+		Self::emit_list(f, &[I::If(BlockType::Empty)]);
 		Self::field(f, cell, node, 1);
 		self.call(f, IS_META_ENTRY);
 		f.instruction(&I::If(BlockType::Empty));
@@ -402,8 +380,7 @@ impl WasmGcEmitter {
 			push_rest(f);
 		}
 		Self::emit_list(f, extra);
-		Self::emit_list(f, &[I::Call(recurse), I::Return, I::End]);
-		Self::emit_list(f, &[I::End, I::End]);
+		Self::emit_list(f, &[I::Call(recurse), I::Return, I::End, I::End, I::End]);
 	}
 
 	pub(super) fn any_ref() -> ValType {
@@ -558,8 +535,7 @@ impl WasmGcEmitter {
 				],
 			);
 			cell_field(f, walked, 1);
-			f.instruction(&I::Call(is_meta_entry));
-			f.instruction(&I::LocalSet(found)); // a meta entry needs no partner
+			Self::emit_list(f, &[I::Call(is_meta_entry), I::LocalSet(found)]); // a meta entry needs no partner
 			Self::emit_list(
 				f,
 				&[
@@ -640,9 +616,10 @@ impl WasmGcEmitter {
 						I::RefIsNull,
 						I::Return,
 						I::End,
+						I::LocalGet(1),
+						I::RefIsNull,
 					],
 				);
-				Self::emit_list(f, &[I::LocalGet(1), I::RefIsNull]);
 				Self::return_if(f, 0);
 
 				// Nodes: same kind (Int and Float are compatible), then equal data and equal value
@@ -770,8 +747,7 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::I32Or, I::I32And, I::If(BlockType::Empty)]);
 				s.number_as_f64(f, 0);
 				s.number_as_f64(f, 1);
-				Self::emit_list(f, &[I::F64Eq, I::Return, I::End]);
-				f.instruction(&I::I32Const(0));
+				Self::emit_list(f, &[I::F64Eq, I::Return, I::End, I::I32Const(0)]);
 			},
 		);
 		self.export_runtime_function(VALUES_EQUAL);
@@ -880,9 +856,14 @@ impl WasmGcEmitter {
 				Self::field(f, 0, f64_box, 0);
 				Self::emit_list(
 					f,
-					&[I::F64Const(Ieee64::new(0f64.to_bits())), I::F64Ne, I::Return, I::End],
+					&[
+						I::F64Const(Ieee64::new(0f64.to_bits())),
+						I::F64Ne,
+						I::Return,
+						I::End,
+						I::I32Const(1),
+					],
 				);
-				f.instruction(&I::I32Const(1));
 			},
 		);
 		self.export_runtime_function(IS_TRUTHY);

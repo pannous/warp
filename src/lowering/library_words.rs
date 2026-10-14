@@ -60,7 +60,6 @@ const COUNT_SUBSTRING_TEMPLATE: &str = "count(split(counted_haystack, counted_ne
 const FOR_WORD: &str = "for";
 /// `log(x)` is libm's natural logarithm; `log(x, base)` divides by the base's
 const LOG_WORD: &str = "log";
-const OF_WORD: &str = "of";
 
 /// Canonical word and the spellings that mean it
 const SYNONYMS: [(&str, &[&str]); 31] = [
@@ -284,16 +283,6 @@ pub fn is_field_update_of(name: &str, value: &Node) -> bool {
 	word.name() == FIELD_WITH && matches!(map.drop_meta(), Node::Symbol(map) if map == name)
 }
 
-/// Library words of a list, text or map that refuse a number (`sum(5)`, `sort(5)`): a user's typed method of one is
-/// what a number would call (traits/generics.rs)
-const COLLECTION_WORDS: [&str; 9] = [
-	SUM_WORD, "sort", "reverse", "first", "last", "keys", "values", "chars", "upper",
-];
-
-pub fn takes_no_number(name: &str) -> bool {
-	COLLECTION_WORDS.contains(&canonical_spelling(name))
-}
-
 pub fn is_runtime_word(name: &str) -> bool {
 	RUNTIME_WORDS.iter().any(|(word, _)| *word == name)
 }
@@ -460,7 +449,7 @@ pub fn lower_function_methods(node: Node) -> Node {
 			|| is_libm(name)
 	};
 	// `xs.map(square)` of a user function map(list, fn): the receiver is its first argument, before function values
-	// are specialised (function_values.rs), which would otherwise see map(square)
+	// are made (function_values.rs), which would otherwise see map(square)
 	let takes_receiver = |name: &str, arguments: usize| arities.get(name) == Some(&(arguments + 1));
 	let node = list_constructor_calls(node, &defined);
 	function_methods_as_calls(node, &defined, &|name, arguments, defined| {
@@ -607,9 +596,7 @@ impl Lowering {
 				self.lower_assert(self.expand(items[1].clone()), self.expand(items[2].clone()))
 			}
 			// `def f(m) { m.a }`: the body sees the parameters, as `f(m) := m.a` does
-			Node::List(items, bracket, separator) if keyword_definition_parameters(&items).is_some() => {
-				let parameters = keyword_definition_parameters(&items).expect("guarded");
-				let name = keyword_definition_name(&items);
+			Node::List(items, bracket, separator) if let Some((name, parameters)) = keyword_definition(&items) => {
 				let items = self.within_function(name, parameters, || {
 					items.into_iter().map(|item| self.expand(item)).collect()
 				});
@@ -780,10 +767,7 @@ impl Lowering {
 	/// The word after a dot, `word` or `word(arguments)`: only the arguments are expanded, the word is not a call of its own
 	fn expand_method(&self, method: Node) -> Node {
 		match method {
-			Node::Meta { node, data } => Node::Meta {
-				node: Box::new(self.expand_method(*node)),
-				data,
-			},
+			meta @ Node::Meta { .. } => meta.under_meta(|node| self.expand_method(node)),
 			Node::List(items, bracket, separator)
 				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
 			{
@@ -820,16 +804,7 @@ impl Lowering {
 
 	/// `word(x, args)` and `word x args`
 	fn word_call(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
-		// `x = sum of xs`, `f() := sum of xs`: an assigned value nests the words after the first, `[sum, [of, xs]]`
-		if let [head, Node::List(rest, Bracket::None, Separator::Space)] = items {
-			if rest.first().is_some_and(is_of) {
-				return self.word_call(&[vec![head.clone()], rest.clone()].concat(), bracket, separator);
-			}
-		}
-		if let Some(lookup) = self.of_lookup(items) {
-			return Some(lookup);
-		}
-		if let Some(membership) = self.membership(items).or_else(|| self.containment(items)) {
+		if let Some(membership) = self.membership(items) {
 			return Some(membership);
 		}
 		if let Some(raised) = raise_call(items, &self.shadowed.borrow()) {
@@ -858,27 +833,12 @@ impl Lowering {
 				return Some(key(log_of(value), Op::Div, log_of(base)));
 			}
 		}
-		// `first 3 of xs` is `first_items(xs, 3)`
-		if let [_, argument, of, object] = items {
-			if let (true, Some(word)) = (is_of(of), self.arity_variant(head, 2)) {
-				return Some(self.call(
-					word,
-					&items[0],
-					vec![self.expand(object.clone()), self.expand(argument.clone())],
-					false,
-				));
-			}
-		}
-		// `first of xs` has one argument, as `first sorted xs`: a library word after it is its argument's prefix
+		// `first sorted xs` has one argument: a library word after it is its argument's prefix
 		let prefixes_its_argument = *bracket == Bracket::None
 			&& items
 				.get(1)
 				.is_some_and(|next| self.library_word(&next.drop_meta().name()).is_some());
-		let argument_count = if items.get(1).is_some_and(is_of) || prefixes_its_argument {
-			1
-		} else {
-			items.len() - 1
-		};
+		let argument_count = if prefixes_its_argument { 1 } else { items.len() - 1 };
 		let word = self.library_word_for(head, argument_count)?;
 		// `sorted "listen" == sorted "silent"`: the word takes the operand of the comparison, as a defined function of `it` does
 		if let ([_, argument], Bracket::None, Separator::Space) = (items, bracket, separator) {
@@ -886,16 +846,6 @@ impl Lowering {
 				return Some(with_first_comparand(argument.clone(), &|operand| {
 					self.call(word, &items[0], vec![operand], true)
 				}));
-			}
-		}
-		if let [_, of, rest @ ..] = items {
-			if is_of(of) && !rest.is_empty() {
-				// `first of xs` is `first(xs)`
-				let argument = match rest {
-					[single] => single.clone(),
-					_ => Node::List(rest.to_vec(), Bracket::None, Separator::Space),
-				};
-				return Some(self.call(word, &items[0], vec![argument], false));
 			}
 		}
 		let is_call = call_name(items, bracket, separator).is_some();
@@ -1010,39 +960,28 @@ impl Lowering {
 	}
 
 	/// `x in xs`: yes/no whether a map has the key x or a list the element x (decision in-bool; its position is
-	/// `xs.index_of(x)`); `byte in t` and `"äb" in bytes` count text units
+	/// `xs.index_of(x)`); `byte in t` and `"äb" in bytes` count text units. `xs contains x`, `xs has x`,
+	/// `xs includes x`: the method `xs.contains(x)` written between its two values, unless the program defines the word
 	fn membership(&self, items: &[Node]) -> Option<Node> {
-		let [element, in_word, collection] = items else {
+		let [left, word, right] = items else {
 			return None;
 		};
 		let names_unit = |side: &Node| match side.drop_meta() {
 			Node::Key(_, Op::Hash, unit) => crate::analyzer::text_unit(&unit.name()).is_some(),
 			other => crate::analyzer::text_unit(&other.name()).is_some(),
 		};
-		if !in_word.is_symbol(IN_WORD) || names_unit(element) || names_unit(collection) {
-			return None;
-		}
+		let (collection, element) = match word.symbol_name()? {
+			IN_WORD if names_unit(left) || names_unit(right) => return None,
+			IN_WORD => (right, left),
+			name if self.library_word_for(name, 2) == Some(COLLECTION_CONTAINS) => (left, right),
+			_ => return None,
+		};
 		Some(self.call(
 			COLLECTION_CONTAINS,
-			in_word,
+			word,
 			vec![collection.clone(), element.clone()],
 			false,
 		))
-	}
-
-	/// `xs contains x`, `xs has x`, `xs includes x`: the method `xs.contains(x)` written between its two values, unless
-	/// the program defines the word
-	fn containment(&self, items: &[Node]) -> Option<Node> {
-		let [collection, word, element] = items else {
-			return None;
-		};
-		let Node::Symbol(name) = word.drop_meta() else {
-			return None;
-		};
-		let canonical = self
-			.library_word_for(name, 2)
-			.filter(|canonical| *canonical == COLLECTION_CONTAINS)?;
-		Some(self.call(canonical, word, vec![collection.clone(), element.clone()], false))
 	}
 
 	/// `x.word` and `x.word(args)`; an unknown word on a value is an error
@@ -1117,9 +1056,15 @@ impl Lowering {
 				Separator::None,
 			));
 		}
+		// `f.effects` of a function, not of a variable: the query effects.rs answers
+		let is_effects_query = name == crate::effects::EFFECTS_WORD
+			&& receiver
+				.symbol_name()
+				.is_some_and(|function| !self.plain.contains(function));
 		let is_known = counting_method(name, &self.context).is_some()
 			|| is_list_mutating_method(name)
-			|| self.context.user_functions.contains_key(name);
+			|| self.context.user_functions.contains_key(name)
+			|| is_effects_query;
 		let is_call_result =
 			matches!(receiver.drop_meta(), Node::Symbol(variable) if self.call_results.contains(variable));
 		let is_object = literal.is_some()
@@ -1437,14 +1382,8 @@ fn call_text(node: &Node) -> String {
 	}
 }
 
-/// The untyped parameters of `def f(a, b) {…}` (any function keyword): the head `f (a, b)` holds them in a group
-/// The name of `def f(a, b) {…}`: f
-fn keyword_definition_name(items: &[Node]) -> Option<String> {
-	keyword_definition_head(items)?.first().map(Node::name)
-}
-
-/// The head items of `def f(a, b) {…}` (any function keyword): f and its parameters
-fn keyword_definition_head(items: &[Node]) -> Option<&[Node]> {
+/// The name and the untyped parameters of `def f(a, b) {…}` (any function keyword): the head `f (a, b)` holds them
+fn keyword_definition(items: &[Node]) -> Option<(Option<String>, Vec<String>)> {
 	let (keyword, head) = match items {
 		[keyword, head, _body] => (keyword, head),
 		// `def ((f (m)) {…})`: the head and the body as one group
@@ -1454,36 +1393,22 @@ fn keyword_definition_head(items: &[Node]) -> Option<&[Node]> {
 		},
 		_ => return None,
 	};
-	let Node::Symbol(keyword) = keyword.drop_meta() else {
-		return None;
-	};
-	if !crate::operators::is_function_keyword(keyword) {
-		return None;
-	}
 	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else {
 		return None;
 	};
-	Some(head_items)
-}
-
-fn keyword_definition_parameters(items: &[Node]) -> Option<Vec<String>> {
-	let head_items = keyword_definition_head(items)?;
+	if !super::nodes::is_function_keyword(keyword) {
+		return None;
+	}
 	let parameters = head_items.iter().skip(1).flat_map(|item| match item.drop_meta() {
 		Node::List(group, Bracket::Round, _) => group.clone(),
 		other => vec![other.clone()],
 	});
-	Some(
-		parameters
-			.filter_map(|parameter| match parameter.drop_meta() {
-				Node::Symbol(name) => Some(name.clone()),
-				Node::Key(name, Op::Assign, _) => Some(name.name()),
-				_ => None,
-			})
-			.collect(),
-	)
-}
-
-/// The word `of` (`first of xs`, `name of person`)
-fn is_of(node: &Node) -> bool {
-	node.is_symbol(OF_WORD)
+	let parameters = parameters
+		.filter_map(|parameter| match parameter.drop_meta() {
+			Node::Symbol(name) => Some(name.clone()),
+			Node::Key(name, Op::Assign, _) => Some(name.name()),
+			_ => None,
+		})
+		.collect();
+	Some((head_items.first().map(Node::name), parameters))
 }

@@ -194,11 +194,6 @@ impl WasmGcEmitter {
 							I::I64Const(Kind::Empty as i64),
 							I::I64Eq,
 							I::If(BlockType::Empty),
-						],
-					);
-					Self::emit_list(
-						f,
-						&[
 							I::I32Const(0),
 							I::I32Const(0),
 							I::ArrayNewDefault(array),
@@ -206,11 +201,6 @@ impl WasmGcEmitter {
 							new_list.clone(),
 							I::Return,
 							I::End,
-						],
-					);
-					Self::emit_list(
-						f,
-						&[
 							I::LocalGet(tag),
 							I::I64Const(Kind::List as i64),
 							I::I64Ne,
@@ -233,11 +223,6 @@ impl WasmGcEmitter {
 							I::LocalSet(cell),
 							I::Block(BlockType::Empty),
 							I::Loop(BlockType::Empty),
-						],
-					);
-					Self::emit_list(
-						f,
-						&[
 							I::LocalGet(cell),
 							I::StructGet {
 								struct_type_index: node,
@@ -308,9 +293,9 @@ impl WasmGcEmitter {
 							new_list.clone(),
 							I::LocalSet(out),
 							I::End,
+							I::LocalGet(out),
 						],
 					);
-					f.instruction(&I::LocalGet(out));
 					s.emit_field(f, 0, 0);
 					Self::emit_list(
 						f,
@@ -598,11 +583,6 @@ impl WasmGcEmitter {
 							I::StructNew(node_list),
 							I::Return,
 							I::End,
-						],
-					);
-					Self::emit_list(
-						f,
-						&[
 							I::LocalGet(0),
 							length.clone(),
 							I::ArrayNewDefault(node_array),
@@ -686,10 +666,11 @@ impl WasmGcEmitter {
 		let (position, rest) = (AS_NODE_POSITION, AS_NODE_REST);
 		Self::emit_list(f, &[I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty)]);
 		self.call(f, "new_empty");
-		Self::emit_list(f, &[I::Return, I::End]);
 		Self::emit_list(
 			f,
 			&[
+				I::Return,
+				I::End,
 				I::RefNull(HeapType::Concrete(self.type_manager.node_type)),
 				I::LocalSet(rest),
 				I::LocalGet(0),
@@ -769,10 +750,10 @@ impl WasmGcEmitter {
 			],
 		);
 		self.call(func, super::super::list_ops::INDEX_OUT_OF_RANGE_OF);
-		func.instruction(&I::End);
 		Self::emit_list(
 			func,
 			&[
+				I::End,
 				I::LocalGet(0),
 				I::StructGet {
 					struct_type_index: list,

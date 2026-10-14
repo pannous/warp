@@ -47,23 +47,6 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// Does the node call a function of the program or a host word giving a value (`str(f(1))` is the text of f's result, not of the call)
-	pub(super) fn mentions_call(&self, node: &Node) -> bool {
-		let mut found = false;
-		node.visit(&mut |part| {
-			if let Node::List(items, _, _) = part {
-				// a user function's call, or a host word's that gives a value (`foreign_call`, `fetch_reply`)
-				found |= matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.ctx.user_functions.contains_key(name) || crate::host::VALUE_GIVING_WORDS.contains(&name.as_str()));
-			}
-		});
-		found
-	}
-
-	/// Does the node read a variable or global (key names and other symbols of a data literal are not variables)
-	pub(super) fn mentions_variable(&self, node: &Node) -> bool {
-		node.mentions_where(|name| self.scope.lookup(name).is_some() || self.ctx.user_globals.contains_key(name))
-	}
-
 	/// A variable named like a function of the program is the variable: a parameter (`f(inc) := inc(3)`), and inside a
 	/// function its locals too (`angle = 0.5; cos(angle)` beside math's angle), and a loop's variable in main (`[str f for f in xs]`).
 	/// main also holds a local for each `sq := it * 2`, which is the function
@@ -136,15 +119,7 @@ impl WasmGcEmitter {
 						},
 					],
 				);
-				Self::emit_list(
-					func,
-					&[
-						I::I64Const(KIND_MASK),
-						I::I64And,
-						I::I64Const(Kind::Codepoint as i64),
-						I::I64Eq,
-					],
-				);
+				Self::emit_kind_test(func, Kind::Codepoint as i64, I::I64Eq);
 				self.emit_fail_if(func, list_ops::NOT_A_NUMBER);
 				Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull]);
 				self.emit_call(func, "get_int_value");

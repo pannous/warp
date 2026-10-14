@@ -83,11 +83,11 @@ impl WasmGcEmitter {
 				I::LocalGet(first),
 				I::LocalGet(second),
 				I::GlobalGet(table.global),
+				I::RefAsNonNull,
+				I::CallRef(table.order_type),
+				I::Return,
+				I::End,
 			],
-		);
-		Self::emit_list(
-			func,
-			&[I::RefAsNonNull, I::CallRef(table.order_type), I::Return, I::End],
 		);
 	}
 

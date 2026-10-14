@@ -10,34 +10,194 @@ const SUFFIX_BP: u8 = 165;
 /// Right binding power of the prefix operators √ ∛ abs: between ^ (160) and the suffix operators (SUFFIX_BP)
 const PREFIX_BP: u8 = 162;
 
-/// Unicode spellings of operators (wiki/alias.md): glyph, operator and the canonical spelling the style hints suggest.
-/// One table for the lexer and the hints; the dashes 0x2010..0x2015 and the minus sign 0x2212 all mean `-`.
-pub const GLYPH_OPERATORS: [(char, Op, &str); 17] = [
-	('∧', Op::And, "and"),
-	('⋀', Op::And, "and"),
-	('∨', Op::Or, "or"),
-	('⋁', Op::Or, "or"),
-	('⊻', Op::Xor, "xor"),
+/// Every spelling of an infix or prefix operator the parser reads: symbols, Unicode glyphs and words (wiki/alias.md,
+/// wiki/operator.md). The canonical spelling is Op::as_str, every other one an alias; the parser takes the longest
+/// spelling that fits (lookahead.rs peek_operator), the style hints name the canonical one (normalize.rs)
+pub const OPERATOR_SPELLINGS: [(&str, Op); 134] = [
+	(":", Op::Colon),
+	(".", Op::Dot),
+	("?.", Op::SafeDot),
+	("??", Op::Coalesce),
+	("::", Op::Scope),
+	(":=", Op::Define),
+	("be", Op::Define), // wiki/be.md
+	("=", Op::Assign),
+	("<-", Op::Assign), // R's `x <- 3` (P145)
+	("->", Op::Arrow),
+	("=>", Op::FatArrow),
+	("+", Op::Add),
+	("plus", Op::Add),
+	("-", Op::Sub),
+	("minus", Op::Sub),
+	// the dashes 0x2010..0x2015 and the minus sign 0x2212 all mean `-`
+	("‐", Op::Sub),
+	("‑", Op::Sub),
+	("‒", Op::Sub),
+	("–", Op::Sub),
+	("—", Op::Sub),
+	("―", Op::Sub),
+	("−", Op::Sub),
+	("*", Op::Mul),
+	("×", Op::Mul),
 	// the unit product of a printed quantity (`6 m·kg`); generated names use `·` only after parsing
-	('·', Op::Mul, "*"),
-	('⋅', Op::Mul, "*"),
-	('≟', Op::Eq, "=="),
-	('≡', Op::Eq, "=="),
-	('﹦', Op::Eq, "=="),
-	('‐', Op::Sub, "-"),
-	('‑', Op::Sub, "-"),
-	('‒', Op::Sub, "-"),
-	('–', Op::Sub, "-"),
-	('—', Op::Sub, "-"),
-	('―', Op::Sub, "-"),
-	('−', Op::Sub, "-"),
+	("·", Op::Mul),
+	("⋅", Op::Mul),
+	("/", Op::Div),
+	("÷", Op::Div),
+	("divided by", Op::Div),
+	// Python's floor division `7//2`, `x//=2` and `7 div 2`: the parser makes them floor_quotient calls
+	("//", Op::Div),
+	("div", Op::Div),
+	("//=", Op::DivAssign),
+	("%", Op::Mod),
+	// `a mod b` is Euclidean (0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the dividend, as C)
+	("mod", Op::Mod),
+	("modulo", Op::Mod),
+	("rem", Op::Rem),
+	("^", Op::Pow),
+	("**", Op::Pow),
+	("⌞", Op::LogBase),
+	("⌟", Op::LogOf),
+	("<<", Op::Shl),
+	(">>", Op::Shr),
+	("+=", Op::AddAssign),
+	("-=", Op::SubAssign),
+	("*=", Op::MulAssign),
+	("/=", Op::DivAssign),
+	("%=", Op::ModAssign),
+	("^=", Op::PowAssign),
+	("**=", Op::PowAssign),
+	("&&=", Op::AndAssign),
+	("and=", Op::AndAssign),
+	("||=", Op::OrAssign),
+	("or=", Op::OrAssign),
+	("^^=", Op::XorAssign),
+	("xor=", Op::XorAssign),
+	("<", Op::Lt),
+	("less than", Op::Lt),
+	("is less than", Op::Lt),
+	(">", Op::Gt),
+	("greater than", Op::Gt),
+	("is greater than", Op::Gt),
+	("<=", Op::Le),
+	("≤", Op::Le),
+	("is at most", Op::Le),
+	(">=", Op::Ge),
+	("≥", Op::Ge),
+	("is at least", Op::Ge),
+	("==", Op::Eq),
+	("≟", Op::Eq),
+	("≡", Op::Eq),
+	("﹦", Op::Eq),
+	("equals", Op::Eq),
+	("is", Op::Eq), // wiki/equality.md: `is` compares by value like ==
+	("!=", Op::Ne),
+	("≠", Op::Ne),
+	// identity (P208): `same` is the word, `===` its alias; no `identical` (user)
+	("===", Op::Identical),
+	("same", Op::Identical),
+	("same as", Op::Identical),
+	("is the same as", Op::Identical),
+	("!==", Op::NotIdentical),
+	("is not the same as", Op::NotIdentical),
+	("≈", Op::Similar),
+	("⋍", Op::Similar),
+	("circa", Op::Similar),
+	("approximately", Op::Similar),
+	("~", Op::Rough),
+	("~~", Op::Rough),
+	("and", Op::And),
+	("&&", Op::And),
+	("∧", Op::And),
+	("⋀", Op::And),
+	("or", Op::Or),
+	("||", Op::Or),
+	("∨", Op::Or),
+	("⋁", Op::Or),
+	("xor", Op::Xor),
+	("⊻", Op::Xor),
+	("not", Op::Not),
+	("!", Op::Not),
+	("¬", Op::Not),
+	("&", Op::And),
+	("|", Op::Or),
+	("±", Op::PlusMinus),
+	("+-", Op::PlusMinus),
+	("++", Op::Inc),
+	("--", Op::Dec),
+	("?", Op::Question),
+	// after a statement `if`, `unless`, `while` and `until` (lookahead.rs: outside a for header) guard it
+	("if", Op::If),
+	("unless", Op::If),
+	("while", Op::While),
+	("then", Op::Then),
+	("else", Op::Else),
+	("do", Op::Do),
+	("#", Op::Hash),
+	("..", Op::Range),
+	("..<", Op::Range),   // Swift's exclusive range
+	("upto", Op::Range),  // wiki/range.md: `1 upto 10` excludes 10
+	("until", Op::Range), // Kotlin's `for i in 0 until n`
+	("to", Op::To),
+	("...", Op::To),
+	("…", Op::To),
+	("through", Op::To),
+	("as", Op::As),
+	// element-wise arithmetic `xs .+ 4` maps the operator over the list (D3: `xs + 4` asks, `xs + [4]` joins)
+	(".+", Op::Add),
+	(".-", Op::Sub),
+	(".*", Op::Mul),
+	("./", Op::Div),
+	(".^", Op::Pow),
+	("|>", Op::Pipe),
+	("in", Op::In),
+	("is in", Op::In), // `item is in basket` reads as `item in basket`
+	("contains", Op::In),
+	("has", Op::In),
+	("includes", Op::In),
 ];
 
-pub fn glyph_operator(glyph: char) -> Option<(Op, &'static str)> {
-	GLYPH_OPERATORS
+/// Spellings of a negated operator, each with the spelling it negates: `a nand b` is `not (a and b)` (wiki/operator.md:
+/// `nand ¬&`, Unicode's ⊼), `x is not 4` is `not (x is 4)`
+const NEGATED_SPELLINGS: [(&str, &str); 4] = [("nand", "and"), ("¬&", "and"), ("⊼", "and"), ("is not", "is")];
+
+/// The spelling a negated spelling negates: `and` for `nand`
+pub fn negated_spelling(spelling: &str) -> Option<&'static str> {
+	NEGATED_SPELLINGS
 		.iter()
-		.find(|(known, _, _)| *known == glyph)
-		.map(|(_, op, canonical)| (*op, *canonical))
+		.find(|(negated, _)| *negated == spelling)
+		.map(|(_, positive)| *positive)
+}
+
+/// Every spelling with its operator, the negated ones with the operator they negate
+pub fn all_spellings() -> impl Iterator<Item = (&'static str, Op)> {
+	let negated = NEGATED_SPELLINGS
+		.into_iter()
+		.filter_map(|(negated, positive)| Some((negated, spelled_operator(positive)?)));
+	OPERATOR_SPELLINGS.into_iter().chain(negated)
+}
+
+/// Glyphs that are fine as written, so no style hint suggests the ASCII spelling of their operator
+const PLAIN_GLYPHS: &str = "×÷≤≥≠≈⋍±¬⌞⌟…";
+
+/// The operator a spelling stands for: `and` and `∧` for And, `+` for Add
+pub fn spelled_operator(spelling: &str) -> Option<Op> {
+	OPERATOR_SPELLINGS
+		.iter()
+		.find(|(known, _)| *known == spelling)
+		.map(|(_, op)| *op)
+}
+
+/// A glyph spelling of an operator the style hints replace by the canonical spelling: `–` by `-`, `∧` by `and`
+pub fn glyph_operator(glyph: char) -> Option<Op> {
+	let mut spelling = [0; 4];
+	spelled_operator(glyph.encode_utf8(&mut spelling)).filter(|_| !glyph.is_ascii() && !PLAIN_GLYPHS.contains(glyph))
+}
+
+/// A word that spells an operator, alone or as the first word of a phrase: `and`, `mod`, `is` (of `is less than`)
+pub fn is_operator_word(word: &str) -> bool {
+	all_spellings()
+		.any(|(spelling, _)| spelling.split([' ', '=']).next() == Some(word) && word.starts_with(char::is_alphabetic))
 }
 
 /// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)
@@ -189,6 +349,11 @@ pub enum Op {
 
 	PlusMinus, // ±  +-  a value with tolerance
 
+	// Parsed only, the parser builds their nodes: the pipeline `xs |> f` is the call `f(xs)`, the membership `x in xs`
+	// and `xs contains x` the list [x in xs]
+	Pipe, // |>
+	In,   // in
+
 	// User(Node), allow user defined operators, name==symbol
 	None, // implicit/unknown
 }
@@ -235,7 +400,9 @@ impl Op {
 			Op::Lt | Op::Gt | Op::Le | Op::Ge => (120, 121),
 
 			// Equality binds weaker and never chains: a<b == c<d compares the two results, a==b==c is ambiguous
-			Op::Eq | Op::Ne | Op::Identical | Op::NotIdentical | Op::Similar | Op::Rough => (115, 116),
+			Op::Eq | Op::Ne | Op::Identical | Op::NotIdentical | Op::Similar | Op::Rough | Op::In => (115, 116),
+			// below arithmetic, above comparison: `xs |> sum > 3` is `sum(xs) > 3`
+			Op::Pipe => (127, 128),
 
 			// Logical not binds weaker than comparison: not a==b → not (a==b)
 			Op::Not => (0, 105),
@@ -304,6 +471,8 @@ impl Op {
 			Op::Add => "+",
 			Op::Sub => "-",
 			Op::PlusMinus => "±",
+			Op::Pipe => "|>",
+			Op::In => "in",
 			Op::Mul => "*",
 			Op::Div => "/",
 			Op::Mod => "%",

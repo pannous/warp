@@ -84,7 +84,8 @@ the other operations (`area(s:square)`) but not this one; lower_conformances the
 `smallest(xs: Comparable list) := (sort xs)#1`: the annotation `xs: T list` (analyzer::with_list_annotation; the parser
 leaves `list` as the next signature item) is `list of T`, T a type word, a declared type or a trait. A list of a trait
 holds Nodes; where the function is called with a list of instances of a known type, each operation of the trait must
-have its witness (traits::unmet_constraint): `dot is not Comparable: smallest([dot{x:3}]) needs compare(a:dot, b:dot)`.
+have its witness (Dispatch::admit, the check every declared parameter type gets; instance_signatures keeps `list of
+<trait>` annotations): `dot is not Comparable: [dot{x:3}] needs compare(a:dot, b:dot)`.
 Lists of numbers or texts pass (sorted by value at run time). `xs: list of T` reads the same.
 
 ## Fixed on the way

@@ -5,22 +5,8 @@ use crate::util::gc_engine;
 use anyhow::{anyhow, Result};
 use num_bigint::{BigInt, Sign};
 use std::cell::RefCell;
-use std::rc::Rc;
 use wasmtime::{AsContextMut, Instance, Linker, Module, Store, StoreContextMut, Val};
 use wasmtime_wasi::p1;
-
-/// GcObject wraps a WASM GC struct reference with ergonomic field access
-pub struct GcObject {
-	inner: Val,
-	store: Rc<RefCell<Store<()>>>,
-	instance: Instance,
-}
-
-impl std::fmt::Debug for GcObject {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "GcObject {{ ... }}")
-	}
-}
 
 /// Compact 3-field Node layout:
 /// - Field 0: kind (i64) - type tag, possibly with flags in upper bits
@@ -67,94 +53,7 @@ fn read_payload<T>(store: &mut wasmtime::StoreContextMut<'_, T>, data_val: &Val)
 	}
 }
 
-impl GcObject {
-	pub fn new(val: Val, store: Rc<RefCell<Store<()>>>, instance: Instance) -> Self {
-		GcObject {
-			inner: val,
-			store,
-			instance,
-		}
-	}
-
-	/// Get field by index
-	pub fn get_field(&self, idx: usize) -> Result<Val> {
-		let mut store = self.store.borrow_mut();
-		if let Some(anyref) = self.inner.unwrap_anyref() {
-			if let Ok(structref) = anyref.unwrap_struct(&*store) {
-				return Ok(structref.field(&mut *store, idx)?);
-			}
-		}
-		Err(anyhow!("Cannot read field at index {}", idx))
-	}
-
-	/// Get the kind field (i64)
-	pub fn kind(&self) -> Result<i64> {
-		let val = self.get_field(FIELD_KIND)?;
-		Ok(val.unwrap_i64())
-	}
-
-	/// Get the base tag (lower 8 bits of kind)
-	pub fn tag(&self) -> Result<u8> {
-		Ok((self.kind()? & KIND_MASK) as u8)
-	}
-
-	/// Get the data field as a Val
-	pub fn data(&self) -> Result<Val> {
-		self.get_field(FIELD_DATA)
-	}
-
-	/// Get the value field as a GcObject (child node)
-	pub fn value(&self) -> Result<GcObject> {
-		let val = self.get_field(FIELD_VALUE)?;
-		Ok(GcObject::new(val, self.store.clone(), self.instance))
-	}
-
-	/// Read string ptr+len from $String struct in data field
-	pub fn read_string_ptr_len(&self) -> Result<(i32, i32)> {
-		let data_val = self.data()?;
-		let mut store = self.store.borrow_mut();
-		if let Some(anyref) = data_val.unwrap_anyref() {
-			if let Ok(structref) = anyref.unwrap_struct(&*store) {
-				let ptr_val = structref.field(&mut *store, 0)?; // field 0: ptr
-				let len_val = structref.field(&mut *store, 1)?; // field 1: len
-				return Ok((ptr_val.unwrap_i32(), len_val.unwrap_i32()));
-			}
-		}
-		Err(anyhow!("Cannot read $String struct"))
-	}
-
-	/// Read string from linear memory
-	pub fn read_string(&self, ptr: i32, len: i32) -> Result<String> {
-		if len == 0 {
-			return Ok(String::new());
-		}
-		let mut store = self.store.borrow_mut();
-		let memory = self
-			.instance
-			.get_memory(&mut *store, "memory")
-			.ok_or_else(|| anyhow!("No memory export"))?;
-		crate::host::read_string_from_memory(&memory, &*store, ptr as u32, len as u32)
-	}
-
-	/// Get text content for Text/Symbol nodes
-	pub fn text(&self) -> Result<String> {
-		let (ptr, len) = self.read_string_ptr_len()?;
-		self.read_string(ptr, len)
-	}
-
-	/// The Node this struct encodes
-	pub fn to_node(&self) -> Node {
-		let mut store = self.store.borrow_mut();
-		node_of(&self.inner, &mut store.as_context_mut(), &self.instance)
-	}
-}
-
-/// Load a WASM module with GC support and return root GcObject
-pub fn run_wasm_gc_object(path: &str) -> Result<GcObject> {
-	read_bytes_gc(&std::fs::read(path)?)
-}
-
-/// Load WASM bytes and return Node (calls from_gc_object)
+/// Load WASM bytes and return Node
 pub fn read_bytes(bytes: &[u8]) -> Result<Node> {
 	read_main_result(bytes).map(|result| crate::units::static_units::with_module_units(bytes, result))
 }
@@ -166,11 +65,7 @@ fn read_main_result(bytes: &[u8]) -> Result<Node> {
 			if !reference.is_struct(&store)? {
 				return Err(anyhow!("main returned a reference that is no Node struct"));
 			}
-			Ok(Node::from_gc_object(&GcObject::new(
-				result,
-				Rc::new(RefCell::new(store)),
-				instance,
-			)))
+			Ok(node_of(&result, &mut store.as_context_mut(), &instance))
 		}
 		// a plain number or the null reference: no Node struct to read
 		Val::I32(_) | Val::I64(_) | Val::F64(_) | Val::AnyRef(None) => val_to_node(&result, &mut store, &instance),
@@ -179,12 +74,6 @@ fn read_main_result(bytes: &[u8]) -> Result<Node> {
 			other.ty(&store)?
 		)),
 	}
-}
-
-/// Load WASM bytes and return GcObject
-pub fn read_bytes_gc(bytes: &[u8]) -> Result<GcObject> {
-	let (result, store, instance) = run_main(bytes, (), |_, _, _| Ok(()))?;
-	Ok(GcObject::new(result, Rc::new(RefCell::new(store)), instance))
 }
 
 /// The engine that runs `bytes` (a module, or one compiled ahead of time), and whether it is the task engine: a

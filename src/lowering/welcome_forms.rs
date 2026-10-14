@@ -22,8 +22,6 @@ const LOOP_KEYWORD: &str = "loop";
 const END_WORD: &str = "end";
 const LAMBDA_WORD: &str = "lambda";
 const LET_WORD: &str = "let";
-/// `let mut x = 1` / `let mutable x = 1` (Rust) declare a variable: warp writes `var x = 1` (user, card let-reassign)
-const MUTABLE_MODIFIERS: [&str; 2] = ["mut", "mutable"];
 const VAR_WORD: &str = "var";
 const DESTRUCTURED_OBJECT: &str = "object·";
 const RUBY_LAMBDA_WORDS: [&str; 2] = ["lambda", "proc"];
@@ -42,10 +40,9 @@ const IS_WORD: &str = "is";
 /// The if chain a `when` arm adds, its conditions joined by `or`
 const WHEN_ARM: &str = "if CONDITION then VALUE else OTHERWISE";
 const LAST_WHEN_ARM: &str = "if CONDITION then VALUE";
-/// F#/OCaml (and Elixir's Enum) modules whose iteration functions are warp's words: `List.map f xs` is `map f xs`
-const ITERATION_MODULES: [&str; 4] = ["List", "Seq", "Array", "Enum"];
-/// JavaScript's math namespace: `Math.sqrt(16)` is `sqrt(16)`
-const JS_MATH: &str = "Math";
+/// Modules of other languages whose words are warp's: JS's `Math.sqrt(16)` is `sqrt(16)`, F#'s `List.map f xs` is
+/// `map f xs` (also `Seq.`, `Array.`), Elixir's `Enum.map(xs, f)` is `map(xs, f)`
+const FOREIGN_MODULES: [&str; 5] = ["Math", "List", "Seq", "Array", "Enum"];
 /// Module words written only qualified, as the module's own name for them (P183: `file.append(path, text)`; a bare
 /// `append` stays the list method)
 const QUALIFIED_WORDS: [(&str, &str, &str); 1] = [("file", "append", "append_file")];
@@ -79,11 +76,12 @@ const METHOD_ALIASES: [(&str, &str); 18] = [
 
 pub fn lower(node: Node) -> Node {
 	// the program's own names keep their meaning: a field `Count`, Go's method `Sum()`
-	let own: HashSet<String> = defined_names(&node)
+	let own: HashSet<String> = crate::library_words::defined_names(&node)
 		.into_iter()
 		.chain(crate::soft_keywords::names_given(&node))
+		.chain(type_fields(&node))
 		.collect();
-	let node = qualified_module_calls(module_aliases(named_switch_subjects(node)));
+	let node = qualified_module_calls(module_aliases(node));
 	let node = forms(method_aliases(node, &own));
 	let mut lambda_names = HashSet::new();
 	collect_lambda_names(&node, &mut lambda_names);
@@ -172,7 +170,7 @@ fn forms(node: Node) -> Node {
 				[word, body] => endless_loop(word, body),
 				_ => None,
 			};
-			endless.unwrap_or_else(|| Node::List(arrow_cases(items), bracket, separator))
+			endless.unwrap_or_else(|| Node::List(items, bracket, separator))
 		}
 		// Ruby's `loop do … end`
 		Node::Key(word, Op::Do, body) if endless_loop(&word, &body).is_some() => {
@@ -208,7 +206,9 @@ fn let_mut(items: &[Node]) -> Option<Node> {
 	let Node::Key(name, Op::Assign, _) = declaration.drop_meta() else {
 		return None;
 	};
-	let modifier = modifier.symbol_name().filter(|word| MUTABLE_MODIFIERS.contains(word))?;
+	let modifier = modifier
+		.symbol_name()
+		.filter(|word| crate::words::MUTABLE_WORDS.contains(word))?;
 	if !keyword.is_symbol(LET_WORD) {
 		return None;
 	}
@@ -251,10 +251,17 @@ fn go_destructuring(mut items: Vec<Node>, separator: &Separator) -> Vec<Node> {
 	items
 }
 
-/// `[match, subject, {k => v …}]`, or `[match, (subject {k => v …})]` as an assigned match parses: the cases as `k: v`,
-/// `_ => v` as `default: v`
-fn arrow_cases(items: Vec<Node>) -> Vec<Node> {
-	with_match_cases(items, colon_cases)
+/// Every match's arms in the one form the later passes read, right after parsing: `[match, subject, {k => v …}]` (or
+/// `[match, (subject {k => v …})]` as an assigned match parses) with the cases as `k: v`, `_ => v` as `default: v`
+pub fn lower_match_arms(node: Node) -> Node {
+	colon_arms(named_switch_subjects(node))
+}
+
+fn colon_arms(node: Node) -> Node {
+	match node.map_children(colon_arms) {
+		Node::List(items, bracket, separator) => Node::List(with_match_cases(items, colon_cases), bracket, separator),
+		other => other,
+	}
 }
 
 fn is_switch_word(word: &Node) -> bool {
@@ -642,8 +649,7 @@ fn block_reduction(items: &[Node]) -> Option<Node> {
 fn qualified_module_calls(node: Node) -> Node {
 	let names = crate::soft_keywords::names_given(&node);
 	let modules: Vec<&str> = crate::modules::std_module_names()
-		.chain([JS_MATH])
-		.chain(ITERATION_MODULES)
+		.chain(FOREIGN_MODULES)
 		.filter(|module| !names.contains(*module))
 		.collect();
 	module_calls(node, &modules)
@@ -689,6 +695,20 @@ fn aliased_module(keyword: &Node, used: &Node) -> Option<(Node, String)> {
 
 pub(crate) fn module_calls(node: Node, modules: &[&str]) -> Node {
 	match node {
+		// F#'s `List.map f xs`: the word applied to the words after it
+		Node::List(mut items, Bracket::None, Separator::Space)
+			if items.len() > 1 && qualified_word(&items[0], modules).is_some() =>
+		{
+			let word = qualified_word(&items[0], modules).expect("guarded");
+			crate::normalize::set_position_of(&items[0]);
+			crate::normalize::hint(&items[0].serialize(), &word, "warp calls a module's word by its name");
+			items[0] = symbol(&word);
+			Node::List(
+				items.into_iter().map(|item| module_calls(item, modules)).collect(),
+				Bracket::None,
+				Separator::Space,
+			)
+		}
 		Node::Key(module, Op::Dot, call)
 			if modules.iter().any(|name| module.is_symbol(name))
 				&& matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|word| matches!(word.drop_meta(), Node::Symbol(_)))) =>
@@ -732,19 +752,6 @@ pub(crate) fn module_calls(node: Node, modules: &[&str]) -> Node {
 				}
 				_ => module_calls(*call, modules),
 			}
-		}
-		// F#'s `List.map f xs`, `Seq.sum xs`: the word itself; `list.length` of a parameter `list` stays its field
-		Node::Key(module, Op::Dot, word)
-			if modules.iter().any(|name| module.is_symbol(name))
-				&& ITERATION_MODULES.iter().any(|name| module.is_symbol(name))
-				&& matches!(word.drop_meta(), Node::Symbol(_)) =>
-		{
-			crate::normalize::hint(
-				&format!("{}.{}", module.name(), word.name()),
-				&word.name(),
-				"warp calls a module's word by its name",
-			);
-			*word
 		}
 		other => other.map_children(|child| module_calls(child, modules)),
 	}
@@ -883,15 +890,11 @@ fn aliased_method(method: Node, own: &HashSet<String>) -> Node {
 	}
 }
 
-/// The names the program defines: `f(x) := …`, `def f`, `func f`, Go's method `func (p Point) Sum()`, fields
-pub(crate) fn defined_names(node: &Node) -> HashSet<String> {
+/// The fields of `type P { Count: int }`: names the program gives
+fn type_fields(node: &Node) -> HashSet<String> {
 	let mut names = HashSet::new();
-	node.visit(&mut |part| match part {
-		Node::Key(head, Op::Define, _) => {
-			names.insert(crate::node::leading_name(head));
-		}
-		// the fields of `type P { Count: int }`
-		Node::Type { body, .. } => {
+	node.visit(&mut |part| {
+		if let Node::Type { body, .. } = part {
 			let fields = match body.drop_meta() {
 				Node::List(fields, _, _) => fields.as_slice(),
 				single => std::slice::from_ref(single),
@@ -901,20 +904,17 @@ pub(crate) fn defined_names(node: &Node) -> HashSet<String> {
 				_ => None,
 			}));
 		}
-		Node::List(words, _, _)
-			if words.first().is_some_and(
-				|keyword| matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word)),
-			) =>
-		{
-			let name = match words.get(1).map(Node::drop_meta) {
-				Some(Node::List(_, Bracket::Round, _)) if words.len() > 2 => words.get(2),
-				_ => words.get(1),
-			};
-			names.extend(name.map(crate::node::leading_name));
-		}
-		_ => {}
 	});
 	names
+}
+
+/// `List.map`: the word a named module qualifies
+fn qualified_word(node: &Node, modules: &[&str]) -> Option<String> {
+	let Node::Key(module, Op::Dot, word) = node.drop_meta() else {
+		return None;
+	};
+	let is_module = modules.iter().any(|name| module.is_symbol(name));
+	word.symbol_name().filter(|_| is_module).map(str::to_string)
 }
 
 /// `call(3)`, `call 3`: the arguments of Ruby's `.call`

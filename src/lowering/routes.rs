@@ -124,14 +124,6 @@ pub(crate) fn is_route(statement: &Node) -> bool {
 	route(statement).is_some()
 }
 
-/// A pattern's text; "/" parses as a character
-pub(crate) fn pattern_text(pattern: &Node) -> String {
-	match pattern.drop_meta() {
-		Node::Char(character) => character.to_string(),
-		other => other.name(),
-	}
-}
-
 /// `route "/users/:id" {…}`: the pattern ("/" parses as a character) and the block's items
 pub(crate) fn route(statement: &Node) -> Option<Route> {
 	let Node::List(items, _, _) = statement.drop_meta() else {
@@ -146,7 +138,7 @@ pub(crate) fn route(statement: &Node) -> Option<Route> {
 	if !matches!(pattern.drop_meta(), Node::Text(_) | Node::Char(_)) {
 		return None;
 	}
-	let pattern = pattern_text(pattern);
+	let pattern = pattern.text_or_name();
 	(word.drop_meta().name() == ROUTE_WORD).then(|| (pattern, body.clone()))
 }
 

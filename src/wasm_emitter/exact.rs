@@ -151,19 +151,16 @@ impl WasmGcEmitter {
 		self.emit_inline_numerator(f, x);
 		f.instruction(&I::LocalSet(numerator));
 		self.emit_inline_denominator(f, x);
-		Self::emit_list(f, &[I::LocalSet(denominator), I::I32Const(1), I::Else]);
 		Self::emit_list(
 			f,
 			&[
+				I::LocalSet(denominator),
+				I::I32Const(1),
+				I::Else,
 				I::LocalGet(x),
 				I::LocalSet(numerator),
 				I::I64Const(1),
 				I::LocalSet(denominator),
-			],
-		);
-		Self::emit_list(
-			f,
-			&[
 				I::LocalGet(x),
 				I::I64Const(SMALL_LIMIT),
 				I::I64Add,
@@ -189,10 +186,11 @@ impl WasmGcEmitter {
 	fn small_ratio(&self, f: &mut Function, combine: &[Instruction]) {
 		let [gcd, rest, ..] = SMALL_PARTS;
 		Self::emit_list(f, combine);
-		Self::emit_list(f, &[I::LocalSet(SMALL_DENOMINATOR), I::LocalTee(SMALL_NUMERATOR)]);
 		Self::emit_list(
 			f,
 			&[
+				I::LocalSet(SMALL_DENOMINATOR),
+				I::LocalTee(SMALL_NUMERATOR),
 				I::LocalGet(SMALL_NUMERATOR),
 				I::I64Const(63),
 				I::I64ShrS,
@@ -202,20 +200,10 @@ impl WasmGcEmitter {
 				I::I64ShrS,
 				I::I64Sub,
 				I::LocalSet(gcd),
-			],
-		);
-		Self::emit_list(
-			f,
-			&[
 				I::LocalGet(SMALL_DENOMINATOR),
 				I::LocalSet(rest),
 				I::Block(BlockType::Empty),
 				I::Loop(BlockType::Empty),
-			],
-		);
-		Self::emit_list(
-			f,
-			&[
 				I::LocalGet(rest),
 				I::I64Eqz,
 				I::BrIf(1),
@@ -228,29 +216,14 @@ impl WasmGcEmitter {
 				I::Br(0),
 				I::End,
 				I::End,
-			],
-		);
-		Self::emit_list(
-			f,
-			&[
 				I::LocalGet(SMALL_NUMERATOR),
 				I::LocalGet(gcd),
 				I::I64DivS,
 				I::LocalSet(SMALL_NUMERATOR),
-			],
-		);
-		Self::emit_list(
-			f,
-			&[
 				I::LocalGet(SMALL_DENOMINATOR),
 				I::LocalGet(gcd),
 				I::I64DivU,
 				I::LocalTee(SMALL_DENOMINATOR),
-			],
-		);
-		Self::emit_list(
-			f,
-			&[
 				I::I64Const(1),
 				I::I64Eq,
 				I::If(BlockType::Result(ValType::I64)),
@@ -382,9 +355,10 @@ impl WasmGcEmitter {
 					I::LocalGet(1),
 					I::I64Eqz,
 					I::BrIf(1),
+					I::LocalGet(0),
+					I::LocalGet(1),
 				],
 			);
-			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
 			s.call(f, "int_rem");
 			Self::emit_list(
 				f,
@@ -397,9 +371,9 @@ impl WasmGcEmitter {
 					I::Br(0),
 					I::End,
 					I::End,
+					I::LocalGet(0),
 				],
 			);
-			f.instruction(&I::LocalGet(0));
 		});
 	}
 
@@ -442,12 +416,18 @@ impl WasmGcEmitter {
 					],
 				);
 				s.call(f, "int_from_payload");
-				Self::emit_list(f, &[I::End, I::Else]);
-				f.instruction(&match integer_value {
-					Some(one) => I::I64Const(one),
-					None => I::LocalGet(0),
-				});
-				f.instruction(&I::End);
+				Self::emit_list(
+					f,
+					&[
+						I::End,
+						I::Else,
+						match integer_value {
+							Some(one) => I::I64Const(one),
+							None => I::LocalGet(0),
+						},
+						I::End,
+					],
+				);
 			});
 		}
 
@@ -457,8 +437,7 @@ impl WasmGcEmitter {
 			f.instruction(&I::If(BlockType::Empty));
 			s.negate_local(f, 0);
 			s.negate_local(f, 1);
-			f.instruction(&I::End);
-			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
+			Self::emit_list(f, &[I::End, I::LocalGet(0), I::LocalGet(1)]);
 			s.call(f, INT_GCD);
 			// gcd 0 only for 0/0 (NaN); compared as an Int: a big gcd's handle is negative (card exact-decimals)
 			Self::emit_list(f, &[I::LocalTee(2), I::I64Const(1)]);
@@ -469,10 +448,10 @@ impl WasmGcEmitter {
 				s.call(f, "int_quot");
 				f.instruction(&I::LocalSet(local));
 			}
-			f.instruction(&I::End);
 			Self::emit_list(
 				f,
 				&[
+					I::End,
 					I::LocalGet(1),
 					I::I64Const(1),
 					I::I64Eq,
@@ -859,8 +838,7 @@ impl WasmGcEmitter {
 			s.call(f, "is_ratio");
 			Self::emit_list(f, &[I::If(BlockType::Empty), I::Unreachable, I::End]);
 			s.is_negative(f, 1);
-			f.instruction(&I::If(BlockType::Empty));
-			Self::emit_list(f, &[I::I64Const(1), I::LocalGet(0)]);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::I64Const(1), I::LocalGet(0)]);
 			s.call(f, "exact_div");
 			f.instruction(&I::LocalSet(0));
 			s.negate_local(f, 1);
@@ -948,11 +926,6 @@ impl WasmGcEmitter {
 						I::LocalSet(digits),
 						I::LocalGet(value),
 						I::LocalSet(rest),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::Block(BlockType::Empty),
 						I::Loop(BlockType::Empty),
 						I::LocalGet(rest),
@@ -982,11 +955,6 @@ impl WasmGcEmitter {
 						I::Br(0),
 						I::End,
 						I::End,
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(digits),
 						I::LocalGet(negative),
 						I::I32Add,
@@ -1004,31 +972,22 @@ impl WasmGcEmitter {
 						I::I32Const(b'-' as i32),
 						I::I32Store8(BYTE),
 						I::End,
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::Block(BlockType::Empty),
 						I::Loop(BlockType::Empty),
 						I::LocalGet(digits),
 						I::LocalGet(negative),
 						I::I32LeU,
 						I::BrIf(1),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(digits),
 						I::I32Const(1),
 						I::I32Sub,
 						I::LocalTee(digits),
 						I::LocalGet(address),
 						I::I32Add,
+						I::LocalGet(value),
+						I::I64Const(DECIMAL_BASE),
 					],
 				);
-				Self::emit_list(f, &[I::LocalGet(value), I::I64Const(DECIMAL_BASE)]);
 				s.call(f, "int_rem");
 				Self::emit_list(
 					f,
@@ -1042,18 +1001,8 @@ impl WasmGcEmitter {
 					],
 				);
 				s.call(f, "int_quot");
-				Self::emit_list(
-					f,
-					&[
-						I::LocalSet(value),
-						I::Br(0),
-						I::End,
-						I::End,
-						I::LocalGet(address),
-						I::LocalGet(length),
-					],
-				);
-				s.call(f, "new_text");
+				Self::emit_list(f, &[I::LocalSet(value), I::Br(0), I::End, I::End]);
+				s.emit_new_text(f, address, length);
 			},
 		);
 
@@ -1140,10 +1089,11 @@ impl WasmGcEmitter {
 				concat(f);
 				Self::emit_list(f, &[I::Return, I::End]);
 				// scale = the smallest power of ten that makes x an integer, rest = |x| * scale
-				Self::emit_list(f, &[I::I64Const(1), I::LocalSet(scale)]);
 				Self::emit_list(
 					f,
 					&[
+						I::I64Const(1),
+						I::LocalSet(scale),
 						I::Block(BlockType::Empty),
 						I::Loop(BlockType::Empty),
 						I::LocalGet(numerator),
@@ -1275,27 +1225,32 @@ impl WasmGcEmitter {
 					I::I32GtS,
 					I::Select,
 					I::LocalSet(before_period),
+					I::LocalGet(rest),
+					I::I64Const(1),
+					I::I64Eq,
 				],
 			);
-			Self::emit_list(f, &[I::LocalGet(rest), I::I64Const(1), I::I64Eq]);
 			exact_text_if(f);
 			// the period: the first power of ten that is 1 modulo the rest
-			f.instruction(&I::I64Const(DECIMAL_BASE));
-			f.instruction(&I::LocalGet(rest));
+			Self::emit_list(f, &[I::I64Const(DECIMAL_BASE), I::LocalGet(rest)]);
 			s.call(f, "int_rem");
-			Self::emit_list(f, &[I::LocalSet(power), I::I32Const(1), I::LocalSet(period)]);
 			Self::emit_list(
 				f,
 				&[
+					I::LocalSet(power),
+					I::I32Const(1),
+					I::LocalSet(period),
 					I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
 					I::LocalGet(power),
 					I::I64Const(1),
 					I::I64Eq,
 					I::BrIf(1),
+					I::LocalGet(period),
+					I::I32Const(MAX_PERIOD),
+					I::I32GeU,
 				],
 			);
-			Self::emit_list(f, &[I::LocalGet(period), I::I32Const(MAX_PERIOD), I::I32GeU]);
 			exact_text_if(f);
 			Self::emit_list(f, &[I::LocalGet(power), I::I64Const(DECIMAL_BASE)]);
 			s.call(f, "int_mul");
@@ -1345,10 +1300,11 @@ impl WasmGcEmitter {
 				],
 			);
 			s.emit_text_allocation(f, length, address);
-			Self::emit_list(f, &[I::LocalGet(address), I::LocalSet(at)]);
 			Self::emit_list(
 				f,
 				&[
+					I::LocalGet(address),
+					I::LocalSet(at),
 					I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
 					I::LocalGet(before_period),
@@ -1356,9 +1312,10 @@ impl WasmGcEmitter {
 					I::I32Or,
 					I::I32Eqz,
 					I::BrIf(1),
+					I::LocalGet(rest),
+					I::I64Const(DECIMAL_BASE),
 				],
 			);
-			Self::emit_list(f, &[I::LocalGet(rest), I::I64Const(DECIMAL_BASE)]);
 			s.call(f, "int_mul");
 			Self::emit_list(
 				f,
@@ -1390,11 +1347,6 @@ impl WasmGcEmitter {
 					I::I32Const(1),
 					I::I32Add,
 					I::LocalSet(at),
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::LocalGet(before_period),
 					I::If(BlockType::Empty),
 					I::LocalGet(before_period),
@@ -1429,18 +1381,11 @@ impl WasmGcEmitter {
 					I::Br(0),
 					I::End,
 					I::End,
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::LocalGet(prefix),
 					I::RefAsNonNull,
-					I::LocalGet(address),
-					I::LocalGet(length),
 				],
 			);
-			s.call(f, "new_text");
+			s.emit_new_text(f, address, length);
 			concat(f);
 		});
 	}

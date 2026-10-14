@@ -66,7 +66,7 @@ pub(crate) mod text_builtins;
 mod try_guard;
 mod tuple_emitter;
 mod type_manager;
-pub use try_guard::{ABORT_TO, CAUGHT_ERROR, RAN_WITHOUT_ABORT, RAN_WITHOUT_ERROR};
+pub use try_guard::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
 pub(crate) mod wasi_emitter;
 mod witness;
 const WASI_START: &str = "_start";
@@ -254,7 +254,6 @@ pub struct WasmGcEmitter {
 	/// Emitting data, not code: the value of an object entry or a quoted form, where unknown words stay words (P62)
 	data_context: bool,
 	error_catching: Option<try_guard::ErrorCatching>, // the tag and globals of that `try`
-	abort_catching: Option<try_guard::AbortCatching>, // the tag of aborting effect handlers
 	memo_caches: HashMap<i64, (u32, u32)>, // per memoized function id: the globals of its values and known flags (memoization.rs)
 	extra_global_names: Vec<(u32, String)>,
 	number_constants: HashMap<(num_bigint::BigInt, num_bigint::BigInt), u32>, // a big or fractional literal's global, made on first use (exact.rs)
@@ -360,7 +359,6 @@ impl WasmGcEmitter {
 			declares_list_types: false,
 			data_context: false,
 			error_catching: None,
-			abort_catching: None,
 			memo_caches: HashMap::new(),
 			extra_global_names: Vec::new(),
 			number_constants: HashMap::new(),

@@ -24,9 +24,10 @@ impl WasmGcEmitter {
 					I::I32Const(0),
 					I::I32Ne,
 					I::I32And,
+					I::LocalGet(2),
+					I::StructNew(big_type),
 				],
 			);
-			Self::emit_list(f, &[I::LocalGet(2), I::StructNew(big_type)]);
 		});
 
 		// big_from_i64(x); locals: magnitude as u64
@@ -48,12 +49,9 @@ impl WasmGcEmitter {
 						I::I64LtS,
 						I::Select,
 						I::LocalSet(1),
-					],
-				);
-				Self::emit_list(f, &[I::LocalGet(0), I::I64Const(0), I::I64LtS]);
-				Self::emit_list(
-					f,
-					&[
+						I::LocalGet(0),
+						I::I64Const(0),
+						I::I64LtS,
 						I::LocalGet(1),
 						I::I32WrapI64,
 						I::LocalGet(1),
@@ -242,10 +240,12 @@ impl WasmGcEmitter {
 		});
 		self.runtime_function("int_store", vec![any], vec![ValType::I64], vec![heap, heap], |_, f| {
 			let (stored, heap, grown) = (0, 1, 2);
-			Self::emit_list(f, &[I::GlobalGet(heap_global), I::LocalTee(heap), I::RefIsNull]);
 			Self::emit_list(
 				f,
 				&[
+					I::GlobalGet(heap_global),
+					I::LocalTee(heap),
+					I::RefIsNull,
 					I::If(BlockType::Result(ValType::I32)),
 					I::I32Const(1),
 					I::Else,
@@ -254,12 +254,7 @@ impl WasmGcEmitter {
 					I::ArrayLen,
 					I::I32GeU,
 					I::End,
-				],
-			);
-			f.instruction(&I::If(BlockType::Empty));
-			Self::emit_list(
-				f,
-				&[
+					I::If(BlockType::Empty),
 					I::LocalGet(heap),
 					I::RefIsNull,
 					I::If(BlockType::Result(ValType::I32)),
@@ -272,11 +267,6 @@ impl WasmGcEmitter {
 					I::End,
 					I::ArrayNewDefault(heap_type),
 					I::LocalSet(grown),
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::LocalGet(heap),
 					I::RefIsNull,
 					I::I32Eqz,
@@ -291,39 +281,19 @@ impl WasmGcEmitter {
 						array_type_index_src: heap_type,
 					},
 					I::End,
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::LocalGet(grown),
 					I::GlobalSet(heap_global),
 					I::LocalGet(grown),
 					I::LocalSet(heap),
 					I::End,
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::LocalGet(heap),
 					I::GlobalGet(count_global),
 					I::LocalGet(stored),
 					I::ArraySet(heap_type),
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::GlobalGet(count_global),
 					I::I64ExtendI32U,
 					I::I64Const(HANDLE_BASE),
 					I::I64Add,
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::GlobalGet(count_global),
 					I::I32Const(1),
 					I::I32Add,
@@ -378,9 +348,9 @@ impl WasmGcEmitter {
 						I::End,
 						I::End,
 						I::End,
+						I::LocalGet(big),
 					],
 				);
-				f.instruction(&I::LocalGet(big));
 				s.call(f, "int_store");
 			},
 		);
@@ -431,21 +401,16 @@ impl WasmGcEmitter {
 		// int_mul_slow: fixnums that overflow only the fast test stay unallocated; locals: product
 		self.runtime_function("int_mul_slow", vec![i64t, i64t], vec![i64t], vec![i64t], |s, f| {
 			s.emit_fixnum_test(f, &[0, 1]);
-			f.instruction(&I::If(BlockType::Empty));
 			Self::emit_list(
 				f,
 				&[
+					I::If(BlockType::Empty),
 					I::LocalGet(0),
 					I::I64Eqz,
 					I::If(BlockType::Empty),
 					I::I64Const(0),
 					I::Return,
 					I::End,
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::LocalGet(0),
 					I::LocalGet(1),
 					I::I64Mul,
@@ -626,20 +591,20 @@ impl WasmGcEmitter {
 				],
 			);
 			s.emit_fixnum_test(f, &[1]);
-			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::Unreachable, I::End]);
 			Self::emit_list(
 				f,
 				&[
+					I::I32Eqz,
+					I::If(BlockType::Empty),
+					I::Unreachable,
+					I::End,
 					I::I64Const(1),
 					I::LocalSet(result),
 					I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-				],
-			);
-			Self::emit_list(f, &[I::LocalGet(exponent), I::I64Eqz, I::BrIf(1)]);
-			Self::emit_list(
-				f,
-				&[
+					I::LocalGet(exponent),
+					I::I64Eqz,
+					I::BrIf(1),
 					I::LocalGet(exponent),
 					I::I64Const(1),
 					I::I64And,
@@ -650,19 +615,21 @@ impl WasmGcEmitter {
 				],
 			);
 			s.call(f, "int_mul");
-			Self::emit_list(f, &[I::LocalSet(result), I::End]);
 			Self::emit_list(
 				f,
 				&[
+					I::LocalSet(result),
+					I::End,
 					I::LocalGet(exponent),
 					I::I64Const(1),
 					I::I64ShrS,
 					I::LocalTee(exponent),
 					I::I64Eqz,
 					I::BrIf(1),
+					I::LocalGet(base),
+					I::LocalGet(base),
 				],
 			);
-			Self::emit_list(f, &[I::LocalGet(base), I::LocalGet(base)]);
 			s.call(f, "int_mul");
 			Self::emit_list(f, &[I::LocalSet(base), I::Br(0), I::End, I::End, I::LocalGet(result)]);
 		});

@@ -1,0 +1,1 @@
+on ask { 42 } in { emit ask }

@@ -11,8 +11,7 @@ use std::collections::HashMap;
 
 /// What a unit field is declared to the emitter: its run-time amount is an exact or float SI amount
 const NUMBER_TYPE: &str = "number";
-const FOR_WORD: &str = "for";
-const IN_WORD: &str = "in";
+use crate::words::{FOR_WORD, IN_WORD};
 
 /// Each class with a field typed by a unit: its fields in order, each with its signature (none for a plain field)
 pub(super) fn unit_classes(program: &Node) -> HashMap<String, Fields> {
@@ -186,14 +185,8 @@ pub(crate) fn unit_type(type_name: &str) -> Option<(String, f64)> {
 
 /// A constant quantity's SI amount and the quantity it measures, as unit_type gives a column's: `5 km` is (5000, "m")
 pub(crate) fn si_quantity(node: &Node) -> Option<(f64, String)> {
-	let Ok(crate::units::Value::Quantity(quantity)) = crate::units::evaluate(node) else {
-		return None;
-	};
-	let per_unit = crate::units::scale(&quantity.factors, |factor| super::base_unit(factor.unit.dimension));
-	Some((
-		quantity.amount.mul(&per_unit).to_f64(),
-		shown(&crate::units::signature(&quantity.factors)),
-	))
+	let (amount, signature) = super::constant(node).ok()??;
+	(!signature.is_empty()).then(|| Some((super::exact_amount(&amount)?.to_f64(), shown(&signature))))?
 }
 
 /// The construction `P{…}` with `body` in place of its fields, its marks kept

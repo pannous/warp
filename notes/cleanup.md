@@ -116,6 +116,8 @@ A. Compile context, to become one `CompileContext` beside `CompileMode` (card cl
 | BOOL_FUNCTIONS | analyzer/booleans | set | functions known to return a bool |
 | WRITTEN_PROBLEMS | accessibility | pass | accessibility problems the source states itself |
 
+Done (2026-10-14): all of A are fields of src/compile_context.rs `CompileContext`, one thread-local; `compile_context::scoped(field, value, run)` replaces the per-static `util::scoped` calls and pipeline's with_flag / set_mode_flag, `read` and `change` the `.with(|cell| …)` accessors, and single-caller accessors (hint_line, module_files, is_module_definition, comments_as_meta, serving_port, server_value, sandbox::confined) are gone. Not done: a reset of the `set` fields per compile, since an inner compile (a module, the renderer) would wipe the outer one's kernels and module definitions; that needs a scoped context per compile, not a reset.
+
 B. Compile output, to become one `Diagnostics` sink taken once per compile (card cleanup-diagnostic-sink)
 
 | static | module | lives |
@@ -323,13 +325,23 @@ Left (each changes behaviour or needs care):
   `parameters()`, `plain_operator()`, `is_glued_head()`. Read through it: law/type_model/forms.rs, overloads,
   nonlocal_cells, printable, generators, component_state, units/static_units, definition_cases, signal_values; each
   keeps its own filter (which forms, result type allowed, glued head), so no site reads a form it did not read before.
-  Left on purpose: memoization `definition_parts` (type_tests) also takes `x := 3` and rebuilds the same form;
+  Follow-up (definition-view-ports): the Lean export's `function_definition` returns the FunctionHead (no
+  result_type / tuple wrappers, Exporter::function and nested lift_from take it), units.rs reads parameter clashes
+  through it (`plain_operator`). Left on purpose: memoization `definition_parts` (type_tests) also takes `x := 3` and
+  rebuilds the same form (compacted: keyword and meta wrappers share `wrapped`);
   declarations.rs `function_definition` builds the Key form; law.rs `function_definition` goes through the analyzer;
   lambdas / nested_functions / reflection `definition` build or print one. Narrowed (nonsense forms only): signal_values
   no longer reads `def {f x}`, `def (f x) y {…}` (four words) or a head whose first item is not a word.
   Candidates (forms rejected by accident, no test pins them): the Lean export skips `def f(x) := body`, untyped
   `def f(x): body` and `def (f x) {…}`; three is_call_head functions mean different things (nodes: round + word,
   traits: round + word without parameters, variable_signals: round only).
+- (cleanup-traits-alias, 2026-10-14) Of src/lowering/traits* (2572 lines) only about 700 are trait code; the rest is
+  class dispatch (generics.rs multiple dispatch, dispatch.rs `<`/`==`/sort on instances, instance_types.rs static
+  shapes, likeness.rs `like`, op·T witnesses that class methods and overloads use too; notes on card
+  methods-as-dispatch). The element check of `xs: Comparable list` is now Dispatch::admit's (a trait list is a
+  declared parameter type like a class), dropping trait_constraints / unmet_constraint (−33). Foreign signatures and
+  the element check stay (interviewer: rust-forms-welcome, list element checks kept). A mixin rewrite of traits saves
+  ~40 lines and loses free-function default methods.
 - soft_keywords::parameter_name accepts only `:` / `=` keys and does not recurse, unlike nodes::parameter_name;
   go_blocks / named_arguments / parameter_shapes have their own parameter_name returning String or Node.
 - (cleanup-big-files) class_methods.rs (~1920 lines): child modules (`use super::*`, items pub(super)) class_methods/operators.rs
@@ -470,9 +482,29 @@ signal family are warp-list-pattern's and left out. Samples = files in samples/,
 | nonlocal cells (nonlocal_cells) | `nonlocal y` | 281 | 0 | 0 | 4 | closures already capture |
 | named patterns + definitions by cases (named_patterns, definition_cases) | `pattern Pair = [_, _]`; `fib(0) := 0; fib(n) := …` | 405 | 0 | 0 | 1 | match arms and guards |
 | object-shaped parameters (parameter_shapes) | `f(p{name, title?}) := …` | 230 | 0 | 0 | 1 | named arguments |
-| ruby blocks (ruby_blocks) | `each(xs) { |x| … }` with `yield v` | 215 | 0 | 1 | 1 | lambdas passed as arguments |
+| ruby blocks (blocks.rs lower_trailing_blocks) | `each(xs) { |x| … }` with `yield v` | 215 | 0 | 1 | 1 | lambdas passed as arguments |
 | version literals (versions) | `v1.2.3`, `version 1.2.3` | 210 | 0 | 0 | 4 | texts `"1.2.3"` compared by parts |
 
 Well used (no cut proposed): library words 1909, tasks 1473, broadcasting 1199, blocks 955, switch/match 882, late
 binding 737, for loops 725, constant folding 670, lazy ranges 654, comprehensions 631, type tests 596, named
 arguments 574, markup tags 398, type constructors 370.
+
+## cleanup-drop-lambdas (2026-10-14, supervisor: stop at step 1)
+- Done: function_values.rs no longer specialises a function per function argument (`apply__double`); every call passes
+  a closure, a capture-free one made once (a global, wasm_emitter/closures.rs). 10M `apply(y => y*2+1, k)`: 0.25 s →
+  0.42 s. Side fixes: `f(*args)` of a closure spreads by count (variadic::run_time_spread), `f:(Int)->Int` parameters
+  are functions, a called returned closure may return a function (Z combinator).
+- Kept: the iteration templates of lambdas.rs (map filter each fold find any all reduce sort) stay the inlining rule
+  for literal lambdas. Library functions over closures measured 0.22 s → 0.45 s on 1M map/filter/sum (~3× without
+  compile time) and give untyped (any) results, for about −140 lines: not worth it.
+- Benchmarks: probes/cleanup/lambdas/bench_*.warp
+## `a of b` is `b.a` (card cleanup-of-is-dot, 2026-10-14)
+One SUGAR pass, lowering/of_lookups.rs, right after interpolation, rewrites every `a of b` to `b.a` (`first 3 of xs` →
+`xs.first(3)`, `byte count of t` → `t.bytes`, `name of people with age > 20` → the field of the filtered list); every
+later pass reads only the dot form. Gone: the special `of` arms in library_words, objects, broadcasting, lazy_reads,
+reflection, comprehensions' call-argument block, and signal_values' token scanner. Not lookups: a collection type
+phrase `list of int` and a spaced definition `square of a number = …`. Measured: about −50 net src lines, not the
+card's −700: reflection's fields/methods/dir code is feature code, not `of` handling. New forms that work now:
+`params of f`, `a of xs` (a field of every element), `name of p + "b"`.
+Trap found: the old signal_values reflected_lists rebuilt every list and unwrapped one-item unbracketed lists on the
+way; `func add<T>(_ a: T, …)` relied on it, so the new walk keeps that unwrap explicitly.

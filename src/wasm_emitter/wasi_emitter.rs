@@ -39,19 +39,9 @@ impl WasmGcEmitter {
 				I::I32Const(IOVEC_ADDRESS),
 				I::I32Const(str_ptr as i32),
 				I::I32Store(WORD),
-			],
-		);
-		Self::emit_list(
-			func,
-			&[
 				I::I32Const(IOVEC_ADDRESS + 4),
 				I::I32Const(str_len as i32),
 				I::I32Store(WORD),
-			],
-		);
-		Self::emit_list(
-			func,
-			&[
 				I::I32Const(STDOUT),
 				I::I32Const(IOVEC_ADDRESS),
 				I::I32Const(1),
@@ -131,18 +121,15 @@ impl WasmGcEmitter {
 					struct_type_index: node_type,
 					field_index: 0,
 				},
-			],
-		);
-		Self::emit_list(
-			func,
-			&[
 				I::I64Const(crate::type_kinds::KIND_MASK),
 				I::I64And,
 				I::I64Const(Kind::Empty as i64),
 				I::I64Eq,
+				I::If(BlockType::FunctionType(consumes_text)),
+				I::Drop,
+				I::Else,
 			],
 		);
-		Self::emit_list(func, &[I::If(BlockType::FunctionType(consumes_text)), I::Drop, I::Else]);
 		self.emit_call(func, PRINT_VALUE);
 		Self::emit_list(func, &[I::Drop, I::End]);
 		self.emit_call(func, "new_empty");

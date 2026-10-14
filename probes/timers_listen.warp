@@ -1,0 +1,8 @@
+// card host-word: every timer starts with one host word signal_listen; prints "tick" three times, then ends
+n = 0
+on every 50 ms {
+	n += 1
+	print "tick"
+	if n == 3 { exit 0 }
+}
+at 9:00 { print "nine o clock" }

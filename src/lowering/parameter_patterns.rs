@@ -2,7 +2,7 @@
 //! `add_pair([a, b]) := a + b` takes a list of two and names its items; `sum(Point{x, y}) := x + y` takes a Point and
 //! names its fields, `greet({name}) := "hi " + name` takes a map with a field name (card param-map-pattern). Each
 //! pattern becomes a parameter of its own name, declared of the class for a class pattern, and the body a match on it:
-//! `sum(point·1: Point) := match point·1 { Point{x, y} => x + y }`. A value of another shape is the match's "no case"
+//! `sum(point·1: Point) := match point·1 { Point{x, y}: x + y }`. A value of another shape is the match's "no case"
 //! error.
 
 use super::nodes::{is_call_head, key, matched};
@@ -24,7 +24,7 @@ pub fn lower(node: Node) -> Node {
 				return Node::Key(head, op, body);
 			}
 			let body = patterns.into_iter().rev().fold(*body, |body, (name, pattern)| {
-				matched(Node::Symbol(name), vec![key(pattern, Op::FatArrow, body)])
+				matched(Node::Symbol(name), vec![key(pattern, Op::Colon, body)])
 			});
 			key(named_head, op, body)
 		}

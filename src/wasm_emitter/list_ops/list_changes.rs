@@ -105,11 +105,13 @@ impl WasmGcEmitter {
 				s.call(f, "new_empty");
 				Self::emit_list(
 					f,
-					&[I::Return, I::End, I::LocalGet(list), I::RefAsNonNull, I::Return, I::End],
-				);
-				Self::emit_list(
-					f,
 					&[
+						I::Return,
+						I::End,
+						I::LocalGet(list),
+						I::RefAsNonNull,
+						I::Return,
+						I::End,
 						I::LocalGet(list),
 						I::RefIsNull,
 						I::If(BlockType::Empty),
@@ -120,10 +122,12 @@ impl WasmGcEmitter {
 					],
 				);
 				s.emit_field(f, list, 0);
-				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::LocalSet(kind)]);
 				Self::emit_list(
 					f,
 					&[
+						I::I64Const(KIND_MASK),
+						I::I64And,
+						I::LocalSet(kind),
 						I::LocalGet(kind),
 						I::I64Const(Kind::Empty as i64),
 						I::I64Eq,
@@ -138,10 +142,13 @@ impl WasmGcEmitter {
 					}
 					f.instruction(&set(field_index));
 				}
-				Self::emit_list(f, &[I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
 				Self::emit_list(
 					f,
 					&[
+						I::LocalGet(list),
+						I::RefAsNonNull,
+						I::Return,
+						I::End,
 						I::LocalGet(kind),
 						I::I64Const(Kind::List as i64),
 						I::I64Ne,
@@ -229,16 +236,31 @@ impl WasmGcEmitter {
 					],
 				);
 				s.emit_field(f, cell, 2);
-				f.instruction(&I::StructGet {
-					struct_type_index: node_type,
-					field_index: 2,
-				});
-				Self::emit_list(f, &[I::RefIsNull, I::BrIf(1)]);
-				s.emit_field(f, cell, 2);
-				Self::emit_list(f, &[I::LocalSet(cell), I::Br(0), I::End, I::End]);
 				Self::emit_list(
 					f,
-					&[I::LocalGet(cell), no_node(), set(2), I::LocalGet(list), I::RefAsNonNull],
+					&[
+						I::StructGet {
+							struct_type_index: node_type,
+							field_index: 2,
+						},
+						I::RefIsNull,
+						I::BrIf(1),
+					],
+				);
+				s.emit_field(f, cell, 2);
+				Self::emit_list(
+					f,
+					&[
+						I::LocalSet(cell),
+						I::Br(0),
+						I::End,
+						I::End,
+						I::LocalGet(cell),
+						no_node(),
+						set(2),
+						I::LocalGet(list),
+						I::RefAsNonNull,
+					],
 				);
 			},
 		);
@@ -288,20 +310,22 @@ impl WasmGcEmitter {
 						I::RefAsNonNull,
 						I::Return,
 						I::End,
+						I::LocalGet(fresh),
+						I::RefIsNull,
+						I::If(BlockType::Empty),
 					],
 				);
-				Self::emit_list(f, &[I::LocalGet(fresh), I::RefIsNull, I::If(BlockType::Empty)]);
 				s.emit_become_empty(f, list);
-				Self::emit_list(f, &[I::LocalGet(list), I::RefAsNonNull, I::Return, I::End]);
-				f.instruction(&I::LocalGet(list));
+				Self::emit_list(
+					f,
+					&[I::LocalGet(list), I::RefAsNonNull, I::Return, I::End, I::LocalGet(list)],
+				);
 				s.emit_field(f, fresh, 0);
 				s.emit_unmarked(f);
 				s.emit_or_element_mark(f, list);
-				f.instruction(&set(0));
-				f.instruction(&I::LocalGet(list));
+				Self::emit_list(f, &[set(0), I::LocalGet(list)]);
 				s.emit_field(f, fresh, 1);
-				f.instruction(&set(1));
-				f.instruction(&I::LocalGet(list));
+				Self::emit_list(f, &[set(1), I::LocalGet(list)]);
 				s.emit_field(f, fresh, 2);
 				Self::emit_list(f, &[set(2), I::LocalGet(list), I::RefAsNonNull]);
 			},
@@ -602,15 +626,7 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::LocalGet(cell), I::RefIsNull]);
 				s.emit_fail_if(f, "index_out_of_range");
 				s.emit_field(f, cell, 0);
-				Self::emit_list(
-					f,
-					&[
-						I::I64Const(KIND_MASK),
-						I::I64And,
-						I::I64Const(Kind::Empty as i64),
-						I::I64Eq,
-					],
-				);
+				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq);
 				s.emit_fail_if(f, "index_out_of_range");
 			};
 			Self::emit_index_compare(f, I::I64LtS);

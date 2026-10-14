@@ -113,9 +113,10 @@ impl WasmGcEmitter {
 					I::Return,
 					I::End,
 					I::End,
+					I::LocalGet(0),
+					I::LocalGet(1),
 				],
 			);
-			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
 			s.call(f, "utf8_decode");
 			Self::emit_list(f, &[I::LocalSet(previous), I::LocalGet(0), I::LocalGet(1)]);
 			s.call(f, "utf8_next");
@@ -383,11 +384,6 @@ impl WasmGcEmitter {
 						I::I64Const(1),
 						I::I64Add,
 						I::LocalSet(1),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::Block(BlockType::Empty),
 						I::Loop(BlockType::Empty),
 						I::LocalGet(pointer),
@@ -466,15 +462,10 @@ impl WasmGcEmitter {
 							I::GlobalGet(counted_end),
 							I::I32Eq,
 							I::I32And,
-						],
-					);
-					Self::emit_list(
-						f,
-						&[I::If(BlockType::Empty), I::GlobalGet(counted_count), I::Return, I::End],
-					);
-					Self::emit_list(
-						f,
-						&[
+							I::If(BlockType::Empty),
+							I::GlobalGet(counted_count),
+							I::Return,
+							I::End,
 							I::LocalGet(pointer),
 							I::GlobalSet(counted_start),
 							I::LocalGet(end),
@@ -686,11 +677,6 @@ impl WasmGcEmitter {
 				I::I32Shl,
 				I::GlobalSet(heap),
 				I::End,
-			],
-		);
-		Self::emit_list(
-			func,
-			&[
 				I::GlobalGet(heap),
 				I::LocalTee(address),
 				I::LocalGet(length),
@@ -714,11 +700,6 @@ impl WasmGcEmitter {
 				I::I32Shl,
 				I::I32GtU,
 				I::If(BlockType::Empty),
-			],
-		);
-		Self::emit_list(
-			func,
-			&[
 				I::GlobalGet(heap),
 				I::LocalGet(length),
 				I::I32Add,
@@ -726,11 +707,6 @@ impl WasmGcEmitter {
 				I32Const(PAGE_BITS),
 				I::I32Shl,
 				I::I32Sub,
-			],
-		);
-		Self::emit_list(
-			func,
-			&[
 				I32Const(PAGE_BITS),
 				I::I32ShrU,
 				I32Const(1),

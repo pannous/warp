@@ -133,8 +133,7 @@ impl WasmGcEmitter {
 			],
 		);
 		self.emit_memory_room(func, heap, room);
-		func.instruction(&I::GlobalGet(heap));
-		func.instruction(&I::GlobalSet(table));
+		Self::emit_list(func, &[I::GlobalGet(heap), I::GlobalSet(table)]);
 		Self::emit_list(func, &bump_heap(room));
 		Self::emit_list(
 			func,

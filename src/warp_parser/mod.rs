@@ -32,11 +32,16 @@ mod user_operators;
 mod xml;
 pub use lookahead::PREFIX_OPERATOR_WORDS;
 mod atoms;
+mod blocks;
+use blocks::*;
+mod commands;
+mod control;
+use control::*;
+mod definitions;
 mod expressions;
 mod lists;
 mod literals;
 pub use literals::shader_blocks;
-mod statements;
 mod suffixes;
 use unicode_normalization::UnicodeNormalization;
 
@@ -154,45 +159,16 @@ const PYTHON_ROOT_CLASS: &str = "object";
 const RECORD_WORD: &str = "record";
 /// `1 upto 10` excludes 10 (wiki/range.md), asked about because readers expect either
 const UPTO: &str = "upto";
-/// English operator words (samples/natural.warp, wiki/operator.md lists `plus` and `equals` as aliases): the longer
-/// phrases first, so `is greater than` is no `is`
-const WORD_OPERATORS: [(&str, Op); 15] = [
-	// identity (P208): `same` is the word, `===` its alias; no `identical` (user)
-	("is not the same as", Op::NotIdentical),
-	("is the same as", Op::Identical),
-	("same as", Op::Identical),
-	("same", Op::Identical),
-	("is greater than", Op::Gt),
-	("is less than", Op::Lt),
-	("is at least", Op::Ge),
-	("is at most", Op::Le),
-	("greater than", Op::Gt),
-	("less than", Op::Lt),
-	("divided by", Op::Div),
-	("plus", Op::Add),
-	("minus", Op::Sub),
-	("equals", Op::Eq),
-	("through", Op::To),
-];
-const IS_IN_PHRASE: &str = "is in";
-/// `xs contains x` (and its synonyms, lowering/library_words.rs COLLECTION_CONTAINS): `x in xs` the other way round
-const CONTAINMENT_WORDS: [&str; 3] = ["contains", "has", "includes"];
 /// `for each item in basket` is `for item in basket`
 const EACH_WORD: &str = "each";
 /// `10 down to 1` is `reverse(1 to 10)`
 const DOWN_WORD: &str = "down";
 const REVERSE_WORD: &str = "reverse";
-/// Word spellings of `≈` (wiki/operator.md): equal within the relative `tolerance`
-const SIMILARITY_WORDS: [&str; 2] = ["circa", "approximately"];
 const EXCLUSIVE_DOTS: &str = "..";
 /// Topic of the Ask about `for i in 0..n-1`, which Kotlin reads inclusive
 const KOTLIN_RANGE: &str = "kotlin-range";
-const STATEMENT_MODIFIERS: [(&str, Op, bool); 4] = [
-	("if", Op::If, false),
-	("unless", Op::If, true),
-	("while", Op::While, false),
-	("until", Op::While, true),
-];
+/// The control words that negate their condition: `unless c` is `if not c`, `until c` is `while not c`
+const NEGATED_CONTROL_WORDS: [(&str, Op); 2] = [("unless", Op::If), ("until", Op::While)];
 /// Words that test a value for being ø or falsy, sugar for `not x`; `failed` tests for an Error value (is_error)
 const TEST_WORDS: [&str; 6] = ["empty", "missing", "absent", "unknown", "undefined", FAILED_WORD];
 const FAILED_WORD: &str = "failed";
@@ -202,8 +178,6 @@ const COUNT_CALL: &str = "count";
 const EMPTY_WORD: &str = "empty";
 /// Operators that may follow a suffix `!` directly: `x!+1`, `x!*2` (`!=` is the inequality)
 const INFIX_AFTER_BANG: [char; 9] = ['+', '-', '*', '/', '%', '^', '<', '>', ')'];
-/// Words that may follow a test word and so end the condition
-const CONDITION_FOLLOWERS: [&str; 5] = ["then", "else", "and", "or", "do"];
 /// Python's `elif`, Perl's and Ruby's `elsif`, PHP's `elseif`: all `else if`
 const ELSE_IF_WORDS: [&str; 3] = ["elif", "elsif", "elseif"];
 const RETURN_KEYWORD: &str = "return";
@@ -220,6 +194,8 @@ const AWAIT_ALL_WORD: &str = "all";
 /// `await x` binds its operand like unary minus
 const AWAIT_OPERAND_BP: u8 = Op::Neg.binding_power().1;
 const PRINT_WORD: &str = "print";
+/// Other languages' print words (wiki/Features.md); `log` stays the logarithm, `puts` the WASI text output
+const PRINT_SPELLINGS: [&str; 2] = ["println", "writeln"];
 /// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
 const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate them with `;` or a newline";
 const IN_KEYWORD: &str = "in";
@@ -300,12 +276,9 @@ fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Nod
 	} else {
 		items
 	};
-	let items = match (&separator, items.as_slice()) {
-		(Separator::Space, [print, value]) if is_print_word(print) => {
-			printed_when(print, value).map_or(items, |guarded| vec![guarded])
-		}
-		(Separator::Space, [.., _]) if bracket == Bracket::None => {
-			looped_while(&items).map_or(items, |looped| vec![looped])
+	let items = match separator {
+		Separator::Space if bracket != Bracket::Square => {
+			guarded_command(&items).map_or(items, |guarded| vec![guarded])
 		}
 		_ => items,
 	};
@@ -345,36 +318,35 @@ fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Nod
 	}
 }
 
-/// `print it if it%2`: the condition guards the print, as in Ruby and Perl, rather than printing ø when it fails
-fn printed_when(print: &Node, value: &Node) -> Option<Node> {
-	let Node::Key(condition, Op::Then, guarded) = value.drop_meta() else {
-		return None;
-	};
-	let Node::Key(nothing, Op::If, _) = condition.drop_meta() else {
-		return None;
-	};
-	let printed = Node::List(
-		vec![print.clone(), (**guarded).clone()],
-		Bracket::None,
-		Separator::Space,
-	);
-	(**nothing == Node::Empty).then(|| Node::Key(condition.clone(), Op::Then, Box::new(printed)))
-}
-
-/// `do {i++} while c`, `print i while c`: a trailing `while` loops the whole command, not its last word (card glued-loop)
-fn looped_while(items: &[Node]) -> Option<Node> {
+/// `print it if it%2`, `do {i++} while c`: a trailing `if` guards and a trailing `while` loops the whole command, not
+/// its last word, as in Ruby and Perl (card glued-loop)
+fn guarded_command(items: &[Node]) -> Option<Node> {
 	let (last, command) = items.split_last()?;
 	if !matches!(command.first()?.drop_meta(), Symbol(_)) {
 		return None;
 	}
-	let Node::Key(head, Op::Do, body) = last.drop_meta() else {
-		return None;
+	let whole = |tail: &Node| {
+		Node::List(
+			[command, std::slice::from_ref(tail)].concat(),
+			Bracket::None,
+			Separator::Space,
+		)
 	};
-	let Node::Key(nothing, Op::While, condition) = head.drop_meta() else {
-		return None;
-	};
-	let looped = Node::List([command, &[(**body).clone()]].concat(), Bracket::None, Separator::Space);
-	(**nothing == Node::Empty).then(|| while_do((**condition).clone(), looped))
+	match last.drop_meta() {
+		Node::Key(head, Op::Do, body) => match head.drop_meta() {
+			Node::Key(nothing, Op::While, condition) if **nothing == Node::Empty => {
+				Some(while_do((**condition).clone(), whole(body)))
+			}
+			_ => None,
+		},
+		Node::Key(condition, Op::Then, guarded) => match condition.drop_meta() {
+			Node::Key(nothing, Op::If, _) if **nothing == Node::Empty => {
+				Some(Node::Key(condition.clone(), Op::Then, Box::new(whole(guarded))))
+			}
+			_ => None,
+		},
+		_ => None,
+	}
 }
 
 /// `(x => print x)`: `=>` binds looser than the space, so the words after a lambda's arrow are its body (`print x`), not
@@ -394,60 +366,6 @@ fn with_arrow_bodies(mut items: Vec<Node>) -> Vec<Node> {
 	let body = one_expression(&[vec![*body], rest].concat());
 	items.push(Node::Key(parameters, op, Box::new(body)));
 	items
-}
-
-/// The infix operators continue_expr reads apart from the operator table
-enum SpecialInfix {
-	/// `a mod b`, `a rem b`
-	Keyword(Op),
-	/// `7//2`, `7 div 2`, `x//=2`
-	FloorDivision { compound: bool },
-	/// `xs |> f(a)`
-	Pipeline,
-	/// `xs .+ 4`
-	ElementWise(Op),
-	/// `x in xs` and `xs contains x`: the list [lhs word operand]
-	Membership(&'static str),
-	/// Julia's dot call `f.(xs)`, `add.(xs, 10)`: f mapped over the first argument
-	DotCall,
-}
-
-impl SpecialInfix {
-	fn applied(self, lhs: Node, operand: Node) -> Node {
-		match self {
-			SpecialInfix::Keyword(op) => Node::Key(Box::new(lhs), op, Box::new(operand)),
-			SpecialInfix::FloorDivision { compound } => {
-				let quotient = floor_division(lhs.clone(), operand);
-				if compound {
-					Node::Key(Box::new(lhs), Op::Assign, Box::new(quotient))
-				} else {
-					quotient
-				}
-			}
-			SpecialInfix::Pipeline => piped(lhs, operand),
-			// Java's and Scala's `import math.*`: a glob, nothing after the `*`, is the module whole
-			SpecialInfix::ElementWise(Op::Mul) if matches!(operand, Empty) => {
-				crate::normalize::hint(
-					&format!("{}.*", lhs.serialize()),
-					&lhs.serialize(),
-					"warp imports a module whole",
-				);
-				lhs
-			}
-			// kept as written, lowering/broadcasting.rs lower_element_wise_operators gives it its meaning
-			SpecialInfix::ElementWise(op) => Node::List(
-				vec![lhs, Symbol(crate::operators::element_wise_word(op)), operand],
-				Bracket::None,
-				Separator::Space,
-			),
-			SpecialInfix::Membership(word) => Node::List(
-				vec![lhs, Symbol(word.to_string()), operand],
-				Bracket::None,
-				Separator::Space,
-			),
-			SpecialInfix::DotCall => dot_call(lhs, operand),
-		}
-	}
 }
 
 /// `f.(xs, a)` → `map(xs, broadcast_item => f(broadcast_item, a))`
@@ -494,15 +412,16 @@ pub const STATIC_KEYWORD: &str = "static";
 const AFTER_KEYWORD: &str = "after";
 /// `sleep 1s and print "x"`: an `and` between two statements runs them one after the other
 const AND_KEYWORD: &str = "and";
-/// Words after `and` that continue an expression rather than start a statement: `a and b or c`
-const CONTINUING_WORDS: [&str; 7] = ["and", "or", "xor", "then", "else", "is", "in"];
-/// A prefix operator word after `and` starts its operand, not a statement: `a and not c` (card let-if)
-const OPERAND_PREFIX_WORDS: [&str; 1] = ["not"];
 /// Words a condition or subject follows: `xs where #it > 1` counts it, `where` takes no `#` index (card topo-sort-wasm);
 /// `match -3 {…}` matches -3, no subtraction from `match` (card match-negative-subject)
 const CLAUSE_WORDS: [&str; 3] = ["where", "match", "switch"];
-/// Words between two operands, as an operator: `and n mod 100 <= 13` continues the condition (card if-then-chain)
-const INFIX_WORDS: [&str; 6] = ["mod", "modulo", "rem", "div", "contains", "as"];
+/// Words between two operands besides the operator words (operators::is_operator_word): `of`, `matches`
+const JOINING_WORDS: [&str; 2] = [OF_WORD, "matches"];
+
+/// A word joining two operands, never a call of the word before it: `a and b`, `n mod 100`, `x in xs`, `p is int`
+pub(crate) fn joins_operands(word: &str) -> bool {
+	crate::operators::is_operator_word(word) || JOINING_WORDS.contains(&word)
+}
 pub const ASSERT_MARKER: &str = "assert·else";
 /// The words that start the fallback of `try X else Y`: `else`, classical `catch`, Python's `except` (P60)
 const FALLBACK_WORDS: [&str; 3] = [ELSE_KEYWORD, "catch", "except"];
@@ -528,8 +447,6 @@ fn iterates_keys(iterable: &Node) -> bool {
 
 /// How tight a suffix `!` binds: below the index `#`, above `^` and arithmetic
 const BANG_BP: u8 = Op::Hash.binding_power().0.midpoint(Op::Pow.binding_power().0);
-/// `nand` and its glyph pair, both `not (a and b)`
-const NAND_SPELLINGS: [&str; 3] = ["nand", "¬&", "⊼"];
 const TO_WORD: &str = "to";
 const TO_SENTENCE_WORD: &str = "To";
 /// `to greet p do …`: the word between a `to` definition's parameters and its body
@@ -704,12 +621,12 @@ fn is_music_accidental(c: char) -> bool {
 /// (a == b*(a//b) + a%b): floor(a/b) for a positive divisor, ceil(a/b) for a negative one. Each operand is evaluated
 /// once, and an exact quotient rounds exactly (wasm_emitter exact_euclid_div)
 pub const FLOOR_QUOTIENT: &str = "floor_quotient";
+/// The spellings of floor division in the operator table: `7//2`, `7 div 2` and the compound `x//=2`
+const FLOOR_DIVISION_SPELLINGS: [&str; 2] = ["//", "div"];
+const FLOOR_DIVISION_ASSIGNMENT: &str = "//=";
 
 /// `a | b`: the logical or, or `b(a)` when b names a function (pipes.rs)
 const PIPE_GLYPH: &str = "|";
-/// `|>` binds below range and arithmetic, above `as` and comparisons
-const PIPELINE_BINDING_POWER: (u8, u8) = (127, 128);
-
 /// `value |> f(args)` → `f(value, args)`, `value |> f` → `f(value)`; a braceless call is grouped, one argument:
 /// `square xs |> filter(p)` → `filter((square xs), p)`
 pub(crate) fn piped(value: Node, stage: Node) -> Node {
@@ -727,10 +644,6 @@ pub(crate) fn piped(value: Node, stage: Node) -> Node {
 		}
 		_ => Node::List(vec![stage, value], Bracket::Round, Separator::None),
 	}
-}
-
-fn floor_division(dividend: Node, divisor: Node) -> Node {
-	call(FLOOR_QUOTIENT, vec![dividend, divisor])
 }
 
 /// Read and parse a WARP file
@@ -1049,7 +962,7 @@ fn operator_call(glyph: &[char], arguments: Vec<Node>) -> Node {
 	)
 }
 
-enum ElseParseMode {
+pub(crate) enum ElseParseMode {
 	Atom,
 	Expr,
 }

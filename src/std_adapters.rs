@@ -5,32 +5,73 @@
 
 use crate::node::Node;
 
-/// module.member applied to the arguments (a list node)
+/// module.member applied to the arguments (a list node); each module's words below, their errors named here
 pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String> {
 	let arguments = arguments.as_items();
-	let failure = |problem: String| format!("{module}.{member}: {problem}");
-	let text_of = |node: &Node| {
-		node.text_value()
-			.ok_or_else(|| failure(format!("needs a text, got {}", node.serialize().trim())))
+	let answer = match module {
+		"json" => json(member, &arguments),
+		"file" => file(member, &arguments),
+		"hash" => hash(member, &arguments),
+		"regex" => regex(member, &arguments),
+		"net" => net(member, &arguments),
+		"os" => os(member, &arguments),
+		"store" => store(member, &arguments),
+		// `clipboard.write(text)` (lowering/system_values.rs)
+		#[cfg(feature = "native")]
+		"clipboard" => match (member, arguments.as_slice()) {
+			("write", [text]) => warp_runtime::system_values::write_clipboard(&text_of(text)?).map(|_| Node::Empty),
+			_ => no_such_word(&arguments),
+		},
+		#[cfg(feature = "native")]
+		"sound" => sound(member, &arguments),
+		#[cfg(feature = "native")]
+		"midi" => midi(member, &arguments),
+		// the tables of registered classes (lowering/database_tables.rs)
+		#[cfg(feature = "native")]
+		"table" => crate::database::call(member, &arguments),
+		_ => no_such_word(&arguments),
 	};
-	// what write puts into a file: a text as it is, any other value as warp writes it (`42`, `[1 2]`)
-	#[cfg(feature = "native")]
-	let number_of = |node: &Node| match node.drop_meta() {
+	answer.map_err(|problem| format!("{module}.{member}: {problem}"))
+}
+
+fn no_such_word(arguments: &[Node]) -> Result<Node, String> {
+	Err(format!("no such word of {} arguments", arguments.len()))
+}
+
+fn text_of(node: &Node) -> Result<String, String> {
+	node.text_value()
+		.ok_or_else(|| format!("needs a text, got {}", node.serialize().trim()))
+}
+
+#[cfg(feature = "native")]
+fn number_of(node: &Node) -> Result<f64, String> {
+	match node.drop_meta() {
 		Node::Number(number) => Ok(f64::from(*number)),
-		other => Err(failure(format!("needs a number, got {}", other.serialize().trim()))),
-	};
-	let content_of = |node: &Node| text_of(node).or_else(|_| Ok::<String, String>(node.serialize().trim().to_string()));
-	match (module, member, arguments.as_slice()) {
-		("json", "parse", [text]) => {
+		other => Err(format!("needs a number, got {}", other.serialize().trim())),
+	}
+}
+
+/// What write puts into a file: a text as it is, any other value as warp writes it (`42`, `[1 2]`)
+fn content_of(node: &Node) -> String {
+	text_of(node).unwrap_or_else(|_| node.serialize().trim().to_string())
+}
+
+fn said(problem: impl std::fmt::Display) -> String {
+	problem.to_string()
+}
+
+fn json(member: &str, arguments: &[Node]) -> Result<Node, String> {
+	match (member, arguments) {
+		("parse", [text]) => {
 			let text = text_of(text)?;
 			let parsed: serde_json::Value = serde_json::from_str(&text)
 				.or_else(|_| serde_json::from_str(&crate::node::json_of_json5(&text)))
-				.map_err(|problem| failure(format!("{text:?} is no json: {problem}")))?;
+				.map_err(|problem| format!("{text:?} is no json: {problem}"))?;
 			Ok(crate::foreign::node_of(&parsed))
 		}
-		("json", "to_json", [value]) => Ok(Node::Text(crate::foreign::json_of(value).to_string())),
+		("to_json", [value]) => Ok(Node::Text(crate::foreign::json_of(value).to_string())),
 		// an instance of one of the program's classes is its fields: `{"Point": {"x": 1}}` is `{"x": 1}` (as host.js)
-		("json", "to_json", [value, classes]) => {
+		("to_json", [value, classes]) => {
 			let classes: Vec<String> = classes
 				.children()
 				.iter()
@@ -40,215 +81,184 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 				without_class_tags(crate::foreign::json_of(value), &classes).to_string(),
 			))
 		}
-		("file", "write", [path, text]) => write_file(&text_of(path)?, content_of(text)?).map_err(failure),
-		("file", "write_bytes", [path, bytes]) => {
-			write_file(&text_of(path)?, bytes_of(bytes).map_err(failure)?).map_err(failure)
-		}
-		("file", "read_bytes", [path]) => std::fs::read(text_of(path)?)
+		_ => no_such_word(arguments),
+	}
+}
+
+fn file(member: &str, arguments: &[Node]) -> Result<Node, String> {
+	match (member, arguments) {
+		("write", [path, text]) => write_file(&text_of(path)?, content_of(text)),
+		("write_bytes", [path, bytes]) => write_file(&text_of(path)?, bytes_of(bytes)?),
+		("read_bytes", [path]) => std::fs::read(text_of(path)?)
 			.map(|bytes| list_of(bytes.into_iter().map(|byte| Node::int(byte.into()))))
-			.map_err(|problem| failure(problem.to_string())),
-		("file", "append", [path, text]) => {
+			.map_err(said),
+		("append", [path, text]) => {
 			use std::io::Write;
-			crate::sandbox::check_write(&text_of(path)?).map_err(failure)?;
+			let path = text_of(path)?;
+			crate::sandbox::check_write(&path)?;
 			let mut file = std::fs::OpenOptions::new()
 				.append(true)
 				.create(true)
-				.open(text_of(path)?)
-				.map_err(|problem| failure(problem.to_string()))?;
-			file.write_all(content_of(text)?.as_bytes())
+				.open(path)
+				.map_err(said)?;
+			file.write_all(content_of(text).as_bytes())
 				.map(|_| Node::Empty)
-				.map_err(|problem| failure(problem.to_string()))
+				.map_err(said)
 		}
-		("file", "exists", [path]) => Ok(Node::from(std::path::Path::new(&text_of(path)?).exists())),
-		("file", "list", [folder]) => {
-			let entries = std::fs::read_dir(text_of(folder)?).map_err(|problem| failure(problem.to_string()))?;
+		("exists", [path]) => Ok(Node::from(std::path::Path::new(&text_of(path)?).exists())),
+		("list", [folder]) => {
+			let entries = std::fs::read_dir(text_of(folder)?).map_err(said)?;
 			let mut names: Vec<String> = entries
 				.filter_map(|entry| Some(entry.ok()?.file_name().to_string_lossy().into_owned()))
 				.collect();
 			names.sort();
 			Ok(texts(names))
 		}
-		("hash", "sha256", [subject]) => {
+		_ => no_such_word(arguments),
+	}
+}
+
+fn hash(member: &str, arguments: &[Node]) -> Result<Node, String> {
+	match (member, arguments) {
+		("sha256", [subject]) => {
 			use sha2::Digest;
 			Ok(Node::Text(
-				sha2::Sha256::digest(content_of(subject)?.as_bytes())
+				sha2::Sha256::digest(content_of(subject).as_bytes())
 					.iter()
 					.map(|byte| format!("{byte:02x}"))
 					.collect(),
 			))
 		}
-		("hash", "crc32", [subject]) => Ok(Node::int(i64::from(crc32fast::hash(content_of(subject)?.as_bytes())))),
-		("regex", member, [text, pattern, rest @ ..]) => {
-			let (text, pattern) = (text_of(text)?, regex_of(&text_of(pattern)?).map_err(failure)?);
-			match (member, rest) {
-				("matches", []) => Ok(Node::from(pattern.is_match(&text))),
-				("first", []) => Ok(pattern
-					.find(&text)
-					.map_or(Node::Empty, |found| Node::Text(found.as_str().to_string()))),
-				("all", []) => Ok(texts(pattern.find_iter(&text).map(|found| found.as_str().to_string()))),
-				("replace", [replacement]) => Ok(Node::Text(
-					pattern.replace_all(&text, text_of(replacement)?.as_str()).into_owned(),
-				)),
-				_ => Err(failure(format!("no such word of {} arguments", arguments.len()))),
-			}
-		}
-		("net", "post", [url, body]) => {
-			crate::extensions::utils::post_within(&text_of(url)?, &content_of(body)?, &[], crate::host::FETCH_TIMEOUT)
-				.map(Node::Text)
-				.map_err(failure)
-		}
-		// `post(url, body, {"x-api-key": key})`: the map's pairs are the request's headers
-		("net", "post", [url, body, headers]) => {
-			let headers = header_pairs(headers).map_err(failure)?;
-			crate::extensions::utils::post_within(
-				&text_of(url)?,
-				&content_of(body)?,
-				&headers,
-				crate::host::FETCH_TIMEOUT,
-			)
-			.map(Node::Text)
-			.map_err(failure)
-		}
-		// `clipboard.write(text)` (lowering/system_values.rs)
+		("crc32", [subject]) => Ok(Node::int(i64::from(crc32fast::hash(content_of(subject).as_bytes())))),
+		_ => no_such_word(arguments),
+	}
+}
+
+fn regex(member: &str, arguments: &[Node]) -> Result<Node, String> {
+	let [text, pattern, rest @ ..] = arguments else {
+		return no_such_word(arguments);
+	};
+	let (text, pattern) = (text_of(text)?, regex_of(&text_of(pattern)?)?);
+	match (member, rest) {
+		("matches", []) => Ok(Node::from(pattern.is_match(&text))),
+		("first", []) => Ok(pattern
+			.find(&text)
+			.map_or(Node::Empty, |found| Node::Text(found.as_str().to_string()))),
+		("all", []) => Ok(texts(pattern.find_iter(&text).map(|found| found.as_str().to_string()))),
+		("replace", [replacement]) => Ok(Node::Text(
+			pattern.replace_all(&text, text_of(replacement)?.as_str()).into_owned(),
+		)),
+		_ => no_such_word(arguments),
+	}
+}
+
+/// `post(url, body)`, `post(url, body, {"x-api-key": key})`: the map's pairs are the request's headers
+fn net(member: &str, arguments: &[Node]) -> Result<Node, String> {
+	let (url, body, headers) = match (member, arguments) {
+		("post", [url, body]) => (url, body, vec![]),
+		("post", [url, body, headers]) => (url, body, header_pairs(headers)?),
+		_ => return no_such_word(arguments),
+	};
+	crate::extensions::utils::post_within(&text_of(url)?, &content_of(body), &headers, crate::host::FETCH_TIMEOUT)
+		.map(Node::Text)
+}
+
+fn os(member: &str, arguments: &[Node]) -> Result<Node, String> {
+	match (member, arguments) {
+		("env", [name]) => Ok(std::env::var(text_of(name)?).map_or(Node::Empty, Node::Text)),
+		("args", []) => Ok(texts(PROGRAM_ARGUMENTS.with(|arguments| arguments.borrow().clone()))),
 		#[cfg(feature = "native")]
-		("clipboard", "write", [text]) => warp_runtime::system_values::write_clipboard(&text_of(text)?)
-			.map(|_| Node::Empty)
-			.map_err(failure),
-		("os", "env", [name]) => Ok(std::env::var(text_of(name)?).map_or(Node::Empty, Node::Text)),
-		("os", "args", []) => Ok(texts(PROGRAM_ARGUMENTS.with(|arguments| arguments.borrow().clone()))),
-		#[cfg(feature = "native")]
-		("os", "exec", [command]) => {
-			let arguments = command
-				.as_items()
-				.iter()
-				.map(content_of)
-				.collect::<Result<Vec<_>, _>>()?;
-			executed(&arguments).map(Node::Text).map_err(failure)
+		("exec", [command]) => {
+			let command: Vec<String> = command.as_items().iter().map(content_of).collect();
+			executed(&command).map(Node::Text)
 		}
-		// `stored theme = "dark"` (lowering/stored_values.rs): the value kept under its name, or the default
-		("store", "load", [name, default, file]) => {
-			let kept = stored_values(&text_of(file)?).map_err(failure)?.remove(&text_of(name)?);
+		_ => no_such_word(arguments),
+	}
+}
+
+/// `stored theme = "dark"` (lowering/stored_values.rs): the values kept by name in a store file
+fn store(member: &str, arguments: &[Node]) -> Result<Node, String> {
+	match (member, arguments) {
+		// the value kept under its name, or the default
+		("load", [name, default, file]) => {
+			let kept = stored_values(&text_of(file)?)?.remove(&text_of(name)?);
 			Ok(kept.map_or_else(|| default.clone(), |value| crate::foreign::node_of(&value)))
 		}
 		// `stored theme default "dark"`: the default kept from the first run on, so the store lists it
-		("store", "declare", [name, default, file]) => {
+		("declare", [name, default, file]) => {
 			let (name, file) = (text_of(name)?, text_of(file)?);
-			let mut values = stored_values(&file).map_err(failure)?;
+			let mut values = stored_values(&file)?;
 			if let Some(kept) = values.get(&name) {
 				return Ok(crate::foreign::node_of(kept));
 			}
 			values.insert(name, crate::foreign::json_of(default));
-			save_stored_values(&file, values)
-				.map(|_| default.clone())
-				.map_err(failure)
+			save_stored_values(&file, values).map(|_| default.clone())
 		}
-		("store", "save", [name, value, file]) => {
-			let file = text_of(file)?;
-			let mut values = stored_values(&file).map_err(failure)?;
-			values.insert(text_of(name)?, crate::foreign::json_of(value));
-			save_stored_values(&file, values).map(|_| Node::Empty).map_err(failure)
+		("save", [name, value, file]) => {
+			let name = text_of(name)?;
+			changed_store(file, |values| drop(values.insert(name, crate::foreign::json_of(value))))
 		}
-		// `delete storage[k]`, `keys(storage)`, `storage` alone (lowering/stored_values.rs)
-		("store", "remove", [name, file]) => {
-			let file = text_of(file)?;
-			let mut values = stored_values(&file).map_err(failure)?;
-			values.remove(&text_of(name)?);
-			save_stored_values(&file, values).map(|_| Node::Empty).map_err(failure)
+		// `delete storage[k]`, `keys(storage)`, `storage` alone
+		("remove", [name, file]) => {
+			let name = text_of(name)?;
+			changed_store(file, |values| drop(values.remove(&name)))
 		}
-		// `play "song.mp3"`, `stop_sound` (lib/sound.warp, card sound-library)
-		#[cfg(feature = "native")]
-		("sound", "play_file", [path]) => crate::sound::play_file(&text_of(path)?)
-			.map(|handle| Node::int(handle as i64))
-			.map_err(failure),
-		// stop_sound(handle), play's handle (card sound-pro); handle 0: all of them
-		#[cfg(feature = "native")]
-		("sound", "stop", [handle]) => match handle.drop_meta() {
-			Node::Number(crate::extensions::numbers::Number::Int(0)) => {
-				crate::sound::stop();
-				Ok(Node::Empty)
-			}
-			Node::Number(crate::extensions::numbers::Number::Int(handle)) => {
-				crate::sound::stop_one((*handle).max(0) as usize)
-					.map(|_| Node::Empty)
-					.map_err(failure)
-			}
-			other => Err(failure(format!(
-				"needs a sound handle, got {}",
-				other.serialize().trim()
-			))),
-		},
-		// fade_sound(handle, gain, seconds): a playing sound's gain ramped (card native-sound)
-		#[cfg(feature = "native")]
-		("sound", "fade", [handle, gain, seconds]) => crate::sound::fade(
+		("all", [file]) => Ok(crate::foreign::node_of(&serde_json::Value::Object(stored_values(
+			&text_of(file)?,
+		)?))),
+		("names", [file]) => Ok(texts(stored_values(&text_of(file)?)?.into_iter().map(|(name, _)| name))),
+		_ => no_such_word(arguments),
+	}
+}
+
+/// `play "song.mp3"`, `stop_sound`, `fade_sound` (lib/sound.warp, cards sound-library, sound-pro, native-sound)
+#[cfg(feature = "native")]
+fn sound(member: &str, arguments: &[Node]) -> Result<Node, String> {
+	match (member, arguments) {
+		("play_file", [path]) => {
+			return crate::sound::play_file(&text_of(path)?).map(|handle| Node::int(handle as i64))
+		}
+		// stop(handle), play's handle; handle 0: all of them
+		("stop", [handle]) if number_of(handle)? == 0.0 => crate::sound::stop(),
+		("stop", [handle]) => crate::sound::stop_one(number_of(handle)?.max(0.0) as usize)?,
+		("fade", [handle, gain, seconds]) => crate::sound::fade(
 			number_of(handle)?.max(0.0) as usize,
 			number_of(gain)?,
 			number_of(seconds)?,
-		)
-		.map(|_| Node::Empty)
-		.map_err(failure),
-		#[cfg(feature = "native")]
-		("sound", "last", []) => Ok(Node::int(crate::sound::last_handle() as i64)),
-		#[cfg(feature = "native")]
-		("sound", "queued", []) => Ok(Node::float(crate::sound::queued_seconds())),
-		#[cfg(feature = "native")]
-		("sound", "at", [seconds]) => {
-			crate::sound::at(number_of(seconds)?);
-			Ok(Node::Empty)
+		)?,
+		("at", [seconds]) => crate::sound::at(number_of(seconds)?),
+		("at_end", []) => crate::sound::at_end(),
+		("wait", []) => crate::sound::wait(),
+		("last", []) => return Ok(Node::int(crate::sound::last_handle() as i64)),
+		("queued", []) => return Ok(Node::float(crate::sound::queued_seconds())),
+		("render", [path]) => return crate::sound::render(&text_of(path)?).map(Node::float),
+		_ => return no_such_word(arguments),
+	}
+	Ok(Node::Empty)
+}
+
+/// MIDI (card midi-out, src/sound/midi.rs): notes cross as flat whole numbers [start ms, key, length ms, velocity …]
+#[cfg(feature = "native")]
+fn midi(member: &str, arguments: &[Node]) -> Result<Node, String> {
+	match (member, arguments) {
+		("write_file", [path, notes]) => {
+			write_file(&text_of(path)?, crate::sound::midi::encode(&whole_numbers(notes)?)?)
 		}
-		#[cfg(feature = "native")]
-		("sound", "at_end", []) => {
-			crate::sound::at_end();
-			Ok(Node::Empty)
-		}
-		#[cfg(feature = "native")]
-		("sound", "wait", []) => {
-			crate::sound::wait();
-			Ok(Node::Empty)
-		}
-		#[cfg(feature = "native")]
-		("sound", "render", [path]) => crate::sound::render(&text_of(path)?).map(Node::float).map_err(failure),
-		// MIDI (card midi-out, src/sound/midi.rs): notes cross as flat whole numbers [start ms, key, length ms, velocity …]
-		#[cfg(feature = "native")]
-		("midi", "write_file", [path, notes]) => {
-			let encoded = crate::sound::midi::encode(&whole_numbers(notes).map_err(failure)?).map_err(failure)?;
-			write_file(&text_of(path)?, encoded).map_err(failure)
-		}
-		#[cfg(feature = "native")]
-		("midi", "read_file", [path]) => {
+		("read_file", [path]) => {
 			let path = text_of(path)?;
-			let bytes = std::fs::read(&path).map_err(|problem| failure(format!("cannot read {path}: {problem}")))?;
-			crate::sound::midi::decode(&bytes)
-				.map(|notes| Node::list(notes.into_iter().map(Node::int).collect()))
-				.map_err(failure)
+			let bytes = std::fs::read(&path).map_err(|problem| format!("cannot read {path}: {problem}"))?;
+			crate::sound::midi::decode(&bytes).map(|notes| Node::list(notes.into_iter().map(Node::int).collect()))
 		}
-		#[cfg(feature = "native")]
-		("midi", "send", [port, message]) => {
-			let bytes = whole_numbers(message)
-				.map_err(failure)?
+		("send", [port, message]) => {
+			let bytes = whole_numbers(message)?
 				.into_iter()
-				.map(|byte| u8::try_from(byte).map_err(|_| failure(format!("{byte} is no MIDI byte (0 to 255)"))))
+				.map(|byte| u8::try_from(byte).map_err(|_| format!("{byte} is no MIDI byte (0 to 255)")))
 				.collect::<Result<Vec<_>, _>>()?;
-			crate::sound::midi::send(&text_of(port)?, &bytes)
-				.map(|_| Node::Empty)
-				.map_err(failure)
+			crate::sound::midi::send(&text_of(port)?, &bytes).map(|_| Node::Empty)
 		}
-		#[cfg(feature = "native")]
-		("midi", "outputs", []) => crate::sound::midi::outputs().map(texts).map_err(failure),
-		#[cfg(feature = "native")]
-		("midi", "receive", []) => crate::sound::midi::receive().map(|_| Node::Empty).map_err(failure),
-		// the tables of registered classes (lowering/database_tables.rs)
-		#[cfg(feature = "native")]
-		("table", member, arguments) => crate::database::call(member, arguments).map_err(failure),
-		("store", "all", [file]) => Ok(crate::foreign::node_of(&serde_json::Value::Object(
-			stored_values(&text_of(file)?).map_err(failure)?,
-		))),
-		("store", "names", [file]) => Ok(texts(
-			stored_values(&text_of(file)?)
-				.map_err(failure)?
-				.into_iter()
-				.map(|(name, _)| name),
-		)),
-		_ => Err(failure(format!("no such word of {} arguments", arguments.len()))),
+		("outputs", []) => crate::sound::midi::outputs().map(texts),
+		("receive", []) => crate::sound::midi::receive().map(|_| Node::Empty),
+		_ => no_such_word(arguments),
 	}
 }
 
@@ -306,6 +316,14 @@ fn write_file(path: &str, contents: impl AsRef<[u8]>) -> Result<Node, String> {
 		.map_err(|problem| format!("{path}: {problem}"))
 }
 
+/// The store file's values changed and saved
+fn changed_store(file: &Node, change: impl FnOnce(&mut StoredValues)) -> Result<Node, String> {
+	let file = text_of(file)?;
+	let mut values = stored_values(&file)?;
+	change(&mut values);
+	save_stored_values(&file, values).map(|_| Node::Empty)
+}
+
 fn save_stored_values(file: &str, values: StoredValues) -> Result<(), String> {
 	if let Some(store) = unfiled_store(file) {
 		UNFILED_STORES.with(|stores| stores.borrow_mut().insert(store, values));
@@ -316,9 +334,6 @@ fn save_stored_values(file: &str, values: StoredValues) -> Result<(), String> {
 	std::fs::write(file, text).map_err(|problem| format!("{file}: {problem}"))
 }
 
-/// A list of texts
-/// The whole numbers of a list argument
-#[cfg(feature = "native")]
 /// What the command (program, arguments…) printed, run without a shell, its trailing newlines dropped as `$(…)` does;
 /// a command that fails is an error with what it printed to stderr
 #[cfg(feature = "native")]
@@ -343,6 +358,8 @@ fn executed(command: &[String]) -> Result<String, String> {
 		.to_string())
 }
 
+/// The whole numbers of a list argument
+#[cfg(feature = "native")]
 fn whole_numbers(list: &Node) -> Result<Vec<i64>, String> {
 	list.as_items()
 		.iter()
@@ -353,6 +370,7 @@ fn whole_numbers(list: &Node) -> Result<Vec<i64>, String> {
 		.collect()
 }
 
+/// A list of texts
 fn texts(items: impl IntoIterator<Item = String>) -> Node {
 	list_of(items.into_iter().map(Node::Text))
 }

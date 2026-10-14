@@ -186,6 +186,12 @@ pub(crate) fn defined_names(node: &Node) -> HashSet<String> {
 	collect_assigned_names(node, &mut defined);
 	let context = crate::analyzer::function_definitions(node);
 	defined.extend(context.user_functions.into_keys());
+	// a method lowered from a class or Go's `func (p Point) Sum()`: `(Sum self:Point) := …`
+	node.visit(&mut |part| {
+		if let Node::Key(head, Op::Define, _) = part {
+			defined.insert(crate::node::leading_name(head));
+		}
+	});
 	defined
 }
 
@@ -302,29 +308,5 @@ impl Lowering {
 			}
 			other => object_entries(other).map(|_| other.clone()),
 		}
-	}
-
-	/// `word of object`, `c of b of p`: the lookup of a field, when the object is one; `None` for anything else
-	pub(super) fn of_lookup(&self, items: &[Node]) -> Option<Node> {
-		let [word_node, of, rest @ ..] = items else { return None };
-		let Node::Symbol(name) = word_node.drop_meta() else {
-			return None;
-		};
-		if !is_of(of) || rest.is_empty() {
-			return None;
-		}
-		let object = match rest {
-			[single] => single.clone(),
-			[_, next_of, ..] if is_of(next_of) => self.of_lookup(rest)?,
-			_ => return None,
-		};
-		let literal = self.object_literal(&object);
-		let is_field = literal
-			.as_ref()
-			.and_then(object_entries)
-			.is_some_and(|entries| entries.iter().any(|(field, _)| field == name));
-		let is_object = literal.is_some() || is_field_lookup(&object);
-		let is_other_word = self.library_word(name).is_some() || counting_method(name, &self.context).is_some();
-		(is_object && (is_field || !is_other_word)).then(|| field_lookup(&object, name, word_node))
 	}
 }

@@ -14,7 +14,7 @@ use crate::time::{
 	TimeForm, INSTANT_AT, MONTHS_SHIFT, OFFSET_SHIFT, TIME_FORMS, TIME_FORM_BITS, TIME_FORM_MASK, TZDATA_FIELD,
 	ZONE_INDEX_MASK,
 };
-use crate::type_kinds::{Kind, KIND_BITS, KIND_MASK};
+use crate::type_kinds::{Kind, KIND_BITS};
 use wasm_encoder::*;
 use Instruction as I;
 
@@ -139,19 +139,14 @@ impl WasmGcEmitter {
 						.unwrap_or_default();
 					Self::emit_list(f, &[I::LocalGet(field), I::I32Const(index as i32), I::I32Ne, I::I32And]);
 				}
-				f.instruction(&I::If(BlockType::Empty));
 				Self::emit_list(
 					f,
 					&[
+						I::If(BlockType::Empty),
 						I::LocalGet(form),
 						I::I64Const(TimeForm::Zoned as i64),
 						I::I64Eq,
 						I::If(BlockType::Empty),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(position),
 						I::LocalGet(offset),
 						I::I64Const(SECOND as i64),
@@ -186,8 +181,7 @@ impl WasmGcEmitter {
 						],
 					);
 				}
-				f.instruction(&I::End);
-				Self::emit_list(f, &[I::LocalGet(form), I::LocalGet(position)]);
+				Self::emit_list(f, &[I::End, I::LocalGet(form), I::LocalGet(position)]);
 				s.call(f, TIME_PARTS);
 				Self::emit_list(f, &[I::LocalSet(nanos), I::LocalSet(days), I::LocalGet(days)]);
 				s.call(f, CIVIL_FROM_DAYS);
@@ -322,11 +316,6 @@ impl WasmGcEmitter {
 						I::I64Sub,
 						I::I64Sub,
 						I::LocalSet(day_of_year),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(day_of_year),
 						I::I64Const(5),
 						I::I64Mul,
@@ -500,11 +489,11 @@ impl WasmGcEmitter {
 							I::I64DivU,
 							I::I64Const(10),
 							I::I64RemU,
+							I::I64Const(ZERO_DIGIT),
+							I::I64Add,
+							I::I32WrapI64,
+							I::I32Store8(BYTE),
 						],
-					);
-					Self::emit_list(
-						f,
-						&[I::I64Const(ZERO_DIGIT), I::I64Add, I::I32WrapI64, I::I32Store8(BYTE)],
 					);
 				}
 				advance(f, count as i32);
@@ -561,8 +550,16 @@ impl WasmGcEmitter {
 			s.call(f, TIME_PARTS);
 			Self::emit_list(f, &[I::LocalSet(nanos), I::LocalSet(days), I::LocalGet(days)]);
 			s.call(f, CIVIL_FROM_DAYS);
-			Self::emit_list(f, &[I::LocalSet(day), I::LocalSet(month), I::LocalSet(year)]);
-			Self::emit_list(f, &[I::I32Const(TIME_TEXT_BYTES), I::LocalSet(position)]);
+			Self::emit_list(
+				f,
+				&[
+					I::LocalSet(day),
+					I::LocalSet(month),
+					I::LocalSet(year),
+					I::I32Const(TIME_TEXT_BYTES),
+					I::LocalSet(position),
+				],
+			);
 			s.emit_text_allocation(f, position, address);
 			Self::emit_list(f, &[I::LocalGet(address), I::LocalSet(position)]);
 			digits(f, &[I::LocalGet(year)], 4);
@@ -630,10 +627,15 @@ impl WasmGcEmitter {
 			if let Some((names, prediction)) = &zone_names {
 				// `+01:00[Europe/Berlin]`, then the rules version of a prediction, as calendar.rs Zoned::plain
 				is_form(f, TimeForm::Zoned);
-				f.instruction(&I::If(BlockType::Empty));
 				Self::emit_list(
 					f,
-					&[I::LocalGet(offset), I::I64Const(0), I::I64LtS, I::If(BlockType::Empty)],
+					&[
+						I::If(BlockType::Empty),
+						I::LocalGet(offset),
+						I::I64Const(0),
+						I::I64LtS,
+						I::If(BlockType::Empty),
+					],
 				);
 				put(f, b'-');
 				Self::emit_list(
@@ -670,9 +672,11 @@ impl WasmGcEmitter {
 							I::I64ShrU,
 							I::I64Const(ZONE_INDEX_MASK),
 							I::I64And,
+							I::I64Const(index as i64),
+							I::I64Eq,
+							I::If(BlockType::Empty),
 						],
 					);
-					Self::emit_list(f, &[I::I64Const(index as i64), I::I64Eq, I::If(BlockType::Empty)]);
 					copy(f, *name);
 					f.instruction(&I::End);
 				}
@@ -690,16 +694,7 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::End, I::End]);
 			}
 			f.instruction(&I::End);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(address),
-					I::LocalGet(position),
-					I::LocalGet(address),
-					I::I32Sub,
-				],
-			);
-			s.call(f, "new_text");
+			s.emit_new_text_to(f, address, position);
 		});
 	}
 
@@ -707,9 +702,15 @@ impl WasmGcEmitter {
 	fn emit_fraction(&self, func: &mut Function, fraction: u32, power: u32, position: u32) {
 		Self::emit_list(
 			func,
-			&[I::LocalGet(fraction), I::I64Const(0), I::I64Ne, I::If(BlockType::Empty)],
+			&[
+				I::LocalGet(fraction),
+				I::I64Const(0),
+				I::I64Ne,
+				I::If(BlockType::Empty),
+				I::I64Const(SECOND as i64),
+				I::LocalSet(power),
+			],
 		);
-		Self::emit_list(func, &[I::I64Const(SECOND as i64), I::LocalSet(power)]);
 		Self::emit_while(
 			func,
 			&[I::LocalGet(fraction), I::I64Const(10), I::I64RemU, I::I64Eqz],
@@ -737,9 +738,16 @@ impl WasmGcEmitter {
 		self.call(func, "int_to_decimal");
 		Self::emit_list(
 			func,
-			&[I::LocalGet(position), I::I32Const(b'.' as i32), I::I32Store8(BYTE)],
+			&[
+				I::LocalGet(position),
+				I::I32Const(b'.' as i32),
+				I::I32Store8(BYTE),
+				I::LocalGet(position),
+				I::I32Add,
+				I::LocalSet(position),
+				I::End,
+			],
 		);
-		Self::emit_list(func, &[I::LocalGet(position), I::I32Add, I::LocalSet(position), I::End]);
 	}
 
 	/// duration_text(node): its months, days, then hours, minutes and seconds of whole seconds, else the seconds with
@@ -801,8 +809,14 @@ impl WasmGcEmitter {
 			};
 			let [months, days, hours, minutes, whole_seconds] = units;
 			s.emit_time_position(f, 0);
-			f.instruction(&I::LocalSet(nanos));
-			Self::emit_list(f, &[I::I32Const(DURATION_TEXT_BYTES), I::LocalSet(position)]);
+			Self::emit_list(
+				f,
+				&[
+					I::LocalSet(nanos),
+					I::I32Const(DURATION_TEXT_BYTES),
+					I::LocalSet(position),
+				],
+			);
 			s.emit_text_allocation(f, position, address);
 			Self::emit_list(f, &[I::LocalGet(address), I::LocalTee(position), I::LocalSet(start)]);
 			let info = |shift: i64| {
@@ -834,11 +848,6 @@ impl WasmGcEmitter {
 					I::I64Ne,
 					I::I32And,
 					I::If(BlockType::Empty),
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::LocalGet(nanos),
 					I::I64Const(SECOND as i64),
 					I::I64DivS,
@@ -875,11 +884,11 @@ impl WasmGcEmitter {
 					I::I32Eq,
 					I::I32Or,
 					I::If(BlockType::Empty),
+					I::LocalGet(nanos),
+					I::I64Const(0),
+					I::I64LtS,
+					I::If(BlockType::Empty),
 				],
-			);
-			Self::emit_list(
-				f,
-				&[I::LocalGet(nanos), I::I64Const(0), I::I64LtS, I::If(BlockType::Empty)],
 			);
 			put(f, b'-');
 			Self::emit_list(
@@ -987,16 +996,8 @@ impl WasmGcEmitter {
 			return;
 		};
 		self.emit_field(func, held, 0);
-		Self::emit_list(
-			func,
-			&[
-				I::I64Const(KIND_MASK),
-				I::I64And,
-				I::I64Const(Kind::Time as i64),
-				I::I64Eq,
-				I::If(BlockType::Empty),
-			],
-		);
+		Self::emit_kind_test(func, Kind::Time as i64, I::I64Eq);
+		Self::emit_list(func, &[I::If(BlockType::Empty)]);
 		for form in TIME_FORMS {
 			if let Some(refusal) = form.refusal(name) {
 				self.emit_time_form(func, held);
@@ -1015,16 +1016,8 @@ impl WasmGcEmitter {
 	/// `t.tzdata` of a zoned time: the version of the rules it was made with, those of the compilation
 	fn emit_tzdata_lookup(&mut self, func: &mut Function, held: u32) {
 		self.emit_field(func, held, 0);
-		Self::emit_list(
-			func,
-			&[
-				I::I64Const(KIND_MASK),
-				I::I64And,
-				I::I64Const(Kind::Time as i64),
-				I::I64Eq,
-				I::If(BlockType::Empty),
-			],
-		);
+		Self::emit_kind_test(func, Kind::Time as i64, I::I64Eq);
+		Self::emit_list(func, &[I::If(BlockType::Empty)]);
 		self.emit_time_form(func, held);
 		Self::emit_list(
 			func,
@@ -1102,32 +1095,19 @@ impl WasmGcEmitter {
 				I::I64Const(divisor),
 				I::I64DivS,
 				I::LocalSet(quotient),
-			],
-		);
-		Self::emit_list(
-			func,
-			&[
 				I::LocalGet(dividend),
 				I::LocalGet(quotient),
 				I::I64Const(divisor),
 				I::I64Mul,
 				I::I64Sub,
 				I::LocalTee(remainder),
-			],
-		);
-		Self::emit_list(func, &[I::I64Const(0), I::I64LtS, I::If(BlockType::Empty)]);
-		Self::emit_list(
-			func,
-			&[
+				I::I64Const(0),
+				I::I64LtS,
+				I::If(BlockType::Empty),
 				I::LocalGet(remainder),
 				I::I64Const(divisor),
 				I::I64Add,
 				I::LocalSet(remainder),
-			],
-		);
-		Self::emit_list(
-			func,
-			&[
 				I::LocalGet(quotient),
 				I::I64Const(1),
 				I::I64Sub,

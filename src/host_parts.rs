@@ -9,9 +9,7 @@ use crate::host::{
 	RUN_BLOCK, SIGNAL_SEND, SOUND, STD_IO, STD_MODULES_SECTION, STD_MODULES_SEPARATOR, STD_PURE, TEXT_COVERAGE,
 };
 use crate::node::Node;
-use warp_runtime::host_words::{
-	RANDOM, RANDOM_BELOW, RANDOM_SEED, SIGNAL_AT, SIGNAL_DAILY, SIGNAL_EVERY, SIGNAL_FRAME,
-};
+use warp_runtime::host_words::{RANDOM, RANDOM_BELOW, RANDOM_SEED, SIGNAL_LISTEN};
 
 /// A script's file name and text
 pub type Script = (&'static str, &'static str);
@@ -110,9 +108,7 @@ pub const HOST_PARTS: [HostPart; 11] = [
 	},
 	HostPart {
 		script: ("host-timers.js", script_text!("host-timers.js")),
-		gives: |module, name| {
-			module == HOST_LIBRARY && [SIGNAL_EVERY, SIGNAL_DAILY, SIGNAL_AT, SIGNAL_FRAME].contains(&name)
-		},
+		gives: |module, name| module == HOST_LIBRARY && name == SIGNAL_LISTEN,
 		needs: &[],
 	},
 	HostPart {

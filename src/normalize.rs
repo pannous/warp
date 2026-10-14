@@ -11,9 +11,9 @@
 //! ```
 //! Every axis also takes `Any`: all its forms are fine and never hinted (function definitions by default).
 
+use crate::compile_context;
 use crate::node::{Bracket, Node};
 use crate::operators::{glyph_operator, Op};
-use std::cell::RefCell;
 
 /// The "got it" topic of a plain hint is its reason: `a` (all of this kind) silences every hint giving that reason
 const HINT_TOPIC_PREFIX: &str = "hint:";
@@ -30,14 +30,9 @@ pub struct HintPosition {
 	pub column: usize,
 }
 
-thread_local! {
-	static HINT_POSITION: RefCell<HintPosition> = RefCell::new(HintPosition::default());
-	static HINTS_MUTED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
-
 /// Run `action` without hints on this thread: a stage that repeats work already hinted (the emitter's rerun) says nothing twice
 pub fn without_hints<T>(action: impl FnOnce() -> T) -> T {
-	crate::util::scoped(&HINTS_MUTED, true, action)
+	compile_context::scoped(|context| &mut context.hints_muted, true, action)
 }
 
 /// A hint as tests and hosts read it: a view of a Diagnostic of level Hint (see `capture_hints`)
@@ -91,37 +86,27 @@ pub fn capture_hints<T>(action: impl FnOnce() -> T) -> (T, Vec<CapturedHint>) {
 
 /// Set the current position for hint messages
 pub fn set_hint_position(line: usize, column: usize) {
-	HINT_POSITION.with(|pos| {
-		let mut p = pos.borrow_mut();
-		p.line = line;
-		p.column = column;
+	compile_context::change(|context| {
+		context.hint_position.line = line;
+		context.hint_position.column = column;
 	});
-}
-
-/// The line of the current hint position, 0 when unknown
-pub fn hint_line() -> usize {
-	HINT_POSITION.with(|pos| pos.borrow().line)
 }
 
 /// Set the current file for hint messages
 pub fn set_hint_file(file: &str) {
-	HINT_POSITION.with(|pos| {
-		pos.borrow_mut().file = Some(file.to_string());
-	});
+	compile_context::change(|context| context.hint_position.file = Some(file.to_string()));
 }
 
 /// Clear the hint position
 pub fn clear_hint_position() {
-	HINT_POSITION.with(|pos| {
-		*pos.borrow_mut() = HintPosition::default();
-	});
+	compile_context::change(|context| context.hint_position = HintPosition::default());
 }
 
 /// Get position string in clickable format (file:line:col or line:col)
 #[cfg(test)]
 fn position_string() -> String {
-	HINT_POSITION.with(|pos| {
-		let p = pos.borrow();
+	compile_context::read(|context| {
+		let p = &context.hint_position;
 		if p.line == 0 {
 			return String::new();
 		}
@@ -331,21 +316,14 @@ impl Default for Style {
 	}
 }
 
-// The style, hint mode and shown hints configure the compilations of one thread (the CLI has one): a parallel
-// test's setting must not leak into another test's compilation
-thread_local! {
-	static STYLE: RefCell<Style> = RefCell::new(Style::default());
-	static HINT_MODE: std::cell::Cell<HintMode> = const { std::cell::Cell::new(HintMode::Always) };
-}
-
 /// Set the style of this thread's compilations
 pub fn set_style(style: Style) {
-	STYLE.with(|current| *current.borrow_mut() = style);
+	compile_context::change(|context| context.style = style);
 }
 
 /// The style of this thread's compilations (cloned)
 pub fn style() -> Style {
-	STYLE.with(|current| current.borrow().clone())
+	compile_context::read(|context| context.style.clone())
 }
 
 // ============================================================================
@@ -365,12 +343,12 @@ pub enum HintMode {
 
 /// Set the hint mode of this thread's compilations
 pub fn set_hint_mode(mode: HintMode) {
-	HINT_MODE.with(|current| current.set(mode));
+	compile_context::change(|context| context.hint_mode = mode);
 }
 
 /// The hint mode of this thread's compilations
 pub fn hint_mode() -> HintMode {
-	HINT_MODE.with(|current| current.get())
+	compile_context::read(|context| context.hint_mode)
 }
 
 pub use crate::diagnostic::clear_shown_hints;
@@ -412,10 +390,10 @@ pub(crate) fn show_hint(
 	fix: Option<crate::fixits::Fix>,
 	topic: &str,
 ) -> bool {
-	if hint_mode() == HintMode::Off || HINTS_MUTED.with(|muted| muted.get()) {
+	if hint_mode() == HintMode::Off || compile_context::read(|context| context.hints_muted) {
 		return false;
 	}
-	let position = HINT_POSITION.with(|position| position.borrow().clone());
+	let position = compile_context::read(|context| context.hint_position.clone());
 	let hint = crate::diagnostic::Diagnostic {
 		message: reason.to_string(),
 		line: position.line,
@@ -502,12 +480,12 @@ pub mod hints {
 	pub fn operator(written: &str, is_prefix: bool) {
 		let mut characters = written.chars();
 		if let (Some(glyph), None) = (characters.next(), characters.next()) {
-			if let Some((_, canonical)) = glyph_operator(glyph) {
-				match canonical {
+			if let Some(op) = glyph_operator(glyph) {
+				match op.as_str() {
 					"and" => and_operator(written),
 					"or" => or_operator(written),
 					"xor" => {}
-					_ => hint(written, canonical, "standard spelling of the operator"),
+					canonical => hint(written, canonical, "standard spelling of the operator"),
 				}
 				return;
 			}

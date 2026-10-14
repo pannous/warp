@@ -11,14 +11,13 @@ use crate::words::{FOR_WORD, IN_WORD};
 use std::collections::{HashMap, HashSet};
 
 const IF_WORD: &str = "if";
-const WHERE_KEYWORD: &str = "where";
+pub(crate) const WHERE_KEYWORD: &str = "where";
 /// `people with age > 20`: `where` of a list of a class's instances
-const WITH_WORD: &str = "with";
+pub(crate) const WITH_WORD: &str = "with";
 /// `people without team`: `where not` of such a list (card people-where)
-const WITHOUT_WORD: &str = "without";
+pub(crate) const WITHOUT_WORD: &str = "without";
 /// `without` of a list of a class's instances, read as `where` with its condition negated
 const WHERE_NOT: &str = "where·not";
-const OF_WORD: &str = "of";
 /// The element `name of people` reads the field of
 const OF_ELEMENT: &str = "of·element";
 /// The element a `where` condition reads as `it`
@@ -187,74 +186,53 @@ fn with_as_where(node: Node, lists: &Lists) -> Node {
 	Node::List(items, bracket, separator)
 }
 
-/// `name of people`, `name of (people where age > 20)`: the field of each element, `[of·element.name for of·element in
-/// people]`, when people is a list of instances of a class with that field
-fn field_of_elements(items: &[Node], lists: &Lists) -> Option<Node> {
-	let items = phrase_words(items);
-	let [field, of, subject @ ..] = items.as_slice() else {
+/// `name of people` (`people.name`), `name of people where age > 20`: the field of each element, `[of·element.name for
+/// of·element in people]`, when people is a list of instances of a class with that field
+fn field_of_elements(node: &Node, lists: &Lists) -> Option<Node> {
+	let Node::Key(subject, Op::Dot, field) = node.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(name) = field.drop_meta() else {
-		return None;
-	};
-	let list = match subject {
-		[group] => match group.drop_meta() {
-			Node::List(inner, Bracket::Round, _) => inner.first()?,
-			_ => group,
-		},
-		[first, ..] => first,
-		[] => return None,
-	};
-	let Node::Symbol(list) = list.drop_meta() else {
-		return None;
-	};
-	if !of.is_symbol(OF_WORD) || !lists.fields.get(list).is_some_and(|fields| fields.contains(name)) {
+	let (name, list) = (field.symbol_name()?, first_word(subject)?);
+	if !lists
+		.fields
+		.get(list)
+		.is_some_and(|fields| fields.iter().any(|field| field == name))
+	{
 		return None;
 	}
-	let sequence = match subject {
-		[single] => single.clone(),
-		words => Node::List(words.to_vec(), Bracket::None, Separator::Space),
-	};
 	let element = symbol(OF_ELEMENT);
 	let clause = Node::List(
-		vec![symbol(FOR_WORD), element.clone(), symbol(IN_WORD), sequence],
+		vec![
+			symbol(FOR_WORD),
+			element.clone(),
+			symbol(IN_WORD),
+			subject.as_ref().clone(),
+		],
 		Bracket::None,
 		Separator::Space,
 	);
 	Some(Node::List(
-		vec![key(element, Op::Dot, field.clone()), clause],
+		vec![key(element, Op::Dot, field.as_ref().clone()), clause],
 		Bracket::Square,
 		Separator::Space,
 	))
 }
 
+/// The word a phrase starts with: `people` of `(people where age > 20)`
+fn first_word(node: &Node) -> Option<&str> {
+	match node.drop_meta() {
+		Node::List(items, _, _) => first_word(items.first()?),
+		other => other.symbol_name(),
+	}
+}
+
 fn where_filters(node: Node, lists: &mut Lists) -> Node {
+	if let Some(comprehension) = field_of_elements(&node, lists) {
+		return where_filters(comprehension, lists);
+	}
 	if let Node::List(items, bracket, separator) = node.drop_meta() {
 		if let Some(filtered_loop) = loop_over_filtered(items, lists) {
 			return Node::List(filtered_loop, bracket.clone(), separator.clone());
-		}
-		if let Some(comprehension) = field_of_elements(items, lists) {
-			let comprehension = where_filters(comprehension, lists);
-			return if *bracket == Bracket::None {
-				comprehension
-			} else {
-				Node::List(vec![comprehension], bracket.clone(), separator.clone())
-			};
-		}
-		// the last argument of a call: `count(name of people)`
-		if let Some(comprehension) = items
-			.split_first()
-			.filter(|_| *bracket == Bracket::Round)
-			.and_then(|(_, arguments)| field_of_elements(arguments, lists))
-		{
-			return Node::List(
-				vec![
-					where_filters(items[0].clone(), lists),
-					where_filters(comprehension, lists),
-				],
-				bracket.clone(),
-				separator.clone(),
-			);
 		}
 	}
 	let node = node.map_children(|child| where_filters(child, lists));
@@ -414,24 +392,35 @@ fn field_condition(condition: &Node) -> Option<(String, String)> {
 fn where_reassociated(node: Node) -> Node {
 	match where_flattened(node) {
 		Node::Key(left, op, right)
-			if !matches!(op, Op::Assign | Op::Define | Op::Colon) && !op.is_compound_assign() =>
+			// a dot is no operator the condition continues with: `name of people where …` is `(people where …).name`
+			if !matches!(op, Op::Assign | Op::Define | Op::Colon | Op::Dot) && !op.is_compound_assign() =>
 		{
 			let (left, right) = (where_reassociated(*left), where_reassociated(*right));
 			match left.drop_meta() {
-				// a parenthesized filter is closed: `(xs where it > 0).slice(0, 1)` slices the filtered list
-				Node::List(items, bracket, separator)
-					if *bracket != Bracket::Round && where_position(items).is_some() =>
-				{
-					let mut items = items.clone();
-					let condition = items.pop().expect("where has a condition");
-					items.push(key(condition, op, right));
-					Node::List(items, bracket.clone(), separator.clone())
-				}
-				_ => key(left, op, right),
+				// `name of people with age > 20` assigned: `(people where age).name > 20` is `(people where age > 20).name`
+				Node::Key(filtered, Op::Dot, field) => match condition_continued(filtered, op, &right) {
+					Some(filtered) => key(filtered, Op::Dot, field.as_ref().clone()),
+					None => key(left, op, right),
+				},
+				_ => condition_continued(&left, op, &right).unwrap_or_else(|| key(left, op, right)),
 			}
 		}
 		other => other.map_children(where_reassociated),
 	}
+}
+
+/// `xs where it > 1` continued by `+ 1`: `xs where it > 1 + 1`; a parenthesized filter is closed, `(xs where it > 0)`
+fn condition_continued(filtered: &Node, op: Op, right: &Node) -> Option<Node> {
+	let Node::List(items, bracket, separator) = filtered.drop_meta() else {
+		return None;
+	};
+	if *bracket == Bracket::Round || where_position(items).is_none() {
+		return None;
+	}
+	let mut items = items.clone();
+	let condition = items.pop().expect("where has a condition");
+	items.push(key(condition, op, right.clone()));
+	Some(Node::List(items, bracket.clone(), separator.clone()))
 }
 
 /// `[[xs, where], it]` and `[xs, [where, 4 + it]]`, as the right side of an assignment parses, as `[xs, where, it]`
@@ -517,10 +506,8 @@ impl Lowering {
 	}
 }
 
-/// `[element for v in xs if c for w in ys]`, `(element for v in xs)`
+/// `[element for v in xs if c for w in ys]`
 pub(crate) struct Comprehension {
-	/// Where the first `for` clause starts: 1 after an element of one word
-	pub(crate) at: usize,
 	element: Node,
 	qualifiers: Vec<Qualifier>,
 }
@@ -532,34 +519,9 @@ impl Comprehension {
 		let at = items.iter().position(starts_with_for).filter(|&at| at > 0)?;
 		let qualifiers = qualifiers(&items[at], &items[at + 1..])?;
 		Some(Comprehension {
-			at,
 			element: phrase(&items[..at]),
 			qualifiers,
 		})
-	}
-
-	/// `for v in xs { if c { for w in ys { yield element } } }`
-	pub(crate) fn yielding_loop(&self) -> Node {
-		self.looped(LOOPS, &format!("yield {ELEMENT}"))
-	}
-
-	/// The element, sequences and conditions: what the comprehension reads
-	pub(crate) fn parts(&self) -> Vec<&Node> {
-		let clauses = self.qualifiers.iter().map(|qualifier| match qualifier {
-			Qualifier::Each(_, sequence) => sequence,
-			Qualifier::If(condition) => condition,
-		});
-		std::iter::once(&self.element).chain(clauses).collect()
-	}
-
-	pub(crate) fn loop_variables(&self) -> Vec<String> {
-		self.qualifiers
-			.iter()
-			.filter_map(|qualifier| match qualifier {
-				Qualifier::Each(variable, _) => Some(variable.name()),
-				Qualifier::If(_) => None,
-			})
-			.collect()
 	}
 
 	/// `template` with LOOPS replaced by the clauses nested in order around `inner`, which reads ELEMENT

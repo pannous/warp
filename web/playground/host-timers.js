@@ -46,10 +46,12 @@ function timerLabel(holder, { id, every, minute, once, frame }) {
 
 addHostPart({
 	words: (holder, hooks) => ({
-		signal_every: (id, milliseconds) => addTimer(holder, hooks, id, { every: Number(milliseconds) }, "on every …"),
-		signal_daily: (id, minute, weekdays) => addTimer(holder, hooks, id, { minute: Number(minute), weekdays: Number(weekdays) }, "on every day at …"),
-		signal_at: (id, minute) => addTimer(holder, hooks, id, { minute: Number(minute), once: true }, "at 9:00 {…}"),
-		// `on frame {…}`: the page's canvas always shows, so every frame's milliseconds until the next run
-		signal_frame: (id, milliseconds) => addTimer(holder, hooks, id, { every: Number(milliseconds), frame: true }, "on frame {…}"),
+		// kind 0 every n ms, 1 each frame (the page's canvas always shows), 2 a clock: weekdays·10000 + minute, 0 once
+		signal_listen: (kind, id, argument) => {
+			const [kindNumber, value] = [Number(kind), Number(argument)];
+			const weekdays = Math.floor(value / 10000);
+			const timer = kindNumber === 2 ? { minute: value % 10000, weekdays, once: !weekdays } : { every: value, frame: kindNumber === 1 };
+			addTimer(holder, hooks, id, timer, "on every …");
+		},
 	}),
 });

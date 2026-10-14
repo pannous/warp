@@ -138,30 +138,15 @@ impl WasmGcEmitter {
 				I32Const(utf8::ONE_BYTE_END),
 				I::I32LtU,
 				I::If(BlockType::Empty),
-			],
-		);
-		Self::emit_list(
-			func,
-			&[
 				I::LocalGet(first_byte),
 				I::LocalSet(code_point),
 				I32Const(1),
 				I::LocalSet(step),
 				I::Else,
-			],
-		);
-		Self::emit_list(
-			func,
-			&[
 				I::LocalGet(first_byte),
 				I32Const(utf8::THREE_BYTE_LEAD),
 				I::I32LtU,
 				I::If(BlockType::Empty),
-			],
-		);
-		Self::emit_list(
-			func,
-			&[
 				I::LocalGet(first_byte),
 				I32Const(utf8::TWO_BYTE_PAYLOAD),
 				I::I32And,
@@ -178,20 +163,10 @@ impl WasmGcEmitter {
 				I32Const(2),
 				I::LocalSet(step),
 				I::Else,
-			],
-		);
-		Self::emit_list(
-			func,
-			&[
 				I::LocalGet(first_byte),
 				I32Const(utf8::FOUR_BYTE_LEAD),
 				I::I32LtU,
 				I::If(BlockType::Empty),
-			],
-		);
-		Self::emit_list(
-			func,
-			&[
 				I::LocalGet(first_byte),
 				I32Const(utf8::THREE_BYTE_PAYLOAD),
 				I::I32And,
@@ -210,11 +185,6 @@ impl WasmGcEmitter {
 				I32Const(3),
 				I::LocalSet(step),
 				I::Else,
-			],
-		);
-		Self::emit_list(
-			func,
-			&[
 				I::LocalGet(first_byte),
 				I32Const(utf8::FOUR_BYTE_PAYLOAD),
 				I::I32And,
@@ -253,11 +223,12 @@ impl WasmGcEmitter {
 					I::LocalGet(code_point),
 					I32Const(shift),
 					I::I32ShrU,
+					I32Const(mask),
+					I::I32And,
+					I32Const(lead),
+					I::I32Or,
+					I::I32Store8(BYTE),
 				],
-			);
-			Self::emit_list(
-				f,
-				&[I32Const(mask), I::I32And, I32Const(lead), I::I32Or, I::I32Store8(BYTE)],
 			);
 		};
 		let advance = |f: &mut Function, bytes: i32| {
@@ -374,11 +345,6 @@ impl WasmGcEmitter {
 					I::LocalSet(index),
 					I::LocalGet(destination),
 					I::LocalSet(out),
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
 					I::LocalGet(index),
@@ -395,33 +361,23 @@ impl WasmGcEmitter {
 			// binary search for the last range starting at or before the code point
 			Self::emit_list(
 				f,
-				&[I32Const(0), I::LocalSet(low), I32Const(entries), I::LocalSet(high)],
-			);
-			Self::emit_list(
-				f,
 				&[
+					I32Const(0),
+					I::LocalSet(low),
+					I32Const(entries),
+					I::LocalSet(high),
 					I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
 					I::LocalGet(low),
 					I::LocalGet(high),
 					I::I32GeU,
 					I::BrIf(1),
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::LocalGet(low),
 					I::LocalGet(high),
 					I::I32Add,
 					I32Const(1),
 					I::I32ShrU,
 					I::LocalTee(middle),
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I32Const(ENTRY_BYTES as i32),
 					I::I32Mul,
 					I32Const(table),
@@ -430,10 +386,11 @@ impl WasmGcEmitter {
 				],
 			);
 			Self::emit_list(f, &range_field(entry, START));
-			Self::emit_list(f, &[I::LocalGet(code_point), I::I32LeU]);
 			Self::emit_list(
 				f,
 				&[
+					I::LocalGet(code_point),
+					I::I32LeU,
 					I::If(BlockType::Empty),
 					I::LocalGet(middle),
 					I32Const(1),
@@ -443,9 +400,11 @@ impl WasmGcEmitter {
 					I::LocalGet(middle),
 					I::LocalSet(high),
 					I::End,
+					I::Br(0),
+					I::End,
+					I::End,
 				],
 			);
-			Self::emit_list(f, &[I::Br(0), I::End, I::End]);
 			// entry: the address of that range when it maps the code point (up to its last, a stride apart), else -1
 			Self::emit_list(
 				f,
@@ -454,11 +413,6 @@ impl WasmGcEmitter {
 					I::LocalSet(mapped),
 					I::LocalGet(low),
 					I::If(BlockType::Empty),
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::LocalGet(low),
 					I32Const(1),
 					I::I32Sub,
@@ -467,9 +421,9 @@ impl WasmGcEmitter {
 					I32Const(table),
 					I::I32Add,
 					I::LocalSet(entry),
+					I::LocalGet(code_point),
 				],
 			);
-			Self::emit_list(f, &[I::LocalGet(code_point)]);
 			Self::emit_list(f, &range_field(entry, LAST));
 			Self::emit_list(f, &[I::I32LeU, I::LocalGet(code_point)]);
 			Self::emit_list(f, &range_field(entry, START));
@@ -488,9 +442,10 @@ impl WasmGcEmitter {
 					I::LocalSet(mapped),
 					I::End,
 					I::End,
+					I::LocalGet(mapped),
+					I::LocalSet(entry),
 				],
 			);
-			Self::emit_list(f, &[I::LocalGet(mapped), I::LocalSet(entry)]);
 			// write the mapped code points (the first is the code point plus delta), or the code point itself without a range
 			Self::emit_list(
 				f,
@@ -499,20 +454,10 @@ impl WasmGcEmitter {
 					I::LocalSet(slot),
 					I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::LocalGet(entry),
 					I32Const(0),
 					I::I32GeS,
 					I::If(BlockType::Result(ValType::I32)),
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::LocalGet(entry),
 					I::LocalGet(slot),
 					I32Const(DELTA as i32),
@@ -521,31 +466,26 @@ impl WasmGcEmitter {
 					I::I32Mul,
 					I::I32Add,
 					I::I32Load(WORD),
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::LocalGet(code_point),
 					I32Const(0),
 					I::LocalGet(slot),
 					I::I32Eqz,
 					I::Select,
 					I::I32Add,
-				],
-			);
-			Self::emit_list(f, &[I::Else, I32Const(0), I::End, I::LocalSet(mapped)]);
-			Self::emit_list(
-				f,
-				&[
+					I::Else,
+					I32Const(0),
+					I::End,
+					I::LocalSet(mapped),
 					I::LocalGet(mapped),
 					I::I32Eqz,
 					I::If(BlockType::Empty),
 					I::LocalGet(slot),
 					I::BrIf(2),
+					I::LocalGet(code_point),
+					I::LocalSet(mapped),
+					I::End,
 				],
 			);
-			Self::emit_list(f, &[I::LocalGet(code_point), I::LocalSet(mapped), I::End]);
 			s.emit_encode_at(f, out, mapped);
 			// only the first slot of an unchanged code point is read: its mapped value stays 0 and slot 1 ends the loop
 			Self::emit_list(
@@ -560,19 +500,12 @@ impl WasmGcEmitter {
 					I::BrIf(0),
 					I::End,
 					I::End,
+					I::Br(0),
+					I::End,
+					I::End,
 				],
 			);
-			Self::emit_list(f, &[I::Br(0), I::End, I::End]);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(destination),
-					I::LocalGet(out),
-					I::LocalGet(destination),
-					I::I32Sub,
-				],
-			);
-			s.call(f, "new_text");
+			s.emit_new_text_to(f, destination, out);
 		});
 	}
 
@@ -616,11 +549,6 @@ impl WasmGcEmitter {
 						I::LocalSet(out),
 						I::LocalGet(end),
 						I::LocalSet(scan),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::Block(BlockType::Empty),
 						I::Loop(BlockType::Empty),
 						I::LocalGet(scan),
@@ -630,21 +558,19 @@ impl WasmGcEmitter {
 					],
 				);
 				// the code point ending at `scan` starts at the last byte that is no continuation byte
-				Self::emit_list(f, &[I::LocalGet(scan), I32Const(1), I::I32Sub, I::LocalSet(start)]);
 				Self::emit_list(
 					f,
 					&[
+						I::LocalGet(scan),
+						I32Const(1),
+						I::I32Sub,
+						I::LocalSet(start),
 						I::Block(BlockType::Empty),
 						I::Loop(BlockType::Empty),
 						I::LocalGet(start),
 						I::I32Load8U(BYTE),
 						I32Const(utf8::CONTINUATION_MASK),
 						I::I32And,
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I32Const(utf8::CONTINUATION_MARK),
 						I::I32Ne,
 						I::BrIf(1),
@@ -655,22 +581,12 @@ impl WasmGcEmitter {
 						I::Br(0),
 						I::End,
 						I::End,
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(out),
 						I::LocalGet(start),
 						I::LocalGet(scan),
 						I::LocalGet(start),
 						I::I32Sub,
 						COPY_BYTES,
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(out),
 						I::LocalGet(scan),
 						I::LocalGet(start),
@@ -684,16 +600,7 @@ impl WasmGcEmitter {
 						I::End,
 					],
 				);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(destination),
-						I::LocalGet(out),
-						I::LocalGet(destination),
-						I::I32Sub,
-					],
-				);
-				s.call(f, "new_text");
+				s.emit_new_text_to(f, destination, out);
 			},
 		);
 	}
@@ -710,10 +617,11 @@ impl WasmGcEmitter {
 		self.runtime_function("text_chars", vec![node_ref], vec![node_ref], locals, |s, f| {
 			let (characters, pointer, end, index, first_byte, code_point, step) = (1, 2, 3, 4, 5, 6, 7);
 			s.emit_text_argument_bounds(f, pointer, end);
-			Self::emit_list(f, &[I::LocalGet(pointer), I::LocalSet(index)]);
 			Self::emit_list(
 				f,
 				&[
+					I::LocalGet(pointer),
+					I::LocalSet(index),
 					I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
 					I::LocalGet(index),
@@ -725,9 +633,15 @@ impl WasmGcEmitter {
 			s.emit_decode_at(f, index, first_byte, code_point, step);
 			Self::emit_list(
 				f,
-				&[I::LocalGet(index), I::LocalGet(step), I::I32Add, I::LocalSet(index)],
+				&[
+					I::LocalGet(index),
+					I::LocalGet(step),
+					I::I32Add,
+					I::LocalSet(index),
+					I::I64Const(SQUARE_LIST_KIND),
+					I::LocalGet(code_point),
+				],
 			);
-			Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND), I::LocalGet(code_point)]);
 			s.call(f, "new_codepoint");
 			Self::emit_list(
 				f,
@@ -738,9 +652,9 @@ impl WasmGcEmitter {
 					I::Br(0),
 					I::End,
 					I::End,
+					I::LocalGet(characters),
 				],
 			);
-			Self::emit_list(f, &[I::LocalGet(characters)]);
 			s.call(f, "list_reverse");
 		});
 	}

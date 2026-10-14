@@ -88,127 +88,6 @@ pub(super) fn types_compatible(existing: Kind, new: Kind) -> bool {
 	}
 }
 
-/// Collect all function declarations from the AST into a FunctionRegistry
-pub fn collect_functions(node: &Node) -> FunctionRegistry {
-	let mut registry = FunctionRegistry::new();
-	collect_functions_inner(node, &mut registry);
-	registry
-}
-
-pub(super) fn collect_functions_inner(node: &Node, registry: &mut FunctionRegistry) {
-	let node = node.drop_meta();
-	match node {
-		// Pattern: fun/fn/def/define/function name(params...) body
-		Node::List(items, _, _) if items.len() >= 2 => {
-			if let Node::Symbol(keyword) = items[0].drop_meta() {
-				if is_function_keyword(keyword) {
-					if let Some(func) = parse_function_declaration(items, keyword) {
-						registry.register(func);
-						return;
-					}
-				}
-			}
-			// Recurse into list items
-			for item in items {
-				collect_functions_inner(item, registry);
-			}
-		}
-		Node::Key(left, _, right) => {
-			collect_functions_inner(left, registry);
-			collect_functions_inner(right, registry);
-		}
-		_ => {}
-	}
-}
-
-/// Parse a function declaration from a list starting with fun/fn/def/define/function
-pub(super) fn parse_function_declaration(items: &[Node], _keyword: &str) -> Option<Function> {
-	// Structure: [keyword, ((name (type param)...) body)]
-	// or: [keyword, ((name params...) body)]
-	if items.len() < 2 {
-		return None;
-	}
-
-	let decl = items[1].drop_meta();
-
-	// Get function name and params from the declaration structure
-	let (name, params, body) = match decl {
-		// Pattern: ((name params...) body)
-		Node::List(decl_items, _, _) if !decl_items.is_empty() => {
-			let first = decl_items[0].drop_meta();
-			match first {
-				// (name params...)
-				Node::List(name_params, _, _) if !name_params.is_empty() => {
-					let func_name = name_params[0].name();
-					let params = &name_params[1..];
-					let body = if decl_items.len() > 1 {
-						Some(Box::new(decl_items[1].clone()))
-					} else {
-						None
-					};
-					(func_name, params.to_vec(), body)
-				}
-				// Just a name symbol
-				Node::Symbol(name) => {
-					let body = if decl_items.len() > 1 {
-						Some(Box::new(decl_items[1].clone()))
-					} else {
-						None
-					};
-					(name.clone(), Vec::new(), body)
-				}
-				_ => return None,
-			}
-		}
-		_ => return None,
-	};
-
-	if name.is_empty() {
-		return None;
-	}
-
-	let mut func = Function::new(&name);
-	func.body = body;
-
-	for param in &params {
-		let (param_name, param_kind) = parse_param(param);
-		func.signature.add(&param_name, param_kind);
-	}
-
-	Some(func)
-}
-
-/// Parse a parameter node into (name, kind)
-pub(super) fn parse_param(param: &Node) -> (String, Kind) {
-	let param = param.drop_meta();
-	match param {
-		// Pattern: (name:type) - single item list containing a Key
-		Node::List(items, _, _) if items.len() == 1 => parse_param(&items[0]),
-		// Pattern: (type name) e.g., (float a)
-		Node::List(items, _, _) if items.len() >= 2 => {
-			let type_name = items[0].name();
-			let param_name = items[1].name();
-			let kind = type_name_to_kind(&type_name);
-			(param_name, kind)
-		}
-		// Pattern: name:type
-		Node::Key(left, Op::Colon, right) => {
-			let param_name = left.name();
-			let type_name = right.name();
-			let kind = type_name_to_kind(&type_name);
-			(param_name, kind)
-		}
-		// Just a name (infer type later)
-		Node::Symbol(name) => (name.clone(), Kind::Int),
-		_ => (String::new(), Kind::Int),
-	}
-}
-
-/// Convert type name string to Kind
-pub(super) fn type_name_to_kind(name: &str) -> Kind {
-	builtin_type_kind(name).unwrap_or(Kind::Int)
-}
-
 /// Kind of a built-in type name (type_tests BUILTIN_TYPES, a fixed width an Int); an exact number (`exact`, `real`) is
 /// an Int that may hold a ratio (wasm_emitter/exact.rs)
 pub fn builtin_type_kind(name: &str) -> Option<Kind> {
@@ -265,8 +144,6 @@ pub fn diagnose(program: &Node) -> Option<Node> {
 		.or_else(|| check_subjectless_comparison(program))
 		.or_else(|| check_ambiguous_calls(program))
 		.or_else(|| check_call_arity(program))
-		.or_else(|| check_walked_numbers(program))
-		.or_else(|| check_mixed_range_bounds(program))
 		.map(Diagnostic::into_error)
 }
 
@@ -369,10 +246,10 @@ pub fn check_operator_word_functions(program: &Node) -> Option<Diagnostic> {
 /// first part of `fun norm(x) { … }`; `not(x)` arrives as the operator
 fn operator_word(head: &Node) -> Option<(String, Op)> {
 	match head.drop_meta() {
-		Node::Key(empty, op @ (Op::Sqrt | Op::Cbrt | Op::Abs | Op::Not), _) if empty.is_nothing() => OPERATOR_WORDS
+		Node::Key(empty, op, _) if empty.is_nothing() => crate::warp_parser::PREFIX_OPERATOR_WORDS
 			.iter()
-			.find(|(known, _)| known == op)
-			.map(|(_, word)| (word.to_string(), *op)),
+			.find(|(_, known)| known == op)
+			.map(|(word, op)| (word.to_string(), *op)),
 		Node::List(items, _, _) => match items.first().map(Node::drop_meta) {
 			Some(Node::Symbol(name)) => crate::warp_parser::PREFIX_OPERATOR_WORDS
 				.iter()
@@ -384,14 +261,6 @@ fn operator_word(head: &Node) -> Option<(String, Op)> {
 		_ => None,
 	}
 }
-
-/// The words the parser reads as prefix operators (warp_parser lookahead.rs peek_prefix_operator)
-const OPERATOR_WORDS: [(Op, &str); 4] = [
-	(Op::Sqrt, "sqrt"),
-	(Op::Cbrt, "cbrt"),
-	(Op::Abs, "abs"),
-	(Op::Not, "not"),
-];
 
 /// `double := it*2` or `double(x) := …`: a type word names a type, never a function (user decision P20)
 pub(super) fn check_type_word_functions(program: &Node) -> Option<Diagnostic> {
@@ -483,61 +352,6 @@ pub(super) fn check_ambiguous_calls(node: &Node) -> Option<Diagnostic> {
 		Node::List(items, _, _) => items.iter().find_map(check_ambiguous_calls),
 		_ => None,
 	}
-}
-
-/// `for x in 3 {…}`: a loop walks a list, a text or a range, never a number (a literal, or a variable only ever
-/// assigned number literals); it failed only at run time with "not a list"
-pub(super) fn check_walked_numbers(program: &Node) -> Option<Diagnostic> {
-	let is_number = |value: &Node| matches!(value.drop_meta(), Node::Number(_));
-	let mut numbers: HashMap<String, bool> = HashMap::new();
-	program.visit(&mut |part| {
-		if let Node::Key(target, Op::Assign | Op::Define, value) = part {
-			if let Node::Symbol(name) = target.drop_meta() {
-				*numbers.entry(name.clone()).or_insert(true) &= is_number(value);
-			}
-		}
-	});
-	// a parameter of the same name holds whatever it is given (`pitch = 440` in one function, `transpose(pitch, …)`
-	// walking its list in another)
-	for parameter in crate::lowering::memoization::parameter_names(program) {
-		numbers.insert(parameter, false);
-	}
-	let mut found = None;
-	program.visit(&mut |part| if let (None, Node::List(items, _, _)) = (&found, part) {
-		let [keyword, variable, within, walked, ..] = items.as_slice() else { return };
-		let walks_number = is_number(walked) || matches!(walked.drop_meta(), Node::Symbol(name) if numbers.get(name) == Some(&true));
-		if walks_number && keyword.drop_meta().name() == "for" && within.drop_meta().name() == "in" {
-			let (variable, walked) = (variable.serialize(), walked.serialize());
-			let message = format!("`for {variable} in {walked}` walks a number: a for loop walks a list, a text or a range, e.g. `for {variable} in 1 to {walked}`");
-			found = Some(Diagnostic::at(part, message));
-		}
-	});
-	found
-}
-
-/// `'a'..3`, `3 to "c"`: a range counts letters or numbers, never from one to the other; it failed only at run time
-/// with "not a character"
-pub(super) fn check_mixed_range_bounds(program: &Node) -> Option<Diagnostic> {
-	let mut found = None;
-	program.visit(&mut |part| {
-		if let (None, Node::Key(start, Op::Range | Op::To, end)) = (&found, part) {
-			let (start_value, end_value) = (start.drop_meta(), end.drop_meta());
-			if matches!(
-				(start_value, end_value),
-				(Node::Char(_), Node::Number(_)) | (Node::Number(_), Node::Char(_))
-			) {
-				let written = part.serialize();
-				found = Some(Diagnostic::at(
-					part,
-					format!(
-						"`{}` mixes a letter and a number: count letters ('a' to 'c') or numbers (1 to 3)",
-						written.trim()
-					),
-				));
-			}
-		}
-	});
-	found
 }
 
 /// Booleans are not numbers: `true + true` is rejected, not 2 (the runtime still encodes them as Int 1/0)

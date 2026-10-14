@@ -26,8 +26,6 @@ const FILTER_WORD: &str = "filter";
 /// Built-in adjectives of a loop filter `(even number)`, when no function of that name is defined
 const EVEN_WORD: &str = "even";
 const ODD_WORD: &str = "odd";
-/// The words `text` variables are declared with: `k:text`
-const TEXT_TYPE_WORDS: [&str; 3] = ["text", "string", "str"];
 
 /// The type test of a loop `for T in xs` carries its loop: the iterable and the got-it question announcing the filter
 #[derive(Clone, Debug, PartialEq)]
@@ -85,7 +83,7 @@ impl Headers {
 		let Node::Symbol(name) = name.drop_meta() else { return };
 		let holds_text = match (op, value.drop_meta()) {
 			(Op::Assign | Op::Define, Node::Text(_)) => true,
-			(Op::Colon, Node::Symbol(type_word)) => TEXT_TYPE_WORDS.contains(&type_word.as_str()),
+			(Op::Colon, Node::Symbol(type_word)) => crate::type_tests::is_text_type_word(type_word),
 			_ => false,
 		};
 		if holds_text {

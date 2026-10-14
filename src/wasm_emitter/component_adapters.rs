@@ -306,10 +306,10 @@ impl WasmGcEmitter {
 	/// The text node on the stack written to a fresh return area as pointer and length: the area's address
 	fn emit_text_out(&mut self, f: &mut Function, text: u32, length: u32, address: u32) {
 		self.emit_call(f, super::text_builtins::TEXT_OF);
-		f.instruction(&I::LocalSet(text));
 		Self::emit_list(
 			f,
 			&[
+				I::LocalSet(text),
 				I::I32Const(RETURN_AREA_BYTES + RETURN_AREA_ALIGNMENT),
 				I::LocalSet(length),
 			],

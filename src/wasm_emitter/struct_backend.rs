@@ -667,11 +667,7 @@ impl StructFunction {
 
 /// The index and stored kind of the field a one-based subscript `"x" + 1` names
 fn field_of(instance: &InstanceType, index: &Node) -> Option<(u32, Kind)> {
-	let name = match crate::warp_parser::subscript_key(index)?.drop_meta() {
-		Node::Text(name) => name.clone(),
-		Node::Char(letter) => letter.to_string(),
-		_ => return None,
-	};
+	let name = crate::warp_parser::subscript_key(index)?.text_value()?;
 	let position = instance.fields.iter().position(|(field, _)| *field == name)?;
 	Some((position as u32, instance.fields[position].1))
 }

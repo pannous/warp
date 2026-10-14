@@ -48,3 +48,19 @@ fn test_a_unit_word_called_as_a_function_is_no_unit() {
 	// `min(n, 3)` calls min, it is no minute: tk stays a plain function that sp can call (lib/list.warp split_at)
 	assert_eq!(shown("tk(xs, n) := { out = []; for i in 1 to min(n, count(xs)) { out = out + [xs#i] }; out }; sp(xs, n) := [tk(xs, n), 2]; sp([1, 2, 3, 4], 1)"), "[[1] 2]");
 }
+
+/// card fade-unit-argument: a function with a default parameter takes a quantity, `fade_sound(h, 0, 1s)` of lib/sound.warp
+#[test]
+fn a_function_with_a_default_takes_a_quantity() {
+	assert_eq!(eval("f(x, t = 0.05) := si_amount(t); f(1, 2s)").serialize().trim(), "2");
+	assert_eq!(eval("f(t = 0.05) := t * 2; f(1s)").serialize().trim(), "2s");
+}
+
+// card quantity-default: a quantity default fills a call that leaves its parameter out
+#[test]
+fn a_quantity_default_fills_a_left_out_argument() {
+	assert_eq!(eval("f(t = 1s) := t * 2; f()").serialize().trim(), "2s");
+	assert_eq!(eval("f(t = 1s) := t * 2; f(3s)").serialize().trim(), "6s");
+	assert_eq!(eval("g(x, d = 5m) := x * d; g(2)").serialize().trim(), "10m");
+	assert_eq!(eval("g(x, d = 5m) := x * d; g(2, 3m)").serialize().trim(), "6m");
+}

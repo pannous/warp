@@ -4,7 +4,7 @@ use crate::analyzer::call_name;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::words::{FOR_WORD, IN_WORD, MATCH_WORD};
+use crate::words::{EACH_WORD, FOR_WORD, IN_WORD, MATCH_WORD};
 use std::cell::Cell;
 
 pub(crate) use crate::node::{call, children_rewritten, int, symbol};
@@ -101,10 +101,7 @@ pub(crate) fn is_assigned_data(target: &Node, value: &Node) -> bool {
 /// The parts of a node rewritten, the node itself kept as written
 pub(crate) fn with_parts_rewritten(node: Node, rewrite: &mut dyn FnMut(Node) -> Node) -> Node {
 	match node {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_parts_rewritten(*node, rewrite)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_parts_rewritten(node, rewrite)),
 		other => children_rewritten(other, rewrite),
 	}
 }
@@ -123,9 +120,14 @@ pub(crate) fn is_block(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _))
 }
 
-/// The words `for i in …` of a loop: i
+/// The words `for i in …` or `for each i in …` of a loop: i
 pub(crate) fn for_in_variable(items: &[Node]) -> Option<String> {
 	match items {
+		[keyword, each, variable, within, ..]
+			if keyword.is_symbol(FOR_WORD) && each.is_symbol(EACH_WORD) && within.is_symbol(IN_WORD) =>
+		{
+			variable.symbol_name().map(String::from)
+		}
 		[keyword, variable, within, ..] if keyword.is_symbol(FOR_WORD) && within.is_symbol(IN_WORD) => {
 			variable.symbol_name().map(String::from)
 		}
@@ -140,6 +142,32 @@ pub(crate) fn if_then(condition: Node, body: Node) -> Node {
 
 pub(crate) fn if_then_else(condition: Node, body: Node, otherwise: Node) -> Node {
 	key(if_then(condition, body), Op::Else, otherwise)
+}
+
+/// `if c then a else b` and `c ? a : b`: the condition and both branches
+pub(crate) fn branches(node: &Node) -> Option<(&Node, &Node, &Node)> {
+	match node.drop_meta() {
+		Node::Key(if_then, Op::Else, otherwise) => {
+			let (condition, then) = if_then_parts(if_then)?;
+			Some((condition, then, otherwise))
+		}
+		Node::Key(condition, Op::Question, branches) => match branches.drop_meta() {
+			Node::Key(then, Op::Colon, otherwise) => Some((condition, then, otherwise)),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// `if c then a`: the condition and the branch
+pub(crate) fn if_then_parts(node: &Node) -> Option<(&Node, &Node)> {
+	let Node::Key(condition, Op::Then, then) = node.drop_meta() else {
+		return None;
+	};
+	match condition.drop_meta() {
+		Node::Key(empty, Op::If, condition) if matches!(empty.drop_meta(), Node::Empty) => Some((condition, then)),
+		_ => None,
+	}
 }
 
 /// `a: 1`
@@ -426,4 +454,13 @@ pub(crate) fn called_name<'a>(items: &'a [Node], bracket: &Bracket, separator: &
 	};
 	let spaced = *separator == Separator::Space && matches!(bracket, Bracket::None | Bracket::Round);
 	(call_name(items, bracket, separator).is_some() || spaced).then_some(name.as_str())
+}
+
+/// The statements of a template with its placeholders filled in, its match arms in the form the passes read
+pub(crate) fn template(text: &str, bindings: &[(&str, &Node)]) -> Vec<Node> {
+	let parsed = crate::welcome_forms::lower_match_arms(crate::warp_parser::parse(text));
+	let filled = bindings.iter().fold(parsed, |node, (placeholder, value)| {
+		crate::library_words::substitute(node, placeholder, value)
+	});
+	filled.drop_meta().sequence_statements().to_vec()
 }
