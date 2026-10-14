@@ -76,12 +76,14 @@ impl WarpParser {
 	}
 
 	/// The word at the cursor is a loop header's last: the body follows it (`for i in 1 to count xs { … }`, `… do …`,
-	/// `…:` or a new line), so it is the argument of the word before rather than that word's body
+	/// `…:` or an indented line), so it is the argument of the word before rather than that word's body; at the end of
+	/// the line it is the braceless body of `for i in 1 to n body`
 	fn word_ends_header(&mut self) -> bool {
 		let start = self.mark();
 		let ends = self.at_identifier_start() && self.parse_symbol().is_ok() && {
 			self.skip_spaces();
-			self.at_to_header_end() || self.matches_keyword(DO_WORD) || matches!(self.current_char(), '\n' | '\0')
+			let indented_line_follows = self.current_char() == '\n' && matches!(self.peek_char(1), ' ' | '\t');
+			self.at_to_header_end() || self.matches_keyword(DO_WORD) || indented_line_follows
 		};
 		self.rewind(start);
 		ends
