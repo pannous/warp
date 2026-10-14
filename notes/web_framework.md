@@ -124,7 +124,7 @@ Each step is useful on its own and is what the next ones stand on.
 ## Step 4 (web-components), what is done and what is left
 - A component is a function returning markup; props are its parameters, positional or named (`Card(title:"Hi")`).
 - Children: a block after a call that leaves a parameter without its value is that argument, for any function
-  (trailing closure, lowering/blocks.rs lower_trailing_blocks): `Card("Hi") { p:"text" }`, `apply(3) { it*2 }`.
+  (trailing closure, lowering/control/blocks.rs lower_trailing_blocks): `Card("Hi") { p:"text" }`, `apply(3) { it*2 }`.
 - Own state per instance (lowering/web/component_state.rs, before element_events): a variable of a component that one of
   its element handlers mentions is the main-level list `Counter·count`, one entry per instance; an instance is the n-th
   call of that component in a render (React's hooks rule, undoable default, question queued with the Interviewer); the
