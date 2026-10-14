@@ -62,6 +62,7 @@ mod test_plus_minus_print;
 mod test_plus_minus_units; // card plus-minus-units
 mod test_printed_quantity; // P231
 mod test_quantities_in_one_text; // card text-join
+mod test_quantity_cast; // card unit-possible
 mod test_quantity_conversion; // card quantity-falls
 mod test_quantity_global; // card quantity-global
 mod test_quantity_tolerance; // card quantity-tolerance
