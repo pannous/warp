@@ -627,8 +627,6 @@ probes/globals/20_print_in_fn.warp
 probes/globals/21_floor_reassign.warp
 probes/gpu_draw/scene.warp
 probes/gpu/render_speed.warp
-probes/handlers/abort_global_single.warp
-probes/handlers/abort_global.warp
 probes/held_key/none_held.warp
 probes/hints_dismissed/index_hint.warp
 probes/hosting/gc_check.warp
