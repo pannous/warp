@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Pure move of a root module into a concept folder (notes/restructuring.md, "Root").
 
-move_module.py <module> <folder>      e.g. move_module.py real numbers
+move_module.py <module> <folder> [--keep-paths]      e.g. move_module.py real numbers
+
+--keep-paths leaves every use as it is and keeps `crate::<module>` valid with `pub use <folder>::<module>;` in lib.rs.
 
 src/<module>.rs (and src/<module>/) go to src/<folder>/; the `mod` line with its attributes leaves lib.rs for the
 folder's module file (created when missing, declared in lib.rs in place of the old line); every `crate::<module>` (in this crate) and
@@ -130,12 +132,14 @@ def deepen_includes(directory):
 
 
 def main():
-	module, folder = sys.argv[1], sys.argv[2]
+	keep_paths = "--keep-paths" in sys.argv
+	module, folder = [argument for argument in sys.argv[1:] if argument != "--keep-paths"]
 	lib, declaration, line = take_declaration(read(LIB), module)
 	module_file, created = folder_module_file(folder)
-	if created:
-		lines = lib.split("\n")
-		lib = "\n".join(lines[:line] + ["pub mod " + folder + ";"] + lines[line:])
+	lines = lib.split("\n")
+	# a module with many users keeps its old path through a re-export until a quiet window (notes/restructuring.md)
+	reexport = declaration[:-1] + ["pub use " + folder + "::" + module + ";"] if keep_paths else []
+	lib = "\n".join(lines[:line] + (["pub mod " + folder + ";"] if created else []) + reexport + lines[line:])
 	write(LIB, lib)
 	declare(module_file, declaration)
 	target = os.path.join(SOURCE, folder)
@@ -144,7 +148,8 @@ def main():
 	if os.path.isdir(os.path.join(SOURCE, module)):
 		git_mv(os.path.join(SOURCE, module), os.path.join(target, module))
 		deepen_includes(os.path.join(target, module))
-	rewrite_paths(module, folder)
+	if not keep_paths:
+		rewrite_paths(module, folder)
 	rewrite_file_mentions(module, folder)
 	print(f"{module} → {folder}/{module}")
 
