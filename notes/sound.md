@@ -247,6 +247,15 @@ how often the voice played the same pattern text before (lib pattern_cycle, the 
 counts its own). The chance is a hash of `pattern_seed` (setting, 0), the cycle and the item's place, not random(): the same
 each run and each render, and the program's own random sequence stays untouched. `live_loop drums 4 { … }` names the voice
 (`await drums`), the unnamed form keeps `live_voice`.
+Built (card live-redefine, tests/programs/test_live_redefine.rs): a named loop defined again in the same block
+(`at 2 bars live_loop bass { … }`) is no new voice: music_words with_live_loops makes the first definition a voice
+choosing each cycle among all the blocks, the later ones set `bass_since#k = sound_moment()` (a shared float array,
+-1 unset). sound_moment (host word sound.moment, natively seconds of the voice's moment on RUN_CLOCK, in the
+playground voiceMoment on the Workers' shared clock) is where the voice's next sound would start; a cycle plays the
+latest block whose moment it reached, 50 ms early counting (voices start microseconds apart). The first definition's
+count stays; `live_loop name { … }` without one is endless (heard voices pace 0.5 s ahead, silent runs don't).
+Still open: playground live reload (Run again while playing keeps the clock and redefines loops by name), a
+redefined block's variables must exist when the voice starts.
 Still open: an endless loop (card live-redefine) whose block is redefined while it plays (needs the playground's live
 reload and voice stealing).
 

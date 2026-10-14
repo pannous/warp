@@ -99,6 +99,8 @@ self.voiceAt = seconds => {
 	voice = { end: origin + seconds, seconds, origin };
 };
 self.insideAt = () => voicesBeforeAt.length > 0;
+// where this voice's next sound would start: its queued sounds' end, never before now (sound_moment)
+self.voiceMoment = () => Math.max(voice.end ?? 0, soundClock());
 self.voiceAtEnd = () => {
 	if (voicesBeforeAt.length) voice = { ...voicesBeforeAt.pop(), origin: voice.origin };
 };
