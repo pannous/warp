@@ -17,7 +17,6 @@ bo.age += 1                            // UPDATE people SET age = 31 WHERE id = 
 ## Registration
 - `name: [C] = database.t` with C a class of the program registers table t for C. `database.t` without a class list
   stays what it is today: one value under the key t of the key-value store (lowering/data/stored_values.rs).
-- `indexedDB.t` is the same (the alias of `database`).
 - `stored people: [Person]` is the short form of `people: [Person] = database.people` (user, 2026-10-08).
 - The schema comes from C's layout:
   - one column per field: int → INTEGER, float and quantities → REAL in the field's unit, text → TEXT, bool → INTEGER

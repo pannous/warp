@@ -2,7 +2,7 @@
 use crate::is;
 use warp::wasm_emitter::eval;
 
-const TODO: &str = "class Todo{title: text; done: bool}\ntodos: [Todo] = database.todos_bool";
+const TODO: &str = "class Todo{title: text; done: bool}\nstored todos: [Todo] in \"todos_bool\"";
 
 fn program(rest: &str) -> String {
 	format!("{TODO}\n{rest}")
@@ -24,7 +24,7 @@ fn a_bool_column_reads_back_as_a_bool() {
 // a one-character text ("x" parses as a character) in a text column is that text, not '' (found writing the todo app)
 #[test]
 fn a_one_character_text_is_stored_as_its_text() {
-	let program = |rest: &str| format!("class Note{{title: text}}\nnotes: [Note] = database.notes_char\n{rest}");
+	let program = |rest: &str| format!("class Note{{title: text}}\nstored notes: [Note] in \"notes_char\"\n{rest}");
 	eval(&program("notes.add(Note(\"x\"))"));
 	is!(&program("notes#1.title"), "x");
 }
