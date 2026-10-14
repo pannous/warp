@@ -24,7 +24,7 @@ function serveTaskWorkers(programWorker) {
 	const terminate = programWorker.terminate.bind(programWorker);
 	programWorker.terminate = () => {
 		taskWorkers.forEach(stopQuietly);
-		silence(programWorker);
+		muteErrors(programWorker);
 		terminate();
 	};
 	return programWorker;
@@ -32,10 +32,10 @@ function serveTaskWorkers(programWorker) {
 
 // a Worker stopped on purpose (Stop, a run's timeout): Firefox reports one stopped while it still loads its scripts as a
 // bare "uncaught exception: undefined" on the page, now and then (playground-turn's tour check), which is no failure
-const silence = worker => worker.addEventListener("error", event => event.preventDefault());
+const muteErrors = worker => worker.addEventListener("error", event => event.preventDefault());
 function stopQuietly(worker) {
 	if (!worker) return;
-	silence(worker);
+	muteErrors(worker);
 	worker.terminate();
 }
 
