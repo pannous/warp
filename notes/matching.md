@@ -180,5 +180,11 @@ probes/matching/tree_patterns.warp. Steps, each its own sub-card of matching:
    in a function copies its subject: indexing the copy guesses the parameter a list, and widen_parameters
    (user_functions.rs) drops that guess when only keys (code) are passed (card alias-indexed-param). Tests
    tests/control/test_code_holes.rs, probe probes/matching/code_holes.warp.
+   Parsed code (2026-10-13): code patterns match `parse(t)` of a text known only at run time as they match `data (…)`.
+   Quoted code of several statements stays as written: blocks.rs (lowering/control) bound `k: n * 1` of
+   `parse("j: 1\nk: n * 1")`, a constant text parsed at compile time, as a block (warning, no field name); it now
+   leaves quoted data alone, as the other passes do since data-quote-lowered. Open: `data (j: 1⏎ k: 2)` keeps its `(` bracket,
+   `parse("j: 1\nk: 2")` has none, so the two lists differ while their items are equal. Test
+   tests/control/test_parsed_code_patterns.rs.
 Beyond Rust: Rust patterns are flat per level, need every struct field or `..`, cannot match at depth, cannot be
 stored or combined, and cannot match code (macros aside).
