@@ -250,7 +250,41 @@ render_sound(path) := std_io("sound", "render", [path])
 // the voice's first sound, exactly so in render_sound; the voice goes on where it stood (src/lowering/music_words.rs)
 sound_at(seconds) := std_io("sound", "at", [si_amount(seconds)])
 sound_at_end() := std_io("sound", "at_end", [])
-play(x) := if x is text then play_file(x) else sound(chord_samples(pitches_of(x), note_seconds, wave_shape))
+// an audio file's samples to play (card sound-samples): kick = sample("kick.wav") (wav, mp3, ogg, flac, aiff, m4a; the
+// playground reads wav), play(kick); play_sample(kick, 2) twice as fast and an octave up, as a sampler plays it;
+// sample_slice(kick, 0.1s, 0.3s) the part between, sample_slices(kick, 4) four equal parts, sample_looped(kick, 4s, 0.5s,
+// 1s) four seconds: up to 1 s, then from 0.5 s to 1 s again and again. Its frames are whole numbers as sound_samples
+// takes them, channels interleaved. Not through the effects: a sample sounds as recorded
+class Sample {
+	rate: int
+	channels: int
+	frames: [int]
+}
+sample(path: text) := {
+	loaded = std_io("sound", "load", [path])
+	Sample(loaded[0], loaded[1], loaded[2..])
+}
+sample_seconds(s) := count(s.frames) / s.channels / s.rate
+// plain seconds below: a quantity passed on fails the unit check (notes/units_runtime.md), so the words take si_amount once
+// where the frame at that many seconds starts among the interleaved values, at most the end
+sample_frame(s, seconds) := min(round(seconds * s.rate) as int, count(s.frames) / s.channels) * s.channels
+sample_between(s, from, to) := Sample(s.rate, s.channels, s.frames[sample_frame(s, from)..sample_frame(s, to)])
+sample_slice(s, from, to) := sample_between(s, si_amount(from), si_amount(to))
+sample_slices(s, parts) := [sample_between(s, i * sample_seconds(s) / parts, (i + 1) * sample_seconds(s) / parts) for i in 0..parts]
+def sample_repeated(s, seconds, from, to) {
+	end = round(seconds * s.rate) as int * s.channels
+	frames = s.frames[0..sample_frame(s, to)]
+	repeated = s.frames[sample_frame(s, from)..sample_frame(s, to)]
+	if count(repeated) == 0 { return Sample(s.rate, s.channels, frames) }
+	while count(frames) < end { frames = frames + repeated }
+	Sample(s.rate, s.channels, frames[0..end])
+}
+sample_looped(s, seconds, from, to) := sample_repeated(s, si_amount(seconds), si_amount(from), si_amount(to))
+play_sample(s, rate) := {
+	sound_samples(s.frames, count(s.frames), round(s.rate * rate) as int, s.channels)
+	std_io("sound", "last", [])
+}
+play(x) := if x is text then play_file(x) else if x is Sample then play_sample(x, 1) else sound(chord_samples(pitches_of(x), note_seconds, wave_shape))
 // one note (or chord) after another: melody([C4 E4 G4]), melody([C4 E4 G4], 250ms)
 // plain seconds: the unit check reads a quantity parameter in a loop as unsupported (notes/units_runtime.md)
 melody_samples(notes, seconds) := {
