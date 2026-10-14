@@ -38,3 +38,11 @@ fn an_acknowledged_kind_of_hint_stays_away() {
 	});
 	let _ = std::fs::remove_file(path);
 }
+
+// card natural-sample-hints: a `// got it` comment silences the hints of its line too, as it does warnings
+#[test]
+fn a_got_it_comment_silences_the_hints_of_its_line() {
+	let reasons = |code: &str| capture_hints(|| warp::wasm_emitter::eval(code)).1.len();
+	assert!(reasons("x = three times four\nx") > 0);
+	assert_eq!(reasons("x = three times four // got it\nx"), 0);
+}

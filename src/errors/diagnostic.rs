@@ -556,9 +556,9 @@ pub fn report(diagnostics: &[Diagnostic]) -> Result<(), Node> {
 
 /// The one way a diagnostic of any level reaches the user: recorded for hosts (take_warnings, capture_hints), printed
 /// to stderr from the shown level up (show_from), and followed by its "got it?" when printed. Under HintMode::Once a
-/// diagnostic said before is not said again. Whether it was printed
+/// diagnostic said before is not said again, nor one acknowledged or on a `// got it` line. Whether it was printed
 pub fn say(diagnostic: Diagnostic) -> bool {
-	if said_before(&diagnostic) {
+	if diagnostic.is_silenced() || said_before(&diagnostic) {
 		return false;
 	}
 	note_said();
@@ -1069,11 +1069,8 @@ pub fn educate_once(topic: &str, written: &str, preferred: &str, reason: &str) {
 
 /// `educate_once` with advice (normalize::advise): `fix` is its "I meant" edit, none for `subscribe before the loop`
 pub fn advise_once(topic: &str, written: &str, preferred: &str, reason: &str, fix: Option<crate::fixits::Fix>) {
-	let silenced = is_quiet()
-		|| is_acknowledged(topic, written)
-		|| silenced_by_comment(crate::compiler::compile_context::read(|context| {
-			context.hint_position.line
-		})) || NOTES_SHOWN.with(|shown| shown.borrow().contains(topic));
+	let silenced =
+		is_quiet() || is_acknowledged(topic, written) || NOTES_SHOWN.with(|shown| shown.borrow().contains(topic));
 	if !silenced {
 		crate::normalize::show_hint(written, preferred, reason, fix, topic);
 	}

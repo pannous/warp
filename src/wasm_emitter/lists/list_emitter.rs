@@ -265,7 +265,7 @@ impl WasmGcEmitter {
 			return None;
 		}
 		let (count_text, repeated_text) = (count.serialize(), repeated.serialize());
-		crate::normalize::set_position_of(word);
+		crate::normalize::set_position_of(node);
 		crate::normalize::hint(
 			&format!("{count_text} times {repeated_text}"),
 			&format!("{count_text} * {repeated_text}"),

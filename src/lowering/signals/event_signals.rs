@@ -101,6 +101,7 @@ pub fn lower(program: Node) -> Node {
 		.filter(|event| !variables.contains(event))
 		.collect();
 	let verbs = emit_verbs(&program);
+	let shows_page = statements.iter().any(crate::web::markup::is_markup);
 	let raised: HashSet<String> = emitted_names(&program, &verbs)
 		.into_iter()
 		.chain(listed.iter().cloned())
@@ -155,7 +156,7 @@ pub fn lower(program: Node) -> Node {
 		// an emit nobody listens to does nothing
 		let statements: Vec<Node> = statements
 			.into_iter()
-			.map(|statement| emits_as_calls(statement, &HashMap::new(), &verbs))
+			.map(|statement| emits_as_calls(statement, &HashMap::new(), &verbs, shows_page))
 			.collect();
 		if !statements.iter().any(defines_timer) {
 			return Node::List(statements, bracket, separator);
@@ -267,7 +268,7 @@ pub fn lower(program: Node) -> Node {
 			None => Some(statement),
 		});
 	let lowered: Vec<Node> = lowered
-		.map(|statement| emits_as_calls(statement, &bodies, &verbs))
+		.map(|statement| emits_as_calls(statement, &bodies, &verbs, shows_page))
 		.collect();
 	let page_handlers: std::collections::BTreeMap<String, usize> = bodies
 		.iter()
@@ -1024,8 +1025,8 @@ fn unconditional_emits(body: &Node, verbs: &[String]) -> Vec<String> {
 }
 
 /// Each `emit name{data}` with handlers is the call `on·name(data)`, `on·name()` when no handler reads `event`; one
-/// nobody handles is ø, nothing
-fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[String]) -> Node {
+/// nobody handles is ø, nothing, with a note unless the program shows a page, whose script may listen
+fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[String], shows_page: bool) -> Node {
 	if let Some((name, data)) = emitted(&node, verbs) {
 		let verb = match node.drop_meta() {
 			Node::List(items, _, _) => items.first().map(word).unwrap_or_default(),
@@ -1049,6 +1050,7 @@ fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[Str
 			None if crate::pipeline::compile_mode().renders_itself() => {
 				call(crate::host::DISPATCH_EVENT, vec![Node::Text(name.clone()), data])
 			}
+			None if shows_page => Node::Empty,
 			None => {
 				// P202: an emit no handler anywhere receives does nothing, with a got-it note
 				crate::normalize::set_position_of(&node);
@@ -1070,7 +1072,7 @@ fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[Str
 			call
 		};
 	}
-	children_rewritten(node, |child| emits_as_calls(child, handled, verbs))
+	children_rewritten(node, |child| emits_as_calls(child, handled, verbs, shows_page))
 }
 
 /// The variables the main level assigns (`n = 0`, `n += 1`, `n: int = 0`)
