@@ -224,90 +224,117 @@ pub(super) fn user_function(name: &str, params: Vec<Param>, body: Node) -> UserF
 /// Undeclared parameters that the body indexes (`xs#2`, `it[1]`) or reads as a map (`g.keys()`, `xs.has(x)`) take a list;
 /// those handed to `cell_get(c)` and the other cell words are cells
 pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
-	let mut indexed: HashSet<String> = HashSet::new();
-	let mut called: HashSet<String> = HashSet::new();
-	let mut celled: HashSet<String> = HashSet::new();
-	let mut texted: HashSet<String> = HashSet::new();
-	let mut foreign: HashSet<String> = HashSet::new();
-	let mut tested: HashSet<String> = HashSet::new();
-	let mut aliases: Vec<(String, String)> = vec![];
-	body.visit(&mut |node| {
+	let usages = Usages::of(body);
+	params.into_iter().map(|param| usages.typed(param)).collect()
+}
+
+/// How a function's body uses its names: called, indexed, as a cell, joined to a text, given to foreign code, tested
+/// for its kind
+#[derive(Default)]
+struct Usages {
+	indexed: HashSet<String>,
+	called: HashSet<String>,
+	celled: HashSet<String>,
+	texted: HashSet<String>,
+	foreign: HashSet<String>,
+	tested: HashSet<String>,
+	aliases: Vec<(String, String)>,
+}
+
+impl Usages {
+	fn of(body: &Node) -> Self {
+		let mut usages = Usages::default();
+		body.visit(&mut |node| usages.record(node));
+		// `for x in xs` walks the copy `x·items = xs`: the source of a used sequence is one too
+		while let Some((_, source)) = usages
+			.aliases
+			.iter()
+			.find(|(alias, source)| usages.indexed.contains(alias) && !usages.indexed.contains(source))
+		{
+			usages.indexed.insert(source.clone());
+		}
+		usages
+	}
+
+	fn record(&mut self, node: &Node) {
 		if let Some(name) = crate::closures::called_closure(node) {
-			called.insert(name.to_string());
+			self.called.insert(name.to_string());
 		}
 		if let Node::List(items, Bracket::Round, _) = node {
 			if let [word, map, ..] = items.as_slice() {
-				// `t.left = 3` lowers to `t = field_with(t, "left", 3)`: t is an object too
-				let is_map_word = matches!(word.drop_meta(), Node::Symbol(call) if crate::library_words::MAP_WORD_FUNCTIONS.contains(&call.as_str()) || call == crate::library_words::FIELD_WITH);
-				if let (true, Node::Symbol(name)) = (is_map_word, map.drop_meta()) {
-					indexed.insert(name.clone());
-				}
-				if let (true, Node::Symbol(name)) = (crate::wasm_emitter::functions::cells::is_cell_word(word), map.drop_meta()) {
-					celled.insert(name.clone());
-				}
+				self.record_word_call(word, map);
 			}
 		}
 		if let Some(Node::Symbol(name)) = used_sequence(node).map(Node::drop_meta) {
-			indexed.insert(name.clone());
+			self.indexed.insert(name.clone());
 		}
 		if let Some(name) = joined_to_text(node) {
-			texted.insert(name.to_string());
+			self.texted.insert(name.to_string());
 		}
-		foreign.extend(given_to_foreign_code(node).map(str::to_string));
-		tested.extend(kind_tested(node).map(str::to_string));
+		self.foreign.extend(given_to_foreign_code(node).map(str::to_string));
+		self.tested.extend(kind_tested(node).map(str::to_string));
 		// `xs = xs + [420]`, `xs += [420]` (what `xs.add(420)` lowers to): xs is a list, called or not
 		if let Some(name) = joined_to_list(node) {
-			indexed.insert(name.to_string());
+			self.indexed.insert(name.to_string());
 		}
 		if let Node::Key(list, Op::AddAssign, added) = node {
 			if let (Node::Symbol(name), Node::List(_, Bracket::Square, _)) = (list.drop_meta(), added.drop_meta()) {
-				indexed.insert(name.clone());
+				self.indexed.insert(name.clone());
 			}
 		}
 		if let Node::Key(alias, Op::Assign | Op::Define, source) = node {
 			if let (Node::Symbol(alias), Node::Symbol(source)) = (alias.drop_meta(), source.drop_meta()) {
-				aliases.push((alias.clone(), source.clone()));
+				self.aliases.push((alias.clone(), source.clone()));
 			}
 		}
-	});
-	// `for x in xs` walks the copy `x·items = xs`: the source of a used sequence is one too
-	while let Some((_, source)) = aliases
-		.iter()
-		.find(|(alias, source)| indexed.contains(alias) && !indexed.contains(source))
-	{
-		indexed.insert(source.clone());
 	}
-	params
-		.into_iter()
-		.map(|param| {
-			let used_as = if called.contains(&param.name) {
-				Some(Kind::Function)
-			} else if celled.contains(&param.name) || foreign.contains(&param.name) {
-				Some(Kind::Data)
-			} else if indexed.contains(&param.name) {
-				// a counted sequence joined to a text is a text; joined alone it may be any value (`"set " + value`)
-				Some(if texted.contains(&param.name) {
-					Kind::Text
-				} else {
-					Kind::List
-				})
+
+	/// `(word map …)`: a map word reads map as a map, a cell word as a cell
+	fn record_word_call(&mut self, word: &Node, map: &Node) {
+		let Node::Symbol(name) = map.drop_meta() else {
+			return;
+		};
+		// `t.left = 3` lowers to `t = field_with(t, "left", 3)`: t is an object too
+		let is_map_word = matches!(word.drop_meta(), Node::Symbol(call) if crate::library_words::MAP_WORD_FUNCTIONS.contains(&call.as_str()) || call == crate::library_words::FIELD_WITH);
+		if is_map_word {
+			self.indexed.insert(name.clone());
+		}
+		if crate::wasm_emitter::functions::cells::is_cell_word(word) {
+			self.celled.insert(name.clone());
+		}
+	}
+
+	fn used_as(&self, name: &String) -> Option<Kind> {
+		if self.called.contains(name) {
+			Some(Kind::Function)
+		} else if self.celled.contains(name) || self.foreign.contains(name) {
+			Some(Kind::Data)
+		} else if self.indexed.contains(name) {
+			// a counted sequence joined to a text is a text; joined alone it may be any value (`"set " + value`)
+			Some(if self.texted.contains(name) {
+				Kind::Text
 			} else {
-				None
-			};
-			// `if x is list then … else x`: a parameter tested for its kind takes any value, as if written `x:any` (card recursive-sum)
-			let takes_any = tested.contains(&param.name) && param.annotation.is_none() && param.default.is_none();
-			let annotation = if takes_any {
-				Some(Node::Symbol(crate::type_kinds::UNTYPED_FIELD.to_string()))
-			} else {
-				param.annotation
-			};
-			Param {
-				used_as,
-				annotation,
-				..param
-			}
-		})
-		.collect()
+				Kind::List
+			})
+		} else {
+			None
+		}
+	}
+
+	fn typed(&self, param: Param) -> Param {
+		// `if x is list then … else x`: a parameter tested for its kind takes any value, as if written `x:any` (card recursive-sum)
+		let takes_any = self.tested.contains(&param.name) && param.annotation.is_none() && param.default.is_none();
+		let annotation = if takes_any {
+			Some(Node::Symbol(crate::type_kinds::UNTYPED_FIELD.to_string()))
+		} else {
+			param.annotation
+		};
+		Param {
+			used_as: self.used_as(&param.name),
+			annotation,
+			..param
+		}
+	}
 }
 
 /// `is_type(x, "list")`, what `x is list` lowers to: the name whose kind is tested
@@ -1172,56 +1199,15 @@ pub(super) fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, L
 		let inferred: Vec<(String, Kind)> = stale
 			.iter()
 			.map(|function| {
-				let kind =
-					crate::closures::closure_call_kind(&function.name, ctx, &function_kinds).unwrap_or_else(|| {
-						infer_function_return_kind(
-							&function.params,
-							&function.body,
-							&function_kinds,
-							globals,
-							&ctx.closure_variable_targets,
-						)
-					});
-				// `if t == ø { return [] }; return f(t.left) + [x]`: assumed to return an Int, the recursion makes an
-				// error of the last value; assumed to return a Node of unknown kind, it settles
-				let kind = if kind == Kind::Error && function_kinds.get(&function.name) == Some(&Kind::Int) {
-					let mut unknown_recursion = function_kinds.clone();
-					unknown_recursion.insert(function.name.clone(), Kind::Empty);
-					infer_function_return_kind(
-						&function.params,
-						&function.body,
-						&unknown_recursion,
-						globals,
-						&ctx.closure_variable_targets,
-					)
-				} else {
-					kind
-				};
-				(function.name.clone(), kind)
+				(
+					function.name.clone(),
+					settled_return_kind(function, ctx, &function_kinds, globals),
+				)
 			})
 			.collect();
 		let tuples: Vec<(String, String, Kind)> = stale
 			.iter()
-			.flat_map(|function| {
-				let kinds = infer_tuple_kinds(
-					&function.params,
-					&function.body,
-					&function_kinds,
-					globals,
-					&ctx.closure_variable_targets,
-				);
-				kinds
-					.into_iter()
-					.enumerate()
-					.map(|(index, kind)| {
-						(
-							function.name.clone(),
-							crate::tuples::element_key(&function.name, index),
-							kind,
-						)
-					})
-					.collect::<Vec<_>>()
-			})
+			.flat_map(|function| element_kinds(function, ctx, &function_kinds, globals))
 			.collect();
 		let changed: HashSet<String> = inferred
 			.iter()
@@ -1233,15 +1219,7 @@ pub(super) fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, L
 		if changed.is_empty() {
 			break;
 		}
-		let changed: Vec<&str> = changed.iter().map(String::as_str).collect();
-		stale = ctx
-			.user_functions
-			.values()
-			.filter(|function| {
-				crate::closures::closure_call_kind(&function.name, ctx, &function_kinds).is_some()
-					|| function.body.mentions_any(&changed)
-			})
-			.collect();
+		stale = naming_changed(ctx, &function_kinds, &changed);
 		function_kinds.extend(inferred);
 		function_kinds.extend(tuples.into_iter().map(|(_, key, kind)| (key, kind)));
 	}
@@ -1251,4 +1229,76 @@ pub(super) fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, L
 			.map(|index| function_kinds[&crate::tuples::element_key(&function.name, index)])
 			.collect();
 	}
+}
+
+/// The kind function returns, given the kinds of the others; a closure call's kind joins its targets'
+fn settled_return_kind(
+	function: &UserFunctionDef,
+	ctx: &Context,
+	function_kinds: &HashMap<String, Kind>,
+	globals: &HashMap<String, Local>,
+) -> Kind {
+	let returned = |kinds: &HashMap<String, Kind>| {
+		infer_function_return_kind(
+			&function.params,
+			&function.body,
+			kinds,
+			globals,
+			&ctx.closure_variable_targets,
+		)
+	};
+	let kind = crate::closures::closure_call_kind(&function.name, ctx, function_kinds)
+		.unwrap_or_else(|| returned(function_kinds));
+	// `if t == ø { return [] }; return f(t.left) + [x]`: assumed to return an Int, the recursion makes an error of the
+	// last value; assumed to return a Node of unknown kind, it settles
+	if kind == Kind::Error && function_kinds.get(&function.name) == Some(&Kind::Int) {
+		let mut unknown_recursion = function_kinds.clone();
+		unknown_recursion.insert(function.name.clone(), Kind::Empty);
+		returned(&unknown_recursion)
+	} else {
+		kind
+	}
+}
+
+/// The kinds of the elements of the tuple function returns: (function, element key, kind)
+fn element_kinds(
+	function: &UserFunctionDef,
+	ctx: &Context,
+	function_kinds: &HashMap<String, Kind>,
+	globals: &HashMap<String, Local>,
+) -> Vec<(String, String, Kind)> {
+	let kinds = infer_tuple_kinds(
+		&function.params,
+		&function.body,
+		function_kinds,
+		globals,
+		&ctx.closure_variable_targets,
+	);
+	kinds
+		.into_iter()
+		.enumerate()
+		.map(|(index, kind)| {
+			(
+				function.name.clone(),
+				crate::tuples::element_key(&function.name, index),
+				kind,
+			)
+		})
+		.collect()
+}
+
+/// The functions to infer again: those naming a function whose kinds changed, and the closure calls
+fn naming_changed<'a>(
+	ctx: &'a Context,
+	function_kinds: &HashMap<String, Kind>,
+	changed: &HashSet<String>,
+) -> Vec<&'a UserFunctionDef> {
+	let changed: Vec<&str> = changed.iter().map(String::as_str).collect();
+	ctx.user_functions
+		.values()
+		.filter(|function| {
+			crate::closures::closure_call_kind(&function.name, ctx, function_kinds).is_some()
+				|| function.body.mentions_any(&changed)
+		})
+		.collect()
 }
