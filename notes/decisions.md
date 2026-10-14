@@ -27,9 +27,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - cleanup-bold (2026-10-14): "get rid of everything you can without asking": clearly superfluous code, duplicate
   paths, unused or rarely-run branches go without a question; we have everything in GitHub. The suite may drop to
   80 % passing (failures marked cleanup-edge as above, so they stay countable); samples and the tour should still run.
-- error-type (2026-10-14): no ugly Rust types. A function that can fail has the type `T | Error`, never shown as
-  Result: users see `T?` (Optional/Error), or, if the type system allows it, just `T` (open, Interviewer). Only the
-  WIT export bytes carry a `result` for Rust callers. Where a caller can take it, the Error value propagates instead of
+- error-type (2026-10-14): no ugly Rust types. A function that can fail has the sound type `T or error` (warp's
+  union spelling, as in `as int or text`), shown and written like that, never as Result; not hidden as plain `T`
+  ("`T or error` is not that ugly, keep it as a sound type"). Only the WIT export bytes carry a `result` for Rust callers. Where a caller can take it, the Error value propagates instead of
   being raised (card error-gaps, wiki/Error.md "Not yet").
 - restructuring (2026-10-14): new major roadmap after the diff review found few duplicates. Inventory every function
   by name, move functions to the file their concept belongs to (a general parser holds no keyword-specific syntax:
