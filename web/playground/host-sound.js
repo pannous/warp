@@ -321,6 +321,8 @@ addHostPart({
 			at: seconds => { self.voiceAt?.(Number(seconds)); return null; },
 			rest: seconds => { self.voiceSounded?.(Number(seconds)); return null; }, // midi_note's length (card midi-clock)
 			at_end: () => { self.voiceAtEnd?.(); return null; },
+			// the voice's moment on the clock every Worker shares (src/sound/mod.rs moment_seconds, card live-redefine)
+			moment: () => self.voiceMoment?.() ?? 0,
 			wait: () => null,
 			// sample("kick.wav") (card sound-samples, src/sound/audio_files.rs): [rate, channels, offset frames …]; the playground
 			// decodes WAV only, a Worker has no decoder for the other formats

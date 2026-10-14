@@ -276,6 +276,9 @@ render_sound(path) := std_io("sound", "render", [path])
 // the voice's first sound, exactly so in render_sound; the voice goes on where it stood (src/lowering/music_words.rs)
 sound_at(seconds) := std_io("sound", "at", [si_amount(seconds)])
 sound_at_end() := std_io("sound", "at_end", [])
+// this voice's moment in seconds on the clock every task shares: where its next sound would start (card live-redefine,
+// a live loop defined again plays its new block from the first cycle starting there)
+sound_moment() := std_io("sound", "moment", [])
 // an audio file's samples to play (card sound-samples): kick = sample("kick.wav") (wav, mp3, ogg, flac, aiff, m4a; the
 // playground reads wav), play(kick); play_sample(kick, 2) twice as fast and an octave up, as a sampler plays it;
 // sample_slice(kick, 0.1s, 0.3s) the part between, sample_slices(kick, 4) four equal parts, sample_looped(kick, 4s, 0.5s,

@@ -237,6 +237,7 @@ fn sound(member: &str, arguments: &[Node]) -> Result<Node, String> {
 		("rest", [seconds]) => crate::sound::rest(number_of(seconds)?),
 		("wait", []) => crate::sound::wait(),
 		("last", []) => return Ok(Node::int(crate::sound::last_handle() as i64)),
+		("moment", []) => return Ok(Node::float(crate::sound::moment_seconds())),
 		("queued", []) => return Ok(Node::float(crate::sound::queued_seconds())),
 		("render", [path]) => return crate::sound::render(&text_of(path)?).map(Node::float),
 		("load", [path]) => {
