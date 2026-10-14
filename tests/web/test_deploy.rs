@@ -130,3 +130,14 @@ fn a_program_without_routes_answers_its_value_and_functions() {
 	assert_eq!(answer(&base, "/square/12").2, "144");
 	std::fs::remove_dir_all(directory).ok();
 }
+
+/// A program of a single route, and routes inside `serve PORT {…}`, deploy too: the Worker answers them, the port is
+/// the local server's only (both were refused with "the program answers no request")
+#[test]
+fn a_single_route_and_a_served_route_deploy() {
+	for program in [r#"get "/" { "hi" }"#, r#"serve 8080 { get "/" { "hi" } }"#] {
+		let (report, module) = warp::web::worker_bundle(program);
+		assert!(report["error"].is_null(), "{program}: {report}");
+		assert_eq!(&module[..4], b"\0asm");
+	}
+}
