@@ -87,21 +87,15 @@ fn ungrouped(body: &Node) -> &Node {
 	}
 }
 
-thread_local! {
-	/// The float kernels lowering named (shared_arrays.rs): their parameter and body by name, so the emitter computes
-	/// them without reading the name back
-	static FLOAT_KERNELS: std::cell::RefCell<std::collections::HashMap<String, (String, Node)>> = Default::default();
-}
-
 /// The kernel's name, its parameter and body after LINEAR_MAP_PREFIX; the emitter finds them by it (kernel_of)
 pub fn kernel_name(parameter: &str, body: &Node) -> String {
 	let name = format!(
 		"{LINEAR_MAP_PREFIX}{parameter}{KERNEL_NAME_SEPARATOR}{}",
 		body.serialize().trim()
 	);
-	FLOAT_KERNELS.with(|kernels| {
-		kernels
-			.borrow_mut()
+	crate::compile_context::change(|context| {
+		context
+			.float_kernels
 			.insert(name.clone(), (parameter.to_string(), body.clone()))
 	});
 	name
@@ -109,8 +103,7 @@ pub fn kernel_name(parameter: &str, body: &Node) -> String {
 
 /// The parameter and body of the kernel lowering named
 fn kernel_of(name: &str) -> (String, Node) {
-	FLOAT_KERNELS
-		.with(|kernels| kernels.borrow().get(name).cloned())
+	crate::compile_context::read(|context| context.float_kernels.get(name).cloned())
 		.expect("a kernel lowering named (kernel_name)")
 }
 

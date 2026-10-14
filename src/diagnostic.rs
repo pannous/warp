@@ -1,6 +1,7 @@
 //! Compiler diagnostics: what went wrong, where, and how to fix it.
 //! Errors become `Node::Error` values (never panics); warnings (lints) are reported and compilation continues.
 
+use crate::compile_context;
 use crate::fixits::Fix;
 use crate::node::Node;
 use std::fmt;
@@ -336,9 +337,9 @@ pub fn written_text(node: &Node) -> String {
 /// The source of the program from `node`'s position to the end of its statement, as the program wrote it
 pub fn written_statement(node: &Node) -> Option<String> {
 	let source_line = |(line, column): (usize, usize)| {
-		SOURCE.with(|source| {
-			let rest: String = source
-				.borrow()
+		compile_context::read(|context| {
+			let rest: String = context
+				.source
 				.lines()
 				.nth(line.checked_sub(1)?)?
 				.chars()
@@ -471,7 +472,6 @@ const ACKNOWLEDGED: &str = "acknowledged";
 const ACKNOWLEDGED_PREFIX: &str = "ack:";
 
 thread_local! {
-	static WARNING_MODE: std::cell::Cell<WarningMode> = const { std::cell::Cell::new(WarningMode::Warn) };
 	static RUNTIME_WARNINGS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
 	static DIAGNOSTICS: std::cell::RefCell<Diagnostics> = std::cell::RefCell::new(Diagnostics::default());
 }
@@ -506,16 +506,16 @@ static SHOWN_SOURCE: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(No
 
 /// The warning mode of every later compilation on this thread (the CLI's `--strict`)
 pub fn set_warning_mode(mode: WarningMode) {
-	WARNING_MODE.with(|current| current.set(mode));
+	compile_context::change(|context| context.warning_mode = mode);
 }
 
 pub fn warning_mode() -> WarningMode {
-	WARNING_MODE.with(|current| current.get())
+	compile_context::read(|context| context.warning_mode)
 }
 
 /// Run `body` in another warning mode, then restore the previous one
 pub fn with_warning_mode<R>(mode: WarningMode, body: impl FnOnce() -> R) -> R {
-	crate::util::scoped(&WARNING_MODE, mode, body)
+	compile_context::scoped(|context| &mut context.warning_mode, mode, body)
 }
 
 /// Run `body` saying nothing (no warnings, hints or "got it?"): the compile of the executable a run leaves repeats the
@@ -918,9 +918,9 @@ const GOT_IT_COMMENT: &str = "// got it";
 /// Whether the source line `line` (1-based) of the program being compiled carries a `// got it` comment
 fn silenced_by_comment(line: usize) -> bool {
 	line > 0
-		&& SOURCE.with(|source| {
-			source
-				.borrow()
+		&& compile_context::read(|context| {
+			context
+				.source
 				.lines()
 				.nth(line - 1)
 				.is_some_and(|text| text.to_lowercase().contains(GOT_IT_COMMENT))
@@ -932,8 +932,6 @@ thread_local! {
 	static ACKNOWLEDGED_TOPICS: std::cell::RefCell<std::collections::HashSet<String>> = std::cell::RefCell::new(Default::default());
 	static ACKNOWLEDGEMENTS_FILE: std::cell::RefCell<Option<std::path::PathBuf>> = const { std::cell::RefCell::new(None) };
 	static NOTES_SHOWN: std::cell::RefCell<std::collections::HashSet<String>> = std::cell::RefCell::new(Default::default());
-	/// The source of the program being compiled, for its `// got it` comments
-	static SOURCE: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
 }
 
 /// Who acknowledges the warnings and notes of later compilations on this thread; `None` (the default): nobody
@@ -1073,7 +1071,7 @@ pub fn educate_once(topic: &str, written: &str, preferred: &str, reason: &str) {
 pub fn advise_once(topic: &str, written: &str, preferred: &str, reason: &str, fix: Option<crate::fixits::Fix>) {
 	let silenced = is_quiet()
 		|| is_acknowledged(topic, written)
-		|| silenced_by_comment(crate::normalize::hint_line())
+		|| silenced_by_comment(crate::compile_context::read(|context| context.hint_position.line))
 		|| NOTES_SHOWN.with(|shown| shown.borrow().contains(topic));
 	if !silenced {
 		crate::normalize::show_hint(written, preferred, reason, fix, topic);
@@ -1124,7 +1122,7 @@ pub fn take_assumptions() -> Vec<Diagnostic> {
 /// Run `body` (the parser) with warnings as errors when a line of the source says `use strict`,
 /// so the warnings of parse-time Asks obey it too
 pub fn in_source_mode<R>(code: &str, body: impl FnOnce() -> R) -> R {
-	SOURCE.with(|source| *source.borrow_mut() = code.to_string());
+	compile_context::change(|context| context.source = code.to_string());
 	match code.lines().any(|line| line.split_whitespace().eq(STRICT_PRAGMA)) {
 		true => with_warning_mode(warning_mode().strictened(), body),
 		false => body(),
@@ -1135,17 +1133,12 @@ pub fn in_source_mode<R>(code: &str, body: impl FnOnce() -> R) -> R {
 /// says `use comments`
 pub fn in_program_mode<R>(program: Node, body: impl FnOnce(Node) -> R) -> R {
 	let (program, comments) = without_pragma(program, COMMENTS_PRAGMA);
-	crate::util::scoped(&COMMENTS_AS_META, comments, || match without_strict_pragma(program) {
-		(program, true) => with_warning_mode(warning_mode().strictened(), || body(program)),
-		(program, false) => body(program),
-	})
-}
-
-thread_local! {
-	static COMMENTS_AS_META: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
-
-/// Did the program being compiled say `use comments` (P114: off by default, the compiler pays nothing for comments)
-pub fn comments_as_meta() -> bool {
-	COMMENTS_AS_META.with(std::cell::Cell::get)
+	compile_context::scoped(
+		|context| &mut context.comments_as_meta,
+		comments,
+		|| match without_strict_pragma(program) {
+			(program, true) => with_warning_mode(warning_mode().strictened(), || body(program)),
+			(program, false) => body(program),
+		},
+	)
 }

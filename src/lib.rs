@@ -15,6 +15,7 @@ pub use util::gc_engine;
 pub mod analysis_memo;
 pub mod analyzer;
 pub mod binaryen;
+pub mod compile_context;
 pub mod context;
 pub mod dead_functions;
 #[cfg(feature = "native")]

@@ -205,8 +205,8 @@ impl<'a> Loader<'a> {
 			.filter(|module| !self.program_std_modules.contains(*module))
 			.flat_map(|module| std_module_definitions(module).unwrap_or_default())
 			.collect();
-		MODULE_DEFINITIONS.with(|names| {
-			let mut names = names.borrow_mut();
+		crate::compile_context::change(|context| {
+			let names = &mut context.module_definitions;
 			hidden.iter().for_each(|word| {
 				names.remove(*word);
 				names.insert(format!("{SHADOWED_WORD_PREFIX}{word}"));
@@ -423,8 +423,8 @@ impl<'a> Loader<'a> {
 			})
 		};
 		self.std_definitions.extend(definitions.into_iter().map(qualified));
-		MODULE_DEFINITIONS.with(|names| {
-			let mut names = names.borrow_mut();
+		crate::compile_context::change(|context| {
+			let names = &mut context.module_definitions;
 			prelude.iter().for_each(|word| {
 				names.remove(word);
 				names.extend(prelude_name(word));
@@ -469,12 +469,10 @@ impl<'a> Loader<'a> {
 			return Err(crate::diagnostic::located_in_file(failure, &shown));
 		}
 		// classes insert_module_classes put in front of the program already: left out before the module's passes lower them
-		let classes_early = import == Import::Use
-			&& EARLY_CLASS_MODULES.with(|modules| {
-				modules
-					.borrow()
-					.contains(&path.canonicalize().unwrap_or_else(|_| path.clone()))
-			});
+		let classes_early = import == Import::Use && {
+			let path = path.canonicalize().unwrap_or_else(|_| path.clone());
+			crate::compile_context::read(|context| context.early_class_modules.contains(&path))
+		};
 		let module = match classes_early {
 			true => Node::List(
 				statements(module)
@@ -498,8 +496,11 @@ impl<'a> Loader<'a> {
 					statements.into_iter().filter(is_declaration).collect(),
 					&self.program_variables,
 				);
-				MODULE_DEFINITIONS
-					.with(|names| names.borrow_mut().extend(declarations.iter().filter_map(declared_name)));
+				crate::compile_context::change(|context| {
+					context
+						.module_definitions
+						.extend(declarations.iter().filter_map(declared_name))
+				});
 				declarations
 			}
 			Import::Include => statements,
