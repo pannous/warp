@@ -296,7 +296,7 @@ impl WasmGcEmitter {
 			}
 		};
 
-		let value = value.drop_meta();
+		let (written, value) = (value, value.drop_meta());
 		if let Some(refusal) = self
 			.unknown_word_refusal(value)
 			.or_else(|| self.cast_refusal(value, target_type))
@@ -323,7 +323,7 @@ impl WasmGcEmitter {
 				self.emit_cast_to_exact(func, value, target_type)
 			}
 			"float" => self.emit_cast_to_float(func, value, target_type),
-			"text" => self.emit_cast_to_text(func, value),
+			"text" => self.emit_cast_to_text(func, written),
 			"codepoint" => self.emit_cast_to_char(func, value),
 			crate::analyzer::BOOL_TYPE => self.emit_cast_to_bool(func, value),
 			"number" => self.emit_cast_to_number(func, value),
@@ -444,7 +444,7 @@ impl WasmGcEmitter {
 		if let Some(quoted) = crate::blocks::quoted_data(value) {
 			return self.emit_string_call(func, &quoted.serialize(), "new_text");
 		}
-		match value {
+		match value.drop_meta() {
 			Node::Number(n) => self.emit_string_call(func, &n.to_string(), "new_text"),
 			Node::Char(c) => self.emit_string_call(func, &c.to_string(), "new_text"),
 			Node::Text(s) => self.emit_string_call(func, s, "new_text"),
