@@ -326,6 +326,8 @@ const MEANING_PASSES: &[Pass] = &[
 	crate::lowering::lambdas::lower,
 	crate::lowering::function_values::lower,
 	crate::lowering::closures::lower,
+	// `x = a`, `a + 1` of a function a without parameters: its call (bare_calls.rs), once aliases and closures are named
+	crate::lowering::bare_calls::lower,
 	crate::lowering::lambdas::lower_strict,
 	crate::lowering::broadcasting::lower_several_arguments,
 	crate::numbers::real::lower,
