@@ -640,21 +640,7 @@ impl WasmGcEmitter {
 		if self.get_type(subject) != crate::Kind::Symbol || crate::type_tests::type_matches(SYMBOL_WORD, spec) {
 			return None;
 		}
-		let names_type = |name: &str| {
-			Node::Key(
-				Box::new(subject.clone()),
-				Op::Eq,
-				Box::new(Node::Symbol(name.to_string())),
-			)
-		};
-		let tests = crate::type_tests::builtin_types_matching(spec)
-			.into_iter()
-			.map(names_type);
-		Some(
-			tests
-				.reduce(|either, test| Node::Key(Box::new(either), Op::Or, Box::new(test)))
-				.unwrap_or(Node::False),
-		)
+		Some(names_covered_type(subject, spec))
 	}
 
 	/// `is_type(x, "spec")` as a Node: its 1 or 0
@@ -760,6 +746,15 @@ impl WasmGcEmitter {
 					Separator::None,
 				);
 				self.emit_numeric_value(func, &instance_test);
+			}
+			// `now is instant`: a built-in type sharing its run-time kind with others (the forms of a time) by `type(x)`'s name
+			None if unknown && crate::type_tests::is_builtin_type_word(spec) => {
+				let type_value = Node::List(
+					vec![Node::Symbol(crate::type_tests::TYPE_WORD.to_string()), subject.clone()],
+					Bracket::Round,
+					Separator::None,
+				);
+				self.emit_numeric_value(func, &names_covered_type(&type_value, spec));
 			}
 			// `x = 2.5; x is int`: an exact ratio is an Int at run time, only is_ratio tells it from a whole number
 			None if self.whole_only_at_run_time(subject, spec) => {
@@ -1600,4 +1595,20 @@ fn names_whole_numbers_only(spec: &str) -> bool {
 	let int = crate::Kind::Int.to_string();
 	crate::type_tests::type_matches(&int, spec)
 		&& !crate::type_tests::type_matches(crate::analyzer::RATIONAL_WORD, spec)
+}
+
+/// `t == int or t == rational or …`: the type value t names one of the built-in types spec covers
+fn names_covered_type(type_value: &Node, spec: &str) -> Node {
+	let names_type = |name: &str| {
+		Node::Key(
+			Box::new(type_value.clone()),
+			Op::Eq,
+			Box::new(Node::Symbol(name.to_string())),
+		)
+	};
+	crate::type_tests::builtin_types_matching(spec)
+		.into_iter()
+		.map(names_type)
+		.reduce(|either, test| Node::Key(Box::new(either), Op::Or, Box::new(test)))
+		.unwrap_or(Node::False)
 }
