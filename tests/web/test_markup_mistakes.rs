@@ -104,6 +104,23 @@ fn a_class_literal_field_named_like_an_element_is_no_markup() {
 	);
 }
 
+/// card html-meta-warnings (decision html-meta): the page facts of html, `description:` and `meta: {author: …}`, go into
+/// the head without a warning; a meta element's own attributes (`charset`) are still checked as attributes
+#[test]
+fn page_facts_are_no_attributes() {
+	let code = "html{ lang: \"en\" description: \"d\" meta: {author: \"Ann\"} }";
+	warp::diagnostic::take_runtime_warnings();
+	assert_eq!(warnings_of(code), Vec::<String>::new(), "{code}");
+	let at_run_time = warp::diagnostic::take_runtime_warnings();
+	assert!(at_run_time.is_empty(), "{at_run_time:?}");
+	let html = warp::web::markup::to_html(&eval(code));
+	assert!(html.contains("<meta name=\"author\" content=\"Ann\">"), "{html}");
+	warns(
+		"html{ head{ meta{ charset: \"utf-8\" contnt: \"x\" } } }",
+		"contnt is no attribute of meta: it shows as text",
+	);
+}
+
 /// cards data-map, body-key-markup: a data map's keys are no elements, even named like one (`body`, `title`), when it
 /// has a field named like no element; a field's value is still markup
 #[test]
