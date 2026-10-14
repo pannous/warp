@@ -18,8 +18,8 @@ impl WasmGcEmitter {
 		if self.emit_raised_error(func, node) || self.emit_undefined_comparison(func, node) {
 			return;
 		}
-		if let Some((list, sum_loop)) = list_dispatch::list_sum_parts(node) {
-			return self.emit_list_sum(func, list, sum_loop, list_dispatch::Wanted::Int);
+		if let Some((list, sum_loop)) = lists::list_dispatch::list_sum_parts(node) {
+			return self.emit_list_sum(func, list, sum_loop, lists::list_dispatch::Wanted::Int);
 		}
 		if self.emit_loop_jump(func, node)
 			|| self.emit_tuple_statement(func, node, Self::emit_numeric_value)
@@ -216,7 +216,10 @@ impl WasmGcEmitter {
 			}
 		}
 		if let [Node::Symbol(fn_name), arguments @ ..] = items {
-			match (text_builtins::text_builtin_kind(fn_name, arguments.len()), arguments) {
+			match (
+				text::text_builtins::text_builtin_kind(fn_name, arguments.len()),
+				arguments,
+			) {
 				(Some(Kind::Int), _) => {
 					self.emit_integer_text_builtin(func, fn_name, arguments);
 					return true;
@@ -249,7 +252,7 @@ impl WasmGcEmitter {
 			return true;
 		}
 		// floor, ceil and round of a float as the i64, without the Int node list_emitter builds for it as a value
-		if super::list_emitter::float_rounding(fn_name).is_some()
+		if super::lists::list_emitter::float_rounding(fn_name).is_some()
 			&& !self.ctx.ffi_imports.contains_key(fn_name)
 			&& self.get_type(argument).is_float()
 		{
@@ -274,8 +277,8 @@ impl WasmGcEmitter {
 		if self.emit_raised_error(func, node) {
 			return;
 		}
-		if let Some((list, sum_loop)) = list_dispatch::list_sum_parts(node) {
-			return self.emit_list_sum(func, list, sum_loop, list_dispatch::Wanted::Float);
+		if let Some((list, sum_loop)) = lists::list_dispatch::list_sum_parts(node) {
+			return self.emit_list_sum(func, list, sum_loop, lists::list_dispatch::Wanted::Float);
 		}
 		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_float_value) {
 			return;
@@ -368,14 +371,12 @@ impl WasmGcEmitter {
 			Node::Key(value, Op::As, _)
 				if self.get_type(node).is_float()
 					&& matches!(self.get_type(value), Kind::Text | Kind::Empty)
-					&& !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) =>
+					&& !value.is_text_literal() =>
 			{
 				self.emit_node_instructions(func, value);
-				self.emit_call(func, list_ops::TEXT_AS_FLOAT);
+				self.emit_call(func, lists::list_ops::TEXT_AS_FLOAT);
 			}
-			Node::Key(value, Op::As, _)
-				if self.get_type(node).is_float() && !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) =>
-			{
+			Node::Key(value, Op::As, _) if self.get_type(node).is_float() && !value.is_text_literal() => {
 				self.emit_float_value(func, value);
 			}
 			// `"1.5" as float`: the literal's cast as everywhere (a number, or loud for "x"), its f64
@@ -484,7 +485,7 @@ impl WasmGcEmitter {
 			Some(comment) => self.emit_node_instructions(func, &Node::Text(comment)),
 			None => self.emit_node_null(func),
 		}
-		self.emit_call(func, super::node_api::NODE_AT);
+		self.emit_call(func, super::reflection::node_api::NODE_AT);
 	}
 
 	pub(super) fn emit_list_structure_with(
@@ -515,7 +516,8 @@ impl WasmGcEmitter {
 /// `int`, `Int`, `integer`: the type `x as int` converts to; `as i64` wraps (casts.rs WRAPPING_INT_WORDS)
 pub(super) fn is_int_type_word(target: &Node) -> bool {
 	let word = target.drop_meta().name().to_lowercase();
-	crate::type_tests::canonical_spec_word(&word) == "int" && !super::casts::WRAPPING_INT_WORDS.contains(&word.as_str())
+	crate::type_tests::canonical_spec_word(&word) == "int"
+		&& !super::numbers::casts::WRAPPING_INT_WORDS.contains(&word.as_str())
 }
 
 /// The info of a list of these items: one item stands between no separators (`[a]` parses Space-separated)

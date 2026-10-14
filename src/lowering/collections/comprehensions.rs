@@ -462,7 +462,7 @@ fn is_where(word: &Node) -> bool {
 
 /// The clause `for v in xs …`
 fn starts_with_for(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(words, _, _) if words.first().is_some_and(|word| word.is_symbol(FOR_WORD)))
+	node.is_call_of(FOR_WORD)
 }
 
 /// One node of several juxtaposed words: `upper w`

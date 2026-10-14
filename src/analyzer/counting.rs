@@ -2,6 +2,16 @@
 
 use super::*;
 
+/// Statement words whose argument is never their property: `return count` is no `return.count`
+pub(crate) const PROPERTYLESS_KEYWORDS: [&str; 6] = ["return", "yield", PRINT_CALL, "println", "puts", "not"];
+/// The words counting a value's elements, as `count x`, `x.size`, `len(x)`: the one table every pass asks, through
+/// is_counting_word (a class's own size method is looked up in this order)
+pub(crate) const COUNTING_WORDS: [&str; 4] = ["size", "count", "len", "length"];
+/// `byte_size(x)`, `x.byte_size`: the bytes of x, as `x.bytes` (size is the element count, user decision P40)
+pub(crate) const BYTE_SIZE: &str = "byte_size";
+/// `x.number` counts too, but `number x` is the type conversion, not a count
+pub(crate) const NUMBER_PROPERTY: &str = "number";
+
 /// `count x`, `length x`, `size x`: the runtime function counting the elements of x; a text counts its graphemes
 /// (user-perceived characters). Bytes are only counted by an explicit unit (`x.bytes`); a user function of that name wins.
 pub fn counting_function(name: &str, ctx: &Context) -> Option<&'static str> {
@@ -276,4 +286,8 @@ pub(super) fn require_counter(ctx: &mut Context, counter: &'static str) {
 		ctx.required_functions.insert("node_count");
 	}
 	ctx.required_functions.insert(counter);
+}
+
+pub(crate) fn is_counting_property(word: &str) -> bool {
+	word == NUMBER_PROPERTY || is_counting_word(word)
 }

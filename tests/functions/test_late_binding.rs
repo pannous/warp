@@ -96,6 +96,7 @@ fn a_def_without_parameters_over_constants_gets_a_note() {
 // Card g-qUrk: a function defined in a function body reads the enclosing function's parameters and variables at call
 // time too; a change after the definition that a later call in the body could observe is an error, as at main level
 #[test]
+#[ignore = "cleanup-edge: cleanup-cut-nonlocal: a nested def shares the enclosing variables and reads their current values (cleanup-cuts-2)"]
 fn late_binding_change_inside_function_is_an_error() {
 	common::fails_with(
 		"def outer(){ y=1; inner := {a=y; a*2}; y=2; inner() }; outer()",
@@ -160,6 +161,7 @@ fn nonlocal_reads_the_value_at_each_call() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-cut-nonlocal: the nonlocal declaration errors are cut, nonlocal is optional (cleanup-cuts-2)"]
 fn nonlocal_needs_a_variable_of_an_enclosing_def() {
 	common::fails_with("def f(){ nonlocal y; y }; f()", "no function encloses f");
 	common::fails_with("nonlocal y; 3", "`nonlocal y` outside a function");

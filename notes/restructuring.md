@@ -154,9 +154,18 @@ with the owner before each folder move.
 
 Status (branches layout-lowering-signals … -control, 2026-10-14): all folders exist. Each folder mod.rs does
 `use super::*`, so moved files kept every `super::x` path unchanged. Still flat until their open branches land:
-blocks (tree-patterns-step7), declarations and type_name_matching (cleanup-drop-type-name-params, warp-cleanup's
-park-phrases), plain_enums (enum-coin), welcome_forms (foreign-spellings), library_words, and the park-phrases files
-phrase_calls, list_phrases, word_slices, music_words, of_lookups.
+declarations and type_name_matching (warp-cleanup's park-phrases), welcome_forms (foreign-spellings),
+and the park-phrases files phrase_calls, list_phrases, word_slices, music_words, of_lookups.
+
+### Lowering per function (branch layout-lowering-functions)
+
+Moved with scripts/move_fn.py. Callers name the new module, and the crate root re-exports it (lib.rs).
+
+| new file | from | functions and constants |
+|---|---|---|
+| collections/list_mutations.rs | definitions/declaration_forms.rs | `appends`, `is_list_mutating_method`, `is_removal_method`, `is_place`, `appended_element`, `called_on_place`, `popped_list`, `removed_key`, `cleared_collection`, `became`, `prelude_call`, `inserted_element`, `insert_arguments`, `insert_position`, `lowered_insert`, `updates_list`, `Inserted`; the method and pseudo-call constants (`LIST_BECOME`, `INSERT_AT_CALL`, `REMOVED_VALUE_CALL` …) |
+| collections/filled_lists.rs | definitions/declaration_forms.rs | `zero_element`, `zero_list`, `lower_list_times`, `list_times`, `is_list_literal`, `list_plus`, `filled_list`, `zero_filled_subscript`, `typed_array_value`, `typed_array_declaration`, `counted_array_declaration`, `ZERO_FILL_CALL`, the list-times/list-plus topics |
+| types/inline_unions.rs | definitions/declaration_forms.rs | `lower_inline_unions`, `lower_unions_of` |
 
 ## Analyzer (`src/analyzer/`, 10 files)
 

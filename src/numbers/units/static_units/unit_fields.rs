@@ -344,7 +344,7 @@ impl Inference {
 		let class = head.drop_meta().name();
 		let mut lowered = vec![head.clone()];
 		for (index, argument) in arguments.iter().enumerate() {
-			if super::is_nothing(argument) {
+			if argument.is_empty_node() {
 				lowered.push(argument.clone());
 				continue;
 			}
@@ -408,7 +408,7 @@ impl Inference {
 				.iter()
 				.find(|(name, _)| *name == field.drop_meta().name())
 				.map(|(_, held)| held);
-			if let Some(held) = held.filter(|held| **held != given && !super::is_nothing(&value)) {
+			if let Some(held) = held.filter(|held| **held != given && !value.is_empty_node()) {
 				return Some(Err(Stop::Error(format!(
 					"DimensionError: {class}.{} holds {}, is given {}",
 					field.drop_meta().name(),

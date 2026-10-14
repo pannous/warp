@@ -259,7 +259,7 @@ pub fn lower(program: Node) -> Node {
 				reads_event(&bodies[name]),
 				&each_its_event(&bodies[name])
 					.iter()
-					.flat_map(statements_of)
+					.flat_map(Node::body_statements)
 					.collect::<Vec<_>>(),
 				&main_variables,
 			)),
@@ -909,18 +909,7 @@ pub(crate) fn global_declarations(bodies: &[Node], main_variables: &HashSet<Stri
 	mentioned.iter().map(|name| global_declaration(name)).collect()
 }
 
-/// The statements of a block, so the function's value is its last one's, not a one-item block; `{emit ask}` holds the words of its one statement
-pub(crate) fn statements_of(block: &Node) -> Vec<Node> {
-	match block.drop_meta() {
-		Node::List(words, Bracket::Curly, Separator::Space) if words.len() > 1 => {
-			vec![Node::List(words.clone(), Bracket::None, Separator::Space)]
-		}
-		Node::List(statements, Bracket::Curly, _) => statements.clone(),
-		other => vec![other.clone()],
-	}
-}
-
-/// The last of statements_of, borrowed where it can be
+/// The last of Node::body_statements, borrowed where it can be
 pub(crate) fn last_statement(block: &Node) -> std::borrow::Cow<'_, Node> {
 	match block.drop_meta() {
 		Node::List(words, Bracket::Curly, Separator::Space) if words.len() > 1 => {
@@ -946,7 +935,7 @@ fn each_its_event(bodies: &[Node]) -> Vec<Node> {
 				changes |= crate::variable_signals::root_variable(target).is_some_and(|name| name == EVENT_WORD);
 			}
 			Node::Key(target, Op::Dot, call) => {
-				let mutating = matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|method| crate::declaration_forms::is_list_mutating_method(&word(method))));
+				let mutating = matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|method| crate::list_mutations::is_list_mutating_method(&word(method))));
 				changes |= mutating && crate::variable_signals::root_variable(target).is_some_and(|name| name == EVENT_WORD);
 			}
 			_ => {}

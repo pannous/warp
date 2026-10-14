@@ -7,7 +7,7 @@ use std::fmt::Display;
 use std::ops::{Add, Div, Mul, Neg, Sub};
 
 /// Positional notation for decimal exponents in [SMALLEST_POSITIONAL, LARGEST_POSITIONAL), at compile time (float_text
-/// below) and at run time (src/wasm_emitter/float_text.rs) alike
+/// below) and at run time (src/wasm_emitter/numbers/float_text.rs) alike
 pub const SMALLEST_POSITIONAL: i32 = -5;
 pub const LARGEST_POSITIONAL: i32 = 15;
 /// The most significant digits the shortest text of a float has: a decimal written with more was meant exactly

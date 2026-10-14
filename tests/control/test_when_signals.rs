@@ -41,3 +41,14 @@ fn a_condition_when_notes_that_it_reacts_to_later_writes() {
 		.iter()
 		.any(|hint| hint.contains("whenever")));
 }
+
+// user 2026-10-13: `when` is ambiguous in all four shapes, so each gives the same one warning, its fix the word meant;
+// a match takes Kotlin's arms `1 -> a; else -> b` too
+#[test]
+fn every_when_warns_naming_the_word_meant() {
+	assert!(hints_of("n = 0; when ping { n += 1 }; emit ping").contains(&"when → on".to_string()));
+	assert!(hints_of("x = 0; when x > 3 { print 1 }; x = 5").contains(&"when → whenever".to_string()));
+	assert!(hints_of("x = 2; when x { 1 -> 10; else -> 20 }").contains(&"when → match".to_string()));
+	assert!(hints_of("x = 2; when { x > 1 -> 10; else -> 20 }").contains(&"when → if".to_string()));
+	is!("x = 3; match x { 1 -> \"a\"; else -> \"b\" }", 'b');
+}

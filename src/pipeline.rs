@@ -292,7 +292,7 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::broadcasting::lower_element_wise_operators,
 	// a shader's `$name` holes (shader_holes.rs) as `name: name` in the values map of each paint of it
 	crate::graphics::shader_holes::lower,
-	crate::lowering::declaration_forms::lower_inline_unions,
+	crate::lowering::inline_unions::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::lowering::scoped_handlers::lower,
 	// `component name {…}` declares a WIT world (`warp build --wit`) and does nothing at run time
@@ -308,8 +308,6 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::soft_keywords::lower,
 	// `add_pair([a, b]) := a + b`, `sum(Point{x, y}) := …`: a pattern parameter is a match on it (parameter_patterns.rs)
 	crate::lowering::parameter_patterns::lower,
-	// `fib(0) := 0; fib(n) := …`: a second definition of one shape is an error with a match as its fix
-	crate::lowering::definition_cases::lower,
 	// `p: position`, `i: index` (index_positions.rs) checked as ints, before any pass reads a declaration
 	crate::lowering::index_positions::mark_declarations,
 	// `int age = 30` is `age: int = 30` before the passes that read declarations, the signal passes among them
@@ -324,10 +322,6 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::match_exhaustive::check,
 	// `global n = 5` in a function body is `global n; n = 5` before any pass reads its `global n`
 	crate::lowering::late_binding::split_global_assignments,
-	// `xs from #2 to #4`, `xs up to second`: a slice by position (word_slices.rs), before a pass reads `to` as a range
-	crate::lowering::word_slices::lower,
-	// `xs.keep only positive` is `xs where it > 0`, before lower_where reads it (list_phrases.rs)
-	crate::lowering::list_phrases::lower,
 	// a hosted program without routes: its value the page at /, each function a route (card make-deploy)
 	crate::lowering::serve::with_default_routes,
 	// `post "/todos/:id" { todos where it.id == id }`: the path's parameters bound before lower_where reads the variables
@@ -405,7 +399,6 @@ const DECLARATION_PASSES: &[Pass] = &[
 	crate::lowering::foreign_modules::lower,
 	// `x as text?` keeps ø, after foreign_modules types a nullable WebIDL result so
 	crate::lowering::optional_casts::lower,
-	crate::lowering::phrase_calls::lower,
 	crate::lowering::std_aliases::lower,
 	crate::lowering::class_methods::lower_json_classes,
 	crate::lowering::welcome_forms::lower,
@@ -425,8 +418,6 @@ const DECLARATION_PASSES: &[Pass] = &[
 /// The used modules join the program (modules::resolve), then the passes that read their words again
 const MODULE_PASSES: &[Pass] = &[
 	crate::modules::resolve,
-	// again: a used module's phrases, `play 440Hz for 0.5s` of lib/sound.warp's `to play x for d:`
-	crate::lowering::phrase_calls::lower,
 	// `fourty_two.exports`, `dir(fourty_two)` of an imported core module, once resolve found its file (reflection.rs)
 	crate::lowering::reflection::lower_module_words,
 	// again: `dir(is_square)`, `is_square.params` of a used module's function, which joined the program in resolve
@@ -512,7 +503,7 @@ const MEANING_PASSES: &[Pass] = &[
 	crate::lowering::traits::lower_declarations,
 	crate::lowering::type_tests::lower,
 	crate::lowering::ambiguous_forms::lower,
-	crate::lowering::declaration_forms::lower_list_times,
+	crate::lowering::filled_lists::lower_list_times,
 	// before any pass reads a call's arity: `square square 2` nests, `f(a)` and `f(a, b)` become `f·1`, `f·2`
 	crate::lowering::broadcasting::lower_scalar_element_wise,
 	crate::lowering::broadcasting::lower_prefix_calls,
@@ -807,7 +798,7 @@ pub fn eval_block(block: Node, names: &Node, values: &Node, definitions: &Node) 
 		[&block]
 			.into_iter()
 			.chain(&definitions)
-			.any(|part| mentions(part, name))
+			.any(|part| names_or_interpolates(part, name))
 	};
 	let bound: Vec<(String, Node)> = names
 		.into_iter()
@@ -860,7 +851,7 @@ fn as_written(value: Node) -> Node {
 }
 
 /// Does `node` mention `name`: as a word, or inside a text (an interpolation)
-fn mentions(node: &Node, name: &str) -> bool {
+fn names_or_interpolates(node: &Node, name: &str) -> bool {
 	let mut found = false;
 	node.visit(&mut |part| {
 		found |= match part {
@@ -993,7 +984,7 @@ pub(crate) fn returned_error_message(value: &Node) -> Option<&Node> {
 	match value.drop_meta() {
 		Node::List(items, Bracket::Round, _)
 			if items.len() == 2
-				&& matches!(items[0].drop_meta(), Node::Symbol(word) if word == "error" || word == crate::wasm_emitter::text_builtins::RAISE) =>
+				&& matches!(items[0].drop_meta(), Node::Symbol(word) if word == "error" || word == crate::wasm_emitter::text::text_builtins::RAISE) =>
 		{
 			Some(&items[1])
 		}

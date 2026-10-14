@@ -3,7 +3,7 @@
 // host-files.js reads sound_samples with intsOfList
 
 // free memory for `byteCount` bytes above the program's text heap, which its next text may take again (src/host.rs
-// scratch, src/wasm_emitter/int_lists.rs); undefined without a text heap
+// scratch, src/wasm_emitter/lists/int_lists.rs); undefined without a text heap
 function scratch(program, byteCount) {
 	const heap = program[TEXT_HEAP_EXPORT];
 	if (!heap) return undefined;

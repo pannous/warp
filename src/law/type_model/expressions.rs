@@ -63,14 +63,21 @@ impl Exporter {
 		self.locals.pop();
 		self.argument_fields.clear();
 		self.cells.clear();
-		let body = cells.iter().zip(&first_values).rev().fold(body?, |body, (cell, first_value)| {
-			let path = lean_strings(&[cell_class(name, cell)]);
-			let new_cell = match first_value.as_str() {
-				UNIT_TYPE => format!(".new {path}"),
-				_ => format!(".letIn \"·new\" (.cls {path}) (.new {path}) (.seq (.set (.loc \"·new\") {} ({first_value})) (.loc \"·new\"))", quoted(CELL_FIELD)),
-			};
-			format!(".letIn {} (.cls {path}) ({new_cell}) ({body})", quoted(cell))
-		});
+		let body = cells
+			.iter()
+			.zip(&first_values)
+			.rev()
+			.fold(body?, |body, (cell, first_value)| {
+				let path = lean_strings(&[cell_class(name, cell)]);
+				let new_cell = match first_value.as_str() {
+					UNIT_TYPE => format!(".new {path}"),
+					_ => format!(
+						".letIn \"·new\" (.cls {path}) (.new {path}) (.seq (.set (.loc \"·new\") {} ({first_value})) (.loc \"·new\"))",
+						quoted(CELL_FIELD)
+					),
+				};
+				format!(".letIn {} (.cls {path}) ({new_cell}) ({body})", quoted(cell))
+			});
 		// a cell parameter among several is read from the arguments object once
 		let body = references
 			.iter()
@@ -344,7 +351,7 @@ impl Exporter {
 		match node.drop_meta() {
 			Node::Number(Number::Int(n)) => Ok(format!(".int ({n})")),
 			Node::Number(Number::Float(x)) if Number::is_exact_decimal(*x) => {
-				let (numerator, denominator) = crate::wasm_emitter::exact::decimal_fraction(*x);
+				let (numerator, denominator) = crate::wasm_emitter::numbers::exact::decimal_fraction(*x);
 				Ok(exact_number(numerator, denominator))
 			}
 			Node::Number(Number::Float(x)) => Ok(format!(".flt (Float.toBits ({x:?} : Float))")),
@@ -486,7 +493,7 @@ impl Exporter {
 							value.as_ref()
 						}
 						Node::Key(name, Op::Assign, _) => {
-							return Err(format!("{} has no parameter {}", call.name(), name.name()))
+							return Err(format!("{} has no parameter {}", call.name(), name.name()));
 						}
 						_ => argument,
 					};
@@ -560,7 +567,7 @@ impl Exporter {
 				(Node::Symbol(name), Node::List(items, _, _))
 					if items.len() == 2
 						&& self.cell_lists.contains(name)
-						&& crate::declaration_forms::appends(&items[0].drop_meta().name(), 1) =>
+						&& crate::list_mutations::appends(&items[0].drop_meta().name(), 1) =>
 				{
 					let item = self.expression(&items[1])?;
 					Ok(format!(
@@ -571,7 +578,7 @@ impl Exporter {
 					))
 				}
 				(Node::Symbol(name), Node::List(items, _, _))
-					if items.len() == 2 && crate::declaration_forms::appends(&items[0].drop_meta().name(), 1) =>
+					if items.len() == 2 && crate::list_mutations::appends(&items[0].drop_meta().name(), 1) =>
 				{
 					let item = self.expression(&items[1])?;
 					if !self.list_names.contains(name) {
@@ -580,9 +587,9 @@ impl Exporter {
 					Ok(format!(".push (.glob {}) ({item})", quoted(name)))
 				}
 				(Node::Symbol(name), call)
-					if self.list_names.contains(name) && crate::declaration_forms::insert_arguments(call).is_some() =>
+					if self.list_names.contains(name) && crate::list_mutations::insert_arguments(call).is_some() =>
 				{
-					let (value, position) = crate::declaration_forms::insert_arguments(call).expect("guarded");
+					let (value, position) = crate::list_mutations::insert_arguments(call).expect("guarded");
 					Ok(format!(
 						".insertAt (.glob {}) ({}) ({})",
 						quoted(name),
@@ -671,11 +678,7 @@ impl Exporter {
 				})
 			}
 			// `'a'..'e'`: letters, outside W0
-			Node::Key(from, Op::Range | Op::To, to)
-				if [from, to]
-					.iter()
-					.any(|bound| matches!(bound.drop_meta(), Node::Text(_) | Node::Char(_))) =>
-			{
+			Node::Key(from, Op::Range | Op::To, to) if [from, to].iter().any(|bound| bound.is_text_literal()) => {
 				outside_w0(node)
 			}
 			Node::Key(from, Op::Range, to) => self.binary(".range", from, to),

@@ -4,7 +4,7 @@ use super::*;
 
 /// `global float y = 2` as `global y: float = 2` (card w0-globals: the type word was dropped, so y held the int 2);
 /// `global int k` without a value stays the declaration of k
-fn typed_global(declaration: Node, type_word: Option<String>) -> Node {
+pub(crate) fn typed_global(declaration: Node, type_word: Option<String>) -> Node {
 	match (declaration.drop_meta(), type_word) {
 		(Node::Key(name, Op::Assign, value), Some(type_word)) if matches!(name.drop_meta(), Symbol(_)) => {
 			let typed_name = Node::Key(name.clone(), Op::Colon, Box::new(Symbol(type_word)));
@@ -119,4 +119,91 @@ impl WarpParser {
 			}
 		}
 	}
+
+	/// `l = "en"` or `k:text` (a typed parameter or declaration) makes l, k text variables; any `x = …` a variable
+	pub(crate) fn note_variable(&mut self, lhs: &Node, op: Op, rhs: &Node) {
+		let Node::Symbol(name) = lhs.drop_meta() else { return };
+		if matches!(op, Op::Assign | Op::Define) {
+			self.variables.insert(name.clone());
+		}
+		let holds_text = match (op, rhs.drop_meta()) {
+			(Op::Assign | Op::Define, Node::Text(_)) => true,
+			(Op::Colon, Node::Symbol(type_word)) => crate::type_tests::is_text_type_word(type_word),
+			_ => false,
+		};
+		if holds_text {
+			self.text_variables.insert(name.clone());
+		}
+	}
+
+	/// R's `<-` at the cursor (P145): `x <- 3` assigns with a note to write `x = 3`; the cramped `x<-3` is an error
+	/// naming `x = 3` and `x < -3`
+	pub(crate) fn left_arrow_assignment(&self, op: Op, target: &Node) -> Result<(), Node> {
+		if op != Op::Assign || (self.current_char(), self.peek_char(1)) != ('<', '-') {
+			return Ok(());
+		}
+		let ends_value = |ch: &char| ch.is_whitespace() || matches!(ch, ';' | '(' | ')' | ']' | '}');
+		let rest: Vec<char> = self.chars[self.pos + 2..]
+			.iter()
+			.copied()
+			.skip_while(|ch| *ch == ' ')
+			.collect();
+		let token: String = rest.iter().take_while(|ch| !ends_value(ch)).collect();
+		let continues = rest
+			.get(token.chars().count())
+			.is_some_and(|ch| !matches!(ch, '\n' | ';' | ')' | ']' | '}'));
+		let value = if continues { format!("{token} …") } else { token };
+		let name = target.serialize();
+		let assignment = format!("{name} = {value}");
+		let is_spaced = self.peek_char(2).is_whitespace();
+		let (written, readings, fallback) = match is_spaced {
+			true => (
+				format!("{name} <- {value}"),
+				vec![reading("the assignment", &assignment)],
+				Fallback::Warning,
+			),
+			false => (
+				format!("{name}<-{value}"),
+				vec![
+					reading("the assignment", &assignment),
+					reading("the comparison", &format!("{name} < -{value}")),
+				],
+				Fallback::Error,
+			),
+		};
+		let forms: Vec<String> = readings.iter().map(|reading| reading.explicit_form.clone()).collect();
+		let question = format!("`{written}`: write {}", forms.join(" or "));
+		let question = Ask::new(LEFT_ARROW_TOPIC, question, readings, fallback)
+			.written(&written)
+			.at(self.line_nr, self.column);
+		ask(&question).map(|_| ())
+	}
+
+	/// Code stands before the cursor on its line (`x = 7 // note`, not a `// note` line of its own)
+	/// Code that could be divided ends right before: a name, a number, `)` or `]` (`xs[1] // 2`); after a text, a comma
+	/// or a brace `//` is plainly a comment
+	pub(crate) fn follows_operand_on_its_line(&self) -> bool {
+		let last = self.chars[..self.pos]
+			.iter()
+			.rev()
+			.take_while(|&&c| c != '\n')
+			.find(|c| !c.is_whitespace());
+		last.is_some_and(|&c| c.is_alphanumeric() || matches!(c, '_' | ')' | ']'))
+	}
+
+	/// The `//` at the cursor is set apart from the code by a tab or two spaces: `x = 5  // 14`, a result written beside
+	/// it (card hint-comment-floordiv), never a spaced-out division
+	pub(crate) fn is_set_apart(&self) -> bool {
+		let before = &self.chars[..self.pos];
+		before.ends_with(&['\t']) || before.ends_with(&[' ', ' '])
+	}
+}
+
+/// `global a, b` as parsed: the declarations `global: a`, `global: b`
+pub(crate) fn declarations_of_several_globals(item: &Node) -> Option<Vec<Node>> {
+	let Node::List(declarations, Bracket::None, Separator::Semicolon) = item.drop_meta() else {
+		return None;
+	};
+	let is_global = |declaration: &Node| matches!(declaration.drop_meta(), Node::Key(keyword, Op::Colon, _) if keyword.is_symbol(crate::node::GLOBAL_DECLARATION));
+	declarations.iter().all(is_global).then(|| declarations.clone())
 }

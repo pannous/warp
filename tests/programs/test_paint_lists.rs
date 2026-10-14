@@ -1,4 +1,4 @@
-// card g_odW4: paint reads a list of Ints in one call of the module's list_to_ints (src/wasm_emitter/int_lists.rs);
+// card g_odW4: paint reads a list of Ints in one call of the module's list_to_ints (src/wasm_emitter/lists/int_lists.rs);
 // any other pixel (a float, a bool, a negative) is read node by node as before, and a short list still fails loudly
 #![cfg(feature = "native")]
 use std::io::Read;

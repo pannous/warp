@@ -1,4 +1,4 @@
-# Simulates the wasm float_text digit search (src/wasm_emitter/float_text.rs) in IEEE doubles and compares it with
+# Simulates the wasm float_text digit search (src/wasm_emitter/numbers/float_text.rs) in IEEE doubles and compares it with
 # Python's repr on random floats: python3 probes/floats/float_scaled_sim.py [count] [values…]
 import math, random, struct, sys
 SPLITTER = 134217729.0

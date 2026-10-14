@@ -21,7 +21,7 @@ const NAMED_TEST: &str = r#"tests_run_ += 1; try { body_; 0 } catch test_error_ 
 const SUMMARY: &str = r#"if tests_failed_ > 0 then raise(str(tests_failed_) + " of " + str(tests_run_) + " failed"); "✓ " + str(tests_run_) + (if tests_run_ == 1 then " test" else " tests") + " passed""#;
 
 pub fn lower(program: Node) -> Node {
-	let written = statements(&program);
+	let written = program.body_statements();
 	if !written.iter().any(|statement| test_of(statement).is_some())
 		|| crate::soft_keywords::program_names(&program, TEST_WORD)
 	{
@@ -30,9 +30,9 @@ pub fn lower(program: Node) -> Node {
 	match crate::pipeline::compile_mode().for_tests {
 		true => sequence(
 			[
-				statements(&template(PROLOGUE)),
+				template(PROLOGUE).body_statements(),
 				written.into_iter().flat_map(run_test).collect(),
-				statements(&template(SUMMARY)),
+				template(SUMMARY).body_statements(),
 			]
 			.concat(),
 		),
@@ -81,7 +81,7 @@ fn run_test(statement: Node) -> Vec<Node> {
 		}
 		Some(Test::Named(name, body)) => {
 			let body = Node::List(
-				statements(body).into_iter().flat_map(run_test).collect(),
+				body.body_statements().into_iter().flat_map(run_test).collect(),
 				Bracket::Curly,
 				Separator::Newline,
 			);
@@ -93,7 +93,7 @@ fn run_test(statement: Node) -> Vec<Node> {
 		}
 		None => return vec![statement],
 	};
-	statements(&lowered)
+	lowered.body_statements()
 }
 
 /// A template's source with the hidden names, which a program cannot write
@@ -102,14 +102,6 @@ fn template(source: &str) -> Node {
 		crate::compiler::meta::parsing_file(crate::compiler::meta::GENERATED_FILE, || parse(source)),
 		|node, (placeholder, hidden)| substitute(node, placeholder, &symbol(hidden)),
 	)
-}
-
-fn statements(node: &Node) -> Vec<Node> {
-	match node.drop_meta() {
-		Node::List(items, Bracket::None | Bracket::Curly, Separator::Newline | Separator::Semicolon) => items.clone(),
-		Node::List(items, Bracket::Curly, _) => items.clone(),
-		_ => vec![node.clone()],
-	}
 }
 
 fn sequence(statements: Vec<Node>) -> Node {

@@ -2,18 +2,18 @@
 use super::*;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) enum UserOperatorKind {
+pub(crate) enum UserOperatorKind {
 	Prefix,
 	Suffix,
 	Infix,
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct UserOperator {
-	pub(super) glyph: Vec<char>,
-	pub(super) kind: UserOperatorKind,
+pub(crate) struct UserOperator {
+	pub(crate) glyph: Vec<char>,
+	pub(crate) kind: UserOperatorKind,
 	/// How tight it binds: a suffix's power, a prefix's right power, an infix's left power (its right one is one more)
-	pub(super) level: u8,
+	pub(crate) level: u8,
 }
 
 impl UserOperatorKind {
@@ -39,47 +39,6 @@ pub(super) const USER_INFIX_BP: (u8, u8) = Op::Add.binding_power();
 /// `operator ⊕ has precedence above *`: ⊕ binds this much tighter than `*`; the built-in levels are at least 5 apart
 pub(super) const PRECEDENCE_STEP: u8 = 2;
 pub(super) const PRECEDENCE_DIRECTIONS: [(&str, bool); 2] = [("above", true), ("below", false)];
-
-/// A glyph a program may declare as an operator: symbols with a non-ASCII character (`‼`, `⊕`), never a letter or digit.
-/// Superscript digits and signs too (P48, user-decided) (`suffix operator ³`, `prefix operator ⁻`, wiki/operator.md)
-pub(super) fn is_operator_glyph(glyph: &str) -> bool {
-	let is_superscript = |c: char| superscript_digit(c).is_some() || superscript_sign(c).is_some();
-	!glyph.is_empty()
-		&& glyph
-			.chars()
-			.all(|c| is_superscript(c) || (!c.is_alphanumeric() && !c.is_whitespace()))
-		&& !glyph.is_ascii()
-}
-
-/// `suffix operator ⁰ := …` and the short `suffix ⁰ := …` (P48): the glyph and the words after `:=`
-pub(super) fn declared_glyph<'a>(words: &'a [&'a str]) -> Option<&'a str> {
-	match words {
-		["operator", glyph, ":=", ..] | [glyph, ":=", ..] => Some(glyph),
-		_ => None,
-	}
-}
-
-/// The operator a `prefix|suffix|infix` declaration declares: a glyph (`infix operator ⊕ := …`), or for infix a word with
-/// optional parameters, `infix operator divides(d:int, n:int) := …` (card g_mnvA); `infix divides(d, n) := …` is the
-/// alias without `operator`
-pub(super) fn declared_operator(kind: UserOperatorKind, words: &[&str]) -> Option<String> {
-	if let Some(glyph) = declared_glyph(words).filter(|glyph| is_operator_glyph(glyph)) {
-		return Some(glyph.to_string());
-	}
-	let head = match words {
-		[OPERATOR_WORD, head, ..] | [head, ..] if kind == UserOperatorKind::Infix && words.contains(&":=") => head,
-		_ => return None,
-	};
-	let word: String = head.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
-	let parameters = &head[word.len()..];
-	let is_word = word.starts_with(char::is_alphabetic) && word != OPERATOR_WORD;
-	(is_word && (parameters.is_empty() || parameters.starts_with('('))).then_some(word)
-}
-
-/// `divides`: a declared operator that is a word, ending where the word ends (not `dividesx`)
-pub(super) fn is_operator_word(glyph: &[char]) -> bool {
-	glyph.first().is_some_and(|c| c.is_alphabetic())
-}
 
 /// `full-name`: plain names joined by hyphens
 fn is_kebab_name(word: &str) -> bool {
@@ -229,18 +188,8 @@ fn quoted_end(chars: &[char], from: usize, quote: char) -> usize {
 	chars.len()
 }
 
-/// The operators a source declares, and those of the standard modules it uses: `use regex` makes `matches` infix
-/// (card matches-infix)
-pub(super) fn scan_user_operators(source: &str) -> Vec<UserOperator> {
-	let mut found = declared_operators(source);
-	for module in used_std_modules(source) {
-		found.extend(declared_operators(module));
-	}
-	found
-}
-
 /// The sources of the standard modules a source uses: `use regex`, `import regex`
-fn used_std_modules(source: &str) -> Vec<&'static str> {
+pub(crate) fn used_std_modules(source: &str) -> Vec<&'static str> {
 	source
 		.lines()
 		.flat_map(|line| line.split(';'))
@@ -253,97 +202,4 @@ fn used_std_modules(source: &str) -> Vec<&'static str> {
 			},
 		)
 		.collect()
-}
-
-/// The operators a source itself declares: `prefix|suffix|infix operator ⊕ := body` and the pattern `a ⊕ b := body` (infix)
-fn declared_operators(source: &str) -> Vec<UserOperator> {
-	let mut found: Vec<UserOperator> = Vec::new();
-	for statement in source.lines().flat_map(|line| line.split(';')) {
-		let words: Vec<&str> = statement.split_whitespace().collect();
-		let by_kind = words.split_first().and_then(|(word, rest)| {
-			let (_, kind) = OPERATOR_KINDS.iter().find(|(keyword, _)| keyword == word)?;
-			Some((declared_operator(*kind, rest)?, *kind))
-		});
-		let declared = by_kind.or_else(|| match words.as_slice() {
-			[left, glyph, right, ":=", ..]
-				if is_plain_name(left) && is_plain_name(right) && is_operator_glyph(glyph) =>
-			{
-				Some((glyph.to_string(), UserOperatorKind::Infix))
-			}
-			_ => None,
-		});
-		if let Some((glyph, kind)) = declared {
-			found.push(UserOperator {
-				glyph: glyph.chars().collect(),
-				kind,
-				level: kind.default_level(),
-			});
-		}
-	}
-	// `operator ⊕ has precedence above *`, wherever it stands, once every operator is known
-	for statement in source.lines().flat_map(|line| line.split(';')) {
-		let words: Vec<&str> = statement.split_whitespace().collect();
-		if let Ok(Some((glyph, level))) = precedence_declaration(&words, &found) {
-			found
-				.iter_mut()
-				.filter(|operator| operator.glyph == glyph.chars().collect::<Vec<char>>())
-				.for_each(|operator| operator.level = level);
-		}
-	}
-	found.sort_by_key(|operator| std::cmp::Reverse(operator.glyph.len()));
-	found
-}
-
-/// `operator ⊕ has precedence above|below [operator] Y`: the glyph ⊕ and its new level; Ok(None) for any other statement,
-/// Err for a precedence declaration that cannot be followed (a built-in ⊕, an unknown Y)
-pub(super) fn precedence_declaration<'a>(
-	words: &[&'a str],
-	declared: &[UserOperator],
-) -> Result<Option<(&'a str, u8)>, String> {
-	let ["operator", glyph, "has", "precedence", direction, rest @ ..] = words else {
-		return Ok(None);
-	};
-	let Some((_, above)) = PRECEDENCE_DIRECTIONS.iter().find(|(word, _)| word == direction) else {
-		return Ok(None);
-	};
-	let other = match rest {
-		["operator", other] | [other] => *other,
-		_ => return Ok(None),
-	};
-	if !declared
-		.iter()
-		.any(|operator| operator.glyph.iter().collect::<String>() == *glyph)
-	{
-		return Err(format!("operator {glyph} is built in: only a declared operator gets a precedence (`infix operator {glyph} := …` first)"));
-	}
-	let reference = match declared
-		.iter()
-		.find(|operator| operator.glyph.iter().collect::<String>() == other)
-	{
-		Some(operator) => operator.level,
-		None => built_in_level(other).ok_or_else(|| {
-			format!("unknown operator {other} in `operator {glyph} has precedence {direction} {other}`")
-		})?,
-	};
-	let level = if *above {
-		reference.saturating_add(PRECEDENCE_STEP)
-	} else {
-		reference.saturating_sub(PRECEDENCE_STEP)
-	};
-	Ok(Some((glyph, level)))
-}
-
-/// The left binding power of a built-in infix operator written as `text` (`*`, `+`, `and`)
-pub(super) fn built_in_level(text: &str) -> Option<u8> {
-	let parser = WarpParser::new_with_options(
-		text.to_string(),
-		ParserOptions {
-			data_mode: true,
-			..ParserOptions::default()
-		},
-	);
-	match parser.peek_operator() {
-		Some((op, length)) if length == text.chars().count() => Some(op.binding_power().0),
-		_ => None,
-	}
 }

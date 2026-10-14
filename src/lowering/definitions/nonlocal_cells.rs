@@ -9,7 +9,7 @@ use crate::late_binding::{changes_in, declared_nonlocals, NONLOCAL};
 use crate::lowering::{function_head, FunctionHead};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::wasm_emitter::cells::{CELL_GET, CELL_NEW, CELL_SET};
+use crate::wasm_emitter::functions::cells::{CELL_GET, CELL_NEW, CELL_SET};
 
 /// `y·cell`: the variable holding y's cell (no name the parser reads)
 const CELL_SUFFIX: &str = "·cell";
@@ -111,10 +111,10 @@ fn through_cell(node: Node, variable: &str, cell: &Node) -> Node {
 /// The name of a lambda that declares `nonlocal`, made a nested function
 const LAMBDA_PREFIX: &str = "lambda·";
 
-/// A nested def changing a variable of its enclosing function declares it `nonlocal` (Python, wiki/charged.md), else
-/// the change is an error naming the fix; a lambda changing one shares it without a declaration (JS, Kotlin, Swift, C#,
-/// Ruby, Julia; P124). Such a lambda becomes a nested function `lambda·N` declaring the variables `nonlocal`, and its
-/// reference, so it shares their cells as a nested def does. Runs before the lambda passes.
+/// A nested def or lambda changing a variable of its enclosing function shares it (JS, Kotlin, Swift, C#, Ruby, Julia;
+/// P124): it gets the `nonlocal` declarations of the cells, and such a lambda becomes a nested function `lambda·N`, and
+/// its reference. A written `nonlocal y` still shares a plain `y = 5`, which is otherwise a fresh local. Runs before the
+/// lambda passes.
 pub fn lower_lambdas(node: Node) -> Node {
 	let mut count = 0;
 	let node = nonlocal_lambdas(node, &mut count);
@@ -185,20 +185,14 @@ fn with_first(statements: Vec<Node>, body: Node) -> Node {
 /// The body of a function whose `locals` its nested functions and lambdas may change only when declared `nonlocal`;
 /// a lambda declaring it is `hoisted` as a nested function
 fn in_enclosing(node: Node, locals: &[String], count: &mut usize, hoisted: &mut Vec<Node>) -> Node {
-	if let Some((_, _, params, body)) = definition(&node) {
-		if let Some(error) = undeclared_change_error(body, &params, locals) {
-			return error;
-		}
-		return nonlocal_lambdas(node, count);
+	if let Some((head, op, params, body)) = definition(&node) {
+		let shared = with_first(shared_declarations(body, &params, locals), body.clone());
+		return nonlocal_lambdas(key(head.clone(), op, shared).with_meta_of(&node), count);
 	}
 	match node {
 		Node::Key(lambda_params, Op::FatArrow, body) => {
 			let params = lambda_parameters(&lambda_params);
-			// a lambda changing an enclosing local shares it, as in JS, Kotlin, Swift, C#, Ruby and Julia
-			let shared: Vec<Node> = undeclared_changes(&body, &params, locals)
-				.into_iter()
-				.map(|(_, name)| key(symbol(NONLOCAL), Op::Colon, Node::Symbol(name)))
-				.collect();
+			let shared = shared_declarations(&body, &params, locals);
 			let body = nonlocal_lambdas(with_first(shared, *body), count);
 			if declared_nonlocals(&body).is_empty() {
 				return Node::Key(lambda_params, Op::FatArrow, Box::new(body));
@@ -272,10 +266,10 @@ fn undeclared_changes<'a>(body: &'a Node, params: &[String], locals: &[String]) 
 	found
 }
 
-/// A nested def changing an enclosing local without `nonlocal` (Python's rule for def)
-fn undeclared_change_error(body: &Node, params: &[String], locals: &[String]) -> Option<Node> {
-	let (node, name) = undeclared_changes(body, params, locals).into_iter().next()?;
-	Some(crate::diagnostic::Diagnostic::at(node, format!(
-		"{name} belongs to the enclosing function: declare `nonlocal {name}` to change it from this inner function, or use a new local name"))
-		.fix(format!("nonlocal {name}")).into_error())
+/// `nonlocal y` for each enclosing local y a nested body changes
+fn shared_declarations(body: &Node, params: &[String], locals: &[String]) -> Vec<Node> {
+	undeclared_changes(body, params, locals)
+		.into_iter()
+		.map(|(_, name)| key(symbol(NONLOCAL), Op::Colon, Node::Symbol(name)))
+		.collect()
 }

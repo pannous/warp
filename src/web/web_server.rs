@@ -121,7 +121,7 @@ impl Route {
 	fn failure_answer(&self, failure: &RouteFailure, request: &Node) -> Answer {
 		let missing = failure
 			.message
-			.strip_prefix(crate::wasm_emitter::list_ops::NO_FIELD_MESSAGE)
+			.strip_prefix(crate::wasm_emitter::lists::list_ops::NO_FIELD_MESSAGE)
 			.and_then(|rest| rest.split_whitespace().next()) // the field, without the ` at line:column` of the program
 			.filter(|field| !has_field(request, field));
 		match missing {

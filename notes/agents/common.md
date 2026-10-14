@@ -139,7 +139,7 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   `todo unsub <card>...` takes them out; `todo list` shows "(in <topic>)" after a sub-card and "(topic 2/5 done)"
   after a topic. Only issues have sub-issues, so these cards become issues of pannous/warp (others stay drafts).
 - Crash cards (user, 2026-10-12: "on a crash a new agent is spawned. I will paste him the trace log"): a panic of a
-  warp built from a checkout files a card in Now (src/crash_card.rs) naming its fingerprint and the branch it was
+  warp built from a checkout files a card in Now (src/diagnostics/crash_card.rs) naming its fingerprint and the branch it was
   built from. Cron (urgent-card-watch) folds a repeated crash into its open card as a note, gives the crash of a
   worktree build to the session on that branch (the Agent of the card keyed like the branch, else tmux warp-<branch>),
   and spawns a new worker warp-<card key> for a crash of a main build; the user pastes the trace there. Crash fixes

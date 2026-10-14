@@ -16,8 +16,8 @@ const PAGE_HOST_CALLS: [&str; 13] = [
 	"new_list",
 	"get_kind",
 	"error_of",
-	super::int_lists::INTS_TO_LIST,
-	super::int_lists::LIST_TO_INTS,
+	super::lists::int_lists::INTS_TO_LIST,
+	super::lists::int_lists::LIST_TO_INTS,
 	super::NODE_AT,
 ];
 

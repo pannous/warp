@@ -24,7 +24,6 @@ pub mod utf8 {
 	pub const TWO_BYTE_LEAD: i32 = 0xC0;
 	pub const THREE_BYTE_LEAD: i32 = 0xE0;
 	pub const FOUR_BYTE_LEAD: i32 = 0xF0;
-	pub const ONE_BYTE_PAYLOAD: i32 = 0x7F;
 	pub const TWO_BYTE_PAYLOAD: i32 = 0x1F;
 	pub const THREE_BYTE_PAYLOAD: i32 = 0x0F;
 	pub const FOUR_BYTE_PAYLOAD: i32 = 0x07;

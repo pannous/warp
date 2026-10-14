@@ -5,7 +5,7 @@ wiki/charged.md section 1 "Unknown words".
 
 `print(3)`, `square(3.0)` or `min(1,2)` with nothing defined silently evaluates to the data `(print 3)`.
 Experiment: export of 8f070776 in `probes/a15_wt` (own target dir; main untouched), one check in
-`emit_list_node` (src/wasm_emitter/list_emitter.rs), placed after every resolver (user function, FFI, WASI, introspection, type
+`emit_list_node` (src/wasm_emitter/lists/list_emitter.rs), placed after every resolver (user function, FFI, WASI, introspection, type
 words, `return`…) and before the data fallthrough: an applied symbol nothing resolved → `emit_type_error("undefined function: <name>")`.
 Switchable with the env var `A15_OFF` so baseline and experiment ran in the same binaries: `./test.sh`, all features.
 

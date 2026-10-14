@@ -64,7 +64,8 @@ replacement, with no card (a user decision, not a gap):
 - traits alias: cut at ea1abd55c, no user-visible change (trait.md fences run, `interface` hints toward trait). Done.
 - compile-time lambdas: cut at 197ce39fc (lambdas no longer specialised per call site); lambda.md, function.md,
   closure.md, charged.md, block.md fences run, no page described the specialisation. Done.
-- natural phrases (parked), OCaml let-in and `fun`, Elixir `def …, do:`, C++ `[](…){…}`,
+- natural phrases: parked by `cleanup-park-phrases`; keyword.md and lambda.md use the retained explicit forms. Done.
+- OCaml let-in and `fun`, Elixir `def …, do:`, C++ `[](…){…}`,
   R/PHP forms (to `use R` / `use PHP`): grep the wiki for examples when each lands.
 - units interpreter: cut at 525f1bd69 (cleanup-units-interpreter); unit.md, int.md, number.md, overflow.md fences
   run on a fresh build, no page shows a unit range or a tolerance in a unit (notes.md:11 "7000-6000 BC" is a loose

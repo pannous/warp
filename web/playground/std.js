@@ -12,7 +12,7 @@ function stdCall(program_, module, member, argumentList, holder) {
 		const context = { warn: message => holder.warnings.push(message), holder };
 		return buildValue(program_, treeOfPlain(adapter.apply(context, Array.isArray(given) ? given : [given])));
 	} catch (error) {
-		// the program raises it (src/wasm_emitter/ffi_emitter.rs emit_ffi_result): `try` catches it
+		// the program raises it (src/wasm_emitter/host/ffi_emitter.rs emit_ffi_result): `try` catches it
 		return errorInProgram(program_, `${moduleName}.${memberName}: ${error.message}`);
 	}
 }

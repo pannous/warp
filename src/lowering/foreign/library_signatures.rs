@@ -64,10 +64,10 @@ fn libm_signature(word: &str) -> Option<String> {
 
 /// A text builtin of one arity; one of several (`warning(x)`, `warning(x, y)`) has no single signature
 fn text_builtin_signature(word: &str) -> Option<String> {
-	let [arity] = crate::wasm_emitter::text_builtins::text_builtin_arities(word)[..] else {
+	let [arity] = crate::wasm_emitter::text::text_builtins::text_builtin_arities(word)[..] else {
 		return None;
 	};
-	let result = crate::wasm_emitter::text_builtins::text_builtin_kind(word, arity)?;
+	let result = crate::wasm_emitter::text::text_builtins::text_builtin_kind(word, arity)?;
 	Some(positional(arity, None, result))
 }
 

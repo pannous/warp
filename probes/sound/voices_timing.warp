@@ -2,7 +2,7 @@
 use sound
 tempo = 110
 start = clock()
-bass = go { melody [C3 G2 A2 F2] each 1 beat; print "bass queued at ${clock() - start} ms" }
-melody [E4 G4 C5 B4 A4 C5 F4 A4] each 1/2 beat
+bass = go { melody([C3 G2 A2 F2], 1 beat); print "bass queued at ${clock() - start} ms" }
+melody([E4 G4 C5 B4 A4 C5 F4 A4], 1/2 beat)
 print "melody queued at ${clock() - start} ms"
 await bass

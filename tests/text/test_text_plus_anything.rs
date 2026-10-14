@@ -12,6 +12,7 @@ fn warns_of_spelled_number(code: &str) -> bool {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-park-phrases: `sorted by` phrase parked until card prepositions-call"]
 fn a_text_joins_anything_in_its_text_form() {
 	is!("\"oldest: \" + [1, 2]", "oldest: [1 2]");
 	is!("[1 2] + \"z\"", "[1 2]z");

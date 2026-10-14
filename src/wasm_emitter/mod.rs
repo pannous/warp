@@ -1,77 +1,43 @@
 //! WASM GC code emitter - generates WebAssembly modules with GC support
 
-mod traps;
-pub use traps::*;
+pub use control::traps::*;
 mod diagnostics;
 mod module_finish;
-mod node_functions;
-mod raw_structs;
 #[cfg(feature = "native")]
-pub use raw_structs::run_raw_struct;
-pub(crate) use raw_structs::*;
+pub use maps::raw_structs::run_raw_struct;
+pub(crate) use maps::raw_structs::*;
 
-mod arithmetic;
-pub(crate) mod component_adapters;
-mod control_flow;
+pub(crate) mod control;
 mod globals;
-mod user_function_calls;
-use control_flow::LoopValues;
-mod big_int;
-mod casts;
-pub mod cells;
-mod closures;
+pub(crate) mod numbers;
+use control::control_flow::LoopValues;
 mod declared_values;
+pub mod functions;
 mod values;
-pub use closures::{CLOSURE_APPLY, CLOSURE_CAPTURED, CLOSURE_REBUILD};
+pub use functions::closures::{CLOSURE_APPLY, CLOSURE_CAPTURED, CLOSURE_REBUILD};
 mod constructors;
-pub(crate) mod exact;
-pub(crate) mod radix;
-pub(crate) use casts::is_called_conversion;
 pub use constructors::NEW_BOOL;
+pub(crate) use numbers::casts::is_called_conversion;
 mod config;
-mod equality;
-mod ffi_emitter;
-mod float_text;
 mod function_builder;
 mod import_manager;
-pub(crate) mod int_lists;
-mod key_emitter;
 mod layout;
-pub(crate) mod library_ops;
-pub(crate) mod linear_arrays;
-mod list_dispatch;
-mod list_emitter;
-pub(crate) mod list_sharing;
-mod node_api;
-pub use node_api::NODE_AT;
-mod similarity;
-mod text_rooms;
-mod text_unicode;
-mod time_arithmetic;
-pub(crate) mod time_zones;
-pub(crate) mod times;
-mod uncertain;
-pub use similarity::NUMBERS_SIMILAR;
-mod list_abi;
-pub(crate) mod list_ops;
-mod map_backend;
-mod map_index;
-mod struct_backend;
-pub use map_backend::MAP_COPY_SUFFIX;
-mod loop_control;
-pub(crate) use loop_control::{is_step, mark_step, split_step};
-mod reflection;
+pub(crate) mod lists;
+pub use reflection::node_api::NODE_AT;
+pub(crate) mod time;
+pub use text::similarity::NUMBERS_SIMILAR;
+pub(crate) mod maps;
+pub(crate) use control::loop_control::{is_step, mark_step, split_step};
+pub use maps::map_backend::MAP_COPY_SUFFIX;
+pub(crate) mod reflection;
 mod string_table;
-pub(crate) mod text_builtins;
-mod try_guard;
-mod tuple_emitter;
+pub(crate) mod text;
 mod type_manager;
-pub use try_guard::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
-pub(crate) mod wasi_emitter;
-mod witness;
+pub use control::try_guard::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
+pub(crate) mod host;
 const WASI_START: &str = "_start";
 
-pub use big_int::{is_fixnum, EXACT_ARITHMETIC, EXACT_BUILDERS, INT_RUNTIME};
+pub use numbers::big_int::{is_fixnum, EXACT_ARITHMETIC, EXACT_BUILDERS, INT_RUNTIME};
 
 /// Something emission found it must have that the analysis pass did not request
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -186,8 +152,8 @@ fn if_then_parts(node: &Node) -> Option<(&Node, &Node)> {
 }
 
 pub use config::EmitterConfig;
-pub use equality::{IS_TRUTHY, SAME_NODE, VALUES_EQUAL};
 pub use import_manager::ImportManager;
+pub use reflection::equality::{IS_TRUTHY, SAME_NODE, VALUES_EQUAL};
 pub use string_table::StringTable;
 pub use type_manager::TypeManager;
 
@@ -253,7 +219,7 @@ pub struct WasmGcEmitter {
 	declares_list_types: bool,
 	/// Emitting data, not code: the value of an object entry or a quoted form, where unknown words stay words (P62)
 	data_context: bool,
-	error_catching: Option<try_guard::ErrorCatching>, // the tag and globals of that `try`
+	error_catching: Option<control::try_guard::ErrorCatching>, // the tag and globals of that `try`
 	memo_caches: HashMap<i64, (u32, u32)>, // per memoized function id: the globals of its values and known flags (memoization.rs)
 	extra_global_names: Vec<(u32, String)>,
 	number_constants: HashMap<(num_bigint::BigInt, num_bigint::BigInt), u32>, // a big or fractional literal's global, made on first use (exact.rs)
@@ -310,26 +276,26 @@ pub struct WasmGcEmitter {
 	source_position: Option<crate::compiler::meta::LineInfo>,
 	/// The position of the statement being emitted, which `trap_position` holds while it runs (emit_trap_position)
 	statement_position: Option<crate::compiler::meta::LineInfo>,
-	loop_labels: Vec<loop_control::LoopLabels>, // enclosing loops of the code being emitted, innermost last
-	typed_lists: HashMap<String, list_dispatch::TypedList>, // list variables of the body being emitted held as typed arrays
-	typed_globals: HashMap<String, (u32, list_dispatch::TypedList)>, // globals held as typed arrays: their global and element type
-	typed_capture_globals: HashMap<u32, list_dispatch::TypedList>,   // capture globals holding a typed list of main
-	main_typed_lists: Option<HashMap<String, list_dispatch::TypedList>>, // main's typed lists, worked out before the capture globals
+	loop_labels: Vec<control::loop_control::LoopLabels>, // enclosing loops of the code being emitted, innermost last
+	typed_lists: HashMap<String, lists::list_dispatch::TypedList>, // list variables of the body being emitted held as typed arrays
+	typed_globals: HashMap<String, (u32, lists::list_dispatch::TypedList)>, // globals held as typed arrays: their global and element type
+	typed_capture_globals: HashMap<u32, lists::list_dispatch::TypedList>,   // capture globals holding a typed list of main
+	main_typed_lists: Option<HashMap<String, lists::list_dispatch::TypedList>>, // main's typed lists, worked out before the capture globals
 	bounded_counters: std::collections::HashSet<String>, // loop counters of the body being emitted proven to stay in 0..i32::MAX (big_int.rs)
 	typed_map_globals: HashMap<String, u32>, // globals held as hash tables (map_backend.rs find_typed_map_globals): their global
 	typed_maps: std::collections::HashSet<String>, // map variables of the body being emitted held as hash tables (map_backend.rs)
 	typed_structs: HashMap<String, String>, // instance variables of the body being emitted held as GC structs, with their class (struct_backend.rs)
-	instance_types: HashMap<String, struct_backend::InstanceType>, // the `P·instance` struct type of each class
+	instance_types: HashMap<String, maps::struct_backend::InstanceType>, // the `P·instance` struct type of each class
 	struct_abi: HashMap<String, Vec<Option<String>>>, // the parameters user functions take as structs, by class (struct_backend.rs)
 	struct_results: HashMap<String, String>, // the user functions giving back a struct, with its class (struct_backend.rs)
 	/// `x = (t = x; …; t)`, an inlined call updating the list it is given back: x and t share one array, no copies
 	moved_lists: Vec<(String, String)>,
 	/// The array calling convention of the user functions that have one (list_abi.rs)
-	list_abi: HashMap<String, list_abi::ListAbi>,
+	list_abi: HashMap<String, lists::list_abi::ListAbi>,
 	/// The function being compiled returns a $NodeList
 	returns_list: bool,
-	compare_witness: Option<witness::WitnessTable>, // runtime dispatch of Comparable to user types (witness.rs)
-	closures: closures::ClosureTypes,
+	compare_witness: Option<reflection::witness::WitnessTable>, // runtime dispatch of Comparable to user types (witness.rs)
+	closures: functions::closures::ClosureTypes,
 	/// The user function whose body is being compiled; None in main
 	compiling: Option<String>,
 	/// The names the program's `for … in` loops and comprehensions bind: variables even beside a function of that name
@@ -409,7 +375,7 @@ impl WasmGcEmitter {
 			list_abi: HashMap::new(),
 			returns_list: false,
 			compare_witness: None,
-			closures: closures::ClosureTypes::default(),
+			closures: functions::closures::ClosureTypes::default(),
 			compiling: None,
 			loop_variables: HashSet::new(),
 		}
@@ -453,7 +419,7 @@ impl WasmGcEmitter {
 	/// Emit core GC types (String, Node, i64box, f64box)
 	fn emit_gc_types(&mut self) {
 		self.type_manager
-			.emit_gc_types(self.should_emit_function(node_api::NODE_AT));
+			.emit_gc_types(self.should_emit_function(reflection::node_api::NODE_AT));
 	}
 
 	// ═══════════════════════════════════════════════════════════════════════════
@@ -734,11 +700,11 @@ impl WasmGcEmitter {
 		analyze_required_functions(&mut self.ctx, node);
 		// quoted or parsed code keeps its positions: node_at and $MetaNode only in a program that quotes or parses
 		// (cards data-meta, parse-word)
-		if node.mentions_any(&list_emitter::QUOTE_WORDS) || node.mentions_any(&[crate::host::PARSE_CODE]) {
-			self.ctx.required_functions.insert(node_api::NODE_AT);
+		if node.mentions_any(&lists::list_emitter::QUOTE_WORDS) || node.mentions_any(&[crate::host::PARSE_CODE]) {
+			self.ctx.required_functions.insert(reflection::node_api::NODE_AT);
 		}
 		if crate::analyzer::makes_floats(&self.ctx, node) {
-			self.ctx.required_functions.insert(float_text::FLOAT_TEXT);
+			self.ctx.required_functions.insert(numbers::float_text::FLOAT_TEXT);
 		}
 		self.ctx
 			.required_functions
@@ -754,14 +720,14 @@ impl WasmGcEmitter {
 			}
 		});
 		self.written_operator_bound = key_operators.fold(self.written_operator_bound, i64::max);
-		self.writes_tags = library_ops::mentions_quoted_tag(node);
-		component_adapters::add_dependencies(&mut self.ctx.required_functions);
-		uncertain::add_dependencies(&mut self.ctx.required_functions); // before the similarity's: uncertain_similar needs numbers_similar
+		self.writes_tags = reflection::library_ops::mentions_quoted_tag(node);
+		host::component_adapters::add_dependencies(&mut self.ctx.required_functions);
+		numbers::uncertain::add_dependencies(&mut self.ctx.required_functions); // before the similarity's: uncertain_similar needs numbers_similar
 		self.require_function_text(); // before the similarity's: function_text needs values_equal
-		similarity::add_dependencies(&mut self.ctx.required_functions); // before the text builtins': values_equal needs text_of
-		text_builtins::add_dependencies(&mut self.ctx.required_functions);
+		text::similarity::add_dependencies(&mut self.ctx.required_functions); // before the text builtins': values_equal needs text_of
+		text::text_builtins::add_dependencies(&mut self.ctx.required_functions);
 		self.require_list_marks(); // before any function emits a list writer, which reads marks_lists
-		self.guards_errors = try_guard::guards_errors(node);
+		self.guards_errors = control::try_guard::guards_errors(node);
 		let len = self.ctx.required_functions.len();
 		trace!(
 			"tree-shaking: {} functions required: {:?}",
@@ -804,7 +770,8 @@ impl WasmGcEmitter {
 			Need::Function(name) => self.ctx.required_functions.contains(name),
 			Need::MathImport(key) => self.ctx.ffi_imports.contains_key(*key),
 			Need::KeyOperator(code) => {
-				*code <= self.written_operator_bound || !self.ctx.required_functions.contains(library_ops::LIST_TEXT)
+				*code <= self.written_operator_bound
+					|| !self.ctx.required_functions.contains(reflection::library_ops::LIST_TEXT)
 			}
 		}
 	}
@@ -973,7 +940,7 @@ impl WasmGcEmitter {
 			.unwrap_or_else(|| self.find_typed_lists(node));
 		self.typed_maps = self.find_typed_maps(node);
 		self.typed_structs = self.find_typed_structs(node);
-		self.bounded_counters = big_int::bounded_counters(node);
+		self.bounded_counters = numbers::big_int::bounded_counters(node);
 
 		// Allocate strings and update Local data pointers
 		self.collect_and_allocate_strings(node);
@@ -994,7 +961,7 @@ impl WasmGcEmitter {
 			locals.push((temp_locals, ValType::I64));
 		}
 		self.int_scratch = var_count + temp_locals;
-		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
+		locals.push((numbers::big_int::INT_SCRATCH_LOCALS, ValType::I64));
 		locals.push((NODE_SCRATCH_LOCALS, Ref(self.node_ref(true)))); // node_scratch, container_scratch
 		self.declare_loop_values(&mut locals, node);
 
@@ -1061,9 +1028,10 @@ impl WasmGcEmitter {
 		// a float the analyzer did not foresee (makes_floats) may be shown: rerun with float_text
 		if name == "new_float"
 			&& self.should_emit_function("list_join")
-			&& !self.should_emit_function(float_text::FLOAT_TEXT)
+			&& !self.should_emit_function(numbers::float_text::FLOAT_TEXT)
 		{
-			self.discovered_needs.insert(Need::Function(float_text::FLOAT_TEXT));
+			self.discovered_needs
+				.insert(Need::Function(numbers::float_text::FLOAT_TEXT));
 		}
 		self.ctx.used_functions.insert(name);
 		func.instruction(&I::Call(self.func_index(name)));

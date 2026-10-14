@@ -47,7 +47,7 @@ pub(crate) fn computed_literal_kind(value: &Node) -> Option<Kind> {
 pub(super) fn exact_literal_value(node: &Node) -> Option<crate::extensions::reals::Rational> {
 	match node.drop_meta() {
 		Node::Number(Number::Float(f)) if Number::is_exact_decimal(*f) => {
-			let (numerator, denominator) = crate::wasm_emitter::exact::decimal_fraction(*f);
+			let (numerator, denominator) = crate::wasm_emitter::numbers::exact::decimal_fraction(*f);
 			Some(crate::extensions::reals::Rational::new(numerator, denominator))
 		}
 		Node::Number(number @ (Number::Int(_) | Number::BigInt(_) | Number::Quotient(..) | Number::BigQuotient(_))) => {
@@ -229,7 +229,7 @@ pub(super) fn infer_function_return_kind(
 		// `while true { …; return left }` with left a float: a float function, whatever the loop is worth
 		_ => match infer_type(last, &scope) {
 			// a loop the function returns from inside: the returns decide, the loop's own value (a number or ø) does not
-			Kind::Data if is_loop(last) && !returned.is_empty() => {
+			Kind::Data if is_while_do(last) && !returned.is_empty() => {
 				if returned.contains(&Kind::Float) {
 					Kind::Float
 				} else {
@@ -250,7 +250,7 @@ pub(super) fn infer_function_return_kind(
 }
 
 /// `while c do body`, what every loop lowers to
-fn is_loop(node: &Node) -> bool {
+fn is_while_do(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Key(condition, Op::Do, _) if matches!(condition.drop_meta(), Node::Key(_, Op::While, _)))
 }
 
@@ -395,7 +395,7 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 				if let (true, Node::Symbol(name)) = (is_map_word, map.drop_meta()) {
 					indexed.insert(name.clone());
 				}
-				if let (true, Node::Symbol(name)) = (crate::wasm_emitter::cells::is_cell_word(word), map.drop_meta()) {
+				if let (true, Node::Symbol(name)) = (crate::wasm_emitter::functions::cells::is_cell_word(word), map.drop_meta()) {
 					celled.insert(name.clone());
 				}
 			}
@@ -479,7 +479,7 @@ fn kind_tested(node: &Node) -> Option<&str> {
 /// foreign code gives them (a warp function called back by JavaScript, card js-callbacks)
 fn given_to_foreign_code(node: &Node) -> impl Iterator<Item = &str> {
 	let given = match node {
-		Node::List(items, Bracket::Round, _) if call_of(node, crate::host::FOREIGN_CALL) => match items.as_slice() {
+		Node::List(items, Bracket::Round, _) if node.is_call_of(crate::host::FOREIGN_CALL) => match items.as_slice() {
 			[_, _, receiver, _, _, Node::List(arguments, _, _)] => std::iter::once(receiver).chain(arguments).collect(),
 			[_, _, receiver, ..] => vec![receiver],
 			_ => vec![],
@@ -492,7 +492,7 @@ fn given_to_foreign_code(node: &Node) -> impl Iterator<Item = &str> {
 /// The name `+` joins to a text: `" " + t`, `t + "!"`, `n times " " + t`, `t[0 ..< n] + "…"`; a list never
 /// concatenates with a text
 fn joined_to_text(node: &Node) -> Option<&str> {
-	joined_to(node, is_text)
+	joined_to(node, is_literal_text)
 }
 
 /// The name `+` joins to a list literal: `xs + [x]`, `[x] + xs`
@@ -500,12 +500,9 @@ fn joined_to_list(node: &Node) -> Option<&str> {
 	joined_to(node, |node| matches!(node, Node::List(_, Bracket::Square, _)))
 }
 
-fn call_of(node: &Node, word: &str) -> bool {
-	matches!(node, Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(call)) if call == word))
-}
-
-fn is_text(node: &Node) -> bool {
-	matches!(node, Node::Text(_) | Node::Char(_)) || call_of(node, crate::warp_parser::TEXT_TIMES)
+/// A text literal or a repeated one `"ab" * 3`
+fn is_literal_text(node: &Node) -> bool {
+	node.is_text_literal() || node.is_call_of(crate::warp_parser::TEXT_TIMES)
 }
 
 /// The name joined by `+` to a value that `is_joined` accepts
@@ -513,10 +510,12 @@ fn joined_to(node: &Node, is_joined: fn(&Node) -> bool) -> Option<&str> {
 	fn joined_name(node: &Node) -> Option<&str> {
 		match node {
 			Node::Symbol(name) => Some(name),
-			Node::List(items, _, _) if call_of(node, crate::words::SLICE) => match items.get(1).map(Node::drop_meta) {
-				Some(Node::Symbol(name)) => Some(name),
-				_ => None,
-			},
+			Node::List(items, _, _) if node.is_call_of(crate::words::SLICE) => {
+				match items.get(1).map(Node::drop_meta) {
+					Some(Node::Symbol(name)) => Some(name),
+					_ => None,
+				}
+			}
 			_ => None,
 		}
 	}
@@ -927,9 +926,9 @@ pub(super) fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
 					Node::Symbol(name) => kinds.get(name).or(variable_kinds.get(name)).copied(),
 					// a cell's value is a Node of any kind (a signal's new value, lowering/signals/signal_values.rs)
 					Node::List(items, _, _)
-						if items
-							.first()
-							.is_some_and(|word| word.drop_meta().name() == crate::wasm_emitter::cells::CELL_GET) =>
+						if items.first().is_some_and(|word| {
+							word.drop_meta().name() == crate::wasm_emitter::functions::cells::CELL_GET
+						}) =>
 					{
 						Some(Kind::Empty)
 					}

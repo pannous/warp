@@ -1,6 +1,6 @@
 //! Reading warp forms for the export: literals and type words, `on`/`emit` effects, definitions and their heads, locals and late binding
 use super::*;
-pub(super) use crate::declaration_forms::is_list_literal;
+pub(super) use crate::filled_lists::is_list_literal;
 pub(super) use crate::lowering::nodes::parameter_word;
 use crate::lowering::{function_head, DefinitionForm, FunctionHead};
 pub(super) use crate::text::injection::literal_text;
@@ -127,7 +127,7 @@ pub(super) fn global_declaration(node: &Node) -> Option<(&str, Option<(&Node, &N
 	let Node::Key(keyword, Op::Colon, declared) = node.drop_meta() else {
 		return None;
 	};
-	if !keyword.is_symbol(GLOBAL_KEYWORD) {
+	if !keyword.is_symbol(crate::words::GLOBAL_WORD) {
 		return None;
 	}
 	match declared.drop_meta() {
@@ -370,7 +370,9 @@ pub(super) fn late_binding(statements: &[&Node], globals: &[String]) -> Option<S
 				.iter()
 				.any(|call| call.mentions(name))
 			{
-				return Some(format!("not in W0: {name} reads {changed}, which changes after {name} is defined and before a call (warp asks for `global {changed}`, late binding)"));
+				return Some(format!(
+					"not in W0: {name} reads {changed}, which changes after {name} is defined and before a call (warp asks for `global {changed}`, late binding)"
+				));
 			}
 		}
 	}
@@ -447,7 +449,7 @@ pub(super) fn place_literal(declared: Option<&str>, value: &Node) -> Option<Stri
 	match value.drop_meta() {
 		Node::Number(Number::Int(n @ (0 | 1))) if declared == Some(BOOL_TYPE) => Some(format!(".bool {}", *n == 1)),
 		Node::Number(Number::Float(decimal)) if declared == Some(EXACT_TYPE) && decimal.is_finite() => {
-			let (numerator, denominator) = crate::wasm_emitter::exact::decimal_fraction(*decimal);
+			let (numerator, denominator) = crate::wasm_emitter::numbers::exact::decimal_fraction(*decimal);
 			Some(exact_number(numerator, denominator))
 		}
 		_ => None,

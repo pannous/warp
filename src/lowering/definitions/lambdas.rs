@@ -81,7 +81,7 @@ const ITERATIONS: [Iteration; 9] = [
 
 /// Sorting by a key of one item (`xs.sort_by(p => p.k)`): the keys computed once, then a merge sort by them in n log n
 fn key_sort_template() -> String {
-	let sorted_by = crate::wasm_emitter::library_ops::LIST_SORTED_BY;
+	let sorted_by = crate::wasm_emitter::reflection::library_ops::LIST_SORTED_BY;
 	format!("(list=loop_list; out=[]; for item in list {{ out = out + [loop_call] }}; {sorted_by}(list, out))")
 }
 

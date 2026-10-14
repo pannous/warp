@@ -358,7 +358,7 @@ pub(super) fn exact_amount(value: &Node) -> Option<Rational> {
 		Node::Number(Number::Quotient(n, d)) => Some(Rational::new(BigInt::from(*n), BigInt::from(*d))),
 		// a written amount converts as the decimal it spells: 6.5km is 6500m, not 6499.999…m
 		Node::Number(Number::Float(f)) if f.is_finite() => {
-			let (numerator, denominator) = crate::wasm_emitter::exact::decimal_fraction(*f);
+			let (numerator, denominator) = crate::wasm_emitter::numbers::exact::decimal_fraction(*f);
 			Some(Rational::new(numerator, denominator))
 		}
 		_ => None,
@@ -463,10 +463,6 @@ fn combined(left: &[(Dimension, i32)], right: &[(Dimension, i32)], sign: i32) ->
 	signature(&factors)
 }
 
-fn is_text(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Text(_) | Node::Char(_))
-}
-
 fn is_number_type(declared: &Node) -> bool {
 	crate::analyzer::builtin_type_kind(&declared.drop_meta().name())
 		.is_some_and(|kind| matches!(kind, crate::type_kinds::Kind::Int | crate::type_kinds::Kind::Float))
@@ -487,11 +483,6 @@ fn shown(signature: &Signature) -> String {
 	}
 }
 
-/// ø, which has no dimension: an optional unit field may hold it
-fn is_nothing(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Empty)
-}
-
 fn is_type_word(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(name) if crate::analyzer::type_word_kind(name).is_some() || crate::type_tests::runtime_kind_mask(name).is_some())
 }
@@ -502,16 +493,6 @@ fn declared_name(declaration: &Node) -> Option<String> {
 		Node::Symbol(name) => Some(name.clone()),
 		Node::Key(target, Op::Assign | Op::Define, _) => declared_name(target),
 		_ => None,
-	}
-}
-
-/// `global x` and `global x = v` statements anywhere in a function body
-fn globals_declared_in(body: &Node) -> Vec<String> {
-	match body.drop_meta() {
-		Node::Key(keyword, Op::Colon, declaration) if super::is_global_keyword(keyword) => {
-			declared_name(declaration).into_iter().collect()
-		}
-		other => other.parts().into_iter().flat_map(globals_declared_in).collect(),
 	}
 }
 
@@ -711,7 +692,7 @@ fn method_of(call: &Node) -> Option<(&str, &[Node])> {
 	let Node::Symbol(method) = head.drop_meta() else {
 		return None;
 	};
-	(TEXT_WORDS.contains(&method.as_str()) || crate::declaration_forms::appends(method, arguments.len()))
+	(TEXT_WORDS.contains(&method.as_str()) || crate::list_mutations::appends(method, arguments.len()))
 		.then_some((method.as_str(), arguments))
 }
 
@@ -803,12 +784,12 @@ impl Inference {
 			}
 			// `r.distance == ø` of an optional unit field: ø has no dimension, any value may be it; `x is list` asks its type
 			Node::Key(left, op @ (Op::Eq | Op::Ne), right)
-				if is_nothing(&left) || is_nothing(&right) || is_type_word(&right) =>
+				if left.is_empty_node() || right.is_empty_node() || is_type_word(&right) =>
 			{
 				self.unchecked_key(*left, op, *right)
 			}
 			// `2 m * "a"`: a text repeats a plain count of times (card units-text-repeat)
-			Node::Key(left, Op::Mul, right) if is_text(&left) || is_text(&right) => {
+			Node::Key(left, Op::Mul, right) if left.is_text_literal() || right.is_text_literal() => {
 				let (left, left_signature) = self.infer(*left)?;
 				let (right, right_signature) = self.infer(*right)?;
 				let count = combined(&left_signature, &right_signature, 1);
@@ -831,7 +812,7 @@ impl Inference {
 				Ok((computed, signature))
 			}
 			// `-3m`: the quantity keeps its units; `-20°C` counts from the zero of °C
-			Node::Key(nothing, Op::Neg, operand) if is_nothing(&nothing) => {
+			Node::Key(nothing, Op::Neg, operand) if nothing.is_empty_node() => {
 				let (operand, signature) = self.infer(*operand)?;
 				let negated = match exact_amount(&operand) {
 					Some(amount) => number_node(&amount.neg()).ok_or(Stop::Unsupported)?,
@@ -1167,7 +1148,7 @@ impl Inference {
 				.lists
 				.get(list)
 				.cloned()
-				.filter(|_| crate::declaration_forms::appends(method, 1))
+				.filter(|_| crate::list_mutations::appends(method, 1))
 			{
 				let (argument, given) = self.infer(argument.clone())?;
 				if given != element {

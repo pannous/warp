@@ -29,12 +29,12 @@ pub fn node_arithmetic(left: Kind, op: &Op, right: Kind) -> Option<&'static str>
 	let numeric = |kind: &Kind| matches!(kind, Kind::Int | Kind::Float) || is_run_time_kind(kind);
 	// a value of run-time kind added to a list: node_add concatenates when it is a list too
 	if *op == Op::Add && [left, right].contains(&Kind::Data) && [left, right].contains(&Kind::List) {
-		return Some(crate::wasm_emitter::list_ops::NODE_ADD);
+		return Some(crate::wasm_emitter::lists::list_ops::NODE_ADD);
 	}
 	if ![left, right].iter().any(is_run_time_kind) || ![left, right].iter().all(numeric) {
 		return None;
 	}
-	crate::wasm_emitter::list_ops::NODE_ARITHMETIC
+	crate::wasm_emitter::lists::list_ops::NODE_ARITHMETIC
 		.iter()
 		.find(|(_, known, _)| known == op)
 		.map(|(name, _, _)| *name)
@@ -74,7 +74,7 @@ fn concatenation_kind(left: Kind, right: Kind) -> Option<Kind> {
 	{
 		Some(Kind::List)
 	} else {
-		crate::wasm_emitter::text_builtins::concatenates(left, right).then_some(Kind::Text)
+		crate::wasm_emitter::text::text_builtins::concatenates(left, right).then_some(Kind::Text)
 	}
 }
 
@@ -272,8 +272,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(indexed, Op::Hash, index) if !indexed.is_empty_node() => {
 			element_kind(indexed, scope).unwrap_or_else(|| {
 				let by_name = crate::warp_parser::subscript_key(index).is_some_and(|key| {
-					matches!(key.drop_meta(), Node::Text(_) | Node::Char(_))
-						|| matches!(infer_type(key, scope), Kind::Text | Kind::Codepoint)
+					key.is_text_literal() || matches!(infer_type(key, scope), Kind::Text | Kind::Codepoint)
 				});
 				if by_name {
 					Kind::Empty
@@ -295,8 +294,8 @@ fn conversion_kind(target: &str) -> Option<Kind> {
 	match crate::type_tests::canonical_spec_word(target) {
 		"codepoint" => Some(Kind::Codepoint),
 		"list" => Some(Kind::List),
-		"text" | crate::wasm_emitter::exact::DECIMAL_WORD => Some(Kind::Text),
-		radix if crate::wasm_emitter::radix::named_radix(radix).is_some() => Some(Kind::Int),
+		"text" | crate::wasm_emitter::numbers::exact::DECIMAL_WORD => Some(Kind::Text),
+		radix if crate::wasm_emitter::numbers::radix::named_radix(radix).is_some() => Some(Kind::Int),
 		_ => None,
 	}
 }
@@ -419,14 +418,14 @@ pub(super) fn infer_list_type(
 			return Kind::Empty;
 		}
 		// a cell's value is held as a Node, like a map value (Empty), and joins a text or adds at run time
-		if crate::wasm_emitter::cells::CELL_WORDS.contains(&name) {
-			return if crate::wasm_emitter::cells::MAKING_WORDS.contains(&name) {
+		if crate::wasm_emitter::functions::cells::CELL_WORDS.contains(&name) {
+			return if crate::wasm_emitter::functions::cells::MAKING_WORDS.contains(&name) {
 				Kind::Data
 			} else {
 				Kind::Empty
 			};
 		}
-		if let Some(kind) = crate::wasm_emitter::text_builtins::text_builtin_kind(name, items.len() - 1) {
+		if let Some(kind) = crate::wasm_emitter::text::text_builtins::text_builtin_kind(name, items.len() - 1) {
 			return kind;
 		}
 		if name == crate::warp_parser::TEXT_TIMES {
@@ -454,7 +453,7 @@ pub(super) fn infer_list_type(
 			return Kind::Empty; // `print x` writes x and gives nothing (user, issue #18)
 		}
 		// a call of a function the component being compiled imports (`host.time()`)
-		if let Some(kind) = crate::wasm_emitter::component_adapters::imported_kind(name) {
+		if let Some(kind) = crate::wasm_emitter::host::component_adapters::imported_kind(name) {
 			return kind;
 		}
 		if items.len() >= 2 {
@@ -500,11 +499,11 @@ pub(super) fn infer_list_type(
 			if name == LIST_DROP_LAST {
 				return Kind::List;
 			}
-			if name == crate::wasm_emitter::library_ops::LIST_SORTED_BY {
+			if name == crate::wasm_emitter::reflection::library_ops::LIST_SORTED_BY {
 				// a list, or a text when it sorts a text's characters
 				return Kind::Empty;
 			}
-			if name == crate::declaration_forms::LIST_BECOME || name == crate::one_entry_maps::MAP_OF_ENTRY {
+			if name == crate::list_mutations::LIST_BECOME || name == crate::one_entry_maps::MAP_OF_ENTRY {
 				// the place itself, changed; the map of `{a:1}` a node as the pair is
 				return infer_type(&items[1], scope);
 			}

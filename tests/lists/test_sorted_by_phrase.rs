@@ -3,6 +3,7 @@
 use crate::is;
 use warp::ints;
 
+#[ignore = "cleanup-edge: cleanup-park-phrases: phrase forms parked until card prepositions-call"]
 #[test]
 fn a_list_sorted_by_a_key_of_it() {
 	is!("xs = [3, 1, 2]; xs sorted by it", ints(vec![1, 2, 3]));

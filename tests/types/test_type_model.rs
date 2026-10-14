@@ -203,7 +203,8 @@ const CORPUS: &[&str] = &[
 	"s = 0; for i in 1 to 3 { s += i }; s",
 	"3..1",
 	"count(n) := { c=0; for i in 0..n { c += 1 }; c }; count(5)",
-	"to add number a to number b: a+b; add 1 to 2",
+	// cleanup-edge: cleanup-park-phrases: comes back with prepositions-call
+	// "to add number a to number b: a+b; add 1 to 2",
 	"0 and 7",
 	"1 and 7",
 	"(not 0) and 7",

@@ -71,7 +71,7 @@ pub(crate) fn kernel_map(list: &Node, function: &Node) -> Option<Node> {
 			Separator::None,
 		),
 	);
-	if crate::wasm_emitter::linear_arrays::is_float_kernel(&parameter.name(), body) {
+	if crate::wasm_emitter::lists::linear_arrays::is_float_kernel(&parameter.name(), body) {
 		Some(map.with_attribute(SPLIT_ATTRIBUTE, Node::True))
 	} else {
 		crate::gpu_maps::gpu_kernel(function).map(|_| map)

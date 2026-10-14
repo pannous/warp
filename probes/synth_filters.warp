@@ -14,4 +14,4 @@ print(phase(440, 1102))
 filter = "lowpass"
 cutoff = 800
 resonance = 4.0
-play [C3 G3] for 1s
+play([C3 G3], 1s)
