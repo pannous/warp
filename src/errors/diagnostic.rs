@@ -465,6 +465,8 @@ pub fn any_hint_printed() -> bool {
 /// `use strict` in warp source makes warnings errors for that program
 const STRICT_PRAGMA: [&str; 2] = [PRAGMA_WORD, "strict"];
 const PRAGMA_WORD: &str = "use";
+/// `use relaxed`, the mirror of `use strict`: the program shows no hints, as `--no-hints` does on the command line
+const RELAXED_PRAGMAS: [&str; 3] = ["relaxed", "lenient", "loose"];
 /// `use comments`: a comment before a binding becomes its meta information (P114, lowering/data/meta_entries.rs)
 const COMMENTS_PRAGMA: &str = "comments";
 /// A "got it" is remembered as the line `ack:<topic> = acknowledged` in the acknowledgements file
@@ -1124,22 +1126,45 @@ pub fn take_assumptions() -> Vec<Diagnostic> {
 /// so the warnings of parse-time Asks obey it too
 pub fn in_source_mode<R>(code: &str, body: impl FnOnce() -> R) -> R {
 	compile_context::change(|context| context.source = code.to_string());
-	match code.lines().any(|line| line.split_whitespace().eq(STRICT_PRAGMA)) {
-		true => with_warning_mode(warning_mode().strictened(), body),
+	let says = |word: &str| code.lines().any(|line| line.split_whitespace().eq([PRAGMA_WORD, word]));
+	let relaxed = RELAXED_PRAGMAS.into_iter().any(says);
+	match says(STRICT_PRAGMA[1]) {
+		true => with_warning_mode(warning_mode().strictened(), || relaxed_if(relaxed, body)),
+		false => relaxed_if(relaxed, body),
+	}
+}
+
+/// Run `body` without hints when the program says `use relaxed`
+fn relaxed_if<R>(relaxed: bool, body: impl FnOnce() -> R) -> R {
+	match relaxed {
+		true => crate::normalize::without_hints(body),
 		false => body(),
 	}
 }
 
+/// The program without its top-level `use relaxed` statements (or an alias), and whether it had one
+fn without_relaxed_pragma(program: Node) -> (Node, bool) {
+	RELAXED_PRAGMAS
+		.into_iter()
+		.fold((program, false), |(program, found), word| {
+			let (program, here) = without_pragma(program, word);
+			(program, found || here)
+		})
+}
+
 /// Run `body` with warnings as errors when the program says `use strict`, and comments as meta information when it
-/// says `use comments`
+/// says `use comments`, and without hints when it says `use relaxed`
 pub fn in_program_mode<R>(program: Node, body: impl FnOnce(Node) -> R) -> R {
 	let (program, comments) = without_pragma(program, COMMENTS_PRAGMA);
+	let (program, relaxed) = without_relaxed_pragma(program);
 	compile_context::scoped(
 		|context| &mut context.comments_as_meta,
 		comments,
-		|| match without_strict_pragma(program) {
-			(program, true) => with_warning_mode(warning_mode().strictened(), || body(program)),
-			(program, false) => body(program),
+		|| {
+			relaxed_if(relaxed, || match without_strict_pragma(program) {
+				(program, true) => with_warning_mode(warning_mode().strictened(), || body(program)),
+				(program, false) => body(program),
+			})
 		},
 	)
 }
