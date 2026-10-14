@@ -8,9 +8,6 @@ use std::time::Duration;
 
 /// The module's bump pointer for runtime texts; texts the host returns are allocated from it too, so they never overlap
 pub const TEXT_HEAP_EXPORT: &str = "text_heap";
-/// Other spellings of the host words, for any number of arguments or only for the given one (user decision #14e:
-/// `download <url>` is `fetch <url>`; `random(n)` is `random_below(n)`)
-const HOST_ALIASES: [(&str, Option<usize>, &str); 2] = [("download", None, "fetch"), ("random", Some(1), RANDOM_BELOW)];
 
 /// The words of the program's environment, imported from the "host" module and called like C functions (ffi.rs);
 /// sleep, random, random_below and clock need no compiler and live in warp-runtime (runtime/src/host_words.rs)
@@ -258,19 +255,21 @@ pub const HOST_WORDS: [&str; HOST_WORD_SIGNATURES.len()] = {
 	words
 };
 
-/// How long `fetch URL` waits for the whole response; `fetch URL timeout SECONDS` overrides it
-pub const FETCH_TIMEOUT: Duration = Duration::from_secs(10);
-
+mod aliases;
 use crate::extensions::numbers::Number;
 use crate::extensions::utils::download_within;
 use crate::lowering::nodes::children_rewritten;
 use crate::node::{Bracket, Node, Separator};
 use anyhow::Result;
+
 #[cfg(feature = "native")]
 pub mod channels;
 #[cfg(feature = "native")]
 pub mod database;
 pub mod host_parts;
+pub use aliases::*;
+mod fetch;
+pub use fetch::*;
 #[cfg(feature = "native")]
 mod native;
 pub mod sandbox;
@@ -280,86 +279,3 @@ pub mod shared;
 pub mod tasks;
 #[cfg(feature = "native")]
 pub use native::*;
-/// Body of `url`, or the reason it could not be fetched
-pub fn fetch(url: &str, timeout: Duration) -> Result<String, String> {
-	let mut content = download_within(url, timeout).map_err(|reason| format!("fetch {url} failed: {reason}"))?;
-	if !content.ends_with('\n') {
-		content.push('\n'); // warp convention
-	}
-	Ok(content)
-}
-
-/// `fetch URL` or `fetch URL timeout SECONDS`, whether parsed as a flat list or as nested implicit applications:
-/// the URL node and the explicit timeout, if any
-pub fn fetch_call(node: &Node) -> Option<(Node, Option<Duration>)> {
-	// `x = fetch u timeout 2` applies implicitly from the left: ((fetch u) timeout) 2, or (fetch u) (timeout 2)
-	fn parts(node: &Node) -> Vec<Node> {
-		match node.drop_meta() {
-			Node::List(items, Bracket::None, Separator::Space | Separator::None) if !items.is_empty() => {
-				let mut parts = parts(&items[0]);
-				for item in &items[1..] {
-					match item.drop_meta() {
-						Node::List(inner, Bracket::None, Separator::Space | Separator::None) if matches!(inner.first().map(Node::drop_meta), Some(Node::Symbol(k)) if k == "timeout") => {
-							parts.extend(inner.iter().map(|part| part.drop_meta().clone()))
-						}
-						other => parts.push(other.clone()),
-					}
-				}
-				parts
-			}
-			other => vec![other.clone()],
-		}
-	}
-	if !matches!(node.drop_meta(), Node::List(_, Bracket::None, _)) {
-		return None;
-	}
-	let is_fetch = |head: &Node| matches!(head, Node::Symbol(name) if name == FETCH_WORD);
-	match parts(node).as_slice() {
-		[head, url] if is_fetch(head) => Some((url.clone(), None)),
-		[head, url, keyword, Node::Number(seconds)]
-			if is_fetch(head) && matches!(keyword, Node::Symbol(k) if k == "timeout") =>
-		{
-			let seconds = match seconds {
-				Number::Complex(..) => return None,
-				real => f64::from(*real),
-			};
-			(seconds > 0.0 && seconds.is_finite()).then(|| (url.clone(), Some(Duration::from_secs_f64(seconds))))
-		}
-		_ => None,
-	}
-}
-
-/// `download url` → `fetch url`: an alias at the head of an application or call, unless the program defines the alias itself
-pub fn lower_aliases(node: Node) -> Node {
-	if !node.mentions_any(&HOST_ALIASES.map(|(alias, _, _)| alias)) {
-		return node;
-	}
-	let defined = crate::library_words::defined_names(&node);
-	let aliases: Vec<_> = HOST_ALIASES
-		.into_iter()
-		.filter(|(alias, _, _)| !defined.contains(*alias))
-		.collect();
-	if aliases.is_empty() {
-		return node;
-	}
-	renamed_heads(node, &aliases)
-}
-
-fn renamed_heads(node: Node, aliases: &[(&str, Option<usize>, &str)]) -> Node {
-	match node {
-		Node::List(items, bracket, separator) => {
-			let mut items: Vec<Node> = items.into_iter().map(|item| renamed_heads(item, aliases)).collect();
-			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
-				let arguments = items.len() - 1;
-				if let Some((_, _, word)) = aliases
-					.iter()
-					.find(|(alias, arity, _)| alias == name && arity.is_none_or(|arity| arity == arguments))
-				{
-					items[0] = Node::Symbol(word.to_string());
-				}
-			}
-			Node::List(items, bracket, separator)
-		}
-		other => children_rewritten(other, |child| renamed_heads(child, aliases)),
-	}
-}
