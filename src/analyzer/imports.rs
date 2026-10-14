@@ -29,124 +29,8 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 				.extend([radix.as_function, radix.text_function, "list_join", "new_text"]);
 		}
 		Node::Empty | Node::Symbol(_) | Node::Char(_) | Node::True | Node::False => {}
-		Node::Key(key, op, value) => {
-			ctx.required_functions.extend(functions_of_operator(op));
-			// `xs += [v]`, what `xs.add(v)` lowers to: the list grows in place
-			if *op == Op::AddAssign && matches!(value.drop_meta(), Node::List(_, Bracket::Square, _)) {
-				ctx.required_functions
-					.insert(crate::wasm_emitter::lists::list_ops::LIST_EXTEND);
-			}
-			if *op == Op::Assign || op.is_compound_assign() {
-				if let Node::Key(_, Op::Hash, _) = key.drop_meta() {
-					ctx.required_functions.insert("node_with_at");
-					analyze_required_functions(ctx, key);
-					analyze_required_functions(ctx, value);
-					return;
-				}
-			}
-			if *op == Op::As && matches!(value.name().to_lowercase().as_str(), "string" | "str" | "text") {
-				ctx.required_functions.insert("list_join"); // `x as string` of a variable joins its text
-			}
-			if *op == Op::As && value.name().to_lowercase() == crate::wasm_emitter::numbers::exact::DECIMAL_WORD {
-				ctx.required_functions.extend([
-					"list_join",
-					crate::wasm_emitter::INT_RUNTIME,
-					crate::wasm_emitter::numbers::exact::DECIMAL_TEXT,
-				]); // `x as decimal`: a text
-			}
-			if *op == Op::As && value.name().to_lowercase() == "list" {
-				ctx.required_functions
-					.extend(["text_chars", "list_reverse", "text_reverse"]); // `x as list` of a text
-			}
-			if *op == Op::Pow {
-				ctx.required_functions.insert("i64_pow");
-			} else if *op == Op::Square || *op == Op::Cube {
-				analyze_required_functions(ctx, key);
-				return;
-			} else if op.is_prefix() && key.is_empty_node() {
-				analyze_required_functions(ctx, value);
-				return;
-			} else if *op == Op::Hash {
-				if key.is_empty_node() {
-					ctx.required_functions.insert("node_count");
-				} else {
-					ctx.required_functions.extend([
-						"node_index_at",
-						"map_get",
-						crate::wasm_emitter::VALUES_EQUAL,
-						"string_char_at",
-						"list_node_at",
-						"list_at",
-					]);
-					if let Some(name) = crate::warp_parser::subscript_key(value).and_then(constant_field_name) {
-						if let Some(fallback) = crate::wasm_emitter::lists::list_ops::field_fallback(&name) {
-							ctx.required_functions.insert(fallback);
-						}
-						ctx.missing_field_names.insert(name);
-					}
-				}
-			} else if *op == Op::Dot {
-				let method_name = match value.drop_meta() {
-					Node::List(items, _, _) if items.len() == 1 => items[0].symbol_name(),
-					other => other.symbol_name(),
-				};
-				if let Some(counter) = method_name.and_then(|method| counting_method(method, ctx)) {
-					require_counter(ctx, counter);
-					analyze_required_functions(ctx, key); // the counted value: `s.fs.count` reads the field fs
-					return;
-				}
-			}
-			analyze_required_functions(ctx, key);
-			analyze_required_functions(ctx, value);
-		}
-		Node::List(items, _, _) => {
-			if items.is_empty() {
-				return;
-			}
-			if let Node::Symbol(fn_name) = items[0].drop_meta() {
-				ctx.required_functions.extend(functions_of_call(fn_name));
-				// a host word that gives a value builds exact numbers from fixnums (tasks.rs Builders)
-				if crate::host::VALUE_GIVING_WORDS.contains(&fn_name.as_str()) {
-					ctx.required_functions
-						.extend([crate::wasm_emitter::INT_RUNTIME, "new_int"]);
-				}
-				if let Some(word) = crate::wasm_emitter::functions::cells::CELL_WORDS
-					.iter()
-					.find(|word| **word == fn_name)
-				{
-					ctx.required_functions.insert(word);
-				}
-				if fn_name == crate::type_tests::TYPE_WORD {
-					ctx.required_functions.insert(crate::type_tests::NODE_TYPE_NAME);
-					// node_type_name names an instance by comparing its data with each declared type's name
-					if !ctx.type_registry.types().is_empty() {
-						ctx.required_functions.insert(crate::wasm_emitter::VALUES_EQUAL);
-					}
-				}
-				if fn_name == crate::switch::NO_CASE_CALL {
-					ctx.missing_case_labels.extend(items.get(1).map(|label| label.name()));
-				}
-				if crate::library_words::is_similarity_call(fn_name) {
-					ctx.required_functions.insert(crate::wasm_emitter::NUMBERS_SIMILAR); // values_similar when needed
-				}
-				if ctx.ffi_imports.contains_key(fn_name.as_str()) {
-					for item in items.iter().skip(1) {
-						analyze_required_functions(ctx, item);
-					}
-					return;
-				}
-				if items.len() == 2 {
-					if let Some(counter) = counting_function(fn_name, ctx) {
-						require_counter(ctx, counter);
-						analyze_required_functions(ctx, &items[1]);
-						return;
-					}
-				}
-			}
-			for item in items {
-				analyze_required_functions(ctx, item);
-			}
-		}
+		Node::Key(key, op, value) => operation_required(ctx, key, op, value),
+		Node::List(items, _, _) => call_required(ctx, items),
 		Node::Data(_) => {
 			ctx.required_functions.insert("new_data");
 		}
@@ -166,6 +50,141 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 		Node::Error(inner) => {
 			analyze_required_functions(ctx, inner);
 		}
+	}
+}
+
+/// What an operation needs: its operator's functions, then its operands'
+fn operation_required(ctx: &mut Context, key: &Node, op: &Op, value: &Node) {
+	ctx.required_functions.extend(functions_of_operator(op));
+	// `xs += [v]`, what `xs.add(v)` lowers to: the list grows in place
+	if *op == Op::AddAssign && matches!(value.drop_meta(), Node::List(_, Bracket::Square, _)) {
+		ctx.required_functions
+			.insert(crate::wasm_emitter::lists::list_ops::LIST_EXTEND);
+	}
+	if (*op == Op::Assign || op.is_compound_assign()) && matches!(key.drop_meta(), Node::Key(_, Op::Hash, _)) {
+		ctx.required_functions.insert("node_with_at");
+	} else {
+		if *op == Op::As {
+			conversion_required(ctx, value);
+		}
+		match op {
+			Op::Pow => {
+				ctx.required_functions.insert("i64_pow");
+			}
+			Op::Square | Op::Cube => return analyze_required_functions(ctx, key),
+			_ if op.is_prefix() && key.is_empty_node() => return analyze_required_functions(ctx, value),
+			Op::Hash => subscript_required(ctx, key, value),
+			Op::Dot if method_counter_required(ctx, key, value) => return,
+			_ => {}
+		}
+	}
+	analyze_required_functions(ctx, key);
+	analyze_required_functions(ctx, value);
+}
+
+/// `x as string`, `x as decimal`, `x as list`
+fn conversion_required(ctx: &mut Context, value: &Node) {
+	if matches!(value.name().to_lowercase().as_str(), "string" | "str" | "text") {
+		ctx.required_functions.insert("list_join"); // `x as string` of a variable joins its text
+	}
+	if value.name().to_lowercase() == crate::wasm_emitter::numbers::exact::DECIMAL_WORD {
+		ctx.required_functions.extend([
+			"list_join",
+			crate::wasm_emitter::INT_RUNTIME,
+			crate::wasm_emitter::numbers::exact::DECIMAL_TEXT,
+		]); // `x as decimal`: a text
+	}
+	if value.name().to_lowercase() == "list" {
+		ctx.required_functions
+			.extend(["text_chars", "list_reverse", "text_reverse"]); // `x as list` of a text
+	}
+}
+
+/// `xs#i`, `#xs`, `p#name`: the count, or the reads of an element or field
+fn subscript_required(ctx: &mut Context, key: &Node, value: &Node) {
+	if key.is_empty_node() {
+		ctx.required_functions.insert("node_count");
+	} else {
+		ctx.required_functions.extend([
+			"node_index_at",
+			"map_get",
+			crate::wasm_emitter::VALUES_EQUAL,
+			"string_char_at",
+			"list_node_at",
+			"list_at",
+		]);
+		if let Some(name) = crate::warp_parser::subscript_key(value).and_then(constant_field_name) {
+			if let Some(fallback) = crate::wasm_emitter::lists::list_ops::field_fallback(&name) {
+				ctx.required_functions.insert(fallback);
+			}
+			ctx.missing_field_names.insert(name);
+		}
+	}
+}
+
+/// `s.count` and the like: the counter, and the counted value (`s.fs.count` reads the field fs); false for other methods
+fn method_counter_required(ctx: &mut Context, key: &Node, value: &Node) -> bool {
+	let method_name = match value.drop_meta() {
+		Node::List(items, _, _) if items.len() == 1 => items[0].symbol_name(),
+		other => other.symbol_name(),
+	};
+	let Some(counter) = method_name.and_then(|method| counting_method(method, ctx)) else {
+		return false;
+	};
+	require_counter(ctx, counter);
+	analyze_required_functions(ctx, key);
+	true
+}
+
+/// What a list or call needs: a called word's functions, then its items (an FFI call's arguments, a counted value)
+fn call_required(ctx: &mut Context, items: &[Node]) {
+	if let Some(Node::Symbol(fn_name)) = items.first().map(Node::drop_meta) {
+		word_call_required(ctx, fn_name, items);
+		if ctx.ffi_imports.contains_key(fn_name.as_str()) {
+			for item in items.iter().skip(1) {
+				analyze_required_functions(ctx, item);
+			}
+			return;
+		}
+		if items.len() == 2 {
+			if let Some(counter) = counting_function(fn_name, ctx) {
+				require_counter(ctx, counter);
+				analyze_required_functions(ctx, &items[1]);
+				return;
+			}
+		}
+	}
+	for item in items {
+		analyze_required_functions(ctx, item);
+	}
+}
+
+/// The functions a call of the word `fn_name` needs
+fn word_call_required(ctx: &mut Context, fn_name: &str, items: &[Node]) {
+	ctx.required_functions.extend(functions_of_call(fn_name));
+	// a host word that gives a value builds exact numbers from fixnums (tasks.rs Builders)
+	if crate::host::VALUE_GIVING_WORDS.contains(&fn_name) {
+		ctx.required_functions
+			.extend([crate::wasm_emitter::INT_RUNTIME, "new_int"]);
+	}
+	if let Some(word) = crate::wasm_emitter::functions::cells::CELL_WORDS
+		.iter()
+		.find(|word| **word == fn_name)
+	{
+		ctx.required_functions.insert(word);
+	}
+	if fn_name == crate::type_tests::TYPE_WORD {
+		ctx.required_functions.insert(crate::type_tests::NODE_TYPE_NAME);
+		// node_type_name names an instance by comparing its data with each declared type's name
+		if !ctx.type_registry.types().is_empty() {
+			ctx.required_functions.insert(crate::wasm_emitter::VALUES_EQUAL);
+		}
+	}
+	if fn_name == crate::switch::NO_CASE_CALL {
+		ctx.missing_case_labels.extend(items.get(1).map(|label| label.name()));
+	}
+	if crate::library_words::is_similarity_call(fn_name) {
+		ctx.required_functions.insert(crate::wasm_emitter::NUMBERS_SIMILAR); // values_similar when needed
 	}
 }
 

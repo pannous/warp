@@ -26,28 +26,8 @@ pub fn shown_list_type_name(list: &Node, scope: &Scope) -> String {
 
 /// The type name of a list: `list of int` when all items share a kind (or the variable is declared `ints`), else `list`
 pub fn list_type_name(list: &Node, scope: &Scope) -> String {
-	pub(super) const PLAIN: &str = "list";
 	match list.drop_meta() {
-		Node::Symbol(name) => {
-			let type_name = scope
-				.binding(name)
-				.and_then(|local| local.type_node.as_ref())
-				.map(|type_node| type_node.name());
-			match type_name {
-				Some(word) => match list_element_type(&word) {
-					Some(element) => format!("{LIST_OF_PREFIX}{element}"),
-					None if word.starts_with(PLAIN) || word.starts_with(MAP_TYPE) => word,
-					None => PLAIN.to_string(),
-				},
-				// `r = f()`: the list a function returns, its elements unknown until runtime
-				None if scope.binding(name).is_none() && scope.function_kind(name) == Some(Kind::List) => {
-					NODE_LIST_TYPE.to_string()
-				}
-				// a list parameter of no declared element type: each caller may pass other elements
-				None if scope.binding(name).is_some_and(|local| local.is_param) => NODE_LIST_TYPE.to_string(),
-				None => PLAIN.to_string(),
-			}
-		}
+		Node::Symbol(name) => variable_list_type(name, scope),
 		// Grouping: `([1 2])` has the type of `[1 2]`, as in infer_type
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => list_type_name(&items[0], scope),
 		// a block `(out = ø; for …; out)` is worth its last value
@@ -64,20 +44,10 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 			format!("{LIST_OF_PREFIX}{}", element_type_word(zero, scope))
 		}
 		Node::List(items, Bracket::Round, _)
-			if let [call, _] = items.as_slice()
+			if let [call, map] = items.as_slice()
 				&& let Some(word) = map_word(call) =>
 		{
-			use crate::library_words::MAP_ENTRIES;
-			use crate::words::MAP_KEYS;
-			match word {
-				MAP_KEYS => format!("{LIST_OF_PREFIX}text"), // the keys of a map are read as texts
-				MAP_ENTRIES => list_type_name(&items[1], scope),
-				// the values of a map of known values; of anything else (a pair `a: {b: 8}`) Nodes of any type
-				_ => match list_type_name(&items[1], scope) {
-					map if map.starts_with(MAP_TYPE) => map.replacen(MAP_TYPE_PREFIX, LIST_OF_PREFIX, 1),
-					_ => NODE_LIST_TYPE.to_string(),
-				},
-			}
+			map_part_type(word, map, scope)
 		}
 		// `sort(xs)`, `reverse(xs)`: the same elements
 		Node::List(items, Bracket::Round, Separator::None)
@@ -104,69 +74,121 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 					.iter()
 					.all(|entry| matches!(entry.drop_meta(), Node::Key(_, Op::Colon, _))) =>
 		{
-			let values: Vec<&Node> = entries
-				.iter()
-				.filter_map(|entry| match entry.drop_meta() {
-					Node::Key(_, _, value) => Some(value.as_ref()),
-					_ => None,
-				})
-				.collect();
-			// an empty `[]` fits any type of list: `{A:[["B", 4]], B:[]}` is a `map of list of list`
-			let is_empty_list = |value: &&Node| {
-				value.is_empty_node()
-					|| matches!(value.drop_meta(), Node::List(items, Bracket::Square, _) if items.is_empty())
-			};
-			let typed: Vec<&Node> = values.iter().copied().filter(|value| !is_empty_list(value)).collect();
-			let words: Vec<String> = if typed.is_empty() { &values } else { &typed }
-				.iter()
-				.map(|value| nested_type_word(value, scope))
-				.collect();
-			let is_list_map = typed.len() < values.len() && words.iter().all(|word| word.starts_with(PLAIN));
-			match common_type_word(&words) {
-				Some(word) if is_list_map || typed.len() == values.len() => format!("{MAP_TYPE_PREFIX}{word}"),
-				_ => MAP_TYPE.to_string(),
-			}
+			map_type_name(entries, scope)
 		}
 		// `xs + ys` of two lists: items of their common type, else of the union of two builtin types (held as Nodes)
 		Node::Key(left, Op::Add, right) if [left, right].iter().all(|list| infer_type(list, scope) == Kind::List) => {
-			let elements = [left, right].map(|list| list_type_name(list, scope));
-			let words: Option<Vec<String>> = elements
-				.iter()
-				.map(|list| list.strip_prefix(LIST_OF_PREFIX).map(str::to_string))
-				.collect();
-			let Some(words) = words else { return PLAIN.to_string() };
-			match common_type_word(&words) {
-				Some(word) => format!("{LIST_OF_PREFIX}{word}"),
-				None if words.iter().all(|word| is_builtin_or_union(word)) => {
-					format!("{LIST_OF_PREFIX}{}", words.join(UNION_JOINER))
-				}
-				None => NODE_LIST_TYPE.to_string(),
-			}
+			joined_list_type(left, right, scope)
 		}
 		// a value of a map: `graph["A"]` of a `map of list of int` is a `list of int`; an element of a `list of list of int`
 		// a `list of int`; an element of a `list of list` (`[("a", 2)]`, tuples of mixed items) holds its items as Nodes
-		Node::Key(map, Op::Hash, _) => {
-			let outer = list_type_name(map, scope);
-			match outer
-				.strip_prefix(MAP_TYPE_PREFIX)
-				.or_else(|| outer.strip_prefix(LIST_OF_PREFIX))
-			{
-				Some(PLAIN) if outer.starts_with(LIST_OF_PREFIX) => NODE_LIST_TYPE.to_string(),
-				Some(value_type) if value_type.starts_with(PLAIN) => value_type.to_string(),
-				_ => PLAIN.to_string(),
-			}
+		Node::Key(map, Op::Hash, _) => element_list_type(map, scope),
+		Node::List(items, _, separator) => literal_list_type(items, separator, scope),
+		_ => LIST_WORD.to_string(),
+	}
+}
+
+/// A variable's list type: as declared, or a list whose elements are only known at runtime
+fn variable_list_type(name: &str, scope: &Scope) -> String {
+	let type_name = scope
+		.binding(name)
+		.and_then(|local| local.type_node.as_ref())
+		.map(|type_node| type_node.name());
+	match type_name {
+		Some(word) => match list_element_type(&word) {
+			Some(element) => format!("{LIST_OF_PREFIX}{element}"),
+			None if word.starts_with(LIST_WORD) || word.starts_with(MAP_TYPE) => word,
+			None => LIST_WORD.to_string(),
+		},
+		// `r = f()`: the list a function returns, its elements unknown until runtime
+		None if scope.binding(name).is_none() && scope.function_kind(name) == Some(Kind::List) => {
+			NODE_LIST_TYPE.to_string()
 		}
-		Node::List(items, _, separator) => {
-			let words: Vec<String> = items.iter().map(|item| nested_type_word(item, scope)).collect();
-			let is_block = matches!(separator, Separator::Semicolon | Separator::Newline);
-			match common_type_word(&words) {
-				Some(word) => format!("{LIST_OF_PREFIX}{word}"),
-				// `[1 "a"]`: elements of different kinds, each held as its Node
-				None if !words.is_empty() && !is_block => NODE_LIST_TYPE.to_string(),
-				None => PLAIN.to_string(),
-			}
+		// a list parameter of no declared element type: each caller may pass other elements
+		None if scope.binding(name).is_some_and(|local| local.is_param) => NODE_LIST_TYPE.to_string(),
+		None => LIST_WORD.to_string(),
+	}
+}
+
+/// `keys(m)`, `entries(m)`, `values(m)`: texts, the map's own type, or a list of its value type
+fn map_part_type(word: &str, map: &Node, scope: &Scope) -> String {
+	use crate::library_words::MAP_ENTRIES;
+	use crate::words::MAP_KEYS;
+	match word {
+		MAP_KEYS => format!("{LIST_OF_PREFIX}text"), // the keys of a map are read as texts
+		MAP_ENTRIES => list_type_name(map, scope),
+		// the values of a map of known values; of anything else (a pair `a: {b: 8}`) Nodes of any type
+		_ => match list_type_name(map, scope) {
+			map if map.starts_with(MAP_TYPE) => map.replacen(MAP_TYPE_PREFIX, LIST_OF_PREFIX, 1),
+			_ => NODE_LIST_TYPE.to_string(),
+		},
+	}
+}
+
+fn map_type_name(entries: &[Node], scope: &Scope) -> String {
+	let values: Vec<&Node> = entries
+		.iter()
+		.filter_map(|entry| match entry.drop_meta() {
+			Node::Key(_, _, value) => Some(value.as_ref()),
+			_ => None,
+		})
+		.collect();
+	// an empty `[]` fits any type of list: `{A:[["B", 4]], B:[]}` is a `map of list of list`
+	let is_empty_list = |value: &&Node| {
+		value.is_empty_node() || matches!(value.drop_meta(), Node::List(items, Bracket::Square, _) if items.is_empty())
+	};
+	let typed: Vec<&Node> = values.iter().copied().filter(|value| !is_empty_list(value)).collect();
+	let words: Vec<String> = if typed.is_empty() { &values } else { &typed }
+		.iter()
+		.map(|value| nested_type_word(value, scope))
+		.collect();
+	let is_list_map = typed.len() < values.len() && words.iter().all(|word| word.starts_with(LIST_WORD));
+	match common_type_word(&words) {
+		Some(word) if is_list_map || typed.len() == values.len() => format!("{MAP_TYPE_PREFIX}{word}"),
+		_ => MAP_TYPE.to_string(),
+	}
+}
+
+fn joined_list_type(left: &Node, right: &Node, scope: &Scope) -> String {
+	let elements = [left, right].map(|list| list_type_name(list, scope));
+	let words: Option<Vec<String>> = elements
+		.iter()
+		.map(|list| list.strip_prefix(LIST_OF_PREFIX).map(str::to_string))
+		.collect();
+	let Some(words) = words else {
+		return LIST_WORD.to_string();
+	};
+	match common_type_word(&words) {
+		Some(word) => format!("{LIST_OF_PREFIX}{word}"),
+		None if words.iter().all(|word| is_builtin_or_union(word)) => {
+			format!("{LIST_OF_PREFIX}{}", words.join(UNION_JOINER))
 		}
-		_ => PLAIN.to_string(),
+		None => NODE_LIST_TYPE.to_string(),
+	}
+}
+
+/// A list value of a map or list: see list_type_name
+fn element_list_type(map: &Node, scope: &Scope) -> String {
+	let outer = list_type_name(map, scope);
+	match outer
+		.strip_prefix(MAP_TYPE_PREFIX)
+		.or_else(|| outer.strip_prefix(LIST_OF_PREFIX))
+	{
+		Some(LIST_WORD) if outer.starts_with(LIST_OF_PREFIX) => NODE_LIST_TYPE.to_string(),
+		Some(value_type) if value_type.starts_with(LIST_WORD) => value_type.to_string(),
+		_ => LIST_WORD.to_string(),
+	}
+}
+
+/// A list of items of a common type, else of Nodes; a block of no common type is a plain list
+fn literal_list_type(items: &[Node], separator: &Separator, scope: &Scope) -> String {
+	let words: Vec<String> = items.iter().map(|item| nested_type_word(item, scope)).collect();
+	let is_block = matches!(separator, Separator::Semicolon | Separator::Newline);
+	match common_type_word(&words) {
+		Some(word) => format!("{LIST_OF_PREFIX}{word}"),
+		// `[1 "a"]`: elements of different kinds, each held as its Node
+		None if !words.is_empty() && !is_block => NODE_LIST_TYPE.to_string(),
+		None => LIST_WORD.to_string(),
 	}
 }
 

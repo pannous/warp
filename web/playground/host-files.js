@@ -7,6 +7,7 @@ const SCHEME_MARK = "://"; // a URL without its scheme: withPageProtocol
 const PAGE_PREFIX = "page:"; // src/web/mod.rs PAGE_PREFIX: a file of the page itself (lib/libc.h), not of the served repository
 const HTTP_NOT_FOUND = "HTTP status 404";
 const FILE_NOT_FOUND = "No such file or directory (os error 2)";
+const NO_PROCESSES = "not in the browser: a page runs no process or shell, natively only";
 
 // the files std's file module wrote (texts) and render_sound rendered (bytes, a Uint8Array): read and the file words see
 // them before the served ones. A page keeps them in IndexedDB (keepWrittenFile), so they are still there after a reload
@@ -142,6 +143,17 @@ const DATABASE_STORE = "database.json";
 // the IndexedDB database, its object store of values and that of the files a program wrote (card files-written)
 const DATABASE = { name: "warp", version: 2, objects: "values", files: "files" };
 const databaseValues = {};
+// `glob("src/*.rs")` as natively (src/modules/std_adapters.rs globbed): the written and served files whose name matches,
+// the wildcards * and ? in its last part, a hidden file only for a name starting with `.`
+function glob(pattern) {
+	const folder = pattern.slice(0, pattern.lastIndexOf("/") + 1), name = pattern.slice(folder.length);
+	const wildcards = new RegExp(`^${name.replace(/[.+^${}()|[\]\\]/g, "\\$&").replaceAll("*", "[^/]*").replaceAll("?", "[^/]")}$`);
+	const served = typeof SERVED_FILES === "undefined" ? [] : [...SERVED_FILES];
+	const names = [...writtenFiles.keys(), ...served].filter(path => path.startsWith(filePath(folder))).map(path => path.slice(filePath(folder).length));
+	const shown = entry => !entry.includes("/") && wildcards.test(entry) && (name.startsWith(".") || !entry.startsWith("."));
+	return [...new Set(names.filter(shown))].sort().map(entry => folder + entry);
+}
+
 const isDatabase = file => file.endsWith(DATABASE_STORE);
 let databaseLoaded;
 
@@ -403,8 +415,17 @@ addHostPart({
 		};
 	},
 	adapters: {
-		// a page has no command line; its environment is what the page sets (the stand-in of the playground's key)
-		os: { env: name => self.pageEnvironment?.[name] ?? null, args: () => [] },
+		// a page has no command line, no input and runs no process; its environment is what the page sets (the stand-in of
+		// the playground's key), its folder the served root that relative paths start from
+		os: {
+			env: name => self.pageEnvironment?.[name] ?? null,
+			args: () => [],
+			cwd: () => ".",
+			stdin: () => "",
+			input: () => null,
+			command: () => { throw new Error(NO_PROCESSES); },
+			exec: () => { throw new Error(NO_PROCESSES); },
+		},
 		// `stored theme = "dark"`, `local[k]`, `session[k]` (src/lowering/data/stored_values.rs, std_io): the page's values
 		// (markup.js keptValues), each save sent back to it with its store (the dev store of a `warp dev` page, the
 		// session's, else the program's)
@@ -430,6 +451,7 @@ addHostPart({
 				const prefix = filePath(folder).replace(/\/?$/, "/");
 				return [...writtenFiles.keys()].filter(path => path.startsWith(prefix) && !path.slice(prefix.length).includes("/")).map(path => path.slice(prefix.length)).sort();
 			},
+			glob,
 		},
 		// a filter compiled natively is an SQL query (a page compiled by the browser keeps filters as comprehensions)
 		table: { open: openTable, migrate: migrateTable, rows: tableRows, page: tablePage, count: (table, schema, file) => storedTable(file, table).rows.length, insert: insertRow, delete: deleteRow, update: updateRow, begin: beginTransaction, commit: file => { delete tablesBefore[file]; return null; }, rollback: rollBack, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },

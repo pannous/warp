@@ -48,136 +48,40 @@ pub(crate) const C_TYPE_WORDS: [&str; 13] = [
 /// C keywords that start a statement: a line holding one declares no function
 const C_STATEMENT_KEYWORDS: [&str; 9] = ["return", "if", "else", "while", "for", "do", "switch", "case", "goto"];
 
+/// Line starts of comments (also a block comment's continued lines: `** See also: [sqlite3_libversion()]`),
+/// preprocessor directives and declarations of no function (typedef, struct, enum, union)
+const NO_FUNCTION_STARTS: [&str; 8] = ["//", "#", "/*", "*", "typedef", "struct", "enum", "union"];
+
+/// Storage qualifiers and API macros a declaration may carry (RLAPI, SDL_CALL, etc.), dropped
+const DROPPED_QUALIFIERS: [&str; 12] = [
+	"extern ",
+	"static ",
+	"inline ",
+	"RLAPI ",
+	"RAYGUIAPI ",
+	"RMAPI ",
+	"PHYSACDEF ",
+	"RL_API ",
+	"SDL_CALL ",
+	"SDLCALL ",
+	"__cdecl ",
+	"__stdcall ",
+];
+
 /// Extract function signature from a C declaration string
 /// e.g., "double sqrt(double x);" -> FfiHeaderSignature
 pub fn extract_function_signature(declaration: &str, library: &str) -> Option<FfiHeaderSignature> {
 	let decl = declaration.trim();
-
-	// Skip empty lines, comments (also a block comment's continued lines: `** See also: [sqlite3_libversion()]`),
-	// preprocessor directives
-	if decl.is_empty()
-		|| decl.starts_with("//")
-		|| decl.starts_with('#')
-		|| decl.starts_with("/*")
-		|| decl.starts_with('*')
-	{
+	if decl.is_empty() || NO_FUNCTION_STARTS.iter().any(|start| decl.starts_with(start)) {
 		return None;
 	}
-
-	// Skip non-function declarations (typedef, struct, enum, etc.)
-	if decl.starts_with("typedef")
-		|| decl.starts_with("struct")
-		|| decl.starts_with("enum")
-		|| decl.starts_with("union")
-	{
-		return None;
-	}
-
-	// Remove extern, static, inline qualifiers and API macros (RLAPI, SDL_CALL, etc.)
-	let decl = decl
-		.replace("extern ", "")
-		.replace("static ", "")
-		.replace("inline ", "")
-		.replace("RLAPI ", "")
-		.replace("RAYGUIAPI ", "")
-		.replace("RMAPI ", "")
-		.replace("PHYSACDEF ", "")
-		.replace("RL_API ", "")
-		.replace("SDL_CALL ", "")
-		.replace("SDLCALL ", "")
-		.replace("__cdecl ", "")
-		.replace("__stdcall ", "");
-	let decl = without_libc_annotations(decl.trim());
-	let decl = decl.trim();
-	// zlib's K&R-compatible prototypes: `zlibVersion OF((void));` declares `zlibVersion(void);`
-	let decl = match decl.find(" OF((") {
-		Some(start) => format!(
-			"{}({}",
-			&decl[..start],
-			decl[start + " OF((".len()..].replacen("))", ")", 1)
-		),
-		None => decl.to_string(),
-	};
-	let decl = decl.as_str();
-
-	// Find the opening parenthesis (marks start of params)
+	let decl = plain_declaration(decl);
 	let paren_pos = decl.find('(')?;
-
-	// Everything before '(' is return_type + name
-	let before_paren = &decl[..paren_pos];
-
-	// Find function name (last word before parenthesis)
-	let parts: Vec<&str> = before_paren.split_whitespace().collect();
-	if parts.is_empty() {
-		return None;
-	}
-
-	// `return f(x);` in an inline function body of a header is a statement, not a declaration
-	if parts.iter().any(|part| C_STATEMENT_KEYWORDS.contains(part)) {
-		return None;
-	}
-
-	// Function name is the last part, may have pointer marker
-	// `char *getenv(…)` returns char *
-	let (name, pointer_marks) = split_pointer_marks(parts.last()?);
-	if name.is_empty() || C_TYPE_WORDS.contains(&name.as_str()) {
-		return None;
-	}
-
-	// Return type is everything before the name
-	let return_type = if parts.len() > 1 {
-		parts[..parts.len() - 1].join(" ")
-	} else {
-		"int".to_string() // C default
-	};
-	let return_type = if pointer_marks.is_empty() {
-		return_type
-	} else {
-		format!("{return_type} {pointer_marks}")
-	};
-
+	let (name, return_type) = name_and_return_type(&decl[..paren_pos])?;
 	// the `)` closing the parameters: a macro may follow it (`fopen(…) __DARWIN_ALIAS(fopen);`); a line without one
 	// (sqlite3.h has such) declares nothing
-	let close_paren = matching_paren(decl, paren_pos)?;
-	let params_str = &decl[paren_pos + 1..close_paren];
-
-	let mut param_types = Vec::new();
-	let mut param_names = Vec::new();
-
-	if params_str.trim() != "void" && !params_str.trim().is_empty() {
-		for param in params_str.split(',') {
-			let param = param.trim();
-			if param.is_empty() || param == "..." {
-				continue;
-			}
-
-			// Split param into type and name
-			let parts: Vec<&str> = param.split_whitespace().collect();
-			if parts.is_empty() {
-				continue;
-			}
-
-			// Handle "type *name" or "type* name" or "type name"
-			let (ptype, pname) = if parts.len() == 1 {
-				(parts[0].to_string(), String::new())
-			} else {
-				let last = parts.last().unwrap();
-				let name = last.trim_start_matches('*').to_string();
-				// Reconstruct type (everything except pure name); `sqlite3 **ppDb` keeps both stars
-				let stars = &last[..last.len() - name.len()];
-				let type_str = if !stars.is_empty() {
-					format!("{} {stars}", parts[..parts.len() - 1].join(" "))
-				} else {
-					parts[..parts.len() - 1].join(" ")
-				};
-				(type_str, name)
-			};
-
-			param_types.push(ptype);
-			param_names.push(pname);
-		}
-	}
-
+	let close_paren = matching_paren(&decl, paren_pos)?;
+	let (param_types, param_names) = parameters(&decl[paren_pos + 1..close_paren]).into_iter().unzip();
 	Some(FfiHeaderSignature {
 		name,
 		return_type,
@@ -186,6 +90,80 @@ pub fn extract_function_signature(declaration: &str, library: &str) -> Option<Ff
 		library: library.to_string(),
 		raw: declaration.to_string(),
 	})
+}
+
+/// A declaration without qualifiers, API macros and annotations; zlib's K&R-compatible prototypes
+/// `zlibVersion OF((void));` declare `zlibVersion(void);`
+fn plain_declaration(declaration: &str) -> String {
+	let decl = DROPPED_QUALIFIERS
+		.iter()
+		.fold(declaration.to_string(), |decl, qualifier| decl.replace(qualifier, ""));
+	let decl = without_libc_annotations(decl.trim());
+	let decl = decl.trim();
+	match decl.find(" OF((") {
+		Some(start) => format!(
+			"{}({}",
+			&decl[..start],
+			decl[start + " OF((".len()..].replacen("))", ")", 1)
+		),
+		None => decl.to_string(),
+	}
+}
+
+/// The function name (the last word before the parameters) and return type (the words before it, `int` by C
+/// default); `char *getenv(…)` returns char *
+fn name_and_return_type(before_paren: &str) -> Option<(String, String)> {
+	let parts: Vec<&str> = before_paren.split_whitespace().collect();
+	// `return f(x);` in an inline function body of a header is a statement, not a declaration
+	if parts.iter().any(|part| C_STATEMENT_KEYWORDS.contains(part)) {
+		return None;
+	}
+	let (name, pointer_marks) = split_pointer_marks(parts.last()?);
+	if name.is_empty() || C_TYPE_WORDS.contains(&name.as_str()) {
+		return None;
+	}
+	let return_type = if parts.len() > 1 {
+		parts[..parts.len() - 1].join(" ")
+	} else {
+		"int".to_string()
+	};
+	let return_type = if pointer_marks.is_empty() {
+		return_type
+	} else {
+		format!("{return_type} {pointer_marks}")
+	};
+	Some((name, return_type))
+}
+
+/// The type and name of each parameter; `(void)` has none, a variadic `...` is skipped
+fn parameters(params_str: &str) -> Vec<(String, String)> {
+	if params_str.trim() == "void" {
+		return vec![];
+	}
+	params_str
+		.split(',')
+		.map(str::trim)
+		.filter(|param| *param != "...")
+		.filter_map(parameter)
+		.collect()
+}
+
+/// "type *name" or "type* name" or "type name", or a type alone
+fn parameter(param: &str) -> Option<(String, String)> {
+	let parts: Vec<&str> = param.split_whitespace().collect();
+	let (last, type_words) = parts.split_last()?;
+	if type_words.is_empty() {
+		return Some((last.to_string(), String::new()));
+	}
+	let name = last.trim_start_matches('*').to_string();
+	// Reconstruct type (everything except pure name); `sqlite3 **ppDb` keeps both stars
+	let stars = &last[..last.len() - name.len()];
+	let type_str = if !stars.is_empty() {
+		format!("{} {stars}", type_words.join(" "))
+	} else {
+		type_words.join(" ")
+	};
+	Some((type_str, name))
 }
 
 /// The macOS SDK's bounds annotations (`char *_LIBC_CSTR strchr(…)`, `_LIBC_COUNT(__n)`) dropped: no C type or name
