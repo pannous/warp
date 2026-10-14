@@ -23,8 +23,6 @@ use crate::words::{AT_WORD, FLOAT_WORD};
 use std::collections::{HashMap, HashSet};
 
 const MIDI_HERTZ_CALL: &str = "midi_hertz";
-/// `note("C#4")`: lib/sound.warp's Note of a frequency, its note-name text read here like the bare name C#4 (card note-value)
-const NOTE_CALL: &str = "note";
 /// A note letter's semitone above C is its place here, from 0 (as lib/sound.warp's note(name))
 const SCALE_LETTERS: &str = "C.D.EF.G.A.B";
 const SHARPS: [&str; 2] = ["#", "♯"];
@@ -328,9 +326,6 @@ fn with_music_words(node: Node, defined: &HashSet<String>) -> Node {
 	if let Some(midi) = note_midi(&node, defined) {
 		return call(MIDI_HERTZ_CALL, vec![Node::Number(crate::Number::Int(midi))]).with_meta_of(&node);
 	}
-	if let Some(named) = with_note_name_text(&node, defined) {
-		return named;
-	}
 	if let Some((word, amount)) = glued_unit(&node, defined) {
 		return call(word, vec![with_music_words(amount, defined)]);
 	}
@@ -554,27 +549,6 @@ fn unit_amount_word(node: &Node, defined: &HashSet<String>) -> Option<&'static s
 		}
 		_ => None,
 	}
-}
-
-/// `note("C#4")` → `note(midi_hertz(61))`: a note name written as a text, in a call of note the program does not define
-fn with_note_name_text(node: &Node, defined: &HashSet<String>) -> Option<Node> {
-	let Node::List(items, bracket, separator) = node.drop_meta() else { return None };
-	let [head, argument] = items.as_slice() else { return None };
-	if !matches!(head.drop_meta(), Node::Symbol(name) if name == NOTE_CALL) || defined.contains(NOTE_CALL) {
-		return None;
-	}
-	let hertz = |text: &Node| match text.drop_meta() {
-		Node::Text(name) => midi_of(name)
-			.map(|midi| call(MIDI_HERTZ_CALL, vec![Node::Number(crate::Number::Int(midi))]).with_meta_of(text)),
-		_ => None,
-	};
-	let argument = match argument.drop_meta() {
-		Node::List(inner, inner_bracket, inner_separator) if inner.len() == 1 => {
-			Node::List(vec![hertz(&inner[0])?], inner_bracket.clone(), inner_separator.clone()).with_meta_of(argument)
-		}
-		text => hertz(text)?.with_meta_of(argument),
-	};
-	Some(Node::List(vec![head.clone(), argument], bracket.clone(), separator.clone()).with_meta_of(node))
 }
 
 /// The MIDI note of a note name the program does not define: `Eb4` (a symbol), `F#4` (read as `F # 4`)
