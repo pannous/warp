@@ -64,7 +64,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   `gcd is function` is yes.
 - parse-type (2026-10-14, from the user's draft "key !?!?!"): an operator node reports type `operation`
   (`parse("1+1").type`, `a<b`; alias `expression`), a pair `a:1` stays `key`; `.op` keeps the operator.
-- time-word (2026-10-14): a bare `time` is always the type (`print time` prints `type time`); the class member
+- time-word (2026-10-14): a bare `time` is always the type (`print time` prints `class time`, as every type value
+  prints `class int`, `class Person`: type-print; not `type time`, which pasted back evaluates to `type`; `class int` without
+  a body is the reference to that class, like `function f`, so the printout reads back); the class member
   `time.now` is the local time of day, printing 22:27:46 (= `now.time`). instant, date, local time, zoned time, duration are subtypes of time (anchor-time).
   `now > 17h` / `now >= October` / `now ≈ 2026-10-14` compare the matching part; `==` stays exact (`now == 2026-10-14` no).
   `now.time` is the local time of day, printing 22:27:46 (`now.date` the date); the old `time > 18h` special case
@@ -251,7 +253,6 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   dimension, exact or a ratio; long unit names work. Unit sums use the finer unit. Quantities print without a space
   (`500m`); P231 print rounds quantities to a decimal, str() keeps the exact value. #31 `min` stays the function,
   `d` free.
-- `time` is the local time of day as a duration since midnight; `time < 12` fails with the hint `12h`.
 
 ## Text
 - Text + anything concatenates in its str() form (2026-10-02, extended 2026-10-10); a function stays an error. A

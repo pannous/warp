@@ -75,6 +75,7 @@ mod test_for_implicit_it;
 mod test_for_it;
 mod test_for_loop;
 mod test_for_over_a_number;
+mod test_for_semicolon_end; // card print-end
 mod test_for_underscore;
 mod test_for_unit_words;
 mod test_frame_event; // card frame-event
@@ -127,6 +128,7 @@ mod test_match_ranges;
 mod test_match_tuples;
 mod test_match_type_arms;
 mod test_match_whole_value;
+mod test_member_completion;
 mod test_mixed_range_bounds;
 mod test_multiline_errors;
 mod test_named_broadcast;
@@ -247,4 +249,4 @@ mod test_while_value;
 mod test_window_clicks; // card native-window
 #[cfg(feature = "native")] // the warp binary's window opener
 mod test_window_opens; // card window-loop
-mod test_word_statements; // card error-beep // card rest-patterns
+mod test_word_statements; // card error-beep // card rest-patterns // card member-completion
