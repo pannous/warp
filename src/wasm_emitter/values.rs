@@ -80,7 +80,7 @@ impl WasmGcEmitter {
 			// `x as int` of an Int, what a declared result type `-> int` lowers to: x, a ratio truncated, without a box
 			Node::Key(value, Op::As, target)
 				if self.get_type(value) == Kind::Int
-					&& is_int_type_word(target)
+					&& super::numbers::casts::is_int_type_word(target)
 					&& !self.computes_at_run_time_kind(value) =>
 			{
 				self.emit_int_value_truncated(func, value)
@@ -417,46 +417,6 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// Emit a range as a list of integers
-	/// inclusive: true for .../ (0...3 = [0,1,2,3]), false for .. (0..3 = [0,1,2])
-	pub(super) fn emit_range(&mut self, func: &mut Function, start: &Node, end: &Node, inclusive: bool) {
-		let (Node::Number(Number::Int(start_val)), Node::Number(Number::Int(end_val))) =
-			(start.drop_meta(), end.drop_meta())
-		else {
-			let bound = if matches!(start.drop_meta(), Node::Number(Number::Int(_))) {
-				end
-			} else {
-				start
-			};
-			self.emit_malformed(func, bound, "a constant integer as range bound");
-			return;
-		};
-		let (start_val, end_val) = (*start_val, *end_val);
-		let actual_end = if inclusive { end_val + 1 } else { end_val };
-		let items: Vec<Node> = (start_val..actual_end).map(|i| Node::Number(Number::Int(i))).collect();
-		if items.is_empty() {
-			self.emit_call(func, "new_empty");
-			return;
-		}
-		self.emit_list_structure(func, &items, &Bracket::Square, &Separator::None);
-	}
-
-	/// Emit a list as linked cons cells
-	pub(super) fn emit_list_structure(
-		&mut self,
-		func: &mut Function,
-		items: &[Node],
-		bracket: &Bracket,
-		separator: &Separator,
-	) {
-		self.emit_list_structure_with(
-			func,
-			items,
-			&items_info(items, bracket, separator),
-			Self::emit_node_instructions,
-		);
-	}
-
 	/// A node as data, nothing evaluated: `data 1+2` is the Key 1+2, `x : a+b` shown is the block a+b
 	pub(super) fn emit_literal(&mut self, func: &mut Function, node: &Node) {
 		match node.drop_meta() {
@@ -487,41 +447,4 @@ impl WasmGcEmitter {
 		}
 		self.emit_call(func, super::reflection::node_api::NODE_AT);
 	}
-
-	pub(super) fn emit_list_structure_with(
-		&mut self,
-		func: &mut Function,
-		items: &[Node],
-		info: &i64,
-		emit: fn(&mut Self, &mut Function, &Node),
-	) {
-		// cons cells: data = first item, value = the list of the rest (null after the last), never an item itself
-		emit(self, func, &items[0]);
-		if items.len() > 1 {
-			self.emit_list_structure_with(func, &items[1..], info, emit);
-		} else {
-			self.emit_node_null(func);
-		}
-
-		func.instruction(&I::I64Const(*info));
-		if self.ctx.func_registry.contains("new_list") {
-			self.emit_call(func, "new_list");
-		} else {
-			// new_list is always emitted; reaching this is a compiler bug, reported as an error value
-			self.emit_type_error(func, "internal error: new_list is not available".to_string());
-		}
-	}
-}
-
-/// `int`, `Int`, `integer`: the type `x as int` converts to; `as i64` wraps (casts.rs WRAPPING_INT_WORDS)
-pub(super) fn is_int_type_word(target: &Node) -> bool {
-	let word = target.drop_meta().name().to_lowercase();
-	crate::type_tests::canonical_spec_word(&word) == "int"
-		&& !super::numbers::casts::WRAPPING_INT_WORDS.contains(&word.as_str())
-}
-
-/// The info of a list of these items: one item stands between no separators (`[a]` parses Space-separated)
-fn items_info(items: &[Node], bracket: &Bracket, separator: &Separator) -> i64 {
-	let separator = if items.len() > 1 { separator } else { &Separator::None };
-	list_info(bracket, separator)
 }

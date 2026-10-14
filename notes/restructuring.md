@@ -193,3 +193,51 @@ variables, checks/). Per-function pass only: keyword-specific checks leave mod.r
 - functions/: closures, user_function_calls, node_functions, cells
 - host/: wasi_emitter, ffi_emitter, component_adapters
 - reflection/: reflection, node_api, equality, witness, library_ops/
+
+Status (2026-10-14): the folders exist (branch layout-emitter, on main).
+
+### Emitter and analyzer per function (branch split-emitter)
+
+Moved with scripts/move_fn.py, pure moves. The emitter's folder modules are glob re-exported (`pub use
+control::traps::*`), the analyzer's files too (`pub use inference::*`), so outside paths stay as they are.
+
+| target | function ← current file |
+|---|---|
+| wasm_emitter/control/traps.rs | globals.rs: `emit_raised_error`, `emit_returned_value`, `emit_trap_detail`, `emit_trap_position`, `trap_position_global`, `trap_detail_global`; mod.rs: `EXACT_TRAP_MESSAGES`, `TRAP_DETAIL`, `TRAP_DETAIL_PREFIX` |
+| wasm_emitter/control/control_flow.rs | mod.rs: `if_then_parts`, `LOGICAL_SCRATCH` (and/or) |
+| wasm_emitter/host/fetch.rs (new) | globals.rs: `emit_fetch_call`, `extract_url_string` |
+| wasm_emitter/host/wasi_emitter.rs | mod.rs: `emit_wagi_start`, `OUTPUT_WORDS`, `OUTPUT_CALLS` |
+| wasm_emitter/numbers/arithmetic.rs | mod.rs: `is_numeric`, `emit_float_comparison`, `LIBM_POW`, `LIBM_CBRT` |
+| wasm_emitter/numbers/casts.rs | mod.rs: `emit_truncating_cast`, `emit_truncating_cast_via`, `emit_float_in_exact_context`, `I64_RANGE_LIMIT`, `ROUNDING_FUNCTIONS`; values.rs: `is_int_type_word` |
+| wasm_emitter/lists/list_emitter.rs | values.rs: `emit_range`, `emit_list_structure`, `emit_list_structure_with`, `items_info` |
+| wasm_emitter/lists/list_sharing.rs | mod.rs: `reads_collection`, `COLLECTION_READING_WORDS` |
+| wasm_emitter/text/text_builtins.rs | mod.rs: `join_call`, `joined_text` |
+| wasm_emitter/maps/key_emitter.rs | mod.rs: `emit_new_key` |
+| wasm_emitter/functions/closures.rs | mod.rs: `CAPTURE_EXPORT_PREFIX` |
+| analyzer/checks/kind_changes.rs | variables.rs: `check_kind_changes`, `global_variables`, `first_kind_change`, `evident_kind`, `evident_results`, `last_expression` |
+| analyzer/inference.rs | user_functions.rs: `literal_kind`, `computed_literal_kind`, `exact_literal_value`, `operand_kind`, `argument_literal_kind`, `is_decimal_literal` |
+| analyzer/annotations.rs (new: the kinds type words and annotations give) | user_functions.rs: `type_word_kind`, `annotated_kind`, `is_map_type`, `names_empty_type`, `names_list_type`, `field_kind_key`, `declared_field_kinds`, `program_field_kinds` |
+| analyzer/main_globals.rs (new: local-or-global, a main variable a function assigns) | variables.rs: `resolve_main_variable_assignments` … `assignment_target_root` (17 functions); after branch diagnostics-paths lands, which edits them |
+
+Stay: mod.rs keeps the module driver (emit, emit_for_node, emit_node_main, emit_node_value, memory, kind globals,
+string allocation, the Node list encoding `bracket_info` … `bracket_of_info`); `kind_with_article`/`with_article` and
+the declaration keyword tests of variables.rs are used everywhere and wait for a words/ home.
+
+### Same-named functions after duplicates-exact (split-emitter, 2026-10-14)
+
+All 494 names used in several files of data/restructuring/functions.tsv have a verdict in duplicates_exact.md. A fresh
+inventory of main (9fdebbb1b) has 7 names that are new since:
+
+| name | verdict |
+|---|---|
+| `uses_it` (analyzer/user_functions/definitions.rs, lowering/type_name_matching.rs) | true duplicate: one `analyzer::uses_it`, Node::mentions of IMPLICIT_PARAMETER |
+| `is_arithmetic` (operators.rs Op method, analyzer/checks/lints.rs) | lints' repeated the operator list: `is_ungrouped_arithmetic` asks Op::is_arithmetic |
+| `aliased_method`, `method_aliases` (class_methods.rs, welcome_forms.rs) | distinct: a class's own method for a word vs. another language's method name; both read METHOD_ALIASES |
+| `keyword_definition` (declarations.rs, library_words.rs) | distinct: the whole definition vs. name and parameters of the head |
+| `map_key` (law/type_model/expressions.rs, wasm_emitter fields_and_keys.rs) | distinct: Lean model vs. emitter |
+| `start_of` (warp_parser/atoms.rs, diagnostics/normalize.rs) | distinct: parser cursor vs. a node's position |
+
+`is_type_word` ×4 (card name-their): four different sets, renamed by set: `is_builtin_type_word` (BUILTIN_TYPES),
+`is_kinded_type_word` (analyzer::type_word_kind), `is_kinded_type_or_any` (function heads),
+`is_kinded_or_testable_type` (units). The parser's local closure in typed_parameter is the kinded set again.
+Seven constants spell "it" (card duplicate-constants).

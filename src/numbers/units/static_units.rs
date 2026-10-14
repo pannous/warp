@@ -483,7 +483,8 @@ fn shown(signature: &Signature) -> String {
 	}
 }
 
-fn is_type_word(node: &Node) -> bool {
+/// A type word with a value kind (analyzer::type_word_kind) or one a run-time test checks (type_tests::runtime_kind_mask)
+fn is_kinded_or_testable_type(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(name) if crate::analyzer::type_word_kind(name).is_some() || crate::type_tests::runtime_kind_mask(name).is_some())
 }
 
@@ -784,7 +785,7 @@ impl Inference {
 			}
 			// `r.distance == ø` of an optional unit field: ø has no dimension, any value may be it; `x is list` asks its type
 			Node::Key(left, op @ (Op::Eq | Op::Ne), right)
-				if left.is_empty_node() || right.is_empty_node() || is_type_word(&right) =>
+				if left.is_empty_node() || right.is_empty_node() || is_kinded_or_testable_type(&right) =>
 			{
 				self.unchecked_key(*left, op, *right)
 			}

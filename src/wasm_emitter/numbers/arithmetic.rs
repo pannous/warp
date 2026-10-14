@@ -2,6 +2,14 @@
 
 use super::super::*;
 
+/// The int scratch local that holds the left operand of `and`/`or` between its test and the branch that returns it
+pub(crate) const LOGICAL_SCRATCH: u32 = 2;
+
+/// ffi_imports key of libm's pow for float powers; the `m.` prefix keeps it apart from a user function named pow
+pub(crate) const LIBM_POW: &str = "m.pow";
+/// ffi_imports key of libm's cbrt for ∛ of a run-time value
+pub(crate) const LIBM_CBRT: &str = "m.cbrt";
+
 impl WasmGcEmitter {
 	/// Emit arithmetic operation: evaluate operands and apply operator
 	pub(in crate::wasm_emitter) fn emit_arithmetic(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
@@ -1056,5 +1064,52 @@ impl WasmGcEmitter {
 		self.emit_call(func, "get_int_value");
 		self.emit_call(func, "new_int");
 		Self::emit_list(func, &[I::Else, I::LocalGet(held), I::RefAsNonNull, I::End]);
+	}
+
+	/// Check if an expression is numeric (int, float, or bool)
+	pub(in crate::wasm_emitter) fn is_numeric(&self, node: &Node) -> bool {
+		let node = node.drop_meta();
+		match node {
+			Node::Number(_) | Node::True | Node::False => true,
+			// `"a"*n` repeats and `"a"+"b"` joins texts: arithmetic that is no number
+			Node::Key(_left, op, _right) if op.is_arithmetic() => {
+				!matches!(self.get_type(node), Kind::Text | Kind::Codepoint | Kind::List)
+			}
+			Node::Key(_left, op, _right) if op.is_shift() || op.is_comparison() => true,
+			Node::Key(left, op, right) if op.is_logical() || op.is_bitwise() => {
+				self.is_numeric(left) && self.is_numeric(right)
+			}
+			// `not x` is always 1 or 0
+			Node::Key(left, Op::Not, _) if left.is_empty_node() => true,
+			Node::Key(_, Op::Define | Op::Assign, right) => self.is_numeric(right),
+			// grouping: `(1==2)` is the number it computes
+			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_numeric(&items[0]),
+			Node::Symbol(name) => {
+				// Check if symbol is a known numeric variable
+				if let Some(local) = self.scope.lookup(name) {
+					matches!(local.kind, Kind::Int | Kind::Float)
+				} else if let Some(&(_, kind)) = self.ctx.user_globals.get(name) {
+					matches!(kind, Kind::Int | Kind::Float)
+				} else {
+					false
+				}
+			}
+			_ => false, // Empty, Text, Char, List, etc. are not numeric
+		}
+	}
+
+	/// Emit comparison operator for f64 (result is i32, extended to i64)
+	pub(in crate::wasm_emitter) fn emit_float_comparison(&self, func: &mut Function, op: &Op) {
+		let cmp = match op {
+			Op::Eq => I::F64Eq,
+			Op::Ne => I::F64Ne,
+			Op::Lt => I::F64Lt,
+			Op::Gt => I::F64Gt,
+			Op::Le => I::F64Le,
+			Op::Ge => I::F64Ge,
+			_ => unreachable!("Not a comparison op: {:?}", op),
+		};
+		func.instruction(&cmp);
+		func.instruction(&I::I64ExtendI32U);
 	}
 }

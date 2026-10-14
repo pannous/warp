@@ -676,3 +676,107 @@ fn declared_any(node: &Node, scope: &Scope) -> bool {
 		_ => false,
 	}
 }
+
+/// Kind of a value known before running the program
+pub(crate) fn literal_kind(value: &Node) -> Option<Kind> {
+	match value.drop_meta() {
+		Node::Number(Number::Int(_) | Number::BigInt(_)) | Node::True | Node::False => Some(Kind::Int),
+		Node::Number(_) => Some(Kind::Float),
+		Node::Text(_) => Some(Kind::Text),
+		Node::Char(_) => Some(Kind::Codepoint),
+		Node::Key(nothing, Op::Neg, operand) if matches!(nothing.drop_meta(), Node::Empty) => literal_kind(operand),
+		_ => None,
+	}
+}
+
+/// The kind of a literal or of arithmetic on literals: `π*1000000` is a float, `2*3` and `2.0*3` (exact decimals) Ints
+pub(crate) fn computed_literal_kind(value: &Node) -> Option<Kind> {
+	match value.drop_meta() {
+		Node::Key(left, op, right) if op.is_arithmetic() && !matches!(left.drop_meta(), Node::Empty) => {
+			// exact: whole or not by its value, `7/2*2` is 7, `33/10*2` is 33/5
+			if let Some(exact) = exact_literal_value(value) {
+				return Some(if exact.is_integer() { Kind::Int } else { Kind::Float });
+			}
+			match (operand_kind(left)?, operand_kind(right)?) {
+				(Kind::Int, Kind::Int) => Some(Kind::Int),
+				(Kind::Float | Kind::Int, Kind::Float | Kind::Int) => Some(Kind::Float),
+				// `"5"*3` repeats the text (card repeat-int)
+				(left_kind, right_kind) if super::inference::repeats_text(left_kind, op, right_kind) => {
+					Some(Kind::Text)
+				}
+				_ => None,
+			}
+		}
+		_ => literal_kind(value),
+	}
+}
+
+/// The exact value of arithmetic on exact literals (`3.3*2` is 33/5), None for anything else or a division by zero
+pub(super) fn exact_literal_value(node: &Node) -> Option<crate::extensions::reals::Rational> {
+	match node.drop_meta() {
+		Node::Number(Number::Float(f)) if Number::is_exact_decimal(*f) => {
+			let (numerator, denominator) = crate::wasm_emitter::numbers::exact::decimal_fraction(*f);
+			Some(crate::extensions::reals::Rational::new(numerator, denominator))
+		}
+		Node::Number(number @ (Number::Int(_) | Number::BigInt(_) | Number::Quotient(..) | Number::BigQuotient(_))) => {
+			Some(number.to_rational())
+		}
+		Node::Key(nothing, Op::Neg | Op::Sub, operand) if matches!(nothing.drop_meta(), Node::Empty) => {
+			Some(exact_literal_value(operand)?.neg())
+		}
+		Node::Key(left, op, right) => {
+			let (left, right) = (exact_literal_value(left)?, exact_literal_value(right)?);
+			match op {
+				Op::Add => Some(left.add(&right)),
+				Op::Sub => Some(left.add(&right.neg())),
+				Op::Mul => Some(left.mul(&right)),
+				Op::Div => Some(left.mul(&right.inverse()?)),
+				_ => None,
+			}
+		}
+		_ => None,
+	}
+}
+
+/// An operand of arithmetic on literals: an exact decimal stays exact (`2.0*3` is 6), a real constant is a float
+pub(super) fn operand_kind(operand: &Node) -> Option<Kind> {
+	match operand.drop_meta() {
+		Node::Symbol(name) if REAL_CONSTANTS.contains(&name.as_str()) => Some(Kind::Float),
+		Node::Number(Number::Float(f)) if Number::is_exact_decimal(*f) => Some(Kind::Int),
+		Node::Key(..) => computed_literal_kind(operand),
+		_ => literal_kind(operand),
+	}
+}
+
+/// The kind a call argument certainly has, judged from the literal alone
+pub fn argument_literal_kind(argument: &Node) -> Option<Kind> {
+	match argument.drop_meta() {
+		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square, _) => {
+			Some(infer_type(argument, &Scope::new()))
+		}
+		Node::Empty => Some(Kind::List),
+		// `"" + n`, `"#" + x + y`: a concatenation with a text is a text
+		Node::Key(_, Op::Add, _) if crate::lowering::declaration_forms::is_text(argument) => Some(Kind::Text),
+		// `1.5 as float`, `x as float`: the kind the conversion names
+		Node::Key(_, Op::As, target) if builtin_type_kind(&target.name()).is_some_and(|kind| kind.is_float()) => {
+			Some(Kind::Float)
+		}
+		_ if crate::closures::as_closure_new(argument).is_some() => Some(Kind::Function),
+		Node::List(entries, Bracket::Curly, _)
+			if entries
+				.iter()
+				.all(|entry| matches!(entry.drop_meta(), Node::Key(_, Op::Colon, _))) =>
+		{
+			Some(Kind::List)
+		} // a map
+		_ => None,
+	}
+}
+
+/// A decimal literal, `2.5` or `2.0` (an exact decimal, so its kind may be Int): a float an int parameter refuses (P49, P49b)
+pub(super) fn is_decimal_literal(node: &Node) -> bool {
+	matches!(
+		node.drop_meta(),
+		Node::Number(crate::extensions::numbers::Number::Float(_))
+	)
+}
