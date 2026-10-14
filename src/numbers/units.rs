@@ -650,7 +650,11 @@ pub fn describe(data: &DataValue) -> Option<String> {
 	data.downcast_ref::<crate::time::Time>().map(|time| time.to_string())
 }
 
-/// `sleep(1000 ms)`, `sleep 1 s`, `sleep(2 seconds)`: a constant duration is its milliseconds, what the host word takes
+/// The unit of a bare number of sleep (decision sleep-seconds)
+const SECOND: &str = "s";
+
+/// `sleep(1000 ms)`, `sleep 1 s`, `sleep(2 seconds)`, `sleep 2`: a constant duration is its milliseconds, what the host
+/// word takes
 /// (async agent, 2026-10-06: quantities do not reach run time yet, notes/units_runtime.md)
 pub fn lower_sleep_durations(program: Node) -> Node {
 	// a duration whose unit word is one of the program's names (`s = 1; sleep 5 s`) stays as written; `m = 2` leaves
@@ -666,22 +670,32 @@ pub fn lower_sleep_durations(program: Node) -> Node {
 					[single] => single.clone(),
 					several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
 				};
-				match milliseconds(&duration).filter(|_| !duration.mentions_where(|name| shadowed.contains(name))) {
+				let shadows = duration.mentions_where(|name| shadowed.contains(name));
+				let bare = matches!(duration.drop_meta(), Node::Number(_));
+				if bare {
+					if let Err(error) = warn_bare_duration(&duration) {
+						return error;
+					}
+				}
+				let duration = match bare {
+					true => Node::List(
+						vec![duration, Node::Symbol(SECOND.into())],
+						Bracket::None,
+						Separator::Space,
+					),
+					false => duration,
+				};
+				match milliseconds(&duration).filter(|_| !shadows) {
 					Some(amount) => Node::List(
 						vec![items[0].clone(), Node::int(amount)],
 						Bracket::Round,
 						Separator::None,
 					),
-					None => {
-						if let Err(error) = warn_bare_duration(&duration) {
-							return error;
-						}
-						Node::List(
-							items.into_iter().map(|item| lower(item, shadowed)).collect(),
-							bracket,
-							separator,
-						)
-					}
+					None => Node::List(
+						items.into_iter().map(|item| lower(item, shadowed)).collect(),
+						bracket,
+						separator,
+					),
 				}
 			}
 			other => other.map_children(|child| lower(child, shadowed)),
@@ -832,14 +846,14 @@ fn without_unread_constants(program: Node, constants: &Constants) -> Node {
 	Node::List(kept, bracket, separator)
 }
 
-/// User #17: `sleep(1)` reads as milliseconds but says nothing; a bare number gets the warning that names the units
+/// User #17: a bare number of `sleep(1)` gets the warning that names the units; it counts seconds (decision
+/// sleep-seconds), as in sh and Python; `use relaxed` and `use script` take it without the warning
 fn warn_bare_duration(duration: &Node) -> Result<(), Node> {
-	if !matches!(duration.drop_meta(), Node::Number(_)) {
+	if crate::compiler::compile_context::read(|context| context.hints_muted) {
 		return Ok(());
 	}
 	let amount = duration.serialize();
-	let message =
-		format!("sleep needs a unit: sleep {amount} second or sleep {amount} ms (a bare number is milliseconds)");
+	let message = format!("sleep needs a unit: sleep {amount}s or sleep {amount}ms (a bare number is seconds)");
 	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(duration, message)])
 }
 

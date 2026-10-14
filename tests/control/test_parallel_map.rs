@@ -16,7 +16,7 @@ fn a_parallel_map_gives_the_results_in_order() {
 #[test]
 fn a_parallel_map_runs_its_items_at_once() {
 	is!(
-		"slow(x) := { sleep(500); x }; started = clock(); ys = @parallel [1,2,3].map(slow); clock() - started < 1200",
+		"slow(x) := { sleep(500ms); x }; started = clock(); ys = @parallel [1,2,3].map(slow); clock() - started < 1200",
 		true
 	);
 }

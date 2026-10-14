@@ -14,6 +14,6 @@ while(frame < 120) {  // 120 frames at 60fps = 2 seconds
     DrawText("Press Ctrl+C to close", 260, 560, 20, 0xFF505050)  // DARKGRAY               
     DrawCircle(400, 300, 80.0, 0xFF2E1990)  // MAROON  Dark red circle                    
     EndDrawing()                                                                           
-    sleep(16)  // ~60fps (16ms per frame)                                                  
+    sleep(16ms)  // ~60fps (16ms per frame)                                                  
     frame = frame + 1                                                                      
 }                                                                                          

@@ -43,7 +43,7 @@ fn a_task_of_other_values_runs_where_it_starts() {
 
 #[test]
 fn a_task_nobody_awaits_finishes_before_the_program_ends() {
-	assert!(crate::common::printed("f(x) := { sleep(200); puti(x); x }; go f(7); 1").starts_with('7'));
+	assert!(crate::common::printed("f(x) := { sleep(200ms); puti(x); x }; go f(7); 1").starts_with('7'));
 }
 
 #[test]
@@ -80,7 +80,7 @@ fn a_paused_task_waits_for_resume() {
 	);
 	// held by the pause, the task is still there to stop after it would have finished
 	crate::common::fails_with(
-		&format!("{SPINNER}job = go spin(30000000); pause job; sleep(1500); stop job; await job"),
+		&format!("{SPINNER}job = go spin(30000000); pause job; sleep(1500ms); stop job; await job"),
 		"task stopped",
 	);
 }
@@ -141,7 +141,7 @@ fn lists_cross_to_a_task() {
 #[test]
 fn a_finish_handler_runs_after_the_statement_that_saw_the_task_finish() {
 	is!(
-		&format!("{SLEEPER}job = go f(300); x = 0; once job finishes: x = 7; sleep(600); x"),
+		&format!("{SLEEPER}job = go f(300); x = 0; once job finishes: x = 7; sleep(0.6s); x"),
 		7
 	);
 	// not finished yet when y is set; the end of the block waits for the task and runs the handler
@@ -153,12 +153,12 @@ fn a_finish_handler_runs_after_the_statement_that_saw_the_task_finish() {
 		&format!("{SLEEPER}job = go f(200); x = 0; once job finishes: x = 7; z = 1; x"),
 		7
 	);
-	is!(&format!("{SLEEPER}job = go f(100); done = 0; once job finishes: done = done + 1; for i in 1 to 3 {{ sleep(100) }}; done"), 1);
+	is!(&format!("{SLEEPER}job = go f(100); done = 0; once job finishes: done = done + 1; for i in 1 to 3 {{ sleep(0.1s) }}; done"), 1);
 }
 
 #[test]
 fn a_stop_handler_runs_once_the_task_stopped() {
-	is!(&format!("{SPINNER}job = go spin(100000000000); stopped = 0; on job.stop: stopped = 1; stop job; sleep(300); stopped"), 1);
+	is!(&format!("{SPINNER}job = go spin(100000000000); stopped = 0; on job.stop: stopped = 1; stop job; sleep(300ms); stopped"), 1);
 }
 
 #[test]

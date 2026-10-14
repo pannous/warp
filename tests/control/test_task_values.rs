@@ -59,7 +59,7 @@ fn a_task_pauses_and_resumes() {
 	);
 	// held by the pause, the task is still there to stop after it would have finished
 	crate::common::fails_with(
-		&format!("{SPINNER}job = go spin(30000000); pause job; sleep(1500); stop job; await job"),
+		&format!("{SPINNER}job = go spin(30000000); pause job; sleep(1500ms); stop job; await job"),
 		"task stopped",
 	);
 }

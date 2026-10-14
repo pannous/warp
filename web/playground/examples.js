@@ -132,7 +132,7 @@ for x in 0..32 {
   clear(paper)
   circle(x, 8, 4, orange)
   show()
-  sleep(30)
+  sleep(30ms)
 }
 "done"` },
 	frames: { value: '"done"', canvases: 1, code: `// without a sleep too: each show() replaces the picture of the same size
@@ -161,7 +161,7 @@ for frame in 0..200 {
   clear(paper)
   circle(mouse_x, mouse_y, 3, if mouse_down then red else blue)
   show()
-  sleep(30)
+  sleep(30ms)
 }
 "done"` },
 	"shader mouse": { value: '"done"', canvases: 1, code: `// a shader under the mouse: rings ripple out from the pointer, a press lights them up
@@ -179,7 +179,7 @@ for frame in 0..300 {
   mouse = [mouse_x + 0.5, mouse_y + 0.5]
   seconds = (clock() - start) / 1000
   paint(ripples, 64, 32)
-  sleep(30)
+  sleep(30ms)
 }
 "done"` },
 	"game of life": { value: "15", wait: 1200, code: `// Conway's Game of Life, a step every half second
