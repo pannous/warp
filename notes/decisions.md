@@ -360,6 +360,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - P34 a number subscript on an empty `{}` keys it as a map.
 - single-entry (2026-10-12): "keep everything as it is and automatically upgrade it to a map": `{a:1}` stays a pair
   and becomes a one-entry map where a map is needed.
+- stored-table-name (2026-10-14): `stored people: [Person]` names its table after the variable;
+  `stored people: [Person] in "people_v2"` names it explicitly (replaces `= database.t`).
 - element-named-pair (2026-10-14): a one-key pair named like an element, `{body: [{type: "image"}]}`, is markup
   (`<body type="image">`); as data it takes a second key or a quoted key. Larger maps with such keys stay data.
 - #25/#36 a space before `[` never indexes; only glued `a[..]` indexes.
