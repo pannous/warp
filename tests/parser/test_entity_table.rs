@@ -29,13 +29,29 @@ fn the_entity_table_is_the_pinned_uniscript_index() {
 	assert!(std::fs::read_to_string(TABLE).unwrap() == expected, "{TABLE} differs from the pinned uniscript index: {REGENERATE}=1 tests/queue.sh --test tests -- the_entity_table");
 }
 
-/// `name\tcharacters` lines of the index's names table that `\:name` can spell (ASCII letters only), sorted by name
+/// The name `\:name` spells for an index name: ASCII letters, or a style block's letter or digit (`fracture A` is
+/// `fracture-A`, card uniscript-literal-hyphen); the hieroglyph and cuneiform catalogues stay out of the binary
+fn spelled_name(name: &str) -> Option<String> {
+	let letters = |part: &str| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_alphabetic() || byte == b'-');
+	match name.split_once(' ') {
+		None => name
+			.bytes()
+			.all(|byte| byte.is_ascii_alphabetic())
+			.then(|| name.to_string()),
+		Some((block, member)) => {
+			(letters(block) && member.len() == 1 && member.bytes().all(|byte| byte.is_ascii_alphanumeric()))
+				.then(|| format!("{block}-{member}"))
+		}
+	}
+}
+
+/// `name\tcharacters` lines of the index's names table that `\:name` can spell (spelled_name), sorted by name
 fn entity_table(index: &[u8]) -> String {
 	let word = |at: usize| u32::from_le_bytes(index[at..at + 4].try_into().unwrap()) as usize;
 	assert_eq!(&index[..4], b"USX1");
 	let (records, count) = (word(8), word(12)); // table 0: names
 	let text = |at: usize, length: usize| std::str::from_utf8(&index[at..at + length]).unwrap();
-	let mut entities: Vec<(&str, &str)> = (0..count)
+	let mut entities: Vec<(String, &str)> = (0..count)
 		.map(|record| records + record * RECORD_BYTES)
 		.map(|record| {
 			(
@@ -43,11 +59,8 @@ fn entity_table(index: &[u8]) -> String {
 				text(word(record + 12), word(record + 16)),
 			)
 		})
-		.filter(|(name, characters)| {
-			name.bytes().all(|byte| byte.is_ascii_alphabetic())
-				&& !characters.is_empty()
-				&& !characters.contains(['\t', '\n'])
-		})
+		.filter(|(_, characters)| !characters.is_empty() && !characters.contains(['\t', '\n']))
+		.filter_map(|(name, characters)| Some((spelled_name(name)?, characters)))
 		.collect();
 	entities.sort();
 	entities
