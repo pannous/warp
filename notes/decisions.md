@@ -287,8 +287,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   where a later call sees it; `global` on the variable or in the reader; pure getters over constants may fold.
 - P71 `:=` without parameters is always charged, re-evaluated at each use; assigning it after is an error. P138 Go's
   `total := 0; total += n` stays that error.
-- P124 a lambda assigning an enclosing function's variable shares it (like JS), `nonlocal n` optional; a nested `def`
-  needs `nonlocal`. Block arguments share captured variables too.
+- P124 a lambda or nested `def` changing an enclosing function's variable (`n += 1`) shares it (like JS; nested def
+  since cleanup-cuts-2 / interviewer option A), `nonlocal n` optional: it only shares a plain `n = 5`, which is
+  otherwise a fresh local. Block arguments share captured variables too.
 - P70c handlers and definitions created in a loop keep their own iteration's variable (JS `let`).
 - P72 no memoization syntax; the compiler decides.
 - P73 `x!` means force: a block runs, an optional unwraps, a plain value is itself. D2 (by position): `fn!` after a
