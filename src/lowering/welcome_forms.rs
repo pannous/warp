@@ -443,7 +443,8 @@ pub(crate) fn with_match_cases(mut items: Vec<Node>, convert: impl Fn(&Node) -> 
 	items
 }
 
-fn colon_cases(block: &Node) -> Node {
+/// The canonical arm form every match lowering reads: `pattern: body`
+pub(crate) fn colon_cases(block: &Node) -> Node {
 	let Node::List(cases, Bracket::Curly, separator) = block.drop_meta() else {
 		return block.clone();
 	};

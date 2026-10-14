@@ -113,27 +113,10 @@ pub(super) fn taken_apart(node: Node, fields: &ClassFields, class_of: &ClassOf) 
 			recurse(Node::Key(Box::new(target), Op::Assign, value))
 		}
 		Node::List(items, bracket, separator) if is_match(&items) => {
-			let items = crate::welcome_forms::with_match_cases(items, |cases| class_arms_as_arrows(cases, fields));
+			let items = crate::welcome_forms::with_match_cases(items, |cases| {
+				class_arms(&crate::welcome_forms::colon_cases(cases), fields)
+			});
 			Node::List(items, bracket, separator).map_children(recurse)
-		}
-		Node::Key(pattern, Op::FatArrow, body) if is_class_pattern(&pattern, fields) => {
-			let mut matched = Matched::default();
-			if matched_pattern(&pattern, &subject, fields, &mut matched).is_none() {
-				return Node::Key(pattern, Op::FatArrow, Box::new(recurse(*body)));
-			}
-			// `parts·from if parts·from is Point and parts·from.x == 0` (`is` compares like ==, a class name tests the type)
-			let test = matched
-				.class_tests
-				.into_iter()
-				.chain(matched.tests)
-				.reduce(|all, test| key(all, Op::And, test))
-				.expect("a class pattern tests its class");
-			let guard = if_then(test, subject.clone());
-			key(
-				guard,
-				Op::FatArrow,
-				bound_parts(subject, &matched.bindings, Some(recurse(*body))),
-			)
 		}
 		other => other.map_children(recurse),
 	}
@@ -145,18 +128,41 @@ fn is_match(items: &[Node]) -> bool {
 		.is_some_and(|word| crate::words::SWITCH_WORDS.iter().any(|switch| word.is_symbol(switch)))
 }
 
-/// `Circle(r): body` in a match's cases is the arm `Circle(r) => body`: outside a match, `f(x): body` defines f
-fn class_arms_as_arrows(cases: &Node, fields: &ClassFields) -> Node {
+/// The class arms of a match's cases, `Point{x, y: 0}: body` and `Circle(r): body`, as the guard
+/// `if parts·from is Point and parts·from.y == 0 then parts·from` and the body with the fields bound
+fn class_arms(cases: &Node, fields: &ClassFields) -> Node {
 	let Node::List(arms, Bracket::Curly, separator) = cases.drop_meta() else {
 		return cases.clone();
 	};
-	let arms = arms.iter().map(|arm| match arm.drop_meta() {
-		Node::Key(pattern, Op::Colon, body) if is_class_pattern(pattern, fields) => {
-			Node::Key(pattern.clone(), Op::FatArrow, body.clone())
-		}
-		_ => arm.clone(),
-	});
+	let arms = arms
+		.iter()
+		.map(|arm| class_arm(arm, fields).unwrap_or_else(|| arm.clone()));
 	Node::List(arms.collect(), Bracket::Curly, separator.clone())
+}
+
+fn class_arm(arm: &Node, fields: &ClassFields) -> Option<Node> {
+	let Node::Key(pattern, Op::Colon, body) = arm.drop_meta() else {
+		return None;
+	};
+	let subject = symbol(PARTS_WORD);
+	let mut matched = Matched::default();
+	if !is_class_pattern(pattern, fields) {
+		return None;
+	}
+	matched_pattern(pattern, &subject, fields, &mut matched)?;
+	// `is` compares like ==, a class name tests the type
+	let test = matched
+		.class_tests
+		.into_iter()
+		.chain(matched.tests)
+		.reduce(|all, test| key(all, Op::And, test))
+		.expect("a class pattern tests its class");
+	let guard = if_then(test, subject.clone());
+	Some(key(
+		guard,
+		Op::Colon,
+		bound_parts(subject, &matched.bindings, Some(body.as_ref().clone())),
+	))
 }
 
 /// What a pattern asks of its subject: class tests (`p is Point`), value tests (`p.x == 0`) and the variables it
