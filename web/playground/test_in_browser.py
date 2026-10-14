@@ -88,6 +88,10 @@ COMPLETIONS = [
 	("xs = 1\nxs_a = 2\nxs_b = 3\nxs", ["Tab", "Enter"], "xs = 1\nxs_a = 2\nxs_b = 3\nxs\n"),
 ]
 KEY_CODES = {"Tab": 9, "Enter": 13}
+# card playground-turn: a long run turns Run into Stop, which stops it
+STOP_BUTTON = "(Run becomes Stop while a program runs, and stops it)"
+STOP_BUTTON_CODE = "n = 0\nwhile yes { n += 1 }"
+STOP_BUTTON_WAIT_MS = 1500  # past playground.js STOP_GRACE_MS, well before RUN_TIMEOUT_MS
 CLIPBOARD_READ = "(a program reads the clipboard)"  # card web-apis-rest: host.js clipboard_text asks the page
 CLIPBOARD_TEXT = "copied by the page"
 # card web-apis-rest: gpu_compute over named arrays, and paint of a shader drawn straight into the page's canvas
@@ -493,6 +497,22 @@ def file_kept_wrong(page_url):
 	return [] if FILE_KEPT_TEXT in read else [f"read after a reload: {read!r}, expected {FILE_KEPT_TEXT!r}"]
 
 
+def stop_button_wrong():
+	"""the Run button of a program still running after STOP_GRACE_MS says Stop; pressing it stops the run, and it says Run again"""
+	shown = browser("eval", f"""(async () => {{
+		const pause = milliseconds => new Promise(done => setTimeout(done, milliseconds));
+		const finished = playground.runCode({json.dumps(STOP_BUTTON_CODE)});
+		await pause({STOP_BUTTON_WAIT_MS});
+		const running = document.getElementById("run").textContent;
+		document.getElementById("run").click();
+		await finished;
+		return JSON.stringify({{ running, after: document.getElementById("run").textContent, value: document.getElementById("value").textContent }});
+	}})()""")
+	shown = json.loads(json.loads(shown)) if shown.startswith('"') else {"running": f"(page gave no answer: {shown or browser_complaint})"}
+	expected = {"running": "Stop ■", "after": "Run ▶", "value": "stopped"}
+	return [f"{part}: {shown.get(part)!r}, expected {value!r}" for part, value in expected.items() if shown.get(part) != value]
+
+
 def clipboard_read_wrong():
 	"""a program reads what the page copied; skipped loudly when the browser refuses the page its own clipboard"""
 	refused = browser("eval", f"""(async () => {{
@@ -711,7 +731,7 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
