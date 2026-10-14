@@ -123,10 +123,9 @@ impl Kind {
 		match s {
 			"void" => Kind::Empty,
 			"int" | "int32_t" | "uint32_t" | "Uint32" => Kind::Int32,
-			"long" | "long int" | "int64_t" | "uint64_t" | "long long" => Kind::Int,
+			s if crate::ffi::C_INT64_TYPES.contains(&s) => Kind::Int,
 			"float" => Kind::Float32,
 			"double" => Kind::Float,
-			"size_t" | "ssize_t" | "ptrdiff_t" => Kind::Int,
 			"bool" | "_Bool" => Kind::Int32,
 			"short" | "int16_t" | "uint16_t" => Kind::Int32,
 			"char" | "int8_t" | "uint8_t" => Kind::Codepoint,

@@ -13,24 +13,28 @@ pub struct FfiHeaderSignature {
 	pub raw: String,
 }
 
-/// Map C type string to wasm_encoder ValType
-pub fn map_c_type_to_valtype(c_type: &str) -> Option<wasm_encoder::ValType> {
-	let t = bare_c_type(c_type);
+/// The C integer types of 64 bits
+pub(crate) const C_INT64_TYPES: [&str; 10] = [
+	"long",
+	"long int",
+	"long long",
+	"unsigned long",
+	"int64_t",
+	"uint64_t",
+	"Uint64",
+	"size_t",
+	"ssize_t",
+	"ptrdiff_t",
+];
 
-	match t {
-		"double" => Some(wasm_encoder::ValType::F64),
+/// The wasm value type of a C type: none for void; pointers (linear memory offsets), the smaller integers and unknown
+/// types (opaque handles) are i32
+pub fn map_c_type_to_valtype(c_type: &str) -> Option<wasm_encoder::ValType> {
+	match bare_c_type(c_type) {
+		"void" => None,
 		"float" => Some(wasm_encoder::ValType::F32),
-		"int" | "int32_t" => Some(wasm_encoder::ValType::I32),
-		"unsigned int" | "uint32_t" | "Uint32" => Some(wasm_encoder::ValType::I32),
-		"long" | "int64_t" | "long long" | "size_t" | "ssize_t" => Some(wasm_encoder::ValType::I64),
-		"unsigned long" | "uint64_t" | "Uint64" => Some(wasm_encoder::ValType::I64),
-		"short" | "int16_t" => Some(wasm_encoder::ValType::I32),
-		"char" | "int8_t" | "unsigned char" | "uint8_t" => Some(wasm_encoder::ValType::I32),
-		"void" => None, // void return means no result
-		// Pointer types - all become i32 (WASM linear memory offset)
-		s if s.ends_with('*') => Some(wasm_encoder::ValType::I32),
-		s if s.contains('*') => Some(wasm_encoder::ValType::I32),
-		// Unknown types default to i32 (could be opaque handles)
+		"double" => Some(wasm_encoder::ValType::F64),
+		t if C_INT64_TYPES.contains(&t) => Some(wasm_encoder::ValType::I64),
 		_ => Some(wasm_encoder::ValType::I32),
 	}
 }
