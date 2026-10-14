@@ -1,4 +1,4 @@
-//! Looking ahead: what can start an atom, operators and control words ahead, guards, attributes
+//! Looking ahead: what can start an atom, operators ahead, attributes
 
 use super::*;
 
@@ -52,38 +52,6 @@ impl WarpParser {
 			|| self.url_follows()
 	}
 
-	/// `function add` (P82): the function itself where a name and then the end of the expression follow the keyword;
-	/// `function add(x) {…}` and `function add x := …` define it
-	pub(super) fn function_reference_after(&mut self, keyword: &str) -> Option<Node> {
-		if !FUNCTION_REFERENCE_WORDS.contains(&keyword) || self.options.data_mode {
-			return None;
-		}
-		let blanks = (0..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
-		if blanks == 0 || !self.peek_char(blanks).is_alphabetic() {
-			return None;
-		}
-		let name: String = (blanks..)
-			.map(|at| self.peek_char(at))
-			.take_while(|ch| is_identifier_char(*ch))
-			.collect();
-		let after = blanks + name.chars().count();
-		let rest = (after..)
-			.find(|at| !matches!(self.peek_char(*at), ' ' | '\t'))
-			.unwrap_or(after);
-		// `map function square on [1 2 3]`: the iteration words' `on` ends it too
-		let on_follows = (rest..)
-			.map(|at| self.peek_char(at))
-			.take_while(|ch| is_identifier_char(*ch))
-			.collect::<String>()
-			== crate::words::ON_WORD;
-		if !matches!(self.peek_char(rest), '\0' | ';' | ',' | ')' | ']' | '}' | '\n') && !on_follows {
-			return None;
-		}
-		self.advance_by(after);
-		self.after_function_keyword = false;
-		Some(crate::closures::function_reference(name))
-	}
-
 	/// `&name`: a reference to the function `name`, an `&` glued to the word after it and not to a word before it (`a &b`, `f(&g)`)
 	/// `./mozart.mp3`, `../songs/a.wav`: `./` or `../` glued to what follows and not to an operand before it starts a
 	/// file path without quotes; `xs ./ 2` and `xs./2` divide each element
@@ -95,29 +63,6 @@ impl WarpParser {
 			&& self.peek_char(dots) == '/'
 			&& !ends_path(self.peek_char(dots + 1))
 			&& !glued_to_operand
-	}
-
-	pub(super) fn starts_function_reference(&self) -> bool {
-		self.current_char() == '&' && self.peek_char(1).is_alphabetic() && !is_identifier_char(self.prev_char())
-	}
-
-	/// Elixir's capture `&(&1 * 2)`: an `&(` not glued to a word before it, whose group reads an `&1`
-	pub(super) fn starts_capture(&self) -> bool {
-		if self.current_char() != '&' || self.peek_char(1) != '(' || is_identifier_char(self.prev_char()) {
-			return false;
-		}
-		let mut depth = 0;
-		for at in 1.. {
-			match self.peek_char(at) {
-				'(' => depth += 1,
-				')' if depth == 1 => return false,
-				')' => depth -= 1,
-				'&' if self.peek_char(at + 1).is_ascii_digit() => return true,
-				'\0' => return false,
-				_ => {}
-			}
-		}
-		false
 	}
 
 	/// A digit, or a leading-dot decimal like `.5`
@@ -238,17 +183,6 @@ impl WarpParser {
 		(allowed && operand_after_word && !selector_part && !style_word).then_some((op, spelling))
 	}
 
-	/// `unless`/`until` in front of a statement: the `if`/`while` it reads as, with the condition negated afterwards
-	pub(super) fn peek_negated_control_word(&self) -> Option<(Op, usize)> {
-		if self.options.data_mode {
-			return None;
-		}
-		NEGATED_CONTROL_WORDS
-			.iter()
-			.find(|(word, _)| self.matches_keyword(word))
-			.map(|(word, op)| (*op, word.len()))
-	}
-
 	/// `10 down to 1`: the length of the words `down to` (Kotlin's `downTo`), the range counting down
 	fn down_to_length(&self) -> Option<usize> {
 		if !self.matches_keyword(DOWN_WORD) {
@@ -259,114 +193,6 @@ impl WarpParser {
 			.count();
 		(blanks > 0 && self.word_at(DOWN_WORD.len() + blanks) == TO_WORD)
 			.then(|| DOWN_WORD.len() + blanks + TO_WORD.len())
-	}
-
-	/// `try` or `assert` followed by an operand: the words that guard a statement
-	pub(super) fn peek_guard_word(&self) -> Option<&'static str> {
-		self.guard_word_ahead().map(|(_, marker)| marker)
-	}
-
-	/// The guard word here and its marker
-	fn guard_word_ahead(&self) -> Option<(&'static str, &'static str)> {
-		if self.options.data_mode {
-			return None;
-		}
-		GUARD_MARKERS.iter().copied().find(|(word, _)| {
-			self.matches_keyword(word) && matches!(self.peek_char(word.len()), ' ' | '\t' | '{' | ':')
-		})
-	}
-
-	/// `try X else Y` and `assert C else X`, as the marker call `marker(X, Y)` that `library_words` lowers.
-	/// X runs to the `else` (it may be an assignment); `assert C` alone has ø for the message.
-	pub(super) fn parse_guard(&mut self, marker: &'static str) -> Node {
-		let word_length = self.guard_word_ahead().map_or(0, |(word, _)| word.len());
-		self.advance_by(word_length);
-		self.skip_spaces();
-		self.skip_python_colon();
-		let outer = std::mem::replace(&mut self.stops_at_else, true);
-		let start = self.pos;
-		let guarded = self.with_equals_comparing(marker == ASSERT_MARKER, |parser| parser.parse_guarded_phrase());
-		let written: String = self.chars[start..self.pos].iter().collect();
-		self.stops_at_else = outer;
-		self.skip_spaces();
-		let mut caught = None;
-		let fallback = if let Some((word, ahead)) = self.fallback_word_ahead() {
-			self.advance_by(ahead + word.len());
-			self.skip_spaces();
-			caught = if word == ELSE_KEYWORD {
-				None
-			} else {
-				self.parse_caught_name(word)
-			};
-			self.skip_python_colon();
-			// `try X else print "msg"`: a braceless call as on the guarded side (card try-print)
-			self.parse_guarded_phrase()
-		} else if marker == TRY_MARKER {
-			// `r = try X` (user, card failed-raised) and `try X finally Z` are `try X catch e { e }`: a failure of X,
-			// trap included, stays the value, which `r failed` tests
-			caught = Some(UNCAUGHT_ERROR.to_string());
-			Symbol(UNCAUGHT_ERROR.to_string())
-		} else if marker == ASSERT_MARKER {
-			// the error names the condition as written, before lowering rewrote it
-			Node::Text(format!("{ASSERTION_FAILED}: {}", written.trim()))
-		} else {
-			Empty
-		};
-		// `catch e { … }` (P67): the name the fallback reads the caught Error by, a fourth item
-		let binding = caught.filter(|name| mentions(&fallback, name)).map(Symbol);
-		let guard = Node::List(
-			[
-				vec![Symbol(marker.to_string()), guarded, fallback],
-				binding.into_iter().collect(),
-			]
-			.concat(),
-			Bracket::Round,
-			Separator::None,
-		);
-		self.with_finally(guard)
-	}
-
-	/// `… finally {Z}` after a guard: `(finally·N = guard; Z; finally·N)`, Z runs and the guard's value stays
-	fn with_finally(&mut self, guard: Node) -> Node {
-		let Some(ahead) = self.finally_ahead() else {
-			return guard;
-		};
-		self.advance_by(ahead + FINALLY_KEYWORD.len());
-		self.skip_spaces();
-		let cleanup = if self.current_char() == ':' {
-			self.colon_body(":")
-		} else {
-			self.rest_of_statement()
-		};
-		self.finally_blocks += 1;
-		let value = Symbol(format!("{FINALLY_KEYWORD}·{}", self.finally_blocks));
-		let held = Node::Key(Box::new(value.clone()), Op::Assign, Box::new(guard));
-		Node::List(vec![held, cleanup, value], Bracket::Round, Separator::Semicolon)
-	}
-
-	/// The blanks before a following `finally`, if one follows
-	fn finally_ahead(&self) -> Option<usize> {
-		let ahead = (0..)
-			.take_while(|&offset| self.peek_char(offset).is_whitespace())
-			.count();
-		(self.word_at(ahead) == FINALLY_KEYWORD).then_some(ahead)
-	}
-
-	/// `after C return V`: the marker call `after·return(C, V)`, when a `return` follows on the statement (outside brackets);
-	/// `after tested: body` without one stays a call listener (variable_signals)
-	pub(super) fn try_parse_after_return(&mut self) -> Option<Node> {
-		if self.options.data_mode || !self.matches_keyword(AFTER_KEYWORD) || !self.return_ahead() {
-			return None;
-		}
-		self.advance_by(AFTER_KEYWORD.len());
-		let condition = self.parse_expr(0);
-		self.skip_spaces();
-		if !self.matches_keyword(RETURN_KEYWORD) {
-			return Some(error("`after` needs a `return`: `after C return V`"));
-		}
-		self.advance_by(RETURN_KEYWORD.len());
-		let value = self.parse_expr(0);
-		Some(call(AFTER_MARKER, vec![condition, value]))
 	}
 
 	/// At an opening bracket: a comma separates the group's own items (`[a -1, 2]`), not one of a nested group or text
@@ -383,22 +209,6 @@ impl WarpParser {
 				(None, ')' | ']' | '}') if depth == 0 => return false,
 				(None, ')' | ']' | '}') => depth -= 1,
 				(None, ',') if depth == 0 => return true,
-				_ => {}
-			}
-		}
-		false
-	}
-
-	/// Is there a `return` word later on this statement, outside brackets
-	fn return_ahead(&self) -> bool {
-		let mut depth = 0i32;
-		for offset in AFTER_KEYWORD.len().. {
-			match self.peek_char(offset) {
-				'\0' | '\n' | ';' => return false,
-				'(' | '[' | '{' => depth += 1,
-				')' | ']' | '}' if depth == 0 => return false,
-				')' | ']' | '}' => depth -= 1,
-				c if depth == 0 && c.is_whitespace() && self.word_at(offset + 1) == RETURN_KEYWORD => return true,
 				_ => {}
 			}
 		}
@@ -428,121 +238,6 @@ impl WarpParser {
 		let next = self.peek_char(argument);
 		let argument_word = self.word_at(argument);
 		(next.is_alphanumeric() || matches!(next, '"' | '\'' | '[' | '{')) && !joins_operands(&argument_word)
-	}
-
-	/// The word that starts the fallback of `try`: `else`, or its classical synonyms `catch` and Python's `except` (P60),
-	/// with how many blanks (line breaks included) come before it
-	pub(super) fn fallback_word_ahead(&self) -> Option<(&'static str, usize)> {
-		let ahead = (0..)
-			.take_while(|&offset| self.peek_char(offset).is_whitespace())
-			.count();
-		FALLBACK_WORDS
-			.iter()
-			.find(|word| self.word_at(ahead) == **word)
-			.map(|word| (*word, ahead))
-	}
-
-	/// `catch e`, `except ZeroDivisionError`, `except ValueError as e`: the name the error would be bound to
-	pub(super) fn parse_caught_name(&mut self, word: &str) -> Option<String> {
-		if !self.is_identifier_start(0) {
-			return None;
-		}
-		let mut name = self.word_at(0);
-		self.advance_by(name.chars().count());
-		self.skip_spaces();
-		if self.matches_keyword("as") {
-			self.advance_by(2);
-			self.skip_spaces();
-			name = self.word_at(0);
-			self.advance_by(name.chars().count());
-			self.skip_spaces();
-			return Some(name);
-		}
-		(word == "catch").then_some(name) // `except ZeroDivisionError` names a type, `catch e` a binding
-	}
-
-	/// Python's `try:` and `except:` end with a colon; the block may start on the next line
-	pub(super) fn skip_python_colon(&mut self) {
-		if self.current_char() == ':' {
-			self.advance();
-			self.skip_whitespace();
-		}
-	}
-
-	/// Either part of `try X else Y`: one expression, or a braceless call of several (`try raise "boom" else print 3`)
-	pub(super) fn parse_guarded_phrase(&mut self) -> Node {
-		let mut items = vec![self.parse_expr(0)];
-		loop {
-			self.skip_spaces();
-			if FALLBACK_WORDS
-				.iter()
-				.chain([&FINALLY_KEYWORD])
-				.any(|word| self.matches_keyword(word))
-				|| matches!(self.current_char(), '\0' | '\n' | '\r' | ';' | ')' | ']' | '}' | ',')
-				// `try X else 7 // note`: the comment ends the phrase, the next line is not part of it
-				|| self.at_line_comment()
-			{
-				break;
-			}
-			let position = self.pos;
-			let item = self.parse_expr(0);
-			if self.pos == position {
-				break;
-			}
-			items.push(item);
-		}
-		Node::single_or_list(items, Bracket::None, Separator::Space)
-	}
-
-	/// `norm() := …`, `def abs(): …`, `fun sqrt() { … }`: the word `length` characters ahead names what is defined, not
-	/// the operator. A function of that name is refused (analyzer check_operator_word_functions, P141); a method is
-	/// called as `p.norm()` (card class-method-named)
-	pub(super) fn defines_named(&self, length: usize) -> bool {
-		if self.peek_char(length) != '(' {
-			return false;
-		}
-		let mut depth = 0;
-		let mut offset = length;
-		loop {
-			match self.peek_char(offset) {
-				'(' => depth += 1,
-				')' if depth == 1 => break,
-				')' => depth -= 1,
-				'\0' | '\n' => return false,
-				_ => {}
-			}
-			offset += 1;
-		}
-		let mut next = offset + 1;
-		while matches!(self.peek_char(next), ' ' | '\t') {
-			next += 1;
-		}
-		match (self.peek_char(next), self.peek_char(next + 1)) {
-			(':', '=') => true,
-			(':' | '{', _) => self.after_function_keyword_word(),
-			_ => false,
-		}
-	}
-
-	/// `def ` right before here: what follows heads a definition
-	pub(super) fn after_function_keyword_word(&self) -> bool {
-		let before: String = self.chars[..self.pos]
-			.iter()
-			.rev()
-			.skip_while(|c| c.is_whitespace())
-			.take_while(|c| c.is_alphanumeric())
-			.collect();
-		crate::operators::is_function_keyword(&before.chars().rev().collect::<String>())
-	}
-
-	/// `Int` or `float` after the colon of a definition's head: its result type, not its body
-	pub(super) fn result_type_follows(&self) -> bool {
-		let word: String = self.chars[self.pos..]
-			.iter()
-			.skip_while(|c| **c == ' ' || **c == '\t')
-			.take_while(|c| c.is_alphanumeric() || **c == '_')
-			.collect();
-		word.starts_with(char::is_uppercase) || crate::analyzer::type_word_kind(&word).is_some()
 	}
 
 	/// In a style sheet `#8884` or `#fff` in a value is a CSS hex color, not the count or index operator (card

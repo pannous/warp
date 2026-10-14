@@ -106,4 +106,37 @@ impl WarpParser {
 			Separator::Space,
 		))
 	}
+
+	/// `after C return V`: the marker call `after·return(C, V)`, when a `return` follows on the statement (outside brackets);
+	/// `after tested: body` without one stays a call listener (variable_signals)
+	pub(crate) fn try_parse_after_return(&mut self) -> Option<Node> {
+		if self.options.data_mode || !self.matches_keyword(AFTER_KEYWORD) || !self.return_ahead() {
+			return None;
+		}
+		self.advance_by(AFTER_KEYWORD.len());
+		let condition = self.parse_expr(0);
+		self.skip_spaces();
+		if !self.matches_keyword(RETURN_KEYWORD) {
+			return Some(error("`after` needs a `return`: `after C return V`"));
+		}
+		self.advance_by(RETURN_KEYWORD.len());
+		let value = self.parse_expr(0);
+		Some(call(AFTER_MARKER, vec![condition, value]))
+	}
+
+	/// Is there a `return` word later on this statement, outside brackets
+	fn return_ahead(&self) -> bool {
+		let mut depth = 0i32;
+		for offset in AFTER_KEYWORD.len().. {
+			match self.peek_char(offset) {
+				'\0' | '\n' | ';' => return false,
+				'(' | '[' | '{' => depth += 1,
+				')' | ']' | '}' if depth == 0 => return false,
+				')' | ']' | '}' => depth -= 1,
+				c if depth == 0 && c.is_whitespace() && self.word_at(offset + 1) == RETURN_KEYWORD => return true,
+				_ => {}
+			}
+		}
+		false
+	}
 }

@@ -1,21 +1,11 @@
-//! Expressions: the Pratt loop, special infix operators, prefix operators, if as a prefix
+//! Expressions: the Pratt loop, special infix operators, prefix operators
 
 use super::*;
 
 /// Characters that end a statement: a body cannot start with them
-const BODY_ENDS: [char; 7] = ['\0', ';', ',', '\n', '}', ')', ']'];
+pub(crate) const BODY_ENDS: [char; 7] = ['\0', ';', ',', '\n', '}', ')', ']'];
 
 impl WarpParser {
-	/// The head of a definition, `f`, `f x` or `f(x)`, makes f a function the rest of the source calls
-	fn register_defined_function(&mut self, head: &Node) {
-		if let Some(name) = defined_function_name(head) {
-			if matches!(head.drop_meta(), Node::List(..)) {
-				self.functions_with_parameters.insert(name.clone());
-			}
-			self.functions.insert(name);
-		}
-	}
-
 	/// Pratt parser: parse expression with given minimum binding power
 	/// Handles prefix, infix, and suffix operators
 	pub(super) fn parse_expr(&mut self, min_bp: u8) -> Node {
@@ -90,68 +80,6 @@ impl WarpParser {
 		self.continue_expr(lhs, min_bp)
 	}
 
-	/// `+(o) := …` defines the method of an operator by its glyph (a class's `plus`): the head is the call `+(o)`, no
-	/// unary plus
-	pub(super) fn try_parse_operator_method_head(&mut self) -> Option<Node> {
-		let (op, chars) = self.peek_operator()?;
-		crate::operators::operator_method(op)?;
-		let mut offset = chars + self.parenthesis_length(chars)?;
-		while matches!(self.peek_char(offset), ' ' | '\t') {
-			offset += 1;
-		}
-		if (self.peek_char(offset), self.peek_char(offset + 1)) != (':', '=') {
-			return None;
-		}
-		self.advance_by(chars);
-		let parameters = match self.parse_atom().drop_meta().clone() {
-			Node::List(parameters, Bracket::Round, _) => parameters,
-			Node::Empty => vec![],
-			parameter => vec![parameter],
-		};
-		Some(Node::List(
-			[vec![Symbol(op.to_string())], parameters].concat(),
-			Bracket::Round,
-			Separator::None,
-		))
-	}
-
-	/// The length of the balanced `(…)` at `offset`, None when none starts there or it never closes
-	fn parenthesis_length(&self, offset: usize) -> Option<usize> {
-		if self.peek_char(offset) != '(' {
-			return None;
-		}
-		let mut depth = 0;
-		for length in 0.. {
-			match self.peek_char(offset + length) {
-				'(' => depth += 1,
-				')' if depth == 1 => return Some(length + 1),
-				')' => depth -= 1,
-				'\0' => return None,
-				_ => {}
-			}
-		}
-		None
-	}
-
-	/// An infix operator alone as an argument or item, `sorted(xs, >)`, `[+, *]`: the operator as a value `(> ø ø)`, as
-	/// `by: >` gives
-	pub(super) fn try_parse_operator_value(&mut self) -> Option<Node> {
-		let (op, chars) = self.peek_operator()?;
-		if self.current_char().is_alphabetic() {
-			return None; // a word operator alone is a name: the parameter `to` of `hanoi(n, from, to, via)`
-		}
-		let blanks = (chars..)
-			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
-			.count();
-		// a pattern's rest `Point{x, ..}` (lowering/switch.rs rest_pattern) also ends a block
-		let ends_rest = matches!(op, Op::Range | Op::To) && self.peek_char(chars + blanks) == '}';
-		if !matches!(self.peek_char(chars + blanks), ')' | ',' | ']') && !ends_rest {
-			return None;
-		}
-		self.advance_by(chars);
-		Some(Node::Key(Box::new(Node::Empty), op, Box::new(Node::Empty)))
-	}
-
 	/// `data a and b` is the data `a and b`, also as an operand (`x = data a and b`, `string(data a and b)`); parentheses
 	/// around all of it only group it (`data (a and b)`). `data = …`, `data.x`, glued `data(x)` and `data class` stay
 	pub(super) fn try_parse_data(&mut self) -> Option<Node> {
@@ -182,11 +110,6 @@ impl WarpParser {
 			Bracket::None,
 			Separator::Space,
 		))
-	}
-
-	/// The right operand of a special infix operator, None when it binds looser than `min_bp` (nothing consumed)
-	pub(super) fn at_pipeline(&self) -> bool {
-		self.current_char() == '|' && self.peek_char(1) == '>'
 	}
 
 	pub(super) fn special_operand(&mut self, width: usize, (left, right): (u8, u8), min_bp: u8) -> Option<Node> {
@@ -587,89 +510,12 @@ impl WarpParser {
 			_ => Node::Key(Box::new(Empty), op, Box::new(rhs)),
 		}
 	}
-
-	/// The rest of the body after `if c:` or `while c:`, of which the colon took only the first word or words
-	pub(super) fn continue_colon_body(&mut self, body: &Node) -> Node {
-		match body.drop_meta() {
-			_ if is_print_word(body) && self.braceless_argument_follows() => {
-				// `if it%2: print it`, `if c: print ord x`
-				let first = self.expression_of_words();
-				self.print_call_from(first, Self::expression_of_words)
-			}
-			// `if c: print a, b`: the colon took `print a`, the comma continues its arguments
-			Node::List(words, Bracket::None, Separator::Space)
-				if words.len() > 1 && is_print_word(&words[0]) && self.current_char() == ',' =>
-			{
-				self.print_call_from(one_expression(&words[1..]), |parser| parser.parse_expr(0))
-			}
-			_ => self.continue_expr(body.clone(), 0),
-		}
-	}
-
-	/// `|x| x*x`, `|a, b| a+b` (Rust, and Ruby's `{ |x| x*x }`): the parameters of a lambda between bars, which the
-	/// body follows; nothing else starts with a bar
-	pub(super) fn pipe_parameters(&mut self) -> Option<Node> {
-		if self.current_char() != '|' || self.options.data_mode {
-			return None;
-		}
-		let mut length = 1;
-		while matches!(self.peek_char(length), ' ' | ',')
-			|| self.peek_char(length).is_alphanumeric()
-			|| self.peek_char(length) == '_'
-		{
-			length += 1;
-		}
-		let written: String = (1..length).map(|offset| self.peek_char(offset)).collect();
-		let names: Vec<Node> = written
-			.split([' ', ','])
-			.filter(|name| !name.is_empty())
-			.map(|name| Node::Symbol(name.to_string()))
-			.collect();
-		let mut body_start = length + 1;
-		while self.peek_char(body_start) == ' ' {
-			body_start += 1;
-		}
-		let first_name = 1 + written.len() - written.trim_start().len();
-		if self.peek_char(length) != '|'
-			|| names.is_empty()
-			|| !self.is_identifier_start(first_name)
-			|| BODY_ENDS.contains(&self.peek_char(body_start))
-		{
-			return None;
-		}
-		self.advance_by(body_start);
-		Some(match <[Node; 1]>::try_from(names) {
-			Ok([name]) => name,
-			Err(names) => Node::List(names, Bracket::Round, Separator::Colon),
-		})
-	}
-
-	/// A statement body follows: not a separator, closing bracket, end of input or the `do` keyword
-	pub(super) fn at_body_start(&self) -> bool {
-		!BODY_ENDS.contains(&self.current_char()) && !self.matches_keyword("do")
-	}
 }
 
 impl WarpParser {
 	/// A loop's key variable (`for k in keys(m)`) or a name holding a text: `m[k]` looks a key up, no indexing hint
 	pub(super) fn names_a_key(&self, index: &Node) -> bool {
 		matches!(index.drop_meta(), Node::Symbol(name) if self.key_variables.contains(name) || self.text_variables.contains(name))
-	}
-
-	/// `l = "en"` or `k:text` (a typed parameter or declaration) makes l, k text variables; any `x = …` a variable
-	fn note_variable(&mut self, lhs: &Node, op: Op, rhs: &Node) {
-		let Node::Symbol(name) = lhs.drop_meta() else { return };
-		if matches!(op, Op::Assign | Op::Define) {
-			self.variables.insert(name.clone());
-		}
-		let holds_text = match (op, rhs.drop_meta()) {
-			(Op::Assign | Op::Define, Node::Text(_)) => true,
-			(Op::Colon, Node::Symbol(type_word)) => crate::type_tests::is_text_type_word(type_word),
-			_ => false,
-		};
-		if holds_text {
-			self.text_variables.insert(name.clone());
-		}
 	}
 }
 

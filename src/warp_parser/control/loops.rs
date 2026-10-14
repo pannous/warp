@@ -346,3 +346,37 @@ impl WarpParser {
 		)
 	}
 }
+
+/// `keys(m)`, `m.keys`, `m.keys()`: an iterable whose items are a map's keys
+pub(crate) fn iterates_keys(iterable: &Node) -> bool {
+	let is_keys_word = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if word == "keys" || word == crate::words::MAP_KEYS);
+	let is_keys_call = |call: &Node| {
+		is_keys_word(call)
+			|| matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(is_keys_word))
+	};
+	match iterable.drop_meta() {
+		Node::Key(_, Op::Dot, method) => is_keys_call(method),
+		call => is_keys_call(call),
+	}
+}
+
+/// The error `message`, fixed by adding the missing `closer` at `at` (line, column)
+/// `for variable in iterable body`, the loop for_loop.rs lowers
+pub(crate) fn for_in_loop(variable: Node, iterable: Node, body: Node) -> Node {
+	Node::List(
+		vec![
+			Symbol("for".to_string()),
+			variable,
+			Symbol("in".to_string()),
+			iterable,
+			body,
+		],
+		Bracket::None,
+		Separator::Space,
+	)
+}
+
+pub(crate) fn while_do(condition: Node, body: Node) -> Node {
+	let head = Node::Key(Box::new(Empty), Op::While, Box::new(condition));
+	Node::Key(Box::new(head), Op::Do, Box::new(body))
+}
