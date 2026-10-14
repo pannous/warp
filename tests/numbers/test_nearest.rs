@@ -1,13 +1,13 @@
 // card nearest-helper: `nearest(x, rational, limit)` is the fraction closest to x whose denominator is at most limit, as
-// Python's Fraction.limit_denominator; `within: ε` the first convergent that close; neither the first convergent that is
-// the same float (user, 2026-10-10: a fixed 10^6 default was "hard to believe"). An exact √2 or π expands exactly
-// (src/numbers/real.rs), a float at run time by lib/prelude.warp
+// Python's Fraction.limit_denominator, with its default 1000000 (user decision 2026-10-14, card nearest-default-limit);
+// `within: ε` the first convergent that close; limit 0 the first convergent that is the same float. An exact √2 or π
+// expands exactly (src/numbers/real.rs), a float at run time by lib/prelude.warp
 use crate::common::fails_with;
 use crate::is;
 
 #[test]
 fn nearest_fraction() {
-	is!("nearest(sqrt(2), rational) == 131836323/93222358", true);
+	is!("nearest(sqrt(2), rational) == 941664/665857", true); // limit 1000000 by default (user decision)
 	is!("nearest(sqrt(2), rational, 1000) == 1393/985", true);
 	is!("nearest(pi, rational, 100) == 311/99", true);
 	is!("type(nearest(sqrt(2), rational))", "rational");
@@ -46,7 +46,7 @@ fn nearest_within_a_precision() {
 	is!("nearest(sqrt(2), rational, within: 1e-6) == 1393/985", true);
 	is!("x = sqrt(2); nearest(x, rational, within: 1e-6) == 1393/985", true);
 	is!("x = sqrt(2); nearest(x, rational, within = 1e-9) == 47321/33461", true);
-	is!("x = sqrt(2); nearest(x, rational) == 131836323/93222358", true);
+	is!("x = sqrt(2); nearest(x, rational) == 665857/470832", true); // a float at run time, as Python
 }
 
 #[test]
@@ -57,7 +57,7 @@ fn nearest_expands_exact_values_beyond_floats() {
 		true
 	);
 	is!("nearest(sqrt(2), rational, 10^38) == 133984184101103275326877813426364627544/94741125149636933417873079920900017937", true);
-	is!("nearest(π, rational) == 245850922/78256779", true);
+	is!("nearest(π, rational) == 3126535/995207", true);
 }
 
 // card nearest-rational: nearest is a method too, of a variable and of a call's result (card sqrt-round)
