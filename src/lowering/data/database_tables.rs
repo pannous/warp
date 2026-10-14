@@ -676,6 +676,7 @@ fn opened(statement: &Node, tables: &BTreeMap<String, Table>, file: &str, open: 
 	let Node::Key(target, Op::Assign, source) = statement.drop_meta() else {
 		return None;
 	};
+	let declared = matches!(target.drop_meta(), Node::Key(_, Op::Colon, _));
 	let variable = match target.drop_meta() {
 		Node::Key(variable, Op::Colon, _) => variable.drop_meta(),
 		variable @ Node::Symbol(_) => variable,
@@ -684,34 +685,61 @@ fn opened(statement: &Node, tables: &BTreeMap<String, Table>, file: &str, open: 
 	let variable = variable.name();
 	let table = tables.get(&variable)?;
 	database_table(source)?;
+	if let Some(problem) = opening_problem(table, &variable, open) {
+		return Some(vec![
+			crate::errors::diagnostic::Diagnostic::at(statement, problem).into_error()
+		]);
+	}
+	open.push(variable.clone());
+	if !declared {
+		// `people = database.people` again (a served route at each request): the next read loads the rows anew; an
+		// assignment still, so a block of it and a value stays a block (`{ p = …; p#1 }`), no list
+		let reset = called(lazy_name(&variable, "reset"), None);
+		return Some(vec![key(target.drop_meta().clone(), Op::Assign, reset)]);
+	}
+	let empty = parse("[]");
+	Some(
+		[
+			vec![key(target.drop_meta().clone(), Op::Assign, empty)],
+			generated(
+				&table_program(table, &variable, file),
+				table_placeholders(table, &variable, file),
+			)
+			.children(),
+		]
+		.concat(),
+	)
+}
+
+/// Why the table cannot open yet: a table its keys point to is not open, or a list of rows has no key pointing back
+fn opening_problem(table: &Table, variable: &str, open: &[String]) -> Option<String> {
 	if let Some((field, unopened)) = table
 		.references
 		.iter()
 		.find(|(_, referenced)| !open.contains(referenced))
 	{
-		let message = format!(
+		return Some(format!(
 			"register {unopened} before {variable}: {}.{field} points to its rows",
 			table.class
-		);
-		return Some(vec![
-			crate::errors::diagnostic::Diagnostic::at(statement, message).into_error()
-		]);
+		));
 	}
-	if let Some(members) = table.members.iter().find(|members| members.back.is_none()) {
-		let message = format!(
-			"{}.{} lists rows of {}, whose class has no field of class {} pointing back",
-			table.class, members.field, members.table, table.class
-		);
-		return Some(vec![
-			crate::errors::diagnostic::Diagnostic::at(statement, message).into_error()
-		]);
-	}
-	open.push(variable.clone());
-	// the row is [id, column values…] in the order of the columns
-	let arguments = constructor_arguments(table, ROW);
-	// a column is [name type default] and its old name when renamed (ø when not); a unit field's adds its quantity and
-	// SI amount per unit, which the browser's store has no unit table for (`[distance km ø ø m 1000]`)
-	let schema = Node::List(
+	table
+		.members
+		.iter()
+		.find(|members| members.back.is_none())
+		.map(|members| {
+			format!(
+				"{}.{} lists rows of {}, whose class has no field of class {} pointing back",
+				table.class, members.field, members.table, table.class
+			)
+		})
+}
+
+/// The table's columns for the store: a column is [name type default] and its old name when renamed (ø when not); a
+/// unit field's adds its quantity and SI amount per unit, which the browser's store has no unit table for
+/// (`[distance km ø ø m 1000]`)
+fn table_schema(table: &Table) -> Node {
+	Node::List(
 		column_fields(table)
 			.into_iter()
 			.map(|(name, field_type, default)| {
@@ -736,13 +764,12 @@ fn opened(statement: &Node, tables: &BTreeMap<String, Table>, file: &str, open: 
 			.collect(),
 		Bracket::Square,
 		Separator::Space,
-	);
-	if !matches!(target.drop_meta(), Node::Key(_, Op::Colon, _)) {
-		// `people = database.people` again (a served route at each request): the next read loads the rows anew; an
-		// assignment still, so a block of it and a value stays a block (`{ p = …; p#1 }`), no list
-		let reset = called(lazy_name(&variable, "reset"), None);
-		return Some(vec![key(target.drop_meta().clone(), Op::Assign, reset)]);
-	}
+	)
+}
+
+/// The store calls of the table program, its placeholders, and the names of its functions
+fn table_placeholders(table: &Table, variable: &str, file: &str) -> impl Iterator<Item = (&'static str, Node)> {
+	let schema = table_schema(table);
 	let table_call_with = |member: &str, extra: &str| {
 		generated(
 			&format!(
@@ -753,15 +780,46 @@ fn opened(statement: &Node, tables: &BTreeMap<String, Table>, file: &str, open: 
 		)
 	};
 	let table_call = |member: &str| table_call_with(member, "");
-	let class = &table.class;
-	let required: Vec<&str> = table
+	[
+		(READ_PLACEHOLDER, table_call("migrate")),
+		(ROWS_PLACEHOLDER, table_call("rows")),
+		(COUNT_PLACEHOLDER, table_call("count")),
+		(ROW_PLACEHOLDER, table_call_with("page", &format!(", {POSITION}, 1"))),
+		(
+			PAGE_PLACEHOLDER,
+			table_call_with("page", &format!(", {POSITION}, {PAGE_SIZE}")),
+		),
+		(
+			SLICE_PLACEHOLDER,
+			table_call_with(
+				"page",
+				&format!(", {FIRST} + 1, (if {UNTIL} > {FIRST} then {UNTIL} - {FIRST} else 0)"),
+			),
+		),
+		(IN_PLACEHOLDER, Node::Text(format!("{} IN (", quote(ID_FIELD)))),
+		(
+			SELECT_PLACEHOLDER,
+			table_call_with("select", &format!(", {CONDITION}, {CONDITION_VALUES}")),
+		),
+	]
+	.into_iter()
+	.chain(lazy_names(variable))
+}
+
+/// The fields whose key must find its row: not optional ones
+fn required_references(table: &Table) -> Vec<&str> {
+	table
 		.references
 		.iter()
 		.map(|(field, _)| field.as_str())
 		.filter(|field| !table.is_optional(field))
-		.collect();
-	// a required key without its row (deleted, or the 0 of a column added for it) leaves its row out, reported
-	let found = |field: &str, present: bool| match is_own_reference(table, field) {
+		.collect()
+}
+
+/// Whether the row's key `field` finds its row (`present`) or not; a required key without its row (deleted, or the 0
+/// of a column added for it) leaves its row out, reported
+fn reference_found(table: &Table, field: &str, present: bool) -> String {
+	match is_own_reference(table, field) {
 		true => format!(
 			"count({}) {} 0",
 			matching_rows(table, field, &column_cell(table, ROW, field)),
@@ -772,29 +830,47 @@ fn opened(statement: &Node, tables: &BTreeMap<String, Table>, file: &str, open: 
 			referenced_instance(table, field, &column_cell(table, ROW, field)),
 			if present { "!=" } else { "==" }
 		),
+	}
+}
+
+/// The warnings for rows whose required key finds no row
+fn missing_reference_checks(table: &Table, variable: &str, required: &[&str]) -> String {
+	if required.is_empty() {
+		return String::new();
+	}
+	let class_of_field = |field: &str| {
+		table
+			.fields
+			.iter()
+			.find(|(name, _, _)| name == field)
+			.map_or(String::new(), |(_, field_type, _)| class_of(field_type).to_string())
 	};
 	let warnings: String = required.iter().map(|field| format!(
 		"if {missing} {{ warning(\"{variable} row \" + {ROW}#1 + \": {field} \" + {cell} + \" is no row of {target}; the row is left out (declare {field}: {class}? to keep it, with ø)\") }}\n",
-		missing = found(field, false), cell = column_cell(table, ROW, field), target = table.reference(field).unwrap_or_default(),
-		class = class_of(&table.fields.iter().find(|(name, _, _)| name == field).map(|(_, field_type, _)| field_type.clone()).unwrap_or_default()))).collect();
-	let checks = match warnings.is_empty() {
-		true => String::new(),
-		false => format!("for {ROW} in {ROWS} {{\n{warnings}}}\n"),
-	};
-	let kept = match required.is_empty() {
+		missing = reference_found(table, field, false), cell = column_cell(table, ROW, field), target = table.reference(field).unwrap_or_default(),
+		class = class_of_field(field))).collect();
+	format!("for {ROW} in {ROWS} {{\n{warnings}}}\n")
+}
+
+/// The condition keeping only the rows whose required keys find their rows
+fn kept_condition(table: &Table, required: &[&str]) -> String {
+	match required.is_empty() {
 		true => String::new(),
 		false => format!(
 			" if {}",
 			required
 				.iter()
-				.map(|field| found(field, true))
+				.map(|field| reference_found(table, field, true))
 				.collect::<Vec<_>>()
 				.join(" and ")
 		),
-	};
-	// natively the rows read before loading find their keys' rows together, `id IN (…)` (card orm-batched); the browser
-	// has no SQL and loads the other table
-	let fetches: String = match cfg!(feature = "native") {
+	}
+}
+
+/// Natively the rows read before loading find their keys' rows together, `id IN (…)` (card orm-batched); the browser
+/// has no SQL and loads the other table
+fn batched_fetches(table: &Table) -> String {
+	match cfg!(feature = "native") {
 		true => table
 			.references
 			.iter()
@@ -807,14 +883,14 @@ fn opened(statement: &Node, tables: &BTreeMap<String, Table>, file: &str, open: 
 			})
 			.collect(),
 		false => String::new(),
-	};
-	// the identity map: the instance of each id met, a hash table keyed by the id (card int-map)
-	let known = format!("{ROW}#1 in {MET}");
-	let constructed = format!("{class}({})", arguments.join(", "));
-	let instance = format!("(if {known} then {MET}[{ROW}#1] else {constructed})");
-	// the rows a required key leaves out are counted and positioned only by loading
-	let (unloaded_count, unloaded_element, unloaded_streamed, unloaded_sliced) = match required.is_empty() {
-		true => (
+	}
+}
+
+/// The count, element, streamed and sliced reads before loading; the rows a required key leaves out are counted and
+/// positioned only by loading
+fn unloaded_reads(has_required: bool, fetches: &str, class: &str) -> [String; 4] {
+	match has_required {
+		false => [
 			COUNT_PLACEHOLDER.to_string(),
 			format!(
 				"{{
@@ -839,15 +915,31 @@ if {POSITION} < {START} or {POSITION} >= {START} + count({PAGE}) {{
 {SLICE_ROWS}
 }}"
 			),
-		),
-		false => (
+		],
+		true => [
 			format!("count({LOAD}())"),
 			format!("{LOAD}()#{POSITION}"),
 			format!("{LOAD}()#{POSITION}"),
 			format!("slice({LOAD}(), {FIRST}, {UNTIL})"),
-		),
-	};
-	let code = format!(
+		],
+	}
+}
+
+/// The warp program of an opened table: its lazy loading, identity map, writes, queries and restore
+fn table_program(table: &Table, variable: &str, file: &str) -> String {
+	let arguments = constructor_arguments(table, ROW);
+	let required = required_references(table);
+	let fetches = batched_fetches(table);
+	let checks = missing_reference_checks(table, variable, &required);
+	let kept = kept_condition(table, &required);
+	let class = &table.class;
+	// the identity map: the instance of each id met, a hash table keyed by the id (card int-map)
+	let known = format!("{ROW}#1 in {MET}");
+	let constructed = format!("{class}({})", arguments.join(", "));
+	let instance = format!("(if {known} then {MET}[{ROW}#1] else {constructed})");
+	let [unloaded_count, unloaded_element, unloaded_streamed, unloaded_sliced] =
+		unloaded_reads(!required.is_empty(), &fetches, class);
+	format!(
 		"{LOADED} = no
 {MET} = {{}}
 {PAGE}: [{class}] = []
@@ -966,43 +1058,11 @@ for {MADE} in {variable} {{ if {MADE}.{ID_FIELD} != 0 {{ {MET}[{MADE}.{ID_FIELD}
 }}",
 		name = table.name,
 		restore_met = restored_rows(table, &arguments, &format!("values({MET})")),
-		restore_loaded = restored_rows(table, &arguments, &variable),
+		restore_loaded = restored_rows(table, &arguments, variable),
 		loaded_found = if required.is_empty() { LOADED } else { "yes" },
 		of_unmet = match cfg!(feature = "native") {
 			true => format!("if not {LOADED} and not ({KEY} in {MET}) {{ {FETCHED}([{KEY}]) }}"),
 			false => format!("if not {LOADED} {{ {LOAD}() }}"),
 		}
-	);
-	let placeholders = [
-		(READ_PLACEHOLDER, table_call("migrate")),
-		(ROWS_PLACEHOLDER, table_call("rows")),
-		(COUNT_PLACEHOLDER, table_call("count")),
-		(ROW_PLACEHOLDER, table_call_with("page", &format!(", {POSITION}, 1"))),
-		(
-			PAGE_PLACEHOLDER,
-			table_call_with("page", &format!(", {POSITION}, {PAGE_SIZE}")),
-		),
-		(
-			SLICE_PLACEHOLDER,
-			table_call_with(
-				"page",
-				&format!(", {FIRST} + 1, (if {UNTIL} > {FIRST} then {UNTIL} - {FIRST} else 0)"),
-			),
-		),
-		(IN_PLACEHOLDER, Node::Text(format!("{} IN (", quote(ID_FIELD)))),
-		(
-			SELECT_PLACEHOLDER,
-			table_call_with("select", &format!(", {CONDITION}, {CONDITION_VALUES}")),
-		),
-	]
-	.into_iter()
-	.chain(lazy_names(&variable));
-	let empty = parse("[]");
-	Some(
-		[
-			vec![key(target.drop_meta().clone(), Op::Assign, empty)],
-			generated(&code, placeholders).children(),
-		]
-		.concat(),
 	)
 }
