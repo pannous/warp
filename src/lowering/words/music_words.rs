@@ -10,7 +10,8 @@
 //! Scheduling (card sample-accurate): `at 2 beats play C4`, `at 1 bar { … }` is the statement between lib/sound.warp
 //! sound_at(time) and sound_at_end(): its sounds start at that time on the voice, the voice then goes on where it stood.
 //! Live loops (card patterns-live): `live_loop 4 { pattern "c4 e4" }` is `go { … }` repeating the block 4 times: its own voice,
-//! playing along with the others on the beat clock.
+//! playing along with the others on the beat clock, awaited as `live_voice`; `live_loop drums 4 { … }` names it `drums`
+//! (card pattern-extras), so several loops can be awaited.
 //! Chord and scale kinds (card music-values): `chord(C4, major7)`, `scale(D4, dorian)` name their kind by a word the
 //! program does not define, the text that lib/sound.warp chord_intervals and scale_intervals know it by.
 
@@ -41,6 +42,7 @@ const AT_END_CALL: &str = "sound_at_end";
 const LIVE_LOOP_WORD: &str = "live_loop";
 /// what `live_loop 4 { … }` is: a voice of its own that plays the block that many cycles, one after another
 const LIVE_LOOP_TEMPLATE: &str = "live_voice = go { for live_cycle in 0..live_cycles { live_body } }";
+const LIVE_VOICE: &str = "live_voice";
 const LIVE_CYCLES: &str = "live_cycles";
 const LIVE_BODY: &str = "live_body";
 /// the words whose second argument is a kind: chord(root, kind), scale(root, kind)
@@ -319,15 +321,18 @@ fn scheduled(statement: &Node, defined: &HashSet<String>) -> Option<Vec<Node>> {
 	Some([call(AT_CALL, vec![time.clone()])].into_iter().chain(actions).chain([call(AT_END_CALL, vec![])]).collect())
 }
 
-/// `live_loop 4 { body }` → `go { for live_cycle in 0..4 { body } }`
+/// `live_loop 4 { body }` → `live_voice = go { for live_cycle in 0..4 { body } }`, `live_loop drums 4 { body }` → `drums = go { … }`
 fn live_loop_statement(statement: &Node, defined: &HashSet<String>) -> Option<Node> {
 	let Node::List(items, _, separator) = statement.drop_meta() else {
 		return None;
 	};
-	let [word, cycles, rest @ ..] = items.as_slice() else {
-		return None;
+	let (word, voice, cycles, block) = match items.as_slice() {
+		[word, cycles, block] => (word, Node::Symbol(LIVE_VOICE.into()), cycles, block),
+		[word, name, cycles, block] if matches!(name.drop_meta(), Node::Symbol(_)) => {
+			(word, name.clone(), cycles, block)
+		}
+		_ => return None,
 	};
-	let [block] = rest else { return None };
 	let Node::List(_, crate::node::Bracket::Curly, _) = block.drop_meta() else {
 		return None;
 	};
@@ -336,7 +341,7 @@ fn live_loop_statement(statement: &Node, defined: &HashSet<String>) -> Option<No
 	}
 	let made = substituted(
 		crate::warp_parser::parse(LIVE_LOOP_TEMPLATE),
-		&[(LIVE_CYCLES, cycles.clone()), (LIVE_BODY, block.clone())],
+		&[(LIVE_VOICE, voice), (LIVE_CYCLES, cycles.clone()), (LIVE_BODY, block.clone())],
 	);
 	Some(match made {
 		Node::List(mut statements, _, _) if statements.len() == 1 => statements.remove(0),

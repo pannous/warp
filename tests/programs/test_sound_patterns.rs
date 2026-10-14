@@ -75,3 +75,54 @@ fn pattern_samples_ends_each_event_at_its_cumulated_seconds() {
 	assert!(silent(&samples[..RATE / 2 - 10]), "the rest");
 	assert!(!silent(&samples[RATE / 2..]), "the note");
 }
+
+// card pattern-extras: `<a b>` alternation, `_` / `@n` elongation, `?` seeded chance, named live loops
+fn halves_sounding(program: &str, name: &str, cycles: usize) -> Vec<bool> {
+	let (_, samples) = rendered(name, program);
+	(0..cycles * 2).map(|half| !silent(&samples[half * RATE / 4 + 50..(half + 1) * RATE / 4 - 50])).collect()
+}
+
+#[test]
+fn alternation_takes_one_per_cycle_in_turn() {
+	let program = "use sound\nfor i in 0..4 { pattern(\"c4 <e4 ~ g4>\", 0.5s) }\nrender_sound(\"SONG\")";
+	assert_eq!(halves_sounding(program, "alternation", 4), [true, true, true, false, true, true, true, true]);
+}
+
+#[test]
+fn nested_alternation_turns_on_its_own_visits() {
+	let program = "use sound\nfor i in 0..4 { pattern(\"<c4 <~ e4>>\", 0.25s) }\nrender_sound(\"SONG\")";
+	let (_, samples) = rendered("nested", program);
+	let sounding: Vec<bool> =
+		(0..4).map(|cycle| !silent(&samples[cycle * RATE / 4 + 50..(cycle + 1) * RATE / 4 - 50])).collect();
+	assert_eq!(sounding, [true, false, true, true]);
+}
+
+#[test]
+fn elongation_holds_a_step_longer() {
+	for steps in ["c4 _ ~", "c4@2 ~"] {
+		let (_, samples) =
+			rendered("elongated", &format!("use sound\npattern(\"{steps}\", 1.5s)\nrender_sound(\"SONG\")"));
+		assert_eq!(samples.len(), RATE * 3 / 2, "{steps}");
+		assert!(!silent(&samples[RATE * 9 / 10..RATE * 95 / 100]), "{steps}: c4 sounds into its second step");
+		assert!(silent(&samples[RATE * 105 / 100..]), "{steps}: then the rest");
+	}
+}
+
+#[test]
+fn chance_drops_some_cycles_the_same_each_run() {
+	let program = "use sound\nfor i in 0..8 { pattern(\"c4? c4\", 0.5s) }\nrender_sound(\"SONG\")";
+	let first = halves_sounding(program, "chance", 8);
+	assert_eq!(first, halves_sounding(program, "chance-again", 8), "seeded: the same each run");
+	let maybe: Vec<bool> = first.iter().step_by(2).copied().collect();
+	assert!(maybe.contains(&true) && maybe.contains(&false), "{maybe:?}");
+	assert!(first.iter().skip(1).step_by(2).all(|&sounds| sounds), "c4 without ? always sounds");
+	let reseeded = halves_sounding(&program.replace("use sound\n", "use sound\npattern_seed = 7\n"), "reseeded", 8);
+	assert_ne!(first, reseeded, "another seed, other cycles");
+}
+
+#[test]
+fn named_live_loops_are_awaited_each() {
+	let program = "use sound\ntempo = 120\nlive_loop bass 2 { pattern(\"c3\", 1 beat) }\nlive_loop lead 3 { pattern(\"e4\", 1 beat) }\nawait bass\nawait lead\nrender_sound(\"SONG\")";
+	let (seconds, _) = rendered("named", program);
+	assert_eq!(seconds, "1.5");
+}
