@@ -203,7 +203,8 @@ const CORPUS: &[&str] = &[
 	"s = 0; for i in 1 to 3 { s += i }; s",
 	"3..1",
 	"count(n) := { c=0; for i in 0..n { c += 1 }; c }; count(5)",
-	"to add number a to number b: a+b; add 1 to 2",
+	// cleanup-edge: cleanup-park-phrases: comes back with prepositions-call
+	// "to add number a to number b: a+b; add 1 to 2",
 	"0 and 7",
 	"1 and 7",
 	"(not 0) and 7",
@@ -699,7 +700,6 @@ fn test_type_model_is_proved() {
 }
 
 #[test]
-#[ignore = "cleanup-edge: cleanup-park-phrases: the corpus entry `to add number a to number b: a+b; add 1 to 2` no longer exports: phrase calls parked until card prepositions-call"]
 fn test_warp_rejects_what_the_type_model_rejects() {
 	crate::requires!(crate::common::LEAN);
 	let programs: Vec<&str> = CORPUS
@@ -747,7 +747,6 @@ fn test_warp_admits_what_the_type_model_subtypes() {
 }
 
 #[test]
-#[ignore = "cleanup-edge: cleanup-park-phrases: the corpus entry `to add number a to number b: a+b; add 1 to 2` no longer exports: phrase calls parked until card prepositions-call"]
 fn test_warp_computes_what_the_type_model_computes() {
 	crate::requires!(crate::common::LEAN);
 	let mut programs: Vec<&str> = CORPUS.to_vec();
