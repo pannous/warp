@@ -459,7 +459,7 @@ pub(super) fn declared_kind(type_node: &Node) -> Option<Kind> {
 	let type_name = type_name.as_str();
 	match type_name.strip_suffix('?') {
 		Some(_) => Some(Kind::Empty),
-		None if super::user_functions::names_empty_type(type_node) => Some(Kind::Empty),
+		None if super::annotations::names_empty_type(type_node) => Some(Kind::Empty),
 		// `y: any`: any value, held as a Node, never the kind of the first value given (card yes-stores)
 		None if type_name == crate::type_kinds::UNTYPED_FIELD => Some(Kind::Empty),
 		// an inline union `int or text` holds a value of either kind as a Node
