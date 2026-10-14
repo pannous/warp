@@ -54,47 +54,11 @@ pub(crate) fn check_null_use(
 	nullable: &mut HashMap<String, Unchecked>,
 	lists: &HashSet<String>,
 ) -> Option<Diagnostic> {
-	let possibly_null = |operand: &Node, nullable: &HashMap<String, Unchecked>| match operand.drop_meta() {
-		Node::Symbol(name) => nullable
-			.get(name)
-			.map(|reason| (name.clone(), reason.describe(name), None)),
-		fetched if crate::host::fetch_call(fetched).is_some() => {
-			let call = fetched.serialize();
-			Some((
-				"result".to_string(),
-				format!("{call} may be an error (fetch can fail)"),
-				Some(call),
-			))
-		}
-		_ => None,
-	};
 	match node.drop_meta() {
-		Node::Key(target, Op::Assign | Op::Define, value) => {
-			// `out = out + xs` building a list from ø, the empty list: a concatenation, no use of a null
-			let found = match value.drop_meta() {
-				Node::Key(left, Op::Add, right)
-					if left.drop_meta() == target.drop_meta()
-						&& nullable.get(&target.name()) == Some(&Unchecked::Null) =>
-				{
-					check_null_use(right, nullable, lists)
-				}
-				_ => check_null_use(value, nullable, lists),
-			};
-			let target = match target.drop_meta() {
-				Node::Key(name, Op::Colon, _) => &**name, // x:int?=ø
-				other => other,
-			};
-			if let Node::Symbol(name) = target.drop_meta() {
-				match Unchecked::of(value) {
-					Some(reason) => nullable.insert(name.clone(), reason),
-					None => nullable.remove(name),
-				};
-			}
-			found
-		}
+		Node::Key(target, Op::Assign | Op::Define, value) => assignment_checked(target, value, nullable, lists),
 		Node::Key(if_condition, Op::Then, then) => {
 			let Node::Key(_, Op::If, condition) = if_condition.drop_meta() else {
-				return check_null_use(if_condition, nullable, lists).or_else(|| check_null_use(then, nullable, lists));
+				return both_checked(if_condition, then, nullable, lists);
 			};
 			let mut narrowed = nullable.clone();
 			if let Node::Symbol(name) = condition.drop_meta() {
@@ -122,30 +86,93 @@ pub(crate) fn check_null_use(
 		}
 		// `xs + ys` of a list xs and ys = []: concatenating the empty list
 		Node::Key(left, Op::Add, right) if [left, right].iter().any(|side| holds_list(side, lists)) => {
-			check_null_use(left, nullable, lists).or_else(|| check_null_use(right, nullable, lists))
+			both_checked(left, right, nullable, lists)
 		}
 		Node::Key(left, op, right) if op.is_arithmetic() || *op == Op::Dot => {
-			let operand = possibly_null(left, nullable).or_else(|| {
-				if *op == Op::Dot {
-					None
-				} else {
-					possibly_null(right, nullable)
-				}
-			});
-			if let Some((name, reason, call)) = operand {
-				let expression = node.drop_meta().serialize();
-				let fix = match call {
-					Some(call) => format!("{name} = {call}; if {name} {{ {} }}", expression.replace(&call, &name)),
-					None => format!("if {name} {{ {expression} }}"),
-				};
-				return Some(Diagnostic::at(node, format!("{reason} in {expression}")).fix(fix));
-			}
-			check_null_use(left, nullable, lists).or_else(|| check_null_use(right, nullable, lists))
+			null_operand_used(node, left, op, right, nullable).or_else(|| both_checked(left, right, nullable, lists))
 		}
-		Node::Key(left, _, right) => {
-			check_null_use(left, nullable, lists).or_else(|| check_null_use(right, nullable, lists))
-		}
+		Node::Key(left, _, right) => both_checked(left, right, nullable, lists),
 		Node::List(items, _, _) => items.iter().find_map(|item| check_null_use(item, nullable, lists)),
+		_ => None,
+	}
+}
+
+fn both_checked(
+	left: &Node,
+	right: &Node,
+	nullable: &mut HashMap<String, Unchecked>,
+	lists: &HashSet<String>,
+) -> Option<Diagnostic> {
+	check_null_use(left, nullable, lists).or_else(|| check_null_use(right, nullable, lists))
+}
+
+/// The value checked, then the target possibly null (`x:int?=ø`) or no longer
+fn assignment_checked(
+	target: &Node,
+	value: &Node,
+	nullable: &mut HashMap<String, Unchecked>,
+	lists: &HashSet<String>,
+) -> Option<Diagnostic> {
+	// `out = out + xs` building a list from ø, the empty list: a concatenation, no use of a null
+	let found = match value.drop_meta() {
+		Node::Key(left, Op::Add, right)
+			if left.drop_meta() == target.drop_meta() && nullable.get(&target.name()) == Some(&Unchecked::Null) =>
+		{
+			check_null_use(right, nullable, lists)
+		}
+		_ => check_null_use(value, nullable, lists),
+	};
+	let target = match target.drop_meta() {
+		Node::Key(name, Op::Colon, _) => &**name, // x:int?=ø
+		other => other,
+	};
+	if let Node::Symbol(name) = target.drop_meta() {
+		match Unchecked::of(value) {
+			Some(reason) => nullable.insert(name.clone(), reason),
+			None => nullable.remove(name),
+		};
+	}
+	found
+}
+
+/// An operand of arithmetic, or the receiver of a member access, that may be null or an error, with its fix
+fn null_operand_used(
+	node: &Node,
+	left: &Node,
+	op: &Op,
+	right: &Node,
+	nullable: &HashMap<String, Unchecked>,
+) -> Option<Diagnostic> {
+	let operand = possibly_null(left, nullable).or_else(|| {
+		if *op == Op::Dot {
+			None
+		} else {
+			possibly_null(right, nullable)
+		}
+	});
+	let (name, reason, call) = operand?;
+	let expression = node.drop_meta().serialize();
+	let fix = match call {
+		Some(call) => format!("{name} = {call}; if {name} {{ {} }}", expression.replace(&call, &name)),
+		None => format!("if {name} {{ {expression} }}"),
+	};
+	Some(Diagnostic::at(node, format!("{reason} in {expression}")).fix(fix))
+}
+
+/// A possibly null variable, or a fetch: its name, why, and the fetch call to name
+fn possibly_null(operand: &Node, nullable: &HashMap<String, Unchecked>) -> Option<(String, String, Option<String>)> {
+	match operand.drop_meta() {
+		Node::Symbol(name) => nullable
+			.get(name)
+			.map(|reason| (name.clone(), reason.describe(name), None)),
+		fetched if crate::host::fetch_call(fetched).is_some() => {
+			let call = fetched.serialize();
+			Some((
+				"result".to_string(),
+				format!("{call} may be an error (fetch can fail)"),
+				Some(call),
+			))
+		}
 		_ => None,
 	}
 }
