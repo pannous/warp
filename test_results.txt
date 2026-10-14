@@ -223,6 +223,7 @@ PASSED:
   ✓ control::test_filter_loops::test_a_condition_loop_visits_only_matching_items
   ✓ control::test_filter_loops::test_a_filter_warns_once_with_its_explicit_form
   ✓ control::test_filter_loops::test_plain_loops_do_not_filter
+  ✓ control::test_for_forms::a_braceless_call_ends_the_loop_range
   ✓ control::test_for_forms::block_after_a_chained_iterable
   ✓ control::test_for_forms::c_style_for_with_a_space_or_without_braces
   ✓ control::test_for_forms::each_starts_a_loop
@@ -415,6 +416,15 @@ PASSED:
   ✓ control::test_named_patterns::is_tests_a_named_pattern
   ✓ control::test_named_patterns::named_patterns_combine_with_and
   ✓ control::test_named_patterns::the_word_pattern_stays_a_call_outside_a_definition
+  ✓ control::test_named_reflection::a_help_statement_prints
+  ✓ control::test_named_reflection::a_name_that_is_no_word_is_named_in_the_error
+  ✓ control::test_named_reflection::an_unjoinable_item_names_its_kind
+  ✓ control::test_named_reflection::dump_of_a_function_named_at_run_time
+  ✓ control::test_named_reflection::every_word_of_a_module_dumps_and_helps
+  ✓ control::test_named_reflection::help_in_an_expression_does_not_print
+  ✓ control::test_named_reflection::help_of_a_module_word_has_its_comment
+  ✓ control::test_named_reflection::help_of_a_name_known_at_run_time
+  ✓ control::test_named_reflection::help_of_a_standard_module_is_its_index
   ✓ control::test_not_condition_block::a_comparison_with_empty_in_a_group
   ✓ control::test_not_condition_block::a_negated_condition_in_a_loop
   ✓ control::test_not_condition_block::a_negated_condition_takes_its_block
@@ -1709,6 +1719,8 @@ PASSED:
   ✓ lists::test_empty_list_count::the_counting_properties_of_an_empty_list_need_no_null_check
   ✓ lists::test_field_count::a_parameter_counts_with_the_call_form
   ✓ lists::test_field_count::test_count_of_a_field
+  ✓ lists::test_filter_element_scope::a_number_filter_beside_a_class_filter
+  ✓ lists::test_filter_element_scope::one_loop_variable_over_numbers_and_instances
   ✓ lists::test_find_any_all::any_and_all_answer_yes_or_no
   ✓ lists::test_find_any_all::find_any_and_all_test_the_elements
   ✓ lists::test_first_items::first_and_last_take_a_number_of_items
@@ -4747,7 +4759,6 @@ PASSED:
   ✓ web::test_routes::without_a_matching_route_the_page_says_so
   ✓ web::test_safari_imports::safaris_engine_reads_the_imports_of_a_task_program
   ✓ web::test_safari_imports::the_page_never_asks_the_engine_for_import_or_export_descriptors
-  ✓ web::test_sandbox_refusals::a_sandboxed_program_reaches_the_network
   ✓ web::test_sandbox_refusals::a_sandboxed_program_starts_no_process_and_calls_no_c
   ✓ web::test_sandbox_refusals::a_sandboxed_program_writes_inside_its_state_folder
   ✓ web::test_sandbox_refusals::a_sandboxed_program_writes_nothing_outside_its_state_folder
@@ -5161,6 +5172,8 @@ PASSED:
   ✓ welcoming::test_slash_comment_needs_space::slash_slash_with_space_is_a_comment
   ✓ welcoming::test_slash_comment_needs_space::slash_slash_without_space_divides
   ✓ welcoming::test_slash_comment_prose_operators::prose_with_operator_characters_gets_no_division_note
+  ✓ welcoming::test_sleep_seconds::a_bare_sleep_number_counts_seconds
+  ✓ welcoming::test_sleep_seconds::the_bare_sleep_warning_suggests_seconds
   ✓ welcoming::test_sleep_unit_shadow::a_unit_named_variable_keeps_other_durations
   ✓ welcoming::test_sleep_unit_warning::a_statement_after_sleep_is_no_duration
   ✓ welcoming::test_sleep_unit_warning::sleep_without_a_unit_warns
@@ -5177,6 +5190,8 @@ PASSED:
   ✓ welcoming::test_unknown_word_error::test_an_unknown_word_with_a_value_is_an_error_in_code
   ✓ welcoming::test_unknown_word_error::test_data_contexts_keep_unknown_words
   ✓ welcoming::test_unknown_word_error::test_known_words_are_untouched
+  ✓ welcoming::test_variable_applied::a_local_holding_a_plain_value_applied_to_a_value_is_an_error
+  ✓ welcoming::test_variable_applied::locals_holding_functions_and_data_lists_stay
   ✓ welcoming::test_warning_levels::capture_hints_still_returns_the_hints
   ✓ welcoming::test_warning_levels::levels_are_ordered_and_named
   ✓ welcoming::test_warning_levels::no_hints_hides_only_the_hints
@@ -5285,6 +5300,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ web::test_sandbox_refusals::a_sandboxed_program_reaches_the_network
 
 SUMMARY:
-13 ignored, 5282 passed, 0 failed, 5282 total tested
+13 ignored, 5297 passed, 1 failed, 5298 total tested
