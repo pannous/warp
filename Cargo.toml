@@ -213,3 +213,6 @@ name = "warp"
 # Only rlib: the browser build asks for the cdylib itself (web/playground/build.sh: `cargo rustc --crate-type cdylib`).
 # A cdylib here made cargo name the rlib without a hash, so every checkout copy linked the same libwarp.rlib.
 crate-type = ["rlib"]
+# Every doc example is `ignore`: a Doc-tests step would test nothing, yet it relinks against the shared target dir's
+# dependency rlibs after the suite, where another checkout's build can replace them mid-run (E0463, card gate-doc).
+doctest = false
