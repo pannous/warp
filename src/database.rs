@@ -552,10 +552,10 @@ fn column_of(field: &Node) -> Result<(String, String, String), String> {
 	let field_type = field_type.drop_meta().name();
 	// `email: text?`: a nullable column, its rows default to NULL (ø)
 	let optional = field_type.ends_with(OPTIONAL_MARK);
-	let column_type = match field_type.trim_end_matches(OPTIONAL_MARK) {
-		"int" | "i64" | "i32" | "bool" => "INTEGER".to_string(),
-		"float" | "f64" | "f32" | "number" => "REAL".to_string(),
-		"text" | "string" | "str" | "char" => "TEXT".to_string(),
+	let column_type = match crate::type_tests::canonical_spec_word(field_type.trim_end_matches(OPTIONAL_MARK)) {
+		"int" | "bool" => "INTEGER".to_string(),
+		"float" | "number" => "REAL".to_string(),
+		"text" | "codepoint" => "TEXT".to_string(),
 		"" => String::new(),
 		// a unit field (`distance: km`) holds SI amounts; its column keeps the unit for migrations
 		unit if crate::units::static_units::unit_type(unit).is_some() => format!("{UNIT_COLUMN} {unit}"),

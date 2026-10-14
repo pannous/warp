@@ -450,36 +450,8 @@ impl WasmGcEmitter {
 			Node::Text(s) => self.emit_string_call(func, s, "new_text"),
 			// `str(data a and b)`: quoted data reads as written
 			_ if let Some(source) = quoted_source(value) => self.emit_string_call(func, &source, "new_text"),
-			// a list of numbers and texts reads as it prints, its texts quoted (P126)
-			Node::List(..) if is_plain_data(value) => self.emit_runtime_text_cast(func, value),
-			// data and names are their source text; a number expression (`str(1+2)`, `str(f(1))` of a float f) is the
-			// text of its value
-			_ if !self.mentions_variable(value)
-				&& !self.mentions_call(value)
-				&& !computes_value(value)
-				&& !self.mentions_conversion(value)
-				&& !matches!(self.get_type(value), Kind::Int | Kind::Float) =>
-			{
-				self.emit_string_call(func, &value.serialize(), "new_text");
-			}
 			_ => self.emit_runtime_text_cast(func, value),
 		}
-	}
-
-	/// Does the node convert a value: `text 5`, `str(5)`, `5 as text`, so `text(text(5))` is "5", not its source
-	fn mentions_conversion(&self, node: &Node) -> bool {
-		let mut found = false;
-		node.visit(&mut |part| {
-			found |= match part {
-				Node::Key(_, Op::As, _) => true,
-				Node::List(items, bracket, separator) => {
-					crate::analyzer::type_cast_of(items, bracket, separator, &|name| self.scope.lookup(name).is_some())
-						.is_some()
-				}
-				_ => false,
-			}
-		});
-		found
 	}
 
 	/// `x as char`, `n as codepoint`: a digit 0…9 is its digit character, as `'5' as int` is 5; any other number is the
@@ -738,39 +710,6 @@ impl WasmGcEmitter {
 		crate::analyzer::is_output_call(node)
 			&& matches!(node.drop_meta(), Node::List(items, _, _) if !self.ctx.user_functions.contains_key(&items[0].name()))
 	}
-}
-
-/// A list whose items are numbers, texts, characters or such lists
-fn is_plain_data(node: &Node) -> bool {
-	match node.drop_meta() {
-		Node::Number(_) | Node::Text(_) | Node::Char(_) => true,
-		Node::List(items, Bracket::Square, _) => items
-			.iter()
-			.all(|item| is_plain_data(item) || quoted_source(item).is_some()), // card data-list
-		_ => false,
-	}
-}
-
-/// An index or field read (`P{x:5}.x`, `{a:"x"}#1`) or arithmetic of literals without names (`"a"+"b"`): a value to
-/// compute, not data that reads as written (card str-inline)
-fn computes_value(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| {
-		found |= match part {
-			Node::Key(_, Op::Hash, _) => true,
-			Node::Key(_, op, _) if op.is_arithmetic() => !names_anything(part),
-			// `str(now)`: the instant the clock reads when the program runs; `str(2024-02-29)` a time node
-			Node::List(..) => crate::time::is_time_call(part),
-			_ => false,
-		}
-	});
-	found
-}
-
-fn names_anything(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::Symbol(_)));
-	found
 }
 
 /// The source text of `data e`, which never runs
