@@ -506,3 +506,19 @@ pub(crate) fn method_call(receiver: Node, method: &str, arguments: Vec<Node>) ->
 pub(crate) fn is_return(items: &[Node]) -> bool {
 	matches!(items, [word, _] if word.is_symbol(crate::words::RETURN_WORD))
 }
+
+/// The list with its head kept and each later item rewritten: a call's name stays, its arguments change
+pub(crate) fn arguments_rewritten(
+	items: Vec<Node>,
+	bracket: Bracket,
+	separator: Separator,
+	mut rewrite: impl FnMut(Node) -> Node,
+) -> Node {
+	let mut items = items.into_iter();
+	let head = items.next();
+	Node::List(
+		head.into_iter().chain(items.map(&mut rewrite)).collect(),
+		bracket,
+		separator,
+	)
+}
