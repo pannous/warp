@@ -13,7 +13,7 @@ use std::collections::HashSet;
 pub const PAGE_HTML: &str = "page·html";
 /// page·render(value): the HTML of any value of the program, for the playground's fine holes (worker.js showHoles)
 pub const PAGE_RENDER: &str = "page·render";
-const TO_HTML: &str = "to_html";
+pub(crate) const TO_HTML: &str = "to_html";
 /// Words that start a statement, not a value to show
 const STATEMENT_WORDS: [&str; 3] = ["print", "puts", "return"];
 
