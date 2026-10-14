@@ -12,6 +12,7 @@
 use super::listeners;
 use super::nodes::{block, call, children_rewritten, if_then, key};
 use crate::declarations::word;
+use crate::errors::diagnostic::Diagnostic;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::signal_values::listeners_subject;
@@ -984,6 +985,9 @@ fn unconditional_emits(body: &Node, verbs: &[String]) -> Vec<String> {
 /// Each `emit name{data}` with handlers is the call `on·name(data)`, `on·name()` when no handler reads `event`; one
 /// nobody handles is ø, nothing, with a note unless the program shows a page, whose script may listen
 fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[String], shows_page: bool) -> Node {
+	if let Some(error) = unhandled_operand(&node, handled, verbs, shows_page) {
+		return error;
+	}
 	if let Some((name, data)) = emitted(&node, verbs) {
 		let verb = match node.drop_meta() {
 			Node::List(items, _, _) => items.first().map(word).unwrap_or_default(),
@@ -1026,6 +1030,32 @@ fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[Str
 		return if braced { Node::List(vec![call], Bracket::Curly, Separator::Semicolon) } else { call };
 	}
 	children_rewritten(node, |child| emits_as_calls(child, handled, verbs, shows_page))
+}
+
+/// card emit-operand-unhandled: `1 + emit tax_rate` with no `on tax_rate` computes with a value that never comes, a
+/// compile error naming the handler (a statement emit only gets the P202 note; a page dispatches it instead)
+fn unhandled_operand(
+	node: &Node,
+	handled: &HashMap<String, Vec<Node>>,
+	verbs: &[String],
+	shows_page: bool,
+) -> Option<Node> {
+	let Node::Key(left, op, right) = node.drop_meta() else {
+		return None;
+	};
+	if !(op.is_arithmetic() || op.is_comparison()) || shows_page || crate::pipeline::compile_mode().renders_itself() {
+		return None;
+	}
+	[left, right].into_iter().find_map(|side| {
+		let operand = match side.drop_meta() {
+			Node::List(items, Bracket::Round, _) if items.len() == 1 => &items[0],
+			_ => side.as_ref(),
+		};
+		let (name, _) = emitted(operand, verbs).filter(|(name, _)| !handled.contains_key(name))?;
+		let message =
+			format!("no handler for event {name}: `emit {name}` gives no value to compute with; add on {name} {{…}}");
+		Some(Diagnostic::at(operand, message).into_error())
+	})
 }
 
 /// The variables the main level assigns (`n = 0`, `n += 1`, `n: int = 0`)
