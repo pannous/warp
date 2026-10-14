@@ -358,7 +358,7 @@ pub(super) fn check_ambiguous_calls(node: &Node) -> Option<Diagnostic> {
 /// `> 100` outside a match arm compares nothing (card leading-gt: it was dropped silently, leaving 100)
 pub(super) fn check_subjectless_comparison(node: &Node) -> Option<Diagnostic> {
 	match node.drop_meta() {
-		Node::Key(left, op, right) if op.is_ordering() && matches!(left.drop_meta(), Node::Empty) => {
+		Node::Key(left, op, right) if op.is_ordering() && left.is_empty_node() => {
 			let written = format!("{} {}", op.as_str(), right.serialize());
 			Some(Diagnostic::at(
 				node,

@@ -219,10 +219,6 @@ pub fn mentions_real(node: &Node) -> bool {
 	}
 }
 
-fn is_empty(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Empty)
-}
-
 fn evaluate(node: &Node, scope: &mut Scope) -> Evaluated {
 	match node.drop_meta() {
 		Node::Number(number) => number_value(number),
@@ -306,8 +302,8 @@ fn key(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Evaluated {
 				_ => Err(Stop::Unsupported),
 			}
 		}
-		Op::Sqrt | Op::Cbrt | Op::Neg | Op::Abs if is_empty(left) => unary(op, evaluate(right, scope)?),
-		Op::Square | Op::Cube if is_empty(right) => {
+		Op::Sqrt | Op::Cbrt | Op::Neg | Op::Abs if left.is_empty_node() => unary(op, evaluate(right, scope)?),
+		Op::Square | Op::Cube if right.is_empty_node() => {
 			let exponent = if op == Op::Square { 2 } else { 3 };
 			arithmetic(
 				evaluate(left, scope)?,

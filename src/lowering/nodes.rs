@@ -170,7 +170,7 @@ pub(crate) fn if_then_parts(node: &Node) -> Option<(&Node, &Node)> {
 		return None;
 	};
 	match condition.drop_meta() {
-		Node::Key(empty, Op::If, condition) if matches!(empty.drop_meta(), Node::Empty) => Some((condition, then)),
+		Node::Key(empty, Op::If, condition) if empty.is_empty_node() => Some((condition, then)),
 		_ => None,
 	}
 }

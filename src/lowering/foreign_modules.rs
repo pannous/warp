@@ -470,9 +470,7 @@ impl Foreign<'_> {
 	fn forwarded(&mut self, node: &Node) -> Option<Node> {
 		match node.drop_meta() {
 			// `-a`, `#a`
-			Node::Key(empty, op @ (Op::Neg | Op::Sub | Op::Hash), operand)
-				if matches!(empty.drop_meta(), Node::Empty) =>
-			{
+			Node::Key(empty, op @ (Op::Neg | Op::Sub | Op::Hash), operand) if empty.is_empty_node() => {
 				let operand = self.rewrite(operand.as_ref().clone());
 				let runtime = self.foreign_value(&operand)?;
 				Some(operator_call(

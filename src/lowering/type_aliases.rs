@@ -45,7 +45,7 @@ fn alias(node: &Node) -> Option<(String, String)> {
 	let Node::Symbol(target) = target.drop_meta() else {
 		return None;
 	};
-	matches!(body.drop_meta(), Node::Empty).then(|| (name.drop_meta().name(), target.clone()))
+	body.is_empty_node().then(|| (name.drop_meta().name(), target.clone()))
 }
 
 /// The type an alias names in the end, `Age?` of `Years?` when `type Years = Age; type Age = int` gives `int?`
@@ -67,15 +67,13 @@ fn target(written: &str, aliases: &HashMap<String, String>) -> Option<String> {
 fn resolved(node: Node, aliases: &HashMap<String, String>) -> Node {
 	match node {
 		declaration @ Node::Key(..) if alias(&declaration).is_some() => declaration,
-		Node::Type { name, body } if matches!(body.drop_meta(), Node::Empty) => {
-			match target(&name.drop_meta().name(), aliases) {
-				Some(target) => Node::Type {
-					name: Box::new(Node::Symbol(target)),
-					body,
-				},
-				None => Node::Type { name, body },
-			}
-		}
+		Node::Type { name, body } if body.is_empty_node() => match target(&name.drop_meta().name(), aliases) {
+			Some(target) => Node::Type {
+				name: Box::new(Node::Symbol(target)),
+				body,
+			},
+			None => Node::Type { name, body },
+		},
 		Node::Type { name, body } => Node::Type {
 			name,
 			body: Box::new(resolved(*body, aliases)),

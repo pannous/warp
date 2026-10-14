@@ -262,7 +262,7 @@ fn dangling_operator(node: &Node) -> Option<(Node, Node)> {
 	let Node::Key(operand, op, nothing) = node.drop_meta() else {
 		return None;
 	};
-	if !matches!(nothing.drop_meta(), Node::Empty) || matches!(operand.drop_meta(), Node::Empty) {
+	if !nothing.is_empty_node() || operand.is_empty_node() {
 		return None;
 	}
 	Some((operand.as_ref().clone(), operator_symbol(*op)?))

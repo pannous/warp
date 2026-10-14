@@ -232,13 +232,11 @@ pub(crate) fn rest_pattern(part: &Node) -> Option<Option<String>> {
 			.strip_prefix(STARRED)
 			.filter(|rest| !rest.is_empty())
 			.map(|rest| Some(rest.to_string())),
-		Node::Key(start, Op::Range | Op::To, end) if matches!(end.drop_meta(), Node::Empty) => {
-			match start.drop_meta() {
-				Node::Empty => Some(None),
-				Node::Symbol(name) => Some(Some(name.clone())),
-				_ => None,
-			}
-		}
+		Node::Key(start, Op::Range | Op::To, end) if end.is_empty_node() => match start.drop_meta() {
+			Node::Empty => Some(None),
+			Node::Symbol(name) => Some(Some(name.clone())),
+			_ => None,
+		},
 		_ => None,
 	}
 }
@@ -247,7 +245,7 @@ pub(crate) fn rest_pattern(part: &Node) -> Option<Option<String>> {
 fn item_pattern(part: &Node) -> Option<&Node> {
 	match part.drop_meta() {
 		Node::Key(each, Op::Range | Op::To, end)
-			if matches!(end.drop_meta(), Node::Empty) && matches!(each.drop_meta(), Node::List(..)) =>
+			if end.is_empty_node() && matches!(each.drop_meta(), Node::List(..)) =>
 		{
 			Some(each)
 		}
@@ -475,7 +473,7 @@ impl<'a> Matched<'a> {
 /// `13 to 17` or alternatives `1 | 2`
 fn condition(path: &Node, pattern: &Node, names: &Names) -> Option<Node> {
 	if let Node::Key(empty, op, bound) = pattern.drop_meta() {
-		if matches!(empty.drop_meta(), Node::Empty) && op.is_ordering() {
+		if empty.is_empty_node() && op.is_ordering() {
 			return Some(key(path.clone(), *op, bound.as_ref().clone()));
 		}
 	}
@@ -718,7 +716,7 @@ fn has_open_part(pattern: &Node, names: &Names) -> bool {
 		return true;
 	}
 	match pattern.drop_meta() {
-		Node::Key(empty, op, _) => matches!(empty.drop_meta(), Node::Empty) && op.is_ordering(),
+		Node::Key(empty, op, _) => empty.is_empty_node() && op.is_ordering(),
 		Node::List(items, _, _) if is_list_pattern(pattern) => items.iter().any(|part| has_open_part(part, names)),
 		// a schema `{port: int, debug?: bool}`: no map holds a type or an optional field
 		Node::List(fields, _, _) if is_map_pattern(pattern) => fields.iter().any(|part| {
@@ -767,7 +765,7 @@ fn range_tests(subject: &Node, pattern: &Node) -> Option<Vec<Node>> {
 	let bounds = [(start, Op::Ge), (end, below_end)];
 	let tests: Vec<Node> = bounds
 		.into_iter()
-		.filter(|(bound, _)| !matches!(bound.drop_meta(), Node::Empty))
+		.filter(|(bound, _)| !bound.is_empty_node())
 		.map(|(bound, comparison)| key(subject.clone(), comparison, bound.as_ref().clone()))
 		.collect();
 	(!tests.is_empty()).then_some(tests)
@@ -785,7 +783,7 @@ fn joined(tests: Vec<Node>, op: Op) -> Node {
 fn split_guard(case_key: &Node) -> (Node, Option<Node>) {
 	match case_key.drop_meta() {
 		Node::Key(condition, Op::Then, pattern) => match condition.drop_meta() {
-			Node::Key(empty, Op::If, guard) if matches!(empty.drop_meta(), Node::Empty) => {
+			Node::Key(empty, Op::If, guard) if empty.is_empty_node() => {
 				(pattern.drop_meta().clone(), Some(guard.as_ref().clone()))
 			}
 			_ => (case_key.clone(), None),

@@ -106,7 +106,7 @@ pub fn is_boolean(node: &Node, scope: &Scope) -> bool {
 		Node::True | Node::False => true,
 		Node::Key(left, op, right) => match op {
 			_ if op.is_comparison() => true,
-			Op::Not => matches!(left.drop_meta(), Node::Empty),
+			Op::Not => left.is_empty_node(),
 			// `2 as bool`, also a function's declared `-> bool` result (card bool-conversion)
 			Op::As => is_bool_type(&right.drop_meta().name()),
 			_ if op.is_logical() || op.is_bitwise() => is_boolean(left, scope) && is_boolean(right, scope),

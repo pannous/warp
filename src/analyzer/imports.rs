@@ -63,11 +63,11 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			} else if *op == Op::Square || *op == Op::Cube {
 				analyze_required_functions(ctx, key);
 				return;
-			} else if op.is_prefix() && matches!(key.drop_meta(), Node::Empty) {
+			} else if op.is_prefix() && key.is_empty_node() {
 				analyze_required_functions(ctx, value);
 				return;
 			} else if *op == Op::Hash {
-				if matches!(key.drop_meta(), Node::Empty) {
+				if key.is_empty_node() {
 					ctx.required_functions.insert("node_count");
 				} else {
 					ctx.required_functions.extend([

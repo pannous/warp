@@ -179,7 +179,7 @@ impl WarpParser {
 	/// `x is empty` holds for ø, "", [] and {} alike (wiki/null.md: empty checks missing or empty): `count(x) == 0`, as a
 	/// number or a bool counts one.
 	pub(super) fn try_parse_test_word(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
-		if self.options.data_mode || min_bp > Op::Not.binding_power().1 || matches!(lhs.drop_meta(), Empty) {
+		if self.options.data_mode || min_bp > Op::Not.binding_power().1 || lhs.is_empty_node() {
 			return None;
 		}
 		let is_length = "is".len();
@@ -225,7 +225,7 @@ impl WarpParser {
 		let binds = min_bp <= TIMES_BP
 			|| self.times_fills_list()
 			|| (self.value_after_times() && min_bp <= Op::Mul.binding_power().0);
-		if self.options.data_mode || matches!(lhs.drop_meta(), Empty) || !binds || !self.matches_keyword(TIMES_WORD) {
+		if self.options.data_mode || lhs.is_empty_node() || !binds || !self.matches_keyword(TIMES_WORD) {
 			return None;
 		}
 		self.advance_by(TIMES_WORD.len());

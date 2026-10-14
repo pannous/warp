@@ -33,7 +33,7 @@ impl WasmGcEmitter {
 				matches!(self.get_type(node), Kind::Text | Kind::Codepoint | Kind::List)
 			}
 			// an indexed element is a Node of any kind: 'héllo'#2 is a codepoint
-			Node::Key(indexed, Op::Hash, _) => !matches!(indexed.drop_meta(), Node::Empty),
+			Node::Key(indexed, Op::Hash, _) => !indexed.is_empty_node(),
 			// `data n*1`: code as a Node, compared as written (`parse("n * 1") == data (n * 1)`)
 			Node::List(..) if crate::blocks::quoted_data(node).is_some() => true,
 			Node::Symbol(name) => {
@@ -134,9 +134,8 @@ impl WasmGcEmitter {
 		let Node::Key(left, op @ (Op::Identical | Op::NotIdentical), right) = node.drop_meta() else {
 			return None;
 		};
-		let known_type = |side: &Node| {
-			Some(self.static_type_name(side)).filter(|name| name != "empty" || matches!(side.drop_meta(), Node::Empty))
-		};
+		let known_type =
+			|side: &Node| Some(self.static_type_name(side)).filter(|name| name != "empty" || side.is_empty_node());
 		let same_type = match (known_type(left), known_type(right)) {
 			(Some(left_type), Some(right_type)) => left_type == right_type,
 			_ => crate::analyzer::is_boolean(left, &self.scope) == crate::analyzer::is_boolean(right, &self.scope),

@@ -265,7 +265,7 @@ fn with_written_amount(node: Node) -> Node {
 			}
 		}
 		Node::Key(conversion, op @ (Op::Square | Op::Cube), nothing)
-			if matches!(nothing.drop_meta(), Node::Empty) && powered_conversion(&conversion, op).is_some() =>
+			if nothing.is_empty_node() && powered_conversion(&conversion, op).is_some() =>
 		{
 			let Node::Key(quantity, Op::As, unit) = conversion.drop_meta().clone() else {
 				unreachable!("a powered conversion is an `as`")
@@ -336,7 +336,7 @@ fn with_unit_aliases(node: Node, aliases: &[(&str, &str)]) -> Node {
 		}
 		Node::Symbol(name) => expansion(&Node::Symbol(name.clone())).unwrap_or(Node::Symbol(name)),
 		// a field's type, `speed: mph`
-		Node::Type { name, body } if matches!(body.drop_meta(), Node::Empty) && expansion(&name).is_some() => {
+		Node::Type { name, body } if body.is_empty_node() && expansion(&name).is_some() => {
 			expansion(&name).expect("guarded")
 		}
 		Node::Type { name, body } => Node::Type {

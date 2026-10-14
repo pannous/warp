@@ -143,7 +143,7 @@ impl WasmGcEmitter {
 			|| matches!(op, Op::Inc | Op::Dec)
 		{
 			self.emit_arithmetic(func, left, op, right);
-		} else if op.is_prefix() && matches!(left.drop_meta(), Node::Empty) {
+		} else if op.is_prefix() && left.is_empty_node() {
 			self.emit_prefix_op(func, right, op);
 		} else if *op == Op::Question {
 			// Ternary: condition ? then : else
@@ -273,7 +273,7 @@ impl WasmGcEmitter {
 	/// Emit hash operator: count (#x) or indexing (x#y)
 	fn emit_hash_op(&mut self, func: &mut Function, left: &Node, right: &Node) {
 		// Check if prefix (count) or infix (index)
-		if matches!(left.drop_meta(), Node::Empty) {
+		if left.is_empty_node() {
 			// Prefix #x = count
 			self.emit_list_count(func, right, "node_count");
 			// node_count returns i64, wrap in new_int

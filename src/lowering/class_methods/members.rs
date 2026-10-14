@@ -558,7 +558,7 @@ pub(super) fn as_member(definition: Node) -> Node {
 	let is_self = |parameter: &Node| match parameter.drop_meta() {
 		Node::Symbol(word) => word == RECEIVER,
 		Node::Key(word, Op::Colon, _) => word.drop_meta().name() == RECEIVER,
-		Node::Key(empty, _, word) => matches!(empty.drop_meta(), Node::Empty) && word.drop_meta().name() == RECEIVER,
+		Node::Key(empty, _, word) => empty.is_empty_node() && word.drop_meta().name() == RECEIVER,
 		_ => false,
 	};
 	let parameters = match parameters.first() {

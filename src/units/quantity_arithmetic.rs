@@ -35,7 +35,7 @@ pub(super) fn powered(factors: Vec<Factor>, exponent: i32) -> Vec<Factor> {
 /// A conversion target written as units: `m`, `minutes`, `cm²`, `km/h`, `kg*m/s²`
 pub(super) fn unit_expression(node: &Node) -> Option<Vec<Factor>> {
 	match node.drop_meta() {
-		Node::Key(base, op @ (Op::Square | Op::Cube), nothing) if matches!(nothing.drop_meta(), Node::Empty) => {
+		Node::Key(base, op @ (Op::Square | Op::Cube), nothing) if nothing.is_empty_node() => {
 			Some(powered(unit_expression(base)?, exponent_of(*op)))
 		}
 		Node::Key(left, Op::Mul, right) => Some([unit_expression(left)?, unit_expression(right)?].concat()),

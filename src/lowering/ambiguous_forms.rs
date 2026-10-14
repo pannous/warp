@@ -139,7 +139,7 @@ impl SuffixWords {
 fn lower_node(node: Node, functions: &SuffixWords) -> Node {
 	match node {
 		// `10%`: a percent is a hundredth, `10/100`
-		Node::Key(left, Op::Mod, right) if matches!(right.drop_meta(), Node::Empty) => {
+		Node::Key(left, Op::Mod, right) if right.is_empty_node() => {
 			key(lower_node(*left, functions), Op::Div, Node::int(PERCENT))
 		}
 		Node::List(items, bracket, separator) => {

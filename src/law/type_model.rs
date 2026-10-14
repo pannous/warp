@@ -717,7 +717,7 @@ impl Exporter {
 			.is_some_and(|lean| lean.starts_with(OPTIONAL_TYPE_PREFIX));
 		if aliased_list
 			|| is_list_literal(value)
-			|| (matches!(value.drop_meta(), Node::Empty) && !optional)
+			|| (value.is_empty_node() && !optional)
 			|| annotation
 				.as_deref()
 				.is_some_and(|lean| lean.starts_with(LIST_TYPE_PREFIX))

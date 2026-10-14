@@ -456,7 +456,7 @@ impl Dispatch {
 	/// The declared type of a field, when it names classes (`content: Circle`, `content: Circle | Square`); a field of a
 	/// class may also hold ø, as `left: Node` of a tree does at its leaves
 	pub(super) fn class_field_type(&self, class: &str, field: &str, value: &Node) -> Option<String> {
-		if matches!(value.drop_meta(), Node::Empty) {
+		if value.is_empty_node() {
 			return None;
 		}
 		let type_def = self.types.registry.get_by_name(class)?;

@@ -232,8 +232,8 @@ fn linear_uses(part: &Node, name: &str, picked: &HashSet<String>) -> (usize, usi
 	}
 	let single = match part.drop_meta() {
 		Node::Key(..) if float_array_assignment(part).as_deref() == Some(name) => true,
-		Node::Key(array, Op::Hash, index) if is_name(array) => !matches!(index.drop_meta(), Node::Empty),
-		Node::Key(empty, Op::Hash, array) => matches!(empty.drop_meta(), Node::Empty) && is_name(array),
+		Node::Key(array, Op::Hash, index) if is_name(array) => !index.is_empty_node(),
+		Node::Key(empty, Op::Hash, array) => empty.is_empty_node() && is_name(array),
 		Node::Key(array, Op::Dot, word) => is_name(array) && crate::analyzer::is_counting_word(&word.name()),
 		Node::List(items, Bracket::Round, _) if items.len() == 3 && items[0].name() == DOT_WORD => {
 			return paired(&items[1], &items[2])
@@ -622,7 +622,7 @@ impl Rewrite<'_> {
 						)
 					}
 					(array, Op::Hash)
-						if !matches!(value.drop_meta(), Node::Empty)
+						if !value.is_empty_node()
 							&& let Some(kind) = shared(array, &names) =>
 					{
 						let [get, _, _] = element_words(kind);

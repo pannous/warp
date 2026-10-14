@@ -568,7 +568,7 @@ impl WasmGcEmitter {
 				self.is_numeric(left) && self.is_numeric(right)
 			}
 			// `not x` is always 1 or 0
-			Node::Key(left, Op::Not, _) if matches!(left.drop_meta(), Node::Empty) => true,
+			Node::Key(left, Op::Not, _) if left.is_empty_node() => true,
 			Node::Key(_, Op::Define | Op::Assign, right) => self.is_numeric(right),
 			// grouping: `(1==2)` is the number it computes
 			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_numeric(&items[0]),

@@ -571,9 +571,7 @@ impl WarpParser {
 pub(super) fn any_for_type_parameters(node: Node, parameters: &[String]) -> Node {
 	let is_parameter = |node: &Node| match node.drop_meta() {
 		Node::Symbol(name) => parameters.contains(name),
-		Node::Type { name, body } => {
-			matches!(body.drop_meta(), Node::Empty) && parameters.contains(&name.drop_meta().name())
-		}
+		Node::Type { name, body } => body.is_empty_node() && parameters.contains(&name.drop_meta().name()),
 		_ => false,
 	};
 	match node {

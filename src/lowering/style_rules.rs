@@ -197,11 +197,11 @@ fn css_length(node: &Node) -> Option<String> {
 			}
 			_ => None,
 		},
-		Node::Key(amount, Op::Mod, nothing) if matches!(nothing.drop_meta(), Node::Empty) => match amount.drop_meta() {
+		Node::Key(amount, Op::Mod, nothing) if nothing.is_empty_node() => match amount.drop_meta() {
 			Node::Number(number) => Some(format!("{number}%")),
 			_ => None,
 		},
-		Node::Key(nothing, Op::Sub | Op::Neg, length) if matches!(nothing.drop_meta(), Node::Empty) => {
+		Node::Key(nothing, Op::Sub | Op::Neg, length) if nothing.is_empty_node() => {
 			css_length(length).map(|length| format!("-{length}"))
 		}
 		_ => None,

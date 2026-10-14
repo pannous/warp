@@ -761,7 +761,7 @@ impl Broadcast {
 					.or_else(|| self.broadcast_one_argument(&items, &bracket, &separator))
 					.unwrap_or(Node::List(items, bracket, separator))
 			}
-			Node::Key(left, op, right) if matches!(left.drop_meta(), Node::Empty) && SCALAR_OPERATORS.contains(&op) => {
+			Node::Key(left, op, right) if left.is_empty_node() && SCALAR_OPERATORS.contains(&op) => {
 				let right = self.rewrite(*right);
 				self.broadcast_operator(op, &right)
 					.unwrap_or(Node::Key(left, op, Box::new(right)))

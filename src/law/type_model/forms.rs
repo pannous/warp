@@ -420,7 +420,7 @@ pub(super) fn first_value_is_list(body: &Node, local: &str) -> bool {
 		Node::Key(target, Op::Assign, value)
 			if first.is_none() && matches!(target.drop_meta(), Node::Symbol(name) if name == local) =>
 		{
-			first = Some(is_list_literal(value) || matches!(value.drop_meta(), Node::Empty));
+			first = Some(is_list_literal(value) || value.is_empty_node());
 		}
 		_ => {}
 	});

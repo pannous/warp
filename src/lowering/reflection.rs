@@ -528,7 +528,7 @@ impl Objects {
 			.module_classes
 			.get(module)
 			.map(|classes| &classes[member])
-			.filter(|class| !matches!(class.drop_meta(), Node::Empty));
+			.filter(|class| !class.is_empty_node());
 		if let Some(class) = class {
 			return listed_names(
 				entry_names(&class[FIELDS_WORDS[0]]),

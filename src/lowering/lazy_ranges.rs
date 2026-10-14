@@ -131,9 +131,7 @@ impl Lowering {
 			{
 				Some(self.sum(&range_of(&items[1])?))
 			}
-			Node::Key(empty, Op::Hash, counted) if matches!(empty.drop_meta(), Node::Empty) => {
-				Some(self.length(&range_of(counted)?))
-			}
+			Node::Key(empty, Op::Hash, counted) if empty.is_empty_node() => Some(self.length(&range_of(counted)?)),
 			Node::Key(range, Op::Dot, word) if self.counts && word.is_symbol(COUNT_WORD) => {
 				Some(self.length(&range_of(range)?))
 			}
@@ -332,7 +330,7 @@ fn only_read(node: &Node, name: &str, readers: &RangeReaders) -> bool {
 			.iter()
 			.enumerate()
 			.all(|(at, item)| (is_name(item) && at > 0 && items[at - 1].is_symbol("in")) || reads(item)),
-		Node::Key(empty, Op::Hash, counted) if matches!(empty.drop_meta(), Node::Empty) && is_name(counted) => true,
+		Node::Key(empty, Op::Hash, counted) if empty.is_empty_node() && is_name(counted) => true,
 		Node::Key(list, Op::Hash, index) if is_name(list) => is_position(index) && reads(index),
 		Node::Key(list, Op::Dot, method) if is_name(list) => reading_method(method) && reads(method),
 		Node::Key(head, Op::Define, body) if matches!(head.drop_meta(), Node::List(..)) => !body.mentions_any(&[name]),

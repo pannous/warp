@@ -457,7 +457,7 @@ fn renamed_column(field: &Node) -> Option<(String, String)> {
 	let [name, _, _, old_name, ..] = parts.as_slice() else {
 		return None;
 	};
-	if matches!(old_name.drop_meta(), Node::Empty) {
+	if old_name.is_empty_node() {
 		return None; // a unit field's column, not renamed
 	}
 	Some((name.drop_meta().name(), old_name.drop_meta().name()))

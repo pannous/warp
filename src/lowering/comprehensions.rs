@@ -575,7 +575,7 @@ fn qualifiers(clause: &Node, rest: &[Node]) -> Option<Vec<Qualifier>> {
 	let mut found = vec![Qualifier::Each(variable.clone(), sequence.clone())];
 	match (tail, rest) {
 		([], []) => {}
-		([nothing], []) if matches!(nothing.drop_meta(), Node::Empty) => {}
+		([nothing], []) if nothing.is_empty_node() => {}
 		([nested], _) if starts_with_for(nested) => found.extend(qualifiers(nested, rest)?),
 		([filter_word], [_, ..]) if filter_word.is_symbol(IF_WORD) || filter_word.is_symbol(WHERE_KEYWORD) => {
 			let end = rest.iter().position(starts_with_for).unwrap_or(rest.len());

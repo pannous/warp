@@ -289,7 +289,7 @@ fn reads_only_items(node: &Node, name: &str) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(symbol) => symbol != name,
 		Node::Key(list, Op::Hash, index) if is_name(list) => reads_only_items(index, name),
-		Node::Key(empty, Op::Hash, list) if matches!(empty.drop_meta(), Node::Empty) && is_name(list) => true,
+		Node::Key(empty, Op::Hash, list) if empty.is_empty_node() && is_name(list) => true,
 		Node::Key(left, _, right) => reads_only_items(left, name) && reads_only_items(right, name),
 		Node::List(items, _, _) => items.iter().all(|item| reads_only_items(item, name)),
 		_ => true,
@@ -639,7 +639,7 @@ impl Translation {
 			Node::Number(number) if !matches!(number, crate::extensions::numbers::Number::Complex(..)) => {
 				Some(float_literal(f64::from(*number)))
 			}
-			Node::Key(empty, op, operand) if matches!(empty.drop_meta(), Node::Empty) => match op {
+			Node::Key(empty, op, operand) if empty.is_empty_node() => match op {
 				Op::Neg => Some(format!("(-{})", self.expression(operand)?)),
 				Op::Sqrt => Some(format!("sqrt({})", self.expression(operand)?)),
 				Op::Abs => Some(format!("abs({})", self.expression(operand)?)),
@@ -722,7 +722,7 @@ impl Translation {
 	/// A condition as a WGSL bool: comparisons, and, or, not; a number is true unless 0
 	fn condition(&mut self, node: &Node) -> Option<String> {
 		match node.drop_meta() {
-			Node::Key(empty, Op::Not, operand) if matches!(empty.drop_meta(), Node::Empty) => {
+			Node::Key(empty, Op::Not, operand) if empty.is_empty_node() => {
 				Some(format!("!{}", self.condition(operand)?))
 			}
 			Node::Key(left, op @ (Op::And | Op::Or), right) => {
@@ -945,7 +945,7 @@ impl Translation {
 				let Node::Key(empty, Op::While, condition) = condition.drop_meta() else {
 					return None;
 				};
-				if !matches!(empty.drop_meta(), Node::Empty) {
+				if !empty.is_empty_node() {
 					return None;
 				}
 				self.heavy = true;

@@ -74,10 +74,10 @@ fn starred(node: &Node) -> Option<String> {
 			.filter(|name| !name.is_empty() && !name.starts_with(STARRED))
 			.map(str::to_string),
 		Node::Key(name, Op::Colon, element_type) => match element_type.drop_meta() {
-			Node::Key(_, Op::To, end) if matches!(end.drop_meta(), Node::Empty) => Some(name.name()),
+			Node::Key(_, Op::To, end) if end.is_empty_node() => Some(name.name()),
 			_ => starred(name),
 		},
-		Node::Key(name, Op::To, end) if matches!(end.drop_meta(), Node::Empty) => name.symbol_name().map(String::from),
+		Node::Key(name, Op::To, end) if end.is_empty_node() => name.symbol_name().map(String::from),
 		_ => None,
 	}
 }

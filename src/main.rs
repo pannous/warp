@@ -672,7 +672,7 @@ fn ended_well(result: &Node) {
 /// A program's value after what it printed, behind `mark`; nothing for ø, the value of `print` (issue #18) and of a
 /// program that only acts, as Python's console shows nothing for None
 fn show(result: &Node, mark: &str) {
-	if !matches!(result.drop_meta(), Node::Empty) {
+	if !result.is_empty_node() {
 		// markup (`html{ body{ … } }`) is printed as HTML: `warp run page.warp > page.html` (card web-dom)
 		let shown = if markup::is_markup(result) {
 			markup::to_html(result)

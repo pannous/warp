@@ -76,10 +76,6 @@ fn connective(op: Op) -> Option<&'static str> {
 	})
 }
 
-fn is_empty(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Empty)
-}
-
 /// Integer-valued term. Warp comparisons yield 1/0, so propositions are lifted with `if`.
 fn term(node: &Node) -> Lean {
 	match node.drop_meta() {
@@ -87,7 +83,7 @@ fn term(node: &Node) -> Lean {
 		Node::True => Ok(integer(1)),
 		Node::False => Ok(integer(0)),
 		Node::Symbol(name) => Ok(name.clone()),
-		Node::Key(left, Op::Neg | Op::Sub, right) if is_empty(left) => Ok(format!("(-{})", term(right)?)),
+		Node::Key(left, Op::Neg | Op::Sub, right) if left.is_empty_node() => Ok(format!("(-{})", term(right)?)),
 		// Warp `%` is Euclidean (0 ≤ r < |b|) like Lean's Int.emod; `rem` is the truncated Int.tmod
 		Node::Key(left, Op::Mod, right) => Ok(format!("(Int.emod {} {})", term(left)?, term(right)?)),
 		Node::Key(left, Op::Rem, right) => Ok(format!("(Int.tmod {} {})", term(left)?, term(right)?)),
@@ -112,7 +108,7 @@ fn term(node: &Node) -> Lean {
 		},
 		Node::Key(head, Op::Else, no) => match head.drop_meta() {
 			Node::Key(if_part, Op::Then, yes) => match if_part.drop_meta() {
-				Node::Key(empty, Op::If, condition) if is_empty(empty) => Ok(format!(
+				Node::Key(empty, Op::If, condition) if empty.is_empty_node() => Ok(format!(
 					"(if {} then {} else {})",
 					proposition(condition)?,
 					term(yes)?,
@@ -148,7 +144,7 @@ fn proposition(node: &Node) -> Lean {
 			connective(*op).unwrap(),
 			proposition(right)?
 		)),
-		Node::Key(left, Op::Not, right) if is_empty(left) => Ok(format!("¬({})", proposition(right)?)),
+		Node::Key(left, Op::Not, right) if left.is_empty_node() => Ok(format!("¬({})", proposition(right)?)),
 		Node::List(items, _, _) if items.len() == 1 => proposition(&items[0]),
 		Node::True => Ok("True".into()),
 		Node::False => Ok("False".into()),
