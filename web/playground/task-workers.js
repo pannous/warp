@@ -22,7 +22,12 @@ function serveTaskWorkers(programWorker) {
 		taskWorkers.set(taskWorker.id, made);
 	});
 	// a message of the page's own to one of them (playground.js sendPaintCanvas)
-	programWorker.postToTaskWorker = (id, message, transfer) => taskWorkers.get(id)?.postMessage(message, transfer);
+	// an unknown id throws: a dropped canvas would leave its program waiting for it forever (host-gpu.js arrivingCanvas)
+	programWorker.postToTaskWorker = (id, message, transfer) => {
+		const taskWorker = taskWorkers.get(id);
+		if (!taskWorker) throw new Error(`no task worker ${id} to post ${Object.keys(message)} to`);
+		taskWorker.postMessage(message, transfer);
+	};
 	const terminate = programWorker.terminate.bind(programWorker);
 	programWorker.terminate = () => {
 		taskWorkers.forEach(made => made.terminate());

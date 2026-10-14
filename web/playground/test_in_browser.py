@@ -121,6 +121,7 @@ SHADER_ERROR_CODE = """broken = shader {
 }
 paint(broken, 8, 8)"""
 SHADER_ERROR_PLACE = "at 5:22"
+SHADER_EXCERPT = "┌─"  # naga's excerpt of the shader (Firefox): the error says why in one line instead (card shader-errors)
 CANVAS_FAILED = "the page's canvas failed"  # host-gpu.js CANVAS_FAILED: the shader painted through pixels instead
 CANVAS_SETTLE_MS = 300  # the task Worker's frame reaches the page's canvas after its task
 # card webgpu-safari: a paint of the view's size makes the output pane taller; the view's size must not grow with it
@@ -609,6 +610,7 @@ def shader_error_wrong():
 		return []
 	marked = browser("eval", '[...document.querySelectorAll(".marked-error")].map(mark => mark.textContent).join(" ")')
 	wrong = [] if SHADER_ERROR_PLACE in shown else [f"shader error: {shown!r}, expected {SHADER_ERROR_PLACE!r} in it"]
+	wrong += [f"shader error: {shown!r}, expected one line without the GPU's excerpt"] if SHADER_EXCERPT in shown else []
 	return wrong + ([] if ":" in marked else [f"shader error marks {marked!r}, expected the colon"])
 
 
