@@ -14,7 +14,9 @@ use control::control_flow::LoopValues;
 mod declared_values;
 pub mod functions;
 mod values;
-pub use functions::closures::{CLOSURE_APPLY, CLOSURE_CAPTURED, CLOSURE_REBUILD};
+pub use functions::closures::{CAPTURE_EXPORT_PREFIX, CLOSURE_APPLY, CLOSURE_CAPTURED, CLOSURE_REBUILD};
+pub(crate) use lists::list_sharing::reads_collection;
+pub(crate) use text::text_builtins::{join_call, joined_text};
 mod constructors;
 pub use constructors::NEW_BOOL;
 pub(crate) use numbers::casts::{is_called_conversion, ROUNDING_FUNCTIONS};
@@ -71,18 +73,9 @@ const MEMORY: MemoryType = MemoryType {
 	shared: false,
 	page_size_log2: None,
 };
-/// Builtins that write their argument and give it back: `puti i` as a statement of a loop body
-/// The export name prefix of a closure's captured variable, `capture·add·k` (tasks copy them to their instance)
-pub const CAPTURE_EXPORT_PREFIX: &str = "capture·";
 /// The WASI output words besides print: each gives an Int (analyzer)
 pub const OUTPUT_WORDS: [&str; 4] = ["puts", "puti", "putl", "putf"];
-/// Words that read a list or map without holding on to it, besides the counting words: `print m`, `type(xs)`, `m has k`
-const COLLECTION_READING_WORDS: [&str; 7] = ["print", "put", "string", "text", "type", "has", "contains"];
 
-/// `count(xs)`, `print m`, `xs has v`: a word given a collection variable reads it, the variable is not shared
-pub(super) fn reads_collection(word: &str) -> bool {
-	crate::analyzer::is_counting_word(word) || COLLECTION_READING_WORDS.contains(&word)
-}
 pub(crate) const OUTPUT_CALLS: [&str; 5] = [
 	"print",
 	OUTPUT_WORDS[0],
@@ -90,24 +83,6 @@ pub(crate) const OUTPUT_CALLS: [&str; 5] = [
 	OUTPUT_WORDS[2],
 	OUTPUT_WORDS[3],
 ];
-
-/// The condition and the then-branch of `if condition then branch`
-/// The call `join(list, separator)`: the items' text forms with the separator between them
-pub(super) fn join_call(list: Node, separator: &str) -> Node {
-	Node::List(
-		vec![
-			Node::Symbol("join".to_string()),
-			list,
-			Node::Text(separator.to_string()),
-		],
-		Bracket::Round,
-		Separator::None,
-	)
-}
-
-pub(super) fn joined_text(items: &[Node], separator: &str) -> Node {
-	join_call(Node::List(items.to_vec(), Bracket::Square, Separator::Space), separator)
-}
 
 pub use config::EmitterConfig;
 pub use import_manager::ImportManager;
@@ -882,14 +857,6 @@ impl WasmGcEmitter {
 
 	fn collect_and_allocate_strings(&mut self, node: &Node) {
 		self.string_table.collect_from_node(node, &mut self.scope);
-	}
-
-	/// A Key of its two sides on the stack, joined by `op` (list_text writes the op as written, a need when it is new)
-	fn emit_new_key(&mut self, func: &mut Function, op: &crate::operators::Op) {
-		let code = crate::operators::op_to_code(op);
-		self.discovered_needs.insert(Need::KeyOperator(code));
-		func.instruction(&I::I64Const(code));
-		self.emit_call(func, "new_key");
 	}
 
 	fn emit_call(&mut self, func: &mut Function, name: &'static str) {
