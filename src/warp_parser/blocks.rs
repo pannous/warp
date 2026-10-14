@@ -278,10 +278,6 @@ pub(super) fn code_words(chars: &[char], start: usize) -> impl Iterator<Item = (
 	})
 }
 
-pub(super) fn is_block(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _))
-}
-
 /// `f(xs) := xs.map { it*10 }` is `f(xs) := (xs.map {it*10})`: the block belongs to the method call, not to the statement
 pub(super) fn with_trailing_block(assignment: Node, block: Node) -> Node {
 	match assignment {

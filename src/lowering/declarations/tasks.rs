@@ -558,7 +558,7 @@ impl Tasks<'_> {
 			([single], fallback) => (single.clone(), fallback),
 			(several, fallback) => (Node::List(several.to_vec(), Bracket::None, Separator::Space), fallback),
 		};
-		let milliseconds = crate::units::milliseconds(&deadline)?;
+		let milliseconds = crate::numbers::units::milliseconds(&deadline)?;
 		let job_name = task_variable(job);
 		let started = format!("{STARTED_PREFIX}{}", fresh_number());
 		let status = call(crate::host::TASK_STATUS, vec![job_name.clone()]);
