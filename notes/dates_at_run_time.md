@@ -40,7 +40,7 @@ An instant's calendar fields (`now.hour`, `t.year`, …) are the wall clock of t
   `Time::field` uses `time::local_offset` for the same result natively.
 - Placing in a zone stays explicit for any other zone: `t in "Europe/Berlin"`.
 
-## Emitter (src/wasm_emitter/times.rs)
+## Emitter (src/wasm_emitter/time/times.rs)
 - `instant_at(i64 ms) -> node`; `time_of` constants are emitted inline (`emit_time_constant`).
 - `civil_from_days`, `days_from_civil`: Hinnant's civil calendar. `time_parts(form, position) -> (days, nanos)`.
 - `time_field(node, index of TIME_FIELDS) -> i64`, a zoned time's on its own wall clock, `offset` its seconds east of

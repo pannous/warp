@@ -290,8 +290,8 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		if required.contains(super::super::numbers::uncertain::UNCERTAIN_NEW) {
 			required.insert(super::super::numbers::uncertain::UNCERTAIN_TEXT); // `7.0 ± 2.0`
 		}
-		if required.contains(super::super::times::TIME_FIELD) {
-			required.insert(super::super::times::TIME_TEXT); // `2026-10-10T14:43:33.682Z`
+		if required.contains(super::super::time::times::TIME_FIELD) {
+			required.insert(super::super::time::times::TIME_TEXT); // `2026-10-10T14:43:33.682Z`
 		}
 	} else {
 		required.remove(super::super::numbers::float_text::FLOAT_TEXT); // no float is shown as text

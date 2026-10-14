@@ -3,9 +3,9 @@
 //! for an instant and a local time). `now` is instant_at(clock()), a constant time_of(form, position) (time.rs).
 //! time_text shows a time as calendar.rs does, `2026-10-10T14:43:33.682Z`, with Howard Hinnant's civil calendar
 
-use super::layout::BYTE;
-use super::lists::list_ops::RETURNED_ERROR;
-use super::WasmGcEmitter;
+use super::super::layout::BYTE;
+use super::super::lists::list_ops::RETURNED_ERROR;
+use super::super::WasmGcEmitter;
 use crate::node::Node;
 use crate::time::calendar::{
 	BUILTIN_RULES, DAYS_PER_ERA, DAY_SECONDS, EPOCH_SHIFT, HOUR, MINUTE, SECOND, YEARS_PER_ERA, ZONES,
@@ -27,11 +27,11 @@ const DURATION_TEXT: &str = "duration_text";
 /// Required by a zoned constant: time_text then names the zones (`[Europe/Berlin]`)
 pub const ZONE_NAMES: &str = "zone_names";
 /// civil_from_days(days) -> (year, month, day)
-pub(super) const CIVIL_FROM_DAYS: &str = "civil_from_days";
+pub(in crate::wasm_emitter) const CIVIL_FROM_DAYS: &str = "civil_from_days";
 /// days_from_civil(year, month, day) -> days
-pub(super) const DAYS_FROM_CIVIL: &str = "days_from_civil";
+pub(in crate::wasm_emitter) const DAYS_FROM_CIVIL: &str = "days_from_civil";
 /// time_parts(form, position) -> (days, nanoseconds of the day): the calendar day and the clock of a position
-pub(super) const TIME_PARTS: &str = "time_parts";
+pub(in crate::wasm_emitter) const TIME_PARTS: &str = "time_parts";
 /// The fields time_field reads, as calendar::Time::field names them
 const TIME_FIELDS: [&str; 10] = [
 	"year",
@@ -48,7 +48,7 @@ const TIME_FIELDS: [&str; 10] = [
 /// The fields that read the position itself, not its wall clock
 const ABSOLUTE_FIELDS: [&str; 2] = [crate::time::EPOCH_SECONDS, "offset"];
 const NANOS_PER_MILLI: i64 = 1_000_000;
-pub(super) const DAY_NANOS: i64 = DAY_SECONDS * SECOND as i64;
+pub(in crate::wasm_emitter) const DAY_NANOS: i64 = DAY_SECONDS * SECOND as i64;
 /// `YYYY-MM-DDThh:mm:ss.fffffffff+hh:mm[America/Los_Angeles][_tzdata=warp-2026a]` is 77 bytes
 const TIME_TEXT_BYTES: i32 = 80;
 /// `-123 months -45 days -6 hours -7 minutes -8.123456789 seconds`, every amount at most 20 bytes
@@ -61,7 +61,7 @@ const UNORDERED_DURATIONS: &str = "cannot order durations: a day is 23 to 25 hou
 
 impl WasmGcEmitter {
 	/// After new_int; before list_join, whose time_text calls them
-	pub(super) fn emit_times_runtime(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_times_runtime(&mut self) {
 		if !self.should_emit_function(TIME_FIELD) {
 			return;
 		}
@@ -445,7 +445,7 @@ impl WasmGcEmitter {
 	}
 
 	/// After int_to_decimal and the times runtime, which it calls
-	pub(super) fn emit_time_text(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_time_text(&mut self) {
 		if !self.should_emit_function(TIME_TEXT) {
 			return;
 		}
@@ -933,7 +933,7 @@ impl WasmGcEmitter {
 	}
 
 	/// time_of(info, position) of two constants: the node itself
-	pub(super) fn emit_time_constant(&self, func: &mut Function, info: i64, position: i64) {
+	pub(in crate::wasm_emitter) fn emit_time_constant(&self, func: &mut Function, info: i64, position: i64) {
 		let (node, i64_box) = (self.type_manager.node_type, self.type_manager.i64_box_type);
 		Self::emit_list(
 			func,
@@ -948,7 +948,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Two times in node_order, whose locals `kinds` hold their kinds: the earlier one first; only the same form compares
-	pub(super) fn emit_time_order(&mut self, func: &mut Function, kinds: [u32; 2], first: u32, second: u32) {
+	pub(in crate::wasm_emitter) fn emit_time_order(&mut self, func: &mut Function, kinds: [u32; 2], first: u32, second: u32) {
 		// required, not merely emitted: emit_all_functions builds node_order without times, its refusal would mark the
 		// text constructors used (test_function_usage_tracking)
 		if !self.ctx.required_functions.contains(TIME_FIELD) {
@@ -985,7 +985,7 @@ impl WasmGcEmitter {
 	}
 
 	/// `t.month` of a time: its field, or the refusal of a form without it (`instant has no hour`, `date has no hour`)
-	pub(super) fn emit_time_field_lookup(&mut self, func: &mut Function, held: u32, name: &str) {
+	pub(in crate::wasm_emitter) fn emit_time_field_lookup(&mut self, func: &mut Function, held: u32, name: &str) {
 		if name == TZDATA_FIELD {
 			return self.emit_tzdata_lookup(func, held);
 		}
@@ -1028,7 +1028,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The TimeForm of the time node in `local`
-	pub(super) fn emit_time_form(&self, func: &mut Function, local: u32) {
+	pub(in crate::wasm_emitter) fn emit_time_form(&self, func: &mut Function, local: u32) {
 		self.emit_field(func, local, 0);
 		Self::emit_list(
 			func,
@@ -1071,7 +1071,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The position of the time node in `local`
-	pub(super) fn emit_time_position(&self, func: &mut Function, local: u32) {
+	pub(in crate::wasm_emitter) fn emit_time_position(&self, func: &mut Function, local: u32) {
 		let i64_box = self.type_manager.i64_box_type;
 		self.emit_field(func, local, 1);
 		Self::emit_list(
@@ -1087,7 +1087,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Quotient and remainder rounded toward minus infinity, as div_euclid and rem_euclid
-	pub(super) fn emit_floor_split(func: &mut Function, dividend: u32, divisor: i64, quotient: u32, remainder: u32) {
+	pub(in crate::wasm_emitter) fn emit_floor_split(func: &mut Function, dividend: u32, divisor: i64, quotient: u32, remainder: u32) {
 		Self::emit_list(
 			func,
 			&[

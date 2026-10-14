@@ -2,8 +2,8 @@
 //! instant under the Europe and United States daylight saving rules, resolving a wall time that a transition skips or
 //! repeats, and `t in "Zone"`, as calendar.rs `Zone::offset_at`, `Zone::resolve` and `Time::in_zone` do for constants.
 
-use super::times::{CIVIL_FROM_DAYS, DAYS_FROM_CIVIL};
-use super::WasmGcEmitter;
+use super::super::time::times::{CIVIL_FROM_DAYS, DAYS_FROM_CIVIL};
+use super::super::WasmGcEmitter;
 use crate::time::calendar::{Dst, DAY_SECONDS, HOUR, MINUTE, SECOND, ZONES};
 use crate::time::{TimeForm, OFFSET_SHIFT, TIME_FORM_BITS};
 use crate::type_kinds::{Kind, KIND_BITS};
@@ -15,14 +15,14 @@ const ZONE_RULE: &str = "zone_rule";
 /// zone_offset_at(zone, seconds since 1970) -> seconds east of UTC
 const ZONE_OFFSET_AT: &str = "zone_offset_at";
 /// zone_resolve(zone, wall nanoseconds, choice) -> (instant nanoseconds, status): the instant a wall time means
-pub(super) const ZONE_RESOLVE: &str = "zone_resolve";
+pub(in crate::wasm_emitter) const ZONE_RESOLVE: &str = "zone_resolve";
 /// zoned_node(zone, instant nanoseconds) -> a zoned time node
-pub(super) const ZONED_NODE: &str = "zoned_node";
+pub(in crate::wasm_emitter) const ZONED_NODE: &str = "zoned_node";
 /// time_in_zone(time, zone, choice) -> zoned time: `t in "Europe/Berlin"`, `zoned(t, "Europe/Berlin", disambiguation: later)`
 pub const TIME_IN_ZONE: &str = "time_in_zone";
 
 /// The status of zone_resolve
-pub(super) const RESOLVED: i64 = 0;
+pub(in crate::wasm_emitter) const RESOLVED: i64 = 0;
 const SKIPPED: i64 = 1;
 const AMBIGUOUS: i64 = 2;
 /// The choice of zone_resolve, as the lowering writes it (time.rs `choice_code`)
@@ -72,9 +72,9 @@ fn weekday_of(days: u32) -> Emit {
 
 impl WasmGcEmitter {
 	/// The zone functions, when a program makes a zoned time; after emit_times_runtime, whose calendar they use
-	pub(super) fn emit_time_zones(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_time_zones(&mut self) {
 		// required, not merely emitted, as time arithmetic (uses_times): their refusals mark the text constructors used
-		if !self.uses_times() || !self.ctx.required_functions.contains(super::times::ZONE_NAMES) {
+		if !self.uses_times() || !self.ctx.required_functions.contains(super::super::time::times::ZONE_NAMES) {
 			return;
 		}
 		self.emit_zone_rule();
@@ -424,7 +424,7 @@ impl WasmGcEmitter {
 
 	/// Puts the instant of the wall time in `wall` into it, resolved in `zone` with `choice`; a skipped or repeated
 	/// wall time with no choice fails
-	pub(super) fn emit_resolved_instant(&mut self, f: &mut Function, zone: u32, wall: u32, choice: u32, status: u32) {
+	pub(in crate::wasm_emitter) fn emit_resolved_instant(&mut self, f: &mut Function, zone: u32, wall: u32, choice: u32, status: u32) {
 		Self::emit_list(f, &[I::LocalGet(zone), I::LocalGet(wall), I::LocalGet(choice)]);
 		self.call(f, ZONE_RESOLVE);
 		Self::emit_list(f, &[I::LocalSet(status), I::LocalSet(wall)]);

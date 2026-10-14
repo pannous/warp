@@ -2,10 +2,10 @@
 //! `d + 1 day`, `t - 90 minutes`, `a - b`, `1 month + 2 days`, `3 * 1 hour`, as calendar.rs `Time::add`, `since`,
 //! `Duration::plus` and `times` do for constants. node_add, node_sub and node_mul hand over when an operand is a time.
 
-use super::lists::list_ops::RETURNED_ERROR;
-use super::time_zones::{REJECT, ZONED_NODE};
-use super::times::{CIVIL_FROM_DAYS, DAYS_FROM_CIVIL, DAY_NANOS, TIME_FIELD, TIME_PARTS, ZONE_NAMES};
-use super::WasmGcEmitter;
+use super::super::lists::list_ops::RETURNED_ERROR;
+use super::super::time::time_zones::{REJECT, ZONED_NODE};
+use super::super::time::times::{CIVIL_FROM_DAYS, DAYS_FROM_CIVIL, DAY_NANOS, TIME_FIELD, TIME_PARTS, ZONE_NAMES};
+use super::super::WasmGcEmitter;
 use crate::node::Node;
 use crate::operators::Op;
 use crate::time::calendar::{MINUTE, SECOND};
@@ -124,7 +124,7 @@ fn part_of(kind: u32, position: u32, part: Part) -> Emit {
 const PARTS: [(Part, u32); 3] = [(Part::Months, MONTHS), (Part::Days, DAYS), (Part::Nanos, NANOS)];
 
 impl WasmGcEmitter {
-	pub(super) fn emit_time_arithmetic(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_time_arithmetic(&mut self) {
 		if !self.uses_times() {
 			return;
 		}
@@ -246,7 +246,7 @@ impl WasmGcEmitter {
 
 	/// Required, not merely emitted: emit_all_functions builds node_add without times, whose refusals would mark the text
 	/// constructors used (test_function_usage_tracking)
-	pub(super) fn uses_times(&self) -> bool {
+	pub(in crate::wasm_emitter) fn uses_times(&self) -> bool {
 		self.ctx.required_functions.contains(TIME_FIELD)
 	}
 
@@ -563,7 +563,7 @@ impl WasmGcEmitter {
 		);
 	}
 
-	pub(super) fn emit_time_failure(&mut self, f: &mut Function, message: &str) {
+	pub(in crate::wasm_emitter) fn emit_time_failure(&mut self, f: &mut Function, message: &str) {
 		self.emit_trap_detail(f, &Node::Text(message.to_string()));
 		self.emit_runtime_error(f, RETURNED_ERROR);
 	}

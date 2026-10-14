@@ -223,7 +223,7 @@ fn functions_of_operator(op: &Op) -> &'static [&'static str] {
 /// The runtime functions a call of the word needs, besides what its arguments need
 fn functions_of_call(word: &str) -> &'static [&'static str] {
 	use crate::library_words::{FIELD_WITH, INSTANCE_COPY, MAP_GET_OR, MAP_WITHOUT};
-	use crate::wasm_emitter::times::TIME_FIELD;
+	use crate::wasm_emitter::time::times::TIME_FIELD;
 	match word {
 		ZERO_FILL_CALL => &[ZERO_FILL_CALL],
 		crate::time::INSTANT_AT => &[
@@ -235,7 +235,7 @@ fn functions_of_call(word: &str) -> &'static [&'static str] {
 		crate::time::TIME_IN_ZONE => &[
 			crate::time::TIME_IN_ZONE,
 			TIME_FIELD,
-			crate::wasm_emitter::times::ZONE_NAMES,
+			crate::wasm_emitter::time::times::ZONE_NAMES,
 			crate::wasm_emitter::lists::list_ops::RETURNED_ERROR,
 		],
 		LIST_DROP_LAST => &[LIST_DROP_LAST],
@@ -513,7 +513,7 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 					add_ffi_import(ctx, crate::host::LOCAL_OFFSET, crate::host::HOST_LIBRARY);
 				}
 				if crate::time::constant_form(items) == Some(crate::time::TimeForm::Zoned) {
-					ctx.required_functions.insert(crate::wasm_emitter::times::ZONE_NAMES);
+					ctx.required_functions.insert(crate::wasm_emitter::time::times::ZONE_NAMES);
 				}
 				if crate::host::HOST_WORDS.contains(&name.as_str()) && !ctx.user_functions.contains_key(name) {
 					add_ffi_import(ctx, name, crate::host::HOST_LIBRARY);

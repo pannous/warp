@@ -216,7 +216,7 @@ impl WasmGcEmitter {
 				|s, f| {
 					let (kind, power) = (2, 3);
 					// a time or duration: calendar arithmetic (time_arithmetic.rs)
-					if let Some(operator) = super::super::super::time_arithmetic::TIME_OPERATORS
+					if let Some(operator) = super::super::super::time::time_arithmetic::TIME_OPERATORS
 						.iter()
 						.position(|known| *known == op)
 						.filter(|_| s.uses_times())
@@ -235,7 +235,7 @@ impl WasmGcEmitter {
 								I::I32Const(operator as i32),
 							],
 						);
-						s.call(f, super::super::super::time_arithmetic::TIME_ARITHMETIC);
+						s.call(f, super::super::super::time::time_arithmetic::TIME_ARITHMETIC);
 						Self::emit_list(f, &[I::Return, I::End]);
 					}
 					// node_add of two lists (ø is the empty list): their concatenation, `out = out + row`
