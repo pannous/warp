@@ -5,7 +5,7 @@ move_fn.py <search_dir> <target_file> <name>... [--impl TYPE]
 
 Each named fn (with its doc comments and attributes) is cut from the one file under <search_dir> that defines it and
 appended to <target_file>: methods into the target's last `impl TYPE {` block (created when missing), free functions
-at the end. A method leaving for a deeper module gets `pub(super)` widened to `pub(crate)`, a free function also when private. Nothing else
+at the end. A method leaving mod.rs or for a deeper module gets `pub(super)` widened to `pub(crate)`, a free function also when private. Nothing else
 in the code changes; module declarations and imports are fixed by hand after the compiler names them.
 """
 import argparse
@@ -124,10 +124,11 @@ def main():
 	located.sort()
 	os.makedirs(os.path.dirname(arguments.target) or ".", exist_ok=True)
 	methods, free, contents = [], [], {path: open(path).read() for path, _, _ in located}
-	widen = depth_below(arguments.search_dir, arguments.target) > 0
+	deeper = depth_below(arguments.search_dir, arguments.target) > 0
 	for path, _, name in located:
 		piece = cut_function(contents, path, name)
-		piece = widened(piece) if widen else piece
+		# what mod.rs keeps private its submodules still see; a sibling file does not
+		piece = widened(piece) if deeper or os.path.basename(path) == "mod.rs" else piece
 		(methods if piece[-1].startswith("\t") else free).append("\n".join(piece) + "\n")
 		print(f"{name}: {path} → {arguments.target}")
 	text = open(arguments.target).read() if os.path.exists(arguments.target) else NEW_FILE_HEADER
