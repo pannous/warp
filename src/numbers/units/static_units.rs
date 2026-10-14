@@ -344,7 +344,7 @@ pub(crate) fn quantity_of(value: Node, units: &[Factor]) -> Node {
 	}
 	let uncertain = match value.drop_meta() {
 		Node::Data(data) => data
-			.downcast_ref::<crate::uncertain::Uncertain>()
+			.downcast_ref::<crate::numbers::uncertain::Uncertain>()
 			.map(|amount| amount.scaled(per_unit.to_f64())),
 		_ => None,
 	};

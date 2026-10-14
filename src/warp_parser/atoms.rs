@@ -129,12 +129,12 @@ impl WarpParser {
 				return Node::Number(Number::Inf);
 			} // the float infinity (P56)
 			// `°C`, `°F`: a temperature unit; `30°`: an angle in degrees (units.rs)
-			crate::units::DEGREE if self.peek_char(1).is_alphabetic() => {
-				self.symbol_after(1, |name| Node::Symbol(format!("{}{name}", crate::units::DEGREE)))
+			crate::numbers::units::DEGREE if self.peek_char(1).is_alphabetic() => {
+				self.symbol_after(1, |name| Node::Symbol(format!("{}{name}", crate::numbers::units::DEGREE)))
 			}
-			crate::units::DEGREE => {
+			crate::numbers::units::DEGREE => {
 				self.advance();
-				Node::Symbol(crate::units::DEGREE.to_string())
+				Node::Symbol(crate::numbers::units::DEGREE.to_string())
 			}
 			_ if let Some((truth, length)) = self.truth_glyph_at() => {
 				self.advance_by(length);
@@ -495,12 +495,12 @@ impl WarpParser {
 			return version;
 		}
 		// `x°`: a variable in degrees, as `30°` (card angles-degrees)
-		if self.current_char() == crate::units::DEGREE && !self.peek_char(1).is_alphabetic() {
+		if self.current_char() == crate::numbers::units::DEGREE && !self.peek_char(1).is_alphabetic() {
 			self.advance();
 			return Node::Key(
 				Box::new(Node::Symbol(symbol)),
 				Op::Mul,
-				Box::new(Node::Symbol(crate::units::DEGREE.to_string())),
+				Box::new(Node::Symbol(crate::numbers::units::DEGREE.to_string())),
 			);
 		}
 

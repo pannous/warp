@@ -491,7 +491,7 @@ impl WasmGcEmitter {
 			.ctx
 			.ffi_imports
 			.iter()
-			.filter(|(name, _)| !crate::uncertain::maps_intervals(name))
+			.filter(|(name, _)| !crate::numbers::uncertain::maps_intervals(name))
 			.map(|(name, import)| (name.clone(), crate::analyzer::signature_kind(import)));
 		imports
 			.chain(rounding)

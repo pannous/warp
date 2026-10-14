@@ -167,7 +167,7 @@ impl Query<'_> {
 	pub(super) fn column_unit(&self, node: &Node) -> Option<String> {
 		let field = self.field_of_it(node)?;
 		let (_, field_type, _) = self.table.fields.iter().find(|(name, _, _)| *name == field)?;
-		crate::units::static_units::unit_type(class_of(field_type)).map(|(quantity, _)| quantity)
+		crate::numbers::units::static_units::unit_type(class_of(field_type)).map(|(quantity, _)| quantity)
 	}
 
 	/// `it.age` as the column "age", `it.id` as id

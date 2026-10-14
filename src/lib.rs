@@ -61,7 +61,6 @@ pub mod ffi;
 pub mod ffi_parser;
 #[cfg(all(feature = "native", target_os = "macos"))]
 pub mod file_type;
-pub mod fixed_width;
 pub mod fixits;
 #[cfg(feature = "native")]
 pub mod foreign;
@@ -82,7 +81,7 @@ pub mod normalize;
 pub mod operators;
 #[cfg(feature = "native")]
 pub mod package_tools;
-pub mod real;
+pub mod numbers;
 pub mod sandbox;
 #[cfg(feature = "native")]
 pub mod shared;
@@ -94,9 +93,7 @@ pub mod std_docs;
 #[cfg(feature = "native")]
 pub mod tasks;
 pub mod time;
-pub mod uncertain;
 pub mod uniscript_entities;
-pub mod units;
 pub mod warp_parser;
 pub mod wasm_modules;
 #[cfg(feature = "native")]

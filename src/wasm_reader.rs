@@ -55,7 +55,7 @@ fn read_payload<T>(store: &mut wasmtime::StoreContextMut<'_, T>, data_val: &Val)
 
 /// Load WASM bytes and return Node
 pub fn read_bytes(bytes: &[u8]) -> Result<Node> {
-	read_main_result(bytes).map(|result| crate::units::static_units::with_module_units(bytes, result))
+	read_main_result(bytes).map(|result| crate::numbers::units::static_units::with_module_units(bytes, result))
 }
 
 fn read_main_result(bytes: &[u8]) -> Result<Node> {
@@ -260,7 +260,7 @@ fn family_linker(engine: &wasmtime::Engine, imports: Imports) -> Result<Linker<c
 pub fn read_bytes_with_imports(bytes: &[u8], imports: Imports) -> Result<Node> {
 	let (result, mut store, instance) = run_main_with_tasks(bytes, imports)?;
 	val_to_node(&result, &mut store, &instance)
-		.map(|result| crate::units::static_units::with_module_units(bytes, result))
+		.map(|result| crate::numbers::units::static_units::with_module_units(bytes, result))
 }
 
 /// Run main with every import it needs, its tasks finished after it (finish_tasks)
@@ -519,7 +519,7 @@ fn struct_node<T>(
 			name: Box::new(node(&data)),
 			body: Box::new(node(&child)),
 		},
-		t if t == Kind::Uncertain as u8 => crate::uncertain::Uncertain::read_node(float_array(store, &data)),
+		t if t == Kind::Uncertain as u8 => crate::numbers::uncertain::Uncertain::read_node(float_array(store, &data)),
 		t if t == Kind::Time as u8 => {
 			crate::time::time_node(kind >> crate::type_kinds::KIND_BITS, read_payload(store, &data).ok())
 		}

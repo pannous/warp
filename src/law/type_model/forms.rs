@@ -19,7 +19,7 @@ pub(super) fn quoted(text: &str) -> String {
 /// `int`, `texts`, `list`, `int16` (the range of ints it holds): the W0 type a warp type word names
 pub(super) fn type_of_word(word: &str) -> Option<String> {
 	let scalar = |word: &str| -> Option<String> {
-		if let Some(width) = crate::fixed_width::fixed_width(word) {
+		if let Some(width) = crate::numbers::fixed_width::fixed_width(word) {
 			return Some(format!("{RANGED_TYPE_PREFIX}({}) ({})", width.low, width.high));
 		}
 		let word = word.to_lowercase();
@@ -479,7 +479,7 @@ pub(super) fn place_literal(declared: Option<&str>, value: &Node) -> Option<Stri
 /// A value whose type is evidently bool: `true`, `1 < 2`
 /// One `unit` as a W0 quantity: its number of smallest steps of its base dimension
 pub(super) fn quantity_literal(unit: &str) -> String {
-	let (dimension, factor) = crate::units::dimension_and_factor(unit).expect("a unit");
+	let (dimension, factor) = crate::numbers::units::dimension_and_factor(unit).expect("a unit");
 	format!(".qty {factor} [({}, 1)]", quoted(&dimension))
 }
 

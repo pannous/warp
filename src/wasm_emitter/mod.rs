@@ -711,8 +711,8 @@ impl WasmGcEmitter {
 
 	pub fn emit_for_node(&mut self, node: &Node) {
 		let lowered;
-		let node = if crate::real::mentions_real(node) {
-			lowered = crate::real::lower(node.clone());
+		let node = if crate::numbers::real::mentions_real(node) {
+			lowered = crate::numbers::real::lower(node.clone());
 			&lowered
 		} else {
 			node
@@ -844,7 +844,7 @@ impl WasmGcEmitter {
 		});
 		self.config.emit_host_imports |= host_import_word;
 		// an ordering of ± values that overlap warns through the host (P224b)
-		self.config.emit_host_imports |= crate::uncertain::may_order_intervals(node);
+		self.config.emit_host_imports |= crate::numbers::uncertain::may_order_intervals(node);
 	}
 
 	/// Import modules this module declares, known after `emit_for_node`

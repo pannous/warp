@@ -130,7 +130,7 @@ impl WasmGcEmitter {
 
 	pub(super) fn emit_undefined_variable(&mut self, func: &mut Function, name: &str) {
 		// a unit reaches the emitter only where quantities are not computed yet (notes/units_runtime.md)
-		let unit_hint = if crate::units::is_unit(name) {
+		let unit_hint = if crate::numbers::units::is_unit(name) {
 			UNIT_AT_RUN_TIME
 		} else {
 			""

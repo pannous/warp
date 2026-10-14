@@ -376,11 +376,11 @@ const DECLARATION_PASSES: &[Pass] = &[
 	// `class Foo;` takes in the definitions after it before any pass reads class bodies (wiki/type.md)
 	crate::lowering::file_declarations::lower,
 	// `60 mph` is `60 mi/h`, `q as km/h` converts to km/h, before any units pass reads them
-	crate::units::lower_unit_words,
+	crate::numbers::units::lower_unit_words,
 	// `class Part{length: m ± 1 mm}`: `Part(5 m)` holds `5 m ± 1 mm` (unit_fields.rs), a tolerance the next pass reads
-	crate::units::static_units::lower_field_tolerances,
+	crate::numbers::units::static_units::lower_field_tolerances,
 	// `5 m ± 1 cm; x * 2`: a run-time quantity with an interval amount (units.rs), before the units module is loaded for it
-	crate::units::lower_run_time_tolerances,
+	crate::numbers::units::lower_run_time_tolerances,
 	crate::modules::insert_module_classes,
 	// `type Name = string` resolved in `name: Name` before class_methods reads the fields
 	crate::lowering::type_aliases::lower,
@@ -392,7 +392,7 @@ const DECLARATION_PASSES: &[Pass] = &[
 	// `p.fields`, `p.methods`, `dir(p)`: the class layout (reflection.rs), before class_methods lowers the class bodies
 	crate::lowering::reflection::lower_objects,
 	// `y certainly < x` is `certainly(y < x)` before class_methods compares the amounts of run-time quantities
-	crate::uncertain::lower_certainty,
+	crate::numbers::uncertain::lower_certainty,
 	// methods in a class body become functions over the class before any pass reads the body as fields
 	// `for x in c` of an object with next() (for_loop.rs) before class_methods lowers the next() calls
 	crate::lowering::for_loop::lower_iterators,
@@ -433,8 +433,8 @@ const MODULE_PASSES: &[Pass] = &[
 
 /// Stored values, system values, signals and events, pages
 const SIGNAL_PASSES: &[Pass] = &[
-	crate::units::lower_sleep_durations,
-	crate::units::lower_quantity_comparisons,
+	crate::numbers::units::lower_sleep_durations,
+	crate::numbers::units::lower_quantity_comparisons,
 	crate::lowering::stored_values::lower,
 	crate::lowering::mutation::lower_deletes,
 	crate::lowering::undo_history::lower,
@@ -498,7 +498,7 @@ const FUNCTION_PASSES: &[Pass] = &[
 	crate::lowering::versions::lower_versions,
 	crate::lowering::negated_calls::lower_negated_calls,
 	// `lo(a:number) := a.low; lo(5 ± 1)`: a number parameter of a program with ± values holds one (uncertain.rs)
-	crate::uncertain::lower_interval_parameters,
+	crate::numbers::uncertain::lower_interval_parameters,
 ];
 
 /// The passes after the constant answers (time, units, reals), in order: types and traits, lambdas and closures, words
@@ -522,7 +522,7 @@ const MEANING_PASSES: &[Pass] = &[
 	crate::lowering::closures::lower,
 	crate::lowering::lambdas::lower_strict,
 	crate::lowering::broadcasting::lower_several_arguments,
-	crate::real::lower,
+	crate::numbers::real::lower,
 	crate::lowering::type_constructor::lower,
 	crate::lowering::printable::lower,
 	crate::lowering::overloads::lower,
@@ -598,7 +598,7 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	if let Some(kind_change) = crate::analyzer::check_kind_changes(&node) {
 		return Err(kind_change.into_error());
 	}
-	if let Some(unsaid) = crate::uncertain::check_orderings(&node) {
+	if let Some(unsaid) = crate::numbers::uncertain::check_orderings(&node) {
 		return Err(unsaid.into_error());
 	}
 	let node = crate::function_equality::decide_comparisons(node);
@@ -607,11 +607,11 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	}
 	let node = crate::time::lower(node);
 	// quantities in loops and branches: SI amounts at run time, the units checked here (static units, stage 1)
-	let node = match crate::units::static_units::lower(&node) {
+	let node = match crate::numbers::units::static_units::lower(&node) {
 		Some(lowered) => lowered?,
 		None => node,
 	};
-	if let Some(answer) = crate::real::answer(&node) {
+	if let Some(answer) = crate::numbers::real::answer(&node) {
 		return Err(answer);
 	}
 	let node = run_passes(node, MEANING_PASSES);
@@ -683,7 +683,7 @@ fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModu
 		let reflected = crate::lowering::reflection::meta_entries(&source, &node, code);
 		warn_about_run_time_blocks(&node)?;
 		// the module's `warp.meta` section: a final quantity's unit, the program's functions and classes
-		let entries: Vec<_> = crate::units::static_units::result_units_entry()
+		let entries: Vec<_> = crate::numbers::units::static_units::result_units_entry()
 			.into_iter()
 			.chain(reflected)
 			.collect();
@@ -767,7 +767,7 @@ fn eval_program(node: Node) -> Node {
 	// Fallback to standard Node encoding; a final quantity's unit travels in the module (`warp.meta`) and is read back
 	match emit_module(&node) {
 		Ok(module) => checked_markup(run_module(CompiledModule {
-			bytes: crate::units::static_units::with_result_units(module.bytes),
+			bytes: crate::numbers::units::static_units::with_result_units(module.bytes),
 			..module
 		})),
 		Err(type_error) => type_error,
@@ -1035,7 +1035,7 @@ pub(crate) fn run_module(
 /// read back from the module's `warp.meta` section (entry units), as wasm_reader does natively
 #[cfg(not(feature = "native"))]
 pub(crate) fn run_module(module: CompiledModule) -> Node {
-	crate::units::static_units::with_module_units(&module.bytes, crate::web::run_in_host(&module.bytes))
+	crate::numbers::units::static_units::with_module_units(&module.bytes, crate::web::run_in_host(&module.bytes))
 }
 
 /// The run used up its fuel: it probably does not terminate, or needs a larger budget

@@ -15,7 +15,7 @@ use super::WasmGcEmitter;
 use crate::node::Node;
 use crate::operators::Op;
 use crate::type_kinds::Kind;
-use crate::uncertain::{Extremum, CERTAINLY, INTERVAL_FIELDS, INTERVAL_WORDS, POSSIBLY, SIGMA};
+use crate::numbers::uncertain::{Extremum, CERTAINLY, INTERVAL_FIELDS, INTERVAL_WORDS, POSSIBLY, SIGMA};
 use wasm_encoder::*;
 use Instruction as I;
 
@@ -1188,7 +1188,7 @@ impl WasmGcEmitter {
 }
 
 impl WasmGcEmitter {
-	/// `certainly(y < x)`, `possibly(y < x)` (crate::uncertain::lower_certainty): an i64 0 or 1
+	/// `certainly(y < x)`, `possibly(y < x)` (crate::numbers::uncertain::lower_certainty): an i64 0 or 1
 	pub(super) fn emit_certainty(&mut self, func: &mut Function, word: &str, comparison: &Node) {
 		let Node::Key(left, op, right) = comparison.drop_meta() else {
 			return self.emit_type_error(
@@ -1219,7 +1219,7 @@ impl WasmGcEmitter {
 		if !self.should_emit_function(UNCERTAIN_ORDER) {
 			return false;
 		}
-		let warning = self.located(crate::uncertain::overlap_warning(left, op, right));
+		let warning = self.located(crate::numbers::uncertain::overlap_warning(left, op, right));
 		let message = self.allocate_string(&warning);
 		self.emit_uncertain_order_call(func, op, CertaintyMode::Bare, message);
 		true

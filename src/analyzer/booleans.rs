@@ -12,8 +12,8 @@ const BOOL_CALLS: [&str; 8] = [
 	crate::wasm_emitter::text_builtins::IS_ERROR,
 	crate::library_words::VALUES_SIMILAR,
 	crate::library_words::VALUES_ROUGH,
-	crate::uncertain::CERTAINLY,
-	crate::uncertain::POSSIBLY,
+	crate::numbers::uncertain::CERTAINLY,
+	crate::numbers::uncertain::POSSIBLY,
 ];
 
 /// `even(n) := n % 2 == 0`: the functions whose body ends in a bool, also through each other (`odd(n) := not even(n)`)

@@ -399,13 +399,13 @@ impl WarpParser {
 		if superscript_letter(next).is_some() {
 			return number;
 		}
-		let tight = (next.is_alphabetic() || next == '_' || next == '(' || next == crate::units::DEGREE)
+		let tight = (next.is_alphabetic() || next == '_' || next == '(' || next == crate::numbers::units::DEGREE)
 			&& !self.at_ordinal_suffix();
 		// `1500 meters` stays the pair the unit lowering reads (`3010 meters`), joined so it binds tighter than `>`
 		if !tight
 			&& self
 				.spaced_word()
-				.is_some_and(|word| crate::units::is_long_unit_name(&word))
+				.is_some_and(|word| crate::numbers::units::is_long_unit_name(&word))
 		{
 			self.skip_spaces();
 			let unit = self.parse_atom();
@@ -429,14 +429,14 @@ impl WarpParser {
 	pub(super) fn at_spaced_unit(&self) -> bool {
 		// `2 m²`: the power is no part of the unit's name
 		self.spaced_word().is_some_and(|word| {
-			word == crate::uncertain::SIGMA
-				|| crate::units::names_unit(word.trim_end_matches(|c: char| superscript_digit(c).is_some()))
+			word == crate::numbers::uncertain::SIGMA
+				|| crate::numbers::units::names_unit(word.trim_end_matches(|c: char| superscript_digit(c).is_some()))
 		})
 	}
 
 	/// `3 km` reads as `3km`, the form units are written in (user 2026-10-09: a soft hint)
 	fn hint_glued_unit(&self, number: &Node) {
-		let Some(unit) = self.spaced_word().filter(|word| word != crate::uncertain::SIGMA) else {
+		let Some(unit) = self.spaced_word().filter(|word| word != crate::numbers::uncertain::SIGMA) else {
 			return;
 		};
 		let amount = number.serialize();

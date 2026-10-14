@@ -10,7 +10,7 @@ use super::nodes::key;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::stored_values::DATABASE_WORDS;
-use crate::units::static_units::si_quantity;
+use crate::numbers::units::static_units::si_quantity;
 use crate::warp_parser::parse;
 use crate::words::{FOR_WORD, GLOBAL_WORD, IN_WORD};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -681,7 +681,7 @@ fn opened(statement: &Node, tables: &BTreeMap<String, Table>, file: &str, open: 
 					.iter()
 					.find(|(field, _)| *field == name)
 					.map(|(_, old)| Node::Text(old.clone()));
-				let unit = crate::units::static_units::unit_type(class_of(&field_type))
+				let unit = crate::numbers::units::static_units::unit_type(class_of(&field_type))
 					.map(|(quantity, per_unit)| [Node::Text(quantity), crate::node::float(per_unit)]);
 				let old_name = if unit.is_some() {
 					Some(old_name.unwrap_or(Node::Empty))

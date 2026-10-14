@@ -328,7 +328,7 @@ impl WasmGcEmitter {
 			crate::analyzer::BOOL_TYPE => self.emit_cast_to_bool(func, value),
 			"number" => self.emit_cast_to_number(func, value),
 			// `255 as byte`: the whole number, trapping as a declared byte does when it leaves the range
-			width if let Some(width) = crate::fixed_width::fixed_width(width) => {
+			width if let Some(width) = crate::numbers::fixed_width::fixed_width(width) => {
 				self.emit_numeric_cast(func, value, value, &Node::Symbol("int".into()));
 				self.emit_fixed_width_check(func, Some(width));
 				self.emit_call(func, "new_int");

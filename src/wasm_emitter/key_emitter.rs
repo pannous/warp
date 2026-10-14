@@ -169,7 +169,7 @@ impl WasmGcEmitter {
 			self.emit_range(func, left, right, *op == Op::To);
 		} else if *op == Op::PlusMinus {
 			// `5 ± 1σ` is a Gaussian (card plus-minus-gaussian), `5 ± 1` an interval
-			let gaussian = crate::uncertain::gaussian_spread(right);
+			let gaussian = crate::numbers::uncertain::gaussian_spread(right);
 			self.emit_float_value(func, left);
 			self.emit_float_value(func, gaussian.unwrap_or(right));
 			self.emit_call(

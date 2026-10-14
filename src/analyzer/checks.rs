@@ -92,7 +92,7 @@ pub(super) fn types_compatible(existing: Kind, new: Kind) -> bool {
 /// an Int that may hold a ratio (wasm_emitter/exact.rs)
 pub fn builtin_type_kind(name: &str) -> Option<Kind> {
 	let name = name.to_lowercase();
-	crate::type_tests::held_kind(&name).or_else(|| crate::fixed_width::fixed_width(&name).map(|_| Kind::Int))
+	crate::type_tests::held_kind(&name).or_else(|| crate::numbers::fixed_width::fixed_width(&name).map(|_| Kind::Int))
 }
 
 /// A whole-number type (`int`, `long`, `byte` …): never a fraction, unlike `exact`

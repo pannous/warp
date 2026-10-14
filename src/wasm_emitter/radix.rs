@@ -73,7 +73,7 @@ pub fn named_radix(type_name: &str) -> Option<&'static Radix> {
 /// `hex`, `binary`, `byte`, `u8`, `uint8`: the radix a type's values show in
 pub fn shown_radix(type_name: &str) -> Option<&'static Radix> {
 	named_radix(type_name).or_else(|| {
-		crate::fixed_width::fixed_width(&type_name.to_lowercase())
+		crate::numbers::fixed_width::fixed_width(&type_name.to_lowercase())
 			.is_some_and(|width| width.high == u8::MAX as i128 && width.low == 0)
 			.then_some(&HEX)
 	})

@@ -220,7 +220,7 @@ fn timer_start(statement: &Node, duration: &Node) -> Result<(i64, i64), Node> {
 		)
 		.into_error()),
 		Some(Err(ClockError::Time)) => Err(no_time_of_day(statement, "on every day at")),
-		None => crate::units::milliseconds(duration)
+		None => crate::numbers::units::milliseconds(duration)
 			.map(|milliseconds| (LISTEN_EVERY, milliseconds))
 			.ok_or_else(|| {
 				Diagnostic::at(

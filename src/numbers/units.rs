@@ -589,12 +589,12 @@ impl fmt::Display for Quantity {
 /// unit, `12.00 ± 0.60σ m`, as lib/units.warp quantity_text shows it (card quantity-final)
 #[derive(Clone, Debug, PartialEq)]
 pub struct UncertainQuantity {
-	amount: crate::uncertain::Uncertain,
+	amount: crate::numbers::uncertain::Uncertain,
 	factors: Vec<Factor>,
 }
 
 impl UncertainQuantity {
-	pub(crate) fn new(amount: crate::uncertain::Uncertain, factors: &[Factor]) -> UncertainQuantity {
+	pub(crate) fn new(amount: crate::numbers::uncertain::Uncertain, factors: &[Factor]) -> UncertainQuantity {
 		UncertainQuantity {
 			amount,
 			factors: factors.to_vec(),
@@ -638,7 +638,7 @@ pub fn describe(data: &DataValue) -> Option<String> {
 	if let Some(quantity) = data.downcast_ref::<Quantity>() {
 		return Some(quantity.to_string());
 	}
-	if let Some(uncertain) = data.downcast_ref::<crate::uncertain::Uncertain>() {
+	if let Some(uncertain) = data.downcast_ref::<crate::numbers::uncertain::Uncertain>() {
 		return Some(uncertain.to_string());
 	}
 	if let Some(uncertain) = data.downcast_ref::<UncertainQuantity>() {

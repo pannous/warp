@@ -148,7 +148,7 @@ fn spec_and_children(words: Vec<Node>) -> (String, Vec<Node>) {
 
 fn is_timing_word(item: &Node) -> bool {
 	matches!(item.drop_meta(), Node::Symbol(word) if TIMING_WORDS.contains(&word.as_str()))
-		|| crate::units::milliseconds(item.drop_meta()).is_some()
+		|| crate::numbers::units::milliseconds(item.drop_meta()).is_some()
 }
 
 fn css_pair(name: &str, value: Node) -> Node {
@@ -169,7 +169,7 @@ fn page_attribute(item: Node) -> Node {
 fn spec_word(word: &Node) -> Option<String> {
 	match word.drop_meta() {
 		Node::Symbol(name) => Some(name.clone()),
-		duration => crate::units::milliseconds(duration).map(|amount| format!("{amount}ms")),
+		duration => crate::numbers::units::milliseconds(duration).map(|amount| format!("{amount}ms")),
 	}
 }
 

@@ -917,7 +917,7 @@ impl fmt::Display for Node {
 				write!(f, "{}", bracket.closing())
 			}
 			Meta { node, .. } => write!(f, "{}", node),
-			Data(data) => match crate::units::describe(data) {
+			Data(data) => match crate::numbers::units::describe(data) {
 				Some(text) => write!(f, "{}", text),
 				None => write!(f, "{:?}", self),
 			},

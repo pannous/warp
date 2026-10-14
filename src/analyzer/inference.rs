@@ -142,7 +142,7 @@ pub fn written_kind(node: &Node, scope: &Scope) -> Kind {
 	}
 }
 
-/// A math word's result: a Node when its argument is one, which may be a ± interval (crate::uncertain::INTERVAL_WORDS)
+/// A math word's result: a Node when its argument is one, which may be a ± interval (crate::numbers::uncertain::INTERVAL_WORDS)
 /// The number a text literal spells: `"4"` is 4
 pub fn literal_number(value: &Node) -> Option<Node> {
 	match value.drop_meta() {
@@ -468,7 +468,7 @@ pub(super) fn infer_list_type(
 			// FFI/builtin function calls (strcmp, strlen, abs, …) return Int by default
 			if crate::ffi::is_ffi_function(name) {
 				return match items {
-					[_, argument] if crate::uncertain::maps_intervals(name) => {
+					[_, argument] if crate::numbers::uncertain::maps_intervals(name) => {
 						interval_or(ffi_call_kind(name), argument, scope)
 					}
 					_ => ffi_call_kind(name),

@@ -161,8 +161,8 @@ pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collecti
 					class_of(left)
 				}
 				// `w = q as m`, `w = q.to("m")` of a run-time quantity q: another one
-				(Op::Assign | Op::Define, conversion) if crate::units::conversion(conversion).is_some() => {
-					crate::units::conversion(conversion).and_then(|(quantity, _)| class_of(quantity))
+				(Op::Assign | Op::Define, conversion) if crate::numbers::units::conversion(conversion).is_some() => {
+					crate::numbers::units::conversion(conversion).and_then(|(quantity, _)| class_of(quantity))
 				}
 				(Op::Assign | Op::Define, Node::Key(quantity, Op::Dot, call))
 					if is_call_of(call, CONVERSION_METHOD) =>

@@ -260,7 +260,7 @@ pub(crate) fn annotated_kind(type_node: &Node) -> Option<Kind> {
 	if crate::type_constructor::instance_parts_marked(type_node) {
 		return Some(Kind::Key); // `p:person` of a declared type (traits::lower_conformances): an instance
 	}
-	if crate::uncertain::is_interval_number(type_node) {
+	if crate::numbers::uncertain::is_interval_number(type_node) {
 		return Some(Kind::Empty); // `a:number` given a ± value: a Node, checked at run time (wasm_emitter admitted)
 	}
 	let type_name = type_node.name();
@@ -881,7 +881,7 @@ pub fn applicable_function_names(node: &Node) -> HashSet<String> {
 		.filter(|(_, function)| !function.params.is_empty())
 		.map(|(name, _)| name);
 	user_functions
-		.chain(crate::real::FUNCTIONS.iter().map(|name| name.to_string()))
+		.chain(crate::numbers::real::FUNCTIONS.iter().map(|name| name.to_string()))
 		.collect()
 }
 

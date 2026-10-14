@@ -8,7 +8,7 @@ use crate::lowering::component_worlds::WorldFunctions;
 use crate::node::Node;
 use crate::normalize::{HintMode, HintPosition, Style};
 use crate::pipeline::CompileMode;
-use crate::units::static_units::ResultUnits;
+use crate::numbers::units::static_units::ResultUnits;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;

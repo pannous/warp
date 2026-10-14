@@ -516,7 +516,7 @@ fn renamed_type_word_methods(node: Node) -> Node {
 					!is_witness_method(name)
 						&& (crate::analyzer::type_word_kind(name).is_some()
 							|| crate::declaration_forms::is_list_mutating_method(name)
-							|| crate::uncertain::INTERVAL_FIELDS.contains(&name.as_str()))
+							|| crate::numbers::uncertain::INTERVAL_FIELDS.contains(&name.as_str()))
 				})
 				.collect();
 			if !clashing.is_empty() {
@@ -608,7 +608,7 @@ fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node 
 			}
 			other => other.name(),
 		};
-		match is_library_method(&name) || crate::uncertain::INTERVAL_FIELDS.contains(&name.as_str()) {
+		match is_library_method(&name) || crate::numbers::uncertain::INTERVAL_FIELDS.contains(&name.as_str()) {
 			true => match receiver.drop_meta() {
 				Node::Symbol(variable) => methods.instances.contains(variable),
 				// `Stack([]).count()`, a construction

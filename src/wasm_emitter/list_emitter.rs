@@ -1137,7 +1137,7 @@ impl WasmGcEmitter {
 
 	/// A word that names nothing the program or the language knows: no function, type, unit or keyword
 	fn is_undefined_word(&self, name: &str) -> bool {
-		!self.resolves_call(name) && !crate::units::is_unit(name) && self.ctx.type_registry.get_by_name(name).is_none()
+		!self.resolves_call(name) && !crate::numbers::units::is_unit(name) && self.ctx.type_registry.get_by_name(name).is_none()
 	}
 
 	/// `pirnt`: a lone word that names nothing but is one or two letters away from a defined name; a got-it warning
@@ -1191,7 +1191,7 @@ impl WasmGcEmitter {
 	}
 
 	fn is_known_word(&self, word: &str) -> bool {
-		self.resolves_call(word) || crate::units::is_unit(word) || crate::analyzer::type_word_kind(word).is_some()
+		self.resolves_call(word) || crate::numbers::units::is_unit(word) || crate::analyzer::type_word_kind(word).is_some()
 	}
 
 	/// `data cube 3`: the words after the prefix as data (P62); true when it was one
