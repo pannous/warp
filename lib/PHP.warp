@@ -1,4 +1,5 @@
 // PHP's array words, for programs ported from PHP: `use PHP` (foreign-spellings, user 2026-10-13)
+
 array_map(f, xs) := map(xs, f)
 array_filter(xs, f) := filter(xs, f)
 array_sum(xs) := sum(xs)

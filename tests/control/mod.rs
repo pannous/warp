@@ -80,6 +80,7 @@ mod test_frame_event; // card frame-event
 mod test_fresh_names; // card cleanup-fresh-names
 mod test_function_body; // card g_X_3s
 mod test_function_dir; // card dir-function
+mod test_function_objects; // card module-methods
 mod test_glued_block_words; // card glued-loop
 mod test_go_blocks;
 mod test_go_heavy_map; // card go-heavy-map

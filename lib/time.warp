@@ -1,4 +1,5 @@
 // The standard library module time (notes/stdlib.md): `use time`, the calendar over clock() (milliseconds since 1970, UTC)
+
 day_number(ms) := ms//86400000
 // Howard Hinnant's civil_from_days: the proleptic Gregorian date of a day number
 date_of(ms) := {

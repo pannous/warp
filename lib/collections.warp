@@ -1,4 +1,5 @@
 // The standard library module collections (notes/stdlib.md): `use collections`, classes over a list field
+
 class Stack { items = []
   push(x) := items.add(x)
   pop() := items.pop()

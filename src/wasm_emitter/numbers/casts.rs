@@ -270,6 +270,21 @@ impl WasmGcEmitter {
 				I::I64Eq,
 			]
 		};
+		// a function value on its own shows its definition (function_dump), in a list its function_text
+		let shows_definitions = self.should_emit_function(functions::closures::FUNCTION_DUMP);
+		if shows_definitions {
+			Self::emit_list(func, &kind_is(Kind::Function));
+			Self::emit_list(
+				func,
+				&[
+					I::If(BlockType::Result(Ref(self.node_ref(false)))),
+					I::LocalGet(held),
+					I::RefAsNonNull,
+				],
+			);
+			self.emit_call(func, functions::closures::FUNCTION_DUMP);
+			func.instruction(&I::Else);
+		}
 		Self::emit_list(func, &kind_is(Kind::Text));
 		Self::emit_list(func, &kind_is(Kind::Codepoint));
 		Self::emit_list(
@@ -293,6 +308,9 @@ impl WasmGcEmitter {
 		self.emit_call(func, "new_text");
 		self.emit_call(func, reflection::library_ops::LIST_TEXT);
 		func.instruction(&I::End);
+		if shows_definitions {
+			func.instruction(&I::End);
+		}
 		held
 	}
 

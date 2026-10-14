@@ -38,6 +38,13 @@ const SIGNATURE_WORD: &str = "signature";
 const BODY_WORD: &str = "body";
 /// `f.dump`: the whole definition as warp text, to copy and paste (card reflection-area)
 const DUMP_WORD: &str = "dump";
+/// The words whose bare argument naming a function without parameters is its call: `print now`
+const CALLING_WORDS: [&str; 1] = ["print"];
+/// `f.name`, `f.return_type`: a function object's name and the kind of its result (card module-methods)
+const NAME_WORD: &str = "name";
+const RETURN_TYPE_WORD: &str = "return_type";
+/// `function f`: the function f itself (P82)
+const FUNCTION_WORD: &str = "function";
 /// `f.doc`: the function's doc string or the comment above it, empty without (doc_strings.rs)
 const DOC_WORD: &str = "doc";
 /// What `dir(f)` lists of a function: the words reflection answers for it
@@ -51,6 +58,13 @@ pub const META_CLASSES: &str = "classes";
 type Functions = std::collections::BTreeMap<String, crate::compiler::context::UserFunctionDef>;
 
 pub fn lower(node: Node) -> Node {
+	if node.mentions_any(&CALLING_WORDS) {
+		let defined = crate::library_words::defined_names(&node);
+		let functions = crate::analyzer::function_definitions(&node).user_functions;
+		if let Err(error) = crate::errors::diagnostic::report(&called_functions(&node, &functions, &defined)) {
+			return error;
+		}
+	}
 	if !node.mentions_any(&[
 		EFFECTS_WORD,
 		LISTENERS_WORD,
@@ -58,6 +72,8 @@ pub fn lower(node: Node) -> Node {
 		BODY_WORD,
 		DUMP_WORD,
 		DOC_WORD,
+		NAME_WORD,
+		RETURN_TYPE_WORD,
 		PARAMS_WORDS[0],
 		PARAMS_WORDS[1],
 		DIR_WORD,
@@ -79,6 +95,42 @@ pub fn lower(node: Node) -> Node {
 		));
 	}
 	as_reflection_words(node.clone(), &user_functions(&node), &defined)
+}
+
+/// `print hi` of a function hi without parameters calls it (decision reflection: a bare name never becomes the
+/// function value): a warning saying so, with `function hi` for the function itself
+fn called_functions(
+	node: &Node,
+	functions: &Functions,
+	defined: &HashSet<String>,
+) -> Vec<crate::errors::diagnostic::Diagnostic> {
+	let parameterless = |name: &str| match functions.get(name) {
+		Some(function) => function.params.is_empty(),
+		None => library_signature(name, functions, defined).is_some_and(|(params, _)| params.is_empty()),
+	};
+	let mut warnings = vec![];
+	node.visit(&mut |part| {
+		let Node::List(items, Bracket::Round | Bracket::None, _) = part.drop_meta() else { return };
+		let [word, subject] = items.as_slice() else { return };
+		let (Some(word), Some(name)) = (word.symbol_name(), subject.symbol_name()) else { return };
+		if !CALLING_WORDS.contains(&word)
+			|| defined.contains(word)
+			|| crate::closures::referenced_function(subject).is_some()
+			|| !parameterless(name)
+		{
+			return;
+		}
+		let written = format!("{word} {name}");
+		let warning = crate::errors::diagnostic::Diagnostic::at(
+			part,
+			format!("`{written}` calls {name}, a function without parameters; write `{word} function {name}` for the function itself"),
+		)
+		.offer("the function itself", &written, format!("{word} function {name}"));
+		if !crate::errors::diagnostic::warned_before(&warning) {
+			warnings.push(warning);
+		}
+	});
+	warnings
 }
 
 /// The name an `on` or `once` statement listens to
@@ -132,7 +184,7 @@ fn as_reflection_words(node: Node, functions: &Functions, defined: &HashSet<Stri
 	}
 	if let Node::Key(subject, Op::Dot, word) = node.drop_meta() {
 		let subject = super::ambiguous_forms::written_word(subject);
-		if let (Some(name), Some(word)) = (subject.symbol_name(), word.symbol_name()) {
+		if let (Some(name), Some(word)) = (function_named(&subject), word.symbol_name()) {
 			let function = functions.get(name).filter(|_| !defined.contains(word));
 			let library = || library_signature(name, functions, defined).filter(|_| !defined.contains(word));
 			let reflected = match (word, function) {
@@ -146,6 +198,8 @@ fn as_reflection_words(node: Node, functions: &Functions, defined: &HashSet<Stri
 				(SIGNATURE_WORD, Some(function)) => Some(Node::Text(signature(function))),
 				(DUMP_WORD, Some(function)) => Some(Node::Text(definition(function))),
 				(DOC_WORD, Some(function)) => Some(Node::Text(function.doc.clone().unwrap_or_default())),
+				(NAME_WORD, Some(function)) => Some(Node::Text(function.name.clone())),
+				(RETURN_TYPE_WORD, Some(function)) => Some(Node::Text(function.return_kind.to_string())),
 				(BODY_WORD, Some(function)) => Some(Node::List(
 					vec![symbol(crate::blocks::DATA_WORD), function.body.as_ref().clone()],
 					Bracket::None,
@@ -153,6 +207,8 @@ fn as_reflection_words(node: Node, functions: &Functions, defined: &HashSet<Stri
 				)),
 				(word, None) if PARAMS_WORDS.contains(&word) => library().map(|(params, _)| text_list(&params)),
 				(SIGNATURE_WORD, None) => library().map(|(_, signature)| Node::Text(signature)),
+				(NAME_WORD, None) => library().map(|_| Node::Text(name.to_string())),
+				(RETURN_TYPE_WORD, None) => library().map(|(_, signature)| Node::Text(return_type(&signature))),
 				_ => None,
 			};
 			if let Some(reflected) = reflected {
@@ -161,6 +217,29 @@ fn as_reflection_words(node: Node, functions: &Functions, defined: &HashSet<Stri
 		}
 	}
 	node.map_children(|child| as_reflection_words(child, functions, defined))
+}
+
+/// `f`, `function f`, `(function f)`: the name of the function the reflection words look at
+fn function_named(subject: &Node) -> Option<&str> {
+	if let Some(name) = subject.symbol_name() {
+		return Some(name);
+	}
+	match subject.drop_meta() {
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => function_named(&items[0]),
+		Node::List(items, Bracket::Round | Bracket::None, _) => match items.as_slice() {
+			[word, name] if word.symbol_name() == Some(FUNCTION_WORD) => name.symbol_name(),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// `(a, b) -> int` → `int`
+fn return_type(signature: &str) -> String {
+	signature
+		.rsplit_once(" -> ")
+		.map_or("", |(_, result)| result)
+		.to_string()
 }
 
 /// A library word's parameter names and signature, unless the program defines that name itself
@@ -317,7 +396,7 @@ fn meta_map(entries: Vec<(&str, Node)>) -> Node {
 }
 
 /// `area(width:int, height:int) := width * height`: the parameters as declared (no inferred types), the body as written
-pub(super) fn definition(function: &crate::compiler::context::UserFunctionDef) -> String {
+pub(crate) fn definition(function: &crate::compiler::context::UserFunctionDef) -> String {
 	let params: Vec<String> = function
 		.params
 		.iter()
@@ -341,7 +420,7 @@ pub(super) fn definition(function: &crate::compiler::context::UserFunctionDef) -
 }
 
 /// `help(area)`: `area(width:int, height:int) -> int`, its doc on the lines below
-pub(super) fn help_text(function: &crate::compiler::context::UserFunctionDef) -> String {
+pub(crate) fn help_text(function: &crate::compiler::context::UserFunctionDef) -> String {
 	let head = format!("{}{}", function.name, signature(function));
 	match &function.doc {
 		Some(doc) => format!("{head}\n{doc}"),
@@ -350,7 +429,7 @@ pub(super) fn help_text(function: &crate::compiler::context::UserFunctionDef) ->
 }
 
 /// `(a:int, b:int) -> int`: each parameter with its declared or demanded type, the result's kind when known
-fn signature(function: &crate::compiler::context::UserFunctionDef) -> String {
+pub(crate) fn signature(function: &crate::compiler::context::UserFunctionDef) -> String {
 	let params: Vec<String> = function
 		.params
 		.iter()

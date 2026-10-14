@@ -1,4 +1,5 @@
 // The standard library module map (notes/stdlib.md): standard functions of every program, `merge(a, b)` or `a.merge(b)`, no `use` needed (`use map` only for the qualified `map.merge(a, b)`)
+
 merge(a, b) := { out = a; ks = keys(b); for k in ks { out[k] = b.get(k) }; out }
 map_values(m, f) := { out = {}; ks = keys(m); for k in ks { out[k] = f(m.get(k)) }; out }
 // {a:1 b:2} → {1:"a" 2:"b"}: the values become the keys
