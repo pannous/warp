@@ -626,15 +626,7 @@ impl WasmGcEmitter {
 			s.call(f, super::list_ops::MAP_KEY_NAME);
 			f.instruction(&I::LocalSet(name));
 			s.emit_field(f, name, 0);
-			Self::emit_list(
-				f,
-				&[
-					I::I64Const(KIND_MASK),
-					I::I64And,
-					I::I64Const(Kind::Symbol as i64),
-					I::I64Ne,
-				],
-			);
+			Self::emit_kind_test(f, Kind::Symbol as i64, I::I64Ne);
 			Self::emit_list(f, &return_missing);
 			field(f, 0, SLOTS);
 			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(name), I::RefAsNonNull]);
@@ -782,12 +774,9 @@ impl WasmGcEmitter {
 								struct_type_index: node,
 								field_index: 0,
 							},
-							I::I64Const(KIND_MASK),
-							I::I64And,
-							I::I64Const(expected),
-							I::I64Eq,
 						],
 					);
+					Self::emit_kind_test(f, expected, I::I64Eq);
 				};
 				s.call(f, NODE_MAP_NEW);
 				f.instruction(&I::LocalSet(table));

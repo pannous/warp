@@ -97,6 +97,19 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// Compares the kind of the kind field on the stack, its low byte, with `kind` by `compare` (I64Eq or I64Ne)
+	pub(super) fn emit_kind_test(func: &mut Function, kind: i64, compare: Instruction) {
+		Self::emit_list(
+			func,
+			&[
+				I::I64Const(crate::type_kinds::KIND_MASK),
+				I::I64And,
+				I::I64Const(kind),
+				compare,
+			],
+		);
+	}
+
 	pub(super) fn emit_new_text(&self, func: &mut Function, address: u32, length: u32) {
 		Self::emit_list(func, &[I::LocalGet(address), I::LocalGet(length)]);
 		self.call(func, "new_text");
