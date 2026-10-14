@@ -5,12 +5,12 @@ guide-expert.md) in line with main. Card docs-sync, session warp-docs-sync.
 
 ## Last swept
 
-- main commit **eb64602c1** (2026-10-14; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27, docs-sync-3 3f01a83b5, keeper 264c844a4, 17b6b455b, 0c2b20013, c1f479e10 (the src regrouping), d19060ec9, 9d84077f6, 6915e892b, 0bcbc6caf, 3801056ee and batch 2eae7fde9 (wiki eb3c384), batch de70c437b, batches 5899b83d1, c65c6a241, 9e6fbf8db, f689a6665, 63ad6eb73, 66dd216a9 (units refactor: no page shows unit tolerances or ranges, nothing to change) 43384c15e, 3be3d7d25 (internal) and eb64602c1 (cargo debug builds already in wiki/cargo.md; C types and Node accessors internal)), checked with
+- main commit **bcb3f966b** (2026-10-14; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27, docs-sync-3 3f01a83b5, keeper 264c844a4, 17b6b455b, 0c2b20013, c1f479e10 (the src regrouping), d19060ec9, 9d84077f6, 6915e892b, 0bcbc6caf, 3801056ee and batch 2eae7fde9 (wiki eb3c384), batch de70c437b, batches 5899b83d1, c65c6a241, 9e6fbf8db, f689a6665, 63ad6eb73, 66dd216a9 (units refactor: no page shows unit tolerances or ranges, nothing to change) 43384c15e, 3be3d7d25 (internal) and eb64602c1 (cargo debug builds already in wiki/cargo.md; C types and Node accessors internal) and bcb3f966b (wiki node.md: built lists == written)), checked with
   /Users/me/dev/bin/warp (19f021863) and, for 17b6b455b and 0c2b20013, a debug build copied to scratch/docs_sync/warp.
 - notes/decisions.md read through its end at that commit.
 
-The next sweep starts with `git log --oneline eb64602c1..origin/main | grep -E 'feature|fix:'` and the decisions added
-since (`git diff eb64602c1 origin/main -- notes/decisions.md`; decisions.md is grouped by topic since 13d194eec).
+The next sweep starts with `git log --oneline bcb3f966b..origin/main | grep -E 'feature|fix:'` and the decisions added
+since (`git diff bcb3f966b origin/main -- notes/decisions.md`; decisions.md is grouped by topic since 13d194eec).
 
 ## How
 
