@@ -501,29 +501,7 @@ pub(crate) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		Err(node) => node,
 	};
 	match node {
-		Node::List(items, _, _) if let Some(walk) = print_walk(&items, variables) => lower(walk),
-		Node::List(items, bracket, separator)
-			if let Some(counting) = counting_phrase(&items, &bracket, &separator, variables) =>
-		{
-			lower(counting)
-		}
-		Node::List(items, bracket, separator)
-			if let Some(declaration) = of_type_declaration(&items, &bracket, &separator) =>
-		{
-			lower(declaration)
-		}
-		Node::List(items, bracket, separator)
-			if let Some(declaration) = postfix_list_declaration(&items, &bracket, &separator) =>
-		{
-			lower(declaration)
-		}
-		Node::List(items, _, _) if let Some(count) = hashed_unit_count(&items) => lower(count),
-		Node::Key(empty, Op::Hash, counted)
-			if matches!(empty.drop_meta(), Node::Empty)
-				&& let Some(count) = unit_count(&counted) =>
-		{
-			lower(count)
-		}
+		phrase if let Some(rephrased) = rephrased(&phrase, variables) => lower(rephrased),
 		// `x : 100 int` and `x:int[100]` declare x as a zero-filled list of 100 ints
 		declaration if let Some((name, zeros)) = typed_array_declaration(&declaration, &names.values) => {
 			Node::Key(Box::new(name), Op::Assign, Box::new(zeros))
@@ -532,49 +510,14 @@ pub(crate) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		Node::Key(target, Op::Assign, value) if let Some(zeros) = typed_array_value(&value, &names.values) => {
 			Node::Key(target, Op::Assign, Box::new(zeros))
 		}
-		// `x as number = 9` declares `x:number=9`
-		Node::Key(target, Op::Assign, value)
-			if matches!(target.drop_meta(), Node::Key(name, Op::As, type_node)
-			if matches!(name.drop_meta(), Node::Symbol(_)) && is_declaration_type(type_node)) =>
-		{
-			let Node::Key(name, Op::As, type_node) = target.drop_meta().clone() else {
-				unreachable!("guarded")
-			};
-			lower(Node::Key(
-				Box::new(Node::Key(name, Op::Colon, type_node)),
-				Op::Assign,
-				value,
-			))
-		}
-		// `x:[number]=v` is `x:list of number=v`
-		Node::Key(target, Op::Assign, value)
-			if let Node::Key(_, Op::Colon, type_node) = target.drop_meta()
-				&& let Some(list_type) = declared_bracketed_list_type(type_node) =>
-		{
-			let Node::Key(name, _, _) = target.drop_meta().clone() else {
-				unreachable!("guarded")
-			};
-			let typed = Node::Key(name, Op::Colon, Box::new(list_type));
+		Node::Key(target, Op::Assign, value) if let Some(typed) = typed_spelling(&target) => {
 			lower(Node::Key(Box::new(typed), Op::Assign, value))
 		}
 		// `x:[number]` is `x:list of number`
 		Node::Key(name, Op::Colon, type_node) if let Some(list_type) = bracketed_list_type(&type_node) => {
 			Node::Key(name, Op::Colon, Box::new(list_type))
 		}
-		// `r=1…3` stores the list [1 2 3]; the range itself only lives in a `for` header
-		Node::Key(target, Op::Assign, value) if let Some(elements) = range_elements(&value) => {
-			Node::Key(target, Op::Assign, Box::new(elements))
-		}
-		// `xs = a..b` of computed bounds: the list a loop over the range collects
-		Node::Key(target, Op::Assign, value) if let Some(collected) = computed_range(&target, &value) => {
-			lower(Node::Key(target, Op::Assign, Box::new(collected)))
-		}
-		// a range anywhere else a value is wanted (`print 1..5`, `str(a..b)`, `(1..5)`) is the same list: the ranges of
-		// `for` headers are loops by now (for_loop above)
-		range if let Some(elements) = range_elements(&range) => elements,
-		range if let Some(collected) = computed_range(&Node::Symbol(RANGE_VALUE.to_string()), &range) => {
-			lower(collected)
-		}
+		range if let Some(list) = range_list(&range, lower) => list,
 		// `fast x=v` → `x:fast=v`, parsed either as `(fast x)=v` or as the statement pair `fast (x=v)`;
 		// `double(x) := x+x` and `double x := x+x` stay function definitions
 		Node::Key(target, Op::Assign, value) if let Some((type_name, name)) = number_type_prefix(&target) => {
@@ -589,60 +532,12 @@ pub(crate) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 				.windows(2)
 				.any(|pair| paired_declaration(&pair[0], &pair[1]).is_some()) =>
 		{
-			let mut lowered = Vec::with_capacity(items.len());
-			let mut items = items.into_iter().peekable();
-			while let Some(item) = items.next() {
-				match items.peek().and_then(|next| paired_declaration(&item, next)) {
-					Some(declaration) => {
-						items.next();
-						lowered.push(lower(declaration));
-					}
-					None => lowered.push(lower(item)),
-				}
-			}
-			Node::single_or_list(lowered, bracket, separator)
+			Node::single_or_list(with_paired_declarations(items, lower), bracket, separator)
 		}
-		Node::Key(target, op @ (Op::Assign | Op::Define), value) => {
-			let value = Box::new(lower(*value));
-			match target.drop_meta() {
-				Node::Key(name, Op::Colon, type_name)
-					if matches!(
-						(name.drop_meta(), type_name.drop_meta()),
-						(Node::Symbol(_), Node::Symbol(_))
-					) =>
-				{
-					let value = match (builtin_type_kind(&type_name.name()), value.drop_meta()) {
-						(Some(Kind::Float), Node::Number(number @ (Number::Int(_) | Number::BigInt(_))))
-							if !crate::type_tests::holds_any_number(&type_name.name()) =>
-						{
-							Box::new(Node::Number(Number::Float((*number).into())))
-						}
-						(Some(Kind::Text), Node::Char(character)) => Box::new(Node::Text(character.to_string())),
-						_ => value,
-					};
-					Node::Key(
-						Box::new(Node::meta(name.drop_meta().clone(), type_name.drop_meta().clone())),
-						op,
-						value,
-					)
-				}
-				_ => Node::Key(target, op, value),
-			}
-		}
+		Node::Key(target, op @ (Op::Assign | Op::Define), value) => typed_assignment(target, op, lower(*value)),
 		Node::Key(list, Op::Dot, call) if inserted_element(&list, &call).is_some() => lowered_insert(list, &call),
 		Node::Key(list, Op::Dot, call) if let Some(element) = appended_element(&list, &call).cloned() => {
-			let element = lower(element);
-			// `add "c" to x` of a text: the text grows (wiki row 29); a list gets the element in place, `xs += [v]` like
-			// Python's extend, so every holder of the list sees it (P200b)
-			if names.texts.contains(&list.name()) {
-				let appended = Node::Key(list.clone(), Op::Add, Box::new(element));
-				return Node::Key(list, Op::Assign, Box::new(appended));
-			}
-			Node::Key(
-				list,
-				Op::AddAssign,
-				Box::new(Node::List(vec![element], Bracket::Square, Separator::Space)),
-			)
+			appended(list, lower(element), names)
 		}
 		Node::Key(list, Op::Dot, call) if let Some(popped) = popped_list(&list, &call) => popped,
 		Node::Key(map, Op::Dot, call) if let Some(removal) = removed_key(&map, &call) => lower(removal),
@@ -667,6 +562,113 @@ pub(crate) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		}
 		other => children_rewritten(other, lower),
 	}
+}
+
+/// A range as the list it stands for. `r=1…3` stores the list [1 2 3]; the range itself only lives in a `for` header;
+/// `xs = a..b` of computed bounds: the list a loop over the range collects. A range anywhere else a value is wanted
+/// (`print 1..5`, `str(a..b)`, `(1..5)`) is the same list: the ranges of `for` headers are loops by now (for_loop)
+fn range_list(node: &Node, lower: impl Fn(Node) -> Node) -> Option<Node> {
+	match node {
+		Node::Key(target, Op::Assign, value) if let Some(elements) = range_elements(value) => {
+			Some(Node::Key(target.clone(), Op::Assign, Box::new(elements)))
+		}
+		Node::Key(target, Op::Assign, value) if let Some(collected) = computed_range(target, value) => {
+			Some(lower(Node::Key(target.clone(), Op::Assign, Box::new(collected))))
+		}
+		range => {
+			range_elements(range).or_else(|| computed_range(&Node::Symbol(RANGE_VALUE.to_string()), range).map(lower))
+		}
+	}
+}
+
+/// The phrases that read as another form: `print each …`, counting phrases, `x of type`, postfix list declarations and
+/// counts of units
+fn rephrased(node: &Node, variables: &HashSet<String>) -> Option<Node> {
+	match node {
+		Node::List(items, bracket, separator) => print_walk(items, variables)
+			.or_else(|| counting_phrase(items, bracket, separator, variables))
+			.or_else(|| of_type_declaration(items, bracket, separator))
+			.or_else(|| postfix_list_declaration(items, bracket, separator))
+			.or_else(|| hashed_unit_count(items)),
+		Node::Key(empty, Op::Hash, counted) if matches!(empty.drop_meta(), Node::Empty) => unit_count(counted),
+		_ => None,
+	}
+}
+
+/// The target `x:number` of another spelling: `x as number = 9` declares `x:number=9`, `x:[number]=v` is
+/// `x:list of number=v`
+fn typed_spelling(target: &Node) -> Option<Node> {
+	match target.drop_meta() {
+		Node::Key(name, Op::As, type_node)
+			if matches!(name.drop_meta(), Node::Symbol(_)) && is_declaration_type(type_node) =>
+		{
+			Some(Node::Key(name.clone(), Op::Colon, type_node.clone()))
+		}
+		Node::Key(name, Op::Colon, type_node) => {
+			let list_type = declared_bracketed_list_type(type_node)?;
+			Some(Node::Key(name.clone(), Op::Colon, Box::new(list_type)))
+		}
+		_ => None,
+	}
+}
+
+/// The items with each pair that declares together (`fast x`, `100 int x`) as its declaration, all lowered
+fn with_paired_declarations(items: Vec<Node>, lower: impl Fn(Node) -> Node) -> Vec<Node> {
+	let mut lowered = Vec::with_capacity(items.len());
+	let mut items = items.into_iter().peekable();
+	while let Some(item) = items.next() {
+		match items.peek().and_then(|next| paired_declaration(&item, next)) {
+			Some(declaration) => {
+				items.next();
+				lowered.push(lower(declaration));
+			}
+			None => lowered.push(lower(item)),
+		}
+	}
+	lowered
+}
+
+/// `x:float = 1` and `c:text = 'a'` of a built-in type: the value as the type (1.0, "a"), the type kept as the name's
+/// meta
+fn typed_assignment(target: Box<Node>, op: Op, value: Node) -> Node {
+	let value = Box::new(value);
+	let Node::Key(name, Op::Colon, type_name) = target.drop_meta() else {
+		return Node::Key(target, op, value);
+	};
+	if !matches!(
+		(name.drop_meta(), type_name.drop_meta()),
+		(Node::Symbol(_), Node::Symbol(_))
+	) {
+		return Node::Key(target, op, value);
+	}
+	let value = match (builtin_type_kind(&type_name.name()), value.drop_meta()) {
+		(Some(Kind::Float), Node::Number(number @ (Number::Int(_) | Number::BigInt(_))))
+			if !crate::type_tests::holds_any_number(&type_name.name()) =>
+		{
+			Box::new(Node::Number(Number::Float((*number).into())))
+		}
+		(Some(Kind::Text), Node::Char(character)) => Box::new(Node::Text(character.to_string())),
+		_ => value,
+	};
+	Node::Key(
+		Box::new(Node::meta(name.drop_meta().clone(), type_name.drop_meta().clone())),
+		op,
+		value,
+	)
+}
+
+/// `add "c" to x` of a text: the text grows (wiki row 29); a list gets the element in place, `xs += [v]` like Python's
+/// extend, so every holder of the list sees it (P200b)
+fn appended(list: Box<Node>, element: Node, names: &Names) -> Node {
+	if names.texts.contains(&list.name()) {
+		let appended = Node::Key(list.clone(), Op::Add, Box::new(element));
+		return Node::Key(list, Op::Assign, Box::new(appended));
+	}
+	Node::Key(
+		list,
+		Op::AddAssign,
+		Box::new(Node::List(vec![element], Bracket::Square, Separator::Space)),
+	)
 }
 
 /// A rewritten declaration and the items after it, as they were grouped
