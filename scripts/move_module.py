@@ -221,17 +221,18 @@ def main():
 	write(parent_file, declare_folder(parent_text, folder, line, public))
 	source_directory = os.path.join(SOURCE, parent)
 	target = os.path.join(source_directory, folder)
+	# checked before the folder exists: a folder named like its member (reflection/reflection.rs) is not the member's
+	module_directory = os.path.join(source_directory, module)
+	has_directory = os.path.isdir(module_directory)
+	moved = [os.path.join(source_directory, module + ".rs")] + (list(files_below(module_directory)) if has_directory else [])
 	os.makedirs(target, exist_ok=True)
 	declare(os.path.join(target, "mod.rs"), opened_to_parent(declaration, parent))
-	moved = [os.path.join(source_directory, module + ".rs")]
-	if os.path.isdir(os.path.join(source_directory, module)):
-		moved += list(files_below(os.path.join(source_directory, module)))
 	rewrite_paths(parent, module, folder)
 	for path in moved:
 		write(path, deepen_moved_file(read(path), depth_below(path, parent), parent))
 	git_mv(moved[0], os.path.join(target, module + ".rs"))
-	if os.path.isdir(os.path.join(source_directory, module)):
-		git_mv(os.path.join(source_directory, module), os.path.join(target, module))
+	if has_directory:
+		git_mv(module_directory, os.path.join(target, module))
 	rewrite_file_mentions(parent, module, folder)
 	print(f"{sys.argv[1]} → {os.path.join(parent, folder, module)}")
 
