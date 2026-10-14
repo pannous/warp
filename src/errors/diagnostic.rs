@@ -465,8 +465,13 @@ pub fn any_hint_printed() -> bool {
 /// `use strict` in warp source makes warnings errors for that program
 const STRICT_PRAGMA: [&str; 2] = [PRAGMA_WORD, "strict"];
 const PRAGMA_WORD: &str = "use";
+/// Every pragma may end in `mode`: `use script mode` is `use script`, `use strict mode` is `use strict`
+const PRAGMA_SUFFIX: &str = "mode";
 /// `use relaxed`, the mirror of `use strict`: the program shows no hints, as `--no-hints` does on the command line
 const RELAXED_PRAGMAS: [&str; 3] = ["relaxed", "lenient", "loose"];
+/// `use script` (decision use-script): `use relaxed` with the scripting modules' words, as `use os file net` gives them
+const SCRIPT_PRAGMA: &str = "script";
+const SCRIPT_MODULES: [&str; 3] = ["os", "file", "net"];
 /// `use comments`: a comment before a binding becomes its meta information (P114, lowering/data/meta_entries.rs)
 const COMMENTS_PRAGMA: &str = "comments";
 /// A "got it" is remembered as the line `ack:<topic> = acknowledged` in the acknowledgements file
@@ -692,24 +697,49 @@ pub fn take_runtime_warnings() -> Vec<String> {
 	RUNTIME_WARNINGS.with(|warnings| std::mem::take(&mut *warnings.borrow_mut()))
 }
 
-/// `use <word>` as a statement: a pragma of the program
+/// `use <word>` (or `use <word> mode`) as a statement: a pragma of the program
 fn is_pragma(node: &Node, word: &str) -> bool {
-	matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(),
-		[using, pragma] if matches!(using.drop_meta(), Node::Symbol(s) if s == PRAGMA_WORD) && matches!(pragma.drop_meta(), Node::Symbol(s) if s == word)))
+	let symbol = |node: &Node, name: &str| matches!(node.drop_meta(), Node::Symbol(s) if s == name);
+	let Node::List(items, _, _) = node.drop_meta() else {
+		return false;
+	};
+	match items.as_slice() {
+		[using, pragma] => symbol(using, PRAGMA_WORD) && symbol(pragma, word),
+		[using, pragma, mode] => symbol(using, PRAGMA_WORD) && symbol(pragma, word) && symbol(mode, PRAGMA_SUFFIX),
+		_ => false,
+	}
+}
+
+/// A source line saying `use <word>` (or `use <word> mode`)
+fn says_pragma(line: &str, word: &str) -> bool {
+	let words: Vec<&str> = line.split_whitespace().collect();
+	words == [PRAGMA_WORD, word] || words == [PRAGMA_WORD, word, PRAGMA_SUFFIX]
 }
 
 /// The program without its top-level `use <word>` statements, and whether it had one
 pub fn without_pragma(program: Node, word: &str) -> (Node, bool) {
+	replaced_pragma(program, word, None)
+}
+
+/// The program with its top-level `use <word>` statements replaced by `replacement` (dropped when None), and whether it
+/// had one
+fn replaced_pragma(program: Node, word: &str, replacement: Option<&Node>) -> (Node, bool) {
 	if is_pragma(&program, word) {
-		return (Node::Empty, true);
+		return (replacement.cloned().unwrap_or(Node::Empty), true);
 	}
 	match program {
 		Node::List(items, bracket, separator) if items.iter().any(|item| is_pragma(item, word)) => {
-			let rest = items.into_iter().filter(|item| !is_pragma(item, word)).collect();
+			let rest = items
+				.into_iter()
+				.filter_map(|item| match is_pragma(&item, word) {
+					true => replacement.cloned(),
+					false => Some(item),
+				})
+				.collect();
 			(Node::List(rest, bracket, separator), true)
 		}
 		Node::Meta { node, data } => {
-			let (inner, found) = without_pragma(*node, word);
+			let (inner, found) = replaced_pragma(*node, word, replacement);
 			(
 				Node::Meta {
 					node: Box::new(inner),
@@ -720,6 +750,20 @@ pub fn without_pragma(program: Node, word: &str) -> (Node, bool) {
 		}
 		other => (other, false),
 	}
+}
+
+/// The program with its `use script` as `use os file net`, and whether it had one
+fn with_script_modules(program: Node) -> (Node, bool) {
+	let modules = [PRAGMA_WORD]
+		.into_iter()
+		.chain(SCRIPT_MODULES)
+		.map(|word| Node::Symbol(word.into()));
+	let uses = Node::List(
+		modules.collect(),
+		crate::node::Bracket::None,
+		crate::node::Separator::Space,
+	);
+	replaced_pragma(program, SCRIPT_PRAGMA, Some(&uses))
 }
 
 /// The program without its top-level `use strict` statements, and whether it had one
@@ -1126,8 +1170,8 @@ pub fn take_assumptions() -> Vec<Diagnostic> {
 /// so the warnings of parse-time Asks obey it too
 pub fn in_source_mode<R>(code: &str, body: impl FnOnce() -> R) -> R {
 	compile_context::change(|context| context.source = code.to_string());
-	let says = |word: &str| code.lines().any(|line| line.split_whitespace().eq([PRAGMA_WORD, word]));
-	let relaxed = RELAXED_PRAGMAS.into_iter().any(says);
+	let says = |word: &str| code.lines().any(|line| says_pragma(line, word));
+	let relaxed = RELAXED_PRAGMAS.into_iter().chain([SCRIPT_PRAGMA]).any(says);
 	match says(STRICT_PRAGMA[1]) {
 		true => with_warning_mode(warning_mode().strictened(), || relaxed_if(relaxed, body)),
 		false => relaxed_if(relaxed, body),
@@ -1153,10 +1197,12 @@ fn without_relaxed_pragma(program: Node) -> (Node, bool) {
 }
 
 /// Run `body` with warnings as errors when the program says `use strict`, and comments as meta information when it
-/// says `use comments`, and without hints when it says `use relaxed`
+/// says `use comments`, and without hints when it says `use relaxed` or `use script`
 pub fn in_program_mode<R>(program: Node, body: impl FnOnce(Node) -> R) -> R {
 	let (program, comments) = without_pragma(program, COMMENTS_PRAGMA);
+	let (program, script) = with_script_modules(program);
 	let (program, relaxed) = without_relaxed_pragma(program);
+	let relaxed = relaxed || script;
 	compile_context::scoped(
 		|context| &mut context.comments_as_meta,
 		comments,
