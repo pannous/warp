@@ -1,7 +1,6 @@
 //! Expressions: the Pratt loop, special infix operators, prefix operators, if as a prefix
 
 use super::*;
-use crate::words::{EMIT_ALIASES, EMIT_WORDS};
 
 /// Characters that end a statement: a body cannot start with them
 const BODY_ENDS: [char; 7] = ['\0', ';', ',', '\n', '}', ')', ']'];
@@ -151,109 +150,6 @@ impl WarpParser {
 		}
 		self.advance_by(chars);
 		Some(Node::Key(Box::new(Node::Empty), op, Box::new(Node::Empty)))
-	}
-
-	/// `await a + await b`: `await` takes its operand like a unary minus, so each task is awaited before the sum.
-	/// `await(x)` (a call or a definition of a function `await`) and `await = …` stay as they are
-	pub(super) fn try_parse_await(&mut self) -> Option<Node> {
-		if !self.matches_keyword(AWAIT_KEYWORD) {
-			return None;
-		}
-		let before_keyword = self.mark();
-		self.advance_by(AWAIT_KEYWORD.len());
-		let called = self.current_char() == '(';
-		self.skip_spaces();
-		let names_a_variable = self
-			.peek_operator()
-			.is_some_and(|(op, _)| matches!(op, Op::Assign | Op::Define | Op::Colon) || op.is_compound_assign());
-		if called || names_a_variable || matches!(self.current_char(), '}' | ';' | '\n' | '\r' | '\0' | ')') {
-			self.rewind(before_keyword);
-			return None;
-		}
-		// `await all jobs` (P47): every task of a list
-		if self.matches_keyword(AWAIT_ALL_WORD)
-			&& self.peek_char(AWAIT_ALL_WORD.len()) == ' '
-			&& (self.is_identifier_start(AWAIT_ALL_WORD.len() + 1)
-				|| matches!(self.peek_char(AWAIT_ALL_WORD.len() + 1), '[' | '('))
-		{
-			self.advance_by(AWAIT_ALL_WORD.len());
-			self.skip_spaces();
-			let list = self.parse_expr(AWAIT_OPERAND_BP);
-			let all = Node::List(
-				vec![Symbol(AWAIT_ALL_WORD.to_string()), list],
-				Bracket::None,
-				Separator::Space,
-			);
-			return Some(Node::List(
-				vec![Symbol(AWAIT_KEYWORD.to_string()), all],
-				Bracket::None,
-				Separator::Space,
-			));
-		}
-		let operand = self.parse_expr(AWAIT_OPERAND_BP);
-		Some(Node::List(
-			vec![Symbol(AWAIT_KEYWORD.to_string()), operand],
-			Bracket::None,
-			Separator::Space,
-		))
-	}
-
-	/// `1 + emit ask`, `net * (1 + ask tax_rate)` (card price-net), `2 * emit stop the machine{reason: "x"} + 1`: the phrase `emit ask` is one operand, the words
-	/// of the event and its data bind like the operand of a unary minus; the same Space list a statement `emit ask` is
-	pub(super) fn try_parse_emit(&mut self) -> Option<Node> {
-		let keyword = EMIT_WORDS
-			.into_iter()
-			.chain(EMIT_ALIASES)
-			.find(|keyword| self.matches_keyword(keyword))?;
-		let before_keyword = self.mark();
-		self.advance_by(keyword.len());
-		self.skip_spaces();
-		if !self.is_identifier_start(0) || self.peek_operator().is_some() {
-			self.rewind(before_keyword);
-			return None;
-		}
-		let mut phrase = vec![Symbol(keyword.to_string())];
-		while self.is_identifier_start(0) || (phrase.len() > 1 && matches!(self.current_char(), '0'..='9' | '"' | '\''))
-		{
-			// `send alarm{} to "x"`: a word operator takes the whole phrase, as without this
-			if self.peek_operator().is_some() {
-				self.rewind(before_keyword);
-				return None;
-			}
-			phrase.push(self.parse_expr(AWAIT_OPERAND_BP));
-			self.skip_spaces();
-		}
-		Some(Node::List(phrase, Bracket::None, Separator::Space))
-	}
-
-	/// `return` takes the whole expression after it: `return -1` is no subtraction from `return`
-	pub(super) fn try_parse_return(&mut self) -> Option<Node> {
-		if !self.matches_keyword(RETURN_KEYWORD) {
-			return None;
-		}
-		let before_keyword = self.mark();
-		self.advance_by(RETURN_KEYWORD.len());
-		self.skip_spaces();
-		let names_a_variable = self
-			.peek_operator()
-			.is_some_and(|(op, _)| matches!(op, Op::Assign | Op::Define | Op::Colon) || op.is_compound_assign());
-		// a bare `return` at the end of a statement returns ø: `if t == ø { return }`
-		let value = if matches!(self.current_char(), '}' | ';' | '\n' | '\r' | '\0') && !names_a_variable {
-			Node::Empty
-		} else if !self.at_body_start() || names_a_variable {
-			self.rewind(before_keyword); // `return := …` as a name
-			return None;
-		} else {
-			// the binding of an assigned value: `return square n` returns the braceless call, like `x = square n`; then
-			// what binds looser, Python's `return a if c else b`
-			let value = self.parse_expr(Op::Assign.binding_power().1);
-			self.continue_expr(value, 0)
-		};
-		Some(Node::List(
-			vec![Symbol(RETURN_KEYWORD.to_string()), value],
-			Bracket::None,
-			Separator::Space,
-		))
 	}
 
 	/// `data a and b` is the data `a and b`, also as an operand (`x = data a and b`, `string(data a and b)`); parentheses
@@ -653,22 +549,6 @@ impl WarpParser {
 		}
 	}
 
-	/// A branch without braces takes the whole statement: `if c then s += 5 else s = 0` assigns in the branch, where
-	/// assignment's weaker binding would end the branch at `s` and assign to the whole if. The value stops at `else`.
-	pub(super) fn branch_assignment(&mut self, target: Node, branch_bp: u8) -> Node {
-		self.skip_spaces();
-		let Some((assignment, chars)) = self
-			.peek_operator()
-			.filter(|(op, _)| *op == Op::Assign || op.is_compound_assign())
-		else {
-			return target;
-		};
-		self.advance_by(chars);
-		self.skip_whitespace();
-		let value = self.parse_expr(branch_bp);
-		Node::Key(Box::new(target), assignment, Box::new(value))
-	}
-
 	/// `‖x‖` brackets a whole expression like parentheses: `‖3-5‖*2` → 4
 	pub(super) fn parse_norm_bars(&mut self) -> Node {
 		let inner = self.parse_expr(0);
@@ -697,23 +577,6 @@ impl WarpParser {
 		}
 	}
 
-	/// The condition of `if` and `while`: `=` compares, and a braceless call takes a variable argument as in a branch
-	/// (`if area certainly > 10 then`, `while square i < 10`)
-	pub(super) fn parse_condition(&mut self) -> Node {
-		let condition_bp = Op::If.binding_power().1;
-		let outer = self.branch_bp.replace(condition_bp);
-		let condition = self.with_equals_comparing(true, |parser| parser.parse_expr(condition_bp));
-		self.branch_bp = outer;
-		condition
-	}
-
-	pub(super) fn with_equals_comparing<T>(&mut self, compares: bool, parse: impl FnOnce(&mut Self) -> T) -> T {
-		let outer = std::mem::replace(&mut self.equals_compares, compares);
-		let node = parse(self);
-		self.equals_compares = outer;
-		node
-	}
-
 	pub(super) fn finish_prefix(&mut self, op: Op, rhs: Node) -> Node {
 		match (op, rhs.drop_meta()) {
 			(Op::If, _) => self.finish_if_prefix(rhs),
@@ -723,49 +586,6 @@ impl WarpParser {
 			(Op::Inc | Op::Dec, _) => Node::Key(Box::new(rhs), op, Box::new(Empty)), // ++i is i++: increment is immediate
 			_ => Node::Key(Box::new(Empty), op, Box::new(rhs)),
 		}
-	}
-
-	pub(super) fn finish_if_prefix(&mut self, rhs: Node) -> Node {
-		self.skip_spaces();
-		if self.current_char() == '{' {
-			let then_block = self.parse_atom(); // parse { block }
-			let if_cond = Node::Key(Box::new(Empty), Op::If, Box::new(rhs));
-			let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_block));
-			return self.parse_optional_else(if_then, ElseParseMode::Atom);
-		}
-
-		if let Node::Key(cond, Op::Colon, then_expr) = &rhs {
-			let if_cond = Node::Key(Box::new(Empty), Op::If, cond.clone());
-			// the body runs to the end of the statement, `if c: x+=1`, but not into the `else`
-			let outer = std::mem::replace(&mut self.stops_at_else, true);
-			let then_expr = self.continue_colon_body(then_expr);
-			self.stops_at_else = outer;
-			let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_expr));
-			return self.parse_optional_else(if_then, ElseParseMode::Expr);
-		}
-
-		if let Some((condition, then_block)) = split_trailing_block(&rhs, false) {
-			self.skip_spaces();
-			let if_cond = Node::Key(Box::new(Empty), Op::If, Box::new(condition));
-			let if_then = Node::Key(Box::new(if_cond), Op::Then, Box::new(then_block));
-			return self.parse_optional_else(if_then, ElseParseMode::Atom);
-		}
-
-		// `if (x < 0) return -1`: C's parenthesized condition, then the statement on the same line
-		let is_grouped = matches!(rhs.drop_meta(), Node::List(_, Bracket::Round, _));
-		if is_grouped && self.at_body_start() && !self.matches_keyword("then") && !self.matches_keyword("else") {
-			let outer = std::mem::replace(&mut self.stops_at_else, true);
-			let then_expr = self.parse_expr(0);
-			self.stops_at_else = outer;
-			let if_then = Node::Key(
-				Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(rhs))),
-				Op::Then,
-				Box::new(then_expr),
-			);
-			return self.parse_optional_else(if_then, ElseParseMode::Expr);
-		}
-
-		Node::Key(Box::new(Empty), Op::If, Box::new(rhs))
 	}
 
 	/// The rest of the body after `if c:` or `while c:`, of which the colon took only the first word or words
@@ -901,43 +721,5 @@ fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Option<Node>) -
 			call(REVERSE_WORD, vec![Node::Key(Box::new(rhs), Op::To, Box::new(lhs))])
 		}
 		_ => Node::Key(Box::new(lhs), op, Box::new(rhs)),
-	}
-}
-
-/// A control word behind a statement: `x++ while c`, `a = 2 if c`, `i++ until c`, `a = 2 unless c`
-fn guarded_statement(statement: Node, guard: Op, word: &str, condition: Node) -> Node {
-	if guard == Op::While {
-		// a trailing `while` tests before the first round like the leading one; it is no do-while (user decision #22)
-		let (statement, test) = (
-			crate::normalize::operand_text(&statement),
-			crate::normalize::operand_text(&condition),
-		);
-		crate::normalize::hint(
-			&format!("{statement} {word} {test}"),
-			&format!("{word} {test} {{ {statement} }}"),
-			"a trailing loop word tests before the first round, the statement may never run",
-		);
-	}
-	let condition = if NEGATED_CONTROL_WORDS.iter().any(|(negated, _)| *negated == word) {
-		Node::Key(Box::new(Empty), Op::Not, Box::new(condition))
-	} else {
-		condition
-	};
-	match guard {
-		Op::While => while_do(condition, statement),
-		_ => Node::Key(
-			Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(condition))),
-			Op::Then,
-			Box::new(statement),
-		),
-	}
-}
-
-/// `where`, alone or the last word of `for i in xs where`: a word whose condition follows
-fn ends_with_clause_word(node: &Node) -> bool {
-	match node.drop_meta() {
-		Node::Symbol(word) => CLAUSE_WORDS.contains(&word.as_str()),
-		Node::List(items, Bracket::None, _) => items.last().is_some_and(ends_with_clause_word),
-		_ => false,
 	}
 }

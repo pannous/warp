@@ -73,26 +73,6 @@ impl WarpParser {
 		*self.chars.get(self.pos + offset).unwrap_or(&'\0')
 	}
 
-	/// `else => …` at the cursor: the catch-all arm of a match on its own line, no else branch of the line before
-	pub(super) fn else_arm_key(&self) -> bool {
-		let after: String = self.chars[(self.pos + 4).min(self.chars.len())..]
-			.iter()
-			.skip_while(|ch| matches!(ch, ' ' | '\t'))
-			.take(2)
-			.collect();
-		after == "=>"
-	}
-
-	/// The cursor is in the key of a match arm: `=>` follows before the statement or block ends (`1 | 2 | 3 => …`)
-	pub(super) fn in_arm_key(&self) -> bool {
-		let rest = &self.chars[self.pos.min(self.chars.len())..];
-		let end = rest
-			.iter()
-			.position(|ch| matches!(ch, ';' | '\n' | '{' | '}'))
-			.unwrap_or(rest.len());
-		rest[..end].windows(2).any(|pair| pair == ['=', '>'])
-	}
-
 	/// The operator a block holds alone, the cursor at its start: `{++}`, `{ * }`, and its length up to the `}`
 	pub(super) fn bare_operator_in_block(&self) -> Option<(String, usize)> {
 		const OPERATOR_CHARS: &str = "+-*/%^<>=!&|";
@@ -641,6 +621,10 @@ impl WarpParser {
 		while !self.end_of_input() && self.current_char() != target {
 			self.advance();
 		}
+	}
+
+	pub(super) fn at_identifier_start(&self) -> bool {
+		self.current_char().is_alphabetic() || self.current_char() == '_'
 	}
 }
 
