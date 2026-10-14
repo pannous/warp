@@ -29,7 +29,7 @@ pub(crate) fn call_arity_error(node: &Node, context: &Context) -> Option<Diagnos
 					.filter(|(function, _)| function == name)
 					.map(|(_, arity)| *arity);
 				let arities: Vec<usize> = libm
-					.chain(crate::wasm_emitter::text_builtins::text_builtin_arities(name))
+					.chain(crate::wasm_emitter::text::text_builtins::text_builtin_arities(name))
 					.collect();
 				let given = items.len() - 1;
 				if !arities.is_empty() && !context.user_functions.contains_key(name) && !arities.contains(&given) {

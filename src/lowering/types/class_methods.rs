@@ -515,7 +515,7 @@ fn renamed_type_word_methods(node: Node) -> Node {
 				.filter(|name| {
 					!is_witness_method(name)
 						&& (crate::analyzer::type_word_kind(name).is_some()
-							|| crate::declaration_forms::is_list_mutating_method(name)
+							|| crate::list_mutations::is_list_mutating_method(name)
 							|| crate::numbers::uncertain::INTERVAL_FIELDS.contains(&name.as_str()))
 				})
 				.collect();

@@ -7,7 +7,7 @@
 
 use super::nodes::{call, children_rewritten, key, Counter};
 use crate::analyzer::{call_name, counting_method};
-use crate::context::Context;
+use crate::compiler::context::Context;
 use crate::diagnostic::Diagnostic;
 use crate::list_mutations::is_list_mutating_method;
 use crate::node::{symbol, text, Bracket, Node, Separator};

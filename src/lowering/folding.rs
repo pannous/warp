@@ -7,7 +7,6 @@
 
 use super::nodes::{branches, call, children_rewritten, key};
 use crate::analyzer::effects::EffectReport;
-use crate::list_mutations::is_list_mutating_method;
 use crate::analyzer::{captured_variables, collect_variables, Scope, CHECKED_RESULT};
 use crate::extensions::numbers::Number;
 use crate::function_values::{definitions, Definition};
