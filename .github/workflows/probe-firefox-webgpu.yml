@@ -4,7 +4,7 @@ name: Probe Firefox WebGPU
 on:
   push:
     branches: [ shaders ]
-    paths: [ ".github/workflows/probe-firefox-webgpu.yml", "probes/firefox_webgpu/**" ]
+    paths: [ ".github/workflows/probe-firefox-webgpu.yml", "probes/firefox_webgpu/**", "web/playground/firefox_driver.mjs" ]
 jobs:
   probe:
     runs-on: ubuntu-latest
@@ -23,7 +23,6 @@ jobs:
         FIREFOX_PREFS: ${{ matrix.prefs }}
       run: probes/firefox_webgpu/check.sh
     - name: The shader examples of the live playground
-      if: false
       env:
         FIREFOX_PREFS: ${{ matrix.prefs }}
       run: python3 web/playground/test_in_browser.py --examples --firefox --url https://warp.pannous.com/ shader "shader mouse" samples/shader samples/shader_brush samples/shader_trails samples/gpu_visualizer samples/webgpu "(a WGSL error at its place in the program)" "(a shader reads its previous frame)" || true

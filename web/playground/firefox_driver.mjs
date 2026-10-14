@@ -65,12 +65,17 @@ const pending = new Map();
 const messages = [];
 const report = (level, text, url = "") => REPORTED_LEVELS.has(level) && messages.push({ level: level === "warn" ? "warning" : level, text, url });
 const events = {
-	"log.entryAdded": entry => report(entry.level, entry.text ?? entry.args?.map(arg => arg.value ?? arg.type).join(" "), entry.source?.realm ? entry.stackTrace?.callFrames?.[0]?.url : ""),
+	"log.entryAdded": entry => report(entry.level, entry.text ?? entry.args?.map(arg => arg.value ?? arg.type).join(" "), entry.source?.realm ? whereLogged(entry.stackTrace) : ""),
 	"network.responseCompleted": ({ response }) => response.status >= FAILED_STATUS && report("error", `${response.status} ${response.statusText}`.trim(), response.url),
 	"network.beforeRequestSent": ({ isBlocked, request }) => isBlocked && send("network.continueRequest", {
 		request: request.request,
 		headers: [...request.headers.filter(({ name }) => name.toLowerCase() !== "authorization"), { name: "Authorization", value: { type: "string", value: `Bearer ${GITHUB_TOKEN}` } }],
 	}),
+};
+// where a console entry came from: its innermost frame's script, line and column (a thrown `undefined` says no more)
+const whereLogged = stack => {
+	const frame = stack?.callFrames?.[0];
+	return frame ? `${frame.url}:${frame.lineNumber + 1}:${frame.columnNumber + 1}${frame.functionName ? ` in ${frame.functionName}` : ""}` : "";
 };
 socket.onclose = () => {
 	console.error(`firefox_driver.mjs: Firefox closed its WebDriver BiDi connection; ${pending.size} commands unanswered`);
