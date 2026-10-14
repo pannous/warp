@@ -251,7 +251,7 @@ pub(super) fn type_definitions(statement: &Node) -> Vec<&Node> {
 }
 
 /// The definitions the export reads, with their declared result type (warp converts the result to it,
-/// lowering/declarations.rs): `f(x) := body`, `f(x): int := body`, `f(x) as int := body`, `int f(x) := body`,
+/// lowering/definitions/declarations.rs): `f(x) := body`, `f(x): int := body`, `f(x) as int := body`, `int f(x) := body`,
 /// `def f(x) { body }`, `def f(x) -> int { body }`, `fun f(x): Int { body }`, `def f(x) -> int: body`,
 /// `def f(x) as int = body`
 pub(super) fn function_definition(statement: &Node) -> Option<FunctionHead<'_>> {

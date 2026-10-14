@@ -12,7 +12,7 @@ is false.
 - Run-time type tests of a value of unknown static type (`value:any`): node_kind_in gives a bool its own mask bit
   (BOOL_MASK_BIT), so it is no int; run-time values_equal takes a bool as a number (`false == 0`).
 - Tasks: a bool crosses as 1/0; where a bool function's task is awaited the result is compared `!= 0`, a bool again
-  (lowering/declarations.rs checked_await, card bool-crossing).
+  (lowering/definitions/declarations.rs checked_await, card bool-crossing).
 
 ## Which values are bools
 src/analyzer/booleans.rs `is_boolean(node, scope)`: literals, comparisons (incl. `===`), prefix `not`, and/or of bools,

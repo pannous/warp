@@ -742,7 +742,7 @@ const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 	("wagi", |_| crate::pipeline::compile_mode().for_wagi),
 ];
 
-/// Whether the program plays sound: it calls a sound word or says `use sound` (lowering/music_words.rs reads its note names)
+/// Whether the program plays sound: it calls a sound word or says `use sound` (lowering/words/music_words.rs reads its note names)
 pub fn uses_sound(program: &Node) -> bool {
 	first_called_undefined(program, SOUND_WORDS).is_some()
 		|| statements_of(program)
