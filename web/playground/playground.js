@@ -201,6 +201,7 @@ function startWorker(restarts = 0) {
 		worker.onerror = event => failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
 		worker.onmessage = ({ data }) => {
 			if (data.type === "notify") data = notification(data.text);
+			if (data.type === "window") return resizeWindow(data, $("paintings")); // canvas.js
 			if (data.type === "dispatch") return dispatchToPage(data.event); // markup.js, card page-custom-event
 			if (!data) return;
 			if (stalled) watchStart();
@@ -282,7 +283,7 @@ function notification(text) {
 // canvas shows the pictures to someone once the page was clicked or typed in; before (the CI tour, as for sounds) a
 // `while window_open` drawing loop ends at once instead of waiting for input forever
 const darkMode = matchMedia(DARK_MODE_QUERY);
-const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(!beforeUserActivation()), ...viewSize() } });
+const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(!beforeUserActivation()), display_width: screen.width, display_height: screen.height, ...viewSize() } });
 darkMode.addEventListener("change", tellSystemValues);
 ["pointerdown", "keydown"].forEach(type => addEventListener(type, () => worker && tellSystemValues(), { once: true, capture: true }));
 new ResizeObserver(() => worker && tellSystemValues()).observe($("output"));
@@ -496,6 +497,7 @@ async function runInWorker(code) {
 		stopAfterTimeout(run);
 		pending = run;
 		silence();
+		paintingWindow = undefined; // canvas.js: each run's paintings at their own size until it sets window.width
 		tellSystemValues();
 		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements() });
 	});

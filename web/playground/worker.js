@@ -67,6 +67,7 @@ const hooks = {
 	sleeping: milliseconds => post({ type: "sleep", milliseconds }),
 	tasksInline: reason => post({ type: "tasks inline", reason }),
 	notify: text => post({ type: "notify", text }),
+	resizeWindow: (width, height) => post({ type: "window", width, height }), // window.width = 800 (canvas.js)
 	dispatch: event => post({ type: "dispatch", event }), // playground.js dispatchToPage
 	listen: (holder, events) => {
 		live = holder;

@@ -60,3 +60,4 @@ pub(crate) mod test_sound_voices; // card sound-pro; its rendered helper serves 
 mod test_sound_wavs; // card sound-wavs
 mod test_task_sound; // card task-sound
 mod test_warp_command; // card midi-out
+mod test_window_size; // card make-width

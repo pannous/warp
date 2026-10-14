@@ -92,6 +92,9 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::of_lookups::lower,
 	// `(p).a` is `p.a` (grouped_receivers.rs), before any pass reads a lookup
 	crate::lowering::grouped_receivers::lower,
+	// `window.width = 800`, `canvas.height`, a bare width (module_properties.rs): getters and setters, before any pass
+	// reads a field's write; resolve brings draw for them
+	crate::lowering::module_properties::lower,
 	// `n times {…}`, `n times [x]`, `n times "ab"` as the parser keeps them: a loop, a filled list, a repeated text
 	crate::lowering::times_phrases::lower,
 	// `xs .* 2` as the parser keeps it: the operator applied to each element (broadcasting.rs)
