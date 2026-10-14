@@ -35,6 +35,9 @@ alice.age + 1` },
 	conditions: { value: '"warm"', code: `// if … then … else gives a value
 temperature = 25
 if temperature > 20 then "warm" else "cold"` },
+	matching: { value: '["logo.png" "cat.jpg"]', code: `// a pattern names the parts it wants; find collects every match, at any depth
+page = {logo: {type: "image", src: "logo.png"}, body: [{type: "text"}, {type: "image", src: "cat.jpg"}]}
+page find {type: "image", src}` },
 	loops: { value: "55", code: `// add up the numbers 1 to 10
 total = 0
 for i in 1 to 10 { total += i }
