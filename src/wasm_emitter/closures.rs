@@ -249,14 +249,10 @@ impl WasmGcEmitter {
 						.user_functions
 						.get(&crate::closures::closure_call_name(arity))
 						.cloned();
+					s.emit_closure_entry(func, closure_local, closure);
 					Self::emit_list(
 						func,
 						&[
-							I::LocalGet(closure_local),
-							I::StructGet {
-								struct_type_index: closure,
-								field_index: ENTRY_FIELD,
-							},
 							I::RefTestNonNull(HeapType::Concrete(entry)),
 							I::If(BlockType::Empty),
 							I::LocalGet(closure_local),
@@ -273,18 +269,8 @@ impl WasmGcEmitter {
 							s.emit_node_as_kind(func, param_kind(&helper.params[1 + index]));
 						}
 					}
-					Self::emit_list(
-						func,
-						&[
-							I::LocalGet(closure_local),
-							I::StructGet {
-								struct_type_index: closure,
-								field_index: ENTRY_FIELD,
-							},
-							I::RefCastNonNull(HeapType::Concrete(entry)),
-							I::CallRef(entry),
-						],
-					);
+					s.emit_closure_entry(func, closure_local, closure);
+					Self::emit_list(func, &[I::RefCastNonNull(HeapType::Concrete(entry)), I::CallRef(entry)]);
 					if let Some(helper) = helper.filter(|_| typed) {
 						s.emit_primitive_as_node(func, helper.return_kind);
 					}
@@ -292,6 +278,19 @@ impl WasmGcEmitter {
 				}
 				s.emit_runtime_error(func, WRONG_ARGUMENT_COUNT);
 			},
+		);
+	}
+
+	fn emit_closure_entry(&self, func: &mut Function, closure: u32, closure_type: u32) {
+		Self::emit_list(
+			func,
+			&[
+				I::LocalGet(closure),
+				I::StructGet {
+					struct_type_index: closure_type,
+					field_index: ENTRY_FIELD,
+				},
+			],
 		);
 	}
 
@@ -548,14 +547,11 @@ impl WasmGcEmitter {
 							field_index: NODE_DATA_FIELD,
 						},
 						I::RefCastNonNull(HeapType::Concrete(closure)),
-						I::LocalTee(closure_local),
-						I::StructGet {
-							struct_type_index: closure,
-							field_index: ENTRY_FIELD,
-						},
-						I::RefTestNonNull(HeapType::Concrete(entry)),
+						I::LocalSet(closure_local),
 					],
 				);
+				s.emit_closure_entry(func, closure_local, closure);
+				func.instruction(&I::RefTestNonNull(HeapType::Concrete(entry)));
 				s.emit_fail_unless(func, WRONG_ARGUMENT_COUNT);
 				Self::emit_list(
 					func,
@@ -570,18 +566,8 @@ impl WasmGcEmitter {
 				for argument in 1..=arity {
 					func.instruction(&I::LocalGet(argument as u32));
 				}
-				Self::emit_list(
-					func,
-					&[
-						I::LocalGet(closure_local),
-						I::StructGet {
-							struct_type_index: closure,
-							field_index: ENTRY_FIELD,
-						},
-						I::RefCastNonNull(HeapType::Concrete(entry)),
-						I::CallRef(entry),
-					],
-				);
+				s.emit_closure_entry(func, closure_local, closure);
+				Self::emit_list(func, &[I::RefCastNonNull(HeapType::Concrete(entry)), I::CallRef(entry)]);
 				if !s.typed_entry(arity) {
 					func.instruction(&I::RefAsNonNull);
 					s.emit_node_as_kind(func, function.return_kind);

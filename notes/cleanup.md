@@ -294,6 +294,11 @@ Done:
 - the `Cell<usize>` counters of 15 passes (get then set, set then get, replace) → `nodes::Counter` with
   `next_number()`; a pass counting from 1 starts it `Counter::starting_at(1)`, so every name stays as it was; then the
   `usize` makers of lazy_ranges, min_max, list_element_checks and variable_signals (`+= 1` then use) the same way
+- (card cleanup-phrase-words) the parser's groups of a phrase undone (5 copies: list_phrases, scoped_handlers,
+  event_signals, tasks, transitions) → `nodes::phrase_words`; code with placeholders (`parse` then `law::substitute`
+  over a HashMap built by hand, 20 sites and 6 local helpers) → `nodes::filled(code, [("X", x)])`. Net −107 lines.
+  Not folded: word_slices::flat_words and phrase_calls::spaced_words (they also split `to` / alphabetic operators),
+  library_words::instantiate_template (names its temporaries apart), test_blocks::template (parses as a generated file)
 
 Left (each changes behaviour or needs care):
 - (cleanup-rewrite-tails) Node::map_children also enters class bodies (Node::Type); children_rewritten does not. 45 tails folded by
@@ -318,7 +323,10 @@ Left (each changes behaviour or needs care):
   `parameters()`, `plain_operator()`, `is_glued_head()`. Read through it: law/type_model/forms.rs, overloads,
   nonlocal_cells, printable, generators, component_state, units/static_units, definition_cases, signal_values; each
   keeps its own filter (which forms, result type allowed, glued head), so no site reads a form it did not read before.
-  Left on purpose: memoization `definition_parts` (type_tests) also takes `x := 3` and rebuilds the same form;
+  Follow-up (definition-view-ports): the Lean export's `function_definition` returns the FunctionHead (no
+  result_type / tuple wrappers, Exporter::function and nested lift_from take it), units.rs reads parameter clashes
+  through it (`plain_operator`). Left on purpose: memoization `definition_parts` (type_tests) also takes `x := 3` and
+  rebuilds the same form (compacted: keyword and meta wrappers share `wrapped`);
   declarations.rs `function_definition` builds the Key form; law.rs `function_definition` goes through the analyzer;
   lambdas / nested_functions / reflection `definition` build or print one. Narrowed (nonsense forms only): signal_values
   no longer reads `def {f x}`, `def (f x) y {…}` (four words) or a head whose first item is not a word.
@@ -331,6 +339,47 @@ Left (each changes behaviour or needs care):
   (operators on instances, specialized calls), inheritance.rs (extends, mixins, super), other_languages.rs (impl, Go
   methods, Ruby .new, witness methods); further parts only if a cohesive group shows up (generic classes?).
   destructurings / positional_fields already share with_value_classes.
+
+### The signal family: one design (card cleanup-signal-family, design only, 2026-10-13)
+Nine passes implement "run this body when something happens", about 6.0k lines: event_signals (1161: `on stop {…}`,
+`raise`/`emit`, page events), variable_signals (971: `on change x`, `on set x`, `once`/`whenever`, `after f`),
+signal_values (1321: listeners that outlive a function, cells, shared polling), system_signals (597: timers, files,
+frames, keys, channel messages), scoped_handlers (422: `on ask {…} in {…}`), component_state (765), fetch_signals (194),
+stored_values (280), element_events (286). Each repeats three things:
+1. Reading the listener. Each pass has its own reader of `on <trigger> <body>`, ~430 lines in 32 functions
+   (event_signals::handler/named_handler/listed_events, variable_signals::listener_parts/subject_and_body/
+   trailing_block/ungrouped, signal_values::named_listener/without_leading_word, system_signals::timer/file_watch/
+   message_listener/event_listener/words_and_body/one_shot, scoped_handlers::scoped_handler/operand_phrase/…). Most of
+   their length undoes the groups the parser made of the phrase (`(on stop) (the (machine {…}))`).
+   Design: one reader `listeners::read(statement) -> Option<Listener { word: On|Once|Whenever|Before|After, name:
+   Option<String> /* h = on … */, trigger: Vec<Node> /* flat words */, body: Node, scope: Option<Node> /* in {…} */ }>`
+   in a new src/lowering/listeners.rs, and each pass asks it and matches on the trigger words. Estimate −300 lines,
+   low risk (behaviour kept; the forms each reader accepts are the union, a few odd spellings may start or stop
+   matching → cleanup-edge ignores).
+2. Calling the handler. Host-triggered events each have their own registration: `signal_every(id, ms)`,
+   `signal_watch(id, file)`, `signal_frame(id, ms)`, `channel_listen(id, name)`, page events through
+   `on·click·node`, system events by name. Design: every handler is `on·<event>·<id>` made by
+   event_signals::function_with_globals (already shared by 10 passes) and registered by ONE host word
+   `signal_listen(kind, id, argument)`; the runtime keeps one table. Estimate −150 in src/, −100 in
+   crates/warp-runtime, medium risk (the playground worker.js has to follow).
+3. Change listeners twice. variable_signals inserts a check after every write of a watched variable (static);
+   signal_values turns escaping variables into cells with listener closures (runtime). Design: drop the static
+   path, every watched variable becomes a cell; `once`/`whenever` become cell listeners on the variables their
+   condition reads (the derived `:=` case already works this way). Estimate −600 to −800 lines (most of
+   variable_signals' write tracking: written_variable, statement_write, checks, inlined, the `while x-->0`
+   expression rewrite, P111's signal·check functions). Cost: every read of a watched variable is `cell_get(x)`; a
+   watched loop counter gets slower. Decision for the user (Interviewer) before building: lines vs speed of watched
+   variables.
+Order: 1, then 2, then 3 after the decision. Together about −1.2k lines of the 6.0k; the rest is real behaviour
+(effects, polling across tasks, components) that no merge removes.
+
+### Foreign spellings (welcome_forms.rs, asked 2026-10-13, nothing removed until the user answers)
+Lines per form incl. helpers; no sample uses any; tests = files using it (they get cleanup-edge ignores if dropped).
+generic `<T>` ~106 (5 tests) · OCaml let-in ~65 · Rust `let mut` ~18 · Kotlin/Ruby `when` chains ~66 · C++ lambda
+`[](int x){…}` ~44 · C++ `auto x =` ~14 · Elixir `def f(x), do:` ~23 · `Enum.map`/`List.map` ~44 · LINQ ~57 ·
+R/PHP `sapply`/`array_map` ~34 · R `c(1,2)` ~57 · R `<- function` ~24 · OCaml `fun x ->` ~26 · Ruby `lambda {}`/`proc`/
+`.call` ~43 · `xs.sum { |x| }`/`sumOf` ~27 · Ruby `.to_s`/`.upcase` ~33 · Python `lambda x:` ~30 (5 tests) · variadic
+lambdas ~23 · JS `({a, b}) =>` ~38. All ≈ 770 lines. Kept (samples use them): match `=>` arms, `loop {}`, `function(){}`.
 
 ## src/wasm_emitter/ (card cleanup-emitter, session warp-fixer)
 
@@ -369,3 +418,56 @@ Left:
 - DONE (cleanup-saved-state) user_function_calls.rs compile_user_function_body: the ~15 per-function emitter fields are one
   FunctionState, swapped in at the start (swap_function_state) and back at the end; the fields that need the body's
   scope (typed variables, scratch locals, loop values) are set once it is known, as main does
+
+## Coverage survey (warp-cleanup, 2026-10-13, at 5899b83d1)
+
+What the test suite (which runs every sample too) never executes, by `cargo llvm-cov`: one queued run in a detached
+worktree, `WARP_TEST_TIME_LIMIT=2400 tests/queue.sh cargo llvm-cov --offline --no-report --tests --no-fail-fast`,
+then `cargo llvm-cov report --json` and `--lcov` into data/cleanup/, ranked by
+`probes/cleanup/coverage_ranking.py <json> <lcov> <checkout>` (data/cleanup/coverage.txt). The executable-building
+tests (wasm::test_executable_*, test_build_emits_wasm, runtime stub) fail under instrumentation; nothing else does.
+
+- 6673 of the executable src lines never run: 534 functions never called (2454 lines), 4219 lines of untaken branches.
+  The suite is thorough, so coverage alone frees a few hundred lines, not thousands.
+- Most unexecuted code is I/O no test drives on purpose: main.rs CLI commands (418), the paint window (408), deploy,
+  sound, package downloads, crash cards. Not dead.
+- The real clusters, filed as cleanup cards: unrun emitter branches (key_emitter emit_power_op, values
+  emit_float_value, list_emitter emit_floor_quotient, wasi emit_result_print), unused math (real.rs, reals.rs,
+  numbers.rs), components.rs value_of/json_of, time.rs, gpu_maps.rs, node/ comparison and indexing, gc_traits'
+  name resolver and wasm_reader's string readers (tested by test_gc_name_registry, so not removable without it).
+- Bigger deletions have to come from generalizing what does run: near-twin lowering passes and runtime emitters.
+
+## Feature overlap in src/lowering/ (warp-cleanup, 2026-10-13)
+
+What each lowering feature costs and who uses it, so the user can decide which are worth their code (decisions
+cleanup-means-fewer-lines, cleanup-may-drop-edge-cases). Usage by `probes/cleanup/feature_usage.py . <wiki>`
+(approximate syntax regexes; data/cleanup/feature_usage.txt), the low rows checked by hand. Foreign spellings and the
+signal family are warp-list-pattern's and left out. Samples = files in samples/, tour = web/playground/examples.js.
+
+| feature (files) | example | lines | samples | tour | wiki | overlap |
+|---|---|---|---|---|---|---|
+| compile-time lambdas + function values (lambdas, function_values) | `xs.map(x => x*2)`, `apply(f, x) := f(x)` | 1939 | many | 2 | 43 | run-time closures (closures.rs, 1170) run the same programs; the compile-time path is a speed-up |
+| traits (traits, traits/dispatch, traits/instance_types) | `trait shape{area}`, `compare(a:person, b:person) := …` | 1901 | 1 | 0 | 1 | instance `<`/`==` via compare witnesses rides on it; declared traits barely used |
+| database tables, ORM (database_tables/) | `people: [Person] = database.people` | 1889 | 4 | 0 | 0 | none; big and recent (orm cards) |
+| gpu maps (gpu_maps) | `ys = xs.map(x => x*2) @gpu` | 1306 | 1 | 0 | 0 | shader blocks (WGSL) and data parallelism do GPU/parallel work |
+| shared arrays (shared_arrays) | `shared xs = int[n]` | 1180 | 3 | 0 | 8 | channels and atomics share between tasks |
+| web server (serve) | `serve 8080 { get "/api" { users } }` | 1143 | 0–2 | 1 | 6 | none in warp; routes.rs is the page side |
+| generators (generators, generator_objects, generator_consumers) | `count_to(n) := { … yield i … }` | 1114 | 0 | 0 | 4 | lazy ranges; a go task writing a channel |
+| reflection dot words (reflection) | `f.effects` | 886 | 2 | 0 | 5 | the word forms `effects of f` |
+| return-type overloads (overloads) | `parse(t) -> int` beside `parse(t) -> float` | 827 | 0 | 0 | 12 | `as int` conversions |
+| natural phrases (phrase_calls, list_phrases, word_slices) | `move piece from a to b`, `first 3 of xs` | 787 | 2 | 0 | 3 | plain calls `move(piece, a, b)`, `xs#1..3` |
+| multiple dispatch by class (traits/generics) | `collide(a:Ship, b:Rock)` | 529 | 1 | 0 | 2 | methods on the class; traits' witness dispatch |
+| type-name parameters (type_name_matching) | `fib int i = …`, `foo of int = it+it` | 442 | ~9 | 0 | 8 | `fib(i:int) := …` |
+| scoped handlers (scoped_handlers) | `on ask { 42 } in { compute() }` | 433 | 1 | 0 | 1 | try/catch, raise and event handlers |
+| tuple returns (tuples) | `return a, b`; `x, y = f()` | 387 | 1 | 0 | 4 | returning a list `[a, b]` and list destructuring |
+| list element checks (list_element_checks) | `xs: [int] = [1, "a"]` is an error | 359 | 0 | 0 | 0 | the analyzer's type checks |
+| instance destructuring (class_methods/destructuring) | `{x, y} = p`, `Point{x, y: b}` patterns | 322 | 0 | 0 | 0 | map destructuring and match patterns |
+| nonlocal cells (nonlocal_cells) | `nonlocal y` | 281 | 0 | 0 | 4 | closures already capture |
+| named patterns + definitions by cases (named_patterns, definition_cases) | `pattern Pair = [_, _]`; `fib(0) := 0; fib(n) := …` | 405 | 0 | 0 | 1 | match arms and guards |
+| object-shaped parameters (parameter_shapes) | `f(p{name, title?}) := …` | 230 | 0 | 0 | 1 | named arguments |
+| ruby blocks (ruby_blocks) | `each(xs) { |x| … }` with `yield v` | 215 | 0 | 1 | 1 | lambdas passed as arguments |
+| version literals (versions) | `v1.2.3`, `version 1.2.3` | 210 | 0 | 0 | 4 | texts `"1.2.3"` compared by parts |
+
+Well used (no cut proposed): library words 1909, tasks 1473, broadcasting 1199, blocks 955, switch/match 882, late
+binding 737, for loops 725, constant folding 670, lazy ranges 654, comprehensions 631, type tests 596, named
+arguments 574, markup tags 398, type constructors 370.

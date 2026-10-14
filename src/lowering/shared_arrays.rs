@@ -752,10 +752,7 @@ impl Rewrite<'_> {
 					),
 				}
 			}
-			Node::Meta { node, data } => Node::Meta {
-				node: Box::new(self.node(*node, function)),
-				data,
-			},
+			meta @ Node::Meta { .. } => meta.under_meta(|node| self.node(node, function)),
 			// an array as a whole: the list of its cells
 			Node::Symbol(_) if let Some(kind) = shared(&node, &self.names(function)) => collected(&node, kind),
 			// a read of a shared value
@@ -899,8 +896,7 @@ fn linear_dot(left: Node, right: Node) -> Node {
 	let template = format!("({}; {LINEAR_DOT}(LEFT, RIGHT))", crate::broadcasting::PAIRED_COUNT)
 		.replace("LEFT", "dot_left")
 		.replace("RIGHT", "dot_right");
-	let bindings = HashMap::from([("dot_left".to_string(), left), ("dot_right".to_string(), right)]);
-	crate::law::substitute(&crate::warp_parser::parse(&template), &bindings)
+	super::nodes::filled(&template, [("dot_left", left), ("dot_right", right)])
 }
 
 /// A linear array, or an element-wise expression of one: `ys`, `(ys .* 2)`

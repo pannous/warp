@@ -316,8 +316,7 @@ impl WasmGcEmitter {
 						I::End,
 					],
 				);
-				Self::emit_list(f, &[I::LocalGet(address), I::LocalGet(length)]);
-				s.call(f, "new_text");
+				s.emit_new_text(f, address, length);
 			},
 		);
 	}

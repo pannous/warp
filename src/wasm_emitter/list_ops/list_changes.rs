@@ -602,15 +602,7 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::LocalGet(cell), I::RefIsNull]);
 				s.emit_fail_if(f, "index_out_of_range");
 				s.emit_field(f, cell, 0);
-				Self::emit_list(
-					f,
-					&[
-						I::I64Const(KIND_MASK),
-						I::I64And,
-						I::I64Const(Kind::Empty as i64),
-						I::I64Eq,
-					],
-				);
+				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Eq);
 				s.emit_fail_if(f, "index_out_of_range");
 			};
 			Self::emit_index_compare(f, I::I64LtS);

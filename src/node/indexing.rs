@@ -19,35 +19,7 @@ impl Index<&String> for Node {
 	type Output = Node;
 
 	fn index(&self, i: &String) -> &Self::Output {
-		match self {
-			List(nodes, _, _) => {
-				if let Some(found) = nodes.find2(&|node| match node.drop_meta() {
-					Key(k, _, _) => matches!(k.drop_meta(), Symbol(key) | Text(key) if key == i),
-					Text(t) => *t == *i,
-					_ => false,
-				}) {
-					// If we found a Key, return its value instead of the whole Key
-					match found.drop_meta() {
-						Key(_, _, v) => v.as_ref(),
-						other => other,
-					}
-				} else {
-					&Empty
-				}
-			}
-			Key(k, _, v) => match k.drop_meta() {
-				Symbol(key) | Text(key) if key == i => v.as_ref(),
-				_ => &v[i], // Pass through to value
-			},
-			Meta { node, data } => {
-				if node[i] != Empty {
-					&node[i]
-				} else {
-					&data[i]
-				}
-			}
-			_ => &Empty,
-		}
+		self.index(i.as_str())
 	}
 }
 

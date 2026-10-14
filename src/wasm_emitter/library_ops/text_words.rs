@@ -385,16 +385,7 @@ impl WasmGcEmitter {
 					],
 				);
 				write(f, I32Const(QUOTE_BYTE));
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(destination),
-						I::LocalGet(out),
-						I::LocalGet(destination),
-						I::I32Sub,
-					],
-				);
-				s.call(f, "new_text");
+				s.emit_new_text_to(f, destination, out);
 			},
 		);
 	}
@@ -457,10 +448,7 @@ impl WasmGcEmitter {
 			};
 			let masked_kind_is = |f: &mut Function, kind: Kind| {
 				s.emit_field(f, element, 0);
-				Self::emit_list(
-					f,
-					&[I::I64Const(KIND_MASK), I::I64And, I::I64Const(kind as i64), I::I64Eq],
-				);
+				Self::emit_kind_test(f, kind as i64, I::I64Eq);
 			};
 			let next_element = |f: &mut Function| {
 				s.emit_field(f, cell, 1);
@@ -472,15 +460,7 @@ impl WasmGcEmitter {
 				if nested {
 					// a text or a character in a container is quoted (P126): `["a" "bc"]`
 					s.emit_field(f, element, 0);
-					Self::emit_list(
-						f,
-						&[
-							I::I64Const(KIND_MASK),
-							I::I64And,
-							I::I64Const(Kind::Text as i64),
-							I::I64Eq,
-						],
-					);
+					Self::emit_kind_test(f, Kind::Text as i64, I::I64Eq);
 					Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(element), I::RefAsNonNull]);
 					s.call(f, TEXT_QUOTED);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
@@ -816,16 +796,7 @@ impl WasmGcEmitter {
 				],
 			);
 			end_loop(f);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(address),
-					I::LocalGet(position),
-					I::LocalGet(address),
-					I::I32Sub,
-				],
-			);
-			s.call(f, "new_text");
+			s.emit_new_text_to(f, address, position);
 		});
 	}
 }

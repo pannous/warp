@@ -199,10 +199,7 @@ fn applied_in(statements: &[Node], name: &str) -> bool {
 /// `z := e` → `z() := e`, the `z()` marked as written bare
 fn getter_definition(statement: Node) -> Node {
 	match statement {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(getter_definition(*node)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(getter_definition),
 		Node::Key(left, Op::Define, body) => match left.drop_meta() {
 			Node::Symbol(name) => Node::Key(
 				Box::new(Node::meta(call(name, vec![]), symbol(BARE_GETTER_MARK))),

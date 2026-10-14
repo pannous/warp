@@ -267,10 +267,7 @@ fn is_element_name(node: &Node) -> bool {
 /// The items of an element's `{…}` or `(…)`, `name = value` of an attribute as `name: value`
 fn attributes_of_group(group: Node) -> Node {
 	match group {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(attributes_of_group(*node)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(attributes_of_group),
 		Node::List(items, bracket @ (Bracket::Curly | Bracket::Round), separator) => {
 			Node::List(items.into_iter().map(html_attribute).collect(), bracket, separator)
 		}
@@ -280,10 +277,7 @@ fn attributes_of_group(group: Node) -> Node {
 
 fn html_attribute(item: Node) -> Node {
 	match item {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(html_attribute(*node)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(html_attribute),
 		Node::Key(name, Op::Assign, value) if matches!(name.drop_meta(), Node::Symbol(word) if crate::markup::names_attribute(word)) => {
 			Node::Key(name, Op::Colon, value)
 		}

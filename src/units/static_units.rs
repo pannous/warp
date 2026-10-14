@@ -1,5 +1,5 @@
-//! Static units, stage 1 (notes/units_runtime.md): a program with quantities that `units::answer` cannot evaluate at compile
-//! time (loops, branches) runs with plain exact numbers. Each expression's unit signature (dimension → power) is inferred
+//! Static units, stage 1 (notes/units_runtime.md): a program with quantities runs with plain exact numbers; a temperature's
+//! amount counts from absolute zero, its unit's zero is added where it is written and taken off where it shows. Each expression's unit signature (dimension → power) is inferred
 //! here and checked (`+ - ==` of different signatures is a DimensionError at compile time), each unit literal becomes its
 //! amount in SI base units (`5 km` → 5000, `5 cm` → 1/20), and the program's final value is converted back to the finest
 //! written unit after the run (`RESULT_UNITS`). Stage 2: a function called with quantities (or whose body has unit
@@ -127,6 +127,14 @@ fn lower_shadowed(program: &Node) -> Option<Result<Node, Node>> {
 		.chain(unit_fields::written_field_units(program))
 		.collect::<Vec<_>>();
 	let display = finest_units(&written);
+	let mut temperatures: Vec<&'static Unit> = vec![];
+	for factor in &written {
+		if factor.unit.dimension == Dimension::Temperature
+			&& !temperatures.iter().any(|unit| std::ptr::eq(*unit, factor.unit))
+		{
+			temperatures.push(factor.unit)
+		}
+	}
 	let mut definitions = HashMap::new();
 	program.visit(&mut |node| {
 		if let Some((name, definition)) = function_definition(node) {
@@ -148,6 +156,7 @@ fn lower_shadowed(program: &Node) -> Option<Result<Node, Node>> {
 		numbered: 0,
 		new_definitions: vec![],
 		display: display.clone(),
+		temperatures,
 		returns: vec![],
 		at_top: true,
 		in_host_call: false,
@@ -278,10 +287,7 @@ fn module_units(bytes: &[u8]) -> Option<ResultUnits> {
 /// reads back as that entry)
 fn with_field_units(object: Node, fields: &[(String, Vec<Factor>)]) -> Node {
 	match object {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_field_units(*node, fields)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_field_units(node, fields)),
 		// an instance of a class with unit fields, the tag `Run{distance:3000}`
 		Node::Key(class, Op::None, body) => Node::Key(class, Op::None, Box::new(with_field_units(*body, fields))),
 		Node::List(entries, bracket, separator) => Node::List(
@@ -307,7 +313,7 @@ pub(crate) fn quantity_of(value: Node, units: &[Factor]) -> Node {
 	};
 	if let Some(amount) = exact_amount(&value) {
 		return Node::data(Quantity {
-			amount: amount.mul(&per_unit),
+			amount: amount.add(&shown_zero(units).neg()).mul(&per_unit),
 			factors: units.to_vec(),
 		});
 	}
@@ -353,15 +359,17 @@ fn display_unit(display: &[&'static Unit], dimension: Dimension) -> &'static Uni
 		.unwrap_or_else(|| base_unit(dimension))
 }
 
-/// A signature in the units it shows in: the finest written unit of each dimension
+/// A signature in the units it shows in: the finest written unit of each dimension, in the order they are written
 fn display_factors(display: &[&'static Unit], signature: &Signature) -> Vec<Factor> {
-	signature
+	let mut factors: Vec<Factor> = signature
 		.iter()
 		.map(|(dimension, power)| Factor {
 			unit: display_unit(display, *dimension),
 			power: *power,
 		})
-		.collect()
+		.collect();
+	factors.sort_by_key(|factor| display.iter().position(|unit| unit.dimension == factor.unit.dimension));
+	factors
 }
 
 /// A unit's amount in SI base units as a literal: km → 1000, cm → 1/20 of 5 cm
@@ -373,6 +381,41 @@ fn si_literal(unit: &'static Unit) -> Option<Node> {
 	number_node(&amount)
 }
 
+/// An amount in `unit` as an SI amount: `40 °C` is 40 + 273.15 (kelvin)
+fn si_amount(amount: Node, unit: &'static Unit) -> Option<Node> {
+	let scaled = folded(amount, Op::Mul, si_literal(unit)?);
+	let zero = si_zero(unit);
+	if zero.is_zero() {
+		return Some(scaled);
+	}
+	match exact_amount(&scaled) {
+		Some(amount) => number_node(&amount.add(&zero)),
+		None => Some(Node::Key(Box::new(scaled), Op::Add, Box::new(number_node(&zero)?))),
+	}
+}
+
+/// Where a unit's 0 lies in SI amounts: 273.15 for °C, 0 for a unit without a zero of its own
+fn si_zero(unit: &Unit) -> Rational {
+	Rational::new(BigInt::from(unit.zero), BigInt::from(base_unit(unit.dimension).factor))
+}
+
+/// The zero of the units a quantity shows in: only a lone temperature unit has one
+fn shown_zero(units: &[Factor]) -> Rational {
+	match units {
+		[Factor { unit, power: 1 }] => si_zero(unit),
+		_ => Rational::integer(0),
+	}
+}
+
+/// `²`, `³` and `^ 2`: the power a quantity is raised to, a whole number written
+fn written_power(op: Op, exponent: &Node) -> Option<i32> {
+	match (op, exponent.drop_meta()) {
+		(Op::Square | Op::Cube, Node::Empty) => Some(exponent_of(op)),
+		(Op::Pow, Node::Number(Number::Int(power))) => i32::try_from(*power).ok(),
+		_ => None,
+	}
+}
+
 fn number_node(amount: &Rational) -> Option<Node> {
 	let numerator = amount.numerator.to_i64()?;
 	Some(match amount.denominator.to_i64()? {
@@ -381,7 +424,7 @@ fn number_node(amount: &Rational) -> Option<Node> {
 	})
 }
 
-fn combined(left: &Signature, right: &Signature, sign: i32) -> Signature {
+fn combined(left: &[(Dimension, i32)], right: &[(Dimension, i32)], sign: i32) -> Signature {
 	let factors: Vec<Factor> = left
 		.iter()
 		.map(|(d, p)| (*d, *p))
@@ -448,7 +491,7 @@ fn globals_declared_in(body: &Node) -> Vec<String> {
 
 fn dimension_error(op: Op, left: &Signature, right: &Signature) -> Stop {
 	Stop::Error(format!(
-		"DimensionError: {} {op} {}: the units do not match",
+		"DimensionError: {} {op} {}: incompatible units",
 		shown(left),
 		shown(right)
 	))
@@ -469,7 +512,8 @@ fn function_definition(node: &Node) -> Option<(String, Definition)> {
 		.iter()
 		.map(|parameter| match parameter.drop_meta() {
 			Node::Symbol(name) => Some(name.clone()),
-			Node::Key(name, Op::Colon, _) => Some(name.name()),
+			// `t = 0.05`: a call giving every argument specialises it; one leaving t out is no specialisation
+			Node::Key(name, Op::Colon | Op::Assign, _) => Some(name.name()),
 			_ => None,
 		})
 		.collect::<Option<Vec<_>>>()?;
@@ -535,6 +579,8 @@ struct Inference {
 	new_definitions: Vec<Node>,
 	/// The finest written unit of each dimension: the unit a quantity shows in unless converted
 	display: Vec<&'static Unit>,
+	/// The temperature units written, each once
+	temperatures: Vec<&'static Unit>,
 	/// The signatures of the `return`s of each function being specialised
 	returns: Vec<Vec<Signature>>,
 	/// Inferring the program's own statements (its last one may be a whole list of quantities)
@@ -564,7 +610,12 @@ fn conversion_target(node: &Node) -> Option<Vec<Factor>> {
 /// The quantity in `quantity` (an SI amount at run time) as text in `units`: `str(amount / 1000) + "km"`, a fraction in parentheses
 fn quantity_text(quantity: Node, units: &[Factor], amount_text: &str) -> Option<Node> {
 	let per_unit = number_node(&super::scale(units, |factor| base_unit(factor.unit.dimension)))?;
-	let amount = Node::Key(Box::new(quantity), Op::Div, Box::new(per_unit));
+	let zero = shown_zero(units);
+	let above_zero = match zero.is_zero() {
+		true => quantity,
+		false => Node::Key(Box::new(quantity), Op::Sub, Box::new(number_node(&zero)?)),
+	};
+	let amount = Node::Key(Box::new(above_zero), Op::Div, Box::new(per_unit));
 	let text =
 		crate::lowering::library_words::substitute(crate::warp_parser::parse(amount_text), AMOUNT_PLACEHOLDER, &amount);
 	Some(Node::Key(
@@ -721,19 +772,39 @@ impl Inference {
 					))),
 				}
 			}
+			Node::Key(amount, Op::Mul, unit) if self.unit_word(&unit).is_some() => {
+				self.amount_in(*amount, self.unit_word(&unit).expect("guarded"))
+			}
 			Node::Key(left, op, right) if matches!(op, Op::Add | Op::Sub | Op::Mul | Op::Div) || op.is_comparison() => {
 				let (left, left_signature) = self.infer(*left)?;
 				let (right, right_signature) = self.infer(*right)?;
 				let signature = self.arithmetic(op, &left_signature, &right_signature)?;
-				Ok((folded(left, op, right), signature))
+				let computed = self.with_one_zero(folded(left, op, right), op, &signature)?;
+				Ok((computed, signature))
 			}
-			Node::Key(base, op @ (Op::Square | Op::Cube), nothing) if matches!(nothing.drop_meta(), Node::Empty) => {
+			// `-3m`: the quantity keeps its units; `-20°C` counts from the zero of °C
+			Node::Key(nothing, Op::Neg, operand) if is_nothing(&nothing) => {
+				let (operand, signature) = self.infer(*operand)?;
+				let negated = Node::Key(nothing, Op::Neg, Box::new(operand));
+				let twice_zero = self
+					.temperature_zero(&signature)
+					.add(&self.temperature_zero(&signature));
+				match twice_zero.is_zero() {
+					true => Ok((negated, signature)),
+					false => {
+						let zero = number_node(&twice_zero).ok_or(Stop::Unsupported)?;
+						Ok((Node::Key(Box::new(zero), Op::Add, Box::new(negated)), signature))
+					}
+				}
+			}
+			Node::Key(base, op, exponent) if written_power(op, &exponent).is_some() => {
+				let power = written_power(op, &exponent).expect("guarded");
 				let (base, signature) = self.infer(*base)?;
 				let signature = signature
 					.iter()
-					.map(|(dimension, power)| (*dimension, power * exponent_of(op)))
+					.map(|(dimension, base_power)| (*dimension, base_power * power))
 					.collect();
-				Ok((Node::Key(Box::new(base), op, nothing), signature))
+				Ok((Node::Key(Box::new(base), op, exponent), signature))
 			}
 			// `if c then a else b`: both branches have one signature
 			Node::Key(if_then, Op::Else, otherwise) if matches!(if_then.drop_meta(), Node::Key(_, Op::Then, _)) => {
@@ -1039,14 +1110,51 @@ impl Inference {
 
 	/// The source of a quantity's text at run time, `amount` an SI amount: `str(amount / (1/100)) + " cm"`
 	fn quantity_source(&self, amount: &str, signature: &Signature, amount_text: &str) -> Result<String, Stop> {
-		let units = display_factors(&self.display, signature);
-		let per_unit =
-			number_node(&super::scale(&units, |factor| base_unit(factor.unit.dimension))).ok_or(Stop::Unsupported)?;
-		let amount_text = amount_text.replace(
-			AMOUNT_PLACEHOLDER,
-			&format!("({amount} / ({}))", per_unit.serialize().trim()),
-		);
-		Ok(format!("{amount_text} + \"{}\"", super::unit_suffix(&units)))
+		let text = self.as_text(crate::warp_parser::parse(amount), signature, None, amount_text)?;
+		Ok(format!("({})", text.serialize()))
+	}
+
+	/// `km` in `5 km` and `5km`: a unit word no variable shadows
+	fn unit_word(&self, node: &Node) -> Option<&'static Unit> {
+		match node.drop_meta() {
+			Node::Symbol(name) if !self.variables.contains_key(name) => unit_named(name),
+			_ => None,
+		}
+	}
+
+	/// `40°C`: an amount in a unit as an SI amount, counted from the unit's zero
+	fn amount_in(&mut self, amount: Node, unit: &'static Unit) -> Result<(Node, Signature), Stop> {
+		let (amount, given) = self.infer(amount)?;
+		let signature = combined(&given, &[(unit.dimension, 1)], 1);
+		Ok((si_amount(amount, unit).ok_or(Stop::Unsupported)?, signature))
+	}
+
+	/// The zero of the unit a temperature shows in, 0 for any other signature
+	fn temperature_zero(&self, signature: &Signature) -> Rational {
+		match signature.as_slice() {
+			[(Dimension::Temperature, 1)] => si_zero(display_unit(&self.display, Dimension::Temperature)),
+			_ => Rational::integer(0),
+		}
+	}
+
+	/// A sum of temperatures counts one zero, of the one unit they are written in: 20 °C + 5 °C is 25 °C
+	fn with_one_zero(&self, computed: Node, op: Op, signature: &Signature) -> Result<Node, Stop> {
+		let zero = self.temperature_zero(signature);
+		if !matches!(op, Op::Add | Op::Sub) || zero.is_zero() {
+			return Ok(computed);
+		}
+		if let [first, second, ..] = self.temperatures.as_slice() {
+			return Err(Stop::Error(format!(
+				"DimensionError: temperatures add in one unit only, given {} and {}",
+				first.name, second.name
+			)));
+		}
+		let undo = if op == Op::Add { Op::Sub } else { Op::Add };
+		Ok(Node::Key(
+			Box::new(computed),
+			undo,
+			Box::new(number_node(&zero).ok_or(Stop::Unsupported)?),
+		))
 	}
 
 	/// A whole list of quantities as text, built at run time: `"[" + join(map(xs, x => str(x / 1/100) + " cm"), " ") + "]"`

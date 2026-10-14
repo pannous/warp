@@ -1,10 +1,9 @@
 //! Tasks: `job = go f(x)`, `await job`, `await any`/`all`, `within` deadlines, task controls and handlers (wiki/async.md)
 use super::*;
-use crate::lowering::nodes::fresh_number;
+use crate::lowering::nodes::{fresh_number, phrase_words};
 
 /// `go f(x)` starts a task, `await job` waits for it
 pub(super) const TASK_WORDS: [&str; 2] = ["go", "await"];
-pub(super) const ONCE_WORD: &str = "once";
 /// What a task signals when it is done, and the controls that would interrupt one
 pub(super) const FINISH_EVENTS: [&str; 5] = ["finishes", "finished", "completes", "ends", "done"];
 pub(super) const TASK_CONTROLS: [&str; 4] = ["stop", "pause", "cancel", "resume"];
@@ -346,10 +345,7 @@ pub(super) fn awaited(node: Node) -> Node {
 			items[0] = symbol(named);
 			Node::List(items, bracket, separator)
 		}
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(awaited(*node)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(awaited),
 		other => other,
 	}
 }
@@ -561,13 +557,7 @@ impl Tasks<'_> {
 		if word(marker_word) != crate::warp_parser::TRY_MARKER {
 			return None;
 		}
-		fn words(node: &Node) -> Vec<Node> {
-			match node.drop_meta() {
-				Node::List(inner, Bracket::None, _) => inner.iter().flat_map(words).collect(),
-				_ => vec![node.clone()],
-			}
-		}
-		self.within(&words(awaited), Some(fallback.clone()))
+		self.within(&phrase_words(std::slice::from_ref(awaited)), Some(fallback.clone()))
 	}
 
 	/// `await job within 100 ms or 0` (P154, asyncio.wait_for, Kotlin withTimeout): the job's result if it ends in
@@ -781,7 +771,7 @@ impl Tasks<'_> {
 	pub(super) fn signal_handler(&self, items: &[Node]) -> Option<Node> {
 		match items {
 			// `once job finishes: body`, `once the download finishes: body`
-			[once, subject @ .., handler] if word(once) == ONCE_WORD => {
+			[once, subject @ .., handler] if word(once) == crate::words::ONCE_WORD => {
 				let subject = subject.iter().find(|item| word(item) != "the")?;
 				let (event, body) = handler_parts(handler)?;
 				self.is_task(subject)

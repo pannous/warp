@@ -1,0 +1,11 @@
+// card wgsl-error: a WGSL error in a shader block is a warp error at its line and column in this file
+size = 8
+broken = shader {
+	@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+		return vec4f(level(at.x), 0.0, 0.0, 1.0);
+	}
+	fn level(band: f32) : f32 {
+		return band / 8.0;
+	}
+}
+paint(broken, size, size)

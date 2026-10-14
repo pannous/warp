@@ -39,6 +39,7 @@ pub mod library_signatures;
 pub mod library_words;
 pub mod list_element_checks;
 pub mod list_phrases;
+pub(crate) mod listeners;
 pub mod markup_tags;
 pub mod match_exhaustive;
 pub mod memoization;

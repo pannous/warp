@@ -92,8 +92,14 @@ fn refused_partial_definition(program: &Node, found: &[Definition]) -> Option<No
 		let Node::Key(name, Op::Define, value) = node.drop_meta() else {
 			return;
 		};
+		// an unused `inc := add 1` arrives as the parameterless function `(inc) := add 1`
+		let parameterless = || {
+			crate::lowering::nodes::function_head(node)
+				.filter(|head| head.parameters().is_empty())
+				.map(|head| head.name)
+		};
 		let (Some(name), Node::List(items, Bracket::None | Bracket::Round, _)) =
-			(name.symbol_name(), value.drop_meta())
+			(name.symbol_name().or_else(parameterless), value.drop_meta())
 		else {
 			return;
 		};

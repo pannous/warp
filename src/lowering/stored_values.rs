@@ -13,7 +13,7 @@
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 pub const STORED_WORD: &str = "stored";
 /// `stored visits default 0`: the value of the first run, the same as `stored visits = 0`
@@ -60,10 +60,7 @@ pub fn lower(program: Node) -> Node {
 		return Node::List(lowered, Bracket::None, Separator::Semicolon);
 	}
 	match program {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(lower(*node)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(lower),
 		Node::List(statements, bracket @ Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
 			let changed = if dev {
 				changed_names(&statements)
@@ -146,12 +143,9 @@ fn dev_kept(statement: &Node, changed: &HashSet<String>, kept_names: &mut HashSe
 
 /// `x = std_io("store", "declare", ["x", v, file])` (v kept when x isn't yet) and the listener saving each change of x
 fn kept(name: &str, default: &Node, file: &str) -> Vec<Node> {
-	let load = parse(&format!(
-		"{name} = std_io(\"store\", \"declare\", [\"{name}\", {DEFAULT_PLACEHOLDER}, {file:?}])"
-	));
-	let load = crate::law::substitute(
-		&load,
-		&HashMap::from([(DEFAULT_PLACEHOLDER.to_string(), default.clone())]),
+	let load = super::nodes::filled(
+		&format!("{name} = std_io(\"store\", \"declare\", [\"{name}\", {DEFAULT_PLACEHOLDER}, {file:?}])"),
+		[(DEFAULT_PLACEHOLDER, default.clone())],
 	);
 	let save = parse(&format!(
 		"on change {name} {{ std_io(\"store\", \"save\", [\"{name}\", value, {file:?}]) }}"

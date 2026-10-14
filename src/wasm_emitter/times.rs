@@ -14,7 +14,7 @@ use crate::time::{
 	TimeForm, INSTANT_AT, MONTHS_SHIFT, OFFSET_SHIFT, TIME_FORMS, TIME_FORM_BITS, TIME_FORM_MASK, TZDATA_FIELD,
 	ZONE_INDEX_MASK,
 };
-use crate::type_kinds::{Kind, KIND_BITS, KIND_MASK};
+use crate::type_kinds::{Kind, KIND_BITS};
 use wasm_encoder::*;
 use Instruction as I;
 
@@ -690,16 +690,7 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::End, I::End]);
 			}
 			f.instruction(&I::End);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(address),
-					I::LocalGet(position),
-					I::LocalGet(address),
-					I::I32Sub,
-				],
-			);
-			s.call(f, "new_text");
+			s.emit_new_text_to(f, address, position);
 		});
 	}
 
@@ -987,16 +978,8 @@ impl WasmGcEmitter {
 			return;
 		};
 		self.emit_field(func, held, 0);
-		Self::emit_list(
-			func,
-			&[
-				I::I64Const(KIND_MASK),
-				I::I64And,
-				I::I64Const(Kind::Time as i64),
-				I::I64Eq,
-				I::If(BlockType::Empty),
-			],
-		);
+		Self::emit_kind_test(func, Kind::Time as i64, I::I64Eq);
+		Self::emit_list(func, &[I::If(BlockType::Empty)]);
 		for form in TIME_FORMS {
 			if let Some(refusal) = form.refusal(name) {
 				self.emit_time_form(func, held);
@@ -1015,16 +998,8 @@ impl WasmGcEmitter {
 	/// `t.tzdata` of a zoned time: the version of the rules it was made with, those of the compilation
 	fn emit_tzdata_lookup(&mut self, func: &mut Function, held: u32) {
 		self.emit_field(func, held, 0);
-		Self::emit_list(
-			func,
-			&[
-				I::I64Const(KIND_MASK),
-				I::I64And,
-				I::I64Const(Kind::Time as i64),
-				I::I64Eq,
-				I::If(BlockType::Empty),
-			],
-		);
+		Self::emit_kind_test(func, Kind::Time as i64, I::I64Eq);
+		Self::emit_list(func, &[I::If(BlockType::Empty)]);
 		self.emit_time_form(func, held);
 		Self::emit_list(
 			func,

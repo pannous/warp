@@ -136,15 +136,7 @@ impl WasmGcEmitter {
 						},
 					],
 				);
-				Self::emit_list(
-					func,
-					&[
-						I::I64Const(KIND_MASK),
-						I::I64And,
-						I::I64Const(Kind::Codepoint as i64),
-						I::I64Eq,
-					],
-				);
+				Self::emit_kind_test(func, Kind::Codepoint as i64, I::I64Eq);
 				self.emit_fail_if(func, list_ops::NOT_A_NUMBER);
 				Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull]);
 				self.emit_call(func, "get_int_value");

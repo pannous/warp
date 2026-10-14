@@ -9,6 +9,10 @@ the wiki).
 (none)
 
 ## Parked (user: "later")
+- unit-edges (warp-operator-shall, cards cleanup-units-answer and cleanup-units-interpreter): eight ignored
+  cleanup-edge tests, kept or retired? Constant `1950 cm ± 50` folding (now at run time, prints right again), ranges
+  with a unit (`1900 - 2000 AD`, descending, the "different units" error, `1900 - 2000 AD == 1950 AD ± 50`: three
+  more tests), the mixed-dimension `5 m ± 1 s` error. Parked 2026-10-13; revisit with card discuss-moving.
 - P237 (warp-class, card natural-phrases): what `numbers.sort by size` means; today a silent no-op. The user leans to
   `size` as an alias chain size → abs → norm (`[3, -5, 2].sort by size` → [2 3 -5]). Open: does `size [3, 4]` stay
   the count 2 (recommended, norm via `norm`) or become the norm 5? Parked 2026-10-09.

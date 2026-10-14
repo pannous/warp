@@ -46,7 +46,7 @@ fn calls(node: &Node, word: &str) -> bool {
 fn defines(program: &[&Node], word: &str) -> bool {
 	program
 		.iter()
-		.any(|statement| function_definition(statement).is_some_and(|(name, _, _)| name == word))
+		.any(|statement| function_definition(statement).is_some_and(|definition| definition.name == word))
 }
 
 fn inline_modules(program: &Node) -> Result<Node, String> {
@@ -91,7 +91,7 @@ fn used_module(statement: &Node) -> Option<String> {
 fn needed_definitions(module: &Node, program: &[&Node]) -> Vec<Node> {
 	let definitions: Vec<(&str, &Node)> = statements(module)
 		.into_iter()
-		.filter_map(|statement| function_definition(statement).map(|(name, _, _)| (name, statement)))
+		.filter_map(|statement| function_definition(statement).map(|definition| (definition.name, statement)))
 		.collect();
 	let mut needed: Vec<&str> = vec![];
 	let mut callers: Vec<&Node> = program.to_vec();

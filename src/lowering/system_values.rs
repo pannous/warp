@@ -203,10 +203,7 @@ fn method_arguments_marked(member: Node, names: &[(&str, bool)]) -> Node {
 				separator,
 			)
 		}
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(method_arguments_marked(*node, names)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| method_arguments_marked(node, names)),
 		field => field,
 	}
 }
@@ -238,10 +235,7 @@ fn clipboard_listeners(node: Node) -> Node {
 				separator,
 			)
 		}
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(clipboard_listeners(*node)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(clipboard_listeners),
 		other => other,
 	}
 }

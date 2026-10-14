@@ -65,14 +65,7 @@ impl PartialEq for Node {
 				Data(d2) => d == d2,
 				_ => false,
 			},
-			Meta { node, .. } => {
-				// Ignore metadata when comparing equality - unwrap both sides
-				let other_unwrapped = match other {
-					Meta { node: other_node, .. } => other_node.as_ref(),
-					_ => other,
-				};
-				node.as_ref().eq(other_unwrapped)
-			}
+			Meta { node, .. } => node.as_ref() == other,
 			Key(k1, op1, v1) => match other {
 				Key(k2, op2, v2) => k1 == k2 && op1 == op2 && v1 == v2,
 				List(items, _, _) if items.len() == 1 => other == self,
@@ -81,7 +74,6 @@ impl PartialEq for Node {
 			List(items1, _, _) => match other {
 				List(items2, _, _) => items1 == items2,
 				// ignore bracket [1,2]=={1,2} and separators [1;2]==[1,2]
-				Meta { node, .. } => self == node.as_ref(), // unwrap Meta
 				// an object of one entry is that entry: {x:1} == x:1 (but {x} is no x)
 				Key(..) => matches!(items1.as_slice(), [only] if only.drop_meta() == other),
 				_ => false,
@@ -99,18 +91,13 @@ impl PartialEq for Node {
 }
 impl PartialEq<str> for Node {
 	fn eq(&self, other: &str) -> bool {
-		match self {
-			Text(s) => s == other,
-			Symbol(s) => s == other,
-			Meta { node, .. } => node.as_ref().eq(other),
-			_ => false,
-		}
+		matches!(self.drop_meta(), Text(s) | Symbol(s) if s == other)
 	}
 }
 
 impl PartialEq<i64> for Node {
 	fn eq(&self, other: &i64) -> bool {
-		match self {
+		match self.drop_meta() {
 			Node::Number(Number::Int(n)) => n == other,
 			Node::Number(Number::Float(f)) => *f == *other as f64,
 			Node::Number(Number::Real(r)) => r.to_f64() == *other as f64,
@@ -118,7 +105,6 @@ impl PartialEq<i64> for Node {
 			True => *other == 1,
 			False => *other == 0,
 			Key(_, _, v) => v.as_ref().eq(other), // Compare value of Key
-			Meta { node, .. } => node.as_ref().eq(other),
 			Data(data) => data
 				.downcast_ref::<crate::units::Quantity>()
 				.is_some_and(|quantity| quantity.is_amount(*other)),
@@ -129,16 +115,13 @@ impl PartialEq<i64> for Node {
 
 impl PartialEq<bool> for Node {
 	fn eq(&self, other: &bool) -> bool {
-		match self {
+		match self.drop_meta() {
 			True => *other,
 			False => !*other,
 			// todo 2 == true? NO only in truthy if(2) …
 			Node::Number(n) => n == &if *other { 1 } else { 0 },
-			// Node::Number(Number::Int(n)) => n == &if *other { 1 } else { 0 },
-			// Node::Number(Number::Float(f)) => *f == if *other { 1.0 } else { 0.0 },
 			Empty => !*other,
-			Symbol(s) => s.is_empty() != *other,
-			Text(s) => s.is_empty() != *other,
+			Symbol(s) | Text(s) => s.is_empty() != *other,
 			List(l, _, _) => l.is_empty() != *other,
 			Key(_, _, v) => v.is_nil() != *other, // Key is true if its value is non-empty
 			_ => false,
@@ -154,14 +137,13 @@ impl PartialEq<i32> for Node {
 
 impl PartialEq<f64> for Node {
 	fn eq(&self, other: &f64) -> bool {
-		match self {
+		match self.drop_meta() {
 			Node::Number(Number::Float(f)) => f == other,
 			Node::Number(Number::Int(n)) => *n as f64 == *other,
 			Node::Number(quotient @ Number::Quotient(..)) => f64::from(*quotient) == *other,
 			Node::Number(Number::BigQuotient(q)) => q.to_f64() == *other,
 			// an exact real equals the f64 nearest to it, up to the rounding of evaluating it in f64
 			Node::Number(Number::Real(r)) => (r.to_f64() - other).abs() <= other.abs() * 4.0 * f64::EPSILON,
-			Meta { node, .. } => node.as_ref().eq(other),
 			_ => false,
 		}
 	}
@@ -169,38 +151,21 @@ impl PartialEq<f64> for Node {
 
 impl PartialEq<&str> for Node {
 	fn eq(&self, other: &&str) -> bool {
-		match self {
-			Text(s) => s == *other,
+		match self.drop_meta() {
 			Char(c) => *c == other.chars().next().unwrap_or('\0'),
-			Symbol(s) => s == *other,
-			Meta { node, .. } => node.as_ref().eq(other),
-			_ => false,
+			node => node == *other,
 		}
-	}
-}
-
-// Reverse comparison: &str == Node
-impl PartialEq<Node> for &str {
-	fn eq(&self, other: &Node) -> bool {
-		other.eq(self)
 	}
 }
 
 impl PartialEq<char> for Node {
 	fn eq(&self, other: &char) -> bool {
-		match self {
+		match self.drop_meta() {
 			Char(c) => c == other,
-			Text(s) => {
-				// Check if string is exactly one char
+			Text(s) | Symbol(s) => {
 				let mut chars = s.chars();
 				chars.next() == Some(*other) && chars.next().is_none()
 			}
-			Symbol(s) => {
-				// Check if string is exactly one char
-				let mut chars = s.chars();
-				chars.next() == Some(*other) && chars.next().is_none()
-			}
-			Meta { node, .. } => node.as_ref().eq(other),
 			_ => false,
 		}
 	}
@@ -212,54 +177,42 @@ impl PartialEq<&Node> for Node {
 	}
 }
 
-// Allow &Node == primitive comparisons
-impl PartialEq<i64> for &Node {
-	fn eq(&self, other: &i64) -> bool {
-		(*self).eq(other)
-	}
+/// `&Node == x` for each x a Node compares with, and the reverse `x == node` (`&str` works via the blanket impl
+/// `PartialEq<&B> for &A`)
+macro_rules! comparisons_by_reference {
+	($($value:ty),*) => {$(
+		impl PartialEq<$value> for &Node {
+			fn eq(&self, other: &$value) -> bool {
+				(*self).eq(other)
+			}
+		}
+	)*};
 }
+comparisons_by_reference!(i64, i32, f64, bool, char);
 
-impl PartialEq<i32> for &Node {
-	fn eq(&self, other: &i32) -> bool {
-		(*self).eq(other)
-	}
+macro_rules! reverse_comparisons {
+	($($value:ty),*) => {$(
+		impl PartialEq<Node> for $value {
+			fn eq(&self, other: &Node) -> bool {
+				other.eq(self)
+			}
+		}
+		impl PartialEq<&Node> for $value {
+			fn eq(&self, other: &&Node) -> bool {
+				(*other).eq(self)
+			}
+		}
+	)*};
 }
+reverse_comparisons!(bool);
 
-impl PartialEq<f64> for &Node {
-	fn eq(&self, other: &f64) -> bool {
-		(*self).eq(other)
-	}
-}
-
-impl PartialEq<bool> for &Node {
-	fn eq(&self, other: &bool) -> bool {
-		(*self).eq(other)
-	}
-}
-
-// Reverse: bool == Node and bool == &Node
-impl PartialEq<Node> for bool {
+impl PartialEq<Node> for &str {
 	fn eq(&self, other: &Node) -> bool {
 		other.eq(self)
 	}
 }
 
-impl PartialEq<&Node> for bool {
-	fn eq(&self, other: &&Node) -> bool {
-		(*other).eq(self)
-	}
-}
-
-impl PartialEq<char> for &Node {
-	fn eq(&self, other: &char) -> bool {
-		(*self).eq(other)
-	}
-}
-
-// Note: &str comparison works via blanket impl: impl<A,B> PartialEq<&B> for &A where A: PartialEq<B>
-// Since Node implements PartialEq<str>, &Node automatically gets PartialEq<&str>
-
-// Allow Box<Node> comparisons with str (for Key nodes with Symbol/Text keys)
+// Box<Node> with str (for Key nodes with Symbol/Text keys)
 impl PartialEq<str> for Box<Node> {
 	fn eq(&self, other: &str) -> bool {
 		self.as_ref().eq(other)
@@ -272,51 +225,34 @@ impl PartialEq<&str> for Box<Node> {
 	}
 }
 
-impl PartialOrd<i32> for Node {
-	fn partial_cmp(&self, other: &i32) -> Option<std::cmp::Ordering> {
-		match self {
-			Node::Number(Number::Int(n)) => (*n as i32).partial_cmp(other),
-			Node::Number(Number::Float(f)) => (*f as i32).partial_cmp(other),
-			Meta { node, .. } => node.as_ref().partial_cmp(other),
-			_ => None,
-		}
-	}
-}
-
-impl PartialOrd<i64> for Node {
-	fn partial_cmp(&self, other: &i64) -> Option<std::cmp::Ordering> {
-		match self {
-			Node::Number(Number::Int(n)) => n.partial_cmp(other),
-			Node::Number(Number::Float(f)) => (*f as i64).partial_cmp(other),
-			Meta { node, .. } => node.as_ref().partial_cmp(other),
-			_ => None,
-		}
-	}
-}
-
+/// A number node orders against a number as f64 does; anything else has no order
 impl PartialOrd<f64> for Node {
 	fn partial_cmp(&self, other: &f64) -> Option<std::cmp::Ordering> {
-		match self {
+		match self.drop_meta() {
 			Node::Number(Number::Int(n)) => (*n as f64).partial_cmp(other),
 			Node::Number(Number::Float(f)) => f.partial_cmp(other),
-			Meta { node, .. } => node.as_ref().partial_cmp(other),
 			_ => None,
 		}
 	}
 }
+
+macro_rules! orders_as_f64 {
+	($($value:ty),*) => {$(
+		impl PartialOrd<$value> for Node {
+			fn partial_cmp(&self, other: &$value) -> Option<std::cmp::Ordering> {
+				self.partial_cmp(&(*other as f64))
+			}
+		}
+	)*};
+}
+orders_as_f64!(i32, i64);
 
 // PartialEq with serde_json::Value for primitive types
 impl PartialEq<serde_json::Value> for Node {
 	fn eq(&self, other: &serde_json::Value) -> bool {
 		use serde_json::Value;
 
-		// Fully unwrap all nested Meta nodes (consistent with Node::eq behavior)
-		let mut self_unwrapped = self;
-		while let Meta { node, .. } = self_unwrapped {
-			self_unwrapped = node.as_ref();
-		}
-
-		match (self_unwrapped, other) {
+		match (self.drop_meta(), other) {
 			// Null comparison
 			(Empty, Value::Null) => true,
 
