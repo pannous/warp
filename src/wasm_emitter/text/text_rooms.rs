@@ -46,59 +46,28 @@ impl WasmGcEmitter {
 		depth: u32,
 	) {
 		let (table, _) = self.text_room_globals();
-		Self::emit_list(
-			func,
-			&[
-				I::GlobalGet(table),
-				I::LocalTee(room),
-				I::If(BlockType::Empty),
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::GlobalGet(table), I::LocalTee(room), I::If(BlockType::Empty),
 				I::Loop(BlockType::Empty),
-				I::LocalGet(left),
-				I::LocalGet(left_length),
-				I::I32Add,
-				I::LocalGet(room),
-				I::I32Load(USED),
-				I::I32Eq,
-				I::LocalGet(room),
-				I::I32Load(USED),
-				I::LocalGet(right_length),
-				I::I32Add,
-				I::LocalGet(room),
-				I::I32Load(END),
-				I::I32LeU,
-				I::I32And,
-				I::If(BlockType::Empty),
-				I::LocalGet(room),
-				I::I32Load(USED),
-			],
-		);
+					I::LocalGet(left), I::LocalGet(left_length), I::I32Add, I::LocalGet(room), I::I32Load(USED),
+					I::I32Eq, I::LocalGet(room), I::I32Load(USED), I::LocalGet(right_length), I::I32Add,
+					I::LocalGet(room), I::I32Load(END), I::I32LeU, I::I32And, I::If(BlockType::Empty),
+						I::LocalGet(room), I::I32Load(USED),
+		]);
 		self.emit_text_field(func, 1, 0);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(right_length),
-				I::MemoryCopy { src_mem: 0, dst_mem: 0 },
-				I::LocalGet(room),
-				I::LocalGet(room),
-				I::I32Load(USED),
-				I::LocalGet(right_length),
-				I::I32Add,
-				I::I32Store(USED),
-				I::Br(depth + 3),
-				I::End,
-				I::LocalGet(room),
-				I::I32Const(ROOM_BYTES),
-				I::I32Add,
-				I::LocalTee(room),
-				I::GlobalGet(table),
-				I::I32Const(ROOMS * ROOM_BYTES),
-				I::I32Add,
-				I::I32LtU,
-				I::BrIf(0),
-				I::End,
-				I::End,
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(right_length), I::MemoryCopy { src_mem: 0, dst_mem: 0 },
+			I::LocalGet(room), I::LocalGet(room), I::I32Load(USED), I::LocalGet(right_length), I::I32Add,
+			I::I32Store(USED),
+			I::Br(depth + 3),
+			I::End,
+			I::LocalGet(room), I::I32Const(ROOM_BYTES), I::I32Add, I::LocalTee(room), I::GlobalGet(table),
+			I::I32Const(ROOMS * ROOM_BYTES), I::I32Add, I::I32LtU, I::BrIf(0),
+			I::End,
+			I::End,
+		]);
 	}
 
 	/// The text just copied to `address` with `length` bytes, the heap starting after it: a long one gets as much room
@@ -119,48 +88,23 @@ impl WasmGcEmitter {
 		);
 		self.emit_memory_room(func, heap, length);
 		Self::emit_list(func, &bump_heap(length));
-		Self::emit_list(
-			func,
-			&[
-				I::GlobalGet(table),
-				I::I32Eqz,
-				I::If(BlockType::Empty),
-				I::I32Const(ROOMS * ROOM_BYTES),
-				I::LocalSet(room),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::GlobalGet(table), I::I32Eqz, I::If(BlockType::Empty),
+				I::I32Const(ROOMS * ROOM_BYTES), I::LocalSet(room),
+		]);
 		self.emit_memory_room(func, heap, room);
 		Self::emit_list(func, &[I::GlobalGet(heap), I::GlobalSet(table)]);
 		Self::emit_list(func, &bump_heap(room));
-		Self::emit_list(
-			func,
-			&[
-				I::End,
-				I::GlobalGet(table),
-				I::GlobalGet(next),
-				I::I32Const(ROOM_BYTES),
-				I::I32Mul,
-				I::I32Add,
-				I::LocalTee(room),
-				I::LocalGet(address),
-				I::LocalGet(length),
-				I::I32Add,
-				I::I32Store(USED),
-				I::LocalGet(room),
-				I::LocalGet(address),
-				I::LocalGet(length),
-				I::I32Const(2),
-				I::I32Mul,
-				I::I32Add,
-				I::I32Store(END),
-				I::GlobalGet(next),
-				I::I32Const(1),
-				I::I32Add,
-				I::I32Const(ROOMS - 1),
-				I::I32And,
-				I::GlobalSet(next),
-				I::End,
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::End,
+			I::GlobalGet(table), I::GlobalGet(next), I::I32Const(ROOM_BYTES), I::I32Mul, I::I32Add, I::LocalTee(room),
+			I::LocalGet(address), I::LocalGet(length), I::I32Add, I::I32Store(USED),
+			I::LocalGet(room), I::LocalGet(address), I::LocalGet(length), I::I32Const(2), I::I32Mul, I::I32Add,
+			I::I32Store(END),
+			I::GlobalGet(next), I::I32Const(1), I::I32Add, I::I32Const(ROOMS - 1), I::I32And, I::GlobalSet(next),
+			I::End,
+		]);
 	}
 }

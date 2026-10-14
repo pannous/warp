@@ -58,18 +58,11 @@ impl WasmGcEmitter {
 				f.instruction(&I::Return);
 			};
 			let put = |f: &mut Function, byte: u8| {
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(position),
-						I::I32Const(byte as i32),
-						I::I32Store8(BYTE),
-						I::LocalGet(position),
-						I::I32Const(1),
-						I::I32Add,
-						I::LocalSet(position),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(position), I::I32Const(byte as i32), I::I32Store8(BYTE),
+					I::LocalGet(position), I::I32Const(1), I::I32Add, I::LocalSet(position),
+				]);
 			};
 			// the digits are written to the scratch bytes behind the text, then copied into place
 			let scratch = |f: &mut Function, offset: &[I<'static>]| {
@@ -87,18 +80,13 @@ impl WasmGcEmitter {
 			};
 			let zeros = |f: &mut Function, how_many: &[I<'static>]| {
 				Self::emit_list(f, how_many);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalSet(count),
-						I::Block(BlockType::Empty),
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalSet(count),
+					I::Block(BlockType::Empty),
 						I::Loop(BlockType::Empty),
-						I::LocalGet(count),
-						I::I32Const(0),
-						I::I32LeS,
-						I::BrIf(1),
-					],
-				);
+							I::LocalGet(count), I::I32Const(0), I::I32LeS, I::BrIf(1),
+				]);
 				put(f, b'0');
 				Self::emit_list(
 					f,
@@ -124,17 +112,11 @@ impl WasmGcEmitter {
 
 			Self::emit_list(f, &[I::I32Const(TEXT_BYTES + SCRATCH_BYTES), I::LocalSet(count)]);
 			s.emit_text_allocation(f, count, address);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(address),
-					I::LocalSet(position),
-					I::LocalGet(x),
-					I::F64Const(0.0.into()),
-					I::F64Lt,
-					I::If(BlockType::Empty),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(address), I::LocalSet(position),
+				I::LocalGet(x), I::F64Const(0.0.into()), I::F64Lt, I::If(BlockType::Empty),
+			]);
 			put(f, b'-');
 			Self::emit_list(f, &[I::LocalGet(x), I::F64Neg, I::LocalSet(x), I::End]);
 
@@ -145,45 +127,25 @@ impl WasmGcEmitter {
 			f.instruction(&I::LocalGet(digits));
 			s.call(f, "int_to_decimal");
 			// how many digits it wrote, and the exponent of the first
-			Self::emit_list(
-				f,
-				&[
-					I::LocalTee(significant),
-					I::I32Const(1),
-					I::I32Sub,
-					I::LocalGet(shift),
-					I::I32Sub,
-					I::LocalSet(exponent),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalTee(significant), I::I32Const(1), I::I32Sub, I::LocalGet(shift), I::I32Sub,
+				I::LocalSet(exponent),
+			]);
 
 			let all = [I::LocalGet(significant)];
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(exponent),
-					I::I32Const(SMALLEST_POSITIONAL),
-					I::I32GeS,
-					I::LocalGet(exponent),
-					I::I32Const(LARGEST_POSITIONAL),
-					I::I32LtS,
-					I::I32And,
-					I::If(BlockType::Empty),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(exponent), I::I32Const(SMALLEST_POSITIONAL), I::I32GeS, I::LocalGet(exponent),
+				I::I32Const(LARGEST_POSITIONAL), I::I32LtS, I::I32And, I::If(BlockType::Empty),
+			]);
 			{
 				// 1500: the digits, then zeros
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(exponent),
-						I::LocalGet(significant),
-						I::I32Const(1),
-						I::I32Sub,
-						I::I32GeS,
-						I::If(BlockType::Empty),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(exponent), I::LocalGet(significant), I::I32Const(1), I::I32Sub, I::I32GeS,
+					I::If(BlockType::Empty),
+				]);
 				copy(f, &[I::I32Const(0)], &all);
 				zeros(f, &[I::LocalGet(exponent), I::LocalGet(significant), I::I32Sub, I::I32Const(1), I::I32Add]);
 				// 1.5: the point after exponent+1 digits
@@ -349,16 +311,11 @@ impl WasmGcEmitter {
 			};
 			let shift_by =
 				|step: i32| [I::LocalGet(shift), I::I32Const(step), I::I32Add, I::LocalSet(shift), I::Br(1), I::End];
-			Self::emit_list(
-				f,
-				&[
-					I::I32Const(MANTISSA_SHIFT),
-					I::LocalGet(exponent),
-					I::I32Sub,
-					I::LocalSet(shift),
-					I::Loop(BlockType::Empty),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I32Const(MANTISSA_SHIFT), I::LocalGet(exponent), I::I32Sub, I::LocalSet(shift),
+				I::Loop(BlockType::Empty),
+			]);
 			scaled(f, &[I::F64Const(0.0.into())]);
 			Self::emit_list(f, &at_least(MOST_17));
 			f.instruction(&I::If(BlockType::Empty));
@@ -368,23 +325,12 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &shift_by(1));
 			f.instruction(&I::End);
 			// hi is whole beyond 2^53: x · 10^shift is whole + fraction
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(hi),
-					I::I64TruncF64S,
-					I::LocalGet(lo),
-					I::F64Floor,
-					I::I64TruncF64S,
-					I::I64Add,
-					I::LocalSet(whole),
-					I::LocalGet(lo),
-					I::LocalGet(lo),
-					I::F64Floor,
-					I::F64Sub,
-					I::LocalSet(fraction),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(hi), I::I64TruncF64S, I::LocalGet(lo), I::F64Floor, I::I64TruncF64S, I::I64Add,
+				I::LocalSet(whole),
+				I::LocalGet(lo), I::LocalGet(lo), I::F64Floor, I::F64Sub, I::LocalSet(fraction),
+			]);
 			// the gaps to the neighbours; the largest float's upper one is its lower
 			let neighbour =
 				|step: i64| [I::LocalGet(x), I::I64ReinterpretF64, I::I64Const(step), I::I64Add, I::F64ReinterpretI64];
@@ -392,19 +338,11 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &neighbour(-1));
 			Self::emit_list(f, &[I::F64Sub, I::LocalTee(below)]);
 			Self::emit_list(f, &neighbour(1));
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(x),
-					I::F64Sub,
-					I::LocalTee(above),
-					I::LocalGet(above),
-					I::F64Const(f64::INFINITY.into()),
-					I::F64Eq,
-					I::Select,
-					I::LocalSet(above),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(x), I::F64Sub, I::LocalTee(above), I::LocalGet(above), I::F64Const(f64::INFINITY.into()),
+				I::F64Eq, I::Select, I::LocalSet(above),
+			]);
 			// an odd last bit excludes a halfway that is whole
 			let odd_and_whole = |f: &mut Function, rounded: I<'static>| {
 				Self::emit_list(
@@ -437,16 +375,10 @@ impl WasmGcEmitter {
 			scaled(f, &[I::LocalGet(above)]);
 			bound(f, I::F64Floor, high, I::I64Sub);
 			// the largest power of ten with a multiple from low to high
+			#[rustfmt::skip]
 			let lowest_multiple = [
-				I::LocalGet(low),
-				I::LocalGet(power),
-				I::I64Add,
-				I::I64Const(1),
-				I::I64Sub,
-				I::LocalGet(power),
-				I::I64DivS,
-				I::LocalGet(power),
-				I::I64Mul,
+				I::LocalGet(low), I::LocalGet(power), I::I64Add, I::I64Const(1), I::I64Sub, I::LocalGet(power),
+				I::I64DivS, I::LocalGet(power), I::I64Mul,
 			];
 			Self::emit_list(f, &[I::I64Const(10), I::LocalSet(power)]);
 			Self::emit_while(
@@ -456,49 +388,17 @@ impl WasmGcEmitter {
 			);
 			Self::emit_list(f, &[I::LocalGet(power), I::I64Const(10), I::I64DivS, I::LocalSet(power)]);
 			// its multiple nearest x · 10^shift: the one below or the next, by twice the distance minus the power
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(whole),
-					I::LocalGet(whole),
-					I::LocalGet(power),
-					I::I64RemS,
-					I::I64Sub,
-					I::LocalSet(multiple),
-					I::LocalGet(whole),
-					I::LocalGet(multiple),
-					I::I64Sub,
-					I::I64Const(2),
-					I::I64Mul,
-					I::LocalGet(power),
-					I::I64Sub,
-					I::F64ConvertI64S,
-					I::LocalGet(fraction),
-					I::F64Const(2.0.into()),
-					I::F64Mul,
-					I::F64Add,
-					I::LocalTee(fraction),
-					I::F64Const(0.0.into()),
-					I::F64Gt,
-					I::LocalGet(fraction),
-					I::F64Const(0.0.into()),
-					I::F64Eq,
-					I::LocalGet(multiple),
-					I::LocalGet(power),
-					I::I64DivS,
-					I::I32WrapI64,
-					I::I32Const(1),
-					I::I32And,
-					I::I32And,
-					I::I32Or,
-					I::I64ExtendI32U,
-					I::LocalGet(power),
-					I::I64Mul,
-					I::LocalGet(multiple),
-					I::I64Add,
-					I::LocalSet(multiple),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(whole), I::LocalGet(whole), I::LocalGet(power), I::I64RemS, I::I64Sub,
+				I::LocalSet(multiple),
+				I::LocalGet(whole), I::LocalGet(multiple), I::I64Sub, I::I64Const(2), I::I64Mul, I::LocalGet(power),
+				I::I64Sub, I::F64ConvertI64S, I::LocalGet(fraction), I::F64Const(2.0.into()), I::F64Mul, I::F64Add,
+				I::LocalTee(fraction), I::F64Const(0.0.into()), I::F64Gt, I::LocalGet(fraction),
+				I::F64Const(0.0.into()), I::F64Eq, I::LocalGet(multiple), I::LocalGet(power), I::I64DivS, I::I32WrapI64,
+				I::I32Const(1), I::I32And, I::I32And, I::I32Or, I::I64ExtendI32U, I::LocalGet(power), I::I64Mul,
+				I::LocalGet(multiple), I::I64Add, I::LocalSet(multiple),
+			]);
 			// kept from low to high
 			let moved_into = |outside: I<'static>, bound: u32, step: I<'static>| {
 				[
@@ -517,15 +417,10 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &moved_into(I::I64GtS, high, I::I64Sub));
 			// without trailing zeros
 			let has_trailing_zero = [I::LocalGet(multiple), I::I64Const(10), I::I64RemS, I::I64Eqz];
+			#[rustfmt::skip]
 			let drop_trailing_zero = [
-				I::LocalGet(multiple),
-				I::I64Const(10),
-				I::I64DivS,
-				I::LocalSet(multiple),
-				I::LocalGet(shift),
-				I::I32Const(1),
-				I::I32Sub,
-				I::LocalSet(shift),
+				I::LocalGet(multiple), I::I64Const(10), I::I64DivS, I::LocalSet(multiple),
+				I::LocalGet(shift), I::I32Const(1), I::I32Sub, I::LocalSet(shift),
 			];
 			Self::emit_while(f, &has_trailing_zero, &drop_trailing_zero);
 			Self::emit_list(f, &[I::LocalGet(multiple), I::LocalGet(shift)]);
@@ -564,52 +459,24 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &rescaled(I::F64Lt, -RESCALE_BY));
 			Self::emit_list(f, &[I::LocalGet(gap), I::F64Const(0.5.into()), I::F64Mul, I::LocalSet(lo)]);
 			let split = |f: &mut Function, value: u32, high: u32, low: u32| {
-				Self::emit_list(
-					f,
-					&[
-						I::F64Const(SPLITTER.into()),
-						I::LocalGet(value),
-						I::F64Mul,
-						I::LocalTee(high),
-						I::LocalGet(high),
-						I::LocalGet(value),
-						I::F64Sub,
-						I::F64Sub,
-						I::LocalSet(high),
-						I::LocalGet(value),
-						I::LocalGet(high),
-						I::F64Sub,
-						I::LocalSet(low),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::F64Const(SPLITTER.into()), I::LocalGet(value), I::F64Mul, I::LocalTee(high), I::LocalGet(high),
+					I::LocalGet(value), I::F64Sub, I::F64Sub, I::LocalSet(high),
+					I::LocalGet(value), I::LocalGet(high), I::F64Sub, I::LocalSet(low),
+				]);
 			};
 			// product = a · b rounded, its error left on the stack
 			let exact_product = |f: &mut Function, a: u32, b: u32| {
 				Self::emit_list(f, &[I::LocalGet(a), I::LocalGet(b), I::F64Mul, I::LocalSet(product)]);
 				split(f, a, a_hi, a_lo);
 				split(f, b, b_hi, b_lo);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(a_hi),
-						I::LocalGet(b_hi),
-						I::F64Mul,
-						I::LocalGet(product),
-						I::F64Sub,
-						I::LocalGet(a_hi),
-						I::LocalGet(b_lo),
-						I::F64Mul,
-						I::F64Add,
-						I::LocalGet(a_lo),
-						I::LocalGet(b_hi),
-						I::F64Mul,
-						I::F64Add,
-						I::LocalGet(a_lo),
-						I::LocalGet(b_lo),
-						I::F64Mul,
-						I::F64Add,
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(a_hi), I::LocalGet(b_hi), I::F64Mul, I::LocalGet(product), I::F64Sub, I::LocalGet(a_hi),
+					I::LocalGet(b_lo), I::F64Mul, I::F64Add, I::LocalGet(a_lo), I::LocalGet(b_hi), I::F64Mul, I::F64Add,
+					I::LocalGet(a_lo), I::LocalGet(b_lo), I::F64Mul, I::F64Add,
+				]);
 			};
 			let clamp = |bound: i32, below: I<'static>| {
 				[
@@ -622,124 +489,58 @@ impl WasmGcEmitter {
 					I::LocalSet(step),
 				]
 			};
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(x),
-					I::LocalSet(hi),
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(x), I::LocalSet(hi),
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(shift),
-					I::I32Eqz,
-					I::BrIf(1),
-					I::LocalGet(shift),
-					I::LocalSet(step),
-				],
-			);
+						I::LocalGet(shift), I::I32Eqz, I::BrIf(1),
+						I::LocalGet(shift), I::LocalSet(step),
+			]);
 			Self::emit_list(f, &clamp(EXACT_POWER, I::I32LtS));
 			Self::emit_list(f, &clamp(-EXACT_POWER, I::I32GtS));
-			Self::emit_list(
-				f,
-				&[
-					I::I32Const(0),
-					I::LocalGet(step),
-					I::I32Sub,
-					I::LocalGet(step),
-					I::LocalGet(step),
-					I::I32Const(0),
-					I::I32LtS,
-					I::Select,
-					I::LocalSet(count),
-					I::F64Const(1.0.into()),
-					I::LocalSet(power),
-					I::LocalGet(lo),
-					I::LocalSet(carried),
-				],
-			);
-			Self::emit_while(
-				f,
-				&[I::LocalGet(count), I::I32Const(0), I::I32GtS],
-				&[
-					I::LocalGet(power),
-					I::F64Const(10.0.into()),
-					I::F64Mul,
-					I::LocalSet(power),
-					I::LocalGet(count),
-					I::I32Const(1),
-					I::I32Sub,
-					I::LocalSet(count),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I32Const(0), I::LocalGet(step), I::I32Sub, I::LocalGet(step), I::LocalGet(step), I::I32Const(0),
+				I::I32LtS, I::Select, I::LocalSet(count),
+				I::F64Const(1.0.into()), I::LocalSet(power),
+				I::LocalGet(lo), I::LocalSet(carried),
+			]);
+			#[rustfmt::skip]
+			Self::emit_while(f, &[I::LocalGet(count), I::I32Const(0), I::I32GtS], &[
+				I::LocalGet(power), I::F64Const(10.0.into()), I::F64Mul, I::LocalSet(power),
+				I::LocalGet(count), I::I32Const(1), I::I32Sub, I::LocalSet(count),
+			]);
 			Self::emit_list(f, &[I::LocalGet(step), I::I32Const(0), I::I32GtS, I::If(BlockType::Empty)]);
 			exact_product(f, hi, power);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(carried),
-					I::LocalGet(power),
-					I::F64Mul,
-					I::F64Add,
-					I::LocalSet(lo),
-					I::LocalGet(product),
-					I::LocalSet(hi),
-					I::Else,
-					I::LocalGet(hi),
-					I::LocalGet(power),
-					I::F64Div,
-					I::LocalSet(quotient),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(carried), I::LocalGet(power), I::F64Mul, I::F64Add, I::LocalSet(lo),
+				I::LocalGet(product), I::LocalSet(hi),
+				I::Else,
+					I::LocalGet(hi), I::LocalGet(power), I::F64Div, I::LocalSet(quotient),
+			]);
 			exact_product(f, quotient, power);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalSet(b_lo),
-					I::LocalGet(hi),
-					I::LocalGet(product),
-					I::F64Sub,
-					I::LocalGet(b_lo),
-					I::F64Sub,
-					I::LocalGet(carried),
-					I::F64Add,
-					I::LocalGet(power),
-					I::F64Div,
-					I::LocalSet(lo),
-					I::LocalGet(quotient),
-					I::LocalSet(hi),
-					I::End,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalSet(b_lo),
+				I::LocalGet(hi), I::LocalGet(product), I::F64Sub, I::LocalGet(b_lo), I::F64Sub, I::LocalGet(carried),
+				I::F64Add, I::LocalGet(power), I::F64Div, I::LocalSet(lo),
+				I::LocalGet(quotient), I::LocalSet(hi),
+				I::End,
+			]);
 			// hi + lo renormalized, so hi is the nearest float
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(hi),
-					I::LocalGet(lo),
-					I::F64Add,
-					I::LocalSet(product),
-					I::LocalGet(lo),
-					I::LocalGet(product),
-					I::LocalGet(hi),
-					I::F64Sub,
-					I::F64Sub,
-					I::LocalSet(lo),
-					I::LocalGet(product),
-					I::LocalSet(hi),
-					I::LocalGet(shift),
-					I::LocalGet(step),
-					I::I32Sub,
-					I::LocalSet(shift),
-					I::Br(0),
-					I::End,
-					I::End,
-					I::LocalGet(hi),
-					I::LocalGet(scale),
-					I::F64Mul,
-					I::LocalGet(lo),
-					I::LocalGet(scale),
-					I::F64Mul,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(hi), I::LocalGet(lo), I::F64Add, I::LocalSet(product),
+				I::LocalGet(lo), I::LocalGet(product), I::LocalGet(hi), I::F64Sub, I::F64Sub, I::LocalSet(lo),
+				I::LocalGet(product), I::LocalSet(hi),
+				I::LocalGet(shift), I::LocalGet(step), I::I32Sub, I::LocalSet(shift),
+				I::Br(0),
+				I::End,
+				I::End,
+				I::LocalGet(hi), I::LocalGet(scale), I::F64Mul, I::LocalGet(lo), I::LocalGet(scale), I::F64Mul,
+			]);
 		});
 	}
 }
