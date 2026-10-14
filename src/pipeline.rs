@@ -100,6 +100,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::welcome_forms::lower_match_arms,
 	// `a of b` is `b.a` (of_lookups.rs), before any pass reads a lookup
 	crate::lowering::of_lookups::lower,
+	// `(p).a` is `p.a` (grouped_receivers.rs), before any pass reads a lookup
+	crate::lowering::grouped_receivers::lower,
 	// `n times {…}`, `n times [x]`, `n times "ab"` as the parser keeps them: a loop, a filled list, a repeated text
 	crate::lowering::times_phrases::lower,
 	// `xs .* 2` as the parser keeps it: the operator applied to each element (broadcasting.rs)
@@ -175,6 +177,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	// `f.effects`, `e.listeners`: the reflection words' dot forms (reflection.rs), before any pass reads them as fields
 	// `help(sound)`, `help(midi)`: a standard module's index, a word's head and comment (word_help.rs), before reflection.rs
 	// answers help(sound) with the signature of the word sound
+	// a function's leading text and the comment above it: its doc (doc_strings.rs), before reflection.rs reads `f.doc`
+	crate::lowering::doc_strings::lower,
 	crate::lowering::word_help::lower,
 	crate::lowering::reflection::lower,
 	// `root` is sqrt (word_operators.rs), before pipes.rs reads `2|square|root`

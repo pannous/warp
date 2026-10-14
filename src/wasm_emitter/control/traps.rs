@@ -124,7 +124,7 @@ pub(crate) fn failed_run(failure: anyhow::Error) -> Node {
 
 /// The characters of an item an unjoinable-item error shows: enough to know it, short enough for one line
 const SHOWN_ITEM_LENGTH: usize = 60;
-const JOINABLE_HINT: &str = "join takes texts and numbers: write the item as text first, as \"{x}\" does";
+const JOINABLE_HINT: &str = "join takes texts and numbers: write the item as text first, \"\\(x)\" or x as text";
 
 /// "not a joinable item: a key ('a'.dump), …" from not_a_joinable_item's detail, the item serialized
 pub(in crate::wasm_emitter) fn unjoinable_message(item: &str) -> String {

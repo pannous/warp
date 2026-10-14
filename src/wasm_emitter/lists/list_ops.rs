@@ -471,6 +471,25 @@ impl WasmGcEmitter {
 				f.instruction(&I::If(BlockType::Empty));
 				s.emit_string_call(f, MAP_WORD, "new_symbol");
 				Self::emit_list(f, &[I::Return, I::End]);
+				for form in crate::time::TIME_FORMS {
+					s.emit_time_form(f, 0);
+					Self::emit_list(
+						f,
+						&[
+							I::I64Const(form as i64),
+							I::I64Eq,
+							I::LocalGet(kind),
+							I::I64Const(KIND_MASK),
+							I::I64And,
+							I::I64Const(Kind::Time as i64),
+							I::I64Eq,
+							I::I32And,
+							I::If(BlockType::Empty),
+						],
+					);
+					s.emit_string_call(f, form.name(), "new_symbol");
+					Self::emit_list(f, &[I::Return, I::End]);
+				}
 				for named in RUN_TIME_TYPE_KINDS {
 					Self::emit_list(
 						f,
