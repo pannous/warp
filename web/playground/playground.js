@@ -222,6 +222,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "clipboard read") return pasteInto(data.shared);
 			if (data.type === "failed") return failed(new Error(data.message));
 			if (data.type === "bundle") return bundled(data.bundle); // deploy.js
+			if (data.type === "members") return answerMembers(data);
 			if (data.type === "sound") return playSound(data);
 			if (data.type === "sound file") return playSoundFile(data.url, data.handle, data.bytes);
 			if (data.type === "file") return offerFile(data.path, data.bytes);
@@ -251,6 +252,22 @@ function startWorker(restarts = 0) {
 	sharePointer();
 	worker.postMessage({ stored: keptValues(), session: keptValues([SESSION_STORE]) });
 	tellEnvironment();
+}
+
+// the members to offer after the code and a dot (completion.js), from the compiler (src/lowering/data/members.rs)
+const memberRequests = new Map(); // request id → its promise's resolve
+let memberRequestCount = 0;
+function askMembers(code) {
+	const id = ++memberRequestCount;
+	return new Promise(resolve => {
+		memberRequests.set(id, resolve);
+		worker.postMessage({ members: code, id });
+	});
+}
+
+function answerMembers({ id, names }) {
+	memberRequests.get(id)?.(names);
+	memberRequests.delete(id);
 }
 
 // the compiler's download (worker.js downloaded), beside the status; without progress for LOADING_STALL_MS it says so,
@@ -1004,7 +1021,7 @@ function initialize() {
 	showReportButton();
 	fillExamples();
 	startWorker();
-	startAssistant(editor, tellEnvironment, startCompletion(editor));
+	startAssistant(editor, tellEnvironment, startCompletion(editor, askMembers));
 	chooseExample(requestedExample() ?? DEFAULT_EXAMPLE);
 	addEventListener("hashchange", chooseExampleOfHash);
 }

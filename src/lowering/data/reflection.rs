@@ -585,6 +585,19 @@ fn module_objects(node: &Node) -> Objects {
 	objects
 }
 
+/// What `dir` lists of a variable known at compile time (members.rs): an instance's fields and methods, a map's keys
+pub(super) fn instance_names(program: &Node, variable: &str) -> Option<Vec<String>> {
+	let layouts = crate::class_methods::class_layouts(program);
+	let classes: Vec<String> = layouts.keys().cloned().collect();
+	let objects =
+		Objects { instances: crate::class_methods::instance_classes(program, &classes), layouts, ..Objects::default() };
+	objects.class_of(variable).and_then(|class| objects.listed(class, DIR_WORD))
+}
+
+pub(super) fn map_keys_of(program: &Node, variable: &str) -> Option<Vec<String>> {
+	map_keys(program).remove(variable)
+}
+
 /// `m = {a:1, b:2}`: m's keys as written
 fn map_keys(node: &Node) -> HashMap<String, Vec<String>> {
 	let mut maps = HashMap::new();
