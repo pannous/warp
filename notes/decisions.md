@@ -23,6 +23,13 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - long-functions (2026-10-14, user): splitting an overly long function is a cleanup card of its own, also when it
   adds a few lines; the "only if it removes lines" rule is for deduplication, not for splits. Split by concept (one
   named helper per case group or per embedded warp template), not into numbered parts.
+- reflection (2026-10-14, user; card module-methods): function objects have .name, .signature, .return_type,
+  .parameters and .doc (a Python-like doc string, card doc-strings); printing one shows its doc as a comment line
+  above its typed .dump. methods(module|class|value) returns the plain list of function objects, descriptions on
+  demand (`methods(math) map .doc`). `use reflection` (reflection mode) adds compilation unit, compiler, origin,
+  wasm index and effects. A bare name never becomes the function value implicitly (a mixed list of functions with
+  and without parameters would behave inconsistently): `function f` stays explicit, and a bare parameterless
+  function inside print/help/dump/type gets a warning that it was called, hint `function now`.
 - cleanup-means-fewer-lines (2026-10-13): the cleanup's metric is lines removed: simpler, more general, more elegant
   code. Splitting files or functions alone is not a goal ("not that impressed by splitting"). Each cleanup merge
   request states its net src/ line delta; baseline 161132 lines of src/*.rs at eaa40f98b.
