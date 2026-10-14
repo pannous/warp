@@ -65,3 +65,13 @@ fn test_cargo_crate_prebuilt_download() {
 		.unwrap_err()
 		.contains("not hosted"));
 }
+
+/// card use-cargo-debug-names: crate components keep their name section, so a trap's backtrace names the Rust
+/// functions (demangled) instead of `<wasm function 2106>` (regex-automata itself is inlined)
+#[test]
+fn test_cargo_crate_trap_names_rust_functions() {
+	fails_with(
+		"use cargo regex; r = regex.Regex(\"a\"); r.shortest_match_at(\"abc\", 10)",
+		"RegexResource",
+	);
+}
