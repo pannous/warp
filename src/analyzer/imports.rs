@@ -24,7 +24,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			.required_functions
 			.extend([crate::wasm_emitter::INT_RUNTIME, "new_int"]),
 		// `as hex`, `byte b`, `as binary`: values shown in hex or binary (cards hex-printing, binary-int)
-		Node::Symbol(name) if let Some(radix) = crate::wasm_emitter::radix::shown_radix(name) => {
+		Node::Symbol(name) if let Some(radix) = crate::wasm_emitter::numbers::radix::shown_radix(name) => {
 			ctx.required_functions
 				.extend([radix.as_function, radix.text_function, "list_join", "new_text"]);
 		}
@@ -34,7 +34,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			// `xs += [v]`, what `xs.add(v)` lowers to: the list grows in place
 			if *op == Op::AddAssign && matches!(value.drop_meta(), Node::List(_, Bracket::Square, _)) {
 				ctx.required_functions
-					.insert(crate::wasm_emitter::list_ops::LIST_EXTEND);
+					.insert(crate::wasm_emitter::lists::list_ops::LIST_EXTEND);
 			}
 			if *op == Op::Assign || op.is_compound_assign() {
 				if let Node::Key(_, Op::Hash, _) = key.drop_meta() {
@@ -47,11 +47,11 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			if *op == Op::As && matches!(value.name().to_lowercase().as_str(), "string" | "str" | "text") {
 				ctx.required_functions.insert("list_join"); // `x as string` of a variable joins its text
 			}
-			if *op == Op::As && value.name().to_lowercase() == crate::wasm_emitter::exact::DECIMAL_WORD {
+			if *op == Op::As && value.name().to_lowercase() == crate::wasm_emitter::numbers::exact::DECIMAL_WORD {
 				ctx.required_functions.extend([
 					"list_join",
 					crate::wasm_emitter::INT_RUNTIME,
-					crate::wasm_emitter::exact::DECIMAL_TEXT,
+					crate::wasm_emitter::numbers::exact::DECIMAL_TEXT,
 				]); // `x as decimal`: a text
 			}
 			if *op == Op::As && value.name().to_lowercase() == "list" {
@@ -79,7 +79,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 						"list_at",
 					]);
 					if let Some(name) = crate::warp_parser::subscript_key(value).and_then(constant_field_name) {
-						let fallbacks = crate::wasm_emitter::list_ops::FIELD_FALLBACKS.iter();
+						let fallbacks = crate::wasm_emitter::lists::list_ops::FIELD_FALLBACKS.iter();
 						if let Some((_, fallback)) = fallbacks.into_iter().find(|(field, _)| *field == name) {
 							ctx.required_functions.insert(fallback);
 						}
@@ -111,7 +111,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 					ctx.required_functions
 						.extend([crate::wasm_emitter::INT_RUNTIME, "new_int"]);
 				}
-				if let Some(word) = crate::wasm_emitter::cells::CELL_WORDS
+				if let Some(word) = crate::wasm_emitter::functions::cells::CELL_WORDS
 					.iter()
 					.find(|word| **word == fn_name)
 				{
@@ -213,7 +213,11 @@ fn functions_of_operator(op: &Op) -> &'static [&'static str] {
 		Op::Inc | Op::Dec | Op::Neg | Op::Abs | Op::Square | Op::Cube => &[INT_RUNTIME, EXACT_ARITHMETIC],
 		Op::Xor => &[INT_RUNTIME],
 		Op::BitAnd | Op::BitOr => &[INT_RUNTIME, IS_TRUTHY],
-		Op::Div | Op::DivAssign => &[INT_RUNTIME, EXACT_ARITHMETIC, crate::wasm_emitter::exact::INT_GCD], // ratios: fast multi-limb division for their gcds
+		Op::Div | Op::DivAssign => &[
+			INT_RUNTIME,
+			EXACT_ARITHMETIC,
+			crate::wasm_emitter::numbers::exact::INT_GCD,
+		], // ratios: fast multi-limb division for their gcds
 		op if op.is_arithmetic() || op.is_compound_assign() => &[INT_RUNTIME, EXACT_ARITHMETIC],
 		op if op.is_shift() => &[INT_RUNTIME],
 		_ => &[],
@@ -223,30 +227,32 @@ fn functions_of_operator(op: &Op) -> &'static [&'static str] {
 /// The runtime functions a call of the word needs, besides what its arguments need
 fn functions_of_call(word: &str) -> &'static [&'static str] {
 	use crate::library_words::{FIELD_WITH, INSTANCE_COPY, MAP_GET_OR, MAP_WITHOUT};
-	use crate::wasm_emitter::times::TIME_FIELD;
+	use crate::wasm_emitter::time::times::TIME_FIELD;
 	match word {
 		ZERO_FILL_CALL => &[ZERO_FILL_CALL],
 		crate::time::INSTANT_AT => &[
 			crate::time::INSTANT_AT,
 			TIME_FIELD,
-			crate::wasm_emitter::list_ops::RETURNED_ERROR,
+			crate::wasm_emitter::lists::list_ops::RETURNED_ERROR,
 		],
-		crate::time::TIME_OF => &[TIME_FIELD, crate::wasm_emitter::list_ops::RETURNED_ERROR],
+		crate::time::TIME_OF => &[TIME_FIELD, crate::wasm_emitter::lists::list_ops::RETURNED_ERROR],
 		crate::time::TIME_IN_ZONE => &[
 			crate::time::TIME_IN_ZONE,
 			TIME_FIELD,
-			crate::wasm_emitter::times::ZONE_NAMES,
-			crate::wasm_emitter::list_ops::RETURNED_ERROR,
+			crate::wasm_emitter::time::times::ZONE_NAMES,
+			crate::wasm_emitter::lists::list_ops::RETURNED_ERROR,
 		],
 		LIST_DROP_LAST => &[LIST_DROP_LAST],
 		crate::declaration_forms::LIST_BECOME => &[crate::declaration_forms::LIST_BECOME],
-		crate::wasm_emitter::library_ops::LIST_SORTED_BY => &[crate::wasm_emitter::library_ops::LIST_SORTED_BY],
+		crate::wasm_emitter::reflection::library_ops::LIST_SORTED_BY => {
+			&[crate::wasm_emitter::reflection::library_ops::LIST_SORTED_BY]
+		}
 		REMOVED_VALUE_CALL => &[MAP_GET_OR, MAP_WITHOUT],
 		INSERT_AT_CALL | INSERT_EITHER_CALL => &[INSERT_AT_CALL],
 		crate::words::IS_TYPE => &[crate::type_tests::NODE_KIND_IN],
-		crate::wasm_emitter::text_builtins::TEXT_FORM => &["list_join"],
+		crate::wasm_emitter::text::text_builtins::TEXT_FORM => &["list_join"],
 		// IEEE bits beyond the fixnums are BigInts
-		crate::wasm_emitter::text_builtins::FLOAT_BITS | crate::wasm_emitter::text_builtins::BITS_FLOAT => {
+		crate::wasm_emitter::text::text_builtins::FLOAT_BITS | crate::wasm_emitter::text::text_builtins::BITS_FLOAT => {
 			&[crate::wasm_emitter::INT_RUNTIME]
 		}
 		FIELD_WITH => &[FIELD_WITH, crate::wasm_emitter::VALUES_EQUAL],
@@ -317,7 +323,7 @@ pub(crate) fn signature_kind(signature: &crate::ffi::FfiSignature) -> Kind {
 pub fn extract_ffi_imports(ctx: &mut Context, node: &Node) {
 	extract_declared_ffi_imports(ctx, node);
 	ctx.ffi_imports
-		.extend(crate::wasm_emitter::component_adapters::imported_signatures());
+		.extend(crate::wasm_emitter::host::component_adapters::imported_signatures());
 	add_implicit_libm_imports(ctx, node);
 	// `use c` makes every libc function the program calls importable (getenv, toupper), not only the built-in few
 	if uses_library(node, "c") {
@@ -492,12 +498,14 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 	match node.drop_meta() {
 		Node::List(items, _, _) => {
 			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
-				if crate::wasm_emitter::linear_arrays::is_linear_word(name) && !ctx.user_functions.contains_key(name) {
-					add_ffi_import(ctx, name, crate::wasm_emitter::linear_arrays::LINEAR_LIBRARY);
+				if crate::wasm_emitter::lists::linear_arrays::is_linear_word(name)
+					&& !ctx.user_functions.contains_key(name)
+				{
+					add_ffi_import(ctx, name, crate::wasm_emitter::lists::linear_arrays::LINEAR_LIBRARY);
 				}
 				// a float map kernel (shared_arrays.rs): the address of its source block in, of the new one out
-				if name.starts_with(crate::wasm_emitter::linear_arrays::LINEAR_MAP_PREFIX) {
-					use crate::wasm_emitter::linear_arrays::{LINEAR_LIBRARY, LINEAR_NEW};
+				if name.starts_with(crate::wasm_emitter::lists::linear_arrays::LINEAR_MAP_PREFIX) {
+					use crate::wasm_emitter::lists::linear_arrays::{LINEAR_LIBRARY, LINEAR_NEW};
 					let kernel: &'static str = Box::leak(name.clone().into_boxed_str());
 					let signature = crate::ffi::FfiSignature::new(
 						kernel,
@@ -513,7 +521,8 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 					add_ffi_import(ctx, crate::host::LOCAL_OFFSET, crate::host::HOST_LIBRARY);
 				}
 				if crate::time::constant_form(items) == Some(crate::time::TimeForm::Zoned) {
-					ctx.required_functions.insert(crate::wasm_emitter::times::ZONE_NAMES);
+					ctx.required_functions
+						.insert(crate::wasm_emitter::time::times::ZONE_NAMES);
 				}
 				if crate::host::HOST_WORDS.contains(&name.as_str()) && !ctx.user_functions.contains_key(name) {
 					add_ffi_import(ctx, name, crate::host::HOST_LIBRARY);
@@ -528,16 +537,16 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 					.contains(&name.as_str())
 					{
 						ctx.required_functions
-							.insert(crate::wasm_emitter::text_builtins::ERROR_OF);
+							.insert(crate::wasm_emitter::text::text_builtins::ERROR_OF);
 					}
 					// an image's pixels cross in one call (wasm_emitter/int_lists.rs)
 					if [crate::host::GPU_RENDER, crate::host::TEXT_COVERAGE].contains(&name.as_str()) {
 						ctx.required_functions
-							.insert(crate::wasm_emitter::int_lists::INTS_TO_LIST);
+							.insert(crate::wasm_emitter::lists::int_lists::INTS_TO_LIST);
 					}
 					if crate::host::INT_LIST_WORDS.contains(&name.as_str()) {
 						ctx.required_functions
-							.insert(crate::wasm_emitter::int_lists::LIST_TO_INTS);
+							.insert(crate::wasm_emitter::lists::int_lists::LIST_TO_INTS);
 					}
 					// a program that controls tasks polls at its loops, where a paused task waits (browser)
 					if name == crate::host::TASK_CONTROL {

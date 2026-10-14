@@ -9,7 +9,7 @@ const BOOL_CALLS: [&str; 8] = [
 	crate::library_words::COLLECTION_CONTAINS,
 	crate::words::IS_TYPE,
 	crate::words::INSTANCE_OF,
-	crate::wasm_emitter::text_builtins::IS_ERROR,
+	crate::wasm_emitter::text::text_builtins::IS_ERROR,
 	crate::library_words::VALUES_SIMILAR,
 	crate::library_words::VALUES_ROUGH,
 	crate::numbers::uncertain::CERTAINLY,

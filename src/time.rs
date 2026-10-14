@@ -9,7 +9,7 @@ pub mod calendar;
 use crate::extensions::numbers::Number;
 use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::wasm_emitter::time_zones::{EARLIER, LATER, REJECT};
+use crate::wasm_emitter::time::time_zones::{EARLIER, LATER, REJECT};
 pub use calendar::{with_rules, Disambiguation, Duration, Overflow, Time, TzRules, Zone, Zoned};
 use std::collections::{HashMap, HashSet};
 
@@ -20,7 +20,7 @@ pub const INSTANT_AT: &str = "instant_at";
 /// time_of(form, position): a time constant at run time, the TimeForm and the calendar::Time position
 pub const TIME_OF: &str = "time_of";
 /// time_in_zone(time, zone index, choice): `t in "Europe/Berlin"` of a time only the run knows
-pub use crate::wasm_emitter::time_zones::TIME_IN_ZONE;
+pub use crate::wasm_emitter::time::time_zones::TIME_IN_ZONE;
 
 /// The calls that build a time node at run time
 pub const TIME_CALLS: [&str; 3] = [INSTANT_AT, TIME_OF, TIME_IN_ZONE];

@@ -47,7 +47,7 @@ pub(crate) fn computed_literal_kind(value: &Node) -> Option<Kind> {
 pub(super) fn exact_literal_value(node: &Node) -> Option<crate::extensions::reals::Rational> {
 	match node.drop_meta() {
 		Node::Number(Number::Float(f)) if Number::is_exact_decimal(*f) => {
-			let (numerator, denominator) = crate::wasm_emitter::exact::decimal_fraction(*f);
+			let (numerator, denominator) = crate::wasm_emitter::numbers::exact::decimal_fraction(*f);
 			Some(crate::extensions::reals::Rational::new(numerator, denominator))
 		}
 		Node::Number(number @ (Number::Int(_) | Number::BigInt(_) | Number::Quotient(..) | Number::BigQuotient(_))) => {
@@ -395,7 +395,7 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 				if let (true, Node::Symbol(name)) = (is_map_word, map.drop_meta()) {
 					indexed.insert(name.clone());
 				}
-				if let (true, Node::Symbol(name)) = (crate::wasm_emitter::cells::is_cell_word(word), map.drop_meta()) {
+				if let (true, Node::Symbol(name)) = (crate::wasm_emitter::functions::cells::is_cell_word(word), map.drop_meta()) {
 					celled.insert(name.clone());
 				}
 			}
@@ -925,9 +925,9 @@ pub(super) fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
 					Node::Symbol(name) => kinds.get(name).or(variable_kinds.get(name)).copied(),
 					// a cell's value is a Node of any kind (a signal's new value, lowering/signals/signal_values.rs)
 					Node::List(items, _, _)
-						if items
-							.first()
-							.is_some_and(|word| word.drop_meta().name() == crate::wasm_emitter::cells::CELL_GET) =>
+						if items.first().is_some_and(|word| {
+							word.drop_meta().name() == crate::wasm_emitter::functions::cells::CELL_GET
+						}) =>
 					{
 						Some(Kind::Empty)
 					}

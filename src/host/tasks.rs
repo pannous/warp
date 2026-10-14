@@ -1005,7 +1005,7 @@ impl TaskTable {
 	/// kernel's results for xs's, mapped in slices by instances of their own on threads of their own; 0 inside a task,
 	/// where the caller maps alone
 	fn split_map(self: &Arc<Self>, caller: &mut Caller<'_, HostState>, kernel: &str, source: i64) -> Result<i64> {
-		use crate::wasm_emitter::linear_arrays::{SPLIT_BLOCK_NEW, SPLIT_KERNEL_PREFIX};
+		use crate::wasm_emitter::lists::linear_arrays::{SPLIT_BLOCK_NEW, SPLIT_KERNEL_PREFIX};
 		if caller.data().in_task {
 			return Ok(0);
 		}
@@ -1039,7 +1039,7 @@ impl TaskTable {
 
 	/// The kernel's results for `cells` (f64s as bytes) into `results`, in an instance of their own
 	fn map_slice(self: &Arc<Self>, kernel: &str, cells: &[u8], results: &mut [u8]) -> Result<()> {
-		use crate::wasm_emitter::linear_arrays::SPLIT_BLOCK_NEW;
+		use crate::wasm_emitter::lists::linear_arrays::SPLIT_BLOCK_NEW;
 		let control = Arc::new(TaskControl {
 			state: Mutex::new(Control::Run),
 			changed: Condvar::new(),

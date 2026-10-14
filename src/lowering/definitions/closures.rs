@@ -439,9 +439,9 @@ impl FunctionValues {
 			Node::Key(left, Op::Add, right) => self.is_function_list(left) || self.is_function_list(right),
 			// a signal's listeners (`listeners of x`, lowering/signals/signal_values.rs)
 			Node::List(items, Bracket::Round, _)
-				if items
-					.first()
-					.is_some_and(|word| word.drop_meta().name() == crate::wasm_emitter::cells::SIGNAL_LISTENERS) =>
+				if items.first().is_some_and(|word| {
+					word.drop_meta().name() == crate::wasm_emitter::functions::cells::SIGNAL_LISTENERS
+				}) =>
 			{
 				true
 			}

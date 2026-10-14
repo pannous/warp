@@ -242,7 +242,7 @@ fn number_value(number: &Number) -> Evaluated {
 		Number::BigQuotient(q) => exact((*q).clone()),
 		// a decimal is the exact fraction it spells (decision exact-decimals): `sqrt(2.0)` is √2, as `sqrt(2)`
 		Number::Float(f) if Number::is_exact_decimal(*f) => {
-			let (n, d) = crate::wasm_emitter::exact::decimal_fraction(*f);
+			let (n, d) = crate::wasm_emitter::numbers::exact::decimal_fraction(*f);
 			exact(Rational::new(n, d))
 		}
 		Number::Float(f) => Ok(Value::Float(*f)),

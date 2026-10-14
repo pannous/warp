@@ -1,6 +1,6 @@
 # Wasm exception handling (`try X else Y`)
 
-`try` compiles to the Wasm 3.0 exception proposal (try_table / throw / tag section), see src/wasm_emitter/try_guard.rs.
+`try` compiles to the Wasm 3.0 exception proposal (try_table / throw / tag section), see src/wasm_emitter/control/try_guard.rs.
 Only `throw` is catchable: engine traps (ref.cast failure, null, stack overflow, fuel) are not, so runtime errors must be
 named error functions that throw (todo.md lists the remaining raw trap sites).
 

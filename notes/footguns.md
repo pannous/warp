@@ -64,7 +64,7 @@
   and where the tz database lives (host import vs embedded table).
 
 ## strings-equality work area (2026-09-27)
-- Fixed: `==`/`!=`/`is` compare by value at runtime (`src/wasm_emitter/equality.rs`: `values_equal`, used when either
+- Fixed: `==`/`!=`/`is` compare by value at runtime (`src/wasm_emitter/reflection/equality.rs`: `values_equal`, used when either
   operand is text, list, ø, an indexed element or a ref-typed variable); `is` parses as `==`; conditions on text/list/ø
   use `is_truthy` (same rule as `Node::is_falsy`) instead of panicking; parser normalizes source to NFC; `#` on text
   decodes UTF-8 code points (bounds checked); `{a:1 a:2}` is a parse error (curly objects only; code may redefine).
@@ -113,7 +113,7 @@
   the parsed program for link/instantiation failures; `x=0.5;x=0` → WASM validation error (int stored into float local).
 
 ## exact-numbers work area (2026-09-27)
-- Fixed: `1/4+1/4` → 0 (analyzer::arithmetic_kind). Exact rationals by default (src/wasm_emitter/exact.rs): an Int handle
+- Fixed: `1/4+1/4` → 0 (analyzer::arithmetic_kind). Exact rationals by default (src/wasm_emitter/numbers/exact.rs): an Int handle
   may point at a `$Ratio{num,den}` of Int payloads in the same heap as `$BigInt`; integer fast paths unchanged, only the
   slow paths dispatch on `is_ratio`. `0.1+0.2==0.3`, `1/3*3==1`, `2^-2` → 0.25 (used to trap), `1/0` → ∞, `0/0` → NaN (den 0).
 - Decimal literals are f64 floats since decision exact-default (2026-10-10): `0.1+0.2 ≈ 0.3`, `==` on floats warns

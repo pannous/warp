@@ -358,7 +358,7 @@ pub(super) fn exact_amount(value: &Node) -> Option<Rational> {
 		Node::Number(Number::Quotient(n, d)) => Some(Rational::new(BigInt::from(*n), BigInt::from(*d))),
 		// a written amount converts as the decimal it spells: 6.5km is 6500m, not 6499.999…m
 		Node::Number(Number::Float(f)) if f.is_finite() => {
-			let (numerator, denominator) = crate::wasm_emitter::exact::decimal_fraction(*f);
+			let (numerator, denominator) = crate::wasm_emitter::numbers::exact::decimal_fraction(*f);
 			Some(Rational::new(numerator, denominator))
 		}
 		_ => None,

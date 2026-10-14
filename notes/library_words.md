@@ -1,6 +1,6 @@
 # Library words: `.word`, `word(x)`, `word x`
 
-`src/lowering/library_words.rs` lowers the three spellings to one call `word(x, args)`; `src/wasm_emitter/library_ops.rs` holds the
+`src/lowering/library_words.rs` lowers the three spellings to one call `word(x, args)`; `src/wasm_emitter/reflection/library_ops.rs` holds the
 runtime functions. A user function or a variable of the same name wins (the word is not lowered).
 
 | Word (aliases) | Args | How |
