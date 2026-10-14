@@ -501,7 +501,9 @@ def member_completion_wrong():
 	"""Tab after `xs.` of a list lists its members, which come from the compiler's worker: the list shows them"""
 	shown = browser("eval", f"""(async () => {{
 		const editor = document.querySelector(".CodeMirror").CodeMirror;
-		editor.focus();
+		// unfocused: the assistant's pause timer, left by the Enter of the checks before, continues only a focused editor
+		// (assistant.js completeAfterPause), which would load Cloudflare's bot check into the checks after this one
+		editor.getInputField().blur();
 		editor.setValue({json.dumps(MEMBER_CODE + ".")}); // not typed (replaceSelection is "+input"): no assistant call
 		editor.setCursor(0, {len(MEMBER_CODE) + 1});
 		editor.triggerOnKeyDown({{ type: "keydown", keyCode: {KEY_CODES["Tab"]}, preventDefault() {{}}, stopPropagation() {{}} }});
