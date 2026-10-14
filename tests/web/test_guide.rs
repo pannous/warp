@@ -34,11 +34,7 @@ fn snippets() -> Vec<Snippet> {
 				.strip_prefix('\n')
 				.and_then(|next| next.strip_prefix(PRINTED_FENCE))
 				.map(|block| block.split(FENCE_END).next().unwrap());
-			Snippet {
-				code: in_scratch_directory(code),
-				value: info.strip_prefix(VALUE_MARK),
-				printed,
-			}
+			Snippet { code: in_scratch_directory(code), value: info.strip_prefix(VALUE_MARK), printed }
 		})
 		.collect()
 }
@@ -48,24 +44,14 @@ fn snippets() -> Vec<Snippet> {
 fn in_scratch_directory(code: &str) -> String {
 	let directory = crate::common::scratch_directory("guide");
 	std::fs::create_dir_all(&directory).unwrap();
-	code.split(WRITE_CALL)
-		.skip(1)
-		.filter_map(|call| call.split('"').next())
-		.fold(code.to_string(), |code, name| {
-			code.replace(
-				&format!("\"{name}\""),
-				&format!("\"{}\"", directory.join(name).display()),
-			)
-		})
+	code.split(WRITE_CALL).skip(1).filter_map(|call| call.split('"').next()).fold(code.to_string(), |code, name| {
+		code.replace(&format!("\"{name}\""), &format!("\"{}\"", directory.join(name).display()))
+	})
 }
 
 // `Examples: welcome, "element events"; samples: hello` → tour names and sample names
 fn linked_examples() -> (Vec<String>, Vec<String>) {
-	let names = |list: &str| {
-		list.split(", ")
-			.map(|name| name.trim().trim_matches('"').to_string())
-			.collect::<Vec<_>>()
-	};
+	let names = |list: &str| list.split(", ").map(|name| name.trim().trim_matches('"').to_string()).collect::<Vec<_>>();
 	let (mut tour, mut samples) = (vec![], vec![]);
 	for line in GUIDE.lines().filter_map(|line| line.strip_prefix(EXAMPLES_LINE)) {
 		let (tour_part, samples_part) = line.split_once("; samples: ").unwrap_or((line, ""));
@@ -81,10 +67,7 @@ fn every_guide_snippet_shows_its_value() {
 		.into_iter()
 		.filter_map(|Snippet { code, value, .. }| {
 			let expected = value?;
-			let shown = evaluate(&code, HashSet::new())["value"]
-				.as_str()
-				.unwrap_or_default()
-				.to_string();
+			let shown = evaluate(&code, HashSet::new())["value"].as_str().unwrap_or_default().to_string();
 			(shown != expected).then(|| format!("{code}  shows {shown}, the guide says {expected}"))
 		})
 		.collect();
@@ -116,25 +99,13 @@ fn every_guide_snippet_prints_what_the_guide_shows() {
 fn every_example_a_chapter_links_exists() {
 	let (tour, samples) = linked_examples();
 	for name in &tour {
-		let key = if name.contains(' ') {
-			format!("\t\"{name}\": {{")
-		} else {
-			format!("\t{name}: {{")
-		};
-		assert!(
-			TOUR.contains(&key),
-			"the guide links the tour example {name}, examples.js has none"
-		);
+		let key = if name.contains(' ') { format!("\t\"{name}\": {{") } else { format!("\t{name}: {{") };
+		assert!(TOUR.contains(&key), "the guide links the tour example {name}, examples.js has none");
 	}
 	for name in &samples {
+		assert!(std::path::Path::new(&format!("samples/{name}.warp")).exists(), "the guide links samples/{name}.warp");
 		assert!(
-			std::path::Path::new(&format!("samples/{name}.warp")).exists(),
-			"the guide links samples/{name}.warp"
-		);
-		assert!(
-			!EXCLUDED_SAMPLES
-				.lines()
-				.any(|line| line.starts_with(&format!("{name}\t"))),
+			!EXCLUDED_SAMPLES.lines().any(|line| line.starts_with(&format!("{name}\t"))),
 			"{name} is not in the playground menu"
 		);
 	}

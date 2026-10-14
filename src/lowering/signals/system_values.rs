@@ -17,7 +17,7 @@ use crate::declarations::word;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::time::NOW_WORD;
-use crate::words::ON_WORD;
+use crate::words::{FLOAT_WORD, ON_WORD};
 use std::collections::HashSet;
 use warp_runtime::host_words::{
 	BATTERY, CLIPBOARD, CLIPBOARD_COUNT, CLIPBOARD_TEXT, HELD_KEY, KEY_CODE_HELD, MOUSE_X, MOUSE_Y, SYSTEM_VALUE,
@@ -31,7 +31,6 @@ pub const SYSTEM_PREFIX: &str = "system·";
 /// Host readings that are measurements, not counts: float sources (decision exact-decimals), so the exact decimals
 /// they meet (`col + 0.5 - mouse_x`) convert once at that use instead of making every later step exact
 const FLOAT_VALUES: [&str; 2] = [MOUSE_X, MOUSE_Y];
-const FLOAT_TYPE: &str = "float";
 const LISTENER_WORDS: [&str; 3] = ["whenever", "once", "on"];
 const CHANGE_WORDS: [&str; 2] = ["change", "changes"];
 /// The timer that keeps a listening program and wakes it for the checks
@@ -51,11 +50,7 @@ pub fn name(program: Node) -> Node {
 	if names.is_empty() {
 		return program;
 	}
-	let program = if bound.contains(CLIPBOARD) {
-		program
-	} else {
-		clipboard_listeners(program)
-	};
+	let program = if bound.contains(CLIPBOARD) { program } else { clipboard_listeners(program) };
 	let marked = mark(program, &names);
 	if marked_names(&marked).is_empty() {
 		return marked;
@@ -113,11 +108,7 @@ pub(crate) fn assigned_symbols(program: &Node) -> HashSet<String> {
 
 /// `held_key`: the name of the key held now, as `on key` names a press (system_signals.rs key_named)
 fn held_key() -> Node {
-	let read = key(
-		symbol(HELD_CODE),
-		Op::Assign,
-		call(SYSTEM_VALUE, vec![Node::Text(KEY_CODE_HELD.to_string())]),
-	);
+	let read = key(symbol(HELD_CODE), Op::Assign, call(SYSTEM_VALUE, vec![Node::Text(KEY_CODE_HELD.to_string())]));
 	let named = crate::system_signals::key_named(symbol(HELD_CODE));
 	Node::List(vec![read, named], Bracket::Curly, Separator::Semicolon)
 }
@@ -154,11 +145,7 @@ fn mark(node: Node, names: &[(&str, bool)]) -> Node {
 				mark(*right, names)
 			};
 			// the target of a dot is read (`now.hour`), a key's name is not
-			let left = if op == Op::Dot {
-				Box::new(mark(*left, names))
-			} else {
-				left
-			};
+			let left = if op == Op::Dot { Box::new(mark(*left, names)) } else { left };
 			Node::Key(left, op, Box::new(right))
 		}
 		Node::List(items, bracket, separator) => {
@@ -221,11 +208,7 @@ fn clipboard_listeners(node: Node) -> Node {
 				return Node::List(items, bracket, separator);
 			}
 			let listener = [symbol(ON_WORD), symbol(CHANGE_WORDS[0]), symbol(CLIPBOARD_COUNT)];
-			Node::List(
-				listener.into_iter().chain(items.into_iter().skip(3)).collect(),
-				bracket,
-				separator,
-			)
+			Node::List(listener.into_iter().chain(items.into_iter().skip(3)).collect(), bracket, separator)
 		}
 		meta @ Node::Meta { .. } => meta.under_meta(clipboard_listeners),
 		other => other,
@@ -272,7 +255,7 @@ fn reading(node: Node) -> Node {
 			if yes_no {
 				key(call, Op::Ne, Node::int(0))
 			} else if measured {
-				key(call, Op::As, symbol(FLOAT_TYPE))
+				key(call, Op::As, symbol(FLOAT_WORD))
 			} else {
 				call
 			}
@@ -300,9 +283,8 @@ fn clipboard_method(call: &Node) -> Option<(String, Vec<Node>)> {
 
 /// `std_io("clipboard", "write", [text])`
 fn clipboard_write(text: Node) -> Node {
-	let call = crate::warp_parser::parse(&format!(
-		"std_io(\"{CLIPBOARD}\", \"{CLIPBOARD_WRITE}\", [{TEXT_PLACEHOLDER}])"
-	));
+	let call =
+		crate::warp_parser::parse(&format!("std_io(\"{CLIPBOARD}\", \"{CLIPBOARD_WRITE}\", [{TEXT_PLACEHOLDER}])"));
 	crate::law::substitute(&call, &[(TEXT_PLACEHOLDER.to_string(), text)].into_iter().collect())
 }
 

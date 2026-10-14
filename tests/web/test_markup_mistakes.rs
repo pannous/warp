@@ -17,34 +17,19 @@ fn warns(code: &str, expected: &str) {
 
 #[test]
 fn an_unknown_attribute_warns() {
-	warns(
-		"a{ hreff: \"/x\" \"go\" }",
-		"hreff is no attribute of a: it shows as text",
-	);
-	warns(
-		"div{ colour: \"red\" \"hi\" }",
-		"colour is no attribute of div: it shows as text",
-	);
-	warns(
-		"p{ onclick: \"go()\" \"x\" }",
-		"onclick is no attribute of p: it shows as text",
-	);
+	warns("a{ hreff: \"/x\" \"go\" }", "hreff is no attribute of a: it shows as text");
+	warns("div{ colour: \"red\" \"hi\" }", "colour is no attribute of div: it shows as text");
+	warns("p{ onclick: \"go()\" \"x\" }", "onclick is no attribute of p: it shows as text");
 }
 
 #[test]
 fn an_unknown_event_warns() {
-	warns(
-		"x = 0\nbutton{ on clik { x = 1 } \"b\" }",
-		"clik is no event of button: the handler shows as text",
-	);
+	warns("x = 0\nbutton{ on clik { x = 1 } \"b\" }", "clik is no event of button: the handler shows as text");
 }
 
 #[test]
 fn an_unknown_input_type_warns() {
-	warns(
-		"input{ type: \"nubmer\" aria-label: \"n\" }",
-		"nubmer is no input type: the browser shows a text field",
-	);
+	warns("input{ type: \"nubmer\" aria-label: \"n\" }", "nubmer is no input type: the browser shows a text field");
 }
 
 // card unknown-tag: a block under a name no element is the text `divv:"hi"`
@@ -57,20 +42,14 @@ fn an_unknown_tag_among_markup_warns() {
 	let warned = warnings_of("div{ divv{ \"hi\" } }");
 	let at_run_time = warp::errors::diagnostic::take_runtime_warnings();
 	assert!(
-		!warned
-			.iter()
-			.chain(&at_run_time)
-			.any(|warning| warning.contains("no attribute")),
+		!warned.iter().chain(&at_run_time).any(|warning| warning.contains("no attribute")),
 		"{warned:?} {at_run_time:?}"
 	);
 }
 
 #[test]
 fn content_of_a_void_element_warns() {
-	warns(
-		"img{ alt: \"a\" \"text inside\" }",
-		"img takes no content: it is dropped",
-	);
+	warns("img{ alt: \"a\" \"text inside\" }", "img takes no content: it is dropped");
 }
 
 #[test]
@@ -129,10 +108,7 @@ fn a_data_map_key_named_like_an_element_is_no_markup() {
 	assert_eq!(warnings_of(code), Vec::<String>::new(), "{code}");
 	let assigned = "r = {status: 200, body: {user: 1}}\nr.body.user";
 	assert_eq!(warnings_of(assigned), Vec::<String>::new(), "{assigned}");
-	warns(
-		"r = {status: 200, page: img{ alt: \"a\" \"text inside\" }}",
-		"img takes no content: it is dropped",
-	);
+	warns("r = {status: 200, page: img{ alt: \"a\" \"text inside\" }}", "img takes no content: it is dropped");
 }
 
 /// card data-map: a map pattern whose element-named key holds a map with a plain key is data too

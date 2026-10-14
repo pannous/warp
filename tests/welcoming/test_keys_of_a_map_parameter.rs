@@ -10,10 +10,7 @@ fn a_key_of_a_one_entry_map_parameter_looks_its_value_up() {
 	is!("g(m) := { r = 0; for k in keys(m) { r = m[k] }; r }; g({b: 2})", 2);
 	is!("g(m) := { r = 0; for k in m.keys { r = m[k] }; r }; g({b: 2})", 2);
 	is!("g(m) := { n = 0; for k in keys(m) { n += 1 }; n }; g({b: 2})", 1);
-	is!(
-		"g(m) := { r = 0; i = 0; while i < 1 { k = keys(m)#1; r = m[k]; i++ }; r }; g({b: 2})",
-		2
-	);
+	is!("g(m) := { r = 0; i = 0; while i < 1 { k = keys(m)#1; r = m[k]; i++ }; r }; g({b: 2})", 2);
 	is!(
 		"merge(a, b) := { out = a; for k in keys(b) { out[k] = b[k] }; out }; string(merge({a: 1}, {b: 2}))",
 		"{a:1 b:2}"
@@ -28,8 +25,5 @@ fn a_key_variable_gets_no_indexing_hint() {
 	assert!(hints.iter().all(|hint| !hint.reason.contains("indexing")), "{hints:?}");
 	let (_, hints) = capture_hints(|| WarpParser::parse("xs = [1 2]; for k in keys(m) { 0 }; xs[0]"));
 	// card g_YiSA (user): a name index never gets the hint now, so a number shows the hint still works after the loop
-	assert!(
-		hints.iter().any(|hint| hint.reason.contains("indexing")),
-		"a number index after the loop: {hints:?}"
-	);
+	assert!(hints.iter().any(|hint| hint.reason.contains("indexing")), "a number index after the loop: {hints:?}");
 }

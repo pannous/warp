@@ -3,11 +3,7 @@
 #[cfg(feature = "native")]
 fn printed(code: &str) -> String {
 	let output = crate::common::printed(code);
-	output
-		.lines()
-		.filter(|line| !line.starts_with('»'))
-		.map(|line| format!("{line}\n"))
-		.collect()
+	output.lines().filter(|line| !line.starts_with('»')).map(|line| format!("{line}\n")).collect()
 }
 
 #[test]

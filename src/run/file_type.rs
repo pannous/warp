@@ -21,10 +21,7 @@ pub fn register() -> Result<PathBuf, String> {
 	let app = Path::new(&home).join("Applications").join(APP_NAME);
 	let warp = warp_command()?;
 	std::fs::create_dir_all(app.parent().expect("in Applications")).map_err(|error| error.to_string())?;
-	run(
-		"osacompile",
-		&["-o", &app.to_string_lossy(), "-e", &applet_script(&warp)],
-	)?;
+	run("osacompile", &["-o", &app.to_string_lossy(), "-e", &applet_script(&warp)])?;
 	let plist = app.join("Contents/Info.plist").to_string_lossy().to_string();
 	for (key, value) in info_entries() {
 		// replaced when there (a second registration), inserted otherwise
@@ -54,16 +51,8 @@ fn applet_script(warp: &Path) -> String {
 }
 
 fn info_entries() -> [(&'static str, String); 3] {
-	let texts = |items: &[&str]| {
-		format!(
-			"[{}]",
-			items
-				.iter()
-				.map(|item| format!("{item:?}"))
-				.collect::<Vec<_>>()
-				.join(",")
-		)
-	};
+	let texts =
+		|items: &[&str]| format!("[{}]", items.iter().map(|item| format!("{item:?}")).collect::<Vec<_>>().join(","));
 	let document_type = format!("[{{\"CFBundleTypeName\":{TYPE_DESCRIPTION:?},\"CFBundleTypeRole\":\"Viewer\",\"LSHandlerRank\":\"Owner\",\"LSItemContentTypes\":[{TYPE_ID:?}]}}]");
 	let exported_type = format!("[{{\"UTTypeIdentifier\":{TYPE_ID:?},\"UTTypeDescription\":{TYPE_DESCRIPTION:?},\"UTTypeConformsTo\":{},\"UTTypeTagSpecification\":{{\"public.filename-extension\":{}}}}}]",
 		texts(&CONFORMS_TO), texts(&EXTENSIONS));
@@ -75,10 +64,7 @@ fn info_entries() -> [(&'static str, String); 3] {
 }
 
 fn run(program: &str, arguments: &[&str]) -> Result<(), String> {
-	let output = Command::new(program)
-		.args(arguments)
-		.output()
-		.map_err(|error| format!("{program}: {error}"))?;
+	let output = Command::new(program).args(arguments).output().map_err(|error| format!("{program}: {error}"))?;
 	match output.status.success() {
 		true => Ok(()),
 		false => Err(format!(

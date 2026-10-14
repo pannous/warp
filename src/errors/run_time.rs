@@ -38,11 +38,7 @@ pub(crate) fn explain_runtime_error(result: Node, exclusive_range: bool) -> Node
 			None => assumed.push((guess, vec![position])),
 		}
 	}
-	lines.extend(
-		assumed
-			.into_iter()
-			.map(|(guess, positions)| format!("assumed at {}: {guess}", positions.join(", "))),
-	);
+	lines.extend(assumed.into_iter().map(|(guess, positions)| format!("assumed at {}: {guess}", positions.join(", "))));
 	match lines.len() {
 		1 => result,
 		_ => crate::node::error(&lines.join("\n  ")),
@@ -54,7 +50,7 @@ pub(crate) fn returned_error_message(value: &Node) -> Option<&Node> {
 	match value.drop_meta() {
 		Node::List(items, Bracket::Round, _)
 			if items.len() == 2
-				&& matches!(items[0].drop_meta(), Node::Symbol(word) if word == "error" || word == crate::wasm_emitter::text::text_builtins::RAISE) =>
+				&& matches!(items[0].drop_meta(), Node::Symbol(word) if word == "error" || word == crate::words::RAISE_WORD) =>
 		{
 			Some(&items[1])
 		}

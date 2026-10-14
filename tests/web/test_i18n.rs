@@ -12,46 +12,19 @@ fn translated(call: &str) -> warp::Node {
 
 #[test]
 fn a_message_takes_its_values_and_plural_form() {
-	eq!(
-		translated("translate(messages, \"en\", \"hello\", { name: \"Ana\" })"),
-		"Hello Ana"
-	);
-	eq!(
-		translated("translate(messages, \"en\", \"cart\", { count: 1 })"),
-		"1 item"
-	);
-	eq!(
-		translated("translate(messages, \"en\", \"cart\", { count: 3 })"),
-		"3 items"
-	);
-	eq!(
-		translated("translate(messages, \"ru\", \"cart\", { count: 21 })"),
-		"21 товар"
-	);
-	eq!(
-		translated("translate(messages, \"ru\", \"cart\", { count: 3 })"),
-		"3 товара"
-	);
-	eq!(
-		translated("translate(messages, \"ru\", \"cart\", { count: 11 })"),
-		"11 товаров"
-	);
+	eq!(translated("translate(messages, \"en\", \"hello\", { name: \"Ana\" })"), "Hello Ana");
+	eq!(translated("translate(messages, \"en\", \"cart\", { count: 1 })"), "1 item");
+	eq!(translated("translate(messages, \"en\", \"cart\", { count: 3 })"), "3 items");
+	eq!(translated("translate(messages, \"ru\", \"cart\", { count: 21 })"), "21 товар");
+	eq!(translated("translate(messages, \"ru\", \"cart\", { count: 3 })"), "3 товара");
+	eq!(translated("translate(messages, \"ru\", \"cart\", { count: 11 })"), "11 товаров");
 }
 
 #[test]
 fn a_missing_translation_comes_from_the_first_language() {
-	eq!(
-		translated("translate(messages, \"ru-RU\", \"hello\", { name: \"Ana\" })"),
-		"Hello Ana"
-	);
-	eq!(
-		translated("translate(messages, \"de\", \"cart\", { count: 2 })"),
-		"2 items"
-	);
-	fails_with(
-		&format!("{MESSAGES}translate(messages, \"en\", \"bye\", {{}})"),
-		"no translation of bye",
-	);
+	eq!(translated("translate(messages, \"ru-RU\", \"hello\", { name: \"Ana\" })"), "Hello Ana");
+	eq!(translated("translate(messages, \"de\", \"cart\", { count: 2 })"), "2 items");
+	fails_with(&format!("{MESSAGES}translate(messages, \"en\", \"bye\", {{}})"), "no translation of bye");
 }
 
 #[test]

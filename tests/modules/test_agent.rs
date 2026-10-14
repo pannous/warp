@@ -38,9 +38,7 @@ fn agent_without_a_key_says_where_to_set_it() {
 
 #[test]
 fn agent_with_a_wrong_key_fails_with_the_api_reason() {
-	with_key(Some("not-a-key"), || {
-		fails_with("agent \"say hi\"", "invalid x-api-key")
-	});
+	with_key(Some("not-a-key"), || fails_with("agent \"say hi\"", "invalid x-api-key"));
 }
 
 #[test]
@@ -50,8 +48,7 @@ fn agent_answers_a_prompt_when_a_key_is_set() {
 		eprintln!("note: {KEY} unset, agent's answer not checked");
 		return;
 	}
-	let answer = warp::wasm_emitter::eval("agent \"Answer with the single word yes, nothing else\"")
-		.serialize()
-		.to_lowercase();
+	let answer =
+		warp::wasm_emitter::eval("agent \"Answer with the single word yes, nothing else\"").serialize().to_lowercase();
 	assert!(answer.contains("yes"), "{answer}");
 }

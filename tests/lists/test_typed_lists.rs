@@ -7,9 +7,7 @@ use wasmparser::{CompositeInnerType, Operator, Parser, Payload, StorageType, Val
 
 /// How many operators in the module of `code` create, read or write an `(array i64)` or `(array f64)`
 fn typed_array_operations(code: &str) -> usize {
-	let bytes = compile(code)
-		.unwrap_or_else(|error| panic!("{code} does not compile: {error:?}"))
-		.bytes;
+	let bytes = compile(code).unwrap_or_else(|error| panic!("{code} does not compile: {error:?}")).bytes;
 	let mut array_types = Vec::new();
 	let mut type_index = 0u32;
 	let mut operations = 0;
@@ -142,10 +140,7 @@ fn test_map_and_element_wise_over_int_arrays() {
 #[test]
 fn test_int_arrays_inside_functions() {
 	assert!(typed_array_operations("def squares(n){out=[]; for i in 1..n {out.add(i*i)}; out}; squares(4)") > 0);
-	assert_eq!(
-		printed("def squares(n){out=[]; for i in 1..n {out.add(i*i)}; out}; squares(4)"),
-		"[1 4 9]"
-	);
+	assert_eq!(printed("def squares(n){out=[]; for i in 1..n {out.add(i*i)}; out}; squares(4)"), "[1 4 9]");
 	is!("def total(){xs=int[5]; for i in 1..5 {xs[i]=i}; sum xs}; total()", 10);
 	is!("def second(){xs=[5,6,7]; xs#2}; second()", 6);
 }
@@ -174,9 +169,7 @@ fn test_float_array_elements_are_numbers() {
 
 /// How many calls the module of `code` makes to the runtime function `name`
 fn calls_to(code: &str, name: &str) -> usize {
-	let bytes = compile(code)
-		.unwrap_or_else(|error| panic!("{code} does not compile: {error:?}"))
-		.bytes;
+	let bytes = compile(code).unwrap_or_else(|error| panic!("{code} does not compile: {error:?}")).bytes;
 	let mut index = None;
 	let mut calls = Vec::new();
 	for payload in Parser::new(0).parse_all(&bytes) {
@@ -217,10 +210,7 @@ fn test_sum_of_a_typed_list_is_one_operation() {
 	is!("xs=[1,2,3]; sum xs", 6);
 	is!("xs=[]; sum xs", 0);
 	// leaving the fixnum range takes the exact loop
-	assert_eq!(
-		eval("xs=[4611686018427387904, 4611686018427387904]; sum xs"),
-		eval("9223372036854775808")
-	);
+	assert_eq!(eval("xs=[4611686018427387904, 4611686018427387904]; sum xs"), eval("9223372036854775808"));
 	assert_eq!(eval("xs=[1.5f,2.5f]; sum xs"), eval("4.0f"));
 	assert_eq!(eval("xs=[1.5f,2.5f]; y = sum xs; y * 2"), eval("8.0f"));
 	assert_eq!(printed("xs=[1,2,3]; [sum xs]"), "[6]");
@@ -239,8 +229,5 @@ fn test_float_written_into_exact_decimal_list() {
 		eval("sqrt(2.0) * 0.75 * 0.75")
 	);
 	// the same for a plain variable read before its float write
-	assert_eq!(
-		eval("x = 0.0; y = 0.0; for i in 0..3 { y = x * 2; x = sqrt(2.0) }; y"),
-		eval("sqrt(2.0) * 2")
-	);
+	assert_eq!(eval("x = 0.0; y = 0.0; for i in 0..3 { y = x * 2; x = sqrt(2.0) }; y"), eval("sqrt(2.0) * 2"));
 }

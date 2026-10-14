@@ -31,10 +31,7 @@ fn is_tests_a_code_pattern() {
 
 #[test]
 fn a_hole_matches_inside_a_call() {
-	is!(
-		"name(code) := match code {\n\tdata($f($x)) => f\n\t_ => \"none\"\n}\nname(data (g(y))) == data g",
-		true
-	);
+	is!("name(code) := match code {\n\tdata($f($x)) => f\n\t_ => \"none\"\n}\nname(data (g(y))) == data g", true);
 }
 
 #[test]

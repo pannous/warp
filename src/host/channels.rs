@@ -41,18 +41,10 @@ thread_local! {
 fn directory(channel: &str) -> PathBuf {
 	let kept = |name: &str| -> String {
 		name.chars()
-			.map(|letter| {
-				if letter.is_alphanumeric() || letter == '-' || letter == '_' {
-					letter
-				} else {
-					'_'
-				}
-			})
+			.map(|letter| if letter.is_alphanumeric() || letter == '-' || letter == '_' { letter } else { '_' })
 			.collect()
 	};
-	channel
-		.split(EVENT_SEPARATOR)
-		.fold(channels_root(), |directory, name| directory.join(kept(name)))
+	channel.split(EVENT_SEPARATOR).fold(channels_root(), |directory, name| directory.join(kept(name)))
 }
 
 /// `/tmp/warp-channels-<user>` on unix: a socket path has at most 104 bytes, and macOS's own temp directory alone takes
@@ -60,9 +52,7 @@ fn directory(channel: &str) -> PathBuf {
 fn channels_root() -> PathBuf {
 	#[cfg(unix)]
 	{
-		let user = std::env::var("USER")
-			.or_else(|_| std::env::var("LOGNAME"))
-			.unwrap_or_default();
+		let user = std::env::var("USER").or_else(|_| std::env::var("LOGNAME")).unwrap_or_default();
 		PathBuf::from(SHORT_TEMP_DIRECTORY).join(format!("{CHANNELS_DIRECTORY}-{user}"))
 	}
 	#[cfg(not(unix))]
@@ -92,22 +82,12 @@ pub fn listen(id: i64, channel: &str) -> Result<(), String> {
 		let socket = std::os::unix::net::UnixDatagram::bind(&path)
 			.map_err(|problem| format!("on message from {channel:?}: {problem}"))?;
 		socket.set_nonblocking(true).map_err(|problem| problem.to_string())?;
-		LISTENERS.with(|listeners| {
-			listeners.borrow_mut().insert(
-				id,
-				Listener {
-					socket,
-					path,
-					received: VecDeque::new(),
-				},
-			)
-		});
+		LISTENERS
+			.with(|listeners| listeners.borrow_mut().insert(id, Listener { socket, path, received: VecDeque::new() }));
 		Ok(())
 	}
 	#[cfg(not(unix))]
-	Err(format!(
-		"on message from {channel:?}: channels need Unix sockets, not here yet"
-	))
+	Err(format!("on message from {channel:?}: channels need Unix sockets, not here yet"))
 }
 
 /// `channel_pending(id)`: how many messages wait, after reading what arrived
@@ -124,9 +104,7 @@ pub fn pending(id: i64) -> i64 {
 		};
 		let mut buffer = vec![0u8; MAX_MESSAGE_BYTES];
 		while let Ok(length) = listener.socket.recv(&mut buffer) {
-			listener
-				.received
-				.push_back(String::from_utf8_lossy(&buffer[..length]).into_owned());
+			listener.received.push_back(String::from_utf8_lossy(&buffer[..length]).into_owned());
 		}
 		listener.received.len() as i64
 	});
@@ -162,10 +140,7 @@ pub fn send(channel: &str, message: &str) -> Result<(), String> {
 			.filter(|path| path.extension().is_some_and(|extension| extension == SOCKET_EXTENSION))
 		{
 			if let Err(problem) = sender.send_to(message.as_bytes(), &path) {
-				if matches!(
-					problem.kind(),
-					std::io::ErrorKind::ConnectionRefused | std::io::ErrorKind::NotFound
-				) {
+				if matches!(problem.kind(), std::io::ErrorKind::ConnectionRefused | std::io::ErrorKind::NotFound) {
 					let _ = std::fs::remove_file(&path);
 				}
 			}
@@ -173,7 +148,5 @@ pub fn send(channel: &str, message: &str) -> Result<(), String> {
 		Ok(())
 	}
 	#[cfg(not(unix))]
-	Err(format!(
-		"broadcast on {channel:?}: channels need Unix sockets, not here yet"
-	))
+	Err(format!("broadcast on {channel:?}: channels need Unix sockets, not here yet"))
 }

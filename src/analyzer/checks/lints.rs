@@ -47,8 +47,13 @@ pub(super) fn braced_it_body(head: &Node, body: &Node) -> Option<Diagnostic> {
 		Node::List(items, _, _) if items.len() == 1 => items[0].clone(),
 		other => other.clone(),
 	};
-	let substituted =
-		|word: &str| crate::library_words::substitute(statement.clone(), "it", &Node::Symbol(word.to_string()));
+	let substituted = |word: &str| {
+		crate::library_words::substitute(
+			statement.clone(),
+			crate::words::IMPLICIT_PARAMETER,
+			&Node::Symbol(word.to_string()),
+		)
+	};
 	let written = format!("{name}({parameter}) := {}", body.serialize().trim());
 	let as_parameter = format!("{name}({parameter}) := {}", substituted(parameter).serialize().trim());
 	let as_lambda = format!("{name}({parameter}) := x => {}", substituted("x").serialize().trim());
@@ -80,7 +85,7 @@ pub(in crate::analyzer) fn it_loop(items: &[Node]) -> Option<(&Node, &Node)> {
 /// Does a function body read its implicit parameter `it`, not counting the `it` its loops bind?
 pub(in crate::analyzer) fn uses_it_outside_loops(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::Symbol(word) => word == "it",
+		Node::Symbol(word) => word == crate::words::IMPLICIT_PARAMETER,
 		Node::Key(left, _, right) => uses_it_outside_loops(left) || uses_it_outside_loops(right),
 		Node::List(items, _, _) if let Some((iterable, _)) = it_loop(items) => uses_it_outside_loops(iterable),
 		Node::List(items, _, _) => items.iter().any(uses_it_outside_loops),
@@ -96,8 +101,11 @@ pub(in crate::analyzer) fn hidden_function_it(body: &Node, warnings: &mut Vec<Di
 	body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node {
 			if it_loop(items).is_some_and(|(_, body)| uses_it(body)) {
-				let renamed =
-					crate::library_words::substitute(node.clone(), "it", &Node::Symbol(FUNCTION_IT.to_string()));
+				let renamed = crate::library_words::substitute(
+					node.clone(),
+					crate::words::IMPLICIT_PARAMETER,
+					&Node::Symbol(FUNCTION_IT.to_string()),
+				);
 				let explicit = format!("{FUNCTION_IT}=it; {}", renamed.serialize().trim());
 				warnings.push(
 					Diagnostic::at(node, "the loop's `it` hides the function's `it` inside the loop")
@@ -118,10 +126,7 @@ pub(super) const NEGATIVE_MODULO_TOPIC: &str = "negative-modulo";
 
 /// `"done"`, `7`: a value written out that is never falsy
 pub(super) fn is_truthy_literal(node: &Node) -> bool {
-	matches!(
-		node.drop_meta(),
-		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True
-	) && !node.is_falsy()
+	matches!(node.drop_meta(), Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True) && !node.is_falsy()
 }
 
 /// `x and y or z` yields z when y is falsy; none when y is written out and never falsy: `done and "done" or "open"`
@@ -153,9 +158,9 @@ pub(in crate::analyzer) fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>
 				let readings = conversion_readings(left, right);
 				let forms: Vec<&str> = readings.iter().map(|(_, form)| form.as_str()).collect();
 				let diagnostic = diagnostic.fix(forms.join(" or "));
-				let diagnostic = readings.iter().fold(diagnostic, |diagnostic, (meaning, form)| {
-					diagnostic.offer(meaning, &written, form)
-				});
+				let diagnostic = readings
+					.iter()
+					.fold(diagnostic, |diagnostic, (meaning, form)| diagnostic.offer(meaning, &written, form));
 				warnings.push(diagnostic.about(ARITHMETIC_CONVERSION_TOPIC, &written));
 			}
 			if *op == Op::Mod && (is_negative(left) || is_negative(right)) {

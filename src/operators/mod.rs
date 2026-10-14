@@ -171,10 +171,7 @@ impl Op {
 
 	/// Check if this is a binary arithmetic operator
 	pub fn is_arithmetic(&self) -> bool {
-		matches!(
-			self,
-			Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Rem | Op::Pow
-		)
+		matches!(self, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Rem | Op::Pow)
 	}
 
 	/// Check if this is a shift operator, defined on exact Ints only
@@ -184,10 +181,7 @@ impl Op {
 
 	/// Check if this is a comparison operator
 	pub fn is_comparison(&self) -> bool {
-		matches!(
-			self,
-			Op::Eq | Op::Ne | Op::Identical | Op::NotIdentical | Op::Lt | Op::Gt | Op::Le | Op::Ge
-		)
+		matches!(self, Op::Eq | Op::Ne | Op::Identical | Op::NotIdentical | Op::Lt | Op::Gt | Op::Le | Op::Ge)
 	}
 
 	/// A comparison or a similarity (≈, ~): `combine 1.1 with 2.2 ≈ 3.3` compares the phrase's value

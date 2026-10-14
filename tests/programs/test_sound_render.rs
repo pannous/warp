@@ -15,16 +15,9 @@ fn rendered(path: &std::path::Path) -> (u32, f64) {
 }
 
 fn run(program: &str) -> String {
-	let run = crate::common::warp_command()
-		.args(["--no-ask", "eval", program])
-		.output()
-		.unwrap();
+	let run = crate::common::warp_command().args(["--no-ask", "eval", program]).output().unwrap();
 	let printed = String::from_utf8_lossy(&run.stdout).into_owned();
-	assert!(
-		run.status.success(),
-		"{printed} {}",
-		String::from_utf8_lossy(&run.stderr)
-	);
+	assert!(run.status.success(), "{printed} {}", String::from_utf8_lossy(&run.stderr));
 	printed
 }
 

@@ -36,10 +36,7 @@ pub(super) fn table_mutation<'a>(
 pub(super) fn insert_code(table: &Table, list: &str, file: &str) -> String {
 	let columns = columns_of(table);
 	let names: Vec<String> = columns.iter().map(|column| format!("{column:?}")).collect();
-	let values: Vec<String> = columns
-		.iter()
-		.map(|column| column_value(table, ADDED, column))
-		.collect();
+	let values: Vec<String> = columns.iter().map(|column| column_value(table, ADDED, column)).collect();
 	let checks = table.references.iter().map(|(field, target)| format!(
 		"if {ADDED}.{field} != ø and {ADDED}.{field}.{ID_FIELD} == 0 {{ raise \"{class}.{field} is no row of {target}: add it to its table first\" }}\n", class = table.class));
 	// the id first: the identity map keeps the instance by it
@@ -64,17 +61,11 @@ pub(super) fn added_to_members(node: &Node, tables: &BTreeMap<String, Table>, fi
 		return None;
 	}
 	let field = field.drop_meta().name();
-	let members = tables
-		.values()
-		.flat_map(|table| &table.members)
-		.find(|members| members.field == field)?;
+	let members = tables.values().flat_map(|table| &table.members).find(|members| members.field == field)?;
 	let (back, table) = (members.back.as_ref()?, &tables[&members.table]);
 	let code = format!("{ADDED} = {VALUE_PLACEHOLDER}\n{ADDED}.{back} = {OWNER_PLACEHOLDER}\nif {ADDED}.{ID_FIELD} > 0 {{ {update} }} else {{\n{insert}\n}}\n{ADDED}",
 		update = column_update(table, ADDED, back, file), insert = insert_code(table, &members.table, file));
-	let lowered = generated(
-		&code,
-		[(VALUE_PLACEHOLDER, value.clone()), (OWNER_PLACEHOLDER, *owner.clone())],
-	);
+	let lowered = generated(&code, [(VALUE_PLACEHOLDER, value.clone()), (OWNER_PLACEHOLDER, *owner.clone())]);
 	Some(Node::List(lowered.children(), Bracket::Round, Separator::Semicolon))
 }
 
@@ -146,22 +137,13 @@ pub(super) fn in_transaction(node: &Node, file: &str, open: &[String]) -> Option
 	let restores: Vec<(String, Node)> = open
 		.iter()
 		.enumerate()
-		.map(|(index, variable)| {
-			(
-				format!("{RESTORE}_{index}"),
-				Node::Symbol(lazy_name(variable, "restore")),
-			)
-		})
+		.map(|(index, variable)| (format!("{RESTORE}_{index}"), Node::Symbol(lazy_name(variable, "restore"))))
 		.collect();
 	let placeholders = restores
 		.iter()
 		.map(|(placeholder, name)| (placeholder.as_str(), name.clone()))
 		.chain([(VALUE_PLACEHOLDER, block.clone())]);
-	Some(Node::List(
-		generated(&code, placeholders).children(),
-		Bracket::Round,
-		Separator::Semicolon,
-	))
+	Some(Node::List(generated(&code, placeholders).children(), Bracket::Round, Separator::Semicolon))
 }
 
 pub(super) fn saved(node: &Node, tables: &BTreeMap<String, Table>, file: &str) -> Option<Node> {
@@ -177,10 +159,7 @@ pub(super) fn saved(node: &Node, tables: &BTreeMap<String, Table>, file: &str) -
 		format!("if {SAVED} is {class} {{\nif {SAVED}.{ID_FIELD} == 0 {{ raise \"save: this {class} has no row: add it to {name} first\" }}\n{updates}\n}}\n",
 			class = table.class, name = variable, updates = updates.join("\n"))
 	});
-	let code = format!(
-		"{SAVED} = {VALUE_PLACEHOLDER}\n{writes}{SAVED}",
-		writes = writes.collect::<String>()
-	);
+	let code = format!("{SAVED} = {VALUE_PLACEHOLDER}\n{writes}{SAVED}", writes = writes.collect::<String>());
 	Some(Node::List(
 		generated(&code, [(VALUE_PLACEHOLDER, value.clone())]).children(),
 		Bracket::Round,

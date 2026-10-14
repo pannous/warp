@@ -12,9 +12,6 @@ fn message_of(code: &str) -> String {
 #[test]
 fn a_raised_text_keeps_its_lines() {
 	assert_eq!(message_of("raise(\"a\nb\")"), "a\nb");
-	assert_eq!(
-		message_of("f = [\"x\", \"y\"]; raise(join(f, \"\\n\") + \"\\nend\")"),
-		"x\ny\nend at 1:17"
-	);
+	assert_eq!(message_of("f = [\"x\", \"y\"]; raise(join(f, \"\\n\") + \"\\nend\")"), "x\ny\nend at 1:17");
 	assert_eq!(message_of("raise(\"a back\\\\slash\")"), "a back\\slash");
 }

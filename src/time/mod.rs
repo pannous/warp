@@ -43,13 +43,8 @@ pub enum TimeForm {
 	Duration = 3,
 	Zoned = 4,
 }
-pub const TIME_FORMS: [TimeForm; 5] = [
-	TimeForm::Instant,
-	TimeForm::Date,
-	TimeForm::Local,
-	TimeForm::Duration,
-	TimeForm::Zoned,
-];
+pub const TIME_FORMS: [TimeForm; 5] =
+	[TimeForm::Instant, TimeForm::Date, TimeForm::Local, TimeForm::Duration, TimeForm::Zoned];
 /// The info bits of the form
 pub const TIME_FORM_MASK: i64 = 7;
 pub const TIME_FORM_BITS: i64 = 3;
@@ -60,6 +55,17 @@ pub const ZONE_INDEX_MASK: i64 = 0xff;
 pub const OFFSET_SHIFT: i64 = TIME_FORM_BITS + 8;
 
 impl TimeForm {
+	/// What `type(t)` says of a time of this form, wiki/time.md's words
+	pub fn name(self) -> &'static str {
+		match self {
+			TimeForm::Instant => "instant",
+			TimeForm::Date => "date",
+			TimeForm::Local => "local time",
+			TimeForm::Duration => "duration",
+			TimeForm::Zoned => "zoned time",
+		}
+	}
+
 	/// Why a time of this form has no field `name`, as the compile-time evaluator says it
 	pub fn refusal(self, name: &str) -> Option<String> {
 		let example = match self {
@@ -91,10 +97,7 @@ fn time_info(value: &Value) -> Option<(i64, i64)> {
 		}
 		Value::Duration(duration) => {
 			let days = (duration.days as u32 as i64) << TIME_FORM_BITS;
-			Some((
-				TimeForm::Duration as i64 | days | duration.months << MONTHS_SHIFT,
-				duration.nanos as i64,
-			))
+			Some((TimeForm::Duration as i64 | days | duration.months << MONTHS_SHIFT, duration.nanos as i64))
 		}
 		_ => None,
 	}
@@ -130,10 +133,7 @@ pub fn constant_form(items: &[Node]) -> Option<TimeForm> {
 
 /// `now` as the program reads it: the host's clock when it runs
 pub fn now_call() -> Node {
-	crate::lowering::nodes::call(
-		INSTANT_AT,
-		vec![crate::lowering::nodes::call(crate::host::CLOCK, vec![])],
-	)
+	crate::lowering::nodes::call(INSTANT_AT, vec![crate::lowering::nodes::call(crate::host::CLOCK, vec![])])
 }
 
 /// A date or time literal as written; validated when evaluated, like `date(2024,2,30)`
@@ -155,9 +155,7 @@ enum Value {
 }
 
 fn form_of(info: i64) -> Option<TimeForm> {
-	TIME_FORMS
-		.into_iter()
-		.find(|form| *form as i64 == info & TIME_FORM_MASK)
+	TIME_FORMS.into_iter().find(|form| *form as i64 == info & TIME_FORM_MASK)
 }
 
 /// A time read back from the run-time node (Kind::Time): its info bits (TimeForm) and position
@@ -175,23 +173,13 @@ pub fn time_node(info: i64, position: Option<Number>) -> Node {
 		}
 		Some(TimeForm::Duration) => {
 			let days = (info >> TIME_FORM_BITS) as i32 as i64;
-			Node::data(Duration {
-				months: info >> MONTHS_SHIFT,
-				days,
-				nanos: position,
-			})
+			Node::data(Duration { months: info >> MONTHS_SHIFT, days, nanos: position })
 		}
 		Some(TimeForm::Zoned) => match calendar::ZONES.get(((info >> TIME_FORM_BITS) & ZONE_INDEX_MASK) as usize) {
 			Some(zone) => {
 				let offset = (info >> OFFSET_SHIFT) * calendar::MINUTE;
 				let (date, clock) = calendar::local_at(position, offset);
-				Node::data(Time::Zoned(Zoned {
-					date,
-					clock,
-					offset,
-					zone,
-					rules: calendar::rules(),
-				}))
+				Node::data(Time::Zoned(Zoned { date, clock, offset, zone, rules: calendar::rules() }))
 			}
 			None => error("unreadable time zone"),
 		},
@@ -304,9 +292,7 @@ fn run_time_constant(value: Value) -> Node {
 }
 
 fn not_at_run_time_yet(written: &str) -> Node {
-	error(&format!(
-		"{written}: this time in a program that runs is not supported yet (card run-time-dates)"
-	))
+	error(&format!("{written}: this time in a program that runs is not supported yet (card run-time-dates)"))
 }
 
 /// Words a constant time expression may hold: no variable, which only the run knows
@@ -415,9 +401,7 @@ fn mentions_time(node: &Node) -> bool {
 		Node::Key(owner, Op::Dot, field) if matches!(field.drop_meta(), Node::Symbol(_)) => mentions_time(owner),
 		Node::Key(left, _, right) => mentions_time(left) || mentions_time(right),
 		Node::List(items, _, _) => {
-			items
-				.first()
-				.is_some_and(|head| head.is_symbol("date") || head.is_symbol(INSTANT_AT))
+			items.first().is_some_and(|head| head.is_symbol("date") || head.is_symbol(INSTANT_AT))
 				|| items.iter().any(mentions_time)
 		}
 		other => time_data(other),
@@ -492,10 +476,7 @@ fn place_in_zone(time: &Node, zone: &Node) -> Result<Value, String> {
 fn zone_argument(word: &str, zone: &Node) -> Result<&'static calendar::Zone, String> {
 	match evaluate(zone)? {
 		Value::Text(name) | Value::Symbol(name) => calendar::zone_named(&name),
-		other => Err(format!(
-			"{word} needs a zone name like \"Europe/Berlin\", got {}",
-			other.kind()
-		)),
+		other => Err(format!("{word} needs a zone name like \"Europe/Berlin\", got {}", other.kind())),
 	}
 }
 
@@ -556,11 +537,9 @@ fn add(args: &[Node]) -> Result<Value, String> {
 	let (overflow, choice) = options("add", rest)?;
 	match (time, duration) {
 		(Value::Time(time), Value::Duration(duration)) => time.add(duration, overflow, choice).map(Value::Time),
-		(time, duration) => Err(format!(
-			"add needs a time and a duration, got {} and {}",
-			time.kind(),
-			duration.kind()
-		)),
+		(time, duration) => {
+			Err(format!("add needs a time and a duration, got {} and {}", time.kind(), duration.kind()))
+		}
 	}
 }
 
@@ -568,15 +547,15 @@ fn add(args: &[Node]) -> Result<Value, String> {
 fn zoned(args: &[Node]) -> Result<Value, String> {
 	let [time, zone, rest @ ..] = args else {
 		return Err(
-			"zoned(local time, \"Zone/Name\", disambiguation: earlier) takes a local time and a zone".to_string(),
+			"zoned(local time, \"Zone/Name\", disambiguation: earlier) takes a local time and a zone".to_string()
 		);
 	};
 	let zone = zone_argument("zoned", zone)?;
 	let (_, choice) = options("zoned", rest)?;
 	match evaluate(time)? {
-		Value::Time(Time::Local(date, clock)) => zone
-			.resolve(date, clock, choice)
-			.map(|zoned| Value::Time(Time::Zoned(zoned))),
+		Value::Time(Time::Local(date, clock)) => {
+			zone.resolve(date, clock, choice).map(|zoned| Value::Time(Time::Zoned(zoned)))
+		}
 		Value::Time(time) => time.in_zone(zone).map(Value::Time),
 		other => Err(format!("zoned needs a local time, got {}", other.kind())),
 	}
@@ -611,12 +590,12 @@ fn binary(left: &Node, op: Op, right: &Node) -> Result<Value, String> {
 fn apply(left: Value, op: Op, right: Value) -> Result<Value, String> {
 	match (left, op, right) {
 		(Value::Time(time), Op::Add, Value::Duration(duration))
-		| (Value::Duration(duration), Op::Add, Value::Time(time)) => time
-			.add(duration, Overflow::Reject, Disambiguation::Reject)
-			.map(Value::Time),
-		(Value::Time(time), Op::Sub, Value::Duration(duration)) => time
-			.add(duration.times(-1), Overflow::Reject, Disambiguation::Reject)
-			.map(Value::Time),
+		| (Value::Duration(duration), Op::Add, Value::Time(time)) => {
+			time.add(duration, Overflow::Reject, Disambiguation::Reject).map(Value::Time)
+		}
+		(Value::Time(time), Op::Sub, Value::Duration(duration)) => {
+			time.add(duration.times(-1), Overflow::Reject, Disambiguation::Reject).map(Value::Time)
+		}
 		(Value::Time(later), Op::Sub, Value::Time(earlier)) => Ok(match later.since(earlier)? {
 			Ok(days) => Value::Int(days),
 			Err(duration) => Value::Duration(duration),

@@ -17,10 +17,7 @@ fn a_float_array_mapped_by_a_kernel_is_linear() {
 		&format!("{FILLED}ys = xs.map(x => x * 0.5 + 1); ys"),
 		list(vec![float(1.5), float(3.0), float(5.5), float(9.0), float(13.5)])
 	);
-	is!(
-		&format!("{FILLED}ys = map(xs, v => -sqrt(v) / 2); [ys#5, #ys]"),
-		list(vec![float(-2.5), int(5)])
-	);
+	is!(&format!("{FILLED}ys = map(xs, v => -sqrt(v) / 2); [ys#5, #ys]"), list(vec![float(-2.5), int(5)]));
 	let numeric = format!("{FILLED}ys = xs.map(x => max(x, 2) * 2); [ys#1, ys#3, #ys]");
 	assert!(!lowered(&numeric).contains(".map"), "{}", lowered(&numeric));
 	is!(&numeric, list(vec![float(4.0), float(18.0), int(5)]));

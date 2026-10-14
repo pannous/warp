@@ -6,9 +6,9 @@
 use super::nodes::{call, key};
 use crate::node::Node;
 use crate::operators::Op;
+use crate::words::LOG_WORD;
 
 const OPERATOR_ALIASES: [(&str, &str, Op); 1] = [("root", "sqrt", Op::Sqrt)];
-const LOG: &str = "log";
 const NATURAL_LOG: &str = "ln";
 
 pub fn lower(node: Node) -> Node {
@@ -18,10 +18,7 @@ pub fn lower(node: Node) -> Node {
 		return node;
 	}
 	let defined = crate::library_words::defined_names(&node);
-	let aliases: Vec<_> = OPERATOR_ALIASES
-		.into_iter()
-		.filter(|(alias, _, _)| !defined.contains(*alias))
-		.collect();
+	let aliases: Vec<_> = OPERATOR_ALIASES.into_iter().filter(|(alias, _, _)| !defined.contains(*alias)).collect();
 	if aliases.is_empty() {
 		return node;
 	}
@@ -48,10 +45,9 @@ fn operators(node: Node, aliases: &[(&str, &str, Op)]) -> Node {
 		}
 		// the pipe stage `| root` (pipes.rs reads the operator alone)
 		stage @ Node::Meta { .. } if crate::pipes::is_pipe_stage(&stage) => match stage {
-			Node::Meta { node, data } if alias_of(&node).is_some() => Node::Meta {
-				node: Box::new(key(Node::Empty, noted(&node), Node::Empty)),
-				data,
-			},
+			Node::Meta { node, data } if alias_of(&node).is_some() => {
+				Node::Meta { node: Box::new(key(Node::Empty, noted(&node), Node::Empty)), data }
+			}
 			other => other.map_children(|child| operators(child, aliases)),
 		},
 		// the stage `then root` (P158, pipes.rs reads the operator alone)
@@ -65,9 +61,9 @@ fn operators(node: Node, aliases: &[(&str, &str, Op)]) -> Node {
 
 fn log_calls(node: Node) -> Node {
 	match node {
-		Node::Key(base, Op::LogBase, value) => call(LOG, vec![log_calls(*value), log_calls(*base)]),
+		Node::Key(base, Op::LogBase, value) => call(LOG_WORD, vec![log_calls(*value), log_calls(*base)]),
 		Node::Key(value, Op::LogOf, base) if base.is_empty_node() => call(NATURAL_LOG, vec![log_calls(*value)]),
-		Node::Key(value, Op::LogOf, base) => call(LOG, vec![log_calls(*value), log_calls(*base)]),
+		Node::Key(value, Op::LogOf, base) => call(LOG_WORD, vec![log_calls(*value), log_calls(*base)]),
 		other => other.map_children(log_calls),
 	}
 }

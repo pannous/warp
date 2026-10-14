@@ -24,7 +24,7 @@ const SETTER_PREFIX: &str = "set ";
 /// program, and named after the file by default
 pub const COMPONENT_RUNTIME: &str = "wasm";
 const COMPONENT_EXTENSION: &str = ".wasm";
-/// `use cargo regex`, `use crate "regex"`: a crate from crates.io, built as a component (src/modules/cargo_crates.rs)
+/// `use cargo regex`, `use crate "regex"`: a crate from crates.io, built as a component (src/modules/cargo_crates/)
 pub const CRATE_RUNTIMES: [&str; 2] = ["cargo", "crate"];
 /// The version after `\0asm` in a core module's header; a component's names another layer
 const CORE_MODULE_VERSION: [u8; 4] = [1, 0, 0, 0];
@@ -78,11 +78,9 @@ fn component_uses(node: Node) -> Node {
 	};
 	match (module, node) {
 		(Some(Err(problem)), _) => crate::node::error(&problem),
-		(Some(Ok(module)), Node::List(_, bracket, separator)) => Node::List(
-			vec![symbol(USE_WORD), symbol(COMPONENT_RUNTIME), module],
-			bracket,
-			separator,
-		),
+		(Some(Ok(module)), Node::List(_, bracket, separator)) => {
+			Node::List(vec![symbol(USE_WORD), symbol(COMPONENT_RUNTIME), module], bracket, separator)
+		}
 		(_, node) => node.map_children(component_uses),
 	}
 }
@@ -107,9 +105,7 @@ fn component_module(items: &[Node]) -> Option<Result<Node, String>> {
 		// `use nothere as x`: no C library without functions
 		(None, Some(_)) if !crate::modules::resolves(&written) => Err(format!(
 			"no module, component or library {written}; {}",
-			listing(&known_components(&crate::modules::beside_program(&format!(
-				"{written}{COMPONENT_EXTENSION}"
-			))))
+			listing(&known_components(&crate::modules::beside_program(&format!("{written}{COMPONENT_EXTENSION}"))))
 		)),
 		(None, _) => return None,
 	};
@@ -119,7 +115,7 @@ fn component_module(items: &[Node]) -> Option<Result<Node, String>> {
 	}))
 }
 
-/// `use cargo regex`, `use crate "regex" as re`: the component src/modules/cargo_crates.rs builds of the crate, `as` the crate's
+/// `use cargo regex`, `use crate "regex" as re`: the component src/modules/cargo_crates/ builds of the crate, `as` the crate's
 /// name by default
 fn crate_module(word: &Node, runtime: &Node, used: &Node) -> Option<Result<Node, String>> {
 	if !word.is_symbol(USE_WORD)
@@ -146,9 +142,7 @@ fn crate_component(name: &str) -> Result<String, String> {
 
 #[cfg(not(feature = "native"))]
 fn crate_component(name: &str) -> Result<String, String> {
-	Err(format!(
-		"use cargo {name} builds the crate with cargo: only the native warp can (card use-cargo-playground)"
-	))
+	Err(format!("use cargo {name} builds the crate with cargo: only the native warp can (card use-cargo-playground)"))
 }
 
 /// `rust_demo.wasm` as written, `rust_demo` where there is a component of that name: natively the file the loader finds,
@@ -177,9 +171,7 @@ fn listing(components: &[String]) -> String {
 }
 
 fn component_name(path: &str) -> String {
-	Path::new(path)
-		.file_stem()
-		.map_or_else(String::new, |stem| stem.to_string_lossy().into_owned())
+	Path::new(path).file_stem().map_or_else(String::new, |stem| stem.to_string_lossy().into_owned())
 }
 
 /// A file that is no component, else none or unreadable here
@@ -198,10 +190,7 @@ fn bare_component(name: &str) -> Option<String> {
 /// The components in the folder of `path`
 #[cfg(not(all(target_arch = "wasm32", not(feature = "native"))))]
 fn known_components(path: &str) -> Vec<String> {
-	let folder = Path::new(path)
-		.parent()
-		.filter(|folder| !folder.as_os_str().is_empty())
-		.unwrap_or(Path::new("."));
+	let folder = Path::new(path).parent().filter(|folder| !folder.as_os_str().is_empty()).unwrap_or(Path::new("."));
 	let files = std::fs::read_dir(folder)
 		.into_iter()
 		.flatten()
@@ -232,12 +221,7 @@ fn bare_component(name: &str) -> Option<String> {
 #[cfg(all(target_arch = "wasm32", not(feature = "native")))]
 fn known_components(_path: &str) -> Vec<String> {
 	crate::web::read_text(PAGE_COMPONENTS).map_or_else(Vec::new, |names| {
-		names
-			.lines()
-			.map(str::trim)
-			.filter(|name| !name.is_empty())
-			.map(String::from)
-			.collect()
+		names.lines().map(str::trim).filter(|name| !name.is_empty()).map(String::from).collect()
 	})
 }
 
@@ -277,11 +261,7 @@ fn foreign_use(items: &[Node]) -> Option<(String, (String, String))> {
 			(module.clone(), module.rsplit('.').next().unwrap_or(&module).to_string())
 		}
 	};
-	let module = if runtime == COMPONENT_RUNTIME {
-		crate::modules::beside_program(&module)
-	} else {
-		module
-	};
+	let module = if runtime == COMPONENT_RUNTIME { crate::modules::beside_program(&module) } else { module };
 	Some((alias, (runtime.clone(), module)))
 }
 
@@ -414,16 +394,7 @@ fn operator_member(op: &Op) -> Option<&'static str> {
 }
 
 fn foreign_call(runtime: &str, module: Node, member: &str, is_call: bool, arguments: Node) -> Node {
-	call(
-		crate::host::FOREIGN_CALL,
-		vec![
-			text(runtime),
-			module,
-			text(member),
-			Node::int(i64::from(is_call)),
-			arguments,
-		],
-	)
+	call(crate::host::FOREIGN_CALL, vec![text(runtime), module, text(member), Node::int(i64::from(is_call)), arguments])
 }
 
 /// `foreign_call("js", receiver, member, call, arguments)`, a JavaScript attribute read or method call: its receiver,
@@ -448,13 +419,7 @@ fn javascript_member(node: &Node) -> Option<(&Node, &str, bool, &Node)> {
 
 /// `operator.member(arguments…)` in `runtime`
 fn operator_call(runtime: &str, member: &str, arguments: Vec<Node>) -> Node {
-	foreign_call(
-		runtime,
-		text(OPERATOR_MODULE),
-		member,
-		true,
-		Node::List(arguments, Bracket::Square, Separator::Space),
-	)
+	foreign_call(runtime, text(OPERATOR_MODULE), member, true, Node::List(arguments, Bracket::Square, Separator::Space))
 }
 
 impl Foreign<'_> {
@@ -473,11 +438,7 @@ impl Foreign<'_> {
 			Node::Key(empty, op @ (Op::Neg | Op::Sub | Op::Hash), operand) if empty.is_empty_node() => {
 				let operand = self.rewrite(operand.as_ref().clone());
 				let runtime = self.foreign_value(&operand)?;
-				Some(operator_call(
-					&runtime,
-					if *op == Op::Hash { "len" } else { "neg" },
-					vec![operand],
-				))
+				Some(operator_call(&runtime, if *op == Op::Hash { "len" } else { "neg" }, vec![operand]))
 			}
 			// `a#2`, 1-based: the item at 0-based 1
 			Node::Key(indexed, Op::Hash, index) => {
@@ -489,20 +450,13 @@ impl Foreign<'_> {
 			Node::Key(left, op, right)
 				if operator_member(op).is_some() && !(*op == Op::Eq && crate::type_tests::begins_type_test(right)) =>
 			{
-				let (left, right) = (
-					self.rewrite(left.as_ref().clone()),
-					self.rewrite(right.as_ref().clone()),
-				);
+				let (left, right) = (self.rewrite(left.as_ref().clone()), self.rewrite(right.as_ref().clone()));
 				if let (Some(_), Some(member)) = (self.component_handle(&left), component_operator(op)) {
 					let arguments = Node::List(vec![right], Bracket::Square, Separator::Space);
 					return Some(foreign_call(COMPONENT_RUNTIME, left, member, true, arguments));
 				}
 				let runtime = self.foreign_value(&left).or_else(|| self.foreign_value(&right))?;
-				Some(operator_call(
-					&runtime,
-					operator_member(op).expect("guarded"),
-					vec![left, right],
-				))
+				Some(operator_call(&runtime, operator_member(op).expect("guarded"), vec![left, right]))
 			}
 			// `count a`, `len(a)`
 			Node::List(items, _, _) if matches!(items.as_slice(), [word, _] if matches!(word.drop_meta(), Node::Symbol(word) if crate::analyzer::is_counting_word(word))) =>
@@ -569,10 +523,7 @@ impl Foreign<'_> {
 		match receiver.drop_meta() {
 			Node::Symbol(name) => match self.modules.get(name) {
 				Some((runtime, module)) if runtime == JS_RUNTIME => global(module, name),
-				_ => Ok(self
-					.web_idl_values
-					.get(name)
-					.map(|interface| (interface.clone(), name.clone()))),
+				_ => Ok(self.web_idl_values.get(name).map(|interface| (interface.clone(), name.clone()))),
 			},
 			// the global inside a lowered read
 			Node::Text(name) => global(name, name),
@@ -587,11 +538,7 @@ impl Foreign<'_> {
 				let Some((interface, path)) = self.web_idl_receiver(inner)? else {
 					return Ok(None);
 				};
-				let read = if is_call {
-					format!("{path}.{member}(…)")
-				} else {
-					format!("{path}.{member}")
-				};
+				let read = if is_call { format!("{path}.{member}(…)") } else { format!("{path}.{member}") };
 				let context = match arguments.drop_meta() {
 					Node::List(items, _, _) => match items.first().map(Node::drop_meta) {
 						Some(Node::Text(context_id)) => {
@@ -625,9 +572,7 @@ impl Foreign<'_> {
 			return Ok(None);
 		};
 		crate::formats::web_idl::check_member(&interface, &path, member, is_call.then_some(count))?;
-		Ok(crate::formats::web_idl::optional_result_type(
-			&interface, member, is_call,
-		))
+		Ok(crate::formats::web_idl::optional_result_type(&interface, member, is_call))
 	}
 
 	/// `URL("https://…")` of `use js URL`: the constructor called, JavaScript's `new`, checked by WebIDL when it declares
@@ -640,19 +585,11 @@ impl Foreign<'_> {
 		let Node::Symbol(name) = head.drop_meta() else {
 			return None;
 		};
-		let (runtime, module) = self
-			.modules
-			.get(name)
-			.filter(|(runtime, _)| runtime == JS_RUNTIME)?
-			.clone();
+		let (runtime, module) = self.modules.get(name).filter(|(runtime, _)| runtime == JS_RUNTIME)?.clone();
 		if let Err(problem) = crate::formats::web_idl::check_constructor(&module, arguments.len()) {
 			return Some(crate::errors::diagnostic::Diagnostic::at(node, problem).into_error());
 		}
-		let arguments = arguments
-			.iter()
-			.cloned()
-			.map(|argument| self.rewrite(argument))
-			.collect();
+		let arguments = arguments.iter().cloned().map(|argument| self.rewrite(argument)).collect();
 		Some(foreign_call(
 			&runtime,
 			Node::Text(module),
@@ -735,97 +672,104 @@ impl Foreign<'_> {
 			return self.rewrite(text);
 		}
 		if let Node::Key(receiver, Op::Dot, member) = node.drop_meta() {
-			let receiver = self.rewrite(receiver.as_ref().clone());
-			if let Some((runtime, module)) = self.receiver(&receiver) {
-				let (member, is_call, arguments) = match member.drop_meta() {
-					Node::Symbol(member) => (member.clone(), false, Node::Empty),
-					Node::List(items, Bracket::Round, _) => match items.split_first() {
-						Some((head, arguments)) if matches!(head.drop_meta(), Node::Symbol(_)) => {
-							let arguments = arguments
-								.iter()
-								.cloned()
-								.map(|argument| self.rewrite(argument))
-								.collect();
-							(
-								head.name(),
-								true,
-								Node::List(arguments, Bracket::Square, Separator::Space),
-							)
-						}
-						_ => return node,
-					},
-					_ => return node,
-				};
-				let result_type = match runtime == JS_RUNTIME {
-					true => self.web_idl_result(&receiver, &member, is_call, &arguments),
-					false => Ok(None),
-				};
-				let call = foreign_call(&runtime, module, &member, is_call, arguments);
-				// a declared text, bool, int or float is a warp value: `crypto.randomUUID().upper()` is warp's upper; `text?` keeps ø
-				return match result_type {
-					Err(problem) => crate::errors::diagnostic::Diagnostic::at(&node, problem).into_error(),
-					Ok(Some(warp_type)) => key(call, Op::As, Node::Symbol(warp_type)),
-					Ok(None) => call,
-				};
-			}
-			// `counter.increment(2)` of a handle a component gave: the method of its resource
-			if let Some(items) = called_method(member)
-				.filter(|items| self.holds_component_value(&receiver) && !is_warp_method(&items[0].name()))
-			{
-				let arguments = items[1..]
-					.iter()
-					.cloned()
-					.map(|argument| self.rewrite(argument))
-					.collect();
-				let arguments = Node::List(arguments, Bracket::Square, Separator::Space);
-				// `semver.Version.parse(t)`: the static function `[static]version.parse` of the component
-				return match type_read(&receiver) {
-					Some((path, resource)) => foreign_call(
-						COMPONENT_RUNTIME,
-						path,
-						&format!("{resource}.{}", items[0].name()),
-						true,
-						arguments,
-					),
-					None => foreign_call(COMPONENT_RUNTIME, receiver, &items[0].name(), true, arguments),
-				};
-			}
-			// `v.major` of a handle whose resource has a method `major` without arguments (a Rust struct's field)
-			if let (Node::Symbol(field), Some((path, kind))) = (member.drop_meta(), self.component_handle(&receiver)) {
-				if has_method(&path, &kind, field) {
-					let arguments = Node::List(vec![], Bracket::Square, Separator::Space);
-					return foreign_call(COMPONENT_RUNTIME, receiver, field, true, arguments);
-				}
+			if let Some(read) = self.member_read(&node, receiver, member) {
+				return read;
 			}
 		}
 		match node {
-			// `d = datetime.date(2020, 1, 2)`: d holds a value of that runtime, `d.isoformat()` asks it
-			Node::Key(target, op @ (Op::Assign | Op::Define), value) => {
-				let value = self.rewrite(*value);
-				if let Some(set) = (op == Op::Assign).then(|| self.member_set(&target, &value)).flatten() {
-					return set;
-				}
-				if let Node::Symbol(name) = target.drop_meta() {
-					match foreign_runtime(&value) {
-						Some(runtime) => self.values.insert(name.clone(), runtime),
-						None => self.values.remove(name),
-					};
-					match self.web_idl_receiver(&value) {
-						Ok(Some((interface, _))) => self.web_idl_values.insert(name.clone(), interface),
-						_ => self.web_idl_values.remove(name),
-					};
-					match called_runtime(&value).is_some_and(|runtime| runtime == COMPONENT_RUNTIME) {
-						true => self.component_values.insert(name.clone()),
-						false => self.component_values.remove(name),
-					};
-					match self.component_handle(&value) {
-						Some(handle) => self.component_handles.insert(name.clone(), handle),
-						None => self.component_handles.remove(name),
-					};
-				}
-				Node::Key(target, op, Box::new(value))
-			}
+			Node::Key(target, op @ (Op::Assign | Op::Define), value) => self.assigned(target, op, *value),
 			other => children_rewritten(other, |child| self.rewrite(child)),
 		}
+	}
+
+	/// `receiver.member` of a foreign module, value or component handle: the call asking its runtime
+	fn member_read(&mut self, node: &Node, receiver: &Node, member: &Node) -> Option<Node> {
+		let receiver = self.rewrite(receiver.clone());
+		if let Some((runtime, module)) = self.receiver(&receiver) {
+			return Some(self.runtime_member(node, &receiver, &runtime, module, member));
+		}
+		// `counter.increment(2)` of a handle a component gave: the method of its resource
+		if let Some(items) = called_method(member)
+			.filter(|items| self.holds_component_value(&receiver) && !is_warp_method(&items[0].name()))
+		{
+			let arguments = self.arguments_rewritten(&items[1..]);
+			// `semver.Version.parse(t)`: the static function `[static]version.parse` of the component
+			return Some(match type_read(&receiver) {
+				Some((path, resource)) => {
+					foreign_call(COMPONENT_RUNTIME, path, &format!("{resource}.{}", items[0].name()), true, arguments)
+				}
+				None => foreign_call(COMPONENT_RUNTIME, receiver, &items[0].name(), true, arguments),
+			});
+		}
+		// `v.major` of a handle whose resource has a method `major` without arguments (a Rust struct's field)
+		if let (Node::Symbol(field), Some((path, kind))) = (member.drop_meta(), self.component_handle(&receiver)) {
+			if has_method(&path, &kind, field) {
+				return Some(foreign_call(COMPONENT_RUNTIME, receiver, field, true, self.arguments_rewritten(&[])));
+			}
+		}
+		None
+	}
+
+	/// `module.member` or `module.member(arguments)` of the runtime holding the module or value; a member it can't
+	/// call stays the `node` it is
+	fn runtime_member(&mut self, node: &Node, receiver: &Node, runtime: &str, module: Node, member: &Node) -> Node {
+		let (member, is_call, arguments) = match member.drop_meta() {
+			Node::Symbol(member) => (member.clone(), false, Node::Empty),
+			Node::List(items, Bracket::Round, _) => match items.split_first() {
+				Some((head, arguments)) if matches!(head.drop_meta(), Node::Symbol(_)) => {
+					(head.name(), true, self.arguments_rewritten(arguments))
+				}
+				_ => return node.clone(),
+			},
+			_ => return node.clone(),
+		};
+		let result_type = match runtime == JS_RUNTIME {
+			true => self.web_idl_result(receiver, &member, is_call, &arguments),
+			false => Ok(None),
+		};
+		let call = foreign_call(runtime, module, &member, is_call, arguments);
+		// a declared text, bool, int or float is a warp value: `crypto.randomUUID().upper()` is warp's upper; `text?` keeps ø
+		match result_type {
+			Err(problem) => crate::errors::diagnostic::Diagnostic::at(node, problem).into_error(),
+			Ok(Some(warp_type)) => key(call, Op::As, Node::Symbol(warp_type)),
+			Ok(None) => call,
+		}
+	}
+
+	fn arguments_rewritten(&mut self, arguments: &[Node]) -> Node {
+		let arguments = arguments.iter().cloned().map(|argument| self.rewrite(argument)).collect();
+		Node::List(arguments, Bracket::Square, Separator::Space)
+	}
+
+	/// `d = datetime.date(2020, 1, 2)`: d holds a value of that runtime, `d.isoformat()` asks it
+	fn assigned(&mut self, target: Box<Node>, op: Op, value: Node) -> Node {
+		let value = self.rewrite(value);
+		if let Some(set) = (op == Op::Assign).then(|| self.member_set(&target, &value)).flatten() {
+			return set;
+		}
+		if let Node::Symbol(name) = target.drop_meta() {
+			self.remember_value(name, &value);
+		}
+		Node::Key(target, op, Box::new(value))
+	}
+
+	/// What the variable `name` holds now: a value of a runtime, of a Web IDL interface, of a component, a handle
+	fn remember_value(&mut self, name: &str, value: &Node) {
+		match foreign_runtime(value) {
+			Some(runtime) => self.values.insert(name.to_string(), runtime),
+			None => self.values.remove(name),
+		};
+		match self.web_idl_receiver(value) {
+			Ok(Some((interface, _))) => self.web_idl_values.insert(name.to_string(), interface),
+			_ => self.web_idl_values.remove(name),
+		};
+		match called_runtime(value).is_some_and(|runtime| runtime == COMPONENT_RUNTIME) {
+			true => self.component_values.insert(name.to_string()),
+			false => self.component_values.remove(name),
+		};
+		match self.component_handle(value) {
+			Some(handle) => self.component_handles.insert(name.to_string(), handle),
+			None => self.component_handles.remove(name),
+		};
 	}
 }

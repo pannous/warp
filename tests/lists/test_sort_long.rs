@@ -13,22 +13,13 @@ fn timed(fill: &str, sort: &str) -> String {
 #[test]
 fn a_long_list_sorts_in_n_log_n() {
 	is!(&timed("\"w\" + (n - i)", "sort(xs)"), "w1");
-	is!(
-		&timed("{k: n - i}", "xs.sort_by(p => p.k)").replace("q[0] else", "q[0].k else"),
-		1
-	);
+	is!(&timed("{k: n - i}", "xs.sort_by(p => p.k)").replace("q[0] else", "q[0].k else"), 1);
 }
 
 #[test]
 fn equal_keys_keep_their_order() {
-	is!(
-		"xs = [{k:2 v:1} {k:1 v:2} {k:2 v:3} {k:1 v:4}]; xs.sort_by(p => p.k).map(p => p.v)",
-		warp::parse("[2 4 1 3]")
-	);
-	is!(
-		"sort([\"b\" \"a\" \"c\" \"a\"])",
-		warp::parse("[\"a\" \"a\" \"b\" \"c\"]")
-	);
+	is!("xs = [{k:2 v:1} {k:1 v:2} {k:2 v:3} {k:1 v:4}]; xs.sort_by(p => p.k).map(p => p.v)", warp::parse("[2 4 1 3]"));
+	is!("sort([\"b\" \"a\" \"c\" \"a\"])", warp::parse("[\"a\" \"a\" \"b\" \"c\"]"));
 	is!("sort(\"hello\")", "ehllo");
 	is!("sort([])", warp::parse("[]"));
 }
@@ -38,10 +29,7 @@ fn ordered_input_sorts_in_linear_time() {
 	is!(&timed("n - i", "sort(xs)"), 1);
 	is!(&timed("i", "sort(xs)"), 0);
 	// descending with equal keys is no strict reversal: the merge keeps their order
-	is!(
-		"xs = [{k:2 v:1} {k:2 v:2} {k:1 v:3}]; xs.sort_by(p => p.k).map(p => p.v)",
-		warp::parse("[3 1 2]")
-	);
+	is!("xs = [{k:2 v:1} {k:2 v:2} {k:1 v:3}]; xs.sort_by(p => p.k).map(p => p.v)", warp::parse("[3 1 2]"));
 	is!("sort([5 4 3 2 1])", warp::parse("[1 2 3 4 5]"));
 	is!("sort([1 2 2 3])", warp::parse("[1 2 2 3]"));
 }

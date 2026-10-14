@@ -64,6 +64,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   `gcd is function` is yes.
 - nearest-limit (2026-10-14): `nearest(x, rational)` limits the denominator to 1,000,000 like Python's
   limit_denominator (sqrt 2 → 665857/470832); `limit = 0` gives the exact fraction of the float.
+- float-as-rational (2026-10-14): `x as rational` / `rational(x)` of a float is the exact fraction of its shortest
+  printed digits, reduced (1.4142135623730951 → 14142135623730951/10000000000000000); nearest-limit is unchanged.
 - restructuring (2026-10-14): new major roadmap after the diff review found few duplicates. Inventory every function
   by name, move functions to the file their concept belongs to (a general parser holds no keyword-specific syntax:
   `finish_if_prefix` goes to e.g. control/if.rs), and have agents check suspiciously similar names for true

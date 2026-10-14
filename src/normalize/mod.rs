@@ -19,9 +19,7 @@ use crate::operators::{glyph_operator, Op};
 const HINT_TOPIC_PREFIX: &str = "hint:";
 const AND_SYMBOLS: [&str; 4] = ["&&", "&", "∧", "⋀"];
 const OR_SYMBOLS: [&str; 4] = ["||", "|", "∨", "⋁"];
-/// Type word of the list types; `list<int>`, `list of int` and `ints` all denote a list of int
-const LIST_TYPE_HEAD: &str = "list";
-const OF_WORD: &str = "of";
+use crate::words::{LIST_WORD, OF_WORD};
 const STRING_TYPE_NAMES: [&str; 2] = ["str", "String"];
 
 mod check_style;
@@ -113,10 +111,7 @@ mod tests {
 		assert_eq!(s.cast, CastStyle::Any);
 
 		// Swap to constructor style
-		set_style(Style {
-			cast: CastStyle::Constructor,
-			..Style::default()
-		});
+		set_style(Style { cast: CastStyle::Constructor, ..Style::default() });
 
 		let s = style();
 		assert_eq!(s.cast, CastStyle::Constructor);

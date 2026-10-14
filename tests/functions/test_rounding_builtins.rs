@@ -8,10 +8,7 @@ fn rounding_words_stay_ints_when_libm_is_used() {
 	is!("use m; floor(3.7)", 3);
 	is!("use m; floor(3.7) + 0.5", 3.5);
 	is!("import floor from 'm'; floor(-2.3)", -3);
-	is!(
-		"use math\ncell(v) := floor(v) as int\nlabel(xs) := cell(xs#3 / 255)\ncell(3)",
-		3
-	);
+	is!("use math\ncell(v) := floor(v) as int\nlabel(xs) := cell(xs#3 / 255)\ncell(3)", 3);
 	is!("use m; ceil(3.2) * 2", 8);
 	is!("use m; cbrt(27.0)", 3.0);
 }

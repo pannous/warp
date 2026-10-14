@@ -7,6 +7,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::type_kinds::Kind;
 use crate::wasm_emitter::layout::BYTE;
 use crate::wasm_emitter::{WasmGcEmitter, RAN_WITHOUT_ERROR};
+use crate::words::{CHR_WORD, ERROR_WORD, IS_ERROR_WORD, RAISE_WORD};
 use std::collections::HashSet;
 use wasm_encoder::*;
 use Instruction as I;
@@ -16,6 +17,8 @@ pub const TEXT_CONCAT: &str = "text_concat";
 /// text_concat for a text held in a variable, which may be built up (`t += x`): it grows into rooms (text_rooms.rs)
 pub const TEXT_APPEND: &str = "text_append";
 pub const TEXT_OF: &str = "text_of";
+/// What a text joined with `+` takes as its literal when made at run time: `"x " + parse("[1 2]")`
+pub(in crate::wasm_emitter) const STRUCTURE_KINDS: [Kind; 2] = [Kind::Key, Kind::List];
 /// text_argument(node): the text a text builtin reads (text_of), but an Error fails with its own message (card byte-slice)
 const TEXT_ARGUMENT: &str = "text_argument";
 /// float_text when the analyzer saw floats (makes_floats), and the run-time functions that make floats
@@ -39,8 +42,6 @@ const MEMORY_SET_BYTE: &str = "memory_set_byte";
 const TRIM: &str = "trim";
 const TEXT_TRIM: &str = "text_trim";
 pub const TEXT_ROUGH_TRIM: &str = "text_rough_trim";
-/// `chr(n)`: the character of a code point, the inverse of `ord(c)`
-const CHR: &str = "chr";
 /// `float_bits(x)`: the IEEE 754 bits of a float as an Int, `bits_float(n)` the float of them (an `f64.const` to emit)
 pub const FLOAT_BITS: &str = "float_bits";
 pub const BITS_FLOAT: &str = "bits_float";
@@ -61,11 +62,6 @@ const ASCII_ALPHANUMERIC_RANGES: [(u8, u8); 3] = [(b'0', b'9'), (b'A', b'Z'), (b
 const READ: &str = "read";
 const READ_TEXT: &str = "read_text";
 const HOST_READ: &str = "host_read";
-const ERROR: &str = "error";
-/// `raise X` (`throw X`): an exception, the runtime error returned_error with X as its detail, which `try` catches
-pub const RAISE: &str = "raise";
-/// `is_error(x)`: 1 when x is an Error value; `try X else Y` tests its result with it
-pub const IS_ERROR: &str = "is_error";
 /// error_of(text) → Error: exported, the host builds the Error of a caught stack overflow with it (guarded_call)
 pub const ERROR_OF: &str = "error_of";
 pub const WARNING: &str = "warning";
@@ -86,16 +82,16 @@ const TEXT_BUILTINS: [(&str, usize, Kind); 23] = [
 	(READ, 1, Kind::Text),
 	(BYTE_AT, 2, Kind::Int),
 	(BYTE_SLICE, 3, Kind::Text),
-	(ERROR, 1, Kind::Empty),
-	(RAISE, 1, Kind::Text),
-	(IS_ERROR, 1, Kind::Int),
+	(ERROR_WORD, 1, Kind::Empty),
+	(RAISE_WORD, 1, Kind::Text),
+	(IS_ERROR_WORD, 1, Kind::Int),
 	(WARNING, 1, Kind::Text),
 	(TEXT_FORM, 1, Kind::Text),
 	(RAN_WITHOUT_ERROR, 1, Kind::Int),
 	(TRIM, 1, Kind::Text),
 	(STARTS_WITH, 2, Kind::Int),
 	(ENDS_WITH, 2, Kind::Int),
-	(CHR, 1, Kind::Codepoint),
+	(CHR_WORD, 1, Kind::Codepoint),
 	(FLOAT_BITS, 1, Kind::Int),
 	(BITS_FLOAT, 1, Kind::Float),
 	(crate::wasm_emitter::CAUGHT_ERROR, 2, Kind::Error),
@@ -105,23 +101,16 @@ const TEXT_BUILTINS: [(&str, usize, Kind); 23] = [
 
 /// The text builtins and the node words (node_api.rs), which are called the same way
 fn builtins() -> impl Iterator<Item = &'static (&'static str, usize, Kind)> {
-	TEXT_BUILTINS
-		.iter()
-		.chain(super::super::reflection::node_api::NODE_BUILTINS.iter())
+	TEXT_BUILTINS.iter().chain(super::super::reflection::node_api::NODE_BUILTINS.iter())
 }
 
 pub fn text_builtin_kind(name: &str, arguments: usize) -> Option<Kind> {
-	builtins()
-		.find(|(builtin, arity, _)| *builtin == name && *arity == arguments)
-		.map(|(_, _, kind)| *kind)
+	builtins().find(|(builtin, arity, _)| *builtin == name && *arity == arguments).map(|(_, _, kind)| *kind)
 }
 
 /// The numbers of arguments a text builtin takes, empty for any other name
 pub fn text_builtin_arities(name: &str) -> Vec<usize> {
-	builtins()
-		.filter(|(builtin, _, _)| *builtin == name)
-		.map(|(_, arity, _)| *arity)
-		.collect()
+	builtins().filter(|(builtin, _, _)| *builtin == name).map(|(_, arity, _)| *arity).collect()
 }
 
 pub fn is_text_builtin(name: &str) -> bool {
@@ -150,10 +139,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains(super::super::reflection::library_ops::NODE_SLICE) {
 		required.extend(["text_chars", "list_join", "list_reverse"]);
 	}
-	if crate::library_words::MAP_WORD_FUNCTIONS
-		.iter()
-		.any(|name| required.contains(name))
-	{
+	if crate::library_words::MAP_WORD_FUNCTIONS.iter().any(|name| required.contains(name)) {
 		required.insert("map_find");
 	}
 	if required.contains(super::super::lists::list_ops::ELEMENT_BODY) {
@@ -164,43 +150,28 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	}
 	// instance_copy is emitted with field_with, both looking into an instance's fields; `shallow` is tested for truth
 	if required.contains(crate::library_words::INSTANCE_COPY) {
-		required.extend([
-			crate::library_words::FIELD_WITH,
-			super::super::reflection::equality::IS_TRUTHY,
-		]);
+		required.extend([crate::library_words::FIELD_WITH, super::super::reflection::equality::IS_TRUTHY]);
 	}
 	if required.contains(crate::library_words::FIELD_WITH) {
 		required.insert(super::super::lists::list_ops::STRUCT_BODY); // an instance keeps its type
 	}
 	if required.contains(super::super::lists::list_ops::NODE_WITH_KEY) {
-		required.extend([
-			super::super::lists::list_ops::NODE_WITH_NODE_AT,
-			crate::library_words::FIELD_WITH,
-		]);
+		required.extend([super::super::lists::list_ops::NODE_WITH_NODE_AT, crate::library_words::FIELD_WITH]);
 	}
 	if required.contains(super::super::lists::list_ops::NODE_WITH_NODE_AT) {
 		required.extend(["node_with_at", "get_int_value"]);
 	}
 	// a map variable held as a hash table names its keys by map_key_name, emitted with map_get; a map node found or set
 	// by name gets an index of the same tables (map_index.rs)
-	if ["map_get", "map_find", "field_with"]
-		.iter()
-		.any(|name| required.contains(name))
-	{
+	if ["map_get", "map_find", "field_with"].iter().any(|name| required.contains(name)) {
 		required.insert(super::super::maps::map_backend::NODE_MAP_NEW);
 	}
-	if super::super::maps::map_backend::NODE_MAP_FUNCTIONS
-		.iter()
-		.any(|name| required.contains(name))
-	{
+	if super::super::maps::map_backend::NODE_MAP_FUNCTIONS.iter().any(|name| required.contains(name)) {
 		required.extend(super::super::maps::map_backend::NODE_MAP_FUNCTIONS);
 		required.insert("map_get");
 	}
 	// maps compare keys by name: map_key_name reads a character key as its text
-	if ["map_get", "map_find", "field_with"]
-		.iter()
-		.any(|name| required.contains(name))
-	{
+	if ["map_get", "map_find", "field_with"].iter().any(|name| required.contains(name)) {
 		required.extend([TEXT_OF, crate::wasm_emitter::VALUES_EQUAL]);
 	}
 	if required.contains("node_list_of") {
@@ -213,12 +184,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		required.insert("list_concat"); // of a non-list
 	}
 	if required.contains(super::super::lists::list_ops::NODE_ADD) {
-		required.extend([
-			"list_concat",
-			TEXT_CONCAT,
-			TEXT_OF,
-			super::super::reflection::library_ops::LIST_JOIN,
-		]);
+		required.extend(["list_concat", TEXT_CONCAT, TEXT_OF, super::super::reflection::library_ops::LIST_JOIN]);
 		// two lists added are concatenated, two texts too, a text and a number joined
 	}
 	if required.contains(super::super::numbers::casts::TEXT_AS_NUMBER) {
@@ -231,10 +197,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 			"new_float",
 		]);
 	}
-	if super::super::lists::list_ops::NODE_ARITHMETIC
-		.iter()
-		.any(|(name, _, _)| required.contains(name))
-	{
+	if super::super::lists::list_ops::NODE_ARITHMETIC.iter().any(|(name, _, _)| required.contains(name)) {
 		required.extend([
 			super::super::lists::list_ops::TEXT_AS_FLOAT,
 			super::super::INT_RUNTIME,
@@ -273,23 +236,13 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		required.insert(super::super::reflection::library_ops::LIST_SORTED_BY);
 	}
 	if required.contains(super::super::reflection::library_ops::LIST_SORTED_BY) {
-		required.extend([
-			super::super::reflection::library_ops::NODE_ORDER,
-			"text_chars",
-			"list_join",
-		]);
+		required.extend([super::super::reflection::library_ops::NODE_ORDER, "text_chars", "list_join"]);
 	}
-	if [TEXT_FIND, TEXT_STARTS_WITH, TEXT_ENDS_WITH]
-		.iter()
-		.any(|name| required.contains(name))
-	{
+	if [TEXT_FIND, TEXT_STARTS_WITH, TEXT_ENDS_WITH].iter().any(|name| required.contains(name)) {
 		required.insert(TEXT_MATCHES_AT);
 	}
 	// a text searched for a text (`s.contains("b")`, `"b" in s`); the map words are emitted together
-	if crate::library_words::MAP_WORD_FUNCTIONS
-		.iter()
-		.any(|name| required.contains(name))
-	{
+	if crate::library_words::MAP_WORD_FUNCTIONS.iter().any(|name| required.contains(name)) {
 		required.extend([TEXT_FIND, TEXT_MATCHES_AT, TEXT_OF]);
 	}
 	if required.contains(super::super::host::wasi_emitter::PRINT_VALUE)
@@ -378,8 +331,8 @@ impl WasmGcEmitter {
 				self.emit_runtime_error_value(func, &reason);
 			}
 			// warnings are errors: the run stops as at `raise`, also where the warning's value is dropped (card under-use)
-			(WARNING | RAISE, [message])
-				if name == RAISE
+			(WARNING | RAISE_WORD, [message])
+				if name == RAISE_WORD
 					|| crate::errors::diagnostic::warning_mode().fails(crate::errors::diagnostic::Level::Normal) =>
 			{
 				self.emit_trap_detail(func, message);
@@ -390,13 +343,10 @@ impl WasmGcEmitter {
 				self.emit_call(func, WARN_TEXT);
 			}
 			(WARNING, [message]) => {
-				let reason = format!(
-					"warning {} not reported: host imports are not available",
-					message.serialize()
-				);
+				let reason = format!("warning {} not reported: host imports are not available", message.serialize());
 				self.emit_runtime_error_value(func, &reason);
 			}
-			(ERROR, [message]) => {
+			(ERROR_WORD, [message]) => {
 				self.emit_node_instructions(func, message);
 				self.emit_call(func, ERROR_OF);
 			}
@@ -410,7 +360,7 @@ impl WasmGcEmitter {
 				BYTE_AT
 				| MEMORY_BYTE
 				| MEMORY_SET_BYTE
-				| IS_ERROR
+				| IS_ERROR_WORD
 				| RAN_WITHOUT_ERROR
 				| STARTS_WITH
 				| ENDS_WITH
@@ -435,7 +385,7 @@ impl WasmGcEmitter {
 				self.emit_text_argument(func, text);
 				self.emit_call(func, TEXT_TRIM);
 			}
-			(CHR, [code]) => {
+			(CHR_WORD, [code]) => {
 				self.emit_numeric_value(func, code);
 				func.instruction(&I::I32WrapI64);
 				self.emit_call(func, "new_codepoint");
@@ -502,22 +452,11 @@ impl WasmGcEmitter {
 				self.emit_numeric_value(func, address);
 				func.instruction(&I::I32WrapI64);
 				self.emit_numeric_value(func, value);
-				Self::emit_list(
-					func,
-					&[
-						I::LocalTee(written),
-						I::I32WrapI64,
-						I::I32Store8(BYTE),
-						I::LocalGet(written),
-					],
-				);
+				Self::emit_list(func, &[I::LocalTee(written), I::I32WrapI64, I::I32Store8(BYTE), I::LocalGet(written)]);
 			}
-			(IS_ERROR, [value]) => {
+			(IS_ERROR_WORD, [value]) => {
 				self.emit_node_instructions(func, value);
-				func.instruction(&I::StructGet {
-					struct_type_index: self.type_manager.node_type,
-					field_index: 0,
-				});
+				func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 });
 				Self::emit_kind_test(func, Kind::Error as i64, I::I64Eq);
 				Self::emit_list(func, &[I::I64ExtendI32U]);
 			}
@@ -528,14 +467,7 @@ impl WasmGcEmitter {
 			(STARTS_WITH | ENDS_WITH, [text, part]) => {
 				self.emit_text_argument(func, text);
 				self.emit_text_argument(func, part);
-				self.emit_call(
-					func,
-					if name == STARTS_WITH {
-						TEXT_STARTS_WITH
-					} else {
-						TEXT_ENDS_WITH
-					},
-				);
+				self.emit_call(func, if name == STARTS_WITH { TEXT_STARTS_WITH } else { TEXT_ENDS_WITH });
 			}
 			(
 				crate::memoization::MEMO_KNOWN | crate::memoization::MEMO_VALUE | crate::memoization::MEMO_STORE,
@@ -556,10 +488,7 @@ impl WasmGcEmitter {
 			unreachable!("memoization passes a constant id")
 		};
 		let array = self.type_manager.int_array_type;
-		let array_ref = ValType::Ref(RefType {
-			nullable: true,
-			heap_type: HeapType::Concrete(array),
-		});
+		let array_ref = ValType::Ref(RefType { nullable: true, heap_type: HeapType::Concrete(array) });
 		let new_global =
 			|emitter: &mut Self| emitter.declare_global_of(array_ref, ConstExpr::ref_null(HeapType::Concrete(array)));
 		let (values, known) = match self.memo_caches.get(id) {
@@ -659,6 +588,7 @@ impl WasmGcEmitter {
 		let (pointer, length) = self.allocate_string("");
 		self.emit_node_instructions(func, operand);
 		func.instruction(&I::LocalSet(held));
+		self.emit_structure_as_literal(func, held, &STRUCTURE_KINDS, (pointer, length));
 		self.emit_field(func, held, 0);
 		Self::emit_kind_test(func, Kind::Error as i64, I::I64Eq);
 		Self::emit_list(func, &[I::If(BlockType::Result(node_ref))]);
@@ -686,20 +616,50 @@ impl WasmGcEmitter {
 		func.instruction(&I::End);
 	}
 
+	/// A value of one of `kinds` made at run time (parsed code) in Node local `local` becomes its literal text, to join
+	/// a text: `"x " + parse(t)` (card print-parse); only in a program that parses code. `empty`: the allocated empty text, the separator of that one-item list
+	pub(in crate::wasm_emitter) fn emit_structure_as_literal(
+		&self,
+		func: &mut Function,
+		local: u32,
+		kinds: &[Kind],
+		empty: (u32, u32),
+	) {
+		if !self.parses_code {
+			return;
+		}
+		let node_type = self.type_manager.node_type;
+		let (pointer, length) = empty;
+		for (index, kind) in kinds.iter().enumerate() {
+			self.emit_field(func, local, 0);
+			Self::emit_kind_test(func, *kind as i64, I::I64Eq);
+			if index > 0 {
+				func.instruction(&I::I32Or);
+			}
+		}
+		Self::emit_list(
+			func,
+			&[
+				I::If(BlockType::Empty),
+				I::I64Const(crate::type_kinds::SQUARE_LIST_KIND),
+				I::LocalGet(local),
+				I::RefNull(HeapType::Concrete(node_type)),
+				I::StructNew(node_type),
+				I::I32Const(pointer as i32),
+				I::I32Const(length as i32),
+			],
+		);
+		self.call(func, "new_text");
+		self.call(func, super::super::reflection::library_ops::LIST_TEXT);
+		Self::emit_list(func, &[I::LocalSet(local), I::End]);
+	}
+
 	/// An Error node carrying `reason`, the way a failed fetch reports
 	fn emit_runtime_error_value(&mut self, func: &mut Function, reason: &str) {
 		let (ptr, len) = self.allocate_string(reason);
 		Self::emit_list(func, &[I::I32Const(ptr as i32), I::I32Const(-(len as i32))]);
 		let (length, pointer) = (self.scratch(0), self.scratch(1));
-		Self::emit_list(
-			func,
-			&[
-				I::I64ExtendI32S,
-				I::LocalSet(length),
-				I::I64ExtendI32U,
-				I::LocalSet(pointer),
-			],
-		);
+		Self::emit_list(func, &[I::I64ExtendI32S, I::LocalSet(length), I::I64ExtendI32U, I::LocalSet(pointer)]);
 		self.emit_host_text_result(func, length, pointer);
 	}
 
@@ -786,47 +746,32 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::I64ExtendI32U, I::I64GeU]);
 				s.emit_fail_if(f, "index_out_of_range");
 				s.emit_text_field(f, 0, 0);
+				Self::emit_list(f, &[I::LocalGet(1), I::I32WrapI64, I::I32Add, I::I32Load8U(BYTE), I::I64ExtendI32U]);
+			});
+		}
+
+		// byte_slice(text, start, end): the bytes start…end-1, sharing the memory of text
+		if self.should_emit_function(BYTE_SLICE) {
+			self.runtime_function(BYTE_SLICE, vec![node_ref, long, long], vec![node_ref], vec![], |s, f| {
+				Self::emit_list(f, &[I::LocalGet(1), I::LocalGet(2), I::I64GtU, I::LocalGet(2)]);
+				s.emit_text_field(f, 0, 1);
+				Self::emit_list(f, &[I::I64ExtendI32U, I::I64GtU, I::I32Or]);
+				s.emit_fail_if(f, "index_out_of_range");
+				s.emit_text_field(f, 0, 0);
 				Self::emit_list(
 					f,
 					&[
 						I::LocalGet(1),
 						I::I32WrapI64,
 						I::I32Add,
-						I::I32Load8U(BYTE),
-						I::I64ExtendI32U,
+						I::LocalGet(2),
+						I::LocalGet(1),
+						I::I64Sub,
+						I::I32WrapI64,
 					],
 				);
+				s.call(f, "new_text");
 			});
-		}
-
-		// byte_slice(text, start, end): the bytes start…end-1, sharing the memory of text
-		if self.should_emit_function(BYTE_SLICE) {
-			self.runtime_function(
-				BYTE_SLICE,
-				vec![node_ref, long, long],
-				vec![node_ref],
-				vec![],
-				|s, f| {
-					Self::emit_list(f, &[I::LocalGet(1), I::LocalGet(2), I::I64GtU, I::LocalGet(2)]);
-					s.emit_text_field(f, 0, 1);
-					Self::emit_list(f, &[I::I64ExtendI32U, I::I64GtU, I::I32Or]);
-					s.emit_fail_if(f, "index_out_of_range");
-					s.emit_text_field(f, 0, 0);
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(1),
-							I::I32WrapI64,
-							I::I32Add,
-							I::LocalGet(2),
-							I::LocalGet(1),
-							I::I64Sub,
-							I::I32WrapI64,
-						],
-					);
-					s.call(f, "new_text");
-				},
-			);
 		}
 	}
 
@@ -865,14 +810,7 @@ impl WasmGcEmitter {
 					s.emit_text_field(f, 0, 1);
 					Self::emit_list(
 						f,
-						&[
-							I::I32GtU,
-							I::I32Or,
-							I::If(BlockType::Empty),
-							I::I32Const(0),
-							I::Return,
-							I::End,
-						],
+						&[I::I32GtU, I::I32Or, I::If(BlockType::Empty), I::I32Const(0), I::Return, I::End],
 					);
 					Self::emit_list(
 						f,
@@ -913,55 +851,33 @@ impl WasmGcEmitter {
 		}
 		// text_find(text, part): the first offset where part matches, 1-based; 0 when it never does
 		if self.should_emit_function(TEXT_FIND) {
-			self.runtime_function(
-				TEXT_FIND,
-				vec![node_ref, node_ref],
-				vec![long],
-				vec![ValType::I32],
-				|s, f| {
-					let offset = 2;
-					Self::emit_list(
-						f,
-						&[
-							I::Block(BlockType::Empty),
-							I::Loop(BlockType::Empty),
-							I::LocalGet(offset),
-						],
-					);
-					s.emit_text_field(f, 0, 1);
-					Self::emit_list(
-						f,
-						&[
-							I::I32GtU,
-							I::BrIf(1),
-							I::LocalGet(0),
-							I::LocalGet(1),
-							I::LocalGet(offset),
-						],
-					);
-					s.call(f, TEXT_MATCHES_AT);
-					Self::emit_list(
-						f,
-						&[
-							I::If(BlockType::Empty),
-							I::LocalGet(offset),
-							I::I32Const(1),
-							I::I32Add,
-							I::I64ExtendI32U,
-							I::Return,
-							I::End,
-							I::LocalGet(offset),
-							I::I32Const(1),
-							I::I32Add,
-							I::LocalSet(offset),
-							I::Br(0),
-							I::End,
-							I::End,
-							I::I64Const(0),
-						],
-					);
-				},
-			);
+			self.runtime_function(TEXT_FIND, vec![node_ref, node_ref], vec![long], vec![ValType::I32], |s, f| {
+				let offset = 2;
+				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(offset)]);
+				s.emit_text_field(f, 0, 1);
+				Self::emit_list(f, &[I::I32GtU, I::BrIf(1), I::LocalGet(0), I::LocalGet(1), I::LocalGet(offset)]);
+				s.call(f, TEXT_MATCHES_AT);
+				Self::emit_list(
+					f,
+					&[
+						I::If(BlockType::Empty),
+						I::LocalGet(offset),
+						I::I32Const(1),
+						I::I32Add,
+						I::I64ExtendI32U,
+						I::Return,
+						I::End,
+						I::LocalGet(offset),
+						I::I32Const(1),
+						I::I32Add,
+						I::LocalSet(offset),
+						I::Br(0),
+						I::End,
+						I::End,
+						I::I64Const(0),
+					],
+				);
+			});
 		}
 		// text_starts_with(text, part) / text_ends_with(text, part): 1 when part matches at the start / at the end
 		for (name, at_end) in [(TEXT_STARTS_WITH, false), (TEXT_ENDS_WITH, true)] {
@@ -1087,14 +1003,7 @@ impl WasmGcEmitter {
 			);
 			Self::emit_list(
 				f,
-				&[
-					I::LocalGet(address),
-					I::LocalGet(start),
-					I::I32Add,
-					I::LocalGet(end),
-					I::LocalGet(start),
-					I::I32Sub,
-				],
+				&[I::LocalGet(address), I::LocalGet(start), I::I32Add, I::LocalGet(end), I::LocalGet(start), I::I32Sub],
 			);
 			s.call(f, "new_text");
 		});
@@ -1145,10 +1054,7 @@ impl WasmGcEmitter {
 				s.emit_field(f, 0, 1);
 				Self::emit_list(
 					f,
-					&[
-						I::RefNull(HeapType::Concrete(s.type_manager.node_type)),
-						I::StructNew(s.type_manager.node_type),
-					],
+					&[I::RefNull(HeapType::Concrete(s.type_manager.node_type)), I::StructNew(s.type_manager.node_type)],
 				);
 			});
 		}
@@ -1293,13 +1199,7 @@ impl WasmGcEmitter {
 			s.emit_text_field(f, 0, 0);
 			Self::emit_list(
 				f,
-				&[
-					I::LocalGet(left_length),
-					copy_bytes.clone(),
-					I::LocalGet(copy),
-					I::LocalGet(left_length),
-					I::I32Add,
-				],
+				&[I::LocalGet(left_length), copy_bytes.clone(), I::LocalGet(copy), I::LocalGet(left_length), I::I32Add],
 			);
 			s.emit_text_field(f, 1, 0);
 			Self::emit_list(f, &[I::LocalGet(right_length), copy_bytes]);
@@ -1315,11 +1215,7 @@ impl WasmGcEmitter {
 /// The call `join(list, separator)`: the items' text forms with the separator between them
 pub(crate) fn join_call(list: Node, separator: &str) -> Node {
 	Node::List(
-		vec![
-			Node::Symbol("join".to_string()),
-			list,
-			Node::Text(separator.to_string()),
-		],
+		vec![Node::Symbol("join".to_string()), list, Node::Text(separator.to_string())],
 		Bracket::Round,
 		Separator::None,
 	)

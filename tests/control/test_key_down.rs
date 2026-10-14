@@ -5,9 +5,7 @@ use crate::is;
 
 #[test]
 fn key_down_is_a_system_value_and_no_without_a_key_held() {
-	let lowered = warp::pipeline::lower("if key_down { 1 } else { 0 }")
-		.expect("lowers")
-		.serialize();
+	let lowered = warp::pipeline::lower("if key_down { 1 } else { 0 }").expect("lowers").serialize();
 	assert!(lowered.contains("system_value key_down"), "{lowered}");
 	is!("if key_down { 1 } else { 0 }", 0);
 }

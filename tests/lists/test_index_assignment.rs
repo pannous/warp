@@ -24,8 +24,5 @@ fn test_index_assign_in_while_with_increment() {
 
 #[test]
 fn test_index_assign_25_elements() {
-	is!(
-		"i=0;w=5;h=5;pixel=(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0);while(i++ < w*h){pixel[i]=i%2 };i ",
-		25
-	);
+	is!("i=0;w=5;h=5;pixel=(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0);while(i++ < w*h){pixel[i]=i%2 };i ", 25);
 }

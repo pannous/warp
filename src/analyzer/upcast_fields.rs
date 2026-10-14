@@ -48,10 +48,7 @@ fn check_scope(body: &Node, mut declared: HashMap<String, String>, classes: &Cla
 	);
 	misread.or_else(|| {
 		definitions.into_iter().find_map(|(parameters, body)| {
-			let parameters = parameters
-				.iter()
-				.filter_map(|parameter| annotated(parameter, classes))
-				.collect();
+			let parameters = parameters.iter().filter_map(|parameter| annotated(parameter, classes)).collect();
 			check_scope(body, parameters, classes)
 		})
 	})
@@ -86,10 +83,7 @@ fn annotated(target: &Node, classes: &Classes) -> Option<(String, String)> {
 	let Node::Key(name, Op::Colon, class) = target.drop_meta() else {
 		return None;
 	};
-	Some((
-		symbol_name(name)?,
-		symbol_name(class).filter(|class| classes.contains_key(class))?,
-	))
+	Some((symbol_name(name)?, symbol_name(class).filter(|class| classes.contains_key(class))?))
 }
 
 fn symbol_name(node: &Node) -> Option<String> {
@@ -111,20 +105,13 @@ fn subclass_member_read(node: &Node, declared: &HashMap<String, String>, classes
 		Node::List(items, Bracket::Round, _) => symbol_name(items.first()?)?,
 		other => symbol_name(other)?,
 	};
-	if chain(class, classes)
-		.iter()
-		.any(|ancestor| classes[ancestor].1.contains(&member))
-	{
+	if chain(class, classes).iter().any(|ancestor| classes[ancestor].1.contains(&member)) {
 		return None;
 	}
 	let owner = classes
 		.keys()
 		.filter(|candidate| *candidate != class && chain(candidate, classes).contains(class))
-		.filter(|candidate| {
-			chain(candidate, classes)
-				.iter()
-				.any(|ancestor| classes[ancestor].1.contains(&member))
-		})
+		.filter(|candidate| chain(candidate, classes).iter().any(|ancestor| classes[ancestor].1.contains(&member)))
 		.min()?;
 	Some(Diagnostic::at(node, format!(
 		"{class} has no field {member}, only {owner} has: match {variable} {{ {owner}({member}) => … }} or read ({variable} as {owner}).{member}"

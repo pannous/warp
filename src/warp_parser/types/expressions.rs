@@ -1,5 +1,6 @@
 //! Type expressions: names of types, list types `[Int]`, array type suffixes `Int[]`
 use super::*;
+use crate::words::LIST_WORD;
 
 /// A word that can take type arguments: a capitalised type, a built-in type word, a plural type word, `list`, `map` …
 pub(crate) fn names_a_type(word: &str) -> bool {
@@ -12,17 +13,13 @@ pub(crate) fn names_a_type(word: &str) -> bool {
 /// The type `name<arguments>` written in words: `list<list<int>>` is `list of list of int`
 pub(crate) fn type_application_name(name: &str, arguments: &str) -> String {
 	let arguments = arguments.replace('<', " of ").replace('>', "");
-	format!(
-		"{} of {}",
-		noted_list_type_head(name),
-		arguments.split_whitespace().collect::<Vec<_>>().join(" ")
-	)
+	format!("{} of {}", noted_list_type_head(name), arguments.split_whitespace().collect::<Vec<_>>().join(" "))
 }
 
 /// The head of a list type: `Vec`, `vector`, `Array`… are list
 pub(crate) fn list_type_head(name: &str) -> &str {
 	if FOREIGN_LIST_HEADS.contains(&name) {
-		LIST_HEAD
+		LIST_WORD
 	} else {
 		name
 	}
@@ -31,7 +28,7 @@ pub(crate) fn list_type_head(name: &str) -> &str {
 /// list_type_head, with a note naming warp's word for a foreign one
 pub(crate) fn noted_list_type_head(name: &str) -> &str {
 	if FOREIGN_LIST_HEADS.contains(&name) {
-		crate::errors::diagnostic::note_alias(name, LIST_HEAD);
+		crate::errors::diagnostic::note_alias(name, LIST_WORD);
 	}
 	list_type_head(name)
 }
@@ -70,18 +67,12 @@ impl WarpParser {
 	fn words_ahead_length(&self, words: &[String]) -> Option<usize> {
 		let mut offset = 0;
 		for word in words {
-			let blanks = (offset..)
-				.take_while(|&at| matches!(self.peek_char(at), ' ' | '\t'))
-				.count() - offset;
+			let blanks = (offset..).take_while(|&at| matches!(self.peek_char(at), ' ' | '\t')).count() - offset;
 			if blanks == 0 {
 				return None;
 			}
 			offset += blanks;
-			if !word
-				.chars()
-				.enumerate()
-				.all(|(index, ch)| self.peek_char(offset + index) == ch)
-			{
+			if !word.chars().enumerate().all(|(index, ch)| self.peek_char(offset + index) == ch) {
 				return None;
 			}
 			offset += word.chars().count();

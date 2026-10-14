@@ -14,11 +14,5 @@ fn an_empty_map_joins_as_empty() {
 #[test]
 fn print_of_an_empty_map_prints_empty() {
 	let printed = crate::common::printed("print({})");
-	assert_eq!(
-		printed
-			.lines()
-			.filter(|line| !line.starts_with('»'))
-			.collect::<Vec<_>>(),
-		["ø"]
-	);
+	assert_eq!(printed.lines().filter(|line| !line.starts_with('»')).collect::<Vec<_>>(), ["ø"]);
 }

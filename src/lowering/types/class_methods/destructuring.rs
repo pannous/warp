@@ -48,11 +48,7 @@ pub(super) fn by_position(node: Node, fields: &ClassFields, class_of: &ClassOf) 
 	match node {
 		Node::Key(declared, Op::Assign, value) if unwrapped_field(&declared, &value).is_some() => {
 			let field = unwrapped_field(&declared, &value).expect("guarded");
-			Node::Key(
-				declared,
-				Op::Assign,
-				Box::new(field_of(&by_position(*value, fields, class_of), &field)),
-			)
+			Node::Key(declared, Op::Assign, Box::new(field_of(&by_position(*value, fields, class_of), &field)))
 		}
 		Node::Key(instance, op @ (Op::Hash | Op::Dot), index)
 			if position(op, &index).is_some() && class_of(&instance).is_some() =>
@@ -60,10 +56,7 @@ pub(super) fn by_position(node: Node, fields: &ClassFields, class_of: &ClassOf) 
 			let class = class_of(&instance).expect("guarded");
 			let class_fields = &fields[&class];
 			let instance = by_position(*instance, fields, class_of);
-			match usize::try_from(position(op, &index).expect("guarded"))
-				.ok()
-				.and_then(|at| class_fields.get(at))
-			{
+			match usize::try_from(position(op, &index).expect("guarded")).ok().and_then(|at| class_fields.get(at)) {
 				Some((field, _)) => field_of(&instance, field),
 				None => crate::node::error(&format!(
 					"{} has {} fields: {} is out of range",
@@ -121,9 +114,7 @@ pub(super) fn taken_apart(node: Node, fields: &ClassFields, class_of: &ClassOf) 
 }
 
 fn is_match(items: &[Node]) -> bool {
-	items
-		.first()
-		.is_some_and(|word| crate::words::SWITCH_WORDS.iter().any(|switch| word.is_symbol(switch)))
+	items.first().is_some_and(|word| crate::words::SWITCH_WORDS.iter().any(|switch| word.is_symbol(switch)))
 }
 
 /// The class arms of a match's cases, `Point{x, y: 0}: body` and `Circle(r): body`, as the guard
@@ -132,9 +123,7 @@ fn class_arms(cases: &Node, fields: &ClassFields) -> Node {
 	let Node::List(arms, Bracket::Curly, separator) = cases.drop_meta() else {
 		return cases.clone();
 	};
-	let arms = arms
-		.iter()
-		.map(|arm| class_arm(arm, fields).unwrap_or_else(|| arm.clone()));
+	let arms = arms.iter().map(|arm| class_arm(arm, fields).unwrap_or_else(|| arm.clone()));
 	Node::List(arms.collect(), Bracket::Curly, separator.clone())
 }
 
@@ -146,11 +135,7 @@ fn class_arm(arm: &Node, fields: &ClassFields) -> Option<Node> {
 	is_class_pattern(pattern, fields).then_some(())?;
 	matched_pattern(pattern, &subject, fields, &mut matched)?;
 	// `is` compares like ==, a class name tests the type
-	let test = matched
-		.class_tests
-		.into_iter()
-		.chain(matched.tests)
-		.reduce(|all, test| key(all, Op::And, test));
+	let test = matched.class_tests.into_iter().chain(matched.tests).reduce(|all, test| key(all, Op::And, test));
 	let guard = if_then(test.expect("a class pattern tests its class"), subject.clone());
 	let body = bound_parts(subject, &matched.bindings, Some(body.as_ref().clone()));
 	Some(key(guard, Op::Colon, body))
@@ -189,9 +174,7 @@ pub(super) fn matched_pattern(pattern: &Node, path: &Node, fields: &ClassFields,
 		Node::Symbol(name) if name == "_" => {}
 		Node::Symbol(name) if !fields.contains_key(name) => matched.bindings.push((path.clone(), name.clone())),
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False => {
-			matched
-				.tests
-				.push(key(path.clone(), Op::Eq, pattern.drop_meta().clone()))
+			matched.tests.push(key(path.clone(), Op::Eq, pattern.drop_meta().clone()))
 		}
 		Node::Key(class, Op::Colon | Op::None, parts) if fields.contains_key(&class.drop_meta().name()) => {
 			matched.class_tests.push(class_test(&class.drop_meta().name()));
@@ -207,15 +190,13 @@ pub(super) fn matched_pattern(pattern: &Node, path: &Node, fields: &ClassFields,
 			let class_fields = &fields[&class];
 			let parts = &items[1..];
 			// `Point(x, ..)`: the parts before an unnamed rest take the first fields, those after it the last ones
-			let (before, after) = match parts
-				.iter()
-				.position(|part| super::super::switch::rest_pattern(part) == Some(None))
-			{
-				Some(rest) if parts.len() - 1 <= class_fields.len() => (&parts[..rest], &parts[rest + 1..]),
-				Some(_) => return None,
-				None if parts.len() == class_fields.len() => (parts, &[][..]),
-				None => return None,
-			};
+			let (before, after) =
+				match parts.iter().position(|part| super::super::switch::rest_pattern(part) == Some(None)) {
+					Some(rest) if parts.len() - 1 <= class_fields.len() => (&parts[..rest], &parts[rest + 1..]),
+					Some(_) => return None,
+					None if parts.len() == class_fields.len() => (parts, &[][..]),
+					None => return None,
+				};
 			matched.class_tests.push(class_test(&class));
 			let last_fields = &class_fields[class_fields.len() - after.len()..];
 			for ((field, _), part) in class_fields.iter().zip(before).chain(last_fields.iter().zip(after)) {
@@ -278,9 +259,8 @@ pub(super) fn positional_names(target: &Node) -> Option<Vec<String>> {
 
 /// `a, (b = p)` with p an instance
 pub(super) fn last_assigns_instance(items: &[Node], class_of: &ClassOf) -> bool {
-	let leading_names = items[..items.len().saturating_sub(1)]
-		.iter()
-		.all(|item| matches!(item.drop_meta(), Node::Symbol(_)));
+	let leading_names =
+		items[..items.len().saturating_sub(1)].iter().all(|item| matches!(item.drop_meta(), Node::Symbol(_)));
 	leading_names
 		&& items.len() > 1
 		&& matches!(items.last().map(Node::drop_meta), Some(Node::Key(name, Op::Assign, value)) if matches!(name.drop_meta(), Node::Symbol(_)) && class_of(value).is_some())
@@ -290,9 +270,9 @@ pub(super) fn last_assigns_instance(items: &[Node], class_of: &ClassOf) -> bool 
 pub(super) fn is_plain_object(object: &Node) -> bool {
 	match object.drop_meta() {
 		Node::List(_, Bracket::Curly, _) => true,
-		Node::List(items, Bracket::Round, _) => items
-			.first()
-			.is_some_and(|word| word.drop_meta().name() == PARSE_JSON_WORD),
+		Node::List(items, Bracket::Round, _) => {
+			items.first().is_some_and(|word| word.drop_meta().name() == PARSE_JSON_WORD)
+		}
 		_ => false,
 	}
 }

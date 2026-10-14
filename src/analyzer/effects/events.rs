@@ -47,10 +47,8 @@ pub fn event_effects(program: &Node) -> BTreeMap<String, (BTreeSet<String>, BTre
 		.map(|(name, definition)| (name.clone(), EventUses::of(&definition.body, &functions, &verbs)))
 		.collect();
 	uses.insert(ENTRY.into(), EventUses::of(program, &functions, &verbs));
-	let mut events: BTreeMap<String, BTreeSet<String>> = uses
-		.iter()
-		.map(|(name, uses)| (name.clone(), uses.own.clone()))
-		.collect();
+	let mut events: BTreeMap<String, BTreeSet<String>> =
+		uses.iter().map(|(name, uses)| (name.clone(), uses.own.clone())).collect();
 	loop {
 		let mut changed = false;
 		for (name, function) in &uses {

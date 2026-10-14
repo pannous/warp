@@ -2,6 +2,7 @@
 //! everywhere, but `type(true)` is bool and they print as true/false. Which expressions are bools, statically.
 
 use super::*;
+use crate::words::IS_ERROR_WORD;
 
 pub const BOOL_TYPE: &str = "bool";
 /// Calls whose value is a bool
@@ -9,7 +10,7 @@ const BOOL_CALLS: [&str; 8] = [
 	crate::library_words::COLLECTION_CONTAINS,
 	crate::words::IS_TYPE,
 	crate::words::INSTANCE_OF,
-	crate::wasm_emitter::text::text_builtins::IS_ERROR,
+	IS_ERROR_WORD,
 	crate::library_words::VALUES_SIMILAR,
 	crate::library_words::VALUES_ROUGH,
 	crate::numbers::uncertain::CERTAINLY,
@@ -56,12 +57,11 @@ fn gives_bool(function: &crate::compiler::context::UserFunctionDef) -> bool {
 /// The function's parameters declared bool (`f(b: bool) := b`), the rest unknown
 fn parameter_scope(function: &crate::compiler::context::UserFunctionDef) -> Scope {
 	let mut scope = Scope::new();
-	for param in function.params.iter().filter(|param| {
-		param
-			.annotation
-			.as_ref()
-			.is_some_and(|annotation| annotation.drop_meta().name() == BOOL_TYPE)
-	}) {
+	for param in function
+		.params
+		.iter()
+		.filter(|param| param.annotation.as_ref().is_some_and(|annotation| annotation.drop_meta().name() == BOOL_TYPE))
+	{
 		scope.define(param.name.clone(), param.annotation.clone().map(Box::new), Kind::Int);
 	}
 	scope

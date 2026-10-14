@@ -1,9 +1,7 @@
 //! Type annotations: the kind a type word, a declared `x:T` or a declared field gives
 
 use super::*;
-
-/// The type word of a value that is an int or a float
-const NUMBER_TYPE: &str = "number";
+use crate::words::{ANY_TYPE, MAP_WORD, NUMBER_WORD};
 
 /// `number` is the exact numeric tower (Int); the other builtin type names have their own kind;
 /// a list type (`list`, `list of int`, `[int]`, `int[]`, `ints`) is a List
@@ -24,14 +22,14 @@ pub(crate) fn annotated_kind(type_node: &Node) -> Option<Kind> {
 		return Some(Kind::Empty);
 	}
 	// `m:map`, `m: map of int`: a map, held as a Node; `{a:1}` given to it is upgraded to the map of its entry (one_entry_maps.rs)
-	if type_name == crate::type_kinds::UNTYPED_FIELD || is_map_type(&type_name) || union_parts(&type_name).is_some() {
+	if type_name == ANY_TYPE || is_map_type(&type_name) || union_parts(&type_name).is_some() {
 		return Some(Kind::Empty);
 	}
 	type_word_kind(&type_name)
 }
 
 pub(crate) fn is_map_type(type_name: &str) -> bool {
-	type_name == super::checks::MAP_TYPE || type_name.starts_with(super::checks::MAP_TYPE_PREFIX)
+	type_name == MAP_WORD || type_name.starts_with(super::checks::MAP_TYPE_PREFIX)
 }
 
 /// `x:ø` / `x:nil` / `x:unit`: the empty type, ø is held as a Node
@@ -56,7 +54,7 @@ pub fn declared_field_kinds(registry: &crate::type_kinds::TypeRegistry) -> HashM
 	for field in registry.types().iter().flat_map(|type_def| &type_def.fields) {
 		let type_name = field.type_name.to_lowercase();
 		// a number field holds an int or a float: read at run time (card number-field)
-		let kind = type_word_kind(&type_name).filter(|_| type_name != NUMBER_TYPE);
+		let kind = type_word_kind(&type_name).filter(|_| type_name != NUMBER_WORD);
 		kinds
 			.entry(field_kind_key(&field.name))
 			.and_modify(|known| {
@@ -79,7 +77,7 @@ pub(super) fn program_field_kinds(program: &Node) -> HashMap<String, Kind> {
 /// The kind a builtin type word names, as annotation (`x:double`) or constructor (`double 2`)
 pub fn type_word_kind(type_name: &str) -> Option<Kind> {
 	match type_name {
-		NUMBER_TYPE => Some(Kind::Int),
+		NUMBER_WORD => Some(Kind::Int),
 		_ => builtin_type_kind(type_name),
 	}
 }

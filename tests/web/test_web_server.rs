@@ -91,30 +91,16 @@ fn a_program_serves_its_own_page() {
 		assert!(started.elapsed() < Duration::from_secs(60), "the server did not start");
 		std::thread::sleep(Duration::from_millis(50));
 	}
-	let fetched = |path: &str| {
-		ureq::get(&format!("http://127.0.0.1:{PAGE_PORT}{path}"))
-			.call()
-			.expect("an answer")
-	};
+	let fetched = |path: &str| ureq::get(&format!("http://127.0.0.1:{PAGE_PORT}{path}")).call().expect("an answer");
 	let page = fetched("/").body_mut().read_to_string().expect("a text");
 	assert!(
 		page.contains("<ul><li>users: 2</li></ul>") && page.contains("<script src=\"site.js\"></script>"),
 		"{page}"
 	);
 	let mut module = fetched("/app.wasm");
-	assert_eq!(
-		module
-			.headers()
-			.get("content-type")
-			.and_then(|value| value.to_str().ok()),
-		Some("application/wasm")
-	);
+	assert_eq!(module.headers().get("content-type").and_then(|value| value.to_str().ok()), Some("application/wasm"));
 	assert!(module.body_mut().read_to_vec().expect("bytes").starts_with(b"\0asm"));
-	assert!(fetched("/site.js")
-		.body_mut()
-		.read_to_string()
-		.expect("a text")
-		.contains("hydrate"));
+	assert!(fetched("/site.js").body_mut().read_to_string().expect("a text").contains("hydrate"));
 	assert_eq!(get_from(PAGE_PORT, "/api/users"), r#"["Ann","Bo"]"#);
 	let (fine, value) = server.join().expect("the server thread");
 	assert!(fine, "{value}");
@@ -138,12 +124,7 @@ fn a_served_page_s_events_draw_no_warning() {
 	);
 	assert!(lowered.is_ok(), "{lowered:?}");
 	let warnings = warp::errors::diagnostic::take_warnings();
-	assert!(
-		warnings
-			.iter()
-			.all(|warning| !warning.message.contains("never raises it")),
-		"{warnings:?}"
-	);
+	assert!(warnings.iter().all(|warning| !warning.message.contains("never raises it")), "{warnings:?}");
 }
 
 // card serve-route, made single-page by the user's decision (2026-10-07, via warp-03): a served program with routes

@@ -117,14 +117,8 @@ impl TypeManager {
 		let node_type_idx = self.next_type_idx;
 		self.next_type_idx += 1;
 
-		let node_ref = RefType {
-			nullable: true,
-			heap_type: HeapType::Concrete(node_type_idx),
-		};
-		let any_ref = RefType {
-			nullable: true,
-			heap_type: any_heap_type(),
-		};
+		let node_ref = RefType { nullable: true, heap_type: HeapType::Concrete(node_type_idx) };
+		let any_ref = RefType { nullable: true, heap_type: any_heap_type() };
 
 		let node_fields = vec![
 			FieldType {
@@ -148,18 +142,12 @@ impl TypeManager {
 		self.node_type = node_type_idx;
 
 		// Type 2: $i64box = (struct (field i64)) for boxed integers
-		self.types.ty().struct_(vec![FieldType {
-			element_type: Val(ValType::I64),
-			mutable: false,
-		}]);
+		self.types.ty().struct_(vec![FieldType { element_type: Val(ValType::I64), mutable: false }]);
 		self.i64_box_type = self.next_type_idx;
 		self.next_type_idx += 1;
 
 		// Type 3: $f64box = (struct (field f64)) for boxed floats
-		self.types.ty().struct_(vec![FieldType {
-			element_type: Val(ValType::F64),
-			mutable: false,
-		}]);
+		self.types.ty().struct_(vec![FieldType { element_type: Val(ValType::F64), mutable: false }]);
 		self.f64_box_type = self.next_type_idx;
 		self.next_type_idx += 1;
 
@@ -174,10 +162,7 @@ impl TypeManager {
 	}
 
 	fn emit_meta_node_type(&mut self, node_fields: Vec<FieldType>, node_ref: RefType) {
-		let immutable = |element_type| FieldType {
-			element_type,
-			mutable: false,
-		};
+		let immutable = |element_type| FieldType { element_type, mutable: false };
 		let fields = [
 			node_fields,
 			vec![
@@ -187,38 +172,18 @@ impl TypeManager {
 			],
 		]
 		.concat();
-		self.types.ty().subtype(&SubType {
-			is_final: true,
-			..struct_subtype(fields, Some(self.node_type))
-		});
+		self.types.ty().subtype(&SubType { is_final: true, ..struct_subtype(fields, Some(self.node_type)) });
 		self.meta_node_type = Some(self.next_type_idx);
 		self.next_type_idx += 1;
 	}
 
 	fn emit_node_map_type(&mut self) {
-		let reference = |index: u32| {
-			Val(Ref(RefType {
-				nullable: false,
-				heap_type: HeapType::Concrete(index),
-			}))
-		};
+		let reference = |index: u32| Val(Ref(RefType { nullable: false, heap_type: HeapType::Concrete(index) }));
 		self.types.ty().struct_(vec![
-			FieldType {
-				element_type: Val(ValType::I32),
-				mutable: true,
-			}, // count
-			FieldType {
-				element_type: reference(self.node_array_type),
-				mutable: true,
-			}, // keys, capacity = their length
-			FieldType {
-				element_type: reference(self.node_array_type),
-				mutable: true,
-			}, // values
-			FieldType {
-				element_type: reference(self.limbs_type),
-				mutable: true,
-			}, // slots: entry index or -1
+			FieldType { element_type: Val(ValType::I32), mutable: true }, // count
+			FieldType { element_type: reference(self.node_array_type), mutable: true }, // keys, capacity = their length
+			FieldType { element_type: reference(self.node_array_type), mutable: true }, // values
+			FieldType { element_type: reference(self.limbs_type), mutable: true }, // slots: entry index or -1
 		]);
 		self.node_map_type = self.next_type_idx;
 		self.next_type_idx += 1;
@@ -226,10 +191,7 @@ impl TypeManager {
 
 	/// $NodeArray and $NodeList = (struct (field $length (mut i32)) (field $items (mut (ref $NodeArray))) (field $kind (mut i64)))
 	fn emit_node_list_types(&mut self) {
-		let kind = FieldType {
-			element_type: Val(ValType::I64),
-			mutable: true,
-		}; // of the list node, with its brackets
+		let kind = FieldType { element_type: Val(ValType::I64), mutable: true }; // of the list node, with its brackets
 		(self.node_array_type, self.node_list_type) =
 			self.emit_growable_list_types(Ref(self.node_ref(true)), Some(kind));
 	}
@@ -239,19 +201,10 @@ impl TypeManager {
 	fn emit_growable_list_types(&mut self, element: ValType, extra: Option<FieldType>) -> (u32, u32) {
 		self.types.ty().array(&Val(element), true);
 		let array = self.next_type_idx;
-		let items = RefType {
-			nullable: false,
-			heap_type: HeapType::Concrete(array),
-		};
+		let items = RefType { nullable: false, heap_type: HeapType::Concrete(array) };
 		let mut fields = vec![
-			FieldType {
-				element_type: Val(ValType::I32),
-				mutable: true,
-			}, // length
-			FieldType {
-				element_type: Val(Ref(items)),
-				mutable: true,
-			}, // items, capacity = their length
+			FieldType { element_type: Val(ValType::I32), mutable: true }, // length
+			FieldType { element_type: Val(Ref(items)), mutable: true },   // items, capacity = their length
 		];
 		fields.extend(extra);
 		self.types.ty().struct_(fields);
@@ -265,40 +218,22 @@ impl TypeManager {
 		self.limbs_type = self.next_type_idx;
 		self.next_type_idx += 1;
 
-		let limbs_ref = RefType {
-			nullable: true,
-			heap_type: HeapType::Concrete(self.limbs_type),
-		};
+		let limbs_ref = RefType { nullable: true, heap_type: HeapType::Concrete(self.limbs_type) };
 		self.types.ty().struct_(vec![
-			FieldType {
-				element_type: Val(ValType::I32),
-				mutable: false,
-			}, // negative
-			FieldType {
-				element_type: Val(Ref(limbs_ref)),
-				mutable: false,
-			}, // limbs
+			FieldType { element_type: Val(ValType::I32), mutable: false }, // negative
+			FieldType { element_type: Val(Ref(limbs_ref)), mutable: false }, // limbs
 		]);
 		self.big_int_type = self.next_type_idx;
 		self.next_type_idx += 1;
 
-		let any_ref = RefType {
-			nullable: true,
-			heap_type: any_heap_type(),
-		};
+		let any_ref = RefType { nullable: true, heap_type: any_heap_type() };
 		self.types.ty().array(&Val(Ref(any_ref)), true);
 		self.big_heap_type = self.next_type_idx;
 		self.next_type_idx += 1;
 
 		self.types.ty().struct_(vec![
-			FieldType {
-				element_type: Val(Ref(any_ref)),
-				mutable: false,
-			}, // numerator payload
-			FieldType {
-				element_type: Val(Ref(any_ref)),
-				mutable: false,
-			}, // positive denominator payload
+			FieldType { element_type: Val(Ref(any_ref)), mutable: false }, // numerator payload
+			FieldType { element_type: Val(Ref(any_ref)), mutable: false }, // positive denominator payload
 		]);
 		self.ratio_type = self.next_type_idx;
 		self.next_type_idx += 1;
@@ -313,11 +248,8 @@ impl TypeManager {
 
 	/// Emit a single user-defined struct type
 	pub fn emit_single_user_type(&mut self, type_def: &TypeDef) {
-		let fields: Vec<FieldType> = type_def
-			.fields
-			.iter()
-			.map(|f| self.field_def_to_wasm_field(f, &type_def.name))
-			.collect();
+		let fields: Vec<FieldType> =
+			type_def.fields.iter().map(|f| self.field_def_to_wasm_field(f, &type_def.name)).collect();
 
 		self.types.ty().struct_(fields);
 		self.user_type_indices.insert(type_def.name.clone(), self.next_type_idx);
@@ -328,12 +260,7 @@ impl TypeManager {
 	/// class is getting
 	pub fn field_def_to_wasm_field(&mut self, field: &FieldDef, class_name: &str) -> FieldType {
 		use crate::type_kinds::FieldStorage;
-		let reference = |heap_type| {
-			Val(Ref(RefType {
-				nullable: true,
-				heap_type,
-			}))
-		};
+		let reference = |heap_type| Val(Ref(RefType { nullable: true, heap_type }));
 		let element_type = match crate::type_kinds::field_storage(&field.type_name) {
 			FieldStorage::I64 => Val(ValType::I64),
 			FieldStorage::F64 => Val(ValType::F64),
@@ -341,20 +268,18 @@ impl TypeManager {
 			FieldStorage::F32 => Val(ValType::F32),
 			FieldStorage::Text => reference(HeapType::Concrete(self.string_type)),
 			FieldStorage::Node => reference(HeapType::Concrete(self.node_type)),
-			FieldStorage::Named => match self
-				.user_type_indices
-				.get(crate::type_kinds::named_field_type(&field.type_name))
-			{
-				Some(&type_idx) => reference(HeapType::Concrete(type_idx)),
-				None if crate::type_kinds::named_field_type(&field.type_name) == class_name => {
-					reference(HeapType::Concrete(self.next_type_idx))
+			FieldStorage::Named => {
+				match self.user_type_indices.get(crate::type_kinds::named_field_type(&field.type_name)) {
+					Some(&type_idx) => reference(HeapType::Concrete(type_idx)),
+					None if crate::type_kinds::named_field_type(&field.type_name) == class_name => {
+						reference(HeapType::Concrete(self.next_type_idx))
+					}
+					None => {
+						self.type_errors.push(format!("unknown type: {} of field {}", field.type_name, field.name));
+						Val(Ref(self.node_ref(true)))
+					}
 				}
-				None => {
-					self.type_errors
-						.push(format!("unknown type: {} of field {}", field.type_name, field.name));
-					Val(Ref(self.node_ref(true)))
-				}
-			},
+			}
 		};
 
 		FieldType {
@@ -365,10 +290,7 @@ impl TypeManager {
 
 	/// Get a RefType for Node with specified nullability
 	pub fn node_ref(&self, nullable: bool) -> RefType {
-		RefType {
-			nullable,
-			heap_type: HeapType::Concrete(self.node_type),
-		}
+		RefType { nullable, heap_type: HeapType::Concrete(self.node_type) }
 	}
 
 	/// Get the WASM type index for a user-defined type
@@ -410,13 +332,7 @@ impl TypeManager {
 
 /// The fields of $String: ptr and len of its bytes in linear memory
 pub(super) fn string_fields() -> Vec<FieldType> {
-	vec![
-		FieldType {
-			element_type: Val(ValType::I32),
-			mutable: false
-		};
-		2
-	]
+	vec![FieldType { element_type: Val(ValType::I32), mutable: false }; 2]
 }
 
 /// A struct type that other types may extend (or, with a supertype, one that extends it)
@@ -425,9 +341,7 @@ fn struct_subtype(fields: Vec<FieldType>, supertype_idx: Option<u32>) -> SubType
 		is_final: false,
 		supertype_idx,
 		composite_type: CompositeType {
-			inner: CompositeInnerType::Struct(StructType {
-				fields: fields.into_boxed_slice(),
-			}),
+			inner: CompositeInnerType::Struct(StructType { fields: fields.into_boxed_slice() }),
 			shared: false,
 			descriptor: None,
 			describes: None,

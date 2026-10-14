@@ -1,5 +1,6 @@
 //! Static members: `static k = 3` and `static make(x) := …` in a class body (P122)
 use super::*;
+use crate::words::SELF_WORD;
 
 /// A method of the instances of a class, its name and parameters: an instance method, or the getter `k` of a static
 /// field `static k = 3`; a static method is none
@@ -47,11 +48,7 @@ pub(super) fn static_reads(node: Node, statics: &[(String, String)]) -> Node {
 	let Node::Symbol(class) = object.drop_meta() else {
 		return key(recurse(*object), Op::Dot, recurse(*member));
 	};
-	let is_member = |name: &str| {
-		statics
-			.iter()
-			.any(|(owner, static_member)| owner == class && static_member == name)
-	};
+	let is_member = |name: &str| statics.iter().any(|(owner, static_member)| owner == class && static_member == name);
 	match member.drop_meta() {
 		Node::Symbol(name) if is_member(name) => Node::Symbol(static_name(class, name)),
 		_ => Node::Key(object, Op::Dot, Box::new(recurse(*member))),
@@ -69,7 +66,7 @@ pub(super) fn static_definitions(members: &Members, member: &Node) -> Vec<Node> 
 		return vec![];
 	};
 	let global = Node::Symbol(static_name(class, &name));
-	let receiver = key(symbol(RECEIVER), Op::Colon, symbol(class));
+	let receiver = key(symbol(SELF_WORD), Op::Colon, symbol(class));
 	let getter_head = call(&name, vec![receiver]);
 	let declaration = Node::Key(Box::new(global.clone()), Op::Assign, value.clone());
 	// `global c·n = 0`: methods may change it (`n += 1`)

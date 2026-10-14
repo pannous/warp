@@ -6,14 +6,8 @@ use warp::extensions::reals::{Exact, Real};
 #[test]
 fn complex_mixes_with_any_number() {
 	assert_eq!(Number::Complex(1.0, 2.0) + Number::Int(1), Number::Complex(2.0, 2.0));
-	assert_eq!(
-		Number::Float(0.5) * Number::Complex(2.0, 4.0),
-		Number::Complex(1.0, 2.0)
-	);
-	assert_eq!(
-		Number::Complex(2.0, 2.0) - Number::Quotient(1, 2),
-		Number::Complex(1.5, 2.0)
-	);
+	assert_eq!(Number::Float(0.5) * Number::Complex(2.0, 4.0), Number::Complex(1.0, 2.0));
+	assert_eq!(Number::Complex(2.0, 2.0) - Number::Quotient(1, 2), Number::Complex(1.5, 2.0));
 	assert_eq!(Number::Complex(2.0, 4.0) / Number::Int(2), Number::Complex(1.0, 2.0));
 	assert_eq!(f64::from(Number::Complex(3.0, 0.0)), 3.0);
 	assert!(f64::from(Number::Complex(1.0, 2.0)).is_nan());
@@ -35,8 +29,5 @@ fn an_exact_real_stays_exact_with_a_ratio() {
 	assert!(matches!(sum, Number::Real(Real::Exact(_))), "{sum}");
 	assert_eq!(sum - Number::Quotient(1, 3), pi);
 	let approximate = pi + Number::Float(0.25);
-	assert!(
-		(f64::from(approximate) - (std::f64::consts::PI + 0.25)).abs() < 1e-12,
-		"{approximate}"
-	);
+	assert!((f64::from(approximate) - (std::f64::consts::PI + 0.25)).abs() < 1e-12, "{approximate}");
 }

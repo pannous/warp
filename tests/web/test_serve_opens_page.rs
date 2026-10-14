@@ -24,11 +24,7 @@ fn a_listening_server_hands_its_address_over_once() {
 		assert!(started.elapsed() < Duration::from_secs(60), "the server did not start");
 		std::thread::sleep(Duration::from_millis(50));
 	}
-	let answer = ureq::get(&format!("http://127.0.0.1:{PORT}/"))
-		.call()
-		.expect("an answer")
-		.body_mut()
-		.read_to_string();
+	let answer = ureq::get(&format!("http://127.0.0.1:{PORT}/")).call().expect("an answer").body_mut().read_to_string();
 	assert_eq!(answer.expect("a text"), "hi");
 	server.join().expect("the server thread");
 	assert_eq!(*HEARD.lock().unwrap(), vec![format!("http://localhost:{PORT}/")]);

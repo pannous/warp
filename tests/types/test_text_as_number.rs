@@ -8,15 +8,9 @@ const READ: &str = "var t = \"\"\nfor c in \"5\".chars() { t = t + c }\n";
 fn a_run_time_text_as_number_is_its_number() {
 	is!(&format!("{READ}(t as number) * 2"), 10);
 	is!(&format!("{READ}n = t as number; n + 1"), 6);
-	is!(
-		&format!("{READ}class Q{{amount}}\nq = Q(t as number)\nq.amount / 2"),
-		2.5
-	);
+	is!(&format!("{READ}class Q{{amount}}\nq = Q(t as number)\nq.amount / 2"), 2.5);
 	is!(&format!("{READ}xs = [t as number]\nxs#1 * 3"), 15);
-	is!(
-		"var t = \"\"\nfor c in \"-2.5\".chars() { t = t + c }\n(t as number) * 2",
-		-5.0
-	);
+	is!("var t = \"\"\nfor c in \"-2.5\".chars() { t = t + c }\n(t as number) * 2", -5.0);
 }
 
 #[test]

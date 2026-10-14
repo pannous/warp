@@ -7,6 +7,12 @@ use crate::node::Node::{Empty, Symbol};
 use crate::node::{error, key_ops, Bracket, Node, Separator};
 use crate::normalize::{hints as norm, set_hint_position, ListTypeStyle};
 use crate::operators::{glyph_operator, is_function_keyword, Op};
+use crate::words::DO_WORD;
+use crate::words::EACH_WORD;
+use crate::words::IS_WORD;
+use crate::words::MAP_WORD;
+use crate::words::OF_WORD;
+use crate::words::PRINT_WORD;
 use log::warn;
 use std::fs::read_to_string;
 
@@ -62,22 +68,14 @@ use unicode_normalization::UnicodeNormalization;
 /// Largest exponent written out as an exact integer literal (1e4096 has 4097 digits)
 /// What follows the scheme of a URL read as one text, whatever the scheme: `https://pannous.com`, `ssh://host` (card add-http)
 const URL_MARK: &str = "://";
-pub const IT_WORD: &str = "it";
 /// The item of the map a Julia dot call `f.(xs)` lowers to
 const BROADCAST_ITEM: &str = "broadcast_item";
-const MAP_WORD: &str = "map";
 /// Words that make a parameter the rest parameter: Kotlin `vararg xs: Int`, C# `params int[] xs`
 const REST_MARKERS: [&str; 2] = ["vararg", "params"];
 const MAX_INTEGER_EXPONENT: i64 = 4096;
 /// Literal suffixes of C, Java and C#, a tight conversion: `0.1f`, `0.1d` (double) → float; `0.1l` (long double) → exact, the default anyway
-const LITERAL_SUFFIXES: [(char, &str); 6] = [
-	('f', "float"),
-	('F', "float"),
-	('d', "float"),
-	('D', "float"),
-	('l', "exact"),
-	('L', "exact"),
-];
+const LITERAL_SUFFIXES: [(char, &str); 6] =
+	[('f', "float"), ('F', "float"), ('d', "float"), ('D', "float"), ('l', "exact"), ('L', "exact")];
 /// Words that may precede the name of a global besides a type word (`int`, `long` … see `analyzer::type_word_kind`)
 pub(crate) const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
 
@@ -85,7 +83,6 @@ pub(crate) const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
 const GENERIC_TYPE_HEADS: [&str; 7] = ["list", "array", "set", "map", "option", "result", "tuple"];
 /// Other languages' list types: warp's list holds any elements, unboxed numbers too, so `Vec<int>` is `list of int`
 const FOREIGN_LIST_HEADS: [&str; 6] = ["Vec", "vector", "Vector", "array", "Array", "ArrayList"];
-const LIST_HEAD: &str = "list";
 
 const DECLARATION_MODIFIERS: [&str; 3] = ["export", "mutable", "mut"];
 /// Modifiers of other languages with no meaning in warp: skipped with a note (user decision P78)
@@ -126,9 +123,7 @@ const LEFT_ARROW_TOPIC: &str = "left-arrow";
 pub(crate) const TYPE_DECLARATION_WORDS: [&str; 2] = ["class", "struct"];
 /// Words before a class declaration that change nothing in warp: `data class` (a warp class compares by value already),
 /// `open`, `abstract`, `sealed`, `final`, visibility
-const CLASS_MODIFIERS: [&str; 8] = [
-	"data", "open", "abstract", "sealed", "final", "public", "private", "internal",
-];
+const CLASS_MODIFIERS: [&str; 8] = ["data", "open", "abstract", "sealed", "final", "public", "private", "internal"];
 /// The keywords of a field: Kotlin's primary constructor `class Point(val x: Int, var y: Int)`, Swift's `var count = 0`
 pub(crate) const FIELD_KEYWORDS: [&str; 3] = ["val", "var", "let"];
 /// `new Point(1, 2)`: the construction `Point(1, 2)`
@@ -173,8 +168,6 @@ const PYTHON_ROOT_CLASS: &str = "object";
 const RECORD_WORD: &str = "record";
 /// `1 upto 10` excludes 10 (wiki/range.md), asked about because readers expect either
 const UPTO: &str = "upto";
-/// `for each item in basket` is `for item in basket`
-const EACH_WORD: &str = "each";
 /// `10 down to 1` is `reverse(1 to 10)`
 const DOWN_WORD: &str = "down";
 const REVERSE_WORD: &str = "reverse";
@@ -186,15 +179,11 @@ const NEGATED_CONTROL_WORDS: [(&str, Op); 2] = [("unless", Op::If), ("until", Op
 /// Words that test a value for being ø or falsy, sugar for `not x`; `failed` tests for an Error value (is_error)
 const TEST_WORDS: [&str; 6] = ["empty", "missing", "absent", "unknown", "undefined", FAILED_WORD];
 const FAILED_WORD: &str = "failed";
-/// The runtime test of `x failed` (wasm_emitter/text_builtins.rs)
-const IS_ERROR_CALL: &str = "is_error";
-const COUNT_CALL: &str = "count";
 const EMPTY_WORD: &str = "empty";
 /// Operators that may follow a suffix `!` directly: `x!+1`, `x!*2` (`!=` is the inequality)
 const INFIX_AFTER_BANG: [char; 9] = ['+', '-', '*', '/', '%', '^', '<', '>', ')'];
 /// Python's `elif`, Perl's and Ruby's `elsif`, PHP's `elseif`: all `else if`
 const ELSE_IF_WORDS: [&str; 3] = ["elif", "elsif", "elseif"];
-const RETURN_KEYWORD: &str = "return";
 /// `x = data a and b`: the prefix takes the whole expression after it (card data-quoting); `data class` is a modifier
 const DATA_KEYWORD: &str = "data";
 const CLASS_KEYWORD: &str = "class";
@@ -207,12 +196,10 @@ const GLUED_BLOCK_KEYWORDS: [&str; 3] = ["go", "loop", "do"];
 const AWAIT_ALL_WORD: &str = "all";
 /// `await x` binds its operand like unary minus
 const AWAIT_OPERAND_BP: u8 = Op::Neg.binding_power().1;
-const PRINT_WORD: &str = "print";
 /// Other languages' print words (wiki/Features.md); `log` stays the logarithm, `puts` the WASI text output
 const PRINT_SPELLINGS: [&str; 2] = ["println", "writeln"];
 /// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
 const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate them with `;` or a newline";
-const IN_KEYWORD: &str = "in";
 /// What ends a loop's iterable besides its body: the statement, a comprehension's bracket or condition (`if`)
 const ITERABLE_ENDS: [char; 6] = [';', '}', ']', ')', ',', '\0'];
 const IF_WORD: &str = "if";
@@ -222,8 +209,6 @@ const ELIXIR_FUNCTION_KEYWORD: &str = "fn";
 const PYTHON_LAMBDA_KEYWORD: &str = "lambda";
 const ELSE_KEYWORD: &str = "else";
 const END_BLOCK_OPENERS: [&str; 2] = ["do", "then"];
-/// The receiver a Ruby instance variable `@x` reads, `self.x`
-const RECEIVER_WORD: &str = "self";
 /// Ruby's field declarations `attr_accessor :x, :y`
 const RUBY_FIELD_WORDS: [&str; 3] = ["attr_accessor", "attr_reader", "attr_writer"];
 /// The words a Ruby `end` closes in a class body: `def … end`, `do … end`
@@ -273,11 +258,8 @@ pub const ASSERTION_FAILED: &str = "assertion failed";
 const BANG_BP: u8 = Op::Hash.binding_power().0.midpoint(Op::Pow.binding_power().0);
 const TO_WORD: &str = "to";
 const TO_SENTENCE_WORD: &str = "To";
-/// `to greet p do …`: the word between a `to` definition's parameters and its body
-const DO_WORD: &str = "do";
 /// `to render text as pdf: …`: the word before a `to` definition's result type (card render-as)
 const RESULT_TYPE_WORD: &str = "as";
-const OF_WORD: &str = "of";
 /// `a[start:end]` calls the library word `slice`
 const SLICE_WORD: &str = crate::words::SLICE;
 pub(crate) const TIMES_WORD: &str = "times";
@@ -286,8 +268,6 @@ pub const TEXT_TIMES: &str = "times·text";
 /// The acknowledge-once note that a spaced `//` after code is a comment, not Python's floor division
 const SLASH_COMMENT_TOPIC: &str = "slash-comment";
 const ELVIS_WORD: &str = "elvis";
-/// `x is int` tests the type; `x == int` stays equality (user decision #30)
-const IS_WORD: &str = "is";
 /// `N times` takes everything up to an assignment: `n+1 times {…}`
 const TIMES_BP: u8 = 50;
 
@@ -310,24 +290,15 @@ pub struct ParserOptions {
 
 impl ParserOptions {
 	pub fn wit() -> Self {
-		ParserOptions {
-			wit_mode: true,
-			..Default::default()
-		}
+		ParserOptions { wit_mode: true, ..Default::default() }
 	}
 
 	pub fn xml() -> Self {
-		ParserOptions {
-			xml_mode: true,
-			..Default::default()
-		}
+		ParserOptions { xml_mode: true, ..Default::default() }
 	}
 
 	pub fn data() -> Self {
-		ParserOptions {
-			data_mode: true,
-			..Default::default()
-		}
+		ParserOptions { data_mode: true, ..Default::default() }
 	}
 }
 
@@ -372,11 +343,7 @@ const FLOOR_DIVISION_ASSIGNMENT: &str = "//=";
 const PIPE_GLYPH: &str = "|";
 
 pub fn parse_file(path: &str) -> Node {
-	let options = if path.ends_with(".wit") {
-		ParserOptions::wit()
-	} else {
-		ParserOptions::default()
-	};
+	let options = if path.ends_with(".wit") { ParserOptions::wit() } else { ParserOptions::default() };
 	match read_to_string(path) {
 		Ok(content) => WarpParser::parse_with_options(&content, options),
 		_ => error(&format!("Failed to read {}", path)),
@@ -387,10 +354,7 @@ pub fn parse_file(path: &str) -> Node {
 /// has one arrow, `->` (user 2026-10-14: "equal for us, but not for others")
 fn one_arrow(node: Node) -> Node {
 	let node = match node {
-		Node::Type { name, body } => Node::Type {
-			name,
-			body: Box::new(one_arrow(*body)),
-		},
+		Node::Type { name, body } => Node::Type { name, body: Box::new(one_arrow(*body)) },
 		other => crate::node::children_rewritten(other, one_arrow),
 	};
 	match node {
@@ -522,19 +486,11 @@ impl WarpParser {
 			unicode_normalization::IsNormalized::Yes => input,
 			_ => input.nfc().collect(),
 		};
-		let input = if options.data_mode {
-			input
-		} else {
-			crate::text::uniscript_entities::expand_entities(&input)
-		};
+		let input = if options.data_mode { input } else { crate::text::uniscript_entities::expand_entities(&input) };
 		let lines: Vec<String> = input.lines().map(String::from).collect();
 		let current_line = lines.first().cloned().unwrap_or_default();
 		let chars: Vec<char> = input.chars().collect();
-		let user_operators = if options == ParserOptions::default() {
-			scan_user_operators(&input)
-		} else {
-			Vec::new()
-		};
+		let user_operators = if options == ParserOptions::default() { scan_user_operators(&input) } else { Vec::new() };
 		let (declared_types, multi_word_types) = if options == ParserOptions::default() {
 			(scan_declared_types(&input), scan_multi_word_types(&input))
 		} else {

@@ -13,10 +13,7 @@ fn a_shader_block_is_its_wgsl_text() {
 #[test]
 fn a_shader_block_over_lines_loses_its_indentation() {
 	let code = "s = shader {\n\t@fragment fn main() -> @location(0) vec4f {\n\t\treturn vec4f(1.0); // a { in a comment\n\t}\n}\ns";
-	is!(
-		code,
-		"@fragment fn main() -> @location(0) vec4f {\n\treturn vec4f(1.0); // a { in a comment\n}"
-	);
+	is!(code, "@fragment fn main() -> @location(0) vec4f {\n\treturn vec4f(1.0); // a { in a comment\n}");
 }
 
 #[test]
@@ -36,8 +33,5 @@ fn paint_takes_a_shader_block() {
 		return crate::common::announce_skip("a WebGPU adapter", module_path!());
 	}
 	let quoted = painted_rows(&format!("paint(\"{FRAGMENT}\", 2, 1)"), "paint-quoted-shader");
-	assert_eq!(
-		painted_rows(&format!("paint(shader {{ {FRAGMENT} }}, 2, 1)"), "paint-shader-block"),
-		quoted
-	);
+	assert_eq!(painted_rows(&format!("paint(shader {{ {FRAGMENT} }}, 2, 1)"), "paint-shader-block"), quoted);
 }

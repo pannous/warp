@@ -46,25 +46,13 @@ fn a_wrapped_comment_is_the_whole_doc_of_its_word() {
 fn a_hand_wrapped_comment_is_the_whole_doc_of_its_word() {
 	let page = standard_library_markdown();
 	let render = markdown_entry(&page, "html_render(value:any, scope:any, chosen:any)");
-	assert!(
-		render.contains("`scope`: the component") && render.ends_with("card web-bind-select)"),
-		"{render}"
-	);
+	assert!(render.contains("`scope`: the component") && render.ends_with("card web-bind-select)"), "{render}");
 	let mark = markdown_entry(&page, "route_part_mark(part:any)");
-	assert!(
-		mark.contains("\"?\" at most once") && mark.ends_with("\"\" exactly once"),
-		"{mark}"
-	);
+	assert!(mark.contains("\"?\" at most once") && mark.ends_with("\"\" exactly once"), "{mark}");
 	let units = markdown_entry(&page, "unit_names");
-	assert!(
-		units.contains("The units by name") && units.contains("65536·time"),
-		"{units}"
-	);
+	assert!(units.contains("The units by name") && units.contains("65536·time"), "{units}");
 	let signal = markdown_entry(&page, "play_signal(signal, seconds)");
-	assert!(
-		signal.contains("a signal computed") && signal.ends_with("the last is queued"),
-		"{signal}"
-	);
+	assert!(signal.contains("a signal computed") && signal.ends_with("the last is queued"), "{signal}");
 	let square = markdown_entry(&page, "square(x)");
 	assert!(!square.contains("P169"), "{square}");
 }

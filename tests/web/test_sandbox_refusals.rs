@@ -10,9 +10,7 @@ const REPLY: &str = "HTTP/1.1 200 OK\r\nContent-Length: 7\r\nConnection: close\r
 
 /// A fresh state folder of the test's own, and a fresh folder outside it
 fn folders(test: &str) -> (PathBuf, PathBuf) {
-	let root = Path::new(env!("CARGO_TARGET_TMPDIR"))
-		.join("sandbox_refusals")
-		.join(test);
+	let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join("sandbox_refusals").join(test);
 	let _ = std::fs::remove_dir_all(&root);
 	let (state, outside) = (root.join("state"), root.join("outside"));
 	std::fs::create_dir_all(&state).expect("a state folder");
@@ -30,11 +28,7 @@ fn sandboxed_run(state: &Path, code: &str) -> (String, bool) {
 		.env("WARP_NO_WINDOW", "1")
 		.output()
 		.expect("warp runs");
-	let printed = format!(
-		"{}{}",
-		String::from_utf8_lossy(&output.stdout),
-		String::from_utf8_lossy(&output.stderr)
-	);
+	let printed = format!("{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
 	(printed, output.status.success())
 }
 
@@ -54,9 +48,7 @@ fn a_sandboxed_program_starts_no_process_and_calls_no_c() {
 	let (state, _) = folders("process");
 	refused(&state, "exec sh\"echo SHELL-RAN\"", "process");
 	refused(&state, "use os; exec(sh\"echo SHELL-RAN\")", "process");
-	assert!(!sandboxed_run(&state, "exec sh\"echo SHELL-RAN\"")
-		.0
-		.contains("\"SHELL-RAN\""));
+	assert!(!sandboxed_run(&state, "exec sh\"echo SHELL-RAN\"").0.contains("\"SHELL-RAN\""));
 	refused(&state, "import strlen from \"c\"; strlen(\"ab\")", "ffi");
 }
 
@@ -67,10 +59,7 @@ fn a_sandboxed_program_writes_inside_its_state_folder() {
 		write_bytes(\"b.bin\", [1, 2]); 3";
 	let (printed, succeeded) = sandboxed_run(&state, code);
 	assert!(succeeded && printed.contains('3'), "{printed}");
-	assert_eq!(
-		std::fs::read_to_string(state.join("notes/a.txt")).ok().as_deref(),
-		Some("xy")
-	);
+	assert_eq!(std::fs::read_to_string(state.join("notes/a.txt")).ok().as_deref(), Some("xy"));
 	assert_eq!(std::fs::read(state.join("b.bin")).ok(), Some(vec![1, 2]));
 }
 
@@ -80,26 +69,10 @@ fn a_sandboxed_program_writes_nothing_outside_its_state_folder() {
 	let escaped = outside.join("escaped.txt");
 	let path = escaped.display();
 	refused(&state, &format!("use file; write(\"{path}\", \"x\")"), "file-write");
-	refused(
-		&state,
-		&format!("use file; file.append(\"{path}\", \"x\")"),
-		"file-write",
-	);
-	refused(
-		&state,
-		&format!("use file; write_bytes(\"{path}\", [1, 2])"),
-		"file-write",
-	);
-	refused(
-		&state,
-		"use file; write(\"../outside/escaped.txt\", \"x\")",
-		"file-write",
-	);
-	refused(
-		&state,
-		"use file; write(\"notes/../../outside/escaped.txt\", \"x\")",
-		"file-write",
-	);
+	refused(&state, &format!("use file; file.append(\"{path}\", \"x\")"), "file-write");
+	refused(&state, &format!("use file; write_bytes(\"{path}\", [1, 2])"), "file-write");
+	refused(&state, "use file; write(\"../outside/escaped.txt\", \"x\")", "file-write");
+	refused(&state, "use file; write(\"notes/../../outside/escaped.txt\", \"x\")", "file-write");
 	std::os::unix::fs::symlink(&outside, state.join("link")).expect("a link to the outside folder");
 	refused(&state, "use file; write(\"link/escaped.txt\", \"x\")", "file-write");
 	std::os::unix::fs::symlink(&escaped, state.join("dangling.txt")).expect("a dangling link");
@@ -118,10 +91,7 @@ fn a_sandboxed_program_reaches_the_network() {
 			let _ = stream.write_all(REPLY.as_bytes());
 		}
 	});
-	for code in [
-		format!("fetch \"http://{address}/\""),
-		format!("use net; post(\"http://{address}/\", \"x\")"),
-	] {
+	for code in [format!("fetch \"http://{address}/\""), format!("use net; post(\"http://{address}/\", \"x\")")] {
 		let (printed, succeeded) = sandboxed_run(&state, &code);
 		assert!(succeeded && printed.contains("REACHED"), "{code}: {printed}");
 	}
@@ -130,12 +100,7 @@ fn a_sandboxed_program_reaches_the_network() {
 #[test]
 fn a_sandboxed_pure_program_still_runs() {
 	let (state, _) = folders("pure");
-	let (printed, succeeded) = sandboxed_run(
-		&state,
-		"fib(n) := if n < 2 then n else fib(n-1) + fib(n-2); [1, 2, 3].map(x => x * fib(10))",
-	);
-	assert!(
-		succeeded && printed.contains("55") && printed.contains("165"),
-		"{printed}"
-	);
+	let (printed, succeeded) =
+		sandboxed_run(&state, "fib(n) := if n < 2 then n else fib(n-1) + fib(n-2); [1, 2, 3].map(x => x * fib(10))");
+	assert!(succeeded && printed.contains("55") && printed.contains("165"), "{printed}");
 }

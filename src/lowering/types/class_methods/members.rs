@@ -1,6 +1,7 @@
 //! Class bodies as their members: fields as Java, C#, Go and Python write them, properties and accessors, constructors as `init`, methods with their result types
 use super::*;
 use crate::node::parens;
+use crate::words::SELF_WORD;
 
 /// The fields and methods of a class body; the groups a `;` makes (`{name age:int; greet() := …}`) flattened
 pub(super) fn class_items(body: &Node) -> Vec<Node> {
@@ -55,17 +56,9 @@ pub(super) fn with_body_words(item: Node) -> Node {
 	let Node::Key(head, op, value) = before[at].drop_meta() else {
 		return item;
 	};
-	let body = Node::List(
-		[vec![value.as_ref().clone()], rest.to_vec()].concat(),
-		Bracket::None,
-		Separator::Space,
-	);
+	let body = Node::List([vec![value.as_ref().clone()], rest.to_vec()].concat(), Bracket::None, Separator::Space);
 	let definition = Node::Key(head.clone(), *op, Box::new(body));
-	Node::List(
-		[before[..at].to_vec(), vec![definition]].concat(),
-		Bracket::None,
-		Separator::Space,
-	)
+	Node::List([before[..at].to_vec(), vec![definition]].concat(), Bracket::None, Separator::Space)
 }
 
 /// `def area() -> int {…}`, `fun area(): Int {…}`, `func area() {…}`: the method `area() := …` (with its result type)
@@ -130,8 +123,8 @@ pub(super) fn accessors(words: &[Node]) -> Option<Vec<Node>> {
 		{
 			let name = name.drop_meta().name();
 			// `it` is the new value; named apart, so no pass reads the block as a lambda of `it`
-			let new_value = Node::Symbol(format!("{}{SETTER_SUFFIX}", crate::warp_parser::IT_WORD));
-			let setter = renamed_symbol(setter.as_ref().clone(), crate::warp_parser::IT_WORD, &new_value);
+			let new_value = Node::Symbol(format!("{}{SETTER_SUFFIX}", crate::words::IMPLICIT_PARAMETER));
+			let setter = renamed_symbol(setter.as_ref().clone(), crate::words::IMPLICIT_PARAMETER, &new_value);
 			Some(vec![
 				method(&name, vec![], getter),
 				method(&format!("{name}{SETTER_SUFFIX}"), vec![new_value], &setter),
@@ -192,10 +185,8 @@ pub(super) fn without_modifiers(item: Node) -> Node {
 	let is_modifier = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if crate::warp_parser::MEMBER_MODIFIERS.contains(&word.as_str()) || crate::warp_parser::FIELD_KEYWORDS.contains(&word.as_str()));
 	let kept: Vec<Node> = words.iter().skip_while(|word| is_modifier(word)).cloned().collect();
 	if let Some(kept_word) = kept.first().map(leading_name).filter(|_| kept.len() < words.len()) {
-		let modifiers: Vec<String> = words[..words.len() - kept.len()]
-			.iter()
-			.map(|word| word.drop_meta().name())
-			.collect();
+		let modifiers: Vec<String> =
+			words[..words.len() - kept.len()].iter().map(|word| word.drop_meta().name()).collect();
 		if !modifiers.iter().any(|word| SILENT_MODIFIERS.contains(&word.as_str())) {
 			crate::normalize::set_position_of(&item);
 			crate::errors::diagnostic::note_alias(&format!("{} {kept_word}", modifiers.join(" ")), &kept_word);
@@ -220,9 +211,9 @@ pub(super) fn nested_fields(words: &[Node]) -> Option<Node> {
 	let is_field = |field: &Node| match field.drop_meta() {
 		Node::Symbol(_) => true,
 		Node::Key(_, Op::Colon, _) => true,
-		Node::List(group, Bracket::None, _) => group
-			.iter()
-			.all(|field| matches!(field.drop_meta(), Node::Symbol(_) | Node::Key(_, Op::Colon, _))),
+		Node::List(group, Bracket::None, _) => {
+			group.iter().all(|field| matches!(field.drop_meta(), Node::Symbol(_) | Node::Key(_, Op::Colon, _)))
+		}
 		_ => false,
 	};
 	let is_member_word = crate::operators::is_function_keyword(word)
@@ -256,12 +247,8 @@ pub(super) fn auto_property(words: &[Node]) -> Option<Node> {
 		return None;
 	};
 	let only_accessors = !accessors.is_empty()
-		&& accessors
-			.iter()
-			.all(|accessor| matches!(accessor.drop_meta().name().as_str(), "get" | "set" | "init"));
-	only_accessors
-		.then(|| typed_field(&[field_type.clone(), name.clone()]))
-		.flatten()
+		&& accessors.iter().all(|accessor| matches!(accessor.drop_meta().name().as_str(), "get" | "set" | "init"));
+	only_accessors.then(|| typed_field(&[field_type.clone(), name.clone()])).flatten()
 }
 
 /// TypeScript's method with its result type, `twice(): number { … }`: `twice():number := {…}`
@@ -274,13 +261,7 @@ pub(super) fn typed_method(call: &Node, typed_block: &Node) -> Option<Node> {
 		return None;
 	};
 	let is_block = matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _));
-	(is_call && is_block).then(|| {
-		key(
-			key(call.clone(), Op::Colon, result_type.clone()),
-			Op::Define,
-			block.clone(),
-		)
-	})
+	(is_call && is_block).then(|| key(key(call.clone(), Op::Colon, result_type.clone()), Op::Define, block.clone()))
 }
 
 /// Python's class attribute: a field `count = 0` read as `Counter.count` is the class's own, shared by its instances
@@ -322,10 +303,7 @@ pub(super) fn class_attributes(node: Node, qualified: &[(String, String)]) -> No
 					false => item,
 				})
 				.collect();
-			Node::Type {
-				name,
-				body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)),
-			}
+			Node::Type { name, body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)) }
 		}
 		other => other.map_children(|child| class_attributes(child, qualified)),
 	}
@@ -362,9 +340,7 @@ pub(super) fn constructed_from_braces(node: Node, classes: &[String]) -> Node {
 			if matches!(class.drop_meta(), Node::Symbol(name) if classes.contains(name))
 				&& matches!(braces.drop_meta(), Node::List(items, Bracket::Curly, _) if is_positional(items)) =>
 		{
-			let Node::List(items, _, _) = braces.drop_meta().clone() else {
-				unreachable!("guarded")
-			};
+			let Node::List(items, _, _) = braces.drop_meta().clone() else { unreachable!("guarded") };
 			let class_name = class.drop_meta().name();
 			let written: Vec<String> = items.iter().map(Node::serialize).collect();
 			crate::normalize::set_position_of(&class);
@@ -414,10 +390,7 @@ pub(super) fn with_init_constructors(node: Node, called: &std::collections::Hash
 					None => item,
 				})
 				.collect();
-			Node::Type {
-				name,
-				body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)),
-			}
+			Node::Type { name, body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)) }
 		}
 		other => other.map_children(|child| with_init_constructors(child, called)),
 	}
@@ -466,10 +439,7 @@ pub(super) fn with_members(node: Node) -> Node {
 			let members = Node::List(class_items(&body), Bracket::Curly, Separator::Semicolon);
 			let changed = members.serialize()
 				!= Node::List(class_items_as_written(&body), Bracket::Curly, Separator::Semicolon).serialize();
-			Node::Type {
-				name,
-				body: Box::new(if changed { members } else { *body }),
-			}
+			Node::Type { name, body: Box::new(if changed { members } else { *body }) }
 		}
 		other => other.map_children(with_members),
 	}
@@ -505,9 +475,7 @@ pub(super) fn declared_with_classes(node: Node, classes: &[String]) -> Node {
 				&& classes.contains(&words[0].drop_meta().name())
 				&& matches!(words[1].drop_meta(), Node::Key(variable, Op::Assign, _) if matches!(variable.drop_meta(), Node::Symbol(_))) =>
 		{
-			let Node::Key(variable, _, value) = words[1].drop_meta().clone() else {
-				unreachable!("guarded")
-			};
+			let Node::Key(variable, _, value) = words[1].drop_meta().clone() else { unreachable!("guarded") };
 			let typed = Node::Key(variable, Op::Colon, Box::new(words[0].clone()));
 			key(typed, Op::Assign, declared_with_classes(*value, classes))
 		}
@@ -549,9 +517,9 @@ pub(super) fn as_member(definition: Node) -> Node {
 	let parameters: Vec<Node> = parameters.iter().flat_map(grouped_parameters).collect();
 	// `self`, `self: Self`, Rust's `&self`
 	let is_self = |parameter: &Node| match parameter.drop_meta() {
-		Node::Symbol(word) => word == RECEIVER,
-		Node::Key(word, Op::Colon, _) => word.drop_meta().name() == RECEIVER,
-		Node::Key(empty, _, word) => empty.is_empty_node() && word.drop_meta().name() == RECEIVER,
+		Node::Symbol(word) => word == SELF_WORD,
+		Node::Key(word, Op::Colon, _) => word.drop_meta().name() == SELF_WORD,
+		Node::Key(empty, _, word) => empty.is_empty_node() && word.drop_meta().name() == SELF_WORD,
 		_ => false,
 	};
 	let parameters = match parameters.first() {
@@ -559,11 +527,7 @@ pub(super) fn as_member(definition: Node) -> Node {
 		_ => parameters,
 	};
 	let name = glyph_method(&name.drop_meta().name()).map_or(name.clone(), symbol);
-	Node::Key(
-		Box::new(Node::List([vec![name], parameters].concat(), Bracket::Round, separator)),
-		Op::Define,
-		body,
-	)
+	Node::Key(Box::new(Node::List([vec![name], parameters].concat(), Bracket::Round, separator)), Op::Define, body)
 }
 
 /// A body as the block `{…}` a constructor has
@@ -645,7 +609,7 @@ pub(super) fn collect_fields_set(node: &Node, parameters: &[String], names: &mut
 				Node::Symbol(name) if !parameters.contains(name) => Some(name.clone()),
 				Node::Key(receiver, Op::Dot, field)
 					if RECEIVER_ALIASES.contains(&receiver.drop_meta().name().as_str())
-						|| receiver.drop_meta().name() == RECEIVER =>
+						|| receiver.drop_meta().name() == SELF_WORD =>
 				{
 					Some(field.drop_meta().name())
 				}
@@ -657,9 +621,7 @@ pub(super) fn collect_fields_set(node: &Node, parameters: &[String], names: &mut
 			collect_fields_set(target, parameters, names);
 			collect_fields_set(value, parameters, names);
 		}
-		Node::List(items, _, _) => items
-			.iter()
-			.for_each(|item| collect_fields_set(item, parameters, names)),
+		Node::List(items, _, _) => items.iter().for_each(|item| collect_fields_set(item, parameters, names)),
 		_ => {}
 	}
 }
@@ -678,11 +640,9 @@ pub(super) fn result_type(item: &Node) -> Option<&Node> {
 /// A definition with the result type on its head
 pub(super) fn with_result_type(definition: Node, result_type: Option<&Node>) -> Node {
 	match (definition, result_type) {
-		(Node::Key(head, Op::Define, body), Some(result_type)) => Node::Key(
-			Box::new(Node::Key(head, Op::Colon, Box::new(result_type.clone()))),
-			Op::Define,
-			body,
-		),
+		(Node::Key(head, Op::Define, body), Some(result_type)) => {
+			Node::Key(Box::new(Node::Key(head, Op::Colon, Box::new(result_type.clone()))), Op::Define, body)
+		}
 		(definition, _) => definition,
 	}
 }

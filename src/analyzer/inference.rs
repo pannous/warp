@@ -1,6 +1,7 @@
 //! Kind inference: the kind of a node, of arithmetic, of list elements and branches
 
 use super::*;
+use crate::words::{ANY_TYPE, MAP_WORD, NUMBER_WORD, PRINT_WORD, REAL_WORD};
 
 /// A statement changing a variable it reads: `x=x+1`, `x+=1`, `x++` (data like `{x=1}` reads nothing)
 pub(super) fn is_update(node: &Node) -> bool {
@@ -50,12 +51,10 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 	}
 	if repeats_text(left, op, right) {
 		Kind::Text // `"ab"*2`, see WasmGcEmitter::emit_text_repeat
-	} else if [left, right].iter().any(|kind| {
-		matches!(
-			kind,
-			Kind::Text | Kind::Codepoint | Kind::List | Kind::Error | Kind::Function
-		)
-	}) {
+	} else if [left, right]
+		.iter()
+		.any(|kind| matches!(kind, Kind::Text | Kind::Codepoint | Kind::List | Kind::Error | Kind::Function))
+	{
 		Kind::Error // no implicit conversion (DESIGN.md "Dangerous implicitness"); an error operand stays an error, a function is no number
 	} else if left == Kind::Float || right == Kind::Float {
 		Kind::Float
@@ -67,10 +66,7 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 /// `a + b` joining lists or texts: lists (an empty one too) are a list; a text with anything but a function, a value held
 /// as a Node too (a map value, a number of run-time kind), is a text
 fn concatenation_kind(left: Kind, right: Kind) -> Option<Kind> {
-	if [left, right]
-		.iter()
-		.all(|kind| matches!(kind, Kind::List | Kind::Empty))
-		&& [left, right].contains(&Kind::List)
+	if [left, right].iter().all(|kind| matches!(kind, Kind::List | Kind::Empty)) && [left, right].contains(&Kind::List)
 	{
 		Some(Kind::List)
 	} else {
@@ -87,11 +83,7 @@ pub fn repeats_text(left: Kind, op: &Op, right: Kind) -> bool {
 /// `base ^ 0.5`, `base ^ (1/3)`: an exact base with a non-integral constant exponent is no exact number, it is computed as
 /// f64; `2^(n/12)`, an exponent that may be a ratio at run time, is decided then (node_pow): exact when it is whole
 pub fn arithmetic_kind_of_operands(left: Kind, op: &Op, right: Kind, right_operand: &Node, scope: &Scope) -> Kind {
-	let constant_exponent = if *op == Op::Pow {
-		constant_value(right_operand)
-	} else {
-		None
-	};
+	let constant_exponent = if *op == Op::Pow { constant_value(right_operand) } else { None };
 	let fractional_exponent = constant_exponent.is_some_and(|exponent| exponent.fract() != 0.0);
 	let ratio_exponent = *op == Op::Pow && constant_exponent.is_none() && may_be_ratio(right_operand, scope);
 	match arithmetic_kind(left, op, right) {
@@ -163,14 +155,7 @@ fn interval_or(kind: Kind, argument: &Node, scope: &Scope) -> Kind {
 pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 	let node = node.drop_meta();
 	match node {
-		// Decimal literals are exact numbers, see wasm_emitter/exact.rs
-		Node::Number(Number::Float(f)) if Number::is_exact_decimal(*f) => Kind::Int,
-		Node::Number(Number::Float(_)) => Kind::Float,
-		Node::Number(Number::Complex(_, _) | Number::Real(_) | Number::Nan | Number::Inf | Number::NegInf) => {
-			Kind::Float
-		}
-		// Integer and rational literals
-		Node::Number(_) => Kind::Int,
+		Node::Number(number) => number_kind(number),
 		Node::Text(_) => Kind::Text,
 		Node::Char(_) => Kind::Codepoint,
 		// ø, the empty value (card infer-type: it was the catch-all's Int)
@@ -190,56 +175,14 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		}
 		// Assignment/definition: type comes from value, ø as the Node a variable holding it is (`if c { f = [] }`)
 		Node::Key(_left, Op::Define | Op::Assign, right) => held_kind(right, || infer_type(right, scope)),
-		// Compound assignment: upgrade if either side is Float
-		Node::Key(left, op, right) if op.is_compound_assign() => {
-			let left_kind = infer_type(left, scope);
-			let right_kind = infer_type(right, scope);
-			// as `s + x` (arithmetic_kind); `xs += v` is what `xs.add(v)` lowers to
-			let any_list = [left_kind, right_kind].contains(&Kind::List);
-			match concatenation_kind(left_kind, right_kind).or(any_list.then_some(Kind::List)) {
-				Some(kind) if op.base_op() == Op::Add => return kind,
-				_ => {}
-			}
-			if left_kind == Kind::Empty {
-				Kind::Empty // a variable held as a Node stays one: `total += event.value` of a global widened by it
-			} else if left_kind == Kind::Float || right_kind == Kind::Float {
-				Kind::Float
-			} else {
-				Kind::Int
-			}
-		}
+		Node::Key(left, op, right) if op.is_compound_assign() => compound_assign_kind(left, op, right, scope),
 		// `x++` of a float steps the float
 		Node::Key(target, Op::Inc | Op::Dec, _) if infer_type(target, scope) == Kind::Float => Kind::Float,
 		// `global:value` is its value; a tag structure like `html:body` a Key
 		Node::Key(left, Op::Colon, right) if left.is_symbol("global") => infer_type(right, scope),
 		Node::Key(_, Op::Colon, _) => Kind::Key,
-		Node::Key(_, Op::As, target) if let Some(kind) = conversion_kind(&target.name().to_lowercase()) => kind,
-		// `"1/3" as number` is the number the text spells, of its kind (an exact ratio is an Int)
-		Node::Key(..) if let Some(number) = spelled_number(node) => infer_type(&number, scope),
-		// `t as number` of a text known only at run time: an Int, a ratio or a Float, as the text says (card runtime-text-ratio)
-		Node::Key(value, Op::As, target)
-			if is_number_word(target) && matches!(infer_type(value, scope), Kind::Text | Kind::Codepoint) =>
-		{
-			Kind::Data
-		}
-		// `v as float` is an f64; `as int`, `as exact` stay exact Ints
-		Node::Key(_, Op::As, target) if builtin_type_kind(&target.name()).is_some_and(|kind| kind.is_float()) => {
-			Kind::Float
-		}
-		// `a or b`, `a and b` of a text or another Node give one of their operands (`"" or "d"` is "d"); of numbers an
-		// Int, a float operand refused in that exact context
-		Node::Key(left, Op::And | Op::Or | Op::BitAnd | Op::BitOr, right) => {
-			match (infer_type(left, scope), infer_type(right, scope)) {
-				(left, right)
-					if [left, right]
-						.iter()
-						.any(|kind| kind.is_ref() || *kind == Kind::Codepoint) =>
-				{
-					branches_kind(left, right)
-				}
-				_ => Kind::Int,
-			}
-		}
+		Node::Key(value, Op::As, target) if let Some(kind) = converted_kind(node, value, target, scope) => kind,
+		Node::Key(left, Op::And | Op::Or | Op::BitAnd | Op::BitOr, right) => logical_kind(left, right, scope),
 		// Comparison operators return Int (boolean as 0/1)
 		Node::Key(_, op, _) if op.is_comparison() => Kind::Int,
 		// √x is irrational in general: an f64; of a value held as a Node maybe an interval, which it maps (a Node)
@@ -257,36 +200,90 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(if_condition, Op::Then, then_expr) if matches!(if_condition.drop_meta(), Node::Key(_, Op::If, _)) => {
 			branches_kind(branch_kind(then_expr, scope), Kind::Int)
 		}
-		// An element: `xs#i`, `xs[i]`, `text#i`
-		// a value looked up by a name in a map of unknown values (`graph[node]` of a parameter) is held as a Node
-		// a field read by name with a declared kind: `v.x` of `type V {x: float}`; a field of a value known only at run time
-		// (`request.body.priority` of an any) holds what it holds, whatever a class's field of that name declares
-		Node::Key(indexed, Op::Hash, index)
-			if let Some(Node::Text(name)) = crate::warp_parser::subscript_key(index).map(Node::drop_meta)
-				&& let Some(kind) = scope.function_kind(&field_kind_key(name))
-				&& !indexed.is_empty_node()
-				&& !declared_any(indexed, scope) =>
-		{
-			kind
-		}
-		Node::Key(indexed, Op::Hash, index) if !indexed.is_empty_node() => {
-			element_kind(indexed, scope).unwrap_or_else(|| {
-				let by_name = crate::warp_parser::subscript_key(index).is_some_and(|key| {
-					key.is_text_literal() || matches!(infer_type(key, scope), Kind::Text | Kind::Codepoint)
-				});
-				if by_name {
-					Kind::Empty
-				} else {
-					Kind::Int
-				}
-			})
-		}
+		Node::Key(indexed, Op::Hash, index) if !indexed.is_empty_node() => subscript_kind(indexed, index, scope),
 		Node::Key(condition, Op::Do, body) if matches!(condition.drop_meta(), Node::Key(_, Op::While, _)) => {
 			loop_kind(body, scope)
 		}
 		// Default to Int for other cases
 		_ => Kind::Int,
 	}
+}
+
+fn number_kind(number: &Number) -> Kind {
+	match number {
+		// Decimal literals are exact numbers, see wasm_emitter/exact.rs
+		Number::Float(f) if Number::is_exact_decimal(*f) => Kind::Int,
+		Number::Float(_) | Number::Complex(_, _) | Number::Real(_) | Number::Nan | Number::Inf | Number::NegInf => {
+			Kind::Float
+		}
+		// Integer and rational literals
+		_ => Kind::Int,
+	}
+}
+
+/// Compound assignment: upgrade if either side is Float
+fn compound_assign_kind(left: &Node, op: &Op, right: &Node, scope: &Scope) -> Kind {
+	let left_kind = infer_type(left, scope);
+	let right_kind = infer_type(right, scope);
+	// as `s + x` (arithmetic_kind); `xs += v` is what `xs.add(v)` lowers to
+	let any_list = [left_kind, right_kind].contains(&Kind::List);
+	match concatenation_kind(left_kind, right_kind).or(any_list.then_some(Kind::List)) {
+		Some(kind) if op.base_op() == Op::Add => kind,
+		// a variable held as a Node stays one: `total += event.value` of a global widened by it
+		_ if left_kind == Kind::Empty => Kind::Empty,
+		_ if left_kind == Kind::Float || right_kind == Kind::Float => Kind::Float,
+		_ => Kind::Int,
+	}
+}
+
+/// `value as target`, of the `node` it is; None for the conversions the other cases decide
+fn converted_kind(node: &Node, value: &Node, target: &Node, scope: &Scope) -> Option<Kind> {
+	if let Some(kind) = conversion_kind(&target.name().to_lowercase()) {
+		return Some(kind);
+	}
+	// `"1/3" as number` is the number the text spells, of its kind (an exact ratio is an Int)
+	if let Some(number) = spelled_number(node) {
+		return Some(infer_type(&number, scope));
+	}
+	// `t as number` of a text known only at run time: an Int, a ratio or a Float, as the text says (card runtime-text-ratio)
+	if is_number_word(target) && matches!(infer_type(value, scope), Kind::Text | Kind::Codepoint) {
+		return Some(Kind::Data);
+	}
+	// `v as float` is an f64; `as int`, `as exact` stay exact Ints
+	builtin_type_kind(&target.name()).is_some_and(|kind| kind.is_float()).then_some(Kind::Float)
+}
+
+/// `a or b`, `a and b` of a text or another Node give one of their operands (`"" or "d"` is "d"); of numbers an Int, a
+/// float operand refused in that exact context
+fn logical_kind(left: &Node, right: &Node, scope: &Scope) -> Kind {
+	let (left, right) = (infer_type(left, scope), infer_type(right, scope));
+	if [left, right].iter().any(|kind| kind.is_ref() || *kind == Kind::Codepoint) {
+		branches_kind(left, right)
+	} else {
+		Kind::Int
+	}
+}
+
+/// An element: `xs#i`, `xs[i]`, `text#i`
+fn subscript_kind(indexed: &Node, index: &Node, scope: &Scope) -> Kind {
+	let key = crate::warp_parser::subscript_key(index);
+	// a field read by name with a declared kind: `v.x` of `type V {x: float}`; a field of a value known only at run time
+	// (`request.body.priority` of an any) holds what it holds, whatever a class's field of that name declares
+	if let Some(Node::Text(name)) = key.map(Node::drop_meta) {
+		if let Some(kind) = scope.function_kind(&field_kind_key(name)).filter(|_| !declared_any(indexed, scope)) {
+			return kind;
+		}
+	}
+	element_kind(indexed, scope).unwrap_or_else(|| {
+		// a value looked up by a name in a map of unknown values (`graph[node]` of a parameter) is held as a Node
+		let by_name = key
+			.is_some_and(|key| key.is_text_literal() || matches!(infer_type(key, scope), Kind::Text | Kind::Codepoint));
+		if by_name {
+			Kind::Empty
+		} else {
+			Kind::Int
+		}
+	})
 }
 
 /// `x as char`, `x as list`, `x as text`
@@ -446,15 +443,9 @@ fn closure_call_kind(name: &str, items: &[Node], scope: &Scope) -> Option<Kind> 
 		.and_then(Node::symbol_name)
 		.and_then(|variable| scope.closure_targets_of(variable))
 		.filter(|targets| !targets.is_empty())?;
-	let mut kinds = targets
-		.iter()
-		.map(|target| scope.function_kind(target).unwrap_or(Kind::Data));
+	let mut kinds = targets.iter().map(|target| scope.function_kind(target).unwrap_or(Kind::Data));
 	let first = kinds.next().unwrap_or(Kind::Data);
-	Some(if kinds.all(|kind| kind == first) {
-		first
-	} else {
-		Kind::Data
-	})
+	Some(if kinds.all(|kind| kind == first) { first } else { Kind::Data })
 }
 
 /// The kind of a call of a built-in word, the program's own function of that name already answered: closures, cells,
@@ -470,11 +461,7 @@ fn builtin_word_kind(name: &str, items: &[Node], bracket: &Bracket, scope: &Scop
 	}
 	// a cell's value is held as a Node, like a map value (Empty), and joins a text or adds at run time
 	if CELL_WORDS.contains(&name) {
-		return Some(if MAKING_WORDS.contains(&name) {
-			Kind::Data
-		} else {
-			Kind::Empty
-		});
+		return Some(if MAKING_WORDS.contains(&name) { Kind::Data } else { Kind::Empty });
 	}
 	if let Some(kind) = crate::wasm_emitter::text::text_builtins::text_builtin_kind(name, items.len() - 1) {
 		return Some(kind);
@@ -500,7 +487,7 @@ fn builtin_word_kind(name: &str, items: &[Node], bracket: &Bracket, scope: &Scop
 	if (super::counting::is_counting_word(name) || name == BYTE_SIZE) && items.len() == 2 {
 		return Some(Kind::Int);
 	}
-	if name == PRINT_CALL && (items.len() >= 2 || *bracket == Bracket::Round) {
+	if name == PRINT_WORD && (items.len() >= 2 || *bracket == Bracket::Round) {
 		return Some(Kind::Empty); // `print x` writes x and gives nothing (user, issue #18)
 	}
 	// a call of a function the component being compiled imports (`host.time()`)
@@ -557,13 +544,10 @@ pub(super) fn element_kind(indexed: &Node, scope: &Scope) -> Option<Kind> {
 		return Some(Kind::Text); // a character, held as a node like any one-character text (see binding_kind)
 	}
 	let list_type = list_type_name(indexed, scope);
-	if list_type == MAP_TYPE || list_type == NODE_LIST_TYPE || infer_type(indexed, scope) == Kind::Empty {
+	if list_type == MAP_WORD || list_type == NODE_LIST_TYPE || infer_type(indexed, scope) == Kind::Empty {
 		return Some(Kind::Empty); // values of different types, or of a value held as a Node: held as a Node, like an optional
 	}
-	match list_type
-		.strip_prefix("list of ")
-		.or_else(|| list_type.strip_prefix(MAP_TYPE_PREFIX))?
-	{
+	match list_type.strip_prefix("list of ").or_else(|| list_type.strip_prefix(MAP_TYPE_PREFIX))? {
 		// `m[k]` of a map is a value
 		word if word.starts_with("list") => Some(Kind::List),
 		RATIONAL_WORD => Some(Kind::Int),
@@ -648,9 +632,7 @@ pub(super) fn branches_kind(then_kind: Kind, else_kind: Kind) -> Kind {
 		// `(if c then 0 else job_result) + 1` adds at run time instead of failing as text
 		Kind::Empty
 	} else if kinds.contains(&Kind::Data)
-		&& kinds
-			.iter()
-			.all(|kind| matches!(kind, Kind::Int | Kind::Float | Kind::Data))
+		&& kinds.iter().all(|kind| matches!(kind, Kind::Int | Kind::Float | Kind::Data))
 	{
 		// a number and a number of run-time kind (`xs#1 + rest`): a number decided at run time, not a text
 		Kind::Data
@@ -680,7 +662,7 @@ fn declared_any(node: &Node, scope: &Scope) -> bool {
 		Node::Symbol(name) => scope
 			.lookup(name)
 			.and_then(|local| local.type_node.as_deref())
-			.is_some_and(|type_node| type_node.is_symbol(crate::type_kinds::UNTYPED_FIELD)),
+			.is_some_and(|type_node| type_node.is_symbol(ANY_TYPE)),
 		Node::Key(indexed, Op::Hash, _) => declared_any(indexed, scope),
 		_ => false,
 	}
@@ -772,9 +754,7 @@ pub fn argument_literal_kind(argument: &Node) -> Option<Kind> {
 		}
 		_ if crate::closures::as_closure_new(argument).is_some() => Some(Kind::Function),
 		Node::List(entries, Bracket::Curly, _)
-			if entries
-				.iter()
-				.all(|entry| matches!(entry.drop_meta(), Node::Key(_, Op::Colon, _))) =>
+			if entries.iter().all(|entry| matches!(entry.drop_meta(), Node::Key(_, Op::Colon, _))) =>
 		{
 			Some(Kind::List)
 		} // a map
@@ -784,8 +764,5 @@ pub fn argument_literal_kind(argument: &Node) -> Option<Kind> {
 
 /// A decimal literal, `2.5` or `2.0` (an exact decimal, so its kind may be Int): a float an int parameter refuses (P49, P49b)
 pub(super) fn is_decimal_literal(node: &Node) -> bool {
-	matches!(
-		node.drop_meta(),
-		Node::Number(crate::extensions::numbers::Number::Float(_))
-	)
+	matches!(node.drop_meta(), Node::Number(crate::extensions::numbers::Number::Float(_)))
 }

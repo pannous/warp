@@ -157,6 +157,11 @@ PASSED:
   ✓ control::test_do_block::do_runs_a_block_literal
   ✓ control::test_do_block::do_runs_a_named_block
   ✓ control::test_do_block::do_still_joins_a_while_condition_with_its_body
+  ✓ control::test_doc_strings::a_function_without_doc_has_the_empty_doc
+  ✓ control::test_doc_strings::a_leading_text_is_the_doc_and_not_evaluated
+  ✓ control::test_doc_strings::a_lone_text_body_stays_the_value
+  ✓ control::test_doc_strings::help_shows_the_doc_below_the_signature
+  ✓ control::test_doc_strings::the_comment_above_a_definition_is_the_doc
   ✓ control::test_each_colon::a_range_do_walks_it
   ✓ control::test_each_colon::each_and_all_with_a_colon_walk_the_list
   ✓ control::test_emit_operands::an_emitted_value_is_the_handlers_number
@@ -277,6 +282,9 @@ PASSED:
   ✓ control::test_go_heavy_map::a_go_map_of_a_heavy_kernel_takes_the_gpu_switch
   ✓ control::test_go_heavy_map::a_small_go_map_of_a_heavy_kernel_is_exact_on_the_cpu
   ✓ control::test_go_statement::a_go_block_of_one_statement_runs_it
+  ✓ control::test_grouped_receivers::a_call_without_arguments_stays_a_call
+  ✓ control::test_grouped_receivers::a_grouped_receiver_reads_its_field
+  ✓ control::test_grouped_receivers::a_grouped_text_without_the_field_names_it
   ✓ control::test_handler_globals::a_handler_writes_an_annotated_global
   ✓ control::test_handler_globals::an_int_given_empty_fails_when_it_happens
   ✓ control::test_held_key::held_key_compares_with_the_key_words
@@ -2317,6 +2325,9 @@ PASSED:
   ✓ node::test_parse_word::quoted_code_in_parentheses_is_a_node
   ✓ node::test_parse_word::quoted_code_keeps_the_comment_before_it
   ✓ node::test_parse_word::quoted_code_knows_its_line_and_column
+  ✓ node::test_parsed_code_text::a_text_plus_parsed_code_is_its_literal
+  ✓ node::test_parsed_code_text::print_of_a_text_and_parsed_code
+  ✓ node::test_parsed_code_text::run_time_parsed_code_keeps_its_operators
   ✓ node::test_quote_as_written::quoted_code_is_the_code_parse_gives
   ✓ node::test_serialized_text_escapes::a_quote_or_backslash_in_a_serialized_text_is_escaped
   ✓ node::test_text_operand_quotes::a_text_operand_keeps_its_quotes
@@ -2506,6 +2517,12 @@ PASSED:
   ✓ numbers::test_named_unit_fields::a_named_field_checks_its_dimension
   ✓ numbers::test_nan_observed::a_nan_leaving_the_run_is_canonical
   ✓ numbers::test_nan_observed::a_nan_prints_as_nan
+  ✓ numbers::test_nearest_default::a_float_gives_pythons_fraction
+  ✓ numbers::test_nearest_default::a_precision_reaches_beyond_the_default_limit
+  ✓ numbers::test_nearest_default::an_exact_value_compares_exactly
+  ✓ numbers::test_nearest_default::limit_zero_is_the_exact_fraction
+  ✓ numbers::test_nearest_quiet::nearest_warns_nothing_of_the_prelude
+  ✓ numbers::test_nearest_quiet::the_programs_own_float_equality_still_warns
   ✓ numbers::test_nearest::float_to_exact_refusals_name_nearest
   ✓ numbers::test_nearest::nearest_as_a_method
   ✓ numbers::test_nearest::nearest_expands_exact_values_beyond_floats
@@ -2780,6 +2797,7 @@ PASSED:
   ✓ operators::test_infix_word_operators::a_word_operator_is_still_a_word_elsewhere
   ✓ operators::test_infix_word_operators::an_assigned_filter_by_an_operator
   ✓ operators::test_infix_word_operators::infix_without_operator_is_an_alias
+  ✓ operators::test_isnt::test_isnt_spellings
   ✓ operators::test_less_than_compare::test_a_less_than_after_a_variable_is_a_comparison
   ✓ operators::test_less_than_compare::test_generics_still_start_after_a_type_name
   ✓ operators::test_library_infix_words::a_used_module_declares_an_infix_word
@@ -3120,6 +3138,8 @@ PASSED:
   ✓ parser::test_uniscript_entities::an_unknown_entity_stays_as_written_and_warns
   ✓ parser::test_uniscript_entities::entities_are_their_characters
   ✓ parser::test_uniscript_entities::entities_expand_inside_double_quoted_texts
+  ✓ parser::test_uniscript_hyphen_names::a_hyphen_after_a_whole_name_stays_a_hyphen
+  ✓ parser::test_uniscript_hyphen_names::a_style_letter_is_one_entity_in_a_text
   ✓ parser::test_url_literal::a_colon_without_slashes_stays_a_pair
   ✓ parser::test_url_literal::any_scheme_before_colon_slash_slash_starts_a_url
   ✓ parser::test_warp_format::html_attributes_and_repeated_tags_in_data
@@ -4191,6 +4211,7 @@ PASSED:
   ✓ types::test_time_programs_run::a_duration_in_a_unit_is_its_quantity_in_a_running_program
   ✓ types::test_time_programs_run::a_placement_in_parentheses_has_fields
   ✓ types::test_time_programs_run::a_zoned_times_rules_version_is_read_at_run_time
+  ✓ types::test_time_type_names::test_time_type_names
   ✓ types::test_time_values_at_run_time::test_a_time_joins_a_text
   ✓ types::test_time_values_at_run_time::test_a_time_reads_back
   ✓ types::test_time_values_at_run_time::test_an_instant_reads_the_local_wall_clock
@@ -4553,7 +4574,6 @@ PASSED:
   ✓ web::test_assistant_edits::a_diff_changes_only_the_lines_it_names
   ✓ web::test_assistant_edits::a_diff_that_no_longer_fits_says_so
   ✓ web::test_assistant_edits::a_whole_program_replaces_only_the_lines_that_differ
-  ✓ web::test_assistant_proxy::the_assistant_proxy_answers_only_the_playground
   ✓ web::test_async_data::a_body_that_is_no_json_is_the_text
   ✓ web::test_async_data::a_changed_url_variable_fetches_anew
   ✓ web::test_async_data::a_failed_fetch_is_the_error
@@ -4690,7 +4710,6 @@ PASSED:
   ✓ web::test_keyed_lists::a_key_names_the_element_of_an_item
   ✓ web::test_keyed_lists::a_key_on_its_own_line_names_the_element
   ✓ web::test_keyed_lists::a_list_inside_an_element_gives_its_children
-  ✓ web::test_keyword_registry::keywords_of_passes_are_highlighted
   ✓ web::test_markup_holes::a_page_binds_each_hole
   ✓ web::test_markup_holes::fixed_markup_or_a_computed_root_has_no_holes
   ✓ web::test_markup_holes::the_elements_holding_computed_parts_are_the_holes
@@ -4771,6 +4790,7 @@ PASSED:
   ✓ web::test_sandboxed_programs::a_sandboxed_program_calls_no_c_and_no_other_runtime
   ✓ web::test_sandboxed_programs::a_sandboxed_program_keeps_the_host_words
   ✓ web::test_script_words::a_path_from_cwd_is_found
+  ✓ web::test_script_words::glob_finds_the_written_files
   ✓ web::test_select_options::a_list_after_the_bound_variable_is_no_part_of_it
   ✓ web::test_select_options::a_list_gives_the_options
   ✓ web::test_select_options::a_map_gives_values_and_labels
@@ -5306,7 +5326,8 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ web::test_script_words::glob_finds_the_written_files
+  ✗ web::test_assistant_proxy::the_assistant_proxy_answers_only_the_playground
+  ✗ web::test_keyword_registry::keywords_of_passes_are_highlighted
 
 SUMMARY:
-13 ignored, 5303 passed, 1 failed, 5304 total tested
+13 ignored, 5323 passed, 2 failed, 5325 total tested

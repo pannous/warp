@@ -42,14 +42,9 @@ fn a_painting_without_a_window_never_waits() {
 	std::fs::write(&file, "paint([1, 0, 1], 3, 1)\nprint \"painted\"\n").expect("write the program");
 	for no_window in [true, false] {
 		let mut command = warp_command();
-		command
-			.args(["run", file.to_str().unwrap()])
-			.stdout(Stdio::piped())
-			.stderr(Stdio::null());
+		command.args(["run", file.to_str().unwrap()]).stdout(Stdio::piped()).stderr(Stdio::null());
 		if !no_window {
-			command
-				.env_remove(warp::graphics::paint::NO_WINDOW_VARIABLE)
-				.env("CI", "1");
+			command.env_remove(warp::graphics::paint::NO_WINDOW_VARIABLE).env("CI", "1");
 		}
 		let mut run = command.spawn().expect("warp runs");
 		let started = Instant::now();
@@ -61,9 +56,6 @@ fn a_painting_without_a_window_never_waits() {
 			std::thread::sleep(Duration::from_millis(50));
 		}
 		let output = run.wait_with_output().expect("the run's output");
-		assert!(
-			String::from_utf8_lossy(&output.stdout).contains("painted"),
-			"{output:?}"
-		);
+		assert!(String::from_utf8_lossy(&output.stdout).contains("painted"), "{output:?}");
 	}
 }

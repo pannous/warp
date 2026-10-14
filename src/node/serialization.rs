@@ -112,11 +112,7 @@ impl Node {
 			}
 			// the operand a prefix or suffix operator lacks is ø in the tree, not in the text: `#x`, `not x`, `x++`
 			Key(_, op, v) if self.is_prefix_form() => {
-				let space = if op.as_str().starts_with(char::is_alphabetic) {
-					" "
-				} else {
-					""
-				};
+				let space = if op.as_str().starts_with(char::is_alphabetic) { " " } else { "" };
 				format!("{op}{space}{}", v.serialize_recurse(meta))
 			}
 			Key(k, op, v) if v.is_empty_node() && op.is_suffix() => {
@@ -133,20 +129,12 @@ impl Node {
 			Key(k, Op::Hash, v) if matches!(v.drop_meta(), Key(..)) && !v.is_prefix_form() => {
 				format!("{}#({})", k.operand_text(meta), v.serialize_recurse(meta))
 			}
-			Key(k, op, v) if v.is_prefix_form() => format!(
-				"{}{}{} {}",
-				v.attribute_prefix(),
-				k.key_text(op, meta),
-				op,
-				v.serialize_with(meta, false)
-			),
-			Key(k, op, v) => format!(
-				"{}{}{}{}",
-				v.attribute_prefix(),
-				k.key_text(op, meta),
-				op,
-				v.serialize_with(meta, false)
-			),
+			Key(k, op, v) if v.is_prefix_form() => {
+				format!("{}{}{} {}", v.attribute_prefix(), k.key_text(op, meta), op, v.serialize_with(meta, false))
+			}
+			Key(k, op, v) => {
+				format!("{}{}{}{}", v.attribute_prefix(), k.key_text(op, meta), op, v.serialize_with(meta, false))
+			}
 			Error(e) => format!("Error({})", e.serialize_recurse(meta)),
 			Empty => "ø".to_string(),
 			True => YES.to_string(),
@@ -155,11 +143,7 @@ impl Node {
 				if let Some(literal) = self.source_literal() {
 					return literal.to_string();
 				}
-				let own_prefix = if attributes {
-					self.own_attribute_prefix()
-				} else {
-					String::new()
-				};
+				let own_prefix = if attributes { self.own_attribute_prefix() } else { String::new() };
 				let inner = format!("{own_prefix}{}", node.serialize_with(meta, attributes));
 				if meta {
 					format!("{} {}", inner, data.meta_string())

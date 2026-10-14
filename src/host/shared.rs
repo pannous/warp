@@ -42,6 +42,12 @@ impl SharedArrays {
 
 	/// Link the shared words into an instance of the run
 	pub fn link_into(self: &Arc<Self>, linker: &mut Linker<HostState>) -> Result<()> {
+		self.link_int_words(linker)?;
+		self.link_float_words(linker)
+	}
+
+	/// new, get, set, add, count and the write count of arrays of ints
+	fn link_int_words(self: &Arc<Self>, linker: &mut Linker<HostState>) -> Result<()> {
 		let [new, get, set, add, count] = SHARED_WORDS;
 		let arrays = self.clone();
 		linker.func_wrap(HOST_LIBRARY, new, move |length: i64| -> i64 {
@@ -55,79 +61,64 @@ impl SharedArrays {
 			Ok(array[cell].load(Ordering::SeqCst))
 		})?;
 		let arrays = self.clone();
-		linker.func_wrap(
-			HOST_LIBRARY,
-			set,
-			move |id: i64, index: i64, value: i64| -> wasmtime::Result<i64> {
-				let (array, cell) = arrays.cell(id, index)?;
-				array[cell].store(value, Ordering::SeqCst);
-				counted(&array);
-				Ok(value)
-			},
-		)?;
+		linker.func_wrap(HOST_LIBRARY, set, move |id: i64, index: i64, value: i64| -> wasmtime::Result<i64> {
+			let (array, cell) = arrays.cell(id, index)?;
+			array[cell].store(value, Ordering::SeqCst);
+			counted(&array);
+			Ok(value)
+		})?;
 		let arrays = self.clone();
-		linker.func_wrap(
-			HOST_LIBRARY,
-			add,
-			move |id: i64, index: i64, value: i64| -> wasmtime::Result<i64> {
-				let (array, cell) = arrays.cell(id, index)?;
-				counted(&array);
-				Ok(array[cell].fetch_add(value, Ordering::SeqCst) + value)
-			},
-		)?;
+		linker.func_wrap(HOST_LIBRARY, add, move |id: i64, index: i64, value: i64| -> wasmtime::Result<i64> {
+			let (array, cell) = arrays.cell(id, index)?;
+			counted(&array);
+			Ok(array[cell].fetch_add(value, Ordering::SeqCst) + value)
+		})?;
 		let arrays = self.clone();
 		linker.func_wrap(HOST_LIBRARY, count, move |id: i64| -> wasmtime::Result<i64> {
 			Ok(arrays.array(id)?.len() as i64 - 1)
 		})?;
 		let arrays = self.clone();
 		linker.func_wrap(HOST_LIBRARY, SHARED_WRITES, move |id: i64| -> wasmtime::Result<i64> {
-			Ok(arrays
-				.array(id)?
-				.last()
-				.expect("the write count")
-				.load(Ordering::SeqCst))
+			Ok(arrays.array(id)?.last().expect("the write count").load(Ordering::SeqCst))
 		})?;
-		// an array of floats: the cells hold the bits; an add swaps until no other task came between
+		Ok(())
+	}
+
+	/// An array of floats: the cells hold the bits
+	fn link_float_words(self: &Arc<Self>, linker: &mut Linker<HostState>) -> Result<()> {
 		let [get_float, set_float, add_float] = SHARED_FLOAT_WORDS;
 		let arrays = self.clone();
-		linker.func_wrap(
-			HOST_LIBRARY,
-			get_float,
-			move |id: i64, index: i64| -> wasmtime::Result<f64> {
-				let (array, cell) = arrays.cell(id, index)?;
-				Ok(f64::from_bits(array[cell].load(Ordering::SeqCst) as u64))
-			},
-		)?;
+		linker.func_wrap(HOST_LIBRARY, get_float, move |id: i64, index: i64| -> wasmtime::Result<f64> {
+			let (array, cell) = arrays.cell(id, index)?;
+			Ok(f64::from_bits(array[cell].load(Ordering::SeqCst) as u64))
+		})?;
 		let arrays = self.clone();
-		linker.func_wrap(
-			HOST_LIBRARY,
-			set_float,
-			move |id: i64, index: i64, value: f64| -> wasmtime::Result<f64> {
-				let (array, cell) = arrays.cell(id, index)?;
-				let value = warp_runtime::floats::canonical_nan(value);
-				array[cell].store(value.to_bits() as i64, Ordering::SeqCst);
-				counted(&array);
-				Ok(value)
-			},
-		)?;
+		linker.func_wrap(HOST_LIBRARY, set_float, move |id: i64, index: i64, value: f64| -> wasmtime::Result<f64> {
+			let (array, cell) = arrays.cell(id, index)?;
+			let value = warp_runtime::floats::canonical_nan(value);
+			array[cell].store(value.to_bits() as i64, Ordering::SeqCst);
+			counted(&array);
+			Ok(value)
+		})?;
 		let arrays = self.clone();
-		linker.func_wrap(
-			HOST_LIBRARY,
-			add_float,
-			move |id: i64, index: i64, value: f64| -> wasmtime::Result<f64> {
-				let (array, cell) = arrays.cell(id, index)?;
-				counted(&array);
-				let mut old = array[cell].load(Ordering::SeqCst);
-				loop {
-					let sum = warp_runtime::floats::canonical_nan(f64::from_bits(old as u64) + value);
-					match array[cell].compare_exchange(old, sum.to_bits() as i64, Ordering::SeqCst, Ordering::SeqCst) {
-						Ok(_) => return Ok(sum),
-						Err(current) => old = current,
-					}
-				}
-			},
-		)?;
+		linker.func_wrap(HOST_LIBRARY, add_float, move |id: i64, index: i64, value: f64| -> wasmtime::Result<f64> {
+			let (array, cell) = arrays.cell(id, index)?;
+			counted(&array);
+			Ok(add_float_to(&array[cell], value))
+		})?;
 		Ok(())
+	}
+}
+
+/// The cell plus value, swapped in until no other task came between
+fn add_float_to(cell: &AtomicI64, value: f64) -> f64 {
+	let mut old = cell.load(Ordering::SeqCst);
+	loop {
+		let sum = warp_runtime::floats::canonical_nan(f64::from_bits(old as u64) + value);
+		match cell.compare_exchange(old, sum.to_bits() as i64, Ordering::SeqCst, Ordering::SeqCst) {
+			Ok(_) => return sum,
+			Err(current) => old = current,
+		}
 	}
 }
 

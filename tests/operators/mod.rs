@@ -11,6 +11,7 @@ mod test_in_position;
 mod test_increment_places;
 mod test_infix_operand_names;
 mod test_infix_word_operators; // card g_mnvA
+mod test_isnt;
 mod test_less_than_compare;
 mod test_library_infix_words; // card matches-infix
 mod test_like;

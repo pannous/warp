@@ -2,8 +2,7 @@
 //! texts in the order the module defines them. A program's own `dir`, or its own name of the module, wins
 
 use crate::node::{Bracket, Node};
-
-const DIR_WORD: &str = "dir";
+use crate::words::DIR_WORD;
 
 pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&[DIR_WORD]) {
@@ -23,11 +22,9 @@ fn listed_names(node: Node, defined: &std::collections::HashSet<String>) -> Node
 		{
 			match module_names(&items[1], defined) {
 				Some(names) => crate::reflection::text_list(names),
-				None => Node::List(
-					items.into_iter().map(|item| listed_names(item, defined)).collect(),
-					bracket,
-					separator,
-				),
+				None => {
+					Node::List(items.into_iter().map(|item| listed_names(item, defined)).collect(), bracket, separator)
+				}
 			}
 		}
 		other => other.map_children(|child| listed_names(child, defined)),

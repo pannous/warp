@@ -1,6 +1,7 @@
 //! Jumps: return, await, emit
 
 use super::*;
+use crate::words::RETURN_WORD;
 use crate::words::{EMIT_ALIASES, EMIT_WORDS};
 
 impl WarpParser {
@@ -30,32 +31,17 @@ impl WarpParser {
 			self.advance_by(AWAIT_ALL_WORD.len());
 			self.skip_spaces();
 			let list = self.parse_expr(AWAIT_OPERAND_BP);
-			let all = Node::List(
-				vec![Symbol(AWAIT_ALL_WORD.to_string()), list],
-				Bracket::None,
-				Separator::Space,
-			);
-			return Some(Node::List(
-				vec![Symbol(AWAIT_KEYWORD.to_string()), all],
-				Bracket::None,
-				Separator::Space,
-			));
+			let all = Node::List(vec![Symbol(AWAIT_ALL_WORD.to_string()), list], Bracket::None, Separator::Space);
+			return Some(Node::List(vec![Symbol(AWAIT_KEYWORD.to_string()), all], Bracket::None, Separator::Space));
 		}
 		let operand = self.parse_expr(AWAIT_OPERAND_BP);
-		Some(Node::List(
-			vec![Symbol(AWAIT_KEYWORD.to_string()), operand],
-			Bracket::None,
-			Separator::Space,
-		))
+		Some(Node::List(vec![Symbol(AWAIT_KEYWORD.to_string()), operand], Bracket::None, Separator::Space))
 	}
 
 	/// `1 + emit ask`, `net * (1 + ask tax_rate)` (card price-net), `2 * emit stop the machine{reason: "x"} + 1`: the phrase `emit ask` is one operand, the words
 	/// of the event and its data bind like the operand of a unary minus; the same Space list a statement `emit ask` is
 	pub(crate) fn try_parse_emit(&mut self) -> Option<Node> {
-		let keyword = EMIT_WORDS
-			.into_iter()
-			.chain(EMIT_ALIASES)
-			.find(|keyword| self.matches_keyword(keyword))?;
+		let keyword = EMIT_WORDS.into_iter().chain(EMIT_ALIASES).find(|keyword| self.matches_keyword(keyword))?;
 		let before_keyword = self.mark();
 		self.advance_by(keyword.len());
 		self.skip_spaces();
@@ -79,11 +65,11 @@ impl WarpParser {
 
 	/// `return` takes the whole expression after it: `return -1` is no subtraction from `return`
 	pub(crate) fn try_parse_return(&mut self) -> Option<Node> {
-		if !self.matches_keyword(RETURN_KEYWORD) {
+		if !self.matches_keyword(RETURN_WORD) {
 			return None;
 		}
 		let before_keyword = self.mark();
-		self.advance_by(RETURN_KEYWORD.len());
+		self.advance_by(RETURN_WORD.len());
 		self.skip_spaces();
 		let names_a_variable = self
 			.peek_operator()
@@ -100,11 +86,7 @@ impl WarpParser {
 			let value = self.parse_expr(Op::Assign.binding_power().1);
 			self.continue_expr(value, 0)
 		};
-		Some(Node::List(
-			vec![Symbol(RETURN_KEYWORD.to_string()), value],
-			Bracket::None,
-			Separator::Space,
-		))
+		Some(Node::List(vec![Symbol(RETURN_WORD.to_string()), value], Bracket::None, Separator::Space))
 	}
 
 	/// `after C return V`: the marker call `after·return(C, V)`, when a `return` follows on the statement (outside brackets);
@@ -116,10 +98,10 @@ impl WarpParser {
 		self.advance_by(AFTER_KEYWORD.len());
 		let condition = self.parse_expr(0);
 		self.skip_spaces();
-		if !self.matches_keyword(RETURN_KEYWORD) {
+		if !self.matches_keyword(RETURN_WORD) {
 			return Some(error("`after` needs a `return`: `after C return V`"));
 		}
-		self.advance_by(RETURN_KEYWORD.len());
+		self.advance_by(RETURN_WORD.len());
 		let value = self.parse_expr(0);
 		Some(call(AFTER_MARKER, vec![condition, value]))
 	}
@@ -133,7 +115,7 @@ impl WarpParser {
 				'(' | '[' | '{' => depth += 1,
 				')' | ']' | '}' if depth == 0 => return false,
 				')' | ']' | '}' => depth -= 1,
-				c if depth == 0 && c.is_whitespace() && self.word_at(offset + 1) == RETURN_KEYWORD => return true,
+				c if depth == 0 && c.is_whitespace() && self.word_at(offset + 1) == RETURN_WORD => return true,
 				_ => {}
 			}
 		}

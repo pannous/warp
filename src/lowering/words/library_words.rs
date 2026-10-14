@@ -14,8 +14,16 @@ use crate::node::{parens, symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{parse, ASSERT_MARKER, TRY_MARKER};
 use crate::wasm_emitter::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
-use crate::words::SUM_WORD;
-use crate::words::{CODEPOINT, MAP_KEYS, SLICE};
+use crate::words::COPY_WORD;
+use crate::words::COUNT_WORD;
+use crate::words::FLOAT_WORD;
+use crate::words::FOR_WORD;
+use crate::words::IN_WORD;
+use crate::words::LIST_WORD;
+use crate::words::LOG_WORD;
+use crate::words::ORD_WORD;
+use crate::words::SPLIT_WORD;
+use crate::words::{CODEPOINT, MAP_KEYS, RAISE_WORD, SLICE, SUM_WORD};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
@@ -52,10 +60,6 @@ pub const MAP_WORD_FUNCTIONS: [&str; 8] = [
 	MAP_WITHOUT,
 	crate::one_entry_maps::MAP_OF_ENTRY,
 ];
-const IN_WORD: &str = "in";
-/// `count x in y` (count_in): the occurrences of an item or a character, or of a substring in a text
-const COUNT_WORD: &str = "count";
-const FLOAT_WORD: &str = "float";
 /// The name `catch e` binds, in lower_try_binding's template
 const CAUGHT_BINDING_PLACEHOLDER: &str = "caught_binding";
 /// The got-it topic of `square 3 + square(4)` (ask_braceless_argument)
@@ -64,9 +68,6 @@ const COUNT_HAYSTACK: &str = "counted_haystack";
 const COUNT_NEEDLE: &str = "counted_needle";
 const COUNT_ITEM_TEMPLATE: &str = "count(filter(counted_haystack, counted_item => counted_item == counted_needle))";
 const COUNT_SUBSTRING_TEMPLATE: &str = "count(split(counted_haystack, counted_needle)) - 1";
-const FOR_WORD: &str = "for";
-/// `log(x)` is libm's natural logarithm; `log(x, base)` divides by the base's
-const LOG_WORD: &str = "log";
 
 /// Canonical word and the spellings that mean it
 const SYNONYMS: [(&str, &[&str]); 31] = [
@@ -92,9 +93,9 @@ const SYNONYMS: [(&str, &[&str]); 31] = [
 	("first", &[]),
 	("last", &[]),
 	(SLICE, &[]),
-	(COPY, &["clone"]),
+	(COPY_WORD, &["clone"]),
 	("replace", &[]),
-	(ORD, &["ordinal", CODEPOINT]),
+	(ORD_WORD, &["ordinal", CODEPOINT]),
 	(IS_DIGIT, &["isdigit"]),
 	("mean", &["average"]),
 	(IS_ALPHA, &["is_letter", "isalpha"]),
@@ -113,7 +114,7 @@ pub const LIST_SUM: &str = "list_sum";
 /// Words the emitter implements as runtime functions, with the number of arguments including the receiver
 pub const RUNTIME_WORDS: [(&str, usize); 20] = [
 	(crate::wasm_emitter::host::wasi_emitter::WASI_ENVIRONMENT, 0),
-	(ORD, 1),
+	(ORD_WORD, 1),
 	("upper", 1),
 	("lower", 1),
 	("reverse", 1),
@@ -133,24 +134,18 @@ pub const RUNTIME_WORDS: [(&str, usize); 20] = [
 	(INSTANCE_COPY, 2),
 	(crate::one_entry_maps::MAP_OF_ENTRY, 1),
 ];
-/// `codepoint(c)`, `ord(c)`, `ordinal(c)`: the code point of a character (`c as int` is only its digit). Inside the
-/// compiler it is `ord`, since `codepoint` is also a type word
-pub const ORD: &str = "ord";
 /// Trailing arguments a word may leave out, passed as ø: `m.get(k)` is ø for a missing key, `s.slice(2)` slices to the end;
 /// `s.split` splits at spaces (left_out_argument)
-const OPTIONAL_ARGUMENTS: [(&str, usize); 3] = [(MAP_GET_OR, 1), (SLICE, 1), (SPLIT, 1)];
-const SPLIT: &str = "split";
+const OPTIONAL_ARGUMENTS: [(&str, usize); 3] = [(MAP_GET_OR, 1), (SLICE, 1), (SPLIT_WORD, 1)];
 const SPLIT_SEPARATOR: &str = " ";
 /// What an optional argument left out is: the space `s.split` splits at, else ø
 fn left_out_argument(word: &str) -> Node {
 	match word {
-		SPLIT => text(SPLIT_SEPARATOR),
+		SPLIT_WORD => text(SPLIT_SEPARATOR),
 		_ => Node::Empty,
 	}
 }
 
-/// `b = a.copy()`: values are never shared, so the copy is the value itself
-const COPY: &str = "copy";
 /// `field_with(object, "name", value)`: a copy of the object with the field set; what `object.name = value` lowers to
 pub const FIELD_WITH: &str = "field_with";
 /// instance_copy(x): a new instance with x's field values (`p.copy()`, Kotlin's `p.copy(y = 5)`); any other value is x
@@ -183,14 +178,9 @@ const EXPANDED_WORDS: [(&str, usize, &str); 3] = [
 		"(hidden_sum=0; for hidden_item in hidden_value {hidden_sum = hidden_sum + hidden_item}; hidden_sum)",
 	),
 	// `x!` (mutation.rs): the value, a loud error when it is ø; an Error value stays that Error
-	(
-		crate::words::UNWRAP,
-		1,
-		"if hidden_value == ø then error \"unwrapped ø\" else hidden_value",
-	),
+	(crate::words::UNWRAP, 1, "if hidden_value == ø then error \"unwrapped ø\" else hidden_value"),
 ];
 const IS_DIGIT: &str = "is_digit";
-const LIST_WORD: &str = "list";
 const DICT_WORD: &str = "dict";
 /// lib/prelude.warp's fromkeys(ks, value), also called on the class as Python's `dict.fromkeys(ks, value)`
 const FROMKEYS: &str = "fromkeys";
@@ -200,11 +190,8 @@ const LIST_CONSTRUCTORS: [&str; 4] = ["listOf", "mutableListOf", "arrayOf", "arr
 /// Words that mean another word with that many arguments (receiver included): `round(x, 3)`, `x.round(3)` is x rounded
 /// to 3 digits after the point (`round(x)` stays the builtin); `xs.first(3)`, `first 3 of xs` the first 3 items,
 /// `last(xs, 2)` the last 2 (lib/prelude.warp)
-const ARITY_VARIANTS: [(&str, usize, &str); 3] = [
-	("round", 2, "round_to"),
-	("first", 2, "first_items"),
-	("last", 2, "last_items"),
-];
+const ARITY_VARIANTS: [(&str, usize, &str); 3] =
+	[("round", 2, "round_to"), ("first", 2, "first_items"), ("last", 2, "last_items")];
 /// Methods a later pass lowers to prelude words: `x.pop(k)` (and `delete x[k]`, mutation::lower_deletes) to popped_item
 /// and popped_rest, `x.clear()` to cleared (list_mutations removed_key, cleared_collection)
 const POPPED_WORDS: &[&str] = &["popped_item", "popped_rest"];
@@ -225,13 +212,8 @@ const SAFE_PREFIX: &str = "safe_tmp_";
 const SAFE_BASE: &str = "safe";
 
 /// Library words whose result is always a text, and those whose result is always a list
-const TEXT_RESULT_WORDS: [&str; 5] = [
-	"upper",
-	"lower",
-	"trim",
-	"join",
-	crate::wasm_emitter::host::wasi_emitter::WASI_ENVIRONMENT,
-];
+const TEXT_RESULT_WORDS: [&str; 5] =
+	["upper", "lower", "trim", "join", crate::wasm_emitter::host::wasi_emitter::WASI_ENVIRONMENT];
 const LIST_RESULT_WORDS: [&str; 8] = [
 	"chars",
 	"sort",
@@ -304,32 +286,17 @@ fn canonical_word(name: &str) -> Option<&'static str> {
 
 pub(crate) fn arity(word: &str) -> usize {
 	let expanded = EXPANDED_WORDS.iter().map(|(name, arity, _)| (*name, *arity));
-	let built_in = RUNTIME_WORDS
-		.into_iter()
-		.chain(expanded)
-		.find(|(name, _)| *name == word)
-		.map(|(_, arity)| arity);
-	built_in
-		.or_else(|| crate::modules::prelude_word_arity(word))
-		.unwrap_or(1)
+	let built_in = RUNTIME_WORDS.into_iter().chain(expanded).find(|(name, _)| *name == word).map(|(_, arity)| arity);
+	built_in.or_else(|| crate::modules::prelude_word_arity(word)).unwrap_or(1)
 }
 
 /// The library words a name may stand for once this pass has run: its canonical spelling (`isdigit` → is_digit) and,
 /// its ARITY_VARIANTS (`round(x, 2)` round_to). modules::resolve, which runs before, loads the prelude words by them
 pub fn words_spelled_by(name: &str) -> Vec<&'static str> {
-	let variants = ARITY_VARIANTS
-		.iter()
-		.filter(|(word, _, _)| *word == name)
-		.map(|(_, _, variant)| *variant);
-	let lowered = LOWERED_TO_PRELUDE
-		.iter()
-		.filter(|(word, _)| *word == name)
-		.flat_map(|(_, words)| words.iter().copied());
-	canonical_word(name)
-		.into_iter()
-		.chain(variants)
-		.chain(lowered)
-		.collect()
+	let variants = ARITY_VARIANTS.iter().filter(|(word, _, _)| *word == name).map(|(_, _, variant)| *variant);
+	let lowered =
+		LOWERED_TO_PRELUDE.iter().filter(|(word, _)| *word == name).flat_map(|(_, words)| words.iter().copied());
+	canonical_word(name).into_iter().chain(variants).chain(lowered).collect()
 }
 
 pub fn lower(node: Node) -> Node {
@@ -353,11 +320,7 @@ pub fn lower(node: Node) -> Node {
 	collect_assigned_objects(&node, &mut assigned);
 
 	let plain = assigned.plain.difference(&assigned.rebound).cloned().collect();
-	let objects = assigned
-		.objects
-		.into_iter()
-		.filter_map(|(name, literal)| Some((name, literal?)))
-		.collect();
+	let objects = assigned.objects.into_iter().filter_map(|(name, literal)| Some((name, literal?))).collect();
 	let instances = crate::traits::InstanceTypes::of(&node);
 	let call_results = call_results(&node, &context);
 	Lowering {
@@ -397,15 +360,13 @@ fn raise_call(items: &[Node], shadowed: &HashSet<String>) -> Option<Node> {
 	if !crate::errors::run_time::RAISE_WORDS.iter().any(is_raise_word) {
 		return None;
 	}
-	let message = crate::errors::run_time::returned_error_message(raised)
-		.unwrap_or(raised)
-		.clone();
+	let message = crate::errors::run_time::returned_error_message(raised).unwrap_or(raised).clone();
 	// the message is a text, so `catch e` reads it whatever was raised (`raise 42`: "42"); a word (`raise oops`) is its name
 	let message = match message.drop_meta() {
 		Node::Text(_) | Node::Symbol(_) => message,
 		_ => call(crate::wasm_emitter::text::text_builtins::TEXT_FORM, vec![message]),
 	};
-	Some(call(crate::wasm_emitter::text::text_builtins::RAISE, vec![message]))
+	Some(call(RAISE_WORD, vec![message]))
 }
 
 /// The field and step of `x++` / `x--` after a dot
@@ -450,11 +411,7 @@ fn method_parts(method: &Node) -> Option<(&Node, &String, Vec<Node>)> {
 
 /// The call `word(receiver, arguments…)`
 fn word_call(word_node: &Node, receiver: &Node, arguments: Vec<Node>) -> Node {
-	Node::List(
-		[vec![word_node.clone(), receiver.clone()], arguments].concat(),
-		Bracket::Round,
-		Separator::None,
-	)
+	Node::List([vec![word_node.clone(), receiver.clone()], arguments].concat(), Bracket::Round, Separator::None)
 }
 
 struct Lowering {
@@ -493,9 +450,8 @@ impl Lowering {
 			}
 			// `def f(m) { m.a }`: the body sees the parameters, as `f(m) := m.a` does
 			Node::List(items, bracket, separator) if let Some((name, parameters)) = keyword_definition(&items) => {
-				let items = self.within_function(name, parameters, || {
-					items.into_iter().map(|item| self.expand(item)).collect()
-				});
+				let items = self
+					.within_function(name, parameters, || items.into_iter().map(|item| self.expand(item)).collect());
 				Node::List(items, bracket, separator)
 			}
 			Node::List(items, bracket, separator) => {
@@ -503,8 +459,7 @@ impl Lowering {
 				if let Some(walk) = self.for_over_map(&items) {
 					return walk;
 				}
-				self.word_call(&items, &bracket, &separator)
-					.unwrap_or(Node::List(items, bracket, separator))
+				self.word_call(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
 			}
 			// `p.x++` (parsed as `p.(x++)` or `(p.x)++`) is `p.x += 1`, an update of the field
 			Node::Key(left, Op::Dot, right) if field_step(&right).is_some() => {
@@ -522,8 +477,7 @@ impl Lowering {
 				let combined = Node::Key(left.clone(), op.base_op(), right);
 				let left = self.expand(*left);
 				let combined = self.expand(combined);
-				self.stored(&left, combined.clone())
-					.unwrap_or(key(left, Op::Assign, combined))
+				self.stored(&left, combined.clone()).unwrap_or(key(left, Op::Assign, combined))
 			}
 			Node::Key(left, Op::Dot, right) => {
 				let (left, right) = (self.expand(*left), self.expand_method(*right));
@@ -535,8 +489,7 @@ impl Lowering {
 				}
 				let left = self.expand(*left);
 				let right = self.in_definition(&left, *right);
-				self.field_assignment(&left, &right)
-					.unwrap_or(key(left, Op::Assign, right))
+				self.field_assignment(&left, &right).unwrap_or(key(left, Op::Assign, right))
 			}
 			Node::Key(left, Op::SafeDot, right) => {
 				let (receiver, word) = (self.expand(*left), *right);
@@ -583,9 +536,7 @@ impl Lowering {
 	fn within_function<T>(&self, name: Option<String>, parameters: Vec<String>, lower: impl FnOnce() -> T) -> T {
 		let scope = self.parameters.borrow().len();
 		self.parameters.borrow_mut().extend(parameters.iter().cloned());
-		let named = name
-			.map(|name| self.defining.borrow_mut().push((name, parameters)))
-			.is_some();
+		let named = name.map(|name| self.defining.borrow_mut().push((name, parameters))).is_some();
 		let lowered = lower();
 		self.parameters.borrow_mut().truncate(scope);
 		if named {
@@ -672,8 +623,7 @@ impl Lowering {
 
 	/// The library word a call of `name` with that many arguments (receiver included) means
 	fn library_word_for(&self, name: &str, argument_count: usize) -> Option<&'static str> {
-		self.arity_variant(name, argument_count)
-			.or_else(|| self.library_word(name))
+		self.arity_variant(name, argument_count).or_else(|| self.library_word(name))
 	}
 
 	/// The word `name` means with that many arguments, unless the program defines `name`
@@ -712,9 +662,7 @@ impl Lowering {
 		}
 		// `first sorted xs` has one argument: a library word after it is its argument's prefix
 		let prefixes_its_argument = *bracket == Bracket::None
-			&& items
-				.get(1)
-				.is_some_and(|next| self.library_word(&next.drop_meta().name()).is_some());
+			&& items.get(1).is_some_and(|next| self.library_word(&next.drop_meta().name()).is_some());
 		let argument_count = if prefixes_its_argument { 1 } else { items.len() - 1 };
 		let word = self.library_word_for(head, argument_count)?;
 		// `sorted "listen" == sorted "silent"`: the word takes the operand of the comparison, as a defined function of `it` does
@@ -767,11 +715,7 @@ impl Lowering {
 		let (key, value) = match names.drop_meta() {
 			Node::Symbol(_) => (names.clone(), None),
 			Node::List(parts, Bracket::Round | Bracket::None, _) => match parts.as_slice() {
-				[key, value]
-					if [key, value]
-						.iter()
-						.all(|name| matches!(name.drop_meta(), Node::Symbol(_))) =>
-				{
+				[key, value] if [key, value].iter().all(|name| matches!(name.drop_meta(), Node::Symbol(_))) => {
 					(key.clone(), Some(value.clone()))
 				}
 				_ => return None,
@@ -786,19 +730,11 @@ impl Lowering {
 					Op::Assign,
 					Box::new(crate::warp_parser::subscript(map.clone(), key.clone())),
 				);
-				Node::List(
-					[vec![lookup], body.body_statements()].concat(),
-					Bracket::Curly,
-					Separator::Semicolon,
-				)
+				Node::List([vec![lookup], body.body_statements()].concat(), Bracket::Curly, Separator::Semicolon)
 			}
 		};
 		let keys = self.call(MAP_KEYS, keyword, vec![map], false);
-		Some(Node::List(
-			vec![keyword.clone(), key, in_word.clone(), keys, body],
-			Bracket::None,
-			Separator::Space,
-		))
+		Some(Node::List(vec![keyword.clone(), key, in_word.clone(), keys, body], Bracket::None, Separator::Space))
 	}
 
 	/// `square 3 + square(4)`, a braceless call of a user function whose argument holds an operator, reads as
@@ -853,12 +789,7 @@ impl Lowering {
 			name if self.library_word_for(name, 2) == Some(COLLECTION_CONTAINS) => (left, right),
 			_ => return None,
 		};
-		Some(self.call(
-			COLLECTION_CONTAINS,
-			word,
-			vec![collection.clone(), element.clone()],
-			false,
-		))
+		Some(self.call(COLLECTION_CONTAINS, word, vec![collection.clone(), element.clone()], false))
 	}
 
 	/// `x.word` and `x.word(args)`; an unknown word on a value is an error
@@ -895,12 +826,7 @@ impl Lowering {
 		if !is_called && self.reads_declared_field(receiver, name) {
 			return Some(field_lookup(receiver, name, word_node));
 		}
-		if self
-			.context
-			.user_functions
-			.get(name)
-			.is_some_and(|function| !function.params.is_empty())
-		{
+		if self.context.user_functions.get(name).is_some_and(|function| !function.params.is_empty()) {
 			return Some(word_call(word_node, receiver, arguments));
 		}
 		// `x.string`, `t.int`, `x.float()`, `2.double()`: the conversion `string(x)`, as written in call form; uncalled
@@ -941,9 +867,7 @@ impl Lowering {
 	/// function (not of a variable), the query effects.rs answers
 	fn is_known_method(&self, receiver: &Node, name: &str) -> bool {
 		let is_effects_query = name == crate::analyzer::effects::EFFECTS_WORD
-			&& receiver
-				.symbol_name()
-				.is_some_and(|function| !self.plain.contains(function));
+			&& receiver.symbol_name().is_some_and(|function| !self.plain.contains(function));
 		counting_method(name, &self.context).is_some()
 			|| is_list_mutating_method(name)
 			|| self.context.user_functions.contains_key(name)
@@ -996,21 +920,15 @@ impl Lowering {
 
 	/// The call of `word` with the receiver and its arguments; arguments are the items after the word for the prefix form
 	fn call(&self, word: &'static str, head: &Node, arguments: Vec<Node>, is_prefix: bool) -> Node {
-		let mut arguments = if is_prefix {
-			self.merged_prefix_arguments(word, arguments)
-		} else {
-			arguments
-		};
+		let mut arguments = if is_prefix { self.merged_prefix_arguments(word, arguments) } else { arguments };
 		let wanted = arity(word);
-		let optional = OPTIONAL_ARGUMENTS
-			.iter()
-			.find(|(name, _)| *name == word)
-			.map_or(0, |(_, optional)| *optional);
+		let optional = OPTIONAL_ARGUMENTS.iter().find(|(name, _)| *name == word).map_or(0, |(_, optional)| *optional);
 		if arguments.len() < wanted && arguments.len() + optional >= wanted {
 			arguments.resize(wanted, left_out_argument(word));
 		}
 		// objects are references (P200): `x.copy()` is a new deep copy, `x.copy(shallow: true)` a shallow one (P205)
-		if let (COPY, [receiver], shallow) | (COPY, [receiver, shallow], _) = (word, arguments.as_slice(), &Node::False)
+		if let (COPY_WORD, [receiver], shallow) | (COPY_WORD, [receiver, shallow], _) =
+			(word, arguments.as_slice(), &Node::False)
 		{
 			return copy_call(receiver.clone(), shallow_flag(shallow));
 		}
@@ -1020,17 +938,10 @@ impl Lowering {
 		let fewest = wanted - crate::modules::prelude_word_defaults(word);
 		if !(fewest..=wanted).contains(&arguments.len()) && !checks_itself {
 			let plural = if wanted == 1 { "" } else { "s" };
-			let counts = if fewest == wanted {
-				wanted.to_string()
-			} else {
-				format!("{fewest} to {wanted}")
-			};
+			let counts = if fewest == wanted { wanted.to_string() } else { format!("{fewest} to {wanted}") };
 			let call = parens([vec![head.clone()], arguments.clone()].concat());
-			return Diagnostic::at(
-				&call,
-				format!("{word} takes {counts} argument{plural}, got {}", arguments.len()),
-			)
-			.into_error();
+			return Diagnostic::at(&call, format!("{word} takes {counts} argument{plural}, got {}", arguments.len()))
+				.into_error();
 		}
 		match EXPANDED_WORDS.iter().find(|(name, _, _)| *name == word) {
 			Some((_, _, template)) if word == SUM_WORD => dispatched_sum(self.expanded(template, arguments)),
@@ -1060,9 +971,7 @@ impl Lowering {
 		}
 		let (kept, rest) = arguments.split_at(wanted - 1);
 		let heads_with_word = matches!(rest[0].drop_meta(), Node::Symbol(name) if self.library_word(name).is_some());
-		let phrase = heads_with_word
-			.then(|| self.word_call(rest, &Bracket::None, &Separator::Space))
-			.flatten();
+		let phrase = heads_with_word.then(|| self.word_call(rest, &Bracket::None, &Separator::Space)).flatten();
 		let phrase = phrase.unwrap_or_else(|| Node::List(rest.to_vec(), Bracket::None, Separator::Space));
 		[kept.to_vec(), vec![phrase]].concat()
 	}
@@ -1075,17 +984,14 @@ impl Lowering {
 			WORD_BASE,
 			self.next_temporary(),
 		);
-		arguments
-			.iter()
-			.enumerate()
-			.fold(program, |program, (index, argument)| {
-				let placeholder = if index == 0 {
-					RECEIVER_PLACEHOLDER.to_string()
-				} else {
-					format!("{RECEIVER_PLACEHOLDER}_{}", index + 1)
-				};
-				substitute(program, &placeholder, argument)
-			})
+		arguments.iter().enumerate().fold(program, |program, (index, argument)| {
+			let placeholder = if index == 0 {
+				RECEIVER_PLACEHOLDER.to_string()
+			} else {
+				format!("{RECEIVER_PLACEHOLDER}_{}", index + 1)
+			};
+			substitute(program, &placeholder, argument)
+		})
 	}
 }
 
@@ -1116,10 +1022,9 @@ fn with_first_comparand(node: Node, replace: &dyn Fn(Node) -> Node) -> Node {
 		Node::Key(left, op, right) if op.is_comparison() || op.is_logical() => {
 			Node::Key(Box::new(with_first_comparand(*left, replace)), op, right)
 		}
-		Node::Meta { node, data } if is_comparison(&node) => Node::Meta {
-			node: Box::new(with_first_comparand(*node, replace)),
-			data,
-		},
+		Node::Meta { node, data } if is_comparison(&node) => {
+			Node::Meta { node: Box::new(with_first_comparand(*node, replace)), data }
+		}
 		operand => replace(operand),
 	}
 }

@@ -19,6 +19,7 @@ use super::memoization::definition_parts;
 use super::nodes::{call, key};
 use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::{AT_WORD, FLOAT_WORD};
 use std::collections::{HashMap, HashSet};
 
 const MIDI_HERTZ_CALL: &str = "midi_hertz";
@@ -35,7 +36,6 @@ const UNIT_WORDS: [(&str, &str); 5] = [
 	("bars", "bar_seconds"),
 	("dB", "decibels"),
 ];
-const AT_WORD: &str = "at";
 const DEF_WORD: &str = "def";
 const AT_CALL: &str = "sound_at";
 const AT_END_CALL: &str = "sound_at_end";
@@ -48,7 +48,6 @@ const LIVE_BODY: &str = "live_body";
 /// the words whose second argument is a kind: chord(root, kind), scale(root, kind)
 const KIND_TAKERS: [&str; 2] = ["chord", "scale"];
 const SIGNAL_WORD: &str = "play_signal";
-const FLOAT_TYPE: &str = "float";
 /// `play_blocks(fill, seconds)` → BLOCKS_CALLS: the host (native.rs played_blocks) calls fill·blocks(t) for each block,
 /// which hands fill the linear float array fill·block of BLOCK_SAMPLES cells to fill (BLOCK_TEMPLATES), in stereo
 /// (fill of three parameters: left, right, t) fill·block and fill·right; mono first, then stereo
@@ -113,11 +112,7 @@ fn with_float_signals(program: Node) -> Node {
 						Node::List(pair, _, _) => pair.clone(),
 						mono => vec![mono.clone()],
 					};
-					signals.extend(
-						channels
-							.iter()
-							.filter_map(|channel| channel.symbol_name().map(str::to_string)),
-					);
+					signals.extend(channels.iter().filter_map(|channel| channel.symbol_name().map(str::to_string)));
 				}
 			}
 		}
@@ -163,11 +158,9 @@ fn block_template(template: &str, fill: &str, seconds: Node) -> Node {
 		("block_samples", crate::node::int(BLOCK_SAMPLES as i64)),
 		("block_seconds", seconds),
 	];
-	names
-		.into_iter()
-		.fold(crate::warp_parser::parse(template), |node, (placeholder, value)| {
-			crate::library_words::substitute(node, placeholder, &value)
-		})
+	names.into_iter().fold(crate::warp_parser::parse(template), |node, (placeholder, value)| {
+		crate::library_words::substitute(node, placeholder, &value)
+	})
 }
 
 /// `play(hum, 2s)` of the program's function hum (PLAY_WORD): play_signal(hum, 2s) of a function of the time (or
@@ -204,12 +197,7 @@ fn parameter_counts(program: &Node) -> HashMap<String, usize> {
 	let mut counts = HashMap::new();
 	program.visit(&mut |node| {
 		if let Some(Node::List(items, _, _)) = definition_parts(node).map(|(head, _, _)| head.drop_meta().clone()) {
-			counts.extend(
-				items
-					.first()
-					.and_then(Node::symbol_name)
-					.map(|name| (name.to_string(), items.len() - 1)),
-			);
+			counts.extend(items.first().and_then(Node::symbol_name).map(|name| (name.to_string(), items.len() - 1)));
 		}
 	});
 	counts
@@ -239,21 +227,18 @@ fn with_float_parameters(node: Node, functions: &HashSet<String>) -> Node {
 	};
 	match head.drop_meta() {
 		Node::List(items, bracket, separator)
-			if items
-				.first()
-				.and_then(Node::symbol_name)
-				.is_some_and(|name| functions.contains(name)) =>
+			if items.first().and_then(Node::symbol_name).is_some_and(|name| functions.contains(name)) =>
 		{
 			let typed = items.iter().enumerate().map(|(index, item)| {
 				if index > 0 && item.symbol_name().is_some() {
-					key(item.clone(), Op::Colon, Node::symbol(FLOAT_TYPE))
+					key(item.clone(), Op::Colon, Node::symbol(FLOAT_WORD))
 				} else {
 					item.clone()
 				}
 			});
 			rebuild(
 				Node::List(typed.collect(), bracket.clone(), separator.clone()),
-				key(parens(vec![body]), Op::As, Node::symbol(FLOAT_TYPE)),
+				key(parens(vec![body]), Op::As, Node::symbol(FLOAT_WORD)),
 			)
 		}
 		_ => node,
@@ -272,21 +257,15 @@ fn with_music_words(node: Node, defined: &HashSet<String>) -> Node {
 		Node::List(items, Bracket::Curly, separator)
 			if !separator.separates_statements()
 				&& let Some(statements) = scheduled(
-					&Node::List(
-						with_unit_words(items.clone(), defined),
-						Bracket::None,
-						separator.clone(),
-					),
+					&Node::List(with_unit_words(items.clone(), defined), Bracket::None, separator.clone()),
 					defined,
 				) =>
 		{
 			Node::List(statements, Bracket::Curly, Separator::Newline)
 		}
-		Node::List(items, bracket, separator) if !separator.separates_statements() => Node::List(
-			with_kind_text(with_unit_words(items, defined), defined),
-			bracket,
-			separator,
-		),
+		Node::List(items, bracket, separator) if !separator.separates_statements() => {
+			Node::List(with_kind_text(with_unit_words(items, defined), defined), bracket, separator)
+		}
 		Node::List(statements, bracket, separator) => {
 			Node::List(with_scheduled(statements, defined), bracket, separator)
 		}
@@ -337,19 +316,9 @@ fn scheduled(statement: &Node, defined: &HashSet<String>) -> Option<Vec<Node>> {
 			}
 			single => vec![single.clone()],
 		},
-		_ => vec![Node::List(
-			action.to_vec(),
-			crate::node::Bracket::None,
-			separator.clone(),
-		)],
+		_ => vec![Node::List(action.to_vec(), crate::node::Bracket::None, separator.clone())],
 	};
-	Some(
-		[call(AT_CALL, vec![time.clone()])]
-			.into_iter()
-			.chain(actions)
-			.chain([call(AT_END_CALL, vec![])])
-			.collect(),
-	)
+	Some([call(AT_CALL, vec![time.clone()])].into_iter().chain(actions).chain([call(AT_END_CALL, vec![])]).collect())
 }
 
 /// `live_loop 4 { body }` → `live_voice = go { for live_cycle in 0..4 { body } }`, `live_loop drums 4 { body }` → `drums = go { … }`
@@ -438,10 +407,9 @@ fn with_unit_words(items: Vec<Node>, defined: &HashSet<String>) -> Vec<Node> {
 
 fn unit_amount_word(node: &Node, defined: &HashSet<String>) -> Option<&'static str> {
 	match node.drop_meta() {
-		Node::Symbol(name) if !defined.contains(name) => UNIT_WORDS
-			.iter()
-			.find(|(word, _)| word == name)
-			.map(|(_, seconds)| *seconds),
+		Node::Symbol(name) if !defined.contains(name) => {
+			UNIT_WORDS.iter().find(|(word, _)| word == name).map(|(_, seconds)| *seconds)
+		}
 		_ => None,
 	}
 }
@@ -502,9 +470,7 @@ fn defined_names(program: &Node) -> HashSet<String> {
 fn definition_signature_names(definition: &Node) -> Vec<String> {
 	match definition.drop_meta() {
 		Node::List(parts, _, _)
-			if parts
-				.last()
-				.is_some_and(|last| matches!(last.drop_meta(), Node::List(_, Bracket::Curly, _))) =>
+			if parts.last().is_some_and(|last| matches!(last.drop_meta(), Node::List(_, Bracket::Curly, _))) =>
 		{
 			parts[..parts.len() - 1].iter().flat_map(definition_names).collect()
 		}

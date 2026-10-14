@@ -17,12 +17,6 @@ fn exit_code(name: &str, program: &str) -> Option<i32> {
 
 #[test]
 fn exit_with_a_code_in_a_handler_body() {
-	assert_eq!(
-		exit_code("handler_exit_code.warp", "on alarm { exit 3 }\nemit alarm\n"),
-		Some(3)
-	);
-	assert_eq!(
-		exit_code("handler_bare_exit.warp", "on alarm { exit }\nemit alarm\nexit 5\n"),
-		Some(0)
-	);
+	assert_eq!(exit_code("handler_exit_code.warp", "on alarm { exit 3 }\nemit alarm\n"), Some(3));
+	assert_eq!(exit_code("handler_bare_exit.warp", "on alarm { exit }\nemit alarm\nexit 5\n"), Some(0));
 }

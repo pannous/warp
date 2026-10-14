@@ -18,15 +18,17 @@ is_alphanumeric(c) := is_alpha(c) or is_digit(c)
 is_space(c) := c == ' ' or c == '\t' or c == '\n' or c == '\r'
 // x as a fraction, by its continued fraction (src/numbers/real.rs computes it exactly for √2, π, … written in the program):
 // `within: 1e-6` the first convergent that close, a limit the closest fraction whose denominator is at most that
-// (Python's limit_denominator), neither the first convergent that is the same float; 0 means not given
-nearest(x, kind, limit = 0, within = 0) := {
+// (Python's limit_denominator and its default 1000000, user decision); limit 0 the exact fraction, of a float the first
+// convergent that is the same float. A precision replaces the default limit (`within: 1e-40` reaches beyond it)
+nearest(x, kind, limit = 1000000, within = 0) := {
 	p0 = 0; q0 = 1; p1 = 1; q1 = 0; rest = x
+	cap = if within > 0 and limit == 1000000 then 0 else limit
 	while true {
 		a = floor(rest) as int
 		q2 = q0 + a * q1
-		if limit > 0 and q2 > limit {
+		if cap > 0 and q2 > cap {
 			// the closer of the last convergent and the semiconvergent with the largest denominator in the limit
-			k = (limit - q0) div q1
+			k = (cap - q0) div q1
 			below = (p0 + k * p1) / (q0 + k * q1)
 			above = p1 / q1
 			return if abs(above - x) <= abs(below - x) then above else below

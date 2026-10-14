@@ -6,10 +6,7 @@ use crate::is;
 fn text_samples() {
 	is!("samples/palindrome.warp", true);
 	is!("samples/word_count.warp", 4);
-	is!(
-		"samples/sort_words.warp",
-		warp::texts(vec!["brown", "fox", "quick", "the"])
-	);
+	is!("samples/sort_words.warp", warp::texts(vec!["brown", "fox", "quick", "the"]));
 	is!("samples/word_lengths.warp", warp::ints(vec![3, 5, 5, 3]));
 	is!("samples/replace_word.warp", "I like coffee");
 	is!("samples/find_text.warp", true);

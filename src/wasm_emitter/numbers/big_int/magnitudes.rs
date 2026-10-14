@@ -8,64 +8,55 @@ impl WasmGcEmitter {
 		let limbs_type = self.type_manager.limbs_type;
 
 		// big_trim(m) -> m without leading zero limbs; locals: n, trimmed
-		self.runtime_function(
-			"big_trim",
-			vec![limbs],
-			vec![limbs],
-			vec![ValType::I32, limbs],
-			|_, f| {
-				let (magnitude, n, trimmed) = (0, 1, 2);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(magnitude),
-						I::ArrayLen,
-						I::LocalSet(n),
-						I::Block(BlockType::Empty),
-						I::Loop(BlockType::Empty),
-						I::LocalGet(n),
-						I::I32Eqz,
-						I::BrIf(1),
-						I::LocalGet(magnitude),
-						I::LocalGet(n),
-						I::I32Const(1),
-						I::I32Sub,
-						I::ArrayGet(limbs_type),
-						I::BrIf(1),
-					],
-				);
-				Self::increment(f, n, -1);
-				Self::emit_list(
-					f,
-					&[
-						I::Br(0),
-						I::End,
-						I::End,
-						I::LocalGet(n),
-						I::LocalGet(magnitude),
-						I::ArrayLen,
-						I::I32Eq,
-						I::If(BlockType::Result(limbs)),
-						I::LocalGet(magnitude),
-						I::Else,
-						I::LocalGet(n),
-						I::ArrayNewDefault(limbs_type),
-						I::LocalSet(trimmed),
-						I::LocalGet(trimmed),
-						I::I32Const(0),
-						I::LocalGet(magnitude),
-						I::I32Const(0),
-						I::LocalGet(n),
-						I::ArrayCopy {
-							array_type_index_dst: limbs_type,
-							array_type_index_src: limbs_type,
-						},
-						I::LocalGet(trimmed),
-						I::End,
-					],
-				);
-			},
-		);
+		self.runtime_function("big_trim", vec![limbs], vec![limbs], vec![ValType::I32, limbs], |_, f| {
+			let (magnitude, n, trimmed) = (0, 1, 2);
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(magnitude),
+					I::ArrayLen,
+					I::LocalSet(n),
+					I::Block(BlockType::Empty),
+					I::Loop(BlockType::Empty),
+					I::LocalGet(n),
+					I::I32Eqz,
+					I::BrIf(1),
+					I::LocalGet(magnitude),
+					I::LocalGet(n),
+					I::I32Const(1),
+					I::I32Sub,
+					I::ArrayGet(limbs_type),
+					I::BrIf(1),
+				],
+			);
+			Self::increment(f, n, -1);
+			Self::emit_list(
+				f,
+				&[
+					I::Br(0),
+					I::End,
+					I::End,
+					I::LocalGet(n),
+					I::LocalGet(magnitude),
+					I::ArrayLen,
+					I::I32Eq,
+					I::If(BlockType::Result(limbs)),
+					I::LocalGet(magnitude),
+					I::Else,
+					I::LocalGet(n),
+					I::ArrayNewDefault(limbs_type),
+					I::LocalSet(trimmed),
+					I::LocalGet(trimmed),
+					I::I32Const(0),
+					I::LocalGet(magnitude),
+					I::I32Const(0),
+					I::LocalGet(n),
+					I::ArrayCopy { array_type_index_dst: limbs_type, array_type_index_src: limbs_type },
+					I::LocalGet(trimmed),
+					I::End,
+				],
+			);
+		});
 
 		// mag_cmp(a, b) -> -1/0/1; locals: i, x, y
 		self.runtime_function(
@@ -224,10 +215,7 @@ impl WasmGcEmitter {
 					I::I32Const(0),
 					I::LocalGet(a),
 					I::ArrayLen,
-					I::ArrayCopy {
-						array_type_index_dst: limbs_type,
-						array_type_index_src: limbs_type,
-					},
+					I::ArrayCopy { array_type_index_dst: limbs_type, array_type_index_src: limbs_type },
 					I::LocalGet(copy),
 					I::LocalGet(b),
 				],
@@ -267,13 +255,7 @@ impl WasmGcEmitter {
 					s.limbs_get(f);
 					Self::emit_list(
 						f,
-						&[
-							I::LocalSet(ai),
-							I::I64Const(0),
-							I::LocalSet(carry),
-							I::I32Const(0),
-							I::LocalSet(j),
-						],
+						&[I::LocalSet(ai), I::I64Const(0), I::LocalSet(carry), I::I32Const(0), I::LocalSet(j)],
 					);
 					Self::count_up(f, j, lb, |f| {
 						// t = ai * b[j] + product[i+j] + carry  (< 2^64)
@@ -281,13 +263,7 @@ impl WasmGcEmitter {
 						s.limbs_get(f);
 						Self::emit_list(
 							f,
-							&[
-								I::I64Mul,
-								I::LocalGet(product),
-								I::LocalGet(i),
-								I::LocalGet(j),
-								I::I32Add,
-							],
+							&[I::I64Mul, I::LocalGet(product), I::LocalGet(i), I::LocalGet(j), I::I32Add],
 						);
 						s.limbs_get(f);
 						Self::emit_list(
@@ -306,10 +282,7 @@ impl WasmGcEmitter {
 							],
 						);
 						s.limbs_set(f);
-						Self::emit_list(
-							f,
-							&[I::LocalGet(carry), I::I64Const(32), I::I64ShrU, I::LocalSet(carry)],
-						);
+						Self::emit_list(f, &[I::LocalGet(carry), I::I64Const(32), I::I64ShrU, I::LocalSet(carry)]);
 					});
 					Self::emit_list(
 						f,
@@ -418,13 +391,7 @@ impl WasmGcEmitter {
 					s.call(f, "mag_cmp");
 					Self::emit_list(
 						f,
-						&[
-							I::I32Const(0),
-							I::I32GeS,
-							I::If(BlockType::Empty),
-							I::LocalGet(remainder),
-							I::LocalGet(b),
-						],
+						&[I::I32Const(0), I::I32GeS, I::If(BlockType::Empty), I::LocalGet(remainder), I::LocalGet(b)],
 					);
 					s.call(f, "mag_sub_into");
 					Self::emit_list(
@@ -499,14 +466,7 @@ impl WasmGcEmitter {
 					get(f, source, &[I::LocalGet(i)]);
 					Self::emit_list(
 						f,
-						&[
-							I::LocalGet(shift),
-							I::I64ExtendI32U,
-							I::I64Shl,
-							I::LocalGet(k),
-							I::I64Or,
-							I::LocalSet(t),
-						],
+						&[I::LocalGet(shift), I::I64ExtendI32U, I::I64Shl, I::LocalGet(k), I::I64Or, I::LocalSet(t)],
 					);
 					set(f, destination, &[I::LocalGet(i)], &[I::LocalGet(t)]);
 					Self::emit_list(f, &[I::LocalGet(t), I::I64Const(32), I::I64ShrU, I::LocalSet(k)]);
@@ -519,14 +479,7 @@ impl WasmGcEmitter {
 			}
 			Self::emit_list(
 				f,
-				&[
-					I::LocalGet(a),
-					I::ArrayLen,
-					I::LocalSet(la),
-					I::LocalGet(b),
-					I::ArrayLen,
-					I::LocalSet(lb),
-				],
+				&[I::LocalGet(a), I::ArrayLen, I::LocalSet(la), I::LocalGet(b), I::ArrayLen, I::LocalSet(lb)],
 			);
 			// a < b: quotient 0, remainder a
 			Self::emit_list(
@@ -543,11 +496,7 @@ impl WasmGcEmitter {
 					I::End,
 				],
 			);
-			new_limbs(
-				f,
-				&[I::LocalGet(la), I::LocalGet(lb), I::I32Sub, I::I32Const(1), I::I32Add],
-				quotient,
-			);
+			new_limbs(f, &[I::LocalGet(la), I::LocalGet(lb), I::I32Sub, I::I32Const(1), I::I32Add], quotient);
 			// normalize: shift both left until the divisor's top bit is set
 			Self::emit_list(
 				f,
@@ -685,12 +634,7 @@ impl WasmGcEmitter {
 				set(f, quotient, &[I::LocalGet(j)], &[I::LocalGet(qhat)]);
 				// subtracted once too often: add the divisor back
 				Self::emit_list(f, &[I::LocalGet(t), I::I64Const(0), I::I64LtS, I::If(BlockType::Empty)]);
-				set(
-					f,
-					quotient,
-					&[I::LocalGet(j)],
-					&[I::LocalGet(qhat), I::I64Const(1), I::I64Sub],
-				);
+				set(f, quotient, &[I::LocalGet(j)], &[I::LocalGet(qhat), I::I64Const(1), I::I64Sub]);
 				Self::emit_list(f, &[I::I64Const(0), I::LocalSet(k)]);
 				range(f, &[I::LocalGet(lb)], &|f| {
 					get(f, un, &[I::LocalGet(i), I::LocalGet(j), I::I32Add]);
@@ -711,16 +655,7 @@ impl WasmGcEmitter {
 				get(f, un, &[I::LocalGet(i), I::I32Const(1), I::I32Add]);
 				Self::emit_list(f, &[I::I64Const(32), I::I64Shl]);
 				get(f, un, &[I::LocalGet(i)]);
-				Self::emit_list(
-					f,
-					&[
-						I::I64Or,
-						I::LocalGet(shift),
-						I::I64ExtendI32U,
-						I::I64ShrU,
-						I::I32WrapI64,
-					],
-				);
+				Self::emit_list(f, &[I::I64Or, I::LocalGet(shift), I::I64ExtendI32U, I::I64ShrU, I::I32WrapI64]);
 				s.limbs_set(f);
 			});
 			f.instruction(&I::LocalGet(quotient));

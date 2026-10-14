@@ -9,29 +9,19 @@ use crate::lowering::function_head;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::traits::{witness_name, InstanceTypes, Shape};
-use crate::words::{FOR_WORD, IN_WORD};
+use crate::words::{FOR_WORD, IN_WORD, PRINT_WORD, TEXT_WORD};
 use std::collections::HashSet;
 
-const TEXT_OPERATION: &str = "text";
 const ITERATE_OPERATION: &str = "iterate";
-const PRINT_WORD: &str = "print";
 
 pub fn lower(node: Node) -> Node {
 	let declared = super::nodes::declared_class_names(&node);
-	let (printable, iterable) = (
-		defining(&node, &declared, TEXT_OPERATION),
-		defining(&node, &declared, ITERATE_OPERATION),
-	);
+	let (printable, iterable) = (defining(&node, &declared, TEXT_WORD), defining(&node, &declared, ITERATE_OPERATION));
 	if printable.is_empty() && iterable.is_empty() {
 		return node;
 	}
 	let types = InstanceTypes::of(&node);
-	Operations {
-		printable,
-		iterable,
-		types,
-	}
-	.rewrite_program(node)
+	Operations { printable, iterable, types }.rewrite_program(node)
 }
 
 struct Operations {
@@ -46,27 +36,20 @@ impl Operations {
 	/// a program shows the value `str()` would
 	fn rewrite_program(&self, node: Node) -> Node {
 		match node {
-			Node::Meta { node, data } if is_statements(&node) => Node::Meta {
-				node: Box::new(self.rewrite_program(*node)),
-				data,
-			},
+			Node::Meta { node, data } if is_statements(&node) => {
+				Node::Meta { node: Box::new(self.rewrite_program(*node)), data }
+			}
 			Node::List(mut statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
 				let last = statements.pop().map(|last| self.rewrite_program(last));
-				let statements = statements
-					.into_iter()
-					.map(|statement| self.rewrite(statement))
-					.chain(last)
-					.collect();
+				let statements = statements.into_iter().map(|statement| self.rewrite(statement)).chain(last).collect();
 				Node::List(statements, Bracket::None, separator)
 			}
-			value => self
-				.call(TEXT_OPERATION, &self.printable, &value)
-				.unwrap_or_else(|| self.rewrite(value)),
+			value => self.call(TEXT_WORD, &self.printable, &value).unwrap_or_else(|| self.rewrite(value)),
 		}
 	}
 
 	fn rewrite(&self, node: Node) -> Node {
-		for (operation, types) in [(TEXT_OPERATION, &self.printable), (ITERATE_OPERATION, &self.iterable)] {
+		for (operation, types) in [(TEXT_WORD, &self.printable), (ITERATE_OPERATION, &self.iterable)] {
 			if let Some((type_name, parameter, body)) = definition(&node, types, operation) {
 				let head = call(&witness_name(operation, &type_name), vec![parameter]);
 				let body = self.types.in_definition(&head, || self.rewrite(body));
@@ -75,13 +58,13 @@ impl Operations {
 		}
 		match node {
 			Node::Key(value, Op::As, target) if is_text_word(&target) => {
-				match self.call(TEXT_OPERATION, &self.printable, &value) {
+				match self.call(TEXT_WORD, &self.printable, &value) {
 					Some(call) => call,
 					None => Node::Key(Box::new(self.rewrite(*value)), Op::As, target),
 				}
 			}
 			Node::List(items, bracket, separator) => {
-				let text_call = |value: &Node| self.call(TEXT_OPERATION, &self.printable, value);
+				let text_call = |value: &Node| self.call(TEXT_WORD, &self.printable, value);
 				let items_of = |value: &Node| self.call(ITERATE_OPERATION, &self.iterable, value);
 				let called = match items.as_slice() {
 					[word, value]
@@ -114,11 +97,7 @@ impl Operations {
 					_ => None,
 				};
 				called.unwrap_or_else(|| {
-					Node::List(
-						items.into_iter().map(|item| self.rewrite(item)).collect(),
-						bracket,
-						separator,
-					)
+					Node::List(items.into_iter().map(|item| self.rewrite(item)).collect(), bracket, separator)
 				})
 			}
 			Node::Key(head, Op::Define, body) => {
@@ -130,10 +109,8 @@ impl Operations {
 			Node::Key(left, Op::Add, right)
 				if self.joins_printable(&left, &right) || self.joins_printable(&right, &left) =>
 			{
-				let joined = |side: Node| {
-					self.call(TEXT_OPERATION, &self.printable, &side)
-						.unwrap_or_else(|| self.rewrite(side))
-				};
+				let joined =
+					|side: Node| self.call(TEXT_WORD, &self.printable, &side).unwrap_or_else(|| self.rewrite(side));
 				key(joined(*left), Op::Add, joined(*right))
 			}
 			other => children_rewritten(other, |child| self.rewrite(child)),
@@ -158,10 +135,7 @@ impl Operations {
 }
 
 fn is_statements(node: &Node) -> bool {
-	matches!(
-		node.drop_meta(),
-		Node::List(_, Bracket::None, Separator::Semicolon | Separator::Newline)
-	)
+	matches!(node.drop_meta(), Node::List(_, Bracket::None, Separator::Semicolon | Separator::Newline))
 }
 
 pub(crate) fn is_text_word(node: &Node) -> bool {
@@ -176,9 +150,8 @@ fn defining(node: &Node, declared: &HashSet<String>, operation: &str) -> HashSet
 		if let Some((type_name, _, _)) = definition(part, declared, operation) {
 			types.insert(type_name);
 		}
-		if let Some(type_name) = declared
-			.iter()
-			.find(|type_name| defines_function_named(part, &witness_name(operation, type_name)))
+		if let Some(type_name) =
+			declared.iter().find(|type_name| defines_function_named(part, &witness_name(operation, type_name)))
 		{
 			types.insert(type_name.clone());
 		}

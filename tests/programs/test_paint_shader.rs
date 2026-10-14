@@ -10,11 +10,7 @@ const SHADER: &str = "shader = \"@fragment fn main(@builtin(position) at: vec4f)
 
 fn has_gpu() -> bool {
 	let run = crate::common::warp_command()
-		.args([
-			"--no-ask",
-			"eval",
-			&format!("{SHADER}gpu_render(shader, 1, 1, {{blue: 1.0}})"),
-		])
+		.args(["--no-ask", "eval", &format!("{SHADER}gpu_render(shader, 1, 1, {{blue: 1.0}})")])
 		.output()
 		.unwrap();
 	!String::from_utf8_lossy(&run.stderr).contains("no WebGPU adapter")
@@ -26,14 +22,9 @@ fn paint_renders_a_shader_text() {
 	if !has_gpu() {
 		return crate::common::announce_skip("a WebGPU adapter", module_path!());
 	}
-	let rendered = painted_rows(
-		&format!("{SHADER}paint(gpu_render(shader, 2, 1, {{blue: 1.0}}), 2, 1)"),
-		"paint-rendered",
-	);
-	assert_eq!(
-		painted_rows(&format!("{SHADER}paint(shader, 2, 1, {{blue: 1.0}})"), "paint-shader"),
-		rendered
-	);
+	let rendered =
+		painted_rows(&format!("{SHADER}paint(gpu_render(shader, 2, 1, {{blue: 1.0}}), 2, 1)"), "paint-rendered");
+	assert_eq!(painted_rows(&format!("{SHADER}paint(shader, 2, 1, {{blue: 1.0}})"), "paint-shader"), rendered);
 }
 
 #[test]
@@ -42,26 +33,14 @@ fn paint_of_a_shader_without_values_reads_none() {
 		return crate::common::announce_skip("a WebGPU adapter", module_path!());
 	}
 	let plain = "shader = \"@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }\"\n";
-	let rendered = painted_rows(
-		&format!("{plain}paint(gpu_render(shader, 2, 1), 2, 1)"),
-		"paint-plain-rendered",
-	);
-	assert_eq!(
-		painted_rows(&format!("{plain}paint(shader, 2, 1)"), "paint-plain-shader"),
-		rendered
-	);
+	let rendered = painted_rows(&format!("{plain}paint(gpu_render(shader, 2, 1), 2, 1)"), "paint-plain-rendered");
+	assert_eq!(painted_rows(&format!("{plain}paint(shader, 2, 1)"), "paint-plain-shader"), rendered);
 }
 
 #[test]
 fn use_graphics_is_use_draw() {
-	is!(
-		"use graphics\ncanvas(2, 1)\ndot(0, 0, red)\ncanvas_pixels[0] == red",
-		true
-	);
-	is!(
-		"use graphics\nuse draw\ncanvas(1, 1)\nclear(blue)\ncanvas_pixels[0] == blue",
-		true
-	);
+	is!("use graphics\ncanvas(2, 1)\ndot(0, 0, red)\ncanvas_pixels[0] == red", true);
+	is!("use graphics\nuse draw\ncanvas(1, 1)\nclear(blue)\ncanvas_pixels[0] == blue", true);
 }
 
 // card paint-shader: paint(shader) without a size takes the program's width and height, else the view's size
@@ -71,21 +50,12 @@ fn paint_of_a_shader_without_a_size_takes_width_and_height() {
 		return crate::common::announce_skip("a WebGPU adapter", module_path!());
 	}
 	assert_eq!(
-		painted_rows(
-			&format!("width = 2\nheight = 1\n{SHADER}paint(shader, {{blue: 1.0}})"),
-			"paint-global-size"
-		),
-		painted_rows(
-			&format!("{SHADER}paint(shader, 2, 1, {{blue: 1.0}})"),
-			"paint-given-size"
-		)
+		painted_rows(&format!("width = 2\nheight = 1\n{SHADER}paint(shader, {{blue: 1.0}})"), "paint-global-size"),
+		painted_rows(&format!("{SHADER}paint(shader, 2, 1, {{blue: 1.0}})"), "paint-given-size")
 	);
 	let plain = "shader = \"@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(1.0, 0.0, 0.0, 1.0); }\"\n";
 	assert_eq!(
 		painted_rows(&format!("{plain}paint(shader)"), "paint-view-size"),
-		painted_rows(
-			&format!("{plain}paint(shader, view_width, view_height)"),
-			"paint-view-given"
-		)
+		painted_rows(&format!("{plain}paint(shader, view_width, view_height)"), "paint-view-given")
 	);
 }

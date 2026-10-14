@@ -5,10 +5,10 @@ use crate::declaration_forms::lower_declarations;
 use crate::lowering::nodes::is_place;
 use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::{AT_WORD, DELETE_WORD, POP_WORD};
 
 /// Methods that append one element: `x.add(v)` is `x += [v]`, in place
 const APPEND_METHODS: [&str; 4] = ["add", "append", "push", "insert"];
-pub(crate) const POP_METHOD: &str = "pop";
 /// Pseudo-call `list_drop_last(xs)`: xs without its last item, in place (wasm_emitter list_ops emit_list_drop_last)
 pub const LIST_DROP_LAST: &str = "list_drop_last";
 /// Pseudo-call `list_become(xs, ys)`: xs takes the items of the fresh list ys in place, so every holder of xs sees them
@@ -17,7 +17,6 @@ pub const LIST_BECOME: &str = "list_become";
 /// The list a pop template takes from, replaced by the variable or field popped
 const POP_PLACE: &str = "pop_place";
 pub const REMOVE_METHOD: &str = "remove";
-const DELETE_METHOD: &str = "delete";
 /// Pseudo-call `removed_value(collection, k)`: what `collection.remove(k)` gives, by the collection's kind: of a map the
 /// value of the key (P35, Python's dict.pop), of a list the list without the first element equal to k
 pub const REMOVED_VALUE_CALL: &str = "removed_value";
@@ -35,7 +34,6 @@ pub(crate) const INSERT_METHOD: &str = "insert";
 pub const INSERT_AT_CALL: &str = "list_insert_at";
 /// Pseudo-call `insert_in_either_order(list, a, b)`: `xs.insert(a, b)` before the kinds decide which is the position
 pub const INSERT_EITHER_CALL: &str = "insert_in_either_order";
-pub(crate) const AT_WORD: &str = "at";
 
 /// The arguments of `xs.insert(…)`: `insert(x, at: i)` names the position, `insert(a, b)` leaves the order to the kinds
 pub(crate) enum Inserted {
@@ -51,11 +49,11 @@ pub(crate) fn appends(method: &str, argument_count: usize) -> bool {
 
 /// Methods that change the list variable they are called on: `xs.add(v)`, `xs.insert(v, at:1)`, `xs.pop()`
 pub fn is_list_mutating_method(name: &str) -> bool {
-	APPEND_METHODS.contains(&name) || [POP_METHOD, REMOVE_METHOD, DELETE_METHOD, CLEAR_METHOD].contains(&name)
+	APPEND_METHODS.contains(&name) || [POP_WORD, REMOVE_METHOD, DELETE_WORD, CLEAR_METHOD].contains(&name)
 }
 
 fn is_removal_method(name: &str) -> bool {
-	[REMOVE_METHOD, DELETE_METHOD].contains(&name)
+	[REMOVE_METHOD, DELETE_WORD].contains(&name)
 }
 
 /// The element of `x.add(v)` when x is a variable or a field of one
@@ -75,7 +73,7 @@ fn called_on_place<'a>(place: &Node, call: &'a Node) -> Option<(&'a str, &'a [No
 /// holder of the list sees it (Python's list.pop(), P200b)
 pub(crate) fn popped_list(list: &Node, call: &Node) -> Option<Node> {
 	match called_on_place(list, call)? {
-		(POP_METHOD, []) => {
+		(POP_WORD, []) => {
 			let template = format!(
 				"({POP_TEMPORARY} = {POP_PLACE}#count({POP_PLACE}); {POP_PLACE} = {LIST_DROP_LAST}({POP_PLACE}); {POP_TEMPORARY})"
 			);
@@ -97,22 +95,18 @@ pub(crate) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
 	};
 	let (value_word, rest_word) = match method {
 		name if is_removal_method(name) => {
-			if name == DELETE_METHOD {
-				crate::errors::diagnostic::note_alias(DELETE_METHOD, REMOVE_METHOD);
+			if name == DELETE_WORD {
+				crate::errors::diagnostic::note_alias(DELETE_WORD, REMOVE_METHOD);
 			}
 			(REMOVED_VALUE_CALL, crate::library_words::MAP_WITHOUT)
 		}
-		POP_METHOD => (POPPED_ITEM_CALL, POPPED_REST_CALL),
+		POP_WORD => (POPPED_ITEM_CALL, POPPED_REST_CALL),
 		_ => return None,
 	};
 	let removed = Node::Symbol(format!("{name}{TEMPORARY_SEPARATOR}removed"));
 	let value = prelude_call(value_word, vec![map.clone(), key.clone()]);
 	let without = prelude_call(rest_word, vec![map.clone(), key.clone()]);
-	let without = if rest_word == POPPED_REST_CALL {
-		became(map, without)
-	} else {
-		without
-	};
+	let without = if rest_word == POPPED_REST_CALL { became(map, without) } else { without };
 	Some(Node::List(
 		vec![
 			Node::Key(Box::new(removed.clone()), Op::Assign, Box::new(value)),
@@ -198,11 +192,9 @@ pub(crate) fn lowered_insert(list: Box<Node>, call: &Node) -> Node {
 /// `xs.add(v)` as `xs += [v]` and `xs.insert(i, v)` as its assignment, for a call that `updates_list`
 pub(crate) fn list_update(list: Box<Node>, call: &Node) -> Node {
 	match appended_element(&list, call).cloned() {
-		Some(element) => Node::Key(
-			list,
-			Op::AddAssign,
-			Box::new(Node::List(vec![element], Bracket::Square, Separator::Space)),
-		),
+		Some(element) => {
+			Node::Key(list, Op::AddAssign, Box::new(Node::List(vec![element], Bracket::Square, Separator::Space)))
+		}
 		None => lowered_insert(list, call),
 	}
 }

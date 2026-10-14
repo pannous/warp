@@ -13,19 +13,13 @@ fn the_listeners_of_an_event_are_a_list() {
 		ints(vec![1, 3])
 	);
 	is!("on alarm {1}; h = on alarm {2}; emit alarm; h", 2);
-	is!(
-		"on alarm {1}; on alarm {2}; remove 1 from listeners of alarm; count listeners of alarm",
-		1
-	);
+	is!("on alarm {1}; on alarm {2}; remove 1 from listeners of alarm; count listeners of alarm", 1);
 }
 
 #[test]
 fn any_handler_is_removed_by_its_place() {
 	is!("n = 0; on alarm {n += 1}; on alarm {n += 10}; remove (listeners of alarm)#1 from listeners of alarm; emit alarm; n", 10);
-	is!(
-		"n = 0; on alarm {n += 1}; on alarm {n += 10}; listeners of alarm -= 2; emit alarm; n",
-		1
-	);
+	is!("n = 0; on alarm {n += 1}; on alarm {n += 10}; listeners of alarm -= 2; emit alarm; n", 1);
 	is!("n = 0; on alarm {n += 1}; h = on alarm {n += 10}; for l in listeners of alarm { remove l from listeners of alarm }; emit alarm; n", 0);
 	is!(
 		"n = 0; on alarm {n += 1}; remove 1 from listeners of alarm; remove 1 from listeners of alarm; emit alarm; n",
@@ -36,10 +30,7 @@ fn any_handler_is_removed_by_its_place() {
 // wiki Footguns "Removing a listener that does not exist"
 #[test]
 fn removing_an_unknown_listener_is_a_compile_error() {
-	fails_with(
-		"on tick {1}; remove h from listeners of tick; emit tick",
-		"h is no named listener of tick",
-	);
+	fails_with("on tick {1}; remove h from listeners of tick; emit tick", "h is no named listener of tick");
 	fails_with(
 		"h = on alarm {1}; on tick {2}; remove h from listeners of tick; emit tick",
 		"h is no named listener of tick",
@@ -49,16 +40,7 @@ fn removing_an_unknown_listener_is_a_compile_error() {
 // card g-_SgI: `remove h from alarm` is short for `remove h from listeners of alarm`
 #[test]
 fn a_listener_is_removed_from_the_event_itself() {
-	is!(
-		"n = 0; h = on alarm {n += 1}; on alarm {n += 10}; remove h from alarm; emit alarm; n",
-		10
-	);
-	is!(
-		"n = 0; on alarm {n += 1}; h = on alarm {n += 10}; remove h from alarm; count listeners of alarm",
-		1
-	);
-	fails_with(
-		"h = on alarm {1}; on tick {2}; remove h from tick; emit tick",
-		"h is no named listener of tick",
-	);
+	is!("n = 0; h = on alarm {n += 1}; on alarm {n += 10}; remove h from alarm; emit alarm; n", 10);
+	is!("n = 0; on alarm {n += 1}; h = on alarm {n += 10}; remove h from alarm; count listeners of alarm", 1);
+	fails_with("h = on alarm {1}; on tick {2}; remove h from tick; emit tick", "h is no named listener of tick");
 }

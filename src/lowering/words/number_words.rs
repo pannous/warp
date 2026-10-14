@@ -37,10 +37,7 @@ const NUMBER_WORDS: [(&str, i64); 28] = [
 
 pub fn lower(program: Node) -> Node {
 	let names = crate::soft_keywords::names_given(&program);
-	let unnamed: Vec<(&str, i64)> = NUMBER_WORDS
-		.into_iter()
-		.filter(|(word, _)| !names.contains(*word))
-		.collect();
+	let unnamed: Vec<(&str, i64)> = NUMBER_WORDS.into_iter().filter(|(word, _)| !names.contains(*word)).collect();
 	if unnamed.is_empty() {
 		return program;
 	}
@@ -61,16 +58,8 @@ fn as_numbers(node: Node, words: &[(&str, i64)]) -> Node {
 			None => Node::Symbol(word),
 		},
 		Node::Key(key, op @ (Op::Colon | Op::Dot), value) => {
-			let key = if op == Op::Dot {
-				Box::new(as_numbers(*key, words))
-			} else {
-				key
-			};
-			let value = if op == Op::Dot {
-				value
-			} else {
-				Box::new(as_numbers(*value, words))
-			};
+			let key = if op == Op::Dot { Box::new(as_numbers(*key, words)) } else { key };
+			let value = if op == Op::Dot { value } else { Box::new(as_numbers(*value, words)) };
 			Node::Key(key, op, value)
 		}
 		positioned @ Node::Meta { .. } => {

@@ -16,24 +16,11 @@ fn assert_float_eq(code: &str, expected: f64) {
 			assert!(approx_eq(f, expected), "{} = {} but expected {}", code, f, expected);
 		}
 		Node::Number(Number::Int(i)) => {
-			assert!(
-				approx_eq(i as f64, expected),
-				"{} = {} but expected {}",
-				code,
-				i,
-				expected
-			);
+			assert!(approx_eq(i as f64, expected), "{} = {} but expected {}", code, i, expected);
 		}
 		Node::Number(Number::Quotient(n, d)) => {
 			let value = n as f64 / d as f64;
-			assert!(
-				approx_eq(value, expected),
-				"{} = {}/{} but expected {}",
-				code,
-				n,
-				d,
-				expected
-			);
+			assert!(approx_eq(value, expected), "{} = {}/{} but expected {}", code, n, d, expected);
 		}
 		other => panic!("{} returned {:?}, expected float {}", code, other, expected),
 	}

@@ -78,7 +78,7 @@ fn of_list_type(items: &[Node], of_index: usize) -> Option<(&Node, Vec<&str>)> {
 	let Node::Key(_, Op::Colon, head) = items.get(of_index.checked_sub(1)?)?.drop_meta() else {
 		return None;
 	};
-	(crate::warp_parser::list_type_head(head.symbol_name()?) == LIST_TYPE_HEAD).then_some(())?;
+	(crate::warp_parser::list_type_head(head.symbol_name()?) == LIST_WORD).then_some(())?;
 	let mut words = Vec::new();
 	for item in &items[of_index + 1..] {
 		match item.drop_meta() {
@@ -190,11 +190,7 @@ fn check_items(items: &[Node], positioned: &Node) {
 		("len", [argument]) => {
 			let counted = operand_text(argument);
 			let counted = counted.trim_matches(|c| c == '(' || c == ')');
-			hint(
-				&format!("len({counted})"),
-				&format!("#{counted}"),
-				"use # prefix for length",
-			);
+			hint(&format!("len({counted})"), &format!("#{counted}"), "use # prefix for length");
 		}
 		(word, [definition, ..]) if crate::operators::is_function_keyword(word) => {
 			if let Some((name, parameters, body_form)) = signature_of(definition) {

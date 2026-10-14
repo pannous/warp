@@ -32,8 +32,5 @@ fn chords_and_scales_are_lists_of_notes() {
 	is!("use sound\nchord(C4, major7) == [C4, E4, G4, B4]", true);
 	is!("use sound\nchord(A3, \"minor\") == [A3, C4, E4]", true);
 	is!("use sound\nscale(D4, dorian) == [D4, E4, F4, G4, A4, B4, C5, D5]", true);
-	is!(
-		"use sound\nplay(chord(C4, minor), 5ms)\nmelody(scale(C4, major), 5ms)\ncount(scale(A2, pentatonic))",
-		6
-	);
+	is!("use sound\nplay(chord(C4, minor), 5ms)\nmelody(scale(C4, major), 5ms)\ncount(scale(A2, pentatonic))", 6);
 }

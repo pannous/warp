@@ -21,11 +21,7 @@ fn a_slice_of_a_table_reads_only_its_rows() {
 	let read = |rest: &str, expected: i64, rows: usize| {
 		let before = warp::host::database::rows_read();
 		is!(&program("people_sliced", rest), expected);
-		assert_eq!(
-			warp::host::database::rows_read(),
-			before + rows,
-			"{rest} read other rows than its {rows}"
-		);
+		assert_eq!(warp::host::database::rows_read(), before + rows, "{rest} read other rows than its {rows}");
 	};
 	read("page = people#(11…20)\ncount(page) * 100 + page#1.age", 1011, 10);
 	read("page = people#(11..20)\ncount(page)", 9, 9);
@@ -39,19 +35,7 @@ fn a_slice_of_a_table_reads_only_its_rows() {
 #[test]
 fn a_sliced_row_is_the_one_instance_of_its_row() {
 	fifty_people("people_sliced_identity");
-	is!(
-		&program(
-			"people_sliced_identity",
-			"page = people#(2..3)\npage#1.name = \"Two\"\npeople#2.name"
-		),
-		"Two"
-	);
+	is!(&program("people_sliced_identity", "page = people#(2..3)\npage#1.name = \"Two\"\npeople#2.name"), "Two");
 	is!(&program("people_sliced_identity", "people#2.name"), "Two");
-	is!(
-		&program(
-			"people_sliced_identity",
-			"n = count(people)\npage = people#(48…50)\npage#3.age + n"
-		),
-		100
-	);
+	is!(&program("people_sliced_identity", "n = count(people)\npage = people#(48…50)\npage#3.age + n"), 100);
 }

@@ -16,12 +16,7 @@ pub struct Param {
 
 impl Param {
 	pub fn untyped(name: &str) -> Self {
-		Param {
-			name: name.to_string(),
-			annotation: None,
-			default: None,
-			used_as: None,
-		}
+		Param { name: name.to_string(), annotation: None, default: None, used_as: None }
 	}
 }
 
@@ -35,6 +30,8 @@ pub struct UserFunctionDef {
 	/// Kinds of the values a `return a, b` function returns as wasm multi-value results (empty: one Node or number)
 	pub tuple_kinds: Vec<Kind>,
 	pub func_index: Option<u32>,
+	/// the doc string or the comment above the definition (doc_strings.rs)
+	pub doc: Option<String>,
 }
 
 /// A variable captured by a closure: the global holding its value at definition time, and its kind

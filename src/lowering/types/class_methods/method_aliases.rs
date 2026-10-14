@@ -37,11 +37,7 @@ pub(super) fn method_aliases(node: Node) -> Node {
 		if let Node::Type { name, body } = part {
 			methods.insert(
 				name.drop_meta().name(),
-				class_items(body)
-					.iter()
-					.filter_map(method_parts)
-					.map(|(method, _, _)| method)
-					.collect(),
+				class_items(body).iter().filter_map(method_parts).map(|(method, _, _)| method).collect(),
 			);
 		}
 	});
@@ -70,9 +66,7 @@ pub(super) fn aliased_method(written: &str, defined: &[String]) -> Option<String
 			.map(|(_, methods)| methods.to_vec())
 			.unwrap_or_default(),
 	};
-	let method = candidates
-		.into_iter()
-		.find(|candidate| defined.iter().any(|method| method == candidate))?;
+	let method = candidates.into_iter().find(|candidate| defined.iter().any(|method| method == candidate))?;
 	crate::errors::diagnostic::note_alias(written, method);
 	Some(method.to_string())
 }
@@ -90,11 +84,7 @@ fn with_method_aliases(node: Node, instances: &std::collections::HashMap<String,
 						Some(method) => Node::List(
 							[
 								vec![Node::Symbol(method)],
-								items[1..]
-									.iter()
-									.cloned()
-									.map(|item| with_method_aliases(item, instances))
-									.collect(),
+								items[1..].iter().cloned().map(|item| with_method_aliases(item, instances)).collect(),
 							]
 							.concat(),
 							Bracket::Round,

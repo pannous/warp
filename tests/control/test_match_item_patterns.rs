@@ -4,14 +4,8 @@ use crate::is;
 
 #[test]
 fn every_item_binds_a_list() {
-	is!(
-		"names = match [[1, \"a\"], [2, \"b\"]] { [[n, s]...] => s }\nnames#2",
-		"b"
-	);
-	is!(
-		"numbers = match [[1, \"a\"], [2, \"b\"]] { [[n, s]...] => n }\ncount(numbers)",
-		2
-	);
+	is!("names = match [[1, \"a\"], [2, \"b\"]] { [[n, s]...] => s }\nnames#2", "b");
+	is!("numbers = match [[1, \"a\"], [2, \"b\"]] { [[n, s]...] => n }\ncount(numbers)", 2);
 }
 
 #[test]

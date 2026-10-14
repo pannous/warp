@@ -107,12 +107,7 @@ fn test_sin() {
 	const TOLERANCE: f64 = 1e-12;
 	macro_rules! near {
 		($actual:expr, $expected:expr) => {
-			assert!(
-				($actual - $expected).abs() < TOLERANCE,
-				"{} != {}",
-				$actual,
-				$expected
-			)
+			assert!(($actual - $expected).abs() < TOLERANCE, "{} != {}", $actual, $expected)
 		};
 	}
 	use std::f64::consts::PI as pi;

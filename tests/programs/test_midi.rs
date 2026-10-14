@@ -12,21 +12,21 @@ fn midi_path(name: &str) -> PathBuf {
 
 /// What `program`, using sound, prints on stdout (its failure is printed there) and stderr (headless sound and MIDI lines)
 fn failures_of(program: &str) -> String {
-	let run = crate::common::warp_command()
-		.args(["--no-ask", "eval", &format!("use sound\n{program}")])
-		.output()
-		.unwrap();
-	format!(
-		"{}{}",
-		String::from_utf8_lossy(&run.stdout),
-		String::from_utf8_lossy(&run.stderr)
-	)
+	let run =
+		crate::common::warp_command().args(["--no-ask", "eval", &format!("use sound\n{program}")]).output().unwrap();
+	format!("{}{}", String::from_utf8_lossy(&run.stdout), String::from_utf8_lossy(&run.stderr))
 }
 
 #[test]
 fn notes_survive_a_midi_file() {
 	let path = midi_path("tune.mid");
-	is!(&format!("use sound\nwrite_midi(\"{0}\", [[0, C4, 0.5, 100], [0.5, E4, 0.25, 90]])\nread_midi(\"{0}\") == [[0, 261.63, 0.5, 100], [0.5, 329.63, 0.25, 90]]", path.display()), true);
+	is!(
+		&format!(
+			"use sound\nwrite_midi(\"{0}\", [[0, C4, 0.5, 100], [0.5, E4, 0.25, 90]])\nread_midi(\"{0}\") == [[0, 261.63, 0.5, 100], [0.5, 329.63, 0.25, 90]]",
+			path.display()
+		),
+		true
+	);
 	let bytes = std::fs::read(&path).unwrap();
 	assert_eq!(&bytes[..4], b"MThd");
 	assert_eq!(&bytes[14..18], b"MTrk");
@@ -43,13 +43,7 @@ fn a_file_of_another_program_reads_with_running_status_and_tempo() {
 	file.extend(track);
 	let path = midi_path("other.mid");
 	std::fs::write(&path, file).unwrap();
-	is!(
-		&format!(
-			"use sound\nread_midi(\"{}\") == [[0, 261.63, 2, 100], [1, 329.63, 2, 100]]",
-			path.display()
-		),
-		true
-	);
+	is!(&format!("use sound\nread_midi(\"{}\") == [[0, 261.63, 2, 100], [1, 329.63, 2, 100]]", path.display()), true);
 }
 
 #[test]
@@ -72,14 +66,12 @@ fn headless_messages_are_named() {
 fn native_input_is_a_loud_error() {
 	let errors = failures_of("midi_receive()");
 	assert!(errors.contains("MIDI input is not available natively yet"), "{errors}");
+	assert!(!errors.contains("the playground reads it"), "promises a way that does not exist: {errors}");
 }
 
 #[test]
 fn listing_outputs_needs_a_backend_or_names_the_missing_one() {
 	let output = failures_of("midi_outputs()");
-	assert!(
-		output.starts_with('»') || output.contains("sendmidi") || output.contains("Error"),
-		"{output}"
-	);
+	assert!(output.starts_with('»') || output.contains("sendmidi") || output.contains("Error"), "{output}");
 	assert!(output.contains('[') || output.contains("sendmidi"), "{output}");
 }

@@ -20,11 +20,8 @@ console.log(JSON.stringify(empty));
 #[test]
 fn the_mode_advances_without_built_keywords() {
 	let stub = "const KEYWORDS = {hard: [], soft: []};\nlet defined;\nconst CodeMirror = { defineSimpleMode: (name, states) => { defined = states; } };\n";
-	let output = Command::new("node")
-		.arg("-e")
-		.arg(format!("{stub}{MODE}\n{EMPTY_MATCHES}"))
-		.output()
-		.expect("node runs");
+	let output =
+		Command::new("node").arg("-e").arg(format!("{stub}{MODE}\n{EMPTY_MATCHES}")).output().expect("node runs");
 	assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
 	assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "[]");
 }

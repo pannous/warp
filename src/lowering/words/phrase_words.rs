@@ -5,9 +5,8 @@
 use super::nodes::children_rewritten;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-
-const DO_WORD: &str = "do";
-const ADD_WORD: &str = "add";
+use crate::words::ADD_WORD;
+use crate::words::DO_WORD;
 
 pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&[DO_WORD, ADD_WORD]) {
@@ -68,10 +67,6 @@ fn appended_to(argument: &Node) -> Option<Node> {
 	if !matches!(list.drop_meta(), Node::Symbol(_)) {
 		return None;
 	}
-	let call = Node::List(
-		vec![symbol(ADD_WORD), element.as_ref().clone()],
-		Bracket::Round,
-		Separator::Space,
-	);
+	let call = Node::List(vec![symbol(ADD_WORD), element.as_ref().clone()], Bracket::Round, Separator::Space);
 	Some(Node::Key(list.clone(), Op::Dot, Box::new(call)))
 }

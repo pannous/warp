@@ -60,19 +60,14 @@ pub fn node_view(node: &Node) -> Node {
 		Node::Error(inner) => tagged("error", [node_view(inner)]),
 		Node::Key(left, op, right) => tagged("key", [Node::text(op.as_str()), node_view(left), node_view(right)]),
 		Node::List(items, bracket, separator) => {
-			let mut parts = vec![
-				Node::text(&bracket_glyphs(bracket)),
-				Node::text(&separator_glyph(separator)),
-			];
+			let mut parts = vec![Node::text(&bracket_glyphs(bracket)), Node::text(&separator_glyph(separator))];
 			parts.extend(items.iter().map(node_view));
 			tagged("list", parts)
 		}
 		Node::Type { name, body } => tagged("type", [node_view(name), node_view(body)]),
 		Node::Data(data) => tagged(
 			"data",
-			[Node::text(
-				&warp::numbers::units::describe(data).unwrap_or_else(|| format!("Data({data:?})")),
-			)],
+			[Node::text(&warp::numbers::units::describe(data).unwrap_or_else(|| format!("Data({data:?})")))],
 		),
 		Node::Meta { node: inner, .. } => meta_view(node, inner),
 	}
@@ -125,10 +120,7 @@ pub fn view_differential(part: &str, word: &str) {
 	let view_of_source =
 		|_: &Path, text: &str| format!("json({})", warp_text_literal(&view_json(&node_view(&parse(text)))));
 	let serialized = |text: &str| Node::text(&parse(text).serialize());
-	report(
-		word,
-		&differences_with(&sources(), part, word, view_of_source, serialized),
-	);
+	report(word, &differences_with(&sources(), part, word, view_of_source, serialized));
 }
 
 /// Fails with the first difference and the names of the next sources that differ
@@ -136,11 +128,7 @@ fn report(word: &str, differing: &[(String, String, String)]) {
 	let Some((path, warp_text, rust_text)) = differing.first() else {
 		return;
 	};
-	let others: Vec<&str> = differing[1..]
-		.iter()
-		.take(LISTED)
-		.map(|(path, _, _)| path.as_str())
-		.collect();
+	let others: Vec<&str> = differing[1..].iter().take(LISTED).map(|(path, _, _)| path.as_str()).collect();
 	panic!(
 		"{word} differs from its Rust twin on {} sources, first on {path}:\n  warp: …{}…\n  rust: …{}…\nnext: {}",
 		differing.len(),
@@ -171,15 +159,8 @@ fn differences_with(
 ) -> Vec<(String, String, String)> {
 	let mut differing = vec![];
 	for paths in paths.chunks(SOURCES_PER_PROGRAM) {
-		let texts: Vec<String> = paths
-			.iter()
-			.map(|path| std::fs::read_to_string(path).unwrap())
-			.collect();
-		let arguments: Vec<String> = paths
-			.iter()
-			.zip(&texts)
-			.map(|(path, text)| argument(path, text))
-			.collect();
+		let texts: Vec<String> = paths.iter().map(|path| std::fs::read_to_string(path).unwrap()).collect();
+		let arguments: Vec<String> = paths.iter().zip(&texts).map(|(path, text)| argument(path, text)).collect();
 		for ((path, text), value) in paths.iter().zip(&texts).zip(warp_values(part, word, &arguments)) {
 			let (warp_text, rust_text) = (as_compared(value).serialize(), as_compared(rust_twin(text)).serialize());
 			if warp_text != rust_text {
@@ -243,9 +224,7 @@ pub fn view_json(view: &Node) -> String {
 }
 
 fn json_text(text: &str) -> String {
-	quoted(text, |character| {
-		character.is_control().then(|| format!("\\u{:04x}", character as u32))
-	})
+	quoted(text, |character| character.is_control().then(|| format!("\\u{:04x}", character as u32)))
 }
 
 /// A text as a warp text literal: `${…}` would be a hole

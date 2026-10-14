@@ -32,15 +32,7 @@ const DEFINITION_WORDS: [&str; 4] = ["partial", "interface", "mixin", "namespace
 /// Member forms checked as no attribute or operation
 const SKIPPED_MEMBERS: [&str; 6] = ["const", "iterable", "maplike", "setlike", "constructor", "async"];
 /// Words before a member that do not change its name or arguments
-const QUALIFIERS: [&str; 7] = [
-	"static",
-	"stringifier",
-	"getter",
-	"setter",
-	"deleter",
-	"inherit",
-	"readonly",
-];
+const QUALIFIERS: [&str; 7] = ["static", "stringifier", "getter", "setter", "deleter", "inherit", "readonly"];
 const VARIADIC: &str = "...";
 const CONSTRUCTOR: &str = "constructor";
 /// `canvas.getContext("2d")`: the interface of the context a literal context id gives (RenderingContext is their union)
@@ -71,16 +63,7 @@ const PRIMITIVE_TYPES: [(&[&str], &str); 4] = [
 		],
 		"int",
 	),
-	(
-		&[
-			"float",
-			"unrestricted float",
-			"double",
-			"unrestricted double",
-			"DOMHighResTimeStamp",
-		],
-		"float",
-	),
+	(&["float", "unrestricted float", "double", "unrestricted double", "DOMHighResTimeStamp"], "float"),
 ];
 
 #[derive(Clone, Debug)]
@@ -187,19 +170,13 @@ pub fn optional_result_type(interface: &str, member: &str, call: bool) -> Option
 /// The WebIDL type of what `member` gives, when all its overloads agree; a promise's value, which a foreign call awaits
 fn declared_result(interface: &str, member: &str, call: bool) -> Option<String> {
 	// an Element's getContext is its HTMLCanvasElement's (check_member accepts the derived interfaces' members)
-	let declaring = || {
-		derived_interfaces(interface)
-			.into_iter()
-			.find_map(|derived| members_of(&derived).remove(member))
-	};
+	let declaring =
+		|| derived_interfaces(interface).into_iter().find_map(|derived| members_of(&derived).remove(member));
 	let declared = match (members_of(interface).remove(member).or_else(declaring)?, call) {
 		(Member::Attribute(type_name), false) => type_name,
 		(Member::Operation(overloads), true) => {
 			let returns: Vec<String> = overloads.into_iter().map(|overload| overload.returns).collect();
-			returns
-				.iter()
-				.all(|other| *other == returns[0])
-				.then(|| returns[0].clone())?
+			returns.iter().all(|other| *other == returns[0]).then(|| returns[0].clone())?
 		}
 		_ => return None,
 	};
@@ -213,10 +190,7 @@ fn declared_result(interface: &str, member: &str, call: bool) -> Option<String> 
 }
 
 fn primitive_type(declared: &str) -> Option<&'static str> {
-	PRIMITIVE_TYPES
-		.iter()
-		.find(|(names, _)| names.contains(&declared))
-		.map(|(_, warp_type)| *warp_type)
+	PRIMITIVE_TYPES.iter().find(|(names, _)| names.contains(&declared)).map(|(_, warp_type)| *warp_type)
 }
 
 /// `path.member` of a value of `interface` (path as the program writes it: `navigator.clipboard`)
@@ -241,16 +215,14 @@ pub fn check_member(interface: &str, path: &str, member: &str, call: Option<usiz
 		return Err(format!("{path} ({interface} in WebIDL) has no member {member}{near}"));
 	};
 	match (declared, call) {
-		(Member::Attribute(type_name), Some(_)) => Err(format!(
-			"{path}.{member} is an attribute ({type_name}), read without a call: {path}.{member}"
-		)),
+		(Member::Attribute(type_name), Some(_)) => {
+			Err(format!("{path}.{member} is an attribute ({type_name}), read without a call: {path}.{member}"))
+		}
 		(Member::Operation(overloads), Some(count))
 			if !overloads.iter().any(|overload| takes(&overload.arguments, count)) =>
 		{
-			let forms: Vec<String> = overloads
-				.iter()
-				.map(|overload| format!("{member}({})", signature(&overload.arguments)))
-				.collect();
+			let forms: Vec<String> =
+				overloads.iter().map(|overload| format!("{member}({})", signature(&overload.arguments))).collect();
 			Err(format!(
 				"{path}.{member} takes {}, not {count} argument{}",
 				forms.join(" or "),
@@ -264,16 +236,12 @@ pub fn check_member(interface: &str, path: &str, member: &str, call: Option<usiz
 /// The interfaces deriving from `interface`, at any depth (HTMLInputElement of Element), sorted by name
 fn derived_interfaces(interface: &str) -> Vec<String> {
 	let derives = |name: &str| {
-		let mut parent = definitions()
-			.get(name)
-			.and_then(|definition| definition.parent.as_deref());
+		let mut parent = definitions().get(name).and_then(|definition| definition.parent.as_deref());
 		while let Some(ancestor) = parent {
 			if ancestor == interface {
 				return true;
 			}
-			parent = definitions()
-				.get(ancestor)
-				.and_then(|definition| definition.parent.as_deref());
+			parent = definitions().get(ancestor).and_then(|definition| definition.parent.as_deref());
 		}
 		false
 	};
@@ -289,16 +257,11 @@ pub fn check_constructor(interface: &str, count: usize) -> Result<Option<String>
 		return Ok(None);
 	};
 	if definition.constructors.is_empty() {
-		return Err(format!(
-			"{interface} has no constructor in WebIDL: its values come from the platform"
-		));
+		return Err(format!("{interface} has no constructor in WebIDL: its values come from the platform"));
 	}
 	if !definition.constructors.iter().any(|arguments| takes(arguments, count)) {
-		let forms: Vec<String> = definition
-			.constructors
-			.iter()
-			.map(|arguments| format!("{interface}({})", signature(arguments)))
-			.collect();
+		let forms: Vec<String> =
+			definition.constructors.iter().map(|arguments| format!("{interface}({})", signature(arguments))).collect();
 		return Err(format!(
 			"{interface} takes {}, not {count} argument{}",
 			forms.join(" or "),
@@ -326,9 +289,7 @@ pub fn context_interface(interface: &str, member: &str, context_id: &str) -> Opt
 
 /// Does WebIDL declare a constructor of `interface` (`URL(text)` is a URL)
 pub fn constructible(interface: &str) -> bool {
-	definitions()
-		.get(interface)
-		.is_some_and(|definition| !definition.constructors.is_empty())
+	definitions().get(interface).is_some_and(|definition| !definition.constructors.is_empty())
 }
 
 /// A global of a page that the program's scope lacks (a Worker's: localStorage), else unchecked
@@ -341,16 +302,11 @@ fn page_only(global: &str) -> Result<(), String> {
 		.find(|(name, _)| *name == global)
 		.map(|(_, instead)| format!(": {instead}"))
 		.unwrap_or_default();
-	Err(format!(
-		"{global} ({interface}) exists on a page, not in the Worker this program runs in{instead}"
-	))
+	Err(format!("{global} ({interface}) exists on a page, not in the Worker this program runs in{instead}"))
 }
 
 fn takes(arguments: &[Argument], count: usize) -> bool {
-	let required = arguments
-		.iter()
-		.filter(|argument| !argument.optional && !argument.variadic)
-		.count();
+	let required = arguments.iter().filter(|argument| !argument.optional && !argument.variadic).count();
 	count >= required && (count <= arguments.len() || arguments.iter().any(|argument| argument.variadic))
 }
 
@@ -369,16 +325,10 @@ fn parse(text: &str) -> HashMap<String, Definition> {
 	let mut parsed: HashMap<String, Definition> = HashMap::new();
 	for chunk in split_top_level(&without_comments(text), ';') {
 		let chunk = without_extended_attributes(&chunk);
-		let words: Vec<&str> = chunk
-			.split(|c: char| c.is_whitespace() || c == '{')
-			.filter(|word| !word.is_empty())
-			.collect();
+		let words: Vec<&str> =
+			chunk.split(|c: char| c.is_whitespace() || c == '{').filter(|word| !word.is_empty()).collect();
 		if let [target, "includes", mixin] = words.as_slice() {
-			parsed
-				.entry(target.to_string())
-				.or_default()
-				.includes
-				.push(mixin.to_string());
+			parsed.entry(target.to_string()).or_default().includes.push(mixin.to_string());
 			continue;
 		}
 		let Some(open) = chunk.find('{') else { continue };
@@ -387,10 +337,7 @@ fn parse(text: &str) -> HashMap<String, Definition> {
 		if words.iter().any(|word| SKIPPED_KINDS.contains(word)) {
 			continue;
 		}
-		let named: Vec<&str> = words
-			.into_iter()
-			.filter(|word| !DEFINITION_WORDS.contains(word))
-			.collect();
+		let named: Vec<&str> = words.into_iter().filter(|word| !DEFINITION_WORDS.contains(word)).collect();
 		let (name, parent) = match named.as_slice() {
 			[name] => (name.to_string(), None),
 			[name, ":", parent] => (name.to_string(), Some(parent.to_string())),
@@ -415,10 +362,7 @@ fn parse(text: &str) -> HashMap<String, Definition> {
 fn add_member(members: &mut BTreeMap<String, Member>, source: &str) {
 	let source = without_extended_attributes(source);
 	let mut words: Vec<&str> = source.split_whitespace().collect();
-	if words
-		.first()
-		.is_none_or(|word| SKIPPED_MEMBERS.iter().any(|skipped| word.starts_with(skipped)))
-	{
+	if words.first().is_none_or(|word| SKIPPED_MEMBERS.iter().any(|skipped| word.starts_with(skipped))) {
 		return;
 	}
 	while words.first().is_some_and(|word| QUALIFIERS.contains(word)) {
@@ -451,31 +395,20 @@ fn add_member(members: &mut BTreeMap<String, Member>, source: &str) {
 fn arguments_of(signature: &str) -> Vec<Argument> {
 	let open = signature.find('(').map_or(0, |open| open + 1);
 	let close = signature.rfind(')').unwrap_or(signature.len());
-	split_top_level(&signature[open..close], ',')
-		.iter()
-		.filter_map(|argument| parse_argument(argument))
-		.collect()
+	split_top_level(&signature[open..close], ',').iter().filter_map(|argument| parse_argument(argument)).collect()
 }
 
 /// `optional DOMString label = "default"`, `any... data`
 fn parse_argument(source: &str) -> Option<Argument> {
 	let source = without_extended_attributes(source);
-	let source = source
-		.split_once('=')
-		.map_or(source.as_str(), |(declared, _)| declared)
-		.trim();
+	let source = source.split_once('=').map_or(source.as_str(), |(declared, _)| declared).trim();
 	let (optional, source) = match source.strip_prefix("optional ") {
 		Some(rest) => (true, rest),
 		None => (false, source),
 	};
 	let (type_name, name) = typed_name(source)?;
 	let variadic = type_name.ends_with(VARIADIC);
-	Some(Argument {
-		name,
-		type_name: type_name.trim_end_matches(VARIADIC).to_string(),
-		optional,
-		variadic,
-	})
+	Some(Argument { name, type_name: type_name.trim_end_matches(VARIADIC).to_string(), optional, variadic })
 }
 
 /// `FrozenArray<DOMString> languages` → (type, name); WebIDL escapes a name that is a keyword with `_`
@@ -487,9 +420,7 @@ fn typed_name(source: &str) -> Option<(String, String)> {
 }
 
 fn without_comments(text: &str) -> String {
-	let lines = text
-		.lines()
-		.map(|line| line.split_once("//").map_or(line, |(code, _)| code));
+	let lines = text.lines().map(|line| line.split_once("//").map_or(line, |(code, _)| code));
 	lines.collect::<Vec<_>>().join("\n")
 }
 

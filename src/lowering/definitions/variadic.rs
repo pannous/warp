@@ -30,11 +30,7 @@ struct Signature {
 pub fn lower(node: Node) -> Node {
 	let mut signatures = HashMap::new();
 	collect_signatures(&node, &mut signatures);
-	if !signatures
-		.values()
-		.any(|signature| signature.rest || signature.keywords)
-		&& !has_spread(&node)
-	{
+	if !signatures.values().any(|signature| signature.rest || signature.keywords) && !has_spread(&node) {
 		return node;
 	}
 	let mut parameters = HashSet::new();
@@ -52,10 +48,7 @@ pub fn lower_list_spreads(node: Node) -> Node {
 	let node = children_rewritten(node, lower_list_spreads);
 	match node {
 		Node::List(items, Bracket::Square, separator) => {
-			if items
-				.iter()
-				.any(|item| matches!(item.drop_meta(), Node::Symbol(_)) && starred(item).is_some())
-			{
+			if items.iter().any(|item| matches!(item.drop_meta(), Node::Symbol(_)) && starred(item).is_some()) {
 				rest_list(&items)
 			} else {
 				Node::List(items, Bracket::Square, separator)
@@ -69,10 +62,9 @@ pub fn lower_list_spreads(node: Node) -> Node {
 /// `xs: Int...` (Swift) too
 fn starred(node: &Node) -> Option<String> {
 	match node.drop_meta() {
-		Node::Symbol(name) => name
-			.strip_prefix(STARRED)
-			.filter(|name| !name.is_empty() && !name.starts_with(STARRED))
-			.map(str::to_string),
+		Node::Symbol(name) => {
+			name.strip_prefix(STARRED).filter(|name| !name.is_empty() && !name.starts_with(STARRED)).map(str::to_string)
+		}
 		Node::Key(name, Op::Colon, element_type) => match element_type.drop_meta() {
 			Node::Key(_, Op::To, end) if end.is_empty_node() => Some(name.name()),
 			_ => starred(name),
@@ -114,21 +106,16 @@ fn head_items(head: &Node) -> Option<&[Node]> {
 /// `**kw`: the name kw
 fn double_starred(node: &Node) -> Option<String> {
 	match node.drop_meta() {
-		Node::Symbol(name) => name
-			.strip_prefix(STARRED)?
-			.strip_prefix(STARRED)
-			.filter(|name| !name.is_empty())
-			.map(str::to_string),
+		Node::Symbol(name) => {
+			name.strip_prefix(STARRED)?.strip_prefix(STARRED).filter(|name| !name.is_empty()).map(str::to_string)
+		}
 		_ => None,
 	}
 }
 
 /// A parameter without its stars
 fn unstarred(parameter: &Node) -> Node {
-	double_starred(parameter)
-		.or_else(|| starred(parameter))
-		.map(Node::Symbol)
-		.unwrap_or_else(|| parameter.clone())
+	double_starred(parameter).or_else(|| starred(parameter)).map(Node::Symbol).unwrap_or_else(|| parameter.clone())
 }
 
 fn collect_signatures(node: &Node, signatures: &mut HashMap<String, Signature>) {
@@ -139,10 +126,7 @@ fn collect_signatures(node: &Node, signatures: &mut HashMap<String, Signature>) 
 		parameters = &parameters[..parameters.len() - keywords as usize];
 		let rest = parameters.last().is_some_and(|last| starred(last).is_some());
 		parameters = &parameters[..parameters.len() - rest as usize];
-		let fixed = parameters
-			.iter()
-			.map(|parameter| parameter_name(parameter).unwrap_or_default())
-			.collect();
+		let fixed = parameters.iter().map(|parameter| parameter_name(parameter).unwrap_or_default()).collect();
 		signatures.insert(head[0].name(), Signature { fixed, rest, keywords });
 	});
 }
@@ -152,9 +136,7 @@ fn has_spread(node: &Node) -> bool {
 	node.visit(&mut |part| {
 		if let Node::List(items, bracket, separator) = part {
 			found |= call_name(items, bracket, separator).is_some()
-				&& items[1..]
-					.iter()
-					.any(|item| starred(item).is_some() || double_starred(item).is_some());
+				&& items[1..].iter().any(|item| starred(item).is_some() || double_starred(item).is_some());
 		}
 	});
 	found
@@ -170,23 +152,16 @@ struct Variadic {
 impl Variadic {
 	fn rewrite(&self, node: Node) -> Node {
 		if let Some(head) = definition_head(&node) {
-			let starred_parameter = head[1..]
-				.iter()
-				.any(|parameter| starred(parameter).is_some() || double_starred(parameter).is_some());
+			let starred_parameter =
+				head[1..].iter().any(|parameter| starred(parameter).is_some() || double_starred(parameter).is_some());
 			let definition = |target: &Node, op: Op, body: &Node| {
-				let target = if starred_parameter {
-					self.unstarred_head(target)
-				} else {
-					target.clone()
-				};
+				let target = if starred_parameter { self.unstarred_head(target) } else { target.clone() };
 				key(target, op, self.rewrite(body.clone()))
 			};
 			return match node.drop_meta() {
 				Node::Key(target, op, body) => definition(target, *op, body),
 				Node::List(items, bracket, separator) => {
-					let Node::Key(target, op, body) = items[1].drop_meta() else {
-						unreachable!("a colon definition")
-					};
+					let Node::Key(target, op, body) = items[1].drop_meta() else { unreachable!("a colon definition") };
 					Node::List(
 						vec![items[0].clone(), definition(target, *op, body)],
 						bracket.clone(),
@@ -209,9 +184,7 @@ impl Variadic {
 			Node::List(items, bracket, separator) => {
 				let (name, parameters) = items.split_first().expect("a function name");
 				Node::List(
-					std::iter::once(name.clone())
-						.chain(parameters.iter().map(unstarred))
-						.collect(),
+					std::iter::once(name.clone()).chain(parameters.iter().map(unstarred)).collect(),
 					bracket.clone(),
 					separator.clone(),
 				)
@@ -225,13 +198,8 @@ impl Variadic {
 		let Some(name) = called_name(items, bracket, separator) else {
 			return false;
 		};
-		let rest = self
-			.signatures
-			.get(name)
-			.is_some_and(|signature| signature.rest || signature.keywords);
-		let spread = items[1..]
-			.iter()
-			.any(|item| starred(item).is_some() || double_starred(item).is_some());
+		let rest = self.signatures.get(name).is_some_and(|signature| signature.rest || signature.keywords);
+		let spread = items[1..].iter().any(|item| starred(item).is_some() || double_starred(item).is_some());
 		rest || spread
 	}
 
@@ -240,9 +208,8 @@ impl Variadic {
 		let head = items.next().expect("a function name");
 		let arguments: Vec<Node> = items.map(|item| self.rewrite(item)).collect();
 		let signature = self.signatures.get(&head.name());
-		let (spread_objects, arguments): (Vec<Node>, Vec<Node>) = arguments
-			.into_iter()
-			.partition(|argument| double_starred(argument).is_some());
+		let (spread_objects, arguments): (Vec<Node>, Vec<Node>) =
+			arguments.into_iter().partition(|argument| double_starred(argument).is_some());
 		let spread_object = match (spread_objects.as_slice(), signature) {
 			([], _) => None,
 			([object], Some(_)) => double_starred(object),
@@ -296,20 +263,13 @@ impl Variadic {
 /// `g(1, c=9, **m)` of `g(a, b, c)`: the arguments in parameter order, `g(1, m.b, 9)`: given ones first, a named one
 /// where its parameter is, the field of the object for every other parameter
 fn arguments_in_order(arguments: &[Node], fixed: &[String], object: &str) -> Vec<Node> {
-	let (named, positional): (Vec<&Node>, Vec<&Node>) = arguments
-		.iter()
-		.partition(|argument| named_argument(argument).is_some());
-	let named: Vec<(String, Node)> = named
-		.into_iter()
-		.filter_map(named_argument)
-		.map(|(name, value)| (name, value.clone()))
-		.collect();
+	let (named, positional): (Vec<&Node>, Vec<&Node>) =
+		arguments.iter().partition(|argument| named_argument(argument).is_some());
+	let named: Vec<(String, Node)> =
+		named.into_iter().filter_map(named_argument).map(|(name, value)| (name, value.clone())).collect();
 	let field = |parameter: &String| key(symbol(object), Op::Dot, Node::Symbol(parameter.clone()));
 	let filled = fixed.iter().skip(positional.len()).map(|parameter| {
-		named
-			.iter()
-			.find(|(name, _)| name == parameter)
-			.map_or_else(|| field(parameter), |(_, value)| value.clone())
+		named.iter().find(|(name, _)| name == parameter).map_or_else(|| field(parameter), |(_, value)| value.clone())
 	});
 	let others = named
 		.iter()
@@ -328,11 +288,7 @@ fn keyword_object(arguments: Vec<Node>, fixed: &[String]) -> (Vec<Node>, Option<
 		.filter_map(named_argument)
 		.map(|(name, value)| key(Node::Symbol(name), Op::Colon, value.clone()))
 		.collect();
-	let separator = if entries.len() > 1 {
-		Separator::Colon
-	} else {
-		Separator::None
-	};
+	let separator = if entries.len() > 1 { Separator::Colon } else { Separator::None };
 	(others, Some(Node::List(entries, Bracket::Curly, separator)))
 }
 
@@ -345,15 +301,9 @@ pub(crate) fn run_time_spread(arguments: &[Node], call_with: impl Fn(Vec<Node>) 
 	let others = arguments.len() - 1;
 	let count = call(COUNT_WORD, vec![Node::Symbol(spread.clone())]);
 	let call_of = |items: usize| call_with(spread_items(arguments, Some(others + items)));
-	let calls = (0..MAX_RUN_TIME_SPREAD)
-		.rev()
-		.fold(call_of(MAX_RUN_TIME_SPREAD), |otherwise, items| {
-			if_then_else(
-				key(count.clone(), Op::Eq, crate::node::int(items as i64)),
-				call_of(items),
-				otherwise,
-			)
-		});
+	let calls = (0..MAX_RUN_TIME_SPREAD).rev().fold(call_of(MAX_RUN_TIME_SPREAD), |otherwise, items| {
+		if_then_else(key(count.clone(), Op::Eq, crate::node::int(items as i64)), call_of(items), otherwise)
+	});
 	Some(calls)
 }
 
@@ -364,9 +314,7 @@ fn spread_items(arguments: &[Node], count: Option<usize>) -> Vec<Node> {
 	for (index, argument) in arguments.iter().enumerate() {
 		match (starred(argument), argument.drop_meta()) {
 			(Some(name), _) => {
-				let left_for_it = count
-					.unwrap_or(0)
-					.saturating_sub(items.len() + arguments.len() - index - 1);
+				let left_for_it = count.unwrap_or(0).saturating_sub(items.len() + arguments.len() - index - 1);
 				items.extend(
 					(1..=left_for_it)
 						.map(|position| key(Node::Symbol(name.clone()), Op::Hash, crate::node::int(position as i64))),
@@ -390,10 +338,7 @@ fn rest_list(leftover: &[Node]) -> Node {
 		match starred(argument) {
 			Some(name) => {
 				if !pending.is_empty() {
-					list = append(
-						list,
-						Node::List(std::mem::take(&mut pending), Bracket::Square, Separator::Space),
-					);
+					list = append(list, Node::List(std::mem::take(&mut pending), Bracket::Square, Separator::Space));
 				}
 				list = append(list, Node::Symbol(name));
 			}
