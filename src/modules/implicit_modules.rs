@@ -11,7 +11,7 @@ pub(crate) const ROUTE_PARTS: [&str; 3] = ["route_segment", "route_parameter", "
 pub(crate) const AGENT_MODULE: &str = "agent";
 /// lib/sound.warp: `play(440Hz, 0.5s)`, `beep` (card basic-sound), loaded when a program calls one of its words
 pub(crate) const SOUND_MODULE: &str = "sound";
-pub(crate) const SOUND_WORDS: [&str; 19] = [
+pub(crate) const SOUND_WORDS: [&str; 20] = [
 	"pattern",
 	"live_loop",
 	"play",
@@ -24,6 +24,7 @@ pub(crate) const SOUND_WORDS: [&str; 19] = [
 	"sound_queued",
 	"wait_sound",
 	"render_sound",
+	"osc",
 	"midi_send",
 	"midi_outputs",
 	"midi_receive",

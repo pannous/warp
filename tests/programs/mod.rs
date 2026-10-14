@@ -49,6 +49,7 @@ mod test_sound_handles; // card sound-pro
 mod test_sound_notes; // card sound-pro
 mod test_sound_pan; // card stereo-pan
 mod test_sound_patterns; // card patterns-live
+mod test_sound_pipes; // card sound-pipe-graph
 mod test_sound_render; // card sound-pro
 mod test_sound_samples; // card sound-samples
 mod test_sound_signal; // card real-time
