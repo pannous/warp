@@ -164,9 +164,7 @@ pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collecti
 				(Op::Assign | Op::Define, conversion) if crate::units::conversion(conversion).is_some() => {
 					crate::units::conversion(conversion).and_then(|(quantity, _)| class_of(quantity))
 				}
-				(Op::Assign | Op::Define, Node::Key(quantity, Op::Dot, call))
-					if is_call_of(call, CONVERSION_METHOD) =>
-				{
+				(Op::Assign | Op::Define, Node::Key(quantity, Op::Dot, call)) if call.is_call_of(CONVERSION_METHOD) => {
 					class_of(quantity)
 				}
 				// `s = sum([quantity("5 m"), …])`: the sum of instances is one (card quantity-sum)

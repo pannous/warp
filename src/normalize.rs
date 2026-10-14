@@ -13,7 +13,7 @@
 
 use crate::compile_context;
 use crate::node::{Bracket, Node};
-use crate::operators::{glyph_operator, Op};
+use crate::operators::{Op, glyph_operator};
 
 /// The "got it" topic of a plain hint is its reason: `a` (all of this kind) silences every hint giving that reason
 const HINT_TOPIC_PREFIX: &str = "hint:";
@@ -717,7 +717,7 @@ pub mod hints {
 	/// Bracket indexing (counts from 0) vs hash indexing (counts from 1)
 	pub fn index_operator(var: &str, idx: &str, used_bracket: bool) {
 		let looks_up_a_key = idx.starts_with(['"', '\'']); // `ages["alice"]` counts no position
-													 // cards g-2WPo, g_YiSA (user): only a number, where `xs#2` is as short as `xs[1]`; `xs[i]` and `xs[i+1]` stay
+		// cards g-2WPo, g_YiSA (user): only a number, where `xs#2` is as short as `xs[1]`; `xs[i]` and `xs[i+1]` stay
 		if looks_up_a_key || !is_number_index(idx) {
 			return;
 		}
@@ -840,26 +840,19 @@ pub fn set_position_of(node: &Node) {
 	}
 }
 
-fn word_of(node: &Node) -> Option<&str> {
-	match node.drop_meta() {
-		Node::Symbol(word) => Some(word),
-		_ => None,
-	}
-}
-
 /// `x:list of int=[1 2]` is the items `x:list`, `of`, `int=[1 2]`: the element words after `of`, and the node of the head word `list`
 fn of_list_type(items: &[Node], of_index: usize) -> Option<(&Node, Vec<&str>)> {
 	let Node::Key(_, Op::Colon, head) = items.get(of_index.checked_sub(1)?)?.drop_meta() else {
 		return None;
 	};
-	(crate::warp_parser::list_type_head(word_of(head)?) == LIST_TYPE_HEAD).then_some(())?;
+	(crate::warp_parser::list_type_head(head.symbol_name()?) == LIST_TYPE_HEAD).then_some(())?;
 	let mut words = Vec::new();
 	for item in &items[of_index + 1..] {
 		match item.drop_meta() {
 			Node::Symbol(word) if word == OF_WORD => continue,
 			Node::Symbol(word) => words.push(word.as_str()),
 			Node::Key(word, _, _) => {
-				words.push(word_of(word)?);
+				words.push(word.symbol_name()?);
 				break;
 			}
 			_ => return None,
@@ -884,7 +877,7 @@ fn signature_of(definition: &Node) -> Option<(String, String, BodyForm)> {
 		.iter()
 		.map(|parameter| parameter.serialize().trim_matches(|c| c == '(' || c == ')').to_string())
 		.collect();
-	Some((word_of(name)?.to_string(), parameters.join(", "), body_form))
+	Some((name.symbol_name()?.to_string(), parameters.join(", "), body_form))
 }
 
 /// Emit the hints for every non-canonical form in the parsed program that the parser cannot see while reading characters
@@ -899,14 +892,14 @@ pub fn check_style(program: &Node) {
 		Node::Key(_, Op::Colon, right) => {
 			if let Node::List(items, Bracket::Square, _) = right.drop_meta() {
 				if let [element] = items.as_slice() {
-					if let Some(word) = word_of(element) {
+					if let Some(word) = element.symbol_name() {
 						set_position_of(right);
 						hints::list_type(ListTypeStyle::Bracket, &[word]);
 					}
 				}
 				return;
 			}
-			let Some(type_word) = word_of(right) else { return };
+			let Some(type_word) = right.symbol_name() else { return };
 			set_position_of(right);
 			if let Some(element) = crate::analyzer::plural_element_type(type_word) {
 				hints::list_type(ListTypeStyle::Plural, &[element]);
@@ -914,14 +907,14 @@ pub fn check_style(program: &Node) {
 			hints::string_type(type_word);
 		}
 		Node::Key(value, Op::As, type_node) => {
-			if let Some(type_word) = word_of(type_node) {
+			if let Some(type_word) = type_node.symbol_name() {
 				set_position_of(positioned);
 				if !hints::as_operator(&operand_text(value), type_word) {
 					hints::string_type(type_word);
 				}
 			}
 		}
-		Node::Key(target, Op::Define, value) if word_of(target).is_some() => {
+		Node::Key(target, Op::Define, value) if target.symbol_name().is_some() => {
 			set_position_of(positioned);
 			hints::var_keyword(":=", &operand_text(target), &operand_text(value));
 		}
@@ -932,7 +925,7 @@ pub fn check_style(program: &Node) {
 			}
 		}
 		Node::Key(target, Op::Dot, call) => {
-			if matches!(call.drop_meta(), Node::List(words, _, _) if words.len() == 1 && word_of(&words[0]) == Some("length"))
+			if matches!(call.drop_meta(), Node::List(words, _, _) if words.len() == 1 && (words[0]).symbol_name() == Some("length"))
 			{
 				set_position_of(positioned);
 				hints::length_operator(&operand_text(target), true);
@@ -943,15 +936,17 @@ pub fn check_style(program: &Node) {
 }
 
 fn check_items(items: &[Node], positioned: &Node) {
-	if let Some(of_index) = items.iter().position(|item| word_of(item) == Some(OF_WORD)) {
+	if let Some(of_index) = items.iter().position(|item| item.symbol_name() == Some(OF_WORD)) {
 		if let Some((head, words)) = of_list_type(items, of_index) {
 			set_position_of(head);
-			let _ = crate::warp_parser::noted_list_type_head(word_of(head).unwrap_or_default());
+			let _ = crate::warp_parser::noted_list_type_head(head.symbol_name().unwrap_or_default());
 			hints::list_type(ListTypeStyle::Of, &words);
 		}
 	}
 	let [keyword, rest @ ..] = items else { return };
-	let Some(keyword_word) = word_of(keyword) else { return };
+	let Some(keyword_word) = keyword.symbol_name() else {
+		return;
+	};
 	set_position_of(positioned);
 	match (keyword_word, rest) {
 		("let" | "var", [declaration, ..]) => {
@@ -1044,7 +1039,7 @@ mod tests {
 	#[test]
 	fn test_hint_position() {
 		assert_eq!(crate::wasm_emitter::eval("'abc'"), "abc"); // hint:
-														 // Clear position
+		// Clear position
 		clear_hint_position();
 		assert_eq!(position_string(), "");
 

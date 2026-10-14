@@ -8,7 +8,7 @@
 //! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
 use super::nodes::{call, children_rewritten, is_function_keyword, is_type_word, key};
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::node::{Bracket, Node, Separator, symbol};
 use crate::operators::Op;
 use crate::words::GENERIC_MARK;
 use crate::words::{IN_WORD, ON_WORD, WHENEVER_WORD};
@@ -856,8 +856,9 @@ fn names_vector_word(node: &Node) -> bool {
 		// `def c(x){…}`, `fun c(x) …`, `c(x) {…}`: a function named c
 		Node::List(items, _, _)
 			if items.windows(2).any(|pair| {
-				is_vector_call(&pair[1]) && is_function_keyword(&pair[0])
-					|| is_vector_call(&pair[0]) && matches!(pair[1].drop_meta(), Node::List(_, Bracket::Curly, _))
+				pair[1].is_call_of(R_VECTOR_WORD) && is_function_keyword(&pair[0])
+					|| pair[0].is_call_of(R_VECTOR_WORD)
+						&& matches!(pair[1].drop_meta(), Node::List(_, Bracket::Curly, _))
 			}) =>
 		{
 			true
@@ -869,10 +870,6 @@ fn names_vector_word(node: &Node) -> bool {
 		Node::Key(left, _, right) => names_vector_word(left) || names_vector_word(right),
 		_ => false,
 	}
-}
-
-fn is_vector_call(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|first| first.is_symbol(R_VECTOR_WORD)))
 }
 
 /// `list.zip(a, b)`, `math.gcd(4, 6)`, JS's `Math.sqrt(16)`: a module's word called through the module's name is the

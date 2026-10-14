@@ -1,10 +1,10 @@
 // type string = str; NO! ugly for a reason!
-use crate::extensions::lists::{map, VecExtensions2};
+use crate::extensions::lists::{VecExtensions2, map};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
 use crate::meta::{DataType, DataValue, LineInfo};
 use crate::node::Node::*;
-use crate::operators::{is_function_keyword, Op};
+use crate::operators::{Op, is_function_keyword};
 use crate::type_kinds::Kind;
 use serde::{Deserialize, Serialize};
 use std::cmp::PartialEq;
@@ -273,6 +273,11 @@ impl Node {
 			List(items, _, _) => Some((items.first()?.symbol_name()?, &items[1..])),
 			_ => None,
 		}
+	}
+
+	/// Whether this is a call or phrase headed by the word `name`: `f(x)`, `f x`
+	pub fn is_call_of(&self, name: &str) -> bool {
+		self.call_parts().is_some_and(|(head, _)| head == name)
 	}
 
 	/// The name of a symbol, through its metadata
@@ -578,6 +583,23 @@ impl Node {
 		self.visit(&mut |node| {
 			if let Key(target, op, _) = node {
 				if binds(op) {
+					names.extend(target.symbol_name().map(String::from));
+				}
+			}
+		});
+		names.into_iter().collect()
+	}
+
+	/// The names `global x` and `global x = v` declare anywhere in this node
+	pub fn declared_globals<Names: FromIterator<String>>(&self) -> Names {
+		let mut names = vec![];
+		self.visit(&mut |node| {
+			if let Key(keyword, Op::Colon, declared) = node {
+				if keyword.is_symbol(crate::words::GLOBAL_WORD) {
+					let target = match declared.drop_meta() {
+						Key(target, Op::Assign | Op::Define, _) => target,
+						name => name,
+					};
 					names.extend(target.symbol_name().map(String::from));
 				}
 			}
@@ -1077,14 +1099,14 @@ fn is_class_code(item: &Node) -> bool {
 	match item.drop_meta() {
 		Key(name, Op::Colon, _) if is_name(name) => return false,
 		Key(declared, Op::Assign, _) if matches!(declared.drop_meta(), Key(name, Op::Colon, _) if is_name(name)) => {
-			return false
+			return false;
 		}
 		List(words, _, _)
 			if words.first().is_some_and(
 				|first| matches!(first.drop_meta(), Symbol(word) if crate::operators::is_function_keyword(word)),
 			) =>
 		{
-			return true
+			return true;
 		}
 		_ => {}
 	}

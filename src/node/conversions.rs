@@ -7,11 +7,7 @@ impl Not for Node {
 	type Output = Node;
 
 	fn not(self) -> Self::Output {
-		if self.to_bool() {
-			False
-		} else {
-			True
-		}
+		if self.to_bool() { False } else { True }
 	}
 }
 
@@ -63,11 +59,7 @@ impl From<f64> for Node {
 
 impl From<bool> for Node {
 	fn from(b: bool) -> Self {
-		if b {
-			True
-		} else {
-			False
-		}
+		if b { True } else { False }
 	}
 }
 

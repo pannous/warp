@@ -2,9 +2,9 @@
 //! `(made = []; for x in xs { if c { made += [x * x] } }; made)`. Lowered first, so the loop and the append go through
 //! every later pass like written ones; `+=`, no `push`, which a program's own `push(st, x)` would answer. `xs where it > 1` filters like `[it for it in xs if it > 1]`.
 
-use super::nodes::{children_rewritten, key, phrase_words, Counter};
+use super::nodes::{Counter, children_rewritten, key, phrase_words};
 use crate::library_words::substitute;
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::node::{Bracket, Node, Separator, symbol};
 use crate::operators::Op;
 use crate::warp_parser::parse;
 use crate::words::{FOR_WORD, IN_WORD};
@@ -457,7 +457,7 @@ fn is_where(word: &Node) -> bool {
 
 /// The clause `for v in xs …`
 fn starts_with_for(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(words, _, _) if words.first().is_some_and(|word| word.is_symbol(FOR_WORD)))
+	node.is_call_of(FOR_WORD)
 }
 
 /// One node of several juxtaposed words: `upper w`

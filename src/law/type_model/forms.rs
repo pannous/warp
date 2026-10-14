@@ -1,7 +1,7 @@
 //! Reading warp forms for the export: literals and type words, `on`/`emit` effects, definitions and their heads, locals and late binding
 use super::*;
 pub(super) use crate::lowering::nodes::parameter_word;
-use crate::lowering::{function_head, DefinitionForm, FunctionHead};
+use crate::lowering::{DefinitionForm, FunctionHead, function_head};
 
 pub(super) fn unsupported(node: &Node) -> Lean {
 	Err(format!("not in W0: {}", node.serialize().trim()))
@@ -136,7 +136,7 @@ pub(super) fn global_declaration(node: &Node) -> Option<(&str, Option<(&Node, &N
 	let Node::Key(keyword, Op::Colon, declared) = node.drop_meta() else {
 		return None;
 	};
-	if !keyword.is_symbol(GLOBAL_KEYWORD) {
+	if !keyword.is_symbol(crate::words::GLOBAL_WORD) {
 		return None;
 	}
 	match declared.drop_meta() {
@@ -392,7 +392,9 @@ pub(super) fn late_binding(statements: &[&Node], globals: &[String]) -> Option<S
 				.iter()
 				.any(|call| call.mentions(name))
 			{
-				return Some(format!("not in W0: {name} reads {changed}, which changes after {name} is defined and before a call (warp asks for `global {changed}`, late binding)"));
+				return Some(format!(
+					"not in W0: {name} reads {changed}, which changes after {name} is defined and before a call (warp asks for `global {changed}`, late binding)"
+				));
 			}
 		}
 	}

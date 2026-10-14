@@ -3,7 +3,7 @@
 //! (Checker.lean: names, charged names, functions, statements in source order); the model elaborates and checks it
 //! and answers `ok <type>` or `rejected`. Warp's own verdict is whether `pipeline::compile` accepts the program.
 //! Contract: W0 rejects ⇒ warp rejects; every exception is a known hole with a card.
-use super::lean::{lean_executable, run_with_timeout, LEAN_TIMEOUT};
+use super::lean::{LEAN_TIMEOUT, lean_executable, run_with_timeout};
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -74,7 +74,6 @@ const ON_KEYWORD: &str = "on";
 const IN_KEYWORD: &str = "in";
 const EMIT_KEYWORD: &str = "emit";
 /// `global n = 0` at main level, `global n` in a function: a main-level name functions may assign
-const GLOBAL_KEYWORD: &str = "global";
 /// What a global declared without a value holds until it is assigned: `global x; x + 1` is 1
 const UNSET_GLOBAL: i64 = 0;
 /// `break` is not in W0: block handlers, whose block it ended, were dropped (card cleanup-drop-scoped-handlers)

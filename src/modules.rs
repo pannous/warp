@@ -1,8 +1,8 @@
 //! `use <name>` file modules: `name.wasp` or `name.warp` is loaded and its definitions become part of the program.
 //! A name found nowhere locally but in the registry packages.warp is a package: its git repository, fetched into packages/<name>.
-use crate::node::{error, Bracket, Node, Separator};
-use crate::operators::{is_function_keyword, Op};
-use crate::versions::{declared_version, is_version_keyword, version_of, Requirement, Version, MINIMUM_KEYWORD};
+use crate::node::{Bracket, Node, Separator, error};
+use crate::operators::{Op, is_function_keyword};
+use crate::versions::{MINIMUM_KEYWORD, Requirement, Version, declared_version, is_version_keyword, version_of};
 use crate::warp_parser::WarpParser;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -57,8 +57,12 @@ const SCOPE_WORDS: [(&str, Scope); 3] = [
 const UNSCOPED_DIRECTORIES: [&str; 3] = [PACKAGES_DIRECTORY, "target", "node_modules"];
 const PROJECT_MARKER: &str = ".git";
 /// `stored x = v` too: a used module's persisted signal is the program's (card web-stores)
-const GLOBAL_KEYWORD: &str = "global";
-const DECLARATION_KEYWORDS: [&str; 4] = ["let", "var", GLOBAL_KEYWORD, crate::stored_values::STORED_WORD];
+const DECLARATION_KEYWORDS: [&str; 4] = [
+	"let",
+	"var",
+	crate::words::GLOBAL_WORD,
+	crate::stored_values::STORED_WORD,
+];
 
 fn is_declaration_keyword(keyword: &str) -> bool {
 	DECLARATION_KEYWORDS.contains(&keyword)
@@ -495,7 +499,9 @@ fn program_variables(program: &Node) -> HashSet<String> {
 		.iter()
 		.filter_map(|statement| match statement.drop_meta() {
 			Node::Key(variable, Op::Assign, _) => variable.drop_meta().symbol_name().map(String::from),
-			Node::Key(keyword, Op::Colon, declared) if keyword.is_symbol(GLOBAL_KEYWORD) => leftmost_symbol(declared),
+			Node::Key(keyword, Op::Colon, declared) if keyword.is_symbol(crate::words::GLOBAL_WORD) => {
+				leftmost_symbol(declared)
+			}
 			_ => None,
 		})
 		.collect()
@@ -539,7 +545,7 @@ fn assigned_names(definition: &Node) -> HashSet<String> {
 
 /// `global x = …`
 fn is_global_declaration(statement: &Node) -> bool {
-	matches!(statement.drop_meta(), Node::Key(keyword, Op::Colon, _) if keyword.is_symbol(GLOBAL_KEYWORD))
+	matches!(statement.drop_meta(), Node::Key(keyword, Op::Colon, _) if keyword.is_symbol(crate::words::GLOBAL_WORD))
 }
 
 /// `names` renamed `lib·name` in the definitions: the definitions still call them, the program does not see them
