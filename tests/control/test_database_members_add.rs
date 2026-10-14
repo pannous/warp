@@ -8,7 +8,9 @@ const CLASSES: &str = "class Team{name: text; players: [Person]}\nclass Person{n
 const SEED: &str = "teams.add(Team(\"Red\"))\nteams.add(Team(\"Blue\"))\npeople.add(Person(\"Bo\", teams#1))";
 
 fn program(tables: &str, rest: &str) -> String {
-	format!("{CLASSES}\nteams: [Team] = database.teams_{tables}\npeople: [Person] = database.people_{tables}\n{rest}")
+	format!(
+		"{CLASSES}\nstored teams: [Team] in \"teams_{tables}\"\nstored people: [Person] in \"people_{tables}\"\n{rest}"
+	)
 }
 
 #[test]

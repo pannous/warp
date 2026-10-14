@@ -180,7 +180,7 @@ fn walk_names(node: &Node, found: &mut dyn FnMut(&str, &str)) {
 			}
 			walk_names(body, found);
 		}
-		Node::Key(parameters, Op::FatArrow | Op::Arrow, body) => {
+		Node::Key(parameters, Op::Arrow, body) => {
 			let names: Vec<String> = match parameters.drop_meta() {
 				Node::List(items, _, _) => items.iter().filter_map(parameter_name).collect(),
 				other => parameter_name(other).into_iter().collect(),

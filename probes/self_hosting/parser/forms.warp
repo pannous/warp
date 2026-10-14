@@ -63,3 +63,18 @@ print ord c
 for i in 1 upto 4 { sum += i }
 while i < count(items) { i += 1 }
 if f(x) { 1 } else { 2 }
+2⁻¹
+2²
+2³
+2¹⁰
+x⁴
+x²+1
+-x²
+xⁿ
+2ⁿ⁺¹
+x⁻ⁿ
+2²⁺³
+a.b²
+[2⁻¹ 2⁰ 2¹]
+xs#1²
+2x²

@@ -147,6 +147,11 @@ def continued(p, left, min_power) {
 	while true {
 		skip_spaces(p)
 		c = peek(p.code, p.at, p.n)
+		power = superscript_power(p, left, min_power)
+		if power != ø {
+			left = power
+			continue
+		}
 		if (c == '+' or c == '-') and is_at(p.code, p.at + 1, c, p.n) and SUFFIX_POWER >= min_power {
 			op = p.code[p.at .. p.at + 2]
 			p.at = p.at + 2
@@ -186,6 +191,8 @@ def continued(p, left, min_power) {
 				continue
 			}
 			powers = binding_powers(op#2)
+			// one arrow, but `=>` binds as written: its body takes an assignment (Rust twin: Op::spelled_binding_power)
+			if op#1 == "=>" { powers = binding_powers("=>") }
 			if powers#1 < min_power { break }
 			p.at = p.at + op#1.length
 			skip_blanks(p)
@@ -328,7 +335,7 @@ INDEX_POWER = 170
 
 // The operators written with symbols, longest first, each with its canonical name
 // Rust twin: lookahead.rs peek_operator, operators.rs Op::as_str
-SYMBOL_OPERATORS = [["...", "to"], ["===", "==="], ["!==", "!=="], ["..<", ".."], ["&&=", "&&="], ["||=", "||="], ["^^=", "^^="], ["**=", "^="], ["??", "??"], [":=", ":="], ["~~", "~"], ["::", "::"], ["->", "->"], ["=>", "=>"], ["**", "^"], ["+=", "+="], ["-=", "-="], ["*=", "*="], ["/=", "/="], ["%=", "%="], ["^=", "^="], ["<<", "<<"], ["<=", "<="], [">=", ">="], ["==", "=="], ["!=", "!="], ["..", ".."], ["&&", "and"], ["||", "or"], [":", ":"], ["=", "="], [".", "."], ["+", "+"], ["±", "±"], ["-", "-"], ["*", "*"], ["×", "*"], ["⋅", "*"], ["/", "/"], ["÷", "/"], ["%", "%"], ["^", "^"], ["<", "<"], [">", ">"], ["≤", "<="], ["≥", ">="], ["≠", "!="], ["≈", "≈"], ["~", "~"], ["&", "and"], ["|", "or"], ["#", "#"], ["?", "?"], ["…", "to"]]
+SYMBOL_OPERATORS = [["...", "to"], ["===", "==="], ["!==", "!=="], ["..<", ".."], ["&&=", "&&="], ["||=", "||="], ["^^=", "^^="], ["**=", "^="], ["??", "??"], [":=", ":="], ["~~", "~"], ["::", "::"], ["->", "->"], ["=>", "->"], ["**", "^"], ["+=", "+="], ["-=", "-="], ["*=", "*="], ["/=", "/="], ["%=", "%="], ["^=", "^="], ["<<", "<<"], ["<=", "<="], [">=", ">="], ["==", "=="], ["!=", "!="], ["..", ".."], ["&&", "and"], ["||", "or"], [":", ":"], ["=", "="], [".", "."], ["+", "+"], ["±", "±"], ["-", "-"], ["*", "*"], ["×", "*"], ["⋅", "*"], ["/", "/"], ["÷", "/"], ["%", "%"], ["^", "^"], ["<", "<"], [">", ">"], ["≤", "<="], ["≥", ">="], ["≠", "!="], ["≈", "≈"], ["~", "~"], ["&", "and"], ["|", "or"], ["#", "#"], ["?", "?"], ["…", "to"]]
 // The operators written as words, each with its canonical name
 WORD_OPERATORS = [["then", "then"], ["else", "else"], ["and", "and"], ["xor", "xor"], ["or", "or"], ["is", "=="], ["do", "do"], ["to", "to"], ["as", "as"], ["mod", "%"], ["modulo", "%"], ["rem", "rem"], ["upto", ".."]]
 
@@ -650,8 +657,69 @@ def with_glued_factor(p, amount) {
 	if not (is_name_start(c) or c == '(') or ORDINAL_SUFFIXES.contains(p.code[p.at .. name_end(p.code, p.at, p.n)]) {
 		return amount
 	}
-	["key", "*", amount, atom(p)]
+	factor = atom(p)
+	power = superscript_power(p, factor, 0)
+	["key", "*", amount, if power == ø then factor else power]
 }
+
+// `x⁴` is x^4, `x⁻¹` is 1/x^1, `2ⁿ⁺¹` is 2^(n+1), `2²⁺³` is 2^5; a lone ² or ³ keeps its square or cube operator:
+// the power of `left` written in superscripts at the parser's position and binding at least `min_power`, else ø
+// Rust twin: math_notation.rs try_parse_superscript_power, superscript_exponent, superscript_variable_exponent
+def superscript_power(p, left, min_power) {
+	terms = raised_terms(p)
+	if terms.length == 0 { return ø }
+	width = terms#(terms.length)#3 - p.at
+	lettered = false
+	for term in terms {
+		if term#2 is list { lettered = true }
+	}
+	if lettered {
+		if binding_powers("^")#1 < min_power { return ø }
+		exponent = terms#1#2
+		for term in terms[1:] { exponent = ["key", if term#1 < 0 then "-" else "+", exponent, term#2] }
+		p.at = p.at + width
+		return reciprocal_if(terms#1#1 < 0, ["key", "^", left, exponent])
+	}
+	total = 0
+	for term in terms { total = total + term#1 * term#2 }
+	power = ["key", "^", left, if total < 0 then 0 - total else total]
+	if width == 1 and total == 2 { power = ["key", "²", left, ø] }
+	if width == 1 and total == 3 { power = ["key", "³", left, ø] }
+	if (if power#2 == "^" then binding_powers("^")#1 else SUFFIX_POWER) < min_power { return ø }
+	p.at = p.at + width
+	reciprocal_if(total < 0, power)
+}
+
+def reciprocal_if(negative, power) := if negative then ["key", "/", 1, power] else power
+
+// The superscript terms at the parser's position, each [sign, value, end]: a raised number, or a raised name as a symbol
+def raised_terms(p) {
+	terms = []
+	at = p.at
+	while true {
+		sign = 1
+		if is_at(p.code, at, '⁻', p.n) { sign = -1 }
+		start = if is_at(p.code, at, '⁻', p.n) or is_at(p.code, at, '⁺', p.n) then at + 1 else at
+		end = start
+		letters = ""
+		while end < p.n and position_in(SUPERSCRIPT_LETTERS, p.code[end]) < SUPERSCRIPT_LETTERS.length {
+			letters = letters + RAISED_LETTERS[position_in(SUPERSCRIPT_LETTERS, p.code[end])]
+			end = end + 1
+		}
+		value = 0
+		while letters == "" and end < p.n and position_in(SUPERSCRIPT_DIGITS, p.code[end]) < 10 {
+			value = value * 10 + position_in(SUPERSCRIPT_DIGITS, p.code[end])
+			end = end + 1
+		}
+		if end == start { return terms }
+		terms += [[sign, if letters == "" then value else ["symbol", letters], end]]
+		at = end
+	}
+	terms
+}
+
+// Where the character c stands in `table`, else the table's length
+def position_in(table, c) := index_of(table, c, 0, table.length)
 
 ORDINAL_SUFFIXES = ["st", "nd", "rd", "th"]
 

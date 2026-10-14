@@ -1,0 +1,6 @@
+use script
+print arguments
+print command("echo hi")
+print env("HOME")
+print glob("*.toml")
+print cwd

@@ -32,4 +32,54 @@ impl WarpParser {
 			|| ch == ','
 			|| ch == '«'
 	}
+
+	/// The path literal at the cursor, up to whitespace, a closing bracket or a separator
+	pub(crate) fn parse_path_literal(&mut self) -> Node {
+		let path: String = (0..)
+			.map(|offset| self.peek_char(offset))
+			.take_while(|&c| !super::lookahead::ends_path(c))
+			.collect();
+		self.advance_by(path.chars().count());
+		Node::Text(path)
+	}
+
+	/// Parse symbol with optional suffix: name{...}, name<...>, name(...)
+	/// Does NOT handle infix operators like : or = (those are handled by parse_expr)
+	/// The soft keyword `version` before digits takes them as written: `version 1.10` is one value, not the float 1.1
+	pub(crate) fn version_operand(&mut self, symbol: &str) -> Option<Node> {
+		if symbol != crate::words::VERSION_KEYWORD || self.options.data_mode {
+			return None;
+		}
+		let blanks = self.chars[self.pos..].iter().take_while(|c| **c == ' ').count();
+		let length = crate::versions::operand_len(&self.chars[self.pos + blanks..]);
+		if blanks == 0 || length == 0 {
+			return None;
+		}
+		let operand: String = self.chars[self.pos + blanks..self.pos + blanks + length]
+			.iter()
+			.collect();
+		self.advance_by(blanks + length);
+		Some(Node::List(
+			vec![Node::Symbol(symbol.to_string()), Node::Symbol(operand)],
+			Bracket::None,
+			Separator::Space,
+		))
+	}
+
+	/// `http://…`, `file://…`, `ssh://…`: the scheme of a URL, the rest of which reads as one text
+	pub(crate) fn url_follows(&self) -> bool {
+		URL_MARK
+			.chars()
+			.enumerate()
+			.all(|(offset, mark)| self.peek_char(offset) == mark)
+	}
+
+	pub(crate) fn parse_url(&mut self, scheme: String) -> Node {
+		let mut url = scheme;
+		while !self.is_url_terminator(self.current_char()) {
+			url.push(self.current_char());
+			self.advance();
+		}
+		Node::Text(url)
+	}
 }

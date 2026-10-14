@@ -26,7 +26,7 @@ const CHECKED: &str = "checked";
 const STEP_ATTRIBUTE: &str = "step";
 const NUMBER_FIELD: &str = "number";
 const CHECKBOX_FIELD: &str = "checkbox";
-const ANY_STEP: &str = "any";
+pub(crate) const ANY_STEP: &str = "any";
 const WHOLE_STEP: &str = "1";
 /// `data-warp-click`: the attribute naming an element's handler of an event
 pub const HANDLER_ATTRIBUTE_PREFIX: &str = "data-warp-";

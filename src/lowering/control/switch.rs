@@ -8,7 +8,9 @@
 use super::blocks::{quoted_data, DATA_WORD};
 use super::for_loop::walking_loop;
 use super::library_words::COLLECTION_CONTAINS;
-use super::nodes::{block, call, children_rewritten, fresh_number, if_then, is_type_word, key, or_operands, Counter};
+use super::nodes::{
+	block, call, children_rewritten, fresh_number, if_then, is_kinded_type_word, key, or_operands, Counter,
+};
 use super::type_tests::{program_names, type_test, Names};
 use crate::analyzer::TEMPORARY_SEPARATOR;
 use crate::diagnostic::Diagnostic;
@@ -617,7 +619,9 @@ fn case_test(subject: &Node, case: Case, names: &Names) -> (Node, Node) {
 /// `red: "fire"` is the symbol red
 fn is_binding_name(pattern: &Node, body: &Node, names: &Names) -> bool {
 	match pattern.drop_meta() {
-		Node::Symbol(name) => !names.contains(name) && !is_type_word(pattern) && body.mentions_any(&[name.as_str()]),
+		Node::Symbol(name) => {
+			!names.contains(name) && !is_kinded_type_word(pattern) && body.mentions_any(&[name.as_str()])
+		}
 		_ => false,
 	}
 }
@@ -721,9 +725,9 @@ fn has_open_part(pattern: &Node, names: &Names) -> bool {
 		// a schema `{port: int, debug?: bool}`: no map holds a type or an optional field
 		Node::List(fields, _, _) if is_map_pattern(pattern) => fields.iter().any(|part| {
 			optional_field(part).is_some()
-				|| map_field(part).is_some_and(|(_, part)| is_type_word(part) || has_open_part(part, names))
+				|| map_field(part).is_some_and(|(_, part)| is_kinded_type_word(part) || has_open_part(part, names))
 		}),
-		Node::Symbol(name) => name == WILDCARD || !names.contains(name) && !is_type_word(pattern),
+		Node::Symbol(name) => name == WILDCARD || !names.contains(name) && !is_kinded_type_word(pattern),
 		_ => false,
 	}
 }

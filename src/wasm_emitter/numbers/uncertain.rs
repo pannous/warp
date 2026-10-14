@@ -166,7 +166,7 @@ impl WasmGcEmitter {
 				func.instruction(&I::F64Abs);
 			}
 			"cbrt" => {
-				self.emit_libm_call(func, super::super::LIBM_CBRT);
+				self.emit_libm_call(func, super::arithmetic::LIBM_CBRT);
 			}
 			// imported when the program calls the word; a module emitting every runtime function has no call, nor import
 			import => {

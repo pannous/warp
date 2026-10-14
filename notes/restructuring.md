@@ -37,10 +37,9 @@ warp_parser/
 Removed by the moves: statements.rs, lists.rs, literals.rs, subscripts.rs, user_operators.rs, xml.rs, atoms/ (its two
 files split into blocks.rs, definitions/functions.rs, definitions/lambdas.rs, types/declarations.rs).
 
-Status (2026-10-14): chunk 1 (statements.rs dissolved) is on main. Branch restructure-layout carries chunk 2a (comments,
-pipes, guards, functions, lambdas, operators: 7a29fb0a0) and 2b (literals/, markup/, collections/, types/expressions,
-math_notation, annotations: bce8c7292). Left: everything out of atoms.rs, atoms/type_declarations.rs and lists.rs
-(types/declarations, collections/lists, literals/paths), blocked until cleanup-park-phrases lands.
+Status (2026-10-14): chunks 1, 2a, 2b are on main. Chunk 3 (branch layout-parser-3, afdb0dd5f, sent to the
+Integrator): atoms.rs keeps only symbols, calls, keyword forms and glued suffixes; atoms/type_declarations.rs is
+types/declarations.rs; lists.rs is dissolved into collections/lists.rs, literals/, definitions/ and types/.
 Tool: scripts/move_fn.py (cuts fns with docs and attributes, widens what leaves mod.rs or goes deeper); intermediate
 folder mod.rs files start with `use super::*;` and glob-import their children so `use super::*` chains see them.
 
@@ -153,9 +152,8 @@ Owned by open branches (warp-operator-shall: the big lowering files; warp-cleanu
 with the owner before each folder move.
 
 Status (branches layout-lowering-signals … -control, 2026-10-14): all folders exist. Each folder mod.rs does
-`use super::*`, so moved files kept every `super::x` path unchanged. Still flat until their open branches land:
-declarations and type_name_matching (warp-cleanup's park-phrases), welcome_forms (foreign-spellings),
-and the park-phrases files phrase_calls, list_phrases, word_slices, music_words, of_lookups.
+`use super::*`, so moved files kept every `super::x` path unchanged. Only welcome_forms is still flat, until
+foreign-spellings lands (park-phrases deleted phrase_calls, list_phrases and word_slices).
 
 ### Lowering per function (branch layout-lowering-functions)
 
@@ -166,6 +164,16 @@ Moved with scripts/move_fn.py. Callers name the new module, and the crate root r
 | collections/list_mutations.rs | definitions/declaration_forms.rs | `appends`, `is_list_mutating_method`, `is_removal_method`, `is_place`, `appended_element`, `called_on_place`, `popped_list`, `removed_key`, `cleared_collection`, `became`, `prelude_call`, `inserted_element`, `insert_arguments`, `insert_position`, `lowered_insert`, `updates_list`, `Inserted`; the method and pseudo-call constants (`LIST_BECOME`, `INSERT_AT_CALL`, `REMOVED_VALUE_CALL` …) |
 | collections/filled_lists.rs | definitions/declaration_forms.rs | `zero_element`, `zero_list`, `lower_list_times`, `list_times`, `is_list_literal`, `list_plus`, `filled_list`, `zero_filled_subscript`, `typed_array_value`, `typed_array_declaration`, `counted_array_declaration`, `ZERO_FILL_CALL`, the list-times/list-plus topics |
 | types/inline_unions.rs | definitions/declaration_forms.rs | `lower_inline_unions`, `lower_unions_of` |
+| words/library_words/function_methods.rs | words/library_words.rs | `lower_function_methods`, `in_function_scope`, `list_constructor_calls`, `function_methods_as_calls` |
+| words/library_words/guards.rs | words/library_words.rs | `Lowering::{is_known_list, lower_try, lower_try_binding, lower_assert}`, the try/assert placeholders |
+| words/library_words/similarity.rs | words/library_words.rs | `is_similarity_call`, `Lowering::lower_similar`, `VALUES_SIMILAR`, `VALUES_ROUGH`, `SIMILARITY_LEVELS` |
+| words/library_words/templates.rs | words/library_words.rs | `Lowering::instantiate_template`, `temporary_name`, `named_apart`, `substitute`, `TRY_TEMPORARY`, `TRY_BASE` |
+| types/class_methods/method_aliases.rs | types/class_methods.rs | `method_aliases`, `aliased_method`, `with_method_aliases`, `METHOD_ALIASES` |
+| types/class_methods/json.rs | types/class_methods.rs | `lower_json_classes`, `with_json_classes`, `TO_JSON_WORD`, `TO_JSON_OF_CLASSES_WORD`, `SERIALIZER_ALIASES` |
+| types/class_methods/statics.rs | types/class_methods.rs | `instance_member`, `is_static`, `static_name`, `static_members`, `static_reads`, `static_definitions` |
+| foreign/gpu_maps/kernels.rs | foreign/gpu_maps.rs | the WGSL translation: `Kernel`, `Reduction`, `Translation`, `ProgramFunction`, the painted fragment shaders, `float_literal` |
+
+Branches: layout-lowering-library-words, -class-methods, -gpu-maps (2026-10-14).
 
 ## Analyzer (`src/analyzer/`, 10 files)
 
@@ -185,3 +193,51 @@ variables, checks/). Per-function pass only: keyword-specific checks leave mod.r
 - functions/: closures, user_function_calls, node_functions, cells
 - host/: wasi_emitter, ffi_emitter, component_adapters
 - reflection/: reflection, node_api, equality, witness, library_ops/
+
+Status (2026-10-14): the folders exist (branch layout-emitter, on main).
+
+### Emitter and analyzer per function (branch split-emitter)
+
+Moved with scripts/move_fn.py, pure moves. The emitter's folder modules are glob re-exported (`pub use
+control::traps::*`), the analyzer's files too (`pub use inference::*`), so outside paths stay as they are.
+
+| target | function ← current file |
+|---|---|
+| wasm_emitter/control/traps.rs | globals.rs: `emit_raised_error`, `emit_returned_value`, `emit_trap_detail`, `emit_trap_position`, `trap_position_global`, `trap_detail_global`; mod.rs: `EXACT_TRAP_MESSAGES`, `TRAP_DETAIL`, `TRAP_DETAIL_PREFIX` |
+| wasm_emitter/control/control_flow.rs | mod.rs: `if_then_parts`, `LOGICAL_SCRATCH` (and/or) |
+| wasm_emitter/host/fetch.rs (new) | globals.rs: `emit_fetch_call`, `extract_url_string` |
+| wasm_emitter/host/wasi_emitter.rs | mod.rs: `emit_wagi_start`, `OUTPUT_WORDS`, `OUTPUT_CALLS` |
+| wasm_emitter/numbers/arithmetic.rs | mod.rs: `is_numeric`, `emit_float_comparison`, `LIBM_POW`, `LIBM_CBRT` |
+| wasm_emitter/numbers/casts.rs | mod.rs: `emit_truncating_cast`, `emit_truncating_cast_via`, `emit_float_in_exact_context`, `I64_RANGE_LIMIT`, `ROUNDING_FUNCTIONS`; values.rs: `is_int_type_word` |
+| wasm_emitter/lists/list_emitter.rs | values.rs: `emit_range`, `emit_list_structure`, `emit_list_structure_with`, `items_info` |
+| wasm_emitter/lists/list_sharing.rs | mod.rs: `reads_collection`, `COLLECTION_READING_WORDS` |
+| wasm_emitter/text/text_builtins.rs | mod.rs: `join_call`, `joined_text` |
+| wasm_emitter/maps/key_emitter.rs | mod.rs: `emit_new_key` |
+| wasm_emitter/functions/closures.rs | mod.rs: `CAPTURE_EXPORT_PREFIX` |
+| analyzer/checks/kind_changes.rs | variables.rs: `check_kind_changes`, `global_variables`, `first_kind_change`, `evident_kind`, `evident_results`, `last_expression` |
+| analyzer/inference.rs | user_functions.rs: `literal_kind`, `computed_literal_kind`, `exact_literal_value`, `operand_kind`, `argument_literal_kind`, `is_decimal_literal` |
+| analyzer/annotations.rs (new: the kinds type words and annotations give) | user_functions.rs: `type_word_kind`, `annotated_kind`, `is_map_type`, `names_empty_type`, `names_list_type`, `field_kind_key`, `declared_field_kinds`, `program_field_kinds` |
+| analyzer/main_globals.rs (new: local-or-global, a main variable a function assigns) | variables.rs: `resolve_main_variable_assignments` … `assignment_target_root` (17 functions); after branch diagnostics-paths lands, which edits them |
+
+Stay: mod.rs keeps the module driver (emit, emit_for_node, emit_node_main, emit_node_value, memory, kind globals,
+string allocation, the Node list encoding `bracket_info` … `bracket_of_info`); `kind_with_article`/`with_article` and
+the declaration keyword tests of variables.rs are used everywhere and wait for a words/ home.
+
+### Same-named functions after duplicates-exact (split-emitter, 2026-10-14)
+
+All 494 names used in several files of data/restructuring/functions.tsv have a verdict in duplicates_exact.md. A fresh
+inventory of main (9fdebbb1b) has 7 names that are new since:
+
+| name | verdict |
+|---|---|
+| `uses_it` (analyzer/user_functions/definitions.rs, lowering/type_name_matching.rs) | true duplicate: one `analyzer::uses_it`, Node::mentions of IMPLICIT_PARAMETER |
+| `is_arithmetic` (operators.rs Op method, analyzer/checks/lints.rs) | lints' repeated the operator list: `is_ungrouped_arithmetic` asks Op::is_arithmetic |
+| `aliased_method`, `method_aliases` (class_methods.rs, welcome_forms.rs) | distinct: a class's own method for a word vs. another language's method name; both read METHOD_ALIASES |
+| `keyword_definition` (declarations.rs, library_words.rs) | distinct: the whole definition vs. name and parameters of the head |
+| `map_key` (law/type_model/expressions.rs, wasm_emitter fields_and_keys.rs) | distinct: Lean model vs. emitter |
+| `start_of` (warp_parser/atoms.rs, diagnostics/normalize.rs) | distinct: parser cursor vs. a node's position |
+
+`is_type_word` ×4 (card name-their): four different sets, renamed by set: `is_builtin_type_word` (BUILTIN_TYPES),
+`is_kinded_type_word` (analyzer::type_word_kind), `is_kinded_type_or_any` (function heads),
+`is_kinded_or_testable_type` (units). The parser's local closure in typed_parameter is the kinded set again.
+Seven constants spell "it" (card duplicate-constants).

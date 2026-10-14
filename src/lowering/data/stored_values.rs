@@ -30,12 +30,12 @@ const LOCAL_WORDS: [&str; 2] = ["local", "storage"];
 const SESSION_WORD: &str = "session";
 /// The store of `session[k]` (in memory natively, std_adapters.rs; sessionStorage in the browser, markup.js SESSION_STORE)
 pub const SESSION_STORE: &str = "warp-session";
-/// `database[k]` (alias indexedDB): the store for values beyond localStorage's ~5 MB. Its file ends in this, `app.warp`'s
+/// `database[k]`: the store for values beyond localStorage's ~5 MB. Its file ends in this, `app.warp`'s
 /// is `app.database.json`, inline code's this name alone (in memory natively, std_adapters.rs); in the browser any
 /// store whose file ends so is IndexedDB (host-files.js DATABASE_STORE)
 pub const DATABASE_STORE: &str = "database.json";
-/// `database.people`, `indexedDB.people`: the stores of tables (database_tables, serve)
-pub(crate) const DATABASE_WORDS: [&str; 2] = ["database", "indexedDB"];
+/// `database.people`: the store of tables (database_tables, serve)
+pub(crate) const DATABASE_WORD: &str = "database";
 const DELETE_WORD: &str = "delete";
 const KEYS_WORD: &str = "keys";
 /// stand for the key and the value in the templates of a storage access
@@ -192,7 +192,7 @@ fn stores_used(program: &Node) -> Vec<(&'static str, String)> {
 		.iter()
 		.map(|word| (*word, local.clone()))
 		.chain([(SESSION_WORD, SESSION_STORE.to_string())]);
-	let words = words.chain(DATABASE_WORDS.iter().map(|word| (*word, database.clone())));
+	let words = words.chain([(DATABASE_WORD, database)]);
 	words
 		.filter(|(word, _)| {
 			crate::warp_parser::mentions(program, word) && !crate::soft_keywords::program_names(program, word)

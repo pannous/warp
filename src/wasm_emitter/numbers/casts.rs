@@ -3,6 +3,18 @@
 use super::super::*;
 use crate::wasm_emitter::layout::BYTE;
 
+/// Builtins that round a float to an exact Int
+pub(crate) const ROUNDING_FUNCTIONS: [&str; 6] = [
+	"ceil",
+	"floor",
+	"round",
+	"round_half_up",
+	"round_half_even",
+	crate::warp_parser::FLOOR_QUOTIENT,
+];
+/// 2^63: floats with a magnitude at or beyond it do not fit an i64
+pub(crate) const I64_RANGE_LIMIT: f64 = 9223372036854775808.0;
+
 /// text_as_number(node): a text's number at run time, as the literal cast gives it: "1/3" the exact ratio, a whole
 /// number an Int, else a Float; no number is invalid_number
 pub const TEXT_AS_NUMBER: &str = "text_as_number";
@@ -132,7 +144,7 @@ impl WasmGcEmitter {
 			}
 			// an exact number as its truncated i64, without the Int node emit_cast_to_int builds
 			_ if exact_value
-				&& super::super::values::is_int_type_word(target)
+				&& is_int_type_word(target)
 				&& !matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty)
 				&& !self.names_unknown_word(value)
 				&& !self.computes_at_run_time_kind(value) =>
@@ -141,7 +153,7 @@ impl WasmGcEmitter {
 			}
 			// a float truncated straight to the i64, without the Int node emit_cast_to_int builds
 			_ if self.get_type(value).is_float()
-				&& super::super::values::is_int_type_word(target)
+				&& is_int_type_word(target)
 				&& !self.computes_at_run_time_kind(value) =>
 			{
 				self.emit_float_value(func, value);
@@ -769,6 +781,39 @@ impl WasmGcEmitter {
 			if matches!(word.drop_meta(), Node::Symbol(name) if super::super::ROUNDING_FUNCTIONS.contains(&name.as_str())
 				&& !self.ctx.user_functions.contains_key(name) && !self.ctx.ffi_imports.contains_key(name))))
 	}
+
+	/// f64 on the stack → exact Int, truncated toward zero: the explicit casts `as int` and `int(x)`, and the
+	/// rounding functions. There is no f64 → bignum path, so a NaN or a value beyond i64 fails cleanly.
+	pub(in crate::wasm_emitter) fn emit_truncating_cast(&mut self, func: &mut Function) {
+		self.emit_truncating_cast_via(func, self.scratch(0));
+	}
+
+	/// emit_truncating_cast through the i64 local `value_bits` (a runtime function has no scratch locals)
+	pub(crate) fn emit_truncating_cast_via(&mut self, func: &mut Function, value_bits: u32) {
+		Self::emit_list(func, &[I::I64ReinterpretF64, I::LocalSet(value_bits)]);
+		Self::emit_list(
+			func,
+			&[
+				I::LocalGet(value_bits),
+				I::F64ReinterpretI64,
+				I::F64Abs,
+				I::F64Const(I64_RANGE_LIMIT.into()),
+				I::F64Lt,
+				I::I32Eqz,
+			],
+		);
+		self.emit_fail_if(func, "float_out_of_int_range");
+		Self::emit_list(func, &[I::LocalGet(value_bits), I::F64ReinterpretI64, I::I64TruncF64S]);
+		self.emit_int_from_machine_in(func, value_bits);
+	}
+
+	/// A float has no implicit exact value: reading it as an Int is refused instead of truncated
+	pub(in crate::wasm_emitter) fn emit_float_in_exact_context(&mut self, func: &mut Function, what: &str) {
+		let message = format!(
+			"{what} is a float where an exact Int is expected: use it in float arithmetic or truncate with `as int`"
+		);
+		self.emit_type_error(func, message);
+	}
 }
 
 /// A word `as` converts to here: units and classes are lowered before emission
@@ -795,4 +840,10 @@ pub(crate) fn is_called_conversion(type_name: &str) -> bool {
 /// `255 as hex`: a word that names no type, unit or class, which used to stay a silent `255 as hex` node
 fn unknown_conversion(value: &Node, type_name: &str) -> String {
 	format!("{type_name} is no type to convert to: {} as {type_name}; known: int, float, rational, {}, byte, int8 … uint64, units and classes", value.serialize(), CONVERSION_WORDS.join(", "))
+}
+
+/// `int`, `Int`, `integer`: the type `x as int` converts to; `as i64` wraps (casts.rs WRAPPING_INT_WORDS)
+pub(crate) fn is_int_type_word(target: &Node) -> bool {
+	let word = target.drop_meta().name().to_lowercase();
+	crate::type_tests::canonical_spec_word(&word) == "int" && !WRAPPING_INT_WORDS.contains(&word.as_str())
 }

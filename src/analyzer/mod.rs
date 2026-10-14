@@ -80,6 +80,7 @@ pub(crate) fn is_statement_block(node: &Node) -> bool {
 	}
 }
 
+mod annotations;
 mod booleans;
 mod checks;
 mod counting;
@@ -91,6 +92,7 @@ mod variables;
 pub use upcast_fields::check_upcast_fields;
 pub mod effects;
 mod list_views;
+pub use annotations::*;
 pub use booleans::*;
 pub use checks::*;
 pub use counting::*;

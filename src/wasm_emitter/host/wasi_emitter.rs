@@ -9,6 +9,18 @@ use super::super::WasmGcEmitter;
 use crate::type_kinds::SQUARE_LIST_KIND;
 use crate::wasm_emitter::layout::WORD;
 
+pub(crate) const WASI_START: &str = "_start";
+
+/// The WASI output words besides print: each gives an Int (analyzer)
+pub const OUTPUT_WORDS: [&str; 4] = ["puts", "puti", "putl", "putf"];
+pub(crate) const OUTPUT_CALLS: [&str; 5] = [
+	"print",
+	OUTPUT_WORDS[0],
+	OUTPUT_WORDS[1],
+	OUTPUT_WORDS[2],
+	OUTPUT_WORDS[3],
+];
+
 const PRINT_TERMINATOR: &str = "\n";
 /// print_value(x): writes the text form of x (as `x as string` has it) and a newline, yields x
 pub const PRINT_VALUE: &str = "print_value";
@@ -364,5 +376,19 @@ impl WasmGcEmitter {
 				Self::emit_list(func, &[I::Call(f.call_index as u32), I::I64ExtendI32S]);
 			}
 		}
+	}
+
+	/// `_start`: main without its value, the entry WASI commands and WAGI (`warp build --wagi`) call
+	pub(in crate::wasm_emitter) fn emit_wagi_start(&mut self) {
+		let start_type = self.type_manager.function_type(vec![], vec![]);
+		self.functions.function(start_type);
+		let mut func = Function::new(vec![]);
+		Self::emit_list(
+			&mut func,
+			&[I::Call(self.main_index.expect("main before _start")), I::Drop, I::End],
+		);
+		self.code.function(&func);
+		self.exports.export(WASI_START, ExportKind::Func, self.next_func_idx);
+		self.next_func_idx += 1;
 	}
 }

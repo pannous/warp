@@ -10,7 +10,7 @@ const IS_PRIME: &str = "is_prime(n) := n > 1 and count([d for d in 2..n if n % d
 
 #[cfg(feature = "native")] // SQLite natively; the browser has no tables yet (notes/orm.md step 6)
 fn table(name: &str, rest: &str) -> String {
-	format!("{PERSON}\n{IS_PRIME}\npeople: [Person] = database.{name}\n{rest}")
+	format!("{PERSON}\n{IS_PRIME}\nstored people: [Person] in \"{name}\"\n{rest}")
 }
 
 #[cfg(feature = "native")] // SQLite natively; the browser has no tables yet (notes/orm.md step 6)

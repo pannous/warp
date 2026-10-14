@@ -2,7 +2,7 @@
 // visit of /users/2 shows "User Bo" from the replies embedded in the HTML without asking the server again
 // Seed: as app.warp
 class User{name: text}
-users: [User] = database.users
+stored users: [User]
 twice(x) := x * 2
 answer = await go twice(21)
 route "/" { div{ p{ "home " + answer } a{ href:"/users/1" "first" } } }

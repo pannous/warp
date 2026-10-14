@@ -56,7 +56,7 @@ pub(crate) fn parallel_map(node: &Node) -> Option<(Node, Node)> {
 /// plain map, which the GPU takes from a count (gpu_maps.rs automatic, card go-heavy-map), else the CPU's loop: tasks
 /// were fifty times slower than either
 pub(crate) fn kernel_map(list: &Node, function: &Node) -> Option<Node> {
-	let Node::Key(parameter, Op::FatArrow, body) = function.drop_meta() else {
+	let Node::Key(parameter, Op::Arrow, body) = function.drop_meta() else {
 		return None;
 	};
 	if !matches!(list.drop_meta(), Node::Symbol(_)) {

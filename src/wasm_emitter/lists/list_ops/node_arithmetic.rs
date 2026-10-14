@@ -172,7 +172,7 @@ impl WasmGcEmitter {
 		if op == Op::Pow {
 			operand(self, f, dividend, false);
 			operand(self, f, divisor, false);
-			if self.emit_libm_call(f, super::super::super::LIBM_POW) {
+			if self.emit_libm_call(f, crate::wasm_emitter::numbers::arithmetic::LIBM_POW) {
 				Self::emit_list(f, &[I::LocalTee(power), I::LocalGet(power), I::F64Ne]);
 				self.emit_fail_if(f, "invalid_number");
 				f.instruction(&I::LocalGet(power));

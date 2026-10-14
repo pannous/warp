@@ -1,0 +1,4 @@
+// use relaxed (or lenient, loose): no hints for this file, as warp --no-hints; the mirror of use strict
+use relaxed
+x = 2**3
+print x

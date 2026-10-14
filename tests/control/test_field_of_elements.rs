@@ -31,7 +31,7 @@ fn with_filters_a_list_of_instances() {
 #[test]
 fn a_field_of_a_filtered_table_reads_only_its_rows() {
 	let stored = |rest: &str| {
-		format!("class Person{{name: text; age: int}}\npeople: [Person] = database.people_field_of\n{rest}")
+		format!("class Person{{name: text; age: int}}\nstored people: [Person] in \"people_field_of\"\n{rest}")
 	};
 	eval(&stored("for i in 1 to 50 { people.add(Person(\"N\" + i, i)) }"));
 	let before = warp::host::database::rows_read();

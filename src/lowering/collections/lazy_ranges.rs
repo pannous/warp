@@ -291,7 +291,7 @@ fn changes(node: &Node, name: &str) -> bool {
 fn is_parameter(node: &Node, name: &str) -> bool {
 	let mut found = false;
 	node.visit(&mut |part| {
-		found |= matches!(part, Node::Key(parameters, Op::FatArrow, _) if parameters.mentions_any(&[name]))
+		found |= matches!(part, Node::Key(parameters, Op::Arrow, _) if parameters.mentions_any(&[name]))
 	});
 	found
 }

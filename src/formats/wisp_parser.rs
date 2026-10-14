@@ -522,7 +522,6 @@ impl WispEmitter {
 					Op::Dot => "cons",
 					Op::Scope => "scope",
 					Op::Arrow => "arrow",
-					Op::FatArrow => "fatarrow",
 					Op::None => "call",
 					// Arithmetic/comparison/logical ops use op symbol
 					_ => op.as_str(),

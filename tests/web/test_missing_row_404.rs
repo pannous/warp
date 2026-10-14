@@ -5,7 +5,7 @@ use std::time::Duration;
 
 const PORT: u16 = 18497;
 const PROGRAM: &str = "class User{name: text}
-users: [User] = database.users_missing
+stored users: [User] in \"users_missing\"
 route \"/users/:id:int\" { h1{ \"User \" + users#id.name } }";
 
 /// The status line and body of GET path
@@ -29,7 +29,7 @@ fn a_missing_row_is_not_found() {
 	let program = folder.join("app.warp");
 	warp::modules::with_program_file(&program, || {
 		warp::wasm_emitter::eval(
-			"class User{name: text}\nusers: [User] = database.users_missing\nusers.add(User(\"Ann\"))",
+			"class User{name: text}\nstored users: [User] in \"users_missing\"\nusers.add(User(\"Ann\"))",
 		)
 	});
 	std::fs::write(&program, PROGRAM).expect("the program file");

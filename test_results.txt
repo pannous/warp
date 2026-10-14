@@ -328,6 +328,7 @@ PASSED:
   ✓ control::test_listener_removal::removing_one_listener_keeps_the_others
   ✓ control::test_loop_forms::a_range_is_a_list_in_a_variable
   ✓ control::test_loop_forms::a_while_body_prints_each_pass
+  ✓ control::test_loop_forms::a_while_without_a_body_loops
   ✓ control::test_loop_forms::for_without_variable_binds_it
   ✓ control::test_loop_forms::ranges_in_for_headers_stay_ranges
   ✓ control::test_loop_forms::upto_excludes_the_end_unlike_to
@@ -447,6 +448,7 @@ PASSED:
   ✓ control::test_parallel_map::go_for_runs_its_iterations_in_parallel
   ✓ control::test_parallel_map::go_maps_in_parallel
   ✓ control::test_pattern_unit_name::a_dollar_name_binds_without_a_warning
+  ✓ control::test_pattern_unit_name::a_dollar_name_is_a_call_argument
   ✓ control::test_pattern_unit_name::a_list_item_named_like_a_unit_binds
   ✓ control::test_pattern_unit_name::a_program_variable_named_like_a_unit_is_no_unit
   ✓ control::test_pattern_unit_name::a_unit_word_as_a_field_pattern_warns
@@ -576,7 +578,6 @@ PASSED:
   ✓ control::test_storage::a_stored_variable_and_its_key_are_one_entry
   ✓ control::test_storage::a_value_kept_under_a_key_is_read_back
   ✓ control::test_storage::an_absent_key_is_empty
-  ✓ control::test_storage::database_is_a_store_of_its_own
   ✓ control::test_storage::delete_drops_a_key
   ✓ control::test_storage::kept_values_last_into_the_next_run
   ✓ control::test_storage::keys_name_the_kept_values
@@ -792,6 +793,7 @@ PASSED:
   ✓ control::test_undo_history::any_value_and_any_writer_has_a_history
   ✓ control::test_undo_history::redo_takes_back_an_undo_until_a_new_change
   ✓ control::test_undo_history::undo_steps_back_through_the_changes
+  ✓ control::test_unhandled_emits::an_emit_in_a_page_program_does_not_warn
   ✓ control::test_unhandled_emits::an_emit_nobody_handles_warns
   ✓ control::test_unit_tasks::a_go_block_with_units_runs
   ✓ control::test_unit_tasks::a_started_function_with_units_runs
@@ -805,6 +807,7 @@ PASSED:
   ✓ control::test_variable_signals::a_global_write_before_the_listener_is_not_seen
   ✓ control::test_variable_signals::a_global_write_inside_a_function_runs_the_listeners
   ✓ control::test_variable_signals::a_listener_on_a_charged_value_watches_what_it_reads
+  ✓ control::test_variable_signals::a_listener_on_a_global_a_function_writes_reads_it_and_main_variables
   ✓ control::test_variable_signals::a_multi_assignment_notifies_once_after_all_its_writes
   ✓ control::test_variable_signals::a_write_has_the_effects_of_its_listeners
   ✓ control::test_variable_signals::after_a_function_runs_after_each_statement_calling_it
@@ -834,9 +837,6 @@ PASSED:
   ✓ control::test_window_opens::reading_window_open_opens_the_window_once
   ✓ control::test_word_statements::a_glued_go_block_is_a_task
   ✓ control::test_word_statements::a_word_statement_in_a_block_is_no_call_of_the_next_lines
-  ✓ diagnostics::normalize::tests::test_hint_mode
-  ✓ diagnostics::normalize::tests::test_hint_position
-  ✓ diagnostics::normalize::tests::test_style_swap
   ✓ extensions::strings::tests::test_char_str_eq
   ✓ extensions::strings::tests::test_str_plus
   ✓ ffi::header::tests::test_extract_function_signature_multi_param
@@ -1135,6 +1135,7 @@ PASSED:
   ✓ functions::test_charged_getters::a_getter_of_now_reads_the_clock_at_every_use
   ✓ functions::test_charged_getters::a_getter_over_constants_gets_the_needless_charging_note
   ✓ functions::test_charged_getters::a_getter_reads_the_current_value_at_every_use
+  ✓ functions::test_charged_getters::a_getter_that_can_fail_gets_no_needless_charging_note
   ✓ functions::test_charged_getters::an_effectful_getter_warns_at_the_definition
   ✓ functions::test_charged_getters::an_object_getter_runs_at_every_read
   ✓ functions::test_charged_getters::assigning_a_getter_is_an_error_naming_the_definition
@@ -1188,6 +1189,7 @@ PASSED:
   ✓ functions::test_csharp_functions::an_expression_bodied_method
   ✓ functions::test_deep_recursion::the_warp_command_recurses_a_million_frames_deep
   ✓ functions::test_def_bool_result::every_definition_form_returns_a_comparison_as_bool
+  ✓ functions::test_def_forms::a_comma_keeps_a_type_named_parameter
   ✓ functions::test_def_forms::a_def_function_calls_its_function_parameter
   ✓ functions::test_def_forms::a_parameter_tested_for_membership_is_no_function
   ✓ functions::test_def_forms::definition_forms_agree
@@ -2301,6 +2303,9 @@ PASSED:
   ✓ node::test_serialized_text_escapes::a_quote_or_backslash_in_a_serialized_text_is_escaped
   ✓ node::test_text_operand_quotes::a_text_operand_keeps_its_quotes
   ✓ node::test_trailing_comment::comment_ending_a_line_belongs_to_its_item
+  ✓ normalize::tests::test_hint_mode
+  ✓ normalize::tests::test_hint_position
+  ✓ normalize::tests::test_style_swap
   ✓ numbers::test_angle::test_call
   ✓ numbers::test_angle::test_function_params
   ✓ numbers::test_angle::test_if
@@ -2417,7 +2422,6 @@ PASSED:
   ✓ numbers::test_hyperreals::test_epsilon_times_omega_is_one
   ✓ numbers::test_hyperreals::test_no_silent_approximation_of_hyperreals
   ✓ numbers::test_hyperreals::test_powers_expand_exactly
-  ✓ numbers::test_hyperreals::test_standard_part
   ✓ numbers::test_implicit_libm::test_libm_in_a_function_without_import
   ✓ numbers::test_implicit_libm::test_libm_on_a_runtime_value_without_import
   ✓ numbers::test_implicit_libm::test_user_function_named_like_libm_wins
@@ -4243,6 +4247,7 @@ PASSED:
   ✓ types::test_type_name_matching::test_phrases_differing_only_by_unknown_nouns_are_a_redefinition
   ✓ types::test_type_name_matching::test_type_word_is_the_parameter_name
   ✓ types::test_type_of_node_values::the_type_of_a_node_held_value_is_read_at_run_time
+  ✓ types::test_type_of_real_variable::a_variable_holding_a_root_is_real_as_the_root_is
   ✓ types::test_type_of_real_variable::a_variable_holding_pi_is_real
   ✓ types::test_type_of_real_variable::an_expression_of_pi_is_real
   ✓ types::test_type_of::test_type_as_a_method
@@ -4289,6 +4294,7 @@ PASSED:
   ✓ types::test_typed_arrays::test_typed_array_declaration_with_count_first
   ✓ types::test_typed_arrays::test_typed_array_declaration_with_subscript
   ✓ types::test_typed_arrays::test_typed_array_of_other_types
+  ✓ types::test_typed_list_elements::a_bracketed_list_parameter_holds_its_element_type
   ✓ types::test_typed_list_elements::a_bracketed_list_type_checks_its_items
   ✓ types::test_typed_list_elements::a_fixed_width_list_checks_its_range
   ✓ types::test_types_scope::test_data_key_is_a_scope
@@ -4515,6 +4521,7 @@ PASSED:
   ✓ wasm::test_wit::test_timeout_protection
   ✓ wasm::test_wit::test_wit_parse
   ✓ web::test_accessibility::accessible_markup_draws_no_warning
+  ✓ web::test_accessibility::compared_values_are_no_elements
   ✓ web::test_accessibility::fetched_content_is_announced
   ✓ web::test_accessibility::head_attributes_count
   ✓ web::test_accessibility::markup_built_at_run_time_is_checked
@@ -4533,6 +4540,7 @@ PASSED:
   ✓ web::test_async_data::a_failed_fetch_is_the_error
   ✓ web::test_async_data::on_change_sees_the_arrived_value
   ✓ web::test_async_data::the_parsed_json_arrives_later
+  ✓ web::test_attribute_values::a_number_attribute_takes_its_keyword_and_dates
   ✓ web::test_attribute_values::a_number_for_an_address_warns
   ✓ web::test_attribute_values::a_text_for_a_boolean_attribute_warns
   ✓ web::test_attribute_values::a_word_for_a_number_attribute_warns
@@ -4677,6 +4685,7 @@ PASSED:
   ✓ web::test_markup_mistakes::an_unknown_input_type_warns
   ✓ web::test_markup_mistakes::an_unknown_tag_among_markup_warns
   ✓ web::test_markup_mistakes::content_of_a_void_element_warns
+  ✓ web::test_markup_mistakes::page_facts_are_no_attributes
   ✓ web::test_markup_mistakes::right_markup_stays_quiet
   ✓ web::test_markup_nesting::misplaced_elements_warn
   ✓ web::test_markup_nesting::right_nesting_stays_quiet
@@ -5136,8 +5145,10 @@ PASSED:
   ✓ welcoming::test_parser_runtime_positions::an_index_in_a_function_names_its_line
   ✓ welcoming::test_parser_runtime_positions::an_index_out_of_range_names_its_line
   ✓ welcoming::test_parser_runtime_positions::an_unexpected_character_names_its_position
+  ✓ welcoming::test_plain_hint_got_it::a_got_it_comment_silences_the_hints_of_its_line
   ✓ welcoming::test_plain_hint_got_it::an_acknowledged_kind_of_hint_stays_away
   ✓ welcoming::test_quiet_hints::legitimate_forms_get_no_hint
+  ✓ welcoming::test_relaxed_pragma::a_relaxed_program_shows_no_hints
   ✓ welcoming::test_slash_comment_after_value::a_comment_after_a_text_gets_no_division_note
   ✓ welcoming::test_slash_comment_needs_space::slash_slash_with_space_is_a_comment
   ✓ welcoming::test_slash_comment_needs_space::slash_slash_without_space_divides
@@ -5256,6 +5267,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::a_word_comment_after_a_value_needs_no_note
   ✓ welcoming::test_welcoming_sugar::an_answered_ask_compiles_the_chosen_reading
   ✓ welcoming::test_welcoming_sugar::an_unknown_word_as_statement_is_loud
+  ✓ welcoming::test_welcoming_sugar::an_unknown_word_beside_a_value_is_loud_too
   ✓ welcoming::test_welcoming_sugar::glued_double_slash_is_floor_division
   ✓ welcoming::test_welcoming_sugar::insert_never_guesses_the_argument_order
   ✓ welcoming::test_welcoming_sugar::len_counts
@@ -5267,4 +5279,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5262 passed, 0 failed, 5262 total tested
+13 ignored, 5274 passed, 0 failed, 5274 total tested

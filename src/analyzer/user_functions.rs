@@ -6,80 +6,6 @@ use crate::lowering::nodes::children_rewritten;
 mod definitions;
 pub(crate) use definitions::*;
 
-/// The type word of a value that is an int or a float
-const NUMBER_TYPE: &str = "number";
-
-/// Kind of a value known before running the program
-pub(crate) fn literal_kind(value: &Node) -> Option<Kind> {
-	match value.drop_meta() {
-		Node::Number(Number::Int(_) | Number::BigInt(_)) | Node::True | Node::False => Some(Kind::Int),
-		Node::Number(_) => Some(Kind::Float),
-		Node::Text(_) => Some(Kind::Text),
-		Node::Char(_) => Some(Kind::Codepoint),
-		Node::Key(nothing, Op::Neg, operand) if matches!(nothing.drop_meta(), Node::Empty) => literal_kind(operand),
-		_ => None,
-	}
-}
-
-/// The kind of a literal or of arithmetic on literals: `π*1000000` is a float, `2*3` and `2.0*3` (exact decimals) Ints
-pub(crate) fn computed_literal_kind(value: &Node) -> Option<Kind> {
-	match value.drop_meta() {
-		Node::Key(left, op, right) if op.is_arithmetic() && !matches!(left.drop_meta(), Node::Empty) => {
-			// exact: whole or not by its value, `7/2*2` is 7, `33/10*2` is 33/5
-			if let Some(exact) = exact_literal_value(value) {
-				return Some(if exact.is_integer() { Kind::Int } else { Kind::Float });
-			}
-			match (operand_kind(left)?, operand_kind(right)?) {
-				(Kind::Int, Kind::Int) => Some(Kind::Int),
-				(Kind::Float | Kind::Int, Kind::Float | Kind::Int) => Some(Kind::Float),
-				// `"5"*3` repeats the text (card repeat-int)
-				(left_kind, right_kind) if super::inference::repeats_text(left_kind, op, right_kind) => {
-					Some(Kind::Text)
-				}
-				_ => None,
-			}
-		}
-		_ => literal_kind(value),
-	}
-}
-
-/// The exact value of arithmetic on exact literals (`3.3*2` is 33/5), None for anything else or a division by zero
-pub(super) fn exact_literal_value(node: &Node) -> Option<crate::extensions::reals::Rational> {
-	match node.drop_meta() {
-		Node::Number(Number::Float(f)) if Number::is_exact_decimal(*f) => {
-			let (numerator, denominator) = crate::wasm_emitter::numbers::exact::decimal_fraction(*f);
-			Some(crate::extensions::reals::Rational::new(numerator, denominator))
-		}
-		Node::Number(number @ (Number::Int(_) | Number::BigInt(_) | Number::Quotient(..) | Number::BigQuotient(_))) => {
-			Some(number.to_rational())
-		}
-		Node::Key(nothing, Op::Neg | Op::Sub, operand) if matches!(nothing.drop_meta(), Node::Empty) => {
-			Some(exact_literal_value(operand)?.neg())
-		}
-		Node::Key(left, op, right) => {
-			let (left, right) = (exact_literal_value(left)?, exact_literal_value(right)?);
-			match op {
-				Op::Add => Some(left.add(&right)),
-				Op::Sub => Some(left.add(&right.neg())),
-				Op::Mul => Some(left.mul(&right)),
-				Op::Div => Some(left.mul(&right.inverse()?)),
-				_ => None,
-			}
-		}
-		_ => None,
-	}
-}
-
-/// An operand of arithmetic on literals: an exact decimal stays exact (`2.0*3` is 6), a real constant is a float
-pub(super) fn operand_kind(operand: &Node) -> Option<Kind> {
-	match operand.drop_meta() {
-		Node::Symbol(name) if REAL_CONSTANTS.contains(&name.as_str()) => Some(Kind::Float),
-		Node::Number(Number::Float(f)) if Number::is_exact_decimal(*f) => Some(Kind::Int),
-		Node::Key(..) => computed_literal_kind(operand),
-		_ => literal_kind(operand),
-	}
-}
-
 /// Extract user-defined functions from the AST into context
 /// Infer return type of a function body given its parameters
 /// The parameters and variables of a function body, typed
@@ -252,85 +178,6 @@ pub(super) fn infer_function_return_kind(
 /// `while c do body`, what every loop lowers to
 fn is_while_do(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Key(condition, Op::Do, _) if matches!(condition.drop_meta(), Node::Key(_, Op::While, _)))
-}
-
-/// `number` is the exact numeric tower (Int); the other builtin type names have their own kind;
-/// a list type (`list`, `list of int`, `[int]`, `int[]`, `ints`) is a List
-pub(crate) fn annotated_kind(type_node: &Node) -> Option<Kind> {
-	if crate::type_constructor::instance_parts_marked(type_node) {
-		return Some(Kind::Key); // `p:person` of a declared type (traits::lower_conformances): an instance
-	}
-	if crate::numbers::uncertain::is_interval_number(type_node) {
-		return Some(Kind::Empty); // `a:number` given a ± value: a Node, checked at run time (wasm_emitter admitted)
-	}
-	let type_name = type_node.name();
-	if bracketed_list_type(type_node).is_some() || names_list_type(&type_name) {
-		return Some(Kind::List);
-	}
-	// `v:any`, as an untyped field: any value, held as a Node (lib/json.warp's to_json takes what parse_json gives)
-	// `x: int or text` (an inline union, card inline-union) and `s: Circle or Square` (card union-types) likewise
-	if names_empty_type(type_node) {
-		return Some(Kind::Empty);
-	}
-	// `m:map`, `m: map of int`: a map, held as a Node; `{a:1}` given to it is upgraded to the map of its entry (one_entry_maps.rs)
-	if type_name == crate::type_kinds::UNTYPED_FIELD || is_map_type(&type_name) || union_parts(&type_name).is_some() {
-		return Some(Kind::Empty);
-	}
-	type_word_kind(&type_name)
-}
-
-pub(crate) fn is_map_type(type_name: &str) -> bool {
-	type_name == super::checks::MAP_TYPE || type_name.starts_with(super::checks::MAP_TYPE_PREFIX)
-}
-
-/// `x:ø` / `x:nil` / `x:unit`: the empty type, ø is held as a Node
-pub(super) fn names_empty_type(type_node: &Node) -> bool {
-	matches!(type_node.drop_meta(), Node::Empty)
-		|| crate::type_tests::canonical_spec_word(&type_node.name()) == crate::type_tests::EMPTY_TYPE
-}
-
-pub(super) fn names_list_type(type_name: &str) -> bool {
-	type_name == "list" || type_name.starts_with("list of ") || plural_element_type(type_name).is_some()
-}
-
-/// The kind a builtin type word names, as annotation (`x:double`) or constructor (`double 2`)
-/// The key under which Scope::function_kinds holds the declared kind of a field (as tuples::element_key holds a
-/// tuple element's): `v.x` reads a float when every declared type with a field x declares it `float`
-pub fn field_kind_key(field: &str) -> String {
-	format!(".{field}")
-}
-
-/// The fields of the declared types whose declarations all agree on one builtin kind, keyed by field_kind_key
-pub fn declared_field_kinds(registry: &crate::type_kinds::TypeRegistry) -> HashMap<String, Kind> {
-	let mut kinds: HashMap<String, Option<Kind>> = HashMap::new();
-	for field in registry.types().iter().flat_map(|type_def| &type_def.fields) {
-		let type_name = field.type_name.to_lowercase();
-		// a number field holds an int or a float: read at run time (card number-field)
-		let kind = type_word_kind(&type_name).filter(|_| type_name != NUMBER_TYPE);
-		kinds
-			.entry(field_kind_key(&field.name))
-			.and_modify(|known| {
-				if *known != kind {
-					*known = None
-				}
-			})
-			.or_insert(kind);
-	}
-	kinds.into_iter().filter_map(|(key, kind)| Some((key, kind?))).collect()
-}
-
-/// The declared field kinds of a program
-pub(super) fn program_field_kinds(program: &Node) -> HashMap<String, Kind> {
-	let mut registry = crate::type_kinds::TypeRegistry::new();
-	collect_all_types(&mut registry, program);
-	declared_field_kinds(&registry)
-}
-
-pub fn type_word_kind(type_name: &str) -> Option<Kind> {
-	match type_name {
-		NUMBER_TYPE => Some(Kind::Int),
-		_ => builtin_type_kind(type_name),
-	}
 }
 
 /// An unannotated parameter without a default, or with an Int one (`within = 0`), takes the kind its callers pass:
@@ -1019,31 +866,6 @@ pub fn with_article(name: &str) -> String {
 	format!("{article} {name}")
 }
 
-/// The kind a call argument certainly has, judged from the literal alone
-pub fn argument_literal_kind(argument: &Node) -> Option<Kind> {
-	match argument.drop_meta() {
-		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square, _) => {
-			Some(infer_type(argument, &Scope::new()))
-		}
-		Node::Empty => Some(Kind::List),
-		// `"" + n`, `"#" + x + y`: a concatenation with a text is a text
-		Node::Key(_, Op::Add, _) if crate::lowering::declaration_forms::is_text(argument) => Some(Kind::Text),
-		// `1.5 as float`, `x as float`: the kind the conversion names
-		Node::Key(_, Op::As, target) if builtin_type_kind(&target.name()).is_some_and(|kind| kind.is_float()) => {
-			Some(Kind::Float)
-		}
-		_ if crate::closures::as_closure_new(argument).is_some() => Some(Kind::Function),
-		Node::List(entries, Bracket::Curly, _)
-			if entries
-				.iter()
-				.all(|entry| matches!(entry.drop_meta(), Node::Key(_, Op::Colon, _))) =>
-		{
-			Some(Kind::List)
-		} // a map
-		_ => None,
-	}
-}
-
 /// The kinds of variables only ever assigned literals of one kind: `s="abcd"; f(s)` passes a Text.
 /// A parameter of the same name shadows the variable (wiki/Footguns.md "Parameter shadowing"), so it is not judged.
 pub(crate) fn literal_variable_kinds(program: &Node, ctx: &Context) -> HashMap<String, Kind> {
@@ -1088,14 +910,6 @@ pub(super) fn variable_kinds(program: &Node, ctx: &Context, unknown_keeps_kind: 
 		.filter(|(name, _)| !unknown_keeps_kind || literal.contains(name))
 		.filter_map(|(name, kind)| Some((name, kind?)))
 		.collect()
-}
-
-/// A decimal literal, `2.5` or `2.0` (an exact decimal, so its kind may be Int): a float an int parameter refuses (P49, P49b)
-pub(super) fn is_decimal_literal(node: &Node) -> bool {
-	matches!(
-		node.drop_meta(),
-		Node::Number(crate::extensions::numbers::Number::Float(_))
-	)
 }
 
 /// Variables assigned a decimal literal (`y = 2.5`, `y = 3.0`)

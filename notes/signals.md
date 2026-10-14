@@ -156,11 +156,12 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
 2. **Named event signals in one module** (done, branch signals-events): `raise name{data}` → `on name {…}` (payload
    `event`), static dispatch; `on set` of a derived value means `on change`. tests/control/test_event_signals.rs.
 3. **Program-wide listeners** (done): writes to a watched main-level variable inside
-   functions (via `global x`) run the checks: the listener's check is the function `signal·check·N()`, guarded by
-   `signal_listening_N` (set where the listener is declared), called after each such write in a function body.
+   functions (via `global x`) run the listeners: since decision watched-cells (2026-10-14) such a variable is a cell
+   and its main-level listeners subscribe to it (signal_values::subscribe), as in phase 5; a variable only the main
+   level writes keeps the static check after each write.
    Done too (card signals-phase-rest): `whenever f() > 3` follows the variables f reads, transitively through the
-   functions it calls (function_reads); effects need nothing new: effects.rs runs on the lowered program, where the
-   check is a call inside the writing function, so `effects of f` includes its listeners' IO.
+   functions it calls (function_reads); effects.rs runs on the lowered program, where a cell write is State and a
+   closure call carries every lifted lambda's effects, so `effects of f` includes its listeners' IO.
 4. **Batching** (done, branch signals-events): a multi-assignment `a, b = 1, 2` checks once, after all its writes
    (P112: no batching block); tuples::destructured_names names its targets.
 5. **Signals as values** (done, branch signals-values, warp-3a; tests/control/test_signal_values.rs): static part

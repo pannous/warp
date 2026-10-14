@@ -156,8 +156,9 @@ fn builtin_type(word: &str) -> Option<&'static BuiltinType> {
 		.find(|builtin| builtin.name == word || builtin.aliases.contains(&word))
 }
 
-/// A word naming a built-in type: where it stands bare, it is that type as a value, never an undefined variable
-pub fn is_type_word(word: &str) -> bool {
+/// A word naming a built-in type or an alias of one (BUILTIN_TYPES): where it stands bare, it is that type as a
+/// value, never an undefined variable
+pub fn is_builtin_type_word(word: &str) -> bool {
 	builtin_type(word).is_some()
 }
 
@@ -171,7 +172,7 @@ pub fn builtin_type_words() -> impl Iterator<Item = &'static str> {
 /// `int`, `i64`, `exact`, `real`, `f64` …: a word naming a type of numbers (one number is covers), `number` itself not
 pub fn is_number_type_word(word: &str) -> bool {
 	let name = canonical_spec_word(word);
-	is_type_word(word) && name != NUMBER_WORD && type_matches(name, NUMBER_WORD)
+	is_builtin_type_word(word) && name != NUMBER_WORD && type_matches(name, NUMBER_WORD)
 }
 
 /// `x as str`, `String(x)`: a word whose cast or call gives a value's text
@@ -371,7 +372,7 @@ fn is_type_union(union: &Node) -> bool {
 	types.len() > 1
 		&& types
 			.iter()
-			.all(|word| matches!(word.drop_meta(), Node::Symbol(name) if is_type_word(name)))
+			.all(|word| matches!(word.drop_meta(), Node::Symbol(name) if is_builtin_type_word(name)))
 }
 
 /// The spec of a type phrase (`int`, `a number`, `ints`, `list of int`, `list of list of int`), `None` when the words are no type
@@ -385,7 +386,7 @@ fn type_spec(words: &[&str], shadowed: &Names) -> Option<String> {
 		return None;
 	}
 	match (*first, rest) {
-		(word, []) if is_type_word(word) => Some(canonical_spec_word(word).to_string()),
+		(word, []) if is_builtin_type_word(word) => Some(canonical_spec_word(word).to_string()),
 		(collection, [of, element @ ..]) if COLLECTION_WORDS.contains(&collection) && *of == OF_WORD => {
 			Some(format!("{collection} of {}", type_spec(element, shadowed)?))
 		}

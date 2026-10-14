@@ -305,6 +305,12 @@ impl WarpParser {
 	pub(super) fn at_identifier_start(&self) -> bool {
 		self.current_char().is_alphabetic() || self.current_char() == '_'
 	}
+
+	pub(crate) fn blanks_ahead(&self) -> usize {
+		(0..)
+			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
+			.count()
+	}
 }
 
 const MAX_DIVISOR_NAME_LENGTH: usize = 2;
@@ -318,7 +324,7 @@ pub(crate) fn is_identifier_char(c: char) -> bool {
 	c.is_alphanumeric() || c == '_' || is_music_accidental(c)
 }
 
-/// The sharp and flat signs continue a name: `C♯4`, `D♭5` are note names (lowering/music_words.rs)
+/// The sharp and flat signs continue a name: `C♯4`, `D♭5` are note names (lowering/words/music_words.rs)
 pub(crate) fn is_music_accidental(c: char) -> bool {
 	matches!(c, '♯' | '♭')
 }

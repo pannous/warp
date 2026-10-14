@@ -56,3 +56,13 @@ fn values_of_the_right_kind_stay_quiet() {
 		assert_eq!(mistakes, Vec::<String>::new(), "{code}");
 	}
 }
+
+// card warn-step-any: a number attribute's keyword (`step: "any"`) and dates (`min: "2024-01-01"`) are valid HTML
+#[test]
+fn a_number_attribute_takes_its_keyword_and_dates() {
+	let warned = warnings_of("input{ type: \"number\" aria-label: \"x\" step: \"any\" min: \"2024-01-01\" }");
+	assert!(
+		warned.iter().all(|warning| !warning.contains("takes a number")),
+		"{warned:?}"
+	);
+}
