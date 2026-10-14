@@ -4,11 +4,13 @@
 //! and answers `ok <type>` or `rejected`. Warp's own verdict is whether `pipeline::compile` accepts the program.
 //! Contract: W0 rejects ⇒ warp rejects; every exception is a known hole with a card.
 use super::lean::{lean_executable, run_with_timeout, LEAN_TIMEOUT};
+use crate::analyzer::UNION_JOINER;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
 use crate::warp_parser::TRY_MARKER;
+use crate::words::EXTREMUM_WORDS;
 use crate::words::{COUNT_WORD, IN_WORD, LET_WORD, MAP_WORD};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -57,7 +59,6 @@ const CELL_FIELD: &str = "·value";
 /// An inline union `int | text` is the join of its alternatives, every value given to it a cast
 const UNION_TYPE: &str = "(Ty.joinAll ";
 const RANGED_TYPE_PREFIX: &str = ".ranged ";
-const UNION_JOINER: &str = " or ";
 const OPTIONAL_MARK: char = '?';
 /// An optional `int?`: its values and ø
 const OPTIONAL_TYPE_PREFIX: &str = ".opt ";
@@ -75,8 +76,6 @@ const RETURN_EVENT_SUFFIX: &str = "·return";
 const EVENT_LOCAL: &str = "event";
 /// an event's payloads are instances of the class `ev·event`, whose fields are every key the program emits it with
 const EVENT_CLASS_SUFFIX: &str = "·event";
-/// `min(a, b)` and `max(a, b)` of two values (lowering/collections/min_max.rs): a comparison, each argument computed once
-const EXTREMA: [&str; 2] = ["min", "max"];
 const TALLY_CLASS: &str = "·tally";
 const TALLY_INDEX: &str = "·index";
 

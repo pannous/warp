@@ -180,6 +180,9 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains("exact_euclid_div") {
 		required.insert(super::super::INT_RUNTIME);
 	}
+	if required.contains(super::super::numbers::float_text::FLOAT_AS_EXACT) {
+		required.extend([super::super::INT_RUNTIME, "new_int"]);
+	}
 	if required.contains(super::super::lists::list_ops::LIST_EXTEND) {
 		required.insert("list_concat"); // of a non-list
 	}

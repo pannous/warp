@@ -24,7 +24,7 @@ use std::collections::{HashMap, HashSet};
 
 /// `once alarm {…}`: the handler runs at the first raise only (Node's emitter.once, DOM `{once: true}`)
 /// `once_fired_0`: whether the once handler ran (a plain word: `global once_fired_0` is parsed)
-const FIRED_PREFIX: &str = "once_fired_";
+pub(crate) const FIRED_PREFIX: &str = "once_fired_";
 /// `h_listening`: whether the named handler h still listens (plain words: `global h_listening` is parsed)
 const LISTENING_SUFFIX: &str = "_listening";
 const REMOVE_WORD: &str = "remove";

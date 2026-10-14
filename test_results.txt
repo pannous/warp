@@ -221,6 +221,8 @@ PASSED:
   ✓ control::test_exit_signal::on_exit_runs_at_exit_and_keeps_its_code
   ✓ control::test_exit_signal::on_exit_runs_once
   ✓ control::test_exit_signal::on_exit_runs_when_main_returns
+  ✓ control::test_expect::a_program_defining_expect_keeps_its_word
+  ✓ control::test_expect::expect_is_a_soft_test
   ✓ control::test_field_of_elements::a_field_of_a_filtered_table_reads_only_its_rows
   ✓ control::test_field_of_elements::a_field_of_a_list_is_the_field_of_each_element
   ✓ control::test_field_of_elements::with_filters_a_list_of_instances
@@ -268,6 +270,22 @@ PASSED:
   ✓ control::test_function_dir::a_later_dir_leaves_an_earlier_line_alone
   ✓ control::test_function_dir::dir_of_a_function_lists_what_reflection_knows
   ✓ control::test_function_dir::the_type_of_a_function_is_function
+  ✓ control::test_function_objects::a_classes_methods_are_its_functions
+  ✓ control::test_function_objects::a_function_in_a_list_prints_by_its_name
+  ✓ control::test_function_objects::a_function_knows_its_name_and_return_type
+  ✓ control::test_function_objects::a_function_value_answers_at_run_time
+  ✓ control::test_function_objects::a_maps_own_description_stays_its_value
+  ✓ control::test_function_objects::a_modules_methods_are_its_functions
+  ✓ control::test_function_objects::a_printed_function_shows_its_doc_and_definition
+  ✓ control::test_function_objects::a_values_methods_are_its_types_functions
+  ✓ control::test_function_objects::description_is_doc
+  ✓ control::test_function_objects::full_is_the_doc_and_the_definition
+  ✓ control::test_function_objects::only_the_comment_directly_above_is_the_doc
+  ✓ control::test_function_objects::printing_a_function_without_parameters_calls_it_and_warns
+  ✓ control::test_function_objects::representation_is_dump
+  ✓ control::test_function_objects::returns_is_return_type
+  ✓ control::test_function_objects::the_type_of_a_function_names_its_signature
+  ✓ control::test_function_objects::the_words_of_a_function_reference
   ✓ control::test_glued_block_words::a_glued_do_runs_its_block
   ✓ control::test_glued_block_words::a_glued_loop_runs_its_block
   ✓ control::test_go_blocks::a_failure_nobody_awaits_ends_the_run
@@ -496,6 +514,10 @@ PASSED:
   ✓ control::test_reflect_inferred::a_field_named_type_is_read_as_written
   ✓ control::test_reflect_inferred::extension_methods_are_listed
   ✓ control::test_reflect_inferred::the_class_of_a_calls_result
+  ✓ control::test_reflection_mode::a_function_knows_what_made_it
+  ✓ control::test_reflection_mode::a_function_knows_where_it_was_written
+  ✓ control::test_reflection_mode::a_printed_function_says_where_it_was_made
+  ✓ control::test_reflection_mode::without_reflection_mode_a_function_has_no_line
   ✓ control::test_reflection_words::a_bindings_doc
   ✓ control::test_reflection_words::a_classes_methods
   ✓ control::test_reflection_words::a_functions_dump
@@ -2247,6 +2269,7 @@ PASSED:
   ✓ node::test_empty_operands::a_missing_operand_is_not_written
   ✓ node::test_empty_operands::a_prefix_form_reads_back_as_the_same_tree
   ✓ node::test_empty_operands::a_written_empty_value_stays
+  ✓ node::test_eval_word::test_eval_word
   ✓ node::test_float_node_text::a_float_node_writes_its_shortest_text
   ✓ node::test_grouped_parts::a_group_of_one_has_its_item_s_parts
   ✓ node::test_index_serialization::a_bracket_index_roundtrips
@@ -2399,6 +2422,9 @@ PASSED:
   ✓ numbers::test_float_accumulator::a_captured_node_local_is_set_before_its_first_value
   ✓ numbers::test_float_accumulator::a_function_accumulator_takes_floats_of_unknown_origin
   ✓ numbers::test_float_accumulator::sum_by_takes_a_float_lambda
+  ✓ numbers::test_float_as_rational::test_float_as_rational
+  ✓ numbers::test_float_as_rational::test_float_as_rational_alone
+  ✓ numbers::test_float_as_rational::test_infinite_float_as_rational
   ✓ numbers::test_float_assignment::test_as_float_promotes_and_never_truncates
   ✓ numbers::test_float_assignment::test_float_assignment_in_exact_context_is_refused_loudly
   ✓ numbers::test_float_assignment::test_float_local_assignment_keeps_its_float_value
@@ -3223,8 +3249,11 @@ PASSED:
   ✓ programs::test_kitchensink::test_kitchensink_wasmtime_execution
   ✓ programs::test_midi::a_broken_file_fails_loudly
   ✓ programs::test_midi::a_file_of_another_program_reads_with_running_status_and_tempo
+  ✓ programs::test_midi::a_message_waits_for_the_sounds_before_it
+  ✓ programs::test_midi::at_places_a_message
   ✓ programs::test_midi::headless_messages_are_named
   ✓ programs::test_midi::listing_outputs_needs_a_backend_or_names_the_missing_one
+  ✓ programs::test_midi::midi_notes_follow_one_another
   ✓ programs::test_midi::native_input_is_a_loud_error
   ✓ programs::test_midi::notes_survive_a_midi_file
   ✓ programs::test_music_values::a_frequency_reads_as_its_note
@@ -3354,12 +3383,23 @@ PASSED:
   ✓ programs::test_sound_patterns::a_cycle_lasts_its_seconds_whatever_its_steps
   ✓ programs::test_sound_patterns::a_live_loop_is_a_voice_that_repeats
   ✓ programs::test_sound_patterns::a_rest_is_silent
+  ✓ programs::test_sound_patterns::alternation_takes_one_per_cycle_in_turn
+  ✓ programs::test_sound_patterns::chance_drops_some_cycles_the_same_each_run
+  ✓ programs::test_sound_patterns::elongation_holds_a_step_longer
   ✓ programs::test_sound_patterns::euclid_spreads_three_notes_over_eight_steps
   ✓ programs::test_sound_patterns::live_loops_play_along
+  ✓ programs::test_sound_patterns::named_live_loops_are_awaited_each
+  ✓ programs::test_sound_patterns::nested_alternation_turns_on_its_own_visits
   ✓ programs::test_sound_patterns::pattern_samples_ends_each_event_at_its_cumulated_seconds
   ✓ programs::test_sound_patterns::swing_holds_the_first_note_longer
   ✓ programs::test_sound_render::a_render_takes_the_sounds_after_the_last_one
   ✓ programs::test_sound_render::sounds_render_into_one_wav_file
+  ✓ programs::test_sound_samples::a_rate_changes_speed_and_pitch
+  ✓ programs::test_sound_samples::a_render_mixes_rates
+  ✓ programs::test_sound_samples::a_wav_plays_back_as_recorded
+  ✓ programs::test_sound_samples::not_audio_fails_loudly
+  ✓ programs::test_sound_samples::other_formats_go_through_a_converter
+  ✓ programs::test_sound_samples::slices_and_loops
   ✓ programs::test_sound_signal::a_block_function_fills_the_samples_of_each_block
   ✓ programs::test_sound_signal::a_block_function_is_called_once_a_block
   ✓ programs::test_sound_signal::a_block_function_of_two_blocks_plays_in_stereo
@@ -4208,6 +4248,7 @@ PASSED:
   ✓ types::test_text_as_number::a_run_time_text_as_number_is_its_number
   ✓ types::test_text_of_text::text_of_a_text_conversion_is_its_value
   ✓ types::test_text_of_text::text_of_data_stays_its_source
+  ✓ types::test_time_kinds_are_types::test_time_kinds_are_types
   ✓ types::test_time_programs_run::a_duration_in_a_unit_is_its_quantity_in_a_running_program
   ✓ types::test_time_programs_run::a_placement_in_parentheses_has_fields
   ✓ types::test_time_programs_run::a_zoned_times_rules_version_is_read_at_run_time
@@ -4574,6 +4615,7 @@ PASSED:
   ✓ web::test_assistant_edits::a_diff_changes_only_the_lines_it_names
   ✓ web::test_assistant_edits::a_diff_that_no_longer_fits_says_so
   ✓ web::test_assistant_edits::a_whole_program_replaces_only_the_lines_that_differ
+  ✓ web::test_assistant_proxy::the_assistant_proxy_answers_only_the_playground
   ✓ web::test_async_data::a_body_that_is_no_json_is_the_text
   ✓ web::test_async_data::a_changed_url_variable_fetches_anew
   ✓ web::test_async_data::a_failed_fetch_is_the_error
@@ -4672,6 +4714,9 @@ PASSED:
   ✓ web::test_gpu_functions::a_map_calls_a_function_of_one_expression_on_the_gpu
   ✓ web::test_gpu_functions::a_map_calls_functions_of_statements_on_the_gpu
   ✓ web::test_gpu_functions::a_small_map_calling_a_function_stays_exact
+  ✓ web::test_guide_heading_links::a_section_and_a_titled_chapter_have_githubs_slug
+  ✓ web::test_guide_heading_links::a_wiki_heading_link_is_a_markdown_heading_link
+  ✓ web::test_guide_heading_links::every_heading_link_of_the_guides_names_a_heading
   ✓ web::test_guide_sections::whole_lists_at_once_is_a_section_of_lists
   ✓ web::test_guide::every_example_a_chapter_links_exists
   ✓ web::test_guide::every_guide_snippet_prints_what_the_guide_shows
@@ -4710,6 +4755,7 @@ PASSED:
   ✓ web::test_keyed_lists::a_key_names_the_element_of_an_item
   ✓ web::test_keyed_lists::a_key_on_its_own_line_names_the_element
   ✓ web::test_keyed_lists::a_list_inside_an_element_gives_its_children
+  ✓ web::test_keyword_registry::keywords_of_passes_are_highlighted
   ✓ web::test_markup_holes::a_page_binds_each_hole
   ✓ web::test_markup_holes::fixed_markup_or_a_computed_root_has_no_holes
   ✓ web::test_markup_holes::the_elements_holding_computed_parts_are_the_holes
@@ -4955,6 +5001,8 @@ PASSED:
   ✓ welcoming::test_count_shadowed::a_global_count_does_not_hide_the_word_in_functions
   ✓ welcoming::test_count_shadowed::a_variable_named_count_applied_to_a_value_is_an_error
   ✓ welcoming::test_count_shadowed::count_stays_a_word_and_a_variable_name
+  ✓ welcoming::test_discarded_error_warning::a_discarded_error_warns
+  ✓ welcoming::test_discarded_error_warning::a_used_error_does_not_warn
   ✓ welcoming::test_discarded_pure_warning::a_discarded_pure_call_warns
   ✓ welcoming::test_discarded_pure_warning::an_assigned_mutating_call_warns
   ✓ welcoming::test_discarded_pure_warning::the_warned_program_still_runs
@@ -5326,8 +5374,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ web::test_assistant_proxy::the_assistant_proxy_answers_only_the_playground
-  ✗ web::test_keyword_registry::keywords_of_passes_are_highlighted
 
 SUMMARY:
-13 ignored, 5323 passed, 2 failed, 5325 total tested
+13 ignored, 5371 passed, 0 failed, 5371 total tested

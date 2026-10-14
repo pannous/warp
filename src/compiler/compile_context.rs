@@ -32,6 +32,8 @@ pub struct CompileContext {
 	pub warning_mode: WarningMode,
 	/// the program said `use comments` (P114: off by default)
 	pub comments_as_meta: bool,
+	/// the program said `use reflection` (decision reflection): function values tell where and how they were made
+	pub reflection_mode: bool,
 	pub style: Style,
 	pub hint_mode: HintMode,
 	/// a stage that repeats work already hinted (the emitter's rerun) says nothing twice
@@ -79,6 +81,7 @@ impl Default for CompileContext {
 			source: String::new(),
 			warning_mode: WarningMode::default(),
 			comments_as_meta: false,
+			reflection_mode: false,
 			style: Style::default(),
 			hint_mode: HintMode::Always,
 			hints_muted: false,

@@ -148,10 +148,13 @@ pub fn insert_module_classes(program: Node) -> Node {
 	// (`math.factorial` of `use python math`, `json.loads`) wait for foreign_modules and welcome_forms
 	let class_modules: Vec<&str> = class_modules.iter().map(String::as_str).collect();
 	let program = with_std_aliases(crate::welcome_forms::module_calls(program, &class_modules), &aliases);
-	let std_classes =
-		std_definitions.into_iter().filter(|definition| is_class(definition) && is_foreign(definition)).collect();
+	// the classes the program's calls reach, also through the module's functions (sound's sample() makes a Sample)
+	let std_classes = needed_definitions(&program, &std_definitions)
+		.into_iter()
+		.filter(|definition| is_class(definition) && is_foreign(definition))
+		.collect();
 	let file_classes: Vec<Node> = file_classes.into_iter().filter(is_foreign).collect();
-	let program = with_implicit_class_modules(with_needed_definitions(program, std_classes));
+	let program = with_implicit_class_modules(with_statements_in_front(program, std_classes));
 	match file_classes.is_empty() {
 		true => program,
 		false => match program {

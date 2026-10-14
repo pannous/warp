@@ -269,7 +269,9 @@ yes
 sure
 ```
 
-### Matching
+Examples: conditions; samples: control_flow, fizzbuzz
+
+## Matching
 
 `match` picks the first case that fits the value. `other` takes the rest.
 
@@ -291,7 +293,14 @@ A case can also describe the shape of a list or a map, and name its parts.
 match [1, 2] { [a, b] => a + b; other => 0 }
 ```
 
-Examples: conditions; samples: control_flow, fizzbuzz, matching
+Patterns reach into data nested at any depth: `find` collects every match, here the `src` of each image.
+
+```warp => ["logo.png" "cat.jpg"]
+page = {logo: {type: "image", src: "logo.png"}, body: [{type: "text"}, {type: "image", src: "cat.jpg"}]}
+page find {type: "image", src}
+```
+
+Examples: matching; samples: matching, tree_patterns
 
 ## Lists
 
@@ -370,10 +379,7 @@ square [1 2 3]
 [1 2 3].map(x => x * 2)
 ```
 
-A heavy `map` over a very long list of floats (sin, exp and the like, from about 300 000 items) runs on the graphics
-card by itself, and says so once. The graphics card computes in single precision, so results are approximate by
-design: a sum of 40 000 cosines may be off by about 40 000 × 2⁻¹¹. Write `@cpu` after the map, before it, or on a
-block or function when every digit counts; `@gpu` asks for the graphics card from about 30 000 items.
+Also see [[#Closures]] and [[#Acceleration]] below.
 
 Examples: lists, broadcasting, "lazy ranges", "linear arrays"; samples: sorting, quicksort, primes, sieve, sorting_idiomatic, sieve_idiomatic, dot, typed_lists
 
@@ -727,10 +733,9 @@ Examples: forms; samples: server, route_headers, hosting, worker
 
 Examples: frames, shader, "shader mouse"; samples: paint_text, finger_paint, shader, webgpu, shader_brush, shader_trails
 
-## GPU
+## Acceleration
 
-Warp parallelizes bulk operations *automatically*: number lists run as SIMD loops, and maps heavy enough to pay for the
-transfer move to the graphics card (GPU).
+Warp parallelizes bulk operations *automatically*: lists of numbers run as [SIMD](https://en.wikipedia.org/wiki/Single_instruction,_multiple_data) loops, and maps heavy enough to pay for the transfer move to an accelerator such as the graphics card (GPU).
 
 To tune the performance yourself, ask for the GPU explicitly with `@gpu`:
 
@@ -739,7 +744,12 @@ xs = [1.0, 2.0, 3.0]
 total = sum(xs.map(x => sin(x) * exp(x) + cos(x * 3)) @gpu)
 ```
 
-Pictures above shows how to draw directly on the GPU.
+A heavy `map` over a very long list of floats (sin, exp and the like, from about 300 000 items) runs on the graphics
+card by itself, and says so once. The graphics card computes in single precision, so results are approximate by
+design: a sum of 40 000 cosines may be off by about 40 000 × 2⁻¹¹. Write `@cpu` after the map, before it, or on a
+block or function when every digit counts; `@gpu` asks for the graphics card from about 30 000 items.
+
+[[#Pictures]] above shows how to draw directly on the GPU.
 
 Examples: shader; samples: gpu_map, gpu_arrays, manual_3d_object_viewer, gpu_visualizer
 

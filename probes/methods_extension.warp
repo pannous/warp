@@ -1,0 +1,4 @@
+class P { x: int; def sum() { x } }
+def make() { P(1) }
+fun P.twice() = this.x * 2
+[m.name for m in P.methods]

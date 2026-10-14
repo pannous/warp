@@ -94,7 +94,7 @@ pub(crate) fn declaring_name_and_type(target: &Node) -> Option<(String, String)>
 
 /// An inline union type joins its parts with it: `x: int | text` and `x: int or text` declare x "int or text", the
 /// anonymous form of P179's sum types (card inline-union)
-pub(super) const UNION_JOINER: &str = " or ";
+pub(crate) const UNION_JOINER: &str = " or ";
 /// The empty part of a union, `int | ø`, makes it optional: `int?`
 pub(super) const NONE_WORDS: [&str; 3] = ["none", "nil", "null"];
 

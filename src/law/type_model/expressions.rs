@@ -181,7 +181,7 @@ impl Exporter {
 		self.hidden_names += 1;
 		let (first, second) =
 			(quoted(&format!("·a{}", self.hidden_names)), quoted(&format!("·b{}", self.hidden_names)));
-		let (left, right) = if word == EXTREMA[0] { (&second, &first) } else { (&first, &second) };
+		let (left, right) = if word == EXTREMUM_WORDS[0] { (&second, &first) } else { (&first, &second) };
 		let comparison = format!(".ite (.lt (.loc {left}) (.loc {right})) (.loc {second}) (.loc {first})");
 		Ok(format!(
 			".letIn {first} {ANY_TYPE} ({}) (.letIn {second} {ANY_TYPE} ({}) ({comparison}))",
@@ -386,7 +386,7 @@ impl Exporter {
 					Ok(truthiness(self.tally(list, Some(item), true)?))
 				}
 				[call, a, b]
-					if EXTREMA.iter().any(|word| call.is_symbol(word))
+					if EXTREMUM_WORDS.iter().any(|word| call.is_symbol(word))
 						&& !self.functions.contains_key(&call.name()) =>
 				{
 					self.extremum(&call.name(), a, b)

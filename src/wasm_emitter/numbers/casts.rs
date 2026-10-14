@@ -63,14 +63,11 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// An f64 has no exact value yet (nearest_hint): `x as exact` of a runtime float is refused instead of rounded silently
-	pub(in crate::wasm_emitter) fn emit_inexact_to_exact(&mut self, func: &mut Function, value: &Node) {
-		let value = value.serialize();
-		let message = format!(
-			"{value} is an IEEE float, `as exact` of a float is not supported yet: keep it exact from the start, {}",
-			nearest_hint(&value)
-		);
-		self.emit_type_error(func, message);
+	/// `x as rational` of a float: the exact fraction of its shortest printed digits (decision float-as-rational)
+	pub(in crate::wasm_emitter) fn emit_float_to_exact(&mut self, func: &mut Function, value: &Node) {
+		self.emit_float_value(func, value);
+		self.emit_call(func, super::float_text::FLOAT_AS_EXACT);
+		self.emit_call(func, "new_int");
 	}
 
 	/// `v as T` as a raw Int: `as float` has no exact value, `as exact` keeps it
@@ -244,6 +241,17 @@ impl WasmGcEmitter {
 				I::I64Eq,
 			]
 		};
+		// a function value on its own shows its definition (function_dump), in a list its function_text
+		let shows_definitions = self.should_emit_function(functions::closures::FUNCTION_DUMP);
+		if shows_definitions {
+			Self::emit_list(func, &kind_is(Kind::Function));
+			Self::emit_list(
+				func,
+				&[I::If(BlockType::Result(Ref(self.node_ref(false)))), I::LocalGet(held), I::RefAsNonNull],
+			);
+			self.emit_call(func, functions::closures::FUNCTION_DUMP);
+			func.instruction(&I::Else);
+		}
 		Self::emit_list(func, &kind_is(Kind::Text));
 		Self::emit_list(func, &kind_is(Kind::Codepoint));
 		Self::emit_list(
@@ -259,6 +267,9 @@ impl WasmGcEmitter {
 		self.emit_call(func, "new_text");
 		self.emit_call(func, reflection::library_ops::LIST_TEXT);
 		func.instruction(&I::End);
+		if shows_definitions {
+			func.instruction(&I::End);
+		}
 		held
 	}
 
@@ -379,7 +390,7 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// `x as exact`: a decimal literal is the fraction it spells (`2.1 as exact` is 21/10), a runtime float is refused
+	/// `x as exact`: a decimal literal is the fraction it spells (`2.1 as exact` is 21/10), so is a runtime float
 	pub(in crate::wasm_emitter) fn emit_cast_to_exact(
 		&mut self,
 		func: &mut Function,
@@ -393,7 +404,7 @@ impl WasmGcEmitter {
 			}
 			Node::Text(s) => self.emit_text_cast(func, s, target_type),
 			Node::Char(_) => self.emit_cast(func, value, &Node::Symbol("int".into())),
-			_ if self.get_type(value).is_float() => self.emit_inexact_to_exact(func, value),
+			_ if self.get_type(value).is_float() => self.emit_float_to_exact(func, value),
 			_ => {
 				self.emit_numeric_value(func, value);
 				self.emit_call(func, "new_int");
