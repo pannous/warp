@@ -203,7 +203,6 @@ impl WarpParser {
 		let allowed = match spelling {
 			"else" => !self.else_arm_key(),
 			"if" => !self.condition_has_branch(2),
-			"until" => self.in_for_header,
 			"?." => after.is_alphabetic() || after == '_', // `x?.name`; `x ?.5 : 1` is a ternary
 			// R's `x <- 3` assigns with a note, the cramped `x<-3` is an error (P145, left_arrow_assignment)
 			"<-" => after.is_whitespace() || !prev.is_whitespace(),
@@ -227,10 +226,10 @@ impl WarpParser {
 			self.in_style_sheet && matches!(spelling, "." | "#") && prev.is_whitespace() && self.is_identifier_start(1);
 		let style_word =
 			spelling.chars().count() == 1 && (self.css_color_length().is_some() || self.at_pseudo_class_selector());
-		let op = if spelling == "=" && self.equals_compares {
-			Op::Eq
-		} else {
-			op
+		let op = match spelling {
+			"=" if self.equals_compares => Op::Eq,
+			"until" if !self.in_for_header => Op::While, // `i++ until done`, Kotlin's `for i in 0 until n` ranges
+			_ => op,
 		};
 		// a word operator stands before its operand, `use same;` names the module same; `then`, `else`, `do` may end a line
 		let operand_after_word = !spelling.ends_with(char::is_alphabetic)
@@ -244,10 +243,10 @@ impl WarpParser {
 		if self.options.data_mode {
 			return None;
 		}
-		STATEMENT_MODIFIERS
+		NEGATED_CONTROL_WORDS
 			.iter()
-			.find(|(word, _, negated)| *negated && self.matches_keyword(word))
-			.map(|(word, op, _)| (*op, word.len()))
+			.find(|(word, _)| self.matches_keyword(word))
+			.map(|(word, op)| (*op, word.len()))
 	}
 
 	/// `10 down to 1`: the length of the words `down to` (Kotlin's `downTo`), the range counting down

@@ -357,7 +357,7 @@ impl WarpParser {
 
 			if let Some(updated) = self
 				.try_parse_evaluate_bang(&lhs, min_bp)
-				.or_else(|| self.try_parse_control_suffix(&lhs, min_bp))
+				.or_else(|| self.try_parse_times(&lhs, min_bp))
 				.or_else(|| self.try_parse_test_word(&lhs, min_bp))
 				.or_else(|| self.try_parse_elvis(&lhs, min_bp))
 			{
@@ -629,7 +629,9 @@ impl WarpParser {
 
 	/// The right operand of `op` without a block: a branch, a glued pair's value or an expression
 	fn parse_right_operand(&mut self, op: Op, glued_pair: bool, r_bp: u8) -> Node {
-		if matches!(op, Op::Then | Op::Else) {
+		if matches!(op, Op::If | Op::While) {
+			self.parse_condition()
+		} else if matches!(op, Op::Then | Op::Else) {
 			let outer = self.branch_bp.replace(r_bp);
 			let branch = self.parse_branch(r_bp);
 			let branch = self.branch_assignment(branch, r_bp);
@@ -866,6 +868,7 @@ fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Option<Node>) -
 			Node::List(vec![lhs, Symbol(word.to_string()), rhs], Bracket::None, Separator::Space)
 		}
 		_ if op == Op::Pipe => piped(lhs, rhs),
+		_ if matches!(op, Op::If | Op::While) => guarded_statement(lhs, op, written, rhs),
 		// Java's and Scala's `import math.*`: a glob, nothing after the `*`, is the module whole
 		_ if written == ".*" && matches!(rhs, Empty) => {
 			crate::normalize::hint(&format!("{}.*", lhs.serialize()), &lhs.serialize(), "warp imports a module whole");
@@ -884,6 +887,31 @@ fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Option<Node>) -
 			call(REVERSE_WORD, vec![Node::Key(Box::new(rhs), Op::To, Box::new(lhs))])
 		}
 		_ => Node::Key(Box::new(lhs), op, Box::new(rhs)),
+	}
+}
+
+/// A control word behind a statement: `x++ while c`, `a = 2 if c`, `i++ until c`, `a = 2 unless c`
+fn guarded_statement(statement: Node, guard: Op, word: &str, condition: Node) -> Node {
+	if guard == Op::While {
+		// a trailing `while` tests before the first round like the leading one; it is no do-while (user decision #22)
+		let (statement, test) = (
+			crate::normalize::operand_text(&statement),
+			crate::normalize::operand_text(&condition),
+		);
+		crate::normalize::hint(
+			&format!("{statement} {word} {test}"),
+			&format!("{word} {test} {{ {statement} }}"),
+			"a trailing loop word tests before the first round, the statement may never run",
+		);
+	}
+	let condition = if NEGATED_CONTROL_WORDS.iter().any(|(negated, _)| *negated == word) {
+		Node::Key(Box::new(Empty), Op::Not, Box::new(condition))
+	} else {
+		condition
+	};
+	match guard {
+		Op::While => while_do(condition, statement),
+		_ => Node::Key(Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(condition))), Op::Then, Box::new(statement)),
 	}
 }
 

@@ -162,12 +162,8 @@ const REVERSE_WORD: &str = "reverse";
 const EXCLUSIVE_DOTS: &str = "..";
 /// Topic of the Ask about `for i in 0..n-1`, which Kotlin reads inclusive
 const KOTLIN_RANGE: &str = "kotlin-range";
-const STATEMENT_MODIFIERS: [(&str, Op, bool); 4] = [
-	("if", Op::If, false),
-	("unless", Op::If, true),
-	("while", Op::While, false),
-	("until", Op::While, true),
-];
+/// The control words that negate their condition: `unless c` is `if not c`, `until c` is `while not c`
+const NEGATED_CONTROL_WORDS: [(&str, Op); 2] = [("unless", Op::If), ("until", Op::While)];
 /// Words that test a value for being ø or falsy, sugar for `not x`; `failed` tests for an Error value (is_error)
 const TEST_WORDS: [&str; 6] = ["empty", "missing", "absent", "unknown", "undefined", FAILED_WORD];
 const FAILED_WORD: &str = "failed";

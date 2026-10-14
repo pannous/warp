@@ -13,7 +13,7 @@ const PREFIX_BP: u8 = 162;
 /// Every spelling of an infix or prefix operator the parser reads: symbols, Unicode glyphs and words (wiki/alias.md,
 /// wiki/operator.md). The canonical spelling is Op::as_str, every other one an alias; the parser takes the longest
 /// spelling that fits (lookahead.rs peek_operator), the style hints name the canonical one (normalize.rs)
-pub const OPERATOR_SPELLINGS: [(&str, Op); 132] = [
+pub const OPERATOR_SPELLINGS: [(&str, Op); 134] = [
 	(":", Op::Colon),
 	(".", Op::Dot),
 	("?.", Op::SafeDot),
@@ -126,7 +126,10 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 132] = [
 	("++", Op::Inc),
 	("--", Op::Dec),
 	("?", Op::Question),
+	// after a statement `if`, `unless`, `while` and `until` (lookahead.rs: outside a for header) guard it
 	("if", Op::If),
+	("unless", Op::If),
+	("while", Op::While),
 	("then", Op::Then),
 	("else", Op::Else),
 	("do", Op::Do),

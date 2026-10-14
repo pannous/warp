@@ -220,54 +220,16 @@ impl WarpParser {
 		Some(Node::Key(Box::new(Empty), Op::Not, Box::new(lhs.clone())))
 	}
 
-	/// A control word behind a statement: `x++ while c`, `a = 2 if c`, `i++ until c`, `a = 2 unless c`, `3 times {body}`
-	pub(super) fn try_parse_control_suffix(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
-		if self.options.data_mode || matches!(lhs.drop_meta(), Empty) {
+	/// `3 times {body}`; `x = it times it`: with a value after it (no block) `times` binds like `*` anywhere
+	pub(super) fn try_parse_times(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
+		let binds = min_bp <= TIMES_BP
+			|| self.times_fills_list()
+			|| (self.value_after_times() && min_bp <= Op::Mul.binding_power().0);
+		if self.options.data_mode || matches!(lhs.drop_meta(), Empty) || !binds || !self.matches_keyword(TIMES_WORD) {
 			return None;
 		}
-		// `x = it times it`: with a value after it (no block) `times` binds like `*` anywhere
-		let value_follows = self.value_after_times();
-		if (min_bp <= TIMES_BP || self.times_fills_list() || (value_follows && min_bp <= Op::Mul.binding_power().0))
-			&& self.matches_keyword(TIMES_WORD)
-		{
-			self.advance_by(TIMES_WORD.len());
-			return Some(self.parse_times_loop(lhs.clone()));
-		}
-		let (word, guard, negated) = STATEMENT_MODIFIERS
-			.iter()
-			.copied()
-			.find(|(word, _, _)| self.matches_keyword(word))?;
-		if min_bp > 0 || (guard == Op::If && self.condition_has_branch(word.len())) {
-			return None;
-		}
-		self.advance_by(word.len());
-		self.skip_spaces();
-		let condition = self.parse_condition();
-		if guard == Op::While {
-			// a trailing `while` tests before the first round like the leading one; it is no do-while (user decision #22)
-			let (statement, test) = (
-				crate::normalize::operand_text(lhs),
-				crate::normalize::operand_text(&condition),
-			);
-			crate::normalize::hint(
-				&format!("{statement} {word} {test}"),
-				&format!("{word} {test} {{ {statement} }}"),
-				"a trailing loop word tests before the first round, the statement may never run",
-			);
-		}
-		let condition = if negated {
-			Node::Key(Box::new(Empty), Op::Not, Box::new(condition))
-		} else {
-			condition
-		};
-		Some(match guard {
-			Op::While => while_do(condition, lhs.clone()),
-			_ => Node::Key(
-				Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(condition))),
-				Op::Then,
-				Box::new(lhs.clone()),
-			),
-		})
+		self.advance_by(TIMES_WORD.len());
+		Some(self.parse_times_loop(lhs.clone()))
 	}
 
 	/// `if b {y}` or `if b then y` after a statement (`if a {x} if b {y}`) starts the next statement: a trailing `if`
