@@ -1,7 +1,7 @@
 //! Reading warp forms for the export: literals and type words, `on`/`emit` effects, definitions and their heads, locals and late binding
 use super::*;
 pub(super) use crate::declaration_forms::is_list_literal;
-pub(super) use crate::injection::literal_text;
+pub(super) use crate::text::injection::literal_text;
 pub(super) use crate::lowering::nodes::parameter_word;
 use crate::lowering::{function_head, DefinitionForm, FunctionHead};
 
