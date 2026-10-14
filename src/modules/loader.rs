@@ -92,8 +92,7 @@ pub(super) fn is_scoped_directory(directory: &Path) -> bool {
 }
 
 pub(super) fn package_root(folder: &Path) -> Result<PathBuf, Node> {
-	let absolute = folder.canonicalize().unwrap_or_else(|_| folder.to_path_buf());
-	let holds_its_module = |directory: &&Path| {
+	let holds_its_module = |directory: &Path| {
 		let name = directory
 			.file_name()
 			.map(|name| name.to_string_lossy().to_string())
@@ -102,30 +101,28 @@ pub(super) fn package_root(folder: &Path) -> Result<PathBuf, Node> {
 			.iter()
 			.any(|extension| directory.join(format!("{name}.{extension}")).is_file())
 	};
-	absolute
-		.ancestors()
-		.find(holds_its_module)
-		.map(Path::to_path_buf)
-		.ok_or_else(|| {
-			error(&format!(
-				"use package: no package folder around {}: a package folder holds <folder name>.warp",
-				folder.display()
-			))
-		})
+	enclosing_root(
+		folder,
+		holds_its_module,
+		"use package: no package folder around {}: a package folder holds <folder name>.warp",
+	)
 }
 
 pub(super) fn project_root(folder: &Path) -> Result<PathBuf, Node> {
+	let holds_marker = |directory: &Path| directory.join(PROJECT_MARKER).exists();
+	enclosing_root(
+		folder,
+		holds_marker,
+		&format!("use project: no project root around {{}}: the project root holds {PROJECT_MARKER}"),
+	)
+}
+
+/// The nearest folder around `folder` (itself included) that `is_root`; `missing` reports none, its `{}` the folder
+fn enclosing_root(folder: &Path, is_root: impl Fn(&Path) -> bool, missing: &str) -> Result<PathBuf, Node> {
 	let absolute = folder.canonicalize().unwrap_or_else(|_| folder.to_path_buf());
-	absolute
-		.ancestors()
-		.find(|directory| directory.join(PROJECT_MARKER).exists())
-		.map(Path::to_path_buf)
-		.ok_or_else(|| {
-			error(&format!(
-				"use project: no project root around {}: the project root holds {PROJECT_MARKER}",
-				folder.display()
-			))
-		})
+	let root = absolute.ancestors().find(|directory| is_root(directory));
+	root.map(Path::to_path_buf)
+		.ok_or_else(|| error(&missing.replace("{}", &folder.display().to_string())))
 }
 
 impl Sibling {
