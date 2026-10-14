@@ -289,7 +289,7 @@ pub(super) const LIST_CANNOT_HOLD: &str = "list_cannot_hold_this_item";
 /// The in-place writers of a list, which check their items against its element mark
 const MARK_CHECKING_WRITERS: [&str; 3] = [
 	super::list_ops::LIST_EXTEND,
-	crate::declaration_forms::INSERT_AT_CALL,
+	crate::list_mutations::INSERT_AT_CALL,
 	"node_with_at",
 ];
 

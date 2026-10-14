@@ -239,7 +239,7 @@ fn functions_of_call(word: &str) -> &'static [&'static str] {
 			crate::wasm_emitter::list_ops::RETURNED_ERROR,
 		],
 		LIST_DROP_LAST => &[LIST_DROP_LAST],
-		crate::declaration_forms::LIST_BECOME => &[crate::declaration_forms::LIST_BECOME],
+		crate::list_mutations::LIST_BECOME => &[crate::list_mutations::LIST_BECOME],
 		crate::wasm_emitter::library_ops::LIST_SORTED_BY => &[crate::wasm_emitter::library_ops::LIST_SORTED_BY],
 		REMOVED_VALUE_CALL => &[MAP_GET_OR, MAP_WITHOUT],
 		INSERT_AT_CALL | INSERT_EITHER_CALL => &[INSERT_AT_CALL],

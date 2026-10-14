@@ -3,7 +3,7 @@
 //! Node is a copy, so the two would part as soon as either changes: such a list stays the Node list every holder shares.
 //! Reading it as a whole (`count xs`, `print xs`, a function that never changes its parameter) is no holding.
 
-use crate::declaration_forms::is_list_mutating_method;
+use crate::list_mutations::is_list_mutating_method;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -131,10 +131,10 @@ impl<'n> Holders<'_, 'n> {
 
 /// The calls that change the list they are given: what `xs.pop()`, `xs.insert(…)` and `xs.remove(v)` lower to
 const IN_PLACE_CALLS: [&str; 5] = [
-	crate::declaration_forms::LIST_DROP_LAST,
-	crate::declaration_forms::LIST_BECOME,
-	crate::declaration_forms::INSERT_AT_CALL,
-	crate::declaration_forms::INSERT_EITHER_CALL,
+	crate::list_mutations::LIST_DROP_LAST,
+	crate::list_mutations::LIST_BECOME,
+	crate::list_mutations::INSERT_AT_CALL,
+	crate::list_mutations::INSERT_EITHER_CALL,
 	crate::library_words::MAP_WITHOUT,
 ];
 

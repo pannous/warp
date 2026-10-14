@@ -801,7 +801,7 @@ fn with_object_words(node: Node, objects: &Objects) -> Node {
 fn is_field_place(place: &Node, op: &Op, rest: &Node) -> bool {
 	let mutates = match op {
 		Op::Dot => {
-			matches!(rest.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| crate::declaration_forms::is_list_mutating_method(&word.drop_meta().name())))
+			matches!(rest.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| crate::list_mutations::is_list_mutating_method(&word.drop_meta().name())))
 		}
 		_ => *op == Op::Assign || op.is_compound_assign(),
 	};

@@ -127,8 +127,11 @@ mod list_views;
 pub use booleans::*;
 pub use checks::*;
 pub use counting::*;
-// the declaration and list forms the checks and the inference know (lowering/definitions/declaration_forms.rs)
+// the declaration and list forms the checks and the inference know (lowering/definitions/declaration_forms.rs,
+// lowering/collections/list_mutations.rs and filled_lists.rs)
 use crate::lowering::declaration_forms::*;
+use crate::lowering::filled_lists::*;
+use crate::lowering::list_mutations::*;
 pub(crate) use imports::signature_kind;
 pub use imports::*;
 pub use inference::*;

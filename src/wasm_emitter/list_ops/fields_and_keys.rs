@@ -1237,7 +1237,7 @@ impl WasmGcEmitter {
 		// removed_value(collection, key): what `collection.remove(key)` gives, of a map the key's value (ø if absent), of
 		// a list the list itself, which map_without then changes (the static kinds don't tell a map from a list)
 		self.runtime_function(
-			crate::declaration_forms::REMOVED_VALUE_CALL,
+			crate::list_mutations::REMOVED_VALUE_CALL,
 			vec![node_ref, node_ref],
 			vec![node_ref],
 			vec![],

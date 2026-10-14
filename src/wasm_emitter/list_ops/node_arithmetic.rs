@@ -693,7 +693,7 @@ impl WasmGcEmitter {
 
 	/// `n times text` and `text * n`: the text n times, joined
 	pub(in crate::wasm_emitter) fn emit_text_repeat(&mut self, func: &mut Function, text: &Node, count: &Node) {
-		let copies = crate::declaration_forms::filled_list(
+		let copies = crate::filled_lists::filled_list(
 			count.clone(),
 			&Node::List(
 				vec![text.clone()],

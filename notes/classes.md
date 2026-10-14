@@ -209,7 +209,7 @@ pair `[pop·value, self]`; `s.pop()` of a variable is `(pop·result = pop(s); s 
 (class_methods Change::GivingValue; a changing method ends in a value unless its last statement assigns or appends).
 A method named like a list mutation (pop, push, add, remove, insert, append) is renamed `method·pop` like a type-word
 method, but called so only on what holds an instance (a variable assigned one, `p:Stack`, self) or bare in its class
-body: `items.pop()` and `xs.pop()` of lists stay list mutations. `s.xs.pop()` pops a list field (declaration_forms
+body: `items.pop()` and `xs.pop()` of lists stay list mutations. `s.xs.pop()` pops a list field (list_mutations
 popped_list takes any place, as add/insert did).
 
 Instances held as Nodes (classes-17): a field read by name of an instance that is no struct variable (`for p in ps
