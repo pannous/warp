@@ -337,7 +337,7 @@ pub(super) struct Operands<'a> {
 pub(super) fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Option<String>) {
 	let recurse = |child: Node| with_operator_calls(child, operands).0;
 	match node {
-		certainty if crate::uncertain::certainty_parts(&certainty).is_some() => {
+		certainty if crate::numbers::uncertain::certainty_parts(&certainty).is_some() => {
 			(with_certain_amounts(&certainty, operands), None)
 		}
 		sum if summed_quantities(&sum, operands).is_some() => {
@@ -345,7 +345,7 @@ pub(super) fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Opt
 				with_operator_calls(summed_quantities(&sum, operands).expect("guarded").clone(), operands).0;
 			(
 				quantities_reduced(quantities),
-				Some(crate::units::RUN_TIME_QUANTITY.to_string()),
+				Some(crate::numbers::units::RUN_TIME_QUANTITY.to_string()),
 			)
 		}
 		Node::Key(left, op, right) if OPERATOR_METHODS.iter().any(|(known, _)| *known == op) => {
@@ -372,18 +372,18 @@ pub(super) fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Opt
 			}
 		}
 		// `q as km/h`, `q in m` of a run-time quantity q: its conversion `q.to("km/h")` (card quantity-falls)
-		conversion if crate::units::conversion(&conversion).is_some() => {
-			let (quantity, units) = crate::units::conversion(&conversion)
+		conversion if crate::numbers::units::conversion(&conversion).is_some() => {
+			let (quantity, units) = crate::numbers::units::conversion(&conversion)
 				.map(|(quantity, units)| (quantity.clone(), units))
 				.expect("guarded");
 			let (quantity, class) = with_operator_calls(quantity, operands);
-			let run_time = Some(crate::units::RUN_TIME_QUANTITY);
+			let run_time = Some(crate::numbers::units::RUN_TIME_QUANTITY);
 			match class.or_else(|| operand_class(&quantity, operands)).as_deref() == run_time {
 				true => (
 					method_call(
 						quantity,
 						CONVERSION_METHOD,
-						Node::Text(crate::units::unit_suffix(&units)),
+						Node::Text(crate::numbers::units::unit_suffix(&units)),
 					),
 					run_time.map(str::to_string),
 				),
@@ -494,7 +494,7 @@ fn dispatched_operator(left: Node, op: Op, right: Node, operands: &Operands) -> 
 /// `rope certainly > 4 m` of a run-time quantity rope: its amount and the other's in the same base units compare, a ±
 /// amount as the interval it is; `Quantity.more` would answer a plain yes (card quantity-tolerance)
 pub(super) fn with_certain_amounts(certainty: &Node, operands: &Operands) -> Node {
-	let (word, ordering) = crate::uncertain::certainty_parts(certainty).expect("guarded");
+	let (word, ordering) = crate::numbers::uncertain::certainty_parts(certainty).expect("guarded");
 	let Node::Key(left, op, right) = ordering.drop_meta() else {
 		unreachable!("certainty_parts takes orderings")
 	};
@@ -502,7 +502,7 @@ pub(super) fn with_certain_amounts(certainty: &Node, operands: &Operands) -> Nod
 	let (right, right_class) = with_operator_calls(right.as_ref().clone(), operands);
 	let class = class.or_else(|| operand_class(&left, operands));
 	let (left, class, right) = with_run_time_units(left, class, right, right_class, operands);
-	let compared = match class.as_deref() == Some(crate::units::RUN_TIME_QUANTITY) {
+	let compared = match class.as_deref() == Some(crate::numbers::units::RUN_TIME_QUANTITY) {
 		true => {
 			let comparable = call(SAME_DIMENSION, vec![left.clone(), right, text("compare")]);
 			key(amount_of(left), *op, amount_of(comparable))
@@ -518,7 +518,8 @@ pub(super) fn summed_quantities<'n>(node: &'n Node, operands: &Operands) -> Opti
 	let Node::List(items, Bracket::Square, _) = list.drop_meta() else {
 		return None;
 	};
-	let is_quantity = |item: &Node| operand_class(item, operands).as_deref() == Some(crate::units::RUN_TIME_QUANTITY);
+	let is_quantity =
+		|item: &Node| operand_class(item, operands).as_deref() == Some(crate::numbers::units::RUN_TIME_QUANTITY);
 	(!items.is_empty() && items.iter().all(is_quantity)).then_some(list)
 }
 
@@ -550,7 +551,7 @@ pub(super) fn quantities_reduced(quantities: Node) -> Node {
 	Node::meta(
 		reduced,
 		Node::data(crate::lowering::traits::TypedAs(
-			crate::units::RUN_TIME_QUANTITY.to_string(),
+			crate::numbers::units::RUN_TIME_QUANTITY.to_string(),
 		)),
 	)
 }
@@ -577,14 +578,17 @@ pub(super) fn with_run_time_units(
 	right_class: Option<String>,
 	operands: &Operands,
 ) -> (Node, Option<String>, Node) {
-	let run_time = Some(crate::units::RUN_TIME_QUANTITY);
+	let run_time = Some(crate::numbers::units::RUN_TIME_QUANTITY);
 	let lifted_left = class.is_none() && right_class.or_else(|| operand_class(&right, operands)).as_deref() == run_time;
-	let (left, class) = match lifted_left.then(|| crate::units::as_run_time_quantity(&left)).flatten() {
+	let (left, class) = match lifted_left
+		.then(|| crate::numbers::units::as_run_time_quantity(&left))
+		.flatten()
+	{
 		Some(quantity) => (quantity, run_time.map(str::to_string)),
 		None => (left, class),
 	};
 	let right = match class.as_deref() == run_time {
-		true => crate::units::as_run_time_quantity(&right).unwrap_or(right),
+		true => crate::numbers::units::as_run_time_quantity(&right).unwrap_or(right),
 		false => right,
 	};
 	(left, class, right)
@@ -619,7 +623,7 @@ pub(super) fn is_text(node: &Node) -> bool {
 
 /// An operand joining a text: a run-time quantity as `str(q)`
 pub(super) fn joined_text(operand: Node, class: Option<String>) -> Node {
-	match class.as_deref() == Some(crate::units::RUN_TIME_QUANTITY) {
+	match class.as_deref() == Some(crate::numbers::units::RUN_TIME_QUANTITY) {
 		true => call(TEXT_WORD, vec![operand]),
 		false => operand,
 	}

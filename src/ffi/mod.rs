@@ -142,7 +142,7 @@ pub fn undefined_function_diagnostic(call: &crate::node::Node, name: &str) -> cr
 
 /// The error of a call of `import name from 'library'` whose headers are missing or do not declare it
 pub fn unresolved_import_message(name: &str, library: &str) -> String {
-	let headers = crate::ffi_parser::find_library_headers(library);
+	let headers = crate::formats::ffi_parser::find_library_headers(library);
 	match headers.is_empty() {
 		true => {
 			format!("{name} is imported from {library}, but no header of {library} is found in the include directories")

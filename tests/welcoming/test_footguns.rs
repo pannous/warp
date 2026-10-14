@@ -730,7 +730,7 @@ fn test_division_by_zero_is_extended_rational() {
 
 #[test]
 fn test_sql_holes_are_parameters_not_text() {
-	use warp::injection::{template, Language::Sql};
+	use warp::text::injection::{template, Language::Sql};
 	let query = template(Sql, "SELECT * FROM t WHERE name = $name AND age > ${min+1}").unwrap();
 	assert_eq!(query.query(), Some("SELECT * FROM t WHERE name = ? AND age > ?"));
 	assert_eq!(query.holes.len(), 2);
@@ -757,7 +757,7 @@ fn test_sql_from_built_text_is_rejected() {
 
 #[test]
 fn test_shell_holes_are_whole_arguments() {
-	use warp::injection::{template, Language::Shell};
+	use warp::text::injection::{template, Language::Shell};
 	let command = template(Shell, "rm -f $file").unwrap();
 	assert_eq!(command.text, [Some("rm".to_string()), Some("-f".to_string()), None]);
 	assert_eq!(command.holes, [Node::Symbol("file".into())]);
@@ -1072,13 +1072,13 @@ fn test_fuel_budget_can_be_raised() {
 	const { assert!(warp::util::DEFAULT_FUEL >= 1_000_000_000, "the default is generous") };
 }
 
-fn effects(code: &str, function: &str) -> warp::effects::EffectSet {
-	warp::effects::effects_of(code, function).unwrap_or_else(|| panic!("{function} unresolved in {code}"))
+fn effects(code: &str, function: &str) -> warp::analyzer::effects::EffectSet {
+	warp::analyzer::effects::effects_of(code, function).unwrap_or_else(|| panic!("{function} unresolved in {code}"))
 }
 
 #[test] // Koka's div: recursion that shrinks a parameter toward a guarded base case is total
 fn test_shrinking_recursion_is_total() {
-	use warp::effects::EffectSet;
+	use warp::analyzer::effects::EffectSet;
 	for (code, name) in [
 		("fib(n) := n<2 ? n : fib(n-1)+fib(n-2)", "fib"),
 		("fac(n) := n<2 ? 1 : n*fac(n-1)", "fac"),
@@ -1097,7 +1097,7 @@ fn test_shrinking_recursion_is_total() {
 
 #[test] // when unsure, Div: unguarded, unbounded (fac(-1)), wrong-way and mutual recursion may diverge
 fn test_unproven_recursion_may_diverge() {
-	use warp::effects::Effect::Div;
+	use warp::analyzer::effects::Effect::Div;
 	for (code, name) in [
 		("f(n) := f(n)", "f"),
 		("f(n) := n==0 ? 0 : n*f(n-1)", "f"),
@@ -1113,7 +1113,7 @@ fn test_unproven_recursion_may_diverge() {
 
 #[test] // a while loop has an unknown condition in general: Div
 fn test_while_loop_may_diverge() {
-	use warp::effects::Effect::Div;
+	use warp::analyzer::effects::Effect::Div;
 	assert!(effects("i=0; while i<3 { i++ }; i", "main").contains(Div));
 	assert!(!effects("x=3; x*2", "main").contains(Div));
 }

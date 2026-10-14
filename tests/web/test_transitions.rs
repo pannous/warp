@@ -2,8 +2,8 @@
 //! is, since P188 (user: stay close to HTML and CSS, card web-css), the CSS transition of opacity and transform and the
 //! starting style it enters from, by which the page animates the element in when it appears, out when it goes and, in a
 //! keyed list, to its new place (markup-transitions.js, FLIP)
-use warp::markup::to_html;
 use warp::wasm_emitter::eval;
+use warp::web::markup::to_html;
 
 fn html_of(code: &str) -> String {
 	to_html(&eval(code))

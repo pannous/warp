@@ -6,9 +6,9 @@
 //! `return`); effects, divergence aside, are never cached.
 
 use super::nodes::{is_call_head, key};
+use crate::analyzer::effects::{Effect, EffectReport, EffectSet};
 use crate::analyzer::{captured_variables, collect_variables, param_kind, Scope};
-use crate::context::UserFunctionDef;
-use crate::effects::{Effect, EffectReport, EffectSet};
+use crate::compiler::context::UserFunctionDef;
 use crate::library_words::substitute;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;

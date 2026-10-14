@@ -5,7 +5,7 @@ use super::test_host_parts::part_files;
 
 fn std_modules(code: &str) -> Vec<String> {
 	let module = warp::pipeline::for_a_page(|| warp::pipeline::compile(code)).expect("compiled");
-	warp::host_parts::std_modules_of(&module.bytes).expect("the std modules")
+	warp::host::host_parts::std_modules_of(&module.bytes).expect("the std modules")
 }
 
 #[test]

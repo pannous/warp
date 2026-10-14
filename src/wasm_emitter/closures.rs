@@ -9,7 +9,7 @@
 use super::WasmGcEmitter;
 use crate::analyzer::param_kind;
 use crate::closures::closure_call_arity;
-use crate::context::UserFunctionDef;
+use crate::compiler::context::UserFunctionDef;
 use crate::node::{Bracket, Node, Separator};
 use crate::type_kinds::Kind;
 use std::collections::HashMap;
@@ -20,7 +20,7 @@ use ValType::Ref;
 
 const ENTRY_PREFIX: &str = "closure_entry_";
 /// closure_rebuild(name, captured) and closure_captured(f): what a host needs to carry a closure to another instance of
-/// the module (a task, src/tasks.rs): its target's name and its captured values; the entry is found again by name
+/// the module (a task, src/host/tasks.rs): its target's name and its captured values; the entry is found again by name
 pub const CLOSURE_REBUILD: &str = "closure_rebuild";
 pub const CLOSURE_CAPTURED: &str = "closure_captured";
 /// closure_apply(f, arguments): f called with the items of the list `arguments`, as many as f takes (missing ones ø,
@@ -98,7 +98,7 @@ impl WasmGcEmitter {
 				.iter()
 				.map(|param| (param.name.clone(), param.annotation.clone()))
 				.collect();
-			let form = crate::function_equality::written_form(target, &parameters, &function.body);
+			let form = crate::compiler::function_equality::written_form(target, &parameters, &function.body);
 			let forms = &mut self.closures.written_forms;
 			let index = forms.iter().position(|known| *known == form).unwrap_or_else(|| {
 				forms.push(form);

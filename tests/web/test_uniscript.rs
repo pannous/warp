@@ -201,6 +201,6 @@ fn spelling_back_round_trips() {
 /// uniscript.wasm (never `cargo run` in the package: that built it into the shared cargo target directory)
 #[test]
 fn the_index_matches_the_readable_entities() {
-	let check = warp::package_tools::run_package_tool("uniscript", &["check"]).unwrap();
+	let check = warp::modules::package_tools::run_package_tool("uniscript", &["check"]).unwrap();
 	assert!(check.success(), "{}{}", check.stdout, check.stderr);
 }

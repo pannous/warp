@@ -334,7 +334,7 @@ fn only_time_words(node: &Node) -> bool {
 		Node::Symbol(word) => is_time_word(word),
 		// a field name: `2024-02-29.month`
 		Node::Key(owner, Op::Dot, field) if matches!(field.drop_meta(), Node::Symbol(_)) => only_time_words(owner),
-		Node::Key(left, Op::As, unit) if matches!(unit.drop_meta(), Node::Symbol(word) if crate::units::names_unit(word)) => {
+		Node::Key(left, Op::As, unit) if matches!(unit.drop_meta(), Node::Symbol(word) if crate::numbers::units::names_unit(word)) => {
 			only_time_words(left)
 		}
 		Node::Key(left, _, right) => only_time_words(left) && only_time_words(right),
@@ -350,7 +350,7 @@ fn converted_to_unit(items: &[Node]) -> bool {
 	match items {
 		[_, keyword, unit] => {
 			(keyword.is_symbol("in") || keyword.is_symbol("as"))
-				&& matches!(unit.drop_meta(), Node::Symbol(word) if crate::units::names_unit(word) || is_time_word(word))
+				&& matches!(unit.drop_meta(), Node::Symbol(word) if crate::numbers::units::names_unit(word) || is_time_word(word))
 		}
 		_ => false,
 	}
@@ -661,7 +661,7 @@ fn converted(duration: &Duration, unit: &Node) -> Result<Value, String> {
 	let Node::Symbol(word) = unit.drop_meta() else {
 		return Err(format!("{duration} converts to a time unit, got {}", unit.serialize()));
 	};
-	match crate::units::duration_in(duration, word) {
+	match crate::numbers::units::duration_in(duration, word) {
 		Some(Node::Error(message)) => Err(message.to_string()),
 		Some(node) => Ok(Value::Converted(node)),
 		None => Err(format!("{duration} converts to a time unit like minutes, got {word}")),

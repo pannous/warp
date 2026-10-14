@@ -453,8 +453,8 @@ impl WasmGcEmitter {
 		// write_back), not to a typed array
 		let changes_arguments = |callee: &str| {
 			self.ctx.ffi_imports.get(callee).is_some_and(|import| {
-				crate::wasm_modules::is_module_path(import.library)
-					&& crate::wasm_modules::exports(import.library)
+				crate::modules::wasm_modules::is_module_path(import.library)
+					&& crate::modules::wasm_modules::exports(import.library)
 						.get(import.name)
 						.is_some_and(|export| export.node_result.is_some())
 			})
@@ -654,7 +654,7 @@ impl WasmGcEmitter {
 			as_locals
 				.locals
 				.entry(name.clone())
-				.or_insert_with(|| crate::local::Local {
+				.or_insert_with(|| crate::compiler::local::Local {
 					is_param: false,
 					..global.clone()
 				});

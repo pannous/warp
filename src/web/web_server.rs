@@ -158,7 +158,7 @@ impl Answer {
 			other => Answer {
 				status: 200,
 				content_type: JSON_TYPE,
-				body: crate::foreign::json_of(&without_classes(other))
+				body: crate::modules::foreign::json_of(&without_classes(other))
 					.to_string()
 					.into_bytes(),
 				headers: vec![],
@@ -193,7 +193,7 @@ impl Answer {
 	/// A page with `message` shown at its top, as an alert: the first thing after <body>, else before the whole page
 	fn with_message(self, message: &str) -> Answer {
 		let page = String::from_utf8_lossy(&self.body).to_string();
-		let alert = format!("<p role=\"alert\">{}</p>", crate::markup::escaped(message));
+		let alert = format!("<p role=\"alert\">{}</p>", crate::web::markup::escaped(message));
 		let at = page.find(PAGE_BODY_TAG).map_or(0, |start| start + PAGE_BODY_TAG.len());
 		Answer {
 			body: format!("{}{alert}{}", &page[..at], &page[at..]).into_bytes(),
@@ -414,7 +414,7 @@ pub fn value_of_body(body: String) -> Node {
 	serde_json::from_str::<serde_json::Value>(&body)
 		.ok()
 		.filter(|value| value.is_object() || value.is_array())
-		.map_or(Node::Text(body), |value| crate::foreign::node_of(&value))
+		.map_or(Node::Text(body), |value| crate::modules::foreign::node_of(&value))
 }
 
 /// `/rpc/route%C2%B7data%C2%B70` → `/rpc/route·data·0` (a browser's fetch encodes the path); an invalid escape stays

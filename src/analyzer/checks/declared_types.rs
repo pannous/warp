@@ -605,7 +605,7 @@ pub(crate) fn misfit_item<'a>(element: &str, value: &'a Node) -> Option<(&'a Nod
 }
 
 pub(super) fn out_of_width(element: &str, item: &Node) -> Option<Kind> {
-	let width = crate::fixed_width::fixed_width(element)?;
+	let width = crate::numbers::fixed_width::fixed_width(element)?;
 	let Node::Number(Number::Int(value)) = item.drop_meta() else {
 		return None;
 	};

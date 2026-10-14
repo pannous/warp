@@ -72,7 +72,7 @@ pub fn lower(node: Node) -> Node {
 }
 
 /// The program has a variable, parameter or loop variable of that name, in any function
-fn names_variable(node: &Node, context: &crate::context::Context, names: &Names, name: &str) -> bool {
+fn names_variable(node: &Node, context: &crate::compiler::context::Context, names: &Names, name: &str) -> bool {
 	let is_parameter = context
 		.user_functions
 		.values()
@@ -679,7 +679,7 @@ fn unit_names(pattern: &Node, program: &Node, warnings: &mut Vec<Diagnostic>) {
 			for (_, part) in values {
 				let unit = part
 					.symbol_name()
-					.and_then(|name| Some((name, crate::units::unit_long_name(name, program)?)));
+					.and_then(|name| Some((name, crate::numbers::units::unit_long_name(name, program)?)));
 				match unit {
 					Some((name, unit)) => warnings.push(
 						Diagnostic::at(

@@ -7,7 +7,7 @@
 
 use super::nodes::{call, children_rewritten, is_type_word, key, named_assignment, Counter};
 use crate::analyzer::call_name;
-use crate::context::Context;
+use crate::compiler::context::Context;
 use crate::diagnostic::Diagnostic;
 use crate::library_words::substitute;
 use crate::node::{symbol, Bracket, Node, Separator};

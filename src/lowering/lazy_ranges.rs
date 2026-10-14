@@ -7,8 +7,8 @@
 //! variable a list, collected once (declaration_forms.rs).
 
 use super::nodes::{call, key, Counter};
+use crate::analyzer::effects::call_arguments;
 use crate::analyzer::{call_name, TEMPORARY_SEPARATOR};
-use crate::effects::call_arguments;
 use crate::library_words::substitute;
 use crate::memoization::definition_parts;
 use crate::node::{Bracket, Node, Separator};

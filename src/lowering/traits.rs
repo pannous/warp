@@ -967,14 +967,14 @@ fn instance_signatures(
 	traits: &Traits,
 ) -> HashMap<String, Vec<(String, Option<String>)>> {
 	let context = crate::analyzer::function_definitions(node);
-	let declared = |param: &crate::context::Param| {
+	let declared = |param: &crate::compiler::context::Param| {
 		param
 			.annotation
 			.as_ref()
 			.map(Node::name)
 			.filter(|type_name| names_classes(type_name, registry) || traits.element_trait(type_name).is_some())
 	};
-	let signature = |function: &crate::context::UserFunctionDef| {
+	let signature = |function: &crate::compiler::context::UserFunctionDef| {
 		function
 			.params
 			.iter()

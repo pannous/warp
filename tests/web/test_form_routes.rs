@@ -1,7 +1,7 @@
 //! card g_mSEw: a form names the route it sends to as the route is written, `form post "/todos" { … }`, instead of
 //! spelling the attributes `form{ method:"post" action:"/todos" … }`
-use warp::markup::to_html;
 use warp::wasm_emitter::eval;
+use warp::web::markup::to_html;
 
 const POSTING: &str = "<form method=\"post\" action=\"/todos\"><button>add</button></form>";
 

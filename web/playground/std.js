@@ -1,4 +1,4 @@
-// std_pure / std_io(module, member, arguments): a word of lib/<module>.warp (src/std_adapters.rs), by the adapters the
+// std_pure / std_io(module, member, arguments): a word of lib/<module>.warp (src/modules/std_adapters.rs), by the adapters the
 // parts add (host-hashes.js hash, json and regex; host-files.js file, net, store, os and table; host-sound.js sound and midi). It starts both parts, so it
 // holds function declarations only: a site loading both gets it twice (card web-bundle-growth)
 

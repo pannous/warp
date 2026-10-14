@@ -124,7 +124,7 @@
 - Other gaps: `3 == 3.0000000000000001` still true
   (literal parsed to f64 first); `law`/Lean export still treats `/` as unsupported ("yields a Float" comment in law/lean.rs is stale).
 ## Work area "injection" (2026-09-27)
-- Fixed (verified via CI on claude/footguns-injection): `src/injection.rs` lowers `sql "…"` / `sh "…"` before effects and
+- Fixed (verified via CI on claude/footguns-injection): `src/text/injection.rs` lowers `sql "…"` / `sh "…"` before effects and
   emission. SQL holes (`$name`, `${expr}`, `$$` = `$`) become `?` parameters, the value is `(query param…)`; shell templates
   become an argv `(program arg…)` where a hole is one whole argument. Diagnostics: non-literal template, hole inside SQL
   quotes, shell operators/quotes, hole glued into a word, `execute`/`exec` of anything but a template of its language.
@@ -256,7 +256,7 @@ User decision 2026-09-28: exact numbers beyond Q with π, ℯ and square/cube ro
   `Generator {Pi, Euler, Imaginary, SquareRoot(r), CubeRoot(r)}`, normal form by construction (√a·√b = √(ab) reduced,
   ⅈ² = -1, π/ℯ any integer exponent). Mirrors ~/dev/script/lean4/hyper `HyperGeneral`. `Real = Exact | Approx(f64)`,
   carried as `Number::Real(&'static Real)` (leaked like BigInt to keep Number Copy). Rationals never take this form.
-- `src/real.rs` evaluates constant programs that mention a generator (π, pi, τ, ℯ, euler, ⅈ, √, sqrt, ∛, cbrt,
+- `src/numbers/real.rs` evaluates constant programs that mention a generator (π, pi, τ, ℯ, euler, ⅈ, √, sqrt, ∛, cbrt,
   sin/cos/tan/ln/exp) at compile time, like time.rs does for dates. Anything else it does not understand (functions, loops,
   imports, `global`) falls back to the WASM path, where exact reals are lowered to f64 exactly as before (π was always
   float(PI) in the parser). So `f(x):=x*x; f(√2)` is still f64: a WASM GC representation of `Exact` is the next step.
@@ -282,7 +282,7 @@ User decision 2026-09-28: exact numbers beyond Q with π, ℯ and square/cube ro
   `while 1 {}` used to fail at compile time (`cannot extract a numeric value from ø`): an empty body `{}` (parsed as ø)
   is now a spinning loop. Tests: test_infinite_loop_runs_out_of_fuel, test_fuel_budget_can_be_raised. The CI test step
   took about as long as before (5m07s, the same as the preceding green runs).
-- Implemented: `Div` effect (src/effects.rs). A function has Div if its body has a `while` (unless the condition is literally
+- Implemented: `Div` effect (src/analyzer/effects.rs). A function has Div if its body has a `while` (unless the condition is literally
   false), if it recurses through another function (mutual recursion), or if its self-recursion has no measure: a parameter
   that each recursive call moves by a positive literal toward a literal bound known from its guard (`n<2 ? n : f(n-1)`,
   `n>0 ? f(n-1) : 0`, `n>=10 ? n : f(n+1)`), and that the body never assigns. Div propagates to callers; `f ! Pure` then
@@ -452,7 +452,7 @@ Warp: solved. `fetch "http://127.0.0.1:9/"` → Error "fetch http://127.0.0.1:9/
 "timeout after 500 ms". Tests: test_failed_fetch_is_an_error_value, test_fetch_result_needs_a_check, test_fetch_times_out_loudly.
 
 ## Work area "function equality" (2026-09-28)
-- Implemented (src/function_equality.rs, runs in `eval_parsed` before analysis): `f == g` / `f != g` on two named
+- Implemented (src/compiler/function_equality.rs, runs in `eval_parsed` before analysis): `f == g` / `f != g` on two named
   top-level functions is decided in fragments, in this order:
   1. structure up to renaming: parameters become positions, self-reference becomes `$self`, the content hash of the
      normalized body plus parameter domains is compared (Unison). `f(x):=x+1; g(y):=y+1; f==g` → true, also recursive

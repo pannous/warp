@@ -1,7 +1,7 @@
 //! Compiler diagnostics: what went wrong, where, and how to fix it.
 //! Errors become `Node::Error` values (never panics); warnings (lints) are reported and compilation continues.
 
-use crate::compile_context;
+use crate::compiler::compile_context;
 use crate::fixits::Fix;
 use crate::node::Node;
 use std::fmt;
@@ -176,7 +176,7 @@ const UNKNOWN_POSITION: &str = " at 0:0";
 const FIX_SEPARATOR: &str = "; fix: ";
 
 /// `message` at `position`, before its fix, unless it names a position already
-pub fn located_at(message: String, position: &crate::meta::LineInfo) -> String {
+pub fn located_at(message: String, position: &crate::compiler::meta::LineInfo) -> String {
 	let at = format!(" at {}", position.place());
 	if message.contains(UNKNOWN_POSITION) {
 		return message.replacen(UNKNOWN_POSITION, &at, 1);
@@ -196,7 +196,7 @@ pub fn first_located_error(node: &Node) -> Option<Node> {
 	located_error_below(node, None)
 }
 
-fn located_error_below(node: &Node, around: Option<&crate::meta::LineInfo>) -> Option<Node> {
+fn located_error_below(node: &Node, around: Option<&crate::compiler::meta::LineInfo>) -> Option<Node> {
 	let own = node.get_lineinfo();
 	let around = own.as_ref().or(around);
 	let below = |part: &Node| located_error_below(part, around);
@@ -373,7 +373,7 @@ pub fn position(node: &Node) -> Option<(usize, usize)> {
 }
 
 /// The position `position` finds, with the module file it is in
-pub fn line_info(node: &Node) -> Option<crate::meta::LineInfo> {
+pub fn line_info(node: &Node) -> Option<crate::compiler::meta::LineInfo> {
 	if let Some(info) = node.get_lineinfo() {
 		return Some(info);
 	}
@@ -393,7 +393,7 @@ impl fmt::Display for Diagnostic {
 			write!(
 				f,
 				" at {}",
-				crate::meta::place_text(self.file.as_deref(), self.line, self.column)
+				crate::compiler::meta::place_text(self.file.as_deref(), self.line, self.column)
 			)?;
 		}
 		if let Some(fix) = &self.fix {
@@ -604,7 +604,7 @@ fn print(diagnostic: &Diagnostic) {
 					" {}",
 					paint(
 						Color::Gray,
-						&crate::meta::place_text(diagnostic.file.as_deref(), line, diagnostic.column)
+						&crate::compiler::meta::place_text(diagnostic.file.as_deref(), line, diagnostic.column)
 					)
 				),
 			};
@@ -1071,8 +1071,9 @@ pub fn educate_once(topic: &str, written: &str, preferred: &str, reason: &str) {
 pub fn advise_once(topic: &str, written: &str, preferred: &str, reason: &str, fix: Option<crate::fixits::Fix>) {
 	let silenced = is_quiet()
 		|| is_acknowledged(topic, written)
-		|| silenced_by_comment(crate::compile_context::read(|context| context.hint_position.line))
-		|| NOTES_SHOWN.with(|shown| shown.borrow().contains(topic));
+		|| silenced_by_comment(crate::compiler::compile_context::read(|context| {
+			context.hint_position.line
+		})) || NOTES_SHOWN.with(|shown| shown.borrow().contains(topic));
 	if !silenced {
 		crate::normalize::show_hint(written, preferred, reason, fix, topic);
 	}

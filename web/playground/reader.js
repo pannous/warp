@@ -9,7 +9,7 @@ const KIND_FLOAT = "2";
 const KIND_MASK = 0xFFn;
 const KIND_FUNCTION = 16n; // src/type_kinds.rs Kind::Function: a closure
 const KIND_SYMBOL = "5";
-const CYCLE_MARK = "…"; // src/wasm_reader.rs CYCLE_MARK: a node met again inside itself (objects pointing to each other)
+const CYCLE_MARK = "…"; // src/run/wasm_reader.rs CYCLE_MARK: a node met again inside itself (objects pointing to each other)
 const utf8Decoder = new TextDecoder("utf-8", { fatal: false });
 
 function readText(module, pointer, length) {

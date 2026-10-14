@@ -17,10 +17,10 @@ fn program(rest: &str) -> String {
 fn a_page_of_rows_reads_only_the_rows_its_keys_point_to() {
 	eval(&program(SEED));
 	let read = |rest: &str, expected: &str, rows: usize| {
-		let before = warp::database::rows_read();
+		let before = warp::host::database::rows_read();
 		is!(&program(rest), expected);
 		assert_eq!(
-			warp::database::rows_read(),
+			warp::host::database::rows_read(),
 			before + rows,
 			"{rest} read other rows than its {rows}"
 		);

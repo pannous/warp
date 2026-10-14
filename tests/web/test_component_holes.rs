@@ -2,7 +2,7 @@
 //! instance's elements holding a computed part are `page·hole·<path>`, the path running through the instance's root
 //! element; `page·holes` renders once, and each hole is its element in that rendering, the instance's own state shown.
 //! Only a program rendering itself (the playground's) has them
-use warp::wasm_reader::{read_exports_after_main, Imports};
+use warp::run::wasm_reader::{read_exports_after_main, Imports};
 
 const FRUIT: &str = r#"def Counter(label, start) {
 	count = start
@@ -35,8 +35,8 @@ fn a_hole_is_its_element_of_the_rendering() {
 		&["page·holes", "page·hole·1·1", "page·hole·2·1"],
 	)
 	.expect("the holes read");
-	assert_eq!(warp::markup::to_html(&read[1]), "<p>Apples: 1</p>");
-	assert_eq!(warp::markup::to_html(&read[2]), "<p>Pears: 5</p>");
+	assert_eq!(warp::web::markup::to_html(&read[1]), "<p>Apples: 1</p>");
+	assert_eq!(warp::web::markup::to_html(&read[2]), "<p>Pears: 5</p>");
 }
 
 #[test]

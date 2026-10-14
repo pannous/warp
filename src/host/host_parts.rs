@@ -27,7 +27,7 @@ pub const GPU_WORDS: [&str; 5] = [
 /// The text of web/playground scripts, joined; empty without the native feature, where only the names are needed
 #[cfg(feature = "native")]
 macro_rules! script_text {
-	($($file:literal),+) => { concat!($(include_str!(concat!("../web/playground/", $file))),+) };
+	($($file:literal),+) => { concat!($(include_str!(concat!("../../web/playground/", $file))),+) };
 }
 #[cfg(not(feature = "native"))]
 macro_rules! script_text {

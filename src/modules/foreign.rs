@@ -1,6 +1,6 @@
 //! The host side of foreign_call(runtime, module, member, arguments) (lowering/foreign_modules.rs,
 //! notes/stdlib_connectors.md): python and js go to the bridge warp_runtime::foreign shares with executables (its
-//! children, JSON lines, handles and callbacks), components to src/components.rs; Nodes cross as JSON (json_of, node_of).
+//! children, JSON lines, handles and callbacks), components to src/modules/components.rs; Nodes cross as JSON (json_of, node_of).
 
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
@@ -53,7 +53,7 @@ pub fn call(
 	.map(|value| node_of(&value))
 }
 
-/// `lib.f(x)` of a component (src/components.rs), or `handle.method(x)` of a resource it gave: only calls
+/// `lib.f(x)` of a component (src/modules/components.rs), or `handle.method(x)` of a resource it gave: only calls
 fn component_call(module: &Node, member: &str, arguments: &Value) -> Result<Node, String> {
 	let receiver = match module.drop_meta() {
 		Node::Text(path) | Node::Symbol(path) => path.clone(),
@@ -68,8 +68,8 @@ fn component_call(module: &Node, member: &str, arguments: &Value) -> Result<Node
 		));
 	};
 	let result = match module.drop_meta() {
-		Node::Text(path) | Node::Symbol(path) => crate::components::call(path, member, arguments),
-		handle => crate::components::call_method(&json_of(handle), member, arguments),
+		Node::Text(path) | Node::Symbol(path) => crate::modules::components::call(path, member, arguments),
+		handle => crate::modules::components::call_method(&json_of(handle), member, arguments),
 	};
 	result
 		.map(|value| node_of(&value))

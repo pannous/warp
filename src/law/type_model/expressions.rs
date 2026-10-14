@@ -371,7 +371,7 @@ impl Exporter {
 			)),
 			Node::Symbol(name) if self.names.contains_key(name) => Ok(format!(".glob {}", quoted(name))),
 			// a unit word is a quantity of one unit (`2 km` parses as `2 * km`)
-			Node::Symbol(name) if crate::units::is_unit(name) => Ok(quantity_literal(name)),
+			Node::Symbol(name) if crate::numbers::units::is_unit(name) => Ok(quantity_literal(name)),
 			_ if map_entries(node).is_some() && self.classes.contains_key(MAP_CLASS) => {
 				self.instance(MAP_CLASS, map_entries(node).expect("a map"))
 			}

@@ -205,7 +205,7 @@ impl<'a> Loader<'a> {
 			.filter(|module| !self.program_std_modules.contains(*module))
 			.flat_map(|module| std_module_definitions(module).unwrap_or_default())
 			.collect();
-		crate::compile_context::change(|context| {
+		crate::compiler::compile_context::change(|context| {
 			let names = &mut context.module_definitions;
 			hidden.iter().for_each(|word| {
 				names.remove(*word);
@@ -314,7 +314,7 @@ impl<'a> Loader<'a> {
 					}),
 				};
 			}
-			if let Some(module) = self.find_with(name, &crate::wasm_modules::MODULE_EXTENSIONS) {
+			if let Some(module) = self.find_with(name, &crate::modules::wasm_modules::MODULE_EXTENSIONS) {
 				return Ok(self.use_wasm_module(&module, statement, import));
 			}
 			if import == Import::Use && package_repository(name).is_some() {
@@ -423,7 +423,7 @@ impl<'a> Loader<'a> {
 			})
 		};
 		self.std_definitions.extend(definitions.into_iter().map(qualified));
-		crate::compile_context::change(|context| {
+		crate::compiler::compile_context::change(|context| {
 			let names = &mut context.module_definitions;
 			prelude.iter().for_each(|word| {
 				names.remove(word);
@@ -464,14 +464,14 @@ impl<'a> Loader<'a> {
 			return Ok(vec![]);
 		}
 		let shown = shown_path(&path);
-		let module = crate::meta::parsing_file(&shown.to_string_lossy(), || WarpParser::parse(source));
+		let module = crate::compiler::meta::parsing_file(&shown.to_string_lossy(), || WarpParser::parse(source));
 		if let Some(failure) = module.first_error() {
 			return Err(crate::diagnostic::located_in_file(failure, &shown));
 		}
 		// classes insert_module_classes put in front of the program already: left out before the module's passes lower them
 		let classes_early = import == Import::Use && {
 			let path = path.canonicalize().unwrap_or_else(|_| path.clone());
-			crate::compile_context::read(|context| context.early_class_modules.contains(&path))
+			crate::compiler::compile_context::read(|context| context.early_class_modules.contains(&path))
 		};
 		let module = match classes_early {
 			true => Node::List(
@@ -496,7 +496,7 @@ impl<'a> Loader<'a> {
 					statements.into_iter().filter(is_declaration).collect(),
 					&self.program_variables,
 				);
-				crate::compile_context::change(|context| {
+				crate::compiler::compile_context::change(|context| {
 					context
 						.module_definitions
 						.extend(declarations.iter().filter_map(declared_name))
@@ -662,7 +662,7 @@ impl<'a> Loader<'a> {
 			other => other,
 		};
 		let entry = (import == Import::Include)
-			.then(|| crate::wasm_modules::entry_call(&path))
+			.then(|| crate::modules::wasm_modules::entry_call(&path))
 			.flatten();
 		std::iter::once(used).chain(entry).collect()
 	}

@@ -508,8 +508,9 @@ fn conversion_factor(table: &str, name: &str, stored_type: &str, column_type: &s
 			.position(|known| known.eq_ignore_ascii_case(sql_type))
 	};
 	let lossless = matches!((widening(stored_base), widening(base)), (Some(from), Some(to)) if from <= to);
-	let quantity =
-		|unit: &str| crate::units::static_units::unit_type(unit).ok_or_else(|| format!("{column}: {unit} is no unit"));
+	let quantity = |unit: &str| {
+		crate::numbers::units::static_units::unit_type(unit).ok_or_else(|| format!("{column}: {unit} is no unit"))
+	};
 	match (stored_unit, unit) {
 		(Some(stored_unit), Some(unit)) => {
 			let ((stored_quantity, _), (field_quantity, _)) = (quantity(stored_unit)?, quantity(unit)?);
@@ -558,7 +559,7 @@ fn column_of(field: &Node) -> Result<(String, String, String), String> {
 		"text" | "codepoint" => "TEXT".to_string(),
 		"" => String::new(),
 		// a unit field (`distance: km`) holds SI amounts; its column keeps the unit for migrations
-		unit if crate::units::static_units::unit_type(unit).is_some() => format!("{UNIT_COLUMN} {unit}"),
+		unit if crate::numbers::units::static_units::unit_type(unit).is_some() => format!("{UNIT_COLUMN} {unit}"),
 		other => {
 			return Err(format!(
 				"a field of type {other} is no column yet (notes/orm.md step 4: foreign keys)"
@@ -603,7 +604,7 @@ fn connection(file: &str) -> Result<Handle, String> {
 	let path = match file {
 		crate::database_tables::TABLES_FILE => IN_MEMORY.to_string(),
 		file => {
-			crate::sandbox::check_write(file)?;
+			crate::host::sandbox::check_write(file)?;
 			test_thread_copy(file).unwrap_or_else(|| file.to_string())
 		}
 	};

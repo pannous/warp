@@ -117,7 +117,7 @@ pub enum LibmSource {
 /// The libm functions the system headers declare (none from glibc, which declares them through macros)
 #[cfg(feature = "native")]
 pub fn libm_header_signatures() -> Vec<FfiHeaderSignature> {
-	crate::ffi_parser::find_library_headers(LIBM)
+	crate::formats::ffi_parser::find_library_headers(LIBM)
 		.iter()
 		.flat_map(|header| parse_header_file(header, LIBM))
 		.collect()
@@ -465,7 +465,7 @@ pub fn link_dynamic_library(
 	};
 
 	// Parse headers to discover function signatures
-	let header_paths = crate::ffi_parser::find_library_headers(lib_name);
+	let header_paths = crate::formats::ffi_parser::find_library_headers(lib_name);
 	if header_paths.is_empty() {
 		return Ok(0);
 	}
@@ -566,7 +566,7 @@ pub fn link_module_libraries(linker: &mut Linker<FfiState>, engine: &Engine, mod
 		let module_name = import.module();
 		// Skip built-in libraries that are already linked; libc beyond its built-in functions (toupper) is linked here
 		let built_in_libc = matches!(module_name, "c" | "libc") && HAND_LINKED_LIBC.contains(&import.name());
-		let wasm_module = crate::wasm_modules::is_module_path(module_name); // linked by wasm_modules::link
+		let wasm_module = crate::modules::wasm_modules::is_module_path(module_name); // linked by wasm_modules::link
 		if !built_in_libc
 			&& !wasm_module
 			&& !matches!(

@@ -5,7 +5,7 @@
 //! notes/closures.md describes the representation.
 
 use super::nodes::{call, children_rewritten, key, parameter_name};
-use crate::context::{Context, Param, UserFunctionDef};
+use crate::compiler::context::{Context, Param, UserFunctionDef};
 use crate::diagnostic::Diagnostic;
 use crate::lambdas::arrow_lambda;
 use crate::library_words::collect_assigned_names;
@@ -1162,7 +1162,7 @@ pub fn type_closure_calls(context: &mut Context) {
 
 /// A parameter nothing declares, demands or computes with may get any value (`is_space` as a value gets a text), not
 /// param_kind's Int
-fn known_param_kind(param: &crate::context::Param, body: &Node) -> Kind {
+fn known_param_kind(param: &crate::compiler::context::Param, body: &Node) -> Kind {
 	let mut in_arithmetic = false;
 	body.visit(&mut |node| {
 		if let Node::Key(left, op, right) = node.drop_meta() {

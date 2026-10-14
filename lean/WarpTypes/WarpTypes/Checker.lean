@@ -52,7 +52,7 @@ def evidentMisconversion (e : Expr) : Ty → Bool
   | _ => false
 
 /-- a quantity meets only its own dimensions (or a dynamic value, or an error): `1 m + 1 s`, `1 m == 1`, `1 m < "a"`
-and `if c { 1 m } else { 2 }` are DimensionErrors when warp compiles them (src/units/static_units.rs) -/
+and `if c { 1 m } else { 2 }` are DimensionErrors when warp compiles them (src/numbers/units/static_units.rs) -/
 def dimensionsAgree (a b : Ty) : Bool :=
   !(a.isQuantity || b.isQuantity) || a == b || a == .any || b == .any || a == .never || b == .never
 

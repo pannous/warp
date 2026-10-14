@@ -77,7 +77,7 @@ fn element_head(head: &Node, defined: &HashSet<String>) -> Option<(String, Vec<N
 		Node::Symbol(tag) => Some((tag.clone(), vec![])),
 		_ => attributes(head, defined),
 	};
-	parts.filter(|(tag, _)| crate::markup::is_element_tag(tag) && !defined.contains(tag))
+	parts.filter(|(tag, _)| crate::web::markup::is_element_tag(tag) && !defined.contains(tag))
 }
 
 /// `name{…}` of a name the program does not define: its body items
@@ -99,7 +99,8 @@ fn tag_with_attributes(node: Node, defined: &HashSet<String>) -> Node {
 	match node {
 		Node::Key(name, Op::Colon, body) => match *body {
 			Node::List(items, Bracket::Curly, separator) => {
-				let is_element = matches!(name.drop_meta(), Node::Symbol(tag) if crate::markup::is_element_tag(tag));
+				let is_element =
+					matches!(name.drop_meta(), Node::Symbol(tag) if crate::web::markup::is_element_tag(tag));
 				let items = if is_element {
 					tags_over_values(spaced_children(items, &separator, defined), defined)
 				} else {
@@ -261,7 +262,7 @@ pub fn lower_html_attributes(node: Node) -> Node {
 }
 
 fn is_element_name(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(tag) if crate::markup::is_element_tag(tag))
+	matches!(node.drop_meta(), Node::Symbol(tag) if crate::web::markup::is_element_tag(tag))
 }
 
 /// The items of an element's `{…}` or `(…)`, `name = value` of an attribute as `name: value`
@@ -278,7 +279,7 @@ fn attributes_of_group(group: Node) -> Node {
 fn html_attribute(item: Node) -> Node {
 	match item {
 		meta @ Node::Meta { .. } => meta.under_meta(html_attribute),
-		Node::Key(name, Op::Assign, value) if matches!(name.drop_meta(), Node::Symbol(word) if crate::markup::names_attribute(word)) => {
+		Node::Key(name, Op::Assign, value) if matches!(name.drop_meta(), Node::Symbol(word) if crate::web::markup::names_attribute(word)) => {
 			Node::Key(name, Op::Colon, value)
 		}
 		other => other,
@@ -339,7 +340,7 @@ fn loop_as_comprehension(item: Node) -> Node {
 /// one tag `li{"apple"}`; a bare word before anything else stays a child
 fn tags_over_values(children: Vec<Node>, defined: &HashSet<String>) -> Vec<Node> {
 	let tag_word = |node: &Node| match node.drop_meta() {
-		Node::Symbol(word) if crate::markup::is_element_tag(word) && !defined.contains(word) => Some(word.clone()),
+		Node::Symbol(word) if crate::web::markup::is_element_tag(word) && !defined.contains(word) => Some(word.clone()),
 		_ => None,
 	};
 	let is_word = |node: &Node, word: &str| matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == word);

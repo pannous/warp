@@ -4,7 +4,7 @@
 //! receives until the channel is closed: `while channel_more(ch) { v = channel_take(ch); … }`. The channels are the
 //! variables assigned `channel()` and the parameters of the functions called with one. First of the source passes:
 //! go_blocks renames what a go block reads, system_signals takes `send v to "chat"` for the machine channel.
-//! `chat = channel "chat"` is the machine-wide channel (src/channels.rs) with the same words: it listens from its
+//! `chat = channel "chat"` is the machine-wide channel (src/host/channels.rs) with the same words: it listens from its
 //! assignment on, `chat.send(v)` and `send v to chat` are `channel_send(chat, v)`, `chat.receive()` waits for a message.
 
 use super::nodes::{call, filled, key};

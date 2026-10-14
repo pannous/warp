@@ -5,7 +5,7 @@
 //! fresh analysis gives. An analysis that says something (a warning, a hint) is not remembered, so a repeat still says
 //! it. `WARP_ANALYSIS_CACHE=off` turns it off (A/B measurements).
 
-use crate::context::{Context, UserFunctionDef};
+use crate::compiler::context::{Context, UserFunctionDef};
 use crate::ffi::FfiSignature;
 use crate::node::Node;
 use std::cell::RefCell;
@@ -145,7 +145,7 @@ fn hash_node(node: &Node, hasher: &mut DefaultHasher) -> bool {
 		Node::Meta { node, data } => hash_node(node, hasher) && hash_node(data, hasher),
 		Node::Type { name, body } => hash_node(name, hasher) && hash_node(body, hasher),
 		// a position (Meta data): the only Rust data a parsed program holds; any other makes the tree unremembered
-		Node::Data(dada) => match dada.downcast_ref::<crate::meta::LineInfo>() {
+		Node::Data(dada) => match dada.downcast_ref::<crate::compiler::meta::LineInfo>() {
 			Some(position) => {
 				format!("{position:?}").hash(hasher);
 				true

@@ -10,7 +10,7 @@ subtyping is the prefix order and needs no class table. A variant of a sum type 
 (P178, P179).
 A fixed-width int type (`int16`, `byte`, D16) is the range of ints it holds, `ranged lo hi`: below int, and one range
 below another that contains it.
-A quantity (`2 m`, `3 km/h`, src/units/static_units.rs) has the type of its dimensions, `quantity [("Length", 1),
+A quantity (`2 m`, `3 km/h`, src/numbers/units/static_units.rs) has the type of its dimensions, `quantity [("Length", 1),
 ("Time", -1)]`: a type of its own, beside the numbers, since `1 m + 1` is a DimensionError. -/
 
 /-- the powers of a quantity's base dimensions, sorted by name, none zero (`Dims.times` keeps them so) -/

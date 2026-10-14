@@ -260,7 +260,7 @@ pub(crate) fn annotated_kind(type_node: &Node) -> Option<Kind> {
 	if crate::type_constructor::instance_parts_marked(type_node) {
 		return Some(Kind::Key); // `p:person` of a declared type (traits::lower_conformances): an instance
 	}
-	if crate::uncertain::is_interval_number(type_node) {
+	if crate::numbers::uncertain::is_interval_number(type_node) {
 		return Some(Kind::Empty); // `a:number` given a ± value: a Node, checked at run time (wasm_emitter admitted)
 	}
 	let type_name = type_node.name();
@@ -603,7 +603,7 @@ pub(super) fn infer_forwarded_parameters(ctx: &mut Context) {
 /// - `name(param) = body` → Key(List[name, param], Assign, body)
 /// - `name := body` → Key(Symbol(name), Define, body) (uses implicit `it`)
 pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
-	crate::analysis_memo::analysed(ctx, node, analyse_user_functions);
+	crate::compiler::analysis_memo::analysed(ctx, node, analyse_user_functions);
 }
 
 /// A fresh context holding the functions the program defines (extract_user_functions)
@@ -881,7 +881,7 @@ pub fn applicable_function_names(node: &Node) -> HashSet<String> {
 		.filter(|(_, function)| !function.params.is_empty())
 		.map(|(name, _)| name);
 	user_functions
-		.chain(crate::real::FUNCTIONS.iter().map(|name| name.to_string()))
+		.chain(crate::numbers::real::FUNCTIONS.iter().map(|name| name.to_string()))
 		.collect()
 }
 

@@ -34,7 +34,7 @@ pub fn lower(node: Node) -> Node {
 	let assigned = assigned_names(&node);
 	let node = flag_arguments(node, &functions, &assigned);
 	let types = declared_types(&node);
-	crate::compile_context::change(|context| context.declared_types = types);
+	crate::compiler::compile_context::change(|context| context.declared_types = types);
 	let mut unknown = None;
 	collect_extras(&node, &mut functions, &mut unknown);
 	if let Some(error) = unknown {
@@ -292,7 +292,7 @@ fn declared_types(node: &Node) -> std::collections::HashSet<String> {
 
 fn is_type(name: &str) -> bool {
 	crate::analyzer::type_word_kind(name).is_some()
-		|| crate::compile_context::read(|context| context.declared_types.contains(name))
+		|| crate::compiler::compile_context::read(|context| context.declared_types.contains(name))
 }
 
 /// `b=1` or `b:1` in a call: the name and the value. Not `pic:{…}` (an instance) nor `s:shape` (a parameter

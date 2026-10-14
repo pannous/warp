@@ -86,7 +86,7 @@ run is bound by total test time, not by one slow test, and only cutting what man
 - Left as they are: tests that sleep or overlap tasks on purpose (control::test_threads, test_job_lists), Lean proofs,
   the two-million-key map (runtime GC work).
 
-## P91: one analysis per program state (src/analysis_memo.rs, branch shared-analysis, 2026-10-05)
+## P91: one analysis per program state (src/compiler/analysis_memo.rs, branch shared-analysis, 2026-10-05)
 - extract_user_functions (and every EffectReport::of, which calls it) of a fresh Context is remembered per thread by a
   fingerprint of the whole tree, positions included (LineInfo hashed; other Rust data makes a tree unremembered), the
   last 256 states. A hit restores exactly the fields the analysis writes (user_functions, ffi_imports, field_kinds,

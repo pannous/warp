@@ -1,4 +1,4 @@
-//! Accessible markup (card web-a11y, src/accessibility.rs): welcoming warnings for markup a screen reader or keyboard
+//! Accessible markup (card web-a11y, src/web/accessibility.rs): welcoming warnings for markup a screen reader or keyboard
 //! user cannot use, each at the element as written with a fix
 use warp::diagnostic::take_warnings;
 use warp::wasm_emitter::eval;
@@ -124,14 +124,14 @@ fn markup_built_at_run_time_is_checked() {
 fn fetched_content_is_announced() {
 	let url = crate::common::serve("200 OK", "[\"Ann\"]");
 	let code = format!("users := fetch \"{url}\"\nmain{{ h1{{ \"Users\" }} div{{ if users.loading then p{{ \"Loading…\" }} else ul{{ [li{{ name }} for name in users] }} }} }}");
-	let html = warp::markup::to_html(&eval(&code));
+	let html = warp::web::markup::to_html(&eval(&code));
 	assert!(
 		html.contains("<div aria-live=\"polite\">") && html.matches("aria-live").count() == 1,
 		"{html}"
 	);
 	let own = format!("users := fetch \"{url}\"\ndiv{{ aria-live: \"assertive\" \"\" + users.loading }}");
 	assert!(
-		warp::markup::to_html(&eval(&own)).contains("aria-live=\"assertive\"")
-			&& !warp::markup::to_html(&eval(&own)).contains("polite")
+		warp::web::markup::to_html(&eval(&own)).contains("aria-live=\"assertive\"")
+			&& !warp::web::markup::to_html(&eval(&own)).contains("polite")
 	);
 }

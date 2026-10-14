@@ -1,5 +1,5 @@
 //! `use python "math"` (also `use python math`, `use python "os.path" as path`, `use js Math`): the module of another runtime, reached
-//! through the host word foreign_call (src/foreign.rs, notes/stdlib_connectors.md). `math.sqrt(2)` is the call
+//! through the host word foreign_call (src/modules/foreign.rs, notes/stdlib_connectors.md). `math.sqrt(2)` is the call
 //! `foreign_call("python", "math", "sqrt", 1, [2])`, `math.pi` the read `foreign_call("python", "math", "pi", 0, ø)`
 //! (an empty argument list is ø on the way, so whether it is a call is said apart).
 //! Values cross as JSON; the result is any Node.
@@ -14,17 +14,17 @@ use std::path::Path;
 const USE_WORD: &str = "use";
 /// The runtimes a `use <runtime> <module>` names: Python, and JavaScript (node natively, the page in the browser)
 pub const FOREIGN_RUNTIMES: [&str; 3] = ["python", JS_RUNTIME, COMPONENT_RUNTIME];
-/// JavaScript: its browser globals are typed through WebIDL (src/web_idl.rs)
+/// JavaScript: its browser globals are typed through WebIDL (src/formats/web_idl.rs)
 const JS_RUNTIME: &str = "js";
-/// The member of a foreign call that constructs its module (`new URL(…)`, src/foreign.rs and host-foreign.js)
+/// The member of a foreign call that constructs its module (`new URL(…)`, src/modules/foreign.rs and host-foreign.js)
 const CONSTRUCTOR_MEMBER: &str = "";
-/// The member a call sets to its one argument: `e.innerHTML = "x"` is the member "set innerHTML" (src/foreign.rs)
+/// The member a call sets to its one argument: `e.innerHTML = "x"` is the member "set innerHTML" (src/modules/foreign.rs)
 const SETTER_PREFIX: &str = "set ";
-/// `use wasm "lib.wasm" as lib`: a WebAssembly component (src/components.rs); its module is the file, found next to the
+/// `use wasm "lib.wasm" as lib`: a WebAssembly component (src/modules/components.rs); its module is the file, found next to the
 /// program, and named after the file by default
 pub const COMPONENT_RUNTIME: &str = "wasm";
 const COMPONENT_EXTENSION: &str = ".wasm";
-/// `use cargo regex`, `use crate "regex"`: a crate from crates.io, built as a component (src/cargo_crates.rs)
+/// `use cargo regex`, `use crate "regex"`: a crate from crates.io, built as a component (src/modules/cargo_crates.rs)
 pub const CRATE_RUNTIMES: [&str; 2] = ["cargo", "crate"];
 /// The version after `\0asm` in a core module's header; a component's names another layer
 const CORE_MODULE_VERSION: [u8; 4] = [1, 0, 0, 0];
@@ -119,7 +119,7 @@ fn component_module(items: &[Node]) -> Option<Result<Node, String>> {
 	}))
 }
 
-/// `use cargo regex`, `use crate "regex" as re`: the component src/cargo_crates.rs builds of the crate, `as` the crate's
+/// `use cargo regex`, `use crate "regex" as re`: the component src/modules/cargo_crates.rs builds of the crate, `as` the crate's
 /// name by default
 fn crate_module(word: &Node, runtime: &Node, used: &Node) -> Option<Result<Node, String>> {
 	if !word.is_symbol(USE_WORD)
@@ -141,7 +141,7 @@ fn crate_module(word: &Node, runtime: &Node, used: &Node) -> Option<Result<Node,
 
 #[cfg(feature = "native")]
 fn crate_component(name: &str) -> Result<String, String> {
-	crate::cargo_crates::component(name)
+	crate::modules::cargo_crates::component(name)
 }
 
 #[cfg(not(feature = "native"))]
@@ -369,10 +369,10 @@ fn is_warp_method(name: &str) -> bool {
 		|| (1..=3).any(|arity| crate::wasm_emitter::text_builtins::text_builtin_kind(name, arity).is_some())
 }
 
-/// The resource a component's function or method gives (src/components.rs); the browser build reads no component
+/// The resource a component's function or method gives (src/modules/components.rs); the browser build reads no component
 #[cfg(feature = "native")]
 fn result_kind(path: &str, member: &str, kind: Option<&str>) -> Option<String> {
-	crate::components::result_kind(path, member, kind)
+	crate::modules::components::result_kind(path, member, kind)
 }
 
 #[cfg(not(feature = "native"))]
@@ -383,7 +383,7 @@ fn result_kind(_path: &str, _member: &str, _kind: Option<&str>) -> Option<String
 /// Does the resource `kind` of a component have the method `member` taking no arguments?
 #[cfg(feature = "native")]
 fn has_method(path: &str, kind: &str, member: &str) -> bool {
-	crate::components::takes_no_arguments(path, member, kind)
+	crate::modules::components::takes_no_arguments(path, member, kind)
 }
 
 #[cfg(not(feature = "native"))]
@@ -566,7 +566,7 @@ impl Foreign<'_> {
 	/// `document.getElementById(id)`: Element); Err for a global only a page has
 	fn web_idl_receiver(&self, receiver: &Node) -> Result<Option<(String, String)>, String> {
 		let global = |name: &str, path: &str| {
-			Ok(crate::web_idl::global_interface(name)?.map(|interface| (interface, path.to_string())))
+			Ok(crate::formats::web_idl::global_interface(name)?.map(|interface| (interface, path.to_string())))
 		};
 		match receiver.drop_meta() {
 			Node::Symbol(name) => match self.modules.get(name) {
@@ -583,7 +583,7 @@ impl Foreign<'_> {
 					return Ok(None);
 				};
 				if let (CONSTRUCTOR_MEMBER, Node::Text(interface)) = (member, inner.drop_meta()) {
-					return Ok(crate::web_idl::constructible(interface)
+					return Ok(crate::formats::web_idl::constructible(interface)
 						.then(|| (interface.clone(), format!("{interface}(…)"))));
 				}
 				let Some((interface, path)) = self.web_idl_receiver(inner)? else {
@@ -597,14 +597,14 @@ impl Foreign<'_> {
 				let context = match arguments.drop_meta() {
 					Node::List(items, _, _) => match items.first().map(Node::drop_meta) {
 						Some(Node::Text(context_id)) => {
-							crate::web_idl::context_interface(&interface, member, context_id)
+							crate::formats::web_idl::context_interface(&interface, member, context_id)
 						}
 						_ => None,
 					},
 					_ => None,
 				};
 				Ok(context
-					.or_else(|| crate::web_idl::result_interface(&interface, member, is_call))
+					.or_else(|| crate::formats::web_idl::result_interface(&interface, member, is_call))
 					.map(|interface| (interface, read)))
 			}
 		}
@@ -626,8 +626,10 @@ impl Foreign<'_> {
 		let Some((interface, path)) = self.web_idl_receiver(receiver)? else {
 			return Ok(None);
 		};
-		crate::web_idl::check_member(&interface, &path, member, is_call.then_some(count))?;
-		Ok(crate::web_idl::optional_result_type(&interface, member, is_call))
+		crate::formats::web_idl::check_member(&interface, &path, member, is_call.then_some(count))?;
+		Ok(crate::formats::web_idl::optional_result_type(
+			&interface, member, is_call,
+		))
 	}
 
 	/// `URL("https://…")` of `use js URL`: the constructor called, JavaScript's `new`, checked by WebIDL when it declares
@@ -645,7 +647,7 @@ impl Foreign<'_> {
 			.get(name)
 			.filter(|(runtime, _)| runtime == JS_RUNTIME)?
 			.clone();
-		if let Err(problem) = crate::web_idl::check_constructor(&module, arguments.len()) {
+		if let Err(problem) = crate::formats::web_idl::check_constructor(&module, arguments.len()) {
 			return Some(crate::diagnostic::Diagnostic::at(node, problem).into_error());
 		}
 		let arguments = arguments
@@ -675,7 +677,7 @@ impl Foreign<'_> {
 		let (runtime, module) = self.receiver(&receiver)?;
 		let checked = match runtime == JS_RUNTIME {
 			true => self.web_idl_receiver(&receiver).and_then(|declared| match declared {
-				Some((interface, path)) => crate::web_idl::check_member(&interface, &path, member, None),
+				Some((interface, path)) => crate::formats::web_idl::check_member(&interface, &path, member, None),
 				None => Ok(()),
 			}),
 			false => Ok(()),
@@ -730,7 +732,7 @@ impl Foreign<'_> {
 		}
 		// `"id \(crypto.randomUUID())"`: the holes are calls of this pass, the text is built later (interpolation.rs)
 		if let Some(text) =
-			crate::interpolation::interpolated_mentioning(&node, |hole| self.mentions_foreign_name(hole))
+			crate::text::interpolation::interpolated_mentioning(&node, |hole| self.mentions_foreign_name(hole))
 		{
 			return self.rewrite(text);
 		}

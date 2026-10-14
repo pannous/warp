@@ -9,7 +9,7 @@
 //! (`system_value("key_pressed")`) and emits `key{key: "a"}` as the playground page does, arrows and Enter by name;
 //! `on click {…}` (card native-window) likewise gets the clicks, `click{x: 30, y: 40}` in the painted frame's pixels.
 //! `exit` and `exit()` as statements are `exit(0)` (P121: the host word ends the run with that code).
-//! Channels (src/channels.rs): `on message from "chat" {body}` (`on message {body}` for the channel "warp") is the timer
+//! Channels (src/host/channels.rs): `on message from "chat" {body}` (`on message {body}` for the channel "warp") is the timer
 //! handler `on·every·0() := {global …; while channel_pending(0) > 0 { event = channel_next(0); body }}`, started by
 //! `channel_listen(0, "chat")` and `signal_listen(0, 0, 20)`, so a program listening stays like one with a timer;
 //! `broadcast value on "chat"` (`broadcast value`) is `channel_send("chat", value)`, and so is `send value to "chat"`.
@@ -220,7 +220,7 @@ fn timer_start(statement: &Node, duration: &Node) -> Result<(i64, i64), Node> {
 		)
 		.into_error()),
 		Some(Err(ClockError::Time)) => Err(no_time_of_day(statement, "on every day at")),
-		None => crate::units::milliseconds(duration)
+		None => crate::numbers::units::milliseconds(duration)
 			.map(|milliseconds| (LISTEN_EVERY, milliseconds))
 			.ok_or_else(|| {
 				Diagnostic::at(

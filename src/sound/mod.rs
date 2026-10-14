@@ -144,7 +144,7 @@ struct Queued {
 /// `play "song.mp3"`: a music file played in the background when the user may hear it, else checked and named. A file
 /// the system's decoder cannot read fails here, as does a player failing at once; a later failure is printed. Its handle
 pub fn play_file(path: &str) -> Result<usize, String> {
-	crate::sandbox::check_process("sound.play_file")?;
+	crate::host::sandbox::check_process("sound.play_file")?;
 	let format = file_format(path)?;
 	probe(path, format)?;
 	let handle = next_handle();
@@ -450,7 +450,7 @@ fn spawned(
 	path: &str,
 	keep_output: bool,
 ) -> Option<(&'static str, std::process::Child)> {
-	if let Err(denial) = crate::sandbox::check_process("a sound player") {
+	if let Err(denial) = crate::host::sandbox::check_process("a sound player") {
 		eprintln!("{denial}"); // a background player has no program to raise it in
 		return None;
 	}
@@ -672,7 +672,7 @@ fn wav_file(wav: &[u8], handle: usize) -> Result<PathBuf, String> {
 /// render_sound(path): the sounds since the last render (or the start) in one WAV file, each at its place in its
 /// voice, the voices mixed (in stereo when one of them is: a mono sound on both speakers alike); its seconds
 pub fn render(path: &str) -> Result<f64, String> {
-	crate::sandbox::check_write(path)?;
+	crate::host::sandbox::check_write(path)?;
 	let sounds = std::mem::take(
 		&mut *UNRENDERED
 			.lock()

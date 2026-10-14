@@ -7,7 +7,7 @@
 use super::list_dispatch::{ElementType, TypedList};
 use super::WasmGcEmitter;
 use crate::analyzer::{collect_variables, param_kind, Scope};
-use crate::context::UserFunctionDef;
+use crate::compiler::context::UserFunctionDef;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;

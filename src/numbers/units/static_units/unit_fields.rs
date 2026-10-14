@@ -77,7 +77,7 @@ fn tolerance_parts(member: &Node) -> Option<(String, &Node, &Node)> {
 		return None;
 	};
 	match type_name.drop_meta() {
-		Node::Key(unit, Op::PlusMinus, spread) if crate::units::unit_expression(unit).is_some() => {
+		Node::Key(unit, Op::PlusMinus, spread) if crate::numbers::units::unit_expression(unit).is_some() => {
 			Some((field.drop_meta().name(), unit, spread))
 		}
 		_ => None,
@@ -131,7 +131,7 @@ fn with_field_tolerances(node: Node, tolerances: &Tolerances) -> Node {
 }
 
 /// The units the program's unit fields are written in: `distance: km` shows km like a written `5 km`
-pub(super) fn written_field_units(program: &Node) -> Vec<crate::units::Factor> {
+pub(super) fn written_field_units(program: &Node) -> Vec<crate::numbers::units::Factor> {
 	let fields = crate::class_methods::class_fields(program).into_values().flatten();
 	fields
 		.filter_map(|(_, type_name)| field_units(&type_name))
@@ -140,19 +140,19 @@ pub(super) fn written_field_units(program: &Node) -> Vec<crate::units::Factor> {
 }
 
 /// The units of a field type that is a unit (`km`, `km/h`, an optional `km?`)
-fn field_units(type_name: &str) -> Option<Vec<crate::units::Factor>> {
+fn field_units(type_name: &str) -> Option<Vec<crate::numbers::units::Factor>> {
 	let unit = type_name.trim_end_matches(OPTIONAL_MARK);
 	if unit.is_empty() {
 		return None;
 	}
-	crate::units::unit_expression(&crate::warp_parser::parse(unit))
+	crate::numbers::units::unit_expression(&crate::warp_parser::parse(unit))
 }
 
 /// The units written in the arguments of constructor calls of `classes` (`1500 m` of `Run(1500 m)`)
 pub(super) fn stored_argument_units(
 	program: &Node,
 	classes: &HashMap<String, Fields>,
-) -> Vec<&'static crate::units::Unit> {
+) -> Vec<&'static crate::numbers::units::Unit> {
 	let mut stored = vec![];
 	program.visit(&mut |node| {
 		let Node::List(items, Bracket::Round, _) = node else {
@@ -172,15 +172,15 @@ pub(super) fn stored_argument_units(
 
 /// The signature of a field type that is a unit
 fn field_unit(type_name: &str) -> Option<Signature> {
-	field_units(type_name).map(|units| crate::units::signature(&units))
+	field_units(type_name).map(|units| crate::numbers::units::signature(&units))
 }
 
 /// A field type that is a unit (`km`): the quantity it measures (`m` of km, `m/s` of km/h) and its SI amount per unit
 /// (1000 of km); a stored column keeps it in its type (`NUMERIC km`, database.rs), the browser's store in its schema
 pub(crate) fn unit_type(type_name: &str) -> Option<(String, f64)> {
 	let units = field_units(type_name)?;
-	let per_unit = crate::units::scale(&units, |factor| super::base_unit(factor.unit.dimension));
-	Some((shown(&crate::units::signature(&units)), per_unit.to_f64()))
+	let per_unit = crate::numbers::units::scale(&units, |factor| super::base_unit(factor.unit.dimension));
+	Some((shown(&crate::numbers::units::signature(&units)), per_unit.to_f64()))
 }
 
 /// A constant quantity's SI amount and the quantity it measures, as unit_type gives a column's: `5 km` is (5000, "m")
@@ -194,7 +194,7 @@ pub(crate) fn si_quantity(node: &Node) -> Option<(f64, String)> {
 /// lower_run_time_tolerances) holds it as written, `(5 ± 1/100) * m`: its amount in the field's base units (card
 /// quantity-tolerance)
 fn written_quantity(argument: &Node) -> Node {
-	match crate::units::run_time_quantity_parts(argument) {
+	match crate::numbers::units::run_time_quantity_parts(argument) {
 		Some((amount, unit)) => Node::Key(
 			Box::new(amount.clone()),
 			Op::Mul,

@@ -1,7 +1,7 @@
 //! `f -x` and `print #xs` as calls of the word before them
 
 use crate::analyzer::{extract_user_functions_inner, is_type_call_word};
-use crate::context::{Context, UserFunctionDef};
+use crate::compiler::context::{Context, UserFunctionDef};
 use crate::lowering::nodes::children_rewritten;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -44,7 +44,7 @@ fn negate_calls(
 			functions.get(name).is_some_and(|function| !function.params.is_empty())
 		}
 		Node::Symbol(name) if op == Op::Hash => {
-			(crate::real::FUNCTIONS.contains(&name.as_str()) || PRINT_WORDS.contains(&name.as_str()))
+			(crate::numbers::real::FUNCTIONS.contains(&name.as_str()) || PRINT_WORDS.contains(&name.as_str()))
 				&& !bound.contains(name)
 		}
 		Node::Symbol(name) => is_builtin_callable(name) && !bound.contains(name),
@@ -68,7 +68,7 @@ fn negate_calls(
 
 /// A built-in word that applies to the value after it: a real function, print, a rounding word, a type, a library word of one value
 fn is_builtin_callable(name: &str) -> bool {
-	crate::real::FUNCTIONS.contains(&name)
+	crate::numbers::real::FUNCTIONS.contains(&name)
 		|| PRINT_WORDS.contains(&name)
 		|| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name)
 		|| is_type_call_word(name)

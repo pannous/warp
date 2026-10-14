@@ -3,6 +3,7 @@
 //! page runs the compiled module (`run_in_host`) and hands its result back as a JSON tree that its reader
 //! (web/playground/reader.js) walked through the module's reflection exports (wasm_emitter/reflection.rs).
 
+pub mod accessibility;
 #[cfg(feature = "native")]
 pub mod deploy;
 #[cfg(feature = "native")]
@@ -10,6 +11,7 @@ pub mod dev_server;
 #[cfg(feature = "native")]
 pub mod fetches;
 pub mod headless;
+pub mod markup;
 pub mod page_tests;
 #[cfg(feature = "native")]
 pub mod route_split;
@@ -22,10 +24,10 @@ pub mod web_sockets;
 #[cfg(all(feature = "native", target_os = "macos"))]
 pub mod webview;
 
+use crate::compiler::meta::{DataType, DataValue};
 use crate::diagnostic::{self, Acknowledger};
 use crate::extensions::numbers::Number;
 use crate::fixits::{self, Fix};
-use crate::meta::{DataType, DataValue};
 use crate::node::{Bracket, Node, Separator};
 use crate::type_kinds::KIND_BITS;
 use crate::type_kinds::{Kind, KIND_MASK};
@@ -123,7 +125,7 @@ pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 /// itself, else by the renderer compiled on its own
 fn html_of(value: &Node) -> Value {
 	let rendered = RENDERED.with(|rendered| rendered.borrow_mut().take());
-	json!(crate::markup::is_markup(value).then(|| rendered.unwrap_or_else(|| crate::markup::to_html(value))))
+	json!(crate::web::markup::is_markup(value).then(|| rendered.unwrap_or_else(|| crate::web::markup::to_html(value))))
 }
 
 /// `code` compiled and run; a program holding markup renders itself (pipeline::rendering_itself). The page has no
@@ -140,7 +142,7 @@ pub fn renders_itself(code: &str) -> bool {
 	let mut holds_markup = false;
 	// quietly: the compile that follows says what the parse finds
 	diagnostic::quietly(|| crate::warp_parser::parse(code))
-		.visit(&mut |part| holds_markup |= crate::markup::is_markup(part));
+		.visit(&mut |part| holds_markup |= crate::web::markup::is_markup(part));
 	holds_markup
 }
 
@@ -262,7 +264,7 @@ pub fn shown(outcome: &Value) -> Value {
 /// The playground's Deploy (deploy.js, notes/hosting.md): `{scripts, module_length}` (the host scripts' names, which
 /// warp-hosting takes as ?scripts=) and the program's module for a Worker, or `{error}` and no module
 pub fn worker_bundle(code: &str) -> (Value, Vec<u8>) {
-	match crate::host_parts::worker_parts(code) {
+	match crate::host::host_parts::worker_parts(code) {
 		Ok((module, scripts)) => {
 			let names: Vec<&str> = scripts.iter().map(|(name, _)| *name).collect();
 			(json!({ "scripts": names, "module_length": module.len() }), module)
@@ -307,7 +309,7 @@ fn tree_of(node: &Node) -> Option<Value> {
 		Node::Number(Number::Int(n)) if crate::wasm_emitter::is_fixnum(*n) => {
 			json!({ "kind": kind(Kind::Int), "data": { "int": n.to_string() }, "chain": [] })
 		}
-		// beyond the fixnums: host.js composes it from fixnum pieces (src/tasks.rs EXACT_BUILDERS)
+		// beyond the fixnums: host.js composes it from fixnum pieces (src/host/tasks.rs EXACT_BUILDERS)
 		Node::Number(Number::Int(n)) => {
 			json!({ "kind": kind(Kind::Int), "data": { "exact": [n.to_string(), "1"] }, "chain": [] })
 		}
@@ -459,7 +461,9 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 		},
 		tag if tag == Kind::Uncertain as i64 => {
 			let floats = data.get("floats").and_then(Value::as_array);
-			crate::uncertain::Uncertain::read_node(floats.map(|parts| parts.iter().filter_map(float_value).collect()))
+			crate::numbers::uncertain::Uncertain::read_node(
+				floats.map(|parts| parts.iter().filter_map(float_value).collect()),
+			)
 		}
 		tag if tag == Kind::Time as i64 => crate::time::time_node(kind >> KIND_BITS, payload_number(data)),
 		tag => Node::Text(format!("Unknown Kind: {tag}")),

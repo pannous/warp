@@ -1,4 +1,4 @@
-//! `use wasm "lib.wasm" as lib`: a WebAssembly component through foreign_call (src/components.rs): a Rust crate built for
+//! `use wasm "lib.wasm" as lib`: a WebAssembly component through foreign_call (src/modules/components.rs): a Rust crate built for
 //! wasm32-wasip2 (tests/fixtures/components/rust_demo, its WIT in wit/demo.wit) or any component with WIT exports
 use crate::common::fails_with;
 use crate::is;

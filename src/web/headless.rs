@@ -12,8 +12,8 @@
 //! ```
 
 use crate::element_events::HANDLER_ATTRIBUTE_PREFIX;
-use crate::markup::to_html;
 use crate::node::Node;
+use crate::web::markup::to_html;
 use serde_json::{json, Map, Value};
 
 /// the attribute naming the component instance an element belongs to (component_state.rs), passed as event.instance
@@ -260,8 +260,8 @@ mod native {
 	use crate::host::HostState;
 	use crate::node::{Bracket, Node, Separator};
 	use crate::pipeline::CompiledModule;
+	use crate::run::wasm_reader::{run_main_kept, val_to_node, with_trap_detail, Imports};
 	use crate::wasm_emitter::failed_run;
-	use crate::wasm_reader::{run_main_kept, val_to_node, with_trap_detail, Imports};
 	use serde_json::Value;
 	use wasmtime::{AsContextMut, Instance, Store, Val};
 
@@ -291,7 +291,11 @@ mod native {
 
 		/// Runs the handler `on·click·1·node` with `[detail]`, then reads page·value
 		pub(super) fn handled(&mut self, page_event: &str, detail: &Value) -> Result<Node, String> {
-			let arguments = Node::List(vec![crate::foreign::node_of(detail)], Bracket::Square, Separator::None);
+			let arguments = Node::List(
+				vec![crate::modules::foreign::node_of(detail)],
+				Bracket::Square,
+				Separator::None,
+			);
 			self.call(&format!("{HANDLER_PREFIX}{page_event}{NODE_SUFFIX}"), Some(arguments))?;
 			self.call(PAGE_VALUE, None)
 		}
@@ -320,7 +324,7 @@ mod native {
 
 		/// A node built inside the program's instance, as a host word's answer is
 		fn built(&mut self, node: &Node) -> Result<Val, String> {
-			use crate::tasks::{Builders, TaskValue};
+			use crate::host::tasks::{Builders, TaskValue};
 			let value = TaskValue::of(node).map_err(|problem| problem.to_string())?;
 			let (instance, store) = (self.instance, &mut self.store);
 			let builders = Builders::of(&mut |export| instance.get_export(&mut *store, export))

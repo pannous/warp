@@ -18,8 +18,8 @@
 
 use super::WasmGcEmitter;
 use crate::extensions::numbers::Number;
-use crate::fixed_width::FixedWidth;
 use crate::node::Node;
+use crate::numbers::fixed_width::FixedWidth;
 use crate::operators::Op;
 use num_bigint::{BigInt, Sign};
 use std::collections::HashSet;
@@ -555,7 +555,7 @@ impl WasmGcEmitter {
 			return None;
 		};
 		let type_node = self.scope.lookup(name)?.type_node.as_ref()?;
-		crate::fixed_width::fixed_width(&type_node.name())
+		crate::numbers::fixed_width::fixed_width(&type_node.name())
 	}
 
 	/// Is the variable `node` declared a whole-number type (`int`, `long`, `byte` …, not `exact`)

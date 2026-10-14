@@ -2,7 +2,7 @@
 //! the WASM GC emitter (wasm_emitter) → run. `eval`, `compile` and `lower` are the entry points; wasm_emitter
 //! re-exports them.
 
-use crate::compile_context;
+use crate::compiler::compile_context;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::WarpParser;
@@ -15,9 +15,9 @@ const UNWRAPPED_EMPTY: &str = "unwrapped ø";
 const RANGE_END_HINT: &str = "hint: `..` excludes the end; `...` or `to` include it";
 use crate::lowering::nodes::children_rewritten;
 #[cfg(feature = "native")]
-use crate::wasm_emitter::{failed_run, run_raw_struct};
+use crate::run::wasm_reader::read_bytes;
 #[cfg(feature = "native")]
-use crate::wasm_reader::read_bytes;
+use crate::wasm_emitter::{failed_run, run_raw_struct};
 
 /// The program written in `code`, or in the file `code` names: a file sees the definitions of its folder (D15)
 pub fn eval(code: &str) -> Node {
@@ -97,11 +97,13 @@ fn lawful_program(code: &str) -> Result<Node, Node> {
 pub fn eval_untrusted(code: &str) -> Node {
 	crate::diagnostic::begin_program();
 	let program = WarpParser::parse(code);
-	match crate::effects::EffectReport::of(&program).denied(&crate::effects::Capability::GRANTED_UNTRUSTED) {
+	match crate::analyzer::effects::EffectReport::of(&program)
+		.denied(&crate::analyzer::effects::Capability::GRANTED_UNTRUSTED)
+	{
 		Some((external, _)) => crate::node::error(&format!(
 			"untrusted code has no capabilities but pure libm, refusing to call {external}"
 		)),
-		None => with_granted(&crate::effects::Capability::GRANTED_UNTRUSTED, || {
+		None => with_granted(&crate::analyzer::effects::Capability::GRANTED_UNTRUSTED, || {
 			eval_parsed(program, code)
 		}),
 	}
@@ -109,14 +111,14 @@ pub fn eval_untrusted(code: &str) -> Node {
 
 /// `run` with the program granted only what a sandboxed program gets (`warp --sandbox`, Capability::GRANTED_SANDBOXED)
 pub fn sandboxed<T>(run: impl FnOnce() -> T) -> T {
-	with_granted(&crate::effects::Capability::GRANTED_SANDBOXED, || {
+	with_granted(&crate::analyzer::effects::Capability::GRANTED_SANDBOXED, || {
 		compile_context::scoped(|context| &mut context.sandboxed, true, run)
 	})
 }
 
 /// `run` with the program granted only `granted` (checked again after lowering, which brings calls of its own:
 /// `use python math` → foreign_call)
-fn with_granted<T>(granted: &'static [crate::effects::Capability], run: impl FnOnce() -> T) -> T {
+fn with_granted<T>(granted: &'static [crate::analyzer::effects::Capability], run: impl FnOnce() -> T) -> T {
 	compile_context::scoped(|context| &mut context.granted, granted, run)
 }
 
@@ -279,7 +281,7 @@ const MODULE_SOURCE_PHASES: [&[Pass]; 2] = [SUGAR_PASSES, DECLARATION_PASSES];
 /// The written forms as the parser keeps them: sugar, markup and web words, blocks, before any pass reads a declaration
 const SUGAR_PASSES: &[Pass] = &[
 	// `"a \(x) b"` → `"a " + text_form(x) + " b"` (interpolation.rs) first, so every pass reads the holes as code
-	crate::interpolation::lower_program,
+	crate::text::interpolation::lower_program,
 	// `pattern => body` and `_ => v` arms of a match as `pattern: body` and `default: v`, the one form later passes read
 	crate::lowering::welcome_forms::lower_match_arms,
 	// `a of b` is `b.a` (of_lookups.rs), before any pass reads a lookup
@@ -376,11 +378,11 @@ const DECLARATION_PASSES: &[Pass] = &[
 	// `class Foo;` takes in the definitions after it before any pass reads class bodies (wiki/type.md)
 	crate::lowering::file_declarations::lower,
 	// `60 mph` is `60 mi/h`, `q as km/h` converts to km/h, before any units pass reads them
-	crate::units::lower_unit_words,
+	crate::numbers::units::lower_unit_words,
 	// `class Part{length: m ± 1 mm}`: `Part(5 m)` holds `5 m ± 1 mm` (unit_fields.rs), a tolerance the next pass reads
-	crate::units::static_units::lower_field_tolerances,
+	crate::numbers::units::static_units::lower_field_tolerances,
 	// `5 m ± 1 cm; x * 2`: a run-time quantity with an interval amount (units.rs), before the units module is loaded for it
-	crate::units::lower_run_time_tolerances,
+	crate::numbers::units::lower_run_time_tolerances,
 	crate::modules::insert_module_classes,
 	// `type Name = string` resolved in `name: Name` before class_methods reads the fields
 	crate::lowering::type_aliases::lower,
@@ -392,7 +394,7 @@ const DECLARATION_PASSES: &[Pass] = &[
 	// `p.fields`, `p.methods`, `dir(p)`: the class layout (reflection.rs), before class_methods lowers the class bodies
 	crate::lowering::reflection::lower_objects,
 	// `y certainly < x` is `certainly(y < x)` before class_methods compares the amounts of run-time quantities
-	crate::uncertain::lower_certainty,
+	crate::numbers::uncertain::lower_certainty,
 	// methods in a class body become functions over the class before any pass reads the body as fields
 	// `for x in c` of an object with next() (for_loop.rs) before class_methods lowers the next() calls
 	crate::lowering::for_loop::lower_iterators,
@@ -433,8 +435,8 @@ const MODULE_PASSES: &[Pass] = &[
 
 /// Stored values, system values, signals and events, pages
 const SIGNAL_PASSES: &[Pass] = &[
-	crate::units::lower_sleep_durations,
-	crate::units::lower_quantity_comparisons,
+	crate::numbers::units::lower_sleep_durations,
+	crate::numbers::units::lower_quantity_comparisons,
 	crate::lowering::stored_values::lower,
 	crate::lowering::mutation::lower_deletes,
 	crate::lowering::undo_history::lower,
@@ -498,7 +500,7 @@ const FUNCTION_PASSES: &[Pass] = &[
 	crate::lowering::versions::lower_versions,
 	crate::lowering::negated_calls::lower_negated_calls,
 	// `lo(a:number) := a.low; lo(5 ± 1)`: a number parameter of a program with ± values holds one (uncertain.rs)
-	crate::uncertain::lower_interval_parameters,
+	crate::numbers::uncertain::lower_interval_parameters,
 ];
 
 /// The passes after the constant answers (time, units, reals), in order: types and traits, lambdas and closures, words
@@ -522,7 +524,7 @@ const MEANING_PASSES: &[Pass] = &[
 	crate::lowering::closures::lower,
 	crate::lowering::lambdas::lower_strict,
 	crate::lowering::broadcasting::lower_several_arguments,
-	crate::real::lower,
+	crate::numbers::real::lower,
 	crate::lowering::type_constructor::lower,
 	crate::lowering::printable::lower,
 	crate::lowering::overloads::lower,
@@ -572,7 +574,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 }
 
 fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
-	use crate::effects::{without_constraints, EffectReport};
+	use crate::analyzer::effects::{without_constraints, EffectReport};
 	// the loop headers the parser keeps as written (`for int in xs`), given their meaning before any check reads the loops
 	let node = crate::lowering::for_loop::headers::lower(node);
 	// `data e` as written: no sugar pass rewrites inside e
@@ -587,7 +589,7 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	if let Some(unfillable) = crate::lowering::class_methods::check_self_typed_fields(&node) {
 		return Err(unfillable.into_error());
 	}
-	crate::diagnostic::report(&crate::accessibility::warnings(&node))?;
+	crate::diagnostic::report(&crate::web::accessibility::warnings(&node))?;
 	crate::diagnostic::report(&crate::analyzer::source_warnings(&node))?;
 	// emits and handler blocks as written: the passes lower them to calls, the named effects are read from them
 	let as_written = node.clone();
@@ -598,20 +600,20 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	if let Some(kind_change) = crate::analyzer::check_kind_changes(&node) {
 		return Err(kind_change.into_error());
 	}
-	if let Some(unsaid) = crate::uncertain::check_orderings(&node) {
+	if let Some(unsaid) = crate::numbers::uncertain::check_orderings(&node) {
 		return Err(unsaid.into_error());
 	}
-	let node = crate::function_equality::decide_comparisons(node);
+	let node = crate::compiler::function_equality::decide_comparisons(node);
 	if let Node::Error(_) = node {
 		return Err(node);
 	}
 	let node = crate::time::lower(node);
 	// quantities in loops and branches: SI amounts at run time, the units checked here (static units, stage 1)
-	let node = match crate::units::static_units::lower(&node) {
+	let node = match crate::numbers::units::static_units::lower(&node) {
 		Some(lowered) => lowered?,
 		None => node,
 	};
-	if let Some(answer) = crate::real::answer(&node) {
+	if let Some(answer) = crate::numbers::real::answer(&node) {
 		return Err(answer);
 	}
 	let node = run_passes(node, MEANING_PASSES);
@@ -627,8 +629,8 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 		return Err(error);
 	}
 	if let Some((name, capability)) = effects.denied(compile_context::read(|context| context.granted)) {
-		return Err(crate::node::error(&if crate::sandbox::is_sandboxed() {
-			crate::sandbox::denial(&name, capability.name())
+		return Err(crate::node::error(&if crate::host::sandbox::is_sandboxed() {
+			crate::host::sandbox::denial(&name, capability.name())
 		} else {
 			format!(
 				"capability denied: {name} needs the {} capability, which eval does not grant",
@@ -683,12 +685,12 @@ fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModu
 		let reflected = crate::lowering::reflection::meta_entries(&source, &node, code);
 		warn_about_run_time_blocks(&node)?;
 		// the module's `warp.meta` section: a final quantity's unit, the program's functions and classes
-		let entries: Vec<_> = crate::units::static_units::result_units_entry()
+		let entries: Vec<_> = crate::numbers::units::static_units::result_units_entry()
 			.into_iter()
 			.chain(reflected)
 			.collect();
 		choose_module(&node).map(|module| CompiledModule {
-			bytes: crate::meta_section::with_entries(module.bytes, entries),
+			bytes: crate::formats::meta_section::with_entries(module.bytes, entries),
 			..module
 		})
 	})
@@ -717,7 +719,7 @@ fn printing_result(program: Node) -> Node {
 
 /// A compiled module that runs blocks at run time needs a host with a warp compiler: say so where it is made
 fn warn_about_run_time_blocks(node: &Node) -> Result<(), Node> {
-	if !crate::effects::EffectReport::of(node).calls_external(crate::host::RUN_BLOCK) {
+	if !crate::analyzer::effects::EffectReport::of(node).calls_external(crate::host::RUN_BLOCK) {
 		return Ok(());
 	}
 	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(node, format!(
@@ -767,7 +769,7 @@ fn eval_program(node: Node) -> Node {
 	// Fallback to standard Node encoding; a final quantity's unit travels in the module (`warp.meta`) and is read back
 	match emit_module(&node) {
 		Ok(module) => checked_markup(run_module(CompiledModule {
-			bytes: crate::units::static_units::with_result_units(module.bytes),
+			bytes: crate::numbers::units::static_units::with_result_units(module.bytes),
 			..module
 		})),
 		Err(type_error) => type_error,
@@ -776,8 +778,8 @@ fn eval_program(node: Node) -> Node {
 
 /// A run's value; markup it built is checked for accessibility as it came out (card web-a11y-runtime)
 fn checked_markup(result: Node) -> Node {
-	if crate::markup::is_markup(&result) {
-		crate::accessibility::check_rendered(&result);
+	if crate::web::markup::is_markup(&result) {
+		crate::web::accessibility::check_rendered(&result);
 	}
 	result
 }
@@ -826,14 +828,15 @@ pub fn eval_block(block: Node, names: &Node, values: &Node, definitions: &Node) 
 			.map(|(name, value)| assignment(name, as_written(value.clone())))
 			.collect(),
 	);
-	let result =
-		match crate::effects::EffectReport::of(&as_written).denied(&crate::effects::Capability::GRANTED_UNTRUSTED) {
-			Some((external, capability)) => crate::node::error(&format!(
-				"a block run at run time is pure: {external} needs the {} capability, which it does not get",
-				capability.name()
-			)),
-			None => run_block_program(bound, program_of),
-		};
+	let result = match crate::analyzer::effects::EffectReport::of(&as_written)
+		.denied(&crate::analyzer::effects::Capability::GRANTED_UNTRUSTED)
+	{
+		Some((external, capability)) => crate::node::error(&format!(
+			"a block run at run time is pure: {external} needs the {} capability, which it does not get",
+			capability.name()
+		)),
+		None => run_block_program(bound, program_of),
+	};
 	match result.drop_meta() {
 		Node::Error(message) => Err(format!("the block {written} failed: {}", message.drop_meta())),
 		_ => Ok(result),
@@ -876,7 +879,7 @@ fn mentions(node: &Node, name: &str) -> bool {
 #[cfg(feature = "native")]
 fn run_block_program(bound: Vec<(String, Node)>, program_of: impl Fn(Vec<Node>) -> Node) -> Node {
 	use crate::extensions::numbers::Number;
-	use crate::tasks::TaskValue;
+	use crate::host::tasks::TaskValue;
 	let mut numbers = vec![];
 	let bindings = bound
 		.into_iter()
@@ -1015,7 +1018,7 @@ pub(crate) fn run_module(
 		needs_ffi,
 	}: CompiledModule,
 ) -> Node {
-	use crate::wasm_reader::{read_bytes_with_imports, Imports};
+	use crate::run::wasm_reader::{read_bytes_with_imports, Imports};
 	let result = if needs_ffi || needs_wasi || needs_host {
 		read_bytes_with_imports(
 			&bytes,
@@ -1035,7 +1038,7 @@ pub(crate) fn run_module(
 /// read back from the module's `warp.meta` section (entry units), as wasm_reader does natively
 #[cfg(not(feature = "native"))]
 pub(crate) fn run_module(module: CompiledModule) -> Node {
-	crate::units::static_units::with_module_units(&module.bytes, crate::web::run_in_host(&module.bytes))
+	crate::numbers::units::static_units::with_module_units(&module.bytes, crate::web::run_in_host(&module.bytes))
 }
 
 /// The run used up its fuel: it probably does not terminate, or needs a larger budget

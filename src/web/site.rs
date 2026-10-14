@@ -5,11 +5,11 @@
 //! The page loads the playground's own reader.js, host.js and markup.js, carried in the warp binary, and the parts of
 //! host.js its module imports words of (HOST_PARTS, card web-bundle).
 
-use crate::host::{FOREIGN_CALL, HOST_LIBRARY, PAINT};
-pub(crate) use crate::host_parts::{
+pub(crate) use crate::host::host_parts::{
 	compile_failure, exports, host_scripts_of, imports_of, message_of, with_excerpt, GPU_WORDS, TASK_WORD_PREFIXES,
 };
-pub use crate::host_parts::{HostPart, Script, HOST_PARTS};
+pub use crate::host::host_parts::{HostPart, Script, HOST_PARTS};
+use crate::host::{FOREIGN_CALL, HOST_LIBRARY, PAINT};
 use crate::node::Node;
 use std::path::{Path, PathBuf};
 pub use warp_runtime::site_files::{content_type, file_at, SiteFile};
@@ -135,7 +135,7 @@ pub struct ServedSite {
 /// (host-tasks.js SERVER_REPLIES), so it starts showing what the server rendered
 struct Renderer {
 	bytes: Vec<u8>,
-	imports: crate::wasm_reader::Imports,
+	imports: crate::run::wasm_reader::Imports,
 	title: String,
 	scripts: Vec<Script>,
 	worker_scripts: Vec<Script>,
@@ -177,7 +177,7 @@ impl Renderer {
 			crate::serve::RPC_VALUES,
 		];
 		let read = crate::host::with_page_path(path, || {
-			crate::wasm_reader::read_exports_after_main(&self.bytes, self.imports, &names)
+			crate::run::wasm_reader::read_exports_after_main(&self.bytes, self.imports, &names)
 		});
 		let failed = |failure| {
 			format!(
@@ -230,7 +230,7 @@ fn replies_script(requests: &[Node], values: &[Node]) -> String {
 			let answer = crate::web::web_server::Answer::of(value);
 			Some(serde_json::json!({
 				"url": url.name(),
-				"arguments": crate::foreign::json_of(&arguments),
+				"arguments": crate::modules::foreign::json_of(&arguments),
 				"body": String::from_utf8_lossy(&answer.body),
 				"text": answer.content_type.starts_with(crate::web::web_server::TEXT_REPLY_TYPE),
 			}))
@@ -250,14 +250,14 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, 
 	if !exports(&rendering.bytes, crate::page_html::PAGE_HTML) {
 		return Ok(None);
 	}
-	let imports = crate::wasm_reader::Imports {
+	let imports = crate::run::wasm_reader::Imports {
 		host: rendering.needs_host,
 		wasi: rendering.needs_wasi,
 		ffi: rendering.needs_ffi,
 	};
 	let read_after_main = |name: &str| {
 		warp_runtime::system_signals::until_first_frame(|| {
-			crate::wasm_reader::read_export_after_main(&rendering.bytes, imports, name)
+			crate::run::wasm_reader::read_export_after_main(&rendering.bytes, imports, name)
 		})
 		.map_err(|failure| {
 			format!(
@@ -457,7 +457,7 @@ fn page(title: &str, body: &str, replies: &str, scripts: &[Script], worker_scrip
 		.replace("{{scripts}}", &scripts)
 		.replace("{{worker}}", &worker)
 		.replace("{{base}}", &base)
-		.replace("{{title}}", &crate::markup::escaped(title))
+		.replace("{{title}}", &crate::web::markup::escaped(title))
 		.replace("{{replies}}", replies)
 		.replace("{{body}}", body)
 }

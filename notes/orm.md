@@ -145,7 +145,7 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
   registration becomes `[Person(row#2, row#3, row#1) for row in std_io("table", "open", [t, schema, file])]`;
   `people.add(p)` adds and then sets `p.id` from `std_io("table", "insert", …)`; after each `v.f op= e` of a column f:
   `if v is C and v.id > 0 { std_io("table", "update", …) }`.
-- src/database.rs: the SQLite C API through libloading (the system's libsqlite3, ffi/link.rs get_or_load_library), one
+- src/host/database.rs: the SQLite C API through libloading (the system's libsqlite3, ffi/link.rs get_or_load_library), one
   connection per file and thread, `:memory:` for inline code. An added column takes the field's default, else the
   type's zero. A changed column type: see step 7. Browser: web/playground/host-files.js `table` (step 6).
 
@@ -203,7 +203,7 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
 - An add or field write in a one-statement block (`if … { teams.add(t) }`) is lowered like a statement of its own.
 
 ## Steps
-1. **Prototype, native, eager** (done: lowering/database_tables.rs, src/database.rs, tests/control/test_database_tables.rs):
+1. **Prototype, native, eager** (done: lowering/database_tables.rs, src/host/database.rs, tests/control/test_database_tables.rs):
    - registration, schema and the implicit id;
    - add and field updates written through;
    - migrations for added/removed columns;

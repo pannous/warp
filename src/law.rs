@@ -12,7 +12,7 @@ pub mod lean;
 pub mod type_model;
 
 use crate::analyzer::extract_user_functions;
-use crate::context::Context;
+use crate::compiler::context::Context;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;

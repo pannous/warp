@@ -71,7 +71,7 @@ use crate::type_kinds::Kind as K;
 /// The built-in type words, the one list of them (card cleanup-closed-lists): each is a type value where it stands bare
 /// (`t = int`, `type(π) == real`). `number` covers every number, `real` the exact numbers and π, `rational` the whole
 /// numbers too, `text` a one-character string (a codepoint); `list` and ø both hold the empty list, as `count` takes
-/// it; a ± value is a number. The fixed widths (`int8`, `uint16` …) are src/fixed_width.rs
+/// it; a ± value is a number. The fixed widths (`int8`, `uint16` …) are src/numbers/fixed_width.rs
 const BUILTIN_TYPES: [BuiltinType; 15] = [
 	builtin(
 		"int",

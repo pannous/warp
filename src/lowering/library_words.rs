@@ -7,7 +7,7 @@
 
 use super::nodes::{call, children_rewritten, key, Counter};
 use crate::analyzer::{call_name, counting_method};
-use crate::context::Context;
+use crate::compiler::context::Context;
 use crate::declaration_forms::is_list_mutating_method;
 use crate::diagnostic::Diagnostic;
 use crate::node::{symbol, text, Bracket, Node, Separator};
@@ -1057,7 +1057,7 @@ impl Lowering {
 			));
 		}
 		// `f.effects` of a function, not of a variable: the query effects.rs answers
-		let is_effects_query = name == crate::effects::EFFECTS_WORD
+		let is_effects_query = name == crate::analyzer::effects::EFFECTS_WORD
 			&& receiver
 				.symbol_name()
 				.is_some_and(|function| !self.plain.contains(function));

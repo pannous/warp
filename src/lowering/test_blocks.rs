@@ -99,7 +99,7 @@ fn run_test(statement: Node) -> Vec<Node> {
 /// A template's source with the hidden names, which a program cannot write
 fn template(source: &str) -> Node {
 	[COUNT, FAILED, CAUGHT].iter().fold(
-		crate::meta::parsing_file(crate::meta::GENERATED_FILE, || parse(source)),
+		crate::compiler::meta::parsing_file(crate::compiler::meta::GENERATED_FILE, || parse(source)),
 		|node, (placeholder, hidden)| substitute(node, placeholder, &symbol(hidden)),
 	)
 }

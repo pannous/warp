@@ -183,7 +183,7 @@ fn markup_functions(statements: &[Node]) -> HashMap<String, Node> {
 		.filter_map(function_definition)
 		.filter_map(|(name, _, _, body)| {
 			let markup = last_statement(&body).into_owned();
-			crate::markup::is_markup(&markup).then_some((name, markup))
+			crate::web::markup::is_markup(&markup).then_some((name, markup))
 		})
 		.collect()
 }
@@ -195,7 +195,7 @@ fn hole_bindings(shown: &Node, markups: &HashMap<String, Node>) -> Vec<Node> {
 	if !crate::pipeline::compile_mode().renders_itself() {
 		return vec![];
 	}
-	let (elements, texts) = crate::markup::holes_through(shown, markups);
+	let (elements, texts) = crate::web::markup::holes_through(shown, markups);
 	let globals = HashSet::from([SHOWN.to_string()]);
 	let bound = |name: String, part: Node| function_with_globals(&name, false, &[part], &globals);
 	let path_list = |path: &[usize]| Node::list(path.iter().map(|index| Node::int(*index as i64)).collect());
@@ -377,12 +377,12 @@ fn stateful_component(statement: &Node) -> Option<StatefulComponent> {
 /// `def Card(t) = div{ style{ "h2": {…} } h2{t} }`: the definition with its root element naming the component
 fn scoped_component(statement: &Node) -> Option<Node> {
 	let mut has_sheet = false;
-	statement.visit(&mut |part| has_sheet |= crate::markup::is_style_sheet(part));
+	statement.visit(&mut |part| has_sheet |= crate::web::markup::is_style_sheet(part));
 	if !has_sheet {
 		return None;
 	}
 	let (name, head, op, body) = function_definition(statement)?;
-	let attribute = key(symbol(crate::markup::SCOPE_ATTRIBUTE), Op::Colon, Node::Text(name));
+	let attribute = key(symbol(crate::web::markup::SCOPE_ATTRIBUTE), Op::Colon, Node::Text(name));
 	let body = match body {
 		Node::List(mut items, Bracket::Curly, separator) => {
 			let root = with_attribute(items.pop()?, attribute)?;
@@ -399,7 +399,7 @@ fn with_attribute(element: Node, attribute: Node) -> Option<Node> {
 	let Node::Key(tag, op, content) = element.drop_meta().clone() else {
 		return None;
 	};
-	if !crate::markup::is_element_tag(&tag.drop_meta().name()) {
+	if !crate::web::markup::is_element_tag(&tag.drop_meta().name()) {
 		return None;
 	}
 	let items = match *content {

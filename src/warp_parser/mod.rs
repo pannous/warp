@@ -1,7 +1,7 @@
+use crate::compiler::meta::LineInfo;
 use crate::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
 use crate::extensions::numbers::Number;
 use crate::extensions::reals::{Exact, Rational, Real};
-use crate::meta::LineInfo;
 use crate::node::call;
 use crate::node::Node::{Empty, Symbol};
 use crate::node::{error, key_ops, Bracket, Node, Separator};
@@ -982,7 +982,7 @@ impl WarpParser {
 		let input = if options.data_mode {
 			input
 		} else {
-			crate::uniscript_entities::expand_entities(&input)
+			crate::text::uniscript_entities::expand_entities(&input)
 		};
 		let lines: Vec<String> = input.lines().map(String::from).collect();
 		let current_line = lines.first().cloned().unwrap_or_default();
@@ -1178,7 +1178,7 @@ fn is_minus_one(end: &Node) -> bool {
 }
 
 pub(crate) fn mentions(node: &Node, name: &str) -> bool {
-	if crate::interpolation::template_mentions(node, |hole| mentions(hole, name)) {
+	if crate::text::interpolation::template_mentions(node, |hole| mentions(hole, name)) {
 		return true;
 	}
 	match node.drop_meta() {

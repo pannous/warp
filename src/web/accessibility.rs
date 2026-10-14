@@ -132,7 +132,7 @@ pub fn warnings(program: &Node) -> Vec<Diagnostic> {
 		.map(|(_, message, _)| message.clone())
 		.chain(rendered_as_attributes)
 		.collect();
-	crate::compile_context::change(|context| context.written_problems = written);
+	crate::compiler::compile_context::change(|context| context.written_problems = written);
 	problems
 		.into_iter()
 		.map(|(node, message, fix)| Diagnostic::at(node, message).fix(fix))
@@ -145,7 +145,7 @@ pub fn check_rendered(markup: &Node) {
 	let mut elements = vec![];
 	collect(&markup, &HashSet::new(), false, None, &mut elements);
 	for (_, message, fix) in problems(&elements, &HashSet::new()) {
-		if !crate::compile_context::read(|context| context.written_problems.contains(&message)) {
+		if !crate::compiler::compile_context::read(|context| context.written_problems.contains(&message)) {
 			crate::diagnostic::report_runtime_warning_once(&format!("{RUN_TIME_NOTICE}: {message}; fix"), &fix);
 		}
 	}
@@ -229,7 +229,7 @@ fn element_parts(node: &Node) -> Option<(&str, &Node, &[Node])> {
 		tag => (tag, &[][..]),
 	};
 	match tag.drop_meta() {
-		Node::Symbol(tag) if crate::markup::is_element_tag(tag) => {
+		Node::Symbol(tag) if crate::web::markup::is_element_tag(tag) => {
 			Some((tag.as_str(), content.as_ref(), head_attributes))
 		}
 		_ => None,
@@ -252,7 +252,7 @@ fn written_attribute(item: &Node) -> Option<(String, &Node)> {
 	let Node::Symbol(name) = name.drop_meta() else {
 		return None;
 	};
-	if crate::markup::is_element_tag(name) {
+	if crate::web::markup::is_element_tag(name) {
 		return None;
 	}
 	Some((name.clone(), value.drop_meta()))
@@ -282,7 +282,7 @@ fn value_mistakes<'a>(element: &Element<'a>) -> Vec<Problem<'a>> {
 		.filter_map(|(name, value)| {
 			let mistake = |message: String, fix: String| Some((element.node, message, fix));
 			match (text_of(value), value) {
-				(Some(text), _) if crate::markup::is_boolean_attribute(name) => mistake(
+				(Some(text), _) if crate::web::markup::is_boolean_attribute(name) => mistake(
 					format!("{name} takes yes or no: the text {text:?} leaves it out"),
 					format!("{name}: yes, or {name}: no"),
 				),
@@ -387,7 +387,7 @@ fn markup_mistakes<'a>(element: &Element<'a>, defined: &HashSet<String>) -> Vec<
 		.iter()
 		.filter(|tag| is_unknown_tag(tag) && !defined.contains(*tag))
 	{
-		let fix = near(tag, crate::markup::element_names().to_vec(), "div".to_string());
+		let fix = near(tag, crate::web::markup::element_names().to_vec(), "div".to_string());
 		mistakes.push((element.node, format!("{tag} is no element: it shows as text"), fix));
 	}
 	for (name, _) in element
@@ -395,12 +395,16 @@ fn markup_mistakes<'a>(element: &Element<'a>, defined: &HashSet<String>) -> Vec<
 		.iter()
 		.filter(|(name, _)| !element.blocks.contains(name))
 	{
-		let renders = crate::markup::names_attribute(name)
+		let renders = crate::web::markup::names_attribute(name)
 			|| WARP_ELEMENT_WORDS.contains(&name.as_str())
 			|| crate::transitions::ELEMENT_WORDS.contains(&name.as_str())
 			|| OWN_ATTRIBUTE_PREFIXES.iter().any(|prefix| name.starts_with(prefix));
 		if !renders {
-			let fix = near(name, crate::markup::attribute_names().to_vec(), format!("data-{name}"));
+			let fix = near(
+				name,
+				crate::web::markup::attribute_names().to_vec(),
+				format!("data-{name}"),
+			);
 			mistakes.push((element.node, no_attribute(name, &element.tag), fix));
 		}
 	}
@@ -438,7 +442,7 @@ fn markup_mistakes<'a>(element: &Element<'a>, defined: &HashSet<String>) -> Vec<
 			));
 		}
 	}
-	if element.has_content && crate::markup::is_void_element(&element.tag) {
+	if element.has_content && crate::web::markup::is_void_element(&element.tag) {
 		let fix = format!("the content beside {}, or an element that holds it", element.tag);
 		mistakes.push((
 			element.node,
@@ -462,8 +466,8 @@ fn block_name(item: &Node) -> Option<String> {
 
 /// A block's name no element, attribute nor warp word: `divv` of `divv{ "hi" }`
 fn is_unknown_tag(tag: &str) -> bool {
-	let known = crate::markup::is_element_tag(tag)
-		|| crate::markup::names_attribute(tag)
+	let known = crate::web::markup::is_element_tag(tag)
+		|| crate::web::markup::names_attribute(tag)
 		|| WARP_ELEMENT_WORDS.contains(&tag)
 		|| crate::transitions::ELEMENT_WORDS.contains(&tag)
 		|| crate::event_signals::is_element_event(tag)
@@ -612,7 +616,7 @@ fn names_no_element(fields: &[Node]) -> bool {
 	fields.iter().any(|field| match field.drop_meta() {
 		Node::Key(name, _, value) => {
 			name.symbol_name()
-				.is_some_and(|name| !crate::markup::is_element_tag(name))
+				.is_some_and(|name| !crate::web::markup::is_element_tag(name))
 				|| map_fields(value).is_some_and(names_no_element)
 		}
 		_ => false,

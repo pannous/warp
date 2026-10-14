@@ -282,7 +282,7 @@ fn maps_on_gpu(statement: &Node, name: &str) -> bool {
 
 /// Whether `node` uses `name` only for its items and count (`ys#i`, `#ys`, in text holes too)
 fn reads_only_items(node: &Node, name: &str) -> bool {
-	let holes = crate::interpolation::holes(node);
+	let holes = crate::text::interpolation::holes(node);
 	if !holes.is_empty() {
 		return holes.iter().all(|hole| reads_only_items(hole, name));
 	}
@@ -365,7 +365,7 @@ fn folded_into_consumers(statements: &[Node], index: usize, program: &Node) -> O
 
 /// How often `name` occurs in `node`, in the holes of its texts too (`"\(ys#1)"` reads ys)
 fn uses_of(node: &Node, name: &str) -> usize {
-	let holes = crate::interpolation::holes(node);
+	let holes = crate::text::interpolation::holes(node);
 	if !holes.is_empty() {
 		return holes.iter().map(|hole| uses_of(hole, name)).sum();
 	}

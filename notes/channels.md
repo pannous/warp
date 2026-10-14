@@ -1,7 +1,7 @@
 # Channels (P155, plan by warp-93, 2026-10-06)
 
 User decision P155: one concept. `ch = channel()` is a channel local to the run, `channel "chat"` the machine-wide one
-(src/channels.rs, sockets in /tmp/warp-channels-<user>); both have the same words, and `send v to "chat"` (P129) is the
+(src/host/channels.rs, sockets in /tmp/warp-channels-<user>); both have the same words, and `send v to "chat"` (P129) is the
 machine channel's send.
 
 ```warp

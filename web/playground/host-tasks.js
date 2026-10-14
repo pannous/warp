@@ -166,7 +166,7 @@ function writtenCell(run, id, index) {
 	return [array, cell];
 }
 
-// The local channels of a run (P155, src/tasks.rs Channels) in one SharedArrayBuffer every task Worker gets: a lock,
+// The local channels of a run (P155, src/host/tasks.rs Channels) in one SharedArrayBuffer every task Worker gets: a lock,
 // a change counter the waiting sides sleep on (a condition variable), the next channel id and whether the program
 // ended, then per channel [full, closed, sent, taken, length] and the bytes of the value offered (JSON of a task tree).
 // Go's unbuffered channel: a send waits until a receiver took its value
@@ -313,10 +313,10 @@ function sayTasksInline(run, holder, hooks) {
 	hooks.tasksInline?.(TASKS_INLINE);
 }
 
-// a task of the run: f(arguments) in a fresh instance of the program (src/tasks.rs TaskTable::run), the Int arguments as
+// a task of the run: f(arguments) in a fresh instance of the program (src/host/tasks.rs TaskTable::run), the Int arguments as
 // they are or the argument list (`values`, a tree of reader.js) rebuilt for a wrapper f·node. On a Worker of the pool
 // (shared memory needs cross-origin isolation), which writes the result into a SharedArrayBuffer. With every Worker
-// busy the task is queued until one frees, as natively it waits for a free thread (src/tasks.rs); run inline here
+// busy the task is queued until one frees, as natively it waits for a free thread (src/host/tasks.rs); run inline here
 // instead, a task the program waits for (a channel's sender) could never answer it (card primer-channel-flake). Inline
 // only without Workers, or in a task (whose Worker has no pool) or a run holding none (no Worker would ever free)
 function startTask(holder, hooks, name, values) {
@@ -367,7 +367,7 @@ function startQueuedTasks(run) {
 	for (const task of run.tasks.values()) if (isQueued(task) && taskPool.length > 0) startOnWorker(task, run);
 }
 
-// the task's function as the program wrote it (src/tasks.rs task_name): `f`, not `f·node`; `go block 1`, not `go·block·1`
+// the task's function as the program wrote it (src/host/tasks.rs task_name): `f`, not `f·node`; `go block 1`, not `go·block·1`
 function taskName(name) {
 	return name.replace(/·node$/, "").replace(/^go·block·/, "go block ");
 }
@@ -481,7 +481,7 @@ function takenTask(run, hooks, id) {
 	return finishedTask(run, hooks, id);
 }
 
-// every task done; the first failure nobody read, but a stopped task's (src/tasks.rs join_all)
+// every task done; the first failure nobody read, but a stopped task's (src/host/tasks.rs join_all)
 function joinTasks(run, hooks) {
 	let unread;
 	for (const id of run.tasks.keys()) {
@@ -518,7 +518,7 @@ function controlTask(run, id, operation) {
 	return 1n;
 }
 
-// the message a raised error left in trap_detail before trapping (src/wasm_reader.rs with_trap_detail), if any
+// the message a raised error left in trap_detail before trapping (src/run/wasm_reader.rs with_trap_detail), if any
 function raisedText(exports) {
 	const detail = exports?.[TRAP_DETAIL_EXPORT]?.value;
 	if (!detail) return null;
@@ -583,7 +583,7 @@ function readTaskValue(module, node) {
 	return { kind: String(kind), data: null, chain: [], items };
 }
 
-// the capture globals of the program's closures (src/tasks.rs captured): their values now, for the task's instance
+// the capture globals of the program's closures (src/host/tasks.rs captured): their values now, for the task's instance
 function capturedValues(exports) {
 	const names = Object.keys(exports).filter(name => name.startsWith(CAPTURE_PREFIX));
 	return names.map(name => {
@@ -594,7 +594,7 @@ function capturedValues(exports) {
 }
 
 // an Int handle beyond the fixnums as [numerator, denominator]: the handle means nothing in another instance (card
-// error-undefined, src/tasks.rs Captured::Int)
+// error-undefined, src/host/tasks.rs Captured::Int)
 function exactParts(exports, handle) {
 	return exactOfPayload(readNode(exports, exports.new_int(handle)).data);
 }
@@ -810,7 +810,7 @@ addHostPart({
 		// `clipboard`: the page reads it (asynchronously) while the Worker waits (askPage; shipped with this part only,
 		// host_parts.rs, so a page that reads no clipboard carries none of it)
 		clipboard_text: () => buildValue(program(), treeOfPlain(self.askPage("clipboard", self.askPageClipboard).text)),
-		// channels between programs (src/channels.rs): a BroadcastChannel of the name, which reaches the other tabs and
+		// channels between programs (src/host/channels.rs): a BroadcastChannel of the name, which reaches the other tabs and
 		// workers of this page's origin; the listener's timer (lowering/system_signals.rs) takes what arrived
 		channel_listen: (id, channel) => listenOnChannel(holder, hooks, Number(id), plainOfTree(readNode(program(), channel))),
 		channel_pending: id => BigInt(holder.channels?.get(Number(id))?.messages.length ?? 0),
@@ -821,7 +821,7 @@ addHostPart({
 			if (SOCKET_ADDRESS.test(name)) return sendOnSocket(holder, hooks, name, value);
 			new BroadcastChannel(name).postMessage(value);
 		},
-		// channels inside one run (P155, src/tasks.rs Channels): Go's unbuffered channel between the task Workers
+		// channels inside one run (P155, src/host/tasks.rs Channels): Go's unbuffered channel between the task Workers
 		channel_new: () => openChannel(holder.run),
 		channel_put: (id, value) => putOnChannel(holder, hooks, id, utf8.encode(JSON.stringify(readTaskValue(program(), value)))),
 		channel_take: id => {
@@ -832,7 +832,7 @@ addHostPart({
 		channel_close: id => closeChannel(holder.run, id),
 		fetch_start: (id, url) => startFetch(holder, hooks, Number(id), plainOfTree(readNode(program(), url))),
 		fetch_reply: id => buildValue(program(), treeOfPlain(fetchReply(holder, Number(id)))),
-		// tasks (src/tasks.rs): `go f(x)` runs f in a fresh instance of the program, values copied in and out; a page
+		// tasks (src/host/tasks.rs): `go f(x)` runs f in a fresh instance of the program, values copied in and out; a page
 		// without cross-origin isolation has no shared memory to wait on, so the task runs at once where it starts
 		task_spawn_values: (name, values) => startTask(holder, hooks, decode(cString(name)), readTaskValue(program(), values)),
 		task_await_value: id => buildValue(program(), taskTree(takenTask(holder.run, hooks, id).value)),
@@ -848,11 +848,11 @@ addHostPart({
 			deliverSignals(holder);
 			return status;
 		},
-		// a raise inside a task goes to the starting program's handlers (src/tasks.rs signal_send, deliver)
+		// a raise inside a task goes to the starting program's handlers (src/host/tasks.rs signal_send, deliver)
 		task_inside: () => holder.inTask ? 1n : 0n,
-		// a parallel let forks from the program only: a task's Worker does not see how many others run (src/tasks.rs counts them)
+		// a parallel let forks from the program only: a task's Worker does not see how many others run (src/host/tasks.rs counts them)
 		task_forks: () => holder.inTask ? 0n : 1n,
-		// a split float map runs on one thread in the browser: 0 makes the program call its kernel itself (src/tasks.rs split_map)
+		// a split float map runs on one thread in the browser: 0 makes the program call its kernel itself (src/host/tasks.rs split_map)
 		task_split_mapf: () => 0n,
 		signal_send: (handler, values) => {
 			(holder.run.signals ??= []).push({ handler: decode(cString(handler)), values: readTaskValue(program(), values) });
@@ -867,7 +867,7 @@ addHostPart({
 			if (!control) return;
 			while (Atomics.load(control, 0) === CONTROL_PAUSED) Atomics.wait(control, 0, CONTROL_PAUSED);
 		},
-		// shared arrays (src/shared.rs): Ints every task of the run reaches, in shared memory when the page is isolated;
+		// shared arrays (src/host/shared.rs): Ints every task of the run reaches, in shared memory when the page is isolated;
 		// one cell more, the last, counts the writes (shared_writes)
 		shared_new: length => {
 			const Buffer = self.crossOriginIsolated ? SharedArrayBuffer : ArrayBuffer;

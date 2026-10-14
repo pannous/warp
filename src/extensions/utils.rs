@@ -70,7 +70,7 @@ pub fn download_within(url: &str, timeout: std::time::Duration) -> Result<String
 	response.body_mut().read_to_string().map_err(reason)
 }
 
-/// `post(url, body, headers)` of the stdlib module net (src/std_adapters.rs): the body sent as UTF-8 text (plain text
+/// `post(url, body, headers)` of the stdlib module net (src/modules/std_adapters.rs): the body sent as UTF-8 text (plain text
 /// unless a header names its Content-Type), the answer's text; an answer of status >= 400 is the error, with its body
 /// (an API's own reason, `{"error": … "invalid x-api-key"}`)
 #[cfg(feature = "native")]

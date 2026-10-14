@@ -271,7 +271,7 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 		}
 	}
 	// a warp module names its functions' parameters in warp.meta, other modules may in the name section
-	let functions_meta = crate::meta_section::entry(bytes, crate::lowering::reflection::META_FUNCTIONS);
+	let functions_meta = crate::formats::meta_section::entry(bytes, crate::lowering::reflection::META_FUNCTIONS);
 	let meta_parameters = |name: &str| {
 		functions_meta.as_ref().map(|functions| {
 			crate::lowering::reflection::entry_names(&functions[name][crate::lowering::reflection::PARAMS_WORDS[0]])
@@ -619,7 +619,7 @@ fn number_types(types: &[wasmparser::ValType]) -> Option<Vec<wasm_encoder::ValTy
 pub fn classes(path: &str) -> Vec<Node> {
 	let Some(Node::List(classes, _, _)) = module_bytes(path)
 		.ok()
-		.and_then(|bytes| crate::meta_section::entry(&bytes, crate::reflection::META_CLASSES))
+		.and_then(|bytes| crate::formats::meta_section::entry(&bytes, crate::reflection::META_CLASSES))
 	else {
 		return vec![];
 	};
@@ -1162,8 +1162,8 @@ fn write_back(
 			.ok_or_else(|| wasmtime::format_err!("a value's instance exports no memory"))
 	};
 	let (program_memory, module_memory) = (memory(caller, None)?, memory(caller, Some(instance))?);
-	let changed = crate::wasm_reader::node_in(module_argument, &mut caller.as_context_mut(), module_memory)
-		!= crate::wasm_reader::node_in(argument, &mut caller.as_context_mut(), program_memory);
+	let changed = crate::run::wasm_reader::node_in(module_argument, &mut caller.as_context_mut(), module_memory)
+		!= crate::run::wasm_reader::node_in(argument, &mut caller.as_context_mut(), program_memory);
 	if !changed {
 		return Ok(());
 	}
@@ -1195,9 +1195,9 @@ fn copied(
 	let memory = export_of(caller, from, "memory")
 		.and_then(wasmtime::Extern::into_memory)
 		.ok_or_else(|| wasmtime::format_err!("a value's instance exports no memory"))?;
-	let node = crate::wasm_reader::node_in(value, &mut caller.as_context_mut(), memory);
-	let value = crate::tasks::TaskValue::of(&node).map_err(|failure| wasmtime::format_err!("{failure}"))?;
-	let builders = crate::tasks::Builders::of(&mut |name| export_of(caller, into, name))
+	let node = crate::run::wasm_reader::node_in(value, &mut caller.as_context_mut(), memory);
+	let value = crate::host::tasks::TaskValue::of(&node).map_err(|failure| wasmtime::format_err!("{failure}"))?;
+	let builders = crate::host::tasks::Builders::of(&mut |name| export_of(caller, into, name))
 		.map_err(|failure| wasmtime::format_err!("{failure}"))?;
 	builders
 		.build(&value, &mut caller.as_context_mut())
@@ -1254,7 +1254,7 @@ fn instance_of(
 	let engine = caller.engine().clone();
 	let module = wasmtime::Module::new(&engine, &bytes)?;
 	let mut linker = wasmtime::Linker::new(&engine);
-	crate::wasm_reader::link_imports(&mut linker, &engine, &module, crate::wasm_reader::Imports::EVERY)
+	crate::run::wasm_reader::link_imports(&mut linker, &engine, &module, crate::run::wasm_reader::Imports::EVERY)
 		.map_err(|failure| wasmtime::format_err!("{path}: {failure:#}"))?;
 	let instance = linker.instantiate(&mut *caller, &module)?;
 	caller.data_mut().wasm_modules.insert(file, instance);

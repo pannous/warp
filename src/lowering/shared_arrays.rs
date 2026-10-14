@@ -1,5 +1,5 @@
 //! Shared arrays (user decision P33 step 6, P44): `shared xs = int[n]` makes n Ints every task of the run shares (held by
-//! the host: src/shared.rs natively, host.js in the browser), `shared xs = float[n]` n floats; `go f(xs)` passes that
+//! the host: src/host/shared.rs natively, host.js in the browser), `shared xs = float[n]` n floats; `go f(xs)` passes that
 //! same array, the one exception to copying. The array is an Int naming it; its uses become host words, atomic in the
 //! host: `xs#i` → `shared_get(xs, i)`, `xs#i = v` → `shared_set(xs, i, v)`, `xs#i += v` → `shared_add(xs, i, v)`
 //! (`shared_getf` … for floats), `#xs` / `count(xs)` → `shared_count(xs)`, `for x in xs` loops over its cells and xs as a
@@ -458,7 +458,7 @@ impl Rewrite<'_> {
 		// `"a \(xs#1)"`: the holes' expressions as code now, so their shared names are rewritten like any others
 		let mentioned = |hole: &Node| mentions_any(hole, &self.names(function));
 		if let Some(text) = matches!(node, Node::Meta { .. })
-			.then(|| crate::interpolation::interpolated_mentioning(&node, mentioned))
+			.then(|| crate::text::interpolation::interpolated_mentioning(&node, mentioned))
 			.flatten()
 		{
 			return self.node(text, function);

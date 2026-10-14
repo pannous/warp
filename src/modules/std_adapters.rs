@@ -28,7 +28,7 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		"midi" => midi(member, &arguments),
 		// the tables of registered classes (lowering/database_tables.rs)
 		#[cfg(feature = "native")]
-		"table" => crate::database::call(member, &arguments),
+		"table" => crate::host::database::call(member, &arguments),
 		_ => no_such_word(&arguments),
 	};
 	answer.map_err(|problem| format!("{module}.{member}: {problem}"))
@@ -67,9 +67,9 @@ fn json(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			let parsed: serde_json::Value = serde_json::from_str(&text)
 				.or_else(|_| serde_json::from_str(&crate::node::json_of_json5(&text)))
 				.map_err(|problem| format!("{text:?} is no json: {problem}"))?;
-			Ok(crate::foreign::node_of(&parsed))
+			Ok(crate::modules::foreign::node_of(&parsed))
 		}
-		("to_json", [value]) => Ok(Node::Text(crate::foreign::json_of(value).to_string())),
+		("to_json", [value]) => Ok(Node::Text(crate::modules::foreign::json_of(value).to_string())),
 		// an instance of one of the program's classes is its fields: `{"Point": {"x": 1}}` is `{"x": 1}` (as host.js)
 		("to_json", [value, classes]) => {
 			let classes: Vec<String> = classes
@@ -78,7 +78,7 @@ fn json(member: &str, arguments: &[Node]) -> Result<Node, String> {
 				.filter_map(|class| text_of(class).ok())
 				.collect();
 			Ok(Node::Text(
-				without_class_tags(crate::foreign::json_of(value), &classes).to_string(),
+				without_class_tags(crate::modules::foreign::json_of(value), &classes).to_string(),
 			))
 		}
 		_ => no_such_word(arguments),
@@ -95,7 +95,7 @@ fn file(member: &str, arguments: &[Node]) -> Result<Node, String> {
 		("append", [path, text]) => {
 			use std::io::Write;
 			let path = text_of(path)?;
-			crate::sandbox::check_write(&path)?;
+			crate::host::sandbox::check_write(&path)?;
 			let mut file = std::fs::OpenOptions::new()
 				.append(true)
 				.create(true)
@@ -182,30 +182,32 @@ fn store(member: &str, arguments: &[Node]) -> Result<Node, String> {
 		// the value kept under its name, or the default
 		("load", [name, default, file]) => {
 			let kept = stored_values(&text_of(file)?)?.remove(&text_of(name)?);
-			Ok(kept.map_or_else(|| default.clone(), |value| crate::foreign::node_of(&value)))
+			Ok(kept.map_or_else(|| default.clone(), |value| crate::modules::foreign::node_of(&value)))
 		}
 		// `stored theme default "dark"`: the default kept from the first run on, so the store lists it
 		("declare", [name, default, file]) => {
 			let (name, file) = (text_of(name)?, text_of(file)?);
 			let mut values = stored_values(&file)?;
 			if let Some(kept) = values.get(&name) {
-				return Ok(crate::foreign::node_of(kept));
+				return Ok(crate::modules::foreign::node_of(kept));
 			}
-			values.insert(name, crate::foreign::json_of(default));
+			values.insert(name, crate::modules::foreign::json_of(default));
 			save_stored_values(&file, values).map(|_| default.clone())
 		}
 		("save", [name, value, file]) => {
 			let name = text_of(name)?;
-			changed_store(file, |values| drop(values.insert(name, crate::foreign::json_of(value))))
+			changed_store(file, |values| {
+				drop(values.insert(name, crate::modules::foreign::json_of(value)))
+			})
 		}
 		// `delete storage[k]`, `keys(storage)`, `storage` alone
 		("remove", [name, file]) => {
 			let name = text_of(name)?;
 			changed_store(file, |values| drop(values.remove(&name)))
 		}
-		("all", [file]) => Ok(crate::foreign::node_of(&serde_json::Value::Object(stored_values(
-			&text_of(file)?,
-		)?))),
+		("all", [file]) => Ok(crate::modules::foreign::node_of(&serde_json::Value::Object(
+			stored_values(&text_of(file)?)?,
+		))),
 		("names", [file]) => Ok(texts(stored_values(&text_of(file)?)?.into_iter().map(|(name, _)| name))),
 		_ => no_such_word(arguments),
 	}
@@ -305,7 +307,7 @@ fn stored_values(file: &str) -> Result<StoredValues, String> {
 
 /// writes a file, creating its missing folders first
 fn write_file(path: &str, contents: impl AsRef<[u8]>) -> Result<Node, String> {
-	crate::sandbox::check_write(path)?;
+	crate::host::sandbox::check_write(path)?;
 	let folder = std::path::Path::new(path)
 		.parent()
 		.filter(|folder| !folder.as_os_str().is_empty());
@@ -329,7 +331,7 @@ fn save_stored_values(file: &str, values: StoredValues) -> Result<(), String> {
 		UNFILED_STORES.with(|stores| stores.borrow_mut().insert(store, values));
 		return Ok(());
 	}
-	crate::sandbox::check_write(file)?;
+	crate::host::sandbox::check_write(file)?;
 	let text = serde_json::to_string_pretty(&values).map_err(|problem| problem.to_string())?;
 	std::fs::write(file, text).map_err(|problem| format!("{file}: {problem}"))
 }
@@ -338,7 +340,7 @@ fn save_stored_values(file: &str, values: StoredValues) -> Result<(), String> {
 /// a command that fails is an error with what it printed to stderr
 #[cfg(feature = "native")]
 fn executed(command: &[String]) -> Result<String, String> {
-	crate::sandbox::check_process("os.exec")?;
+	crate::host::sandbox::check_process("os.exec")?;
 	let (program, arguments) = command.split_first().ok_or("needs a command")?;
 	let output = std::process::Command::new(program)
 		.args(arguments)
@@ -426,7 +428,7 @@ fn unshared_feature(pattern: &str) -> Option<&'static str> {
 
 /// A map of texts `{"x-api-key": key}` as (name, value) pairs
 fn header_pairs(headers: &Node) -> Result<Vec<(String, String)>, String> {
-	let serde_json::Value::Object(pairs) = crate::foreign::json_of(headers) else {
+	let serde_json::Value::Object(pairs) = crate::modules::foreign::json_of(headers) else {
 		return Err(format!(
 			"headers are a map of texts, got {}",
 			headers.serialize().trim()

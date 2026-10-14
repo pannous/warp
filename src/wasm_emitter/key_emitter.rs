@@ -169,7 +169,7 @@ impl WasmGcEmitter {
 			self.emit_range(func, left, right, *op == Op::To);
 		} else if *op == Op::PlusMinus {
 			// `5 ± 1σ` is a Gaussian (card plus-minus-gaussian), `5 ± 1` an interval
-			let gaussian = crate::uncertain::gaussian_spread(right);
+			let gaussian = crate::numbers::uncertain::gaussian_spread(right);
 			self.emit_float_value(func, left);
 			self.emit_float_value(func, gaussian.unwrap_or(right));
 			self.emit_call(
@@ -432,7 +432,7 @@ impl WasmGcEmitter {
 }
 
 fn has_list_children(tag: &Node, children: &Node) -> bool {
-	let is_element = matches!(tag.drop_meta(), Node::Symbol(name) if crate::markup::is_element_tag(name));
+	let is_element = matches!(tag.drop_meta(), Node::Symbol(name) if crate::web::markup::is_element_tag(name));
 	is_element
 		&& matches!(children, Node::List(items, Bracket::Curly, _) if items.iter().any(|item| matches!(item.drop_meta(), Node::List(_, Bracket::Square, _))))
 }

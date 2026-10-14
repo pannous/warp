@@ -99,8 +99,8 @@ const TEXT_BUILTINS: [(&str, usize, Kind); 23] = [
 	(FLOAT_BITS, 1, Kind::Int),
 	(BITS_FLOAT, 1, Kind::Float),
 	(crate::wasm_emitter::CAUGHT_ERROR, 2, Kind::Error),
-	(crate::uncertain::CERTAINLY, 1, Kind::Int),
-	(crate::uncertain::POSSIBLY, 1, Kind::Int),
+	(crate::numbers::uncertain::CERTAINLY, 1, Kind::Int),
+	(crate::numbers::uncertain::POSSIBLY, 1, Kind::Int),
 ];
 
 /// The text builtins and the node words (node_api.rs), which are called the same way
@@ -396,8 +396,8 @@ impl WasmGcEmitter {
 				| crate::memoization::MEMO_KNOWN
 				| crate::memoization::MEMO_VALUE
 				| crate::memoization::MEMO_STORE
-				| crate::uncertain::CERTAINLY
-				| crate::uncertain::POSSIBLY,
+				| crate::numbers::uncertain::CERTAINLY
+				| crate::numbers::uncertain::POSSIBLY,
 				_,
 			) => {
 				self.emit_integer_text_builtin(func, name, arguments);
@@ -495,7 +495,7 @@ impl WasmGcEmitter {
 				Self::emit_list(func, &[I::I64ExtendI32U]);
 			}
 			(RAN_WITHOUT_ERROR, [statement]) => self.emit_ran_without_error(func, statement),
-			(crate::uncertain::CERTAINLY | crate::uncertain::POSSIBLY, [comparison]) => {
+			(crate::numbers::uncertain::CERTAINLY | crate::numbers::uncertain::POSSIBLY, [comparison]) => {
 				self.emit_certainty(func, name, comparison)
 			}
 			(STARTS_WITH | ENDS_WITH, [text, part]) => {

@@ -98,7 +98,7 @@ impl WarpParser {
 			if ch == closing {
 				self.advance(); // skip closing quote
 				if is_template {
-					return crate::interpolation::template_text(&template);
+					return crate::text::interpolation::template_text(&template);
 				}
 				return self.quoted_text(s.nfc().collect(), quote, (quote_line, quote_column), interpolates);
 			}
@@ -133,11 +133,12 @@ impl WarpParser {
 				match escaped {
 					'\0' => continue, // `"\` ends the source: the loop reports the unterminated text
 					':' if interpolates && self.peek_char(1).is_ascii_alphabetic() => {
-						let Some((name, length)) = crate::uniscript_entities::entity_name_at(&self.chars, self.pos - 1)
+						let Some((name, length)) =
+							crate::text::uniscript_entities::entity_name_at(&self.chars, self.pos - 1)
 						else {
 							unreachable!("a letter follows")
 						};
-						let Some(characters) = crate::uniscript_entities::entity(&name) else {
+						let Some(characters) = crate::text::uniscript_entities::entity(&name) else {
 							if let Err(strict) = self.warn_unknown_entity(&name, self.column - 1) {
 								return strict;
 							}
@@ -210,7 +211,7 @@ impl WarpParser {
 
 	/// `\:xyzzy` names no entity: it stays as written and warns; in strict mode the warning is the error
 	pub(super) fn warn_unknown_entity(&self, name: &str, column: usize) -> Result<(), Node> {
-		let message = crate::uniscript_entities::unknown_entity(name);
+		let message = crate::text::uniscript_entities::unknown_entity(name);
 		crate::diagnostic::report(&[Diagnostic {
 			message,
 			line: self.line_nr,
@@ -399,13 +400,13 @@ impl WarpParser {
 		if superscript_letter(next).is_some() {
 			return number;
 		}
-		let tight = (next.is_alphabetic() || next == '_' || next == '(' || next == crate::units::DEGREE)
+		let tight = (next.is_alphabetic() || next == '_' || next == '(' || next == crate::numbers::units::DEGREE)
 			&& !self.at_ordinal_suffix();
 		// `1500 meters` stays the pair the unit lowering reads (`3010 meters`), joined so it binds tighter than `>`
 		if !tight
 			&& self
 				.spaced_word()
-				.is_some_and(|word| crate::units::is_long_unit_name(&word))
+				.is_some_and(|word| crate::numbers::units::is_long_unit_name(&word))
 		{
 			self.skip_spaces();
 			let unit = self.parse_atom();
@@ -429,14 +430,17 @@ impl WarpParser {
 	pub(super) fn at_spaced_unit(&self) -> bool {
 		// `2 m²`: the power is no part of the unit's name
 		self.spaced_word().is_some_and(|word| {
-			word == crate::uncertain::SIGMA
-				|| crate::units::names_unit(word.trim_end_matches(|c: char| superscript_digit(c).is_some()))
+			word == crate::numbers::uncertain::SIGMA
+				|| crate::numbers::units::names_unit(word.trim_end_matches(|c: char| superscript_digit(c).is_some()))
 		})
 	}
 
 	/// `3 km` reads as `3km`, the form units are written in (user 2026-10-09: a soft hint)
 	fn hint_glued_unit(&self, number: &Node) {
-		let Some(unit) = self.spaced_word().filter(|word| word != crate::uncertain::SIGMA) else {
+		let Some(unit) = self
+			.spaced_word()
+			.filter(|word| word != crate::numbers::uncertain::SIGMA)
+		else {
 			return;
 		};
 		let amount = number.serialize();

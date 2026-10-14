@@ -13,7 +13,7 @@ fn test_a_compiled_quantity_carries_its_unit() {
 		.any(|window| window == b"warp.meta"));
 	#[cfg(feature = "native")] // the browser build runs modules in the page (test_eval_reads_the_same_section)
 	assert_eq!(
-		warp::wasm_reader::read_bytes(&module.bytes)
+		warp::run::wasm_reader::read_bytes(&module.bytes)
 			.expect("runs")
 			.serialize()
 			.trim(),

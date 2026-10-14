@@ -12,15 +12,15 @@ const BOOL_CALLS: [&str; 8] = [
 	crate::wasm_emitter::text_builtins::IS_ERROR,
 	crate::library_words::VALUES_SIMILAR,
 	crate::library_words::VALUES_ROUGH,
-	crate::uncertain::CERTAINLY,
-	crate::uncertain::POSSIBLY,
+	crate::numbers::uncertain::CERTAINLY,
+	crate::numbers::uncertain::POSSIBLY,
 ];
 
 /// `even(n) := n % 2 == 0`: the functions whose body ends in a bool, also through each other (`odd(n) := not even(n)`)
 /// and themselves (`f(n) := if n == 0 then true else f(n - 1)`), for the emission of one program: every function is
 /// taken for one until its body shows otherwise
-pub fn note_bool_functions<'a>(functions: impl Iterator<Item = &'a crate::context::UserFunctionDef> + Clone) {
-	crate::compile_context::change(|context| {
+pub fn note_bool_functions<'a>(functions: impl Iterator<Item = &'a crate::compiler::context::UserFunctionDef> + Clone) {
+	crate::compiler::compile_context::change(|context| {
 		context.bool_functions = functions.clone().map(|function| function.name.clone()).collect()
 	});
 	loop {
@@ -32,12 +32,14 @@ pub fn note_bool_functions<'a>(functions: impl Iterator<Item = &'a crate::contex
 		if refuted.is_empty() {
 			return;
 		}
-		crate::compile_context::change(|context| context.bool_functions.retain(|name| !refuted.contains(name)));
+		crate::compiler::compile_context::change(|context| {
+			context.bool_functions.retain(|name| !refuted.contains(name))
+		});
 	}
 }
 
 /// The body ends in a bool and every `return` in it returns one
-fn gives_bool(function: &crate::context::UserFunctionDef) -> bool {
+fn gives_bool(function: &crate::compiler::context::UserFunctionDef) -> bool {
 	let mut scope = parameter_scope(function);
 	define_bool_locals(function, &mut scope);
 	let mut returns_bool = true;
@@ -52,7 +54,7 @@ fn gives_bool(function: &crate::context::UserFunctionDef) -> bool {
 }
 
 /// The function's parameters declared bool (`f(b: bool) := b`), the rest unknown
-fn parameter_scope(function: &crate::context::UserFunctionDef) -> Scope {
+fn parameter_scope(function: &crate::compiler::context::UserFunctionDef) -> Scope {
 	let mut scope = Scope::new();
 	for param in function.params.iter().filter(|param| {
 		param
@@ -67,7 +69,7 @@ fn parameter_scope(function: &crate::context::UserFunctionDef) -> Scope {
 
 /// The locals of the body that only ever store bools (`hit = no; … hit = yes`, the flag `any` inlines to), also
 /// through each other (`b = a`); a parameter or a local updated in place (`n += 1`) is none
-fn define_bool_locals(function: &crate::context::UserFunctionDef, scope: &mut Scope) {
+fn define_bool_locals(function: &crate::compiler::context::UserFunctionDef, scope: &mut Scope) {
 	let mut stored: HashMap<String, Vec<Node>> = HashMap::new();
 	let mut updated: HashSet<String> = function.params.iter().map(|param| param.name.clone()).collect();
 	function.body.visit(&mut |node| {
@@ -97,7 +99,7 @@ fn define_bool_locals(function: &crate::context::UserFunctionDef, scope: &mut Sc
 }
 
 pub fn is_bool_function(name: &str) -> bool {
-	crate::compile_context::read(|context| context.bool_functions.contains(name))
+	crate::compiler::compile_context::read(|context| context.bool_functions.contains(name))
 }
 
 /// `true`, `3 > 2`, `2 as bool`, `bool(2)`, `not x`, `a and b` of bools, `x is int`, a variable bound to one, `(…; x < 3)` ending in one

@@ -8,9 +8,9 @@
 
 use super::nodes::key;
 use crate::node::{symbol, Bracket, Node, Separator};
+use crate::numbers::units::static_units::si_quantity;
 use crate::operators::Op;
 use crate::stored_values::DATABASE_WORDS;
-use crate::units::static_units::si_quantity;
 use crate::warp_parser::parse;
 use crate::words::{FOR_WORD, GLOBAL_WORD, IN_WORD};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -185,12 +185,12 @@ const NUMERIC_TYPES: [&str; 4] = ["int", "float", "number", "real"];
 /// A bool field's column holds 0/1 (database.rs column types), read back as the bool
 const BOOL_TYPE: &str = "bool";
 /// What a filter's function should not do: not being sure to end (Div) or allocating is fine
-const SIDE_EFFECTS: [crate::effects::Effect; 5] = [
-	crate::effects::Effect::State,
-	crate::effects::Effect::IO,
-	crate::effects::Effect::FFI,
-	crate::effects::Effect::Async,
-	crate::effects::Effect::Eval,
+const SIDE_EFFECTS: [crate::analyzer::effects::Effect; 5] = [
+	crate::analyzer::effects::Effect::State,
+	crate::analyzer::effects::Effect::IO,
+	crate::analyzer::effects::Effect::FFI,
+	crate::analyzer::effects::Effect::Async,
+	crate::analyzer::effects::Effect::Eval,
 ];
 
 /// A registered table: the list variable holding it and its class's fields (name, type, default)
@@ -339,7 +339,7 @@ pub struct Tables {
 	tables: BTreeMap<String, Table>,
 	functions: Vec<Node>,
 	/// the effects of the program's functions, which a filter's query should not have
-	effects: Option<crate::effects::EffectReport>,
+	effects: Option<crate::analyzer::effects::EffectReport>,
 }
 
 pub fn registered(program: &Node) -> Tables {
@@ -351,7 +351,7 @@ pub fn registered(program: &Node) -> Tables {
 		true => registrations(&with_stored_tables(program.clone(), &class_bodies(program))),
 		false => BTreeMap::new(),
 	};
-	let effects = (!tables.is_empty()).then(|| crate::effects::EffectReport::of(program));
+	let effects = (!tables.is_empty()).then(|| crate::analyzer::effects::EffectReport::of(program));
 	Tables {
 		tables,
 		functions: vec![],
@@ -681,7 +681,7 @@ fn opened(statement: &Node, tables: &BTreeMap<String, Table>, file: &str, open: 
 					.iter()
 					.find(|(field, _)| *field == name)
 					.map(|(_, old)| Node::Text(old.clone()));
-				let unit = crate::units::static_units::unit_type(class_of(&field_type))
+				let unit = crate::numbers::units::static_units::unit_type(class_of(&field_type))
 					.map(|(quantity, per_unit)| [Node::Text(quantity), crate::node::float(per_unit)]);
 				let old_name = if unit.is_some() {
 					Some(old_name.unwrap_or(Node::Empty))

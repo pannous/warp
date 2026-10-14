@@ -199,7 +199,7 @@ pub(crate) fn element_items(node: &Node) -> Option<&Vec<Node>> {
 		return None;
 	};
 	match content.drop_meta() {
-		Node::List(items, Bracket::Curly, _) if crate::markup::is_element_tag(tag) => Some(items),
+		Node::List(items, Bracket::Curly, _) if crate::web::markup::is_element_tag(tag) => Some(items),
 		_ => None,
 	}
 }

@@ -574,7 +574,7 @@ impl Tasks<'_> {
 			([single], fallback) => (single.clone(), fallback),
 			(several, fallback) => (Node::List(several.to_vec(), Bracket::None, Separator::Space), fallback),
 		};
-		let milliseconds = crate::units::milliseconds(&deadline)?;
+		let milliseconds = crate::numbers::units::milliseconds(&deadline)?;
 		let job_name = match job.drop_meta() {
 			Node::List(parts, _, _) if word(&parts[0]) == TASK_VALUE => parts[1].clone(),
 			other => other.clone(),
@@ -835,7 +835,7 @@ pub fn resolve_tasks(node: Node) -> Node {
 	if !has_task {
 		return node;
 	}
-	let mut context = crate::context::Context::new();
+	let mut context = crate::compiler::context::Context::new();
 	crate::analyzer::extract_user_functions(&mut context, &node);
 	crate::analyzer::note_bool_functions(context.user_functions.values());
 	let path = |function: &str| {

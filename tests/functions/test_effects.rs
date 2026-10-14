@@ -1,7 +1,7 @@
 //! Effect inference, `effects of f`, declared constraints, effect-driven imports
 
 use crate::is;
-use warp::effects::{effects_of, Effect::*, EffectReport, EffectSet};
+use warp::analyzer::effects::{effects_of, Effect::*, EffectReport, EffectSet};
 use warp::warp_parser::WarpParser;
 use warp::wasm_emitter::eval;
 use warp::{Node, WasmGcEmitter};

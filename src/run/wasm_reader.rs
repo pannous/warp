@@ -55,7 +55,7 @@ fn read_payload<T>(store: &mut wasmtime::StoreContextMut<'_, T>, data_val: &Val)
 
 /// Load WASM bytes and return Node
 pub fn read_bytes(bytes: &[u8]) -> Result<Node> {
-	read_main_result(bytes).map(|result| crate::units::static_units::with_module_units(bytes, result))
+	read_main_result(bytes).map(|result| crate::numbers::units::static_units::with_module_units(bytes, result))
 }
 
 fn read_main_result(bytes: &[u8]) -> Result<Node> {
@@ -79,7 +79,8 @@ fn read_main_result(bytes: &[u8]) -> Result<Node> {
 /// The engine that runs `bytes` (a module, or one compiled ahead of time), and whether it is the task engine: a
 /// program that starts tasks needs its epoch interruption
 pub fn engine_for(bytes: &[u8]) -> (wasmtime::Engine, bool) {
-	let starts_tasks = crate::tasks::imports_tasks_in(bytes) || crate::run::module_cache::precompiled_for_tasks(bytes);
+	let starts_tasks =
+		crate::host::tasks::imports_tasks_in(bytes) || crate::run::module_cache::precompiled_for_tasks(bytes);
 	(
 		if starts_tasks {
 			crate::util::task_engine()
@@ -99,7 +100,7 @@ fn run_main<S: 'static>(
 	let (engine, starts_tasks) = engine_for(bytes);
 	let mut store = crate::util::fueled_store(&engine, state);
 	if starts_tasks {
-		store.set_epoch_deadline(crate::tasks::MAIN_EPOCH_DEADLINE);
+		store.set_epoch_deadline(crate::host::tasks::MAIN_EPOCH_DEADLINE);
 	}
 	let module = crate::run::module_cache::compiled_module(&engine, bytes)?;
 	let mut linker = Linker::new(&engine);
@@ -207,7 +208,7 @@ pub fn link_imports(
 		// the dynamic libraries discovered from the module's imports (raylib, SDL2, etc.)
 		crate::ffi::link_module_libraries(linker, engine, module)?;
 	}
-	crate::wasm_modules::link(linker, module)?;
+	crate::modules::wasm_modules::link(linker, module)?;
 	Ok(())
 }
 
@@ -260,7 +261,7 @@ fn family_linker(engine: &wasmtime::Engine, imports: Imports) -> Result<Linker<c
 pub fn read_bytes_with_imports(bytes: &[u8], imports: Imports) -> Result<Node> {
 	let (result, mut store, instance) = run_main_with_tasks(bytes, imports)?;
 	val_to_node(&result, &mut store, &instance)
-		.map(|result| crate::units::static_units::with_module_units(bytes, result))
+		.map(|result| crate::numbers::units::static_units::with_module_units(bytes, result))
 }
 
 /// Run main with every import it needs, its tasks finished after it (finish_tasks)
@@ -278,17 +279,17 @@ fn link_run(
 	engine: &wasmtime::Engine,
 	module: &Module,
 	imports: Imports,
-	tasks: &mut Option<std::sync::Arc<crate::tasks::TaskTable>>,
+	tasks: &mut Option<std::sync::Arc<crate::host::tasks::TaskTable>>,
 ) -> Result<()> {
 	link_imports(linker, engine, module, imports)?;
 	// the shared arrays of the run: the program's and every task's instance reach the same ones
-	let shared =
-		crate::shared::imports_shared(module).then(|| std::sync::Arc::new(crate::shared::SharedArrays::default()));
+	let shared = crate::host::shared::imports_shared(module)
+		.then(|| std::sync::Arc::new(crate::host::shared::SharedArrays::default()));
 	if let Some(shared) = &shared {
 		shared.link_into(linker)?;
 	}
-	if crate::tasks::imports_tasks(module) {
-		*tasks = Some(crate::tasks::link(linker, engine, module, imports, shared)?);
+	if crate::host::tasks::imports_tasks(module) {
+		*tasks = Some(crate::host::tasks::link(linker, engine, module, imports, shared)?);
 	}
 	Ok(())
 }
@@ -297,7 +298,7 @@ fn link_run(
 /// and the listeners on shared values see what the tasks left
 fn finish_tasks<R>(
 	outcome: Result<(R, Store<crate::host::HostState>, Instance)>,
-	tasks: Option<&crate::tasks::TaskTable>,
+	tasks: Option<&crate::host::tasks::TaskTable>,
 ) -> Result<(R, Store<crate::host::HostState>, Instance)> {
 	let unread_failure = tasks.map_or(Ok(()), |tasks| tasks.join_all());
 	let (result, mut store, instance) = outcome?;
@@ -504,10 +505,10 @@ fn struct_node<T>(
 		),
 		t if t == Kind::Data as u8 => {
 			let type_name = text_of(store, &data, memory);
-			Node::Data(crate::meta::DataValue {
+			Node::Data(crate::compiler::meta::DataValue {
 				data: Box::new(format!("<wasm data: {type_name}>")),
 				type_name,
-				data_type: crate::meta::DataType::Other,
+				data_type: crate::compiler::meta::DataType::Other,
 			})
 		}
 		// a closure reads as the name of its function
@@ -519,7 +520,7 @@ fn struct_node<T>(
 			name: Box::new(node(&data)),
 			body: Box::new(node(&child)),
 		},
-		t if t == Kind::Uncertain as u8 => crate::uncertain::Uncertain::read_node(float_array(store, &data)),
+		t if t == Kind::Uncertain as u8 => crate::numbers::uncertain::Uncertain::read_node(float_array(store, &data)),
 		t if t == Kind::Time as u8 => {
 			crate::time::time_node(kind >> crate::type_kinds::KIND_BITS, read_payload(store, &data).ok())
 		}

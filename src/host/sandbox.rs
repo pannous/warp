@@ -18,7 +18,7 @@ pub fn confine_process() {
 }
 
 pub fn is_sandboxed() -> bool {
-	PROCESS_SANDBOXED.load(Ordering::SeqCst) || crate::compile_context::read(|context| context.sandboxed)
+	PROCESS_SANDBOXED.load(Ordering::SeqCst) || crate::compiler::compile_context::read(|context| context.sandboxed)
 }
 
 /// The loud refusal of `word`, which needs `capability`

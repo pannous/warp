@@ -137,7 +137,7 @@ fn lower_shadowed(program: &Node) -> Option<Result<Node, Node>> {
 				ResultUnits::Whole(factors) => !factors.is_empty(),
 				ResultUnits::Fields(fields) => !fields.is_empty(),
 			};
-			crate::compile_context::change(|context| context.result_units = has_units.then_some(units));
+			crate::compiler::compile_context::change(|context| context.result_units = has_units.then_some(units));
 			Some(Ok(node))
 		}
 		Err(Stop::Error(message)) => Some(Err(crate::node::error(&message))),
@@ -234,7 +234,7 @@ fn written_units(node: &Node) -> Vec<&'static Unit> {
 
 /// The units the last lowered program's final value has, once (None for a plain number)
 pub(crate) fn take_result_units() -> Option<ResultUnits> {
-	crate::compile_context::change(|context| context.result_units.take())
+	crate::compiler::compile_context::change(|context| context.result_units.take())
 }
 
 /// The entry of the module's `warp.meta` section (meta_section.rs) naming the units of `main`'s result (`km:1 h:-1`), or
@@ -267,7 +267,7 @@ fn factors_of(text: &str) -> Option<Vec<Factor>> {
 
 /// The module with the `units` entry of the units of its result, when the last lowered program's result has units
 pub(crate) fn with_result_units(bytes: Vec<u8>) -> Vec<u8> {
-	crate::meta_section::with_entries(bytes, result_units_entry().into_iter().collect())
+	crate::formats::meta_section::with_entries(bytes, result_units_entry().into_iter().collect())
 }
 
 /// The `units` entry of the last lowered program's result, when it has units
@@ -293,7 +293,7 @@ pub fn with_module_units(bytes: &[u8], result: Node) -> Node {
 }
 
 fn module_units(bytes: &[u8]) -> Option<ResultUnits> {
-	let Node::Text(text) = crate::meta_section::entry(bytes, UNITS_ENTRY)? else {
+	let Node::Text(text) = crate::formats::meta_section::entry(bytes, UNITS_ENTRY)? else {
 		return None;
 	};
 	if !text.contains(FIELD_MARK) {
@@ -344,7 +344,7 @@ pub(crate) fn quantity_of(value: Node, units: &[Factor]) -> Node {
 	}
 	let uncertain = match value.drop_meta() {
 		Node::Data(data) => data
-			.downcast_ref::<crate::uncertain::Uncertain>()
+			.downcast_ref::<crate::numbers::uncertain::Uncertain>()
 			.map(|amount| amount.scaled(per_unit.to_f64())),
 		_ => None,
 	};

@@ -32,7 +32,7 @@ fn a_constant_argument_unrolls_the_recursion() {
 	#[cfg(feature = "native")]
 	{
 		let module = warp::pipeline::compile(&code).expect("compiles");
-		eq!(warp::wasm_reader::read_bytes(&module.bytes).expect("runs"), 1032);
+		eq!(warp::run::wasm_reader::read_bytes(&module.bytes).expect("runs"), 1032);
 	}
 }
 
@@ -47,6 +47,6 @@ fn an_unbounded_specialisation_keeps_the_call() {
 	#[cfg(feature = "native")]
 	{
 		let module = warp::pipeline::compile(code).expect("compiles");
-		eq!(warp::wasm_reader::read_bytes(&module.bytes).expect("runs"), 101);
+		eq!(warp::run::wasm_reader::read_bytes(&module.bytes).expect("runs"), 101);
 	}
 }

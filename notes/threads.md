@@ -55,7 +55,7 @@ matches warp's value semantics (index assignment already copies, aliases never c
 
 ## Status
 - Step 1 done (2026-10-04, 487dd2f1): functions of up to four Ints that give an Int; declarations::lower_tasks marks,
-  declarations::resolve_tasks decides (inferred kinds), src/tasks.rs runs. `await` binds like a unary minus.
+  declarations::resolve_tasks decides (inferred kinds), src/host/tasks.rs runs. `await` binds like a unary minus.
 - Step 2 done (2026-10-04): stop/cancel/pause/resume through epoch interruption (util::task_engine, only for modules
   importing the task words, checked by wasmparser before compiling). Awaiting a stopped task is the error
   `task f: task stopped`, catchable with `try` since "Catchable" below (a568a26a9; test_threads
@@ -83,7 +83,7 @@ matches warp's value semantics (index assignment already copies, aliases never c
   called where every loop starts in a program that controls tasks, waits on it while paused (Atomics.wait).
 
 - Step 6 done (2026-10-04, P44): `shared xs = int[n]` (lowering/shared_arrays.rs): host words shared_new/get/set/add/
-  count (and shared_getf/setf/addf for `float[n]`, bits in the same cells) over arrays the host holds for the run (src/shared.rs: Arc<[AtomicI64]>, host.js: BigInt64Array over a
+  count (and shared_getf/setf/addf for `float[n]`, bits in the same cells) over arrays the host holds for the run (src/host/shared.rs: Arc<[AtomicI64]>, host.js: BigInt64Array over a
   SharedArrayBuffer handed to the task Workers). Not wasm shared memory: an imported memory would take index 0 ahead of
   the module's own, and every memory instruction assumes 0; the host call per access is the price.
 
@@ -131,4 +131,4 @@ matches warp's value semantics (index assignment already copies, aliases never c
 ## Split float maps (card go-split-kernel)
 `go xs.map(x => kernel)` over a float array doesn't start tasks: the host word task_split_mapf splits the linear array
 into one slice per core, maps each slice in a fresh instance on a scoped thread, and writes the results into a new
-block of the caller's memory (src/tasks.rs split_map, notes/simd.md). Other `go xs.map(f)` still use map_in_tasks.
+block of the caller's memory (src/host/tasks.rs split_map, notes/simd.md). Other `go xs.map(f)` still use map_in_tasks.

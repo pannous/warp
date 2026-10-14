@@ -66,8 +66,8 @@ Programs themselves ran 0.1–0.2 s in total: compiling, not running, is what te
    - Foreign calls in an executable (card exe-foreign, done 2026-10-12): `use python`/`use js` work in an
      executable. It starts python3 or node from PATH when it runs (user decision) and fails loudly naming a missing
      interpreter ("cannot start python3 (…); set WARP_PYTHON to an interpreter"). One bridge for both:
-     warp-runtime/src/foreign.rs holds the children, loop scripts and callbacks on serde_json::Value; warp's
-     src/foreign.rs only turns Nodes into JSON and back and calls components. warp-runtime/src/gc_values.rs reads a
+     warp-runtime/src/modules/foreign.rs holds the children, loop scripts and callbacks on serde_json::Value; warp's
+     src/modules/foreign.rs only turns Nodes into JSON and back and calls components. warp-runtime/src/gc_values.rs reads a
      program's GC Node as JSON and builds JSON back through its constructor exports (new_text … exact_add);
      stub_calls_export_with_foreign_calls keeps those exports when the program imports foreign_call.
      `use python` no longer imports fetch, read, warn and run (wasm_emitter emit_host_imports only for those words).
@@ -141,7 +141,7 @@ the system signals and values (optional packages chosen by the program's imports
 1. Done: Cranelift crates optimized in dev builds (largest win, tests 8×).
 2. Done (branch aot): the on-disk module cache for every native run, and `warp compile --aot`.
 3. Done (g-qV5Y, g-qV8Y): one shared gc_engine per process (a repeated run is a map lookup) and `warp build`.
-4. Done (2026-10-05): dead-function elimination of every emitted module (src/dead_functions.rs): functions no export,
+4. Done (2026-10-05): dead-function elimination of every emitted module (src/compiler/dead_functions.rs): functions no export,
    start, element segment or global reaches are dropped. `f(x):=x+1; f(41)`: 113 → 52 functions, 7.6 → 5.0 KB wasm,
    cwasm 131 → 92 KB, single-threaded Cranelift 17.0 → 14.7 ms; ackermann 10.9 → 8.4 KB, cwasm 149 → 128 KB;
    functions:: (289 tests, one thread, cache off) 17.1 → 13.4 s.

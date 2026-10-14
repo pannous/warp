@@ -1,4 +1,4 @@
-use warp::dead_functions::without_dead_functions;
+use warp::compiler::dead_functions::without_dead_functions;
 
 const MODULE_WITH_DEAD_CODE: &str = r#"(module
 	(import "host" "clock" (func $clock (result i64)))

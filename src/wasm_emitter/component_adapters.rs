@@ -1,4 +1,4 @@
-//! The canonical-ABI side of a component (`warp build --component`, src/component_builder.rs): for each function its
+//! The canonical-ABI side of a component (`warp build --component`, src/modules/component_builder.rs): for each function its
 //! world exports, an adapter `api#add` taking and giving the core types of the WIT signature and converting them to the
 //! program's own: s32 widened to its i64, a string (pointer and length in linear memory) a text node, a text result
 //! written to a return area as pointer and length. `cabi_realloc` lets the host place arguments in the text heap.

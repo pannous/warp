@@ -21,7 +21,7 @@ fn a_page_leaves_the_seeding_of_server_data_to_the_server() {
 	.expect("the page builds");
 	let module = &files.iter().find(|(name, _)| name == "app.wasm").expect("app.wasm").1;
 	assert!(!contains(module, "users_seeded"), "the table shipped in app.wasm");
-	let std_modules = warp::host_parts::std_modules_of(module).expect("the std modules");
+	let std_modules = warp::host::host_parts::std_modules_of(module).expect("the std modules");
 	assert!(!std_modules.contains(&"table".to_string()), "{std_modules:?}");
 	assert!(contains(module, "/rpc/route·data·0"));
 }

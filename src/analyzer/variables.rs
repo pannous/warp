@@ -730,10 +730,9 @@ pub fn resolve_main_variable_assignments(program: Node) -> Result<Node, Node> {
 	let mut outside_blocks = Scope::new(); // a variable a block binds for itself is no outer variable
 	collect_variables(&without_block_bodies(program.clone(), &blocks), &mut outside_blocks);
 	// a used module's functions never see the program's variables (card module-locals)
-	for function in functions
-		.into_iter()
-		.filter(|function| !crate::compile_context::read(|context| context.module_definitions.contains(&function.name)))
-	{
+	for function in functions.into_iter().filter(|function| {
+		!crate::compiler::compile_context::read(|context| context.module_definitions.contains(&function.name))
+	}) {
 		let looped = crate::lowering::for_loop::loop_variables(&function.body);
 		let is_main_variable = |name: &String| {
 			!is_compiler_temporary(name)
@@ -1119,7 +1118,7 @@ impl Scope {
 	}
 
 	/// Define a function parameter, with its declared type (`r: any`)
-	pub fn define_param(&mut self, param: &crate::context::Param, kind: Kind) -> Local {
+	pub fn define_param(&mut self, param: &crate::compiler::context::Param, kind: Kind) -> Local {
 		let mut local = self.define(param.name.clone(), param.annotation.clone().map(Box::new), kind);
 		local.is_param = true;
 		local.declared = param.annotation.is_some();

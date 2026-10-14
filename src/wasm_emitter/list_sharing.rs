@@ -9,7 +9,7 @@ use crate::operators::Op;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use super::map_backend::is_update;
-use crate::context::UserFunctionDef;
+use crate::compiler::context::UserFunctionDef;
 
 /// Words that read a list without holding on to it, besides those reading any collection (reads_collection)
 const LIST_READING_WORDS: [&str; 4] = ["join", "sum", crate::library_words::LIST_SUM, super::list_abi::RETURN];
