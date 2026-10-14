@@ -981,7 +981,11 @@ fn with_yield_parameters(node: Node) -> Node {
 	if let Node::Key(head, Op::Define, body) = node.drop_meta() {
 		if let Node::List(items, Bracket::Round, separator) = head.drop_meta() {
 			if contains_yield(body) && items.first().is_some_and(|name| name.symbol_name().is_some()) {
-				let head = Node::List([&items[..], &[symbol(BLOCK_WORDS[1])]].concat(), Bracket::Round, separator.clone());
+				let head = Node::List(
+					[&items[..], &[symbol(BLOCK_WORDS[1])]].concat(),
+					Bracket::Round,
+					separator.clone(),
+				);
 				return key(head, Op::Define, yields_as_calls(body.as_ref().clone()));
 			}
 		}
@@ -1033,7 +1037,9 @@ fn trailing_block_call(node: &Node, parameter_counts: &HashMap<String, usize>) -
 		}
 		Node::Key(callee, Op::Do, block) if is_block(block) => (callee.as_ref(), vec![], block.as_ref()),
 		Node::List(items, _, Separator::Space) if items.len() == 2 => match items[1].drop_meta() {
-			Node::Key(argument, Op::Do, block) if is_block(block) => (&items[0], grouped_arguments(argument), block.as_ref()),
+			Node::Key(argument, Op::Do, block) if is_block(block) => {
+				(&items[0], grouped_arguments(argument), block.as_ref())
+			}
 			_ => return None,
 		},
 		_ => return None,
@@ -1052,7 +1058,10 @@ fn call_parts(node: &Node, parameter_counts: &HashMap<String, usize>) -> Option<
 		Node::List(items, Bracket::Round | Bracket::None, _) => items.split_first()?,
 		single => (single, &[][..]),
 	};
-	let name = name.drop_meta().symbol_name().filter(|name| parameter_counts.contains_key(*name))?;
+	let name = name
+		.drop_meta()
+		.symbol_name()
+		.filter(|name| parameter_counts.contains_key(*name))?;
 	Some((name.to_string(), arguments.iter().flat_map(grouped_arguments).collect()))
 }
 
