@@ -27,8 +27,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   .parameters and .doc (a Python-like doc string, card doc-strings); printing one shows its doc as a comment line
   above its typed .dump. methods(module|class|value) returns the plain list of function objects, descriptions on
   demand (`methods(math) map .doc`). `use reflection` (reflection mode) adds compilation unit, compiler, origin,
-  wasm index and effects. A bare name never becomes the function value implicitly (a mixed list of functions with
-  and without parameters would behave inconsistently): `function f` stays explicit, and a bare parameterless
+  wasm index and effects. A bare name never becomes the function value implicitly (the `print now` case: a
+  parameterless function must stay a call, so in a mixed list some names would print and others would be called): `function f` stays explicit, and a bare parameterless
   function inside print/help/dump/type gets a warning that it was called, hint `function now`.
 - cleanup-means-fewer-lines (2026-10-13): the cleanup's metric is lines removed: simpler, more general, more elegant
   code. Splitting files or functions alone is not a goal ("not that impressed by splitting"). Each cleanup merge
