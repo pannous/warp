@@ -90,6 +90,12 @@ The only session that runs the full suite and the only one that pushes code to m
 - Triggers GitHub CI only when asked or for a release (`gh workflow run "Rust CI" -R pannous/warp`).
 - Keeps the baseline (test_results.txt) and the "Merged" lines on the board; tells the supervisor after each merge.
 
+## Reviewer
+User 2026-10-14 invented it: "makes sure that everything is sound and beautiful according to standards", so the
+Integrator has less to do. It reads each merge request's diff in parallel with the gate: fine, polish (it commits
+small fixes itself as a follow-up tip) or veto (unsound: the Integrator leaves the branch out of the push).
+Structural findings become cards for the Refactorer. Prompt: notes/agents/reviewer.md; a default service.
+
 ## Refactorer
 User 2026-10-14: "a new role refactorer that will regularly reorganize the codebase by keeping it structural and
 generalized and beautiful". A long-running session, not a default service: the Supervisor starts it with
