@@ -263,14 +263,14 @@ function plainOfTree(tree) {
 			const isObject = ((kind >> 8n) & KIND_MASK) === 0n && values.length > 0 && values.every(item => item !== null && (BigInt(item.kind) & KIND_MASK) === KIND_KEY);
 			return isObject ? Object.assign({}, ...values.map(plainOfTree)) : values.map(plainOfItem);
 		}
-		// its value the function's name (src/wasm_emitter/closures.rs), kept for a host word calling the export itself
+		// its value the function's name (src/wasm_emitter/functions/closures.rs), kept for a host word calling the export itself
 		case Number(KIND_FUNCTION): return tree.warpFunction ? Object.assign(callableOf(tree.warpFunction), { warpName: tree.chain?.[0]?.data?.text }) : null;
 		default: return null;
 	}
 }
 
 // a warp function given to foreign code: a JavaScript function calling it back through the module's closure_apply
-// (src/wasm_emitter/closures.rs), synchronously, with as many of its arguments as it takes
+// (src/wasm_emitter/functions/closures.rs), synchronously, with as many of its arguments as it takes
 function callableOf({ module, node }) {
 	return (...values) => plainOfTree(readResult(module, module.closure_apply(node, buildValue(module, treeOfPlain(values)))));
 }

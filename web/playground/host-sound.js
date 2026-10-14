@@ -14,7 +14,7 @@ const SIGNAL_AHEAD_SECONDS = 0.1;
 const SIGNAL_POLL_MS = 10;
 // heard, a voice queues at most this far ahead of the speaker before its next sound waits (src/sound/mod.rs PLAY_AHEAD)
 const PLAY_AHEAD_SECONDS = 0.5;
-// a linear float array's block: [count: i64][count f64 cells] (src/wasm_emitter/linear_arrays.rs)
+// a linear float array's block: [count: i64][count f64 cells] (src/wasm_emitter/lists/linear_arrays.rs)
 const LINEAR_CELL_BYTES = 8;
 
 // MIDI (card midi-out, src/sound/midi.rs, which says how notes cross): Standard MIDI Files, format 0, 480 ticks a quarter at 120 beats a minute

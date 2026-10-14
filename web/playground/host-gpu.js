@@ -415,7 +415,7 @@ function gpuTaskWorker() {
 	return worker;
 }
 
-// the f64 cells of a linear array: its block is [count: i64][count cells] (src/wasm_emitter/linear_arrays.rs)
+// the f64 cells of a linear array: its block is [count: i64][count cells] (src/wasm_emitter/lists/linear_arrays.rs)
 function linearCells(memory, block) {
 	const count = Number(new DataView(memory.buffer).getBigInt64(Number(block), true));
 	return new Float64Array(memory.buffer, Number(block) + Float64Array.BYTES_PER_ELEMENT, count);
