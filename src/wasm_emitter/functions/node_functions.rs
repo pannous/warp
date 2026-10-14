@@ -1,5 +1,5 @@
 //! The runtime functions of the Node itself: its constructors and getters, user type constructors, math helpers
-use super::*;
+use super::super::*;
 
 impl WasmGcEmitter {
 	/// Emit with user-defined types from a TypeRegistry
@@ -27,14 +27,14 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit constructor functions for user-defined types
-	pub(super) fn emit_user_type_constructors(&mut self, registry: &TypeRegistry) {
+	pub(in crate::wasm_emitter) fn emit_user_type_constructors(&mut self, registry: &TypeRegistry) {
 		for type_def in registry.types() {
 			self.emit_user_type_constructor(type_def);
 		}
 	}
 
 	/// Emit a constructor function for a single user type: new_TypeName(fields...) -> ref $TypeName
-	pub(super) fn emit_user_type_constructor(&mut self, type_def: &TypeDef) {
+	pub(in crate::wasm_emitter) fn emit_user_type_constructor(&mut self, type_def: &TypeDef) {
 		let type_idx = match self.ctx.user_type_indices.get(&type_def.name) {
 			Some(idx) => *idx,
 			None => return,
@@ -62,7 +62,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit constructor functions for the compact Node
-	pub(super) fn emit_constructors(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_constructors(&mut self) {
 		// Emit basic Node constructors using macros
 		self.emit_int_heap_globals();
 		self.emit_list_cursor_globals();
@@ -109,7 +109,7 @@ impl WasmGcEmitter {
 		self.emit_node_api(); // after text_of, text_concat and error_of, which it calls
 	}
 
-	pub(super) fn emit_getters(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_getters(&mut self) {
 		let node_ref = self.node_ref(true);
 
 		// get_kind(node: ref $Node) -> i64
@@ -184,7 +184,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit math helper functions (i64_pow, etc.)
-	pub(super) fn emit_math_helpers(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_math_helpers(&mut self) {
 		// i64_pow(base, exponent) -> i64: base multiplied exponent times
 		if self.should_emit_function("i64_pow") {
 			self.exported_function(

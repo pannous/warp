@@ -45,7 +45,7 @@ sum_with(f, xs) := reduce xs f; k=0; sum_with((a b)->a+b+k, [1 2 3])
   captured variables and its parameters the kinds of literal arguments of closure calls of its arity;
   `infer_forwarded_parameters` reads `closure_new(target, captured…)` as a call of target.
 
-## Run time (src/wasm_emitter/closures.rs)
+## Run time (src/wasm_emitter/functions/closures.rs)
 ```
 (type $Closure (struct (field $entry (ref func)) (field $captured (ref null $Node))))
 (type $closure_entry_n (func (param (ref null $Node)) (param (ref null $Node))×n (result (ref null $Node))))

@@ -114,7 +114,7 @@ impl WasmGcEmitter {
 			|| name == PRINT
 			|| name == crate::warp_parser::TEXT_TIMES
 			|| BUILTIN_CALLS.contains(&name)
-			|| super::super::cells::CELL_WORDS.contains(&name)
+			|| super::super::functions::cells::CELL_WORDS.contains(&name)
 			|| crate::library_words::is_runtime_word(name)
 			|| name == crate::words::IS_TYPE
 			|| ROUNDING_FUNCTIONS.contains(&name)

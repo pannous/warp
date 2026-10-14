@@ -6,7 +6,7 @@
 //! (a list) and the arguments to the parameter kinds of the target, calls it and boxes its result. `closure_call_n(f, a1…an)`
 //! casts the entry to $closure_entry_n and call_refs it, unboxing the result to the kind all closures of arity n return.
 
-use super::WasmGcEmitter;
+use super::super::WasmGcEmitter;
 use crate::analyzer::param_kind;
 use crate::closures::closure_call_arity;
 use crate::compiler::context::UserFunctionDef;
@@ -30,8 +30,8 @@ pub const CLOSURE_APPLY: &str = "closure_apply";
 /// written (`x => x + n`) (card print-closure)
 pub const FUNCTION_TEXT: &str = "function_text";
 /// Runtime errors of a closure call: the value called is no closure, or a closure of another arity
-pub(super) const NOT_A_FUNCTION: &str = "not_a_function";
-pub(super) const WRONG_ARGUMENT_COUNT: &str = "wrong_number_of_arguments";
+pub(in crate::wasm_emitter) const NOT_A_FUNCTION: &str = "not_a_function";
+pub(in crate::wasm_emitter) const WRONG_ARGUMENT_COUNT: &str = "wrong_number_of_arguments";
 const ENTRY_FIELD: u32 = 0;
 /// The name a capture global is read by while a nested function's closure is made (nested_captures_now)
 const CAPTURE_VALUE_PREFIX: &str = "·capture·";
@@ -40,13 +40,13 @@ const NODE_DATA_FIELD: u32 = 1;
 const NODE_VALUE_FIELD: u32 = 2;
 /// A closure's kind carries the class of its target's written form above the kind bits, so == compares definitions
 /// (card runtime-function); class 0: one of too many to count, compared by name
-pub(super) const FUNCTION_CLASS_SHIFT: i64 = 8;
+pub(in crate::wasm_emitter) const FUNCTION_CLASS_SHIFT: i64 = 8;
 const FUNCTION_CLASSES: usize = (1 << (crate::type_kinds::ELEMENT_MARK_SHIFT - FUNCTION_CLASS_SHIFT)) - 1;
-pub(super) const FUNCTION_CLASS_MASK: i64 = (FUNCTION_CLASSES as i64) << FUNCTION_CLASS_SHIFT;
+pub(in crate::wasm_emitter) const FUNCTION_CLASS_MASK: i64 = (FUNCTION_CLASSES as i64) << FUNCTION_CLASS_SHIFT;
 
 /// The types and entry functions of the closures in a module
 #[derive(Default, Clone)]
-pub(super) struct ClosureTypes {
+pub(in crate::wasm_emitter) struct ClosureTypes {
 	closure: Option<u32>,
 	/// Arity → $closure_entry_n
 	entries: HashMap<usize, u32>,
@@ -64,11 +64,11 @@ pub(super) struct ClosureTypes {
 
 impl ClosureTypes {
 	/// The entry functions referenced by `ref.func`: a module must declare them in an element segment
-	pub(super) fn declared_functions(&self) -> Vec<u32> {
+	pub(in crate::wasm_emitter) fn declared_functions(&self) -> Vec<u32> {
 		self.entry_functions.iter().map(|(_, index, _, _)| *index).collect()
 	}
 
-	pub(super) fn entry_names(&self) -> Vec<(u32, String)> {
+	pub(in crate::wasm_emitter) fn entry_names(&self) -> Vec<(u32, String)> {
 		let carriers = self.carriers.into_iter().flat_map(|(rebuild, captured)| {
 			[
 				(rebuild, CLOSURE_REBUILD.to_string()),
@@ -163,7 +163,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Pass 1 of compile_user_functions: a function index for the entry of every closure target
-	pub(super) fn register_closure_entries(&mut self) {
+	pub(in crate::wasm_emitter) fn register_closure_entries(&mut self) {
 		for (target, captured) in self.ctx.closure_targets.clone() {
 			let Some(function) = self.ctx.user_functions.get(&target) else {
 				continue;
@@ -336,7 +336,7 @@ impl WasmGcEmitter {
 			for (target, entry, _, _) in s.closures.entry_functions.clone() {
 				rebuild.instruction(&I::LocalGet(0));
 				s.emit_string_call(rebuild, &target, "new_symbol");
-				s.emit_call(rebuild, super::equality::VALUES_EQUAL);
+				s.emit_call(rebuild, super::super::equality::VALUES_EQUAL);
 				rebuild.instruction(&I::If(BlockType::Empty));
 				Self::emit_list(
 					rebuild,
@@ -374,7 +374,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Pass 2: the entry bodies, in the order of their registration
-	pub(super) fn compile_closure_entries(&mut self) {
+	pub(in crate::wasm_emitter) fn compile_closure_entries(&mut self) {
 		for (target, _, captured, arity) in self.closures.entry_functions.clone() {
 			let function = self.ctx.user_functions[&target].clone();
 			let typed = self.typed_entry(arity);
@@ -491,7 +491,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Stack [Codepoint node] → [i64 code point]
-	pub(super) fn emit_codepoint_of_node(&self, func: &mut Function) {
+	pub(in crate::wasm_emitter) fn emit_codepoint_of_node(&self, func: &mut Function) {
 		Self::emit_list(
 			func,
 			&[
@@ -507,7 +507,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Is `name` a helper `closure_call_n` whose body the emitter writes
-	pub(super) fn is_closure_call(&self, name: &str) -> bool {
+	pub(in crate::wasm_emitter) fn is_closure_call(&self, name: &str) -> bool {
 		closure_call_arity(name).is_some()
 			&& self
 				.ctx
@@ -517,7 +517,7 @@ impl WasmGcEmitter {
 	}
 
 	/// `closure_call_n(f, a1…an)`: the entry of f's $Closure, cast to its arity, called with the captured values and the arguments
-	pub(super) fn compile_closure_call(&mut self, name: &str) {
+	pub(in crate::wasm_emitter) fn compile_closure_call(&mut self, name: &str) {
 		let function = self.ctx.user_functions[name].clone();
 		let arity = closure_call_arity(name).expect("a closure call");
 		let (closure, entry) = (self.closure_type(), self.entry_type(arity));
@@ -582,7 +582,7 @@ impl WasmGcEmitter {
 
 	/// `closure_call_n(h, a1…an)` where the variable h only ever holds closures of one target: that target's entry called
 	/// directly with h's captured values, no closure or arity test and no call_ref (what closure_call_n does)
-	pub(super) fn emit_direct_closure_call(
+	pub(in crate::wasm_emitter) fn emit_direct_closure_call(
 		&mut self,
 		func: &mut Function,
 		helper: &UserFunctionDef,
@@ -672,7 +672,7 @@ impl WasmGcEmitter {
 	}
 
 	/// `closure_lambda_1·captured·0(h)`: the index-th captured value of the closure h, as the kind of the target's parameter
-	pub(super) fn compile_capture_reader(&mut self, name: &str) {
+	pub(in crate::wasm_emitter) fn compile_capture_reader(&mut self, name: &str) {
 		let reader = self.ctx.user_functions[name].clone();
 		let (_, position) = crate::closures::capture_reader(name).expect("a capture reader");
 		let closure = self.closure_type();
@@ -733,7 +733,7 @@ impl WasmGcEmitter {
 	}
 
 	/// `closure_new(target, captured…)`: the Node holding the $Closure of the target's entry and the captured values
-	pub(super) fn emit_closure_new(&mut self, func: &mut Function, target: &str, captured: &[Node]) {
+	pub(in crate::wasm_emitter) fn emit_closure_new(&mut self, func: &mut Function, target: &str, captured: &[Node]) {
 		let Some(entry_function) = self
 			.closures
 			.entry_functions
@@ -796,7 +796,7 @@ impl WasmGcEmitter {
 impl WasmGcEmitter {
 	/// In values_equal, two closures of the same kind (so of the same class, Self::function_kind): equal when they
 	/// captured equal values; of class 0 only of the same function
-	pub(super) fn emit_closures_equal(&mut self, f: &mut Function, recurse: u32) {
+	pub(in crate::wasm_emitter) fn emit_closures_equal(&mut self, f: &mut Function, recurse: u32) {
 		let (node, closure) = (self.type_manager.node_type, self.closure_type());
 		let (left, right, left_kind) = (0, 1, 2);
 		Self::emit_list(
@@ -839,11 +839,11 @@ impl WasmGcEmitter {
 
 impl WasmGcEmitter {
 	/// A program whose function values may be shown needs function_text
-	pub(super) fn require_function_text(&mut self) {
+	pub(in crate::wasm_emitter) fn require_function_text(&mut self) {
 		let required = &mut self.ctx.required_functions;
 		let shows_values = [
-			super::wasi_emitter::PRINT_VALUE,
-			super::wasi_emitter::PUT_VALUE,
+			super::super::wasi_emitter::PRINT_VALUE,
+			super::super::wasi_emitter::PUT_VALUE,
 			"list_join",
 		]
 		.iter()
@@ -879,11 +879,11 @@ impl WasmGcEmitter {
 
 	/// Whether function_text is emitted: a program that shows values and has function values (an emit without a
 	/// program, which emits everything, has none to show)
-	pub(super) fn shows_functions(&self) -> bool {
+	pub(in crate::wasm_emitter) fn shows_functions(&self) -> bool {
 		!self.ctx.closure_targets.is_empty() && self.should_emit_function(FUNCTION_TEXT)
 	}
 
-	pub(super) fn emit_function_text(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_function_text(&mut self) {
 		if !self.shows_functions() {
 			return;
 		}

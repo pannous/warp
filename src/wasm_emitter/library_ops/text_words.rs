@@ -641,7 +641,7 @@ impl WasmGcEmitter {
 				if s.shows_functions() {
 					masked_kind_is(f, Kind::Function); // its class in the info bits
 					Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(element), I::RefAsNonNull]);
-					s.call(f, super::super::closures::FUNCTION_TEXT);
+					s.call(f, super::super::functions::closures::FUNCTION_TEXT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
 				if s.should_emit_function(super::super::time::times::TIME_TEXT) {

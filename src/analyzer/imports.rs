@@ -111,7 +111,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 					ctx.required_functions
 						.extend([crate::wasm_emitter::INT_RUNTIME, "new_int"]);
 				}
-				if let Some(word) = crate::wasm_emitter::cells::CELL_WORDS
+				if let Some(word) = crate::wasm_emitter::functions::cells::CELL_WORDS
 					.iter()
 					.find(|word| **word == fn_name)
 				{

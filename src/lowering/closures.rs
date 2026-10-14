@@ -446,7 +446,7 @@ impl FunctionValues {
 			Node::List(items, Bracket::Round, _)
 				if items
 					.first()
-					.is_some_and(|word| word.drop_meta().name() == crate::wasm_emitter::cells::SIGNAL_LISTENERS) =>
+					.is_some_and(|word| word.drop_meta().name() == crate::wasm_emitter::functions::cells::SIGNAL_LISTENERS) =>
 			{
 				true
 			}

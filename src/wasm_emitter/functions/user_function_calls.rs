@@ -1,6 +1,6 @@
 //! User functions: their compilation, signatures, closure captures and calls
 
-use super::*;
+use super::super::*;
 
 /// The kinds a call's argument has for sure when inference names them: what a declared parameter type is checked against
 const SCALAR_KINDS: [Kind; 5] = [Kind::Int, Kind::Float, Kind::Text, Kind::Codepoint, Kind::List];
@@ -14,7 +14,7 @@ impl WasmGcEmitter {
 
 	/// Compile all extracted user functions to WASM
 	/// Pre-allocate strings from user function bodies before compiling
-	pub(super) fn collect_user_function_strings(&mut self) {
+	pub(in crate::wasm_emitter) fn collect_user_function_strings(&mut self) {
 		let bodies: Vec<Box<Node>> = self.ctx.user_functions.values().map(|f| f.body.clone()).collect();
 		for body in bodies {
 			self.collect_and_allocate_strings(&body);
@@ -22,13 +22,13 @@ impl WasmGcEmitter {
 	}
 
 	/// A program that starts tasks (`go`): each runs in a fresh instance of the module (src/host/tasks.rs)
-	pub(super) fn spawns_tasks(&self) -> bool {
+	pub(in crate::wasm_emitter) fn spawns_tasks(&self) -> bool {
 		self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN_VALUES)
 			|| self.ctx.ffi_imports.contains_key(crate::host::TASK_SPAWN)
 	}
 
 	/// A global whose value a task's instance gets from the spawning instance (src/host/tasks.rs copies these at the start)
-	pub(super) fn export_to_tasks(&mut self, label: &str, global: u32) {
+	pub(in crate::wasm_emitter) fn export_to_tasks(&mut self, label: &str, global: u32) {
 		if self.spawns_tasks() {
 			self.exports
 				.export(&format!("{CAPTURE_EXPORT_PREFIX}{label}"), ExportKind::Global, global);
@@ -36,7 +36,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Give every outer variable a function reads a global, set from the variable where the function is defined
-	pub(super) fn allocate_closure_captures(&mut self, program: &Node) {
+	pub(in crate::wasm_emitter) fn allocate_closure_captures(&mut self, program: &Node) {
 		let mut outer = Scope::with_function_kinds(self.user_function_kinds())
 			.with_closure_targets(self.ctx.closure_variable_targets.clone()); // `x = g()` holds what g returns
 		collect_variables(program, &mut outer);
@@ -102,7 +102,7 @@ impl WasmGcEmitter {
 
 	/// A host that hands values into the program (run_block's result, a task's value) builds an exact number beyond the
 	/// fixnums from fixnum pieces with these (tasks.rs Builders)
-	pub(super) fn export_exact_builders(&mut self) {
+	pub(in crate::wasm_emitter) fn export_exact_builders(&mut self) {
 		let hands_values_in = [
 			crate::host::RUN_BLOCK,
 			crate::host::PARSE_CODE,
@@ -127,7 +127,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The globals a function body sees: the declared ones and the variables it captures, with their types
-	pub(super) fn function_globals(&self, function: &str) -> HashMap<String, Local> {
+	pub(in crate::wasm_emitter) fn function_globals(&self, function: &str) -> HashMap<String, Local> {
 		let mut globals = self.ctx.declared_globals.clone();
 		for binding in self.ctx.capture_bindings.get(function).into_iter().flatten() {
 			globals.entry(binding.name.clone()).or_insert_with(|| binding.clone());
@@ -139,7 +139,7 @@ impl WasmGcEmitter {
 	/// kinds its compiled body gives them (compile_user_function_body); behind them those of the functions enclosing it
 	/// (`outer·mid·deep` reads outer's too, card nested-two), then main's, which outer reads too (`under = paper` copies
 	/// main's kind, card captured-copy)
-	pub(super) fn enclosing_scope(&self, function: &str, main: &Scope) -> Option<Scope> {
+	pub(in crate::wasm_emitter) fn enclosing_scope(&self, function: &str, main: &Scope) -> Option<Scope> {
 		let enclosing = self
 			.ctx
 			.enclosing_functions
@@ -167,7 +167,7 @@ impl WasmGcEmitter {
 	/// Any call in the body of outer may reach `outer·inner` (directly, through a sibling, or passed as a value:
 	/// `apply(inner)`), and inner reads outer's variables as they are now (`nonlocal y`, cards g-qUkY, g-rQ-U): the
 	/// capture globals of all of outer's nested functions are set anew before each call
-	pub(super) fn refresh_enclosing_captures(&mut self, func: &mut Function) {
+	pub(in crate::wasm_emitter) fn refresh_enclosing_captures(&mut self, func: &mut Function) {
 		let Some(compiling) = self.compiling.clone() else {
 			return;
 		};
@@ -178,7 +178,7 @@ impl WasmGcEmitter {
 
 	/// At a function definition: snapshot the captured variables, so later reassignment is not seen by the function;
 	/// the functions nested in it get the variables of this scope too (`k=5; def outer(){ def inner(){ k } }`)
-	pub(super) fn emit_closure_capture(&mut self, func: &mut Function, function_name: &str) {
+	pub(in crate::wasm_emitter) fn emit_closure_capture(&mut self, func: &mut Function, function_name: &str) {
 		let captures = self.ctx.captures.get(function_name).cloned().unwrap_or_default();
 		for (name, (global, kind)) in captures {
 			if self.emit_typed_capture(func, &name, global)
@@ -198,7 +198,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The functions defined in the body of `function` (`outer·inner` of outer), in a stable order
-	pub(super) fn nested_functions(&self, function: &str) -> Vec<String> {
+	pub(in crate::wasm_emitter) fn nested_functions(&self, function: &str) -> Vec<String> {
 		let mut nested: Vec<String> = self
 			.ctx
 			.enclosing_functions
@@ -210,7 +210,7 @@ impl WasmGcEmitter {
 		nested
 	}
 
-	pub(super) fn compile_user_functions(&mut self) {
+	pub(in crate::wasm_emitter) fn compile_user_functions(&mut self) {
 		let func_names: Vec<String> = self.ctx.user_functions.keys().cloned().collect();
 
 		self.list_abi = self.find_list_abi();
@@ -235,7 +235,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Register a user function's signature and assign it an index (PASS 1)
-	pub(super) fn register_user_function_signature(&mut self, name: &str) {
+	pub(in crate::wasm_emitter) fn register_user_function_signature(&mut self, name: &str) {
 		let user_fn = self.ctx.user_functions.get(name).unwrap().clone();
 		let returns_node = user_fn.return_kind.is_ref(); // Text, Symbol, List, etc. return Node refs
 
@@ -296,7 +296,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Compile a user function's body (PASS 2)
-	pub(super) fn compile_user_function_body(&mut self, name: &str) {
+	pub(in crate::wasm_emitter) fn compile_user_function_body(&mut self, name: &str) {
 		let user_fn = self.ctx.user_functions.get(name).unwrap().clone();
 		let returns_node = user_fn.return_kind.is_ref(); // Text, Symbol, List, etc. return Node refs
 		let function_scope = Scope::with_function_kinds(self.user_function_kinds())
@@ -366,7 +366,7 @@ impl WasmGcEmitter {
 				.filter_map(|(index, param)| Some((param.name.clone(), self.struct_parameter(name, index)?.clone()))),
 		);
 		self.typed_structs = typed_structs;
-		self.bounded_counters = super::numbers::big_int::bounded_counters(&user_fn.body);
+		self.bounded_counters = super::super::numbers::big_int::bounded_counters(&user_fn.body);
 
 		// Declare locals (parameters are already accounted for); temps follow the variables, as in main
 		let num_params = user_fn.params.len() as u32;
@@ -452,7 +452,7 @@ impl WasmGcEmitter {
 	}
 
 	/// A call of a user function whose result is wanted as a Node
-	pub(super) fn emit_user_function_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
+	pub(in crate::wasm_emitter) fn emit_user_function_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
 		let Some(user_fn) = self.emit_defined_user_function_call(func, fn_name, args) else {
 			return;
 		};
@@ -474,7 +474,7 @@ impl WasmGcEmitter {
 	/// unless libm's f64 version is imported, and of the imported functions as their signatures declare them: a module's
 	/// export (`shout("hi")`, a text), a C library's (raylib's `GetTime()`, a float); a math word that maps a ± interval
 	/// (`exp(0 ± 1)`) has the kind of its argument, which infer_type decides per call
-	pub(super) fn user_function_kinds(&self) -> HashMap<String, Kind> {
+	pub(in crate::wasm_emitter) fn user_function_kinds(&self) -> HashMap<String, Kind> {
 		let rounding = ROUNDING_FUNCTIONS
 			.iter()
 			.filter(|name| !self.ctx.ffi_imports.contains_key(**name))
@@ -507,7 +507,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit a call to a user-defined function whose result is needed as f64
-	pub(super) fn emit_user_function_call_float(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
+	pub(in crate::wasm_emitter) fn emit_user_function_call_float(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
 		let user_fn = self.ctx.user_functions[fn_name].clone();
 		if user_fn.return_kind.is_float() {
 			self.emit_user_function_call_inner(func, &user_fn, args);
@@ -522,7 +522,7 @@ impl WasmGcEmitter {
 	}
 
 	/// A call of a user function whose result is wanted as a raw i64: the Int of a Node result
-	pub(super) fn emit_user_function_call_numeric(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
+	pub(in crate::wasm_emitter) fn emit_user_function_call_numeric(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
 		let Some(user_fn) = self.emit_defined_user_function_call(func, fn_name, args) else {
 			return;
 		};
@@ -538,7 +538,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Inner helper for emitting user function calls; a tuple function's values are packed into a list
-	pub(super) fn emit_user_function_call_inner(
+	pub(in crate::wasm_emitter) fn emit_user_function_call_inner(
 		&mut self,
 		func: &mut Function,
 		user_fn: &UserFunctionDef,
@@ -551,7 +551,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Arguments and the call: the function's own results on the stack, several for a tuple function
-	pub(super) fn emit_user_function_values(&mut self, func: &mut Function, user_fn: &UserFunctionDef, args: &[Node]) {
+	pub(in crate::wasm_emitter) fn emit_user_function_values(&mut self, func: &mut Function, user_fn: &UserFunctionDef, args: &[Node]) {
 		let Some(func_index) = user_fn.func_index else {
 			self.emit_type_error(func, format!("function {} is used before it is compiled", user_fn.name));
 			return;
@@ -731,6 +731,6 @@ struct FunctionState {
 	returns_list: bool,
 	returned_tuple: Vec<Kind>,
 	statement_position: Option<crate::compiler::meta::LineInfo>,
-	loop_labels: Vec<super::control::loop_control::LoopLabels>,
-	loop_values: super::control::control_flow::LoopValues,
+	loop_labels: Vec<super::super::control::loop_control::LoopLabels>,
+	loop_values: super::super::control::control_flow::LoopValues,
 }

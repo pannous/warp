@@ -9,7 +9,7 @@ use crate::late_binding::{changes_in, declared_nonlocals, NONLOCAL};
 use crate::lowering::{function_head, FunctionHead};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::wasm_emitter::cells::{CELL_GET, CELL_NEW, CELL_SET};
+use crate::wasm_emitter::functions::cells::{CELL_GET, CELL_NEW, CELL_SET};
 
 /// `y·cell`: the variable holding y's cell (no name the parser reads)
 const CELL_SUFFIX: &str = "·cell";

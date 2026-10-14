@@ -3,7 +3,6 @@
 pub use control::traps::*;
 mod diagnostics;
 mod module_finish;
-mod node_functions;
 #[cfg(feature = "native")]
 pub use maps::raw_structs::run_raw_struct;
 pub(crate) use maps::raw_structs::*;
@@ -12,13 +11,11 @@ pub(crate) mod numbers;
 pub(crate) mod component_adapters;
 pub(crate) mod control;
 mod globals;
-mod user_function_calls;
 use control::control_flow::LoopValues;
-pub mod cells;
-mod closures;
+pub mod functions;
 mod declared_values;
 mod values;
-pub use closures::{CLOSURE_APPLY, CLOSURE_CAPTURED, CLOSURE_REBUILD};
+pub use functions::closures::{CLOSURE_APPLY, CLOSURE_CAPTURED, CLOSURE_REBUILD};
 mod constructors;
 pub(crate) use numbers::casts::is_called_conversion;
 pub use constructors::NEW_BOOL;
@@ -304,7 +301,7 @@ pub struct WasmGcEmitter {
 	/// The function being compiled returns a $NodeList
 	returns_list: bool,
 	compare_witness: Option<witness::WitnessTable>, // runtime dispatch of Comparable to user types (witness.rs)
-	closures: closures::ClosureTypes,
+	closures: functions::closures::ClosureTypes,
 	/// The user function whose body is being compiled; None in main
 	compiling: Option<String>,
 	/// The names the program's `for … in` loops and comprehensions bind: variables even beside a function of that name
@@ -384,7 +381,7 @@ impl WasmGcEmitter {
 			list_abi: HashMap::new(),
 			returns_list: false,
 			compare_witness: None,
-			closures: closures::ClosureTypes::default(),
+			closures: functions::closures::ClosureTypes::default(),
 			compiling: None,
 			loop_variables: HashSet::new(),
 		}

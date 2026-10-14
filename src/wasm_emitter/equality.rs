@@ -166,7 +166,7 @@ impl WasmGcEmitter {
 
 	/// `cell_get(c)`: a cell's value, a Node of any kind
 	fn is_held_cell_value(&self, node: &Node) -> bool {
-		matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().name() == super::cells::CELL_GET))
+		matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().name() == super::functions::cells::CELL_GET))
 	}
 
 	/// Push i64 1/0 for `left == right` or `left != right` compared by value

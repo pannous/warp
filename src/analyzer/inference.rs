@@ -423,8 +423,8 @@ pub(super) fn infer_list_type(
 			return Kind::Empty;
 		}
 		// a cell's value is held as a Node, like a map value (Empty), and joins a text or adds at run time
-		if crate::wasm_emitter::cells::CELL_WORDS.contains(&name) {
-			return if crate::wasm_emitter::cells::MAKING_WORDS.contains(&name) {
+		if crate::wasm_emitter::functions::cells::CELL_WORDS.contains(&name) {
+			return if crate::wasm_emitter::functions::cells::MAKING_WORDS.contains(&name) {
 				Kind::Data
 			} else {
 				Kind::Empty

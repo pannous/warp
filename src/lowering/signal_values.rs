@@ -19,7 +19,7 @@ use crate::lowering::{function_head, DefinitionForm};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::variable_signals::{assign, is_round_head, listener_parts, symbols, with_old, with_value, ListenerWord};
-use crate::wasm_emitter::cells::{CELL_GET, CELL_NEW, CELL_SET, SIGNAL_LISTENERS, SIGNAL_LISTENERS_SET, SIGNAL_NEW};
+use crate::wasm_emitter::functions::cells::{CELL_GET, CELL_NEW, CELL_SET, SIGNAL_LISTENERS, SIGNAL_LISTENERS_SET, SIGNAL_NEW};
 use crate::words::{COUNT_WORD, FROM_WORD, GLOBAL_WORD, ONCE_WORD, ON_WORD, WHENEVER_WORD};
 use std::collections::HashSet;
 

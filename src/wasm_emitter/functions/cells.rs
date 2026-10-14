@@ -6,7 +6,7 @@
 //!   signal_listeners(s) → the listener list, signal_listeners_set(s, list) → stores it and gives it back.
 //! Everything is in the module itself, so the browser build runs it as it is.
 
-use super::WasmGcEmitter;
+use super::super::WasmGcEmitter;
 use crate::node::Node;
 use crate::type_kinds::Kind;
 use wasm_encoder::*;
@@ -39,7 +39,7 @@ pub fn is_cell_word(word: &Node) -> bool {
 }
 
 impl WasmGcEmitter {
-	pub(super) fn emit_cells(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_cells(&mut self) {
 		if !CELL_WORDS.iter().any(|word| self.should_emit_function(word)) {
 			return;
 		}
@@ -91,7 +91,7 @@ impl WasmGcEmitter {
 	}
 
 	/// `cell_new(v)`, `cell_get(c)`, `cell_set(c, v)`: the arguments as Nodes and the call
-	pub(super) fn emit_cell_call(&mut self, func: &mut Function, items: &[Node]) -> bool {
+	pub(in crate::wasm_emitter) fn emit_cell_call(&mut self, func: &mut Function, items: &[Node]) -> bool {
 		let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) else {
 			return false;
 		};

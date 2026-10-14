@@ -395,7 +395,7 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 				if let (true, Node::Symbol(name)) = (is_map_word, map.drop_meta()) {
 					indexed.insert(name.clone());
 				}
-				if let (true, Node::Symbol(name)) = (crate::wasm_emitter::cells::is_cell_word(word), map.drop_meta()) {
+				if let (true, Node::Symbol(name)) = (crate::wasm_emitter::functions::cells::is_cell_word(word), map.drop_meta()) {
 					celled.insert(name.clone());
 				}
 			}
@@ -929,7 +929,7 @@ pub(super) fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
 					Node::List(items, _, _)
 						if items
 							.first()
-							.is_some_and(|word| word.drop_meta().name() == crate::wasm_emitter::cells::CELL_GET) =>
+							.is_some_and(|word| word.drop_meta().name() == crate::wasm_emitter::functions::cells::CELL_GET) =>
 					{
 						Some(Kind::Empty)
 					}
