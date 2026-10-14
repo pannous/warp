@@ -315,7 +315,10 @@ pub fn canonical_spelling(name: &str) -> &str {
 
 /// The other spellings of a library word: `contains`, `has`, `includes` of collection_contains
 pub fn synonyms(word: &str) -> &'static [&'static str] {
-	SYNONYMS.iter().find(|(canonical, _)| *canonical == word).map_or(&[], |(_, synonyms)| synonyms)
+	SYNONYMS
+		.iter()
+		.find(|(canonical, _)| *canonical == word)
+		.map_or(&[], |(_, synonyms)| synonyms)
 }
 
 fn canonical_word(name: &str) -> Option<&'static str> {
