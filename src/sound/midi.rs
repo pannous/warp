@@ -3,22 +3,30 @@
 //! A note crosses to the host as four whole numbers, start in milliseconds, key (0..127), length in milliseconds and
 //! velocity (1..127); a file is a list of them flattened. Files are format 0, 480 ticks a quarter at 120 beats per
 //! minute (960 ticks a second), so a millisecond is a whole number of ticks to within 5%: ticks are rounded, not kept.
-//! Live output goes to `sendmidi` when the user may hear it; headless (tests, CI, WARP_NO_WINDOW) only a
-//! `midi out <port>: 90 3c 64` line on stderr, as sound prints its WAV. A message goes out at its voice's moment like a
-//! sound (card midi-clock): after the sounds before it, or at an `at`'s time. Live input has no backend yet, natively or
-//! in the playground (its Web MIDI input stays on the page, out of the program's Worker): it fails loudly (card midi-receive).
+//! Live output goes to the system's MIDI devices through midir (CoreMIDI, ALSA, WinMM) when the user may hear it;
+//! headless (tests, CI, WARP_NO_WINDOW) only a `midi out <port>: 90 3c 64` line on stderr, as sound prints its WAV. A
+//! message goes out at its voice's moment like a sound (card midi-clock): after the sounds before it, or at an `at`'s
+//! time. Live input (card midi-receive) comes natively from an input kept open for the run; the playground's Web MIDI
+//! input stays on the page, out of the program's Worker, and fails loudly there.
 
-use std::process::Command;
+use midir::{MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};
+use std::collections::HashMap;
+use std::sync::{mpsc, LazyLock, Mutex};
 
 const TICKS_PER_QUARTER: u32 = 480;
 const MICROSECONDS_PER_QUARTER: u32 = 500_000;
 const TICKS_PER_SECOND: f64 = TICKS_PER_QUARTER as f64 * 1_000_000.0 / MICROSECONDS_PER_QUARTER as f64;
 const NOTE_ON: u8 = 0x90;
 const NOTE_OFF: u8 = 0x80;
-const SENDER: &str = "sendmidi";
-const SENDER_INSTALL: &str = "brew install gbevin/tools/sendmidi";
+/// The name the system shows for warp's MIDI client and its connections
+const CLIENT: &str = "warp";
 /// A note's four numbers in the flat list
 pub const FIELDS: usize = 4;
+
+/// The outputs opened by name, kept open for the run
+static OUTPUTS: LazyLock<Mutex<HashMap<String, MidiOutputConnection>>> = LazyLock::new(Default::default);
+/// The inputs opened by name, their messages queued
+static INPUTS: LazyLock<Mutex<HashMap<String, Input>>> = LazyLock::new(Default::default);
 
 fn variable_length(mut value: u32, bytes: &mut Vec<u8>) {
 	let mut groups = vec![(value & 0x7f) as u8];
@@ -199,46 +207,110 @@ pub fn send(port: &str, bytes: &[u8]) -> Result<(), String> {
 	if bytes.is_empty() {
 		return Err("a MIDI message has at least a status byte".into());
 	}
-	let hex = bytes.iter().map(|byte| format!("{byte:02x}")).collect::<Vec<_>>();
 	if !crate::graphics::paint::shows_windows() {
+		let hex = bytes.iter().map(|byte| format!("{byte:02x}")).collect::<Vec<_>>();
 		let (_, place) = crate::sound::moment();
 		let at = if place > 0.0 { format!(" at {place:.3} s") } else { String::new() };
 		eprintln!("midi out {port}: {}{at}", hex.join(" "));
 		return Ok(());
 	}
 	crate::host::sandbox::check_process("midi.send")?;
-	let port = port.to_string();
-	crate::sound::on_clock(move || sent(&port, &hex))
+	let (port, bytes) = (port.to_string(), bytes.to_vec());
+	crate::sound::on_clock(move || sent(&port, &bytes))
 }
 
-/// The message's hex bytes handed to the sender now
-fn sent(port: &str, hex: &[String]) -> Result<(), String> {
-	let port = if port.is_empty() {
-		outputs()?.into_iter().next().ok_or("no MIDI output devices found")?
-	} else {
-		port.to_string()
-	};
-	let status =
-		Command::new(SENDER).args(["dev", &port, "hex"]).args(hex).status().map_err(|failure| no_backend(&failure))?;
-	status.success().then_some(()).ok_or_else(|| format!("{SENDER} failed ({status}) sending to {port}"))
+/// The message to its output, connected once and kept open for the run
+fn sent(port: &str, bytes: &[u8]) -> Result<(), String> {
+	let mut outputs = OUTPUTS.lock().map_err(|_| "the MIDI outputs are poisoned")?;
+	let name = chosen_port(port, &outputs_of(&midi_output()?), "output")?;
+	if !outputs.contains_key(&name) {
+		let output = midi_output()?;
+		let device = output.ports().into_iter().find(|device| output.port_name(device).ok().as_deref() == Some(&name));
+		let device = device.ok_or_else(|| format!("the MIDI output {name} is gone"))?;
+		let connection =
+			output.connect(&device, CLIENT).map_err(|failure| format!("cannot open MIDI output {name}: {failure}"))?;
+		outputs.insert(name.clone(), connection);
+	}
+	let connection = outputs.get_mut(&name).expect("connected above");
+	connection.send(bytes).map_err(|failure| format!("cannot send to MIDI output {name}: {failure}"))
 }
 
 /// The names of the MIDI outputs the system has
 pub fn outputs() -> Result<Vec<String>, String> {
 	crate::host::sandbox::check_process("midi.outputs")?;
-	let listed = Command::new(SENDER).arg("list").output().map_err(|failure| no_backend(&failure))?;
-	Ok(String::from_utf8_lossy(&listed.stdout)
-		.lines()
-		.map(|line| line.trim().trim_matches('"').to_string())
-		.filter(|line| !line.is_empty())
-		.collect())
+	Ok(outputs_of(&midi_output()?))
 }
 
-fn no_backend(failure: &std::io::Error) -> String {
-	format!("no MIDI output: {SENDER} could not run ({failure}); install it with `{SENDER_INSTALL}` (the playground uses Web MIDI)")
+/// The names of the MIDI inputs the system has
+pub fn inputs() -> Result<Vec<String>, String> {
+	crate::host::sandbox::check_process("midi.inputs")?;
+	Ok(inputs_of(&midi_input()?))
 }
 
-/// There is no native MIDI input: failing loudly beats a program that waits for messages that cannot come
-pub fn receive() -> Result<(), String> {
-	Err("MIDI input is not available natively yet (no CoreMIDI binding in this build), nor in the playground (card midi-receive)".into())
+/// The next message from the input `port` ("" the first one): its bytes, waiting for it; `seconds` > 0 waits that long
+/// at most, then `None`. The input stays open for the run, so no message between two calls is lost
+pub fn receive(port: &str, seconds: f64) -> Result<Option<Vec<u8>>, String> {
+	crate::host::sandbox::check_process("midi.receive")?;
+	let mut inputs = INPUTS.lock().map_err(|_| "the MIDI inputs are poisoned")?;
+	let name = chosen_port(port, &inputs_of(&midi_input()?), "input")?;
+	if !inputs.contains_key(&name) {
+		inputs.insert(name.clone(), opened_input(&name)?);
+	}
+	let messages = &inputs[&name].messages;
+	match seconds > 0.0 {
+		true => match messages.recv_timeout(std::time::Duration::from_secs_f64(seconds)) {
+			Ok(message) => Ok(Some(message)),
+			Err(mpsc::RecvTimeoutError::Timeout) => Ok(None),
+			Err(mpsc::RecvTimeoutError::Disconnected) => Err(format!("the MIDI input {name} closed")),
+		},
+		false => messages.recv().map(Some).map_err(|_| format!("the MIDI input {name} closed")),
+	}
+}
+
+/// An open input whose messages queue up for receive
+struct Input {
+	_connection: MidiInputConnection<()>,
+	messages: mpsc::Receiver<Vec<u8>>,
+}
+
+fn opened_input(name: &str) -> Result<Input, String> {
+	let input = midi_input()?;
+	let device = input.ports().into_iter().find(|device| input.port_name(device).ok().as_deref() == Some(name));
+	let device = device.ok_or_else(|| format!("the MIDI input {name} is gone"))?;
+	let (queue, messages) = mpsc::channel();
+	let forward = move |_stamp: u64, message: &[u8], _: &mut ()| {
+		let _ = queue.send(message.to_vec());
+	};
+	let connection = input
+		.connect(&device, CLIENT, forward, ())
+		.map_err(|failure| format!("cannot open MIDI input {name}: {failure}"))?;
+	Ok(Input { _connection: connection, messages })
+}
+
+/// The device named `wanted` (exactly, else the first whose name contains it), "" the first one
+fn chosen_port(wanted: &str, names: &[String], direction: &str) -> Result<String, String> {
+	let found = match wanted.is_empty() {
+		true => names.first(),
+		false => names.iter().find(|name| *name == wanted).or_else(|| names.iter().find(|name| name.contains(wanted))),
+	};
+	found.cloned().ok_or_else(|| match names.is_empty() {
+		true => format!("no MIDI {direction} devices found"),
+		false => format!("no MIDI {direction} named {wanted}; there are {}", names.join(", ")),
+	})
+}
+
+fn midi_output() -> Result<MidiOutput, String> {
+	MidiOutput::new(CLIENT).map_err(|failure| format!("no MIDI output: {failure}"))
+}
+
+fn midi_input() -> Result<MidiInput, String> {
+	MidiInput::new(CLIENT).map_err(|failure| format!("no MIDI input: {failure}"))
+}
+
+fn outputs_of(output: &MidiOutput) -> Vec<String> {
+	output.ports().iter().filter_map(|device| output.port_name(device).ok()).collect()
+}
+
+fn inputs_of(input: &MidiInput) -> Vec<String> {
+	input.ports().iter().filter_map(|device| input.port_name(device).ok()).collect()
 }

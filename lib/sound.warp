@@ -428,8 +428,10 @@ midi_note(pitch, duration, velocity = 100, channel = 1) := {
 	midi_off(pitch, channel)
 }
 midi_outputs() := std_io("midi", "outputs", [])
-// the next message [status, data1, data2] waiting at the input, ø when none (fails where there is no MIDI input)
-midi_receive() := std_io("midi", "receive", [])
+midi_inputs() := std_io("midi", "inputs", [])
+// the next message [status, data1, data2] from the input port ("" the first, else by name), waiting for it; seconds > 0
+// waits that long at most, then ø (card midi-receive); the input stays open, so no message between two calls is lost
+midi_receive(port = "", seconds = 0) := std_io("midi", "receive", [port, seconds])
 // a Standard MIDI File of notes [start, pitch, length, velocity] (seconds, frequency or note, seconds, 1 to 127) at
 // 120 beats a minute, and the notes of such a file the same way: write_midi("tune.mid", [[0, C4, 0.5, 100]])
 write_midi(path, notes) := std_io("midi", "write_file", [path, [v for entry in notes for v in [round(entry#1 * 1000) as int, midi(entry#2), round(si_amount(entry#3) * 1000) as int, entry#4]]])

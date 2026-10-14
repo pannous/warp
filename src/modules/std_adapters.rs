@@ -268,7 +268,12 @@ fn midi(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			crate::sound::midi::send(&text_of(port)?, &bytes).map(|_| Node::Empty)
 		}
 		("outputs", []) => crate::sound::midi::outputs().map(texts),
-		("receive", []) => crate::sound::midi::receive().map(|_| Node::Empty),
+		("inputs", []) => crate::sound::midi::inputs().map(texts),
+		("receive", [port, seconds]) => {
+			crate::sound::midi::receive(&text_of(port)?, number_of(seconds)?).map(|message| {
+				message.map_or(Node::Empty, |bytes| list_of(bytes.into_iter().map(|byte| Node::int(byte as i64))))
+			})
+		}
 		_ => no_such_word(arguments),
 	}
 }
