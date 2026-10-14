@@ -89,10 +89,10 @@ def rewrite_grouped_imports(text, module, folder):
 
 
 def rewrite_file_mentions(module, folder):
-	"""Comments, scripts and notes naming src/<module>.rs or src/<module>/ (the decision history keeps its wording)"""
+	"""Comments, scripts and notes naming src/<module>.rs or src/<module>/ (not the decision history, not AGENTS.md: the user edits that)"""
 	listed = subprocess.run(["git", "-C", REPO, "grep", "-lE", r"src/" + module + r"(\.rs|/)"], capture_output=True, text=True)
 	for relative in listed.stdout.split():
-		if relative != "notes/decisions.md":
+		if relative not in ("notes/decisions.md", "AGENTS.md"):
 			path = os.path.join(REPO, relative)
 			write(path, re.sub(r"\bsrc/" + module + r"(?=\.rs|/)", "src/" + folder + "/" + module, read(path)))
 
