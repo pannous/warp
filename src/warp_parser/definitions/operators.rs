@@ -57,14 +57,23 @@ pub(crate) fn scan_user_operators(source: &str) -> Vec<UserOperator> {
 	found
 }
 
-/// The operators a source itself declares: `prefix|suffix|infix operator ⊕ := body` and the pattern `a ⊕ b := body` (infix)
+/// The kind a declaration's first word declares: `prefix|suffix|infix operator ⊕`, and `operator ⊕` alone is infix (card
+/// operator-infix)
+fn declared_kind(word: &str) -> Option<UserOperatorKind> {
+	match word {
+		OPERATOR_WORD => Some(UserOperatorKind::Infix),
+		_ => OPERATOR_KINDS.iter().find(|(keyword, _)| *keyword == word).map(|(_, kind)| *kind),
+	}
+}
+
+/// The operators a source itself declares: `[prefix|suffix|infix] operator ⊕ := body` and the pattern `a ⊕ b := body` (infix)
 pub(crate) fn declared_operators(source: &str) -> Vec<UserOperator> {
 	let mut found: Vec<UserOperator> = Vec::new();
 	for statement in source.lines().flat_map(|line| line.split(';')) {
 		let words: Vec<&str> = statement.split_whitespace().collect();
 		let by_kind = words.split_first().and_then(|(word, rest)| {
-			let (_, kind) = OPERATOR_KINDS.iter().find(|(keyword, _)| keyword == word)?;
-			Some((declared_operator(*kind, rest)?, *kind))
+			let kind = declared_kind(word)?;
+			Some((declared_operator(kind, rest)?, kind))
 		});
 		let declared = by_kind.or_else(|| match words.as_slice() {
 			[left, glyph, right, ":=", ..]
@@ -267,14 +276,14 @@ impl WarpParser {
 				Err(message) => error(&message),
 			});
 		}
-		let (_, kind) = OPERATOR_KINDS.iter().find(|(keyword, _)| *keyword == word)?;
-		let glyph: Vec<char> = declared_operator(*kind, &words)?.chars().collect();
+		let kind = declared_kind(word)?;
+		let glyph: Vec<char> = declared_operator(kind, &words)?.chars().collect();
 		let has_operator_word = words.first() == Some(&OPERATOR_WORD);
 		self.skip_spaces();
 		if has_operator_word {
 			self.advance_by(OPERATOR_WORD.chars().count());
 			self.skip_spaces();
-		} else if is_operator_word(&glyph) {
+		} else if is_operator_word(&glyph) && word != OPERATOR_WORD {
 			self.set_hint_pos();
 			let name: String = glyph.iter().collect();
 			crate::errors::diagnostic::educate_once(
