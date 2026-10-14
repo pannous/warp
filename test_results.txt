@@ -1521,6 +1521,7 @@ PASSED:
   ✓ functions::test_partial_application::a_returned_zero_argument_closure_is_called
   ✓ functions::test_passed_through_functions::a_returned_parameter_is_called
   ✓ functions::test_passed_through_functions::a_variable_holds_the_returned_function
+  ✓ functions::test_phrase_calls::a_get_phrase_is_a_call
   ✓ functions::test_phrase_calls::test_prepositions_keep_their_meaning_elsewhere
   ✓ functions::test_phrase_calls::test_spaced_phrases_are_called_with_their_prepositions
   ✓ functions::test_phrase_calls::test_to_phrases_are_called_with_their_prepositions
@@ -4683,7 +4684,6 @@ PASSED:
   ✓ web::test_dev_server::the_dev_server_rebuilds_a_changed_program
   ✓ web::test_dev_server::the_dev_server_watches_the_modules_used
   ✓ web::test_dev_server::warp_dev_opens_no_browser_when_piped
-  ✓ web::test_dom_pages::a_handler_draws_on_a_canvas_of_the_page
   ✓ web::test_dom_pages::a_handler_sets_and_reads_elements_of_the_page
   ✓ web::test_dom_pages::main_sets_the_title_of_the_page
   ✓ web::test_editor_mode::the_mode_advances_without_built_keywords
