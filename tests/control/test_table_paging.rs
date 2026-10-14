@@ -7,7 +7,7 @@ use warp::wasm_emitter::eval;
 const PERSON: &str = "class Person{name: text; age: int}";
 
 fn program(table: &str, rest: &str) -> String {
-	format!("{PERSON}\npeople: [Person] = database.{table}\n{rest}")
+	format!("{PERSON}\nstored people: [Person] in \"{table}\"\n{rest}")
 }
 
 fn fifty_people(table: &str) {

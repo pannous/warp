@@ -4,16 +4,16 @@
 use crate::is;
 use warp::wasm_emitter::eval;
 
-const TEAMS: &str = "class Team{name: text}\nteams: [Team] = database.teams_";
-const PEOPLE_BEFORE: &str = "class Person{name: text}\npeople: [Person] = database.people_";
+const TEAMS: &str = "class Team{name: text}\nstored teams: [Team] in \"teams_";
+const PEOPLE_BEFORE: &str = "class Person{name: text}\nstored people: [Person] in \"people_";
 
 /// Bo and Cy in a people table that had no team column yet, so their added column holds 0
 fn seeded(tables: &str) {
-	eval(&format!("{TEAMS}{tables}\nteams.add(Team(\"Red\"))\n{PEOPLE_BEFORE}{tables}\npeople.add(Person(\"Bo\"))\npeople.add(Person(\"Cy\"))"));
+	eval(&format!("{TEAMS}{tables}\"\nteams.add(Team(\"Red\"))\n{PEOPLE_BEFORE}{tables}\"\npeople.add(Person(\"Bo\"))\npeople.add(Person(\"Cy\"))"));
 }
 
 fn program(tables: &str, team_type: &str, rest: &str) -> String {
-	format!("{TEAMS}{tables}\nclass Person{{name: text; team: {team_type}}}\npeople: [Person] = database.people_{tables}\n{rest}")
+	format!("{TEAMS}{tables}\"\nclass Person{{name: text; team: {team_type}}}\nstored people: [Person] in \"people_{tables}\"\n{rest}")
 }
 
 #[test]

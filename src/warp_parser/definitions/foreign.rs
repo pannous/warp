@@ -1,6 +1,7 @@
 //! Foreign declaration modifiers: `public static fun f()`, `private x = 4`
 
 use super::*;
+use crate::warp_parser::atoms::note_alias_at;
 
 impl WarpParser {
 	/// `public static fun f(){…}`, `private x = 4` (P78): a run of modifiers that ends before a function definition, or of
@@ -61,5 +62,83 @@ impl WarpParser {
 		} else {
 			statement
 		})
+	}
+
+	/// Another language's way of writing a warp form: `new Point(1, 2)`, `constant`, Ruby's `attr_accessor :x`,
+	/// `operator +`, Kotlin's `enum class` and `data class`, `mixin Name {…}`
+	pub(crate) fn foreign_form(&mut self, symbol: &str) -> Option<Node> {
+		let start = self.start_of(symbol);
+		// `new Point(1, 2)` (Java, JavaScript, C#) of a declared class: the construction `Point(1, 2)`
+		if symbol == NEW_WORD && !self.options.data_mode && self.declared_type_after_blanks() {
+			self.skip_blanks();
+			let construction = self.parse_atom();
+			let class = crate::node::leading_name(&construction);
+			note_alias_at(start, &format!("{NEW_WORD} {class}"), &class);
+			return Some(construction);
+		}
+		if symbol == CONSTANT_ALIAS && !self.options.data_mode && self.identifier_after_blanks() {
+			note_alias_at(start, CONSTANT_ALIAS, CONST_WORD);
+			return Some(Symbol(CONST_WORD.to_string()));
+		}
+		// Ruby's `attr_accessor :x, :y` in a class body: the fields x and y
+		if RUBY_FIELD_WORDS.contains(&symbol) && self.type_fields.is_some() {
+			let line: String = (0..)
+				.map(|offset| self.peek_char(offset))
+				.take_while(|ch| !matches!(ch, '\n' | '\0' | ';' | '}'))
+				.collect();
+			let names: Vec<String> = line
+				.split(',')
+				.map(|name| name.trim().trim_start_matches(':').to_string())
+				.collect();
+			if names
+				.iter()
+				.all(|name| !name.is_empty() && name.chars().all(is_identifier_char))
+			{
+				self.advance_by(line.chars().count());
+				note_alias_at(start, &format!("{symbol}{line}"), &names.join("; "));
+				return Some(Node::List(
+					names.into_iter().map(Symbol).collect(),
+					Bracket::None,
+					Separator::Semicolon,
+				));
+			}
+		}
+		if symbol == OPERATOR_WORD && !self.options.data_mode && matches!(self.current_char(), ' ' | '\t') {
+			self.skip_blanks();
+			if let Some(head) = self.try_parse_operator_method_head() {
+				note_alias_at(
+					start,
+					&format!("{OPERATOR_WORD} {}", head.first().name()),
+					&head.first().name(),
+				);
+				return Some(head);
+			}
+		}
+		// Kotlin's `enum class Color {…}`: the enum
+		if symbol == ENUM_WORD && !self.options.wit_mode && self.class_keyword_after_blanks() == Some("class") {
+			self.skip_blanks();
+			self.advance_by("class".len());
+			note_alias_at(start, &format!("{ENUM_WORD} class"), ENUM_WORD);
+			return Some(Symbol(symbol.to_string()));
+		}
+		// `data class P(…)` (Kotlin), `open class`, `abstract class`: a modifier of a class declaration, the class itself
+		if !self.options.wit_mode && CLASS_MODIFIERS.contains(&symbol) {
+			if let Some(keyword) = self.class_keyword_after_blanks() {
+				note_alias_at(start, &format!("{symbol} {keyword}"), keyword);
+				self.skip_blanks();
+				self.advance_by(keyword.len());
+				return Some(self.parse_type_declaration());
+			}
+		}
+		if !self.options.wit_mode && symbol == MIXIN_WORD && self.name_and_block_follow() {
+			return Some(match self.parse_type_declaration() {
+				Node::Type { name, body } => Node::Type {
+					name: Box::new(name.with_attribute(MIXIN_WORD, Node::True)),
+					body,
+				},
+				other => other,
+			});
+		}
+		None
 	}
 }

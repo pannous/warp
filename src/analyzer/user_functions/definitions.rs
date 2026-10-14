@@ -297,7 +297,7 @@ pub(in crate::analyzer) fn extract_param(item: &Node) -> Option<Param> {
 			if let Node::Symbol(s) = n.drop_meta() {
 				Some(Param {
 					name: s.clone(),
-					annotation: Some(type_name.as_ref().clone()),
+					annotation: Some(named_list_annotation(type_name)),
 					default: None,
 					used_as: None,
 				})
@@ -325,15 +325,9 @@ pub(in crate::analyzer) fn extract_param(item: &Node) -> Option<Param> {
 	}
 }
 
-/// Check if a node uses the implicit `it` parameter
-pub(in crate::analyzer) fn uses_it(node: &Node) -> bool {
-	let node = node.drop_meta();
-	match node {
-		Node::Symbol(s) if s == "it" => true,
-		Node::Key(left, _, right) => uses_it(left) || uses_it(right),
-		Node::List(items, _, _) => items.iter().any(uses_it),
-		_ => false,
-	}
+/// Whether a body reads the implicit parameter `it`
+pub(crate) fn uses_it(node: &Node) -> bool {
+	node.mentions(crate::words::IMPLICIT_PARAMETER)
 }
 
 /// A body of `name := body` that reads `it` or `$0`: a function of that parameter

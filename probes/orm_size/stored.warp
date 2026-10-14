@@ -1,5 +1,5 @@
 class Cup{size: text; count: int}
-cups: [Cup] = database.cups_sized
+stored cups: [Cup] in "cups_sized"
 cups.add(Cup("big", 3))
 print cups#1.size
 print cups#1.count

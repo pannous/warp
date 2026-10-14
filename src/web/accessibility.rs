@@ -20,6 +20,9 @@ const LABEL: &str = "label";
 const HTML: &str = "html";
 /// a style sheet's items are rules: `html { … }` there styles the element, it makes none
 const STYLE: &str = "style";
+const META: &str = "meta";
+/// Keys of html that are facts for the page's head, besides `meta: {…}` (decision html-meta, lib/markup.warp html_is_page_fact)
+const PAGE_FACTS: [&str; 2] = ["title", "description"];
 const FORM_FIELDS: [&str; 3] = ["input", "select", "textarea"];
 /// input types that need no label: they say what they do or are not shown
 const SELF_LABELED_INPUTS: [&str; 5] = ["hidden", "submit", "button", "reset", "image"];
@@ -35,10 +38,13 @@ const TYPE: &str = "type";
 /// one lib/markup.warp writes as an attribute besides html_attributes
 const WARP_ELEMENT_WORDS: [&str; 2] = ["bind", "key"];
 const OWN_ATTRIBUTE_PREFIXES: [&str; 2] = ["data-", "aria-"];
-/// attributes whose value is a number (`rows: 3`, `cols: "40"` as a text of one)
+/// attributes whose value is a number (`rows: 3`, `cols: "40"` as a text of one), or a date or time (`min: "2024-01-01"`),
+/// or the attribute's keyword (NUMBER_KEYWORDS)
 const NUMBER_ATTRIBUTES: [&str; 10] = [
 	"min", "max", "step", "rows", "cols", "colspan", "rowspan", "tabindex", "width", "height",
 ];
+/// the words a number attribute takes besides numbers: `step: "any"`
+const NUMBER_KEYWORDS: [(&str, &str); 1] = [("step", crate::element_events::ANY_STEP)];
 /// attributes whose value is an address
 const ADDRESS_ATTRIBUTES: [&str; 3] = ["href", "src", "action"];
 /// elements a p cannot hold: the browser ends the p before them
@@ -286,9 +292,7 @@ fn value_mistakes<'a>(element: &Element<'a>) -> Vec<Problem<'a>> {
 					format!("{name} takes yes or no: the text {text:?} leaves it out"),
 					format!("{name}: yes, or {name}: no"),
 				),
-				(Some(text), _)
-					if NUMBER_ATTRIBUTES.contains(&name.as_str()) && text.trim().parse::<f64>().is_err() =>
-				{
+				(Some(text), _) if NUMBER_ATTRIBUTES.contains(&name.as_str()) && !is_number_value(name, &text) => {
 					mistake(format!("{name} takes a number, not {text:?}"), format!("{name}: 3"))
 				}
 				(None, Node::Number(number)) if ADDRESS_ATTRIBUTES.contains(&name.as_str()) => mistake(
@@ -299,6 +303,11 @@ fn value_mistakes<'a>(element: &Element<'a>) -> Vec<Problem<'a>> {
 			}
 		})
 		.collect()
+}
+
+/// A number attribute's value: written with digits (a number, date or time) or the attribute's keyword (`step: "any"`)
+fn is_number_value(attribute: &str, value: &str) -> bool {
+	value.chars().any(|character| character.is_ascii_digit()) || NUMBER_KEYWORDS.contains(&(attribute, value.trim()))
 }
 
 /// An element where HTML does not let it be, which the browser moves or drops (card markup-content)
@@ -378,8 +387,8 @@ fn markup_mistakes<'a>(element: &Element<'a>, defined: &HashSet<String>) -> Vec<
 		crate::extensions::strings::near_miss(word, names).unwrap_or(otherwise)
 	};
 	let mut mistakes = vec![];
-	// a style sheet's items are rules, no attributes
-	if element.tag == STYLE {
+	// a style sheet's items are rules, no attributes; `meta: {author: "Ann"}` of html names metas (page facts)
+	if element.tag == STYLE || names_metas(element) {
 		return mistakes;
 	}
 	for tag in element
@@ -394,6 +403,7 @@ fn markup_mistakes<'a>(element: &Element<'a>, defined: &HashSet<String>) -> Vec<
 		.attributes
 		.iter()
 		.filter(|(name, _)| !element.blocks.contains(name))
+		.filter(|(name, _)| !(element.tag == HTML && PAGE_FACTS.contains(&name.as_str())))
 	{
 		let renders = crate::web::markup::names_attribute(name)
 			|| WARP_ELEMENT_WORDS.contains(&name.as_str())
@@ -462,6 +472,17 @@ fn block_name(item: &Node) -> Option<String> {
 		},
 		_ => None,
 	}
+}
+
+/// `meta: {author: "Ann"}` of html: page facts, no meta element of its own attributes (`charset`, `name`)
+fn names_metas(element: &Element) -> bool {
+	let meta_attributes = crate::web::markup::meta_attribute_names();
+	element.tag == META
+		&& element.parent.as_deref() == Some(HTML)
+		&& !element
+			.attributes
+			.iter()
+			.any(|(name, _)| meta_attributes.contains(name))
 }
 
 /// A block's name no element, attribute nor warp word: `divv` of `divv{ "hi" }`
@@ -559,6 +580,8 @@ fn collect<'a>(
 				.into_iter()
 				.for_each(|part| collect(part, classes, inside_label, parent, found));
 		}
+		// `{a: 2} is {a: h}`: compared values, or a pattern, are never rendered, so they hold no elements
+		Node::Key(_, op, _) if op.is_relation() => {}
 		Node::Key(left, _, right) => {
 			collect(left, classes, inside_label, parent, found);
 			collect(right, classes, inside_label, parent, found);

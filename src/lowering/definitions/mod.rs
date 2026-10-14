@@ -6,6 +6,7 @@ use super::*;
 
 pub mod closures;
 pub mod declaration_forms;
+pub mod declarations;
 pub mod file_declarations;
 pub mod function_values;
 pub mod getters;

@@ -7,10 +7,11 @@
 //! for a server function's value (without_serving).
 
 use super::nodes::{call, key};
+use crate::database_tables::{stored_table, table_store};
 use crate::declarations::word;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::stored_values::DATABASE_WORDS;
+use crate::stored_values::DATABASE_WORD;
 use std::collections::HashSet;
 
 const SERVE_WORD: &str = "serve";
@@ -344,7 +345,7 @@ fn with_route_data(program: Node) -> Node {
 		let row_classes: Vec<String> = lowered
 			.iter()
 			.filter(|statement| left_out(statement))
-			.filter_map(table_class)
+			.filter_map(|statement| stored_table(statement).map(|stored| stored.class))
 			.collect();
 		lowered.retain(|statement| !left_out(statement));
 		lowered = lowered
@@ -370,71 +371,24 @@ fn changes_server_data_only(statement: &Node, reads_server_data: &dyn Fn(&Node) 
 		&& crate::event_signals::main_level_variables(std::slice::from_ref(statement)).is_empty()
 }
 
-/// `stored todos: [Todo]` or `todos: [Todo] = database.todos`: the class of the table's rows
-fn table_class(statement: &Node) -> Option<String> {
-	let declared = match statement.drop_meta() {
-		Node::Key(target, Op::Assign, _) => target.drop_meta().clone(),
-		Node::List(items, _, _) => items.last()?.drop_meta().clone(),
-		_ => return None,
-	};
-	let Node::Key(_, Op::Colon, list_type) = declared else {
-		return None;
-	};
-	match list_type.drop_meta() {
-		Node::List(element, Bracket::Square, _) if element.len() == 1 => Some(element[0].drop_meta().name()),
-		_ => None,
-	}
-}
-
-/// `users: [User] = database.users`, `prefs = database.prefs` (indexedDB too), `stored users: [User]`: the variable
-/// holding server data
+/// `prefs = database.prefs`, `stored users: [User]`: the variable holding server data
 fn server_variable(statement: &Node) -> Option<String> {
 	match statement.drop_meta() {
-		Node::Key(target, Op::Assign, source) => {
-			let Node::Key(store, Op::Dot, _) = source.drop_meta() else {
-				return None;
-			};
-			if !DATABASE_WORDS.contains(&store.drop_meta().name().as_str()) {
-				return None;
-			}
-			match target.drop_meta() {
-				Node::Key(name, Op::Colon, _) => Some(name.drop_meta().name()),
-				Node::Symbol(name) => Some(name.clone()),
-				_ => None,
-			}
+		Node::Key(name, Op::Assign, source)
+			if let Node::Key(store, Op::Dot, _) = source.drop_meta()
+				&& store.is_symbol(DATABASE_WORD) =>
+		{
+			name.symbol_name().map(str::to_string)
 		}
-		Node::List(items, _, _) => match items.as_slice() {
-			[word, declaration] if word.drop_meta().name() == crate::stored_values::STORED_WORD => {
-				match declaration.drop_meta() {
-					Node::Key(name, Op::Colon, list_type)
-						if matches!(list_type.drop_meta(), Node::List(_, Bracket::Square, _)) =>
-					{
-						Some(name.drop_meta().name())
-					}
-					_ => None,
-				}
-			}
-			_ => None,
-		},
-		_ => None,
+		_ => stored_table(statement).map(|stored| stored.variable),
 	}
 }
 
-/// `users: [User] = database.users` or `stored users: [User]`: the table variable and `database.users`, its table.
-/// A served route reads it anew at each request (`global users; users = database.users`, reopened by
-/// database_tables.rs): a page render runs in an instance of its own and may have changed the table since
+/// `stored users: [User]`: the table variable and `database.users`, its table. A served route reads it anew at each
+/// request (`global users; users = database.users`, reopened by database_tables.rs): a page render runs in an instance
+/// of its own and may have changed the table since
 fn table_variable(statement: &Node) -> Option<(String, Node)> {
-	let name = server_variable(statement)?;
-	match statement.drop_meta() {
-		Node::Key(target, Op::Assign, source) if matches!(target.drop_meta(), Node::Key(_, Op::Colon, list_type) if matches!(list_type.drop_meta(), Node::List(_, Bracket::Square, _))) => {
-			Some((name, source.drop_meta().clone()))
-		}
-		Node::List(..) => {
-			let table = key(symbol(DATABASE_WORDS[0]), Op::Dot, Node::Symbol(name.clone()));
-			Some((name, table))
-		}
-		_ => None,
-	}
+	stored_table(statement).map(|stored| (stored.variable, table_store(&stored.table)))
 }
 
 /// The server's tables and the words giving a list: the table variables and the functions whose value is one

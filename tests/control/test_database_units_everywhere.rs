@@ -5,7 +5,7 @@ use crate::common::fails_with;
 use warp::wasm_emitter::eval;
 
 fn runs(class: &str, table: &str, rest: &str) -> String {
-	format!("class Run{{{class}}}\nruns: [Run] = database.{table}\n{rest}")
+	format!("class Run{{{class}}}\nstored runs: [Run] in \"{table}\"\n{rest}")
 }
 
 fn value(code: &str) -> String {

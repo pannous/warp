@@ -282,7 +282,7 @@ fn without_use_of(program: Node, module: &str) -> Node {
 /// The standard modules named after a type with their words, the methods of that type: list, map, text
 pub fn type_modules() -> Vec<(&'static str, &'static [String])> {
 	std_module_names()
-		.filter(|module| crate::type_tests::is_type_word(module))
+		.filter(|module| crate::type_tests::is_builtin_type_word(module))
 		.filter_map(|module| Some((module, std_module_definitions(module)?)))
 		.collect()
 }
@@ -742,7 +742,7 @@ const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 	("wagi", |_| crate::pipeline::compile_mode().for_wagi),
 ];
 
-/// Whether the program plays sound: it calls a sound word or says `use sound` (lowering/music_words.rs reads its note names)
+/// Whether the program plays sound: it calls a sound word or says `use sound` (lowering/words/music_words.rs reads its note names)
 pub fn uses_sound(program: &Node) -> bool {
 	first_called_undefined(program, SOUND_WORDS).is_some()
 		|| statements_of(program)

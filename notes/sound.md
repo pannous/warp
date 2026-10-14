@@ -97,7 +97,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    block-data-sound.
    Tempo built (step 4, 2026-10-10, samples/rhythm.warp): `1/4 beat`, `2 beats`, `1 bar` are seconds at the
    module's `tempo` (beats per minute, 120) and `beats_per_bar` (4), anywhere in a program that uses sound: the
-   amount is the item before the word, of an assignment its value (src/lowering/music_words.rs → lib beat_seconds,
+   amount is the item before the word, of an assignment its value (src/lowering/words/music_words.rs → lib beat_seconds,
    bar_seconds; tests/programs/test_sound_tempo.rs). Not units of the static unit checker: a beat is no SI time.
    Voices built (step 5, 2026-10-10, samples/voices.warp): every task (`go { }`) is a voice. It forks its starter's
    place in time (src/sound/mod.rs Voice, joined in src/host/tasks.rs spawn), so a task's notes sound along with the

@@ -15,6 +15,7 @@ pub mod list_mutations;
 pub mod min_max;
 pub mod nested_index;
 pub mod number_keys;
+pub mod of_lookups;
 pub mod one_entry_maps;
 pub mod shared_arrays;
 pub mod tree_walks;

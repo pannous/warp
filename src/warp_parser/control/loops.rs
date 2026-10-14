@@ -283,6 +283,10 @@ impl WarpParser {
 			self.skip_end_line(); // Ruby's `while c` … `end`
 			return while_do(rhs, body);
 		}
+		// `while x-->0` alone loops for the condition's effects, as `while x-->0 {}` does
+		if BODY_ENDS.contains(&self.current_char()) {
+			return while_do(rhs, Empty);
+		}
 		Node::Key(Box::new(Empty), Op::While, Box::new(rhs))
 	}
 

@@ -18,6 +18,9 @@ use Instruction as I;
 use StorageType::Val;
 use ValType::Ref;
 
+/// The export name prefix of a closure's captured variable, `capture·add·k` (tasks copy them to their instance)
+pub const CAPTURE_EXPORT_PREFIX: &str = "capture·";
+
 const ENTRY_PREFIX: &str = "closure_entry_";
 /// closure_rebuild(name, captured) and closure_captured(f): what a host needs to carry a closure to another instance of
 /// the module (a task, src/host/tasks.rs): its target's name and its captured values; the entry is found again by name

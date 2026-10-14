@@ -1,7 +1,7 @@
 #!/usr/bin/env warp
 // A transaction: every write of its block lands, or none does
 class Account{owner: text; balance: int}
-accounts: [Account] = database.accounts
+stored accounts: [Account]
 if count(accounts) == 0 {
 	accounts.add(Account("Al", 100))
 	accounts.add(Account("Bo", 0))
