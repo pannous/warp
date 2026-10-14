@@ -290,7 +290,7 @@ pub(super) fn names_empty_type(type_node: &Node) -> bool {
 }
 
 pub(super) fn names_list_type(type_name: &str) -> bool {
-	type_name == "list" || type_name.starts_with("list of ") || plural_element_type(type_name).is_some()
+	type_name == "list" || super::list_element_type(type_name).is_some()
 }
 
 /// The kind a builtin type word names, as annotation (`x:double`) or constructor (`double 2`)
