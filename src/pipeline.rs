@@ -242,7 +242,7 @@ pub fn rendering_itself<T>(run: impl FnOnce() -> T) -> T {
 	with_flag(|context| &mut context.mode.rendering_itself, run)
 }
 
-/// `run` compiling a program for `warp dev`: the main-level variables it changes are kept (lowering/stored_values.rs)
+/// `run` compiling a program for `warp dev`: the main-level variables it changes are kept (lowering/data/stored_values.rs)
 pub fn for_dev<T>(run: impl FnOnce() -> T) -> T {
 	with_flag(|context| &mut context.mode.for_dev, run)
 }

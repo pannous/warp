@@ -354,7 +354,7 @@ Each step is useful on its own and is what the next ones stand on.
 - `outlet` is the canonical word (aliases such as slot on demand).
 
 ## Step 12 (web-stores), what is done and what is left
-- Persisted signals: `stored theme = "dark"` (lowering/stored_values.rs, soft keyword) is the variable theme holding the
+- Persisted signals: `stored theme = "dark"` (lowering/data/stored_values.rs, soft keyword) is the variable theme holding the
   value an earlier run kept under its name, else the default; `on change theme` keeps each change. Natively the values
   are JSON in `<program>.stored.json` beside the program (in memory for inline code), in the playground the page's
   localStorage (`warp stored <name>`): the worker gets them at start and sends each save back (host.js

@@ -52,7 +52,7 @@ const MOST_COMPILED = 16;
 const compiledModules = new Map();
 const compiledPipelines = new Map();
 const WORDS_STATE = 2; // the shared buffer's state when it holds raw 32-bit words, floats or pixels (writeShared's JSON is state 1)
-// kept buffers (src/lowering/gpu_maps.rs marked_kept): a map result read on the CPU stays on the GPU for the next map of
+// kept buffers (src/lowering/foreign/gpu_maps.rs marked_kept): a map result read on the CPU stays on the GPU for the next map of
 // it, by block, the last MOST_KEPT of them (src/graphics/gpu.rs KEPT); flags as gpu_map_linear's last argument
 const KEEP_RESULT = 1n;
 const SOURCE_KEPT = 2n;
@@ -536,7 +536,7 @@ addHostPart({
 				cells.set(kernel(shader, Float32Array.from(cells), workgroups, 0));
 				return block;
 			},
-			// `ys = xs.map(x => …) @gpu` (src/lowering/gpu_maps.rs): the kernel over source's cells (and the values it reads)
+			// `ys = xs.map(x => …) @gpu` (src/lowering/foreign/gpu_maps.rs): the kernel over source's cells (and the values it reads)
 			// into target's; 0 without an adapter (said once), when the program maps them on the CPU
 			gpu_map_linear: (shader, source, values, target, workgroups, keeping) => gpuKernelLinear(shader, source, values, target, workgroups, false, keeping),
 			// `s = sum(xs.map(x => …) @gpu)`, min, max: each workgroup's partial result, left after the values, into target

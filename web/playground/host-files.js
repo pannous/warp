@@ -135,7 +135,7 @@ function hostBytes(program, action, what) {
 	}
 }
 
-// `database[k]`: the store of any file ending so (src/lowering/stored_values.rs DATABASE_STORE), kept in IndexedDB, which
+// `database[k]`: the store of any file ending so (src/lowering/data/stored_values.rs DATABASE_STORE), kept in IndexedDB, which
 // Workers have too; its values are read before the program runs (loadKept: worker.js, site-worker.js, site.js) and
 // each change written back where the host keeps values (self.keepStored; the browser test suite keeps them in memory)
 const DATABASE_STORE = "database.json";
@@ -228,7 +228,7 @@ function takeDatabaseValue(name, value) {
 const byRowId = entries => entries.map(entry => [entry, Number(entry[0].match(ROW_KEY)?.[2] ?? 0)])
 	.sort((first, second) => first[1] - second[1]).map(([entry]) => entry);
 
-// `people: [Person] = database.people` (src/lowering/database_tables.rs): a table of the browser, kept in the database
+// `people: [Person] = database.people` (src/lowering/data/database_tables.rs): a table of the browser, kept in the database
 // store (IndexedDB, as `database[k]`), where natively SQLite keeps it (src/database.rs): its column types under the
 // table's key, each row, an object with its id, under its own (`table people.database.json people #3`), so a change
 // writes only its row. In memory a table holds its rows. Filters stay list comprehensions over the rows (no SQL here).
@@ -281,7 +281,7 @@ const keepRow = (file, table, row) => keep(rowKey(file, table, row[ID_COLUMN]), 
 // the table's rows [id, columns…], the table first created or migrated to the class's fields [name, type, default];
 // a removed field keeps its column (data is never dropped silently), loudly
 // the table migrated to the class's fields, then its rows; src/database.rs gives the two halves apart too: a table's
-// list migrates at registration and loads its rows at the first read (lowering/database_tables.rs)
+// list migrates at registration and loads its rows at the first read (lowering/data/database_tables.rs)
 function openTable(table, schema, file) {
 	migrateTable.call(this, table, schema, file);
 	return tableRows(table, schema, file);
@@ -363,7 +363,7 @@ function updateRow(table, id, column, value, file) {
 	return null;
 }
 
-// `transaction { … }` (src/lowering/database_tables.rs): its file's tables as they were at the start, put back with every
+// `transaction { … }` (src/lowering/data/database_tables.rs): its file's tables as they were at the start, put back with every
 // row's kept value by a rollback; writes go on to IndexedDB meanwhile, as SQLite's would to its journal
 const tablesBefore = {};
 const tablesOf = file => Object.keys(databaseValues).filter(key => key.startsWith(tableKey(file, "")) && !ROW_KEY.test(key));
@@ -405,7 +405,7 @@ addHostPart({
 	adapters: {
 		// a page has no command line; its environment is what the page sets (the stand-in of the playground's key)
 		os: { env: name => self.pageEnvironment?.[name] ?? null, args: () => [] },
-		// `stored theme = "dark"`, `local[k]`, `session[k]` (src/lowering/stored_values.rs, std_io): the page's values
+		// `stored theme = "dark"`, `local[k]`, `session[k]` (src/lowering/data/stored_values.rs, std_io): the page's values
 		// (markup.js keptValues), each save sent back to it with its store (the dev store of a `warp dev` page, the
 		// session's, else the program's)
 		store: {

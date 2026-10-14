@@ -76,7 +76,7 @@ print(f"registerComponent({json.dumps(name)}, {json.dumps(cores)}, {json.dumps(s
 PYTHON
 		echo "built $page/components/$name.js"
 	done
-	# the compiler's list of them (src/lowering/foreign_modules.rs PAGE_COMPONENTS): `use rust_demo` names one
+	# the compiler's list of them (src/lowering/foreign/foreign_modules.rs PAGE_COMPONENTS): `use rust_demo` names one
 	for component in "${COMPONENTS[@]}"; do basename "$component" .wasm; done > "$page/components/names.txt"
 }
 

@@ -98,10 +98,10 @@ pub const TEXT_COVERAGE: &str = "text_coverage";
 /// `gpu_compute(shader, xs, workgroups)` of a `linear xs = float[n]`: the shader runs over the cells of the block in linear
 /// memory, read and written in place without building a list (card gpu-vectors, notes/gpu.md); gives the block back
 pub const GPU_COMPUTE_LINEAR: &str = "gpu_compute_linear";
-/// `ys = xs.map(x => …) @gpu` of a linear float array (src/lowering/gpu_maps.rs): the WGSL kernel run over xs's cells,
+/// `ys = xs.map(x => …) @gpu` of a linear float array (src/lowering/foreign/gpu_maps.rs): the WGSL kernel run over xs's cells,
 /// written into ys's; gives 1, or 0 without an adapter (said once), when the CPU maps them instead
 pub const GPU_MAP_LINEAR: &str = "gpu_map_linear";
-/// `s = sum(xs.map(x => …) @gpu)`, min, max (src/lowering/gpu_maps.rs): the kernel leaves one partial result per
+/// `s = sum(xs.map(x => …) @gpu)`, min, max (src/lowering/foreign/gpu_maps.rs): the kernel leaves one partial result per
 /// workgroup, written into a block the program combines; 1, or 0 without an adapter, as gpu_map_linear
 pub const GPU_REDUCE_LINEAR: &str = "gpu_reduce_linear";
 /// What every exported handler name starts with

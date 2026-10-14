@@ -465,7 +465,7 @@ pub fn any_hint_printed() -> bool {
 /// `use strict` in warp source makes warnings errors for that program
 const STRICT_PRAGMA: [&str; 2] = [PRAGMA_WORD, "strict"];
 const PRAGMA_WORD: &str = "use";
-/// `use comments`: a comment before a binding becomes its meta information (P114, lowering/meta_entries.rs)
+/// `use comments`: a comment before a binding becomes its meta information (P114, lowering/data/meta_entries.rs)
 const COMMENTS_PRAGMA: &str = "comments";
 /// A "got it" is remembered as the line `ack:<topic> = acknowledged` in the acknowledgements file
 const ACKNOWLEDGED: &str = "acknowledged";

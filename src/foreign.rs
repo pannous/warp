@@ -1,4 +1,4 @@
-//! The host side of foreign_call(runtime, module, member, arguments) (lowering/foreign_modules.rs,
+//! The host side of foreign_call(runtime, module, member, arguments) (lowering/foreign/foreign_modules.rs,
 //! notes/stdlib_connectors.md): python and js go to the bridge warp_runtime::foreign shares with executables (its
 //! children, JSON lines, handles and callbacks), components to src/components.rs; Nodes cross as JSON (json_of, node_of).
 

@@ -6,10 +6,10 @@ const INSTANCE_ATTRIBUTE = "data-warp-instance"; // a component instance's eleme
 const KEY_ATTRIBUTE = "data-warp-key"; // a list item's element (lib/markup.warp)
 const NUMBER_FIELDS = ["number", "range"]; // fields whose bound value is a number
 const LEAVING_ATTRIBUTE = "data-warp-leaving"; // an element animating out: no longer matched, removed when done
-const DEV_STORE = "warp-dev"; // the store of the values a `warp dev` page keeps (src/lowering/stored_values.rs DEV_STORE)
+const DEV_STORE = "warp-dev"; // the store of the values a `warp dev` page keeps (src/lowering/data/stored_values.rs DEV_STORE)
 const STORED_PREFIX = "warp stored "; // a stored value in localStorage, kept across visits
 const DEV_PREFIX = "warp dev "; // a value a `warp dev` page keeps in sessionStorage, across its reloads
-const SESSION_STORE = "warp-session"; // the store of `session[k]` (src/lowering/stored_values.rs SESSION_STORE)
+const SESSION_STORE = "warp-session"; // the store of `session[k]` (src/lowering/data/stored_values.rs SESSION_STORE)
 const SESSION_PREFIX = "warp session "; // a value of `session[k]` in sessionStorage, while the tab lasts
 
 // the children of shown become those of wanted: an element with a key (data-warp-key, card web-keyed) is the shown one

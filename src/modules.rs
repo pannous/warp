@@ -812,7 +812,7 @@ fn statement_words(node: &Node) -> Option<Vec<&Node>> {
 }
 
 /// The modules a `use` statement names, each with the statement that uses it alone: `use list, text` and
-/// `use list text` (card std-use) use each; `use js Math` is a foreign module (lowering/foreign_modules.rs), not two
+/// `use list text` (card std-use) use each; `use js Math` is a foreign module (lowering/foreign/foreign_modules.rs), not two
 fn used_modules(node: &Node) -> Option<Vec<(Used, Node)>> {
 	if let Some(used) = used_module(node) {
 		return Some(vec![(used, node.clone())]);

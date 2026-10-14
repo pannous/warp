@@ -132,7 +132,7 @@ pub(super) fn gpu_compute_linear(
 	Ok(block)
 }
 
-/// `ys = xs.map(x => …) @gpu` (src/lowering/gpu_maps.rs): the kernel over the cells of the block `source`, then the
+/// `ys = xs.map(x => …) @gpu` (src/lowering/foreign/gpu_maps.rs): the kernel over the cells of the block `source`, then the
 /// values of the program's numbers it reads, written into the block `target` of the same count; 1, or 0 without an
 /// adapter (a warning, once), when the program maps on the CPU. `keeping` (gpu_maps.rs KEEP_RESULT, SOURCE_KEPT): the
 /// result's buffer stays on the GPU for a later map of it, the source's items come from such a buffer
