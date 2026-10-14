@@ -520,8 +520,17 @@ def clipboard_read_wrong():
 		catch (failure) {{ return failure.message; }}
 	}})()""")
 	if refused not in ('""', ""):
-		print(f"skip {CLIPBOARD_READ}: this browser refuses the page its clipboard: {refused}")
-		return []
+		# card dir-clipboard: the run asks the user with a button instead of failing (a script's click is no user action)
+		asked = browser("eval", """(async () => {
+			playground.runCode("clipboard");
+			for (let wait = 0; wait < 100 && !document.querySelector(".permission-ask"); wait++) await new Promise(done => setTimeout(done, 50));
+			const asking = document.querySelector(".permission-ask");
+			asking?.remove(); // it would cover the output the later checks click
+			return asking ? asking.textContent : document.getElementById("value").textContent;
+		})()""")
+		print(f"skip reading {CLIPBOARD_READ}: this browser refuses the page its clipboard: {refused}")
+		run_code("1")  # the asking run gives up once a new run replaces its worker
+		return [] if "click to allow" in asked else [f"a refused clipboard read asks no permission: {asked!r}"]
 	read = run_code("clipboard")
 	return [] if CLIPBOARD_TEXT in read else [f"clipboard read: {read!r}, expected {CLIPBOARD_TEXT!r}"]
 
