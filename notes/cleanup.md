@@ -157,8 +157,13 @@ and NOTES_SHOWN. Process-wide `static`s, checked: caches of outside facts (ffi S
 gc_traits REGISTRY of name sections, module_cache IN_MEMORY, components COMPILED, SQLITE), locks serializing
 outside tools (NATIVE_CALL_TURN, MODEL_LOCK, FETCHING, BUILDING, PROVIDING), the one terminal's output settings
 (SHOWN_FROM, ANY_HINT_PRINTED, SHOWN_SOURCE: a program may compile on another thread), the process's devices (graphics,
-sound, VIEWER) and PROCESS_SANDBOXED, FILED. None is compile state. Left open: a scoped context per compile in place of
-the `set` fields (see A).
+sound, VIEWER) and PROCESS_SANDBOXED, FILED. None is compile state.
+A scoped context per compile: closed as not worth it (2026-10-14). Of CompileContext's `set` fields, the ones a compile
+fills are already scoped or reset at their pass (module_definitions, early_class_modules, module_files, declared_types,
+bool_functions, written_problems, result_units, shadowed_units, server_values). Only float_kernels accumulates, keyed by
+the kernel's own text, so a later compile finds the same entry. A fresh context per compile would have to copy mode,
+grants, source and positions into inner compiles (modules, the renderer): plumbing lines, no leak fixed. The 26
+`thread_local!`s left are host and run-time state, caches and the diagnostics sink.
 
 ## src/analyzer/, src/warp_parser/, src/node/ (card cleanup-analyzer, session warp-types)
 
