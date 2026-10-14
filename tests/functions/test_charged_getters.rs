@@ -73,3 +73,11 @@ fn a_function_factory_gets_no_hint_of_lowered_code() {
 		"{hints:?}"
 	);
 }
+
+// card hint-nullary-raise: `risky() := 1/0` fails only when called (inside a try); as a value it would fail at once
+#[test]
+fn a_getter_that_can_fail_gets_no_needless_charging_note() {
+	assert!(hints_of("risky() := 1/0; try { risky() } catch error { 2 }")
+		.iter()
+		.all(|(_, reason)| !reason.contains("never changes")));
+}
