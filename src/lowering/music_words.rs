@@ -169,7 +169,7 @@ fn block_template(template: &str, fill: &str, seconds: Node) -> Node {
 		})
 }
 
-/// `play hum for 2s` of the program's function hum (PLAY_WORD): play_signal(hum, 2s) of a function of the time (or
+/// `play(hum, 2s)` of the program's function hum (PLAY_WORD): play_signal(hum, 2s) of a function of the time (or
 /// a pair [left, right] of them), play_blocks(hum, 2s) of a block function (hum(block, t), hum(left, right, t))
 fn with_played_functions(node: Node, counts: &HashMap<String, usize>) -> Node {
 	match node.map_children(|child| with_played_functions(child, counts)) {
@@ -275,7 +275,7 @@ fn with_music_words(node: Node, defined: &HashSet<String>) -> Node {
 		return call(word, vec![with_music_words(amount, defined)]);
 	}
 	match node.map_children(|child| with_music_words(child, defined)) {
-		// a block of one statement, a loop's or an if's body: `for i in 1 to 3 { at 0 bars play C4 for 1s }`
+		// a block of one statement, a loop's or an if's body: `for i in 1 to 3 { at 0 bars play(C4, 1s) }`
 		Node::List(items, Bracket::Curly, separator)
 			if !separator.separates_statements()
 				&& let Some(statements) = scheduled(

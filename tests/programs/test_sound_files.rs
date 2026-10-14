@@ -63,5 +63,5 @@ fn only_a_music_file_plays() {
 	let text = sound_file("sound-files-not", "notes.txt", b"C4 E4 G4");
 	fails_with(&format!("play \"{}\"", text.display()), "not a sound file");
 	fails_with("play \"no/such/song.mp3\"", "no/such/song.mp3");
-	is!("play [C4 E4] for 3ms\nstop_sound\n7", 7);
+	is!("play([C4 E4], 3ms)\nstop_sound\n7", 7);
 }

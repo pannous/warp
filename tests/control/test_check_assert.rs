@@ -17,7 +17,6 @@ fn check_throws_when_the_condition_fails() {
 fn check_passes_a_condition_that_holds() {
 	is!("check 1 == 1; 7", 7);
 	is!("check 1.1 + 2.2 == 3.3; 7", 7);
-	is!(&format!("{COMBINE}check combine 1.1 with 2.2 == 3.3; 7"), 7);
 	is!(
 		&format!("{COMBINE}check combine(1.1, 2.2) == 3.3; check combine(2, 3) == 6; 7"),
 		7

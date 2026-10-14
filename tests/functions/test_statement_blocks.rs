@@ -1,5 +1,5 @@
 // Card statement-block: a block of one statement runs it as a program of that statement does, also when its word is a
-// phrase (`to add a to b`) or has several definitions (`to play x`, `to play x for duration`): `f() := {play "x.wav"}`
+// a function has several definitions (`play(x)`, `play(x, duration)`): `f() := {play("x.wav")}`
 // plays, it returned the data `{play "x.wav"}`; `x = {…}` still assigns the data as written
 use crate::is;
 use warp::wasm_emitter::eval;

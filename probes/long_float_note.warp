@@ -1,4 +1,4 @@
-// card long-float: note() with the 17-digit ratio 1.0594630943592953 made `play note("C#4") for 0.1` fail with
+// card long-float: note() with the 17-digit ratio 1.0594630943592953 made `play(note("C#4"), 0.1)` fail with
 // "not an int": the long literal is a float (1.059463094359 stayed an exact decimal), and chord_samples took `% 1` of
 // that float element in a function, the bug of card float-modulo. Expected: 3 phases, no error
 ratio = 1.0594630943592953
