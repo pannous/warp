@@ -143,7 +143,7 @@ pub struct CompileMode {
 	pub for_any_host: bool,
 	/// hosted (`warp deploy`): a program without routes gets them (lowering/web/serve.rs with_default_routes)
 	pub for_hosting: bool,
-	/// it runs under `warp test`: its tests run and give its value (lowering/test_blocks.rs)
+	/// it runs under `warp test`: its tests run and give its value (lowering/control/test_blocks.rs)
 	pub for_tests: bool,
 }
 

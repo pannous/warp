@@ -97,7 +97,7 @@ pub fn is_statement(item: &Node, bracket: &Bracket) -> bool {
 			true
 		}
 		Node::List(list_items, _, _) if list_items.len() >= 2 => {
-			// `cell_set(c, v)` is the assignment of a nonlocal variable (lowering/nonlocal_cells.rs)
+			// `cell_set(c, v)` is the assignment of a nonlocal variable (lowering/definitions/nonlocal_cells.rs)
 			// `$destructure (h, o) value` is `h, o = value` lowered (tuples.rs)
 			matches!(list_items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s) || crate::modules::is_import_keyword(s) || ["return", crate::tuples::DESTRUCTURE, crate::host::TASK_CHECK, crate::wasm_emitter::cells::CELL_SET, crate::wasm_emitter::cells::SIGNAL_LISTENERS_SET].contains(&s.as_str()))
 		}
@@ -128,7 +128,7 @@ mod list_views;
 pub use booleans::*;
 pub use checks::*;
 pub use counting::*;
-// the declaration and list forms the checks and the inference know (lowering/declaration_forms.rs)
+// the declaration and list forms the checks and the inference know (lowering/definitions/declaration_forms.rs)
 use crate::lowering::declaration_forms::*;
 pub(crate) use imports::signature_kind;
 pub use imports::*;

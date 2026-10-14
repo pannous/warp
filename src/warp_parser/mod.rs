@@ -101,7 +101,7 @@ const DEFINITION_MODIFIERS: [&str; 7] = ["global", "export", "import", "const", 
 const FOREIGN_MODIFIER_TOPIC: &str = "foreign-modifier";
 /// `function add`, `func add`: a reference to a function (P82), like `&add`
 const FUNCTION_REFERENCE_WORDS: [&str; 2] = ["function", "func"];
-/// `nonlocal y` in a nested function: it reads the enclosing function's current y (lowering/late_binding.rs)
+/// `nonlocal y` in a nested function: it reads the enclosing function's current y (lowering/definitions/late_binding.rs)
 const NONLOCAL_WORD: &str = "nonlocal";
 
 const SIGNED_OPERAND_TOPIC: &str = "signed-operand";
@@ -186,7 +186,7 @@ const DATA_KEYWORD: &str = "data";
 const CLASS_KEYWORD: &str = "class";
 /// `await job` waits for a task; its operand binds like the operand of a unary minus (Op::Neg)
 const AWAIT_KEYWORD: &str = "await";
-/// The words of a block of code, also glued to it: `go{…}` starts a task as `go {…}` does (lowering/go_blocks.rs,
+/// The words of a block of code, also glued to it: `go{…}` starts a task as `go {…}` does (lowering/control/go_blocks.rs,
 /// card error-beep), `loop{…}` loops, `do{…}` runs its block (card glued-loop); no tags `go:{…}`
 const GLUED_BLOCK_KEYWORDS: [&str; 3] = ["go", "loop", "do"];
 /// `await all jobs`: every task of a list (P47)
@@ -918,7 +918,7 @@ fn typed_parameter(arguments: Node) -> Node {
 			{
 				Node::Key(Box::new(name.clone()), Op::Colon, Box::new(type_word.clone()))
 			}
-			// Kotlin `vararg xs: Int`, C# `params int[] xs`: the rest parameter `*xs` (lowering/variadic.rs)
+			// Kotlin `vararg xs: Int`, C# `params int[] xs`: the rest parameter `*xs` (lowering/definitions/variadic.rs)
 			[marker, .., name] if matches!(marker.drop_meta(), Symbol(word) if REST_MARKERS.contains(&word.as_str())) => {
 				match name.drop_meta() {
 					Symbol(name) => Symbol(format!("{}{name}", crate::words::STARRED)),

@@ -9,7 +9,7 @@ wiki/charged.md. Board card signals-first.
 
 | piece | where | what it is in signal terms |
 |---|---|---|
-| `z := y*y` (P71) | lowering/getters.rs | a **derived value** (Solid `createMemo`, Vue `computed`, Svelte `$derived`) without a cache: pulled, recomputed at every use |
+| `z := y*y` (P71) | lowering/definitions/getters.rs | a **derived value** (Solid `createMemo`, Vue `computed`, Svelte `$derived`) without a cache: pulled, recomputed at every use |
 | `once cond {…}`, `whenever cond {…}`, `on set x {…}` | lowering/signals/variable_signals.rs | **effects** (Solid `createEffect`, Vue `watch`): a check inserted after each later write of a variable the condition reads, decided at compile time |
 | `after tested: …`, `before save: …` | variable_signals.rs | listeners on calls (aspect oriented), static |
 | `once job finishes: …`, `on job.stop: …` | declarations.rs TaskHandlers | task events, checked after each later statement through task_status |

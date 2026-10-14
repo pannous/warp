@@ -40,7 +40,7 @@ What a place declared `photo` accepts, a parameter `keep(p:photo)` and a typed v
 `image like photo` declares that an image may stand wherever a photo is expected. It is a promise, not a conversion:
 the image is still judged by its uses, so a field it lacks fails loudly where it is read. Unknown values get the benefit
 of the doubt (a newcomer's untyped code runs), known types never mix silently (two declared types that happen to share
-fields are a decision the writer states once, in one line). Implemented in src/lowering/traits.rs (`Likeness`,
+fields are a decision the writer states once, in one line). Implemented in src/lowering/types/traits.rs (`Likeness`,
 `Dispatch::refused_argument`), tests/operators/test_like.rs, wiki page wiki_pages/like.md.
 
 ## Field test 2026-10-02
@@ -55,7 +55,7 @@ User decisions from that round:
 - `upto` excludes the end, with a warning naming the explicit forms (`..<`/`..` exclusive, `to`/`...` inclusive)
 - missing map key `m["Z"]` stays an error (as in Python); `m.get(k)`, `m.get(k, default)`, `k in m`, `m.has(k)` are the soft forms
 - an expression of `it` where a function is expected is that function: `xs.map(it * 2)`, `apply(it + 3, 1)`; inside a
-  function of one parameter its `it` stays the argument function's (card map-it, src/lowering/lambdas.rs it_function)
+  function of one parameter its `it` stays the argument function's (card map-it, src/lowering/definitions/lambdas.rs it_function)
 
 ## Ask: how it works (src/diagnostic.rs)
 - `Ask { topic, written, question, readings: [Reading{meaning, explicit_form}], default, fallback: Fallback::{Warning, Error}, line, column }`;

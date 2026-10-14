@@ -21,7 +21,7 @@ Semantics (Go's unbuffered channel): `send` waits until a receiver took the valu
   empty), channel_more(id) waits until a value is offered (1) or the channel closed (0), channel_close(id). The program
   waiting with no task left is an error ("ch.receive() waits forever: no task is left to answer it"); tasks still
   waiting stop when the program ends.
-- Lowering src/lowering/channel_words.rs, FIRST of SOURCE_PHASES (go_blocks renames what a go block reads,
+- Lowering src/lowering/words/channel_words.rs, FIRST of SOURCE_PHASES (go_blocks renames what a go block reads,
   system_signals takes `send v to "chat"`): `channel()` → channel_new(); `ch.send(v)` / `send v to ch` →
   channel_put(ch, v); `ch.receive()` → channel_take(ch); `ch.close()` → channel_close(ch); `for v in ch {…}` →
   `while channel_more(ch) { v = channel_take(ch); … }`. Channels are the variables assigned `channel()` plus the

@@ -382,7 +382,7 @@ Each step is useful on its own and is what the next ones stand on.
   host-tasks.js so only a program reading the clipboard ships it) and waits on shared memory while the page reads
   navigator.clipboard.readText (task-workers.js pasteInto/answerInto); the browser may refuse it without a recent
   click: a loud error. The tour checks it where the browser allows (CLIPBOARD_READ).
-- Undo history (lowering/undo_history.rs): a program saying `undo x` or `redo x` keeps x's history: after the first
+- Undo history (lowering/definitions/undo_history.rs): a program saying `undo x` or `redo x` keeps x's history: after the first
   main-level assignment of x come the lists `undo_past_x`, `undo_future_x` and an `on change x` listener adding the
   old value (not while undo or redo itself writes x); a new change empties what was undone. `undo`, `redo` and
   `stored` are soft keywords.
@@ -535,7 +535,7 @@ Each step is useful on its own and is what the next ones stand on.
   objects, promises and overloads with differing returns stay untyped foreign values. Fixed alongside: `(f() as text)`
   / `str(…)` of a foreign call gave the source of the call (emitter mentions_call now counts host::VALUE_GIVING_WORDS).
 - Nullable results (card text-generally): `DOMString?` is `text?` (web_idl.rs optional_result_type), lowered by
-  src/lowering/optional_casts.rs: `x as T?` keeps ø, any other value is cast to T, the call held once in `optional·N`.
+  src/lowering/types/optional_casts.rs: `x as T?` keeps ø, any other value is cast to T, the call held once in `optional·N`.
   Natively a JS null (getItem of a missing key) arrives as ø (foreign.rs plain), no longer as a handle of null.
 - DOM (slice 5): the bundle adds Document, Element, NodeList, HTMLCollection, DOMTokenList, Event and every
   HTML…Element of html.idl (lib/web.webidl ~100 KB; arguments in scripts/webidl_bundle.py's docstring). What an

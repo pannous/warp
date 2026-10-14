@@ -2,7 +2,7 @@
 
 `on e {h} in {block}` answered `emit e` only while the block ran, also deep in the functions it called; `break v` in
 the handler ended the block with v. Dropped by the user's cleanup cuts (card cleanup-drop-scoped-handlers): the form
-is now an error naming the program-wide `on e {…}` (src/lowering/scoped_handlers.rs keeps only that check).
+is now an error naming the program-wide `on e {…}` (src/lowering/control/scoped_handlers.rs keeps only that check).
 
 Gone with it:
 - the lowering (handler functions `e·handler·i`, the globals `effect_handler_active_e`, enter/leave, unwinding of

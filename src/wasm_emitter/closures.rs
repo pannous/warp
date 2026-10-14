@@ -1,4 +1,4 @@
-//! Closures at run time (lowering in src/lowering/closures.rs, notes/closures.md):
+//! Closures at run time (lowering in src/lowering/definitions/closures.rs, notes/closures.md):
 //!   (type $Closure (struct (field $entry (ref func)) (field $captured (ref null $Node))))
 //!   (type $closure_entry_n (func (param $captured (ref null $Node)) (param (ref null $Node))×n (result (ref null $Node))))
 //! A closure value is a $Node of Kind::Function whose data is the $Closure and whose value is the function name as a Symbol.
@@ -627,7 +627,7 @@ impl WasmGcEmitter {
 		true
 	}
 
-	/// `closure_call_n(h, a1…an)` after `h·capture·0 = …` (lowering/closures.rs hoist_captures): the target itself called
+	/// `closure_call_n(h, a1…an)` after `h·capture·0 = …` (lowering/definitions/closures.rs hoist_captures): the target itself called
 	/// with the captured values read once and the arguments, as a plain call
 	fn emit_hoisted_closure_call(
 		&mut self,

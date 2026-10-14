@@ -129,7 +129,7 @@ fn html_of(value: &Node) -> Value {
 }
 
 /// `code` compiled and run; a program holding markup renders itself (pipeline::rendering_itself). The page has no
-/// `warp test`: a program's tests run, and their summary is its value (lowering/test_blocks.rs)
+/// `warp test`: a program's tests run, and their summary is its value (lowering/control/test_blocks.rs)
 fn run_shown(code: &str) -> Node {
 	crate::pipeline::for_tests(|| match renders_itself(code) {
 		true => crate::pipeline::rendering_itself(|| crate::wasm_emitter::eval(code)),

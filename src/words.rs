@@ -14,7 +14,7 @@ pub const WHENEVER_WORD: &str = "whenever";
 pub const RETURN_WORD: &str = "return";
 pub const SUM_WORD: &str = "sum";
 
-/// `switch x {…}` / `match x {…}` (lowering/switch.rs)
+/// `switch x {…}` / `match x {…}` (lowering/control/switch.rs)
 pub const SWITCH_WORDS: [&str; 2] = ["switch", MATCH_WORD];
 /// The match lowering passes write (nodes::matched)
 pub const MATCH_WORD: &str = "match";

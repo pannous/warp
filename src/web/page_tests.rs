@@ -13,7 +13,7 @@
 //! each test's setup, `render markup` shows that markup as the page, `click "label"` and `fill "label" with "text"` act
 //! on it, `check condition` must hold with `text` and `html` naming what the page shows, and any other line is setup
 //! of that test. They run under `warp test` and the playground's Run (pipeline::for_tests); a plain run skips them (P209,
-//! lowering/test_blocks.rs). The value is "✓ n tests passed", or an Error with a ✗ line for each failed test and why,
+//! lowering/control/test_blocks.rs). The value is "✓ n tests passed", or an Error with a ✗ line for each failed test and why,
 //! then "m of n failed" (P210). Everything is taken from the source as written (Node::serialize would not give back
 //! every program).
 

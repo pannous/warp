@@ -3,7 +3,7 @@
 User program: `def hi: {sleep(1000 ms);print('hi')}; go { hi() }; print('faster')` prints `faster`, then `hi` a second
 later; the program waits for its tasks before it ends (tasks::TaskTable::join_all).
 
-- `go { … }` (src/lowering/go_blocks.rs, first source pass): the block becomes `go·block·N(v…) := { … }`, where v… are
+- `go { … }` (src/lowering/control/go_blocks.rs, first source pass): the block becomes `go·block·N(v…) := { … }`, where v… are
   the variables it reads that are assigned before it (or parameters of the enclosing function), and the statement is
   `go go·block·N(v…)`. The task gets their values at its start, copied: no sharing (notes/threads.md). After that it is
   an ordinary `go f(x)`: lower_tasks / resolve_tasks decide the thread path. `job = go { … }; await job` works too.
@@ -24,7 +24,7 @@ later; the program waits for its tasks before it ends (tasks::TaskTable::join_al
   value; results in order.
 - A task that fails while nobody awaits it ends the run with its error (tasks::TaskTable::join_all, host.js joinTasks);
   a stopped task does not.
-- Data parallelism (user, 2026-10-06: dual use of `go`, src/lowering/parallel.rs): `go xs.map(f)`, `xs.map(f)
+- Data parallelism (user, 2026-10-06: dual use of `go`, src/lowering/control/parallel.rs): `go xs.map(f)`, `xs.map(f)
   @parallel` and `go for x in xs { … }` split xs into 8 slices (PARALLEL_CHUNKS), each a go block; a map joins its
   results in order, a loop ends when every slice is done. A loop body updating a non-shared outer variable warns.
   `@parallel square all xs` is the same map (the parser reads it as `(square all) xs`, so the annotation is found on
