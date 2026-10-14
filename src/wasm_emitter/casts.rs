@@ -84,8 +84,7 @@ impl WasmGcEmitter {
 			self.emit_type_error(func, refusal);
 			return;
 		}
-		let exact_value =
-			!matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) && !self.get_type(value).is_float();
+		let exact_value = !value.is_text_literal() && !self.get_type(value).is_float();
 		match crate::type_tests::canonical_spec_word(&target.name().to_lowercase()) {
 			"float" => {
 				let message = format!(

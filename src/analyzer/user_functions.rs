@@ -229,7 +229,7 @@ pub(super) fn infer_function_return_kind(
 		// `while true { …; return left }` with left a float: a float function, whatever the loop is worth
 		_ => match infer_type(last, &scope) {
 			// a loop the function returns from inside: the returns decide, the loop's own value (a number or ø) does not
-			Kind::Data if is_loop(last) && !returned.is_empty() => {
+			Kind::Data if is_while_do(last) && !returned.is_empty() => {
 				if returned.contains(&Kind::Float) {
 					Kind::Float
 				} else {
@@ -250,7 +250,7 @@ pub(super) fn infer_function_return_kind(
 }
 
 /// `while c do body`, what every loop lowers to
-fn is_loop(node: &Node) -> bool {
+fn is_while_do(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Key(condition, Op::Do, _) if matches!(condition.drop_meta(), Node::Key(_, Op::While, _)))
 }
 
@@ -492,7 +492,7 @@ fn given_to_foreign_code(node: &Node) -> impl Iterator<Item = &str> {
 /// The name `+` joins to a text: `" " + t`, `t + "!"`, `n times " " + t`, `t[0 ..< n] + "…"`; a list never
 /// concatenates with a text
 fn joined_to_text(node: &Node) -> Option<&str> {
-	joined_to(node, is_text)
+	joined_to(node, is_literal_text)
 }
 
 /// The name `+` joins to a list literal: `xs + [x]`, `[x] + xs`
@@ -504,8 +504,9 @@ fn call_of(node: &Node, word: &str) -> bool {
 	matches!(node, Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(call)) if call == word))
 }
 
-fn is_text(node: &Node) -> bool {
-	matches!(node, Node::Text(_) | Node::Char(_)) || call_of(node, crate::warp_parser::TEXT_TIMES)
+/// A text literal or a repeated one `"ab" * 3`
+fn is_literal_text(node: &Node) -> bool {
+	node.is_text_literal() || call_of(node, crate::warp_parser::TEXT_TIMES)
 }
 
 /// The name joined by `+` to a value that `is_joined` accepts

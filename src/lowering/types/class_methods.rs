@@ -6,7 +6,7 @@
 //! `class dog extends animal {…}` (P117) gives dog the fields and methods of animal, its own ones override them, and
 //! declares `dog like animal`, so a dog is accepted where an animal is wanted.
 
-use super::nodes::{call, grouped_parameters, if_then, key, Counter};
+use super::nodes::{call, grouped_parameters, if_then, is_call_of, is_place, key, Counter};
 use crate::words::{GLOBAL_WORD, MAP_WORD, RETURN_WORD, SUM_WORD};
 mod components;
 use components::*;

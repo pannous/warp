@@ -630,11 +630,6 @@ pub(super) fn is_operator_method_call(call: &Node, operands: &Operands) -> bool 
 	operands.methods.iter().any(|(_, _, method)| is_call_of(call, method))
 }
 
-/// `to("m")` is a call of `to`
-pub(super) fn is_call_of(call: &Node, method: &str) -> bool {
-	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|word| word.drop_meta().name() == method))
-}
-
 /// A name the library gives lists and texts too (`pop`, `sum`, `count`): a method of that name is one only on an
 /// instance
 pub(crate) fn is_library_method(name: &str) -> bool {

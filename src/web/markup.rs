@@ -285,9 +285,7 @@ impl<'a> Shapes<'a> {
 /// `"count " + n`, `"a" + b + "c"`: a sum starting with a literal text, which shows as text whatever it adds
 fn is_computed_text(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::Key(left, Op::Add, _) => {
-			matches!(left.drop_meta(), Node::Text(_) | Node::Char(_)) || is_computed_text(left)
-		}
+		Node::Key(left, Op::Add, _) => left.is_text_literal() || is_computed_text(left),
 		_ => false,
 	}
 }

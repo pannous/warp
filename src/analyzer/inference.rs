@@ -272,8 +272,7 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(indexed, Op::Hash, index) if !indexed.is_empty_node() => {
 			element_kind(indexed, scope).unwrap_or_else(|| {
 				let by_name = crate::warp_parser::subscript_key(index).is_some_and(|key| {
-					matches!(key.drop_meta(), Node::Text(_) | Node::Char(_))
-						|| matches!(infer_type(key, scope), Kind::Text | Kind::Codepoint)
+					key.is_text_literal() || matches!(infer_type(key, scope), Kind::Text | Kind::Codepoint)
 				});
 				if by_name {
 					Kind::Empty

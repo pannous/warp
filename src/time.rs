@@ -7,6 +7,7 @@
 pub mod calendar;
 
 use crate::extensions::numbers::Number;
+use crate::lowering::nodes::is_call_of;
 use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasm_emitter::time_zones::{EARLIER, LATER, REJECT};
@@ -361,10 +362,6 @@ fn time_data(node: &Node) -> bool {
 		Node::Data(data) => data.downcast_ref::<TimeLiteral>().is_some() || data.downcast_ref::<Duration>().is_some(),
 		_ => false,
 	}
-}
-
-fn is_call_of(node: &Node, name: &str) -> bool {
-	matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|head| head.is_symbol(name)))
 }
 
 /// What only this compile-time evaluator knows so far: literals, durations, `date(…)`, `t in "Europe/Berlin"`;

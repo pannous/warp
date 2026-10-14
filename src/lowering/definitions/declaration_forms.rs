@@ -3,7 +3,7 @@
 use crate::analyzer::*;
 use crate::broadcasting::{element_wise, EACH_ELEMENT};
 use crate::extensions::numbers::Number;
-use crate::lowering::nodes::{call, children_rewritten};
+use crate::lowering::nodes::{call, children_rewritten, is_place};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
@@ -848,17 +848,6 @@ pub fn is_list_mutating_method(name: &str) -> bool {
 
 fn is_removal_method(name: &str) -> bool {
 	[REMOVE_METHOD, DELETE_METHOD].contains(&name)
-}
-
-/// A place a list update can assign: a variable `xs` or a field of one `p.items`, `self.stack.items` (by now the
-/// field index `p#…` of a declared type)
-fn is_place(node: &Node) -> bool {
-	match node.drop_meta() {
-		Node::Symbol(_) => true,
-		Node::Key(object, Op::Dot, field) => matches!(field.drop_meta(), Node::Symbol(_)) && is_place(object),
-		Node::Key(object, Op::Hash, _) => is_place(object),
-		_ => false,
-	}
 }
 
 /// The element of `x.add(v)` when x is a variable or a field of one

@@ -89,6 +89,10 @@ impl Node {
 	pub fn is_empty_node(&self) -> bool {
 		matches!(self.drop_meta(), Empty)
 	}
+	/// A text or character literal, under any metadata
+	pub fn is_text_literal(&self) -> bool {
+		matches!(self.drop_meta(), Text(_) | Char(_))
+	}
 	/// ø or a block without statements: `{}` evaluates to nothing
 	pub fn is_nothing(&self) -> bool {
 		match self.drop_meta() {

@@ -121,6 +121,23 @@ pub(crate) fn block(statements: Vec<Node>) -> Node {
 	statement_list(statements, Bracket::Curly)
 }
 
+/// A place a value can be written to: a variable `s`, a field of one `box.shape`, `p#…` (a declared type's field
+/// index), `shapes#1`, in parentheses or not
+pub(crate) fn is_place(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(_) => true,
+		Node::Key(object, Op::Dot, field) => matches!(field.drop_meta(), Node::Symbol(_)) && is_place(object),
+		Node::Key(object, Op::Hash, _) => is_place(object),
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_place(&items[0]),
+		_ => false,
+	}
+}
+
+/// `to("m")` and `date("2024-01-01")` are calls of `to` and `date`
+pub(crate) fn is_call_of(node: &Node, name: &str) -> bool {
+	matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|head| head.is_symbol(name)))
+}
+
 pub(crate) fn is_block(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _))
 }

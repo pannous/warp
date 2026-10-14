@@ -368,14 +368,12 @@ impl WasmGcEmitter {
 			Node::Key(value, Op::As, _)
 				if self.get_type(node).is_float()
 					&& matches!(self.get_type(value), Kind::Text | Kind::Empty)
-					&& !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) =>
+					&& !value.is_text_literal() =>
 			{
 				self.emit_node_instructions(func, value);
 				self.emit_call(func, list_ops::TEXT_AS_FLOAT);
 			}
-			Node::Key(value, Op::As, _)
-				if self.get_type(node).is_float() && !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) =>
-			{
+			Node::Key(value, Op::As, _) if self.get_type(node).is_float() && !value.is_text_literal() => {
 				self.emit_float_value(func, value);
 			}
 			// `"1.5" as float`: the literal's cast as everywhere (a number, or loud for "x"), its f64
