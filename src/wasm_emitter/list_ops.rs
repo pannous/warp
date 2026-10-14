@@ -54,6 +54,8 @@ const TEXT_UNIT_USERS: [&str; 7] = [
 	"text_codepoint_count",
 	"text_grapheme_count",
 ];
+/// Runtime functions that read text code point by code point (utf8_next, utf8_decode) without its unit cursors
+const CODE_POINT_READERS: [&str; 4] = ["text_chars", "text_upper", "text_lower", super::similarity::TEXT_FOLD];
 
 /// The globals of the list cursor (emit_list_cursor_globals): the list indexed last, the cell and index found there, the
 /// list counted last and its count, the list extended last and its last cell
@@ -121,6 +123,13 @@ impl WasmGcEmitter {
 	pub(crate) fn emit_list_ops(&mut self) {
 		self.emit_is_meta_entry();
 		self.emit_zero_fill();
+		if TEXT_UNIT_USERS
+			.iter()
+			.chain(&CODE_POINT_READERS)
+			.any(|name| self.should_emit_function(name))
+		{
+			self.emit_utf8_steps();
+		}
 		if TEXT_UNIT_USERS.iter().any(|name| self.should_emit_function(name)) {
 			self.emit_text_units();
 		}

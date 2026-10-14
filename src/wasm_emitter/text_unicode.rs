@@ -114,203 +114,6 @@ fn extends(range: &[u32; ENTRY_FIELDS], code: u32, delta: u32) -> bool {
 }
 
 impl WasmGcEmitter {
-	/// The code point at the byte offset in local `index` of the text bytes, into local `code_point`, and its byte length into `step`
-	fn emit_decode_at(&self, func: &mut Function, index: u32, first_byte: u32, code_point: u32, step: u32) {
-		let continuation = |f: &mut Function, offset: i32| {
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(index),
-					I32Const(offset),
-					I::I32Add,
-					I::I32Load8U(BYTE),
-					I32Const(utf8::CONTINUATION_PAYLOAD),
-					I::I32And,
-				],
-			);
-		};
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(index),
-				I::I32Load8U(BYTE),
-				I::LocalTee(first_byte),
-				I32Const(utf8::ONE_BYTE_END),
-				I::I32LtU,
-				I::If(BlockType::Empty),
-				I::LocalGet(first_byte),
-				I::LocalSet(code_point),
-				I32Const(1),
-				I::LocalSet(step),
-				I::Else,
-				I::LocalGet(first_byte),
-				I32Const(utf8::THREE_BYTE_LEAD),
-				I::I32LtU,
-				I::If(BlockType::Empty),
-				I::LocalGet(first_byte),
-				I32Const(utf8::TWO_BYTE_PAYLOAD),
-				I::I32And,
-				I32Const(utf8::PAYLOAD_BITS),
-				I::I32Shl,
-			],
-		);
-		continuation(func, 1);
-		Self::emit_list(
-			func,
-			&[
-				I::I32Or,
-				I::LocalSet(code_point),
-				I32Const(2),
-				I::LocalSet(step),
-				I::Else,
-				I::LocalGet(first_byte),
-				I32Const(utf8::FOUR_BYTE_LEAD),
-				I::I32LtU,
-				I::If(BlockType::Empty),
-				I::LocalGet(first_byte),
-				I32Const(utf8::THREE_BYTE_PAYLOAD),
-				I::I32And,
-				I32Const(2 * utf8::PAYLOAD_BITS),
-				I::I32Shl,
-			],
-		);
-		continuation(func, 1);
-		Self::emit_list(func, &[I32Const(utf8::PAYLOAD_BITS), I::I32Shl, I::I32Or]);
-		continuation(func, 2);
-		Self::emit_list(
-			func,
-			&[
-				I::I32Or,
-				I::LocalSet(code_point),
-				I32Const(3),
-				I::LocalSet(step),
-				I::Else,
-				I::LocalGet(first_byte),
-				I32Const(utf8::FOUR_BYTE_PAYLOAD),
-				I::I32And,
-				I32Const(3 * utf8::PAYLOAD_BITS),
-				I::I32Shl,
-			],
-		);
-		continuation(func, 1);
-		Self::emit_list(func, &[I32Const(2 * utf8::PAYLOAD_BITS), I::I32Shl, I::I32Or]);
-		continuation(func, 2);
-		Self::emit_list(func, &[I32Const(utf8::PAYLOAD_BITS), I::I32Shl, I::I32Or]);
-		continuation(func, 3);
-		Self::emit_list(
-			func,
-			&[
-				I::I32Or,
-				I::LocalSet(code_point),
-				I32Const(4),
-				I::LocalSet(step),
-				I::End,
-				I::End,
-				I::End,
-			],
-		);
-	}
-
-	/// Write the code point in local `code_point` as UTF-8 at local `out` and advance `out`
-	fn emit_encode_at(&self, func: &mut Function, out: u32, code_point: u32) {
-		let store = |f: &mut Function, offset: i32, lead: i32, shift: i32, mask: i32| {
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(out),
-					I32Const(offset),
-					I::I32Add,
-					I::LocalGet(code_point),
-					I32Const(shift),
-					I::I32ShrU,
-					I32Const(mask),
-					I::I32And,
-					I32Const(lead),
-					I::I32Or,
-					I::I32Store8(BYTE),
-				],
-			);
-		};
-		let advance = |f: &mut Function, bytes: i32| {
-			Self::emit_list(f, &[I::LocalGet(out), I32Const(bytes), I::I32Add, I::LocalSet(out)]);
-		};
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(code_point),
-				I32Const(utf8::ONE_BYTE_END),
-				I::I32LtU,
-				I::If(BlockType::Empty),
-			],
-		);
-		store(func, 0, 0, 0, utf8::ONE_BYTE_PAYLOAD);
-		advance(func, 1);
-		Self::emit_list(
-			func,
-			&[
-				I::Else,
-				I::LocalGet(code_point),
-				I32Const(utf8::TWO_BYTE_END),
-				I::I32LtU,
-				I::If(BlockType::Empty),
-			],
-		);
-		store(func, 0, utf8::TWO_BYTE_LEAD, utf8::PAYLOAD_BITS, utf8::TWO_BYTE_PAYLOAD);
-		store(func, 1, utf8::CONTINUATION_MARK, 0, utf8::CONTINUATION_PAYLOAD);
-		advance(func, 2);
-		Self::emit_list(
-			func,
-			&[
-				I::Else,
-				I::LocalGet(code_point),
-				I32Const(utf8::THREE_BYTE_END),
-				I::I32LtU,
-				I::If(BlockType::Empty),
-			],
-		);
-		store(
-			func,
-			0,
-			utf8::THREE_BYTE_LEAD,
-			2 * utf8::PAYLOAD_BITS,
-			utf8::THREE_BYTE_PAYLOAD,
-		);
-		store(
-			func,
-			1,
-			utf8::CONTINUATION_MARK,
-			utf8::PAYLOAD_BITS,
-			utf8::CONTINUATION_PAYLOAD,
-		);
-		store(func, 2, utf8::CONTINUATION_MARK, 0, utf8::CONTINUATION_PAYLOAD);
-		advance(func, 3);
-		Self::emit_list(func, &[I::Else]);
-		store(
-			func,
-			0,
-			utf8::FOUR_BYTE_LEAD,
-			3 * utf8::PAYLOAD_BITS,
-			utf8::FOUR_BYTE_PAYLOAD,
-		);
-		store(
-			func,
-			1,
-			utf8::CONTINUATION_MARK,
-			2 * utf8::PAYLOAD_BITS,
-			utf8::CONTINUATION_PAYLOAD,
-		);
-		store(
-			func,
-			2,
-			utf8::CONTINUATION_MARK,
-			utf8::PAYLOAD_BITS,
-			utf8::CONTINUATION_PAYLOAD,
-		);
-		store(func, 3, utf8::CONTINUATION_MARK, 0, utf8::CONTINUATION_PAYLOAD);
-		advance(func, 4);
-		Self::emit_list(func, &[I::End, I::End, I::End]);
-	}
-
 	/// text_upper(text) / text_lower(text) / text_fold(text): a fresh text with every code point mapped
 	pub(super) fn emit_text_case(&mut self, name: &'static str, mapping: CaseMapping) {
 		if !self.should_emit_function(name) {
@@ -321,10 +124,10 @@ impl WasmGcEmitter {
 		let entries = (case_table.len() as u32 / ENTRY_BYTES) as i32;
 		let table = self.allocate_bytes(name, case_table) as i32;
 		let node_ref = Ref(self.node_ref(false));
-		self.runtime_function(name, vec![node_ref], vec![node_ref], vec![ValType::I32; 15], |s, f| {
+		self.runtime_function(name, vec![node_ref], vec![node_ref], vec![ValType::I32; 16], |s, f| {
 			let (pointer, end, capacity, destination, index, out) = (1, 2, 3, 4, 5, 6);
-			let (first_byte, code_point, step, slot, mapped, entry) = (7, 8, 9, 10, 11, 12);
-			let (low, high, middle) = (13, 14, 15);
+			let (width, code_point, lead, slot, mapped, entry) = (7, 8, 9, 10, 11, 12);
+			let (low, high, middle, next) = (13, 14, 15, 16);
 			s.emit_text_argument_bounds(f, pointer, end);
 			Self::emit_list(
 				f,
@@ -353,11 +156,7 @@ impl WasmGcEmitter {
 					I::BrIf(1),
 				],
 			);
-			s.emit_decode_at(f, index, first_byte, code_point, step);
-			Self::emit_list(
-				f,
-				&[I::LocalGet(index), I::LocalGet(step), I::I32Add, I::LocalSet(index)],
-			);
+			s.emit_next_code_point(f, index, end, code_point);
 			// binary search for the last range starting at or before the code point
 			Self::emit_list(
 				f,
@@ -486,7 +285,10 @@ impl WasmGcEmitter {
 					I::End,
 				],
 			);
-			s.emit_encode_at(f, out, mapped);
+			Self::emit_utf8_width(f, mapped);
+			Self::emit_list(f, &[I::LocalTee(width), I::LocalGet(out), I::I32Add, I::LocalSet(next)]);
+			Self::emit_utf8_store(f, out, mapped, width, lead);
+			Self::emit_list(f, &[I::LocalGet(next), I::LocalSet(out)]);
 			// only the first slot of an unchanged code point is read: its mapped value stays 0 and slot 1 ends the loop
 			Self::emit_list(
 				f,
@@ -613,35 +415,23 @@ impl WasmGcEmitter {
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
 		let mut locals = vec![nullable];
-		locals.extend([ValType::I32; 6]);
+		locals.extend([ValType::I32; 3]);
 		self.runtime_function("text_chars", vec![node_ref], vec![node_ref], locals, |s, f| {
-			let (characters, pointer, end, index, first_byte, code_point, step) = (1, 2, 3, 4, 5, 6, 7);
+			let (characters, pointer, end, code_point) = (1, 2, 3, 4);
 			s.emit_text_argument_bounds(f, pointer, end);
 			Self::emit_list(
 				f,
 				&[
-					I::LocalGet(pointer),
-					I::LocalSet(index),
 					I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(index),
+					I::LocalGet(pointer),
 					I::LocalGet(end),
 					I::I32GeU,
 					I::BrIf(1),
 				],
 			);
-			s.emit_decode_at(f, index, first_byte, code_point, step);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(index),
-					I::LocalGet(step),
-					I::I32Add,
-					I::LocalSet(index),
-					I::I64Const(SQUARE_LIST_KIND),
-					I::LocalGet(code_point),
-				],
-			);
+			s.emit_next_code_point(f, pointer, end, code_point);
+			Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND), I::LocalGet(code_point)]);
 			s.call(f, "new_codepoint");
 			Self::emit_list(
 				f,

@@ -2,12 +2,9 @@
 use super::*;
 
 impl WasmGcEmitter {
-	/// Text is UTF-8 and is read by one of three units: `.bytes` counts bytes, `.chars` code points,
-	/// `#`, `count`, `length` and `.graphemes` user-perceived characters (grapheme clusters, see GRAPHEME_EXTEND)
-	pub(super) fn emit_text_units(&mut self) {
-		let node_ref = Ref(self.node_ref(false));
-		let (int, long) = (ValType::I32, ValType::I64);
-
+	/// utf8_next and utf8_decode: every reader of text code point by code point steps with these two
+	pub(super) fn emit_utf8_steps(&mut self) {
+		let int = ValType::I32;
 		// utf8_next(pointer, end): past the code point at pointer, never past end
 		self.runtime_function("utf8_next", vec![int, int], vec![int], vec![int], |_, f| {
 			let next = 2;
@@ -76,6 +73,13 @@ impl WasmGcEmitter {
 			Self::emit_skip_continuation_bytes(f, 0, 1, Some(codepoint));
 			Self::emit_list(f, &[I::End, I::LocalGet(codepoint)]);
 		});
+	}
+
+	/// Text is UTF-8 and is read by one of three units: `.bytes` counts bytes, `.chars` code points,
+	/// `#`, `count`, `length` and `.graphemes` user-perceived characters (grapheme clusters, see GRAPHEME_EXTEND)
+	pub(super) fn emit_text_units(&mut self) {
+		let node_ref = Ref(self.node_ref(false));
+		let (int, long) = (ValType::I32, ValType::I64);
 
 		// grapheme_end(pointer, end): past the grapheme cluster starting at pointer, like strings::grapheme_clusters
 		self.runtime_function("grapheme_end", vec![int, int], vec![int], vec![int; 3], |s, f| {
@@ -113,14 +117,9 @@ impl WasmGcEmitter {
 					I::Return,
 					I::End,
 					I::End,
-					I::LocalGet(0),
-					I::LocalGet(1),
 				],
 			);
-			s.call(f, "utf8_decode");
-			Self::emit_list(f, &[I::LocalSet(previous), I::LocalGet(0), I::LocalGet(1)]);
-			s.call(f, "utf8_next");
-			f.instruction(&I::LocalSet(0));
+			s.emit_next_code_point(f, 0, 1, previous);
 			// CR LF stays together, any other control ends the cluster
 			Self::emit_list(
 				f,
@@ -580,6 +579,111 @@ impl WasmGcEmitter {
 		func.instruction(&I::LocalTee(pointer));
 		self.emit_text_field(func, 0, 1);
 		Self::emit_list(func, &[I::I32Add, I::LocalSet(end)]);
+	}
+
+	/// The code point at local `pointer` into local `code_point`, and `pointer` past it (never past `end`)
+	pub(in crate::wasm_emitter) fn emit_next_code_point(
+		&self,
+		func: &mut Function,
+		pointer: u32,
+		end: u32,
+		code_point: u32,
+	) {
+		Self::emit_list(func, &[I::LocalGet(pointer), I::LocalGet(end)]);
+		self.call(func, "utf8_decode");
+		Self::emit_list(func, &[I::LocalSet(code_point), I::LocalGet(pointer), I::LocalGet(end)]);
+		self.call(func, "utf8_next");
+		func.instruction(&I::LocalSet(pointer));
+	}
+
+	/// Push the UTF-8 width of the code point in local `code_point`: 1 to 4 bytes
+	pub(in crate::wasm_emitter) fn emit_utf8_width(func: &mut Function, code_point: u32) {
+		Self::emit_list(
+			func,
+			&[
+				I32Const(1),
+				I32Const(2),
+				I32Const(3),
+				I32Const(4),
+				I::LocalGet(code_point),
+				I32Const(utf8::THREE_BYTE_END),
+				I::I32LtU,
+				I::Select,
+				I::LocalGet(code_point),
+				I32Const(utf8::TWO_BYTE_END),
+				I::I32LtU,
+				I::Select,
+				I::LocalGet(code_point),
+				I32Const(utf8::ONE_BYTE_END),
+				I::I32LtU,
+				I::Select,
+			],
+		);
+	}
+
+	/// Write the code point in local `code_point` as the `width` UTF-8 bytes at local `at`; uses up `code_point`, `width`
+	/// and `lead`
+	pub(in crate::wasm_emitter) fn emit_utf8_store(
+		func: &mut Function,
+		at: u32,
+		code_point: u32,
+		width: u32,
+		lead: u32,
+	) {
+		Self::emit_list(
+			func,
+			&[
+				// lead byte marker by width
+				I32Const(0),
+				I32Const(utf8::TWO_BYTE_LEAD),
+				I32Const(utf8::THREE_BYTE_LEAD),
+				I32Const(utf8::FOUR_BYTE_LEAD),
+				I::LocalGet(width),
+				I32Const(3),
+				I::I32Eq,
+				I::Select,
+				I::LocalGet(width),
+				I32Const(2),
+				I::I32Eq,
+				I::Select,
+				I::LocalGet(width),
+				I32Const(1),
+				I::I32Eq,
+				I::Select,
+				I::LocalSet(lead),
+				// continuation bytes from the last one back, 6 bits each
+				I::Block(BlockType::Empty),
+				I::Loop(BlockType::Empty),
+				I::LocalGet(width),
+				I32Const(1),
+				I::I32LeU,
+				I::BrIf(1),
+				I::LocalGet(width),
+				I32Const(1),
+				I::I32Sub,
+				I::LocalTee(width),
+				I::LocalGet(at),
+				I::I32Add,
+				I::LocalGet(code_point),
+				I32Const(utf8::CONTINUATION_PAYLOAD),
+				I::I32And,
+				I32Const(utf8::CONTINUATION_MARK),
+				I::I32Or,
+				I::I32Store8(BYTE),
+				I::LocalGet(code_point),
+				I32Const(utf8::PAYLOAD_BITS),
+				I::I32ShrU,
+				I::LocalSet(code_point),
+				I::Br(0),
+				I::End,
+				I::End,
+				I::LocalGet(at),
+				I::LocalGet(code_point),
+				I::LocalGet(lead),
+				I::I32Or,
+				I::I32Store8(BYTE),
+			],
+		);
 	}
 
 	/// pointer++ past following UTF-8 continuation bytes (10xxxxxx), shifting their 6 bits into `accumulator`
