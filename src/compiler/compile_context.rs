@@ -4,8 +4,8 @@
 //! nothing in them compiles, or the context would be borrowed twice.
 use crate::analyzer::effects::Capability;
 use crate::errors::diagnostic::WarningMode;
-use crate::lowering::component_worlds::WorldFunctions;
 use crate::gpu_maps::ProgramFunction;
+use crate::lowering::component_worlds::WorldFunctions;
 use crate::node::Node;
 use crate::normalize::{HintMode, HintPosition, Style};
 use crate::numbers::units::static_units::ResultUnits;
