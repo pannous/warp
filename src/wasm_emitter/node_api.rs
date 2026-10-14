@@ -589,9 +589,9 @@ impl WasmGcEmitter {
 							I::I32Const(text.len() as i32),
 							I::I32Eq,
 							I::If(BlockType::Empty),
+							I::I32Const(1),
 						],
 					);
-					f.instruction(&I::I32Const(1));
 					for (offset, byte) in text.bytes().enumerate() {
 						Self::emit_list(
 							f,

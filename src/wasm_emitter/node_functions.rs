@@ -119,11 +119,16 @@ impl WasmGcEmitter {
 			vec![ValType::I64],
 			vec![],
 			|s, func| {
-				func.instruction(&I::LocalGet(0));
-				func.instruction(&I::StructGet {
-					struct_type_index: s.type_manager.node_type,
-					field_index: 0,
-				});
+				Self::emit_list(
+					func,
+					&[
+						I::LocalGet(0),
+						I::StructGet {
+							struct_type_index: s.type_manager.node_type,
+							field_index: 0,
+						},
+					],
+				);
 			},
 		);
 
@@ -157,8 +162,7 @@ impl WasmGcEmitter {
 				Self::emit_list(func, &node_kind_is(Kind::Int));
 				Self::emit_list(func, &[I::I32Eqz, I::If(BlockType::Empty)]);
 				s.emit_runtime_error(func, "not_an_int");
-				func.instruction(&I::End);
-				func.instruction(&I::LocalGet(0)); // Node
+				Self::emit_list(func, &[I::End, I::LocalGet(0)]); // Node
 				func.instruction(&I::StructGet {
 					struct_type_index: s.type_manager.node_type,
 					field_index: 1, // data field

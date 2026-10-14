@@ -50,10 +50,11 @@ impl WasmGcEmitter {
 					s.emit_text_field(f, node, 1);
 					f.instruction(&I::LocalSet(length));
 				}
-				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
 				Self::emit_list(
 					f,
 					&[
+						I::Block(BlockType::Empty),
+						I::Loop(BlockType::Empty),
 						I::LocalGet(index),
 						I::LocalGet(first_length),
 						I::I32GeU,
@@ -62,35 +63,20 @@ impl WasmGcEmitter {
 						I::I32GeU,
 						I::I32Or,
 						I::BrIf(1),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(first_pointer),
 						I::LocalGet(index),
 						I::I32Add,
 						I::I32Load8U(BYTE),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(second_pointer),
 						I::LocalGet(index),
 						I::I32Add,
 						I::I32Load8U(BYTE),
 						I::I32Sub,
 						I::LocalTee(difference),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[I::If(BlockType::Empty), I::LocalGet(difference), I::Return, I::End],
-				);
-				Self::emit_list(
-					f,
-					&[
+						I::If(BlockType::Empty),
+						I::LocalGet(difference),
+						I::Return,
+						I::End,
 						I::LocalGet(index),
 						I32Const(1),
 						I::I32Add,
@@ -98,11 +84,6 @@ impl WasmGcEmitter {
 						I::Br(0),
 						I::End,
 						I::End,
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(first_length),
 						I::LocalGet(second_length),
 						I::I32Sub,
@@ -234,8 +215,7 @@ impl WasmGcEmitter {
 					Self::emit_list(f, b);
 					Self::emit_list(f, a);
 					Self::emit_list(f, b);
-					f.instruction(&I::I32LtU);
-					f.instruction(&I::Select);
+					Self::emit_list(f, &[I::I32LtU, I::Select]);
 				};
 				Self::emit_list(f, &[I::LocalGet(list), I::LocalSet(cell)]);
 				s.emit_cell_walk(f, cell, |f| Self::emit_list(f, &increment(count)));
@@ -280,11 +260,6 @@ impl WasmGcEmitter {
 						I::LocalSet(descending),
 						I::I32Const(1),
 						I::LocalSet(low),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::Block(BlockType::Empty),
 						I::Loop(BlockType::Empty),
 						I::LocalGet(low),
@@ -319,11 +294,6 @@ impl WasmGcEmitter {
 						I::I32Const(0),
 						I::LocalSet(descending),
 						I::End,
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(ascending),
 						I::LocalGet(descending),
 						I::I32Or,
@@ -332,10 +302,12 @@ impl WasmGcEmitter {
 					],
 				);
 				Self::emit_list(f, &increment(low));
-				Self::emit_list(f, &[I::Br(0), I::End, I::End]);
 				Self::emit_list(
 					f,
 					&[
+						I::Br(0),
+						I::End,
+						I::End,
 						I::LocalGet(descending),
 						I::If(BlockType::Empty),
 						I::I32Const(0),
@@ -344,11 +316,6 @@ impl WasmGcEmitter {
 						I::I32Const(1),
 						I::I32Sub,
 						I::LocalSet(high),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::Block(BlockType::Empty),
 						I::Loop(BlockType::Empty),
 						I::LocalGet(low),
@@ -359,8 +326,7 @@ impl WasmGcEmitter {
 				);
 				for array_local in [cells, ranks] {
 					Self::emit_list(f, &get(array_local, low));
-					f.instruction(&I::LocalSet(cell));
-					Self::emit_list(f, &[I::LocalGet(array_local), I::LocalGet(low)]);
+					Self::emit_list(f, &[I::LocalSet(cell), I::LocalGet(array_local), I::LocalGet(low)]);
 					Self::emit_list(f, &get(array_local, high));
 					Self::emit_list(
 						f,
@@ -398,23 +364,14 @@ impl WasmGcEmitter {
 						I::I32Or,
 						I::Select,
 						I::LocalSet(width),
-					],
-				);
-				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
-				Self::emit_list(
-					f,
-					&[
+						I::Block(BlockType::Empty),
+						I::Loop(BlockType::Empty),
 						I::LocalGet(width),
 						I::LocalGet(count),
 						I::I32GeU,
 						I::BrIf(1),
 						I::I32Const(0),
 						I::LocalSet(low),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::Block(BlockType::Empty),
 						I::Loop(BlockType::Empty),
 						I::LocalGet(low),
@@ -442,11 +399,6 @@ impl WasmGcEmitter {
 						I::LocalSet(right),
 						I::LocalGet(low),
 						I::LocalSet(index),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::Block(BlockType::Empty),
 						I::Loop(BlockType::Empty),
 						I::LocalGet(index),
@@ -463,11 +415,6 @@ impl WasmGcEmitter {
 						I::LocalGet(middle),
 						I::I32LtU,
 						I::If(BlockType::Result(ValType::I32)),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(right),
 						I::LocalGet(high),
 						I::I32GeU,
@@ -481,8 +428,20 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &get(ranks, left));
 				f.instruction(&I::RefAsNonNull);
 				s.call(f, NODE_ORDER);
-				Self::emit_list(f, &[I::I32Const(0), I::I32GeS, I::End, I::Else, I::I32Const(0), I::End]);
-				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(left), I::LocalSet(from)]);
+				Self::emit_list(
+					f,
+					&[
+						I::I32Const(0),
+						I::I32GeS,
+						I::End,
+						I::Else,
+						I::I32Const(0),
+						I::End,
+						I::If(BlockType::Empty),
+						I::LocalGet(left),
+						I::LocalSet(from),
+					],
+				);
 				Self::emit_list(f, &increment(left));
 				Self::emit_list(f, &[I::Else, I::LocalGet(right), I::LocalSet(from)]);
 				Self::emit_list(f, &increment(right));
@@ -538,9 +497,12 @@ impl WasmGcEmitter {
 						I::LocalGet(count),
 						I::I32Eqz,
 						I::BrIf(1),
+						I::LocalGet(count),
+						I::I32Const(1),
+						I::I32Sub,
+						I::LocalSet(count),
 					],
 				);
-				Self::emit_list(f, &[I::LocalGet(count), I::I32Const(1), I::I32Sub, I::LocalSet(count)]);
 				Self::emit_list(f, &get(cells, count));
 				Self::emit_list(f, &[I::RefAsNonNull, I::LocalSet(cell)]);
 				s.emit_field(f, cell, 0);

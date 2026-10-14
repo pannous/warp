@@ -242,9 +242,15 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::LocalSet(b), I::LocalSet(a)]);
 		match op {
 			Op::Add | Op::Sub => {
-				Self::emit_list(func, &[I::LocalGet(a), I::LocalGet(b)]);
-				func.instruction(&if *op == Op::Add { I::I64Add } else { I::I64Sub });
-				func.instruction(&I::LocalSet(r));
+				Self::emit_list(
+					func,
+					&[
+						I::LocalGet(a),
+						I::LocalGet(b),
+						if *op == Op::Add { I::I64Add } else { I::I64Sub },
+						I::LocalSet(r),
+					],
+				);
 				let unproven = self.unproven(&[(r, result), (a, left), (b, right)]);
 				self.emit_fixnum_test(func, &unproven);
 				self.emit_fast_or_slow(
@@ -531,14 +537,16 @@ impl WasmGcEmitter {
 		self.emit_fixnum_test(func, &unproven);
 		Self::emit_list(
 			func,
-			&[I::If(BlockType::Result(ValType::I32)), I::LocalGet(a), I::LocalGet(b)],
+			&[
+				I::If(BlockType::Result(ValType::I32)),
+				I::LocalGet(a),
+				I::LocalGet(b),
+				machine,
+				I::Else,
+			],
 		);
-		func.instruction(&machine);
-		func.instruction(&I::Else);
 		self.emit_scratch_call(func, "exact_cmp");
-		func.instruction(&I::I32Const(0));
-		func.instruction(&Self::i32_compare(op));
-		func.instruction(&I::End);
+		Self::emit_list(func, &[I::I32Const(0), Self::i32_compare(op), I::End]);
 	}
 
 	/// The fixed width (`byte`, `int8` …) the variable `node` was declared with
@@ -934,18 +942,18 @@ impl WasmGcEmitter {
 
 	/// Push limb `index_local` of `limbs_local` as u64, 0 past the end
 	fn limb_or_zero(&self, func: &mut Function, limbs_local: u32, index: Instruction) {
-		func.instruction(&index);
 		Self::emit_list(
 			func,
 			&[
+				index.clone(),
 				I::LocalGet(limbs_local),
 				I::ArrayLen,
 				I::I32LtU,
 				I::If(BlockType::Result(ValType::I64)),
 				I::LocalGet(limbs_local),
+				index,
 			],
 		);
-		func.instruction(&index);
 		self.limbs_get(func);
 		Self::emit_list(func, &[I::Else, I::I64Const(0), I::End]);
 	}
