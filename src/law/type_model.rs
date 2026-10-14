@@ -92,7 +92,7 @@ const MAP_CLASS: &str = "map";
 /// `count xs`, `count x in xs` (how often x is in xs) and `x in xs` (yes when x has a first position from 1) walk the list
 /// with a `·tally` instance: its int fields hold the count or position and the current index
 const COUNT_WORD: &str = "count";
-/// `min(a, b)` and `max(a, b)` of two values (lowering/min_max.rs): a comparison, each argument computed once
+/// `min(a, b)` and `max(a, b)` of two values (lowering/collections/min_max.rs): a comparison, each argument computed once
 const EXTREMA: [&str; 2] = ["min", "max"];
 const TALLY_CLASS: &str = "·tally";
 const TALLY_INDEX: &str = "·index";
