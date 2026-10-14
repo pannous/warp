@@ -173,10 +173,42 @@ def rewrite_file_mentions(parent, module, folder):
 		if relative not in ("notes/decisions.md", "AGENTS.md"):
 			path = os.path.join(REPO, relative)
 			write(path, re.sub(r"\b" + re.escape(old) + r"(?=\.rs|/)", new, read(path)))
-	# os.path.join(REPOSITORY, "src", "ffi_parser.rs") broke the browser runner after layout-root: such joins need a hand
-	joined = subprocess.run(["git", "-C", REPO, "grep", "-nE", r"[\"']" + module + r"\.rs[\"']"], capture_output=True, text=True)
-	if joined.stdout:
-		print(f"check these path joins by hand:\n{joined.stdout}")
+	# os.path.join(REPOSITORY, "src", "ffi_parser.rs") broke the browser runner after layout-root (card py-misses)
+	joined = subprocess.run(["git", "-C", REPO, "grep", "-lE", r"[\"']" + module + r"(\.rs)?[\"']"], capture_output=True, text=True)
+	for relative in joined.stdout.split():
+		if not relative.startswith("src/"):
+			path = os.path.join(REPO, relative)
+			text = read(path)
+			changed = rewrite_joined_path(text, parent, module, folder)
+			if changed != text:
+				write(path, changed)
+	warn_about_leftover_mentions(parent, module, folder)
+
+
+def rewrite_joined_path(text, parent, module, folder):
+	"""`"src", "parent", "module.rs"` (joined by commas or `/`, either quote) gains the folder before the module part"""
+	parts = ["src"] + (parent.split("/") if parent else [])
+	separator = r"\s*[,/]\s*"
+	leading = separator.join(f"(?P<q{index}>['\"]){re.escape(part)}(?P=q{index})" for index, part in enumerate(parts))
+	pattern = re.compile(f"(?P<leading>{leading})(?P<separator>{separator})(?P<quote>['\"]){re.escape(module)}(\\.rs)?(?=['\"])")
+
+	def through_folder(match):
+		module_part = match.group(0)[match.end("separator") - match.start():]
+		return match["leading"] + match["separator"] + match["quote"] + folder + match["quote"] + match["separator"] + module_part
+
+	return pattern.sub(through_folder, text)
+
+
+def warn_about_leftover_mentions(parent, module, folder):
+	"""Every mention of the module's file name outside src/ not yet naming the new folder, listed loudly to stderr"""
+	listed = subprocess.run(["git", "-C", REPO, "grep", "-nwE", module + r"\.rs", "--", ":!src", ":!notes/decisions.md"],
+		capture_output=True, text=True)
+	followed = re.compile(re.escape(folder) + r"(/|['\"]\s*[,/]\s*['\"])" + re.escape(module) + r"\.rs")
+	leftovers = [line for line in listed.stdout.splitlines() if not followed.search(line)]
+	if leftovers:
+		print(f"WARNING: {len(leftovers)} mentions of {module}.rs outside src/ may still point at the old place "
+			f"(src/{parent + '/' if parent else ''}{module}.rs), check each:", file=sys.stderr)
+		print("\n".join(leftovers), file=sys.stderr)
 
 
 def take_declaration(text, module):
