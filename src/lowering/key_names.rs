@@ -102,25 +102,12 @@ fn with_key_names(node: Node, own: &HashSet<String>, warnings: &mut Vec<Diagnost
 			};
 			let body = &items[index];
 			let mut known = own.clone();
-			known.extend(assigned_names(body));
+			known.extend(body.assigned_names::<Vec<String>>(|op| matches!(op, Op::Assign | Op::Define)));
 			unbound_comparisons(body, &known, warnings);
 			items[index] = named(body.clone(), own);
 			Node::List(items, bracket, separator)
 		}
 		None => node.map_children(|child| with_key_names(child, own, warnings)),
-	}
-}
-
-/// The names the handler's body assigns itself
-fn assigned_names(body: &Node) -> Vec<String> {
-	match body.drop_meta() {
-		Node::Key(name, Op::Assign | Op::Define, value) => name
-			.symbol_name()
-			.map(str::to_string)
-			.into_iter()
-			.chain(assigned_names(value))
-			.collect(),
-		other => other.parts().into_iter().flat_map(assigned_names).collect(),
 	}
 }
 
