@@ -19,8 +19,10 @@ function serveTaskWorkers(programWorker) {
 		const channel = new MessageChannel();
 		made.postMessage({ port: channel.port1 }, [channel.port1]);
 		programWorker.postMessage({ taskWorker: taskWorker.id, port: channel.port2 }, [channel.port2]);
+		reportBareErrors(made, `task Worker ${taskWorker.id}`);
 		taskWorkers.set(taskWorker.id, made);
 	});
+	reportBareErrors(programWorker, "the program's Worker");
 	const terminate = programWorker.terminate.bind(programWorker);
 	programWorker.terminate = () => {
 		taskWorkers.forEach(stopQuietly);
@@ -29,6 +31,13 @@ function serveTaskWorkers(programWorker) {
 	};
 	return programWorker;
 }
+
+// a failure without an Error (Firefox's bare "uncaught exception: undefined") at the page or one of its Workers is said
+// with where it happened
+const reportBareErrors = (target, label) => target.addEventListener("error", event => {
+	if (event.error instanceof Error) return;
+	console.error(`warp ${label}: an error without an Error (${event.error}) at ${event.filename}:${event.lineno}:${event.colno}: ${event.message}`);
+});
 
 // a Worker stopped on purpose (Stop, a run's timeout): Firefox reports one stopped while it still loads its scripts as a
 // bare "uncaught exception: undefined" on the page, now and then (playground-turn's tour check), which is no failure
