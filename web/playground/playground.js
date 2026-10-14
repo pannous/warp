@@ -1033,4 +1033,15 @@ window.playground = { evaluate, applyFix, chooseExample, runCode, reportAddress,
 	// what a run waits for, for the Firefox driver's timeout report (card firefox-hello-again)
 	state: () => ({ worker: workerStage, ready: workerSettled, pending: pending?.id, queued: queued !== undefined, showing }) };
 
+// a failure without a reason (Firefox's bare "uncaught exception: undefined") is said with where it happened
+addEventListener("error", event => {
+	if (event.error !== undefined) return;
+	console.error(`warp page: an error without a reason at ${event.filename}:${event.lineno}:${event.colno}: ${event.message}`);
+});
+addEventListener("unhandledrejection", event => {
+	if (event.reason !== undefined) return;
+	event.preventDefault();
+	console.error("warp page: a promise failed without a reason", event.promise, new Error("seen here").stack);
+});
+
 (window.pageStarts ?? Promise.resolve()).then(initialize); // index.html: not before its reload for isolation
