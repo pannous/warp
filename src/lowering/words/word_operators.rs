@@ -1,7 +1,7 @@
 //! Words for operators (word-choice rule: the canonical word plus aliases that work with a note): `root 4`,
 //! `root(4)` and the pipe stage `2|square|root` (wiki/pipe.md) are sqrt; a variable or function the program names
 //! root wins (P142). The other way round, the log glyphs are the log words (P226): `b⌞x` is `log(x, b)`, `x⌟` is
-//! `ln(x)` and `x⌟b` is `log(x, b)`
+//! `ln(x)` and `x⌟b` is `log(x, b)`, as is `x↓b` (card easy-add); `x↑n`, Knuth's up arrow, is `x^n`
 
 use super::nodes::{call, key};
 use crate::node::Node;
@@ -63,7 +63,8 @@ fn log_calls(node: Node) -> Node {
 	match node {
 		Node::Key(base, Op::LogBase, value) => call(LOG_WORD, vec![log_calls(*value), log_calls(*base)]),
 		Node::Key(value, Op::LogOf, base) if base.is_empty_node() => call(NATURAL_LOG, vec![log_calls(*value)]),
-		Node::Key(value, Op::LogOf, base) => call(LOG_WORD, vec![log_calls(*value), log_calls(*base)]),
+		Node::Key(value, Op::LogOf | Op::ArrowDown, base) => call(LOG_WORD, vec![log_calls(*value), log_calls(*base)]),
+		Node::Key(value, Op::ArrowUp, power) => key(log_calls(*value), Op::Pow, log_calls(*power)),
 		other => other.map_children(log_calls),
 	}
 }

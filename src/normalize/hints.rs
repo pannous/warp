@@ -66,7 +66,8 @@ pub fn operator(written: &str, is_prefix: bool) {
 				"and" => logical_operator(written, "and", AND_SYMBOLS),
 				"or" => logical_operator(written, "or", OR_SYMBOLS),
 				"xor" => {}
-				canonical => hint(written, canonical, "standard spelling of the operator"),
+				canonical if canonical != written => hint(written, canonical, "standard spelling of the operator"),
+				_ => {}
 			}
 			return;
 		}
