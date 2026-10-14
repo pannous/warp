@@ -1,6 +1,8 @@
 (async () => {
 	const describe = async () => {
-		const out = { steps: [] };
+		const out = { steps: self.probeSteps = [] };
+		self.addEventListener("error", event => out.steps.push(`error event: ${event.message} at ${event.filename}:${event.lineno}:${event.colno} ${event.error}`));
+		self.addEventListener("unhandledrejection", event => out.steps.push(`unhandled rejection: ${event.reason}`));
 		try { out.gpu = !!self.navigator.gpu; } catch (failure) { out.gpu = `THREW ${failure} ${failure?.stack}`; return out; }
 		const thrown = value => value === undefined ? "undefined" : value === null ? "null" : `${value?.constructor?.name}: ${value?.message ?? value}`;
 		const step = async (name, run) => {
