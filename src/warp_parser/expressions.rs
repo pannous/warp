@@ -290,21 +290,9 @@ impl WarpParser {
 
 	/// The operator after `lhs` that the infix table does not hold, its width in characters and its binding power
 	pub(super) fn special_infix(&self, lhs: &Node) -> Option<(SpecialInfix, usize, (u8, u8))> {
-		// `def div(a,b) = …`: the word after a function keyword is the name, never an operator
+		// `def contains(a,b) = …`: the word after a function keyword is the name, never an operator
 		if matches!(lhs.drop_meta(), Node::Symbol(keyword) if crate::operators::is_function_keyword(keyword)) {
 			return None;
-		}
-		// Python floor division glued to its operand, `7//2` and `x//=2` (`x // note` stays a comment), and `7 div 2`;
-		// `div{…}` and `div {…}` are the html tag, and data never computes
-		let word_division = self.matches_keyword("div") && !self.options.data_mode && !self.word_opens_block("div");
-		if word_division || self.at_floor_division() {
-			let compound = !word_division && self.peek_char(2) == '=';
-			let op = if compound { Op::Assign } else { Op::Div };
-			return Some((
-				SpecialInfix::FloorDivision { compound },
-				if compound || word_division { 3 } else { 2 },
-				op.binding_power(),
-			));
 		}
 		// the pipeline `xs |> f(a)` is the call `f(xs, a)`, `xs |> f` is `f(xs)` (F#, Elixir); it binds below arithmetic
 		// and above comparison: `xs |> sum > 3` is `sum(xs) > 3`
@@ -903,6 +891,11 @@ fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Option<Node>) -
 			Node::Key(Box::new(lhs), Op::And, Box::new(next_comparison))
 		}
 		(_, Some((start, end))) if op == Op::Hash => call(SLICE_WORD, vec![lhs, start, end]),
+		_ if FLOOR_DIVISION_SPELLINGS.contains(&written) => call(FLOOR_QUOTIENT, vec![lhs, rhs]),
+		_ if written == FLOOR_DIVISION_ASSIGNMENT => {
+			let quotient = call(FLOOR_QUOTIENT, vec![lhs.clone(), rhs]);
+			Node::Key(Box::new(lhs), Op::Assign, Box::new(quotient))
+		}
 		_ if op == Op::To && written.starts_with(DOWN_WORD) => {
 			call(REVERSE_WORD, vec![Node::Key(Box::new(rhs), Op::To, Box::new(lhs))])
 		}

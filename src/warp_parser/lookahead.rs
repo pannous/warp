@@ -212,6 +212,9 @@ impl WarpParser {
 			">>" => !self.options.wit_mode && self.operand_follows(2),
 			"+-" => after.is_whitespace() && prev.is_whitespace(),
 			"/" => after != '/', // Don't treat // as division - it's a comment
+			"//" | "//=" => self.at_floor_division(), // `x // note` stays a comment
+			// `div{…}` and `div {…}` are the html tag, and data never computes
+			"div" => !self.options.data_mode && !self.word_opens_block("div"),
 			// `a .5` is a list of two values, `a.5` a member access
 			"." => !(prev.is_whitespace() && self.number_starts_at(0)),
 			"&" => !(self.starts_function_reference() && prev.is_whitespace()), // `map &square xs`

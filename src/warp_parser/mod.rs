@@ -370,8 +370,6 @@ fn with_arrow_bodies(mut items: Vec<Node>) -> Vec<Node> {
 
 /// The infix operators continue_expr reads apart from the operator table
 enum SpecialInfix {
-	/// `7//2`, `7 div 2`, `x//=2`
-	FloorDivision { compound: bool },
 	/// `xs |> f(a)`
 	Pipeline,
 	/// `xs .+ 4`
@@ -385,14 +383,6 @@ enum SpecialInfix {
 impl SpecialInfix {
 	fn applied(self, lhs: Node, operand: Node) -> Node {
 		match self {
-			SpecialInfix::FloorDivision { compound } => {
-				let quotient = floor_division(lhs.clone(), operand);
-				if compound {
-					Node::Key(Box::new(lhs), Op::Assign, Box::new(quotient))
-				} else {
-					quotient
-				}
-			}
 			SpecialInfix::Pipeline => piped(lhs, operand),
 			// Java's and Scala's `import math.*`: a glob, nothing after the `*`, is the module whole
 			SpecialInfix::ElementWise(Op::Mul) if matches!(operand, Empty) => {
@@ -672,6 +662,9 @@ fn is_music_accidental(c: char) -> bool {
 /// (a == b*(a//b) + a%b): floor(a/b) for a positive divisor, ceil(a/b) for a negative one. Each operand is evaluated
 /// once, and an exact quotient rounds exactly (wasm_emitter exact_euclid_div)
 pub const FLOOR_QUOTIENT: &str = "floor_quotient";
+/// The spellings of floor division in the operator table: `7//2`, `7 div 2` and the compound `x//=2`
+const FLOOR_DIVISION_SPELLINGS: [&str; 2] = ["//", "div"];
+const FLOOR_DIVISION_ASSIGNMENT: &str = "//=";
 
 /// `a | b`: the logical or, or `b(a)` when b names a function (pipes.rs)
 const PIPE_GLYPH: &str = "|";
@@ -695,10 +688,6 @@ pub(crate) fn piped(value: Node, stage: Node) -> Node {
 		}
 		_ => Node::List(vec![stage, value], Bracket::Round, Separator::None),
 	}
-}
-
-fn floor_division(dividend: Node, divisor: Node) -> Node {
-	call(FLOOR_QUOTIENT, vec![dividend, divisor])
 }
 
 /// Read and parse a WARP file

@@ -13,7 +13,7 @@ const PREFIX_BP: u8 = 162;
 /// Every spelling of an infix or prefix operator the parser reads: symbols, Unicode glyphs and words (wiki/alias.md,
 /// wiki/operator.md). The canonical spelling is Op::as_str, every other one an alias; the parser takes the longest
 /// spelling that fits (lookahead.rs peek_operator), the style hints name the canonical one (normalize.rs)
-pub const OPERATOR_SPELLINGS: [(&str, Op); 118] = [
+pub const OPERATOR_SPELLINGS: [(&str, Op); 121] = [
 	(":", Op::Colon),
 	(".", Op::Dot),
 	("?.", Op::SafeDot),
@@ -45,6 +45,10 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 118] = [
 	("/", Op::Div),
 	("÷", Op::Div),
 	("divided by", Op::Div),
+	// Python's floor division `7//2`, `x//=2` and `7 div 2`: the parser makes them floor_quotient calls
+	("//", Op::Div),
+	("div", Op::Div),
+	("//=", Op::DivAssign),
 	("%", Op::Mod),
 	// `a mod b` is Euclidean (0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the dividend, as C)
 	("mod", Op::Mod),
