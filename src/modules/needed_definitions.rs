@@ -82,11 +82,18 @@ pub(crate) fn collect_called_words(node: &Node, is_module_name: &dyn Fn(&Node) -
 	match node.drop_meta() {
 		Node::Key(receiver, Op::Dot | Op::SafeDot, member) => {
 			collect_called_words(receiver, is_module_name, names);
-			if let Node::List(call, _, _) = member.drop_meta() {
-				if !is_module_name(receiver) {
-					names.extend(called(call));
+			// `xs.product` is `xs.product()` (user 2026-10-14, card type-module)
+			match member.drop_meta() {
+				Node::List(call, _, _) => {
+					if !is_module_name(receiver) {
+						names.extend(called(call));
+					}
+					call.iter().skip(1).for_each(|argument| collect_called_words(argument, is_module_name, names));
 				}
-				call.iter().skip(1).for_each(|argument| collect_called_words(argument, is_module_name, names));
+				Node::Symbol(word) if !is_module_name(receiver) => {
+					names.insert(word.clone());
+				}
+				_ => {}
 			}
 		}
 		Node::Key(left, _, right) => {
