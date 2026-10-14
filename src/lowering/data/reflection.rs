@@ -45,6 +45,14 @@ const RETURN_TYPE_WORD: &str = "return_type";
 const FUNCTION_WORD: &str = "function";
 /// `f.doc`: the function's doc string or the comment above it, empty without (doc_strings.rs)
 const DOC_WORD: &str = "doc";
+/// `f.full`: what `print f` shows, the doc as comment lines above the definition (user, card module-methods)
+const FULL_WORD: &str = "full";
+/// Other names of a function's words (user, card module-methods): each read as its canonical word with a note
+pub(crate) const FUNCTION_WORD_ALIASES: [(&str, &str); 3] = [
+	("description", DOC_WORD),
+	("returns", RETURN_TYPE_WORD),
+	("representation", DUMP_WORD),
+];
 /// What `dir(f)` lists of a function: the words reflection answers for it
 const FUNCTION_WORDS: [&str; 4] = [PARAMS_WORDS[0], SIGNATURE_WORD, BODY_WORD, EFFECTS_WORD];
 /// `dir(sqrt)`: a library word has no body to show
@@ -74,6 +82,10 @@ pub fn lower(node: Node) -> Node {
 			BODY_WORD,
 			DUMP_WORD,
 			DOC_WORD,
+			FULL_WORD,
+			FUNCTION_WORD_ALIASES[0].0,
+			FUNCTION_WORD_ALIASES[1].0,
+			FUNCTION_WORD_ALIASES[2].0,
 			NAME_WORD,
 			RETURN_TYPE_WORD,
 			PARAMS_WORDS[0],
@@ -189,6 +201,14 @@ fn as_reflection_words(node: Node, functions: &Functions, defined: &HashSet<Stri
 		if let (Some(name), Some(word)) = (function_named(&subject), word.symbol_name()) {
 			let function = functions.get(name).filter(|_| !defined.contains(word));
 			let library = || library_signature(name, functions, defined).filter(|_| !defined.contains(word));
+			let word = match canonical_word(word) {
+				Some(canonical) if function.is_some() || library().is_some() => {
+					crate::normalize::set_position_of(&node);
+					crate::errors::diagnostic::note_alias(word, canonical);
+					canonical
+				}
+				_ => word,
+			};
 			let reflected = match (word, function) {
 				(word, Some(function)) if PARAMS_WORDS.contains(&word) => Some(text_list(
 					&function
@@ -200,6 +220,7 @@ fn as_reflection_words(node: Node, functions: &Functions, defined: &HashSet<Stri
 				(SIGNATURE_WORD, Some(function)) => Some(Node::Text(signature(function))),
 				(DUMP_WORD, Some(function)) => Some(Node::Text(definition(function))),
 				(DOC_WORD, Some(function)) => Some(Node::Text(function.doc.clone().unwrap_or_default())),
+				(FULL_WORD, Some(function)) => Some(Node::Text(printed(function))),
 				(NAME_WORD, Some(function)) => Some(Node::Text(function.name.clone())),
 				(RETURN_TYPE_WORD, Some(function)) => Some(Node::Text(function.return_kind.to_string())),
 				(BODY_WORD, Some(function)) => Some(Node::List(
@@ -230,7 +251,32 @@ fn as_reflection_words(node: Node, functions: &Functions, defined: &HashSet<Stri
 /// A word a function value answers at run time only: the reflection mode's (function_words)
 fn is_run_time_word(word: &str) -> bool {
 	crate::wasm_emitter::functions::function_words().any(|(answered, _)| answered == word)
-		&& ![NAME_WORD, DOC_WORD, SIGNATURE_WORD, RETURN_TYPE_WORD, DUMP_WORD].contains(&word)
+		&& ![
+			NAME_WORD,
+			DOC_WORD,
+			FULL_WORD,
+			SIGNATURE_WORD,
+			RETURN_TYPE_WORD,
+			DUMP_WORD,
+		]
+		.contains(&word)
+}
+
+/// The canonical word of an alias of a function's word: `doc` of `description`
+pub(crate) fn canonical_word(word: &str) -> Option<&'static str> {
+	FUNCTION_WORD_ALIASES
+		.into_iter()
+		.find(|(alias, _)| *alias == word)
+		.map(|(_, canonical)| canonical)
+}
+
+/// `print f`, `f.full`: the definition, the doc as comment lines above it (decision reflection)
+pub(crate) fn printed(function: &crate::compiler::context::UserFunctionDef) -> String {
+	let definition = definition(function);
+	match &function.doc {
+		Some(doc) => format!("# {}\n{definition}", doc.replace('\n', "\n# ")),
+		None => definition,
+	}
 }
 
 /// `f`, `function f`, `(function f)`: the name of the function the reflection words look at

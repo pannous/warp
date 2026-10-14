@@ -40,14 +40,16 @@ const FUNCTION_DOC: &str = "function_doc";
 const FUNCTION_SIGNATURE: &str = "function_signature";
 const FUNCTION_RETURN_TYPE: &str = "function_return_type";
 const FUNCTION_DEFINITION: &str = "function_definition";
+const FUNCTION_FULL: &str = "function_full";
 /// The reflection words a function value answers at run time (`fs#1.doc`, `methods(math) map .doc`; card
 /// module-methods), each a field read's fallback (fields_and_keys.rs FIELD_FALLBACKS): word → its table
-pub const FUNCTION_WORDS: [(&str, &str); 5] = [
+pub const FUNCTION_WORDS: [(&str, &str); 6] = [
 	("name", FUNCTION_NAME),
 	("doc", FUNCTION_DOC),
 	("signature", FUNCTION_SIGNATURE),
 	("return_type", FUNCTION_RETURN_TYPE),
 	("dump", FUNCTION_DEFINITION),
+	("full", FUNCTION_FULL),
 ];
 const FUNCTION_FILE: &str = "function_file";
 const FUNCTION_LINE: &str = "function_line";
@@ -993,15 +995,14 @@ impl WasmGcEmitter {
 	fn printed_function(&self, target: &str, captured: usize) -> String {
 		match self.ctx.user_functions.get(target) {
 			Some(function) if !crate::closures::is_lambda_function(target) => {
-				let definition = crate::lowering::reflection::definition(function);
-				let doc = function
-					.doc
-					.iter()
-					.map(|doc| format!("# {}\n", doc.replace('\n', "\n# ")));
 				let made = function_words()
 					.any(|(_, table)| table == FUNCTION_WASM_NAME)
 					.then(|| format!("# {}\n", self.made_by(target, function)));
-				format!("{}{}{definition}", made.unwrap_or_default(), doc.collect::<String>())
+				format!(
+					"{}{}",
+					made.unwrap_or_default(),
+					crate::lowering::reflection::printed(function)
+				)
 			}
 			_ => self.function_text_of(target, captured),
 		}
@@ -1027,6 +1028,7 @@ impl WasmGcEmitter {
 			(FUNCTION_SIGNATURE, Some(function)) => text(crate::lowering::reflection::signature(function)),
 			(FUNCTION_RETURN_TYPE, Some(function)) => text(function.return_kind.to_string()),
 			(FUNCTION_DEFINITION, Some(function)) => text(crate::lowering::reflection::definition(function)),
+			(FUNCTION_FULL, _) => text(self.printed_function(target, captured)),
 			(FUNCTION_FILE, _) => text(written_in(at.as_ref()).unwrap_or_default()),
 			(FUNCTION_LINE, _) => Node::int(at.as_ref().map_or(0, |at| at.line_nr) as i64),
 			(FUNCTION_COLUMN, _) => Node::int(at.as_ref().map_or(0, |at| at.column) as i64),
