@@ -108,7 +108,8 @@ Decisions (user, via warp-interviewer):
 - `int | text` / `int or text` in a case key is a type union, as is `x is (int or text)`; mixed `0 or text` means
   the value 0 or any text.
 - `other` (like `_`, `default`, `else`) is a catch-all case key; a variable named other stays a variable.
-- Definitions by cases `fib(0) := 0; fib(n) := …` are the error "fib is defined twice", whose fix shows a match.
+- Definitions by cases `fib(0) := 0; fib(n) := …` have no diagnostic of their own (cut, cleanup-cuts-2): the last one
+  wins, as any redefinition; write the cases as one match.
 - Exhaustiveness: a match over a known enum or sealed set that misses a case is the compile error "match on Coin
   misses Dime"; an unknown subject type keeps the run-time "no case".
 
