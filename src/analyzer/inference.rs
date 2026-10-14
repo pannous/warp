@@ -44,25 +44,12 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 	if node_arithmetic(left, op, right).is_some() {
 		return Kind::Data; // Int or Float, decided at run time
 	}
-	if *op == Op::Add
-		&& [left, right]
-			.iter()
-			.all(|kind| matches!(kind, Kind::List | Kind::Empty))
-		&& [left, right].contains(&Kind::List)
-	{
-		Kind::List // concatenation
-	} else if *op == Op::Add
-		&& (crate::wasm_emitter::text_builtins::concatenates(left, right)
-			|| [left, right]
-				.iter()
-				.any(|kind| matches!(kind, Kind::Empty | Kind::Data))
-				&& [left, right]
-					.iter()
-					.any(|kind| matches!(kind, Kind::Text | Kind::Codepoint)))
-		|| repeats_text(left, op, right)
-	{
-		// concatenation; a value held as a Node (a map value, an element of one, a number of run-time kind) joining a text; `"ab"*2` repeats, see WasmGcEmitter::emit_text_repeat
-		Kind::Text
+	match concatenation_kind(left, right) {
+		Some(kind) if *op == Op::Add => return kind,
+		_ => {}
+	}
+	if repeats_text(left, op, right) {
+		Kind::Text // `"ab"*2`, see WasmGcEmitter::emit_text_repeat
 	} else if [left, right].iter().any(|kind| {
 		matches!(
 			kind,
@@ -74,6 +61,20 @@ pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 		Kind::Float
 	} else {
 		Kind::Int
+	}
+}
+
+/// `a + b` joining lists or texts: lists (an empty one too) are a list; a text with anything but a function, a value held
+/// as a Node too (a map value, a number of run-time kind), is a text
+fn concatenation_kind(left: Kind, right: Kind) -> Option<Kind> {
+	if [left, right]
+		.iter()
+		.all(|kind| matches!(kind, Kind::List | Kind::Empty))
+		&& [left, right].contains(&Kind::List)
+	{
+		Some(Kind::List)
+	} else {
+		crate::wasm_emitter::text_builtins::concatenates(left, right).then_some(Kind::Text)
 	}
 }
 
@@ -193,16 +194,13 @@ pub fn infer_type(node: &Node, scope: &Scope) -> Kind {
 		Node::Key(left, op, right) if op.is_compound_assign() => {
 			let left_kind = infer_type(left, scope);
 			let right_kind = infer_type(right, scope);
-			// a text joined with a text, a character or a value held as a Node: as `s + x` (arithmetic_kind)
-			let joins_text = matches!(left_kind, Kind::Text | Kind::Codepoint)
-				&& arithmetic_kind(left_kind, &Op::Add, right_kind) == Kind::Text;
-			if op.base_op() == Op::Add
-				&& (joins_text || crate::wasm_emitter::text_builtins::concatenates(left_kind, right_kind))
-			{
-				Kind::Text
-			} else if op.base_op() == Op::Add && (left_kind == Kind::List || right_kind == Kind::List) {
-				Kind::List // `xs += [v]`, what `xs.add(v)` lowers to
-			} else if left_kind == Kind::Empty {
+			// as `s + x` (arithmetic_kind); `xs += v` is what `xs.add(v)` lowers to
+			let any_list = [left_kind, right_kind].contains(&Kind::List);
+			match concatenation_kind(left_kind, right_kind).or(any_list.then_some(Kind::List)) {
+				Some(kind) if op.base_op() == Op::Add => return kind,
+				_ => {}
+			}
+			if left_kind == Kind::Empty {
 				Kind::Empty // a variable held as a Node stays one: `total += event.value` of a global widened by it
 			} else if left_kind == Kind::Float || right_kind == Kind::Float {
 				Kind::Float
