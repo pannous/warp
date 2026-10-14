@@ -65,12 +65,12 @@ addHostPart({
 			if (!hooks.paint) throw new Error("paint: no canvas here; it draws in the playground page");
 			const room = Number(width) * Number(height);
 			// typed arrays, which reach the page as one copy: a million numbers of an Array were cloned one by one (card abysmally-slow)
-			let painted = intsOfList(program(), pixels, room, Float64Array) ?? plainOfTree(readNode(program(), pixels));
+			const painted = intsOfList(program(), pixels, room, Float64Array) ?? plainOfTree(readNode(program(), pixels));
 			if (typeof painted === "string") {
 				if (!holder.gpuRendered) throw new Error("paint: a shader needs WebGPU (host-gpu.js), which this page has not");
 				const rendered = (holder.gpuPainted ?? holder.gpuRendered)(painted, width, height, values); // pixels, or the id of a canvas drawn into
 				if (typeof rendered === "number") return hooks.paint(undefined, Number(width), Number(height), rendered);
-				painted = rendered;
+				return hooks.paint(rendered, Number(width), Number(height), undefined, true);
 			}
 			hooks.paint(painted, Number(width), Number(height));
 		},

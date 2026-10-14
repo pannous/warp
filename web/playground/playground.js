@@ -740,7 +740,7 @@ const paintCanvases = new Map();
 // a paint message as shown: a GPU-drawn one names its canvas by id
 const paintingOf = data => data.canvas ? { ...data, canvas: paintCanvases.get(data.canvas) } : data;
 function sendPaintCanvas({ id, width, height, taskWorkerId, replaces }) {
-	const canvas = paintingElement({ width, height });
+	const canvas = paintingElement({ width, height, shaded: true });
 	canvas.gpu = true;
 	paintCanvases.delete(replaces);
 	paintCanvases.set(id, canvas);
