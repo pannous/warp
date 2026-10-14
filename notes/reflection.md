@@ -109,3 +109,6 @@ reflection.rs (which would read help(sound) as the word sound). After modules::r
 modules' words plus the program's functions (`if T has x then T[x] else error(…)`). `function trick` is still the
 function reference P82; where trick is no function but a variable, its value is the name. std_docs now indexes
 `global x = …` and `def f(x) {…}` definitions too; a prelude word's help stays its head (test_library_signatures).
+A help statement prints (user decision help-statement, via the Interviewer): `help(x)` on its own line, other than the
+value of a block or program, is `print help(x)` (word_help::printing_help_statements); in a loop's body the last
+statement too. `t = help(x)` stays silent, `print help(x)` prints once.
