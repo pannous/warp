@@ -36,10 +36,10 @@ pub use lowering::{
 	list_phrases, markup_tags, memoization, meta_entries, min_max, music_words, mutation, named_arguments,
 	negated_calls, nested_index, nonlocal_cells, number_keys, object_groups, one_entry_maps, optional_casts, overloads,
 	page_html, parallel, parameter_shapes, phrase_calls, phrase_words, picked_calls, pipes, printable, references,
-	reflection, result_word, routes, ruby_blocks, run_time_blocks, scoped_handlers, select_options, serve,
-	shared_arrays, signal_values, soft_keywords, std_aliases, stored_values, style_rules, switch, system_signals,
-	system_values, traits, transitions, tuples, type_aliases, type_constructor, type_name_matching, type_tests,
-	undo_history, variable_signals, variadic, versions, welcome_forms, word_operators, word_slices,
+	reflection, result_word, routes, run_time_blocks, scoped_handlers, select_options, serve, shared_arrays,
+	signal_values, soft_keywords, std_aliases, stored_values, style_rules, switch, system_signals, system_values,
+	traits, transitions, tuples, type_aliases, type_constructor, type_name_matching, type_tests, undo_history,
+	variable_signals, variadic, versions, welcome_forms, word_operators, word_slices,
 };
 pub mod accessibility;
 #[cfg(feature = "native")]
@@ -99,7 +99,6 @@ pub mod uniscript_entities;
 pub mod units;
 pub mod warp_parser;
 pub mod wasm_modules;
-pub mod wasm_optimizer;
 #[cfg(feature = "native")]
 pub mod wasm_reader;
 pub mod web;
@@ -132,12 +131,9 @@ pub use wasm_emitter::WasmGcEmitter;
 #[cfg(feature = "native")]
 pub use host::{create_host_linker, link_host_functions, HostState};
 // Functions
-pub use function::{kind_to_valtype, Arg, Function, FunctionRegistry, Signature, ABI};
+pub use function::{Function, FunctionRegistry};
 // Local (unified struct for variables)
 pub use local::Local;
-// Legacy GcObject for backward compatibility (3-field Node layout)
-#[cfg(feature = "native")]
-pub use wasm_reader::GcObject;
 // New gc_traits module with rasm-style ergonomic GC struct access
 // Note: gc_struct!, obj!, and wasm_struct! macros are exported at crate root via #[macro_export]
 #[cfg(feature = "native")]

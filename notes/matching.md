@@ -125,7 +125,7 @@ Parameter patterns (card parameter-patterns, lowering/parameter_patterns.rs): `a
 `total(Point{x, y}) := x + y`. Each pattern parameter gets a numbered name (`list·1`, `point·1: Point`), and the body
 becomes a match on it, so another shape is the match's "no case" error and a non-Point the call's type error.
 Probe: probes/matching/parameter_patterns.warp. Open: a user `sum(p: Point)` called with 5 runs the library sum
-(card sum-point).
+(card sum-point; its error special case was removed by cleanup-sum-point, a general fix belongs in overload dispatch).
 Pattern names are declared `let` (switch::bind), the arm's own locals: no local-or-global question (card pattern-names).
 Class arms `Point{x, y} =>` bind with `let` too (class_methods/destructuring.rs bound_parts, card
 param-pattern-local-warning); that `let x = p.x; let y = …` once read as a Haskell definition named let
@@ -161,7 +161,7 @@ probes/matching/tree_patterns.warp. Steps, each its own sub-card of matching:
    find done (src/lowering/tree_walks.rs): each `subject find P` (P a map, list or named pattern) becomes a call of a
    generated recursive walker `find·N`, defined from a source template; result: the one name's values, a map of the
    names, or the matching subtrees. Tests tests/control/test_tree_find.rs, probe probes/matching/tree_find.warp.
-   `found = [[…]] find P` walks the literal, as after a list variable (lists.rs with_applied_word, card found-find).
+   Open: `found = [[…]] find P` parses as an assignment first (card found-find; its parser special case was removed by cleanup-found-find, the general fix belongs in assignment parsing).
    replace done (same file, renamed tree_walks.rs): `tree replace P with Q` rebuilds lists (bracketed/separated keep the
    bracket), maps (`keys`, `r[k] = …`) and keys (`key(left, op, right)`), children first, then rewrites the node. Data
    and code alike: `code replace data($a * 1) with a`. In a function body the words come in nested pairs and `with Q`

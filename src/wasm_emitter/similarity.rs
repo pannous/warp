@@ -104,12 +104,9 @@ impl WasmGcEmitter {
 						I::F64Sub,
 						I::F64Abs,
 						I::LocalSet(difference),
-					],
-				);
-				Self::emit_list(f, &[I::LocalGet(a), I::LocalGet(b), I::F64Eq]);
-				Self::emit_list(
-					f,
-					&[
+						I::LocalGet(a),
+						I::LocalGet(b),
+						I::F64Eq,
 						I::LocalGet(difference),
 						I::F64Const(ABSOLUTE_TOLERANCE.into()),
 						I::F64Le,
@@ -197,9 +194,9 @@ impl WasmGcEmitter {
 						I::I64Const(BOOL_KIND),
 						I::I64Eq,
 						I::I32Or,
+						I::If(BlockType::Empty),
 					],
 				);
-				f.instruction(&I::If(BlockType::Empty));
 				for side in [a, b] {
 					f.instruction(&I::LocalGet(side));
 					s.call(f, IS_TRUTHY);
@@ -247,8 +244,10 @@ impl WasmGcEmitter {
 					s.call(f, TEXT_FOLD);
 				}
 				s.call(f, VALUES_EQUAL);
-				Self::emit_list(f, &[I::Return, I::End]);
-				Self::emit_list(f, &[I::LocalGet(kind_a), I::LocalGet(kind_b), I::I64Ne]);
+				Self::emit_list(
+					f,
+					&[I::Return, I::End, I::LocalGet(kind_a), I::LocalGet(kind_b), I::I64Ne],
+				);
 				Self::return_if(f, 0);
 				// `{…}` objects are maps: their entries may come in any order
 				Self::emit_list(
@@ -273,8 +272,7 @@ impl WasmGcEmitter {
 				s.is_number_payload(f, b);
 				Self::emit_list(f, &[I::I32And, I::If(BlockType::Empty)]);
 				numbers_similar(s, f, a, b);
-				f.instruction(&I::End);
-				Self::emit_list(f, &[I::LocalGet(a), I::LocalGet(b)]);
+				Self::emit_list(f, &[I::End, I::LocalGet(a), I::LocalGet(b)]);
 				s.call(f, VALUES_EQUAL);
 			},
 		);

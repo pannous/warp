@@ -8,12 +8,15 @@
 //! - `f(**m)` spreads an object: into a `**kw` parameter it is the object, into fixed parameters the fields named like
 //!   the parameters the other arguments leave, `g(1, **m)` → `g(1, b=m.b)`.
 
-use super::nodes::{called_name, children_rewritten, key, parameter_name};
+use super::nodes::{call, called_name, children_rewritten, if_then_else, key, parameter_name};
 use crate::analyzer::call_name;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::words::STARRED;
+use crate::words::{COUNT_WORD, STARRED};
 use std::collections::{HashMap, HashSet};
+
+/// `f(*args)` of a closure: calls with up to this many spread items
+const MAX_RUN_TIME_SPREAD: usize = 4;
 
 /// A function's fixed parameters, whether a rest parameter follows them, and whether a keyword parameter `**kw` ends them
 #[derive(Clone)]
@@ -341,6 +344,27 @@ fn keyword_object(arguments: Vec<Node>, fixed: &[String]) -> (Vec<Node>, Option<
 		Separator::None
 	};
 	(others, Some(Node::List(entries, Bracket::Curly, separator)))
+}
+
+/// `f(*args)` of a function known only at run time: the call with as many items as args holds, chosen by its count
+/// (up to MAX_RUN_TIME_SPREAD); None without exactly one spread argument
+pub(crate) fn run_time_spread(arguments: &[Node], call_with: impl Fn(Vec<Node>) -> Node) -> Option<Node> {
+	let [spread] = &arguments.iter().filter_map(starred).collect::<Vec<_>>()[..] else {
+		return None;
+	};
+	let others = arguments.len() - 1;
+	let count = call(COUNT_WORD, vec![Node::Symbol(spread.clone())]);
+	let call_of = |items: usize| call_with(spread_items(arguments, Some(others + items)));
+	let calls = (0..MAX_RUN_TIME_SPREAD)
+		.rev()
+		.fold(call_of(MAX_RUN_TIME_SPREAD), |otherwise, items| {
+			if_then_else(
+				key(count.clone(), Op::Eq, crate::node::int(items as i64)),
+				call_of(items),
+				otherwise,
+			)
+		});
+	Some(calls)
 }
 
 /// The arguments with every spread list replaced by its items: a list literal's own items, else `xs#1, xs#2, …` as many

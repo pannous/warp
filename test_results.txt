@@ -11,7 +11,6 @@ PASSED:
   ✓ control::test_async_ports::await_within_a_deadline
   ✓ control::test_async_ports::gather_nested_and_wait_group_forms
   ✓ control::test_atomic_arrays::atomic_is_shared
-  ✓ control::test_await_any_unwarned::await_any_with_a_racer_that_never_blocks_does_not_warn
   ✓ control::test_await_any_values::await_any_of_computed_values_answers
   ✓ control::test_await_any_variables::await_any_of_task_variables_gives_the_first_to_finish
   ✓ control::test_await_go::await_of_a_start_is_the_result
@@ -665,7 +664,6 @@ PASSED:
   ✓ control::test_task_char::a_task_gives_back_its_character
   ✓ control::test_task_closures::a_capturing_text_lambda_runs_in_a_task
   ✓ control::test_task_closures::a_parameter_named_like_a_unit_is_the_parameter
-  ✓ control::test_task_dir::dir_of_a_task_lists_its_words
   ✓ control::test_task_dir::the_task_still_runs_after_its_dir
   ✓ control::test_task_error_positions::a_failing_task_names_its_statement
   ✓ control::test_task_exact::a_big_integer_crosses_to_a_task_and_back
@@ -841,13 +839,6 @@ PASSED:
   ✓ control::test_word_statements::a_word_statement_in_a_block_is_no_call_of_the_next_lines
   ✓ extensions::strings::tests::test_char_str_eq
   ✓ extensions::strings::tests::test_str_plus
-  ✓ ffi_parser::tests::test_parse_int32_return
-  ✓ ffi_parser::tests::test_parse_pointer_param
-  ✓ ffi_parser::tests::test_parse_simple_function
-  ✓ ffi_parser::tests::test_parse_system_headers
-  ✓ ffi_parser::tests::test_parse_two_params
-  ✓ ffi_parser::tests::test_parse_void_params
-  ✓ ffi_parser::tests::test_raylib_functions
   ✓ ffi::header::tests::test_extract_function_signature_multi_param
   ✓ ffi::header::tests::test_extract_function_signature_pointer
   ✓ ffi::header::tests::test_extract_function_signature_simple
@@ -1033,14 +1024,7 @@ PASSED:
   ✓ ffi::test_web_idl::the_global_object_is_typed
   ✓ ffi::test_web_idl::what_the_interface_declares_runs
   ✓ foreign::tests::json_conversion_keeps_nested_values_and_node_layout
-  ✓ function::tests::test_arg
-  ✓ function::tests::test_function_builder
-  ✓ function::tests::test_function_host
-  ✓ function::tests::test_function_locals
   ✓ function::tests::test_function_registry
-  ✓ function::tests::test_kind_to_valtype
-  ✓ function::tests::test_signature_builder
-  ✓ function::tests::test_signature_format
   ✓ functions::test_alias_definition::a_defined_name_of_a_function_calls_it
   ✓ functions::test_alias_definition::a_partial_definition_names_its_hole
   ✓ functions::test_alias_definition::an_alias_of_an_alias_calls_the_function
@@ -1287,7 +1271,6 @@ PASSED:
   ✓ functions::test_functions::test_fibonacci_typed2
   ✓ functions::test_functions::test_float_return_through_main
   ✓ functions::test_functions::test_function_declaration
-  ✓ functions::test_functions::test_function_declaration_parse
   ✓ functions::test_functions::test_function_definitions
   ✓ functions::test_functions::test_graph_params
   ✓ functions::test_functions::test_modifiers
@@ -1387,7 +1370,6 @@ PASSED:
   ✓ functions::test_multi_value::test_big_exact_division_results_unchanged
   ✓ functions::test_multi_value::test_divmod_returns_quotient_and_remainder
   ✓ functions::test_multi_value::test_int_divmod_returns_both_results
-  ✓ functions::test_multi_value::test_optimized_multi_value_division
   ✓ functions::test_named_arguments::a_bare_flag_name_in_a_call_sets_it
   ✓ functions::test_named_arguments::a_missing_or_unknown_argument_is_an_error
   ✓ functions::test_named_arguments::named_arguments_follow_the_parameter_order_of_a_python_colon_def
@@ -1402,7 +1384,6 @@ PASSED:
   ✓ functions::test_nested_it::test_named_lambda_parameter_leaves_the_outer_it
   ✓ functions::test_nested_it::test_trailing_block_of_a_lambda_body_method
   ✓ functions::test_nested_it::test_trailing_block_of_an_assigned_method_call
-  ✓ functions::test_nested_it::test_unbound_it_in_a_named_lambda
   ✓ functions::test_nested_prefix_calls::a_function_name_among_the_arguments_takes_the_ones_after_it
   ✓ functions::test_nested_prefix_calls::a_function_passed_as_a_value_stays_one
   ✓ functions::test_nested_two_deep::a_function_nested_two_deep_reads_the_outermost_variables
@@ -1427,7 +1408,6 @@ PASSED:
   ✓ functions::test_object_arguments::a_missing_field_of_a_map_argument_is_an_error
   ✓ functions::test_object_arguments::a_number_for_a_class_typed_parameter_is_a_type_error
   ✓ functions::test_object_arguments::a_parameter_reads_a_field_of_a_map_argument
-  ✓ functions::test_object_arguments::a_typed_library_word_names_its_parameter_for_a_number
   ✓ functions::test_object_arguments::an_instance_of_another_class_is_a_type_error
   ✓ functions::test_object_arguments::the_to_phrase_types_its_parameter_by_the_class
   ✓ functions::test_operator_arguments::a_word_operator_alone_stays_a_name
@@ -2669,7 +2649,6 @@ PASSED:
   ✓ numbers::test_time_of_day::time_is_the_time_of_day
   ✓ numbers::test_trailing_symbol::a_known_word_after_an_assignment_is_an_error
   ✓ numbers::test_trailing_symbol::a_spaced_sigma_makes_a_gaussian
-  ✓ numbers::test_trailing_symbol::a_walk_after_an_assigned_list_walks_the_list
   ✓ numbers::test_trailing_symbol::an_unknown_word_after_an_assignment_is_an_error
   ✓ numbers::test_unbounded_int::test_big_division_and_remainder
   ✓ numbers::test_unbounded_int::test_big_int_to_float
@@ -2711,7 +2690,6 @@ PASSED:
   ✓ numbers::test_unit_named_function::a_function_named_like_a_unit_keeps_the_other_units
   ✓ numbers::test_unit_named_function::a_parameter_named_like_a_unit_keeps_the_other_units
   ✓ numbers::test_unit_named_function::a_variable_named_like_a_unit_keeps_the_other_units
-  ✓ numbers::test_unit_named_parameter::a_parameter_named_like_a_unit_written_as_that_unit_is_a_name_clash
   ✓ numbers::test_unit_named_parameter::a_parameter_named_like_another_unit_or_used_only_inside_is_no_clash
   ✓ numbers::test_unit_named_variable::a_loop_variable_named_like_a_unit
   ✓ numbers::test_unit_named_variable::a_printed_loop_variable_named_like_a_unit
@@ -4425,8 +4403,6 @@ PASSED:
   ✓ wasm::test_emitter::test_compact_empty
   ✓ wasm::test_emitter::test_compact_float
   ✓ wasm::test_emitter::test_compact_int
-  ✓ wasm::test_emitter::test_optimizer_graph_generation
-  ✓ wasm::test_emitter::test_tools_available
   ✓ wasm::test_executable_foreign::a_missing_interpreter_is_named
   ✓ wasm::test_executable_foreign::an_executable_calls_python_and_node
   ✓ wasm::test_executable_foreign::the_runtime_reads_and_builds_nodes_with_warps_codes
@@ -4449,8 +4425,6 @@ PASSED:
   ✓ wasm::test_name_subsection_order::name_subsections_ascend_in_raw_struct_modules
   ✓ wasm::test_no_cwd_debris::eval_leaves_no_module_in_the_current_directory
   ✓ wasm::test_no_cwd_debris::the_last_module_is_kept_at_its_fixed_path
-  ✓ wasm::test_optimizer_exceptions::optimized_try_still_catches
-  ✓ wasm::test_optimizer_extended_const::optimizer_keeps_extended_constant_expressions
   ✓ wasm::test_own_runtime_stub::test_runtime_stub_is_this_checkouts
   ✓ wasm::test_parameter_names::a_page_leaves_parameter_names_out
   ✓ wasm::test_parameter_names::parameters_are_named_in_the_name_section
@@ -4564,10 +4538,6 @@ PASSED:
   ✓ wasm::test_wit_types::wit_type_arguments_close_at_the_first_angle_bracket
   ✓ wasm::test_wit::test_timeout_protection
   ✓ wasm::test_wit::test_wit_parse
-  ✓ wasm::wasm_optimizer_test::test_executable_tree_shaking
-  ✓ wasm::wasm_optimizer_test::test_library_optimization
-  ✓ wasm::wasm_optimizer_test::test_no_optimization
-  ✓ wasm::wasm_optimizer_test::test_tools_availability
   ✓ web::test_accessibility::accessible_markup_draws_no_warning
   ✓ web::test_accessibility::fetched_content_is_announced
   ✓ web::test_accessibility::head_attributes_count
@@ -5200,10 +5170,8 @@ PASSED:
   ✓ welcoming::test_plain_hint_got_it::an_acknowledged_kind_of_hint_stays_away
   ✓ welcoming::test_quiet_hints::legitimate_forms_get_no_hint
   ✓ welcoming::test_slash_comment_after_value::a_comment_after_a_text_gets_no_division_note
-  ✓ welcoming::test_slash_comment_after_value::a_prose_comment_after_a_value_gets_no_division_note
   ✓ welcoming::test_slash_comment_needs_space::slash_slash_with_space_is_a_comment
   ✓ welcoming::test_slash_comment_needs_space::slash_slash_without_space_divides
-  ✓ welcoming::test_slash_comment_prose_operators::an_expression_after_slashes_still_gets_the_note
   ✓ welcoming::test_slash_comment_prose_operators::prose_with_operator_characters_gets_no_division_note
   ✓ welcoming::test_sleep_unit_shadow::a_unit_named_variable_keeps_other_durations
   ✓ welcoming::test_sleep_unit_warning::a_statement_after_sleep_is_no_duration
@@ -5346,6 +5314,7 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
+  ✗ control::test_await_any_unwarned::await_any_with_a_racer_that_never_blocks_does_not_warn
 
 SUMMARY:
-13 ignored, 5343 passed, 0 failed, 5343 total tested
+13 ignored, 5311 passed, 1 failed, 5312 total tested

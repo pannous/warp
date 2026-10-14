@@ -612,22 +612,20 @@ impl WasmGcEmitter {
 					I::LocalSet(slash),
 					I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-				],
-			);
-			Self::emit_list(f, &[I::LocalGet(slash), I::LocalGet(end), I::I32GeU, I::BrIf(1)]);
-			Self::emit_list(
-				f,
-				&[
+					I::LocalGet(slash),
+					I::LocalGet(end),
+					I::I32GeU,
+					I::BrIf(1),
 					I::LocalGet(slash),
 					I::I32Load8U(BYTE),
 					I::I32Const(RATIO_SLASH),
 					I::I32Eq,
 					I::If(BlockType::Empty),
+					I::LocalGet(start),
+					I::LocalGet(slash),
+					I::LocalGet(start),
+					I::I32Sub,
 				],
-			);
-			Self::emit_list(
-				f,
-				&[I::LocalGet(start), I::LocalGet(slash), I::LocalGet(start), I::I32Sub],
 			);
 			s.call(f, "new_text");
 			s.call(f, list_ops::TEXT_AS_INT);
@@ -648,10 +646,11 @@ impl WasmGcEmitter {
 			s.call(f, list_ops::TEXT_AS_INT);
 			s.call(f, "exact_div");
 			s.call(f, "new_int");
-			Self::emit_list(f, &[I::Return, I::End]);
 			Self::emit_list(
 				f,
 				&[
+					I::Return,
+					I::End,
 					I::LocalGet(slash),
 					I::I32Const(1),
 					I::I32Add,

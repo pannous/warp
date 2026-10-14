@@ -375,10 +375,10 @@ impl WasmGcEmitter {
 		self.call(f, DAYS_FROM_CIVIL);
 		Self::emit_list(f, &[I::LocalGet(DAYS), I::I64Add, I::LocalSet(EPOCH_DAY)]);
 		// a date's position is its day, a local time's the nanoseconds since 1970 as if UTC
-		Self::emit_list(f, &[I::LocalGet(EPOCH_DAY)]);
 		Self::emit_list(
 			f,
 			&[
+				I::LocalGet(EPOCH_DAY),
 				I::LocalGet(EPOCH_DAY),
 				I::I64Const(DAY_NANOS),
 				I::I64Mul,
@@ -443,12 +443,9 @@ impl WasmGcEmitter {
 					I::I64ShrS,
 					I::I64Const(MINUTE * SECOND as i64),
 					I::I64Mul,
-				],
-			);
-			Self::emit_list(f, &[I::LocalGet(POSITION_A), I::I64Add, I::LocalSet(POSITION_A)]);
-			Self::emit_list(
-				f,
-				&[
+					I::LocalGet(POSITION_A),
+					I::I64Add,
+					I::LocalSet(POSITION_A),
 					I::I64Const(TimeForm::Local as i64),
 					I::LocalSet(FORM),
 					I::LocalGet(NANOS),

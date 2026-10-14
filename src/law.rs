@@ -11,7 +11,7 @@
 pub mod lean;
 pub mod type_model;
 
-use crate::analyzer::{collect_functions, extract_user_functions};
+use crate::analyzer::extract_user_functions;
 use crate::context::Context;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
@@ -209,31 +209,17 @@ pub fn extract_laws(parsed: &Node) -> Vec<Law> {
 pub(crate) fn function_definition(item: &Node) -> Option<FunctionDefinition> {
 	let mut context = Context::new();
 	extract_user_functions(&mut context, item);
-	if let Some(def) = context.user_functions.into_values().next() {
-		let kinds = declared_parameter_kinds(item);
-		let parameters = def
-			.params
-			.iter()
-			.map(|param| (param.name.clone(), kinds.get(&param.name).copied().unwrap_or(Kind::Int)))
-			.collect();
-		return Some(FunctionDefinition {
-			name: def.name,
-			parameters,
-			body: *def.body,
-			source: item.clone(),
-		});
-	}
-	let registry = collect_functions(item);
-	let function = registry.all().first()?;
+	let def = context.user_functions.into_values().next()?;
+	let kinds = declared_parameter_kinds(item);
+	let parameters = def
+		.params
+		.iter()
+		.map(|param| (param.name.clone(), kinds.get(&param.name).copied().unwrap_or(Kind::Int)))
+		.collect();
 	Some(FunctionDefinition {
-		name: function.name.clone(),
-		parameters: function
-			.signature
-			.parameters
-			.iter()
-			.map(|arg| (arg.name.clone(), arg.kind))
-			.collect(),
-		body: function.body.as_deref().cloned().unwrap_or(Node::Empty),
+		name: def.name,
+		parameters,
+		body: *def.body,
 		source: item.clone(),
 	})
 }

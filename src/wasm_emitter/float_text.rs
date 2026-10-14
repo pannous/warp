@@ -57,11 +57,15 @@ impl WasmGcEmitter {
 			let put = |f: &mut Function, byte: u8| {
 				Self::emit_list(
 					f,
-					&[I::LocalGet(position), I::I32Const(byte as i32), I::I32Store8(BYTE)],
-				);
-				Self::emit_list(
-					f,
-					&[I::LocalGet(position), I::I32Const(1), I::I32Add, I::LocalSet(position)],
+					&[
+						I::LocalGet(position),
+						I::I32Const(byte as i32),
+						I::I32Store8(BYTE),
+						I::LocalGet(position),
+						I::I32Const(1),
+						I::I32Add,
+						I::LocalSet(position),
+					],
 				);
 			};
 			// the digits are written to the scratch bytes behind the text, then copied into place
@@ -86,9 +90,12 @@ impl WasmGcEmitter {
 						I::LocalSet(count),
 						I::Block(BlockType::Empty),
 						I::Loop(BlockType::Empty),
+						I::LocalGet(count),
+						I::I32Const(0),
+						I::I32LeS,
+						I::BrIf(1),
 					],
 				);
-				Self::emit_list(f, &[I::LocalGet(count), I::I32Const(0), I::I32LeS, I::BrIf(1)]);
 				put(f, b'0');
 				Self::emit_list(
 					f,
@@ -143,10 +150,11 @@ impl WasmGcEmitter {
 
 			Self::emit_list(f, &[I::I32Const(TEXT_BYTES + SCRATCH_BYTES), I::LocalSet(count)]);
 			s.emit_text_allocation(f, count, address);
-			Self::emit_list(f, &[I::LocalGet(address), I::LocalSet(position)]);
 			Self::emit_list(
 				f,
 				&[
+					I::LocalGet(address),
+					I::LocalSet(position),
 					I::LocalGet(x),
 					I::F64Const(0.0.into()),
 					I::F64Lt,
@@ -186,9 +194,9 @@ impl WasmGcEmitter {
 					I::I32Const(LARGEST_POSITIONAL),
 					I::I32LtS,
 					I::I32And,
+					I::If(BlockType::Empty),
 				],
 			);
-			f.instruction(&I::If(BlockType::Empty));
 			{
 				// 1500: the digits, then zeros
 				Self::emit_list(
@@ -391,11 +399,6 @@ impl WasmGcEmitter {
 					I::I64TruncF64S,
 					I::I64Add,
 					I::LocalSet(whole),
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::LocalGet(lo),
 					I::LocalGet(lo),
 					I::F64Floor,
@@ -500,11 +503,6 @@ impl WasmGcEmitter {
 					I::I64RemS,
 					I::I64Sub,
 					I::LocalSet(multiple),
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::LocalGet(whole),
 					I::LocalGet(multiple),
 					I::I64Sub,
@@ -513,11 +511,6 @@ impl WasmGcEmitter {
 					I::LocalGet(power),
 					I::I64Sub,
 					I::F64ConvertI64S,
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::LocalGet(fraction),
 					I::F64Const(2.0.into()),
 					I::F64Mul,
@@ -525,11 +518,6 @@ impl WasmGcEmitter {
 					I::LocalTee(fraction),
 					I::F64Const(0.0.into()),
 					I::F64Gt,
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::LocalGet(fraction),
 					I::F64Const(0.0.into()),
 					I::F64Eq,
@@ -541,11 +529,6 @@ impl WasmGcEmitter {
 					I::I32And,
 					I::I32And,
 					I::I32Or,
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::I64ExtendI32U,
 					I::LocalGet(power),
 					I::I64Mul,
@@ -660,9 +643,12 @@ impl WasmGcEmitter {
 							I::F64Sub,
 							I::F64Sub,
 							I::LocalSet(high),
+							I::LocalGet(value),
+							I::LocalGet(high),
+							I::F64Sub,
+							I::LocalSet(low),
 						],
 					);
-					Self::emit_list(f, &[I::LocalGet(value), I::LocalGet(high), I::F64Sub, I::LocalSet(low)]);
 				};
 				// product = a · b rounded, its error left on the stack
 				let exact_product = |f: &mut Function, a: u32, b: u32| {
@@ -681,11 +667,6 @@ impl WasmGcEmitter {
 							I::LocalGet(b_lo),
 							I::F64Mul,
 							I::F64Add,
-						],
-					);
-					Self::emit_list(
-						f,
-						&[
 							I::LocalGet(a_lo),
 							I::LocalGet(b_hi),
 							I::F64Mul,
@@ -718,9 +699,10 @@ impl WasmGcEmitter {
 						I::LocalGet(shift),
 						I::I32Eqz,
 						I::BrIf(1),
+						I::LocalGet(shift),
+						I::LocalSet(step),
 					],
 				);
-				Self::emit_list(f, &[I::LocalGet(shift), I::LocalSet(step)]);
 				Self::emit_list(f, &clamp(EXACT_POWER, I::I32LtS));
 				Self::emit_list(f, &clamp(-EXACT_POWER, I::I32GtS));
 				Self::emit_list(
@@ -735,11 +717,6 @@ impl WasmGcEmitter {
 						I::I32LtS,
 						I::Select,
 						I::LocalSet(count),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::F64Const(1.0.into()),
 						I::LocalSet(power),
 						I::LocalGet(lo),
@@ -776,11 +753,11 @@ impl WasmGcEmitter {
 						I::LocalGet(product),
 						I::LocalSet(hi),
 						I::Else,
+						I::LocalGet(hi),
+						I::LocalGet(power),
+						I::F64Div,
+						I::LocalSet(quotient),
 					],
-				);
-				Self::emit_list(
-					f,
-					&[I::LocalGet(hi), I::LocalGet(power), I::F64Div, I::LocalSet(quotient)],
 				);
 				exact_product(f, quotient, power);
 				Self::emit_list(
@@ -794,11 +771,6 @@ impl WasmGcEmitter {
 						I::F64Sub,
 						I::LocalGet(carried),
 						I::F64Add,
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(power),
 						I::F64Div,
 						I::LocalSet(lo),
@@ -821,11 +793,6 @@ impl WasmGcEmitter {
 						I::F64Sub,
 						I::F64Sub,
 						I::LocalSet(lo),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(product),
 						I::LocalSet(hi),
 						I::LocalGet(shift),
@@ -835,11 +802,6 @@ impl WasmGcEmitter {
 						I::Br(0),
 						I::End,
 						I::End,
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(hi),
 						I::LocalGet(scale),
 						I::F64Mul,

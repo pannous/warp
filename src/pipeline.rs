@@ -463,7 +463,7 @@ const FUNCTION_PASSES: &[Pass] = &[
 	crate::lowering::declarations::lower_spaced_definitions,
 	crate::lowering::number_words::lower,
 	crate::lowering::parameter_shapes::lower,
-	crate::lowering::ruby_blocks::lower,
+	crate::lowering::blocks::lower_trailing_blocks,
 	crate::lowering::declarations::lower_sized_arrays,
 	crate::lowering::result_word::lower,
 	crate::lowering::picked_calls::lower,
@@ -575,9 +575,6 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	let node = crate::lowering::blocks::seal_quoted(node);
 
 	if let Some(clash) = crate::analyzer::check_operator_word_functions(&node) {
-		return Err(clash.into_error());
-	}
-	if let Some(clash) = crate::units::check_unit_parameter_clashes(&node) {
 		return Err(clash.into_error());
 	}
 	if let Some(misread) = crate::analyzer::check_upcast_fields(&node) {

@@ -178,9 +178,9 @@ impl WasmGcEmitter {
 				I::I64Const(0),
 				I::I64LtS,
 				I::If(BlockType::Empty),
+				I::LocalGet(local),
 			],
 		);
-		func.instruction(&I::LocalGet(local));
 		self.call(func, "is_ratio");
 		self.emit_fail_if(func, error);
 		func.instruction(&I::End);
@@ -245,8 +245,7 @@ impl WasmGcEmitter {
 				let (count, current) = (2, 3);
 				s.emit_field(f, 0, 0);
 				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Ne);
-				Self::emit_list(f, &[I::If(BlockType::Empty)]);
-				Self::emit_list(f, &[I::LocalGet(0), I::LocalSet(current)]);
+				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(0), I::LocalSet(current)]);
 				s.emit_cell_walk(f, current, |f| {
 					Self::emit_list(f, &[I::LocalGet(count), I::I64Const(1), I::I64Add, I::LocalSet(count)])
 				});
