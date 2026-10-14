@@ -213,85 +213,101 @@ impl Translation {
 		match body.drop_meta() {
 			Node::Symbol(name) if self.locals.contains(name) => Some(format!("{VARIABLE_PREFIX}{name}")),
 			Node::Symbol(name) if *name == self.parameter => Some(KERNEL_ITEM.to_string()),
-			Node::Symbol(name) => {
-				let index = self.outer.iter().position(|known| known == name).unwrap_or_else(|| {
-					self.outer.push(name.clone());
-					self.outer.len() - 1
-				});
-				Some(match self.uniforms {
-					true => format!("{SHADER_VALUES}.{name}"),
-					false => format!("data[{KERNEL_COUNT} + {index}u]"),
-				})
-			}
+			Node::Symbol(name) => Some(self.program_number(name)),
 			// every number is an f32 on the GPU (user 2026-10-13: precision does not matter there)
 			Node::Key(value, Op::As, _) => self.expression(value),
 			Node::Number(number) if !matches!(number, crate::extensions::numbers::Number::Complex(..)) => {
 				Some(float_literal(f64::from(*number)))
 			}
-			Node::Key(empty, op, operand) if empty.is_empty_node() => match op {
-				Op::Neg => Some(format!("(-{})", self.expression(operand)?)),
-				Op::Sqrt => Some(format!("sqrt({})", self.expression(operand)?)),
-				Op::Abs => Some(format!("abs({})", self.expression(operand)?)),
-				Op::Not => Some(format!("select(0.0, 1.0, !{})", self.condition(operand)?)),
-				_ => None,
-			},
-			Node::Key(base, Op::Pow, exponent) => match exponent.drop_meta() {
-				Node::Number(crate::extensions::numbers::Number::Int(power))
-					if (1..=LARGEST_MULTIPLIED_POWER).contains(power) =>
-				{
-					let base = self.expression(base)?;
-					Some(format!("({})", vec![base; *power as usize].join(" * ")))
-				}
-				_ => {
-					self.heavy = true;
-					Some(format!(
-						"pow({}, {})",
-						self.expression(base)?,
-						self.expression(exponent)?
-					))
-				}
-			},
+			Node::Key(empty, op, operand) if empty.is_empty_node() => self.prefixed(op, operand),
+			Node::Key(base, Op::Pow, exponent) => self.power(base, exponent),
 			Node::Key(_, op, _) if comparison(*op).is_some() || matches!(op, Op::And | Op::Or) => {
 				Some(format!("select(0.0, 1.0, {})", self.condition(body)?))
 			}
-			Node::Key(left, op, right) => {
-				let symbol = match op {
-					Op::Add => "+",
-					Op::Sub => "-",
-					Op::Mul => "*",
-					Op::Div => "/",
-					Op::Mod => "%",
-					_ => return None,
-				};
-				Some(format!(
-					"({} {symbol} {})",
-					self.expression(left)?,
-					self.expression(right)?
-				))
-			}
+			Node::Key(left, op, right) => self.arithmetic(left, op, right),
 			Node::List(items, _, _) => match items.as_slice() {
 				[single] => self.expression(single),
-				[function, arguments @ ..] => {
-					let name = function.name();
-					if let Some(called) = program_function(&name) {
-						return self.call(&name, &called, arguments, false);
-					}
-					let arity = if KERNEL_FUNCTIONS.contains(&name.as_str()) {
-						1
-					} else if KERNEL_FUNCTIONS_OF_TWO.contains(&name.as_str()) {
-						2
-					} else {
-						return None;
-					};
-					let arguments = spread_arguments(arguments, arity)?;
-					self.heavy |= HEAVY_FUNCTIONS.contains(&name.as_str());
-					let arguments = self.expressions(arguments)?;
-					Some(format!("{name}({})", arguments.join(", ")))
-				}
+				[function, arguments @ ..] => self.function_call(&function.name(), arguments),
 				_ => None,
 			},
 			_ => None,
 		}
+	}
+
+	/// A number of the program: a cell of the kernel's `data` after its items, or a fragment shader's value
+	fn program_number(&mut self, name: &str) -> String {
+		let index = self.outer.iter().position(|known| known == name).unwrap_or_else(|| {
+			self.outer.push(name.to_string());
+			self.outer.len() - 1
+		});
+		match self.uniforms {
+			true => format!("{SHADER_VALUES}.{name}"),
+			false => format!("data[{KERNEL_COUNT} + {index}u]"),
+		}
+	}
+
+	fn prefixed(&mut self, op: &Op, operand: &Node) -> Option<String> {
+		match op {
+			Op::Neg => Some(format!("(-{})", self.expression(operand)?)),
+			Op::Sqrt => Some(format!("sqrt({})", self.expression(operand)?)),
+			Op::Abs => Some(format!("abs({})", self.expression(operand)?)),
+			Op::Not => Some(format!("select(0.0, 1.0, !{})", self.condition(operand)?)),
+			_ => None,
+		}
+	}
+
+	/// A small whole power multiplied out, any other the heavy `pow`
+	fn power(&mut self, base: &Node, exponent: &Node) -> Option<String> {
+		match exponent.drop_meta() {
+			Node::Number(crate::extensions::numbers::Number::Int(power))
+				if (1..=LARGEST_MULTIPLIED_POWER).contains(power) =>
+			{
+				let base = self.expression(base)?;
+				Some(format!("({})", vec![base; *power as usize].join(" * ")))
+			}
+			_ => {
+				self.heavy = true;
+				Some(format!(
+					"pow({}, {})",
+					self.expression(base)?,
+					self.expression(exponent)?
+				))
+			}
+		}
+	}
+
+	fn arithmetic(&mut self, left: &Node, op: &Op, right: &Node) -> Option<String> {
+		let symbol = match op {
+			Op::Add => "+",
+			Op::Sub => "-",
+			Op::Mul => "*",
+			Op::Div => "/",
+			Op::Mod => "%",
+			_ => return None,
+		};
+		Some(format!(
+			"({} {symbol} {})",
+			self.expression(left)?,
+			self.expression(right)?
+		))
+	}
+
+	/// A call of a program function, or of a WGSL function of one or two arguments
+	fn function_call(&mut self, name: &str, arguments: &[Node]) -> Option<String> {
+		if let Some(called) = program_function(name) {
+			return self.call(name, &called, arguments, false);
+		}
+		let arity = if KERNEL_FUNCTIONS.contains(&name) {
+			1
+		} else if KERNEL_FUNCTIONS_OF_TWO.contains(&name) {
+			2
+		} else {
+			return None;
+		};
+		let arguments = spread_arguments(arguments, arity)?;
+		self.heavy |= HEAVY_FUNCTIONS.contains(&name);
+		let arguments = self.expressions(arguments)?;
+		Some(format!("{name}({})", arguments.join(", ")))
 	}
 
 	fn expressions(&mut self, nodes: &[Node]) -> Option<Vec<String>> {

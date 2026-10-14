@@ -111,90 +111,123 @@ pub(super) fn instances_of(list: Node, class: &str, fields: &ClassFields) -> Nod
 /// The variables known to hold an instance of one of `classes`, with its class: assigned a construction or a call of a
 /// function returning one, annotated `p:Point`, or iterating a list of constructions `for p in ps`
 pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collections::HashMap<String, String> {
-	let returned = returned_classes(node, classes);
-	let constructed_class = |value: &Node| instance_class(value, &returned);
-	// `[Point(1, 2), …]`: a list of constructions of one class
-	let list_class = |list: &Node| match list.drop_meta() {
-		Node::List(items, Bracket::Square, _) if !items.is_empty() => {
-			let first = constructed_class(&items[0])?;
-			items
-				.iter()
-				.all(|item| constructed_class(item).as_ref() == Some(&first))
-				.then_some(first)
-		}
-		_ => None,
+	let finder = InstanceFinder {
+		classes,
+		returned: returned_classes(node, classes),
 	};
 	let mut instances: std::collections::HashMap<String, String> = std::collections::HashMap::new();
 	node.visit(&mut |part| {
-		if let Node::Key(target, op, value) = part {
-			// `p:Point = …`: the annotation says it
-			if let (Node::Key(variable, Op::Colon, class), Op::Assign) = (target.drop_meta(), op) {
-				// `p:Point`, not a list of them `ps:[Point]`
-				let is_class = matches!(class.drop_meta(), Node::Symbol(_) | Node::Type { .. });
-				if is_class && classes.contains(&class.drop_meta().name()) {
-					instances.insert(variable.drop_meta().name(), class.drop_meta().name());
-				}
-			}
-			let Node::Symbol(variable) = target.drop_meta() else {
-				return;
-			};
-			let class_of = |operand: &Node| match operand.drop_meta() {
-				Node::Symbol(operand) => instances.get(operand).cloned(),
-				other => constructed_class(other),
-			};
-			let class = match (op, value.drop_meta()) {
-				// `c = a + b` of an instance a: the operation gives one of a's class, as with_operator_calls reads it
-				(Op::Assign | Op::Define, Node::Key(left, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod, _)) => {
-					class_of(left)
-				}
-				// `w = q as m`, `w = q.to("m")` of a run-time quantity q: another one
-				(Op::Assign | Op::Define, conversion) if crate::numbers::units::conversion(conversion).is_some() => {
-					crate::numbers::units::conversion(conversion).and_then(|(quantity, _)| class_of(quantity))
-				}
-				(Op::Assign | Op::Define, Node::Key(quantity, Op::Dot, call)) if call.is_call_of(CONVERSION_METHOD) => {
-					class_of(quantity)
-				}
-				// `s = sum([quantity("5 m"), …])`: the sum of instances is one (card quantity-sum)
-				(Op::Assign | Op::Define, summed) if summed_list(summed).is_some() => {
-					summed_list(summed).and_then(list_class)
-				}
-				(Op::Assign | Op::Define, _) => constructed_class(value),
-				// `p:Point`, the annotation a symbol or a type
-				(Op::Colon, Node::Symbol(_) | Node::Type { .. }) => Some(value.drop_meta().name()),
-				_ => None,
-			};
-			if let Some(class) = class.filter(|class| classes.contains(class)) {
-				instances.insert(variable.clone(), class);
+		let Node::Key(target, op, value) = part else { return };
+		// `p:Point = …`: the annotation says it
+		if let (Node::Key(variable, Op::Colon, class), Op::Assign) = (target.drop_meta(), op) {
+			// `p:Point`, not a list of them `ps:[Point]`
+			let is_class = matches!(class.drop_meta(), Node::Symbol(_) | Node::Type { .. });
+			if is_class && classes.contains(&class.drop_meta().name()) {
+				instances.insert(variable.drop_meta().name(), class.drop_meta().name());
 			}
 		}
-	});
-	// `for p in ps {…}` over a list of constructions `ps = [Point(1, 2), …]`: p holds instances
-	let mut instance_lists = std::collections::HashMap::new();
-	node.visit(&mut |part| {
-		if let Node::Key(target, Op::Assign | Op::Define, value) = part {
-			if let Some(class) = list_class(value).filter(|class| classes.contains(class)) {
-				instance_lists.insert(target.drop_meta().name(), class);
-			}
+		let Node::Symbol(variable) = target.drop_meta() else {
+			return;
+		};
+		if let Some(class) = finder
+			.assigned_class(op, value, &instances)
+			.filter(|class| classes.contains(class))
+		{
+			instances.insert(variable.clone(), class);
 		}
 	});
-	node.visit(&mut |part| {
-		if let Node::List(words, _, _) = part {
-			if let [for_word, item, in_word, list, ..] = words.as_slice() {
-				let class = instance_lists
-					.get(&list.drop_meta().name())
-					.cloned()
-					.or_else(|| list_class(list))
-					.filter(|class| classes.contains(class));
-				if let (true, Some(class)) = (
-					for_word.drop_meta().name() == "for" && in_word.drop_meta().name() == "in",
-					class,
-				) {
-					instances.insert(item.drop_meta().name(), class);
-				}
-			}
-		}
-	});
+	finder.iterated(node, &mut instances);
 	instances
+}
+
+struct InstanceFinder<'a> {
+	classes: &'a [String],
+	/// returned_classes
+	returned: std::collections::HashMap<String, String>,
+}
+
+impl InstanceFinder<'_> {
+	fn constructed_class(&self, value: &Node) -> Option<String> {
+		instance_class(value, &self.returned)
+	}
+
+	/// `[Point(1, 2), …]`: a list of constructions of one class
+	fn list_class(&self, list: &Node) -> Option<String> {
+		match list.drop_meta() {
+			Node::List(items, Bracket::Square, _) if !items.is_empty() => {
+				let first = self.constructed_class(&items[0])?;
+				items
+					.iter()
+					.all(|item| self.constructed_class(item).as_ref() == Some(&first))
+					.then_some(first)
+			}
+			_ => None,
+		}
+	}
+
+	/// The class of the instance `op value` gives a variable: `=` a construction, an operation or conversion of an
+	/// instance, a sum of instances; `:` an annotation
+	fn assigned_class(
+		&self,
+		op: &Op,
+		value: &Node,
+		instances: &std::collections::HashMap<String, String>,
+	) -> Option<String> {
+		let class_of = |operand: &Node| match operand.drop_meta() {
+			Node::Symbol(operand) => instances.get(operand).cloned(),
+			other => self.constructed_class(other),
+		};
+		match (op, value.drop_meta()) {
+			// `c = a + b` of an instance a: the operation gives one of a's class, as with_operator_calls reads it
+			(Op::Assign | Op::Define, Node::Key(left, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod, _)) => {
+				class_of(left)
+			}
+			// `w = q as m`, `w = q.to("m")` of a run-time quantity q: another one
+			(Op::Assign | Op::Define, conversion) if crate::numbers::units::conversion(conversion).is_some() => {
+				crate::numbers::units::conversion(conversion).and_then(|(quantity, _)| class_of(quantity))
+			}
+			(Op::Assign | Op::Define, Node::Key(quantity, Op::Dot, call)) if call.is_call_of(CONVERSION_METHOD) => {
+				class_of(quantity)
+			}
+			// `s = sum([quantity("5 m"), …])`: the sum of instances is one (card quantity-sum)
+			(Op::Assign | Op::Define, summed) if summed_list(summed).is_some() => {
+				summed_list(summed).and_then(|list| self.list_class(list))
+			}
+			(Op::Assign | Op::Define, _) => self.constructed_class(value),
+			// `p:Point`, the annotation a symbol or a type
+			(Op::Colon, Node::Symbol(_) | Node::Type { .. }) => Some(value.drop_meta().name()),
+			_ => None,
+		}
+	}
+
+	/// `for p in ps {…}` over a list of constructions `ps = [Point(1, 2), …]`: p holds instances
+	fn iterated(&self, node: &Node, instances: &mut std::collections::HashMap<String, String>) {
+		let mut instance_lists = std::collections::HashMap::new();
+		node.visit(&mut |part| {
+			if let Node::Key(target, Op::Assign | Op::Define, value) = part {
+				if let Some(class) = self.list_class(value).filter(|class| self.classes.contains(class)) {
+					instance_lists.insert(target.drop_meta().name(), class);
+				}
+			}
+		});
+		node.visit(&mut |part| {
+			if let Node::List(words, _, _) = part {
+				if let [for_word, item, in_word, list, ..] = words.as_slice() {
+					let class = instance_lists
+						.get(&list.drop_meta().name())
+						.cloned()
+						.or_else(|| self.list_class(list))
+						.filter(|class| self.classes.contains(class));
+					if let (true, Some(class)) = (
+						for_word.drop_meta().name() == "for" && in_word.drop_meta().name() == "in",
+						class,
+					) {
+						instances.insert(item.drop_meta().name(), class);
+					}
+				}
+			}
+		});
+	}
 }
 
 /// The functions whose value is an instance of one of `classes`, with its class: `make(n) := V(n)`, a body ending in
