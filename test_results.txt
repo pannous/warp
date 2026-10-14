@@ -4768,6 +4768,8 @@ PASSED:
   ✓ web::test_markup_lines::a_line_of_attributes_renders_as_attributes
   ✓ web::test_markup_lines::an_aria_attribute_renders
   ✓ web::test_markup_mistakes::a_class_literal_field_named_like_an_element_is_no_markup
+  ✓ web::test_markup_mistakes::a_data_map_key_named_like_an_element_is_no_markup
+  ✓ web::test_markup_mistakes::a_nested_data_map_is_no_markup
   ✓ web::test_markup_mistakes::an_unknown_attribute_warns
   ✓ web::test_markup_mistakes::an_unknown_event_warns
   ✓ web::test_markup_mistakes::an_unknown_input_type_warns
@@ -5390,4 +5392,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5385 passed, 0 failed, 5385 total tested
+13 ignored, 5387 passed, 0 failed, 5387 total tested
