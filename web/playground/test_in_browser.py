@@ -92,6 +92,7 @@ MEMBER_COMPLETION = "(members listed after a dot)"  # card member-completion: co
 MEMBER_CODE = "xs = [1 2]; xs"
 MEMBERS_LISTED = ["count", "sum", "map", "unique"]
 MEMBERS_WAIT_MS = 10000
+ASSISTANT_PAUSE_MS = 1500  # assistant.js PAUSE_BEFORE_COMPLETION_MS and a margin
 CLIPBOARD_READ = "(a program reads the clipboard)"  # card web-apis-rest: host.js clipboard_text asks the page
 CLIPBOARD_TEXT = "copied by the page"
 # card web-apis-rest: gpu_compute over named arrays, and paint of a shader drawn straight into the page's canvas
@@ -504,6 +505,7 @@ def member_completion_wrong():
 		// unfocused: the assistant's pause timer, left by the Enter of the checks before, continues only a focused editor
 		// (assistant.js completeAfterPause), which would load Cloudflare's bot check into the checks after this one
 		editor.getInputField().blur();
+		await new Promise(done => setTimeout(done, {ASSISTANT_PAUSE_MS})); // that timer passes while unfocused
 		editor.setValue({json.dumps(MEMBER_CODE + ".")}); // not typed (replaceSelection is "+input"): no assistant call
 		editor.setCursor(0, {len(MEMBER_CODE) + 1});
 		editor.triggerOnKeyDown({{ type: "keydown", keyCode: {KEY_CODES["Tab"]}, preventDefault() {{}}, stopPropagation() {{}} }});
