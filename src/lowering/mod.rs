@@ -27,7 +27,6 @@ pub mod lazy_ranges;
 pub mod library_words;
 pub mod list_element_checks;
 pub mod list_phrases;
-pub(crate) mod listeners;
 pub mod match_exhaustive;
 pub mod memoization;
 pub mod min_max;
