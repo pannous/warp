@@ -747,7 +747,7 @@ pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &Hash
 }
 
 /// The user functions a list calls and their arguments: `f(a, b)`, and a task start that runs f in another instance with
-/// them: `task·go(f, a, b)` (lower_tasks), `task_spawn("f", a, b)`, and `task_spawn_values("f·node", [a, b])`, which
+/// them: `task·go(f, a, b)` (lower_tasks) and `task_spawn_values("f·node", [a, b])`, which
 /// calls the wrapper f·node with the list and through it f with the items (resolve_tasks)
 pub(crate) fn called_functions(items: &[Node]) -> Vec<(String, Vec<&Node>)> {
 	let Some(Node::Symbol(head)) = items.first().map(Node::drop_meta) else {
@@ -758,7 +758,7 @@ pub(crate) fn called_functions(items: &[Node]) -> Vec<(String, Vec<&Node>)> {
 		_ => None,
 	};
 	match head.as_str() {
-		crate::declarations::TASK_GO | crate::host::TASK_SPAWN => started
+		crate::declarations::TASK_GO => started
 			.map(|name| (name, items[2..].iter().collect()))
 			.into_iter()
 			.collect(),
