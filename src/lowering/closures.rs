@@ -1138,7 +1138,7 @@ pub fn type_closure_calls(context: &mut Context) {
 				let captured = function.params.len() - arity;
 				function.params[captured..]
 					.iter()
-					.map(crate::analyzer::param_kind)
+					.map(|param| known_param_kind(param, &function.body))
 					.chain(std::iter::once(function.return_kind))
 					.collect()
 			})
@@ -1157,6 +1157,21 @@ pub fn type_closure_calls(context: &mut Context) {
 				.for_each(|(param, kind)| param.used_as = Some(*kind));
 			helper.return_kind = signature[arity];
 		}
+	}
+}
+
+/// A parameter nothing declares, demands or computes with may get any value (`is_space` as a value gets a text), not
+/// param_kind's Int
+fn known_param_kind(param: &crate::context::Param, body: &Node) -> Kind {
+	let mut in_arithmetic = false;
+	body.visit(&mut |node| {
+		if let Node::Key(left, op, right) = node.drop_meta() {
+			in_arithmetic |= op.is_arithmetic() && [left, right].iter().any(|side| side.is_symbol(&param.name));
+		}
+	});
+	match in_arithmetic || param.annotation.is_some() || param.default.is_some() || param.used_as.is_some() {
+		true => crate::analyzer::param_kind(param),
+		false => Kind::Data,
 	}
 }
 
