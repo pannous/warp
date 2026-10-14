@@ -7,6 +7,7 @@ use super::*;
 pub mod broadcasting;
 pub mod comprehensions;
 pub mod filled_lists;
+pub mod grouped_receivers;
 pub mod index_positions;
 pub mod key_names;
 pub mod lazy_ranges;

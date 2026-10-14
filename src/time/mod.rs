@@ -55,6 +55,17 @@ pub const ZONE_INDEX_MASK: i64 = 0xff;
 pub const OFFSET_SHIFT: i64 = TIME_FORM_BITS + 8;
 
 impl TimeForm {
+	/// What `type(t)` says of a time of this form, wiki/time.md's words
+	pub fn name(self) -> &'static str {
+		match self {
+			TimeForm::Instant => "instant",
+			TimeForm::Date => "date",
+			TimeForm::Local => "local time",
+			TimeForm::Duration => "duration",
+			TimeForm::Zoned => "zoned time",
+		}
+	}
+
 	/// Why a time of this form has no field `name`, as the compile-time evaluator says it
 	pub fn refusal(self, name: &str) -> Option<String> {
 		let example = match self {

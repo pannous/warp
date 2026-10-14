@@ -20,7 +20,13 @@ fn failures_of(program: &str) -> String {
 #[test]
 fn notes_survive_a_midi_file() {
 	let path = midi_path("tune.mid");
-	is!(&format!("use sound\nwrite_midi(\"{0}\", [[0, C4, 0.5, 100], [0.5, E4, 0.25, 90]])\nread_midi(\"{0}\") == [[0, 261.63, 0.5, 100], [0.5, 329.63, 0.25, 90]]", path.display()), true);
+	is!(
+		&format!(
+			"use sound\nwrite_midi(\"{0}\", [[0, C4, 0.5, 100], [0.5, E4, 0.25, 90]])\nread_midi(\"{0}\") == [[0, 261.63, 0.5, 100], [0.5, 329.63, 0.25, 90]]",
+			path.display()
+		),
+		true
+	);
 	let bytes = std::fs::read(&path).unwrap();
 	assert_eq!(&bytes[..4], b"MThd");
 	assert_eq!(&bytes[14..18], b"MTrk");
@@ -60,6 +66,7 @@ fn headless_messages_are_named() {
 fn native_input_is_a_loud_error() {
 	let errors = failures_of("midi_receive()");
 	assert!(errors.contains("MIDI input is not available natively yet"), "{errors}");
+	assert!(!errors.contains("the playground reads it"), "promises a way that does not exist: {errors}");
 }
 
 #[test]

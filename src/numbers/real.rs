@@ -13,7 +13,7 @@ use crate::node::{error, Node, Separator};
 use crate::operators::Op;
 use crate::type_tests::{is_float_type_word, is_real_type_word, is_text_type_word};
 use num_bigint::BigInt;
-use num_traits::ToPrimitive;
+use num_traits::{ToPrimitive, Zero};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
@@ -25,6 +25,8 @@ const NEAREST: &str = "nearest";
 const NEAREST_KIND: &str = "rational";
 const NEAREST_WITHIN: &str = "within";
 const NEAREST_LIMIT: &str = "limit";
+/// Python's limit_denominator default (user decision, card nearest-default-limit); lib/prelude.warp's `limit = 1000000`
+const NEAREST_DEFAULT_LIMIT: u32 = 1_000_000;
 
 /// Largest integer exponent computed exactly; beyond it the power is approximated
 const MAX_EXACT_EXPONENT: i64 = 10_000;
@@ -328,7 +330,8 @@ fn is_nearest_call(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|head| head.name() == NEAREST))
 }
 
-/// The fraction `nearest(x, rational, limit, within: ε)` names; a float x is left to lib/prelude.warp
+/// The fraction `nearest(x, rational, limit, within: ε)` names; a float x is left to lib/prelude.warp, which shares the
+/// defaults
 fn nearest(value: Value, options: &[Node], scope: &mut Scope) -> Evaluated {
 	let Value::Real(Real::Exact(exact)) = value else {
 		return Err(Stop::Unsupported);
@@ -345,6 +348,11 @@ fn nearest(value: Value, options: &[Node], scope: &mut Scope) -> Evaluated {
 			positional => limit = Some(exact_rational(evaluate(positional, scope)?)?.numerator),
 		}
 	}
+	// a precision replaces the default limit; limit 0 is none: the exact fraction, as far as the float
+	let limit = match limit {
+		None if within.is_none() => Some(BigInt::from(NEAREST_DEFAULT_LIMIT)),
+		limit => limit.filter(|limit| !limit.is_zero()),
+	};
 	let fraction = exact.nearest_fraction(limit.as_ref(), within.as_ref()).map_err(Stop::Error)?;
 	Ok(Value::Real(Real::Exact(Exact::rational(fraction))))
 }
