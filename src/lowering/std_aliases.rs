@@ -72,7 +72,7 @@ pub fn lower(program: Node) -> Node {
 		.filter(|module| names.contains(*module))
 		.collect();
 	// `def parse_json(t) {…}` too: the program's own word gets no note (card hint-own-definition)
-	let defined = super::welcome_forms::defined_names(&program);
+	let defined = crate::library_words::defined_names(&program);
 	note_internal_words(&program, &names.union(&defined).cloned().collect());
 	let mut used = HashSet::new();
 	let program = aliased(program, &kept, &mut used);
