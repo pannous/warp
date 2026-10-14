@@ -3,11 +3,11 @@
 #   keywords.py              → {"hard", "soft", "modules"} as JSON on stdout, for editor plugins
 #   keywords.py keywords.js  → the playground's keywords.js (build.sh), and keywords.txt beside it: the two lists in
 #                              words, part of what the assistant tells Claude about warp (assistant.json "guides")
-# hard and soft: src/lowering/soft_keywords.rs's lists; soft also every `const …_KEYWORD: &str = "word"` in src/, so a
+# hard and soft: src/lowering/welcoming/soft_keywords.rs's lists; soft also every `const …_KEYWORD: &str = "word"` in src/, so a
 # pass registers the word it gives meaning by naming its constant so (card where-infix)
 import glob, json, re, sys
 
-KEYWORD_LISTS = "src/lowering/soft_keywords.rs"
+KEYWORD_LISTS = "src/lowering/welcoming/soft_keywords.rs"
 MODULES = "src/modules.rs"
 SOURCES = "src/**/*.rs"
 KEYWORD_CONSTANT = re.compile(r'const [A-Z_]+_KEYWORD: &str = "([a-z_]+)"')

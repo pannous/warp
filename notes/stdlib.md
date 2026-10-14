@@ -216,7 +216,7 @@ run natively and in the browser.
    the list word find(xs, predicate).
 3b. Done: net (A, std_io): `use net` brings post(url, body), the body sent as UTF-8 text, the answer's text (ureq
    natively, a synchronous XMLHttpRequest in the browser; tests/modules/test_std_net.rs against httpbin.org).
-3c. Done: other ecosystems' names (src/lowering/std_aliases.rs, the source pass before welcome_forms): `JSON.parse` /
+3c. Done: other ecosystems' names (src/lowering/welcoming/std_aliases.rs, the source pass before welcome_forms): `JSON.parse` /
    `json.loads` → json.parse (warp's own form, card g_ogQg: lowered to lib/json.warp's parse_json, which written by hand gets the note too), `JSON.stringify` / `json.dumps` → to_json, `re.findall(p, t)` → find_all(t, p),
    `re.sub(p, r, t)` → replace_all(t, p, r), `fs.readFileSync` → read, `fs.writeFileSync` / `appendFileSync` /
    `existsSync` → write / append_file / exists, `os.getenv` → env, `process.exit` → exit: the got-it note names warp's
@@ -251,7 +251,7 @@ every word lives today and what still moves.
 | src/host.rs HOST_WORDS | host imports (print, clock, fetch, paint, clipboard, notify, tasks, foreign_call, gpu, std_pure/std_io …) | 55 |
 | src/modules.rs STD_MODULES | embedded lib/*.warp: memory net collections hash regex file json os list math text random map time matrix draw markup router i18n | 19 |
 | … PRELUDE_WORDS | module words global without `use`: file: write exists | 2 |
-| … STD_ALIASES, lowering/std_aliases.rs, welcome_forms QUALIFIED_WORDS | foreign and qualified names (OrderedDict, JSON.parse, file.append …) | 27 + 21 + 1 |
+| … STD_ALIASES, lowering/welcoming/std_aliases.rs, welcome_forms QUALIFIED_WORDS | foreign and qualified names (OrderedDict, JSON.parse, file.append …) | 27 + 21 + 1 |
 | … IMPLICIT_MODULES | modules a program needs without `use`: file (a file URL), markup (a page), router (routes), regex (a route's regular expression); markup.rs reads markup's lists at compile time | 4 |
 Words per module: math 45, list 38, text 26, markup 19, matrix 15, time 14, map 10, router 9, the rest fewer.
 lib/web.webidl is data for web_idl.rs, not a module. The playground has no prelude of its own (warp-70).
