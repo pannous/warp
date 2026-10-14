@@ -295,8 +295,8 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	linker.func_wrap(HOST_LIBRARY, GPU_RENDER, gpu_render)?;
 	linker.func_wrap(HOST_LIBRARY, TEXT_COVERAGE, text_coverage)?;
 	linker.func_wrap(HOST_LIBRARY, GPU_COMPUTE_LINEAR, gpu_compute_linear)?;
-	linker.func_wrap(HOST_LIBRARY, GPU_MAP_LINEAR, gpu_map_linear)?;
-	linker.func_wrap(HOST_LIBRARY, GPU_REDUCE_LINEAR, gpu_reduce_linear)?;
+	linker.func_wrap(HOST_LIBRARY, GPU_MAP_LINEAR, gpu_kernel_linear::<false>)?;
+	linker.func_wrap(HOST_LIBRARY, GPU_REDUCE_LINEAR, gpu_kernel_linear::<true>)?;
 	linker.func_wrap(HOST_LIBRARY, CHANNEL_SEND, channel_send)?;
 	linker.func_wrap(HOST_LIBRARY, DISPATCH_EVENT, dispatch_event)?;
 	linker.func_wrap(HOST_LIBRARY, PAINT, paint)?;
@@ -371,27 +371,20 @@ fn paint(
 	warp_runtime::system_signals::end_at_first_frame()?;
 	let memory = module_memory(&mut caller, "paint")?;
 	let size = (width.max(0) as usize, height.max(0) as usize);
-	let values = match ints_of_list(&mut caller, memory, pixels, size.0 * size.1)? {
-		Some(values) => values,
-		None => {
-			match crate::run::wasm_reader::node_in(&Val::AnyRef(pixels), &mut caller.as_context_mut(), memory)
-				.drop_meta()
-			{
-				crate::node::Node::List(items, _, _) => items.iter().map(pixel_value).collect(),
-				crate::node::Node::Text(shader) => {
-					let failure = gpu_failure(PAINT);
-					let (width, height, values) = shader_request(&mut caller, width, height, shader_values, &failure)?;
-					return crate::graphics::paint::paint_shader(shader, width, height, &values)
-						.map(|_| ())
-						.map_err(failure);
-				}
-				other => {
-					return Err(task_failure(format!(
-						"paint needs a list of pixels or a shader text, got {}",
-						other.serialize()
-					)))
-				}
-			}
+	let values = match list_values(&mut caller, memory, pixels, size.0 * size.1)? {
+		Ok(values) => values,
+		Err(crate::node::Node::Text(shader)) => {
+			let failure = gpu_failure(PAINT);
+			let (width, height, values) = shader_request(&mut caller, width, height, shader_values, &failure)?;
+			return crate::graphics::paint::paint_shader(&shader, width, height, &values)
+				.map(|_| ())
+				.map_err(failure);
+		}
+		Err(other) => {
+			return Err(task_failure(format!(
+				"paint needs a list of pixels or a shader text, got {}",
+				other.serialize()
+			)))
 		}
 	};
 	crate::graphics::paint::paint(&values, size.0, size.1)
@@ -416,28 +409,33 @@ fn sound(
 	channels: i64,
 ) -> wasmtime::Result<()> {
 	let memory = module_memory(&mut caller, "sound")?;
-	let values = match ints_of_list(&mut caller, memory, samples, count.max(0) as usize)? {
-		Some(values) => values,
-		None => {
-			match crate::run::wasm_reader::node_in(&Val::AnyRef(samples), &mut caller.as_context_mut(), memory)
-				.drop_meta()
-			{
-				crate::node::Node::List(items, _, _) => items.iter().map(pixel_value).collect(),
-				other => {
-					return Err(task_failure(format!(
-						"sound needs a list of samples, got {}",
-						other.serialize()
-					)))
-				}
-			}
-		}
-	};
+	let values = list_values(&mut caller, memory, samples, count.max(0) as usize)?
+		.map_err(|other| task_failure(format!("sound needs a list of samples, got {}", other.serialize())))?;
 	crate::sound::sound(
 		&values,
 		rate.clamp(1, u32::MAX as i64) as u32,
 		channels.clamp(1, 2) as u16,
 	)
 	.map_err(task_failure)
+}
+
+/// The first `room` values of a list, read in one call by ints_of_list or else node by node; the value itself when it is
+/// no list
+fn list_values(
+	caller: &mut Caller<'_, HostState>,
+	memory: Memory,
+	list: HostNode,
+	room: usize,
+) -> wasmtime::Result<Result<Vec<u64>, crate::node::Node>> {
+	if let Some(values) = ints_of_list(caller, memory, list, room)? {
+		return Ok(Ok(values));
+	}
+	Ok(
+		match crate::run::wasm_reader::node_in(&Val::AnyRef(list), &mut caller.as_context_mut(), memory).drop_meta() {
+			crate::node::Node::List(items, _, _) => Ok(items.iter().map(pixel_value).collect()),
+			other => Err(other.clone()),
+		},
+	)
 }
 
 /// The first `room` items of a list of fixnum Ints read in one call of the module's list_to_ints (wasm_emitter/int_lists.rs), their magnitudes;
