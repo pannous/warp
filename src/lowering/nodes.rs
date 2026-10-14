@@ -489,3 +489,8 @@ pub(crate) fn method_call(receiver: Node, method: &str, arguments: Vec<Node>) ->
 	};
 	key(receiver, Op::Dot, call(method, arguments))
 }
+
+/// `return value`, as the items of a statement
+pub(crate) fn is_return(items: &[Node]) -> bool {
+	matches!(items, [word, _] if word.is_symbol(crate::words::RETURN_WORD))
+}

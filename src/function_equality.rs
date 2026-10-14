@@ -362,7 +362,9 @@ fn undecidable(f: &Function, g: &Function, functions: &[Function]) -> Node {
 fn exact_ratio(number: &Number) -> Option<Rational> {
 	match number {
 		Number::Quotient(_, 0) => None,
-		Number::Int(_) | Number::Quotient(..) | Number::BigQuotient(_) | Number::BigInt(_) => Some(number.to_rational()),
+		Number::Int(_) | Number::Quotient(..) | Number::BigQuotient(_) | Number::BigInt(_) => {
+			Some(number.to_rational())
+		}
 		_ => None,
 	}
 }

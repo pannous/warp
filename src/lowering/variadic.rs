@@ -10,6 +10,7 @@
 
 use super::nodes::{call, called_name, children_rewritten, if_then_else, key, parameter_name};
 use crate::analyzer::call_name;
+use crate::named_arguments::named_argument;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{COUNT_WORD, STARRED};
@@ -144,17 +145,6 @@ fn collect_signatures(node: &Node, signatures: &mut HashMap<String, Signature>) 
 			.collect();
 		signatures.insert(head[0].name(), Signature { fixed, rest, keywords });
 	});
-}
-
-/// `a=1`, `a: 1` in a call: the name a and the value
-fn named_argument(argument: &Node) -> Option<(String, Node)> {
-	match argument.drop_meta() {
-		Node::Key(name, Op::Assign | Op::Colon, value) => match name.drop_meta() {
-			Node::Symbol(name) => Some((name.clone(), value.as_ref().clone())),
-			_ => None,
-		},
-		_ => None,
-	}
 }
 
 fn has_spread(node: &Node) -> bool {
@@ -313,7 +303,11 @@ fn arguments_in_order(arguments: &[Node], fixed: &[String], object: &str) -> Vec
 	let (named, positional): (Vec<&Node>, Vec<&Node>) = arguments
 		.iter()
 		.partition(|argument| named_argument(argument).is_some());
-	let named: Vec<(String, Node)> = named.into_iter().filter_map(named_argument).collect();
+	let named: Vec<(String, Node)> = named
+		.into_iter()
+		.filter_map(named_argument)
+		.map(|(name, value)| (name, value.clone()))
+		.collect();
 	let field = |parameter: &String| key(symbol(object), Op::Dot, Node::Symbol(parameter.clone()));
 	let filled = fixed.iter().skip(positional.len()).map(|parameter| {
 		named
@@ -336,7 +330,7 @@ fn keyword_object(arguments: Vec<Node>, fixed: &[String]) -> (Vec<Node>, Option<
 	let entries: Vec<Node> = named
 		.iter()
 		.filter_map(named_argument)
-		.map(|(name, value)| key(Node::Symbol(name), Op::Colon, value))
+		.map(|(name, value)| key(Node::Symbol(name), Op::Colon, value.clone()))
 		.collect();
 	let separator = if entries.len() > 1 {
 		Separator::Colon

@@ -44,7 +44,7 @@ fn gives_bool(function: &crate::context::UserFunctionDef) -> bool {
 	function.body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node.drop_meta() {
 			if let [word, value] = items.as_slice() {
-				returns_bool &= word.drop_meta().name() != crate::lowering::tuples::RETURN || is_boolean(value, &scope);
+				returns_bool &= word.drop_meta().name() != crate::words::RETURN_WORD || is_boolean(value, &scope);
 			}
 		}
 	});
@@ -129,7 +129,7 @@ pub fn is_boolean(node: &Node, scope: &Scope) -> bool {
 		Node::List(items, Bracket::Round | Bracket::Curly, _) if items.len() == 1 && is_boolean(&items[0], scope) => {
 			true
 		}
-		Node::List(items, _, _) if matches!(items.as_slice(), [word, _] if word.drop_meta().name() == crate::lowering::tuples::RETURN) => {
+		Node::List(items, _, _) if matches!(items.as_slice(), [word, _] if word.drop_meta().name() == crate::words::RETURN_WORD) => {
 			is_boolean(&items[1], scope)
 		}
 		Node::List(items, _, Separator::Semicolon | Separator::Newline) => {

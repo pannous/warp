@@ -12,7 +12,7 @@ use super::map_backend::is_update;
 use crate::context::UserFunctionDef;
 
 /// Words that read a list without holding on to it, besides those reading any collection (reads_collection)
-const LIST_READING_WORDS: [&str; 4] = ["join", "sum", crate::library_words::LIST_SUM, super::list_abi::RETURN];
+const LIST_READING_WORDS: [&str; 4] = ["join", "sum", crate::library_words::LIST_SUM, crate::words::RETURN_WORD];
 
 /// The variables `program` hands on as a whole Node: an argument of a function that changes that parameter (or of an
 /// imported one that `changes_arguments` may), an item of a list or map, a field value (not the program's final

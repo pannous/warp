@@ -8,6 +8,7 @@
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::type_constructor::entry_name;
 use std::collections::{HashMap, HashSet};
 
 /// The attribute of a shader text listing its holes' names
@@ -228,13 +229,6 @@ fn with_values(
 		}
 	}
 	Node::List(items, bracket.clone(), separator.clone()).with_meta_of(&node)
-}
-
-fn entry_name(entry: &Node) -> Option<String> {
-	match entry.drop_meta() {
-		Node::Key(key, Op::Colon, _) => Some(key.drop_meta().name()),
-		_ => None,
-	}
 }
 
 fn entry(name: &str) -> Node {

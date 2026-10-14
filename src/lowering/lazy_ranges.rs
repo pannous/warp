@@ -252,7 +252,10 @@ fn replaceable(statements: &[Node], position: usize, readers: &RangeReaders) -> 
 		return None;
 	}
 	let (before, after) = (&statements[..position], &statements[position + 1..]);
-	let bound_names: Vec<String> = [&range.start, &range.end].into_iter().flat_map(crate::variable_signals::symbols).collect();
+	let bound_names: Vec<String> = [&range.start, &range.end]
+		.into_iter()
+		.flat_map(crate::variable_signals::symbols)
+		.collect();
 	let unchanged = |name: &str| !after.iter().any(|statement| changes(statement, name));
 	let read_only = before
 		.iter()

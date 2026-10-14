@@ -57,7 +57,6 @@ const KERNEL_COUNT: &str = "count";
 const FUNCTION_PREFIX: &str = "warp_";
 const VARIABLE_PREFIX: &str = "v_";
 const PARAMETER_PREFIX: &str = "a_";
-const RETURN_WORD: &str = "return";
 /// paint(f, width, height) of a warp function f(x, y) (step 4 of card gpu-functions): f's colors and numbers
 const PAINT_WORD: &str = "paint";
 const RGB_WORD: &str = "rgb";
@@ -1129,7 +1128,7 @@ fn block_statements(node: &Node) -> Option<&[Node]> {
 /// `return v`: v
 fn returned_value(node: &Node) -> Option<&Node> {
 	match node.drop_meta() {
-		Node::List(items, _, _) if items.len() == 2 && items[0].is_symbol(RETURN_WORD) => Some(&items[1]),
+		Node::List(items, _, _) if items.len() == 2 && items[0].is_symbol(crate::words::RETURN_WORD) => Some(&items[1]),
 		_ => None,
 	}
 }

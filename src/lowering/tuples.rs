@@ -10,7 +10,6 @@ use crate::node::{error, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::STARRED;
 
-pub const RETURN: &str = "return";
 pub const DESTRUCTURE: &str = "$destructure";
 /// The hidden names holding the value of a nested target: `(a, b), c = …`
 const UNPACKED: &str = "unpacked";
@@ -61,7 +60,9 @@ pub fn lower(node: Node) -> Node {
 /// The values of `return a, b, …` (lowered), or None for any other node
 pub fn returned_values(node: &Node) -> Option<&[Node]> {
 	match node.drop_meta() {
-		Node::List(items, _, Separator::Space) if items.len() >= 3 && items[0].is_symbol(RETURN) => Some(&items[1..]),
+		Node::List(items, _, Separator::Space) if items.len() >= 3 && items[0].is_symbol(crate::words::RETURN_WORD) => {
+			Some(&items[1..])
+		}
 		_ => None,
 	}
 }
@@ -127,7 +128,9 @@ fn with_trailing_return(node: &Node, more: &[Node]) -> Option<Node> {
 			*op,
 			Box::new(with_trailing_return(right, more)?),
 		)),
-		Node::List(items, Bracket::None, Separator::Space) if items.len() == 2 && items[0].is_symbol(RETURN) => {
+		Node::List(items, Bracket::None, Separator::Space)
+			if items.len() == 2 && items[0].is_symbol(crate::words::RETURN_WORD) =>
+		{
 			Some(Node::List(
 				items.iter().chain(more).cloned().collect(),
 				Bracket::None,
@@ -315,7 +318,7 @@ fn check_definition(node: &Node) -> Option<Node> {
 	let mut single = None;
 	body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node.drop_meta() {
-			if items.len() == 2 && items[0].is_symbol(RETURN) {
+			if items.len() == 2 && items[0].is_symbol(crate::words::RETURN_WORD) {
 				single.get_or_insert_with(|| node.serialize());
 			}
 		}

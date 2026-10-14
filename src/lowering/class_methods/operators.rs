@@ -1,6 +1,7 @@
 //! Operators on instances (wiki/operator.md): `a + b` calls the class's `plus`, quantities with run-time units, and
 //! functions specialized by the classes of their arguments
 use super::*;
+use crate::lowering::nodes::method_call;
 
 /// `a + b` of an instance a whose class defines the operator's method (`plus`, Python's `__add__`, wiki/operator.md):
 /// the method call `a.plus(b)`; an operation of such calls is an instance of the same class (`a + b + c`)
@@ -558,8 +559,6 @@ pub(super) fn quantities_reduced(quantities: Node) -> Node {
 pub(super) fn amount_of(quantity: Node) -> Node {
 	key(quantity, Op::Dot, symbol(QUANTITY_AMOUNT))
 }
-
-use crate::lowering::nodes::method_call;
 
 /// `2 km < q`, `q + 1 m` of a run-time quantity q: the unit written in the program is one too (card units-mixed); the
 /// operands with the left one's class

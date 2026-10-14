@@ -15,8 +15,6 @@ use std::collections::{HashMap, HashSet};
 use wasm_encoder::*;
 use Instruction as I;
 
-pub(super) const RETURN: &str = "return";
-
 /// The list calling convention of one function
 #[derive(Clone, Default, Debug)]
 pub(super) struct ListAbi {
@@ -56,7 +54,7 @@ pub(super) fn results(body: &Node) -> Vec<&Node> {
 	body.visit(&mut |part| {
 		if let Node::List(items, _, _) = part {
 			if let [word, value] = items.as_slice() {
-				if matches!(word.drop_meta(), Node::Symbol(name) if name == RETURN) {
+				if matches!(word.drop_meta(), Node::Symbol(name) if name == crate::words::RETURN_WORD) {
 					found.push(value);
 				}
 			}
@@ -67,7 +65,7 @@ pub(super) fn results(body: &Node) -> Vec<&Node> {
 		_ => Some(body), // `f(x) := (…; v)` is worth v (last_value)
 	};
 	if let Some(last) = last {
-		let returns = matches!(last.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if name == RETURN));
+		let returns = matches!(last.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if name == crate::words::RETURN_WORD));
 		if !returns {
 			found.push(last);
 		}
@@ -316,7 +314,7 @@ impl WasmGcEmitter {
 				func.instruction(&I::Drop);
 			}
 		}
-		let is_return = matches!(last.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if name == RETURN));
+		let is_return = matches!(last.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if name == crate::words::RETURN_WORD));
 		if is_return {
 			self.emit_node_instructions(func, last); // returns, leaving nothing reachable
 		} else {

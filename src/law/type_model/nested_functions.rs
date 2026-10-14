@@ -5,6 +5,7 @@
 //! as in Python and warp.
 
 use super::{assigned_locals, cell_class, function_definition, parameter_word, statements};
+use crate::lowering::nodes::typed;
 use crate::lowering::FunctionHead;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -193,8 +194,6 @@ fn definition(head: Node, result: Option<&Node>, body: Node) -> Node {
 	};
 	Node::Key(Box::new(target), Op::Define, Box::new(body))
 }
-
-use crate::lowering::nodes::typed;
 
 /// `nonlocal y` (parsed `nonlocal: y`)
 fn nonlocal_declaration(statement: &Node) -> Option<String> {

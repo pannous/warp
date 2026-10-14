@@ -4,7 +4,7 @@
 //! `xs.take first 10` is `xs.slice(0, 10)`. The parser reads a chain `xs.keep only positive.sort by size` as one list
 //! `[xs.keep, only, positive.sort, by, size]`: each `.method` binds to the word before it.
 
-use super::nodes::{call, key, phrase_words as words, symbol};
+use super::nodes::{call, key, method_call, phrase_words as words, symbol};
 use crate::context::Context;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -220,5 +220,3 @@ fn key_function(argument: &Node, context: &Context) -> Option<Node> {
 	};
 	Some(key(element, Op::Arrow, value))
 }
-
-use super::nodes::method_call;
