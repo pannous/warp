@@ -1154,7 +1154,22 @@ fn template_holes(statements: &[Node]) -> Vec<Node> {
 }
 
 fn mentioned_names(statements: &[Node]) -> Vec<String> {
+	// a function's parameters are its own: `f(x, melody) := x + melody` mentions no module word melody
 	fn collect(node: &Node, names: &mut Vec<String>) {
+		let parameters: Vec<String> = crate::lowering::nodes::function_head(node)
+			.map(|function| function.parameters())
+			.unwrap_or_default()
+			.into_iter()
+			.filter_map(crate::lowering::nodes::parameter_name)
+			.collect();
+		if parameters.is_empty() {
+			return collect_parts(node, names);
+		}
+		let mut mentioned = vec![];
+		collect_parts(node, &mut mentioned);
+		names.extend(mentioned.into_iter().filter(|name| !parameters.contains(name)));
+	}
+	fn collect_parts(node: &Node, names: &mut Vec<String>) {
 		match node {
 			Node::Symbol(name) => names.push(name.clone()),
 			Node::Key(receiver, Op::Dot | Op::SafeDot, member) => {
