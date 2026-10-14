@@ -1,0 +1,1 @@
+class Point{x:int; y:int}; string(Point(1, 2))
