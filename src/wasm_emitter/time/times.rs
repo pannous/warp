@@ -948,7 +948,13 @@ impl WasmGcEmitter {
 	}
 
 	/// Two times in node_order, whose locals `kinds` hold their kinds: the earlier one first; only the same form compares
-	pub(in crate::wasm_emitter) fn emit_time_order(&mut self, func: &mut Function, kinds: [u32; 2], first: u32, second: u32) {
+	pub(in crate::wasm_emitter) fn emit_time_order(
+		&mut self,
+		func: &mut Function,
+		kinds: [u32; 2],
+		first: u32,
+		second: u32,
+	) {
 		// required, not merely emitted: emit_all_functions builds node_order without times, its refusal would mark the
 		// text constructors used (test_function_usage_tracking)
 		if !self.ctx.required_functions.contains(TIME_FIELD) {
@@ -1087,7 +1093,13 @@ impl WasmGcEmitter {
 	}
 
 	/// Quotient and remainder rounded toward minus infinity, as div_euclid and rem_euclid
-	pub(in crate::wasm_emitter) fn emit_floor_split(func: &mut Function, dividend: u32, divisor: i64, quotient: u32, remainder: u32) {
+	pub(in crate::wasm_emitter) fn emit_floor_split(
+		func: &mut Function,
+		dividend: u32,
+		divisor: i64,
+		quotient: u32,
+		remainder: u32,
+	) {
 		Self::emit_list(
 			func,
 			&[

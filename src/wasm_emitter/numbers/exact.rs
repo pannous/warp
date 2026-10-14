@@ -60,7 +60,12 @@ impl WasmGcEmitter {
 
 	/// A literal beyond the fixnums (a big Int, a ratio) from a global set on its first evaluation: built at every
 	/// evaluation, each one added a $BigInt or $Ratio to the handle heap, which keeps them until the run ends
-	pub(in crate::wasm_emitter) fn emit_number_constant(&mut self, func: &mut Function, numerator: &BigInt, denominator: &BigInt) {
+	pub(in crate::wasm_emitter) fn emit_number_constant(
+		&mut self,
+		func: &mut Function,
+		numerator: &BigInt,
+		denominator: &BigInt,
+	) {
 		let key = (numerator.clone(), denominator.clone());
 		let global = match self.number_constants.get(&key) {
 			Some(global) => *global,

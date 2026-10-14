@@ -884,7 +884,12 @@ impl WasmGcEmitter {
 	}
 
 	/// `body` for each cell of the list in local `cell`, which steps to the rest after it; `BrIf(1)` in the body ends the walk
-	pub(in crate::wasm_emitter) fn emit_cell_walk(&self, func: &mut Function, cell: u32, body: impl FnOnce(&mut Function)) {
+	pub(in crate::wasm_emitter) fn emit_cell_walk(
+		&self,
+		func: &mut Function,
+		cell: u32,
+		body: impl FnOnce(&mut Function),
+	) {
 		Self::emit_list(
 			func,
 			&[
@@ -1049,7 +1054,13 @@ impl WasmGcEmitter {
 	}
 
 	/// `target#index = value` leaves the assigned value (i64) on the stack; a variable target gets the updated copy
-	pub(in crate::wasm_emitter) fn emit_index_assignment(&mut self, func: &mut Function, target: &Node, index: &Node, value: &Node) {
+	pub(in crate::wasm_emitter) fn emit_index_assignment(
+		&mut self,
+		func: &mut Function,
+		target: &Node,
+		index: &Node,
+		value: &Node,
+	) {
 		if let Node::Symbol(name) = target.drop_meta() {
 			if self.is_unbound(name) {
 				return self.emit_undefined_variable(func, name);
@@ -1164,7 +1175,13 @@ impl WasmGcEmitter {
 	}
 
 	/// The value of an entry assignment (i64): an Int value read back from the entry, else 0
-	pub(in crate::wasm_emitter) fn emit_assigned_entry_value(&mut self, func: &mut Function, target: &Node, key: &Node, value: &Node) {
+	pub(in crate::wasm_emitter) fn emit_assigned_entry_value(
+		&mut self,
+		func: &mut Function,
+		target: &Node,
+		key: &Node,
+		value: &Node,
+	) {
 		if self.get_type(value) != Kind::Int {
 			func.instruction(&I::I64Const(0));
 			return;

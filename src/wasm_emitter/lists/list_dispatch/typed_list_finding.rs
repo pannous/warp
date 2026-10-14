@@ -459,17 +459,22 @@ impl WasmGcEmitter {
 						.is_some_and(|export| export.node_result.is_some())
 			})
 		};
-		let held = super::super::super::lists::list_sharing::held_elsewhere(program, &self.ctx.user_functions, &changes_arguments);
+		let held = super::super::super::lists::list_sharing::held_elsewhere(
+			program,
+			&self.ctx.user_functions,
+			&changes_arguments,
+		);
 		// a counter `i++` changes no list
 		let is_number = |name: &String| {
 			self.scope
 				.lookup(name)
 				.is_some_and(|local| matches!(local.kind, Kind::Int | Kind::Float))
 		};
-		let written: HashSet<String> = super::super::super::lists::list_sharing::written_roots(program, &self.ctx.user_functions)
-			.into_iter()
-			.filter(|root| !is_number(root))
-			.collect();
+		let written: HashSet<String> =
+			super::super::super::lists::list_sharing::written_roots(program, &self.ctx.user_functions)
+				.into_iter()
+				.filter(|root| !is_number(root))
+				.collect();
 		loop {
 			let typed = self.typed_list_elements(&sources, &excluded, &declared_floats, &assigned_kinds);
 			// such a copy is no snapshot only while no list but the typed arrays is changed in place (shared-lists-typed):

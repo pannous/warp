@@ -12,7 +12,12 @@ use super::super::maps::map_backend::is_update;
 use crate::compiler::context::UserFunctionDef;
 
 /// Words that read a list without holding on to it, besides those reading any collection (reads_collection)
-const LIST_READING_WORDS: [&str; 4] = ["join", "sum", crate::library_words::LIST_SUM, super::super::lists::list_abi::RETURN];
+const LIST_READING_WORDS: [&str; 4] = [
+	"join",
+	"sum",
+	crate::library_words::LIST_SUM,
+	super::super::lists::list_abi::RETURN,
+];
 
 /// The variables `program` hands on as a whole Node: an argument of a function that changes that parameter (or of an
 /// imported one that `changes_arguments` may), an item of a list or map, a field value (not the program's final
@@ -158,9 +163,9 @@ fn changes_parameter(function: &UserFunctionDef, index: usize) -> bool {
 /// May the function give back the list its parameter `index` holds: `f(a) := a`, `return a`
 fn returns_parameter(function: &UserFunctionDef, index: usize) -> bool {
 	function.params.get(index).is_some_and(|param| {
-		super::super::lists::list_abi::results(&function.body)
-			.into_iter()
-			.any(|result| matches!(super::super::lists::list_abi::last_value(result), Node::Symbol(name) if *name == param.name))
+		super::super::lists::list_abi::results(&function.body).into_iter().any(
+			|result| matches!(super::super::lists::list_abi::last_value(result), Node::Symbol(name) if *name == param.name),
+		)
 	})
 }
 
@@ -189,7 +194,10 @@ pub fn changes_list(body: &Node, name: &str) -> bool {
 /// The variables whose lists `body` changes in place (an item set, an append, a method that changes it, an argument to
 /// a function that changes it), each by the variable it is reached from: `grid#i#j = v` changes grid. A list reached
 /// otherwise (`f()#1 = v`), or a function that changes any list, is the unknown root ""
-pub(in crate::wasm_emitter) fn written_roots(body: &Node, functions: &BTreeMap<String, UserFunctionDef>) -> HashSet<String> {
+pub(in crate::wasm_emitter) fn written_roots(
+	body: &Node,
+	functions: &BTreeMap<String, UserFunctionDef>,
+) -> HashSet<String> {
 	let mut roots = HashSet::new();
 	body.visit(&mut |part| match part {
 		Node::Key(target, op, value) if matches!(op, Op::Assign | Op::Define) || is_update(op) => match target.drop_meta() {

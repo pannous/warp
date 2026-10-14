@@ -927,9 +927,9 @@ pub(super) fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
 					Node::Symbol(name) => kinds.get(name).or(variable_kinds.get(name)).copied(),
 					// a cell's value is a Node of any kind (a signal's new value, lowering/signal_values.rs)
 					Node::List(items, _, _)
-						if items
-							.first()
-							.is_some_and(|word| word.drop_meta().name() == crate::wasm_emitter::functions::cells::CELL_GET) =>
+						if items.first().is_some_and(|word| {
+							word.drop_meta().name() == crate::wasm_emitter::functions::cells::CELL_GET
+						}) =>
 					{
 						Some(Kind::Empty)
 					}

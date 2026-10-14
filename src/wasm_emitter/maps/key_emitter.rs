@@ -331,7 +331,13 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit default Key node (preserve structure for roundtrip)
-	pub(in crate::wasm_emitter) fn emit_default_key(&mut self, func: &mut Function, left: &Node, right: &Node, op: &Op) {
+	pub(in crate::wasm_emitter) fn emit_default_key(
+		&mut self,
+		func: &mut Function,
+		left: &Node,
+		right: &Node,
+		op: &Op,
+	) {
 		match left.drop_meta() {
 			// `{x: x}`: the name of an entry is its name, also when a variable or parameter is called so
 			Node::Symbol(name) if *op == Op::Colon => self.emit_string_call(func, name, "new_symbol"),

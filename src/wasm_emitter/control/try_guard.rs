@@ -176,7 +176,11 @@ impl WasmGcEmitter {
 				let detail = self.trap_detail_global();
 				Self::emit_list(func, &[I::GlobalGet(detail), I::RefAsNonNull]);
 			} else {
-				self.emit_string_call(func, &super::super::lists::list_ops::runtime_error_message(name), "new_text");
+				self.emit_string_call(
+					func,
+					&super::super::lists::list_ops::runtime_error_message(name),
+					"new_text",
+				);
 			}
 			self.emit_call(func, super::super::text::text_builtins::ERROR_OF);
 			func.instruction(&I::Else);

@@ -215,7 +215,13 @@ impl WasmGcEmitter {
 
 	/// `m = {}`, `m = {a:1}`, `m·map = m`: a table in m's slot, left on the stack; `m = field_with(m, k, v)` sets the
 	/// entry in place, `m = map_without(m, k)` removes it
-	pub(in crate::wasm_emitter) fn emit_typed_map_store(&mut self, func: &mut Function, name: &str, slot: Slot, value: &Node) {
+	pub(in crate::wasm_emitter) fn emit_typed_map_store(
+		&mut self,
+		func: &mut Function,
+		name: &str,
+		slot: Slot,
+		value: &Node,
+	) {
 		if let Some((key, entry_value)) = entry_update(name, value) {
 			let key = self.map_key(&key).expect("find_typed_maps admits only name keys");
 			self.emit_typed_map_set(func, slot, &key, &entry_value);
@@ -235,7 +241,13 @@ impl WasmGcEmitter {
 	}
 
 	/// `m[key] = value`: the entry set in place
-	pub(in crate::wasm_emitter) fn emit_typed_map_set(&mut self, func: &mut Function, slot: Slot, key: &Node, value: &Node) {
+	pub(in crate::wasm_emitter) fn emit_typed_map_set(
+		&mut self,
+		func: &mut Function,
+		slot: Slot,
+		key: &Node,
+		value: &Node,
+	) {
 		func.instruction(&slot.get());
 		self.emit_node_instructions(func, key);
 		self.emit_node_instructions(func, value);

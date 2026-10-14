@@ -213,7 +213,11 @@ fn functions_of_operator(op: &Op) -> &'static [&'static str] {
 		Op::Inc | Op::Dec | Op::Neg | Op::Abs | Op::Square | Op::Cube => &[INT_RUNTIME, EXACT_ARITHMETIC],
 		Op::Xor => &[INT_RUNTIME],
 		Op::BitAnd | Op::BitOr => &[INT_RUNTIME, IS_TRUTHY],
-		Op::Div | Op::DivAssign => &[INT_RUNTIME, EXACT_ARITHMETIC, crate::wasm_emitter::numbers::exact::INT_GCD], // ratios: fast multi-limb division for their gcds
+		Op::Div | Op::DivAssign => &[
+			INT_RUNTIME,
+			EXACT_ARITHMETIC,
+			crate::wasm_emitter::numbers::exact::INT_GCD,
+		], // ratios: fast multi-limb division for their gcds
 		op if op.is_arithmetic() || op.is_compound_assign() => &[INT_RUNTIME, EXACT_ARITHMETIC],
 		op if op.is_shift() => &[INT_RUNTIME],
 		_ => &[],
@@ -240,7 +244,9 @@ fn functions_of_call(word: &str) -> &'static [&'static str] {
 		],
 		LIST_DROP_LAST => &[LIST_DROP_LAST],
 		crate::declaration_forms::LIST_BECOME => &[crate::declaration_forms::LIST_BECOME],
-		crate::wasm_emitter::reflection::library_ops::LIST_SORTED_BY => &[crate::wasm_emitter::reflection::library_ops::LIST_SORTED_BY],
+		crate::wasm_emitter::reflection::library_ops::LIST_SORTED_BY => {
+			&[crate::wasm_emitter::reflection::library_ops::LIST_SORTED_BY]
+		}
 		REMOVED_VALUE_CALL => &[MAP_GET_OR, MAP_WITHOUT],
 		INSERT_AT_CALL | INSERT_EITHER_CALL => &[INSERT_AT_CALL],
 		crate::words::IS_TYPE => &[crate::type_tests::NODE_KIND_IN],
@@ -492,7 +498,9 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 	match node.drop_meta() {
 		Node::List(items, _, _) => {
 			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
-				if crate::wasm_emitter::lists::linear_arrays::is_linear_word(name) && !ctx.user_functions.contains_key(name) {
+				if crate::wasm_emitter::lists::linear_arrays::is_linear_word(name)
+					&& !ctx.user_functions.contains_key(name)
+				{
 					add_ffi_import(ctx, name, crate::wasm_emitter::lists::linear_arrays::LINEAR_LIBRARY);
 				}
 				// a float map kernel (shared_arrays.rs): the address of its source block in, of the new one out
@@ -513,7 +521,8 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 					add_ffi_import(ctx, crate::host::LOCAL_OFFSET, crate::host::HOST_LIBRARY);
 				}
 				if crate::time::constant_form(items) == Some(crate::time::TimeForm::Zoned) {
-					ctx.required_functions.insert(crate::wasm_emitter::time::times::ZONE_NAMES);
+					ctx.required_functions
+						.insert(crate::wasm_emitter::time::times::ZONE_NAMES);
 				}
 				if crate::host::HOST_WORDS.contains(&name.as_str()) && !ctx.user_functions.contains_key(name) {
 					add_ffi_import(ctx, name, crate::host::HOST_LIBRARY);

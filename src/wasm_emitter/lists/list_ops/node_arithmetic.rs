@@ -701,7 +701,10 @@ impl WasmGcEmitter {
 				crate::node::Separator::Space,
 			),
 		);
-		self.emit_node_instructions(func, &super::super::super::join_call(copies.expect("a one-element list"), ""));
+		self.emit_node_instructions(
+			func,
+			&super::super::super::join_call(copies.expect("a one-element list"), ""),
+		);
 	}
 
 	/// `"ab"*2` repeats; the got-it warning names `2 times "ab"`, and for a text spelling a number how to multiply it

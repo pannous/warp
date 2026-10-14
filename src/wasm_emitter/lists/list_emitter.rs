@@ -56,7 +56,11 @@ const PRINT_ARGUMENT_SEPARATOR: &str = " ";
 /// The value `print` writes: its one argument, or several joined by a space
 /// The word a list calls: `f a b`, `f(a, b)`, `(f)`; none for a `;`/newline sequence, whose first statement may be a
 /// word of its own (`{beep⏎ play 440}` runs beep, then play; card error-beep)
-pub(in crate::wasm_emitter) fn called_word<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator) -> Option<&'a str> {
+pub(in crate::wasm_emitter) fn called_word<'a>(
+	items: &'a [Node],
+	bracket: &Bracket,
+	separator: &Separator,
+) -> Option<&'a str> {
 	let calls =
 		(items.len() >= 2 && !separator.separates_statements()) || *bracket == Bracket::Round && items.len() == 1;
 	items.first().filter(|_| calls)?.symbol_name()
@@ -199,7 +203,9 @@ impl WasmGcEmitter {
 			if !matches!(items, [_, argument] if self.emit_interval_word(func, fn_name, argument)) {
 				self.emit_ffi_call(func, fn_name, &items[1..], None);
 			}
-		} else if items.len() >= 2 && super::super::text::text_builtins::text_builtin_kind(fn_name, items.len() - 1).is_some() {
+		} else if items.len() >= 2
+			&& super::super::text::text_builtins::text_builtin_kind(fn_name, items.len() - 1).is_some()
+		{
 			self.emit_text_builtin(func, fn_name, &items[1..]);
 		} else {
 			return false;
@@ -759,7 +765,12 @@ impl WasmGcEmitter {
 	/// `count = 0; count(users)`: a local variable named like a counting word, applied to a value, neither counts nor
 	/// lists quietly; the error names the variable (card count-shadowed). A global of that name leaves the word to the
 	/// functions, which call it (lib/markup.warp's count(items))
-	pub(in crate::wasm_emitter) fn emit_shadowed_counting(&mut self, func: &mut Function, name: &str, argument: &Node) -> bool {
+	pub(in crate::wasm_emitter) fn emit_shadowed_counting(
+		&mut self,
+		func: &mut Function,
+		name: &str,
+		argument: &Node,
+	) -> bool {
 		let shadowed = self.scope.lookup(name).is_some()
 			&& !self.ctx.user_functions.contains_key(name)
 			&& crate::analyzer::counting_function(name, &self.ctx).is_some();
@@ -773,7 +784,12 @@ impl WasmGcEmitter {
 		shadowed
 	}
 
-	pub(in crate::wasm_emitter) fn emit_introspection_fn(&mut self, func: &mut Function, fn_name: &str, arg: &Node) -> bool {
+	pub(in crate::wasm_emitter) fn emit_introspection_fn(
+		&mut self,
+		func: &mut Function,
+		fn_name: &str,
+		arg: &Node,
+	) -> bool {
 		if self.ctx.user_functions.contains_key(fn_name) {
 			return false; // `def floor(x) := x+10` is the program's floor, no builtin's (card user-defined)
 		}
@@ -907,7 +923,12 @@ impl WasmGcEmitter {
 	}
 
 	/// `a // b` as i64: the Euclidean quotient, exact for exact operands (exact_euclid_div), else of the f64 quotient
-	pub(in crate::wasm_emitter) fn emit_floor_quotient(&mut self, func: &mut Function, dividend: &Node, divisor: &Node) {
+	pub(in crate::wasm_emitter) fn emit_floor_quotient(
+		&mut self,
+		func: &mut Function,
+		dividend: &Node,
+		divisor: &Node,
+	) {
 		let floats = self.get_type(dividend).is_float() || self.get_type(divisor).is_float();
 		if !floats {
 			self.emit_numeric_value(func, dividend);

@@ -112,7 +112,11 @@ impl WasmGcEmitter {
 	}
 
 	/// Push i64 1/0: are the two objects one
-	pub(in crate::wasm_emitter) fn emit_object_identity(&mut self, func: &mut Function, (left, right, negated): (&Node, &Node, bool)) {
+	pub(in crate::wasm_emitter) fn emit_object_identity(
+		&mut self,
+		func: &mut Function,
+		(left, right, negated): (&Node, &Node, bool),
+	) {
 		match (self.typed_list(left), self.typed_list(right)) {
 			// two typed arrays are one list when their list structs are one: their Nodes would be fresh copies
 			(Some((left, _)), Some((right, _))) => Self::emit_list(func, &[left.get(), right.get(), I::RefEq]),
@@ -361,7 +365,14 @@ impl WasmGcEmitter {
 
 	/// A list cell (local `cell`) whose entry is a meta entry: compare its rest instead, `values_equal(rest, other)`;
 	/// `extra` pushes the comparison's further arguments (values_similar's tolerance)
-	pub(in crate::wasm_emitter) fn skip_meta_cell(&self, f: &mut Function, cell: u32, other: u32, recurse: u32, extra: &[I<'static>]) {
+	pub(in crate::wasm_emitter) fn skip_meta_cell(
+		&self,
+		f: &mut Function,
+		cell: u32,
+		other: u32,
+		recurse: u32,
+		extra: &[I<'static>],
+	) {
 		let node = self.type_manager.node_type;
 		Self::test(f, cell, HeapType::Concrete(node));
 		f.instruction(&I::If(BlockType::Empty));

@@ -97,7 +97,10 @@ impl WasmGcEmitter {
 				let kind = self.get_type(operand);
 				self.emit_type_error(
 					func,
-					format!("type error: {kind} in arithmetic: {}", lists::list_ops::CHARACTER_IS_NO_NUMBER),
+					format!(
+						"type error: {kind} in arithmetic: {}",
+						lists::list_ops::CHARACTER_IS_NO_NUMBER
+					),
 				);
 			}
 			// an array of Ints or Floats holds no character: its fast read stays

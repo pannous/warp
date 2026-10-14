@@ -30,7 +30,12 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit ternary expression returning i64: condition ? then_expr : else_expr
-	pub(in crate::wasm_emitter) fn emit_ternary_numeric(&mut self, func: &mut Function, condition: &Node, then_else: &Node) {
+	pub(in crate::wasm_emitter) fn emit_ternary_numeric(
+		&mut self,
+		func: &mut Function,
+		condition: &Node,
+		then_else: &Node,
+	) {
 		self.emit_ternary_raw(func, condition, then_else, ValType::I64, Self::emit_numeric_value);
 	}
 
@@ -52,7 +57,12 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit if-then-else returning i64: if condition then then_expr else else_expr
-	pub(in crate::wasm_emitter) fn emit_if_then_else_numeric(&mut self, func: &mut Function, left: &Node, else_expr: Option<&Node>) {
+	pub(in crate::wasm_emitter) fn emit_if_then_else_numeric(
+		&mut self,
+		func: &mut Function,
+		left: &Node,
+		else_expr: Option<&Node>,
+	) {
 		self.emit_if_then_else_raw(func, left, else_expr, ValType::I64, Self::emit_numeric_value);
 	}
 
@@ -107,7 +117,12 @@ impl WasmGcEmitter {
 	/// Emit if-then-else expression: if condition then then_expr [else else_expr]
 	/// Structure: Key(Key(Key(Empty, If, condition), Then, then_expr), Else, else_expr)
 	/// Or for if-then without else: Key(Key(Empty, If, condition), Then, then_expr)
-	pub(in crate::wasm_emitter) fn emit_if_then_else(&mut self, func: &mut Function, left: &Node, else_expr: Option<&Node>) {
+	pub(in crate::wasm_emitter) fn emit_if_then_else(
+		&mut self,
+		func: &mut Function,
+		left: &Node,
+		else_expr: Option<&Node>,
+	) {
 		// Extract condition and then_expr from structure
 		// Structure: Key(Key(Empty, If, condition), Then, then_expr)
 		let Some((condition, then_expr)) = if_then_parts(left) else {
@@ -201,7 +216,13 @@ impl WasmGcEmitter {
 
 	/// Emit while loop: (while condition) do body
 	/// If wrap_result is true, wraps result in Node; otherwise returns raw i64
-	pub(in crate::wasm_emitter) fn emit_while_loop_impl(&mut self, func: &mut Function, left: &Node, body: &Node, wrap_result: bool) {
+	pub(in crate::wasm_emitter) fn emit_while_loop_impl(
+		&mut self,
+		func: &mut Function,
+		left: &Node,
+		body: &Node,
+		wrap_result: bool,
+	) {
 		let Node::Key(_, Op::While, condition) = left.drop_meta() else {
 			self.emit_malformed(func, left, "`while condition`");
 			return;

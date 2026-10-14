@@ -21,7 +21,12 @@ impl WasmGcEmitter {
 	}
 
 	/// `return a, b` and `x, y = …`: emitted here, true when `node` was one of them
-	pub(in crate::wasm_emitter) fn emit_tuple_statement(&mut self, func: &mut Function, node: &Node, read: ValueReader) -> bool {
+	pub(in crate::wasm_emitter) fn emit_tuple_statement(
+		&mut self,
+		func: &mut Function,
+		node: &Node,
+		read: ValueReader,
+	) -> bool {
 		if let Some(values) = returned_values(node) {
 			self.emit_tuple_return(func, values);
 			return true;

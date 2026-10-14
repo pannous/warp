@@ -452,7 +452,12 @@ impl WasmGcEmitter {
 	}
 
 	/// A call of a user function whose result is wanted as a Node
-	pub(in crate::wasm_emitter) fn emit_user_function_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
+	pub(in crate::wasm_emitter) fn emit_user_function_call(
+		&mut self,
+		func: &mut Function,
+		fn_name: &str,
+		args: &[Node],
+	) {
 		let Some(user_fn) = self.emit_defined_user_function_call(func, fn_name, args) else {
 			return;
 		};
@@ -507,7 +512,12 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit a call to a user-defined function whose result is needed as f64
-	pub(in crate::wasm_emitter) fn emit_user_function_call_float(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
+	pub(in crate::wasm_emitter) fn emit_user_function_call_float(
+		&mut self,
+		func: &mut Function,
+		fn_name: &str,
+		args: &[Node],
+	) {
 		let user_fn = self.ctx.user_functions[fn_name].clone();
 		if user_fn.return_kind.is_float() {
 			self.emit_user_function_call_inner(func, &user_fn, args);
@@ -522,7 +532,12 @@ impl WasmGcEmitter {
 	}
 
 	/// A call of a user function whose result is wanted as a raw i64: the Int of a Node result
-	pub(in crate::wasm_emitter) fn emit_user_function_call_numeric(&mut self, func: &mut Function, fn_name: &str, args: &[Node]) {
+	pub(in crate::wasm_emitter) fn emit_user_function_call_numeric(
+		&mut self,
+		func: &mut Function,
+		fn_name: &str,
+		args: &[Node],
+	) {
 		let Some(user_fn) = self.emit_defined_user_function_call(func, fn_name, args) else {
 			return;
 		};
@@ -551,7 +566,12 @@ impl WasmGcEmitter {
 	}
 
 	/// Arguments and the call: the function's own results on the stack, several for a tuple function
-	pub(in crate::wasm_emitter) fn emit_user_function_values(&mut self, func: &mut Function, user_fn: &UserFunctionDef, args: &[Node]) {
+	pub(in crate::wasm_emitter) fn emit_user_function_values(
+		&mut self,
+		func: &mut Function,
+		user_fn: &UserFunctionDef,
+		args: &[Node],
+	) {
 		let Some(func_index) = user_fn.func_index else {
 			self.emit_type_error(func, format!("function {} is used before it is compiled", user_fn.name));
 			return;

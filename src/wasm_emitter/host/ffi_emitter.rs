@@ -9,7 +9,12 @@ use super::super::WasmGcEmitter;
 
 impl WasmGcEmitter {
 	/// Emit arguments for FFI function call with type conversion
-	pub(in crate::wasm_emitter) fn emit_ffi_args(&mut self, func: &mut Function, args: &[Node], sig: &crate::ffi::FfiSignature) {
+	pub(in crate::wasm_emitter) fn emit_ffi_args(
+		&mut self,
+		func: &mut Function,
+		args: &[Node],
+		sig: &crate::ffi::FfiSignature,
+	) {
 		// a text whose length the call leaves out crosses as (pointer, length): strcmp's, a module's `const void *, size_t`
 		let texts_with_lengths = if args.len() < sig.params.len() {
 			crate::modules::wasm_modules::texts_with_lengths(sig)
@@ -87,7 +92,12 @@ impl WasmGcEmitter {
 
 	/// Emit FFI result conversion based on context
 	/// None = wrap in Node, Some(Kind::Int) = raw i64, Some(Kind::Float) = raw f64
-	pub(in crate::wasm_emitter) fn emit_ffi_result(&mut self, func: &mut Function, sig: &crate::ffi::FfiSignature, ctx: Option<Kind>) {
+	pub(in crate::wasm_emitter) fn emit_ffi_result(
+		&mut self,
+		func: &mut Function,
+		sig: &crate::ffi::FfiSignature,
+		ctx: Option<Kind>,
+	) {
 		let result_type = sig.results.first().copied();
 		// a host word giving a value (task_await_value): the Node it built, its number where one is wanted
 		if matches!(result_type, Some(ValType::Ref(_))) {
@@ -154,7 +164,13 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit FFI function call with automatic result handling based on context
-	pub(in crate::wasm_emitter) fn emit_ffi_call(&mut self, func: &mut Function, fn_name: &str, args: &[Node], ctx: Option<Kind>) {
+	pub(in crate::wasm_emitter) fn emit_ffi_call(
+		&mut self,
+		func: &mut Function,
+		fn_name: &str,
+		args: &[Node],
+		ctx: Option<Kind>,
+	) {
 		if [crate::host::STD_PURE, crate::host::STD_IO].contains(&fn_name) {
 			self.note_std_module(args.first());
 		}

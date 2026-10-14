@@ -286,7 +286,12 @@ impl WasmGcEmitter {
 	}
 
 	/// Stack [a, b] (Ints) → [a // b], the Euclidean quotient: (a - a % b) / b is exact on fixnums, else exact_euclid_div
-	pub(in crate::wasm_emitter) fn emit_euclidean_quotient(&mut self, func: &mut Function, left: IntRange, right: IntRange) {
+	pub(in crate::wasm_emitter) fn emit_euclidean_quotient(
+		&mut self,
+		func: &mut Function,
+		left: IntRange,
+		right: IntRange,
+	) {
 		if !self.int_runtime() {
 			return self.emit_call(func, "exact_euclid_div");
 		}
@@ -586,7 +591,11 @@ impl WasmGcEmitter {
 	}
 
 	/// Stack [Int] → [Int], trapping in `overflow_of_<type>` when the Int leaves the range of `width`
-	pub(in crate::wasm_emitter) fn emit_fixed_width_check(&mut self, func: &mut Function, width: Option<&'static FixedWidth>) {
+	pub(in crate::wasm_emitter) fn emit_fixed_width_check(
+		&mut self,
+		func: &mut Function,
+		width: Option<&'static FixedWidth>,
+	) {
 		let Some(width) = width else { return };
 		let value = self.scratch(2);
 		func.instruction(&I::LocalSet(value));
@@ -837,7 +846,12 @@ impl WasmGcEmitter {
 	}
 
 	/// Push i32 1 when numerator and denominator (Int locals of a normalized ratio) fit inside a handle
-	pub(in crate::wasm_emitter) fn emit_inline_ratio_fits(&self, func: &mut Function, numerator: u32, denominator: u32) {
+	pub(in crate::wasm_emitter) fn emit_inline_ratio_fits(
+		&self,
+		func: &mut Function,
+		numerator: u32,
+		denominator: u32,
+	) {
 		Self::emit_list(
 			func,
 			&[

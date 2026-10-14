@@ -385,7 +385,12 @@ impl WasmGcEmitter {
 	}
 
 	/// Push the element count (i64) of `target`; `counter` is the runtime counter of the generic backend (node_count, node_bytes …)
-	pub(in crate::wasm_emitter) fn emit_list_count(&mut self, func: &mut Function, target: &Node, counter: &'static str) {
+	pub(in crate::wasm_emitter) fn emit_list_count(
+		&mut self,
+		func: &mut Function,
+		target: &Node,
+		counter: &'static str,
+	) {
 		// `(statements; xs)` (a lowered filter): the statements run, a typed list xs is counted without making its nodes
 		if let Node::List(items, Bracket::Round, crate::node::Separator::Semicolon | crate::node::Separator::Newline) =
 			target.drop_meta()
@@ -422,7 +427,12 @@ impl WasmGcEmitter {
 
 	/// Push the number (i64) at the 1-based `index` of `target`; a float element takes the generic way, which fails as
 	/// it always did
-	pub(in crate::wasm_emitter) fn emit_list_element_number(&mut self, func: &mut Function, target: &Node, index: &Node) {
+	pub(in crate::wasm_emitter) fn emit_list_element_number(
+		&mut self,
+		func: &mut Function,
+		target: &Node,
+		index: &Node,
+	) {
 		self.emit_integral_index_check(func, index);
 		match self.list_backend(ListOp::Element, target) {
 			Backend::TypedArray(ElementType::Int) => self.emit_typed_element(func, target, index),
@@ -449,7 +459,12 @@ impl WasmGcEmitter {
 	}
 
 	/// Push the f64 at the 1-based `index` of a typed list `target`
-	pub(in crate::wasm_emitter) fn emit_typed_element_float(&mut self, func: &mut Function, target: &Node, index: &Node) {
+	pub(in crate::wasm_emitter) fn emit_typed_element_float(
+		&mut self,
+		func: &mut Function,
+		target: &Node,
+		index: &Node,
+	) {
 		let (_, list) = self.typed_list(target).expect("typed backend");
 		self.emit_integral_index_check(func, index);
 		self.emit_typed_element(func, target, index);
@@ -562,7 +577,12 @@ impl WasmGcEmitter {
 	}
 
 	/// `name = value` for a typed list variable: stores the list and leaves it on the stack. False for any other variable.
-	pub(in crate::wasm_emitter) fn emit_typed_list_store(&mut self, func: &mut Function, name: &str, value: &Node) -> bool {
+	pub(in crate::wasm_emitter) fn emit_typed_list_store(
+		&mut self,
+		func: &mut Function,
+		name: &str,
+		value: &Node,
+	) -> bool {
 		if let Some(slot) = self.typed_map(&Node::Symbol(name.to_string())) {
 			self.emit_typed_map_store(func, name, slot, value);
 			return true;
@@ -647,7 +667,8 @@ impl WasmGcEmitter {
 			}
 			// a call of a function giving back its array: that array, no conversion (list_abi.rs)
 			_ if list.element == ElementType::Node
-				&& super::super::lists::list_abi::called_function(value).is_some_and(|callee| self.returns_list_abi(callee)) =>
+				&& super::super::lists::list_abi::called_function(value)
+					.is_some_and(|callee| self.returns_list_abi(callee)) =>
 			{
 				self.emit_list_abi_value(func, value);
 			}
@@ -663,7 +684,12 @@ impl WasmGcEmitter {
 	}
 
 	/// `xs += [a b]` of a typed list: the items pushed onto its array in place, leaving the list. False for any other
-	pub(in crate::wasm_emitter) fn emit_typed_list_extend(&mut self, func: &mut Function, name: &str, items: &[Node]) -> bool {
+	pub(in crate::wasm_emitter) fn emit_typed_list_extend(
+		&mut self,
+		func: &mut Function,
+		name: &str,
+		items: &[Node],
+	) -> bool {
 		let Some((slot, list)) = self.typed_list(&Node::Symbol(name.to_string())) else {
 			return false;
 		};
@@ -765,7 +791,13 @@ impl WasmGcEmitter {
 
 	/// `list_sum(list, loop)` as `wanted`: a typed list sums its items in one runtime call (an int sum that leaves the
 	/// fixnum range runs the exact loop instead), any other list runs the loop
-	pub(in crate::wasm_emitter) fn emit_list_sum(&mut self, func: &mut Function, list: &Node, sum_loop: &Node, wanted: Wanted) {
+	pub(in crate::wasm_emitter) fn emit_list_sum(
+		&mut self,
+		func: &mut Function,
+		list: &Node,
+		sum_loop: &Node,
+		wanted: Wanted,
+	) {
 		match (self.list_backend(ListOp::Sum, list), wanted) {
 			(Backend::TypedArray(ElementType::Int), _) => {
 				let (slot, _) = self.typed_list(list).expect("typed backend");

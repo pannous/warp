@@ -227,12 +227,21 @@ impl WasmGcEmitter {
 	}
 
 	/// `√x`, `-x`, `!x`, `‖x‖` where an Int is wanted
-	pub(in crate::wasm_emitter) fn emit_numeric_prefix(&mut self, func: &mut Function, located: &Node, op: &Op, right: &Node) {
+	pub(in crate::wasm_emitter) fn emit_numeric_prefix(
+		&mut self,
+		func: &mut Function,
+		located: &Node,
+		op: &Op,
+		right: &Node,
+	) {
 		match op {
 			Op::Sqrt if self.get_type(right) == Kind::Codepoint => {
 				self.emit_type_error(
 					func,
-					format!("type error: √ of a codepoint: {}", lists::list_ops::CHARACTER_IS_NO_NUMBER),
+					format!(
+						"type error: √ of a codepoint: {}",
+						lists::list_ops::CHARACTER_IS_NO_NUMBER
+					),
 				);
 			}
 			root @ (Op::Sqrt | Op::Cbrt) => {
@@ -436,7 +445,13 @@ impl WasmGcEmitter {
 	}
 
 	/// `x = v` where an Int is wanted: the value stored and left on the stack (0 for a Node variable holding a non-number)
-	pub(in crate::wasm_emitter) fn emit_numeric_assignment(&mut self, func: &mut Function, located: &Node, left: &Node, right: &Node) {
+	pub(in crate::wasm_emitter) fn emit_numeric_assignment(
+		&mut self,
+		func: &mut Function,
+		located: &Node,
+		left: &Node,
+		right: &Node,
+	) {
 		if let Node::Key(node_expr, Op::Hash, index_expr) = left.drop_meta() {
 			self.emit_index_assignment(func, node_expr, index_expr, right);
 			return;
@@ -478,7 +493,13 @@ impl WasmGcEmitter {
 	}
 
 	/// `i++`, `i--` where an Int is wanted: the new value
-	pub(in crate::wasm_emitter) fn emit_numeric_step(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+	pub(in crate::wasm_emitter) fn emit_numeric_step(
+		&mut self,
+		func: &mut Function,
+		left: &Node,
+		op: &Op,
+		right: &Node,
+	) {
 		if let Some(assignment) = self.global_update_as_assignment(left, op, right) {
 			self.emit_numeric_value(func, &assignment);
 			return;
@@ -567,7 +588,12 @@ impl WasmGcEmitter {
 	}
 
 	/// Push i32 1 when `left` is falsy (0 or 0.0), keeping its value in a scratch local (a float as its bits)
-	pub(in crate::wasm_emitter) fn emit_held_left_is_falsy(&mut self, func: &mut Function, left: &Node, is_float: bool) {
+	pub(in crate::wasm_emitter) fn emit_held_left_is_falsy(
+		&mut self,
+		func: &mut Function,
+		left: &Node,
+		is_float: bool,
+	) {
 		let held = self.scratch(LOGICAL_SCRATCH);
 		if is_float {
 			self.emit_float_value(func, left);
@@ -596,7 +622,13 @@ impl WasmGcEmitter {
 	}
 
 	/// One branch of a numeric and/or: the held left value or right, raw
-	pub(in crate::wasm_emitter) fn emit_logical_branch(&mut self, func: &mut Function, is_left: bool, right: &Node, is_float: bool) {
+	pub(in crate::wasm_emitter) fn emit_logical_branch(
+		&mut self,
+		func: &mut Function,
+		is_left: bool,
+		right: &Node,
+		is_float: bool,
+	) {
 		match (is_left, is_float) {
 			(true, _) => self.emit_held_left(func, is_float),
 			(false, true) => self.emit_float_value(func, right),
@@ -728,7 +760,13 @@ impl WasmGcEmitter {
 
 	/// `left op right` as an f64; `x ^ 2` is x * x: one rounding of the exact square, as pow gives it, without a libm
 	/// call per use
-	pub(in crate::wasm_emitter) fn emit_float_operation(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+	pub(in crate::wasm_emitter) fn emit_float_operation(
+		&mut self,
+		func: &mut Function,
+		left: &Node,
+		op: &Op,
+		right: &Node,
+	) {
 		self.emit_float_value(func, left);
 		if *op == Op::Pow && matches!(right.drop_meta(), Node::Number(Number::Int(2))) {
 			self.pop_float_scratch(func, 0);
@@ -753,7 +791,13 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit both operands as Ints and apply an arithmetic, xor or comparison operator
-	pub(in crate::wasm_emitter) fn emit_int_operands_op(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+	pub(in crate::wasm_emitter) fn emit_int_operands_op(
+		&mut self,
+		func: &mut Function,
+		left: &Node,
+		op: &Op,
+		right: &Node,
+	) {
 		// `s < "b"`, `c >= "0"` with a text: ordered by code points (node_order, as sort orders them); a value held as a
 		// Node (a cell's, another runtime's: `time.time() > 0`) by its value, an Int or a Float decided at run time
 		// (an element `xs#2` that is a character compares by its code point with a number, `x#2 > 50`)
@@ -843,7 +887,13 @@ impl WasmGcEmitter {
 
 	/// Emit truthy logical operations (and/or) when operands may be non-numeric
 	/// Returns a Node reference based on short-circuit evaluation
-	pub(in crate::wasm_emitter) fn emit_truthy_logical(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+	pub(in crate::wasm_emitter) fn emit_truthy_logical(
+		&mut self,
+		func: &mut Function,
+		left: &Node,
+		op: &Op,
+		right: &Node,
+	) {
 		let node_ref = RefType {
 			nullable: false,
 			heap_type: HeapType::Concrete(self.type_manager.node_type),

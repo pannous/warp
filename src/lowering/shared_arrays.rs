@@ -779,14 +779,13 @@ fn float_map(value: &Node, names: &HashMap<String, Shared>) -> Option<(Node, Str
 	let Node::Symbol(parameter) = parameter.drop_meta() else {
 		return None;
 	};
-	(is_linear_floats(array, names) && crate::wasm_emitter::lists::linear_arrays::is_float_kernel(parameter, body)).then(
-		|| {
+	(is_linear_floats(array, names) && crate::wasm_emitter::lists::linear_arrays::is_float_kernel(parameter, body))
+		.then(|| {
 			(
 				array.clone(),
 				crate::wasm_emitter::lists::linear_arrays::kernel_name(parameter, body),
 			)
-		},
-	)
+		})
 }
 
 /// `xs.map(f)` or `map(xs, f)`: xs and f

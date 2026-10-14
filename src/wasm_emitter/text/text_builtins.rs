@@ -105,7 +105,9 @@ const TEXT_BUILTINS: [(&str, usize, Kind); 23] = [
 
 /// The text builtins and the node words (node_api.rs), which are called the same way
 fn builtins() -> impl Iterator<Item = &'static (&'static str, usize, Kind)> {
-	TEXT_BUILTINS.iter().chain(super::super::reflection::node_api::NODE_BUILTINS.iter())
+	TEXT_BUILTINS
+		.iter()
+		.chain(super::super::reflection::node_api::NODE_BUILTINS.iter())
 }
 
 pub fn text_builtin_kind(name: &str, arguments: usize) -> Option<Kind> {
@@ -162,13 +164,19 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	}
 	// instance_copy is emitted with field_with, both looking into an instance's fields; `shallow` is tested for truth
 	if required.contains(crate::library_words::INSTANCE_COPY) {
-		required.extend([crate::library_words::FIELD_WITH, super::super::reflection::equality::IS_TRUTHY]);
+		required.extend([
+			crate::library_words::FIELD_WITH,
+			super::super::reflection::equality::IS_TRUTHY,
+		]);
 	}
 	if required.contains(crate::library_words::FIELD_WITH) {
 		required.insert(super::super::lists::list_ops::STRUCT_BODY); // an instance keeps its type
 	}
 	if required.contains(super::super::lists::list_ops::NODE_WITH_KEY) {
-		required.extend([super::super::lists::list_ops::NODE_WITH_NODE_AT, crate::library_words::FIELD_WITH]);
+		required.extend([
+			super::super::lists::list_ops::NODE_WITH_NODE_AT,
+			crate::library_words::FIELD_WITH,
+		]);
 	}
 	if required.contains(super::super::lists::list_ops::NODE_WITH_NODE_AT) {
 		required.extend(["node_with_at", "get_int_value"]);
@@ -205,7 +213,12 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		required.insert("list_concat"); // of a non-list
 	}
 	if required.contains(super::super::lists::list_ops::NODE_ADD) {
-		required.extend(["list_concat", TEXT_CONCAT, TEXT_OF, super::super::reflection::library_ops::LIST_JOIN]);
+		required.extend([
+			"list_concat",
+			TEXT_CONCAT,
+			TEXT_OF,
+			super::super::reflection::library_ops::LIST_JOIN,
+		]);
 		// two lists added are concatenated, two texts too, a text and a number joined
 	}
 	if required.contains(super::super::numbers::casts::TEXT_AS_NUMBER) {
@@ -242,7 +255,9 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 			required.extend(["is_ratio", "invalid_number"]);
 		}
 	}
-	if required.contains(super::super::lists::list_ops::TEXT_AS_INT) || required.contains(super::super::lists::list_ops::TEXT_AS_FLOAT) {
+	if required.contains(super::super::lists::list_ops::TEXT_AS_INT)
+		|| required.contains(super::super::lists::list_ops::TEXT_AS_FLOAT)
+	{
 		required.insert("get_int_value");
 	}
 	if required.contains(super::super::lists::list_ops::TEXT_AS_FLOAT) {
@@ -258,7 +273,11 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		required.insert(super::super::reflection::library_ops::LIST_SORTED_BY);
 	}
 	if required.contains(super::super::reflection::library_ops::LIST_SORTED_BY) {
-		required.extend([super::super::reflection::library_ops::NODE_ORDER, "text_chars", "list_join"]);
+		required.extend([
+			super::super::reflection::library_ops::NODE_ORDER,
+			"text_chars",
+			"list_join",
+		]);
 	}
 	if [TEXT_FIND, TEXT_STARTS_WITH, TEXT_ENDS_WITH]
 		.iter()
@@ -273,7 +292,9 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	{
 		required.extend([TEXT_FIND, TEXT_MATCHES_AT, TEXT_OF]);
 	}
-	if required.contains(super::super::host::wasi_emitter::PRINT_VALUE) || required.contains(super::super::host::wasi_emitter::PUT_VALUE) {
+	if required.contains(super::super::host::wasi_emitter::PRINT_VALUE)
+		|| required.contains(super::super::host::wasi_emitter::PUT_VALUE)
+	{
 		required.insert("list_join");
 	}
 	// the text of a list (list_text) is emitted with join, as the analyzer requires list_join for both
@@ -453,7 +474,12 @@ impl WasmGcEmitter {
 		}
 	}
 
-	pub(in crate::wasm_emitter) fn emit_integer_text_builtin(&mut self, func: &mut Function, name: &str, arguments: &[Node]) {
+	pub(in crate::wasm_emitter) fn emit_integer_text_builtin(
+		&mut self,
+		func: &mut Function,
+		name: &str,
+		arguments: &[Node],
+	) {
 		match (name, arguments) {
 			(FLOAT_BITS, [value]) => {
 				self.emit_float_value(func, value);

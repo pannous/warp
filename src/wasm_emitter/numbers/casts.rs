@@ -20,7 +20,12 @@ const CONVERSION_WORDS: [&str; 5] = ["text", "list", "codepoint", crate::analyze
 impl WasmGcEmitter {
 	/// Text converts only if it is a number literal (truncated for int); anything else is a runtime error, never a plausible 0
 	/// `'7' as int` is 7; `'x' as int` is no number (invalid_number, which `try` catches), hinted toward `codepoint('x')`
-	pub(in crate::wasm_emitter) fn emit_character_cast(&mut self, func: &mut Function, character: char, target_type: &Node) {
+	pub(in crate::wasm_emitter) fn emit_character_cast(
+		&mut self,
+		func: &mut Function,
+		character: char,
+		target_type: &Node,
+	) {
 		if !character.is_ascii_digit() {
 			let (target, codepoint) = (target_type.name(), crate::words::CODEPOINT);
 			crate::normalize::hint(
@@ -33,9 +38,16 @@ impl WasmGcEmitter {
 	}
 
 	/// `reverse(xs)`, `codepoint(c)`: a call of a library word the program does not define itself
-	pub(in crate::wasm_emitter) fn is_library_word_call(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
+	pub(in crate::wasm_emitter) fn is_library_word_call(
+		&self,
+		items: &[Node],
+		bracket: &Bracket,
+		separator: &Separator,
+	) -> bool {
 		crate::analyzer::call_name(items, bracket, separator).is_some_and(|name| {
-			reflection::library_ops::LIBRARY_FUNCTIONS.iter().any(|(word, _)| *word == name)
+			reflection::library_ops::LIBRARY_FUNCTIONS
+				.iter()
+				.any(|(word, _)| *word == name)
 				&& !self.ctx.user_functions.contains_key(name)
 		})
 	}
@@ -76,7 +88,13 @@ impl WasmGcEmitter {
 		})
 	}
 
-	pub(in crate::wasm_emitter) fn emit_numeric_cast(&mut self, func: &mut Function, located: &Node, value: &Node, target: &Node) {
+	pub(in crate::wasm_emitter) fn emit_numeric_cast(
+		&mut self,
+		func: &mut Function,
+		located: &Node,
+		value: &Node,
+		target: &Node,
+	) {
 		if let Some(computed) = super::super::numbers::radix::computed_type(target) {
 			return self.emit_numeric_cast(func, located, value, &computed);
 		}
@@ -388,7 +406,12 @@ impl WasmGcEmitter {
 	}
 
 	/// `x as exact`: a decimal literal is the fraction it spells (`2.1 as exact` is 21/10), a runtime float is refused
-	pub(in crate::wasm_emitter) fn emit_cast_to_exact(&mut self, func: &mut Function, value: &Node, target_type: &Node) {
+	pub(in crate::wasm_emitter) fn emit_cast_to_exact(
+		&mut self,
+		func: &mut Function,
+		value: &Node,
+		target_type: &Node,
+	) {
 		match value.drop_meta() {
 			Node::Number(Number::Float(decimal)) => {
 				self.emit_decimal_literal(func, *decimal);
@@ -405,7 +428,12 @@ impl WasmGcEmitter {
 	}
 
 	/// `x as float`
-	pub(in crate::wasm_emitter) fn emit_cast_to_float(&mut self, func: &mut Function, value: &Node, target_type: &Node) {
+	pub(in crate::wasm_emitter) fn emit_cast_to_float(
+		&mut self,
+		func: &mut Function,
+		value: &Node,
+		target_type: &Node,
+	) {
 		match value {
 			Node::Text(s) => self.emit_text_cast(func, s, target_type),
 			Node::Char(c) => self.emit_character_cast(func, *c, target_type),
@@ -758,7 +786,8 @@ fn converts_to(type_name: &str) -> bool {
 /// built-in types have their calls (`int("12")`, analyzer::type_cast_of), a library word its function (`codepoint(c)`)
 pub(crate) fn is_called_conversion(type_name: &str) -> bool {
 	(converts_to(type_name) || type_name == super::super::numbers::exact::DECIMAL_WORD)
-		&& (crate::analyzer::type_word_kind(type_name).is_none() || super::super::numbers::radix::shown_radix(type_name).is_some())
+		&& (crate::analyzer::type_word_kind(type_name).is_none()
+			|| super::super::numbers::radix::shown_radix(type_name).is_some())
 		&& !reflection::library_ops::LIBRARY_FUNCTIONS
 			.iter()
 			.any(|(word, _)| *word == type_name)

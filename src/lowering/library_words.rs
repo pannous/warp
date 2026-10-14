@@ -442,7 +442,8 @@ pub fn lower_function_methods(node: Node) -> Node {
 	// a libc function is no method: `m.remove(k)` is the map's, not stdio's remove(path)
 	let is_libm = |name: &str| crate::ffi::get_ffi_signature(name).is_some_and(|signature| signature.library != "c");
 	let is_builtin = |name: &str, arguments: usize| {
-		let is_text_builtin = crate::wasm_emitter::text::text_builtins::text_builtin_kind(name, arguments + 1).is_some();
+		let is_text_builtin =
+			crate::wasm_emitter::text::text_builtins::text_builtin_kind(name, arguments + 1).is_some();
 		crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name)
 			|| crate::min_max::is_extremum(name)
 			|| is_text_builtin

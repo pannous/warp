@@ -74,7 +74,12 @@ impl WasmGcEmitter {
 	/// The zone functions, when a program makes a zoned time; after emit_times_runtime, whose calendar they use
 	pub(in crate::wasm_emitter) fn emit_time_zones(&mut self) {
 		// required, not merely emitted, as time arithmetic (uses_times): their refusals mark the text constructors used
-		if !self.uses_times() || !self.ctx.required_functions.contains(super::super::time::times::ZONE_NAMES) {
+		if !self.uses_times()
+			|| !self
+				.ctx
+				.required_functions
+				.contains(super::super::time::times::ZONE_NAMES)
+		{
 			return;
 		}
 		self.emit_zone_rule();
@@ -424,7 +429,14 @@ impl WasmGcEmitter {
 
 	/// Puts the instant of the wall time in `wall` into it, resolved in `zone` with `choice`; a skipped or repeated
 	/// wall time with no choice fails
-	pub(in crate::wasm_emitter) fn emit_resolved_instant(&mut self, f: &mut Function, zone: u32, wall: u32, choice: u32, status: u32) {
+	pub(in crate::wasm_emitter) fn emit_resolved_instant(
+		&mut self,
+		f: &mut Function,
+		zone: u32,
+		wall: u32,
+		choice: u32,
+		status: u32,
+	) {
 		Self::emit_list(f, &[I::LocalGet(zone), I::LocalGet(wall), I::LocalGet(choice)]);
 		self.call(f, ZONE_RESOLVE);
 		Self::emit_list(f, &[I::LocalSet(status), I::LocalSet(wall)]);

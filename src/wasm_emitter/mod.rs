@@ -7,17 +7,17 @@ mod module_finish;
 pub use maps::raw_structs::run_raw_struct;
 pub(crate) use maps::raw_structs::*;
 
-pub(crate) mod numbers;
 pub(crate) mod control;
 mod globals;
+pub(crate) mod numbers;
 use control::control_flow::LoopValues;
-pub mod functions;
 mod declared_values;
+pub mod functions;
 mod values;
 pub use functions::closures::{CLOSURE_APPLY, CLOSURE_CAPTURED, CLOSURE_REBUILD};
 mod constructors;
-pub(crate) use numbers::casts::is_called_conversion;
 pub use constructors::NEW_BOOL;
+pub(crate) use numbers::casts::is_called_conversion;
 mod config;
 mod function_builder;
 mod import_manager;
@@ -27,8 +27,8 @@ pub use reflection::node_api::NODE_AT;
 pub(crate) mod time;
 pub use text::similarity::NUMBERS_SIMILAR;
 pub(crate) mod maps;
-pub use maps::map_backend::MAP_COPY_SUFFIX;
 pub(crate) use control::loop_control::{is_step, mark_step, split_step};
+pub use maps::map_backend::MAP_COPY_SUFFIX;
 pub(crate) mod reflection;
 mod string_table;
 pub(crate) mod text;
@@ -152,8 +152,8 @@ fn if_then_parts(node: &Node) -> Option<(&Node, &Node)> {
 }
 
 pub use config::EmitterConfig;
-pub use reflection::equality::{IS_TRUTHY, SAME_NODE, VALUES_EQUAL};
 pub use import_manager::ImportManager;
+pub use reflection::equality::{IS_TRUTHY, SAME_NODE, VALUES_EQUAL};
 pub use string_table::StringTable;
 pub use type_manager::TypeManager;
 
@@ -770,7 +770,8 @@ impl WasmGcEmitter {
 			Need::Function(name) => self.ctx.required_functions.contains(name),
 			Need::MathImport(key) => self.ctx.ffi_imports.contains_key(*key),
 			Need::KeyOperator(code) => {
-				*code <= self.written_operator_bound || !self.ctx.required_functions.contains(reflection::library_ops::LIST_TEXT)
+				*code <= self.written_operator_bound
+					|| !self.ctx.required_functions.contains(reflection::library_ops::LIST_TEXT)
 			}
 		}
 	}
@@ -1029,7 +1030,8 @@ impl WasmGcEmitter {
 			&& self.should_emit_function("list_join")
 			&& !self.should_emit_function(numbers::float_text::FLOAT_TEXT)
 		{
-			self.discovered_needs.insert(Need::Function(numbers::float_text::FLOAT_TEXT));
+			self.discovered_needs
+				.insert(Need::Function(numbers::float_text::FLOAT_TEXT));
 		}
 		self.ctx.used_functions.insert(name);
 		func.instruction(&I::Call(self.func_index(name)));

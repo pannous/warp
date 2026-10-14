@@ -216,7 +216,10 @@ impl WasmGcEmitter {
 			}
 		}
 		if let [Node::Symbol(fn_name), arguments @ ..] = items {
-			match (text::text_builtins::text_builtin_kind(fn_name, arguments.len()), arguments) {
+			match (
+				text::text_builtins::text_builtin_kind(fn_name, arguments.len()),
+				arguments,
+			) {
 				(Some(Kind::Int), _) => {
 					self.emit_integer_text_builtin(func, fn_name, arguments);
 					return true;
@@ -515,7 +518,8 @@ impl WasmGcEmitter {
 /// `int`, `Int`, `integer`: the type `x as int` converts to; `as i64` wraps (casts.rs WRAPPING_INT_WORDS)
 pub(super) fn is_int_type_word(target: &Node) -> bool {
 	let word = target.drop_meta().name().to_lowercase();
-	crate::type_tests::canonical_spec_word(&word) == "int" && !super::numbers::casts::WRAPPING_INT_WORDS.contains(&word.as_str())
+	crate::type_tests::canonical_spec_word(&word) == "int"
+		&& !super::numbers::casts::WRAPPING_INT_WORDS.contains(&word.as_str())
 }
 
 /// The info of a list of these items: one item stands between no separators (`[a]` parses Space-separated)

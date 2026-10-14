@@ -5,10 +5,10 @@
 //! its standard deviation, low and high one deviation from the value; its arithmetic propagates linearly and adds
 //! independent deviations in quadrature (gaussian_add and its siblings), so `(5 ± 1σ) + (2 ± 1σ)` is 7 ± 1.4σ
 
-use super::super::numbers::float_text::FLOAT_TEXT;
 use super::super::layout::BYTE;
-use super::super::reflection::library_ops::NODE_ORDER;
 use super::super::lists::list_ops::TEXT_AS_FLOAT;
+use super::super::numbers::float_text::FLOAT_TEXT;
+use super::super::reflection::library_ops::NODE_ORDER;
 use super::super::text::similarity::NUMBERS_SIMILAR;
 use super::super::text::text_builtins::TEXT_CONCAT;
 use super::super::WasmGcEmitter;
@@ -139,7 +139,12 @@ impl WasmGcEmitter {
 
 	/// `sin(x)`, `√x` of a value held as a Node in a program with ± values: through the word's uncertain_<word>, which maps
 	/// an interval. False otherwise, and the caller computes the word on a float
-	pub(in crate::wasm_emitter) fn emit_interval_word(&mut self, func: &mut Function, word: &str, argument: &Node) -> bool {
+	pub(in crate::wasm_emitter) fn emit_interval_word(
+		&mut self,
+		func: &mut Function,
+		word: &str,
+		argument: &Node,
+	) -> bool {
 		let Some((_, name, _)) = INTERVAL_WORDS.iter().find(|(known, _, _)| *known == word) else {
 			return false;
 		};
@@ -1215,7 +1220,13 @@ impl WasmGcEmitter {
 
 	/// After both operands of a bare ordering: the i64 verdict, or false with `overlap_warning` when ± values overlap.
 	/// False when the program has no ± values (the caller orders them itself)
-	pub(in crate::wasm_emitter) fn emit_bare_uncertain_order(&mut self, func: &mut Function, left: &Node, op: Op, right: &Node) -> bool {
+	pub(in crate::wasm_emitter) fn emit_bare_uncertain_order(
+		&mut self,
+		func: &mut Function,
+		left: &Node,
+		op: Op,
+		right: &Node,
+	) -> bool {
 		if !self.should_emit_function(UNCERTAIN_ORDER) {
 			return false;
 		}

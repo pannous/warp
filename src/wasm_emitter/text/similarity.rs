@@ -4,10 +4,10 @@
 //! instances entry by entry with ≈ again, anything else by values_equal. `a ~ b` (P211, values_rough) is the same with
 //! its own tolerance, texts also without the whitespace and punctuation around them (text_rough_trim).
 
+use super::super::numbers::uncertain::UNCERTAIN_SIMILAR;
 use super::super::reflection::equality::IS_META_ENTRY;
 use super::super::text::text_builtins::{TEXT_OF, TEXT_ROUGH_TRIM};
 use super::super::text::text_unicode::CaseMapping;
-use super::super::numbers::uncertain::UNCERTAIN_SIMILAR;
 use super::super::{WasmGcEmitter, IS_TRUTHY, VALUES_EQUAL};
 use crate::library_words::{VALUES_ROUGH, VALUES_SIMILAR};
 use crate::node::Node;

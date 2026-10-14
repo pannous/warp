@@ -91,7 +91,10 @@ impl ImportManager {
 			fd_write_type_idx,
 			"wasi_fd_write",
 		);
-		if ctx.required_functions.contains(super::host::wasi_emitter::WASI_ENVIRONMENT) {
+		if ctx
+			.required_functions
+			.contains(super::host::wasi_emitter::WASI_ENVIRONMENT)
+		{
 			let sizes_type = type_manager.function_type(vec![ValType::I32, ValType::I32], vec![ValType::I32]);
 			for (name, registered) in super::host::wasi_emitter::ENVIRON_IMPORTS
 				.into_iter()
