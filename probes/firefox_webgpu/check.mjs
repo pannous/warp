@@ -53,5 +53,48 @@
 	const source = `const describe = ${describe}; describe().then(r => postMessage(r), e => postMessage({ workerError: String(e) }));`;
 	const worker = new Worker(URL.createObjectURL(new Blob([source], { type: "text/javascript" })));
 	const inWorker = await new Promise(done => { worker.onmessage = m => done(m.data); worker.onerror = e => done({ onerror: e.message }); setTimeout(() => done({ timeout: true }), 20000); });
-	return JSON.stringify({ userAgent: navigator.userAgent, isolated: self.crossOriginIsolated, page, worker: inWorker }, null, 1);
+	// the playground's hand-off (host-gpu.js gpuPainted): a page canvas's OffscreenCanvas sent over a MessagePort that
+	// reached the drawing Worker through another port, drawn there through WebGPU
+	const drawer = `
+		self.addEventListener("error", event => self.report?.(\`error event: \${event.message} at \${event.lineno}\`));
+		onmessage = ({ data }) => {
+			const program = data.port;
+			self.report = text => program.postMessage(text);
+			program.onmessage = ({ data }) => {
+				program.postMessage("got the canvas port");
+				data.canvasPort.onmessage = async ({ data }) => {
+					try {
+						program.postMessage("got " + data.canvas);
+						const adapter = await navigator.gpu.requestAdapter();
+						const device = await adapter.requestDevice();
+						const context = data.canvas.getContext("webgpu");
+						program.postMessage("context " + context);
+						context.configure({ device, format: navigator.gpu.getPreferredCanvasFormat(), alphaMode: "opaque", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST });
+						const encoder = device.createCommandEncoder();
+						const pass = encoder.beginRenderPass({ colorAttachments: [{ view: context.getCurrentTexture().createView(), loadOp: "clear", clearValue: [1, 0, 0, 1], storeOp: "store" }] });
+						pass.end();
+						device.queue.submit([encoder.finish()]);
+						program.postMessage("drawn");
+					} catch (failure) { program.postMessage("THREW " + failure); }
+				};
+			};
+		};`;
+	const handoff = [];
+	try {
+		const drawing = new Worker(URL.createObjectURL(new Blob([drawer], { type: "text/javascript" })));
+		drawing.onerror = event => handoff.push(`drawing worker onerror: ${event.message}`);
+		const toDrawer = new MessageChannel();
+		drawing.postMessage({ port: toDrawer.port2 }, [toDrawer.port2]);
+		toDrawer.port1.onmessage = ({ data }) => handoff.push(data);
+		const canvasChannel = new MessageChannel();
+		toDrawer.port1.postMessage({ canvasPort: canvasChannel.port1 }, [canvasChannel.port1]);
+		const canvas = document.body.appendChild(document.createElement("canvas"));
+		canvas.width = canvas.height = 8;
+		const offscreen = canvas.transferControlToOffscreen();
+		handoff.push("transferred control");
+		canvasChannel.port2.postMessage({ canvas: offscreen }, [offscreen]);
+		handoff.push("posted the canvas");
+	} catch (failure) { handoff.push(`page THREW ${failure}`); }
+	await new Promise(done => setTimeout(done, 5000));
+	return JSON.stringify({ userAgent: navigator.userAgent, isolated: self.crossOriginIsolated, page, worker: inWorker, handoff }, null, 1);
 })()
