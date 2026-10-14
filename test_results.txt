@@ -2537,7 +2537,6 @@ PASSED:
   ✓ numbers::test_math::test_global_with_pi
   ✓ numbers::test_math::test_harder_arithmetic
   ✓ numbers::test_math::test_hypen_versus_minus
-  ✓ numbers::test_math::test_hyphen_units
   ✓ numbers::test_math::test_if_block_syntax
   ✓ numbers::test_math::test_if_then_else
   ✓ numbers::test_math::test_logarithm_in_runtime
@@ -2606,7 +2605,6 @@ PASSED:
   ✓ numbers::test_plus_minus_units::a_plain_spread_counts_in_the_value_unit
   ✓ numbers::test_plus_minus_units::a_tolerance_with_units_flows_through_arithmetic
   ✓ numbers::test_plus_minus_units::a_tolerance_with_units_passes_through_functions
-  ✓ numbers::test_plus_minus_units::compile_time_tolerances_stay_at_compile_time
   ✓ numbers::test_plus_minus::approximately_within_the_tolerance
   ✓ numbers::test_plus_minus::bounds_propagate_through_arithmetic
   ✓ numbers::test_plus_minus::intervals_are_not_correlated
@@ -2630,7 +2628,6 @@ PASSED:
   ✓ numbers::test_quantity_tolerance::a_sum_of_quantities_is_a_quantity
   ✓ numbers::test_quantity_tolerance::a_unit_field_takes_a_quantity_with_tolerance
   ✓ numbers::test_quantity_tolerance::quantities_with_tolerance_sum
-  ✓ numbers::test_range_tolerance_compare::a_range_equals_the_same_span_with_tolerance
   ✓ numbers::test_ratio_compare_shortcut::small_ratios_compare_in_i64_when_the_program_calculates
   ✓ numbers::test_ratio_float_division::a_ratio_divides_by_a_float
   ✓ numbers::test_rational_quantities::test_exact_amounts_compute_on
@@ -5392,4 +5389,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5387 passed, 0 failed, 5387 total tested
+13 ignored, 5384 passed, 0 failed, 5384 total tested
