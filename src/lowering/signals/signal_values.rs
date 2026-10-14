@@ -652,6 +652,13 @@ impl Signals {
 			let body = self.rewrite(definition.body.clone(), &inner, false);
 			return with_body(node, body);
 		}
+		// `xs.add(v)` on a signal is a write of its cell, which runs the listeners
+		if let Node::Key(list, Op::Dot, method) = node.drop_meta() {
+			if signals.contains(&signal_name(list)) && crate::declaration_forms::updates_list(list, method) {
+				let update = crate::declaration_forms::list_update(list.clone(), method);
+				return self.rewrite(update, signals, main);
+			}
+		}
 		if matches!(node.drop_meta(), Node::Key(_, Op::Dot, _)) && signals.contains(&signal_name(&node)) {
 			return call(CELL_GET, vec![node]);
 		}

@@ -1016,6 +1016,18 @@ pub(crate) fn lowered_insert(list: Box<Node>, call: &Node) -> Node {
 	)
 }
 
+/// `xs.add(v)` as `xs += [v]` and `xs.insert(i, v)` as its assignment, for a call that `updates_list`
+pub(crate) fn list_update(list: Box<Node>, call: &Node) -> Node {
+	match appended_element(&list, call).cloned() {
+		Some(element) => Node::Key(
+			list,
+			Op::AddAssign,
+			Box::new(Node::List(vec![element], Bracket::Square, Separator::Space)),
+		),
+		None => lowered_insert(list, call),
+	}
+}
+
 /// `xs.add(v)`, `xs.insert(i, v)`: an update of the list variable that ø (the empty list) allows
 pub(crate) fn updates_list(list: &Node, call: &Node) -> bool {
 	appended_element(list, call).is_some() || inserted_element(list, call).is_some()
