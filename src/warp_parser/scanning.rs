@@ -73,26 +73,6 @@ impl WarpParser {
 		*self.chars.get(self.pos + offset).unwrap_or(&'\0')
 	}
 
-	/// `else => …` at the cursor: the catch-all arm of a match on its own line, no else branch of the line before
-	pub(super) fn else_arm_key(&self) -> bool {
-		let after: String = self.chars[(self.pos + 4).min(self.chars.len())..]
-			.iter()
-			.skip_while(|ch| matches!(ch, ' ' | '\t'))
-			.take(2)
-			.collect();
-		after == "=>"
-	}
-
-	/// The cursor is in the key of a match arm: `=>` follows before the statement or block ends (`1 | 2 | 3 => …`)
-	pub(super) fn in_arm_key(&self) -> bool {
-		let rest = &self.chars[self.pos.min(self.chars.len())..];
-		let end = rest
-			.iter()
-			.position(|ch| matches!(ch, ';' | '\n' | '{' | '}'))
-			.unwrap_or(rest.len());
-		rest[..end].windows(2).any(|pair| pair == ['=', '>'])
-	}
-
 	/// The operator a block holds alone, the cursor at its start: `{++}`, `{ * }`, and its length up to the `}`
 	pub(super) fn bare_operator_in_block(&self) -> Option<(String, usize)> {
 		const OPERATOR_CHARS: &str = "+-*/%^<>=!&|";
@@ -222,17 +202,6 @@ impl WarpParser {
 	pub(super) fn at_floor_division(&self) -> bool {
 		let divisor_follows = self.chars.get(self.pos + 2).is_some_and(|next| !next.is_whitespace());
 		self.current_char() == '/' && self.peek_char(1) == '/' && divisor_follows && self.follows_operand_on_its_line()
-	}
-
-	/// `.+ .- .* ./` at the cursor: the element-wise form of the arithmetic operator (`./mozart.mp3` is a path)
-	pub(super) fn element_wise_operator(&self) -> Option<Op> {
-		if self.current_char() != '.' || self.starts_path_literal() {
-			return None;
-		}
-		let glyph = self.peek_char(1).to_string();
-		crate::operators::ELEMENT_WISE_OPERATORS
-			.into_iter()
-			.find(|op| op.as_str() == glyph)
 	}
 
 	/// `1 -1`, `[1 +1]`: a number, a space, then a sign glued to a number (D13). Asked: the list `[1 -1]` (the default,
@@ -652,6 +621,10 @@ impl WarpParser {
 		while !self.end_of_input() && self.current_char() != target {
 			self.advance();
 		}
+	}
+
+	pub(super) fn at_identifier_start(&self) -> bool {
+		self.current_char().is_alphabetic() || self.current_char() == '_'
 	}
 }
 

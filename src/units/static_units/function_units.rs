@@ -52,45 +52,35 @@ impl Inference {
 			}
 		}
 		match items {
+			// `str(q)`, `print q`: the quantity as its text in the units it is written in, a whole list or object of them too
 			[head, value]
-				if call_or_words
-					&& TEXT_WORDS.iter().any(|text| word(head, text))
-					&& self.whole_text(value, AMOUNT_TEXT).is_some() =>
+				if call_or_words && (word(head, PRINT_WORD) || TEXT_WORDS.iter().any(|text| word(head, text))) =>
 			{
-				self.whole_text(value, AMOUNT_TEXT)
-					.map(|text| text.map(|text| (text, vec![])))
-			}
-			[head, value] if call_or_words && TEXT_WORDS.iter().any(|text| word(head, text)) => Some((|| {
-				let (value, signature) = self.infer(value.clone())?;
-				if signature.is_empty() {
-					return Ok((
-						Node::List(vec![head.clone(), value], bracket.clone(), separator.clone()),
-						vec![],
-					));
-				}
-				Ok((self.as_text(value, &signature, None, AMOUNT_TEXT)?, vec![]))
-			})()),
-			[head, value]
-				if call_or_words && word(head, PRINT_WORD) && self.whole_text(value, PRINTED_AMOUNT_TEXT).is_some() =>
-			{
-				self.whole_text(value, PRINTED_AMOUNT_TEXT).map(|text| {
-					text.map(|text| {
-						(
+				let printed = word(head, PRINT_WORD);
+				let amount_text = if printed { PRINTED_AMOUNT_TEXT } else { AMOUNT_TEXT };
+				Some((|| {
+					let text = match self.whole_text(value, amount_text) {
+						Some(text) => text?,
+						None => {
+							let (written, conversion) = (value.clone(), conversion_target(value));
+							let (value, signature) = self.infer(value.clone())?;
+							if signature.is_empty() {
+								let call = Node::List(vec![head.clone(), value], bracket.clone(), separator.clone());
+								return Ok((call, vec![]));
+							}
+							let shown_units = conversion.unwrap_or_else(|| self.shown_factors(&written, &signature));
+							self.as_text(value, &signature, Some(shown_units), amount_text)?
+						}
+					};
+					match printed {
+						true => Ok((
 							Node::List(vec![head.clone(), text], bracket.clone(), separator.clone()),
 							vec![],
-						)
-					})
-				})
+						)),
+						false => Ok((text, vec![])),
+					}
+				})())
 			}
-			[head, value] if call_or_words && word(head, PRINT_WORD) => Some((|| {
-				let shown_units = conversion_target(value);
-				let (value, signature) = self.infer(value.clone())?;
-				let text = self.as_text(value, &signature, shown_units, PRINTED_AMOUNT_TEXT)?;
-				Ok((
-					Node::List(vec![head.clone(), text], bracket.clone(), separator.clone()),
-					vec![],
-				))
-			})()),
 			[head, value] if call_or_words && word(head, SI_AMOUNT_WORD) => {
 				Some(self.infer(value.clone()).map(|(value, _)| (value, vec![])))
 			}
@@ -109,18 +99,7 @@ impl Inference {
 					&& word(in_word, super::super::IN_WORD)
 					&& super::super::unit_expression(unit).is_some() =>
 			{
-				Some((|| {
-					let target = signature(&super::super::unit_expression(unit).expect("guarded"));
-					let (quantity, given) = self.infer(quantity.clone())?;
-					if given != target {
-						return Err(Stop::Error(format!(
-							"DimensionError: {} cannot be converted to {}",
-							shown(&given),
-							shown(&target)
-						)));
-					}
-					Ok((quantity, given))
-				})())
+				Some(self.converted(quantity.clone(), unit))
 			}
 			_ => None,
 		}
@@ -178,10 +157,11 @@ impl Inference {
 			return None;
 		};
 		let definition = self.definitions.get(&(name.clone(), arguments.len()))?.clone();
+		let defaults = definition.defaults[arguments.len()..].iter().flatten().cloned();
 		let mut lowered = vec![];
 		let mut signatures = vec![];
-		for argument in arguments {
-			match self.infer(argument.clone()) {
+		for argument in arguments.iter().cloned().chain(defaults) {
+			match self.infer(argument) {
 				Ok((argument, signature)) => {
 					lowered.push(argument);
 					signatures.push(signature);
@@ -189,7 +169,7 @@ impl Inference {
 				Err(stop) => return Some(Err(stop)),
 			}
 		}
-		if signatures.iter().all(Vec::is_empty) && !self.has_units(&definition.body) {
+		if signatures.iter().all(Vec::is_empty) && !self.has_units(&definition) {
 			return None;
 		}
 		Some(
@@ -279,8 +259,9 @@ impl Inference {
 		Ok((specialised, result))
 	}
 
-	/// A function body with unit literals or one reading a global that holds a quantity
-	pub(super) fn has_units(&self, body: &Node) -> bool {
+	/// A function with unit literals in its body or defaults, or reading a global that holds a quantity
+	pub(super) fn has_units(&self, definition: &Definition) -> bool {
+		let body = &definition.body;
 		let holds_quantity = |name: &String| {
 			self.globals
 				.get(name)
@@ -288,6 +269,7 @@ impl Inference {
 				.is_some_and(|signature| !signature.is_empty())
 		};
 		mentions_units(body)
+			|| definition.defaults.iter().flatten().any(mentions_units)
 			|| globals_declared_in(body).iter().any(holds_quantity)
 			|| self
 				.globals

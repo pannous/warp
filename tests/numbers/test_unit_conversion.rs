@@ -48,3 +48,11 @@ fn a_duration_in_a_variable_converts_to_a_time_unit() {
 	assert_eq!(text_of("d = 2 days; f() := d in h; f()"), "48h");
 	assert_eq!(text_of("d = 1 day; d in minutes"), "1440min");
 }
+
+// `as` takes a unit word as `in` does: `1 day as h` once failed with "a plain number cannot be converted to s"
+#[test]
+fn a_duration_converts_with_as_to_a_unit_word() {
+	assert_eq!(text_of("1 day as h"), "24h");
+	assert_eq!(text_of("d = 1 day; d as h"), "24h");
+	assert_eq!(text_of("\"t \" + (1 day as min)"), "\"t 1440min\"");
+}

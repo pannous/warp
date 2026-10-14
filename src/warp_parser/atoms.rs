@@ -472,6 +472,7 @@ impl WarpParser {
 		}
 		let symbol = or_return_error!(self.parse_symbol());
 		let symbol = self.joined_type_name(symbol);
+		let symbol = self.print_spelled(symbol);
 
 		if let Some(version) = self.version_operand(&symbol) {
 			return version;
@@ -631,6 +632,16 @@ impl WarpParser {
 			return Some(self.parse_enum_with_values());
 		}
 		self.foreign_form(symbol)
+	}
+
+	/// `println x`, `writeln x`: print, with a note; a function of the program keeps its name
+	fn print_spelled(&self, symbol: String) -> String {
+		let named = self.functions.contains(&symbol) || self.defines_named(0);
+		if !PRINT_SPELLINGS.contains(&symbol.as_str()) || !self.in_code() || named {
+			return symbol;
+		}
+		crate::diagnostic::note_alias(&symbol, PRINT_WORD);
+		PRINT_WORD.to_string()
 	}
 
 	/// Another language's way of writing a warp form: `new Point(1, 2)`, `constant`, Ruby's `attr_accessor :x`,
