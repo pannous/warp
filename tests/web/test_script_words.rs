@@ -8,11 +8,12 @@ const FOLDER: &str = "scratch/test_script_words";
 
 #[test]
 fn glob_finds_the_written_files() {
-	let _ = std::fs::create_dir_all(FOLDER);
-	let writes = ["b.txt", "a.txt", "c.md"].map(|file| format!("write(\"{FOLDER}/{file}\", \"x\")"));
+	let folder = format!("{FOLDER}/glob"); // its own folder: the other tests write files of their own beside FOLDER
+	let _ = std::fs::create_dir_all(&folder);
+	let writes = ["b.txt", "a.txt", "c.md"].map(|file| format!("write(\"{folder}/{file}\", \"x\")"));
 	is!(
-		&format!("use script; {}; glob(\"{FOLDER}/*.txt\")", writes.join("; ")),
-		parse(&format!("[\"{FOLDER}/a.txt\" \"{FOLDER}/b.txt\"]"))
+		&format!("use script; {}; glob(\"{folder}/*.txt\")", writes.join("; ")),
+		parse(&format!("[\"{folder}/a.txt\" \"{folder}/b.txt\"]"))
 	);
 }
 
