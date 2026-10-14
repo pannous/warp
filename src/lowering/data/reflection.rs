@@ -697,10 +697,8 @@ impl Objects {
 		if self.defined.contains(word) {
 			return None;
 		}
-		let written = || match word {
-			METHODS_WORD => self.value_methods(subject),
-			_ => key(subject.clone(), Op::Dot, symbol(word)),
-		};
+		let value_methods = || (word == METHODS_WORD).then(|| self.value_methods(subject)).flatten();
+		let written = || value_methods().unwrap_or_else(|| key(subject.clone(), Op::Dot, symbol(word)));
 		if let Some(reflected) = self.module_member_word(subject, word) {
 			return Some(reflected);
 		}
@@ -711,9 +709,12 @@ impl Objects {
 			return None;
 		}
 		let Some(name) = subject.symbol_name() else {
-			return self
-				.dispatched(subject, word, written())
-				.or_else(|| (word == METHODS_WORD).then(written));
+			// `P(3).methods`: a construction's class is known, no type test needed
+			let constructed = self.known_class(subject).or_else(|| self.constructed_class(subject));
+			if let Some(class) = constructed.filter(|_| !CLASS_WORDS.contains(&word)) {
+				return self.listed(&class, word).map(|names| word_list(word, &class, &names));
+			}
+			return self.dispatched(subject, word, written()).or_else(value_methods);
 		};
 		if let Some(class) = self.class_of(name) {
 			let is_instance = self.instances.contains_key(name);
@@ -722,7 +723,7 @@ impl Objects {
 				_ if CLASS_WORDS.contains(&word) && is_instance => {
 					Some(call(crate::type_tests::TYPE_WORD, vec![subject.clone()]))
 				}
-				_ => self.listed(class, word).map(|names| word_list(word, &names)),
+				_ => self.listed(class, word).map(|names| word_list(word, class, &names)),
 			};
 		}
 		if let Some(exports) = self.modules.get(name) {
@@ -732,9 +733,7 @@ impl Objects {
 			Some(keys) => {
 				(FIELDS_WORDS.contains(&word) && !keys.iter().any(|key| key == word)).then(|| self.map_keys(subject))
 			}
-			None => self
-				.dispatched(subject, word, written())
-				.or_else(|| (word == METHODS_WORD).then(written)),
+			None => self.dispatched(subject, word, written()).or_else(value_methods),
 		}
 	}
 
@@ -804,6 +803,15 @@ impl Objects {
 		}
 	}
 
+	/// `P(3)`, a call of one of the program's classes: its class
+	fn constructed_class(&self, subject: &Node) -> Option<String> {
+		let Node::List(items, Bracket::Round, _) = subject.drop_meta() else {
+			return None;
+		};
+		let class = items.first()?.symbol_name()?;
+		self.layouts.contains_key(class).then(|| class.to_string())
+	}
+
 	/// A subject whose class is known only at run time (`f(o) := o.fields`, `make().class`): a type test over the
 	/// program's classes picks the names (or the class for `class`/`type`), a class's own member of that name is read
 	/// as written, anything else stays `written`
@@ -819,26 +827,21 @@ impl Objects {
 			let names = match (self.has_member(class, word), names_class) {
 				(true, _) => written.clone(),
 				(false, true) => call(crate::type_tests::TYPE_WORD, vec![subject.clone()]),
-				(false, false) => word_list(word, &self.listed(class, word).unwrap_or_default()),
+				(false, false) => word_list(word, class, &self.listed(class, word).unwrap_or_default()),
 			};
 			type_dispatch(subject, class, names, otherwise)
 		}))
 	}
 
 	/// `methods("hi")`, `xs.methods` of a value that is no instance of the program's classes: the words of the module
-	/// named after its type, the functions themselves (`methods([1 2])` lists the list module's); a type known only at
-	/// run time picks among the type modules, else none
-	fn value_methods(&self, subject: &Node) -> Node {
-		let known = literal_type(subject).or_else(|| self.literal_types.get(subject.symbol_name()?).copied());
-		let modules = crate::modules::type_modules()
+	/// named after its type, the functions themselves (`methods([1 2])` lists the list module's). Only a type known
+	/// before the run: a parameter's `o.methods` or an imported class's `shapes.P.methods` stays as written
+	fn value_methods(&self, subject: &Node) -> Option<Node> {
+		let known = literal_type(subject).or_else(|| self.literal_types.get(subject.symbol_name()?).copied())?;
+		let (_, words) = crate::modules::type_modules()
 			.into_iter()
-			.filter(|(module, _)| known.is_none_or(|known| known == *module));
-		if let (Some(_), [(_, words)]) = (known, modules.clone().collect::<Vec<_>>().as_slice()) {
-			return function_list(words);
-		}
-		modules.rev().fold(function_list(&[]), |otherwise, (module, words)| {
-			type_dispatch(subject, module, function_list(words), otherwise)
-		})
+			.find(|(module, _)| *module == known)?;
+		Some(function_list(&words))
 	}
 
 	fn map_keys(&self, subject: &Node) -> Node {
@@ -968,9 +971,16 @@ fn is_field_place(place: &Node, op: &Op, rest: &Node) -> bool {
 
 /// What a reflection word lists of a class: its methods themselves, `function sq` for each (decision reflection,
 /// card module-methods), its fields and dir's names as texts
-fn word_list(word: &str, names: &[String]) -> Node {
+fn word_list(word: &str, class: &str, names: &[String]) -> Node {
 	match word {
-		METHODS_WORD => function_list(names),
+		METHODS_WORD => Node::List(
+			names
+				.iter()
+				.map(|name| crate::closures::method_reference(name.clone(), class))
+				.collect(),
+			Bracket::Square,
+			Separator::Space,
+		),
 		_ => text_list(names),
 	}
 }

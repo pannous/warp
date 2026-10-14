@@ -892,7 +892,7 @@ impl WasmGcEmitter {
 			.get(target)
 			.filter(|_| crate::closures::is_lambda_function(target))
 		else {
-			return target.rsplit('·').next().unwrap_or(target).to_string();
+			return self.function_name(target).to_string();
 		};
 		let params: Vec<&str> = function
 			.params
@@ -905,6 +905,16 @@ impl WasmGcEmitter {
 			more => format!("({})", more.join(", ")),
 		};
 		format!("{params} => {}", function.body.serialize())
+	}
+
+	/// The name a function value shows: `sum` of a class's method that became the witness `sum·P`, the last part of a
+	/// nested `outer·inner`
+	fn function_name<'a>(&self, target: &'a str) -> &'a str {
+		match target.rsplit_once(crate::traits::WITNESS_SEPARATOR) {
+			Some((operation, class)) if self.ctx.type_registry.get_by_name(class).is_some() => operation,
+			Some((_, last)) => last,
+			None => target,
+		}
 	}
 
 	/// Whether function_text is emitted: a program that shows values and has function values (an emit without a
