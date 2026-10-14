@@ -99,6 +99,10 @@ def rewrite_file_mentions(module, folder):
 		if relative not in ("notes/decisions.md", "AGENTS.md"):
 			path = os.path.join(REPO, relative)
 			write(path, re.sub(r"\bsrc/" + module + r"(?=\.rs|/)", "src/" + folder + "/" + module, read(path)))
+	# os.path.join(REPOSITORY, "src", "ffi_parser.rs") broke the browser runner after layout-root: such joins need a hand
+	joined = subprocess.run(["git", "-C", REPO, "grep", "-nE", r"[\"']" + module + r"\.rs[\"']"], capture_output=True, text=True)
+	if joined.stdout:
+		print(f"check these path joins by hand:\n{joined.stdout}")
 
 
 def rewrite_paths(module, folder):
