@@ -28,8 +28,8 @@ fn a_one_character_text_can_be_indexed() {
 
 #[test]
 fn a_text_as_list_is_its_characters() {
-	assert_eq!(text_of("\"abc\" as list"), "[\"a\" \"b\" \"c\"]");
-	assert_eq!(text_of("\"a\" as list"), "[\"a\"]");
+	assert_eq!(text_of("\"abc\" as list"), "['a' 'b' 'c']");
+	assert_eq!(text_of("\"a\" as list"), "['a']");
 	assert_eq!(text_of("[1 2] as list"), "[1 2]");
 }
 
