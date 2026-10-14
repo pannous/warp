@@ -351,46 +351,11 @@ pub(super) fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Opt
 			)
 		}
 		Node::Key(left, op, right) if OPERATOR_METHODS.iter().any(|(known, _)| *known == op) => {
-			let (left, class) = with_operator_calls(*left, operands);
-			let (right, right_class) = with_operator_calls(*right, operands);
-			let class = class.or_else(|| operand_class(&left, operands));
-			let right_class = right_class.or_else(|| operand_class(&right, operands));
-			// `"v: " + q` of a run-time quantity q joins its text, as a static quantity does (card quantity-falls)
-			if op == Op::Add && (is_plain_text(&left) || is_plain_text(&right)) {
-				return (key(joined_text(left, class), op, joined_text(right, right_class)), None);
-			}
-			let (left, class, right) = with_run_time_units(left, class, right, right_class, operands);
-			match class.as_ref().and_then(|class| {
-				operands
-					.methods
-					.iter()
-					.find(|(owner, known, _)| owner == class && *known == op)
-			}) {
-				Some((_, _, method)) => (method_call(left, method, vec![right]), class),
-				None if class.is_none() && may_hold_instance(&left, operands) => {
-					(dispatched_operator(left, op, right, operands), None)
-				}
-				None => (key(left, op, right), None),
-			}
+			operator_call(*left, op, *right, operands)
 		}
 		// `q as km/h`, `q in m` of a run-time quantity q: its conversion `q.to("km/h")` (card quantity-falls)
 		conversion if crate::numbers::units::conversion(&conversion).is_some() => {
-			let (quantity, units) = crate::numbers::units::conversion(&conversion)
-				.map(|(quantity, units)| (quantity.clone(), units))
-				.expect("guarded");
-			let (quantity, class) = with_operator_calls(quantity, operands);
-			let run_time = Some(crate::numbers::units::RUN_TIME_QUANTITY);
-			match class.or_else(|| operand_class(&quantity, operands)).as_deref() == run_time {
-				true => (
-					method_call(
-						quantity,
-						CONVERSION_METHOD,
-						vec![Node::Text(crate::numbers::units::unit_suffix(&units))],
-					),
-					run_time.map(str::to_string),
-				),
-				false => (conversion.map_children(recurse), None),
-			}
+			quantity_conversion(conversion, operands)
 		}
 		// `1 min == q` of a run-time quantity q (the equality witness compares them)
 		Node::Key(left, op @ (Op::Eq | Op::Ne), right) => {
@@ -408,26 +373,7 @@ pub(super) fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Opt
 		// class (`q:Quantity`), or given instances of one class by every call, is an instance of it
 		Node::Key(head, Op::Define, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() > 1) =>
 		{
-			let Node::List(items, _, _) = head.drop_meta() else {
-				unreachable!("guarded")
-			};
-			let mut instances = operands.instances.clone();
-			let called_with = operands.parameters.get(&items[0].drop_meta().name());
-			for (position, parameter) in items[1..].iter().enumerate() {
-				let (name, declared) = match parameter.drop_meta() {
-					Node::Key(name, Op::Colon, type_node) => {
-						(name.drop_meta().name(), Some(type_node.drop_meta().name()))
-					}
-					other => (
-						other.name(),
-						called_with.and_then(|classes| classes.get(position).cloned().flatten()),
-					),
-				};
-				match declared.filter(|class| operands.methods.iter().any(|(owner, _, _)| owner == class)) {
-					Some(class) => instances.insert(name, class),
-					None => instances.remove(&name),
-				};
-			}
+			let instances = parameter_instances(head.drop_meta(), operands);
 			let body = with_operator_calls(
 				*body,
 				&Operands {
@@ -440,6 +386,76 @@ pub(super) fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Opt
 		}
 		other => (other.map_children(recurse), None),
 	}
+}
+
+/// An operator its operand's class defines as a method: the method's call
+fn operator_call(left: Node, op: Op, right: Node, operands: &Operands) -> (Node, Option<String>) {
+	let (left, class) = with_operator_calls(left, operands);
+	let (right, right_class) = with_operator_calls(right, operands);
+	let class = class.or_else(|| operand_class(&left, operands));
+	let right_class = right_class.or_else(|| operand_class(&right, operands));
+	// `"v: " + q` of a run-time quantity q joins its text, as a static quantity does (card quantity-falls)
+	if op == Op::Add && (is_plain_text(&left) || is_plain_text(&right)) {
+		return (key(joined_text(left, class), op, joined_text(right, right_class)), None);
+	}
+	let (left, class, right) = with_run_time_units(left, class, right, right_class, operands);
+	match class.as_ref().and_then(|class| {
+		operands
+			.methods
+			.iter()
+			.find(|(owner, known, _)| owner == class && *known == op)
+	}) {
+		Some((_, _, method)) => (method_call(left, method, vec![right]), class),
+		None if class.is_none() && may_hold_instance(&left, operands) => {
+			(dispatched_operator(left, op, right, operands), None)
+		}
+		None => (key(left, op, right), None),
+	}
+}
+
+fn quantity_conversion(conversion: Node, operands: &Operands) -> (Node, Option<String>) {
+	let (quantity, units) = crate::numbers::units::conversion(&conversion)
+		.map(|(quantity, units)| (quantity.clone(), units))
+		.expect("guarded");
+	let (quantity, class) = with_operator_calls(quantity, operands);
+	let run_time = Some(crate::numbers::units::RUN_TIME_QUANTITY);
+	match class.or_else(|| operand_class(&quantity, operands)).as_deref() == run_time {
+		true => (
+			method_call(
+				quantity,
+				CONVERSION_METHOD,
+				vec![Node::Text(crate::numbers::units::unit_suffix(&units))],
+			),
+			run_time.map(str::to_string),
+		),
+		false => (
+			conversion.map_children(|child| with_operator_calls(child, operands).0),
+			None,
+		),
+	}
+}
+
+/// The instance variables in a function's body: the program's, but its parameters for their own classes
+fn parameter_instances(head: &Node, operands: &Operands) -> std::collections::HashMap<String, String> {
+	let Node::List(items, _, _) = head else {
+		unreachable!("guarded")
+	};
+	let mut instances = operands.instances.clone();
+	let called_with = operands.parameters.get(&items[0].drop_meta().name());
+	for (position, parameter) in items[1..].iter().enumerate() {
+		let (name, declared) = match parameter.drop_meta() {
+			Node::Key(name, Op::Colon, type_node) => (name.drop_meta().name(), Some(type_node.drop_meta().name())),
+			other => (
+				other.name(),
+				called_with.and_then(|classes| classes.get(position).cloned().flatten()),
+			),
+		};
+		match declared.filter(|class| operands.methods.iter().any(|(owner, _, _)| owner == class)) {
+			Some(class) => instances.insert(name, class),
+			None => instances.remove(&name),
+		};
+	}
+	instances
 }
 
 /// A variable of no known class (`q` of `for q in [V(1), W(9)]`) may hold an instance whose class defines the operator
