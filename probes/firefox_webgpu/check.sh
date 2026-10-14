@@ -3,5 +3,9 @@
 # Runs in CI (card shaders-firefox): probes/firefox_webgpu/check.sh [url]
 URL=${1:-https://warp.pannous.com/}
 HERE=$(cd "$(dirname "$0")" && pwd)
-CHECK=$(tr '\n' ' ' < "$HERE/check.mjs" | sed 's/"/\\"/g')
-printf '["open", "%s"]\n["eval", "%s"]\n["messages"]\n["close"]\n' "$URL" "$CHECK" | node "$HERE/../../web/playground/firefox_driver.mjs"
+node -e '
+const [url, check] = process.argv.slice(1);
+for (const command of [["open", url], ["eval", require("fs").readFileSync(check, "utf8")], ["messages"], ["close"]]) console.log(JSON.stringify(command));
+' "$URL" "$HERE/check.mjs" | node "$HERE/../../web/playground/firefox_driver.mjs" | node -e '
+require("readline").createInterface({ input: process.stdin }).on("line", line => { const value = JSON.parse(line); console.log(typeof value === "string" ? value : JSON.stringify(value)); });
+'
