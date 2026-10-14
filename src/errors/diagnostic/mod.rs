@@ -251,6 +251,8 @@ const SCRIPT_PRAGMA: &str = "script";
 const SCRIPT_MODULES: [&str; 3] = ["os", "file", "net"];
 /// `use comments`: a comment before a binding becomes its meta information (P114, lowering/data/meta_entries.rs)
 const COMMENTS_PRAGMA: &str = "comments";
+/// `use reflection` (or `use reflection mode`): function values answer where and how they were made
+const REFLECTION_PRAGMA: &str = "reflection";
 /// A "got it" is remembered as the line `ack:<topic> = acknowledged` in the acknowledgements file
 const ACKNOWLEDGED: &str = "acknowledged";
 const ACKNOWLEDGED_PREFIX: &str = "ack:";
@@ -560,8 +562,14 @@ fn without_relaxed_pragma(program: Node) -> (Node, bool) {
 }
 
 /// Run `body` with warnings as errors when the program says `use strict`, and comments as meta information when it
-/// says `use comments`, and without hints when it says `use relaxed` or `use script`
+/// says `use comments`, and without hints when it says `use relaxed` or `use script`; `use reflection` turns on
+/// reflection mode
 pub fn in_program_mode<R>(program: Node, body: impl FnOnce(Node) -> R) -> R {
+	let (program, reflection) = without_pragma(program, REFLECTION_PRAGMA);
+	compile_context::scoped(|context| &mut context.reflection_mode, reflection, || in_written_mode(program, body))
+}
+
+fn in_written_mode<R>(program: Node, body: impl FnOnce(Node) -> R) -> R {
 	let (program, comments) = without_pragma(program, COMMENTS_PRAGMA);
 	let (program, script) = with_script_modules(program);
 	let (program, relaxed) = without_relaxed_pragma(program);

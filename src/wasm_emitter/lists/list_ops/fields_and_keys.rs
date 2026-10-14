@@ -28,7 +28,7 @@ pub fn field_fallback(name: &str) -> Option<&'static str> {
 	let name = crate::lowering::reflection::canonical_word(name).unwrap_or(name);
 	FIELD_FALLBACKS
 		.into_iter()
-		.chain(crate::wasm_emitter::functions::closures::FUNCTION_WORDS)
+		.chain(crate::wasm_emitter::functions::closures::function_words())
 		.find(|(field, _)| *field == name)
 		.map(|(_, fallback)| fallback)
 }
