@@ -36,9 +36,7 @@ fn is_type_word(word: &str) -> bool {
 	type_word_kind(word).is_some() || word == crate::words::ANY_TYPE
 }
 
-fn typed(name: &str, type_name: &str) -> Node {
-	key(symbol(name), Op::Colon, symbol(type_name))
-}
+use super::nodes::typed;
 
 /// Which head words are prepositions
 pub fn prepositions_among(words: &[&str]) -> Vec<bool> {

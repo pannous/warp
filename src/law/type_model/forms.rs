@@ -251,9 +251,7 @@ pub(super) fn without_tail_return(body: &Node) -> Node {
 	}
 }
 
-pub(super) fn is_list_literal(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(_, Bracket::Square, _))
-}
+pub(super) use crate::declaration_forms::is_list_literal;
 
 /// The statements of a program or block: an unbracketed `;`/newline list, else the one node
 pub(super) fn statements(node: &Node) -> Vec<&Node> {

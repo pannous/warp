@@ -591,9 +591,7 @@ fn assigned_method_call(node: &Node) -> bool {
 	}
 }
 
-fn is_block(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _))
-}
+use crate::lowering::nodes::is_block;
 
 /// `f(xs) := xs.map { it*10 }` is `f(xs) := (xs.map {it*10})`: the block belongs to the method call, not to the statement
 fn with_trailing_block(assignment: Node, block: Node) -> Node {

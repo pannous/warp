@@ -221,11 +221,4 @@ fn key_function(argument: &Node, context: &Context) -> Option<Node> {
 	Some(key(element, Op::Arrow, value))
 }
 
-fn method_call(receiver: Node, method: &str, arguments: Vec<Node>) -> Node {
-	let call = Node::List(
-		[vec![symbol(method)], arguments].concat(),
-		Bracket::Round,
-		Separator::None,
-	);
-	key(receiver, Op::Dot, call)
-}
+use super::nodes::method_call;

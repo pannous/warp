@@ -194,13 +194,7 @@ fn definition(head: Node, result: Option<&Node>, body: Node) -> Node {
 	Node::Key(Box::new(target), Op::Define, Box::new(body))
 }
 
-fn typed(name: &str, type_word: &str) -> Node {
-	Node::Key(
-		Box::new(Node::Symbol(name.to_string())),
-		Op::Colon,
-		Box::new(Node::Symbol(type_word.to_string())),
-	)
-}
+use crate::lowering::nodes::typed;
 
 /// `nonlocal y` (parsed `nonlocal: y`)
 fn nonlocal_declaration(statement: &Node) -> Option<String> {

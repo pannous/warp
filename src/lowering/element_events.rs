@@ -63,7 +63,7 @@ pub(crate) fn has_element_handler(node: &Node) -> bool {
 
 /// Each `bind: name` of an element spelled out as its attribute and handler, with the checks of name's declared type
 pub fn lower_binds(program: Node) -> Node {
-	let declared = declared_types(&program);
+	let declared = declared_variable_types(&program);
 	with_binds(program, &declared)
 }
 
@@ -93,7 +93,7 @@ fn with_binds(node: Node, declared: &HashMap<String, Option<String>>) -> Node {
 }
 
 /// `age: int = 30`: each variable's declared type; none for a name declared with two types
-fn declared_types(program: &Node) -> HashMap<String, Option<String>> {
+fn declared_variable_types(program: &Node) -> HashMap<String, Option<String>> {
 	let mut declared: HashMap<String, Option<String>> = HashMap::new();
 	program.visit(&mut |part| {
 		let Node::Key(target, Op::Assign, _) = part.drop_meta() else {

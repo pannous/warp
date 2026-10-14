@@ -59,6 +59,11 @@ pub(crate) fn assign(target: Node, value: Node) -> Node {
 	key(target, Op::Assign, value)
 }
 
+/// `name:type`, a typed parameter or declaration
+pub(crate) fn typed(name: &str, type_name: &str) -> Node {
+	key(symbol(name), Op::Colon, symbol(type_name))
+}
+
 /// Where an entry is and its key: `x[k]` (parsed as `x#(k+1)`) and `x.k` (the text "k") as `x#k` was written, which
 /// counts positions from 1 (`true`)
 pub(crate) fn written_entry(target: &Node) -> Option<(&Node, Node, bool)> {
@@ -463,4 +468,24 @@ pub(crate) fn template(text: &str, bindings: &[(&str, &Node)]) -> Vec<Node> {
 		crate::library_words::substitute(node, placeholder, value)
 	});
 	filled.drop_meta().sequence_statements().to_vec()
+}
+
+/// The names of the classes the program declares (`class Point {…}`)
+pub(crate) fn declared_class_names(node: &Node) -> std::collections::HashSet<String> {
+	let mut names = std::collections::HashSet::new();
+	node.visit(&mut |part| {
+		if let Node::Type { name, .. } = part {
+			names.insert(name.name());
+		}
+	});
+	names
+}
+
+/// `receiver.method(arguments)`, a receiver in round brackets `(a)` unwrapped
+pub(crate) fn method_call(receiver: Node, method: &str, arguments: Vec<Node>) -> Node {
+	let receiver = match receiver.drop_meta() {
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => items[0].clone(),
+		_ => receiver,
+	};
+	key(receiver, Op::Dot, call(method, arguments))
 }
