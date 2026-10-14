@@ -355,7 +355,7 @@ pub(super) fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Opt
 			let class = class.or_else(|| operand_class(&left, operands));
 			let right_class = right_class.or_else(|| operand_class(&right, operands));
 			// `"v: " + q` of a run-time quantity q joins its text, as a static quantity does (card quantity-falls)
-			if op == Op::Add && (is_text(&left) || is_text(&right)) {
+			if op == Op::Add && (is_plain_text(&left) || is_plain_text(&right)) {
 				return (key(joined_text(left, class), op, joined_text(right, right_class)), None);
 			}
 			let (left, class, right) = with_run_time_units(left, class, right, right_class, operands);
@@ -610,7 +610,7 @@ pub(super) fn operand_class(operand: &Node, operands: &Operands) -> Option<Strin
 	}
 }
 
-pub(super) fn is_text(node: &Node) -> bool {
+pub(super) fn is_plain_text(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Text(_))
 }
 

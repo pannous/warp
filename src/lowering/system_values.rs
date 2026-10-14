@@ -42,7 +42,7 @@ const CLIPBOARD_WRITE: &str = "write";
 const TEXT_PLACEHOLDER: &str = "clipboard_text_written";
 
 pub fn name(program: Node) -> Node {
-	let bound = bound_names(&program);
+	let bound = assigned_symbols(&program);
 	let names: Vec<(&str, bool)> = SYSTEM_VALUES
 		.into_iter()
 		.chain([(CLIPBOARD, false), (NOW_WORD, false), (HELD_KEY, false)])
@@ -101,7 +101,7 @@ fn first_word(statement: &Node) -> String {
 }
 
 /// The names the program binds: assigned, defined, parameters of functions and lambdas
-pub(crate) fn bound_names(program: &Node) -> HashSet<String> {
+pub(crate) fn assigned_symbols(program: &Node) -> HashSet<String> {
 	let mut bound = HashSet::new();
 	program.visit(&mut |part| {
 		if let Node::Key(target, Op::Assign | Op::Define | Op::Arrow | Op::FatArrow, _) = part {

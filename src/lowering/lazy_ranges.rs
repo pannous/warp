@@ -430,7 +430,7 @@ fn bounds_name(function: &str, positions: &[usize]) -> String {
 	)
 }
 
-fn bound_names(parameter: &str) -> [String; 2] {
+fn range_bound_names(parameter: &str) -> [String; 2] {
 	[
 		format!("{parameter}{TEMPORARY_SEPARATOR}start"),
 		format!("{parameter}{TEMPORARY_SEPARATOR}end"),
@@ -529,7 +529,7 @@ fn bounds_copies(statement: &Node, readers: &RangeReaders, copies: &mut Copies) 
 					new_parameters.push(parameter.drop_meta().clone());
 					continue;
 				}
-				let [start, end] = bound_names(&parameter.name()).map(Node::Symbol);
+				let [start, end] = range_bound_names(&parameter.name()).map(Node::Symbol);
 				let range = Node::List(
 					vec![key(start.clone(), Op::Range, end.clone())],
 					Bracket::Round,

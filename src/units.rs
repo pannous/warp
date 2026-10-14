@@ -704,7 +704,7 @@ fn quantity_comparisons_folded(program: Node) -> Node {
 	if !(needs_quantities(&program) || program.mentions(TIME_WORD)) {
 		return program;
 	}
-	let bound = crate::system_values::bound_names(&program);
+	let bound = crate::system_values::assigned_symbols(&program);
 	let constants = constant_quantities(&program);
 	let clock = !bound.contains(TIME_WORD);
 	let folded = fold_comparisons(program, &constants, clock);

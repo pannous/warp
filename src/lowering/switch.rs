@@ -291,7 +291,7 @@ fn every_item_test(each: &Node, items: Node, bindings: &mut Vec<Node>, names: &N
 }
 
 /// The names a pattern binds, in order
-pub(crate) fn bound_names(pattern: &Node) -> Vec<Node> {
+pub(crate) fn pattern_bindings(pattern: &Node) -> Vec<Node> {
 	Matched::of(pattern, Node::Empty, &Names::default())
 		.bindings
 		.iter()

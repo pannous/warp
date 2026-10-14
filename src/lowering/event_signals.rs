@@ -173,7 +173,7 @@ pub fn lower(program: Node) -> Node {
 			.map(|(_, name, _)| (name.clone(), unnamed(name)))
 			.collect(),
 		// a handler nothing emits is gone: its name binds nothing
-		bound: statements.iter().flat_map(bound_names).collect(),
+		bound: statements.iter().flat_map(assigned_and_loop_names).collect(),
 		named,
 	};
 	// `h = on alarm {…}`: h is its place among alarm's handlers, an entry of `listeners of alarm`
@@ -756,7 +756,7 @@ fn first_error(node: &Node) -> Option<Node> {
 }
 
 /// The names a program binds: assigned ones and loop variables (`for l in …`)
-fn bound_names(program: &Node) -> HashSet<String> {
+fn assigned_and_loop_names(program: &Node) -> HashSet<String> {
 	let mut names = HashSet::new();
 	program.visit(&mut |part| match part {
 		Node::Key(target, Op::Assign | Op::Define, _) => {

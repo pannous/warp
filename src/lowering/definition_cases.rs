@@ -40,7 +40,10 @@ impl Definition<'_> {
 	}
 
 	fn literal_parameter(&self) -> Option<&Node> {
-		self.parameters.iter().copied().find(|parameter| is_literal(parameter))
+		self.parameters
+			.iter()
+			.copied()
+			.find(|parameter| is_literal_pattern(parameter))
 	}
 }
 
@@ -132,7 +135,7 @@ fn listed_parameters(parameter: &Node, grouped: bool) -> Vec<&Node> {
 	}
 }
 
-fn is_literal(parameter: &Node) -> bool {
+fn is_literal_pattern(parameter: &Node) -> bool {
 	matches!(
 		parameter.drop_meta(),
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False | Node::Empty
@@ -145,13 +148,13 @@ fn joined(cases: &[&Definition]) -> String {
 	if first.parameters.len() != 1 {
 		return format!("one definition of {} with a match on its parameters", first.name);
 	}
-	let general = cases.iter().find(|case| !is_literal(case.parameters[0]));
+	let general = cases.iter().find(|case| !is_literal_pattern(case.parameters[0]));
 	let subject = general.map_or(SUBJECT.to_string(), |case| case.parameters[0].name());
 	let mut arms: Vec<String> = cases
 		.iter()
 		.map(|case| {
 			let parameter = case.parameters[0];
-			let pattern = if is_literal(parameter) {
+			let pattern = if is_literal_pattern(parameter) {
 				parameter.serialize()
 			} else {
 				"_".into()

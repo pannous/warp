@@ -887,7 +887,7 @@ pub(crate) fn declare_global(program: Node, names: &[String]) -> Node {
 		single => (vec![single], Bracket::None, Separator::Newline),
 	};
 	for name in names {
-		let assigns = |assignment: &&Node| matches!(assignment, Node::Key(target, Op::Assign, _) if declared_name(target) == Some(name));
+		let assigns = |assignment: &&Node| matches!(assignment, Node::Key(target, Op::Assign, _) if name_before_type(target) == Some(name));
 		let found = items.iter().enumerate().find_map(|(index, item)| {
 			statement_assignment(item)
 				.filter(assigns)
@@ -913,10 +913,10 @@ fn statement_assignment(item: &Node) -> Option<&Node> {
 }
 
 /// The variable a declaration binds: `k` of `k` and of the typed `k: int`
-fn declared_name(target: &Node) -> Option<&String> {
+fn name_before_type(target: &Node) -> Option<&String> {
 	match target.drop_meta() {
 		Node::Symbol(name) => Some(name),
-		Node::Key(name, Op::Colon, _) => declared_name(name),
+		Node::Key(name, Op::Colon, _) => name_before_type(name),
 		_ => None,
 	}
 }
