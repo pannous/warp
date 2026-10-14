@@ -63,7 +63,7 @@ otherwise constant evaluation may hide the loop. Profile the generated module ap
   the overflow-checked `*`), and a float `as int` truncates natively. Then `a // b` on fixnums is inline
   (`(a - a % b) / b` beside the inline `%`), an Int assignment whose value is dropped (`i = start` of a range loop)
   stores the i64 without new_int, and a computed range end (`for col in cell(x-r)..cell(x+r)+1`) is evaluated
-  once into `col·end` instead of every round (lowering/for_loop.rs), as a walked list already was.
+  once into `col·end` instead of every round (lowering/control/for_loop.rs), as a walked list already was.
 - **Finger paint frames** (same card): `show()` passed draw's typed `canvas_pixels` to paint as a value, so each frame
   built a million Int Nodes (int_list_as_node) only for list_to_ints to read them back. Now a typed int list crosses
   to the host words in host.rs INT_LIST_WORDS (paint, sound) as its `$IntList`, and list_to_ints copies its array.

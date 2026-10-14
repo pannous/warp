@@ -112,7 +112,7 @@ Decisions (user, via warp-interviewer):
 - Exhaustiveness: a match over a known enum or sealed set that misses a case is the compile error "match on Coin
   misses Dime"; an unknown subject type keeps the run-time "no case".
 
-Done on branch matching (warp-semantics), all in src/lowering/switch.rs, one entry `pattern_test` shared with
+Done on branch matching (warp-semantics), all in src/lowering/control/switch.rs, one entry `pattern_test` shared with
 parameter patterns: alternatives, type arms (`int =>`, `i: int =>`, `Circle =>`), ranges (`13 to 19` inclusive,
 `13..20` exclusive, open `65..`), `other`/`else` catch-alls, tuple arms `(1, t)` (a round comma list matches by
 shape like `[1, t]`), `xs is [_, 2]` and `if xs is [a, b] then b` (switch::is_pattern, called from type_tests: a list

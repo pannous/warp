@@ -34,7 +34,7 @@ CHECKS = {
 }
 DEBUG_BUILD = os.path.join(REPOSITORY, "web", "playground", "warp.debug.wasm")
 EXCLUDED = os.path.join(REPOSITORY, "web", "playground", "excluded_samples.txt")
-TEST_LINE = r"^\s*test\b"  # a program with tests runs them in the page, as `warp test` does (lowering/test_blocks.rs)
+TEST_LINE = r"^\s*test\b"  # a program with tests runs them in the page, as `warp test` does (lowering/control/test_blocks.rs)
 UPTO = "x=0; for i in 1 upto 4 {x+=i}; x"
 
 

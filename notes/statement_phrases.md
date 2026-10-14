@@ -24,7 +24,7 @@ like `try X else Y`. The condition runs up to the `return`.
 `after` starts this phrase only when a `return` follows on the same statement outside brackets. Without one,
 `after tested: body` stays the call listener of lowering/signals/variable_signals.rs.
 
-lowering/go_blocks.rs `after_parts` turns the marker (and the older flat form) into `go { while not (C) { sleep(1) }; V }`.
+lowering/control/go_blocks.rs `after_parts` turns the marker (and the older flat form) into `go { while not (C) { sleep(1) }; V }`.
 
 ## Number words (P184)
 `one plus two` is 3: lowering/number_words.rs turns the words zero…twenty and thirty…ninety into Ints, each with a

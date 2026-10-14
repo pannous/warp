@@ -139,7 +139,7 @@ impl WarpParser {
 		if key_variable.is_some() {
 			self.key_variables.pop();
 		}
-		// kept as written: lowering/for_loop/headers.rs gives `for int in xs`, `for chars in text` their meaning
+		// kept as written: lowering/control/for_loop/headers.rs gives `for int in xs`, `for chars in text` their meaning
 		Some(for_in_loop(variable, iterable, body))
 	}
 
@@ -220,7 +220,7 @@ impl WarpParser {
 			Some(word) => self.colon_body(word),
 			None => self.indented_lines_below().unwrap_or_else(|| self.parse_atom()),
 		};
-		// kept as written, the condition in round brackets: lowering/for_loop/headers.rs filters the loop
+		// kept as written, the condition in round brackets: lowering/control/for_loop/headers.rs filters the loop
 		let condition = Node::List(vec![condition], Bracket::Round, Separator::None);
 		Some(for_in_loop(condition, iterable, body))
 	}

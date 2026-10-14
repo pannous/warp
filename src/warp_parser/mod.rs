@@ -186,7 +186,7 @@ const DATA_KEYWORD: &str = "data";
 const CLASS_KEYWORD: &str = "class";
 /// `await job` waits for a task; its operand binds like the operand of a unary minus (Op::Neg)
 const AWAIT_KEYWORD: &str = "await";
-/// The words of a block of code, also glued to it: `go{…}` starts a task as `go {…}` does (lowering/go_blocks.rs,
+/// The words of a block of code, also glued to it: `go{…}` starts a task as `go {…}` does (lowering/control/go_blocks.rs,
 /// card error-beep), `loop{…}` loops, `do{…}` runs its block (card glued-loop); no tags `go:{…}`
 const GLUED_BLOCK_KEYWORDS: [&str; 3] = ["go", "loop", "do"];
 /// `await all jobs`: every task of a list (P47)
