@@ -8,7 +8,7 @@ use serde_json::{Map, Value};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
-use wasmtime::component::types::ComponentItem;
+use wasmtime::component::types::{self, ComponentItem};
 use wasmtime::component::{
 	Component, ComponentExportIndex, Func, Instance, Linker, ResourceAny, ResourceTable, ResourceType, Type, Val,
 };
@@ -424,14 +424,7 @@ impl Handles<'_> {
 			Type::U64 => Val::U64(unsigned()?),
 			Type::Float32 => Val::Float32(argument.as_f64().ok_or_else(|| format!("{argument} is no number"))? as f32),
 			Type::Float64 => Val::Float64(argument.as_f64().ok_or_else(|| format!("{argument} is no number"))?),
-			Type::Char => {
-				let text = argument.as_str().ok_or_else(|| format!("{argument} is no character"))?;
-				let mut characters = text.chars();
-				match (characters.next(), characters.next()) {
-					(Some(character), None) => Val::Char(character),
-					_ => return Err(format!("{argument} is no single character")),
-				}
-			}
+			Type::Char => char_of(argument)?,
 			Type::String => Val::String(
 				argument
 					.as_str()
@@ -448,98 +441,77 @@ impl Handles<'_> {
 					.map(|item| self.value_of(item, &list.ty()))
 					.collect::<Result<_, _>>()?,
 			),
-			Type::Tuple(tuple) => {
-				let items = items(argument)?;
-				if items.len() != tuple.types().len() {
-					return Err(format!(
-						"{argument} has {} items, the tuple {}",
-						items.len(),
-						tuple.types().len()
-					));
-				}
-				Val::Tuple(
-					items
-						.iter()
-						.zip(tuple.types())
-						.map(|(item, ty)| self.value_of(item, &ty))
-						.collect::<Result<_, _>>()?,
-				)
-			}
-			Type::Record(record) => {
-				let fields = argument
-					.as_object()
-					.ok_or_else(|| format!("{argument} is no object of the record's fields"))?;
-				Val::Record(
-					record
-						.fields()
-						.map(|field| {
-							let value = fields
-								.get(field.name)
-								.ok_or_else(|| format!("{argument} has no field {}", field.name))?;
-							Ok((field.name.to_string(), self.value_of(value, &field.ty)?))
-						})
-						.collect::<Result<_, String>>()?,
-				)
-			}
-			Type::Enum(cases) => {
-				let name = argument.as_str().ok_or_else(|| format!("{argument} is no case name"))?;
-				if !cases.names().any(|case| case == name) {
-					return Err(format!(
-						"{name} is none of {}",
-						cases.names().collect::<Vec<_>>().join(", ")
-					));
-				}
-				Val::Enum(name.to_string())
-			}
-			Type::Variant(variant) => {
-				let (name, payload) = match argument {
-					Value::String(name) => (name.as_str(), None),
-					Value::Object(entries) if entries.len() == 1 => entries
-						.iter()
-						.next()
-						.map(|(name, payload)| (name.as_str(), Some(payload)))
-						.expect("one"),
-					_ => return Err(format!("{argument} is no case: a name or {{case: value}}")),
-				};
-				let case = variant
-					.cases()
-					.find(|case| case.name == name)
-					.ok_or_else(|| format!("{name} is no case of the variant"))?;
-				let payload = match (case.ty, payload) {
-					(Some(ty), Some(payload)) => Some(Box::new(self.value_of(payload, &ty)?)),
-					(None, _) => None,
-					(Some(_), None) => return Err(format!("the case {name} takes a value")),
-				};
-				Val::Variant(name.to_string(), payload)
-			}
+			Type::Tuple(tuple) => self.tuple_of(argument, tuple)?,
+			Type::Record(record) => self.record_of(argument, record)?,
+			Type::Enum(cases) => enum_of(argument, cases)?,
+			Type::Variant(variant) => self.variant_of(argument, variant)?,
 			Type::Option(option) => match argument {
 				Value::Null => Val::Option(None),
 				present => Val::Option(Some(Box::new(self.value_of(present, &option.ty())?))),
 			},
-			Type::Flags(flags) => {
-				let names: Vec<String> = items(argument)?
-					.iter()
-					.map(|name| {
-						name.as_str()
-							.map(str::to_string)
-							.ok_or_else(|| format!("{name} is no flag name"))
-					})
-					.collect::<Result<_, _>>()?;
-				if let Some(unknown) = names
-					.iter()
-					.find(|name| !flags.names().any(|flag| flag == name.as_str()))
-				{
-					return Err(format!(
-						"{unknown} is none of the flags {}",
-						flags.names().collect::<Vec<_>>().join(", ")
-					));
-				}
-				Val::Flags(names)
-			}
+			Type::Flags(flags) => flags_of(argument, flags)?,
 			// a handle the component gave: its resource again
 			Type::Own(resource) | Type::Borrow(resource) => Val::Resource(self.held_resource(argument, resource)?),
 			other => return Err(format!("arguments of the WIT type {other:?} are not supported yet")),
 		})
+	}
+
+	fn tuple_of(&self, argument: &Value, tuple: &types::Tuple) -> Result<Val, String> {
+		let items = items(argument)?;
+		if items.len() != tuple.types().len() {
+			return Err(format!(
+				"{argument} has {} items, the tuple {}",
+				items.len(),
+				tuple.types().len()
+			));
+		}
+		Ok(Val::Tuple(
+			items
+				.iter()
+				.zip(tuple.types())
+				.map(|(item, ty)| self.value_of(item, &ty))
+				.collect::<Result<_, _>>()?,
+		))
+	}
+
+	fn record_of(&self, argument: &Value, record: &types::Record) -> Result<Val, String> {
+		let fields = argument
+			.as_object()
+			.ok_or_else(|| format!("{argument} is no object of the record's fields"))?;
+		Ok(Val::Record(
+			record
+				.fields()
+				.map(|field| {
+					let value = fields
+						.get(field.name)
+						.ok_or_else(|| format!("{argument} has no field {}", field.name))?;
+					Ok((field.name.to_string(), self.value_of(value, &field.ty)?))
+				})
+				.collect::<Result<_, String>>()?,
+		))
+	}
+
+	/// A case: its name, or `{case: value}`
+	fn variant_of(&self, argument: &Value, variant: &types::Variant) -> Result<Val, String> {
+		let (name, payload) = match argument {
+			Value::String(name) => (name.as_str(), None),
+			Value::Object(entries) if entries.len() == 1 => entries
+				.iter()
+				.next()
+				.map(|(name, payload)| (name.as_str(), Some(payload)))
+				.expect("one"),
+			_ => return Err(format!("{argument} is no case: a name or {{case: value}}")),
+		};
+		let case = variant
+			.cases()
+			.find(|case| case.name == name)
+			.ok_or_else(|| format!("{name} is no case of the variant"))?;
+		let payload = match (case.ty, payload) {
+			(Some(ty), Some(payload)) => Some(Box::new(self.value_of(payload, &ty)?)),
+			(None, _) => None,
+			(Some(_), None) => return Err(format!("the case {name} takes a value")),
+		};
+		Ok(Val::Variant(name.to_string(), payload))
 	}
 
 	/// A component's value as JSON; the `err` of a result is the failure
@@ -655,6 +627,49 @@ fn handle_text(handle: &Value) -> String {
 
 fn dropped_error(handle: &Value) -> String {
 	format!("{} was dropped", handle_text(handle))
+}
+
+fn char_of(argument: &Value) -> Result<Val, String> {
+	let text = argument.as_str().ok_or_else(|| format!("{argument} is no character"))?;
+	let mut characters = text.chars();
+	match (characters.next(), characters.next()) {
+		(Some(character), None) => Ok(Val::Char(character)),
+		_ => Err(format!("{argument} is no single character")),
+	}
+}
+
+/// A case name of the enum
+fn enum_of(argument: &Value, cases: &types::Enum) -> Result<Val, String> {
+	let name = argument.as_str().ok_or_else(|| format!("{argument} is no case name"))?;
+	if !cases.names().any(|case| case == name) {
+		return Err(format!(
+			"{name} is none of {}",
+			cases.names().collect::<Vec<_>>().join(", ")
+		));
+	}
+	Ok(Val::Enum(name.to_string()))
+}
+
+/// A list of the flags' names
+fn flags_of(argument: &Value, flags: &types::Flags) -> Result<Val, String> {
+	let names: Vec<String> = items(argument)?
+		.iter()
+		.map(|name| {
+			name.as_str()
+				.map(str::to_string)
+				.ok_or_else(|| format!("{name} is no flag name"))
+		})
+		.collect::<Result<_, _>>()?;
+	if let Some(unknown) = names
+		.iter()
+		.find(|name| !flags.names().any(|flag| flag == name.as_str()))
+	{
+		return Err(format!(
+			"{unknown} is none of the flags {}",
+			flags.names().collect::<Vec<_>>().join(", ")
+		));
+	}
+	Ok(Val::Flags(names))
 }
 
 fn items(argument: &Value) -> Result<&Vec<Value>, String> {
