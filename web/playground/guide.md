@@ -35,7 +35,7 @@ A comment is a note for people. The computer skips it.
 3 // a note
 ```
 
-Examples: hello; samples: comments, sample
+Examples: hello; samples: comments, sample, natural
 
 ## Numbers
 
@@ -94,7 +94,7 @@ Numbers can have units.
 2h + 30min
 ```
 
-Examples: numbers; samples: factorial, power, gcd, collatz, quadratic, sum, sin, sine
+Examples: numbers; samples: factorial, power, gcd, collatz, quadratic, sum, sin, sine, measurements, units_dynamic, dates
 
 ## Text
 
@@ -122,7 +122,7 @@ Text is anything in quotes: a word, a name, a sentence.
 "1 + 1 = $(1 + 1)"
 ```
 
-Examples: text; samples: levenshtein, palindrome, word_count, sort_words, word_lengths, replace_word, find_text, levenshtein_idiomatic, calculator
+Examples: text; samples: levenshtein, palindrome, word_count, sort_words, word_lengths, replace_word, find_text, levenshtein_idiomatic, calculator, regexes
 
 ## Variables
 
@@ -191,7 +191,7 @@ x = 3
 big
 ```
 
-Examples: "derived values", signals, listeners, "signals in lists"
+Examples: "derived values", signals, listeners, "signals in lists"; samples: signal_fields
 
 
 Examples: constants
@@ -375,7 +375,7 @@ card by itself, and says so once. The graphics card computes in single precision
 design: a sum of 40 000 cosines may be off by about 40 000 × 2⁻¹¹. Write `@cpu` after the map, before it, or on a
 block or function when every digit counts; `@gpu` asks for the graphics card from about 30 000 items.
 
-Examples: lists, broadcasting, "lazy ranges", "linear arrays"; samples: sorting, quicksort, primes, sieve, sorting_idiomatic, sieve_idiomatic
+Examples: lists, broadcasting, "lazy ranges", "linear arrays"; samples: sorting, quicksort, primes, sieve, sorting_idiomatic, sieve_idiomatic, dot, typed_lists
 
 ## Objects
 
@@ -400,7 +400,7 @@ ada.age += 1
 ada.age
 ```
 
-Examples: data; samples: data_structures, json_parser, binary_tree, dijkstra, dijkstra_idiomatic
+Examples: data; samples: data_structures, json_parser, binary_tree, dijkstra, dijkstra_idiomatic, references
 
 ## Loops
 
@@ -485,7 +485,7 @@ def fib(n) = if n < 2 then n else fib(n - 1) + fib(n - 2)
 fib(10)
 ```
 
-Examples: functions, arguments, "polyglot calls"; samples: functions, fibonacci, ackermann, queens, queens_idiomatic, sudoku
+Examples: functions, arguments, "polyglot calls"; samples: functions, fibonacci, ackermann, queens, queens_idiomatic, sudoku, block_arguments, y_combinator
 
 ## Closures
 
@@ -533,7 +533,7 @@ class Point { x: int y: int }
 Point{x: 1 y: 2}.x
 ```
 
-Examples: classes, properties; samples: types, polymorphism
+Examples: classes, properties; samples: types, polymorphism, dispatch, reflection
 
 ## Data and storage
 
@@ -585,7 +585,7 @@ use json
 json('{"age": 36}').age
 ```
 
-Examples: data; samples: orm, orm_transaction, orm_units, todo_app, json_parser
+Examples: data; samples: orm, orm_transaction, orm_units, todo_app, json_parser, store
 
 ## Errors
 
@@ -622,7 +622,7 @@ When a line could mean two things, warp asks which one you meant.
 Some lines work but look like a slip. Then warp prints a warning and goes on. `use strict` at the top of a program
 makes warnings stop it, as errors do.
 
-Examples: "welcoming errors", ambiguity; samples: try_catch, try_else, parse_number, raise_error, assertions
+Examples: "welcoming errors", ambiguity; samples: try_catch, try_else, parse_number, raise_error, assertions, try_failed_json
 
 ## Modules
 
@@ -633,7 +633,7 @@ use math
 max(√2 arc_cosine(π/4))
 ```
 
-Examples: "C libraries"; samples: lib, square, main, test_ffi, test_ffi_comprehensive, test_ffi_extended
+Examples: "C libraries"; samples: lib, square, main, test_ffi, test_ffi_comprehensive, test_ffi_extended, modules, javascript, agent
 
 ## Events and timers
 
@@ -649,7 +649,7 @@ emit ping
 pong
 ```
 
-Examples: "emit and on", events, timers, animation, mouse, "game of life", "system values", "on exit"
+Examples: "emit and on", events, timers, animation, mouse, "game of life", "system values", "on exit"; samples: effects
 
 ## Tasks and channels
 
@@ -664,7 +664,7 @@ print("first!")
 
 Channels pass messages between programs.
 
-Examples: tasks, channels; samples: async, threads
+Examples: tasks, channels; samples: async, threads, parallel_let
 
 ## Web pages
 
@@ -695,13 +695,31 @@ ul{ li all fruits }
 
 `on click { … }` inside a button makes it do something. `local["key"]` remembers a value in the browser.
 
-Examples: markup, "element events", "fine updates", components, cleanup, "keyed list", "form binding", styles, routes, transitions; samples: html, html_dsl
+Examples: markup, "element events", "fine updates", components, cleanup, "keyed list", "form binding", styles, routes, transitions; samples: html, html_dsl, hello_div, component_binding, component_totals, keyed_counters, computed_tags, live_region, form_submit, typed_form, select_binding, page_custom_event, keyframes, leaving_list
+
+## Servers
+
+Routes answer requests. `warp serve` runs the program as a web server; `warp deploy` puts it on the web.
+
+Examples: forms; samples: server, route_headers, hosting, worker
+
+## Pictures and the GPU
+
+`use draw` paints pixels on a canvas, and `show()` shows it. A shader colors every pixel at once on the graphics card.
+
+Examples: frames, shader, "shader mouse"; samples: paint_text, finger_paint, shader, webgpu, shader_brush, shader_trails, gpu_map, gpu_arrays, manual_3d_object_viewer, gpu_visualizer
+
+## Sound and music
+
+`use sound` plays notes by name, chords, rhythms and whole songs. A function can also compute the sound itself.
+
+Examples: melody; samples: music, rhythm, harmony, synth, filters, voices, arrangement, patterns, signal_graph, siren_sound, stereo_sound, midi, visualizer
 
 ## WebAssembly
 
 warp turns warp into WebAssembly, which runs in every browser. Code from Rust or C can be called alike.
 
-Examples: "wasm components"; samples: wasm_interop
+Examples: "wasm components"; samples: wasm_interop, import_compiled, component_reflection
 
 ## Laws
 

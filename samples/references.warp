@@ -10,6 +10,7 @@ mine = Account("Ada", 100)
 ours = mine
 ours.balance = 150
 print mine.balance
+test ours.balance == mine.balance
 
 // copy() makes a new object you can change on its own
 backup = copy(mine)
@@ -17,7 +18,7 @@ backup.balance = 0
 print mine.balance
 
 // === asks: the same object? == asks: equal values?
-print mine === ours
+test mine === ours
 print backup == mine
 print copy(mine) == mine
 
