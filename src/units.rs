@@ -200,13 +200,8 @@ const EACH_WORD: &str = "each";
 /// The local time of day, unless the program names something so (card time-day-value)
 const TIME_WORD: &str = "time";
 
-thread_local! {
-	/// The unit words the program being lowered defines itself (`m = 2`, `g(x) := …`): no units while it is lowered
-	static SHADOWED_UNITS: std::cell::RefCell<std::collections::HashSet<String>> = std::cell::RefCell::new(Default::default());
-}
-
 fn unit_named(name: &str) -> Option<&'static Unit> {
-	if SHADOWED_UNITS.with(|shadowed| shadowed.borrow().contains(name)) {
+	if crate::compile_context::read(|context| context.shadowed_units.contains(name)) {
 		return None;
 	}
 	UNITS.iter().find(|unit| unit.name == name)
@@ -214,7 +209,7 @@ fn unit_named(name: &str) -> Option<&'static Unit> {
 
 /// `run` with the unit words `program` defines as its names, not units: `g(x) := x + 1 m` keeps m a unit
 fn shadowing<T>(program: &Node, run: impl FnOnce() -> T) -> T {
-	crate::util::scoped(&SHADOWED_UNITS, defined_unit_names(program), run)
+	crate::compile_context::scoped(|context| &mut context.shadowed_units, defined_unit_names(program), run)
 }
 
 /// A conversion target: a unit by its short name or its long name, `minute` or `minutes`

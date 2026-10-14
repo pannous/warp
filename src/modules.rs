@@ -73,9 +73,9 @@ pub fn resolve(program: Node) -> Node {
 }
 
 pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
-	MODULE_DEFINITIONS.with(|names| names.borrow_mut().clear());
+	crate::compile_context::change(|context| context.module_definitions.clear());
 	let own_names: Vec<String> = statements_of(&program).iter().filter_map(declared_name).collect();
-	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
+	let file = program_file();
 	let mut loader = Loader::new(directories, file.as_deref().map(folder_of));
 	loader.program_variables = program_variables(&program);
 	let folder = loader.including_directory.clone();
@@ -96,23 +96,23 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 		.filter(|path| path.is_file())
 		.cloned()
 		.collect();
-	MODULE_FILES.with(|modules| *modules.borrow_mut() = files);
-	EARLY_CLASS_MODULES.with(|modules| modules.borrow_mut().clear()); // for this program only
-	MODULE_DEFINITIONS.with(|names| {
+	crate::compile_context::change(|context| {
+		context.module_files = files;
+		context.early_class_modules.clear(); // for this program only
 		own_names.iter().for_each(|own| {
-			names.borrow_mut().remove(own);
-		})
-	}); // the program's own word wins
+			context.module_definitions.remove(own); // the program's own word wins
+		});
+	});
 	resolved.unwrap_or_else(|failure| failure)
 }
 
 /// The classes of the modules the program uses, in front of it: those of a file (`use shapes`) all, those of a standard
 /// module the program names (`use collections; s = Stack()`). class_methods, which turns a class's methods into
 /// functions and its method calls into theirs, runs before `resolve` loads a module's other definitions; the loader
-/// then leaves these modules' classes out (EARLY_CLASS_MODULES). A class the program declares itself wins.
+/// then leaves these modules' classes out (early_class_modules). A class the program declares itself wins.
 pub fn insert_module_classes(program: Node) -> Node {
 	let mut program = with_type_module_uses(program);
-	let file = PROGRAM_FILE.with(|current| current.borrow().clone());
+	let file = program_file();
 	let loader = Loader::new(&SEARCH_DIRECTORIES, file.as_deref().map(folder_of));
 	let own_names: HashSet<String> = statements_of(&program).iter().filter_map(declared_name).collect();
 	let (mut std_definitions, mut file_classes, mut early, mut class_modules) =
@@ -165,7 +165,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 		}
 		early.insert(path.canonicalize().unwrap_or(path));
 	}
-	EARLY_CLASS_MODULES.with(|modules| *modules.borrow_mut() = early);
+	crate::compile_context::change(|context| context.early_class_modules = early);
 	let is_foreign = |class: &Node| declared_name(class).is_none_or(|name| !own_names.contains(&name));
 	let aliases: Vec<(&str, &str)> = STD_ALIASES
 		.into_iter()
@@ -563,31 +563,10 @@ fn renamed_word(node: Node, from: &str, to: &str) -> Node {
 	}
 }
 
-thread_local! {
-	/// The file being compiled; its folder is in scope (D15). None for inline code
-	static PROGRAM_FILE: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
-	/// The modules whose classes insert_module_classes put in front of the program: the loader leaves them out
-	static EARLY_CLASS_MODULES: std::cell::RefCell<HashSet<PathBuf>> = std::cell::RefCell::new(HashSet::new());
-	/// The names a used module defines for the program being compiled: their bodies never see the program's variables
-	static MODULE_DEFINITIONS: std::cell::RefCell<HashSet<String>> = std::cell::RefCell::new(HashSet::new());
-	/// The module files the last program resolved used or included: `warp dev` builds anew when one changes
-	static MODULE_FILES: std::cell::RefCell<Vec<PathBuf>> = const { std::cell::RefCell::new(vec![]) };
-}
-
-/// The files of the modules the last program compiled on this thread used or included (card web-dev-modules)
-pub fn module_files() -> Vec<PathBuf> {
-	MODULE_FILES.with(|files| files.borrow().clone())
-}
-
-/// Whether `name` is defined by a module the program uses (`use markup`'s html_element), not by the program
-pub fn is_module_definition(name: &str) -> bool {
-	MODULE_DEFINITIONS.with(|names| names.borrow().contains(name))
-}
-
 /// `path` as written in the program: a relative path is next to the program's file, or in the working directory for
 /// inline code
 pub fn beside_program(path: &str) -> String {
-	let folder = PROGRAM_FILE.with(|current| current.borrow().as_deref().map(folder_of));
+	let folder = program_file().as_deref().map(folder_of);
 	match folder {
 		Some(folder) if Path::new(path).is_relative() => folder.join(path).to_string_lossy().into_owned(),
 		_ => path.to_string(),
@@ -624,12 +603,12 @@ fn program_loader() -> Loader<'static> {
 
 /// The file being compiled, None for inline code
 pub fn program_file() -> Option<PathBuf> {
-	PROGRAM_FILE.with(|current| current.borrow().clone())
+	crate::compile_context::read(|context| context.program_file.clone())
 }
 
 /// Compile `body` as the program of `file`: `use folder`, `use package` and `use project` start from its folder
 pub fn with_program_file<R>(file: &Path, body: impl FnOnce() -> R) -> R {
-	crate::util::scoped(&PROGRAM_FILE, Some(file.to_path_buf()), body)
+	crate::compile_context::scoped(|context| &mut context.program_file, Some(file.to_path_buf()), body)
 }
 
 fn folder_of(file: &Path) -> PathBuf {

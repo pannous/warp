@@ -103,11 +103,6 @@ const INPUT_TYPES: [&str; 22] = [
 	"week",
 ];
 
-thread_local! {
-	/// The problems of the markup as written, said where it is written: the markup a run hands back does not repeat them
-	static WRITTEN_PROBLEMS: std::cell::RefCell<HashSet<String>> = std::cell::RefCell::new(HashSet::new());
-}
-
 /// An element's problem: where, what, and its fix
 type Problem<'a> = (&'a Node, String, String);
 
@@ -137,7 +132,7 @@ pub fn warnings(program: &Node) -> Vec<Diagnostic> {
 		.map(|(_, message, _)| message.clone())
 		.chain(rendered_as_attributes)
 		.collect();
-	WRITTEN_PROBLEMS.with(|problems| *problems.borrow_mut() = written);
+	crate::compile_context::change(|context| context.written_problems = written);
 	problems
 		.into_iter()
 		.map(|(node, message, fix)| Diagnostic::at(node, message).fix(fix))
@@ -150,7 +145,7 @@ pub fn check_rendered(markup: &Node) {
 	let mut elements = vec![];
 	collect(&markup, &HashSet::new(), false, None, &mut elements);
 	for (_, message, fix) in problems(&elements, &HashSet::new()) {
-		if !WRITTEN_PROBLEMS.with(|written| written.borrow().contains(&message)) {
+		if !crate::compile_context::read(|context| context.written_problems.contains(&message)) {
 			crate::diagnostic::report_runtime_warning_once(&format!("{RUN_TIME_NOTICE}: {message}; fix"), &fix);
 		}
 	}

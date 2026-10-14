@@ -2,6 +2,7 @@
 //! the WASM GC emitter (wasm_emitter) → run. `eval`, `compile` and `lower` are the entry points; wasm_emitter
 //! re-exports them.
 
+use crate::compile_context;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::WarpParser;
@@ -106,22 +107,17 @@ pub fn eval_untrusted(code: &str) -> Node {
 	}
 }
 
-thread_local! {
-	/// What the program being compiled may call: eval's grant, or the untrusted one (checked again after lowering,
-	/// which brings calls of its own: `use python math` → foreign_call)
-	static GRANTED: std::cell::Cell<&'static [crate::effects::Capability]> = const { std::cell::Cell::new(&crate::effects::Capability::GRANTED_BY_EVAL) };
-}
-
 /// `run` with the program granted only what a sandboxed program gets (`warp --sandbox`, Capability::GRANTED_SANDBOXED)
 pub fn sandboxed<T>(run: impl FnOnce() -> T) -> T {
 	with_granted(&crate::effects::Capability::GRANTED_SANDBOXED, || {
-		crate::sandbox::confined(run)
+		compile_context::scoped(|context| &mut context.sandboxed, true, run)
 	})
 }
 
-/// `run` with the program granted only `granted`
+/// `run` with the program granted only `granted` (checked again after lowering, which brings calls of its own:
+/// `use python math` → foreign_call)
 fn with_granted<T>(granted: &'static [crate::effects::Capability], run: impl FnOnce() -> T) -> T {
-	crate::util::scoped(&GRANTED, granted, run)
+	compile_context::scoped(|context| &mut context.granted, granted, run)
 }
 
 /// What the program compiled on this thread is compiled for: set by the `for_*` wrappers around a compile, read by the
@@ -169,125 +165,91 @@ impl CompileMode {
 	}
 }
 
-thread_local! {
-	static COMPILE_MODE: std::cell::Cell<CompileMode> = const { std::cell::Cell::new(CompileMode::PLAIN) };
-	/// the values the page's calls of server functions gave its prerender, the shipped page's first values
-	static SERVER_VALUES: std::cell::RefCell<Vec<Node>> = const { std::cell::RefCell::new(vec![]) };
-	/// the port `warp serve` serves a program at that has no `serve PORT {…}` of its own (lowering/serve.rs)
-	static SERVING_PORT: std::cell::Cell<Option<u16>> = const { std::cell::Cell::new(None) };
-}
-
 /// What the program compiled now is compiled for
 pub fn compile_mode() -> CompileMode {
-	COMPILE_MODE.with(std::cell::Cell::get)
+	compile_context::read(|context| context.mode)
 }
 
-fn set_mode_flag(flag: fn(&mut CompileMode) -> &mut bool, value: bool) -> bool {
-	COMPILE_MODE.with(|current| {
-		let mut mode = current.get();
-		let before = std::mem::replace(flag(&mut mode), value);
-		current.set(mode);
-		before
-	})
+fn set_mode_flag(flag: fn(&mut CompileMode) -> &mut bool, value: bool) {
+	compile_context::change(|context| *flag(&mut context.mode) = value)
 }
 
 /// `run` with one flag of the compile mode set, then that flag as it was (the others keep what `run` set)
-fn with_flag<T>(flag: fn(&mut CompileMode) -> &mut bool, run: impl FnOnce() -> T) -> T {
-	struct Restore(fn(&mut CompileMode) -> &mut bool, bool);
-	impl Drop for Restore {
-		fn drop(&mut self) {
-			set_mode_flag(self.0, self.1);
-		}
-	}
-	let _restore = Restore(flag, set_mode_flag(flag, true));
-	run()
-}
-
-thread_local! {
-	/// The functions the component compiled on this thread exports and imports (`warp build --component`)
-	static COMPONENT_FUNCTIONS: std::cell::RefCell<crate::lowering::component_worlds::WorldFunctions> = std::cell::RefCell::new(Default::default());
+fn with_flag<T>(flag: fn(&mut compile_context::CompileContext) -> &mut bool, run: impl FnOnce() -> T) -> T {
+	compile_context::scoped(flag, true, run)
 }
 
 /// `run` compiling a program as a component exporting and importing `functions`: the emitter adds the canonical-ABI
 /// adapters of the exports and imports the imports from the core modules the world names
 pub fn for_a_component<T>(functions: crate::lowering::component_worlds::WorldFunctions, run: impl FnOnce() -> T) -> T {
-	crate::util::scoped(&COMPONENT_FUNCTIONS, functions, run)
+	compile_context::scoped(|context| &mut context.component, functions, run)
 }
 
 /// The functions the component being compiled exports, none for a program
 pub fn component_exports() -> Vec<(String, crate::lowering::component_worlds::Signature)> {
-	COMPONENT_FUNCTIONS.with(|current| current.borrow().exports.clone())
+	compile_context::read(|context| context.component.exports.clone())
 }
 
 /// The functions the component being compiled imports, none for a program
 pub fn component_imports() -> Vec<(String, crate::lowering::component_worlds::Signature)> {
-	COMPONENT_FUNCTIONS.with(|current| current.borrow().imports.clone())
+	compile_context::read(|context| context.component.imports.clone())
 }
 
 /// `run` compiling a program for a page: its page event handlers are expected, not warned about; it exports the
 /// reflection getters the page's host reads values with
 pub fn for_a_page<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(|mode| &mut mode.for_a_page, run)
+	with_flag(|context| &mut context.mode.for_a_page, run)
 }
 
 /// `run` compiling a program for WAGI (Spin, Akamai Functions): lowering/serve.rs ends it in the answer of its routes
 /// to the request (lib/wagi.warp), and it exports `_start`
 pub fn for_wagi<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(|mode| &mut mode.for_wagi, run)
+	with_flag(|context| &mut context.mode.for_wagi, run)
 }
 
 /// `run` compiling a module for any host (`warp compile --wasm`): it exports the reflection getters a host without GC
 /// field access (the browser) reads values with, so a browser program importing it copies values in and out
 pub fn for_any_host<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(|mode| &mut mode.for_any_host, run)
+	with_flag(|context| &mut context.mode.for_any_host, run)
 }
 
 /// `run` compiling a hosted program (`warp deploy`): without routes of its own, its value is the page at / and each of
 /// its functions a route
 pub fn for_hosting<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(|mode| &mut mode.for_hosting, run)
+	with_flag(|context| &mut context.mode.for_hosting, run)
 }
 
 /// `run` compiling a page that calls its server functions directly, as the server does (lowering/serve.rs): for its
 /// first HTML, rendered at build time
 pub fn prerendering<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(|mode| &mut mode.prerendering, run)
+	with_flag(|context| &mut context.mode.prerendering, run)
 }
 
 /// `run` compiling the shipped page, whose calls of server functions start as `values`
 pub fn with_server_values<T>(values: Vec<Node>, run: impl FnOnce() -> T) -> T {
-	crate::util::scoped(&SERVER_VALUES, values, run)
+	compile_context::scoped(|context| &mut context.server_values, values, run)
 }
 
 /// `run` compiling a program `warp serve` serves at the port: its server functions, its top-level `get`/`post` routes
 /// and its page, without a `serve PORT {…}` statement
 pub fn serving_at<T>(port: u16, run: impl FnOnce() -> T) -> T {
-	crate::util::scoped(&SERVING_PORT, Some(port), run)
-}
-
-pub fn serving_port() -> Option<u16> {
-	SERVING_PORT.with(|port| port.get())
-}
-
-/// The first value of the page's `index`th call of a server function, ø when none was rendered
-pub fn server_value(index: usize) -> Node {
-	SERVER_VALUES.with(|values| values.borrow().get(index).cloned().unwrap_or(Node::Empty))
+	compile_context::scoped(|context| &mut context.serving_port, Some(port), run)
 }
 
 /// `run` compiling a program that renders its own markup (the playground, web.rs renders_itself): it exports page·html
 /// and page·render as a page does (lowering/page_html.rs); nothing else of a page changes (it may still serve)
 pub fn rendering_itself<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(|mode| &mut mode.rendering_itself, run)
+	with_flag(|context| &mut context.mode.rendering_itself, run)
 }
 
 /// `run` compiling a program for `warp dev`: the main-level variables it changes are kept (lowering/stored_values.rs)
 pub fn for_dev<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(|mode| &mut mode.for_dev, run)
+	with_flag(|context| &mut context.mode.for_dev, run)
 }
 
 /// `run` a program under `warp test`: its `test` lines and blocks run, its value is their summary (P209, P210)
 pub fn for_tests<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(|mode| &mut mode.for_tests, run)
+	with_flag(|context| &mut context.mode.for_tests, run)
 }
 
 /// A compiled program and the host capabilities its imports need.
@@ -663,7 +625,7 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	if let Some(error) = crate::diagnostic::first_located_error(&node) {
 		return Err(error);
 	}
-	if let Some((name, capability)) = effects.denied(GRANTED.with(|granted| granted.get())) {
+	if let Some((name, capability)) = effects.denied(compile_context::read(|context| context.granted)) {
 		return Err(crate::node::error(&if crate::sandbox::is_sandboxed() {
 			crate::sandbox::denial(&name, capability.name())
 		} else {

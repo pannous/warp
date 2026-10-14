@@ -2,7 +2,6 @@
 //! writes files only inside its state folder; it reaches the network. The capability check in pipeline.rs sees only
 //! the words a program calls directly (`exec sh"…"` is os.exec through std_io, a Host word), so the places that start
 //! a process or write a file ask here themselves, and refuse loudly.
-use std::cell::Cell;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -10,16 +9,8 @@ const FLAG: &str = "warp --sandbox";
 /// systemd's StateDirectory= (web/hosting/server/warp-lambda@.service); without it the working directory
 const STATE_FOLDER_VARIABLE: &str = "STATE_DIRECTORY";
 
-thread_local! {
-	static SANDBOXED: Cell<bool> = const { Cell::new(false) };
-}
 /// Set once by `warp --sandbox` for its whole run: the threads tasks run on are sandboxed too
 static PROCESS_SANDBOXED: AtomicBool = AtomicBool::new(false);
-
-/// `run` sandboxed on this thread
-pub fn confined<T>(run: impl FnOnce() -> T) -> T {
-	crate::util::scoped(&SANDBOXED, true, run)
-}
 
 /// Every thread of this process sandboxed, for good
 pub fn confine_process() {
@@ -27,7 +18,7 @@ pub fn confine_process() {
 }
 
 pub fn is_sandboxed() -> bool {
-	PROCESS_SANDBOXED.load(Ordering::SeqCst) || SANDBOXED.with(Cell::get)
+	PROCESS_SANDBOXED.load(Ordering::SeqCst) || crate::compile_context::read(|context| context.sandboxed)
 }
 
 /// The loud refusal of `word`, which needs `capability`
