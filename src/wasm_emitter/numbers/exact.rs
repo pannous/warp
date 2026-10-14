@@ -34,6 +34,12 @@ const INT_TEXT: &str = "int_text";
 /// int_gcd(a, b): every ratio is normalized by one
 pub(crate) const INT_GCD: &str = "int_gcd";
 const DECIMAL_BASE: i64 = 10;
+/// int_text divides a big integer by 10^18, a fixnum, and writes each remainder's 18 digits in i64 arithmetic
+const CHUNK: i64 = 1_000_000_000_000_000_000;
+/// A limb of a $BigInt (base 2^32) has fewer decimal digits than this
+const LIMB_DIGITS: i32 = 10;
+/// The field of a $BigInt holding its limbs (type_manager.rs)
+const BIG_INT_LIMBS: u32 = 1;
 /// exact_dispatch's shortcut takes operands within ±SMALL_LIMIT (inline ratio parts are smaller) as i64 parts
 const SMALL_LIMIT: i64 = 1 << 31;
 /// The shortcut's locals after the two operands: a.n, a.d, b.n, b.d (reused as gcd and rest), then the result's parts
@@ -769,54 +775,63 @@ impl WasmGcEmitter {
 			s.call(f, "new_text");
 		};
 
-		// int_text(n): sign, then the digits written from the last one back; locals: negative, digits, rest, address, length
-		self.runtime_function(INT_TEXT, vec![i64t], vec![node_ref], vec![i32t, i32t, i64t, i32t, i32t], |s, f| {
-			let (value, negative, digits, rest, address, length) = (0, 1, 2, 3, 4, 5);
+		// int_text(n): sign, then the digits written from the last one back, a chunk of 18 per big division
+		// (card out-fuel), into room for LIMB_DIGITS per limb; the text starts at the first digit written.
+		// locals: negative, digits, address, length, chunk, last (the chunk is the value's top one)
+		let locals = vec![i32t, i32t, i32t, i32t, i64t, i32t];
+		let big_int = self.type_manager.big_int_type;
+		self.runtime_function(INT_TEXT, vec![i64t], vec![node_ref], locals, |s, f| {
+			let (value, negative, digits, address, length, chunk, last) = (0, 1, 2, 3, 4, 5, 6);
 			s.is_negative(f, value);
 			Self::emit_list(f, &[I::LocalTee(negative), I::If(BlockType::Empty)]);
 			s.negate_local(f, value);
+			Self::emit_list(f, &[I::End, I::LocalGet(value)]);
+			s.call(f, "int_unbox");
+			// room for the sign and the "0" of zero, which has no limbs
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::End,
-				I::I32Const(1), I::LocalSet(digits),
-				I::LocalGet(value), I::LocalSet(rest),
-				I::Block(BlockType::Empty),
-					I::Loop(BlockType::Empty),
-						I::LocalGet(rest), I::I64Const(DECIMAL_BASE),
-			]);
-			s.call(f, "int_cmp");
-			Self::emit_list(f, &[I::I32Const(0), I::I32LtS, I::BrIf(1), I::LocalGet(rest), I::I64Const(DECIMAL_BASE)]);
-			s.call(f, "int_quot");
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::LocalSet(rest),
-				I::LocalGet(digits), I::I32Const(1), I::I32Add, I::LocalSet(digits),
-				I::Br(0),
-				I::End,
-				I::End,
-				I::LocalGet(digits), I::LocalGet(negative), I::I32Add, I::LocalTee(length), I::LocalSet(digits),
+				I::StructGet { struct_type_index: big_int, field_index: BIG_INT_LIMBS }, I::ArrayLen,
+				I::I32Const(LIMB_DIGITS), I::I32Mul, I::I32Const(2), I::I32Add, I::LocalTee(digits), I::LocalSet(length),
 			]);
 			s.emit_text_allocation(f, length, address);
+			Self::emit_list(f, &[I::Loop(BlockType::Empty), I::LocalGet(value), I::I64Const(CHUNK)]);
+			s.call(f, "int_cmp");
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::LocalGet(negative), I::If(BlockType::Empty),
-					I::LocalGet(address), I::I32Const(b'-' as i32), I::I32Store8(BYTE),
-				I::End,
-				I::Block(BlockType::Empty),
-					I::Loop(BlockType::Empty),
-						I::LocalGet(digits), I::LocalGet(negative), I::I32LeU, I::BrIf(1),
-						I::LocalGet(digits), I::I32Const(1), I::I32Sub, I::LocalTee(digits), I::LocalGet(address),
-						I::I32Add, I::LocalGet(value), I::I64Const(DECIMAL_BASE),
+				I::I32Const(0), I::I32LtS, I::LocalTee(last), I::If(BlockType::Empty),
+					I::LocalGet(value), I::LocalSet(chunk),
+				I::Else,
+					I::LocalGet(value), I::I64Const(CHUNK),
 			]);
 			s.call(f, "int_rem");
+			// a lower chunk plus 10^18: its digits with their zeros, then the leading 1 the loop stops at
+			Self::emit_list(
+				f,
+				&[I::I64Const(CHUNK), I::I64Add, I::LocalSet(chunk), I::LocalGet(value), I::I64Const(CHUNK)],
+			);
+			s.call(f, "int_quot");
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
-				I::I32WrapI64, I::I32Const(b'0' as i32), I::I32Add, I::I32Store8(BYTE),
-				I::LocalGet(value), I::I64Const(DECIMAL_BASE),
+					I::LocalSet(value),
+				I::End,
+				I::Loop(BlockType::Empty),
+					I::LocalGet(digits), I::I32Const(1), I::I32Sub, I::LocalTee(digits), I::LocalGet(address), I::I32Add,
+					I::LocalGet(chunk), I::I64Const(DECIMAL_BASE), I::I64RemU, I::I32WrapI64,
+					I::I32Const(b'0' as i32), I::I32Add, I::I32Store8(BYTE),
+					I::LocalGet(chunk), I::I64Const(DECIMAL_BASE), I::I64DivU, I::LocalTee(chunk),
+					// the top chunk stops at 0, a lower one at its leading 1
+					I::I64Const(1), I::LocalGet(last), I::I64ExtendI32U, I::I64Sub, I::I64GtU, I::BrIf(0),
+				I::End,
+				I::LocalGet(last), I::I32Eqz, I::BrIf(0),
+				I::End,
+				I::LocalGet(negative), I::If(BlockType::Empty),
+					I::LocalGet(digits), I::I32Const(1), I::I32Sub, I::LocalTee(digits), I::LocalGet(address), I::I32Add,
+					I::I32Const(b'-' as i32), I::I32Store8(BYTE),
+				I::End,
+				I::LocalGet(address), I::LocalGet(digits), I::I32Add,
+				I::LocalGet(length), I::LocalGet(digits), I::I32Sub,
 			]);
-			s.call(f, "int_quot");
-			Self::emit_list(f, &[I::LocalSet(value), I::Br(0), I::End, I::End]);
-			s.emit_new_text(f, address, length);
+			s.call(f, "new_text");
 		});
 
 		// exact_text(x); locals: numerator, denominator, rest, scale, fraction digits
