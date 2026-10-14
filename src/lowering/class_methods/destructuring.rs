@@ -144,25 +144,18 @@ fn class_arm(arm: &Node, fields: &ClassFields) -> Option<Node> {
 	let Node::Key(pattern, Op::Colon, body) = arm.drop_meta() else {
 		return None;
 	};
-	let subject = symbol(PARTS_WORD);
-	let mut matched = Matched::default();
-	if !is_class_pattern(pattern, fields) {
-		return None;
-	}
+	let (subject, mut matched) = (symbol(PARTS_WORD), Matched::default());
+	is_class_pattern(pattern, fields).then_some(())?;
 	matched_pattern(pattern, &subject, fields, &mut matched)?;
 	// `is` compares like ==, a class name tests the type
 	let test = matched
 		.class_tests
 		.into_iter()
 		.chain(matched.tests)
-		.reduce(|all, test| key(all, Op::And, test))
-		.expect("a class pattern tests its class");
-	let guard = if_then(test, subject.clone());
-	Some(key(
-		guard,
-		Op::Colon,
-		bound_parts(subject, &matched.bindings, Some(body.as_ref().clone())),
-	))
+		.reduce(|all, test| key(all, Op::And, test));
+	let guard = if_then(test.expect("a class pattern tests its class"), subject.clone());
+	let body = bound_parts(subject, &matched.bindings, Some(body.as_ref().clone()));
+	Some(key(guard, Op::Colon, body))
 }
 
 /// What a pattern asks of its subject: class tests (`p is Point`), value tests (`p.x == 0`) and the variables it
