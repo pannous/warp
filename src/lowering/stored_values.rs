@@ -60,10 +60,7 @@ pub fn lower(program: Node) -> Node {
 		return Node::List(lowered, Bracket::None, Separator::Semicolon);
 	}
 	match program {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(lower(*node)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(lower),
 		Node::List(statements, bracket @ Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
 			let changed = if dev {
 				changed_names(&statements)

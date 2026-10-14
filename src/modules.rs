@@ -247,10 +247,7 @@ fn without_use_of(program: Node, module: &str) -> Node {
 				.collect();
 			Node::List(kept, Bracket::None, separator)
 		}
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(without_use_of(*node, module)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| without_use_of(node, module)),
 		single => single,
 	}
 }
@@ -419,10 +416,7 @@ fn with_statements_first(program: Node, first: Vec<Node>) -> Node {
 		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
 			Node::List(first.into_iter().chain(statements).collect(), Bracket::None, separator)
 		}
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_statements_first(*node, first)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_statements_first(node, first)),
 		single => Node::List(
 			first.into_iter().chain(std::iter::once(single)).collect(),
 			Bracket::None,
