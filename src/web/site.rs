@@ -1,6 +1,6 @@
 //! `warp build --site app.warp` (card web-ssr, notes/web_framework.md "Built sites"): a directory a static web server
 //! serves as it is. index.html holds the HTML of what the program shows, rendered at build time by the program itself
-//! (its export page·html, lowering/page_html.rs, run natively after main), so the page reads without JavaScript; app.wasm is the program, which the loader (web/playground/site.js)
+//! (its export page·html, lowering/web/page_html.rs, run natively after main), so the page reads without JavaScript; app.wasm is the program, which the loader (web/playground/site.js)
 //! runs in the page to hydrate it: the DOM stays, the handlers of its elements run, and what they change is shown anew.
 //! The page loads the playground's own reader.js, host.js and markup.js, carried in the warp binary, and the parts of
 //! host.js its module imports words of (HOST_PARTS, card web-bundle).
@@ -283,7 +283,7 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, 
 			.collect(),
 		false => vec![],
 	};
-	// a page calling server functions ships without them, starting from the values they gave here (lowering/serve.rs)
+	// a page calling server functions ships without them, starting from the values they gave here (lowering/web/serve.rs)
 	let asks_the_server = exports(&rendering.bytes, crate::serve::RPC_VALUES);
 	let rendering_bytes = rendering.bytes.clone();
 	let module = if asks_the_server {

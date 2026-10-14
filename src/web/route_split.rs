@@ -12,7 +12,7 @@ use std::process::Command;
 use wasmparser::{Name, NameSectionReader, Parser, Payload};
 
 const WASM_SPLIT: &str = "wasm-split";
-/// The function of route N is ROUTE_FUNCTION_PREFIX + N (src/lowering/routes.rs)
+/// The function of route N is ROUTE_FUNCTION_PREFIX + N (src/lowering/web/routes.rs)
 const ROUTE_FUNCTION_PREFIX: &str = "page·route·";
 /// The file of route N's module is ROUTE_MODULE_PREFIX + N + ".wasm"; site.js finds them by their placeholder imports
 pub const ROUTE_MODULE_PREFIX: &str = "app-route-";

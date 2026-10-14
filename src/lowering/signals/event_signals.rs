@@ -891,7 +891,7 @@ pub(crate) fn function_with_globals(
 	key(head, op, Node::List(statements, Bracket::Curly, Separator::Semicolon))
 }
 
-/// A program serving (serve_routes, lowering/serve.rs) serves its page too: the page raises its events
+/// A program serving (serve_routes, lowering/web/serve.rs) serves its page too: the page raises its events
 #[cfg(feature = "native")]
 pub(crate) fn serves_its_page(statements: &[Node]) -> bool {
 	statements.iter().any(|statement| matches!(statement.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().name() == crate::host::SERVE_ROUTES)))

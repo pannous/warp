@@ -1,7 +1,7 @@
 //! `warp deploy app.warp` (card cloud-deploy): the program as a Cloudflare Worker. Workers run V8, which runs WASM GC,
 //! so the Worker is the playground's host scripts the program needs (reader.js, host.js, its parts, as a built site
 //! ships them: src/web/site.rs) with web/playground/cloud-worker.js, which answers each request by the program's routes
-//! (`get "/" {…}`, lowering/serve.rs page·submitted), and the program's module. A Worker compiles no module from bytes,
+//! (`get "/" {…}`, lowering/web/serve.rs page·submitted), and the program's module. A Worker compiles no module from bytes,
 //! so app.wasm comes in compiled and app.bin as bytes for the host parts that read its sections.
 //! `warp deploy app.warp` writes app-worker/ next to the program and runs `wrangler deploy` there (its browser login
 //! the first time); `warp deploy --dev app.warp` runs `wrangler dev`, the Worker on this machine; `--dry-run` only

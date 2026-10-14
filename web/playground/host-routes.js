@@ -6,7 +6,7 @@
 const ROOT_PATH = "/"; // the page path before any navigation (page_path)
 const PAGE_ROUTED_EXPORT = "page·routed"; // the value of the route the path picks
 const ROUTE_INDEX_EXPORT = "page·route_index"; // the index of the route the path picks
-const PAGE_NAVIGATED_EXPORT = "page·navigated"; // sets the path the server data of a route is asked for (P221, lowering/serve.rs)
+const PAGE_NAVIGATED_EXPORT = "page·navigated"; // sets the path the server data of a route is asked for (P221, lowering/web/serve.rs)
 const ROUTE_MODULE_PREFIX = "app-route-"; // src/web/route_split.rs: the module of route N is app-route-N.wasm
 const PLACEHOLDER_PREFIX = "placeholder."; // wasm-split's import module of the functions a route's module fills in
 // the site's files, as the page was loaded: a link followed from "/" changes the location, not the folder of the files
@@ -62,7 +62,7 @@ function loadRouteModule(holder) {
 
 if (globalThis.addHostPart) addHostPart({
 	words: (holder, hooks, { program }) => ({
-		// the path of the page shown, which picks its route (src/lowering/routes.rs); navigate changes it
+		// the path of the page shown, which picks its route (src/lowering/web/routes.rs); navigate changes it
 		page_path: () => buildValue(program(), treeOfPlain(holder.pagePath ?? ROOT_PATH)),
 	}),
 });

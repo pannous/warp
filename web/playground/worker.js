@@ -182,7 +182,7 @@ function handleNavigation(path) {
 	showHandled(live, { result: true });
 }
 
-// the page's path for the playground's address bar: only a program with routes has one (lowering/routes.rs)
+// the page's path for the playground's address bar: only a program with routes has one (lowering/web/routes.rs)
 const addressOf = holder => holder.exports[PAGE_ROUTES_EXPORT] ? holder.pagePath ?? ROOT_PATH : undefined;
 
 // a form of the page was sent (playground.js submitForm): the live run's route answers it, then its page shows anew

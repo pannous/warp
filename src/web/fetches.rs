@@ -22,7 +22,7 @@ enum Fetch {
 thread_local! {
 	/// the fetches of the run on this thread, by the id the program gave each; a fetch started anew replaces its own
 	static FETCHES: RefCell<HashMap<i64, Fetch>> = RefCell::new(HashMap::new());
-	/// the fetches that POSTed a body: a server function's reply, JSON of any value (lowering/serve.rs)
+	/// the fetches that POSTed a body: a server function's reply, JSON of any value (lowering/web/serve.rs)
 	static POSTED: RefCell<std::collections::HashSet<i64>> = RefCell::new(std::collections::HashSet::new());
 }
 

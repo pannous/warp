@@ -123,7 +123,7 @@ pub const USER_FUNCTIONS_SEPARATOR: &str = "\n";
 /// it serves; ø once it stops
 pub const SERVE_ROUTES: &str = "serve_routes";
 /// response_header(name, value): `header "name" "value"` in a route's body, `status 418` the CGI header Status
-/// (card web-route-header, lowering/serve.rs with_answer_headers): natively the route's HTTP answer carries it
+/// (card web-route-header, lowering/web/serve.rs with_answer_headers): natively the route's HTTP answer carries it
 pub const RESPONSE_HEADER: &str = "response_header";
 pub const STATUS_HEADER: &str = "Status";
 /// `users := fetch url` (src/web/fetches.rs): fetch_start(id, url) fetches without waiting, the handler on·fetch·id runs once

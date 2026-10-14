@@ -3,7 +3,7 @@
 A program declares the component it is with `component name { import …: {…} export …: interface }`
 (samples/wasm_interop.warp, tests/wasm/test_component_worlds.rs). At run time the declaration does nothing.
 
-- `src/lowering/component_worlds.rs` parses the declaration into a `World` (WIT names, kebab-case) and writes its WIT
+- `src/lowering/web/component_worlds.rs` parses the declaration into a `World` (WIT names, kebab-case) and writes its WIT
   (`world_wit`, what `warp build --wit` writes). Types: the scalars of `WIT_TYPES` and `string`.
 - `src/component_builder.rs` (`warp build --component`): compiles the program under `pipeline::for_a_component(world.functions())`,
   embeds the WIT and encodes the component with wit-component (which validates it).

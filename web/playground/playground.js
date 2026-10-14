@@ -48,7 +48,7 @@ const REPORT_KEY = "warp-playground-report";
 const REPORT_OFF = "off";
 const ISSUE_URL = "https://github.com/pannous/warp/issues/new";
 const REPORT_LIMITS = { code: 6000, output: 1500 }; // characters: an issue address stays under GitHub's 8 KB
-// a page event, or one element's (`on click·1`, src/lowering/element_events.rs)
+// a page event, or one element's (`on click·1`, src/lowering/web/element_events.rs)
 const PAGE_EVENT = /^on ((?:click|key|input)(?:·\d+)?|(?:change|focus|blur)·\d+)$/;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 const SOUND_OFFSET = 32768; // a sound's samples cross as amplitude + 32768 (lib/sound.warp, src/sound/mod.rs SAMPLE_OFFSET)
@@ -649,7 +649,7 @@ function renderedRoot(host) {
 }
 
 // a form of the shown markup with `on submit` runs that handler (card web-submit); any other asks the program's own
-// route (lowering/serve.rs page·submitted), as `warp serve` would: its fields are the body of a POST, the query of a
+// route (lowering/web/serve.rs page·submitted), as `warp serve` would: its fields are the body of a POST, the query of a
 // GET (src/web/web_server.rs request_node), not a request leaving here
 function submitForm(submitted) {
 	submitted.preventDefault();
@@ -724,7 +724,7 @@ function sendElementEvent(event, happened, detail) {
 	if (found) sendPageEvent(found.event, found.detail);
 }
 
-// a click on a link inside the shown markup goes to that page of the program (lowering/routes.rs), not away from here
+// a click on a link inside the shown markup goes to that page of the program (lowering/web/routes.rs), not away from here
 function followLink(click) {
 	const link = click.composedPath().find(element => element.matches?.("a[href]"));
 	if (!link || click.metaKey || click.ctrlKey || click.shiftKey) return false;

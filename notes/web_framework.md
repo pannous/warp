@@ -42,7 +42,7 @@ Each step is useful on its own and is what the next ones stand on.
 ## Server and page (agreed with warp-f0, 2026-10-07; card web-server)
 - **Routes**: `serve 8080 { get "/api/users" { users } post "/api/users" { … } }`. A route's block value is the response:
   a text as text/plain, any other value as JSON (std json to_json). `request` holds method, path, query and body (the
-  body parsed when it is JSON); `status 418` sets the status and `header "name" "value"` adds a header (card web-route-header: lowering/serve.rs
+  body parsed when it is JSON); `status 418` sets the status and `header "name" "value"` adds a header (card web-route-header: lowering/web/serve.rs
   with_answer_headers makes them the host word response_header, `status` as the CGI header Status; natively
   web_server.rs Answer::with_headers; a route the page answers itself ignores them; samples/route_headers.warp).
   A WAGI build (`warp build --wagi`, card wagi-build) has no host: there they are lib/wagi.warp wagi_header calls,
@@ -125,7 +125,7 @@ Each step is useful on its own and is what the next ones stand on.
 - A component is a function returning markup; props are its parameters, positional or named (`Card(title:"Hi")`).
 - Children: a block after a call that leaves a parameter without its value is that argument, for any function
   (trailing closure, lowering/blocks.rs lower_trailing_blocks): `Card("Hi") { p:"text" }`, `apply(3) { it*2 }`.
-- Own state per instance (lowering/component_state.rs, before element_events): a variable of a component that one of
+- Own state per instance (lowering/web/component_state.rs, before element_events): a variable of a component that one of
   its element handlers mentions is the main-level list `Counter·count`, one entry per instance; an instance is the n-th
   call of that component in a render (React's hooks rule, undoable default, question queued with the Interviewer); the
   handler's element carries `data-warp-instance`, the page passes it as `event.instance`. The program's last line
@@ -196,7 +196,7 @@ Each step is useful on its own and is what the next ones stand on.
 - `style: { color: theme padding: 8 }` on an element is its inline style; `style{ ".card": { padding: 8 } }` a style
   sheet of rules (lib/markup.warp). Numbers are pixels unless the property has no unit (opacity, z-index, …), camelCase names
   are kebab-case; values read variables, so a handler that changes them restyles through the morph. Tour example styles.
-- CSS as CSS (classes-42, src/lowering/style_rules.rs, tests/web/test_style_rules.rs): selectors without quotes,
+- CSS as CSS (classes-42, src/lowering/web/style_rules.rs, tests/web/test_style_rules.rs): selectors without quotes,
   one rule per line (`.card {…}`, `ul > li {…}`, `h1, h2 {…}`, `a:hover {…}`, `p.note {…}`, `ul li {…}`, `#main {…}`),
   lengths with units (`8px`, `1.5em`, `50%`, `-2px`) and values of several words (`padding: 8px 4px`, `border: 1px
   solid "red"`; a bare number among several words stays as written: `flex: 1 1 auto`, `margin: 0 auto`). The parser reads `.name` at an atom's start as the symbol `.name`. In a style sheet a blank before
@@ -231,7 +231,7 @@ Each step is useful on its own and is what the next ones stand on.
   so its page events draw no warning.
 
 ## Step 15 (web-transitions), what is done and what is left
-- CSS form (P188, card web-css; lowering/transitions.rs, right after markup_tags): `li{ transition: opacity 200ms }` is
+- CSS form (P188, card web-css; lowering/web/transitions.rs, right after markup_tags): `li{ transition: opacity 200ms }` is
   the element's inline CSS transition, joined to its own `style`; `starting-style: { opacity: 0 }` (CSS's
   @starting-style, which an inline style cannot hold) is the attribute `data-warp-starting-style`, rendered as
   declarations by lib/markup.warp. Words are data (not variables), durations normalized to ms, a text taken as written,
@@ -271,7 +271,7 @@ Each step is useful on its own and is what the next ones stand on.
 - One renderer, written in warp (warp-96: "Warp is wasm-first"): lib/markup.warp's to_html (`use markup`; not `html`,
   which samples/html.warp would shadow) is the one renderer: the CLI and the playground render a markup value with it
   too (src/markup.rs to_html runs `use markup; to_html(value)`; src/html.rs is gone). A program
-  compiled for a page (pipeline::for_a_page) exports page·html := to_html(page·value) (lowering/page_html.rs); its
+  compiled for a page (pipeline::for_a_page) exports page·html := to_html(page·value) (lowering/web/page_html.rs); its
   page·value is event_signals' output binding, else the last line when that is an expression (no assignment,
   definition, print, use). `warp build --site` runs main and page·html natively (wasm_reader::read_export_after_main)
   for index.html, so the page reads without JavaScript; the page calls the same export after each handler. Page builds also export the reflection getters
@@ -315,7 +315,7 @@ Each step is useful on its own and is what the next ones stand on.
   (html_meta_attributes). Test: tests/web/test_html_meta.rs; probe probes/html_meta/page_facts.warp.
 
 ## Routes (card web-router, 2026-10-07; split agreed with warp-cf (web-bundle) and warp-34 (playground, fetch-cancel))
-- `route "/users/:id" { UserPage(id) }` (lowering/routes.rs, lib/router.warp): each route is the function page·route·N,
+- `route "/users/:id" { UserPage(id) }` (lowering/web/routes.rs, lib/router.warp): each route is the function page·route·N,
   `id` bound by `let` to that part of the path (a number when it is digits, else the text), page·routes gives the
   patterns in order (exported, for warp-cf's per-route modules), page·routed() is the first route matching the page's
   path, else "no page at <path>"; `route "*"` matches any path (the not-found page). A layout shows page·routed() where
@@ -340,7 +340,7 @@ Each step is useful on its own and is what the next ones stand on.
   page·value, else page·routed. A routes program stays listening for that. Tour example routes.
 - Nested routes (card route-nested): `route "/users" { div{ h1{ "Users" } outlet } route "/" {…} route ":id:int" {…} }`.
   Inner patterns are relative to the outer one, the outer block's other items are its layout, showing the inner route
-  at `outlet`. Flattened in lowering/routes.rs: each inner route is a page route with the whole pattern
+  at `outlet`. Flattened in lowering/web/routes.rs: each inner route is a page route with the whole pattern
   ("/users/:id:int") whose function is the layout with page·part·N() at the outlet (page·part·N: the inner block, its
   parameters, the outer ones too, bound by `let`); after them the outer route itself with an empty outlet, so an inner
   "/" route answers the outer path first. page·routes lists the whole patterns.

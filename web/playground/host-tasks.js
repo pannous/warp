@@ -7,7 +7,7 @@ const SHARED_HANDLER = "on·shared";
 const SOCKET_ADDRESS = /^wss?:\/\//; // src/web/web_sockets.rs SOCKET_SCHEMES
 const TEXT_REPLY_TYPE = "text/plain"; // src/web/web_server.rs TEXT_REPLY_TYPE: a text reply of a server function
 const SERVER_REPLIES_ID = "warp-replies"; // src/web/site.rs REPLIES_ID
-const ROUTE_DATA_URL = "/rpc/route·data·"; // src/lowering/serve.rs RPC_PREFIX + ROUTE_DATA_PREFIX
+const ROUTE_DATA_URL = "/rpc/route·data·"; // src/lowering/web/serve.rs RPC_PREFIX + ROUTE_DATA_PREFIX
 
 const TASK_FINISHED = 1n; // src/host.rs TASK_FINISHED, TASK_FAILED, TASK_STOPPED, TASK_STOP
 const TASK_FAILED = 2n;
@@ -632,7 +632,7 @@ function serverReply(url, body) {
 const routeDataReplies = new Map();
 const routeDataKey = (url, body) => body !== undefined && decodeURI(url).startsWith(ROUTE_DATA_URL) ? url + " " + body : undefined;
 
-// A request [url, body] POSTs the body as JSON: a server function the page calls (src/lowering/serve.rs)
+// A request [url, body] POSTs the body as JSON: a server function the page calls (src/lowering/web/serve.rs)
 function startFetch(holder, hooks, id, request) {
 	const [url, body] = Array.isArray(request) ? [request[0], JSON.stringify(request[1])] : [request];
 	if (!hooks.arrived && taskPool.length === 0) return holder.warnings.push(`fetch ${url}: replies arriving later are not handled here`);
@@ -750,7 +750,7 @@ function fetchReply(holder, id) {
 	const { reply, posted } = holder.fetches?.get(id) ?? {};
 	if (!reply) return [null, `fetch ${id} has no reply yet`];
 	if (reply.error) return [null, reply.error];
-	// a server function's reply (src/lowering/serve.rs) is a text as text/plain, JSON of any other value (src/web/web_server.rs)
+	// a server function's reply (src/lowering/web/serve.rs) is a text as text/plain, JSON of any other value (src/web/web_server.rs)
 	if (posted && reply.text) return [reply.body, null];
 	if (posted) try { return [JSON.parse(reply.body), null]; } catch (failure) { return [null, `the server's reply is no JSON: ${failure.message}`]; }
 	const structure = structureOf(reply.body);

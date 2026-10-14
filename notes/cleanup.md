@@ -362,7 +362,7 @@ stored_values (280), element_events (286). Each repeats three things:
    their length undoes the groups the parser made of the phrase (`(on stop) (the (machine {…}))`).
    Design: one reader `listeners::read(statement) -> Option<Listener { word: On|Once|Whenever|Before|After, name:
    Option<String> /* h = on … */, trigger: Vec<Node> /* flat words */, body: Node, scope: Option<Node> /* in {…} */ }>`
-   in a new src/lowering/listeners.rs, and each pass asks it and matches on the trigger words. Estimate −300 lines,
+   in a new src/lowering/web/listeners.rs, and each pass asks it and matches on the trigger words. Estimate −300 lines,
    low risk (behaviour kept; the forms each reader accepts are the union, a few odd spellings may start or stop
    matching → cleanup-edge ignores).
 2. Calling the handler. Host-triggered events each have their own registration: `signal_every(id, ms)`,

@@ -9,7 +9,7 @@ const TRAP_DETAIL_EXPORT = "trap_detail";
 const TRAP_POSITION_EXPORT = "trap_position";
 const SHARED_CHECK_MILLISECONDS = 10; // how often a busy sleep looks at its check points
 const PAGE_ROUTES_EXPORT = "page·routes";
-const PAGE_SUBMITTED_EXPORT = "page·submitted"; // lowering/serve.rs PAGE_SUBMITTED
+const PAGE_SUBMITTED_EXPORT = "page·submitted"; // lowering/web/serve.rs PAGE_SUBMITTED
 const PAGE_BITS = 16;
 const STDERR = 2;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
@@ -354,7 +354,7 @@ function runMain(holder, hooks) {
 	return whenSettled(outcomeOf(holder, hooks, () => withExitHandler(holder, exports, () => main())), outcome => {
 		holder.waiting = false;
 		const events = pageEvents(exports);
-		// a program with routes stays for its links (lowering/routes.rs page·routes)
+		// a program with routes stays for its links (lowering/web/routes.rs page·routes)
 		if ((events.length > 0 || holder.timers || holder.fetches || exports[PAGE_ROUTES_EXPORT] || exports[PAGE_SUBMITTED_EXPORT]) && outcome.result) hooks.listen?.(holder, events);
 		// a run without page events (lib/markup.warp rendering the page's HTML, src/markup.rs) keeps the page's run
 		if (events.length > 0 && outcome.result) listeningRun = holder;
@@ -365,7 +365,7 @@ function runMain(holder, hooks) {
 // the last run that handles page events, for the compiler's warp_host.page_event (src/web/headless.rs in the browser tests)
 let listeningRun;
 const PAGE_VALUE_EXPORT = "page·value";
-const PAGE_RENDER_EXPORT = "page·render"; // src/lowering/page_html.rs PAGE_RENDER
+const PAGE_RENDER_EXPORT = "page·render"; // src/lowering/web/page_html.rs PAGE_RENDER
 
 // the HTML of a value by the program's own renderer (lib/markup.warp's to_html, exported as page·render by a program
 // holding markup): undefined for a number, a program without one, or a rendering that failed (the compiler then
@@ -485,7 +485,7 @@ function runPageEvent(holder, hooks, event, detail) {
 }
 
 // a form's request {method, path, query, body} for the program's own routes, without a server (worker.js handleSubmit,
-// lowering/serve.rs with_local_routes)
+// lowering/web/serve.rs with_local_routes)
 function runSubmitted(holder, hooks, request) {
 	holder.warnings = [];
 	const submitted = holder.exports[PAGE_SUBMITTED_EXPORT];

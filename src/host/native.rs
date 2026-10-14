@@ -968,7 +968,7 @@ fn channel_listen(mut caller: Caller<'_, HostState>, id: i64, channel: HostNode)
 	crate::channels::listen(id, &channel.name()).map_err(task_failure)
 }
 
-/// A fetch's URL, or `[url, body]`: a POST of the body as JSON (a server function the page calls, lowering/serve.rs)
+/// A fetch's URL, or `[url, body]`: a POST of the body as JSON (a server function the page calls, lowering/web/serve.rs)
 fn request_of(request: &Node) -> crate::web::fetches::Request {
 	match request.drop_meta() {
 		Node::List(items, _, _) if items.len() == 2 => {
