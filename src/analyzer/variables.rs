@@ -4,6 +4,11 @@ use super::*;
 use crate::lowering::nodes::children_rewritten;
 use std::collections::HashSet;
 
+/// `var x = 1` announces a reassignable variable, plain `x = 1`
+pub(crate) const VAR_KEYWORD: &str = "var";
+/// `let x = 1` binds x once: any change of it is an error naming `var` (user, card let-reassign; check_constants)
+pub(crate) const IMMUTABLE_LET: &str = "let";
+
 /// Collect variables defined in node and populate scope
 /// Returns count of temp locals needed (e.g., for while loops)
 pub fn collect_variables(node: &Node, scope: &mut Scope) -> u32 {
@@ -1137,4 +1142,17 @@ impl Scope {
 	pub fn local_count(&self) -> u32 {
 		self.locals.len() as u32
 	}
+}
+
+pub(crate) fn is_constant_keyword(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(word) if CONSTANT_KEYWORDS.contains(&word.as_str()))
+}
+
+pub(crate) fn is_declaration_keyword(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(word) if is_declaration_word(word))
+}
+
+/// `var`, `let`, `const`, `val` …: a word declaring the name after it
+pub(crate) fn is_declaration_word(word: &str) -> bool {
+	CONSTANT_KEYWORDS.contains(&word) || word == VAR_KEYWORD || word == IMMUTABLE_LET
 }

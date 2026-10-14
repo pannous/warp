@@ -1,6 +1,9 @@
 //! Function names: an operator word or a type word cannot name a function
 use super::*;
 
+/// The error for a user function named like a type word; `{name}` is the word
+pub(crate) const TYPE_WORD_FUNCTION_CLASH: &str = "{name} is a type; rename your function";
+
 /// `sqrt(x) := …`, `def abs(x): …`: a prefix operator word reads as the operator, so the definition could never be
 /// called (P141); it arrives as `(√ ø x) := …`. Checked on the source, before a pass reads the operator
 pub fn check_operator_word_functions(program: &Node) -> Option<Diagnostic> {
