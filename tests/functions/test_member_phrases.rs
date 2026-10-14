@@ -14,3 +14,10 @@ fn a_member_with_arguments_is_its_call() {
 fn the_parenthesized_call_stays_the_same() {
 	is!("xs = [1, 2]; xs.insert(4); xs", parse("[1 2 4]"));
 }
+
+#[test]
+fn an_operator_word_ends_the_phrase() {
+	is!("number of chars in \"héllo\"", 5);
+	is!("\"äb\".size in bytes", 3);
+	is!("xs = [1, 2]; xs.count in [2, 3]", true);
+}

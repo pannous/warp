@@ -17,7 +17,13 @@ pub fn lower(node: Node) -> Node {
 	};
 	// `xs.sum { |x| x * 2 }`: a trailing block, which the block passes read
 	let trailing_block = matches!(arguments, [block] if matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)));
-	if arguments.is_empty() || trailing_block || member.drop_meta().symbol_name().is_none() {
+	// `"äb".size in bytes`, `chars.number of x`: an operator word joins the member's value, it is no argument
+	let operator_word = arguments.iter().any(|argument| {
+		argument.drop_meta().symbol_name().is_some_and(|word| {
+			crate::operators::is_operator_word(word) || word == crate::words::OF_WORD || word == crate::words::IN_WORD
+		})
+	});
+	if arguments.is_empty() || trailing_block || operator_word || member.drop_meta().symbol_name().is_none() {
 		return node;
 	}
 	let call = parens([vec![(**member).clone()], arguments.to_vec()].concat());
