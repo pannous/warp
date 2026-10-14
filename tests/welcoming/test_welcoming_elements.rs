@@ -35,10 +35,7 @@ fn returned_list_literal() {
 	is!("fun f(x) { return [x, 2] }; f(1)[0]", 1);
 	is!("fun d() { return [[1, 2], [3]] }; result = d(); r = result[0]; r[1]", 2);
 	is!("f() := [1, 2]; count(f())", 2);
-	is!(
-		"ins(items) := { for i in 1..3 { x = 1 }; items }; count(ins([3, 1, 2]))",
-		3
-	);
+	is!("ins(items) := { for i in 1..3 { x = 1 }; items }; count(ins([3, 1, 2]))", 3);
 }
 
 // "A" lexes as the character 'A', yet it equals and looks up like the text "A"

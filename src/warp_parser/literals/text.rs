@@ -9,17 +9,9 @@ pub(crate) fn closing_brace(chars: &[char]) -> Option<usize> {
 	let (mut depth, mut at) = (1, 0);
 	while at < chars.len() {
 		match (chars[at], chars.get(at + 1)) {
-			('/', Some('/')) => {
-				at += chars[at..]
-					.iter()
-					.position(|&ch| ch == '\n')
-					.unwrap_or(chars.len() - at)
-			}
+			('/', Some('/')) => at += chars[at..].iter().position(|&ch| ch == '\n').unwrap_or(chars.len() - at),
 			('/', Some('*')) => {
-				at += chars[at..]
-					.windows(2)
-					.position(|pair| pair == ['*', '/'])
-					.map_or(chars.len() - at, |end| end + 1)
+				at += chars[at..].windows(2).position(|pair| pair == ['*', '/']).map_or(chars.len() - at, |end| end + 1)
 			}
 			('{', _) => depth += 1,
 			('}', _) if depth == 1 => return Some(at),
@@ -33,11 +25,7 @@ pub(crate) fn closing_brace(chars: &[char]) -> Option<usize> {
 
 /// The lines without the indentation all non-blank ones share, without the blank lines around them
 pub(crate) fn without_common_indentation(source: &str) -> String {
-	dedented_lines(source)
-		.into_iter()
-		.map(|line| line.text)
-		.collect::<Vec<_>>()
-		.join("\n")
+	dedented_lines(source).into_iter().map(|line| line.text).collect::<Vec<_>>().join("\n")
 }
 
 /// The lines of `source` without the indentation all non-blank ones share, without the blank lines around them, and
@@ -45,17 +33,10 @@ pub(crate) fn without_common_indentation(source: &str) -> String {
 pub(crate) fn dedented_lines(source: &str) -> Vec<DedentedLine> {
 	let lines: Vec<&str> = source.lines().collect();
 	let is_blank = |line: &&str| line.trim().is_empty();
-	let common = lines
-		.iter()
-		.filter(|line| !is_blank(line))
-		.map(|line| line.len() - line.trim_start().len())
-		.min()
-		.unwrap_or(0);
+	let common =
+		lines.iter().filter(|line| !is_blank(line)).map(|line| line.len() - line.trim_start().len()).min().unwrap_or(0);
 	let first = lines.iter().position(|line| !is_blank(line)).unwrap_or(lines.len());
-	let end = lines
-		.iter()
-		.rposition(|line| !is_blank(line))
-		.map_or(first, |last| last + 1);
+	let end = lines.iter().rposition(|line| !is_blank(line)).map_or(first, |last| last + 1);
 	let mut kept: Vec<DedentedLine> = (first..end)
 		.map(|line| DedentedLine {
 			line,
@@ -107,11 +88,7 @@ impl WarpParser {
 				let message = format!(
 					"Unterminated string: the text opened at {quote_line}:{quote_column} has no closing `{closing}`"
 				);
-				return missing_closer(
-					message,
-					closing,
-					crate::errors::fixits::end_of_line(&self.input, quote_line),
-				);
+				return missing_closer(message, closing, crate::errors::fixits::end_of_line(&self.input, quote_line));
 			}
 			if ch == closing {
 				self.advance(); // skip closing quote
@@ -202,26 +179,14 @@ impl WarpParser {
 			}
 			return Node::text(&text);
 		};
-		match self
-			.number_cast_follows()
-			.filter(|_| interpolates && !c.is_ascii_digit())
-		{
+		match self.number_cast_follows().filter(|_| interpolates && !c.is_ascii_digit()) {
 			Some(number_type) => {
 				let message = format!("\"{c}\" as {number_type}: a text is no number (user decision #35); codepoint('{c}') is the code point of the character");
 				let explicit = format!("{}('{c}') as {number_type}", crate::words::CODEPOINT);
-				Diagnostic {
-					message,
-					line,
-					column,
-					..Default::default()
-				}
-				.fix(&explicit)
-				.offer(
-					"the code point of the character",
-					format!("\"{c}\" as {number_type}"),
-					explicit,
-				)
-				.into_error()
+				Diagnostic { message, line, column, ..Default::default() }
+					.fix(&explicit)
+					.offer("the code point of the character", format!("\"{c}\" as {number_type}"), explicit)
+					.into_error()
 			}
 			None => Node::codepoint(c),
 		}
@@ -230,12 +195,7 @@ impl WarpParser {
 	/// `\:xyzzy` names no entity: it stays as written and warns; in strict mode the warning is the error
 	pub(crate) fn warn_unknown_entity(&self, name: &str, column: usize) -> Result<(), Node> {
 		let message = crate::text::uniscript_entities::unknown_entity(name);
-		crate::errors::diagnostic::report(&[Diagnostic {
-			message,
-			line: self.line_nr,
-			column,
-			..Default::default()
-		}])
+		crate::errors::diagnostic::report(&[Diagnostic { message, line: self.line_nr, column, ..Default::default() }])
 	}
 
 	/// Python's `f"hi {name}"` at the cursor: interpolated text whose holes are braces, `"hi \(name)"`
@@ -274,9 +234,7 @@ impl WarpParser {
 			hex.push(self.current_char());
 		}
 		if self.peek_char(1) != '}' {
-			return Err(format!(
-				"\\u{{{hex}…: a unicode escape is hex digits in braces, like \\u{{e9}}"
-			));
+			return Err(format!("\\u{{{hex}…: a unicode escape is hex digits in braces, like \\u{{e9}}"));
 		}
 		self.advance(); // now at `}`
 		u32::from_str_radix(&hex, 16)

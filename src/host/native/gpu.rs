@@ -60,11 +60,7 @@ fn named_arrays_computed(
 			)
 		})
 		.collect();
-	Ok(Node::List(
-		entries,
-		crate::node::Bracket::Curly,
-		crate::node::Separator::Space,
-	))
+	Ok(Node::List(entries, crate::node::Bracket::Curly, crate::node::Separator::Space))
 }
 
 /// `[1 2 3]`: the array the shader left, of f32 or of i32/u32 as it declares its array
@@ -74,10 +70,8 @@ fn array_computed(
 	workgroups: u32,
 	failure: &impl Fn(String) -> wasmtime::Error,
 ) -> wasmtime::Result<Node> {
-	let numbers = numbers
-		.iter()
-		.map(|number| number_of(&number, failure))
-		.collect::<wasmtime::Result<Vec<Number>>>()?;
+	let numbers =
+		numbers.iter().map(|number| number_of(&number, failure)).collect::<wasmtime::Result<Vec<Number>>>()?;
 	let left: Vec<Node> = match crate::graphics::gpu::element_of(shader) {
 		crate::graphics::gpu::Element::Float => {
 			let floats: Vec<f32> = numbers.iter().map(|&number| f64::from(number) as f32).collect();
@@ -92,9 +86,9 @@ fn array_computed(
 				.iter()
 				.map(|number| match number {
 					Number::Int(int) => Ok(*int),
-					other => Err(failure(format!(
-						"an array<i32> or array<u32> shader computes over ints, got {other}"
-					))),
+					other => {
+						Err(failure(format!("an array<i32> or array<u32> shader computes over ints, got {other}")))
+					}
 				})
 				.collect::<wasmtime::Result<Vec<i64>>>()?;
 			crate::graphics::gpu::compute_ints(shader, &ints, workgroups, element)
@@ -104,11 +98,7 @@ fn array_computed(
 				.collect()
 		}
 	};
-	Ok(Node::List(
-		left,
-		crate::node::Bracket::Square,
-		crate::node::Separator::Space,
-	))
+	Ok(Node::List(left, crate::node::Bracket::Square, crate::node::Separator::Space))
 }
 
 pub(super) fn number_of(node: &Node, failure: &impl Fn(String) -> wasmtime::Error) -> wasmtime::Result<Number> {
@@ -180,14 +170,9 @@ pub(super) fn gpu_kernel_linear<const REDUCES: bool>(
 		return Ok(0);
 	}
 	let shader = given_shader(&mut caller, shader, &failure)?;
-	let kept = (keeping & crate::gpu_maps::SOURCE_KEPT != 0)
-		.then(|| crate::graphics::gpu::kept_count(source))
-		.flatten();
-	let mut floats = if kept.is_some() {
-		vec![]
-	} else {
-		linear_floats(&mut caller, source, &failure)?
-	};
+	let kept =
+		(keeping & crate::gpu_maps::SOURCE_KEPT != 0).then(|| crate::graphics::gpu::kept_count(source)).flatten();
+	let mut floats = if kept.is_some() { vec![] } else { linear_floats(&mut caller, source, &failure)? };
 	let items = kept.unwrap_or(floats.len());
 	for value in given_node(&mut caller, values)?.iter() {
 		match value.drop_meta() {
@@ -204,14 +189,9 @@ pub(super) fn gpu_kernel_linear<const REDUCES: bool>(
 		source: kept.map(|_| source),
 		result: (keeping & crate::gpu_maps::KEEP_RESULT != 0).then_some((target, items)),
 	};
-	let left = crate::graphics::gpu::compute_kept(
-		&shader,
-		&floats,
-		workgroups,
-		if REDUCES { partials } else { 0 },
-		keeping,
-	)
-	.map_err(&failure)?;
+	let left =
+		crate::graphics::gpu::compute_kept(&shader, &floats, workgroups, if REDUCES { partials } else { 0 }, keeping)
+			.map_err(&failure)?;
 	write_linear_floats(&mut caller, target, &left, &failure)?;
 	if automatic {
 		crate::errors::diagnostic::report_runtime_warning_once(
@@ -248,10 +228,7 @@ pub(super) fn linear_floats(
 	block: i64,
 	failure: &impl Fn(String) -> wasmtime::Error,
 ) -> wasmtime::Result<Vec<f32>> {
-	Ok(linear_doubles(caller, block, failure)?
-		.into_iter()
-		.map(|cell| cell as f32)
-		.collect())
+	Ok(linear_doubles(caller, block, failure)?.into_iter().map(|cell| cell as f32).collect())
 }
 
 /// A linear float array's cells
@@ -263,12 +240,7 @@ pub(super) fn linear_doubles(
 	let memory = linear_memory(caller, failure)?;
 	let bytes = memory.data(&*caller);
 	let cells = linear_cells(bytes, block).ok_or_else(|| failure(format!("no linear array at {block}")))?;
-	Ok(bytes[cells]
-		.as_chunks::<LINEAR_CELL_BYTES>()
-		.0
-		.iter()
-		.map(|cell| f64::from_le_bytes(*cell))
-		.collect())
+	Ok(bytes[cells].as_chunks::<LINEAR_CELL_BYTES>().0.iter().map(|cell| f64::from_le_bytes(*cell)).collect())
 }
 
 /// The f32 the GPU left, written into a linear float array's cells
@@ -367,15 +339,8 @@ pub(super) fn list_of_ints(caller: &mut Caller<'_, HostState>, ints: &[u32], wor
 			return ints_to_list.call(&mut *caller, (address as i32, ints.len() as i32));
 		}
 	}
-	let ints = ints
-		.iter()
-		.map(|&int| Node::Number(Number::Int(i64::from(int))))
-		.collect();
-	built_in_program(
-		caller,
-		&Node::List(ints, crate::node::Bracket::Square, crate::node::Separator::Space),
-		word,
-	)
+	let ints = ints.iter().map(|&int| Node::Number(Number::Int(i64::from(int)))).collect();
+	built_in_program(caller, &Node::List(ints, crate::node::Bracket::Square, crate::node::Separator::Space), word)
 }
 
 /// The module's memory, or the task failure "`word`: the module exports no memory"
@@ -414,10 +379,9 @@ pub(super) fn shader_values(values: &Node) -> Result<Vec<crate::graphics::gpu::S
 			};
 			let name = name.drop_meta().name();
 			let floats_of = |value: &Node| match value.drop_meta() {
-				Node::List(items, _, _) => items
-					.iter()
-					.map(|item| float(&name, item))
-					.collect::<Result<Vec<f32>, String>>(),
+				Node::List(items, _, _) => {
+					items.iter().map(|item| float(&name, item)).collect::<Result<Vec<f32>, String>>()
+				}
 				single => Ok(vec![float(&name, single)?]),
 			};
 			let items: Vec<Node> = match value.drop_meta() {
@@ -438,11 +402,7 @@ pub(super) fn shader_values(values: &Node) -> Result<Vec<crate::graphics::gpu::S
 					vector.resize(crate::graphics::gpu::VECTOR_FLOATS, 0.0);
 					floats.extend(vector);
 				}
-				return Ok(crate::graphics::gpu::ShaderValue {
-					name,
-					floats,
-					array: true,
-				});
+				return Ok(crate::graphics::gpu::ShaderValue { name, floats, array: true });
 			}
 			let floats = floats_of(value)?;
 			let array = floats.len() > crate::graphics::gpu::VECTOR_FLOATS;
@@ -460,9 +420,6 @@ pub(super) fn given_shader(
 	match given_node(caller, shader)? {
 		Node::Text(shader) => Ok(shader),
 		Node::Char(letter) => Ok(letter.to_string()), // a one-letter text reads as a code point
-		other => Err(failure(format!(
-			"the shader is a text of WGSL, got {}",
-			other.serialize()
-		))),
+		other => Err(failure(format!("the shader is a text of WGSL, got {}", other.serialize()))),
 	}
 }

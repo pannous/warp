@@ -46,10 +46,7 @@ pub fn place_in_program(code: &str, line: usize, column: usize) -> Option<(usize
 			let shader_line = lines.get(line.checked_sub(1)?)?;
 			let text_column = written_column(&shader_line.text, column)?;
 			let block_column = if shader_line.line == 0 { start_column } else { 1 };
-			Some((
-				start_line + shader_line.line,
-				block_column + shader_line.dropped + text_column - 1,
-			))
+			Some((start_line + shader_line.line, block_column + shader_line.dropped + text_column - 1))
 		})
 		.collect();
 	match places.as_slice() {
@@ -61,13 +58,6 @@ pub fn place_in_program(code: &str, line: usize, column: usize) -> Option<(usize
 /// The column in a block's line of a column in the shader's line, where each `$name` is `values.name`; none past its end
 fn written_column(line: &str, column: usize) -> Option<usize> {
 	let characters: Vec<char> = line.chars().collect();
-	let shader_length = |length: usize| {
-		written(&characters[..length].iter().collect::<String>())
-			.0
-			.chars()
-			.count()
-	};
-	(0..=characters.len())
-		.find(|&length| shader_length(length) + 1 >= column)
-		.map(|length| length + 1)
+	let shader_length = |length: usize| written(&characters[..length].iter().collect::<String>()).0.chars().count();
+	(0..=characters.len()).find(|&length| shader_length(length) + 1 >= column).map(|length| length + 1)
 }

@@ -39,10 +39,7 @@ impl WasmGcEmitter {
 		let string_type_idx = 0u32;
 
 		// Type 1: User struct type
-		let string_ref = RefType {
-			nullable: false,
-			heap_type: HeapType::Concrete(string_type_idx),
-		};
+		let string_ref = RefType { nullable: false, heap_type: HeapType::Concrete(string_type_idx) };
 		let struct_fields: Vec<FieldType> = type_def
 			.fields
 			.iter()
@@ -55,20 +52,14 @@ impl WasmGcEmitter {
 					crate::type_kinds::FieldStorage::Text => Val(Ref(string_ref)),
 					_ => Val(ValType::I64), // default
 				};
-				FieldType {
-					element_type,
-					mutable: false,
-				}
+				FieldType { element_type, mutable: false }
 			})
 			.collect();
 		types.ty().struct_(struct_fields);
 		let struct_type_idx = 1u32;
 
 		// Type 2: main() -> ref $StructType
-		let struct_ref = RefType {
-			nullable: false,
-			heap_type: HeapType::Concrete(struct_type_idx),
-		};
+		let struct_ref = RefType { nullable: false, heap_type: HeapType::Concrete(struct_type_idx) };
 		types.ty().func_type(&FuncType::new([], [Ref(struct_ref)]));
 
 		module.section(&types);
@@ -124,11 +115,7 @@ impl WasmGcEmitter {
 					let (ptr, len) = string_offsets[string_idx];
 					Self::emit_list(
 						&mut func,
-						&[
-							I32Const(ptr as i32),
-							I32Const(len as i32),
-							I::StructNew(string_type_idx),
-						],
+						&[I32Const(ptr as i32), I32Const(len as i32), I::StructNew(string_type_idx)],
 					);
 					string_idx += 1;
 				}
@@ -195,17 +182,12 @@ pub fn run_raw_struct(wasm_bytes: &[u8]) -> Result<Node, String> {
 		crate::run::module_cache::compiled_module(&engine, wasm_bytes).map_err(|e: wasmtime::Error| e.to_string())?;
 
 	let linker = Linker::new(&engine);
-	let instance = linker
-		.instantiate(&mut store, &module)
-		.map_err(|e: wasmtime::Error| e.to_string())?;
+	let instance = linker.instantiate(&mut store, &module).map_err(|e: wasmtime::Error| e.to_string())?;
 
-	let main = instance
-		.get_func(&mut store, "main")
-		.ok_or_else(|| "no main function".to_string())?;
+	let main = instance.get_func(&mut store, "main").ok_or_else(|| "no main function".to_string())?;
 
 	let mut results = vec![Val::I32(0)];
-	main.call(&mut store, &[], &mut results)
-		.map_err(|e: wasmtime::Error| e.to_string())?;
+	main.call(&mut store, &[], &mut results).map_err(|e: wasmtime::Error| e.to_string())?;
 
 	let gc_obj = ErgonomicGcObject::new(results[0], store, Some(instance))
 		.map_err(|e: anyhow::Error| e.to_string())?
@@ -224,10 +206,7 @@ pub(crate) fn find_struct_instantiation(registry: &TypeRegistry, node: &Node) ->
 		_ => std::slice::from_ref(node),
 	};
 	let (last, before) = statements.split_last()?;
-	if !before
-		.iter()
-		.all(|statement| matches!(statement.drop_meta(), Node::Type { .. } | Node::Empty))
-	{
+	if !before.iter().all(|statement| matches!(statement.drop_meta(), Node::Type { .. } | Node::Empty)) {
 		return None;
 	}
 	find_instantiation_recursive(registry, last)

@@ -7,19 +7,13 @@ use warp::warp_parser::parse;
 fn a_list_of_a_parameter_named_like_a_function_lists_it() {
 	is!("f(x) := x + 1; g(f, b) := [f, b]; g(1, 2)", parse("[1 2]"));
 	is!("f := 3; g(f, b) := [f, b]; g(1, 2)", parse("[1 2]"));
-	is!(
-		"path := \"x\"; g(path, t) := [path, t]; g(\"ab\", \"cd\")",
-		parse("[\"ab\" \"cd\"]")
-	);
+	is!("path := \"x\"; g(path, t) := [path, t]; g(\"ab\", \"cd\")", parse("[\"ab\" \"cd\"]"));
 }
 
 #[test]
 fn a_global_named_like_a_module_parameter_leaves_the_module_word_alone() {
 	let _ = std::fs::create_dir_all("scratch/test_parameter_shadows_function");
-	is!(
-		"path := \"scratch/test_parameter_shadows_function/a.txt\"; write(path, \"hi\"); read(path)",
-		"hi"
-	);
+	is!("path := \"scratch/test_parameter_shadows_function/a.txt\"; write(path, \"hi\"); read(path)", "hi");
 }
 
 #[test]

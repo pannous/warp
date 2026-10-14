@@ -5,18 +5,9 @@ use crate::is;
 
 #[test]
 fn test_a_body_returns_a_function_reference() {
-	is!(
-		"def add(t){ t + \"!\" }; def make(){ function add }; a = make(); a(\"x\")",
-		"x!"
-	);
-	is!(
-		"def add(t){ t + \"!\" }; def make(){ &add }; a = make(); a(\"x\")",
-		"x!"
-	);
-	is!(
-		"def make(){ def add(t){ t + \"!\" }; function add }; a = make(); a(\"x\")",
-		"x!"
-	);
+	is!("def add(t){ t + \"!\" }; def make(){ function add }; a = make(); a(\"x\")", "x!");
+	is!("def add(t){ t + \"!\" }; def make(){ &add }; a = make(); a(\"x\")", "x!");
+	is!("def make(){ def add(t){ t + \"!\" }; function add }; a = make(); a(\"x\")", "x!");
 }
 
 #[test]
@@ -28,12 +19,6 @@ fn test_a_function_reference_as_a_value_and_an_argument() {
 
 #[test]
 fn test_a_bare_name_needing_arguments_is_an_error_with_the_fix() {
-	fails_with(
-		"def add(t){ t + \"!\" }; def make(){ add }; make()",
-		"add needs 1 argument",
-	);
-	fails_with(
-		"def make(){ def add(t){ t + \"!\" }; add }; a = make(); a(\"x\")",
-		"fix: function add",
-	);
+	fails_with("def add(t){ t + \"!\" }; def make(){ add }; make()", "add needs 1 argument");
+	fails_with("def make(){ def add(t){ t + \"!\" }; add }; a = make(); a(\"x\")", "fix: function add");
 }

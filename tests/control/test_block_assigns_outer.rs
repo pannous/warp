@@ -4,11 +4,7 @@ use crate::is;
 use warp::normalize::capture_hints;
 
 fn hints_of(code: &str) -> Vec<String> {
-	capture_hints(|| warp::wasm_emitter::eval(code))
-		.1
-		.into_iter()
-		.map(|hint| hint.canonical)
-		.collect()
+	capture_hints(|| warp::wasm_emitter::eval(code)).1.into_iter().map(|hint| hint.canonical).collect()
 }
 
 #[test]

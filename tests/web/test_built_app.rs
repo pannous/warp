@@ -20,15 +20,8 @@ fn built_app_checked(name: &str, code: &str) -> std::process::Output {
 		.output()
 		.unwrap();
 	assert!(build.status.success(), "{}", String::from_utf8_lossy(&build.stderr));
-	assert!(
-		String::from_utf8_lossy(&build.stdout).contains("web view"),
-		"{}",
-		String::from_utf8_lossy(&build.stdout)
-	);
-	std::process::Command::new(page.with_extension(std::env::consts::EXE_EXTENSION))
-		.arg("--check")
-		.output()
-		.unwrap()
+	assert!(String::from_utf8_lossy(&build.stdout).contains("web view"), "{}", String::from_utf8_lossy(&build.stdout));
+	std::process::Command::new(page.with_extension(std::env::consts::EXE_EXTENSION)).arg("--check").output().unwrap()
 }
 
 #[test]
@@ -37,14 +30,7 @@ fn a_built_page_program_is_an_app_showing_its_page() {
 	let text = String::from_utf8_lossy(&shown.stdout);
 	assert!(shown.status.success(), "{}", String::from_utf8_lossy(&shown.stderr));
 	assert!(text.contains("hello") && text.contains("built as an app"), "{text}");
-	let exited = built_app_checked(
-		"exits_app",
-		&format!("on key {{ exit 3 }}\ndiv{{ p{{ \"press a key\" }} {PRESSES_Q} }}"),
-	);
-	assert_eq!(
-		exited.status.code(),
-		Some(3),
-		"{}",
-		String::from_utf8_lossy(&exited.stderr)
-	);
+	let exited =
+		built_app_checked("exits_app", &format!("on key {{ exit 3 }}\ndiv{{ p{{ \"press a key\" }} {PRESSES_Q} }}"));
+	assert_eq!(exited.status.code(), Some(3), "{}", String::from_utf8_lossy(&exited.stderr));
 }

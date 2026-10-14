@@ -27,8 +27,5 @@ fn test_sqrt_halves_the_powers() {
 
 #[test]
 fn test_curly_interpolation_shows_the_unit() {
-	assert_eq!(
-		shown("d = 0 m; for i in 1..3 { d += 2 m }; \"distance ${d}\""),
-		"\"distance 4m\""
-	);
+	assert_eq!(shown("d = 0 m; for i in 1..3 { d += 2 m }; \"distance ${d}\""), "\"distance 4m\"");
 }

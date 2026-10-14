@@ -58,11 +58,7 @@ impl Generic {
 			.methods
 			.iter()
 			.flat_map(|(signature, _)| {
-				signature
-					.iter()
-					.enumerate()
-					.filter(|(_, class)| class.is_some())
-					.map(|(position, _)| position)
+				signature.iter().enumerate().filter(|(_, class)| class.is_some()).map(|(position, _)| position)
 			})
 			.collect();
 		positions.sort();
@@ -73,11 +69,7 @@ impl Generic {
 	/// Whether other values of a call with `arity` arguments have a function to call: `b.take()` of a class Box
 	/// never calls list's `take(xs, n)`
 	pub(super) fn falls_back(&self, arity: usize) -> bool {
-		self.library
-			|| self
-				.untyped_arities
-				.iter()
-				.any(|(required, all)| (*required..=*all).contains(&arity))
+		self.library || self.untyped_arities.iter().any(|(required, all)| (*required..=*all).contains(&arity))
 	}
 
 	pub(super) fn variant(&self, method: usize) -> String {
@@ -123,10 +115,7 @@ pub(super) fn likeness_steps(class: &str, target: &str, likenesses: &[Likeness])
 		let mut parents: Vec<String> = level
 			.iter()
 			.flat_map(|kind| {
-				likenesses
-					.iter()
-					.filter(move |likeness| likeness.kind == *kind)
-					.map(|likeness| likeness.like.clone())
+				likenesses.iter().filter(move |likeness| likeness.kind == *kind).map(|likeness| likeness.like.clone())
 			})
 			.collect();
 		parents.retain(|parent| !seen.contains(parent));
@@ -139,10 +128,7 @@ pub(super) fn likeness_steps(class: &str, target: &str, likenesses: &[Likeness])
 
 /// `Ship·Rock` of `collide(a:Ship, b:Rock)`, `Deck` of `sort(d:Deck)`, `any·Ship` of `describe(k, s:Ship)`
 pub(super) fn signature_variant(signature: &Signature) -> String {
-	let last_class = signature
-		.iter()
-		.rposition(Option::is_some)
-		.map_or(0, |position| position + 1);
+	let last_class = signature.iter().rposition(Option::is_some).map_or(0, |position| position + 1);
 	signature[..last_class]
 		.iter()
 		.map(|class| class.as_deref().unwrap_or(ANY_TYPE))
@@ -152,19 +138,12 @@ pub(super) fn signature_variant(signature: &Signature) -> String {
 
 /// `Ship, Rock`; `Deck` alone
 pub(super) fn classes_text(classes: &[Option<String>]) -> String {
-	classes
-		.iter()
-		.map(|class| class.as_deref().unwrap_or(ANY_TYPE))
-		.collect::<Vec<_>>()
-		.join(", ")
+	classes.iter().map(|class| class.as_deref().unwrap_or(ANY_TYPE)).collect::<Vec<_>>().join(", ")
 }
 
 /// The class a parameter `s:square` takes, if it is a declared one, per positional parameter of a definition
 pub(super) fn signature_of(parameters: &[Node], registry: &TypeRegistry) -> Signature {
-	parameters
-		.iter()
-		.map(|parameter| parameter_type(parameter, registry).map(String::from))
-		.collect()
+	parameters.iter().map(|parameter| parameter_type(parameter, registry).map(String::from)).collect()
 }
 
 /// The functions with methods for declared classes that need telling apart: methods of several signatures, or of a
@@ -186,10 +165,7 @@ pub(super) fn generic_functions(node: &Node, registry: &TypeRegistry, traits: &T
 				true => typed.push((
 					name.clone(),
 					(signature, arities(&items[1..])),
-					items[1..]
-						.iter()
-						.map(|parameter| parameter.drop_meta().name())
-						.collect(),
+					items[1..].iter().map(|parameter| parameter.drop_meta().name()).collect(),
 				)),
 				false => untyped.push((name.clone(), arities(&items[1..]))),
 			}
@@ -198,17 +174,9 @@ pub(super) fn generic_functions(node: &Node, registry: &TypeRegistry, traits: &T
 	let mut generics: HashMap<String, Generic> = HashMap::new();
 	for (name, (signature, arity), parameters) in typed {
 		let library = crate::lowering::class_methods::is_library_method(&name);
-		let untyped_arities = untyped
-			.iter()
-			.filter(|(untyped_name, _)| *untyped_name == name)
-			.map(|(_, arity)| *arity)
-			.collect();
-		let generic = generics.entry(name).or_insert(Generic {
-			methods: vec![],
-			parameters,
-			library,
-			untyped_arities,
-		});
+		let untyped_arities =
+			untyped.iter().filter(|(untyped_name, _)| *untyped_name == name).map(|(_, arity)| *arity).collect();
+		let generic = generics.entry(name).or_insert(Generic { methods: vec![], parameters, library, untyped_arities });
 		if !generic.methods.iter().any(|(known, _)| *known == signature) {
 			generic.methods.push((signature, arity));
 		}
@@ -219,10 +187,8 @@ pub(super) fn generic_functions(node: &Node, registry: &TypeRegistry, traits: &T
 
 /// The arguments a definition takes, fewest and most: `add(a, b = 1)` takes 1 or 2
 pub(super) fn arities(parameters: &[Node]) -> (usize, usize) {
-	let required = parameters
-		.iter()
-		.filter(|parameter| !matches!(parameter.drop_meta(), Node::Key(_, Op::Assign, _)))
-		.count();
+	let required =
+		parameters.iter().filter(|parameter| !matches!(parameter.drop_meta(), Node::Key(_, Op::Assign, _))).count();
 	(required, parameters.len())
 }
 
@@ -234,10 +200,7 @@ pub(super) fn method_of(head: &Node, registry: &TypeRegistry, generics: &HashMap
 	};
 	generics.contains_key(name).then_some(())?;
 	let signature = signature_of(&items[1..], registry);
-	signature
-		.iter()
-		.any(Option::is_some)
-		.then(|| witness_name(name, &signature_variant(&signature)))
+	signature.iter().any(Option::is_some).then(|| witness_name(name, &signature_variant(&signature)))
 }
 
 /// Every call of a generic function calls the method for its arguments' classes: statically where they are known,
@@ -247,12 +210,7 @@ pub(super) fn generic_calls(node: Node, functions: HashMap<String, Generic>) -> 
 	let mut likenesses = vec![];
 	collect_declared(&node, &mut likenesses);
 	let plain = crate::analyzer::literal_variable_kinds(&node, &crate::analyzer::function_context(&node));
-	let classes = types
-		.registry
-		.types()
-		.iter()
-		.map(|type_def| type_def.name.clone())
-		.collect();
+	let classes = types.registry.types().iter().map(|type_def| type_def.name.clone()).collect();
 	let calls = GenericCalls {
 		functions,
 		types,
@@ -315,8 +273,7 @@ impl GenericCalls {
 			}
 			Node::List(items, bracket, separator) => {
 				let items: Vec<Node> = items.into_iter().map(|item| self.resolve(item)).collect();
-				self.call(&items, &bracket, &separator)
-					.unwrap_or(Node::List(items, bracket, separator))
+				self.call(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
 			}
 			other => children_rewritten(other, |child| self.resolve(child)),
 		}
@@ -349,11 +306,7 @@ impl GenericCalls {
 		let fallback = generic.falls_back(arguments.len());
 		let known: Vec<Known> = arguments.iter().map(|argument| self.known(argument)).collect();
 		let positions = generic.typed_positions();
-		let is_known = |position: &usize| {
-			known
-				.get(*position)
-				.is_none_or(|known| matches!(known, Known::Class(_)))
-		};
+		let is_known = |position: &usize| known.get(*position).is_none_or(|known| matches!(known, Known::Class(_)));
 		if positions.iter().all(is_known) {
 			let classes: Vec<Option<String>> = known
 				.iter()
@@ -375,9 +328,7 @@ impl GenericCalls {
 			(0, true) => None,
 			(1, false) => Some(witness_call(name, &cases[0].1, arguments)),
 			_ => {
-				self.dispatched
-					.borrow_mut()
-					.insert((name.to_string(), arguments.len()), (cases, fallback));
+				self.dispatched.borrow_mut().insert((name.to_string(), arguments.len()), (cases, fallback));
 				Some(witness_call(name, DISPATCH, arguments))
 			}
 		}
@@ -388,15 +339,10 @@ impl GenericCalls {
 	pub(super) fn cases(&self, generic: &Generic, positions: &[usize], arity: usize) -> Vec<DispatchCase> {
 		let positions: Vec<usize> = positions.iter().copied().filter(|position| *position < arity).collect();
 		let candidates = |position: usize| -> Vec<Option<String>> {
-			let parameters: Vec<&String> = generic
-				.methods
-				.iter()
-				.filter_map(|(signature, _)| signature.get(position)?.as_ref())
-				.collect();
+			let parameters: Vec<&String> =
+				generic.methods.iter().filter_map(|(signature, _)| signature.get(position)?.as_ref()).collect();
 			let fitting = self.classes.iter().filter(|class| {
-				parameters
-					.iter()
-					.any(|parameter| likeness_steps(class, parameter, &self.likenesses).is_some())
+				parameters.iter().any(|parameter| likeness_steps(class, parameter, &self.likenesses).is_some())
 			});
 			fitting.cloned().map(Some).chain([None]).collect()
 		};
@@ -415,14 +361,9 @@ impl GenericCalls {
 			.into_iter()
 			.filter_map(|combination| {
 				let mut classes: Vec<Option<String>> = vec![None; arity];
-				combination
-					.iter()
-					.for_each(|(position, class)| classes[*position] = class.clone());
+				combination.iter().for_each(|(position, class)| classes[*position] = class.clone());
 				let method = generic.method_for(&classes, &self.likenesses).ok()??;
-				let tests = combination
-					.into_iter()
-					.filter_map(|(position, class)| Some((position, class?)))
-					.collect();
+				let tests = combination.into_iter().filter_map(|(position, class)| Some((position, class?))).collect();
 				Some((tests, generic.variant(method)))
 			})
 			.collect();
@@ -449,13 +390,8 @@ pub(super) fn no_method(located: &Node, name: &str, classes: &[Option<String>], 
 			None => parameter.clone(),
 		})
 		.collect();
-	let message = format!(
-		"{name} has no method for {described}; methods: {}",
-		generic.signatures(name)
-	);
-	Diagnostic::at(located, message)
-		.fix(format!("define {name}({}) := …", parameters.join(", ")))
-		.into_error()
+	let message = format!("{name} has no method for {described}; methods: {}", generic.signatures(name));
+	Diagnostic::at(located, message).fix(format!("define {name}({}) := …", parameters.join(", "))).into_error()
 }
 
 /// `f(C(1))` of methods f(A) and f(B) where C is like both; `meet(dog, dog)` of meet(dog, animal) and meet(animal, dog)
@@ -484,13 +420,9 @@ pub(super) fn ambiguous_method(
 		.iter()
 		.enumerate()
 		.map(|(position, class)| match class {
-			Some(class) => format!(
-				"{}:{class}",
-				generic
-					.parameters
-					.get(position)
-					.map_or(DEFAULT_PARAMETER, String::as_str)
-			),
+			Some(class) => {
+				format!("{}:{class}", generic.parameters.get(position).map_or(DEFAULT_PARAMETER, String::as_str))
+			}
 			None => generic.parameters.get(position).cloned().unwrap_or_default(),
 		})
 		.collect();

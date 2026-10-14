@@ -12,9 +12,7 @@ div{ h1{ "Fruit" } Counter("Apples", 1) Counter("Pears", 5) }"#;
 
 #[test]
 fn each_instance_binds_its_own_holes() {
-	let lowered = warp::pipeline::rendering_itself(|| warp::pipeline::lower(FRUIT))
-		.expect("lowers")
-		.serialize();
+	let lowered = warp::pipeline::rendering_itself(|| warp::pipeline::lower(FRUIT)).expect("lowers").serialize();
 	for hole in ["(page·holes):=", "(page·hole·1·1):=", "(page·hole·2·1):="] {
 		assert!(lowered.contains(hole), "{hole} in {lowered}");
 	}
@@ -24,17 +22,9 @@ fn each_instance_binds_its_own_holes() {
 #[test]
 fn a_hole_is_its_element_of_the_rendering() {
 	let module = warp::pipeline::rendering_itself(|| warp::pipeline::compile(FRUIT)).expect("compiles");
-	let imports = Imports {
-		host: true,
-		wasi: true,
-		ffi: false,
-	};
-	let read = read_exports_after_main(
-		&module.bytes,
-		imports,
-		&["page·holes", "page·hole·1·1", "page·hole·2·1"],
-	)
-	.expect("the holes read");
+	let imports = Imports { host: true, wasi: true, ffi: false };
+	let read = read_exports_after_main(&module.bytes, imports, &["page·holes", "page·hole·1·1", "page·hole·2·1"])
+		.expect("the holes read");
 	assert_eq!(warp::web::markup::to_html(&read[1]), "<p>Apples: 1</p>");
 	assert_eq!(warp::web::markup::to_html(&read[2]), "<p>Pears: 5</p>");
 }
@@ -47,11 +37,7 @@ fn an_instances_lone_text_is_a_text_hole() {
 }
 div{ Tally(2) Tally(7) }"#;
 	let module = warp::pipeline::rendering_itself(|| warp::pipeline::compile(code)).expect("compiles");
-	let imports = Imports {
-		host: true,
-		wasi: true,
-		ffi: false,
-	};
+	let imports = Imports { host: true, wasi: true, ffi: false };
 	let read = read_exports_after_main(&module.bytes, imports, &["page·holes", "page·hole·1·text·1"])
 		.expect("the text hole reads");
 	assert_eq!(read[1].serialize(), "\"clicked 7 times\"");

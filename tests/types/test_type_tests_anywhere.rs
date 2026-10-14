@@ -15,10 +15,7 @@ fn test_type_tests_in_conditions_and_chains() {
 fn test_items_of_a_mixed_list_are_tested_at_run_time() {
 	is!("xs=[1, \"a\"]; xs#2 is text", 1);
 	is!("xs=[1, \"a\"]; xs#1 is text", 0);
-	is!(
-		"xs=[1, \"a\", 2.5]; n=0; for x in xs { if x is number { n += 1 } }; n",
-		2
-	);
+	is!("xs=[1, \"a\", 2.5]; n=0; for x in xs { if x is number { n += 1 } }; n", 2);
 	is!("xs=[1, [2]]; xs#2 is list", 1);
 	is!("x = a:1; x is pair", 1);
 }

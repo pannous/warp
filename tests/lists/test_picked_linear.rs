@@ -15,14 +15,8 @@ fn float_arrays_paired_by_dot_are_linear() {
 	assert!(lowered(&format!("{FILLED}sum(xs .* ys)")).contains("linear_dotf"));
 	is!(&format!("{FILLED}dot(xs, ys)"), 8.0);
 	is!(&format!("{FILLED}sum(xs .* ys)"), 8.0);
-	is!(
-		&format!("{FILLED}zs = xs .* ys; [zs#1, zs#2, #zs]"),
-		list(vec![float(6.0), float(2.0), int(3)])
-	);
-	is!(
-		&format!("{FILLED}s = 0.0; for x in xs {{ s += x }}; dot(xs, ys) + s + count(ys) + xs.count"),
-		20.0
-	);
+	is!(&format!("{FILLED}zs = xs .* ys; [zs#1, zs#2, #zs]"), list(vec![float(6.0), float(2.0), int(3)]));
+	is!(&format!("{FILLED}s = 0.0; for x in xs {{ s += x }}; dot(xs, ys) + s + count(ys) + xs.count"), 20.0);
 }
 
 #[test]
@@ -40,9 +34,7 @@ fn the_linear_hint_names_float_arrays() {
 	clear_shown_hints();
 	let (_, hints) = capture_hints(|| warp::wasm_emitter::eval("linear xs = float[3]; xs#1 = 2.0; xs#1"));
 	assert!(
-		hints
-			.iter()
-			.any(|hint| hint.original == "linear xs = float[n]" && hint.canonical == "xs = float[n]"),
+		hints.iter().any(|hint| hint.original == "linear xs = float[n]" && hint.canonical == "xs = float[n]"),
 		"{hints:?}"
 	);
 }

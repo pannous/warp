@@ -26,18 +26,14 @@ fn lowered(node: Node, counter: &mut usize) -> Node {
 	if let Some(call) = called_root(place) {
 		let change = node.drop_meta().serialize();
 		let message = format!("{call}() gives a copy: {change} changes nothing");
-		return Diagnostic::at(&node, message)
-			.fix(format!("keep it first: x = {call}(); then change x"))
-			.into_error();
+		return Diagnostic::at(&node, message).fix(format!("keep it first: x = {call}(); then change x")).into_error();
 	}
 	let Some(element) = element_below(place).cloned() else {
 		return node.map_children(|child| lowered(child, counter));
 	};
 	let number = *counter;
 	*counter += 1;
-	let Node::Key(base, Op::Hash, index) = element.drop_meta() else {
-		unreachable!("element_below finds an index")
-	};
+	let Node::Key(base, Op::Hash, index) = element.drop_meta() else { unreachable!("element_below finds an index") };
 	let (index_binding, index) = match index.drop_meta() {
 		Node::Number(_) | Node::Symbol(_) => (None, index.as_ref().clone()),
 		_ => {
@@ -71,9 +67,7 @@ fn changed_place(node: &Node) -> Option<&Node> {
 		return None;
 	};
 	let changes_list = *op == Op::Dot
-		&& items
-			.first()
-			.is_some_and(|method| crate::list_mutations::is_list_mutating_method(&method.name()));
+		&& items.first().is_some_and(|method| crate::list_mutations::is_list_mutating_method(&method.name()));
 	changes_list.then_some(target)
 }
 
@@ -122,11 +116,7 @@ fn replaced_below(place: Node, inner: &Node) -> Node {
 		meta @ Node::Meta { .. } => meta.under_meta(|node| replaced_below(node, inner)),
 		Node::Key(left, op, right) if inside(&Node::Key(left.clone(), op, right.clone())).is_some() => {
 			let is_index = matches!(left.drop_meta(), Node::Key(_, Op::Hash, _));
-			let left = if is_index {
-				inner.clone()
-			} else {
-				replaced_below(*left, inner)
-			};
+			let left = if is_index { inner.clone() } else { replaced_below(*left, inner) };
 			Node::Key(Box::new(left), op, right)
 		}
 		other => other,

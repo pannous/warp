@@ -21,34 +21,22 @@ fn assert_contains(code: &str, needles: &[&str]) {
 
 #[test]
 fn help_of_a_standard_module_is_its_index() {
-	assert_contains(
-		"use sound\nhelp(sound)",
-		&["sound:", "beep()", "tone(pitch, duration, shape)"],
-	);
+	assert_contains("use sound\nhelp(sound)", &["sound:", "beep()", "tone(pitch, duration, shape)"]);
 }
 
 #[test]
 fn help_of_a_module_word_has_its_comment() {
-	assert_contains(
-		"use sound\nhelp(midi)",
-		&["midi(pitch)", "the MIDI note nearest a frequency"],
-	);
+	assert_contains("use sound\nhelp(midi)", &["midi(pitch)", "the MIDI note nearest a frequency"]);
 }
 
 #[test]
 fn help_of_a_name_known_at_run_time() {
-	assert_contains(
-		"use sound\nword = dir(sound)#18\nhelp(word)",
-		&["midi(pitch)", "the MIDI note nearest"],
-	);
+	assert_contains("use sound\nword = dir(sound)#18\nhelp(word)", &["midi(pitch)", "the MIDI note nearest"]);
 }
 
 #[test]
 fn dump_of_a_function_named_at_run_time() {
-	assert_contains(
-		"use sound\nname = \"beep\"\n(function name).dump",
-		&["beep() := tone(880, 0.15, \"square\")"],
-	);
+	assert_contains("use sound\nname = \"beep\"\n(function name).dump", &["beep() := tone(880, 0.15, \"square\")"]);
 	assert_contains("use sound\nfunction(\"beep\").dump", &["beep() :="]);
 }
 

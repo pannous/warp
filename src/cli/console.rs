@@ -8,12 +8,7 @@ struct ConsoleSession {
 
 impl ConsoleSession {
 	fn source_with(&self, input: &str) -> String {
-		self.state
-			.iter()
-			.map(String::as_str)
-			.chain([input])
-			.collect::<Vec<_>>()
-			.join("\n")
+		self.state.iter().map(String::as_str).chain([input]).collect::<Vec<_>>().join("\n")
 	}
 
 	fn remember(&mut self, input: &str, value: &Node) {
@@ -38,10 +33,8 @@ pub(crate) fn console_state_line(node: &Node) -> bool {
 			items.iter().all(console_state_line)
 		}
 		Node::List(items, node::Bracket::None, node::Separator::Space) => {
-			matches!(
-				items.first().and_then(Node::symbol_name),
-				Some("let" | "var" | "const" | "global")
-			) && items.iter().skip(1).any(console_state_line)
+			matches!(items.first().and_then(Node::symbol_name), Some("let" | "var" | "const" | "global"))
+				&& items.iter().skip(1).any(console_state_line)
 		}
 		_ => false,
 	}

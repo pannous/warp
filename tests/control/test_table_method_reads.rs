@@ -8,13 +8,7 @@ fn people(table: &str, rest: &str) -> String {
 
 #[test]
 fn a_method_reads_the_table() {
-	is!(
-		&people(
-			"method_count",
-			"class Club{ name: text; fn total() := count(people) }\nClub(\"x\").total()"
-		),
-		2
-	);
+	is!(&people("method_count", "class Club{ name: text; fn total() := count(people) }\nClub(\"x\").total()"), 2);
 	is!(
 		&people(
 			"method_loop",
@@ -22,25 +16,13 @@ fn a_method_reads_the_table() {
 		),
 		70
 	);
-	is!(
-		&people(
-			"method_element",
-			"class Club{ name: text; second() := people#2.name }\nClub(\"x\").second()"
-		),
-		"Bo"
-	);
+	is!(&people("method_element", "class Club{ name: text; second() := people#2.name }\nClub(\"x\").second()"), "Bo");
 }
 
 // a field named like a table is the field, not the table
 #[test]
 fn a_field_named_like_a_table_stays_the_field() {
-	is!(
-		&people(
-			"method_field",
-			"class Club{ people: int; fn n() := people + 1 }\nClub(5).n()"
-		),
-		6
-	);
+	is!(&people("method_field", "class Club{ people: int; fn n() := people + 1 }\nClub(5).n()"), 6);
 }
 
 // a method's filter is lowered as a function's: a table filter is its query, `it` the element, not the instance
@@ -57,12 +39,6 @@ fn a_method_filters_the_table() {
 
 #[test]
 fn a_method_filters_a_list() {
-	is!(
-		"xs = [1, 5, 9]; class Club{ name: text; fn big() := count(xs where it > 3) }; Club(\"x\").big()",
-		2
-	);
-	is!(
-		"class Club{ least: int; fn big(xs) := count(xs where it > least) }; Club(4).big([1, 5, 9])",
-		2
-	);
+	is!("xs = [1, 5, 9]; class Club{ name: text; fn big() := count(xs where it > 3) }; Club(\"x\").big()", 2);
+	is!("class Club{ least: int; fn big(xs) := count(xs where it > least) }; Club(4).big([1, 5, 9])", 2);
 }

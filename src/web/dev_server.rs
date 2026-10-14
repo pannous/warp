@@ -48,12 +48,7 @@ impl DevSite {
 
 	/// Builds the program anew when its file or a module it uses changed since the last build
 	fn refresh(&mut self) {
-		if self.version > 0
-			&& self
-				.watched
-				.iter()
-				.all(|(file, modified)| modified_time(file) == *modified)
-		{
+		if self.version > 0 && self.watched.iter().all(|(file, modified)| modified_time(file) == *modified) {
 			return;
 		}
 		let program_modified = modified_time(&self.program);
@@ -61,16 +56,12 @@ impl DevSite {
 		let built = crate::web::site::read_program(&self.program).and_then(|code| {
 			crate::modules::with_program_file(&self.program, || crate::web::site::files(&code, &self.title, true))
 		});
-		let modules = crate::compiler::compile_context::read(|context| context.module_files.clone())
-			.into_iter()
-			.map(|file| {
+		let modules =
+			crate::compiler::compile_context::read(|context| context.module_files.clone()).into_iter().map(|file| {
 				let modified = modified_time(&file);
 				(file, modified)
 			});
-		self.watched = [(self.program.clone(), program_modified)]
-			.into_iter()
-			.chain(modules)
-			.collect();
+		self.watched = [(self.program.clone(), program_modified)].into_iter().chain(modules).collect();
 		match built {
 			Ok(files) => (self.files, self.failure) = (files, None),
 			Err(failure) => self.failure = Some(failure),
@@ -126,11 +117,7 @@ pub fn serve_and_open(program: &Path, port: u16, open: bool) -> Result<(), Strin
 /// Opens `url` in the default browser; whether that started
 pub fn open_in_browser(url: &str) -> bool {
 	let (opener, arguments) = BROWSER_OPENER.split_first().expect("an opener");
-	std::process::Command::new(opener)
-		.args(arguments)
-		.arg(url)
-		.spawn()
-		.is_ok()
+	std::process::Command::new(opener).args(arguments).arg(url).spawn().is_ok()
 }
 
 fn modified_time(file: &Path) -> Option<SystemTime> {

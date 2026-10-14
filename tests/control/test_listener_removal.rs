@@ -5,11 +5,7 @@ use crate::is;
 #[cfg(feature = "native")]
 fn printed(code: &str) -> String {
 	let output = crate::common::printed(code);
-	output
-		.lines()
-		.filter(|line| !line.starts_with('»'))
-		.map(|line| format!("{line}\n"))
-		.collect()
+	output.lines().filter(|line| !line.starts_with('»')).map(|line| format!("{line}\n")).collect()
 }
 
 #[test]
@@ -27,8 +23,5 @@ fn removing_one_listener_keeps_the_others() {
 #[test]
 #[cfg(feature = "native")]
 fn a_named_listener_can_be_called() {
-	assert_eq!(
-		printed("t = 0\nreport = on set t {print \"set \" + value}\nreport(7, 0)"),
-		"set 7\n"
-	);
+	assert_eq!(printed("t = 0\nreport = on set t {print \"set \" + value}\nreport(7, 0)"), "set 7\n");
 }

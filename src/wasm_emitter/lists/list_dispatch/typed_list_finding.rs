@@ -245,9 +245,7 @@ impl WasmGcEmitter {
 			Node::Key(left, op, right) => {
 				let conditional = CONDITIONAL_OPS.contains(op);
 				walk.conditions += usize::from(conditional);
-				[left, right]
-					.into_iter()
-					.for_each(|part| self.list_events(part, name, holds, walk));
+				[left, right].into_iter().for_each(|part| self.list_events(part, name, holds, walk));
 				walk.conditions -= usize::from(conditional);
 			}
 			Node::List(items, _, _) => items.iter().for_each(|item| self.list_events(item, name, holds, walk)),
@@ -399,10 +397,7 @@ impl WasmGcEmitter {
 					} else {
 						value.as_ref().clone()
 					};
-					assigned_kinds
-						.entry(name.clone())
-						.or_default()
-						.push(self.get_type(&assigned));
+					assigned_kinds.entry(name.clone()).or_default().push(self.get_type(&assigned));
 				}
 				_ => {}
 			}
@@ -440,11 +435,8 @@ impl WasmGcEmitter {
 				.flatten()
 				.cloned(),
 		);
-		let group_updated = |name: &String| {
-			groups
-				.get(name)
-				.is_some_and(|group| group.iter().any(|member| updated.contains(member)))
-		};
+		let group_updated =
+			|name: &String| groups.get(name).is_some_and(|group| group.iter().any(|member| updated.contains(member)));
 		// a function of an imported warp module may change the Node it gets: the change is written back to it (wasm_modules.rs
 		// write_back), not to a typed array
 		let changes_arguments = |callee: &str| {
@@ -461,11 +453,8 @@ impl WasmGcEmitter {
 			&changes_arguments,
 		);
 		// a counter `i++` changes no list
-		let is_number = |name: &String| {
-			self.scope
-				.lookup(name)
-				.is_some_and(|local| matches!(local.kind, Kind::Int | Kind::Float))
-		};
+		let is_number =
+			|name: &String| self.scope.lookup(name).is_some_and(|local| matches!(local.kind, Kind::Int | Kind::Float));
 		let written: HashSet<String> =
 			super::super::super::lists::list_sharing::written_roots(program, &self.ctx.user_functions)
 				.into_iter()
@@ -476,11 +465,8 @@ impl WasmGcEmitter {
 			// such a copy is no snapshot only while no list but the typed arrays is changed in place (shared-lists-typed):
 			// `ys = p.xs; p.xs#1 = 7` shares the list instead
 			let writes_shared_lists = written.iter().any(|root| !typed.contains_key(root));
-			let snapshots: Vec<String> = typed
-				.keys()
-				.filter(|name| writes_shared_lists && place_sourced.contains(*name))
-				.cloned()
-				.collect();
+			let snapshots: Vec<String> =
+				typed.keys().filter(|name| writes_shared_lists && place_sourced.contains(*name)).cloned().collect();
 			if !snapshots.is_empty() {
 				excluded.extend(snapshots);
 				continue;
@@ -497,12 +483,8 @@ impl WasmGcEmitter {
 			// a list an item or a field holds once it is complete (`o = {r = 1..n}`, `[xs, 5]`) is converted there, never
 			// changed after: its Node copy and the array stay equal
 			let held_complete = |name: &String| {
-				let places: Vec<&Node> = groups[name]
-					.iter()
-					.filter_map(|member| held.places.get(member))
-					.flatten()
-					.copied()
-					.collect();
+				let places: Vec<&Node> =
+					groups[name].iter().filter_map(|member| held.places.get(member)).flatten().copied().collect();
 				!writes_shared_lists
 					&& groups[name].iter().all(|member| {
 						!written.contains(member) && !self.appends_while_aliased(program, member, &places)
@@ -516,9 +498,7 @@ impl WasmGcEmitter {
 						&& (groups[name]
 							.iter()
 							.any(|member| element_of(member).is_none() || element_of(member) != element_of(name))
-							|| sources[name]
-								.iter()
-								.any(|source| matches!(source, Source::Converted { fresh: false }))))
+							|| sources[name].iter().any(|source| matches!(source, Source::Converted { fresh: false }))))
 			};
 			let parted: Vec<String> = typed.keys().filter(|name| shared_as_nodes(name)).cloned().collect();
 			if parted.is_empty() {
@@ -533,11 +513,7 @@ impl WasmGcEmitter {
 					})
 					.filter_map(|(name, element)| {
 						let aliased = groups[&name].len() > 1 && self.appends_while_aliased(program, &name, &[]);
-						let list = TypedList {
-							element: element?,
-							updated: group_updated(&name),
-							aliased,
-						};
+						let list = TypedList { element: element?, updated: group_updated(&name), aliased };
 						Some((name, list))
 					})
 					.collect();
@@ -620,9 +596,8 @@ impl WasmGcEmitter {
 		let Some(&captured) = self.typed_capture_globals.get(&global) else {
 			return false;
 		};
-		let (slot, list) = self
-			.typed_list(&Node::Symbol(name.to_string()))
-			.expect("a typed capture global takes main's typed list");
+		let (slot, list) =
+			self.typed_list(&Node::Symbol(name.to_string())).expect("a typed capture global takes main's typed list");
 		func.instruction(&slot.get());
 		if list.updated {
 			self.emit_call(func, captured.element.runtime().copy);
@@ -633,10 +608,7 @@ impl WasmGcEmitter {
 	/// A null-initialized mutable global holding a typed list
 	pub(in crate::wasm_emitter) fn declare_typed_list_global(&mut self, element: ElementType) -> u32 {
 		let list_type = self.typed_list_types(element).1;
-		self.declare_global_of(
-			Ref(self.typed_list_ref(element)),
-			ConstExpr::ref_null(HeapType::Concrete(list_type)),
-		)
+		self.declare_global_of(Ref(self.typed_list_ref(element)), ConstExpr::ref_null(HeapType::Concrete(list_type)))
 	}
 
 	/// The globals (main's variables that functions read, `global` ones) held as typed arrays: what find_typed_lists finds
@@ -655,26 +627,16 @@ impl WasmGcEmitter {
 			as_locals
 				.locals
 				.entry(name.clone())
-				.or_insert_with(|| crate::compiler::local::Local {
-					is_param: false,
-					..global.clone()
-				});
+				.or_insert_with(|| crate::compiler::local::Local { is_param: false, ..global.clone() });
 		}
 		let saved = std::mem::replace(&mut self.scope, as_locals);
 		let main_code = self.without_definitions(program); // function bodies are checked below, each in its own scope
-		let mut found: HashMap<String, TypedList> = self
-			.find_typed_lists(&main_code)
-			.into_iter()
-			.filter(|(name, _)| main.globals.contains_key(name))
-			.collect();
+		let mut found: HashMap<String, TypedList> =
+			self.find_typed_lists(&main_code).into_iter().filter(|(name, _)| main.globals.contains_key(name)).collect();
 		self.scope = saved;
 		let function_kinds = self.user_function_kinds();
-		let functions: Vec<_> = self
-			.ctx
-			.user_functions
-			.values()
-			.map(|function| (function.params.clone(), function.body.clone()))
-			.collect();
+		let functions: Vec<_> =
+			self.ctx.user_functions.values().map(|function| (function.params.clone(), function.body.clone())).collect();
 		for (params, body) in functions {
 			let scope = crate::analyzer::function_body_scope(
 				&params,

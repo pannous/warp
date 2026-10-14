@@ -18,17 +18,7 @@ pub(super) fn build(name: &str) -> Result<PathBuf, String> {
 	let package = format!("{name}@{version}");
 	cargo(
 		&wrapper,
-		&[
-			"rustdoc",
-			"-p",
-			&package,
-			"--lib",
-			"--",
-			"-Z",
-			"unstable-options",
-			"--output-format",
-			"json",
-		],
+		&["rustdoc", "-p", &package, "--lib", "--", "-Z", "unstable-options", "--output-format", "json"],
 		true,
 	)?;
 	let doc = target.join("doc").join(format!("{}.json", rust_name(name)));
@@ -37,10 +27,7 @@ pub(super) fn build(name: &str) -> Result<PathBuf, String> {
 	let mut api = Api::of(&doc, &rust_name(name));
 	let wasm = compile_dropping_refused(&wrapper, name, &mut api, &target)?;
 	let built = components().join(format!("{name}@{version}{}", variant().ending));
-	write_atomically(
-		&built,
-		&std::fs::read(&wasm).map_err(|e| format!("{}: {e}", wasm.display()))?,
-	)?;
+	write_atomically(&built, &std::fs::read(&wasm).map_err(|e| format!("{}: {e}", wasm.display()))?)?;
 	write(&built.with_extension("wit"), &api.wit(name))?;
 	Ok(built)
 }
@@ -72,9 +59,7 @@ fn cargo_output(wrapper: &Path, arguments: &[&str], bootstrap: bool) -> Result<s
 		if bootstrap {
 			command.env("RUSTC_BOOTSTRAP", "1");
 		}
-		command
-			.output()
-			.map_err(|e| format!("use cargo needs cargo (https://rustup.rs): {e}"))
+		command.output().map_err(|e| format!("use cargo needs cargo (https://rustup.rs): {e}"))
 	};
 	let offline = run(true)?;
 	match offline.status.success() {
@@ -134,17 +119,8 @@ fn resolved_version(metadata: &Value, name: &str) -> Result<String, String> {
 /// Build the wrapper; a function the compiler refuses is dropped and the wrapper built again
 fn compile_dropping_refused(wrapper: &Path, name: &str, api: &mut Api, target: &Path) -> Result<PathBuf, String> {
 	let package = format!("{WRAPPER_PREFIX}{name}");
-	let arguments = [
-		"build",
-		"--profile",
-		variant().profile,
-		"--target",
-		TARGET,
-		"-p",
-		&package,
-		"--message-format",
-		"json",
-	];
+	let arguments =
+		["build", "--profile", variant().profile, "--target", TARGET, "-p", &package, "--message-format", "json"];
 	for _ in 0..BUILD_ROUNDS {
 		if api.functions.is_empty() && api.resources.is_empty() {
 			return Err(format!(
@@ -157,21 +133,13 @@ fn compile_dropping_refused(wrapper: &Path, name: &str, api: &mut Api, target: &
 		write(&wrapper.join("src/lib.rs"), &code)?;
 		let output = cargo_output(wrapper, &arguments, false)?;
 		if output.status.success() {
-			return Ok(target
-				.join(TARGET)
-				.join(variant().profile)
-				.join(format!("{}.wasm", rust_name(&package))));
+			return Ok(target.join(TARGET).join(variant().profile).join(format!("{}.wasm", rust_name(&package))));
 		}
 		let messages = String::from_utf8_lossy(&output.stdout).into_owned();
 		let (refused_lines, rendered) = refused(&messages);
 		let refused_items: HashSet<String> = refused_lines
 			.iter()
-			.filter_map(|line| {
-				lines
-					.iter()
-					.find(|(range, _)| range.contains(line))
-					.map(|(_, item)| item.clone())
-			})
+			.filter_map(|line| lines.iter().find(|(range, _)| range.contains(line)).map(|(_, item)| item.clone()))
 			.collect();
 		if refused_items.is_empty() {
 			let stderr = String::from_utf8_lossy(&output.stderr);
@@ -182,29 +150,21 @@ fn compile_dropping_refused(wrapper: &Path, name: &str, api: &mut Api, target: &
 		}
 		api.drop_items(&refused_items);
 	}
-	Err(format!(
-		"the wrapper of crate {name} still does not build after {BUILD_ROUNDS} rounds"
-	))
+	Err(format!("the wrapper of crate {name} still does not build after {BUILD_ROUNDS} rounds"))
 }
 
 /// The lines of src/lib.rs cargo's JSON errors name, and the errors as rustc printed them
 fn refused(messages: &str) -> (Vec<usize>, Vec<String>) {
 	let mut lines = vec![];
 	let mut rendered = vec![];
-	for message in messages
-		.lines()
-		.filter_map(|line| serde_json::from_str::<Value>(line).ok())
-	{
+	for message in messages.lines().filter_map(|line| serde_json::from_str::<Value>(line).ok()) {
 		let message = &message["message"];
 		if message["level"] != "error" {
 			continue;
 		}
 		rendered.extend(message["rendered"].as_str().map(String::from));
 		for span in message["spans"].as_array().into_iter().flatten() {
-			if span["file_name"]
-				.as_str()
-				.is_some_and(|file| file.ends_with("src/lib.rs"))
-			{
+			if span["file_name"].as_str().is_some_and(|file| file.ends_with("src/lib.rs")) {
 				lines.extend(span["line_start"].as_u64().map(|line| line as usize));
 			}
 		}

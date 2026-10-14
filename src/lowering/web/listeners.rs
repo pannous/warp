@@ -26,11 +26,7 @@ impl Listener {
 	/// The listener as a statement of its own, without its name
 	pub fn unnamed(&self) -> Node {
 		let keyword = Node::Symbol(self.keyword.clone());
-		Node::List(
-			vec![keyword, self.trigger.clone(), self.body.clone()],
-			Bracket::None,
-			Separator::Space,
-		)
+		Node::List(vec![keyword, self.trigger.clone(), self.body.clone()], Bracket::None, Separator::Space)
 	}
 }
 
@@ -47,16 +43,8 @@ pub(crate) fn read_named(statement: &Node, keywords: &[&str]) -> Option<Listener
 		_ => (None, head),
 	};
 	let (keyword, trigger) = leading_word(&head)?;
-	let keyword = keyword
-		.symbol_name()
-		.filter(|word| keywords.contains(word))?
-		.to_string();
-	Some(Listener {
-		name,
-		keyword,
-		trigger,
-		body,
-	})
+	let keyword = keyword.symbol_name().filter(|word| keywords.contains(word))?.to_string();
+	Some(Listener { name, keyword, trigger, body })
 }
 
 /// `… {body}`, `…: body`, `… do body`, `a == (b {body})`, `on every (5 seconds: print) n`: the phrase before the body,
@@ -84,9 +72,7 @@ fn head_and_body(node: &Node) -> Option<(Node, Node)> {
 			if is_block(last) {
 				return Some((row(words.to_vec()), last.clone()));
 			}
-			let colon = items
-				.iter()
-				.position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _)));
+			let colon = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _)));
 			match colon {
 				// the words after the colon are the body's
 				Some(colon) if colon + 1 < items.len() => {

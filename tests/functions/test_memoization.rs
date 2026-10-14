@@ -6,9 +6,7 @@ use std::time::{Duration, Instant};
 const FAST: Duration = Duration::from_secs(3);
 
 fn lowered(code: &str) -> String {
-	warp::pipeline::lower(code)
-		.expect("a program that needs a module")
-		.serialize()
+	warp::pipeline::lower(code).expect("a program that needs a module").serialize()
 }
 
 #[test]
@@ -21,10 +19,7 @@ fn fib_is_memoized() {
 
 #[test]
 fn only_overlapping_recursion_is_memoized() {
-	assert!(
-		!lowered("sq(n) := n*n; sq(5)").contains("memo_"),
-		"a non-recursive function gets no cache"
-	);
+	assert!(!lowered("sq(n) := n*n; sq(5)").contains("memo_"), "a non-recursive function gets no cache");
 	assert!(
 		!lowered("fact(n) := n<2 ? 1 : n*fact(n-1); fact(5)").contains("memo_"),
 		"one recursive call: nothing to share"

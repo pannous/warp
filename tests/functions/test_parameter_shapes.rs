@@ -12,10 +12,7 @@ fn test_shaped_parameter_reads_its_fields() {
 
 #[test]
 fn test_to_definition_with_a_shaped_parameter() {
-	is!(
-		"to greet person{name, title?} do \"Hi \" + person.name\ngreet {name:\"Ann\"}",
-		"Hi Ann"
-	);
+	is!("to greet person{name, title?} do \"Hi \" + person.name\ngreet {name:\"Ann\"}", "Hi Ann");
 	is!("to greet p do \"Hi \" + p.name\ngreet {name:\"Ann\"}", "Hi Ann");
 }
 
@@ -27,24 +24,15 @@ fn test_wiki_argument_example() {
 
 #[test]
 fn test_missing_required_field_is_a_compile_error() {
-	fails_with(
-		"f(p{name, phone}) := p.name; f({name:\"Dick\"})",
-		"missing argument field phone",
-	);
+	fails_with("f(p{name, phone}) := p.name; f({name:\"Dick\"})", "missing argument field phone");
 	is!("f(p{name?, phone}) := p.phone; f({phone:\"8\"})", "8");
 }
 
 #[test]
 fn test_constructed_argument_is_checked() {
 	let call = "class person{name, phone?}\nto call p{name?, phone} do p.phone\n";
-	fails_with(
-		&format!("{call}call person{{name:\"Dick\"}}"),
-		"missing argument field phone",
-	);
-	fails_with(
-		&format!("{call}call person {{name:\"Dick\"}}"),
-		"missing argument field phone",
-	);
+	fails_with(&format!("{call}call person{{name:\"Dick\"}}"), "missing argument field phone");
+	fails_with(&format!("{call}call person {{name:\"Dick\"}}"), "missing argument field phone");
 	is!(&format!("{call}call person{{name:\"J\" phone:\"8\"}}"), "8");
 }
 
@@ -54,30 +42,18 @@ fn test_field_type_is_checked() {
 		"to call person{name?, phone number} do person.phone\ncall {phone:\"899-573-5842\"}",
 		"type error: field phone is number",
 	);
-	is!(
-		"to call person{name?, phone number} do person.phone + 1\ncall {phone:41}",
-		42
-	);
+	is!("to call person{name?, phone number} do person.phone + 1\ncall {phone:41}", 42);
 	is!("f(p{name: text}) := p.name; f({name:\"Ann\"})", "Ann");
 }
 
 #[test]
 fn test_hyphenated_field_with_a_type() {
 	// P164 addendum (user): `phone-number:text` is one field name with its type
-	is!(
-		"f(p{phone-number:text}) := p.phone-number; f({phone-number:\"899-573-5842\"})",
-		"899-573-5842"
-	);
-	is!(
-		"f(p{phone-number:text}) := p.phone-number; f({phone-number:\"8\"})",
-		"8"
-	);
+	is!("f(p{phone-number:text}) := p.phone-number; f({phone-number:\"899-573-5842\"})", "899-573-5842");
+	is!("f(p{phone-number:text}) := p.phone-number; f({phone-number:\"8\"})", "8");
 	fails_with(
 		"f(p{phone-number:text}) := p.phone-number; f({phone-number:8})",
 		"type error: field phone-number is text",
 	);
-	fails_with(
-		"f(p{phone-number:text}) := p.phone-number; f({name:\"Ann\"})",
-		"missing argument field phone-number",
-	);
+	fails_with("f(p{phone-number:text}) := p.phone-number; f({name:\"Ann\"})", "missing argument field phone-number");
 }

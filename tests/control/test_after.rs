@@ -8,18 +8,12 @@ fn after_waits_for_its_condition() {
 		"shared done = false; go { sleep(50ms); done = true }; last = after done return \"third\"; await last",
 		"third"
 	);
-	is!(
-		"shared n = 0; go { for i in 1 to 5 { n += 1 } }; five = after (n == 5) return n * 2; await five",
-		10
-	);
+	is!("shared n = 0; go { for i in 1 to 5 { n += 1 } }; five = after (n == 5) return n * 2; await five", 10);
 }
 
 #[test]
 fn a_cancelled_after_gives_the_fallback() {
-	is!(
-		"shared done = false; last = after done return \"third\"; cancel last; await last or \"no third\"",
-		"no third"
-	);
+	is!("shared done = false; last = after done return \"third\"; cancel last; await last or \"no third\"", "no third");
 	is!("job = go { sleep(10ms); 3 }; await job or 0", 3);
 }
 

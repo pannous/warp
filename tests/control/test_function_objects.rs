@@ -62,10 +62,7 @@ fn printing_a_function_without_parameters_calls_it_and_warns() {
 fn a_classes_methods_are_its_functions() {
 	const DOG: &str = "class Dog { name: text; bark() := \"wuff \" + name }\nd = Dog(\"rex\")\n";
 	is!(&format!("{DOG}fs = d.methods\nfs#1(d)"), "wuff rex");
-	is!(
-		&format!("{DOG}[m.name for m in methods(Dog)]"),
-		warp::texts(vec!["bark"])
-	);
+	is!(&format!("{DOG}[m.name for m in methods(Dog)]"), warp::texts(vec!["bark"]));
 }
 
 #[test]
@@ -86,10 +83,7 @@ fn a_values_methods_are_its_types_functions() {
 #[test]
 fn description_is_doc() {
 	is!(&format!("{TWICE}twice.description"), "doubles a number");
-	is!(
-		&format!("{TWICE}fs = [function twice]\nfs#1.description"),
-		"doubles a number"
-	);
+	is!(&format!("{TWICE}fs = [function twice]\nfs#1.description"), "doubles a number");
 }
 
 #[test]
@@ -101,20 +95,14 @@ fn returns_is_return_type() {
 #[test]
 fn representation_is_dump() {
 	is!(&format!("{TWICE}twice.representation"), "twice(x) := x*2");
-	is!(
-		&format!("{TWICE}fs = [function twice]\nfs#1.representation"),
-		"twice(x) := x*2"
-	);
+	is!(&format!("{TWICE}fs = [function twice]\nfs#1.representation"), "twice(x) := x*2");
 }
 
 // `f.full`: what `print f` shows
 #[test]
 fn full_is_the_doc_and_the_definition() {
 	is!(&format!("{TWICE}twice.full"), "# doubles a number\ntwice(x) := x*2");
-	is!(
-		&format!("{TWICE}fs = [function twice]\nfs#1.full"),
-		"# doubles a number\ntwice(x) := x*2"
-	);
+	is!(&format!("{TWICE}fs = [function twice]\nfs#1.full"), "# doubles a number\ntwice(x) := x*2");
 }
 
 #[test]

@@ -56,12 +56,8 @@ const TEXT_UNIT_USERS: [&str; 7] = [
 	"text_grapheme_count",
 ];
 /// Runtime functions that read text code point by code point (utf8_next, utf8_decode) without its unit cursors
-const CODE_POINT_READERS: [&str; 4] = [
-	"text_chars",
-	"text_upper",
-	"text_lower",
-	super::super::text::similarity::TEXT_FOLD,
-];
+const CODE_POINT_READERS: [&str; 4] =
+	["text_chars", "text_upper", "text_lower", super::super::text::similarity::TEXT_FOLD];
 
 /// The globals of the list cursor (emit_list_cursor_globals): the list indexed last, the cell and index found there, the
 /// list counted last and its count, the list extended last and its last cell
@@ -114,13 +110,7 @@ pub(in crate::wasm_emitter) struct CopyCells {
 
 impl CopyCells {
 	pub(in crate::wasm_emitter) fn at(first: u32) -> Self {
-		CopyCells {
-			cell: first,
-			cells: first + 1,
-			position: first + 2,
-			copied: first + 3,
-			result: first + 4,
-		}
+		CopyCells { cell: first, cells: first + 1, position: first + 2, copied: first + 3, result: first + 4 }
 	}
 }
 
@@ -129,11 +119,7 @@ impl WasmGcEmitter {
 	pub(crate) fn emit_list_ops(&mut self) {
 		self.emit_is_meta_entry();
 		self.emit_zero_fill();
-		if TEXT_UNIT_USERS
-			.iter()
-			.chain(&CODE_POINT_READERS)
-			.any(|name| self.should_emit_function(name))
-		{
+		if TEXT_UNIT_USERS.iter().chain(&CODE_POINT_READERS).any(|name| self.should_emit_function(name)) {
 			self.emit_utf8_steps();
 		}
 		if TEXT_UNIT_USERS.iter().any(|name| self.should_emit_function(name)) {
@@ -172,10 +158,7 @@ impl WasmGcEmitter {
 		for part in LIST_CURSOR_PARTS {
 			let (val_type, initial) = match part {
 				CursorPart::Index | CursorPart::Count => (ValType::I64, ConstExpr::i64_const(0)),
-				_ => (
-					Ref(self.node_ref(true)),
-					ConstExpr::ref_null(HeapType::Concrete(node_type)),
-				),
+				_ => (Ref(self.node_ref(true)), ConstExpr::ref_null(HeapType::Concrete(node_type))),
 			};
 			self.declare_global_of(val_type, initial);
 		}
@@ -207,11 +190,7 @@ impl WasmGcEmitter {
 			names.chain(TEXT_COUNTED_PARTS.map(|(part, val_type)| (format!("text_counted_{part}"), val_type)))
 		{
 			// no text starts at address -1
-			let initial = if val_type == ValType::I64 {
-				ConstExpr::i64_const(0)
-			} else {
-				ConstExpr::i32_const(-1)
-			};
+			let initial = if val_type == ValType::I64 { ConstExpr::i64_const(0) } else { ConstExpr::i32_const(-1) };
 			self.declare_named_global(val_type, initial, name);
 		}
 	}
@@ -267,27 +246,13 @@ impl WasmGcEmitter {
 	}
 
 	fn forget_cursor_parts(&self, parts: &[CursorPart]) -> Vec<Instruction<'static>> {
-		let forget = |global: u32| {
-			[
-				I::RefNull(HeapType::Concrete(self.type_manager.node_type)),
-				I::GlobalSet(global),
-			]
-		};
+		let forget = |global: u32| [I::RefNull(HeapType::Concrete(self.type_manager.node_type)), I::GlobalSet(global)];
 		let read_lists: Vec<u32> = if parts.iter().any(|part| matches!(part, CursorPart::List)) {
-			self.read_cursors()
-				.into_iter()
-				.skip(1)
-				.map(|(list, _, _)| list)
-				.collect()
+			self.read_cursors().into_iter().skip(1).map(|(list, _, _)| list).collect()
 		} else {
 			vec![]
 		};
-		parts
-			.iter()
-			.filter_map(|part| self.list_cursor(*part))
-			.chain(read_lists)
-			.flat_map(forget)
-			.collect()
+		parts.iter().filter_map(|part| self.list_cursor(*part)).chain(read_lists).flat_map(forget).collect()
 	}
 
 	/// list_at and list_node_at: the element of a cons list at a 1-based index
@@ -374,10 +339,7 @@ impl WasmGcEmitter {
 			func,
 			&[
 				I::RefAsNonNull,
-				I::StructGet {
-					struct_type_index: self.type_manager.node_type,
-					field_index: 0,
-				},
+				I::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 },
 				I::I64Const(crate::type_kinds::UNMARKED_KIND),
 				I::I64And,
 				I::I64Const(crate::type_kinds::CURLY_LIST_KIND),
@@ -404,12 +366,7 @@ impl WasmGcEmitter {
 				s.emit_field(f, 0, 0);
 				Self::emit_list(
 					f,
-					&[
-						I::LocalTee(kind),
-						I::I64Const(crate::type_kinds::BOOL_KIND),
-						I::I64Eq,
-						I::If(BlockType::Empty),
-					],
+					&[I::LocalTee(kind), I::I64Const(crate::type_kinds::BOOL_KIND), I::I64Eq, I::If(BlockType::Empty)],
 				);
 				s.emit_string_call(f, crate::analyzer::BOOL_TYPE, "new_symbol");
 				Self::emit_list(f, &[I::Return, I::End]);
@@ -417,32 +374,19 @@ impl WasmGcEmitter {
 					// an exact number that is no integer holds a $Ratio (exact.rs)
 					Self::emit_list(
 						f,
-						&[
-							I::LocalGet(kind),
-							I::I64Const(Kind::Int as i64),
-							I::I64Eq,
-							I::If(BlockType::Empty),
-						],
+						&[I::LocalGet(kind), I::I64Const(Kind::Int as i64), I::I64Eq, I::If(BlockType::Empty)],
 					);
 					s.emit_field(f, 0, 1);
 					Self::emit_list(
 						f,
-						&[
-							I::RefTestNonNull(HeapType::Concrete(s.type_manager.ratio_type)),
-							I::If(BlockType::Empty),
-						],
+						&[I::RefTestNonNull(HeapType::Concrete(s.type_manager.ratio_type)), I::If(BlockType::Empty)],
 					);
 					s.emit_string_call(f, crate::analyzer::RATIONAL_WORD, "new_symbol");
 					Self::emit_list(f, &[I::Return, I::End, I::End]);
 				}
 				// an instance of a declared type is a Key whose data is the type's name
-				let type_names: Vec<String> = s
-					.ctx
-					.type_registry
-					.types()
-					.iter()
-					.map(|type_def| type_def.name.clone())
-					.collect();
+				let type_names: Vec<String> =
+					s.ctx.type_registry.types().iter().map(|type_def| type_def.name.clone()).collect();
 				if !type_names.is_empty() {
 					Self::emit_list(
 						f,
@@ -548,10 +492,7 @@ impl WasmGcEmitter {
 
 					// the cells along the value chain, a meta entry `@name:value` counting none
 					let (count, current) = (1, 2);
-					Self::emit_list(
-						func,
-						&[I::I64Const(0), I::LocalSet(count), I::LocalGet(0), I::LocalSet(current)],
-					);
+					Self::emit_list(func, &[I::I64Const(0), I::LocalSet(count), I::LocalGet(0), I::LocalSet(current)]);
 					s.emit_cell_walk(func, current, |func| {
 						func.instruction(&I::LocalGet(count));
 						s.emit_field(func, current, 1);
@@ -595,12 +536,7 @@ impl WasmGcEmitter {
 					s.emit_codepoint_of_node(f);
 					Self::emit_list(
 						f,
-						&[
-							I::I64Const(first_code_point_of_longer_encoding),
-							I::I64GeU,
-							I::I64ExtendI32U,
-							I::I64Add,
-						],
+						&[I::I64Const(first_code_point_of_longer_encoding), I::I64GeU, I::I64ExtendI32U, I::I64Add],
 					);
 				}
 				Self::emit_list(f, &[I::Return, I::End]);
@@ -639,10 +575,7 @@ impl WasmGcEmitter {
 						func,
 						&[
 							I::LocalGet(0),
-							I::StructGet {
-								struct_type_index: s.type_manager.node_type,
-								field_index: 0,
-							},
+							I::StructGet { struct_type_index: s.type_manager.node_type, field_index: 0 },
 							I::I64Const(Kind::Codepoint as i64),
 							I::I64Eq,
 							I::If(BlockType::Empty),
@@ -660,12 +593,7 @@ impl WasmGcEmitter {
 					}
 					Self::emit_list(
 						func,
-						&[
-							I::I32Or,
-							I::If(BlockType::Result(Ref(node_ref))),
-							I::LocalGet(0),
-							I::LocalGet(1),
-						],
+						&[I::I32Or, I::If(BlockType::Result(Ref(node_ref))), I::LocalGet(0), I::LocalGet(1)],
 					);
 					s.emit_call(func, "string_char_at");
 					Self::emit_list(func, &[I::Else, I::LocalGet(0), I::LocalGet(1)]);
@@ -685,10 +613,7 @@ impl WasmGcEmitter {
 		let node_ref = Ref(self.node_ref(false));
 		let node_ref_nullable = Ref(self.node_ref(true));
 		let node_type = self.type_manager.node_type;
-		let set = |field_index: u32| I::StructSet {
-			struct_type_index: node_type,
-			field_index,
-		};
+		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
 		let params = vec![node_ref_nullable, ValType::I64, node_ref];
 		self.runtime_function(
 			crate::list_mutations::INSERT_AT_CALL,
@@ -786,47 +711,32 @@ impl WasmGcEmitter {
 	fn emit_string_char_at(&mut self) {
 		let node_ref = Ref(self.node_ref(false));
 		let params = vec![node_ref, ValType::I64];
-		self.runtime_function(
-			"string_char_at",
-			params,
-			vec![node_ref],
-			vec![ValType::I32; 3],
-			|s, f| {
-				let (start, end, stop) = (2, 3, 4);
-				Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
-				s.call(f, "text_grapheme_offset");
-				f.instruction(&I::LocalSet(start));
-				s.emit_text_bounds(f, stop, end);
-				Self::emit_list(f, &[I::LocalGet(start), I::LocalGet(end)]);
-				s.call(f, "grapheme_end");
-				Self::emit_list(f, &[I::LocalSet(stop), I::LocalGet(start), I::LocalGet(end)]);
-				s.call(f, "utf8_next");
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(stop),
-						I::I32Eq,
-						I::If(BlockType::Result(node_ref)),
-						I::LocalGet(start),
-						I::LocalGet(end),
-					],
-				);
-				s.call(f, "utf8_decode");
-				s.call(f, "new_codepoint");
-				Self::emit_list(
-					f,
-					&[
-						I::Else,
-						I::LocalGet(start),
-						I::LocalGet(stop),
-						I::LocalGet(start),
-						I::I32Sub,
-					],
-				);
-				s.call(f, "new_text");
-				f.instruction(&I::End);
-			},
-		);
+		self.runtime_function("string_char_at", params, vec![node_ref], vec![ValType::I32; 3], |s, f| {
+			let (start, end, stop) = (2, 3, 4);
+			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
+			s.call(f, "text_grapheme_offset");
+			f.instruction(&I::LocalSet(start));
+			s.emit_text_bounds(f, stop, end);
+			Self::emit_list(f, &[I::LocalGet(start), I::LocalGet(end)]);
+			s.call(f, "grapheme_end");
+			Self::emit_list(f, &[I::LocalSet(stop), I::LocalGet(start), I::LocalGet(end)]);
+			s.call(f, "utf8_next");
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(stop),
+					I::I32Eq,
+					I::If(BlockType::Result(node_ref)),
+					I::LocalGet(start),
+					I::LocalGet(end),
+				],
+			);
+			s.call(f, "utf8_decode");
+			s.call(f, "new_codepoint");
+			Self::emit_list(f, &[I::Else, I::LocalGet(start), I::LocalGet(stop), I::LocalGet(start), I::I32Sub]);
+			s.call(f, "new_text");
+			f.instruction(&I::End);
+		});
 	}
 }
 
@@ -888,13 +798,7 @@ impl WasmGcEmitter {
 	pub(in crate::wasm_emitter) fn emit_field(&self, func: &mut Function, local: u32, field_index: u32) {
 		Self::emit_list(
 			func,
-			&[
-				I::LocalGet(local),
-				I::StructGet {
-					struct_type_index: self.type_manager.node_type,
-					field_index,
-				},
-			],
+			&[I::LocalGet(local), I::StructGet { struct_type_index: self.type_manager.node_type, field_index }],
 		);
 	}
 
@@ -907,13 +811,7 @@ impl WasmGcEmitter {
 	) {
 		Self::emit_list(
 			func,
-			&[
-				I::Block(BlockType::Empty),
-				I::Loop(BlockType::Empty),
-				I::LocalGet(cell),
-				I::RefIsNull,
-				I::BrIf(1),
-			],
+			&[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(cell), I::RefIsNull, I::BrIf(1)],
 		);
 		body(func);
 		self.emit_field(func, cell, 2);
@@ -927,10 +825,7 @@ impl WasmGcEmitter {
 			func,
 			&[
 				I::RefCastNonNull(HeapType::Concrete(self.type_manager.string_type)),
-				I::StructGet {
-					struct_type_index: self.type_manager.string_type,
-					field_index,
-				},
+				I::StructGet { struct_type_index: self.type_manager.string_type, field_index },
 			],
 		);
 	}
@@ -982,12 +877,7 @@ impl WasmGcEmitter {
 		}
 		Self::emit_list(
 			func,
-			&[
-				I::Block(BlockType::Empty),
-				I::Loop(BlockType::Empty),
-				I::LocalGet(current),
-				I::RefIsNull,
-			],
+			&[I::Block(BlockType::Empty), I::Loop(BlockType::Empty), I::LocalGet(current), I::RefIsNull],
 		);
 		self.emit_fail_out_of_range_if(func, asked);
 		Self::emit_index_compare(func, I::I64LeS);
@@ -1002,15 +892,7 @@ impl WasmGcEmitter {
 		self.emit_fail_out_of_range_if(func, asked);
 		let cursors = self.read_cursors();
 		if !cursors.is_empty() {
-			Self::emit_list(
-				func,
-				&[
-					I::LocalGet(asked),
-					I::I64Const(SHORT_WALK),
-					I::I64GtS,
-					I::If(BlockType::Empty),
-				],
-			);
+			Self::emit_list(func, &[I::LocalGet(asked), I::I64Const(SHORT_WALK), I::I64GtS, I::If(BlockType::Empty)]);
 			Self::emit_cursor_store(func, &cursors, current, asked);
 			func.instruction(&I::End);
 		}
@@ -1030,10 +912,7 @@ impl WasmGcEmitter {
 			]
 		};
 		for &(list, _, _) in cursors {
-			Self::emit_list(
-				func,
-				&[I::GlobalGet(list), I::LocalGet(0), I::RefEq, I::If(BlockType::Empty)],
-			);
+			Self::emit_list(func, &[I::GlobalGet(list), I::LocalGet(0), I::RefEq, I::If(BlockType::Empty)]);
 			Self::emit_list(func, &store(cursors[cursors.iter().position(|c| c.0 == list).unwrap()]));
 			func.instruction(&I::Else);
 		}
@@ -1162,12 +1041,9 @@ impl WasmGcEmitter {
 	pub(in crate::wasm_emitter) fn node_variable_slot(&self, name: &str) -> Option<Slot> {
 		match self.scope.lookup(name) {
 			Some(local) => local.kind.is_ref().then_some(Slot::Local(local.position)),
-			None => self
-				.ctx
-				.user_globals
-				.get(name)
-				.filter(|(_, kind)| kind.is_ref())
-				.map(|&(index, _)| Slot::Global(index)),
+			None => {
+				self.ctx.user_globals.get(name).filter(|(_, kind)| kind.is_ref()).map(|&(index, _)| Slot::Global(index))
+			}
 		}
 	}
 
@@ -1212,10 +1088,7 @@ impl WasmGcEmitter {
 
 	/// ø (an Empty node) in local `list` becomes null, the end of a cons list
 	pub(in crate::wasm_emitter) fn emit_empty_as_null(&self, func: &mut Function, list: u32) {
-		Self::emit_list(
-			func,
-			&[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty), I::Else],
-		);
+		Self::emit_list(func, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty), I::Else]);
 		self.emit_field(func, list, 0);
 		self.emit_unmarked(func);
 		Self::emit_list(
@@ -1260,10 +1133,7 @@ impl WasmGcEmitter {
 	/// a declared list keeps its element mark
 	pub(in crate::wasm_emitter) fn emit_become_empty(&self, func: &mut Function, node: u32) {
 		let node_type = self.type_manager.node_type;
-		let set = |field_index: u32| I::StructSet {
-			struct_type_index: node_type,
-			field_index,
-		};
+		let set = |field_index: u32| I::StructSet { struct_type_index: node_type, field_index };
 		Self::emit_list(func, &self.forget_list_cursor());
 		Self::emit_list(func, &[I::LocalGet(node), I::I64Const(Kind::Empty as i64)]);
 		self.emit_or_element_mark(func, node);
@@ -1272,10 +1142,7 @@ impl WasmGcEmitter {
 			&[
 				set(0),
 				I::LocalGet(node),
-				I::RefNull(HeapType::Abstract {
-					shared: false,
-					ty: AbstractHeapType::Any,
-				}),
+				I::RefNull(HeapType::Abstract { shared: false, ty: AbstractHeapType::Any }),
 				set(1),
 				I::LocalGet(node),
 				I::RefNull(HeapType::Concrete(node_type)),

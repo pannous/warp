@@ -20,11 +20,7 @@ pub fn decimal_text_fraction(text: &str) -> Option<(BigInt, BigInt)> {
 	let digits: BigInt = mantissa.replace('.', "").parse().ok()?;
 	let scale = exponent.parse::<i64>().ok()? - fraction_digits;
 	let power = BigInt::from(10).pow(scale.unsigned_abs() as u32);
-	Some(if scale >= 0 {
-		(digits * power, BigInt::one())
-	} else {
-		(digits, power)
-	})
+	Some(if scale >= 0 { (digits * power, BigInt::one()) } else { (digits, power) })
 }
 
 /// A decimal written with more significant digits than a float keeps is the exact ratio it spells (card keep-exact):
@@ -39,10 +35,7 @@ pub fn long_decimal(text: &str) -> Option<Number> {
 		return None;
 	}
 	let (numerator, denominator) = decimal_text_fraction(text)?;
-	Some(Number::ratio(
-		Number::from_bigint(numerator),
-		Number::from_bigint(denominator),
-	))
+	Some(Number::ratio(Number::from_bigint(numerator), Number::from_bigint(denominator)))
 }
 
 /// The text of a float as the run-time float_text writes it (user decision float-text): the shortest digits that read
@@ -63,11 +56,7 @@ pub fn float_text(x: f64) -> String {
 	let sign = if x < 0.0 { "-" } else { "" };
 	let zeros = |how_many: i32| "0".repeat(how_many.max(0) as usize);
 	let placed = if !(SMALLEST_POSITIONAL..LARGEST_POSITIONAL).contains(&exponent) {
-		let rest = if count > 1 {
-			format!(".{}", &digits[1..])
-		} else {
-			String::new()
-		};
+		let rest = if count > 1 { format!(".{}", &digits[1..]) } else { String::new() };
 		format!("{}{rest}e{exponent}", &digits[..1])
 	} else if exponent >= count - 1 {
 		digits.clone() + &zeros(exponent - count + 1)
@@ -85,10 +74,7 @@ pub fn float_text(x: f64) -> String {
 fn shortest_digits(x: f64) -> (i64, i32) {
 	let written = format!("{:e}", x.abs()); // Rust writes the shortest digits that read back
 	let (mantissa, exponent) = written.split_once('e').unwrap_or((&written, "0"));
-	(
-		mantissa.replace('.', "").parse().unwrap_or(0),
-		exponent.parse().unwrap_or(0),
-	)
+	(mantissa.replace('.', "").parse().unwrap_or(0), exponent.parse().unwrap_or(0))
 }
 
 fn deserialize_leaked_real<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<&'static Real, D::Error> {
@@ -165,9 +151,7 @@ impl Number {
 impl Number {
 	/// Normalize: an integer that fits i64 is always `Int`, only larger ones are `BigInt`
 	pub fn from_bigint(big: BigInt) -> Number {
-		big.to_i64()
-			.map(Number::Int)
-			.unwrap_or_else(|| Number::BigInt(Box::leak(Box::new(big))))
+		big.to_i64().map(Number::Int).unwrap_or_else(|| Number::BigInt(Box::leak(Box::new(big))))
 	}
 
 	pub fn real(real: Real) -> Number {
@@ -411,13 +395,10 @@ fn mixed(a: Number, b: Number, operation: Operation) -> Number {
 		return operation.of_complex(complex(a), complex(b));
 	}
 	if matches!(a, Number::Real(_)) || matches!(b, Number::Real(_)) {
-		let exact = exact_of(&a)
-			.zip(exact_of(&b))
-			.and_then(|(a, b)| operation.of_exact(&a, &b));
-		return Number::real(exact.map_or_else(
-			|| Real::Approx(operation.of_f64(f64::from(a), f64::from(b))),
-			Real::Exact,
-		));
+		let exact = exact_of(&a).zip(exact_of(&b)).and_then(|(a, b)| operation.of_exact(&a, &b));
+		return Number::real(
+			exact.map_or_else(|| Real::Approx(operation.of_f64(f64::from(a), f64::from(b))), Real::Exact),
+		);
 	}
 	Number::of_f64(operation.of_f64(f64::from(a), f64::from(b)))
 }
@@ -427,10 +408,7 @@ impl Neg for Number {
 
 	fn neg(self) -> Self::Output {
 		match self {
-			Number::Int(n) => n
-				.checked_neg()
-				.map(Number::Int)
-				.unwrap_or_else(|| Number::from_bigint(-BigInt::from(n))),
+			Number::Int(n) => n.checked_neg().map(Number::Int).unwrap_or_else(|| Number::from_bigint(-BigInt::from(n))),
 			Number::BigInt(big) => Number::from_bigint(-big.clone()),
 			Number::Float(f) => Number::Float(-f),
 			Number::Quotient(n, d) => Number::Quotient(-n, d),
@@ -498,13 +476,11 @@ impl Div for Number {
 				Number::Float(n1 / f64::from(ratio))
 			}
 			(a, b)
-				if matches!(
-					a,
-					Number::Quotient(..) | Number::BigQuotient(_) | Number::Int(_) | Number::BigInt(_)
-				) && matches!(
-					b,
-					Number::Quotient(..) | Number::BigQuotient(_) | Number::Int(_) | Number::BigInt(_)
-				) =>
+				if matches!(a, Number::Quotient(..) | Number::BigQuotient(_) | Number::Int(_) | Number::BigInt(_))
+					&& matches!(
+						b,
+						Number::Quotient(..) | Number::BigQuotient(_) | Number::Int(_) | Number::BigInt(_)
+					) =>
 			{
 				Number::ratio(a, b)
 			}

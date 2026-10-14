@@ -16,8 +16,5 @@ fn a_compute_shader_over_ints_gives_ints() {
 		return crate::common::announce_skip("a WebGPU adapter", module_path!());
 	}
 	assert_eq!(computed.serialize(), "[4 -5 16]");
-	assert!(
-		matches!(computed.first().drop_meta(), Node::Number(Number::Int(4))),
-		"{computed:?}"
-	);
+	assert!(matches!(computed.first().drop_meta(), Node::Number(Number::Int(4))), "{computed:?}");
 }

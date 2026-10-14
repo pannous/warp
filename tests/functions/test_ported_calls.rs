@@ -9,14 +9,8 @@ const CASES: [(&str, &str); 305] = [
 	(r#"def f(a, b=2){a+b}; f(1)"#, r#"3"#),
 	(r#"def f(a=1, b=2){a*10+b}; f()"#, r#"12"#),
 	(r#"def f(a=1, b=2){a*10+b}; f(b=5)"#, r#"15"#),
-	(
-		r#"def greet(name, greeting="Hello"){greeting + " " + name}; greet("Bob")"#,
-		r#"Hello Bob"#,
-	),
-	(
-		r#"def greet(name, greeting="Hello"){greeting + " " + name}; greet("Bob", greeting="Hi")"#,
-		r#"Hi Bob"#,
-	),
+	(r#"def greet(name, greeting="Hello"){greeting + " " + name}; greet("Bob")"#, r#"Hello Bob"#),
+	(r#"def greet(name, greeting="Hello"){greeting + " " + name}; greet("Bob", greeting="Hi")"#, r#"Hi Bob"#),
 	(r#"def f(a, b=a*2){a+b}; f(3)"#, r#"9"#),
 	(r#"def f(a, b=a*2){a+b}; f(3, 1)"#, r#"4"#),
 	(r#"fun area(w:int, h:int=w){w*h}; area(4)"#, r#"16"#),
@@ -39,29 +33,17 @@ const CASES: [(&str, &str); 305] = [
 	(r#"def f(a){a}; def f(a,b){a+b}; f(1)*10 + f(2,3)"#, r#"15"#),
 	(r#"def f(x:int){1}; def f(x:text){2}; f(3)*10+f("a")"#, r#"12"#),
 	(r#"def adder(n){ x => x + n }; add2 = adder(2); add2(3)"#, r#"5"#),
-	(
-		r#"def counter(){ n=0; ()=>{ n+=1; n } }; c=counter(); c(); c()"#,
-		r#"2"#,
-	),
+	(r#"def counter(){ n=0; ()=>{ n+=1; n } }; c=counter(); c(); c()"#, r#"2"#),
 	(r#"add(a,b) := a+b; inc = add(1, _); inc(5)"#, r#"6"#),
 	(r#"apply(f, x) := f(x); apply(x=>x*x, 4)"#, r#"16"#),
 	(r#"twice(f, x) := f(f(x)); twice(x=>x+3, 1)"#, r#"7"#),
 	(r#"map([1,2,3], x=>x*2)"#, r#"[2 4 6]"#),
 	(r#"[1,2,3].map(x=>x*2)"#, r#"[2 4 6]"#),
-	(
-		r#"compose(f,g) := x => f(g(x)); h = compose(x=>x+1, x=>x*2); h(5)"#,
-		r#"11"#,
-	),
+	(r#"compose(f,g) := x => f(g(x)); h = compose(x=>x+1, x=>x*2); h(5)"#, r#"11"#),
 	(r#"fact(n) := n<2 ? 1 : n*fact(n-1); fact(5)"#, r#"120"#),
 	(r#"def gcd(a,b){ b==0 ? a : gcd(b, a%b) }; gcd(48,18)"#, r#"6"#),
-	(
-		r#"def ack(m,n){ if m==0 {n+1} else if n==0 {ack(m-1,1)} else {ack(m-1, ack(m, n-1))} }; ack(2,3)"#,
-		r#"9"#,
-	),
-	(
-		r#"def even(n){ n==0 ? 1 : odd(n-1) }; def odd(n){ n==0 ? 0 : even(n-1) }; even(10)"#,
-		r#"1"#,
-	),
+	(r#"def ack(m,n){ if m==0 {n+1} else if n==0 {ack(m-1,1)} else {ack(m-1, ack(m, n-1))} }; ack(2,3)"#, r#"9"#),
+	(r#"def even(n){ n==0 ? 1 : odd(n-1) }; def odd(n){ n==0 ? 0 : even(n-1) }; even(10)"#, r#"1"#),
 	(r#"square(n) := n*n; square 3"#, r#"9"#),
 	(r#"square(n) := n*n; square square 2"#, r#"16"#),
 	(r#"add(a,b) := a+b; add 1 2"#, r#"3"#),
@@ -69,14 +51,8 @@ const CASES: [(&str, &str); 305] = [
 	(r#"f(x, y=10) = x + y; f(1)"#, r#"11"#),
 	(r#"def f(a, b: 2){a+b}; f(1)"#, r#"3"#),
 	(r#"def f(a, b: 2){a+b}; f(1, b: 5)"#, r#"6"#),
-	(
-		r#"def counter(){ n=0; ()=>{ n=n+1; n } }; c=counter(); c(); c()"#,
-		r#"2"#,
-	),
-	(
-		r#"def counter(){ n=0; return ()=>{ n+=1; return n } }; c=counter(); c(); c()"#,
-		r#"2"#,
-	),
+	(r#"def counter(){ n=0; ()=>{ n=n+1; n } }; c=counter(); c(); c()"#, r#"2"#),
+	(r#"def counter(){ n=0; return ()=>{ n+=1; return n } }; c=counter(); c(); c()"#, r#"2"#),
 	(r#"def f(a:int, b=2) {a+b}; f(1)"#, r#"3"#),
 	(r#"def f(a, b:int=2) {a+b}; f(1)"#, r#"3"#),
 	(r#"def f(b:int=2) {b}; f()"#, r#"2"#),
@@ -87,10 +63,7 @@ const CASES: [(&str, &str); 305] = [
 	(r#"mk(k) := { return x => x * k }; t = mk(3); t(4)"#, r#"12"#),
 	(r#"mk(k) := x => x * k; t = mk(3); t(4)"#, r#"12"#),
 	(r#"square(n) := n*n; square(square 2)"#, r#"16"#),
-	(
-		r#"def apply_n(f, n, x){ for i in 1...n { x = f(x) }; x }; apply_n(x=>x*2, 3, 1)"#,
-		r#"8"#,
-	),
+	(r#"def apply_n(f, n, x){ for i in 1...n { x = f(x) }; x }; apply_n(x=>x*2, 3, 1)"#, r#"8"#),
 	(r#"filter([1,2,3,4], x => x%2==0)"#, r#"[2 4]"#),
 	(r#"reduce([1,2,3,4], (a,b) => a+b)"#, r#"10"#),
 	(r#"[1,2,3].reduce((a,b)=>a*b)"#, r#"6"#),
@@ -111,28 +84,13 @@ const CASES: [(&str, &str); 305] = [
 	(r#"func f(x: Int) -> Int { return x + 1 }; f(1)"#, r#"2"#),
 	(r#"function f(x: number): number { return x + 1 }; f(1)"#, r#"2"#),
 	(r#"int f(int x) { return x + 1; }; f(1)"#, r#"2"#),
-	(
-		r#"def sign(x){ if x < 0 { return -1 }; if x == 0 { return 0 }; 1 }; sign(-5) + sign(0) + sign(7)"#,
-		r#"0"#,
-	),
-	(
-		r#"def first_even(xs){ for x in xs { if x % 2 == 0 { return x } }; -1 }; first_even([1,3,4,5])"#,
-		r#"4"#,
-	),
+	(r#"def sign(x){ if x < 0 { return -1 }; if x == 0 { return 0 }; 1 }; sign(-5) + sign(0) + sign(7)"#, r#"0"#),
+	(r#"def first_even(xs){ for x in xs { if x % 2 == 0 { return x } }; -1 }; first_even([1,3,4,5])"#, r#"4"#),
 	(r#"def fib(n){ n < 2 ? n : fib(n-1) + fib(n-2) }; fib(15)"#, r#"610"#),
-	(
-		r#"def power(b, e){ if e == 0 {1} else { b * power(b, e-1) } }; power(2, 10)"#,
-		r#"1024"#,
-	),
-	(
-		r#"def sum_list(xs){ if #xs == 0 {0} else { xs#1 + sum_list(xs[1:]) } }; sum_list([1,2,3])"#,
-		r#"6"#,
-	),
+	(r#"def power(b, e){ if e == 0 {1} else { b * power(b, e-1) } }; power(2, 10)"#, r#"1024"#),
+	(r#"def sum_list(xs){ if #xs == 0 {0} else { xs#1 + sum_list(xs[1:]) } }; sum_list([1,2,3])"#, r#"6"#),
 	(r#"def hanoi(n){ n == 0 ? 0 : 2*hanoi(n-1)+1 }; hanoi(10)"#, r#"1023"#),
-	(
-		r#"func greet(person name: String) -> String { "Hi " + name }; greet(person: "Bob")"#,
-		r#"Hi Bob"#,
-	),
+	(r#"func greet(person name: String) -> String { "Hi " + name }; greet(person: "Bob")"#, r#"Hi Bob"#),
 	(r#"def f(a, b) { a - b }; f(b: 1, a: 10)"#, r#"9"#),
 	(r#"def twice(x) { x * 2 }; twice 21"#, r#"42"#),
 	(r#"def add(a, b) { a + b }; add 1, 2"#, r#"3"#),
@@ -142,20 +100,11 @@ const CASES: [(&str, &str); 305] = [
 	(r#"def f(xs=[]){ #xs }; f()"#, r#"0"#),
 	(r#"def f(xs=[1,2]){ #xs }; f()"#, r#"2"#),
 	(r#"def f(s="a"){ s + s }; f()"#, r#"aa"#),
-	(
-		r#"def minmax(xs){ return min(xs), max(xs) }; lo, hi = minmax([3,1,2]); lo*10+hi"#,
-		r#"13"#,
-	),
+	(r#"def minmax(xs){ return min(xs), max(xs) }; lo, hi = minmax([3,1,2]); lo*10+hi"#, r#"13"#),
 	(r#"def swap(a, b){ (b, a) }; x, y = swap(1, 2); x*10+y"#, r#"21"#),
 	(r#"x = 10; def f(){ x * 2 }; f()"#, r#"20"#),
-	(
-		r#"def outer(){ y = 5; def inner(){ y + 1 }; inner() }; outer()"#,
-		r#"6"#,
-	),
-	(
-		r#"fun f(a: Int = 1, b: Int = 2): Int { return a * b }; f(b = 5)"#,
-		r#"5"#,
-	),
+	(r#"def outer(){ y = 5; def inner(){ y + 1 }; inner() }; outer()"#, r#"6"#),
+	(r#"fun f(a: Int = 1, b: Int = 2): Int { return a * b }; f(b = 5)"#, r#"5"#),
 	(r#"fun f(a: Int, b: Int): Int = a + b; f(1, 2)"#, r#"3"#),
 	(r#"function f(x; y=2) x*y end; f(3)"#, r#"6"#),
 	(r#"function f(x; y=2) x*y end; f(3; y=4)"#, r#"12"#),
@@ -168,54 +117,30 @@ const CASES: [(&str, &str); 305] = [
 	(r#"let f = (a: number): number => a * 2; f(4)"#, r#"8"#),
 	(r#"def f(a, b: 2) a * b end; f(3)"#, r#"6"#),
 	(r#"def f(a, b: 2) a * b end; f(3, b: 5)"#, r#"15"#),
-	(
-		r#"func f(_ a: Int, times b: Int) -> Int { a * b }; f(3, times: 4)"#,
-		r#"12"#,
-	),
+	(r#"func f(_ a: Int, times b: Int) -> Int { a * b }; f(3, times: 4)"#, r#"12"#),
 	(r#"[1,2,3].forEach { print(it) }"#, r#"ø"#),         // prints 1 2 3
 	(r#"xs = [1,2,3]; xs.each { |x| print x }"#, r#"ø"#), // prints 1 2 3
 	(r#"def twice(f, x){ f(f(x)) }; twice(x => x + 1, 5)"#, r#"7"#),
-	(
-		r#"compose = (f, g) => x => f(g(x)); h = compose(x => x + 1, x => x * 2); h(5)"#,
-		r#"11"#,
-	),
+	(r#"compose = (f, g) => x => f(g(x)); h = compose(x => x + 1, x => x * 2); h(5)"#, r#"11"#),
 	(r#"add = a => b => a + b; add(1)(2)"#, r#"3"#),
 	(r#"fun total(vararg xs: Int): Int = xs.sum(); total(1, 2, 3)"#, r#"6"#),
-	(
-		r#"int Total(params int[] xs) { return xs.sum(); }; Total(1, 2, 3)"#,
-		r#"6"#,
-	),
+	(r#"int Total(params int[] xs) { return xs.sum(); }; Total(1, 2, 3)"#, r#"6"#),
 	(r#"def f(a, *, b): return a + b; f(1, b=2)"#, r#"3"#),
 	(r#"f(x) = x^2; f.([1,2,3])"#, r#"[1 4 9]"#),
 	(r#"map(x -> x * 2, [1,2,3])"#, r#"[2 4 6]"#),
 	(r#"function f(a, b = a * 2) { return a + b }; f(3)"#, r#"9"#),
-	(
-		r#"def fact(n, acc=1){ if n <= 1 { acc } else { fact(n - 1, acc * n) } }; fact(5)"#,
-		r#"120"#,
-	),
+	(r#"def fact(n, acc=1){ if n <= 1 { acc } else { fact(n - 1, acc * n) } }; fact(5)"#, r#"120"#),
 	(r#"add = (a) => (b) => a + b; add(2)(3)"#, r#"5"#),
-	(
-		r#"def apply(f, *args): return f(*args); apply((a, b) => a * b, 3, 4)"#,
-		r#"12"#,
-	),
-	(
-		r#"func swapped(_ a: Int, _ b: Int) -> (Int, Int) { return (b, a) }; swapped(1, 2)"#,
-		r#"(2 1)"#,
-	),
+	(r#"def apply(f, *args): return f(*args); apply((a, b) => a * b, 3, 4)"#, r#"12"#),
+	(r#"func swapped(_ a: Int, _ b: Int) -> (Int, Int) { return (b, a) }; swapped(1, 2)"#, r#"(2 1)"#),
 	(r#"def f(x): return x * 2; list(map(f, [1, 2, 3]))"#, r#"[2 4 6]"#),
 	(r#"square = lambda x: x ** 2; square(5)"#, r#"25"#),
 	(r#"const inc = x => x + 1; [1,2,3].map(inc)"#, r#"[2 3 4]"#),
 	(r#"fn add(a: i32, b: i32) -> i32 { a + b }; add(2, 3)"#, r#"5"#),
-	(
-		r#"def greet(name="World"): return "Hello " + name; greet()"#,
-		r#"Hello World"#,
-	),
+	(r#"def greet(name="World"): return "Hello " + name; greet()"#, r#"Hello World"#),
 	(r#"def f(n){ return n if n < 2 else f(n-1) + f(n-2) }; f(10)"#, r#"55"#),
 	(r#"max(3, 7)"#, r#"7"#),
-	(
-		r#"func divmod(a, b int) (int, int) { return a / b, a % b }; q, r := divmod(7, 2); q * 10 + r"#,
-		r#"31"#,
-	),
+	(r#"func divmod(a, b int) (int, int) { return a / b, a % b }; q, r := divmod(7, 2); q * 10 + r"#, r#"31"#),
 	(r#"function add(a, b) return a + b end; add(1, 2)"#, r#"3"#),
 	(r#"function f($a) { return $a * 2; }; f(4)"#, r#"8"#),
 	(r#"int twice(int x) => x * 2; twice(4)"#, r#"8"#),
@@ -252,16 +177,10 @@ twice 4"#,
 	(r#"f = x => x * 2; f.(4)"#, r#"8"#),
 	(r#"fun add(a: Int, b: Int): Int { return a + b }; add(2, 3)"#, r#"5"#),
 	(r#"fun Int.half() = this / 2; 8.half()"#, r#"4"#),
-	(
-		r#"func add(_ a: Int, to b: Int) -> Int { a + b }; add(1, to: 2)"#,
-		r#"3"#,
-	),
+	(r#"func add(_ a: Int, to b: Int) -> Int { a + b }; add(1, to: 2)"#, r#"3"#),
 	(r#"static int Add(int a, int b) => a + b; Add(2, 3)"#, r#"5"#),
 	(r#"Func<int, int> sq = x => x * x; sq(6)"#, r#"36"#),
-	(
-		r#"const add = (a: number, b: number): number => a + b; add(1, 2)"#,
-		r#"3"#,
-	),
+	(r#"const add = (a: number, b: number): number => a + b; add(1, 2)"#, r#"3"#),
 	(r#"function add(a, b = 10) { return a + b }; add(1)"#, r#"11"#),
 	(r#"def add(a, b) = a + b; add(1, 2)"#, r#"3"#),
 	(r#"add(x, y) = x + y; add(2, 3)"#, r#"5"#),
@@ -291,33 +210,21 @@ twice 4"#,
 	(r#"local x = 3; x"#, r#"3"#),
 	(r#"def sq(x : Int) : Int; x * x; end; sq(3)"#, r#"9"#),
 	(r#"fun Int.twice() = this * 2; 3.twice()"#, r#"6"#),
-	(
-		r#"class Adder { k: int; def call(x) { x + k } }; a = Adder(k: 2); a.call(1)"#,
-		r#"3"#,
-	),
+	(r#"class Adder { k: int; def call(x) { x + k } }; a = Adder(k: 2); a.call(1)"#, r#"3"#),
 	(r#"int sq(int x) => x * x; sq(5)"#, r#"25"#),
 	(r#"def f(a, *, b): return a * b; f(2, b=5)"#, r#"10"#),
 	(r#"def f(*args): return len(args); f(1, 2, 3)"#, r#"3"#),
 	(r#"def fact(n) = n <= 1 ? 1 : n * fact(n - 1); fact(5)"#, r#"120"#),
 	(r#"fact(n) = n <= 1 ? 1 : n * fact(n - 1); fact(5)"#, r#"120"#),
-	(
-		r#"compose = (f, g) => x => f(g(x)); inc = x => x + 1; dbl = x => x * 2; compose(inc, dbl)(5)"#,
-		r#"11"#,
-	),
+	(r#"compose = (f, g) => x => f(g(x)); inc = x => x + 1; dbl = x => x * 2; compose(inc, dbl)(5)"#, r#"11"#),
 	(r#"apply = (f, x) => f(x); apply(x => x * 3, 4)"#, r#"12"#),
 	(r#"[1, 2, 3].map(x => x * x).filter(x => x > 1)"#, r#"[4 9]"#),
 	(r#"[1, 2, 3].reduce((a, b) => a + b)"#, r#"6"#),
 	(r#"square x := x * x; sum square [1 2 3]"#, r#"14"#),
-	(
-		r#"func greet(name: String = "you") -> String { "hi \(name)" }; greet()"#,
-		r#"hi you"#,
-	),
+	(r#"func greet(name: String = "you") -> String { "hi \(name)" }; greet()"#, r#"hi you"#),
 	(r#"xs = [3, 1, 2]; xs.sort()"#, r#"[1 2 3]"#),
 	(r#"[3, 1, 2].sort()"#, r#"[1 2 3]"#),
-	(
-		r#"def greet(name: str = "you") -> str: return f"hi {name}"; greet()"#,
-		r#"hi you"#,
-	),
+	(r#"def greet(name: str = "you") -> str: return f"hi {name}"; greet()"#, r#"hi you"#),
 	(r#"name = "Bo"; f"hi {name}, {1 + 1}""#, r#"hi Bo, 2"#),
 	(r#"f"{{x}}""#, r#"{x}"#),
 	(r#"def f(x){ x * 2 }; f"{f(2)}""#, r#"4"#),
@@ -327,40 +234,25 @@ twice 4"#,
 	(r#"var sq = (int x) => x * x; sq(3)"#, r#"9"#),
 	(r#"add = (int a, int b) => a + b; add(1, 2)"#, r#"3"#),
 	(r#"f = (x y) => x + y; f(1, 2)"#, r#"3"#),
-	(
-		r#"func total(_ xs: Int...) -> Int { xs.reduce(0, +) }; total(1, 2, 3)"#,
-		r#"6"#,
-	),
+	(r#"func total(_ xs: Int...) -> Int { xs.reduce(0, +) }; total(1, 2, 3)"#, r#"6"#),
 	(r#"def f(a, *xs: int){ a * xs.sum() }; f(2, 1, 2)"#, r#"6"#),
 	(r#"const add = (a, b = a * 2) => a + b; add(3)"#, r#"9"#),
 	(r#"def f(a, b = a * 2){ a + b }; f(3)"#, r#"9"#),
-	(
-		r#"function add(...nums) { return nums.reduce((a, b) => a + b, 0) }; add(1, 2, 3)"#,
-		r#"6"#,
-	),
+	(r#"function add(...nums) { return nums.reduce((a, b) => a + b, 0) }; add(1, 2, 3)"#, r#"6"#),
 	(r#"[1, 2, 3].reduce((a, b) => a * b, 10)"#, r#"60"#),
 	(r#"[1,2,3].reduce(0) { $0 + $1 }"#, r#"6"#),
 	(r#"xs = [1,2,3]; xs.reduce(10) { a, b in a + b }"#, r#"16"#),
-	(
-		r#"func makeAdder(_ k: Int) { return { $0 + k } }; makeAdder(2)(3)"#,
-		r#"5"#,
-	),
+	(r#"func makeAdder(_ k: Int) { return { $0 + k } }; makeAdder(2)(3)"#, r#"5"#),
 	(r#"def mk(k){ return { $0 + k } }; mk(2)(3)"#, r#"5"#),
 	(r#"def mk(){ return { $0 * $1 } }; mk()(3, 4)"#, r#"12"#),
 	(r#"def g(a, b){ $0 - $1 }; g(5, 2)"#, r#"3"#),
 	(r#"def twice(f, x){ f(f(x)) }; twice({ $0 + 1 }, 5)"#, r#"7"#),
-	(
-		r#"func makeAdder(_ k: Int) -> (Int) -> Int { return { $0 + k } }; makeAdder(2)(3)"#,
-		r#"5"#,
-	),
+	(r#"func makeAdder(_ k: Int) -> (Int) -> Int { return { $0 + k } }; makeAdder(2)(3)"#, r#"5"#),
 	(r#"def add(x: Int)(y: Int): Int = x + y; add(1)(2)"#, r#"3"#),
 	(r#"def add(x)(y) = x + y; inc = add(1); inc(5)"#, r#"6"#),
 	(r#"xs = [1,2,3]; xs.max()"#, r#"3"#),
 	(r#"[1,2,3].min()"#, r#"1"#),
-	(
-		r#"static int Total(params int[] xs) => xs.Sum(); Total(1, 2, 3)"#,
-		r#"6"#,
-	),
+	(r#"static int Total(params int[] xs) => xs.Sum(); Total(1, 2, 3)"#, r#"6"#),
 	(r#"xs = [1, 2, 3]; xs.Aggregate((a, b) => a * b)"#, r#"6"#),
 	(r#"f(x) = 2x + 1; f(3)"#, r#"7"#),
 	(r#"sq = x -> x^2; sq(4)"#, r#"16"#),
@@ -383,33 +275,18 @@ twice 4"#,
 	(r#"f = lambda x: "big" if x > 2 else "small"; f(3)"#, r#"big"#),
 	(r#"lambda = 3; lambda + 1"#, r#"4"#),
 	(r#"fs = []; for i in 1 to 3 { fs.add(x => x + i) }; fs#1(10)"#, r#"11"#),
-	(
-		r#"fs = []; for i in 1 to 3 { fs = fs + [x => x + i] }; fs#3(10)"#,
-		r#"13"#,
-	),
+	(r#"fs = []; for i in 1 to 3 { fs = fs + [x => x + i] }; fs#3(10)"#, r#"13"#),
 	(r#"dbl = func(x int) int { return x * 2 }; dbl(4)"#, r#"8"#),
 	(r#"twice := func(x int) int { return x * 2 }; twice(4)"#, r#"8"#),
 	(r#"f = func(a, b int) int { return a + b }; f(1, 2)"#, r#"3"#),
-	(
-		r#"func apply(f func(int) int, x int) int { return f(x) }; apply(func(x int) int { return x + 1 }, 2)"#,
-		r#"3"#,
-	),
-	(
-		r#"fn apply<F: Fn(i32) -> i32>(f: F, x: i32) -> i32 { f(x) }; apply(|x| x + 1, 2)"#,
-		r#"3"#,
-	),
-	(
-		r#"int add({required int a, required int b}) => a + b; add(a: 1, b: 2)"#,
-		r#"3"#,
-	),
+	(r#"func apply(f func(int) int, x int) int { return f(x) }; apply(func(x int) int { return x + 1 }, 2)"#, r#"3"#),
+	(r#"fn apply<F: Fn(i32) -> i32>(f: F, x: i32) -> i32 { f(x) }; apply(|x| x + 1, 2)"#, r#"3"#),
+	(r#"int add({required int a, required int b}) => a + b; add(a: 1, b: 2)"#, r#"3"#),
 	(r#"int add(int a, {int b = 2}) => a + b; add(1)"#, r#"3"#),
 	(r#"int add({int a = 1, int b = 2}) => a + b; add(b: 5)"#, r#"6"#),
 	(r#"To square a number: return it times it; square 3"#, r#"9"#),
 	(r#"To square a number: return it times it; square of 3"#, r#"9"#),
-	(
-		r#"To square a number: return it times it; x = 3; square of x is 9"#,
-		r#"yes"#,
-	),
+	(r#"To square a number: return it times it; x = 3; square of x is 9"#, r#"yes"#),
 	(r#"3 times 4"#, r#"12"#),
 	(r#"x = 3; y = x times x; y"#, r#"9"#),
 	// cleanup-edge: cleanup-park-phrases: comes back with prepositions-call
@@ -420,10 +297,7 @@ twice 4"#,
 	(r#"def add(a, b: int) -> int { a + b }; add(1, 2)"#, r#"3"#),
 	(r#"def apply(f, x: int) -> int { f(x) }; apply(x => x + 1, 2)"#, r#"3"#),
 	(r#"func id<T>(_ x: T) -> T { return x }; id(5)"#, r#"5"#),
-	(
-		r#"func add<T>(_ a: T, _ b: T) -> T { return a + b }; add(2, 3)"#,
-		r#"5"#,
-	),
+	(r#"func add<T>(_ a: T, _ b: T) -> T { return a + b }; add(2, 3)"#, r#"5"#),
 	(r#"xs=[1,2,3]; map(xs, function(x) x*2)"#, r#"[2 4 6]"#),
 	(r#"c = 3; c * 2"#, r#"6"#),
 	(r#"sq = @(x) x.^2; sq([1,2,3])"#, r#"[1 4 9]"#),
@@ -460,11 +334,7 @@ const DROPPED_CASES: [(&str, &str); 10] = [
 /// The value as `warp eval` shows it: a text without its quotes
 fn shown(code: &str) -> String {
 	let serialized = eval(code).serialize();
-	serialized
-		.strip_prefix('"')
-		.and_then(|text| text.strip_suffix('"'))
-		.map(str::to_string)
-		.unwrap_or(serialized)
+	serialized.strip_prefix('"').and_then(|text| text.strip_suffix('"')).map(str::to_string).unwrap_or(serialized)
 }
 
 #[test]
@@ -486,13 +356,7 @@ fn keep_their_values(cases: &[(&str, &str)]) {
 			(got != *want).then(|| format!("{code}\n  got {got}, want {want}"))
 		})
 		.collect();
-	assert!(
-		failures.is_empty(),
-		"{} of {} forms changed:\n{}",
-		failures.len(),
-		cases.len(),
-		failures.join("\n")
-	);
+	assert!(failures.is_empty(), "{} of {} forms changed:\n{}", failures.len(), cases.len(), failures.join("\n"));
 }
 
 #[test]
@@ -501,12 +365,7 @@ fn linq_methods_work_with_a_note_naming_warps_word() {
 	let (value, hints) =
 		warp::normalize::capture_hints(|| shown("xs = [1, 2, 3]; xs.Select(x => x * 2).Where(x => x > 2)"));
 	assert_eq!(value, "[4 6]");
-	assert!(
-		hints
-			.iter()
-			.any(|hint| hint.canonical == ".map(" && hint.original == ".Select("),
-		"{hints:?}"
-	);
+	assert!(hints.iter().any(|hint| hint.canonical == ".map(" && hint.original == ".Select("), "{hints:?}");
 }
 
 #[test]
@@ -514,26 +373,15 @@ fn linq_methods_work_with_a_note_naming_warps_word() {
 fn r_words_work_with_a_note_naming_warps_form() {
 	let (value, hints) = warp::normalize::capture_hints(|| shown("sapply(c(1, 2, 3), function(x) x * 2)"));
 	assert_eq!(value, "[2 4 6]");
-	assert!(
-		hints
-			.iter()
-			.any(|hint| hint.canonical == "map(" && hint.original == "sapply("),
-		"{hints:?}"
-	);
-	assert!(
-		hints.iter().any(|hint| hint.canonical == "[" && hint.original == "c("),
-		"{hints:?}"
-	);
+	assert!(hints.iter().any(|hint| hint.canonical == "map(" && hint.original == "sapply("), "{hints:?}");
+	assert!(hints.iter().any(|hint| hint.canonical == "[" && hint.original == "c("), "{hints:?}");
 }
 
 #[test]
 fn types_built_from_type_parameters_drop_with_them() {
 	assert_eq!(shown("fn first<T>(xs: Vec<T>) -> T { xs[0] }; first([4, 5])"), "4");
 	assert_eq!(shown("fn wrap<T>(x: T) -> Vec<T> { [x] }; wrap(3)"), "[3]");
-	assert_eq!(
-		shown("fn pair<A, B>(a: A, b: B) -> (A, B) { (a, b) }; pair(1, \"x\")"),
-		"(1 \"x\")"
-	);
+	assert_eq!(shown("fn pair<A, B>(a: A, b: B) -> (A, B) { (a, b) }; pair(1, \"x\")"), "(1 \"x\")");
 }
 
 #[test]

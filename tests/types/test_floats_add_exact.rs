@@ -19,10 +19,7 @@ fn a_concatenated_ratio_converts() {
 
 #[test]
 fn a_floats_field_converts_an_added_ratio() {
-	is!(
-		"class Q { xs: floats }; q = Q([1/3]); q.xs.add(1/3); \"\" + q.xs[1]",
-		FLOAT_THIRD
-	);
+	is!("class Q { xs: floats }; q = Q([1/3]); q.xs.add(1/3); \"\" + q.xs[1]", FLOAT_THIRD);
 }
 
 #[test]

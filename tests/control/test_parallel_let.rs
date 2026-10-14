@@ -10,8 +10,5 @@ fn a_parallel_let_binds_each_name_to_its_call() {
 
 #[test]
 fn a_recursive_parallel_let_forks_only_while_cores_are_free() {
-	is!(
-		"sum(d) := { if d == 0 { return 1 }; a b = sum(d - 1) sum(d - 1); a + b }; sum(10)",
-		1024
-	);
+	is!("sum(d) := { if d == 0 { return 1 }; a b = sum(d - 1) sum(d - 1); a + b }; sum(10)", 1024);
 }

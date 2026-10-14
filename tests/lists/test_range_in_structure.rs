@@ -12,9 +12,7 @@ fn a_range_after_colon_is_its_value() {
 	is!("n = 3; o = {r: n..6}; o.r", ints(vec![3, 4, 5]));
 	take_warnings();
 	warp::wasm_emitter::eval("o = {r: 1..10}; count o.r");
-	assert!(!take_warnings()
-		.iter()
-		.any(|warning| warning.message.contains("keeps the block")));
+	assert!(!take_warnings().iter().any(|warning| warning.message.contains("keeps the block")));
 }
 
 /// collected once, in linear time: a quadratic collection runs out of fuel

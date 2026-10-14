@@ -10,18 +10,9 @@ const FOLDER: &str = "scratch/test_std_file";
 fn use_file_writes_appends_and_reads_back() {
 	let _ = std::fs::create_dir_all(FOLDER);
 	let path = format!("{FOLDER}/greeting.txt");
-	is!(
-		&format!("use file; write(\"{path}\", \"hello\"); read(\"{path}\")"),
-		"hello"
-	);
-	is!(
-		&format!("use file; write(\"{path}\", \"hello\"); append_file(\"{path}\", \"!\"); read(\"{path}\")"),
-		"hello!"
-	);
-	is!(
-		&format!("use file; write(\"{path}\", \"ab\ncd\"); lines(\"{path}\")"),
-		parse("[\"ab\" \"cd\"]")
-	);
+	is!(&format!("use file; write(\"{path}\", \"hello\"); read(\"{path}\")"), "hello");
+	is!(&format!("use file; write(\"{path}\", \"hello\"); append_file(\"{path}\", \"!\"); read(\"{path}\")"), "hello!");
+	is!(&format!("use file; write(\"{path}\", \"ab\ncd\"); lines(\"{path}\")"), parse("[\"ab\" \"cd\"]"));
 	is!(&format!("use file; write(\"{path}\", \"x\"); exists(\"{path}\")"), true);
 	is!(&format!("use file; exists(\"{FOLDER}/no such file\")"), false);
 }
@@ -63,9 +54,6 @@ fn a_file_url_loads_the_module_and_append_is_qualified() {
 		parse("[\"a.txt\"]")
 	);
 	let path = format!("{FOLDER}/appended.txt");
-	is!(
-		&format!("use file; write(\"{path}\", \"a\"); file.append(\"{path}\", \"b\"); read(\"{path}\")"),
-		"ab"
-	);
+	is!(&format!("use file; write(\"{path}\", \"a\"); file.append(\"{path}\", \"b\"); read(\"{path}\")"), "ab");
 	is!("use file; xs = [1]; xs.append(2); xs", parse("[1 2]"));
 }

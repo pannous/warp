@@ -9,10 +9,7 @@ use warp::wasm_emitter::eval;
 const NOW_TOLERANCE_NANOS: i128 = 5_000_000_000;
 
 fn nanos_since_epoch() -> i128 {
-	std::time::SystemTime::now()
-		.duration_since(std::time::UNIX_EPOCH)
-		.expect("after 1970")
-		.as_nanos() as i128
+	std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("after 1970").as_nanos() as i128
 }
 
 fn instant_of(node: &Node) -> i128 {
@@ -21,19 +18,16 @@ fn instant_of(node: &Node) -> i128 {
 			Some(Time::Instant(nanos)) => *nanos,
 			_ => panic!("expected an instant, got {node:?}"),
 		},
-		Node::Text(text) => instant_of(&Node::data(
-			warp::time::calendar::parse_literal(text.trim()).expect("an RFC 3339 instant"),
-		)),
+		Node::Text(text) => {
+			instant_of(&Node::data(warp::time::calendar::parse_literal(text.trim()).expect("an RFC 3339 instant")))
+		}
 		_ => panic!("expected an instant, got {node:?}"),
 	}
 }
 
 fn assert_now(node: &Node) {
 	let distance = (instant_of(node) - nanos_since_epoch()).abs();
-	assert!(
-		distance < NOW_TOLERANCE_NANOS,
-		"{node:?} is {distance} ns away from now"
-	);
+	assert!(distance < NOW_TOLERANCE_NANOS, "{node:?} is {distance} ns away from now");
 }
 
 #[test]
@@ -44,10 +38,7 @@ fn test_now_reads_the_clock_when_the_program_runs() {
 	std::thread::sleep(std::time::Duration::from_millis(20));
 	let second = warp::run::wasm_reader::read_bytes_with_host(&module.bytes).expect("runs again");
 	assert_now(&first);
-	assert!(
-		instant_of(&second) > instant_of(&first),
-		"{second:?} is not after {first:?}"
-	);
+	assert!(instant_of(&second) > instant_of(&first), "{second:?} is not after {first:?}");
 }
 
 #[test]
@@ -59,16 +50,10 @@ fn test_now_reads_back_as_an_instant() {
 #[test]
 fn test_an_instant_shows_as_rfc_3339() {
 	let shown = eval("str(now)");
-	assert!(
-		matches!(&shown, Node::Text(text) if text.ends_with('Z') && text.contains('T')),
-		"{shown:?}"
-	);
+	assert!(matches!(&shown, Node::Text(text) if text.ends_with('Z') && text.contains('T')), "{shown:?}");
 	assert_now(&shown);
 	let joined = eval("\"at \" + now");
-	assert!(
-		matches!(&joined, Node::Text(text) if text.starts_with("at 20")),
-		"{joined:?}"
-	);
+	assert!(matches!(&joined, Node::Text(text) if text.starts_with("at 20")), "{joined:?}");
 }
 
 #[test]

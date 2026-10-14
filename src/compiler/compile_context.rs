@@ -128,9 +128,6 @@ pub fn scoped<T: 'static, R>(field: fn(&mut CompileContext) -> &mut T, value: T,
 		}
 	}
 	let outer = change(|context| std::mem::replace(field(context), value));
-	let _restore = Restore {
-		field,
-		outer: Some(outer),
-	};
+	let _restore = Restore { field, outer: Some(outer) };
 	run()
 }

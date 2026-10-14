@@ -21,10 +21,7 @@ fn written_slots_win() {
 #[test]
 fn every_left_out_slot_needs_its_variable() {
 	// all or nothing: a partly fed call could match a shorter overload's pattern
-	fails_with(
-		&format!("{INTEGRATE}from = 1\nintegrate sin"),
-		"needs a value for parameter a",
-	);
+	fails_with(&format!("{INTEGRATE}from = 1\nintegrate sin"), "needs a value for parameter a");
 }
 
 #[test]

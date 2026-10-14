@@ -55,14 +55,8 @@ pub(in crate::wasm_emitter) const NEGATIVE_UNCERTAINTY: &str = "an_uncertainty_m
 pub const UNCERTAIN_ARITHMETIC: [&str; 4] = ["uncertain_add", "uncertain_sub", "uncertain_mul", "uncertain_div"];
 /// uncertain_field(node, field) -> node or null: one of UNCERTAIN_FIELDS as a float
 const UNCERTAIN_FIELD: &str = "uncertain_field";
-const UNCERTAIN_FUNCTIONS: [&str; 6] = [
-	UNCERTAIN_NEW,
-	GAUSSIAN_NEW,
-	GAUSSIAN_COMBINE,
-	UNCERTAIN_PARTS,
-	UNCERTAIN_FIELD,
-	UNCERTAIN_SIMILAR,
-];
+const UNCERTAIN_FUNCTIONS: [&str; 6] =
+	[UNCERTAIN_NEW, GAUSSIAN_NEW, GAUSSIAN_COMBINE, UNCERTAIN_PARTS, UNCERTAIN_FIELD, UNCERTAIN_SIMILAR];
 const VALUE: i32 = 0;
 const LOW: i32 = 1;
 const HIGH: i32 = 2;
@@ -123,11 +117,7 @@ impl WasmGcEmitter {
 		for (name, operation) in GAUSSIAN_ARITHMETIC.into_iter().zip(operations.clone()) {
 			self.emit_gaussian_arithmetic(name, operation);
 		}
-		for ((name, gaussian), operation) in UNCERTAIN_ARITHMETIC
-			.into_iter()
-			.zip(GAUSSIAN_ARITHMETIC)
-			.zip(operations)
-		{
+		for ((name, gaussian), operation) in UNCERTAIN_ARITHMETIC.into_iter().zip(GAUSSIAN_ARITHMETIC).zip(operations) {
 			self.emit_uncertain_arithmetic(name, gaussian, operation);
 		}
 		for (word, name, extrema) in &INTERVAL_WORDS {
@@ -238,15 +228,7 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &self.part(parts, VALUE));
 		func.instruction(&I::LocalSet(at));
 		Self::emit_list(func, &self.part(parts, DEVIATION));
-		Self::emit_list(
-			func,
-			&[
-				I::F64Const(SLOPE_STEP.into()),
-				I::F64Mul,
-				I::LocalSet(step),
-				I::LocalGet(at),
-			],
-		);
+		Self::emit_list(func, &[I::F64Const(SLOPE_STEP.into()), I::F64Mul, I::LocalSet(step), I::LocalGet(at)]);
 		self.apply_math_word(func, word);
 		func.instruction(&I::LocalGet(parts));
 		for sign in [I::F64Add, I::F64Sub] {
@@ -289,17 +271,7 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &self.part(parts, LOW));
 		Self::emit_list(
 			func,
-			&[
-				at.clone(),
-				I::F64Sub,
-				every.clone(),
-				I::F64Div,
-				I::F64Ceil,
-				every,
-				I::F64Mul,
-				at,
-				I::F64Add,
-			],
+			&[at.clone(), I::F64Sub, every.clone(), I::F64Div, I::F64Ceil, every, I::F64Mul, at, I::F64Add],
 		);
 		Self::emit_list(func, &self.part(parts, HIGH));
 		func.instruction(&I::F64Le);
@@ -327,10 +299,7 @@ impl WasmGcEmitter {
 	}
 
 	fn parts_ref(&self) -> ValType {
-		ValType::Ref(RefType {
-			nullable: false,
-			heap_type: HeapType::Concrete(self.parts_array()),
-		})
+		ValType::Ref(RefType { nullable: false, heap_type: HeapType::Concrete(self.parts_array()) })
 	}
 
 	/// [I::LocalGet(parts), index, ArrayGet]: one part of the array in `parts`
@@ -350,15 +319,7 @@ impl WasmGcEmitter {
 
 	/// Push an i32: are the parts in `parts` a Gaussian's
 	fn is_gaussian(&self, func: &mut Function, parts: u32) {
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(parts),
-				I::ArrayLen,
-				I::I32Const(INTERVAL_PARTS as i32),
-				I::I32GtU,
-			],
-		);
+		Self::emit_list(func, &[I::LocalGet(parts), I::ArrayLen, I::I32Const(INTERVAL_PARTS as i32), I::I32GtU]);
 	}
 
 	/// The uncertain node of the kind and the three f64 on the stack
@@ -371,10 +332,7 @@ impl WasmGcEmitter {
 		Self::emit_list(
 			func,
 			&[
-				I::ArrayNewFixed {
-					array_type_index: self.parts_array(),
-					array_size: parts,
-				},
+				I::ArrayNewFixed { array_type_index: self.parts_array(), array_size: parts },
 				I::RefNull(HeapType::Concrete(node)),
 				I::StructNew(node),
 			],
@@ -456,13 +414,7 @@ impl WasmGcEmitter {
 
 	/// The index of the id (`offset` 0) or the amount (1) of the contribution numbered by the i32 local `entry`
 	fn contribution(entry: u32, offset: i32) -> [I<'static>; 5] {
-		[
-			I::LocalGet(entry),
-			I::I32Const(1),
-			I::I32Shl,
-			I::I32Const(GAUSSIAN_PARTS as i32 + offset),
-			I::I32Add,
-		]
+		[I::LocalGet(entry), I::I32Const(1), I::I32Shl, I::I32Const(GAUSSIAN_PARTS as i32 + offset), I::I32Add]
 	}
 
 	/// `for counter in 0..limit { body }`, limit an i32 the instructions push
@@ -482,15 +434,7 @@ impl WasmGcEmitter {
 		body(func);
 		Self::emit_list(
 			func,
-			&[
-				I::LocalGet(counter),
-				I::I32Const(1),
-				I::I32Add,
-				I::LocalSet(counter),
-				I::Br(0),
-				I::End,
-				I::End,
-			],
+			&[I::LocalGet(counter), I::I32Const(1), I::I32Add, I::LocalSet(counter), I::Br(0), I::End, I::End],
 		);
 	}
 
@@ -501,13 +445,7 @@ impl WasmGcEmitter {
 		let array = self.parts_array();
 		let node = self.type_manager.node_type;
 		let node_ref = ValType::Ref(self.node_ref(false));
-		let params = vec![
-			ValType::F64,
-			self.parts_ref(),
-			ValType::F64,
-			self.parts_ref(),
-			ValType::F64,
-		];
+		let params = vec![ValType::F64, self.parts_ref(), ValType::F64, self.parts_ref(), ValType::F64];
 		let locals = vec![
 			self.parts_ref(),
 			ValType::I32,
@@ -546,14 +484,7 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &Self::contributions(b));
 			Self::emit_list(
 				f,
-				&[
-					I::I32Add,
-					I::I32Const(1),
-					I::I32Shl,
-					I::I32Add,
-					I::ArrayNewDefault(array),
-					I::LocalSet(sums),
-				],
+				&[I::I32Add, I::I32Const(1), I::I32Shl, I::I32Add, I::ArrayNewDefault(array), I::LocalSet(sums)],
 			);
 			Self::repeat(f, index, &Self::contributions(a), |f| {
 				set_in_sums(f, count, 0, &get(a, index, 0));
@@ -634,10 +565,7 @@ impl WasmGcEmitter {
 					I::LocalGet(count),
 					I::I32Const(1),
 					I::I32Shl,
-					I::ArrayCopy {
-						array_type_index_dst: array,
-						array_type_index_src: array,
-					},
+					I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
 					I::LocalGet(square_sum),
 					I::F64Sqrt,
 					I::LocalSet(square_sum),
@@ -676,15 +604,7 @@ impl WasmGcEmitter {
 			for (node, parts, value) in [(0, a, a_value), (1, b, b_value)] {
 				f.instruction(&I::LocalGet(node));
 				s.call(f, UNCERTAIN_PARTS);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalTee(parts),
-						I::ArrayLen,
-						I::I32Const(INTERVAL_PARTS as i32),
-						I::I32Eq,
-					],
-				);
+				Self::emit_list(f, &[I::LocalTee(parts), I::ArrayLen, I::I32Const(INTERVAL_PARTS as i32), I::I32Eq]);
 				s.is_uncertain(f, node);
 				f.instruction(&I::I32And);
 				s.emit_fail_if(f, INTERVAL_AND_GAUSSIAN);
@@ -708,10 +628,7 @@ impl WasmGcEmitter {
 				),
 				_ => (vec![one.clone()], vec![one]),
 			};
-			Self::emit_list(
-				f,
-				&[I::LocalGet(a_value), I::LocalGet(b_value), operation, I::LocalGet(a)],
-			);
+			Self::emit_list(f, &[I::LocalGet(a_value), I::LocalGet(b_value), operation, I::LocalGet(a)]);
 			Self::emit_list(f, &a_slope);
 			f.instruction(&I::LocalGet(b));
 			Self::emit_list(f, &b_slope);
@@ -723,39 +640,22 @@ impl WasmGcEmitter {
 		let array = self.parts_array();
 		let node_ref = ValType::Ref(self.node_ref(false));
 		let parts_ref = self.parts_ref();
-		self.runtime_function(
-			UNCERTAIN_PARTS,
-			vec![node_ref],
-			vec![parts_ref],
-			vec![ValType::F64],
-			|s, f| {
-				s.is_uncertain(f, 0);
-				Self::emit_list(f, &[I::If(BlockType::Empty)]);
-				s.emit_field(f, 0, 1);
-				Self::emit_list(
-					f,
-					&[
-						I::RefCastNonNull(HeapType::Concrete(array)),
-						I::Return,
-						I::End,
-						I::LocalGet(0),
-					],
-				);
-				s.call(f, TEXT_AS_FLOAT);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalTee(1),
-						I::LocalGet(1),
-						I::LocalGet(1),
-						I::ArrayNewFixed {
-							array_type_index: array,
-							array_size: 3,
-						},
-					],
-				);
-			},
-		);
+		self.runtime_function(UNCERTAIN_PARTS, vec![node_ref], vec![parts_ref], vec![ValType::F64], |s, f| {
+			s.is_uncertain(f, 0);
+			Self::emit_list(f, &[I::If(BlockType::Empty)]);
+			s.emit_field(f, 0, 1);
+			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(array)), I::Return, I::End, I::LocalGet(0)]);
+			s.call(f, TEXT_AS_FLOAT);
+			Self::emit_list(
+				f,
+				&[
+					I::LocalTee(1),
+					I::LocalGet(1),
+					I::LocalGet(1),
+					I::ArrayNewFixed { array_type_index: array, array_size: 3 },
+				],
+			);
+		});
 	}
 
 	/// uncertain_<op>(a, b) -> node: the operation on the values, the bounds the least and greatest of it on the four
@@ -856,15 +756,7 @@ impl WasmGcEmitter {
 			// the number in `x` to the place of `scale`: rounded half away from zero to whole units of 1/scale, or
 			// half to even at `decimals` digits after the point, as Rust's `{:.*}`
 			let fixed = |f: &mut Function| {
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(x),
-						I::F64Const(0.0.into()),
-						I::F64Lt,
-						I::If(BlockType::Empty),
-					],
-				);
+				Self::emit_list(f, &[I::LocalGet(x), I::F64Const(0.0.into()), I::F64Lt, I::If(BlockType::Empty)]);
 				put(f, b'-');
 				Self::emit_list(
 					f,
@@ -917,27 +809,12 @@ impl WasmGcEmitter {
 				write_decimal(f, &[I::LocalGet(digits), I::LocalGet(power), I::I64DivS]);
 				Self::emit_list(f, &[I::LocalGet(position), I::I32Add, I::LocalSet(position)]);
 				// the fraction with its leading zeros: power + fraction, its leading 1 overwritten by the point
-				write_decimal(
-					f,
-					&[
-						I::LocalGet(power),
-						I::LocalGet(digits),
-						I::LocalGet(power),
-						I::I64RemS,
-						I::I64Add,
-					],
-				);
+				write_decimal(f, &[I::LocalGet(power), I::LocalGet(digits), I::LocalGet(power), I::I64RemS, I::I64Add]);
 				f.instruction(&I::Drop);
 				put(f, b'.');
 				Self::emit_list(
 					f,
-					&[
-						I::LocalGet(position),
-						I::LocalGet(decimals),
-						I::I32Add,
-						I::LocalSet(position),
-						I::End,
-					],
+					&[I::LocalGet(position), I::LocalGet(decimals), I::I32Add, I::LocalSet(position), I::End],
 				);
 			};
 
@@ -994,12 +871,7 @@ impl WasmGcEmitter {
 			Self::emit_while(
 				f,
 				&too_large,
-				&[
-					I::LocalGet(scale),
-					I::F64Const(10.0.into()),
-					I::F64Div,
-					I::LocalSet(scale),
-				],
+				&[I::LocalGet(scale), I::F64Const(10.0.into()), I::F64Div, I::LocalSet(scale)],
 			);
 			Self::emit_list(
 				f,
@@ -1023,15 +895,7 @@ impl WasmGcEmitter {
 
 			Self::emit_list(f, &[I::I32Const(TEXT_BYTES), I::LocalSet(position)]);
 			s.emit_text_allocation(f, position, address);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(address),
-					I::LocalSet(position),
-					I::LocalGet(value),
-					I::LocalSet(x),
-				],
-			);
+			Self::emit_list(f, &[I::LocalGet(address), I::LocalSet(position), I::LocalGet(value), I::LocalSet(x)]);
 			fixed(f);
 			for byte in PLUS_MINUS_SEPARATOR.bytes() {
 				put(f, byte);
@@ -1100,16 +964,7 @@ impl WasmGcEmitter {
 					],
 				);
 				s.push_radius(f, parts);
-				Self::emit_list(
-					f,
-					&[
-						I::Else,
-						I::LocalGet(parts),
-						I::LocalGet(field),
-						I::ArrayGet(array),
-						I::End,
-					],
-				);
+				Self::emit_list(f, &[I::Else, I::LocalGet(parts), I::LocalGet(field), I::ArrayGet(array), I::End]);
 				s.call(f, "new_float");
 			},
 		);
@@ -1124,14 +979,7 @@ impl WasmGcEmitter {
 		if !self.should_emit_function(UNCERTAIN_NEW) {
 			return;
 		}
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(held),
-				I::RefAsNonNull,
-				I::I32Const(UNCERTAIN_FIELDS[field].0),
-			],
-		);
+		Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull, I::I32Const(UNCERTAIN_FIELDS[field].0)]);
 		self.call(func, UNCERTAIN_FIELD);
 		func.instruction(&I::BrOnNonNull(0));
 	}
@@ -1142,19 +990,9 @@ impl WasmGcEmitter {
 			return;
 		}
 		let node_ref = ValType::Ref(self.node_ref(false));
-		Self::emit_list(
-			func,
-			&[
-				I::Block(BlockType::Result(node_ref)),
-				I::LocalGet(local),
-				I::I32Const(VALUE),
-			],
-		);
+		Self::emit_list(func, &[I::Block(BlockType::Result(node_ref)), I::LocalGet(local), I::I32Const(VALUE)]);
 		self.call(func, UNCERTAIN_FIELD);
-		Self::emit_list(
-			func,
-			&[I::BrOnNonNull(0), I::LocalGet(local), I::End, I::LocalSet(local)],
-		);
+		Self::emit_list(func, &[I::BrOnNonNull(0), I::LocalGet(local), I::End, I::LocalSet(local)]);
 	}
 
 	/// After numbers_similar, before values_similar
@@ -1196,10 +1034,8 @@ impl WasmGcEmitter {
 	/// `certainly(y < x)`, `possibly(y < x)` (crate::numbers::uncertain::lower_certainty): an i64 0 or 1
 	pub(in crate::wasm_emitter) fn emit_certainty(&mut self, func: &mut Function, word: &str, comparison: &Node) {
 		let Node::Key(left, op, right) = comparison.drop_meta() else {
-			return self.emit_type_error(
-				func,
-				format!("{word} compares with <, >, <= or >=, not {}", comparison.serialize()),
-			);
+			return self
+				.emit_type_error(func, format!("{word} compares with <, >, <= or >=, not {}", comparison.serialize()));
 		};
 		if !op.is_ordering() {
 			return self.emit_type_error(func, format!("{word} compares with <, >, <= or >=, not {op}"));
@@ -1243,10 +1079,7 @@ impl WasmGcEmitter {
 		mode: CertaintyMode,
 		(pointer, length): (u32, u32),
 	) {
-		let op_index = ORDERINGS
-			.iter()
-			.position(|ordering| *ordering == op)
-			.expect("an ordering");
+		let op_index = ORDERINGS.iter().position(|ordering| *ordering == op).expect("an ordering");
 		Self::emit_list(
 			func,
 			&[
@@ -1272,21 +1105,8 @@ impl WasmGcEmitter {
 			.map(|function| function.call_index as u32);
 		let warned = host_warn.map(|_| self.declare_global_of(ValType::I32, ConstExpr::i32_const(0)));
 		let node_ref = ValType::Ref(self.node_ref(false));
-		let params = vec![
-			node_ref,
-			node_ref,
-			ValType::I32,
-			ValType::I32,
-			ValType::I32,
-			ValType::I32,
-		];
-		let locals = vec![
-			self.parts_ref(),
-			self.parts_ref(),
-			ValType::F64,
-			ValType::F64,
-			ValType::I32,
-		];
+		let params = vec![node_ref, node_ref, ValType::I32, ValType::I32, ValType::I32, ValType::I32];
+		let locals = vec![self.parts_ref(), self.parts_ref(), ValType::F64, ValType::F64, ValType::I32];
 		self.runtime_function(UNCERTAIN_ORDER, params, vec![ValType::I32], locals, |s, f| {
 			let (a, b, op, mode, pointer, length) = (0, 1, 2, 3, 4, 5);
 			let (a_parts, b_parts, x, y, certain) = (6, 7, 8, 9, 10);
@@ -1332,26 +1152,9 @@ impl WasmGcEmitter {
 
 			s.is_uncertain(f, a);
 			s.is_uncertain(f, b);
-			Self::emit_list(
-				f,
-				&[
-					I::I32Or,
-					I::I32Eqz,
-					I::If(BlockType::Empty),
-					I::LocalGet(a),
-					I::LocalGet(b),
-				],
-			);
+			Self::emit_list(f, &[I::I32Or, I::I32Eqz, I::If(BlockType::Empty), I::LocalGet(a), I::LocalGet(b)]);
 			s.call(f, NODE_ORDER);
-			Self::emit_list(
-				f,
-				&[
-					I::F64ConvertI32S,
-					I::LocalSet(x),
-					I::F64Const(0.0.into()),
-					I::LocalSet(y),
-				],
-			);
+			Self::emit_list(f, &[I::F64ConvertI32S, I::LocalSet(x), I::F64Const(0.0.into()), I::LocalSet(y)]);
 			compare(f);
 			Self::emit_list(f, &[I::Return, I::End]);
 			for (node, parts) in [(a, a_parts), (b, b_parts)] {
@@ -1372,15 +1175,7 @@ impl WasmGcEmitter {
 				],
 			);
 			compare_ends(f, [LOW, HIGH, HIGH, LOW]);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(mode),
-					I::I32Const(CertaintyMode::Possibly as i32),
-					I::I32Eq,
-					I::BrIf(0),
-				],
-			);
+			Self::emit_list(f, &[I::LocalGet(mode), I::I32Const(CertaintyMode::Possibly as i32), I::I32Eq, I::BrIf(0)]);
 			match (host_warn, warned) {
 				// bare: an overlap (possible, not certain) warns once
 				(Some(host_warn), Some(warned)) => {

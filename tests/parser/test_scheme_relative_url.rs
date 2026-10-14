@@ -16,12 +16,6 @@ fn natively_it_is_fetched_over_https() {
 	use warp::extensions::utils::with_default_scheme;
 	assert_eq!(with_default_scheme(LIBC_HEADER), format!("https{LIBC_HEADER}"));
 	assert_eq!(with_default_scheme("http://pannous.com"), "http://pannous.com");
-	is!(
-		&format!("header = fetch \"{LIBC_HEADER}\"\nheader.contains(\"size_t\")"),
-		true
-	);
-	is!(
-		&format!("header = fetch {LIBC_HEADER}\nheader.contains(\"size_t\")"),
-		true
-	);
+	is!(&format!("header = fetch \"{LIBC_HEADER}\"\nheader.contains(\"size_t\")"), true);
+	is!(&format!("header = fetch {LIBC_HEADER}\nheader.contains(\"size_t\")"), true);
 }

@@ -8,11 +8,7 @@ const GOLF: &str = "samples/golf";
 const MINIMUM_SOLUTIONS: usize = 38; // 19 holes, each solved twice
 
 fn trimmed(text: &str) -> String {
-	text.trim_end()
-		.lines()
-		.map(str::trim_end)
-		.collect::<Vec<_>>()
-		.join("\n")
+	text.trim_end().lines().map(str::trim_end).collect::<Vec<_>>().join("\n")
 }
 
 fn printed_by(solution: &Path, arguments: &[String]) -> String {
@@ -49,11 +45,7 @@ fn every_golf_solution_prints_its_holes_output() {
 		.filter(|path| path.extension().is_some_and(|extension| extension == "warp"))
 		.collect();
 	solutions.sort();
-	assert!(
-		solutions.len() >= MINIMUM_SOLUTIONS,
-		"only {} solutions in {GOLF}",
-		solutions.len()
-	);
+	assert!(solutions.len() >= MINIMUM_SOLUTIONS, "only {} solutions in {GOLF}", solutions.len());
 	let failures: Vec<String> = solutions.iter().filter_map(|solution| failure(solution)).collect();
 	assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

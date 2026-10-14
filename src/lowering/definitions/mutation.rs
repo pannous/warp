@@ -95,18 +95,12 @@ pub fn mutated_variable(call: &Node) -> Option<&Node> {
 
 /// `x!`: evaluated alone, assigned the result of the call it is the argument of
 pub fn marked(name: Node) -> Node {
-	Node::Meta {
-		node: Box::new(name),
-		data: Box::new(Node::key(MUTATED_MARK, Node::True)),
-	}
+	Node::Meta { node: Box::new(name), data: Box::new(Node::key(MUTATED_MARK, Node::True)) }
 }
 
 /// `x!!`: like `x!`, and a block runs fully (blocks.rs)
 pub fn marked_fully(name: Node) -> Node {
-	Node::Meta {
-		node: Box::new(name),
-		data: Box::new(Node::key(MUTATED_MARK, Node::int(FULLY))),
-	}
+	Node::Meta { node: Box::new(name), data: Box::new(Node::key(MUTATED_MARK, Node::int(FULLY))) }
 }
 const FULLY: i64 = 2;
 
@@ -116,10 +110,9 @@ pub(crate) fn bang_target(node: &Node) -> Option<(Node, bool)> {
 		return None;
 	};
 	match data.as_ref() {
-		Node::Key(key, _, value) if key.name() == MUTATED_MARK => Some((
-			inner.drop_meta().clone(),
-			matches!(value.drop_meta(), Node::Number(n) if *n == FULLY),
-		)),
+		Node::Key(key, _, value) if key.name() == MUTATED_MARK => {
+			Some((inner.drop_meta().clone(), matches!(value.drop_meta(), Node::Number(n) if *n == FULLY)))
+		}
 		_ => bang_target(inner),
 	}
 }
@@ -199,10 +192,7 @@ fn strip_marks(node: Node, unwrap: bool) -> Node {
 	};
 	match node {
 		Node::List(items, bracket, separator) => Node::List(
-			items
-				.into_iter()
-				.map(|item| if is_marked(&item) { plain(item) } else { item })
-				.collect(),
+			items.into_iter().map(|item| if is_marked(&item) { plain(item) } else { item }).collect(),
 			bracket,
 			separator,
 		),
@@ -229,9 +219,7 @@ fn unwrapped(name: Node) -> Node {
 	}
 	if !is_name(&name) {
 		let written = crate::normalize::operand_text(&name);
-		return crate::node::error(&format!(
-			"{written} is only known at run time: `!` needs a constant block"
-		));
+		return crate::node::error(&format!("{written} is only known at run time: `!` needs a constant block"));
 	}
 	call(UNWRAP, vec![name])
 }

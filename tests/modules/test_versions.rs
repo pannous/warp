@@ -30,10 +30,7 @@ fn use_requires_a_version_of_a_package() {
 	is!("use uniscript version 1.0.0; uniscript(\"<:alpha>\")", "α");
 	// the tags are pannous/uniscript's live list: new releases join it (v1.0.1), the known ones stay
 	let missing = warp::wasm_emitter::eval("use uniscript >= 9.0.0; 1").serialize();
-	assert!(
-		missing.contains("package uniscript has no version >= 9.0.0 (tagged: 0.1.0, 1.0.0"),
-		"{missing}"
-	);
+	assert!(missing.contains("package uniscript has no version >= 9.0.0 (tagged: 0.1.0, 1.0.0"), "{missing}");
 }
 
 /// a version the default branch does not have comes from the git tag `v0.1.0`, into packages/uniscript@0.1.0
@@ -56,14 +53,8 @@ fn tagged_version_literals() {
 /// one asking for another version is the error naming both
 #[test]
 fn a_package_used_twice_is_loaded_once() {
-	is!(
-		"use uniscript version 1.0.0; use uniscript from 1.0; uniscript(\"<:alpha>\")",
-		"α"
-	);
+	is!("use uniscript version 1.0.0; use uniscript from 1.0; uniscript(\"<:alpha>\")", "α");
 	is!("use uniscript; use uniscript >= 1.0; uniscript(\"<:alpha>\")", "α");
 	let clash = warp::wasm_emitter::eval("use uniscript; use uniscript version 1.0.0; 1").serialize();
-	assert!(
-		clash.contains("use uniscript version 1.0.0: uniscript ") && clash.contains(" is used already"),
-		"{clash}"
-	);
+	assert!(clash.contains("use uniscript version 1.0.0: uniscript ") && clash.contains(" is used already"), "{clash}");
 }

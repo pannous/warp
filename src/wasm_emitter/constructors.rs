@@ -68,10 +68,7 @@ impl WasmGcEmitter {
 		});
 		let node_ref = Ref(self.node_ref(false));
 		self.runtime_function(AS_BOOL, vec![node_ref], vec![node_ref], vec![], |s, func| {
-			let field = |index: u32| I::StructGet {
-				struct_type_index: node_type,
-				field_index: index,
-			};
+			let field = |index: u32| I::StructGet { struct_type_index: node_type, field_index: index };
 			Self::emit_list(
 				func,
 				&[
@@ -89,10 +86,7 @@ impl WasmGcEmitter {
 					I::LocalGet(0),
 					field(1),
 					I::RefCastNonNull(HeapType::Concrete(i64_box)),
-					I::StructGet {
-						struct_type_index: i64_box,
-						field_index: 0,
-					},
+					I::StructGet { struct_type_index: i64_box, field_index: 0 },
 				],
 			);
 			s.call(func, NEW_BOOL);
@@ -110,23 +104,13 @@ pub fn emit_all_constructors(emitter: &mut WasmGcEmitter) {
 	use Instruction::{LocalGet, RefNull, StructNew};
 	use KindField::{Plain, WithInfo};
 	let types = &emitter.type_manager;
-	let (node_type, i64_box, f64_box, string) = (
-		types.node_type,
-		types.i64_box_type,
-		types.f64_box_type,
-		types.string_type,
-	);
+	let (node_type, i64_box, f64_box, string) =
+		(types.node_type, types.i64_box_type, types.f64_box_type, types.string_type);
 	let node = Ref(emitter.node_ref(false));
 	let nullable_node = Ref(emitter.node_ref(true));
 	let no_value = || RefNull(HeapType::Concrete(node_type));
 
-	emitter.emit_node_constructor(
-		"new_empty",
-		Kind::Empty,
-		vec![],
-		Plain,
-		vec![RefNull(any_heap_type()), no_value()],
-	);
+	emitter.emit_node_constructor("new_empty", Kind::Empty, vec![], Plain, vec![RefNull(any_heap_type()), no_value()]);
 	if emitter.int_runtime() {
 		emitter.emit_new_unbounded_int();
 	} else {
@@ -155,13 +139,7 @@ pub fn emit_all_constructors(emitter: &mut WasmGcEmitter) {
 	);
 	let text = || vec![LocalGet(0), LocalGet(1), StructNew(string), no_value()];
 	emitter.emit_node_constructor("new_text", Kind::Text, vec![ValType::I32, ValType::I32], Plain, text());
-	emitter.emit_node_constructor(
-		"new_symbol",
-		Kind::Symbol,
-		vec![ValType::I32, ValType::I32],
-		Plain,
-		text(),
-	);
+	emitter.emit_node_constructor("new_symbol", Kind::Symbol, vec![ValType::I32, ValType::I32], Plain, text());
 	emitter.emit_node_constructor(
 		"new_key",
 		Kind::Key,
@@ -169,13 +147,7 @@ pub fn emit_all_constructors(emitter: &mut WasmGcEmitter) {
 		WithInfo,
 		vec![LocalGet(0), LocalGet(1)],
 	);
-	emitter.emit_node_constructor(
-		"new_type",
-		Kind::TypeDef,
-		vec![node, node],
-		Plain,
-		vec![LocalGet(0), LocalGet(1)],
-	);
+	emitter.emit_node_constructor("new_type", Kind::TypeDef, vec![node, node], Plain, vec![LocalGet(0), LocalGet(1)]);
 	emitter.emit_node_constructor(
 		"new_list",
 		Kind::List,

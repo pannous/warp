@@ -4,19 +4,14 @@
 use crate::is;
 
 fn lowered(code: &str) -> String {
-	warp::pipeline::lower(code)
-		.expect("a program that needs a module")
-		.serialize()
+	warp::pipeline::lower(code).expect("a program that needs a module").serialize()
 }
 
 #[test]
 #[ignore = "cleanup-edge: host-word: pins the old host words signal_at/signal_daily/signal_every; one_host_word_starts_every_timer checks signal_listen"]
 fn a_clipboard_listener_watches_the_change_count() {
 	let code = lowered("on clipboard change { print \"copied\" }");
-	assert!(
-		code.contains("clipboard count") && code.contains("on·shared") && code.contains("signal_every"),
-		"{code}"
-	);
+	assert!(code.contains("clipboard count") && code.contains("on·shared") && code.contains("signal_every"), "{code}");
 	assert!(!code.contains("clipboard_text"), "listening reads no content: {code}");
 }
 

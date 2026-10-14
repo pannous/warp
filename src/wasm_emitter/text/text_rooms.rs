@@ -15,11 +15,7 @@ const ROOM_BYTES: i32 = 8;
 /// A shorter text is copied without a room: copying it costs no more than the room would save
 const SHORTEST_WITH_ROOM: i32 = 64;
 /// Where a room's text ends, where the room ends (the table needs no alignment)
-const USED: MemArg = MemArg {
-	offset: 0,
-	align: 0,
-	memory_index: 0,
-};
+const USED: MemArg = MemArg { offset: 0, align: 0, memory_index: 0 };
 const END: MemArg = MemArg { offset: 4, ..USED };
 
 impl WasmGcEmitter {
@@ -119,12 +115,7 @@ impl WasmGcEmitter {
 		let bump_heap = |amount: u32| [I::GlobalGet(heap), I::LocalGet(amount), I::I32Add, I::GlobalSet(heap)];
 		Self::emit_list(
 			func,
-			&[
-				I::LocalGet(length),
-				I::I32Const(SHORTEST_WITH_ROOM),
-				I::I32GeU,
-				I::If(BlockType::Empty),
-			],
+			&[I::LocalGet(length), I::I32Const(SHORTEST_WITH_ROOM), I::I32GeU, I::If(BlockType::Empty)],
 		);
 		self.emit_memory_room(func, heap, length);
 		Self::emit_list(func, &bump_heap(length));

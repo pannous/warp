@@ -15,10 +15,7 @@ pub fn lower(node: Node) -> Node {
 		return node;
 	}
 	let defined = crate::library_words::defined_names(&node);
-	let words: Vec<&str> = [DIR_WORD, METHODS_WORD]
-		.into_iter()
-		.filter(|word| !defined.contains(*word))
-		.collect();
+	let words: Vec<&str> = [DIR_WORD, METHODS_WORD].into_iter().filter(|word| !defined.contains(*word)).collect();
 	listed_names(node, &words, &defined)
 }
 

@@ -11,8 +11,5 @@ fn counted_parameter_joined_to_a_text_is_a_text() {
 
 #[test]
 fn std_text_runs_as_a_program() {
-	is!(
-		"pad_left(t, width) := if count(t) >= width then t else (width - count(t)) times \" \" + t; 1",
-		1
-	);
+	is!("pad_left(t, width) := if count(t) >= width then t else (width - count(t)) times \" \" + t; 1", 1);
 }

@@ -9,11 +9,7 @@ pub(super) fn rendered_components(node: Node) -> Node {
 	let mut components = vec![];
 	node.visit(&mut |part| {
 		if let Node::Type { name, body } = part {
-			if class_items(body)
-				.iter()
-				.filter_map(method_parts)
-				.any(|(method, _, _)| method == RENDER_WORD)
-			{
+			if class_items(body).iter().filter_map(method_parts).any(|(method, _, _)| method == RENDER_WORD) {
 				components.push(name.drop_meta().name());
 			}
 		}
@@ -38,14 +34,8 @@ pub(super) fn with_render_aliases(node: Node) -> Node {
 	match node {
 		Node::Type { name, body } => {
 			let items = class_items(&body);
-			let methods: Vec<String> = items
-				.iter()
-				.filter_map(method_parts)
-				.map(|(method, _, _)| method)
-				.collect();
-			let alias = RENDER_ALIASES
-				.iter()
-				.find(|alias| methods.iter().any(|method| method == *alias));
+			let methods: Vec<String> = items.iter().filter_map(method_parts).map(|(method, _, _)| method).collect();
+			let alias = RENDER_ALIASES.iter().find(|alias| methods.iter().any(|method| method == *alias));
 			match alias.filter(|_| !methods.iter().any(|method| method == RENDER_WORD)) {
 				Some(alias) => {
 					crate::errors::diagnostic::note_alias(alias, RENDER_WORD);
@@ -56,10 +46,7 @@ pub(super) fn with_render_aliases(node: Node) -> Node {
 							_ => item,
 						})
 						.collect();
-					Node::Type {
-						name,
-						body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)),
-					}
+					Node::Type { name, body: Box::new(Node::List(items, Bracket::Curly, Separator::Semicolon)) }
 				}
 				None => Node::Type { name, body },
 			}
@@ -75,13 +62,9 @@ pub(super) fn with_rendered_children(node: Node, components: &[String]) -> Node 
 			if crate::web::markup::is_element_tag(&tag.drop_meta().name())
 				&& matches!(children.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
 		{
-			let Node::List(items, bracket, separator) = children.drop_meta().clone() else {
-				unreachable!("guarded")
-			};
-			let items = items
-				.into_iter()
-				.map(|item| rendered(with_rendered_children(item, components), components))
-				.collect();
+			let Node::List(items, bracket, separator) = children.drop_meta().clone() else { unreachable!("guarded") };
+			let items =
+				items.into_iter().map(|item| rendered(with_rendered_children(item, components), components)).collect();
 			Node::Key(tag, op, Box::new(Node::List(items, bracket, separator)))
 		}
 		other => other.map_children(|child| with_rendered_children(child, components)),

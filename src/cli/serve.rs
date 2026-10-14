@@ -8,9 +8,8 @@ pub(crate) const DEFAULT_PROGRAMS: [&str; 2] = ["app.warp", "main.warp"];
 /// the port (8080 when none is given)
 #[cfg(not(test))]
 pub(crate) fn served_program(arguments: &[String]) -> Result<(&str, u16), String> {
-	let (ports, files): (Vec<&String>, Vec<&String>) = arguments
-		.iter()
-		.partition(|argument| argument.chars().all(|digit| digit.is_ascii_digit()));
+	let (ports, files): (Vec<&String>, Vec<&String>) =
+		arguments.iter().partition(|argument| argument.chars().all(|digit| digit.is_ascii_digit()));
 	let port = match ports.as_slice() {
 		[] => SERVE_PORT,
 		[port] => port.parse().map_err(|_| format!("{port} is no port"))?,

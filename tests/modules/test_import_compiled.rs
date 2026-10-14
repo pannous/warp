@@ -55,10 +55,7 @@ fn a_compiled_fixtures_values_and_classes_cross() {
 #[test]
 fn a_module_for_any_host_can_be_read_by_the_browser() {
 	let module = warp::pipeline::for_any_host(|| warp::pipeline::compile(SHAPES)).expect("a module");
-	assert!(module
-		.bytes
-		.windows("reflect_data".len())
-		.any(|window| window == b"reflect_data"));
+	assert!(module.bytes.windows("reflect_data".len()).any(|window| window == b"reflect_data"));
 }
 
 // card import-shared: an instance the program passes is the module's too, not a copy: a change the module makes is
@@ -73,10 +70,7 @@ fn an_instance_passed_to_a_compiled_module_is_shared() {
 	);
 	is!(&format!("{moving}p = P(1, 2)\nmoved(p)\np.x"), 9);
 	is!(&format!("{moving}q = P(1, 2)\nr = q\nmoved(q)\nr.x"), 9);
-	is!(
-		&format!("{moving}numbers = [1, 2, 3]\ngrown(numbers)\ncount(numbers)"),
-		4
-	);
+	is!(&format!("{moving}numbers = [1, 2, 3]\ngrown(numbers)\ncount(numbers)"), 4);
 }
 
 // the same in the browser, through the fixture's moved

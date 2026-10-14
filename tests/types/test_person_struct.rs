@@ -60,9 +60,7 @@ fn test_person_struct_roundtrip() {
 	// Verify age = 30
 	let get_age = instance.get_func(&mut *store.borrow_mut(), "get_age").unwrap();
 	let mut age_result = vec![Val::I64(0)];
-	get_age
-		.call(&mut *store.borrow_mut(), &[person], &mut age_result)
-		.unwrap();
+	get_age.call(&mut *store.borrow_mut(), &[person], &mut age_result).unwrap();
 	assert_eq!(age_result[0].unwrap_i64(), 30, "Age should be 30");
 
 	// Verify name = "Alice"
@@ -71,12 +69,8 @@ fn test_person_struct_roundtrip() {
 
 	let mut ptr_result = vec![Val::I32(0)];
 	let mut len_result = vec![Val::I32(0)];
-	get_name_ptr
-		.call(&mut *store.borrow_mut(), &[person], &mut ptr_result)
-		.unwrap();
-	get_name_len
-		.call(&mut *store.borrow_mut(), &[person], &mut len_result)
-		.unwrap();
+	get_name_ptr.call(&mut *store.borrow_mut(), &[person], &mut ptr_result).unwrap();
+	get_name_len.call(&mut *store.borrow_mut(), &[person], &mut len_result).unwrap();
 
 	let ptr = ptr_result[0].unwrap_i32();
 	let len = len_result[0].unwrap_i32();

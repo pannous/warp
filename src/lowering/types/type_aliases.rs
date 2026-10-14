@@ -28,10 +28,7 @@ fn declared_aliases(node: &Node) -> HashMap<String, String> {
 /// Each alias with the type it names in the end (`type Paint = Color`: Paint, Color)
 pub(crate) fn resolved_aliases(node: &Node) -> HashMap<String, String> {
 	let aliases = declared_aliases(node);
-	aliases
-		.keys()
-		.filter_map(|name| Some((name.clone(), target(name, &aliases)?)))
-		.collect()
+	aliases.keys().filter_map(|name| Some((name.clone(), target(name, &aliases)?))).collect()
 }
 
 /// `type Name = string`: (Name, string)
@@ -68,16 +65,10 @@ fn resolved(node: Node, aliases: &HashMap<String, String>) -> Node {
 	match node {
 		declaration @ Node::Key(..) if alias(&declaration).is_some() => declaration,
 		Node::Type { name, body } if body.is_empty_node() => match target(&name.drop_meta().name(), aliases) {
-			Some(target) => Node::Type {
-				name: Box::new(Node::Symbol(target)),
-				body,
-			},
+			Some(target) => Node::Type { name: Box::new(Node::Symbol(target)), body },
 			None => Node::Type { name, body },
 		},
-		Node::Type { name, body } => Node::Type {
-			name,
-			body: Box::new(resolved(*body, aliases)),
-		},
+		Node::Type { name, body } => Node::Type { name, body: Box::new(resolved(*body, aliases)) },
 		// `x is Age` tests the type Age names; `x == Age` keeps the comparison
 		Node::Key(subject, Op::Eq, right) if is_test(&subject) => {
 			key(resolved(*subject, aliases), Op::Eq, annotated(*right, aliases))

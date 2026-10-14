@@ -11,10 +11,7 @@ fn indented_either_way(code: &str, value: i64) {
 #[test]
 fn an_end_in_a_comment_closes_no_else() {
 	is!("t(n) := if n == 1 then \"a\" else n\n\n// this would end it\nt(2)", 2);
-	is!(
-		"t(n) := if n == 1 then \"a\" else n\n\n/* the end */\nu(n) := n + 1\nu(2)",
-		3
-	);
+	is!("t(n) := if n == 1 then \"a\" else n\n\n/* the end */\nu(n) := n + 1\nu(2)", 3);
 }
 
 #[test]

@@ -74,12 +74,7 @@ impl WasmGcEmitter {
 	/// The zone functions, when a program makes a zoned time; after emit_times_runtime, whose calendar they use
 	pub(in crate::wasm_emitter) fn emit_time_zones(&mut self) {
 		// required, not merely emitted, as time arithmetic (uses_times): their refusals mark the text constructors used
-		if !self.uses_times()
-			|| !self
-				.ctx
-				.required_functions
-				.contains(super::super::time::times::ZONE_NAMES)
-		{
+		if !self.uses_times() || !self.ctx.required_functions.contains(super::super::time::times::ZONE_NAMES) {
 			return;
 		}
 		self.emit_zone_rule();
@@ -90,32 +85,26 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_zone_rule(&mut self) {
-		self.runtime_function(
-			ZONE_RULE,
-			vec![ValType::I64],
-			vec![ValType::I64; 2],
-			vec![ValType::I64; 2],
-			|_, f| {
-				let (zone, standard, dst) = (0, 1, 2);
-				for (index, known) in ZONES.iter().enumerate() {
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(zone),
-							I::I64Const(index as i64),
-							I::I64Eq,
-							I::If(BlockType::Empty),
-							I::I64Const(known.standard),
-							I::LocalSet(standard),
-							I::I64Const(dst_code(known.dst)),
-							I::LocalSet(dst),
-							I::End,
-						],
-					);
-				}
-				Self::emit_list(f, &[I::LocalGet(standard), I::LocalGet(dst)]);
-			},
-		);
+		self.runtime_function(ZONE_RULE, vec![ValType::I64], vec![ValType::I64; 2], vec![ValType::I64; 2], |_, f| {
+			let (zone, standard, dst) = (0, 1, 2);
+			for (index, known) in ZONES.iter().enumerate() {
+				Self::emit_list(
+					f,
+					&[
+						I::LocalGet(zone),
+						I::I64Const(index as i64),
+						I::I64Eq,
+						I::If(BlockType::Empty),
+						I::I64Const(known.standard),
+						I::LocalSet(standard),
+						I::I64Const(dst_code(known.dst)),
+						I::LocalSet(dst),
+						I::End,
+					],
+				);
+			}
+			Self::emit_list(f, &[I::LocalGet(standard), I::LocalGet(dst)]);
+		});
 	}
 
 	/// The Sunday on or before the last day of `month`, as calendar.rs Date::last_sunday; the day count on the stack
@@ -175,15 +164,7 @@ impl WasmGcEmitter {
 				s.call(f, CIVIL_FROM_DAYS);
 				Self::emit_list(f, &[I::Drop, I::Drop, I::LocalSet(year)]);
 				let day_seconds = |f: &mut Function| Self::emit_list(f, &[I::I64Const(DAY_SECONDS), I::I64Mul]);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(dst),
-						I::I64Const(DST_EUROPE),
-						I::I64Eq,
-						I::If(BlockType::Empty),
-					],
-				);
+				Self::emit_list(f, &[I::LocalGet(dst), I::I64Const(DST_EUROPE), I::I64Eq, I::If(BlockType::Empty)]);
 				// last Sunday of March to last Sunday of October, switching at 01:00 UTC
 				s.emit_last_sunday(f, year, MARCH, spare);
 				day_seconds(f);
@@ -196,13 +177,7 @@ impl WasmGcEmitter {
 				day_seconds(f);
 				Self::emit_list(
 					f,
-					&[
-						I::I64Const(2 * HOUR),
-						I::I64Add,
-						I::LocalGet(standard),
-						I::I64Sub,
-						I::LocalSet(start),
-					],
+					&[I::I64Const(2 * HOUR), I::I64Add, I::LocalGet(standard), I::I64Sub, I::LocalSet(start)],
 				);
 				s.emit_nth_sunday(f, year, NOVEMBER, 1, spare);
 				day_seconds(f);
@@ -346,38 +321,32 @@ impl WasmGcEmitter {
 	/// The zoned time at an instant: its zone and offset in the info bits, as time.rs `time_info`
 	fn emit_zoned_node(&mut self) {
 		let node_ref = ValType::Ref(self.node_ref(false));
-		self.runtime_function(
-			ZONED_NODE,
-			vec![ValType::I64; 2],
-			vec![node_ref],
-			vec![ValType::I64; 2],
-			|s, f| {
-				let (zone, instant, kind, spare) = (0, 1, 2, 3);
-				let (node, i64_box) = (s.type_manager.node_type, s.type_manager.i64_box_type);
-				Self::emit_floor_split(f, instant, NANOS_PER_SECOND, kind, spare);
-				Self::emit_list(f, &[I::LocalGet(zone), I::LocalGet(kind)]);
-				s.call(f, ZONE_OFFSET_AT);
-				Self::emit_list(
-					f,
-					&[
-						I::I64Const(MINUTE),
-						I::I64DivS,
-						I::I64Const(KIND_BITS + OFFSET_SHIFT),
-						I::I64Shl,
-						I::LocalGet(zone),
-						I::I64Const(KIND_BITS + TIME_FORM_BITS),
-						I::I64Shl,
-						I::I64Or,
-						I::I64Const(((TimeForm::Zoned as i64) << KIND_BITS) | Kind::Time as i64),
-						I::I64Or,
-						I::LocalGet(instant),
-						I::StructNew(i64_box),
-						I::RefNull(HeapType::Concrete(node)),
-						I::StructNew(node),
-					],
-				);
-			},
-		);
+		self.runtime_function(ZONED_NODE, vec![ValType::I64; 2], vec![node_ref], vec![ValType::I64; 2], |s, f| {
+			let (zone, instant, kind, spare) = (0, 1, 2, 3);
+			let (node, i64_box) = (s.type_manager.node_type, s.type_manager.i64_box_type);
+			Self::emit_floor_split(f, instant, NANOS_PER_SECOND, kind, spare);
+			Self::emit_list(f, &[I::LocalGet(zone), I::LocalGet(kind)]);
+			s.call(f, ZONE_OFFSET_AT);
+			Self::emit_list(
+				f,
+				&[
+					I::I64Const(MINUTE),
+					I::I64DivS,
+					I::I64Const(KIND_BITS + OFFSET_SHIFT),
+					I::I64Shl,
+					I::LocalGet(zone),
+					I::I64Const(KIND_BITS + TIME_FORM_BITS),
+					I::I64Shl,
+					I::I64Or,
+					I::I64Const(((TimeForm::Zoned as i64) << KIND_BITS) | Kind::Time as i64),
+					I::I64Or,
+					I::LocalGet(instant),
+					I::StructNew(i64_box),
+					I::RefNull(HeapType::Concrete(node)),
+					I::StructNew(node),
+				],
+			);
+		});
 	}
 
 	fn emit_time_in_zone(&mut self) {
@@ -441,15 +410,7 @@ impl WasmGcEmitter {
 		self.call(f, ZONE_RESOLVE);
 		Self::emit_list(f, &[I::LocalSet(status), I::LocalSet(wall)]);
 		for (code, message) in [(SKIPPED, SKIPPED_MESSAGE), (AMBIGUOUS, AMBIGUOUS_MESSAGE)] {
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(status),
-					I::I64Const(code),
-					I::I64Eq,
-					I::If(BlockType::Empty),
-				],
-			);
+			Self::emit_list(f, &[I::LocalGet(status), I::I64Const(code), I::I64Eq, I::If(BlockType::Empty)]);
 			self.emit_time_failure(f, message);
 			f.instruction(&I::End);
 		}

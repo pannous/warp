@@ -9,9 +9,6 @@ fn appending_in_a_loop_is_linear() {
 
 #[test]
 fn a_text_grown_in_place_leaves_its_earlier_value() {
-	is!(
-		"a = \"x\"; for i in 0..2 { a += \"y\" }; b = a + \"c\"; c = a + \"d\"; b + \" \" + c",
-		"xyyc xyyd"
-	);
+	is!("a = \"x\"; for i in 0..2 { a += \"y\" }; b = a + \"c\"; c = a + \"d\"; b + \" \" + c", "xyyc xyyd");
 	is!("a = \"x\"; for i in 0..2 { a += \"y\" }; b = a + \"c\"; a", "xyy");
 }

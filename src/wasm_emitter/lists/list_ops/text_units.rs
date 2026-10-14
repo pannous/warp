@@ -166,10 +166,7 @@ impl WasmGcEmitter {
 			f.instruction(&I::LocalSet(next));
 			// joins: an extending mark, a pictograph after ZWJ, the second regional indicator of a flag
 			Self::emit_in_ranges(f, next, &GRAPHEME_EXTEND);
-			Self::emit_list(
-				f,
-				&[I::LocalGet(previous), I32Const(ZERO_WIDTH_JOINER as i32), I::I32Eq],
-			);
+			Self::emit_list(f, &[I::LocalGet(previous), I32Const(ZERO_WIDTH_JOINER as i32), I::I32Eq]);
 			Self::emit_in_ranges(f, next, &GRAPHEME_PICTOGRAPHIC);
 			Self::emit_list(f, &[I::I32And, I::I32Or, I::LocalGet(unpaired)]);
 			Self::emit_in_ranges(f, next, &[REGIONAL_INDICATORS]);
@@ -283,269 +280,243 @@ impl WasmGcEmitter {
 		// on from the nearest text cursor at or before the index in the same text, or back from one past it (a look
 		// back, `src#(i-1)`, text_grapheme_back), then becomes the newest cursor: a scan takes linear time
 		let locals = vec![int, int, int, long, long, int, long];
-		self.runtime_function(
-			"text_grapheme_offset",
-			vec![node_ref, long],
-			vec![int],
-			locals,
-			|s, f| {
-				let (pointer, end, start, wanted, base, back, back_index) = (2, 3, 4, 5, 6, 7, 8);
-				Self::emit_index_compare(f, I::I64LtS);
-				s.emit_fail_if(f, "index_out_of_range");
-				s.emit_text_bounds(f, pointer, end);
+		self.runtime_function("text_grapheme_offset", vec![node_ref, long], vec![int], locals, |s, f| {
+			let (pointer, end, start, wanted, base, back, back_index) = (2, 3, 4, 5, 6, 7, 8);
+			Self::emit_index_compare(f, I::I64LtS);
+			s.emit_fail_if(f, "index_out_of_range");
+			s.emit_text_bounds(f, pointer, end);
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(pointer),
+					I::LocalSet(start),
+					I::LocalGet(1),
+					I::LocalSet(wanted),
+					I::I64Const(1),
+					I::LocalSet(base),
+				],
+			);
+			let cursors = s.text_cursors();
+			for &(text, index, at) in &cursors {
+				let in_this_text = [
+					I::GlobalGet(text),
+					I::LocalGet(start),
+					I::I32Eq,
+					I::GlobalGet(at),
+					I::LocalGet(end),
+					I::I32LtU,
+					I::I32And,
+				];
+				Self::emit_list(f, &in_this_text);
 				Self::emit_list(
 					f,
 					&[
-						I::LocalGet(pointer),
-						I::LocalSet(start),
-						I::LocalGet(1),
-						I::LocalSet(wanted),
-						I::I64Const(1),
+						I::GlobalGet(index),
+						I::LocalGet(wanted),
+						I::I64LeS,
+						I::I32And,
+						I::GlobalGet(index),
+						I::LocalGet(base),
+						I::I64GtS,
+						I::I32And,
+						I::If(BlockType::Empty),
+						I::GlobalGet(at),
+						I::LocalSet(pointer),
+						I::GlobalGet(index),
 						I::LocalSet(base),
+						I::End,
 					],
 				);
-				let cursors = s.text_cursors();
-				for &(text, index, at) in &cursors {
-					let in_this_text = [
-						I::GlobalGet(text),
+				Self::emit_list(f, &in_this_text);
+				Self::emit_list(
+					f,
+					&[
+						I::GlobalGet(index),
+						I::LocalGet(wanted),
+						I::I64GtS,
+						I::I32And,
+						I::LocalGet(base),
+						I::LocalGet(wanted),
+						I::I64LtS,
+						I::I32And,
+						I::If(BlockType::Empty),
 						I::LocalGet(start),
-						I::I32Eq,
 						I::GlobalGet(at),
 						I::LocalGet(end),
-						I::I32LtU,
-						I::I32And,
-					];
-					Self::emit_list(f, &in_this_text);
+						I::GlobalGet(index),
+						I::LocalGet(wanted),
+					],
+				);
+				s.call(f, "text_grapheme_back");
+				Self::emit_list(
+					f,
+					&[
+						I::LocalSet(back_index),
+						I::LocalSet(back),
+						I::LocalGet(back_index),
+						I::LocalGet(base),
+						I::I64GtS,
+						I::If(BlockType::Empty),
+						I::LocalGet(back),
+						I::LocalSet(pointer),
+						I::LocalGet(back_index),
+						I::LocalSet(base),
+						I::End,
+						I::End,
+					],
+				);
+			}
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(wanted),
+					I::LocalGet(base),
+					I::I64Sub,
+					I::I64Const(1),
+					I::I64Add,
+					I::LocalSet(1),
+					I::Block(BlockType::Empty),
+					I::Loop(BlockType::Empty),
+					I::LocalGet(pointer),
+					I::LocalGet(end),
+					I::I32GeU,
+				],
+			);
+			s.emit_fail_if(f, "index_out_of_range");
+			Self::emit_index_compare(f, I::I64LeS);
+			Self::emit_list(f, &[I::BrIf(1), I::LocalGet(pointer), I::LocalGet(end)]);
+			s.call(f, "grapheme_end");
+			f.instruction(&I::LocalSet(pointer));
+			Self::emit_index_compare(f, I::I64Sub);
+			Self::emit_list(f, &[I::LocalSet(1), I::Br(0), I::End, I::End]);
+			if let Some(&(newest, newest_index, newest_at)) = cursors.first() {
+				// another text than the newest cursor's: the older cursors move down one place
+				Self::emit_list(f, &[I::GlobalGet(newest), I::LocalGet(start), I::I32Ne, I::If(BlockType::Empty)]);
+				for pair in cursors.windows(2).rev() {
+					let ((text, index, at), (older_text, older_index, older_at)) = (pair[0], pair[1]);
 					Self::emit_list(
 						f,
 						&[
+							I::GlobalGet(text),
+							I::GlobalSet(older_text),
 							I::GlobalGet(index),
-							I::LocalGet(wanted),
-							I::I64LeS,
-							I::I32And,
-							I::GlobalGet(index),
-							I::LocalGet(base),
-							I::I64GtS,
-							I::I32And,
-							I::If(BlockType::Empty),
+							I::GlobalSet(older_index),
 							I::GlobalGet(at),
-							I::LocalSet(pointer),
-							I::GlobalGet(index),
-							I::LocalSet(base),
-							I::End,
-						],
-					);
-					Self::emit_list(f, &in_this_text);
-					Self::emit_list(
-						f,
-						&[
-							I::GlobalGet(index),
-							I::LocalGet(wanted),
-							I::I64GtS,
-							I::I32And,
-							I::LocalGet(base),
-							I::LocalGet(wanted),
-							I::I64LtS,
-							I::I32And,
-							I::If(BlockType::Empty),
-							I::LocalGet(start),
-							I::GlobalGet(at),
-							I::LocalGet(end),
-							I::GlobalGet(index),
-							I::LocalGet(wanted),
-						],
-					);
-					s.call(f, "text_grapheme_back");
-					Self::emit_list(
-						f,
-						&[
-							I::LocalSet(back_index),
-							I::LocalSet(back),
-							I::LocalGet(back_index),
-							I::LocalGet(base),
-							I::I64GtS,
-							I::If(BlockType::Empty),
-							I::LocalGet(back),
-							I::LocalSet(pointer),
-							I::LocalGet(back_index),
-							I::LocalSet(base),
-							I::End,
-							I::End,
+							I::GlobalSet(older_at),
 						],
 					);
 				}
 				Self::emit_list(
 					f,
 					&[
+						I::End,
+						I::LocalGet(start),
+						I::GlobalSet(newest),
 						I::LocalGet(wanted),
-						I::LocalGet(base),
-						I::I64Sub,
-						I::I64Const(1),
-						I::I64Add,
-						I::LocalSet(1),
-						I::Block(BlockType::Empty),
-						I::Loop(BlockType::Empty),
+						I::GlobalSet(newest_index),
 						I::LocalGet(pointer),
-						I::LocalGet(end),
-						I::I32GeU,
+						I::GlobalSet(newest_at),
 					],
 				);
-				s.emit_fail_if(f, "index_out_of_range");
-				Self::emit_index_compare(f, I::I64LeS);
-				Self::emit_list(f, &[I::BrIf(1), I::LocalGet(pointer), I::LocalGet(end)]);
-				s.call(f, "grapheme_end");
-				f.instruction(&I::LocalSet(pointer));
-				Self::emit_index_compare(f, I::I64Sub);
-				Self::emit_list(f, &[I::LocalSet(1), I::Br(0), I::End, I::End]);
-				if let Some(&(newest, newest_index, newest_at)) = cursors.first() {
-					// another text than the newest cursor's: the older cursors move down one place
-					Self::emit_list(
-						f,
-						&[
-							I::GlobalGet(newest),
-							I::LocalGet(start),
-							I::I32Ne,
-							I::If(BlockType::Empty),
-						],
-					);
-					for pair in cursors.windows(2).rev() {
-						let ((text, index, at), (older_text, older_index, older_at)) = (pair[0], pair[1]);
-						Self::emit_list(
-							f,
-							&[
-								I::GlobalGet(text),
-								I::GlobalSet(older_text),
-								I::GlobalGet(index),
-								I::GlobalSet(older_index),
-								I::GlobalGet(at),
-								I::GlobalSet(older_at),
-							],
-						);
-					}
-					Self::emit_list(
-						f,
-						&[
-							I::End,
-							I::LocalGet(start),
-							I::GlobalSet(newest),
-							I::LocalGet(wanted),
-							I::GlobalSet(newest_index),
-							I::LocalGet(pointer),
-							I::GlobalSet(newest_at),
-						],
-					);
-				}
-				f.instruction(&I::LocalGet(pointer));
-			},
-		);
+			}
+			f.instruction(&I::LocalGet(pointer));
+		});
 
 		// text_grapheme_count(text) -> i64
-		self.runtime_function(
-			"text_grapheme_count",
-			vec![node_ref],
-			vec![long],
-			vec![int, int, long],
-			|s, f| {
-				let (pointer, end, count) = (1, 2, 3);
-				s.emit_text_bounds(f, pointer, end);
-				// the text counted last (its bytes never change): its count
-				let counted = s.text_counted();
-				if let Some((counted_start, counted_end, counted_count)) = counted {
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(pointer),
-							I::GlobalGet(counted_start),
-							I::I32Eq,
-							I::LocalGet(end),
-							I::GlobalGet(counted_end),
-							I::I32Eq,
-							I::I32And,
-							I::If(BlockType::Empty),
-							I::GlobalGet(counted_count),
-							I::Return,
-							I::End,
-							I::LocalGet(pointer),
-							I::GlobalSet(counted_start),
-							I::LocalGet(end),
-							I::GlobalSet(counted_end),
-						],
-					);
-				}
+		self.runtime_function("text_grapheme_count", vec![node_ref], vec![long], vec![int, int, long], |s, f| {
+			let (pointer, end, count) = (1, 2, 3);
+			s.emit_text_bounds(f, pointer, end);
+			// the text counted last (its bytes never change): its count
+			let counted = s.text_counted();
+			if let Some((counted_start, counted_end, counted_count)) = counted {
 				Self::emit_list(
 					f,
 					&[
-						I::Block(BlockType::Empty),
-						I::Loop(BlockType::Empty),
 						I::LocalGet(pointer),
+						I::GlobalGet(counted_start),
+						I::I32Eq,
 						I::LocalGet(end),
-						I::I32GeU,
-						I::BrIf(1),
+						I::GlobalGet(counted_end),
+						I::I32Eq,
+						I::I32And,
+						I::If(BlockType::Empty),
+						I::GlobalGet(counted_count),
+						I::Return,
+						I::End,
 						I::LocalGet(pointer),
+						I::GlobalSet(counted_start),
 						I::LocalGet(end),
+						I::GlobalSet(counted_end),
 					],
 				);
-				s.call(f, "grapheme_end");
-				Self::emit_list(
-					f,
-					&[
-						I::LocalSet(pointer),
-						I::LocalGet(count),
-						I::I64Const(1),
-						I::I64Add,
-						I::LocalSet(count),
-						I::Br(0),
-						I::End,
-						I::End,
-						I::LocalGet(count),
-					],
-				);
-				if let Some((_, _, counted_count)) = counted {
-					Self::emit_list(f, &[I::LocalGet(count), I::GlobalSet(counted_count)]);
-				}
-			},
-		);
+			}
+			Self::emit_list(
+				f,
+				&[
+					I::Block(BlockType::Empty),
+					I::Loop(BlockType::Empty),
+					I::LocalGet(pointer),
+					I::LocalGet(end),
+					I::I32GeU,
+					I::BrIf(1),
+					I::LocalGet(pointer),
+					I::LocalGet(end),
+				],
+			);
+			s.call(f, "grapheme_end");
+			Self::emit_list(
+				f,
+				&[
+					I::LocalSet(pointer),
+					I::LocalGet(count),
+					I::I64Const(1),
+					I::I64Add,
+					I::LocalSet(count),
+					I::Br(0),
+					I::End,
+					I::End,
+					I::LocalGet(count),
+				],
+			);
+			if let Some((_, _, counted_count)) = counted {
+				Self::emit_list(f, &[I::LocalGet(count), I::GlobalSet(counted_count)]);
+			}
+		});
 
 		// text_codepoint_count(text) -> i64: every byte but a continuation byte (10xxxxxx) starts a code point
-		self.runtime_function(
-			"text_codepoint_count",
-			vec![node_ref],
-			vec![long],
-			vec![int, int, long],
-			|s, f| {
-				let (pointer, end, count) = (1, 2, 3);
-				s.emit_text_bounds(f, pointer, end);
-				Self::emit_list(
-					f,
-					&[
-						I::Block(BlockType::Empty),
-						I::Loop(BlockType::Empty),
-						I::LocalGet(pointer),
-						I::LocalGet(end),
-						I::I32GeU,
-						I::BrIf(1),
-						I::LocalGet(count),
-						I::LocalGet(pointer),
-						I::I32Load8U(BYTE),
-						I32Const(utf8::CONTINUATION_MASK),
-						I::I32And,
-						I32Const(utf8::CONTINUATION_MARK),
-						I::I32Ne,
-						I::I64ExtendI32U,
-						I::I64Add,
-						I::LocalSet(count),
-						I::LocalGet(pointer),
-						I32Const(1),
-						I::I32Add,
-						I::LocalSet(pointer),
-						I::Br(0),
-						I::End,
-						I::End,
-						I::LocalGet(count),
-					],
-				);
-			},
-		);
+		self.runtime_function("text_codepoint_count", vec![node_ref], vec![long], vec![int, int, long], |s, f| {
+			let (pointer, end, count) = (1, 2, 3);
+			s.emit_text_bounds(f, pointer, end);
+			Self::emit_list(
+				f,
+				&[
+					I::Block(BlockType::Empty),
+					I::Loop(BlockType::Empty),
+					I::LocalGet(pointer),
+					I::LocalGet(end),
+					I::I32GeU,
+					I::BrIf(1),
+					I::LocalGet(count),
+					I::LocalGet(pointer),
+					I::I32Load8U(BYTE),
+					I32Const(utf8::CONTINUATION_MASK),
+					I::I32And,
+					I32Const(utf8::CONTINUATION_MARK),
+					I::I32Ne,
+					I::I64ExtendI32U,
+					I::I64Add,
+					I::LocalSet(count),
+					I::LocalGet(pointer),
+					I32Const(1),
+					I::I32Add,
+					I::LocalSet(pointer),
+					I::Br(0),
+					I::End,
+					I::End,
+					I::LocalGet(count),
+				],
+			);
+		});
 
 		// text_byte_count(text) -> i64
 		self.runtime_function("text_byte_count", vec![node_ref], vec![long], vec![], |s, f| {
@@ -559,13 +530,7 @@ impl WasmGcEmitter {
 		for (i, &(low, high)) in ranges.iter().enumerate() {
 			Self::emit_list(
 				func,
-				&[
-					I::LocalGet(local),
-					I32Const(low as i32),
-					I::I32Sub,
-					I32Const((high - low + 1) as i32),
-					I::I32LtU,
-				],
+				&[I::LocalGet(local), I32Const(low as i32), I::I32Sub, I32Const((high - low + 1) as i32), I::I32LtU],
 			);
 			if i > 0 {
 				func.instruction(&I::I32Or);
@@ -736,17 +701,14 @@ impl WasmGcEmitter {
 		}
 		let global = self.declare_global_of(ValType::I32, ConstExpr::i32_const(0));
 		self.text_heap_global = Some(global);
-		self.exports
-			.export(crate::host::TEXT_HEAP_EXPORT, ExportKind::Global, global);
+		self.exports.export(crate::host::TEXT_HEAP_EXPORT, ExportKind::Global, global);
 	}
 
 	/// Bump-allocate `length` bytes into local `address`; fresh pages come from memory.grow,
 	/// so runtime texts never overlap the string table at the start of memory
 	pub(in crate::wasm_emitter) fn emit_text_allocation(&self, func: &mut Function, length: u32, address: u32) {
 		const PAGE_BITS: i32 = 16;
-		let heap = self
-			.text_heap_global
-			.expect("emit_text_heap_global before allocating texts");
+		let heap = self.text_heap_global.expect("emit_text_heap_global before allocating texts");
 		Self::emit_list(
 			func,
 			&[

@@ -38,37 +38,21 @@ pub fn answer(code: &str) -> Option<Node> {
 		return None;
 	}
 	let ranges = test_ranges(code);
-	let tests: Vec<(String, Vec<&str>)> = ranges
-		.iter()
-		.filter_map(|range| test_parts(&code[range.clone()]))
-		.collect();
-	if !tests
-		.iter()
-		.any(|(_, steps)| steps.iter().any(|step| step_word(step) == Some(RENDER_WORD)))
-	{
+	let tests: Vec<(String, Vec<&str>)> = ranges.iter().filter_map(|range| test_parts(&code[range.clone()])).collect();
+	if !tests.iter().any(|(_, steps)| steps.iter().any(|step| step_word(step) == Some(RENDER_WORD))) {
 		return None;
 	}
 	let mut setup = code.to_string();
-	ranges
-		.iter()
-		.rev()
-		.for_each(|range| setup.replace_range(range.clone(), ""));
+	ranges.iter().rev().for_each(|range| setup.replace_range(range.clone(), ""));
 	let failures: Vec<String> = tests
 		.iter()
 		.filter_map(|(name, steps)| {
-			run_test(&setup, steps)
-				.err()
-				.map(|problem| format!("✗ test \"{name}\": {problem}"))
+			run_test(&setup, steps).err().map(|problem| format!("✗ test \"{name}\": {problem}"))
 		})
 		.collect();
 	Some(match failures.is_empty() {
 		true => Node::Text(format!("✓ {} passed", plural(tests.len(), TEST_WORD))),
-		false => error(&format!(
-			"{}\n{} of {} failed",
-			failures.join("\n"),
-			failures.len(),
-			tests.len()
-		)),
+		false => error(&format!("{}\n{} of {} failed", failures.join("\n"), failures.len(), tests.len())),
 	})
 }
 
@@ -79,10 +63,7 @@ fn plural(count: usize, word: &str) -> String {
 /// Where the top-level `test "…" { … }` blocks are: from a line starting with `test "` to its block's closing brace
 fn test_ranges(code: &str) -> Vec<Range<usize>> {
 	let opening = format!("{TEST_WORD} \"");
-	let starts = code
-		.match_indices(&opening)
-		.map(|(at, _)| at)
-		.filter(|&at| at == 0 || code[..at].ends_with('\n'));
+	let starts = code.match_indices(&opening).map(|(at, _)| at).filter(|&at| at == 0 || code[..at].ends_with('\n'));
 	starts
 		.filter_map(|start| {
 			let open = start + code[start..].find('{')?;
@@ -144,21 +125,13 @@ fn statements(body: &str) -> Vec<&str> {
 		}
 		true
 	});
-	let bounds = [0]
-		.into_iter()
-		.chain(cuts.iter().map(|cut| cut + 1))
-		.zip(cuts.iter().copied().chain([body.len()]));
-	bounds
-		.map(|(start, end)| body[start..end].trim())
-		.filter(|statement| !statement.is_empty())
-		.collect()
+	let bounds = [0].into_iter().chain(cuts.iter().map(|cut| cut + 1)).zip(cuts.iter().copied().chain([body.len()]));
+	bounds.map(|(start, end)| body[start..end].trim()).filter(|statement| !statement.is_empty()).collect()
 }
 
 /// The step word a statement starts with: render, click, fill, check
 fn step_word(statement: &str) -> Option<&'static str> {
-	let word = statement
-		.split(|character: char| !character.is_alphanumeric() && character != '_')
-		.next()?;
+	let word = statement.split(|character: char| !character.is_alphanumeric() && character != '_').next()?;
 	STEP_WORDS.into_iter().find(|step| *step == word)
 }
 
@@ -210,10 +183,7 @@ fn check(page: &Page, condition: &str) -> Result<(), String> {
 	match crate::pipeline::eval(&format!("{TEXT_WORD} = {text}\n{HTML_WORD} = {html}\n{condition}")).drop_meta() {
 		Node::True => Ok(()),
 		Node::Number(Number::Int(truth)) if *truth != 0 => Ok(()),
-		verdict => Err(format!(
-			"check {condition} gave {}; the page shows {text}",
-			verdict.serialize()
-		)),
+		verdict => Err(format!("check {condition} gave {}; the page shows {text}", verdict.serialize())),
 	}
 }
 

@@ -48,11 +48,8 @@ const DOC_WORD: &str = "doc";
 /// `f.full`: what `print f` shows, the doc as comment lines above the definition (user, card module-methods)
 const FULL_WORD: &str = "full";
 /// Other names of a function's words (user, card module-methods): each read as its canonical word with a note
-pub(crate) const FUNCTION_WORD_ALIASES: [(&str, &str); 3] = [
-	("description", DOC_WORD),
-	("returns", RETURN_TYPE_WORD),
-	("representation", DUMP_WORD),
-];
+pub(crate) const FUNCTION_WORD_ALIASES: [(&str, &str); 3] =
+	[("description", DOC_WORD), ("returns", RETURN_TYPE_WORD), ("representation", DUMP_WORD)];
 /// What `dir(f)` lists of a function: the words reflection answers for it
 const FUNCTION_WORDS: [&str; 4] = [PARAMS_WORDS[0], SIGNATURE_WORD, BODY_WORD, EFFECTS_WORD];
 /// `dir(sqrt)`: a library word has no body to show
@@ -179,10 +176,7 @@ fn unlistened_reflection(node: &Node, listened: &HashSet<String>, defined: &Hash
 		.filter(|name| !listened.contains(*name) && !defined.contains(*name));
 	match unlistened {
 		Some(name) => Some(name.to_string()),
-		None => node
-			.children()
-			.iter()
-			.find_map(|child| unlistened_reflection(child, listened, defined)),
+		None => node.children().iter().find_map(|child| unlistened_reflection(child, listened, defined)),
 	}
 }
 
@@ -206,13 +200,9 @@ fn as_reflection_words(node: Node, functions: &Functions, defined: &HashSet<Stri
 				_ => word,
 			};
 			let reflected = match (word, function) {
-				(word, Some(function)) if PARAMS_WORDS.contains(&word) => Some(text_list(
-					&function
-						.params
-						.iter()
-						.map(|param| param.name.clone())
-						.collect::<Vec<_>>(),
-				)),
+				(word, Some(function)) if PARAMS_WORDS.contains(&word) => {
+					Some(text_list(&function.params.iter().map(|param| param.name.clone()).collect::<Vec<_>>()))
+				}
 				(SIGNATURE_WORD, Some(function)) => Some(Node::Text(signature(function))),
 				(DUMP_WORD, Some(function)) => Some(Node::Text(definition(function))),
 				(DOC_WORD, Some(function)) => Some(Node::Text(function.doc.clone().unwrap_or_default())),
@@ -240,10 +230,7 @@ fn as_reflection_words(node: Node, functions: &Functions, defined: &HashSet<Stri
 
 /// The canonical word of an alias of a function's word: `doc` of `description`
 pub(crate) fn canonical_word(word: &str) -> Option<&'static str> {
-	FUNCTION_WORD_ALIASES
-		.into_iter()
-		.find(|(alias, _)| *alias == word)
-		.map(|(_, canonical)| canonical)
+	FUNCTION_WORD_ALIASES.into_iter().find(|(alias, _)| *alias == word).map(|(_, canonical)| canonical)
 }
 
 /// `print f`, `f.full`: the definition, the doc as comment lines above it (decision reflection)
@@ -277,10 +264,7 @@ fn function_type(signature: &str) -> Node {
 
 /// `(a, b) -> int` → `int`
 fn return_type(signature: &str) -> String {
-	signature
-		.rsplit_once(" -> ")
-		.map_or("", |(_, result)| result)
-		.to_string()
+	signature.rsplit_once(" -> ").map_or("", |(_, result)| result).to_string()
 }
 
 /// A library word's parameter names and signature, unless the program defines that name itself
@@ -324,10 +308,7 @@ fn function_word(node: &Node, functions: &Functions, defined: &HashSet<String>) 
 /// inferred), and `classes` {P: {fields: [x] methods: [sum] definition: "class P{…}"}} off the source, inherited
 /// fields first; absent when the program defines none. Names are symbols: a one-letter text reads back as a character
 pub fn meta_entries(source: &Node, lowered: &Node, code: &str) -> Vec<(&'static str, Node)> {
-	let objects = Objects {
-		layouts: crate::class_methods::class_layouts(source),
-		..Objects::default()
-	};
+	let objects = Objects { layouts: crate::class_methods::class_layouts(source), ..Objects::default() };
 	let mut classes: Vec<&String> = objects.layouts.keys().collect();
 	classes.sort();
 	let is_method = |name: &String| objects.layouts.values().any(|layout| layout.methods.contains(name));
@@ -337,11 +318,7 @@ pub fn meta_entries(source: &Node, lowered: &Node, code: &str) -> Vec<(&'static 
 		.values()
 		.filter(|function| own.contains_key(&function.name) && !is_method(&function.name))
 		.map(|function| {
-			let params = function
-				.params
-				.iter()
-				.map(|param| param.name.clone())
-				.collect::<Vec<_>>();
+			let params = function.params.iter().map(|param| param.name.clone()).collect::<Vec<_>>();
 			(
 				function.name.clone(),
 				meta_map(vec![
@@ -368,15 +345,7 @@ pub fn meta_entries(source: &Node, lowered: &Node, code: &str) -> Vec<(&'static 
 		.into_iter()
 		.filter(|(_, entries)| !entries.is_empty())
 		.map(|(entry, entries)| {
-			(
-				entry,
-				meta_map(
-					entries
-						.iter()
-						.map(|(name, value)| (name.as_str(), value.clone()))
-						.collect(),
-				),
-			)
+			(entry, meta_map(entries.iter().map(|(name, value)| (name.as_str(), value.clone())).collect()))
 		})
 		.collect()
 }
@@ -384,13 +353,9 @@ pub fn meta_entries(source: &Node, lowered: &Node, code: &str) -> Vec<(&'static 
 /// A class's definition as written in the code: from its keyword (`class P`, `struct P`) to its balanced closing brace
 /// (a parsed class does not serialize back to its source)
 fn class_definition(code: &str, class: &str) -> Option<Node> {
-	let keywords = crate::warp_parser::TYPE_DECLARATION_WORDS
-		.iter()
-		.chain(CLASS_WORDS.iter());
+	let keywords = crate::warp_parser::TYPE_DECLARATION_WORDS.iter().chain(CLASS_WORDS.iter());
 	let starts = keywords.flat_map(|keyword| {
-		code.match_indices(&format!("{keyword} {class}"))
-			.map(|(at, written)| (at, written.len()))
-			.collect::<Vec<_>>()
+		code.match_indices(&format!("{keyword} {class}")).map(|(at, written)| (at, written.len())).collect::<Vec<_>>()
 	});
 	let (start, _) = starts
 		.filter(|(at, length)| !code[at + length..].starts_with(|next: char| next.is_alphanumeric() || next == '_'))
@@ -428,10 +393,7 @@ pub(super) fn user_functions(program: &Node) -> Functions {
 /// `{key: value …}`
 fn meta_map(entries: Vec<(&str, Node)>) -> Node {
 	Node::List(
-		entries
-			.into_iter()
-			.map(|(name, value)| key(symbol(name), Op::Colon, value))
-			.collect(),
+		entries.into_iter().map(|(name, value)| key(symbol(name), Op::Colon, value)).collect(),
 		Bracket::Curly,
 		Separator::Space,
 	)
@@ -443,22 +405,14 @@ pub(crate) fn definition(function: &crate::compiler::context::UserFunctionDef) -
 		.params
 		.iter()
 		.map(|param| {
-			let typed = param.annotation.as_ref().map_or_else(
-				|| param.name.clone(),
-				|annotation| format!("{}:{}", param.name, annotation.serialize()),
-			);
-			param
-				.default
+			let typed = param
+				.annotation
 				.as_ref()
-				.map_or(typed.clone(), |default| format!("{typed} = {}", default.serialize()))
+				.map_or_else(|| param.name.clone(), |annotation| format!("{}:{}", param.name, annotation.serialize()));
+			param.default.as_ref().map_or(typed.clone(), |default| format!("{typed} = {}", default.serialize()))
 		})
 		.collect();
-	format!(
-		"{}({}) := {}",
-		function.name,
-		params.join(", "),
-		function.body.serialize()
-	)
+	format!("{}({}) := {}", function.name, params.join(", "), function.body.serialize())
 }
 
 /// `help(area)`: `area(width:int, height:int) -> int`, its doc on the lines below
@@ -510,12 +464,8 @@ struct Objects {
 }
 
 pub fn lower_objects(node: Node) -> Node {
-	let words: Vec<&str> = CLASS_WORDS
-		.iter()
-		.chain(&FIELDS_WORDS)
-		.chain(&[METHODS_WORD, DIR_WORD, HELP_WORD])
-		.copied()
-		.collect();
+	let words: Vec<&str> =
+		CLASS_WORDS.iter().chain(&FIELDS_WORDS).chain(&[METHODS_WORD, DIR_WORD, HELP_WORD]).copied().collect();
 	if !node.mentions_any(&words) {
 		return node;
 	}
@@ -565,28 +515,19 @@ pub fn lower_component_words(node: Node) -> Node {
 		return node;
 	}
 	let defined = crate::library_words::defined_names(&node);
-	with_object_words(
-		node,
-		&Objects {
-			modules,
-			defined,
-			..Objects::default()
-		},
-	)
+	with_object_words(node, &Objects { modules, defined, ..Objects::default() })
 }
 
 fn component_exports(node: &Node) -> HashMap<String, Vec<String>> {
 	crate::foreign_modules::component_modules(node)
 		.into_iter()
-		.filter_map(
-			|(alias, path)| match crate::modules::wasm_modules::component_export_names(&path) {
-				Ok(names) => Some((alias, names)),
-				Err(failure) => {
-					eprintln!("[wasm] {failure}");
-					None
-				}
-			},
-		)
+		.filter_map(|(alias, path)| match crate::modules::wasm_modules::component_export_names(&path) {
+			Ok(names) => Some((alias, names)),
+			Err(failure) => {
+				eprintln!("[wasm] {failure}");
+				None
+			}
+		})
 		.collect()
 }
 
@@ -606,16 +547,10 @@ fn module_objects(node: &Node) -> Objects {
 	for path in paths {
 		let alias = crate::modules::wasm_modules::module_alias(path);
 		let bytes = crate::modules::wasm_modules::module_bytes(path).ok();
-		let entry = |key: &str| {
-			bytes
-				.as_ref()
-				.and_then(|bytes| crate::formats::meta_section::entry(bytes, key))
-		};
+		let entry = |key: &str| bytes.as_ref().and_then(|bytes| crate::formats::meta_section::entry(bytes, key));
 		let functions = entry(META_FUNCTIONS);
 		let is_own = |name: &String| {
-			functions
-				.as_ref()
-				.is_none_or(|functions| !matches!(functions[name.as_str()].drop_meta(), Node::Empty))
+			functions.as_ref().is_none_or(|functions| !matches!(functions[name.as_str()].drop_meta(), Node::Empty))
 		};
 		let mut names: Vec<String> = crate::modules::wasm_modules::exports(path)
 			.keys()
@@ -623,12 +558,8 @@ fn module_objects(node: &Node) -> Objects {
 			.cloned()
 			.collect();
 		names.sort();
-		objects
-			.module_classes
-			.extend(entry(META_CLASSES).map(|classes| (alias.clone(), classes)));
-		objects
-			.module_functions
-			.extend(functions.map(|functions| (alias.clone(), functions)));
+		objects.module_classes.extend(entry(META_CLASSES).map(|classes| (alias.clone(), classes)));
+		objects.module_functions.extend(functions.map(|functions| (alias.clone(), functions)));
 		objects.modules.insert(alias, names);
 	}
 	objects
@@ -665,24 +596,13 @@ impl Objects {
 			Node::Key(module, Op::Dot, member) => (module.symbol_name()?, member.symbol_name()?),
 			qualified => qualified.symbol_name()?.split_once('.')?,
 		};
-		let class = self
-			.module_classes
-			.get(module)
-			.map(|classes| &classes[member])
-			.filter(|class| !class.is_empty_node());
+		let class =
+			self.module_classes.get(module).map(|classes| &classes[member]).filter(|class| !class.is_empty_node());
 		if let Some(class) = class {
-			return listed_names(
-				entry_names(&class[FIELDS_WORDS[0]]),
-				entry_names(&class[METHODS_WORD]),
-				word,
-			)
-			.map(|names| text_list(&names));
+			return listed_names(entry_names(&class[FIELDS_WORDS[0]]), entry_names(&class[METHODS_WORD]), word)
+				.map(|names| text_list(&names));
 		}
-		let word = if PARAMS_WORDS.contains(&word) {
-			PARAMS_WORDS[0]
-		} else {
-			word
-		};
+		let word = if PARAMS_WORDS.contains(&word) { PARAMS_WORDS[0] } else { word };
 		match self.module_functions.get(module)?[member][word].drop_meta() {
 			Node::Empty => None,
 			names if word == PARAMS_WORDS[0] => Some(text_list(&entry_names(names))),
@@ -692,10 +612,7 @@ impl Objects {
 
 	/// The class an instance variable holds, or the class a name is
 	fn class_of<'a>(&'a self, name: &'a str) -> Option<&'a str> {
-		self.instances
-			.get(name)
-			.map(String::as_str)
-			.or_else(|| self.layouts.contains_key(name).then_some(name))
+		self.instances.get(name).map(String::as_str).or_else(|| self.layouts.contains_key(name).then_some(name))
 	}
 
 	/// Inherited names first, a name the class redeclares kept in its parent's place
@@ -703,18 +620,8 @@ impl Objects {
 		let Some(layout) = self.layouts.get(class) else {
 			return vec![];
 		};
-		let mut names = layout
-			.parent
-			.as_deref()
-			.map(|parent| self.names(parent, own))
-			.unwrap_or_default();
-		names.extend(
-			own(layout)
-				.iter()
-				.filter(|name| !names.contains(name))
-				.cloned()
-				.collect::<Vec<_>>(),
-		);
+		let mut names = layout.parent.as_deref().map(|parent| self.names(parent, own)).unwrap_or_default();
+		names.extend(own(layout).iter().filter(|name| !names.contains(name)).cloned().collect::<Vec<_>>());
 		names
 	}
 
@@ -736,10 +643,7 @@ impl Objects {
 		if let Some(reflected) = self.module_member_word(subject, word) {
 			return Some(reflected);
 		}
-		if self
-			.known_class(subject)
-			.is_some_and(|class| self.has_member(&class, word))
-		{
+		if self.known_class(subject).is_some_and(|class| self.has_member(&class, word)) {
 			return None;
 		}
 		let Some(name) = subject.symbol_name() else {
@@ -793,27 +697,19 @@ impl Objects {
 
 	/// `help(P)`, `help(p)`: the class, its parent, fields and methods, one per line (an empty line left out)
 	fn help(&self, subject: &Node) -> Option<Node> {
-		let class = self
-			.class_of(subject.symbol_name()?)
-			.filter(|_| !self.defined.contains(HELP_WORD))?;
+		let class = self.class_of(subject.symbol_name()?).filter(|_| !self.defined.contains(HELP_WORD))?;
 		let parent = self.layouts[class]
 			.parent
 			.as_ref()
 			.map(|parent| format!(" {} {parent}", crate::warp_parser::EXTENDS_KEYWORD))
 			.unwrap_or_default();
-		let members = [
-			(FIELDS_WORDS[0], self.fields(class)),
-			(METHODS_WORD, self.methods(class)),
-		];
+		let members = [(FIELDS_WORDS[0], self.fields(class)), (METHODS_WORD, self.methods(class))];
 		let lines = members
 			.into_iter()
 			.filter(|(_, names)| !names.is_empty())
 			.map(|(word, names)| format!("{word}: {}", names.join(" ")));
 		Some(Node::Text(
-			std::iter::once(format!("{} {class}{parent}", CLASS_WORDS[0]))
-				.chain(lines)
-				.collect::<Vec<_>>()
-				.join("\n"),
+			std::iter::once(format!("{} {class}{parent}", CLASS_WORDS[0])).chain(lines).collect::<Vec<_>>().join("\n"),
 		))
 	}
 
@@ -823,10 +719,7 @@ impl Objects {
 	}
 
 	fn has_member(&self, class: &str, word: &str) -> bool {
-		self.fields(class)
-			.iter()
-			.chain(&self.methods(class))
-			.any(|name| name == word)
+		self.fields(class).iter().chain(&self.methods(class)).any(|name| name == word)
 	}
 
 	/// The class of the instance an expression holds, when known at compile time
@@ -872,9 +765,7 @@ impl Objects {
 	/// before the run: a parameter's `o.methods` or an imported class's `shapes.P.methods` stays as written
 	fn value_methods(&self, subject: &Node) -> Option<Node> {
 		let known = literal_type(subject).or_else(|| self.literal_types.get(subject.symbol_name()?).copied())?;
-		let (_, words) = crate::modules::type_modules()
-			.into_iter()
-			.find(|(module, _)| *module == known)?;
+		let (_, words) = crate::modules::type_modules().into_iter().find(|(module, _)| *module == known)?;
 		Some(function_list(words))
 	}
 
@@ -923,13 +814,8 @@ fn dir_otherwise(subject: &Node) -> Node {
 		.into_iter()
 		.rev()
 		.filter(|(module, _)| *module != MAP_WORD)
-		.fold(text_list(&[]), |otherwise, (module, words)| {
-			type_dispatch(subject, module, text_list(words), otherwise)
-		});
-	super::nodes::filled(
-		DIR_OTHERWISE_TEMPLATE,
-		[("RECEIVER", subject.clone()), ("OTHERWISE", methods)],
-	)
+		.fold(text_list(&[]), |otherwise, (module, words)| type_dispatch(subject, module, text_list(words), otherwise));
+	super::nodes::filled(DIR_OTHERWISE_TEMPLATE, [("RECEIVER", subject.clone()), ("OTHERWISE", methods)])
 }
 
 /// The type module of a text or list literal
@@ -958,14 +844,9 @@ fn with_object_words(node: Node, objects: &Objects) -> Node {
 	// `o.members = v`, `o.members.add(p)`: a field as a place, no reflection word (card orm-members)
 	if let Node::Key(place, op, rest) = node.drop_meta() {
 		if is_field_place(place, op, rest) {
-			let Node::Key(subject, Op::Dot, word) = place.drop_meta() else {
-				unreachable!("guarded")
-			};
-			let place = Node::Key(
-				Box::new(with_object_words(subject.as_ref().clone(), objects)),
-				Op::Dot,
-				word.clone(),
-			);
+			let Node::Key(subject, Op::Dot, word) = place.drop_meta() else { unreachable!("guarded") };
+			let place =
+				Node::Key(Box::new(with_object_words(subject.as_ref().clone(), objects)), Op::Dot, word.clone());
 			return key(place, *op, with_object_words(rest.as_ref().clone(), objects));
 		}
 	}
@@ -1008,10 +889,7 @@ fn is_field_place(place: &Node, op: &Op, rest: &Node) -> bool {
 fn word_list(word: &str, class: &str, names: &[String]) -> Node {
 	match word {
 		METHODS_WORD => Node::List(
-			names
-				.iter()
-				.map(|name| crate::closures::method_reference(name.clone(), class))
-				.collect(),
+			names.iter().map(|name| crate::closures::method_reference(name.clone(), class)).collect(),
 			Bracket::Square,
 			Separator::Space,
 		),
@@ -1048,9 +926,5 @@ pub(crate) fn entry_names(list: &Node) -> Vec<String> {
 }
 
 pub(crate) fn text_list(names: &[String]) -> Node {
-	Node::List(
-		names.iter().map(|name| Node::Text(name.clone())).collect(),
-		Bracket::Square,
-		Separator::None,
-	)
+	Node::List(names.iter().map(|name| Node::Text(name.clone())).collect(), Bracket::Square, Separator::None)
 }

@@ -9,10 +9,7 @@ fn sources(length: usize) -> Vec<String> {
 	if length == 0 {
 		return vec![String::new()];
 	}
-	sources(length - 1)
-		.into_iter()
-		.flat_map(|prefix| ALPHABET.chars().map(move |ch| format!("{prefix}{ch}")))
-		.collect()
+	sources(length - 1).into_iter().flat_map(|prefix| ALPHABET.chars().map(move |ch| format!("{prefix}{ch}"))).collect()
 }
 
 #[test]
