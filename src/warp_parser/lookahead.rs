@@ -30,6 +30,7 @@ impl WarpParser {
 		let ch = self.current_char();
 		ch.is_alphanumeric()
 			|| ch == '_'
+			|| (ch == '$' && self.is_identifier_start(1)) // a bound name `$h`
 			|| ch == '"'
 			|| ch == '\''
 			|| ch == '('

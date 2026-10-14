@@ -38,3 +38,11 @@ fn a_program_variable_named_like_a_unit_is_no_unit() {
 		"{warnings:?}"
 	);
 }
+
+#[test] // a bound `$h` is an argument like any name: `then print $h` prints the value (card if-host)
+fn a_dollar_name_is_a_call_argument() {
+	assert_eq!(
+		crate::common::printed("c = {host: \"x\"}\nif c is {host: $h} then print $h"),
+		"x\n"
+	);
+}
