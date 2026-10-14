@@ -704,6 +704,11 @@ impl Node {
 		}
 	}
 
+	/// The text or the name a node holds: a one-character text (a Char) too
+	pub fn text_or_name(&self) -> String {
+		self.text_value().unwrap_or_else(|| self.name())
+	}
+
 	/// The first Error node in the tree, e.g. a parse diagnostic
 	pub fn first_error(&self) -> Option<&Node> {
 		match self.drop_meta() {

@@ -840,11 +840,7 @@ pub(crate) const AT_WORD: &str = "at";
 /// the runtime error for its miss is a function named after it (`no_field_x`), and the trace of the trap carries the name.
 /// A symbol key `p[k]` is evaluated when `k` is a variable, so it is not a constant.
 pub fn constant_field_name(key: &Node) -> Option<String> {
-	let name = match key.drop_meta() {
-		Node::Text(name) => name.clone(),
-		Node::Char(letter) => letter.to_string(),
-		_ => return None,
-	};
+	let name = key.text_value()?;
 	(!name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-')).then_some(name)
 }
 

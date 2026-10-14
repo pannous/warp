@@ -671,13 +671,9 @@ fn rows(database: Handle, sql: &str, parameters: &[Node]) -> Result<Vec<Vec<Node
 	result
 }
 
-/// A text or character value as SQLite's text: a one-character text ("x") is a character (its name() is empty)
+/// A text or character value as SQLite's text
 fn c_text(value: &Node) -> Result<CString, String> {
-	let text = match value.drop_meta() {
-		Node::Char(character) => character.to_string(),
-		other => other.name(),
-	};
-	CString::new(text).map_err(|problem| problem.to_string())
+	CString::new(value.text_or_name()).map_err(|problem| problem.to_string())
 }
 
 fn bind(sqlite: &Sqlite, statement: Handle, index: c_int, value: &Node) -> Result<(), String> {
