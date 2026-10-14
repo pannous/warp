@@ -609,7 +609,11 @@ impl<'a> Loader<'a> {
 	/// `import fourty_two` of `fourty_two.wasm` / `.wat`: `use "<its absolute path>"`, which the FFI imports from
 	/// (wasm_modules.rs); `include` also runs its entry point, whose value it is (P139)
 	pub(super) fn use_wasm_module(&mut self, module: &Path, statement: &Node, import: Import) -> Vec<Node> {
-		let path = module.canonicalize().unwrap_or_else(|_| module.to_path_buf()).display().to_string();
+		// a page file or URL stays as written: a browser's file system shim made page:x into /page:x (card takes-three)
+		let address =
+			module.to_string_lossy().starts_with(crate::web::PAGE_PREFIX) || module.to_string_lossy().contains("://");
+		let canonical = if address { None } else { module.canonicalize().ok() };
+		let path = canonical.unwrap_or_else(|| module.to_path_buf()).display().to_string();
 		self.wasm_modules.push(path.clone());
 		let used = match as_use(statement) {
 			Node::List(_, bracket, separator) => {
