@@ -17,9 +17,8 @@ pub fn lower_dispatch(node: Node) -> Node {
 		return node;
 	}
 	let witnesses = defined_functions(&node);
-	let signatures = instance_signatures(&node, &types.registry);
 	let traits = Traits::of(&node);
-	let constraints = trait_constraints(&node, &traits);
+	let signatures = instance_signatures(&node, &types.registry, &traits);
 	let enums = crate::lowering::sum_variants::sum_types(&node)
 		.into_iter()
 		.filter(|(_, variants)| variants.is_plain())
@@ -30,7 +29,6 @@ pub fn lower_dispatch(node: Node) -> Node {
 		types,
 		witnesses,
 		signatures,
-		constraints,
 		enums,
 		likenesses,
 		missing: RefCell::new(None),
@@ -138,10 +136,8 @@ pub(super) struct Dispatch {
 	traits: Traits,
 	types: InstanceTypes,
 	witnesses: Vec<String>,
-	/// Per function, its parameters and the declared type each one takes (`p:photo`), if any
+	/// Per function, its parameters and the declared type each one takes (`p:photo`, `xs: Comparable list`), if any
 	signatures: HashMap<String, Vec<(String, Option<String>)>>,
-	/// Per function, the positions of its parameters `xs: Comparable list` and the trait their elements need
-	constraints: HashMap<String, Vec<(usize, String)>>,
 	/// The plain enums, `enum Coin { Penny, Dime }`: an int becomes one of their cases explicitly, `1 as Coin`
 	enums: std::collections::HashSet<String>,
 	/// The `image like photo` declarations
@@ -265,9 +261,6 @@ impl Dispatch {
 	}
 
 	pub(super) fn call(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
-		if let Some(error) = self.unmet_constraint(items, bracket, separator) {
-			return Some(error);
-		}
 		if let Some(name) = call_name(items, bracket, separator) {
 			match (name, &items[1..]) {
 				(SORT_WORD, [list]) => {
@@ -318,34 +311,28 @@ impl Dispatch {
 		}
 	}
 
-	/// `smallest([dot(1)])` of `smallest(xs: Comparable list)`: the error when the elements' type lacks an operation of the trait
-	pub(super) fn unmet_constraint(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
-		let name = called_name(items, bracket, separator)?;
-		for (index, trait_name) in self.constraints.get(name)? {
-			let Some(argument) = items.get(index + 1) else { continue };
-			let Some(Shape::ListOf(type_name)) = self.types.shape(argument) else {
-				continue;
-			};
-			let required = self.traits.named(trait_name)?;
-			if let Some(operation) = self.traits.missing(required, &type_name, &self.witnesses) {
-				let call = Node::List(items.to_vec(), Bracket::Round, Separator::None);
-				return self.fail(missing_conformance(
-					&call,
-					&type_name,
-					required,
-					operation,
-					&format!("{name}({})", argument.serialize()),
-				));
-			}
-		}
-		None
-	}
-
 	/// The value given for a place of declared type T (a parameter, a typed variable): the value to use, or the error.
 	/// An instance of T or of a type declared like T stays; an instance of another known type is an error that teaches
 	/// `like`; written data (`pic{…}` of no declared pic, `{…}`) is used without its ad hoc name, with a warning for each
 	/// field it lacks or has extra; a known non-object is an error; anything else is judged by its uses
 	pub(super) fn admit(&self, value: &Node, declared: &str, needs: &str) -> Result<Node, Node> {
+		// `smallest([dot(1)])` of `smallest(xs: Comparable list)`: each operation of the trait needs its witness
+		if let Some(required) = self.traits.element_trait(declared) {
+			return match self.types.shape(value) {
+				Some(Shape::ListOf(type_name))
+					if let Some(operation) = self.traits.missing(required, &type_name, &self.witnesses) =>
+				{
+					Err(missing_conformance(
+						value,
+						&type_name,
+						required,
+						operation,
+						&value.serialize(),
+					))
+				}
+				_ => Ok(value.clone()),
+			};
+		}
 		let got = format!("{needs}, got {}", value.serialize());
 		let parts = class_parts(declared);
 		if let Some(type_name) = self.instance_type(value) {

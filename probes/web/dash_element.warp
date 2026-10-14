@@ -1,0 +1,2 @@
+// card dash-element: a custom element named with a dash renders as one
+div{ my-thing{ class: "c" "x" } }

@@ -7,6 +7,7 @@
 //! array goes to the GPU by itself from GPU_AUTO_MIN_COUNT items, saying so once at run time; `@cpu` on the map, its
 //! block or its function keeps it on the CPU in f64, and WARP_GPU=off keeps a whole run there (@gpu included)
 
+use super::nodes::{branches, if_then_parts};
 use crate::node::Node;
 use crate::operators::Op;
 
@@ -161,10 +162,7 @@ fn automatic_value(value: &Node, is_linear_floats: &impl Fn(&Node) -> bool) -> O
 /// The assignment with its value replaced
 fn with_value(statement: Node, value: Node) -> Node {
 	match statement {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_value(*node, value)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_value(node, value)),
 		Node::Key(target, op, _) => Node::Key(target, op, Box::new(value)),
 		other => other,
 	}
@@ -302,10 +300,7 @@ fn reads_only_items(node: &Node, name: &str) -> bool {
 /// The assignment with `attribute` on its value
 fn with_attribute_on_value(statement: Node, attribute: &str) -> Node {
 	match statement {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_attribute_on_value(*node, attribute)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_attribute_on_value(node, attribute)),
 		Node::Key(target, op, value) => Node::Key(target, op, Box::new(value.with_attribute(attribute, Node::True))),
 		other => other,
 	}
@@ -624,6 +619,9 @@ struct Translation {
 impl Translation {
 	/// `body` in WGSL f32 arithmetic of the parameter, number literals and the program's numbers
 	fn expression(&mut self, body: &Node) -> Option<String> {
+		if let Some((condition, then, otherwise)) = branches(body) {
+			return self.selected(condition, then, otherwise);
+		}
 		match body.drop_meta() {
 			Node::Symbol(name) if self.locals.contains(name) => Some(format!("{VARIABLE_PREFIX}{name}")),
 			Node::Symbol(name) if *name == self.parameter => Some(KERNEL_ITEM.to_string()),
@@ -665,14 +663,6 @@ impl Translation {
 					))
 				}
 			},
-			Node::Key(condition, Op::Question, branches) => match branches.drop_meta() {
-				Node::Key(then, Op::Colon, otherwise) => self.selected(condition, then, otherwise),
-				_ => None,
-			},
-			Node::Key(if_then, Op::Else, otherwise) => {
-				let (condition, then) = if_then_parts(if_then)?;
-				self.selected(condition, then, otherwise)
-			}
 			Node::Key(_, op, _) if comparison(*op).is_some() || matches!(op, Op::And | Op::Or) => {
 				Some(format!("select(0.0, 1.0, {})", self.condition(body)?))
 			}
@@ -790,19 +780,14 @@ impl Translation {
 	/// What a color-giving function returns: rgb(r, g, b) and the functions giving one as a vec4f; a packed
 	/// 0xAARRGGBB literal unpacked exactly; any other number ink, 0 or no paper (src/graphics/paint.rs pixel colors)
 	fn color(&mut self, node: &Node) -> Option<String> {
+		if let Some((condition, then, otherwise)) = branches(node) {
+			return self.selected_color(condition, then, otherwise);
+		}
 		match node.drop_meta() {
 			Node::Number(number) if f64::from(*number) >= crate::graphics::pixels::COLOR_FROM as f64 => {
 				let packed = f64::from(*number) as u64;
 				let channel = |shift: u32| float_literal(((packed >> shift) & 0xFF) as f64 / 255.0);
 				Some(format!("vec4f({}, {}, {}, 1.0)", channel(16), channel(8), channel(0)))
-			}
-			Node::Key(condition, Op::Question, branches) => match branches.drop_meta() {
-				Node::Key(then, Op::Colon, otherwise) => self.selected_color(condition, then, otherwise),
-				_ => None,
-			},
-			Node::Key(if_then, Op::Else, otherwise) => {
-				let (condition, then) = if_then_parts(if_then)?;
-				self.selected_color(condition, then, otherwise)
 			}
 			Node::List(items, _, _) if items.len() == 1 => self.color(&items[0]),
 			Node::List(items, _, _) if !items.is_empty() && items[0].is_symbol(RGB_WORD) => {
@@ -1031,20 +1016,11 @@ fn last_values<'a>(node: &'a Node, values: &mut Vec<&'a Node>) {
 	if let Some(statements) = block_statements(node) {
 		return statements.last().into_iter().for_each(|last| last_values(last, values));
 	}
+	if let Some((_, then, otherwise)) = branches(node) {
+		last_values(then, values);
+		return last_values(otherwise, values);
+	}
 	match node.drop_meta() {
-		Node::Key(if_then, Op::Else, otherwise) => {
-			if let Some((_, then)) = if_then_parts(if_then) {
-				last_values(then, values);
-			}
-			last_values(otherwise, values);
-		}
-		Node::Key(_, Op::Question, branches) => match branches.drop_meta() {
-			Node::Key(then, Op::Colon, otherwise) => {
-				last_values(then, values);
-				last_values(otherwise, values);
-			}
-			_ => values.push(node),
-		},
 		Node::List(items, _, _) if items.len() == 1 => last_values(&items[0], values),
 		_ => values.push(node),
 	}
@@ -1137,16 +1113,6 @@ fn is_assignment(op: Op) -> bool {
 }
 
 /// `if c then t` (`if c { t }`): c and t
-fn if_then_parts(node: &Node) -> Option<(&Node, &Node)> {
-	let Node::Key(condition, Op::Then, then) = node.drop_meta() else {
-		return None;
-	};
-	match condition.drop_meta() {
-		Node::Key(empty, Op::If, condition) if matches!(empty.drop_meta(), Node::Empty) => Some((condition, then)),
-		_ => None,
-	}
-}
-
 /// The statements of a block: `{ … }`, or lines and `;` without brackets
 fn block_statements(node: &Node) -> Option<&[Node]> {
 	match node.drop_meta() {

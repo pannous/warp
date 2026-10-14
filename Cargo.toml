@@ -51,7 +51,6 @@ native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2", "dep:flate2", "dep:cr
 # of the browser build, whose engine validates anyway: web/playground/build.sh leaves it out of the optimized warp.wasm
 validate = []
 #test = [] superfluous, just use cargo test => #[cfg(test)]
-optimizer = [] # Enable optimizing wasm via ...
 ffi = []  # Enable FFI tests (requires native libraries like libc/libm)
 
 [dependencies]
@@ -97,7 +96,7 @@ libloading = { version = "0.9", optional = true }  # Dynamic library loading for
 #It exposes an API for parsing and generating WebAssembly modules, and a set of tools for interacting with them.
 #wabt = "0.2.0" # C++ WebAssembly Binary Toolkit, exposes only wasm2wat wat2wasm DEAD (2023-02)
 
-wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "cranelift", "gc", "gc-copying", "runtime", "wat"], optional = true }
+wasmtime = { version = "49.0.1", default-features = false, features = ["anyhow", "cranelift", "gc", "gc-copying", "runtime", "wat", "demangle", "addr2line"], optional = true }
 wasmtime-wasi = { version = "49.0.1", optional = true }
 # `warp build --component` (src/component_builder.rs): a module and its WIT world encoded as a component; the versions
 # wasmtime itself builds with (its own wasm-encoder copy)

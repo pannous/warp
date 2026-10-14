@@ -1,4 +1,4 @@
-//! The binaryen tools (wasm-opt, wasm-metadce in wasm_optimizer.rs; wasm-split in route_split.rs), run when on PATH
+//! The binaryen tools (wasm-split in route_split.rs), run when on PATH
 
 /// WASM proposals the emitter uses (GC nodes, bulk memory for runtime texts, exceptions for `try`, multi-value results
 /// for mag_divmod and the host text imports, tail calls); extended constant expressions are Wasm 3.0 and on by default

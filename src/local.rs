@@ -29,13 +29,4 @@ impl Local {
 			may_be_ratio: false,
 		}
 	}
-
-	pub fn param(position: u32, name: impl Into<String>, kind: crate::type_kinds::Kind) -> Self {
-		Local {
-			is_param: true,
-			..Local::new(position, name, kind)
-		}
-	}
 }
-
-pub type Variable = Local;

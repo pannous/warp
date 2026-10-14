@@ -6,7 +6,7 @@ use super::times::{CIVIL_FROM_DAYS, DAYS_FROM_CIVIL};
 use super::WasmGcEmitter;
 use crate::time::calendar::{Dst, DAY_SECONDS, HOUR, MINUTE, SECOND, ZONES};
 use crate::time::{TimeForm, OFFSET_SHIFT, TIME_FORM_BITS};
-use crate::type_kinds::{Kind, KIND_BITS, KIND_MASK};
+use crate::type_kinds::{Kind, KIND_BITS};
 use wasm_encoder::*;
 use Instruction as I;
 
@@ -423,16 +423,8 @@ impl WasmGcEmitter {
 			|s, f| {
 				let (time, zone, choice, form, position, status) = (0, 1, 2, 3, 4, 5);
 				s.emit_field(f, time, 0);
-				Self::emit_list(
-					f,
-					&[
-						I::I64Const(KIND_MASK),
-						I::I64And,
-						I::I64Const(Kind::Time as i64),
-						I::I64Ne,
-						I::If(BlockType::Empty),
-					],
-				);
+				Self::emit_kind_test(f, Kind::Time as i64, I::I64Ne);
+				Self::emit_list(f, &[I::If(BlockType::Empty)]);
 				s.emit_time_failure(f, NOT_A_TIME);
 				f.instruction(&I::End);
 				s.emit_time_form(f, time);

@@ -6,8 +6,6 @@ use crate::meta::{DataType, DataValue, LineInfo};
 use crate::node::Node::*;
 use crate::operators::{is_function_keyword, Op};
 use crate::type_kinds::Kind;
-#[cfg(feature = "native")]
-use crate::wasm_reader::GcObject;
 use serde::{Deserialize, Serialize};
 use std::cmp::PartialEq;
 use std::fmt;
@@ -98,9 +96,8 @@ impl Node {
 	pub fn data_value(&self) -> DataValue {
 		// 💡use via
 		// let val = data.data_value().downcast_ref::<MyType>().unwrap().clone();
-		match self {
+		match self.drop_meta() {
 			Data(dada) => dada.clone(),
-			Meta { node, .. } => node.data_value(),
 			_ => DataValue {
 				data: Box::new(()),
 				type_name: "ø".to_string(),
@@ -111,7 +108,7 @@ impl Node {
 	/// Remove the children `from..=to` in place: `[a b c d].remove(1,2) == [a d]`.
 	/// A negative `to` means up to the end, `to` is clamped to the last child.
 	pub fn remove(&mut self, from: i32, to: i32) {
-		match self {
+		match self.innermost_mut() {
 			List(items, _, _) => {
 				let last = items.len() as i32 - 1;
 				let to = if to < 0 { last } else { to.max(from).min(last) };
@@ -119,40 +116,25 @@ impl Node {
 					items.drain(from as usize..=to as usize);
 				}
 			}
-			Meta { node, .. } => node.remove(from, to),
-			_ => panic!("can't remove without children: {self:?}"),
+			other => panic!("can't remove without children: {other:?}"),
 		}
 	}
 	pub fn strings(p0: Vec<&str>) -> Node {
 		List(map(p0, |s| Text(s.to_string())), Bracket::Square, Separator::None)
 	}
 	pub fn first(&self) -> Node {
-		match self {
-			List(xs, _, _) => {
-				if let Some(first) = xs.first() {
-					first.clone()
-				} else {
-					Empty
-				}
-			}
+		match self.drop_meta() {
+			List(xs, _, _) => xs.first().cloned().unwrap_or(Empty),
 			Key(k, _, _v) => k.drop_meta().clone(), // first part of key-value pair is the key
-			Meta { node, .. } => node.first(),
 			_ => Empty,
 		}
 	}
 	pub fn last_item(&self) -> Node {
 		// last() belongs to iterator trade!!
-		match self {
+		match self.drop_meta() {
 			// Text(t) => {Char(t.chars().last().unwrap_or('\0'))} // switch of semantics!?
-			List(xs, _, _) => {
-				if let Some(last) = xs.last() {
-					last.clone()
-				} else {
-					Empty
-				}
-			}
+			List(xs, _, _) => xs.last().cloned().unwrap_or(Empty),
 			Key(_k, _, v) => v.as_ref().clone(), // last part of key-value pair is the value
-			Meta { node, .. } => node.last_item(),
 			_ => Empty,
 		}
 	}
@@ -176,9 +158,8 @@ impl Node {
 		}
 	}
 	pub fn children(&self) -> Vec<Node> {
-		match self {
+		match self.drop_meta() {
 			List(xs, _, _) => xs.clone(),
-			Meta { node, .. } => node.children(),
 			_ => vec![],
 		}
 	}
@@ -203,17 +184,16 @@ impl Node {
 	}
 
 	pub fn values(&self) -> &Node {
-		match self {
+		match self.drop_meta() {
 			Key(_, _, v) => v.as_ref(),
-			Meta { node, .. } => node.values(),
-			List(_, _, _) => self,
+			list @ List(_, _, _) => list,
 			_ => &Empty,
 		}
 	}
 
 	/// Returns the Kind for this node (Meta unwraps to inner node's tag)
 	pub fn kind(&self) -> Kind {
-		match self {
+		match self.drop_meta() {
 			Empty => Kind::Empty,
 			Text(_) => Kind::Text,
 			Char(_) => Kind::Codepoint,
@@ -222,9 +202,9 @@ impl Node {
 			List(_, Bracket::Curly, _) => Kind::Block,
 			List(_, _, _) => Kind::List,
 			Data(_) => Kind::Data,
-			Meta { node, .. } => node.kind(),
 			Type { .. } => Kind::TypeDef,
 			Error(_) => Kind::Error,
+			Meta { .. } => unreachable!("drop_meta removes every Meta layer"),
 			False | True => Kind::Int,
 			Node::Number(num) => match num {
 				Number::Int(_) | Number::BigInt(_) | Number::Quotient(..) | Number::BigQuotient(_) => Kind::Int, // exact numbers
@@ -233,10 +213,9 @@ impl Node {
 		}
 	}
 	pub fn length(&self) -> i32 {
-		match self {
+		match self.drop_meta() {
 			List(items, _, _) => items.len() as i32,
 			Key(_, _, v) => v.length(),
-			Meta { node, .. } => node.length(),
 			_ => 0,
 		}
 	}
@@ -296,14 +275,13 @@ impl Node {
 	}
 
 	pub fn name(&self) -> String {
-		match self {
+		match self.drop_meta() {
 			Symbol(name) | Text(name) => name.clone(),
 			Key(k, _, _) => match k.drop_meta() {
 				Symbol(s) | Text(s) => s.clone(),
 				Number(n) => n.to_string(),
 				_ => String::new(),
 			},
-			Meta { node, .. } => node.name(),
 			List(items, _, _) => {
 				if let Some(first) = items.first() {
 					let first_name = first.name();
@@ -322,12 +300,6 @@ impl Node {
 		}
 	}
 
-	/// Convert compact 3-field WASM GC object to Node
-	#[cfg(feature = "native")]
-	pub fn from_gc_object(obj: &GcObject) -> Node {
-		obj.to_node()
-	}
-
 	/// Placeholder for a missing feature: an error value, never a fake result
 	pub fn todo(missing_feature: String) -> Node {
 		error(&format!("not implemented yet: {missing_feature}"))
@@ -337,22 +309,13 @@ impl Node {
 	/// - Empty, False, 0, "", [] -> false
 	/// - Everything else -> true
 	pub fn to_bool(&self) -> bool {
-		match self {
-			False => false,
-			True => true,
-			Empty => false,
-			Node::Number(ref n) if n.zero() => false,
-			Node::Number(_) => true,
-			Text(ref s) if s.is_empty() => false,
-			Text(_) => true,
-			Symbol(ref s) if s.is_empty() => false,
-			Symbol(_) => true,
-			Char(c) if c == &'\0' => false,
-			Char(_) => true,
-			List(ref items, _, _) if items.is_empty() => false,
-			List(_, _, _) => true,
-			Meta { node, .. } => node.to_bool(),
-			_ => true, // Other types (Data, Key, Pair, Tag) are truthy
+		match self.drop_meta() {
+			False | Empty => false,
+			Node::Number(n) => !n.zero(),
+			Text(s) | Symbol(s) => !s.is_empty(),
+			Char(c) => *c != '\0',
+			List(items, _, _) => !items.is_empty(),
+			_ => true, // True and the other types (Data, Key, Pair, Tag) are truthy
 		}
 	}
 }
@@ -548,6 +511,17 @@ impl Node {
 		}
 	}
 
+	/// `rewrite` applied to the node under the Meta layers (comments, positions), which stay around its result
+	pub fn under_meta(self, rewrite: impl FnOnce(Node) -> Node) -> Node {
+		match self {
+			Meta { node, data } => Meta {
+				node: Box::new(node.under_meta(rewrite)),
+				data,
+			},
+			other => rewrite(other),
+		}
+	}
+
 	/// This node under the Meta layers (comments, positions) of `original`, which it replaces
 	pub fn with_meta_of(self, original: &Node) -> Node {
 		match original {
@@ -671,36 +645,32 @@ impl Node {
 	}
 
 	pub fn get(&self, i: usize) -> &Node {
-		match self {
+		match self.drop_meta() {
 			List(elements, _, _) => elements.get(i).unwrap(),
-			Meta { node, .. } => node.get(i),
 			_ => &Empty,
 		}
 	}
 
 	pub fn get_key(&self) -> &str {
-		match self {
+		match self.drop_meta() {
 			Key(k, _, _) => match k.drop_meta() {
 				Symbol(s) | Text(s) => s.as_str(),
 				_ => "",
 			},
-			Meta { node, .. } => node.get_key(),
 			_ => "",
 		}
 	}
 
 	pub fn get_value(&self) -> Node {
-		match self {
+		match self.drop_meta() {
 			Key(_, _, v) => v.as_ref().clone(),
-			Meta { node, .. } => node.get_value(),
 			_ => Empty,
 		}
 	}
 
 	pub fn iter(&self) -> NodeIter {
-		match self {
+		match self.drop_meta() {
 			List(items, _, _) => NodeIter::new(items.clone()),
-			Meta { node, .. } => node.iter(),
 			_ => NodeIter::new(vec![]),
 		}
 	}
@@ -708,9 +678,8 @@ impl Node {
 	/// The number of elements of a list (0 for anything else). Comments are never elements: the parser attaches them
 	/// as metadata to the neighbouring element (`a // note` is one element), so no variant needs to count them.
 	pub fn len(&self) -> usize {
-		match self {
+		match self.drop_meta() {
 			List(items, _, _) => items.len(),
-			Meta { node, .. } => node.len(),
 			_ => 0,
 		}
 	}
@@ -729,11 +698,10 @@ impl Node {
 
 	/// The first Error node in the tree, e.g. a parse diagnostic
 	pub fn first_error(&self) -> Option<&Node> {
-		match self {
-			Error(_) => Some(self),
+		match self.drop_meta() {
+			error @ Error(_) => Some(error),
 			Key(left, _, right) => left.first_error().or_else(|| right.first_error()),
 			List(items, _, _) => items.iter().find_map(Node::first_error),
-			Meta { node, .. } => node.first_error(),
 			Type { name, body } => name.first_error().or_else(|| body.first_error()),
 			_ => None,
 		}

@@ -22,6 +22,7 @@ fn an_emitted_event_is_a_named_effect() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-scoped-handlers: block-scoped handlers `on e {…} in {…}` were dropped"]
 fn a_block_handler_handles_its_event() {
 	is!(
 		"compute() := emit ask\nrun() := on ask { 42 } in { compute() }\neffects of run",
@@ -34,6 +35,7 @@ fn a_block_handler_handles_its_event() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-scoped-handlers: block-scoped handlers `on e {…} in {…}` were dropped"]
 fn a_declared_effect_set_reports_an_unhandled_event() {
 	fails_with(
 		"compute() := { emit ask; 1 } ! Pure\n3",

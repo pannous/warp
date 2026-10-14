@@ -409,10 +409,7 @@ pub fn lower(node: Node) -> Node {
 			typed_return(&items[0], &items[1]).expect("guarded")
 		}
 		Node::List(items, bracket, separator) => Node::List(items.into_iter().map(lower).collect(), bracket, separator),
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(lower(*node)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(lower),
 		other => other,
 	}
 }

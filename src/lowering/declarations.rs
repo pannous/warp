@@ -590,10 +590,7 @@ fn applied_to_last(body: Node, extra: &[Node]) -> Node {
 	}
 	match body {
 		Node::Key(left, op, right) => Node::Key(left, op, Box::new(applied_to_last(*right, extra))),
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(applied_to_last(*node, extra)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| applied_to_last(node, extra)),
 		last => Node::List([vec![last], extra.to_vec()].concat(), Bracket::Round, Separator::None),
 	}
 }
@@ -1109,20 +1106,6 @@ fn c_parameter(parameter: &Node) -> Option<Node> {
 			}
 			[kind, name] if matches!((kind.drop_meta(), name.drop_meta()), (Node::Symbol(_), Node::Symbol(_))) => {
 				Some(key(name.clone(), Op::Colon, kind.clone()))
-			}
-			// `int b = 2` as the parser groups it, the type then the assignment
-			[kind, assignment]
-				if matches!(assignment.drop_meta(), Node::Key(name, Op::Assign, _) if matches!(name.drop_meta(), Node::Symbol(_)))
-					&& matches!(kind.drop_meta(), Node::Symbol(_)) =>
-			{
-				let Node::Key(name, _, default) = assignment.drop_meta() else {
-					unreachable!("guarded")
-				};
-				Some(Node::Key(
-					Box::new(Node::Key(name.clone(), Op::Colon, Box::new(kind.clone()))),
-					Op::Assign,
-					default.clone(),
-				))
 			}
 			_ => None,
 		},

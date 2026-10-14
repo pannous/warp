@@ -33,7 +33,8 @@ pub fn lower(node: Node) -> Node {
 	}
 	let assigned = assigned_names(&node);
 	let node = flag_arguments(node, &functions, &assigned);
-	DECLARED_TYPES.with(|types| *types.borrow_mut() = declared_types(&node));
+	let types = declared_types(&node);
+	crate::compile_context::change(|context| context.declared_types = types);
 	let mut unknown = None;
 	collect_extras(&node, &mut functions, &mut unknown);
 	if let Some(error) = unknown {
@@ -129,10 +130,7 @@ fn literal_default(parameter: Node) -> Node {
 		Node::Symbol(name) if name.len() > 1 && name.ends_with(OPTIONAL_MARK) => {
 			optional(symbol(name.trim_end_matches(OPTIONAL_MARK)))
 		}
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(literal_default(*node)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(literal_default),
 		other => other,
 	}
 }
@@ -282,12 +280,6 @@ fn parameter_default(parameter: &Node) -> Option<Node> {
 	}
 }
 
-thread_local! {
-	/// The program's declared types, while this pass runs: `pic{width:5}` constructs and `s:shape` declares, neither
-	/// names an argument
-	static DECLARED_TYPES: std::cell::RefCell<std::collections::HashSet<String>> = Default::default();
-}
-
 fn declared_types(node: &Node) -> std::collections::HashSet<String> {
 	let mut types = std::collections::HashSet::new();
 	node.visit(&mut |part| {
@@ -299,7 +291,8 @@ fn declared_types(node: &Node) -> std::collections::HashSet<String> {
 }
 
 fn is_type(name: &str) -> bool {
-	crate::analyzer::type_word_kind(name).is_some() || DECLARED_TYPES.with(|types| types.borrow().contains(name))
+	crate::analyzer::type_word_kind(name).is_some()
+		|| crate::compile_context::read(|context| context.declared_types.contains(name))
 }
 
 /// `b=1` or `b:1` in a call: the name and the value. Not `pic:{…}` (an instance) nor `s:shape` (a parameter

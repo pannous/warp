@@ -73,7 +73,7 @@ pub fn lower(program: Node) -> Node {
 	if crate::pipeline::compile_mode().for_a_page {
 		return without_serving(program);
 	}
-	let port = crate::pipeline::serving_port();
+	let port = crate::compile_context::read(|context| context.serving_port);
 	let program = if port.is_none() {
 		with_local_routes(program)
 	} else {
@@ -835,7 +835,13 @@ fn asking_the_server(statements: Vec<Node>, servers: &[String]) -> Result<Vec<No
 				Bracket::None,
 				Separator::Space,
 			);
-			key(fetch, Op::Coalesce, crate::pipeline::server_value(index))
+			key(
+				fetch,
+				Op::Coalesce,
+				crate::compile_context::read(|context| {
+					context.server_values.get(index).cloned().unwrap_or(Node::Empty)
+				}),
+			)
 		};
 		let op = if prerendering { Op::Assign } else { Op::Define };
 		(call, key(Node::Symbol(names[index].clone()), op, value))
@@ -1115,7 +1121,10 @@ fn routes_in(items: &[Node]) -> Vec<Route> {
 	words
 		.chunks(3)
 		.filter_map(|route| match route {
-			[method, path, body] if METHODS.contains(&method.drop_meta().name().as_str()) => {
+			// the path is text: `get cents of 3` is the phrase call `get cents of`, no route
+			[method, path, body]
+				if METHODS.contains(&method.drop_meta().name().as_str()) && path.text_value().is_some() =>
+			{
 				Some((method.drop_meta().name().to_uppercase(), path.clone(), body.clone()))
 			}
 			_ => None,

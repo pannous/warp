@@ -1,0 +1,3 @@
+// card partial-hole-fix: leaving an argument out is an error whose fix names the hole
+add(a, b) := a + b
+inc := add 1

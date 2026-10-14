@@ -752,10 +752,7 @@ impl Rewrite<'_> {
 					),
 				}
 			}
-			Node::Meta { node, data } => Node::Meta {
-				node: Box::new(self.node(*node, function)),
-				data,
-			},
+			meta @ Node::Meta { .. } => meta.under_meta(|node| self.node(node, function)),
 			// an array as a whole: the list of its cells
 			Node::Symbol(_) if let Some(kind) = shared(&node, &self.names(function)) => collected(&node, kind),
 			// a read of a shared value

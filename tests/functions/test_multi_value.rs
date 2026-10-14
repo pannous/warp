@@ -79,24 +79,6 @@ fn test_big_division_results_unchanged() {
 	is!("12 % 98765432109876543210", 12);
 }
 
-#[cfg(feature = "optimizer")]
-#[test]
-fn test_optimized_multi_value_division() {
-	use warp::wasm_optimizer::{OptimizationMode, WasmOptimizer};
-	if !WasmOptimizer::tools_available() {
-		eprintln!("Skipping: wasm-opt not found - install binaryen");
-		return;
-	}
-	let module = compile(BIG_DIVISION).unwrap_or_else(|error| panic!("{error:?}"));
-	let optimized = WasmOptimizer::library(OptimizationMode::Speed)
-		.optimize(&module.bytes)
-		.unwrap();
-	assert_eq!(
-		warp::wasm_reader::read_bytes(&optimized).unwrap(),
-		int("60308641996265432088")
-	);
-}
-
 #[test]
 fn test_int_divmod_returns_both_results() {
 	let module = compile(BIG_DIVISION).unwrap_or_else(|error| panic!("{error:?}"));

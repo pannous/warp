@@ -360,6 +360,10 @@ them, so `use draw; show()` fills the pane. Test: tests/web/test_playground_pain
 The room is measured from the pane's width and the window's bottom, never from the paintings: measured around them
 (pane.bottom - painted.top) the pane grew with each view-sized painting, so each run (and each `on frame` frame) took a
 view ~40 px taller (card webgpu-safari; tour check VIEW_STEADY).
+What follows the paintings to the page's end (diagnostics list, pane padding and border, body padding; roomBelowPaintings)
+is left free, and `.painted` is top-aligned (no descender gap): before, a view-sized painting overflowed the window by
+~40 px, Firefox's scrollbar (12 px) then narrowed the next view, and VIEW_STEADY failed now and then (card
+tour-firefox, 2026-10-14). viewSize is also retold as each run starts: the ResizeObserver sees only the pane's size.
 
 ## Safari (card webgpu-safari, 2026-10-13)
 No Safari on the Mac either: `test_in_browser.py --examples --safari …` drives it through safaridriver (classic

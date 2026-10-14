@@ -778,7 +778,7 @@ fn instance_member(item: &Node) -> Option<(String, Vec<Node>)> {
 	}
 }
 
-/// `static k = 3`, `static make(x) := …` in a class body (P122)
+/// `static k = 3` in a class body (P122)
 fn is_static(item: &Node) -> bool {
 	item.attribute(crate::warp_parser::STATIC_KEYWORD).is_some()
 }
@@ -805,7 +805,7 @@ fn static_members(node: &Node) -> Vec<(String, String)> {
 	statics
 }
 
-/// `circle.count` and `circle.make(2)` of static members as the global `circle·count` and the call `circle·make(2)`
+/// `circle.count` of a static member as the global `circle·count`
 fn static_reads(node: Node, statics: &[(String, String)]) -> Node {
 	let recurse = |child: Node| static_reads(child, statics);
 	let Node::Key(object, Op::Dot, member) = node else {
@@ -821,16 +821,6 @@ fn static_reads(node: Node, statics: &[(String, String)]) -> Node {
 	};
 	match member.drop_meta() {
 		Node::Symbol(name) if is_member(name) => Node::Symbol(static_name(class, name)),
-		Node::List(items, Bracket::Round, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if is_member(name)) =>
-		{
-			let arguments = items[1..].iter().cloned().map(recurse);
-			let function = Node::Symbol(static_name(class, &items[0].drop_meta().name()));
-			Node::List(
-				std::iter::once(function).chain(arguments).collect(),
-				Bracket::Round,
-				separator.clone(),
-			)
-		}
 		_ => Node::Key(object, Op::Dot, Box::new(recurse(*member))),
 	}
 }
@@ -1022,16 +1012,6 @@ fn split_class(node: &Node, changing: &mut Changing) -> Option<(Node, Vec<Node>)
 /// getter `k(self:class) := class·k`, so an instance reads it too (`c.k`)
 fn static_definitions(members: &Members, member: &Node) -> Vec<Node> {
 	let class = members.class;
-	if let Some((name, parameters, body)) = method_parts(member) {
-		let readable = Readable {
-			class,
-			fields: vec![],
-			methods: vec![],
-			statics: members.statics.iter().collect(),
-		};
-		let head = call(&static_name(class, &name), parameters);
-		return vec![key(head, Op::Define, receiver_reads(body, &readable))];
-	}
 	let Some(name) = field_name(member) else { return vec![] };
 	let Node::Key(_, Op::Assign, value) = member.drop_meta() else {
 		return vec![];
@@ -1228,18 +1208,6 @@ fn receiver_reads(node: Node, readable: &Readable) -> Node {
 	let is_call_of = |items: &[Node], names: &[&String]| matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if names.contains(&name));
 	match node {
 		Node::Symbol(name) if readable.statics.contains(&&name) => Node::Symbol(static_name(readable.class, &name)),
-		Node::List(items, Bracket::Round, separator) if is_call_of(&items, &readable.statics) => {
-			let arguments = items[1..]
-				.iter()
-				.cloned()
-				.map(|argument| receiver_reads(argument, readable));
-			let function = Node::Symbol(static_name(readable.class, &items[0].drop_meta().name()));
-			Node::List(
-				std::iter::once(function).chain(arguments).collect(),
-				Bracket::Round,
-				separator,
-			)
-		}
 		Node::Symbol(name) if readable.fields.contains(&&name) => on_receiver(Node::Symbol(name)),
 		Node::Symbol(name) if RECEIVER_ALIASES.contains(&name.as_str()) => symbol(RECEIVER),
 		Node::List(items, Bracket::Round, separator) if is_call_of(&items, &readable.methods) => {

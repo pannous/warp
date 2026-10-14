@@ -35,17 +35,8 @@ impl WasmGcEmitter {
 			let at_end = [I::LocalGet(pointer), I::LocalGet(end), I::I32GeU];
 			// a one-character text is a character node: its digit, else invalid_number
 			s.emit_field(f, 0, 0);
-			Self::emit_list(
-				f,
-				&[
-					I::I64Const(KIND_MASK),
-					I::I64And,
-					I::I64Const(Kind::Codepoint as i64),
-					I::I64Eq,
-					I::If(BlockType::Empty),
-					I::LocalGet(0),
-				],
-			);
+			Self::emit_kind_test(f, Kind::Codepoint as i64, I::I64Eq);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(0)]);
 			s.emit_codepoint_of_node(f);
 			Self::emit_list(
 				f,
@@ -62,17 +53,8 @@ impl WasmGcEmitter {
 			// a float truncates toward zero (`(x*x) as int` of a float parameter held as a Node)
 			let (node_type, float_box) = (s.type_manager.node_type, s.type_manager.f64_box_type);
 			s.emit_field(f, 0, 0);
-			Self::emit_list(
-				f,
-				&[
-					I::I64Const(KIND_MASK),
-					I::I64And,
-					I::I64Const(Kind::Float as i64),
-					I::I64Eq,
-					I::If(BlockType::Empty),
-					I::LocalGet(0),
-				],
-			);
+			Self::emit_kind_test(f, Kind::Float as i64, I::I64Eq);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(0)]);
 			Self::emit_list(
 				f,
 				&[
@@ -91,17 +73,8 @@ impl WasmGcEmitter {
 			s.emit_truncating_cast_via(f, value);
 			Self::emit_list(f, &[I::Return, I::End]);
 			s.emit_field(f, 0, 0);
-			Self::emit_list(
-				f,
-				&[
-					I::I64Const(KIND_MASK),
-					I::I64And,
-					I::I64Const(Kind::Text as i64),
-					I::I64Ne,
-					I::If(BlockType::Empty),
-					I::LocalGet(0),
-				],
-			);
+			Self::emit_kind_test(f, Kind::Text as i64, I::I64Ne);
+			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(0)]);
 			s.call(f, "get_int_value");
 			Self::emit_list(f, &[I::Return, I::End]);
 			s.emit_text_bounds(f, pointer, end);
@@ -248,15 +221,7 @@ impl WasmGcEmitter {
 					{
 						for operand in [0, 1] {
 							s.emit_field(f, operand, 0);
-							Self::emit_list(
-								f,
-								&[
-									I::I64Const(KIND_MASK),
-									I::I64And,
-									I::I64Const(Kind::Time as i64),
-									I::I64Eq,
-								],
-							);
+							Self::emit_kind_test(f, Kind::Time as i64, I::I64Eq);
 						}
 						Self::emit_list(
 							f,
@@ -277,19 +242,8 @@ impl WasmGcEmitter {
 						// text as their message (`out += tag(x)` of an error, card error-value-kind)
 						for side in 0..2 {
 							s.emit_field(f, side, 0);
-							Self::emit_list(
-								f,
-								&[
-									I::I64Const(KIND_MASK),
-									I::I64And,
-									I::I64Const(Kind::Error as i64),
-									I::I64Eq,
-									I::If(BlockType::Empty),
-									I::LocalGet(side),
-									I::Return,
-									I::End,
-								],
-							);
+							Self::emit_kind_test(f, Kind::Error as i64, I::I64Eq);
+							Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(side), I::Return, I::End]);
 						}
 						let is_list = |f: &mut Function, operand: u32| {
 							s.emit_field(f, operand, 0);
@@ -421,10 +375,7 @@ impl WasmGcEmitter {
 					}
 					for operand in [0, 1] {
 						s.emit_field(f, operand, 0);
-						Self::emit_list(
-							f,
-							&[I::I64Const(KIND_MASK), I::I64And, I::I64Const(float_kind), I::I64Eq],
-						);
+						Self::emit_kind_test(f, float_kind, I::I64Eq);
 					}
 					f.instruction(&I::I32Or);
 					// an exact power of a ratio exponent is no exact number: 2^(7/12) is computed as f64

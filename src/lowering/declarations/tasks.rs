@@ -7,8 +7,6 @@ pub(super) const TASK_WORDS: [&str; 2] = ["go", "await"];
 /// What a task signals when it is done, and the controls that would interrupt one
 pub(super) const FINISH_EVENTS: [&str; 5] = ["finishes", "finished", "completes", "ends", "done"];
 pub(super) const TASK_CONTROLS: [&str; 4] = ["stop", "pause", "cancel", "resume"];
-/// `dir(job)` of a task: the words it takes (card g_oOJs), no read of its value
-pub(super) const DIR_WORD: &str = "dir";
 /// `go f(x)` of a user function and a read of its task variable, until resolve_tasks knows whether f runs on a thread
 pub(crate) const TASK_GO: &str = "task·go";
 pub(super) const TASK_VALUE: &str = "task·value";
@@ -108,10 +106,8 @@ pub fn lower_tasks(node: Node) -> Node {
 	});
 	started.retain(|_, function| functions.contains(function));
 	let job_lists = job_lists(&node, &functions);
-	let own_dir = defined.contains(DIR_WORD);
 	Tasks {
 		words,
-		own_dir,
 		tasks,
 		started,
 		functions,
@@ -345,10 +341,7 @@ pub(super) fn awaited(node: Node) -> Node {
 			items[0] = symbol(named);
 			Node::List(items, bracket, separator)
 		}
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(awaited(*node)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(awaited),
 		other => other,
 	}
 }
@@ -368,8 +361,6 @@ pub(super) fn marker(word: &str, parts: Vec<Node>) -> Node {
 #[derive(Clone)]
 pub(super) struct Tasks<'a> {
 	words: Vec<&'a str>,
-	/// the program defines its own `dir`
-	own_dir: bool,
 	/// task variables and the functions `go` starts
 	tasks: std::collections::HashSet<String>,
 	/// task variable → the user function its `go` started
@@ -381,18 +372,6 @@ pub(super) struct Tasks<'a> {
 }
 
 impl Tasks<'_> {
-	/// `dir(job)`: await, the controls and the finish event, as texts
-	pub(super) fn task_dir(&self, items: &[Node]) -> Option<Node> {
-		let [dir, subject] = items else { return None };
-		let names: Vec<String> = [TASK_WORDS[1]]
-			.iter()
-			.chain(&TASK_CONTROLS)
-			.chain(&[FINISH_EVENT])
-			.map(|name| name.to_string())
-			.collect();
-		(word(dir) == DIR_WORD && !self.own_dir && self.is_task(subject)).then(|| crate::reflection::text_list(&names))
-	}
-
 	pub(super) fn is_task(&self, node: &Node) -> bool {
 		match node.drop_meta() {
 			Node::Symbol(name) => self.tasks.contains(name),
@@ -522,9 +501,6 @@ impl Tasks<'_> {
 					.or_else(|| self.within_or(&items))
 				{
 					return race;
-				}
-				if let Some(names) = self.task_dir(&items) {
-					return names;
 				}
 				let items: Vec<Node> = items.into_iter().map(|item| self.lower(item)).collect();
 				match self.task_statement(&items) {

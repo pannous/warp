@@ -3,6 +3,7 @@
 use crate::is;
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-scoped-handlers: block-scoped handlers `on e {…} in {…}` were dropped"]
 fn effect_block_as_operand() {
 	is!(
 		"price(net) := net * (1 + emit tax)\n\"total \" + on tax { 0.5 } in { price(100) }",

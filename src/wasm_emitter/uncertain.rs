@@ -14,7 +14,7 @@ use super::text_builtins::TEXT_CONCAT;
 use super::WasmGcEmitter;
 use crate::node::Node;
 use crate::operators::Op;
-use crate::type_kinds::{Kind, KIND_MASK};
+use crate::type_kinds::Kind;
 use crate::uncertain::{Extremum, CERTAINLY, INTERVAL_FIELDS, INTERVAL_WORDS, POSSIBLY, SIGMA};
 use wasm_encoder::*;
 use Instruction as I;
@@ -307,15 +307,7 @@ impl WasmGcEmitter {
 	/// Push an i32: is the Node in `local` uncertain
 	pub(super) fn is_uncertain(&self, func: &mut Function, local: u32) {
 		self.emit_field(func, local, 0);
-		Self::emit_list(
-			func,
-			&[
-				I::I64Const(KIND_MASK),
-				I::I64And,
-				I::I64Const(Kind::Uncertain as i64),
-				I::I64Eq,
-			],
-		);
+		Self::emit_kind_test(func, Kind::Uncertain as i64, I::I64Eq);
 	}
 
 	/// An Int or a Float, not a bool
@@ -1019,16 +1011,7 @@ impl WasmGcEmitter {
 				put(f, byte);
 			}
 			f.instruction(&I::End);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(address),
-					I::LocalGet(position),
-					I::LocalGet(address),
-					I::I32Sub,
-				],
-			);
-			s.call(f, "new_text");
+			s.emit_new_text_to(f, address, position);
 		});
 	}
 

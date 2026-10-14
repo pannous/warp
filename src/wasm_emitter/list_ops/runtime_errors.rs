@@ -141,17 +141,10 @@ impl WasmGcEmitter {
 	pub(in crate::wasm_emitter) fn emit_fail_if_error(&mut self, func: &mut Function, local: u32) {
 		let trap_detail = self.trap_detail_global();
 		self.emit_field(func, local, 0);
+		Self::emit_kind_test(func, Kind::Error as i64, I::I64Eq);
 		Self::emit_list(
 			func,
-			&[
-				I::I64Const(KIND_MASK),
-				I::I64And,
-				I::I64Const(Kind::Error as i64),
-				I::I64Eq,
-				I::If(BlockType::Empty),
-				I::LocalGet(local),
-				I::GlobalSet(trap_detail),
-			],
+			&[I::If(BlockType::Empty), I::LocalGet(local), I::GlobalSet(trap_detail)],
 		);
 		self.call(func, RETURNED_ERROR);
 		func.instruction(&I::End);
@@ -251,16 +244,8 @@ impl WasmGcEmitter {
 			|s, f| {
 				let (count, current) = (2, 3);
 				s.emit_field(f, 0, 0);
-				Self::emit_list(
-					f,
-					&[
-						I::I64Const(KIND_MASK),
-						I::I64And,
-						I::I64Const(Kind::Empty as i64),
-						I::I64Ne,
-						I::If(BlockType::Empty),
-					],
-				);
+				Self::emit_kind_test(f, Kind::Empty as i64, I::I64Ne);
+				Self::emit_list(f, &[I::If(BlockType::Empty)]);
 				Self::emit_list(f, &[I::LocalGet(0), I::LocalSet(current)]);
 				s.emit_cell_walk(f, current, |f| {
 					Self::emit_list(f, &[I::LocalGet(count), I::I64Const(1), I::I64Add, I::LocalSet(count)])
