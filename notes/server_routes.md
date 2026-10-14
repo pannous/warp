@@ -10,8 +10,8 @@ One source file is compiled twice:
 
 | build | what it makes of | made by |
 |---|---|---|
-| server (native, `warp run app.warp`) | `serve 8080 { get "/api/x" {…} }` serves HTTP, `server def f` is also POST /rpc/f, the page's site answers GET / and any other path | lowering/serve.rs, web_server.rs, site::served_files |
-| page (wasm in the browser, pipeline::for_a_page) | `route` patterns run in the page's router, `serve` is left out, each call of a `server def f` is a value fetched from POST /rpc/f | lowering/routes.rs, lowering/serve.rs without_serving, site.js |
+| server (native, `warp run app.warp`) | `serve 8080 { get "/api/x" {…} }` serves HTTP, `server def f` is also POST /rpc/f, the page's site answers GET / and any other path | lowering/web/serve.rs, web_server.rs, site::served_files |
+| page (wasm in the browser, pipeline::for_a_page) | `route` patterns run in the page's router, `serve` is left out, each call of a `server def f` is a value fetched from POST /rpc/f | lowering/web/routes.rs, lowering/web/serve.rs without_serving, site.js |
 
 Example (probes/server_routes/one_source.warp, which runs and was checked in a browser):
 
@@ -42,7 +42,7 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
    because every definition is in both.
 2. **Server-only code** (`server def`), done (cards rpc-stub, rpc-everywhere; probes/server_routes/rpc_everywhere.warp,
    checked in a browser: the button's handler doubles n through the server, "next" is fetched anew):
-   - The page build reads **every** call of a server function from a main-level variable, `f·rpc·0` (lowering/serve.rs
+   - The page build reads **every** call of a server function from a main-level variable, `f·rpc·0` (lowering/web/serve.rs
      asking_the_server; `g := f(x)` names it g). The shipped page leaves the server functions out (their bodies and
      secrets stay out of app.wasm) and fetches the value: `f·rpc·0 := fetch ["/rpc/f", [args]] ?? first value`, a
      POST of the arguments as JSON, fetched anew when an argument changes. Markup, expressions and handlers read the
@@ -70,7 +70,7 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
    secret ships, the server gives out only what the route displays). Server data is a variable registered from the
    database (`users: [User] = database.users`, `stored users: [User]`, `prefs = database.prefs`). A plain main-level
    value (`users = ["Ann", "Bo"]` above) is still a value at build time in the page.
-   - lowering/serve.rs with_route_data: each value of a route's block that reads server data (`"User " + users#id.name`
+   - lowering/web/serve.rs with_route_data: each value of a route's block that reads server data (`"User " + users#id.name`
      inside `h1{…}`; markup and blocks are looked into, any other value is asked for whole) becomes the server function
      `route·data·N(path)`. It binds the route's parameters from the path and gives that value, ø for a path of another
      route. So POST /rpc/route·data·N with `["/users/2"]` gives "User Bo" and nothing else of the table.
@@ -106,7 +106,7 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
      /users/app-route-1.wasm).
 6. **`warp serve [app.warp] [port]`** (P222, done; the CGI mode is retired): serves any program without a `serve PORT
    {…}` statement: its page (site.rs), its `server def`s as POST /rpc/f and its top-level `get`/`post "/path" {…}` routes,
-   at the port (8080; the file app.warp or main.warp of the folder). pipeline::serving_at(port) makes lowering/serve.rs
+   at the port (8080; the file app.warp or main.warp of the folder). pipeline::serving_at(port) makes lowering/web/serve.rs
    append the serving after the program's statements; a program with its own `serve PORT {…}` keeps it. Plain
    `warp app.warp` serves too when serve::serves finds a route, a `get`/`post`, a `server def` or a `serve` (a static
    check), printing "serving http://localhost:8080 (routes found; `warp run app.warp` runs it once without serving)";

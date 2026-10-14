@@ -141,7 +141,7 @@ pub struct CompileMode {
 	pub prerendering: bool,
 	/// a module for any host (`warp compile --wasm`): a browser's host reads its values too
 	pub for_any_host: bool,
-	/// hosted (`warp deploy`): a program without routes gets them (lowering/serve.rs with_default_routes)
+	/// hosted (`warp deploy`): a program without routes gets them (lowering/web/serve.rs with_default_routes)
 	pub for_hosting: bool,
 	/// it runs under `warp test`: its tests run and give its value (lowering/test_blocks.rs)
 	pub for_tests: bool,
@@ -203,7 +203,7 @@ pub fn for_a_page<T>(run: impl FnOnce() -> T) -> T {
 	with_flag(|context| &mut context.mode.for_a_page, run)
 }
 
-/// `run` compiling a program for WAGI (Spin, Akamai Functions): lowering/serve.rs ends it in the answer of its routes
+/// `run` compiling a program for WAGI (Spin, Akamai Functions): lowering/web/serve.rs ends it in the answer of its routes
 /// to the request (lib/wagi.warp), and it exports `_start`
 pub fn for_wagi<T>(run: impl FnOnce() -> T) -> T {
 	with_flag(|context| &mut context.mode.for_wagi, run)
@@ -221,7 +221,7 @@ pub fn for_hosting<T>(run: impl FnOnce() -> T) -> T {
 	with_flag(|context| &mut context.mode.for_hosting, run)
 }
 
-/// `run` compiling a page that calls its server functions directly, as the server does (lowering/serve.rs): for its
+/// `run` compiling a page that calls its server functions directly, as the server does (lowering/web/serve.rs): for its
 /// first HTML, rendered at build time
 pub fn prerendering<T>(run: impl FnOnce() -> T) -> T {
 	with_flag(|context| &mut context.mode.prerendering, run)
@@ -239,7 +239,7 @@ pub fn serving_at<T>(port: u16, run: impl FnOnce() -> T) -> T {
 }
 
 /// `run` compiling a program that renders its own markup (the playground, web.rs renders_itself): it exports page·html
-/// and page·render as a page does (lowering/page_html.rs); nothing else of a page changes (it may still serve)
+/// and page·render as a page does (lowering/web/page_html.rs); nothing else of a page changes (it may still serve)
 pub fn rendering_itself<T>(run: impl FnOnce() -> T) -> T {
 	with_flag(|context| &mut context.mode.rendering_itself, run)
 }

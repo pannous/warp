@@ -2,7 +2,7 @@
 // changes only what differs (morphChildren), and an event inside it names its element's handler (elementEvent). The page
 // also keeps the values of `stored x = v` and those a `warp dev` page keeps across reloads (keptValues, keepValue).
 
-const INSTANCE_ATTRIBUTE = "data-warp-instance"; // a component instance's elements (src/lowering/element_events.rs)
+const INSTANCE_ATTRIBUTE = "data-warp-instance"; // a component instance's elements (src/lowering/web/element_events.rs)
 const KEY_ATTRIBUTE = "data-warp-key"; // a list item's element (lib/markup.warp)
 const NUMBER_FIELDS = ["number", "range"]; // fields whose bound value is a number
 const LEAVING_ATTRIBUTE = "data-warp-leaving"; // an element animating out: no longer matched, removed when done

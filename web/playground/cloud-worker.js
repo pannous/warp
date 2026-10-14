@@ -1,12 +1,12 @@
 // A warp program as a Cloudflare Worker (card cloud-deploy, src/web/deploy.rs): `warp deploy app.warp` bundles the host
 // scripts the program needs (reader.js, host.js, its parts) with this module and the program's app.wasm. Each request
-// goes to the program's routes (`get "/" {…}`, lowering/serve.rs page·submitted) as {method, path, query, body, headers}; the
+// goes to the program's routes (`get "/" {…}`, lowering/web/serve.rs page·submitted) as {method, path, query, body, headers}; the
 // value answers as src/web/web_server.rs answers it: a text as text/plain, any other value as JSON; no route is 404, a
 // failure 500 with its message. The program's main runs once per isolate, so its variables live across requests.
 import compiledProgram from "./app.wasm";
 import programBytes from "./app.bin";
 
-const NO_ROUTE = "no route answers"; // lowering/serve.rs: page·submitted of a request no route takes
+const NO_ROUTE = "no route answers"; // lowering/web/serve.rs: page·submitted of a request no route takes
 const JSON_TYPE = "application/json";
 const TEXT_TYPE = "text/plain; charset=utf-8";
 const workerHooks = { print: text => console.log(text) };

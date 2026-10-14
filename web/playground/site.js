@@ -5,7 +5,7 @@
 // in the HTML the program renders itself (its export page·html, lib/markup.warp's to_html, which also rendered index.html
 // at build time; notes/web_framework.md "Built sites"). Main runs once here as it ran at build time, so the component instances count alike.
 // A link to a page of the same site goes through the program's routes (History API): the address changes, the program
-// reads the new path (page_path) and the page morphs; the back button does the same (lowering/routes.rs).
+// reads the new path (page_path) and the page morphs; the back button does the same (lowering/web/routes.rs).
 // Each route's own code may come in a module of its own (src/web/route_split.rs): the page loads the one of the route it
 // shows before running it (host-routes.js loadRouteModule).
 

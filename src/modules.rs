@@ -680,7 +680,7 @@ const FILE_URL_PREFIX: &str = "file://";
 /// lib/units.warp: quantities whose unit is known only at run time, `quantity("5 km")` (notes/units_runtime.md)
 const UNITS_MODULE: &str = "units";
 const QUANTITY: &str = "quantity";
-/// A served route's path parameters (`post "/todos/:id:int/toggle"`, lowering/serve.rs) are read by the router's words
+/// A served route's path parameters (`post "/todos/:id:int/toggle"`, lowering/web/serve.rs) are read by the router's words
 const ROUTE_PARTS: [&str; 3] = ["route_segment", "route_parameter", "route_matches"];
 /// lib/agent.warp: `agent "prompt"` asks Claude (card g_X_F0)
 const AGENT_MODULE: &str = "agent";
@@ -710,8 +710,8 @@ const SOUND_WORDS: [&str; 17] = [
 const SOUND_SETUP_FREE_WORDS: [&str; 4] = ["play", "beep", "stop_sound", "wait_sound"];
 /// Whether a program needs a module
 type NeededBy = fn(&Node) -> bool;
-/// The standard modules a program needs without `use`: P183 a file URL → file, a page → markup (lowering/page_html.rs),
-/// routes or a server route's path parameters → router, a route's regular expression → regex (lowering/routes.rs), a call of quantity → units (run-time units),
+/// The standard modules a program needs without `use`: P183 a file URL → file, a page → markup (lowering/web/page_html.rs),
+/// routes or a server route's path parameters → router, a route's regular expression → regex (lowering/web/routes.rs), a call of quantity → units (run-time units),
 /// a call of agent → agent, a call of play, beep, stop_sound or wait_sound → sound, a WAGI build (`warp build --wagi`) → wagi
 const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 	("file", mentions_file_url),

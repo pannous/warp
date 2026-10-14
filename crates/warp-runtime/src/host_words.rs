@@ -81,7 +81,7 @@ pub const SYSTEM_VALUES: [(&str, bool); 13] = [
 /// `clipboard`: the clipboard's text, read only when the program reads it (host.rs clipboard_text)
 pub const CLIPBOARD: &str = "clipboard";
 pub const CLIPBOARD_TEXT: &str = "clipboard_text";
-/// The path of the page shown ("/users/7"), which picks its route (lowering/routes.rs); "/" natively
+/// The path of the page shown ("/users/7"), which picks its route (lowering/web/routes.rs); "/" natively
 pub const PAGE_PATH: &str = "page_path";
 /// `notify "text"`: a desktop notification (system_values.rs notify; the playground: the browser's Notification)
 pub const NOTIFY: &str = "notify";

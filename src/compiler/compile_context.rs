@@ -22,7 +22,7 @@ pub struct CompileContext {
 	pub component: WorldFunctions,
 	/// the values the page's calls of server functions gave its prerender, the shipped page's first values
 	pub server_values: Vec<Node>,
-	/// the port `warp serve` serves a program at that has no `serve PORT {…}` of its own (lowering/serve.rs)
+	/// the port `warp serve` serves a program at that has no `serve PORT {…}` of its own (lowering/web/serve.rs)
 	pub serving_port: Option<u16>,
 	/// a sandboxed run on this thread (sandbox.rs)
 	pub sandboxed: bool,
