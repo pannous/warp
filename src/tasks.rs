@@ -2,14 +2,13 @@
 //! a fixed worker pool; `await job` waits for it. Values are copied: the arguments go in, the result comes out (a TaskValue
 //! between the threads, rebuilt in each instance through its exported constructors); the task never changes the
 //! caller's variables. The program calls the host words (declarations::resolve_tasks):
-//! `task_spawn(name, a0, a1, a2, a3)` / `task_await(id)` for functions of Ints, `task_spawn_values(name, [args])` /
-//! `task_await_value(id)` for numbers, texts and characters, and `task_control(id, op)` for stop, pause and resume.
+//! `task_spawn_values(name, [args])` / `task_await_value(id)` for numbers, texts, characters and lists, and `task_control(id, op)` for stop, pause and resume.
 //! The task's instance starts with the spawning instance's capture globals: what its closures captured and the
 //! program's globals (`capture·global·<name>`, card task-sound), as they are at the spawn.
 
 use crate::host::{
-	HostState, HOST_LIBRARY, MAX_TASK_ARGUMENTS, TASK_AWAIT, TASK_AWAIT_VALUE, TASK_CONTROL, TASK_FAILURE, TASK_JOIN,
-	TASK_PAUSE, TASK_SPAWN, TASK_SPAWN_VALUES, TASK_STATUS, TASK_STOP, TEXT_HEAP_EXPORT,
+	HostState, HOST_LIBRARY, TASK_AWAIT_VALUE, TASK_CONTROL, TASK_FAILURE, TASK_JOIN, TASK_PAUSE, TASK_SPAWN_VALUES,
+	TASK_STATUS, TASK_STOP, TEXT_HEAP_EXPORT,
 };
 use crate::node::{Bracket, Node};
 use crate::wasm_reader::Imports;
@@ -694,29 +693,6 @@ pub fn imports_tasks_in(bytes: &[u8]) -> bool {
 
 impl TaskTable {
 	fn link_into(self: &Arc<Self>, linker: &mut Linker<HostState>) -> Result<()> {
-		let spawner = self.clone();
-		linker.func_wrap(
-			HOST_LIBRARY,
-			TASK_SPAWN,
-			move |mut caller: Caller<'_, HostState>,
-			      name: i32,
-			      a0: i64,
-			      a1: i64,
-			      a2: i64,
-			      a3: i64|
-			      -> wasmtime::Result<i64> {
-				let name = c_string(&mut caller, name).map_err(host_error)?;
-				let arguments: [i64; MAX_TASK_ARGUMENTS] = [a0, a1, a2, a3];
-				let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
-				let arguments = arguments
-					.iter()
-					.map(|argument| builders.integer(*argument, &mut caller.as_context_mut()))
-					.collect::<Result<Vec<_>>>()
-					.map_err(host_error)?;
-				let captured = spawner.captured(&mut caller).map_err(host_error)?;
-				Ok(spawner.spawn(name, arguments, captured))
-			},
-		)?;
 		let value_spawner = self.clone();
 		linker.func_wrap(
 			HOST_LIBRARY,
@@ -836,18 +812,6 @@ impl TaskTable {
 			controller.control(id, operation)
 		})?;
 		self.link_channels(linker)?;
-		let awaiter = self.clone();
-		linker.func_wrap(
-			HOST_LIBRARY,
-			TASK_AWAIT,
-			move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<i64> {
-				let value = awaiter.take(id).map_err(task_failure)?;
-				let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
-				builders
-					.int_of(&value, &mut caller.as_context_mut())
-					.map_err(host_error)
-			},
-		)?;
 		Ok(())
 	}
 
