@@ -45,3 +45,26 @@ fn version_names_the_branch() {
 		assert!(stderr.contains(&format!(" on {branch} · built 20")), "{stderr}");
 	}
 }
+
+/// A program whose first word names a command is still a program when that word is assigned (card top-level):
+/// `warp 'lower = "abc"; lower'` printed "no module needed: Error(…)"
+#[test]
+fn an_assigned_command_word_is_a_variable() {
+	for (program, expected) in [
+		("lower = \"abc\"; lower", "abc"),
+		("parse = 3; parse", "3"),
+		("eval := 4; eval", "4"),
+	] {
+		let output = crate::common::warp_command()
+			.arg(program)
+			.env("WARP_NO_WINDOW", "1")
+			.env("WARP_HINTS", "0")
+			.output()
+			.expect("warp runs");
+		let stdout = String::from_utf8_lossy(&output.stdout);
+		assert!(
+			stdout.contains(expected) && !stdout.contains("Error"),
+			"{program}: {stdout}"
+		);
+	}
+}
