@@ -248,7 +248,6 @@ PASSED:
   ✓ control::test_for_loop::test_for_with_colon_body
   ✓ control::test_for_loop::test_loop_body_with_a_list_statement
   ✓ control::test_for_loop::test_nested_for
-  ✓ control::test_for_over_a_number::a_for_loop_over_a_number_is_a_compile_error
   ✓ control::test_for_underscore::a_loop_over_underscore_runs
   ✓ control::test_for_unit_words::a_unit_word_walks_the_text_by_that_unit
   ✓ control::test_for_unit_words::the_loop_variable_byte_walks_a_text_by_its_bytes
@@ -399,7 +398,6 @@ PASSED:
   ✓ control::test_match_whole_value::match_names_its_subject
   ✓ control::test_match_whole_value::match_on_a_literal_in_a_body_or_an_arm
   ✓ control::test_match_whole_value::value_is_the_matched_value
-  ✓ control::test_mixed_range_bounds::a_range_from_a_letter_to_a_number_is_a_compile_error
   ✓ control::test_multiline_errors::a_raised_text_keeps_its_lines
   ✓ control::test_named_broadcast::a_named_event_is_no_message_and_no_other_event
   ✓ control::test_named_broadcast::a_named_event_reaches_another_program
@@ -1911,8 +1909,6 @@ PASSED:
   ✓ lists::test_range_arguments::a_range_variable_passed_on_stays_its_bounds
   ✓ lists::test_range_in_structure::a_held_range_is_collected_in_linear_time
   ✓ lists::test_range_in_structure::a_range_after_colon_is_its_value
-  ✓ lists::test_range_returns::a_returned_range_is_read_from_its_bounds
-  ✓ lists::test_range_returns::a_returned_range_stored_in_a_variable_stays_its_bounds
   ✓ lists::test_range_returns::a_returned_range_used_as_a_list_is_its_list
   ✓ lists::test_range_values::a_parenthesized_range_is_a_list
   ✓ lists::test_range_values::a_range_is_a_list_as_an_argument
@@ -2670,6 +2666,7 @@ PASSED:
   ✓ numbers::test_unit_composites::test_products_of_different_dimensions
   ✓ numbers::test_unit_composites::test_sums_need_the_same_dimensions
   ✓ numbers::test_unit_conversion::a_duration_converts_to_a_time_unit
+  ✓ numbers::test_unit_conversion::a_duration_in_a_variable_converts_to_a_time_unit
   ✓ numbers::test_unit_conversion::a_quantity_converts_to_a_unit_of_its_dimension
   ✓ numbers::test_unit_conversion::an_inexact_conversion_is_a_ratio
   ✓ numbers::test_unit_conversion::another_dimension_is_the_dimension_error
@@ -5320,4 +5317,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5315 passed, 0 failed, 5315 total tested
+13 ignored, 5312 passed, 0 failed, 5312 total tested
