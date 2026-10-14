@@ -230,7 +230,7 @@ impl WasmGcEmitter {
 							},
 						],
 					);
-					s.call(f, super::super::equality::IS_META_ENTRY);
+					s.call(f, super::super::super::equality::IS_META_ENTRY);
 					Self::emit_list(
 						f,
 						&[
@@ -505,7 +505,7 @@ impl WasmGcEmitter {
 					let not_fixnum = |local| {
 						[
 							I::LocalGet(local),
-							I::I64Const(super::super::numbers::big_int::FIXNUM_OFFSET),
+							I::I64Const(super::super::super::numbers::big_int::FIXNUM_OFFSET),
 							I::I64Add,
 							I::I64Const(0),
 							I::I64LtS,
@@ -749,7 +749,7 @@ impl WasmGcEmitter {
 				I::I64ExtendI32U,
 			],
 		);
-		self.call(func, super::super::list_ops::INDEX_OUT_OF_RANGE_OF);
+		self.call(func, super::super::super::lists::list_ops::INDEX_OUT_OF_RANGE_OF);
 		Self::emit_list(
 			func,
 			&[

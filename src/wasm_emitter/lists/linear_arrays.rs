@@ -3,7 +3,7 @@
 //! The program calls them like C functions (their signatures in crate::ffi, library LINEAR_LIBRARY, never imported):
 //! an array is the Int of its address, so a host or GPU backend can later take the block as it is, without copying.
 
-use super::WasmGcEmitter;
+use super::super::WasmGcEmitter;
 use crate::node::Node;
 use crate::operators::Op;
 use wasm_encoder::{Function, Instruction as I, MemArg, ValType};
@@ -138,7 +138,7 @@ pub fn is_linear_word(name: &str) -> bool {
 
 impl WasmGcEmitter {
 	/// The linear words the program calls
-	pub(super) fn emit_linear_arrays(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_linear_arrays(&mut self) {
 		let called: Vec<_> = linear_word_signatures()
 			.into_iter()
 			.filter(|(word, _, _)| self.ctx.ffi_imports.contains_key(*word))

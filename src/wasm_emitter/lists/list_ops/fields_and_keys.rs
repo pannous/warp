@@ -140,9 +140,9 @@ impl WasmGcEmitter {
 					self.emit_uncertain_field_lookup(func, held, &name);
 					self.emit_time_field_lookup(func, held, &name);
 					// a key's key, value, op and name, a list's bracket (node_api.rs)
-					if let Some(part) = super::super::node_api::node_part(&name) {
+					if let Some(part) = super::super::super::node_api::node_part(&name) {
 						Self::emit_list(func, &[I::LocalGet(held), I32Const(part)]);
-						self.emit_call(func, super::super::node_api::NODE_PART);
+						self.emit_call(func, super::super::super::node_api::NODE_PART);
 						func.instruction(&I::BrOnNonNull(0));
 					}
 					if let Some((_, fallback)) = FIELD_FALLBACKS.iter().find(|(field, _)| *field == name) {
@@ -211,7 +211,7 @@ impl WasmGcEmitter {
 			|s, f| {
 				let name = 1;
 				f.instruction(&I::LocalGet(0));
-				s.call(f, super::super::text::text_builtins::TEXT_OF);
+				s.call(f, super::super::super::text::text_builtins::TEXT_OF);
 				f.instruction(&I::LocalSet(name));
 				s.emit_field(f, name, 0);
 				Self::emit_list(
@@ -337,7 +337,7 @@ impl WasmGcEmitter {
 				);
 				// a map walked lately has an index
 				Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
-				s.call(f, super::super::map_index::MAP_INDEX_ENTRY);
+				s.call(f, super::super::super::map_index::MAP_INDEX_ENTRY);
 				Self::emit_list(
 					f,
 					&[
@@ -944,7 +944,7 @@ impl WasmGcEmitter {
 				s.emit_cell_walk(f, cell, |f| {
 					// a meta entry `@name:value` is no key, value or entry of the map
 					s.emit_field(f, cell, 1);
-					s.call(f, super::super::equality::IS_META_ENTRY);
+					s.call(f, super::super::super::equality::IS_META_ENTRY);
 					Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::I64Const(SQUARE_LIST_KIND)]);
 					s.emit_field(f, cell, 1);
 					Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalGet(part)]);
@@ -1095,8 +1095,8 @@ impl WasmGcEmitter {
 							I::LocalGet(wanted),
 						],
 					);
-					s.call(f, super::super::text::text_builtins::TEXT_OF);
-					s.call(f, super::super::text::text_builtins::TEXT_FIND);
+					s.call(f, super::super::super::text::text_builtins::TEXT_OF);
+					s.call(f, super::super::super::text::text_builtins::TEXT_FIND);
 					if !positional {
 						Self::emit_list(f, &[I::I64Const(0), I::I64Ne, I::I64ExtendI32U]);
 					}

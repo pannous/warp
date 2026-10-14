@@ -210,7 +210,7 @@ impl WasmGcEmitter {
 					func.instruction(&I::I64Const(0));
 					self.emit_call(func, "new_int");
 					self.emit_node_instructions(func, right);
-					self.emit_call(func, super::list_ops::NODE_ARITHMETIC[1].0);
+					self.emit_call(func, super::lists::list_ops::NODE_ARITHMETIC[1].0);
 				} else if use_float {
 					func.instruction(&I::F64Const(0.0.into()));
 					self.emit_float_value(func, right);
@@ -353,7 +353,7 @@ impl WasmGcEmitter {
 			self.emit_node_instructions(func, if checked { right } else { right_node });
 			self.data_context = outer;
 			if has_list_children(left, right_node) {
-				self.emit_call(func, super::list_ops::ELEMENT_BODY);
+				self.emit_call(func, super::lists::list_ops::ELEMENT_BODY);
 			}
 		} else {
 			self.emit_node_instructions(func, right_node);
@@ -381,14 +381,14 @@ impl WasmGcEmitter {
 		let Some(slot) = self.node_variable_slot(name) else {
 			return false;
 		};
-		if !is_list || !self.should_emit_function(super::list_ops::LIST_EXTEND) {
+		if !is_list || !self.should_emit_function(super::lists::list_ops::LIST_EXTEND) {
 			return false;
 		}
 		self.emit_node_instructions(func, left);
 		self.emit_node_instructions(func, right);
-		self.emit_call(func, super::list_ops::LIST_EXTEND);
+		self.emit_call(func, super::lists::list_ops::LIST_EXTEND);
 		slot.tee(func);
-		if matches!(slot, super::list_dispatch::Slot::Global(_)) {
+		if matches!(slot, super::lists::list_dispatch::Slot::Global(_)) {
 			func.instruction(&I::RefAsNonNull); // a global is nullable, list_extend's list is not
 		}
 		true
@@ -402,13 +402,13 @@ impl WasmGcEmitter {
 		if !is_member
 			|| !matches!(self.get_type(left), crate::Kind::List | crate::Kind::Empty)
 			|| self.get_type(right) != crate::Kind::List
-			|| !self.should_emit_function(super::list_ops::LIST_EXTEND)
+			|| !self.should_emit_function(super::lists::list_ops::LIST_EXTEND)
 		{
 			return false;
 		}
 		let extended = Node::List(
 			vec![
-				Node::Symbol(super::list_ops::LIST_EXTEND.to_string()),
+				Node::Symbol(super::lists::list_ops::LIST_EXTEND.to_string()),
 				left.clone(),
 				right.clone(),
 			],

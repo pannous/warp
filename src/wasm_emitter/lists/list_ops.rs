@@ -5,7 +5,7 @@ use crate::node::Node;
 use crate::operators::Op;
 use crate::type_kinds::{Kind, CURLY_LIST_KIND, KIND_MASK, SQUARE_LIST_KIND, UNMARKED_KIND};
 use crate::wasm_emitter::layout::{utf8, BYTE};
-use crate::wasm_emitter::list_dispatch::Slot;
+use crate::wasm_emitter::lists::list_dispatch::Slot;
 use crate::wasm_emitter::{WasmGcEmitter, NEW_BOOL, VALUES_EQUAL};
 use wasm_encoder::*;
 use Instruction as I;
@@ -42,8 +42,8 @@ const RUN_TIME_TYPE_KINDS: [Kind; 12] = [
 
 /// An ASCII letter with this bit set is lowercase: `byte | ASCII_LOWERCASE_BIT == 'e'` takes e and E
 const ASCII_LOWERCASE_BIT: i32 = 0x20;
-pub(super) const ELEMENT_CHILDREN: &str = "element_children";
-pub(super) const ELEMENT_BODY: &str = "element_body";
+pub(in crate::wasm_emitter) const ELEMENT_CHILDREN: &str = "element_children";
+pub(in crate::wasm_emitter) const ELEMENT_BODY: &str = "element_body";
 /// Runtime functions that read text by one of its units (byte, code point, grapheme)
 const TEXT_UNIT_USERS: [&str; 7] = [
 	"node_count",
@@ -95,7 +95,7 @@ const TEXT_COUNTED_PARTS: [(&str, ValType); 3] =
 	[("start", ValType::I32), ("end", ValType::I32), ("count", ValType::I64)];
 
 /// The locals of a copy of a list's first cells (emit_collect_cells, emit_rebuild_cells), consecutive from `cell`
-pub(super) struct CopyCells {
+pub(in crate::wasm_emitter) struct CopyCells {
 	cell: u32,
 	cells: u32,
 	position: u32,
@@ -105,7 +105,7 @@ pub(super) struct CopyCells {
 }
 
 impl CopyCells {
-	pub(super) fn at(first: u32) -> Self {
+	pub(in crate::wasm_emitter) fn at(first: u32) -> Self {
 		CopyCells {
 			cell: first,
 			cells: first + 1,
@@ -145,7 +145,7 @@ impl WasmGcEmitter {
 	/// with its count (a loop's `index < #items`). A function changing a list's links in place forgets both
 	/// (forget_list_cursor). The list extended last and its last cell, so a loop's `out += [x]` appends there instead of
 	/// walking the list. Globals in the order of LIST_CURSOR_PARTS.
-	pub(super) fn emit_list_cursor_globals(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_list_cursor_globals(&mut self) {
 		if !["list_at", "list_node_at", "node_count", LIST_EXTEND]
 			.iter()
 			.any(|function| self.should_emit_function(function))
@@ -180,7 +180,7 @@ impl WasmGcEmitter {
 	/// The text cursors of text_grapheme_offset, newest first. Runtime texts are bump-allocated, never freed and never
 	/// changed in place (an append writes after their end), so a cursor stays true for any text at the same address
 	/// that still holds it: the same text, the text grown, a prefix sharing its bytes
-	pub(super) fn emit_text_cursor_globals(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_text_cursor_globals(&mut self) {
 		if !TEXT_UNIT_USERS.iter().any(|name| self.should_emit_function(name)) {
 			return;
 		}
@@ -242,12 +242,12 @@ impl WasmGcEmitter {
 	}
 
 	/// The instructions forgetting the list cursor, before a list's links change in place
-	pub(super) fn forget_list_cursor(&self) -> Vec<Instruction<'static>> {
+	pub(in crate::wasm_emitter) fn forget_list_cursor(&self) -> Vec<Instruction<'static>> {
 		[self.forget_list_cursor_keeping_map_indexes(), self.forget_map_indexes()].concat()
 	}
 
 	/// The instructions forgetting the list cursor, in field_with and fields_grow, which keep the map indexes right
-	pub(super) fn forget_list_cursor_keeping_map_indexes(&self) -> Vec<Instruction<'static>> {
+	pub(in crate::wasm_emitter) fn forget_list_cursor_keeping_map_indexes(&self) -> Vec<Instruction<'static>> {
 		self.forget_cursor_parts(&[CursorPart::List, CursorPart::Counted, CursorPart::Extended])
 	}
 
@@ -354,7 +354,7 @@ impl WasmGcEmitter {
 	}
 
 	/// node on the stack → i32 1 when it is a map: a list whose kind carries the curly bracket (`{a: 1}`)
-	pub(super) fn emit_is_map(&self, func: &mut Function) {
+	pub(in crate::wasm_emitter) fn emit_is_map(&self, func: &mut Function) {
 		Self::emit_list(
 			func,
 			&[
@@ -540,7 +540,7 @@ impl WasmGcEmitter {
 					s.emit_cell_walk(func, current, |func| {
 						func.instruction(&I::LocalGet(count));
 						s.emit_field(func, current, 1);
-						s.call(func, super::equality::IS_META_ENTRY);
+						s.call(func, super::super::equality::IS_META_ENTRY);
 						Self::emit_list(func, &[I::I32Eqz, I::I64ExtendI32U, I::I64Add, I::LocalSet(count)]);
 					});
 
@@ -689,7 +689,7 @@ impl WasmGcEmitter {
 					I::RefNull(HeapType::Concrete(node_type)),
 					I::StructNew(node_type),
 				];
-				s.emit_item_check(f, super::declared_values::LIST_ITEM_CHECK, list, value);
+				s.emit_item_check(f, super::super::declared_values::LIST_ITEM_CHECK, list, value);
 				Self::emit_list(f, &[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty)]);
 				Self::emit_list(f, &lone_cell);
 				Self::emit_list(f, &[I::Return, I::End]);
@@ -870,7 +870,7 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::LocalGet(1), I::I64Const(1), compare]);
 	}
 
-	pub(super) fn emit_field(&self, func: &mut Function, local: u32, field_index: u32) {
+	pub(in crate::wasm_emitter) fn emit_field(&self, func: &mut Function, local: u32, field_index: u32) {
 		Self::emit_list(
 			func,
 			&[
@@ -884,7 +884,7 @@ impl WasmGcEmitter {
 	}
 
 	/// `body` for each cell of the list in local `cell`, which steps to the rest after it; `BrIf(1)` in the body ends the walk
-	pub(super) fn emit_cell_walk(&self, func: &mut Function, cell: u32, body: impl FnOnce(&mut Function)) {
+	pub(in crate::wasm_emitter) fn emit_cell_walk(&self, func: &mut Function, cell: u32, body: impl FnOnce(&mut Function)) {
 		Self::emit_list(
 			func,
 			&[
@@ -901,7 +901,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Push field `field_index` (0 ptr, 1 len) of the $String inside text node `local`
-	pub(super) fn emit_text_field(&self, func: &mut Function, local: u32, field_index: u32) {
+	pub(in crate::wasm_emitter) fn emit_text_field(&self, func: &mut Function, local: u32, field_index: u32) {
 		self.emit_field(func, local, 1);
 		Self::emit_list(
 			func,
@@ -978,7 +978,7 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::LocalSet(1), I::Br(0), I::End, I::End]);
 		// meta entries `@name:value` sit behind every field (meta_entries.rs, field_with): arriving at one is past the end
 		self.emit_field(func, current, 1);
-		self.call(func, super::equality::IS_META_ENTRY);
+		self.call(func, super::super::equality::IS_META_ENTRY);
 		self.emit_fail_out_of_range_if(func, asked);
 		let cursors = self.read_cursors();
 		if !cursors.is_empty() {
@@ -1049,7 +1049,7 @@ impl WasmGcEmitter {
 	}
 
 	/// `target#index = value` leaves the assigned value (i64) on the stack; a variable target gets the updated copy
-	pub(super) fn emit_index_assignment(&mut self, func: &mut Function, target: &Node, index: &Node, value: &Node) {
+	pub(in crate::wasm_emitter) fn emit_index_assignment(&mut self, func: &mut Function, target: &Node, index: &Node, value: &Node) {
 		if let Node::Symbol(name) = target.drop_meta() {
 			if self.is_unbound(name) {
 				return self.emit_undefined_variable(func, name);
@@ -1094,7 +1094,7 @@ impl WasmGcEmitter {
 
 	/// An element value node_with_at stores as given: an Int, or a character in a text known as one. A character into
 	/// a target of unknown type goes as its Node: a list read from a field would otherwise hold its codepoint as an Int
-	pub(super) fn is_exact_int_element(&self, target: &Node, value: &Node) -> bool {
+	pub(in crate::wasm_emitter) fn is_exact_int_element(&self, target: &Node, value: &Node) -> bool {
 		match self.get_type(value) {
 			Kind::Int => true,
 			Kind::Codepoint => matches!(self.get_type(target), Kind::Text | Kind::Symbol),
@@ -1104,7 +1104,7 @@ impl WasmGcEmitter {
 
 	/// `left = value` with `left` an element `target#index`, valued as `read` emits it: the element read back after the
 	/// assignment, so a float or text keeps its value (emit_index_assignment leaves an Int)
-	pub(super) fn emit_index_assignment_read_back(
+	pub(in crate::wasm_emitter) fn emit_index_assignment_read_back(
 		&mut self,
 		func: &mut Function,
 		left: &Node,
@@ -1133,7 +1133,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The local or declared global a variable holding a Node (reference) lives in
-	pub(super) fn node_variable_slot(&self, name: &str) -> Option<Slot> {
+	pub(in crate::wasm_emitter) fn node_variable_slot(&self, name: &str) -> Option<Slot> {
 		match self.scope.lookup(name) {
 			Some(local) => local.kind.is_ref().then_some(Slot::Local(local.position)),
 			None => self
@@ -1164,7 +1164,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The value of an entry assignment (i64): an Int value read back from the entry, else 0
-	pub(super) fn emit_assigned_entry_value(&mut self, func: &mut Function, target: &Node, key: &Node, value: &Node) {
+	pub(in crate::wasm_emitter) fn emit_assigned_entry_value(&mut self, func: &mut Function, target: &Node, key: &Node, value: &Node) {
 		if self.get_type(value) != Kind::Int {
 			func.instruction(&I::I64Const(0));
 			return;
@@ -1179,7 +1179,7 @@ impl WasmGcEmitter {
 	}
 
 	/// ø (an Empty node) in local `list` becomes null, the end of a cons list
-	pub(super) fn emit_empty_as_null(&self, func: &mut Function, list: u32) {
+	pub(in crate::wasm_emitter) fn emit_empty_as_null(&self, func: &mut Function, list: u32) {
 		Self::emit_list(
 			func,
 			&[I::LocalGet(list), I::RefIsNull, I::If(BlockType::Empty), I::Else],
@@ -1201,14 +1201,14 @@ impl WasmGcEmitter {
 	}
 
 	/// The kind on the stack without its element mark, when the program's lists carry marks (declared_values LIST_MARK)
-	pub(super) fn emit_unmarked(&self, func: &mut Function) {
+	pub(in crate::wasm_emitter) fn emit_unmarked(&self, func: &mut Function) {
 		if self.marks_lists() {
 			Self::emit_list(func, &[I::I64Const(KIND_MASK), I::I64And]);
 		}
 	}
 
 	/// The kind on the stack with the element mark of the node in local `node`, when the program's lists carry marks
-	pub(super) fn emit_or_element_mark(&self, func: &mut Function, node: u32) {
+	pub(in crate::wasm_emitter) fn emit_or_element_mark(&self, func: &mut Function, node: u32) {
 		if self.marks_lists() {
 			self.emit_field(func, node, 0);
 			Self::emit_list(func, &[I::I64Const(!UNMARKED_KIND), I::I64And, I::I64Or]);
@@ -1217,7 +1217,7 @@ impl WasmGcEmitter {
 
 	/// The run-time error when the item in local `item` (`check` LIST_ITEM_CHECK) or an item of the list in local `item`
 	/// (LIST_ITEMS_CHECK) does not fit the element mark of the list in local `list`
-	pub(super) fn emit_item_check(&self, func: &mut Function, check: &str, list: u32, item: u32) {
+	pub(in crate::wasm_emitter) fn emit_item_check(&self, func: &mut Function, check: &str, list: u32, item: u32) {
 		if self.marks_lists() {
 			Self::emit_list(func, &[I::LocalGet(list), I::LocalGet(item)]);
 			self.call(func, check);
@@ -1226,7 +1226,7 @@ impl WasmGcEmitter {
 
 	/// The node in local `node` (a lone cell or entry) becomes ø in place, so every holder of it sees the empty list;
 	/// a declared list keeps its element mark
-	pub(super) fn emit_become_empty(&self, func: &mut Function, node: u32) {
+	pub(in crate::wasm_emitter) fn emit_become_empty(&self, func: &mut Function, node: u32) {
 		let node_type = self.type_manager.node_type;
 		let set = |field_index: u32| I::StructSet {
 			struct_type_index: node_type,

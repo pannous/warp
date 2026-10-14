@@ -291,12 +291,12 @@ impl WasmGcEmitter {
 			// not a tuple `(1, 2)` or an object `{a:1}`, whose brackets a typed list would lose
 			Source::Other if self.get_type(value) == Kind::List && !is_tuple_or_object(value) => Source::Converted {
 				// a function giving back the list it got (`f(a) := a`) returns the caller's list, no new one
-				fresh: super::super::list_abi::called_function(value).is_some_and(|name| {
+				fresh: super::super::super::lists::list_abi::called_function(value).is_some_and(|name| {
 					!self
 						.ctx
 						.user_functions
 						.get(name)
-						.is_some_and(super::super::list_sharing::returns_a_parameter)
+						.is_some_and(super::super::super::lists::list_sharing::returns_a_parameter)
 				}),
 			},
 			source => source,
@@ -375,7 +375,7 @@ impl WasmGcEmitter {
 						source => source,
 					};
 					sources.entry(name.clone()).or_default().push(source);
-					if super::super::list_sharing::changes_in_place(value) {
+					if super::super::super::lists::list_sharing::changes_in_place(value) {
 						updated.insert(name.clone());
 						changed_in_place.insert(name.clone());
 					}
@@ -421,7 +421,7 @@ impl WasmGcEmitter {
 					}
 				}
 			}
-			if matches!(part, Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == super::super::RAN_WITHOUT_ERROR)) {
+			if matches!(part, Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == super::super::super::RAN_WITHOUT_ERROR)) {
 				part.visit(&mut |inner| if let Node::Key(target, _, _) = inner {
 					if let Node::Symbol(name) = target.drop_meta() { excluded.insert(name.clone()); }
 				});
@@ -459,14 +459,14 @@ impl WasmGcEmitter {
 						.is_some_and(|export| export.node_result.is_some())
 			})
 		};
-		let held = super::super::list_sharing::held_elsewhere(program, &self.ctx.user_functions, &changes_arguments);
+		let held = super::super::super::lists::list_sharing::held_elsewhere(program, &self.ctx.user_functions, &changes_arguments);
 		// a counter `i++` changes no list
 		let is_number = |name: &String| {
 			self.scope
 				.lookup(name)
 				.is_some_and(|local| matches!(local.kind, Kind::Int | Kind::Float))
 		};
-		let written: HashSet<String> = super::super::list_sharing::written_roots(program, &self.ctx.user_functions)
+		let written: HashSet<String> = super::super::super::lists::list_sharing::written_roots(program, &self.ctx.user_functions)
 			.into_iter()
 			.filter(|root| !is_number(root))
 			.collect();

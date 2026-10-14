@@ -97,7 +97,7 @@ impl WasmGcEmitter {
 				let kind = self.get_type(operand);
 				self.emit_type_error(
 					func,
-					format!("type error: {kind} in arithmetic: {}", list_ops::CHARACTER_IS_NO_NUMBER),
+					format!("type error: {kind} in arithmetic: {}", lists::list_ops::CHARACTER_IS_NO_NUMBER),
 				);
 			}
 			// an array of Ints or Floats holds no character: its fast read stays
@@ -120,7 +120,7 @@ impl WasmGcEmitter {
 					],
 				);
 				Self::emit_kind_test(func, Kind::Codepoint as i64, I::I64Eq);
-				self.emit_fail_if(func, list_ops::NOT_A_NUMBER);
+				self.emit_fail_if(func, lists::list_ops::NOT_A_NUMBER);
 				Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull]);
 				self.emit_call(func, "get_int_value");
 			}

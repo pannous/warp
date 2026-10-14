@@ -402,7 +402,7 @@ pub(super) fn shader_request(
 
 /// The ints as a list built in one call of the module's ints_to_list (wasm_emitter/int_lists.rs); None when it has none
 pub(super) fn list_of_ints(caller: &mut Caller<'_, HostState>, ints: &[u32]) -> wasmtime::Result<Option<HostNode>> {
-	use crate::wasm_emitter::int_lists::INTS_TO_LIST;
+	use crate::wasm_emitter::lists::int_lists::INTS_TO_LIST;
 	let (Some(Extern::Func(ints_to_list)), Some(Extern::Memory(memory))) =
 		(caller.get_export(INTS_TO_LIST), caller.get_export("memory"))
 	else {

@@ -241,7 +241,7 @@ impl WasmGcEmitter {
 				f.instruction(&I::If(BlockType::Empty));
 				if has_instances {
 					f.instruction(&I::LocalGet(object));
-					s.call(f, super::super::list_ops::STRUCT_BODY);
+					s.call(f, super::super::lists::list_ops::STRUCT_BODY);
 					Self::emit_list(
 						f,
 						&[
@@ -535,7 +535,7 @@ impl WasmGcEmitter {
 				};
 				f.instruction(&I::LocalGet(object));
 				if has_instances {
-					s.call(f, super::super::list_ops::STRUCT_BODY);
+					s.call(f, super::super::lists::list_ops::STRUCT_BODY);
 				}
 				f.instruction(&I::LocalSet(fields));
 				s.emit_field(f, fields, 0);
@@ -548,7 +548,7 @@ impl WasmGcEmitter {
 				f.instruction(&I::End);
 				// the name as a symbol like the names of an object literal
 				f.instruction(&I::LocalGet(name));
-				s.call(f, super::super::list_ops::MAP_KEY_NAME);
+				s.call(f, super::super::lists::list_ops::MAP_KEY_NAME);
 				f.instruction(&I::LocalSet(name));
 				s.emit_require_kind(f, name, Kind::Symbol, "not_a_text");
 				// a map walked lately has an index: its entry takes the value, else the field is new

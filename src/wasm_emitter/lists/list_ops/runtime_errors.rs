@@ -30,7 +30,7 @@ pub(super) fn divided_index(index: &Node) -> Option<(&Node, &Node)> {
 pub(super) const WHOLE_NUMBER_FIX: &str = "fix: compute it with // (floor division) or `… as int`";
 pub(super) const RUNTIME_ERROR_FIXES: [(&str, &str); 6] = [
 	(
-		super::super::numbers::casts::INVALID_CODE_POINT,
+		super::super::super::numbers::casts::INVALID_CODE_POINT,
 		"a code point is 0…0x10FFFF, outside the surrogates 0xD800…0xDFFF",
 	),
 	(
@@ -41,7 +41,7 @@ pub(super) const RUNTIME_ERROR_FIXES: [(&str, &str); 6] = [
 	(COUNT_NOT_INTEGRAL, WHOLE_NUMBER_FIX),
 	(INT_NOT_WHOLE, WHOLE_NUMBER_FIX),
 	(
-		super::super::declared_values::LIST_CANNOT_HOLD,
+		super::super::super::declared_values::LIST_CANNOT_HOLD,
 		"its declared element type does not admit it (P215)",
 	),
 ];
@@ -88,20 +88,20 @@ pub const RUNTIME_ERRORS: [&str; 31] = [
 	"empty_separator",
 	"not_an_object",
 	"not_comparable",
-	super::super::closures::NOT_A_FUNCTION,
-	super::super::closures::WRONG_ARGUMENT_COUNT,
-	super::super::tuple_emitter::WRONG_NUMBER_OF_VALUES,
+	super::super::super::closures::NOT_A_FUNCTION,
+	super::super::super::closures::WRONG_ARGUMENT_COUNT,
+	super::super::super::lists::tuple_emitter::WRONG_NUMBER_OF_VALUES,
 	RETURNED_ERROR,
 	"not_a_character",
 	COUNT_NOT_INTEGRAL,
 	NOT_A_NUMBER,
 	DIVIDE_BY_ZERO,
 	INT_NOT_WHOLE,
-	super::super::declared_values::LIST_CANNOT_HOLD,
-	super::super::numbers::uncertain::NEGATIVE_UNCERTAINTY,
-	super::super::numbers::uncertain::INTERVAL_AND_GAUSSIAN,
+	super::super::super::declared_values::LIST_CANNOT_HOLD,
+	super::super::super::numbers::uncertain::NEGATIVE_UNCERTAINTY,
+	super::super::super::numbers::uncertain::INTERVAL_AND_GAUSSIAN,
 	NOT_A_MAP,
-	super::super::numbers::casts::INVALID_CODE_POINT,
+	super::super::super::numbers::casts::INVALID_CODE_POINT,
 ];
 
 impl WasmGcEmitter {
@@ -168,7 +168,7 @@ impl WasmGcEmitter {
 		if !self.int_runtime() {
 			return; // without the big-int runtime an Int is always a plain i64
 		}
-		let fixnum_offset = super::super::numbers::big_int::FIXNUM_OFFSET;
+		let fixnum_offset = super::super::super::numbers::big_int::FIXNUM_OFFSET;
 		Self::emit_list(
 			func,
 			&[

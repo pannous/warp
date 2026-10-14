@@ -2,26 +2,26 @@
 //! result per value; `x, y = f()` stores them straight into x and y; any other call packs them into the list `[a b]`
 //! through the function's packer `f$list`, so everywhere else such a function is an ordinary List-returning one.
 
-use super::WasmGcEmitter;
+use super::super::WasmGcEmitter;
 use crate::node::{Bracket, Node};
 use crate::tuples::{destructuring, returned_values, unstarred};
 use crate::type_kinds::Kind;
 use wasm_encoder::{Function, Instruction as I, ValType};
 
 /// `a, b = [1, 2, 3]`: the runtime error of unpacking another number of items than names
-pub(super) const WRONG_NUMBER_OF_VALUES: &str = "wrong_number_of_values";
+pub(in crate::wasm_emitter) const WRONG_NUMBER_OF_VALUES: &str = "wrong_number_of_values";
 const LIST_BRACKET_INFO: i64 = 1; // `[a b]`, as emit_list_structure writes Bracket::Square
 
 /// How the statement's own value is read afterwards: emit_numeric_value, emit_node_instructions or emit_float_value
-pub(super) type ValueReader = fn(&mut WasmGcEmitter, &mut Function, &Node);
+pub(in crate::wasm_emitter) type ValueReader = fn(&mut WasmGcEmitter, &mut Function, &Node);
 
 impl WasmGcEmitter {
-	pub(super) fn tuple_result_types(&self, kinds: &[Kind]) -> Vec<ValType> {
+	pub(in crate::wasm_emitter) fn tuple_result_types(&self, kinds: &[Kind]) -> Vec<ValType> {
 		kinds.iter().map(|kind| self.storage_type(*kind)).collect()
 	}
 
 	/// `return a, b` and `x, y = …`: emitted here, true when `node` was one of them
-	pub(super) fn emit_tuple_statement(&mut self, func: &mut Function, node: &Node, read: ValueReader) -> bool {
+	pub(in crate::wasm_emitter) fn emit_tuple_statement(&mut self, func: &mut Function, node: &Node, read: ValueReader) -> bool {
 		if let Some(values) = returned_values(node) {
 			self.emit_tuple_return(func, values);
 			return true;
@@ -40,7 +40,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The kind of a destructuring statement's value (its last name's), None for any other statement
-	pub(super) fn destructured_kind(&self, node: &Node) -> Option<Kind> {
+	pub(in crate::wasm_emitter) fn destructured_kind(&self, node: &Node) -> Option<Kind> {
 		destructuring(node).map(|(names, _)| self.get_type(&Self::destructured_value(&names)))
 	}
 
@@ -126,7 +126,7 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_int");
 				Self::emit_list(func, &[I::LocalGet(count), I::I64Const(from_end - 1), I::I64Sub]);
 				self.emit_call(func, "new_int");
-				self.emit_call(func, super::library_ops::NODE_SLICE);
+				self.emit_call(func, super::super::library_ops::NODE_SLICE);
 				self.emit_store_destructured(func, unstarred(name), Kind::List);
 				continue;
 			}
@@ -186,19 +186,19 @@ impl WasmGcEmitter {
 	}
 
 	/// After a call of a tuple function in any other place: its values as one list
-	pub(super) fn emit_pack_tuple(&mut self, func: &mut Function, function: &str) {
+	pub(in crate::wasm_emitter) fn emit_pack_tuple(&mut self, func: &mut Function, function: &str) {
 		func.instruction(&I::Call(self.tuple_packers[function]));
 	}
 
 	/// `f$list(a, b) -> [a b]`: registered right after `f`, compiled right after its body (same order in both passes)
-	pub(super) fn register_tuple_packer(&mut self, function: &str, kinds: &[Kind]) {
+	pub(in crate::wasm_emitter) fn register_tuple_packer(&mut self, function: &str, kinds: &[Kind]) {
 		let (values, node) = (self.tuple_result_types(kinds), ValType::Ref(self.node_ref(false)));
 		let packer_type = self.type_manager.function_type(values, vec![node]);
 		let packer = self.reserve_function(packer_type);
 		self.tuple_packers.insert(function.to_string(), packer);
 	}
 
-	pub(super) fn compile_tuple_packer(&mut self, kinds: &[Kind]) {
+	pub(in crate::wasm_emitter) fn compile_tuple_packer(&mut self, kinds: &[Kind]) {
 		self.function_body(vec![], |s, packer| {
 			for (position, kind) in kinds.iter().enumerate() {
 				packer.instruction(&I::LocalGet(position as u32));

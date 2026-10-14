@@ -2,7 +2,7 @@
 //! two host calls a pixel, which took most of a gpu_render or paint frame. The host writes or reads the ints in linear
 //! memory above the text heap (src/host.rs with_scratch, web/playground/host.js withScratch) and the module walks them.
 
-use super::WasmGcEmitter;
+use super::super::WasmGcEmitter;
 use crate::type_kinds::Kind;
 use wasm_encoder::{BlockType, Function, HeapType, Instruction as I, MemArg, RefType, ValType};
 
@@ -27,7 +27,7 @@ const NOT_INTS: i32 = -1;
 const SATURATED: i64 = i64::MAX;
 
 impl WasmGcEmitter {
-	pub(super) fn emit_int_lists(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_int_lists(&mut self) {
 		if self.should_emit_function(INTS_TO_LIST) || self.should_emit_function(LIST_TO_INTS) {
 			self.emit_text_heap_global(); // the host finds the free memory above it
 		}
@@ -155,7 +155,7 @@ impl WasmGcEmitter {
 				Self::emit_list(
 					f,
 					&[
-						I::I64Const(super::numbers::big_int::FIXNUM_OFFSET),
+						I::I64Const(super::super::numbers::big_int::FIXNUM_OFFSET),
 						I::I64Add,
 						I::I64Const(0),
 						I::I64LtS,

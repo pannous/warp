@@ -24,7 +24,7 @@ impl WasmGcEmitter {
 		}
 		let run_time_power = *op == Op::Pow && self.arithmetic_type(left, op, right) == Kind::Data;
 		if let Some(function) = crate::analyzer::node_arithmetic(self.get_type(left), op, self.get_type(right))
-			.or(run_time_power.then_some(super::super::list_ops::NODE_POW))
+			.or(run_time_power.then_some(super::super::lists::list_ops::NODE_POW))
 		{
 			self.emit_node_instructions(func, left);
 			self.emit_node_instructions(func, right);
@@ -232,7 +232,7 @@ impl WasmGcEmitter {
 			Op::Sqrt if self.get_type(right) == Kind::Codepoint => {
 				self.emit_type_error(
 					func,
-					format!("type error: √ of a codepoint: {}", list_ops::CHARACTER_IS_NO_NUMBER),
+					format!("type error: √ of a codepoint: {}", lists::list_ops::CHARACTER_IS_NO_NUMBER),
 				);
 			}
 			root @ (Op::Sqrt | Op::Cbrt) => {

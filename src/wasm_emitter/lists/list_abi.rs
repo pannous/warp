@@ -4,8 +4,8 @@
 //! result is such an array, or a call of another such function, returns the `$NodeList` itself. Callers convert only
 //! where they need a Node: recursive list algorithms (quicksort_partitioned) stop converting at every call.
 
-use super::list_dispatch::{ElementType, TypedList};
-use super::WasmGcEmitter;
+use super::super::lists::list_dispatch::{ElementType, TypedList};
+use super::super::WasmGcEmitter;
 use crate::analyzer::{collect_variables, param_kind, Scope};
 use crate::compiler::context::UserFunctionDef;
 use crate::node::{Bracket, Node, Separator};
@@ -15,11 +15,11 @@ use std::collections::{HashMap, HashSet};
 use wasm_encoder::*;
 use Instruction as I;
 
-pub(super) const RETURN: &str = "return";
+pub(in crate::wasm_emitter) const RETURN: &str = "return";
 
 /// The list calling convention of one function
 #[derive(Clone, Default, Debug)]
-pub(super) struct ListAbi {
+pub(in crate::wasm_emitter) struct ListAbi {
 	/// Per parameter: passed as a `$NodeList`
 	pub params: Vec<bool>,
 	/// The result is a `$NodeList`
@@ -51,7 +51,7 @@ fn list_parameters(function: &UserFunctionDef) -> Vec<Option<String>> {
 }
 
 /// What a body gives back: its last statement (or what its final `return` returns) and every `return` value
-pub(super) fn results(body: &Node) -> Vec<&Node> {
+pub(in crate::wasm_emitter) fn results(body: &Node) -> Vec<&Node> {
 	let mut found = vec![];
 	body.visit(&mut |part| {
 		if let Node::List(items, _, _) = part {
@@ -76,7 +76,7 @@ pub(super) fn results(body: &Node) -> Vec<&Node> {
 }
 
 /// The statements of a function body: those of its block, `{a; b}` or `a; b`, or the body itself
-pub(super) fn body_statements(body: &Node) -> Vec<Node> {
+pub(in crate::wasm_emitter) fn body_statements(body: &Node) -> Vec<Node> {
 	match body.drop_meta() {
 		Node::List(items, Bracket::Curly, _) => items.clone(),
 		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) => items.clone(),
@@ -85,7 +85,7 @@ pub(super) fn body_statements(body: &Node) -> Vec<Node> {
 }
 
 /// The last value of a block `(…; x)`
-pub(super) fn last_value(node: &Node) -> &Node {
+pub(in crate::wasm_emitter) fn last_value(node: &Node) -> &Node {
 	match node.drop_meta() {
 		Node::List(items, Bracket::Round | Bracket::Curly, Separator::Semicolon | Separator::Newline)
 			if !items.is_empty() =>
@@ -97,7 +97,7 @@ pub(super) fn last_value(node: &Node) -> &Node {
 }
 
 /// The function a call `f(…)` calls
-pub(super) fn called_function(node: &Node) -> Option<&str> {
+pub(in crate::wasm_emitter) fn called_function(node: &Node) -> Option<&str> {
 	match node.drop_meta() {
 		Node::List(items, Bracket::Round, Separator::None) => match items.first().map(Node::drop_meta) {
 			Some(Node::Symbol(name)) => Some(name),
@@ -109,7 +109,7 @@ pub(super) fn called_function(node: &Node) -> Option<&str> {
 
 impl WasmGcEmitter {
 	/// The list convention of every user function that has one, decided before the signatures are registered
-	pub(super) fn find_list_abi(&mut self) -> HashMap<String, ListAbi> {
+	pub(in crate::wasm_emitter) fn find_list_abi(&mut self) -> HashMap<String, ListAbi> {
 		let functions = self.directly_called_functions();
 		let mut abi: HashMap<String, ListAbi> = HashMap::new();
 		let mut list_results: HashMap<String, Vec<Node>> = HashMap::new();
@@ -181,7 +181,7 @@ impl WasmGcEmitter {
 
 	/// The user functions only ever called directly, never as a closure, a tuple function or a witness the runtime
 	/// dispatches to (witness.rs): those may take a calling convention of their own (lists as arrays, instances as structs)
-	pub(super) fn directly_called_functions(&self) -> Vec<UserFunctionDef> {
+	pub(in crate::wasm_emitter) fn directly_called_functions(&self) -> Vec<UserFunctionDef> {
 		let excluded: HashSet<String> = self
 			.ctx
 			.closure_targets
@@ -202,7 +202,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The typed lists of a function body, as compile_user_function_body will find them, its list parameters typed
-	pub(super) fn body_typed_lists(
+	pub(in crate::wasm_emitter) fn body_typed_lists(
 		&mut self,
 		function: &UserFunctionDef,
 		list_params: &[bool],
@@ -231,7 +231,7 @@ impl WasmGcEmitter {
 		typed
 	}
 
-	pub(super) fn node_list_type(&self) -> ValType {
+	pub(in crate::wasm_emitter) fn node_list_type(&self) -> ValType {
 		ValType::Ref(RefType {
 			nullable: true,
 			heap_type: HeapType::Concrete(self.type_manager.node_list_type),
@@ -239,11 +239,11 @@ impl WasmGcEmitter {
 	}
 
 	/// Does a call of this function give back a $NodeList
-	pub(super) fn returns_list_abi(&self, name: &str) -> bool {
+	pub(in crate::wasm_emitter) fn returns_list_abi(&self, name: &str) -> bool {
 		self.list_abi.get(name).is_some_and(|abi| abi.returns_list)
 	}
 
-	pub(super) fn takes_list_abi(&self, name: &str, index: usize) -> bool {
+	pub(in crate::wasm_emitter) fn takes_list_abi(&self, name: &str, index: usize) -> bool {
 		self.list_abi
 			.get(name)
 			.is_some_and(|abi| abi.params.get(index).copied().unwrap_or(false))
@@ -251,7 +251,7 @@ impl WasmGcEmitter {
 
 	/// A value where a $NodeList is wanted: a Node-list variable as its array, a call of a function returning one as it
 	/// is, any other Node list converted once
-	pub(super) fn emit_list_abi_value(&mut self, func: &mut Function, value: &Node) {
+	pub(in crate::wasm_emitter) fn emit_list_abi_value(&mut self, func: &mut Function, value: &Node) {
 		// `(statements; x)`: the statements run, x is the value
 		if let Node::List(items, Bracket::Round | Bracket::Curly, Separator::Semicolon | Separator::Newline) =
 			value.drop_meta()
@@ -291,12 +291,12 @@ impl WasmGcEmitter {
 
 impl WasmGcEmitter {
 	/// The body of a function returning a $NodeList: its statements, then its last value as the array
-	pub(super) fn emit_list_abi_body(&mut self, func: &mut Function, body: &Node) {
+	pub(in crate::wasm_emitter) fn emit_list_abi_body(&mut self, func: &mut Function, body: &Node) {
 		self.emit_body_then(func, body, Self::emit_list_abi_value);
 	}
 
 	/// A function body: its statements, then its last value as `emit_last` gives it (a `return` returns)
-	pub(super) fn emit_body_then(
+	pub(in crate::wasm_emitter) fn emit_body_then(
 		&mut self,
 		func: &mut Function,
 		body: &Node,

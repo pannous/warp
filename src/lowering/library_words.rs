@@ -259,7 +259,7 @@ const LIST_RESULT_WORDS: [&str; 8] = [
 	MAP_VALUES,
 	MAP_ENTRIES,
 	MAP_WITHOUT,
-	crate::wasm_emitter::list_ops::LIST_EXTEND,
+	crate::wasm_emitter::lists::list_ops::LIST_EXTEND,
 ];
 
 pub fn result_kind(word: &str) -> Option<crate::type_kinds::Kind> {

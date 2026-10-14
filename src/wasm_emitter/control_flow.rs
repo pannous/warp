@@ -98,7 +98,7 @@ impl WasmGcEmitter {
 	/// not when the program compiles: the other branch may be the only one taken
 	fn emit_raw_branch(&mut self, func: &mut Function, branch: &Node, emit: fn(&mut Self, &mut Function, &Node)) {
 		if matches!(branch.drop_meta(), Node::Empty) {
-			self.emit_runtime_error(func, super::list_ops::NOT_A_NUMBER);
+			self.emit_runtime_error(func, super::lists::list_ops::NOT_A_NUMBER);
 		} else {
 			emit(self, func, branch);
 		}

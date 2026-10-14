@@ -18,8 +18,8 @@ impl WasmGcEmitter {
 		if self.emit_raised_error(func, node) || self.emit_undefined_comparison(func, node) {
 			return;
 		}
-		if let Some((list, sum_loop)) = list_dispatch::list_sum_parts(node) {
-			return self.emit_list_sum(func, list, sum_loop, list_dispatch::Wanted::Int);
+		if let Some((list, sum_loop)) = lists::list_dispatch::list_sum_parts(node) {
+			return self.emit_list_sum(func, list, sum_loop, lists::list_dispatch::Wanted::Int);
 		}
 		if self.emit_loop_jump(func, node)
 			|| self.emit_tuple_statement(func, node, Self::emit_numeric_value)
@@ -249,7 +249,7 @@ impl WasmGcEmitter {
 			return true;
 		}
 		// floor, ceil and round of a float as the i64, without the Int node list_emitter builds for it as a value
-		if super::list_emitter::float_rounding(fn_name).is_some()
+		if super::lists::list_emitter::float_rounding(fn_name).is_some()
 			&& !self.ctx.ffi_imports.contains_key(fn_name)
 			&& self.get_type(argument).is_float()
 		{
@@ -274,8 +274,8 @@ impl WasmGcEmitter {
 		if self.emit_raised_error(func, node) {
 			return;
 		}
-		if let Some((list, sum_loop)) = list_dispatch::list_sum_parts(node) {
-			return self.emit_list_sum(func, list, sum_loop, list_dispatch::Wanted::Float);
+		if let Some((list, sum_loop)) = lists::list_dispatch::list_sum_parts(node) {
+			return self.emit_list_sum(func, list, sum_loop, lists::list_dispatch::Wanted::Float);
 		}
 		if self.emit_loop_jump(func, node) || self.emit_tuple_statement(func, node, Self::emit_float_value) {
 			return;
@@ -371,7 +371,7 @@ impl WasmGcEmitter {
 					&& !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) =>
 			{
 				self.emit_node_instructions(func, value);
-				self.emit_call(func, list_ops::TEXT_AS_FLOAT);
+				self.emit_call(func, lists::list_ops::TEXT_AS_FLOAT);
 			}
 			Node::Key(value, Op::As, _)
 				if self.get_type(node).is_float() && !matches!(value.drop_meta(), Node::Text(_) | Node::Char(_)) =>

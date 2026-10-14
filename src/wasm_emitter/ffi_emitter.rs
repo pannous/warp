@@ -260,7 +260,7 @@ impl WasmGcEmitter {
 		self.emit_numeric_value(func, joined);
 		Self::emit_list(func, &[I::I32WrapI64, I::If(BlockType::Empty)]);
 		self.emit_trap_detail(func, failure);
-		self.emit_runtime_error(func, super::list_ops::RETURNED_ERROR);
+		self.emit_runtime_error(func, super::lists::list_ops::RETURNED_ERROR);
 		func.instruction(&I::End);
 		true
 	}

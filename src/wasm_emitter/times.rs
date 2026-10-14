@@ -4,7 +4,7 @@
 //! time_text shows a time as calendar.rs does, `2026-10-10T14:43:33.682Z`, with Howard Hinnant's civil calendar
 
 use super::layout::BYTE;
-use super::list_ops::RETURNED_ERROR;
+use super::lists::list_ops::RETURNED_ERROR;
 use super::WasmGcEmitter;
 use crate::node::Node;
 use crate::time::calendar::{

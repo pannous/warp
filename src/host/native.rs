@@ -448,7 +448,7 @@ fn ints_of_list(
 	list: HostNode,
 	room: usize,
 ) -> wasmtime::Result<Option<Vec<u64>>> {
-	use crate::wasm_emitter::int_lists::LIST_TO_INTS;
+	use crate::wasm_emitter::lists::int_lists::LIST_TO_INTS;
 	let Some(Extern::Func(list_to_ints)) = caller.get_export(LIST_TO_INTS) else {
 		return Ok(None);
 	};
@@ -746,7 +746,7 @@ fn route_failure(
 		let _ = global.set(&mut *caller, Val::AnyRef(None));
 	}
 	let failure = anyhow::Error::from(failure);
-	let raised = format!("{failure:?}").contains(crate::wasm_emitter::list_ops::RETURNED_ERROR);
+	let raised = format!("{failure:?}").contains(crate::wasm_emitter::lists::list_ops::RETURNED_ERROR);
 	// a runtime error names its statement; what the program raised is its own words to the client
 	let failure = match raised {
 		true => failure,

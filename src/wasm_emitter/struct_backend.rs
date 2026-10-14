@@ -310,7 +310,7 @@ impl WasmGcEmitter {
 			return;
 		}
 		if let Some(callee) =
-			super::list_abi::called_function(value).filter(|callee| self.struct_results.contains_key(*callee))
+			super::lists::list_abi::called_function(value).filter(|callee| self.struct_results.contains_key(*callee))
 		{
 			let Node::List(items, _, _) = value.drop_meta() else {
 				unreachable!("a call")
@@ -429,9 +429,9 @@ impl WasmGcEmitter {
 
 	/// The struct convention a function could take, judged by its body alone
 	fn struct_function(&self, function: &crate::compiler::context::UserFunctionDef) -> Option<StructFunction> {
-		let statements = super::list_abi::body_statements(&function.body);
+		let statements = super::lists::list_abi::body_statements(&function.body);
 		let mut returns = false;
-		function.body.visit(&mut |part| returns |= matches!(part, Node::List(items, _, _) if items.first().is_some_and(|word| names(word, super::list_abi::RETURN))));
+		function.body.visit(&mut |part| returns |= matches!(part, Node::List(items, _, _) if items.first().is_some_and(|word| names(word, super::lists::list_abi::RETURN))));
 		let gives = |name: &str| !returns && statements.last().is_some_and(|last| names(last, name));
 		let mut changed = None;
 		let mut result = None;
@@ -565,9 +565,9 @@ pub(super) fn used_whole(node: &Node, abi: &HashMap<String, Vec<Option<String>>>
 		}
 		Node::Key(object, Op::Hash, index) if matches!(object.drop_meta(), Node::Symbol(_)) => recurse(index),
 		Node::List(items, _, _)
-			if super::list_abi::called_function(node).is_some_and(|function| abi.contains_key(function)) =>
+			if super::lists::list_abi::called_function(node).is_some_and(|function| abi.contains_key(function)) =>
 		{
-			let parameters = &abi[super::list_abi::called_function(node).expect("guarded")];
+			let parameters = &abi[super::lists::list_abi::called_function(node).expect("guarded")];
 			for (index, argument) in items.iter().enumerate().skip(1) {
 				let struct_parameter = parameters.get(index - 1).is_some_and(Option::is_some);
 				if !(struct_parameter && matches!(argument.drop_meta(), Node::Symbol(_))) {
@@ -586,7 +586,7 @@ pub(super) fn used_whole(node: &Node, abi: &HashMap<String, Vec<Option<String>>>
 
 /// The class of the struct a call of a function giving one back gives
 fn struct_call_class(value: &Node, results: &HashMap<String, String>) -> Option<String> {
-	results.get(super::list_abi::called_function(value)?).cloned()
+	results.get(super::lists::list_abi::called_function(value)?).cloned()
 }
 
 /// A function taking structs: the class of each struct parameter, the parameter it changes or gives back, and the
@@ -634,7 +634,7 @@ impl StructFunction {
 		for (tree, variables) in trees {
 			tree.visit(&mut |part: &Node| match part {
 				Node::Symbol(name) if *name == self.name => mentions += 1,
-				Node::List(items, _, _) if super::list_abi::called_function(part) == Some(self.name.as_str()) => {
+				Node::List(items, _, _) if super::lists::list_abi::called_function(part) == Some(self.name.as_str()) => {
 					if is_head(items) {
 						heads += 1;
 					} else if passes(items, variables) {
@@ -642,7 +642,7 @@ impl StructFunction {
 					}
 				}
 				Node::Key(target, Op::Assign, value)
-					if super::list_abi::called_function(value) == Some(self.name.as_str()) =>
+					if super::lists::list_abi::called_function(value) == Some(self.name.as_str()) =>
 				{
 					let Some(changed) = self.changed else { return };
 					let Node::List(items, _, _) = value.drop_meta() else {

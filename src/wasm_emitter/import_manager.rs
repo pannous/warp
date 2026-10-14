@@ -108,7 +108,7 @@ impl ImportManager {
 			.ffi_imports
 			.iter()
 			// the linear words are the module's own functions (linear_arrays.rs)
-			.filter(|(_, sig)| sig.library != super::linear_arrays::LINEAR_LIBRARY)
+			.filter(|(_, sig)| sig.library != super::lists::linear_arrays::LINEAR_LIBRARY)
 			.map(|(name, sig)| {
 				(
 					name.clone(),

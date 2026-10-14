@@ -34,7 +34,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			// `xs += [v]`, what `xs.add(v)` lowers to: the list grows in place
 			if *op == Op::AddAssign && matches!(value.drop_meta(), Node::List(_, Bracket::Square, _)) {
 				ctx.required_functions
-					.insert(crate::wasm_emitter::list_ops::LIST_EXTEND);
+					.insert(crate::wasm_emitter::lists::list_ops::LIST_EXTEND);
 			}
 			if *op == Op::Assign || op.is_compound_assign() {
 				if let Node::Key(_, Op::Hash, _) = key.drop_meta() {
@@ -79,7 +79,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 						"list_at",
 					]);
 					if let Some(name) = crate::warp_parser::subscript_key(value).and_then(constant_field_name) {
-						let fallbacks = crate::wasm_emitter::list_ops::FIELD_FALLBACKS.iter();
+						let fallbacks = crate::wasm_emitter::lists::list_ops::FIELD_FALLBACKS.iter();
 						if let Some((_, fallback)) = fallbacks.into_iter().find(|(field, _)| *field == name) {
 							ctx.required_functions.insert(fallback);
 						}
@@ -229,14 +229,14 @@ fn functions_of_call(word: &str) -> &'static [&'static str] {
 		crate::time::INSTANT_AT => &[
 			crate::time::INSTANT_AT,
 			TIME_FIELD,
-			crate::wasm_emitter::list_ops::RETURNED_ERROR,
+			crate::wasm_emitter::lists::list_ops::RETURNED_ERROR,
 		],
-		crate::time::TIME_OF => &[TIME_FIELD, crate::wasm_emitter::list_ops::RETURNED_ERROR],
+		crate::time::TIME_OF => &[TIME_FIELD, crate::wasm_emitter::lists::list_ops::RETURNED_ERROR],
 		crate::time::TIME_IN_ZONE => &[
 			crate::time::TIME_IN_ZONE,
 			TIME_FIELD,
 			crate::wasm_emitter::times::ZONE_NAMES,
-			crate::wasm_emitter::list_ops::RETURNED_ERROR,
+			crate::wasm_emitter::lists::list_ops::RETURNED_ERROR,
 		],
 		LIST_DROP_LAST => &[LIST_DROP_LAST],
 		crate::declaration_forms::LIST_BECOME => &[crate::declaration_forms::LIST_BECOME],
@@ -492,12 +492,12 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 	match node.drop_meta() {
 		Node::List(items, _, _) => {
 			if let Some(Node::Symbol(name)) = items.first().map(Node::drop_meta) {
-				if crate::wasm_emitter::linear_arrays::is_linear_word(name) && !ctx.user_functions.contains_key(name) {
-					add_ffi_import(ctx, name, crate::wasm_emitter::linear_arrays::LINEAR_LIBRARY);
+				if crate::wasm_emitter::lists::linear_arrays::is_linear_word(name) && !ctx.user_functions.contains_key(name) {
+					add_ffi_import(ctx, name, crate::wasm_emitter::lists::linear_arrays::LINEAR_LIBRARY);
 				}
 				// a float map kernel (shared_arrays.rs): the address of its source block in, of the new one out
-				if name.starts_with(crate::wasm_emitter::linear_arrays::LINEAR_MAP_PREFIX) {
-					use crate::wasm_emitter::linear_arrays::{LINEAR_LIBRARY, LINEAR_NEW};
+				if name.starts_with(crate::wasm_emitter::lists::linear_arrays::LINEAR_MAP_PREFIX) {
+					use crate::wasm_emitter::lists::linear_arrays::{LINEAR_LIBRARY, LINEAR_NEW};
 					let kernel: &'static str = Box::leak(name.clone().into_boxed_str());
 					let signature = crate::ffi::FfiSignature::new(
 						kernel,
@@ -533,11 +533,11 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 					// an image's pixels cross in one call (wasm_emitter/int_lists.rs)
 					if [crate::host::GPU_RENDER, crate::host::TEXT_COVERAGE].contains(&name.as_str()) {
 						ctx.required_functions
-							.insert(crate::wasm_emitter::int_lists::INTS_TO_LIST);
+							.insert(crate::wasm_emitter::lists::int_lists::INTS_TO_LIST);
 					}
 					if crate::host::INT_LIST_WORDS.contains(&name.as_str()) {
 						ctx.required_functions
-							.insert(crate::wasm_emitter::int_lists::LIST_TO_INTS);
+							.insert(crate::wasm_emitter::lists::int_lists::LIST_TO_INTS);
 					}
 					// a program that controls tasks polls at its loops, where a paused task waits (browser)
 					if name == crate::host::TASK_CONTROL {

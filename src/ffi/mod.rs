@@ -365,7 +365,7 @@ fn hand_linked_signatures() -> HashMap<String, FfiSignature> {
 			FfiSignature::new(name, crate::host::HOST_LIBRARY, params.to_vec(), results.to_vec()),
 		);
 	}
-	use crate::wasm_emitter::linear_arrays::{linear_word_signatures, LINEAR_LIBRARY};
+	use crate::wasm_emitter::lists::linear_arrays::{linear_word_signatures, LINEAR_LIBRARY};
 	for (name, params, results) in linear_word_signatures() {
 		sigs.insert(
 			name.to_string(),

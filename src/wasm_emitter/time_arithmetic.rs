@@ -2,7 +2,7 @@
 //! `d + 1 day`, `t - 90 minutes`, `a - b`, `1 month + 2 days`, `3 * 1 hour`, as calendar.rs `Time::add`, `since`,
 //! `Duration::plus` and `times` do for constants. node_add, node_sub and node_mul hand over when an operand is a time.
 
-use super::list_ops::RETURNED_ERROR;
+use super::lists::list_ops::RETURNED_ERROR;
 use super::time_zones::{REJECT, ZONED_NODE};
 use super::times::{CIVIL_FROM_DAYS, DAYS_FROM_CIVIL, DAY_NANOS, TIME_FIELD, TIME_PARTS, ZONE_NAMES};
 use super::WasmGcEmitter;

@@ -13,7 +13,7 @@ impl WasmGcEmitter {
 			return false;
 		};
 		self.emit_trap_detail(func, message);
-		self.emit_runtime_error(func, list_ops::RETURNED_ERROR);
+		self.emit_runtime_error(func, lists::list_ops::RETURNED_ERROR);
 		true
 	}
 
@@ -24,7 +24,7 @@ impl WasmGcEmitter {
 			self.emit_list_abi_value(func, value);
 		} else if let Some(message) = returned_error_message(value).filter(|_| !self.returns_node) {
 			self.emit_trap_detail(func, message);
-			self.emit_runtime_error(func, list_ops::RETURNED_ERROR);
+			self.emit_runtime_error(func, lists::list_ops::RETURNED_ERROR);
 		} else if self.returns_node {
 			self.emit_node_instructions(func, value);
 		} else if self.returns_float {

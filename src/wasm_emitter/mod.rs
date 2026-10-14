@@ -29,22 +29,16 @@ mod equality;
 mod ffi_emitter;
 mod function_builder;
 mod import_manager;
-pub(crate) mod int_lists;
 mod key_emitter;
 mod layout;
 pub(crate) mod library_ops;
-pub(crate) mod linear_arrays;
-mod list_dispatch;
-mod list_emitter;
-pub(crate) mod list_sharing;
+pub(crate) mod lists;
 mod node_api;
 pub use node_api::NODE_AT;
 mod time_arithmetic;
 pub(crate) mod time_zones;
 pub(crate) mod times;
 pub use text::similarity::NUMBERS_SIMILAR;
-mod list_abi;
-pub(crate) mod list_ops;
 mod map_backend;
 mod map_index;
 mod struct_backend;
@@ -55,7 +49,6 @@ mod reflection;
 mod string_table;
 pub(crate) mod text;
 mod try_guard;
-mod tuple_emitter;
 mod type_manager;
 pub use try_guard::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
 pub(crate) mod wasi_emitter;
@@ -302,10 +295,10 @@ pub struct WasmGcEmitter {
 	/// The position of the statement being emitted, which `trap_position` holds while it runs (emit_trap_position)
 	statement_position: Option<crate::compiler::meta::LineInfo>,
 	loop_labels: Vec<loop_control::LoopLabels>, // enclosing loops of the code being emitted, innermost last
-	typed_lists: HashMap<String, list_dispatch::TypedList>, // list variables of the body being emitted held as typed arrays
-	typed_globals: HashMap<String, (u32, list_dispatch::TypedList)>, // globals held as typed arrays: their global and element type
-	typed_capture_globals: HashMap<u32, list_dispatch::TypedList>,   // capture globals holding a typed list of main
-	main_typed_lists: Option<HashMap<String, list_dispatch::TypedList>>, // main's typed lists, worked out before the capture globals
+	typed_lists: HashMap<String, lists::list_dispatch::TypedList>, // list variables of the body being emitted held as typed arrays
+	typed_globals: HashMap<String, (u32, lists::list_dispatch::TypedList)>, // globals held as typed arrays: their global and element type
+	typed_capture_globals: HashMap<u32, lists::list_dispatch::TypedList>,   // capture globals holding a typed list of main
+	main_typed_lists: Option<HashMap<String, lists::list_dispatch::TypedList>>, // main's typed lists, worked out before the capture globals
 	bounded_counters: std::collections::HashSet<String>, // loop counters of the body being emitted proven to stay in 0..i32::MAX (big_int.rs)
 	typed_map_globals: HashMap<String, u32>, // globals held as hash tables (map_backend.rs find_typed_map_globals): their global
 	typed_maps: std::collections::HashSet<String>, // map variables of the body being emitted held as hash tables (map_backend.rs)
@@ -316,7 +309,7 @@ pub struct WasmGcEmitter {
 	/// `x = (t = x; …; t)`, an inlined call updating the list it is given back: x and t share one array, no copies
 	moved_lists: Vec<(String, String)>,
 	/// The array calling convention of the user functions that have one (list_abi.rs)
-	list_abi: HashMap<String, list_abi::ListAbi>,
+	list_abi: HashMap<String, lists::list_abi::ListAbi>,
 	/// The function being compiled returns a $NodeList
 	returns_list: bool,
 	compare_witness: Option<witness::WitnessTable>, // runtime dispatch of Comparable to user types (witness.rs)
@@ -725,7 +718,7 @@ impl WasmGcEmitter {
 		analyze_required_functions(&mut self.ctx, node);
 		// quoted or parsed code keeps its positions: node_at and $MetaNode only in a program that quotes or parses
 		// (cards data-meta, parse-word)
-		if node.mentions_any(&list_emitter::QUOTE_WORDS) || node.mentions_any(&[crate::host::PARSE_CODE]) {
+		if node.mentions_any(&lists::list_emitter::QUOTE_WORDS) || node.mentions_any(&[crate::host::PARSE_CODE]) {
 			self.ctx.required_functions.insert(node_api::NODE_AT);
 		}
 		if crate::analyzer::makes_floats(&self.ctx, node) {

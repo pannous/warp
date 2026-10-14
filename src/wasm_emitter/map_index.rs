@@ -143,7 +143,7 @@ impl WasmGcEmitter {
 				return_unless(f);
 				s.emit_field(f, entry, 1);
 				f.instruction(&I::RefCastNonNull(HeapType::Concrete(node)));
-				s.call(f, super::list_ops::MAP_KEY_NAME);
+				s.call(f, super::lists::list_ops::MAP_KEY_NAME);
 				f.instruction(&I::LocalTee(name));
 				kind_of(f);
 				Self::emit_list(f, &[I::I64Const(Kind::Symbol as i64), I::I64Eq]);
@@ -301,7 +301,7 @@ impl WasmGcEmitter {
 				f.instruction(&I::I32Eqz);
 				Self::emit_list(f, &unindexed);
 				f.instruction(&I::LocalGet(key));
-				s.call(f, super::list_ops::MAP_KEY_NAME);
+				s.call(f, super::lists::list_ops::MAP_KEY_NAME);
 				f.instruction(&I::LocalTee(name));
 				kind_of(f);
 				Self::emit_list(f, &[I::I64Const(Kind::Symbol as i64), I::I64Ne]);

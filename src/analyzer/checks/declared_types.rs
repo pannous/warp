@@ -561,7 +561,7 @@ pub(crate) fn list_element_type(type_name: &str) -> Option<&str> {
 pub(crate) fn added_items(value: &Node) -> Option<&[Node]> {
 	let appended = match value.drop_meta() {
 		Node::Key(_, Op::Add, appended) => appended.as_ref(),
-		Node::List(items, Bracket::Round, _) if matches!(items.as_slice(), [call, _, _] if call.drop_meta().name() == crate::wasm_emitter::list_ops::LIST_EXTEND) => {
+		Node::List(items, Bracket::Round, _) if matches!(items.as_slice(), [call, _, _] if call.drop_meta().name() == crate::wasm_emitter::lists::list_ops::LIST_EXTEND) => {
 			&items[2]
 		}
 		literal => literal,

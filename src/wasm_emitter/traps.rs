@@ -131,21 +131,21 @@ pub(super) fn index_range_message(detail: &str) -> Option<String> {
 	};
 	Some(format!(
 		"{}: {index} not in {range}",
-		list_ops::runtime_error_message("index_out_of_range")
+		lists::list_ops::runtime_error_message("index_out_of_range")
 	))
 }
 
 /// The runtime error a trap means, read from its trace: the function names on the stack and the `trap detail: …`
 /// line; `trap` (the engine's own words) when the trace names none. Shared by wasmtime and the browser (web.rs).
 pub fn trap_error(trace: &str, trap: String) -> Node {
-	let missing_field = trace.split_once(list_ops::NO_FIELD_PREFIX).map(|(_, rest)| {
+	let missing_field = trace.split_once(lists::list_ops::NO_FIELD_PREFIX).map(|(_, rest)| {
 		// a meta key starts with its mark (`no_field_@source`); a later `@` begins the url of a Firefox or Safari frame
 		let mark = rest.strip_prefix(crate::node::ATTRIBUTE_MARK).map_or("", |_| "@");
 		let name: String = rest[mark.len()..]
 			.chars()
 			.take_while(|c| c.is_alphanumeric() || *c == '_')
 			.collect();
-		format!("{}{mark}{name}", list_ops::NO_FIELD_MESSAGE)
+		format!("{}{mark}{name}", lists::list_ops::NO_FIELD_MESSAGE)
 	});
 	let no_case = trace.split_once(crate::switch::NO_CASE_PREFIX).map(|(_, rest)| {
 		let label: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
@@ -162,12 +162,12 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 		});
 	// `return error "…"` from a number function: the message is the trap detail
 	let returned_error = trace
-		.contains(list_ops::RETURNED_ERROR)
+		.contains(lists::list_ops::RETURNED_ERROR)
 		.then(|| trap_detail(trace))
 		.flatten()
 		.map(|detail| unquoted(&detail));
 	let index_range = trace
-		.contains(list_ops::INDEX_OUT_OF_RANGE_OF)
+		.contains(lists::list_ops::INDEX_OUT_OF_RANGE_OF)
 		.then(|| index_range_message(&trap_detail(trace)?))
 		.flatten();
 	let runtime_error = returned_error
@@ -176,10 +176,10 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 		.or(no_case)
 		.or(overflow)
 		.or_else(|| {
-			list_ops::RUNTIME_ERRORS
+			lists::list_ops::RUNTIME_ERRORS
 				.iter()
 				.find(|name| trace.contains(*name))
-				.map(|name| list_ops::runtime_error_message(name))
+				.map(|name| lists::list_ops::runtime_error_message(name))
 		});
 	let exact_trap = EXACT_TRAP_MESSAGES
 		.iter()
@@ -188,7 +188,7 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 	// the engine's own integer divide trap (a division the emitter did not guard) reads as the guarded one
 	let divide_trap = trap
 		.ends_with(ENGINE_DIVIDE_BY_ZERO)
-		.then(|| list_ops::runtime_error_message(list_ops::DIVIDE_BY_ZERO));
+		.then(|| lists::list_ops::runtime_error_message(lists::list_ops::DIVIDE_BY_ZERO));
 	let message = runtime_error.or(exact_trap).or(divide_trap).unwrap_or(trap);
 	match trap_position(trace) {
 		Some(position) => crate::node::error(&crate::diagnostic::located_at(message, &position)),

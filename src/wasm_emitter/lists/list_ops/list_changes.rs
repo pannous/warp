@@ -86,7 +86,7 @@ impl WasmGcEmitter {
 					Self::emit_list(f, &s.forget_cursor_parts(&[CursorPart::Counted]));
 					f.instruction(&I::End);
 				}
-				s.emit_item_check(f, super::super::declared_values::LIST_ITEMS_CHECK, list, items);
+				s.emit_item_check(f, super::super::super::declared_values::LIST_ITEMS_CHECK, list, items);
 				s.emit_empty_as_null(f, items);
 				s.emit_collect_cells(f, items, None, &copy);
 				s.emit_rebuild_cells(f, &copy);
@@ -405,7 +405,7 @@ impl WasmGcEmitter {
 						I::End,
 						I::LocalGet(item),
 						I::LocalGet(tail),
-						I::I64Const(super::super::bracket_info(&crate::node::Bracket::Curly)),
+						I::I64Const(super::super::super::bracket_info(&crate::node::Bracket::Curly)),
 					],
 				);
 				s.call(f, "new_list");
@@ -631,7 +631,7 @@ impl WasmGcEmitter {
 			};
 			Self::emit_index_compare(f, I::I64LtS);
 			s.emit_fail_if(f, "index_out_of_range");
-			s.emit_item_check(f, super::super::declared_values::LIST_ITEM_CHECK, list, value);
+			s.emit_item_check(f, super::super::super::declared_values::LIST_ITEM_CHECK, list, value);
 			// the cell at index
 			Self::emit_list(
 				f,

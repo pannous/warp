@@ -308,7 +308,7 @@ impl WasmGcEmitter {
 			return;
 		}
 		Self::emit_list(func, &[I::LocalGet(divisor), I::I64Eqz]);
-		self.emit_fail_if(func, super::super::list_ops::DIVIDE_BY_ZERO);
+		self.emit_fail_if(func, super::super::lists::list_ops::DIVIDE_BY_ZERO);
 	}
 
 	fn emit_scratch_call(&mut self, func: &mut Function, name: &'static str) {
@@ -571,7 +571,7 @@ impl WasmGcEmitter {
 	pub(in crate::wasm_emitter) fn emit_whole_check(&mut self, func: &mut Function) {
 		let value = self.scratch(2);
 		func.instruction(&I::LocalSet(value));
-		self.emit_require_whole(func, value, super::super::list_ops::INT_NOT_WHOLE);
+		self.emit_require_whole(func, value, super::super::lists::list_ops::INT_NOT_WHOLE);
 		func.instruction(&I::LocalGet(value));
 	}
 

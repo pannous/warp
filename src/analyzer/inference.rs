@@ -29,12 +29,12 @@ pub fn node_arithmetic(left: Kind, op: &Op, right: Kind) -> Option<&'static str>
 	let numeric = |kind: &Kind| matches!(kind, Kind::Int | Kind::Float) || is_run_time_kind(kind);
 	// a value of run-time kind added to a list: node_add concatenates when it is a list too
 	if *op == Op::Add && [left, right].contains(&Kind::Data) && [left, right].contains(&Kind::List) {
-		return Some(crate::wasm_emitter::list_ops::NODE_ADD);
+		return Some(crate::wasm_emitter::lists::list_ops::NODE_ADD);
 	}
 	if ![left, right].iter().any(is_run_time_kind) || ![left, right].iter().all(numeric) {
 		return None;
 	}
-	crate::wasm_emitter::list_ops::NODE_ARITHMETIC
+	crate::wasm_emitter::lists::list_ops::NODE_ARITHMETIC
 		.iter()
 		.find(|(_, known, _)| known == op)
 		.map(|(name, _, _)| *name)

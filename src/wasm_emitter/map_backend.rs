@@ -6,7 +6,7 @@
 //! (`{}` is ø, one entry is the entry itself, more are a curly list).
 //! A lookup it cannot answer (a missing key, a key no name) takes the generic way on that copy, with its errors.
 
-use super::list_dispatch::Slot;
+use super::lists::list_dispatch::Slot;
 use super::WasmGcEmitter;
 use crate::compiler::context::UserFunctionDef;
 use crate::library_words::{COLLECTION_CONTAINS, COLLECTION_POSITION};
@@ -506,7 +506,7 @@ impl WasmGcEmitter {
 			|s, f| {
 				let (name, slot, entry, count, grown) = (3, 4, 5, 6, 7);
 				f.instruction(&I::LocalGet(1));
-				s.call(f, super::list_ops::MAP_KEY_NAME);
+				s.call(f, super::lists::list_ops::MAP_KEY_NAME);
 				f.instruction(&I::LocalSet(name));
 				s.emit_require_kind(f, name, Kind::Symbol, "not_a_text");
 				Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(name), I::RefAsNonNull]);
@@ -613,7 +613,7 @@ impl WasmGcEmitter {
 		let find_entry = |s: &mut Self, f: &mut Function, name: u32, entry: u32, missing: &[I<'static>]| {
 			let return_missing = [&[I::If(BlockType::Empty)], missing, &[I::Return, I::End]].concat();
 			f.instruction(&I::LocalGet(1));
-			s.call(f, super::list_ops::MAP_KEY_NAME);
+			s.call(f, super::lists::list_ops::MAP_KEY_NAME);
 			f.instruction(&I::LocalSet(name));
 			s.emit_field(f, name, 0);
 			Self::emit_kind_test(f, Kind::Symbol as i64, I::I64Ne);

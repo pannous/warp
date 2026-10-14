@@ -365,7 +365,7 @@ impl WasmGcEmitter {
 				|| self.computes_at_run_time_kind(value) =>
 			{
 				self.emit_node_instructions(func, value);
-				self.emit_call(func, list_ops::TEXT_AS_INT);
+				self.emit_call(func, lists::list_ops::TEXT_AS_INT);
 				self.emit_call(func, "new_int");
 			}
 			// Already int or coercible; a ratio is truncated
@@ -413,7 +413,7 @@ impl WasmGcEmitter {
 			// a text, or a value known only at run time, parses its digits
 			_ if matches!(self.get_type(value), Kind::Text | Kind::Empty) => {
 				self.emit_node_instructions(func, value);
-				self.emit_call(func, list_ops::TEXT_AS_FLOAT);
+				self.emit_call(func, lists::list_ops::TEXT_AS_FLOAT);
 				self.emit_call(func, "new_float");
 			}
 			// `codepoint(c) as float`: a library word's number result (a text one parses above)
@@ -628,7 +628,7 @@ impl WasmGcEmitter {
 				],
 			);
 			s.call(f, "new_text");
-			s.call(f, list_ops::TEXT_AS_INT);
+			s.call(f, lists::list_ops::TEXT_AS_INT);
 			Self::emit_list(
 				f,
 				&[
@@ -643,7 +643,7 @@ impl WasmGcEmitter {
 				],
 			);
 			s.call(f, "new_text");
-			s.call(f, list_ops::TEXT_AS_INT);
+			s.call(f, lists::list_ops::TEXT_AS_INT);
 			s.call(f, "exact_div");
 			s.call(f, "new_int");
 			Self::emit_list(
@@ -663,7 +663,7 @@ impl WasmGcEmitter {
 			);
 			// else its float: an Int when whole and in range
 			f.instruction(&I::LocalGet(0));
-			s.call(f, list_ops::TEXT_AS_FLOAT);
+			s.call(f, lists::list_ops::TEXT_AS_FLOAT);
 			Self::emit_list(f, &[I::I64ReinterpretF64, I::LocalSet(bits)]);
 			let float = [I::LocalGet(bits), I::F64ReinterpretI64];
 			Self::emit_list(f, &float);

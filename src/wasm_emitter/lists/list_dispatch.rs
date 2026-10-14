@@ -16,8 +16,8 @@
 //! grows it in place. A typed list never meets a Node holder of itself, whose copy would part from it: a list another
 //! variable holds as Nodes, or one used whole (an argument, an item, a field) stays the Node list every holder shares.
 
-use super::map_backend::is_update;
-use super::WasmGcEmitter;
+use super::super::map_backend::is_update;
+use super::super::WasmGcEmitter;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
@@ -283,13 +283,13 @@ const CONDITIONAL_OPS: [Op; 6] = [Op::If, Op::Then, Op::Else, Op::And, Op::Or, O
 
 /// Where a typed list variable lives: a local of the body, or a global main builds and functions read
 #[derive(Clone, Copy, Debug)]
-pub(super) enum Slot {
+pub(in crate::wasm_emitter) enum Slot {
 	Local(u32),
 	Global(u32),
 }
 
 impl Slot {
-	pub(super) fn get(self) -> Instruction<'static> {
+	pub(in crate::wasm_emitter) fn get(self) -> Instruction<'static> {
 		match self {
 			Slot::Local(index) => I::LocalGet(index),
 			Slot::Global(index) => I::GlobalGet(index),
@@ -297,7 +297,7 @@ impl Slot {
 	}
 
 	/// Store the list on the stack and leave it there
-	pub(super) fn tee(self, func: &mut Function) {
+	pub(in crate::wasm_emitter) fn tee(self, func: &mut Function) {
 		match self {
 			Slot::Local(index) => {
 				func.instruction(&I::LocalTee(index));
@@ -331,7 +331,7 @@ enum Source {
 impl WasmGcEmitter {
 	/// The slot and element type of `target` when it is a list variable held as a typed array: a local of the body, else
 	/// a typed global
-	pub(super) fn typed_list(&self, target: &Node) -> Option<(Slot, TypedList)> {
+	pub(in crate::wasm_emitter) fn typed_list(&self, target: &Node) -> Option<(Slot, TypedList)> {
 		let Node::Symbol(name) = target.drop_meta() else {
 			return None;
 		};
@@ -346,7 +346,7 @@ impl WasmGcEmitter {
 
 	/// The backend that runs `op` on `target`. A host backend would be picked here for its element types, with the
 	/// length test against HOST_BACKEND_MIN_LENGTH emitted around the call.
-	pub(super) fn list_backend(&self, _op: ListOp, target: &Node) -> Backend {
+	pub(in crate::wasm_emitter) fn list_backend(&self, _op: ListOp, target: &Node) -> Backend {
 		match self.typed_list(target) {
 			Some((_, list)) => Backend::TypedArray(list.element),
 			None => Backend::NodeCells,
@@ -354,7 +354,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The (array, list) type indices of an element type
-	pub(super) fn typed_list_types(&self, element: ElementType) -> (u32, u32) {
+	pub(in crate::wasm_emitter) fn typed_list_types(&self, element: ElementType) -> (u32, u32) {
 		let types = &self.type_manager;
 		match element {
 			ElementType::Int => (types.int_array_type, types.int_list_type),
@@ -363,7 +363,7 @@ impl WasmGcEmitter {
 		}
 	}
 
-	pub(super) fn typed_list_ref(&self, element: ElementType) -> RefType {
+	pub(in crate::wasm_emitter) fn typed_list_ref(&self, element: ElementType) -> RefType {
 		RefType {
 			nullable: true,
 			heap_type: HeapType::Concrete(self.typed_list_types(element).1),
@@ -371,7 +371,7 @@ impl WasmGcEmitter {
 	}
 
 	/// How the local of a variable is stored: a typed list as its list struct, anything else by its kind
-	pub(super) fn local_storage_type(&self, name: &str, kind: Kind) -> ValType {
+	pub(in crate::wasm_emitter) fn local_storage_type(&self, name: &str, kind: Kind) -> ValType {
 		if self.typed_maps.contains(name) {
 			return Ref(self.node_map_ref());
 		}
@@ -385,7 +385,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Push the element count (i64) of `target`; `counter` is the runtime counter of the generic backend (node_count, node_bytes …)
-	pub(super) fn emit_list_count(&mut self, func: &mut Function, target: &Node, counter: &'static str) {
+	pub(in crate::wasm_emitter) fn emit_list_count(&mut self, func: &mut Function, target: &Node, counter: &'static str) {
 		// `(statements; xs)` (a lowered filter): the statements run, a typed list xs is counted without making its nodes
 		if let Node::List(items, Bracket::Round, crate::node::Separator::Semicolon | crate::node::Separator::Newline) =
 			target.drop_meta()
@@ -422,7 +422,7 @@ impl WasmGcEmitter {
 
 	/// Push the number (i64) at the 1-based `index` of `target`; a float element takes the generic way, which fails as
 	/// it always did
-	pub(super) fn emit_list_element_number(&mut self, func: &mut Function, target: &Node, index: &Node) {
+	pub(in crate::wasm_emitter) fn emit_list_element_number(&mut self, func: &mut Function, target: &Node, index: &Node) {
 		self.emit_integral_index_check(func, index);
 		match self.list_backend(ListOp::Element, target) {
 			Backend::TypedArray(ElementType::Int) => self.emit_typed_element(func, target, index),
@@ -439,29 +439,29 @@ impl WasmGcEmitter {
 	}
 
 	/// A typed array of Ints or Floats: its elements are numbers, never characters (P65)
-	pub(super) fn holds_only_numbers(&self, target: &Node) -> bool {
+	pub(in crate::wasm_emitter) fn holds_only_numbers(&self, target: &Node) -> bool {
 		self.typed_list(target)
 			.is_some_and(|(_, list)| list.element != ElementType::Node)
 	}
 
-	pub(super) fn is_typed_list(&self, target: &Node) -> bool {
+	pub(in crate::wasm_emitter) fn is_typed_list(&self, target: &Node) -> bool {
 		self.typed_list(target).is_some()
 	}
 
 	/// Push the f64 at the 1-based `index` of a typed list `target`
-	pub(super) fn emit_typed_element_float(&mut self, func: &mut Function, target: &Node, index: &Node) {
+	pub(in crate::wasm_emitter) fn emit_typed_element_float(&mut self, func: &mut Function, target: &Node, index: &Node) {
 		let (_, list) = self.typed_list(target).expect("typed backend");
 		self.emit_integral_index_check(func, index);
 		self.emit_typed_element(func, target, index);
 		match list.element {
 			ElementType::Int => self.emit_int_to_f64(func, None),
-			ElementType::Node => self.emit_call(func, super::list_ops::TEXT_AS_FLOAT),
+			ElementType::Node => self.emit_call(func, super::super::lists::list_ops::TEXT_AS_FLOAT),
 			ElementType::Float => {}
 		}
 	}
 
 	/// Push the Node at the 1-based `index` of `target` (a list element, or a character of a text)
-	pub(super) fn emit_list_element_node(&mut self, func: &mut Function, target: &Node, index: &Node) {
+	pub(in crate::wasm_emitter) fn emit_list_element_node(&mut self, func: &mut Function, target: &Node, index: &Node) {
 		self.emit_integral_index_check(func, index);
 		match self.list_backend(ListOp::Element, target) {
 			Backend::TypedArray(element) => {
@@ -535,7 +535,7 @@ impl WasmGcEmitter {
 
 	/// `target#index = value` on a typed list, in place: leaves the assigned value (i64; 0 for a float, which is no exact
 	/// Int, as an entry assignment of a non-number leaves). False for any other list.
-	pub(super) fn emit_typed_element_assignment(
+	pub(in crate::wasm_emitter) fn emit_typed_element_assignment(
 		&mut self,
 		func: &mut Function,
 		target: &Node,
@@ -562,7 +562,7 @@ impl WasmGcEmitter {
 	}
 
 	/// `name = value` for a typed list variable: stores the list and leaves it on the stack. False for any other variable.
-	pub(super) fn emit_typed_list_store(&mut self, func: &mut Function, name: &str, value: &Node) -> bool {
+	pub(in crate::wasm_emitter) fn emit_typed_list_store(&mut self, func: &mut Function, name: &str, value: &Node) -> bool {
 		if let Some(slot) = self.typed_map(&Node::Symbol(name.to_string())) {
 			self.emit_typed_map_store(func, name, slot, value);
 			return true;
@@ -647,7 +647,7 @@ impl WasmGcEmitter {
 			}
 			// a call of a function giving back its array: that array, no conversion (list_abi.rs)
 			_ if list.element == ElementType::Node
-				&& super::list_abi::called_function(value).is_some_and(|callee| self.returns_list_abi(callee)) =>
+				&& super::super::lists::list_abi::called_function(value).is_some_and(|callee| self.returns_list_abi(callee)) =>
 			{
 				self.emit_list_abi_value(func, value);
 			}
@@ -663,7 +663,7 @@ impl WasmGcEmitter {
 	}
 
 	/// `xs += [a b]` of a typed list: the items pushed onto its array in place, leaving the list. False for any other
-	pub(super) fn emit_typed_list_extend(&mut self, func: &mut Function, name: &str, items: &[Node]) -> bool {
+	pub(in crate::wasm_emitter) fn emit_typed_list_extend(&mut self, func: &mut Function, name: &str, items: &[Node]) -> bool {
 		let Some((slot, list)) = self.typed_list(&Node::Symbol(name.to_string())) else {
 			return false;
 		};
@@ -709,7 +709,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The variable and value of an assignment to a typed list variable
-	pub(super) fn typed_list_store(&self, statement: &Node) -> Option<(String, Node)> {
+	pub(in crate::wasm_emitter) fn typed_list_store(&self, statement: &Node) -> Option<(String, Node)> {
 		let Node::Key(target, Op::Assign | Op::Define, value) = statement.drop_meta() else {
 			return None;
 		};
@@ -721,7 +721,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The variable and items of `xs += [a b]` on a typed list variable
-	pub(super) fn typed_list_extension(&self, statement: &Node) -> Option<(String, Vec<Node>)> {
+	pub(in crate::wasm_emitter) fn typed_list_extension(&self, statement: &Node) -> Option<(String, Vec<Node>)> {
 		let Node::Key(target, Op::AddAssign, value) = statement.drop_meta() else {
 			return None;
 		};
@@ -734,7 +734,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Push a typed list variable as the Node list it stands for; false for any other variable
-	pub(super) fn emit_typed_list_as_node(&mut self, func: &mut Function, name: &str) -> bool {
+	pub(in crate::wasm_emitter) fn emit_typed_list_as_node(&mut self, func: &mut Function, name: &str) -> bool {
 		if let Some(slot) = self.typed_map(&Node::Symbol(name.to_string())) {
 			self.emit_typed_map_as_node(func, slot);
 			return true;
@@ -752,7 +752,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The $IntList itself of a typed int list variable, as a host word reads it (list_to_ints); false for any other value
-	pub(super) fn emit_typed_int_list(&mut self, func: &mut Function, value: &Node) -> bool {
+	pub(in crate::wasm_emitter) fn emit_typed_int_list(&mut self, func: &mut Function, value: &Node) -> bool {
 		let Some((slot, _)) = self
 			.typed_list(value)
 			.filter(|(_, list)| list.element == ElementType::Int)
@@ -765,7 +765,7 @@ impl WasmGcEmitter {
 
 	/// `list_sum(list, loop)` as `wanted`: a typed list sums its items in one runtime call (an int sum that leaves the
 	/// fixnum range runs the exact loop instead), any other list runs the loop
-	pub(super) fn emit_list_sum(&mut self, func: &mut Function, list: &Node, sum_loop: &Node, wanted: Wanted) {
+	pub(in crate::wasm_emitter) fn emit_list_sum(&mut self, func: &mut Function, list: &Node, sum_loop: &Node, wanted: Wanted) {
 		match (self.list_backend(ListOp::Sum, list), wanted) {
 			(Backend::TypedArray(ElementType::Int), _) => {
 				let (slot, _) = self.typed_list(list).expect("typed backend");

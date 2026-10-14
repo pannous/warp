@@ -172,7 +172,7 @@ impl WasmGcEmitter {
 		if op == Op::Pow {
 			operand(self, f, dividend, false);
 			operand(self, f, divisor, false);
-			if self.emit_libm_call(f, super::super::LIBM_POW) {
+			if self.emit_libm_call(f, super::super::super::LIBM_POW) {
 				Self::emit_list(f, &[I::LocalTee(power), I::LocalGet(power), I::F64Ne]);
 				self.emit_fail_if(f, "invalid_number");
 				f.instruction(&I::LocalGet(power));
@@ -216,7 +216,7 @@ impl WasmGcEmitter {
 				|s, f| {
 					let (kind, power) = (2, 3);
 					// a time or duration: calendar arithmetic (time_arithmetic.rs)
-					if let Some(operator) = super::super::time_arithmetic::TIME_OPERATORS
+					if let Some(operator) = super::super::super::time_arithmetic::TIME_OPERATORS
 						.iter()
 						.position(|known| *known == op)
 						.filter(|_| s.uses_times())
@@ -235,7 +235,7 @@ impl WasmGcEmitter {
 								I::I32Const(operator as i32),
 							],
 						);
-						s.call(f, super::super::time_arithmetic::TIME_ARITHMETIC);
+						s.call(f, super::super::super::time_arithmetic::TIME_ARITHMETIC);
 						Self::emit_list(f, &[I::Return, I::End]);
 					}
 					// node_add of two lists (ø is the empty list): their concatenation, `out = out + row`
@@ -305,7 +305,7 @@ impl WasmGcEmitter {
 						is_text(f, 0);
 						is_text(f, 1);
 						Self::emit_list(f, &[I::I32And, I::If(BlockType::Empty), I::LocalGet(0), I::LocalGet(1)]);
-						s.call(f, super::super::text::text_builtins::TEXT_CONCAT);
+						s.call(f, super::super::super::text::text_builtins::TEXT_CONCAT);
 						Self::emit_list(f, &[I::Return, I::End]);
 						// a text and a number: the number's text joined to it, as `1 + "x"` is "1x" when the kinds are known
 						is_text(f, 0);
@@ -313,9 +313,9 @@ impl WasmGcEmitter {
 						Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty)]);
 						let node_type = s.type_manager.node_type;
 						Self::emit_list(f, &[I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(0)]);
-						s.call(f, super::super::text::text_builtins::TEXT_OF);
+						s.call(f, super::super::super::text::text_builtins::TEXT_OF);
 						Self::emit_list(f, &[I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(1)]);
-						s.call(f, super::super::text::text_builtins::TEXT_OF);
+						s.call(f, super::super::super::text::text_builtins::TEXT_OF);
 						Self::emit_list(
 							f,
 							&[
@@ -327,7 +327,7 @@ impl WasmGcEmitter {
 						let (pointer, length) = s.allocate_string("");
 						Self::emit_list(f, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
 						s.call(f, "new_text");
-						s.call(f, super::super::library_ops::LIST_JOIN);
+						s.call(f, super::super::super::library_ops::LIST_JOIN);
 						Self::emit_list(f, &[I::Return, I::End]);
 					}
 					// an Error value fails with its own message (`x!` of ø is "unwrapped ø"), never as "not a number"
@@ -335,8 +335,8 @@ impl WasmGcEmitter {
 						s.emit_fail_if_error(f, operand);
 					}
 					// a remainder of a value with uncertainty is not a number here
-					let uncertain = s.should_emit_function(super::super::numbers::uncertain::UNCERTAIN_NEW)
-						&& index < super::super::numbers::uncertain::UNCERTAIN_ARITHMETIC.len();
+					let uncertain = s.should_emit_function(super::super::super::numbers::uncertain::UNCERTAIN_NEW)
+						&& index < super::super::super::numbers::uncertain::UNCERTAIN_ARITHMETIC.len();
 					// a text, a character or a list is no number here: "x" * 2 is no 240
 					for operand in [0, 1] {
 						s.emit_field(f, operand, 0);
@@ -372,7 +372,7 @@ impl WasmGcEmitter {
 						s.is_uncertain(f, 0);
 						s.is_uncertain(f, 1);
 						Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty), I::LocalGet(0), I::LocalGet(1)]);
-						s.call(f, super::super::numbers::uncertain::UNCERTAIN_ARITHMETIC[index]);
+						s.call(f, super::super::super::numbers::uncertain::UNCERTAIN_ARITHMETIC[index]);
 						Self::emit_list(f, &[I::Return, I::End]);
 					}
 					for operand in [0, 1] {
@@ -701,7 +701,7 @@ impl WasmGcEmitter {
 				crate::node::Separator::Space,
 			),
 		);
-		self.emit_node_instructions(func, &super::super::join_call(copies.expect("a one-element list"), ""));
+		self.emit_node_instructions(func, &super::super::super::join_call(copies.expect("a one-element list"), ""));
 	}
 
 	/// `"ab"*2` repeats; the got-it warning names `2 times "ab"`, and for a text spelling a number how to multiply it

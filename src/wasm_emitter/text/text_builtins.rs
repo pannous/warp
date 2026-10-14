@@ -21,7 +21,7 @@ const TEXT_ARGUMENT: &str = "text_argument";
 /// float_text when the analyzer saw floats (makes_floats), and the run-time functions that make floats
 const FLOAT_MAKERS: [&str; 4] = [
 	super::super::numbers::float_text::FLOAT_TEXT,
-	super::super::list_ops::TEXT_AS_FLOAT,
+	super::super::lists::list_ops::TEXT_AS_FLOAT,
 	super::super::numbers::casts::TEXT_AS_NUMBER,
 	super::super::numbers::uncertain::UNCERTAIN_NEW,
 ];
@@ -154,10 +154,10 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	{
 		required.insert("map_find");
 	}
-	if required.contains(super::super::list_ops::ELEMENT_BODY) {
-		required.insert(super::super::list_ops::ELEMENT_CHILDREN);
+	if required.contains(super::super::lists::list_ops::ELEMENT_BODY) {
+		required.insert(super::super::lists::list_ops::ELEMENT_CHILDREN);
 	}
-	if required.contains(super::super::list_ops::NODE_AT_KEY) {
+	if required.contains(super::super::lists::list_ops::NODE_AT_KEY) {
 		required.extend(["node_index_at", "map_get"]);
 	}
 	// instance_copy is emitted with field_with, both looking into an instance's fields; `shallow` is tested for truth
@@ -165,12 +165,12 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		required.extend([crate::library_words::FIELD_WITH, super::super::equality::IS_TRUTHY]);
 	}
 	if required.contains(crate::library_words::FIELD_WITH) {
-		required.insert(super::super::list_ops::STRUCT_BODY); // an instance keeps its type
+		required.insert(super::super::lists::list_ops::STRUCT_BODY); // an instance keeps its type
 	}
-	if required.contains(super::super::list_ops::NODE_WITH_KEY) {
-		required.extend([super::super::list_ops::NODE_WITH_NODE_AT, crate::library_words::FIELD_WITH]);
+	if required.contains(super::super::lists::list_ops::NODE_WITH_KEY) {
+		required.extend([super::super::lists::list_ops::NODE_WITH_NODE_AT, crate::library_words::FIELD_WITH]);
 	}
-	if required.contains(super::super::list_ops::NODE_WITH_NODE_AT) {
+	if required.contains(super::super::lists::list_ops::NODE_WITH_NODE_AT) {
 		required.extend(["node_with_at", "get_int_value"]);
 	}
 	// a map variable held as a hash table names its keys by map_key_name, emitted with map_get; a map node found or set
@@ -201,16 +201,16 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains("exact_euclid_div") {
 		required.insert(super::super::INT_RUNTIME);
 	}
-	if required.contains(super::super::list_ops::LIST_EXTEND) {
+	if required.contains(super::super::lists::list_ops::LIST_EXTEND) {
 		required.insert("list_concat"); // of a non-list
 	}
-	if required.contains(super::super::list_ops::NODE_ADD) {
+	if required.contains(super::super::lists::list_ops::NODE_ADD) {
 		required.extend(["list_concat", TEXT_CONCAT, TEXT_OF, super::super::library_ops::LIST_JOIN]);
 		// two lists added are concatenated, two texts too, a text and a number joined
 	}
 	if required.contains(super::super::numbers::casts::TEXT_AS_NUMBER) {
 		required.extend([
-			super::super::list_ops::TEXT_AS_FLOAT,
+			super::super::lists::list_ops::TEXT_AS_FLOAT,
 			super::super::INT_RUNTIME,
 			"exact_div",
 			"new_text",
@@ -218,12 +218,12 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 			"new_float",
 		]);
 	}
-	if super::super::list_ops::NODE_ARITHMETIC
+	if super::super::lists::list_ops::NODE_ARITHMETIC
 		.iter()
 		.any(|(name, _, _)| required.contains(name))
 	{
 		required.extend([
-			super::super::list_ops::TEXT_AS_FLOAT,
+			super::super::lists::list_ops::TEXT_AS_FLOAT,
 			super::super::INT_RUNTIME,
 			"exact_add",
 			"exact_sub",
@@ -232,26 +232,26 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 			"new_float",
 		]);
 		required.extend(
-			super::super::list_ops::NODE_ARITHMETIC
+			super::super::lists::list_ops::NODE_ARITHMETIC
 				.iter()
 				.filter(|(name, _, _)| required.contains(name))
 				.map(|(_, _, exact)| *exact)
 				.collect::<Vec<_>>(),
 		);
-		if required.contains(super::super::list_ops::NODE_POW) {
+		if required.contains(super::super::lists::list_ops::NODE_POW) {
 			required.extend(["is_ratio", "invalid_number"]);
 		}
 	}
-	if required.contains(super::super::list_ops::TEXT_AS_INT) || required.contains(super::super::list_ops::TEXT_AS_FLOAT) {
+	if required.contains(super::super::lists::list_ops::TEXT_AS_INT) || required.contains(super::super::lists::list_ops::TEXT_AS_FLOAT) {
 		required.insert("get_int_value");
 	}
-	if required.contains(super::super::list_ops::TEXT_AS_FLOAT) {
-		required.insert(super::super::list_ops::TEXT_AS_INT);
+	if required.contains(super::super::lists::list_ops::TEXT_AS_FLOAT) {
+		required.insert(super::super::lists::list_ops::TEXT_AS_INT);
 		if required.contains(super::super::INT_RUNTIME) {
 			required.insert("exact_to_f64");
 		}
 	}
-	if required.contains(super::super::list_ops::TEXT_AS_INT) && required.contains(super::super::INT_RUNTIME) {
+	if required.contains(super::super::lists::list_ops::TEXT_AS_INT) && required.contains(super::super::INT_RUNTIME) {
 		required.extend(["exact_mul", "exact_add", "exact_sub"]);
 	}
 	if required.contains("list_sort") {
@@ -361,7 +361,7 @@ impl WasmGcEmitter {
 				if name == RAISE || crate::diagnostic::warning_mode().fails(crate::diagnostic::Level::Normal) =>
 			{
 				self.emit_trap_detail(func, message);
-				self.emit_runtime_error(func, super::super::list_ops::RETURNED_ERROR);
+				self.emit_runtime_error(func, super::super::lists::list_ops::RETURNED_ERROR);
 			}
 			(WARNING, [message]) if self.ctx.func_registry.get(HOST_WARN).is_some() => {
 				self.emit_node_instructions(func, message);

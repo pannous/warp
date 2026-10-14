@@ -539,7 +539,7 @@ impl Resolver<'_> {
 		if let Some(import) = self.context.ffi_imports.get(name) {
 			// libm is pure (P26): untrusted code and `! Pure` functions may call it; so are the module's own linear arrays
 			let pure_library = import.library == crate::ffi::LIBM
-				|| import.library == crate::wasm_emitter::linear_arrays::LINEAR_LIBRARY;
+				|| import.library == crate::wasm_emitter::lists::linear_arrays::LINEAR_LIBRARY;
 			// warp's own host words (serve_routes, sleep, gpu_render …) are the Host capability, not C: a sandboxed program
 			// (warp --sandbox) keeps them
 			let host_word = import.library == crate::host::HOST_LIBRARY;

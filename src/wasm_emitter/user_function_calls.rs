@@ -348,8 +348,8 @@ impl WasmGcEmitter {
 		{
 			typed_lists.insert(
 				param.name.clone(),
-				list_dispatch::TypedList {
-					element: list_dispatch::ElementType::Node,
+				lists::list_dispatch::TypedList {
+					element: lists::list_dispatch::ElementType::Node,
 					updated: true,
 					aliased: true,
 				},
@@ -720,7 +720,7 @@ fn statements_run(body: &Node) -> Node {
 struct FunctionState {
 	compiling: Option<String>,
 	scope: Scope,
-	typed_lists: HashMap<String, list_dispatch::TypedList>,
+	typed_lists: HashMap<String, lists::list_dispatch::TypedList>,
 	typed_maps: std::collections::HashSet<String>,
 	typed_structs: HashMap<String, String>,
 	bounded_counters: std::collections::HashSet<String>,
