@@ -16,7 +16,7 @@
 //! grows it in place. A typed list never meets a Node holder of itself, whose copy would part from it: a list another
 //! variable holds as Nodes, or one used whole (an argument, an item, a field) stays the Node list every holder shares.
 
-use super::super::map_backend::is_update;
+use super::super::maps::map_backend::is_update;
 use super::super::WasmGcEmitter;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;

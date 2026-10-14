@@ -4,14 +4,14 @@
 //! first, and stays right while only field sets (the entries are kept) and fields_grow (which adds to it) change the
 //! map; anything else changing a list's links or items in place forgets every index (forget_map_indexes).
 
-use super::WasmGcEmitter;
+use super::super::WasmGcEmitter;
 use crate::type_kinds::{Kind, KIND_MASK};
 use wasm_encoder::*;
 use Instruction as I;
 use ValType::Ref;
 
-pub(super) const MAP_INDEX_ENTRY: &str = "map_index_entry";
-pub(super) const MAP_INDEX_GROW: &str = "map_index_grow";
+pub(in crate::wasm_emitter) const MAP_INDEX_ENTRY: &str = "map_index_entry";
+pub(in crate::wasm_emitter) const MAP_INDEX_GROW: &str = "map_index_grow";
 const MAP_INDEX_OF: &str = "map_index_of";
 const MAP_INDEX_ADD: &str = "map_index_add";
 /// Maps indexed at once: a loop copying one map into another (`b[k] = a[k]`) keeps both
@@ -37,13 +37,13 @@ const KEY_KIND: i64 = Kind::Key as i64;
 
 impl WasmGcEmitter {
 	/// Programs finding or setting entries of a map node
-	pub(super) fn uses_map_lookups(&self) -> bool {
+	pub(in crate::wasm_emitter) fn uses_map_lookups(&self) -> bool {
 		["map_get", "map_find", "field_with"]
 			.iter()
 			.any(|name| self.should_emit_function(name))
 	}
 
-	pub(super) fn emit_map_index_globals(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_map_index_globals(&mut self) {
 		if !self.uses_map_lookups() {
 			return;
 		}
@@ -70,7 +70,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The instructions forgetting every map index, before a list's links or items change in place
-	pub(super) fn forget_map_indexes(&self) -> Vec<I<'static>> {
+	pub(in crate::wasm_emitter) fn forget_map_indexes(&self) -> Vec<I<'static>> {
 		let Some(_) = self.map_index_global else { return vec![] };
 		let null = I::RefNull(HeapType::Concrete(self.type_manager.node_type));
 		(0..MAP_INDEXES)
@@ -79,7 +79,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The runtime functions of the index, after node_map_set and node_map_lookup they call
-	pub(super) fn emit_map_index(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_map_index(&mut self) {
 		let node = self.type_manager.node_type;
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let map_ref = Ref(self.node_map_ref());
@@ -143,13 +143,13 @@ impl WasmGcEmitter {
 				return_unless(f);
 				s.emit_field(f, entry, 1);
 				f.instruction(&I::RefCastNonNull(HeapType::Concrete(node)));
-				s.call(f, super::lists::list_ops::MAP_KEY_NAME);
+				s.call(f, super::super::lists::list_ops::MAP_KEY_NAME);
 				f.instruction(&I::LocalTee(name));
 				kind_of(f);
 				Self::emit_list(f, &[I::I64Const(Kind::Symbol as i64), I::I64Eq]);
 				return_unless(f);
 				Self::emit_list(f, &[I::LocalGet(table), I::LocalGet(name), I::RefAsNonNull]);
-				s.call(f, super::map_backend::NODE_MAP_LOOKUP);
+				s.call(f, super::super::maps::map_backend::NODE_MAP_LOOKUP);
 				Self::emit_list(f, &[I::RefIsNull]);
 				return_unless(f);
 				Self::emit_list(
@@ -162,7 +162,7 @@ impl WasmGcEmitter {
 						I::RefAsNonNull,
 					],
 				);
-				s.call(f, super::map_backend::NODE_MAP_SET);
+				s.call(f, super::super::maps::map_backend::NODE_MAP_SET);
 			},
 		);
 
@@ -245,14 +245,14 @@ impl WasmGcEmitter {
 					);
 				}
 				Self::emit_list(f, &[I::LocalGet(fields), I::GlobalSet(owner)]);
-				s.call(f, super::map_backend::NODE_MAP_NEW);
+				s.call(f, super::super::maps::map_backend::NODE_MAP_NEW);
 				Self::emit_list(f, &[I::GlobalSet(index), I::LocalGet(fields), I::LocalSet(cell)]);
 				s.emit_cell_walk(f, cell, |f| {
 					f.instruction(&I::GlobalGet(index));
 					s.emit_field(f, cell, 1);
 					s.call(f, MAP_INDEX_ADD);
 					s.emit_field(f, cell, 1);
-					s.call(f, super::equality::IS_META_ENTRY);
+					s.call(f, super::super::equality::IS_META_ENTRY);
 					Self::emit_list(
 						f,
 						&[
@@ -301,13 +301,13 @@ impl WasmGcEmitter {
 				f.instruction(&I::I32Eqz);
 				Self::emit_list(f, &unindexed);
 				f.instruction(&I::LocalGet(key));
-				s.call(f, super::lists::list_ops::MAP_KEY_NAME);
+				s.call(f, super::super::lists::list_ops::MAP_KEY_NAME);
 				f.instruction(&I::LocalTee(name));
 				kind_of(f);
 				Self::emit_list(f, &[I::I64Const(Kind::Symbol as i64), I::I64Ne]);
 				Self::emit_list(f, &unindexed);
 				Self::emit_list(f, &[I::GlobalGet(index), I::LocalGet(name), I::RefAsNonNull]);
-				s.call(f, super::map_backend::NODE_MAP_LOOKUP);
+				s.call(f, super::super::maps::map_backend::NODE_MAP_LOOKUP);
 				f.instruction(&I::I32Const(1));
 			},
 		);
@@ -358,7 +358,7 @@ impl WasmGcEmitter {
 						I::LocalGet(entry),
 					],
 				);
-				s.call(f, super::equality::IS_META_ENTRY);
+				s.call(f, super::super::equality::IS_META_ENTRY);
 				Self::emit_list(
 					f,
 					&[

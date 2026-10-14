@@ -8,7 +8,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use super::super::map_backend::is_update;
+use super::super::maps::map_backend::is_update;
 use crate::compiler::context::UserFunctionDef;
 
 /// Words that read a list without holding on to it, besides those reading any collection (reads_collection)

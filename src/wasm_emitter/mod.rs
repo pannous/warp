@@ -5,10 +5,9 @@ pub use traps::*;
 mod diagnostics;
 mod module_finish;
 mod node_functions;
-mod raw_structs;
 #[cfg(feature = "native")]
-pub use raw_structs::run_raw_struct;
-pub(crate) use raw_structs::*;
+pub use maps::raw_structs::run_raw_struct;
+pub(crate) use maps::raw_structs::*;
 
 pub(crate) mod numbers;
 pub(crate) mod component_adapters;
@@ -29,7 +28,6 @@ mod equality;
 mod ffi_emitter;
 mod function_builder;
 mod import_manager;
-mod key_emitter;
 mod layout;
 pub(crate) mod library_ops;
 pub(crate) mod lists;
@@ -39,10 +37,8 @@ mod time_arithmetic;
 pub(crate) mod time_zones;
 pub(crate) mod times;
 pub use text::similarity::NUMBERS_SIMILAR;
-mod map_backend;
-mod map_index;
-mod struct_backend;
-pub use map_backend::MAP_COPY_SUFFIX;
+pub(crate) mod maps;
+pub use maps::map_backend::MAP_COPY_SUFFIX;
 mod loop_control;
 pub(crate) use loop_control::{is_step, mark_step, split_step};
 mod reflection;
@@ -303,7 +299,7 @@ pub struct WasmGcEmitter {
 	typed_map_globals: HashMap<String, u32>, // globals held as hash tables (map_backend.rs find_typed_map_globals): their global
 	typed_maps: std::collections::HashSet<String>, // map variables of the body being emitted held as hash tables (map_backend.rs)
 	typed_structs: HashMap<String, String>, // instance variables of the body being emitted held as GC structs, with their class (struct_backend.rs)
-	instance_types: HashMap<String, struct_backend::InstanceType>, // the `P·instance` struct type of each class
+	instance_types: HashMap<String, maps::struct_backend::InstanceType>, // the `P·instance` struct type of each class
 	struct_abi: HashMap<String, Vec<Option<String>>>, // the parameters user functions take as structs, by class (struct_backend.rs)
 	struct_results: HashMap<String, String>, // the user functions giving back a struct, with its class (struct_backend.rs)
 	/// `x = (t = x; …; t)`, an inlined call updating the list it is given back: x and t share one array, no copies

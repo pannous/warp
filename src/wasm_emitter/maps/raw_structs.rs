@@ -1,5 +1,5 @@
 //! Raw structs: a standalone module returning a GC struct instance of a user type, and running it
-use super::*;
+use super::super::*;
 
 impl WasmGcEmitter {
 	/// Emit a standalone WASM module that returns a raw GC struct instance.
@@ -233,7 +233,7 @@ pub(crate) fn find_struct_instantiation(registry: &TypeRegistry, node: &Node) ->
 	find_instantiation_recursive(registry, last)
 }
 
-pub(super) fn find_instantiation_recursive(
+pub(in crate::wasm_emitter) fn find_instantiation_recursive(
 	registry: &TypeRegistry,
 	node: &Node,
 ) -> Option<(TypeDef, Vec<RawFieldValue>)> {

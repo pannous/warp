@@ -6,8 +6,8 @@
 //! (`{}` is ø, one entry is the entry itself, more are a curly list).
 //! A lookup it cannot answer (a missing key, a key no name) takes the generic way on that copy, with its errors.
 
-use super::lists::list_dispatch::Slot;
-use super::WasmGcEmitter;
+use super::super::lists::list_dispatch::Slot;
+use super::super::WasmGcEmitter;
 use crate::compiler::context::UserFunctionDef;
 use crate::library_words::{COLLECTION_CONTAINS, COLLECTION_POSITION};
 use crate::node::{Bracket, Node};
@@ -18,11 +18,11 @@ use wasm_encoder::*;
 use Instruction as I;
 use ValType::Ref;
 
-pub(super) const NODE_MAP_NEW: &str = "node_map_new";
-pub(super) const NODE_MAP_SET: &str = "node_map_set";
-pub(super) const NODE_MAP_LOOKUP: &str = "node_map_lookup";
-pub(super) const NODE_MAP_AS_NODE: &str = "node_map_as_node";
-pub(super) const NODE_MAP_OF: &str = "node_map_of";
+pub(in crate::wasm_emitter) const NODE_MAP_NEW: &str = "node_map_new";
+pub(in crate::wasm_emitter) const NODE_MAP_SET: &str = "node_map_set";
+pub(in crate::wasm_emitter) const NODE_MAP_LOOKUP: &str = "node_map_lookup";
+pub(in crate::wasm_emitter) const NODE_MAP_AS_NODE: &str = "node_map_as_node";
+pub(in crate::wasm_emitter) const NODE_MAP_OF: &str = "node_map_of";
 /// The hash-table copy of a map parameter, `m·map = m` (declaration_forms::indexed_parameter_copies)
 pub const MAP_COPY_SUFFIX: &str = "·map";
 const NODE_MAP_HASH: &str = "node_map_hash";
@@ -30,7 +30,7 @@ const NODE_MAP_SLOT: &str = "node_map_slot";
 const NODE_MAP_RESLOT: &str = "node_map_reslot";
 const NODE_MAP_REMOVE: &str = "node_map_remove";
 /// The functions a program using a map variable calls; the rest come with them
-pub(super) const NODE_MAP_FUNCTIONS: [&str; 6] = [
+pub(in crate::wasm_emitter) const NODE_MAP_FUNCTIONS: [&str; 6] = [
 	NODE_MAP_NEW,
 	NODE_MAP_SET,
 	NODE_MAP_LOOKUP,
@@ -61,7 +61,7 @@ const SLOTS: u32 = 3;
 
 impl WasmGcEmitter {
 	/// The map variables of `program` held as hash tables: locals assigned only `{}` and entries with name keys
-	pub(super) fn find_typed_maps(&self, program: &Node) -> HashSet<String> {
+	pub(in crate::wasm_emitter) fn find_typed_maps(&self, program: &Node) -> HashSet<String> {
 		let held_as_nodes = self.names_held_as_nodes(program);
 		self.map_candidates(program)
 			.into_iter()
@@ -72,7 +72,7 @@ impl WasmGcEmitter {
 
 	/// The globals held as hash tables: those main and every function use only as find_typed_maps admits a local, so a
 	/// map a function fills (`global m; m[k] = v`) is set and found in O(1) too
-	pub(super) fn find_typed_map_globals(
+	pub(in crate::wasm_emitter) fn find_typed_map_globals(
 		&self,
 		program: &Node,
 		globals: &std::collections::HashMap<String, crate::compiler::local::Local>,
@@ -126,9 +126,9 @@ impl WasmGcEmitter {
 		});
 		// a map is a reference (P200b): one used whole (`n = m`, `[m]`, an argument) is the one Node every holder shares
 		let mut used_whole = vec![];
-		super::struct_backend::used_whole(
+		super::super::maps::struct_backend::used_whole(
 			&without_reads(
-				super::struct_backend::without_final_variable(program),
+				super::super::maps::struct_backend::without_final_variable(program),
 				&self.ctx.user_functions,
 			),
 			&Default::default(),
@@ -143,7 +143,7 @@ impl WasmGcEmitter {
 
 	/// The variables a typed backend (hash table, struct) never holds: globals, captured ones and those assigned in a
 	/// block that may stop at an error (`RAN_WITHOUT_ERROR`)
-	pub(super) fn names_held_as_nodes(&self, program: &Node) -> HashSet<String> {
+	pub(in crate::wasm_emitter) fn names_held_as_nodes(&self, program: &Node) -> HashSet<String> {
 		let mut names = self.names_kept_as_nodes(program);
 		names.extend(self.ctx.user_globals.keys().cloned());
 		names
@@ -153,7 +153,7 @@ impl WasmGcEmitter {
 	fn names_kept_as_nodes(&self, program: &Node) -> HashSet<String> {
 		let mut names = HashSet::new();
 		program.visit(&mut |part| {
-			if matches!(part, Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == super::RAN_WITHOUT_ERROR)) {
+			if matches!(part, Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == super::super::RAN_WITHOUT_ERROR)) {
 				part.visit(&mut |inner| if let Node::Key(target, _, _) = inner {
 					if let Node::Symbol(name) = target.drop_meta() { names.insert(name.clone()); }
 				});
@@ -164,7 +164,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Where `target` lives when it is a map variable held as a hash table: a local of the body, else a typed global
-	pub(super) fn typed_map(&self, target: &Node) -> Option<Slot> {
+	pub(in crate::wasm_emitter) fn typed_map(&self, target: &Node) -> Option<Slot> {
 		let Node::Symbol(name) = target.drop_meta() else {
 			return None;
 		};
@@ -175,7 +175,7 @@ impl WasmGcEmitter {
 	}
 
 	/// A null-initialized mutable global holding a hash table
-	pub(super) fn declare_typed_map_global(&mut self) -> u32 {
+	pub(in crate::wasm_emitter) fn declare_typed_map_global(&mut self) -> u32 {
 		self.declare_global_of(
 			Ref(self.node_map_ref()),
 			ConstExpr::ref_null(HeapType::Concrete(self.type_manager.node_map_type)),
@@ -184,7 +184,7 @@ impl WasmGcEmitter {
 
 	/// `collection_contains(m, key)` and `collection_position(m, key)` (`key in m`, `m has key`) of a hash table with a
 	/// name key: yes/no (contains) or 1/0 (position) whether it holds the key; false for any other call
-	pub(super) fn emit_typed_map_membership(&mut self, func: &mut Function, items: &[Node]) -> bool {
+	pub(in crate::wasm_emitter) fn emit_typed_map_membership(&mut self, func: &mut Function, items: &[Node]) -> bool {
 		let [word, map, key] = items else { return false };
 		let word = word.drop_meta().name();
 		let is_membership = word == COLLECTION_CONTAINS || word == COLLECTION_POSITION;
@@ -198,7 +198,7 @@ impl WasmGcEmitter {
 		self.emit_call(
 			func,
 			if word == COLLECTION_CONTAINS {
-				super::NEW_BOOL
+				super::super::NEW_BOOL
 			} else {
 				"new_int"
 			},
@@ -206,7 +206,7 @@ impl WasmGcEmitter {
 		true
 	}
 
-	pub(super) fn node_map_ref(&self) -> RefType {
+	pub(in crate::wasm_emitter) fn node_map_ref(&self) -> RefType {
 		RefType {
 			nullable: true,
 			heap_type: HeapType::Concrete(self.type_manager.node_map_type),
@@ -215,7 +215,7 @@ impl WasmGcEmitter {
 
 	/// `m = {}`, `m = {a:1}`, `m·map = m`: a table in m's slot, left on the stack; `m = field_with(m, k, v)` sets the
 	/// entry in place, `m = map_without(m, k)` removes it
-	pub(super) fn emit_typed_map_store(&mut self, func: &mut Function, name: &str, slot: Slot, value: &Node) {
+	pub(in crate::wasm_emitter) fn emit_typed_map_store(&mut self, func: &mut Function, name: &str, slot: Slot, value: &Node) {
 		if let Some((key, entry_value)) = entry_update(name, value) {
 			let key = self.map_key(&key).expect("find_typed_maps admits only name keys");
 			self.emit_typed_map_set(func, slot, &key, &entry_value);
@@ -235,7 +235,7 @@ impl WasmGcEmitter {
 	}
 
 	/// `m[key] = value`: the entry set in place
-	pub(super) fn emit_typed_map_set(&mut self, func: &mut Function, slot: Slot, key: &Node, value: &Node) {
+	pub(in crate::wasm_emitter) fn emit_typed_map_set(&mut self, func: &mut Function, slot: Slot, key: &Node, value: &Node) {
 		func.instruction(&slot.get());
 		self.emit_node_instructions(func, key);
 		self.emit_node_instructions(func, value);
@@ -244,14 +244,14 @@ impl WasmGcEmitter {
 
 	/// Push the value of `m[key]` or null when the table cannot answer, inside a block the caller closes with the
 	/// generic lookup: `br_on_non_null` skips it
-	pub(super) fn emit_typed_map_lookup(&mut self, func: &mut Function, slot: Slot, key: &Node) {
+	pub(in crate::wasm_emitter) fn emit_typed_map_lookup(&mut self, func: &mut Function, slot: Slot, key: &Node) {
 		func.instruction(&slot.get());
 		self.emit_node_instructions(func, key);
 		self.emit_call(func, NODE_MAP_LOOKUP);
 		func.instruction(&I::BrOnNonNull(0));
 	}
 
-	pub(super) fn emit_typed_map_count(&self, func: &mut Function, slot: Slot) {
+	pub(in crate::wasm_emitter) fn emit_typed_map_count(&self, func: &mut Function, slot: Slot) {
 		let map = self.type_manager.node_map_type;
 		Self::emit_list(
 			func,
@@ -266,13 +266,13 @@ impl WasmGcEmitter {
 		);
 	}
 
-	pub(super) fn emit_typed_map_as_node(&mut self, func: &mut Function, slot: Slot) {
+	pub(in crate::wasm_emitter) fn emit_typed_map_as_node(&mut self, func: &mut Function, slot: Slot) {
 		func.instruction(&slot.get());
 		self.emit_call(func, NODE_MAP_AS_NODE);
 	}
 
 	/// The runtime functions of the hash tables, after map_get (they compare keys as map_key_name makes them)
-	pub(super) fn emit_node_map_runtime(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_node_map_runtime(&mut self) {
 		if !NODE_MAP_FUNCTIONS.iter().any(|name| self.should_emit_function(name)) {
 			return;
 		}
@@ -431,7 +431,7 @@ impl WasmGcEmitter {
 					],
 				);
 				s.emit_field(f, 1, 1);
-				s.call(f, super::VALUES_EQUAL);
+				s.call(f, super::super::VALUES_EQUAL);
 				Self::emit_list(
 					f,
 					&[
@@ -506,7 +506,7 @@ impl WasmGcEmitter {
 			|s, f| {
 				let (name, slot, entry, count, grown) = (3, 4, 5, 6, 7);
 				f.instruction(&I::LocalGet(1));
-				s.call(f, super::lists::list_ops::MAP_KEY_NAME);
+				s.call(f, super::super::lists::list_ops::MAP_KEY_NAME);
 				f.instruction(&I::LocalSet(name));
 				s.emit_require_kind(f, name, Kind::Symbol, "not_a_text");
 				Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(name), I::RefAsNonNull]);
@@ -613,7 +613,7 @@ impl WasmGcEmitter {
 		let find_entry = |s: &mut Self, f: &mut Function, name: u32, entry: u32, missing: &[I<'static>]| {
 			let return_missing = [&[I::If(BlockType::Empty)], missing, &[I::Return, I::End]].concat();
 			f.instruction(&I::LocalGet(1));
-			s.call(f, super::lists::list_ops::MAP_KEY_NAME);
+			s.call(f, super::super::lists::list_ops::MAP_KEY_NAME);
 			f.instruction(&I::LocalSet(name));
 			s.emit_field(f, name, 0);
 			Self::emit_kind_test(f, Kind::Symbol as i64, I::I64Ne);
@@ -926,12 +926,12 @@ fn is_meta_key(index: &Node) -> bool {
 	matches!(key.drop_meta(), Node::Text(name) | Node::Symbol(name) if name.starts_with(crate::node::ATTRIBUTE_MARK))
 }
 
-pub(super) fn is_update(op: &Op) -> bool {
+pub(in crate::wasm_emitter) fn is_update(op: &Op) -> bool {
 	op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec)
 }
 
 /// `field_with(m, key, value)` updating the variable m itself: the key (as an index, `key + 1` like `m[key]`) and value
-pub(super) fn entry_update(name: &str, value: &Node) -> Option<(Node, Node)> {
+pub(in crate::wasm_emitter) fn entry_update(name: &str, value: &Node) -> Option<(Node, Node)> {
 	let Node::List(items, _, _) = value.drop_meta() else {
 		return None;
 	};
@@ -947,7 +947,7 @@ pub(super) fn entry_update(name: &str, value: &Node) -> Option<(Node, Node)> {
 }
 
 /// `map_without(m, key)` removing an entry of the variable m itself: the key
-pub(super) fn entry_removal<'a>(name: &str, value: &'a Node) -> Option<&'a Node> {
+pub(in crate::wasm_emitter) fn entry_removal<'a>(name: &str, value: &'a Node) -> Option<&'a Node> {
 	let Node::List(items, _, _) = value.drop_meta() else {
 		return None;
 	};
@@ -977,7 +977,7 @@ fn is_empty_map(value: &Node) -> bool {
 /// is no reading word: it may change the map (card user-defined-size)
 fn without_reads(node: Node, functions: &BTreeMap<String, UserFunctionDef>) -> Node {
 	let is_variable = |node: &Node| matches!(node.drop_meta(), Node::Symbol(_));
-	let is_reading_word = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if !functions.contains_key(word) && (super::reads_collection(word) || MAP_READING_WORDS.contains(&word.as_str())));
+	let is_reading_word = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if !functions.contains_key(word) && (super::super::reads_collection(word) || MAP_READING_WORDS.contains(&word.as_str())));
 	let read = |node: Node| {
 		if is_variable(&node) {
 			Node::Empty

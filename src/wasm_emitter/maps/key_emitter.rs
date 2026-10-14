@@ -5,11 +5,11 @@ use crate::operators::Op;
 use wasm_encoder::*;
 use Instruction as I;
 
-use super::WasmGcEmitter;
+use super::super::WasmGcEmitter;
 
 impl WasmGcEmitter {
 	/// Key(left, op, right) by its operator and operands
-	pub(super) fn emit_key_node(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+	pub(in crate::wasm_emitter) fn emit_key_node(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
 		if let Some(logical) = self.logical_reading(left, op, right) {
 			return self.emit_key_node(func, left, &logical, right);
 		}
@@ -104,7 +104,7 @@ impl WasmGcEmitter {
 				.and_then(|declared| self.element_mark_of(declared))
 			{
 				func.instruction(&I::I64Const(mark));
-				self.emit_call(func, super::declared_values::LIST_MARK);
+				self.emit_call(func, super::super::declared_values::LIST_MARK);
 			}
 			if let Some(local) = self.scope.lookup(name) {
 				func.instruction(&I::LocalTee(local.position));
@@ -175,9 +175,9 @@ impl WasmGcEmitter {
 			self.emit_call(
 				func,
 				if gaussian.is_some() {
-					super::numbers::uncertain::GAUSSIAN_NEW
+					super::super::numbers::uncertain::GAUSSIAN_NEW
 				} else {
-					super::numbers::uncertain::UNCERTAIN_NEW
+					super::super::numbers::uncertain::UNCERTAIN_NEW
 				},
 			);
 		} else {
@@ -210,7 +210,7 @@ impl WasmGcEmitter {
 					func.instruction(&I::I64Const(0));
 					self.emit_call(func, "new_int");
 					self.emit_node_instructions(func, right);
-					self.emit_call(func, super::lists::list_ops::NODE_ARITHMETIC[1].0);
+					self.emit_call(func, super::super::lists::list_ops::NODE_ARITHMETIC[1].0);
 				} else if use_float {
 					func.instruction(&I::F64Const(0.0.into()));
 					self.emit_float_value(func, right);
@@ -286,7 +286,7 @@ impl WasmGcEmitter {
 
 	/// The runtime counter behind the getter word in `x.size`, `x.count`, `x.bytes`, or the call `x.count()` (`x.chars()`
 	/// is the list of characters)
-	pub(super) fn counting_getter(&self, property: &Node) -> Option<&'static str> {
+	pub(in crate::wasm_emitter) fn counting_getter(&self, property: &Node) -> Option<&'static str> {
 		match property.drop_meta() {
 			Node::Symbol(word) => crate::analyzer::counting_method(word, &self.ctx),
 			Node::List(call, Bracket::Round, _) => match call.as_slice() {
@@ -331,7 +331,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit default Key node (preserve structure for roundtrip)
-	pub(super) fn emit_default_key(&mut self, func: &mut Function, left: &Node, right: &Node, op: &Op) {
+	pub(in crate::wasm_emitter) fn emit_default_key(&mut self, func: &mut Function, left: &Node, right: &Node, op: &Op) {
 		match left.drop_meta() {
 			// `{x: x}`: the name of an entry is its name, also when a variable or parameter is called so
 			Node::Symbol(name) if *op == Op::Colon => self.emit_string_call(func, name, "new_symbol"),
@@ -349,11 +349,11 @@ impl WasmGcEmitter {
 			// the value of an entry is data: unknown words in it stay words (P62)
 			let outer = std::mem::replace(&mut self.data_context, true);
 			// a field value keeps the mark of its declared type (declared_values::with_declared_field_types)
-			let checked = super::declared_values::declared_field_value(right).is_some();
+			let checked = super::super::declared_values::declared_field_value(right).is_some();
 			self.emit_node_instructions(func, if checked { right } else { right_node });
 			self.data_context = outer;
 			if has_list_children(left, right_node) {
-				self.emit_call(func, super::lists::list_ops::ELEMENT_BODY);
+				self.emit_call(func, super::super::lists::list_ops::ELEMENT_BODY);
 			}
 		} else {
 			self.emit_node_instructions(func, right_node);
@@ -381,14 +381,14 @@ impl WasmGcEmitter {
 		let Some(slot) = self.node_variable_slot(name) else {
 			return false;
 		};
-		if !is_list || !self.should_emit_function(super::lists::list_ops::LIST_EXTEND) {
+		if !is_list || !self.should_emit_function(super::super::lists::list_ops::LIST_EXTEND) {
 			return false;
 		}
 		self.emit_node_instructions(func, left);
 		self.emit_node_instructions(func, right);
-		self.emit_call(func, super::lists::list_ops::LIST_EXTEND);
+		self.emit_call(func, super::super::lists::list_ops::LIST_EXTEND);
 		slot.tee(func);
-		if matches!(slot, super::lists::list_dispatch::Slot::Global(_)) {
+		if matches!(slot, super::super::lists::list_dispatch::Slot::Global(_)) {
 			func.instruction(&I::RefAsNonNull); // a global is nullable, list_extend's list is not
 		}
 		true
@@ -402,13 +402,13 @@ impl WasmGcEmitter {
 		if !is_member
 			|| !matches!(self.get_type(left), crate::Kind::List | crate::Kind::Empty)
 			|| self.get_type(right) != crate::Kind::List
-			|| !self.should_emit_function(super::lists::list_ops::LIST_EXTEND)
+			|| !self.should_emit_function(super::super::lists::list_ops::LIST_EXTEND)
 		{
 			return false;
 		}
 		let extended = Node::List(
 			vec![
-				Node::Symbol(super::lists::list_ops::LIST_EXTEND.to_string()),
+				Node::Symbol(super::super::lists::list_ops::LIST_EXTEND.to_string()),
 				left.clone(),
 				right.clone(),
 			],
@@ -423,7 +423,7 @@ impl WasmGcEmitter {
 /// `ul{ h2{…} [li{f} for f in fruits] }`: an element whose children hold a list, spliced into them at run time
 impl WasmGcEmitter {
 	/// `&` and `|` of anything but two whole numbers: the logical and/or they read as (card operator-shall)
-	pub(super) fn logical_reading(&self, left: &Node, op: &Op, right: &Node) -> Option<Op> {
+	pub(in crate::wasm_emitter) fn logical_reading(&self, left: &Node, op: &Op, right: &Node) -> Option<Op> {
 		let combines_bits = |side: &Node| {
 			self.get_type(side) == crate::type_kinds::Kind::Int && !crate::analyzer::is_boolean(side, &self.scope)
 		};

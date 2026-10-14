@@ -337,7 +337,7 @@ impl WasmGcEmitter {
 				);
 				// a map walked lately has an index
 				Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
-				s.call(f, super::super::super::map_index::MAP_INDEX_ENTRY);
+				s.call(f, super::super::super::maps::map_index::MAP_INDEX_ENTRY);
 				Self::emit_list(
 					f,
 					&[

@@ -391,7 +391,7 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &s.forget_list_cursor_keeping_map_indexes());
 				let (fields, entry, kind, cells) = (0, 1, 2, 3);
 				Self::emit_list(f, &[I::LocalGet(fields), I::LocalGet(entry)]);
-				s.call(f, super::super::map_index::MAP_INDEX_GROW);
+				s.call(f, super::super::maps::map_index::MAP_INDEX_GROW);
 				Self::emit_list(f, &[I::If(BlockType::Empty), I::Return, I::End]);
 				s.emit_field(f, fields, 0);
 				Self::emit_list(
@@ -553,7 +553,7 @@ impl WasmGcEmitter {
 				s.emit_require_kind(f, name, Kind::Symbol, "not_a_text");
 				// a map walked lately has an index: its entry takes the value, else the field is new
 				Self::emit_list(f, &[I::LocalGet(fields), I::LocalGet(name)]);
-				s.call(f, super::super::map_index::MAP_INDEX_ENTRY);
+				s.call(f, super::super::maps::map_index::MAP_INDEX_ENTRY);
 				Self::emit_list(
 					f,
 					&[

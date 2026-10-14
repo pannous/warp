@@ -179,13 +179,13 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		.iter()
 		.any(|name| required.contains(name))
 	{
-		required.insert(super::super::map_backend::NODE_MAP_NEW);
+		required.insert(super::super::maps::map_backend::NODE_MAP_NEW);
 	}
-	if super::super::map_backend::NODE_MAP_FUNCTIONS
+	if super::super::maps::map_backend::NODE_MAP_FUNCTIONS
 		.iter()
 		.any(|name| required.contains(name))
 	{
-		required.extend(super::super::map_backend::NODE_MAP_FUNCTIONS);
+		required.extend(super::super::maps::map_backend::NODE_MAP_FUNCTIONS);
 		required.insert("map_get");
 	}
 	// maps compare keys by name: map_key_name reads a character key as its text

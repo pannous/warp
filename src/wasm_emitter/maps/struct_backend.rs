@@ -4,8 +4,8 @@
 //! variable: wherever the program needs the instance as a value it becomes the same Node the construction builds,
 //! `Point{x:3 y:4}`, made from the fields (notes/classes.md "Representation").
 
-use super::map_backend::{entry_update, is_update};
-use super::WasmGcEmitter;
+use super::super::maps::map_backend::{entry_update, is_update};
+use super::super::WasmGcEmitter;
 use crate::node::{Node, Separator};
 use crate::operators::Op;
 use crate::type_constructor::{entry_name, entry_value, instance_parts};
@@ -14,17 +14,17 @@ use std::collections::HashMap;
 use wasm_encoder::*;
 use Instruction as I;
 
-pub(super) const INSTANCE_SUFFIX: &str = "·instance";
+pub(in crate::wasm_emitter) const INSTANCE_SUFFIX: &str = "·instance";
 
 /// The struct ABI of a program (the emitter's struct_abi, struct_results): by function, which parameters are structs of
 /// which class, and the class of the struct it gives back
-pub(super) type StructAbi = (HashMap<String, Vec<Option<String>>>, HashMap<String, String>);
+pub(in crate::wasm_emitter) type StructAbi = (HashMap<String, Vec<Option<String>>>, HashMap<String, String>);
 
 /// The struct type of the instances of one class held as GC structs, and the kind each field is stored as
 #[derive(Clone)]
-pub(super) struct InstanceType {
-	pub(super) type_index: u32,
-	pub(super) fields: Vec<(String, Kind)>,
+pub(in crate::wasm_emitter) struct InstanceType {
+	pub(in crate::wasm_emitter) type_index: u32,
+	pub(in crate::wasm_emitter) fields: Vec<(String, Kind)>,
 }
 
 /// A field of a struct variable: its slot, struct type, field index and stored kind
@@ -37,7 +37,7 @@ struct FieldAccess {
 
 impl WasmGcEmitter {
 	/// One mutable `P·instance` struct type per class, after the user types
-	pub(super) fn emit_instance_types(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_instance_types(&mut self) {
 		let types: Vec<TypeDef> = self.ctx.type_registry.types().to_vec();
 		for type_def in types {
 			let fields: Vec<(String, Kind)> = type_def
@@ -60,7 +60,7 @@ impl WasmGcEmitter {
 
 	/// The variables of `program` held as GC structs, with their class: locals assigned only constructions of one class
 	/// that give every field in declared order, and field writes, all with values of the field's kind
-	pub(super) fn find_typed_structs(&self, program: &Node) -> HashMap<String, String> {
+	pub(in crate::wasm_emitter) fn find_typed_structs(&self, program: &Node) -> HashMap<String, String> {
 		let mut classes = self.struct_variables(program, &(self.struct_abi.clone(), self.struct_results.clone()));
 		classes.retain(|name, _| self.scope.lookup(name).is_some_and(|local| !local.is_param));
 		classes
@@ -161,7 +161,7 @@ impl WasmGcEmitter {
 		fits.then(|| class.name())
 	}
 
-	pub(super) fn instance_ref(&self, class: &str) -> RefType {
+	pub(in crate::wasm_emitter) fn instance_ref(&self, class: &str) -> RefType {
 		RefType {
 			nullable: true,
 			heap_type: HeapType::Concrete(self.instance_types[class].type_index),
@@ -169,7 +169,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The local slot and class of `target` when it is a struct variable
-	pub(super) fn typed_struct(&self, target: &Node) -> Option<(u32, &InstanceType)> {
+	pub(in crate::wasm_emitter) fn typed_struct(&self, target: &Node) -> Option<(u32, &InstanceType)> {
 		let Node::Symbol(name) = target.drop_meta() else {
 			return None;
 		};
@@ -203,7 +203,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Push `target#index` as a Node when it reads a field of a struct variable; false otherwise
-	pub(super) fn emit_struct_field_node(&mut self, func: &mut Function, target: &Node, index: &Node) -> bool {
+	pub(in crate::wasm_emitter) fn emit_struct_field_node(&mut self, func: &mut Function, target: &Node, index: &Node) -> bool {
 		let Some(access) = self.field_access(target, index) else {
 			return false;
 		};
@@ -215,7 +215,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Push `target#index` as an i64 when it reads an int field of a struct variable; false otherwise
-	pub(super) fn emit_struct_field_int(&mut self, func: &mut Function, target: &Node, index: &Node) -> bool {
+	pub(in crate::wasm_emitter) fn emit_struct_field_int(&mut self, func: &mut Function, target: &Node, index: &Node) -> bool {
 		let Some(access) = self
 			.field_access(target, index)
 			.filter(|access| access.kind == Kind::Int)
@@ -228,7 +228,7 @@ impl WasmGcEmitter {
 
 	/// `target#index = value` when it writes a field of a struct variable, leaving the i64 an index assignment gives
 	/// (emit_assigned_entry_value); false otherwise
-	pub(super) fn emit_struct_field_set(
+	pub(in crate::wasm_emitter) fn emit_struct_field_set(
 		&mut self,
 		func: &mut Function,
 		target: &Node,
@@ -295,7 +295,7 @@ impl WasmGcEmitter {
 
 	/// `p = P{…}`: the struct of the field values in p's local; `p = field_with(p, "x", v)`: the field set in place.
 	/// The struct is left on the stack
-	pub(super) fn emit_typed_struct_store(
+	pub(in crate::wasm_emitter) fn emit_typed_struct_store(
 		&mut self,
 		func: &mut Function,
 		name: &str,
@@ -310,7 +310,7 @@ impl WasmGcEmitter {
 			return;
 		}
 		if let Some(callee) =
-			super::lists::list_abi::called_function(value).filter(|callee| self.struct_results.contains_key(*callee))
+			super::super::lists::list_abi::called_function(value).filter(|callee| self.struct_results.contains_key(*callee))
 		{
 			let Node::List(items, _, _) = value.drop_meta() else {
 				unreachable!("a call")
@@ -355,7 +355,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Push a struct variable as the instance Node its construction builds
-	pub(super) fn emit_typed_struct_as_node(&mut self, func: &mut Function, name: &str) {
+	pub(in crate::wasm_emitter) fn emit_typed_struct_as_node(&mut self, func: &mut Function, name: &str) {
 		let class = self.typed_structs[name].clone();
 		let entries = self.instance_types[&class]
 			.fields
@@ -378,7 +378,7 @@ impl WasmGcEmitter {
 	/// a value that only looks like a P (duck typing) may lack fields the body never reads. A function that changes p or
 	/// gives it back is called only as `x = f(x, …)` of a struct variable x: the struct it changes is the one replaced,
 	/// so no caller sees a change by reference, and the result is a struct (`c.inc()` of a method changing c)
-	pub(super) fn find_struct_abi(&self, program: &Node) -> StructAbi {
+	pub(in crate::wasm_emitter) fn find_struct_abi(&self, program: &Node) -> StructAbi {
 		let functions = self.directly_called_functions();
 		let mut candidates: Vec<StructFunction> = functions
 			.iter()
@@ -429,9 +429,9 @@ impl WasmGcEmitter {
 
 	/// The struct convention a function could take, judged by its body alone
 	fn struct_function(&self, function: &crate::compiler::context::UserFunctionDef) -> Option<StructFunction> {
-		let statements = super::lists::list_abi::body_statements(&function.body);
+		let statements = super::super::lists::list_abi::body_statements(&function.body);
 		let mut returns = false;
-		function.body.visit(&mut |part| returns |= matches!(part, Node::List(items, _, _) if items.first().is_some_and(|word| names(word, super::lists::list_abi::RETURN))));
+		function.body.visit(&mut |part| returns |= matches!(part, Node::List(items, _, _) if items.first().is_some_and(|word| names(word, super::super::lists::list_abi::RETURN))));
 		let gives = |name: &str| !returns && statements.last().is_some_and(|last| names(last, name));
 		let mut changed = None;
 		let mut result = None;
@@ -484,7 +484,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The body of a function giving back its struct parameter: its statements, then that struct
-	pub(super) fn emit_struct_result_body(&mut self, func: &mut Function, body: &Node) {
+	pub(in crate::wasm_emitter) fn emit_struct_result_body(&mut self, func: &mut Function, body: &Node) {
 		self.emit_body_then(func, body, |emitter, func, last| {
 			let (slot, _) = emitter
 				.typed_struct(last)
@@ -494,12 +494,12 @@ impl WasmGcEmitter {
 	}
 
 	/// The class of the parameter `index` of `function` when it takes it as a struct
-	pub(super) fn struct_parameter(&self, function: &str, index: usize) -> Option<&String> {
+	pub(in crate::wasm_emitter) fn struct_parameter(&self, function: &str, index: usize) -> Option<&String> {
 		self.struct_abi.get(function)?.get(index)?.as_ref()
 	}
 
 	/// An argument where a struct of `class` is wanted: a struct variable as it is, a construction made into one
-	pub(super) fn emit_struct_argument(&mut self, func: &mut Function, argument: &Node, class: &str) {
+	pub(in crate::wasm_emitter) fn emit_struct_argument(&mut self, func: &mut Function, argument: &Node, class: &str) {
 		if let Some((slot, instance)) = self.typed_struct(argument) {
 			if self.instance_types[class].type_index == instance.type_index {
 				func.instruction(&I::LocalGet(slot));
@@ -520,7 +520,7 @@ impl WasmGcEmitter {
 }
 
 /// The body without its value when that is a bare variable (`…; p`): nothing changes it after, so its Node copy is it
-pub(super) fn without_final_variable(body: &Node) -> Node {
+pub(in crate::wasm_emitter) fn without_final_variable(body: &Node) -> Node {
 	match body.drop_meta() {
 		Node::List(statements, bracket, separator)
 			if matches!(separator, Separator::Semicolon | Separator::Newline)
@@ -540,7 +540,7 @@ pub(super) fn without_final_variable(body: &Node) -> Node {
 
 /// The variables a node uses as a whole value: not as an assignment's target, a field's object `p#x`, or an argument
 /// to a struct parameter
-pub(super) fn used_whole(node: &Node, abi: &HashMap<String, Vec<Option<String>>>, names: &mut Vec<String>) {
+pub(in crate::wasm_emitter) fn used_whole(node: &Node, abi: &HashMap<String, Vec<Option<String>>>, names: &mut Vec<String>) {
 	let mut recurse = |child: &Node| used_whole(child, abi, names);
 	match node.drop_meta() {
 		Node::Symbol(name) => names.push(name.clone()),
@@ -554,7 +554,7 @@ pub(super) fn used_whole(node: &Node, abi: &HashMap<String, Vec<Option<String>>>
 						return recurse(&written);
 					}
 					// a removal `m = map_without(m, k)` uses only k
-					if let Some(key) = super::map_backend::entry_removal(name, value) {
+					if let Some(key) = super::super::maps::map_backend::entry_removal(name, value) {
 						return recurse(key);
 					}
 				}
@@ -565,9 +565,9 @@ pub(super) fn used_whole(node: &Node, abi: &HashMap<String, Vec<Option<String>>>
 		}
 		Node::Key(object, Op::Hash, index) if matches!(object.drop_meta(), Node::Symbol(_)) => recurse(index),
 		Node::List(items, _, _)
-			if super::lists::list_abi::called_function(node).is_some_and(|function| abi.contains_key(function)) =>
+			if super::super::lists::list_abi::called_function(node).is_some_and(|function| abi.contains_key(function)) =>
 		{
-			let parameters = &abi[super::lists::list_abi::called_function(node).expect("guarded")];
+			let parameters = &abi[super::super::lists::list_abi::called_function(node).expect("guarded")];
 			for (index, argument) in items.iter().enumerate().skip(1) {
 				let struct_parameter = parameters.get(index - 1).is_some_and(Option::is_some);
 				if !(struct_parameter && matches!(argument.drop_meta(), Node::Symbol(_))) {
@@ -586,7 +586,7 @@ pub(super) fn used_whole(node: &Node, abi: &HashMap<String, Vec<Option<String>>>
 
 /// The class of the struct a call of a function giving one back gives
 fn struct_call_class(value: &Node, results: &HashMap<String, String>) -> Option<String> {
-	results.get(super::lists::list_abi::called_function(value)?).cloned()
+	results.get(super::super::lists::list_abi::called_function(value)?).cloned()
 }
 
 /// A function taking structs: the class of each struct parameter, the parameter it changes or gives back, and the
@@ -634,7 +634,7 @@ impl StructFunction {
 		for (tree, variables) in trees {
 			tree.visit(&mut |part: &Node| match part {
 				Node::Symbol(name) if *name == self.name => mentions += 1,
-				Node::List(items, _, _) if super::lists::list_abi::called_function(part) == Some(self.name.as_str()) => {
+				Node::List(items, _, _) if super::super::lists::list_abi::called_function(part) == Some(self.name.as_str()) => {
 					if is_head(items) {
 						heads += 1;
 					} else if passes(items, variables) {
@@ -642,7 +642,7 @@ impl StructFunction {
 					}
 				}
 				Node::Key(target, Op::Assign, value)
-					if super::lists::list_abi::called_function(value) == Some(self.name.as_str()) =>
+					if super::super::lists::list_abi::called_function(value) == Some(self.name.as_str()) =>
 				{
 					let Some(changed) = self.changed else { return };
 					let Node::List(items, _, _) = value.drop_meta() else {
