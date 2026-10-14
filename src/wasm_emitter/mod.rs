@@ -579,6 +579,11 @@ impl WasmGcEmitter {
 		if node.mentions_any(&lists::list_emitter::QUOTE_WORDS) || node.mentions_any(&[crate::host::PARSE_CODE]) {
 			self.ctx.required_functions.insert(reflection::node_api::NODE_AT);
 		}
+		// code parsed at run time holds any operator and joins a text as its literal (card print-parse)
+		if node.mentions_any(&[crate::host::PARSE_CODE]) {
+			self.ctx.required_functions.insert(reflection::library_ops::LIST_TEXT);
+			self.written_operator_bound = (crate::operators::OP_CODES.len() - 1) as i64;
+		}
 		if crate::analyzer::makes_floats(&self.ctx, node) {
 			self.ctx.required_functions.insert(numbers::float_text::FLOAT_TEXT);
 		}

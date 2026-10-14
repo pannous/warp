@@ -312,6 +312,15 @@ impl WasmGcEmitter {
 						is_text(f, 1);
 						Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty)]);
 						let node_type = s.type_manager.node_type;
+						let empty = s.allocate_string("");
+						for operand in [0, 1] {
+							s.emit_structure_as_literal(
+								f,
+								operand,
+								&super::super::super::text::text_builtins::STRUCTURE_KINDS,
+								empty,
+							);
+						}
 						Self::emit_list(f, &[I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(0)]);
 						s.call(f, super::super::super::text::text_builtins::TEXT_OF);
 						Self::emit_list(f, &[I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(1)]);

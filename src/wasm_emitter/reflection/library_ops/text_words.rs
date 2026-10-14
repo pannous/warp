@@ -242,7 +242,8 @@ impl WasmGcEmitter {
 	/// list_text(list, separator), the text of a list (`str(xs)`), also takes nested lists, each as "[…]" ("{…}" for a
 	/// map), entries as "key:value", symbols as their names and texts quoted (P126: `["a" "b"]`, `p{name:"a"}`)
 	pub(super) fn emit_list_join(&mut self) {
-		let joinings = [(LIST_JOIN, false), (LIST_TEXT, true)]
+		// list_text first: list_join calls it for a structure made at run time (emit_structure_as_literal)
+		let joinings = [(LIST_TEXT, true), (LIST_JOIN, false)]
 			.into_iter()
 			.filter(|(name, _)| self.should_emit_function(name))
 			.collect::<Vec<_>>();
@@ -444,6 +445,7 @@ impl WasmGcEmitter {
 			(self.written_operator_bound > op_to_code(&Op::Colon)).then(|| self.allocate_operator_texts());
 		let instance_texts = [self.allocate_string(""), self.allocate_string(Op::Colon.as_str())];
 		let empty_text = self.allocate_string(EMPTY_TEXT);
+		let empty = self.allocate_string("");
 		let bool_texts = [
 			self.allocate_string(crate::node::NO),
 			self.allocate_string(crate::node::YES),
@@ -475,6 +477,11 @@ impl WasmGcEmitter {
 					&[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(element)],
 				);
 				s.emit_codepoint_as_text(f, element); // a character joins as its UTF-8 bytes
+				if !nested {
+					// code parsed at run time joins as its literal: `print "area:", parse(t)` (card print-parse); a list
+					// stays no joinable item of join, as Python's ",".join([[1]])
+					s.emit_structure_as_literal(f, element, &[Kind::Key], empty);
+				}
 				if nested {
 					// a text or a character in a container is quoted (P126): `["a" "bc"]`
 					s.emit_field(f, element, 0);
