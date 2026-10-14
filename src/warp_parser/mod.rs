@@ -189,6 +189,8 @@ const AWAIT_ALL_WORD: &str = "all";
 /// `await x` binds its operand like unary minus
 const AWAIT_OPERAND_BP: u8 = Op::Neg.binding_power().1;
 const PRINT_WORD: &str = "print";
+/// Other languages' print words (wiki/Features.md); `log` stays the logarithm, `puts` the WASI text output
+const PRINT_SPELLINGS: [&str; 2] = ["println", "writeln"];
 /// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
 const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate them with `;` or a newline";
 const IN_KEYWORD: &str = "in";
