@@ -33,6 +33,15 @@ impl Node {
 		self.serialize_recurse(false)
 	}
 
+	/// A list item: one character in single quotes, a one-character text too, as the runtime prints it
+	/// (chars-codepoints: `['a' "bc"]`)
+	fn item_text(&self) -> String {
+		match self.drop_meta() {
+			Text(t) if t.chars().count() == 1 => quoted_by(t, '\''),
+			_ => self.serialize(),
+		}
+	}
+
 	pub fn meta_string(&self) -> String {
 		// todo as impl for Meta?
 		// Extract MetaData from Data node if present
@@ -96,9 +105,9 @@ impl Node {
 				if nodes.is_empty() {
 					format!("{}{}", bracket, close)
 				} else if nodes.len() == 1 {
-					format!("{}{}{}", bracket, nodes[0].serialize(), close)
+					format!("{}{}{}", bracket, nodes[0].item_text(), close)
 				} else {
-					let items: Vec<String> = nodes.iter().map(Node::serialize).collect();
+					let items: Vec<String> = nodes.iter().map(Node::item_text).collect();
 					format!("{}{}{}", bracket, items.join(&separator.joint()), close)
 				}
 			}

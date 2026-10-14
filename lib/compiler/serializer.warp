@@ -78,8 +78,8 @@ list_text(view:any) := {
 	opening(bracket) + inside + closing(bracket)
 }
 
-// a list item: a character is quoted like a text, ["a" "bb"], and reads back as the character it is (P126)
-item_text(item:any) := if kind(bare(item)) == "char" then quoted("" + bare(item)#2) else serialize(item)
+// a list item: one character in single quotes, a one-character text too, as the runtime prints it (chars-codepoints)
+item_text(item:any) := if kind(bare(item)) == "text" and count(bare(item)#2) == 1 then quoted_by(bare(item)#2, "'") else serialize(item)
 // a text in quotes, a quote or \ in it escaped by a \ so it reads back, as the runtime prints it (P126)
 quoted(text:any) := quoted_by(text, quote)
 quoted_by(text:any, mark:any) := {

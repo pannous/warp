@@ -157,17 +157,17 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// text_quoted(text, quote): the text in the quote byte, that quote or a `\` in it escaped by a `\` (P126:
-	/// `["say \"hi\""]`, a character `['a']`); byte-wise, as neither byte occurs inside a multi-byte UTF-8 character
+	/// text_quoted(text): the text in double quotes, a `"` or `\` in it escaped by a `\` (P126: `["say \"hi\""]`);
+	/// one character in single quotes (chars-codepoints: `['a' "bc"]`, a one-character text is a character);
+	/// byte-wise, as neither byte occurs inside a multi-byte UTF-8 character
 	pub(super) fn emit_text_quoted(&mut self) {
 		if !self.should_emit_function(TEXT_QUOTED) {
 			return;
 		}
 		self.emit_text_heap_global();
 		let node_ref = Ref(self.node_ref(false));
-		let parameters = vec![node_ref, ValType::I32];
-		self.runtime_function(TEXT_QUOTED, parameters, vec![node_ref], vec![ValType::I32; 6], |s, f| {
-			let (quote, pointer, end, capacity, destination, out, byte) = (1, 2, 3, 4, 5, 6, 7);
+		self.runtime_function(TEXT_QUOTED, vec![node_ref], vec![node_ref], vec![ValType::I32; 7], |s, f| {
+			let (pointer, end, capacity, destination, out, byte, quote) = (1, 2, 3, 4, 5, 6, 7);
 			let write = |f: &mut Function, value: I<'static>| {
 				Self::emit_list(
 					f,
@@ -183,6 +183,17 @@ impl WasmGcEmitter {
 				);
 			};
 			s.emit_text_bounds(f, pointer, end);
+			// one character: as many bytes as its first byte's UTF-8 sequence, 1 + (b ≥ C0) + (b ≥ E0) + (b ≥ F0)
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I32Const(CHARACTER_QUOTE_BYTE), I32Const(QUOTE_BYTE),
+				I::LocalGet(end), I::LocalGet(pointer), I::I32Sub,
+				I32Const(1),
+				I::LocalGet(pointer), I::I32Load8U(BYTE), I::LocalTee(byte), I32Const(0xC0), I::I32GeU, I::I32Add,
+				I::LocalGet(byte), I32Const(0xE0), I::I32GeU, I::I32Add,
+				I::LocalGet(byte), I32Const(0xF0), I::I32GeU, I::I32Add,
+				I::I32Eq, I::Select, I::LocalSet(quote),
+			]);
 			// at worst every byte is escaped, plus the two quotes
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
@@ -289,12 +300,12 @@ impl WasmGcEmitter {
 		let node_type = self.type_manager.node_type;
 		let mut locals = vec![nullable, nullable];
 		locals.extend([ValType::I32; 4]);
-		locals.extend([ValType::I64, nullable, ValType::I32, ValType::I64, ValType::I32]);
+		locals.extend([ValType::I64, nullable, ValType::I32, ValType::I64]);
 		let trap_detail = self.trap_detail_global(); // the item that cannot join, for its error to name
 		self.runtime_function(name, vec![nullable, node_ref], vec![node_ref], locals, |s, f| {
 			let (cell, element) = (2, 3);
-			let (bound, address, position, is_first, number, entry_value, operator_entry, list_kind, is_character) =
-				(4, 5, 6, 7, 8, 9, 10, 11, 12);
+			let (bound, address, position, is_first, number, entry_value, operator_entry, list_kind) =
+				(4, 5, 6, 7, 8, 9, 10, 11);
 			let is_kind = |f: &mut Function, kind: Kind| {
 				s.emit_field(f, element, 0);
 				Self::emit_list(f, &[I::I64Const(kind as i64), I::I64Eq]);
@@ -306,8 +317,6 @@ impl WasmGcEmitter {
 			let next_element = |f: &mut Function| {
 				s.emit_field(f, cell, 1);
 				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node_type)), I::LocalSet(element)]);
-				masked_kind_is(f, Kind::Codepoint);
-				f.instruction(&I::LocalSet(is_character));
 				s.emit_codepoint_as_text(f, element); // a character joins as its UTF-8 bytes
 				if !nested {
 					// code parsed at run time joins as its literal: `print "area:", parse(t)` (card print-parse); a list
@@ -315,14 +324,10 @@ impl WasmGcEmitter {
 					s.emit_structure_as_literal(f, element, &[Kind::Key], empty);
 				}
 				if nested {
-					// a text in a container is quoted (P126), a character in single quotes (chars-codepoints): `['a' "bc"]`
+					// a text or a character in a container is quoted (P126, chars-codepoints): `['a' "bc"]`
 					s.emit_field(f, element, 0);
 					Self::emit_kind_test(f, Kind::Text as i64, I::I64Eq);
-					#[rustfmt::skip]
-					Self::emit_list(f, &[
-						I::If(BlockType::Empty), I::LocalGet(element), I::RefAsNonNull,
-						I32Const(CHARACTER_QUOTE_BYTE), I32Const(QUOTE_BYTE), I::LocalGet(is_character), I::Select,
-					]);
+					Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(element), I::RefAsNonNull]);
 					s.call(f, TEXT_QUOTED);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
