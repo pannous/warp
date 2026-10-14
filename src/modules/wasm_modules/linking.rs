@@ -69,134 +69,195 @@ pub(crate) fn call_c(
 	arguments: &[wasmtime::Val],
 	results: &mut [wasmtime::Val],
 ) -> wasmtime::Result<()> {
-	use wasmtime::Val;
 	let name = export.signature.name;
 	let program_memory = caller
 		.get_export("memory")
 		.and_then(|memory| memory.into_memory())
 		.ok_or_else(|| wasmtime::format_err!("{name}: the program has no memory for its text"))?;
-	let module_memory = instance
+	let memory = instance
 		.get_memory(&mut *caller, "memory")
 		.ok_or_else(|| wasmtime::format_err!("{name}: its module exports no memory"))?;
-	let malloc = |caller: &mut wasmtime::Caller<'_, crate::host::HostState>, bytes: &[u8]| -> wasmtime::Result<i32> {
-		let malloc = instance
+	let mut blocks = ModuleBlocks {
+		name,
+		instance,
+		memory,
+		allocated: vec![],
+		out_slots: vec![],
+		buffers: vec![],
+	};
+	let module_arguments = blocks.passed(caller, program_memory, &export.c_parameters, arguments)?;
+	let mut returned = [wasmtime::Val::I32(0)];
+	let result_count = function.ty(&*caller).results().len();
+	function.call(&mut *caller, &module_arguments, &mut returned[..result_count])?;
+	let result = blocks.received(caller, &export.c_result, returned[0])?;
+	if let Some(slot) = results.first_mut() {
+		*slot = result;
+	}
+	blocks.freed(caller)
+}
+
+/// The blocks a C call allocates in its module's memory with `malloc`, freed after the call
+#[cfg(feature = "native")]
+struct ModuleBlocks {
+	name: &'static str,
+	instance: wasmtime::Instance,
+	memory: wasmtime::Memory,
+	allocated: Vec<i32>,
+	out_slots: Vec<i32>,
+	/// each buffer and the slot of its length
+	buffers: Vec<(i32, i32)>,
+}
+
+#[cfg(feature = "native")]
+impl ModuleBlocks {
+	fn allocated(
+		&mut self,
+		caller: &mut wasmtime::Caller<'_, crate::host::HostState>,
+		bytes: &[u8],
+	) -> wasmtime::Result<i32> {
+		let name = self.name;
+		let malloc = self
+			.instance
 			.get_typed_func::<i32, i32>(&mut *caller, "malloc")
 			.map_err(|_| {
 				wasmtime::format_err!("{name}: its module exports no malloc(size) to pass a text or out-pointer")
 			})?;
 		let block = malloc.call(&mut *caller, bytes.len() as i32)?;
-		module_memory.write(&mut *caller, block as usize, bytes)?;
+		self.memory.write(&mut *caller, block as usize, bytes)?;
+		self.allocated.push(block);
 		Ok(block)
-	};
-	let too_few = || wasmtime::format_err!("{name}: too few arguments");
-	let mut program_arguments = arguments.iter().peekable();
-	let (mut module_arguments, mut blocks, mut out_slots, mut buffers) =
-		(Vec::new(), Vec::new(), Vec::new(), Vec::new());
-	let (mut capacity, mut buffer) = (0, 0);
-	for (index, parameter) in export.c_parameters.iter().enumerate() {
-		let argument = match parameter {
-			CParameter::Number | CParameter::TextLength => *program_arguments.next().ok_or_else(too_few)?,
-			CParameter::Text => {
-				let address = program_arguments.next().ok_or_else(too_few)?.unwrap_i32() as usize;
-				let memory = program_memory.data(&*caller);
-				let mut text = match export.c_parameters.get(index + 1) {
-					Some(CParameter::TextLength) => memory
-						.get(address..address + count_of(program_arguments.peek().ok_or_else(too_few)?))
-						.unwrap_or_default(),
-					_ => c_text(memory, address),
-				}
-				.to_vec();
-				text.push(0);
-				let block = malloc(caller, &text)?;
-				blocks.push(block);
-				Val::I32(block)
-			}
-			CParameter::Out => {
-				let slot = malloc(caller, &[0; 4])?;
-				blocks.push(slot);
-				out_slots.push(slot);
-				Val::I32(slot)
-			}
-			CParameter::Buffer => {
-				capacity = count_of(program_arguments.next().ok_or_else(too_few)?);
-				buffer = malloc(caller, &vec![0; capacity])?;
-				blocks.push(buffer);
-				Val::I32(buffer)
-			}
-			CParameter::BufferLength => {
-				let slot = malloc(caller, &(capacity as u32).to_le_bytes())?;
-				blocks.push(slot);
-				buffers.push((buffer, slot));
-				Val::I32(slot)
-			}
-		};
-		module_arguments.push(argument);
 	}
-	let mut returned = [Val::I32(0)];
-	let result_count = function.ty(&*caller).results().len();
-	function.call(&mut *caller, &module_arguments, &mut returned[..result_count])?;
-	let read_u32 = |caller: &wasmtime::Caller<'_, crate::host::HostState>, address: usize| -> u32 {
-		module_memory
+
+	/// The arguments the C function takes for the program's: texts copied into blocks, slots for out-pointers and buffers
+	fn passed(
+		&mut self,
+		caller: &mut wasmtime::Caller<'_, crate::host::HostState>,
+		program_memory: wasmtime::Memory,
+		parameters: &[CParameter],
+		arguments: &[wasmtime::Val],
+	) -> wasmtime::Result<Vec<wasmtime::Val>> {
+		use wasmtime::Val;
+		let name = self.name;
+		let too_few = || wasmtime::format_err!("{name}: too few arguments");
+		let mut program_arguments = arguments.iter().peekable();
+		let mut module_arguments = Vec::new();
+		let (mut capacity, mut buffer) = (0, 0);
+		for (index, parameter) in parameters.iter().enumerate() {
+			let argument = match parameter {
+				CParameter::Number | CParameter::TextLength => *program_arguments.next().ok_or_else(too_few)?,
+				CParameter::Text => {
+					let address = program_arguments.next().ok_or_else(too_few)?.unwrap_i32() as usize;
+					let memory = program_memory.data(&*caller);
+					let mut text = match parameters.get(index + 1) {
+						Some(CParameter::TextLength) => memory
+							.get(address..address + count_of(program_arguments.peek().ok_or_else(too_few)?))
+							.unwrap_or_default(),
+						_ => c_text(memory, address),
+					}
+					.to_vec();
+					text.push(0);
+					Val::I32(self.allocated(caller, &text)?)
+				}
+				CParameter::Out => {
+					let slot = self.allocated(caller, &[0; 4])?;
+					self.out_slots.push(slot);
+					Val::I32(slot)
+				}
+				CParameter::Buffer => {
+					capacity = count_of(program_arguments.next().ok_or_else(too_few)?);
+					buffer = self.allocated(caller, &vec![0; capacity])?;
+					Val::I32(buffer)
+				}
+				CParameter::BufferLength => {
+					let slot = self.allocated(caller, &(capacity as u32).to_le_bytes())?;
+					self.buffers.push((buffer, slot));
+					Val::I32(slot)
+				}
+			};
+			module_arguments.push(argument);
+		}
+		Ok(module_arguments)
+	}
+
+	/// The result as the header says it crosses: a number, an unsigned one, a text, or what the first out-pointer or
+	/// buffer received
+	fn received(
+		&self,
+		caller: &mut wasmtime::Caller<'_, crate::host::HostState>,
+		result: &CResult,
+		returned: wasmtime::Val,
+	) -> wasmtime::Result<wasmtime::Val> {
+		use wasmtime::Val;
+		let name = self.name;
+		match result {
+			CResult::Number => Ok(returned),
+			CResult::Unsigned => Ok(Val::I64(returned.unwrap_i32() as u32 as i64)),
+			CResult::Text => {
+				let text = self.text_at(caller, returned.unwrap_i32() as u32);
+				self.text_node(caller, text.as_deref())
+			}
+			CResult::Out { text } => {
+				let received = self.u32_at(caller, self.out_slots[0] as usize);
+				if received == 0 {
+					return Err(wasmtime::format_err!(
+						"{name} gave nothing through its out-pointer (C status {})",
+						returned.i32().unwrap_or(0)
+					));
+				}
+				match text {
+					true => {
+						let text = self.text_at(caller, received);
+						self.text_node(caller, text.as_deref())
+					}
+					false => Ok(Val::I32(received as i32)),
+				}
+			}
+			CResult::Buffer => {
+				let status = returned.i32().unwrap_or(0);
+				if status != 0 {
+					return Err(wasmtime::format_err!("{name} failed (C status {status})"));
+				}
+				let (block, length_slot) = self.buffers[0];
+				let length = self.u32_at(caller, length_slot as usize) as usize;
+				let bytes = self
+					.memory
+					.data(&*caller)
+					.get(block as usize..block as usize + length)
+					.unwrap_or_default()
+					.to_vec();
+				self.text_node(caller, Some(&bytes))
+			}
+		}
+	}
+
+	fn u32_at(&self, caller: &wasmtime::Caller<'_, crate::host::HostState>, address: usize) -> u32 {
+		self.memory
 			.data(caller)
 			.get(address..address + 4)
 			.map_or(0, |bytes| u32::from_le_bytes(bytes.try_into().unwrap_or_default()))
-	};
-	let text_at = |caller: &wasmtime::Caller<'_, crate::host::HostState>, address: u32| {
-		(address != 0).then(|| c_text(module_memory.data(caller), address as usize).to_vec())
-	};
-	let result = match export.c_result {
-		CResult::Number => results.first().map(|_| returned[0]),
-		CResult::Unsigned => Some(Val::I64(returned[0].unwrap_i32() as u32 as i64)),
-		CResult::Text => {
-			let text = text_at(caller, returned[0].unwrap_i32() as u32);
-			Some(
-				crate::ffi::text_node(caller, text.as_deref())
-					.map_err(|failure| wasmtime::format_err!("{name}: {failure}"))?,
-			)
-		}
-		CResult::Out { text } => {
-			let received = read_u32(caller, out_slots[0] as usize);
-			if received == 0 {
-				return Err(wasmtime::format_err!(
-					"{name} gave nothing through its out-pointer (C status {})",
-					returned[0].i32().unwrap_or(0)
-				));
-			}
-			match text {
-				true => Some(
-					crate::ffi::text_node(caller, text_at(caller, received).as_deref())
-						.map_err(|failure| wasmtime::format_err!("{name}: {failure}"))?,
-				),
-				false => Some(Val::I32(received as i32)),
-			}
-		}
-		CResult::Buffer => {
-			let status = returned[0].i32().unwrap_or(0);
-			if status != 0 {
-				return Err(wasmtime::format_err!("{name} failed (C status {status})"));
-			}
-			let (block, length_slot) = buffers[0];
-			let length = read_u32(caller, length_slot as usize) as usize;
-			let bytes = module_memory
-				.data(&*caller)
-				.get(block as usize..block as usize + length)
-				.unwrap_or_default()
-				.to_vec();
-			Some(
-				crate::ffi::text_node(caller, Some(&bytes))
-					.map_err(|failure| wasmtime::format_err!("{name}: {failure}"))?,
-			)
-		}
-	};
-	if let (Some(result), Some(slot)) = (result, results.first_mut()) {
-		*slot = result;
 	}
-	if let Ok(free) = instance.get_typed_func::<i32, ()>(&mut *caller, "free") {
-		for block in blocks {
-			free.call(&mut *caller, block)?;
-		}
+
+	fn text_at(&self, caller: &wasmtime::Caller<'_, crate::host::HostState>, address: u32) -> Option<Vec<u8>> {
+		(address != 0).then(|| c_text(self.memory.data(caller), address as usize).to_vec())
 	}
-	Ok(())
+
+	fn text_node(
+		&self,
+		caller: &mut wasmtime::Caller<'_, crate::host::HostState>,
+		text: Option<&[u8]>,
+	) -> wasmtime::Result<wasmtime::Val> {
+		let name = self.name;
+		crate::ffi::text_node(caller, text).map_err(|failure| wasmtime::format_err!("{name}: {failure}"))
+	}
+
+	fn freed(self, caller: &mut wasmtime::Caller<'_, crate::host::HostState>) -> wasmtime::Result<()> {
+		if let Ok(free) = self.instance.get_typed_func::<i32, ()>(&mut *caller, "free") {
+			for block in self.allocated {
+				free.call(&mut *caller, block)?;
+			}
+		}
+		Ok(())
+	}
 }
 
 /// A call of a function of a module warp compiled that takes or gives values: each value argument is read out of the
