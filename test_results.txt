@@ -1597,6 +1597,9 @@ PASSED:
   ✓ functions::test_round8_call_forms::ruby_symbol_blocks_methods_and_block_sums
   ✓ functions::test_rounding_builtins::rounding_words_stay_ints_when_libm_is_used
   ✓ functions::test_runtime_function_equality::a_function_value_equals_itself
+  ✓ functions::test_runtime_function_equality::a_loop_variable_shadows_a_function_of_its_name
+  ✓ functions::test_runtime_function_equality::a_parameter_named_like_a_method_is_no_prefix_call
+  ✓ functions::test_runtime_function_equality::a_parameter_shadows_a_function_of_its_name
   ✓ functions::test_runtime_function_equality::closures_compare_their_captured_values
   ✓ functions::test_runtime_function_equality::different_definitions_are_different_functions
   ✓ functions::test_runtime_function_equality::equal_definitions_are_equal_functions
@@ -2385,6 +2388,11 @@ PASSED:
   ✓ numbers::test_angle::test_switch
   ✓ numbers::test_angle::test_switch_evaluation
   ✓ numbers::test_angle::test_truthy_and
+  ✓ numbers::test_arrow_operators::a_canonical_glyph_gets_no_note
+  ✓ numbers::test_arrow_operators::a_class_overloads_the_up_arrow_beside_the_numbers
+  ✓ numbers::test_arrow_operators::a_glyph_operator_takes_typed_parameters
+  ✓ numbers::test_arrow_operators::the_down_arrow_is_the_log_to_a_base
+  ✓ numbers::test_arrow_operators::the_up_arrow_is_the_power
   ✓ numbers::test_as_compound_unit::a_compound_unit_after_as_is_the_target
   ✓ numbers::test_as_compound_unit::a_run_time_quantity_converts_to_a_compound_unit
   ✓ numbers::test_average::a_captured_float_stays_a_float
@@ -2395,6 +2403,7 @@ PASSED:
   ✓ numbers::test_bend_laws::a_violated_law_makes_the_gate_loud_and_red
   ✓ numbers::test_bend_laws::quantified_laws_still_reach_the_lean_prover
   ✓ numbers::test_bend_laws::the_project_laws_file_is_a_green_verification_gate
+  ✓ numbers::test_big_int_text::test_big_int_text
   ✓ numbers::test_big_ratio::test_big_ratio_readback_stays_exact
   ✓ numbers::test_big_ratio::test_big_ratio_terminating_decimal
   ✓ numbers::test_big_ratio::test_big_ratio_unit_amounts_stay_exact
@@ -2573,6 +2582,9 @@ PASSED:
   ✓ numbers::test_nearest::nearest_takes_two_to_four_arguments
   ✓ numbers::test_nearest::nearest_within_a_precision
   ✓ numbers::test_norm::norm_is_abs
+  ✓ numbers::test_number_methods::test_a_field_named_like_a_number_method_stays_a_field
+  ✓ numbers::test_number_methods::test_prefix_operator_words_as_methods
+  ✓ numbers::test_number_methods::test_rounding_methods_without_parentheses
   ✓ numbers::test_number_words::a_number_word_hints_its_digits
   ✓ numbers::test_number_words::a_variable_of_that_name_wins
   ✓ numbers::test_number_words::keys_and_texts_stay_words
@@ -2891,6 +2903,8 @@ PASSED:
   ✓ operators::test_operator_declarations::test_precedence_declarations_are_followed
   ✓ operators::test_operator_declarations::test_prefix_operator
   ✓ operators::test_operator_declarations::test_suffix_operator
+  ✓ operators::test_operator_default_infix::a_precedence_declaration_stays_one
+  ✓ operators::test_operator_default_infix::an_operator_without_a_kind_is_infix
   ✓ operators::test_operator_parsing::call_with_an_expression_argument_is_name_and_key
   ✓ operators::test_operator_parsing::equals_and_colon_make_keys_with_their_own_operator
   ✓ operators::test_operator_parsing::increment_suffix_and_while_condition_spacing
@@ -3270,7 +3284,6 @@ PASSED:
   ✓ programs::test_midi::a_message_waits_for_the_sounds_before_it
   ✓ programs::test_midi::at_places_a_message
   ✓ programs::test_midi::headless_messages_are_named
-  ✓ programs::test_midi::listing_outputs_needs_a_backend_or_names_the_missing_one
   ✓ programs::test_midi::midi_notes_follow_one_another
   ✓ programs::test_midi::native_input_is_a_loud_error
   ✓ programs::test_midi::notes_survive_a_midi_file
@@ -3278,6 +3291,11 @@ PASSED:
   ✓ programs::test_music_values::chords_and_scales_are_lists_of_notes
   ✓ programs::test_music_values::the_tuning_tunes_every_note
   ✓ programs::test_music_values::transposing_moves_notes_by_semitones
+  ✓ programs::test_note_values::a_class_printing_method_keeps_is_text
+  ✓ programs::test_note_values::a_note_value_plays_as_its_frequency
+  ✓ programs::test_note_values::a_note_value_prints_as_its_name
+  ✓ programs::test_note_values::note_names_stay_with_play_alone
+  ✓ programs::test_note_values::semitones_move_a_note
   ✓ programs::test_paint_function::a_function_wgsl_cannot_compute_paints_on_the_cpu
   ✓ programs::test_paint_function::a_painted_function_becomes_a_fragment_shader
   ✓ programs::test_paint_function::a_painted_function_paints_on_the_gpu_what_the_cpu_paints
@@ -3463,6 +3481,12 @@ PASSED:
   ✓ programs::test_warp_command::debug_build_names_its_commit
   ✓ programs::test_warp_command::version_names_the_branch
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
+  ✓ programs::test_window_size::a_bare_width_is_the_canvas_width
+  ✓ programs::test_window_size::a_width_of_the_program_keeps_its_meaning
+  ✓ programs::test_window_size::canvas_size_is_a_property
+  ✓ programs::test_window_size::the_display_is_read_only
+  ✓ programs::test_window_size::the_viewer_reads_a_resize
+  ✓ programs::test_window_size::window_size_is_a_property
   ✓ scope::test_colon_body_assignment::test_for_colon_body_with_assignments
   ✓ scope::test_colon_body_assignment::test_if_colon_body_assignment_stops_at_else
   ✓ scope::test_colon_body_assignment::test_if_colon_body_with_assignment
@@ -4478,6 +4502,7 @@ PASSED:
   ✓ wasm::test_compiled_module_cache::test_compile_aot_writes_machine_code_that_runs
   ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_compiles_once_then_maps_the_compiled_module
   ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_holds_compiled_programs
+  ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_holds_components
   ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_keys_on_the_engine_settings
   ✓ wasm::test_compiled_module_cache::test_compiled_module_cache_recompiles_a_damaged_entry
   ✓ wasm::test_compiled_module_cache::test_gc_engine_is_shared
@@ -4696,6 +4721,7 @@ PASSED:
   ✓ web::test_database_site::a_built_site_keeps_database_values
   ✓ web::test_deploy::a_deployed_program_answers_its_routes
   ✓ web::test_deploy::a_deployed_route_answers_its_status
+  ✓ web::test_deploy::a_painting_program_deploys_as_its_site
   ✓ web::test_deploy::a_program_without_routes_answers_its_value_and_functions
   ✓ web::test_deploy::a_program_without_routes_is_no_worker
   ✓ web::test_deploy::a_single_route_and_a_served_route_deploy
@@ -5410,6 +5436,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ programs::test_midi::listing_outputs_needs_a_backend_or_names_the_missing_one
 
 SUMMARY:
-13 ignored, 5407 passed, 0 failed, 5407 total tested
+13 ignored, 5433 passed, 1 failed, 5434 total tested
