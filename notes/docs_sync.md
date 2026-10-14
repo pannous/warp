@@ -5,12 +5,12 @@ guide-expert.md) in line with main. Card docs-sync, session warp-docs-sync.
 
 ## Last swept
 
-- main commit **eb64602c1** (2026-10-14; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27, docs-sync-3 3f01a83b5, keeper 264c844a4, 17b6b455b, 0c2b20013, c1f479e10 (the src regrouping), d19060ec9, 9d84077f6, 6915e892b, 0bcbc6caf, 3801056ee and batch 2eae7fde9 (wiki eb3c384), batch de70c437b, batches 5899b83d1, c65c6a241, 9e6fbf8db, f689a6665, 63ad6eb73, 66dd216a9 (units refactor: no page shows unit tolerances or ranges, nothing to change) 43384c15e, 3be3d7d25 (internal) and eb64602c1 (cargo debug builds already in wiki/cargo.md; C types and Node accessors internal)), checked with
+- main commit **bcb3f966b** (2026-10-14; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27, docs-sync-3 3f01a83b5, keeper 264c844a4, 17b6b455b, 0c2b20013, c1f479e10 (the src regrouping), d19060ec9, 9d84077f6, 6915e892b, 0bcbc6caf, 3801056ee and batch 2eae7fde9 (wiki eb3c384), batch de70c437b, batches 5899b83d1, c65c6a241, 9e6fbf8db, f689a6665, 63ad6eb73, 66dd216a9 (units refactor: no page shows unit tolerances or ranges, nothing to change) 43384c15e, 3be3d7d25 (internal) and eb64602c1 (cargo debug builds already in wiki/cargo.md; C types and Node accessors internal) and bcb3f966b (wiki node.md: built lists == written)), checked with
   /Users/me/dev/bin/warp (19f021863) and, for 17b6b455b and 0c2b20013, a debug build copied to scratch/docs_sync/warp.
 - notes/decisions.md read through its end at that commit.
 
-The next sweep starts with `git log --oneline eb64602c1..origin/main | grep -E 'feature|fix:'` and the decisions added
-since (`git diff eb64602c1 origin/main -- notes/decisions.md`; decisions.md is grouped by topic since 13d194eec).
+The next sweep starts with `git log --oneline bcb3f966b..origin/main | grep -E 'feature|fix:'` and the decisions added
+since (`git diff bcb3f966b origin/main -- notes/decisions.md`; decisions.md is grouped by topic since 13d194eec).
 
 ## How
 
@@ -48,8 +48,10 @@ major corrections go to warp-interviewer, tiny fixes are made directly.
 
 ## Pending cuts (decision cleanup-cuts, foreign-spellings, 2026-10-13)
 
-Decided, not cut yet; the features still work, so the pages stay until the cut lands, then:
-- scoped handlers `on … in {…}`: wiki/effects.md (the whole "Whoever calls it answers" part).
+Decided, not cut yet; the features still work, so the pages stay until the cut lands (supervisor 2026-10-14: the big
+cuts land about 10:00, start when warp-integrator reports them), then remove each dropped form or rewrite it to its
+replacement, with no card (a user decision, not a gap):
+- scoped handlers `on … in {…}`: wiki/effects.md (the whole "Whoever calls it answers" part) → the program-wide `on`.
 - spaced type heads (lands with the cleanup-park-phrases cut; cleanup-drop-type-name-params was withdrawn) `fib int i`, `foo of int`, `square of a number`,
   `combine number with number` → `fib(i:int) := …`: wiki/=.md:11, Bad.md:51, type.md:59, function.md:5 (list of
   natural forms), inventions.md:42/96/137, Purpose.md:455, Features.md:60 (`++ of a number reference`).
@@ -57,6 +59,8 @@ Decided, not cut yet; the features still work, so the pages stay until the cut l
 - generators/yield: wiki/trait.md, zig.md (count_to), keyword.md's yield row if Ruby's block yield goes too.
 - compile-time lambdas, natural phrases (parked), OCaml let-in and `fun`, Elixir `def …, do:`, C++ `[](…){…}`,
   R/PHP forms (to `use R` / `use PHP`): grep the wiki for examples when each lands.
+- units interpreter edge cases (cleanup-edge: `1950 cm ± 50`, `1900 - 2000 cm`/`AD` ranges, `5 m ± 1 s`): no wiki
+  example today (checked 66dd216a9); grep again for `±` and unit ranges.
 - reflection dot words → `a of b` ≡ `b.a`; traits as a thin alias of classes; ORM only `stored people: [Person]`.
 
 ## Not swept yet
