@@ -303,8 +303,7 @@ impl Slot {
 				func.instruction(&I::LocalTee(index));
 			}
 			Slot::Global(index) => {
-				func.instruction(&I::GlobalSet(index));
-				func.instruction(&I::GlobalGet(index));
+				WasmGcEmitter::emit_list(func, &[I::GlobalSet(index), I::GlobalGet(index)]);
 			}
 		}
 	}
