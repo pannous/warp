@@ -1,7 +1,7 @@
 //! Type tests: `x is int`, `x is a number`, `[1 2] is list of int`, `[1 2] is ints`, `x is pair`, `p is friend` (a declared
 //! type) lower to `is_type(x, "spec")`, which the emitter answers in any position from the static type name of `x` (the same
 //! as `type(x)`) when it is known, else from the value's kind at run time (`runtime_kind_mask`, node_kind_in) or, for a
-//! declared type, its instance type (instance_of). `type of x` is `type(x)`.
+//! declared type, its instance type (instance_of). `type of x` is `type(x)` (of_lookups.rs).
 //! A type word on the right of `is` switches from equality to a type test; `x is y` with a variable stays equality.
 //! `x == int` is no type test (user decision #30): a value never equals a type, so it is false and hints `x is int`.
 
@@ -459,8 +459,11 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 		return rebuild(head, expand(body, &inner));
 	}
 	match node {
+		Node::List(items, Bracket::None | Bracket::Round, _) if names_a_type(&items, shadowed) => {
+			Node::Symbol(TYPE_WORD.to_string())
+		}
 		Node::List(items, bracket, separator) => {
-			if let Some(call) = type_of_word(&items, shadowed).or_else(|| spaced_type_test(&items, shadowed)) {
+			if let Some(call) = spaced_type_test(&items, shadowed) {
 				return expand(call, shadowed);
 			}
 			Node::List(items.into_iter().map(|item| expand(item, shadowed)).collect(), bracket, separator)
@@ -480,6 +483,16 @@ fn expand(node: Node, shadowed: &Names) -> Node {
 	}
 }
 
+/// `type(int)`, `type(Circle)`: the type of a type is type, unless a variable takes the name
+fn names_a_type(items: &[Node], names: &Names) -> bool {
+	let [word, subject] = items else { return false };
+	let Some(name) = subject.symbol_name() else { return false };
+	word.is_symbol(TYPE_WORD)
+		&& !names.is_variable(TYPE_WORD)
+		&& !names.is_variable(name)
+		&& (is_builtin_type_word(name) || names.types.contains(name))
+}
+
 /// `x is a number` is the items `x is a` and `number`: the words after the comparison continue the type phrase
 fn spaced_type_test(items: &[Node], shadowed: &Names) -> Option<Node> {
 	let [first, tail @ ..] = items else { return None };
@@ -492,23 +505,4 @@ fn spaced_type_test(items: &[Node], shadowed: &Names) -> Option<Node> {
 	let mut words = vec![word.as_str()];
 	words.extend(symbol_words(tail)?);
 	Some(is_type_call(subject.as_ref().clone(), type_spec(&words, shadowed)?))
-}
-
-/// `type of x`: the parser reads `type of` as a declaration head, its argument is the next item
-fn type_of_word(items: &[Node], shadowed: &Names) -> Option<Node> {
-	let [head, argument @ ..] = items else { return None };
-	if argument.is_empty() || shadowed.contains(TYPE_WORD) {
-		return None;
-	}
-	let Node::Type { name, body } = head.drop_meta() else {
-		return None;
-	};
-	if !name.is_symbol(OF_WORD) || !body.is_empty_node() {
-		return None;
-	}
-	let argument = match argument {
-		[single] => single.clone(),
-		many => Node::List(many.to_vec(), Bracket::None, Separator::Space),
-	};
-	Some(call(TYPE_WORD, vec![argument]))
 }

@@ -36,8 +36,8 @@ const SIGNATURE_WORD: &str = "signature";
 const BODY_WORD: &str = "body";
 /// `f.dump`: the whole definition as warp text, to copy and paste (card reflection-area)
 const DUMP_WORD: &str = "dump";
-/// The words whose bare argument naming a function without parameters is its call: `print now`
-const CALLING_WORDS: [&str; 1] = ["print"];
+/// The words whose bare argument naming a function without parameters is its call: `print now`, `type now`
+const CALLING_WORDS: [&str; 2] = ["print", crate::type_tests::TYPE_WORD];
 /// `f.name`, `f.return_type`: a function object's name and the kind of its result (card module-methods)
 const NAME_WORD: &str = "name";
 const RETURN_TYPE_WORD: &str = "return_type";
@@ -113,10 +113,6 @@ fn called_functions(
 	functions: &Functions,
 	defined: &HashSet<String>,
 ) -> Vec<crate::errors::diagnostic::Diagnostic> {
-	let parameterless = |name: &str| match functions.get(name) {
-		Some(function) => function.params.is_empty(),
-		None => library_signature(name, functions, defined).is_some_and(|(params, _)| params.is_empty()),
-	};
 	let mut warnings = vec![];
 	node.visit(&mut |part| {
 		let Node::List(items, Bracket::Round | Bracket::None, _) = part.drop_meta() else { return };
@@ -125,7 +121,7 @@ fn called_functions(
 		if !CALLING_WORDS.contains(&word)
 			|| defined.contains(word)
 			|| crate::closures::referenced_function(subject).is_some()
-			|| !parameterless(name)
+			|| !is_parameterless(name, functions, defined)
 		{
 			return;
 		}
@@ -140,6 +136,13 @@ fn called_functions(
 		}
 	});
 	warnings
+}
+
+fn is_parameterless(name: &str, functions: &Functions, defined: &HashSet<String>) -> bool {
+	match functions.get(name) {
+		Some(function) => function.params.is_empty(),
+		None => library_signature(name, functions, defined).is_some_and(|(params, _)| params.is_empty()),
+	}
 }
 
 /// The name an `on` or `once` statement listens to
@@ -297,6 +300,11 @@ fn function_word(node: &Node, functions: &Functions, defined: &HashSet<String>) 
 	let (word, name) = (word.symbol_name()?, subject.symbol_name()?);
 	if defined.contains(word) {
 		return None;
+	}
+	// `type a` of a function a without parameters: the type of its result (called_functions warns)
+	let referenced = crate::closures::referenced_function(&items[1]).is_some();
+	if word == crate::type_tests::TYPE_WORD && !referenced && is_parameterless(name, functions, defined) {
+		return Some(call(word, vec![call(name, vec![])]));
 	}
 	if !functions.contains_key(name) {
 		let (_, signature) = library_signature(name, functions, defined)?;
