@@ -129,16 +129,16 @@ def biquad(amplitudes, kind, frequency, q) {
 	x2 = 0.0
 	y1 = 0.0
 	y2 = 0.0
-	out = []
+	shaped = []
 	for x in amplitudes {
 		y = (b0 * x + b1 * x1 + b2 * x2 + 2 * c * y1 - (1 - alpha) * y2) / a0
 		x2 = x1
 		x1 = x
 		y2 = y1
 		y1 = y
-		out.push(y)
+		shaped.push(y)
 	}
-	out
+	shaped
 }
 // the amplitudes of frequencies sounding together
 chord_amplitudes(pitches, duration, shape) := {
@@ -176,11 +176,11 @@ def clipped(amplitudes, drive) {
 }
 // the signal plus feedback combs: y[i] = x[i] + feedback · y[i - gap], after the signal's end for the tail
 def comb(amplitudes, gap, feedback, tail) {
-	out = []
+	combed = []
 	for i in 0..(count(amplitudes) + tail) {
-		out.push(dry_at(amplitudes, i) + (if i >= gap then feedback * out[i - gap] else 0.0))
+		combed.push(dry_at(amplitudes, i) + (if i >= gap then feedback * combed[i - gap] else 0.0))
 	}
-	out
+	combed
 }
 // the number of repeats until a feedback has died below echo_floor
 echoes_of(feedback) := if feedback <= 0 then 0 else min(max_echoes, ceil(log(echo_floor) / log(feedback)) as int)
