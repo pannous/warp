@@ -683,13 +683,13 @@ function showFrame(paintings) {
 // OffscreenCanvas straight to the task Worker holding the GPU device (task-workers.js). Not through a port the program's
 // Worker made: Firefox lost a canvas posted into a port still on its way to the task Worker (card shaders-firefox)
 const paintCanvases = new Map();
-function sendPaintCanvas({ id, width, height, taskWorker, replaces }) {
+function sendPaintCanvas({ id, width, height, taskWorkerId, replaces }) {
 	const canvas = paintingElement({ width, height });
 	canvas.gpu = true;
 	paintCanvases.delete(replaces);
 	paintCanvases.set(id, canvas);
 	const offscreen = canvas.transferControlToOffscreen();
-	worker.postToTaskWorker(taskWorker, { paintCanvas: { id, canvas: offscreen } }, [offscreen]);
+	worker.postToTaskWorker(taskWorkerId, { paintCanvas: { id, canvas: offscreen } }, [offscreen]);
 }
 
 // ⛶ (card little-full): the last painting fills the screen at its own aspect ratio, Esc or ⛶ again leaves; a click

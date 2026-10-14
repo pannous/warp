@@ -536,7 +536,7 @@ addHostPart({
 		const newPaintCanvas = (width, height, replaces) => {
 			const id = ++paintCanvasCount, worker = gpuTaskWorker();
 			if (!worker) throw new Error("gpu_canvas: every task Worker is busy");
-			hooks.gpuCanvas({ id, width, height, taskWorker: worker.taskWorkerId, replaces });
+			hooks.gpuCanvas({ id, width, height, taskWorkerId: worker.taskWorkerId, replaces });
 			gpuJob("gpu_canvas", { id, replaces }, [], Float32Array, worker);
 			return { id, width, height };
 		};
