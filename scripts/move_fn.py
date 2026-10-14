@@ -5,7 +5,7 @@ move_fn.py <search_dir> <target_file> <name>... [--impl TYPE]
 
 Each named fn (with its doc comments and attributes) is cut from the one file under <search_dir> that defines it and
 appended to <target_file>: methods into the target's last `impl TYPE {` block (created when missing), free functions
-at the end. A method or function leaving for a deeper module gets `pub(super)` widened to `pub(crate)`. Nothing else
+at the end. A method leaving for a deeper module gets `pub(super)` widened to `pub(crate)`, a free function also when private. Nothing else
 in the code changes; module declarations and imports are fixed by hand after the compiler names them.
 """
 import argparse
@@ -90,7 +90,9 @@ def depth_below(search_dir, path):
 
 
 def widened(piece):
-	return [re.sub(r"^(\s*)pub\(super\) ", r"\1pub(crate) ", line, count=1) for line in piece]
+	"""pub(super) means another module after the move; a free function is also reached through re-exports"""
+	widen = re.compile(r"^(\s*)pub\(super\) " if piece[-1].startswith("\t") else r"^()(?:pub\(super\) )?(?=(?:const )?fn )")
+	return [widen.sub(r"\1pub(crate) ", line, count=1) if re.match(r"^\s*(pub\(super\) )?(const )?fn ", line) else line for line in piece]
 
 
 def insert_methods(text, impl_type, methods):

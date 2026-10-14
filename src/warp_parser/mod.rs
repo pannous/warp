@@ -28,15 +28,20 @@ macro_rules! or_return_error {
 
 mod lookahead;
 mod scanning;
-mod user_operators;
 mod xml;
 pub use lookahead::PREFIX_OPERATOR_WORDS;
 mod atoms;
 mod blocks;
-use blocks::*;
 mod commands;
+mod comments;
+mod pipes;
+use blocks::*;
+pub(crate) use commands::*;
+use comments::*;
+pub(crate) use control::*;
+pub(crate) use definitions::*;
+pub(crate) use pipes::*;
 mod control;
-use control::*;
 mod definitions;
 mod expressions;
 mod lists;
@@ -218,137 +223,6 @@ const AMBIGUOUS_END: &str = "ambiguous `end`: it closes either the `then` or the
 /// Keywords a `[` after never indexes: `in [1, 2]` and `return [x]` take a list
 const UNINDEXABLE_KEYWORDS: [&str; 6] = ["in", "return", "yield", "then", "else", "do"];
 
-fn is_print_word(node: &Node) -> bool {
-	node.is_symbol(PRINT_WORD)
-}
-
-/// `print` or the call `print(…)`: a print statement starts here
-pub(crate) fn starts_print(node: &Node) -> bool {
-	match node.drop_meta() {
-		Node::List(items, Bracket::Round, _) | Node::List(items, Bracket::None, Separator::Space) => {
-			items.first().is_some_and(is_print_word)
-		}
-		other => is_print_word(other),
-	}
-}
-
-/// Words separated by spaces form one expression: `upper "a"` is one argument of print
-fn one_expression(words: &[Node]) -> Node {
-	match words {
-		[single] => single.clone(),
-		several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
-	}
-}
-
-/// The call print(a, b, …): its arguments are separated by commas, like Python's
-pub(crate) fn print_call(arguments: impl IntoIterator<Item = Node>) -> Node {
-	Node::List(
-		[Symbol(PRINT_WORD.to_string())].into_iter().chain(arguments).collect(),
-		Bracket::Round,
-		Separator::None,
-	)
-}
-
-/// The arguments of `print(…)`: words separated by spaces (`print(upper "a")`) are one, else each item is one
-fn print_arguments(arguments: Node) -> Vec<Node> {
-	match arguments.drop_meta() {
-		Node::List(items, _, Separator::Space) if items.len() > 1 => vec![arguments],
-		Node::List(items, _, _) => items.clone(),
-		Node::Empty => vec![],
-		_ => vec![arguments],
-	}
-}
-
-/// The arguments of a parsed print list: the call print(a, b) has several, `print first xs` the one expression `first xs`
-pub(crate) fn print_arguments_of(call: &[Node], bracket: &Bracket) -> Vec<Node> {
-	match bracket {
-		Bracket::Round => call[1..].to_vec(),
-		_ => vec![one_expression(&call[1..])],
-	}
-}
-
-/// A list as grouped by its separators, with the braceless print forms made explicit:
-/// `print first xs` prints the one expression `first xs`, and in `print a, b` the comma binds looser than the space,
-/// so the comma list [[print a], b] becomes the call print(a, b)
-fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Node {
-	let items = if separator == Separator::Space {
-		with_arrow_bodies(items)
-	} else {
-		items
-	};
-	let items = match separator {
-		Separator::Space if bracket != Bracket::Square => {
-			guarded_command(&items).map_or(items, |guarded| vec![guarded])
-		}
-		_ => items,
-	};
-	// `{ print upper n }`: a block of the one statement prints the one expression too
-	let is_print_block =
-		bracket == Bracket::Curly && separator == Separator::Space && items.len() > 2 && is_print_word(&items[0]);
-	if is_print_block {
-		return Node::List(vec![items[0].clone(), one_expression(&items[1..])], bracket, separator);
-	}
-	// `{ print i, i*2 }`: the block of the one call print(i, i*2)
-	if let (Bracket::Curly, Separator::Colon, Some(Node::List(head, Bracket::None, Separator::Space))) =
-		(&bracket, &separator, items.first().map(Node::drop_meta))
-	{
-		if is_print_word(&head[0]) {
-			return Node::List(
-				vec![print_call(head[1..].iter().chain(&items[1..]).cloned())],
-				bracket,
-				Separator::None,
-			);
-		}
-	}
-	if bracket != Bracket::None || !matches!(separator, Separator::Space | Separator::Colon) {
-		return Node::List(items, bracket, separator);
-	}
-	match (&separator, items[0].drop_meta()) {
-		(Separator::Space, head) if starts_print(head) && items.iter().skip(2).any(starts_print) => {
-			let second = items.iter().skip(2).find(|item| starts_print(item)).expect("guarded");
-			Diagnostic::at(second, TWO_STATEMENTS_ON_ONE_LINE).into_error()
-		}
-		(Separator::Space, head) if is_print_word(head) && items.len() > 2 => {
-			Node::List(vec![items[0].clone(), one_expression(&items[1..])], bracket, separator)
-		}
-		(Separator::Colon, Node::List(head, Bracket::None, Separator::Space)) if is_print_word(&head[0]) => {
-			print_call(head[1..].iter().chain(&items[1..]).cloned())
-		}
-		_ => Node::List(items, bracket, separator),
-	}
-}
-
-/// `print it if it%2`, `do {i++} while c`: a trailing `if` guards and a trailing `while` loops the whole command, not
-/// its last word, as in Ruby and Perl (card glued-loop)
-fn guarded_command(items: &[Node]) -> Option<Node> {
-	let (last, command) = items.split_last()?;
-	if !matches!(command.first()?.drop_meta(), Symbol(_)) {
-		return None;
-	}
-	let whole = |tail: &Node| {
-		Node::List(
-			[command, std::slice::from_ref(tail)].concat(),
-			Bracket::None,
-			Separator::Space,
-		)
-	};
-	match last.drop_meta() {
-		Node::Key(head, Op::Do, body) => match head.drop_meta() {
-			Node::Key(nothing, Op::While, condition) if **nothing == Node::Empty => {
-				Some(while_do((**condition).clone(), whole(body)))
-			}
-			_ => None,
-		},
-		Node::Key(condition, Op::Then, guarded) => match condition.drop_meta() {
-			Node::Key(nothing, Op::If, _) if **nothing == Node::Empty => {
-				Some(Node::Key(condition.clone(), Op::Then, Box::new(whole(guarded))))
-			}
-			_ => None,
-		},
-		_ => None,
-	}
-}
-
 /// `(x => print x)`: `=>` binds looser than the space, so the words after a lambda's arrow are its body (`print x`), not
 /// further items; a run of entries `1 => "a" 2 => "b"` stays a list of pairs
 fn with_arrow_bodies(mut items: Vec<Node>) -> Vec<Node> {
@@ -366,27 +240,6 @@ fn with_arrow_bodies(mut items: Vec<Node>) -> Vec<Node> {
 	let body = one_expression(&[vec![*body], rest].concat());
 	items.push(Node::Key(parameters, op, Box::new(body)));
 	items
-}
-
-/// `f.(xs, a)` → `map(xs, broadcast_item => f(broadcast_item, a))`
-fn dot_call(function: Node, arguments: Node) -> Node {
-	let mut arguments = match arguments.drop_meta() {
-		Node::List(items, Bracket::Round, _) if !items.is_empty() => items.clone(),
-		_ => vec![arguments],
-	};
-	// a number broadcasts as itself (Julia, Elixir's `f.(4)`): the call
-	if matches!(arguments[0].drop_meta(), Node::Number(_)) {
-		return Node::List([vec![function], arguments].concat(), Bracket::Round, Separator::None);
-	}
-	let list = arguments.remove(0);
-	let item = Symbol(BROADCAST_ITEM.to_string());
-	let applied = Node::List(
-		[vec![function, item.clone()], arguments].concat(),
-		Bracket::Round,
-		Separator::None,
-	);
-	let each = Node::Key(Box::new(item), Op::FatArrow, Box::new(applied));
-	call(MAP_WORD, vec![list, each])
 }
 
 fn is_unindexable_keyword(node: &Node) -> bool {
@@ -432,18 +285,6 @@ const UNCAUGHT_ERROR: &str = "uncaught·error";
 /// `check C` is `assert C` (user, card check-assert)
 const GUARD_MARKERS: [(&str, &str); 3] = [("try", TRY_MARKER), ("assert", ASSERT_MARKER), ("check", ASSERT_MARKER)];
 pub const ASSERTION_FAILED: &str = "assertion failed";
-/// `keys(m)`, `m.keys`, `m.keys()`: an iterable whose items are a map's keys
-fn iterates_keys(iterable: &Node) -> bool {
-	let is_keys_word = |word: &Node| matches!(word.drop_meta(), Node::Symbol(word) if word == "keys" || word == crate::words::MAP_KEYS);
-	let is_keys_call = |call: &Node| {
-		is_keys_word(call)
-			|| matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(is_keys_word))
-	};
-	match iterable.drop_meta() {
-		Node::Key(_, Op::Dot, method) => is_keys_call(method),
-		call => is_keys_call(call),
-	}
-}
 
 /// How tight a suffix `!` binds: below the index `#`, above `^` and arithmetic
 const BANG_BP: u8 = Op::Hash.binding_power().0.midpoint(Op::Pow.binding_power().0);
@@ -627,55 +468,6 @@ const FLOOR_DIVISION_ASSIGNMENT: &str = "//=";
 
 /// `a | b`: the logical or, or `b(a)` when b names a function (pipes.rs)
 const PIPE_GLYPH: &str = "|";
-/// `value |> f(args)` → `f(value, args)`, `value |> f` → `f(value)`; a braceless call is grouped, one argument:
-/// `square xs |> filter(p)` → `filter((square xs), p)`
-pub(crate) fn piped(value: Node, stage: Node) -> Node {
-	let value = match value.drop_meta() {
-		Node::List(_, Bracket::None, Separator::Space) => Node::List(vec![value], Bracket::Round, Separator::None),
-		_ => value,
-	};
-	match stage.drop_meta() {
-		Node::List(items, Bracket::Round, Separator::None)
-			if matches!(items.first().map(Node::drop_meta), Some(Symbol(_))) =>
-		{
-			let mut items = items.clone();
-			items.insert(1, value);
-			Node::List(items, Bracket::Round, Separator::None)
-		}
-		_ => Node::List(vec![stage, value], Bracket::Round, Separator::None),
-	}
-}
-
-/// Read and parse a WARP file
-/// The body block at the end of an `if`/`while` header: `c {b}` is the pair [c {b}], and in `i < n {b}` the
-/// block juxtaposes only with the rightmost operand `n`, so it is split off the right spine of the comparison
-fn split_trailing_block(header: &Node, empty_is_block: bool) -> Option<(Node, Node)> {
-	match header.drop_meta() {
-		Node::List(items, _, _) if items.len() == 2 => match items[1].drop_meta() {
-			Node::List(_, Bracket::Curly, _) => Some((items[0].clone(), items[1].clone())),
-			Empty if empty_is_block => Some((items[0].clone(), items[1].clone())),
-			_ => None,
-		},
-		// `if x in xs {…}`: the block after the collection is the body
-		Node::List(items, bracket, separator) if items.len() == 3 && items[1].is_symbol(IN_KEYWORD) => {
-			split_trailing_block(&items[2], empty_is_block).map(|(collection, block)| {
-				(
-					Node::List(
-						vec![items[0].clone(), items[1].clone(), collection],
-						bracket.clone(),
-						separator.clone(),
-					),
-					block,
-				)
-			})
-		}
-		Node::Key(left, op, right) if op.is_comparison() || op.is_arithmetic() || op.is_logical() || op.is_prefix() => {
-			split_trailing_block(right, empty_is_block)
-				.map(|(operand, block)| (Node::Key(left.clone(), *op, Box::new(operand)), block))
-		}
-		_ => None,
-	}
-}
 
 pub fn parse_file(path: &str) -> Node {
 	let options = if path.ends_with(".wit") {
@@ -715,89 +507,6 @@ pub fn number_in_text(text: &str) -> Option<Number> {
 		Node::Number(number) => Some(*number),
 		_ => None,
 	}
-}
-
-/// `(col // 3) * 3`: a spaced `//` after code starts a comment, and when the rest of its line closes a bracket that is
-/// open before it, the writer meant floor division. The line, column and the hidden closing bracket.
-fn comment_hiding_a_closer(input: &str) -> Option<(usize, usize, char)> {
-	for (line_index, line) in input.lines().enumerate() {
-		let chars: Vec<char> = line.chars().collect();
-		let (mut depth, mut quote, mut escaped): (i32, Option<char>, bool) = (0, None, false);
-		for (column, &c) in chars.iter().enumerate() {
-			match (quote, c) {
-				// `\"` inside a text leaves it open
-				(Some(_), _) if escaped => escaped = false,
-				(Some(_), '\\') => escaped = true,
-				(Some(open), _) if c == open => quote = None,
-				(Some(_), _) => {}
-				(None, '"' | '\'') => quote = Some(c),
-				(None, '(' | '[' | '{') => depth += 1,
-				(None, ')' | ']' | '}') => depth -= 1,
-				(None, '/') if chars.get(column + 1) == Some(&'/') => {
-					let spaced = column > 0 && chars[column - 1] == ' ' && chars.get(column + 2) == Some(&' ');
-					let rest = &chars[column + 2..];
-					let closes = rest
-						.iter()
-						.map(|c| match c {
-							')' | ']' | '}' => 1,
-							'(' | '[' | '{' => -1,
-							_ => 0,
-						})
-						.sum::<i32>();
-					if spaced && depth > 0 && closes > 0 {
-						let closer = rest
-							.iter()
-							.find(|c| matches!(c, ')' | ']' | '}'))
-							.copied()
-							.unwrap_or(')');
-						return Some((line_index + 1, column + 1, closer));
-					}
-					break;
-				}
-				_ => {}
-			}
-		}
-	}
-	None
-}
-
-/// `(7 // 2)`: the fix `7//2`, the operands around the `//` at `line`:`column` glued to it
-fn glued_floor_division(diagnostic: Diagnostic, input: &str, line: usize, column: usize) -> Diagnostic {
-	let text: Vec<char> = input.lines().nth(line - 1).unwrap_or_default().chars().collect();
-	let before = text[..column - 1].iter().rposition(|c| !c.is_whitespace());
-	let after = text[column + 1..]
-		.iter()
-		.position(|c| !c.is_whitespace())
-		.map(|offset| column + 1 + offset);
-	let (Some(before), Some(after)) = (before, after) else {
-		return diagnostic;
-	};
-	let written: String = text[before..=after].iter().collect();
-	diagnostic.offer("floor division", written, format!("{}//{}", text[before], text[after]))
-}
-
-/// The error `message`, fixed by adding the missing `closer` at `at` (line, column)
-/// `for variable in iterable body`, the loop for_loop.rs lowers
-pub(crate) fn for_in_loop(variable: Node, iterable: Node, body: Node) -> Node {
-	Node::List(
-		vec![
-			Symbol("for".to_string()),
-			variable,
-			Symbol("in".to_string()),
-			iterable,
-			body,
-		],
-		Bracket::None,
-		Separator::Space,
-	)
-}
-
-pub(super) fn missing_closer(message: String, closer: impl Into<String>, at: (usize, usize)) -> Node {
-	let closer = closer.into();
-	Diagnostic::default()
-		.message(message)
-		.offering(crate::fixits::inserted(format!("the closing {closer}"), closer, at))
-		.into_error()
 }
 
 /// Parse-only path for untrusted data: nothing is evaluated, no word is guessed to be a boolean
@@ -897,69 +606,6 @@ pub struct WarpParser {
 	multi_word_types: Vec<Vec<String>>,
 	/// The parameters of each `to` phrase defined so far, to catch a second phrase that differs only by untyped nouns
 	phrase_definitions: std::collections::HashMap<String, Vec<Node>>,
-}
-
-/// The single argument `(int x)` of `f(int x)` is the typed parameter `x:int`, so that flattening the call `f(T, y)` into
-/// `(f T y)` never reads a parameter named like a type (`offset_of(text, byte, start)`) as the type of the next one
-fn typed_parameter(arguments: Node) -> Node {
-	let is_type_word =
-		|node: &Node| matches!(node.drop_meta(), Symbol(word) if crate::analyzer::type_word_kind(word).is_some());
-	match arguments.drop_meta() {
-		Node::List(items, _, Separator::Space) => match items.as_slice() {
-			[type_word, name] if is_type_word(type_word) && matches!(name.drop_meta(), Symbol(_)) => {
-				Node::Key(Box::new(name.clone()), Op::Colon, Box::new(type_word.clone()))
-			}
-			// `x of int`: the parameter x of type int
-			[name, of, type_word]
-				if of.drop_meta().is_symbol(OF_WORD)
-					&& is_type_word(type_word)
-					&& matches!(name.drop_meta(), Symbol(_))
-					&& !is_type_word(name) =>
-			{
-				Node::Key(Box::new(name.clone()), Op::Colon, Box::new(type_word.clone()))
-			}
-			// Kotlin `vararg xs: Int`, C# `params int[] xs`: the rest parameter `*xs` (lowering/definitions/variadic.rs)
-			[marker, .., name] if matches!(marker.drop_meta(), Symbol(word) if REST_MARKERS.contains(&word.as_str())) => {
-				match name.drop_meta() {
-					Symbol(name) => Symbol(format!("{}{name}", crate::words::STARRED)),
-					Node::Key(name, Op::Colon, _) => Symbol(format!("{}{}", crate::words::STARRED, name.name())),
-					_ => arguments,
-				}
-			}
-			// `int b = 2` (C#, C++): `b:int = 2`
-			[type_word, default] if is_type_word(type_word) => match default.drop_meta() {
-				Node::Key(name, Op::Assign, value) if matches!(name.drop_meta(), Symbol(_)) => Node::Key(
-					Box::new(Node::Key(name.clone(), Op::Colon, Box::new(type_word.clone()))),
-					Op::Assign,
-					value.clone(),
-				),
-				_ => arguments,
-			},
-			_ => arguments,
-		},
-		_ => arguments,
-	}
-}
-
-/// Every argument of `f(int x, float y)` as its typed parameter
-fn typed_parameters(arguments: Node) -> Node {
-	match arguments.drop_meta() {
-		Node::List(items, bracket, Separator::Colon) => Node::List(
-			items.iter().cloned().map(typed_parameter).collect(),
-			bracket.clone(),
-			Separator::Colon,
-		),
-		_ => typed_parameter(arguments),
-	}
-}
-
-fn operator_call(glyph: &[char], arguments: Vec<Node>) -> Node {
-	let name = format!("{OPERATOR_FUNCTION_PREFIX}{}", glyph.iter().collect::<String>());
-	Node::List(
-		[vec![Symbol(name)], arguments].concat(),
-		Bracket::Round,
-		Separator::None,
-	)
 }
 
 pub(crate) enum ElseParseMode {
@@ -1156,18 +802,6 @@ fn check_constants(s: &str, data_mode: bool) -> Option<Node> {
 }
 // Tests moved to tests/parser/test_parser.rs
 
-/// `f := …`, `f x := …`, `f(x) := …` define f
-fn defined_function_name(target: &Node) -> Option<String> {
-	match target.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		Node::List(items, _, _) => match items.first().map(Node::drop_meta) {
-			Some(Node::Symbol(name)) => Some(name.clone()),
-			_ => None,
-		},
-		_ => None,
-	}
-}
-
 /// `n-1`, the end a Kotlin writer gives an inclusive `..`
 fn is_minus_one(end: &Node) -> bool {
 	match end.drop_meta() {
@@ -1260,43 +894,4 @@ fn logic_mixed_with_comparison(lhs: &Node, symbol: char, rhs: &Node) -> Option<D
 	Some(readings.iter().fold(diagnostic, |diagnostic, (meaning, form)| {
 		diagnostic.offer(meaning, &written, form)
 	}))
-}
-
-/// `while condition body`: the loop head `ø while condition` applied `do` to its body
-/// Statements as a `{…}` block body
-fn curly_block(statements: Node) -> Node {
-	match statements {
-		Node::List(items, Bracket::None, separator) => Node::List(items, Bracket::Curly, separator),
-		single => Node::List(vec![single], Bracket::Curly, Separator::None),
-	}
-}
-
-pub(crate) fn while_do(condition: Node, body: Node) -> Node {
-	let head = Node::Key(Box::new(Empty), Op::While, Box::new(condition));
-	Node::Key(Box::new(head), Op::Do, Box::new(body))
-}
-
-/// The condition of the `if`/`while` head inside a parsed conditional or loop, negated: `unless c {…}` is `if not c {…}`
-fn negate_condition(conditional: Node) -> Node {
-	match conditional {
-		Node::Key(head, op @ (Op::Then | Op::Else | Op::Do), body) => {
-			Node::Key(Box::new(negate_condition(*head)), op, body)
-		}
-		Node::Key(empty, op @ (Op::If | Op::While), condition) if matches!(empty.drop_meta(), Empty) => {
-			Node::Key(empty, op, Box::new(Node::Key(Box::new(Empty), Op::Not, condition)))
-		}
-		other => other,
-	}
-}
-
-/// `f={it*2}` defines a function like `f:={it*2}`: a name assigned a block that uses `it`; other blocks are data
-fn is_function_block(name: &Node, block: &Node) -> bool {
-	matches!(name.drop_meta(), Node::Symbol(_))
-		&& matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _))
-		&& mentions(block, "it")
-}
-
-/// A braceless call `sleep 1s`, `f 3`: a word applied to what follows it
-fn is_command(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(items, Bracket::None, Separator::Space) if items.len() > 1 && matches!(items[0].drop_meta(), Symbol(_)))
 }

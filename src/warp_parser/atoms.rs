@@ -1,12 +1,9 @@
-//! Atoms: symbols with suffixes, definitions and their bodies, indented and end blocks, URLs, type declarations
+//! Atoms: symbols with suffixes, calls, phrase definitions, URLs, type declarations
 
 use super::*;
-use crate::node::children_rewritten;
 use crate::words::SWITCH_WORDS;
 
-mod blocks_and_lambdas;
 mod type_declarations;
-use blocks_and_lambdas::*;
 
 const VOID_WORD: &str = "void";
 /// `none` is the null ø; called, `none(xs, f)` (Kotlin's "no element matches") is an error naming it (P185)
