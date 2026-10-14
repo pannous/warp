@@ -341,11 +341,7 @@ fn live_loop_statement(statement: &Node, defined: &HashSet<String>) -> Option<No
 	}
 	let made = substituted(
 		crate::warp_parser::parse(LIVE_LOOP_TEMPLATE),
-		&[
-			(LIVE_VOICE, voice),
-			(LIVE_CYCLES, cycles.clone()),
-			(LIVE_BODY, block.clone()),
-		],
+		&[(LIVE_VOICE, voice), (LIVE_CYCLES, cycles.clone()), (LIVE_BODY, block.clone())],
 	);
 	Some(match made {
 		Node::List(mut statements, _, _) if statements.len() == 1 => statements.remove(0),
