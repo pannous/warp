@@ -713,7 +713,7 @@ Examples: frames, shader, "shader mouse"; samples: paint_text, finger_paint, sha
 
 `use sound` plays notes by name, chords, rhythms and whole songs. A function can also compute the sound itself.
 
-Examples: melody; samples: music, rhythm, harmony, synth, filters, voices, arrangement, patterns, signal_graph, siren_sound, stereo_sound, midi, visualizer
+Examples: melody; samples: music, rhythm, harmony, synth, filters, voices, arrangement, sound_patterns, signal_graph, siren_sound, stereo_sound, midi, visualizer
 
 ## WebAssembly
 
