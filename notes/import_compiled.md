@@ -5,7 +5,7 @@
 tests/modules/test_import_compiled.rs (the browser too).
 
 ## How
-- The module's `warp.meta` section (lowering/reflection.rs meta_entries) names each function's parameters and
+- The module's `warp.meta` section (lowering/data/reflection.rs meta_entries) names each function's parameters and
   signature (`functions{f{params signature}}`) and each class's fields, methods and source (`classes{P{… definition}}`,
   sliced from the code by `class P` up to its closing brace, because a class Node serializes lossily).
 - wasm_modules.rs read_exports: a function whose signature crosses Nodes is imported with anyref parameters and

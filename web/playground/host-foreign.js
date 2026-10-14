@@ -9,7 +9,7 @@ const MODULE_PATH = /\.(wasm|wat)$/; // src/modules/wasm_modules.rs MODULE_EXTEN
 const SETTER_PREFIX = "set "; // src/modules/wasm_modules.rs SETTER_PREFIX: the import that sets a mutable global
 const C_CALLS_SECTION = "warp.c_calls"; // src/modules/wasm_modules.rs C_CALLS_SECTION
 const IMPORTED_MEMORY_PAGES = 1; // src/wasm_emitter/mod.rs MEMORY: one page at least
-const SETTER = /^set (.+)$/; // src/lowering/foreign_modules.rs SETTER_PREFIX: "set innerHTML" sets the member to the one argument
+const SETTER = /^set (.+)$/; // src/lowering/foreign/foreign_modules.rs SETTER_PREFIX: "set innerHTML" sets the member to the one argument
 // a promise is awaited only by an awaited run's main (host.js JSPI), not where the browser has no JSPI (Safari), nor in a
 // page event's handler, nor in a warp function JavaScript calls back (a JavaScript frame between: the engine refuses
 // to suspend it, SUSPENSION_FAILURE)
@@ -27,7 +27,7 @@ function registerForeignRuntime(name, runtime) {
 }
 const prepareForeignRuntimes = code => Promise.all([...foreignRuntimes.values()].map(runtime => runtime.prepare?.(code)));
 
-// what warp's operators on a value of the page forward to (src/lowering/foreign_modules.rs), as in src/modules/foreign.rs's loop
+// what warp's operators on a value of the page forward to (src/lowering/foreign/foreign_modules.rs), as in src/modules/foreign.rs's loop
 const FOREIGN_OPERATORS = { add: (a, b) => a + b, sub: (a, b) => a - b, mul: (a, b) => a * b, truediv: (a, b) => a / b, mod: (a, b) => a % b, pow: (a, b) => a ** b,
 	lt: (a, b) => a < b, gt: (a, b) => a > b, le: (a, b) => a <= b, ge: (a, b) => a >= b, eq: (a, b) => a === b, ne: (a, b) => a !== b, neg: a => -a,
 	getitem: (a, i) => typeof a.get === "function" ? a.get(i) : a[i], len: a => a.length ?? a.size, list: a => Array.from(a) };
@@ -50,7 +50,7 @@ registerForeignRuntime("js", {
 		// a module's name, or a handle: an object of the page kept behind an id (src/modules/foreign.rs)
 		let owner = null, value = typeof moduleName === "object" ? unhandled(moduleName) : moduleName === "operator" ? FOREIGN_OPERATORS : globalThis[moduleName];
 		if (value === undefined) throw new Error(`js ${moduleName}.${memberName}: the page has no global ${moduleName} (modules need the native host)`);
-		// member "": the module constructed, `new URL(…)` (src/lowering/foreign_modules.rs CONSTRUCTOR_MEMBER)
+		// member "": the module constructed, `new URL(…)` (src/lowering/foreign/foreign_modules.rs CONSTRUCTOR_MEMBER)
 		if (memberName === "") return new value(...argumentValues.map(unhandled));
 		const set = memberName.match(SETTER);
 		if (set) return value[set[1]] = unhandled(argumentValues[0]);

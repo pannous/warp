@@ -30,7 +30,7 @@ custom section, `warp.meta`, kept unstripped.
 ## Rule
 `x.word` is, in order: x's real field `word` (a class or map field always wins), its meta entry `@word`
 (meta_entries.rs), then the reflection word. A program's own definition of the word (`fields(x) := …`) wins as usual
-(library_words defined_names). One lowering pass, `src/lowering/reflection.rs` (absorbing introspection.rs), rewrites
+(library_words defined_names). One lowering pass, `src/lowering/data/reflection.rs` (absorbing introspection.rs), rewrites
 `x.word` to the function form (`type(x)`, `effects of f`, `listeners of e`), so each word has one implementation.
 
 ## Sources
@@ -62,7 +62,7 @@ Warp notation text (parsed by the reader we already have), one map:
 3. Functions: `f.params`, `f.signature`. Done in reflection::lower: constants from the user function's definition;
    a parameter's type is its annotation or the kind the body demands, the result the inferred kind (`def g(x){x*2}`
    is `(x) -> int`). Library words (`sqrt.signature`, `first.params`, `dir(sqrt)`, `help(upper)`) answer from
-   lowering/library_signatures.rs: a hand table names and types the operator, rounding and text/list words (result
+   lowering/foreign/library_signatures.rs: a hand table names and types the operator, rounding and text/list words (result
    `number` where it depends on the argument), a prelude word shows its lib/prelude.warp head, libm, text builtins and
    runtime words get positional names (`(a:float, b:float) -> float`) from their tables. A program's own definition wins.
 4. `x.unit`, `x.doc` (aliases of meta/units), `module.exports` for `use wasm` modules (compile time: their exports).

@@ -26,7 +26,7 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		"sound" => sound(member, &arguments),
 		#[cfg(feature = "native")]
 		"midi" => midi(member, &arguments),
-		// the tables of registered classes (lowering/database_tables.rs)
+		// the tables of registered classes (lowering/data/database_tables.rs)
 		#[cfg(feature = "native")]
 		"table" => crate::host::database::call(member, &arguments),
 		_ => no_such_word(&arguments),
@@ -176,7 +176,7 @@ fn os(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	}
 }
 
-/// `stored theme = "dark"` (lowering/stored_values.rs): the values kept by name in a store file
+/// `stored theme = "dark"` (lowering/data/stored_values.rs): the values kept by name in a store file
 fn store(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	match (member, arguments) {
 		// the value kept under its name, or the default

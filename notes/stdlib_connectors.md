@@ -66,7 +66,7 @@ step 3.
 4. **Components/WIT** when the component model is turned on again: the general, typed, sandboxable connector.
 
 ## Step 1 as implemented (branch hijack-stdlib)
-- Lowering (src/lowering/foreign_modules.rs, the first source pass, before `x.word(…)` becomes a method call of a
+- Lowering (src/lowering/foreign/foreign_modules.rs, the first source pass, before `x.word(…)` becomes a method call of a
   built-in word): `use python "math"` / `use python math` / `use python "os.path" as path` record the module and
   vanish; `math.sqrt(2)` → `foreign_call("python", "math", "sqrt", [2])`, `math.pi` →
   `foreign_call("python", "math", "pi", ø)` (ø: a read, a list: a call).

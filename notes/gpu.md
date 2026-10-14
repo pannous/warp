@@ -115,7 +115,7 @@ Superseded (P214): floats on the GPU only with @gpu or float32[n]; (b) automatic
 3. Dropped (gpu-threshold): Ints automatically never pay against the fused CPU loop (step 2 finding).
 4. Fusion of an element-wise expression ending in a reduction into one WGSL kernel.
 5. Floats per the Interviewer's answer; `map(f)` of a pure numeric f.
-   Done for linear float arrays (src/lowering/gpu_maps.rs): `ys = xs.map(x => …) @gpu` (or `@gpu xs.map(…)`) of a
+   Done for linear float arrays (src/lowering/foreign/gpu_maps.rs): `ys = xs.map(x => …) @gpu` (or `@gpu xs.map(…)`) of a
    lambda of + - * / ^ √ ‖‖ and the math words sin … atan2, min, max of the item and number literals becomes a WGSL
    kernel (whole powers up to 8 multiplied out: WGSL's pow of a negative base is NaN); shared_arrays.rs lowers it to
    `ys = linear_new(count(xs)); if gpu_map_linear(kernel, xs, ys, workgroups) == 0 { CPU loop }`. The host word gives

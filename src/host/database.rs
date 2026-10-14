@@ -1,4 +1,4 @@
-//! The tables of the program's registered classes (lowering/database_tables.rs, notes/orm.md) in SQLite, through the
+//! The tables of the program's registered classes (lowering/data/database_tables.rs, notes/orm.md) in SQLite, through the
 //! system's libsqlite3 (loaded like any FFI library, ffi/link.rs): `std_io("table", member, …)` answered natively.
 //! A connection per file and thread; inline code's tables (database_tables::TABLES_FILE) live in memory per thread.
 

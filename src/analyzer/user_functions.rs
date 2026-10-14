@@ -475,7 +475,7 @@ fn kind_tested(node: &Node) -> Option<&str> {
 	}
 }
 
-/// The names a foreign call takes as its receiver or arguments (lowering/foreign_modules.rs): values of any kind, as
+/// The names a foreign call takes as its receiver or arguments (lowering/foreign/foreign_modules.rs): values of any kind, as
 /// foreign code gives them (a warp function called back by JavaScript, card js-callbacks)
 fn given_to_foreign_code(node: &Node) -> impl Iterator<Item = &str> {
 	let given = match node {
