@@ -227,7 +227,11 @@ impl WarpParser {
 		} else {
 			op
 		};
-		(allowed && !selector_part && !style_word).then_some((op, spelling))
+		// a word operator stands before its operand, `use same;` names the module same; `then`, `else`, `do` may end a line
+		let operand_after_word = !spelling.ends_with(char::is_alphabetic)
+			|| matches!(op, Op::Then | Op::Else | Op::Do)
+			|| self.operand_follows(spelling.chars().count());
+		(allowed && operand_after_word && !selector_part && !style_word).then_some((op, spelling))
 	}
 
 	/// `unless`/`until` in front of a statement: the `if`/`while` it reads as, with the condition negated afterwards

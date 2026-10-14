@@ -83,6 +83,8 @@ fn xor_of_bools_is_a_bool() {
 fn word_spellings_stay_names() {
 	is!("def mod(a, b) := a - b; mod(7, 3)", 4);
 	is!("plus = 3; plus + 1", 4);
+	is!("minus = 5; minus", 5);
+	is!("same = 2; same", 2);
 }
 
 /// a negated spelling negates its operator: `x is not 4` is `not (x is 4)`, `a nand b` is `not (a and b)`; `3 is not 4`
