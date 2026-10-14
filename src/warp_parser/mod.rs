@@ -620,8 +620,6 @@ const FLOOR_DIVISION_ASSIGNMENT: &str = "//=";
 
 /// `a | b`: the logical or, or `b(a)` when b names a function (pipes.rs)
 const PIPE_GLYPH: &str = "|";
-/// `|>` binds below range and arithmetic, above `as` and comparisons
-
 /// `value |> f(args)` → `f(value, args)`, `value |> f` → `f(value)`; a braceless call is grouped, one argument:
 /// `square xs |> filter(p)` → `filter((square xs), p)`
 pub(crate) fn piped(value: Node, stage: Node) -> Node {

@@ -864,20 +864,34 @@ fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Option<Node>) -
 		(_, Some((start, end))) if op == Op::Hash => call(SLICE_WORD, vec![lhs, start, end]),
 		// membership `x in xs` is kept as the list [x in xs]: `if "Z" in v {…}`, `found = x in xs`, `xs contains x`
 		_ if op == Op::In => {
-			let word = if written.ends_with(IN_KEYWORD) { IN_KEYWORD } else { written };
-			Node::List(vec![lhs, Symbol(word.to_string()), rhs], Bracket::None, Separator::Space)
+			let word = if written.ends_with(IN_KEYWORD) {
+				IN_KEYWORD
+			} else {
+				written
+			};
+			Node::List(
+				vec![lhs, Symbol(word.to_string()), rhs],
+				Bracket::None,
+				Separator::Space,
+			)
 		}
 		_ if op == Op::Pipe => piped(lhs, rhs),
 		_ if matches!(op, Op::If | Op::While) => guarded_statement(lhs, op, written, rhs),
 		// Java's and Scala's `import math.*`: a glob, nothing after the `*`, is the module whole
 		_ if written == ".*" && matches!(rhs, Empty) => {
-			crate::normalize::hint(&format!("{}.*", lhs.serialize()), &lhs.serialize(), "warp imports a module whole");
+			crate::normalize::hint(
+				&format!("{}.*", lhs.serialize()),
+				&lhs.serialize(),
+				"warp imports a module whole",
+			);
 			lhs
 		}
 		// kept as written, lowering/broadcasting.rs lower_element_wise_operators gives it its meaning
-		_ if crate::operators::element_wise_operator(written).is_some() => {
-			Node::List(vec![lhs, Symbol(written.to_string()), rhs], Bracket::None, Separator::Space)
-		}
+		_ if crate::operators::element_wise_operator(written).is_some() => Node::List(
+			vec![lhs, Symbol(written.to_string()), rhs],
+			Bracket::None,
+			Separator::Space,
+		),
 		_ if FLOOR_DIVISION_SPELLINGS.contains(&written) => call(FLOOR_QUOTIENT, vec![lhs, rhs]),
 		_ if written == FLOOR_DIVISION_ASSIGNMENT => {
 			let quotient = call(FLOOR_QUOTIENT, vec![lhs.clone(), rhs]);
@@ -911,7 +925,11 @@ fn guarded_statement(statement: Node, guard: Op, word: &str, condition: Node) ->
 	};
 	match guard {
 		Op::While => while_do(condition, statement),
-		_ => Node::Key(Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(condition))), Op::Then, Box::new(statement)),
+		_ => Node::Key(
+			Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(condition))),
+			Op::Then,
+			Box::new(statement),
+		),
 	}
 }
 

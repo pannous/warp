@@ -210,7 +210,7 @@ impl WarpParser {
 			// `list<list<int>>` closes two generics, a shift has an operand behind it
 			">>" => !self.options.wit_mode && self.operand_follows(2),
 			"+-" => after.is_whitespace() && prev.is_whitespace(),
-			"/" => after != '/', // Don't treat // as division - it's a comment
+			"/" => after != '/',                      // Don't treat // as division - it's a comment
 			"//" | "//=" => self.at_floor_division(), // `x // note` stays a comment
 			// `div{…}` and `div {…}` are the html tag, and data never computes
 			"div" => !self.options.data_mode && !self.word_opens_block("div"),
