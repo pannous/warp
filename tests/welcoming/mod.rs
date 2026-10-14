@@ -10,6 +10,7 @@ mod test_closed_pipe;
 mod test_const_list_methods;
 mod test_constant_shadowing;
 mod test_count_shadowed; // card count-shadowed
+mod test_discarded_error_warning; // card error-if
 mod test_discarded_pure_warning;
 mod test_end_and_def_blocks; // cards std-module-swallowed, end-indented, def-indented
 mod test_english_operator_words;
