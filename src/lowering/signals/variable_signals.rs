@@ -13,7 +13,7 @@
 use super::listeners;
 use super::nodes::{block, children_rewritten, if_then, key, Counter};
 use crate::declarations::{handler_parts, word};
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{ONCE_WORD, ON_WORD, WHENEVER_WORD};
 use std::collections::{HashMap, HashSet};
@@ -694,7 +694,7 @@ pub(crate) fn subject_and_body(rest: &[Node]) -> Option<(Node, Node)> {
 fn without_empty_argument(call: &Node) -> Node {
 	match call.drop_meta() {
 		Node::List(items, _, _) if items.len() == 2 && is_nothing_or_empty_list(&items[1]) => {
-			Node::List(vec![items[0].clone()], Bracket::Round, Separator::None)
+			parens(vec![items[0].clone()])
 		}
 		_ => call.clone(),
 	}

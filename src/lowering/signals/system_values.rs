@@ -12,7 +12,7 @@
 //! Browser names (P188): `clipboard.read()` is `clipboard`, `clipboard.write(text)` the std word
 //! `std_io("clipboard", "write", [text])` (std_adapters.rs; host-files.js in a page).
 
-use super::nodes::{call, key};
+use super::nodes::{arguments_rewritten, call, key};
 use crate::declarations::word;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -193,15 +193,7 @@ fn mark(node: Node, names: &[(&str, bool)]) -> Node {
 fn method_arguments_marked(member: Node, names: &[(&str, bool)]) -> Node {
 	match member {
 		Node::List(items, bracket, separator) if items.len() > 1 => {
-			let mut items = items.into_iter();
-			let method = items.next().expect("a method name");
-			Node::List(
-				std::iter::once(method)
-					.chain(items.map(|argument| mark(argument, names)))
-					.collect(),
-				bracket,
-				separator,
-			)
+			arguments_rewritten(items, bracket, separator, |argument| mark(argument, names))
 		}
 		meta @ Node::Meta { .. } => meta.under_meta(|node| method_arguments_marked(node, names)),
 		field => field,

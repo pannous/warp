@@ -8,7 +8,7 @@
 
 use super::go_blocks::AWAIT_WORD;
 use super::nodes::{is_call_head, key};
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{FOR_WORD, IN_WORD, MAP_WORD};
 
@@ -62,15 +62,7 @@ pub(crate) fn kernel_map(list: &Node, function: &Node) -> Option<Node> {
 	if !matches!(list.drop_meta(), Node::Symbol(_)) {
 		return None;
 	}
-	let map = key(
-		list.clone(),
-		Op::Dot,
-		Node::List(
-			vec![symbol(MAP_WORD), function.clone()],
-			Bracket::Round,
-			Separator::None,
-		),
-	);
+	let map = key(list.clone(), Op::Dot, parens(vec![symbol(MAP_WORD), function.clone()]));
 	if crate::wasm_emitter::lists::linear_arrays::is_float_kernel(&parameter.name(), body) {
 		Some(map.with_attribute(SPLIT_ATTRIBUTE, Node::True))
 	} else {

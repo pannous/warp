@@ -526,8 +526,7 @@ impl<'a> Reader<'a> {
 
 	/// The root's public items by the name they have there: `use` re-exports followed, glob re-exports expanded
 	fn root_items(&self, module: &'a Value, items: &mut Vec<(String, &'a Value)>, seen: &mut HashSet<String>) {
-		for id in module["inner"]["module"]["items"].as_array().into_iter().flatten() {
-			let Some(item) = self.item(id) else { continue };
+		for item in self.items(&module["inner"]["module"]["items"]) {
 			if let Some(reexport) = item["inner"].get("use") {
 				let Some(target) = reexport.get("id").and_then(|id| self.item(id)) else {
 					continue;
@@ -870,17 +869,8 @@ impl<'a> Reader<'a> {
 
 	/// The public functions of a struct's inherent impls
 	fn methods(&self, name: &str, item: &Value) -> Vec<Function> {
-		let impls = item["inner"]["struct"]["impls"].as_array().into_iter().flatten();
-		let mut methods: Vec<Function> = impls
-			.filter_map(|id| self.item(id))
-			.filter(|implementation| implementation["inner"]["impl"]["trait"].is_null())
-			.flat_map(|implementation| {
-				implementation["inner"]["impl"]["items"]
-					.as_array()
-					.into_iter()
-					.flatten()
-			})
-			.filter_map(|id| self.item(id))
+		let mut methods: Vec<Function> = self
+			.inherent_items(item)
 			.filter(|method| method["visibility"] == "public")
 			.filter_map(|method| self.function(method["name"].as_str()?, method, Some(name)))
 			.collect();
@@ -905,13 +895,27 @@ impl<'a> Reader<'a> {
 		methods
 	}
 
+	/// The items a list of ids names
+	fn items(&self, ids: &'a Value) -> impl Iterator<Item = &'a Value> + '_ {
+		ids.as_array().into_iter().flatten().filter_map(|id| self.item(id))
+	}
+
+	/// The impl blocks of a struct
+	fn impls(&self, item: &'a Value) -> impl Iterator<Item = &'a Value> + '_ {
+		self.items(&item["inner"]["struct"]["impls"])
+	}
+
+	/// The items of a struct's inherent impls (those of no trait)
+	fn inherent_items(&self, item: &'a Value) -> impl Iterator<Item = &'a Value> + '_ {
+		let inherent = self
+			.impls(item)
+			.filter(|implementation| implementation["inner"]["impl"]["trait"].is_null());
+		inherent.flat_map(|implementation| self.items(&implementation["inner"]["impl"]["items"]))
+	}
+
 	/// The public fields of a struct whose values cross: each read by a method of its name (`v.major()`)
-	fn fields(&self, item: &Value, name: &str) -> Vec<(String, Conversion)> {
-		item["inner"]["struct"]["kind"]["plain"]["fields"]
-			.as_array()
-			.into_iter()
-			.flatten()
-			.filter_map(|id| self.item(id))
+	fn fields(&self, item: &'a Value, name: &str) -> Vec<(String, Conversion)> {
+		self.items(&item["inner"]["struct"]["kind"]["plain"]["fields"])
 			.filter(|field| field["visibility"] == "public")
 			.filter_map(|field| {
 				let result = self.result(field["inner"].get("struct_field")?, Some(name))?;
@@ -926,31 +930,16 @@ impl<'a> Reader<'a> {
 	}
 
 	fn implements(&self, item: &Value, trait_name: &str) -> bool {
-		item["inner"]["struct"]["impls"]
-			.as_array()
-			.into_iter()
-			.flatten()
-			.filter_map(|id| self.item(id))
-			.any(|implementation| {
-				implementation["inner"]["impl"]["trait"]["path"]
-					.as_str()
-					.is_some_and(|path| last_segment(path) == trait_name)
-			})
+		self.impls(item).any(|implementation| {
+			implementation["inner"]["impl"]["trait"]["path"]
+				.as_str()
+				.is_some_and(|path| last_segment(path) == trait_name)
+		})
 	}
 
 	/// Does a function of the struct make one (`new` returning `Self`, `Result<Self, E>`, `Option<Self>`)?
 	fn constructs(&self, item: &Value) -> bool {
-		let impls = item["inner"]["struct"]["impls"].as_array().into_iter().flatten();
-		impls
-			.filter_map(|id| self.item(id))
-			.filter(|implementation| implementation["inner"]["impl"]["trait"].is_null())
-			.flat_map(|implementation| {
-				implementation["inner"]["impl"]["items"]
-					.as_array()
-					.into_iter()
-					.flatten()
-			})
-			.filter_map(|id| self.item(id))
+		self.inherent_items(item)
 			.filter_map(|method| method["inner"].get("function"))
 			.any(|function| {
 				let output = &function["sig"]["output"];

@@ -126,9 +126,12 @@ layout-diagnostics; step 2 is pending. time.rs → time/mod.rs needed no path ch
 
 ### Per-function pass over the root files (card layout-root)
 
-One chain of branches, layout-main → layout-pipeline → layout-modules (tip 375e5f494, sent 2026-10-14). These are pure moves.
-Each root file or mod.rs re-exports its new children, so `crate::…` paths stay; users were updated only where few files
-use them (run_time_blocks, errors/run_time).
+One chain of branches, all pure moves: layout-main → layout-pipeline → layout-modules (5e83c8849) → layout-root-6 →
+layout-root-7, and layout-root-8 on main (sent 2026-10-14). Each root file or mod.rs re-exports its new children, so `crate::…` paths stay.
+Users were updated only where few files use them (run_time_blocks, errors/run_time).
+
+The rule (user 2026-10-14): split a file by concept, never for its length; ~500 lines is fine. type_kinds.rs was split
+and then reverted (5e83c8849): its entries are related enough for one file.
 
 | from | to |
 |---|---|
@@ -137,12 +140,13 @@ use them (run_time_blocks, errors/run_time).
 | modules.rs (1214 → 180) | modules/: use_statements, implicit_modules, needed_definitions, declarations, program_file; std/package/loader items to their files |
 | normalize.rs | normalize/: positions, style, hints, check_style, mod.rs (core hint functions) |
 | operators.rs | operators/: spellings, binding_power, codes, mod.rs (Op and its kinds) |
-| type_kinds.rs | type_kinds/: user_types, field_storage, mod.rs (Kind encoding) |
 | law.rs (504 → 383) | law/asserted.rs, law/property_tests.rs |
 | host.rs (365 → 281) | host/fetch.rs, host/aliases.rs; host.rs keeps the host word registry |
-
-Still to do: the big subfolder files (errors/diagnostic.rs, host/tasks.rs, modules/wasm_modules.rs,
-modules/cargo_crates.rs, analyzer/effects.rs).
+| modules/wasm_modules.rs | wasm_modules/: exports, c_calls, program_uses, linking (native) |
+| analyzer/effects.rs | effects/: termination (Div), constraints, events, queries, resolver; mod.rs keeps the effect sets and the report |
+| errors/diagnostic.rs | diagnostic/: positions (where, excerpts), asks (ambiguities, got it); mod.rs keeps reporting and pragmas |
+| host/tasks.rs | tasks/: values, channels, pool; mod.rs keeps the task table |
+| modules/cargo_crates.rs | cargo_crates/: rustdoc (reading the API), wrapper (WIT and Rust generation), compile (cargo build); mod.rs keeps download and cache (layout-root-8, on main after cleanup-roots) |
 
 ## Lowering (`src/lowering/`, 112 files): proposed folders
 

@@ -9,7 +9,7 @@
 use super::nodes::{call, key};
 use crate::database_tables::{stored_table, table_store};
 use crate::declarations::word;
-use crate::node::{symbol, text, Bracket, Node, Separator};
+use crate::node::{parens, symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::stored_values::DATABASE_WORD;
 use std::collections::HashSet;
@@ -773,11 +773,7 @@ fn asking_the_server(statements: Vec<Node>, servers: &[String]) -> Result<Vec<No
 		.collect();
 	let read = |node: Node| with_calls_read(node, &calls, &names);
 	let asking = |index: usize| {
-		let call = Node::List(
-			call_items(&calls[index]).into_iter().map(&read).collect(),
-			Bracket::Round,
-			Separator::None,
-		);
+		let call = parens(call_items(&calls[index]).into_iter().map(&read).collect());
 		let value = if prerendering {
 			call.clone()
 		} else {
@@ -1038,11 +1034,7 @@ fn rpc_route(definition: &Node) -> Option<Route> {
 	let (name, parameters) = defined_function(definition)?;
 	let arguments = (1..=parameters).map(|index| crate::warp_parser::parse(&format!("{REQUEST_WORD}.body#{index}")));
 	// built, not parsed: a generated name's `·` would parse as a product
-	let call = Node::List(
-		std::iter::once(Node::Symbol(name.clone())).chain(arguments).collect(),
-		Bracket::Round,
-		Separator::None,
-	);
+	let call = parens(std::iter::once(Node::Symbol(name.clone())).chain(arguments).collect());
 	Some((
 		RPC_METHOD.to_string(),
 		Node::Text(format!("{RPC_PREFIX}{name}")),

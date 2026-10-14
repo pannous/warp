@@ -6,7 +6,7 @@
 //! `class dog extends animal {…}` (P117) gives dog the fields and methods of animal, its own ones override them, and
 //! declares `dog like animal`, so a dog is accepted where an animal is wanted.
 
-use super::nodes::{call, grouped_parameters, if_then, is_place, key, Counter};
+use super::nodes::{arguments_rewritten, call, grouped_parameters, if_then, is_place, key, Counter};
 use crate::words::{GLOBAL_WORD, MAP_WORD, RETURN_WORD, SUM_WORD};
 mod components;
 use components::*;
@@ -25,7 +25,7 @@ pub use json::*;
 mod method_aliases;
 use method_aliases::*;
 mod statics;
-use crate::node::{leading_name, symbol, text, Bracket, Node, Separator};
+use crate::node::{leading_name, parens, symbol, text, Bracket, Node, Separator};
 use crate::operators::{operator_method, Op, OPERATOR_METHODS};
 use inheritance::*;
 pub(crate) use operators::is_library_method;
@@ -539,7 +539,7 @@ fn copies(node: Node) -> Node {
 								Node::Text(field),
 								value,
 							];
-							Node::List(call, Bracket::Round, Separator::None)
+							parens(call)
 						},
 					)
 				}
@@ -560,11 +560,7 @@ fn shared_method_traits(node: &Node) -> Vec<Node> {
 				let receiver = symbol(RECEIVER);
 				let requirement = match parameters.is_empty() {
 					true => Node::Symbol(name.clone()),
-					false => Node::List(
-						[vec![Node::Symbol(name.clone()), receiver], parameters].concat(),
-						Bracket::Round,
-						Separator::None,
-					),
+					false => parens([vec![Node::Symbol(name.clone()), receiver], parameters].concat()),
 				};
 				methods.push((name, requirement));
 			}
@@ -627,13 +623,11 @@ fn method_calls(node: Node, called: &[String], changing: &Changing, calls: &Coun
 	if !called.contains(&name) && !changing.contains(&name) {
 		return key(receiver, Op::Dot, recurse(*member));
 	}
-	let call = Node::List(
+	let call = parens(
 		[Node::Symbol(name.clone()), receiver.clone()]
 			.into_iter()
 			.chain(arguments)
 			.collect(),
-		Bracket::Round,
-		Separator::None,
 	);
 	let item = |pair: Node, position: i64| key(pair, Op::Hash, Node::int(position));
 	match receiver.drop_meta() {
@@ -876,11 +870,7 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 		}
 	};
 	let receiver = key(symbol(RECEIVER), Op::Colon, symbol(class));
-	let head = Node::List(
-		[vec![symbol(method), receiver], parameters].concat(),
-		Bracket::Round,
-		Separator::None,
-	);
+	let head = parens([vec![symbol(method), receiver], parameters].concat());
 	(key(head, Op::Define, body), changes)
 }
 
@@ -950,15 +940,9 @@ fn receiver_reads(node: Node, readable: &Readable) -> Node {
 		Node::Symbol(name) if readable.fields.contains(&&name) => on_receiver(Node::Symbol(name)),
 		Node::Symbol(name) if RECEIVER_ALIASES.contains(&name.as_str()) => symbol(RECEIVER),
 		Node::List(items, Bracket::Round, separator) if is_call_of(&items, &readable.methods) => {
-			let arguments = items[1..]
-				.iter()
-				.cloned()
-				.map(|argument| receiver_reads(argument, readable));
-			on_receiver(Node::List(
-				std::iter::once(items[0].clone()).chain(arguments).collect(),
-				Bracket::Round,
-				separator,
-			))
+			on_receiver(arguments_rewritten(items, Bracket::Round, separator, |argument| {
+				receiver_reads(argument, readable)
+			}))
 		}
 		Node::Key(object, Op::Dot, member) => Node::Key(Box::new(receiver_reads(*object, readable)), Op::Dot, member),
 		other => other.map_children(|child| receiver_reads(child, readable)),

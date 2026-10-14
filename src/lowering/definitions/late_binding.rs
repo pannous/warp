@@ -454,7 +454,7 @@ fn note_charging(
 fn can_fail(body: &Node) -> bool {
 	let mut fails = false;
 	body.visit(&mut |part| {
-		fails |= crate::pipeline::returned_error_message(part).is_some()
+		fails |= crate::errors::run_time::returned_error_message(part).is_some()
 			|| matches!(part, Node::Key(_, Op::Div | Op::Mod | Op::Rem, divisor)
 				if !matches!(divisor.drop_meta(), Node::Number(number) if !number.zero()))
 	});

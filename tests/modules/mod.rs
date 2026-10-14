@@ -23,6 +23,8 @@ mod test_module_signals;
 mod test_netbase_package;
 mod test_package_hints; // card hints-fire
 mod test_package_pin;
+#[cfg(feature = "native")] // files beside the program: not in the browser build
+mod test_package_shadow; // card sample-local
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_package_tools;
 mod test_packages;

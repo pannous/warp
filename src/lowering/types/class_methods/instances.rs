@@ -1,5 +1,6 @@
 //! Instances: `object as Point` and its checked cast, and which variables and functions hold an instance of which class
 use super::*;
+use crate::node::parens;
 
 pub(super) fn with_objects_as_instances(node: Node, fields: &ClassFields) -> Node {
 	let class_of = |node: &Node| Some(node.drop_meta().name()).filter(|name| fields.contains_key(name));
@@ -97,11 +98,7 @@ pub(super) fn instance_of(path: &Node, class: &str, fields: &ClassFields, lists:
 			(false, None) => value,
 		});
 	}
-	Node::List(
-		std::iter::once(symbol(class)).chain(values).collect(),
-		Bracket::Round,
-		Separator::None,
-	)
+	parens(std::iter::once(symbol(class)).chain(values).collect())
 }
 
 /// `list.map(Point·element => Point(Point·element.x, …))`
