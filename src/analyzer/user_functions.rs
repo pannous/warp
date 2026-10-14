@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::lowering::nodes::children_rewritten;
+use crate::words::ANY_TYPE;
 
 mod definitions;
 pub(crate) use definitions::*;
@@ -297,7 +298,7 @@ pub(super) fn with_usage_kinds(params: Vec<Param>, body: &Node) -> Vec<Param> {
 			// `if x is list then … else x`: a parameter tested for its kind takes any value, as if written `x:any` (card recursive-sum)
 			let takes_any = tested.contains(&param.name) && param.annotation.is_none() && param.default.is_none();
 			let annotation = if takes_any {
-				Some(Node::Symbol(crate::type_kinds::UNTYPED_FIELD.to_string()))
+				Some(Node::Symbol(ANY_TYPE.to_string()))
 			} else {
 				param.annotation
 			};
@@ -1130,7 +1131,7 @@ fn type_parameters_by_arguments(ctx: &mut Context, argument_kinds: HashMap<(Stri
 			[Kind::Int] => {}
 			[kind] => param.used_as = Some(*kind),
 			// called with several kinds, it takes any value, as if written `x:any` (P173: silently, no annotation asked)
-			[_, _, ..] => param.annotation = Some(Node::Symbol(crate::type_kinds::UNTYPED_FIELD.to_string())),
+			[_, _, ..] => param.annotation = Some(Node::Symbol(ANY_TYPE.to_string())),
 			[] => {}
 		}
 	}

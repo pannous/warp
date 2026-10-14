@@ -1,5 +1,6 @@
 //! Declared types: annotations must name known types (inline unions too), and every value given to a declared variable, parameter or list must fit
 use super::*;
+use crate::words::{ANY_TYPE, LIST_WORD, NUMBER_WORD, OF_WORD};
 
 /// A parameter annotation must name a builtin or a user-defined type, `x:flaot` is a typo
 pub(in crate::analyzer) fn check_parameter_annotations(program: &Node) -> Option<Diagnostic> {
@@ -51,7 +52,7 @@ impl KnownTypes {
 
 	pub(super) fn is_known_name(&self, name: &str) -> bool {
 		type_word_kind(name).is_some()
-			|| name == crate::type_kinds::UNTYPED_FIELD
+			|| name == ANY_TYPE
 			|| crate::lowering::declarations::is_collection_type_word(name)
 			|| self.user_types.get_by_name(name).is_some()
 			|| self.traits.is_trait(name)

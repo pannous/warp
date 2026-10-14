@@ -17,6 +17,7 @@ use crate::operators::Op;
 use crate::signal_values::listeners_subject;
 use crate::variable_signals::{assign, symbols};
 use crate::warp_parser::parse;
+use crate::words::ERROR_WORD;
 use crate::words::{COUNT_WORD, FROM_WORD, ONCE_WORD, ON_WORD};
 use crate::words::{EMIT_ALIASES, EMIT_WORDS};
 use std::collections::{HashMap, HashSet};
@@ -27,8 +28,6 @@ const FIRED_PREFIX: &str = "once_fired_";
 /// `h_listening`: whether the named handler h still listens (plain words: `global h_listening` is parsed)
 const LISTENING_SUFFIX: &str = "_listening";
 const REMOVE_WORD: &str = "remove";
-/// `on error of f {…}` catches the errors of f's calls
-const ERROR_WORD: &str = "error";
 const CLEAR_WORD: &str = "clear";
 /// `alarm_handler_3`: the flag name of an unnamed handler of a cleared event
 const HANDLER_SUFFIX: &str = "_handler_";

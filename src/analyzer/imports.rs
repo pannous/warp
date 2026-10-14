@@ -1,6 +1,7 @@
 //! What a program needs: required runtime functions, FFI and host-word imports
 
 use super::*;
+use crate::words::{NUMBER_WORD, REAL_WORD};
 
 /// Analyze node tree for non-default required functions.
 /// Default functions (new_empty, new_int, new_float, new_text, new_symbol, new_codepoint, new_key, new_list)

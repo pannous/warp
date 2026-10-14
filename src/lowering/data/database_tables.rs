@@ -12,6 +12,7 @@ use crate::numbers::units::static_units::si_quantity;
 use crate::operators::Op;
 use crate::stored_values::DATABASE_WORD;
 use crate::warp_parser::parse;
+use crate::words::ADD_WORD;
 use crate::words::{FOR_WORD, GLOBAL_WORD, IN_WORD};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -26,7 +27,6 @@ use row_writes::*;
 pub const TABLES_FILE: &str = "database.sqlite";
 /// The row id every registered class gets, unless it declares one
 const ID_FIELD: &str = "id";
-const ADD_WORD: &str = "add";
 /// `first 3 of people`, `people.last(2)`: a slice at either end of a table
 const END_WORDS: [&str; 2] = ["first", "last"];
 const REMOVE_WORD: &str = "remove";

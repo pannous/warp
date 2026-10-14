@@ -12,33 +12,24 @@ use crate::analyzer::{plural_element_type, type_word_kind};
 use crate::library_words::collect_assigned_names;
 use crate::node::{text, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::words::IS_TYPE;
-use crate::words::OF_WORD;
+use crate::words::{
+	ERROR_WORD, FLOAT_WORD, IS_TYPE, LIST_WORD, MAP_WORD, NUMBER_WORD, OF_WORD, PAIR_WORD, REAL_WORD, SYMBOL_WORD,
+	TEXT_WORD,
+};
 use std::collections::HashSet;
 
 /// `node_kind_in(node, mask)`: 1 when the run-time kind of node is in the bit mask of kinds (wasm_emitter list_ops.rs)
 pub const NODE_KIND_IN: &str = "node_kind_in";
 /// `node_type_name(node)`: `type(x)` of a value of unknown static type, its run-time type as a symbol (list_ops.rs)
 pub const NODE_TYPE_NAME: &str = "node_type_name";
-/// `x is error`: any value may turn out an Error at run time, so this test always reads the kind (card catch-message)
-pub const ERROR_TYPE: &str = "error";
 /// The type of ø, as type(ø) names it; unit, nil … are its aliases (canonical_spec_word)
 pub const EMPTY_TYPE: &str = "empty";
 const ARTICLES: [&str; 2] = ["a", "an"];
-const NUMBER_WORD: &str = "number";
-const FLOAT_WORD: &str = "float";
-const REAL_WORD: &str = "real";
-const TEXT_WORD: &str = "text";
 /// `String(x)`, `x as String`: the class spelling of text, a cast word only, so `String` stays free as a type value
 const TEXT_CLASS_WORD: &str = "String";
-pub(crate) const LIST_WORD: &str = "list";
-const MAP_WORD: &str = crate::analyzer::MAP_TYPE;
 /// The collection types: `x is list`, `x is map`, and of their element type: `x is list of int`, `x is map of text`
 pub(crate) const COLLECTION_WORDS: [&str; 2] = [LIST_WORD, MAP_WORD];
-/// `x is pair`: a `key: value` pair
-const PAIR_WORD: &str = "pair";
 pub const TYPE_WORD: &str = "type";
-pub const SYMBOL_TYPE: &str = "symbol";
 /// A built-in type: its name, the other words naming it, the types it covers (`is` tests the subtype, `==` the type
 /// itself), the kind a declared value of it is held as (`x: real = 1.5` an exact Int, `x: number` a Float; none for a
 /// type no declaration converts to) and the bits of its run-time kinds (node_kind_in, none for a type only the static
@@ -130,7 +121,7 @@ const BUILTIN_TYPES: [BuiltinType; 15] = [
 		&[crate::type_kinds::BOOL_MASK_BIT],
 	),
 	builtin("function", &["closure"], &[], Some(K::Function), &[]),
-	builtin(SYMBOL_TYPE, &[], &[], None, &[K::Symbol as i64]),
+	builtin(SYMBOL_WORD, &[], &[], None, &[K::Symbol as i64]),
 	builtin("key", &[PAIR_WORD], &[], None, &[K::Key as i64]),
 	builtin(
 		EMPTY_TYPE,
@@ -139,7 +130,7 @@ const BUILTIN_TYPES: [BuiltinType; 15] = [
 		None,
 		&[K::Empty as i64],
 	),
-	builtin(ERROR_TYPE, &[], &[], None, &[K::Error as i64]),
+	builtin(ERROR_WORD, &[], &[], None, &[K::Error as i64]),
 	builtin(
 		LIST_WORD,
 		&[],

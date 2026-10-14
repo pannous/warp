@@ -1,6 +1,8 @@
 //! Conditions: if/while heads, statement modifiers `x++ while c`, condition words `x empty`
 
 use super::*;
+use crate::words::COUNT_WORD;
+use crate::words::IS_ERROR_WORD;
 
 /// A control word behind a statement: `x++ while c`, `a = 2 if c`, `i++ until c`, `a = 2 unless c`
 pub(crate) fn guarded_statement(statement: Node, guard: Op, word: &str, condition: Node) -> Node {
@@ -95,10 +97,10 @@ impl WarpParser {
 		}
 		self.advance_by(end);
 		if *word == FAILED_WORD {
-			return Some(call(IS_ERROR_CALL, vec![lhs.clone()]));
+			return Some(call(IS_ERROR_WORD, vec![lhs.clone()]));
 		}
 		if after_is && *word == EMPTY_WORD {
-			let counted = call(COUNT_CALL, vec![lhs.clone()]);
+			let counted = call(COUNT_WORD, vec![lhs.clone()]);
 			return Some(Node::Key(Box::new(counted), Op::Eq, Box::new(Node::int(0))));
 		}
 		Some(Node::Key(Box::new(Empty), Op::Not, Box::new(lhs.clone())))

@@ -192,9 +192,9 @@ fn list_type_spelling(list_style: ListTypeStyle, element_words: &[&str]) -> Opti
 				.iter()
 				.rev()
 				.fold(last.to_string(), |inner, word| format!("{word}<{inner}>"));
-			Some(format!("{LIST_TYPE_HEAD}<{arguments}>"))
+			Some(format!("{LIST_WORD}<{arguments}>"))
 		}
-		(ListTypeStyle::Of, words) => Some(format!("{LIST_TYPE_HEAD} {OF_WORD} {}", words.join(" of "))),
+		(ListTypeStyle::Of, words) => Some(format!("{LIST_WORD} {OF_WORD} {}", words.join(" of "))),
 		(ListTypeStyle::Bracket, words) => {
 			let (last, nested) = words.split_last()?;
 			Some(

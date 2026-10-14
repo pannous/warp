@@ -2,12 +2,11 @@
 
 use super::*;
 use crate::lowering::nodes::children_rewritten;
+use crate::words::{ANY_TYPE, FLOAT_WORD, LET_WORD, MAP_WORD};
 use std::collections::HashSet;
 
 /// `var x = 1` announces a reassignable variable, plain `x = 1`
 pub(crate) const VAR_KEYWORD: &str = "var";
-/// `let x = 1` binds x once: any change of it is an error naming `var` (user, card let-reassign; check_constants)
-pub(crate) const IMMUTABLE_LET: &str = "let";
 
 /// Collect variables defined in node and populate scope
 /// Returns count of temp locals needed (e.g., for while loops)
@@ -286,7 +285,7 @@ fn type_map_by_first_entry(name: &str, value: &Node, scope: &mut Scope) {
 		.own_binding_mut(name)
 		.filter(|local| local.kind == Kind::Empty && local.type_node.is_none() && !local.is_param)
 	{
-		local.type_node = Some(Box::new(Node::Symbol(super::checks::MAP_TYPE.to_string())));
+		local.type_node = Some(Box::new(Node::Symbol(MAP_WORD.to_string())));
 	}
 }
 
@@ -461,7 +460,7 @@ pub(super) fn declared_kind(type_node: &Node) -> Option<Kind> {
 		Some(_) => Some(Kind::Empty),
 		None if super::annotations::names_empty_type(type_node) => Some(Kind::Empty),
 		// `y: any`: any value, held as a Node, never the kind of the first value given (card yes-stores)
-		None if type_name == crate::type_kinds::UNTYPED_FIELD => Some(Kind::Empty),
+		None if type_name == ANY_TYPE => Some(Kind::Empty),
 		// an inline union `int or text` holds a value of either kind as a Node
 		None if super::checks::union_parts(type_name).is_some() => Some(Kind::Empty),
 		// `number` keeps whatever number it is given, an exact 1/3 or a float (card number-keeps-exact)
@@ -931,5 +930,5 @@ pub(crate) fn is_declaration_keyword(node: &Node) -> bool {
 
 /// `var`, `let`, `const`, `val` …: a word declaring the name after it
 pub(crate) fn is_declaration_word(word: &str) -> bool {
-	CONSTANT_KEYWORDS.contains(&word) || word == VAR_KEYWORD || word == IMMUTABLE_LET
+	CONSTANT_KEYWORDS.contains(&word) || word == VAR_KEYWORD || word == LET_WORD
 }

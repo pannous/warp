@@ -14,8 +14,16 @@ use crate::node::{parens, symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{parse, ASSERT_MARKER, TRY_MARKER};
 use crate::wasm_emitter::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
-use crate::words::SUM_WORD;
-use crate::words::{CODEPOINT, MAP_KEYS, SLICE};
+use crate::words::COPY_WORD;
+use crate::words::COUNT_WORD;
+use crate::words::FLOAT_WORD;
+use crate::words::FOR_WORD;
+use crate::words::IN_WORD;
+use crate::words::LIST_WORD;
+use crate::words::LOG_WORD;
+use crate::words::ORD_WORD;
+use crate::words::SPLIT_WORD;
+use crate::words::{CODEPOINT, MAP_KEYS, RAISE_WORD, SLICE, SUM_WORD};
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
@@ -52,10 +60,6 @@ pub const MAP_WORD_FUNCTIONS: [&str; 8] = [
 	MAP_WITHOUT,
 	crate::one_entry_maps::MAP_OF_ENTRY,
 ];
-const IN_WORD: &str = "in";
-/// `count x in y` (count_in): the occurrences of an item or a character, or of a substring in a text
-const COUNT_WORD: &str = "count";
-const FLOAT_WORD: &str = "float";
 /// The name `catch e` binds, in lower_try_binding's template
 const CAUGHT_BINDING_PLACEHOLDER: &str = "caught_binding";
 /// The got-it topic of `square 3 + square(4)` (ask_braceless_argument)
@@ -64,9 +68,6 @@ const COUNT_HAYSTACK: &str = "counted_haystack";
 const COUNT_NEEDLE: &str = "counted_needle";
 const COUNT_ITEM_TEMPLATE: &str = "count(filter(counted_haystack, counted_item => counted_item == counted_needle))";
 const COUNT_SUBSTRING_TEMPLATE: &str = "count(split(counted_haystack, counted_needle)) - 1";
-const FOR_WORD: &str = "for";
-/// `log(x)` is libm's natural logarithm; `log(x, base)` divides by the base's
-const LOG_WORD: &str = "log";
 
 /// Canonical word and the spellings that mean it
 const SYNONYMS: [(&str, &[&str]); 31] = [
@@ -92,9 +93,9 @@ const SYNONYMS: [(&str, &[&str]); 31] = [
 	("first", &[]),
 	("last", &[]),
 	(SLICE, &[]),
-	(COPY, &["clone"]),
+	(COPY_WORD, &["clone"]),
 	("replace", &[]),
-	(ORD, &["ordinal", CODEPOINT]),
+	(ORD_WORD, &["ordinal", CODEPOINT]),
 	(IS_DIGIT, &["isdigit"]),
 	("mean", &["average"]),
 	(IS_ALPHA, &["is_letter", "isalpha"]),
@@ -113,7 +114,7 @@ pub const LIST_SUM: &str = "list_sum";
 /// Words the emitter implements as runtime functions, with the number of arguments including the receiver
 pub const RUNTIME_WORDS: [(&str, usize); 20] = [
 	(crate::wasm_emitter::host::wasi_emitter::WASI_ENVIRONMENT, 0),
-	(ORD, 1),
+	(ORD_WORD, 1),
 	("upper", 1),
 	("lower", 1),
 	("reverse", 1),
@@ -133,24 +134,18 @@ pub const RUNTIME_WORDS: [(&str, usize); 20] = [
 	(INSTANCE_COPY, 2),
 	(crate::one_entry_maps::MAP_OF_ENTRY, 1),
 ];
-/// `codepoint(c)`, `ord(c)`, `ordinal(c)`: the code point of a character (`c as int` is only its digit). Inside the
-/// compiler it is `ord`, since `codepoint` is also a type word
-pub const ORD: &str = "ord";
 /// Trailing arguments a word may leave out, passed as ø: `m.get(k)` is ø for a missing key, `s.slice(2)` slices to the end;
 /// `s.split` splits at spaces (left_out_argument)
-const OPTIONAL_ARGUMENTS: [(&str, usize); 3] = [(MAP_GET_OR, 1), (SLICE, 1), (SPLIT, 1)];
-const SPLIT: &str = "split";
+const OPTIONAL_ARGUMENTS: [(&str, usize); 3] = [(MAP_GET_OR, 1), (SLICE, 1), (SPLIT_WORD, 1)];
 const SPLIT_SEPARATOR: &str = " ";
 /// What an optional argument left out is: the space `s.split` splits at, else ø
 fn left_out_argument(word: &str) -> Node {
 	match word {
-		SPLIT => text(SPLIT_SEPARATOR),
+		SPLIT_WORD => text(SPLIT_SEPARATOR),
 		_ => Node::Empty,
 	}
 }
 
-/// `b = a.copy()`: values are never shared, so the copy is the value itself
-const COPY: &str = "copy";
 /// `field_with(object, "name", value)`: a copy of the object with the field set; what `object.name = value` lowers to
 pub const FIELD_WITH: &str = "field_with";
 /// instance_copy(x): a new instance with x's field values (`p.copy()`, Kotlin's `p.copy(y = 5)`); any other value is x
@@ -190,7 +185,6 @@ const EXPANDED_WORDS: [(&str, usize, &str); 3] = [
 	),
 ];
 const IS_DIGIT: &str = "is_digit";
-const LIST_WORD: &str = "list";
 const DICT_WORD: &str = "dict";
 /// lib/prelude.warp's fromkeys(ks, value), also called on the class as Python's `dict.fromkeys(ks, value)`
 const FROMKEYS: &str = "fromkeys";
@@ -405,7 +399,7 @@ fn raise_call(items: &[Node], shadowed: &HashSet<String>) -> Option<Node> {
 		Node::Text(_) | Node::Symbol(_) => message,
 		_ => call(crate::wasm_emitter::text::text_builtins::TEXT_FORM, vec![message]),
 	};
-	Some(call(crate::wasm_emitter::text::text_builtins::RAISE, vec![message]))
+	Some(call(RAISE_WORD, vec![message]))
 }
 
 /// The field and step of `x++` / `x--` after a dot
@@ -1010,7 +1004,8 @@ impl Lowering {
 			arguments.resize(wanted, left_out_argument(word));
 		}
 		// objects are references (P200): `x.copy()` is a new deep copy, `x.copy(shallow: true)` a shallow one (P205)
-		if let (COPY, [receiver], shallow) | (COPY, [receiver, shallow], _) = (word, arguments.as_slice(), &Node::False)
+		if let (COPY_WORD, [receiver], shallow) | (COPY_WORD, [receiver, shallow], _) =
+			(word, arguments.as_slice(), &Node::False)
 		{
 			return copy_call(receiver.clone(), shallow_flag(shallow));
 		}

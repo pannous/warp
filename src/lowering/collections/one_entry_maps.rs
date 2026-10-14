@@ -8,6 +8,7 @@ use super::memoization::definition_parts;
 use super::nodes::{call, is_colon_pair, key};
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
+use crate::words::MAP_WORD;
 use std::collections::{HashMap, HashSet};
 
 /// `map_of_entry(x)`: the lone entry x as the map of it, any other value itself (wasm_emitter list_ops.rs)
@@ -45,7 +46,7 @@ type Functions = HashMap<String, Vec<bool>>;
 
 fn takes_map(parameter: &Node) -> bool {
 	match parameter.drop_meta() {
-		Node::Key(_, Op::Colon, type_name) => type_name.drop_meta().name().starts_with(crate::analyzer::MAP_TYPE),
+		Node::Key(_, Op::Colon, type_name) => type_name.drop_meta().name().starts_with(MAP_WORD),
 		_ => true,
 	}
 }

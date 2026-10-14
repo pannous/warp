@@ -1,6 +1,7 @@
 //! Class bodies as their members: fields as Java, C#, Go and Python write them, properties and accessors, constructors as `init`, methods with their result types
 use super::*;
 use crate::node::parens;
+use crate::words::SELF_WORD;
 
 /// The fields and methods of a class body; the groups a `;` makes (`{name age:int; greet() := …}`) flattened
 pub(super) fn class_items(body: &Node) -> Vec<Node> {
@@ -130,8 +131,8 @@ pub(super) fn accessors(words: &[Node]) -> Option<Vec<Node>> {
 		{
 			let name = name.drop_meta().name();
 			// `it` is the new value; named apart, so no pass reads the block as a lambda of `it`
-			let new_value = Node::Symbol(format!("{}{SETTER_SUFFIX}", crate::warp_parser::IT_WORD));
-			let setter = renamed_symbol(setter.as_ref().clone(), crate::warp_parser::IT_WORD, &new_value);
+			let new_value = Node::Symbol(format!("{}{SETTER_SUFFIX}", crate::words::IMPLICIT_PARAMETER));
+			let setter = renamed_symbol(setter.as_ref().clone(), crate::words::IMPLICIT_PARAMETER, &new_value);
 			Some(vec![
 				method(&name, vec![], getter),
 				method(&format!("{name}{SETTER_SUFFIX}"), vec![new_value], &setter),
@@ -549,9 +550,9 @@ pub(super) fn as_member(definition: Node) -> Node {
 	let parameters: Vec<Node> = parameters.iter().flat_map(grouped_parameters).collect();
 	// `self`, `self: Self`, Rust's `&self`
 	let is_self = |parameter: &Node| match parameter.drop_meta() {
-		Node::Symbol(word) => word == RECEIVER,
-		Node::Key(word, Op::Colon, _) => word.drop_meta().name() == RECEIVER,
-		Node::Key(empty, _, word) => empty.is_empty_node() && word.drop_meta().name() == RECEIVER,
+		Node::Symbol(word) => word == SELF_WORD,
+		Node::Key(word, Op::Colon, _) => word.drop_meta().name() == SELF_WORD,
+		Node::Key(empty, _, word) => empty.is_empty_node() && word.drop_meta().name() == SELF_WORD,
 		_ => false,
 	};
 	let parameters = match parameters.first() {
@@ -645,7 +646,7 @@ pub(super) fn collect_fields_set(node: &Node, parameters: &[String], names: &mut
 				Node::Symbol(name) if !parameters.contains(name) => Some(name.clone()),
 				Node::Key(receiver, Op::Dot, field)
 					if RECEIVER_ALIASES.contains(&receiver.drop_meta().name().as_str())
-						|| receiver.drop_meta().name() == RECEIVER =>
+						|| receiver.drop_meta().name() == SELF_WORD =>
 				{
 					Some(field.drop_meta().name())
 				}

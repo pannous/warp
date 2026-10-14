@@ -12,6 +12,8 @@ use crate::declarations::word;
 use crate::node::{parens, symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::stored_values::DATABASE_WORD;
+use crate::words::GLOBAL_WORD;
+use crate::words::IMPLICIT_PARAMETER;
 use std::collections::HashSet;
 
 const SERVE_WORD: &str = "serve";
@@ -62,7 +64,6 @@ const WAGI_HEADER: &str = "wagi_header";
 
 /// with_default_routes: the page of a hosted program's value, and what a function's `it` is called in its route
 const PAGE_ROUTE: &str = "/";
-const IMPLICIT_PARAMETER: &str = "it";
 const ROUTE_ARGUMENT: &str = "value";
 const USE_WORD: &str = "use";
 
@@ -552,7 +553,7 @@ fn reading_tables(body: Node, tables: &[(String, Node)]) -> Node {
 
 /// `global name`
 fn global(name: &str) -> Node {
-	crate::warp_parser::parse(&format!("{} {name}", crate::late_binding::GLOBAL))
+	crate::warp_parser::parse(&format!("{} {name}", GLOBAL_WORD))
 }
 
 /// The block with these statements first; a one-line block of words, `{ last 2 of users }`, is one statement

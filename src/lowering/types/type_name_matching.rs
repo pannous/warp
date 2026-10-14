@@ -7,15 +7,13 @@ use super::nodes::{is_return, typed};
 use crate::analyzer::type_word_kind;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::{ANY_TYPE, ERROR_WORD, IMPLICIT_PARAMETER};
 
 const ARTICLES: [&str; 3] = ["a", "an", "the"];
 /// The words that separate a phrase's slots; `each` too: `to hum notes each d: …` is called `hum [C4 E4] each 50ms`
 pub(crate) const PREPOSITIONS: [&str; 11] = [
 	"to", "of", "from", "with", "in", "into", "at", "by", "for", "on", "each",
 ];
-const IT: &str = "it";
-/// The word that makes an error value, `error "e"`
-const ERROR_WORD: &str = "error";
 /// Statement words before a typed declaration that never name a function: `global number = 3`, `let int x = 1`
 const STATEMENT_WORDS: [&str; 17] = [
 	"global", "let", "var", "export", "mutable", "mut", "return", "yield", "print", "println", "puts", "not", "if",
@@ -102,7 +100,7 @@ pub fn parameter_slots(
 	if let [Node::Key(name, Op::Colon, type_name)] = parameters.as_slice() {
 		// `fibonacci number := … number … it …` uses both: the parameter keeps its name and `it` is the same value
 		if name == type_name && crate::analyzer::uses_it(&body) && !body.mentions(&name.name()) {
-			parameters = vec![typed(IT, &type_name.name())];
+			parameters = vec![typed(IMPLICIT_PARAMETER, &type_name.name())];
 		}
 	}
 	Ok((parameters, body))
@@ -296,7 +294,7 @@ fn return_typed_definition(node: &Node) -> Option<Node> {
 		}
 	};
 	// `f(w) as any := …`: a value of any kind converts to nothing (card def); `y: any = yes` stays a declaration
-	if type_name.is_symbol(crate::type_kinds::UNTYPED_FIELD) && is_call_head(&head) {
+	if type_name.is_symbol(ANY_TYPE) && is_call_head(&head) {
 		return Some(Node::Key(Box::new(head), *op, body.clone()));
 	}
 	typed_return(&type_name, &Node::Key(Box::new(head), *op, body.clone()))

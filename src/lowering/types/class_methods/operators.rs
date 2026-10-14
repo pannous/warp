@@ -2,6 +2,7 @@
 //! functions specialized by the classes of their arguments
 use super::*;
 use crate::lowering::nodes::method_call;
+use crate::words::STR_WORD;
 
 /// `a + b` of an instance a whose class defines the operator's method (`plus`, Python's `__add__`, wiki/operator.md):
 /// the method call `a.plus(b)`; an operation of such calls is an instance of the same class (`a + b + c`)
@@ -621,7 +622,7 @@ pub(super) fn is_plain_text(node: &Node) -> bool {
 /// An operand joining a text: a run-time quantity as `str(q)`
 pub(super) fn joined_text(operand: Node, class: Option<String>) -> Node {
 	match class.as_deref() == Some(crate::numbers::units::RUN_TIME_QUANTITY) {
-		true => call(TEXT_WORD, vec![operand]),
+		true => call(STR_WORD, vec![operand]),
 		false => operand,
 	}
 }

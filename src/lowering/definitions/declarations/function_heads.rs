@@ -1,6 +1,7 @@
 //! Function heads: result types (`-> int`, `as int or text`, curried, function and tuple results), parameter labels and types, Ruby's `end` and bodiless definitions
 use super::*;
 use crate::node::parens;
+use crate::words::ANY_TYPE;
 
 /// `f(x) -> int { body }`, `f(x): int { body }` (Rust/Swift/Python, TypeScript/Kotlin) and `f(x) -> int: body`
 /// (Python): the definition `(f(x) { body })` without its result type, and the type
@@ -36,7 +37,7 @@ pub(crate) fn typed_result(definition: &Node) -> Option<(Node, Node)> {
 
 /// A built-in type, or `any`: a Node of whatever kind the paths return (`def f(w) as any`, card def)
 fn is_result_type(result_type: &Node) -> bool {
-	is_kinded_type_word(result_type) || result_type.is_symbol(crate::type_kinds::UNTYPED_FIELD)
+	is_kinded_type_word(result_type) || result_type.is_symbol(ANY_TYPE)
 }
 
 /// `f(x) as int or text` parses as `(f(x) as int) or text`: the head and its result type `int or text`, which `as`

@@ -17,6 +17,7 @@ use crate::list_mutations::insert_position;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
+use crate::words::{FLOAT_WORD, NUMBER_WORD};
 use std::collections::HashMap;
 
 const ITEM_PLACEHOLDER: &str = "checked_item_placeholder";
@@ -25,9 +26,6 @@ const INSTANCE_PLACEHOLDER: &str = "checked_instance_placeholder";
 const CHECK_PLACEHOLDER: &str = "item_check_placeholder";
 /// The temporaries holding an item or a list while it is checked: `checked·1`
 const CHECKED_PREFIX: &str = "checked·";
-/// A float or number list takes ints too, as a declared float does
-const NUMBER_WORD: &str = "number";
-const FLOAT_WORD: &str = "float";
 
 pub fn lower(node: Node) -> Node {
 	let class_fields = crate::class_methods::class_fields(&node);

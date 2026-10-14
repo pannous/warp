@@ -6,6 +6,7 @@
 //! inherited fields first; of a map literal's variable they are its keys, read at run time (`m.keys`).
 
 use super::nodes::{call, key};
+use crate::words::{DIR_WORD, MAP_WORD};
 use std::collections::{HashMap, HashSet};
 
 use crate::class_methods::ClassLayout;
@@ -22,7 +23,6 @@ const FIELDS_WORDS: [&str; 3] = ["fields", "attributes", "members"];
 const METHODS_WORD: &str = "methods";
 /// A class's definition as written, in its warp.meta entry: a program importing the module declares the class too
 pub const DEFINITION_WORD: &str = "definition";
-const DIR_WORD: &str = "dir";
 /// `help(x)`: a class's, an instance's or a function's description as text (card help-help)
 const HELP_WORD: &str = "help";
 const KEYS_WORD: &str = "keys";
@@ -30,8 +30,6 @@ const EXPORTS_WORD: &str = "exports";
 /// The run-time choice of a class's names (Objects::dispatched)
 const DISPATCH_TEMPLATE: &str = "if RECEIVER is CLASS then NAMES else OTHERWISE";
 const DIR_OTHERWISE_TEMPLATE: &str = "if RECEIVER is map then RECEIVER.keys else OTHERWISE";
-/// A map's `dir` lists its keys, not the map module's words
-const MAP_WORD: &str = "map";
 pub(crate) const PARAMS_WORDS: [&str; 2] = ["params", "parameters"];
 const SIGNATURE_WORD: &str = "signature";
 /// `f.body`: the body as written, as data (card g_X_3s)

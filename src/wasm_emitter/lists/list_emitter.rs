@@ -5,6 +5,7 @@ use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 use crate::type_kinds::Kind;
+use crate::words::{ERROR_WORD, MAP_WORD, PRINT_WORD, SYMBOL_WORD, TEXT_WORD};
 use wasm_encoder::*;
 use Instruction as I;
 
@@ -63,7 +64,6 @@ const BUILTIN_CALLS: [&str; 27] = [
 	super::super::reflection::library_ops::LIST_SORTED_BY,
 ];
 
-const PRINT: &str = "print";
 /// `print a, b` writes "a b", like Python
 const PRINT_ARGUMENT_SEPARATOR: &str = " ";
 
@@ -105,8 +105,6 @@ const INSERT_ORDER_TOPIC: &str = "insert-order";
 pub(in crate::wasm_emitter) const QUOTE_WORDS: [&str; 3] = ["data", "code", "block"];
 /// The got-it topic of a lone word close to a defined name
 const NEAR_MISS_TOPIC: &str = "near-miss";
-/// Words the near-miss warning compares with besides the program's own names
-const TEXT_TYPE: &str = "text";
 const CODEPOINT_TYPE: &str = "codepoint";
 const KNOWN_WORDS: [&str; 6] = ["print", "count", "sum", "first", "last", "reverse"];
 
@@ -129,7 +127,7 @@ impl WasmGcEmitter {
 			|| self.ctx.type_registry.get_by_name(name).is_some()
 			|| type_word_kind(&name.to_lowercase()).is_some()
 			|| is_function_keyword(name)
-			|| name == PRINT
+			|| name == PRINT_WORD
 			|| name == crate::warp_parser::TEXT_TIMES
 			|| BUILTIN_CALLS.contains(&name)
 			|| super::super::functions::cells::CELL_WORDS.contains(&name)
@@ -303,11 +301,11 @@ impl WasmGcEmitter {
 			return false;
 		};
 		match word.as_str() {
-			PRINT if items.as_ptr() as usize == self.result_print => {
+			PRINT_WORD if items.as_ptr() as usize == self.result_print => {
 				self.emit_result_print(func, &printed_value(items, bracket));
 				return true;
 			}
-			PRINT => {
+			PRINT_WORD => {
 				self.emit_print(func, &printed_value(items, bracket));
 				return true;
 			}
@@ -332,7 +330,7 @@ impl WasmGcEmitter {
 
 	/// `print()`: an empty line, like Python; worth the empty text, as `print ""`
 	fn emit_empty_print(&mut self, func: &mut Function, items: &[Node]) -> bool {
-		let is_print = matches!(items, [word] if matches!(word.drop_meta(), Node::Symbol(name) if name == PRINT));
+		let is_print = matches!(items, [word] if matches!(word.drop_meta(), Node::Symbol(name) if name == PRINT_WORD));
 		if is_print && self.config.emit_wasi_imports {
 			self.emit_print(func, &Node::Text(String::new()));
 		}
@@ -633,15 +631,13 @@ impl WasmGcEmitter {
 
 	/// A list of no known shape (a parameter given `{a: 1}`) may be a map, which is a list carrying the curly bracket
 	fn may_be_map(&self, subject: &Node) -> bool {
-		self.get_type(subject) == crate::Kind::List && self.static_type_name(subject) == crate::type_tests::LIST_WORD
+		self.get_type(subject) == crate::Kind::List && self.static_type_name(subject) == crate::words::LIST_WORD
 	}
 
 	/// `t is number` of a type value t (`t = type(x)`, `int is number`): t names one of the types number covers, `t == int or
 	/// t == rational or …`; None for a value that is no symbol, or a test for a symbol
 	fn type_value_test(&self, subject: &Node, spec: &str) -> Option<Node> {
-		if self.get_type(subject) != crate::Kind::Symbol
-			|| crate::type_tests::type_matches(crate::type_tests::SYMBOL_TYPE, spec)
-		{
+		if self.get_type(subject) != crate::Kind::Symbol || crate::type_tests::type_matches(SYMBOL_WORD, spec) {
 			return None;
 		}
 		let names_type = |name: &str| {
@@ -705,11 +701,11 @@ impl WasmGcEmitter {
 			return true;
 		}
 		// `s#1 is char`: an item of a text is typed text but is a code point at run time
-		let item_of_text = self.static_type_name(subject) == TEXT_TYPE
+		let item_of_text = self.static_type_name(subject) == TEXT_WORD
 			&& crate::type_tests::canonical_spec_word(spec) == CODEPOINT_TYPE;
-		let unknown = spec == crate::type_tests::ERROR_TYPE || item_of_text || self.has_unknown_static_type(subject);
+		let unknown = spec == ERROR_WORD || item_of_text || self.has_unknown_static_type(subject);
 		let declared_type = self.ctx.type_registry.get_by_name(spec).is_some();
-		let map_spec = crate::type_tests::canonical_spec_word(spec) == crate::analyzer::MAP_TYPE;
+		let map_spec = crate::type_tests::canonical_spec_word(spec) == MAP_WORD;
 		let known_map = crate::analyzer::held_map_type(subject, &self.scope).is_some();
 		let map_test = (unknown || self.may_be_map(subject)) && map_spec && !declared_type && !known_map;
 		let kind_mask = crate::type_tests::runtime_kind_mask(spec).filter(|_| unknown && !declared_type);
@@ -746,7 +742,7 @@ impl WasmGcEmitter {
 					Self::emit_list(func, &[I::I32Eqz, I::I64ExtendI32U, I::Else, I::I64Const(0), I::End]);
 				}
 				// a map is a curly list at run time, no list (card inside-function)
-				if crate::type_tests::canonical_spec_word(spec) == crate::type_tests::LIST_WORD {
+				if crate::type_tests::canonical_spec_word(spec) == crate::words::LIST_WORD {
 					self.emit_node_instructions(func, subject);
 					self.emit_is_map(func);
 					Self::emit_list(func, &[I::I32Eqz, I::I64ExtendI32U, I::I64And]);

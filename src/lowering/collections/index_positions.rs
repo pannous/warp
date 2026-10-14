@@ -12,10 +12,11 @@ use super::memoization::definition_parts;
 use super::nodes::{children_rewritten, for_in_variable, key, parameter_name};
 use crate::errors::diagnostic::Diagnostic;
 use crate::library_words::COLLECTION_POSITION;
-use crate::list_mutations::{insert_position, AT_WORD, INSERT_METHOD};
+use crate::list_mutations::{insert_position, INSERT_METHOD};
 use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::SubscriptOffset;
+use crate::words::AT_WORD;
 use std::collections::{HashMap, HashSet};
 
 const POSITION_TYPE: &str = "position";

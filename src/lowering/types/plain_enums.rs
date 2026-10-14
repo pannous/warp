@@ -10,6 +10,7 @@ use super::sum_variants::sum_type;
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::RAISE_WORD;
 use crate::Number;
 use std::collections::HashMap;
 
@@ -19,7 +20,6 @@ const CASE_WORD: &str = "case";
 /// The types a case converts to and the number each counts its first case as: `Coin.Dime as int` and `as index` its
 /// index 2 (from 0, as C counts), `as position` its position 3 (from 1, as `xs#p` counts; index_positions.rs)
 const COUNT_TYPES: [(&str, i64); 3] = [("int", 0), ("index", 0), ("position", 1)];
-const RAISE_WORD: &str = "raise";
 const OTHER_ARM: &str = "_";
 
 /// The plain enums of a program: each one's cases in order, by name

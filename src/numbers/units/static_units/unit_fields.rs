@@ -7,11 +7,8 @@ use super::{shown, Fields, Inference, Signature, Stop};
 use crate::lowering::database_tables::OPTIONAL_MARK;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
+use crate::words::{FOR_WORD, IN_WORD, NUMBER_WORD};
 use std::collections::HashMap;
-
-/// What a unit field is declared to the emitter: its run-time amount is an exact or float SI amount
-const NUMBER_TYPE: &str = "number";
-use crate::words::{FOR_WORD, IN_WORD};
 
 /// Each class with a field typed by a unit: its fields in order, each with its signature (none for a plain field)
 pub(super) fn unit_classes(program: &Node) -> HashMap<String, Fields> {
@@ -468,7 +465,7 @@ impl Inference {
 					} else {
 						String::new()
 					};
-					Box::new(Node::Symbol(format!("{NUMBER_TYPE}{optional}")))
+					Box::new(Node::Symbol(format!("{NUMBER_WORD}{optional}")))
 				};
 				let number = match field_type.drop_meta() {
 					Node::Type { name, body } => Node::Type {

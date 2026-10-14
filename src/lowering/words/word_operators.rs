@@ -6,9 +6,9 @@
 use super::nodes::{call, key};
 use crate::node::Node;
 use crate::operators::Op;
+use crate::words::LOG_WORD;
 
 const OPERATOR_ALIASES: [(&str, &str, Op); 1] = [("root", "sqrt", Op::Sqrt)];
-const LOG: &str = "log";
 const NATURAL_LOG: &str = "ln";
 
 pub fn lower(node: Node) -> Node {
@@ -65,9 +65,9 @@ fn operators(node: Node, aliases: &[(&str, &str, Op)]) -> Node {
 
 fn log_calls(node: Node) -> Node {
 	match node {
-		Node::Key(base, Op::LogBase, value) => call(LOG, vec![log_calls(*value), log_calls(*base)]),
+		Node::Key(base, Op::LogBase, value) => call(LOG_WORD, vec![log_calls(*value), log_calls(*base)]),
 		Node::Key(value, Op::LogOf, base) if base.is_empty_node() => call(NATURAL_LOG, vec![log_calls(*value)]),
-		Node::Key(value, Op::LogOf, base) => call(LOG, vec![log_calls(*value), log_calls(*base)]),
+		Node::Key(value, Op::LogOf, base) => call(LOG_WORD, vec![log_calls(*value), log_calls(*base)]),
 		other => other.map_children(log_calls),
 	}
 }

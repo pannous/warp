@@ -11,6 +11,8 @@ use super::nodes::{call, children_rewritten, is_kinded_type_word, key};
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::GENERIC_MARK;
+use crate::words::IS_WORD;
+use crate::words::LET_WORD;
 use crate::words::{ON_WORD, WHENEVER_WORD};
 use std::collections::HashSet;
 
@@ -21,7 +23,6 @@ const LOOP_KEYWORD: &str = "loop";
 /// Lua's, Ruby's and Julia's word closing a function body
 const END_WORD: &str = "end";
 const LAMBDA_WORD: &str = "lambda";
-const LET_WORD: &str = "let";
 const VAR_WORD: &str = "var";
 const DESTRUCTURED_OBJECT: &str = "object·";
 const RUBY_LAMBDA_WORDS: [&str; 2] = ["lambda", "proc"];
@@ -36,7 +37,6 @@ const WHEN_REASON: &str = "when is on, whenever, if or match by its shape; write
 const ELSE_WORD: &str = "else";
 /// The listeners a `when` without arms is: of an event, of a condition
 const IF_WORD: &str = "if";
-const IS_WORD: &str = "is";
 /// The if chain a `when` arm adds, its conditions joined by `or`
 const WHEN_ARM: &str = "if CONDITION then VALUE else OTHERWISE";
 const LAST_WHEN_ARM: &str = "if CONDITION then VALUE";

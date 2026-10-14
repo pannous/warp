@@ -2,6 +2,7 @@
 //! `Point.new(1, 2)`, and the text, equality and order methods by their other names (`toString`, `__eq__`, `compareTo`)
 use super::*;
 use crate::node::parens;
+use crate::words::SELF_WORD;
 
 /// Rust's `impl Point { fn sum(&self) -> i32 {…} }` (and `impl Trait for Point {…}`): its functions are methods of
 /// the class Point, the impl block itself goes
@@ -118,7 +119,7 @@ pub(super) fn go_method(words: &[Node]) -> Option<(String, Vec<Node>)> {
 		[Node::List(group, Bracket::None, _)] => group.clone(),
 		_ => rest.to_vec(),
 	};
-	let bindings = [(variable.clone(), symbol(RECEIVER))].into_iter().collect();
+	let bindings = [(variable.clone(), symbol(SELF_WORD))].into_iter().collect();
 	let method = crate::law::substitute(
 		&Node::List([vec![keyword.clone()], rest].concat(), Bracket::None, Separator::Space),
 		&bindings,

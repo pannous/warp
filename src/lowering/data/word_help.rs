@@ -5,6 +5,7 @@
 //! modules it uses and its own functions. `function trick` is the function named trick (P82), so a trick that is no
 //! function but a variable holding a name is read as that name. A program's own `help` wins
 
+use crate::words::PRINT_WORD;
 use std::collections::{BTreeMap, HashSet};
 
 use super::nodes::{filled, key};
@@ -14,7 +15,6 @@ use crate::operators::Op;
 const HELP_WORD: &str = "help";
 const FUNCTION_WORD: &str = "function";
 const DUMP_WORD: &str = "dump";
-const PRINT_WORD: &str = "print";
 const LOOP_WORDS: [&str; 2] = [crate::words::FOR_WORD, "while"];
 /// The lookup of a name known at run time in a table of the words' texts
 const LOOKUP_TEMPLATE: &str = "if TABLE has NAME then TABLE[NAME] else error(\"no word named \" + NAME + \": dir(<module>) lists a module's words\")";

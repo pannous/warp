@@ -2,6 +2,7 @@
 use super::*;
 use crate::lowering::nodes::{fresh_number, phrase_words};
 use crate::node::parens;
+use crate::words::{ADD_WORD, ALL_WORD, RAISE_WORD};
 
 /// `go f(x)` starts a task, `await job` waits for it
 pub(super) const TASK_WORDS: [&str; 2] = ["go", "await"];
@@ -22,8 +23,6 @@ pub(super) const AWAITED_MARKERS: [(&str, &str); 3] = [
 ];
 pub(super) const IMPLICIT_WAIT_TOPIC: &str = "implicit-await";
 pub(super) const TASK_ELEMENT: &str = "task·element";
-/// `await all jobs`: the results of every job of a list
-pub(super) const ALL_WORD: &str = "all";
 /// `await any [a, b]`: the result of the first task to finish (Promise.race)
 pub(super) const ANY_WORD: &str = "any";
 /// `race·0`: which task of an `await any` finished first (1-based, 0 while none)
@@ -40,10 +39,8 @@ pub(super) const FIRST_TOPIC: &str = "await-first";
 pub(super) const STARTED_PREFIX: &str = "started·";
 /// task_status of a task still running (tasks.rs: finished 1, failed 2, stopped 3, paused 4)
 pub(super) const TASK_RUNNING: i64 = 0;
-pub(super) const RAISE_WORD: &str = "raise";
 /// the event an `await … within` without `or` raises at its deadline: try catches it
 pub(super) const TIMEOUT_EVENT: &str = "timeout";
-pub(super) const ADD_WORD: &str = "add";
 /// The parameter of the await map over a job list (resolve_tasks)
 pub(super) const AWAITED_JOB: &str = "awaited_job";
 /// `stop job`, `job.pause()`: until resolve_tasks knows whether the task runs on a thread

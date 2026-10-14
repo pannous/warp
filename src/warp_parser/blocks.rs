@@ -3,6 +3,7 @@
 use super::expressions::BODY_ENDS;
 use super::*;
 use crate::node::children_rewritten;
+use crate::words::IN_WORD;
 
 /// A loop body of one comma line holds code, one statement: `x, y = y, x + y` swaps, as `{a, b=2}` would be data
 pub(super) fn statement_block(block: Node) -> Node {
@@ -305,7 +306,7 @@ pub(super) fn split_trailing_block(header: &Node, empty_is_block: bool) -> Optio
 			_ => None,
 		},
 		// `if x in xs {…}`: the block after the collection is the body
-		Node::List(items, bracket, separator) if items.len() == 3 && items[1].is_symbol(IN_KEYWORD) => {
+		Node::List(items, bracket, separator) if items.len() == 3 && items[1].is_symbol(IN_WORD) => {
 			split_trailing_block(&items[2], empty_is_block).map(|(collection, block)| {
 				(
 					Node::List(
