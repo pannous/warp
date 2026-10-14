@@ -2680,6 +2680,7 @@ PASSED:
   ✓ numbers::test_static_units_data::test_annotated_variables_keep_and_check_units
   ✓ numbers::test_static_units_data::test_lists_grow_with_quantities_of_their_unit
   ✓ numbers::test_static_units_data::test_object_fields_hold_quantities
+  ✓ numbers::test_static_units_functions::a_function_with_a_default_takes_a_quantity
   ✓ numbers::test_static_units_functions::test_a_unit_word_called_as_a_function_is_no_unit
   ✓ numbers::test_static_units_functions::test_dimension_errors_inside_functions_are_compile_errors
   ✓ numbers::test_static_units_functions::test_functions_take_and_give_quantities
@@ -4684,6 +4685,7 @@ PASSED:
   ✓ web::test_dev_server::the_dev_server_rebuilds_a_changed_program
   ✓ web::test_dev_server::the_dev_server_watches_the_modules_used
   ✓ web::test_dev_server::warp_dev_opens_no_browser_when_piped
+  ✓ web::test_dom_pages::a_handler_draws_on_a_canvas_of_the_page
   ✓ web::test_dom_pages::a_handler_sets_and_reads_elements_of_the_page
   ✓ web::test_dom_pages::main_sets_the_title_of_the_page
   ✓ web::test_editor_mode::the_mode_advances_without_built_keywords
@@ -5388,4 +5390,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5383 passed, 0 failed, 5383 total tested
+13 ignored, 5385 passed, 0 failed, 5385 total tested
