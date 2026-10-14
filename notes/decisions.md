@@ -41,6 +41,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   `command("…")` (run a shell command, its output as text; the explicit opt-in to text-as-shell), `arguments` (the
   program's arguments as a list), `cwd`, `glob("*.toml")`, `stdin`/`input`, `sleep`, `exit n`. `use relaxed` stays
   the hint switch alone. P45's "script mode" is this pragma.
+- sleep-seconds (2026-10-14): a bare number in `sleep 0.3` means seconds everywhere (like sh and Python), with the
+  "needs a unit" warning suggesting `0.3s`; demo samples written with bare ms move to `300ms`.
 - restructuring (2026-10-14): new major roadmap after the diff review found few duplicates. Inventory every function
   by name, move functions to the file their concept belongs to (a general parser holds no keyword-specific syntax:
   `finish_if_prefix` goes to e.g. control/if.rs), and have agents check suspiciously similar names for true
