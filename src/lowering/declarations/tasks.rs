@@ -152,7 +152,7 @@ pub(super) fn awaited_starts(node: Node, counter: &Counter) -> Node {
 				[await_word, go_word, started @ ..]
 					if !started.is_empty() && await_word.name() == TASK_WORDS[1] && go_word.name() == TASK_WORDS[0] =>
 				{
-					let job = Node::Symbol(format!("go·job·{}", counter.next_number()));
+					let job = fresh_job(counter);
 					let start = Node::List(
 						[vec![go_word.clone()], started.to_vec()].concat(),
 						Bracket::None,
@@ -189,7 +189,7 @@ pub(super) fn awaited_starts(node: Node, counter: &Counter) -> Node {
 						.into_iter()
 						.map(|item| match is_start(&item) {
 							true => {
-								let job = Node::Symbol(format!("go·job·{}", counter.next_number()));
+								let job = fresh_job(counter);
 								starts.push(key(job.clone(), Op::Assign, item));
 								if racing {
 									job
@@ -229,6 +229,10 @@ pub(super) fn awaited_starts(node: Node, counter: &Counter) -> Node {
 		}
 		other => children_rewritten(other, |child| awaited_starts(child, counter)),
 	}
+}
+
+fn fresh_job(counter: &Counter) -> Node {
+	Node::Symbol(format!("go·job·{}", counter.next_number()))
 }
 
 /// `go f(x)`, `go { … }`: a task started where it stands
@@ -328,17 +332,11 @@ pub(super) fn started_call(rest: &[Node]) -> Option<(String, Vec<Node>)> {
 /// A read of a task that `await` names: no warning that it waits
 pub(super) fn awaited(node: Node) -> Node {
 	match node {
-		Node::List(mut items, bracket, separator)
-			if AWAITED_MARKERS
-				.iter()
-				.any(|(read, _)| word(items.first().unwrap_or(&Node::Empty)) == *read) =>
-		{
-			let read = word(&items[0]);
-			let (_, named) = AWAITED_MARKERS
-				.iter()
-				.find(|(marker, _)| *marker == read)
-				.expect("guarded");
-			items[0] = symbol(named);
+		Node::List(mut items, bracket, separator) => {
+			let head = word(items.first().unwrap_or(&Node::Empty));
+			if let Some((_, named)) = AWAITED_MARKERS.iter().find(|(read, _)| *read == head) {
+				items[0] = symbol(named);
+			}
 			Node::List(items, bracket, separator)
 		}
 		meta @ Node::Meta { .. } => meta.under_meta(awaited),
@@ -352,10 +350,6 @@ pub(super) fn read_marker(head: &str) -> (&str, bool) {
 		.iter()
 		.find(|(_, named)| *named == head)
 		.map_or((head, false), |(read, _)| (*read, true))
-}
-
-pub(super) fn marker(word: &str, parts: Vec<Node>) -> Node {
-	call(word, parts)
 }
 
 #[derive(Clone)]
@@ -382,12 +376,9 @@ impl Tasks<'_> {
 
 	/// `stop job`: a control of a task that may run on a thread, else the warning that a finished task has nothing to stop
 	pub(super) fn control(&self, subject: &Node, control: &str) -> Node {
-		let variable = match subject.drop_meta() {
-			Node::List(items, _, _) if word(&items[0]) == TASK_VALUE => word(&items[1]),
-			other => other.name(),
-		};
+		let variable = task_variable(subject).name();
 		match self.started.get(&variable) {
-			Some(function) => marker(
+			Some(function) => call(
 				TASK_CONTROL_MARK,
 				vec![Node::Symbol(variable), Node::Symbol(function.clone()), symbol(control)],
 			),
@@ -398,10 +389,7 @@ impl Tasks<'_> {
 	/// A read of a task variable: its value once the task is done (`await job`, `job + 1`)
 	pub(super) fn value_of(&self, variable: &str) -> Option<Node> {
 		let function = self.started.get(variable)?;
-		Some(marker(
-			TASK_VALUE,
-			vec![symbol(variable), Node::Symbol(function.clone())],
-		))
+		Some(call(TASK_VALUE, vec![symbol(variable), Node::Symbol(function.clone())]))
 	}
 
 	/// `count(jobs)`, `count jobs`, `#jobs`, `jobs.size` (count, length) of a job list: a count needs no result (P47)
@@ -423,7 +411,7 @@ impl Tasks<'_> {
 		let functions = self.job_lists[list]
 			.iter()
 			.map(|function| Node::Symbol(function.clone()));
-		marker(marker_word, [vec![read], functions.collect()].concat())
+		call(marker_word, [vec![read], functions.collect()].concat())
 	}
 
 	/// Inside a function that binds a task variable's name itself (a parameter, a local, a loop variable: a joined
@@ -479,12 +467,8 @@ impl Tasks<'_> {
 					TASK_ELEMENT,
 				)
 			}
-			// `jobs = []`: the variable itself
-			Node::Key(target, op @ (Op::Assign | Op::Define), value) if matches!(target.drop_meta(), Node::Symbol(name) if self.job_lists.contains_key(name)) => {
-				Node::Key(target, op, Box::new(self.lower(*value)))
-			}
-			// `job = go f(x)`: the variable holds the task
-			Node::Key(target, op @ (Op::Assign | Op::Define), value) if matches!(target.drop_meta(), Node::Symbol(name) if self.started.contains_key(name)) => {
+			// `jobs = []`, `job = go f(x)`: the variable itself holds the jobs, the task
+			Node::Key(target, op @ (Op::Assign | Op::Define), value) if matches!(target.drop_meta(), Node::Symbol(name) if self.job_lists.contains_key(name) || self.started.contains_key(name)) => {
 				Node::Key(target, op, Box::new(self.lower(*value)))
 			}
 			Node::List(items, bracket, separator) => {
@@ -574,24 +558,17 @@ impl Tasks<'_> {
 			([single], fallback) => (single.clone(), fallback),
 			(several, fallback) => (Node::List(several.to_vec(), Bracket::None, Separator::Space), fallback),
 		};
-		let milliseconds = crate::numbers::units::milliseconds(&deadline)?;
-		let job_name = match job.drop_meta() {
-			Node::List(parts, _, _) if word(&parts[0]) == TASK_VALUE => parts[1].clone(),
-			other => other.clone(),
-		};
+		let milliseconds = crate::units::milliseconds(&deadline)?;
+		let job_name = task_variable(job);
 		let started = format!("{STARTED_PREFIX}{}", fresh_number());
-		let status = marker(crate::host::TASK_STATUS, vec![job_name.clone()]);
+		let status = call(crate::host::TASK_STATUS, vec![job_name.clone()]);
 		let runs = key(status, Op::Eq, crate::node::int(TASK_RUNNING));
-		let elapsed = key(
-			marker(crate::host::CLOCK, vec![]),
-			Op::Sub,
-			Node::Symbol(started.clone()),
-		);
+		let elapsed = key(call(crate::host::CLOCK, vec![]), Op::Sub, Node::Symbol(started.clone()));
 		let in_time = key(elapsed, Op::Lt, crate::node::int(milliseconds));
 		let waiting = key(
 			key(Node::Empty, Op::While, key(runs.clone(), Op::And, in_time)),
 			Op::Do,
-			block(vec![marker(SLEEP_WORD, vec![crate::node::int(RACE_POLL_MILLISECONDS)])]),
+			block(vec![call(SLEEP_WORD, vec![crate::node::int(RACE_POLL_MILLISECONDS)])]),
 		);
 		let timed_out = match &fallback {
 			Some(value) => value.clone(),
@@ -624,7 +601,7 @@ impl Tasks<'_> {
 			awaited_job,
 		);
 		Some(Node::List(
-			vec![assign(&started, marker(crate::host::CLOCK, vec![])), waiting, result],
+			vec![assign(&started, call(crate::host::CLOCK, vec![])), waiting, result],
 			Bracket::Round,
 			Separator::Semicolon,
 		))
@@ -639,40 +616,28 @@ impl Tasks<'_> {
 					&& started_call(rest).is_some_and(|(f, _)| self.functions.contains(&f)) =>
 			{
 				let (function, arguments) = started_call(rest).expect("guarded");
-				Some(marker(TASK_GO, [vec![Node::Symbol(function)], arguments].concat()))
-			}
-			// `await all jobs` (also read as `await (all jobs)`): every result, a job list read awaits them all
-			[head, phrase]
-				if word(head) == TASK_WORDS[1]
-					&& self.words.contains(&TASK_WORDS[1])
-					&& matches!(phrase.drop_meta(), Node::List(inner, Bracket::None, _) if inner.len() == 2 && word(&inner[0]) == ALL_WORD) =>
-			{
-				let Node::List(inner, _, _) = phrase.drop_meta() else {
-					unreachable!("guarded")
-				};
-				Some(awaited(inner[1].clone()))
-			}
-			[head, all, rest @ ..]
-				if word(head) == TASK_WORDS[1]
-					&& word(all) == ALL_WORD
-					&& !rest.is_empty()
-					&& self.words.contains(&TASK_WORDS[1]) =>
-			{
-				Some(awaited(match rest {
-					[single] => single.clone(),
-					_ => Node::List(rest.to_vec(), Bracket::None, Separator::Space),
-				}))
+				Some(call(TASK_GO, [vec![Node::Symbol(function)], arguments].concat()))
 			}
 			[head, rest @ ..] if !rest.is_empty() && self.words.contains(&word(head).as_str()) => {
-				let value = match rest {
+				let one = |nodes: &[Node]| match nodes {
 					[single] => single.clone(),
-					_ => Node::List(rest.to_vec(), Bracket::None, Separator::Space),
+					_ => Node::List(nodes.to_vec(), Bracket::None, Separator::Space),
 				};
-				Some(if word(head) == TASK_WORDS[1] {
-					awaited(value)
-				} else {
-					value
-				})
+				if word(head) != TASK_WORDS[1] {
+					return Some(one(rest));
+				}
+				// `await all jobs` (also read as `await (all jobs)`): every result, a job list read awaits them all
+				let spoken = match rest {
+					[phrase] => match phrase.drop_meta() {
+						Node::List(inner, Bracket::None, _) if inner.len() == 2 => inner.as_slice(),
+						_ => rest,
+					},
+					_ => rest,
+				};
+				Some(awaited(one(match spoken {
+					[all, jobs @ ..] if word(all) == ALL_WORD && !jobs.is_empty() => jobs,
+					_ => rest,
+				})))
 			}
 			// `stop job`
 			[control, subject] if TASK_CONTROLS.contains(&word(control).as_str()) && self.is_task(subject) => {
@@ -705,18 +670,14 @@ impl Tasks<'_> {
 		if listed.is_empty() || !listed.iter().all(|item| self.is_task(item)) {
 			return None;
 		}
-		let job_of = |item: &Node| match item.drop_meta() {
-			Node::List(items, _, _) if word(&items[0]) == TASK_VALUE => items[1].clone(),
-			other => other.clone(),
-		};
 		let winner = format!("{RACE_PREFIX}{}", fresh_number());
 		let winner_is = |index: usize| key(Node::Symbol(winner.clone()), Op::Eq, crate::node::int(index as i64));
 		// `go 1+1` is computed right away, no task is started: it has ended (card await-hang)
 		let ended = |job: &Node| {
-			if !self.started.contains_key(&word(&job_of(job))) {
+			if !self.started.contains_key(&word(&task_variable(job))) {
 				return Node::True;
 			}
-			let status = marker(crate::host::TASK_STATUS, vec![job_of(job)]);
+			let status = call(crate::host::TASK_STATUS, vec![task_variable(job)]);
 			let is = |code: i64| key(status.clone(), Op::Eq, crate::node::int(code));
 			key(is(crate::host::TASK_FINISHED), Op::Or, is(crate::host::TASK_FAILED))
 		};
@@ -732,11 +693,12 @@ impl Tasks<'_> {
 			.collect();
 		checks.push(if_then(
 			winner_is(0),
-			block(vec![marker(SLEEP_WORD, vec![crate::node::int(RACE_POLL_MILLISECONDS)])]),
+			block(vec![call(SLEEP_WORD, vec![crate::node::int(RACE_POLL_MILLISECONDS)])]),
 		));
 		let waiting = key(key(Node::Empty, Op::While, winner_is(0)), Op::Do, block(checks));
 		// the race is the `await`: reading the winner waits as said, no warning (card await-warns)
-		let awaited_job = |job: &Node| awaited(self.value_of(&word(&job_of(job))).unwrap_or_else(|| job.clone()));
+		let awaited_job =
+			|job: &Node| awaited(self.value_of(&word(&task_variable(job))).unwrap_or_else(|| job.clone()));
 		let (last, first) = listed.split_last().expect("not empty");
 		let result = first
 			.iter()
@@ -783,7 +745,7 @@ impl Tasks<'_> {
 			} else {
 				event
 			};
-			return marker(
+			return call(
 				TASK_ON,
 				vec![
 					Node::Symbol(subject.name()),
@@ -890,7 +852,7 @@ impl TaskHandler {
 		use crate::variable_signals::assign;
 		let not_handled = key(Node::Empty, Op::Not, Node::Symbol(self.flag.clone()));
 		let status = key(
-			marker(crate::host::TASK_STATUS, vec![self.job.clone()]),
+			call(crate::host::TASK_STATUS, vec![self.job.clone()]),
 			Op::Eq,
 			Node::Number(crate::extensions::numbers::Number::Int(self.status)),
 		);
@@ -903,12 +865,8 @@ impl TaskHandler {
 
 	/// At the end of the block: a finish or stop handler waits for the task, a pause handler does not
 	pub(super) fn final_check(&self) -> Option<Node> {
-		(self.status != crate::host::TASK_PAUSED).then(|| {
-			block(vec![
-				marker(crate::host::TASK_JOIN, vec![self.job.clone()]),
-				self.check(),
-			])
-		})
+		(self.status != crate::host::TASK_PAUSED)
+			.then(|| block(vec![call(crate::host::TASK_JOIN, vec![self.job.clone()]), self.check()]))
 	}
 }
 
@@ -1092,7 +1050,7 @@ pub(super) fn forwarded_raises(
 				let function = word(&items[0]);
 				wrapped.borrow_mut().insert(function.clone(), items.len() - 1);
 				let arguments = Node::List(items[1..].to_vec(), Bracket::Square, Separator::Colon);
-				let send = marker(
+				let send = call(
 					crate::host::SIGNAL_SEND,
 					vec![Node::Text(format!("{function}{NODE_WRAPPER_SUFFIX}")), arguments],
 				);
@@ -1120,14 +1078,14 @@ pub(super) const BODY_PLACEHOLDER: &str = "handler_body_placeholder";
 /// `try` catches, before the result is read
 pub(super) fn checked_await(job: &Node, crossing: Crossing) -> Node {
 	use crate::host::{TASK_CHECK, TASK_FAILURE, TASK_JOIN};
-	let check = marker(
+	let check = call(
 		TASK_CHECK,
 		vec![
-			marker(TASK_JOIN, vec![job.clone()]),
-			marker(TASK_FAILURE, vec![job.clone()]),
+			call(TASK_JOIN, vec![job.clone()]),
+			call(TASK_FAILURE, vec![job.clone()]),
 		],
 	);
-	let result = marker(crate::host::TASK_AWAIT_VALUE, vec![job.clone()]);
+	let result = call(crate::host::TASK_AWAIT_VALUE, vec![job.clone()]);
 	let result = match crossing {
 		Crossing::AsIs => result,
 		Crossing::Bool => key(result, Op::Ne, Node::Number(crate::extensions::numbers::Number::Int(0))),
@@ -1177,12 +1135,12 @@ pub(super) fn guarded_calls(
 				.map(|item| guarded_calls(item, guardable, wrapped))
 				.collect();
 			let guarded = match items[1].drop_meta() {
-				Node::List(call, Bracket::Round, _) if matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(function)) if guardable(function).is_some()) =>
+				Node::List(called, Bracket::Round, _) if matches!(called.first().map(Node::drop_meta), Some(Node::Symbol(function)) if guardable(function).is_some()) =>
 				{
-					let function = word(&call[0]);
-					wrapped.borrow_mut().insert(function.clone(), call.len() - 1);
-					let arguments = Node::List(call[1..].to_vec(), Bracket::Square, Separator::Colon);
-					let guarded = marker(
+					let function = word(&called[0]);
+					wrapped.borrow_mut().insert(function.clone(), called.len() - 1);
+					let arguments = Node::List(called[1..].to_vec(), Bracket::Square, Separator::Colon);
+					let guarded = call(
 						crate::host::GUARDED_CALL,
 						vec![Node::Text(format!("{function}{NODE_WRAPPER_SUFFIX}")), arguments],
 					);
@@ -1255,7 +1213,7 @@ pub(super) fn resolved(
 							// through the wrapper: whether f takes a list as an array is decided later (list_abi)
 							wrapped.borrow_mut().insert(function.clone(), parameters.len());
 							let started = format!("{function}{NODE_WRAPPER_SUFFIX}");
-							marker(
+							call(
 								TASK_SPAWN_VALUES,
 								vec![
 									Node::Text(started),
@@ -1286,7 +1244,7 @@ pub(super) fn resolved(
 				}
 				TASK_CONTROL_MARK => match path(&word(&items[2])) {
 					TaskPath::Inline => nothing_to_stop(&items[1], &word(&items[3])),
-					_ => marker(
+					_ => call(
 						TASK_CONTROL,
 						vec![
 							items[1].clone(),
@@ -1354,6 +1312,14 @@ pub(crate) fn handler_parts(handler: &Node) -> Option<(Node, Node)> {
 /// A task marker before resolve_tasks: `task·go(f, args)` and the reads and controls naming the started functions
 pub(crate) fn is_task_marker(head: &str) -> bool {
 	[TASK_GO, TASK_VALUE, TASK_LIST, TASK_ELEMENT, TASK_CONTROL_MARK, TASK_ON].contains(&read_marker(head).0)
+}
+
+/// `job` of `job` or of its read `task·value(job, f)`
+fn task_variable(node: &Node) -> Node {
+	match node.drop_meta() {
+		Node::List(items, _, _) if word(&items[0]) == TASK_VALUE => items[1].clone(),
+		other => other.clone(),
+	}
 }
 
 pub(crate) fn word(node: &Node) -> String {
