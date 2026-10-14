@@ -1041,6 +1041,7 @@ impl WasmGcEmitter {
 		self.emit_handle_functions();
 		self.emit_int_functions();
 		self.emit_exact_functions();
+		self.emit_float_as_exact();
 	}
 }
 
