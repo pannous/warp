@@ -699,52 +699,56 @@ Examples: markup, "element events", "fine updates", components, cleanup, "keyed 
 
 ## Servers
 
-Routes answer requests. 
+Routes answer requests. One line is all your first server needs:
 
 ```warp
-route "/" { "hello"}`  // is all you need for your first server! 
+route "/" { "hello" }
 ```
 
-Instead of text, you can also return complex HTML 
+Instead of text, a route can also answer with HTML:
 
 ```warp
-route "/" { b{"bold!"} }`  
+route "/" { b{"bold!"} }
 ```
 
-Arguments are automatically provided with the correct type: 
+The parts of the path arrive as arguments of the declared type, so `/square/7` answers 49:
 
 ```warp
-`route "/square/:n:int" { n*n }`
+route "/square/:n:int" { n*n }
 ```
 
-`warp (serve)` runs the program as a web server; `warp deploy` puts it on the web.
+`warp app.warp` (or `warp serve app.warp`) runs a program with routes as a web server; `warp deploy` puts it on the web.
 
 Examples: forms; samples: server, route_headers, hosting, worker
 
 ## Pictures
 
 `use draw` paints pixels on a canvas, and `show()` shows it. A shader colors every pixel at once on the graphics card.
-Examples: frames, shader, "shader mouse"; samples: paint_text, finger_paint, shader, webgpu, shader_brush, shader_trails, gpu_map, gpu_arrays, manual_3d_object_viewer, gpu_visualizer
 
+Examples: frames, shader, "shader mouse"; samples: paint_text, finger_paint, shader, webgpu, shader_brush, shader_trails
 
 ## GPU
-Warp *automatically* parallelizes bulk operations either as SIMD or sends to Accelerator cards (GPU) beyond a threshold of computational complexity.
 
-If you want to fine tune the performance you can make it explicit with `@gpu` :
-```warp 
-sum(xs.map(x => sin(x) * exp(x) + cos(x * 3)) @gpu)
+Warp parallelizes bulk operations *automatically*: number lists run as SIMD loops, and maps heavy enough to pay for the
+transfer move to the graphics card (GPU).
+
+To tune the performance yourself, ask for the GPU explicitly with `@gpu`:
+
+```warp
+xs = [1.0, 2.0, 3.0]
+total = sum(xs.map(x => sin(x) * exp(x) + cos(x * 3)) @gpu)
 ```
 
-Also see [[##graphics]] on how to draw directly on the GPU 
+Pictures above shows how to draw directly on the GPU.
 
-Examples: gpu_map, gpu_arrays, manual_3d_object_viewer, gpu_visualizer
-
+Examples: shader; samples: gpu_map, gpu_arrays, manual_3d_object_viewer, gpu_visualizer
 
 ## Sound and music
 
 `use sound` plays notes by name, chords, rhythms and whole songs. A function can also compute the sound itself.
+`play "mozart.mp3"` plays a music file (samples/play_mp3.warp; in the native warp for now, card play-beside-program).
 
-Examples: melody; samples: music, play_mp3, rhythm, harmony, synth, filters, voices, arrangement, sound_patterns, signal_graph, siren_sound, stereo_sound, midi, visualizer
+Examples: melody; samples: music, rhythm, harmony, synth, filters, voices, arrangement, sound_patterns, signal_graph, siren_sound, stereo_sound, midi, visualizer
 
 ## WebAssembly
 
