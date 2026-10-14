@@ -2,7 +2,7 @@
 // without the declaration the compiler educates instead of shadowing or mutating silently. probes/globals/
 use crate::common;
 use crate::is;
-use warp::diagnostic::{with_warning_mode, WarningMode};
+use warp::errors::diagnostic::{with_warning_mode, WarningMode};
 
 #[test]
 fn test_function_changes_a_declared_global() {

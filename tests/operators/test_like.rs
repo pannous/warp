@@ -122,11 +122,11 @@ fn like_relates_declared_types_only() {
 // missing or an extra field is a warning, and the data is used as the declared type, judged by its uses
 
 fn warnings_of(code: &str) -> (warp::Node, Vec<String>) {
-	warp::diagnostic::take_warnings();
+	warp::errors::diagnostic::take_warnings();
 	let value = warp::wasm_emitter::eval(code);
 	(
 		value,
-		warp::diagnostic::take_warnings()
+		warp::errors::diagnostic::take_warnings()
 			.iter()
 			.map(|warning| warning.to_string())
 			.collect(),

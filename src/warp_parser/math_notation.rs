@@ -33,7 +33,7 @@ impl WarpParser {
 			return missing_closer(
 				"Missing closing ‖".into(),
 				"‖",
-				crate::fixits::end_of_line(&self.input, self.line_nr),
+				crate::errors::fixits::end_of_line(&self.input, self.line_nr),
 			);
 		}
 		self.advance();

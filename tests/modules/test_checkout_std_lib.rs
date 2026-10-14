@@ -1,7 +1,7 @@
 // card local-lib: lib/<std>.warp of another warp checkout (the text the binary embeds, found in a folder other than the
 // build's) is the standard module, its nested `use math` too; a file of different text shadows it, with a warning when it
 // is older than the running warp (a stale checkout), quietly when changed since (std being edited in a checkout)
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 use warp::wasm_emitter::eval;
 
 fn checkout_with(name: &str, files: &[(&str, &str)]) -> std::path::PathBuf {

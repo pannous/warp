@@ -200,7 +200,7 @@ pub(super) fn gpu_kernel_linear(
 	if let Err(problem) = crate::graphics::gpu::available() {
 		// a map the compiler switched says nothing: the program did not ask for the GPU
 		if !automatic && !WARNED.swap(true, std::sync::atomic::Ordering::Relaxed) {
-			crate::diagnostic::report_runtime_warning(&format!("@gpu: {problem}, so the map runs on the CPU"));
+			crate::errors::diagnostic::report_runtime_warning(&format!("@gpu: {problem}, so the map runs on the CPU"));
 		}
 		return Ok(0);
 	}
@@ -239,7 +239,7 @@ pub(super) fn gpu_kernel_linear(
 	.map_err(&failure)?;
 	write_linear_floats(&mut caller, target, &left, &failure)?;
 	if automatic {
-		crate::diagnostic::report_runtime_warning_once(
+		crate::errors::diagnostic::report_runtime_warning_once(
 			crate::gpu_maps::AUTOMATIC_NOTICE,
 			&format!("{} of {items} items", if reduces { "a reduction" } else { "a map" }),
 		);

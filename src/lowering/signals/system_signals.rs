@@ -21,7 +21,7 @@
 use super::listeners;
 use super::nodes::call;
 use crate::declarations::word;
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::event_signals::{event_name, function_with_globals, main_level_variables};
 use crate::extensions::numbers::Number;
 use crate::node::{symbol, Bracket, Node, Separator};

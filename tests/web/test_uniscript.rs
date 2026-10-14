@@ -1,8 +1,8 @@
 //! Uniscript (wiki/uniscript.md) in warp: the uniscript package (packages.warp): its uniscript.wasp over its data/entities.idx
 
 use crate::is;
-use warp::diagnostic::take_runtime_warnings;
 use warp::error;
+use warp::errors::diagnostic::take_runtime_warnings;
 use warp::node::Node;
 use warp::wasm_emitter::eval;
 

@@ -840,7 +840,7 @@ fn warn_bare_duration(duration: &Node) -> Result<(), Node> {
 	let amount = duration.serialize();
 	let message =
 		format!("sleep needs a unit: sleep {amount} second or sleep {amount} ms (a bare number is milliseconds)");
-	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(duration, message)])
+	crate::errors::diagnostic::report(&[crate::errors::diagnostic::Diagnostic::at(duration, message)])
 }
 
 /// A constant duration in whole milliseconds: `1000 ms`, `2 s`, `1 min`, `2 seconds` (a duration of the time module)

@@ -229,12 +229,12 @@ pub(crate) fn message_of(failure: &Node) -> String {
 
 /// A failure's message and, when it names a position, the source line there (a module's, when it names the module's file)
 pub(crate) fn with_excerpt(code: &str, message: String) -> String {
-	let excerpt = match crate::diagnostic::message_file_position(&message) {
+	let excerpt = match crate::errors::diagnostic::message_file_position(&message) {
 		Some((file, line, column)) => std::fs::read_to_string(file)
 			.ok()
-			.and_then(|module| crate::diagnostic::excerpt(&module, line, column)),
-		None => crate::diagnostic::message_position(&message)
-			.and_then(|(line, column)| crate::diagnostic::excerpt(code, line, column)),
+			.and_then(|module| crate::errors::diagnostic::excerpt(&module, line, column)),
+		None => crate::errors::diagnostic::message_position(&message)
+			.and_then(|(line, column)| crate::errors::diagnostic::excerpt(code, line, column)),
 	};
 	[message].into_iter().chain(excerpt).collect::<Vec<_>>().join("\n")
 }

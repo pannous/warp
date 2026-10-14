@@ -122,7 +122,7 @@ fn a_gpu_map_runs_a_numeric_lambda_as_a_kernel() {
 // linear memory, maps on the CPU with a warning saying why (an error under strict)
 #[test]
 fn a_gpu_map_the_gpu_cannot_run_says_why() {
-	use warp::diagnostic::{with_warning_mode, WarningMode};
+	use warp::errors::diagnostic::{with_warning_mode, WarningMode};
 	with_warning_mode(WarningMode::Error, || {
 		crate::common::fails_with("linear xs = float[2]\nys = xs.map(x => str(x)) @gpu", "@gpu")
 	});
@@ -141,7 +141,7 @@ fn a_gpu_map_the_gpu_cannot_run_says_why() {
 #[test]
 fn a_gpu_map_runs_on_the_cpu_where_that_is_faster() {
 	let tolerance = crate::common::gpu_tolerance();
-	use warp::diagnostic::{with_warning_mode, WarningMode};
+	use warp::errors::diagnostic::{with_warning_mode, WarningMode};
 	let filled = |n: usize| {
 		format!("linear xs = float[{n}]\nfor i in 1 to {n} {{ xs#i = i / 30000.0 }}\nys = xs.map(x => sin(x)) @gpu\n")
 	};
@@ -159,7 +159,7 @@ fn a_gpu_map_runs_on_the_cpu_where_that_is_faster() {
 // each map; a lambda of only arithmetic stays on the CPU, with outer numbers too
 #[test]
 fn a_gpu_map_reads_outer_numbers() {
-	use warp::diagnostic::{with_warning_mode, WarningMode};
+	use warp::errors::diagnostic::{with_warning_mode, WarningMode};
 	let program = "linear xs = float[40000]\nfor i in 1 to 40000 { xs#i = i / 40000.0 }\nk = 0.5; shift = 2\nys = xs.map(x => sin(x) * k + shift) @gpu\n";
 	assert_eq!(
 		eval(&format!("{program}abs(ys#40000 - (sin(1) * 0.5 + 2)) < 0.00001")).serialize(),
@@ -194,7 +194,7 @@ fn a_chain_of_gpu_maps_is_one_kernel() {
 #[test]
 fn a_gpu_map_takes_a_list_of_floats() {
 	let tolerance = crate::common::gpu_tolerance();
-	use warp::diagnostic::{with_warning_mode, WarningMode};
+	use warp::errors::diagnostic::{with_warning_mode, WarningMode};
 	let program = "xs = float[40000]\nfor i in 1 to 40000 { xs#i = i / 40000.0 }\nys = xs.map(x => sin(x)) @gpu\n";
 	let checked = format!("{program}abs(ys#40000 - sin(1)) < {tolerance}");
 	assert_eq!(
@@ -212,7 +212,7 @@ fn a_gpu_map_takes_a_list_of_floats() {
 #[test]
 fn a_gpu_map_result_mapped_again_stays_on_the_gpu() {
 	let tolerance = crate::common::gpu_tolerance();
-	use warp::diagnostic::{with_warning_mode, WarningMode};
+	use warp::errors::diagnostic::{with_warning_mode, WarningMode};
 	let program = "linear xs = float[40000]\nfor i in 1 to 40000 { xs#i = i / 40000.0 }\nys = xs.map(x => sin(x)) @gpu\nzs = ys.map(y => exp(y) + 1) @gpu\n";
 	let checked = format!("{program}abs(zs#40000 - (exp(sin(1)) + 1)) < {tolerance}");
 	assert_eq!(
@@ -245,7 +245,7 @@ fn a_gpu_map_result_mapped_again_stays_on_the_gpu() {
 #[test]
 fn a_reduction_of_a_gpu_map_reads_back_partial_results() {
 	let tolerance = crate::common::gpu_tolerance();
-	use warp::diagnostic::{with_warning_mode, WarningMode};
+	use warp::errors::diagnostic::{with_warning_mode, WarningMode};
 	let filled = |n: usize| format!("linear xs = float[{n}]\nfor i in 1 to {n} {{ xs#i = i / {n}.0 }}\n");
 	let program = filled(40000);
 	let close = |reduction: &str, expected: &str| {
@@ -313,7 +313,7 @@ fn a_gpu_map_result_read_in_a_text_hole_is_not_folded() {
 #[test]
 fn a_gpu_map_result_read_on_the_cpu_is_kept_on_the_gpu_for_the_next_map() {
 	let tolerance = crate::common::gpu_tolerance();
-	use warp::diagnostic::{with_warning_mode, WarningMode};
+	use warp::errors::diagnostic::{with_warning_mode, WarningMode};
 	let keeping = |program: &str| {
 		let mut flags = vec![];
 		warp::pipeline::lower(program).expect("a program").visit(&mut |part| {

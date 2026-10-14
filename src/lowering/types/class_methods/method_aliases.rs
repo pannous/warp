@@ -73,7 +73,7 @@ pub(super) fn aliased_method(written: &str, defined: &[String]) -> Option<String
 	let method = candidates
 		.into_iter()
 		.find(|candidate| defined.iter().any(|method| method == candidate))?;
-	crate::diagnostic::note_alias(written, method);
+	crate::errors::diagnostic::note_alias(written, method);
 	Some(method.to_string())
 }
 

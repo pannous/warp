@@ -1,6 +1,6 @@
 // "got it" per expression (user, 2026-10-05): the prompt offers [y this / a all of this kind / n]; "this" remembers one
 // expression by its written text, "all" the whole topic; a `// got it` comment on its line silences a warning there
-use warp::diagnostic::{take_warnings, use_acknowledgements_file, with_acknowledger, Acknowledger, GotIt};
+use warp::errors::diagnostic::{take_warnings, use_acknowledgements_file, with_acknowledger, Acknowledger, GotIt};
 use warp::wasm_emitter::eval;
 
 const UPTO_A: &str = "x=0; for i in 1 upto 4 {x+=i}; x";

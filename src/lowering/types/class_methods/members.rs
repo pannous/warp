@@ -201,7 +201,7 @@ pub(super) fn without_modifiers(item: Node) -> Node {
 			.collect();
 		if !modifiers.iter().any(|word| SILENT_MODIFIERS.contains(&word.as_str())) {
 			crate::normalize::set_position_of(&item);
-			crate::diagnostic::note_alias(&format!("{} {kept_word}", modifiers.join(" ")), &kept_word);
+			crate::errors::diagnostic::note_alias(&format!("{} {kept_word}", modifiers.join(" ")), &kept_word);
 		}
 	}
 	match kept.len() {
@@ -371,7 +371,7 @@ pub(super) fn constructed_from_braces(node: Node, classes: &[String]) -> Node {
 			let class_name = class.drop_meta().name();
 			let written: Vec<String> = items.iter().map(Node::serialize).collect();
 			crate::normalize::set_position_of(&class);
-			crate::diagnostic::note_alias(
+			crate::errors::diagnostic::note_alias(
 				&format!("{class_name}{{{}}}", written.join(", ")),
 				&format!("{class_name}({})", written.join(", ")),
 			);
@@ -415,7 +415,7 @@ pub(super) fn with_init_constructors(node: Node, called: &std::collections::Hash
 					Some(alias) if alias == CONSTRUCTOR_WORD => as_init(item),
 					Some(alias) => {
 						crate::normalize::set_position_of(&item);
-						crate::diagnostic::note_alias(&alias, CONSTRUCTOR_WORD);
+						crate::errors::diagnostic::note_alias(&alias, CONSTRUCTOR_WORD);
 						as_init(item)
 					}
 					None => item,

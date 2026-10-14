@@ -1,7 +1,7 @@
 // P174 (user, 2026-10-07): `mk(k) := { it * k }` keeps `it` = the parameter (mk(3) is 9) and warns, naming both
 // readings: the parameter, or the parameter of a returned lambda (Kotlin/Swift)
 use crate::is;
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 use warp::wasm_emitter::eval;
 
 fn warnings_of(code: &str) -> Vec<String> {

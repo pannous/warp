@@ -37,7 +37,7 @@ fn with_json_classes(node: Node, classes: &Node) -> Node {
 				return Node::Key(module, Op::Dot, member);
 			};
 			let argument = items.get(1).cloned().unwrap_or(Node::Empty);
-			crate::diagnostic::note_alias(
+			crate::errors::diagnostic::note_alias(
 				&format!("{written_module}.{written_member}"),
 				if word.is_empty() { "the instance" } else { word },
 			);

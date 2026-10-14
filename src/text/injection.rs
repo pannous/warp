@@ -6,7 +6,7 @@
 //! Building a template from computed text is a compile error, and running one (`execute`, `exec`)
 //! needs the `sql` / `process` capability, which `eval` does not grant.
 
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::WarpParser;

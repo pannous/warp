@@ -202,7 +202,7 @@ pub(crate) fn class_fields(node: &Node) -> ClassFields {
 
 /// `class Tree{left: Tree}`: a field of the class's own type without `?` could never be filled, every Tree needing a
 /// Tree first (card empty-field, user decision: strict, the fix `left: Tree?`)
-pub fn check_self_typed_fields(program: &Node) -> Option<crate::diagnostic::Diagnostic> {
+pub fn check_self_typed_fields(program: &Node) -> Option<crate::errors::diagnostic::Diagnostic> {
 	let mut unfillable = None;
 	program.visit(&mut |part| {
 		let Node::Type { name, body } = part else { return };
@@ -214,7 +214,7 @@ pub fn check_self_typed_fields(program: &Node) -> Option<crate::diagnostic::Diag
 		if let Some(field) = field.filter(|_| unfillable.is_none()) {
 			let field_name = declared_field_name(&field).unwrap_or_default();
 			unfillable = Some(
-				crate::diagnostic::Diagnostic::at(
+				crate::errors::diagnostic::Diagnostic::at(
 					&field,
 					format!("{field_name} can never be filled: every {class} needs a {class} first"),
 				)

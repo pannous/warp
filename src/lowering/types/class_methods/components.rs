@@ -48,7 +48,7 @@ pub(super) fn with_render_aliases(node: Node) -> Node {
 				.find(|alias| methods.iter().any(|method| method == *alias));
 			match alias.filter(|_| !methods.iter().any(|method| method == RENDER_WORD)) {
 				Some(alias) => {
-					crate::diagnostic::note_alias(alias, RENDER_WORD);
+					crate::errors::diagnostic::note_alias(alias, RENDER_WORD);
 					let items = items
 						.into_iter()
 						.map(|item| match method_parts(&item) {

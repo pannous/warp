@@ -392,7 +392,7 @@ impl WarpParser {
 			};
 			self.note_variable(&lhs, op, &rhs);
 			if let Some(warning) = hash_range_warning(&lhs, op, &written, &rhs) {
-				if let Err(strict) = crate::diagnostic::report(&[warning]) {
+				if let Err(strict) = crate::errors::diagnostic::report(&[warning]) {
 					lhs = strict;
 					continue;
 				}

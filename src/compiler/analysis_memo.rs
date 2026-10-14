@@ -75,10 +75,10 @@ pub fn analysed(context: &mut Context, program: &Node, analyse: impl FnOnce(&mut
 		return analysis.into(context);
 	}
 	// what the analysis needs from the runtime is no part of a remembered answer: such an analysis is not remembered
-	let (required, said) = (context.required_functions.clone(), crate::diagnostic::said());
+	let (required, said) = (context.required_functions.clone(), crate::errors::diagnostic::said());
 	analyse(context, program);
 	// an analysis that needed runtime functions or said something (a warning, a hint) is no pure answer: not remembered
-	if context.required_functions != required || crate::diagnostic::said() != said {
+	if context.required_functions != required || crate::errors::diagnostic::said() != said {
 		return;
 	}
 	REMEMBERED_ANALYSES.with(|remembered| {
