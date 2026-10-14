@@ -185,6 +185,8 @@ jobs:
       with:
         name: site
         path: _site
+    - name: Software Vulkan for Firefox's WebGPU (lavapipe)
+      run: sudo apt-get update -q && sudo apt-get install -y -q mesa-vulkan-drivers
     - name: The tour in headless Firefox
       # a run takes about 3 minutes; a stuck one fails loudly instead of holding the deploy (card deploy-firefox-hang)
       # a failed first attempt runs again once, loudly (card tour-firefox-stall: an intermittent worker-start stall in
@@ -192,6 +194,8 @@ jobs:
       timeout-minutes: 25
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # api.github.com's limit for samples/live_region (firefox_driver.mjs)
+        # Linux Firefox keeps WebGPU off; on lavapipe it runs the GPU samples as the user's Firefox does (card shaders-firefox)
+        FIREFOX_PREFS: "{'dom.webgpu.enabled': true, 'gfx.webgpu.ignore-blocklist': true}"
       run: |
         set -o pipefail
         tour() { python3 web/playground/test_in_browser.py --examples --firefox --site _site 2>&1 | tee "$1"; }
