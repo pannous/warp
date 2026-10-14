@@ -777,18 +777,8 @@ impl Inference {
 				}
 				Ok((Node::Key(Box::new(target), op, Box::new(value)), held))
 			}
-			// `q as km`: the dimension must match; the amount stays in SI units, the unit shown is chosen where it is shown
 			Node::Key(quantity, Op::As, unit) if super::unit_expression(&unit).is_some() => {
-				let target = signature(&super::unit_expression(&unit).expect("guarded"));
-				let (quantity, given) = self.infer(*quantity)?;
-				if given != target {
-					return Err(Stop::Error(format!(
-						"DimensionError: {} cannot be converted to {}",
-						shown(&given),
-						shown(&target)
-					)));
-				}
-				Ok((quantity, given))
+				self.converted(*quantity, &unit)
 			}
 			// `"distance " + d`: the quantity joins as its text, `"distance " + (d as km)` in km
 			Node::Key(left, Op::Add, right) if super::joins_text(&left) || super::joins_text(&right) => {
@@ -803,9 +793,7 @@ impl Inference {
 			Node::Key(left, op @ (Op::Eq | Op::Ne), right)
 				if is_nothing(&left) || is_nothing(&right) || is_type_word(&right) =>
 			{
-				let (left, _) = self.infer(*left)?;
-				let (right, _) = self.infer(*right)?;
-				Ok((Node::Key(Box::new(left), op, Box::new(right)), vec![]))
+				self.unchecked_key(*left, op, *right)
 			}
 			// `2 m * "a"`: a text repeats a plain count of times (card units-text-repeat)
 			Node::Key(left, Op::Mul, right) if is_text(&left) || is_text(&right) => {
@@ -890,16 +878,7 @@ impl Inference {
 				left,
 				op @ (Op::Then | Op::If | Op::Do | Op::While | Op::Not | Op::And | Op::Or | Op::Range | Op::To),
 				right,
-			) => {
-				let (left, _) = self.infer(*left)?;
-				let (right, signature) = self.infer(*right)?;
-				let signature = if matches!(op, Op::Then | Op::Else) {
-					signature
-				} else {
-					vec![]
-				};
-				Ok((Node::Key(Box::new(left), op, Box::new(right)), signature))
-			}
+			) => self.unchecked_key(*left, op, *right),
 			// `xs#2`: an element of a list of quantities
 			Node::Key(list, Op::Hash, index) if matches!(list.drop_meta(), Node::Symbol(name) if self.lists.contains_key(name)) =>
 			{
@@ -947,6 +926,29 @@ impl Inference {
 			Node::List(items, bracket, separator) => self.infer_list(items, bracket, separator),
 			other => Ok((other, vec![])),
 		}
+	}
+
+	/// `q as km`, `q in km`: the dimension must match; the amount stays in SI units, the unit shown is chosen where it
+	/// is shown
+	fn converted(&mut self, quantity: Node, unit: &Node) -> Result<(Node, Signature), Stop> {
+		let target = signature(&super::unit_expression(unit).ok_or(Stop::Unsupported)?);
+		let (quantity, given) = self.infer(quantity)?;
+		if given != target {
+			return Err(Stop::Error(format!(
+				"DimensionError: {} cannot be converted to {}",
+				shown(&given),
+				shown(&target)
+			)));
+		}
+		Ok((quantity, given))
+	}
+
+	/// A key whose sides' units need not match: the value of `c then q` has q's signature, any other none
+	fn unchecked_key(&mut self, left: Node, op: Op, right: Node) -> Result<(Node, Signature), Stop> {
+		let (left, _) = self.infer(left)?;
+		let (right, signature) = self.infer(right)?;
+		let signature = if op == Op::Then { signature } else { vec![] };
+		Ok((Node::Key(Box::new(left), op, Box::new(right)), signature))
 	}
 
 	/// Any other key: no quantity may take part (stage 1 does not know what it does with the unit)
@@ -1326,38 +1328,32 @@ impl Inference {
 		Ok((lowered, element.unwrap_or_default()))
 	}
 
+	/// The items of a list literal of quantities and their signature; None for a list of plain values
+	fn quantity_items(&mut self, items: Vec<Node>) -> Option<Result<(Vec<Node>, Signature), Stop>> {
+		match self.list_elements(items) {
+			Ok((_, element)) if element.is_empty() => None,
+			found => Some(found),
+		}
+	}
+
 	/// The element signature of a list of quantities a word applies to: `sum(xs)` of a list variable, `max(a, b)` of quantities
 	fn list_word(&mut self, word: &str, arguments: &[Node]) -> Option<Result<(Vec<Node>, Signature), Stop>> {
 		if !ELEMENT_WORDS.contains(&word) && !crate::analyzer::is_counting_word(word) {
 			return None;
 		}
-		let (arguments, element) = match arguments {
-			[list] => match (list.drop_meta(), self.mapped_list(list)) {
-				(Node::Symbol(name), _) => (arguments.to_vec(), self.lists.get(name).cloned()?),
-				(Node::List(items, Bracket::Square, separator), _) => match self.list_elements(items.clone()) {
-					Ok((items, element)) if !element.is_empty() => {
-						(vec![Node::List(items, Bracket::Square, separator.clone())], element)
-					}
-					Ok(_) => return None,
-					Err(stop) => return Some(Err(stop)),
-				},
-				(_, Some(Ok((mapped, element)))) => (vec![mapped], element),
-				(_, Some(Err(stop))) => return Some(Err(stop)),
-				(_, None) => return None,
+		let found = match arguments {
+			[list] => match list.drop_meta() {
+				Node::Symbol(name) => Ok((arguments.to_vec(), self.lists.get(name).cloned()?)),
+				Node::List(items, Bracket::Square, separator) => self
+					.quantity_items(items.clone())?
+					.map(|(items, element)| (vec![Node::List(items, Bracket::Square, separator.clone())], element)),
+				_ => self.mapped_list(list)?.map(|(mapped, element)| (vec![mapped], element)),
 			},
-			_ if ELEMENT_WORDS.contains(&word) => match self.list_elements(arguments.to_vec()) {
-				Ok((items, element)) if !element.is_empty() => return Some(Ok((items, element))),
-				Ok(_) => return None,
-				Err(stop) => return Some(Err(stop)),
-			},
+			_ if ELEMENT_WORDS.contains(&word) => self.quantity_items(arguments.to_vec())?,
 			_ => return None,
 		};
-		let signature = if crate::analyzer::is_counting_word(word) {
-			vec![]
-		} else {
-			element
-		};
-		Some(Ok((arguments, signature)))
+		let counting = crate::analyzer::is_counting_word(word);
+		Some(found.map(|(arguments, element)| (arguments, if counting { vec![] } else { element })))
 	}
 
 	/// `runs.map(r => r.distance)` (or an `it` body) of a list of a class or of quantities: the list, its
