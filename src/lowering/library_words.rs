@@ -69,21 +69,21 @@ const SYNONYMS: [(&str, &[&str]); 31] = [
 	(MAP_KEYS, &["keys"]),
 	(MAP_VALUES, &["values"]),
 	(MAP_ENTRIES, &[]),
-	(COLLECTION_CONTAINS, &["contains", "has", "includes"]),
+	(COLLECTION_CONTAINS, &["contains", "has", "includes", "Contains"]),
 	(MAP_GET_OR, &["get"]),
 	// P35 default: `xs.index_of(x)` is the 1-based position (0 when absent)
 	(COLLECTION_POSITION, &["index_of"]),
 	("chars", &[]),
-	("upper", &["uppercase"]),
-	("lower", &["lowercase"]),
+	("upper", &["uppercase", "upcase"]),
+	("lower", &["lowercase", "downcase"]),
 	// the text builtin trim (text_builtins.rs), Python's strip
 	("trim", &["strip"]),
 	("reverse", &["reversed"]),
 	("sort", &["sorted"]),
 	("split", &[]),
 	("join", &[]),
-	("first", &[]),
-	("last", &[]),
+	("first", &["First"]),
+	("last", &["Last"]),
 	(SLICE, &[]),
 	(COPY, &["clone"]),
 	("replace", &[]),
@@ -99,6 +99,31 @@ const SYNONYMS: [(&str, &[&str]); 31] = [
 	(FROMKEYS, &[]),
 	(crate::words::UNWRAP, &[]),
 ];
+/// Other languages' words for warp words that are no library words (C#'s LINQ, R, PHP, Ruby, Kotlin): they work, with
+/// a note naming warp's word (welcome_forms::foreign_words). A spelling of a library word goes in SYNONYMS
+const FOREIGN_SYNONYMS: [(&str, &[&str]); 12] = [
+	("map", &["Select", "sapply", "lapply", "vapply", "array_map"]),
+	("filter", &["Where", "array_filter"]),
+	("reduce", &["Aggregate"]),
+	(SUM_WORD, &["Sum", "sumOf", "array_sum"]),
+	("count", &["Count"]),
+	("max", &["Max"]),
+	("min", &["Min"]),
+	("any", &["Any"]),
+	("all", &["All"]),
+	("string", &["to_s"]),
+	("int", &["to_i"]),
+	("float", &["to_f"]),
+];
+
+/// The warp word another language's `name` is (FOREIGN_SYNONYMS)
+pub(crate) fn foreign_synonym(name: &str) -> Option<&'static str> {
+	FOREIGN_SYNONYMS
+		.iter()
+		.find(|(_, spellings)| spellings.contains(&name))
+		.map(|(word, _)| *word)
+}
+
 /// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/list_dispatch.rs):
 /// a typed list sums its array, any other list runs the loop `sum` always lowered to
 pub const LIST_SUM: &str = "list_sum";

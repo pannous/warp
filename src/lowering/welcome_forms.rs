@@ -10,7 +10,7 @@
 use super::nodes::{call, children_rewritten, is_function_keyword, is_type_word, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::words::GENERIC_MARK;
+use crate::words::{GENERIC_MARK, SUM_WORD};
 use crate::words::{IN_WORD, ON_WORD, WHENEVER_WORD};
 use std::collections::HashSet;
 
@@ -38,17 +38,8 @@ const IS_WORD: &str = "is";
 const WHEN_ARM: &str = "if CONDITION then VALUE else OTHERWISE";
 const LAST_WHEN_ARM: &str = "if CONDITION then VALUE";
 const OCAML_FUNCTION_KEYWORD: &str = "fun";
-/// C# LINQ methods and the warp words they are (the alias rule: they work, with a note naming warp's word)
-/// Iteration functions of other languages and the warp word they are (alias rule, with a note): R's `sapply(xs, f)` is
-/// `map(xs, f)`; PHP's `array_map(f, xs)` takes the function first (true), `array_filter(xs, f)` the list
-const FOREIGN_ITERATIONS: [(&str, &str, bool, &str); 6] = [
-	("sapply", "map", false, "R's apply function"),
-	("lapply", "map", false, "R's apply function"),
-	("vapply", "map", false, "R's apply function"),
-	("array_map", "map", true, "PHP's array function"),
-	("array_filter", "filter", false, "PHP's array function"),
-	("array_sum", "sum", false, "PHP's array function"),
-];
+/// PHP's `array_map(f, xs)` takes the function first: `map(xs, f)`
+const FUNCTION_FIRST: [&str; 1] = ["array_map"];
 /// Modules of other languages whose words are warp's: JS's `Math.sqrt(16)` is `sqrt(16)`, F#'s `List.map f xs` is
 /// `map f xs` (also `Seq.`, `Array.`), Elixir's `Enum.map(xs, f)` is `map(xs, f)`
 const FOREIGN_MODULES: [&str; 5] = ["Math", "List", "Seq", "Array", "Enum"];
@@ -59,38 +50,12 @@ const QUALIFIED_WORDS: [(&str, &str, &str); 1] = [("file", "append", "append_fil
 const R_VECTOR_WORD: &str = "c";
 /// Ruby's `xs.sum { |x| x * 2 }`, Kotlin's `xs.sumOf { it * 2 }`, `xs.count { it > 1 }`: a reduction of the list
 /// the block makes, `sum(map(xs, block))`, `count(filter(xs, block))`
-const BLOCK_REDUCTIONS: [(&str, &str, &str); 3] = [
-	("sum", "sum", "map"),
-	("sumOf", "sum", "map"),
-	("count", "count", "filter"),
-];
-/// Ruby's conversion and case methods and the warp words they are: `x.to_s` is `string(x)`
-const RUBY_METHODS: [(&str, &str); 5] = [
-	("to_s", "string"),
-	("to_i", "int"),
-	("to_f", "float"),
-	("upcase", "upper"),
-	("downcase", "lower"),
-];
+const BLOCK_REDUCTIONS: [(&str, &str); 2] = [(SUM_WORD, "map"), ("count", "filter")];
 /// Elixir's `def sq(x), do: x * x` and its private `defp`
 const ELIXIR_DO_WORD: &str = "do";
 const ELIXIR_PRIVATE_DEF: &str = "defp";
 /// C++'s `auto x = 3`
 const CPP_AUTO_WORD: &str = "auto";
-const LINQ_METHODS: [(&str, &str); 12] = [
-	("Select", "map"),
-	("Where", "filter"),
-	("Aggregate", "reduce"),
-	("Sum", "sum"),
-	("Count", "count"),
-	("Max", "max"),
-	("Min", "min"),
-	("Any", "any"),
-	("All", "all"),
-	("First", "first"),
-	("Last", "last"),
-	("Contains", "contains"),
-];
 
 pub fn lower(node: Node) -> Node {
 	let defined = crate::library_words::defined_names(&node);
@@ -100,7 +65,8 @@ pub fn lower(node: Node) -> Node {
 		r_vectors(node)
 	};
 	let node = qualified_module_calls(module_aliases(node));
-	let node = linq_calls(forms(node), &defined);
+	let fields = field_names(&node);
+	let node = forms(foreign_words(node, &defined, &fields));
 	let mut lambda_names = HashSet::new();
 	collect_lambda_names(&node, &mut lambda_names);
 	lambda_calls(node, &lambda_names)
@@ -155,9 +121,7 @@ fn forms(node: Node) -> Node {
 			forms(without_type_parameters(Node::List(items, bracket, separator), &names))
 		}
 		Node::List(items, bracket, separator) => {
-			let items: Vec<Node> = foreign_iteration(python_lambdas(braceless_lambdas(
-				items.into_iter().map(forms).collect(),
-			)));
+			let items: Vec<Node> = python_lambdas(braceless_lambdas(items.into_iter().map(forms).collect()));
 			if let Some(lambda) = anonymous_function(&items)
 				.or_else(|| assigned_braceless_function(&items))
 				.or_else(|| ruby_lambda(&items))
@@ -220,17 +184,6 @@ fn forms(node: Node) -> Node {
 					Separator::Semicolon,
 				),
 			)
-		}
-		// Ruby's `x.to_s`, `t.upcase`: warp's word called on x, `string(x)`, `upper(t)` (alias rule, with a note)
-		Node::Key(subject, Op::Dot, method) if ruby_method(&method).is_some() => {
-			let warp_word = ruby_method(&method).expect("guarded");
-			crate::normalize::set_position_of(&method);
-			crate::normalize::hint(
-				&format!(".{}", method.name()),
-				&format!("{warp_word}(…)"),
-				"warp's word for Ruby's method",
-			);
-			call(warp_word, vec![forms(*subject)])
 		}
 		// `f = lambda *xs: …`, JS `f = (...xs) => …`: the definition `f(*xs) := …`, which variadic.rs reads
 		Node::Key(name, Op::Assign, value) if starred_lambda(&name, &value).is_some() => {
@@ -718,22 +671,6 @@ fn braceless_lambdas(items: Vec<Node>) -> Vec<Node> {
 	merged
 }
 
-/// `to_s` of `x.to_s` (or `x.to_s()`): the warp word of the Ruby method (RUBY_METHODS)
-fn ruby_method(method: &Node) -> Option<&'static str> {
-	let word = match method.drop_meta() {
-		Node::Symbol(word) => word.as_str(),
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => match items[0].drop_meta() {
-			Node::Symbol(word) => word.as_str(),
-			_ => return None,
-		},
-		_ => return None,
-	};
-	RUBY_METHODS
-		.iter()
-		.find(|(ruby, _)| *ruby == word)
-		.map(|(_, warp_word)| *warp_word)
-}
-
 /// Elixir's one-line `def sq(x), do: x * x`, parsed as `def sq(x)`, `do: x * x`: the definition `sq(x) := x * x`.
 /// Its block form `def sq(x) do x * x end` is parsed as `def`, `sq(x) do {x * x}`
 fn elixir_definition(items: &[Node]) -> Option<Node> {
@@ -807,43 +744,17 @@ fn block_reduction(items: &[Node]) -> Option<Node> {
 	let Node::Key(subject, Op::Dot, word) = method.drop_meta() else {
 		return None;
 	};
-	let &(written, reduction, iteration) = BLOCK_REDUCTIONS.iter().find(|(written, ..)| word.is_symbol(written))?;
+	let &(reduction, iteration) = BLOCK_REDUCTIONS
+		.iter()
+		.find(|(reduction, _)| word.is_symbol(reduction))?;
 	if !matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 		return None;
-	}
-	if written != reduction {
-		crate::normalize::set_position_of(method);
-		crate::normalize::hint(&format!(".{written} {{"), &format!(".{reduction} {{"), "warp's word");
 	}
 	let call = |word: &str, arguments: Vec<Node>| call(word, arguments);
 	Some(call(
 		reduction,
 		vec![call(iteration, vec![subject.as_ref().clone(), block.clone()])],
 	))
-}
-
-/// R's `sapply(xs, f)`, PHP's `array_map(f, xs)`: `map(xs, f)`, with a note naming warp's word (FOREIGN_ITERATIONS)
-fn foreign_iteration(mut items: Vec<Node>) -> Vec<Node> {
-	let Some(&(word, warp_word, function_first, source)) = items
-		.first()
-		.and_then(|first| FOREIGN_ITERATIONS.iter().find(|(word, ..)| first.is_symbol(word)))
-	else {
-		return items;
-	};
-	if items.len() < 2 {
-		return items;
-	}
-	crate::normalize::set_position_of(&items[0]);
-	crate::normalize::hint(
-		&format!("{word}("),
-		&format!("{warp_word}("),
-		&format!("warp's word for {source}"),
-	);
-	items[0] = symbol(warp_word);
-	if function_first && items.len() == 3 {
-		items.swap(1, 2);
-	}
-	items
 }
 
 /// Whether the program uses `c` other than as R's call `c(…)`: a variable, parameter or function of that name
@@ -1128,36 +1039,70 @@ fn starred_lambda(name: &Node, value: &Node) -> Option<Node> {
 	Some(Node::Key(Box::new(head), Op::Define, body.clone()))
 }
 
-/// C#'s `xs.Sum()`, `xs.Select(x => x * 2)`: the LINQ name, warp's word and the arguments (a called method only:
-/// `obj.Count` may be a field)
-/// `xs.Select(f)`: warp's `xs.map(f)`, with a note; a method the program defines itself (Go's `Sum()`) stays
-fn linq_calls(node: Node, defined: &HashSet<String>) -> Node {
+/// Other languages' words as warp's, with a note (library_words::FOREIGN_SYNONYMS): C#'s `xs.Select(f)` is
+/// `xs.map(f)`, Ruby's `x.to_s` `x.string`, R's `sapply(xs, f)` `map(xs, f)`, PHP's `array_map(f, xs)` `map(xs, f)`.
+/// A word the program defines stays, and so does a bare `.Count` when the program has a field of that name
+fn foreign_words(node: Node, defined: &HashSet<String>, fields: &HashSet<String>) -> Node {
+	let warp_word = |word: &Node| {
+		let written = word.symbol_name().filter(|written| !defined.contains(*written))?;
+		Some((written.to_string(), crate::library_words::foreign_synonym(written)?))
+	};
+	let renamed = |head: &Node, prefix: &str, suffix: &str| {
+		let (written, word) = warp_word(head)?;
+		crate::normalize::set_position_of(head);
+		crate::normalize::hint(
+			&format!("{prefix}{written}{suffix}"),
+			&format!("{prefix}{word}{suffix}"),
+			"warp's word",
+		);
+		Some(symbol(word))
+	};
+	let recurse = |child: Node| foreign_words(child, defined, fields);
 	match node {
-		Node::Key(receiver, Op::Dot, method)
-			if linq_method(&method).is_some_and(|(written, _, _)| !defined.contains(written)) =>
-		{
-			let (written, word, arguments) = linq_method(&method).expect("guarded");
-			crate::normalize::set_position_of(&method);
-			crate::normalize::hint(
-				&format!(".{written}("),
-				&format!(".{word}("),
-				"warp's word for the LINQ method",
-			);
-			let arguments = arguments.into_iter().map(|argument| linq_calls(argument, defined));
-			let call = call(word, arguments.collect());
-			key(linq_calls(*receiver, defined), Op::Dot, call)
+		Node::Key(receiver, Op::Dot, method) => {
+			let method = match method.drop_meta().clone() {
+				Node::List(mut items, Bracket::Round, separator) if !items.is_empty() => {
+					if let Some(word) = renamed(&items[0], ".", "(") {
+						items[0] = word;
+					}
+					let head = items.remove(0);
+					Node::List(
+						[head].into_iter().chain(items.into_iter().map(recurse)).collect(),
+						Bracket::Round,
+						separator,
+					)
+				}
+				Node::Symbol(written) if !fields.contains(&written) => {
+					let bare = Node::Symbol(written);
+					renamed(&bare, ".", "").unwrap_or(bare)
+				}
+				other => recurse(other),
+			};
+			key(recurse(*receiver), Op::Dot, method)
 		}
-		other => other.map_children(|child| linq_calls(child, defined)),
+		// a call: `sapply(xs, f)`, `sapply xs f`
+		Node::List(mut items, bracket @ (Bracket::Round | Bracket::None), separator) if items.len() > 1 => {
+			if let Some(word) = renamed(&items[0], "", "(") {
+				if items.len() == 3 && FUNCTION_FIRST.iter().any(|written| items[0].is_symbol(written)) {
+					items.swap(1, 2);
+				}
+				items[0] = word;
+			}
+			Node::List(items.into_iter().map(recurse).collect(), bracket, separator)
+		}
+		other => other.map_children(recurse),
 	}
 }
 
-fn linq_method(method: &Node) -> Option<(&'static str, &'static str, Vec<Node>)> {
-	let Node::List(items, Bracket::Round, _) = method.drop_meta() else {
-		return None;
-	};
-	let (word, arguments) = items.split_first()?;
-	let (written, warp_word) = LINQ_METHODS.iter().find(|(linq, _)| word.is_symbol(linq))?;
-	Some((written, warp_word, arguments.to_vec()))
+/// The names the program gives fields: `Count` of `{Count: 3}` and of a class's `Count: int`
+fn field_names(node: &Node) -> HashSet<String> {
+	let mut fields = HashSet::new();
+	node.visit(&mut |part| {
+		if let Node::Key(name, Op::Colon, _) = part {
+			fields.extend(name.symbol_name().map(str::to_string));
+		}
+	});
+	fields
 }
 
 /// `call(3)`, `call 3`: the arguments of Ruby's `.call`
