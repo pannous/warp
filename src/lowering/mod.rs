@@ -75,7 +75,6 @@ pub mod references;
 pub mod reflection;
 pub mod result_word;
 pub mod routes;
-pub mod ruby_blocks;
 pub mod run_time_blocks;
 pub mod scoped_handlers;
 pub mod select_options;
