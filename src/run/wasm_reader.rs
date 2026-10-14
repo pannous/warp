@@ -504,10 +504,10 @@ fn struct_node<T>(
 		),
 		t if t == Kind::Data as u8 => {
 			let type_name = text_of(store, &data, memory);
-			Node::Data(crate::meta::DataValue {
+			Node::Data(crate::compiler::meta::DataValue {
 				data: Box::new(format!("<wasm data: {type_name}>")),
 				type_name,
-				data_type: crate::meta::DataType::Other,
+				data_type: crate::compiler::meta::DataType::Other,
 			})
 		}
 		// a closure reads as the name of its function

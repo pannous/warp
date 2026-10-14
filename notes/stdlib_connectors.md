@@ -21,7 +21,7 @@ access to anything." Card hijack-stdlib. Survey of what exists, options per ecos
 - **Host words** (src/host.rs): Rust functions the module imports, Node in / Node out. `run_block` reads Nodes with
   `wasm_reader::node_in` and builds its result with `tasks::Builders` (TaskValue: ø, Int, Float, Char, Text, Symbol,
   List, Key, Closure, Exact). That is a general bridge for any value: every connector below can use it.
-- **Capabilities** (src/effects.rs): Host, Wasi, Ffi, Libm, Sql, Process. `eval` grants Host+Wasi+Ffi+Libm,
+- **Capabilities** (src/analyzer/effects.rs): Host, Wasi, Ffi, Libm, Sql, Process. `eval` grants Host+Wasi+Ffi+Libm,
   `eval_untrusted` only Libm. Process (`exec sh "…"`) and Sql are granted by no host yet: there is no "allow anything"
   mode.
 - **Packages** (notes/packages.md): `use name` = local `.warp`, then builtin/FFI library, then the git registry

@@ -65,7 +65,7 @@ pub(super) const TRAP_POSITION_GLOBAL: &str = "trap·position";
 pub(super) const COLUMN_BITS: u32 = 12;
 
 /// A source position of the program as the i32 `trap_position` holds: the line above, the column below
-pub(super) fn encoded_position(position: &crate::meta::LineInfo) -> i32 {
+pub(super) fn encoded_position(position: &crate::compiler::meta::LineInfo) -> i32 {
 	((position.line_nr as i32) << COLUMN_BITS) | position.column.min((1 << COLUMN_BITS) - 1) as i32
 }
 
@@ -75,7 +75,7 @@ pub fn trap_position_line(encoded: i64) -> Option<String> {
 }
 
 /// The position a trace's `trap position: …` line carries
-pub(super) fn trap_position(trace: &str) -> Option<crate::meta::LineInfo> {
+pub(super) fn trap_position(trace: &str) -> Option<crate::compiler::meta::LineInfo> {
 	let encoded: i64 = trace
 		.split_once(TRAP_POSITION_PREFIX)?
 		.1
@@ -84,7 +84,7 @@ pub(super) fn trap_position(trace: &str) -> Option<crate::meta::LineInfo> {
 		.trim()
 		.parse()
 		.ok()?;
-	Some(crate::meta::LineInfo {
+	Some(crate::compiler::meta::LineInfo {
 		line_nr: (encoded >> COLUMN_BITS) as usize,
 		column: (encoded & ((1 << COLUMN_BITS) - 1)) as usize,
 		..Default::default()

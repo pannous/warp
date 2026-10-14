@@ -356,7 +356,7 @@ function runMain(holder, hooks) {
 		const events = pageEvents(exports);
 		// a program with routes stays for its links (lowering/routes.rs page·routes)
 		if ((events.length > 0 || holder.timers || holder.fetches || exports[PAGE_ROUTES_EXPORT] || exports[PAGE_SUBMITTED_EXPORT]) && outcome.result) hooks.listen?.(holder, events);
-		// a run without page events (lib/markup.warp rendering the page's HTML, src/markup.rs) keeps the page's run
+		// a run without page events (lib/markup.warp rendering the page's HTML, src/web/markup.rs) keeps the page's run
 		if (events.length > 0 && outcome.result) listeningRun = holder;
 		return outcome;
 	});

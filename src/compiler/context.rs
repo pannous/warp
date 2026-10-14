@@ -1,5 +1,5 @@
 use crate::ffi::FfiSignature;
-use crate::function::FunctionRegistry;
+use crate::compiler::function::FunctionRegistry;
 use crate::node::Node;
 use crate::type_kinds::{Kind, TypeRegistry};
 use std::collections::{HashMap, HashSet};
@@ -60,14 +60,14 @@ pub struct Context {
 	/// The variants without payload of the program's sum types (`enum Coin { Penny }`): bare words naming a value
 	pub variant_names: HashSet<String>,
 	/// The program's `global` declarations with kind and type, which every function body sees
-	pub declared_globals: HashMap<String, crate::local::Local>,
+	pub declared_globals: HashMap<String, crate::compiler::local::Local>,
 	/// Declared kinds of the fields of the program's types, keyed by analyzer::field_kind_key (`.x` → Float)
 	pub field_kinds: HashMap<String, Kind>,
 	pub user_functions: std::collections::BTreeMap<String, UserFunctionDef>,
 	/// Per function: captured outer variable → (global holding its value at definition time, kind)
 	pub captures: HashMap<String, Vec<Capture>>,
 	/// Per function: the captured variables' bindings with their types (`k = {a: 10}`: `k.a` is an Int in the body)
-	pub capture_bindings: HashMap<String, Vec<crate::local::Local>>,
+	pub capture_bindings: HashMap<String, Vec<crate::compiler::local::Local>>,
 	/// A function defined in a function body (`outer·inner`) → the function whose body defines it (`outer`)
 	pub enclosing_functions: HashMap<String, String>,
 	/// Calls that disagree on the kind of an undeclared parameter, reported as type errors

@@ -80,7 +80,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
   emitted before the list ops now (tests/control/test_try_list_index.rs).
 
 ## 2026-10-05 fix-uniscript-entities
-- `\alpha` / `\:infinity` uniscript entities in code (src/uniscript_entities.rs, ~150 LaTeX and English names, Greek,
+- `\alpha` / `\:infinity` uniscript entities in code (src/text/uniscript_entities.rs, ~150 LaTeX and English names, Greek,
   sets, logic, relations): expanded to their character before parsing, outside texts and comments; an unknown
   `\name` is the loud "unknown entity \name" (tests/parser/test_uniscript_entities.rs). The full table and `<:…>`
   blocks stay with the uniscript package.

@@ -2,7 +2,7 @@
 //! the WASM GC emitter (wasm_emitter) → run. `eval`, `compile` and `lower` are the entry points; wasm_emitter
 //! re-exports them.
 
-use crate::compile_context;
+use crate::compiler::compile_context;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::WarpParser;
@@ -17,7 +17,7 @@ use crate::lowering::nodes::children_rewritten;
 #[cfg(feature = "native")]
 use crate::wasm_emitter::{failed_run, run_raw_struct};
 #[cfg(feature = "native")]
-use crate::wasm_reader::read_bytes;
+use crate::run::wasm_reader::read_bytes;
 
 /// The program written in `code`, or in the file `code` names: a file sees the definitions of its folder (D15)
 pub fn eval(code: &str) -> Node {
@@ -97,11 +97,11 @@ fn lawful_program(code: &str) -> Result<Node, Node> {
 pub fn eval_untrusted(code: &str) -> Node {
 	crate::diagnostic::begin_program();
 	let program = WarpParser::parse(code);
-	match crate::effects::EffectReport::of(&program).denied(&crate::effects::Capability::GRANTED_UNTRUSTED) {
+	match crate::analyzer::effects::EffectReport::of(&program).denied(&crate::analyzer::effects::Capability::GRANTED_UNTRUSTED) {
 		Some((external, _)) => crate::node::error(&format!(
 			"untrusted code has no capabilities but pure libm, refusing to call {external}"
 		)),
-		None => with_granted(&crate::effects::Capability::GRANTED_UNTRUSTED, || {
+		None => with_granted(&crate::analyzer::effects::Capability::GRANTED_UNTRUSTED, || {
 			eval_parsed(program, code)
 		}),
 	}
@@ -109,14 +109,14 @@ pub fn eval_untrusted(code: &str) -> Node {
 
 /// `run` with the program granted only what a sandboxed program gets (`warp --sandbox`, Capability::GRANTED_SANDBOXED)
 pub fn sandboxed<T>(run: impl FnOnce() -> T) -> T {
-	with_granted(&crate::effects::Capability::GRANTED_SANDBOXED, || {
+	with_granted(&crate::analyzer::effects::Capability::GRANTED_SANDBOXED, || {
 		compile_context::scoped(|context| &mut context.sandboxed, true, run)
 	})
 }
 
 /// `run` with the program granted only `granted` (checked again after lowering, which brings calls of its own:
 /// `use python math` → foreign_call)
-fn with_granted<T>(granted: &'static [crate::effects::Capability], run: impl FnOnce() -> T) -> T {
+fn with_granted<T>(granted: &'static [crate::analyzer::effects::Capability], run: impl FnOnce() -> T) -> T {
 	compile_context::scoped(|context| &mut context.granted, granted, run)
 }
 
@@ -572,7 +572,7 @@ fn lower_for_emission(node: Node) -> Result<Node, Node> {
 }
 
 fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
-	use crate::effects::{without_constraints, EffectReport};
+	use crate::analyzer::effects::{without_constraints, EffectReport};
 	// the loop headers the parser keeps as written (`for int in xs`), given their meaning before any check reads the loops
 	let node = crate::lowering::for_loop::headers::lower(node);
 	// `data e` as written: no sugar pass rewrites inside e
@@ -587,7 +587,7 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	if let Some(unfillable) = crate::lowering::class_methods::check_self_typed_fields(&node) {
 		return Err(unfillable.into_error());
 	}
-	crate::diagnostic::report(&crate::accessibility::warnings(&node))?;
+	crate::diagnostic::report(&crate::web::accessibility::warnings(&node))?;
 	crate::diagnostic::report(&crate::analyzer::source_warnings(&node))?;
 	// emits and handler blocks as written: the passes lower them to calls, the named effects are read from them
 	let as_written = node.clone();
@@ -601,7 +601,7 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	if let Some(unsaid) = crate::numbers::uncertain::check_orderings(&node) {
 		return Err(unsaid.into_error());
 	}
-	let node = crate::function_equality::decide_comparisons(node);
+	let node = crate::compiler::function_equality::decide_comparisons(node);
 	if let Node::Error(_) = node {
 		return Err(node);
 	}
@@ -717,7 +717,7 @@ fn printing_result(program: Node) -> Node {
 
 /// A compiled module that runs blocks at run time needs a host with a warp compiler: say so where it is made
 fn warn_about_run_time_blocks(node: &Node) -> Result<(), Node> {
-	if !crate::effects::EffectReport::of(node).calls_external(crate::host::RUN_BLOCK) {
+	if !crate::analyzer::effects::EffectReport::of(node).calls_external(crate::host::RUN_BLOCK) {
 		return Ok(());
 	}
 	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(node, format!(
@@ -776,8 +776,8 @@ fn eval_program(node: Node) -> Node {
 
 /// A run's value; markup it built is checked for accessibility as it came out (card web-a11y-runtime)
 fn checked_markup(result: Node) -> Node {
-	if crate::markup::is_markup(&result) {
-		crate::accessibility::check_rendered(&result);
+	if crate::web::markup::is_markup(&result) {
+		crate::web::accessibility::check_rendered(&result);
 	}
 	result
 }
@@ -827,7 +827,7 @@ pub fn eval_block(block: Node, names: &Node, values: &Node, definitions: &Node) 
 			.collect(),
 	);
 	let result =
-		match crate::effects::EffectReport::of(&as_written).denied(&crate::effects::Capability::GRANTED_UNTRUSTED) {
+		match crate::analyzer::effects::EffectReport::of(&as_written).denied(&crate::analyzer::effects::Capability::GRANTED_UNTRUSTED) {
 			Some((external, capability)) => crate::node::error(&format!(
 				"a block run at run time is pure: {external} needs the {} capability, which it does not get",
 				capability.name()
@@ -1015,7 +1015,7 @@ pub(crate) fn run_module(
 		needs_ffi,
 	}: CompiledModule,
 ) -> Node {
-	use crate::wasm_reader::{read_bytes_with_imports, Imports};
+	use crate::run::wasm_reader::{read_bytes_with_imports, Imports};
 	let result = if needs_ffi || needs_wasi || needs_host {
 		read_bytes_with_imports(
 			&bytes,

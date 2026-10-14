@@ -137,7 +137,7 @@ fn lower_shadowed(program: &Node) -> Option<Result<Node, Node>> {
 				ResultUnits::Whole(factors) => !factors.is_empty(),
 				ResultUnits::Fields(fields) => !fields.is_empty(),
 			};
-			crate::compile_context::change(|context| context.result_units = has_units.then_some(units));
+			crate::compiler::compile_context::change(|context| context.result_units = has_units.then_some(units));
 			Some(Ok(node))
 		}
 		Err(Stop::Error(message)) => Some(Err(crate::node::error(&message))),
@@ -234,7 +234,7 @@ fn written_units(node: &Node) -> Vec<&'static Unit> {
 
 /// The units the last lowered program's final value has, once (None for a plain number)
 pub(crate) fn take_result_units() -> Option<ResultUnits> {
-	crate::compile_context::change(|context| context.result_units.take())
+	crate::compiler::compile_context::change(|context| context.result_units.take())
 }
 
 /// The entry of the module's `warp.meta` section (meta_section.rs) naming the units of `main`'s result (`km:1 h:-1`), or

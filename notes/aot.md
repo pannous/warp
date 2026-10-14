@@ -141,7 +141,7 @@ the system signals and values (optional packages chosen by the program's imports
 1. Done: Cranelift crates optimized in dev builds (largest win, tests 8×).
 2. Done (branch aot): the on-disk module cache for every native run, and `warp compile --aot`.
 3. Done (g-qV5Y, g-qV8Y): one shared gc_engine per process (a repeated run is a map lookup) and `warp build`.
-4. Done (2026-10-05): dead-function elimination of every emitted module (src/dead_functions.rs): functions no export,
+4. Done (2026-10-05): dead-function elimination of every emitted module (src/compiler/dead_functions.rs): functions no export,
    start, element segment or global reaches are dropped. `f(x):=x+1; f(41)`: 113 → 52 functions, 7.6 → 5.0 KB wasm,
    cwasm 131 → 92 KB, single-threaded Cranelift 17.0 → 14.7 ms; ackermann 10.9 → 8.4 KB, cwasm 149 → 128 KB;
    functions:: (289 tests, one thread, cache off) 17.1 → 13.4 s.

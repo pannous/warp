@@ -519,7 +519,7 @@ function controlTask(run, id, operation) {
 	return 1n;
 }
 
-// the message a raised error left in trap_detail before trapping (src/wasm_reader.rs with_trap_detail), if any
+// the message a raised error left in trap_detail before trapping (src/run/wasm_reader.rs with_trap_detail), if any
 function raisedText(exports) {
 	const detail = exports?.[TRAP_DETAIL_EXPORT]?.value;
 	if (!detail) return null;

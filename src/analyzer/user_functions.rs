@@ -603,7 +603,7 @@ pub(super) fn infer_forwarded_parameters(ctx: &mut Context) {
 /// - `name(param) = body` → Key(List[name, param], Assign, body)
 /// - `name := body` → Key(Symbol(name), Define, body) (uses implicit `it`)
 pub fn extract_user_functions(ctx: &mut Context, node: &Node) {
-	crate::analysis_memo::analysed(ctx, node, analyse_user_functions);
+	crate::compiler::analysis_memo::analysed(ctx, node, analyse_user_functions);
 }
 
 /// A fresh context holding the functions the program defines (extract_user_functions)

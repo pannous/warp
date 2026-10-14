@@ -8,7 +8,7 @@
 //! Later the `EffectSet` moves onto semantic `Expr`/`FunctionDecl`; the report stays the query API.
 
 use crate::analyzer::{extract_ffi_imports, function_definitions};
-use crate::context::Context;
+use crate::compiler::context::Context;
 use crate::node::{Bracket, Node};
 use crate::operators::{is_function_keyword, Op};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};

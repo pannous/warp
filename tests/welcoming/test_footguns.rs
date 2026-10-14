@@ -1072,13 +1072,13 @@ fn test_fuel_budget_can_be_raised() {
 	const { assert!(warp::util::DEFAULT_FUEL >= 1_000_000_000, "the default is generous") };
 }
 
-fn effects(code: &str, function: &str) -> warp::effects::EffectSet {
-	warp::effects::effects_of(code, function).unwrap_or_else(|| panic!("{function} unresolved in {code}"))
+fn effects(code: &str, function: &str) -> warp::analyzer::effects::EffectSet {
+	warp::analyzer::effects::effects_of(code, function).unwrap_or_else(|| panic!("{function} unresolved in {code}"))
 }
 
 #[test] // Koka's div: recursion that shrinks a parameter toward a guarded base case is total
 fn test_shrinking_recursion_is_total() {
-	use warp::effects::EffectSet;
+	use warp::analyzer::effects::EffectSet;
 	for (code, name) in [
 		("fib(n) := n<2 ? n : fib(n-1)+fib(n-2)", "fib"),
 		("fac(n) := n<2 ? 1 : n*fac(n-1)", "fac"),
@@ -1097,7 +1097,7 @@ fn test_shrinking_recursion_is_total() {
 
 #[test] // when unsure, Div: unguarded, unbounded (fac(-1)), wrong-way and mutual recursion may diverge
 fn test_unproven_recursion_may_diverge() {
-	use warp::effects::Effect::Div;
+	use warp::analyzer::effects::Effect::Div;
 	for (code, name) in [
 		("f(n) := f(n)", "f"),
 		("f(n) := n==0 ? 0 : n*f(n-1)", "f"),
@@ -1113,7 +1113,7 @@ fn test_unproven_recursion_may_diverge() {
 
 #[test] // a while loop has an unknown condition in general: Div
 fn test_while_loop_may_diverge() {
-	use warp::effects::Effect::Div;
+	use warp::analyzer::effects::Effect::Div;
 	assert!(effects("i=0; while i<3 { i++ }; i", "main").contains(Div));
 	assert!(!effects("x=3; x*2", "main").contains(Div));
 }

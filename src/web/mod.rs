@@ -21,11 +21,13 @@ pub mod web_server;
 pub mod web_sockets;
 #[cfg(all(feature = "native", target_os = "macos"))]
 pub mod webview;
+pub mod markup;
+pub mod accessibility;
 
 use crate::diagnostic::{self, Acknowledger};
 use crate::extensions::numbers::Number;
 use crate::fixits::{self, Fix};
-use crate::meta::{DataType, DataValue};
+use crate::compiler::meta::{DataType, DataValue};
 use crate::node::{Bracket, Node, Separator};
 use crate::type_kinds::KIND_BITS;
 use crate::type_kinds::{Kind, KIND_MASK};
@@ -123,7 +125,7 @@ pub fn evaluate(code: &str, acknowledged: HashSet<String>) -> Value {
 /// itself, else by the renderer compiled on its own
 fn html_of(value: &Node) -> Value {
 	let rendered = RENDERED.with(|rendered| rendered.borrow_mut().take());
-	json!(crate::markup::is_markup(value).then(|| rendered.unwrap_or_else(|| crate::markup::to_html(value))))
+	json!(crate::web::markup::is_markup(value).then(|| rendered.unwrap_or_else(|| crate::web::markup::to_html(value))))
 }
 
 /// `code` compiled and run; a program holding markup renders itself (pipeline::rendering_itself). The page has no
@@ -140,7 +142,7 @@ pub fn renders_itself(code: &str) -> bool {
 	let mut holds_markup = false;
 	// quietly: the compile that follows says what the parse finds
 	diagnostic::quietly(|| crate::warp_parser::parse(code))
-		.visit(&mut |part| holds_markup |= crate::markup::is_markup(part));
+		.visit(&mut |part| holds_markup |= crate::web::markup::is_markup(part));
 	holds_markup
 }
 

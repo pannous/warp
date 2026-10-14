@@ -335,14 +335,14 @@ fn with_output_binding(mut statements: Vec<Node>, main_variables: &HashSet<Strin
 	let shown = statements
 		.last()
 		.map(Node::drop_meta)
-		.filter(|last| matches!(last, Node::Symbol(_)) || crate::markup::is_markup(last) || is_shown_choice(last))
+		.filter(|last| matches!(last, Node::Symbol(_)) || crate::web::markup::is_markup(last) || is_shown_choice(last))
 		.cloned();
 	if let Some(shown) = shown {
 		// markup: each element holding a computed part is read on its own too, the page changes only those that differ
-		let holes = crate::markup::holes(&shown)
+		let holes = crate::web::markup::holes(&shown)
 			.into_iter()
 			.map(|(path, element)| (hole_name(&path), element));
-		let text_holes = crate::markup::text_holes(&shown)
+		let text_holes = crate::web::markup::text_holes(&shown)
 			.into_iter()
 			.map(|hole| (text_hole_name(&hole.path, hole.after), hole.text));
 		let bindings: Vec<Node> = holes
@@ -383,7 +383,7 @@ fn only_reads(node: &Node) -> bool {
 		Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::Empty | Node::True | Node::False => {
 			true
 		}
-		markup if crate::markup::is_markup(markup) => true,
+		markup if crate::web::markup::is_markup(markup) => true,
 		Node::Key(left, op, right) => {
 			!matches!(op, Op::Assign | Op::Define | Op::Inc | Op::Dec | Op::While | Op::Do)
 				&& !op.is_compound_assign()

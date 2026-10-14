@@ -2,7 +2,7 @@
 use crate::extensions::lists::{map, VecExtensions2};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
-use crate::meta::{DataType, DataValue, LineInfo};
+use crate::compiler::meta::{DataType, DataValue, LineInfo};
 use crate::node::Node::*;
 use crate::operators::{is_function_keyword, Op};
 use crate::type_kinds::Kind;

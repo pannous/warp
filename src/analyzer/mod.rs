@@ -1,7 +1,7 @@
-use crate::context::{Context, Param, UserFunctionDef};
+use crate::compiler::context::{Context, Param, UserFunctionDef};
 use crate::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
-use crate::local::Local;
+use crate::compiler::local::Local;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 use crate::type_kinds::Kind;
@@ -124,6 +124,7 @@ mod user_functions;
 mod variables;
 pub use upcast_fields::check_upcast_fields;
 mod list_views;
+pub mod effects;
 pub use booleans::*;
 pub use checks::*;
 pub use counting::*;

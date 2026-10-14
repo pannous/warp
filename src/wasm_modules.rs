@@ -1162,8 +1162,8 @@ fn write_back(
 			.ok_or_else(|| wasmtime::format_err!("a value's instance exports no memory"))
 	};
 	let (program_memory, module_memory) = (memory(caller, None)?, memory(caller, Some(instance))?);
-	let changed = crate::wasm_reader::node_in(module_argument, &mut caller.as_context_mut(), module_memory)
-		!= crate::wasm_reader::node_in(argument, &mut caller.as_context_mut(), program_memory);
+	let changed = crate::run::wasm_reader::node_in(module_argument, &mut caller.as_context_mut(), module_memory)
+		!= crate::run::wasm_reader::node_in(argument, &mut caller.as_context_mut(), program_memory);
 	if !changed {
 		return Ok(());
 	}
@@ -1195,7 +1195,7 @@ fn copied(
 	let memory = export_of(caller, from, "memory")
 		.and_then(wasmtime::Extern::into_memory)
 		.ok_or_else(|| wasmtime::format_err!("a value's instance exports no memory"))?;
-	let node = crate::wasm_reader::node_in(value, &mut caller.as_context_mut(), memory);
+	let node = crate::run::wasm_reader::node_in(value, &mut caller.as_context_mut(), memory);
 	let value = crate::tasks::TaskValue::of(&node).map_err(|failure| wasmtime::format_err!("{failure}"))?;
 	let builders = crate::tasks::Builders::of(&mut |name| export_of(caller, into, name))
 		.map_err(|failure| wasmtime::format_err!("{failure}"))?;
@@ -1254,7 +1254,7 @@ fn instance_of(
 	let engine = caller.engine().clone();
 	let module = wasmtime::Module::new(&engine, &bytes)?;
 	let mut linker = wasmtime::Linker::new(&engine);
-	crate::wasm_reader::link_imports(&mut linker, &engine, &module, crate::wasm_reader::Imports::EVERY)
+	crate::run::wasm_reader::link_imports(&mut linker, &engine, &module, crate::run::wasm_reader::Imports::EVERY)
 		.map_err(|failure| wasmtime::format_err!("{path}: {failure:#}"))?;
 	let instance = linker.instantiate(&mut *caller, &module)?;
 	caller.data_mut().wasm_modules.insert(file, instance);

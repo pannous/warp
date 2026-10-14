@@ -14,7 +14,7 @@ use std::path::Path;
 const USE_WORD: &str = "use";
 /// The runtimes a `use <runtime> <module>` names: Python, and JavaScript (node natively, the page in the browser)
 pub const FOREIGN_RUNTIMES: [&str; 3] = ["python", JS_RUNTIME, COMPONENT_RUNTIME];
-/// JavaScript: its browser globals are typed through WebIDL (src/web_idl.rs)
+/// JavaScript: its browser globals are typed through WebIDL (src/formats/web_idl.rs)
 const JS_RUNTIME: &str = "js";
 /// The member of a foreign call that constructs its module (`new URL(…)`, src/foreign.rs and host-foreign.js)
 const CONSTRUCTOR_MEMBER: &str = "";

@@ -48,7 +48,7 @@ pub const KEY_CODE_HELD: &str = "key code held";
 /// Whether a window shows the pictures: natively the paint window until it closes (no before the first paint and
 /// headless), on a page its canvas, always; `while window_open { … }` is a drawing loop that ends with its window
 pub const WINDOW_OPEN: &str = "window_open";
-/// The local time of day in milliseconds since midnight, what the word `time` is compared with a duration (src/units.rs)
+/// The local time of day in milliseconds since midnight, what the word `time` is compared with a duration (src/numbers/units.rs)
 pub const TIME_OF_DAY: &str = "time of day";
 /// the size a picture gets: the playground's output pane, natively the paint window's first size (system_values.rs)
 pub const VIEW_WIDTH: &str = "view_width";

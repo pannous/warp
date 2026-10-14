@@ -61,7 +61,7 @@ impl DevSite {
 		let built = crate::web::site::read_program(&self.program).and_then(|code| {
 			crate::modules::with_program_file(&self.program, || crate::web::site::files(&code, &self.title, true))
 		});
-		let modules = crate::compile_context::read(|context| context.module_files.clone())
+		let modules = crate::compiler::compile_context::read(|context| context.module_files.clone())
 			.into_iter()
 			.map(|file| {
 				let modified = modified_time(&file);

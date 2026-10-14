@@ -9,7 +9,7 @@
 use super::WasmGcEmitter;
 use crate::analyzer::param_kind;
 use crate::closures::closure_call_arity;
-use crate::context::UserFunctionDef;
+use crate::compiler::context::UserFunctionDef;
 use crate::node::{Bracket, Node, Separator};
 use crate::type_kinds::Kind;
 use std::collections::HashMap;
@@ -98,7 +98,7 @@ impl WasmGcEmitter {
 				.iter()
 				.map(|param| (param.name.clone(), param.annotation.clone()))
 				.collect();
-			let form = crate::function_equality::written_form(target, &parameters, &function.body);
+			let form = crate::compiler::function_equality::written_form(target, &parameters, &function.body);
 			let forms = &mut self.closures.written_forms;
 			let index = forms.iter().position(|known| *known == form).unwrap_or_else(|| {
 				forms.push(form);

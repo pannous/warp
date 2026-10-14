@@ -73,7 +73,7 @@ pub fn resolve(program: Node) -> Node {
 }
 
 pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
-	crate::compile_context::change(|context| context.module_definitions.clear());
+	crate::compiler::compile_context::change(|context| context.module_definitions.clear());
 	let own_names: Vec<String> = statements_of(&program).iter().filter_map(declared_name).collect();
 	let file = program_file();
 	let mut loader = Loader::new(directories, file.as_deref().map(folder_of));
@@ -96,7 +96,7 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 		.filter(|path| path.is_file())
 		.cloned()
 		.collect();
-	crate::compile_context::change(|context| {
+	crate::compiler::compile_context::change(|context| {
 		context.module_files = files;
 		context.early_class_modules.clear(); // for this program only
 		own_names.iter().for_each(|own| {
@@ -165,7 +165,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 		}
 		early.insert(path.canonicalize().unwrap_or(path));
 	}
-	crate::compile_context::change(|context| context.early_class_modules = early);
+	crate::compiler::compile_context::change(|context| context.early_class_modules = early);
 	let is_foreign = |class: &Node| declared_name(class).is_none_or(|name| !own_names.contains(&name));
 	let aliases: Vec<(&str, &str)> = STD_ALIASES
 		.into_iter()
@@ -603,12 +603,12 @@ fn program_loader() -> Loader<'static> {
 
 /// The file being compiled, None for inline code
 pub fn program_file() -> Option<PathBuf> {
-	crate::compile_context::read(|context| context.program_file.clone())
+	crate::compiler::compile_context::read(|context| context.program_file.clone())
 }
 
 /// Compile `body` as the program of `file`: `use folder`, `use package` and `use project` start from its folder
 pub fn with_program_file<R>(file: &Path, body: impl FnOnce() -> R) -> R {
-	crate::compile_context::scoped(|context| &mut context.program_file, Some(file.to_path_buf()), body)
+	crate::compiler::compile_context::scoped(|context| &mut context.program_file, Some(file.to_path_buf()), body)
 }
 
 fn folder_of(file: &Path) -> PathBuf {

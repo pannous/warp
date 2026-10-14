@@ -1,9 +1,9 @@
-// Card cleanup-html-escape: one HTML escaper, warp::markup::escaped, for markup's failed renderings and for site.rs
+// Card cleanup-html-escape: one HTML escaper, warp::web::markup::escaped, for markup's failed renderings and for site.rs
 // and web_server.rs (they had two: markup.rs's inline one left `>` as it was)
-use warp::markup::escaped;
+use warp::web::markup::escaped;
 
 const FILES_THAT_ESCAPE: [(&str, &str); 3] = [
-	("src/markup.rs", include_str!("../../src/markup.rs")),
+	("src/web/markup.rs", include_str!("../../src/web/markup.rs")),
 	("src/web/site.rs", include_str!("../../src/web/site.rs")),
 	("src/web/web_server.rs", include_str!("../../src/web/web_server.rs")),
 ];
@@ -24,7 +24,7 @@ fn test_one_html_escaper() {
 		.collect();
 	assert_eq!(
 		spelled_out,
-		["src/markup.rs"],
+		["src/web/markup.rs"],
 		"only markup::escaped spells out the entities"
 	);
 	assert_eq!(

@@ -93,7 +93,7 @@ pub fn kernel_name(parameter: &str, body: &Node) -> String {
 		"{LINEAR_MAP_PREFIX}{parameter}{KERNEL_NAME_SEPARATOR}{}",
 		body.serialize().trim()
 	);
-	crate::compile_context::change(|context| {
+	crate::compiler::compile_context::change(|context| {
 		context
 			.float_kernels
 			.insert(name.clone(), (parameter.to_string(), body.clone()))
@@ -103,7 +103,7 @@ pub fn kernel_name(parameter: &str, body: &Node) -> String {
 
 /// The parameter and body of the kernel lowering named
 fn kernel_of(name: &str) -> (String, Node) {
-	crate::compile_context::read(|context| context.float_kernels.get(name).cloned())
+	crate::compiler::compile_context::read(|context| context.float_kernels.get(name).cloned())
 		.expect("a kernel lowering named (kernel_name)")
 }
 

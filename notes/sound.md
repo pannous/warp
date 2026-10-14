@@ -36,7 +36,7 @@ play note("F#4") for 250ms      // note(name) needs `use sound` when called alon
   file is decoded first by ffprobe or afinfo (a broken one fails play, also headless); a player failing within 0.3 s
   fails play, a later failure prints `sound file <path>: <player> failed (<status>): <its error output>`; without a
   decoder on the machine only the format is checked. In the browser a failure reaches the console.
-- Units: `Hz` is `1/s`, `kHz` `1/ms` (src/units.rs UNIT_ALIASES); `si_amount(x)` takes a quantity or a plain number.
+- Units: `Hz` is `1/s`, `kHz` `1/ms` (src/numbers/units.rs UNIT_ALIASES); `si_amount(x)` takes a quantity or a plain number.
 
 A module's `global` is a setting: the program's top-level `note_seconds = 0.25` or `tempo = 90` sets it (modules.rs
 shadowed_apart leaves globals alone; other program variables named like a module word still shadow it). Before

@@ -7,7 +7,7 @@
 
 use super::nodes::{if_then, key};
 use crate::analyzer::counting_function;
-use crate::context::Context;
+use crate::compiler::context::Context;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::IMPLICIT_PARAMETER;

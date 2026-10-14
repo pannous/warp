@@ -5,7 +5,7 @@
 //! `[xs.keep, only, positive.sort, by, size]`: each `.method` binds to the word before it.
 
 use super::nodes::{call, key, phrase_words as words, symbol};
-use crate::context::Context;
+use crate::compiler::context::Context;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::SLICE;

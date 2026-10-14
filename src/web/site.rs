@@ -135,7 +135,7 @@ pub struct ServedSite {
 /// (host-tasks.js SERVER_REPLIES), so it starts showing what the server rendered
 struct Renderer {
 	bytes: Vec<u8>,
-	imports: crate::wasm_reader::Imports,
+	imports: crate::run::wasm_reader::Imports,
 	title: String,
 	scripts: Vec<Script>,
 	worker_scripts: Vec<Script>,
@@ -177,7 +177,7 @@ impl Renderer {
 			crate::serve::RPC_VALUES,
 		];
 		let read = crate::host::with_page_path(path, || {
-			crate::wasm_reader::read_exports_after_main(&self.bytes, self.imports, &names)
+			crate::run::wasm_reader::read_exports_after_main(&self.bytes, self.imports, &names)
 		});
 		let failed = |failure| {
 			format!(
@@ -250,14 +250,14 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, 
 	if !exports(&rendering.bytes, crate::page_html::PAGE_HTML) {
 		return Ok(None);
 	}
-	let imports = crate::wasm_reader::Imports {
+	let imports = crate::run::wasm_reader::Imports {
 		host: rendering.needs_host,
 		wasi: rendering.needs_wasi,
 		ffi: rendering.needs_ffi,
 	};
 	let read_after_main = |name: &str| {
 		warp_runtime::system_signals::until_first_frame(|| {
-			crate::wasm_reader::read_export_after_main(&rendering.bytes, imports, name)
+			crate::run::wasm_reader::read_export_after_main(&rendering.bytes, imports, name)
 		})
 		.map_err(|failure| {
 			format!(
@@ -457,7 +457,7 @@ fn page(title: &str, body: &str, replies: &str, scripts: &[Script], worker_scrip
 		.replace("{{scripts}}", &scripts)
 		.replace("{{worker}}", &worker)
 		.replace("{{base}}", &base)
-		.replace("{{title}}", &crate::markup::escaped(title))
+		.replace("{{title}}", &crate::web::markup::escaped(title))
 		.replace("{{replies}}", replies)
 		.replace("{{body}}", body)
 }

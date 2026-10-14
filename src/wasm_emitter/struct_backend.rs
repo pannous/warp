@@ -428,7 +428,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The struct convention a function could take, judged by its body alone
-	fn struct_function(&self, function: &crate::context::UserFunctionDef) -> Option<StructFunction> {
+	fn struct_function(&self, function: &crate::compiler::context::UserFunctionDef) -> Option<StructFunction> {
 		let statements = super::list_abi::body_statements(&function.body);
 		let mut returns = false;
 		function.body.visit(&mut |part| returns |= matches!(part, Node::List(items, _, _) if items.first().is_some_and(|word| names(word, super::list_abi::RETURN))));

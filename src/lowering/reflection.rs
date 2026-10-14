@@ -12,7 +12,7 @@ use crate::class_methods::ClassLayout;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 
-use crate::effects::EFFECTS_WORD;
+use crate::analyzer::effects::EFFECTS_WORD;
 const LISTENERS_WORD: &str = "listeners";
 /// `on alarm {…}`, `once tick {…}`, `on set x {…}`: the words before a listened name
 const LISTENING_WORDS: [&str; 2] = ["on", "once"];
@@ -46,7 +46,7 @@ const LIBRARY_FUNCTION_WORDS: [&str; 2] = [PARAMS_WORDS[0], SIGNATURE_WORD];
 pub const META_FUNCTIONS: &str = "functions";
 pub const META_CLASSES: &str = "classes";
 
-type Functions = std::collections::BTreeMap<String, crate::context::UserFunctionDef>;
+type Functions = std::collections::BTreeMap<String, crate::compiler::context::UserFunctionDef>;
 
 pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&[
@@ -295,7 +295,7 @@ fn balanced_end(text: &str) -> Option<usize> {
 }
 
 fn user_functions(program: &Node) -> Functions {
-	let mut context = crate::context::Context::new();
+	let mut context = crate::compiler::context::Context::new();
 	crate::analyzer::extract_user_functions(&mut context, program);
 	context.user_functions
 }
@@ -313,7 +313,7 @@ fn meta_map(entries: Vec<(&str, Node)>) -> Node {
 }
 
 /// `area(width:int, height:int) := width * height`: the parameters as declared (no inferred types), the body as written
-fn definition(function: &crate::context::UserFunctionDef) -> String {
+fn definition(function: &crate::compiler::context::UserFunctionDef) -> String {
 	let params: Vec<String> = function
 		.params
 		.iter()
@@ -337,7 +337,7 @@ fn definition(function: &crate::context::UserFunctionDef) -> String {
 }
 
 /// `(a:int, b:int) -> int`: each parameter with its declared or demanded type, the result's kind when known
-fn signature(function: &crate::context::UserFunctionDef) -> String {
+fn signature(function: &crate::compiler::context::UserFunctionDef) -> String {
 	let params: Vec<String> = function
 		.params
 		.iter()
@@ -457,7 +457,7 @@ fn component_exports(node: &Node) -> HashMap<String, Vec<String>> {
 /// A module warp compiled names its own functions in warp.meta: its exports are those (not warp's runtime exports), and
 /// that entry is kept by the module's alias for `m.f.params`, its `classes` entry for `m.P.fields`
 fn module_objects(node: &Node) -> Objects {
-	let mut context = crate::context::Context::new();
+	let mut context = crate::compiler::context::Context::new();
 	crate::analyzer::extract_ffi_imports(&mut context, node);
 	let paths: HashSet<&str> = context
 		.ffi_imports

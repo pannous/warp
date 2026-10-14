@@ -5,7 +5,7 @@ use std::env;
 use std::fs;
 use std::io::{self, IsTerminal, Read, Write};
 use warp::node;
-use warp::{diagnostic, extensions, law, markup, package_tools, run, util, warp_parser, wasm_emitter, wasm_reader};
+use warp::{diagnostic, extensions, law, web::markup, package_tools, run, util, warp_parser, wasm_emitter, run::wasm_reader};
 use warp_runtime::host_words::{FOREIGN_CALL, HOST_LIBRARY};
 use wasm_emitter::eval;
 
@@ -92,7 +92,7 @@ const DEPLOY_COMMAND: &str = "deploy";
 /// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
 const SERVE_COMMAND: &str = "serve";
 const SERVE_PORT: u16 = 8080;
-/// `warp register`: Finder and `open` run .warp files (macOS, src/file_type.rs)
+/// `warp register`: Finder and `open` run .warp files (macOS, src/run/file_type.rs)
 const REGISTER_COMMAND: &str = "register";
 /// The program `warp serve` serves when it is given none: the first of these in the current folder
 const DEFAULT_PROGRAMS: [&str; 2] = ["app.warp", "main.warp"];
@@ -292,7 +292,7 @@ fn tip_hiding_hints_at_exit() {
 
 #[cfg(all(not(test), target_os = "macos"))]
 fn register_file_type() {
-	match warp::file_type::register() {
+	match warp::run::file_type::register() {
 		Ok(app) => println!(
 			"registered .warp files: {} runs them in Terminal (Open With offers editors)",
 			app.display()
@@ -815,7 +815,7 @@ fn write_standalone_executable(code: &str, target: &str) -> Result<String, Strin
 	} else {
 		warp_runtime::standalone::stub_calls_export
 	};
-	let bytes = warp::dead_functions::keeping_exports(&program.bytes, kept_exports)?;
+	let bytes = warp::compiler::dead_functions::keeping_exports(&program.bytes, kept_exports)?;
 	let engine = warp_runtime::standalone::standalone_engine().map_err(|failure| failure.to_string())?;
 	let module = run::module_cache::compiled_module(&engine, &bytes).map_err(|failure| failure.to_string())?;
 	let provided: Vec<(&str, &str)> = warp_runtime::standalone::provided_imports().collect();

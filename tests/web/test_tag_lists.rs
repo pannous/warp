@@ -1,7 +1,7 @@
 //! card ul-li: among an element's children a tag word applied to a list makes one tag per item, as broadcasting does
 //! for functions: `ul{ li all fruits }` and `ul{ li ["apple" "pear"] }` are `ul{ [li{ fruit } for fruit in fruits] }`
 //! (they rendered "<ul>liallapplepear</ul>")
-use warp::markup::{is_markup, to_html};
+use warp::web::markup::{is_markup, to_html};
 use warp::wasm_emitter::eval;
 
 const ITEMS: &str = "<ul><li>apple</li><li>pear</li></ul>";

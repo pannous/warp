@@ -116,7 +116,7 @@ A. Compile context, to become one `CompileContext` beside `CompileMode` (card cl
 | BOOL_FUNCTIONS | analyzer/booleans | set | functions known to return a bool |
 | WRITTEN_PROBLEMS | accessibility | pass | accessibility problems the source states itself |
 
-Done (2026-10-14): all of A are fields of src/compile_context.rs `CompileContext`, one thread-local; `compile_context::scoped(field, value, run)` replaces the per-static `util::scoped` calls and pipeline's with_flag / set_mode_flag, `read` and `change` the `.with(|cell| …)` accessors, and single-caller accessors (hint_line, module_files, is_module_definition, comments_as_meta, serving_port, server_value, sandbox::confined) are gone. Not done: a reset of the `set` fields per compile, since an inner compile (a module, the renderer) would wipe the outer one's kernels and module definitions; that needs a scoped context per compile, not a reset.
+Done (2026-10-14): all of A are fields of src/compiler/compile_context.rs `CompileContext`, one thread-local; `compile_context::scoped(field, value, run)` replaces the per-static `util::scoped` calls and pipeline's with_flag / set_mode_flag, `read` and `change` the `.with(|cell| …)` accessors, and single-caller accessors (hint_line, module_files, is_module_definition, comments_as_meta, serving_port, server_value, sandbox::confined) are gone. Not done: a reset of the `set` fields per compile, since an inner compile (a module, the renderer) would wipe the outer one's kernels and module definitions; that needs a scoped context per compile, not a reset.
 
 B. Compile output, to become one `Diagnostics` sink taken once per compile (card cleanup-diagnostic-sink)
 

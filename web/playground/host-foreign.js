@@ -266,7 +266,7 @@ addHostPart({
 		m: new Proxy(LIBM, { get: (libm, name) => libm[name] ?? Math[name] }),
 		// the pure part of libc (ffi "c"): numbers, and C strings read up to their zero byte
 		c: libcImports(holder),
-		// `use { memory, table } from "env"` (src/wasm_reader.rs define_imported_entities): a fresh memory and table
+		// `use { memory, table } from "env"` (src/run/wasm_reader.rs define_imported_entities): a fresh memory and table
 		env: {
 			get memory() { return new WebAssembly.Memory({ initial: IMPORTED_MEMORY_PAGES }); },
 			get table() { return new WebAssembly.Table({ initial: 0, element: "anyfunc" }); },

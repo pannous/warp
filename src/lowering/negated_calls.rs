@@ -1,7 +1,7 @@
 //! `f -x` and `print #xs` as calls of the word before them
 
 use crate::analyzer::{extract_user_functions_inner, is_type_call_word};
-use crate::context::{Context, UserFunctionDef};
+use crate::compiler::context::{Context, UserFunctionDef};
 use crate::lowering::nodes::children_rewritten;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;

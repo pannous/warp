@@ -1,6 +1,6 @@
 //! card words-glue: an attribute's value followed by a text, a list or an element ends there, the rest is the element's
 //! content: `label{ for: name "Name" }` is for="name" with the text Name, not for="name Name"
-use warp::markup::to_html;
+use warp::web::markup::to_html;
 use warp::wasm_emitter::eval;
 
 fn html_of(code: &str) -> String {

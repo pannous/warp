@@ -1,6 +1,6 @@
 //! A list inside `select{}` gives its options, one per item; a map item gives value and label; a bound select marks the
 //! chosen one (card select-shorthand)
-use warp::markup::to_html;
+use warp::web::markup::to_html;
 use warp::wasm_emitter::eval;
 
 fn html_of(code: &str) -> String {

@@ -176,7 +176,7 @@ fn defines_functions(statement: &Node) -> bool {
 /// The names whose kind is known only at run time, so that their `!` decides there (P73): assigned an element of a list
 /// that holds data (`xs = [data a+1, data 2]; y = xs#2`), or what a function of the program gives (`y = g()`, `g()#1`)
 fn data_holders(program: &Node) -> Vec<String> {
-	let mut context = crate::context::Context::new();
+	let mut context = crate::compiler::context::Context::new();
 	crate::analyzer::extract_user_functions(&mut context, program);
 	let mut lists: Vec<String> = vec![];
 	let mut holders: Vec<String> = vec![];
@@ -195,7 +195,7 @@ fn data_holders(program: &Node) -> Vec<String> {
 }
 
 /// An element of a list of data, or the result of a call of the program's own functions (or an element of it)
-fn known_at_run_time(value: &Node, lists: &[String], context: &crate::context::Context) -> bool {
+fn known_at_run_time(value: &Node, lists: &[String], context: &crate::compiler::context::Context) -> bool {
 	match value.drop_meta() {
 		Node::Key(list, Op::Hash, _) => {
 			matches!(list.drop_meta(), Node::Symbol(list) if lists.contains(list))
@@ -210,7 +210,7 @@ fn known_at_run_time(value: &Node, lists: &[String], context: &crate::context::C
 
 /// The parameters of a definition (only those without a declared type: anything may come in, a block too)
 fn parameters(definition: &Node, untyped_only: bool) -> Vec<String> {
-	let mut context = crate::context::Context::new();
+	let mut context = crate::compiler::context::Context::new();
 	crate::analyzer::extract_user_functions(&mut context, definition);
 	context
 		.user_functions

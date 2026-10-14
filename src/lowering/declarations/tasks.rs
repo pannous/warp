@@ -832,7 +832,7 @@ pub fn resolve_tasks(node: Node) -> Node {
 	if !has_task {
 		return node;
 	}
-	let mut context = crate::context::Context::new();
+	let mut context = crate::compiler::context::Context::new();
 	crate::analyzer::extract_user_functions(&mut context, &node);
 	crate::analyzer::note_bool_functions(context.user_functions.values());
 	let int_starts = int_starts(&node, &crate::analyzer::literal_variable_kinds(&node, &context));

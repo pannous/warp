@@ -1,6 +1,6 @@
 // The standard library module sound (card basic-sound): `play 440Hz for 0.5s`, `play C4`, `play [C4 E4 G4]` (a chord, as
 // in Sonic Pi), `play note("C#4")`, `melody [C4 E4 G4]` (one note after another), `beep`, `tone(frequency, seconds, "square")`. Frequencies
-// and durations are numbers or quantities (440Hz, 0.5s, 250ms), read by si_amount as plain numbers (src/units/static_units.rs). The samples are made here and played by the host word
+// and durations are numbers or quantities (440Hz, 0.5s, 250ms), read by si_amount as plain numbers (src/numbers/units/static_units.rs). The samples are made here and played by the host word
 // sound_samples: natively a WAV file and the system's player (src/sound/mod.rs; silent under tests and WARP_NO_WINDOW),
 // in the browser WebAudio. Loaded when a program calls one of its words (src/modules.rs SOUND_WORDS)
 global sample_rate = 22050

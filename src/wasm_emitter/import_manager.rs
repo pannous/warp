@@ -1,7 +1,7 @@
 //! Import management for WASM modules
 
-use crate::context::Context;
-use crate::function::Function as FuncDef;
+use crate::compiler::context::Context;
+use crate::compiler::function::Function as FuncDef;
 use crate::wasm_emitter::config::EmitterConfig;
 use crate::wasm_emitter::type_manager::TypeManager;
 use wasm_encoder::*;

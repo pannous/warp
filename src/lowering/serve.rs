@@ -73,7 +73,7 @@ pub fn lower(program: Node) -> Node {
 	if crate::pipeline::compile_mode().for_a_page {
 		return without_serving(program);
 	}
-	let port = crate::compile_context::read(|context| context.serving_port);
+	let port = crate::compiler::compile_context::read(|context| context.serving_port);
 	let program = if port.is_none() {
 		with_local_routes(program)
 	} else {
@@ -149,7 +149,7 @@ pub fn serves(code: &str) -> bool {
 /// Whether the program's value is a page, `html{ … }` or any other element (`div{ … }`, card div-opens-app) its last
 /// statement: plain `warp page.warp` run from a terminal shows it in a window (main.rs) as `warp app page.warp` does
 pub fn shows_page(code: &str) -> bool {
-	let is_page_tag = |tag: &Node| tag.symbol_name().is_some_and(crate::markup::is_element_tag);
+	let is_page_tag = |tag: &Node| tag.symbol_name().is_some_and(crate::web::markup::is_element_tag);
 	top_level_statements(code).last().is_some_and(|last| match last.drop_meta() {
 		Node::Key(tag, Op::Colon, _) => is_page_tag(tag),
 		Node::List(items, _, _) => matches!(items.as_slice(), [tag, body] if is_page_tag(tag) && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _))),
@@ -360,7 +360,7 @@ fn with_route_data(program: Node) -> Node {
 /// web-page-server-data); in the browser it would open a table of the page's own
 fn changes_server_data_only(statement: &Node, reads_server_data: &dyn Fn(&Node) -> bool) -> bool {
 	let mut shows = false;
-	statement.visit(&mut |node| shows |= crate::markup::is_markup(node));
+	statement.visit(&mut |node| shows |= crate::web::markup::is_markup(node));
 	reads_server_data(statement)
 		&& !shows
 		&& server_variable(statement).is_none()
@@ -838,7 +838,7 @@ fn asking_the_server(statements: Vec<Node>, servers: &[String]) -> Result<Vec<No
 			key(
 				fetch,
 				Op::Coalesce,
-				crate::compile_context::read(|context| {
+				crate::compiler::compile_context::read(|context| {
 					context.server_values.get(index).cloned().unwrap_or(Node::Empty)
 				}),
 			)

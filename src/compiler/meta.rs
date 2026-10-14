@@ -29,7 +29,7 @@ impl LineInfo {
 			column,
 			#[cfg(debug_assertions)]
 			line: line.chars().take(DEBUG_LINE_LENGTH).collect(),
-			file: crate::compile_context::read(|context| context.parsed_file.clone()),
+			file: crate::compiler::compile_context::read(|context| context.parsed_file.clone()),
 		}
 	}
 
@@ -52,7 +52,7 @@ pub const GENERATED_FILE: &str = "generated";
 
 /// `parse` with the positions it records marked as in `file`: a module's, so its failures name it
 pub fn parsing_file<T>(file: &str, parse: impl FnOnce() -> T) -> T {
-	crate::compile_context::scoped(|context| &mut context.parsed_file, Some(file.to_string()), parse)
+	crate::compiler::compile_context::scoped(|context| &mut context.parsed_file, Some(file.to_string()), parse)
 }
 
 // Custom trait for cloneable Any types with equality support

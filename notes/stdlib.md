@@ -15,7 +15,7 @@ Draft by functions (warp-64), adapters section by async (warp-f0). Defaults belo
 - **P165 soft keywords.** Module names and module words are soft: a program may name a local variable `text` or a
   parameter `count`; a top-level redefinition of a *prelude* word stays allowed as today (user function wins, e.g.
   `def sum(xs)`), unless the word is in `soft_keywords::SOFT_KEYWORDS`.
-- **Capabilities.** Modules that touch the outside declare it (src/effects.rs): file → Wasi/Host, net → Host, os/process
+- **Capabilities.** Modules that touch the outside declare it (src/analyzer/effects.rs): file → Wasi/Host, net → Host, os/process
   → Process. `eval_untrusted` gets math, text, list, map, json, random-with-seed only.
 
 ## 2. Module layout
@@ -50,7 +50,7 @@ strip split join replace starts_with ends_with chars ord chr is_digit is_alpha i
 values entries get has contains without`; conversion `int text float list type as`; time `clock now sleep`, durations;
 random `random random_below`; io `read`; net `fetch`; os `exit`; signals `every daily at whenever on emit send`.
 Sources: src/lowering/library_words.rs (SYNONYMS, RUNTIME_WORDS, EXPANDED_WORDS), src/wasm_emitter/library_ops.rs
-(LIBRARY_FUNCTIONS), text_builtins.rs (TEXT_BUILTINS), list_emitter.rs (BUILTIN_CALLS), src/real.rs (FUNCTIONS),
+(LIBRARY_FUNCTIONS), text_builtins.rs (TEXT_BUILTINS), list_emitter.rs (BUILTIN_CALLS), src/numbers/real.rs (FUNCTIONS),
 src/host.rs (HOST_WORDS), notes/library_words.md.
 
 Missing (probe gives "undefined function"): `unique zip enumerate product mean write exists env args hash regex
@@ -247,7 +247,7 @@ every word lives today and what still moves.
 | src/wasm_emitter/library_ops.rs LIBRARY_FUNCTIONS | runtime functions in wasm: keys values entries contains index_of get without ord chars field_with reverse sort upper lower split join slice | 17 |
 | src/wasm_emitter/text_builtins.rs TEXT_BUILTINS | text runtime functions | 21 |
 | src/wasm_emitter/list_emitter.rs BUILTIN_CALLS | list runtime calls | 18 |
-| src/real.rs FUNCTIONS | exact-real functions | 6 |
+| src/numbers/real.rs FUNCTIONS | exact-real functions | 6 |
 | src/host.rs HOST_WORDS | host imports (print, clock, fetch, paint, clipboard, notify, tasks, foreign_call, gpu, std_pure/std_io …) | 55 |
 | src/modules.rs STD_MODULES | embedded lib/*.warp: memory net collections hash regex file json os list math text random map time matrix draw markup router i18n | 19 |
 | … PRELUDE_WORDS | module words global without `use`: file: write exists | 2 |

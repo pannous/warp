@@ -5,7 +5,7 @@
 //! where exact reals are lowered to f64; a WASM GC representation of them is future work.
 //! Ints and fractions without generators never come here: they keep the i64 / ratio fast path.
 
-use crate::compile_time::{answer_of, fail, Stop};
+use crate::compiler::compile_time::{answer_of, fail, Stop};
 use crate::extensions::numbers::Number;
 use crate::extensions::reals::{Exact, Generator, Monomial, Rational, Real};
 use crate::lowering::nodes::children_rewritten;

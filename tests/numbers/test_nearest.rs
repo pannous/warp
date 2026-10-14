@@ -1,7 +1,7 @@
 // card nearest-helper: `nearest(x, rational, limit)` is the fraction closest to x whose denominator is at most limit, as
 // Python's Fraction.limit_denominator; `within: ε` the first convergent that close; neither the first convergent that is
 // the same float (user, 2026-10-10: a fixed 10^6 default was "hard to believe"). An exact √2 or π expands exactly
-// (src/real.rs), a float at run time by lib/prelude.warp
+// (src/numbers/real.rs), a float at run time by lib/prelude.warp
 use crate::common::fails_with;
 use crate::is;
 

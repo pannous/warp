@@ -372,7 +372,7 @@ fn paint(
 	let values = match ints_of_list(&mut caller, memory, pixels, size.0 * size.1)? {
 		Some(values) => values,
 		None => {
-			match crate::wasm_reader::node_in(&Val::AnyRef(pixels), &mut caller.as_context_mut(), memory).drop_meta() {
+			match crate::run::wasm_reader::node_in(&Val::AnyRef(pixels), &mut caller.as_context_mut(), memory).drop_meta() {
 				crate::node::Node::List(items, _, _) => items.iter().map(pixel_value).collect(),
 				crate::node::Node::Text(shader) => {
 					let failure = gpu_failure(PAINT);
@@ -415,7 +415,7 @@ fn sound(
 	let values = match ints_of_list(&mut caller, memory, samples, count.max(0) as usize)? {
 		Some(values) => values,
 		None => {
-			match crate::wasm_reader::node_in(&Val::AnyRef(samples), &mut caller.as_context_mut(), memory).drop_meta() {
+			match crate::run::wasm_reader::node_in(&Val::AnyRef(samples), &mut caller.as_context_mut(), memory).drop_meta() {
 				crate::node::Node::List(items, _, _) => items.iter().map(pixel_value).collect(),
 				other => {
 					return Err(task_failure(format!(
@@ -510,7 +510,7 @@ fn run_block(
 	let memory = module_memory(&mut caller, "run_block")?;
 	let mut store = caller.as_context_mut();
 	let [block, names, values, definitions] = [block, names, values, definitions]
-		.map(|value| crate::wasm_reader::node_in(&Val::AnyRef(value), &mut store, memory));
+		.map(|value| crate::run::wasm_reader::node_in(&Val::AnyRef(value), &mut store, memory));
 	let result = crate::pipeline::eval_block(block, &names, &values, &definitions).map_err(task_failure)?;
 	let value = TaskValue::of(&result).map_err(|_| task_failure(crate::pipeline::cannot_hand_back(&result)))?;
 	build_in_program(&mut caller, &value, &task_failure)
@@ -576,7 +576,7 @@ fn foreign_call(
 	let mut store = caller.as_context_mut();
 	let functions = function_arguments(&mut store, arguments)?;
 	let [runtime, module, member, call, arguments] = [runtime, module, member, call, arguments]
-		.map(|value| crate::wasm_reader::node_in(&Val::AnyRef(value), &mut store, memory));
+		.map(|value| crate::run::wasm_reader::node_in(&Val::AnyRef(value), &mut store, memory));
 	let arguments = with_function_markers(arguments, &functions);
 	let builders =
 		Builders::of(&mut |export| caller.get_export(export)).map_err(|problem| task_failure(problem.to_string()))?;
@@ -621,7 +621,7 @@ fn function_arguments(
 	arguments: HostNode,
 ) -> wasmtime::Result<Vec<Option<wasmtime::Rooted<wasmtime::AnyRef>>>> {
 	use crate::type_kinds::{Kind, KIND_MASK};
-	use crate::wasm_reader::{FIELD_DATA, FIELD_KIND, FIELD_VALUE};
+	use crate::run::wasm_reader::{FIELD_DATA, FIELD_KIND, FIELD_VALUE};
 	let node_of = |value: &Val, store: &wasmtime::StoreContextMut<'_, HostState>| {
 		value
 			.unwrap_anyref()
@@ -729,7 +729,7 @@ fn route_failure(
 	failure: wasmtime::Error,
 ) -> crate::web::web_server::RouteFailure {
 	let detail = caller
-		.get_export(crate::wasm_reader::TRAP_DETAIL)
+		.get_export(crate::run::wasm_reader::TRAP_DETAIL)
 		.and_then(Extern::into_global);
 	let left = detail.map(|global| global.get(&mut *caller));
 	// read once: the next failure must not show this one's detail
@@ -743,15 +743,15 @@ fn route_failure(
 		true => failure,
 		false => {
 			let position = caller
-				.get_export(crate::wasm_reader::TRAP_POSITION)
+				.get_export(crate::run::wasm_reader::TRAP_POSITION)
 				.and_then(Extern::into_global)
 				.map(|global| global.get(&mut *caller));
-			crate::wasm_reader::with_trap_position(failure, position)
+			crate::run::wasm_reader::with_trap_position(failure, position)
 		}
 	};
 	let failure = match left {
 		Some(Val::AnyRef(Some(value))) => match given_node(caller, Some(value)) {
-			Ok(node) => failure.context(crate::wasm_reader::trap_detail_line(&node)),
+			Ok(node) => failure.context(crate::run::wasm_reader::trap_detail_line(&node)),
 			Err(_) => failure,
 		},
 		_ => failure,
@@ -955,7 +955,7 @@ fn given_node(caller: &mut Caller<'_, HostState>, value: HostNode) -> wasmtime::
 	let Some(Extern::Memory(memory)) = caller.get_export("memory") else {
 		return Err(wasmtime::Error::msg("the module exports no memory"));
 	};
-	Ok(crate::wasm_reader::node_in(
+	Ok(crate::run::wasm_reader::node_in(
 		&Val::AnyRef(value),
 		&mut caller.as_context_mut(),
 		memory,

@@ -55,7 +55,7 @@ pub(crate) fn is_filter_query(node: &Node) -> bool {
 /// how often or in which order a query runs is its own business (card orm-filter)
 pub(super) fn effectful_calls(
 	functions: &[Node],
-	effects: Option<&crate::effects::EffectReport>,
+	effects: Option<&crate::analyzer::effects::EffectReport>,
 ) -> Vec<crate::diagnostic::Diagnostic> {
 	let Some(effects) = effects else { return vec![] };
 	let mut warned: Vec<String> = vec![];

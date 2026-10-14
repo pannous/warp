@@ -3,7 +3,7 @@
 //! (the emitter, the runner) read is written with `change`. Closures given to `read` and `change` only touch fields:
 //! nothing in them compiles, or the context would be borrowed twice.
 use crate::diagnostic::WarningMode;
-use crate::effects::Capability;
+use crate::analyzer::effects::Capability;
 use crate::lowering::component_worlds::WorldFunctions;
 use crate::node::Node;
 use crate::normalize::{HintMode, HintPosition, Style};

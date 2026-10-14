@@ -8,7 +8,7 @@
 
 use super::list_dispatch::Slot;
 use super::WasmGcEmitter;
-use crate::context::UserFunctionDef;
+use crate::compiler::context::UserFunctionDef;
 use crate::library_words::{COLLECTION_CONTAINS, COLLECTION_POSITION};
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
@@ -75,7 +75,7 @@ impl WasmGcEmitter {
 	pub(super) fn find_typed_map_globals(
 		&self,
 		program: &Node,
-		globals: &std::collections::HashMap<String, crate::local::Local>,
+		globals: &std::collections::HashMap<String, crate::compiler::local::Local>,
 	) -> HashSet<String> {
 		let bodies = self.ctx.user_functions.values().map(|function| *function.body.clone());
 		let whole = Node::List(

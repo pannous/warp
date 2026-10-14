@@ -4,7 +4,7 @@
 //! `3km+10m` is `3010m`. A quantity is an amount times units to powers: `6 m²`, `6 m·kg`, `5 km/h` (km·h⁻¹), `1 kg·m/s²`.
 
 use crate::extensions::numbers::Number;
-use crate::meta::DataValue;
+use crate::compiler::meta::DataValue;
 use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashMap;
@@ -198,7 +198,7 @@ use crate::words::IN_WORD;
 const TIME_WORD: &str = "time";
 
 fn unit_named(name: &str) -> Option<&'static Unit> {
-	if crate::compile_context::read(|context| context.shadowed_units.contains(name)) {
+	if crate::compiler::compile_context::read(|context| context.shadowed_units.contains(name)) {
 		return None;
 	}
 	UNITS.iter().find(|unit| unit.name == name)
@@ -206,7 +206,7 @@ fn unit_named(name: &str) -> Option<&'static Unit> {
 
 /// `run` with the unit words `program` defines as its names, not units: `g(x) := x + 1 m` keeps m a unit
 fn shadowing<T>(program: &Node, run: impl FnOnce() -> T) -> T {
-	crate::compile_context::scoped(|context| &mut context.shadowed_units, defined_unit_names(program), run)
+	crate::compiler::compile_context::scoped(|context| &mut context.shadowed_units, defined_unit_names(program), run)
 }
 
 /// A conversion target: a unit by its short name or its long name, `minute` or `minutes`

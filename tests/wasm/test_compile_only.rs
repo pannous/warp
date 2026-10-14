@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use warp::wasm_emitter::run_raw_struct;
-use warp::wasm_reader::read_bytes;
+use warp::run::wasm_reader::read_bytes;
 
 const OUTPUT_DIRECTORY: &str = env!("CARGO_TARGET_TMPDIR");
 const STRUCT_SOURCE: &str = "class Person{name:String age:i64}; Person{name:'Alice' age:30}";

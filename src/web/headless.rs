@@ -12,7 +12,7 @@
 //! ```
 
 use crate::element_events::HANDLER_ATTRIBUTE_PREFIX;
-use crate::markup::to_html;
+use crate::web::markup::to_html;
 use crate::node::Node;
 use serde_json::{json, Map, Value};
 
@@ -261,7 +261,7 @@ mod native {
 	use crate::node::{Bracket, Node, Separator};
 	use crate::pipeline::CompiledModule;
 	use crate::wasm_emitter::failed_run;
-	use crate::wasm_reader::{run_main_kept, val_to_node, with_trap_detail, Imports};
+	use crate::run::wasm_reader::{run_main_kept, val_to_node, with_trap_detail, Imports};
 	use serde_json::Value;
 	use wasmtime::{AsContextMut, Instance, Store, Val};
 

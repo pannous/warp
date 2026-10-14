@@ -654,7 +654,7 @@ impl WasmGcEmitter {
 			as_locals
 				.locals
 				.entry(name.clone())
-				.or_insert_with(|| crate::local::Local {
+				.or_insert_with(|| crate::compiler::local::Local {
 					is_param: false,
 					..global.clone()
 				});

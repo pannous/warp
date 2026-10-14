@@ -90,7 +90,7 @@ Each step is useful on its own and is what the next ones stand on.
   a node of another kind or tag is replaced. Elements keep their identity, focus, input and scroll state. Tour example
   "fine updates" checks it (`clicks`, `clicked`, `kept` in examples.js, test_in_browser.py --examples).
 - Done (compute side, card web-fine-holes): the holes of shown markup are the outermost elements holding a computed
-  text, attribute or child directly (src/markup.rs `holes`); each is its own binding `page·hole·<path>` (event_signals.rs),
+  text, attribute or child directly (src/web/markup.rs `holes`); each is its own binding `page·hole·<path>` (event_signals.rs),
   the path its element indices from the root, which the fixed elements above it keep stable. After a handler worker.js
   reads only the holes and sends `patches` for those whose HTML changed; playground.js morphs just those elements. The
   value text follows once events pause (50 ms). Falls back to the whole markup when the root itself holds a computed
@@ -270,7 +270,7 @@ Each step is useful on its own and is what the next ones stand on.
   host.js, markup.js, site.js, carried in the warp binary (src/web/site.rs include_str!, one source with the playground).
 - One renderer, written in warp (warp-96: "Warp is wasm-first"): lib/markup.warp's to_html (`use markup`; not `html`,
   which samples/html.warp would shadow) is the one renderer: the CLI and the playground render a markup value with it
-  too (src/markup.rs to_html runs `use markup; to_html(value)`; src/html.rs is gone). A program
+  too (src/web/markup.rs to_html runs `use markup; to_html(value)`; src/html.rs is gone). A program
   compiled for a page (pipeline::for_a_page) exports page·html := to_html(page·value) (lowering/page_html.rs); its
   page·value is event_signals' output binding, else the last line when that is an expression (no assignment,
   definition, print, use). `warp build --site` runs main and page·html natively (wasm_reader::read_export_after_main)
@@ -283,7 +283,7 @@ Each step is useful on its own and is what the next ones stand on.
 - lib/markup.warp cannot tell a square list from a curly one at run time: a list value whose items hold pairs is
   inline CSS (for style) or children (`style{ ".x": {…} }`), any other list the joined attribute value (`class:["a" "b"]`).
 - Scoped style sheets (card web-scoped): an element with data-warp-scope:"Card" prefixes the selectors of the sheets
-  inside it with `[data-warp-scope="Card"] `; src/markup.rs is_style_sheet and SCOPE_ATTRIBUTE serve the lowering.
+  inside it with `[data-warp-scope="Card"] `; src/web/markup.rs is_style_sheet and SCOPE_ATTRIBUTE serve the lowering.
 - Timers in a built page: site.js starts them after main (host.js startTimers, shared with the playground worker),
   each handler morphs the page; a failing handler stops them (probes/site/ticker.warp).
 - A program serving its own page: `warp run app.warp` with `serve 8080 {…}` and a page as its last line answers GET /
@@ -513,7 +513,7 @@ Each step is useful on its own and is what the next ones stand on.
 - Next: GPU vectors: card gpu-vectors, notes/gpu.md.
 
 ## web-apis: WebIDL (2026-10-08, warp-95)
-- `use js <global>` of a browser global is typed through WebIDL as `use c` is through C headers: src/web_idl.rs reads
+- `use js <global>` of a browser global is typed through WebIDL as `use c` is through C headers: src/formats/web_idl.rs reads
   lib/web.webidl (bundled from w3c/webref's @webref/idl 3.85.0 by scripts/webidl_bundle.py: console, Crypto,
   Performance, Storage, Navigator, Location, Clipboard whole, i.e. with every partial, mixin and parent of all 334 spec
   files; Window and its mixins only with the attributes that name those globals). foreign_modules.rs checks a member of
@@ -608,7 +608,7 @@ Each step is useful on its own and is what the next ones stand on.
   hover (tests/web/test_dev_marks.rs runs it under node). Warnings of a good build are not shown.
 
 ## Step 16 (web-a11y), what is done and what is left (classes-44, warp-06; split agreed with warp-90)
-- Welcoming warnings over the markup as written (src/accessibility.rs, run on the parsed program at the start of
+- Welcoming warnings over the markup as written (src/web/accessibility.rs, run on the parsed program at the start of
   pipeline lower_for_emission, tests/web/test_accessibility.rs): img without alt (alt:"" marks a decoration); input /
   select / textarea without a label (label{for}, a label around it, aria-label, aria-labelledby or title count; a
   placeholder alone gets its own warning; hidden/submit/button/reset/image inputs need none); button or a with no text

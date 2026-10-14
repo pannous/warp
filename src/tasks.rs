@@ -12,7 +12,7 @@ use crate::host::{
 	TASK_PAUSE, TASK_SPAWN, TASK_SPAWN_VALUES, TASK_STATUS, TASK_STOP, TEXT_HEAP_EXPORT,
 };
 use crate::node::{Bracket, Node};
-use crate::wasm_reader::Imports;
+use crate::run::wasm_reader::Imports;
 use anyhow::{anyhow, Result};
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
@@ -212,7 +212,7 @@ impl Builders {
 			return Ok(TaskValue::Int(n));
 		}
 		let node = self.call("new_int", &[Val::I64(n)], store)?;
-		TaskValue::of(&crate::wasm_reader::node_in(&node, store, self.memory))
+		TaskValue::of(&crate::run::wasm_reader::node_in(&node, store, self.memory))
 	}
 
 	/// A value as an Int of this instance: a fixnum, or the handle of an exact number
@@ -292,7 +292,7 @@ impl Builders {
 		match (kind & crate::type_kinds::KIND_MASK) as u8 {
 			tag if tag == crate::type_kinds::Kind::Function as u8 => {
 				let name =
-					crate::wasm_reader::node_in(&node.field(&mut *store, VALUE_FIELD)?, store, self.memory).name();
+					crate::run::wasm_reader::node_in(&node.field(&mut *store, VALUE_FIELD)?, store, self.memory).name();
 				let closure = node.field(&mut *store, DATA_FIELD)?;
 				let captured = match closure
 					.unwrap_anyref()
@@ -330,7 +330,7 @@ impl Builders {
 			Val::F64(bits) => Ok(TaskValue::Float(warp_runtime::floats::canonical_nan(f64::from_bits(
 				*bits,
 			)))),
-			Val::AnyRef(_) => TaskValue::of(&crate::wasm_reader::node_in(value, store, self.memory)),
+			Val::AnyRef(_) => TaskValue::of(&crate::run::wasm_reader::node_in(value, store, self.memory)),
 			other => Err(anyhow!("a task gave {other:?}")),
 		}
 	}
@@ -1028,7 +1028,7 @@ impl TaskTable {
 		store.epoch_deadline_callback(move |_| control.checkpoint());
 		store.set_epoch_deadline(1);
 		let mut linker = Linker::new(&self.engine);
-		crate::wasm_reader::link_imports(&mut linker, &self.engine, &self.module, self.imports)?;
+		crate::run::wasm_reader::link_imports(&mut linker, &self.engine, &self.module, self.imports)?;
 		if let Some(shared) = &self.shared {
 			shared.link_into(&mut linker)?;
 		}
@@ -1144,7 +1144,7 @@ impl TaskTable {
 		};
 		let mut results = zero_results(&signature);
 		// a raised error leaves its message in trap_detail, as in the program
-		crate::wasm_reader::with_trap_detail(callee.call(&mut store, &values, &mut results), &mut store, &instance)?;
+		crate::run::wasm_reader::with_trap_detail(callee.call(&mut store, &values, &mut results), &mut store, &instance)?;
 		match results.first() {
 			Some(result) => builders.read(result, &mut store.as_context_mut()),
 			None => Ok(TaskValue::Empty),

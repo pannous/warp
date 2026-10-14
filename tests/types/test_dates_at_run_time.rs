@@ -40,9 +40,9 @@ fn assert_now(node: &Node) {
 #[cfg(feature = "native")] // the browser build runs modules in the page
 fn test_now_reads_the_clock_when_the_program_runs() {
 	let module = warp::pipeline::compile("now").expect("now needs a module: it is no constant");
-	let first = warp::wasm_reader::read_bytes_with_host(&module.bytes).expect("runs");
+	let first = warp::run::wasm_reader::read_bytes_with_host(&module.bytes).expect("runs");
 	std::thread::sleep(std::time::Duration::from_millis(20));
-	let second = warp::wasm_reader::read_bytes_with_host(&module.bytes).expect("runs again");
+	let second = warp::run::wasm_reader::read_bytes_with_host(&module.bytes).expect("runs again");
 	assert_now(&first);
 	assert!(
 		instant_of(&second) > instant_of(&first),

@@ -730,7 +730,7 @@ struct FunctionState {
 	returns_float: bool,
 	returns_list: bool,
 	returned_tuple: Vec<Kind>,
-	statement_position: Option<crate::meta::LineInfo>,
+	statement_position: Option<crate::compiler::meta::LineInfo>,
 	loop_labels: Vec<super::loop_control::LoopLabels>,
 	loop_values: super::control_flow::LoopValues,
 }
