@@ -33,7 +33,7 @@ impl Inference {
 		}
 		// `for x in xs` of a list of quantities: x has the element signature
 		if let [for_word, variable, in_word, list, body] = items {
-			if word(for_word, "for") && word(in_word, super::super::IN_WORD) {
+			if word(for_word, crate::words::FOR_WORD) && word(in_word, super::super::IN_WORD) {
 				if let (Node::Symbol(name), Node::Symbol(list_name)) = (variable.drop_meta(), list.drop_meta()) {
 					if let Some(element) = self.lists.get(list_name).cloned() {
 						self.variables.insert(name.clone(), element);
