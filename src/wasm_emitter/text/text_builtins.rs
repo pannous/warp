@@ -690,8 +690,7 @@ impl WasmGcEmitter {
 	}
 
 	/// A value of one of `kinds` made at run time (parsed code) in Node local `local` becomes its literal text, to join
-	/// a text: `"x " + parse(t)` (card print-parse); only where list_text is emitted anyway, as code parsed at run time
-	/// makes it. `empty`: the allocated empty text, the separator of that one-item list
+	/// a text: `"x " + parse(t)` (card print-parse); only in a program that parses code. `empty`: the allocated empty text, the separator of that one-item list
 	pub(in crate::wasm_emitter) fn emit_structure_as_literal(
 		&self,
 		func: &mut Function,
@@ -699,7 +698,7 @@ impl WasmGcEmitter {
 		kinds: &[Kind],
 		empty: (u32, u32),
 	) {
-		if !self.should_emit_function(super::super::reflection::library_ops::LIST_TEXT) {
+		if !self.parses_code {
 			return;
 		}
 		let node_type = self.type_manager.node_type;

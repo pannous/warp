@@ -17,4 +17,6 @@ fn a_grouped_text_without_the_field_names_it() {
 fn a_call_without_arguments_stays_a_call() {
 	is!("f() := {a:1 b:2}; f().b", 2);
 	is!("use time\ntoday().year > 2025", true);
+	is!("mk = () => ({a: 1}); mk().a", 1);
+	is!("class point{x:int=0; y:int=3}; point().y", 3);
 }

@@ -1,8 +1,9 @@
 //! `(p).a` is `p.a` (card dump-text): parentheses around a variable before a dot only group it, so the dot reads the
 //! field or method as it does without them. Before, `(p).a` stayed the data `a:1.a` and `(t).dump` of a text failed
 //! at run time as an item print could not join. `(function f).dump` keeps its group: the function itself, not a call.
-//! The parser gives the call `f()` the same form as the group `(f)`, so a name that is a function stays a call:
-//! `f().b`, `today().year`
+//! The parser gives the call `f()` the same form as the group `(f)`, so only a name the program binds to a value (an
+//! assignment, a loop variable) ungroups; any other name stays a call: `f().b`, `today().year`, `point().x`, `mk().a`
+//! of `mk = () => …`, and the functions of an imported module
 
 use std::collections::HashSet;
 
@@ -17,33 +18,42 @@ pub fn lower(node: Node) -> Node {
 	if !grouped {
 		return node;
 	}
-	let functions: HashSet<String> = crate::analyzer::function_definitions(&node)
-		.user_functions
-		.into_keys()
-		.collect();
-	let is_function = |name: &str| {
-		functions.contains(name)
-			|| crate::library_words::is_library_word(name)
-			|| crate::modules::std_module_defining(name).is_some()
-	};
-	ungrouped_receivers(node, &is_function)
+	let variables = bound_variables(&node);
+	ungrouped_receivers(node, &variables)
 }
 
-fn ungrouped_receivers(node: Node, is_function: &dyn Fn(&str) -> bool) -> Node {
+/// The names assigned a value that is no function, and the loop variables
+fn bound_variables(program: &Node) -> HashSet<String> {
+	let functions = crate::analyzer::function_definitions(program).user_functions;
+	let mut variables: HashSet<String> = crate::lowering::for_loop::loop_variables(program).into_iter().collect();
+	program.visit(&mut |part| {
+		if let Node::Key(target, Op::Assign, value) = part {
+			let is_function = crate::lowering::lambdas::arrow_lambda(value).is_some()
+				|| crate::closures::referenced_function(value).is_some();
+			if let Some(name) = target.symbol_name().filter(|_| !is_function) {
+				variables.insert(name.to_string());
+			}
+		}
+	});
+	variables.retain(|name| !functions.contains_key(name));
+	variables
+}
+
+fn ungrouped_receivers(node: Node, variables: &HashSet<String>) -> Node {
 	match node {
 		Node::Key(receiver, Op::Dot, member) => {
-			let receiver = ungrouped_receivers(*receiver, is_function);
+			let receiver = ungrouped_receivers(*receiver, variables);
 			let receiver = match grouped_name(&receiver) {
-				Some(name) if !is_function(name.symbol_name().unwrap_or_default()) => name.clone(),
+				Some(name) if variables.contains(name.symbol_name().unwrap_or_default()) => name.clone(),
 				_ => receiver,
 			};
 			Node::Key(
 				Box::new(receiver),
 				Op::Dot,
-				Box::new(ungrouped_receivers(*member, is_function)),
+				Box::new(ungrouped_receivers(*member, variables)),
 			)
 		}
-		other => other.map_children(|child| ungrouped_receivers(child, is_function)),
+		other => other.map_children(|child| ungrouped_receivers(child, variables)),
 	}
 }
 
