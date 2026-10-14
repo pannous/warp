@@ -121,7 +121,7 @@ with `_`, a rest or a name defined nowhere is a pattern, else `is` compares), an
 The whole matched value (user): no `@`/`as` binding. In an arm the subject's name (`match xs`), the word `value` (any
 subject, innermost match; a program variable named value wins) and `match name = expr { … }` (assigns, then matches;
 the name stays bound) give it.
-Parameter patterns (card parameter-patterns, lowering/parameter_patterns.rs): `add_pair([a, b]) := a + b`,
+Parameter patterns (card parameter-patterns, lowering/definitions/parameter_patterns.rs): `add_pair([a, b]) := a + b`,
 `total(Point{x, y}) := x + y`. Each pattern parameter gets a numbered name (`list·1`, `point·1: Point`), and the body
 becomes a match on it, so another shape is the match's "no case" error and a non-Point the call's type error.
 Probe: probes/matching/parameter_patterns.warp. Open: a user `sum(p: Point)` called with 5 runs the library sum

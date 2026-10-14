@@ -103,11 +103,11 @@ impl WarpParser {
 			':' if self.at_pseudo_class_selector() => self.symbol_after(1, |name| Node::Symbol(format!(":{name}"))),
 			'.' if self.starts_path_literal() => self.parse_path_literal(),
 			// `a, *rest = xs`: the starred name takes the items the other names leave (src/lowering/tuples.rs); `...rest`
-			// (JS) is the starred `*rest` too: a rest parameter or a spread argument (src/lowering/variadic.rs)
+			// (JS) is the starred `*rest` too: a rest parameter or a spread argument (src/lowering/definitions/variadic.rs)
 			'.' if self.peek_char(1) == '.' && self.peek_char(2) == '.' && self.is_identifier_start(3) => {
 				self.parse_starred(3)
 			}
-			// Python's `**kw`: the keyword arguments as one object (src/lowering/variadic.rs)
+			// Python's `**kw`: the keyword arguments as one object (src/lowering/definitions/variadic.rs)
 			'*' if self.peek_char(1) == '*' && self.is_identifier_start(2) => match self.parse_starred(2) {
 				Node::Symbol(name) => Node::Symbol(format!("{}{name}", crate::words::STARRED)),
 				other => other,

@@ -371,7 +371,7 @@ pub(super) fn assigned_before_read(statements: &[&Node], name: &str) -> bool {
 	}
 }
 
-/// Warp's late binding (src/lowering/late_binding.rs): a function or lambda reading a main-level name the program
+/// Warp's late binding (src/lowering/definitions/late_binding.rs): a function or lambda reading a main-level name the program
 /// changes after its definition, with a call after that change, needs `global x`. W0 reads at call time, which gives
 /// what warp gives for every program warp accepts, so such programs are outside W0 rather than rejected by it
 pub(super) fn late_binding(statements: &[&Node], globals: &[String]) -> Option<String> {

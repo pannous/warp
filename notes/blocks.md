@@ -17,7 +17,7 @@
   `{1 2}` stays a data list, `{"A": 1}` a map, `{it*2}` / `{x => x+1}` lambdas.
 - `o = {s1: a+b, s3 = a+b}`: a computed `:` entry is an uncharged block the object holds as data (got-it warning where
   written), `o.s1!` runs it where written (the parser marks the field as for `x.upper!`), `o.s1 + 1` is the type error;
-  `s3 = a+b` is a value entry (evaluated now); `s := e` entries are getters (P71, src/lowering/getters.rs). An object without such entries is not
+  `s3 = a+b` is a value entry (evaluated now); `s := e` entries are getters (P71, src/lowering/definitions/getters.rs). An object without such entries is not
   rebuilt (meta attributes like `@unit("cm") {x:1}` stay).
 - `help = {print: "there is help"}; help!` runs the object as code: each `key: value` is the call `key(value)`.
 Next: code/block prefixes, block parameters for if/while/for/def.

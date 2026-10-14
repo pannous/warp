@@ -382,7 +382,7 @@ Each step is useful on its own and is what the next ones stand on.
   host-tasks.js so only a program reading the clipboard ships it) and waits on shared memory while the page reads
   navigator.clipboard.readText (task-workers.js pasteInto/answerInto); the browser may refuse it without a recent
   click: a loud error. The tour checks it where the browser allows (CLIPBOARD_READ).
-- Undo history (lowering/undo_history.rs): a program saying `undo x` or `redo x` keeps x's history: after the first
+- Undo history (lowering/definitions/undo_history.rs): a program saying `undo x` or `redo x` keeps x's history: after the first
   main-level assignment of x come the lists `undo_past_x`, `undo_future_x` and an `on change x` listener adding the
   old value (not while undo or redo itself writes x); a new change empties what was undone. `undo`, `redo` and
   `stored` are soft keywords.

@@ -499,7 +499,7 @@ the value comparison above, maps, then tasks.
 `f(b=1, a=5)` writes the fields of `f·args` by name, positional arguments fill the others in order, a missing one
 takes its default (`f(a, b=3)`, `b: int = 3`); a call whose arguments do not fit exports as a call given `unit`, so
 W0 rejects it as warp does. Arguments run as written, left to right (P216; warp computed them in parameter order
-until src/lowering/named_arguments.rs moved effectful reordered ones into temporaries). `f(n=4)` names the one
+until src/lowering/definitions/named_arguments.rs moved effectful reordered ones into temporaries). `f(n=4)` names the one
 parameter. A function defined in a function's body is lifted (src/law/type_model/nested_functions.rs) to the
 main-level `outer·inner`, the names of outer it reads added as parameters passed by name; a name it declares
 `nonlocal` is passed as outer's cell (parameter type `outer·y`, the cell class), so writes reach outer. Siblings

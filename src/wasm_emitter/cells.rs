@@ -1,4 +1,4 @@
-//! Cells: one mutable value that several functions share (lowering/nonlocal_cells.rs, `nonlocal y` changed by a nested
+//! Cells: one mutable value that several functions share (lowering/definitions/nonlocal_cells.rs, `nonlocal y` changed by a nested
 //! function). A cell is a $Node of Kind::Data whose data is a $node_array of one element:
 //!   cell_new(v) → the cell holding v, cell_get(c) → its value, cell_set(c, v) → stores v and gives it back.
 //! A signal (lowering/signals/signal_values.rs) is a cell with a second slot, the list of its listener closures:
