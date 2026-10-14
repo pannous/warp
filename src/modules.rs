@@ -931,16 +931,16 @@ fn used_module(node: &Node) -> Option<Used> {
 		return None;
 	};
 	let (name, requirement) = match (argument.drop_meta(), rest) {
-		(Node::Key(name, Op::Ge, minimum), []) => (path_of(name)?, Some(Requirement::Minimum(version_of(minimum)?))),
+		(Node::Key(name, Op::Ge, minimum), []) => (path_of(name)?, Some(Requirement(Op::Ge, version_of(minimum)?))),
 		(name, []) => (path_of(name)?, None),
 		(name, [version]) if version_of(version).is_some() && is_version_list(version) => {
-			(path_of(name)?, Some(Requirement::Exact(version_of(version)?)))
+			(path_of(name)?, Some(Requirement(Op::Eq, version_of(version)?)))
 		}
 		(name, [word, version]) if word.is_symbol(MINIMUM_KEYWORD) => {
-			(path_of(name)?, Some(Requirement::Minimum(version_of(version)?)))
+			(path_of(name)?, Some(Requirement(Op::Ge, version_of(version)?)))
 		}
 		(name, [word, version]) if is_version_keyword(word) => {
-			(path_of(name)?, Some(Requirement::Exact(version_of(version)?)))
+			(path_of(name)?, Some(Requirement(Op::Eq, version_of(version)?)))
 		}
 		_ => return None,
 	};
