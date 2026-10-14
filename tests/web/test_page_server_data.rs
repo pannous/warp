@@ -2,7 +2,7 @@
 // server, which runs main; the shipped page leaves it out, with the table it reads, instead of opening a table of its
 // own in the browser ("table.open: no such word in the browser" before)
 const PROGRAM: &str = "class User{name: text}
-users: [User] = database.users_seeded
+stored users: [User] in \"users_seeded\"
 if count(users) == 0 { users.add(User(\"Ann\")); users.add(User(\"Bo\")) }
 route \"/\" { p{ \"home\" } }
 route \"/users/:id:int\" { h1{ \"User \" + users#id.name } }";

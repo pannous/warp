@@ -1,7 +1,7 @@
 // card orm-paging: a slice of a stored table reads only its rows (a LIMIT … OFFSET … query), each the one instance
 // of its row; run it twice: the changed name stays
 class Person{name: text; age: int}
-people: [Person] = database.people
+stored people: [Person]
 if count(people) == 0 { for i in 1 to 50 { people.add(Person("N" + i, i)) } }
 page = people#(11…20)
 print "people#(11…20): ${count(page)} rows, from ${page#1.name} to ${page#10.name}"
