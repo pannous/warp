@@ -7,6 +7,7 @@ fn an_operator_node_is_an_operation() {
 	is!("parse(\"1+1\").type", "operation");
 	is!("type(parse(\"a < b\"))", "operation");
 	is!("x = data (1+1); type(x)", "operation");
+	is!("x = parse(\"a<b\"); x.type", "operation");
 	is!("parse(\"1+1\").op", "+");
 }
 
@@ -14,6 +15,7 @@ fn an_operator_node_is_an_operation() {
 fn a_pair_stays_a_key() {
 	is!("parse(\"a:1\").type", "key");
 	is!("parse(\"a=1\").type", "key");
+	is!("type(parse(\"a:1\"))", "key");
 }
 
 #[test]

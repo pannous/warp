@@ -72,6 +72,15 @@ pub const OP_CODES: [Op; 66] = [
 	Op::ArrowDown,
 ];
 
+/// The bits of the operation codes (Op::is_operation), codes 0..64 then 64..128, for a run-time test of a Key's code
+pub fn operation_code_masks() -> [i64; 2] {
+	let mut masks = [0i64; 2];
+	for (code, _) in OP_CODES.iter().enumerate().filter(|(_, op)| op.is_operation()) {
+		masks[code / 64] |= 1 << (code % 64);
+	}
+	masks
+}
+
 /// Encode Op as i64 for storage in kind field
 pub fn op_to_code(op: &Op) -> i64 {
 	OP_CODES.iter().position(|known| known == op).unwrap_or(0) as i64
