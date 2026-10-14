@@ -352,3 +352,38 @@ pub(in crate::analyzer) fn negative_modulo_warning(left: &Node, right: &Node) ->
 		),
 	}
 }
+
+/// `"3"+3`: a text spelling a number added to a number (card print-oldest: "a"+3 joins silently, "3"+3 warns); the
+/// spelling text, quoted
+pub(crate) fn number_text_plus_number(left: &Node, right: &Node) -> Option<String> {
+	let spelled = |text: &Node, number: &Node| match (text.drop_meta(), number.drop_meta()) {
+		(Node::Text(digits), Node::Number(_)) if digits.trim().parse::<f64>().is_ok() => {
+			Some(text.serialize().trim().to_string())
+		}
+		(Node::Char(digit), Node::Number(_)) if digit.is_ascii_digit() => Some(format!("\"{digit}\"")),
+		_ => None,
+	};
+	spelled(left, right).or_else(|| spelled(right, left))
+}
+
+pub(crate) fn number_text_plus_number_warning(node: &Node, left: &Node, right: &Node, spelled: &str) -> Diagnostic {
+	let is_number = |side: &Node| matches!(side.drop_meta(), Node::Number(_));
+	let written_with = |number_form: &dyn Fn(String) -> String, text_form: &dyn Fn(&str) -> String| {
+		let operand = |side: &Node| {
+			if is_number(side) {
+				number_form(side.serialize().trim().to_string())
+			} else {
+				text_form(spelled)
+			}
+		};
+		format!("{} + {}", operand(left), operand(right))
+	};
+	let written = written_with(&|number| number, &|text| text.to_string());
+	let conversion = if spelled.contains('.') { "float" } else { "int" };
+	let as_sum = written_with(&|number| number, &|text| format!("{conversion}({text})"));
+	let as_text = written_with(&|number| format!("str({number})"), &|text| text.to_string());
+	Diagnostic::at(node, format!("{written} joins the texts; {spelled} spells a number"))
+		.fix(format!("{as_sum} or {as_text}"))
+		.offer("the sum of the numbers", &written, as_sum)
+		.offer("the joined text", &written, as_text)
+}
