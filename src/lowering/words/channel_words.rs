@@ -11,14 +11,12 @@ use super::nodes::{call, filled, key};
 use crate::declarations::word;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::{FOR_WORD, IN_WORD, SEND_WORD};
 use std::collections::{HashMap, HashSet};
 
 const CHANNEL_WORD: &str = "channel";
-const SEND_WORD: &str = "send";
 const RECEIVE_WORD: &str = "receive";
 const CLOSE_WORD: &str = "close";
-const FOR_WORD: &str = "for";
-const IN_WORD: &str = "in";
 const NEW: &str = crate::host::CHANNEL_WORDS[0];
 const PUT: &str = crate::host::CHANNEL_WORDS[1];
 const TAKE: &str = crate::host::CHANNEL_WORDS[2];

@@ -1,5 +1,6 @@
 //! Generic functions: methods told apart by the classes of their arguments (`collide(a:Ship, b:Rock)`), each call resolved or dispatched
 use super::*;
+use crate::words::ANY_TYPE;
 
 /// The class each positional parameter of a method takes, None where it takes any value: `collide(a:Ship, b:Rock)`
 pub(super) type Signature = Vec<Option<String>>;
@@ -144,7 +145,7 @@ pub(super) fn signature_variant(signature: &Signature) -> String {
 		.map_or(0, |position| position + 1);
 	signature[..last_class]
 		.iter()
-		.map(|class| class.as_deref().unwrap_or(ANY_WORD))
+		.map(|class| class.as_deref().unwrap_or(ANY_TYPE))
 		.collect::<Vec<_>>()
 		.join(&WITNESS_SEPARATOR.to_string())
 }
@@ -153,7 +154,7 @@ pub(super) fn signature_variant(signature: &Signature) -> String {
 pub(super) fn classes_text(classes: &[Option<String>]) -> String {
 	classes
 		.iter()
-		.map(|class| class.as_deref().unwrap_or(ANY_WORD))
+		.map(|class| class.as_deref().unwrap_or(ANY_TYPE))
 		.collect::<Vec<_>>()
 		.join(", ")
 }

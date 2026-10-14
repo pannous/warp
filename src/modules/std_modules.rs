@@ -108,6 +108,14 @@ pub(super) fn std_path(name: &str) -> PathBuf {
 	PathBuf::from(format!("{STD_FOLDER}/{name}.warp"))
 }
 
+/// Is `file` an embedded standard module as loaded (std_path): code the program's writer does not write
+pub fn is_std_source(file: &str) -> bool {
+	let name = file
+		.strip_prefix(STD_FOLDER)
+		.and_then(|rest| rest.strip_prefix('/')?.strip_suffix(".warp"));
+	name.is_some_and(|name| std_module(name).is_some())
+}
+
 /// The source of the standard module `name` (lib/<name>.warp, embedded)
 pub fn std_module_source(name: &str) -> Option<&'static str> {
 	std_module(name)

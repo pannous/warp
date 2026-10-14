@@ -8,6 +8,7 @@ use crate::lowering::nodes::children_rewritten;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
+use crate::words::LIST_WORD;
 use std::collections::{HashMap, HashSet};
 
 /// `x:T = v` → `x = v` with T kept as metadata on x (see `declared_type`);

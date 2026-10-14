@@ -72,7 +72,7 @@ impl Lowering {
 		self.instantiate_template(
 			&format!(
 				"(if {condition_placeholder} {{1}} else {{{}({TRY_FALLBACK_PLACEHOLDER})}})",
-				crate::wasm_emitter::text::text_builtins::RAISE
+				RAISE_WORD
 			),
 			&[
 				(condition_placeholder, &condition),

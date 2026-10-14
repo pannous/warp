@@ -7,6 +7,7 @@ use crate::type_kinds::{Kind, CURLY_LIST_KIND, KIND_MASK, SQUARE_LIST_KIND, UNMA
 use crate::wasm_emitter::layout::{utf8, BYTE};
 use crate::wasm_emitter::lists::list_dispatch::Slot;
 use crate::wasm_emitter::{WasmGcEmitter, NEW_BOOL, VALUES_EQUAL};
+use crate::words::MAP_WORD;
 use wasm_encoder::*;
 use Instruction as I;
 use Instruction::I32Const;
@@ -468,7 +469,7 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::LocalGet(0)]);
 				s.emit_is_map(f);
 				f.instruction(&I::If(BlockType::Empty));
-				s.emit_string_call(f, crate::analyzer::MAP_TYPE, "new_symbol");
+				s.emit_string_call(f, MAP_WORD, "new_symbol");
 				Self::emit_list(f, &[I::Return, I::End]);
 				for named in RUN_TIME_TYPE_KINDS {
 					Self::emit_list(

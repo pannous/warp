@@ -10,6 +10,8 @@
 use super::nodes::{branches, if_then_parts};
 use crate::node::Node;
 use crate::operators::Op;
+use crate::words::FOR_WORD;
+use crate::words::IN_WORD;
 
 mod kernels;
 pub(crate) use kernels::*;
@@ -67,8 +69,6 @@ const RGB_WORD: &str = "rgb";
 const COLOR_SUFFIX: &str = "_color";
 /// The uniforms of a painted shader (src/graphics/gpu.rs), the program's numbers its function reads
 const SHADER_VALUES: &str = "values";
-const FOR_WORD: &str = "for";
-const IN_WORD: &str = "in";
 /// `x^k` for a whole k up to this is a product (pow of a negative base is NaN in WGSL, a number on the CPU)
 const LARGEST_MULTIPLIED_POWER: i64 = 8;
 

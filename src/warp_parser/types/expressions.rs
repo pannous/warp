@@ -1,5 +1,6 @@
 //! Type expressions: names of types, list types `[Int]`, array type suffixes `Int[]`
 use super::*;
+use crate::words::LIST_WORD;
 
 /// A word that can take type arguments: a capitalised type, a built-in type word, a plural type word, `list`, `map` …
 pub(crate) fn names_a_type(word: &str) -> bool {
@@ -22,7 +23,7 @@ pub(crate) fn type_application_name(name: &str, arguments: &str) -> String {
 /// The head of a list type: `Vec`, `vector`, `Array`… are list
 pub(crate) fn list_type_head(name: &str) -> &str {
 	if FOREIGN_LIST_HEADS.contains(&name) {
-		LIST_HEAD
+		LIST_WORD
 	} else {
 		name
 	}
@@ -31,7 +32,7 @@ pub(crate) fn list_type_head(name: &str) -> &str {
 /// list_type_head, with a note naming warp's word for a foreign one
 pub(crate) fn noted_list_type_head(name: &str) -> &str {
 	if FOREIGN_LIST_HEADS.contains(&name) {
-		crate::errors::diagnostic::note_alias(name, LIST_HEAD);
+		crate::errors::diagnostic::note_alias(name, LIST_WORD);
 	}
 	list_type_head(name)
 }

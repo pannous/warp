@@ -1,9 +1,10 @@
 //! Counting words and phrases: count/length/size of a value, units, ranges
 
 use super::*;
+use crate::words::PRINT_WORD;
 
 /// Statement words whose argument is never their property: `return count` is no `return.count`
-pub(crate) const PROPERTYLESS_KEYWORDS: [&str; 6] = ["return", "yield", PRINT_CALL, "println", "puts", "not"];
+pub(crate) const PROPERTYLESS_KEYWORDS: [&str; 6] = ["return", "yield", PRINT_WORD, "println", "puts", "not"];
 /// The words counting a value's elements, as `count x`, `x.size`, `len(x)`: the one table every pass asks, through
 /// is_counting_word (a class's own size method is looked up in this order)
 pub(crate) const COUNTING_WORDS: [&str; 4] = ["size", "count", "len", "length"];

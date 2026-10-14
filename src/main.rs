@@ -5,6 +5,7 @@ use std::env;
 use std::fs;
 use std::io::{self, IsTerminal, Read, Write};
 use warp::node;
+use warp::run::module_cache::COMPILED_EXTENSION;
 use warp::util::{dirs_home, extract_after, file_exists, load_file};
 use warp::{
 	errors::diagnostic, extensions, law, modules::package_tools, run, run::wasm_reader, util, warp_parser,
@@ -38,7 +39,6 @@ const COMPONENT_FLAG: &str = "--component";
 /// `warp build --wagi app.warp`: app.wagi.wasm, its routes answering one WAGI request (lib/wagi.warp), and app.spin.toml
 /// to run it: `spin up -f app.spin.toml` (Spin's wagi executor; Akamai Functions: `spin aka deploy`)
 const WAGI_FLAG: &str = "--wagi";
-const MACHINE_CODE_EXTENSION: &str = "cwasm";
 /// The name of an executable built from inline code (plus the platform's extension)
 const DEFAULT_EXECUTABLE_NAME: &str = "out";
 /// `warp run <file>`: the program runs, no executable is left (P105)
@@ -311,7 +311,7 @@ fn run_command(args: &[String]) {
 		// Compile WAT/WAST text format to WASM binary, then execute
 		let wat_code = load_file(&arg_string);
 		print_and_exit(run::wasmtime_runner::run_wat(&wat_code));
-	} else if arg_string.ends_with(".wasm") || arg_string.ends_with(&format!(".{MACHINE_CODE_EXTENSION}")) {
+	} else if arg_string.ends_with(".wasm") || arg_string.ends_with(&format!(".{COMPILED_EXTENSION}")) {
 		if args.len() >= 3 {
 			fail(format!(
 				"Error: running several wasm files together (linking {}) is not supported yet; run one file",

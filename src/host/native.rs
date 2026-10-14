@@ -239,6 +239,12 @@ fn fetch_into_memory(caller: &mut Caller<'_, HostState>, url_ptr: i32, url_len: 
 
 /// Link host functions into a wasmtime Linker
 pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> Result<()> {
+	link_memory_words(linker)?;
+	link_library_words(linker)
+}
+
+/// The words of the module `host` that pass texts and bytes through the instance's linear memory
+fn link_memory_words(linker: &mut Linker<HostState>) -> Result<()> {
 	// host.fetch(url_ptr: i32, url_len: i32) -> (result_ptr: i32, result_len: i32)
 	// Returns the body via two i32 values (multivalue return); a negative length marks the text as the failure reason
 	linker.func_wrap(
@@ -271,7 +277,15 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 			read_into_memory(&mut caller, path_ptr, path_len)
 		},
 	)?;
+	// host.warn(message_ptr: i32, message_len: i32): a runtime warning, reported and collected
+	linker.func_wrap("host", "warn", warn)?;
+	// host.run(wasm_ptr: i32, wasm_len: i32) -> i64
+	linker.func_wrap("host", "run", run_wasm_bytes)?;
+	Ok(())
+}
 
+/// The words of HOST_LIBRARY: blocks, foreign and std calls, serving and fetching, channels, the GPU, painting, sound
+fn link_library_words(linker: &mut Linker<HostState>) -> Result<()> {
 	linker.func_wrap(HOST_LIBRARY, GUARDED_CALL, guarded_call)?;
 	warp_runtime::host_words::link_host_words(linker)?;
 	linker.func_wrap(HOST_LIBRARY, RUN_BLOCK, run_block)?;
@@ -309,54 +323,43 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	)?;
 	linker.func_wrap(HOST_LIBRARY, DRAW_SHOW, draw_show)?;
 	linker.func_wrap(HOST_LIBRARY, SOUND, sound)?;
-
-	// host.warn(message_ptr: i32, message_len: i32): a runtime warning, reported and collected
-	linker.func_wrap(
-		"host",
-		"warn",
-		|mut caller: Caller<'_, HostState>, message_ptr: i32, message_len: i32| {
-			if let Some(Extern::Memory(memory)) = caller.get_export("memory") {
-				match read_string_from_memory(&memory, &caller, message_ptr as u32, message_len as u32) {
-					Ok(message) => crate::errors::diagnostic::report_runtime_warning(&message),
-					Err(e) => trace!("host.warn: unreadable message: {e}"),
-				}
-			}
-		},
-	)?;
-
-	// host.run(wasm_ptr: i32, wasm_len: i32) -> i64
-	// Runs WASM bytes and returns result as an i64 (simplified for now)
-	// Full GC object return requires more complex setup
-	linker.func_wrap(
-		"host",
-		"run",
-		|mut caller: Caller<'_, HostState>, wasm_ptr: i32, wasm_len: i32| -> i64 {
-			let Some(Extern::Memory(memory)) = caller.get_export("memory") else {
-				trace!("host.run: no memory export");
-				return -1;
-			};
-
-			// Read WASM bytes from memory
-			let mut wasm_bytes = vec![0u8; wasm_len as usize];
-			if memory.read(&caller, wasm_ptr as usize, &mut wasm_bytes).is_err() {
-				trace!("host.run: failed to read WASM bytes");
-				return -1;
-			}
-
-			trace!("host.run: executing {} bytes of WASM", wasm_len);
-
-			// Execute the WASM and get result directly
-			match run_wasm_simple(&wasm_bytes) {
-				Ok(result) => result,
-				Err(e) => {
-					trace!("host.run: execution failed: {}", e);
-					-1
-				}
-			}
-		},
-	)?;
-
 	Ok(())
+}
+
+fn warn(mut caller: Caller<'_, HostState>, message_ptr: i32, message_len: i32) {
+	if let Some(Extern::Memory(memory)) = caller.get_export("memory") {
+		match read_string_from_memory(&memory, &caller, message_ptr as u32, message_len as u32) {
+			Ok(message) => crate::errors::diagnostic::report_runtime_warning(&message),
+			Err(e) => trace!("host.warn: unreadable message: {e}"),
+		}
+	}
+}
+
+/// Runs WASM bytes and returns result as an i64 (simplified for now)
+/// Full GC object return requires more complex setup
+fn run_wasm_bytes(mut caller: Caller<'_, HostState>, wasm_ptr: i32, wasm_len: i32) -> i64 {
+	let Some(Extern::Memory(memory)) = caller.get_export("memory") else {
+		trace!("host.run: no memory export");
+		return -1;
+	};
+
+	// Read WASM bytes from memory
+	let mut wasm_bytes = vec![0u8; wasm_len as usize];
+	if memory.read(&caller, wasm_ptr as usize, &mut wasm_bytes).is_err() {
+		trace!("host.run: failed to read WASM bytes");
+		return -1;
+	}
+
+	trace!("host.run: executing {} bytes of WASM", wasm_len);
+
+	// Execute the WASM and get result directly
+	match run_wasm_simple(&wasm_bytes) {
+		Ok(result) => result,
+		Err(e) => {
+			trace!("host.run: execution failed: {}", e);
+			-1
+		}
+	}
 }
 
 /// paint(pixels, width, height) natively: the pixels as a PNG (src/graphics/paint.rs); paint(shader, width, height, values)

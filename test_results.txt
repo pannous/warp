@@ -2506,6 +2506,8 @@ PASSED:
   ✓ numbers::test_named_unit_fields::a_named_field_checks_its_dimension
   ✓ numbers::test_nan_observed::a_nan_leaving_the_run_is_canonical
   ✓ numbers::test_nan_observed::a_nan_prints_as_nan
+  ✓ numbers::test_nearest_quiet::nearest_warns_nothing_of_the_prelude
+  ✓ numbers::test_nearest_quiet::the_programs_own_float_equality_still_warns
   ✓ numbers::test_nearest::float_to_exact_refusals_name_nearest
   ✓ numbers::test_nearest::nearest_as_a_method
   ✓ numbers::test_nearest::nearest_expands_exact_values_beyond_floats
@@ -2780,6 +2782,7 @@ PASSED:
   ✓ operators::test_infix_word_operators::a_word_operator_is_still_a_word_elsewhere
   ✓ operators::test_infix_word_operators::an_assigned_filter_by_an_operator
   ✓ operators::test_infix_word_operators::infix_without_operator_is_an_alias
+  ✓ operators::test_isnt::test_isnt_spellings
   ✓ operators::test_less_than_compare::test_a_less_than_after_a_variable_is_a_comparison
   ✓ operators::test_less_than_compare::test_generics_still_start_after_a_type_name
   ✓ operators::test_library_infix_words::a_used_module_declares_an_infix_word
@@ -3120,6 +3123,8 @@ PASSED:
   ✓ parser::test_uniscript_entities::an_unknown_entity_stays_as_written_and_warns
   ✓ parser::test_uniscript_entities::entities_are_their_characters
   ✓ parser::test_uniscript_entities::entities_expand_inside_double_quoted_texts
+  ✓ parser::test_uniscript_hyphen_names::a_hyphen_after_a_whole_name_stays_a_hyphen
+  ✓ parser::test_uniscript_hyphen_names::a_style_letter_is_one_entity_in_a_text
   ✓ parser::test_url_literal::a_colon_without_slashes_stays_a_pair
   ✓ parser::test_url_literal::any_scheme_before_colon_slash_slash_starts_a_url
   ✓ parser::test_warp_format::html_attributes_and_repeated_tags_in_data
@@ -4771,6 +4776,7 @@ PASSED:
   ✓ web::test_sandboxed_programs::a_sandboxed_program_calls_no_c_and_no_other_runtime
   ✓ web::test_sandboxed_programs::a_sandboxed_program_keeps_the_host_words
   ✓ web::test_script_words::a_path_from_cwd_is_found
+  ✓ web::test_script_words::glob_finds_the_written_files
   ✓ web::test_select_options::a_list_after_the_bound_variable_is_no_part_of_it
   ✓ web::test_select_options::a_list_gives_the_options
   ✓ web::test_select_options::a_map_gives_values_and_labels
@@ -5306,7 +5312,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ web::test_script_words::glob_finds_the_written_files
 
 SUMMARY:
-13 ignored, 5303 passed, 1 failed, 5304 total tested
+13 ignored, 5309 passed, 0 failed, 5309 total tested

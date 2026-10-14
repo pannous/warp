@@ -8,12 +8,10 @@ use crate::errors::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::words::UNWRAP;
+use crate::words::{DELETE_WORD, POP_WORD, UNWRAP};
 
 /// Meta key on a name written `x!`
 const MUTATED_MARK: &str = "mutated";
-const DELETE_WORD: &str = "delete";
-const POP_WORD: &str = "pop";
 
 /// Pure words whose result is a changed copy of their argument: dropping it changes nothing. Any spelling of them
 /// (`uppercase`, `strip`, `sorted`) is one (library_words::canonical_spelling)

@@ -42,6 +42,12 @@ impl SharedArrays {
 
 	/// Link the shared words into an instance of the run
 	pub fn link_into(self: &Arc<Self>, linker: &mut Linker<HostState>) -> Result<()> {
+		self.link_int_words(linker)?;
+		self.link_float_words(linker)
+	}
+
+	/// new, get, set, add, count and the write count of arrays of ints
+	fn link_int_words(self: &Arc<Self>, linker: &mut Linker<HostState>) -> Result<()> {
 		let [new, get, set, add, count] = SHARED_WORDS;
 		let arrays = self.clone();
 		linker.func_wrap(HOST_LIBRARY, new, move |length: i64| -> i64 {
@@ -87,7 +93,11 @@ impl SharedArrays {
 				.expect("the write count")
 				.load(Ordering::SeqCst))
 		})?;
-		// an array of floats: the cells hold the bits; an add swaps until no other task came between
+		Ok(())
+	}
+
+	/// An array of floats: the cells hold the bits
+	fn link_float_words(self: &Arc<Self>, linker: &mut Linker<HostState>) -> Result<()> {
 		let [get_float, set_float, add_float] = SHARED_FLOAT_WORDS;
 		let arrays = self.clone();
 		linker.func_wrap(
@@ -117,17 +127,22 @@ impl SharedArrays {
 			move |id: i64, index: i64, value: f64| -> wasmtime::Result<f64> {
 				let (array, cell) = arrays.cell(id, index)?;
 				counted(&array);
-				let mut old = array[cell].load(Ordering::SeqCst);
-				loop {
-					let sum = warp_runtime::floats::canonical_nan(f64::from_bits(old as u64) + value);
-					match array[cell].compare_exchange(old, sum.to_bits() as i64, Ordering::SeqCst, Ordering::SeqCst) {
-						Ok(_) => return Ok(sum),
-						Err(current) => old = current,
-					}
-				}
+				Ok(add_float_to(&array[cell], value))
 			},
 		)?;
 		Ok(())
+	}
+}
+
+/// The cell plus value, swapped in until no other task came between
+fn add_float_to(cell: &AtomicI64, value: f64) -> f64 {
+	let mut old = cell.load(Ordering::SeqCst);
+	loop {
+		let sum = warp_runtime::floats::canonical_nan(f64::from_bits(old as u64) + value);
+		match cell.compare_exchange(old, sum.to_bits() as i64, Ordering::SeqCst, Ordering::SeqCst) {
+			Ok(_) => return sum,
+			Err(current) => old = current,
+		}
 	}
 }
 

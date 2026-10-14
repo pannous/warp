@@ -273,7 +273,7 @@ impl Loaded {
 					_ => false,
 				},
 			})
-			// `regex.Regex("a+")` of a resource without a constructor: its static `new` (a Rust crate's, src/modules/cargo_crates.rs)
+			// `regex.Regex("a+")` of a resource without a constructor: its static `new` (a Rust crate's, src/modules/cargo_crates/)
 			.or_else(|| {
 				self.functions
 					.iter()

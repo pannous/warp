@@ -23,6 +23,29 @@ pub const TEXT_AS_FLOAT: &str = "text_as_float";
 pub(super) const TEXT_REPEAT_TOPIC: &str = "text-repeat";
 
 impl WasmGcEmitter {
+	/// A leading sign of the text at `pointer`: `negative` set for -, the pointer past a - or + (`digit` holds the byte)
+	fn emit_skip_sign(f: &mut Function, pointer: u32, digit: u32, negative: u32) {
+		Self::emit_list(
+			f,
+			&[
+				I::LocalGet(pointer),
+				I::I32Load8U(BYTE),
+				I::LocalTee(digit),
+				I32Const('-' as i32),
+				I::I32Eq,
+				I::LocalSet(negative),
+				I::LocalGet(negative),
+				I::LocalGet(digit),
+				I32Const('+' as i32),
+				I::I32Eq,
+				I::I32Or,
+				I::LocalGet(pointer),
+				I::I32Add,
+				I::LocalSet(pointer),
+			],
+		);
+	}
+
 	/// `x as int` of a text held in a variable, like the literal `"12" as int`; no digits is the runtime error invalid_number
 	pub(in crate::wasm_emitter) fn emit_text_as_int(&mut self) {
 		if !self.should_emit_function(TEXT_AS_INT) {
@@ -81,26 +104,7 @@ impl WasmGcEmitter {
 			s.emit_text_bounds(f, pointer, end);
 			Self::emit_list(f, &at_end);
 			s.emit_fail_if(f, "invalid_number");
-			// a leading sign: negative = (c == '-'), pointer skips it
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(pointer),
-					I::I32Load8U(BYTE),
-					I::LocalTee(digit),
-					I32Const('-' as i32),
-					I::I32Eq,
-					I::LocalSet(negative),
-					I::LocalGet(negative),
-					I::LocalGet(digit),
-					I32Const('+' as i32),
-					I::I32Eq,
-					I::I32Or,
-					I::LocalGet(pointer),
-					I::I32Add,
-					I::LocalSet(pointer),
-				],
-			);
+			Self::emit_skip_sign(f, pointer, digit, negative);
 			Self::emit_list(f, &at_end);
 			s.emit_fail_if(f, "invalid_number");
 			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
@@ -470,27 +474,7 @@ impl WasmGcEmitter {
 			}
 			Self::emit_list(f, &[I::Return, I::End]);
 			s.emit_text_bounds(f, pointer, end);
-			// a sign: `negative` set for -, the pointer past a - or +
-			let sign = |f: &mut Function, negative: u32| {
-				Self::emit_list(f, &byte);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalTee(digit),
-						I32Const('-' as i32),
-						I::I32Eq,
-						I::LocalSet(negative),
-						I::LocalGet(negative),
-						I::LocalGet(digit),
-						I32Const('+' as i32),
-						I::I32Eq,
-						I::I32Or,
-						I::LocalGet(pointer),
-						I::I32Add,
-						I::LocalSet(pointer),
-					],
-				);
-			};
+			let sign = |f: &mut Function, negative: u32| Self::emit_skip_sign(f, pointer, digit, negative);
 			Self::emit_list(f, &at_end);
 			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
 			sign(f, negative);

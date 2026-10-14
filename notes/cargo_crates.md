@@ -1,4 +1,4 @@
-# `use cargo <crate>`: crates.io crates as generated components (card use-cargo, src/modules/cargo_crates.rs)
+# `use cargo <crate>`: crates.io crates as generated components (card use-cargo, src/modules/cargo_crates/)
 
 `use cargo regex`, `use crate "regex"`, `use cargo regex as re`: foreign_modules::crate_module rewrites the statement
 into `use wasm "<cache>/regex@1.13.1.wasm" as regex`, so everything after it is the components path
@@ -41,7 +41,7 @@ into `use wasm "<cache>/regex@1.13.1.wasm" as regex`, so everything after it is 
 
 ## Prebuilt downloads (card use-cargo-downloads)
 - Order: the newest cached component, else the newest hosted one, else the local build. Hosted = the assets
-  `<crate>.<version>.wasm` of the prerelease `crates-v4` (generation = GENERATION in src/modules/cargo_crates.rs), listed by the
+  `<crate>.<version>.wasm` of the prerelease `crates-v4` (generation = GENERATION in src/modules/cargo_crates/mod.rs), listed by the
   release API (`api.github.com/repos/pannous/warp/releases/tags/crates-v4`); a download must match the asset's
   `digest` (SHA-256 GitHub computes) and lands in the cache as `<crate>@<version>.wasm` (no .wit: the interface is in
   the component, `wasm-tools component wit` prints it). Any failure says why and falls back to the local build.
@@ -55,7 +55,7 @@ into `use wasm "<cache>/regex@1.13.1.wasm" as regex`, so everything after it is 
   file:line (`regex-automata/src/util/search.rs:426`). 10 to 45 times the size (strsim 3.7 MB, regex 13.5 MB), so it's
   opt-in, not the default of debug warps.
 - .github/workflows/crates.yml builds the crates of its CRATES list and uploads them (`gh release upload --clobber`):
-  on pushes to main that touch it or src/modules/cargo_crates.rs, weekly, by dispatch. Add a crate there.
+  on pushes to main that touch it or src/modules/cargo_crates/, weekly, by dispatch. Add a crate there.
 - Release assets, not ghcr: a new ghcr package starts private and only the web UI makes it public (no API).
 - A hosted version may trail crates.io until the weekly run; a raised GENERATION needs one workflow run before
   downloads work again (until then everyone builds locally).

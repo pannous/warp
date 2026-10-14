@@ -12,11 +12,13 @@
 //! become linear ones (picked_linear).
 //! Shared values (P106): `shared done = false`, `shared n = 0`, `shared x = 0.5` are one-cell arrays: a read of `n` is
 //! `shared_get(n, 1)`, `n = v` is `shared_set(n, 1, v)`, `n += v` is `shared_add(n, 1, v)`; a boolean is the Int 1 or 0.
+//! Kept as built (user decision cleanup-cuts): `shared` for any atomic variable, not only Int and float arrays and
+//! one-cell values, is the general form for later.
 
 use super::nodes::{call, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::words::{MAP_WORD, SUM_WORD};
+use crate::words::{DOT_WORD, MAP_WORD, SUM_WORD};
 use std::collections::{HashMap, HashSet};
 
 /// `shared xs = int[n]` and its synonym `atomic` (P44)
@@ -25,7 +27,6 @@ const SHARED_WORDS: [&str; 2] = ["shared", "atomic"];
 const SHARED_NEW: &str = crate::host::SHARED_WORDS[0];
 const SHARED_COUNT: &str = crate::host::SHARED_WORDS[4];
 const FLOAT_WORDS: [&str; 3] = ["float", "real", "double"];
-const DOT_WORD: &str = "dot";
 
 /// `linear xs = int[n]`: an array in linear memory
 const LINEAR_WORD: &str = "linear";

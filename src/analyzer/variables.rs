@@ -2,12 +2,11 @@
 
 use super::*;
 use crate::lowering::nodes::children_rewritten;
+use crate::words::{ANY_TYPE, FLOAT_WORD, LET_WORD, MAP_WORD};
 use std::collections::HashSet;
 
 /// `var x = 1` announces a reassignable variable, plain `x = 1`
 pub(crate) const VAR_KEYWORD: &str = "var";
-/// `let x = 1` binds x once: any change of it is an error naming `var` (user, card let-reassign; check_constants)
-pub(crate) const IMMUTABLE_LET: &str = "let";
 
 /// Collect variables defined in node and populate scope
 /// Returns count of temp locals needed (e.g., for while loops)
@@ -130,11 +129,8 @@ pub(super) fn collect_variables_inner(
 		}
 		// Define (:=) always creates a variable, Assign (=) only outside structure context
 		Node::Key(left, Op::Define, right) => {
-			if let Some(name) = left.symbol_name().filter(|_| !skip_first_assign) {
-				if scope.lookup(name).is_none() && !scope.is_global(name) {
-					let kind = binding_kind(right, scope);
-					scope.define(name.to_string(), None, kind);
-				}
+			if !skip_first_assign {
+				define_new(left, right, scope);
 			}
 			visit(right, scope)
 		}
@@ -150,19 +146,7 @@ pub(super) fn collect_variables_inner(
 		// the value's variables come first, as for `=`: `r += (t = l[b]; t)` (a lowered max) widens r by t's kind
 		Node::Key(left, op, right) if op.is_compound_assign() => {
 			let inner_temporaries = visit(right, scope);
-			if let Some(name) = left.symbol_name() {
-				mark_ratio(left, right, scope);
-				widen_to_float(scope, name, right);
-				// `out += x` of a number of run-time kind may add a float, as `out = out + x` does; an evident other kind
-				// (`s += "ab"` of an Int) stays the type error of emit_compound_type_error
-				if crate::analyzer::inference::is_run_time_kind(&binding_kind(right, scope)) {
-					widen_to_node(scope, name, &Node::Key(left.clone(), op.base_op(), right.clone()));
-				}
-				// `xs += [v]` (a lowered `xs.push(v)`) types xs as `xs = xs + [v]` does
-				if *op == Op::AddAssign {
-					type_list_by_first_append(name, &Node::Key(left.clone(), Op::Add, right.clone()), scope);
-				}
-			}
+			widen_by_compound_assign(left, op, right, scope);
 			visit(left, scope) + inner_temporaries
 		}
 		// While loop needs temp locals for the result and for "the body ran"
@@ -177,6 +161,42 @@ pub(super) fn collect_variables_inner(
 			.sum(),
 		Node::List(items, _, _) => items.iter().map(|item| visit(item, scope)).sum(),
 		_ => 0,
+	}
+}
+
+/// `x := v` of a name not yet a local or global defines it
+fn define_new(left: &Node, right: &Node, scope: &mut Scope) {
+	if let Some(name) = left.symbol_name() {
+		if scope.lookup(name).is_none() && !scope.is_global(name) {
+			let kind = binding_kind(right, scope);
+			scope.define(name.to_string(), None, kind);
+		}
+	}
+}
+
+/// `x += v` widens x by the kind of v: a ratio, a float, a Node of run-time kind, a list by its first append
+fn widen_by_compound_assign(left: &Node, op: &Op, right: &Node, scope: &mut Scope) {
+	let Some(name) = left.symbol_name() else {
+		return;
+	};
+	mark_ratio(left, right, scope);
+	widen_to_float(scope, name, right);
+	// `out += x` of a number of run-time kind may add a float, as `out = out + x` does; an evident other kind
+	// (`s += "ab"` of an Int) stays the type error of emit_compound_type_error
+	if crate::analyzer::inference::is_run_time_kind(&binding_kind(right, scope)) {
+		widen_to_node(
+			scope,
+			name,
+			&Node::Key(Box::new(left.clone()), op.base_op(), Box::new(right.clone())),
+		);
+	}
+	// `xs += [v]` (a lowered `xs.push(v)`) types xs as `xs = xs + [v]` does
+	if *op == Op::AddAssign {
+		type_list_by_first_append(
+			name,
+			&Node::Key(Box::new(left.clone()), Op::Add, Box::new(right.clone())),
+			scope,
+		);
 	}
 }
 
@@ -286,7 +306,7 @@ fn type_map_by_first_entry(name: &str, value: &Node, scope: &mut Scope) {
 		.own_binding_mut(name)
 		.filter(|local| local.kind == Kind::Empty && local.type_node.is_none() && !local.is_param)
 	{
-		local.type_node = Some(Box::new(Node::Symbol(super::checks::MAP_TYPE.to_string())));
+		local.type_node = Some(Box::new(Node::Symbol(MAP_WORD.to_string())));
 	}
 }
 
@@ -461,7 +481,7 @@ pub(super) fn declared_kind(type_node: &Node) -> Option<Kind> {
 		Some(_) => Some(Kind::Empty),
 		None if super::annotations::names_empty_type(type_node) => Some(Kind::Empty),
 		// `y: any`: any value, held as a Node, never the kind of the first value given (card yes-stores)
-		None if type_name == crate::type_kinds::UNTYPED_FIELD => Some(Kind::Empty),
+		None if type_name == ANY_TYPE => Some(Kind::Empty),
 		// an inline union `int or text` holds a value of either kind as a Node
 		None if super::checks::union_parts(type_name).is_some() => Some(Kind::Empty),
 		// `number` keeps whatever number it is given, an exact 1/3 or a float (card number-keeps-exact)
@@ -931,5 +951,5 @@ pub(crate) fn is_declaration_keyword(node: &Node) -> bool {
 
 /// `var`, `let`, `const`, `val` …: a word declaring the name after it
 pub(crate) fn is_declaration_word(word: &str) -> bool {
-	CONSTANT_KEYWORDS.contains(&word) || word == VAR_KEYWORD || word == IMMUTABLE_LET
+	CONSTANT_KEYWORDS.contains(&word) || word == VAR_KEYWORD || word == LET_WORD
 }

@@ -1,5 +1,6 @@
 //! Exporting functions, blocks and expressions to W0: loops, lambdas, extrema, tallies, conversions and checked results
 use super::*;
+use crate::words::{ERROR_WORD, FOR_WORD, IN_WORD, IS_ERROR_WORD, MAP_WORD};
 
 impl Exporter {
 	/// A function of one parameter as it is; of none, a function of `unit`; of several, a function of its
@@ -379,8 +380,8 @@ impl Exporter {
 			Node::Symbol(name) if self.names.contains_key(name) => Ok(format!(".glob {}", quoted(name))),
 			// a unit word is a quantity of one unit (`2 km` parses as `2 * km`)
 			Node::Symbol(name) if crate::numbers::units::is_unit(name) => Ok(quantity_literal(name)),
-			_ if map_entries(node).is_some() && self.classes.contains_key(MAP_CLASS) => {
-				self.instance(MAP_CLASS, map_entries(node).expect("a map"))
+			_ if map_entries(node).is_some() && self.classes.contains_key(MAP_WORD) => {
+				self.instance(MAP_WORD, map_entries(node).expect("a map"))
 			}
 			Node::List(items, Bracket::Square, _) => Ok(self
 				.expressions(items)?
@@ -413,21 +414,21 @@ impl Exporter {
 			Node::List(items, _, _) => match items.as_slice() {
 				[marker, body, handler] if marker.is_symbol(TRY_MARKER) => self.binary(".tryCatch", body, handler),
 				[for_word, variable, in_word, list, body]
-					if for_word.is_symbol(FOR_KEYWORD) && in_word.is_symbol(IN_KEYWORD) =>
+					if for_word.is_symbol(FOR_WORD) && in_word.is_symbol(IN_WORD) =>
 				{
 					self.for_loop(variable, list, body)
 				}
 				// `count 2 in xs` parses as `count (2 in xs)`
 				[count, list] if count.is_symbol(COUNT_WORD) && !self.functions.contains_key(COUNT_WORD) => {
 					match list.drop_meta() {
-						Node::List(words, Bracket::None, _) if words.len() == 3 && words[1].is_symbol(IN_KEYWORD) => {
+						Node::List(words, Bracket::None, _) if words.len() == 3 && words[1].is_symbol(IN_WORD) => {
 							self.tally(&words[2], Some(&words[0]), false)
 						}
 						_ => self.tally(list, None, false),
 					}
 				}
 				// decision in-bool: `x in xs` is yes when x has a position in xs
-				[item, in_word, list] if in_word.is_symbol(IN_KEYWORD) => {
+				[item, in_word, list] if in_word.is_symbol(IN_WORD) => {
 					Ok(truthiness(self.tally(list, Some(item), true)?))
 				}
 				[call, a, b]
@@ -437,12 +438,12 @@ impl Exporter {
 					self.extremum(&call.name(), a, b)
 				}
 				// a stored error: a value until an operation that needs another value meets it (Decided #1)
-				[call, message] if call.is_symbol(ERROR_CALL) => match message.drop_meta() {
+				[call, message] if call.is_symbol(ERROR_WORD) => match message.drop_meta() {
 					Node::Text(message) => Ok(format!(".fail {}", quoted(message))),
 					Node::Char(letter) => Ok(format!(".fail {}", quoted(&letter.to_string()))),
 					_ => outside_w0(node),
 				},
-				[call, value] if call.is_symbol(IS_ERROR_CALL) => Ok(format!(".failed ({})", self.expression(value)?)),
+				[call, value] if call.is_symbol(IS_ERROR_WORD) => Ok(format!(".failed ({})", self.expression(value)?)),
 				[call]
 					if self
 						.functions

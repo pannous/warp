@@ -334,7 +334,7 @@ impl WarpParser {
 				};
 				names.map(|name| Symbol(name.to_string())).to_vec()
 			}
-			_ => vec![Symbol("it".to_string())],
+			_ => vec![Symbol(crate::words::IMPLICIT_PARAMETER.to_string())],
 		};
 		let head = operator_call(&glyph, parameters);
 		Some(Node::Key(Box::new(head), Op::Define, Box::new(body)))

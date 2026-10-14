@@ -1,5 +1,6 @@
 //! Type names: what `type(x)` reports for lists and numbers (`list of int`, `ints`), and the type word all elements fit
 use super::*;
+use crate::words::{FLOAT_WORD, LIST_WORD, MAP_WORD, NUMBER_WORD, REAL_WORD};
 
 /// A plural type word denotes a list of that type: `ints`, `numbers` → `int`, `number`
 pub fn plural_element_type(word: &str) -> Option<&str> {
@@ -11,7 +12,7 @@ pub fn plural_element_type(word: &str) -> Option<&str> {
 pub fn held_map_type(subject: &Node, scope: &Scope) -> Option<String> {
 	let local = scope.binding(subject.drop_meta().symbol_name()?)?;
 	let type_name = local.type_node.as_ref()?.name();
-	(local.kind == Kind::Empty && type_name.starts_with(MAP_TYPE)).then_some(type_name)
+	(local.kind == Kind::Empty && type_name.starts_with(MAP_WORD)).then_some(type_name)
 }
 
 /// The type name `type(x)` reports for a list: a list whose elements are held as Nodes is a plain `list`
@@ -97,7 +98,7 @@ fn variable_list_type(name: &str, scope: &Scope) -> String {
 	match type_name {
 		Some(word) => match list_element_type(&word) {
 			Some(element) => format!("{LIST_OF_PREFIX}{element}"),
-			None if word.starts_with(LIST_WORD) || word.starts_with(MAP_TYPE) => word,
+			None if word.starts_with(LIST_WORD) || word.starts_with(MAP_WORD) => word,
 			None => LIST_WORD.to_string(),
 		},
 		// `r = f()`: the list a function returns, its elements unknown until runtime
@@ -119,7 +120,7 @@ fn map_part_type(word: &str, map: &Node, scope: &Scope) -> String {
 		MAP_ENTRIES => list_type_name(map, scope),
 		// the values of a map of known values; of anything else (a pair `a: {b: 8}`) Nodes of any type
 		_ => match list_type_name(map, scope) {
-			map if map.starts_with(MAP_TYPE) => map.replacen(MAP_TYPE_PREFIX, LIST_OF_PREFIX, 1),
+			map if map.starts_with(MAP_WORD) => map.replacen(MAP_TYPE_PREFIX, LIST_OF_PREFIX, 1),
 			_ => NODE_LIST_TYPE.to_string(),
 		},
 	}
@@ -145,7 +146,7 @@ fn map_type_name(entries: &[Node], scope: &Scope) -> String {
 	let is_list_map = typed.len() < values.len() && words.iter().all(|word| word.starts_with(LIST_WORD));
 	match common_type_word(&words) {
 		Some(word) if is_list_map || typed.len() == values.len() => format!("{MAP_TYPE_PREFIX}{word}"),
-		_ => MAP_TYPE.to_string(),
+		_ => MAP_WORD.to_string(),
 	}
 }
 
@@ -201,8 +202,6 @@ pub(super) fn nested_type_word(item: &Node, scope: &Scope) -> String {
 	}
 }
 
-/// The type name of a map literal, `map of <value type>` when its values share one
-pub(crate) const MAP_TYPE: &str = "map";
 /// Library words whose list result has the elements of their list argument
 pub(in crate::analyzer) const ORDER_WORDS: [&str; 2] = ["sort", "reverse"];
 /// Library words whose result is a list of texts
@@ -210,7 +209,6 @@ pub(super) const TEXT_LIST_WORDS: [&str; 2] = ["split", "chars"];
 pub(in crate::analyzer) const MAP_TYPE_PREFIX: &str = "map of ";
 /// A list whose elements are known only at runtime (the result of a call): each element is held as a Node
 pub(in crate::analyzer) const NODE_LIST_TYPE: &str = "list of node";
-pub(crate) const LIST_WORD: &str = "list";
 /// Between a variable and the name of a temporary made for it (`xs·range`, `xs·item`, `m·removed`)
 pub const TEMPORARY_SEPARATOR: &str = "·";
 
@@ -222,7 +220,6 @@ pub fn is_compiler_temporary(name: &str) -> bool {
 pub(crate) const LIST_OF_PREFIX: &str = "list of ";
 /// The type words of a bool, held as an Int (builtin_type_kind)
 pub(super) const BOOL_TYPES: [&str; 2] = ["bool", "boolean"];
-pub(in crate::analyzer) const OF_WORD: &str = "of";
 
 /// The map word a call names: `map_keys`, `map_values` or `map_entries`
 pub(in crate::analyzer) fn map_word(call: &Node) -> Option<&'static str> {
@@ -235,11 +232,6 @@ pub(in crate::analyzer) fn map_word(call: &Node) -> Option<&'static str> {
 
 pub(in crate::analyzer) const INT_WORD: &str = "int";
 pub(crate) const RATIONAL_WORD: &str = "rational";
-pub(crate) const FLOAT_WORD: &str = "float";
-pub(in crate::analyzer) const NUMBER_WORD: &str = "number";
-/// Irrational constants are `real`, although the underlying representation may still be exact or float: the type name is
-/// the contract, the representation may change
-pub(in crate::analyzer) const REAL_WORD: &str = "real";
 pub(in crate::analyzer) const REAL_CONSTANTS: [&str; 2] = ["π", "pi"];
 
 /// The type word of a number literal: whole numbers are `int` (also `2.0`), exact fractions and decimals `rational`,

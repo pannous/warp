@@ -7,6 +7,8 @@
 //! declares `dog like animal`, so a dog is accepted where an animal is wanted.
 
 use super::nodes::{arguments_rewritten, call, grouped_parameters, if_then, is_place, key, Counter};
+use crate::words::COPY_WORD;
+use crate::words::SELF_WORD;
 use crate::words::{GLOBAL_WORD, MAP_WORD, RETURN_WORD, SUM_WORD};
 mod components;
 use components::*;
@@ -33,8 +35,6 @@ use operators::*;
 use other_languages::*;
 use statics::*;
 
-/// The receiver parameter of a method
-const RECEIVER: &str = "self";
 /// Other names of the receiver in a method body
 const RECEIVER_ALIASES: [&str; 1] = ["this"];
 /// Suffixes of a field name that mark it optional or required (`left?`, `name!`)
@@ -83,8 +83,6 @@ const RUBY_NEW_WORD: &str = "new";
 const GO_FUNCTION_WORD: &str = "func";
 /// Rust's block of methods of a type, `impl Point {…}`
 const IMPL_WORD: &str = "impl";
-/// Kotlin's `p.copy(y = 5)`
-const COPY_WORD: &str = "copy";
 /// lib/units.warp's `q.to("km/h")`: a run-time quantity in other units
 const CONVERSION_METHOD: &str = "to";
 /// lib/units.warp's check that two quantities measure the same, and a quantity's amount in base units
@@ -93,12 +91,10 @@ const QUANTITY_AMOUNT: &str = "amount";
 /// The sum of a list of run-time quantities folds their `plus` (quantities_reduced)
 const REDUCE_WORD: &str = "reduce";
 const REDUCED_NAMES: [&str; 2] = ["quantity·sum", "quantity·item"];
-/// `str(q)`: a run-time quantity's text
-const TEXT_WORD: &str = "str";
 /// P212: a class defining the method of only one of these operators has it serve the other too
 const INTERCHANGEABLE_OPERATORS: [(Op, Op); 2] = [(Op::Similar, Op::Rough), (Op::Rough, Op::Similar)];
 /// The run-time choice of a library-word method by the receiver's class (dispatched_by_class)
-const DISPATCH_TEMPLATE: &str = "if RECEIVER is CLASS then METHOD else OTHERWISE";
+const DISPATCH_TEMPLATE: &str = "if SELF_WORD is CLASS then METHOD else OTHERWISE";
 /// Ruby's `include Walker` in a class body takes in a mixin
 const INCLUDE_WORD: &str = "include";
 /// The prefix of a method named like a type or library word: `method·double`, `method·sum` (a prefix: a name
@@ -354,7 +350,7 @@ fn renamed_type_word_methods(node: Node) -> Node {
 		return node;
 	}
 	let mut instances: Vec<String> = instance_classes(&node, &classes).into_keys().collect();
-	instances.extend([RECEIVER.to_string(), RECEIVER_ALIASES[0].to_string()]);
+	instances.extend([SELF_WORD.to_string(), RECEIVER_ALIASES[0].to_string()]);
 	with_method_names(
 		node,
 		&MethodNames {
@@ -394,7 +390,7 @@ fn dispatched_by_class(receiver: &Node, member: Node, methods: &MethodNames, ren
 /// `if receiver is class then method else otherwise`
 pub(crate) fn by_class(receiver: &Node, class: &str, method: Node, otherwise: Node) -> Node {
 	let bindings = [
-		("RECEIVER", receiver.clone()),
+		("SELF_WORD", receiver.clone()),
 		("CLASS", Node::Symbol(class.to_string())),
 		("METHOD", method),
 		("OTHERWISE", otherwise),
@@ -557,7 +553,7 @@ fn shared_method_traits(node: &Node) -> Vec<Node> {
 		let Node::Type { body, .. } = part else { return };
 		for item in class_items(body) {
 			if let Some((name, parameters)) = instance_member(&item) {
-				let receiver = symbol(RECEIVER);
+				let receiver = symbol(SELF_WORD);
 				let requirement = match parameters.is_empty() {
 					true => Node::Symbol(name.clone()),
 					false => parens([vec![Node::Symbol(name.clone()), receiver], parameters].concat()),
@@ -738,7 +734,7 @@ fn split_class(node: &Node, changing: &mut Changing) -> Option<(Node, Vec<Node>)
 	// the constructor gives the instance it was handed, its fields set
 	let gives_itself = |body: &Node| {
 		Node::List(
-			vec![body.clone(), symbol(RECEIVER)],
+			vec![body.clone(), symbol(SELF_WORD)],
 			Bracket::None,
 			Separator::Semicolon,
 		)
@@ -844,8 +840,8 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 	// the holes of `"#\(n)"` as code first, so a field in one is read from self too
 	let body = crate::text::interpolation::lower_program(body);
 	let body = receiver_reads(body, &readable);
-	let receiver = symbol(RECEIVER);
-	let changes = match changes_fields_of(&body, RECEIVER) {
+	let receiver = symbol(SELF_WORD);
+	let changes = match changes_fields_of(&body, SELF_WORD) {
 		false => Change::None,
 		true if gives_value(&body) => Change::GivingValue,
 		true => Change::Itself,
@@ -869,7 +865,7 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 			Node::List(statements, Bracket::None, Separator::Semicolon)
 		}
 	};
-	let receiver = key(symbol(RECEIVER), Op::Colon, symbol(class));
+	let receiver = key(symbol(SELF_WORD), Op::Colon, symbol(class));
 	let head = parens([vec![symbol(method), receiver], parameters].concat());
 	(key(head, Op::Define, body), changes)
 }
@@ -913,7 +909,7 @@ fn gives_value(body: &Node) -> bool {
 			false
 		}
 		// a body giving its object back already (a constructor)
-		Node::Symbol(name) if name == RECEIVER => false,
+		Node::Symbol(name) if name == SELF_WORD => false,
 		Node::Key(_, Op::Dot, call) => {
 			!mutating_call(call)
 				|| matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| GIVING_MUTATIONS.contains(&word.drop_meta().name().as_str())))
@@ -933,12 +929,12 @@ struct Readable<'a> {
 /// The body with each field name and getter read from self, each call of a method of the class a call on self (as in
 /// Java), `this` as self; the member name right of a dot stays as it is
 fn receiver_reads(node: Node, readable: &Readable) -> Node {
-	let on_receiver = |member: Node| key(symbol(RECEIVER), Op::Dot, member);
+	let on_receiver = |member: Node| key(symbol(SELF_WORD), Op::Dot, member);
 	let is_call_of = |items: &[Node], names: &[&String]| matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if names.contains(&name));
 	match node {
 		Node::Symbol(name) if readable.statics.contains(&&name) => Node::Symbol(static_name(readable.class, &name)),
 		Node::Symbol(name) if readable.fields.contains(&&name) => on_receiver(Node::Symbol(name)),
-		Node::Symbol(name) if RECEIVER_ALIASES.contains(&name.as_str()) => symbol(RECEIVER),
+		Node::Symbol(name) if RECEIVER_ALIASES.contains(&name.as_str()) => symbol(SELF_WORD),
 		Node::List(items, Bracket::Round, separator) if is_call_of(&items, &readable.methods) => {
 			on_receiver(arguments_rewritten(items, Bracket::Round, separator, |argument| {
 				receiver_reads(argument, readable)

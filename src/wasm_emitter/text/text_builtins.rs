@@ -7,6 +7,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::type_kinds::Kind;
 use crate::wasm_emitter::layout::BYTE;
 use crate::wasm_emitter::{WasmGcEmitter, RAN_WITHOUT_ERROR};
+use crate::words::{CHR_WORD, ERROR_WORD, IS_ERROR_WORD, RAISE_WORD};
 use std::collections::HashSet;
 use wasm_encoder::*;
 use Instruction as I;
@@ -39,8 +40,6 @@ const MEMORY_SET_BYTE: &str = "memory_set_byte";
 const TRIM: &str = "trim";
 const TEXT_TRIM: &str = "text_trim";
 pub const TEXT_ROUGH_TRIM: &str = "text_rough_trim";
-/// `chr(n)`: the character of a code point, the inverse of `ord(c)`
-const CHR: &str = "chr";
 /// `float_bits(x)`: the IEEE 754 bits of a float as an Int, `bits_float(n)` the float of them (an `f64.const` to emit)
 pub const FLOAT_BITS: &str = "float_bits";
 pub const BITS_FLOAT: &str = "bits_float";
@@ -61,11 +60,6 @@ const ASCII_ALPHANUMERIC_RANGES: [(u8, u8); 3] = [(b'0', b'9'), (b'A', b'Z'), (b
 const READ: &str = "read";
 const READ_TEXT: &str = "read_text";
 const HOST_READ: &str = "host_read";
-const ERROR: &str = "error";
-/// `raise X` (`throw X`): an exception, the runtime error returned_error with X as its detail, which `try` catches
-pub const RAISE: &str = "raise";
-/// `is_error(x)`: 1 when x is an Error value; `try X else Y` tests its result with it
-pub const IS_ERROR: &str = "is_error";
 /// error_of(text) → Error: exported, the host builds the Error of a caught stack overflow with it (guarded_call)
 pub const ERROR_OF: &str = "error_of";
 pub const WARNING: &str = "warning";
@@ -86,16 +80,16 @@ const TEXT_BUILTINS: [(&str, usize, Kind); 23] = [
 	(READ, 1, Kind::Text),
 	(BYTE_AT, 2, Kind::Int),
 	(BYTE_SLICE, 3, Kind::Text),
-	(ERROR, 1, Kind::Empty),
-	(RAISE, 1, Kind::Text),
-	(IS_ERROR, 1, Kind::Int),
+	(ERROR_WORD, 1, Kind::Empty),
+	(RAISE_WORD, 1, Kind::Text),
+	(IS_ERROR_WORD, 1, Kind::Int),
 	(WARNING, 1, Kind::Text),
 	(TEXT_FORM, 1, Kind::Text),
 	(RAN_WITHOUT_ERROR, 1, Kind::Int),
 	(TRIM, 1, Kind::Text),
 	(STARTS_WITH, 2, Kind::Int),
 	(ENDS_WITH, 2, Kind::Int),
-	(CHR, 1, Kind::Codepoint),
+	(CHR_WORD, 1, Kind::Codepoint),
 	(FLOAT_BITS, 1, Kind::Int),
 	(BITS_FLOAT, 1, Kind::Float),
 	(crate::wasm_emitter::CAUGHT_ERROR, 2, Kind::Error),
@@ -378,8 +372,8 @@ impl WasmGcEmitter {
 				self.emit_runtime_error_value(func, &reason);
 			}
 			// warnings are errors: the run stops as at `raise`, also where the warning's value is dropped (card under-use)
-			(WARNING | RAISE, [message])
-				if name == RAISE
+			(WARNING | RAISE_WORD, [message])
+				if name == RAISE_WORD
 					|| crate::errors::diagnostic::warning_mode().fails(crate::errors::diagnostic::Level::Normal) =>
 			{
 				self.emit_trap_detail(func, message);
@@ -396,7 +390,7 @@ impl WasmGcEmitter {
 				);
 				self.emit_runtime_error_value(func, &reason);
 			}
-			(ERROR, [message]) => {
+			(ERROR_WORD, [message]) => {
 				self.emit_node_instructions(func, message);
 				self.emit_call(func, ERROR_OF);
 			}
@@ -410,7 +404,7 @@ impl WasmGcEmitter {
 				BYTE_AT
 				| MEMORY_BYTE
 				| MEMORY_SET_BYTE
-				| IS_ERROR
+				| IS_ERROR_WORD
 				| RAN_WITHOUT_ERROR
 				| STARTS_WITH
 				| ENDS_WITH
@@ -435,7 +429,7 @@ impl WasmGcEmitter {
 				self.emit_text_argument(func, text);
 				self.emit_call(func, TEXT_TRIM);
 			}
-			(CHR, [code]) => {
+			(CHR_WORD, [code]) => {
 				self.emit_numeric_value(func, code);
 				func.instruction(&I::I32WrapI64);
 				self.emit_call(func, "new_codepoint");
@@ -512,7 +506,7 @@ impl WasmGcEmitter {
 					],
 				);
 			}
-			(IS_ERROR, [value]) => {
+			(IS_ERROR_WORD, [value]) => {
 				self.emit_node_instructions(func, value);
 				func.instruction(&I::StructGet {
 					struct_type_index: self.type_manager.node_type,

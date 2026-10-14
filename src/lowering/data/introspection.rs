@@ -5,9 +5,9 @@
 
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
+use crate::words::DIR_WORD;
 use std::collections::HashSet;
 
-const DIR_WORD: &str = "dir";
 const METHODS_WORD: &str = "methods";
 
 pub fn lower(node: Node) -> Node {

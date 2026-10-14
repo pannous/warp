@@ -78,7 +78,7 @@ fn of_list_type(items: &[Node], of_index: usize) -> Option<(&Node, Vec<&str>)> {
 	let Node::Key(_, Op::Colon, head) = items.get(of_index.checked_sub(1)?)?.drop_meta() else {
 		return None;
 	};
-	(crate::warp_parser::list_type_head(head.symbol_name()?) == LIST_TYPE_HEAD).then_some(())?;
+	(crate::warp_parser::list_type_head(head.symbol_name()?) == LIST_WORD).then_some(())?;
 	let mut words = Vec::new();
 	for item in &items[of_index + 1..] {
 		match item.drop_meta() {

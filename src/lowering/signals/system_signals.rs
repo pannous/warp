@@ -26,7 +26,7 @@ use crate::event_signals::{event_name, function_with_globals, main_level_variabl
 use crate::extensions::numbers::Number;
 use crate::node::{parens, symbol, Bracket, Node};
 use crate::operators::Op;
-use crate::words::{FROM_WORD, ON_WORD};
+use crate::words::{AT_WORD, FROM_WORD, ON_WORD, SEND_WORD};
 use warp_runtime::host_words::{CLOCK_WEEKDAYS, LISTEN_CLOCK, LISTEN_EVERY, LISTEN_FRAME};
 
 const EVERY_WORD: &str = "every";
@@ -66,7 +66,6 @@ const KEY_NAMES: [(i64, &str); 9] = [
 	(9, "Tab"),
 ];
 const DAY_WORD: &str = "day";
-const AT_WORD: &str = "at";
 const WEEKDAY_WORD: &str = "weekday";
 const WEEKEND_WORD: &str = "weekend";
 /// `9am`, `9pm`: the half of the day by its index
@@ -75,7 +74,6 @@ const FILE_WORD: &str = "file";
 const CHANGE_WORDS: [&str; 2] = ["change", "changes"];
 const MESSAGE_WORD: &str = "message";
 const BROADCAST_WORD: &str = "broadcast";
-const SEND_WORD: &str = "send";
 /// `chat/stop the machine`: the named event `stop the machine` on the channel `chat`, a channel of its own
 pub const EVENT_SEPARATOR: char = '/';
 /// The channel of `on message {…}` and `broadcast value` without a channel name

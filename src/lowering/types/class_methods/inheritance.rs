@@ -1,6 +1,7 @@
 //! `class dog extends animal {…}` (P117): dog takes in the fields and methods of animal and of its mixins (`include
 //! Walker`), its own ones override them; `super.speak()` calls the version dog would inherit
 use super::*;
+use crate::words::SELF_WORD;
 
 /// Every class with the items of the mixins it takes in (`class Duck with Walker {…}`, `include Walker` in its body)
 /// after its own, but those it defines itself; the mixin declarations themselves are no classes and go
@@ -193,7 +194,7 @@ pub(super) fn super_calls(node: Node, class: &str, called: &mut Vec<String>) -> 
 		}
 		other => other,
 	};
-	key(symbol(RECEIVER), Op::Dot, member)
+	key(symbol(SELF_WORD), Op::Dot, member)
 }
 
 /// `speak·super·dog`, the name of the speak dog inherits; speak goes to `called`

@@ -11,6 +11,7 @@ use crate::type_kinds::{Kind, KIND_BITS, KIND_MASK, SEPARATOR_MASK, SEPARATOR_SH
 use crate::wasm_emitter::layout::BYTE;
 use crate::wasm_emitter::text::text_builtins::{TEXT_CONCAT, TEXT_OF};
 use crate::wasm_emitter::WasmGcEmitter;
+use crate::words::SYMBOL_WORD;
 use std::collections::HashSet;
 use wasm_encoder::*;
 use Instruction as I;
@@ -50,13 +51,12 @@ const SEPARATOR_CODE: &str = "separator_code";
 const NEW_KEY_OF: &str = "new_key_of";
 const NEW_BRACKETED: &str = "new_bracketed";
 const NEW_SEPARATED: &str = "new_separated";
-const SYMBOL: &str = "symbol";
 const KEY: &str = "key";
 const BRACKETED: &str = "bracketed";
 const SEPARATED: &str = "separated";
 /// name, number of arguments, result kind
 pub const NODE_BUILTINS: [(&str, usize, Kind); 4] = [
-	(SYMBOL, 1, Kind::Symbol),
+	(SYMBOL_WORD, 1, Kind::Symbol),
 	(KEY, 3, Kind::Key),
 	(BRACKETED, 2, Kind::List),
 	(SEPARATED, 2, Kind::List),
@@ -107,7 +107,7 @@ impl WasmGcEmitter {
 			func.instruction(&I::RefAsNonNull);
 		}
 		match name {
-			SYMBOL => {
+			SYMBOL_WORD => {
 				self.emit_call(func, TEXT_OF);
 				let text = self.node_scratch();
 				func.instruction(&I::LocalTee(text));

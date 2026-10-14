@@ -303,7 +303,10 @@ impl WarpParser {
 			let rhs_end = self.pos.min(self.chars.len());
 			let rhs_written: String = self.chars[rhs_start.min(rhs_end)..rhs_end].iter().collect();
 
-			if op == Op::Define && !matches!(lhs.drop_meta(), Node::List(..)) && !mentions(&rhs, "it") {
+			if op == Op::Define
+				&& !matches!(lhs.drop_meta(), Node::List(..))
+				&& !mentions(&rhs, crate::words::IMPLICIT_PARAMETER)
+			{
 				self.functions.remove(&lhs.name()); // `x := 5` defines a value, not a function
 			}
 
