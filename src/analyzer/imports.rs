@@ -333,7 +333,7 @@ pub(super) fn uses_library(node: &Node, library: &str) -> bool {
 	node.visit(&mut |part| {
 		if let Node::List(items, _, _) = part {
 			if let [word, named] = items.as_slice() {
-				found |= word.is_symbol("use") && crate::ffi::resolve_library_alias(&library_name(named)) == library;
+				found |= word.is_symbol("use") && crate::ffi::resolve_library_alias(&named.text_or_name()) == library;
 			}
 		}
 	});
@@ -416,7 +416,7 @@ pub(super) fn extract_declared_ffi_imports(ctx: &mut Context, node: &Node) {
 					Node::Symbol(first_sym) => {
 						if first_sym == "import" && items.len() >= 2 {
 							if items.len() == 2 {
-								let lib = library_name(&items[1]);
+								let lib = items[1].text_or_name();
 								add_ffi_lib(ctx, &lib);
 								return;
 							}
@@ -424,7 +424,7 @@ pub(super) fn extract_declared_ffi_imports(ctx: &mut Context, node: &Node) {
 							if items.len() >= 3 {
 								if let Node::Key(ref key, _, ref value) = items[2].drop_meta() {
 									if key.name() == "from" {
-										let lib = library_name(value);
+										let lib = value.text_or_name();
 										func_names
 											.iter()
 											.for_each(|func_name| add_ffi_import(ctx, func_name, &lib));
@@ -433,20 +433,20 @@ pub(super) fn extract_declared_ffi_imports(ctx: &mut Context, node: &Node) {
 								}
 							}
 							if items.len() >= 4 && items[2].name() == "from" {
-								let lib = library_name(&items[3]);
+								let lib = items[3].text_or_name();
 								func_names
 									.iter()
 									.for_each(|func_name| add_ffi_import(ctx, func_name, &lib));
 								return;
 							}
 						} else if first_sym == "use" && items.len() >= 4 && items[2].name() == "from" {
-							let lib = library_name(&items[3]);
+							let lib = items[3].text_or_name();
 							imported_names(&items[1])
 								.iter()
 								.for_each(|name| add_named_import(ctx, name, &lib));
 							return;
 						} else if first_sym == "use" && items.len() >= 2 {
-							let lib = library_name(&items[1]);
+							let lib = items[1].text_or_name();
 							add_ffi_lib(ctx, &lib);
 							return;
 						}
@@ -471,7 +471,7 @@ pub(super) fn extract_declared_ffi_imports(ctx: &mut Context, node: &Node) {
 				if let Node::Key(ref from_key, _, ref lib) = value.drop_meta() {
 					if from_key.name() == "from" {
 						let func_name = key.name();
-						let lib_name = library_name(lib);
+						let lib_name = lib.text_or_name();
 						add_ffi_import(ctx, &func_name, &lib_name);
 						return;
 					}
@@ -571,14 +571,6 @@ pub fn handles_system_signals(ctx: &Context) -> bool {
 			|| name.starts_with(crate::host::FILE_HANDLER_PREFIX)
 			|| name.starts_with(crate::host::FETCH_HANDLER_PREFIX)
 	})
-}
-
-/// The library an import names: `"z"` and `'m'` are one-character texts, which parse as characters
-pub(super) fn library_name(library: &Node) -> String {
-	match library.drop_meta() {
-		Node::Char(letter) => letter.to_string(),
-		other => other.name(),
-	}
 }
 
 /// The function names of `import sin from 'm'` and of the group `import (sin, floor, fabs) from 'm'`

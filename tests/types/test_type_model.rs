@@ -632,6 +632,7 @@ const CORPUS: &[&str] = &[
 const KNOWN_HOLES: &[(&str, &str)] = &[
 	("b: bool = no; b++; b", "bool-assign"),
 	("f(n) := { n = \"x\"; n }; f(3)", "param-assign-unchecked"),
+	("s = 0; for x in 3 { s += x }; s", "cleanup-early-shape-checks"),
 ];
 
 /// Programs warp refuses when compiled that the model accepts and fails only when they run: warp computes a constant

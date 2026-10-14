@@ -200,16 +200,7 @@ pub fn std_module_list(module: &str, list: &str) -> Vec<String> {
 		.iter()
 		.find_map(|statement| match statement.drop_meta() {
 			Node::Key(name, Op::Assign, items) if name.drop_meta().name() == list => match items.drop_meta() {
-				// "p" parses as a character
-				Node::List(items, _, _) => Some(
-					items
-						.iter()
-						.map(|item| match item.drop_meta() {
-							Node::Char(character) => character.to_string(),
-							other => other.name(),
-						})
-						.collect(),
-				),
+				Node::List(items, _, _) => Some(items.iter().map(Node::text_or_name).collect()),
 				_ => None,
 			},
 			_ => None,

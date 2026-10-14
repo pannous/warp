@@ -823,13 +823,7 @@ fn listed_names(fields: Vec<String>, methods: Vec<String>, word: &str) -> Option
 /// The names of a warp.meta list, `["x" "y"]`: a one-letter text reads back as a character
 pub(crate) fn entry_names(list: &Node) -> Vec<String> {
 	match list.drop_meta() {
-		Node::List(items, _, _) => items
-			.iter()
-			.map(|item| match item.drop_meta() {
-				Node::Char(letter) => letter.to_string(),
-				other => other.name(),
-			})
-			.collect(),
+		Node::List(items, _, _) => items.iter().map(Node::text_or_name).collect(),
 		_ => vec![],
 	}
 }
