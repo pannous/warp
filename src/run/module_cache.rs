@@ -1,6 +1,6 @@
 //! Compiled modules cached on disk (notes/aot.md): wasmtime's ahead-of-time output (.cwasm) of every module a run
 //! compiles, keyed by the SHA-256 of the module bytes and the engine's compatibility hash (wasmtime version, target,
-//! every setting that changes the machine code). A cached module is mapped into memory instead of compiled again.
+//! every setting that changes the machine code). A cached module is loaded instead of compiled again.
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
@@ -125,9 +125,14 @@ fn cached_module(engine: &Engine, path: &Path) -> Option<Module> {
 	if !path.exists() {
 		return None;
 	}
-	// SAFETY: deserialize trusts the file to be wasmtime's own output: only this module writes the cache directory,
-	// atomically (store_module), and wasmtime still rejects a file of another version or engine configuration
-	match unsafe { Module::deserialize_file(engine, path) } {
+	// Read, not deserialize_file: a mapped file stays open as long as its Module, and IN_MEMORY keeps up to 512, past
+	// macOS's default limit of 256 open files (EMFILE in tests, card targeted-tests)
+	let loaded = fs::read(path).map_err(wasmtime::Error::from).and_then(|bytes| {
+		// SAFETY: deserialize trusts the file to be wasmtime's own output: only this module writes the cache directory,
+		// atomically (store_module), and wasmtime still rejects a file of another version or engine configuration
+		unsafe { Module::deserialize(engine, &bytes) }
+	});
+	match loaded {
 		Ok(module) => {
 			let _ = fs::File::options()
 				.write(true)
