@@ -5,6 +5,7 @@
 //! `instant_at(clock())` (system_values).
 
 pub mod calendar;
+pub mod partial_comparisons;
 
 use crate::extensions::numbers::Number;
 use crate::node::{error, Bracket, Node, Separator};
@@ -28,6 +29,13 @@ pub const TIME_CALLS: [&str; 3] = [INSTANT_AT, TIME_OF, TIME_IN_ZONE];
 /// `instant_at(clock)`, `time_of(…)`, `time_in_zone(…)`: a time the run builds
 pub fn is_time_call(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::List(items, ..) if items.first().and_then(Node::symbol_name).is_some_and(|head| TIME_CALLS.contains(&head)))
+}
+/// A time call or arithmetic on one: `now`, `time_of(…) * n`, `d + 1 day` as the run builds it
+pub fn is_time_expression(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Key(left, op, right) if op.is_arithmetic() => is_time_expression(left) || is_time_expression(right),
+		_ => is_time_call(node),
+	}
 }
 /// The one field of an instant that needs no time zone
 pub const EPOCH_SECONDS: &str = "epoch_seconds";

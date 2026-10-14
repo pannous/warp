@@ -240,6 +240,8 @@ const MODULE_PASSES: &[Pass] = &[
 /// Stored values, system values, signals and events, pages
 const SIGNAL_PASSES: &[Pass] = &[
 	crate::numbers::units::lower_sleep_durations,
+	// `now > 17h`, `now >= October`, `now ≈ 2026-10-14`: that part of now (partial_comparisons.rs), before units fold `time > 17h`
+	crate::time::partial_comparisons::lower,
 	crate::numbers::units::lower_quantity_comparisons,
 	crate::lowering::stored_values::lower,
 	crate::lowering::mutation::lower_deletes,

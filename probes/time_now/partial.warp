@@ -1,0 +1,6 @@
+print time
+print time.now is instant
+print now == now
+print now > 17h
+print now >= October
+print now ≈ 2026-10-14

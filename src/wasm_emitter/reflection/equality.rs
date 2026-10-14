@@ -78,6 +78,7 @@ impl WasmGcEmitter {
 	pub(crate) fn compares_structurally(&self, op: &Op, left: &Node, right: &Node) -> bool {
 		let by_value = |node: &Node| {
 			matches!(self.get_type(node), Kind::Text | Kind::Symbol | Kind::Empty | Kind::Function)
+				|| crate::time::is_time_expression(node)
 				|| self.is_held_cell_value(node)
 		};
 		matches!(op, Op::Eq | Op::Ne)
