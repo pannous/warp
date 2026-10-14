@@ -21,10 +21,10 @@ create_user(name, email, role) := print name
 to mail message to address { print "\(message) → \(address)" }
 
 // Arithmetic with words
-result = one plus two
-total = three times four
-half = ten divided by two
-rest = ten modulo three
+result = one plus two // got it
+total = three times four // got it
+half = ten divided by two // got it
+rest = ten modulo three // got it
 
 // Boolean logic
 valid = age >= 18 and has_id
