@@ -99,6 +99,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   diagnostic is cut. `nonlocal` only loses its error and checks: the cells behind P124 sharing stay, a nested def
   also shares `n += 1` without it, a plain `y = 5` there stays local unless `nonlocal y` (P124). rustfmt `use_small_heuristics = "Max"` comes
   in one fmt commit after the open cleanup branches are merged.
+  emit-rows (2026-10-14): the emitter's instruction lists are packed one logical step per row, like WAT
+  (`LocalGet(0), I32Const(1), I32Add, LocalSet(0),`), kept from rustfmt by #[rustfmt::skip] or an emit macro.
   Kotlin `when x { 1 -> … }` works, and `match` takes `->` arms and `else` too. `case` is an optional word before any match arm (`case 1: …`).
 - real-runtime (2026-10-13): real.rs (compile-time symbolic reals) stays until symbolic reals are a run-time number
   type next to the exact ratios; then it goes.
