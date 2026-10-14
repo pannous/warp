@@ -18,9 +18,20 @@ pub const ERROR_MESSAGE: &str = "error_message";
 /// The field every Error has
 pub const MESSAGE_FIELD: &str = "message";
 /// What a field read answers when the value has no such field or key, before the missing field's error: an Error's
-/// `message`, any value's `type` (field → meta → reflection word, notes/reflection.md "Rule"; card type-non)
-pub const FIELD_FALLBACKS: [(&str, &str); 2] =
+/// `message`, any value's `type` (field → meta → reflection word, notes/reflection.md "Rule"; card type-non), a function
+/// value's reflection words (closures.rs FUNCTION_WORDS)
+const FIELD_FALLBACKS: [(&str, &str); 2] =
 	[(MESSAGE_FIELD, ERROR_MESSAGE), (crate::type_tests::TYPE_WORD, crate::type_tests::NODE_TYPE_NAME)];
+
+/// The function a field read of `name` falls back to (FIELD_FALLBACKS)
+pub fn field_fallback(name: &str) -> Option<&'static str> {
+	let name = crate::lowering::reflection::canonical_word(name).unwrap_or(name);
+	FIELD_FALLBACKS
+		.into_iter()
+		.chain(crate::wasm_emitter::functions::closures::function_words())
+		.find(|(field, _)| *field == name)
+		.map(|(_, fallback)| fallback)
+}
 pub(super) const KEY_KIND: i64 = Kind::Key as i64;
 pub const MAP_KEY_NAME: &str = "map_key_name";
 /// node_at_key(xs, key) and node_with_key(xs, key, value): `xs[key]` read and set with a key known only at runtime
@@ -133,7 +144,7 @@ impl WasmGcEmitter {
 						self.emit_call(func, super::super::super::reflection::node_api::NODE_PART);
 						func.instruction(&I::BrOnNonNull(0));
 					}
-					if let Some((_, fallback)) = FIELD_FALLBACKS.iter().find(|(field, _)| *field == name) {
+					if let Some(fallback) = field_fallback(&name) {
 						Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull]);
 						self.emit_call(func, fallback);
 						func.instruction(&I::BrOnNonNull(0));
@@ -191,15 +202,11 @@ impl WasmGcEmitter {
 			s.call(f, super::super::super::text::text_builtins::TEXT_OF);
 			f.instruction(&I::LocalSet(name));
 			s.emit_field(f, name, 0);
-			Self::emit_list(
-				f,
-				&[
-					I::I64Const(Kind::Text as i64),
-					I::I64Eq,
-					I::If(BlockType::Result(node_ref)),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I64Const(Kind::Text as i64), I::I64Eq, I::If(BlockType::Result(node_ref)),
 					I::I64Const(Kind::Symbol as i64),
-				],
-			);
+			]);
 			s.emit_field(f, name, 1);
 			s.emit_field(f, name, 2);
 			Self::emit_list(f, &[I::StructNew(node), I::Else, I::LocalGet(name), I::RefAsNonNull, I::End]);
@@ -256,55 +263,33 @@ impl WasmGcEmitter {
 			s.emit_field(f, 0, 0);
 			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::LocalSet(kind)]);
 			// a single entry `{a:1}` is the `a:1` node itself
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(kind),
-					I::I64Const(KEY_KIND),
-					I::I64Eq,
-					I::If(BlockType::Empty),
-					I::LocalGet(0),
-					I::LocalSet(entry),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(kind), I::I64Const(KEY_KIND), I::I64Eq, I::If(BlockType::Empty),
+					I::LocalGet(0), I::LocalSet(entry),
+			]);
 			check_entry(f);
-			Self::emit_list(
-				f,
-				&[
-					I::RefNull(HeapType::Concrete(node)),
-					I::Return,
-					I::End,
-					I::LocalGet(kind),
-					I::I64Const(Kind::List as i64),
-					I::I64Ne,
-					I::LocalGet(kind),
-					I::I64Const(Kind::Block as i64),
-					I::I64Ne,
-					I::I32And,
-					I::If(BlockType::Empty),
-					I::RefNull(HeapType::Concrete(node)),
-					I::Return,
-					I::End,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::RefNull(HeapType::Concrete(node)), I::Return,
+				I::End,
+				I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Ne, I::LocalGet(kind),
+				I::I64Const(Kind::Block as i64), I::I64Ne, I::I32And, I::If(BlockType::Empty),
+					I::RefNull(HeapType::Concrete(node)), I::Return,
+				I::End,
+			]);
 			// a map walked lately has an index
 			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
 			s.call(f, super::super::super::maps::map_index::MAP_INDEX_ENTRY);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalSet(indexed),
-					I::LocalSet(entry),
-					I::LocalGet(indexed),
-					I::If(BlockType::Empty),
-					I::LocalGet(entry),
-					I::RefIsNull,
-					I::If(BlockType::Empty),
-					I::RefNull(HeapType::Concrete(node)),
-					I::Return,
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalSet(indexed),
+				I::LocalSet(entry),
+				I::LocalGet(indexed), I::If(BlockType::Empty),
+					I::LocalGet(entry), I::RefIsNull, I::If(BlockType::Empty),
+						I::RefNull(HeapType::Concrete(node)), I::Return,
 					I::End,
-				],
-			);
+			]);
 			s.emit_field(f, entry, 2);
 			Self::emit_list(f, &[I::LocalTee(tmp), I::RefIsNull, I::If(BlockType::Result(nullable_node_ref))]);
 			s.call(f, "new_empty");
@@ -321,34 +306,23 @@ impl WasmGcEmitter {
 		});
 		if self.should_emit_function(ERROR_MESSAGE) {
 			self.runtime_function(ERROR_MESSAGE, vec![nullable_node_ref], vec![nullable_node_ref], vec![], |_, f| {
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(0),
-						I::RefIsNull,
-						I::If(BlockType::Empty),
-						I::RefNull(HeapType::Concrete(node)),
-						I::Return,
-						I::End,
-						I::LocalGet(0),
-						I::StructGet { struct_type_index: node, field_index: 0 },
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty),
+						I::RefNull(HeapType::Concrete(node)), I::Return,
+					I::End,
+					I::LocalGet(0), I::StructGet { struct_type_index: node, field_index: 0 },
+				]);
 				Self::emit_kind_test(f, Kind::Error as i64, I::I64Ne);
-				Self::emit_list(
-					f,
-					&[
-						I::If(BlockType::Empty),
-						I::RefNull(HeapType::Concrete(node)),
-						I::Return,
-						I::End,
-						I::I64Const(Kind::Text as i64),
-						I::LocalGet(0),
-						I::StructGet { struct_type_index: node, field_index: 1 },
-						I::RefNull(HeapType::Concrete(node)),
-						I::StructNew(node),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::If(BlockType::Empty),
+						I::RefNull(HeapType::Concrete(node)), I::Return,
+					I::End,
+					I::I64Const(Kind::Text as i64), I::LocalGet(0),
+					I::StructGet { struct_type_index: node, field_index: 1 }, I::RefNull(HeapType::Concrete(node)),
+					I::StructNew(node),
+				]);
 			});
 		}
 		if self.should_emit_function(TAGGED_FIELD) {
@@ -373,44 +347,27 @@ impl WasmGcEmitter {
 						)
 					};
 					kind_of(f, 0);
-					Self::emit_list(
-						f,
-						&[
-							I::I64Const(KEY_KIND),
-							I::I64Ne,
-							I::If(BlockType::Empty),
-							I::RefNull(HeapType::Concrete(node)),
-							I::Return,
-							I::End,
-							I::LocalGet(0),
-							I::StructGet { struct_type_index: node, field_index: 2 },
-							I::LocalTee(value),
-							I::RefIsNull,
-							I::If(BlockType::Empty),
-							I::RefNull(HeapType::Concrete(node)),
-							I::Return,
-							I::End,
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::I64Const(KEY_KIND), I::I64Ne, I::If(BlockType::Empty),
+							I::RefNull(HeapType::Concrete(node)), I::Return,
+						I::End,
+						I::LocalGet(0), I::StructGet { struct_type_index: node, field_index: 2 }, I::LocalTee(value),
+						I::RefIsNull, I::If(BlockType::Empty),
+							I::RefNull(HeapType::Concrete(node)), I::Return,
+						I::End,
+					]);
 					// the fields: a list of entries, or the one entry `{b:1}` is
 					kind_of(f, value);
 					Self::emit_list(f, &[I::I64Const(list_kind), I::I64Ne]);
 					kind_of(f, value);
-					Self::emit_list(
-						f,
-						&[
-							I::I64Const(KEY_KIND),
-							I::I64Ne,
-							I::I32And,
-							I::If(BlockType::Empty),
-							I::RefNull(HeapType::Concrete(node)),
-							I::Return,
-							I::End,
-							I::LocalGet(value),
-							I::RefAsNonNull,
-							I::LocalGet(1),
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::I64Const(KEY_KIND), I::I64Ne, I::I32And, I::If(BlockType::Empty),
+							I::RefNull(HeapType::Concrete(node)), I::Return,
+						I::End,
+						I::LocalGet(value), I::RefAsNonNull, I::LocalGet(1),
+					]);
 					s.call(f, "map_find");
 				},
 			);
@@ -456,16 +413,11 @@ impl WasmGcEmitter {
 				field(f, 0, 2);
 				Self::emit_list(f, &[I::RefIsNull, I::If(BlockType::Empty)]);
 				field(f, 0, 1);
-				Self::emit_list(
-					f,
-					&[
-						I::RefCastNullable(HeapType::Concrete(node)),
-						I::LocalTee(entry),
-						I::RefIsNull,
-						I::I32Eqz,
-						I::If(BlockType::Empty),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::RefCastNullable(HeapType::Concrete(node)), I::LocalTee(entry), I::RefIsNull, I::I32Eqz,
+					I::If(BlockType::Empty),
+				]);
 				kind_of(f, entry);
 				Self::emit_list(f, &[I::I64Const(KEY_KIND), I::I64Eq, I::If(BlockType::Empty)]);
 				fields_when_named(f, entry);
@@ -477,16 +429,11 @@ impl WasmGcEmitter {
 				);
 				// an instance carries its own op code (D4, type_constructor.rs): its fields, no type name compared
 				field(f, 0, 0);
-				Self::emit_list(
-					f,
-					&[
-						I::I64Const(8),
-						I::I64ShrU,
-						I::I64Const(crate::operators::op_to_code(&crate::operators::Op::None)),
-						I::I64Eq,
-						I::If(BlockType::Empty),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::I64Const(8), I::I64ShrU, I::I64Const(crate::operators::op_to_code(&crate::operators::Op::None)),
+					I::I64Eq, I::If(BlockType::Empty),
+				]);
 				field(f, 0, 2);
 				Self::emit_list(f, &[I::RefAsNonNull, I::Return, I::End]);
 				fields_when_named(f, 0);
@@ -518,69 +465,45 @@ impl WasmGcEmitter {
 						get(f, local, 0);
 						Self::emit_kind_test(f, kind, I::I64Eq);
 					};
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(0),
-							I::LocalSet(cell),
-							I::Block(BlockType::Empty),
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::LocalGet(0), I::LocalSet(cell),
+						I::Block(BlockType::Empty),
 							I::Loop(BlockType::Empty),
-							I::LocalGet(cell),
-							I::RefIsNull,
-							I::BrIf(1),
-						],
-					);
+								I::LocalGet(cell), I::RefIsNull, I::BrIf(1),
+					]);
 					kind_is(f, cell, Kind::List as i64);
 					Self::emit_list(f, &[I::I32Eqz, I::BrIf(1)]);
 					get(f, cell, 1);
-					Self::emit_list(
-						f,
-						&[
-							I::RefCastNullable(HeapType::Concrete(node)),
-							I::LocalTee(entry),
-							I::RefIsNull,
-							I::I32Eqz,
-							I::If(BlockType::Empty),
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::RefCastNullable(HeapType::Concrete(node)), I::LocalTee(entry), I::RefIsNull, I::I32Eqz,
+						I::If(BlockType::Empty),
+					]);
 					kind_is(f, entry, Kind::Key as i64);
 					f.instruction(&I::If(BlockType::Empty));
 					get(f, entry, 1);
-					Self::emit_list(
-						f,
-						&[
-							I::RefCastNullable(HeapType::Concrete(node)),
-							I::LocalTee(key),
-							I::RefIsNull,
-							I::I32Eqz,
-							I::If(BlockType::Empty),
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::RefCastNullable(HeapType::Concrete(node)), I::LocalTee(key), I::RefIsNull, I::I32Eqz,
+						I::If(BlockType::Empty),
+					]);
 					kind_is(f, key, Kind::Symbol as i64);
 					f.instruction(&I::If(BlockType::Empty));
 					// the same string: its offset and length
 					get(f, key, 1);
-					Self::emit_list(
-						f,
-						&[
-							I::RefCastNonNull(HeapType::Concrete(string)),
-							I::StructGet { struct_type_index: string, field_index: 0 },
-							I::LocalGet(1),
-							I::I32Eq,
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::RefCastNonNull(HeapType::Concrete(string)),
+						I::StructGet { struct_type_index: string, field_index: 0 }, I::LocalGet(1), I::I32Eq,
+					]);
 					get(f, key, 1);
-					Self::emit_list(
-						f,
-						&[
-							I::RefCastNonNull(HeapType::Concrete(string)),
-							I::StructGet { struct_type_index: string, field_index: 1 },
-							I::LocalGet(2),
-							I::I32Eq,
-							I::I32And,
-							I::If(BlockType::Empty),
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::RefCastNonNull(HeapType::Concrete(string)),
+						I::StructGet { struct_type_index: string, field_index: 1 }, I::LocalGet(2), I::I32Eq, I::I32And,
+						I::If(BlockType::Empty),
+					]);
 					get(f, entry, 2);
 					Self::emit_list(f, &[I::Return, I::End, I::End, I::End, I::End, I::End]);
 					get(f, cell, 2);
@@ -687,19 +610,13 @@ impl WasmGcEmitter {
 			is_entry(s, f, 0);
 			Self::emit_list(f, &[I::If(BlockType::Empty), I32Const(1), I::Return, I::End]);
 			s.emit_field(f, 0, 0);
-			Self::emit_list(
-				f,
-				&[
-					I::I64Const(crate::type_kinds::UNMARKED_KIND),
-					I::I64And,
-					I::I64Const(CURLY_LIST_KIND),
-					I::I64Ne,
-					I::If(BlockType::Empty),
-					I32Const(0),
-					I::Return,
-					I::End,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::I64Const(CURLY_LIST_KIND), I::I64Ne,
+				I::If(BlockType::Empty),
+					I32Const(0), I::Return,
+				I::End,
+			]);
 			s.emit_field(f, 0, 1);
 			Self::emit_list(f, &[I::RefTestNonNull(HeapType::Concrete(node)), I::If(BlockType::Result(ValType::I32))]);
 			s.emit_field(f, 0, 1);
@@ -728,38 +645,23 @@ impl WasmGcEmitter {
 		self.runtime_function(MAP_PART, vec![node_ref, ValType::I32], vec![node_ref], vec![nullable], |s, f| {
 			let key = 2;
 			is_entry(s, f, 0);
-			Self::emit_list(
-				f,
-				&[
-					I::I32Eqz,
-					I::LocalGet(1),
-					I32Const(ENTRY_PART),
-					I::I32Eq,
-					I::I32Or,
-					I::If(BlockType::Empty),
-					I::LocalGet(0),
-					I::Return,
-					I::End,
-					I::LocalGet(1),
-					I32Const(VALUE_PART),
-					I::I32Eq,
-					I::If(BlockType::Empty),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I32Eqz, I::LocalGet(1), I32Const(ENTRY_PART), I::I32Eq, I::I32Or, I::If(BlockType::Empty),
+					I::LocalGet(0), I::Return,
+				I::End,
+				I::LocalGet(1), I32Const(VALUE_PART), I::I32Eq, I::If(BlockType::Empty),
+			]);
 			s.emit_value_or_empty(f, 0);
 			Self::emit_list(f, &[I::Return, I::End]);
 			s.emit_field(f, 0, 1);
 			Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalSet(key)]);
 			s.emit_field(f, key, 0);
-			Self::emit_list(
-				f,
-				&[
-					I::I64Const(Kind::Symbol as i64),
-					I::I64Eq,
-					I::If(BlockType::Result(node_ref)),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I64Const(Kind::Symbol as i64), I::I64Eq, I::If(BlockType::Result(node_ref)),
 					I::I64Const(Kind::Text as i64),
-				],
-			);
+			]);
 			s.emit_field(f, key, 1);
 			s.emit_field(f, key, 2);
 			Self::emit_list(f, &[I::StructNew(node), I::Else, I::LocalGet(key), I::RefAsNonNull, I::End]);
@@ -781,27 +683,18 @@ impl WasmGcEmitter {
 					s.emit_field(f, cell, 1);
 					Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalGet(part)]);
 					s.call(f, MAP_PART);
-					Self::emit_list(
-						f,
-						&[
-							I::RefNull(HeapType::Concrete(node)),
-							I::StructNew(node),
-							I::LocalSet(made),
-							I::LocalGet(last),
-							I::RefIsNull,
-							I::If(BlockType::Empty),
-							I::LocalGet(made),
-							I::LocalSet(head),
-							I::Else,
-							I::LocalGet(last),
-							I::LocalGet(made),
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::RefNull(HeapType::Concrete(node)), I::StructNew(node), I::LocalSet(made),
+						I::LocalGet(last), I::RefIsNull, I::If(BlockType::Empty),
+							I::LocalGet(made), I::LocalSet(head),
+						I::Else,
+							I::LocalGet(last), I::LocalGet(made),
 							I::StructSet { struct_type_index: node, field_index: 2 },
-							I::End,
-							I::LocalGet(made),
-							I::LocalSet(last),
-							I::End,
-						],
-					);
+						I::End,
+						I::LocalGet(made), I::LocalSet(last),
+						I::End,
+					]);
 				});
 				f.instruction(&I::LocalGet(head));
 			},
@@ -819,18 +712,13 @@ impl WasmGcEmitter {
 				&[I::RefNull(HeapType::Concrete(node)), I::StructNew(node), I::Return, I::End, I::LocalGet(0)],
 			);
 			s.call(f, IS_MAP);
-			Self::emit_list(
-				f,
-				&[
-					I::I32Eqz,
-					I::If(BlockType::Empty),
-					I::LocalGet(0),
-					I::Return,
-					I::End,
-					I::LocalGet(0),
-					I::LocalGet(1),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I32Eqz, I::If(BlockType::Empty),
+					I::LocalGet(0), I::Return,
+				I::End,
+				I::LocalGet(0), I::LocalGet(1),
+			]);
 			s.call(f, MAP_COLUMN_CELLS);
 			f.instruction(&I::RefAsNonNull);
 		});
@@ -878,51 +766,32 @@ impl WasmGcEmitter {
 					s.call(f, answer_constructor);
 					Self::emit_list(f, &[I::Return, I::End]);
 					s.emit_field(f, 0, 0);
-					Self::emit_list(
-						f,
-						&[
-							I::I64Const(KIND_MASK),
-							I::I64And,
-							I::LocalTee(kind),
-							I::I64Const(Kind::Empty as i64),
-							I::I64Eq,
-							I::If(BlockType::Empty),
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::I64Const(KIND_MASK), I::I64And, I::LocalTee(kind), I::I64Const(Kind::Empty as i64), I::I64Eq,
+						I::If(BlockType::Empty),
+					]);
 					answer(f, s, 0);
 					f.instruction(&I::End);
 					// a text holds a text: its 1-based byte position (in), or 1 (contains)
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(kind),
-							I::I64Const(Kind::Text as i64),
-							I::I64Eq,
-							I::If(BlockType::Empty),
-							I::LocalGet(0),
-							I::LocalGet(wanted),
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::LocalGet(kind), I::I64Const(Kind::Text as i64), I::I64Eq, I::If(BlockType::Empty),
+							I::LocalGet(0), I::LocalGet(wanted),
+					]);
 					s.call(f, super::super::super::text::text_builtins::TEXT_OF);
 					s.call(f, super::super::super::text::text_builtins::TEXT_FIND);
 					if !positional {
 						Self::emit_list(f, &[I::I64Const(0), I::I64Ne, I::I64ExtendI32U]);
 					}
 					s.call(f, answer_constructor);
-					Self::emit_list(
-						f,
-						&[
-							I::Return,
-							I::End,
-							I::LocalGet(kind),
-							I::I64Const(Kind::List as i64),
-							I::I64Ne,
-							I::LocalGet(kind),
-							I::I64Const(Kind::Block as i64),
-							I::I64Ne,
-							I::I32And,
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::Return,
+						I::End,
+						I::LocalGet(kind), I::I64Const(Kind::List as i64), I::I64Ne, I::LocalGet(kind),
+						I::I64Const(Kind::Block as i64), I::I64Ne, I::I32And,
+					]);
 					s.emit_fail_if(f, "not_a_list");
 					Self::emit_list(f, &[I::LocalGet(0), I::LocalSet(cell)]);
 					s.emit_cell_walk(f, cell, |f| {

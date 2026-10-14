@@ -71,13 +71,10 @@ fn push_in_place(list: u32, array: u32, new_list_tail: &[I<'static>]) -> Vec<I<'
 	let grown = 2;
 	let length = || I::StructGet { struct_type_index: list, field_index: 0 };
 	let items = || I::StructGet { struct_type_index: list, field_index: 1 };
+	#[rustfmt::skip]
 	let mut body = vec![
-		I::LocalGet(0),
-		I::RefIsNull,
-		I::If(BlockType::Empty),
-		I::I32Const(0),
-		I::I32Const(FIRST_CAPACITY),
-		I::ArrayNewDefault(array),
+		I::LocalGet(0), I::RefIsNull, I::If(BlockType::Empty),
+			I::I32Const(0), I::I32Const(FIRST_CAPACITY), I::ArrayNewDefault(array),
 	];
 	body.extend_from_slice(new_list_tail);
 	body.extend([
@@ -470,15 +467,11 @@ impl WasmGcEmitter {
 		if let Some(counter) = self.walking_counter(target, index).filter(|_| list.element != ElementType::Node) {
 			// `x·items#(x·index + 1)` of a for loop: the counter is below the count, read the array directly
 			let (array, list_type) = self.typed_list_types(list.element);
-			Self::emit_list(
-				func,
-				&[
-					I::StructGet { struct_type_index: list_type, field_index: TYPED_LIST_ITEMS },
-					I::LocalGet(counter),
-					I::I32WrapI64,
-					I::ArrayGet(array),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(func, &[
+				I::StructGet { struct_type_index: list_type, field_index: TYPED_LIST_ITEMS }, I::LocalGet(counter),
+				I::I32WrapI64, I::ArrayGet(array),
+			]);
 			return;
 		}
 		self.emit_numeric_value(func, index);

@@ -219,7 +219,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "sound") return playSound(data);
 			if (data.type === "sound file") return playSoundFile(data.url, data.handle, data.bytes);
 			if (data.type === "file") return offerFile(data.path, data.bytes);
-			if (data.type === "midi") return sendMidi(data.port, data.message);
+			if (data.type === "midi") return sendMidi(data.port, data.message, data.at);
 			if (data.type === "stop sound files") return silence(); // stop_sound: the queued sounds and the music files
 			if (data.type === "stop sound") return silenced(data.handle); // stop_sound(handle): that one alone
 			if (data.type === "fade sound") return faded(data.handle, data.gain, data.seconds); // fade_sound
@@ -359,17 +359,26 @@ function playSound({ samples, rate, channels, at, handle }) {
 // midi_send / midi_on (card midi-out): Web MIDI, asked for once and kept; a browser without it, a refusal or a port that
 // is not there reaches the console, as sound failures do. The first output when the port is "". Before the page's first
 // click or key press (the run on load, the CI tour) a message goes nowhere, as a sound stays silent: asking for Web MIDI
-// then is refused, and the refusal would land as a console error during whatever runs next
+// then is refused, and the refusal would land as a console error during whatever runs next. Only a granted access is
+// kept: after a refusal the next message asks again (card webmidi-requires)
 let midiAccess;
-async function sendMidi(port, message) {
+// Firefox refuses without asking ("WebMIDI requires a site permission add-on to activate") when it saw no MIDI device
+// at its start; only then does it offer the add-on that grants the site access
+const MIDI_REFUSED = "the browser refused Web MIDI. Firefox does so without asking when no MIDI device was connected as it started: connect the device, restart Firefox, then accept its site permission add-on. Otherwise allow MIDI in the site settings";
+// `at`: when on the clock the page and the Workers share (host-tasks.js soundClock, seconds); Web MIDI's own timestamp
+// sends it then, a past one at once (card midi-clock)
+async function sendMidi(port, message, at) {
 	if (beforeUserActivation()) return;
 	try {
 		if (!navigator.requestMIDIAccess) throw new Error("this browser has no Web MIDI");
-		midiAccess ??= navigator.requestMIDIAccess();
+		midiAccess ??= navigator.requestMIDIAccess().catch(error => {
+			midiAccess = undefined;
+			throw error.name === "SecurityError" ? new Error(`${MIDI_REFUSED} (${error.message})`) : error;
+		});
 		const outputs = [...(await midiAccess).outputs.values()];
 		const output = port ? outputs.find(candidate => candidate.name === port) : outputs[0];
 		if (!output) throw new Error(port ? `no MIDI output named ${port} (there are: ${outputs.map(candidate => candidate.name).join(", ") || "none"})` : "no MIDI output device");
-		output.send(message);
+		output.send(message, at ? at * 1000 - performance.timeOrigin : undefined);
 	} catch (error) {
 		console.error(`midi: ${error.message}`);
 	}

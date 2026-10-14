@@ -115,184 +115,100 @@ impl WasmGcEmitter {
 			let (width, code_point, lead, slot, mapped, entry) = (7, 8, 9, 10, 11, 12);
 			let (low, high, middle, next) = (13, 14, 15, 16);
 			s.emit_text_argument_bounds(f, pointer, end);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(end),
-					I::LocalGet(pointer),
-					I::I32Sub,
-					I32Const(OUTPUT_FACTOR),
-					I::I32Mul,
-					I::LocalSet(capacity),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(end), I::LocalGet(pointer), I::I32Sub, I32Const(OUTPUT_FACTOR), I::I32Mul,
+				I::LocalSet(capacity),
+			]);
 			s.emit_text_allocation(f, capacity, destination);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(pointer),
-					I::LocalSet(index),
-					I::LocalGet(destination),
-					I::LocalSet(out),
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(pointer), I::LocalSet(index),
+				I::LocalGet(destination), I::LocalSet(out),
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(index),
-					I::LocalGet(end),
-					I::I32GeU,
-					I::BrIf(1),
-				],
-			);
+						I::LocalGet(index), I::LocalGet(end), I::I32GeU, I::BrIf(1),
+			]);
 			s.emit_next_code_point(f, index, end, code_point);
 			// binary search for the last range starting at or before the code point
-			Self::emit_list(
-				f,
-				&[
-					I32Const(0),
-					I::LocalSet(low),
-					I32Const(entries),
-					I::LocalSet(high),
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I32Const(0), I::LocalSet(low),
+				I32Const(entries), I::LocalSet(high),
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(low),
-					I::LocalGet(high),
-					I::I32GeU,
-					I::BrIf(1),
-					I::LocalGet(low),
-					I::LocalGet(high),
-					I::I32Add,
-					I32Const(1),
-					I::I32ShrU,
-					I::LocalTee(middle),
-					I32Const(ENTRY_BYTES as i32),
-					I::I32Mul,
-					I32Const(table),
-					I::I32Add,
-					I::LocalSet(entry),
-				],
-			);
+						I::LocalGet(low), I::LocalGet(high), I::I32GeU, I::BrIf(1),
+						I::LocalGet(low), I::LocalGet(high), I::I32Add, I32Const(1), I::I32ShrU, I::LocalTee(middle),
+						I32Const(ENTRY_BYTES as i32), I::I32Mul, I32Const(table), I::I32Add, I::LocalSet(entry),
+			]);
 			Self::emit_list(f, &range_field(entry, START));
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(code_point),
-					I::I32LeU,
-					I::If(BlockType::Empty),
-					I::LocalGet(middle),
-					I32Const(1),
-					I::I32Add,
-					I::LocalSet(low),
-					I::Else,
-					I::LocalGet(middle),
-					I::LocalSet(high),
-					I::End,
-					I::Br(0),
-					I::End,
-					I::End,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(code_point), I::I32LeU, I::If(BlockType::Empty),
+					I::LocalGet(middle), I32Const(1), I::I32Add, I::LocalSet(low),
+				I::Else,
+					I::LocalGet(middle), I::LocalSet(high),
+				I::End,
+				I::Br(0),
+				I::End,
+				I::End,
+			]);
 			// entry: the address of that range when it maps the code point (up to its last, a stride apart), else -1
-			Self::emit_list(
-				f,
-				&[
-					I32Const(-1),
-					I::LocalSet(mapped),
-					I::LocalGet(low),
-					I::If(BlockType::Empty),
-					I::LocalGet(low),
-					I32Const(1),
-					I::I32Sub,
-					I32Const(ENTRY_BYTES as i32),
-					I::I32Mul,
-					I32Const(table),
-					I::I32Add,
-					I::LocalSet(entry),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I32Const(-1), I::LocalSet(mapped),
+				I::LocalGet(low), I::If(BlockType::Empty),
+					I::LocalGet(low), I32Const(1), I::I32Sub, I32Const(ENTRY_BYTES as i32), I::I32Mul, I32Const(table),
+					I::I32Add, I::LocalSet(entry),
 					I::LocalGet(code_point),
-				],
-			);
+			]);
 			Self::emit_list(f, &range_field(entry, LAST));
 			Self::emit_list(f, &[I::I32LeU, I::LocalGet(code_point)]);
 			Self::emit_list(f, &range_field(entry, START));
 			Self::emit_list(f, &[I::I32Sub]);
 			Self::emit_list(f, &range_field(entry, STRIDE));
-			Self::emit_list(
-				f,
-				&[
-					I32Const(1),
-					I::I32Sub,
-					I::I32And,
-					I::I32Eqz,
-					I::I32And,
-					I::If(BlockType::Empty),
-					I::LocalGet(entry),
-					I::LocalSet(mapped),
-					I::End,
-					I::End,
-					I::LocalGet(mapped),
-					I::LocalSet(entry),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I32Const(1), I::I32Sub, I::I32And, I::I32Eqz, I::I32And, I::If(BlockType::Empty),
+					I::LocalGet(entry), I::LocalSet(mapped),
+				I::End,
+				I::End,
+				I::LocalGet(mapped), I::LocalSet(entry),
+			]);
 			// write the mapped code points (the first is the code point plus delta), or the code point itself without a range
-			Self::emit_list(
-				f,
-				&[
-					I32Const(0),
-					I::LocalSet(slot),
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I32Const(0), I::LocalSet(slot),
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(entry),
-					I32Const(0),
-					I::I32GeS,
-					I::If(BlockType::Result(ValType::I32)),
-					I::LocalGet(entry),
-					I::LocalGet(slot),
-					I32Const(DELTA as i32),
-					I::I32Add,
-					I32Const(4),
-					I::I32Mul,
-					I::I32Add,
-					I::I32Load(WORD),
-					I::LocalGet(code_point),
-					I32Const(0),
-					I::LocalGet(slot),
-					I::I32Eqz,
-					I::Select,
-					I::I32Add,
-					I::Else,
-					I32Const(0),
-					I::End,
-					I::LocalSet(mapped),
-					I::LocalGet(mapped),
-					I::I32Eqz,
-					I::If(BlockType::Empty),
-					I::LocalGet(slot),
-					I::BrIf(2),
-					I::LocalGet(code_point),
-					I::LocalSet(mapped),
-					I::End,
-				],
-			);
+						I::LocalGet(entry), I32Const(0), I::I32GeS, I::If(BlockType::Result(ValType::I32)),
+							I::LocalGet(entry), I::LocalGet(slot), I32Const(DELTA as i32), I::I32Add, I32Const(4),
+							I::I32Mul, I::I32Add, I::I32Load(WORD), I::LocalGet(code_point), I32Const(0),
+							I::LocalGet(slot), I::I32Eqz, I::Select, I::I32Add,
+						I::Else,
+							I32Const(0),
+						I::End,
+						I::LocalSet(mapped),
+						I::LocalGet(mapped), I::I32Eqz, I::If(BlockType::Empty),
+							I::LocalGet(slot), I::BrIf(2),
+							I::LocalGet(code_point), I::LocalSet(mapped),
+						I::End,
+			]);
 			Self::emit_utf8_width(f, mapped);
 			Self::emit_list(f, &[I::LocalTee(width), I::LocalGet(out), I::I32Add, I::LocalSet(next)]);
 			Self::emit_utf8_store(f, out, mapped, width, lead);
 			Self::emit_list(f, &[I::LocalGet(next), I::LocalSet(out)]);
 			// only the first slot of an unchanged code point is read: its mapped value stays 0 and slot 1 ends the loop
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(slot),
-					I32Const(1),
-					I::I32Add,
-					I::LocalTee(slot),
-					I32Const(MAPPED_SLOTS as i32),
-					I::I32LtU,
-					I::BrIf(0),
-					I::End,
-					I::End,
-					I::Br(0),
-					I::End,
-					I::End,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(slot), I32Const(1), I::I32Add, I::LocalTee(slot), I32Const(MAPPED_SLOTS as i32), I::I32LtU,
+				I::BrIf(0),
+				I::End,
+				I::End,
+				I::Br(0),
+				I::End,
+				I::End,
+			]);
 			s.emit_new_text_to(f, destination, out);
 		});
 	}
@@ -319,21 +235,14 @@ impl WasmGcEmitter {
 			s.emit_text_argument_bounds(f, pointer, end);
 			Self::emit_list(f, &[I::LocalGet(end), I::LocalGet(pointer), I::I32Sub, I::LocalSet(scan)]);
 			s.emit_text_allocation(f, scan, destination);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(destination),
-					I::LocalSet(out),
-					I::LocalGet(end),
-					I::LocalSet(scan),
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(destination), I::LocalSet(out),
+				I::LocalGet(end), I::LocalSet(scan),
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(scan),
-					I::LocalGet(pointer),
-					I::I32LeU,
-					I::BrIf(1),
-				],
-			);
+						I::LocalGet(scan), I::LocalGet(pointer), I::I32LeU, I::BrIf(1),
+			]);
 			// the code point ending at `scan` starts at the last byte that is no continuation byte
 			Self::emit_list(
 				f,
@@ -393,32 +302,23 @@ impl WasmGcEmitter {
 		self.runtime_function("text_chars", vec![node_ref], vec![node_ref], locals, |s, f| {
 			let (characters, pointer, end, code_point) = (1, 2, 3, 4);
 			s.emit_text_argument_bounds(f, pointer, end);
-			Self::emit_list(
-				f,
-				&[
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(pointer),
-					I::LocalGet(end),
-					I::I32GeU,
-					I::BrIf(1),
-				],
-			);
+						I::LocalGet(pointer), I::LocalGet(end), I::I32GeU, I::BrIf(1),
+			]);
 			s.emit_next_code_point(f, pointer, end, code_point);
 			Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND), I::LocalGet(code_point)]);
 			s.call(f, "new_codepoint");
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(characters),
-					I::StructNew(node_type),
-					I::LocalSet(characters),
-					I::Br(0),
-					I::End,
-					I::End,
-					I::LocalGet(characters),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(characters), I::StructNew(node_type), I::LocalSet(characters),
+				I::Br(0),
+				I::End,
+				I::End,
+				I::LocalGet(characters),
+			]);
 			s.call(f, "list_reverse");
 		});
 	}

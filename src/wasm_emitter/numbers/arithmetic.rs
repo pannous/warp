@@ -595,16 +595,11 @@ impl WasmGcEmitter {
 		let held = self.scratch(LOGICAL_SCRATCH);
 		if is_float {
 			self.emit_float_value(func, left);
-			Self::emit_list(
-				func,
-				&[
-					I::I64ReinterpretF64,
-					I::LocalTee(held),
-					I::F64ReinterpretI64,
-					I::F64Const(Ieee64::new(0.0f64.to_bits())),
-					I::F64Eq,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(func, &[
+				I::I64ReinterpretF64, I::LocalTee(held), I::F64ReinterpretI64,
+				I::F64Const(Ieee64::new(0.0f64.to_bits())), I::F64Eq,
+			]);
 		} else {
 			self.emit_numeric_value(func, left);
 			Self::emit_list(func, &[I::LocalTee(held), I::I64Eqz]);
@@ -948,20 +943,15 @@ impl WasmGcEmitter {
 	pub(in crate::wasm_emitter) fn emit_held_node_as_f64(&mut self, func: &mut Function) {
 		let (node_type, float_box) = (self.type_manager.node_type, self.type_manager.f64_box_type);
 		let held = self.emit_held_node_is_float(func);
-		Self::emit_list(
-			func,
-			&[
-				I::If(BlockType::Result(ValType::F64)),
-				I::LocalGet(held),
-				I::RefAsNonNull,
-				I::StructGet { struct_type_index: node_type, field_index: 1 },
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::If(BlockType::Result(ValType::F64)),
+				I::LocalGet(held), I::RefAsNonNull, I::StructGet { struct_type_index: node_type, field_index: 1 },
 				I::RefCastNonNull(HeapType::Concrete(float_box)),
 				I::StructGet { struct_type_index: float_box, field_index: 0 },
-				I::Else,
-				I::LocalGet(held),
-				I::RefAsNonNull,
-			],
-		);
+			I::Else,
+				I::LocalGet(held), I::RefAsNonNull,
+		]);
 		self.emit_call(func, "get_int_value");
 		self.emit_int_to_f64(func, None);
 		func.instruction(&I::End);

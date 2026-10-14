@@ -196,12 +196,19 @@ impl WarpParser {
 		let mut had_newline = false;
 		let mut line_indent = 0;
 		let mut comments = Vec::new();
+		let mut after_line_comment = false;
 		loop {
 			let (newline, indent) = self.skip_whitespace();
 			had_newline |= newline;
 			if newline {
 				line_indent = indent;
 			}
+			// a blank line ends the comments above: only those directly above an item are its own (a file's header
+			// is no doc of its first function, card module-methods); a line comment's newline is consumed with it
+			if newline && after_line_comment {
+				comments.clear();
+			}
+			after_line_comment = false;
 
 			let c1 = self.current_char();
 
@@ -213,6 +220,7 @@ impl WarpParser {
 					comments.push(text);
 				}
 				had_newline = true;
+				after_line_comment = true;
 				continue;
 			}
 			// // line comment (but not :// URL scheme)
@@ -224,6 +232,7 @@ impl WarpParser {
 					comments.push(text);
 				}
 				had_newline = true;
+				after_line_comment = true;
 				continue;
 			}
 			// /* block comment */ and /# block comment #/

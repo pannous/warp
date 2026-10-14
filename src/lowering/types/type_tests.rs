@@ -57,7 +57,7 @@ use crate::type_kinds::Kind as K;
 /// (`t = int`, `type(π) == real`). `number` covers every number, `real` the exact numbers and π, `rational` the whole
 /// numbers too, `text` a one-character string (a codepoint); `list` and ø both hold the empty list, as `count` takes
 /// it; a ± value is a number. The fixed widths (`int8`, `uint16` …) are src/numbers/fixed_width.rs
-const BUILTIN_TYPES: [BuiltinType; 15] = [
+const BUILTIN_TYPES: [BuiltinType; 21] = [
 	builtin("int", &["integer", "long", "i64", "i32"], &[], Some(K::Int), &[K::Int as i64]),
 	builtin("rational", &[], &["int"], Some(K::Int), &[K::Int as i64, K::Float as i64]),
 	builtin(REAL_WORD, &["exact"], &["rational"], Some(K::Empty), &[K::Int as i64, K::Float as i64]),
@@ -79,7 +79,18 @@ const BUILTIN_TYPES: [BuiltinType; 15] = [
 	builtin(ERROR_WORD, &[], &[], None, &[K::Error as i64]),
 	builtin(LIST_WORD, &[], &[], None, &[K::List as i64, K::Block as i64, K::Empty as i64]),
 	builtin(MAP_WORD, &[], &[], None, &[]),
+	builtin(crate::time::TIME_WORD, &[], &TIME_FORM_NAMES, None, &[K::Time as i64]),
+	// the forms share Kind::Time: a value of unknown static type tests its form by its type name (node_type_name)
+	builtin(TIME_FORM_NAMES[0], &[], &[], None, &[]),
+	builtin(TIME_FORM_NAMES[1], &[], &[], None, &[]),
+	builtin(TIME_FORM_NAMES[2], &[], &[], None, &[]),
+	builtin(TIME_FORM_NAMES[3], &[], &[], None, &[]),
+	builtin(TIME_FORM_NAMES[4], &[], &[], None, &[]),
 ];
+const TIME_FORM_NAMES: [&str; 5] = {
+	let forms = crate::time::TIME_FORMS;
+	[forms[0].name(), forms[1].name(), forms[2].name(), forms[3].name(), forms[4].name()]
+};
 
 fn builtin_type(word: &str) -> Option<&'static BuiltinType> {
 	BUILTIN_TYPES.iter().find(|builtin| builtin.name == word || builtin.aliases.contains(&word))
@@ -288,8 +299,10 @@ fn type_spec(words: &[&str], shadowed: &Names) -> Option<String> {
 	if shadowed.contains(first) {
 		return None;
 	}
+	let phrase = words.join(" ");
 	match (*first, rest) {
 		(word, []) if is_builtin_type_word(word) => Some(canonical_spec_word(word).to_string()),
+		(_, [_, ..]) if is_builtin_type_word(&phrase) => Some(canonical_spec_word(&phrase).to_string()),
 		(collection, [of, element @ ..]) if COLLECTION_WORDS.contains(&collection) && *of == OF_WORD => {
 			Some(format!("{collection} of {}", type_spec(element, shadowed)?))
 		}

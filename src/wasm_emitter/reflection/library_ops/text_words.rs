@@ -31,97 +31,51 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::LocalGet(pointer), I::LocalTee(start), I::LocalSet(index)]);
 			// the bytes from `start` up to the local `stop` as a text at the front of `pieces`
 			let push_piece = |f: &mut Function, stop: u32| {
-				Self::emit_list(
-					f,
-					&[
-						I::I64Const(SQUARE_LIST_KIND),
-						I::LocalGet(start),
-						I::LocalGet(stop),
-						I::LocalGet(start),
-						I::I32Sub,
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::I64Const(SQUARE_LIST_KIND), I::LocalGet(start), I::LocalGet(stop), I::LocalGet(start), I::I32Sub,
+				]);
 				s.call(f, "new_text");
 				Self::emit_list(f, &[I::LocalGet(pieces), I::StructNew(node_type), I::LocalSet(pieces)]);
 			};
 			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
 			// stop when the separator no longer fits before the end
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(index),
-					I::LocalGet(separator_end),
-					I::I32Add,
-					I::LocalGet(separator),
-					I::I32Sub,
-					I::LocalGet(end),
-					I::I32GtU,
-					I::BrIf(1),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(index), I::LocalGet(separator_end), I::I32Add, I::LocalGet(separator), I::I32Sub,
+				I::LocalGet(end), I::I32GtU, I::BrIf(1),
+			]);
 			// compare the separator with the bytes at index
-			Self::emit_list(
-				f,
-				&[
-					I32Const(1),
-					I::LocalSet(matched),
-					I32Const(0),
-					I::LocalSet(offset),
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I32Const(1), I::LocalSet(matched),
+				I32Const(0), I::LocalSet(offset),
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(separator),
-					I::LocalGet(offset),
-					I::I32Add,
-					I::LocalGet(separator_end),
-					I::I32GeU,
-					I::BrIf(1),
-					I::LocalGet(index),
-					I::LocalGet(offset),
-					I::I32Add,
-					I::I32Load8U(BYTE),
-					I::LocalGet(separator),
-					I::LocalGet(offset),
-					I::I32Add,
-					I::I32Load8U(BYTE),
-					I::I32Ne,
-					I::If(BlockType::Empty),
-					I32Const(0),
-					I::LocalSet(matched),
-					I::Br(2),
-					I::End,
-					I::LocalGet(offset),
-					I32Const(1),
-					I::I32Add,
-					I::LocalSet(offset),
-					I::Br(0),
-					I::End,
-					I::End,
-					I::LocalGet(matched),
-					I::If(BlockType::Empty),
-				],
-			);
+						I::LocalGet(separator), I::LocalGet(offset), I::I32Add, I::LocalGet(separator_end), I::I32GeU,
+						I::BrIf(1),
+						I::LocalGet(index), I::LocalGet(offset), I::I32Add, I::I32Load8U(BYTE), I::LocalGet(separator),
+						I::LocalGet(offset), I::I32Add, I::I32Load8U(BYTE), I::I32Ne, I::If(BlockType::Empty),
+							I32Const(0), I::LocalSet(matched),
+							I::Br(2),
+						I::End,
+						I::LocalGet(offset), I32Const(1), I::I32Add, I::LocalSet(offset),
+						I::Br(0),
+				I::End, I::End,
+				I::LocalGet(matched), I::If(BlockType::Empty),
+			]);
 			push_piece(f, index);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(index),
-					I::LocalGet(separator_end),
-					I::I32Add,
-					I::LocalGet(separator),
-					I::I32Sub,
-					I::LocalTee(index),
-					I::LocalSet(start),
-					I::Else,
-					I::LocalGet(index),
-					I32Const(1),
-					I::I32Add,
-					I::LocalSet(index),
-					I::End,
-					I::Br(0),
-					I::End,
-					I::End,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(index), I::LocalGet(separator_end), I::I32Add, I::LocalGet(separator), I::I32Sub,
+				I::LocalTee(index), I::LocalSet(start),
+				I::Else,
+					I::LocalGet(index), I32Const(1), I::I32Add, I::LocalSet(index),
+				I::End,
+				I::Br(0),
+				I::End,
+				I::End,
+			]);
 			push_piece(f, end);
 			Self::emit_list(f, &[I::LocalGet(pieces)]);
 			s.call(f, "list_reverse");
@@ -138,90 +92,42 @@ impl WasmGcEmitter {
 			locals,
 			|_, f| {
 				let (position, value, negative, digits, rest, offset) = (0, 1, 2, 3, 4, 5);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(value),
-						I::I64Const(0),
-						I::I64LtS,
-						I::LocalTee(negative),
-						I::If(BlockType::Empty),
-						I::LocalGet(position),
-						I32Const(MINUS_SIGN),
-						I::I32Store8(BYTE),
-						I::I64Const(0),
-						I::LocalGet(value),
-						I::I64Sub,
-						I::LocalSet(value),
-						I::End,
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(value), I::I64Const(0), I::I64LtS, I::LocalTee(negative), I::If(BlockType::Empty),
+						I::LocalGet(position), I32Const(MINUS_SIGN), I::I32Store8(BYTE),
+						I::I64Const(0), I::LocalGet(value), I::I64Sub, I::LocalSet(value),
+					I::End,
+				]);
 				// count the digits
-				Self::emit_list(
-					f,
-					&[
-						I32Const(1),
-						I::LocalSet(digits),
-						I::LocalGet(value),
-						I::LocalSet(rest),
-						I::Block(BlockType::Empty),
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I32Const(1), I::LocalSet(digits),
+					I::LocalGet(value), I::LocalSet(rest),
+					I::Block(BlockType::Empty),
 						I::Loop(BlockType::Empty),
-						I::LocalGet(rest),
-						I::I64Const(DECIMAL_BASE),
-						I::I64LtU,
-						I::BrIf(1),
-						I::LocalGet(rest),
-						I::I64Const(DECIMAL_BASE),
-						I::I64DivU,
-						I::LocalSet(rest),
-						I::LocalGet(digits),
-						I32Const(1),
-						I::I32Add,
-						I::LocalSet(digits),
-						I::Br(0),
-						I::End,
-						I::End,
-					],
-				);
+							I::LocalGet(rest), I::I64Const(DECIMAL_BASE), I::I64LtU, I::BrIf(1),
+							I::LocalGet(rest), I::I64Const(DECIMAL_BASE), I::I64DivU, I::LocalSet(rest),
+							I::LocalGet(digits), I32Const(1), I::I32Add, I::LocalSet(digits),
+							I::Br(0),
+					I::End, I::End,
+				]);
 				// write them from the last one back
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(digits),
-						I::LocalSet(offset),
-						I::Block(BlockType::Empty),
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(digits), I::LocalSet(offset),
+					I::Block(BlockType::Empty),
 						I::Loop(BlockType::Empty),
-						I::LocalGet(offset),
-						I::I32Eqz,
-						I::BrIf(1),
-						I::LocalGet(offset),
-						I32Const(1),
-						I::I32Sub,
-						I::LocalSet(offset),
-						I::LocalGet(position),
-						I::LocalGet(negative),
-						I::I32Add,
-						I::LocalGet(offset),
-						I::I32Add,
-						I::LocalGet(value),
-						I::I64Const(DECIMAL_BASE),
-						I::I64RemU,
-						I::I32WrapI64,
-						I32Const(ZERO_DIGIT),
-						I::I32Add,
-						I::I32Store8(BYTE),
-						I::LocalGet(value),
-						I::I64Const(DECIMAL_BASE),
-						I::I64DivU,
-						I::LocalSet(value),
-						I::Br(0),
-						I::End,
-						I::End,
-						I::LocalGet(digits),
-						I::LocalGet(negative),
-						I::I32Add,
-					],
-				);
+							I::LocalGet(offset), I::I32Eqz, I::BrIf(1),
+							I::LocalGet(offset), I32Const(1), I::I32Sub, I::LocalSet(offset),
+							I::LocalGet(position), I::LocalGet(negative), I::I32Add, I::LocalGet(offset), I::I32Add,
+							I::LocalGet(value), I::I64Const(DECIMAL_BASE), I::I64RemU, I::I32WrapI64,
+							I32Const(ZERO_DIGIT), I::I32Add, I::I32Store8(BYTE),
+							I::LocalGet(value), I::I64Const(DECIMAL_BASE), I::I64DivU, I::LocalSet(value),
+							I::Br(0),
+					I::End, I::End,
+					I::LocalGet(digits), I::LocalGet(negative), I::I32Add,
+				]);
 			},
 		);
 	}
@@ -277,43 +183,22 @@ impl WasmGcEmitter {
 			};
 			s.emit_text_bounds(f, pointer, end);
 			// at worst every byte is escaped, plus the two quotes
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(end),
-					I::LocalGet(pointer),
-					I::I32Sub,
-					I32Const(2),
-					I::I32Mul,
-					I32Const(2),
-					I::I32Add,
-					I::LocalSet(capacity),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(end), I::LocalGet(pointer), I::I32Sub, I32Const(2), I::I32Mul, I32Const(2), I::I32Add,
+				I::LocalSet(capacity),
+			]);
 			s.emit_text_allocation(f, capacity, destination);
 			Self::emit_list(f, &[I::LocalGet(destination), I::LocalSet(out)]);
 			write(f, I32Const(QUOTE_BYTE));
-			Self::emit_list(
-				f,
-				&[
-					I::Block(BlockType::Empty),
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
-					I::LocalGet(pointer),
-					I::LocalGet(end),
-					I::I32GeU,
-					I::BrIf(1),
-					I::LocalGet(pointer),
-					I::I32Load8U(BYTE),
-					I::LocalTee(byte),
-					I32Const(QUOTE_BYTE),
-					I::I32Eq,
-					I::LocalGet(byte),
-					I32Const(BACKSLASH_BYTE),
-					I::I32Eq,
-					I::I32Or,
-					I::If(BlockType::Empty),
-				],
-			);
+						I::LocalGet(pointer), I::LocalGet(end), I::I32GeU, I::BrIf(1),
+						I::LocalGet(pointer), I::I32Load8U(BYTE), I::LocalTee(byte), I32Const(QUOTE_BYTE), I::I32Eq,
+						I::LocalGet(byte), I32Const(BACKSLASH_BYTE), I::I32Eq, I::I32Or, I::If(BlockType::Empty),
+			]);
 			write(f, I32Const(BACKSLASH_BYTE));
 			f.instruction(&I::End);
 			write(f, I::LocalGet(byte));
@@ -438,17 +323,13 @@ impl WasmGcEmitter {
 				s.emit_field(f, element, 0);
 				Self::emit_list(f, &[I::I64Const(crate::type_kinds::BOOL_KIND), I::I64Eq, I::If(BlockType::Empty)]);
 				s.emit_field(f, element, 1);
-				Self::emit_list(
-					f,
-					&[
-						I::RefCastNonNull(HeapType::Concrete(i64_box)),
-						I::StructGet { struct_type_index: i64_box, field_index: 0 },
-						I::I64Eqz,
-						I::If(BlockType::Result(node_ref)),
-						I32Const(bool_texts[0].0 as i32),
-						I32Const(bool_texts[0].1 as i32),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::RefCastNonNull(HeapType::Concrete(i64_box)),
+					I::StructGet { struct_type_index: i64_box, field_index: 0 }, I::I64Eqz,
+					I::If(BlockType::Result(node_ref)),
+						I32Const(bool_texts[0].0 as i32), I32Const(bool_texts[0].1 as i32),
+				]);
 				s.call(f, "new_text");
 				Self::emit_list(f, &[I::Else, I32Const(bool_texts[1].0 as i32), I32Const(bool_texts[1].1 as i32)]);
 				s.call(f, "new_text");
@@ -489,15 +370,11 @@ impl WasmGcEmitter {
 					is_kind(f, Kind::Symbol);
 					Self::emit_list(f, &[I::If(BlockType::Empty), I::I64Const(Kind::Text as i64)]);
 					s.emit_field(f, element, 1);
-					Self::emit_list(
-						f,
-						&[
-							I::RefNull(HeapType::Concrete(node_type)),
-							I::StructNew(node_type),
-							I::LocalSet(element),
-							I::End,
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::LocalSet(element),
+						I::End,
+					]);
 					// an entry key:value as list_text([key value], ":"), ø for a missing value
 					masked_kind_is(f, Kind::Key);
 					Self::emit_list(f, &[I::If(BlockType::Empty), I::I64Const(SQUARE_LIST_KIND)]);
@@ -510,15 +387,11 @@ impl WasmGcEmitter {
 					s.emit_field(f, element, 2);
 					f.instruction(&I::LocalSet(entry_value));
 					s.emit_entry_in_braces(f, entry_value);
-					Self::emit_list(
-						f,
-						&[
-							I::End,
-							I::RefNull(HeapType::Concrete(node_type)),
-							I::StructNew(node_type),
-							I::StructNew(node_type),
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::End,
+						I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::StructNew(node_type),
+					]);
 					// joined by its operator as written: `x+1`, an instance `point{x:1}` without one (P123)
 					s.emit_field(f, element, 0);
 					Self::emit_list(f, &[I::I64Const(KIND_BITS), I::I64ShrU, I::I64Const(OP_INFO_MASK), I::I64And]);
@@ -630,18 +503,13 @@ impl WasmGcEmitter {
 				}
 			};
 			let loop_over_cells = |f: &mut Function| {
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(0),
-						I::LocalSet(cell),
-						I::Block(BlockType::Empty),
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(0), I::LocalSet(cell),
+					I::Block(BlockType::Empty),
 						I::Loop(BlockType::Empty),
-						I::LocalGet(cell),
-						I::RefIsNull,
-						I::BrIf(1),
-					],
-				);
+							I::LocalGet(cell), I::RefIsNull, I::BrIf(1),
+				]);
 				next_element(f);
 			};
 			let end_loop = |f: &mut Function| {

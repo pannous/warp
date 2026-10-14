@@ -19,10 +19,50 @@ use std::collections::{HashMap, HashSet};
 pub const CLOSURE_NEW: &str = "closure_new";
 /// The mark of `&add` / `function add`: the function itself, not its call (user decision P82)
 const FUNCTION_REFERENCE_MARK: &str = "function_reference";
+/// The class whose method a closure_new target is (class_method_target)
+const METHOD_CLASS_MARK: &str = "method_of";
 
 /// `&add`, `function add`: the name, marked as the function itself; passes that ignore marks see the name
 pub fn function_reference(name: String) -> Node {
 	Node::Meta { node: Box::new(Node::Symbol(name)), data: Box::new(Node::key(FUNCTION_REFERENCE_MARK, Node::True)) }
+}
+
+/// The method `name` of `class` itself (`P.methods`, card module-methods), marked with its class
+pub fn method_reference(name: String, class: &str) -> Node {
+	Node::Meta { node: Box::new(Node::Symbol(name)), data: Box::new(Node::key(FUNCTION_REFERENCE_MARK, symbol(class))) }
+}
+
+/// The class a method_reference names, through its own marks
+fn referenced_class(node: &Node) -> Option<String> {
+	let Node::Meta { node: inner, data } = node else {
+		return None;
+	};
+	match data.as_ref() {
+		Node::Key(key, _, class) if key.name() == FUNCTION_REFERENCE_MARK => class.symbol_name().map(String::from),
+		_ => referenced_class(inner),
+	}
+}
+
+/// The target of `closure_new` marked with the class whose method it is: a pass that renames the method (a trait's
+/// witness `sum·P`, traits.rs) renames the target too
+pub fn class_method_target(target: &str, class: Option<String>) -> Node {
+	match class {
+		Some(class) => Node::meta(symbol(target), Node::key(METHOD_CLASS_MARK, symbol(&class))),
+		None => symbol(target),
+	}
+}
+
+/// (method, class) of a closure_new target marked by class_method_target
+pub fn class_method(node: &Node) -> Option<(String, String)> {
+	match node {
+		Node::Meta { node: inner, data } => match data.as_ref() {
+			Node::Key(key, _, class) if key.name() == METHOD_CLASS_MARK => {
+				Some((inner.symbol_name()?.to_string(), class.symbol_name()?.to_string()))
+			}
+			_ => class_method(inner),
+		},
+		_ => None,
+	}
 }
 
 /// The function `&add` / `function add` refers to
@@ -741,7 +781,7 @@ impl Lifting {
 
 	fn function_value(&mut self, node: Node, bound: &HashSet<String>) -> Node {
 		if let Some(target) = referenced_function(&node).and_then(|name| self.function_named(&name)) {
-			return closure_new(&target, vec![]);
+			return call(CLOSURE_NEW, vec![class_method_target(&target, referenced_class(&node))]);
 		}
 		match node {
 			Node::Symbol(ref name)

@@ -557,6 +557,7 @@ pub fn lower_conformances(node: Node) -> Node {
 		},
 	};
 	let witnesses = defined_functions(&node);
+	let node = witness_references(node, &witnesses);
 	match first_unkept_claim(&node, &traits, &witnesses) {
 		Some(error) => error,
 		None => without_claims(node, &traits),
@@ -752,6 +753,17 @@ fn renamed_head(head: Node, witness: String) -> Node {
 	};
 	items[0] = Node::Symbol(witness);
 	Node::List(items, bracket, separator)
+}
+
+/// A closure of a method that became a witness makes the witness: `sum` of P's `P.methods` is `sum·P`
+fn witness_references(node: Node, witnesses: &[String]) -> Node {
+	if let Some((method, class)) = crate::closures::class_method(&node) {
+		let witness = witness_name(&method, &class);
+		if witnesses.contains(&witness) {
+			return crate::closures::class_method_target(&witness, Some(class));
+		}
+	}
+	children_rewritten(node, |child| witness_references(child, witnesses))
 }
 
 fn defined_functions(node: &Node) -> Vec<String> {

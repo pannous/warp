@@ -75,3 +75,34 @@ fn listing_outputs_needs_a_backend_or_names_the_missing_one() {
 	assert!(output.starts_with('»') || output.contains("sendmidi") || output.contains("Error"), "{output}");
 	assert!(output.contains('[') || output.contains("sendmidi"), "{output}");
 }
+
+// card midi-clock: a message goes out at its voice's place, after the sounds queued before it or at an `at`'s time;
+// headless names that place
+#[test]
+fn a_message_waits_for_the_sounds_before_it() {
+	let printed = failures_of("play(C4, 0.5s)\nmidi_on E4\n7");
+	assert!(printed.contains("midi out : 90 40 64 at 0.500 s"), "{printed}");
+}
+
+#[test]
+fn at_places_a_message() {
+	let printed = failures_of("at 1s midi_on C4\nmidi_on E4\n7");
+	assert!(printed.contains("midi out : 90 3c 64 at 1.000 s"), "{printed}");
+	assert!(printed.contains("midi out : 90 40 64\n"), "the voice goes on where it stood: {printed}");
+}
+
+#[test]
+fn midi_notes_follow_one_another() {
+	let printed = failures_of("midi_note(C4, 0.5s)\nmidi_note(E4, 250ms, 90)\nsound_queued() > 0");
+	let lines: Vec<&str> = printed.lines().filter(|line| line.starts_with("midi out")).collect();
+	assert_eq!(
+		lines,
+		[
+			"midi out : 90 3c 64",
+			"midi out : 80 3c 00 at 0.500 s",
+			"midi out : 90 40 5a at 0.500 s",
+			"midi out : 80 40 00 at 0.750 s"
+		],
+		"{printed}"
+	);
+}

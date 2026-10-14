@@ -91,36 +91,18 @@ impl WasmGcEmitter {
 		let (a, b, tolerance, difference) = (0, 1, 2, 3);
 		let f64t = ValType::F64;
 		self.runtime_function(NUMBERS_SIMILAR, vec![f64t; 3], vec![ValType::I32], vec![f64t], |_, f| {
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(a),
-					I::LocalGet(b),
-					I::F64Sub,
-					I::F64Abs,
-					I::LocalSet(difference),
-					I::LocalGet(a),
-					I::LocalGet(b),
-					I::F64Eq,
-					I::LocalGet(difference),
-					I::F64Const(ABSOLUTE_TOLERANCE.into()),
-					I::F64Le,
-					I::I32Or,
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(a), I::LocalGet(b), I::F64Sub, I::F64Abs, I::LocalSet(difference),
+				I::LocalGet(a), I::LocalGet(b), I::F64Eq, I::LocalGet(difference),
+				I::F64Const(ABSOLUTE_TOLERANCE.into()), I::F64Le, I::I32Or,
+			]);
 			for side in [a, b] {
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(difference),
-						I::LocalGet(tolerance),
-						I::LocalGet(side),
-						I::F64Abs,
-						I::F64Mul,
-						I::F64Le,
-						I::I32Or,
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(difference), I::LocalGet(tolerance), I::LocalGet(side), I::F64Abs, I::F64Mul, I::F64Le,
+					I::I32Or,
+				]);
 			}
 		});
 	}
@@ -161,19 +143,11 @@ impl WasmGcEmitter {
 					Self::emit_list(f, &[I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::LocalSet(to)]);
 				}
 				// a bool and any value: alike in truthiness
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(kind_a),
-						I::I64Const(BOOL_KIND),
-						I::I64Eq,
-						I::LocalGet(kind_b),
-						I::I64Const(BOOL_KIND),
-						I::I64Eq,
-						I::I32Or,
-						I::If(BlockType::Empty),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(kind_a), I::I64Const(BOOL_KIND), I::I64Eq, I::LocalGet(kind_b), I::I64Const(BOOL_KIND),
+					I::I64Eq, I::I32Or, I::If(BlockType::Empty),
+				]);
 				for side in [a, b] {
 					f.instruction(&I::LocalGet(side));
 					s.call(f, IS_TRUTHY);

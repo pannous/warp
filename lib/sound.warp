@@ -250,7 +250,41 @@ render_sound(path) := std_io("sound", "render", [path])
 // the voice's first sound, exactly so in render_sound; the voice goes on where it stood (src/lowering/music_words.rs)
 sound_at(seconds) := std_io("sound", "at", [si_amount(seconds)])
 sound_at_end() := std_io("sound", "at_end", [])
-play(x) := if x is text then play_file(x) else sound(chord_samples(pitches_of(x), note_seconds, wave_shape))
+// an audio file's samples to play (card sound-samples): kick = sample("kick.wav") (wav, mp3, ogg, flac, aiff, m4a; the
+// playground reads wav), play(kick); play_sample(kick, 2) twice as fast and an octave up, as a sampler plays it;
+// sample_slice(kick, 0.1s, 0.3s) the part between, sample_slices(kick, 4) four equal parts, sample_looped(kick, 4s, 0.5s,
+// 1s) four seconds: up to 1 s, then from 0.5 s to 1 s again and again. Its frames are whole numbers as sound_samples
+// takes them, channels interleaved. Not through the effects: a sample sounds as recorded
+class Sample {
+	rate: int
+	channels: int
+	frames: [int]
+}
+sample(path: text) := {
+	loaded = std_io("sound", "load", [path])
+	Sample(loaded[0], loaded[1], loaded[2..])
+}
+sample_seconds(clip: Sample) := count(clip.frames) / clip.channels / clip.rate
+// plain seconds below; the words take si_amount once, as melody does (notes/units_runtime.md)
+// where the frame at that many seconds starts among the interleaved values, at most the end
+sample_frame(clip: Sample, seconds) := min(round(seconds * clip.rate) as int, count(clip.frames) / clip.channels) * clip.channels
+sample_between(clip: Sample, from, to) := Sample(clip.rate, clip.channels, clip.frames[sample_frame(clip, from)..sample_frame(clip, to)])
+sample_slice(clip: Sample, from, to) := sample_between(clip, si_amount(from), si_amount(to))
+sample_slices(clip: Sample, parts) := [sample_between(clip, i * sample_seconds(clip) / parts, (i + 1) * sample_seconds(clip) / parts) for i in 0..parts]
+def sample_repeated(clip: Sample, seconds, from, to) {
+	end = round(seconds * clip.rate) as int * clip.channels
+	frames = clip.frames[0..sample_frame(clip, to)]
+	repeated = clip.frames[sample_frame(clip, from)..sample_frame(clip, to)]
+	if count(repeated) == 0 { return Sample(clip.rate, clip.channels, frames) }
+	while count(frames) < end { frames = frames + repeated }
+	Sample(clip.rate, clip.channels, frames[0..end])
+}
+sample_looped(clip: Sample, seconds, from, to) := sample_repeated(clip, si_amount(seconds), si_amount(from), si_amount(to))
+play_sample(clip: Sample, rate) := {
+	sound_samples(clip.frames, count(clip.frames), round(clip.rate * rate) as int, clip.channels)
+	std_io("sound", "last", [])
+}
+play(x) := if x is text then play_file(x) else if x is Sample then play_sample(x, 1) else sound(chord_samples(pitches_of(x), note_seconds, wave_shape))
 // one note (or chord) after another: melody([C4 E4 G4]), melody([C4 E4 G4], 250ms)
 // plain seconds: the unit check reads a quantity parameter in a loop as unsupported (notes/units_runtime.md)
 melody_samples(notes, seconds) := {
@@ -263,18 +297,24 @@ melody(notes) := melody(notes, note_seconds)
 
 // patterns in Tidal's mini-notation (card patterns-live): a cycle of steps that share the cycle's seconds evenly.
 // `c4 e4 g4` three steps, `~` a rest, `[g4 b4]` a group sharing one step, `c4*2` twice in its step, `c4,e4,g4` a chord,
-// `c4(3,8)` Euclidean: 3 notes spread over 8 steps. The cycle lasts `for 2 bars` (a bar without), the result is one sound
-// the voice goes on after; `swing` (0 to 1) delays every second step of a group, 1 to a triplet feel
+// `c4(3,8)` Euclidean: 3 notes spread over 8 steps. Card pattern-extras: `<c4 e4 g4>` one of them per cycle, in turn;
+// `c4 _ e4` (or `c4@2 e4`) c4 holds two steps; `c4?` sounds in half the cycles (`c4?0.3` in 30 %), chosen by
+// pattern_seed, the same each run. The cycle lasts `for 2 bars` (a bar without), the result is one sound the voice
+// goes on after; `swing` (0 to 1) delays every second step of a group, 1 to a triplet feel
 global swing = 0.0 as float
-// a pattern item is [0, items] (a group) or [1, frequencies] (a sound, no frequencies: a rest)
-pattern_note(word) := if word == "~" then [1, []] else [1, [note(upper(word[0]) + word[1..]) for word in split(word, ",")]]
+global pattern_seed = 0
+// a pattern item is [kind, payload, weight, chance]: kind 0 a group of items, 1 a sound of frequencies (none: a
+// rest), 2 alternatives (`<a b>`); weight its steps (`_`, `@n`), chance the share of cycles it sounds in (`?`)
+pattern_item(kind, payload) := [kind, payload, 1, 1.0 as float]
+pattern_note(word) := if word == "~" then pattern_item(1, []) else pattern_item(1, [note(upper(word[0]) + word[1..]) for word in split(word, ",")])
 // k notes over n steps as evenly as possible: step i sounds when (i * k) mod n < k
-pattern_euclid(item, k, n) := [0, [if (i * k) % n < k then item else [1, []] for i in 0..n]]
+pattern_euclid(item, k, n) := pattern_item(0, [if (i * k) % n < k then item else pattern_item(1, []) for i in 0..n])
 pattern_end(text: text, from: int, stops: text) := {
 	i = from
 	while i < count(text) and not (text[i] in stops) { i = i + 1 }
 	i
 }
+global pattern_stops = " []<>*(?@_"
 // the steps from `from` to the closing bracket (or the end), and the place after it
 def parse_pattern(text: text, from: int) {
 	items = []
@@ -282,27 +322,37 @@ def parse_pattern(text: text, from: int) {
 	while i < count(text) {
 		c = text[i]
 		if c == " " { i = i + 1 }
-		else if c == "]" { return [items, i + 1] }
-		else {
-			item = [1, []]
-			if c == "[" {
+		else if c == "]" or c == ">" { return [items, i + 1] }
+		else if c == "_" {
+			last = count(items) - 1
+			if last >= 0 { items[last][2] = items[last][2] + 1 }
+			i = i + 1
+		} else {
+			item = pattern_item(1, [])
+			if c == "[" or c == "<" {
 				inner = parse_pattern(text, i + 1)
-				item = [0, inner[0]]
+				item = pattern_item(if c == "[" then 0 else 2, inner[0])
 				i = inner[1]
 			} else {
-				stop = pattern_end(text, i, " []*(")
+				stop = pattern_end(text, i, pattern_stops)
 				item = pattern_note(text[i..stop])
 				i = stop
 			}
-			while i < count(text) and (text[i] == "*" or text[i] == "(") {
+			while i < count(text) and text[i] in "*(?@" {
 				if text[i] == "*" {
-					stop = pattern_end(text, i + 1, " []*(")
-					item = [0, [item for x in 0..number(text[i + 1..stop])]]
-				} else {
+					stop = pattern_end(text, i + 1, pattern_stops)
+					item = pattern_item(0, [item for x in 0..number(text[i + 1..stop])])
+				} else if text[i] == "(" {
 					stop = pattern_end(text, i + 1, ")")
 					arguments = split(text[i + 1..stop], ",")
 					item = pattern_euclid(item, number(arguments[0]), number(arguments[1]))
 					stop = stop + 1
+				} else if text[i] == "@" {
+					stop = pattern_end(text, i + 1, pattern_stops)
+					item[2] = number(text[i + 1..stop])
+				} else {
+					stop = pattern_end(text, i + 1, pattern_stops)
+					item[3] = if stop > i + 1 then float(text[i + 1..stop]) else 0.5 as float
 				}
 				i = stop
 			}
@@ -311,17 +361,43 @@ def parse_pattern(text: text, from: int) {
 	}
 	[items, i]
 }
-// [frequencies, seconds] of every sound and rest of the items spread over the seconds, the swing applied
-def pattern_events(items, seconds) {
-	step = seconds / count(items)
+// 0 to 1, the same for the same seed, cycle and place in the pattern
+def pattern_chance(cycle, place) {
+	h = (pattern_seed * 7919 + cycle * 104729 + place * 1299709 + 12345) % 2147483647
+	for round in 0..3 { h = (h * h + 48271) % 2147483647 }
+	(h as float) / 2147483647
+}
+// [frequencies, seconds] of every sound and rest of the items spread over the seconds in this cycle, the swing applied;
+// place numbers each item for its chance, chance is the share of cycles the enclosing items sound in
+def pattern_events(items, seconds, cycle, place, chance) {
+	steps = 0
+	for item in items { steps = steps + item[2] }
+	step = seconds / steps
 	shift = swing * step / 3
 	events = []
 	for k in 0..count(items) {
-		length = step + (if k % 2 == 1 then -shift else if k + 1 < count(items) then shift else 0)
 		item = items[k]
-		if item[0] == 0 { events = events + pattern_events(item[1], length) } else { events.push([item[1], length]) }
+		length = item[2] * step + (if k % 2 == 1 then -shift else if k + 1 < count(items) then shift else 0)
+		turn = cycle
+		while item[0] == 2 {
+			chosen = item[1][turn % count(item[1])]
+			turn = floor(turn / count(item[1])) as int
+			item = [chosen[0], chosen[1], item[2], chosen[3] * item[3]]
+		}
+		here = (place * 31 + k + 1) % 1000003
+		sounds = chance * item[3]
+		if item[0] == 0 { events = events + pattern_events(item[1], length, turn, here, sounds) }
+		else if sounds < 1 and pattern_chance(cycle, here) >= sounds { events.push([[], length]) }
+		else { events.push([item[1], length]) }
 	}
 	events
+}
+// the cycle a pattern plays: how often this voice played the same text before
+global patterns_played = [""]
+def pattern_cycle(text) {
+	cycle = count([seen for seen in patterns_played if seen == text])
+	patterns_played.push(text)
+	cycle
 }
 silence(n) := [sample_offset for i in 0..n]
 // the samples of the events one after another, each ending at the sample its cumulated seconds reach: no drift
@@ -337,7 +413,7 @@ def pattern_samples(events) {
 	}
 	samples
 }
-pattern(text, duration) := sound(pattern_samples(pattern_events(parse_pattern(text, 0)[0], si_amount(duration))))
+pattern(text, duration) := sound(pattern_samples(pattern_events(parse_pattern(text, 0)[0], si_amount(duration), pattern_cycle(text), 0, 1.0 as float)))
 pattern(text) := pattern(text, bar_seconds(1))
 
 // MIDI (card midi-out): midi_on C4, midi_off C4, midi_send(144, 60, 100) to the first output device (or the browser's
@@ -345,6 +421,12 @@ pattern(text) := pattern(text, bar_seconds(1))
 midi_send(status, data1, data2 = 0, port = "") := std_io("midi", "send", [port, if status < 192 or status >= 224 then [status, data1, data2] else [status, data1]])
 midi_on(pitch, velocity = 100, channel = 1) := midi_send(143 + channel, midi(pitch), velocity)
 midi_off(pitch, channel = 1) := midi_send(127 + channel, midi(pitch), 0)
+// a note of that length: on at the voice's place, off after it; the next sound or message follows (card midi-clock)
+midi_note(pitch, duration, velocity = 100, channel = 1) := {
+	midi_on(pitch, velocity, channel)
+	std_io("sound", "rest", [si_amount(duration)])
+	midi_off(pitch, channel)
+}
 midi_outputs() := std_io("midi", "outputs", [])
 // the next message [status, data1, data2] waiting at the input, ø when none (fails where there is no MIDI input)
 midi_receive() := std_io("midi", "receive", [])

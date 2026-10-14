@@ -60,18 +60,11 @@ impl WasmGcEmitter {
 		let node_ref = ValType::Ref(self.node_ref(false));
 		if self.should_emit_function(INSTANT_AT) {
 			self.runtime_function(INSTANT_AT, vec![ValType::I64], vec![node_ref], vec![], |_, f| {
-				Self::emit_list(
-					f,
-					&[
-						I::I64Const(Kind::Time as i64),
-						I::LocalGet(0),
-						I::I64Const(NANOS_PER_MILLI),
-						I::I64Mul,
-						I::StructNew(i64_box),
-						I::RefNull(HeapType::Concrete(node)),
-						I::StructNew(node),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::I64Const(Kind::Time as i64), I::LocalGet(0), I::I64Const(NANOS_PER_MILLI), I::I64Mul,
+					I::StructNew(i64_box), I::RefNull(HeapType::Concrete(node)), I::StructNew(node),
+				]);
 			});
 		}
 		self.emit_civil_from_days();
@@ -83,19 +76,12 @@ impl WasmGcEmitter {
 			vec![ValType::I64; 2],
 			|_, f| {
 				let (form, position, days, nanos) = (0, 1, 2, 3);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(form),
-						I::I64Const(TimeForm::Date as i64),
-						I::I64Eq,
-						I::If(BlockType::Empty),
-						I::LocalGet(position),
-						I::I64Const(0),
-						I::Return,
-						I::End,
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(form), I::I64Const(TimeForm::Date as i64), I::I64Eq, I::If(BlockType::Empty),
+						I::LocalGet(position), I::I64Const(0), I::Return,
+					I::End,
+				]);
 				Self::emit_floor_split(f, position, DAY_NANOS, days, nanos);
 				Self::emit_list(f, &[I::LocalGet(days), I::LocalGet(nanos)]);
 			},
@@ -126,53 +112,35 @@ impl WasmGcEmitter {
 					let index = TIME_FIELDS.iter().position(|known| *known == absolute).unwrap_or_default();
 					Self::emit_list(f, &[I::LocalGet(field), I::I32Const(index as i32), I::I32Ne, I::I32And]);
 				}
-				Self::emit_list(
-					f,
-					&[
-						I::If(BlockType::Empty),
-						I::LocalGet(form),
-						I::I64Const(TimeForm::Zoned as i64),
-						I::I64Eq,
-						I::If(BlockType::Empty),
-						I::LocalGet(position),
-						I::LocalGet(offset),
-						I::I64Const(SECOND as i64),
-						I::I64Mul,
-						I::I64Add,
-						I::LocalSet(position),
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::If(BlockType::Empty),
+						I::LocalGet(form), I::I64Const(TimeForm::Zoned as i64), I::I64Eq, I::If(BlockType::Empty),
+							I::LocalGet(position), I::LocalGet(offset), I::I64Const(SECOND as i64), I::I64Mul,
+							I::I64Add, I::LocalSet(position),
 						I::End,
-					],
-				);
+				]);
 				if let Some(local_offset) = local_offset {
 					Self::emit_list(
 						f,
 						&[I::LocalGet(form), I::I64Const(TimeForm::Instant as i64), I::I64Eq, I::If(BlockType::Empty)],
 					);
 					Self::emit_floor_split(f, position, NANOS_PER_MILLI, milliseconds, nanos);
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(position),
-							I::LocalGet(milliseconds),
-							I::Call(local_offset),
-							I::I64Const(SECOND as i64),
-							I::I64Mul,
-							I::I64Add,
-							I::LocalSet(position),
-							I::End,
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::LocalGet(position), I::LocalGet(milliseconds), I::Call(local_offset),
+						I::I64Const(SECOND as i64), I::I64Mul, I::I64Add, I::LocalSet(position),
+						I::End,
+					]);
 				}
 				Self::emit_list(f, &[I::End, I::LocalGet(form), I::LocalGet(position)]);
 				s.call(f, TIME_PARTS);
 				Self::emit_list(f, &[I::LocalSet(nanos), I::LocalSet(days), I::LocalGet(days)]);
 				s.call(f, CIVIL_FROM_DAYS);
 				Self::emit_list(f, &[I::LocalSet(day), I::LocalSet(month), I::LocalSet(year)]);
+				#[rustfmt::skip]
 				let mut day_of_year = vec![
-					I::LocalGet(days),
-					I::LocalGet(year),
-					I::I64Const(1),
-					I::I64Const(1),
+					I::LocalGet(days), I::LocalGet(year), I::I64Const(1), I::I64Const(1),
 					I::Call(s.func_index(DAYS_FROM_CIVIL)),
 				];
 				day_of_year.extend([I::I64Sub, I::I64Const(1), I::I64Add]);
@@ -240,100 +208,35 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::LocalGet(days), I::I64Const(EPOCH_SHIFT), I::I64Add, I::LocalSet(days)]);
 				Self::emit_floor_split(f, days, DAYS_PER_ERA, era, day_of_era);
 				// (doe - doe/1460 + doe/36524 - doe/146096) / 365
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(day_of_era),
-						I::LocalGet(day_of_era),
-						I::I64Const(1460),
-						I::I64DivU,
-						I::I64Sub,
-						I::LocalGet(day_of_era),
-						I::I64Const(36_524),
-						I::I64DivU,
-						I::I64Add,
-						I::LocalGet(day_of_era),
-						I::I64Const(146_096),
-						I::I64DivU,
-						I::I64Sub,
-						I::I64Const(365),
-						I::I64DivU,
-						I::LocalSet(year_of_era),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(day_of_era), I::LocalGet(day_of_era), I::I64Const(1460), I::I64DivU, I::I64Sub,
+					I::LocalGet(day_of_era), I::I64Const(36_524), I::I64DivU, I::I64Add, I::LocalGet(day_of_era),
+					I::I64Const(146_096), I::I64DivU, I::I64Sub, I::I64Const(365), I::I64DivU, I::LocalSet(year_of_era),
+				]);
 				// doe - (365 yoe + yoe/4 - yoe/100)
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(day_of_era),
-						I::LocalGet(year_of_era),
-						I::I64Const(365),
-						I::I64Mul,
-						I::LocalGet(year_of_era),
-						I::I64Const(4),
-						I::I64DivU,
-						I::I64Add,
-						I::LocalGet(year_of_era),
-						I::I64Const(100),
-						I::I64DivU,
-						I::I64Sub,
-						I::I64Sub,
-						I::LocalSet(day_of_year),
-						I::LocalGet(day_of_year),
-						I::I64Const(5),
-						I::I64Mul,
-						I::I64Const(2),
-						I::I64Add,
-						I::I64Const(153),
-						I::I64DivU,
-						I::LocalSet(shifted_month),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(day_of_era), I::LocalGet(year_of_era), I::I64Const(365), I::I64Mul,
+					I::LocalGet(year_of_era), I::I64Const(4), I::I64DivU, I::I64Add, I::LocalGet(year_of_era),
+					I::I64Const(100), I::I64DivU, I::I64Sub, I::I64Sub, I::LocalSet(day_of_year),
+					I::LocalGet(day_of_year), I::I64Const(5), I::I64Mul, I::I64Const(2), I::I64Add, I::I64Const(153),
+					I::I64DivU, I::LocalSet(shifted_month),
+				]);
 				// the year starts in March: months 10 and 11 of it are January and February
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(shifted_month),
-						I::I64Const(3),
-						I::I64Add,
-						I::LocalGet(shifted_month),
-						I::I64Const(10),
-						I::I64GeU,
-						I::I64ExtendI32U,
-						I::I64Const(12),
-						I::I64Mul,
-						I::I64Sub,
-						I::LocalSet(month),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(shifted_month), I::I64Const(3), I::I64Add, I::LocalGet(shifted_month), I::I64Const(10),
+					I::I64GeU, I::I64ExtendI32U, I::I64Const(12), I::I64Mul, I::I64Sub, I::LocalSet(month),
+				]);
 				// year, month, day
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(year_of_era),
-						I::LocalGet(era),
-						I::I64Const(YEARS_PER_ERA),
-						I::I64Mul,
-						I::I64Add,
-						I::LocalGet(month),
-						I::I64Const(2),
-						I::I64LeU,
-						I::I64ExtendI32U,
-						I::I64Add,
-						I::LocalGet(month),
-						I::LocalGet(day_of_year),
-						I::LocalGet(shifted_month),
-						I::I64Const(153),
-						I::I64Mul,
-						I::I64Const(2),
-						I::I64Add,
-						I::I64Const(5),
-						I::I64DivU,
-						I::I64Sub,
-						I::I64Const(1),
-						I::I64Add,
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(year_of_era), I::LocalGet(era), I::I64Const(YEARS_PER_ERA), I::I64Mul, I::I64Add,
+					I::LocalGet(month), I::I64Const(2), I::I64LeU, I::I64ExtendI32U, I::I64Add, I::LocalGet(month),
+					I::LocalGet(day_of_year), I::LocalGet(shifted_month), I::I64Const(153), I::I64Mul, I::I64Const(2),
+					I::I64Add, I::I64Const(5), I::I64DivU, I::I64Sub, I::I64Const(1), I::I64Add,
+				]);
 			},
 		);
 	}
@@ -348,61 +251,23 @@ impl WasmGcEmitter {
 			|_, f| {
 				let (year, month, day, era, year_of_era, day_of_year, shifted_month) = (0, 1, 2, 3, 4, 5, 6);
 				// the year starts in March
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(year),
-						I::LocalGet(month),
-						I::I64Const(2),
-						I::I64LeS,
-						I::I64ExtendI32U,
-						I::I64Sub,
-						I::LocalSet(year),
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(year), I::LocalGet(month), I::I64Const(2), I::I64LeS, I::I64ExtendI32U, I::I64Sub,
+					I::LocalSet(year),
+				]);
 				Self::emit_floor_split(f, year, YEARS_PER_ERA, era, year_of_era);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(month),
-						I::I64Const(9),
-						I::I64Add,
-						I::I64Const(12),
-						I::I64RemS,
-						I::LocalSet(shifted_month),
-						I::LocalGet(shifted_month),
-						I::I64Const(153),
-						I::I64Mul,
-						I::I64Const(2),
-						I::I64Add,
-						I::I64Const(5),
-						I::I64DivS,
-						I::LocalGet(day),
-						I::I64Add,
-						I::I64Const(1),
-						I::I64Sub,
-						I::LocalSet(day_of_year),
-						I::LocalGet(era),
-						I::I64Const(DAYS_PER_ERA),
-						I::I64Mul,
-						I::LocalGet(year_of_era),
-						I::I64Const(365),
-						I::I64Mul,
-						I::LocalGet(year_of_era),
-						I::I64Const(4),
-						I::I64DivS,
-						I::I64Add,
-						I::LocalGet(year_of_era),
-						I::I64Const(100),
-						I::I64DivS,
-						I::I64Sub,
-						I::LocalGet(day_of_year),
-						I::I64Add,
-						I::I64Add,
-						I::I64Const(EPOCH_SHIFT),
-						I::I64Sub,
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(month), I::I64Const(9), I::I64Add, I::I64Const(12), I::I64RemS,
+					I::LocalSet(shifted_month),
+					I::LocalGet(shifted_month), I::I64Const(153), I::I64Mul, I::I64Const(2), I::I64Add, I::I64Const(5),
+					I::I64DivS, I::LocalGet(day), I::I64Add, I::I64Const(1), I::I64Sub, I::LocalSet(day_of_year),
+					I::LocalGet(era), I::I64Const(DAYS_PER_ERA), I::I64Mul, I::LocalGet(year_of_era), I::I64Const(365),
+					I::I64Mul, I::LocalGet(year_of_era), I::I64Const(4), I::I64DivS, I::I64Add,
+					I::LocalGet(year_of_era), I::I64Const(100), I::I64DivS, I::I64Sub, I::LocalGet(day_of_year),
+					I::I64Add, I::I64Add, I::I64Const(EPOCH_SHIFT), I::I64Sub,
+				]);
 			},
 		);
 	}
@@ -434,32 +299,20 @@ impl WasmGcEmitter {
 				for place in 0..count {
 					Self::emit_list(f, &[I::LocalGet(position), I::I32Const(place as i32), I::I32Add]);
 					Self::emit_list(f, value);
-					Self::emit_list(
-						f,
-						&[
-							I::I64Const(10_i64.pow(count - 1 - place)),
-							I::I64DivU,
-							I::I64Const(10),
-							I::I64RemU,
-							I::I64Const(ZERO_DIGIT),
-							I::I64Add,
-							I::I32WrapI64,
-							I::I32Store8(BYTE),
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::I64Const(10_i64.pow(count - 1 - place)), I::I64DivU, I::I64Const(10), I::I64RemU,
+						I::I64Const(ZERO_DIGIT), I::I64Add, I::I32WrapI64, I::I32Store8(BYTE),
+					]);
 				}
 				advance(f, count as i32);
 			};
 			let copy = |f: &mut Function, (address, length): (u32, u32)| {
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(position),
-						I::I32Const(address as i32),
-						I::I32Const(length as i32),
-						I::MemoryCopy { src_mem: 0, dst_mem: 0 },
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(position), I::I32Const(address as i32), I::I32Const(length as i32),
+					I::MemoryCopy { src_mem: 0, dst_mem: 0 },
+				]);
 				advance(f, length as i32);
 			};
 			let is_form = |f: &mut Function, time_form: TimeForm| {
@@ -480,32 +333,25 @@ impl WasmGcEmitter {
 			// a zoned time shows its wall clock
 			Self::emit_list(f, &[I::LocalGet(form), I::LocalGet(instant)]);
 			is_form(f, TimeForm::Zoned);
-			Self::emit_list(
-				f,
-				&[
-					I::If(BlockType::Result(ValType::I64)),
-					I::LocalGet(offset),
-					I::I64Const(SECOND as i64),
-					I::I64Mul,
-					I::Else,
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::If(BlockType::Result(ValType::I64)),
+					I::LocalGet(offset), I::I64Const(SECOND as i64), I::I64Mul,
+				I::Else,
 					I::I64Const(0),
-					I::End,
-					I::I64Add,
-				],
-			);
+				I::End,
+				I::I64Add,
+			]);
 			s.call(f, TIME_PARTS);
 			Self::emit_list(f, &[I::LocalSet(nanos), I::LocalSet(days), I::LocalGet(days)]);
 			s.call(f, CIVIL_FROM_DAYS);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalSet(day),
-					I::LocalSet(month),
-					I::LocalSet(year),
-					I::I32Const(TIME_TEXT_BYTES),
-					I::LocalSet(position),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalSet(day),
+				I::LocalSet(month),
+				I::LocalSet(year),
+				I::I32Const(TIME_TEXT_BYTES), I::LocalSet(position),
+			]);
 			s.emit_text_allocation(f, position, address);
 			Self::emit_list(f, &[I::LocalGet(address), I::LocalSet(position)]);
 			digits(f, &[I::LocalGet(year)], 4);
@@ -554,18 +400,11 @@ impl WasmGcEmitter {
 				digits(f, &[I::LocalGet(offset), I::I64Const(MINUTE), I::I64DivU, I::I64Const(MINUTE), I::I64RemU], 2);
 				for (index, name) in names.iter().enumerate() {
 					s.emit_field(f, 0, 0);
-					Self::emit_list(
-						f,
-						&[
-							I::I64Const(KIND_BITS + TIME_FORM_BITS),
-							I::I64ShrU,
-							I::I64Const(ZONE_INDEX_MASK),
-							I::I64And,
-							I::I64Const(index as i64),
-							I::I64Eq,
-							I::If(BlockType::Empty),
-						],
-					);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::I64Const(KIND_BITS + TIME_FORM_BITS), I::I64ShrU, I::I64Const(ZONE_INDEX_MASK), I::I64And,
+						I::I64Const(index as i64), I::I64Eq, I::If(BlockType::Empty),
+					]);
 					copy(f, *name);
 					f.instruction(&I::End);
 				}
@@ -581,46 +420,25 @@ impl WasmGcEmitter {
 
 	/// `.5` of the nanoseconds in `fraction`, without trailing zeros, written at `position`, which it advances
 	fn emit_fraction(&self, func: &mut Function, fraction: u32, power: u32, position: u32) {
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(fraction),
-				I::I64Const(0),
-				I::I64Ne,
-				I::If(BlockType::Empty),
-				I::I64Const(SECOND as i64),
-				I::LocalSet(power),
-			],
-		);
-		Self::emit_while(
-			func,
-			&[I::LocalGet(fraction), I::I64Const(10), I::I64RemU, I::I64Eqz],
-			&[
-				I::LocalGet(fraction),
-				I::I64Const(10),
-				I::I64DivU,
-				I::LocalSet(fraction),
-				I::LocalGet(power),
-				I::I64Const(10),
-				I::I64DivU,
-				I::LocalSet(power),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(fraction), I::I64Const(0), I::I64Ne, I::If(BlockType::Empty),
+				I::I64Const(SECOND as i64), I::LocalSet(power),
+		]);
+		#[rustfmt::skip]
+		Self::emit_while(func, &[I::LocalGet(fraction), I::I64Const(10), I::I64RemU, I::I64Eqz], &[
+			I::LocalGet(fraction), I::I64Const(10), I::I64DivU, I::LocalSet(fraction),
+			I::LocalGet(power), I::I64Const(10), I::I64DivU, I::LocalSet(power),
+		]);
 		// power + fraction keeps the fraction's leading zeros; the point overwrites its leading 1
 		Self::emit_list(func, &[I::LocalGet(position), I::LocalGet(power), I::LocalGet(fraction), I::I64Add]);
 		self.call(func, "int_to_decimal");
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(position),
-				I::I32Const(b'.' as i32),
-				I::I32Store8(BYTE),
-				I::LocalGet(position),
-				I::I32Add,
-				I::LocalSet(position),
-				I::End,
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(position), I::I32Const(b'.' as i32), I::I32Store8(BYTE),
+			I::LocalGet(position), I::I32Add, I::LocalSet(position),
+			I::End,
+		]);
 	}
 
 	/// duration_text(node): its months, days, then hours, minutes and seconds of whole seconds, else the seconds with
@@ -648,15 +466,11 @@ impl WasmGcEmitter {
 				advance(f, &written);
 			};
 			let unit = |f: &mut Function, (address, length): (u32, u32)| {
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(position),
-						I::I32Const(address as i32),
-						I::I32Const(length as i32),
-						I::MemoryCopy { src_mem: 0, dst_mem: 0 },
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(position), I::I32Const(address as i32), I::I32Const(length as i32),
+					I::MemoryCopy { src_mem: 0, dst_mem: 0 },
+				]);
 				advance(f, &[I::I32Const(length as i32)]);
 			};
 			// `amount unit` and a space, the unit plural unless the amount is 1
@@ -690,46 +504,23 @@ impl WasmGcEmitter {
 			day_count.extend([I::I32WrapI64, I::I64ExtendI32S]);
 			part(f, &day_count, days);
 			// whole seconds read as hours, minutes and seconds: `3 hours`, not `10800 seconds`
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(nanos),
-					I::I64Const(SECOND as i64),
-					I::I64RemS,
-					I::I64Eqz,
-					I::LocalGet(nanos),
-					I::I64Const(0),
-					I::I64Ne,
-					I::I32And,
-					I::If(BlockType::Empty),
-					I::LocalGet(nanos),
-					I::I64Const(SECOND as i64),
-					I::I64DivS,
-					I::LocalSet(seconds),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(nanos), I::I64Const(SECOND as i64), I::I64RemS, I::I64Eqz, I::LocalGet(nanos),
+				I::I64Const(0), I::I64Ne, I::I32And, I::If(BlockType::Empty),
+					I::LocalGet(nanos), I::I64Const(SECOND as i64), I::I64DivS, I::LocalSet(seconds),
+			]);
 			part(f, &[I::LocalGet(seconds), I::I64Const(HOUR), I::I64DivS], hours);
 			part(f, &[I::LocalGet(seconds), I::I64Const(HOUR), I::I64RemS, I::I64Const(MINUTE), I::I64DivS], minutes);
 			part(f, &[I::LocalGet(seconds), I::I64Const(MINUTE), I::I64RemS], whole_seconds);
 			f.instruction(&I::Else);
 			// `1.5 seconds`, `0 seconds` for no duration at all
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(nanos),
-					I::I64Const(0),
-					I::I64Ne,
-					I::LocalGet(position),
-					I::LocalGet(start),
-					I::I32Eq,
-					I::I32Or,
-					I::If(BlockType::Empty),
-					I::LocalGet(nanos),
-					I::I64Const(0),
-					I::I64LtS,
-					I::If(BlockType::Empty),
-				],
-			);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(nanos), I::I64Const(0), I::I64Ne, I::LocalGet(position), I::LocalGet(start), I::I32Eq,
+				I::I32Or, I::If(BlockType::Empty),
+					I::LocalGet(nanos), I::I64Const(0), I::I64LtS, I::If(BlockType::Empty),
+			]);
 			put(f, b'-');
 			Self::emit_list(f, &[I::I64Const(0), I::LocalGet(nanos), I::I64Sub, I::LocalSet(nanos), I::End]);
 			number(f, &[I::LocalGet(nanos), I::I64Const(SECOND as i64), I::I64DivU]);
@@ -751,16 +542,11 @@ impl WasmGcEmitter {
 	/// time_of(info, position) of two constants: the node itself
 	pub(in crate::wasm_emitter) fn emit_time_constant(&self, func: &mut Function, info: i64, position: i64) {
 		let (node, i64_box) = (self.type_manager.node_type, self.type_manager.i64_box_type);
-		Self::emit_list(
-			func,
-			&[
-				I::I64Const((info << KIND_BITS) | Kind::Time as i64),
-				I::I64Const(position),
-				I::StructNew(i64_box),
-				I::RefNull(HeapType::Concrete(node)),
-				I::StructNew(node),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::I64Const((info << KIND_BITS) | Kind::Time as i64), I::I64Const(position), I::StructNew(i64_box),
+			I::RefNull(HeapType::Concrete(node)), I::StructNew(node),
+		]);
 	}
 
 	/// Two times in node_order, whose locals `kinds` hold their kinds: the earlier one first; only the same form compares
@@ -881,32 +667,14 @@ impl WasmGcEmitter {
 		quotient: u32,
 		remainder: u32,
 	) {
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(dividend),
-				I::I64Const(divisor),
-				I::I64DivS,
-				I::LocalSet(quotient),
-				I::LocalGet(dividend),
-				I::LocalGet(quotient),
-				I::I64Const(divisor),
-				I::I64Mul,
-				I::I64Sub,
-				I::LocalTee(remainder),
-				I::I64Const(0),
-				I::I64LtS,
-				I::If(BlockType::Empty),
-				I::LocalGet(remainder),
-				I::I64Const(divisor),
-				I::I64Add,
-				I::LocalSet(remainder),
-				I::LocalGet(quotient),
-				I::I64Const(1),
-				I::I64Sub,
-				I::LocalSet(quotient),
-				I::End,
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(dividend), I::I64Const(divisor), I::I64DivS, I::LocalSet(quotient),
+			I::LocalGet(dividend), I::LocalGet(quotient), I::I64Const(divisor), I::I64Mul, I::I64Sub,
+			I::LocalTee(remainder), I::I64Const(0), I::I64LtS, I::If(BlockType::Empty),
+				I::LocalGet(remainder), I::I64Const(divisor), I::I64Add, I::LocalSet(remainder),
+				I::LocalGet(quotient), I::I64Const(1), I::I64Sub, I::LocalSet(quotient),
+			I::End,
+		]);
 	}
 }

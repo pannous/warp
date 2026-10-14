@@ -67,7 +67,7 @@ pub(in crate::wasm_emitter) const NOT_JOINABLE: &str = "not_a_joinable_item";
 /// `x.keys`, `x.values`, `x.entries` of a value that is no map (card keys-value)
 pub(super) const NOT_A_MAP: &str = "not_a_map";
 
-pub const RUNTIME_ERRORS: [&str; 31] = [
+pub const RUNTIME_ERRORS: [&str; 32] = [
 	"index_out_of_range",
 	INDEX_NOT_INTEGRAL,
 	"invalid_number",
@@ -99,6 +99,7 @@ pub const RUNTIME_ERRORS: [&str; 31] = [
 	super::super::super::numbers::uncertain::INTERVAL_AND_GAUSSIAN,
 	NOT_A_MAP,
 	super::super::super::numbers::casts::INVALID_CODE_POINT,
+	super::super::super::numbers::float_text::NOT_FINITE,
 ];
 
 impl WasmGcEmitter {
@@ -157,18 +158,12 @@ impl WasmGcEmitter {
 			return; // without the big-int runtime an Int is always a plain i64
 		}
 		let fixnum_offset = super::super::super::numbers::big_int::FIXNUM_OFFSET;
-		Self::emit_list(
-			func,
-			&[
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(local), I::I64Const(fixnum_offset), I::I64Add, I::I64Const(0), I::I64LtS,
+			I::If(BlockType::Empty),
 				I::LocalGet(local),
-				I::I64Const(fixnum_offset),
-				I::I64Add,
-				I::I64Const(0),
-				I::I64LtS,
-				I::If(BlockType::Empty),
-				I::LocalGet(local),
-			],
-		);
+		]);
 		self.call(func, "is_ratio");
 		self.emit_fail_if(func, error);
 		func.instruction(&I::End);

@@ -628,10 +628,7 @@ impl WasmGcEmitter {
 		if self.get_type(subject) != crate::Kind::Symbol || crate::type_tests::type_matches(SYMBOL_WORD, spec) {
 			return None;
 		}
-		let names_type =
-			|name: &str| Node::Key(Box::new(subject.clone()), Op::Eq, Box::new(Node::Symbol(name.to_string())));
-		let tests = crate::type_tests::builtin_types_matching(spec).into_iter().map(names_type);
-		Some(tests.reduce(|either, test| Node::Key(Box::new(either), Op::Or, Box::new(test))).unwrap_or(Node::False))
+		Some(names_covered_type(subject, spec))
 	}
 
 	/// `is_type(x, "spec")` as a Node: its 1 or 0
@@ -737,6 +734,15 @@ impl WasmGcEmitter {
 					Separator::None,
 				);
 				self.emit_numeric_value(func, &instance_test);
+			}
+			// `now is instant`: a built-in type sharing its run-time kind with others (the forms of a time) by `type(x)`'s name
+			None if unknown && crate::type_tests::is_builtin_type_word(spec) => {
+				let type_value = Node::List(
+					vec![Node::Symbol(crate::type_tests::TYPE_WORD.to_string()), subject.clone()],
+					Bracket::Round,
+					Separator::None,
+				);
+				self.emit_numeric_value(func, &names_covered_type(&type_value, spec));
 			}
 			// `x = 2.5; x is int`: an exact ratio is an Int at run time, only is_ratio tells it from a whole number
 			None if self.whole_only_at_run_time(subject, spec) => {
@@ -856,25 +862,12 @@ impl WasmGcEmitter {
 			"round_half_up" => {
 				let bits = self.scratch(0);
 				self.emit_float_value(func, arg);
-				Self::emit_list(
-					func,
-					&[
-						I::I64ReinterpretF64,
-						I::LocalTee(bits),
-						I::F64ReinterpretI64,
-						I::F64Floor,
-						I::LocalGet(bits),
-						I::F64ReinterpretI64,
-						I::LocalGet(bits),
-						I::F64ReinterpretI64,
-						I::F64Floor,
-						I::F64Sub,
-						I::F64Const(0.5f64.into()),
-						I::F64Ge,
-						I::F64ConvertI32U,
-						I::F64Add,
-					],
-				);
+				#[rustfmt::skip]
+				Self::emit_list(func, &[
+					I::I64ReinterpretF64, I::LocalTee(bits), I::F64ReinterpretI64, I::F64Floor, I::LocalGet(bits),
+					I::F64ReinterpretI64, I::LocalGet(bits), I::F64ReinterpretI64, I::F64Floor, I::F64Sub,
+					I::F64Const(0.5f64.into()), I::F64Ge, I::F64ConvertI32U, I::F64Add,
+				]);
 				self.emit_integral_float_as_int(func);
 				true
 			}
@@ -902,16 +895,11 @@ impl WasmGcEmitter {
 		let instance_local = self.node_scratch();
 		func.instruction(&I::LocalSet(instance_local));
 		self.emit_field(func, instance_local, 0);
-		Self::emit_list(
-			func,
-			&[
-				I::I64Const(crate::type_kinds::KIND_MASK),
-				I::I64And,
-				I::I64Const(crate::Kind::Key as i64),
-				I::I64Eq,
-				I::If(BlockType::Result(ValType::I64)),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::I64Const(crate::type_kinds::KIND_MASK), I::I64And, I::I64Const(crate::Kind::Key as i64), I::I64Eq,
+			I::If(BlockType::Result(ValType::I64)),
+		]);
 		self.emit_field(func, instance_local, 1);
 		func.instruction(&I::RefCastNonNull(HeapType::Concrete(node_type)));
 		let (pointer, length) = self.allocate_string(type_name);
@@ -938,33 +926,17 @@ impl WasmGcEmitter {
 		let (quotient, divisor_bits) = (self.scratch(0), self.scratch(1));
 		self.emit_float_value(func, dividend);
 		self.emit_float_value(func, divisor);
-		Self::emit_list(
-			func,
-			&[
-				I::I64ReinterpretF64,
-				I::LocalTee(divisor_bits),
-				I::F64ReinterpretI64,
-				I::F64Div,
-				I::I64ReinterpretF64,
-				I::LocalSet(quotient),
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::I64ReinterpretF64, I::LocalTee(divisor_bits), I::F64ReinterpretI64, I::F64Div, I::I64ReinterpretF64,
+			I::LocalSet(quotient),
+		]);
 		// a negative divisor rounds the quotient up, a positive one down
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(quotient),
-				I::F64ReinterpretI64,
-				I::F64Ceil,
-				I::LocalGet(quotient),
-				I::F64ReinterpretI64,
-				I::F64Floor,
-				I::LocalGet(divisor_bits),
-				I::I64Const(0),
-				I::I64LtS,
-				I::Select,
-			],
-		);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(quotient), I::F64ReinterpretI64, I::F64Ceil, I::LocalGet(quotient), I::F64ReinterpretI64,
+			I::F64Floor, I::LocalGet(divisor_bits), I::I64Const(0), I::I64LtS, I::Select,
+		]);
 		self.emit_truncating_cast(func);
 	}
 
@@ -1125,7 +1097,9 @@ impl WasmGcEmitter {
 			let assigned = crate::errors::diagnostic::written_text(assigned?);
 			let dropped =
 				crate::errors::diagnostic::written_text(&Node::List(atoms.to_vec(), Bracket::None, Separator::Space));
-			let message = format!("`{dropped}` after `{assigned}` does nothing; join it to the value with an operator, or start a new statement");
+			let message = format!(
+				"`{dropped}` after `{assigned}` does nothing; join it to the value with an operator, or start a new statement"
+			);
 			return Some(crate::errors::diagnostic::Diagnostic::at(&written, message).remembered());
 		};
 		let diagnostic = match crate::modules::std_module_defining(&name) {
@@ -1546,4 +1520,15 @@ fn names_whole_numbers_only(spec: &str) -> bool {
 	let int = crate::Kind::Int.to_string();
 	crate::type_tests::type_matches(&int, spec)
 		&& !crate::type_tests::type_matches(crate::analyzer::RATIONAL_WORD, spec)
+}
+
+/// `t == int or t == rational or …`: the type value t names one of the built-in types spec covers
+fn names_covered_type(type_value: &Node, spec: &str) -> Node {
+	let names_type =
+		|name: &str| Node::Key(Box::new(type_value.clone()), Op::Eq, Box::new(Node::Symbol(name.to_string())));
+	crate::type_tests::builtin_types_matching(spec)
+		.into_iter()
+		.map(names_type)
+		.reduce(|either, test| Node::Key(Box::new(either), Op::Or, Box::new(test)))
+		.unwrap_or(Node::False)
 }

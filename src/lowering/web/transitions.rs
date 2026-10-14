@@ -13,9 +13,9 @@ use super::nodes::{key, phrase_words};
 use crate::element_events::with_element_items;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::STYLE_WORD;
 
 const TRANSITION: &str = "transition";
-const STYLE: &str = "style";
 const STARTING_STYLE: &str = "starting-style";
 pub const STARTING_STYLE_ATTRIBUTE: &str = "data-warp-starting-style";
 const ANIMATION: &str = "animation";
@@ -56,7 +56,7 @@ const DEFAULT_DURATION: &str = "200ms";
 pub fn lower(node: Node) -> Node {
 	let node = node.map_children(lower);
 	// `style: { transition: "opacity 1s" }` is an inline style, its transition the CSS property
-	if node.drop_meta().name() == STYLE {
+	if node.drop_meta().name() == STYLE_WORD {
 		return node;
 	}
 	with_element_items(node, |items| {
@@ -219,10 +219,11 @@ fn advise_css(spec: &str, css: &str, starting: &[(&str, &str)], kind: &str) {
 
 /// The CSS transition, the style at `at`, joins the element's own inline style when it has one: its declarations or text
 fn with_style_declarations(mut items: Vec<Node>, at: usize, added: &[(&str, String)]) -> Vec<Node> {
-	let is_style = |item: &Node| matches!(item.drop_meta(), Node::Key(name, Op::Colon, _) if name.is_symbol(STYLE));
+	let is_style =
+		|item: &Node| matches!(item.drop_meta(), Node::Key(name, Op::Colon, _) if name.is_symbol(STYLE_WORD));
 	let pairs: Vec<(&str, &str)> = added.iter().map(|(property, spec)| (*property, spec.as_str())).collect();
 	let Some(own) = items.iter().position(is_style) else {
-		items.insert(at, css_pair(STYLE, declarations(&pairs)));
+		items.insert(at, css_pair(STYLE_WORD, declarations(&pairs)));
 		return items;
 	};
 	let Node::Key(_, _, value) = items[own].drop_meta() else { unreachable!("a style") };
@@ -236,6 +237,6 @@ fn with_style_declarations(mut items: Vec<Node>, at: usize, added: &[(&str, Stri
 		}
 		one => Node::List([vec![one.clone()], added].concat(), Bracket::Curly, Separator::Space), // `{ color: red }`, one declaration
 	};
-	items[own] = css_pair(STYLE, joined);
+	items[own] = css_pair(STYLE_WORD, joined);
 	items
 }
