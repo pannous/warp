@@ -12,6 +12,8 @@
 //! become linear ones (picked_linear).
 //! Shared values (P106): `shared done = false`, `shared n = 0`, `shared x = 0.5` are one-cell arrays: a read of `n` is
 //! `shared_get(n, 1)`, `n = v` is `shared_set(n, 1, v)`, `n += v` is `shared_add(n, 1, v)`; a boolean is the Int 1 or 0.
+//! Kept as built (user decision cleanup-cuts): `shared` for any atomic variable, not only Int and float arrays and
+//! one-cell values, is the general form for later.
 
 use super::nodes::{call, key};
 use crate::node::{symbol, Bracket, Node, Separator};
