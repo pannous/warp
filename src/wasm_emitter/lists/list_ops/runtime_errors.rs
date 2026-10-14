@@ -67,7 +67,7 @@ pub(in crate::wasm_emitter) const NOT_JOINABLE: &str = "not_a_joinable_item";
 /// `x.keys`, `x.values`, `x.entries` of a value that is no map (card keys-value)
 pub(super) const NOT_A_MAP: &str = "not_a_map";
 
-pub const RUNTIME_ERRORS: [&str; 31] = [
+pub const RUNTIME_ERRORS: [&str; 32] = [
 	"index_out_of_range",
 	INDEX_NOT_INTEGRAL,
 	"invalid_number",
@@ -99,6 +99,7 @@ pub const RUNTIME_ERRORS: [&str; 31] = [
 	super::super::super::numbers::uncertain::INTERVAL_AND_GAUSSIAN,
 	NOT_A_MAP,
 	super::super::super::numbers::casts::INVALID_CODE_POINT,
+	super::super::super::numbers::float_text::NOT_FINITE,
 ];
 
 impl WasmGcEmitter {
