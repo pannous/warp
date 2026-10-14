@@ -107,10 +107,7 @@ fn without_components(node: Node) -> Node {
 			bracket,
 			separator,
 		),
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(without_components(*node)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(without_components),
 		other => other,
 	}
 }

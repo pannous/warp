@@ -229,10 +229,7 @@ fn with_case_keys(item: Node, patterns: &Patterns) -> Node {
 			bracket,
 			separator,
 		),
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_case_keys(*node, patterns)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_case_keys(node, patterns)),
 		other => other,
 	}
 }

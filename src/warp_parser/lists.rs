@@ -476,10 +476,7 @@ impl WarpParser {
 				let type_node = Self::symbol_to_type(*value);
 				Node::Key(name, op, Box::new(type_node))
 			}
-			Node::Meta { node, data } => Node::Meta {
-				node: Box::new(Self::transform_fields_to_types(*node)),
-				data,
-			},
+			meta @ Node::Meta { .. } => meta.under_meta(Self::transform_fields_to_types),
 			other => other,
 		}
 	}
@@ -491,10 +488,7 @@ impl WarpParser {
 				name: Box::new(Node::Symbol(s)),
 				body: Box::new(Empty),
 			},
-			Node::Meta { node, data } => Node::Meta {
-				node: Box::new(Self::symbol_to_type(*node)),
-				data,
-			},
+			meta @ Node::Meta { .. } => meta.under_meta(Self::symbol_to_type),
 			other => other,
 		}
 	}
@@ -564,10 +558,7 @@ fn with_type_phrases(items: Vec<Node>) -> Vec<Node> {
 /// `x => x * 2`. A typed lambda `{x: int => x * 2}` or `{p: Person => p.name}` stays one.
 fn field_holding_lambda(item: Node) -> Node {
 	match item {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(field_holding_lambda(*node)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(field_holding_lambda),
 		Node::Key(head, Op::FatArrow, body) => match head.drop_meta() {
 			Node::Key(key, Op::Colon, parameter)
 				if matches!(key.drop_meta(), Symbol(_)) && is_parameter_word(parameter) =>
@@ -629,10 +620,7 @@ fn is_block(node: &Node) -> bool {
 /// `f(xs) := xs.map { it*10 }` is `f(xs) := (xs.map {it*10})`: the block belongs to the method call, not to the statement
 fn with_trailing_block(assignment: Node, block: Node) -> Node {
 	match assignment {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_trailing_block(*node, block)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_trailing_block(node, block)),
 		Node::Key(target, op, value) if assigned_method_call(&value) => {
 			Node::Key(target, op, Box::new(with_trailing_block(*value, block)))
 		}
@@ -649,10 +637,7 @@ fn with_trailing_block(assignment: Node, block: Node) -> Node {
 /// literal and a walk word follows, or it already took one and this is its argument
 fn with_applied_word(assignment: Node, item: Node) -> Node {
 	match assignment {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_applied_word(*node, item)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_applied_word(node, item)),
 		Node::Key(target, op, value) => {
 			let applied = match *value {
 				Node::List(mut items, Bracket::None, Separator::Space) => {

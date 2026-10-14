@@ -1115,7 +1115,10 @@ fn routes_in(items: &[Node]) -> Vec<Route> {
 	words
 		.chunks(3)
 		.filter_map(|route| match route {
-			[method, path, body] if METHODS.contains(&method.drop_meta().name().as_str()) => {
+			// the path is text: `get cents of 3` is the phrase call `get cents of`, no route
+			[method, path, body]
+				if METHODS.contains(&method.drop_meta().name().as_str()) && path.text_value().is_some() =>
+			{
 				Some((method.drop_meta().name().to_uppercase(), path.clone(), body.clone()))
 			}
 			_ => None,

@@ -130,6 +130,16 @@ fn node_to_i32(node: &Node) -> i32 {
 	}
 }
 
+/// The argument of `warp <command> <argument>`; an assigned command word (`warp 'lower = "abc"; lower'`) starts a
+/// program instead (card top-level)
+fn command_argument<'a>(arg_string: &'a str, command: &str) -> Option<&'a str> {
+	let argument = arg_string.strip_prefix(command.trim_end())?.strip_prefix(' ')?;
+	let assigned = ["=", ":="]
+		.iter()
+		.any(|operator| argument.trim_start().starts_with(operator));
+	(!assigned).then_some(argument)
+}
+
 #[cfg(not(test))]
 fn main() {
 	let mut args: Vec<String> = env::args().collect();
@@ -389,7 +399,7 @@ fn run_command(args: &[String]) {
 		show_in_webview(&args[if check { 3 } else { 2 }..].join(" "), check);
 	} else if is_html_file(&arg_string) {
 		show_in_webview(&arg_string, false);
-	} else if let Some(target) = arg_string.strip_prefix("verify ") {
+	} else if let Some(target) = command_argument(&arg_string, "verify") {
 		let code = source_of(target);
 		let reports = law::verify(&code);
 		reports.iter().for_each(|report| println!("{}", report));
@@ -405,7 +415,7 @@ fn run_command(args: &[String]) {
 			}
 		);
 		std::process::exit((!all_proofs_check) as i32);
-	} else if let Some(target) = arg_string.strip_prefix("types ") {
+	} else if let Some(target) = command_argument(&arg_string, "types") {
 		println!("{}", law::type_model::report(&source_of(target)));
 	} else if args[1] == TOOL_COMMAND && args.len() >= 3 {
 		let arguments: Vec<&str> = args[3..].iter().map(String::as_str).collect();
@@ -459,11 +469,8 @@ fn run_command(args: &[String]) {
 		if let Err(failure) = served {
 			fail(failure);
 		}
-	} else if let Some(target) = arg_string
-		.strip_prefix("data ")
-		.filter(|target| !target.trim_start().starts_with('='))
-	{
-		// `warp data file.warp` prints the file as data; `warp 'data = [3 1 2]; …'` is a program
+	} else if let Some(target) = command_argument(&arg_string, "data") {
+		// `warp data file.warp` prints the file as data
 		let text = source_of(target);
 		println!("{}", warp_parser::parse_data(&text).serialize());
 	} else if COMPILE_COMMANDS
@@ -556,16 +563,15 @@ fn run_command(args: &[String]) {
 	} else if matches!(arg_string.as_str(), "home" | "wiki" | "docs" | "documentation") {
 		println!("Warp documentation can be found at https://github.com/pannous/warp/wiki");
 		warp::web::dev_server::open_in_browser("https://github.com/pannous/warp/");
-	} else if arg_string.starts_with("eval ") {
-		let code = arg_string.strip_prefix("eval ").unwrap_or("");
+	} else if let Some(code) = command_argument(&arg_string, "eval") {
 		diagnostic::show_lines_of(code);
 		show_and_fail_on_error(&eval(code), RESULT_MARK);
-	} else if let Some(code) = arg_string.strip_prefix("lower ") {
+	} else if let Some(code) = command_argument(&arg_string, "lower") {
 		match wasm_emitter::lower(code) {
 			Ok(lowered) => println!("{}", lowered.serialize()),
 			Err(final_value) => println!("no module needed: {}", final_value.serialize()),
 		}
-	} else if let Some(code) = arg_string.strip_prefix("parse ") {
+	} else if let Some(code) = command_argument(&arg_string, "parse") {
 		println!("{}", structure(&warp_parser::parse(code)));
 	} else if matches!(arg_string.as_str(), "repl" | "console" | "start" | "run") {
 		console();
@@ -582,7 +588,7 @@ fn run_command(args: &[String]) {
 		println!("detailed documentation can be found at https://github.com/pannous/warp/wiki");
 	} else if arg_string == HELP_MARKDOWN {
 		print!("{}", warp::std_docs::standard_library_markdown());
-	} else if let Some(module) = arg_string.strip_prefix(HELP_PREFIX) {
+	} else if let Some(module) = command_argument(&arg_string, HELP_PREFIX) {
 		match warp::std_docs::module_help(module) {
 			Some(help) => println!("{help}"),
 			None => fail(format!(

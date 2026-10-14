@@ -331,10 +331,7 @@ impl WasmGcEmitter {
 					f.instruction(&I::I32Eqz);
 					Self::return_if(f, 0);
 					Self::field(f, local, node, 0);
-					Self::emit_list(
-						f,
-						&[I::I64Const(KIND_MASK), I::I64And, I::I64Const(kind as i64), I::I64Ne],
-					);
+					Self::emit_kind_test(f, kind as i64, I::I64Ne);
 					Self::return_if(f, 0);
 				};
 				is_node_of_kind(f, entry, Kind::Key);
@@ -380,16 +377,8 @@ impl WasmGcEmitter {
 		Self::test(f, cell, HeapType::Concrete(node));
 		f.instruction(&I::If(BlockType::Empty));
 		Self::field(f, cell, node, 0);
-		Self::emit_list(
-			f,
-			&[
-				I::I64Const(KIND_MASK),
-				I::I64And,
-				I::I64Const(Kind::List as i64),
-				I::I64Eq,
-				I::If(BlockType::Empty),
-			],
-		);
+		Self::emit_kind_test(f, Kind::List as i64, I::I64Eq);
+		Self::emit_list(f, &[I::If(BlockType::Empty)]);
 		Self::field(f, cell, node, 1);
 		self.call(f, IS_META_ENTRY);
 		f.instruction(&I::If(BlockType::Empty));

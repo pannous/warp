@@ -3,7 +3,7 @@
 //! (Checker.lean: names, charged names, functions, statements in source order); the model elaborates and checks it
 //! and answers `ok <type>` or `rejected`. Warp's own verdict is whether `pipeline::compile` accepts the program.
 //! Contract: W0 rejects ⇒ warp rejects; every exception is a known hole with a card.
-use super::lean::{lean_executable, run_with_timeout};
+use super::lean::{lean_executable, run_with_timeout, LEAN_TIMEOUT};
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -26,6 +26,10 @@ mod used_modules;
 pub const MODEL_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lean/WarpTypes");
 /// `lake build` of one project must not run twice at once
 static MODEL_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+/// The first `lake build` of the model takes minutes (card types-first-run); later ones check it again in seconds
+const MODEL_BUILD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(900);
+/// What `lake build` leaves once the model is built
+const MODEL_BUILD_OUTPUT: &str = ".lake/build";
 const ACCEPTED_PREFIX: &str = "ok ";
 const REJECTED: &str = "rejected";
 const CONSTANT_KEYWORD: &str = "const";

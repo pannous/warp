@@ -287,10 +287,7 @@ fn module_units(bytes: &[u8]) -> Option<ResultUnits> {
 /// reads back as that entry)
 fn with_field_units(object: Node, fields: &[(String, Vec<Factor>)]) -> Node {
 	match object {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_field_units(*node, fields)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_field_units(node, fields)),
 		// an instance of a class with unit fields, the tag `Run{distance:3000}`
 		Node::Key(class, Op::None, body) => Node::Key(class, Op::None, Box::new(with_field_units(*body, fields))),
 		Node::List(entries, bracket, separator) => Node::List(
@@ -515,7 +512,8 @@ fn function_definition(node: &Node) -> Option<(String, Definition)> {
 		.iter()
 		.map(|parameter| match parameter.drop_meta() {
 			Node::Symbol(name) => Some(name.clone()),
-			Node::Key(name, Op::Colon, _) => Some(name.name()),
+			// `t = 0.05`: a call giving every argument specialises it; one leaving t out is no specialisation
+			Node::Key(name, Op::Colon | Op::Assign, _) => Some(name.name()),
 			_ => None,
 		})
 		.collect::<Option<Vec<_>>>()?;

@@ -38,3 +38,9 @@ fn an_alias_of_an_alias_calls_the_function() {
 	is!("doubled(x) := x*2; g := &doubled; h := g; h 4", 8);
 	is!("doubled(x) := x*2; g := doubled; h := g; h(4) + g 1", 10);
 }
+
+// card partial-hole-fix: an unused definition leaving an argument out gets the hole fix too
+#[test]
+fn an_unused_partial_definition_names_its_hole() {
+	fails_with("add(a, b) := a + b; inc := add 1", "fix: inc := add(1, _)");
+}

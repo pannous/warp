@@ -4,7 +4,7 @@
 //! Offsets are bytes, not characters: code that scans UTF-8 itself (a parser, a binary index) needs them.
 
 use crate::node::Node;
-use crate::type_kinds::{Kind, KIND_MASK};
+use crate::type_kinds::Kind;
 use crate::wasm_emitter::layout::BYTE;
 use crate::wasm_emitter::{WasmGcEmitter, RAN_WITHOUT_ERROR};
 use std::collections::HashSet;
@@ -491,16 +491,8 @@ impl WasmGcEmitter {
 					struct_type_index: self.type_manager.node_type,
 					field_index: 0,
 				});
-				Self::emit_list(
-					func,
-					&[
-						I::I64Const(KIND_MASK),
-						I::I64And,
-						I::I64Const(Kind::Error as i64),
-						I::I64Eq,
-						I::I64ExtendI32U,
-					],
-				);
+				Self::emit_kind_test(func, Kind::Error as i64, I::I64Eq);
+				Self::emit_list(func, &[I::I64ExtendI32U]);
 			}
 			(RAN_WITHOUT_ERROR, [statement]) => self.emit_ran_without_error(func, statement),
 			(crate::uncertain::CERTAINLY | crate::uncertain::POSSIBLY, [comparison]) => {
@@ -641,16 +633,8 @@ impl WasmGcEmitter {
 		self.emit_node_instructions(func, operand);
 		func.instruction(&I::LocalSet(held));
 		self.emit_field(func, held, 0);
-		Self::emit_list(
-			func,
-			&[
-				I::I64Const(KIND_MASK),
-				I::I64And,
-				I::I64Const(Kind::Error as i64),
-				I::I64Eq,
-				I::If(BlockType::Result(node_ref)),
-			],
-		);
+		Self::emit_kind_test(func, Kind::Error as i64, I::I64Eq);
+		Self::emit_list(func, &[I::If(BlockType::Result(node_ref))]);
 		Self::emit_list(
 			func,
 			&[
