@@ -167,6 +167,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	// `li{ transition: fade 200ms }`: words as data, the attribute data-warp-transition (transitions.rs), before any pass
 	// reads fade as a variable
 	crate::lowering::transitions::lower,
+	// `xs.insert 4` is `xs.insert(4)` (member_phrases.rs), after markup_tags read `p.note "hi"` as an element
+	crate::lowering::member_phrases::lower,
 	// `dir(time)`: the names of the standard module (introspection.rs), before any pass reads time as a value
 	crate::lowering::introspection::lower,
 	// `f.effects`, `e.listeners`: the reflection words' dot forms (reflection.rs), before any pass reads them as fields
