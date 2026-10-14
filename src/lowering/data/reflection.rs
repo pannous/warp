@@ -38,6 +38,8 @@ const SIGNATURE_WORD: &str = "signature";
 const BODY_WORD: &str = "body";
 /// `f.dump`: the whole definition as warp text, to copy and paste (card reflection-area)
 const DUMP_WORD: &str = "dump";
+/// `f.doc`: the function's doc string or the comment above it, empty without (doc_strings.rs)
+const DOC_WORD: &str = "doc";
 /// What `dir(f)` lists of a function: the words reflection answers for it
 const FUNCTION_WORDS: [&str; 4] = [PARAMS_WORDS[0], SIGNATURE_WORD, BODY_WORD, EFFECTS_WORD];
 /// `dir(sqrt)`: a library word has no body to show
@@ -55,6 +57,7 @@ pub fn lower(node: Node) -> Node {
 		SIGNATURE_WORD,
 		BODY_WORD,
 		DUMP_WORD,
+		DOC_WORD,
 		PARAMS_WORDS[0],
 		PARAMS_WORDS[1],
 		DIR_WORD,
@@ -142,6 +145,7 @@ fn as_reflection_words(node: Node, functions: &Functions, defined: &HashSet<Stri
 				)),
 				(SIGNATURE_WORD, Some(function)) => Some(Node::Text(signature(function))),
 				(DUMP_WORD, Some(function)) => Some(Node::Text(definition(function))),
+				(DOC_WORD, Some(function)) => Some(Node::Text(function.doc.clone().unwrap_or_default())),
 				(BODY_WORD, Some(function)) => Some(Node::List(
 					vec![symbol(crate::blocks::DATA_WORD), function.body.as_ref().clone()],
 					Bracket::None,
@@ -336,9 +340,13 @@ pub(super) fn definition(function: &crate::compiler::context::UserFunctionDef) -
 	)
 }
 
-/// `help(area)`: `area(width:int, height:int) -> int`
+/// `help(area)`: `area(width:int, height:int) -> int`, its doc on the lines below
 pub(super) fn help_text(function: &crate::compiler::context::UserFunctionDef) -> String {
-	format!("{}{}", function.name, signature(function))
+	let head = format!("{}{}", function.name, signature(function));
+	match &function.doc {
+		Some(doc) => format!("{head}\n{doc}"),
+		None => head,
+	}
 }
 
 /// `(a:int, b:int) -> int`: each parameter with its declared or demanded type, the result's kind when known

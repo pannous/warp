@@ -905,6 +905,7 @@ pub fn register_closure_calls(context: &mut Context, program: &Node) {
 				return_kind: Kind::Data,
 				tuple_kinds: vec![],
 				func_index: None,
+				doc: None,
 			};
 			context.user_functions.insert(name.clone(), reader);
 		}
@@ -929,6 +930,7 @@ pub fn register_closure_calls(context: &mut Context, program: &Node) {
 				return_kind: Kind::Data,
 				tuple_kinds: vec![],
 				func_index: None,
+				doc: None,
 			},
 		);
 	}

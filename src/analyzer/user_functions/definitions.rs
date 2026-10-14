@@ -81,7 +81,7 @@ pub(in crate::analyzer) fn extract_user_functions_in(ctx: &mut Context, node: &N
 }
 
 /// Between an enclosing function and a nested `def` lifted out of its body: `outer·inner`
-pub(in crate::analyzer) const NESTED_DEF_SEPARATOR: &str = "·";
+pub(crate) const NESTED_DEF_SEPARATOR: &str = "·";
 
 pub(crate) fn qualify_nested_name(enclosing: Option<&str>, name: &str) -> String {
 	match enclosing {
