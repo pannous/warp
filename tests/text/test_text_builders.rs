@@ -30,8 +30,5 @@ fn a_text_grown_in_its_room_leaves_earlier_values() {
 		&format!("{built}; c = a; a += \"z\"; d = c + \"w\"; c + \"|\" + a[100] + d[100]"),
 		("x".repeat(100) + "|zw").as_str()
 	);
-	is!(
-		&format!("{built}; s = a[90..]; s += \"q\"; a += \"r\"; s + a[100]"),
-		("x".repeat(10) + "qr").as_str()
-	);
+	is!(&format!("{built}; s = a[90..]; s += \"q\"; a += \"r\"; s + a[100]"), ("x".repeat(10) + "qr").as_str());
 }

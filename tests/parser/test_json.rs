@@ -35,19 +35,11 @@ fn test_implicit_html_structure() {
 	// html{ ul{ li:"hi" li:"ok"} colors=[red, green,blue]}
 	let html = Node::List(
 		vec![
-			Node::List(
-				vec![Node::keys("li", "hi"), Node::keys("li", "ok")],
-				Bracket::Curly,
-				Separator::None,
-			),
+			Node::List(vec![Node::keys("li", "hi"), Node::keys("li", "ok")], Bracket::Curly, Separator::None),
 			Node::Key(
 				Box::new(Symbol("colors".to_string())),
 				Op::Colon,
-				Box::new(Node::list(vec![
-					Node::symbol("red"),
-					Node::symbol("green"),
-					Node::symbol("blue"),
-				])),
+				Box::new(Node::list(vec![Node::symbol("red"), Node::symbol("green"), Node::symbol("blue")])),
 			),
 		],
 		Bracket::Curly,
@@ -98,12 +90,7 @@ fn test_simple_values() {
 
 #[test]
 fn test_complex_node_json() {
-	let n = Node::list(vec![
-		Node::int(1),
-		Node::int(2),
-		Node::text("hello"),
-		Node::keys("key", "value"),
-	]);
+	let n = Node::list(vec![Node::int(1), Node::int(2), Node::text("hello"), Node::keys("key", "value")]);
 
 	let json = n.to_json().unwrap();
 	println!("Complex JSON:\n{}", json);
@@ -117,10 +104,7 @@ fn test_complex_node_json() {
 
 #[test]
 fn test_nested_node_json() {
-	let n = Node::key(
-		"user",
-		Node::list(vec![Node::keys("name", "Alice"), Node::keys("age", "30")]),
-	);
+	let n = Node::key("user", Node::list(vec![Node::keys("name", "Alice"), Node::keys("age", "30")]));
 
 	let json = n.to_json().unwrap();
 	println!("Nested JSON:\n{}", json);
@@ -132,11 +116,7 @@ fn test_nested_node_json() {
 
 #[test]
 fn test_block_node_json() {
-	let n = Node::List(
-		vec![Node::int(1), Node::int(2), Node::int(3)],
-		Bracket::Curly,
-		Separator::None,
-	);
+	let n = Node::List(vec![Node::int(1), Node::int(2), Node::int(3)], Bracket::Curly, Separator::None);
 
 	let json = n.to_json().unwrap();
 	println!("Block JSON:\n{}", json);
@@ -215,11 +195,7 @@ fn test_node_eq_json_lists() {
 	assert_eq!(json!([42, "hello", true]), mixed);
 
 	// Nested lists
-	let nested = Node::list(vec![
-		Node::int(1),
-		Node::list(vec![Node::int(2), Node::int(3)]),
-		Node::int(4),
-	]);
+	let nested = Node::list(vec![Node::int(1), Node::list(vec![Node::int(2), Node::int(3)]), Node::int(4)]);
 	assert_eq!(nested, json!([1, [2, 3], 4]));
 	assert_eq!(json!([1, [2, 3], 4]), nested);
 }
@@ -245,11 +221,8 @@ fn test_node_eq_json_keys() {
 #[test]
 fn test_node_eq_json_curly_lists() {
 	// Curly list with keys → object
-	let obj = Node::List(
-		vec![Node::keys("name", "Bob"), Node::key("age", Node::int(25))],
-		Bracket::Curly,
-		Separator::None,
-	);
+	let obj =
+		Node::List(vec![Node::keys("name", "Bob"), Node::key("age", Node::int(25))], Bracket::Curly, Separator::None);
 	assert_eq!(obj, json!({"name": "Bob", "age": 25}));
 	assert_eq!(json!({"name": "Bob", "age": 25}), obj);
 
@@ -262,19 +235,13 @@ fn test_node_eq_json_curly_lists() {
 #[test]
 fn test_node_eq_json_meta() {
 	// Meta nodes should unwrap for comparison
-	let meta_node = Node::Meta {
-		node: Box::new(Node::int(42)),
-		data: Box::new(Node::text("some comment")),
-	};
+	let meta_node = Node::Meta { node: Box::new(Node::int(42)), data: Box::new(Node::text("some comment")) };
 	assert_eq!(meta_node, json!(42));
 	assert_eq!(json!(42), meta_node);
 
 	// Nested meta
 	let nested_meta = Node::Meta {
-		node: Box::new(Node::Meta {
-			node: Box::new(Node::text("hello")),
-			data: Box::new(Node::Empty),
-		}),
+		node: Box::new(Node::Meta { node: Box::new(Node::text("hello")), data: Box::new(Node::Empty) }),
 		data: Box::new(Node::Empty),
 	};
 	assert_eq!(nested_meta, json!("hello"));

@@ -28,15 +28,9 @@ fn a_number_is_found_in_a_map() {
 
 #[test]
 fn a_global_map_is_set_in_a_function() {
-	is!(
-		"m = {}; f(k, v) := { global m; m[k] = v }; f(9, 1); f(10, 2); m[9] + m[10]",
-		3
-	);
+	is!("m = {}; f(k, v) := { global m; m[k] = v }; f(9, 1); f(10, 2); m[9] + m[10]", 3);
 	is!("m = {}; f(k) := { global m; m[k] }; m[3] = 7; f(3)", 7);
-	is!(
-		"m = {}; f(k) := { global m; if k in m then 1 else 0 }; m[3] = 7; f(3) + f(4)",
-		1
-	);
+	is!("m = {}; f(k) := { global m; if k in m then 1 else 0 }; m[3] = 7; f(3) + f(4)", 1);
 	is!("m = {}; f() := { global m; m = {} }; m[3] = 7; f(); count(m)", 0);
 }
 
@@ -46,10 +40,7 @@ fn an_entry_is_removed_by_its_number() {
 		"m = {}; for i in 1 to 100 { m[i] = i }; for i in 1 to 99 { m.remove(i) }; [count(m), m[100]]",
 		warp::parse("[1 100]")
 	);
-	is!(
-		"m = {}; f(k) := { global m; m.remove(k) }; m[1] = 1; m[2] = 2; f(1); if 1 in m then 0 else m[2]",
-		2
-	);
+	is!("m = {}; f(k) := { global m; m.remove(k) }; m[1] = 1; m[2] = 2; f(1); if 1 in m then 0 else m[2]", 2);
 	is!("m = {}; m[1] = 5; m.remove(1)", 5);
 }
 

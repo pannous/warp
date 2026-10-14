@@ -35,10 +35,7 @@ fn test_declared_float_parameter_accepts_exact_reals() {
 fn test_undeclared_and_int_targets_keep_their_rules() {
 	is!("x = 1/3; x * 3", 1);
 	common::fails_with("x:int = 1.5", "x");
-	common::fails_with(
-		"f(x:float) := [10,20,30][x]; f(2.0)",
-		"is a float where an exact Int is expected",
-	);
+	common::fails_with("f(x:float) := [10,20,30][x]; f(2.0)", "is a float where an exact Int is expected");
 }
 
 // an exact expression is computed exactly and rounded once to the nearest f64

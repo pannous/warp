@@ -15,42 +15,37 @@ pub fn link(linker: &mut wasmtime::Linker<crate::host::HostState>, module: &wasm
 		};
 		let (path, name) = (import.module().to_string(), import.name().to_string());
 		let role = exports(&path).get(&name).map_or(Role::Function, |export| export.role);
-		linker.func_new(
-			import.module(),
-			import.name(),
-			function_type,
-			move |mut caller, arguments, results| {
-				let instance = instance_of(&mut caller, &path)?;
-				let global_name = name.strip_prefix(SETTER_PREFIX).unwrap_or(&name);
-				let global = |caller: &mut wasmtime::Caller<'_, crate::host::HostState>| {
-					instance
-						.get_global(caller, global_name)
-						.ok_or_else(|| wasmtime::format_err!("{path} exports no global {global_name}"))
-				};
-				match role {
-					Role::Global { .. } => results[0] = global(&mut caller)?.get(&mut caller),
-					Role::Setter => {
-						global(&mut caller)?.set(&mut caller, arguments[0])?;
-						results[0] = arguments[0];
-					}
-					Role::Function => {
-						let function = instance
-							.get_func(&mut caller, &name)
-							.ok_or_else(|| wasmtime::format_err!("{path} exports no function {name}"))?;
-						match exports(&path).get(&name) {
-							Some(export) if export.crosses_c_values() => {
-								call_c(&mut caller, instance, function, export, arguments, results)?
-							}
-							Some(export) if export.node_result.is_some() => {
-								call_with_values(&mut caller, instance, function, arguments, results)?
-							}
-							_ => function.call(&mut caller, arguments, results)?,
+		linker.func_new(import.module(), import.name(), function_type, move |mut caller, arguments, results| {
+			let instance = instance_of(&mut caller, &path)?;
+			let global_name = name.strip_prefix(SETTER_PREFIX).unwrap_or(&name);
+			let global = |caller: &mut wasmtime::Caller<'_, crate::host::HostState>| {
+				instance
+					.get_global(caller, global_name)
+					.ok_or_else(|| wasmtime::format_err!("{path} exports no global {global_name}"))
+			};
+			match role {
+				Role::Global { .. } => results[0] = global(&mut caller)?.get(&mut caller),
+				Role::Setter => {
+					global(&mut caller)?.set(&mut caller, arguments[0])?;
+					results[0] = arguments[0];
+				}
+				Role::Function => {
+					let function = instance
+						.get_func(&mut caller, &name)
+						.ok_or_else(|| wasmtime::format_err!("{path} exports no function {name}"))?;
+					match exports(&path).get(&name) {
+						Some(export) if export.crosses_c_values() => {
+							call_c(&mut caller, instance, function, export, arguments, results)?
 						}
+						Some(export) if export.node_result.is_some() => {
+							call_with_values(&mut caller, instance, function, arguments, results)?
+						}
+						_ => function.call(&mut caller, arguments, results)?,
 					}
 				}
-				Ok(())
-			},
-		)?;
+			}
+			Ok(())
+		})?;
 	}
 	Ok(())
 }
@@ -77,14 +72,7 @@ pub(crate) fn call_c(
 	let memory = instance
 		.get_memory(&mut *caller, "memory")
 		.ok_or_else(|| wasmtime::format_err!("{name}: its module exports no memory"))?;
-	let mut blocks = ModuleBlocks {
-		name,
-		instance,
-		memory,
-		allocated: vec![],
-		out_slots: vec![],
-		buffers: vec![],
-	};
+	let mut blocks = ModuleBlocks { name, instance, memory, allocated: vec![], out_slots: vec![], buffers: vec![] };
 	let module_arguments = blocks.passed(caller, program_memory, &export.c_parameters, arguments)?;
 	let mut returned = [wasmtime::Val::I32(0)];
 	let result_count = function.ty(&*caller).results().len();
@@ -116,12 +104,9 @@ impl ModuleBlocks {
 		bytes: &[u8],
 	) -> wasmtime::Result<i32> {
 		let name = self.name;
-		let malloc = self
-			.instance
-			.get_typed_func::<i32, i32>(&mut *caller, "malloc")
-			.map_err(|_| {
-				wasmtime::format_err!("{name}: its module exports no malloc(size) to pass a text or out-pointer")
-			})?;
+		let malloc = self.instance.get_typed_func::<i32, i32>(&mut *caller, "malloc").map_err(|_| {
+			wasmtime::format_err!("{name}: its module exports no malloc(size) to pass a text or out-pointer")
+		})?;
 		let block = malloc.call(&mut *caller, bytes.len() as i32)?;
 		self.memory.write(&mut *caller, block as usize, bytes)?;
 		self.allocated.push(block);
@@ -342,9 +327,7 @@ pub(crate) fn copied(
 	let value = crate::host::tasks::TaskValue::of(&node).map_err(|failure| wasmtime::format_err!("{failure}"))?;
 	let builders = crate::host::tasks::Builders::of(&mut |name| export_of(caller, into, name))
 		.map_err(|failure| wasmtime::format_err!("{failure}"))?;
-	builders
-		.build(&value, &mut caller.as_context_mut())
-		.map_err(|failure| wasmtime::format_err!("{failure}"))
+	builders.build(&value, &mut caller.as_context_mut()).map_err(|failure| wasmtime::format_err!("{failure}"))
 }
 
 /// The export `name` of the instance (None: the program's)
@@ -363,11 +346,7 @@ pub(crate) fn export_of(
 /// A count the program passed (a length, a capacity) as a size
 #[cfg(feature = "native")]
 pub(crate) fn count_of(value: &wasmtime::Val) -> usize {
-	value
-		.i32()
-		.map(|count| count as u32 as usize)
-		.or_else(|| value.i64().map(|count| count as usize))
-		.unwrap_or(0)
+	value.i32().map(|count| count as u32 as usize).or_else(|| value.i64().map(|count| count as usize)).unwrap_or(0)
 }
 
 /// The NUL-terminated bytes at `address` of a linear memory

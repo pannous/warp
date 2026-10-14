@@ -40,12 +40,10 @@ fn defined_functions(module: &[u8]) -> Vec<String> {
 
 fn site_functions(code: &str, module: &str) -> Vec<String> {
 	let files = warp::web::site::files(code, "routes", false).expect("the site is built");
-	let (_, bytes) = files.iter().find(|(name, _)| name == module).unwrap_or_else(|| {
-		panic!(
-			"no {module} among {:?}",
-			files.iter().map(|(name, _)| name).collect::<Vec<_>>()
-		)
-	});
+	let (_, bytes) = files
+		.iter()
+		.find(|(name, _)| name == module)
+		.unwrap_or_else(|| panic!("no {module} among {:?}", files.iter().map(|(name, _)| name).collect::<Vec<_>>()));
 	defined_functions(bytes)
 }
 

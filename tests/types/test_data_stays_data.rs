@@ -13,10 +13,7 @@ fn a_bare_now_in_data_is_the_word() {
 #[cfg(feature = "native")]
 #[test]
 fn now_prints_as_written_and_now_forced_as_a_date() {
-	assert_eq!(
-		printed("friends{peter james created:now}\nprint friends"),
-		"{peter james created:now}\n"
-	);
+	assert_eq!(printed("friends{peter james created:now}\nprint friends"), "{peter james created:now}\n");
 	assert!(printed("friends{peter james created:now!}\nprint friends").starts_with("{peter james created:20"));
 }
 

@@ -13,9 +13,5 @@ fn hundreds_of_tasks_run_at_once() {
 	let program = format!("shared total = int[1]; f(i, xs) := {{ sleep(200ms); m = {{}}; m[\"k\"] = i; xs#1 += m[\"k\"]; 0 }}; for i in 0..{TASKS} {{ go f(i, total) }}; await go f(0, total); sleep(1000ms); total#1");
 	let started = Instant::now();
 	is!(&program, TASKS * (TASKS - 1) / 2);
-	assert!(
-		started.elapsed() < OVERLAPPING_LIMIT,
-		"{TASKS} tasks of 200 ms took {:?}",
-		started.elapsed()
-	);
+	assert!(started.elapsed() < OVERLAPPING_LIMIT, "{TASKS} tasks of 200 ms took {:?}", started.elapsed());
 }

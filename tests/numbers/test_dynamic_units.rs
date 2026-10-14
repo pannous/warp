@@ -6,10 +6,7 @@ use crate::is;
 /// the text of the program's last value, a quantity's own `5km`
 fn shown(code: &str) -> String {
 	let (statements, last) = code.rsplit_once('\n').unwrap_or(("", code));
-	warp::wasm_emitter::eval(&format!("{statements}\nstr({last})"))
-		.serialize()
-		.trim_matches('"')
-		.to_string()
+	warp::wasm_emitter::eval(&format!("{statements}\nstr({last})")).serialize().trim_matches('"').to_string()
 }
 
 #[test]
@@ -40,18 +37,9 @@ fn quantities_multiply_divide_and_convert() {
 
 #[test]
 fn quantities_of_other_dimensions_fail_loudly() {
-	fails_with(
-		"quantity(\"3 m\") + quantity(\"2 s\")",
-		"DimensionError: cannot add 3m and 2s",
-	);
-	fails_with(
-		"quantity(\"3 m\") + 2",
-		"DimensionError: cannot add 3m and the plain number 2",
-	);
-	fails_with(
-		"quantity(\"3 m\").to(\"kg\")",
-		"DimensionError: cannot convert 3m and 1kg",
-	);
+	fails_with("quantity(\"3 m\") + quantity(\"2 s\")", "DimensionError: cannot add 3m and 2s");
+	fails_with("quantity(\"3 m\") + 2", "DimensionError: cannot add 3m and the plain number 2");
+	fails_with("quantity(\"3 m\").to(\"kg\")", "DimensionError: cannot convert 3m and 1kg");
 	fails_with("quantity(\"3 furlong\")", "unknown unit: furlong");
 	fails_with("quantity(\"km\")", "not a quantity: km");
 }

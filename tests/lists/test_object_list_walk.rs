@@ -15,13 +15,7 @@ fn walking_a_list_of_objects_takes_linear_steps() {
 // the remembered position follows a list changed in place: an insert or removal before it shifts the items
 #[test]
 fn indexing_after_an_in_place_change_reads_the_changed_list() {
-	is!(
-		"class P{age: int}\nps: [P] = [P(1), P(2), P(3)]\na = ps#3\nps.insert(P(9), 1)\nps#3.age",
-		2
-	);
-	is!(
-		"class P{age: int}\nps: [P] = [P(1), P(2), P(3)]\na = ps#3\nps.remove(ps#1)\nps#2.age",
-		3
-	);
+	is!("class P{age: int}\nps: [P] = [P(1), P(2), P(3)]\na = ps#3\nps.insert(P(9), 1)\nps#3.age", 2);
+	is!("class P{age: int}\nps: [P] = [P(1), P(2), P(3)]\na = ps#3\nps.remove(ps#1)\nps#2.age", 3);
 	is!("xs = [\"a\", \"b\", \"c\"]\na = xs#3\nxs.pop()\nb = xs#2\ncount(xs)", 2);
 }

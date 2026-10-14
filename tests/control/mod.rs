@@ -50,6 +50,7 @@ mod test_database_short_names; // card orm-one-letter-column
 mod test_database_tables; // card orm
 mod test_database_units_everywhere; // card browser-unit
 mod test_do_block;
+mod test_doc_strings; // card doc-strings
 mod test_each_colon;
 mod test_emit_operands;
 mod test_empty_block;
@@ -83,6 +84,7 @@ mod test_glued_block_words; // card glued-loop
 mod test_go_blocks;
 mod test_go_heavy_map; // card go-heavy-map
 mod test_go_statement; // card go-play
+mod test_grouped_receivers; // card dump-text
 mod test_handler_globals;
 mod test_handler_unwinding; // card on-error-abort
 mod test_held_key; // card held-key

@@ -20,50 +20,20 @@ fn test_builtin_kinds_stay_comparable() {
 
 #[test]
 fn test_a_user_type_sorts_through_its_compare() {
-	is!(
-		&with(
-			PERSON,
-			"xs = [person(\"Ann\" 40) person(\"Bob\" 30)]; first = (sort xs)#1; first.name"
-		),
-		"Bob"
-	);
-	is!(
-		&with(
-			PERSON,
-			"first = (sort [person(\"Ann\" 40) person(\"Bob\" 30) person(\"Cy\" 35)])#2; first.name"
-		),
-		"Cy"
-	);
+	is!(&with(PERSON, "xs = [person(\"Ann\" 40) person(\"Bob\" 30)]; first = (sort xs)#1; first.name"), "Bob");
+	is!(&with(PERSON, "first = (sort [person(\"Ann\" 40) person(\"Bob\" 30) person(\"Cy\" 35)])#2; first.name"), "Cy");
 }
 
 #[test]
 fn test_a_user_type_orders_with_less_than() {
-	is!(
-		&with(PERSON, "p = person(\"Ann\" 40); q = person(\"Bob\" 30); q < p"),
-		true
-	);
-	is!(
-		&with(PERSON, "p = person(\"Ann\" 40); q = person(\"Bob\" 30); p <= q"),
-		false
-	);
+	is!(&with(PERSON, "p = person(\"Ann\" 40); q = person(\"Bob\" 30); q < p"), true);
+	is!(&with(PERSON, "p = person(\"Ann\" 40); q = person(\"Bob\" 30); p <= q"), false);
 }
 
 #[test]
 fn test_min_and_max_of_a_user_type() {
-	is!(
-		&with(
-			PERSON,
-			"young = min(person(\"Ann\" 40), person(\"Bob\" 30)); young.name"
-		),
-		"Bob"
-	);
-	is!(
-		&with(
-			PERSON,
-			"xs = [person(\"Ann\" 40) person(\"Bob\" 30)]; old = max(xs); old.name"
-		),
-		"Ann"
-	);
+	is!(&with(PERSON, "young = min(person(\"Ann\" 40), person(\"Bob\" 30)); young.name"), "Bob");
+	is!(&with(PERSON, "xs = [person(\"Ann\" 40) person(\"Bob\" 30)]; old = max(xs); old.name"), "Ann");
 }
 
 #[test]
@@ -118,10 +88,7 @@ fn test_a_user_type_overrides_equality_with_equals() {
 
 #[test]
 fn test_a_compare_with_mismatched_types_is_no_conformance() {
-	fails_with(
-		"class dot{x:int}; compare(a:dot, b:int) := a.x - b; sort [dot(2) dot(1)]",
-		"compare(a:dot, b:dot)",
-	);
+	fails_with("class dot{x:int}; compare(a:dot, b:int) := a.x - b; sort [dot(2) dot(1)]", "compare(a:dot, b:dot)");
 }
 
 #[test]
@@ -151,37 +118,19 @@ fn test_conformance_to_a_declared_trait_is_a_type_test() {
 #[test]
 fn test_a_type_without_the_operation_of_a_declared_trait() {
 	fails_with("trait shape{area}; class dot{x:int}; area(dot(1))", "dot is not shape");
-	fails_with(
-		"trait shape{area}; class dot{x:int}; area(dot(1))",
-		"define area(x:dot)",
-	);
-	fails_with(
-		"trait shape{area(s)}; class dot{x:int}; area(dot(1))",
-		"define area(s:dot)",
-	);
+	fails_with("trait shape{area}; class dot{x:int}; area(dot(1))", "define area(x:dot)");
+	fails_with("trait shape{area(s)}; class dot{x:int}; area(dot(1))", "define area(s:dot)");
 }
 
 #[test]
 fn test_a_claim_of_a_declared_trait_is_checked() {
 	fails_with("trait shape{area}; class dot{x:int} is shape; 1", "dot claims shape");
-	is!(
-		"trait shape{area}; class dot{x:int} is shape; area(d:dot) := d.x; area(dot(4))",
-		4
-	);
+	is!("trait shape{area}; class dot{x:int} is shape; area(d:dot) := d.x; area(dot(4))", 4);
 }
 
 #[test]
 fn test_trait_synonyms_declare_a_trait() {
-	for keyword in [
-		"trait",
-		"interface",
-		"protocol",
-		"typeclass",
-		"prototype",
-		"capability",
-		"aspect",
-		"feature",
-	] {
+	for keyword in ["trait", "interface", "protocol", "typeclass", "prototype", "capability", "aspect", "feature"] {
 		let code = format!(
 			"{keyword} shape{{area}}; class square{{side:int}}; area(s:square) := s.side*s.side; area(square(3))"
 		);

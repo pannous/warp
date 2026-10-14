@@ -11,10 +11,7 @@ fn a_libm_function_of_the_headers_links_by_itself() {
 
 #[test]
 fn a_libm_function_with_an_int_parameter_says_so() {
-	crate::common::fails_with(
-		"ldexp(1, 3)",
-		"ldexp is a libm function with a parameter other than a float",
-	);
+	crate::common::fails_with("ldexp(1, 3)", "ldexp is a libm function with a parameter other than a float");
 }
 
 /// glibc declares math.h through macros: the hand-linked table then serves every function the implicit import takes

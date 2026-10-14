@@ -14,17 +14,13 @@ impl WarpParser {
 		let mut words = vec![first.to_string()];
 		let mut offset = 0;
 		let next = loop {
-			let blanks = (offset..)
-				.take_while(|at| matches!(self.peek_char(*at), ' ' | '\t'))
-				.count();
+			let blanks = (offset..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
 			if blanks == 0 {
 				return None; // `public = 3`, `public(…)`: a name
 			}
 			let start = offset + blanks;
-			let word: String = (start..)
-				.map(|at| self.peek_char(at))
-				.take_while(|ch| is_identifier_char(*ch))
-				.collect();
+			let word: String =
+				(start..).map(|at| self.peek_char(at)).take_while(|ch| is_identifier_char(*ch)).collect();
 			offset = start + word.chars().count();
 			if !is_modifier(&word) {
 				break word;
@@ -38,10 +34,7 @@ impl WarpParser {
 		}
 		let (line, column) = (self.line_nr, self.column.saturating_sub(first.chars().count()));
 		let is_static = words.iter().any(|word| word == STATIC_KEYWORD);
-		for word in words
-			.iter()
-			.filter(|word| FOREIGN_MODIFIERS.contains(&word.as_str()) && *word != STATIC_KEYWORD)
-		{
+		for word in words.iter().filter(|word| FOREIGN_MODIFIERS.contains(&word.as_str()) && *word != STATIC_KEYWORD) {
 			let question = Ask::new(
 				FOREIGN_MODIFIER_TOPIC,
 				format!("{word} has no meaning in warp"),
@@ -57,11 +50,7 @@ impl WarpParser {
 		self.advance_by(offset - next.chars().count());
 		self.skip_spaces();
 		let statement = self.parse_expr(0);
-		Some(if is_static {
-			statement.with_attribute(STATIC_KEYWORD, Node::True)
-		} else {
-			statement
-		})
+		Some(if is_static { statement.with_attribute(STATIC_KEYWORD, Node::True) } else { statement })
 	}
 
 	/// Another language's way of writing a warp form: `new Point(1, 2)`, `constant`, Ruby's `attr_accessor :x`,
@@ -86,31 +75,18 @@ impl WarpParser {
 				.map(|offset| self.peek_char(offset))
 				.take_while(|ch| !matches!(ch, '\n' | '\0' | ';' | '}'))
 				.collect();
-			let names: Vec<String> = line
-				.split(',')
-				.map(|name| name.trim().trim_start_matches(':').to_string())
-				.collect();
-			if names
-				.iter()
-				.all(|name| !name.is_empty() && name.chars().all(is_identifier_char))
-			{
+			let names: Vec<String> =
+				line.split(',').map(|name| name.trim().trim_start_matches(':').to_string()).collect();
+			if names.iter().all(|name| !name.is_empty() && name.chars().all(is_identifier_char)) {
 				self.advance_by(line.chars().count());
 				note_alias_at(start, &format!("{symbol}{line}"), &names.join("; "));
-				return Some(Node::List(
-					names.into_iter().map(Symbol).collect(),
-					Bracket::None,
-					Separator::Semicolon,
-				));
+				return Some(Node::List(names.into_iter().map(Symbol).collect(), Bracket::None, Separator::Semicolon));
 			}
 		}
 		if symbol == OPERATOR_WORD && !self.options.data_mode && matches!(self.current_char(), ' ' | '\t') {
 			self.skip_blanks();
 			if let Some(head) = self.try_parse_operator_method_head() {
-				note_alias_at(
-					start,
-					&format!("{OPERATOR_WORD} {}", head.first().name()),
-					&head.first().name(),
-				);
+				note_alias_at(start, &format!("{OPERATOR_WORD} {}", head.first().name()), &head.first().name());
 				return Some(head);
 			}
 		}
@@ -132,10 +108,9 @@ impl WarpParser {
 		}
 		if !self.options.wit_mode && symbol == MIXIN_WORD && self.name_and_block_follow() {
 			return Some(match self.parse_type_declaration() {
-				Node::Type { name, body } => Node::Type {
-					name: Box::new(name.with_attribute(MIXIN_WORD, Node::True)),
-					body,
-				},
+				Node::Type { name, body } => {
+					Node::Type { name: Box::new(name.with_attribute(MIXIN_WORD, Node::True)), body }
+				}
 				other => other,
 			});
 		}

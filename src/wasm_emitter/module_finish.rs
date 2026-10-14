@@ -32,13 +32,8 @@ impl WasmGcEmitter {
 	fn memory_section(&self) -> MemorySection {
 		let mut section = MemorySection::new();
 		if self.owns_memory {
-			let pages = (self.string_table.next_offset() as u64)
-				.div_ceil(PAGE_BYTES)
-				.max(MEMORY.minimum);
-			section.memory(MemoryType {
-				minimum: pages,
-				..MEMORY
-			});
+			let pages = (self.string_table.next_offset() as u64).div_ceil(PAGE_BYTES).max(MEMORY.minimum);
+			section.memory(MemoryType { minimum: pages, ..MEMORY });
 		}
 		section
 	}
@@ -60,12 +55,8 @@ impl WasmGcEmitter {
 		}
 		self.module.section(&self.exports);
 		// functions taken by ref.func: one declarative element segment for all (a module has one element section)
-		let declared_functions: Vec<u32> = self
-			.closures
-			.declared_functions()
-			.into_iter()
-			.chain(self.witness_dispatcher())
-			.collect();
+		let declared_functions: Vec<u32> =
+			self.closures.declared_functions().into_iter().chain(self.witness_dispatcher()).collect();
 		if !declared_functions.is_empty() {
 			let mut elements = ElementSection::new();
 			elements.declared(Elements::Functions(declared_functions.into()));
@@ -81,12 +72,7 @@ impl WasmGcEmitter {
 			});
 		}
 		if !self.std_modules.is_empty() {
-			let modules = self
-				.std_modules
-				.iter()
-				.cloned()
-				.collect::<Vec<_>>()
-				.join(crate::host::STD_MODULES_SEPARATOR);
+			let modules = self.std_modules.iter().cloned().collect::<Vec<_>>().join(crate::host::STD_MODULES_SEPARATOR);
 			self.module.section(&CustomSection {
 				name: crate::host::STD_MODULES_SECTION.into(),
 				data: modules.as_bytes().into(),
@@ -99,10 +85,7 @@ impl WasmGcEmitter {
 		if !user_functions.is_empty() {
 			self.module.section(&CustomSection {
 				name: crate::host::USER_FUNCTIONS_SECTION.into(),
-				data: user_functions
-					.join(crate::host::USER_FUNCTIONS_SEPARATOR)
-					.as_bytes()
-					.into(),
+				data: user_functions.join(crate::host::USER_FUNCTIONS_SEPARATOR).as_bytes().into(),
 			});
 		}
 		self.emit_names();
@@ -133,16 +116,10 @@ impl WasmGcEmitter {
 					.filter_map(|function| Some((function.func_index?, function.name.clone()))),
 			)
 			.chain(self.closures.entry_names())
-			.chain(
-				self.tuple_packers
-					.iter()
-					.map(|(function, index)| (*index, crate::tuples::packer_name(function))),
-			)
+			.chain(self.tuple_packers.iter().map(|(function, index)| (*index, crate::tuples::packer_name(function))))
 			.chain(self.main_index.map(|index| (index, "main".to_string())))
 			.collect();
-		self.names.functions(&name_map(
-			&mut functions.iter().map(|(idx, name)| (*idx, name.as_str())).collect(),
-		));
+		self.names.functions(&name_map(&mut functions.iter().map(|(idx, name)| (*idx, name.as_str())).collect()));
 
 		// a user function's parameter names, for debuggers and wasm-tools; a page leaves them out for size, an importer
 		// reads them from warp.meta (wasm_modules.rs read_exports)
@@ -154,12 +131,7 @@ impl WasmGcEmitter {
 				.filter_map(|function| {
 					Some((
 						function.func_index?,
-						function
-							.params
-							.iter()
-							.enumerate()
-							.map(|(i, param)| (i as u32, param.name.as_str()))
-							.collect(),
+						function.params.iter().enumerate().map(|(i, param)| (i as u32, param.name.as_str())).collect(),
 					))
 				})
 				.collect();
@@ -178,21 +150,11 @@ impl WasmGcEmitter {
 			(tm.float_list_type, "FloatList"),
 		];
 		types.extend(tm.meta_node_type.map(|index| (index, "MetaNode")));
-		types.extend(
-			self.ctx
-				.user_type_indices
-				.iter()
-				.map(|(name, idx)| (*idx, name.as_str())),
-		);
+		types.extend(self.ctx.user_type_indices.iter().map(|(name, idx)| (*idx, name.as_str())));
 		let instance_names: Vec<(u32, String)> = self
 			.instance_types
 			.iter()
-			.map(|(class, instance)| {
-				(
-					instance.type_index,
-					format!("{class}{}", maps::struct_backend::INSTANCE_SUFFIX),
-				)
-			})
+			.map(|(class, instance)| (instance.type_index, format!("{class}{}", maps::struct_backend::INSTANCE_SUFFIX)))
 			.collect();
 		types.extend(instance_names.iter().map(|(idx, name)| (*idx, name.as_str())));
 		self.names.types(&name_map(&mut types));
@@ -218,11 +180,7 @@ impl WasmGcEmitter {
 				.filter(|(idx, _)| (*idx as u32) < self.ctx.kind_global_indices.len() as u32)
 				.map(|(idx, name)| (idx as u32, *name))
 				.collect();
-			globals.extend(
-				self.extra_global_names
-					.iter()
-					.map(|(index, name)| (*index, name.as_str())),
-			);
+			globals.extend(self.extra_global_names.iter().map(|(index, name)| (*index, name.as_str())));
 			self.names.globals(&name_map(&mut globals));
 		}
 
@@ -242,24 +200,14 @@ impl WasmGcEmitter {
 			if let Some(&type_idx) = self.ctx.user_type_indices.get(&type_def.name) {
 				fields.push((
 					type_idx,
-					type_def
-						.fields
-						.iter()
-						.enumerate()
-						.map(|(i, field)| (i as u32, field.name.as_str()))
-						.collect(),
+					type_def.fields.iter().enumerate().map(|(i, field)| (i as u32, field.name.as_str())).collect(),
 				));
 			}
 		}
 		fields.extend(self.instance_types.values().map(|instance| {
 			(
 				instance.type_index,
-				instance
-					.fields
-					.iter()
-					.enumerate()
-					.map(|(i, (field, _))| (i as u32, field.as_str()))
-					.collect(),
+				instance.fields.iter().enumerate().map(|(i, (field, _))| (i as u32, field.as_str())).collect(),
 			)
 		}));
 		self.names.fields(&indirect_name_map(fields));

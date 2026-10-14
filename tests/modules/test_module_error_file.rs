@@ -4,8 +4,5 @@ use crate::common::fails_with;
 
 #[test]
 fn a_modules_unknown_word_names_its_file() {
-	fails_with(
-		"use tests/fixtures/broken_word\nshout(\"hi\")",
-		"tests/fixtures/broken_word.warp:4:",
-	);
+	fails_with("use tests/fixtures/broken_word\nshout(\"hi\")", "tests/fixtures/broken_word.warp:4:");
 }

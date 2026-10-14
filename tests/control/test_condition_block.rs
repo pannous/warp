@@ -14,8 +14,5 @@ fn the_block_after_a_comparison_with_a_variable_is_the_body() {
 
 #[test]
 fn a_condition_still_ends_before_its_block() {
-	assert_eq!(
-		parse("while i < n {i++}").to_string(),
-		parse("while i < n do {i++}").to_string()
-	);
+	assert_eq!(parse("while i < n {i++}").to_string(), parse("while i < n do {i++}").to_string());
 }

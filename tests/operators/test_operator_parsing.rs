@@ -135,15 +135,9 @@ fn test_type_annotation_with_block() {
 	let node = parsed.drop_meta();
 	match node {
 		Node::Key(key, op, value) => {
-			assert!(
-				matches!(key.as_ref().drop_meta(), Node::Symbol(_)),
-				"Key should be Symbol"
-			);
+			assert!(matches!(key.as_ref().drop_meta(), Node::Symbol(_)), "Key should be Symbol");
 			assert_eq!(*op, Op::Colon);
-			assert!(
-				matches!(value.as_ref().drop_meta(), Node::List(..)),
-				"Value should be List/Block"
-			);
+			assert!(matches!(value.as_ref().drop_meta(), Node::List(..)), "Value should be List/Block");
 		}
 		_ => panic!("Expected Key, got {:?}", node),
 	}
@@ -157,10 +151,7 @@ fn test_type_annotation_block_with_assignment() {
 	match node {
 		Node::Key(key, op, value) => {
 			assert_eq!(*op, Op::Assign);
-			assert!(
-				matches!(value.as_ref().drop_meta(), Node::Number(_)),
-				"Value should be Number 7"
-			);
+			assert!(matches!(value.as_ref().drop_meta(), Node::Number(_)), "Value should be Number 7");
 			match key.as_ref().drop_meta() {
 				Node::Key(inner_key, inner_op, inner_value) => {
 					assert_eq!(*inner_op, Op::Colon);

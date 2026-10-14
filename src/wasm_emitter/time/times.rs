@@ -33,18 +33,8 @@ pub(in crate::wasm_emitter) const DAYS_FROM_CIVIL: &str = "days_from_civil";
 /// time_parts(form, position) -> (days, nanoseconds of the day): the calendar day and the clock of a position
 pub(in crate::wasm_emitter) const TIME_PARTS: &str = "time_parts";
 /// The fields time_field reads, as calendar::Time::field names them
-const TIME_FIELDS: [&str; 10] = [
-	"year",
-	"month",
-	"day",
-	"weekday",
-	"day_of_year",
-	"hour",
-	"minute",
-	"second",
-	"epoch_seconds",
-	"offset",
-];
+const TIME_FIELDS: [&str; 10] =
+	["year", "month", "day", "weekday", "day_of_year", "hour", "minute", "second", "epoch_seconds", "offset"];
 /// The fields that read the position itself, not its wall clock
 const ABSOLUTE_FIELDS: [&str; 2] = [crate::time::EPOCH_SECONDS, "offset"];
 const NANOS_PER_MILLI: i64 = 1_000_000;
@@ -133,10 +123,7 @@ impl WasmGcEmitter {
 				// the wall clock: a zoned time's own offset, an instant's the environment's at that instant, from the host
 				f.instruction(&I::I32Const(1));
 				for absolute in ABSOLUTE_FIELDS {
-					let index = TIME_FIELDS
-						.iter()
-						.position(|known| *known == absolute)
-						.unwrap_or_default();
+					let index = TIME_FIELDS.iter().position(|known| *known == absolute).unwrap_or_default();
 					Self::emit_list(f, &[I::LocalGet(field), I::I32Const(index as i32), I::I32Ne, I::I32And]);
 				}
 				Self::emit_list(
@@ -159,12 +146,7 @@ impl WasmGcEmitter {
 				if let Some(local_offset) = local_offset {
 					Self::emit_list(
 						f,
-						&[
-							I::LocalGet(form),
-							I::I64Const(TimeForm::Instant as i64),
-							I::I64Eq,
-							I::If(BlockType::Empty),
-						],
+						&[I::LocalGet(form), I::I64Const(TimeForm::Instant as i64), I::I64Eq, I::If(BlockType::Empty)],
 					);
 					Self::emit_floor_split(f, position, NANOS_PER_MILLI, milliseconds, nanos);
 					Self::emit_list(
@@ -221,13 +203,7 @@ impl WasmGcEmitter {
 						I::I64Const(MINUTE),
 						I::I64RemS,
 					],
-					vec![
-						I::LocalGet(nanos),
-						I::I64Const(SECOND as i64),
-						I::I64DivS,
-						I::I64Const(MINUTE),
-						I::I64RemS,
-					],
+					vec![I::LocalGet(nanos), I::I64Const(SECOND as i64), I::I64DivS, I::I64Const(MINUTE), I::I64RemS],
 					vec![
 						I::LocalGet(days),
 						I::I64Const(DAY_SECONDS),
@@ -242,12 +218,7 @@ impl WasmGcEmitter {
 				for (index, value) in values.iter().enumerate() {
 					Self::emit_list(
 						f,
-						&[
-							I::LocalGet(field),
-							I::I32Const(index as i32),
-							I::I32Eq,
-							I::If(BlockType::Empty),
-						],
+						&[I::LocalGet(field), I::I32Const(index as i32), I::I32Eq, I::If(BlockType::Empty)],
 					);
 					Self::emit_list(f, value);
 					Self::emit_list(f, &[I::Return, I::End]);
@@ -266,15 +237,7 @@ impl WasmGcEmitter {
 			vec![ValType::I64; 7],
 			|_, f| {
 				let (days, era, day_of_era, year_of_era, day_of_year, shifted_month, month) = (0, 1, 2, 3, 4, 5, 6);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(days),
-						I::I64Const(EPOCH_SHIFT),
-						I::I64Add,
-						I::LocalSet(days),
-					],
-				);
+				Self::emit_list(f, &[I::LocalGet(days), I::I64Const(EPOCH_SHIFT), I::I64Add, I::LocalSet(days)]);
 				Self::emit_floor_split(f, days, DAYS_PER_ERA, era, day_of_era);
 				// (doe - doe/1460 + doe/36524 - doe/146096) / 365
 				Self::emit_list(
@@ -460,21 +423,10 @@ impl WasmGcEmitter {
 			let (form, days, nanos, year, month, day, fraction, power, position, address, offset, instant) =
 				(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
 			let advance = |f: &mut Function, count: i32| {
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(position),
-						I::I32Const(count),
-						I::I32Add,
-						I::LocalSet(position),
-					],
-				)
+				Self::emit_list(f, &[I::LocalGet(position), I::I32Const(count), I::I32Add, I::LocalSet(position)])
 			};
 			let put = |f: &mut Function, byte: u8| {
-				Self::emit_list(
-					f,
-					&[I::LocalGet(position), I::I32Const(byte as i32), I::I32Store8(BYTE)],
-				);
+				Self::emit_list(f, &[I::LocalGet(position), I::I32Const(byte as i32), I::I32Store8(BYTE)]);
 				advance(f, 1);
 			};
 			// the value `count` digits wide, with leading zeros
@@ -519,13 +471,7 @@ impl WasmGcEmitter {
 			is_form(f, TimeForm::Duration);
 			Self::emit_list(
 				f,
-				&[
-					I::If(BlockType::Empty),
-					I::LocalGet(0),
-					I::Call(s.func_index(DURATION_TEXT)),
-					I::Return,
-					I::End,
-				],
+				&[I::If(BlockType::Empty), I::LocalGet(0), I::Call(s.func_index(DURATION_TEXT)), I::Return, I::End],
 			);
 			s.emit_time_position(f, 0);
 			f.instruction(&I::LocalSet(instant));
@@ -571,51 +517,19 @@ impl WasmGcEmitter {
 			is_form(f, TimeForm::Date);
 			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
 			put(f, b'T');
-			digits(
-				f,
-				&[I::LocalGet(nanos), I::I64Const(HOUR * SECOND as i64), I::I64DivU],
-				2,
-			);
+			digits(f, &[I::LocalGet(nanos), I::I64Const(HOUR * SECOND as i64), I::I64DivU], 2);
 			put(f, b':');
 			digits(
 				f,
-				&[
-					I::LocalGet(nanos),
-					I::I64Const(MINUTE * SECOND as i64),
-					I::I64DivU,
-					I::I64Const(MINUTE),
-					I::I64RemU,
-				],
+				&[I::LocalGet(nanos), I::I64Const(MINUTE * SECOND as i64), I::I64DivU, I::I64Const(MINUTE), I::I64RemU],
 				2,
 			);
 			// seconds only when there are any, the fraction without its trailing zeros
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(nanos),
-					I::I64Const(SECOND as i64),
-					I::I64RemU,
-					I::LocalSet(fraction),
-				],
-			);
-			let whole_seconds = [
-				I::LocalGet(nanos),
-				I::I64Const(SECOND as i64),
-				I::I64DivU,
-				I::I64Const(MINUTE),
-				I::I64RemU,
-			];
+			Self::emit_list(f, &[I::LocalGet(nanos), I::I64Const(SECOND as i64), I::I64RemU, I::LocalSet(fraction)]);
+			let whole_seconds =
+				[I::LocalGet(nanos), I::I64Const(SECOND as i64), I::I64DivU, I::I64Const(MINUTE), I::I64RemU];
 			Self::emit_list(f, &whole_seconds);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(fraction),
-					I::I64Or,
-					I::I64Const(0),
-					I::I64Ne,
-					I::If(BlockType::Empty),
-				],
-			);
+			Self::emit_list(f, &[I::LocalGet(fraction), I::I64Or, I::I64Const(0), I::I64Ne, I::If(BlockType::Empty)]);
 			put(f, b':');
 			digits(f, &whole_seconds, 2);
 			f.instruction(&I::End);
@@ -629,40 +543,15 @@ impl WasmGcEmitter {
 				is_form(f, TimeForm::Zoned);
 				Self::emit_list(
 					f,
-					&[
-						I::If(BlockType::Empty),
-						I::LocalGet(offset),
-						I::I64Const(0),
-						I::I64LtS,
-						I::If(BlockType::Empty),
-					],
+					&[I::If(BlockType::Empty), I::LocalGet(offset), I::I64Const(0), I::I64LtS, I::If(BlockType::Empty)],
 				);
 				put(f, b'-');
-				Self::emit_list(
-					f,
-					&[
-						I::I64Const(0),
-						I::LocalGet(offset),
-						I::I64Sub,
-						I::LocalSet(offset),
-						I::Else,
-					],
-				);
+				Self::emit_list(f, &[I::I64Const(0), I::LocalGet(offset), I::I64Sub, I::LocalSet(offset), I::Else]);
 				put(f, b'+');
 				f.instruction(&I::End);
 				digits(f, &[I::LocalGet(offset), I::I64Const(HOUR), I::I64DivU], 2);
 				put(f, b':');
-				digits(
-					f,
-					&[
-						I::LocalGet(offset),
-						I::I64Const(MINUTE),
-						I::I64DivU,
-						I::I64Const(MINUTE),
-						I::I64RemU,
-					],
-					2,
-				);
+				digits(f, &[I::LocalGet(offset), I::I64Const(MINUTE), I::I64DivU, I::I64Const(MINUTE), I::I64RemU], 2);
 				for (index, name) in names.iter().enumerate() {
 					s.emit_field(f, 0, 0);
 					Self::emit_list(
@@ -681,15 +570,7 @@ impl WasmGcEmitter {
 					f.instruction(&I::End);
 				}
 				let published = BUILTIN_RULES.published.days() * DAY_NANOS;
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(instant),
-						I::I64Const(published),
-						I::I64GeS,
-						I::If(BlockType::Empty),
-					],
-				);
+				Self::emit_list(f, &[I::LocalGet(instant), I::I64Const(published), I::I64GeS, I::If(BlockType::Empty)]);
 				copy(f, *prediction);
 				Self::emit_list(f, &[I::End, I::End]);
 			}
@@ -726,15 +607,7 @@ impl WasmGcEmitter {
 			],
 		);
 		// power + fraction keeps the fraction's leading zeros; the point overwrites its leading 1
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(position),
-				I::LocalGet(power),
-				I::LocalGet(fraction),
-				I::I64Add,
-			],
-		);
+		Self::emit_list(func, &[I::LocalGet(position), I::LocalGet(power), I::LocalGet(fraction), I::I64Add]);
 		self.call(func, "int_to_decimal");
 		Self::emit_list(
 			func,
@@ -765,10 +638,7 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::I32Add, I::LocalSet(position)]);
 			};
 			let put = |f: &mut Function, byte: u8| {
-				Self::emit_list(
-					f,
-					&[I::LocalGet(position), I::I32Const(byte as i32), I::I32Store8(BYTE)],
-				);
+				Self::emit_list(f, &[I::LocalGet(position), I::I32Const(byte as i32), I::I32Store8(BYTE)]);
 				advance(f, &[I::I32Const(1)]);
 			};
 			let number = |f: &mut Function, value: &[I<'static>]| {
@@ -792,16 +662,10 @@ impl WasmGcEmitter {
 			// `amount unit` and a space, the unit plural unless the amount is 1
 			let part = |f: &mut Function, value: &[I<'static>], name: (u32, u32)| {
 				Self::emit_list(f, value);
-				Self::emit_list(
-					f,
-					&[I::LocalTee(amount), I::I64Const(0), I::I64Ne, I::If(BlockType::Empty)],
-				);
+				Self::emit_list(f, &[I::LocalTee(amount), I::I64Const(0), I::I64Ne, I::If(BlockType::Empty)]);
 				number(f, &[I::LocalGet(amount)]);
 				unit(f, name);
-				Self::emit_list(
-					f,
-					&[I::LocalGet(amount), I::I64Const(1), I::I64Ne, I::If(BlockType::Empty)],
-				);
+				Self::emit_list(f, &[I::LocalGet(amount), I::I64Const(1), I::I64Ne, I::If(BlockType::Empty)]);
 				put(f, b's');
 				f.instruction(&I::End);
 				put(f, b' ');
@@ -809,24 +673,14 @@ impl WasmGcEmitter {
 			};
 			let [months, days, hours, minutes, whole_seconds] = units;
 			s.emit_time_position(f, 0);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalSet(nanos),
-					I::I32Const(DURATION_TEXT_BYTES),
-					I::LocalSet(position),
-				],
-			);
+			Self::emit_list(f, &[I::LocalSet(nanos), I::I32Const(DURATION_TEXT_BYTES), I::LocalSet(position)]);
 			s.emit_text_allocation(f, position, address);
 			Self::emit_list(f, &[I::LocalGet(address), I::LocalTee(position), I::LocalSet(start)]);
 			let info = |shift: i64| {
 				[
 					I::LocalGet(0),
 					I::RefAsNonNull,
-					I::StructGet {
-						struct_type_index: s.type_manager.node_type,
-						field_index: 0,
-					},
+					I::StructGet { struct_type_index: s.type_manager.node_type, field_index: 0 },
 					I::I64Const(KIND_BITS + shift),
 					I::I64ShrS,
 				]
@@ -855,22 +709,8 @@ impl WasmGcEmitter {
 				],
 			);
 			part(f, &[I::LocalGet(seconds), I::I64Const(HOUR), I::I64DivS], hours);
-			part(
-				f,
-				&[
-					I::LocalGet(seconds),
-					I::I64Const(HOUR),
-					I::I64RemS,
-					I::I64Const(MINUTE),
-					I::I64DivS,
-				],
-				minutes,
-			);
-			part(
-				f,
-				&[I::LocalGet(seconds), I::I64Const(MINUTE), I::I64RemS],
-				whole_seconds,
-			);
+			part(f, &[I::LocalGet(seconds), I::I64Const(HOUR), I::I64RemS, I::I64Const(MINUTE), I::I64DivS], minutes);
+			part(f, &[I::LocalGet(seconds), I::I64Const(MINUTE), I::I64RemS], whole_seconds);
 			f.instruction(&I::Else);
 			// `1.5 seconds`, `0 seconds` for no duration at all
 			Self::emit_list(
@@ -891,26 +731,9 @@ impl WasmGcEmitter {
 				],
 			);
 			put(f, b'-');
-			Self::emit_list(
-				f,
-				&[
-					I::I64Const(0),
-					I::LocalGet(nanos),
-					I::I64Sub,
-					I::LocalSet(nanos),
-					I::End,
-				],
-			);
+			Self::emit_list(f, &[I::I64Const(0), I::LocalGet(nanos), I::I64Sub, I::LocalSet(nanos), I::End]);
 			number(f, &[I::LocalGet(nanos), I::I64Const(SECOND as i64), I::I64DivU]);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(nanos),
-					I::I64Const(SECOND as i64),
-					I::I64RemU,
-					I::LocalSet(fraction),
-				],
-			);
+			Self::emit_list(f, &[I::LocalGet(nanos), I::I64Const(SECOND as i64), I::I64RemU, I::LocalSet(fraction)]);
 			s.emit_fraction(f, fraction, power, position);
 			unit(f, whole_seconds);
 			put(f, b's');
@@ -919,14 +742,7 @@ impl WasmGcEmitter {
 			// without the last space
 			Self::emit_list(
 				f,
-				&[
-					I::LocalGet(start),
-					I::LocalGet(position),
-					I::LocalGet(start),
-					I::I32Sub,
-					I::I32Const(1),
-					I::I32Sub,
-				],
+				&[I::LocalGet(start), I::LocalGet(position), I::LocalGet(start), I::I32Sub, I::I32Const(1), I::I32Sub],
 			);
 			s.call(f, "new_text");
 		});
@@ -971,14 +787,7 @@ impl WasmGcEmitter {
 		self.emit_runtime_error(func, RETURNED_ERROR);
 		func.instruction(&I::End);
 		self.emit_time_form(func, first);
-		Self::emit_list(
-			func,
-			&[
-				I::I64Const(TimeForm::Duration as i64),
-				I::I64Eq,
-				I::If(BlockType::Empty),
-			],
-		);
+		Self::emit_list(func, &[I::I64Const(TimeForm::Duration as i64), I::I64Eq, I::If(BlockType::Empty)]);
 		self.emit_trap_detail(func, &Node::Text(UNORDERED_DURATIONS.to_string()));
 		self.emit_runtime_error(func, RETURNED_ERROR);
 		func.instruction(&I::End);
@@ -1025,10 +834,7 @@ impl WasmGcEmitter {
 		Self::emit_kind_test(func, Kind::Time as i64, I::I64Eq);
 		Self::emit_list(func, &[I::If(BlockType::Empty)]);
 		self.emit_time_form(func, held);
-		Self::emit_list(
-			func,
-			&[I::I64Const(TimeForm::Zoned as i64), I::I64Eq, I::If(BlockType::Empty)],
-		);
+		Self::emit_list(func, &[I::I64Const(TimeForm::Zoned as i64), I::I64Eq, I::If(BlockType::Empty)]);
 		self.emit_node_instructions(func, &Node::Text(crate::time::calendar::rules().version.to_string()));
 		Self::emit_list(func, &[I::Br(2), I::End, I::End]);
 	}
@@ -1036,29 +842,13 @@ impl WasmGcEmitter {
 	/// The TimeForm of the time node in `local`
 	pub(in crate::wasm_emitter) fn emit_time_form(&self, func: &mut Function, local: u32) {
 		self.emit_field(func, local, 0);
-		Self::emit_list(
-			func,
-			&[
-				I::I64Const(KIND_BITS),
-				I::I64ShrU,
-				I::I64Const(TIME_FORM_MASK),
-				I::I64And,
-			],
-		);
+		Self::emit_list(func, &[I::I64Const(KIND_BITS), I::I64ShrU, I::I64Const(TIME_FORM_MASK), I::I64And]);
 	}
 
 	/// The offset of the zoned time node in `local`, seconds east of UTC
 	fn emit_zone_offset(&self, func: &mut Function, local: u32) {
 		self.emit_field(func, local, 0);
-		Self::emit_list(
-			func,
-			&[
-				I::I64Const(KIND_BITS + OFFSET_SHIFT),
-				I::I64ShrS,
-				I::I64Const(MINUTE),
-				I::I64Mul,
-			],
-		);
+		Self::emit_list(func, &[I::I64Const(KIND_BITS + OFFSET_SHIFT), I::I64ShrS, I::I64Const(MINUTE), I::I64Mul]);
 	}
 
 	/// The `[Zone/Name]` of every zone and the rules suffix of a prediction, in linear memory, when a zoned time is shown
@@ -1066,14 +856,8 @@ impl WasmGcEmitter {
 		if !self.should_emit_function(ZONE_NAMES) {
 			return None;
 		}
-		let names = ZONES
-			.iter()
-			.map(|zone| self.allocate_string(&format!("[{}]", zone.name)))
-			.collect();
-		Some((
-			names,
-			self.allocate_string(&format!("[_tzdata={}]", BUILTIN_RULES.version)),
-		))
+		let names = ZONES.iter().map(|zone| self.allocate_string(&format!("[{}]", zone.name))).collect();
+		Some((names, self.allocate_string(&format!("[_tzdata={}]", BUILTIN_RULES.version))))
 	}
 
 	/// The position of the time node in `local`
@@ -1084,10 +868,7 @@ impl WasmGcEmitter {
 			func,
 			&[
 				I::RefCastNonNull(HeapType::Concrete(i64_box)),
-				I::StructGet {
-					struct_type_index: i64_box,
-					field_index: 0,
-				},
+				I::StructGet { struct_type_index: i64_box, field_index: 0 },
 			],
 		);
 	}

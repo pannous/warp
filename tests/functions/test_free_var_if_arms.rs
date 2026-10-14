@@ -22,10 +22,7 @@ fn same_value(code: &str, value: i64) {
 #[test]
 fn non_foldable_capped_sum() {
 	// `limit = n` is not a constant binding, so fold leaves the free var
-	same_value(
-		"n=10; limit=n; def capped(x){ if x > limit then limit else x }; capped(3)+capped(30)",
-		13,
-	);
+	same_value("n=10; limit=n; def capped(x){ if x > limit then limit else x }; capped(3)+capped(30)", 13);
 }
 
 #[test]
@@ -35,30 +32,18 @@ fn then_arm_only_free_var_sum() {
 
 #[test]
 fn global_capped_sum() {
-	same_value(
-		"global limit=10; def capped(x){ if x > limit then limit else x }; capped(3)+capped(30)",
-		13,
-	);
+	same_value("global limit=10; def capped(x){ if x > limit then limit else x }; capped(3)+capped(30)", 13);
 }
 
 #[test]
 fn capped_single_and_semantics() {
-	same_value(
-		"n=10; limit=n; def capped(x){ if x > limit then limit else x }; capped(13)",
-		10,
-	);
-	same_value(
-		"n=10; limit=n; def capped(x){ if x > limit then limit else x }; capped(3)",
-		3,
-	);
+	same_value("n=10; limit=n; def capped(x){ if x > limit then limit else x }; capped(13)", 10);
+	same_value("n=10; limit=n; def capped(x){ if x > limit then limit else x }; capped(3)", 3);
 }
 
 #[test]
 fn free_var_only_in_condition_stays() {
-	same_value(
-		"n=10; limit=n; def f(x){ if x > limit then 99 else x }; f(3)+f(30)",
-		102,
-	);
+	same_value("n=10; limit=n; def f(x){ if x > limit then 99 else x }; f(3)+f(30)", 102);
 }
 
 #[test]

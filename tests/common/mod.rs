@@ -43,10 +43,8 @@ pub const LEAN: Resource = Resource {
 };
 /// binaryen's wasm-split, which splits a built site's module by route (src/web/route_split.rs)
 #[cfg(feature = "native")]
-pub const WASM_SPLIT: Resource = Resource {
-	name: "binaryen's wasm-split",
-	available: || warp::modules::binaryen::available("wasm-split"),
-};
+pub const WASM_SPLIT: Resource =
+	Resource { name: "binaryen's wasm-split", available: || warp::modules::binaryen::available("wasm-split") };
 
 // The test macros (user decision P100: they live with the tests, not in the library). is!(code, value) compiles and
 // runs code through the whole pipeline (parse, analyze, emit, run, read back) and compares the result
@@ -69,13 +67,7 @@ macro_rules! is {
 	// For wasm_struct! types: use reverse comparison (Person == Node)
 	($a:expr, $b:expr, gc) => {{
 		let result = ::warp::wasm_emitter::eval($a);
-		assert!(
-			$b == result,
-			"is! xxx assertion failed:\n  code: {}\n  expected: {:?}\n  got: {:?}",
-			$a,
-			$b,
-			result
-		);
+		assert!($b == result, "is! xxx assertion failed:\n  code: {}\n  expected: {:?}\n  got: {:?}", $a, $b, result);
 	}};
 }
 
@@ -180,13 +172,7 @@ pub fn fails_with(code: &str, needle: &str) {
 pub fn warnings_of(code: &str) -> (Node, Vec<String>) {
 	warp::errors::diagnostic::take_warnings();
 	let value = eval(code);
-	(
-		value,
-		warp::errors::diagnostic::take_warnings()
-			.iter()
-			.map(|warning| warning.to_string())
-			.collect(),
-	)
+	(value, warp::errors::diagnostic::take_warnings().iter().map(|warning| warning.to_string()).collect())
 }
 
 /// `code` gives `expected` and warns with a message containing `needle`
@@ -209,10 +195,8 @@ pub fn serve(status: &'static str, body: &'static str) -> String {
 		for mut stream in listener.incoming().flatten() {
 			let mut request = [0u8; 4096];
 			let _ = stream.read(&mut request);
-			let response = format!(
-				"HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-				body.len()
-			);
+			let response =
+				format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
 			let _ = stream.write_all(response.as_bytes());
 		}
 	});
@@ -223,11 +207,7 @@ pub fn serve(status: &'static str, body: &'static str) -> String {
 #[cfg(not(feature = "native"))]
 pub fn serve(status: &'static str, body: &'static str) -> String {
 	let stub = std::env::var("WARP_HTTP_STUB").expect("the browser test page names its HTTP stub (wasi.js)");
-	format!(
-		"{stub}?status={}&body={}",
-		percent_encoded(status),
-		percent_encoded(body)
-	)
+	format!("{stub}?status={}&body={}", percent_encoded(status), percent_encoded(body))
 }
 
 /// A warp server (web_server.rs, end to end) answering POST /post with what it got, as httpbin.org does: {data,
@@ -236,11 +216,7 @@ pub fn serve(status: &'static str, body: &'static str) -> String {
 pub fn echo_url() -> String {
 	static URL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 	URL.get_or_init(|| {
-		let port = std::net::TcpListener::bind("127.0.0.1:0")
-			.unwrap()
-			.local_addr()
-			.unwrap()
-			.port();
+		let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
 		std::thread::spawn(move || warp::pipeline::serving_at(port, || eval(ECHO_SERVER).serialize()));
 		let started = std::time::Instant::now();
 		while std::net::TcpStream::connect(("127.0.0.1", port)).is_err() {
@@ -291,13 +267,7 @@ pub fn online_eval(code: &str) -> Node {
 #[cfg(not(feature = "native"))]
 fn percent_encoded(text: &str) -> String {
 	text.bytes()
-		.map(|byte| {
-			if byte.is_ascii_alphanumeric() {
-				(byte as char).to_string()
-			} else {
-				format!("%{byte:02X}")
-			}
-		})
+		.map(|byte| if byte.is_ascii_alphanumeric() { (byte as char).to_string() } else { format!("%{byte:02X}") })
 		.collect()
 }
 
@@ -348,9 +318,7 @@ fn built_stub(name: &str, features: &[&str]) -> std::path::PathBuf {
 		.expect("cargo runs");
 	assert!(built.success(), "cargo build -p warp-runtime --bin {name} failed");
 	let shared = std::path::Path::new(env!("CARGO_BIN_EXE_warp")).with_file_name(name);
-	let runtime_manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-		.join("crates")
-		.join("warp-runtime");
+	let runtime_manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("crates").join("warp-runtime");
 	let build = checkout_build(
 		&shared,
 		&format!("{}-", name.replace('-', "_")),
@@ -378,17 +346,11 @@ pub fn warp_command() -> std::process::Command {
 	let binary = BINARY.get_or_init(|| {
 		let shared = std::path::Path::new(env!("CARGO_BIN_EXE_warp"));
 		let find = || {
-			let candidates = checkout_build(
-				shared,
-				"warp-",
-				env!("CARGO_MANIFEST_DIR"),
-				Some(env!("CARGO_PKG_VERSION")),
-			)
-			.into_iter()
-			.chain([shared.to_path_buf()]);
-			candidates
-				.filter_map(|candidate| own_copy(&candidate, "warp").ok())
-				.find(|own| is_this_version(own))
+			let candidates =
+				checkout_build(shared, "warp-", env!("CARGO_MANIFEST_DIR"), Some(env!("CARGO_PKG_VERSION")))
+					.into_iter()
+					.chain([shared.to_path_buf()]);
+			candidates.filter_map(|candidate| own_copy(&candidate, "warp").ok()).find(|own| is_this_version(own))
 		};
 		// another checkout's build can replace the shared binary before this one was found: build this checkout's anew
 		let own = find().or_else(|| {
@@ -455,12 +417,9 @@ fn checkout_build(
 ) -> Option<std::path::PathBuf> {
 	let deps = uplifted.parent()?.join("deps");
 	let names_this_checkout = |info: &str| {
-		info.lines()
-			.any(|line| line == format!("# env-dep:CARGO_MANIFEST_DIR={manifest_dir}"))
-			&& version.is_none_or(|version| {
-				info.lines()
-					.any(|line| line == format!("# env-dep:CARGO_PKG_VERSION={version}"))
-			})
+		info.lines().any(|line| line == format!("# env-dep:CARGO_MANIFEST_DIR={manifest_dir}"))
+			&& version
+				.is_none_or(|version| info.lines().any(|line| line == format!("# env-dep:CARGO_PKG_VERSION={version}")))
 	};
 	std::fs::read_dir(deps)
 		.ok()?
@@ -468,9 +427,7 @@ fn checkout_build(
 		.map(|entry| entry.path())
 		.filter(|path| {
 			path.extension().is_some_and(|extension| extension == "d")
-				&& path
-					.file_name()
-					.is_some_and(|name| name.to_string_lossy().starts_with(prefix))
+				&& path.file_name().is_some_and(|name| name.to_string_lossy().starts_with(prefix))
 		})
 		.filter(|info| std::fs::read_to_string(info).is_ok_and(|text| names_this_checkout(&text)))
 		.map(|info| info.with_extension(""))
@@ -481,9 +438,8 @@ fn checkout_build(
 /// How many calls the module of `code` makes to the function `name` (by the wasm name section)
 pub fn calls_to(code: &str, name: &str) -> usize {
 	use wasmparser::{KnownCustom, Name, Operator, Parser, Payload};
-	let bytes = warp::wasm_emitter::compile(code)
-		.unwrap_or_else(|error| panic!("{code} does not compile: {error:?}"))
-		.bytes;
+	let bytes =
+		warp::wasm_emitter::compile(code).unwrap_or_else(|error| panic!("{code} does not compile: {error:?}")).bytes;
 	let mut index = None;
 	let mut calls = Vec::new();
 	for payload in Parser::new(0).parse_all(&bytes) {
@@ -518,9 +474,8 @@ pub fn calls_to(code: &str, name: &str) -> usize {
 
 /// The (module, name) of every import of the module `code` compiles to
 pub fn imports_of(code: &str) -> Vec<(String, String)> {
-	let bytes = warp::wasm_emitter::compile(code)
-		.unwrap_or_else(|error| panic!("{code} does not compile: {error:?}"))
-		.bytes;
+	let bytes =
+		warp::wasm_emitter::compile(code).unwrap_or_else(|error| panic!("{code} does not compile: {error:?}")).bytes;
 	wasmparser::Parser::new(0)
 		.parse_all(&bytes)
 		.filter_map(|payload| match payload.expect("valid module") {

@@ -7,10 +7,7 @@ use warp::formats::ffi_parser::find_library_headers;
 #[test]
 fn libc_signatures() {
 	is!("import sranddev from 'c'\nsranddev()\n1", 1); // _V
-	is!(
-		"import srand from 'c'\nimport rand from 'c'\nsrand(7)\na=rand()\nsrand(7)\na==rand()",
-		true
-	); // I_V, _I
+	is!("import srand from 'c'\nimport rand from 'c'\nsrand(7)\na=rand()\nsrand(7)\na==rand()", true); // I_V, _I
 	is!("import abs from 'c'\nabs(-5)", 5); // I_I
 	is!("import sqrtf from 'c'\nsqrtf(2.25)", 1.5); // F_F
 	is!("import fabsf from 'c'\nfabsf(-2.5)", 2.5); // F_F

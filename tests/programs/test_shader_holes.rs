@@ -38,9 +38,6 @@ fn a_shader_with_holes_paints_as_with_the_values_given() {
 	if format!("{probe:?}").contains("no WebGPU adapter") {
 		return crate::common::announce_skip("a WebGPU adapter", module_path!());
 	}
-	let given = painted_rows(
-		&format!("{HOLES}paint(glow, 2, 1, {{size: 2.0, blue: 1.0}})"),
-		"paint-holes-given",
-	);
+	let given = painted_rows(&format!("{HOLES}paint(glow, 2, 1, {{size: 2.0, blue: 1.0}})"), "paint-holes-given");
 	assert_eq!(painted_rows(&format!("{HOLES}paint(glow, 2, 1)"), "paint-holes"), given);
 }

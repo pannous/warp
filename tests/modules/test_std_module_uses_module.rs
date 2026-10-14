@@ -21,16 +21,10 @@ fn the_used_modules_words_stay_hidden_from_the_program() {
 
 #[test]
 fn the_program_uses_both_modules() {
-	is!(
-		"use text; use list; [camel_case(\"a b\"), drop([1, 2], 1)]",
-		parse(r#"["aB" [2]]"#)
-	);
+	is!("use text; use list; [camel_case(\"a b\"), drop([1, 2], 1)]", parse(r#"["aB" [2]]"#));
 }
 
 #[test]
 fn a_programs_own_word_of_the_hidden_name_is_its_own() {
-	is!(
-		"use text; drop(x) := x * 2; [camel_case(\"a b\"), drop(4)]",
-		parse(r#"["aB" 8]"#)
-	);
+	is!("use text; drop(x) := x * 2; [camel_case(\"a b\"), drop(4)]", parse(r#"["aB" 8]"#));
 }

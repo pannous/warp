@@ -15,89 +15,56 @@ impl WasmGcEmitter {
 	pub(super) fn emit_node_list_runtime(&mut self) {
 		let (array, list) = self.typed_list_types(ElementType::Node);
 		let list_ref = Ref(self.typed_list_ref(ElementType::Node));
-		let array_ref = Ref(RefType {
-			nullable: true,
-			heap_type: HeapType::Concrete(array),
-		});
+		let array_ref = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(array) });
 		let node = self.type_manager.node_type;
 		let node_ref = Ref(self.node_ref(false));
 		let nullable_node = Ref(self.node_ref(true));
-		let length = I::StructGet {
-			struct_type_index: list,
-			field_index: 0,
-		};
-		let items = I::StructGet {
-			struct_type_index: list,
-			field_index: 1,
-		};
-		let kind = I::StructGet {
-			struct_type_index: list,
-			field_index: 2,
-		};
+		let length = I::StructGet { struct_type_index: list, field_index: 0 };
+		let items = I::StructGet { struct_type_index: list, field_index: 1 };
+		let kind = I::StructGet { struct_type_index: list, field_index: 2 };
 		let new_list = I::StructNew(list);
 		if self.should_emit_function(NODE_RUNTIME.at) || self.should_emit_function(NODE_RUNTIME.set) {
 			self.ensure_index_out_of_range_of();
 		}
 		if self.should_emit_function(NODE_RUNTIME.at) {
-			self.runtime_function(
-				NODE_RUNTIME.at,
-				vec![list_ref, ValType::I64],
-				vec![node_ref],
-				vec![],
-				|s, f| {
-					s.emit_list_position(f, list);
-					Self::emit_list(f, &[I::ArrayGet(array), I::RefAsNonNull]);
-				},
-			);
+			self.runtime_function(NODE_RUNTIME.at, vec![list_ref, ValType::I64], vec![node_ref], vec![], |s, f| {
+				s.emit_list_position(f, list);
+				Self::emit_list(f, &[I::ArrayGet(array), I::RefAsNonNull]);
+			});
 		}
 		if self.should_emit_function(NODE_RUNTIME.set) {
-			self.runtime_function(
-				NODE_RUNTIME.set,
-				vec![list_ref, ValType::I64, node_ref],
-				vec![],
-				vec![],
-				|s, f| {
-					s.emit_list_position(f, list);
-					Self::emit_list(f, &[I::LocalGet(2), I::ArraySet(array)]);
-				},
-			);
+			self.runtime_function(NODE_RUNTIME.set, vec![list_ref, ValType::I64, node_ref], vec![], vec![], |s, f| {
+				s.emit_list_position(f, list);
+				Self::emit_list(f, &[I::LocalGet(2), I::ArraySet(array)]);
+			});
 		}
 		if self.should_emit_function(NODE_RUNTIME.copy) {
-			self.runtime_function(
-				NODE_RUNTIME.copy,
-				vec![list_ref],
-				vec![list_ref],
-				vec![array_ref],
-				|_, f| {
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(0),
-							length.clone(),
-							I::ArrayNewDefault(array),
-							I::LocalSet(1),
-							I::LocalGet(1),
-							I::I32Const(0),
-							I::LocalGet(0),
-							items.clone(),
-							I::I32Const(0),
-							I::LocalGet(0),
-							length.clone(),
-							I::ArrayCopy {
-								array_type_index_dst: array,
-								array_type_index_src: array,
-							},
-							I::LocalGet(0),
-							length.clone(),
-							I::LocalGet(1),
-							I::RefAsNonNull,
-							I::LocalGet(0),
-							kind.clone(),
-							new_list.clone(),
-						],
-					);
-				},
-			);
+			self.runtime_function(NODE_RUNTIME.copy, vec![list_ref], vec![list_ref], vec![array_ref], |_, f| {
+				Self::emit_list(
+					f,
+					&[
+						I::LocalGet(0),
+						length.clone(),
+						I::ArrayNewDefault(array),
+						I::LocalSet(1),
+						I::LocalGet(1),
+						I::I32Const(0),
+						I::LocalGet(0),
+						items.clone(),
+						I::I32Const(0),
+						I::LocalGet(0),
+						length.clone(),
+						I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
+						I::LocalGet(0),
+						length.clone(),
+						I::LocalGet(1),
+						I::RefAsNonNull,
+						I::LocalGet(0),
+						kind.clone(),
+						new_list.clone(),
+					],
+				);
+			});
 		}
 		if self.should_emit_function(NODE_RUNTIME.filled) {
 			self.runtime_function(
@@ -224,10 +191,7 @@ impl WasmGcEmitter {
 							I::Block(BlockType::Empty),
 							I::Loop(BlockType::Empty),
 							I::LocalGet(cell),
-							I::StructGet {
-								struct_type_index: node,
-								field_index: 1,
-							},
+							I::StructGet { struct_type_index: node, field_index: 1 },
 						],
 					);
 					s.call(f, super::super::super::reflection::equality::IS_META_ENTRY);
@@ -237,10 +201,7 @@ impl WasmGcEmitter {
 							I::BrIf(1),
 							I::LocalGet(out),
 							I::LocalGet(cell),
-							I::StructGet {
-								struct_type_index: node,
-								field_index: 1,
-							},
+							I::StructGet { struct_type_index: node, field_index: 1 },
 							I::RefCastNonNull(HeapType::Concrete(node)),
 						],
 					);
@@ -250,18 +211,12 @@ impl WasmGcEmitter {
 						&[
 							I::LocalSet(out),
 							I::LocalGet(cell),
-							I::StructGet {
-								struct_type_index: node,
-								field_index: 2,
-							},
+							I::StructGet { struct_type_index: node, field_index: 2 },
 							I::LocalTee(cell),
 							I::RefIsNull,
 							I::BrIf(1),
 							I::LocalGet(cell),
-							I::StructGet {
-								struct_type_index: node,
-								field_index: 0,
-							},
+							I::StructGet { struct_type_index: node, field_index: 0 },
 							I::I64Const(crate::type_kinds::KIND_MASK),
 							I::I64And,
 							I::LocalTee(tag),
@@ -297,16 +252,7 @@ impl WasmGcEmitter {
 						],
 					);
 					s.emit_field(f, 0, 0);
-					Self::emit_list(
-						f,
-						&[
-							I::StructSet {
-								struct_type_index: list,
-								field_index: 2,
-							},
-							I::LocalGet(out),
-						],
-					);
+					Self::emit_list(f, &[I::StructSet { struct_type_index: list, field_index: 2 }, I::LocalGet(out)]);
 				},
 			);
 		}
@@ -317,19 +263,10 @@ impl WasmGcEmitter {
 		let value = element.val_type();
 		let (array, list) = self.typed_list_types(element);
 		let list_ref = Ref(self.typed_list_ref(element));
-		let array_ref = Ref(RefType {
-			nullable: true,
-			heap_type: HeapType::Concrete(array),
-		});
+		let array_ref = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(array) });
 		let node_ref = Ref(self.node_ref(false));
-		let length = I::StructGet {
-			struct_type_index: list,
-			field_index: 0,
-		};
-		let items = I::StructGet {
-			struct_type_index: list,
-			field_index: 1,
-		};
+		let length = I::StructGet { struct_type_index: list, field_index: 0 };
+		let items = I::StructGet { struct_type_index: list, field_index: 1 };
 		if self.should_emit_function(runtime.at) || self.should_emit_function(runtime.set) {
 			self.ensure_index_out_of_range_of();
 		}
@@ -342,16 +279,10 @@ impl WasmGcEmitter {
 		}
 		// set(list, index, value): the element at the 1-based index becomes value
 		if self.should_emit_function(runtime.set) {
-			self.runtime_function(
-				runtime.set,
-				vec![list_ref, ValType::I64, value],
-				vec![],
-				vec![],
-				|s, f| {
-					s.emit_list_position(f, list);
-					Self::emit_list(f, &[I::LocalGet(2), I::ArraySet(array)]);
-				},
-			);
+			self.runtime_function(runtime.set, vec![list_ref, ValType::I64, value], vec![], vec![], |s, f| {
+				s.emit_list_position(f, list);
+				Self::emit_list(f, &[I::LocalGet(2), I::ArraySet(array)]);
+			});
 		}
 		// copy(list) -> list: its own items, no spare capacity
 		if self.should_emit_function(runtime.copy) {
@@ -370,10 +301,7 @@ impl WasmGcEmitter {
 						I::I32Const(0),
 						I::LocalGet(0),
 						length.clone(),
-						I::ArrayCopy {
-							array_type_index_dst: array,
-							array_type_index_src: array,
-						},
+						I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
 						I::LocalGet(0),
 						length.clone(),
 						I::LocalGet(1),
@@ -407,10 +335,7 @@ impl WasmGcEmitter {
 						items.clone(),
 						I::I32Const(0),
 						I::LocalGet(count),
-						I::ArrayCopy {
-							array_type_index_dst: array,
-							array_type_index_src: array,
-						},
+						I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
 						I::End,
 					],
 				]
@@ -483,15 +408,9 @@ impl WasmGcEmitter {
 		}
 		// push(list, value) -> list: value appended in place, the items doubled when full; a new list for ø
 		if self.should_emit_function(runtime.push) {
-			self.runtime_function(
-				runtime.push,
-				vec![list_ref, value],
-				vec![list_ref],
-				vec![array_ref],
-				|_, f| {
-					Self::emit_list(f, &push_in_place(list, array, &[I::StructNew(list)]));
-				},
-			);
+			self.runtime_function(runtime.push, vec![list_ref, value], vec![list_ref], vec![array_ref], |_, f| {
+				Self::emit_list(f, &push_in_place(list, array, &[I::StructNew(list)]));
+			});
 		}
 		// sum(list) -> element: left to right like the loop; an int sum gives SUM_NOT_FIXNUM when it leaves the fixnum range
 		if self.should_emit_function(runtime.sum) {
@@ -559,10 +478,7 @@ impl WasmGcEmitter {
 		if self.should_emit_function(runtime.as_node_list) {
 			let (node_array, node_list) = self.typed_list_types(ElementType::Node);
 			let node_list_ref = Ref(self.typed_list_ref(ElementType::Node));
-			let node_array_ref = Ref(RefType {
-				nullable: true,
-				heap_type: HeapType::Concrete(node_array),
-			});
+			let node_array_ref = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(node_array) });
 			self.runtime_function(
 				runtime.as_node_list,
 				vec![list_ref],
@@ -638,12 +554,7 @@ impl WasmGcEmitter {
 					s.emit_cells_from_last(f, list, |s, f| {
 						Self::emit_list(
 							f,
-							&[
-								I::LocalGet(0),
-								items.clone(),
-								I::LocalGet(AS_NODE_POSITION),
-								I::ArrayGet(array),
-							],
+							&[I::LocalGet(0), items.clone(), I::LocalGet(AS_NODE_POSITION), I::ArrayGet(array)],
 						);
 						s.call(f, runtime.new_node);
 						Self::emit_list(f, &[I::LocalGet(AS_NODE_REST), I::I64Const(SQUARE_BRACKET_INFO)]);
@@ -674,10 +585,7 @@ impl WasmGcEmitter {
 				I::RefNull(HeapType::Concrete(self.type_manager.node_type)),
 				I::LocalSet(rest),
 				I::LocalGet(0),
-				I::StructGet {
-					struct_type_index: list,
-					field_index: 0,
-				},
+				I::StructGet { struct_type_index: list, field_index: 0 },
 				I::LocalSet(position),
 				I::Block(BlockType::Empty),
 				I::Loop(BlockType::Empty),
@@ -732,20 +640,14 @@ impl WasmGcEmitter {
 				I::I64LtS,
 				I::LocalGet(1),
 				I::LocalGet(0),
-				I::StructGet {
-					struct_type_index: list,
-					field_index: 0,
-				},
+				I::StructGet { struct_type_index: list, field_index: 0 },
 				I::I64ExtendI32U,
 				I::I64GtS,
 				I::I32Or,
 				I::If(BlockType::Empty),
 				I::LocalGet(1),
 				I::LocalGet(0),
-				I::StructGet {
-					struct_type_index: list,
-					field_index: 0,
-				},
+				I::StructGet { struct_type_index: list, field_index: 0 },
 				I::I64ExtendI32U,
 			],
 		);
@@ -755,10 +657,7 @@ impl WasmGcEmitter {
 			&[
 				I::End,
 				I::LocalGet(0),
-				I::StructGet {
-					struct_type_index: list,
-					field_index: 1,
-				},
+				I::StructGet { struct_type_index: list, field_index: 1 },
 				I::LocalGet(1),
 				I::I32WrapI64,
 				I::I32Const(1),

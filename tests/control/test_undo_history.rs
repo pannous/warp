@@ -21,8 +21,5 @@ fn any_value_and_any_writer_has_a_history() {
 	is!("t = \"a\"; t = \"b\"; undo t; t", "a");
 	is!("xs = [1]; xs = [1,2]; undo xs; string(xs)", "[1]");
 	is!("n = 0; def bump() { global n; n += 1 }; bump(); bump(); undo n; n", 1);
-	is!(
-		"stored kept_undo = 1; kept_undo = 2; kept_undo = 3; undo kept_undo; kept_undo",
-		2
-	);
+	is!("stored kept_undo = 1; kept_undo = 2; kept_undo = 3; undo kept_undo; kept_undo", 2);
 }

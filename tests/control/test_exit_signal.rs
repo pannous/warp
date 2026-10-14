@@ -4,11 +4,7 @@
 use crate::common::{printed, warp_command};
 
 fn lines(code: &str) -> Vec<String> {
-	printed(code)
-		.lines()
-		.filter(|line| !line.starts_with('»'))
-		.map(str::to_string)
-		.collect()
+	printed(code).lines().filter(|line| !line.starts_with('»')).map(str::to_string).collect()
 }
 
 #[test]
@@ -18,35 +14,23 @@ fn on_exit_runs_when_main_returns() {
 
 #[test]
 fn on_exit_runs_at_exit_and_keeps_its_code() {
-	assert_eq!(
-		lines("n = 1\non exit { print \"bye \" + n }\nn = 2\nexit(3)\nprint \"never\""),
-		["bye 2"]
-	);
+	assert_eq!(lines("n = 1\non exit { print \"bye \" + n }\nn = 2\nexit(3)\nprint \"never\""), ["bye 2"]);
 	let file = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("on_exit_code.warp");
 	std::fs::write(&file, "on exit { print \"bye\" }\nexit(3)\n").expect("write the program");
-	let output = warp_command()
-		.args(["run", file.to_str().unwrap()])
-		.output()
-		.expect("warp runs");
+	let output = warp_command().args(["run", file.to_str().unwrap()]).output().expect("warp runs");
 	assert_eq!(String::from_utf8_lossy(&output.stdout), "bye\n");
 	assert_eq!(output.status.code(), Some(3));
 }
 
 #[test]
 fn on_exit_runs_once() {
-	assert_eq!(
-		lines("on exit { print \"bye\"; exit(0) }\nprint \"hello\""),
-		["hello", "bye"]
-	);
+	assert_eq!(lines("on exit { print \"bye\"; exit(0) }\nprint \"hello\""), ["hello", "bye"]);
 }
 
 // P134: `event` in `on exit` is the exit code, 0 when main returns
 #[test]
 fn on_exit_reads_the_exit_code() {
-	assert_eq!(
-		lines("on exit { print \"bye \" event }\nprint \"hello\""),
-		["hello", "bye 0"]
-	);
+	assert_eq!(lines("on exit { print \"bye \" event }\nprint \"hello\""), ["hello", "bye 0"]);
 	assert_eq!(lines("on exit { print \"code \" + event }\nexit(4)"), ["code 4"]);
 	assert_eq!(lines("n = 0; on exit { print \"bye\" }; print \"hi\""), ["hi", "bye"]);
 }

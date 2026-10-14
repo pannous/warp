@@ -23,10 +23,7 @@ city: "NYC""#;
 		// Second item should be at line 2
 		if let Some(second) = items.get(1) {
 			if let Some(meta) = second.get_lineinfo() {
-				println!(
-					"Second item position: line {:?}, column {:?}",
-					meta.line_nr, meta.column
-				);
+				println!("Second item position: line {:?}, column {:?}", meta.line_nr, meta.column);
 				eq!(meta.line_nr, 2);
 			}
 		}

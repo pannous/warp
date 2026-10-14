@@ -16,12 +16,7 @@ fn a_failing_route_names_its_statement() {
 		std::thread::sleep(Duration::from_millis(50));
 	}
 	let url = format!("http://127.0.0.1:{PORT}/index");
-	let mut reply = ureq::get(&url)
-		.config()
-		.http_status_as_error(false)
-		.build()
-		.call()
-		.expect("an answer");
+	let mut reply = ureq::get(&url).config().http_status_as_error(false).build().call().expect("an answer");
 	let body = reply.body_mut().read_to_string().expect("a text");
 	assert_eq!(body, "index out of range: 5 not in 1…2 at 2:17");
 	server.join().expect("the server thread");

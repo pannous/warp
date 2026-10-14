@@ -44,10 +44,7 @@ fn an_int_becomes_a_case_explicitly() {
 
 #[test]
 fn other_languages_enums_are_plain_enums_too() {
-	is!(
-		"enum Direction { case north, south }\nlet d = Direction.south\nd",
-		symbol("south")
-	);
+	is!("enum Direction { case north, south }\nlet d = Direction.south\nd", symbol("south"));
 	is!("enum class Color { RED, GREEN }\nColor.GREEN is Color", true);
 	is!("enum color {red green blue}; color.blue as int", 2);
 }

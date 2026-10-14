@@ -18,9 +18,7 @@ const NAME_PLACEHOLDER: &str = "X";
 pub fn lower(program: Node) -> Node {
 	let mut undone = vec![];
 	collect_undone(&program, &mut undone);
-	let taken = [UNDO_WORD, REDO_WORD]
-		.iter()
-		.any(|word| crate::soft_keywords::program_names(&program, word));
+	let taken = [UNDO_WORD, REDO_WORD].iter().any(|word| crate::soft_keywords::program_names(&program, word));
 	if undone.is_empty() || taken {
 		return program;
 	}
@@ -70,14 +68,7 @@ fn collect_undone(node: &Node, undone: &mut Vec<String>) {
 /// Every `undo x` and `redo x` as the block that moves x through its history
 fn with_undo_statements(node: Node) -> Node {
 	match undo_parts(&node) {
-		Some((word, name)) => from_template(
-			if word == UNDO_WORD {
-				UNDO_TEMPLATE
-			} else {
-				REDO_TEMPLATE
-			},
-			name,
-		),
+		Some((word, name)) => from_template(if word == UNDO_WORD { UNDO_TEMPLATE } else { REDO_TEMPLATE }, name),
 		None => node.map_children(with_undo_statements),
 	}
 }

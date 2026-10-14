@@ -3,11 +3,7 @@
 // is given, so later writes of the field reach it; a variable kept in such a field stays a signal there
 #[cfg(feature = "native")]
 fn printed(code: &str) -> String {
-	crate::common::printed(code)
-		.lines()
-		.filter(|line| !line.starts_with('»'))
-		.map(|line| format!("{line}\n"))
-		.collect()
+	crate::common::printed(code).lines().filter(|line| !line.starts_with('»')).map(|line| format!("{line}\n")).collect()
 }
 
 #[test]

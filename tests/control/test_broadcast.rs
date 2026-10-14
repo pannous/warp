@@ -4,21 +4,14 @@
 #[cfg(all(feature = "native", unix))]
 fn printed(code: &str) -> String {
 	let output = crate::common::printed(code);
-	output
-		.lines()
-		.filter(|line| !line.starts_with('»'))
-		.map(|line| format!("{line}\n"))
-		.collect()
+	output.lines().filter(|line| !line.starts_with('»')).map(|line| format!("{line}\n")).collect()
 }
 
 #[test]
 #[cfg(all(feature = "native", unix))]
 fn a_program_hears_its_own_broadcast() {
 	assert_eq!(printed("on message from \"test-own\" { print \"got \" + event.text }\nbroadcast {text: \"hi\"} on \"test-own\"\nsleep(200 ms)"), "got hi\n");
-	assert_eq!(
-		printed("on message { print \"got \" + event }\nbroadcast 21\nsleep(200 ms)"),
-		"got 21\n"
-	);
+	assert_eq!(printed("on message { print \"got \" + event }\nbroadcast 21\nsleep(200 ms)"), "got 21\n");
 }
 
 #[test]
@@ -31,9 +24,8 @@ fn a_broadcast_reaches_another_program() {
 		.stdout(std::process::Stdio::piped())
 		.spawn()
 		.expect("the listener starts");
-	let mut lines = std::io::BufReader::new(listener.stdout.take().expect("the listener's output"))
-		.lines()
-		.map_while(Result::ok);
+	let mut lines =
+		std::io::BufReader::new(listener.stdout.take().expect("the listener's output")).lines().map_while(Result::ok);
 	assert_eq!(lines.next().as_deref(), Some("listening"));
 	printed("broadcast \"ping\" on \"test-other\"");
 	assert_eq!(lines.next().as_deref(), Some("heard ping"));

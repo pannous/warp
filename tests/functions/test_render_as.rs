@@ -7,26 +7,14 @@ const PHRASES: &str = "class pdf{body:text}; class docx{body:text}; to render te
 
 #[test]
 fn a_phrase_names_its_result_after_as() {
-	is!(
-		"class pdf{body:text}; to render text as pdf: pdf(text); x = render \"hello\" as pdf; x.body",
-		"hello"
-	);
-	is!(
-		"class pdf{body:text}; to render text as pdf: pdf(text); type of (render \"hello\" as pdf)",
-		"pdf"
-	);
+	is!("class pdf{body:text}; to render text as pdf: pdf(text); x = render \"hello\" as pdf; x.body", "hello");
+	is!("class pdf{body:text}; to render text as pdf: pdf(text); type of (render \"hello\" as pdf)", "pdf");
 }
 
 #[test]
 fn as_names_the_result_of_a_single_definition() {
-	is!(
-		"class pdf{body:text}; render(t):pdf := pdf(t); (render \"hello\" as pdf).body",
-		"hello"
-	);
-	is!(
-		"class pdf{body:text}; render(t) := pdf(t); ((render \"hello\") as pdf).body",
-		"hello"
-	);
+	is!("class pdf{body:text}; render(t):pdf := pdf(t); (render \"hello\" as pdf).body", "hello");
+	is!("class pdf{body:text}; render(t) := pdf(t); ((render \"hello\") as pdf).body", "hello");
 }
 
 #[test]

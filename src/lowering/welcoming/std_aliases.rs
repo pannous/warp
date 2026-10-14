@@ -26,13 +26,7 @@ const fn alias(
 	word: &'static str,
 	order: &'static [usize],
 ) -> StdAlias {
-	StdAlias {
-		module,
-		member,
-		std_module,
-		word,
-		order,
-	}
+	StdAlias { module, member, std_module, word, order }
 }
 
 const STD_ALIASES: [StdAlias; 21] = [
@@ -66,11 +60,8 @@ const USE_WORD: &str = "use";
 
 pub fn lower(program: Node) -> Node {
 	let names = crate::soft_keywords::names_given(&program);
-	let kept: Vec<&str> = STD_ALIASES
-		.iter()
-		.map(|alias| alias.module)
-		.filter(|module| names.contains(*module))
-		.collect();
+	let kept: Vec<&str> =
+		STD_ALIASES.iter().map(|alias| alias.module).filter(|module| names.contains(*module)).collect();
 	// `def parse_json(t) {…}` too: the program's own word gets no note (card hint-own-definition)
 	let defined = crate::library_words::defined_names(&program);
 	note_internal_words(&program, &names.union(&defined).cloned().collect());
@@ -106,9 +97,7 @@ fn in_module_file(node: &Node) -> bool {
 fn first_call_of<'a>(node: &'a Node, word: &str) -> Option<&'a Node> {
 	match node.drop_meta() {
 		Node::List(items, Bracket::Round, _)
-			if items
-				.first()
-				.is_some_and(|first| matches!(first.drop_meta(), Node::Symbol(name) if name == word)) =>
+			if items.first().is_some_and(|first| matches!(first.drop_meta(), Node::Symbol(name) if name == word)) =>
 		{
 			(!in_module_file(node)).then_some(node)
 		}
@@ -131,10 +120,7 @@ fn aliased(node: Node, kept: &[&str], used: &mut HashSet<&'static str>) -> Node 
 			if !alias.std_module.is_empty() {
 				used.insert(alias.std_module);
 			}
-			let arguments = alias
-				.order
-				.iter()
-				.map(|&index| aliased(arguments[index].clone(), kept, used));
+			let arguments = alias.order.iter().map(|&index| aliased(arguments[index].clone(), kept, used));
 			parens(std::iter::once(symbol(alias.word)).chain(arguments).collect())
 		}
 		None => node.map_children(|child| aliased(child, kept, used)),
@@ -201,10 +187,6 @@ fn with_uses(program: Node, used: HashSet<&'static str>) -> Node {
 		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
 			Node::List(uses.chain(statements).collect(), Bracket::None, separator)
 		}
-		single => Node::List(
-			uses.chain(std::iter::once(single)).collect(),
-			Bracket::None,
-			Separator::Semicolon,
-		),
+		single => Node::List(uses.chain(std::iter::once(single)).collect(), Bracket::None, Separator::Semicolon),
 	}
 }

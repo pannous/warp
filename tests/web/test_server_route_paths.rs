@@ -44,18 +44,10 @@ fn serving(program: &'static str, folder: &str, port: u16, requests: usize) -> s
 /// The status code and body of GET path
 fn fetched(port: u16, path: &str) -> (u16, String) {
 	let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).expect("the server");
-	write!(
-		stream,
-		"GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
-	)
-	.expect("the request");
+	write!(stream, "GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n").expect("the request");
 	let mut answer = String::new();
 	stream.read_to_string(&mut answer).expect("the answer");
-	let status = answer
-		.split(' ')
-		.nth(1)
-		.and_then(|code| code.parse().ok())
-		.expect("a status line");
+	let status = answer.split(' ').nth(1).and_then(|code| code.parse().ok()).expect("a status line");
 	let body = answer.split_once("\r\n\r\n").map_or("", |(_, body)| body).to_string();
 	(status, body)
 }
@@ -64,21 +56,12 @@ fn fetched(port: u16, path: &str) -> (u16, String) {
 fn a_get_route_takes_typed_parameters_and_answers_plain_objects() {
 	let server = serving(PROGRAM, "route_paths", PORT, 6);
 	let get = |path| fetched(PORT, path);
-	assert_eq!(
-		get("/api/users/2"),
-		(200, r#"{"name":"Bo","team":{"name":"red"}}"#.to_string())
-	);
+	assert_eq!(get("/api/users/2"), (200, r#"{"name":"Bo","team":{"name":"red"}}"#.to_string()));
 	assert_eq!(
 		get("/api/users"),
-		(
-			200,
-			r#"[{"name":"Ann","team":{"name":"red"}},{"name":"Bo","team":{"name":"red"}}]"#.to_string()
-		)
+		(200, r#"[{"name":"Ann","team":{"name":"red"}},{"name":"Bo","team":{"name":"red"}}]"#.to_string())
 	);
-	assert_eq!(
-		get("/api/users/abc"),
-		(404, r#"{"error":"no route GET /api/users/abc"}"#.to_string())
-	);
+	assert_eq!(get("/api/users/abc"), (404, r#"{"error":"no route GET /api/users/abc"}"#.to_string()));
 	// the one page, whose router shows `route "*"` in the browser
 	let (status, page) = get("/users/abc");
 	assert!(status == 200 && page.contains("<base href=\"/\">"), "{status} {page}");

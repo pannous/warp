@@ -24,10 +24,7 @@ fn a_variable_named_value_wins() {
 #[test]
 fn match_names_its_subject() {
 	is!("f(x) := [x, x+1]; match alle = f(3) { [a, b] => #alle + b; _ => 0 }", 6);
-	is!(
-		"f(x) := [x, x+1]; r = match alle=f(3) { [a, b] => #alle; _ => 0 }; r",
-		2
-	);
+	is!("f(x) := [x, x+1]; r = match alle=f(3) { [a, b] => #alle; _ => 0 }; r", 2);
 	is!("f(x) := [x, x+1]; match (alle=f(3)) { [a, b] => #alle; _ => 0 }", 2);
 	is!("f(x) := [x, x+1]; match alle=f(3) { _ => 0 }; alle[1]", 4);
 }

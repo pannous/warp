@@ -40,12 +40,7 @@ impl WarpParser {
 		let (start, line, column) = (self.pos, self.line_nr, self.column);
 		let value = read(self);
 		let written = self.chars[start..self.pos].iter().collect();
-		self.atoms.push(Atom {
-			kind,
-			line,
-			column,
-			written,
-		});
+		self.atoms.push(Atom { kind, line, column, written });
 		value
 	}
 
@@ -212,30 +207,19 @@ impl WarpParser {
 	/// Is the keyword at the cursor followed (after blanks) by `{`: `div {…}` is a tag, not the operator
 	pub(super) fn word_opens_block(&self, word: &str) -> bool {
 		let after = word.chars().count();
-		let gap = (after..)
-			.take_while(|at| matches!(self.peek_char(*at), ' ' | '\t'))
-			.count();
+		let gap = (after..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
 		self.peek_char(after + gap) == '{'
 	}
 
 	/// Does an operand follow, after blanks, the `width` characters at the cursor (not the line's end or a closing bracket)
 	pub(super) fn operand_after(&self, width: usize) -> bool {
-		let gap = (width..)
-			.take_while(|at| matches!(self.peek_char(*at), ' ' | '\t'))
-			.count();
-		gap > 0
-			&& !matches!(
-				self.peek_char(width + gap),
-				'\n' | '\r' | '\0' | ')' | ']' | '}' | ';' | ','
-			)
+		let gap = (width..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		gap > 0 && !matches!(self.peek_char(width + gap), '\n' | '\r' | '\0' | ')' | ']' | '}' | ';' | ',')
 	}
 
 	/// The identifier starting `offset` characters ahead
 	pub(super) fn word_at(&self, offset: usize) -> String {
-		(offset..)
-			.map(|at| self.peek_char(at))
-			.take_while(|c| is_identifier_char(*c))
-			.collect()
+		(offset..).map(|at| self.peek_char(at)).take_while(|c| is_identifier_char(*c)).collect()
 	}
 
 	/// The identifier that ends right before the cursor and the blanks before it, on this line
@@ -261,11 +245,7 @@ impl WarpParser {
 
 	/// The source line up to the cursor
 	pub(super) fn input_before_cursor(&self) -> String {
-		let before: String = self.chars[..self.pos]
-			.iter()
-			.rev()
-			.take_while(|c| **c != '\n')
-			.collect();
+		let before: String = self.chars[..self.pos].iter().rev().take_while(|c| **c != '\n').collect();
 		before.chars().rev().collect()
 	}
 
@@ -307,9 +287,7 @@ impl WarpParser {
 	}
 
 	pub(crate) fn blanks_ahead(&self) -> usize {
-		(0..)
-			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
-			.count()
+		(0..).take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t')).count()
 	}
 }
 

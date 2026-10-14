@@ -106,11 +106,7 @@ impl DataValue {
 	pub fn new<T: 'static + Clone + PartialEq>(data: T) -> Self {
 		let type_name = std::any::type_name::<T>().to_string();
 		let data_type = Self::infer_type(&type_name);
-		DataValue {
-			data: Box::new(data),
-			type_name,
-			data_type,
-		}
+		DataValue { data: Box::new(data), type_name, data_type }
 	}
 
 	pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
@@ -146,11 +142,7 @@ impl DataValue {
 
 impl Clone for DataValue {
 	fn clone(&self) -> Self {
-		DataValue {
-			data: self.data.clone_any(),
-			type_name: self.type_name.clone(),
-			data_type: self.data_type.clone(),
-		}
+		DataValue { data: self.data.clone_any(), type_name: self.type_name.clone(), data_type: self.data_type.clone() }
 	}
 }
 

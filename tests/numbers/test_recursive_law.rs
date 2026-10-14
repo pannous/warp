@@ -16,10 +16,7 @@ fn a_recursive_function_is_exported_with_its_termination_measure() {
 	let code = law_of(SUM_TO, "sum_to(n) >= 0");
 	let lawful = separate_laws(parse(&code));
 	let source = lean::export(&lawful.functions, &lawful.laws[0], lean::TACTICS).unwrap();
-	assert!(
-		source.contains("termination_by n.toNat\ndecreasing_by all_goals omega"),
-		"{source}"
-	);
+	assert!(source.contains("termination_by n.toNat\ndecreasing_by all_goals omega"), "{source}");
 	assert!(source.contains("fun_induction sum_to n"), "{source}");
 }
 
@@ -27,20 +24,14 @@ fn a_recursive_function_is_exported_with_its_termination_measure() {
 fn an_instance_too_deep_to_run_is_no_counterexample() {
 	let code = law_of(SUM_TO, "sum_to(n) >= 0");
 	let lawful = separate_laws(parse(&code));
-	assert_eq!(
-		property_test(&lawful, &lawful.laws[0], PROPERTY_TRIALS, &code),
-		Verdict::Holds
-	);
+	assert_eq!(property_test(&lawful, &lawful.laws[0], PROPERTY_TRIALS, &code), Verdict::Holds);
 }
 
 #[test]
 fn a_precondition_skips_the_instances_it_excludes() {
 	let code = law_of(SUM_TO, "n >= 0 => sum_to(n) * 2 == n * (n + 1)");
 	let lawful = separate_laws(parse(&code));
-	assert_eq!(
-		property_test(&lawful, &lawful.laws[0], PROPERTY_TRIALS, &code),
-		Verdict::Holds
-	);
+	assert_eq!(property_test(&lawful, &lawful.laws[0], PROPERTY_TRIALS, &code), Verdict::Holds);
 }
 
 #[test]
@@ -57,10 +48,7 @@ fn recursive_laws_are_proved_by_induction() {
 	for (function, law) in [
 		(SUM_TO, "sum_to(n) >= 0"),
 		(SUM_TO, "n >= 0 => sum_to(n) * 2 == n * (n + 1)"),
-		(
-			"power(b, e) := if e <= 0 then 1 else b * power(b, e - 1)",
-			"e >= 0 => power(b, e + 1) == b * power(b, e)",
-		),
+		("power(b, e) := if e <= 0 then 1 else b * power(b, e - 1)", "e >= 0 => power(b, e + 1) == b * power(b, e)"),
 	] {
 		let reports = verify(&law_of(function, law));
 		assert_eq!(reports[0].assurance, Assurance::Proved, "{}", reports[0]);

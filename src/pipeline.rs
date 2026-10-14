@@ -42,9 +42,7 @@ fn eval_source(code: &str) -> Node {
 
 /// Parse the source and check its laws; `Err` is the violation.
 fn lawful_program(code: &str) -> Result<Node, Node> {
-	let lawful = crate::law::separate_laws(crate::errors::diagnostic::in_source_mode(code, || {
-		WarpParser::parse(code)
-	}));
+	let lawful = crate::law::separate_laws(crate::errors::diagnostic::in_source_mode(code, || WarpParser::parse(code)));
 	match crate::law::assert_laws(&lawful, code) {
 		Some(violation) => Err(violation),
 		None => Ok(lawful.program),
@@ -62,9 +60,7 @@ pub fn eval_untrusted(code: &str) -> Node {
 		Some((external, _)) => crate::node::error(&format!(
 			"untrusted code has no capabilities but pure libm, refusing to call {external}"
 		)),
-		None => with_granted(&crate::analyzer::effects::Capability::GRANTED_UNTRUSTED, || {
-			eval_parsed(program, code)
-		}),
+		None => with_granted(&crate::analyzer::effects::Capability::GRANTED_UNTRUSTED, || eval_parsed(program, code)),
 	}
 }
 
@@ -82,13 +78,7 @@ type Pass = fn(Node) -> Node;
 
 /// The passes over the source forms, in order, each reading what the one before it left: definitions and sugar become
 /// the forms every later pass knows (`def f(x) {…}` is `f(x) := {…}`), modules are resolved; one phase after the other
-const SOURCE_PHASES: [&[Pass]; 5] = [
-	SUGAR_PASSES,
-	DECLARATION_PASSES,
-	MODULE_PASSES,
-	SIGNAL_PASSES,
-	FUNCTION_PASSES,
-];
+const SOURCE_PHASES: [&[Pass]; 5] = [SUGAR_PASSES, DECLARATION_PASSES, MODULE_PASSES, SIGNAL_PASSES, FUNCTION_PASSES];
 /// The phases a used module's source runs before it joins the program (lower_module_source)
 const MODULE_SOURCE_PHASES: [&[Pass]; 2] = [SUGAR_PASSES, DECLARATION_PASSES];
 
@@ -100,6 +90,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::welcome_forms::lower_match_arms,
 	// `a of b` is `b.a` (of_lookups.rs), before any pass reads a lookup
 	crate::lowering::of_lookups::lower,
+	// `(p).a` is `p.a` (grouped_receivers.rs), before any pass reads a lookup
+	crate::lowering::grouped_receivers::lower,
 	// `n times {…}`, `n times [x]`, `n times "ab"` as the parser keeps them: a loop, a filled list, a repeated text
 	crate::lowering::times_phrases::lower,
 	// `xs .* 2` as the parser keeps it: the operator applied to each element (broadcasting.rs)
@@ -175,6 +167,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	// `f.effects`, `e.listeners`: the reflection words' dot forms (reflection.rs), before any pass reads them as fields
 	// `help(sound)`, `help(midi)`: a standard module's index, a word's head and comment (word_help.rs), before reflection.rs
 	// answers help(sound) with the signature of the word sound
+	// a function's leading text and the comment above it: its doc (doc_strings.rs), before reflection.rs reads `f.doc`
+	crate::lowering::doc_strings::lower,
 	crate::lowering::word_help::lower,
 	crate::lowering::reflection::lower,
 	// `root` is sqrt (word_operators.rs), before pipes.rs reads `2|square|root`
@@ -357,17 +351,12 @@ const MEANING_PASSES: &[Pass] = &[
 /// Not the program's own passes: getters::lower (a getter `answer := 42` is lowered with the program, whose reads of it
 /// become calls) and serve::with_default_routes (a module's functions are no routes of a hosted program).
 pub(crate) fn lower_module_source(module: Node) -> Node {
-	let program_only: [Pass; 2] = [
-		crate::lowering::getters::lower,
-		crate::lowering::serve::with_default_routes,
-	];
+	let program_only: [Pass; 2] = [crate::lowering::getters::lower, crate::lowering::serve::with_default_routes];
 	MODULE_SOURCE_PHASES
 		.iter()
 		.flat_map(|phase| phase.iter())
 		.filter(|pass| !program_only.iter().any(|own| std::ptr::fn_addr_eq(**pass, *own)))
-		.fold(crate::lowering::for_loop::headers::lower(module), |module, pass| {
-			pass(module)
-		})
+		.fold(crate::lowering::for_loop::headers::lower(module), |module, pass| pass(module))
 }
 
 fn run_passes(node: Node, passes: &[Pass]) -> Node {
@@ -378,9 +367,7 @@ fn run_passes(node: Node, passes: &[Pass]) -> Node {
 /// (a constant answer, an error, a denied capability).
 pub(crate) fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	use crate::lowering::blocks::unsealed;
-	crate::lowering::nodes::numbering_fresh_names(|| lower_with_sealed_quotes(node))
-		.map(unsealed)
-		.map_err(unsealed)
+	crate::lowering::nodes::numbering_fresh_names(|| lower_with_sealed_quotes(node)).map(unsealed).map_err(unsealed)
 }
 
 fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
@@ -442,10 +429,7 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 		return Err(crate::node::error(&if crate::host::sandbox::is_sandboxed() {
 			crate::host::sandbox::denial(&name, capability.name())
 		} else {
-			format!(
-				"capability denied: {name} needs the {} capability, which eval does not grant",
-				capability.name()
-			)
+			format!("capability denied: {name} needs the {} capability, which eval does not grant", capability.name())
 		}));
 	}
 	let node = crate::analyzer::resolve_main_variable_assignments(crate::lowering::late_binding::lower(
@@ -458,11 +442,9 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	let mut warnings = crate::analyzer::lint(&node);
 	warnings.retain(|warning| !warning.file.as_deref().is_some_and(crate::modules::is_std_source));
 	crate::errors::diagnostic::report(&warnings)?;
-	Ok(crate::lowering::declaration_forms::indexed_parameter_copies(
-		crate::lowering::inlining::lower(crate::lowering::declaration_forms::lower_declarations(
-			crate::lowering::kebab_names::resolve_data_scope(node),
-		)),
-	))
+	Ok(crate::lowering::declaration_forms::indexed_parameter_copies(crate::lowering::inlining::lower(
+		crate::lowering::declaration_forms::lower_declarations(crate::lowering::kebab_names::resolve_data_scope(node)),
+	)))
 }
 
 /// The program as the emitter sees it after every lowering pass (`warp lower <code>`); `Err` is its final value
@@ -498,10 +480,8 @@ fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModu
 		let reflected = crate::lowering::reflection::meta_entries(&source, &node, code);
 		warn_about_run_time_blocks(&node)?;
 		// the module's `warp.meta` section: a final quantity's unit, the program's functions and classes
-		let entries: Vec<_> = crate::numbers::units::static_units::result_units_entry()
-			.into_iter()
-			.chain(reflected)
-			.collect();
+		let entries: Vec<_> =
+			crate::numbers::units::static_units::result_units_entry().into_iter().chain(reflected).collect();
 		choose_module(&node).map(|module| CompiledModule {
 			bytes: crate::formats::meta_section::with_entries(module.bytes, entries),
 			..module
@@ -550,12 +530,7 @@ fn raw_struct_module(node: &Node) -> Option<Vec<u8>> {
 
 fn choose_module(node: &Node) -> Result<CompiledModule, Node> {
 	match raw_struct_module(node) {
-		Some(bytes) => Ok(CompiledModule {
-			bytes,
-			needs_host: false,
-			needs_wasi: false,
-			needs_ffi: false,
-		}),
+		Some(bytes) => Ok(CompiledModule { bytes, needs_host: false, needs_wasi: false, needs_ffi: false }),
 		None => emit_module(node),
 	}
 }
@@ -599,24 +574,10 @@ fn checked_markup(result: Node) -> Node {
 
 /// Run a compiled program with the linker its imports need
 #[cfg(feature = "native")]
-pub(crate) fn run_module(
-	CompiledModule {
-		bytes,
-		needs_host,
-		needs_wasi,
-		needs_ffi,
-	}: CompiledModule,
-) -> Node {
+pub(crate) fn run_module(CompiledModule { bytes, needs_host, needs_wasi, needs_ffi }: CompiledModule) -> Node {
 	use crate::run::wasm_reader::{read_bytes_with_imports, Imports};
 	let result = if needs_ffi || needs_wasi || needs_host {
-		read_bytes_with_imports(
-			&bytes,
-			Imports {
-				host: needs_host,
-				wasi: needs_wasi,
-				ffi: needs_ffi,
-			},
-		)
+		read_bytes_with_imports(&bytes, Imports { host: needs_host, wasi: needs_wasi, ffi: needs_ffi })
 	} else {
 		read_bytes(&bytes)
 	};

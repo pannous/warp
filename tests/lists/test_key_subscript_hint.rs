@@ -4,11 +4,7 @@ use warp::wasm_emitter::eval;
 
 fn index_hints(code: &str) -> Vec<String> {
 	let (_, hints) = capture_hints(|| eval(code));
-	hints
-		.into_iter()
-		.filter(|hint| hint.reason == "use # for indexing")
-		.map(|hint| hint.canonical)
-		.collect()
+	hints.into_iter().filter(|hint| hint.reason == "use # for indexing").map(|hint| hint.canonical).collect()
 }
 
 #[test]
@@ -22,14 +18,8 @@ fn a_text_key_subscript_gets_no_index_hint() {
 #[test]
 fn a_text_variable_subscript_gets_no_index_hint() {
 	assert_eq!(index_hints("l=\"en\"; m={en:\"x\"}; m[l]"), Vec::<String>::new());
-	assert_eq!(
-		index_hints("get(m, k:text) := m[k]; get({en:\"x\"}, \"en\")"),
-		Vec::<String>::new()
-	);
-	assert_eq!(
-		index_hints("m={en:{hi:\"x\"}}; l=\"en\"; k=\"hi\"; m[l][k]"),
-		Vec::<String>::new()
-	);
+	assert_eq!(index_hints("get(m, k:text) := m[k]; get({en:\"x\"}, \"en\")"), Vec::<String>::new());
+	assert_eq!(index_hints("m={en:{hi:\"x\"}}; l=\"en\"; k=\"hi\"; m[l][k]"), Vec::<String>::new());
 	assert_eq!(index_hints("xs=[1,2]; xs[0]"), vec!["xs#1".to_string()]); // card g_YiSA: a number only
 }
 

@@ -43,10 +43,7 @@ fn every_expert_snippet_shows_its_value() {
 		.into_iter()
 		.filter_map(|(code, value, _)| {
 			let expected = value?;
-			let shown = evaluate(code, HashSet::new())["value"]
-				.as_str()
-				.unwrap_or_default()
-				.to_string();
+			let shown = evaluate(code, HashSet::new())["value"].as_str().unwrap_or_default().to_string();
 			(shown != expected).then(|| format!("{code}  shows {shown}, the guide says {expected}"))
 		})
 		.collect();

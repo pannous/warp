@@ -32,11 +32,7 @@ fn headers(answer: &str) -> Vec<&str> {
 fn a_routes_status_and_headers_reach_the_cgi_answer() {
 	let module = module();
 	let teapot = answer(&module, "/teapot");
-	assert_eq!(
-		headers(&teapot),
-		["Status: 418", "Content-Type: text/plain; charset=utf-8", "X-Warp: yes"],
-		"{teapot}"
-	);
+	assert_eq!(headers(&teapot), ["Status: 418", "Content-Type: text/plain; charset=utf-8", "X-Warp: yes"], "{teapot}");
 	assert!(teapot.trim_end().ends_with("\n\nshort and stout"), "{teapot}");
 	let page = answer(&module, "/page");
 	assert_eq!(headers(&page), ["Status: 200", "Content-Type: text/html"], "{page}");

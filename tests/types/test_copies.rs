@@ -14,10 +14,7 @@ fn a_copy_is_independent() {
 #[test]
 fn a_copy_is_deep() {
 	is!("m = {a: {b: 1}}; n = m.copy(); n.a.b = 2; m.a.b", 1);
-	is!(
-		"class P { x: int }; p = P(1); ps = [p]; qs = ps.copy(); qs#1.x = 9; p.x",
-		1
-	);
+	is!("class P { x: int }; p = P(1); ps = [p]; qs = ps.copy(); qs#1.x = 9; p.x", 1);
 }
 
 #[test]
@@ -39,10 +36,7 @@ fn a_class_copy_wins_and_clone_calls_it() {
 
 #[test]
 fn kotlin_copy_changes_fields() {
-	is!(
-		"class P { x: int; y: int }; p = P(1, 2); q = p.copy(y = 5); q.y * 10 + p.y",
-		52
-	);
+	is!("class P { x: int; y: int }; p = P(1, 2); q = p.copy(y = 5); q.y * 10 + p.y", 52);
 }
 
 #[test]

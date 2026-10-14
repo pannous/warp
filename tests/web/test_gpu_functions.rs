@@ -40,10 +40,7 @@ fn maps_on_gpu(program: &str) -> bool {
 /// The last item of the map on the GPU, close to the same map pinned to the CPU
 fn agrees_with_cpu(lambda: &str) {
 	let tolerance = crate::common::gpu_tolerance();
-	let program = format!(
-		"{}ys = xs.map({lambda})\nexact = xs.map({lambda}) @cpu\n",
-		filled(AUTO_COUNT)
-	);
+	let program = format!("{}ys = xs.map({lambda})\nexact = xs.map({lambda}) @cpu\n", filled(AUTO_COUNT));
 	assert!(maps_on_gpu(&format!("{program}ys#1")), "{lambda} maps on the CPU");
 	let close = format!("{program}abs(ys#{AUTO_COUNT} - exact#{AUTO_COUNT}) + abs(ys#7 - exact#7) < {tolerance}");
 	assert_eq!(eval(&close).serialize(), "yes", "{lambda}");
@@ -76,12 +73,5 @@ fn a_function_wgsl_cannot_compute_keeps_the_map_on_the_cpu() {
 
 #[test]
 fn a_small_map_calling_a_function_stays_exact() {
-	assert_eq!(
-		eval(&format!(
-			"{}ys = xs.map(x => shade(x))\nys#3 == shade(xs#3)",
-			filled(100)
-		))
-		.serialize(),
-		"yes"
-	);
+	assert_eq!(eval(&format!("{}ys = xs.map(x => shade(x))\nys#3 == shade(xs#3)", filled(100))).serialize(), "yes");
 }

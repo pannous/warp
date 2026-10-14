@@ -27,10 +27,7 @@ fn cmd_slash_comments_lines_out_and_back_in() {
 	assert_eq!(toggled(&["// x = 1"]), ["x = 1"]);
 	assert_eq!(toggled(&["//x"]), ["x"]);
 	// after the shallowest indentation, blank lines alone
-	assert_eq!(
-		toggled(&["if a {", "\tb", "", "}"]),
-		["// if a {", "// \tb", "", "// }"]
-	);
+	assert_eq!(toggled(&["if a {", "\tb", "", "}"]), ["// if a {", "// \tb", "", "// }"]);
 	assert_eq!(toggled(&["\tf()", "\t\tg()"]), ["\t// f()", "\t// \tg()"]);
 	assert_eq!(toggled(&["\t// f()", "\t// \tg()"]), ["\tf()", "\t\tg()"]);
 	// some commented, some not: all commented
@@ -58,12 +55,8 @@ console.log(JSON.stringify([lines, [anchor.line, anchor.ch, head.line, head.ch]]
 
 fn moved(lines: &[&str], selection: [usize; 4], step: i32) -> (Vec<String>, [usize; 4]) {
 	let input = serde_json::to_string(&(lines, selection, step)).unwrap();
-	let output = Command::new("node")
-		.arg("-e")
-		.arg(format!("{SHORTCUTS}\n{MOVED}"))
-		.arg(input)
-		.output()
-		.expect("node runs");
+	let output =
+		Command::new("node").arg("-e").arg(format!("{SHORTCUTS}\n{MOVED}")).arg(input).output().expect("node runs");
 	assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
 	serde_json::from_slice(&output.stdout).expect("lines and selection")
 }
@@ -71,14 +64,8 @@ fn moved(lines: &[&str], selection: [usize; 4], step: i32) -> (Vec<String>, [usi
 // card keyboard-shortcut: Cmd-Ctrl-Up/Down (Alt-Up/Down elsewhere) move the selected lines, else the cursor's line
 #[test]
 fn cmd_ctrl_arrows_move_lines() {
-	assert_eq!(
-		moved(&["a", "b", "c"], [1, 1, 1, 1], -1),
-		(vec!["b".into(), "a".into(), "c".into()], [0, 1, 0, 1])
-	);
-	assert_eq!(
-		moved(&["a", "b", "c"], [1, 0, 1, 0], 1),
-		(vec!["a".into(), "c".into(), "b".into()], [2, 0, 2, 0])
-	);
+	assert_eq!(moved(&["a", "b", "c"], [1, 1, 1, 1], -1), (vec!["b".into(), "a".into(), "c".into()], [0, 1, 0, 1]));
+	assert_eq!(moved(&["a", "b", "c"], [1, 0, 1, 0], 1), (vec!["a".into(), "c".into(), "b".into()], [2, 0, 2, 0]));
 	// a selection over two lines moves both, ending at the start of the next line leaves that one
 	assert_eq!(
 		moved(&["a", "b", "c", "d"], [1, 0, 3, 0], -1),
@@ -89,12 +76,6 @@ fn cmd_ctrl_arrows_move_lines() {
 		(vec!["d".into(), "a".into(), "b".into(), "c".into()], [3, 1, 1, 0])
 	);
 	// at the edge nothing moves
-	assert_eq!(
-		moved(&["a", "b"], [0, 0, 0, 0], -1),
-		(vec!["a".into(), "b".into()], [0, 0, 0, 0])
-	);
-	assert_eq!(
-		moved(&["a", "b"], [1, 0, 1, 1], 1),
-		(vec!["a".into(), "b".into()], [1, 0, 1, 1])
-	);
+	assert_eq!(moved(&["a", "b"], [0, 0, 0, 0], -1), (vec!["a".into(), "b".into()], [0, 0, 0, 0]));
+	assert_eq!(moved(&["a", "b"], [1, 0, 1, 1], 1), (vec!["a".into(), "b".into()], [1, 0, 1, 1]));
 }

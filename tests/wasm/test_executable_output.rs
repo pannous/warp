@@ -15,13 +15,8 @@ fn executable_output(name: &str, source: &str) -> (String, String) {
 		.output()
 		.unwrap();
 	assert!(build.status.success(), "{}", String::from_utf8_lossy(&build.stderr));
-	let run = std::process::Command::new(source_path.with_extension(std::env::consts::EXE_EXTENSION))
-		.output()
-		.unwrap();
-	(
-		String::from_utf8_lossy(&run.stdout).into_owned(),
-		String::from_utf8_lossy(&run.stderr).into_owned(),
-	)
+	let run = std::process::Command::new(source_path.with_extension(std::env::consts::EXE_EXTENSION)).output().unwrap();
+	(String::from_utf8_lossy(&run.stdout).into_owned(), String::from_utf8_lossy(&run.stderr).into_owned())
 }
 
 #[test]
@@ -35,27 +30,15 @@ fn test_executable_ending_in_a_print_prints_no_value() {
 
 #[test]
 fn test_executable_shows_no_empty_value() {
-	assert_eq!(
-		executable_output("ends_in_loop", "for i in 1..3 { print i }").0,
-		"1\n2\n"
-	);
-	assert_eq!(
-		executable_output("ends_in_if", "x = 3\nif x > 5 { print \"big\" }").0,
-		""
-	);
-	assert_eq!(
-		executable_output("own_final_print", "xs = [1, 2]\nprint xs").0,
-		"[1 2]\n"
-	);
+	assert_eq!(executable_output("ends_in_loop", "for i in 1..3 { print i }").0, "1\n2\n");
+	assert_eq!(executable_output("ends_in_if", "x = 3\nif x > 5 { print \"big\" }").0, "");
+	assert_eq!(executable_output("own_final_print", "xs = [1, 2]\nprint xs").0, "[1 2]\n");
 }
 
 #[test]
 fn test_executable_still_shows_its_value() {
 	assert_eq!(executable_output("ends_in_value", "x = 3\nif x > 1 { x * 2 }").0, "6\n");
-	assert_eq!(
-		executable_output("ends_in_list", "[1, 2, 3].map(x => x * 10)").0,
-		"[10 20 30]\n"
-	);
+	assert_eq!(executable_output("ends_in_list", "[1, 2, 3].map(x => x * 10)").0, "[10 20 30]\n");
 }
 
 #[test]

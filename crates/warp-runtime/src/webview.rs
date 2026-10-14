@@ -31,9 +31,7 @@ pub fn show(title: &str, check: bool, files: Files) -> Result<(), String> {
 	let mut builder = EventLoop::builder();
 	if check {
 		// no Dock icon and no focus taken from the user's app (tests run beside them)
-		builder
-			.with_activation_policy(ActivationPolicy::Prohibited)
-			.with_activate_ignoring_other_apps(false);
+		builder.with_activation_policy(ActivationPolicy::Prohibited).with_activate_ignoring_other_apps(false);
 	}
 	if check {
 		std::thread::spawn(|| {
@@ -43,14 +41,8 @@ pub fn show(title: &str, check: bool, files: Files) -> Result<(), String> {
 		});
 	}
 	let event_loop = builder.build().map_err(|failure| format!("no window: {failure}"))?;
-	let mut viewer = Viewer {
-		title: title.to_string(),
-		check,
-		files: Some(files),
-		window: None,
-		webview: None,
-		failure: None,
-	};
+	let mut viewer =
+		Viewer { title: title.to_string(), check, files: Some(files), window: None, webview: None, failure: None };
 	event_loop.run_app(&mut viewer).map_err(|failure| failure.to_string())?;
 	viewer.failure.map_or(Ok(()), Err)
 }
@@ -70,9 +62,7 @@ impl Viewer {
 			.with_title(&self.title)
 			.with_visible(!self.check)
 			.with_inner_size(winit::dpi::LogicalSize::new(DEFAULT_WIDTH, DEFAULT_HEIGHT));
-		let window = event_loop
-			.create_window(attributes)
-			.map_err(|failure| failure.to_string())?;
+		let window = event_loop.create_window(attributes).map_err(|failure| failure.to_string())?;
 		let files = self.files.take().expect("the window opens once");
 		let mut builder = WebViewBuilder::new()
 			.with_url(START_URL)
@@ -112,10 +102,7 @@ impl Viewer {
 /// through it too: it crashed winit while wry's view had replaced winit's (card focus-crash)
 fn window_bounds(window: &Window) -> wry::Rect {
 	let size = window.inner_size().to_logical::<f64>(window.scale_factor());
-	wry::Rect {
-		position: winit::dpi::LogicalPosition::new(0.0, 0.0).into(),
-		size: size.into(),
-	}
+	wry::Rect { position: winit::dpi::LogicalPosition::new(0.0, 0.0).into(), size: size.into() }
 }
 
 fn lose_focus(window: &Window) {
@@ -136,11 +123,7 @@ fn lose_focus(window: &Window) {
 
 fn answer(files: &Files, request: &Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
 	let found = files(request.uri().path());
-	let status = if found.is_some() {
-		StatusCode::OK
-	} else {
-		StatusCode::NOT_FOUND
-	};
+	let status = if found.is_some() { StatusCode::OK } else { StatusCode::NOT_FOUND };
 	let (bytes, content_type) = found.unwrap_or_default();
 	Response::builder()
 		.status(status)

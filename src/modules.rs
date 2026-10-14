@@ -69,13 +69,7 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 		})
 		.map(|program| crate::modules::wasm_modules::rewrite_uses(program, &loader.wasm_modules))
 		.map(|program| with_needed_definitions(program, loader.hidden_apart()));
-	let files = loader
-		.loaded
-		.iter()
-		.chain(&loader.included)
-		.filter(|path| path.is_file())
-		.cloned()
-		.collect();
+	let files = loader.loaded.iter().chain(&loader.included).filter(|path| path.is_file()).cloned().collect();
 	crate::compiler::compile_context::change(|context| {
 		context.module_files = files;
 		context.early_class_modules.clear(); // for this program only
@@ -98,11 +92,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 	let (mut std_definitions, mut file_classes, mut early, mut class_modules) =
 		(vec![], vec![], HashSet::new(), vec![]);
 	let mut defined: Vec<String> = vec![]; // every used module's words, a file's copy of a standard module's too
-	for used in statements(program.clone())
-		.iter()
-		.filter_map(used_module)
-		.filter(|used| used.import == Import::Use)
-	{
+	for used in statements(program.clone()).iter().filter_map(used_module).filter(|used| used.import == Import::Use) {
 		if let Some(module) = loader
 			.find(&used.name)
 			.is_none()
@@ -158,10 +148,8 @@ pub fn insert_module_classes(program: Node) -> Node {
 	// (`math.factorial` of `use python math`, `json.loads`) wait for foreign_modules and welcome_forms
 	let class_modules: Vec<&str> = class_modules.iter().map(String::as_str).collect();
 	let program = with_std_aliases(crate::welcome_forms::module_calls(program, &class_modules), &aliases);
-	let std_classes = std_definitions
-		.into_iter()
-		.filter(|definition| is_class(definition) && is_foreign(definition))
-		.collect();
+	let std_classes =
+		std_definitions.into_iter().filter(|definition| is_class(definition) && is_foreign(definition)).collect();
 	let file_classes: Vec<Node> = file_classes.into_iter().filter(is_foreign).collect();
 	let program = with_implicit_class_modules(with_needed_definitions(program, std_classes));
 	match file_classes.is_empty() {
@@ -170,11 +158,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 			Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
 				Node::List([file_classes, statements].concat(), Bracket::None, separator)
 			}
-			single => Node::List(
-				[file_classes, vec![single]].concat(),
-				Bracket::None,
-				Separator::Semicolon,
-			),
+			single => Node::List([file_classes, vec![single]].concat(), Bracket::None, Separator::Semicolon),
 		},
 	}
 }

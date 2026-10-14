@@ -23,19 +23,10 @@ fn a_required_key_without_its_row_leaves_the_row_out_with_a_warning() {
 	is!(&program("required", "Team", "count(people)"), 0);
 	let warnings = warp::errors::diagnostic::take_runtime_warnings();
 	assert!(
-		warnings
-			.iter()
-			.any(|warning| warning.contains("people row 1") && warning.contains("Team?")),
+		warnings.iter().any(|warning| warning.contains("people row 1") && warning.contains("Team?")),
 		"{warnings:?}"
 	);
-	is!(
-		&program(
-			"required",
-			"Team",
-			"people.add(Person(\"Di\", teams#1))\npeople#1.team.name"
-		),
-		"Red"
-	);
+	is!(&program("required", "Team", "people.add(Person(\"Di\", teams#1))\npeople#1.team.name"), "Red");
 }
 
 #[test]
@@ -43,16 +34,6 @@ fn an_optional_key_without_its_row_reads_empty() {
 	seeded("optional");
 	is!(&program("optional", "Team?", "count(people)"), 2);
 	is!(&program("optional", "Team?", "people#1.team == ø"), true);
-	is!(
-		&program(
-			"optional",
-			"Team?",
-			"people.add(Person(\"Di\", teams#1))\npeople#3.team.name"
-		),
-		"Red"
-	);
-	is!(
-		&program("optional", "Team?", "people.add(Person(\"Ed\", ø))\npeople#4.name"),
-		"Ed"
-	);
+	is!(&program("optional", "Team?", "people.add(Person(\"Di\", teams#1))\npeople#3.team.name"), "Red");
+	is!(&program("optional", "Team?", "people.add(Person(\"Ed\", ø))\npeople#4.name"), "Ed");
 }

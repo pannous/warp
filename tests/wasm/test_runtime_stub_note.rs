@@ -11,12 +11,8 @@ fn stderr_of_fresh_program(name: &str) -> String {
 	let program = folder.join(format!("{name}.warp"));
 	let _ = std::fs::remove_file(program.with_extension(std::env::consts::EXE_EXTENSION));
 	std::fs::write(&program, format!("// {name}\n6 * 7")).unwrap();
-	let output = crate::common::warp_command()
-		.env("WARP_EXECUTABLE", "1")
-		.arg("--no-ask")
-		.arg(&program)
-		.output()
-		.unwrap();
+	let output =
+		crate::common::warp_command().env("WARP_EXECUTABLE", "1").arg("--no-ask").arg(&program).output().unwrap();
 	String::from_utf8_lossy(&output.stderr).to_string()
 }
 

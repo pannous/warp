@@ -13,10 +13,7 @@ fn a_definition_alone_is_empty() {
 #[test]
 fn it_names_the_one_parameter_of_a_definition() {
 	// wiki/Home.md, declaration.md, syntax.md: `fibonacci it - 2` inside `fibonacci number := …`
-	is!(
-		"fibonacci number := if number<2 : 1 else fibonacci(number - 1) + fibonacci it - 2; fibonacci(10)",
-		89
-	);
+	is!("fibonacci number := if number<2 : 1 else fibonacci(number - 1) + fibonacci it - 2; fibonacci(10)", 89);
 	is!("twice x := it * 2; twice 4", 8);
 	is!("f(x) := x + it; f(3)", 6);
 }

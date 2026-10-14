@@ -25,17 +25,8 @@ const SIZE_WORDS: [&str; 2] = ["width", "height"];
 /// before this one, the pointer over the image (in its pixels), whether a button is down, the key held down (its
 /// character's code point, the arrows 0xF700 up, 0xF701 down, 0xF702 left, 0xF703 right as on a Mac; 0: none)
 /// and `$previous(at)`, the shader's own previous frame at a pixel (src/graphics/gpu.rs PREVIOUS_FRAME)
-pub const BUILTIN_HOLES: [&str; 9] = [
-	"width",
-	"height",
-	"size",
-	"time",
-	"frame",
-	"mouse",
-	"mouse_down",
-	"key",
-	PREVIOUS_HOLE,
-];
+pub const BUILTIN_HOLES: [&str; 9] =
+	["width", "height", "size", "time", "frame", "mouse", "mouse_down", "key", PREVIOUS_HOLE];
 pub const PREVIOUS_HOLE: &str = "previous";
 /// other words for $previous, which stay the program's own names: a value missing under one of them hints at $previous
 pub const PREVIOUS_WORDS: [&str; 3] = ["last", "feedback", "before"];
@@ -56,9 +47,7 @@ pub fn written(wgsl: &str) -> (String, Vec<String>) {
 	while let Some(at) = rest.find('$') {
 		text.push_str(&rest[..at]);
 		let after = &rest[at + 1..];
-		let length = after
-			.find(|ch: char| !(ch.is_alphanumeric() || ch == '_'))
-			.unwrap_or(after.len());
+		let length = after.find(|ch: char| !(ch.is_alphanumeric() || ch == '_')).unwrap_or(after.len());
 		let name = &after[..length];
 		if name.is_empty() || name.starts_with(|ch: char| ch.is_ascii_digit()) {
 			text.push('$');
@@ -82,11 +71,7 @@ pub fn shader_text(wgsl: &str) -> Node {
 		true => Node::Text(text),
 		false => Node::Text(text).with_attribute(
 			HOLES_ATTRIBUTE,
-			Node::List(
-				names.into_iter().map(Node::Symbol).collect(),
-				Bracket::Square,
-				Separator::Space,
-			),
+			Node::List(names.into_iter().map(Node::Symbol).collect(), Bracket::Square, Separator::Space),
 		),
 	}
 }
@@ -114,10 +99,7 @@ pub fn lower(program: Node) -> Node {
 			.filter(|name| !BUILTIN_HOLES.contains(&name.as_str()) || variables.contains(name))
 			.collect::<Vec<_>>()
 	};
-	let shaders = shaders
-		.into_iter()
-		.map(|(shader, holes)| (shader, passed(holes)))
-		.collect();
+	let shaders = shaders.into_iter().map(|(shader, holes)| (shader, passed(holes))).collect();
 	with_values(program, &shaders, &passed)
 }
 
@@ -126,10 +108,7 @@ fn sizes(variables: &HashSet<String>) -> [Node; 2] {
 	let own = SIZE_WORDS.iter().all(|word| variables.contains(*word));
 	let words = match own {
 		true => SIZE_WORDS,
-		false => [
-			warp_runtime::host_words::VIEW_WIDTH,
-			warp_runtime::host_words::VIEW_HEIGHT,
-		],
+		false => [warp_runtime::host_words::VIEW_WIDTH, warp_runtime::host_words::VIEW_HEIGHT],
 	};
 	words.map(|word| Node::Symbol(word.to_string()))
 }
@@ -182,11 +161,10 @@ fn with_values(
 		return node;
 	};
 	let rendering = renders(items);
-	let holes = items.get(1).filter(|_| rendering).and_then(|shader| {
-		holes_of(shader)
-			.map(passed)
-			.or_else(|| shaders.get(&shader.drop_meta().name()).cloned())
-	});
+	let holes = items
+		.get(1)
+		.filter(|_| rendering)
+		.and_then(|shader| holes_of(shader).map(passed).or_else(|| shaders.get(&shader.drop_meta().name()).cloned()));
 	let Some(holes) =
 		holes.filter(|holes| !holes.is_empty() && items.len() >= VALUES_INDEX - 1 && items.len() <= VALUES_INDEX + 1)
 	else {
@@ -196,11 +174,7 @@ fn with_values(
 	let entries = |given: &[Node]| {
 		holes
 			.iter()
-			.filter(|name| {
-				!given
-					.iter()
-					.any(|entry| entry_name(entry).as_deref() == Some(name.as_str()))
-			})
+			.filter(|name| !given.iter().any(|entry| entry_name(entry).as_deref() == Some(name.as_str())))
 			.map(|name| entry(name))
 			.collect::<Vec<_>>()
 	};
@@ -212,18 +186,10 @@ fn with_values(
 				.with_meta_of(&items[VALUES_INDEX]);
 		}
 		Some(_) => {
-			let names = holes
-				.iter()
-				.map(|name| format!("${name}"))
-				.collect::<Vec<_>>()
-				.join(", ");
+			let names = holes.iter().map(|name| format!("${name}")).collect::<Vec<_>>().join(", ");
 			let message = format!(
 				"the shader's holes {names} need the values map written out here, `{{{}}}`, to add their entries",
-				holes
-					.iter()
-					.map(|name| format!("{name}: {name}"))
-					.collect::<Vec<_>>()
-					.join(", ")
+				holes.iter().map(|name| format!("{name}: {name}")).collect::<Vec<_>>().join(", ")
 			);
 			return crate::errors::diagnostic::Diagnostic::at(&items[VALUES_INDEX], message).into_error();
 		}
