@@ -124,6 +124,26 @@ A module whose path many files use (and open branches keep adding uses of) moves
 Applied: diagnostics/ (diagnostic 173 using files, normalize 115, fixits 12, crash_card 2) on branch
 layout-diagnostics; step 2 is pending. time.rs → time/mod.rs needed no path changes (branch layout-time).
 
+### Per-function pass over the root files (card layout-root)
+
+One chain of branches, layout-main → layout-pipeline → layout-modules (tip 375e5f494, sent 2026-10-14). These are pure moves.
+Each root file or mod.rs re-exports its new children, so `crate::…` paths stay; users were updated only where few files
+use them (run_time_blocks, errors/run_time).
+
+| from | to |
+|---|---|
+| main.rs (1291 → 463) | src/cli/: flags, outputs, executables, display, serve, console |
+| pipeline.rs (1042 → 623) | compiler/compile_mode.rs (CompileMode, `for_*`; pipeline re-exports), compiler/run_time_blocks.rs, errors/run_time.rs |
+| modules.rs (1214 → 180) | modules/: use_statements, implicit_modules, needed_definitions, declarations, program_file; std/package/loader items to their files |
+| normalize.rs | normalize/: positions, style, hints, check_style, mod.rs (core hint functions) |
+| operators.rs | operators/: spellings, binding_power, codes, mod.rs (Op and its kinds) |
+| type_kinds.rs | type_kinds/: user_types, field_storage, mod.rs (Kind encoding) |
+| law.rs (504 → 383) | law/asserted.rs, law/property_tests.rs |
+| host.rs (365 → 281) | host/fetch.rs, host/aliases.rs; host.rs keeps the host word registry |
+
+Still to do: the big subfolder files (errors/diagnostic.rs, host/tasks.rs, modules/wasm_modules.rs,
+modules/cargo_crates.rs, analyzer/effects.rs).
+
 ## Lowering (`src/lowering/`, 112 files): proposed folders
 
 File-level first (pure `git mv` + mod paths), then per function inside each folder when the area starts (its table is
