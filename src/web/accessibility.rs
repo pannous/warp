@@ -35,10 +35,13 @@ const TYPE: &str = "type";
 /// one lib/markup.warp writes as an attribute besides html_attributes
 const WARP_ELEMENT_WORDS: [&str; 2] = ["bind", "key"];
 const OWN_ATTRIBUTE_PREFIXES: [&str; 2] = ["data-", "aria-"];
-/// attributes whose value is a number (`rows: 3`, `cols: "40"` as a text of one)
+/// attributes whose value is a number (`rows: 3`, `cols: "40"` as a text of one), or a date or time (`min: "2024-01-01"`),
+/// or the attribute's keyword (NUMBER_KEYWORDS)
 const NUMBER_ATTRIBUTES: [&str; 10] = [
 	"min", "max", "step", "rows", "cols", "colspan", "rowspan", "tabindex", "width", "height",
 ];
+/// the words a number attribute takes besides numbers: `step: "any"`
+const NUMBER_KEYWORDS: [(&str, &str); 1] = [("step", crate::element_events::ANY_STEP)];
 /// attributes whose value is an address
 const ADDRESS_ATTRIBUTES: [&str; 3] = ["href", "src", "action"];
 /// elements a p cannot hold: the browser ends the p before them
@@ -286,9 +289,7 @@ fn value_mistakes<'a>(element: &Element<'a>) -> Vec<Problem<'a>> {
 					format!("{name} takes yes or no: the text {text:?} leaves it out"),
 					format!("{name}: yes, or {name}: no"),
 				),
-				(Some(text), _)
-					if NUMBER_ATTRIBUTES.contains(&name.as_str()) && text.trim().parse::<f64>().is_err() =>
-				{
+				(Some(text), _) if NUMBER_ATTRIBUTES.contains(&name.as_str()) && !is_number_value(name, &text) => {
 					mistake(format!("{name} takes a number, not {text:?}"), format!("{name}: 3"))
 				}
 				(None, Node::Number(number)) if ADDRESS_ATTRIBUTES.contains(&name.as_str()) => mistake(
@@ -299,6 +300,11 @@ fn value_mistakes<'a>(element: &Element<'a>) -> Vec<Problem<'a>> {
 			}
 		})
 		.collect()
+}
+
+/// A number attribute's value: written with digits (a number, date or time) or the attribute's keyword (`step: "any"`)
+fn is_number_value(attribute: &str, value: &str) -> bool {
+	value.chars().any(|character| character.is_ascii_digit()) || NUMBER_KEYWORDS.contains(&(attribute, value.trim()))
 }
 
 /// An element where HTML does not let it be, which the browser moves or drops (card markup-content)
