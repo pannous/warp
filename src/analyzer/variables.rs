@@ -4,6 +4,11 @@ use super::*;
 use crate::lowering::nodes::children_rewritten;
 use std::collections::HashSet;
 
+/// `var x = 1` announces a reassignable variable, plain `x = 1`
+pub(crate) const VAR_KEYWORD: &str = "var";
+/// `let x = 1` binds x once: any change of it is an error naming `var` (user, card let-reassign; check_constants)
+pub(crate) const IMMUTABLE_LET: &str = "let";
+
 /// Collect variables defined in node and populate scope
 /// Returns count of temp locals needed (e.g., for while loops)
 pub fn collect_variables(node: &Node, scope: &mut Scope) -> u32 {
@@ -61,7 +66,7 @@ pub(super) fn value_binding(value: &Node, scope: &Scope) -> (Kind, Option<Box<No
 		// `x = 255 as hex`, `x = 255 as byte`: x shows in hex too (card hex-printing), without the byte's range
 		Kind::Int
 			if let Node::Key(_, Op::As, target) = value.drop_meta()
-				&& let Some(radix) = crate::wasm_emitter::radix::shown_radix(&target.name()) =>
+				&& let Some(radix) = crate::wasm_emitter::numbers::radix::shown_radix(&target.name()) =>
 		{
 			Some(radix.word.to_string())
 		}
@@ -530,7 +535,7 @@ impl EvidentKind {
 			Node::Key(_, Op::As, type_name) if super::checks::is_bool_type(&type_name.drop_meta().name()) => {
 				Some(EvidentKind::Bool)
 			}
-			Node::Key(_, Op::Arrow | Op::FatArrow, _) => Some(EvidentKind::Function),
+			Node::Key(_, Op::Arrow, _) => Some(EvidentKind::Function),
 			_ => evident_kind(value, results).map(EvidentKind::Of),
 		}
 	}
@@ -587,7 +592,7 @@ pub(super) fn first_kind_change(
 			}
 			_ => None,
 		},
-		Node::Key(_, Op::Arrow | Op::FatArrow, _) => None,
+		Node::Key(_, Op::Arrow, _) => None,
 		Node::Key(target, Op::Assign, value) => {
 			if let Some(change) = first_kind_change(value, kinds, results, globals) {
 				return Some(change);
@@ -1137,4 +1142,17 @@ impl Scope {
 	pub fn local_count(&self) -> u32 {
 		self.locals.len() as u32
 	}
+}
+
+pub(crate) fn is_constant_keyword(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(word) if CONSTANT_KEYWORDS.contains(&word.as_str()))
+}
+
+pub(crate) fn is_declaration_keyword(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(word) if is_declaration_word(word))
+}
+
+/// `var`, `let`, `const`, `val` …: a word declaring the name after it
+pub(crate) fn is_declaration_word(word: &str) -> bool {
+	CONSTANT_KEYWORDS.contains(&word) || word == VAR_KEYWORD || word == IMMUTABLE_LET
 }

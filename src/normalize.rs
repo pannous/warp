@@ -17,6 +17,8 @@ use crate::operators::{glyph_operator, Op};
 
 /// The "got it" topic of a plain hint is its reason: `a` (all of this kind) silences every hint giving that reason
 const HINT_TOPIC_PREFIX: &str = "hint:";
+const AND_SYMBOLS: [&str; 4] = ["&&", "&", "∧", "⋀"];
+const OR_SYMBOLS: [&str; 4] = ["||", "|", "∨", "⋁"];
 
 // ============================================================================
 // Position Tracking for Hints
@@ -482,8 +484,8 @@ pub mod hints {
 		if let (Some(glyph), None) = (characters.next(), characters.next()) {
 			if let Some(op) = glyph_operator(glyph) {
 				match op.as_str() {
-					"and" => and_operator(written),
-					"or" => or_operator(written),
+					"and" => logical_operator(written, "and", AND_SYMBOLS),
+					"or" => logical_operator(written, "or", OR_SYMBOLS),
 					"xor" => {}
 					canonical => hint(written, canonical, "standard spelling of the operator"),
 				}
@@ -492,8 +494,8 @@ pub mod hints {
 		}
 		match (written, is_prefix) {
 			("¬&", false) => hint(written, "nand", "standard spelling of the operator"),
-			("&&" | "&" | "and", false) => and_operator(written),
-			("||" | "|" | "or", false) => or_operator(written),
+			("&&" | "&" | "and", false) => logical_operator(written, "and", AND_SYMBOLS),
+			("||" | "|" | "or", false) => logical_operator(written, "or", OR_SYMBOLS),
 			("!" | "not", true) => not_operator(written),
 			("**" | "^", false) => power_operator(written),
 			("?", false) => conditional(true),
@@ -502,22 +504,14 @@ pub mod hints {
 		}
 	}
 
-	/// && operator
-	pub fn and_operator(used: &str) {
-		let s = style();
-		match (used, s.logical) {
-			("&&" | "&" | "∧" | "⋀", LogicalStyle::Words) => hint(used, "and", "word operators are more readable"),
-			("and" | "∧" | "⋀", LogicalStyle::Symbols) => hint(used, "&&", "symbol operators preferred"),
-			_ => {}
-		}
-	}
-
-	/// || operator
-	pub fn or_operator(used: &str) {
-		let s = style();
-		match (used, s.logical) {
-			("||" | "|" | "∨" | "⋁", LogicalStyle::Words) => hint(used, "or", "word operators are more readable"),
-			("or" | "∨" | "⋁", LogicalStyle::Symbols) => hint(used, "||", "symbol operators preferred"),
+	/// `and` / `&&`, `or` / `||`: the hint toward the style's spelling; `symbols` = the canonical symbol, its short
+	/// form, then the logic glyphs
+	fn logical_operator(used: &str, word: &str, symbols: [&str; 4]) {
+		match style().logical {
+			LogicalStyle::Words if symbols.contains(&used) => hint(used, word, "word operators are more readable"),
+			LogicalStyle::Symbols if used == word || symbols[2..].contains(&used) => {
+				hint(used, symbols[0], "symbol operators preferred")
+			}
 			_ => {}
 		}
 	}
@@ -841,26 +835,19 @@ pub fn set_position_of(node: &Node) {
 	}
 }
 
-fn word_of(node: &Node) -> Option<&str> {
-	match node.drop_meta() {
-		Node::Symbol(word) => Some(word),
-		_ => None,
-	}
-}
-
 /// `x:list of int=[1 2]` is the items `x:list`, `of`, `int=[1 2]`: the element words after `of`, and the node of the head word `list`
 fn of_list_type(items: &[Node], of_index: usize) -> Option<(&Node, Vec<&str>)> {
 	let Node::Key(_, Op::Colon, head) = items.get(of_index.checked_sub(1)?)?.drop_meta() else {
 		return None;
 	};
-	(crate::warp_parser::list_type_head(word_of(head)?) == LIST_TYPE_HEAD).then_some(())?;
+	(crate::warp_parser::list_type_head(head.symbol_name()?) == LIST_TYPE_HEAD).then_some(())?;
 	let mut words = Vec::new();
 	for item in &items[of_index + 1..] {
 		match item.drop_meta() {
 			Node::Symbol(word) if word == OF_WORD => continue,
 			Node::Symbol(word) => words.push(word.as_str()),
 			Node::Key(word, _, _) => {
-				words.push(word_of(word)?);
+				words.push(word.symbol_name()?);
 				break;
 			}
 			_ => return None,
@@ -885,7 +872,7 @@ fn signature_of(definition: &Node) -> Option<(String, String, BodyForm)> {
 		.iter()
 		.map(|parameter| parameter.serialize().trim_matches(|c| c == '(' || c == ')').to_string())
 		.collect();
-	Some((word_of(name)?.to_string(), parameters.join(", "), body_form))
+	Some((name.symbol_name()?.to_string(), parameters.join(", "), body_form))
 }
 
 /// Emit the hints for every non-canonical form in the parsed program that the parser cannot see while reading characters
@@ -900,14 +887,14 @@ pub fn check_style(program: &Node) {
 		Node::Key(_, Op::Colon, right) => {
 			if let Node::List(items, Bracket::Square, _) = right.drop_meta() {
 				if let [element] = items.as_slice() {
-					if let Some(word) = word_of(element) {
+					if let Some(word) = element.symbol_name() {
 						set_position_of(right);
 						hints::list_type(ListTypeStyle::Bracket, &[word]);
 					}
 				}
 				return;
 			}
-			let Some(type_word) = word_of(right) else { return };
+			let Some(type_word) = right.symbol_name() else { return };
 			set_position_of(right);
 			if let Some(element) = crate::analyzer::plural_element_type(type_word) {
 				hints::list_type(ListTypeStyle::Plural, &[element]);
@@ -915,14 +902,14 @@ pub fn check_style(program: &Node) {
 			hints::string_type(type_word);
 		}
 		Node::Key(value, Op::As, type_node) => {
-			if let Some(type_word) = word_of(type_node) {
+			if let Some(type_word) = type_node.symbol_name() {
 				set_position_of(positioned);
 				if !hints::as_operator(&operand_text(value), type_word) {
 					hints::string_type(type_word);
 				}
 			}
 		}
-		Node::Key(target, Op::Define, value) if word_of(target).is_some() => {
+		Node::Key(target, Op::Define, value) if target.symbol_name().is_some() => {
 			set_position_of(positioned);
 			hints::var_keyword(":=", &operand_text(target), &operand_text(value));
 		}
@@ -933,7 +920,7 @@ pub fn check_style(program: &Node) {
 			}
 		}
 		Node::Key(target, Op::Dot, call) => {
-			if matches!(call.drop_meta(), Node::List(words, _, _) if words.len() == 1 && word_of(&words[0]) == Some("length"))
+			if matches!(call.drop_meta(), Node::List(words, _, _) if words.len() == 1 && (words[0]).symbol_name() == Some("length"))
 			{
 				set_position_of(positioned);
 				hints::length_operator(&operand_text(target), true);
@@ -944,15 +931,17 @@ pub fn check_style(program: &Node) {
 }
 
 fn check_items(items: &[Node], positioned: &Node) {
-	if let Some(of_index) = items.iter().position(|item| word_of(item) == Some(OF_WORD)) {
+	if let Some(of_index) = items.iter().position(|item| item.symbol_name() == Some(OF_WORD)) {
 		if let Some((head, words)) = of_list_type(items, of_index) {
 			set_position_of(head);
-			let _ = crate::warp_parser::noted_list_type_head(word_of(head).unwrap_or_default());
+			let _ = crate::warp_parser::noted_list_type_head(head.symbol_name().unwrap_or_default());
 			hints::list_type(ListTypeStyle::Of, &words);
 		}
 	}
 	let [keyword, rest @ ..] = items else { return };
-	let Some(keyword_word) = word_of(keyword) else { return };
+	let Some(keyword_word) = keyword.symbol_name() else {
+		return;
+	};
 	set_position_of(positioned);
 	match (keyword_word, rest) {
 		("let" | "var", [declaration, ..]) => {

@@ -1,6 +1,5 @@
 //! Interpolated text (user decision D1, 2026-10-03): double-quoted text in code takes Swift holes `"a \(x+1) b"` and
-//! dollar holes `"${x+1}"`; `\(…)` is the canonical form the normalizer hints. A bare `"$x"` is text ("only the one with
-//! the curly braces must interpolate the other is text like dollar money"), single quotes stay literal.
+//! dollar holes `"${x+1}"`; A bare `"$x"` is text single quotes stay literal. Backtick templates don't need the braces.
 //!
 //! The parser keeps such a literal as its template text (holes written `${expr}`, a literal dollar `$$`, the syntax of
 //! injection::parts) marked as a template, so `sql "…"` / `sh "…"` still see the literal and turn holes into parameters.
@@ -10,7 +9,7 @@ use crate::lowering::nodes::children_rewritten;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::text::injection::{parts_with, Part};
-use crate::wasm_emitter::text_builtins::TEXT_FORM;
+use crate::wasm_emitter::text::text_builtins::TEXT_FORM;
 
 /// Meta key marking a text literal as a template
 const TEMPLATE_MARK: &str = "template";

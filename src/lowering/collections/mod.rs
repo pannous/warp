@@ -6,10 +6,12 @@ use super::*;
 
 pub mod broadcasting;
 pub mod comprehensions;
+pub mod filled_lists;
 pub mod index_positions;
 pub mod key_names;
 pub mod lazy_ranges;
 pub mod list_element_checks;
+pub mod list_mutations;
 pub mod min_max;
 pub mod nested_index;
 pub mod number_keys;

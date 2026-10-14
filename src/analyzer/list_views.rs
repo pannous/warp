@@ -5,7 +5,7 @@
 //! element type fits the list's (the same type, a subclass), is fine.
 
 use super::*;
-use crate::wasm_emitter::list_sharing::changes_list;
+use crate::wasm_emitter::lists::list_sharing::changes_list;
 use std::collections::HashMap;
 
 pub fn check_widened_list_views(program: &Node) -> Option<Diagnostic> {

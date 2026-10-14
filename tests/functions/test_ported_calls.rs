@@ -3,7 +3,7 @@
 // `def f(a, *, b)`, which no test held)
 use warp::wasm_emitter::eval;
 
-const CASES: [(&str, &str); 316] = [
+const CASES: [(&str, &str); 305] = [
 	(r#"f(a, b=2) := a + b; f(1)"#, r#"3"#),
 	(r#"f(a, b=2) := a + b; f(1, 5)"#, r#"6"#),
 	(r#"def f(a, b=2){a+b}; f(1)"#, r#"3"#),
@@ -212,7 +212,6 @@ const CASES: [(&str, &str); 316] = [
 	),
 	(r#"def f(n){ return n if n < 2 else f(n-1) + f(n-2) }; f(10)"#, r#"55"#),
 	(r#"max(3, 7)"#, r#"7"#),
-	(r#"let twice x = x * 2 in twice 4"#, r#"8"#),
 	(
 		r#"func divmod(a, b int) (int, int) { return a / b, a % b }; q, r := divmod(7, 2); q * 10 + r"#,
 		r#"31"#,
@@ -297,8 +296,6 @@ twice 4"#,
 		r#"3"#,
 	),
 	(r#"int sq(int x) => x * x; sq(5)"#, r#"25"#),
-	(r#"let sq x = x * x; sq 6"#, r#"36"#),
-	(r#"let add a b = a + b; add 2 3"#, r#"5"#),
 	(r#"def f(a, *, b): return a * b; f(2, b=5)"#, r#"10"#),
 	(r#"def f(*args): return len(args); f(1, 2, 3)"#, r#"3"#),
 	(r#"def fact(n) = n <= 1 ? 1 : n * fact(n - 1); fact(5)"#, r#"120"#),
@@ -378,8 +375,6 @@ twice 4"#,
 	(r#"fact = n -> n <= 1 ? 1 : n * fact(n - 1); fact(5)"#, r#"120"#),
 	(r#"def f(x): return "pos" if x > 0 else "neg"; f(1)"#, r#"pos"#),
 	(r#"def f(x): return "pos" if x > 0 else "neg"; f(-1)"#, r#"neg"#),
-	(r#"let inc = fun x -> x + 1 in inc 4"#, r#"5"#),
-	(r#"let add = fun a b -> a + b in add 1 2"#, r#"3"#),
 	(r#"add = lambda a, b=2: a + b; add(1)"#, r#"3"#),
 	(r#"add = lambda a, b: a + b; add(1, 2)"#, r#"3"#),
 	(r#"f = lambda *xs: sum(xs); f(1, 2, 3)"#, r#"6"#),
@@ -399,9 +394,6 @@ twice 4"#,
 		r#"func apply(f func(int) int, x int) int { return f(x) }; apply(func(x int) int { return x + 1 }, 2)"#,
 		r#"3"#,
 	),
-	(r#"map (fun x -> x * 2) [1, 2, 3]"#, r#"[2 4 6]"#),
-	(r#"List.map (fun x -> x * 2) [1; 2; 3]"#, r#"[2 4 6]"#),
-	(r#"Seq.filter (fun x -> x > 1) [1; 2; 3]"#, r#"[2 3]"#),
 	(
 		r#"fn apply<F: Fn(i32) -> i32>(f: F, x: i32) -> i32 { f(x) }; apply(|x| x + 1, 2)"#,
 		r#"3"#,
@@ -420,7 +412,8 @@ twice 4"#,
 	),
 	(r#"3 times 4"#, r#"12"#),
 	(r#"x = 3; y = x times x; y"#, r#"9"#),
-	(r#"to add number a to number b: a + b; add 1 to 2 == 3"#, r#"yes"#),
+	// cleanup-edge: cleanup-park-phrases: comes back with prepositions-call
+	// (r#"to add number a to number b: a + b; add 1 to 2 == 3"#, r#"yes"#),
 	(r#"fn id<T>(x: T) -> T { x }; id(5)"#, r#"5"#),
 	(r#"function id<T>(x: T): T { return x }; id(5)"#, r#"5"#),
 	(r#"fn pair<A, B>(a: A, b: B) -> A { a }; pair(1, 2)"#, r#"1"#),
@@ -431,8 +424,6 @@ twice 4"#,
 		r#"func add<T>(_ a: T, _ b: T) -> T { return a + b }; add(2, 3)"#,
 		r#"5"#,
 	),
-	(r#"sapply(c(1, 2, 3), function(x) x * 2)"#, r#"[2 4 6]"#),
-	(r#"lapply(c(1, 2), function(x) x + 1)"#, r#"[2 3]"#),
 	(r#"xs=[1,2,3]; map(xs, function(x) x*2)"#, r#"[2 4 6]"#),
 	(r#"c = 3; c * 2"#, r#"6"#),
 	(r#"sq = @(x) x.^2; sq([1,2,3])"#, r#"[1 4 9]"#),
@@ -452,6 +443,20 @@ twice 4"#,
 	(r#"function sq($x) { return $x * $x; } sq(3);"#, r#"9"#),
 ];
 
+/// Forms the user dropped (OCaml let … in, `fun x ->`) or moved to `use R` (decision foreign-spellings, 2026-10-13)
+const DROPPED_CASES: [(&str, &str); 10] = [
+	(r#"let twice x = x * 2 in twice 4"#, r#"8"#),
+	(r#"let sq x = x * x; sq 6"#, r#"36"#),
+	(r#"let add a b = a + b; add 2 3"#, r#"5"#),
+	(r#"let inc = fun x -> x + 1 in inc 4"#, r#"5"#),
+	(r#"let add = fun a b -> a + b in add 1 2"#, r#"3"#),
+	(r#"map (fun x -> x * 2) [1, 2, 3]"#, r#"[2 4 6]"#),
+	(r#"List.map (fun x -> x * 2) [1; 2; 3]"#, r#"[2 4 6]"#),
+	(r#"Seq.filter (fun x -> x > 1) [1; 2; 3]"#, r#"[2 3]"#),
+	(r#"sapply(c(1, 2, 3), function(x) x * 2)"#, r#"[2 4 6]"#),
+	(r#"lapply(c(1, 2), function(x) x + 1)"#, r#"[2 3]"#),
+];
+
 /// The value as `warp eval` shows it: a text without its quotes
 fn shown(code: &str) -> String {
 	let serialized = eval(code).serialize();
@@ -464,7 +469,17 @@ fn shown(code: &str) -> String {
 
 #[test]
 fn every_ported_call_form_keeps_its_value() {
-	let failures: Vec<String> = CASES
+	keep_their_values(&CASES);
+}
+
+#[test]
+#[ignore = "cleanup-edge: foreign-spellings: OCaml let … in and fun x ->, R words without use R"]
+fn dropped_call_forms_keep_their_values() {
+	keep_their_values(&DROPPED_CASES);
+}
+
+fn keep_their_values(cases: &[(&str, &str)]) {
+	let failures: Vec<String> = cases
 		.iter()
 		.filter_map(|(code, want)| {
 			let got = shown(code);
@@ -475,7 +490,7 @@ fn every_ported_call_form_keeps_its_value() {
 		failures.is_empty(),
 		"{} of {} forms changed:\n{}",
 		failures.len(),
-		CASES.len(),
+		cases.len(),
 		failures.join("\n")
 	);
 }
@@ -495,6 +510,7 @@ fn linq_methods_work_with_a_note_naming_warps_word() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: foreign-spellings: R words moved to use R, without notes"]
 fn r_words_work_with_a_note_naming_warps_form() {
 	let (value, hints) = warp::normalize::capture_hints(|| shown("sapply(c(1, 2, 3), function(x) x * 2)"));
 	assert_eq!(value, "[2 4 6]");

@@ -68,7 +68,7 @@ pub(super) fn std_module_words(index: usize) -> &'static [String] {
 		statements(crate::normalize::without_hints(|| WarpParser::parse(source)))
 			.iter()
 			.filter(|statement| used_module(statement).is_none())
-			.filter_map(declared_name)
+			.filter_map(name_declared_by)
 			.collect()
 	})
 }

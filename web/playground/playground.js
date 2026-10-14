@@ -6,7 +6,7 @@
 const ACKNOWLEDGED_KEY = "warp-playground-acknowledged";
 const SHOWN_FROM_KEY = "warp-playground-shown-from"; // the least diagnostic level shown, hint by default (card warning-levels)
 const HINTS_KEY = "warp-playground-hints"; // the former hints checkbox: "off" now means showing from weak
-const LEVELS = ["hint", "weak", "normal", "severe"]; // src/diagnostic.rs Level, least first
+const LEVELS = ["hint", "weak", "normal", "severe"]; // src/diagnostics/diagnostic.rs Level, least first
 const SIZES_KEY = "warp-playground-sizes"; // the guide's width and the editor's height as the resizers left them
 const GUIDE_WIDTH_RANGE = [200, 0.6]; // pixels, then the share of the page's width
 const EDITOR_HEIGHT_RANGE = [120, 0.85]; // pixels, then the share of the window's height

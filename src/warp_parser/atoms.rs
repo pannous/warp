@@ -1,12 +1,9 @@
-//! Atoms: symbols with suffixes, definitions and their bodies, indented and end blocks, URLs, type declarations
+//! Atoms: symbols with suffixes, calls, phrase definitions, URLs, type declarations
 
 use super::*;
-use crate::node::children_rewritten;
 use crate::words::SWITCH_WORDS;
 
-mod blocks_and_lambdas;
 mod type_declarations;
-use blocks_and_lambdas::*;
 
 const VOID_WORD: &str = "void";
 /// `none` is the null ø; called, `none(xs, f)` (Kotlin's "no element matches") is an error naming it (P185)
@@ -289,7 +286,6 @@ impl WarpParser {
 				|| crate::analyzer::plural_element_type(word).is_some()
 				|| declared_types.contains(word)
 		};
-		let in_phrase = crate::type_name_matching::phrase_words(&words, &body, &is_known_type);
 		let (parameters, body) = match crate::type_name_matching::parameter_slots(&words, &body, &is_known_type) {
 			Ok(slots) => slots,
 			Err(message) => return Some(error(&message)),
@@ -311,27 +307,11 @@ impl WarpParser {
 		} else {
 			self.functions_with_parameters.insert(name.clone());
 			self.phrase_definitions.insert(name.clone(), parameters.clone());
-			let head = Node::List(
+			Node::List(
 				[vec![Symbol(name)], parameters].concat(),
 				Bracket::Round,
 				Separator::None,
-			);
-			// P52: the prepositions of the phrase, for phrase_calls to read calls like `add 1 to 2`
-			let pattern = crate::phrase_calls::pattern_text(&words, &in_phrase);
-			// `To square a number: …` of one slot is called in English as `square of x` too (`square 3` stays a call)
-			let pattern = if pattern == crate::words::SLOT {
-				format!("{OF_WORD} {pattern}")
-			} else {
-				pattern
-			};
-			if pattern.split(' ').any(|part| part != crate::words::SLOT) {
-				Node::Meta {
-					node: Box::new(head),
-					data: Box::new(Node::key(crate::words::PHRASE_MARK, Node::Text(pattern))),
-				}
-			} else {
-				head
-			}
+			)
 		};
 		let head = match result_type {
 			Some(result_type) => Node::Key(Box::new(head), Op::As, Box::new(Symbol(result_type))),
@@ -484,7 +464,7 @@ impl WarpParser {
 	}
 
 	pub(super) fn parse_symbol_with_suffix(&mut self) -> Node {
-		let version_len = crate::versions::tagged_literal_len(&self.chars[self.pos..]);
+		let version_len = crate::versions::literal_len(&self.chars[self.pos..]);
 		if version_len > 0 {
 			let literal = self.take_chars(version_len);
 			return Node::Symbol(literal);

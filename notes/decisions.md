@@ -27,6 +27,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - cleanup-bold (2026-10-14): "get rid of everything you can without asking": clearly superfluous code, duplicate
   paths, unused or rarely-run branches go without a question; we have everything in GitHub. The suite may drop to
   80 % passing (failures marked cleanup-edge as above, so they stay countable); samples and the tour should still run.
+- error-type (2026-10-14): no ugly Rust types. A function that can fail has the sound type `T or error` (warp's
+  union spelling, as in `as int or text`), shown and written like that, never as Result; not hidden as plain `T`
+  ("`T or error` is not that ugly, keep it as a sound type"). Only the WIT export bytes carry a `result` for Rust callers. Where a caller can take it, the Error value propagates instead of
+  being raised (card error-gaps, wiki/Error.md "Not yet").
 - restructuring (2026-10-14): new major roadmap after the diff review found few duplicates. Inventory every function
   by name, move functions to the file their concept belongs to (a general parser holds no keyword-specific syntax:
   `finish_if_prefix` goes to e.g. control/if.rs), and have agents check suspiciously similar names for true
@@ -60,6 +64,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   diagnostic is cut. `nonlocal` only loses its error and checks: the cells behind P124 sharing stay, a nested def
   also shares `n += 1` without it, a plain `y = 5` there stays local unless `nonlocal y` (P124). rustfmt `use_small_heuristics = "Max"` comes
   in one fmt commit after the open cleanup branches are merged.
+  Kotlin `when x { 1 -> … }` works, and `match` takes `->` arms and `else` too. `case` is an optional word before any match arm (`case 1: …`).
+- real-runtime (2026-10-13): real.rs (compile-time symbolic reals) stays until symbolic reals are a run-time number
+  type next to the exact ratios; then it goes.
 - watched-cells (2026-10-13): watched variables use the run-time cell, except main-level variables no function
   writes, which keep the inserted check (same speed, about −300 lines).
 - crash-fixes-first (2026-10-12): crash fixes merge with the highest priority (notes/roles.md).
@@ -285,8 +292,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   where a later call sees it; `global` on the variable or in the reader; pure getters over constants may fold.
 - P71 `:=` without parameters is always charged, re-evaluated at each use; assigning it after is an error. P138 Go's
   `total := 0; total += n` stays that error.
-- P124 a lambda assigning an enclosing function's variable shares it (like JS), `nonlocal n` optional; a nested `def`
-  needs `nonlocal`. Block arguments share captured variables too.
+- P124 a lambda or nested `def` changing an enclosing function's variable (`n += 1`) shares it (like JS; nested def
+  since cleanup-cuts-2 / interviewer option A), `nonlocal n` optional: it only shares a plain `n = 5`, which is
+  otherwise a fresh local. Block arguments share captured variables too.
 - P70c handlers and definitions created in a loop keep their own iteration's variable (JS `let`).
 - P72 no memoization syntax; the compiler decides.
 - P73 `x!` means force: a block runs, an optional unwraps, a plain value is itself. D2 (by position): `fn!` after a
@@ -332,7 +340,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - P24 suffix forms (`4 doubled`) call user functions. P164 a type word after a parameter name is its type
   (`phone number`); `phone-number:text` is one hyphenated name in declarations.
 - P132 `{f: x => x * 2}` holds a lambda; a type word after the colon makes a typed lambda. P133 `|x| x*2` is a lambda.
-- definition-cases (2026-10-13): a second same-shape definition is "defined twice" with a fix toward match; overloads
+- definition-cases (2026-10-13, cut by cleanup-cuts-2 2026-10-14): a second same-shape definition was "defined twice"; overloads
   by type are unaffected.
 - P48 custom operators: `prefix operator ⁻ := …`, `suffix`, `infix operator ⊕ := left+right`; word infix operators
   `infix operator divides(d, n) := …`. P54 only declared operators are ranked (`has precedence above +`). P166
@@ -356,6 +364,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - P34 a number subscript on an empty `{}` keys it as a map.
 - single-entry (2026-10-12): "keep everything as it is and automatically upgrade it to a map": `{a:1}` stays a pair
   and becomes a one-entry map where a map is needed.
+- stored-table-name (2026-10-14): `stored people: [Person]` names its table after the variable;
+  `stored people: [Person] in "people_v2"` names it explicitly (replaces `= database.t`).
 - element-named-pair (2026-10-14): a one-key pair named like an element, `{body: [{type: "image"}]}`, is markup
   (`<body type="image">`); as data it takes a second key or a quoted key. Larger maps with such keys stay data.
 - #25/#36 a space before `[` never indexes; only glued `a[..]` indexes.
@@ -393,7 +403,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   under `try` are caught. failed-raised (2026-10-10): a raised error stops the program; bare `try X` turns it into
   the value (`r failed`). try-finally: `try X finally Z` runs Z, X's value or Error is the result.
 - P55 a while loop's value is its last body value. P213 a loop ending in `print` gives ø; loops stay expressions.
-- `when` by shape: `when click {…}` = `on click`, `when x > 3 {…}` = `whenever`, `->` arms a Kotlin switch.
+- `when` by shape: `when click {…}` = `on click`, `when x > 3 {…}` = `whenever`, `when x {… -> …}` = `match`,
+  `when {cond -> …}` = an if chain; all four give the same one warning naming the word meant (user, 2026-10-13: the
+  shapes are not unambiguous).
 - P46 type-name and condition patterns in `for` filter with a got-it warning (`for friend in xs`, `for (it>2) in xs`).
 - P61 `is` is always a comparison; with an undefined x it teaches `x be <value>`. #27 `be` is `:=`; `≤ ≥ ≠ × ÷ ¬ √`
   are accepted and normalized.

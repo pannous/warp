@@ -57,7 +57,7 @@ User decisions from that round:
 - an expression of `it` where a function is expected is that function: `xs.map(it * 2)`, `apply(it + 3, 1)`; inside a
   function of one parameter its `it` stays the argument function's (card map-it, src/lowering/definitions/lambdas.rs it_function)
 
-## Ask: how it works (src/diagnostic.rs)
+## Ask: how it works (src/diagnostics/diagnostic.rs)
 - `Ask { topic, written, question, readings: [Reading{meaning, explicit_form}], default, fallback: Fallback::{Warning, Error}, line, column }`;
   `ask(&Ask) -> Result<usize, Node>` returns the default reading or the error. It never asks and never remembers a reading.
 - Fallback Warning prints `warning: <question> (taking <default>) at l:c; fix: <explicit form>` and takes the default.
@@ -118,10 +118,6 @@ Control flow as other languages write it (samples/control_flow.warp, tests/contr
   `equals`, `is greater than`, `greater than`, `is less than`, `less than`, `is at least`, `is at most`, `through`
   (= `to`), `is in` (= `in`), `for each x in xs`; a word operator needs a blank after it, so `plus(a, b)` stays a call.
   `10 down to 1` is `reverse(1 to 10)`; letters make ranges (`'a' to 'e'`, `c to 'z'` counts codepoints).
-  List phrases of a method chain (src/lowering/list_phrases.rs, undoable defaults): `xs.keep only positive` is
-  `xs where it > 0` (positive, negative, even, odd, or a function of the program), `xs.sort by k` sorts by the
-  program's function or counting word k, else by the field k (`sort by price`), `xs.take first n` is `xs.slice(0, n)`.
-  The parser reads a chain `xs.keep only p.sort by k` as one list `[xs.keep, only, p.sort, by, k]`.
   A parenthesized filter is closed: `(xs where it > 0).slice(0, 1)` slices the filtered list.
   Open (asked): number words (`one plus two`, then `three times four` multiplies like `3 times 4`).
 - a comparison without its left side is a relational pattern in a match arm (`> 100 => "big"`, C#), elsewhere the

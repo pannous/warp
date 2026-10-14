@@ -13,7 +13,7 @@ const PREFIX_BP: u8 = 162;
 /// Every spelling of an infix or prefix operator the parser reads: symbols, Unicode glyphs and words (wiki/alias.md,
 /// wiki/operator.md). The canonical spelling is Op::as_str, every other one an alias; the parser takes the longest
 /// spelling that fits (lookahead.rs peek_operator), the style hints name the canonical one (normalize.rs)
-pub const OPERATOR_SPELLINGS: [(&str, Op); 134] = [
+pub const OPERATOR_SPELLINGS: [(&str, Op); 136] = [
 	(":", Op::Colon),
 	(".", Op::Dot),
 	("?.", Op::SafeDot),
@@ -27,8 +27,10 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 134] = [
 	("=>", Op::FatArrow),
 	("+", Op::Add),
 	("plus", Op::Add),
+	// ("add", Op::Add), // card word-operators: clashes with xs.add(…), add:(…) members, `add x to y`
 	("-", Op::Sub),
 	("minus", Op::Sub),
+	// ("subtract", Op::Sub), // card word-operators
 	// the dashes 0x2010..0x2015 and the minus sign 0x2212 all mean `-`
 	("‐", Op::Sub),
 	("‑", Op::Sub),
@@ -42,16 +44,17 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 134] = [
 	// the unit product of a printed quantity (`6 m·kg`); generated names use `·` only after parsing
 	("·", Op::Mul),
 	("⋅", Op::Mul),
+	// ("times", Op::Mul), // card word-operators: `3 times {…}` is a loop
 	("/", Op::Div),
 	("÷", Op::Div),
 	("divided by", Op::Div),
 	// Python's floor division `7//2`, `x//=2` and `7 div 2`: the parser makes them floor_quotient calls
-	("//", Op::Div),
+	("//", Op::Div), // todo cleaner? ^^
 	("div", Op::Div),
-	("//=", Op::DivAssign),
+	("//=", Op::DivAssign), // todo /= ≠ //=
 	("%", Op::Mod),
 	// `a mod b` is Euclidean (0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the dividend, as C)
-	("mod", Op::Mod),
+	("mod", Op::Mod), // rest overloaded
 	("modulo", Op::Mod),
 	("rem", Op::Rem),
 	("^", Op::Pow),
@@ -155,6 +158,9 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 134] = [
 	("contains", Op::In),
 	("has", Op::In),
 	("includes", Op::In),
+	("↑", Op::ArrowUp),
+	("↓", Op::ArrowDown),
+	// Arrows ˂ ˃ ˄ ˅ ͍ ͎ ͢   ⃔ ⃕ ⃖ ⃗ ⃡  ← ↑ → ↓ ↔ ↕ ↖ ↗ ↘ ↙ ↚ ↛ ↜ ↝ ↞ ↟ ↠ ↡ ↢ ↣ ↤ ↥ ↦ ↧ ↨ ↩ ↪ ↫ ↬ ↭ ↮ ↯ ↰ ↱ ↲ ↳ ↴ ↵ ↶ ↷ ↸ ↹ ↺ ⇄ ⇅ ⇆ ⇇ ⇈ ⇉ ⇊ ⇍ ⇎ ⇏ ⇐ ⇑ ⇒ ⇓ ⇔ ⇕ ⇖ ⇗ ⇘ ⇙ ⇚ ⇛ ⇜ ⇝ ⇞ ⇟ ⇠ ⇡ ⇢ ⇣ ⇤ ⇦ ⇧ ⇨ ⇩ ⇪ ⇫ ⇬ ⇭ ⇮ ⇯ ⇰ ⇱ ⇲ ⇳ ⌁ ⌃ ⌄ ⌤ ⍇ ⍈ ⍐ ⍗ ⎋ ➔ ➘ ➙ ➚ ➛ ➜ ➝ ➞ ➟ ➠ ➡ ➢ ➣ ➤ ➥ ➦ ➧ ➨ ➩ ➪ ➫ ➬ ➭ ➮ ➯ ➱ ➲ ➳ ➴ ➵ ➶ ➷ ➸ ➹ ➺ ➻ ➼ ➽ ➾ ⽮ ￩ ￪ ￫ ￬ ⬀ ⬁ ⬂ ⬃ ⬄ ⬅ ⬆ ⬇ ⬈ ⬉ ⬊ ⬋ ⬌ ⬍ ⬎ ⬏ ⬐ ⬑ ⭠ ⭡ ⭢ ⭣ ⭤ ⭥ ⬰ ⬱ ⬲ ⬳ ⬴ ⬵ ⬶ ⬷ ⬸ ⬹ ⬺ ⬻ ⬼ ⬽ ⬾ ⬿ ⭀ ⭁ ⭂ ⭃ ⭄ ⭅ ⭆ ⭇ ⭈ ⭉ ⭊ ⭋ ⭌ ⟰ ⟱ ⟲ ⟳ ⟴ ⟵ ⟶ ⟷ ⟸ ⟹ ⟺ ⟻ ⟼ ⟽ ⟾ ⟿ ⤾ ⤿ ⥀ ⥁ ⥂ ⥃ ⥄ ⥅ ⥆ ⥇ ⥈ ⥉ ⥊ ⥋ ⥌ ⥍ ⥎ ⥏ ⥐ ⥑ ⥒ ⥓ ⥔ ⥕ ⥖
 ];
 
 /// Spellings of a negated operator, each with the spelling it negates: `a nand b` is `not (a and b)` (wiki/operator.md:
@@ -260,15 +266,17 @@ pub fn is_function_keyword(s: &str) -> bool {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Op {
 	// Structural operators (existing)
-	Colon,    // :   type annotation and object construction person:{name:"Joe" age:42}
-	Dot,      // .   member access
-	SafeDot,  // ?.  member access that is ø when the receiver is ø
-	Coalesce, // ??  the left value unless it is ø, then the right (Swift, C#, JS)
-	Scope,    // ::  scope resolution
-	Define,   // :=  definition
-	Assign,   // =   assignment
-	Arrow,    // ->  arrow/return type
-	FatArrow, // =>  fat arrow/lambda
+	Colon,     // :   type annotation and object construction person:{name:"Joe" age:42}
+	Dot,       // .   member access
+	SafeDot,   // ?.  member access that is ø when the receiver is ø
+	Coalesce,  // ??  the left value unless it is ø, then the right (Swift, C#, JS)
+	Scope,     // ::  scope resolution
+	Define,    // :=  definition
+	Assign,    // =   assignment
+	Arrow,     // ->  arrow/lambda/return type
+	FatArrow,  // =>  only while parsing: the spelling binds and reads as in JS; parse() makes it Arrow, one arrow for warp
+	ArrowUp,   // ↑  e.g. exponential x^n
+	ArrowDown, // ↓ e.g. logarithmic   log(x)/log(base)
 
 	// Arithmetic operators
 	Add,     // +
@@ -376,7 +384,7 @@ impl Op {
 			Op::Hash => (170, 182),
 
 			// Power (right-assoc: 2^3^4 = 2^(3^4))
-			Op::Pow => (160, 159),
+			Op::Pow | Op::ArrowUp | Op::ArrowDown => (160, 159),
 			Op::LogBase | Op::LogOf => (160, 161),
 
 			// Multiplicative (left-assoc)
@@ -427,8 +435,8 @@ impl Op {
 
 			// Structural/Key operators (existing, adjusted for consistency)
 			Op::Colon => (80, 81),    // type annotation: a:b:c → a:(b:c)
-			Op::Arrow => (70, 69),    // right-assoc: a->b->c → a->(b->c)
-			Op::FatArrow => (70, 58), // right-assoc: a => b; the body takes an assignment as in JS: x => total += x
+			Op::Arrow => (70, 69),    // right-assoc: a->b->c → a->(b->c); a return type `-> (Int, Int)` stays one type
+			Op::FatArrow => (70, 58), // `=>` as JS: the body takes an assignment, x => total += x
 			Op::Define => (60, 59),   // right-assoc: a:=b:=c → a:=(b:=c)
 			Op::Assign => (60, 59),   // right-assoc: a=b=c → a=(b=c)
 
@@ -466,6 +474,8 @@ impl Op {
 			Op::Assign => "=",
 			Op::Arrow => "->",
 			Op::FatArrow => "=>",
+			Op::ArrowUp => "↑",
+			Op::ArrowDown => "↓",
 
 			// Arithmetic
 			Op::Add => "+",
@@ -571,8 +581,8 @@ impl Op {
 	pub fn holds(&self, ordering: std::cmp::Ordering) -> bool {
 		use std::cmp::Ordering::*;
 		match self {
-			Op::Eq => ordering == Equal,
-			Op::Ne => ordering != Equal,
+			Op::Eq | Op::Identical => ordering == Equal,
+			Op::Ne | Op::NotIdentical => ordering != Equal,
 			Op::Lt => ordering == Less,
 			Op::Le => ordering != Greater,
 			Op::Gt => ordering == Greater,
@@ -679,7 +689,7 @@ impl fmt::Display for Op {
 
 /// Every operator by its code in the kind field of a Key node (`(code << 8) | Kind::Key`); the first five are the
 /// codes earlier modules stored, the rest follow, so a quoted expression (`data 1+2`) reads back with its operator
-pub const OP_CODES: [Op; 65] = [
+pub const OP_CODES: [Op; 66] = [
 	Op::None,
 	Op::Colon,
 	Op::Assign,
@@ -688,7 +698,6 @@ pub const OP_CODES: [Op; 65] = [
 	Op::SafeDot,
 	Op::Scope,
 	Op::Arrow,
-	Op::FatArrow,
 	Op::Add,
 	Op::Sub,
 	Op::Mul,
@@ -745,6 +754,8 @@ pub const OP_CODES: [Op; 65] = [
 	Op::LogOf,
 	Op::BitAnd,
 	Op::BitOr,
+	Op::ArrowUp,
+	Op::ArrowDown,
 ];
 
 /// Encode Op as i64 for storage in kind field

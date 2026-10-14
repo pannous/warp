@@ -61,7 +61,6 @@ const BLOCK_TEMPLATES: [&str; 2] = [
 ];
 const STEREO_FILL_PARAMETERS: usize = 3;
 const PLAY_WORD: &str = "play";
-const FOR_WORD: &str = "for";
 /// The samples a signal computes at once (sound.rs play_signal, play_blocks): 23 ms at 22050 Hz
 pub const BLOCK_SAMPLES: usize = 512;
 
@@ -169,19 +168,15 @@ fn block_template(template: &str, fill: &str, seconds: Node) -> Node {
 		})
 }
 
-/// `play hum for 2s` of the program's function hum (PLAY_WORD): play_signal(hum, 2s) of a function of the time (or
+/// `play(hum, 2s)` of the program's function hum (PLAY_WORD): play_signal(hum, 2s) of a function of the time (or
 /// a pair [left, right] of them), play_blocks(hum, 2s) of a block function (hum(block, t), hum(left, right, t))
 fn with_played_functions(node: Node, counts: &HashMap<String, usize>) -> Node {
-	match node.map_children(|child| with_played_functions(child, counts)) {
-		Node::List(ref items, _, _)
-			if let [play, played, for_word, seconds] = items.as_slice()
-				&& play.is_symbol(PLAY_WORD)
-				&& for_word.is_symbol(FOR_WORD)
-				&& let Some(word) = signal_word(played, counts) =>
-		{
+	let node = node.map_children(|child| with_played_functions(child, counts));
+	match node.call_parts() {
+		Some((PLAY_WORD, [played, seconds])) if let Some(word) = signal_word(played, counts) => {
 			call(word, vec![played.clone(), seconds.clone()])
 		}
-		other => other,
+		_ => node,
 	}
 }
 
@@ -275,7 +270,7 @@ fn with_music_words(node: Node, defined: &HashSet<String>) -> Node {
 		return call(word, vec![with_music_words(amount, defined)]);
 	}
 	match node.map_children(|child| with_music_words(child, defined)) {
-		// a block of one statement, a loop's or an if's body: `for i in 1 to 3 { at 0 bars play C4 for 1s }`
+		// a block of one statement, a loop's or an if's body: `for i in 1 to 3 { at 0 bars play(C4, 1s) }`
 		Node::List(items, Bracket::Curly, separator)
 			if !separator.separates_statements()
 				&& let Some(statements) = scheduled(

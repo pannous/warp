@@ -185,7 +185,7 @@ pub(super) fn set_aside(packages: &Path, name: &str, version: &Version, clone: &
 			return Err(format!(
 				"package {name}: {} not moved out of the pin's way: {failure}",
 				clone.display()
-			))
+			));
 		}
 	}
 	Ok(())
@@ -197,7 +197,9 @@ pub(super) fn warn_overridden(name: &str, version: &Version, directory: &Path) {
 	let mut warned = WARNED.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 	let key = directory.display().to_string();
 	if !warned.contains(&key) {
-		eprintln!("warning: package {name}: {key} (a local checkout or a clone with changes) overrides the pinned version {version}");
+		eprintln!(
+			"warning: package {name}: {key} (a local checkout or a clone with changes) overrides the pinned version {version}"
+		);
 		warned.push(key);
 	}
 }

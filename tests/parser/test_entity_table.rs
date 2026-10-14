@@ -1,10 +1,10 @@
 // card entities-index: the parser's `\:name` entities are the single-word names of the pinned uniscript package's
-// index (data/entities.idx, format in uniscript's AGENTS.md "Index format"), embedded as src/uniscript_entities.tsv
+// index (data/entities.idx, format in uniscript's AGENTS.md "Index format"), embedded as src/text/uniscript_entities.tsv
 use crate::is;
 use std::path::Path;
 use warp::modules::fetch_package_into;
 
-const TABLE: &str = "src/uniscript_entities.tsv";
+const TABLE: &str = "src/text/uniscript_entities.tsv";
 const REGENERATE: &str = "WARP_REGENERATE_ENTITIES";
 const RECORD_BYTES: usize = 20;
 

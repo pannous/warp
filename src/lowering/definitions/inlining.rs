@@ -88,7 +88,7 @@ fn inlinable(node: &Node) -> Option<(String, Inlinable)> {
 				Node::Key(list, Op::Hash, _) if list.symbol_name().is_some() => {}
 				_ => movable = false,
 			},
-			Node::Key(_, Op::Define | Op::FatArrow | Op::Arrow, _) => movable = false,
+			Node::Key(_, Op::Define | Op::Arrow, _) => movable = false,
 			Node::Key(_, op, _) if op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec) => movable = false,
 			Node::Symbol(word) if word == RETURN_WORD || *word == name || word == GLOBAL_WORD => movable = false,
 			_ => {}

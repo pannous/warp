@@ -6,7 +6,7 @@
 //! `class dog extends animal {…}` (P117) gives dog the fields and methods of animal, its own ones override them, and
 //! declares `dog like animal`, so a dog is accepted where an animal is wanted.
 
-use super::nodes::{call, grouped_parameters, if_then, key, Counter};
+use super::nodes::{call, grouped_parameters, if_then, is_place, key, Counter};
 use crate::words::{GLOBAL_WORD, MAP_WORD, RETURN_WORD, SUM_WORD};
 mod components;
 use components::*;
@@ -515,7 +515,7 @@ fn renamed_type_word_methods(node: Node) -> Node {
 				.filter(|name| {
 					!is_witness_method(name)
 						&& (crate::analyzer::type_word_kind(name).is_some()
-							|| crate::declaration_forms::is_list_mutating_method(name)
+							|| crate::list_mutations::is_list_mutating_method(name)
 							|| crate::numbers::uncertain::INTERVAL_FIELDS.contains(&name.as_str()))
 				})
 				.collect();
@@ -1119,7 +1119,7 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 			// an early `return v` gives the pair too: `if n <= 0 { return 0 }; n -= 1; n`
 			let paired = |value: Node| Node::List(vec![value, receiver.clone()], Bracket::Square, Separator::Space);
 			// the statements before the value run first: `x = items#1; items = …; x` gives x, not the block
-			let mut statements = statements_of(with_returns(body, &paired));
+			let mut statements = with_returns(body, &paired).body_statements();
 			let value = statements.pop().unwrap_or(Node::Empty);
 			let result = Node::Symbol(format!("{method}{VALUE_SUFFIX}"));
 			let pair = Node::List(vec![result.clone(), receiver], Bracket::Square, Separator::Space);
@@ -1147,7 +1147,7 @@ fn with_returns(node: Node, given: &dyn Fn(Node) -> Node) -> Node {
 			let value = items.get(1).cloned().unwrap_or(Node::Empty);
 			Node::List(vec![items[0].clone(), given(value)], bracket, separator)
 		}
-		Node::Key(_, Op::Define | Op::FatArrow | Op::Arrow, _) => node,
+		Node::Key(_, Op::Define | Op::Arrow, _) => node,
 		other => other.map_children(|child| with_returns(child, given)),
 	}
 }
@@ -1162,7 +1162,7 @@ enum Change {
 
 /// Does a method body that changes its object end in a value of its own: `items.pop()`, not `n += 1` or `items.add(x)`
 fn gives_value(body: &Node) -> bool {
-	let Some(last) = statements_of(body.clone()).pop() else {
+	let Some(last) = body.body_statements().pop() else {
 		return false;
 	};
 	match last.drop_meta() {
@@ -1181,17 +1181,6 @@ fn gives_value(body: &Node) -> bool {
 				|| matches!(call.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| GIVING_MUTATIONS.contains(&word.drop_meta().name().as_str())))
 		}
 		_ => true,
-	}
-}
-
-/// The statements of a block `{a; b}` or sequence `a; b`, or the one statement of any other body
-fn statements_of(body: Node) -> Vec<Node> {
-	match body.drop_meta() {
-		Node::List(statements, Bracket::Curly, _)
-		| Node::List(statements, Bracket::None | Bracket::Round, Separator::Semicolon | Separator::Newline) => {
-			statements.clone()
-		}
-		_ => vec![body],
 	}
 }
 
@@ -1258,5 +1247,5 @@ fn is_field_of(target: &Node, variable: &str) -> bool {
 
 /// `add(x)`, `insert(x, at:1)`: a call of a method that changes the list it is called on
 fn mutating_call(call: &Node) -> bool {
-	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if crate::declaration_forms::is_list_mutating_method(name)))
+	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if crate::list_mutations::is_list_mutating_method(name)))
 }

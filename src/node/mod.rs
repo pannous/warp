@@ -43,21 +43,20 @@ pub const GLOBAL_DECLARATION: &str = "global";
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Node {
-	// closed cannot be extended so anticipate all cases here
+	// Id(i64), // unique INTERNAL(?) node id for graph structures (put in metadata?)
+	// Kind(i64), enum NodeKind in serialization
+
+	// closed, cannot be extended so anticipate all cases here
 	True,
 	False, // alternative would be pub const FALSE: Node = Node::Number(Number::Int(0));
 	Empty, // Null, Nill, None, Ø, ø null nill none nil
-	// Id(i64), // unique INTERNAL(?) node id for graph structures (put in metadata?)
-	// Kind(i64), enum NodeKind in serialization
 	Number(Number),
-	// Number(Float|Int),
-	Char(char), // Single Unicode codepoint/character like 'a', '🍏' necessary?? as Number?
+	Char(char), // Single Unicode codepoint/character like 'a', '🍏'
 	Text(String),
 	Symbol(String),
 	Error(Box<Node>),
 	// Keyword(String), Call, Declaration … AST or here? AST!  via Meta(node, AstKind)
-
-	// emit with dot .name for special semantics .meta:{} .data={type=T, b64=[] id} .type=T …
+	// emit key with dot ".name" for special semantics .meta:{} .data={type=T, b64=[] id} .type=T … TODO I saw @meta ??
 	// key can be any node (Symbol, Number, Text, etc.)
 	Key(Box<Node>, Op, Box<Node>),
 	List(Vec<Node>, Bracket, Separator),
@@ -76,6 +75,20 @@ impl Node {
 		}
 	}
 
+	/// The statements of a body: `{a;b}`, `{a⏎b}`, `(a; b)` and an unbracketed `a; b` hold several; `{x}` and
+	/// `{for i in xs {…}}` (words in braces) one
+	pub fn body_statements(&self) -> Vec<Node> {
+		match self.drop_meta() {
+			List(items, Bracket::Round, separator) if separator.separates_statements() => items.clone(),
+			List(items, Bracket::Curly, separator) if items.len() > 1 && !separator.separates_statements() => {
+				vec![List(items.clone(), Bracket::None, separator.clone())]
+			}
+			List(items, Bracket::Curly, _) if items.len() == 1 => items[0].sequence_statements().to_vec(),
+			List(items, Bracket::Curly, _) => items.clone(),
+			_ => self.sequence_statements().to_vec(),
+		}
+	}
+
 	pub fn meta(node: Node, meta: Node) -> Node {
 		Meta {
 			node: Box::new(node),
@@ -88,6 +101,10 @@ impl Node {
 	/// ø itself, under any metadata: unlike `is_nil`, an empty text, list or zero is not
 	pub fn is_empty_node(&self) -> bool {
 		matches!(self.drop_meta(), Empty)
+	}
+	/// A text or character literal, under any metadata
+	pub fn is_text_literal(&self) -> bool {
+		matches!(self.drop_meta(), Text(_) | Char(_))
 	}
 	/// ø or a block without statements: `{}` evaluates to nothing
 	pub fn is_nothing(&self) -> bool {
@@ -263,6 +280,11 @@ impl Node {
 			List(items, _, _) => Some((items.first()?.symbol_name()?, &items[1..])),
 			_ => None,
 		}
+	}
+
+	/// Whether this is a call or phrase headed by the word `name`: `f(x)`, `f x`
+	pub fn is_call_of(&self, name: &str) -> bool {
+		self.call_parts().is_some_and(|(head, _)| head == name)
 	}
 
 	/// The name of a symbol, through its metadata
@@ -488,15 +510,6 @@ impl Node {
 	/// a key, the node under metadata; any other node as it is. A lowering pass's recursion over the rest of the tree
 	pub fn map_children(self, mut rewrite: impl FnMut(Node) -> Node) -> Node {
 		match self {
-			List(items, bracket, separator) => List(items.into_iter().map(&mut rewrite).collect(), bracket, separator),
-			Key(left, op, right) => {
-				let left = rewrite(*left);
-				Key(Box::new(left), op, Box::new(rewrite(*right)))
-			}
-			Meta { node, data } => Meta {
-				node: Box::new(rewrite(*node)),
-				data,
-			},
 			// a class body: its methods are lowered as functions are, its field declarations stay (card method-bodies)
 			Type { name, body } => {
 				let mut rewrite_code = |item: Node| if is_class_code(&item) { rewrite(item) } else { item };
@@ -511,7 +524,7 @@ impl Node {
 					body: Box::new(body),
 				}
 			}
-			other => other,
+			other => children_rewritten(other, rewrite),
 		}
 	}
 
@@ -568,6 +581,54 @@ impl Node {
 		self.visit(&mut |node| {
 			if let Key(target, op, _) = node {
 				if binds(op) {
+					names.extend(target.symbol_name().map(String::from));
+				}
+			}
+		});
+		names.into_iter().collect()
+	}
+
+	/// The name `x = …`, `f(x) := …`, `f := …it…`, `def f(x){…}` or `def ((init ø) {1})` defines
+	pub fn defined_name(&self) -> Option<String> {
+		fn leading_symbol(node: &Node) -> Option<String> {
+			match node.drop_meta() {
+				Symbol(name) => Some(name.clone()),
+				List(items, _, _) => leading_symbol(items.first()?),
+				_ => None,
+			}
+		}
+		match self.drop_meta() {
+			Key(target, Op::Define | Op::Assign, _) => leading_symbol(target),
+			List(words, _, _) if words.len() > 1 && words[0].symbol_name().is_some_and(is_function_keyword) => {
+				Some(leading_name(&words[1])).filter(|name| !name.is_empty())
+			}
+			_ => None,
+		}
+	}
+
+	/// Every symbol anywhere in this node, once each, in reading order
+	pub fn symbols_read(&self) -> Vec<String> {
+		let mut symbols: Vec<String> = vec![];
+		self.visit(&mut |part| {
+			if let Symbol(name) = part {
+				if !symbols.contains(name) {
+					symbols.push(name.clone());
+				}
+			}
+		});
+		symbols
+	}
+
+	/// The names `global x` and `global x = v` declare anywhere in this node
+	pub fn declared_globals<Names: FromIterator<String>>(&self) -> Names {
+		let mut names = vec![];
+		self.visit(&mut |node| {
+			if let Key(keyword, Op::Colon, declared) = node {
+				if keyword.is_symbol(crate::words::GLOBAL_WORD) {
+					let target = match declared.drop_meta() {
+						Key(target, Op::Assign | Op::Define, _) => target,
+						name => name,
+					};
 					names.extend(target.symbol_name().map(String::from));
 				}
 			}
@@ -1067,23 +1128,18 @@ fn is_class_code(item: &Node) -> bool {
 	match item.drop_meta() {
 		Key(name, Op::Colon, _) if is_name(name) => return false,
 		Key(declared, Op::Assign, _) if matches!(declared.drop_meta(), Key(name, Op::Colon, _) if is_name(name)) => {
-			return false
+			return false;
 		}
 		List(words, _, _)
 			if words.first().is_some_and(
 				|first| matches!(first.drop_meta(), Symbol(word) if crate::operators::is_function_keyword(word)),
 			) =>
 		{
-			return true
+			return true;
 		}
 		_ => {}
 	}
 	let mut code = false;
-	item.visit(&mut |part| {
-		code |= matches!(
-			part,
-			Key(_, Op::Define | Op::Arrow | Op::FatArrow, _) | List(_, Bracket::Curly, _)
-		)
-	});
+	item.visit(&mut |part| code |= matches!(part, Key(_, Op::Define | Op::Arrow, _) | List(_, Bracket::Curly, _)));
 	code
 }

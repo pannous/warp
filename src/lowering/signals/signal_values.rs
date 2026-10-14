@@ -19,7 +19,9 @@ use crate::lowering::{function_head, DefinitionForm};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::variable_signals::{assign, is_round_head, listener_parts, symbols, with_old, with_value, ListenerWord};
-use crate::wasm_emitter::cells::{CELL_GET, CELL_NEW, CELL_SET, SIGNAL_LISTENERS, SIGNAL_LISTENERS_SET, SIGNAL_NEW};
+use crate::wasm_emitter::functions::cells::{
+	CELL_GET, CELL_NEW, CELL_SET, SIGNAL_LISTENERS, SIGNAL_LISTENERS_SET, SIGNAL_NEW,
+};
 use crate::words::{COUNT_WORD, FROM_WORD, GLOBAL_WORD, ONCE_WORD, ON_WORD, WHENEVER_WORD};
 use std::collections::HashSet;
 
@@ -103,7 +105,10 @@ pub fn poll_shared(program: Node) -> Node {
 				format!("{POLLING_PREFIX}{}_running", flags.len()),
 			);
 			// the loop's start polls again: the running flag keeps that inner check out
-			let each_write = format!("if {polling} and not {running} {{ {running} = true; while {writes} < {}({name}) {{ {writes} += 1; BODY }}; {running} = false }}", crate::host::SHARED_WRITES);
+			let each_write = format!(
+				"if {polling} and not {running} {{ {running} = true; while {writes} < {}({name}) {{ {writes} += 1; BODY }}; {running} = false }}",
+				crate::host::SHARED_WRITES
+			);
 			let body = with_value(&body, &subject);
 			checks.push(super::nodes::filled(&each_write, [("BODY", body)]));
 			lowered.push(
@@ -329,12 +334,22 @@ fn removing(name: &str, variable: &str, named: &[(String, String)]) -> Node {
 			format!("if {other} > {index} {{ {other} = {other} - 1 }}; ")
 		})
 		.collect();
-	from_template(&format!("if {index} >= 0 {{ {SIGNAL_LISTENERS_SET}({variable}, {WITHOUT_PLACEHOLDER}({variable}, {index})); {shifts}{index} = -1 }}"), &[])
+	from_template(
+		&format!(
+			"if {index} >= 0 {{ {SIGNAL_LISTENERS_SET}({variable}, {WITHOUT_PLACEHOLDER}({variable}, {index})); {shifts}{index} = -1 }}"
+		),
+		&[],
+	)
 }
 
 /// `signal·without(s, skip)`: the listeners of s but the one at skip
 fn without_function() -> Node {
-	from_template(&format!("{WITHOUT_PLACEHOLDER}(s, skip) := {{ kept = []; i = 0; for f in {SIGNAL_LISTENERS}(s) {{ if i != skip {{ kept = kept + [f] }}; i += 1 }}; kept }}"), &[])
+	from_template(
+		&format!(
+			"{WITHOUT_PLACEHOLDER}(s, skip) := {{ kept = []; i = 0; for f in {SIGNAL_LISTENERS}(s) {{ if i != skip {{ kept = kept + [f] }}; i += 1 }}; kept }}"
+		),
+		&[],
+	)
 }
 
 /// `listeners of x` → `signal_listeners(x)`, `clear listeners of x` → `signal_listeners_set(x, ø)`; and the variables
@@ -592,7 +607,7 @@ impl Signals {
 	fn rewrite(&mut self, node: Node, signals: &HashSet<String>, main: bool) -> Node {
 		if let Some(definition) = definition(&node) {
 			let locals = assigned_names(&definition.body);
-			let globals = declared_globals(&definition.body);
+			let globals: HashSet<String> = definition.body.declared_globals();
 			let mut inner: HashSet<String> = self
 				.escaping
 				.iter()
@@ -1130,7 +1145,12 @@ fn loop_variables(body: &Node) -> Vec<(String, String)> {
 
 /// `signal·set(s, v)`: store v, then call each listener with the new and the old value; gives the new value
 fn set_function() -> Node {
-	from_template(&format!("{SET_PLACEHOLDER}(s, v) := {{ {OLD_PLACEHOLDER} = {CELL_GET}(s); {CELL_SET}(s, v); for {LISTENER_PLACEHOLDER} in {SIGNAL_LISTENERS}(s) {{ {CLOSURE_CALL}({LISTENER_PLACEHOLDER}, {CELL_GET}(s), {OLD_PLACEHOLDER}) }}; {CELL_GET}(s) }}"), &[])
+	from_template(
+		&format!(
+			"{SET_PLACEHOLDER}(s, v) := {{ {OLD_PLACEHOLDER} = {CELL_GET}(s); {CELL_SET}(s, v); for {LISTENER_PLACEHOLDER} in {SIGNAL_LISTENERS}(s) {{ {CLOSURE_CALL}({LISTENER_PLACEHOLDER}, {CELL_GET}(s), {OLD_PLACEHOLDER}) }}; {CELL_GET}(s) }}"
+		),
+		&[],
+	)
 }
 
 /// The code parsed, its placeholders replaced: the generated names (`signal·old`) and the given nodes
@@ -1257,18 +1277,6 @@ fn assigned_names(body: &Node) -> HashSet<String> {
 /// `global x` of one of the names
 fn declares_global_of(statement: &Node, names: &HashSet<String>) -> bool {
 	matches!(statement.drop_meta(), Node::Key(keyword, Op::Colon, name) if word(keyword) == GLOBAL_WORD && names.contains(&word(name)))
-}
-
-fn declared_globals(body: &Node) -> HashSet<String> {
-	let mut names = HashSet::new();
-	body.visit(&mut |node| {
-		if let Node::Key(keyword, Op::Colon, name) = node {
-			if word(keyword) == GLOBAL_WORD {
-				names.insert(word(name));
-			}
-		}
-	});
-	names
 }
 
 fn unique(names: Vec<String>) -> Vec<String> {

@@ -561,7 +561,7 @@ pub(crate) fn list_element_type(type_name: &str) -> Option<&str> {
 pub(crate) fn added_items(value: &Node) -> Option<&[Node]> {
 	let appended = match value.drop_meta() {
 		Node::Key(_, Op::Add, appended) => appended.as_ref(),
-		Node::List(items, Bracket::Round, _) if matches!(items.as_slice(), [call, _, _] if call.drop_meta().name() == crate::wasm_emitter::list_ops::LIST_EXTEND) => {
+		Node::List(items, Bracket::Round, _) if matches!(items.as_slice(), [call, _, _] if call.drop_meta().name() == crate::wasm_emitter::lists::list_ops::LIST_EXTEND) => {
 			&items[2]
 		}
 		literal => literal,
@@ -656,4 +656,40 @@ pub(super) fn list_items_mismatch(
 		item.serialize()
 	);
 	Some(Diagnostic::at(assignment, message).fix(format!("declare {name}:list to hold any items")))
+}
+
+/// Kind of a built-in type name (type_tests BUILTIN_TYPES, a fixed width an Int); an exact number (`exact`, `real`) is
+/// an Int that may hold a ratio (wasm_emitter/exact.rs)
+pub fn builtin_type_kind(name: &str) -> Option<Kind> {
+	let name = name.to_lowercase();
+	crate::type_tests::held_kind(&name).or_else(|| crate::numbers::fixed_width::fixed_width(&name).map(|_| Kind::Int))
+}
+
+/// A whole-number type (`int`, `long`, `byte` …): never a fraction, unlike `exact`
+pub fn is_whole_type(name: &str) -> bool {
+	let name = name.trim_end_matches('?').to_lowercase();
+	!crate::type_tests::is_exact_fraction_type(&name) && builtin_type_kind(&name) == Some(Kind::Int)
+}
+
+/// A declared type a decimal loses digits in: a whole type, or an inline union with a whole part and no fractional
+/// one (`int or text` refuses 2.5, `int or float` takes it)
+pub fn refuses_decimals(type_name: &str) -> bool {
+	match union_parts(type_name.trim_end_matches('?')) {
+		// a class part (`point or int`) takes no number
+		Some(parts) => {
+			parts.iter().any(|part| is_whole_type(part))
+				&& !parts
+					.iter()
+					.any(|part| builtin_type_kind(part).is_some() && admits(part, Kind::Float))
+		}
+		None => is_whole_type(type_name),
+	}
+}
+
+/// A declared type held as an exact Int, or a union of such (`rational`, `int or rational`): an IEEE float loses its
+/// value there
+pub fn refuses_floats(type_name: &str) -> bool {
+	let type_name = type_name.trim_end_matches('?');
+	let exact = |name: &str| builtin_type_kind(name) == Some(Kind::Int);
+	union_parts(type_name).map_or_else(|| exact(type_name), |parts| parts.iter().all(|part| exact(part)))
 }

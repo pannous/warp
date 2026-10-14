@@ -27,21 +27,22 @@ pub mod wasm_emitter;
 pub use lowering::{
 	ambiguous_forms, blocks, broadcasting, channel_words, class_methods, closures, component_state, component_worlds,
 	comprehensions, database_tables, declaration_forms, declarations, element_events, event_signals, fetch_signals,
-	field_elements, folding, for_loop, foreign_modules, function_values, getters, glued_attributes, go_blocks,
-	gpu_maps, inlining, introspection, kebab_names, key_names, lambdas, late_binding, lazy_ranges, library_words,
-	list_phrases, markup_tags, memoization, meta_entries, min_max, music_words, mutation, named_arguments,
-	negated_calls, nested_index, nonlocal_cells, number_keys, object_groups, one_entry_maps, optional_casts, overloads,
-	page_html, parallel, parameter_shapes, phrase_calls, phrase_words, picked_calls, pipes, printable, references,
-	reflection, result_word, routes, run_time_blocks, scoped_handlers, select_options, serve, shared_arrays,
-	signal_values, soft_keywords, std_aliases, stored_values, style_rules, switch, system_signals, system_values,
-	traits, transitions, tuples, type_aliases, type_constructor, type_name_matching, type_tests, undo_history,
-	variable_signals, variadic, versions, welcome_forms, word_operators, word_slices,
+	field_elements, filled_lists, folding, for_loop, foreign_modules, function_values, getters, glued_attributes,
+	go_blocks, gpu_maps, inline_unions, inlining, introspection, kebab_names, key_names, lambdas, late_binding,
+	lazy_ranges, library_words, list_mutations, markup_tags, memoization, meta_entries, min_max, music_words, mutation,
+	named_arguments, negated_calls, nested_index, nonlocal_cells, number_keys, object_groups, one_entry_maps,
+	optional_casts, overloads, page_html, parallel, parameter_shapes, phrase_words, picked_calls, pipes, printable,
+	references, reflection, result_word, routes, run_time_blocks, scoped_handlers, select_options, serve,
+	shared_arrays, signal_values, soft_keywords, std_aliases, stored_values, style_rules, switch, system_signals,
+	system_values, traits, transitions, tuples, type_aliases, type_constructor, type_name_matching, type_tests,
+	undo_history, variable_signals, variadic, versions, welcome_forms, word_operators,
 };
+pub mod errors;
+// old paths until the quiet-window path pass (notes/restructuring.md "Moves with many users")
 #[cfg(feature = "native")]
-pub mod crash_card;
-pub mod diagnostic;
+pub use errors::crash_card;
+pub use errors::{diagnostic, fixits};
 pub mod ffi;
-pub mod fixits;
 pub mod formats;
 pub mod graphics;
 pub mod host;

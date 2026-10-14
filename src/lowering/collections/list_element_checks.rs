@@ -11,8 +11,9 @@ use crate::analyzer::{
 	added_items, appended_items, builtin_type_kind, computed_literal_kind, declaring_name_and_type, indexed_list,
 	inserted_item, list_element_type,
 };
-use crate::declaration_forms::{insert_position, of_type_declaration};
+use crate::declaration_forms::of_type_declaration;
 use crate::library_words::substitute;
+use crate::list_mutations::insert_position;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;

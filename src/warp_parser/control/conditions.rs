@@ -103,4 +103,59 @@ impl WarpParser {
 		}
 		Some(Node::Key(Box::new(Empty), Op::Not, Box::new(lhs.clone())))
 	}
+
+	/// `unless`/`until` in front of a statement: the `if`/`while` it reads as, with the condition negated afterwards
+	pub(crate) fn peek_negated_control_word(&self) -> Option<(Op, usize)> {
+		if self.options.data_mode {
+			return None;
+		}
+		NEGATED_CONTROL_WORDS
+			.iter()
+			.find(|(word, _)| self.matches_keyword(word))
+			.map(|(word, op)| (*op, word.len()))
+	}
+}
+
+/// `print it if it%2`, `do {i++} while c`: a trailing `if` guards and a trailing `while` loops the whole command, not
+/// its last word, as in Ruby and Perl (card glued-loop)
+pub(crate) fn guarded_command(items: &[Node]) -> Option<Node> {
+	let (last, command) = items.split_last()?;
+	if !matches!(command.first()?.drop_meta(), Symbol(_)) {
+		return None;
+	}
+	let whole = |tail: &Node| {
+		Node::List(
+			[command, std::slice::from_ref(tail)].concat(),
+			Bracket::None,
+			Separator::Space,
+		)
+	};
+	match last.drop_meta() {
+		Node::Key(head, Op::Do, body) => match head.drop_meta() {
+			Node::Key(nothing, Op::While, condition) if **nothing == Node::Empty => {
+				Some(while_do((**condition).clone(), whole(body)))
+			}
+			_ => None,
+		},
+		Node::Key(condition, Op::Then, guarded) => match condition.drop_meta() {
+			Node::Key(nothing, Op::If, _) if **nothing == Node::Empty => {
+				Some(Node::Key(condition.clone(), Op::Then, Box::new(whole(guarded))))
+			}
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// The condition of the `if`/`while` head inside a parsed conditional or loop, negated: `unless c {…}` is `if not c {…}`
+pub(crate) fn negate_condition(conditional: Node) -> Node {
+	match conditional {
+		Node::Key(head, op @ (Op::Then | Op::Else | Op::Do), body) => {
+			Node::Key(Box::new(negate_condition(*head)), op, body)
+		}
+		Node::Key(empty, op @ (Op::If | Op::While), condition) if matches!(empty.drop_meta(), Empty) => {
+			Node::Key(empty, op, Box::new(Node::Key(Box::new(Empty), Op::Not, condition)))
+		}
+		other => other,
+	}
 }

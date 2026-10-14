@@ -3,7 +3,7 @@
 //! name wins with a got-it note ("send is a keyword; here it is your variable"); redefining one at the top level is a
 //! loud error. Passes that give a soft keyword its meaning ask `program_names` whether the program took the word.
 
-use super::nodes::{is_function_keyword, parameter_name};
+use super::nodes::parameter_name;
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
@@ -123,7 +123,7 @@ pub fn names_given(program: &Node) -> std::collections::HashSet<String> {
 
 /// A hard keyword assigned anywhere, a soft one defined at the top level: the loud error
 fn first_refused(node: &Node, top_level: bool) -> Option<Node> {
-	if let Some(name) = defined_name(node) {
+	if let Some(name) = node.defined_name() {
 		let refused = HARD_KEYWORDS.contains(&name.as_str()) || top_level && SOFT_KEYWORDS.contains(&name.as_str());
 		if refused {
 			let fix = if top_level && SOFT_KEYWORDS.contains(&name.as_str()) {
@@ -139,25 +139,9 @@ fn first_refused(node: &Node, top_level: bool) -> Option<Node> {
 		Node::List(items, Bracket::None | Bracket::Curly, _) if top_level => {
 			items.iter().find_map(|item| first_refused(item, true))
 		}
-		Node::Key(_, Op::Define | Op::Assign, body) if defined_name(node).is_some() => first_refused(body, false),
+		Node::Key(_, Op::Define | Op::Assign, body) if node.defined_name().is_some() => first_refused(body, false),
 		Node::Key(left, _, right) => first_refused(left, false).or_else(|| first_refused(right, false)),
 		Node::List(items, _, _) => items.iter().find_map(|item| first_refused(item, false)),
-		_ => None,
-	}
-}
-
-/// `x = …`, `f(x) := …`, `def f(x) {…}`: the name defined
-fn defined_name(node: &Node) -> Option<String> {
-	match node.drop_meta() {
-		Node::Key(target, Op::Define | Op::Assign, _) => match target.drop_meta() {
-			Node::Symbol(name) => Some(name.clone()),
-			Node::List(items, Bracket::Round, _) => items.first().and_then(Node::symbol_name).map(String::from),
-			_ => None,
-		},
-		// `def ((init ø) {1})`: the name leads the head
-		Node::List(words, _, _) if words.len() > 1 && words.first().is_some_and(is_function_keyword) => {
-			Some(crate::node::leading_name(&words[1])).filter(|name| !name.is_empty())
-		}
 		_ => None,
 	}
 }
@@ -196,7 +180,7 @@ fn walk_names(node: &Node, found: &mut dyn FnMut(&str, &str)) {
 			}
 			walk_names(body, found);
 		}
-		Node::Key(parameters, Op::FatArrow | Op::Arrow, body) => {
+		Node::Key(parameters, Op::Arrow, body) => {
 			let names: Vec<String> = match parameters.drop_meta() {
 				Node::List(items, _, _) => items.iter().filter_map(parameter_name).collect(),
 				other => parameter_name(other).into_iter().collect(),

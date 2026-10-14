@@ -295,24 +295,6 @@ impl WarpParser {
 			None => list,
 		}
 	}
-	/// The lines of a definition `def f(n)` indented below it by spaces, as `def f(n):` (by tabs the indentation rule of
-	/// parse_list_with_separators takes them); Ruby's `def f(n) … end` is read by its end
-	fn with_definition_block(&mut self, definition: Node) -> Node {
-		let ruby_definition = self.closing_end_follows(&RUBY_END_OPENERS);
-		// a top-level Ruby `def f(n)` with its lines indented by tabs: the indented block, then its `end` (the tab rule
-		// would make each line the block of the one before)
-		let tab_indented_ruby = ruby_definition && self.base_indent == 0 && self.next_line_starts_with_tab();
-		if (ruby_definition && !tab_indented_ruby) || !self.only_blanks_before_newline() {
-			return definition;
-		}
-		let Some(body) = self.parse_indented_block() else {
-			return definition;
-		};
-		if tab_indented_ruby {
-			self.skip_end_line();
-		}
-		Node::Key(Box::new(definition), Op::Colon, Box::new(body))
-	}
 
 	/// The separator after a list item, consumed: `,` `;` a newline, a blank, or an `and` starting the next command
 	fn parse_separator(&mut self, close: Option<char>, had_newline: bool, in_command: bool) -> Separator {
@@ -532,41 +514,6 @@ fn with_type_phrases(items: Vec<Node>) -> Vec<Node> {
 	fields
 }
 
-/// `{f: x => x * 2}`: `:` binds tighter than `=>`, so the entry parses as the lambda `(f:x) => x*2` with a parameter f of
-/// type x; in an object a lowercase word that is no type after the key is the lambda's parameter: the field f holds
-/// `x => x * 2`. A typed lambda `{x: int => x * 2}` or `{p: Person => p.name}` stays one.
-fn field_holding_lambda(item: Node) -> Node {
-	match item {
-		meta @ Node::Meta { .. } => meta.under_meta(field_holding_lambda),
-		Node::Key(head, Op::FatArrow, body) => match head.drop_meta() {
-			Node::Key(key, Op::Colon, parameter)
-				if matches!(key.drop_meta(), Symbol(_)) && is_parameter_word(parameter) =>
-			{
-				let lambda = Node::Key(parameter.clone(), Op::FatArrow, body);
-				Node::Key(key.clone(), Op::Colon, Box::new(lambda))
-			}
-			_ => Node::Key(head, Op::FatArrow, body),
-		},
-		other => other,
-	}
-}
-
-/// A lowercase word that names no type, or a parameter group `(x, y)`
-fn is_parameter_word(node: &Node) -> bool {
-	match node.drop_meta() {
-		Symbol(word) => word.starts_with(char::is_lowercase) && crate::analyzer::type_word_kind(word).is_none(),
-		Node::List(_, Bracket::Round, _) => true,
-		_ => false,
-	}
-}
-
-/// The first word of a class-body item that is code: a function keyword, or the constructor call `init(n)`
-/// `int bar(){ 42 }` as words: a type word and a call with its block
-fn is_typed_method(words: &[Node]) -> bool {
-	matches!(words, [type_word, head] if matches!(type_word.drop_meta(), Node::Symbol(word) if crate::analyzer::builtin_type_kind(word).is_some())
-		&& matches!(head.drop_meta(), Node::List(parts, _, _) if matches!(parts.last().map(Node::drop_meta), Some(Node::List(_, Bracket::Curly, _)))))
-}
-
 fn starts_code(first: &Node) -> bool {
 	match first.drop_meta() {
 		Node::Symbol(word) => {
@@ -578,41 +525,4 @@ fn starts_code(first: &Node) -> bool {
 		Node::List(call, Bracket::Round, _) => matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(_))),
 		_ => false,
 	}
-}
-
-/// `f(xs) := xs.map`, `ys = xs.filter`, `x -> x.map`: a definition or lambda whose value ends in a method name, waiting
-/// for its trailing block
-fn assigned_method_call(node: &Node) -> bool {
-	match node.drop_meta() {
-		Node::Key(_, Op::Assign | Op::Define | Op::Arrow | Op::FatArrow, value) => {
-			matches!(value.drop_meta(), Node::Key(_, Op::Dot, method) if matches!(method.drop_meta(), Symbol(_)))
-				|| assigned_method_call(value)
-		}
-		_ => false,
-	}
-}
-
-/// `f(xs) := xs.map { it*10 }` is `f(xs) := (xs.map {it*10})`: the block belongs to the method call, not to the statement
-fn with_trailing_block(assignment: Node, block: Node) -> Node {
-	match assignment {
-		meta @ Node::Meta { .. } => meta.under_meta(|node| with_trailing_block(node, block)),
-		Node::Key(target, op, value) if assigned_method_call(&value) => {
-			Node::Key(target, op, Box::new(with_trailing_block(*value, block)))
-		}
-		Node::Key(target, op, value) => Node::Key(
-			target,
-			op,
-			Box::new(Node::List(vec![*value, block], Bracket::None, Separator::Space)),
-		),
-		other => other,
-	}
-}
-
-/// `global a, b` as parsed: the declarations `global: a`, `global: b`
-fn declarations_of_several_globals(item: &Node) -> Option<Vec<Node>> {
-	let Node::List(declarations, Bracket::None, Separator::Semicolon) = item.drop_meta() else {
-		return None;
-	};
-	let is_global = |declaration: &Node| matches!(declaration.drop_meta(), Node::Key(keyword, Op::Colon, _) if keyword.is_symbol(crate::node::GLOBAL_DECLARATION));
-	declarations.iter().all(is_global).then(|| declarations.clone())
 }

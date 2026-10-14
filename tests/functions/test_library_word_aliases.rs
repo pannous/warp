@@ -13,6 +13,7 @@ fn print_spellings_print() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-park-phrases: `sorted by` phrase parked until card prepositions-call"]
 fn containment_and_phrase_spellings() {
 	for contains in ["contains", "has", "includes"] {
 		is!(&format!("xs = [1, 2]; xs {contains} 2"), true);

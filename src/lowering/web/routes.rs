@@ -135,7 +135,7 @@ pub(crate) fn route(statement: &Node) -> Option<Route> {
 	let Node::List(body, Bracket::Curly, _) = block.drop_meta() else {
 		return None;
 	};
-	if !matches!(pattern.drop_meta(), Node::Text(_) | Node::Char(_)) {
+	if !pattern.is_text_literal() {
 		return None;
 	}
 	let pattern = pattern.text_or_name();

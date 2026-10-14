@@ -190,7 +190,7 @@ impl WasmGcEmitter {
 			.map(|(class, instance)| {
 				(
 					instance.type_index,
-					format!("{class}{}", struct_backend::INSTANCE_SUFFIX),
+					format!("{class}{}", maps::struct_backend::INSTANCE_SUFFIX),
 				)
 			})
 			.collect();

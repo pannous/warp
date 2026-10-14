@@ -49,8 +49,8 @@ implemented in src/lowering/type_name_matching.rs (`parameter_slots`, used by th
    Not yet: referring to the parameter by its head noun alone (`name.given`). Probe: probes/matching/multi_word_class.warp.
 5. A slot that is a single known type word and the only parameter is also `it` (`fibonacci number`, `foo of int`).
 6. Spaced heads without any known type word (`f x = …`) keep their old meaning; the `to` phrase always uses the slots.
-8. Calls with the phrase's prepositions (P52, user): `add 1 to 2`, `square of 4`, `move 1 from 2 to 3`
-   (src/lowering/phrase_calls.rs, the first source pass). Elsewhere `to` stays a range and `of` a field lookup.
+8. Phrase-shaped definitions are ordinary functions and use explicit calls. Elsewhere `to` stays a range and `of`
+   a field lookup.
 7. One parse for every spelling: `=` and `:=` heads both go through `type_name_matching::spaced_parameters`
    (declarations::spaced_definition delegates to it), the `to` phrase takes a `:` or a `{…}` body. A lone type-word
    parameter is `it` only when the body does not use the word itself (`fibonacci number := … number … it …` keeps
@@ -100,7 +100,7 @@ Gaps, most important first (silent wrong answers lead: they quietly compensate i
 | multi-word-class | `class full name { first; last }` (D5 rule 4) | done: rule 4 above; `n.first` read the library word first until field-before-library-word (a known instance's field wins) |
 | matches-infix | `use regex; "abc" matches "a.c"` | "matches needs 2 arguments" (infix use of a library word) |
 | render-as | `to render text as pdf: …; render "hello" as pdf` (Features.md, D10) | done: notes/dispatch.md, probes/matching/render_as.warp |
-| gap-feeding | `to integrate a function from a to b …` fed by same-named locals (call.md) | done: a left-out `from _` takes the variable from, with a hint (phrase_calls.rs with_gaps_fed); a plain parameter's name feeds nothing (test_named_arguments) |
+| gap-feeding | `to integrate a function from a to b …` fed by same-named locals (call.md) | parked with natural phrase calls; explicit calls name every argument |
 
 Decisions (user, via warp-interviewer):
 - In a case key `1 | 2`, `1 or 2` and `1, 2` are alternatives; a computed comparison goes in a guard. Alternatives
@@ -108,7 +108,8 @@ Decisions (user, via warp-interviewer):
 - `int | text` / `int or text` in a case key is a type union, as is `x is (int or text)`; mixed `0 or text` means
   the value 0 or any text.
 - `other` (like `_`, `default`, `else`) is a catch-all case key; a variable named other stays a variable.
-- Definitions by cases `fib(0) := 0; fib(n) := …` are the error "fib is defined twice", whose fix shows a match.
+- Definitions by cases `fib(0) := 0; fib(n) := …` have no diagnostic of their own (cut, cleanup-cuts-2): the last one
+  wins, as any redefinition; write the cases as one match.
 - Exhaustiveness: a match over a known enum or sealed set that misses a case is the compile error "match on Coin
   misses Dime"; an unknown subject type keeps the run-time "no case".
 

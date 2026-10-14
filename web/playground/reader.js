@@ -1,5 +1,5 @@
 // Reads a WASM GC result node into the JSON tree src/web/mod.rs node_from_tree turns into a Node: JavaScript cannot read
-// GC struct fields, so it calls the module's reflection exports (src/wasm_emitter/reflection.rs).
+// GC struct fields, so it calls the module's reflection exports (src/wasm_emitter/reflection/exports.rs).
 // A node is {kind, data, chain}: chain holds the nodes reached through value fields (a list's cons cells), kept flat.
 
 // the order of PAYLOAD_TAGS in reflection.rs

@@ -58,8 +58,8 @@ impl Storage {
 		match self {
 			Storage::Host => (SHARED_NEW, SHARED_COUNT),
 			Storage::Linear => (
-				crate::wasm_emitter::linear_arrays::LINEAR_NEW,
-				crate::wasm_emitter::linear_arrays::LINEAR_COUNT,
+				crate::wasm_emitter::lists::linear_arrays::LINEAR_NEW,
+				crate::wasm_emitter::lists::linear_arrays::LINEAR_COUNT,
 			),
 		}
 	}
@@ -75,7 +75,7 @@ enum Element {
 
 /// The words of reading, writing and adding an element of a shared or linear array of Ints or of floats
 fn element_words(kind: Shared) -> [&'static str; 3] {
-	use crate::wasm_emitter::linear_arrays::{LINEAR_FLOAT_WORDS, LINEAR_INT_WORDS};
+	use crate::wasm_emitter::lists::linear_arrays::{LINEAR_FLOAT_WORDS, LINEAR_INT_WORDS};
 	let [_, get, set, add, _] = crate::host::SHARED_WORDS;
 	match (kind.storage, kind.element == Element::Float) {
 		(Storage::Host, true) => crate::host::SHARED_FLOAT_WORDS,
@@ -668,7 +668,7 @@ impl Rewrite<'_> {
 				}
 				match items.as_slice() {
 					[word, array]
-						if word.name() == crate::wasm_emitter::linear_arrays::LINEAR_ADDRESS
+						if word.name() == crate::wasm_emitter::lists::linear_arrays::LINEAR_ADDRESS
 							&& shared(array, &names).is_some_and(|kind| kind.storage == Storage::Linear) =>
 					{
 						array.clone()
@@ -680,7 +680,7 @@ impl Rewrite<'_> {
 						builtin(kind.storage.new_and_count().1, vec![array.clone()])
 					}
 					[word, left, right]
-						if word.name() == crate::wasm_emitter::linear_arrays::LINEAR_DOT
+						if word.name() == crate::wasm_emitter::lists::linear_arrays::LINEAR_DOT
 							&& is_linear_floats(left, &names)
 							&& is_linear_floats(right, &names) =>
 					{
@@ -773,20 +773,19 @@ impl Rewrite<'_> {
 /// the kernel's name (wasm_emitter/linear_arrays.rs, f64x2 lanes)
 fn float_map(value: &Node, names: &HashMap<String, Shared>) -> Option<(Node, String)> {
 	let (array, lambda) = map_parts(value)?;
-	let Node::Key(parameter, Op::FatArrow, body) = lambda.drop_meta() else {
+	let Node::Key(parameter, Op::Arrow, body) = lambda.drop_meta() else {
 		return None;
 	};
 	let Node::Symbol(parameter) = parameter.drop_meta() else {
 		return None;
 	};
-	(is_linear_floats(array, names) && crate::wasm_emitter::linear_arrays::is_float_kernel(parameter, body)).then(
-		|| {
+	(is_linear_floats(array, names) && crate::wasm_emitter::lists::linear_arrays::is_float_kernel(parameter, body))
+		.then(|| {
 			(
 				array.clone(),
-				crate::wasm_emitter::linear_arrays::kernel_name(parameter, body),
+				crate::wasm_emitter::lists::linear_arrays::kernel_name(parameter, body),
 			)
-		},
-	)
+		})
 }
 
 /// `xs.map(f)` or `map(xs, f)`: xs and f
@@ -892,7 +891,7 @@ fn paired_linear(
 
 /// `sum(xs .* ys)` of two linear float arrays: their lengths checked, then linear_dotf over both blocks
 fn linear_dot(left: Node, right: Node) -> Node {
-	use crate::wasm_emitter::linear_arrays::LINEAR_DOT;
+	use crate::wasm_emitter::lists::linear_arrays::LINEAR_DOT;
 	let template = format!("({}; {LINEAR_DOT}(LEFT, RIGHT))", crate::broadcasting::PAIRED_COUNT)
 		.replace("LEFT", "dot_left")
 		.replace("RIGHT", "dot_right");
@@ -944,7 +943,7 @@ fn gpu_reduced(
 	names: &HashMap<String, Shared>,
 	keeping: i64,
 ) -> Node {
-	use crate::wasm_emitter::linear_arrays::{LINEAR_COUNT, LINEAR_FLOAT_WORDS, LINEAR_NEW};
+	use crate::wasm_emitter::lists::linear_arrays::{LINEAR_COUNT, LINEAR_FLOAT_WORDS, LINEAR_NEW};
 	let [get, _, _] = LINEAR_FLOAT_WORDS;
 	let (size, fewest) = (crate::gpu_maps::WORKGROUP_SIZE, crate::gpu_maps::fewest_items(keeping));
 	let combined = reduction.combined("reduce_value", &format!("{get}(reduce_partials, reduce_index)"));
@@ -982,7 +981,7 @@ fn gpu_reduced(
 /// The items of the list `array` (not in linear memory) as floats in a new block, once: the statements and the name
 /// holding the block's address
 fn copied_into_block(target: &Node, array: &Node) -> (Node, Node) {
-	use crate::wasm_emitter::linear_arrays::{LINEAR_FLOAT_WORDS, LINEAR_NEW};
+	use crate::wasm_emitter::lists::linear_arrays::{LINEAR_FLOAT_WORDS, LINEAR_NEW};
 	let [_, set, _] = LINEAR_FLOAT_WORDS;
 	let copy = crate::warp_parser::parse(&format!("copy_list = copy_items; copy_block = {LINEAR_NEW}(count(copy_list)); copy_index = 0; for copy_item in copy_list {{ copy_index = copy_index + 1; {set}(copy_block, copy_index, {}(copy_item)) }}", FLOAT_WORDS[0]));
 	let separator = crate::analyzer::TEMPORARY_SEPARATOR;
@@ -1005,7 +1004,7 @@ fn copied_into_block(target: &Node, array: &Node) -> (Node, Node) {
 /// `ys = linear_new(count(xs))`, then the kernel maps xs's cells into ys's, given the values of the program's numbers it
 /// reads, or the CPU does: for few items or without an adapter
 fn gpu_mapped(target: &Node, array: &Node, lambda: &Node, kernel: crate::gpu_maps::Kernel, keeping: i64) -> Node {
-	use crate::wasm_emitter::linear_arrays::LINEAR_COUNT;
+	use crate::wasm_emitter::lists::linear_arrays::LINEAR_COUNT;
 	let size = crate::gpu_maps::WORKGROUP_SIZE;
 	let fewest = crate::gpu_maps::fewest_items(keeping);
 	let mapped = format!("if {LINEAR_COUNT}(map_source) < {fewest} or {}(gpu_shader, map_source, gpu_values, map_target, ({LINEAR_COUNT}(map_source) + {size} - 1)//{size}, {keeping}) == 0 {{ map_loop }}", crate::host::GPU_MAP_LINEAR);
@@ -1024,7 +1023,7 @@ fn gpu_mapped(target: &Node, array: &Node, lambda: &Node, kernel: crate::gpu_map
 /// `ys = go xs.map(x => …)` of a float kernel: from SPLIT_FEWEST cells on the host maps slices of xs on threads
 /// (task_split_mapf), else, or where it gives 0, the kernel here
 fn split_mapped(target: &Node, array: &Node, kernel: &str, mapped: Node) -> Node {
-	use crate::wasm_emitter::linear_arrays::LINEAR_COUNT;
+	use crate::wasm_emitter::lists::linear_arrays::LINEAR_COUNT;
 	let template = crate::warp_parser::parse(&format!(
 		"map_target = (map_split = (if {LINEAR_COUNT}(map_source) >= {SPLIT_FEWEST} then {}(map_kernel, map_source) else 0); if map_split == 0 then map_kernel_call else map_split)",
 		crate::host::TASK_SPLIT_MAPF
@@ -1046,7 +1045,7 @@ fn split_mapped(target: &Node, array: &Node, kernel: &str, mapped: Node) -> Node
 /// `ys = linear_new(count(xs))`, then `mapped` (`map_loop` in it the CPU's loop writing each cell of ys from xs's)
 fn block_mapped(target: &Node, array: &Node, lambda: &Node, mapped: &str, fills: &[(&str, Node)]) -> Node {
 	use crate::library_words::substitute;
-	use crate::wasm_emitter::linear_arrays::{LINEAR_COUNT, LINEAR_FLOAT_WORDS, LINEAR_NEW};
+	use crate::wasm_emitter::lists::linear_arrays::{LINEAR_COUNT, LINEAR_FLOAT_WORDS, LINEAR_NEW};
 	let Node::Key(parameter, _, body) = lambda.drop_meta() else {
 		unreachable!("a numeric map's function is a lambda")
 	};

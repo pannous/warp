@@ -188,7 +188,7 @@ impl WasmGcEmitter {
 		{
 			let value = value.serialize();
 			let message = format!("{value} is a float where an exact {} is expected: declare it `number` to keep the float, truncate with `as int`, {}",
-				declared.name(), super::casts::nearest_hint(&value));
+				declared.name(), super::numbers::casts::nearest_hint(&value));
 			return self.emit_type_error(func, message);
 		}
 		let check = declared
@@ -229,7 +229,7 @@ impl WasmGcEmitter {
 			func,
 			&Node::Text(format!("not {}", crate::analyzer::with_article(&declared.name()))),
 		);
-		self.emit_runtime_error(func, super::list_ops::RETURNED_ERROR);
+		self.emit_runtime_error(func, super::lists::list_ops::RETURNED_ERROR);
 		Self::emit_list(func, &[I::End, I::LocalGet(held), I::RefAsNonNull]);
 		if kind.is_float() {
 			self.emit_held_node_as_f64(func);
@@ -288,8 +288,8 @@ pub(super) const LIST_ITEMS_CHECK: &str = "list_items_check";
 pub(super) const LIST_CANNOT_HOLD: &str = "list_cannot_hold_this_item";
 /// The in-place writers of a list, which check their items against its element mark
 const MARK_CHECKING_WRITERS: [&str; 3] = [
-	super::list_ops::LIST_EXTEND,
-	crate::declaration_forms::INSERT_AT_CALL,
+	super::lists::list_ops::LIST_EXTEND,
+	crate::list_mutations::INSERT_AT_CALL,
 	"node_with_at",
 ];
 

@@ -7,14 +7,14 @@
 //! - OCaml / F# `let f x = body in rest`: the definition `f(x) := body`, then rest
 //! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
-use super::nodes::{call, children_rewritten, is_function_keyword, is_type_word, key};
+use super::nodes::{call, children_rewritten, is_type_word, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::words::{GENERIC_MARK, SUM_WORD};
-use crate::words::{IN_WORD, ON_WORD, WHENEVER_WORD};
+use crate::words::GENERIC_MARK;
+use crate::words::{ON_WORD, WHENEVER_WORD};
 use std::collections::HashSet;
 
-use crate::words::SWITCH_WORDS;
+use crate::words::{MATCH_WORD, SWITCH_WORDS};
 const WILDCARD: &str = "_";
 const DEFAULT_CASE: &str = "default";
 const LOOP_KEYWORD: &str = "loop";
@@ -28,45 +28,61 @@ const RUBY_LAMBDA_WORDS: [&str; 2] = ["lambda", "proc"];
 const CALL_METHOD: &str = "call";
 /// Swift's and C's case label `case .north:` in a switch
 const CASE_WORD: &str = "case";
-/// Kotlin's `when (x) { a -> 1; is T -> 2; else -> 3 }`, an if chain
+/// Kotlin's `when (x) { a -> 1; is T -> 2; else -> 3 }`, an if chain; `when` means on, whenever, if or match by its
+/// shape, and every shape warns the same (user, 2026-10-13)
 const WHEN_KEYWORD: &str = "when";
+const WHEN_TOPIC: &str = "when";
+const WHEN_REASON: &str = "when is on, whenever, if or match by its shape; write the one meant";
 const ELSE_WORD: &str = "else";
 /// The listeners a `when` without arms is: of an event, of a condition
-const WHEN_CONDITION_TOPIC: &str = "when-condition";
+const IF_WORD: &str = "if";
 const IS_WORD: &str = "is";
 /// The if chain a `when` arm adds, its conditions joined by `or`
 const WHEN_ARM: &str = "if CONDITION then VALUE else OTHERWISE";
 const LAST_WHEN_ARM: &str = "if CONDITION then VALUE";
-const OCAML_FUNCTION_KEYWORD: &str = "fun";
-/// PHP's `array_map(f, xs)` takes the function first: `map(xs, f)`
-const FUNCTION_FIRST: [&str; 1] = ["array_map"];
 /// Modules of other languages whose words are warp's: JS's `Math.sqrt(16)` is `sqrt(16)`, F#'s `List.map f xs` is
 /// `map f xs` (also `Seq.`, `Array.`), Elixir's `Enum.map(xs, f)` is `map(xs, f)`
 const FOREIGN_MODULES: [&str; 5] = ["Math", "List", "Seq", "Array", "Enum"];
 /// Module words written only qualified, as the module's own name for them (P183: `file.append(path, text)`; a bare
 /// `append` stays the list method)
 const QUALIFIED_WORDS: [(&str, &str, &str); 1] = [("file", "append", "append_file")];
-/// R's vector constructor: `c(1, 2, 3)` is the list `[1, 2, 3]` unless the program names something c
-const R_VECTOR_WORD: &str = "c";
-/// Ruby's `xs.sum { |x| x * 2 }`, Kotlin's `xs.sumOf { it * 2 }`, `xs.count { it > 1 }`: a reduction of the list
+/// Ruby's `xs.sum { |x| x * 2 }`, `xs.count { it > 1 }`: a reduction of the list
 /// the block makes, `sum(map(xs, block))`, `count(filter(xs, block))`
-const BLOCK_REDUCTIONS: [(&str, &str); 2] = [(SUM_WORD, "map"), ("count", "filter")];
-/// Elixir's `def sq(x), do: x * x` and its private `defp`
-const ELIXIR_DO_WORD: &str = "do";
-const ELIXIR_PRIVATE_DEF: &str = "defp";
+const BLOCK_REDUCTIONS: [(&str, &str); 2] = [("sum", "map"), ("count", "filter")];
 /// C++'s `auto x = 3`
 const CPP_AUTO_WORD: &str = "auto";
+/// Other languages' method names for warp's words (the alias rule: they work, with a note naming warp's word): C#'s
+/// LINQ, Ruby's conversions and cases, Kotlin's `xs.sumOf {…}`
+const METHOD_ALIASES: [(&str, &str); 18] = [
+	("Select", "map"),
+	("Where", "filter"),
+	("Aggregate", "reduce"),
+	("Sum", "sum"),
+	("Count", "count"),
+	("Max", "max"),
+	("Min", "min"),
+	("Any", "any"),
+	("All", "all"),
+	("First", "first"),
+	("Last", "last"),
+	("Contains", "contains"),
+	("to_s", "string"),
+	("to_i", "int"),
+	("to_f", "float"),
+	("upcase", "upper"),
+	("downcase", "lower"),
+	("sumOf", "sum"),
+];
 
 pub fn lower(node: Node) -> Node {
-	let defined = crate::library_words::defined_names(&node);
-	let node = if names_vector_word(&node) {
-		node
-	} else {
-		r_vectors(node)
-	};
+	// the program's own names keep their meaning: a field `Count`, Go's method `Sum()`
+	let own: HashSet<String> = crate::library_words::defined_names(&node)
+		.into_iter()
+		.chain(crate::soft_keywords::names_given(&node))
+		.chain(type_fields(&node))
+		.collect();
 	let node = qualified_module_calls(module_aliases(node));
-	let fields = field_names(&node);
-	let node = forms(foreign_words(node, &defined, &fields));
+	let node = forms(method_aliases(node, &own));
 	let mut lambda_names = HashSet::new();
 	collect_lambda_names(&node, &mut lambda_names);
 	lambda_calls(node, &lambda_names)
@@ -125,34 +141,23 @@ fn forms(node: Node) -> Node {
 			if let Some(lambda) = anonymous_function(&items)
 				.or_else(|| assigned_braceless_function(&items))
 				.or_else(|| ruby_lambda(&items))
-				.or_else(|| keyword_arrow(&items))
 			{
 				return lambda;
 			}
 			if let Some(reduction) = block_reduction(&items) {
 				return reduction;
 			}
-			// C++'s `auto x = 3`: wasp infers every type
+			// C++'s `auto x = 3`: `var x = 3`
 			if items.len() > 1
 				&& items[0].is_symbol(CPP_AUTO_WORD)
 				&& matches!(items[1].drop_meta(), Node::Key(_, Op::Assign, _))
 			{
 				crate::normalize::set_position_of(&items[0]);
-				crate::normalize::hint(
-					&format!("{CPP_AUTO_WORD} "),
-					"",
-					"warp infers types: write the assignment without auto",
-				);
-				return forms(Node::single_or_list(items[1..].to_vec(), bracket, separator));
+				crate::diagnostic::note_alias(CPP_AUTO_WORD, VAR_WORD);
+				return var_declaration(Node::single_or_list(items[1..].to_vec(), bracket, separator));
 			}
-			if let Some(assignment) = cpp_lambda(&items) {
-				return assignment;
-			}
-			if let Some(definition) = elixir_definition(&items) {
-				return definition;
-			}
-			if let Some(binding) = let_binding(&items) {
-				return binding;
+			if let Some(variable) = let_mut(&items) {
+				return variable;
 			}
 			let items = go_destructuring(items, &separator);
 			if let Some(chain) = when_chain(&items) {
@@ -174,7 +179,7 @@ fn forms(node: Node) -> Node {
 		Node::Key(left, Op::Colon, body) if lambda_parameters(&left).is_some() => {
 			lambda(lambda_parameters(&left).expect("guarded"), forms(*body))
 		}
-		Node::Key(parameters, Op::FatArrow, body) if destructured_parameters(&parameters).is_some() => {
+		Node::Key(parameters, Op::Arrow, body) if destructured_parameters(&parameters).is_some() => {
 			let (parameters, fields) = destructured_parameters(&parameters).expect("guarded");
 			lambda(
 				parameters,
@@ -194,10 +199,19 @@ fn forms(node: Node) -> Node {
 }
 
 /// Rust's `let mut x = 1`: `var x = 1`, with a note naming var
-fn let_mut(keyword: &Node, modifier: &Node, declaration: &Node, name: &Node) -> Option<Node> {
+fn let_mut(items: &[Node]) -> Option<Node> {
+	let [keyword, modifier, declaration] = items else {
+		return None;
+	};
+	let Node::Key(name, Op::Assign, _) = declaration.drop_meta() else {
+		return None;
+	};
 	let modifier = modifier
 		.symbol_name()
 		.filter(|word| crate::words::MUTABLE_WORDS.contains(word))?;
+	if !keyword.is_symbol(LET_WORD) {
+		return None;
+	}
 	let name = name.serialize();
 	crate::normalize::set_position_of(keyword);
 	crate::diagnostic::educate_once(
@@ -206,56 +220,16 @@ fn let_mut(keyword: &Node, modifier: &Node, declaration: &Node, name: &Node) -> 
 		&format!("var {name}"),
 		&format!("write var {name}, not let {modifier} {name}"),
 	);
-	Some(Node::List(
-		vec![Node::Symbol(VAR_WORD.to_string()), forms(declaration.clone())],
-		Bracket::None,
-		Separator::None,
-	))
+	Some(var_declaration(declaration.clone()))
 }
 
-/// OCaml / F# `let f x = body in rest`, `let f x = body`, `let x = v in rest`: the definition `f(x) := body` (or the
-/// assignment) and then rest
-fn let_binding(items: &[Node]) -> Option<Node> {
-	let [keyword, names @ .., last] = items else {
-		return None;
-	};
-	let Node::Key(last_name, Op::Assign, value) = last.drop_meta() else {
-		return None;
-	};
-	if !keyword.is_symbol(LET_WORD) {
-		return None;
-	}
-	if let Some(variable) = names
-		.first()
-		.filter(|_| names.len() == 1)
-		.and_then(|modifier| let_mut(keyword, modifier, last, last_name))
-	{
-		return Some(variable);
-	}
-	let names: Vec<&Node> = names.iter().chain([last_name.as_ref()]).collect();
-	if !names.iter().all(|name| matches!(name.drop_meta(), Node::Symbol(_))) {
-		return None;
-	}
-	let (body, rest) = split_at_in(value);
-	if names.len() == 1 && rest.is_none() {
-		return None; // `let x = 5`: a declaration as it is
-	}
-	let (name, parameters) = names.split_first().expect("a name");
-	let binding = match parameters.is_empty() {
-		true => key((*name).clone(), Op::Assign, forms(body)),
-		false => {
-			let head = Node::List(
-				names.iter().map(|name| (*name).clone()).collect(),
-				Bracket::Round,
-				Separator::None,
-			);
-			key(head, Op::Define, forms(body))
-		}
-	};
-	Some(match rest {
-		Some(rest) => Node::List(vec![binding, forms(rest)], Bracket::Round, Separator::Semicolon),
-		None => binding,
-	})
+/// `var x = 1`
+fn var_declaration(declaration: Node) -> Node {
+	Node::List(
+		vec![symbol(VAR_WORD), forms(declaration)],
+		Bracket::None,
+		Separator::None,
+	)
 }
 
 /// Go's `q, r := f(x)`: names taking the values apart, `q, r = f(x)` (`r := …` alone would define a getter)
@@ -275,26 +249,6 @@ fn go_destructuring(mut items: Vec<Node>, separator: &Separator) -> Vec<Node> {
 	}
 	items[position] = Node::Key(name.clone(), Op::Assign, value.clone());
 	items
-}
-
-/// `x * 2 in double 4` → (`x * 2`, `double 4`); no `in`: the value alone
-fn split_at_in(value: &Node) -> (Node, Option<Node>) {
-	// OCaml's `let inc = fun x -> x + 1 in inc 4`: the `in` ends the lambda's body
-	if let Node::Key(head, op @ (Op::Arrow | Op::FatArrow), body) = value.drop_meta() {
-		let (body, rest) = split_at_in(body);
-		return (Node::Key(head.clone(), *op, Box::new(body)), rest);
-	}
-	let Node::List(words, Bracket::None, separator @ (Separator::Space | Separator::None)) = value.drop_meta() else {
-		return (value.clone(), None);
-	};
-	let Some(position) = words.iter().position(|word| word.is_symbol(IN_WORD)) else {
-		return (value.clone(), None);
-	};
-	let phrase = |part: &[Node]| match part {
-		[single] => single.clone(),
-		several => Node::List(several.to_vec(), Bracket::None, separator.clone()),
-	};
-	(phrase(&words[..position]), Some(phrase(&words[position + 1..])))
 }
 
 /// Every match's arms in the one form the later passes read, right after parsing: `[match, subject, {k => v …}]` (or
@@ -423,8 +377,9 @@ fn colon_case(case: &Node) -> Node {
 		Node::List(words, _, _) if matches!(words.as_slice(), [word, _] if word.is_symbol(CASE_WORD)) => {
 			words[1].clone()
 		}
-		Node::Key(pattern, Op::FatArrow, body) => {
-			let pattern = if pattern.is_symbol(WILDCARD) {
+		// Kotlin's arms `1 -> a; else -> b` too
+		Node::Key(pattern, Op::Arrow, body) => {
+			let pattern = if pattern.is_symbol(WILDCARD) || pattern.is_symbol(ELSE_WORD) {
 				symbol(DEFAULT_CASE)
 			} else {
 				pattern.as_ref().clone()
@@ -461,6 +416,7 @@ fn when_chain(items: &[Node]) -> Option<Node> {
 		return None;
 	};
 	let arms: Vec<(Vec<Node>, Node)> = arms.iter().map(when_arm).collect::<Option<_>>()?;
+	when_meant(&items[0], if subject.is_some() { MATCH_WORD } else { IF_WORD });
 	let condition = |pattern: Node| match (&subject, pattern) {
 		(_, pattern) if pattern.is_symbol(ELSE_WORD) => Node::True,
 		(Some(subject), pattern) => key(subject.clone(), Op::Eq, pattern),
@@ -501,16 +457,14 @@ fn when_listener(items: &[Node]) -> Option<Vec<Node>> {
 	} else {
 		WHENEVER_WORD
 	};
-	if listener == WHENEVER_WORD {
-		crate::normalize::set_position_of(word);
-		crate::diagnostic::educate_once(
-			WHEN_CONDITION_TOPIC,
-			WHEN_KEYWORD,
-			WHENEVER_WORD,
-			"it reacts to every later write that makes the condition true; write if for a one-time check now",
-		);
-	}
+	when_meant(word, listener);
 	Some(vec![symbol(listener), subject.clone(), body.clone()])
+}
+
+/// The one warning of every `when`, its fix the word this shape means
+fn when_meant(word: &Node, meant: &str) {
+	crate::normalize::set_position_of(word);
+	crate::diagnostic::educate_once(WHEN_TOPIC, WHEN_KEYWORD, meant, WHEN_REASON);
 }
 
 /// The patterns and value of a `when` arm: `5 -> 50`, `1, 2 -> 10`, `is Circle -> 3`, `else -> 0`
@@ -541,7 +495,7 @@ fn endless_loop(word: &Node, body: &Node) -> Option<Node> {
 }
 
 fn lambda(parameters: Node, body: Node) -> Node {
-	key(parameters, Op::FatArrow, body)
+	key(parameters, Op::Arrow, body)
 }
 
 /// `[function (a, b)] {body}`: a function keyword with parameters and no name, then its body
@@ -671,73 +625,6 @@ fn braceless_lambdas(items: Vec<Node>) -> Vec<Node> {
 	merged
 }
 
-/// Elixir's one-line `def sq(x), do: x * x`, parsed as `def sq(x)`, `do: x * x`: the definition `sq(x) := x * x`.
-/// Its block form `def sq(x) do x * x end` is parsed as `def`, `sq(x) do {x * x}`
-fn elixir_definition(items: &[Node]) -> Option<Node> {
-	let (keyword, call, body) = match items {
-		[head, body] => match (head.drop_meta(), body.drop_meta()) {
-			(Node::List(words, _, _), Node::Key(do_word, Op::Colon, body)) if do_word.is_symbol(ELIXIR_DO_WORD) => {
-				match words.as_slice() {
-					[keyword, call] => (keyword, call, body.as_ref()),
-					_ => return None,
-				}
-			}
-			(_, Node::Key(call, Op::Do, body)) if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
-				(head, call.as_ref(), body.as_ref())
-			}
-			_ => return None,
-		},
-		_ => return None,
-	};
-	let is_call = matches!(call.drop_meta(), Node::List(_, Bracket::Round, _));
-	let is_keyword = matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word) || word == ELIXIR_PRIVATE_DEF);
-	(is_keyword && is_call).then(|| key(call.clone(), Op::Define, forms(body.clone())))
-}
-
-/// C++'s `sq = [](int x) { return x * x; }`, parsed as `sq = []`, `(int x)`, `{…}`, the capture list `[]`, `[&]` or
-/// `[=]` is the value assigned: the assignment of the lambda `x => {…}` (a warp closure captures what it reads)
-/// A declared type before it, `std::function<int(int)> sq = …` or `function<int(int)> sq = …`, is dropped like `auto`
-fn cpp_lambda(items: &[Node]) -> Option<Node> {
-	let (assignment, parameters, body) = match items {
-		[assignment, parameters, body] => (assignment, parameters, body),
-		[declared, assignment, parameters, body] if is_cpp_type(declared) => (assignment, parameters, body),
-		_ => return None,
-	};
-	let Node::Key(name, Op::Assign, capture) = assignment.drop_meta() else {
-		return None;
-	};
-	let is_capture = matches!(capture.drop_meta(), Node::Empty | Node::List(_, Bracket::Square, _));
-	let Node::List(declared, Bracket::Round, separator) = parameters.drop_meta() else {
-		return None;
-	};
-	if !is_capture || !matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
-		return None;
-	}
-	// `(int x)` is one parameter, `(int a, int b)` several: each its name, the type before it dropped
-	let last_word = |parameter: &Node| match parameter.drop_meta() {
-		Node::List(words, _, _) => words.last().cloned(),
-		_ => Some(parameter.clone()),
-	};
-	let names: Vec<Node> = match separator {
-		Separator::Colon => declared.iter().map(last_word).collect::<Option<_>>()?,
-		_ => vec![declared.last()?.clone()],
-	};
-	let parameters = match names.as_slice() {
-		[single] => single.clone(),
-		_ => Node::List(names, Bracket::Round, Separator::Colon),
-	};
-	Some(Node::Key(
-		name.clone(),
-		Op::Assign,
-		Box::new(lambda(parameters, forms(body.clone()))),
-	))
-}
-
-/// `std::function<int(int)>` (a namespaced name) or `function<int(int)>` (by now the one symbol `function of int(int)`)
-fn is_cpp_type(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Key(_, Op::Scope, _) | Node::Symbol(_))
-}
-
 /// `[xs.sum, {block}]` as the parser groups `xs.sum { |x| x * 2 }`: `sum(map(xs, {block}))` (BLOCK_REDUCTIONS)
 fn block_reduction(items: &[Node]) -> Option<Node> {
 	let [method, block] = items else { return None };
@@ -755,35 +642,6 @@ fn block_reduction(items: &[Node]) -> Option<Node> {
 		reduction,
 		vec![call(iteration, vec![subject.as_ref().clone(), block.clone()])],
 	))
-}
-
-/// Whether the program uses `c` other than as R's call `c(…)`: a variable, parameter or function of that name
-fn names_vector_word(node: &Node) -> bool {
-	match node.drop_meta() {
-		Node::Symbol(word) => word == R_VECTOR_WORD,
-		Node::List(items, Bracket::Round, _) if items.len() > 1 && items[0].is_symbol(R_VECTOR_WORD) => {
-			items[1..].iter().any(names_vector_word)
-		}
-		// `def c(x){…}`, `fun c(x) …`, `c(x) {…}`: a function named c
-		Node::List(items, _, _)
-			if items.windows(2).any(|pair| {
-				is_vector_call(&pair[1]) && is_function_keyword(&pair[0])
-					|| is_vector_call(&pair[0]) && matches!(pair[1].drop_meta(), Node::List(_, Bracket::Curly, _))
-			}) =>
-		{
-			true
-		}
-		Node::List(items, _, _) => items.iter().any(names_vector_word),
-		Node::Key(target, Op::Assign | Op::Define, _) if matches!(target.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|first| first.is_symbol(R_VECTOR_WORD))) => {
-			true
-		}
-		Node::Key(left, _, right) => names_vector_word(left) || names_vector_word(right),
-		_ => false,
-	}
-}
-
-fn is_vector_call(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|first| first.is_symbol(R_VECTOR_WORD)))
 }
 
 /// `list.zip(a, b)`, `math.gcd(4, 6)`, JS's `Math.sqrt(16)`: a module's word called through the module's name is the
@@ -899,57 +757,6 @@ pub(crate) fn module_calls(node: Node, modules: &[&str]) -> Node {
 	}
 }
 
-/// `List.map`: the word a named module qualifies
-fn qualified_word(node: &Node, modules: &[&str]) -> Option<String> {
-	let Node::Key(module, Op::Dot, word) = node.drop_meta() else {
-		return None;
-	};
-	let is_module = modules.iter().any(|name| module.is_symbol(name));
-	word.symbol_name().filter(|_| is_module).map(str::to_string)
-}
-
-/// R's `c(1, 2, 3)`: the list `[1, 2, 3]`, with a note
-fn r_vectors(node: Node) -> Node {
-	match node {
-		Node::List(items, Bracket::Round, separator) if items.len() > 1 && items[0].is_symbol(R_VECTOR_WORD) => {
-			crate::normalize::set_position_of(&items[0]);
-			crate::normalize::hint(&format!("{R_VECTOR_WORD}("), "[", "warp writes a list in brackets");
-			let elements = items
-				.into_iter()
-				.skip(1)
-				.map(r_vectors)
-				.flat_map(|element| match element {
-					Node::List(group, Bracket::Round, Separator::Colon) => group, // `c(1, 2, 3)` holds its arguments as one group
-					other => vec![other],
-				});
-			Node::List(
-				elements.collect(),
-				Bracket::Square,
-				if separator == Separator::None {
-					Separator::Colon
-				} else {
-					separator
-				},
-			)
-		}
-		other => other.map_children(r_vectors),
-	}
-}
-
-/// OCaml/F# `(fun x -> x * 2)` as the parser groups it, the keyword then the arrow: the lambda
-fn keyword_arrow(items: &[Node]) -> Option<Node> {
-	let [keyword, arrow] = items else { return None };
-	let Node::Key(parameters, Op::Arrow, body) = arrow.drop_meta() else {
-		return None;
-	};
-	// only names: Swift's `func f(x) -> Int { … }` names a function and its result type
-	let is_name = |node: &Node| matches!(node.drop_meta(), Node::Symbol(_));
-	let only_names = is_name(parameters)
-		|| matches!(parameters.drop_meta(), Node::List(words, Bracket::None, Separator::Space) if words.iter().all(is_name));
-	(keyword.is_symbol(OCAML_FUNCTION_KEYWORD) && only_names)
-		.then(|| lambda(parameters.as_ref().clone(), forms(body.as_ref().clone())))
-}
-
 /// Go's `func(x int) int { … }`: the body without the result type before it
 fn without_result_type(rest: &[Node]) -> &[Node] {
 	match rest {
@@ -1020,7 +827,7 @@ fn ruby_lambda(items: &[Node]) -> Option<Node> {
 }
 
 fn starred_lambda(name: &Node, value: &Node) -> Option<Node> {
-	let Node::Key(parameters, Op::FatArrow, body) = value.drop_meta() else {
+	let Node::Key(parameters, Op::Arrow, body) = value.drop_meta() else {
 		return None;
 	};
 	let parameters = match parameters.drop_meta() {
@@ -1039,70 +846,75 @@ fn starred_lambda(name: &Node, value: &Node) -> Option<Node> {
 	Some(Node::Key(Box::new(head), Op::Define, body.clone()))
 }
 
-/// Other languages' words as warp's, with a note (library_words::FOREIGN_SYNONYMS): C#'s `xs.Select(f)` is
-/// `xs.map(f)`, Ruby's `x.to_s` `x.string`, R's `sapply(xs, f)` `map(xs, f)`, PHP's `array_map(f, xs)` `map(xs, f)`.
-/// A word the program defines stays, and so does a bare `.Count` when the program has a field of that name
-fn foreign_words(node: Node, defined: &HashSet<String>, fields: &HashSet<String>) -> Node {
-	let warp_word = |word: &Node| {
-		let written = word.symbol_name().filter(|written| !defined.contains(*written))?;
-		Some((written.to_string(), crate::library_words::foreign_synonym(written)?))
-	};
-	let renamed = |head: &Node, prefix: &str, suffix: &str| {
-		let (written, word) = warp_word(head)?;
-		crate::normalize::set_position_of(head);
-		crate::normalize::hint(
-			&format!("{prefix}{written}{suffix}"),
-			&format!("{prefix}{word}{suffix}"),
-			"warp's word",
-		);
-		Some(symbol(word))
-	};
-	let recurse = |child: Node| foreign_words(child, defined, fields);
+/// `xs.Select(f)`: warp's `xs.map(f)`, `x.to_s`: `x.string`, with a note (METHOD_ALIASES); a name the program gives
+/// itself stays
+fn method_aliases(node: Node, own: &HashSet<String>) -> Node {
 	match node {
 		Node::Key(receiver, Op::Dot, method) => {
-			let method = match method.drop_meta().clone() {
-				Node::List(mut items, Bracket::Round, separator) if !items.is_empty() => {
-					if let Some(word) = renamed(&items[0], ".", "(") {
-						items[0] = word;
-					}
-					let head = items.remove(0);
-					Node::List(
-						[head].into_iter().chain(items.into_iter().map(recurse)).collect(),
-						Bracket::Round,
-						separator,
-					)
-				}
-				Node::Symbol(written) if !fields.contains(&written) => {
-					let bare = Node::Symbol(written);
-					renamed(&bare, ".", "").unwrap_or(bare)
-				}
-				other => recurse(other),
-			};
-			key(recurse(*receiver), Op::Dot, method)
+			let method = aliased_method(*method, own);
+			key(method_aliases(*receiver, own), Op::Dot, method_aliases(method, own))
 		}
-		// a call: `sapply(xs, f)`, `sapply xs f`
-		Node::List(mut items, bracket @ (Bracket::Round | Bracket::None), separator) if items.len() > 1 => {
-			if let Some(word) = renamed(&items[0], "", "(") {
-				if items.len() == 3 && FUNCTION_FIRST.iter().any(|written| items[0].is_symbol(written)) {
-					items.swap(1, 2);
-				}
-				items[0] = word;
-			}
-			Node::List(items.into_iter().map(recurse).collect(), bracket, separator)
-		}
-		other => other.map_children(recurse),
+		other => other.map_children(|child| method_aliases(child, own)),
 	}
 }
 
-/// The names the program gives fields: `Count` of `{Count: 3}` and of a class's `Count: int`
-fn field_names(node: &Node) -> HashSet<String> {
-	let mut fields = HashSet::new();
+/// `Select(f)` or `to_s`: the method under warp's word
+fn aliased_method(method: Node, own: &HashSet<String>) -> Node {
+	let (word, called) = match method.drop_meta() {
+		Node::List(items, Bracket::Round, _) if !items.is_empty() => (items[0].name(), true),
+		_ => (method.name(), false),
+	};
+	let Some((written, warp_word)) = METHOD_ALIASES
+		.iter()
+		.find(|(written, _)| *written == word && !own.contains(*written))
+	else {
+		return method;
+	};
+	crate::normalize::set_position_of(&method);
+	let paren = if called { "(" } else { "" };
+	crate::normalize::hint(
+		&format!(".{written}{paren}"),
+		&format!(".{warp_word}{paren}"),
+		"warp's word for the method",
+	);
+	match method.drop_meta() {
+		Node::List(items, bracket, separator) => {
+			let arguments = items[1..].iter().cloned();
+			Node::List(
+				[symbol(warp_word)].into_iter().chain(arguments).collect(),
+				bracket.clone(),
+				separator.clone(),
+			)
+		}
+		_ => symbol(warp_word),
+	}
+}
+
+/// The fields of `type P { Count: int }`: names the program gives
+fn type_fields(node: &Node) -> HashSet<String> {
+	let mut names = HashSet::new();
 	node.visit(&mut |part| {
-		if let Node::Key(name, Op::Colon, _) = part {
-			fields.extend(name.symbol_name().map(str::to_string));
+		if let Node::Type { body, .. } = part {
+			let fields = match body.drop_meta() {
+				Node::List(fields, _, _) => fields.as_slice(),
+				single => std::slice::from_ref(single),
+			};
+			names.extend(fields.iter().filter_map(|field| match field.drop_meta() {
+				Node::Key(name, _, _) => name.symbol_name().map(str::to_string),
+				_ => None,
+			}));
 		}
 	});
-	fields
+	names
+}
+
+/// `List.map`: the word a named module qualifies
+fn qualified_word(node: &Node, modules: &[&str]) -> Option<String> {
+	let Node::Key(module, Op::Dot, word) = node.drop_meta() else {
+		return None;
+	};
+	let is_module = modules.iter().any(|name| module.is_symbol(name));
+	word.symbol_name().filter(|_| is_module).map(str::to_string)
 }
 
 /// `call(3)`, `call 3`: the arguments of Ruby's `.call`

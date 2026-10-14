@@ -24,7 +24,7 @@ const KEY_WORDS: [&str; 5] = [
 	COLLECTION_POSITION,
 	MAP_GET_OR,
 	MAP_WITHOUT,
-	crate::declaration_forms::REMOVED_VALUE_CALL,
+	crate::list_mutations::REMOVED_VALUE_CALL,
 ];
 
 pub fn lower(node: Node) -> Node {
@@ -178,7 +178,7 @@ fn keyed(node: Node, maps: &HashSet<String>) -> Node {
 		}
 		// `d.remove(k)`, lowered by the analyzer after lower_key_words
 		Node::Key(target, Op::Dot, call) if is_map(&target, maps) => match call.drop_meta() {
-			Node::List(items, bracket, separator) if matches!(items.as_slice(), [method, _] if method.name() == crate::declaration_forms::REMOVE_METHOD) =>
+			Node::List(items, bracket, separator) if matches!(items.as_slice(), [method, _] if method.name() == crate::list_mutations::REMOVE_METHOD) =>
 			{
 				let removed = vec![items[0].clone(), key_text(keyed(items[1].clone(), maps))];
 				Node::Key(

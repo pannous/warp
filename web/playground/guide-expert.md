@@ -209,6 +209,18 @@ Tags are values: `tag{attributes children}`, `li all xs` repeats a tag over a li
 fruits = ["apple" "pear"]; div{ h1{"Fruit"} ul{ li all fruits } }
 ```
 
+## Servers
+
+Routes answer requests; `warp serve` serves them, `warp deploy` deploys them (Cloudflare Workers or the playground's Deploy).
+
+## Pictures and the GPU
+
+`use draw` keeps a pixel canvas that `show()` paints; WGSL shaders and `@gpu` maps run on the GPU (WebGPU in the page).
+
+## Sound and music
+
+`use sound`: notes, chords, scales, beats, envelopes and filters; a function of time computes a signal sample by sample.
+
 ## WebAssembly
 
 Programs compile to WebAssembly GC; Rust and C code is called alike.

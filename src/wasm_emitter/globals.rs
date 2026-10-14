@@ -13,7 +13,7 @@ impl WasmGcEmitter {
 			return false;
 		};
 		self.emit_trap_detail(func, message);
-		self.emit_runtime_error(func, list_ops::RETURNED_ERROR);
+		self.emit_runtime_error(func, lists::list_ops::RETURNED_ERROR);
 		true
 	}
 
@@ -24,7 +24,7 @@ impl WasmGcEmitter {
 			self.emit_list_abi_value(func, value);
 		} else if let Some(message) = returned_error_message(value).filter(|_| !self.returns_node) {
 			self.emit_trap_detail(func, message);
-			self.emit_runtime_error(func, list_ops::RETURNED_ERROR);
+			self.emit_runtime_error(func, lists::list_ops::RETURNED_ERROR);
 		} else if self.returns_node {
 			self.emit_node_instructions(func, value);
 		} else if self.returns_float {
@@ -36,7 +36,7 @@ impl WasmGcEmitter {
 
 	/// The one nullable Node local of every function, after its int scratch locals
 	pub(super) fn node_scratch(&self) -> u32 {
-		self.int_scratch + big_int::INT_SCRATCH_LOCALS
+		self.int_scratch + numbers::big_int::INT_SCRATCH_LOCALS
 	}
 
 	/// A second Node scratch local: a container held while node_scratch serves its items (`a, b = xs` checking an item)

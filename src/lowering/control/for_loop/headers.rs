@@ -224,7 +224,7 @@ impl Headers {
 		let part = Node::Symbol(format!("{unit}·part"));
 		let non_empty = Node::Key(
 			Box::new(part.clone()),
-			Op::FatArrow,
+			Op::Arrow,
 			Box::new(Node::Key(Box::new(part), Op::Ne, Box::new(Node::Text(String::new())))),
 		);
 		Node::Key(Box::new(parts), Op::Dot, Box::new(call(FILTER_WORD, vec![non_empty])))
@@ -384,7 +384,7 @@ fn bytes_of(text: &Node) -> Node {
 	let offsets = Node::Key(Box::new(Node::int(0)), Op::Range, Box::new(count));
 	let byte = Node::Key(
 		Box::new(offset.clone()),
-		Op::FatArrow,
+		Op::Arrow,
 		Box::new(call("byte_at", vec![text.clone(), offset])),
 	);
 	Node::Key(

@@ -1,0 +1,6 @@
+f(x) := 10/x
+g(x) := raise "no"
+h(x) := if x < 0 then error "neg" else x
+print effects of f
+print effects of g
+effects of h

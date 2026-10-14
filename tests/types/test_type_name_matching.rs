@@ -5,6 +5,7 @@ use crate::is;
 use warp::wasm_emitter::eval;
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-park-phrases: type-name parameters (`fib int i`) dropped"]
 fn test_type_then_name_parameter() {
 	is!("fib int i = if i<2 : i else fib(i - 1) + fib(i - 2); fib(10)", 55);
 	is!("twice int x := x+x; twice 4", 8);
@@ -26,6 +27,7 @@ fn test_lone_type_word_parameter_is_it() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-park-phrases: phrase calls parked until card prepositions-call"]
 fn test_to_phrase_with_a_type_word() {
 	is!("to square a number: it*it; square 3", 9);
 	is!("to cube a number: number*number*number; cube 2", 8);
@@ -35,6 +37,7 @@ fn test_to_phrase_with_a_type_word() {
 // The general rule (notes/matching.md), approved by warp-43 as an assumption for the user to review
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-park-phrases: phrase calls parked until card prepositions-call"]
 fn test_prepositions_separate_parameter_slots() {
 	is!("to add number a to number b: a+b; add(1, 2)", 3);
 	is!("to add a to b: a+b; add(1, 2)", 3);

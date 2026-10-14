@@ -8,6 +8,7 @@ const BOOP: &str = "to boop x: x + 1; to boop x for y: x + y; ";
 const MISSING_FILE_ERROR: &str = "cannot open x.wav";
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-park-phrases: phrase forms parked until card prepositions-call"]
 fn a_block_of_one_phrase_call_runs_it() {
 	is!("to add a to b: a + b; f() := {add 1 to 2}; f()", 3);
 	is!(&format!("{BOOP}f() := {{boop 2}}; f()"), 3);

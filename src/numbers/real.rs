@@ -17,9 +17,7 @@ use num_traits::ToPrimitive;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
-pub const FUNCTIONS: [&str; 6] = ["sin", "cos", "tan", "ln", "exp", STANDARD_PART];
-/// st(x): the standard part of a finite hyperreal (wiki/hyperreals.md)
-const STANDARD_PART: &str = "st";
+pub const FUNCTIONS: [&str; 5] = ["sin", "cos", "tan", "ln", "exp"]; // todo: via builtin math.warp
 
 /// `nearest(x, rational, limit, within: ε)` of an exact x is computed here, exactly (Exact::nearest_fraction); of a
 /// float at run time by lib/prelude.warp
@@ -58,13 +56,13 @@ fn mentions_generator(node: &Node) -> bool {
 		Node::Key(_, Op::Sqrt | Op::Cbrt, _) => true,
 		Node::Key(left, _, right) => mentions_generator(left) || mentions_generator(right),
 		Node::List(items, _, _) => {
-			items.first().is_some_and(|head| function_name(head).is_some()) || items.iter().any(mentions_generator)
+			items.first().is_some_and(|head| is_function_name(head).is_some()) || items.iter().any(mentions_generator)
 		}
 		_ => false,
 	}
 }
 
-fn function_name(node: &Node) -> Option<&'static str> {
+fn is_function_name(node: &Node) -> Option<&'static str> {
 	match node.drop_meta() {
 		Node::Symbol(name) => FUNCTIONS.iter().find(|f| *f == name).copied(),
 		_ => None,
@@ -242,7 +240,7 @@ fn number_value(number: &Number) -> Evaluated {
 		Number::BigQuotient(q) => exact((*q).clone()),
 		// a decimal is the exact fraction it spells (decision exact-decimals): `sqrt(2.0)` is √2, as `sqrt(2)`
 		Number::Float(f) if Number::is_exact_decimal(*f) => {
-			let (n, d) = crate::wasm_emitter::exact::decimal_fraction(*f);
+			let (n, d) = crate::wasm_emitter::numbers::exact::decimal_fraction(*f);
 			exact(Rational::new(n, d))
 		}
 		Number::Float(f) => Ok(Value::Float(*f)),
@@ -251,13 +249,14 @@ fn number_value(number: &Number) -> Evaluated {
 	}
 }
 
+// Todo: why does a real need special treatment in a list? It's just a value, just like all the other values(?)
 fn list(items: &[Node], separator: &Separator, scope: &mut Scope) -> Evaluated {
 	match items {
 		[] => Err(Stop::Unsupported),
 		[single] => evaluate(single, scope),
-		[head, argument] if function_name(head).is_some() && !scope.contains_key(&head.name()) => {
+		[head, argument] if is_function_name(head).is_some() && !scope.contains_key(&head.name()) => {
 			let argument = evaluate(argument, scope)?;
-			call(function_name(head).unwrap_or_default(), argument)
+			call(is_function_name(head).unwrap_or_default(), argument)
 		}
 		[head, value, kind, options @ ..]
 			if head.name() == NEAREST && kind.name() == NEAREST_KIND && !scope.contains_key(NEAREST) =>
@@ -286,6 +285,7 @@ fn list(items: &[Node], separator: &Separator, scope: &mut Scope) -> Evaluated {
 	}
 }
 
+// Todo why have the special logic over here? Numbers are just hashable keys, and keys can take any value.  key:value ?
 fn key(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Evaluated {
 	match op {
 		Op::Assign | Op::Define => {
@@ -302,6 +302,7 @@ fn key(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Evaluated {
 				_ => Err(Stop::Unsupported),
 			}
 		}
+		// To do why does to have the special logic over here?
 		Op::Sqrt | Op::Cbrt | Op::Neg | Op::Abs if left.is_empty_node() => unary(op, evaluate(right, scope)?),
 		Op::Square | Op::Cube if right.is_empty_node() => {
 			let exponent = if op == Op::Square { 2 } else { 3 };
@@ -619,25 +620,10 @@ fn call(function: &str, argument: Value) -> Evaluated {
 			"cos" => f.cos(),
 			"tan" => f.tan(),
 			"ln" => f.ln(),
-			STANDARD_PART => f,
 			_ => f.exp(),
 		}));
 	}
 	let real = real_operand(argument)?;
-	if let Real::Exact(exact) = &real {
-		if function == STANDARD_PART {
-			return exact
-				.standard_part()
-				.map(|part| Value::Real(Real::Exact(part)))
-				.map_err(Stop::Error);
-		}
-		if exact.has_epsilon() {
-			return fail(format!("{function}({exact}) of a hyperreal has no exact form"));
-		}
-	}
-	if function == STANDARD_PART {
-		return Ok(Value::Real(real)); // a real is its own standard part
-	}
 	Ok(Value::Real(match function {
 		"sin" | "cos" | "tan" => trigonometric(function, real)?,
 		"ln" => logarithm(real)?,

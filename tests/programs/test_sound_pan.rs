@@ -19,10 +19,7 @@ fn panning_interleaves_the_channels() {
 
 #[test]
 fn a_panned_note_sounds_on_one_side() {
-	let (seconds, samples) = rendered(
-		"left",
-		"use sound\npan = -1.0\nplay C4 for 0.1s\nrender_sound(\"SONG\")",
-	);
+	let (seconds, samples) = rendered("left", "use sound\npan = -1.0\nplay(C4, 0.1s)\nrender_sound(\"SONG\")");
 	assert_eq!(seconds, "0.1");
 	assert_eq!(samples.len(), 2 * RATE / 10);
 	assert!(
@@ -39,7 +36,7 @@ fn a_panned_note_sounds_on_one_side() {
 fn mono_and_stereo_mix_into_stereo() {
 	let (seconds, samples) = rendered(
 		"both",
-		"use sound\nplay C4 for 0.1s\npan = 1.0\nplay E4 for 0.1s\nrender_sound(\"SONG\")",
+		"use sound\nplay(C4, 0.1s)\npan = 1.0\nplay(E4, 0.1s)\nrender_sound(\"SONG\")",
 	);
 	assert_eq!(seconds, "0.2");
 	assert_eq!(samples.len(), 2 * RATE / 5);

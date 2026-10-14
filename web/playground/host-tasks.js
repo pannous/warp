@@ -546,7 +546,7 @@ function indexRange(exports) {
 	return `: ${index} not in ${count === "0" ? EMPTY_RANGE : `1…${count}`}`;
 }
 
-// " at line:column" of the statement the task trapped in (src/diagnostic.rs located_at), from its trap_position
+// " at line:column" of the statement the task trapped in (src/diagnostics/diagnostic.rs located_at), from its trap_position
 function trapPosition(exports) {
 	const position = exports?.[TRAP_POSITION_EXPORT]?.value;
 	return position ? ` at ${position >> POSITION_COLUMN_BITS}:${position & ((1 << POSITION_COLUMN_BITS) - 1)}` : "";

@@ -11,31 +11,22 @@ use crate::lowering::comprehensions::{WHERE_KEYWORD, WITHOUT_WORD, WITH_WORD};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::OF_WORD;
-use std::collections::HashSet;
 
 pub fn lower(node: Node) -> Node {
 	if !node.mentions_any(&[OF_WORD]) {
 		return node;
 	}
-	let phrases = crate::lowering::phrase_calls::of_phrase_names(&node);
-	rewrite(node, &phrases)
+	rewrite(node)
 }
 
-/// `phrases`: the program's functions called with an `of` of their own, `get cents of 3` (phrase_calls.rs)
-fn rewrite(node: Node, phrases: &HashSet<String>) -> Node {
-	let is_phrase_call = |items: &[Node]| {
-		items
-			.first()
-			.and_then(Node::symbol_name)
-			.is_some_and(|name| phrases.contains(name))
-	};
-	match children_rewritten(as_one_phrase(node), |child| rewrite(child, phrases)) {
+fn rewrite(node: Node) -> Node {
+	match children_rewritten(as_one_phrase(node), rewrite) {
 		// a phrase, a call's arguments `str(name of people)`, a block of one statement `{remove b from listeners of t}`
 		Node::List(
 			items,
 			bracket @ (Bracket::None | Bracket::Round | Bracket::Curly),
 			separator @ (Separator::Space | Separator::None),
-		) if spaced_statement(&items).is_none() && !is_phrase_call(&items) => {
+		) if spaced_statement(&items).is_none() => {
 			let items = looked_up(items);
 			match (items.len(), &bracket) {
 				(1, Bracket::None) => items.into_iter().next().expect("one item"),

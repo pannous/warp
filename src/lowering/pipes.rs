@@ -85,7 +85,7 @@ impl Pipes {
 				let it = Node::Symbol(IMPLICIT_PARAMETER.to_string());
 				key(
 					it.clone(),
-					Op::FatArrow,
+					Op::Arrow,
 					self.applied(&stage, self.chain_applied(*value, it)),
 				)
 			}
@@ -313,7 +313,7 @@ fn spaced_function(items: &[Node]) -> Option<String> {
 fn is_function_word(name: &str, context: &Context) -> bool {
 	FUNCTION_WORDS.contains(&name)
 		|| crate::library_words::is_library_word(name)
-		|| crate::wasm_emitter::text_builtins::is_text_builtin(name)
+		|| crate::wasm_emitter::text::text_builtins::is_text_builtin(name)
 		|| counting_function(name, context).is_some()
 		|| crate::ffi::get_ffi_signature(name).is_some()
 }

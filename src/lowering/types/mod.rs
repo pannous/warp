@@ -5,9 +5,11 @@
 use super::*;
 
 pub mod class_methods;
+pub mod inline_unions;
 pub mod named_patterns;
 pub mod object_groups;
 pub mod optional_casts;
+pub mod plain_enums;
 pub mod sum_variants;
 pub mod traits;
 pub mod tuples;

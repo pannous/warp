@@ -9,4 +9,4 @@ siren(t) := {
 	phase = phase + 2 * pi * pitch / sample_rate
 	0.3 * sin(phase)
 }
-play siren for 4s
+play(siren, 4s)
