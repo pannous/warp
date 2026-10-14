@@ -89,75 +89,65 @@ pub(crate) type Rebuild = Box<dyn Fn(Node, Node) -> Node>;
 /// lowered here): its head, body and a constructor of the same form for another head and body, which keeps the
 /// definition's meta (its comment, which `f.doc` reads)
 pub(crate) fn definition_parts(node: &Node) -> Option<(Node, Node, Rebuild)> {
-	if let Node::Meta { node: inner, data } = node {
-		let (head, body, rebuild) = definition_parts(inner)?;
-		let data = data.clone();
-		return Some((
-			head,
-			body,
-			Box::new(move |head: Node, body: Node| Node::Meta {
-				node: Box::new(rebuild(head, body)),
-				data: data.clone(),
-			}),
-		));
-	}
 	match node {
+		Node::Meta { node: inner, data } => {
+			let data = data.clone();
+			wrapped(definition_parts(inner), move |node| Node::Meta {
+				node: Box::new(node),
+				data: data.clone(),
+			})
+		}
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) if *op == Op::Define || is_call_head(head) => {
-			let op = *op;
-			Some((
-				head.as_ref().clone(),
-				body.as_ref().clone(),
-				Box::new(move |head: Node, body: Node| key(head, op, body)),
-			))
+			key_parts(head, *op, body)
 		}
 		Node::List(items, bracket, separator) => match items.as_slice() {
 			[keyword, definition] if crate::operators::is_function_keyword(&keyword.drop_meta().name()) => {
-				match definition.drop_meta() {
-					Node::Key(head, Op::Colon | Op::Define, body) => {
-						let (keyword, bracket, separator, op) = (
-							keyword.clone(),
-							bracket.clone(),
-							separator.clone(),
-							if matches!(definition.drop_meta(), Node::Key(_, Op::Define, _)) {
-								Op::Define
-							} else {
-								Op::Colon
-							},
-						);
-						Some((
-							head.as_ref().clone(),
-							body.as_ref().clone(),
-							Box::new(move |head: Node, body: Node| {
-								Node::List(
-									vec![keyword.clone(), key(head, op, body)],
-									bracket.clone(),
-									separator.clone(),
-								)
-							}),
-						))
-					}
-					// `def f() { … }` as parsed: the head and the block
-					Node::List(parts, inner_bracket, inner_separator) if matches!(parts.as_slice(), [head, body] if is_call_head(head) && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _))) =>
-					{
-						let (keyword, bracket, separator) = (keyword.clone(), bracket.clone(), separator.clone());
-						let (inner_bracket, inner_separator) = (inner_bracket.clone(), inner_separator.clone());
-						Some((
-							parts[0].clone(),
-							parts[1].clone(),
-							Box::new(move |head: Node, body: Node| {
-								let definition =
-									Node::List(vec![head, body], inner_bracket.clone(), inner_separator.clone());
-								Node::List(vec![keyword.clone(), definition], bracket.clone(), separator.clone())
-							}),
-						))
-					}
-					_ => None,
-				}
+				let (keyword, bracket, separator) = (keyword.clone(), bracket.clone(), separator.clone());
+				wrapped(keyword_definition_parts(definition.drop_meta()), move |definition| {
+					Node::List(vec![keyword.clone(), definition], bracket.clone(), separator.clone())
+				})
 			}
 			_ => None,
 		},
 		_ => None,
 	}
+}
+
+/// What follows the keyword of `def f(n): body`, `def f(n) := body` and `def f() { … }` (as parsed: the head and the
+/// block)
+fn keyword_definition_parts(definition: &Node) -> Option<(Node, Node, Rebuild)> {
+	match definition {
+		Node::Key(head, op @ (Op::Colon | Op::Define), body) => key_parts(head, *op, body),
+		Node::List(parts, bracket, separator) => match parts.as_slice() {
+			[head, body] if is_call_head(head) && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) => {
+				let (bracket, separator) = (bracket.clone(), separator.clone());
+				Some((
+					head.clone(),
+					body.clone(),
+					Box::new(move |head, body| Node::List(vec![head, body], bracket.clone(), separator.clone())),
+				))
+			}
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+fn key_parts(head: &Node, op: Op, body: &Node) -> Option<(Node, Node, Rebuild)> {
+	Some((
+		head.clone(),
+		body.clone(),
+		Box::new(move |head, body| key(head, op, body)),
+	))
+}
+
+/// The parts of a definition rebuilt inside what `wrap` makes of it
+fn wrapped(
+	parts: Option<(Node, Node, Rebuild)>,
+	wrap: impl Fn(Node) -> Node + 'static,
+) -> Option<(Node, Node, Rebuild)> {
+	let (head, body, rebuild) = parts?;
+	Some((head, body, Box::new(move |head, body| wrap(rebuild(head, body)))))
 }
 
 /// The parameter names of every function the program defines: a variable of the same name in another function is

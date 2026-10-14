@@ -937,9 +937,14 @@ fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet
 pub fn check_unit_parameter_clashes(program: &Node) -> Option<crate::diagnostic::Diagnostic> {
 	let mut parameter_of = HashMap::new();
 	program.visit(&mut |node| {
-		if let Some((function, parameters)) = function_head(node) {
-			for parameter in parameters.iter().map(Node::name).filter(|name| is_unit(name)) {
-				parameter_of.insert(parameter, function.name());
+		if let Some(definition) = plain_definition(node) {
+			for parameter in definition
+				.written_parameters
+				.iter()
+				.map(Node::name)
+				.filter(|name| is_unit(name))
+			{
+				parameter_of.insert(parameter, definition.name.to_string());
 			}
 		}
 	});
@@ -957,19 +962,13 @@ pub fn check_unit_parameter_clashes(program: &Node) -> Option<crate::diagnostic:
 	))
 }
 
-/// The name and parameters of a function definition `f(a, b) := …`
-fn function_head(node: &Node) -> Option<(&Node, &[Node])> {
-	let Node::Key(head, Op::Define | Op::Assign, _) = node.drop_meta() else {
-		return None;
-	};
-	let Node::List(items, Bracket::Round, _) = head.drop_meta() else {
-		return None;
-	};
-	items.split_first()
+/// A function definition `f(a, b) := …`
+fn plain_definition(node: &Node) -> Option<crate::lowering::FunctionHead<'_>> {
+	crate::lowering::function_head(node).filter(|definition| definition.plain_operator().is_some())
 }
 
 fn without_function_definitions(node: Node) -> Node {
-	match function_head(&node) {
+	match plain_definition(&node) {
 		Some(_) => Node::Empty,
 		None => node.map_children(without_function_definitions),
 	}

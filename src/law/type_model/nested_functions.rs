@@ -4,7 +4,8 @@
 //! `y: outer·y` holds the cell itself, so inner's writes reach outer. A plain `y = 7` in inner is inner's own local,
 //! as in Python and warp.
 
-use super::{assigned_locals, cell_class, function_definition, parameter_word, result_type, statements};
+use super::{assigned_locals, cell_class, function_definition, parameter_word, statements};
+use crate::lowering::FunctionHead;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -31,9 +32,7 @@ pub(super) fn lift(program: &Node, globals: &[String]) -> Result<Node, String> {
 	let mut lifted = vec![];
 	for statement in parts {
 		match function_definition(statement) {
-			Some((outer, parameters, body)) if has_nested(statement) => {
-				lifted.extend(lift_from(outer, &parameters, body, result_type(statement), globals)?)
-			}
+			Some(outer) if has_nested(statement) => lifted.extend(lift_from(&outer, globals)?),
 			_ => lifted.push(statement.clone()),
 		}
 	}
@@ -42,8 +41,11 @@ pub(super) fn lift(program: &Node, globals: &[String]) -> Result<Node, String> {
 }
 
 fn has_nested(statement: &Node) -> bool {
-	function_definition(statement)
-		.is_some_and(|(_, _, body)| body_items(body).iter().any(|item| function_definition(item).is_some()))
+	function_definition(statement).is_some_and(|outer| {
+		body_items(outer.body)
+			.iter()
+			.any(|item| function_definition(item).is_some())
+	})
 }
 
 fn body_items(body: &Node) -> &[Node] {
@@ -54,14 +56,9 @@ fn body_items(body: &Node) -> &[Node] {
 }
 
 /// The lifted functions, then outer without them
-fn lift_from(
-	outer: &str,
-	parameters: &[&Node],
-	body: &Node,
-	result: Option<&Node>,
-	globals: &[String],
-) -> Result<Vec<Node>, String> {
-	let (definitions, rest): (Vec<&Node>, Vec<&Node>) = body_items(body)
+fn lift_from(lifted_from: &FunctionHead, globals: &[String]) -> Result<Vec<Node>, String> {
+	let (outer, parameters) = (lifted_from.name, lifted_from.parameters());
+	let (definitions, rest): (Vec<&Node>, Vec<&Node>) = body_items(lifted_from.body)
 		.iter()
 		.partition(|item| function_definition(item).is_some());
 	let rest_body = Node::List(
@@ -81,7 +78,8 @@ fn lift_from(
 	let mut nested: Vec<Nested> = definitions
 		.iter()
 		.map(|definition| {
-			let (name, parameters, body) = function_definition(definition).expect("a function definition");
+			let nested = function_definition(definition).expect("a function definition");
+			let (name, parameters, body) = (nested.name, nested.parameters(), nested.body);
 			let own: Vec<String> = parameters.iter().map(|parameter| parameter_word(parameter)).collect();
 			let references = nonlocal_names(body);
 			let locals: Vec<String> = assigned_locals(body, globals)
@@ -97,7 +95,7 @@ fn lift_from(
 				name: name.to_string(),
 				lifted: cell_class(outer, name),
 				parameters: parameters.into_iter().cloned().collect(),
-				result: result_type(definition).cloned(),
+				result: nested.result.cloned(),
 				body: without_nonlocal(body),
 				captures,
 				references,
@@ -168,7 +166,11 @@ fn lift_from(
 		Bracket::Round,
 		Separator::None,
 	);
-	lifted.push(definition(outer_head, result, with_lifted_calls(&rest_body, &nested)));
+	lifted.push(definition(
+		outer_head,
+		lifted_from.result,
+		with_lifted_calls(&rest_body, &nested),
+	));
 	Ok(lifted)
 }
 

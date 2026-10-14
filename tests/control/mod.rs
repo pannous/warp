@@ -22,6 +22,7 @@ mod test_cell_truth;
 mod test_channels;
 mod test_charged_fields;
 mod test_check_assert;
+mod test_check_holds;
 mod test_clipboard;
 mod test_code_holes; // card code-holes
 mod test_colon_handlers;

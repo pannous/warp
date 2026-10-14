@@ -3,7 +3,7 @@
 //! memory above the text heap (src/host.rs with_scratch, web/playground/host.js withScratch) and the module walks them.
 
 use super::WasmGcEmitter;
-use crate::type_kinds::{Kind, KIND_MASK};
+use crate::type_kinds::Kind;
 use wasm_encoder::{BlockType, Function, HeapType, Instruction as I, MemArg, RefType, ValType};
 
 /// ints_to_list(address, count) -> list: the `count` u32 at `address` as a square list of Ints (gpu_render's pixels)
@@ -116,10 +116,7 @@ impl WasmGcEmitter {
 				let (list, address, room, count, item, value, cell, ints) = (0, 1, 2, 3, 4, 5, 6, 7);
 				let kind_is = |f: &mut Function, local: u32, kind: Kind| {
 					s.emit_field(f, local, 0);
-					Self::emit_list(
-						f,
-						&[I::I64Const(KIND_MASK), I::I64And, I::I64Const(kind as i64), I::I64Eq],
-					);
+					Self::emit_kind_test(f, kind as i64, I::I64Eq);
 				};
 				// a typed list of ints (draw's canvas_pixels) is copied from its array, no Node built per item
 				Self::emit_list(

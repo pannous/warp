@@ -403,63 +403,47 @@ enum RetType {
 	Bool,
 }
 
-/// The C integer types of 64 bits
-#[cfg(feature = "native")]
-const C_INT64_TYPES: [&str; 7] = [
-	"long",
-	"int64_t",
-	"long long",
-	"size_t",
-	"ssize_t",
-	"unsigned long",
-	"uint64_t",
-];
-
-/// Map C type string to normalized ParamType
+/// The C type's parameter: a pointer by what it points to, else by its wasm value type (int, bool, char, short, Color: i32)
 #[cfg(feature = "native")]
 fn c_type_to_param_type(c_type: &str) -> ParamType {
 	let t = bare_c_type(c_type);
-
-	match t {
-		"float" => ParamType::F32,
-		"double" => ParamType::F64,
-		t if C_INT64_TYPES.contains(&t) => ParamType::I64,
-		s if s.contains('*') => match pointer_kind(s) {
+	if t.contains('*') {
+		return match pointer_kind(t) {
 			Some(CPointer::Handle) => ParamType::Handle,
 			Some(CPointer::Out) => ParamType::Out,
 			_ => ParamType::Ptr,
-		},
-		_ => ParamType::I32, // int, bool, char, short, Color, etc.
+		};
+	}
+	match c_type_to_wasm_valtype(t) {
+		Some(ValType::F32) => ParamType::F32,
+		Some(ValType::F64) => ParamType::F64,
+		Some(ValType::I64) => ParamType::I64,
+		_ => ParamType::I32,
 	}
 }
 
-/// Map C type string to normalized RetType
+/// The C type's result: a bool by its low byte, else by its wasm value type
 #[cfg(feature = "native")]
 fn c_type_to_ret_type(c_type: &str) -> RetType {
-	let t = bare_c_type(c_type);
-
-	match t {
-		"void" => RetType::Void,
-		"float" => RetType::F32,
-		"double" => RetType::F64,
-		"bool" => RetType::Bool,
-		t if C_INT64_TYPES.contains(&t) => RetType::I64,
+	match c_type_to_wasm_valtype(c_type) {
+		_ if bare_c_type(c_type) == "bool" => RetType::Bool,
+		None => RetType::Void,
+		Some(ValType::F32) => RetType::F32,
+		Some(ValType::F64) => RetType::F64,
+		Some(ValType::I64) => RetType::I64,
 		_ => RetType::I32,
 	}
 }
 
-/// Map C type string to wasmtime ValType
+/// The C type's wasm value type (map_c_type_to_valtype) for wasmtime
 #[cfg(feature = "native")]
 fn c_type_to_wasm_valtype(c_type: &str) -> Option<ValType> {
-	let t = bare_c_type(c_type);
-
-	match t {
-		"void" => None,
-		"float" => Some(ValType::F32),
-		"double" => Some(ValType::F64),
-		t if C_INT64_TYPES.contains(&t) => Some(ValType::I64),
-		_ => Some(ValType::I32),
-	}
+	map_c_type_to_valtype(c_type).map(|value_type| match value_type {
+		wasm_encoder::ValType::I64 => ValType::I64,
+		wasm_encoder::ValType::F32 => ValType::F32,
+		wasm_encoder::ValType::F64 => ValType::F64,
+		_ => ValType::I32,
+	})
 }
 
 /// Link all functions from a library discovered through header reflection

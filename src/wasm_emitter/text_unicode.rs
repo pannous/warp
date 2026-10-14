@@ -563,16 +563,7 @@ impl WasmGcEmitter {
 				],
 			);
 			Self::emit_list(f, &[I::Br(0), I::End, I::End]);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(destination),
-					I::LocalGet(out),
-					I::LocalGet(destination),
-					I::I32Sub,
-				],
-			);
-			s.call(f, "new_text");
+			s.emit_new_text_to(f, destination, out);
 		});
 	}
 
@@ -684,16 +675,7 @@ impl WasmGcEmitter {
 						I::End,
 					],
 				);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(destination),
-						I::LocalGet(out),
-						I::LocalGet(destination),
-						I::I32Sub,
-					],
-				);
-				s.call(f, "new_text");
+				s.emit_new_text_to(f, destination, out);
 			},
 		);
 	}

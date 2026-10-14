@@ -11,7 +11,7 @@ use super::uncertain::UNCERTAIN_SIMILAR;
 use super::{WasmGcEmitter, IS_TRUTHY, VALUES_EQUAL};
 use crate::library_words::{VALUES_ROUGH, VALUES_SIMILAR};
 use crate::node::Node;
-use crate::type_kinds::{Kind, BOOL_KIND, CURLY_LIST_KIND, KIND_MASK};
+use crate::type_kinds::{Kind, BOOL_KIND, CURLY_LIST_KIND};
 use wasm_encoder::*;
 use Instruction as I;
 
@@ -208,16 +208,8 @@ impl WasmGcEmitter {
 				// an uncertain value: alike within the uncertainty of the difference
 				if s.should_emit_function(UNCERTAIN_SIMILAR) {
 					for kind in [kind_a, kind_b] {
-						Self::emit_list(
-							f,
-							&[
-								I::LocalGet(kind),
-								I::I64Const(KIND_MASK),
-								I::I64And,
-								I::I64Const(Kind::Uncertain as i64),
-								I::I64Eq,
-							],
-						);
+						Self::emit_list(f, &[I::LocalGet(kind)]);
+						Self::emit_kind_test(f, Kind::Uncertain as i64, I::I64Eq);
 					}
 					Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty)]);
 					for side in [a, b] {
@@ -238,16 +230,8 @@ impl WasmGcEmitter {
 				// texts and characters: alike folded
 				for kind in [kind_a, kind_b] {
 					for (index, text_kind) in TEXT_KINDS.iter().enumerate() {
-						Self::emit_list(
-							f,
-							&[
-								I::LocalGet(kind),
-								I::I64Const(KIND_MASK),
-								I::I64And,
-								I::I64Const(*text_kind as i64),
-								I::I64Eq,
-							],
-						);
+						Self::emit_list(f, &[I::LocalGet(kind)]);
+						Self::emit_kind_test(f, *text_kind as i64, I::I64Eq);
 						if index > 0 {
 							f.instruction(&I::I32Or);
 						}

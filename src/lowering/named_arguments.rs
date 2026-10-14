@@ -129,10 +129,7 @@ fn literal_default(parameter: Node) -> Node {
 		Node::Symbol(name) if name.len() > 1 && name.ends_with(OPTIONAL_MARK) => {
 			optional(symbol(name.trim_end_matches(OPTIONAL_MARK)))
 		}
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(literal_default(*node)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(literal_default),
 		other => other,
 	}
 }

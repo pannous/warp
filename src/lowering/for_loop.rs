@@ -171,10 +171,7 @@ fn branch_it_as(branch: Node, variable: &Node) -> Node {
 			Bracket::Curly,
 			separator,
 		),
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(branch_it_as(*node, variable)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| branch_it_as(node, variable)),
 		other => it_as(other, variable),
 	}
 }

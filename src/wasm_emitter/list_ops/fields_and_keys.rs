@@ -241,24 +241,13 @@ impl WasmGcEmitter {
 				let is_name = |f: &mut Function, local: u32| {
 					for kind in [Kind::Text, Kind::Symbol] {
 						s.emit_field(f, local, 0);
-						Self::emit_list(
-							f,
-							&[I::I64Const(KIND_MASK), I::I64And, I::I64Const(kind as i64), I::I64Eq],
-						);
+						Self::emit_kind_test(f, kind as i64, I::I64Eq);
 					}
 					f.instruction(&I::I32Or);
 				};
 				s.emit_field(f, 0, 0);
-				Self::emit_list(
-					f,
-					&[
-						I::I64Const(KIND_MASK),
-						I::I64And,
-						I::I64Const(KEY_KIND),
-						I::I64Eq,
-						I::If(BlockType::Result(ValType::I32)),
-					],
-				);
+				Self::emit_kind_test(f, KEY_KIND, I::I64Eq);
+				Self::emit_list(f, &[I::If(BlockType::Result(ValType::I32))]);
 				s.emit_field(f, 0, 1);
 				Self::emit_list(
 					f,
@@ -418,12 +407,9 @@ impl WasmGcEmitter {
 								struct_type_index: node,
 								field_index: 0,
 							},
-							I::I64Const(KIND_MASK),
-							I::I64And,
-							I::I64Const(Kind::Error as i64),
-							I::I64Ne,
 						],
 					);
+					Self::emit_kind_test(f, Kind::Error as i64, I::I64Ne);
 					Self::emit_list(
 						f,
 						&[
@@ -655,7 +641,7 @@ impl WasmGcEmitter {
 					};
 					let kind_is = |f: &mut Function, local: u32, kind: i64| {
 						get(f, local, 0);
-						Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(kind), I::I64Eq]);
+						Self::emit_kind_test(f, kind, I::I64Eq);
 					};
 					Self::emit_list(
 						f,
@@ -804,16 +790,8 @@ impl WasmGcEmitter {
 	pub(super) fn emit_pair_part(&self, func: &mut Function) {
 		let node = self.type_manager.node_type;
 		self.emit_field(func, 0, 0);
-		Self::emit_list(
-			func,
-			&[
-				I::I64Const(KIND_MASK),
-				I::I64And,
-				I::I64Const(KEY_KIND),
-				I::I64Eq,
-				I::If(BlockType::Empty),
-			],
-		);
+		Self::emit_kind_test(func, KEY_KIND, I::I64Eq);
+		Self::emit_list(func, &[I::If(BlockType::Empty)]);
 		Self::emit_list(
 			func,
 			&[I::LocalGet(1), I::I64Const(1), I::I64Eq, I::If(BlockType::Empty)],
@@ -845,7 +823,7 @@ impl WasmGcEmitter {
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let is_entry = |s: &Self, f: &mut Function, local: u32| {
 			s.emit_field(f, local, 0);
-			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(KEY_KIND), I::I64Eq]);
+			Self::emit_kind_test(f, KEY_KIND, I::I64Eq);
 		};
 		// is_map(node): a single entry, or a `{…}` list that starts with one
 		self.runtime_function(IS_MAP, vec![node_ref], vec![ValType::I32], vec![], |s, f| {
@@ -884,18 +862,8 @@ impl WasmGcEmitter {
 					},
 				],
 			);
-			Self::emit_list(
-				f,
-				&[
-					I::I64Const(KIND_MASK),
-					I::I64And,
-					I::I64Const(KEY_KIND),
-					I::I64Eq,
-					I::Else,
-					I32Const(0),
-					I::End,
-				],
-			);
+			Self::emit_kind_test(f, KEY_KIND, I::I64Eq);
+			Self::emit_list(f, &[I::Else, I32Const(0), I::End]);
 		});
 		// map_of_entry(node): a lone entry `{a:1}` as the map of it, a `{…}` list of one cell (one_entry_maps.rs); else itself
 		self.runtime_function(MAP_OF_ENTRY, vec![node_ref], vec![node_ref], vec![], |s, f| {

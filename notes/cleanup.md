@@ -323,7 +323,10 @@ Left (each changes behaviour or needs care):
   `parameters()`, `plain_operator()`, `is_glued_head()`. Read through it: law/type_model/forms.rs, overloads,
   nonlocal_cells, printable, generators, component_state, units/static_units, definition_cases, signal_values; each
   keeps its own filter (which forms, result type allowed, glued head), so no site reads a form it did not read before.
-  Left on purpose: memoization `definition_parts` (type_tests) also takes `x := 3` and rebuilds the same form;
+  Follow-up (definition-view-ports): the Lean export's `function_definition` returns the FunctionHead (no
+  result_type / tuple wrappers, Exporter::function and nested lift_from take it), units.rs reads parameter clashes
+  through it (`plain_operator`). Left on purpose: memoization `definition_parts` (type_tests) also takes `x := 3` and
+  rebuilds the same form (compacted: keyword and meta wrappers share `wrapped`);
   declarations.rs `function_definition` builds the Key form; law.rs `function_definition` goes through the analyzer;
   lambdas / nested_functions / reflection `definition` build or print one. Narrowed (nonsense forms only): signal_values
   no longer reads `def {f x}`, `def (f x) y {…}` (four words) or a head whose first item is not a word.
