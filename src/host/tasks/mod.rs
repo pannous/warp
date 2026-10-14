@@ -192,6 +192,14 @@ pub fn imports_tasks_in(bytes: &[u8]) -> bool {
 
 impl TaskTable {
 	fn link_into(self: &Arc<Self>, linker: &mut Linker<HostState>) -> Result<()> {
+		self.link_task_values(linker)?;
+		self.link_task_state(linker)?;
+		self.link_work_sharing(linker)?;
+		self.link_channels(linker)
+	}
+
+	/// Spawning a task with its arguments, awaiting its value, joining it and reading its failure
+	fn link_task_values(self: &Arc<Self>, linker: &mut Linker<HostState>) -> Result<()> {
 		let value_spawner = self.clone();
 		linker.func_wrap(
 			HOST_LIBRARY,
@@ -240,6 +248,11 @@ impl TaskTable {
 				build_in(&mut caller, &TaskValue::Text(message))
 			},
 		)?;
+		Ok(())
+	}
+
+	/// Polling, the status of a task, whether the code runs in one and controlling one
+	fn link_task_state(self: &Arc<Self>, linker: &mut Linker<HostState>) -> Result<()> {
 		// natively the epoch checks pause a task: a loop start only runs the forwarded raises
 		let poller = self.clone();
 		linker.func_wrap(
@@ -264,6 +277,15 @@ impl TaskTable {
 			crate::host::TASK_INSIDE,
 			|caller: Caller<'_, HostState>| -> i64 { caller.data().in_task as i64 },
 		)?;
+		let controller = self.clone();
+		linker.func_wrap(HOST_LIBRARY, TASK_CONTROL, move |id: i64, operation: i64| -> i64 {
+			controller.control(id, operation)
+		})?;
+		Ok(())
+	}
+
+	/// Whether a core is free to fork onto, a map split over the cores, a signal sent to the program
+	fn link_work_sharing(self: &Arc<Self>, linker: &mut Linker<HostState>) -> Result<()> {
 		let forker = self.clone();
 		linker.func_wrap(HOST_LIBRARY, crate::host::TASK_FORKS, move || -> i64 {
 			(forker.running.load(Ordering::Relaxed) < cores()) as i64
@@ -291,11 +313,6 @@ impl TaskTable {
 				Ok(0)
 			},
 		)?;
-		let controller = self.clone();
-		linker.func_wrap(HOST_LIBRARY, TASK_CONTROL, move |id: i64, operation: i64| -> i64 {
-			controller.control(id, operation)
-		})?;
-		self.link_channels(linker)?;
 		Ok(())
 	}
 
