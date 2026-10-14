@@ -26,3 +26,20 @@ fn renaming_a_module_function_as_the_module_does() {
 	is!("use math; arctan := arc_tangent; arctan(0)", 0.0);
 	is!("use math; arcsin := arc_sine; arcsin(0)", 0.0);
 }
+
+/// a note on another language's word points at the word itself, not at a node read before or after it
+#[test]
+fn parser_alias_notes_point_at_the_word() {
+	warp::normalize::clear_shown_hints();
+	let code = "x = 1\nprintln x\n  writeln 2\nconstant y = 3";
+	let (_, hints) = warp::normalize::capture_hints(|| warp::wasm_emitter::eval(code));
+	let position = |written: &str| {
+		hints
+			.iter()
+			.find(|hint| hint.original == written)
+			.map(|hint| hint.position.clone())
+	};
+	assert_eq!(position("println"), Some("2:1".to_string()), "{hints:?}");
+	assert_eq!(position("writeln"), Some("3:3".to_string()), "{hints:?}");
+	assert_eq!(position("constant"), Some("4:1".to_string()), "{hints:?}");
+}
