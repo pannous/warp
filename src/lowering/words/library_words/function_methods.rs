@@ -1,5 +1,6 @@
 //! Method syntax for builtin functions: `x.round()` is `round(x)`; `listOf(1, 2)` and `list()` are lists
 use super::*;
+use crate::node::parens;
 
 /// Method syntax for builtin functions: the called method `x.f(args)` is `f(x, args)` when f is a rounding, extremum,
 /// text or libm function the program does not define. Runs first, so the passes that know these calls see their plain form; user
@@ -60,13 +61,11 @@ fn list_constructor_calls(node: Node, defined: &HashSet<String>) -> Node {
 			let is_list_word = items[0].is_symbol(LIST_WORD);
 			match elements.is_empty() {
 				true => Node::Empty,
-				false if is_list_word => Node::List(
+				false if is_list_word => parens(
 					items
 						.into_iter()
 						.map(|item| list_constructor_calls(item, defined))
 						.collect(),
-					Bracket::Round,
-					Separator::None,
 				), // `list(x)` is `x as list`
 				false => Node::List(
 					elements
@@ -98,11 +97,7 @@ fn function_methods_as_calls(
 			let (receiver, method) = (lowered(*receiver), lowered(*method));
 			match method.drop_meta() {
 				Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if is_function(name, items.len() - 1, defined)) => {
-					Node::List(
-						[vec![items[0].clone(), receiver], items[1..].to_vec()].concat(),
-						Bracket::Round,
-						Separator::None,
-					)
+					parens([vec![items[0].clone(), receiver], items[1..].to_vec()].concat())
 				}
 				_ => key(receiver, Op::Dot, method),
 			}

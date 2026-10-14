@@ -10,7 +10,7 @@ use crate::analyzer::{call_name, counting_method};
 use crate::compiler::context::Context;
 use crate::errors::diagnostic::Diagnostic;
 use crate::list_mutations::is_list_mutating_method;
-use crate::node::{symbol, text, Bracket, Node, Separator};
+use crate::node::{parens, symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{parse, ASSERT_MARKER, TRY_MARKER};
 use crate::wasm_emitter::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
@@ -682,13 +682,7 @@ impl Lowering {
 				return None;
 			}
 			if call_name(items, bracket, separator).is_some() {
-				let log_of = |argument: &Node| {
-					Node::List(
-						vec![items[0].clone(), argument.clone()],
-						Bracket::Round,
-						Separator::None,
-					)
-				};
+				let log_of = |argument: &Node| parens(vec![items[0].clone(), argument.clone()]);
 				return Some(key(log_of(value), Op::Div, log_of(base)));
 			}
 		}
@@ -1015,11 +1009,7 @@ impl Lowering {
 			} else {
 				format!("{fewest} to {wanted}")
 			};
-			let call = Node::List(
-				[vec![head.clone()], arguments.clone()].concat(),
-				Bracket::Round,
-				Separator::None,
-			);
+			let call = parens([vec![head.clone()], arguments.clone()].concat());
 			return Diagnostic::at(
 				&call,
 				format!("{word} takes {counts} argument{plural}, got {}", arguments.len()),
@@ -1040,7 +1030,7 @@ impl Lowering {
 					// the written spelling's position: `warn "x"` errs where warn is
 					symbol(word).with_meta_of(head)
 				};
-				Node::List([vec![name], arguments].concat(), Bracket::Round, Separator::None)
+				parens([vec![name], arguments].concat())
 			}
 		}
 	}

@@ -7,7 +7,7 @@
 use super::nodes::{children_rewritten, key, parameter_word, Counter};
 use crate::errors::diagnostic::Diagnostic;
 use crate::min_max::{is_plain, with_bindings};
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
 
@@ -477,7 +477,7 @@ impl Rewrite {
 						let items = std::iter::once(Node::Symbol(callable_name(name)))
 							.chain(function.extras.iter().cloned().map(Node::Symbol))
 							.collect();
-						key(Node::List(items, Bracket::Round, Separator::None), Op::Define, body)
+						key(parens(items), Op::Define, body)
 					}
 					_ => key(head, op, body),
 				}
@@ -541,10 +541,7 @@ impl Rewrite {
 				.into_iter()
 				.map(|slot| slot.map_or_else(|default| default, |position| values[position].clone())),
 		);
-		Ok(with_bindings(
-			bindings,
-			Node::List(ordered.collect(), Bracket::Round, Separator::None),
-		))
+		Ok(with_bindings(bindings, parens(ordered.collect())))
 	}
 
 	fn temporary(&self) -> String {

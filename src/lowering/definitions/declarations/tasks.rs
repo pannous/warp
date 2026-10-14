@@ -1,6 +1,7 @@
 //! Tasks: `job = go f(x)`, `await job`, `await any`/`all`, `within` deadlines, task controls and handlers (wiki/async.md)
 use super::*;
 use crate::lowering::nodes::{fresh_number, phrase_words};
+use crate::node::parens;
 
 /// `go f(x)` starts a task, `await job` waits for it
 pub(super) const TASK_WORDS: [&str; 2] = ["go", "await"];
@@ -1221,7 +1222,7 @@ pub(super) fn resolved(
 								],
 							)
 						}
-						TaskPath::Inline => Node::List(items[1..].to_vec(), Bracket::Round, Separator::None),
+						TaskPath::Inline => parens(items[1..].to_vec()),
 					}
 				}
 				TASK_VALUE => {

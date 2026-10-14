@@ -134,11 +134,9 @@ fn import_calls(node: Node, imports: &[(String, Signature)]) -> Node {
 			.any(|(imported, signature)| *imported == interface && signature.name == underscores_to_dashes(&function))
 		{
 			let arguments = arguments.into_iter().map(|argument| import_calls(argument, imports));
-			let callee = Node::Symbol(import_name(&interface, &underscores_to_dashes(&function)));
-			return Node::List(
-				std::iter::once(callee).chain(arguments).collect(),
-				Bracket::Round,
-				crate::node::Separator::None,
+			return crate::node::call(
+				&import_name(&interface, &underscores_to_dashes(&function)),
+				arguments.collect(),
 			);
 		}
 	}

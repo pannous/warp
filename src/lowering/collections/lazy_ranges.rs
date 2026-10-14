@@ -11,7 +11,7 @@ use crate::analyzer::effects::call_arguments;
 use crate::analyzer::{call_name, TEMPORARY_SEPARATOR};
 use crate::library_words::substitute;
 use crate::memoization::definition_parts;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
 use crate::words::{COUNT_WORD, SUM_WORD};
@@ -264,12 +264,7 @@ fn replaceable(statements: &[Node], position: usize, readers: &RangeReaders) -> 
 		&& bound_names
 			.iter()
 			.all(|bound| unchanged(bound) && !after.iter().any(|statement| is_parameter(statement, bound))))
-	.then(|| {
-		(
-			name.clone(),
-			Node::List(vec![range.whole.clone()], Bracket::Round, Separator::None),
-		)
-	})
+	.then(|| (name.clone(), parens(vec![range.whole.clone()])))
 }
 
 /// Whether `node` assigns or updates `name`, its items or its fields
@@ -530,18 +525,11 @@ fn bounds_copies(statement: &Node, readers: &RangeReaders, copies: &mut Copies) 
 					continue;
 				}
 				let [start, end] = range_bound_names(&parameter.name()).map(Node::Symbol);
-				let range = Node::List(
-					vec![key(start.clone(), Op::Range, end.clone())],
-					Bracket::Round,
-					Separator::None,
-				);
+				let range = parens(vec![key(start.clone(), Op::Range, end.clone())]);
 				new_body = substitute(new_body, &parameter.name(), &range);
 				new_parameters.extend([start, end]);
 			}
-			make(
-				Node::List(new_parameters, Bracket::Round, Separator::None),
-				call_bounds_copies(new_body, readers, copies),
-			)
+			make(parens(new_parameters), call_bounds_copies(new_body, readers, copies))
 		})
 		.collect()
 }

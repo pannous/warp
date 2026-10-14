@@ -8,7 +8,7 @@
 use super::nodes::{if_then, key};
 use crate::analyzer::counting_function;
 use crate::compiler::context::Context;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::IMPLICIT_PARAMETER;
 use std::collections::HashSet;
@@ -354,5 +354,5 @@ fn spread(node: &Node) -> Vec<Node> {
 }
 
 fn called(function: Node, argument: Node) -> Node {
-	Node::List(vec![function, argument], Bracket::Round, Separator::None)
+	parens(vec![function, argument])
 }

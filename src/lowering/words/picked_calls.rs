@@ -2,7 +2,7 @@
 //! `(picked·1 = fs#2; picked·1(3))`, the call of a function held by a variable, which closures.rs knows.
 
 use super::nodes::{key, Counter};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
 
 const PICKED_PREFIX: &str = "picked·";
@@ -46,7 +46,7 @@ impl Picking {
 				Some(self.picked_call(operand.clone(), arguments))
 			}
 			Node::Key(left, op, right) => self
-				.called(right, &Node::List(arguments.clone(), Bracket::Round, Separator::None))
+				.called(right, &parens(arguments.clone()))
 				.map(|right| key(self.rewrite(left.as_ref().clone()), *op, right)),
 			_ => None,
 		}
@@ -56,11 +56,7 @@ impl Picking {
 		let name = format!("{PICKED_PREFIX}{}", self.counter.next_number());
 		let assignment = key(Node::Symbol(name.clone()), Op::Assign, self.rewrite(picked));
 		let arguments = arguments.iter().map(|argument| self.rewrite(argument.clone()));
-		let call = Node::List(
-			std::iter::once(Node::Symbol(name)).chain(arguments).collect(),
-			Bracket::Round,
-			Separator::None,
-		);
+		let call = parens(std::iter::once(Node::Symbol(name)).chain(arguments).collect());
 		Node::List(vec![assignment, call], Bracket::Round, Separator::Semicolon)
 	}
 }

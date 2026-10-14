@@ -1,5 +1,6 @@
 //! `a ≈ b` and `a ~ b`: compared within a relative tolerance
 use super::*;
+use crate::node::parens;
 
 /// values_similar(a, b, tolerance): `a ≈ b` (wasm_emitter/similarity.rs)
 pub const VALUES_SIMILAR: &str = "values_similar";
@@ -29,6 +30,6 @@ impl Lowering {
 			.expect("a similarity operator");
 		let tolerance = if self.shadows(variable) { variable } else { default };
 		let call = vec![symbol(function), left, right, crate::warp_parser::parse(tolerance)];
-		Node::List(call, Bracket::Round, Separator::None)
+		parens(call)
 	}
 }
