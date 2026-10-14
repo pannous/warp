@@ -166,6 +166,16 @@ Moved with scripts/move_fn.py. Callers name the new module, and the crate root r
 | collections/list_mutations.rs | definitions/declaration_forms.rs | `appends`, `is_list_mutating_method`, `is_removal_method`, `is_place`, `appended_element`, `called_on_place`, `popped_list`, `removed_key`, `cleared_collection`, `became`, `prelude_call`, `inserted_element`, `insert_arguments`, `insert_position`, `lowered_insert`, `updates_list`, `Inserted`; the method and pseudo-call constants (`LIST_BECOME`, `INSERT_AT_CALL`, `REMOVED_VALUE_CALL` …) |
 | collections/filled_lists.rs | definitions/declaration_forms.rs | `zero_element`, `zero_list`, `lower_list_times`, `list_times`, `is_list_literal`, `list_plus`, `filled_list`, `zero_filled_subscript`, `typed_array_value`, `typed_array_declaration`, `counted_array_declaration`, `ZERO_FILL_CALL`, the list-times/list-plus topics |
 | types/inline_unions.rs | definitions/declaration_forms.rs | `lower_inline_unions`, `lower_unions_of` |
+| words/library_words/function_methods.rs | words/library_words.rs | `lower_function_methods`, `in_function_scope`, `list_constructor_calls`, `function_methods_as_calls` |
+| words/library_words/guards.rs | words/library_words.rs | `Lowering::{is_known_list, lower_try, lower_try_binding, lower_assert}`, the try/assert placeholders |
+| words/library_words/similarity.rs | words/library_words.rs | `is_similarity_call`, `Lowering::lower_similar`, `VALUES_SIMILAR`, `VALUES_ROUGH`, `SIMILARITY_LEVELS` |
+| words/library_words/templates.rs | words/library_words.rs | `Lowering::instantiate_template`, `temporary_name`, `named_apart`, `substitute`, `TRY_TEMPORARY`, `TRY_BASE` |
+| types/class_methods/method_aliases.rs | types/class_methods.rs | `method_aliases`, `aliased_method`, `with_method_aliases`, `METHOD_ALIASES` |
+| types/class_methods/json.rs | types/class_methods.rs | `lower_json_classes`, `with_json_classes`, `TO_JSON_WORD`, `TO_JSON_OF_CLASSES_WORD`, `SERIALIZER_ALIASES` |
+| types/class_methods/statics.rs | types/class_methods.rs | `instance_member`, `is_static`, `static_name`, `static_members`, `static_reads`, `static_definitions` |
+| foreign/gpu_maps/kernels.rs | foreign/gpu_maps.rs | the WGSL translation: `Kernel`, `Reduction`, `Translation`, `ProgramFunction`, the painted fragment shaders, `float_literal` |
+
+Branches: layout-lowering-library-words, -class-methods, -gpu-maps (2026-10-14).
 
 ## Analyzer (`src/analyzer/`, 10 files)
 
