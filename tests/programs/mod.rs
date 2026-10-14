@@ -19,6 +19,7 @@ mod test_json_parser_fixes;
 mod test_kitchensink;
 mod test_midi;
 mod test_music_values; // card music-values
+mod test_note_values; // card note-value
 mod test_paint;
 mod test_paint_function; // card gpu-functions
 mod test_paint_in_window; // card paint-keeps

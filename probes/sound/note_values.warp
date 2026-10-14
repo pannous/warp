@@ -1,0 +1,11 @@
+#!/usr/bin/env warp
+// card note-value: note(...) is a Note that prints as its name; bare note names stay frequencies
+use sound
+n = note(C4)
+print n                    // C4
+print n + 7                // G4
+print note(445Hz)          // A4+20c
+print note("Eb5")          // D#5
+print interval(C4, G4)     // 7
+print C4                   // 261.63
+play(n + 7)

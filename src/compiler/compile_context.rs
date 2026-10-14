@@ -49,6 +49,9 @@ pub struct CompileContext {
 	pub module_definitions: HashSet<String>,
 	/// the modules whose classes insert_module_classes put in front of the program: the loader leaves them out
 	pub early_class_modules: HashSet<PathBuf>,
+	/// the functions of those modules giving an instance of such a class (`note_value(C4)` a Note), with its class:
+	/// class_methods reads `n + 2` of `n = note_value(C4)` as Note's plus before the module joins the program
+	pub module_returned_classes: HashMap<String, String>,
 	/// the unit words the program being lowered defines itself (`m = 2`): no units while it is lowered
 	pub shadowed_units: HashSet<String>,
 	/// the units of the last lowered program's final value, to convert its run-time amount back
@@ -91,6 +94,7 @@ impl Default for CompileContext {
 			module_files: vec![],
 			module_definitions: HashSet::new(),
 			early_class_modules: HashSet::new(),
+			module_returned_classes: HashMap::new(),
 			shadowed_units: HashSet::new(),
 			result_units: None,
 			declared_types: HashSet::new(),
