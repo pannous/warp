@@ -1,4 +1,5 @@
 mod test_angle;
+mod test_arrow_operators; // card easy-add
 mod test_as_compound_unit; // card compound-unit
 mod test_average; // card average-undefined
 mod test_bend_laws; // card bend-style
