@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-const LEAN_TIMEOUT: Duration = Duration::from_secs(120);
+pub(crate) const LEAN_TIMEOUT: Duration = Duration::from_secs(120);
 pub const TACTICS: &[&str] = &[
 	"rfl",
 	"decide",
@@ -396,7 +396,7 @@ pub(crate) fn lean_executable(name: &str) -> PathBuf {
 	}
 }
 
-pub(crate) fn run_with_timeout(mut command: Command) -> Result<String, String> {
+pub(crate) fn run_with_timeout(mut command: Command, limit: Duration) -> Result<String, String> {
 	let mut child = command
 		.stdout(Stdio::piped())
 		.stderr(Stdio::piped())
@@ -404,9 +404,9 @@ pub(crate) fn run_with_timeout(mut command: Command) -> Result<String, String> {
 		.map_err(|e| format!("lean not runnable: {}", e))?;
 	let started = Instant::now();
 	while child.try_wait().map_err(|e| e.to_string())?.is_none() {
-		if started.elapsed() > LEAN_TIMEOUT {
+		if started.elapsed() > limit {
 			let _ = child.kill();
-			return Err(format!("lean timed out after {:?}", LEAN_TIMEOUT));
+			return Err(format!("lean timed out after {limit:?}"));
 		}
 		std::thread::sleep(Duration::from_millis(50));
 	}
@@ -440,7 +440,7 @@ fn first_error(lean_output: &str) -> String {
 fn check_file(file: &Path) -> Result<String, String> {
 	let mut command = Command::new(lean_executable("lean"));
 	command.arg(file);
-	run_with_timeout(command).map_err(|output| first_error(&output))
+	run_with_timeout(command, LEAN_TIMEOUT).map_err(|output| first_error(&output))
 }
 
 fn verdict_of(record: &str) -> Verdict {
