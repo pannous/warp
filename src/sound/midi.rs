@@ -4,8 +4,8 @@
 //! velocity (1..127); a file is a list of them flattened. Files are format 0, 480 ticks a quarter at 120 beats per
 //! minute (960 ticks a second), so a millisecond is a whole number of ticks to within 5%: ticks are rounded, not kept.
 //! Live output goes to `sendmidi` when the user may hear it; headless (tests, CI, WARP_NO_WINDOW) only a
-//! `midi out <port>: 90 3c 64` line on stderr, as sound prints its WAV. Live input has no native backend yet: it fails
-//! loudly (the browser has Web MIDI, host-midi.js).
+//! `midi out <port>: 90 3c 64` line on stderr, as sound prints its WAV. Live input has no backend yet, natively or in the
+//! playground (its Web MIDI input stays on the page, out of the program's Worker): it fails loudly (card midi-receive).
 
 use std::process::Command;
 
@@ -230,5 +230,5 @@ fn no_backend(failure: &std::io::Error) -> String {
 
 /// There is no native MIDI input: failing loudly beats a program that waits for messages that cannot come
 pub fn receive() -> Result<(), String> {
-	Err("MIDI input is not available natively yet (no CoreMIDI binding in this build); the playground reads it with Web MIDI".into())
+	Err("MIDI input is not available natively yet (no CoreMIDI binding in this build), nor in the playground (card midi-receive)".into())
 }

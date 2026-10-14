@@ -19,7 +19,7 @@ fn an_operator_words_signature() {
 fn a_prelude_words_signature_as_its_head() {
 	is!("first.signature", text("(xs)"));
 	is!("replace.params", texts(vec!["t", "old", "new"]));
-	is!("help(nearest)", text("nearest(x, kind, limit = 0, within = 0)"));
+	is!("help(nearest)", text("nearest(x, kind, limit = 1000000, within = 0)"));
 }
 
 #[test]

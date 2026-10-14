@@ -54,7 +54,7 @@ fn a_name_that_is_no_word_is_named_in_the_error() {
 
 #[test]
 fn an_unjoinable_item_names_its_kind() {
-	fails_with("for t in [\"a\" \"b\"]: print (t).dump", "not a joinable item: a key");
+	fails_with("join([[1], [2]], \",\")", "not a joinable item: a list ([1])");
 }
 
 #[cfg(feature = "native")] // the help tests below run the warp binary

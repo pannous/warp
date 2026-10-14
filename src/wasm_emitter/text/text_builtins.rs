@@ -17,6 +17,8 @@ pub const TEXT_CONCAT: &str = "text_concat";
 /// text_concat for a text held in a variable, which may be built up (`t += x`): it grows into rooms (text_rooms.rs)
 pub const TEXT_APPEND: &str = "text_append";
 pub const TEXT_OF: &str = "text_of";
+/// What a text joined with `+` takes as its literal when made at run time: `"x " + parse("[1 2]")`
+pub(in crate::wasm_emitter) const STRUCTURE_KINDS: [Kind; 2] = [Kind::Key, Kind::List];
 /// text_argument(node): the text a text builtin reads (text_of), but an Error fails with its own message (card byte-slice)
 const TEXT_ARGUMENT: &str = "text_argument";
 /// float_text when the analyzer saw floats (makes_floats), and the run-time functions that make floats
@@ -586,6 +588,7 @@ impl WasmGcEmitter {
 		let (pointer, length) = self.allocate_string("");
 		self.emit_node_instructions(func, operand);
 		func.instruction(&I::LocalSet(held));
+		self.emit_structure_as_literal(func, held, &STRUCTURE_KINDS, (pointer, length));
 		self.emit_field(func, held, 0);
 		Self::emit_kind_test(func, Kind::Error as i64, I::I64Eq);
 		Self::emit_list(func, &[I::If(BlockType::Result(node_ref))]);
@@ -611,6 +614,44 @@ impl WasmGcEmitter {
 		self.emit_call(func, "new_text");
 		self.emit_call(func, super::super::reflection::library_ops::LIST_JOIN);
 		func.instruction(&I::End);
+	}
+
+	/// A value of one of `kinds` made at run time (parsed code) in Node local `local` becomes its literal text, to join
+	/// a text: `"x " + parse(t)` (card print-parse); only in a program that parses code. `empty`: the allocated empty text, the separator of that one-item list
+	pub(in crate::wasm_emitter) fn emit_structure_as_literal(
+		&self,
+		func: &mut Function,
+		local: u32,
+		kinds: &[Kind],
+		empty: (u32, u32),
+	) {
+		if !self.parses_code {
+			return;
+		}
+		let node_type = self.type_manager.node_type;
+		let (pointer, length) = empty;
+		for (index, kind) in kinds.iter().enumerate() {
+			self.emit_field(func, local, 0);
+			Self::emit_kind_test(func, *kind as i64, I::I64Eq);
+			if index > 0 {
+				func.instruction(&I::I32Or);
+			}
+		}
+		Self::emit_list(
+			func,
+			&[
+				I::If(BlockType::Empty),
+				I::I64Const(crate::type_kinds::SQUARE_LIST_KIND),
+				I::LocalGet(local),
+				I::RefNull(HeapType::Concrete(node_type)),
+				I::StructNew(node_type),
+				I::I32Const(pointer as i32),
+				I::I32Const(length as i32),
+			],
+		);
+		self.call(func, "new_text");
+		self.call(func, super::super::reflection::library_ops::LIST_TEXT);
+		Self::emit_list(func, &[I::LocalSet(local), I::End]);
 	}
 
 	/// An Error node carrying `reason`, the way a failed fetch reports
