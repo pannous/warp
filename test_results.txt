@@ -1,6 +1,7 @@
 === Test Results ===
 
 PASSED:
+  ✓ compiler::function::tests::test_function_registry
   ✓ control::test_after::a_cancelled_after_gives_the_fallback
   ✓ control::test_after::after_needs_a_shared_condition
   ✓ control::test_after::after_waits_for_its_condition
@@ -1020,8 +1021,24 @@ PASSED:
   ✓ ffi::test_web_idl::the_dom_is_typed
   ✓ ffi::test_web_idl::the_global_object_is_typed
   ✓ ffi::test_web_idl::what_the_interface_declares_runs
-  ✓ foreign::tests::json_conversion_keeps_nested_values_and_node_layout
-  ✓ function::tests::test_function_registry
+  ✓ formats::wisp_parser::tests::test_wisp_basic_atom_types
+  ✓ formats::wisp_parser::tests::test_wisp_call
+  ✓ formats::wisp_parser::tests::test_wisp_cons_dotted_pair
+  ✓ formats::wisp_parser::tests::test_wisp_defn
+  ✓ formats::wisp_parser::tests::test_wisp_emit_atoms
+  ✓ formats::wisp_parser::tests::test_wisp_emit_compound
+  ✓ formats::wisp_parser::tests::test_wisp_key_pair
+  ✓ formats::wisp_parser::tests::test_wisp_list
+  ✓ formats::wisp_parser::tests::test_wisp_meta
+  ✓ formats::wisp_parser::tests::test_wisp_nested
+  ✓ formats::wisp_parser::tests::test_wisp_roundtrip_atoms
+  ✓ formats::wisp_parser::tests::test_wisp_roundtrip_compound
+  ✓ formats::wisp_parser::tests::test_wisp_roundtrip_nested
+  ✓ formats::wisp_parser::tests::test_wisp_roundtrip_sexpr
+  ✓ formats::wisp_parser::tests::test_wisp_sexpr_types
+  ✓ formats::wisp_parser::tests::test_wisp_sexpr_types_superfluous_empty_node
+  ✓ formats::wisp_parser::tests::test_wisp_shorthand_operators
+  ✓ formats::wisp_parser::tests::test_wisp_tag
   ✓ functions::test_alias_definition::a_defined_name_of_a_function_calls_it
   ✓ functions::test_alias_definition::a_partial_definition_names_its_hole
   ✓ functions::test_alias_definition::an_alias_of_an_alias_calls_the_function
@@ -1332,6 +1349,7 @@ PASSED:
   ✓ functions::test_libm_pure::libm_calls_are_pure
   ✓ functions::test_libm_pure::libm_runs_untrusted_and_in_pure_functions
   ✓ functions::test_library_word_aliases::containment_and_phrase_spellings
+  ✓ functions::test_library_word_aliases::parser_alias_notes_point_at_the_word
   ✓ functions::test_library_word_aliases::print_spellings_print
   ✓ functions::test_library_word_aliases::renaming_a_module_function_as_the_module_does
   ✓ functions::test_library_word_values::a_function_updating_a_main_list_asks_for_global
@@ -1990,6 +2008,7 @@ PASSED:
   ✓ lists::test_word_slices::hash_positions_slice
   ✓ lists::test_word_slices::ordinal_positions_slice
   ✓ lists::test_word_slices::other_from_and_to_stay
+  ✓ modules::foreign::tests::json_conversion_keeps_nested_values_and_node_layout
   ✓ modules::test_agent_types::a_companion_takes_the_expected_type_of_any_function
   ✓ modules::test_agent_types::a_typed_declaration_asks_the_agent_for_its_type
   ✓ modules::test_agent_types::without_an_expected_type_the_agent_answers_text
@@ -5302,26 +5321,8 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::n_times_a_one_element_list_repeats_it
   ✓ welcoming::test_welcoming_sugar::the_empty_list_counts_zero_and_grows
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
-  ✓ wisp_parser::tests::test_wisp_basic_atom_types
-  ✓ wisp_parser::tests::test_wisp_call
-  ✓ wisp_parser::tests::test_wisp_cons_dotted_pair
-  ✓ wisp_parser::tests::test_wisp_defn
-  ✓ wisp_parser::tests::test_wisp_emit_atoms
-  ✓ wisp_parser::tests::test_wisp_emit_compound
-  ✓ wisp_parser::tests::test_wisp_key_pair
-  ✓ wisp_parser::tests::test_wisp_list
-  ✓ wisp_parser::tests::test_wisp_meta
-  ✓ wisp_parser::tests::test_wisp_nested
-  ✓ wisp_parser::tests::test_wisp_roundtrip_atoms
-  ✓ wisp_parser::tests::test_wisp_roundtrip_compound
-  ✓ wisp_parser::tests::test_wisp_roundtrip_nested
-  ✓ wisp_parser::tests::test_wisp_roundtrip_sexpr
-  ✓ wisp_parser::tests::test_wisp_sexpr_types
-  ✓ wisp_parser::tests::test_wisp_sexpr_types_superfluous_empty_node
-  ✓ wisp_parser::tests::test_wisp_shorthand_operators
-  ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
 
 SUMMARY:
-13 ignored, 5319 passed, 0 failed, 5319 total tested
+13 ignored, 5320 passed, 0 failed, 5320 total tested
