@@ -93,7 +93,7 @@ pub fn resolve(program: Node) -> Node {
 
 pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	crate::compiler::compile_context::change(|context| context.module_definitions.clear());
-	let own_names: Vec<String> = statements_of(&program).iter().filter_map(declared_name).collect();
+	let own_names: Vec<String> = statements_of(&program).iter().filter_map(name_declared_by).collect();
 	let file = program_file();
 	let mut loader = Loader::new(directories, file.as_deref().map(folder_of));
 	loader.program_variables = program_variables(&program);
@@ -133,7 +133,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 	let mut program = with_type_module_uses(program);
 	let file = program_file();
 	let loader = Loader::new(&SEARCH_DIRECTORIES, file.as_deref().map(folder_of));
-	let own_names: HashSet<String> = statements_of(&program).iter().filter_map(declared_name).collect();
+	let own_names: HashSet<String> = statements_of(&program).iter().filter_map(name_declared_by).collect();
 	let (mut std_definitions, mut file_classes, mut early, mut class_modules) =
 		(vec![], vec![], HashSet::new(), vec![]);
 	let mut defined: Vec<String> = vec![]; // every used module's words, a file's copy of a standard module's too
@@ -150,7 +150,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 		{
 			let module = module.to_string_lossy();
 			let classes = crate::modules::wasm_modules::classes(&module);
-			let names: Vec<String> = classes.iter().filter_map(declared_name).collect();
+			let names: Vec<String> = classes.iter().filter_map(name_declared_by).collect();
 			program = crate::modules::wasm_modules::with_bare_classes(
 				program,
 				&crate::modules::wasm_modules::module_alias(&module),
@@ -175,7 +175,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 			continue; // the loader reports it
 		}
 		let definitions = statements(module);
-		defined.extend(definitions.iter().filter_map(declared_name));
+		defined.extend(definitions.iter().filter_map(name_declared_by));
 		match is_std {
 			true => {
 				if definitions.iter().any(is_class) {
@@ -188,7 +188,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 		early.insert(path.canonicalize().unwrap_or(path));
 	}
 	crate::compiler::compile_context::change(|context| context.early_class_modules = early);
-	let is_foreign = |class: &Node| declared_name(class).is_none_or(|name| !own_names.contains(&name));
+	let is_foreign = |class: &Node| name_declared_by(class).is_none_or(|name| !own_names.contains(&name));
 	let aliases: Vec<(&str, &str)> = STD_ALIASES
 		.into_iter()
 		.filter(|(alias, word)| defined.iter().any(|name| name == word) && !own_names.contains(*alias))
@@ -367,15 +367,15 @@ fn collect_own_functions(node: &Node, classes: &HashSet<String>, own: &mut HashS
 			collect_own_functions(value, classes, own)
 		}
 		Node::Key(left, _, right) => {
-			own.extend(declared_name(node));
+			own.extend(name_declared_by(node));
 			collect_own_functions(left, classes, own);
 			collect_own_functions(right, classes, own);
 		}
 		Node::List(items, _, _) => {
-			own.extend(declared_name(node));
+			own.extend(name_declared_by(node));
 			items.iter().for_each(|item| collect_own_functions(item, classes, own));
 		}
-		other => own.extend(declared_name(other)),
+		other => own.extend(name_declared_by(other)),
 	}
 }
 
@@ -456,7 +456,7 @@ fn with_needed_definitions(program: Node, definitions: Vec<Node>) -> Node {
 	loop {
 		let now_needed: Vec<Node> = definitions
 			.iter()
-			.filter(|definition| declared_name(definition).is_some_and(|name| is_needed(&name, &mentioned)))
+			.filter(|definition| name_declared_by(definition).is_some_and(|name| is_needed(&name, &mentioned)))
 			.cloned()
 			.collect();
 		if now_needed.len() == needed.len() {
@@ -530,11 +530,11 @@ fn program_variables(program: &Node) -> HashSet<String> {
 /// function named like a program variable: a program's `global hue` is not draw's `hue` in hsv (card program-global).
 /// A module's `global` is a setting, which the program's `tempo = 90` sets (lib/sound.warp's tempo, note_seconds)
 fn shadowed_apart(definitions: Vec<Node>, variables: &HashSet<String>) -> Vec<Node> {
-	let declared: Vec<String> = definitions.iter().filter_map(declared_name).collect();
+	let declared: Vec<String> = definitions.iter().filter_map(name_declared_by).collect();
 	let settings: Vec<String> = definitions
 		.iter()
 		.filter(|definition| is_global_declaration(definition))
-		.filter_map(declared_name)
+		.filter_map(name_declared_by)
 		.collect();
 	let shadowed: Vec<String> = declared
 		.iter()
@@ -991,7 +991,7 @@ fn mentions_file_url(program: &Node) -> bool {
 fn defined(program: &Node, name: &str) -> Option<Node> {
 	statements_of(program)
 		.iter()
-		.find(|statement| declared_name(statement).as_deref() == Some(name))
+		.find(|statement| name_declared_by(statement).as_deref() == Some(name))
 		.cloned()
 }
 
@@ -1022,7 +1022,7 @@ pub(crate) fn is_declaration(statement: &Node) -> bool {
 }
 
 /// The name a declaration defines: `f(x) := …`, `x = …`, `x:int = 1`, `fun f(x) {…}`, `global x = …`, `class T {…}`
-fn declared_name(statement: &Node) -> Option<String> {
+fn name_declared_by(statement: &Node) -> Option<String> {
 	if !is_declaration(statement) {
 		return None; // a list `[a, b]` declares nothing
 	}
@@ -1031,7 +1031,7 @@ fn declared_name(statement: &Node) -> Option<String> {
 		Node::Key(target, Op::Assign | Op::Define, _) => leftmost_symbol(target),
 		// `global x = 0`, as the parser reads it: `global: (x = 0)`
 		Node::Key(keyword, Op::Colon, declared) if matches!(keyword.drop_meta(), Node::Symbol(keyword) if is_declaration_keyword(keyword)) => {
-			declared_name(declared)
+			name_declared_by(declared)
 		}
 		Node::List(items, _, _) if items.len() >= 2 => leftmost_symbol(&items[1]),
 		_ => None,
@@ -1069,17 +1069,17 @@ fn header(definition: &Node) -> &Node {
 
 /// Every name the program binds anywhere: variables, functions, parameters, loop variables, imports.
 /// Generous on purpose: a bound name never comes from a sibling
-fn bound_names(node: &Node, names: &mut HashSet<String>) {
+fn program_bound_names(node: &Node, names: &mut HashSet<String>) {
 	match node.drop_meta() {
 		Node::Key(target, op, value)
 			if matches!(op, Op::Assign | Op::Define | Op::FatArrow) || op.is_compound_assign() =>
 		{
 			names.extend(mentioned_names(std::slice::from_ref(target.as_ref())));
-			bound_names(value, names);
+			program_bound_names(value, names);
 		}
 		Node::Key(left, _, right) => {
-			bound_names(left, names);
-			bound_names(right, names);
+			program_bound_names(left, names);
+			program_bound_names(right, names);
 		}
 		Node::List(items, _, _) => {
 			if let [keyword, bound, ..] = items.as_slice() {
@@ -1087,12 +1087,12 @@ fn bound_names(node: &Node, names: &mut HashSet<String>) {
 					names.extend(mentioned_names(std::slice::from_ref(header(bound))));
 				}
 			}
-			items.iter().for_each(|item| bound_names(item, names));
+			items.iter().for_each(|item| program_bound_names(item, names));
 		}
 		Node::Type { name, body } => {
-			bound_names(name, names);
+			program_bound_names(name, names);
 			names.extend(leftmost_symbol(name));
-			bound_names(body, names);
+			program_bound_names(body, names);
 		}
 		_ => {}
 	}

@@ -463,10 +463,6 @@ fn combined(left: &[(Dimension, i32)], right: &[(Dimension, i32)], sign: i32) ->
 	signature(&factors)
 }
 
-fn is_text(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Text(_) | Node::Char(_))
-}
-
 fn is_number_type(declared: &Node) -> bool {
 	crate::analyzer::builtin_type_kind(&declared.drop_meta().name())
 		.is_some_and(|kind| matches!(kind, crate::type_kinds::Kind::Int | crate::type_kinds::Kind::Float))
@@ -485,11 +481,6 @@ fn shown(signature: &Signature) -> String {
 	} else {
 		units_text(&factors)
 	}
-}
-
-/// ø, which has no dimension: an optional unit field may hold it
-fn is_nothing(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Empty)
 }
 
 fn is_type_word(node: &Node) -> bool {
@@ -793,12 +784,12 @@ impl Inference {
 			}
 			// `r.distance == ø` of an optional unit field: ø has no dimension, any value may be it; `x is list` asks its type
 			Node::Key(left, op @ (Op::Eq | Op::Ne), right)
-				if is_nothing(&left) || is_nothing(&right) || is_type_word(&right) =>
+				if left.is_empty_node() || right.is_empty_node() || is_type_word(&right) =>
 			{
 				self.unchecked_key(*left, op, *right)
 			}
 			// `2 m * "a"`: a text repeats a plain count of times (card units-text-repeat)
-			Node::Key(left, Op::Mul, right) if is_text(&left) || is_text(&right) => {
+			Node::Key(left, Op::Mul, right) if left.is_text_literal() || right.is_text_literal() => {
 				let (left, left_signature) = self.infer(*left)?;
 				let (right, right_signature) = self.infer(*right)?;
 				let count = combined(&left_signature, &right_signature, 1);
@@ -821,7 +812,7 @@ impl Inference {
 				Ok((computed, signature))
 			}
 			// `-3m`: the quantity keeps its units; `-20°C` counts from the zero of °C
-			Node::Key(nothing, Op::Neg, operand) if is_nothing(&nothing) => {
+			Node::Key(nothing, Op::Neg, operand) if nothing.is_empty_node() => {
 				let (operand, signature) = self.infer(*operand)?;
 				let negated = match exact_amount(&operand) {
 					Some(amount) => number_node(&amount.neg()).ok_or(Stop::Unsupported)?,

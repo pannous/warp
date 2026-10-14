@@ -798,7 +798,7 @@ pub fn eval_block(block: Node, names: &Node, values: &Node, definitions: &Node) 
 		[&block]
 			.into_iter()
 			.chain(&definitions)
-			.any(|part| mentions(part, name))
+			.any(|part| names_or_interpolates(part, name))
 	};
 	let bound: Vec<(String, Node)> = names
 		.into_iter()
@@ -851,7 +851,7 @@ fn as_written(value: Node) -> Node {
 }
 
 /// Does `node` mention `name`: as a word, or inside a text (an interpolation)
-fn mentions(node: &Node, name: &str) -> bool {
+fn names_or_interpolates(node: &Node, name: &str) -> bool {
 	let mut found = false;
 	node.visit(&mut |part| {
 		found |= match part {

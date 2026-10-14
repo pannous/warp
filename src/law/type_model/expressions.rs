@@ -678,11 +678,7 @@ impl Exporter {
 				})
 			}
 			// `'a'..'e'`: letters, outside W0
-			Node::Key(from, Op::Range | Op::To, to)
-				if [from, to]
-					.iter()
-					.any(|bound| matches!(bound.drop_meta(), Node::Text(_) | Node::Char(_))) =>
-			{
+			Node::Key(from, Op::Range | Op::To, to) if [from, to].iter().any(|bound| bound.is_text_literal()) => {
 				outside_w0(node)
 			}
 			Node::Key(from, Op::Range, to) => self.binary(".range", from, to),

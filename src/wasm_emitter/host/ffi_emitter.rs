@@ -208,8 +208,7 @@ impl WasmGcEmitter {
 
 	/// A text (or one-character text) whose letters exist only at run time: a list element, a text variable
 	pub(in crate::wasm_emitter) fn is_runtime_text(&self, node: &Node) -> bool {
-		!matches!(node.drop_meta(), Node::Text(_) | Node::Char(_))
-			&& matches!(self.get_type(node), Kind::Text | Kind::Codepoint)
+		!node.is_text_literal() && matches!(self.get_type(node), Kind::Text | Kind::Codepoint)
 	}
 
 	/// The text node of a run-time text in the node scratch local, as a Text (a character becomes one)

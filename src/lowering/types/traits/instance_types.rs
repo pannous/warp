@@ -74,8 +74,7 @@ impl InstanceTypes {
 	) {
 		match node.drop_meta() {
 			Node::Key(target, Op::Assign | Op::Define, value) => {
-				let is_plain =
-					crate::min_max::is_plain(value) || matches!(value.drop_meta(), Node::Text(_) | Node::Char(_));
+				let is_plain = crate::min_max::is_plain(value) || value.is_text_literal();
 				match (target.drop_meta(), definition_head(target)) {
 					(Node::Symbol(name), _) => {
 						// `p = field_with(p, …)` (a field assignment) keeps the shape of p

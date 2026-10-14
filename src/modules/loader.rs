@@ -143,7 +143,7 @@ impl Sibling {
 		Ok(self
 			.statements()?
 			.iter()
-			.filter(|statement| is_declaration(statement) && declared_name(statement).as_deref() == Some(name))
+			.filter(|statement| is_declaration(statement) && name_declared_by(statement).as_deref() == Some(name))
 			.cloned()
 			.collect())
 	}
@@ -276,7 +276,7 @@ impl<'a> Loader<'a> {
 		let module_words: HashSet<String> = imported
 			.iter()
 			.chain(&std_definitions)
-			.filter_map(declared_name)
+			.filter_map(name_declared_by)
 			.collect();
 		if module_words.is_empty() {
 			return Ok(imported);
@@ -385,7 +385,7 @@ impl<'a> Loader<'a> {
 			}
 		});
 		// a program's own `write(x, y)` wins
-		let own: HashSet<String> = statements_of(program).iter().filter_map(declared_name).collect();
+		let own: HashSet<String> = statements_of(program).iter().filter_map(name_declared_by).collect();
 		for (module, words) in PRELUDE_WORDS {
 			let words: Vec<&str> = words
 				.iter()
@@ -396,11 +396,10 @@ impl<'a> Loader<'a> {
 				let source = std_module(module).expect("a prelude module is embedded");
 				let definitions =
 					crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(module), source))?;
-				self.std_definitions.extend(
-					definitions.into_iter().filter(|definition| {
-						declared_name(definition).is_some_and(|name| words.contains(&name.as_str()))
-					}),
-				);
+				self.std_definitions
+					.extend(definitions.into_iter().filter(|definition| {
+						name_declared_by(definition).is_some_and(|name| words.contains(&name.as_str()))
+					}));
 			}
 		}
 		self.use_prelude(program)
@@ -499,7 +498,7 @@ impl<'a> Loader<'a> {
 				crate::compiler::compile_context::change(|context| {
 					context
 						.module_definitions
-						.extend(declarations.iter().filter_map(declared_name))
+						.extend(declarations.iter().filter_map(name_declared_by))
 				});
 				declarations
 			}
@@ -573,7 +572,7 @@ impl<'a> Loader<'a> {
 		let mut siblings = scope_files(scope, file)?;
 		let mut own = statements(program.clone());
 		let mut known = HashSet::new();
-		bound_names(&program, &mut known);
+		program_bound_names(&program, &mut known);
 		let mut needed: Vec<String> = mentioned_names(&own)
 			.into_iter()
 			.filter(|name| !known.contains(name))
@@ -614,7 +613,7 @@ impl<'a> Loader<'a> {
 			let mut parameters = HashSet::new();
 			declarations
 				.iter()
-				.for_each(|declaration| bound_names(declaration, &mut parameters));
+				.for_each(|declaration| program_bound_names(declaration, &mut parameters));
 			parameters.remove(&name);
 			needed.extend(
 				mentioned_names(&declarations)

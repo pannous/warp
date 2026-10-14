@@ -37,16 +37,6 @@ pub(super) fn with_objects_as_instances(node: Node, fields: &ClassFields) -> Nod
 	}
 }
 
-/// `s`, `box.shape`, `shapes#1`
-pub(super) fn is_place(node: &Node) -> bool {
-	match node.drop_meta() {
-		Node::Symbol(_) => true,
-		Node::Key(holder, Op::Dot | Op::Hash, _) => is_place(holder),
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_place(&items[0]),
-		_ => false,
-	}
-}
-
 /// `(cast·value = s; if not (cast·value is Circle) { raise "s is no Circle" }; cast·value)`: the value is computed once
 pub(super) fn checked_cast(object: Node, class: &str) -> Node {
 	let held = symbol(CAST_VALUE);
