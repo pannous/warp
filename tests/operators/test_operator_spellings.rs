@@ -84,3 +84,18 @@ fn word_spellings_stay_names() {
 	is!("def mod(a, b) := a - b; mod(7, 3)", 4);
 	is!("plus = 3; plus + 1", 4);
 }
+
+/// a negated spelling negates its operator: `x is not 4` is `not (x is 4)`, `a nand b` is `not (a and b)`; `3 is not 4`
+/// was `3 is (not 4)`, no
+#[test]
+fn negated_spellings() {
+	is!("3 is not 4", true);
+	is!("x = 3; x is not 3", false);
+	is!("x = 3; if x is not 4 {1} else {2}", 1);
+	is!("x = 3; x is not text", true);
+	is!("x = 3; x is not int", false);
+	for nand in ["nand", "¬&", "⊼"] {
+		is!(&format!("yes {nand} yes"), false);
+		is!(&format!("yes {nand} no"), true);
+	}
+}
