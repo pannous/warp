@@ -478,8 +478,9 @@ fn lower_parameter_overloads(node: Node) -> Node {
 	if overloaded.is_empty() {
 		return node;
 	}
-	let mut variables = HashMap::new();
-	collect_variable_kinds(&node, &mut variables);
+	let variables = crate::analyzer::agreeing_kinds(&node, HashMap::new(), |_, value| {
+		Some(argument_kind(value, &HashMap::new()))
+	});
 	let mut renaming = ParameterOverloads {
 		overloaded,
 		variables,
@@ -676,25 +677,6 @@ fn collect_signatures(node: &Node, signatures: &mut HashMap<String, Vec<Vec<Opti
 			.entry(definition.head[0].name())
 			.or_default()
 			.push(definition.head[1..].iter().map(parameter_type).collect())
-	});
-}
-
-/// The kind a variable is assigned everywhere in the program; a variable assigned values of different kinds has none
-fn collect_variable_kinds(node: &Node, variables: &mut HashMap<String, Option<Kind>>) {
-	node.visit(&mut |part| {
-		let Node::Key(target, Op::Assign | Op::Define, value) = part else {
-			return;
-		};
-		let Node::Symbol(name) = target.drop_meta() else { return };
-		let kind = argument_kind(value, &HashMap::new());
-		variables
-			.entry(name.clone())
-			.and_modify(|known| {
-				if *known != kind {
-					*known = None
-				}
-			})
-			.or_insert(kind);
 	});
 }
 
