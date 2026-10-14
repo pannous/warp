@@ -42,3 +42,31 @@ fn a_class_printing_method_keeps_is_text() {
 	// card is-text-method: Note's text() made `x is text` an equality, so play "song.wav" played a tone
 	is!("class N { k: int\n text() := \"n\" }\nf(x) := if x is text then 1 else 2\nf(\"a\")", 1);
 }
+
+// card note-value-follow: a note name in a variable, notes as interval's ends, a part of a semitone, no silent 0 Hz
+#[test]
+fn a_note_name_in_a_variable_is_a_note() {
+	is!("use sound; s = \"C#4\"; note(s)", "C#4");
+	is!("use sound; s = \"A4\"; hertz_of(s)", 440);
+}
+
+#[test]
+fn notes_are_the_ends_of_an_interval() {
+	is!("use sound; interval(note(C4), note(G4))", 7);
+	is!("use sound; interval(C4, note(E4))", 4);
+}
+
+#[test]
+fn a_part_of_a_semitone_is_cents() {
+	is!("use sound; note(C4) + 2.25", "D4+25c");
+	is!("use sound; note(C4) - 0.25", "C4-25c");
+	is!("use sound; note(C4) + 7", "G4");
+}
+
+#[test]
+fn something_else_is_no_pitch() {
+	let errors =
+		crate::common::warp_command().args(["--no-ask", "eval", "use sound; hertz_of(\"hello\")"]).output().unwrap();
+	let printed = String::from_utf8_lossy(&errors.stdout).to_string() + &String::from_utf8_lossy(&errors.stderr);
+	assert!(printed.contains("not a pitch"), "{printed}");
+}
