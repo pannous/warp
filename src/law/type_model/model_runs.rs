@@ -18,7 +18,7 @@ pub(super) fn ask_model(name: &str, requests: &str) -> Result<String, String> {
 		.map_err(|e| format!("cannot write {}: {e}", file.display()))?;
 	let mut command = Command::new(lean_executable("lake"));
 	command.current_dir(MODEL_DIR).arg("env").arg("lean").arg(&file);
-	run_with_timeout(command)
+	run_with_timeout(command, LEAN_TIMEOUT)
 }
 
 /// Builds the model (`lake build` fails on any proof error) and returns its verdict for each exported program
@@ -120,7 +120,10 @@ pub fn axioms(theorems: &[&str]) -> Result<String, String> {
 pub fn build_model() -> Result<String, String> {
 	let mut command = Command::new(lean_executable("lake"));
 	command.current_dir(MODEL_DIR).arg("build");
-	run_with_timeout(command)
+	if !Path::new(MODEL_DIR).join(MODEL_BUILD_OUTPUT).exists() {
+		eprintln!("building the Lean type model once, a few minutes (lake build in {MODEL_DIR})");
+	}
+	run_with_timeout(command, MODEL_BUILD_TIMEOUT)
 }
 
 /// The proof files of the model
