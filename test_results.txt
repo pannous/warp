@@ -2671,6 +2671,7 @@ PASSED:
   ✓ numbers::test_unit_composites::test_products_of_different_dimensions
   ✓ numbers::test_unit_composites::test_sums_need_the_same_dimensions
   ✓ numbers::test_unit_conversion::a_duration_converts_to_a_time_unit
+  ✓ numbers::test_unit_conversion::a_duration_converts_with_as_to_a_unit_word
   ✓ numbers::test_unit_conversion::a_duration_in_a_variable_converts_to_a_time_unit
   ✓ numbers::test_unit_conversion::a_quantity_converts_to_a_unit_of_its_dimension
   ✓ numbers::test_unit_conversion::an_inexact_conversion_is_a_ratio
@@ -3353,6 +3354,7 @@ PASSED:
   ✓ programs::test_sound_spectrum::a_tone_fills_its_own_band
   ✓ programs::test_sound_spectrum::silence_and_the_end_are_empty
   ✓ programs::test_sound_spectrum::the_gpu_visualizer_raymarches_while_it_plays
+  ✓ programs::test_sound_spectrum::the_visualizer_paints_while_it_plays
   ✓ programs::test_sound_synth::gain_in_decibels
   ✓ programs::test_sound_synth::noise_is_a_wave
   ✓ programs::test_sound_synth::the_envelope_rises_decays_sustains_and_releases
@@ -5319,7 +5321,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ programs::test_sound_spectrum::the_visualizer_paints_while_it_plays
 
 SUMMARY:
-13 ignored, 5316 passed, 1 failed, 5317 total tested
+13 ignored, 5318 passed, 0 failed, 5318 total tested

@@ -18,7 +18,7 @@ const ACTION_ATTRIBUTE: &str = "action";
 
 pub fn lower(node: Node) -> Node {
 	// `label(for:pwd):"Password"` itself would read as a definition: only `:=`, function keywords and assignments define
-	let mut defined = crate::welcome_forms::defined_names(&node);
+	let mut defined = crate::library_words::defined_names(&node);
 	crate::library_words::collect_assigned_names(&node, &mut defined);
 	outside_tags(spaced_elements(node, &defined), &defined)
 }
