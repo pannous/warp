@@ -155,8 +155,9 @@ fn forms(node: Node) -> Node {
 			forms(without_type_parameters(Node::List(items, bracket, separator), &names))
 		}
 		Node::List(items, bracket, separator) => {
-			let items: Vec<Node> =
-				foreign_iteration(python_lambdas(braceless_lambdas(items.into_iter().map(forms).collect())));
+			let items: Vec<Node> = foreign_iteration(python_lambdas(braceless_lambdas(
+				items.into_iter().map(forms).collect(),
+			)));
 			if let Some(lambda) = anonymous_function(&items)
 				.or_else(|| assigned_braceless_function(&items))
 				.or_else(|| ruby_lambda(&items))
