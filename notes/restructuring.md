@@ -37,10 +37,9 @@ warp_parser/
 Removed by the moves: statements.rs, lists.rs, literals.rs, subscripts.rs, user_operators.rs, xml.rs, atoms/ (its two
 files split into blocks.rs, definitions/functions.rs, definitions/lambdas.rs, types/declarations.rs).
 
-Status (2026-10-14): chunk 1 (statements.rs dissolved) is on main. Branch restructure-layout carries chunk 2a (comments,
-pipes, guards, functions, lambdas, operators: 7a29fb0a0) and 2b (literals/, markup/, collections/, types/expressions,
-math_notation, annotations: bce8c7292). Left: everything out of atoms.rs, atoms/type_declarations.rs and lists.rs
-(types/declarations, collections/lists, literals/paths), blocked until cleanup-park-phrases lands.
+Status (2026-10-14): chunks 1, 2a, 2b are on main. Chunk 3 (branch layout-parser-3, afdb0dd5f, sent to the
+Integrator): atoms.rs keeps only symbols, calls, keyword forms and glued suffixes; atoms/type_declarations.rs is
+types/declarations.rs; lists.rs is dissolved into collections/lists.rs, literals/, definitions/ and types/.
 Tool: scripts/move_fn.py (cuts fns with docs and attributes, widens what leaves mod.rs or goes deeper); intermediate
 folder mod.rs files start with `use super::*;` and glob-import their children so `use super::*` chains see them.
 
