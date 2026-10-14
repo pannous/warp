@@ -61,7 +61,6 @@ const BLOCK_TEMPLATES: [&str; 2] = [
 ];
 const STEREO_FILL_PARAMETERS: usize = 3;
 const PLAY_WORD: &str = "play";
-const FOR_WORD: &str = "for";
 /// The samples a signal computes at once (sound.rs play_signal, play_blocks): 23 ms at 22050 Hz
 pub const BLOCK_SAMPLES: usize = 512;
 
@@ -172,16 +171,12 @@ fn block_template(template: &str, fill: &str, seconds: Node) -> Node {
 /// `play(hum, 2s)` of the program's function hum (PLAY_WORD): play_signal(hum, 2s) of a function of the time (or
 /// a pair [left, right] of them), play_blocks(hum, 2s) of a block function (hum(block, t), hum(left, right, t))
 fn with_played_functions(node: Node, counts: &HashMap<String, usize>) -> Node {
-	match node.map_children(|child| with_played_functions(child, counts)) {
-		Node::List(ref items, _, _)
-			if let [play, played, for_word, seconds] = items.as_slice()
-				&& play.is_symbol(PLAY_WORD)
-				&& for_word.is_symbol(FOR_WORD)
-				&& let Some(word) = signal_word(played, counts) =>
-		{
+	let node = node.map_children(|child| with_played_functions(child, counts));
+	match node.call_parts() {
+		Some((PLAY_WORD, [played, seconds])) if let Some(word) = signal_word(played, counts) => {
 			call(word, vec![played.clone(), seconds.clone()])
 		}
-		other => other,
+		_ => node,
 	}
 }
 
