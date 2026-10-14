@@ -289,7 +289,8 @@ new ResizeObserver(() => worker && tellSystemValues()).observe($("output"));
 
 // view_width, view_height (use draw's default canvas, paint(shader) without a size): the room below the output pane's
 // text, in CSS pixels: the pane's width, down to the window's bottom; none while the pane is folded away, so host.js's
-// defaults stand. Never measured from the paintings: the pane grows with them, so a view-sized painting made the next
+// defaults stand. Measured again as each run starts: the text above the paintings moves without resizing the pane, so
+// the ResizeObserver alone left a run a size measured mid-layout (25 px short in the Firefox tour, card tour-firefox). Never measured from the paintings: the pane grows with them, so a view-sized painting made the next
 // view taller each frame, until Safari ran out of memory (card webgpu-safari)
 function viewSize() {
 	const pane = $("output"), style = getComputedStyle(pane), painted = $("painted").getBoundingClientRect();
@@ -477,6 +478,7 @@ async function runInWorker(code) {
 		stopAfterTimeout(run);
 		pending = run;
 		silence();
+		tellSystemValues();
 		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements() });
 	});
 }
