@@ -435,6 +435,10 @@ emitter-builders, emitter-equality, emitter-runs, emitter-deterministic, emitter
 - runs of single `f.instruction(&I::…)` lines as one `Self::emit_list(f, &[…])` per statement group:
   `probes/cleanup/merge_instruction_runs.py <file.rs>…` (rewrites in place; a run splits after statement-ending
   instructions and after `return; end`), done in every emitter file
+- instruction arrays in rows, one logical step per row like WAT, nested blocks one tab deeper, kept by
+  `#[rustfmt::skip]` on the statement (card emit-rows, user decision 2026-10-14: rustfmt puts each `I::…` on its own
+  line): `probes/cleanup/emit_rows.py [--write] files…`, idempotent; `--check` proves only whitespace changed against
+  HEAD. Emitter -3757 lines. New emitter code: write the rows by hand or run the script before sending a branch
 - `probes/cleanup/duplicate_windows.py` lists repeated windows of normalised lines (the duplicates left to share)
 
 Left:
