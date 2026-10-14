@@ -169,7 +169,7 @@ impl WarpParser {
 				Separator::Colon,
 			),
 		};
-		Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body)))
+		Some(Node::Key(Box::new(parameters), Op::Arrow, Box::new(body)))
 	}
 
 	/// Python's `lambda a, b=2: a + b`, `lambda *xs: …`, `lambda: 42` at the cursor: the parameters as one group (the
@@ -199,7 +199,7 @@ impl WarpParser {
 		self.skip_spaces();
 		let body = self.parse_expr(Op::Assign.binding_power().1);
 		let body = self.continue_expr(body, 0);
-		Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body)))
+		Some(Node::Key(Box::new(parameters), Op::Arrow, Box::new(body)))
 	}
 }
 
@@ -210,7 +210,7 @@ impl WarpParser {
 		let parameters = self.parse_bracketed('(');
 		self.skip_spaces();
 		let body = self.parse_expr(Op::Assign.binding_power().1);
-		Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body))
+		Node::Key(Box::new(parameters), Op::Arrow, Box::new(body))
 	}
 
 	/// `\x ->`, `\a b ->`: names and an arrow after the backslash (`\alpha` alone is an entity)
@@ -250,7 +250,7 @@ impl WarpParser {
 			_ => Node::List(names, Bracket::Round, Separator::Colon),
 		};
 		let body = self.parse_expr(Op::Assign.binding_power().1);
-		Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body))
+		Node::Key(Box::new(parameters), Op::Arrow, Box::new(body))
 	}
 
 	/// `<T, F: Fn(i32) -> i32>` glued to a function's name and followed by its parameters: its length
@@ -289,7 +289,7 @@ impl WarpParser {
 			return error("a stabby lambda `->(x) { … }` needs its body in braces");
 		}
 		let body = self.parse_bracketed('{');
-		Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body))
+		Node::Key(Box::new(parameters), Op::Arrow, Box::new(body))
 	}
 
 	/// The `end` (or, in a `then` block, the `else`) that closes the block being parsed

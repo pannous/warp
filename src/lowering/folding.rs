@@ -123,7 +123,7 @@ fn is_plain_symbol(node: &Node) -> bool {
 /// A function or lambda defined inside the body: its parameters could shadow a main-level name
 fn contains_definition(body: &Node) -> bool {
 	let mut found = false;
-	body.visit(&mut |node| found |= matches!(node, Node::Key(_, Op::Define | Op::FatArrow | Op::Arrow, _)));
+	body.visit(&mut |node| found |= matches!(node, Node::Key(_, Op::Define | Op::Arrow | Op::Arrow, _)));
 	found
 }
 

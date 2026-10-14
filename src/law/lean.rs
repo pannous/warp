@@ -71,7 +71,7 @@ fn connective(op: Op) -> Option<&'static str> {
 	Some(match op {
 		Op::And => "∧",
 		Op::Or => "∨",
-		Op::Arrow | Op::FatArrow => "→",
+		Op::Arrow | Op::Arrow => "→",
 		_ => return None,
 	})
 }

@@ -31,7 +31,7 @@ fn operator_values(node: Node) -> Node {
 	match operator_reference(&node) {
 		Some(op) => Node::Key(
 			operand(),
-			Op::FatArrow,
+			Op::Arrow,
 			Box::new(Node::Key(Box::new(Node::Empty), op, operand())),
 		),
 		None => node.map_children(operator_values),
@@ -50,7 +50,7 @@ fn library_word_values(node: Node, words: &SuffixWords) -> Node {
 		.filter(|last| is_iteration && words.is_library_word(last))
 	{
 		let call = Node::List(vec![function.clone(), *operand()], Bracket::None, Separator::Space);
-		*function = Node::Key(operand(), Op::FatArrow, Box::new(call));
+		*function = Node::Key(operand(), Op::Arrow, Box::new(call));
 	}
 	Node::List(items, bracket, separator)
 }

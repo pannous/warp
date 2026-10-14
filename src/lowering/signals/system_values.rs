@@ -104,7 +104,7 @@ fn first_word(statement: &Node) -> String {
 pub(crate) fn assigned_symbols(program: &Node) -> HashSet<String> {
 	let mut bound = HashSet::new();
 	program.visit(&mut |part| {
-		if let Node::Key(target, Op::Assign | Op::Define | Op::Arrow | Op::FatArrow, _) = part {
+		if let Node::Key(target, Op::Assign | Op::Define | Op::Arrow | Op::Arrow, _) = part {
 			bound.extend(crate::variable_signals::symbols(target));
 		}
 	});

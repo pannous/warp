@@ -99,7 +99,7 @@ pub(super) fn curried_definition(head: &Node, rest: &Node) -> Option<Node> {
 	if !matches!(head_items.first().map(Node::drop_meta), Some(Node::Symbol(_))) {
 		return None;
 	}
-	let lambda = Node::Key(Box::new(second.clone()), Op::FatArrow, body.clone());
+	let lambda = Node::Key(Box::new(second.clone()), Op::Arrow, body.clone());
 	Some(key(head.clone(), Op::Define, lambda))
 }
 
@@ -224,7 +224,7 @@ pub(super) fn argument_label<'a>(label: &'a Node, typed: &Node) -> Option<&'a st
 pub(super) fn typed_parameter_name(typed: &Node) -> Option<&Node> {
 	match typed.drop_meta() {
 		Node::Key(name, Op::Colon, _) if matches!(name.drop_meta(), Node::Symbol(_)) => Some(name),
-		Node::Key(parameter, Op::Arrow | Op::FatArrow, _) => typed_parameter_name(parameter),
+		Node::Key(parameter, Op::Arrow | Op::Arrow, _) => typed_parameter_name(parameter),
 		_ => None,
 	}
 }

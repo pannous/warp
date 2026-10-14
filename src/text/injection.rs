@@ -19,10 +19,20 @@ const QUOTES: [char; 2] = ['\'', '"'];
 
 /// The language a template is written in
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Language {
+pub enum Language { // DSLs
 	Sql,
 	Shell,
+	JavaScript,
+	Shader, // we use ... ?
 }
+
+/*
+Language	API / Platform	Main use
+GLSL	OpenGL, OpenGL ES, WebGL	Graphics shaders
+HLSL	Direct3D, Unity, Unreal	Graphics and compute shaders
+WGSL	WebGPU	Modern web graphics and compute
+SPIR-V	Vulkan, OpenCL, WebGPU (internally)	Intermediate representation (binary IR)
+*/
 
 impl Language {
 	pub fn tagged(tag: &str) -> Option<Language> {

@@ -24,11 +24,13 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 134] = [
 	("=", Op::Assign),
 	("<-", Op::Assign), // R's `x <- 3` (P145)
 	("->", Op::Arrow),
-	("=>", Op::FatArrow),
+	("=>", Op::Arrow),
 	("+", Op::Add),
 	("plus", Op::Add),
+	("add", Op::Add),
 	("-", Op::Sub),
 	("minus", Op::Sub),
+	("subtract", Op::Sub),
 	// the dashes 0x2010..0x2015 and the minus sign 0x2212 all mean `-`
 	("‐", Op::Sub),
 	("‑", Op::Sub),
@@ -42,16 +44,18 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 134] = [
 	// the unit product of a printed quantity (`6 m·kg`); generated names use `·` only after parsing
 	("·", Op::Mul),
 	("⋅", Op::Mul),
+	("times", Op::Mul),
 	("/", Op::Div),
 	("÷", Op::Div),
 	("divided by", Op::Div),
 	// Python's floor division `7//2`, `x//=2` and `7 div 2`: the parser makes them floor_quotient calls
-	("//", Op::Div),
+	("//", Op::Div), // todo cleaner? ^^
 	("div", Op::Div),
-	("//=", Op::DivAssign),
+	("/=", Op::DivAssign),
+	("//=", Op::DivAssign), // todo /= ≠ //=
 	("%", Op::Mod),
 	// `a mod b` is Euclidean (0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the dividend, as C)
-	("mod", Op::Mod),
+	("mod", Op::Mod), // rest overloaded
 	("modulo", Op::Mod),
 	("rem", Op::Rem),
 	("^", Op::Pow),
@@ -155,6 +159,8 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 134] = [
 	("contains", Op::In),
 	("has", Op::In),
 	("includes", Op::In),
+	("↑", Op::Arrow)
+	// Arrows ˂ ˃ ˄ ˅ ͍ ͎ ͢   ⃔ ⃕ ⃖ ⃗ ⃡  ← ↑ → ↓ ↔ ↕ ↖ ↗ ↘ ↙ ↚ ↛ ↜ ↝ ↞ ↟ ↠ ↡ ↢ ↣ ↤ ↥ ↦ ↧ ↨ ↩ ↪ ↫ ↬ ↭ ↮ ↯ ↰ ↱ ↲ ↳ ↴ ↵ ↶ ↷ ↸ ↹ ↺ ⇄ ⇅ ⇆ ⇇ ⇈ ⇉ ⇊ ⇍ ⇎ ⇏ ⇐ ⇑ ⇒ ⇓ ⇔ ⇕ ⇖ ⇗ ⇘ ⇙ ⇚ ⇛ ⇜ ⇝ ⇞ ⇟ ⇠ ⇡ ⇢ ⇣ ⇤ ⇦ ⇧ ⇨ ⇩ ⇪ ⇫ ⇬ ⇭ ⇮ ⇯ ⇰ ⇱ ⇲ ⇳ ⌁ ⌃ ⌄ ⌤ ⍇ ⍈ ⍐ ⍗ ⎋ ➔ ➘ ➙ ➚ ➛ ➜ ➝ ➞ ➟ ➠ ➡ ➢ ➣ ➤ ➥ ➦ ➧ ➨ ➩ ➪ ➫ ➬ ➭ ➮ ➯ ➱ ➲ ➳ ➴ ➵ ➶ ➷ ➸ ➹ ➺ ➻ ➼ ➽ ➾ ⽮ ￩ ￪ ￫ ￬ ⬀ ⬁ ⬂ ⬃ ⬄ ⬅ ⬆ ⬇ ⬈ ⬉ ⬊ ⬋ ⬌ ⬍ ⬎ ⬏ ⬐ ⬑ ⭠ ⭡ ⭢ ⭣ ⭤ ⭥ ⬰ ⬱ ⬲ ⬳ ⬴ ⬵ ⬶ ⬷ ⬸ ⬹ ⬺ ⬻ ⬼ ⬽ ⬾ ⬿ ⭀ ⭁ ⭂ ⭃ ⭄ ⭅ ⭆ ⭇ ⭈ ⭉ ⭊ ⭋ ⭌ ⟰ ⟱ ⟲ ⟳ ⟴ ⟵ ⟶ ⟷ ⟸ ⟹ ⟺ ⟻ ⟼ ⟽ ⟾ ⟿ ⤾ ⤿ ⥀ ⥁ ⥂ ⥃ ⥄ ⥅ ⥆ ⥇ ⥈ ⥉ ⥊ ⥋ ⥌ ⥍ ⥎ ⥏ ⥐ ⥑ ⥒ ⥓ ⥔ ⥕ ⥖
 ];
 
 /// Spellings of a negated operator, each with the spelling it negates: `a nand b` is `not (a and b)` (wiki/operator.md:
@@ -267,8 +273,9 @@ pub enum Op {
 	Scope,    // ::  scope resolution
 	Define,   // :=  definition
 	Assign,   // =   assignment
-	Arrow,    // ->  arrow/return type
-	FatArrow, // =>  fat arrow/lambda
+	Arrow,    // ->  arrow/lambda/return type
+	ArrowUp,  // ↑  e.g. exponential x^n
+	ArrowDown, // ↓ e.g. logarithmic   log(x)/log(base)
 
 	// Arithmetic operators
 	Add,     // +
@@ -428,7 +435,7 @@ impl Op {
 			// Structural/Key operators (existing, adjusted for consistency)
 			Op::Colon => (80, 81),    // type annotation: a:b:c → a:(b:c)
 			Op::Arrow => (70, 69),    // right-assoc: a->b->c → a->(b->c)
-			Op::FatArrow => (70, 58), // right-assoc: a => b; the body takes an assignment as in JS: x => total += x
+			Op::Arrow => (70, 58), // right-assoc: a => b; the body takes an assignment as in JS: x => total += x
 			Op::Define => (60, 59),   // right-assoc: a:=b:=c → a:=(b:=c)
 			Op::Assign => (60, 59),   // right-assoc: a=b=c → a=(b=c)
 
@@ -465,7 +472,7 @@ impl Op {
 			Op::Define => ":=",
 			Op::Assign => "=",
 			Op::Arrow => "->",
-			Op::FatArrow => "=>",
+			Op::Arrow => "=>",
 
 			// Arithmetic
 			Op::Add => "+",
@@ -688,7 +695,7 @@ pub const OP_CODES: [Op; 65] = [
 	Op::SafeDot,
 	Op::Scope,
 	Op::Arrow,
-	Op::FatArrow,
+	Op::Arrow,
 	Op::Add,
 	Op::Sub,
 	Op::Mul,

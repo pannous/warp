@@ -550,7 +550,7 @@ pub(super) fn quantities_reduced(quantities: Node) -> Node {
 	let parameters = Node::List(vec![sum.clone(), item.clone()], Bracket::Round, Separator::Colon);
 	let added = key(
 		parameters,
-		Op::FatArrow,
+		Op::Arrow,
 		method_call(sum, operator_method(Op::Add).expect("plus"), vec![item]),
 	);
 	let reduced = key(quantities, Op::Dot, call(REDUCE_WORD, vec![added]));

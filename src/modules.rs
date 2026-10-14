@@ -1069,7 +1069,7 @@ fn header(definition: &Node) -> &Node {
 fn bound_names(node: &Node, names: &mut HashSet<String>) {
 	match node.drop_meta() {
 		Node::Key(target, op, value)
-			if matches!(op, Op::Assign | Op::Define | Op::FatArrow) || op.is_compound_assign() =>
+			if matches!(op, Op::Assign | Op::Define | Op::Arrow) || op.is_compound_assign() =>
 		{
 			names.extend(mentioned_names(std::slice::from_ref(target.as_ref())));
 			bound_names(value, names);

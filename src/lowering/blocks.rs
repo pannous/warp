@@ -314,7 +314,7 @@ fn value_entry(entry: &Node) -> Option<(&Node, &Node)> {
 fn function_entry(entry: &Node) -> Option<(String, Vec<Node>, Node)> {
 	fn lambda(value: &Node) -> Option<(Node, Node)> {
 		match value.drop_meta() {
-			Node::Key(parameters, Op::FatArrow, body) => Some((parameters.as_ref().clone(), body.as_ref().clone())),
+			Node::Key(parameters, Op::Arrow, body) => Some((parameters.as_ref().clone(), body.as_ref().clone())),
 			Node::List(items, Bracket::Round, _) if items.len() == 1 => lambda(&items[0]), // `f: (x => x * 2)`
 			_ => None,
 		}
@@ -387,7 +387,7 @@ fn statement_block(value: &Node) -> Option<Node> {
 	let statements = matches!(separator, Separator::Semicolon | Separator::Newline) && items.len() > 1;
 	let lambda = items
 		.iter()
-		.any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Arrow | Op::FatArrow, _)))
+		.any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Arrow | Op::Arrow, _)))
 		|| crate::lambdas::arrow_lambda(value).is_some();
 	if items.is_empty() || object_entries(value).is_some() || crate::warp_parser::mentions(value, IT) || lambda {
 		return None;
@@ -813,7 +813,7 @@ impl Blocks {
 		let call = self.method_call_of(method, names.clone(), Bracket::Round, Separator::None)?;
 		Some(key(
 			Node::List(names, Bracket::Round, Separator::None),
-			Op::FatArrow,
+			Op::Arrow,
 			call,
 		))
 	}

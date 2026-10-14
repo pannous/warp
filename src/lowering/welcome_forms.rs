@@ -210,7 +210,7 @@ fn forms(node: Node) -> Node {
 		Node::Key(left, Op::Colon, body) if lambda_parameters(&left).is_some() => {
 			lambda(lambda_parameters(&left).expect("guarded"), forms(*body))
 		}
-		Node::Key(parameters, Op::FatArrow, body) if destructured_parameters(&parameters).is_some() => {
+		Node::Key(parameters, Op::Arrow, body) if destructured_parameters(&parameters).is_some() => {
 			let (parameters, fields) = destructured_parameters(&parameters).expect("guarded");
 			lambda(
 				parameters,
@@ -327,7 +327,7 @@ fn go_destructuring(mut items: Vec<Node>, separator: &Separator) -> Vec<Node> {
 /// `x * 2 in double 4` → (`x * 2`, `double 4`); no `in`: the value alone
 fn split_at_in(value: &Node) -> (Node, Option<Node>) {
 	// OCaml's `let inc = fun x -> x + 1 in inc 4`: the `in` ends the lambda's body
-	if let Node::Key(head, op @ (Op::Arrow | Op::FatArrow), body) = value.drop_meta() {
+	if let Node::Key(head, op @ (Op::Arrow | Op::Arrow), body) = value.drop_meta() {
 		let (body, rest) = split_at_in(body);
 		return (Node::Key(head.clone(), *op, Box::new(body)), rest);
 	}
@@ -470,7 +470,7 @@ fn colon_case(case: &Node) -> Node {
 		Node::List(words, _, _) if matches!(words.as_slice(), [word, _] if word.is_symbol(CASE_WORD)) => {
 			words[1].clone()
 		}
-		Node::Key(pattern, Op::FatArrow, body) => {
+		Node::Key(pattern, Op::Arrow, body) => {
 			let pattern = if pattern.is_symbol(WILDCARD) {
 				symbol(DEFAULT_CASE)
 			} else {
@@ -588,7 +588,7 @@ fn endless_loop(word: &Node, body: &Node) -> Option<Node> {
 }
 
 fn lambda(parameters: Node, body: Node) -> Node {
-	key(parameters, Op::FatArrow, body)
+	key(parameters, Op::Arrow, body)
 }
 
 /// `[function (a, b)] {body}`: a function keyword with parameters and no name, then its body
@@ -1109,7 +1109,7 @@ fn ruby_lambda(items: &[Node]) -> Option<Node> {
 }
 
 fn starred_lambda(name: &Node, value: &Node) -> Option<Node> {
-	let Node::Key(parameters, Op::FatArrow, body) = value.drop_meta() else {
+	let Node::Key(parameters, Op::Arrow, body) = value.drop_meta() else {
 		return None;
 	};
 	let parameters = match parameters.drop_meta() {

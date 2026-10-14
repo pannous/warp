@@ -184,7 +184,7 @@ pub(crate) fn fused(mut list: Node, mut function: Node) -> (Node, Node) {
 /// `x => g_body` after `x => f_body`: `x => g_body` with g's parameter replaced by f's body (none when g reads a name
 /// f's parameter would capture)
 fn composed(first: &Node, then: &Node) -> Option<Node> {
-	let (Node::Key(parameter, Op::FatArrow, body), Node::Key(then_parameter, Op::FatArrow, then_body)) =
+	let (Node::Key(parameter, Op::Arrow, body), Node::Key(then_parameter, Op::Arrow, then_body)) =
 		(first.drop_meta(), then.drop_meta())
 	else {
 		return None;
@@ -201,7 +201,7 @@ fn composed(first: &Node, then: &Node) -> Option<Node> {
 		crate::node::Separator::None,
 	);
 	let body = crate::library_words::substitute(then_body.as_ref().clone(), then_name, &grouped);
-	Some(Node::Key(parameter.clone(), Op::FatArrow, Box::new(body)))
+	Some(Node::Key(parameter.clone(), Op::Arrow, Box::new(body)))
 }
 
 /// `ys = xs.map(f) @gpu; zs = ys.map(g) @gpu`, ys read nowhere else: `zs = xs.map(f).map(g) @gpu`, so ys never comes
@@ -513,7 +513,7 @@ var<workgroup> partial: array<f32, {WORKGROUP_SIZE}>;
 
 /// The kernel mapping every item of `data` by the lambda `parameter => body`, if WGSL can compute it
 pub(crate) fn kernel(lambda: &Node) -> Option<Kernel> {
-	let Node::Key(parameter, Op::FatArrow, body) = lambda.drop_meta() else {
+	let Node::Key(parameter, Op::Arrow, body) = lambda.drop_meta() else {
 		return None;
 	};
 	let Node::Symbol(parameter) = parameter.drop_meta() else {

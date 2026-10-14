@@ -164,7 +164,7 @@ fn it_as(node: Node, variable: &Node) -> Node {
 		Node::Key(left, op @ (Op::Then | Op::Else), right) => {
 			key(it_as(*left, variable), op, branch_it_as(*right, variable))
 		}
-		Node::List(_, Bracket::Curly, _) | Node::Key(_, Op::Arrow | Op::FatArrow, _) => node,
+		Node::List(_, Bracket::Curly, _) | Node::Key(_, Op::Arrow | Op::Arrow, _) => node,
 		other => other.map_children(|child| it_as(child, variable)),
 	}
 }

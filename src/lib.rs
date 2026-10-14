@@ -38,10 +38,10 @@ pub use lowering::{
 	variable_signals, variadic, versions, welcome_forms, word_operators, word_slices,
 };
 #[cfg(feature = "native")]
-pub mod crash_card;
-pub mod diagnostic;
+pub mod errors::crash_card;
+pub mod errors::diagnostic;
+pub mod errors::fixits;
 pub mod ffi;
-pub mod fixits;
 pub mod formats;
 pub mod graphics;
 pub mod host;

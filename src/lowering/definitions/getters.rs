@@ -34,7 +34,7 @@ pub(crate) fn getter_name(statement: &Node) -> Option<&str> {
 	};
 	let function_like = matches!(
 		body.drop_meta(),
-		Node::List(_, Bracket::Curly, _) | Node::Key(_, Op::FatArrow, _)
+		Node::List(_, Bracket::Curly, _) | Node::Key(_, Op::Arrow, _)
 	);
 	(!function_like && !crate::analyzer::takes_implicit_parameter(body)).then_some(name.as_str())
 }
@@ -147,7 +147,7 @@ fn mentions_define(node: &Node) -> bool {
 /// variables (locals, wiki/charged.md §3)
 pub(crate) fn shadowed_names(node: &Node) -> Vec<String> {
 	match node.drop_meta() {
-		Node::Key(parameters, Op::FatArrow, _) => {
+		Node::Key(parameters, Op::Arrow, _) => {
 			let mut names = vec![];
 			parameters.visit(&mut |part| {
 				if let Node::Symbol(name) = part {

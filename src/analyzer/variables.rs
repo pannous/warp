@@ -530,7 +530,7 @@ impl EvidentKind {
 			Node::Key(_, Op::As, type_name) if super::checks::is_bool_type(&type_name.drop_meta().name()) => {
 				Some(EvidentKind::Bool)
 			}
-			Node::Key(_, Op::Arrow | Op::FatArrow, _) => Some(EvidentKind::Function),
+			Node::Key(_, Op::Arrow | Op::Arrow, _) => Some(EvidentKind::Function),
 			_ => evident_kind(value, results).map(EvidentKind::Of),
 		}
 	}
@@ -587,7 +587,7 @@ pub(super) fn first_kind_change(
 			}
 			_ => None,
 		},
-		Node::Key(_, Op::Arrow | Op::FatArrow, _) => None,
+		Node::Key(_, Op::Arrow | Op::Arrow, _) => None,
 		Node::Key(target, Op::Assign, value) => {
 			if let Some(change) = first_kind_change(value, kinds, results, globals) {
 				return Some(change);

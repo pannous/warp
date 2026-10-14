@@ -32,7 +32,7 @@ Person {
 It is similar to JSON5 / ECMA Script but much simplified yet with a richer syntax and more precise and flexible data model.
 
 
-### Node AST (`src/node/`, the enum in `mod.rs`)
+### Node AST (the enum in `src/node/mod.rs`)
 
 The central data structure is `Node`, an enum representing all AST node types:
 

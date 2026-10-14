@@ -352,7 +352,7 @@ fn guarded_command(items: &[Node]) -> Option<Node> {
 /// `(x => print x)`: `=>` binds looser than the space, so the words after a lambda's arrow are its body (`print x`), not
 /// further items; a run of entries `1 => "a" 2 => "b"` stays a list of pairs
 fn with_arrow_bodies(mut items: Vec<Node>) -> Vec<Node> {
-	let is_arrow = |node: &Node| matches!(node.drop_meta(), Node::Key(_, Op::FatArrow, _));
+	let is_arrow = |node: &Node| matches!(node.drop_meta(), Node::Key(_, Op::Arrow, _));
 	let Some(arrow) = items.iter().position(is_arrow) else {
 		return items;
 	};
@@ -385,7 +385,7 @@ fn dot_call(function: Node, arguments: Node) -> Node {
 		Bracket::Round,
 		Separator::None,
 	);
-	let each = Node::Key(Box::new(item), Op::FatArrow, Box::new(applied));
+	let each = Node::Key(Box::new(item), Op::Arrow, Box::new(applied));
 	call(MAP_WORD, vec![list, each])
 }
 

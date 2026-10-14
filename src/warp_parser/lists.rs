@@ -538,14 +538,14 @@ fn with_type_phrases(items: Vec<Node>) -> Vec<Node> {
 fn field_holding_lambda(item: Node) -> Node {
 	match item {
 		meta @ Node::Meta { .. } => meta.under_meta(field_holding_lambda),
-		Node::Key(head, Op::FatArrow, body) => match head.drop_meta() {
+		Node::Key(head, Op::Arrow, body) => match head.drop_meta() {
 			Node::Key(key, Op::Colon, parameter)
 				if matches!(key.drop_meta(), Symbol(_)) && is_parameter_word(parameter) =>
 			{
-				let lambda = Node::Key(parameter.clone(), Op::FatArrow, body);
+				let lambda = Node::Key(parameter.clone(), Op::Arrow, body);
 				Node::Key(key.clone(), Op::Colon, Box::new(lambda))
 			}
-			_ => Node::Key(head, Op::FatArrow, body),
+			_ => Node::Key(head, Op::Arrow, body),
 		},
 		other => other,
 	}
@@ -584,7 +584,7 @@ fn starts_code(first: &Node) -> bool {
 /// for its trailing block
 fn assigned_method_call(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::Key(_, Op::Assign | Op::Define | Op::Arrow | Op::FatArrow, value) => {
+		Node::Key(_, Op::Assign | Op::Define | Op::Arrow | Op::Arrow, value) => {
 			matches!(value.drop_meta(), Node::Key(_, Op::Dot, method) if matches!(method.drop_meta(), Symbol(_)))
 				|| assigned_method_call(value)
 		}

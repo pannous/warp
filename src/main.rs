@@ -4,6 +4,7 @@ use node::Node;
 use std::env;
 use std::fs;
 use std::io::{self, IsTerminal, Read, Write};
+use wasmtime_wasi::cli::IsTerminal;
 use warp::node;
 use warp::{
 	diagnostic, extensions, law, modules::package_tools, run, run::wasm_reader, util, warp_parser, wasm_emitter,
@@ -293,21 +294,6 @@ fn tip_hiding_hints_at_exit() {
 	unsafe { atexit(tip) };
 }
 
-#[cfg(all(not(test), target_os = "macos"))]
-fn register_file_type() {
-	match warp::run::file_type::register() {
-		Ok(app) => println!(
-			"registered .warp files: {} runs them in Terminal (Open With offers editors)",
-			app.display()
-		),
-		Err(failure) => fail(format!("warp register: {failure}")),
-	}
-}
-
-#[cfg(all(not(test), not(target_os = "macos")))]
-fn register_file_type() {
-	fail("warp register: only macOS so far");
-}
 
 /// `warp [run] prog.warp a b`: whether only to run, the program file and the arguments it gets (`use os; args`)
 #[cfg(not(test))]
@@ -437,8 +423,6 @@ fn run_command(args: &[String]) {
 		) {
 			fail(failure);
 		}
-	} else if args[1] == REGISTER_COMMAND {
-		register_file_type();
 	} else if args[1] == SERVE_COMMAND {
 		match served_program(&args[2..]) {
 			Ok((path, port)) => serve_file(path, port, "", false),
@@ -1309,25 +1293,3 @@ fn console() {
 	let _ = rl.save_history(&history_path);
 }
 
-fn dirs_home() -> std::path::PathBuf {
-	env::var("HOME")
-		.map(std::path::PathBuf::from)
-		.unwrap_or_else(|_| std::path::PathBuf::from("."))
-}
-
-fn load_file(path: &str) -> String {
-	fs::read_to_string(path).unwrap_or_else(|_| {
-		eprintln!("Error: Could not read file '{}'", path);
-		String::new()
-	})
-}
-
-fn file_exists(path: &str) -> bool {
-	std::path::Path::new(path).exists()
-}
-
-fn extract_after(s: &str, sep: &str) -> String {
-	s.split_once(sep)
-		.map(|(_, after)| after.to_string())
-		.unwrap_or_default()
-}

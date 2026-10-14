@@ -318,7 +318,7 @@ pub fn substitute(node: &Node, bindings: &HashMap<String, Node>) -> Node {
 /// without running b (`n >= 0 => sum_to(n) …` never calls sum_to of a negative n)
 pub(crate) fn check_instance(lawful: &Lawful, law: &Law, bindings: &HashMap<String, Node>, code: &str) -> Verdict {
 	let statement = substitute(&law.statement, bindings);
-	if let Node::Key(condition, Op::FatArrow | Op::Arrow, conclusion) = statement.drop_meta() {
+	if let Node::Key(condition, Op::Arrow | Op::Arrow, conclusion) = statement.drop_meta() {
 		return match instance_verdict(lawful, condition, bindings, code) {
 			Verdict::Holds => instance_verdict(lawful, conclusion, bindings, code),
 			Verdict::Violated(_) => Verdict::Holds,
