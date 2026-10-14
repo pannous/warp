@@ -334,7 +334,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - P24 suffix forms (`4 doubled`) call user functions. P164 a type word after a parameter name is its type
   (`phone number`); `phone-number:text` is one hyphenated name in declarations.
 - P132 `{f: x => x * 2}` holds a lambda; a type word after the colon makes a typed lambda. P133 `|x| x*2` is a lambda.
-- definition-cases (2026-10-13): a second same-shape definition is "defined twice" with a fix toward match; overloads
+- definition-cases (2026-10-13, cut by cleanup-cuts-2 2026-10-14): a second same-shape definition was "defined twice"; overloads
   by type are unaffected.
 - P48 custom operators: `prefix operator ⁻ := …`, `suffix`, `infix operator ⊕ := left+right`; word infix operators
   `infix operator divides(d, n) := …`. P54 only declared operators are ranked (`has precedence above +`). P166
