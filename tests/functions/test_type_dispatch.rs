@@ -15,6 +15,7 @@ fn test_type_name_variants_dispatch_by_argument() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-park-phrases: type-name parameters (`fib int i`) dropped"]
 fn test_typed_parameter_variants_dispatch_by_argument() {
 	is!("foo(x:int):=x+x; foo(x:text):=x+\"!\"; foo 3", 6);
 	is!("foo(x:int):=x+x; foo(x:text):=x+\"!\"; foo \"a\"", "a!");

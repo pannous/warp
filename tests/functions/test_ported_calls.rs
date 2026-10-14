@@ -3,7 +3,7 @@
 // `def f(a, *, b)`, which no test held)
 use warp::wasm_emitter::eval;
 
-const CASES: [(&str, &str); 306] = [
+const CASES: [(&str, &str); 305] = [
 	(r#"f(a, b=2) := a + b; f(1)"#, r#"3"#),
 	(r#"f(a, b=2) := a + b; f(1, 5)"#, r#"6"#),
 	(r#"def f(a, b=2){a+b}; f(1)"#, r#"3"#),
@@ -412,7 +412,8 @@ twice 4"#,
 	),
 	(r#"3 times 4"#, r#"12"#),
 	(r#"x = 3; y = x times x; y"#, r#"9"#),
-	(r#"to add number a to number b: a + b; add 1 to 2 == 3"#, r#"yes"#),
+	// cleanup-edge: cleanup-park-phrases: comes back with prepositions-call
+	// (r#"to add number a to number b: a + b; add 1 to 2 == 3"#, r#"yes"#),
 	(r#"fn id<T>(x: T) -> T { x }; id(5)"#, r#"5"#),
 	(r#"function id<T>(x: T): T { return x }; id(5)"#, r#"5"#),
 	(r#"fn pair<A, B>(a: A, b: B) -> A { a }; pair(1, 2)"#, r#"1"#),

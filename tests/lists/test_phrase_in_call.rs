@@ -3,12 +3,14 @@
 use crate::is;
 use warp::ints;
 
+#[ignore = "cleanup-edge: cleanup-park-phrases: phrase forms parked until card prepositions-call"]
 #[test]
 fn a_list_phrase_as_the_argument_of_a_call() {
 	is!("xs = [1, 2, 3, 4]; str(xs.take first 3)", "[1 2 3]");
 	is!("xs = [1, 2, 3, 4]; count(xs.keep only even)", 2);
 }
 
+#[ignore = "cleanup-edge: cleanup-park-phrases: phrase forms parked until card prepositions-call"]
 #[test]
 fn sort_by_an_expression_of_it() {
 	is!("xs = [3, 1, 2]; xs.sort by it", ints(vec![1, 2, 3]));

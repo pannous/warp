@@ -32,6 +32,7 @@ const COMBINE_WITH: &str = "combine number with number = number#1 + number#2; co
 
 // Card paren-overload: a phrase call in parentheses dispatches as the bare call
 #[test]
+#[ignore = "cleanup-edge: cleanup-park-phrases: phrase forms parked until card prepositions-call"]
 fn a_phrase_call_in_parentheses_takes_its_variant() {
 	is!(&format!("{COMBINE_WITH}(combine 1.1 with 2.2)"), 3.3);
 	is!(&format!("{COMBINE_WITH}x = (combine 2 with 3); x"), 6);
@@ -40,6 +41,7 @@ fn a_phrase_call_in_parentheses_takes_its_variant() {
 
 // Card similar-vs: ≈ and ~ end a phrase call's arguments as == does
 #[test]
+#[ignore = "cleanup-edge: cleanup-park-phrases: phrase forms parked until card prepositions-call"]
 fn a_similarity_compares_the_phrase_calls_value() {
 	is!(&format!("{COMBINE_WITH}combine 1.1 with 2.2 ≈ 3.3"), true);
 	is!(&format!("{COMBINE_WITH}check combine 1.1 with 2.2 ≈ 3.3; 7"), 7);

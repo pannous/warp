@@ -322,10 +322,6 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::match_exhaustive::check,
 	// `global n = 5` in a function body is `global n; n = 5` before any pass reads its `global n`
 	crate::lowering::late_binding::split_global_assignments,
-	// `xs from #2 to #4`, `xs up to second`: a slice by position (word_slices.rs), before a pass reads `to` as a range
-	crate::lowering::word_slices::lower,
-	// `xs.keep only positive` is `xs where it > 0`, before lower_where reads it (list_phrases.rs)
-	crate::lowering::list_phrases::lower,
 	// a hosted program without routes: its value the page at /, each function a route (card make-deploy)
 	crate::lowering::serve::with_default_routes,
 	// `post "/todos/:id" { todos where it.id == id }`: the path's parameters bound before lower_where reads the variables
@@ -403,7 +399,6 @@ const DECLARATION_PASSES: &[Pass] = &[
 	crate::lowering::foreign_modules::lower,
 	// `x as text?` keeps ø, after foreign_modules types a nullable WebIDL result so
 	crate::lowering::optional_casts::lower,
-	crate::lowering::phrase_calls::lower,
 	crate::lowering::std_aliases::lower,
 	crate::lowering::class_methods::lower_json_classes,
 	crate::lowering::welcome_forms::lower,
@@ -423,8 +418,6 @@ const DECLARATION_PASSES: &[Pass] = &[
 /// The used modules join the program (modules::resolve), then the passes that read their words again
 const MODULE_PASSES: &[Pass] = &[
 	crate::modules::resolve,
-	// again: a used module's phrases, `play 440Hz for 0.5s` of lib/sound.warp's `to play x for d:`
-	crate::lowering::phrase_calls::lower,
 	// `fourty_two.exports`, `dir(fourty_two)` of an imported core module, once resolve found its file (reflection.rs)
 	crate::lowering::reflection::lower_module_words,
 	// again: `dir(is_square)`, `is_square.params` of a used module's function, which joined the program in resolve

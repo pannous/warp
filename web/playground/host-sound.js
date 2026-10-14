@@ -120,7 +120,7 @@ const wholeNumbers = list => Array.from(list, Number);
 // `at 1s beep()` keeps its second of silence
 // the sounds mixed at their places, in stereo when one of them is (a mono sound on both speakers alike, as src/sound/mod.rs
 // render): the samples interleaved and the channels
-// play hum for 2s (card real-time): `blockOf(first, count)` the blocks of each channel's values (-1…1) of `count`
+// play(hum, 2s) (card real-time): `blockOf(first, count)` the blocks of each channel's values (-1…1) of `count`
 // samples from `first` on. Played to someone (window_open: playground.js tellSystemValues), each block is a sound of
 // the signal's handle, computed when the voice holds less than SIGNAL_AHEAD_SECONDS, the wait a sleep (no runaway
 // time); else all of them at once, one sound. Its handle
@@ -276,7 +276,7 @@ addHostPart({
 			at: seconds => { self.voiceAt?.(Number(seconds)); return null; },
 			at_end: () => { self.voiceAtEnd?.(); return null; },
 			wait: () => null,
-			// play hum for 2s: hum(t) for each sample (left, then right of a pair [left, right]), t its time in seconds
+			// play(hum, 2s): hum(t) for each sample (left, then right of a pair [left, right]), t its time in seconds
 			signal(functions, seconds, rate) {
 				const signals = [functions].flat().map(signal => exportedOr(this.holder.exports, signal));
 				return playedSignal(this.holder, seconds, Number(rate), signals.length, SIGNAL_BLOCK, (first, count) => {
@@ -285,7 +285,7 @@ addHostPart({
 					return blocks;
 				});
 			},
-			// play fill for 2s of a block function (lowering/music_words.rs with_block_signals): the program's fill·blocks(t)
+			// play(fill, 2s) of a block function (lowering/music_words.rs with_block_signals): the program's fill·blocks(t)
 			// fills the linear float arrays at `addresses` (one, or left and right), read from its memory
 			blocks(caller, addresses, seconds, rate) {
 				const blocks = [addresses].flat().map(Number);

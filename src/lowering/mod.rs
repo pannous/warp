@@ -3,16 +3,13 @@
 
 pub mod declarations;
 pub mod folding;
-pub mod list_phrases;
 pub mod music_words;
 pub(crate) mod nodes;
 pub use nodes::{function_head, DefinitionForm, FunctionHead};
 pub mod of_lookups;
-pub mod phrase_calls;
 pub mod pipes;
 pub mod type_name_matching;
 pub mod welcome_forms;
-pub mod word_slices;
 
 // concept folders (notes/restructuring.md): their passes stay reachable as crate::lowering::x
 mod signals;

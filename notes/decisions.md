@@ -56,8 +56,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   [Person]`, `play(440Hz, 10ms)`), assertions untouched. All phrase calls are parked, `play hum for 2s`, `melody …
   each 20ms`, `add 1 to 2` and gap feeding included, until prepositions become call keywords in the general call
   mechanism (`move x from a to b`, card prepositions-call); sound uses calls until then. Version literals stay but
-  get rebuilt small ("why do we need 200 lines for this simple pattern?"), without the semver crate. `nonlocal`
-  (closures already share) and the defined-twice diagnostic are cut. rustfmt `use_small_heuristics = "Max"` comes
+  get rebuilt small ("why do we need 200 lines for this simple pattern?"), without the semver crate. The defined-twice
+  diagnostic is cut. `nonlocal` only loses its error and checks: the cells behind P124 sharing stay, a nested def
+  also shares `n += 1` without it, a plain `y = 5` there stays local unless `nonlocal y` (P124). rustfmt `use_small_heuristics = "Max"` comes
   in one fmt commit after the open cleanup branches are merged.
   Kotlin `when x { 1 -> … }` works, and `match` takes `->` arms and `else` too. `case` is an optional word before any match arm (`case 1: …`).
 - real-runtime (2026-10-13): real.rs (compile-time symbolic reals) stays until symbolic reals are a run-time number

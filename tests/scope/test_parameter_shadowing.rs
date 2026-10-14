@@ -28,12 +28,12 @@ siren(t) := {
 	pitch = 440 + 110 * sin(pi * t)
 	0.3 * sin(2 * pi * pitch * t)
 }
-play siren for 0.1s
+play(siren, 0.1s)
 chord(left, right, t) := for i in 1 to #left {
 	left#i = 0.4 * sin(2 * pi * 262 * t)
 	right#i = 0.4 * sin(2 * pi * 392 * t)
 }
-play chord for 0.1s
+play(chord, 0.1s)
 render_sound(\"SONG\")",
 	);
 	assert_eq!(seconds, "0.2");

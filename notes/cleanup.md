@@ -472,7 +472,7 @@ signal family are warp-list-pattern's and left out. Samples = files in samples/,
 | generators (generators, generator_objects, generator_consumers) | `count_to(n) := { … yield i … }` | 1114 | 0 | 0 | 4 | lazy ranges; a go task writing a channel |
 | reflection dot words (reflection) | `f.effects` | 886 | 2 | 0 | 5 | the word forms `effects of f` |
 | return-type overloads (overloads) | `parse(t) -> int` beside `parse(t) -> float` | 827 | 0 | 0 | 12 | `as int` conversions |
-| natural phrases (phrase_calls, list_phrases, word_slices) | `move piece from a to b`, `first 3 of xs` | 787 | 2 | 0 | 3 | plain calls `move(piece, a, b)`, `xs#1..3` |
+| DONE: parked natural phrases | `move piece from a to b`, `first 3 of xs` | 787 removed | 2 | 0 | 3 | plain calls `move(piece, a, b)`, `xs#(1…3)` |
 | multiple dispatch by class (traits/generics) | `collide(a:Ship, b:Rock)` | 529 | 1 | 0 | 2 | methods on the class; traits' witness dispatch |
 | type-name parameters (type_name_matching) | `fib int i = …`, `foo of int = it+it` | 442 | ~9 | 0 | 8 | `fib(i:int) := …` |
 | scoped handlers (scoped_handlers) | `on ask { 42 } in { compute() }` | 433 | 1 | 0 | 1 | try/catch, raise and event handlers |

@@ -64,3 +64,7 @@
 - 2026-10-12 cleanup-json-nodes: headless page events had a private JSON converter that silently turned arrays into ø; `foreign::node_of` already preserves arrays and special big-integer/codepoint objects, so it is now the one converter.
 
 2026-10-13 list-text-quotes: the reported computed quote in a printed list was already fixed by `text_quoted` on main; the older regression covered literals, so the exact runtime-concatenated serializer shape now has string() and print coverage.
+- 2026-10-14 cleanup-park-phrases: the newly generalized `of_lookups` pass still asked `phrase_calls` which function
+  names owned an `of`; parking phrase calls removes that exception and leaves one unconditional `a of b` to `b.a`
+  rule. A push also printed `fatal: failed to store: -61` after successfully creating its remote branch; board card
+  `git-credential-store` tracks the credential-helper problem.
