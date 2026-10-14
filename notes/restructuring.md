@@ -214,3 +214,22 @@ control::traps::*`), the analyzer's files too (`pub use inference::*`), so outsi
 Stay: mod.rs keeps the module driver (emit, emit_for_node, emit_node_main, emit_node_value, memory, kind globals,
 string allocation, the Node list encoding `bracket_info` … `bracket_of_info`); `kind_with_article`/`with_article` and
 the declaration keyword tests of variables.rs are used everywhere and wait for a words/ home.
+
+### Same-named functions after duplicates-exact (split-emitter, 2026-10-14)
+
+All 494 names used in several files of data/restructuring/functions.tsv have a verdict in duplicates_exact.md. A fresh
+inventory of main (9fdebbb1b) has 7 names that are new since:
+
+| name | verdict |
+|---|---|
+| `uses_it` (analyzer/user_functions/definitions.rs, lowering/type_name_matching.rs) | true duplicate: one `analyzer::uses_it`, Node::mentions of IMPLICIT_PARAMETER |
+| `is_arithmetic` (operators.rs Op method, analyzer/checks/lints.rs) | lints' repeated the operator list: `is_ungrouped_arithmetic` asks Op::is_arithmetic |
+| `aliased_method`, `method_aliases` (class_methods.rs, welcome_forms.rs) | distinct: a class's own method for a word vs. another language's method name; both read METHOD_ALIASES |
+| `keyword_definition` (declarations.rs, library_words.rs) | distinct: the whole definition vs. name and parameters of the head |
+| `map_key` (law/type_model/expressions.rs, wasm_emitter fields_and_keys.rs) | distinct: Lean model vs. emitter |
+| `start_of` (warp_parser/atoms.rs, diagnostics/normalize.rs) | distinct: parser cursor vs. a node's position |
+
+`is_type_word` ×4 (card name-their): four different sets, renamed by set: `is_builtin_type_word` (BUILTIN_TYPES),
+`is_kinded_type_word` (analyzer::type_word_kind), `is_kinded_type_or_any` (function heads),
+`is_kinded_or_testable_type` (units). The parser's local closure in typed_parameter is the kinded set again.
+Seven constants spell "it" (card duplicate-constants).
