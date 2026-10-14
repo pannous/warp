@@ -85,7 +85,7 @@ impl Pipes {
 				let it = Node::Symbol(IMPLICIT_PARAMETER.to_string());
 				key(
 					it.clone(),
-					Op::FatArrow,
+					Op::Arrow,
 					self.applied(&stage, self.chain_applied(*value, it)),
 				)
 			}

@@ -3,7 +3,7 @@
 use crate::is;
 use warp::wasm_emitter::eval;
 
-const CUPS: &str = "class Cup{size: text; count: int}\ncups: [Cup] = database.cups_field_named";
+const CUPS: &str = "class Cup{size: text; count: int}\nstored cups: [Cup] in \"cups_field_named\"";
 
 fn program(rest: &str) -> String {
 	format!("{CUPS}\n{rest}")

@@ -144,7 +144,7 @@ fn all_calls(node: Node) -> Node {
 			}
 			let item = symbol(ALL_ITEM);
 			let applied = Node::List(vec![function.clone(), item.clone()], Bracket::Round, Separator::None);
-			let each = key(item, Op::FatArrow, applied);
+			let each = key(item, Op::Arrow, applied);
 			call(MAP_WORD, vec![all_calls(list.clone()), each])
 		}
 		other => other.map_children(all_calls),
@@ -509,7 +509,7 @@ fn element_shapes(program: &Node) -> Option<InstanceTypes> {
 /// `map(list, broadcast_item => applied(broadcast_item))`
 fn each_item(list: Node, applied: impl Fn(Node) -> Node) -> Node {
 	let item = symbol(BROADCAST_ITEM);
-	let each = key(item.clone(), Op::FatArrow, applied(item));
+	let each = key(item.clone(), Op::Arrow, applied(item));
 	call(MAP_WORD, vec![list, each])
 }
 
@@ -762,9 +762,7 @@ impl Broadcast {
 					.unwrap_or(Node::Key(left, op, Box::new(right)))
 			}
 			// a definition head names parameters, it calls nothing
-			Node::Key(head, op @ (Op::Define | Op::Assign | Op::FatArrow | Op::Arrow), body)
-				if is_function_head(&head, op) =>
-			{
+			Node::Key(head, op @ (Op::Define | Op::Assign | Op::Arrow), body) if is_function_head(&head, op) => {
 				let body = self.with_parameters(untyped_parameters(&head, op), || self.rewrite(*body));
 				Node::Key(head, op, Box::new(body))
 			}
@@ -1025,9 +1023,7 @@ fn scalar_element_wise(node: Node, parameters: &[String]) -> Node {
 	}
 	match node {
 		// a function or lambda: its own parameters, the outer ones are out of scope
-		Node::Key(head, op @ (Op::Define | Op::Assign | Op::FatArrow | Op::Arrow), body)
-			if is_function_head(&head, op) =>
-		{
+		Node::Key(head, op @ (Op::Define | Op::Assign | Op::Arrow), body) if is_function_head(&head, op) => {
 			let inner: Vec<String> = untyped_parameters(&head, op)
 				.into_iter()
 				.filter(|name| only_operand(&body, name))
@@ -1087,7 +1083,7 @@ pub fn element_wise(list: Node, op: Op, operand: Node) -> Node {
 	let element = || Box::new(Node::Symbol(EACH_ELEMENT.to_string()));
 	let lambda = Node::Key(
 		element(),
-		Op::FatArrow,
+		Op::Arrow,
 		Box::new(Node::Key(element(), op, Box::new(operand))),
 	);
 	Node::Key(Box::new(list), Op::Dot, Box::new(call("map", vec![lambda])))
@@ -1117,7 +1113,7 @@ pub(crate) fn element_wise_parts(node: &Node) -> Option<(Node, Op, Node)> {
 		return None;
 	};
 	let [word, lambda] = items.as_slice() else { return None };
-	let Node::Key(element, Op::FatArrow, body) = lambda.drop_meta() else {
+	let Node::Key(element, Op::Arrow, body) = lambda.drop_meta() else {
 		return None;
 	};
 	let Node::Key(left, op, operand) = body.drop_meta() else {
@@ -1129,8 +1125,7 @@ pub(crate) fn element_wise_parts(node: &Node) -> Option<(Node, Op, Node)> {
 }
 
 fn is_function_head(head: &Node, op: Op) -> bool {
-	matches!(op, Op::FatArrow | Op::Arrow)
-		|| matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() > 1)
+	matches!(op, Op::Arrow) || matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.len() > 1)
 }
 
 /// The untyped parameters of `f(a, b) := …`, `(a, b) => …`, `x => …`

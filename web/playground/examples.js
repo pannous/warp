@@ -281,6 +281,11 @@ div{
 	button{ on click { todos = todos[1..] } "remove" }
 	ul{ [li{ key: todo.id starting-style: { opacity: 0 } transition: "opacity 150ms, transform 150ms" todo.text } for todo in todos] }
 }` },
+	melody: { value: '"done"', code: `// notes by name: one after another, then together as a chord
+use sound
+melody([C4 E4 G4], 100ms)
+play([C4 E4 G4], 300ms)
+"done"` },
 	"wasm components": { value: '[12586269025 ["a" "bc" "d"] 7]', code: `// a Rust library compiled to a WebAssembly component
 use rust_demo as demo
 c = demo.counter(5)

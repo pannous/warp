@@ -179,7 +179,7 @@ fn forms(node: Node) -> Node {
 		Node::Key(left, Op::Colon, body) if lambda_parameters(&left).is_some() => {
 			lambda(lambda_parameters(&left).expect("guarded"), forms(*body))
 		}
-		Node::Key(parameters, Op::FatArrow, body) if destructured_parameters(&parameters).is_some() => {
+		Node::Key(parameters, Op::Arrow, body) if destructured_parameters(&parameters).is_some() => {
 			let (parameters, fields) = destructured_parameters(&parameters).expect("guarded");
 			lambda(
 				parameters,
@@ -378,7 +378,7 @@ fn colon_case(case: &Node) -> Node {
 			words[1].clone()
 		}
 		// Kotlin's arms `1 -> a; else -> b` too
-		Node::Key(pattern, Op::FatArrow | Op::Arrow, body) => {
+		Node::Key(pattern, Op::Arrow, body) => {
 			let pattern = if pattern.is_symbol(WILDCARD) || pattern.is_symbol(ELSE_WORD) {
 				symbol(DEFAULT_CASE)
 			} else {
@@ -495,7 +495,7 @@ fn endless_loop(word: &Node, body: &Node) -> Option<Node> {
 }
 
 fn lambda(parameters: Node, body: Node) -> Node {
-	key(parameters, Op::FatArrow, body)
+	key(parameters, Op::Arrow, body)
 }
 
 /// `[function (a, b)] {body}`: a function keyword with parameters and no name, then its body
@@ -827,7 +827,7 @@ fn ruby_lambda(items: &[Node]) -> Option<Node> {
 }
 
 fn starred_lambda(name: &Node, value: &Node) -> Option<Node> {
-	let Node::Key(parameters, Op::FatArrow, body) = value.drop_meta() else {
+	let Node::Key(parameters, Op::Arrow, body) = value.drop_meta() else {
 		return None;
 	};
 	let parameters = match parameters.drop_meta() {

@@ -821,8 +821,9 @@ pub fn set_position_of(node: &Node) {
 		}
 		match node {
 			Node::Meta { node, .. } => start_of(node),
-			Node::Key(left, _, _) => start_of(left),
-			Node::List(items, _, _) => items.first().and_then(start_of),
+			// a word a pass made (`times` of `3 times 4`) has no position: the first part that has one
+			Node::Key(left, _, right) => start_of(left).or_else(|| start_of(right)),
+			Node::List(items, _, _) => items.iter().find_map(start_of),
 			_ => None,
 		}
 	}

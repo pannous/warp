@@ -1,5 +1,6 @@
 use std::cell::Cell;
 use std::thread::LocalKey;
+use std::{env, fs};
 #[cfg(feature = "native")]
 use wasmtime::{Engine, Store};
 
@@ -95,6 +96,7 @@ pub fn task_engine() -> Engine {
 /// reach every store of a shared engine.
 #[cfg(feature = "native")]
 pub fn gc_engine() -> Engine {
+	// todo move to wasm / runner / ... ?
 	static SHARED: std::sync::OnceLock<Engine> = std::sync::OnceLock::new();
 	SHARED
 		.get_or_init(|| Engine::new(&warp_runtime::engine::fueled_config()).expect("Failed to create WASM engine"))
@@ -105,4 +107,27 @@ pub fn show_type_name<T>(_: &T) {
 	use std::any::type_name;
 	// println!("{}", type_name_of_val(*json!({"name": "Alice"})));
 	println!("{}", type_name::<T>());
+}
+
+pub fn dirs_home() -> std::path::PathBuf {
+	env::var("HOME")
+		.map(std::path::PathBuf::from)
+		.unwrap_or_else(|_| std::path::PathBuf::from("."))
+}
+
+pub fn load_file(path: &str) -> String {
+	fs::read_to_string(path).unwrap_or_else(|_| {
+		eprintln!("Error: Could not read file '{}'", path);
+		String::new()
+	})
+}
+
+pub fn file_exists(path: &str) -> bool {
+	std::path::Path::new(path).exists()
+}
+
+pub fn extract_after(s: &str, sep: &str) -> String {
+	s.split_once(sep)
+		.map(|(_, after)| after.to_string())
+		.unwrap_or_default()
 }

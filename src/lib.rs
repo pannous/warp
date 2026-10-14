@@ -37,17 +37,18 @@ pub use lowering::{
 	system_values, traits, transitions, tuples, type_aliases, type_constructor, type_name_matching, type_tests,
 	undo_history, variable_signals, variadic, versions, welcome_forms, word_operators,
 };
-pub mod diagnostics;
+pub mod errors;
 // old paths until the quiet-window path pass (notes/restructuring.md "Moves with many users")
 #[cfg(feature = "native")]
-pub use diagnostics::crash_card;
-pub use diagnostics::{diagnostic, fixits, normalize};
+pub use errors::crash_card;
+pub use errors::{diagnostic, fixits};
 pub mod ffi;
 pub mod formats;
 pub mod graphics;
 pub mod host;
 pub mod law;
 pub mod modules;
+pub mod normalize;
 pub mod numbers;
 pub mod operators;
 #[cfg(feature = "native")]

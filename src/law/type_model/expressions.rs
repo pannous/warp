@@ -667,7 +667,7 @@ impl Exporter {
 			}
 			Node::Key(list, Op::Hash, index) if !list.is_nothing() => self.binary(".index", list, index),
 			Node::Key(empty, Op::Not, operand) if empty.is_nothing() => Ok(negation(self.expression(operand)?)),
-			Node::Key(parameter, Op::FatArrow, body) => self.lambda(parameter, body),
+			Node::Key(parameter, Op::Arrow, body) => self.lambda(parameter, body),
 			Node::Key(value, Op::As, target) => self.conversion(value, target),
 			// `a and b` is b when a is truthy, else a; `a or b` the other way round: a, free of effects, evaluated twice
 			Node::Key(left, op @ (Op::And | Op::Or), right) if self.is_pure(left) => {

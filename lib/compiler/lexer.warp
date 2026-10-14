@@ -93,7 +93,14 @@ def positions(source, kind) {
 	found
 }
 
-def is_name_char(c) := is_alphanumeric(c) or c == '_' or c == '♯' or c == '♭'
+// A raised letter continues a name as in Rust (`xⁿ`), a raised digit ends it (`x²` squares x)
+def is_name_char(c) := is_alphanumeric(c) or c == '_' or c == '♯' or c == '♭' or SUPERSCRIPT_LETTERS.contains(c)
+
+// The superscript digits in digit order, the raised letters in the order of the letters they raise (no raised q)
+// Rust twin: warp_parser/mod.rs SUPERSCRIPT_DIGITS, SUPERSCRIPT_LETTERS
+SUPERSCRIPT_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹"
+SUPERSCRIPT_LETTERS = "ᵃᵇᶜᵈᵉᶠᵍʰⁱʲᵏˡᵐⁿᵒᵖʳˢᵗᵘᵛʷˣʸᶻ"
+RAISED_LETTERS = "abcdefghijklmnoprstuvwxyz"
 
 def is_blank(c) := c == ' ' or c == '\t' or c == '\n' or c == '\r'
 

@@ -122,7 +122,7 @@ echo "built $page/samples.js"
 python3 web/playground/keywords.py "$page/keywords.js"
 echo "built $page/keywords.js and keywords.txt"
 # the uniscript entities completion.js lists after \: and <:
-cp src/uniscript_entities.tsv "$page/entities.tsv"
+cp src/text/uniscript_entities.tsv "$page/entities.tsv"
 
 # the ⋯ menu names the commit the page was built from and when, so a deployed page tells which version it is
 # (cards version-commit, g_oMw8)

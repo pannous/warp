@@ -101,14 +101,14 @@ impl GoBlocks {
 				)
 			}
 			// `x => …`, `(x, y) => …`
-			Node::Key(parameters, Op::FatArrow, body) => {
+			Node::Key(parameters, Op::Arrow, body) => {
 				let names: Vec<String> = match parameters.drop_meta() {
 					Node::List(items, _, _) => items.iter().map(parameter_word).collect(),
 					single => vec![parameter_word(single)],
 				};
 				Node::Key(
 					parameters,
-					Op::FatArrow,
+					Op::Arrow,
 					Box::new(self.lower(*body, &[known.to_vec(), names].concat())),
 				)
 			}

@@ -34,7 +34,7 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 				.and_then(|local| local.type_node.as_ref())
 				.map(|type_node| type_node.name());
 			match type_name {
-				Some(word) => match plural_element_type(&word) {
+				Some(word) => match list_element_type(&word) {
 					Some(element) => format!("{LIST_OF_PREFIX}{element}"),
 					None if word.starts_with(LIST_WORD) || word.starts_with(MAP_WORD) => word,
 					None => LIST_WORD.to_string(),

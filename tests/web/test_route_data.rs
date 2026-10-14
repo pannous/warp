@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 const PROGRAM: &str = "class User{name: text}
-users: [User] = database.users_p221
+stored users: [User] in \"users_p221\"
 route \"/\" { p{ \"home\" } }
 route \"/users/:id:int\" { h1{ \"User \" + users#id.name } }";
 
@@ -37,7 +37,7 @@ fn served(port: u16, folder: &str, requests: usize) -> std::thread::JoinHandle<S
 	let _ = std::fs::remove_file(folder.join("app.database.sqlite"));
 	let program = folder.join("app.warp");
 	warp::modules::with_program_file(&program, || {
-		warp::wasm_emitter::eval("class User{name: text}\nusers: [User] = database.users_p221\nusers.add(User(\"Ann\"))\nusers.add(User(\"Bo\"))")
+		warp::wasm_emitter::eval("class User{name: text}\nstored users: [User] in \"users_p221\"\nusers.add(User(\"Ann\"))\nusers.add(User(\"Bo\"))")
 	});
 	std::fs::write(&program, PROGRAM).expect("the program file");
 	let server = std::thread::spawn(move || {

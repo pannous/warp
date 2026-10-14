@@ -302,7 +302,7 @@ pub(in crate::analyzer) fn extract_param(item: &Node) -> Option<Param> {
 			if let Node::Symbol(s) = n.drop_meta() {
 				Some(Param {
 					name: s.clone(),
-					annotation: Some(type_name.as_ref().clone()),
+					annotation: Some(named_list_annotation(type_name)),
 					default: None,
 					used_as: None,
 				})
@@ -311,7 +311,7 @@ pub(in crate::analyzer) fn extract_param(item: &Node) -> Option<Param> {
 			}
 		}
 		// `f: (Int) -> Int` parses as `(f: (Int)) -> Int`: a function
-		Node::Key(typed, Op::Arrow | Op::FatArrow, _) if matches!(typed.drop_meta(), Node::Key(_, Op::Colon, _)) => {
+		Node::Key(typed, Op::Arrow, _) if matches!(typed.drop_meta(), Node::Key(_, Op::Colon, _)) => {
 			let param = extract_param(typed)?;
 			Some(Param {
 				annotation: Some(Node::Symbol(Kind::Function.to_string())),

@@ -1,0 +1,4 @@
+#!/usr/bin/env warp
+use regex
+print "abc" matches "a.c"
+print "abd" matches "a.c$"

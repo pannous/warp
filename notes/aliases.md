@@ -18,5 +18,5 @@ Lessons (cards operator-spelling, synonyms-table, alias-hint-position, 2026-10-1
   adding a statement word, check the binding.
 - A note raised in the parser must set its own position (note_alias_at); the hint position is otherwise stale.
 
-Open: welcome_forms.rs RUBY_METHODS, LINQ_METHODS, FOREIGN_ITERATIONS and BLOCK_REDUCTIONS overlap SYNONYMS (card
-welcome_forms-private).
+Folded (card rs-private, 2026-10-14): welcome_forms' RUBY_METHODS and LINQ_METHODS and the sumOf entry of
+BLOCK_REDUCTIONS are one METHOD_ALIASES table; R's and PHP's iteration functions live in lib/R.warp and lib/PHP.warp.

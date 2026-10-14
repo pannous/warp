@@ -107,7 +107,7 @@ pub(super) fn instance_of(path: &Node, class: &str, fields: &ClassFields, lists:
 /// `list.map(Point·element => Point(Point·element.x, …))`
 pub(super) fn instances_of(list: Node, class: &str, fields: &ClassFields) -> Node {
 	let element = Node::Symbol(format!("{class}{ELEMENT_SUFFIX}"));
-	let lambda = key(element.clone(), Op::FatArrow, built_instance(&element, class, fields));
+	let lambda = key(element.clone(), Op::Arrow, built_instance(&element, class, fields));
 	key(list, Op::Dot, call(MAP_WORD, vec![lambda]))
 }
 

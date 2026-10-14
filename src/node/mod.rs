@@ -42,21 +42,20 @@ const SOURCE_LITERAL: &str = "literal";
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Node {
-	// closed cannot be extended so anticipate all cases here
+	// Id(i64), // unique INTERNAL(?) node id for graph structures (put in metadata?)
+	// Kind(i64), enum NodeKind in serialization
+
+	// closed, cannot be extended so anticipate all cases here
 	True,
 	False, // alternative would be pub const FALSE: Node = Node::Number(Number::Int(0));
 	Empty, // Null, Nill, None, Ø, ø null nill none nil
-	// Id(i64), // unique INTERNAL(?) node id for graph structures (put in metadata?)
-	// Kind(i64), enum NodeKind in serialization
 	Number(Number),
-	// Number(Float|Int),
-	Char(char), // Single Unicode codepoint/character like 'a', '🍏' necessary?? as Number?
+	Char(char), // Single Unicode codepoint/character like 'a', '🍏'
 	Text(String),
 	Symbol(String),
 	Error(Box<Node>),
 	// Keyword(String), Call, Declaration … AST or here? AST!  via Meta(node, AstKind)
-
-	// emit with dot .name for special semantics .meta:{} .data={type=T, b64=[] id} .type=T …
+	// emit key with dot ".name" for special semantics .meta:{} .data={type=T, b64=[] id} .type=T … TODO I saw @meta ??
 	// key can be any node (Symbol, Number, Text, etc.)
 	Key(Box<Node>, Op, Box<Node>),
 	List(Vec<Node>, Bracket, Separator),
@@ -1140,11 +1139,6 @@ fn is_class_code(item: &Node) -> bool {
 		_ => {}
 	}
 	let mut code = false;
-	item.visit(&mut |part| {
-		code |= matches!(
-			part,
-			Key(_, Op::Define | Op::Arrow | Op::FatArrow, _) | List(_, Bracket::Curly, _)
-		)
-	});
+	item.visit(&mut |part| code |= matches!(part, Key(_, Op::Define | Op::Arrow, _) | List(_, Bracket::Curly, _)));
 	code
 }

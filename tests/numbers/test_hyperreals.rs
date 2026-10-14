@@ -38,6 +38,7 @@ fn test_powers_expand_exactly() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: the user removed st(x), the standard part (2026-10-14)"]
 fn test_standard_part() {
 	is!("st(1+ε)", 1);
 	is!("st(3-2ε+ε²)", 3);

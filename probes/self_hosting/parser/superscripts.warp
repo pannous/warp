@@ -1,0 +1,2 @@
+use "lib/compiler/parser.warp"
+for form in ["2⁻¹", "2²", "2³", "2¹⁰", "x⁴", "x²+1", "-x²", "xⁿ", "2ⁿ⁺¹", "x⁻ⁿ", "2²⁺³", "a.b²", "[2⁻¹ 2⁰ 2¹]", "xs#1²", "2x²"] { print tree(form) }

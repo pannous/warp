@@ -27,6 +27,22 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - cleanup-bold (2026-10-14): "get rid of everything you can without asking": clearly superfluous code, duplicate
   paths, unused or rarely-run branches go without a question; we have everything in GitHub. The suite may drop to
   80 % passing (failures marked cleanup-edge as above, so they stay countable); samples and the tour should still run.
+- error-type (2026-10-14): no ugly Rust types. A function that can fail has the sound type `T or error` (warp's
+  union spelling, as in `as int or text`), shown and written like that, never as Result; not hidden as plain `T`
+  ("`T or error` is not that ugly, keep it as a sound type"). Only the WIT export bytes carry a `result` for Rust callers.
+  error-optional (2026-10-14, "YES!!!"): `T?` means T, nothing (ø) or an error; `T or error` stays the precise
+  spelling. Rules: writing an Error into a field or list element raises ("a field holds no error: handle it or declare
+  `or error`"), so data stays clean while results, locals and arguments carry it; `x is ø` is missing only, `x failed`
+  failed only, `if no x` and `x or 0` cover both; at a WIT export a function that can fail gives `result`, one that
+  only gives ø an `option`, one doing both `result<option<T>>`; `effects of f` tells which. Where a caller can take it, the Error value propagates instead of
+  being raised (card error-gaps, wiki/Error.md "Not yet").
+- use-script (2026-10-14): `use script` (alias `use script mode`) = `use relaxed` (no hints) plus the scripting words without further `use`:
+  the modules os, file and net (env, exec, write, exists, list_files, lines, post …), plus new words where missing:
+  `command("…")` (run a shell command, its output as text; the explicit opt-in to text-as-shell), `arguments` (the
+  program's arguments as a list), `cwd`, `glob("*.toml")`, `stdin`/`input`, `sleep`, `exit n`. `use relaxed` stays
+  the hint switch alone. P45's "script mode" is this pragma.
+- sleep-seconds (2026-10-14): a bare number in `sleep 0.3` means seconds everywhere (like sh and Python), with the
+  "needs a unit" warning suggesting `0.3s`; demo samples written with bare ms move to `300ms`.
 - restructuring (2026-10-14): new major roadmap after the diff review found few duplicates. Inventory every function
   by name, move functions to the file their concept belongs to (a general parser holds no keyword-specific syntax:
   `finish_if_prefix` goes to e.g. control/if.rs), and have agents check suspiciously similar names for true

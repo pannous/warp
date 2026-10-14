@@ -951,7 +951,6 @@ samples/netbase.warp
 samples/paint_text.warp
 samples/palindrome.warp
 samples/parallel_let.warp
-samples/patterns.warp
 samples/power.warp
 samples/primes.warp
 samples/quadratic.warp
@@ -977,6 +976,7 @@ samples/signal_graph.warp
 samples/simple.warp
 samples/sort_words.warp
 samples/sorting_idiomatic.warp
+samples/sound_patterns.warp
 samples/square.warp
 samples/store.warp
 samples/sudoku.warp

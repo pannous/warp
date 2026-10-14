@@ -42,7 +42,7 @@ fn a_number_field_adds_into_an_exact_total() {
 fn a_stored_unit_column_filters_and_sums() {
 	let stored = |rest: &str| {
 		eval(&format!(
-			"class Run{{distance: km; note: text}}\nruns: [Run] = database.runs_stressed\n{rest}"
+			"class Run{{distance: km; note: text}}\nstored runs: [Run] in \"runs_stressed\"\n{rest}"
 		))
 		.serialize()
 		.trim()
@@ -53,10 +53,10 @@ fn a_stored_unit_column_filters_and_sums() {
 	assert_eq!(stored("count(runs where it.distance > 4000 m)"), "2");
 	assert_eq!(stored("count(runs where it.distance * 2 > 5 km)"), "2");
 	assert_eq!(stored("sum(runs.map(r => r.distance)) as m"), "18500m");
-	crate::common::fails_with("class Run{distance: km; note: text}\nruns: [Run] = database.runs_stressed\ncount(runs where it.distance > 5 s)", "compared with");
+	crate::common::fails_with("class Run{distance: km; note: text}\nstored runs: [Run] in \"runs_stressed\"\ncount(runs where it.distance > 5 s)", "compared with");
 	let parcels = |rest: &str| {
 		eval(&format!(
-			"class Parcel{{weight: kg}}\nparcels: [Parcel] = database.parcels_exact\n{rest}"
+			"class Parcel{{weight: kg}}\nstored parcels: [Parcel] in \"parcels_exact\"\n{rest}"
 		))
 		.serialize()
 		.trim()
@@ -66,7 +66,7 @@ fn a_stored_unit_column_filters_and_sums() {
 	assert_eq!(parcels("sum(parcels.map(p => p.weight)) as g"), "3500g");
 	let loads = |rest: &str| {
 		eval(&format!(
-			"class T{{load: number}}\nts: [T] = database.loads_mixed\n{rest}"
+			"class T{{load: number}}\nstored ts: [T] in \"loads_mixed\"\n{rest}"
 		))
 		.serialize()
 		.trim()

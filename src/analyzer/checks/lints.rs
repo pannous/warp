@@ -217,7 +217,7 @@ pub(super) fn is_float_literal_value(node: &Node) -> bool {
 	!matches!(node.drop_meta(), Node::Symbol(_)) && infer_type(node, &Scope::new()) == Kind::Float
 }
 
-/// `0.1 + 0.2 == 0.3` is no: decimals are floats, which `==` compares bit for bit (decision exact-default)
+/// `0.1f + 0.2 == 0.3` is false: decimals are floats, which `==` compares bit for bit (decision exact-default)
 pub(super) fn float_equality_warning(node: &Node, left: &Node, op: Op, right: &Node) -> Diagnostic {
 	let (a, b) = (left.serialize(), right.serialize());
 	let (a, b) = (a.trim(), b.trim());
@@ -227,9 +227,9 @@ pub(super) fn float_equality_warning(node: &Node, left: &Node, op: Op, right: &N
 	};
 	Diagnostic::at(
 		node,
-		format!("`{written}` compares floats exactly: rounding makes 0.1 + 0.2 == 0.3 no"),
+		format!("`{written}` compares floats exactly: rounding results in classical footgun 0.1f + 0.2 ≠ 0.3"),
 	)
-	.fix("use ≈")
+	.fix("use ≈ or exact numbers")
 	.offer("equal within rounding", written, similar)
 }
 

@@ -512,7 +512,7 @@ fn bind_it(node: Node, parameter: &str, is_value: bool) -> Node {
 	match node {
 		Node::Symbol(name) if name == IMPLICIT_PARAMETER => symbol(parameter),
 		// a lambda of its own `it`: `mk(k) := it => it * k`
-		Node::Key(ref parameters, Op::FatArrow, _) if names_it(parameters) => node,
+		Node::Key(ref parameters, Op::Arrow, _) if names_it(parameters) => node,
 		// `{it * k}`, Swift's `{ $0 + k }`
 		Node::List(_, Bracket::Curly, _) if is_value && crate::lambdas::block_as_arrow(&node).is_some() => {
 			crate::lambdas::block_as_arrow(&node).unwrap_or(node)
@@ -694,7 +694,7 @@ fn partial_application(items: &[Node]) -> Option<Node> {
 		[single] => single.clone(),
 		_ => Node::List(parameters, Bracket::Round, Separator::Colon),
 	};
-	Some(key(head, Op::FatArrow, call))
+	Some(key(head, Op::Arrow, call))
 }
 
 /// `def f(a, b) { body }`, `def f(x) := body`, `function g() { … }`: the definition `f(a, b) := body`
@@ -829,8 +829,12 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 		.map(|parameter| labeled_parameter(parameter, &mut labeled_names))
 		.collect();
 	let body = with_label_names(body, labeled_names);
-	// `func add1(x int)`: the one parameter and its type arrive as two words; `func total(s Shape)` of a declared type
-	if let [parameter, type_word] = parameters.as_slice() {
+	// `func add1(x int)`: the one parameter and its type arrive as two words; `func total(s Shape)` of a declared type;
+	// a comma separates parameters, so `def f(p, number)` keeps two
+	let comma_separated = arguments
+		.iter()
+		.any(|argument| matches!(argument.drop_meta(), Node::List(_, Bracket::Round, Separator::Colon)));
+	if let (false, [parameter, type_word]) = (comma_separated, parameters.as_slice()) {
 		let is_type_name = matches!(type_word.drop_meta(), Node::Symbol(word) if word.starts_with(char::is_uppercase));
 		if matches!(parameter.drop_meta(), Node::Symbol(_)) && (is_kinded_type_word(type_word) || is_type_name) {
 			parameters = vec![key(parameter.clone(), Op::Colon, type_word.clone())];
@@ -1075,7 +1079,7 @@ pub(crate) fn c_function(items: &[Node]) -> Option<Node> {
 			_ => return None,
 		},
 		// C#'s expression-bodied member `int Add(int a, int b) => a + b`
-		Node::Key(head, Op::FatArrow, body) => (head.as_ref(), body.as_ref()),
+		Node::Key(head, Op::Arrow, body) => (head.as_ref(), body.as_ref()),
 		_ => return None,
 	};
 	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else {

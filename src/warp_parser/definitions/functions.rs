@@ -285,4 +285,137 @@ impl WarpParser {
 		};
 		Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body)))
 	}
+
+	/// `to name params: body`, after the word `to`: the function `name(params) := body`.
+	/// The body is the rest of the statement, a `{…}` block or an indented block. Parameters are plain names or, with a
+	/// known type word, typed slots (`to square a number:`, type_name_matching::parameter_slots). Anything else is no definition.
+	pub(crate) fn try_parse_to_definition(&mut self) -> Option<Node> {
+		let before_header = self.mark();
+		let restore = |parser: &mut Self| parser.rewind(before_header.clone());
+		self.skip_spaces();
+		let Some(name) = self.at_identifier_start().then(|| self.parse_symbol().ok()).flatten() else {
+			restore(self);
+			return None;
+		};
+		let mut parameters = Vec::new();
+		// `to call person{name?, phone number} do …` (wiki/argument.md): the parameter's fields, glued to it
+		let mut shapes = Vec::new();
+		let mut result_type = None;
+		loop {
+			self.skip_spaces();
+			if self.at_to_header_end() {
+				break;
+			}
+			let word = self.at_identifier_start().then(|| self.parse_symbol().ok()).flatten();
+			match word.map(|word| self.joined_type_name(word)) {
+				Some(word) if word == DO_WORD && !parameters.is_empty() => break,
+				Some(word) if word == RESULT_TYPE_WORD && !parameters.is_empty() => {
+					result_type = self.phrase_result_type();
+					if result_type.is_some() {
+						break;
+					}
+					parameters.push(word)
+				}
+				Some(parameter) => {
+					if self.current_char() == '{' {
+						shapes.push((parameter.clone(), self.parse_atom()));
+					}
+					parameters.push(parameter)
+				}
+				None => {
+					restore(self);
+					return None;
+				}
+			}
+		}
+		if self.current_char() == ':' {
+			self.advance();
+			self.skip_spaces();
+		}
+		let body = self.parse_definition_body();
+		self.functions.insert(name.clone());
+		let words: Vec<&str> = parameters.iter().map(String::as_str).collect();
+		let declared_types = &self.declared_types;
+		let is_known_type = |word: &str| {
+			crate::analyzer::type_word_kind(word).is_some()
+				|| crate::analyzer::plural_element_type(word).is_some()
+				|| declared_types.contains(word)
+		};
+		let (parameters, body) = match crate::type_name_matching::parameter_slots(&words, &body, &is_known_type) {
+			Ok(slots) => slots,
+			Err(message) => return Some(error(&message)),
+		};
+		let parameters: Vec<Node> = parameters
+			.into_iter()
+			.map(
+				|parameter| match shapes.iter().find(|(name, _)| *name == parameter.name()) {
+					Some((_, fields)) => Node::Key(Box::new(parameter), Op::Colon, Box::new(fields.clone())),
+					None => parameter,
+				},
+			)
+			.collect();
+		if let Some(clash) = self.phrase_redefinition(&name, &parameters) {
+			return Some(clash);
+		}
+		let head = if parameters.is_empty() {
+			Symbol(name)
+		} else {
+			self.functions_with_parameters.insert(name.clone());
+			self.phrase_definitions.insert(name.clone(), parameters.clone());
+			Node::List(
+				[vec![Symbol(name)], parameters].concat(),
+				Bracket::Round,
+				Separator::None,
+			)
+		};
+		let head = match result_type {
+			Some(result_type) => Node::Key(Box::new(head), Op::As, Box::new(Symbol(result_type))),
+			None => head,
+		};
+		Some(Node::Key(Box::new(head), Op::Define, Box::new(body)))
+	}
+
+	/// `to square a number: …` or `to square a number { … }`
+	fn at_to_header_end(&self) -> bool {
+		(self.current_char() == ':' && self.peek_char(1) != '=') || self.current_char() == '{'
+	}
+
+	/// The type after `as` when it ends the header: `to render text as pdf: …`
+	fn phrase_result_type(&mut self) -> Option<String> {
+		let after_as = self.mark();
+		self.skip_spaces();
+		let result_type = self.at_identifier_start().then(|| self.parse_symbol().ok()).flatten();
+		self.skip_spaces();
+		if result_type.is_some() && (self.at_to_header_end() || self.matches_keyword(DO_WORD)) {
+			return result_type;
+		}
+		self.rewind(after_as);
+		None
+	}
+
+	/// `to kill a person: …` after `to kill a dog: …`: the same phrase with other untyped nouns can only be told apart by types
+	pub(crate) fn phrase_redefinition(&self, name: &str, parameters: &[Node]) -> Option<Node> {
+		let earlier = self
+			.phrase_definitions
+			.get(name)
+			.filter(|earlier| earlier.len() == parameters.len())?;
+		let untyped = |parameter: &Node| matches!(parameter.drop_meta(), Symbol(_));
+		let differing: Vec<(&Node, &Node)> = earlier
+			.iter()
+			.zip(parameters)
+			.filter(|(before, now)| before != now)
+			.collect();
+		if differing.is_empty() || !differing.iter().all(|(before, now)| untyped(before) && untyped(now)) {
+			return None;
+		}
+		let classes: Vec<String> = differing
+			.iter()
+			.flat_map(|(before, now)| [before.name(), now.name()])
+			.map(|noun| format!("class {noun}"))
+			.collect();
+		Some(error(&format!(
+			"{name} is defined twice; declare {} to dispatch on them",
+			classes.join(" and ")
+		)))
+	}
 }

@@ -383,7 +383,7 @@ const DECLARATION_PASSES: &[Pass] = &[
 	crate::lowering::type_aliases::lower,
 	// `f(s:Shape)` of a trait takes any conforming instance: untyped before class_methods reads typed parameters
 	crate::lowering::traits::lower_trait_parameters,
-	// `people: [Person] = database.people`: the table's rows, inserts and field changes written through
+	// `stored people: [Person]`: the table's rows, inserts and field changes written through
 	// (database_tables.rs), before class_methods lowers the class (its row id) and stored_values reads `database.people`
 	crate::lowering::database_tables::lower,
 	// `p.fields`, `p.methods`, `dir(p)`: the class layout (reflection.rs), before class_methods lowers the class bodies

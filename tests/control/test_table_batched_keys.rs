@@ -9,7 +9,9 @@ const SEED: &str =
 	"for i in 1 to 300 { teams.add(Team(\"T\" + i)) }\nfor i in 1 to 300 { people.add(Person(\"N\" + i, teams#i)) }";
 
 fn program(rest: &str) -> String {
-	format!("{CLASSES}\nteams: [Team] = database.teams_batched\npeople: [Person] = database.people_batched\n{rest}")
+	format!(
+		"{CLASSES}\nstored teams: [Team] in \"teams_batched\"\nstored people: [Person] in \"people_batched\"\n{rest}"
+	)
 }
 
 #[cfg(feature = "native")]

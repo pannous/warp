@@ -226,7 +226,7 @@ pub(crate) fn it_function(node: &Node) -> Option<Node> {
 	let is_bare = matches!(node.drop_meta(), Node::Symbol(_));
 	let it = || Box::new(symbol(IMPLICIT_PARAMETER));
 	(!is_bare && mentions_outside_blocks(node, IMPLICIT_PARAMETER))
-		.then(|| Node::Key(it(), Op::FatArrow, Box::new(node.clone())))
+		.then(|| Node::Key(it(), Op::Arrow, Box::new(node.clone())))
 }
 
 /// `a > b`, also as the one statement of a block, and any other bool: `a < b or a == b and c`, `if … then a < b else …`
@@ -244,7 +244,7 @@ fn unlabeled(function: Node) -> Node {
 	let is_label = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if SORT_LABELS.contains(&word.as_str()));
 	match function.drop_meta() {
 		Node::Key(label, Op::Colon | Op::Assign, inner) if is_label(label) => inner.as_ref().clone(),
-		Node::Key(head, arrow @ (Op::Arrow | Op::FatArrow), body) => match head.drop_meta() {
+		Node::Key(head, arrow @ Op::Arrow, body) => match head.drop_meta() {
 			Node::Key(label, Op::Colon, parameters) if is_label(label) => {
 				Node::Key(parameters.clone(), *arrow, body.clone())
 			}
@@ -306,7 +306,7 @@ fn parameter_names(left: &Node) -> Option<Vec<String>> {
 /// `x=>body`, `(x y)->body` and the same in a group `(x=>body)` or a block
 pub(crate) fn arrow_lambda(node: &Node) -> Option<Lambda> {
 	match node.drop_meta() {
-		Node::Key(head, Op::Arrow | Op::FatArrow, body) => arrow_parts(head, body),
+		Node::Key(head, Op::Arrow, body) => arrow_parts(head, body),
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => arrow_lambda(&items[0]),
 		// Kotlin `{ x -> x*2 }`, `{ a: Int, b: Int -> a + b }`, Ruby `{ |x| x*2 }`, Swift `{ x in x*2 }` and `{ $0 * 2 }`
 		Node::List(items, Bracket::Curly, _) => match items.as_slice() {
@@ -488,7 +488,7 @@ fn mentions_outside_blocks(node: &Node, name: &str) -> bool {
 fn symbol_outside_blocks<'a>(node: &'a Node, wanted: &dyn Fn(&str) -> bool) -> Option<&'a Node> {
 	match node.drop_meta() {
 		Node::Symbol(symbol) if wanted(symbol) => Some(node),
-		Node::Key(_, Op::FatArrow, _) | Node::List(_, Bracket::Curly, _) => None,
+		Node::Key(_, Op::Arrow, _) | Node::List(_, Bracket::Curly, _) => None,
 		Node::Key(left, _, right) => {
 			symbol_outside_blocks(left, wanted).or_else(|| symbol_outside_blocks(right, wanted))
 		}
@@ -596,7 +596,7 @@ pub(crate) fn block_as_arrow(node: &Node) -> Option<Node> {
 			Separator::Colon,
 		),
 	};
-	Some(key(parameters, Op::FatArrow, lambda.body))
+	Some(key(parameters, Op::Arrow, lambda.body))
 }
 
 /// The definition `name(params) := body` of a lambda, a block with `it` or an operator given as a value
@@ -824,7 +824,7 @@ impl Lowering {
 			// Python's `any(xs)`, `all(xs)`: the items themselves are the conditions
 			if let ([list], true) = (rest.as_slice(), is_call && TRUTH_WORDS.contains(&iteration.word)) {
 				let item = symbol(TRUTH_ITEM);
-				return self.iterate(iteration, list.clone(), vec![], key(item.clone(), Op::FatArrow, item));
+				return self.iterate(iteration, list.clone(), vec![], key(item.clone(), Op::Arrow, item));
 			}
 			let [list, extras @ .., function] = rest.as_slice() else {
 				return None;

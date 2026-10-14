@@ -1,6 +1,9 @@
 //! Texts: quoted strings, escapes, f-strings and their holes, dedented multiline texts
 use super::*;
 
+/// The most code points an emoji in code may have (a family ZWJ sequence has 7 to 11, a subdivision flag 7)
+pub(crate) const LONGEST_EMOJI: usize = 32;
+
 /// The length of `chars` before the `}` that closes an already open `{`, skipping `//` and `/* */` comments
 pub(crate) fn closing_brace(chars: &[char]) -> Option<usize> {
 	let (mut depth, mut at) = (1, 0);
@@ -331,6 +334,17 @@ impl WarpParser {
 				_ => {}
 			}
 			self.advance();
+		}
+	}
+
+	pub(crate) fn parse_emoji(&mut self) -> Node {
+		let ahead: String = self.chars[self.pos..].iter().take(LONGEST_EMOJI).collect();
+		let emoji = crate::extensions::strings::grapheme_clusters(&ahead)[0].to_string();
+		self.advance_by(emoji.chars().count());
+		let mut code_points = emoji.chars();
+		match (code_points.next(), code_points.next()) {
+			(Some(single), None) => Node::Char(single),
+			_ => Node::Text(emoji),
 		}
 	}
 }

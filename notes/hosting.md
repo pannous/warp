@@ -139,6 +139,9 @@ State on 2026-10-12 (sent to the Interviewer as user steps):
 - Publishing the OAuth client needs the TXT record on the client URL's host. warp.pannous.com is a CNAME to GitHub
   Pages, so no TXT can go there: the client URL should be https://lambda.pannous.com (A record) with the TXT on
   `lambda`, then visibility Public in the dashboard. Our API token can't read or edit OAuth clients.
+- 2026-10-14: adding that TXT (zone serial 2026101301) left `lambda` and `*.lambda` without A records at orderbox:
+  lambda.pannous.com stopped resolving, while the server still answers on 81.169.181.160. Both A records have to be
+  added back next to the TXT (one name can have A and TXT together).
 
 ## Decisions (moved from notes/decisions.md, 2026-10-09)
 - Each program is its own Cloudflare Worker uploaded by the hosting Worker. Q1 GitHub OAuth App for "Log in with

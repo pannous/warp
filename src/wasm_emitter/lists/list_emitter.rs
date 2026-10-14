@@ -263,7 +263,7 @@ impl WasmGcEmitter {
 			return None;
 		}
 		let (count_text, repeated_text) = (count.serialize(), repeated.serialize());
-		crate::normalize::set_position_of(word);
+		crate::normalize::set_position_of(node);
 		crate::normalize::hint(
 			&format!("{count_text} times {repeated_text}"),
 			&format!("{count_text} * {repeated_text}"),
@@ -999,13 +999,9 @@ impl WasmGcEmitter {
 		emit: fn(&mut Self, &mut Function, &Node),
 	) {
 		let last_statement = items.iter().rposition(|item| !self.is_definition(item));
-		// `a;b;c` is data; among code (`x=1; foo; x`) a word that names nothing would be silently dropped
-		let is_code = items.iter().any(|item| {
-			!matches!(
-				item.drop_meta(),
-				Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_)
-			)
-		});
+		// `a;b;c`, words alone, is data; among anything else (`x=1; foo; x`, `foo; 3`, `foo; yes`) a word that names
+		// nothing would be silently dropped
+		let is_code = items.iter().any(|item| !matches!(item.drop_meta(), Node::Symbol(_)));
 		for (i, item) in items.iter().enumerate() {
 			if self.is_definition(item) {
 				if let Some(name) = self.defined_function_name(item) {
