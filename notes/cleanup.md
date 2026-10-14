@@ -333,6 +333,13 @@ Left (each changes behaviour or needs care):
   Candidates (forms rejected by accident, no test pins them): the Lean export skips `def f(x) := body`, untyped
   `def f(x): body` and `def (f x) {…}`; three is_call_head functions mean different things (nodes: round + word,
   traits: round + word without parameters, variable_signals: round only).
+- (cleanup-traits-alias, 2026-10-14) Of src/lowering/traits* (2572 lines) only about 700 are trait code; the rest is
+  class dispatch (generics.rs multiple dispatch, dispatch.rs `<`/`==`/sort on instances, instance_types.rs static
+  shapes, likeness.rs `like`, op·T witnesses that class methods and overloads use too; notes on card
+  methods-as-dispatch). The element check of `xs: Comparable list` is now Dispatch::admit's (a trait list is a
+  declared parameter type like a class), dropping trait_constraints / unmet_constraint (−33). Foreign signatures and
+  the element check stay (interviewer: rust-forms-welcome, list element checks kept). A mixin rewrite of traits saves
+  ~40 lines and loses free-function default methods.
 - soft_keywords::parameter_name accepts only `:` / `=` keys and does not recurse, unlike nodes::parameter_name;
   go_blocks / named_arguments / parameter_shapes have their own parameter_name returning String or Node.
 - (cleanup-big-files) class_methods.rs (~1920 lines): child modules (`use super::*`, items pub(super)) class_methods/operators.rs
