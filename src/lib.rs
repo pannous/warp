@@ -99,7 +99,6 @@ pub mod uniscript_entities;
 pub mod units;
 pub mod warp_parser;
 pub mod wasm_modules;
-pub mod wasm_optimizer;
 #[cfg(feature = "native")]
 pub mod wasm_reader;
 pub mod web;
@@ -135,9 +134,6 @@ pub use host::{create_host_linker, link_host_functions, HostState};
 pub use function::{kind_to_valtype, Arg, Function, FunctionRegistry, Signature, ABI};
 // Local (unified struct for variables)
 pub use local::Local;
-// Legacy GcObject for backward compatibility (3-field Node layout)
-#[cfg(feature = "native")]
-pub use wasm_reader::GcObject;
 // New gc_traits module with rasm-style ergonomic GC struct access
 // Note: gc_struct!, obj!, and wasm_struct! macros are exported at crate root via #[macro_export]
 #[cfg(feature = "native")]
