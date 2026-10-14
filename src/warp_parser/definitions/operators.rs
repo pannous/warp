@@ -32,10 +32,14 @@ pub(crate) fn declared_operator(kind: UserOperatorKind, words: &[&str]) -> Optio
 		[OPERATOR_WORD, head, ..] | [head, ..] if kind == UserOperatorKind::Infix && words.contains(&":=") => head,
 		_ => return None,
 	};
-	let word: String = head.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+	// a word, or a glyph with its parameters: `infix operator ↑(x: number, n: number) := …` (card easy-add)
+	let word: String = match head.starts_with(char::is_alphabetic) {
+		true => head.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect(),
+		false => head.chars().take_while(|c| *c != '(').collect(),
+	};
 	let parameters = &head[word.len()..];
-	let is_word = word.starts_with(char::is_alphabetic) && word != OPERATOR_WORD;
-	(is_word && (parameters.is_empty() || parameters.starts_with('('))).then_some(word)
+	let is_operator = (word.starts_with(char::is_alphabetic) && word != OPERATOR_WORD) || is_operator_glyph(&word);
+	(is_operator && (parameters.is_empty() || parameters.starts_with('('))).then_some(word)
 }
 
 /// `divides`: a declared operator that is a word, ending where the word ends (not `dividesx`)

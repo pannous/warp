@@ -1,7 +1,7 @@
 //! Words for operators (word-choice rule: the canonical word plus aliases that work with a note): `root 4`,
 //! `root(4)` and the pipe stage `2|square|root` (wiki/pipe.md) are sqrt; a variable or function the program names
 //! root wins (P142). The other way round, the log glyphs are the log words (P226): `b⌞x` is `log(x, b)`, `x⌟` is
-//! `ln(x)` and `x⌟b` is `log(x, b)`, as is `x↓b` (card easy-add); `x↑n`, Knuth's up arrow, is `x^n`
+//! `ln(x)` and `x⌟b` is `log(x, b)`. `x↑n` and `x↓b` call their declarations, `operator_↑(x, n)` (card easy-add)
 
 use super::nodes::{call, key};
 use crate::node::Node;
@@ -63,8 +63,12 @@ fn log_calls(node: Node) -> Node {
 	match node {
 		Node::Key(base, Op::LogBase, value) => call(LOG_WORD, vec![log_calls(*value), log_calls(*base)]),
 		Node::Key(value, Op::LogOf, base) if base.is_empty_node() => call(NATURAL_LOG, vec![log_calls(*value)]),
-		Node::Key(value, Op::LogOf | Op::ArrowDown, base) => call(LOG_WORD, vec![log_calls(*value), log_calls(*base)]),
-		Node::Key(value, Op::ArrowUp, power) => key(log_calls(*value), Op::Pow, log_calls(*power)),
+		Node::Key(value, Op::LogOf, base) => call(LOG_WORD, vec![log_calls(*value), log_calls(*base)]),
+		// `2↑3`: an operator only a declaration gives meaning is the call of that declaration (lib/prelude.warp)
+		Node::Key(left, op, right) if op.is_declared_only() => call(
+			&format!("{}{}", crate::operators::OPERATOR_FUNCTION_PREFIX, op.as_str()),
+			vec![log_calls(*left), log_calls(*right)],
+		),
 		other => other.map_children(log_calls),
 	}
 }

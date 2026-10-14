@@ -1,4 +1,6 @@
-//! Card easy-add (user: "arrow down for logarithm"): `x↓b` is log base b of x, and `x↑n`, Knuth's up arrow, is x^n;
+//! Card easy-add (user: "arrow down for logarithm"; "↑ is power, just for the specific type of number, it can be
+//! overwritten in other context. Use the infix operator for that"): `x↓b` is log base b of x and `x↑n` is x^n, both
+//! typed infix operators on numbers (lib/prelude.warp) that another type overloads with its own `infix operator ↑`;
 //! a glyph that is already the operator's spelling gets no note
 use crate::is;
 
@@ -13,6 +15,17 @@ fn the_down_arrow_is_the_log_to_a_base() {
 fn the_up_arrow_is_the_power() {
 	is!("2↑3", 8);
 	is!("(2↑3)↓2", 3);
+}
+
+#[test]
+fn a_glyph_operator_takes_typed_parameters() {
+	is!("infix operator ⊕(a: int, b: int) := a * 10 + b; 4 ⊕ 2", 42);
+}
+
+#[test]
+fn a_class_overloads_the_up_arrow_beside_the_numbers() {
+	is!("class V { x: int }; infix operator ↑(v: V, n: int) := V(v.x * n); (V(2)↑5).x", 10);
+	is!("class V { x: int }; infix operator ↑(v: V, n: int) := V(v.x * n); 2↑5", 32);
 }
 
 #[test]
