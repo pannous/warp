@@ -8,7 +8,9 @@
 use super::blocks::{quoted_data, DATA_WORD};
 use super::for_loop::walking_loop;
 use super::library_words::COLLECTION_CONTAINS;
-use super::nodes::{block, call, children_rewritten, fresh_number, if_then, is_kinded_type_word, key, or_operands, Counter};
+use super::nodes::{
+	block, call, children_rewritten, fresh_number, if_then, is_kinded_type_word, key, or_operands, Counter,
+};
 use super::type_tests::{program_names, type_test, Names};
 use crate::analyzer::TEMPORARY_SEPARATOR;
 use crate::diagnostic::Diagnostic;
@@ -617,7 +619,9 @@ fn case_test(subject: &Node, case: Case, names: &Names) -> (Node, Node) {
 /// `red: "fire"` is the symbol red
 fn is_binding_name(pattern: &Node, body: &Node, names: &Names) -> bool {
 	match pattern.drop_meta() {
-		Node::Symbol(name) => !names.contains(name) && !is_kinded_type_word(pattern) && body.mentions_any(&[name.as_str()]),
+		Node::Symbol(name) => {
+			!names.contains(name) && !is_kinded_type_word(pattern) && body.mentions_any(&[name.as_str()])
+		}
 		_ => false,
 	}
 }

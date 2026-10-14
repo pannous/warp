@@ -18,7 +18,6 @@ use Instruction as I;
 use StorageType::Val;
 use ValType::Ref;
 
-/// Builtins that write their argument and give it back: `puti i` as a statement of a loop body
 /// The export name prefix of a closure's captured variable, `capture·add·k` (tasks copy them to their instance)
 pub const CAPTURE_EXPORT_PREFIX: &str = "capture·";
 

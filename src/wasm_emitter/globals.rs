@@ -6,7 +6,6 @@ use super::*;
 const GLOBAL_EXPORT_LABEL: &str = "global·";
 
 impl WasmGcEmitter {
-
 	/// The one nullable Node local of every function, after its int scratch locals
 	pub(super) fn node_scratch(&self) -> u32 {
 		self.int_scratch + numbers::big_int::INT_SCRATCH_LOCALS
@@ -17,8 +16,6 @@ impl WasmGcEmitter {
 		self.node_scratch() + 1
 	}
 
-	/// Emit global variable declaration: global x = value
-	/// Creates a mutable WASM global and initializes it, or reassigns existing global
 	/// A local or declared global holding a primitive number, not a Node reference
 	pub(super) fn is_numeric_variable(&self, name: &str) -> bool {
 		match self.scope.lookup(name) {

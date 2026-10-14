@@ -470,6 +470,7 @@ fn last_statement(node: &Node) -> &Node {
 	}
 }
 
+/// The condition and the then-branch of `if condition then branch`
 pub(crate) fn if_then_parts(node: &Node) -> Option<(&Node, &Node)> {
 	let Node::Key(if_condition, Op::Then, then_branch) = node.drop_meta() else {
 		return None;

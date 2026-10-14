@@ -1311,7 +1311,6 @@ impl WasmGcEmitter {
 	}
 }
 
-/// The condition and the then-branch of `if condition then branch`
 /// The call `join(list, separator)`: the items' text forms with the separator between them
 pub(crate) fn join_call(list: Node, separator: &str) -> Node {
 	Node::List(

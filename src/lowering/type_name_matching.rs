@@ -139,9 +139,9 @@ fn spaced_definition(items: &[Node]) -> Option<Node> {
 /// `def`) → `square(x) := (x*x) as int`
 fn typed_return(type_name: &Node, definition: &Node) -> Option<Node> {
 	// `function square(n){…}` names no return type: a definition keyword is no type word here
-	type_name
-		.symbol_name()
-		.filter(|word| (is_kinded_type_or_any(word) || is_union(word)) && !crate::operators::FUNCTION_KEYWORDS.contains(word))?;
+	type_name.symbol_name().filter(|word| {
+		(is_kinded_type_or_any(word) || is_union(word)) && !crate::operators::FUNCTION_KEYWORDS.contains(word)
+	})?;
 	let type_name = type_name.drop_meta();
 	match definition.drop_meta() {
 		Node::Key(head, op @ (Op::Assign | Op::Define), body) if is_call_head(head) => {

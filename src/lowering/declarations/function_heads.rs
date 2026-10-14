@@ -301,7 +301,9 @@ pub(super) fn name_then_type(parameter: Node) -> Node {
 			parts[0].clone()
 		}
 		Node::List(parts, _, Separator::Space)
-			if parts.len() == 2 && matches!(parts[0].drop_meta(), Node::Symbol(_)) && is_kinded_type_word(&parts[1]) =>
+			if parts.len() == 2
+				&& matches!(parts[0].drop_meta(), Node::Symbol(_))
+				&& is_kinded_type_word(&parts[1]) =>
 		{
 			key(parts[0].clone(), Op::Colon, parts[1].clone())
 		}

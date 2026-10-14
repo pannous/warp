@@ -6,7 +6,6 @@ pub(crate) const EXACT_TRAP_MESSAGES: [(&str, &str); 2] = [
 	("int_shift_", "a shift needs an integer and a count from 0 to 65536"),
 	("exact_pow", "an exact power needs an integer exponent"),
 ];
-/// An index out of range in a program with an exclusive range is often an end the writer meant to include
 /// The exported global where a program leaves the value a runtime error is about (the subject of a missed switch)
 pub const TRAP_DETAIL: &str = "trap_detail";
 /// How a trapped run carries that value into its error: `trap detail: <value>`
