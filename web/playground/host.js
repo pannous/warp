@@ -31,6 +31,12 @@ const utf8 = new TextEncoder();
 // the pointer the page shares (canvas.js pointerMessage) as the worker keeps it: self.pagePointer, read by system_value
 const sharedPointer = ({ buffer, names }) => ({ values: new Int32Array(buffer), names });
 
+// an error nothing caught, said with where it came from: Firefox says only "uncaught exception: undefined" otherwise
+function reportUncaughtErrors(who) {
+	self.addEventListener("error", event => console.error(`${who}: ${event.message} at ${event.filename}:${event.lineno}:${event.colno}`, event.error));
+	self.addEventListener("unhandledrejection", event => console.error(`${who}: unhandled rejection ${event.reason}`, event.reason?.stack));
+}
+
 // copy bytes into the program's memory from its text heap, the rule of src/host.rs write_bytes_to_caller
 function writeBytes(program, bytes) {
 	const heap = program[TEXT_HEAP_EXPORT];

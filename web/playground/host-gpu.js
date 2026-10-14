@@ -373,8 +373,10 @@ async function gpuJobInto({ gpu: { word, job }, shared }) {
 	try {
 		answer = await GPU_JOBS[word](job);
 	} catch (failure) {
-		answer = { error: String(failure.message ?? failure) };
-		await forgetDeviceIfLost();
+		// a browser's WebGPU may reject with no Error at all (Firefox: `undefined`), which still answers the waiting program
+		answer = { error: failure instanceof Error ? failure.message : `the browser's WebGPU failed with ${failure} (${word})` };
+		console.error(failure, failure?.stack);
+		await forgetDeviceIfLost().catch(() => {});
 	}
 	if (answer.words) writeSharedWords(shared, answer.words);
 	else writeShared(shared, answer);

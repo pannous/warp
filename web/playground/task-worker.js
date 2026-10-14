@@ -6,6 +6,7 @@
 const SITE_SCRIPTS = new URL(self.location.href).searchParams.get("scripts")?.split(",");
 importScripts(...(SITE_SCRIPTS ?? ["reader.js", "imports.js", "exact.js", "std.js", "host.js"]));
 if (!SITE_SCRIPTS) importScripts(...HOST_PART_FILES, "components.js", "served-files.js");
+reportUncaughtErrors("task Worker"); // host.js
 // the program's Worker, through the port the page gives with the first message (task-workers.js serveTaskWorkers)
 let program;
 self.onmessage = ({ data }) => {

@@ -8,6 +8,7 @@ const stage = name => self.postMessage({ type: "stage", stage: name });
 stage("loading its scripts");
 importScripts("reader.js", "imports.js", "exact.js", "std.js", "host.js");
 importScripts(...HOST_PART_FILES, "components.js", "served-files.js");
+reportUncaughtErrors("the program's Worker");
 stage("starting the task workers");
 prepareTaskPool(); // task Workers start while this worker is idle (host.js)
 
