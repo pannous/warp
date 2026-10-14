@@ -467,11 +467,11 @@ const AND_KEYWORD: &str = "and";
 /// `match -3 {…}` matches -3, no subtraction from `match` (card match-negative-subject)
 const CLAUSE_WORDS: [&str; 3] = ["where", "match", "switch"];
 /// Words between two operands besides the operator words (operators::is_operator_word): membership, `div`, `of`
-const JOINING_WORDS: [&str; 7] = [IN_KEYWORD, "contains", "has", "includes", "div", OF_WORD, "matches"];
+const JOINING_WORDS: [&str; 4] = [IN_KEYWORD, "div", OF_WORD, "matches"];
 
 /// A word joining two operands, never a call of the word before it: `a and b`, `n mod 100`, `x in xs`, `p is int`
 pub(crate) fn joins_operands(word: &str) -> bool {
-	crate::operators::is_operator_word(word) || JOINING_WORDS.contains(&word)
+	crate::operators::is_operator_word(word) || JOINING_WORDS.contains(&word) || CONTAINMENT_WORDS.contains(&word)
 }
 pub const ASSERT_MARKER: &str = "assert·else";
 /// The words that start the fallback of `try X else Y`: `else`, classical `catch`, Python's `except` (P60)
