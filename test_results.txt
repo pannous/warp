@@ -748,7 +748,6 @@ PASSED:
   ✓ control::test_threads::function_values_cross_to_a_task
   ✓ control::test_threads::lists_cross_to_a_task
   ✓ control::test_threads::stop_ends_a_running_task
-  ✓ control::test_threads::tasks_run_at_the_same_time
   ✓ control::test_threads::texts_floats_characters_and_lists_cross_to_a_task
   ✓ control::test_threads::try_catches_the_failure_of_a_task
   ✓ control::test_time_of_day::a_time_of_day_must_be_one
@@ -5374,6 +5373,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ control::test_threads::tasks_run_at_the_same_time
 
 SUMMARY:
-13 ignored, 5371 passed, 0 failed, 5371 total tested
+13 ignored, 5370 passed, 1 failed, 5371 total tested
