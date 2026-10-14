@@ -440,17 +440,6 @@ fn without_statements(program: Node, dropped: &dyn Fn(&Node) -> bool) -> Node {
 	})
 }
 
-/// Every symbol in `node`
-fn symbols_read(node: &Node) -> HashSet<&str> {
-	let mut symbols = HashSet::new();
-	node.visit(&mut |part| {
-		if let Node::Symbol(name) = part {
-			symbols.insert(name.as_str());
-		}
-	});
-	symbols
-}
-
 fn reads_any(node: &Node, names: &dyn Fn(&str) -> bool) -> bool {
 	node.mentions_where(names)
 }
@@ -608,13 +597,12 @@ fn callers(definitions: &[Definition], written: &dyn Fn(&str) -> Vec<String>) ->
 	let callees: Vec<Vec<&String>> = definitions
 		.iter()
 		.map(|definition| {
-			let read = symbols_read(&definition.function.body);
+			let read: HashSet<String> = definition.function.body.symbols_read().into_iter().collect();
 			names
 				.iter()
 				.copied()
 				.filter(|callee| {
-					*callee != &definition.function.name
-						&& spellings[*callee].iter().any(|name| read.contains(name.as_str()))
+					*callee != &definition.function.name && spellings[*callee].iter().any(|name| read.contains(name))
 				})
 				.collect()
 		})

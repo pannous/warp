@@ -15,12 +15,12 @@
 use super::listeners;
 use super::nodes::{block, call, children_rewritten, for_in_variable, if_then, key};
 use crate::declarations::word;
-use crate::lowering::{DefinitionForm, function_head};
-use crate::node::{Bracket, Node, Separator, symbol};
+use crate::lowering::{function_head, DefinitionForm};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::variable_signals::{ListenerWord, assign, is_round_head, listener_parts, symbols, with_old, with_value};
+use crate::variable_signals::{assign, is_round_head, listener_parts, symbols, with_old, with_value, ListenerWord};
 use crate::wasm_emitter::cells::{CELL_GET, CELL_NEW, CELL_SET, SIGNAL_LISTENERS, SIGNAL_LISTENERS_SET, SIGNAL_NEW};
-use crate::words::{COUNT_WORD, FROM_WORD, GLOBAL_WORD, ON_WORD, ONCE_WORD, WHENEVER_WORD};
+use crate::words::{COUNT_WORD, FROM_WORD, GLOBAL_WORD, ONCE_WORD, ON_WORD, WHENEVER_WORD};
 use std::collections::HashSet;
 
 /// `signal·set(s, v)`: store v in the signal s, then call its listeners
@@ -1119,7 +1119,11 @@ fn field_paths(node: &Node) -> Vec<String> {
 
 /// `for s in xs {…}`: the loop variable s
 fn loop_variable(items: &[Node]) -> Option<String> {
-	if items.len() == 5 { for_in_variable(items) } else { None }
+	if items.len() == 5 {
+		for_in_variable(items)
+	} else {
+		None
+	}
 }
 
 /// Each `for s in xs {…}` in the body: the loop variable and the name of the list

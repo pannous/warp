@@ -7,10 +7,10 @@
 pub mod calendar;
 
 use crate::extensions::numbers::Number;
-use crate::node::{Bracket, Node, Separator, error};
+use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasm_emitter::time_zones::{EARLIER, LATER, REJECT};
-pub use calendar::{Disambiguation, Duration, Overflow, Time, TzRules, Zone, Zoned, with_rules};
+pub use calendar::{with_rules, Disambiguation, Duration, Overflow, Time, TzRules, Zone, Zoned};
 use std::collections::{HashMap, HashSet};
 
 pub const NOW_WORD: &str = "now";

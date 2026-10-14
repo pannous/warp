@@ -3,7 +3,7 @@
 //! Builtins that warp computes the way a warp definition would come along the same way when called.
 
 use super::{function_definition, statements};
-use crate::modules::{USE_KEYWORDS, std_module_source};
+use crate::modules::{std_module_source, USE_KEYWORDS};
 use crate::node::{Bracket, Node, Separator};
 
 /// builtin words as warp definitions giving what warp gives: `sum` folds from 0 (`sum(["a", "b"])` is "0ab")

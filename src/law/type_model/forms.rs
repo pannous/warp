@@ -1,7 +1,7 @@
 //! Reading warp forms for the export: literals and type words, `on`/`emit` effects, definitions and their heads, locals and late binding
 use super::*;
 pub(super) use crate::lowering::nodes::parameter_word;
-use crate::lowering::{DefinitionForm, FunctionHead, function_head};
+use crate::lowering::{function_head, DefinitionForm, FunctionHead};
 
 pub(super) fn unsupported(node: &Node) -> Lean {
 	Err(format!("not in W0: {}", node.serialize().trim()))

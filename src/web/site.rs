@@ -189,7 +189,7 @@ impl Renderer {
 		Ok(page(
 			&self.title,
 			page_html_text(&html)?,
-			&replies_script(&items_of(&requests), &items_of(&values)),
+			&replies_script(&requests.as_items(), &values.as_items()),
 			&self.scripts,
 			&self.worker_scripts,
 			root,
@@ -211,14 +211,6 @@ fn page_html_text(rendered: &Node) -> Result<&str, String> {
 	}
 }
 
-/// A list's items, a single value as one
-fn items_of(list: &Node) -> Vec<Node> {
-	match list.drop_meta() {
-		Node::List(items, _, _) => items.clone(),
-		single => vec![single.clone()],
-	}
-}
-
 /// The replies of the page's server calls as host-tasks.js reads them: each request's url and arguments with the reply
 /// the server gives it (web_server.rs Answer: a text as text/plain, any other value as JSON)
 fn replies_script(requests: &[Node], values: &[Node]) -> String {
@@ -226,7 +218,7 @@ fn replies_script(requests: &[Node], values: &[Node]) -> String {
 		.iter()
 		.zip(values)
 		.filter_map(|(request, value)| {
-			let [url, arguments] = items_of(request).try_into().ok()?;
+			let [url, arguments] = request.as_items().try_into().ok()?;
 			let answer = crate::web::web_server::Answer::of(value);
 			Some(serde_json::json!({
 				"url": url.name(),
@@ -277,7 +269,8 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, 
 		other => other?,
 	};
 	let page_routes: Vec<String> = match exports(&rendering.bytes, crate::routes::PAGE_ROUTES) {
-		true => items_of(&read_after_main(crate::routes::PAGE_ROUTES)?)
+		true => read_after_main(crate::routes::PAGE_ROUTES)?
+			.as_items()
 			.iter()
 			.map(Node::text_or_name)
 			.collect(),
@@ -287,7 +280,7 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, 
 	let asks_the_server = exports(&rendering.bytes, crate::serve::RPC_VALUES);
 	let rendering_bytes = rendering.bytes.clone();
 	let module = if asks_the_server {
-		let values = items_of(&read_after_main(crate::serve::RPC_VALUES)?);
+		let values = read_after_main(crate::serve::RPC_VALUES)?.as_items();
 		compile(&|| crate::pipeline::with_server_values(values.clone(), || crate::pipeline::compile(code)))?
 	} else {
 		rendering

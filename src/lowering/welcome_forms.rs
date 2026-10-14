@@ -8,7 +8,7 @@
 //! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
 use super::nodes::{call, children_rewritten, is_function_keyword, is_type_word, key};
-use crate::node::{Bracket, Node, Separator, symbol};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::GENERIC_MARK;
 use crate::words::{IN_WORD, ON_WORD, WHENEVER_WORD};

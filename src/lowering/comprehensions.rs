@@ -2,9 +2,9 @@
 //! `(made = []; for x in xs { if c { made += [x * x] } }; made)`. Lowered first, so the loop and the append go through
 //! every later pass like written ones; `+=`, no `push`, which a program's own `push(st, x)` would answer. `xs where it > 1` filters like `[it for it in xs if it > 1]`.
 
-use super::nodes::{Counter, children_rewritten, key, phrase_words};
+use super::nodes::{children_rewritten, key, phrase_words, Counter};
 use crate::library_words::substitute;
-use crate::node::{Bracket, Node, Separator, symbol};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
 use crate::words::{FOR_WORD, IN_WORD};

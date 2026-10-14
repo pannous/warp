@@ -13,7 +13,7 @@
 
 use crate::compile_context;
 use crate::node::{Bracket, Node};
-use crate::operators::{Op, glyph_operator};
+use crate::operators::{glyph_operator, Op};
 
 /// The "got it" topic of a plain hint is its reason: `a` (all of this kind) silences every hint giving that reason
 const HINT_TOPIC_PREFIX: &str = "hint:";
@@ -717,7 +717,7 @@ pub mod hints {
 	/// Bracket indexing (counts from 0) vs hash indexing (counts from 1)
 	pub fn index_operator(var: &str, idx: &str, used_bracket: bool) {
 		let looks_up_a_key = idx.starts_with(['"', '\'']); // `ages["alice"]` counts no position
-		// cards g-2WPo, g_YiSA (user): only a number, where `xs#2` is as short as `xs[1]`; `xs[i]` and `xs[i+1]` stay
+													 // cards g-2WPo, g_YiSA (user): only a number, where `xs#2` is as short as `xs[1]`; `xs[i]` and `xs[i+1]` stay
 		if looks_up_a_key || !is_number_index(idx) {
 			return;
 		}
@@ -1039,7 +1039,7 @@ mod tests {
 	#[test]
 	fn test_hint_position() {
 		assert_eq!(crate::wasm_emitter::eval("'abc'"), "abc"); // hint:
-		// Clear position
+														 // Clear position
 		clear_hint_position();
 		assert_eq!(position_string(), "");
 

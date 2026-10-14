@@ -1,10 +1,10 @@
 // type string = str; NO! ugly for a reason!
-use crate::extensions::lists::{VecExtensions2, map};
+use crate::extensions::lists::{map, VecExtensions2};
 use crate::extensions::numbers::Number;
 use crate::extensions::strings::StringExtensions;
 use crate::meta::{DataType, DataValue, LineInfo};
 use crate::node::Node::*;
-use crate::operators::{Op, is_function_keyword};
+use crate::operators::{is_function_keyword, Op};
 use crate::type_kinds::Kind;
 use serde::{Deserialize, Serialize};
 use std::cmp::PartialEq;
@@ -503,15 +503,6 @@ impl Node {
 	/// a key, the node under metadata; any other node as it is. A lowering pass's recursion over the rest of the tree
 	pub fn map_children(self, mut rewrite: impl FnMut(Node) -> Node) -> Node {
 		match self {
-			List(items, bracket, separator) => List(items.into_iter().map(&mut rewrite).collect(), bracket, separator),
-			Key(left, op, right) => {
-				let left = rewrite(*left);
-				Key(Box::new(left), op, Box::new(rewrite(*right)))
-			}
-			Meta { node, data } => Meta {
-				node: Box::new(rewrite(*node)),
-				data,
-			},
 			// a class body: its methods are lowered as functions are, its field declarations stay (card method-bodies)
 			Type { name, body } => {
 				let mut rewrite_code = |item: Node| if is_class_code(&item) { rewrite(item) } else { item };
@@ -526,7 +517,7 @@ impl Node {
 					body: Box::new(body),
 				}
 			}
-			other => other,
+			other => children_rewritten(other, rewrite),
 		}
 	}
 
@@ -588,6 +579,37 @@ impl Node {
 			}
 		});
 		names.into_iter().collect()
+	}
+
+	/// The name `x = …`, `f(x) := …`, `f := …it…`, `def f(x){…}` or `def ((init ø) {1})` defines
+	pub fn defined_name(&self) -> Option<String> {
+		fn leading_symbol(node: &Node) -> Option<String> {
+			match node.drop_meta() {
+				Symbol(name) => Some(name.clone()),
+				List(items, _, _) => leading_symbol(items.first()?),
+				_ => None,
+			}
+		}
+		match self.drop_meta() {
+			Key(target, Op::Define | Op::Assign, _) => leading_symbol(target),
+			List(words, _, _) if words.len() > 1 && words[0].symbol_name().is_some_and(is_function_keyword) => {
+				Some(leading_name(&words[1])).filter(|name| !name.is_empty())
+			}
+			_ => None,
+		}
+	}
+
+	/// Every symbol anywhere in this node, once each, in reading order
+	pub fn symbols_read(&self) -> Vec<String> {
+		let mut symbols: Vec<String> = vec![];
+		self.visit(&mut |part| {
+			if let Symbol(name) = part {
+				if !symbols.contains(name) {
+					symbols.push(name.clone());
+				}
+			}
+		});
+		symbols
 	}
 
 	/// The names `global x` and `global x = v` declare anywhere in this node

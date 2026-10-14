@@ -1,8 +1,8 @@
 //! `use <name>` file modules: `name.wasp` or `name.warp` is loaded and its definitions become part of the program.
 //! A name found nowhere locally but in the registry packages.warp is a package: its git repository, fetched into packages/<name>.
-use crate::node::{Bracket, Node, Separator, error};
-use crate::operators::{Op, is_function_keyword};
-use crate::versions::{MINIMUM_KEYWORD, Requirement, Version, declared_version, is_version_keyword, version_of};
+use crate::node::{error, Bracket, Node, Separator};
+use crate::operators::{is_function_keyword, Op};
+use crate::versions::{declared_version, is_version_keyword, version_of, Requirement, Version, MINIMUM_KEYWORD};
 use crate::warp_parser::WarpParser;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};

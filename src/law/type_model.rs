@@ -3,7 +3,7 @@
 //! (Checker.lean: names, charged names, functions, statements in source order); the model elaborates and checks it
 //! and answers `ok <type>` or `rejected`. Warp's own verdict is whether `pipeline::compile` accepts the program.
 //! Contract: W0 rejects ⇒ warp rejects; every exception is a known hole with a card.
-use super::lean::{LEAN_TIMEOUT, lean_executable, run_with_timeout};
+use super::lean::{lean_executable, run_with_timeout, LEAN_TIMEOUT};
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;

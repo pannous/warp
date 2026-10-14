@@ -272,7 +272,7 @@ impl Date {
 				return Err(format!(
 					"{year:04}-{month:02}-{:02} does not exist: use add(…, overflow: clamp) for {year:04}-{month:02}-{last:02}",
 					self.day
-				));
+				))
 			}
 		};
 		Ok(civil_from_days(days_from_civil(year, month, day) + days))
@@ -492,7 +492,11 @@ pub fn literal_len(chars: &[char]) -> usize {
 		}
 	}
 	let at_boundary = chars.get(end).is_none_or(|c| !(c.is_alphanumeric() || *c == '_'));
-	if at_boundary { end } else { 0 }
+	if at_boundary {
+		end
+	} else {
+		0
+	}
 }
 
 /// Validate a literal found by `literal_len`: an offset makes an instant, a bracketed zone a zoned time
@@ -550,7 +554,7 @@ pub fn parse_literal(text: &str) -> Result<Time, String> {
 			Some(_) => {
 				return Err(format!(
 					"unsupported suffix [{suffix}] in {text}: only [_tzdata=version] is known"
-				));
+				))
 			}
 			None if zone.is_none() => zone = Some(zone_named(suffix)?),
 			None => return Err(format!("{text} names two zones")),

@@ -12,11 +12,11 @@
 //! `before test {…}` before it.
 
 use super::listeners;
-use super::nodes::{Counter, block, call, children_rewritten, if_then, key};
+use super::nodes::{block, call, children_rewritten, if_then, key, Counter};
 use crate::declarations::{handler_parts, word};
-use crate::node::{Bracket, Node, Separator, symbol};
+use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::words::{ON_WORD, ONCE_WORD, WHENEVER_WORD};
+use crate::words::{ONCE_WORD, ON_WORD, WHENEVER_WORD};
 use std::collections::{HashMap, HashSet};
 
 const SET_WORD: &str = "set";
@@ -690,18 +690,10 @@ fn function_definitions(node: &Node) -> HashMap<String, &Node> {
 /// The function a definition defines (`f(x) := …`, `def f(x) {…}`, `def f(x): …`), else empty
 pub(crate) fn defined_function_name(part: &Node) -> String {
 	match part {
-		Node::Key(head, Op::Define, _) => definition_name(head),
-		Node::List(items, _, _) if defines_function(items) => items.get(1).map(definition_name).unwrap_or_default(),
-		_ => String::new(),
-	}
-}
-
-/// `f`, `f(x)`, `f(x) {…}`, `f(x): …`: f
-fn definition_name(head: &Node) -> String {
-	match head.drop_meta() {
-		Node::Symbol(name) => name.clone(),
-		Node::List(items, _, _) => items.first().map(definition_name).unwrap_or_default(),
-		Node::Key(head, _, _) => definition_name(head),
+		Node::Key(head, Op::Define, _) => crate::node::leading_name(head),
+		Node::List(items, _, _) if defines_function(items) => {
+			items.get(1).map(crate::node::leading_name).unwrap_or_default()
+		}
 		_ => String::new(),
 	}
 }
