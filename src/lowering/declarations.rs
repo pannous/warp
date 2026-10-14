@@ -29,9 +29,15 @@ const COLLECTION_DECLARATION_WORDS: [(&str, &str); 5] = [
 
 /// `tuple`, the annotation `tuple t = (…)` lowers to, and the other collection words a declaration takes
 pub(crate) fn is_collection_type_word(word: &str) -> bool {
+	collection_type_meant(word).is_some()
+}
+
+/// The collection type a declaration word means: `dict` means map, `array` list
+pub(crate) fn collection_type_meant(word: &str) -> Option<&'static str> {
 	COLLECTION_DECLARATION_WORDS
 		.iter()
-		.any(|(written, meant)| *written == word || *meant == word)
+		.find(|(written, meant)| *written == word || *meant == word)
+		.map(|(_, meant)| *meant)
 }
 
 const SELF_WORD: &str = "self";

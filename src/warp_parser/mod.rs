@@ -154,26 +154,6 @@ const PYTHON_ROOT_CLASS: &str = "object";
 const RECORD_WORD: &str = "record";
 /// `1 upto 10` excludes 10 (wiki/range.md), asked about because readers expect either
 const UPTO: &str = "upto";
-/// English operator words (samples/natural.warp, wiki/operator.md lists `plus` and `equals` as aliases): the longer
-/// phrases first, so `is greater than` is no `is`
-const WORD_OPERATORS: [(&str, Op); 15] = [
-	// identity (P208): `same` is the word, `===` its alias; no `identical` (user)
-	("is not the same as", Op::NotIdentical),
-	("is the same as", Op::Identical),
-	("same as", Op::Identical),
-	("same", Op::Identical),
-	("is greater than", Op::Gt),
-	("is less than", Op::Lt),
-	("is at least", Op::Ge),
-	("is at most", Op::Le),
-	("greater than", Op::Gt),
-	("less than", Op::Lt),
-	("divided by", Op::Div),
-	("plus", Op::Add),
-	("minus", Op::Sub),
-	("equals", Op::Eq),
-	("through", Op::To),
-];
 const IS_IN_PHRASE: &str = "is in";
 /// `xs contains x` (and its synonyms, lowering/library_words.rs COLLECTION_CONTAINS): `x in xs` the other way round
 const CONTAINMENT_WORDS: [&str; 3] = ["contains", "has", "includes"];
@@ -182,8 +162,6 @@ const EACH_WORD: &str = "each";
 /// `10 down to 1` is `reverse(1 to 10)`
 const DOWN_WORD: &str = "down";
 const REVERSE_WORD: &str = "reverse";
-/// Word spellings of `≈` (wiki/operator.md): equal within the relative `tolerance`
-const SIMILARITY_WORDS: [&str; 2] = ["circa", "approximately"];
 const EXCLUSIVE_DOTS: &str = "..";
 /// Topic of the Ask about `for i in 0..n-1`, which Kotlin reads inclusive
 const KOTLIN_RANGE: &str = "kotlin-range";
@@ -202,8 +180,6 @@ const COUNT_CALL: &str = "count";
 const EMPTY_WORD: &str = "empty";
 /// Operators that may follow a suffix `!` directly: `x!+1`, `x!*2` (`!=` is the inequality)
 const INFIX_AFTER_BANG: [char; 9] = ['+', '-', '*', '/', '%', '^', '<', '>', ')'];
-/// Words that may follow a test word and so end the condition
-const CONDITION_FOLLOWERS: [&str; 5] = ["then", "else", "and", "or", "do"];
 /// Python's `elif`, Perl's and Ruby's `elsif`, PHP's `elseif`: all `else if`
 const ELSE_IF_WORDS: [&str; 3] = ["elif", "elsif", "elseif"];
 const RETURN_KEYWORD: &str = "return";
@@ -394,8 +370,6 @@ fn with_arrow_bodies(mut items: Vec<Node>) -> Vec<Node> {
 
 /// The infix operators continue_expr reads apart from the operator table
 enum SpecialInfix {
-	/// `a mod b`, `a rem b`
-	Keyword(Op),
 	/// `7//2`, `7 div 2`, `x//=2`
 	FloorDivision { compound: bool },
 	/// `xs |> f(a)`
@@ -411,7 +385,6 @@ enum SpecialInfix {
 impl SpecialInfix {
 	fn applied(self, lhs: Node, operand: Node) -> Node {
 		match self {
-			SpecialInfix::Keyword(op) => Node::Key(Box::new(lhs), op, Box::new(operand)),
 			SpecialInfix::FloorDivision { compound } => {
 				let quotient = floor_division(lhs.clone(), operand);
 				if compound {
@@ -490,15 +463,16 @@ pub const STATIC_KEYWORD: &str = "static";
 const AFTER_KEYWORD: &str = "after";
 /// `sleep 1s and print "x"`: an `and` between two statements runs them one after the other
 const AND_KEYWORD: &str = "and";
-/// Words after `and` that continue an expression rather than start a statement: `a and b or c`
-const CONTINUING_WORDS: [&str; 7] = ["and", "or", "xor", "then", "else", "is", "in"];
-/// A prefix operator word after `and` starts its operand, not a statement: `a and not c` (card let-if)
-const OPERAND_PREFIX_WORDS: [&str; 1] = ["not"];
 /// Words a condition or subject follows: `xs where #it > 1` counts it, `where` takes no `#` index (card topo-sort-wasm);
 /// `match -3 {…}` matches -3, no subtraction from `match` (card match-negative-subject)
 const CLAUSE_WORDS: [&str; 3] = ["where", "match", "switch"];
-/// Words between two operands, as an operator: `and n mod 100 <= 13` continues the condition (card if-then-chain)
-const INFIX_WORDS: [&str; 6] = ["mod", "modulo", "rem", "div", "contains", "as"];
+/// Words between two operands besides the operator words (operators::is_operator_word): membership, `div`, `of`
+const JOINING_WORDS: [&str; 4] = [IN_KEYWORD, "div", OF_WORD, "matches"];
+
+/// A word joining two operands, never a call of the word before it: `a and b`, `n mod 100`, `x in xs`, `p is int`
+pub(crate) fn joins_operands(word: &str) -> bool {
+	crate::operators::is_operator_word(word) || JOINING_WORDS.contains(&word) || CONTAINMENT_WORDS.contains(&word)
+}
 pub const ASSERT_MARKER: &str = "assert·else";
 /// The words that start the fallback of `try X else Y`: `else`, classical `catch`, Python's `except` (P60)
 const FALLBACK_WORDS: [&str; 3] = [ELSE_KEYWORD, "catch", "except"];
@@ -524,8 +498,6 @@ fn iterates_keys(iterable: &Node) -> bool {
 
 /// How tight a suffix `!` binds: below the index `#`, above `^` and arithmetic
 const BANG_BP: u8 = Op::Hash.binding_power().0.midpoint(Op::Pow.binding_power().0);
-/// `nand` and its glyph pair, both `not (a and b)`
-const NAND_SPELLINGS: [&str; 3] = ["nand", "¬&", "⊼"];
 const TO_WORD: &str = "to";
 const TO_SENTENCE_WORD: &str = "To";
 /// `to greet p do …`: the word between a `to` definition's parameters and its body

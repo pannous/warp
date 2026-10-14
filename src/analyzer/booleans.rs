@@ -109,7 +109,7 @@ pub fn is_boolean(node: &Node, scope: &Scope) -> bool {
 			Op::Not => matches!(left.drop_meta(), Node::Empty),
 			// `2 as bool`, also a function's declared `-> bool` result (card bool-conversion)
 			Op::As => is_bool_type(&right.drop_meta().name()),
-			Op::And | Op::Or | Op::BitAnd | Op::BitOr => is_boolean(left, scope) && is_boolean(right, scope),
+			_ if op.is_logical() || op.is_bitwise() => is_boolean(left, scope) && is_boolean(right, scope),
 			// `c ? yes : f(n)`, `if c then yes else f(n)`: both branches
 			Op::Question => {
 				matches!(right.drop_meta(), Node::Key(then, Op::Colon, otherwise) if is_boolean(then, scope) && is_boolean(otherwise, scope))

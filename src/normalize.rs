@@ -480,12 +480,12 @@ pub mod hints {
 	pub fn operator(written: &str, is_prefix: bool) {
 		let mut characters = written.chars();
 		if let (Some(glyph), None) = (characters.next(), characters.next()) {
-			if let Some((_, canonical)) = glyph_operator(glyph) {
-				match canonical {
+			if let Some(op) = glyph_operator(glyph) {
+				match op.as_str() {
 					"and" => and_operator(written),
 					"or" => or_operator(written),
 					"xor" => {}
-					_ => hint(written, canonical, "standard spelling of the operator"),
+					canonical => hint(written, canonical, "standard spelling of the operator"),
 				}
 				return;
 			}

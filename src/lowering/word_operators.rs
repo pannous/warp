@@ -30,40 +30,33 @@ pub fn lower(node: Node) -> Node {
 
 fn operators(node: Node, aliases: &[(&str, &str, Op)]) -> Node {
 	let alias_of = |word: &Node| match word.drop_meta() {
-		Node::Symbol(name) => aliases
-			.iter()
-			.find(|(alias, _, _)| alias == name)
-			.map(|(alias, canonical, op)| {
-				crate::normalize::set_position_of(word);
-				crate::normalize::hint(alias, canonical, &format!("{alias} is the word {canonical}"));
-				*op
-			}),
+		Node::Symbol(name) => aliases.iter().find(|(alias, _, _)| alias == name),
 		_ => None,
+	};
+	let noted = |word: &Node| {
+		let (alias, canonical, op) = alias_of(word).expect("guarded");
+		crate::normalize::set_position_of(word);
+		crate::normalize::hint(alias, canonical, &format!("{alias} is the word {canonical}"));
+		*op
 	};
 	match node {
 		// `root 4`, `root(4)`
-		Node::List(items, bracket, separator) if items.len() == 2 && alias_of(&items[0]).is_some() => {
-			let op = alias_of(&items[0]).expect("guarded");
+		Node::List(items, _, _) if items.len() == 2 && alias_of(&items[0]).is_some() => {
+			let op = noted(&items[0]);
 			let [_, argument] = <[Node; 2]>::try_from(items).expect("two items");
-			let _ = (bracket, separator);
 			key(Node::Empty, op, operators(argument, aliases))
 		}
 		// the pipe stage `| root` (pipes.rs reads the operator alone)
-		Node::Meta { node, data }
-			if crate::pipes::is_pipe_stage(&Node::Meta {
-				node: node.clone(),
-				data: data.clone(),
-			}) && alias_of(&node).is_some() =>
-		{
-			let op = alias_of(&node).expect("guarded");
-			Node::Meta {
-				node: Box::new(key(Node::Empty, op, Node::Empty)),
+		stage @ Node::Meta { .. } if crate::pipes::is_pipe_stage(&stage) => match stage {
+			Node::Meta { node, data } if alias_of(&node).is_some() => Node::Meta {
+				node: Box::new(key(Node::Empty, noted(&node), Node::Empty)),
 				data,
-			}
-		}
+			},
+			other => other.map_children(|child| operators(child, aliases)),
+		},
 		// the stage `then root` (P158, pipes.rs reads the operator alone)
 		Node::Key(value, Op::Then, stage) if alias_of(&stage).is_some() => {
-			let op = alias_of(&stage).expect("guarded");
+			let op = noted(&stage);
 			key(operators(*value, aliases), Op::Then, key(Node::Empty, op, Node::Empty))
 		}
 		other => other.map_children(|child| operators(child, aliases)),

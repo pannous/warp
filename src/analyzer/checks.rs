@@ -248,10 +248,10 @@ pub fn check_operator_word_functions(program: &Node) -> Option<Diagnostic> {
 /// first part of `fun norm(x) { … }`; `not(x)` arrives as the operator
 fn operator_word(head: &Node) -> Option<(String, Op)> {
 	match head.drop_meta() {
-		Node::Key(empty, op @ (Op::Sqrt | Op::Cbrt | Op::Abs | Op::Not), _) if empty.is_nothing() => OPERATOR_WORDS
+		Node::Key(empty, op, _) if empty.is_nothing() => crate::warp_parser::PREFIX_OPERATOR_WORDS
 			.iter()
-			.find(|(known, _)| known == op)
-			.map(|(_, word)| (word.to_string(), *op)),
+			.find(|(_, known)| known == op)
+			.map(|(word, op)| (word.to_string(), *op)),
 		Node::List(items, _, _) => match items.first().map(Node::drop_meta) {
 			Some(Node::Symbol(name)) => crate::warp_parser::PREFIX_OPERATOR_WORDS
 				.iter()
@@ -263,14 +263,6 @@ fn operator_word(head: &Node) -> Option<(String, Op)> {
 		_ => None,
 	}
 }
-
-/// The words the parser reads as prefix operators (warp_parser lookahead.rs peek_prefix_operator)
-const OPERATOR_WORDS: [(Op, &str); 4] = [
-	(Op::Sqrt, "sqrt"),
-	(Op::Cbrt, "cbrt"),
-	(Op::Abs, "abs"),
-	(Op::Not, "not"),
-];
 
 /// `double := it*2` or `double(x) := …`: a type word names a type, never a function (user decision P20)
 pub(super) fn check_type_word_functions(program: &Node) -> Option<Diagnostic> {

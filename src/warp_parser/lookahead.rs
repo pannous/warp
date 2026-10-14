@@ -2,16 +2,23 @@
 
 use super::*;
 
-/// `abs x`, `norm x`: the absolute value (card g-1pvQ: norm is a synonym)
-/// The prefix operators written as words: `sqrt x`, `cbrt x`, `abs x`, `norm x`
 /// `∜x`, read as `√√x`
 pub(super) const FOURTH_ROOT: char = '∜';
-pub const PREFIX_OPERATOR_WORDS: [(&str, Op); 4] = [
+/// The prefix operators written as words: `sqrt x`, `cbrt x`, `abs x`, `norm x` (card g-1pvQ: norm is a synonym of abs),
+/// `not x`
+pub const PREFIX_OPERATOR_WORDS: [(&str, Op); 5] = [
 	("sqrt", Op::Sqrt),
 	("cbrt", Op::Cbrt),
 	("abs", Op::Abs),
 	("norm", Op::Abs),
+	("not", Op::Not),
 ];
+/// operators::OPERATOR_SPELLINGS, the longest first: `<=` before `<`, `is less than` before `is`
+static LONGEST_SPELLINGS_FIRST: std::sync::LazyLock<Vec<(&str, Op)>> = std::sync::LazyLock::new(|| {
+	let mut spellings: Vec<_> = crate::operators::all_spellings().collect();
+	spellings.sort_by_key(|(spelling, _)| std::cmp::Reverse(spelling.chars().count()));
+	spellings
+});
 /// Infix operators that may follow a suffix: `10% + 1`, `x abs * 2`
 const SUFFIX_FOLLOWERS: [char; 6] = ['+', '-', '*', '/', '<', '>'];
 /// Operator words that stay operators before a colon: `if c then: a else: b`, `defp f(x), do: x`
@@ -162,170 +169,69 @@ impl WarpParser {
 			&& !matches!(self.peek_char(after + 1), ':' | '=')
 	}
 
-	/// Peek ahead for an infix operator, returns (Op, chars_to_consume) if found
-	/// Checks longer operators first (greedy matching)
+	/// Peek ahead for an infix operator, returns (Op, chars_to_consume) if found: the longest spelling of
+	/// operators::OPERATOR_SPELLINGS that fits here and its context allows
 	pub(super) fn peek_operator(&self) -> Option<(Op, usize)> {
-		let (c1, c2, c3) = (self.current_char(), self.peek_char(1), self.peek_char(2));
-		if (c1, c2) == ('?', ':') {
+		if (self.current_char(), self.peek_char(1)) == ('?', ':') {
 			return None; // the elvis `?:` is no ternary, `try_parse_elvis` takes it
 		}
 		// `fetch ://host/path`: the colon starts a URL (card pannous-com), no key
 		if self.word_names_key() || self.starts_path_literal() || self.url_follows() {
 			return None;
 		}
-
-		if let Some(word) = SIMILARITY_WORDS.iter().find(|word| self.matches_keyword(word)) {
-			return Some((Op::Similar, word.len()));
-		}
-		// Keywords (4-char)
-		if self.matches_keyword("then") {
-			return Some((Op::Then, 4));
-		}
-		if self.matches_keyword("else") && !self.else_arm_key() {
-			return Some((Op::Else, 4));
-		}
-
-		// 3-char operators
-		match (c1, c2, c3) {
-			('.', '.', '.') => return Some((Op::To, 3)),
-			('=', '=', '=') => return Some((Op::Identical, 3)),
-			('!', '=', '=') => return Some((Op::NotIdentical, 3)),
-			('.', '.', '<') => return Some((Op::Range, 3)), // Swift-style exclusive range
-			('&', '&', '=') => return Some((Op::AndAssign, 3)),
-			('|', '|', '=') => return Some((Op::OrAssign, 3)),
-			('^', '^', '=') => return Some((Op::XorAssign, 3)),
-			('*', '*', '=') => return Some((Op::PowAssign, 3)),
-			_ => {}
-		}
-		// Keywords (3-char)
-		if self.matches_keyword("and") {
-			return Some((Op::And, 3));
-		}
-		if self.matches_keyword("xor") {
-			return Some((Op::Xor, 3));
-		}
-		if self.matches_keyword("not") {
-			return Some((Op::Not, 3));
-		}
-
-		// 2-char operators
-		match (c1, c2) {
-			('a', 's') if !is_identifier_char(c3) => return Some((Op::As, 2)),
-			('?', '?') => return Some((Op::Coalesce, 2)),
-			('?', '.') if c3.is_alphabetic() || c3 == '_' => return Some((Op::SafeDot, 2)), // `x?.name`; `x ?.5 : 1` is a ternary
-			(':', '=') => return Some((Op::Define, 2)),
-			('~', '~') => return Some((Op::Rough, 2)),
-			(':', ':') => return Some((Op::Scope, 2)),
-			('-', '>') => return Some((Op::Arrow, 2)),
-			// R's `x <- 3` assigns with a note, the cramped `x<-3` is an error (P145, left_arrow_assignment)
-			('<', '-') if c3.is_whitespace() || !self.prev_char().is_whitespace() => return Some((Op::Assign, 2)),
-			('=', '>') => return Some((Op::FatArrow, 2)),
-			('*', '*') => return Some((Op::Pow, 2)),
-			('+', '=') => return Some((Op::AddAssign, 2)),
-			('-', '=') => return Some((Op::SubAssign, 2)),
-			('*', '=') => return Some((Op::MulAssign, 2)),
-			('/', '=') => return Some((Op::DivAssign, 2)),
-			('%', '=') => return Some((Op::ModAssign, 2)),
-			('^', '=') => return Some((Op::PowAssign, 2)),
-			('<', '<') if !self.options.wit_mode => return Some((Op::Shl, 2)),
-			// `list<list<int>>` closes two generics, a shift has an operand behind it
-			('>', '>') if !self.options.wit_mode && self.operand_follows(2) => return Some((Op::Shr, 2)),
-			('<', '=') => return Some((Op::Le, 2)),
-			('>', '=') => return Some((Op::Ge, 2)),
-			('=', '=') => return Some((Op::Eq, 2)),
-			('!', '=') => return Some((Op::Ne, 2)),
-			('+', '+') => return Some((Op::Inc, 2)),
-			('-', '-') => return Some((Op::Dec, 2)),
-			('.', '.') => return Some((Op::Range, 2)),
-			('+', '-') if c3.is_whitespace() && self.prev_char().is_whitespace() => return Some((Op::PlusMinus, 2)),
-			('&', '&') => return Some((Op::And, 2)),
-			('|', '|') => return Some((Op::Or, 2)),
-			_ => {}
-		}
-		// a blank after it: `plus(a, b)` stays a call of the function plus
-		if let Some((phrase, op)) = WORD_OPERATORS
-			.iter()
-			.find(|(phrase, _)| self.matches_keyword(phrase) && matches!(self.peek_char(phrase.len()), ' ' | '\t'))
-		{
-			return Some((*op, phrase.len()));
-		}
-		// Keywords (2-char)
-		if self.matches_keyword("or") {
-			return Some((Op::Or, 2));
-		}
-		if self.matches_keyword("is") {
-			return Some((Op::Eq, 2));
-		} // wiki/equality.md: `is` compares by value like ==
-		if self.matches_keyword("be") {
-			return Some((Op::Define, 2));
-		} // wiki/be.md
-		if self.matches_keyword("if") && !self.condition_has_branch(2) {
-			return Some((Op::If, 2));
-		}
-		if self.matches_keyword("do") {
-			return Some((Op::Do, 2));
-		}
-		if self.matches_keyword("to") {
-			return Some((Op::To, 2));
-		}
-		if self.matches_keyword("upto") {
-			return Some((Op::Range, 4));
-		} // wiki/range.md: `1 upto 10` excludes 10
 		if let Some(length) = self.down_to_length() {
 			return Some((Op::To, length));
 		}
-		// Kotlin's `for i in 0 until n`; elsewhere `until` guards a statement: `i++ until c`
-		if self.in_for_header && self.matches_keyword("until") {
-			return Some((Op::Range, 5));
-		}
+		LONGEST_SPELLINGS_FIRST
+			.iter()
+			.filter(|(spelling, _)| self.spelled_here(spelling))
+			.find_map(|(spelling, op)| self.operator_in_context(spelling, *op))
+			.map(|(op, spelling)| (op, spelling.chars().count()))
+	}
 
-		if self.css_color_length().is_some() || self.at_pseudo_class_selector() {
-			return None; // `solid #8884`: the color is the next word of the value
-		}
-		if self.in_style_sheet
-			&& matches!(c1, '.' | '#')
-			&& self.prev_char().is_whitespace()
-			&& self.is_identifier_start(1)
-		{
-			return None; // `#main .x`: the descendant selector's next part
-		}
-		// 1-char operators
-		match c1 {
-			':' => Some((Op::Colon, 1)),
-			'=' if self.equals_compares => Some((Op::Eq, 1)),
-			'=' => Some((Op::Assign, 1)),
+	/// The spelling starts here; a word ends here too: `and` but not `android`, `plus a` but not the call `plus(a, b)`
+	fn spelled_here(&self, spelling: &str) -> bool {
+		let length = spelling.chars().count();
+		let after = self.peek_char(length);
+		spelling.chars().enumerate().all(|(i, c)| self.peek_char(i) == c)
+			&& !(spelling.ends_with(char::is_alphabetic) && (is_identifier_char(after) || after == '('))
+	}
+
+	/// The operator a fitting spelling is here, None where the context reads it otherwise
+	fn operator_in_context<'a>(&self, spelling: &'a str, op: Op) -> Option<(Op, &'a str)> {
+		let (after, prev) = (self.peek_char(spelling.chars().count()), self.prev_char());
+		let allowed = match spelling {
+			"else" => !self.else_arm_key(),
+			"if" => !self.condition_has_branch(2),
+			"until" => self.in_for_header,
+			"?." => after.is_alphabetic() || after == '_', // `x?.name`; `x ?.5 : 1` is a ternary
+			// R's `x <- 3` assigns with a note, the cramped `x<-3` is an error (P145, left_arrow_assignment)
+			"<-" => after.is_whitespace() || !prev.is_whitespace(),
+			"<<" | "<" | ">" => !self.options.wit_mode, // angle brackets only delimit type arguments
+			// `list<list<int>>` closes two generics, a shift has an operand behind it
+			">>" => !self.options.wit_mode && self.operand_follows(2),
+			"+-" => after.is_whitespace() && prev.is_whitespace(),
+			"/" => after != '/', // Don't treat // as division - it's a comment
 			// `a .5` is a list of two values, `a.5` a member access
-			'.' if !(self.prev_char().is_whitespace() && self.number_starts_at(0)) => Some((Op::Dot, 1)),
-			'+' => Some((Op::Add, 1)),
-			'±' => Some((Op::PlusMinus, 1)),
-			'-' => Some((Op::Sub, 1)),
-			'*' => Some((Op::Mul, 1)),
-			'/' if c2 != '/' => Some((Op::Div, 1)), // Don't treat // as division - it's a comment
-			'%' => Some((Op::Mod, 1)),
-			'^' => Some((Op::Pow, 1)),
-			'⌞' => Some((Op::LogBase, 1)),
-			'⌟' => Some((Op::LogOf, 1)),
-			'×' | '⋅' => Some((Op::Mul, 1)),
-			'÷' => Some((Op::Div, 1)),
-			'<' | '>' if self.options.wit_mode => None, // angle brackets only delimit type arguments
-			'<' => Some((Op::Lt, 1)),
-			'>' => Some((Op::Gt, 1)),
-			'≤' => Some((Op::Le, 1)),
-			'≥' => Some((Op::Ge, 1)),
-			'≠' => Some((Op::Ne, 1)),
-			'≈' | '⋍' => Some((Op::Similar, 1)),
-			'~' => Some((Op::Rough, 1)),
-			'!' => Some((Op::Not, 1)),
-			'¬' => Some((Op::Not, 1)),
-			'&' if self.starts_function_reference() && self.prev_char().is_whitespace() => None, // `map &square xs`
-			'&' => Some((Op::And, 1)),
-			'|' => Some((Op::Or, 1)),
-			glyph if let Some((op, _)) = glyph_operator(glyph) => Some((op, 1)),
-			'#' => Some((Op::Hash, 1)),
-			'?' => Some((Op::Question, 1)),
-			'…' => Some((Op::To, 1)),
-			_ => None,
-		}
+			"." => !(prev.is_whitespace() && self.number_starts_at(0)),
+			"&" => !(self.starts_function_reference() && prev.is_whitespace()), // `map &square xs`
+			_ => true,
+		};
+		// `solid #8884`: the color is the next word of the value; `#main .x`: the descendant selector's next part
+		let selector_part =
+			self.in_style_sheet && matches!(spelling, "." | "#") && prev.is_whitespace() && self.is_identifier_start(1);
+		let style_word =
+			spelling.chars().count() == 1 && (self.css_color_length().is_some() || self.at_pseudo_class_selector());
+		let op = if spelling == "=" && self.equals_compares {
+			Op::Eq
+		} else {
+			op
+		};
+		// a word operator stands before its operand, `use same;` names the module same; `then`, `else`, `do` may end a line
+		let operand_after_word = !spelling.ends_with(char::is_alphabetic)
+			|| matches!(op, Op::Then | Op::Else | Op::Do)
+			|| self.operand_follows(spelling.chars().count());
+		(allowed && operand_after_word && !selector_part && !style_word).then_some((op, spelling))
 	}
 
 	/// `unless`/`until` in front of a statement: the `if`/`while` it reads as, with the condition negated afterwards
@@ -507,11 +413,7 @@ impl WarpParser {
 		};
 		let word_start = AND_KEYWORD.len() + blanks(AND_KEYWORD.len());
 		let word = self.word_at(word_start);
-		if word.is_empty()
-			|| CONTINUING_WORDS.contains(&word.as_str())
-			|| OPERAND_PREFIX_WORDS.contains(&word.as_str())
-			|| !self.peek_char(word_start).is_alphabetic()
-		{
+		if word.is_empty() || joins_operands(&word) || !self.peek_char(word_start).is_alphabetic() {
 			return false;
 		}
 		let word_end = word_start + word.chars().count();
@@ -521,9 +423,7 @@ impl WarpParser {
 		}
 		let next = self.peek_char(argument);
 		let argument_word = self.word_at(argument);
-		let joins_operands =
-			CONTINUING_WORDS.contains(&argument_word.as_str()) || INFIX_WORDS.contains(&argument_word.as_str());
-		(next.is_alphanumeric() || matches!(next, '"' | '\'' | '[' | '{')) && !joins_operands
+		(next.is_alphanumeric() || matches!(next, '"' | '\'' | '[' | '{')) && !joins_operands(&argument_word)
 	}
 
 	/// The word that starts the fallback of `try`: `else`, or its classical synonyms `catch` and Python's `except` (P60),
@@ -688,9 +588,6 @@ impl WarpParser {
 		{
 			return (!self.defines_named(word.len())).then_some((op, word.len()));
 		}
-		if self.matches_keyword("not") {
-			return Some((Op::Not, 3));
-		}
 		if self.matches_keyword("if") {
 			return Some((Op::If, 2));
 		}
@@ -705,7 +602,7 @@ impl WarpParser {
 			// word (`fold + xs`)
 			'+' if c2.is_alphanumeric() || matches!(c2, '_' | '(' | '.') => Some((Op::Add, 1)),
 			'-' => Some((Op::Neg, 1)),
-			dash if matches!(glyph_operator(dash), Some((Op::Sub, _))) => Some((Op::Neg, 1)),
+			dash if glyph_operator(dash) == Some(Op::Sub) => Some((Op::Neg, 1)),
 			'!' | '¬' => Some((Op::Not, 1)),
 			'√' | FOURTH_ROOT => Some((Op::Sqrt, 1)), // ∜x is √√x (expressions.rs)
 			'∛' => Some((Op::Cbrt, 1)),

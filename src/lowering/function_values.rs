@@ -21,8 +21,6 @@ pub(crate) const LAMBDA_PREFIX: &str = "lambda_value_";
 pub(crate) const ITERATION_WORDS: [&str; 5] = ["map", "filter", "each", "fold", "reduce"];
 /// `argument·1`: a parameter of the function a library word given as a function becomes; no name the user writes
 const LIBRARY_WORD_PARAMETER: &str = "argument·";
-/// Words between two values that make a spaced list no call of its first item: `p in xs`
-const INFIX_WORDS: [&str; 6] = ["in", "is", "of", "and", "or", "as"];
 
 /// A user function `name(params) := body` as found in the program
 #[derive(Clone)]
@@ -280,7 +278,7 @@ fn collect_function_uses(
 					let is_call = (*bracket == Bracket::Round && *separator == Separator::None)
 						|| (*bracket == Bracket::None && *separator == Separator::Space);
 					// `p in xs`, `p is int`: a word joining two values, no call of p
-					let infix = matches!(arguments.first().map(Node::drop_meta), Some(Node::Symbol(word)) if INFIX_WORDS.contains(&word.as_str()));
+					let infix = matches!(arguments.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::warp_parser::joins_operands(word));
 					if !arguments.is_empty() && is_call && !infix {
 						used.insert(name);
 					}

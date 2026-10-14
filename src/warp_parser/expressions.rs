@@ -5,8 +5,6 @@ use crate::words::{EMIT_ALIASES, EMIT_WORDS};
 
 /// Characters that end a statement: a body cannot start with them
 const BODY_ENDS: [char; 7] = ['\0', ';', ',', '\n', '}', ')', ']'];
-/// The type words of a text: `k:text` names a key in `m[k]` (card text-key)
-const TEXT_TYPE_WORDS: [&str; 3] = ["text", "string", "str"];
 
 impl WarpParser {
 	/// The head of a definition, `f`, `f x` or `f(x)`, makes f a function the rest of the source calls
@@ -296,13 +294,6 @@ impl WarpParser {
 		if matches!(lhs.drop_meta(), Node::Symbol(keyword) if crate::operators::is_function_keyword(keyword)) {
 			return None;
 		}
-		// `a mod b` (`a modulo b`) is `a % b` (Euclidean, 0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the
-		// dividend, as C)
-		for (word, op) in [("mod", Op::Mod), ("modulo", Op::Mod), ("rem", Op::Rem)] {
-			if self.matches_keyword(word) {
-				return Some((SpecialInfix::Keyword(op), word.len(), op.binding_power()));
-			}
-		}
 		// Python floor division glued to its operand, `7//2` and `x//=2` (`x // note` stays a comment), and `7 div 2`;
 		// `div{…}` and `div {…}` are the html tag, and data never computes
 		let word_division = self.matches_keyword("div") && !self.options.data_mode && !self.word_opens_block("div");
@@ -417,7 +408,6 @@ impl WarpParser {
 				.try_parse_evaluate_bang(&lhs, min_bp)
 				.or_else(|| self.try_parse_control_suffix(&lhs, min_bp))
 				.or_else(|| self.try_parse_test_word(&lhs, min_bp))
-				.or_else(|| self.try_parse_nand(&lhs, min_bp))
 				.or_else(|| self.try_parse_elvis(&lhs, min_bp))
 			{
 				lhs = updated;
@@ -515,6 +505,9 @@ impl WarpParser {
 			} else {
 				self.hint_operator(chars, false)
 			};
+			// `a nand b` is `not (a and b)`, `x is not int` is `not (x is int)`
+			let negated = crate::operators::negated_spelling(&written);
+			let written = negated.map_or(written, str::to_string);
 			let (op_line, op_column) = self.get_position();
 			let bare_symbol = Some(self.current_char()).filter(|symbol| chars == 1 && matches!(symbol, '&' | '|'));
 			let glued_before = !self.prev_char().is_whitespace();
@@ -666,6 +659,9 @@ impl WarpParser {
 				lhs
 			};
 			lhs = combined(lhs_operand, op, &written, rhs.clone(), previous_comparand.take());
+			if negated.is_some() {
+				lhs = Node::Key(Box::new(Empty), Op::Not, Box::new(lhs));
+			}
 			if op.is_ordering() {
 				previous_comparand = Some(rhs);
 			}
@@ -889,7 +885,7 @@ impl WarpParser {
 		}
 		let holds_text = match (op, rhs.drop_meta()) {
 			(Op::Assign | Op::Define, Node::Text(_)) => true,
-			(Op::Colon, Node::Symbol(type_word)) => TEXT_TYPE_WORDS.contains(&type_word.as_str()),
+			(Op::Colon, Node::Symbol(type_word)) => crate::type_tests::is_text_type_word(type_word),
 			_ => false,
 		};
 		if holds_text {

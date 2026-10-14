@@ -205,13 +205,7 @@ impl WarpParser {
 		let next = self.peek_char(end + blanks);
 		let word_ends_condition = !self.operand_follows(end)
 			|| matches!(next, '{' | ':')
-			|| CONDITION_FOLLOWERS.iter().any(|follower| {
-				follower
-					.chars()
-					.enumerate()
-					.all(|(index, letter)| self.peek_char(end + blanks + index) == letter)
-					&& !is_identifier_char(self.peek_char(end + blanks + follower.len()))
-			});
+			|| crate::operators::is_operator_word(&self.word_at(end + blanks));
 		if !word_ends_condition {
 			return None;
 		}
@@ -302,38 +296,6 @@ impl WarpParser {
 			}
 		}
 		false
-	}
-
-	/// `a nand b` and `a ¬& b` are `not (a and b)`
-	pub(super) fn try_parse_nand(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
-		let spelling = NAND_SPELLINGS
-			.iter()
-			.find(|spelling| self.matches_operator_word(spelling))?;
-		let (and_bp, right_bp) = Op::And.binding_power();
-		if and_bp < min_bp || matches!(lhs.drop_meta(), Empty) {
-			return None;
-		}
-		self.set_hint_pos();
-		norm::operator(spelling, false);
-		self.advance_by(spelling.chars().count());
-		self.skip_spaces();
-		let rhs = self.parse_expr(right_bp);
-		Some(Node::Key(
-			Box::new(Empty),
-			Op::Not,
-			Box::new(Node::Key(Box::new(lhs.clone()), Op::And, Box::new(rhs))),
-		))
-	}
-
-	/// The word or glyph pair `spelling` at the cursor; a word must not run into an identifier
-	pub(super) fn matches_operator_word(&self, spelling: &str) -> bool {
-		let matches = spelling
-			.chars()
-			.enumerate()
-			.all(|(index, letter)| self.peek_char(index) == letter);
-		matches
-			&& (!spelling.chars().all(char::is_alphabetic)
-				|| !is_identifier_char(self.peek_char(spelling.chars().count())))
 	}
 
 	/// `a ?: b` is `a ? a : b`; a left side that is not a plain name is evaluated once, into a hidden variable

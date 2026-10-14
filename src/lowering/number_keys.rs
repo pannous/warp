@@ -18,8 +18,6 @@ use std::collections::HashSet;
 
 /// The word that makes a key of a number known only at run time
 const KEY_TEXT: &str = "string";
-/// The declared types that make a variable a map (declarations.rs: dict is another language's word for map)
-const MAP_TYPE_WORDS: [&str; 2] = ["map", "dict"];
 /// The words `word(map, key, …)` that find an entry by its key
 const KEY_WORDS: [&str; 5] = [
 	COLLECTION_CONTAINS,
@@ -154,7 +152,7 @@ fn is_map_type(declared: &Node) -> bool {
 		.name()
 		.split_whitespace()
 		.next()
-		.is_some_and(|word| MAP_TYPE_WORDS.contains(&word))
+		.is_some_and(|word| super::declarations::collection_type_meant(word) == Some("map"))
 }
 
 fn is_map(node: &Node, maps: &HashSet<String>) -> bool {

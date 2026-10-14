@@ -55,6 +55,7 @@ pub const IS_TYPE: &str = "is_type";
 pub const VERSION_KEYWORD: &str = "version";
 /// The Meta key the parser puts on the name of a function written with type parameters `fn id<T>(…)`: their names
 pub const GENERIC_MARK: &str = "generic";
-/// Property words that count the elements of a value: `size of x`, `x size`, `x.size`; `size` is a synonym of `count`
 /// Words that declare a name assignable once: `const x=5`, `final x=5`
 pub const CONSTANT_KEYWORDS: [&str; 4] = ["const", "constant", "final", "val"];
+/// Rust's `let mut x` and `let mutable x`
+pub const MUTABLE_WORDS: [&str; 2] = ["mut", "mutable"];
