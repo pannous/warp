@@ -102,15 +102,6 @@ fn named_call<'a>(node: &'a Node, named: &dyn Fn(&str) -> bool) -> Option<(&'a N
 	(is_call(items, bracket, separator) && !arguments.is_empty() && named(&head.name())).then_some((head, arguments))
 }
 
-/// `f x`, `(f x)`
-fn written_with_spaces(node: &Node) -> bool {
-	match node.drop_meta() {
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => written_with_spaces(&items[0]),
-		Node::List(_, bracket, separator) => is_words_call(bracket, separator),
-		_ => false,
-	}
-}
-
 /// `f(x)`, `f x`, `(f x)`, `{f x}`
 fn is_call(items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
 	call_name(items, bracket, separator).is_some() || is_words_call(bracket, separator)
@@ -229,12 +220,6 @@ impl Lowering {
 		if let Some(rewritten) = self.rewrite_definition(&node) {
 			return rewritten;
 		}
-		// `render "x" as pdf` reads as `render ("x" as pdf)`: the `as` names the result of the call, also after
-		// lower_arity_overloads wrote it `agent·1("x" as bool)`
-		if let Some((head, argument, result)) = self.as_result(&node) {
-			let argument = self.rewrite(argument.clone(), None);
-			return in_block_as_written(&bracket_of(&node), self.typed_call(head, &result, vec![argument]));
-		}
 		if let Some((head, arguments)) = self.overloaded_call(&node) {
 			return in_block_as_written(&bracket_of(&node), self.resolve(&node, head, arguments, expected));
 		}
@@ -327,21 +312,6 @@ impl Lowering {
 			Some(Shape::Instance(type_name)) => Some(type_name),
 			_ => None,
 		})
-	}
-
-	/// `render ("x" as pdf)` as the parser groups it: the function, its argument and the result type
-	fn as_result<'a>(&self, node: &'a Node) -> Option<(&'a Node, &'a Node, String)> {
-		let (head, [argument]) = named_call(node, &|_| true)? else {
-			return None;
-		};
-		let Node::Key(value, Op::As, result) = argument.drop_meta() else {
-			return None;
-		};
-		let result = result.drop_meta().name();
-		// `square(2.7 as int)` converts its argument: only a spaced call `render "x" as pdf` names the result of a single definition
-		let names_result = self.gives(&head.name(), &result)
-			&& (!self.single_results.contains_key(&head.name()) || written_with_spaces(node));
-		names_result.then_some((head, value.as_ref(), result))
 	}
 
 	/// Whether the function `name` can give a `result`: an overload of it, its companion or its only definition does
