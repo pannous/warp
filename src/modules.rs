@@ -34,7 +34,7 @@ mod declarations;
 pub(crate) use declarations::*;
 mod implicit_modules;
 pub use implicit_modules::*;
-mod needed_definitions;
+pub(crate) mod needed_definitions;
 use needed_definitions::*;
 mod program_file;
 pub use program_file::*;

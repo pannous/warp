@@ -11,6 +11,7 @@ mod test_component_short_use;
 mod test_components;
 mod test_components_anywhere;
 mod test_download;
+mod test_browser_dollar_names; // card browser-interaction
 mod test_fetch_computed_url;
 mod test_ffi;
 #[cfg(feature = "native")] // the C headers: not in the browser build
