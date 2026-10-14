@@ -574,6 +574,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   snake case words. The phrase form is parked until prepositions-call (cleanup-cuts-2); meanwhile `play(hum, 2s)`.
 - sound-at (default): `at 2 beats play C4` places sounds from the voice's first sound.
 - signal-samples: samples/signal*.warp were renamed siren_sound/stereo_sound; the wiki "Signals" examples stay.
+- note-value (2026-10-14): note names stay frequencies (`C4 * 2` = 523.25); `note(C4)` (alias note_value) is a Note
+  that prints "C4", `note(445Hz)` "A4+20c", `n + 7` G4; `note("C#4")` now gives a Note, not 277.18.
 
 ## Old id index (superseded or historic; git has the text)
 P35 → index-position. P42 → P227. P56(2-4) unknown entity → P56 revised. P63 → wiki/charged.md. P66 → footgun-divzero.
