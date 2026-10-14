@@ -239,3 +239,11 @@ fn a_word_comment_after_a_value_needs_no_note() {
 	assert_eq!(notes("x = 4.0 // a peak\nx"), 0);
 	assert_eq!(notes("n = 2\nx = 8 // n\nx"), 1);
 }
+
+#[test] // card undefined-bare: next to a value as next to code, a word that names nothing is loud; words alone stay data
+fn an_unknown_word_beside_a_value_is_loud_too() {
+	fails_with("foo; 3", "undefined variable: foo");
+	fails_with("foo; yes", "undefined variable: foo");
+	fails_with("foo\n\"a\"", "undefined variable: foo");
+	is!("a;b;c", "c");
+}
