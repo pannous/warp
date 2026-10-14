@@ -270,7 +270,7 @@ impl Inference {
 		};
 		mentions_units(body)
 			|| definition.defaults.iter().flatten().any(mentions_units)
-			|| globals_declared_in(body).iter().any(holds_quantity)
+			|| body.declared_globals::<Vec<String>>().iter().any(holds_quantity)
 			|| self
 				.globals
 				.iter()
@@ -286,7 +286,7 @@ impl Inference {
 	) -> Result<(Node, Signature), Stop> {
 		// the globals it writes keep their signatures: main's `global` ones and those it declares `global x` itself
 		let mut scope = self.globals.clone();
-		for name in globals_declared_in(&definition.body) {
+		for name in definition.body.declared_globals::<Vec<String>>() {
 			if let Some(signature) = self.variables.get(&name) {
 				scope.insert(name, signature.clone());
 			}
