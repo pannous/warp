@@ -215,8 +215,7 @@ impl WasmGcEmitter {
 		}
 		self.emit_returned_value(func, value);
 		self.emit_leave_tries(func, 0);
-		func.instruction(&I::Return);
-		func.instruction(&I::Unreachable); // nothing follows a return, the block type still wants a value
+		Self::emit_list(func, &[I::Return, I::Unreachable]); // nothing follows a return, the block type still wants a value
 		true
 	}
 
@@ -461,8 +460,7 @@ impl WasmGcEmitter {
 		if let [Node::Symbol(call), time, Node::Number(Number::Int(zone)), Node::Number(Number::Int(choice))] = items {
 			if call == crate::time::TIME_IN_ZONE {
 				self.emit_node_instructions(func, time);
-				func.instruction(&Instruction::I64Const(*zone));
-				func.instruction(&Instruction::I64Const(*choice));
+				Self::emit_list(func, &[Instruction::I64Const(*zone), Instruction::I64Const(*choice)]);
 				self.emit_call(func, crate::time::TIME_IN_ZONE);
 				return;
 			}
@@ -905,8 +903,7 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
 		self.emit_call(func, "new_symbol");
 		self.emit_call(func, super::VALUES_EQUAL);
-		func.instruction(&I::I64ExtendI32U);
-		Self::emit_list(func, &[I::Else, I::I64Const(0), I::End]);
+		Self::emit_list(func, &[I::I64ExtendI32U, I::Else, I::I64Const(0), I::End]);
 	}
 
 	/// `a // b` as i64: the Euclidean quotient, exact for exact operands (exact_euclid_div), else of the f64 quotient
@@ -1364,8 +1361,7 @@ impl WasmGcEmitter {
 			func.instruction(&I::Else);
 			self.emit_branch_statements(func, otherwise);
 		}
-		func.instruction(&I::End);
-		func.instruction(&I::I64Const(0)); // the statement's value, dropped
+		Self::emit_list(func, &[I::End, I::I64Const(0)]); // the statement's value, dropped
 		true
 	}
 

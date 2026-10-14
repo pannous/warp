@@ -1409,7 +1409,6 @@ PASSED:
   ✓ functions::test_object_arguments::a_missing_field_of_a_map_argument_is_an_error
   ✓ functions::test_object_arguments::a_number_for_a_class_typed_parameter_is_a_type_error
   ✓ functions::test_object_arguments::a_parameter_reads_a_field_of_a_map_argument
-  ✓ functions::test_object_arguments::a_typed_library_word_names_its_parameter_for_a_number
   ✓ functions::test_object_arguments::an_instance_of_another_class_is_a_type_error
   ✓ functions::test_object_arguments::the_to_phrase_types_its_parameter_by_the_class
   ✓ functions::test_operator_arguments::a_word_operator_alone_stays_a_name
@@ -2651,7 +2650,6 @@ PASSED:
   ✓ numbers::test_time_of_day::time_is_the_time_of_day
   ✓ numbers::test_trailing_symbol::a_known_word_after_an_assignment_is_an_error
   ✓ numbers::test_trailing_symbol::a_spaced_sigma_makes_a_gaussian
-  ✓ numbers::test_trailing_symbol::a_walk_after_an_assigned_list_walks_the_list
   ✓ numbers::test_trailing_symbol::an_unknown_word_after_an_assignment_is_an_error
   ✓ numbers::test_unbounded_int::test_big_division_and_remainder
   ✓ numbers::test_unbounded_int::test_big_int_to_float
@@ -5319,4 +5317,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5314 passed, 0 failed, 5314 total tested
+13 ignored, 5312 passed, 0 failed, 5312 total tested

@@ -50,21 +50,20 @@ impl WasmGcEmitter {
 				let (address, count, rest) = (0, 1, 2);
 				Self::emit_list(f, &[I::LocalGet(count), I::I32Eqz, I::If(BlockType::Empty)]);
 				s.call(f, "new_empty");
-				Self::emit_list(f, &[I::Return, I::End]);
 				Self::emit_list(
 					f,
 					&[
+						I::Return,
+						I::End,
 						I::Block(BlockType::Empty),
 						I::Loop(BlockType::Empty),
 						I::LocalGet(count),
 						I::I32Eqz,
 						I::BrIf(1),
-					],
-				);
-				Self::emit_list(f, &[I::LocalGet(count), I::I32Const(1), I::I32Sub, I::LocalSet(count)]);
-				Self::emit_list(
-					f,
-					&[
+						I::LocalGet(count),
+						I::I32Const(1),
+						I::I32Sub,
+						I::LocalSet(count),
 						I::LocalGet(address),
 						I::LocalGet(count),
 						I::I32Const(4),
@@ -125,20 +124,11 @@ impl WasmGcEmitter {
 						I::LocalGet(list),
 						I::RefTestNonNull(HeapType::Concrete(int_list)),
 						I::If(BlockType::Empty),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(list),
 						I::RefCastNonNull(HeapType::Concrete(int_list)),
 						I::LocalSet(ints),
-					],
-				);
-				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
-				Self::emit_list(
-					f,
-					&[
+						I::Block(BlockType::Empty),
+						I::Loop(BlockType::Empty),
 						I::LocalGet(count),
 						I::LocalGet(room),
 						I::I32GeU,
@@ -151,11 +141,6 @@ impl WasmGcEmitter {
 						I::I32GeU,
 						I::I32Or,
 						I::BrIf(1),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(ints),
 						I::StructGet {
 							struct_type_index: int_list,
@@ -181,10 +166,15 @@ impl WasmGcEmitter {
 					],
 				);
 				Self::emit_magnitude_store(f, address, count, value);
-				Self::emit_list(f, &[I::Br(0), I::End, I::End, I::LocalGet(count), I::Return, I::End]);
 				Self::emit_list(
 					f,
 					&[
+						I::Br(0),
+						I::End,
+						I::End,
+						I::LocalGet(count),
+						I::Return,
+						I::End,
 						I::LocalGet(list),
 						I::RefCastNullable(HeapType::Concrete(node_type)),
 						I::LocalSet(cell),
@@ -275,11 +265,6 @@ impl WasmGcEmitter {
 				I::I32Const(8),
 				I::I32Mul,
 				I::I32Add,
-			],
-		);
-		Self::emit_list(
-			f,
-			&[
 				I::LocalGet(value),
 				I::LocalGet(value),
 				I::I64Const(63),
@@ -290,8 +275,11 @@ impl WasmGcEmitter {
 				I::I64ShrS,
 				I::I64Sub,
 				I::I64Store(I64),
+				I::LocalGet(count),
+				I::I32Const(1),
+				I::I32Add,
+				I::LocalSet(count),
 			],
 		);
-		Self::emit_list(f, &[I::LocalGet(count), I::I32Const(1), I::I32Add, I::LocalSet(count)]);
 	}
 }

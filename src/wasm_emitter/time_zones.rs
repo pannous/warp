@@ -100,11 +100,6 @@ impl WasmGcEmitter {
 							I::I64Const(index as i64),
 							I::I64Eq,
 							I::If(BlockType::Empty),
-						],
-					);
-					Self::emit_list(
-						f,
-						&[
 							I::I64Const(known.standard),
 							I::LocalSet(standard),
 							I::I64Const(dst_code(known.dst)),
@@ -156,10 +151,11 @@ impl WasmGcEmitter {
 				let (zone, seconds, standard, dst, days, spare, year, start, end) = (0, 1, 2, 3, 4, 5, 6, 7, 8);
 				Self::emit_list(f, &[I::LocalGet(zone)]);
 				s.call(f, ZONE_RULE);
-				Self::emit_list(f, &[I::LocalSet(dst), I::LocalSet(standard)]);
 				Self::emit_list(
 					f,
 					&[
+						I::LocalSet(dst),
+						I::LocalSet(standard),
 						I::LocalGet(dst),
 						I::I64Const(DST_NONE),
 						I::I64Eq,
@@ -216,20 +212,10 @@ impl WasmGcEmitter {
 						I::I64Sub,
 						I::LocalSet(end),
 						I::End,
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(standard),
 						I::I64Const(HOUR),
 						I::I64Add,
 						I::LocalGet(standard),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(seconds),
 						I::LocalGet(start),
 						I::I64GeS,
@@ -257,19 +243,15 @@ impl WasmGcEmitter {
 					(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
 				Self::emit_list(f, &[I::LocalGet(zone)]);
 				s.call(f, ZONE_RULE);
-				Self::emit_list(f, &[I::LocalSet(dst), I::LocalSet(standard)]);
 				Self::emit_list(
 					f,
 					&[
+						I::LocalSet(dst),
+						I::LocalSet(standard),
 						I::LocalGet(dst),
 						I::I64Const(DST_NONE),
 						I::I64Eq,
 						I::If(BlockType::Empty),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(wall),
 						I::LocalGet(standard),
 						I::I64Const(NANOS_PER_SECOND),
@@ -320,11 +302,6 @@ impl WasmGcEmitter {
 						I::I64Xor,
 						I::I32WrapI64,
 						I::If(BlockType::Empty),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(earlier),
 						I::LocalGet(later),
 						I::LocalGet(valid_earlier),
@@ -333,11 +310,6 @@ impl WasmGcEmitter {
 						I::I64Const(RESOLVED),
 						I::Return,
 						I::End,
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(choice),
 						I::I64Const(EARLIER),
 						I::I64Eq,
@@ -346,11 +318,6 @@ impl WasmGcEmitter {
 						I::I64Const(RESOLVED),
 						I::Return,
 						I::End,
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(choice),
 						I::I64Const(LATER),
 						I::I64Eq,
@@ -359,11 +326,6 @@ impl WasmGcEmitter {
 						I::I64Const(RESOLVED),
 						I::Return,
 						I::End,
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(earlier),
 						I::I64Const(AMBIGUOUS),
 						I::I64Const(SKIPPED),

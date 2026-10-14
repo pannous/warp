@@ -1,5 +1,4 @@
-//! Real closures: a function as a run-time value. Where compile-time specialisation (function_values.rs) cannot know the
-//! function, a lambda is lifted to a top-level function whose first parameters are the variables it captures (by value,
+//! Real closures: a function as a run-time value. Unless an iteration word inlines it (lambdas.rs), a lambda is lifted to a top-level function whose first parameters are the variables it captures (by value,
 //! decision D7), and the lambda becomes `closure_new(lifted, captured…)`: at run time a $Node of Kind::Function holding a
 //! $Closure struct (a typed function reference plus the captured values). Calling a variable that holds one, `f(x)`,
 //! becomes `closure_call_1(f, x)`, a helper per arity that call_refs the closure's entry (wasm_emitter/closures.rs).
@@ -142,7 +141,7 @@ pub fn needs_a_function(needer: &str, parameter: Option<&str>, value: &Node, fix
 	crate::diagnostic::Diagnostic::at(value, message).into_error()
 }
 
-/// A function value that a call cannot be specialised for: a variable, a lambda, a call that may return a function, an
+/// A function value known only at run time: a variable, a lambda, a call that may return a function, an
 /// element of a list (`fs#1`, the arguments of a task's wrapper)
 pub fn may_be_function_value(node: &Node) -> bool {
 	match node.drop_meta() {
@@ -410,6 +409,16 @@ impl FunctionValues {
 			Node::Key(_, Op::Then, chosen) => self.is_function_value(chosen),
 			Node::Key(list, Op::Hash, _) => self.is_function_list(list),
 			Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.returning.contains(name) || self.variables.contains(name)) => {
+				true
+			}
+			// `half(f)(half(f))`: the call of the function value a call returns may give one in turn
+			Node::List(items, Bracket::None, Separator::Space)
+				if items.len() > 1
+					&& self.is_function_value(&items[0])
+					&& items[1..]
+						.iter()
+						.all(|group| matches!(group.drop_meta(), Node::List(_, Bracket::Round, _))) =>
+			{
 				true
 			}
 			// `g(y => y*2)` of `g = x => x`: the function value it was given
@@ -681,7 +690,9 @@ impl Lifting {
 				.map(|argument| self.function_value(argument.clone(), bound))
 				.collect();
 			if self.may_hold_function(name, bound) {
-				return closure_call(items[0].clone(), arguments);
+				let function = items[0].clone();
+				return super::variadic::run_time_spread(&arguments, |spread| closure_call(function.clone(), spread))
+					.unwrap_or_else(|| closure_call(function.clone(), arguments));
 			}
 			if self.functions.contains(name) {
 				return Node::List([vec![items[0].clone()], arguments].concat(), bracket, separator);
@@ -1127,7 +1138,7 @@ pub fn type_closure_calls(context: &mut Context) {
 				let captured = function.params.len() - arity;
 				function.params[captured..]
 					.iter()
-					.map(crate::analyzer::param_kind)
+					.map(|param| known_param_kind(param, &function.body))
 					.chain(std::iter::once(function.return_kind))
 					.collect()
 			})
@@ -1146,6 +1157,21 @@ pub fn type_closure_calls(context: &mut Context) {
 				.for_each(|(param, kind)| param.used_as = Some(*kind));
 			helper.return_kind = signature[arity];
 		}
+	}
+}
+
+/// A parameter nothing declares, demands or computes with may get any value (`is_space` as a value gets a text), not
+/// param_kind's Int
+fn known_param_kind(param: &crate::context::Param, body: &Node) -> Kind {
+	let mut in_arithmetic = false;
+	body.visit(&mut |node| {
+		if let Node::Key(left, op, right) = node.drop_meta() {
+			in_arithmetic |= op.is_arithmetic() && [left, right].iter().any(|side| side.is_symbol(&param.name));
+		}
+	});
+	match in_arithmetic || param.annotation.is_some() || param.default.is_some() || param.used_as.is_some() {
+		true => crate::analyzer::param_kind(param),
+		false => Kind::Data,
 	}
 }
 

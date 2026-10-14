@@ -1,20 +1,18 @@
-//! Reflection words as dot forms (card reflection, notes/reflection.md): `f.effects` is `effects of f` (effects.rs),
-//! `e.listeners` is `listeners of e` (event_signals.rs, signal_values.rs), so each word has one implementation.
-//! A real field comes first: only a function's `.effects` and a listened name's `.listeners` are rewritten, a map's
-//! own field `listeners` stays its field. `listeners of x` for a name nothing listens to is loud (card listeners-tick).
+//! Reflection words (card reflection, notes/reflection.md), read as dot forms (`effects of f` is `f.effects`,
+//! of_lookups.rs): `f.effects` is answered by effects.rs, `e.listeners` by event_signals.rs and signal_values.rs.
+//! `listeners of x` for a name nothing listens to is loud (card listeners-tick).
 //! Objects known at compile time (step 2): an instance's `p.class` and `p.type` are `type(p)`; `p.fields` (aliases
 //! `attributes`, `members`), `p.methods` and `dir(p)` of an instance or a class are the names of its class layout,
 //! inherited fields first; of a map literal's variable they are its keys, read at run time (`m.keys`).
 
 use super::nodes::{call, key};
-use crate::words::OF_WORD;
 use std::collections::{HashMap, HashSet};
 
 use crate::class_methods::ClassLayout;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 
-const EFFECTS_WORD: &str = "effects";
+use crate::effects::EFFECTS_WORD;
 const LISTENERS_WORD: &str = "listeners";
 /// `on alarm {…}`, `once tick {…}`, `on set x {…}`: the words before a listened name
 const LISTENING_WORDS: [&str; 2] = ["on", "once"];
@@ -77,7 +75,7 @@ pub fn lower(node: Node) -> Node {
 			"nothing listens to {name}: `listeners of {name}` needs an `on {name} {{…}}` handler or a variable {name}"
 		));
 	}
-	as_reflection_words(node.clone(), &user_functions(&node), &listened, &defined)
+	as_reflection_words(node.clone(), &user_functions(&node), &defined)
 }
 
 /// The name an `on` or `once` statement listens to
@@ -105,47 +103,27 @@ fn listened_name(node: &Node) -> Option<String> {
 	}
 }
 
-/// A main-level `listeners of x` whose x is neither listened to nor a variable (a function's parameter may be)
+/// A main-level `listeners of x` (`x.listeners`) whose x is neither listened to nor a variable (a function's parameter
+/// may be)
 fn unlistened_reflection(node: &Node, listened: &HashSet<String>, defined: &HashSet<String>) -> Option<String> {
-	match node.drop_meta() {
-		Node::Key(_, Op::Define, _) => None,
-		Node::List(items, _, _) => items
-			.windows(3)
-			.find_map(|window| {
-				match [
-					window[0].symbol_name(),
-					window[1].symbol_name(),
-					window[2].symbol_name(),
-				] {
-					[Some(LISTENERS_WORD), Some(OF_WORD), Some(name)]
-						if !listened.contains(name) && !defined.contains(name) =>
-					{
-						Some(name.to_string())
-					}
-					_ => None,
-				}
-			})
-			.or_else(|| {
-				items
-					.iter()
-					.find_map(|item| unlistened_reflection(item, listened, defined))
-			}),
-		Node::Key(left, _, right) => {
-			unlistened_reflection(left, listened, defined).or_else(|| unlistened_reflection(right, listened, defined))
-		}
-		_ => None,
+	if let Node::Key(_, Op::Define, _) = node.drop_meta() {
+		return None;
+	}
+	let unlistened = crate::signal_values::listeners_subject(node)
+		.and_then(Node::symbol_name)
+		.filter(|name| !listened.contains(*name) && !defined.contains(*name));
+	match unlistened {
+		Some(name) => Some(name.to_string()),
+		None => node
+			.children()
+			.iter()
+			.find_map(|child| unlistened_reflection(child, listened, defined)),
 	}
 }
 
-/// `f.effects` → `effects of f` for a function f, `e.listeners` → `listeners of e` for a listened e; a function's
-/// `f.params`, `f.signature` and `f.body` are constants read off its definition, as are `dir(f)` and `type(f)`: the
+/// A function's `f.params`, `f.signature` and `f.body` are constants read off its definition, as are `dir(f)` and `type(f)`: the
 /// reflection words take the function itself, `f` as `&f`, never its call (P83, card dir-function)
-fn as_reflection_words(
-	node: Node,
-	functions: &Functions,
-	listened: &HashSet<String>,
-	defined: &HashSet<String>,
-) -> Node {
+fn as_reflection_words(node: Node, functions: &Functions, defined: &HashSet<String>) -> Node {
 	if let Some(reflected) = function_word(&node, functions, defined) {
 		return reflected;
 	}
@@ -155,8 +133,6 @@ fn as_reflection_words(
 			let function = functions.get(name).filter(|_| !defined.contains(word));
 			let library = || library_signature(name, functions, defined).filter(|_| !defined.contains(word));
 			let reflected = match (word, function) {
-				(EFFECTS_WORD, Some(_)) => Some(of_phrase(word, name)),
-				(LISTENERS_WORD, _) if listened.contains(name) => Some(of_phrase(word, name)),
 				(word, Some(function)) if PARAMS_WORDS.contains(&word) => Some(text_list(
 					&function
 						.params
@@ -180,7 +156,7 @@ fn as_reflection_words(
 			}
 		}
 	}
-	node.map_children(|child| as_reflection_words(child, functions, listened, defined))
+	node.map_children(|child| as_reflection_words(child, functions, defined))
 }
 
 /// A library word's parameter names and signature, unless the program defines that name itself
@@ -332,15 +308,6 @@ fn meta_map(entries: Vec<(&str, Node)>) -> Node {
 			.map(|(name, value)| key(symbol(name), Op::Colon, value))
 			.collect(),
 		Bracket::Curly,
-		Separator::Space,
-	)
-}
-
-/// `effects of f`
-fn of_phrase(word: &str, name: &str) -> Node {
-	Node::List(
-		vec![symbol(word), symbol(OF_WORD), symbol(name)],
-		Bracket::None,
 		Separator::Space,
 	)
 }

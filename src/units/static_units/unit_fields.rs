@@ -11,8 +11,7 @@ use std::collections::HashMap;
 
 /// What a unit field is declared to the emitter: its run-time amount is an exact or float SI amount
 const NUMBER_TYPE: &str = "number";
-const FOR_WORD: &str = "for";
-const IN_WORD: &str = "in";
+use crate::words::{FOR_WORD, IN_WORD};
 
 /// Each class with a field typed by a unit: its fields in order, each with its signature (none for a plain field)
 pub(super) fn unit_classes(program: &Node) -> HashMap<String, Fields> {

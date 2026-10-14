@@ -571,8 +571,16 @@ impl WasmGcEmitter {
 		let held = self.scratch(LOGICAL_SCRATCH);
 		if is_float {
 			self.emit_float_value(func, left);
-			Self::emit_list(func, &[I::I64ReinterpretF64, I::LocalTee(held), I::F64ReinterpretI64]);
-			Self::emit_list(func, &[I::F64Const(Ieee64::new(0.0f64.to_bits())), I::F64Eq]);
+			Self::emit_list(
+				func,
+				&[
+					I::I64ReinterpretF64,
+					I::LocalTee(held),
+					I::F64ReinterpretI64,
+					I::F64Const(Ieee64::new(0.0f64.to_bits())),
+					I::F64Eq,
+				],
+			);
 		} else {
 			self.emit_numeric_value(func, left);
 			Self::emit_list(func, &[I::LocalTee(held), I::I64Eqz]);
@@ -867,8 +875,15 @@ impl WasmGcEmitter {
 			if *op == Op::And {
 				func.instruction(&I::I32Eqz); // and: a falsy left is the value
 			}
-			func.instruction(&I::If(BlockType::Result(Ref(node_ref))));
-			Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull, I::Else]);
+			Self::emit_list(
+				func,
+				&[
+					I::If(BlockType::Result(Ref(node_ref))),
+					I::LocalGet(held),
+					I::RefAsNonNull,
+					I::Else,
+				],
+			);
 			self.emit_node_instructions(func, right);
 			func.instruction(&I::End);
 		} else {
@@ -906,21 +921,11 @@ impl WasmGcEmitter {
 				I::If(BlockType::Result(ValType::F64)),
 				I::LocalGet(held),
 				I::RefAsNonNull,
-			],
-		);
-		Self::emit_list(
-			func,
-			&[
 				I::StructGet {
 					struct_type_index: node_type,
 					field_index: 1,
 				},
 				I::RefCastNonNull(HeapType::Concrete(float_box)),
-			],
-		);
-		Self::emit_list(
-			func,
-			&[
 				I::StructGet {
 					struct_type_index: float_box,
 					field_index: 0,

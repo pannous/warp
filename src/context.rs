@@ -83,6 +83,14 @@ pub struct Context {
 }
 
 impl Context {
+	/// The parameter names of every function: a variable of the same name in another function is another variable
+	pub fn parameter_names(&self) -> HashSet<String> {
+		self.user_functions
+			.values()
+			.flat_map(|function| function.params.iter().map(|param| param.name.clone()))
+			.collect()
+	}
+
 	/// The error of a call nothing resolves; an import that resolved to nothing says why
 	pub fn undefined_function_message(&self, name: &str) -> String {
 		match self.unresolved_imports.get(name) {

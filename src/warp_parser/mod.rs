@@ -300,12 +300,9 @@ fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Nod
 	} else {
 		items
 	};
-	let items = match (&separator, items.as_slice()) {
-		(Separator::Space, [print, value]) if is_print_word(print) => {
-			printed_when(print, value).map_or(items, |guarded| vec![guarded])
-		}
-		(Separator::Space, [.., _]) if bracket == Bracket::None => {
-			looped_while(&items).map_or(items, |looped| vec![looped])
+	let items = match separator {
+		Separator::Space if bracket != Bracket::Square => {
+			guarded_command(&items).map_or(items, |guarded| vec![guarded])
 		}
 		_ => items,
 	};
@@ -345,36 +342,35 @@ fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Nod
 	}
 }
 
-/// `print it if it%2`: the condition guards the print, as in Ruby and Perl, rather than printing ø when it fails
-fn printed_when(print: &Node, value: &Node) -> Option<Node> {
-	let Node::Key(condition, Op::Then, guarded) = value.drop_meta() else {
-		return None;
-	};
-	let Node::Key(nothing, Op::If, _) = condition.drop_meta() else {
-		return None;
-	};
-	let printed = Node::List(
-		vec![print.clone(), (**guarded).clone()],
-		Bracket::None,
-		Separator::Space,
-	);
-	(**nothing == Node::Empty).then(|| Node::Key(condition.clone(), Op::Then, Box::new(printed)))
-}
-
-/// `do {i++} while c`, `print i while c`: a trailing `while` loops the whole command, not its last word (card glued-loop)
-fn looped_while(items: &[Node]) -> Option<Node> {
+/// `print it if it%2`, `do {i++} while c`: a trailing `if` guards and a trailing `while` loops the whole command, not
+/// its last word, as in Ruby and Perl (card glued-loop)
+fn guarded_command(items: &[Node]) -> Option<Node> {
 	let (last, command) = items.split_last()?;
 	if !matches!(command.first()?.drop_meta(), Symbol(_)) {
 		return None;
 	}
-	let Node::Key(head, Op::Do, body) = last.drop_meta() else {
-		return None;
+	let whole = |tail: &Node| {
+		Node::List(
+			[command, std::slice::from_ref(tail)].concat(),
+			Bracket::None,
+			Separator::Space,
+		)
 	};
-	let Node::Key(nothing, Op::While, condition) = head.drop_meta() else {
-		return None;
-	};
-	let looped = Node::List([command, &[(**body).clone()]].concat(), Bracket::None, Separator::Space);
-	(**nothing == Node::Empty).then(|| while_do((**condition).clone(), looped))
+	match last.drop_meta() {
+		Node::Key(head, Op::Do, body) => match head.drop_meta() {
+			Node::Key(nothing, Op::While, condition) if **nothing == Node::Empty => {
+				Some(while_do((**condition).clone(), whole(body)))
+			}
+			_ => None,
+		},
+		Node::Key(condition, Op::Then, guarded) => match condition.drop_meta() {
+			Node::Key(nothing, Op::If, _) if **nothing == Node::Empty => {
+				Some(Node::Key(condition.clone(), Op::Then, Box::new(whole(guarded))))
+			}
+			_ => None,
+		},
+		_ => None,
+	}
 }
 
 /// `(x => print x)`: `=>` binds looser than the space, so the words after a lambda's arrow are its body (`print x`), not

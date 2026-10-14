@@ -12,7 +12,7 @@ use crate::operators::Op;
 use crate::stored_values::DATABASE_WORDS;
 use crate::units::static_units::si_quantity;
 use crate::warp_parser::parse;
-use crate::words::{FOR_WORD, GLOBAL_WORD, IN_WORD, OF_WORD};
+use crate::words::{FOR_WORD, GLOBAL_WORD, IN_WORD};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 mod queries;

@@ -12,13 +12,7 @@ use std::collections::{HashMap, HashSet};
 /// `a-b:2 c-d:4 a-b` is 2 (the data is the scope)
 pub fn resolve_data_scope(program: Node) -> Node {
 	let mut variables = assigned_names(&program);
-	let context = function_definitions(&program);
-	variables.extend(
-		context
-			.user_functions
-			.values()
-			.flat_map(|function| function.params.iter().map(|param| param.name.clone())),
-	);
+	variables.extend(function_definitions(&program).parameter_names());
 	let resolved = resolve_blocks(program, &variables);
 	subtract_kebab_variables(resolved, &variables)
 }

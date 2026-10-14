@@ -150,18 +150,6 @@ fn wrapped(
 	Some((head, body, Box::new(move |head, body| wrap(rebuild(head, body)))))
 }
 
-/// The parameter names of every function the program defines: a variable of the same name in another function is
-/// another variable, whatever the whole-program analyses saw assigned to it (card two-signal-kinds)
-pub(crate) fn parameter_names(program: &Node) -> std::collections::HashSet<String> {
-	let mut names = std::collections::HashSet::new();
-	program.visit(&mut |part| {
-		if let Some((head, _, _)) = definition_parts(part) {
-			names.extend(head_parameters(&head));
-		}
-	});
-	names
-}
-
 /// The parameter names of a definition's head `(f a b)`
 pub(crate) fn head_parameters(head: &Node) -> Vec<String> {
 	match head.drop_meta() {
@@ -170,7 +158,6 @@ pub(crate) fn head_parameters(head: &Node) -> Vec<String> {
 	}
 }
 
-/// `(f n)`: a name and its parameters, what `f(n) = body` assigns, unlike `x = body`
 /// Every definition of a memoized function with its body behind the cache
 fn rewritten(node: Node, memoized: &[String]) -> Node {
 	if let Some(cached) = cached(&node, memoized) {

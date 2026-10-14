@@ -19,7 +19,7 @@ use Effect::*;
 
 const PURE: &str = "Pure";
 const ENTRY: &str = "main";
-const QUERY_WORDS: [&str; 2] = ["effects", "of"];
+pub(crate) const EFFECTS_WORD: &str = "effects";
 const STATE_KEYWORD: &str = "global";
 
 /// Trusted effect signatures of the built-in host and WASI functions.
@@ -1166,27 +1166,19 @@ fn statements_before_last(program: &Node) -> Node {
 
 fn last_statement(program: &Node) -> &Node {
 	match program.drop_meta() {
-		Node::List(items, _, _) if matches!(items.last().map(Node::drop_meta), Some(Node::List(..))) => {
-			items.last().expect("non-empty")
+		Node::List(items, bracket, separator) if crate::variable_signals::is_statement_list(bracket, separator) => {
+			items.last().unwrap_or(program)
 		}
 		_ => program,
 	}
 }
 
-/// `effects of f` → `f`
+/// `f.effects` (`effects of f`) → `f`
 fn effects_query(statement: &Node) -> Option<String> {
-	let Node::List(items, _, _) = statement.drop_meta() else {
-		return None;
-	};
-	let words: Vec<&str> = items
-		.iter()
-		.filter_map(|item| match item.drop_meta() {
-			Node::Symbol(word) => Some(word.as_str()),
-			_ => None,
-		})
-		.collect();
-	match words.as_slice() {
-		[effects, of, name] if items.len() == 3 && [*effects, *of] == QUERY_WORDS => Some(name.to_string()),
+	match statement.drop_meta() {
+		Node::Key(function, Op::Dot, word) if word.is_symbol(EFFECTS_WORD) => {
+			function.symbol_name().map(str::to_string)
+		}
 		_ => None,
 	}
 }

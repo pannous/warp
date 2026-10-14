@@ -81,21 +81,11 @@ impl WasmGcEmitter {
 					I::I64And,
 					I::I64Const(Kind::Int as i64),
 					I::I64Eq,
-				],
-			);
-			Self::emit_list(
-				func,
-				&[
 					I::LocalGet(0),
 					field(1),
 					I::RefTestNonNull(HeapType::Concrete(i64_box)),
 					I::I32And,
 					I::If(BlockType::Result(node_ref)),
-				],
-			);
-			Self::emit_list(
-				func,
-				&[
 					I::LocalGet(0),
 					field(1),
 					I::RefCastNonNull(HeapType::Concrete(i64_box)),
