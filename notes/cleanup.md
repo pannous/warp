@@ -474,9 +474,29 @@ signal family are warp-list-pattern's and left out. Samples = files in samples/,
 | nonlocal cells (nonlocal_cells) | `nonlocal y` | 281 | 0 | 0 | 4 | closures already capture |
 | named patterns + definitions by cases (named_patterns, definition_cases) | `pattern Pair = [_, _]`; `fib(0) := 0; fib(n) := …` | 405 | 0 | 0 | 1 | match arms and guards |
 | object-shaped parameters (parameter_shapes) | `f(p{name, title?}) := …` | 230 | 0 | 0 | 1 | named arguments |
-| ruby blocks (ruby_blocks) | `each(xs) { |x| … }` with `yield v` | 215 | 0 | 1 | 1 | lambdas passed as arguments |
+| ruby blocks (blocks.rs lower_trailing_blocks) | `each(xs) { |x| … }` with `yield v` | 215 | 0 | 1 | 1 | lambdas passed as arguments |
 | version literals (versions) | `v1.2.3`, `version 1.2.3` | 210 | 0 | 0 | 4 | texts `"1.2.3"` compared by parts |
 
 Well used (no cut proposed): library words 1909, tasks 1473, broadcasting 1199, blocks 955, switch/match 882, late
 binding 737, for loops 725, constant folding 670, lazy ranges 654, comprehensions 631, type tests 596, named
 arguments 574, markup tags 398, type constructors 370.
+
+## cleanup-drop-lambdas (2026-10-14, supervisor: stop at step 1)
+- Done: function_values.rs no longer specialises a function per function argument (`apply__double`); every call passes
+  a closure, a capture-free one made once (a global, wasm_emitter/closures.rs). 10M `apply(y => y*2+1, k)`: 0.25 s →
+  0.42 s. Side fixes: `f(*args)` of a closure spreads by count (variadic::run_time_spread), `f:(Int)->Int` parameters
+  are functions, a called returned closure may return a function (Z combinator).
+- Kept: the iteration templates of lambdas.rs (map filter each fold find any all reduce sort) stay the inlining rule
+  for literal lambdas. Library functions over closures measured 0.22 s → 0.45 s on 1M map/filter/sum (~3× without
+  compile time) and give untyped (any) results, for about −140 lines: not worth it.
+- Benchmarks: probes/cleanup/lambdas/bench_*.warp
+## `a of b` is `b.a` (card cleanup-of-is-dot, 2026-10-14)
+One SUGAR pass, lowering/of_lookups.rs, right after interpolation, rewrites every `a of b` to `b.a` (`first 3 of xs` →
+`xs.first(3)`, `byte count of t` → `t.bytes`, `name of people with age > 20` → the field of the filtered list); every
+later pass reads only the dot form. Gone: the special `of` arms in library_words, objects, broadcasting, lazy_reads,
+reflection, comprehensions' call-argument block, and signal_values' token scanner. Not lookups: a collection type
+phrase `list of int` and a spaced definition `square of a number = …`. Measured: about −50 net src lines, not the
+card's −700: reflection's fields/methods/dir code is feature code, not `of` handling. New forms that work now:
+`params of f`, `a of xs` (a field of every element), `name of p + "b"`.
+Trap found: the old signal_values reflected_lists rebuilt every list and unwrapped one-item unbracketed lists on the
+way; `func add<T>(_ a: T, …)` relied on it, so the new walk keeps that unwrap explicitly.

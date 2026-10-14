@@ -206,11 +206,6 @@ impl WasmGcEmitter {
 						I::RefEq,
 						I::I32Or,
 						I::I32Eqz,
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::If(BlockType::Empty),
 						I::GlobalGet(seen),
 						I::GlobalSet(other_seen),
@@ -219,9 +214,10 @@ impl WasmGcEmitter {
 						I::I32Const(0),
 						I::Return,
 						I::End,
+						I::LocalGet(fields),
+						I::LocalSet(cell),
 					],
 				);
-				Self::emit_list(f, &[I::LocalGet(fields), I::LocalSet(cell)]);
 				s.emit_cell_walk(f, cell, |f| {
 					Self::emit_list(
 						f,
@@ -336,11 +332,6 @@ impl WasmGcEmitter {
 						null_node.clone(),
 						I::GlobalSet(other_owner),
 						I::End,
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(fields),
 						I::GlobalGet(owner),
 						I::RefEq,
@@ -349,9 +340,11 @@ impl WasmGcEmitter {
 						I::I32Const(0),
 						I::Return,
 						I::End,
+						I::GlobalGet(index),
+						I::RefAsNonNull,
+						I::LocalGet(entry),
 					],
 				);
-				Self::emit_list(f, &[I::GlobalGet(index), I::RefAsNonNull, I::LocalGet(entry)]);
 				s.call(f, MAP_INDEX_ADD);
 				Self::emit_list(
 					f,

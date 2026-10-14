@@ -5,12 +5,12 @@ guide-expert.md) in line with main. Card docs-sync, session warp-docs-sync.
 
 ## Last swept
 
-- main commit **1098ee155** (2026-10-14; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27, docs-sync-3 3f01a83b5, keeper 264c844a4, 17b6b455b, 0c2b20013, c1f479e10 (the src regrouping), d19060ec9, 9d84077f6, 6915e892b, 0bcbc6caf, 3801056ee and batch 2eae7fde9 (wiki eb3c384), batch de70c437b, batches 5899b83d1, c65c6a241, 9e6fbf8db, f689a6665, 63ad6eb73, 66dd216a9 (units refactor: no page shows unit tolerances or ranges, nothing to change) 43384c15e, 3be3d7d25 (internal) and eb64602c1 (cargo debug builds already in wiki/cargo.md; C types and Node accessors internal) bcb3f966b (wiki node.md: built lists == written) 2518ccd57 (fix, internal) 3f60ecd4d (wiki cli.md: warp code argument) de4b71071 (wiki function.md: hole fix error) c9c928e54 (matching.md to-get fence runs, routes already quoted) 967d8ce4a (wiki sound.md: fade duration) 9c68b36af (wiki W0.md: first types run) a4f4a44dc (wiki pattern-matching.md: two-key map) 525f1bd69 (units interpreter cut, no page change) ea1abd55c (generators and traits cuts) and 1098ee155 (scoped handlers cut)), checked with
+- main commit **63d532e36** (2026-10-14; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27, docs-sync-3 3f01a83b5, keeper 264c844a4, 17b6b455b, 0c2b20013, c1f479e10 (the src regrouping), d19060ec9, 9d84077f6, 6915e892b, 0bcbc6caf, 3801056ee and batch 2eae7fde9 (wiki eb3c384), batch de70c437b, batches 5899b83d1, c65c6a241, 9e6fbf8db, f689a6665, 63ad6eb73, 66dd216a9 (units refactor: no page shows unit tolerances or ranges, nothing to change) 43384c15e, 3be3d7d25 (internal) and eb64602c1 (cargo debug builds already in wiki/cargo.md; C types and Node accessors internal) bcb3f966b (wiki node.md: built lists == written) 2518ccd57 (fix, internal) 3f60ecd4d (wiki cli.md: warp code argument) de4b71071 (wiki function.md: hole fix error) c9c928e54 (matching.md to-get fence runs, routes already quoted) 967d8ce4a (wiki sound.md: fade duration) 9c68b36af (wiki W0.md: first types run) a4f4a44dc (wiki pattern-matching.md: two-key map) 525f1bd69 (units interpreter cut, no page change) ea1abd55c (generators and traits cuts) 1098ee155 (scoped handlers cut) 6a7794ee1 (wiki task.md: dir(job) dropped) 197ce39fc (lambdas cut; wiki keyword.md trailing if/while) and 97fe6cbc1 (of-is-dot cut and canonical arms: full fence run, 19 errors, all error demos or mis-tagged sketches, fixed in wiki fba909c; card emit-operand-unhandled) and 63d532e36 (str cast, signal_listen: no page names either)), checked with
   /Users/me/dev/bin/warp (19f021863) and, for 17b6b455b and 0c2b20013, a debug build copied to scratch/docs_sync/warp.
 - notes/decisions.md read through its end at that commit.
 
-The next sweep starts with `git log --oneline 1098ee155..origin/main | grep -E 'feature|fix:'` and the decisions added
-since (`git diff 1098ee155 origin/main -- notes/decisions.md`; decisions.md is grouped by topic since 13d194eec).
+The next sweep starts with `git log --oneline 63d532e36..origin/main | grep -E 'feature|fix:'` and the decisions added
+since (`git diff 63d532e36 origin/main -- notes/decisions.md`; decisions.md is grouped by topic since 13d194eec).
 
 ## How
 
@@ -39,6 +39,8 @@ major corrections go to warp-interviewer, tiny fixes are made directly.
 - `probes/docs_sync/wiki_fences.py` runs every warp/wasp/untagged fence (data/docs_sync/fences.tsv); a fence that
   fails alone is retried after the page's earlier fences. Sketches, other languages and error demos are ```` ```text ````
   (or cpp, swift); `--show page.md:line` prints one fence with its run.
+- A run with page arguments overwrites data/docs_sync/fences.tsv with only those pages: copy the full run first
+  (`cp data/docs_sync/fences.tsv data/docs_sync/fences.full.tsv`) to diff a later full run against it.
 - `--values` runs each `code // value` line and lists mismatches (data/docs_sync/values.tsv); most hits are prose
   comments, not values.
 - `grep -n "not yet" wiki/*.md | grep -v "card "` lists the unimplemented notes without a card; the audit
@@ -53,19 +55,22 @@ cuts land about 10:00, start when warp-integrator reports them), then remove eac
 replacement, with no card (a user decision, not a gap):
 - scoped handlers: cut at 1098ee155; wiki/effects.md's handler section now shows the program-wide `on` (fence
   runs: 120); no other page or guide used `on … in {…}`. Done.
-- spaced type heads (lands with the cleanup-park-phrases cut; cleanup-drop-type-name-params was withdrawn) `fib int i`, `foo of int`, `square of a number`,
-  `combine number with number` → `fib(i:int) := …`: wiki/=.md:11, Bad.md:51, type.md:59, function.md:5 (list of
-  natural forms), inventions.md:42/96/137, Purpose.md:455, Features.md:60 (`++ of a number reference`).
-  polymorphism.md was rewritten ahead of the cut (wiki 5ec7480, the written form already works).
+- spaced type heads (lands with the cleanup-park-phrases cut) `fib int i`, `foo of int`, `combine number with number`
+  → `fib(i:int) := …`: wiki/=.md:11, Bad.md:51, type.md:59. `square of a number = …` is kept (integrator, of-is-dot
+  97fe6cbc1), so function.md:5, inventions.md, Purpose.md:455 stay; recheck Features.md:60 (`++ of a number
+  reference`) when the cut lands. polymorphism.md was rewritten ahead of the cut (wiki 5ec7480).
 - generators/yield: cut at ea1abd55c; wiki 'generators' left trait.md's Iterable rows, keyword.md's yield row shows the
   kept Ruby block form (`def twice; yield 1; yield 2; end; twice { |x| print x }`). Done.
 - traits alias: cut at ea1abd55c, no user-visible change (trait.md fences run, `interface` hints toward trait). Done.
-- compile-time lambdas, natural phrases (parked), OCaml let-in and `fun`, Elixir `def …, do:`, C++ `[](…){…}`,
+- compile-time lambdas: cut at 197ce39fc (lambdas no longer specialised per call site); lambda.md, function.md,
+  closure.md, charged.md, block.md fences run, no page described the specialisation. Done.
+- natural phrases (parked), OCaml let-in and `fun`, Elixir `def …, do:`, C++ `[](…){…}`,
   R/PHP forms (to `use R` / `use PHP`): grep the wiki for examples when each lands.
 - units interpreter: cut at 525f1bd69 (cleanup-units-interpreter); unit.md, int.md, number.md, overflow.md fences
   run on a fresh build, no page shows a unit range or a tolerance in a unit (notes.md:11 "7000-6000 BC" is a loose
   idea). Done.
-- reflection dot words → `a of b` ≡ `b.a`; ORM only `stored people: [Person]`.
+- reflection dot words → `a of b` ≡ `b.a`: cut at 97fe6cbc1, every wiki fence still runs. Done.
+- ORM only `stored people: [Person]`.
 
 ## Not swept yet
 

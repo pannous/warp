@@ -4,7 +4,7 @@ use crate::analyzer::call_name;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::words::{FOR_WORD, IN_WORD, MATCH_WORD};
+use crate::words::{EACH_WORD, FOR_WORD, IN_WORD, MATCH_WORD};
 use std::cell::Cell;
 
 pub(crate) use crate::node::{call, children_rewritten, int, symbol};
@@ -120,9 +120,14 @@ pub(crate) fn is_block(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _))
 }
 
-/// The words `for i in …` of a loop: i
+/// The words `for i in …` or `for each i in …` of a loop: i
 pub(crate) fn for_in_variable(items: &[Node]) -> Option<String> {
 	match items {
+		[keyword, each, variable, within, ..]
+			if keyword.is_symbol(FOR_WORD) && each.is_symbol(EACH_WORD) && within.is_symbol(IN_WORD) =>
+		{
+			variable.symbol_name().map(String::from)
+		}
 		[keyword, variable, within, ..] if keyword.is_symbol(FOR_WORD) && within.is_symbol(IN_WORD) => {
 			variable.symbol_name().map(String::from)
 		}

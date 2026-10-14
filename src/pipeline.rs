@@ -282,6 +282,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::interpolation::lower_program,
 	// `pattern => body` and `_ => v` arms of a match as `pattern: body` and `default: v`, the one form later passes read
 	crate::lowering::welcome_forms::lower_match_arms,
+	// `a of b` is `b.a` (of_lookups.rs), before any pass reads a lookup
+	crate::lowering::of_lookups::lower,
 	// `n times {…}`, `n times [x]`, `n times "ab"` as the parser keeps them: a loop, a filled list, a repeated text
 	crate::lowering::times_phrases::lower,
 	// `xs .* 2` as the parser keeps it: the operator applied to each element (broadcasting.rs)
@@ -465,7 +467,7 @@ const FUNCTION_PASSES: &[Pass] = &[
 	crate::lowering::declarations::lower_spaced_definitions,
 	crate::lowering::number_words::lower,
 	crate::lowering::parameter_shapes::lower,
-	crate::lowering::ruby_blocks::lower,
+	crate::lowering::blocks::lower_trailing_blocks,
 	crate::lowering::declarations::lower_sized_arrays,
 	crate::lowering::result_word::lower,
 	crate::lowering::picked_calls::lower,

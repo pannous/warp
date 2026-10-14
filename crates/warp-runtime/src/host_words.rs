@@ -2,7 +2,7 @@
 //! `sleep(ms)` pauses, `random()` is a float in [0, 1), `random_below(n)` an int in 0..n, `clock()` the milliseconds
 //! since the Unix epoch. A program that defines a word of the same name keeps its own. warp adds the words that need
 //! its compiler, the network or threads (host.rs); these need nothing.
-//! `signal_poll()` and `signal_every(id, ms)` serve the handlers of system signals (system_signals.rs).
+//! `signal_poll()` and `signal_listen(kind, id, argument)` serve the handlers of system signals (system_signals.rs).
 pub const HOST_LIBRARY: &str = "host";
 /// foreign_call(runtime, module, member, call, arguments): a module of another runtime (foreign.rs), Nodes in and out
 pub const FOREIGN_CALL: &str = "foreign_call";
@@ -15,16 +15,17 @@ pub const CLOCK: &str = "clock";
 /// `local_offset(ms)`: seconds east of UTC in the environment's time zone (TZ) at that instant: an instant's wall clock
 pub const LOCAL_OFFSET: &str = "local_offset";
 pub const SIGNAL_POLL: &str = "signal_poll";
-pub const SIGNAL_EVERY: &str = "signal_every";
-/// `signal_daily(id, minute_of_day, weekdays)`: `on every day at 9:00 {…}`, the timer on·every·id at that local time
-/// on the weekdays of the mask (bit 0 Sunday … bit 6 Saturday, 127 every day)
-pub const SIGNAL_DAILY: &str = "signal_daily";
-/// `signal_at(id, minute_of_day)`: `at 9:00 {…}`, on·every·id once at the next such local time
-pub const SIGNAL_AT: &str = "signal_at";
+/// `signal_listen(kind, id, argument)`: starts the timer on·every·id, `on every 5 seconds {…}` (LISTEN_EVERY, ms),
+/// `on frame {…}` (LISTEN_FRAME, ms; every frame of the paint window while it shows, without a window once),
+/// `on every monday at 9:00 {…}` and `at 9:00 {…}` (LISTEN_CLOCK, weekdays · CLOCK_WEEKDAYS + minute of day, the
+/// weekdays a mask with bit 0 Sunday … bit 6 Saturday, 0 once at the next such local time)
+pub const SIGNAL_LISTEN: &str = "signal_listen";
+pub const LISTEN_EVERY: i64 = 0;
+pub const LISTEN_FRAME: i64 = 1;
+pub const LISTEN_CLOCK: i64 = 2;
+/// The clock argument's weekdays count in ten-thousands: `(signal_listen 2 0 1271290)` is 21:30 (1290) every day (127)
+pub const CLOCK_WEEKDAYS: i64 = 10_000;
 pub const SIGNAL_WATCH: &str = "signal_watch";
-/// `signal_frame(id, ms)`: `on frame {…}`, on·every·id every frame of the paint window while it shows; without a window
-/// once (system_signals.rs Trigger::WindowShows)
-pub const SIGNAL_FRAME: &str = "signal_frame";
 /// `system_value(name)`: the machine's `battery` percent, `charging`, `online`, `dark mode` (system_values.rs)
 pub const SYSTEM_VALUE: &str = "system_value";
 pub const BATTERY: &str = "battery";
@@ -120,7 +121,7 @@ pub const FETCH_HANDLER_PREFIX: &str = "on·fetch·";
 /// The checks of the listeners on shared values (P106), polled at every check point (lowering/signal_values.rs)
 pub const SHARED_HANDLER: &str = "on·shared";
 /// The words link_host_words provides
-pub const BASIC_HOST_WORDS: [&str; 14] = [
+pub const BASIC_HOST_WORDS: [&str; 11] = [
 	SLEEP,
 	RANDOM,
 	RANDOM_BELOW,
@@ -128,11 +129,8 @@ pub const BASIC_HOST_WORDS: [&str; 14] = [
 	CLOCK,
 	LOCAL_OFFSET,
 	SIGNAL_POLL,
-	SIGNAL_EVERY,
-	SIGNAL_DAILY,
-	SIGNAL_AT,
+	SIGNAL_LISTEN,
 	SIGNAL_WATCH,
-	SIGNAL_FRAME,
 	SYSTEM_VALUE,
 	EXIT,
 ];
@@ -178,10 +176,7 @@ mod linking {
 		linker.func_wrap(HOST_LIBRARY, SIGNAL_POLL, |mut caller: Caller<'_, T>| {
 			system_signals::run_due_handlers(&mut caller, exported)
 		})?;
-		linker.func_wrap(HOST_LIBRARY, SIGNAL_EVERY, system_signals::start_timer)?;
-		linker.func_wrap(HOST_LIBRARY, SIGNAL_DAILY, system_signals::start_daily_timer)?;
-		linker.func_wrap(HOST_LIBRARY, SIGNAL_AT, system_signals::start_one_shot_timer)?;
-		linker.func_wrap(HOST_LIBRARY, SIGNAL_FRAME, system_signals::start_frame_timer)?;
+		linker.func_wrap(HOST_LIBRARY, SIGNAL_LISTEN, system_signals::listen)?;
 		linker.func_wrap(
 			HOST_LIBRARY,
 			SIGNAL_WATCH,

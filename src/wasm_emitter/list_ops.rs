@@ -343,9 +343,11 @@ impl WasmGcEmitter {
 							I::I64Const(KIND_MASK),
 							I::I64And,
 							I::End,
+							I::I64ShrU,
+							I::I64Const(1),
+							I::I64And,
 						],
 					);
-					Self::emit_list(f, &[I::I64ShrU, I::I64Const(1), I::I64And]);
 				},
 			);
 		}
@@ -502,15 +504,14 @@ impl WasmGcEmitter {
 							I::If(BlockType::Empty),
 							I::I64Const(0),
 							I::Return,
+							I::End,
 						],
 					);
-					Self::emit_list(func, &[I::End]);
 
 					// a key:value pair is one item, the one-entry object `{a:1}`
 					s.emit_field(func, 0, 0);
 					Self::emit_kind_test(func, KEY_KIND, I::I64Eq);
-					Self::emit_list(func, &[I::If(BlockType::Empty), I::I64Const(1), I::Return]);
-					Self::emit_list(func, &[I::End]);
+					Self::emit_list(func, &[I::If(BlockType::Empty), I::I64Const(1), I::Return, I::End]);
 
 					// the list counted last, unchanged since
 					if let (Some(counted), Some(count)) =
@@ -716,11 +717,6 @@ impl WasmGcEmitter {
 						I::RefAsNonNull,
 						I::Return,
 						I::End,
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(list),
 						I::LocalSet(cell),
 						I::Loop(BlockType::Empty),
@@ -788,8 +784,7 @@ impl WasmGcEmitter {
 				s.emit_text_bounds(f, stop, end);
 				Self::emit_list(f, &[I::LocalGet(start), I::LocalGet(end)]);
 				s.call(f, "grapheme_end");
-				f.instruction(&I::LocalSet(stop));
-				Self::emit_list(f, &[I::LocalGet(start), I::LocalGet(end)]);
+				Self::emit_list(f, &[I::LocalSet(stop), I::LocalGet(start), I::LocalGet(end)]);
 				s.call(f, "utf8_next");
 				Self::emit_list(
 					f,
@@ -872,8 +867,7 @@ impl WasmGcEmitter {
 	}
 
 	fn emit_index_compare(func: &mut Function, compare: Instruction) {
-		Self::emit_list(func, &[I::LocalGet(1), I::I64Const(1)]);
-		func.instruction(&compare);
+		Self::emit_list(func, &[I::LocalGet(1), I::I64Const(1), compare]);
 	}
 
 	pub(super) fn emit_field(&self, func: &mut Function, local: u32, field_index: u32) {
@@ -1200,9 +1194,10 @@ impl WasmGcEmitter {
 				I::If(BlockType::Empty),
 				I::RefNull(HeapType::Concrete(self.type_manager.node_type)),
 				I::LocalSet(list),
+				I::End,
+				I::End,
 			],
 		);
-		Self::emit_list(func, &[I::End, I::End]);
 	}
 
 	/// The kind on the stack without its element mark, when the program's lists carry marks (declared_values LIST_MARK)

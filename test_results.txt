@@ -64,7 +64,6 @@ PASSED:
   ✓ control::test_check_assert::check_passes_a_condition_that_holds
   ✓ control::test_check_assert::check_throws_when_the_condition_fails
   ✓ control::test_check_holds::a_check_that_holds_goes_on
-  ✓ control::test_clipboard::a_clipboard_listener_watches_the_change_count
   ✓ control::test_clipboard::reading_the_clipboard_is_one_host_call
   ✓ control::test_clipboard::the_change_count_is_read_without_the_content
   ✓ control::test_clipboard::writing_the_clipboard_is_the_std_word
@@ -621,10 +620,10 @@ PASSED:
   ✓ control::test_system_signals::exit_gives_the_process_its_code
   ✓ control::test_system_signals::on_interrupt_cuts_a_sleep_short
   ✓ control::test_system_signals::on_interrupt_runs_at_the_next_loop_start
-  ✓ control::test_system_values::a_listener_on_a_system_value_polls_it
   ✓ control::test_system_values::a_negated_system_value
   ✓ control::test_system_values::a_program_keeps_its_own_names
   ✓ control::test_system_values::a_system_value_is_a_host_reading
+  ✓ control::test_system_values::a_system_value_listener_starts_a_timer
   ✓ control::test_system_values::dark_mode_is_the_appearance_of_macos
   ✓ control::test_system_values::listening_to_a_system_value_gives_no_hint_about_generated_code
   ✓ control::test_system_values::method_arguments_read_system_values
@@ -709,11 +708,9 @@ PASSED:
   ✓ control::test_threads::tasks_run_at_the_same_time
   ✓ control::test_threads::texts_floats_characters_and_lists_cross_to_a_task
   ✓ control::test_threads::try_catches_the_failure_of_a_task
-  ✓ control::test_time_of_day::a_one_shot_time_starts_and_main_runs_on
   ✓ control::test_time_of_day::a_time_of_day_must_be_one
-  ✓ control::test_time_of_day::am_and_pm_name_the_half_of_the_day
+  ✓ control::test_time_of_day::one_host_word_starts_every_timer
   ✓ control::test_time_of_day::the_delay_until_a_weekday_skips_the_other_days
-  ✓ control::test_time_of_day::weekdays_name_the_days_a_timer_runs
   ✓ control::test_times_count_once::a_trailing_if_guards_the_whole_assignment
   ✓ control::test_times_count_once::times_evaluates_its_count_once
   ✓ control::test_times_count_once::trailing_while_stays_a_plain_while_with_a_hint
@@ -1409,7 +1406,6 @@ PASSED:
   ✓ functions::test_object_arguments::a_missing_field_of_a_map_argument_is_an_error
   ✓ functions::test_object_arguments::a_number_for_a_class_typed_parameter_is_a_type_error
   ✓ functions::test_object_arguments::a_parameter_reads_a_field_of_a_map_argument
-  ✓ functions::test_object_arguments::a_typed_library_word_names_its_parameter_for_a_number
   ✓ functions::test_object_arguments::an_instance_of_another_class_is_a_type_error
   ✓ functions::test_object_arguments::the_to_phrase_types_its_parameter_by_the_class
   ✓ functions::test_operator_arguments::a_word_operator_alone_stays_a_name
@@ -2651,7 +2647,6 @@ PASSED:
   ✓ numbers::test_time_of_day::time_is_the_time_of_day
   ✓ numbers::test_trailing_symbol::a_known_word_after_an_assignment_is_an_error
   ✓ numbers::test_trailing_symbol::a_spaced_sigma_makes_a_gaussian
-  ✓ numbers::test_trailing_symbol::a_walk_after_an_assigned_list_walks_the_list
   ✓ numbers::test_trailing_symbol::an_unknown_word_after_an_assignment_is_an_error
   ✓ numbers::test_unbounded_int::test_big_division_and_remainder
   ✓ numbers::test_unbounded_int::test_big_int_to_float
@@ -3589,7 +3584,6 @@ PASSED:
   ✓ text::test_split_default::split_without_separator_splits_at_spaces
   ✓ text::test_split_element_kind::split_elements_concatenate
   ✓ text::test_str_computed::str_of_a_field_read_is_its_value
-  ✓ text::test_str_computed::str_of_data_reads_as_written
   ✓ text::test_str_computed::str_of_literal_arithmetic_is_its_value
   ✓ text::test_string::test_first_char
   ✓ text::test_string::test_interpolation
@@ -5319,4 +5313,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5314 passed, 0 failed, 5314 total tested
+13 ignored, 5308 passed, 0 failed, 5308 total tested

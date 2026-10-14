@@ -54,21 +54,22 @@ impl WasmGcEmitter {
 			let (node_type, float_box) = (s.type_manager.node_type, s.type_manager.f64_box_type);
 			s.emit_field(f, 0, 0);
 			Self::emit_kind_test(f, Kind::Float as i64, I::I64Eq);
-			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(0)]);
 			Self::emit_list(
 				f,
 				&[
+					I::If(BlockType::Empty),
+					I::LocalGet(0),
 					I::StructGet {
 						struct_type_index: node_type,
 						field_index: 1,
 					},
 					I::RefCastNonNull(HeapType::Concrete(float_box)),
+					I::StructGet {
+						struct_type_index: float_box,
+						field_index: 0,
+					},
 				],
 			);
-			f.instruction(&I::StructGet {
-				struct_type_index: float_box,
-				field_index: 0,
-			});
 			// a checked truncation: wasm-split and wasm-opt reject the saturating one without nontrapping-float-to-int
 			s.emit_truncating_cast_via(f, value);
 			Self::emit_list(f, &[I::Return, I::End]);
@@ -143,9 +144,10 @@ impl WasmGcEmitter {
 					I::Br(0),
 					I::End,
 					I::End,
+					I::I64Const(0),
+					I::LocalGet(value),
 				],
 			);
-			Self::emit_list(f, &[I::I64Const(0), I::LocalGet(value)]);
 			if unbounded {
 				s.call(f, "exact_sub")
 			} else {
@@ -483,9 +485,11 @@ impl WasmGcEmitter {
 						I32Const('+' as i32),
 						I::I32Eq,
 						I::I32Or,
+						I::LocalGet(pointer),
+						I::I32Add,
+						I::LocalSet(pointer),
 					],
 				);
-				Self::emit_list(f, &[I::LocalGet(pointer), I::I32Add, I::LocalSet(pointer)]);
 			};
 			Self::emit_list(f, &at_end);
 			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
@@ -506,11 +510,6 @@ impl WasmGcEmitter {
 						I32Const(9),
 						I::I32GtU,
 						I::BrIf(1),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(value),
 						I::F64Const(10.0.into()),
 						I::F64Mul,
@@ -518,9 +517,12 @@ impl WasmGcEmitter {
 						I::F64ConvertI32U,
 						I::F64Add,
 						I::LocalSet(value),
+						I::LocalGet(digits),
+						I32Const(1),
+						I::I32Add,
+						I::LocalSet(digits),
 					],
 				);
-				Self::emit_list(f, &[I::LocalGet(digits), I32Const(1), I::I32Add, I::LocalSet(digits)]);
 				if after_point {
 					Self::emit_list(
 						f,
@@ -542,8 +544,7 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I32Const('.' as i32), I::I32Eq, I::If(BlockType::Empty)]);
 			Self::emit_list(f, &advance);
 			digits_loop(f, true);
-			Self::emit_list(f, &[I::End, I::End]);
-			Self::emit_list(f, &[I::LocalGet(digits), I::I32Eqz]);
+			Self::emit_list(f, &[I::End, I::End, I::LocalGet(digits), I::I32Eqz]);
 			s.emit_fail_if(f, "invalid_number");
 			// an exponent: e or E, a sign, digits
 			Self::emit_list(f, &at_end);
@@ -563,8 +564,15 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &at_end);
 			s.emit_fail_if(f, "invalid_number");
 			sign(f, exponent_negative);
-			Self::emit_list(f, &[I32Const(0), I::LocalSet(digits)]);
-			Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+			Self::emit_list(
+				f,
+				&[
+					I32Const(0),
+					I::LocalSet(digits),
+					I::Block(BlockType::Empty),
+					I::Loop(BlockType::Empty),
+				],
+			);
 			Self::emit_list(f, &at_end);
 			f.instruction(&I::BrIf(1));
 			Self::emit_list(f, &byte);
@@ -577,11 +585,6 @@ impl WasmGcEmitter {
 					I32Const(9),
 					I::I32GtU,
 					I::BrIf(1),
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::LocalGet(exponent),
 					I32Const(10),
 					I::I32Mul,
@@ -595,8 +598,7 @@ impl WasmGcEmitter {
 				],
 			);
 			Self::emit_list(f, &advance);
-			Self::emit_list(f, &[I::Br(0), I::End, I::End]);
-			Self::emit_list(f, &[I::LocalGet(digits), I::I32Eqz]);
+			Self::emit_list(f, &[I::Br(0), I::End, I::End, I::LocalGet(digits), I::I32Eqz]);
 			s.emit_fail_if(f, "invalid_number");
 			Self::emit_list(f, &[I::End, I::End]);
 			// nothing may follow
@@ -613,9 +615,11 @@ impl WasmGcEmitter {
 					I::LocalGet(exponent),
 					I::LocalGet(exponent_negative),
 					I::Select,
+					I::LocalGet(scale_digits),
+					I::I32Sub,
+					I::LocalSet(exponent),
 				],
 			);
-			Self::emit_list(f, &[I::LocalGet(scale_digits), I::I32Sub, I::LocalSet(exponent)]);
 			for (more, step, towards_zero) in [(I::I32GtS, I::F64Mul, I::I32Sub), (I::I32LtS, I::F64Div, I::I32Add)] {
 				Self::emit_list(
 					f,
@@ -627,15 +631,10 @@ impl WasmGcEmitter {
 						more,
 						I::I32Eqz,
 						I::BrIf(1),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[I::LocalGet(value), I::F64Const(10.0.into()), step, I::LocalSet(value)],
-				);
-				Self::emit_list(
-					f,
-					&[
+						I::LocalGet(value),
+						I::F64Const(10.0.into()),
+						step,
+						I::LocalSet(value),
 						I::LocalGet(exponent),
 						I32Const(1),
 						towards_zero,

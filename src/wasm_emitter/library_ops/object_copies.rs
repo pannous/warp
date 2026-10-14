@@ -28,22 +28,12 @@ impl WasmGcEmitter {
 					I::I64Const(KIND_MASK),
 					I::I64And,
 					I::LocalTee(kind),
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::I64Const(KEY_KIND),
 					I::I64Ne,
 					I::LocalGet(kind),
 					I::I64Const(Kind::List as i64),
 					I::I64Ne,
 					I::I32And,
-				],
-			);
-			Self::emit_list(
-				f,
-				&[
 					I::LocalGet(kind),
 					I::I64Const(Kind::Empty as i64),
 					I::I64Ne,
@@ -105,11 +95,6 @@ impl WasmGcEmitter {
 						I::LocalGet(item),
 						I::RefCastNonNull(node_heap),
 						I::LocalTee(entry),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::StructGet {
 							struct_type_index: node_type,
 							field_index: 0,
@@ -156,10 +141,11 @@ impl WasmGcEmitter {
 				f.instruction(&I::LocalSet(cell));
 				s.emit_cell_walk(f, cell, |f| {
 					s.emit_field(f, cell, 1);
-					Self::emit_list(f, &[I::RefCastNonNull(node_heap), I::LocalTee(pair)]);
 					Self::emit_list(
 						f,
 						&[
+							I::RefCastNonNull(node_heap),
+							I::LocalTee(pair),
 							I::StructGet {
 								struct_type_index: node_type,
 								field_index: 1,
@@ -184,11 +170,6 @@ impl WasmGcEmitter {
 						I::RefNull(node_heap),
 						I::StructNew(node_type),
 						I::LocalSet(copy),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(memo),
 						I::I64Const(Kind::List as i64),
 						I::I64Const(KEY_KIND),
@@ -216,11 +197,6 @@ impl WasmGcEmitter {
 						I::LocalGet(copy),
 						I::LocalGet(data),
 						I::RefTestNonNull(node_heap),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::If(BlockType::Result(Self::any_ref())),
 						I::LocalGet(data),
 						I::RefCastNonNull(node_heap),
@@ -229,11 +205,6 @@ impl WasmGcEmitter {
 						I::Else,
 						I::LocalGet(data),
 						I::End,
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::StructSet {
 							struct_type_index: node_type,
 							field_index: 1,
@@ -296,11 +267,12 @@ impl WasmGcEmitter {
 				}
 				Self::emit_list(
 					f,
-					&[I::LocalGet(object), I::Call(spine), I::RefAsNonNull, I::Return, I::End],
-				);
-				Self::emit_list(
-					f,
 					&[
+						I::LocalGet(object),
+						I::Call(spine),
+						I::RefAsNonNull,
+						I::Return,
+						I::End,
 						I::LocalGet(object),
 						I::I64Const(Kind::Empty as i64),
 						I::RefNull(HeapType::Abstract {
@@ -330,8 +302,16 @@ impl WasmGcEmitter {
 			|s, f| {
 				Self::emit_list(f, &s.forget_list_cursor_keeping_map_indexes());
 				let (cells, name, value, entry, kind) = (0, 1, 2, 3, 4);
-				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
-				Self::emit_list(f, &[I::LocalGet(cells), I::RefIsNull, I::BrIf(1)]);
+				Self::emit_list(
+					f,
+					&[
+						I::Block(BlockType::Empty),
+						I::Loop(BlockType::Empty),
+						I::LocalGet(cells),
+						I::RefIsNull,
+						I::BrIf(1),
+					],
+				);
 				s.emit_field(f, cells, 0);
 				Self::emit_list(
 					f,
@@ -355,18 +335,22 @@ impl WasmGcEmitter {
 						I::RefCastNullable(HeapType::Concrete(node_type)),
 						I::LocalSet(entry),
 						I::End,
+						I::LocalGet(entry),
+						I::RefIsNull,
+						I::I32Eqz,
+						I::If(BlockType::Empty),
+						I::LocalGet(entry),
+						I::RefAsNonNull,
+						I::LocalGet(name),
 					],
 				);
-				Self::emit_list(
-					f,
-					&[I::LocalGet(entry), I::RefIsNull, I::I32Eqz, I::If(BlockType::Empty)],
-				);
-				Self::emit_list(f, &[I::LocalGet(entry), I::RefAsNonNull, I::LocalGet(name)]);
 				s.call(f, "map_entry_has_key");
-				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(entry), I::LocalGet(value)]);
 				Self::emit_list(
 					f,
 					&[
+						I::If(BlockType::Empty),
+						I::LocalGet(entry),
+						I::LocalGet(value),
 						I::StructSet {
 							struct_type_index: node_type,
 							field_index: 2,
@@ -375,9 +359,12 @@ impl WasmGcEmitter {
 						I::Return,
 						I::End,
 						I::End,
+						I::LocalGet(kind),
+						I::I64Const(KEY_KIND),
+						I::I64Eq,
+						I::BrIf(1),
 					],
 				);
-				Self::emit_list(f, &[I::LocalGet(kind), I::I64Const(KEY_KIND), I::I64Eq, I::BrIf(1)]);
 				s.emit_field(f, cells, 2);
 				Self::emit_list(f, &[I::LocalSet(cells), I::Br(0), I::End, I::End, I32Const(0)]);
 			},
@@ -407,10 +394,12 @@ impl WasmGcEmitter {
 				s.call(f, super::super::map_index::MAP_INDEX_GROW);
 				Self::emit_list(f, &[I::If(BlockType::Empty), I::Return, I::End]);
 				s.emit_field(f, fields, 0);
-				Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::LocalSet(kind)]);
 				Self::emit_list(
 					f,
 					&[
+						I::I64Const(KIND_MASK),
+						I::I64And,
+						I::LocalSet(kind),
 						I::LocalGet(kind),
 						I::I64Const(Kind::Empty as i64),
 						I::I64Eq,
@@ -445,22 +434,12 @@ impl WasmGcEmitter {
 						I::LocalGet(fields),
 						I::I64Const(CURLY_LIST_KIND),
 						set(0),
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(fields),
 						I::RefNull(HeapType::Concrete(node_type)),
 						set(2),
 						I::I64Const(Kind::List as i64),
 						I::LocalSet(kind),
 						I::End,
-					],
-				);
-				Self::emit_list(
-					f,
-					&[
 						I::LocalGet(kind),
 						I::I64Const(Kind::List as i64),
 						I::I64Ne,
@@ -582,9 +561,11 @@ impl WasmGcEmitter {
 						I::LocalSet(entry),
 						I::LocalGet(indexed),
 						I::If(BlockType::Empty),
+						I::LocalGet(entry),
+						I::RefIsNull,
+						I::If(BlockType::Empty),
 					],
 				);
-				Self::emit_list(f, &[I::LocalGet(entry), I::RefIsNull, I::If(BlockType::Empty)]);
 				add_field(s, f);
 				Self::emit_list(
 					f,
@@ -597,10 +578,14 @@ impl WasmGcEmitter {
 							field_index: 2,
 						},
 						I::End,
+						I::LocalGet(object),
+						I::Return,
+						I::End,
+						I::LocalGet(fields),
+						I::LocalGet(name),
+						I::LocalGet(value),
 					],
 				);
-				Self::emit_list(f, &[I::LocalGet(object), I::Return, I::End]);
-				Self::emit_list(f, &[I::LocalGet(fields), I::LocalGet(name), I::LocalGet(value)]);
 				s.call(f, FIELD_SET_IN_PLACE);
 				Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
 				add_field(s, f);
