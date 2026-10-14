@@ -138,6 +138,26 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 118] = [
 	("as", Op::As),
 ];
 
+/// Spellings of a negated operator, each with the spelling it negates: `a nand b` is `not (a and b)` (wiki/operator.md:
+/// `nand ¬&`, Unicode's ⊼), `x is not 4` is `not (x is 4)`
+const NEGATED_SPELLINGS: [(&str, &str); 4] = [("nand", "and"), ("¬&", "and"), ("⊼", "and"), ("is not", "is")];
+
+/// The spelling a negated spelling negates: `and` for `nand`
+pub fn negated_spelling(spelling: &str) -> Option<&'static str> {
+	NEGATED_SPELLINGS
+		.iter()
+		.find(|(negated, _)| *negated == spelling)
+		.map(|(_, positive)| *positive)
+}
+
+/// Every spelling with its operator, the negated ones with the operator they negate
+pub fn all_spellings() -> impl Iterator<Item = (&'static str, Op)> {
+	let negated = NEGATED_SPELLINGS
+		.into_iter()
+		.filter_map(|(negated, positive)| Some((negated, spelled_operator(positive)?)));
+	OPERATOR_SPELLINGS.into_iter().chain(negated)
+}
+
 /// Glyphs that are fine as written, so no style hint suggests the ASCII spelling of their operator
 const PLAIN_GLYPHS: &str = "×÷≤≥≠≈⋍±¬⌞⌟…";
 
@@ -157,9 +177,7 @@ pub fn glyph_operator(glyph: char) -> Option<Op> {
 
 /// A word that spells an operator, alone or as the first word of a phrase: `and`, `mod`, `is` (of `is less than`)
 pub fn is_operator_word(word: &str) -> bool {
-	OPERATOR_SPELLINGS
-		.iter()
-		.any(|(spelling, _)| spelling.split([' ', '=']).next() == Some(word) && word.starts_with(char::is_alphabetic))
+	all_spellings().any(|(spelling, _)| spelling.split([' ', '=']).next() == Some(word) && word.starts_with(char::is_alphabetic))
 }
 
 /// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)

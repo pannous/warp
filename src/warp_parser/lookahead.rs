@@ -14,7 +14,7 @@ pub const PREFIX_OPERATOR_WORDS: [(&str, Op); 4] = [
 ];
 /// operators::OPERATOR_SPELLINGS, the longest first: `<=` before `<`, `is less than` before `is`
 static LONGEST_SPELLINGS_FIRST: std::sync::LazyLock<Vec<(&str, Op)>> = std::sync::LazyLock::new(|| {
-	let mut spellings = OPERATOR_SPELLINGS.to_vec();
+	let mut spellings: Vec<_> = crate::operators::all_spellings().collect();
 	spellings.sort_by_key(|(spelling, _)| std::cmp::Reverse(spelling.chars().count()));
 	spellings
 });

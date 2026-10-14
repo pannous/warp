@@ -410,7 +410,6 @@ impl WarpParser {
 				.try_parse_evaluate_bang(&lhs, min_bp)
 				.or_else(|| self.try_parse_control_suffix(&lhs, min_bp))
 				.or_else(|| self.try_parse_test_word(&lhs, min_bp))
-				.or_else(|| self.try_parse_nand(&lhs, min_bp))
 				.or_else(|| self.try_parse_elvis(&lhs, min_bp))
 			{
 				lhs = updated;
@@ -508,6 +507,9 @@ impl WarpParser {
 			} else {
 				self.hint_operator(chars, false)
 			};
+			// `a nand b` is `not (a and b)`, `x is not int` is `not (x is int)`
+			let negated = crate::operators::negated_spelling(&written);
+			let written = negated.map_or(written, str::to_string);
 			let (op_line, op_column) = self.get_position();
 			let bare_symbol = Some(self.current_char()).filter(|symbol| chars == 1 && matches!(symbol, '&' | '|'));
 			let glued_before = !self.prev_char().is_whitespace();
@@ -659,6 +661,9 @@ impl WarpParser {
 				lhs
 			};
 			lhs = combined(lhs_operand, op, &written, rhs.clone(), previous_comparand.take());
+			if negated.is_some() {
+				lhs = Node::Key(Box::new(Empty), Op::Not, Box::new(lhs));
+			}
 			if op.is_ordering() {
 				previous_comparand = Some(rhs);
 			}

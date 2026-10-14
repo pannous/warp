@@ -6,7 +6,7 @@ use crate::node::call;
 use crate::node::Node::{Empty, Symbol};
 use crate::node::{error, key_ops, Bracket, Node, Separator};
 use crate::normalize::{hints as norm, set_hint_position, ListTypeStyle};
-use crate::operators::{glyph_operator, is_function_keyword, Op, OPERATOR_SPELLINGS};
+use crate::operators::{glyph_operator, is_function_keyword, Op};
 use log::warn;
 use std::fs::read_to_string;
 
@@ -180,8 +180,6 @@ const COUNT_CALL: &str = "count";
 const EMPTY_WORD: &str = "empty";
 /// Operators that may follow a suffix `!` directly: `x!+1`, `x!*2` (`!=` is the inequality)
 const INFIX_AFTER_BANG: [char; 9] = ['+', '-', '*', '/', '%', '^', '<', '>', ')'];
-/// Words that may follow a test word and so end the condition
-const CONDITION_FOLLOWERS: [&str; 5] = ["then", "else", "and", "or", "do"];
 /// Python's `elif`, Perl's and Ruby's `elsif`, PHP's `elseif`: all `else if`
 const ELSE_IF_WORDS: [&str; 3] = ["elif", "elsif", "elseif"];
 const RETURN_KEYWORD: &str = "return";
@@ -504,8 +502,6 @@ fn iterates_keys(iterable: &Node) -> bool {
 
 /// How tight a suffix `!` binds: below the index `#`, above `^` and arithmetic
 const BANG_BP: u8 = Op::Hash.binding_power().0.midpoint(Op::Pow.binding_power().0);
-/// `nand` and its glyph pair, both `not (a and b)`
-const NAND_SPELLINGS: [&str; 3] = ["nand", "¬&", "⊼"];
 const TO_WORD: &str = "to";
 const TO_SENTENCE_WORD: &str = "To";
 /// `to greet p do …`: the word between a `to` definition's parameters and its body
