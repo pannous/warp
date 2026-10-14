@@ -112,6 +112,27 @@ modules.rs, wasm_modules.rs, cargo_crates.rs, effects.rs), whose table is added 
 Status (2026-10-14): branch layout-root (4749cbf5b) did compiler/, analyzer/effects, numbers/, text/, formats/, modules/,
 host/, run/, web/. Deferred: diagnostics/ (diagnostic and normalize are used by nearly every open branch) and time/.
 
+### Dry run: diagnostics/ and time/ (2026-10-14, nothing moved yet)
+
+| file | lines | target | path uses to rewrite | open branches touching it |
+|---|---|---|---|---|
+| time.rs | 701 | time/mod.rs (src/time/calendar.rs is already there) | none: `crate::time` stays | duplicates-similar, globals-fold (carries it; same 2 files, +31 −46), layout-emitter (2 lines) |
+| diagnostic.rs | 1145 | diagnostics/diagnostic.rs | `crate::diagnostic` in 173 files | none |
+| normalize.rs | 1063 | diagnostics/normalize.rs | `crate::normalize` in 115 files | duplicates-similar, globals-fold |
+| fixits.rs | 237 | diagnostics/fixits.rs | 12 files | none |
+| crash_card.rs | 161 | diagnostics/crash_card.rs | 2 files | none |
+
+- time/: a plain `git mv src/time.rs src/time/mod.rs`, with no use-site edits. Git follows the rename, so branches edit
+  the moved file cleanly. It can go any time; the only reason to wait is to keep the three branches' merges trivial.
+- diagnostics/: scripts/move_module.py per file (fixits, crash_card, diagnostic, normalize). The risk is not in the
+  files themselves but in their path uses: 173 + 115 files carry `crate::diagnostic`/`crate::normalize`, and nearly
+  every open branch adds new uses. Each such use becomes a compile error after the merge (cheap to fix: the compiler
+  names it). Plan: do it in a quiet window right after an integrator batch, as one branch that only renames paths, and
+  send it at once.
+- Mentions to update with it: notes/fixits.md, notes/footguns.md, notes/welcoming.md, notes/agents/common.md,
+  web/playground/{dev, host-gpu, host-tasks, playground}.js, tests/queue.sh, tests/sweeps/mod.rs (crash_card path:
+  check whether it is a file path a script reads before rewriting it).
+
 ## Lowering (`src/lowering/`, 112 files): proposed folders
 
 File-level first (pure `git mv` + mod paths), then per function inside each folder when the area starts (its table is

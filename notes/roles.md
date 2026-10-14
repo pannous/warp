@@ -90,6 +90,14 @@ The only session that runs the full suite and the only one that pushes code to m
 - Triggers GitHub CI only when asked or for a release (`gh workflow run "Rust CI" -R pannous/warp`).
 - Keeps the baseline (test_results.txt) and the "Merged" lines on the board; tells the supervisor after each merge.
 
+## Refactorer
+User 2026-10-14: "a new role refactorer that will regularly reorganize the codebase by keeping it structural and
+generalized and beautiful". A long-running session, not a default service: the Supervisor starts it with
+`notes/agents/start.sh refactorer` and wakes it after a batch of feature merges or once a day. It moves functions to
+their concept's file, merges duplicate and similarly named functions, and folds special cases into the general
+machinery. Every chunk goes on its own branch to the Integrator, stating its net src/ delta. Feature cuts go to the
+Interviewer. Prompt: notes/agents/refactorer.md.
+
 ## Workers
 - One task, one branch, one worktree: `cowtree add -b <name> /Users/me/dev/angles/warp.worktrees.noindex/<name>
   origin/main`. Outside the repo, so grep/IDE/cargo of the main checkout never see it, and `.noindex` keeps Spotlight out.
