@@ -65,7 +65,7 @@ const OPTIONAL_TYPE_PREFIX: &str = ".opt ";
 /// ø is the empty list (`xs = []` parses as ø), but the empty part where an optional takes it
 const EMPTY_LIST: &str = ".nil";
 const EMPTY_VALUE: &str = ".unit";
-/// Effect handlers (notes/effect_handlers.md): `on ev {h}`, `on ev {h} in {body}`, `emit ev{payload}`
+/// Effect handlers (notes/effect_handlers.md): `on ev {h}`, `emit ev{payload}`
 const ON_KEYWORD: &str = "on";
 const IN_KEYWORD: &str = "in";
 const EMIT_KEYWORD: &str = "emit";
@@ -73,7 +73,7 @@ const EMIT_KEYWORD: &str = "emit";
 const GLOBAL_KEYWORD: &str = "global";
 /// What a global declared without a value holds until it is assigned: `global x; x + 1` is 1
 const UNSET_GLOBAL: i64 = 0;
-/// `break v` in a block handler ends its block with v (aborting handlers)
+/// `break` is not in W0: block handlers, whose block it ended, were dropped (card cleanup-drop-scoped-handlers)
 const BREAK_KEYWORD: &str = "break";
 /// `return v` before a function's end is the event `f·return` whose block handler, around f's body, breaks with v
 const RETURN_KEYWORD: &str = "return";
@@ -124,9 +124,6 @@ struct Exporter {
 	classes: HashMap<String, ClassShape>,
 	/// the default values of a function's parameters (`f(a, b=3)`), by its arguments class: a call missing b passes 3
 	defaults: HashMap<String, HashMap<String, Node>>,
-	/// the event whose block a `break` ends: the innermost block handler's; none in a loop (the loop's break) or a
-	/// program-wide handler
-	breaking: Vec<Option<String>>,
 	/// the names declared `global` anywhere in the program
 	globals: Vec<String>,
 	/// the locals of the function being exported: each lives in a cell, a fresh instance of its class `f·n` per call
@@ -368,45 +365,16 @@ impl Exporter {
 		keys.into_iter().map(|(class, _)| class).collect()
 	}
 
-	/// a handler body: `event` is its payload; a block handler (of `on ev {…} in {…}`) may `break`
-	fn handler(&mut self, handler: &Node, block_event: Option<&str>) -> Lean {
+	/// a handler body: `event` is its payload
+	fn handler(&mut self, handler: &Node) -> Lean {
 		self.locals.push(EVENT_LOCAL.to_string());
-		let handler = self.breaking_in(block_event.map(str::to_string), |exporter| exporter.block(handler));
+		let handler = self.block(handler);
 		self.locals.pop();
 		handler
 	}
 
-	fn breaking_in(&mut self, event: Option<String>, export: impl FnOnce(&mut Self) -> Lean) -> Lean {
-		self.breaking.push(event);
-		let exported = export(self);
-		self.breaking.pop();
-		exported
-	}
-
-	/// `break v` or a bare `break` (ø) in a block handler
-	fn abort(&mut self, value: Option<&Node>) -> Lean {
-		let Some(event) = self.breaking.last().cloned().flatten() else {
-			return Err("not in W0: a break outside a block handler".to_string());
-		};
-		let value = match value {
-			Some(value) => self.expression(value)?,
-			None => UNIT_TYPE.to_string(),
-		};
-		Ok(format!(".abort {} none ({value})", quoted(&event)))
-	}
-
 	fn effect(&mut self, effect: Effect) -> Lean {
 		match effect {
-			Effect::On {
-				event,
-				handler,
-				body: Some(body),
-			} => Ok(format!(
-				".handle {} ({}) ({})",
-				quoted(&event),
-				self.handler(handler, Some(&event))?,
-				self.block(body)?
-			)),
 			Effect::On { event, .. } => Err(format!(
 				"not in W0: a program-wide handler of {event} inside an expression"
 			)),
@@ -564,13 +532,8 @@ impl Exporter {
 	}
 
 	fn item(&mut self, statement: &Node) -> Lean {
-		if let Some(Effect::On {
-			event,
-			handler,
-			body: None,
-		}) = effect(statement)
-		{
-			return Ok(format!(".on {} ({})", quoted(&event), self.handler(handler, None)?));
+		if let Some(Effect::On { event, handler }) = effect(statement) {
+			return Ok(format!(".on {} ({})", quoted(&event), self.handler(handler)?));
 		}
 		match global_declaration(statement) {
 			Some((_, Some((target, value)))) => return self.binding(target, ".var", value),

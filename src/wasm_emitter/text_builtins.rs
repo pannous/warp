@@ -6,7 +6,7 @@
 use crate::node::Node;
 use crate::type_kinds::{Kind, KIND_MASK};
 use crate::wasm_emitter::layout::BYTE;
-use crate::wasm_emitter::{WasmGcEmitter, ABORT_TO, RAN_WITHOUT_ABORT, RAN_WITHOUT_ERROR};
+use crate::wasm_emitter::{WasmGcEmitter, RAN_WITHOUT_ERROR};
 use std::collections::HashSet;
 use wasm_encoder::*;
 use Instruction as I;
@@ -77,7 +77,7 @@ const CHARACTER_ENCODER: &str = "node_with_at";
 pub const TEXT_FORM: &str = "text_form";
 
 /// name, number of arguments, result kind
-const TEXT_BUILTINS: [(&str, usize, Kind); 25] = [
+const TEXT_BUILTINS: [(&str, usize, Kind); 23] = [
 	(MEMORY_BYTE, 1, Kind::Int),
 	(MEMORY_SET_BYTE, 2, Kind::Int),
 	(crate::memoization::MEMO_KNOWN, 2, Kind::Int),
@@ -99,8 +99,6 @@ const TEXT_BUILTINS: [(&str, usize, Kind); 25] = [
 	(FLOAT_BITS, 1, Kind::Int),
 	(BITS_FLOAT, 1, Kind::Float),
 	(crate::wasm_emitter::CAUGHT_ERROR, 2, Kind::Error),
-	(RAN_WITHOUT_ABORT, 2, Kind::Int),
-	(ABORT_TO, 1, Kind::Int),
 	(crate::uncertain::CERTAINLY, 1, Kind::Int),
 	(crate::uncertain::POSSIBLY, 1, Kind::Int),
 ];
@@ -392,8 +390,6 @@ impl WasmGcEmitter {
 				| MEMORY_SET_BYTE
 				| IS_ERROR
 				| RAN_WITHOUT_ERROR
-				| RAN_WITHOUT_ABORT
-				| ABORT_TO
 				| STARTS_WITH
 				| ENDS_WITH
 				| FLOAT_BITS
@@ -507,8 +503,6 @@ impl WasmGcEmitter {
 				);
 			}
 			(RAN_WITHOUT_ERROR, [statement]) => self.emit_ran_without_error(func, statement),
-			(RAN_WITHOUT_ABORT, [handler, statement]) => self.emit_ran_without_abort(func, handler, statement),
-			(ABORT_TO, [handler]) => self.emit_abort_to(func, handler),
 			(crate::uncertain::CERTAINLY | crate::uncertain::POSSIBLY, [comparison]) => {
 				self.emit_certainty(func, name, comparison)
 			}
