@@ -19,7 +19,7 @@ fn noise_is_a_wave() {
 		"use sound\nxs = [wave(\"noise\", 0.25) for i in 0..100]\nmin(xs) >= -1 and max(xs) <= 1 and min(xs) < max(xs)",
 		true
 	);
-	is!("wave_shape = \"noise\"\nplay C4 for 5ms\n7", 7);
+	is!("wave_shape = \"noise\"\nplay(C4, 5ms)\n7", 7);
 }
 
 #[test]
@@ -27,5 +27,5 @@ fn gain_in_decibels() {
 	is!("use sound\nx = -6 dB\nround(x * 1000)", 501);
 	is!("use sound\ndecibels(20)", 10.0); // the word it lowers to
 	is!("use sound\nround(-6dB * 1000)", 501);
-	is!("loudness = -20 dB\nplay C4 for 5ms\nloudness", 0.1);
+	is!("loudness = -20 dB\nplay(C4, 5ms)\nloudness", 0.1);
 }

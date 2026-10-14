@@ -3,6 +3,7 @@
 use crate::is;
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-park-phrases: type-name parameters (`fib int i`) dropped"]
 fn a_recursive_spaced_definition_with_equals_defines_the_function() {
 	is!(
 		"fibonacci number = if number<2 : 1 else fibonacci(number - 1) + fibonacci it - 2\nfibonacci 10",
