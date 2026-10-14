@@ -93,7 +93,12 @@ pub fn build(code: &str, title: &str, directory: &Path) -> Result<BuiltSite, Str
 pub fn write_files(files: &[SiteFile], directory: &Path) -> Result<BuiltSite, String> {
 	std::fs::create_dir_all(directory).map_err(|failure| format!("cannot make {}: {failure}", directory.display()))?;
 	for (name, bytes) in files {
-		std::fs::write(directory.join(name), bytes).map_err(|failure| format!("cannot write {name}: {failure}"))?;
+		let path = directory.join(name);
+		// modules/<file> (site_modules.rs)
+		path.parent()
+			.map_or(Ok(()), std::fs::create_dir_all)
+			.and_then(|()| std::fs::write(&path, bytes))
+			.map_err(|failure| format!("cannot write {name}: {failure}"))?;
 	}
 	Ok(BuiltSite { directory: directory.to_path_buf(), files: files.iter().map(|(name, _)| name.clone()).collect() })
 }
@@ -247,6 +252,8 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, 
 		rendering
 	};
 	let html = page_html_text(&rendered)?;
+	let (renamed, shipped_modules) = crate::web::site_modules::with_shipped_modules(&module.bytes)?;
+	let module = crate::pipeline::CompiledModule { bytes: renamed, ..module };
 	let host_scripts = host_scripts_of(&module.bytes)?;
 	let page_scripts = page_scripts_of(&module.bytes)?.into_iter().chain(dev.then_some(DEV_SCRIPT));
 	let (scripts, worker_scripts): (Vec<Script>, Vec<Script>) = if runs_in_a_worker(&imports_of(&module.bytes)?) {
@@ -269,6 +276,7 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, 
 		files.push((ROUTED_PAGE_FILE.to_string(), page_file(SITE_ROOT)));
 	}
 	files.extend(route_modules);
+	files.extend(shipped_modules);
 	let worker_files = if worker_scripts.is_empty() { &[][..] } else { &WORKER_FILES[..] };
 	let shipped =
 		scripts.iter().chain(worker_scripts.iter().filter(|script| !scripts.contains(script))).chain(worker_files);
