@@ -460,7 +460,7 @@ pub fn lower_function_methods(node: Node) -> Node {
 			|| is_libm(name)
 	};
 	// `xs.map(square)` of a user function map(list, fn): the receiver is its first argument, before function values
-	// are specialised (function_values.rs), which would otherwise see map(square)
+	// are made (function_values.rs), which would otherwise see map(square)
 	let takes_receiver = |name: &str, arguments: usize| arities.get(name) == Some(&(arguments + 1));
 	let node = list_constructor_calls(node, &defined);
 	function_methods_as_calls(node, &defined, &|name, arguments, defined| {

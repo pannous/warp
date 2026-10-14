@@ -1,5 +1,4 @@
-//! Real closures: a function as a run-time value. Where compile-time specialisation (function_values.rs) cannot know the
-//! function, a lambda is lifted to a top-level function whose first parameters are the variables it captures (by value,
+//! Real closures: a function as a run-time value. Unless an iteration word inlines it (lambdas.rs), a lambda is lifted to a top-level function whose first parameters are the variables it captures (by value,
 //! decision D7), and the lambda becomes `closure_new(lifted, captured…)`: at run time a $Node of Kind::Function holding a
 //! $Closure struct (a typed function reference plus the captured values). Calling a variable that holds one, `f(x)`,
 //! becomes `closure_call_1(f, x)`, a helper per arity that call_refs the closure's entry (wasm_emitter/closures.rs).
@@ -142,7 +141,7 @@ pub fn needs_a_function(needer: &str, parameter: Option<&str>, value: &Node, fix
 	crate::diagnostic::Diagnostic::at(value, message).into_error()
 }
 
-/// A function value that a call cannot be specialised for: a variable, a lambda, a call that may return a function, an
+/// A function value known only at run time: a variable, a lambda, a call that may return a function, an
 /// element of a list (`fs#1`, the arguments of a task's wrapper)
 pub fn may_be_function_value(node: &Node) -> bool {
 	match node.drop_meta() {
