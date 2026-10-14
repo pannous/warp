@@ -502,9 +502,8 @@ def member_completion_wrong():
 	shown = browser("eval", f"""(async () => {{
 		const editor = document.querySelector(".CodeMirror").CodeMirror;
 		editor.focus();
-		editor.setValue({json.dumps(MEMBER_CODE)});
-		editor.setCursor(0, {len(MEMBER_CODE)});
-		editor.replaceSelection(".");
+		editor.setValue({json.dumps(MEMBER_CODE + ".")}); // not typed (replaceSelection is "+input"): no assistant call
+		editor.setCursor(0, {len(MEMBER_CODE) + 1});
 		editor.triggerOnKeyDown({{ type: "keydown", keyCode: {KEY_CODES["Tab"]}, preventDefault() {{}}, stopPropagation() {{}} }});
 		const list = document.querySelector(".completions");
 		const deadline = Date.now() + {MEMBERS_WAIT_MS};
