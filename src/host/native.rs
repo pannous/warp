@@ -517,8 +517,10 @@ fn run_block(
 	let mut store = caller.as_context_mut();
 	let [block, names, values, definitions] = [block, names, values, definitions]
 		.map(|value| crate::run::wasm_reader::node_in(&Val::AnyRef(value), &mut store, memory));
-	let result = crate::pipeline::eval_block(block, &names, &values, &definitions).map_err(task_failure)?;
-	let value = TaskValue::of(&result).map_err(|_| task_failure(crate::pipeline::cannot_hand_back(&result)))?;
+	let result =
+		crate::compiler::run_time_blocks::eval_block(block, &names, &values, &definitions).map_err(task_failure)?;
+	let value = TaskValue::of(&result)
+		.map_err(|_| task_failure(crate::compiler::run_time_blocks::cannot_hand_back(&result)))?;
 	build_in_program(&mut caller, &value, &task_failure)
 }
 

@@ -87,15 +87,14 @@ use crate::analyzer::{
 use crate::compiler::context::{Context, UserFunctionDef};
 use crate::compiler::function::Function as FuncDef;
 use crate::compiler::local::Local;
+pub use crate::errors::run_time::out_of_fuel;
+use crate::errors::run_time::returned_error_message;
 use crate::extensions::numbers::Number;
 #[cfg(feature = "native")]
 use crate::gc_traits::GcObject as ErgonomicGcObject;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::pipeline::returned_error_message;
-pub use crate::pipeline::{
-	compile, compile_printing_result, eval, eval_parsed, eval_untrusted, lower, out_of_fuel, CompiledModule,
-};
+pub use crate::pipeline::{compile, compile_printing_result, eval, eval_parsed, eval_untrusted, lower, CompiledModule};
 use crate::type_kinds::{field_def_to_val_type, Kind, RawFieldValue, TypeDef, TypeRegistry, KIND_MASK};
 #[cfg(feature = "native")]
 use crate::util::gc_engine;

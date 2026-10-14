@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Pure move of Rust functions, consts, statics and type aliases between files (notes/restructuring.md).
 
-move_fn.py <search_dir> <target_file> <name>... [--impl TYPE]
+move_fn.py <search_dir> <target_file> <name>... [--impl TYPE] [--from FILE]
+
+--from takes the items from that one file only: names defined elsewhere too (`show`, `fail`) stay unambiguous.
 
 Each named item (with its doc comments and attributes) is cut from the one file under <search_dir> that defines it and
 appended to <target_file>: methods into the target's last `impl TYPE {` block (created when missing), free functions
@@ -97,7 +99,7 @@ def body_end(text, start):
 def cut_function(contents, path, name):
 	lines = contents[path].split("\n")
 	found = function_line(lines, name)
-	if len(found) != 1:
+	if not found:
 		return None
 	start = first_attached_line(lines, found[0])
 	text = "\n".join(lines)
@@ -153,8 +155,11 @@ def main():
 	parser.add_argument("target")
 	parser.add_argument("names", nargs="+")
 	parser.add_argument("--impl", default="WarpParser")
+	parser.add_argument("--from", dest="source")
 	arguments = parser.parse_args()
 	sources = [os.path.join(root, file) for root, _, files in os.walk(arguments.search_dir) for file in files if file.endswith(".rs")]
+	if arguments.source:
+		sources = [arguments.source]
 	located = []
 	for name in arguments.names:
 		holders = [path for path in sources if os.path.abspath(path) != os.path.abspath(arguments.target) and function_line(open(path).read().split("\n"), name)]
@@ -165,12 +170,14 @@ def main():
 	os.makedirs(os.path.dirname(arguments.target) or ".", exist_ok=True)
 	methods, free, values, contents = [], [], [], {path: open(path).read() for path, _, _ in located}
 	deeper = depth_below(arguments.search_dir, arguments.target) > 0
-	for path, line, name in located:
-		value = is_value_item(open(path).read().split("\n")[line])
-		piece = cut_function(contents, path, name)
-		# what mod.rs keeps private its submodules still see; a sibling file does not
-		piece = widened(piece) if deeper or os.path.basename(path) == "mod.rs" else piece
-		(values if value else methods if piece[-1].startswith("\t") else free).append("\n".join(piece))
+	for path, _, name in located:
+		# every definition of the name: `#[cfg(feature = "native")] fn f` and its `#[cfg(not(…))]` twin go together
+		while found := function_line(contents[path].split("\n"), name):
+			value = is_value_item(contents[path].split("\n")[found[0]])
+			piece = cut_function(contents, path, name)
+			# what mod.rs keeps private its submodules still see; a sibling file does not
+			piece = widened(piece) if deeper or os.path.basename(path) == "mod.rs" else piece
+			(values if value else methods if piece[-1].startswith("\t") else free).append("\n".join(piece))
 		print(f"{name}: {path} → {arguments.target}")
 	text = open(arguments.target).read() if os.path.exists(arguments.target) else NEW_FILE_HEADER
 	if values:

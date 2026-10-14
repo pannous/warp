@@ -3,17 +3,14 @@
 //! re-exports them.
 
 use crate::compiler::compile_context;
+pub use crate::compiler::compile_mode::*;
 use crate::node::{Bracket, Node, Separator};
-use crate::operators::Op;
 use crate::warp_parser::WarpParser;
 use crate::wasm_emitter::{emit_module, find_struct_instantiation, WasmGcEmitter};
 #[cfg(feature = "native")]
 use log::warn;
 
-const INDEX_OUT_OF_RANGE: &str = "index out of range";
-const UNWRAPPED_EMPTY: &str = "unwrapped ø";
-const RANGE_END_HINT: &str = "hint: `..` excludes the end; `...` or `to` include it";
-use crate::lowering::nodes::children_rewritten;
+use crate::errors::run_time::{explain_runtime_error, has_exclusive_range};
 #[cfg(feature = "native")]
 use crate::run::wasm_reader::read_bytes;
 #[cfg(feature = "native")]
@@ -43,46 +40,6 @@ fn eval_source(code: &str) -> Node {
 	}
 }
 
-fn has_exclusive_range(node: &Node) -> bool {
-	match node.drop_meta() {
-		Node::Key(_, Op::Range, _) => true,
-		Node::Key(left, _, right) => has_exclusive_range(left) || has_exclusive_range(right),
-		Node::List(items, _, _) => items.iter().any(has_exclusive_range),
-		_ => false,
-	}
-}
-
-/// A runtime error fails far from its cause: it names the range hint and the defaults unanswered Asks took
-fn explain_runtime_error(result: Node, exclusive_range: bool) -> Node {
-	let assumptions = crate::errors::diagnostic::take_assumptions();
-	let Node::Error(reason) = &result else { return result };
-	let Node::Text(message) = reason.drop_meta() else {
-		return result;
-	};
-	let mut lines = vec![message.clone()];
-	if exclusive_range && message.starts_with(INDEX_OUT_OF_RANGE) {
-		lines.push(RANGE_END_HINT.to_string());
-	}
-	let mut assumed: Vec<(String, Vec<String>)> = Vec::new();
-	for assumption in assumptions {
-		let guess = format!("{}; fix: {}", assumption.message, assumption.fix.unwrap_or_default());
-		let position = format!("{}:{}", assumption.line, assumption.column);
-		match assumed.iter_mut().find(|(known, _)| *known == guess) {
-			Some((_, positions)) => positions.push(position),
-			None => assumed.push((guess, vec![position])),
-		}
-	}
-	lines.extend(
-		assumed
-			.into_iter()
-			.map(|(guess, positions)| format!("assumed at {}: {guess}", positions.join(", "))),
-	);
-	match lines.len() {
-		1 => result,
-		_ => crate::node::error(&lines.join("\n  ")),
-	}
-}
-
 /// Parse the source and check its laws; `Err` is the violation.
 fn lawful_program(code: &str) -> Result<Node, Node> {
 	let lawful = crate::law::separate_laws(crate::errors::diagnostic::in_source_mode(code, || {
@@ -109,151 +66,6 @@ pub fn eval_untrusted(code: &str) -> Node {
 			eval_parsed(program, code)
 		}),
 	}
-}
-
-/// `run` with the program granted only what a sandboxed program gets (`warp --sandbox`, Capability::GRANTED_SANDBOXED)
-pub fn sandboxed<T>(run: impl FnOnce() -> T) -> T {
-	with_granted(&crate::analyzer::effects::Capability::GRANTED_SANDBOXED, || {
-		compile_context::scoped(|context| &mut context.sandboxed, true, run)
-	})
-}
-
-/// `run` with the program granted only `granted` (checked again after lowering, which brings calls of its own:
-/// `use python math` → foreign_call)
-fn with_granted<T>(granted: &'static [crate::analyzer::effects::Capability], run: impl FnOnce() -> T) -> T {
-	compile_context::scoped(|context| &mut context.granted, granted, run)
-}
-
-/// What the program compiled on this thread is compiled for: set by the `for_*` wrappers around a compile, read by the
-/// lowering passes and (through wasm_emitter/config.rs) the emitter
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct CompileMode {
-	/// for a page (`warp build --site`), where page events happen
-	pub for_a_page: bool,
-	/// for `warp dev`, whose page keeps the program's state across reloads
-	pub for_dev: bool,
-	/// a program that renders its own markup (rendering_itself)
-	pub rendering_itself: bool,
-	/// for WAGI (`warp build --wagi`): its routes answer the one request in its environment
-	pub for_wagi: bool,
-	/// the program ends in the print of its value that compile_printing_result added: that print shows nothing for ø (a
-	/// loop or a call that gives nothing), as `warp <file>` shows nothing; a print of the program's own prints ø
-	pub prints_result: bool,
-	/// the page is compiled to render its first HTML where the server's code is (site.rs, headless.rs)
-	pub prerendering: bool,
-	/// a module for any host (`warp compile --wasm`): a browser's host reads its values too
-	pub for_any_host: bool,
-	/// hosted (`warp deploy`): a program without routes gets them (lowering/web/serve.rs with_default_routes)
-	pub for_hosting: bool,
-	/// it runs under `warp test`: its tests run and give its value (lowering/control/test_blocks.rs)
-	pub for_tests: bool,
-}
-
-impl CompileMode {
-	/// a plain run: none of the flags
-	pub const PLAIN: CompileMode = CompileMode {
-		for_a_page: false,
-		for_dev: false,
-		rendering_itself: false,
-		for_wagi: false,
-		prints_result: false,
-		prerendering: false,
-		for_any_host: false,
-		for_hosting: false,
-		for_tests: false,
-	};
-
-	/// Whether the program exports its renderer: a page's, or one rendering itself
-	pub fn renders_itself(&self) -> bool {
-		self.for_a_page || self.rendering_itself
-	}
-}
-
-/// What the program compiled now is compiled for
-pub fn compile_mode() -> CompileMode {
-	compile_context::read(|context| context.mode)
-}
-
-fn set_mode_flag(flag: fn(&mut CompileMode) -> &mut bool, value: bool) {
-	compile_context::change(|context| *flag(&mut context.mode) = value)
-}
-
-/// `run` with one flag of the compile mode set, then that flag as it was (the others keep what `run` set)
-fn with_flag<T>(flag: fn(&mut compile_context::CompileContext) -> &mut bool, run: impl FnOnce() -> T) -> T {
-	compile_context::scoped(flag, true, run)
-}
-
-/// `run` compiling a program as a component exporting and importing `functions`: the emitter adds the canonical-ABI
-/// adapters of the exports and imports the imports from the core modules the world names
-pub fn for_a_component<T>(functions: crate::lowering::component_worlds::WorldFunctions, run: impl FnOnce() -> T) -> T {
-	compile_context::scoped(|context| &mut context.component, functions, run)
-}
-
-/// The functions the component being compiled exports, none for a program
-pub fn component_exports() -> Vec<(String, crate::lowering::component_worlds::Signature)> {
-	compile_context::read(|context| context.component.exports.clone())
-}
-
-/// The functions the component being compiled imports, none for a program
-pub fn component_imports() -> Vec<(String, crate::lowering::component_worlds::Signature)> {
-	compile_context::read(|context| context.component.imports.clone())
-}
-
-/// `run` compiling a program for a page: its page event handlers are expected, not warned about; it exports the
-/// reflection getters the page's host reads values with
-pub fn for_a_page<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(|context| &mut context.mode.for_a_page, run)
-}
-
-/// `run` compiling a program for WAGI (Spin, Akamai Functions): lowering/web/serve.rs ends it in the answer of its routes
-/// to the request (lib/wagi.warp), and it exports `_start`
-pub fn for_wagi<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(|context| &mut context.mode.for_wagi, run)
-}
-
-/// `run` compiling a module for any host (`warp compile --wasm`): it exports the reflection getters a host without GC
-/// field access (the browser) reads values with, so a browser program importing it copies values in and out
-pub fn for_any_host<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(|context| &mut context.mode.for_any_host, run)
-}
-
-/// `run` compiling a hosted program (`warp deploy`): without routes of its own, its value is the page at / and each of
-/// its functions a route
-pub fn for_hosting<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(|context| &mut context.mode.for_hosting, run)
-}
-
-/// `run` compiling a page that calls its server functions directly, as the server does (lowering/web/serve.rs): for its
-/// first HTML, rendered at build time
-pub fn prerendering<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(|context| &mut context.mode.prerendering, run)
-}
-
-/// `run` compiling the shipped page, whose calls of server functions start as `values`
-pub fn with_server_values<T>(values: Vec<Node>, run: impl FnOnce() -> T) -> T {
-	compile_context::scoped(|context| &mut context.server_values, values, run)
-}
-
-/// `run` compiling a program `warp serve` serves at the port: its server functions, its top-level `get`/`post` routes
-/// and its page, without a `serve PORT {…}` statement
-pub fn serving_at<T>(port: u16, run: impl FnOnce() -> T) -> T {
-	compile_context::scoped(|context| &mut context.serving_port, Some(port), run)
-}
-
-/// `run` compiling a program that renders its own markup (the playground, web.rs renders_itself): it exports page·html
-/// and page·render as a page does (lowering/web/page_html.rs); nothing else of a page changes (it may still serve)
-pub fn rendering_itself<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(|context| &mut context.mode.rendering_itself, run)
-}
-
-/// `run` compiling a program for `warp dev`: the main-level variables it changes are kept (lowering/data/stored_values.rs)
-pub fn for_dev<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(|context| &mut context.mode.for_dev, run)
-}
-
-/// `run` a program under `warp test`: its `test` lines and blocks run, its value is their summary (P209, P210)
-pub fn for_tests<T>(run: impl FnOnce() -> T) -> T {
-	with_flag(|context| &mut context.mode.for_tests, run)
 }
 
 /// A compiled program and the host capabilities its imports need.
@@ -564,7 +376,7 @@ fn run_passes(node: Node, passes: &[Pass]) -> Node {
 
 /// Everything before code generation. `Err` is the final value of the program when it needs no module
 /// (a constant answer, an error, a denied capability).
-fn lower_for_emission(node: Node) -> Result<Node, Node> {
+pub(crate) fn lower_for_emission(node: Node) -> Result<Node, Node> {
 	use crate::lowering::blocks::unsealed;
 	crate::lowering::nodes::numbering_fresh_names(|| lower_with_sealed_quotes(node))
 		.map(unsealed)
@@ -782,230 +594,6 @@ fn checked_markup(result: Node) -> Node {
 	result
 }
 
-/// The words of an exception (library_words lowers them to the call raise(X)), unless the program defines one
-pub(crate) const RAISE_WORDS: [&str; 4] = ["raise", "throw", "fail", "panic"];
-
-/// Run a block the program built at run time (the host's run_block, notes/runtime_eval.md): `names` (one text, the
-/// names separated by spaces) are bound to `values` first, the values the program had where it ran the block, then
-/// the program's function `definitions` follow. Only the names the block or the definitions mention are bound.
-/// The block gets no capability but pure libm, wherever its code came from (user decision: pure by default)
-/// `Err` is the message the run fails with, naming the block.
-pub fn eval_block(block: Node, names: &Node, values: &Node, definitions: &Node) -> Result<Node, String> {
-	let written = block.serialize().trim().to_string();
-	if block.drop_meta() == &Node::Empty {
-		return Err(UNWRAPPED_EMPTY.to_string()); // `x!` forces: ø is the optional's loud error (P73)
-	}
-	let names: Vec<String> = match names.drop_meta() {
-		Node::Text(names) => names.split_whitespace().map(str::to_string).collect(),
-		_ => vec![],
-	};
-	let block = spaced(block);
-	let definitions: Vec<Node> = definitions.as_items().into_iter().map(spaced).collect();
-	let mentioned = |name: &str| {
-		[&block]
-			.into_iter()
-			.chain(&definitions)
-			.any(|part| names_or_interpolates(part, name))
-	};
-	let bound: Vec<(String, Node)> = names
-		.into_iter()
-		.zip(values.as_items())
-		.filter(|(name, _)| mentioned(name))
-		.collect();
-	let program_of = |bindings: Vec<Node>| {
-		let statements: Vec<Node> = bindings
-			.into_iter()
-			.chain(definitions.iter().cloned())
-			.chain([block.clone()])
-			.collect();
-		Node::List(statements, Bracket::None, Separator::Newline)
-	};
-	let as_written = program_of(
-		bound
-			.iter()
-			.map(|(name, value)| assignment(name, as_written(value.clone())))
-			.collect(),
-	);
-	let result = match crate::analyzer::effects::EffectReport::of(&as_written)
-		.denied(&crate::analyzer::effects::Capability::GRANTED_UNTRUSTED)
-	{
-		Some((external, capability)) => crate::node::error(&format!(
-			"a block run at run time is pure: {external} needs the {} capability, which it does not get",
-			capability.name()
-		)),
-		None => run_block_program(bound, program_of),
-	};
-	match result.drop_meta() {
-		Node::Error(message) => Err(format!("the block {written} failed: {}", message.drop_meta())),
-		_ => Ok(result),
-	}
-}
-
-fn assignment(name: &str, value: Node) -> Node {
-	Node::Key(Box::new(Node::Symbol(name.to_string())), Op::Assign, Box::new(value))
-}
-
-/// A value written into the block's program: a number, text or character as itself, anything else as data
-fn as_written(value: Node) -> Node {
-	match value.drop_meta() {
-		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::Empty => value,
-		_ => Node::List(
-			vec![Node::Symbol(crate::lowering::blocks::DATA_WORD.to_string()), value],
-			Bracket::None,
-			Separator::Space,
-		),
-	}
-}
-
-/// Does `node` mention `name`: as a word, or inside a text (an interpolation)
-fn names_or_interpolates(node: &Node, name: &str) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| {
-		found |= match part {
-			Node::Symbol(word) => word == name,
-			Node::Text(text) => text.contains(name),
-			_ => false,
-		}
-	});
-	found
-}
-
-/// Natively the block is compiled as a function of the numbers it reads: each is `block·value(i) as int` (or `float`),
-/// exact ratios and big Ints included,
-/// which the host gives from this run's values, so the same block with other numbers is the same program, compiled
-/// once per thread (BLOCK_MODULES) and machine code once per machine (run/module_cache.rs). Other values are written in
-#[cfg(feature = "native")]
-fn run_block_program(bound: Vec<(String, Node)>, program_of: impl Fn(Vec<Node>) -> Node) -> Node {
-	use crate::extensions::numbers::Number;
-	use crate::host::tasks::TaskValue;
-	let mut numbers = vec![];
-	let bindings = bound
-		.into_iter()
-		.map(|(name, value)| {
-			// an exact ratio (`0.5` is 1/2) or big Int is an Int to the compiler: a handle the host composes (tasks.rs Builders)
-			let (number, type_word) = match value.drop_meta() {
-				Node::Number(Number::Float(x)) => (TaskValue::Float(*x), "float"),
-				Node::Number(Number::Int(_) | Number::BigInt(_) | Number::Quotient(..) | Number::BigQuotient(_)) => {
-					match TaskValue::of(&value) {
-						Ok(number) => (number, "int"),
-						Err(_) => return assignment(&name, as_written(value)),
-					}
-				}
-				_ => return assignment(&name, as_written(value)),
-			};
-			let read = Node::List(
-				vec![
-					Node::Symbol(crate::host::BLOCK_VALUE.to_string()),
-					Node::Number(Number::Int(numbers.len() as i64)),
-				],
-				Bracket::Round,
-				Separator::None,
-			);
-			numbers.push(number);
-			assignment(
-				&name,
-				Node::Key(Box::new(read), Op::As, Box::new(Node::Symbol(type_word.to_string()))),
-			)
-		})
-		.collect();
-	let program = program_of(bindings);
-	crate::host::with_block_values(numbers, || {
-		crate::errors::diagnostic::in_program_mode(program, run_cached_block)
-	})
-}
-
-#[cfg(not(feature = "native"))]
-fn run_block_program(bound: Vec<(String, Node)>, program_of: impl Fn(Vec<Node>) -> Node) -> Node {
-	eval_parsed(
-		program_of(
-			bound
-				.into_iter()
-				.map(|(name, value)| assignment(&name, as_written(value)))
-				.collect(),
-		),
-		"",
-	)
-}
-
-/// The block programs compiled on this thread, by their text; past BLOCK_MODULES_KEPT they start over
-#[cfg(feature = "native")]
-const BLOCK_MODULES_KEPT: usize = 256;
-#[cfg(feature = "native")]
-thread_local! {
-	static BLOCK_MODULES: std::cell::RefCell<std::collections::HashMap<String, CompiledModule>> = std::cell::RefCell::new(std::collections::HashMap::new());
-	static COMPILED_BLOCKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
-}
-
-/// How many block programs this thread compiled (the cache's misses)
-#[cfg(feature = "native")]
-pub fn compiled_blocks() -> usize {
-	COMPILED_BLOCKS.with(std::cell::Cell::get)
-}
-
-#[cfg(feature = "native")]
-fn run_cached_block(program: Node) -> Node {
-	let key = program.serialize();
-	let module = match BLOCK_MODULES.with(|modules| modules.borrow().get(&key).cloned()) {
-		Some(module) => module,
-		None => {
-			COMPILED_BLOCKS.with(|count| count.set(count.get() + 1));
-			let module = match lower_for_emission(program).map(|node| emit_module(&node)) {
-				Ok(Ok(module)) => module,
-				Ok(Err(type_error)) => return type_error,
-				Err(final_value) => return final_value,
-			};
-			BLOCK_MODULES.with(|modules| {
-				let mut modules = modules.borrow_mut();
-				if modules.len() >= BLOCK_MODULES_KEPT {
-					modules.clear();
-				}
-				modules.insert(key, module.clone());
-			});
-			module
-		}
-	};
-	run_module(module)
-}
-
-/// A phrase read back from a Node of the program (`data 2*3`, `print x`) has lost its spaces: an unbracketed list is a
-/// spaced phrase again, as the parser made it
-fn spaced(node: Node) -> Node {
-	match node {
-		Node::List(items, Bracket::None, Separator::None) => {
-			Node::List(items.into_iter().map(spaced).collect(), Bracket::None, Separator::Space)
-		}
-		other => children_rewritten(other, spaced),
-	}
-}
-
-/// A block's value the host has no constructor for in the running module yet
-pub fn cannot_hand_back(value: &Node) -> String {
-	format!(
-		"the block gave {}, a value run_block cannot hand back yet",
-		value.serialize().trim()
-	)
-}
-
-/// The message of `error "…"`, or of `raise …`, which always fails the run
-pub(crate) fn returned_error_message(value: &Node) -> Option<&Node> {
-	match value.drop_meta() {
-		Node::List(items, Bracket::Round, _)
-			if items.len() == 2
-				&& matches!(items[0].drop_meta(), Node::Symbol(word) if word == "error" || word == crate::wasm_emitter::text::text_builtins::RAISE) =>
-		{
-			Some(&items[1])
-		}
-		// `raise X` / `throw X` before library_words makes them the call raise(X)
-		Node::List(items, Bracket::None, _)
-			if items.len() == 2
-				&& matches!(items[0].drop_meta(), Node::Symbol(word) if RAISE_WORDS.contains(&word.as_str())) =>
-		{
-			Some(&items[1])
-		}
-		_ => None,
-	}
-}
-
 /// Run a compiled program with the linker its imports need
 #[cfg(feature = "native")]
 pub(crate) fn run_module(
@@ -1037,11 +625,4 @@ pub(crate) fn run_module(
 #[cfg(not(feature = "native"))]
 pub(crate) fn run_module(module: CompiledModule) -> Node {
 	crate::numbers::units::static_units::with_module_units(&module.bytes, crate::web::run_in_host(&module.bytes))
-}
-
-/// The run used up its fuel: it probably does not terminate, or needs a larger budget
-pub fn out_of_fuel(steps: u64) -> Node {
-	crate::node::error(&format!(
-		"out of fuel after {steps} steps: the program may not terminate (raise the budget with {}=<steps> or --fuel <steps>)",
-		crate::util::FUEL_VARIABLE))
 }

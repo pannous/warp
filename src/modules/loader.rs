@@ -1,6 +1,19 @@
 //! Loading modules: the Loader finds, fetches and parses the modules a program uses, and the sibling files of its folder, package or project (D15 `use folder|package|project`)
 use super::*;
 
+/// the directory of the file it is written in, as text: `read(module_directory + "/data/x")` finds a module's own files
+pub(crate) const MODULE_DIRECTORY: &str = "module_directory";
+/// Statements a module contributes; everything else in a module (expressions, calls) is its own business
+/// `use folder`, `use package`, `use project`: every definition of that scope is visible, looked up by name (D15)
+pub(crate) const SCOPE_WORDS: [(&str, Scope); 3] = [
+	("folder", Scope::Folder),
+	("package", Scope::Package),
+	("project", Scope::Project),
+];
+/// Folders a package or project scope never looks into, besides hidden ones and nested repositories
+pub(crate) const UNSCOPED_DIRECTORIES: [&str; 3] = [PACKAGES_DIRECTORY, "target", "node_modules"];
+pub(crate) const PROJECT_MARKER: &str = ".git";
+
 /// Another module file of the program's folder, parsed only when its text mentions a name the program needs
 pub(super) struct Sibling {
 	pub(super) path: PathBuf,
@@ -690,4 +703,11 @@ impl<'a> Loader<'a> {
 			.collect();
 		error(&format!("include not found: {name}; searched {}", searched.join(", ")))
 	}
+}
+
+/// A module's path as failures name it: without `./` steps (`./././greeting.warp` is `greeting.warp`)
+pub(crate) fn shown_path(path: &Path) -> PathBuf {
+	path.components()
+		.filter(|component| !matches!(component, std::path::Component::CurDir))
+		.collect()
 }
