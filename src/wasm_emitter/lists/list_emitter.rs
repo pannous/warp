@@ -34,8 +34,9 @@ const NODE_ARGUMENT_CALLS: [(&str, usize); 4] = [
 	(super::super::reflection::library_ops::LIST_SORTED_BY, 2),
 ];
 
-const BUILTIN_CALLS: [&str; 27] = [
+const BUILTIN_CALLS: [&str; 28] = [
 	"return",
+	crate::words::AS_CODE,
 	"fetch",
 	"puts",
 	"puti",
@@ -570,6 +571,9 @@ impl WasmGcEmitter {
 		if crate::analyzer::is_boolean(arg, &self.scope) {
 			return crate::analyzer::BOOL_TYPE.to_string();
 		}
+		if crate::analyzer::is_code(arg, &self.scope) {
+			return crate::words::CODE_WORD.to_string();
+		}
 		if let Some(map_type) = crate::analyzer::held_map_type(arg, &self.scope) {
 			return map_type;
 		}
@@ -603,6 +607,7 @@ impl WasmGcEmitter {
 	/// number of Int kind), a Key that may be an instance of a declared type or an operation
 	fn type_known_only_at_run_time(&self, subject: &Node) -> bool {
 		if crate::analyzer::is_boolean(subject, &self.scope)
+			|| crate::analyzer::is_code(subject, &self.scope)
 			|| matches!(subject.drop_meta(), Node::Number(_) | Node::Empty)
 			|| crate::analyzer::held_map_type(subject, &self.scope).is_some()
 		{
@@ -628,7 +633,10 @@ impl WasmGcEmitter {
 	/// `t is number` of a type value t (`t = type(x)`, `int is number`): t names one of the types number covers, `t == int or
 	/// t == rational or …`; None for a value that is no symbol, or a test for a symbol
 	fn type_value_test(&self, subject: &Node, spec: &str) -> Option<Node> {
-		if self.get_type(subject) != crate::Kind::Symbol || crate::type_tests::type_matches(SYMBOL_WORD, spec) {
+		if self.get_type(subject) != crate::Kind::Symbol
+			|| crate::type_tests::type_matches(SYMBOL_WORD, spec)
+			|| crate::analyzer::is_code(subject, &self.scope)
+		{
 			return None;
 		}
 		Some(names_covered_type(subject, spec))
@@ -683,11 +691,15 @@ impl WasmGcEmitter {
 		// only the run time tells an operation from a pair
 		let operation_of_key = self.get_type(subject) == Kind::Key
 			&& crate::type_tests::canonical_spec_word(spec) == crate::words::OPERATION_WORD;
-		let unknown = spec == ERROR_WORD || item_of_text || operation_of_key || self.has_unknown_static_type(subject);
+		// code is any node: its form only the run time tells
+		let code = crate::analyzer::is_code(subject, &self.scope);
+		let unknown =
+			spec == ERROR_WORD || item_of_text || operation_of_key || code || self.has_unknown_static_type(subject);
 		let declared_type = self.ctx.type_registry.get_by_name(spec).is_some();
 		let map_spec = crate::type_tests::canonical_spec_word(spec) == MAP_WORD;
 		let known_map = crate::analyzer::held_map_type(subject, &self.scope).is_some();
-		let map_test = (unknown || self.may_be_map(subject)) && map_spec && !declared_type && !known_map;
+		// code in braces `{x; x+1}` is no map
+		let map_test = (unknown || self.may_be_map(subject)) && map_spec && !declared_type && !known_map && !code;
 		let kind_mask = crate::type_tests::runtime_kind_mask(spec).filter(|_| unknown && !declared_type);
 		// a loop `for T in xs` filters only when its test is left to run time
 		if map_test || kind_mask.is_some() || declared_type {
@@ -835,6 +847,12 @@ impl WasmGcEmitter {
 					return false;
 				};
 				self.emit_runtime_error(func, error);
+				true
+			}
+			crate::words::AS_CODE => {
+				self.emit_node_instructions(func, arg);
+				func.instruction(&I::RefAsNonNull);
+				self.emit_call(func, crate::words::AS_CODE);
 				true
 			}
 			"type" if self.type_known_only_at_run_time(arg) => {

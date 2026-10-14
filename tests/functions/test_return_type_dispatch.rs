@@ -22,8 +22,8 @@ fn return_type_warnings() -> Vec<String> {
 
 #[test]
 fn test_as_picks_the_overload() {
-	is!(&with(RENDER, "x = render \"hi\" as pdf; x.body"), "%PDF hi");
-	is!(&with(RENDER, "x = render \"hi\" as docx; x.body"), "<w:t>hi");
+	is!(&with(RENDER, "x = (render \"hi\") as pdf; x.body"), "%PDF hi");
+	is!(&with(RENDER, "x = (render \"hi\") as docx; x.body"), "<w:t>hi");
 	is!(&with(RENDER, "x = (render \"hi\") as docx; x.body"), "<w:t>hi");
 }
 
@@ -41,7 +41,7 @@ fn test_a_typed_parameter_picks_the_overload() {
 
 #[test]
 fn test_the_result_type_can_be_inferred_from_the_body() {
-	is!(&with(INFERRED, "x = render \"hi\" as docx; x.body"), "<w:t>hi");
+	is!(&with(INFERRED, "x = (render \"hi\") as docx; x.body"), "<w:t>hi");
 	is!(&with(INFERRED, "pdf p = render \"hi\"; p.body"), "%PDF hi");
 }
 
@@ -56,7 +56,7 @@ fn test_no_expected_type_takes_the_first_overload_with_a_warning() {
 #[test]
 fn test_a_picked_overload_warns_nothing() {
 	take_warnings();
-	is!(&with(RENDER, "x = render \"hi\" as docx; x.body"), "<w:t>hi");
+	is!(&with(RENDER, "x = (render \"hi\") as docx; x.body"), "<w:t>hi");
 	assert!(return_type_warnings().is_empty());
 }
 

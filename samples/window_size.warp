@@ -1,0 +1,13 @@
+#!/usr/bin/env warp
+// sizes are properties: canvas.width is the picture's pixels, window.width the window showing it (in the playground the
+// frame of its paintings), display.width the screen's, read only. Writing one resizes it; a bare width is canvas.width
+use draw
+canvas.width = 160
+canvas.height = 90
+window.width = 640
+window.height = 360
+clear(paper)
+circle(canvas.width / 2, canvas.height / 2, 30, purple)
+label(4, 4, "\(canvas.width)×\(canvas.height)", black)
+label(4, 74, "window \(window.width)×\(window.height)", black)
+show()

@@ -24,6 +24,10 @@ pub const BINARY_INFO: i64 = 3;
 pub const BOOL_MASK_BIT: i64 = 62;
 /// The bit of an operation, a key of an operator other than `:` (`1+1` as data), in those masks (decision parse-type)
 pub const OPERATION_MASK_BIT: i64 = 61;
+/// The bit of code, a quoted program part (`f.body`, `parse("1+1")`, decision body-code), in those masks
+pub const CODE_MASK_BIT: i64 = 60;
+/// Code is marked in its top node's kind field above the separator, whatever node it is (as_code)
+pub const CODE_MARK: i64 = 1 << 56;
 /// P215: the head cell of a declared list carries the run-time kinds its element type admits, its element mark, in the
 /// kind field above the bracket byte; everything that reads the bracket masks it with KIND_MASK
 pub const ELEMENT_MARK_SHIFT: i64 = 16;
@@ -41,6 +45,7 @@ const _: () =
 /// A kind field without its element mark, for the comparisons of whole kinds (bracket and kind)
 pub const UNMARKED_KIND: i64 = (1 << ELEMENT_MARK_SHIFT) - 1;
 const _: () = assert!(MARK_BOOL_BIT + ELEMENT_MARK_SHIFT < 63, "the element mark fits in the kind field");
+const _: () = assert!(CODE_MARK > SEPARATOR_MASK, "the code mark lies above the separator");
 
 /// The element mark of a node_kind_in mask, shifted to its place in the kind field
 pub fn element_mark(mask: i64) -> i64 {

@@ -21,7 +21,8 @@ pub const TEXT_MEMBERS: [&str; 18] = [
 	"chars", "is_digit", "is_alpha", "number", "string", "copy",
 ];
 pub const MAP_MEMBERS: [&str; 8] = ["keys", "values", "get", "count", "contains", "remove", "copy", "string"];
-pub const NUMBER_MEMBERS: [&str; 3] = ["string", "int", "float"];
+pub const NUMBER_MEMBERS: [&str; 10] =
+	["string", "int", "float", "round", "floor", "ceil", "abs", "sqrt", "cbrt", "norm"];
 const LIST_WORD: &str = "list";
 const TEXT_WORD: &str = "text";
 /// The variable the receiver is assigned to, so the passes that know variables (instance classes, map keys) know it

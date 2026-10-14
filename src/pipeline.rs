@@ -92,6 +92,9 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::of_lookups::lower,
 	// `(p).a` is `p.a` (grouped_receivers.rs), before any pass reads a lookup
 	crate::lowering::grouped_receivers::lower,
+	// `window.width = 800`, `canvas.height`, a bare width (module_properties.rs): getters and setters, before any pass
+	// reads a field's write; resolve brings draw for them
+	crate::lowering::module_properties::lower,
 	// `n times {…}`, `n times [x]`, `n times "ab"` as the parser keeps them: a loop, a filled list, a repeated text
 	crate::lowering::times_phrases::lower,
 	// `xs .* 2` as the parser keeps it: the operator applied to each element (broadcasting.rs)
@@ -164,6 +167,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	// `li{ transition: fade 200ms }`: words as data, the attribute data-warp-transition (transitions.rs), before any pass
 	// reads fade as a variable
 	crate::lowering::transitions::lower,
+	// `xs.insert 4` is `xs.insert(4)` (member_phrases.rs), after markup_tags read `p.note "hi"` as an element
+	crate::lowering::member_phrases::lower,
 	// `dir(time)`: the names of the standard module (introspection.rs), before any pass reads time as a value
 	crate::lowering::introspection::lower,
 	// `f.effects`, `e.listeners`: the reflection words' dot forms (reflection.rs), before any pass reads them as fields
@@ -242,6 +247,8 @@ const MODULE_PASSES: &[Pass] = &[
 /// Stored values, system values, signals and events, pages
 const SIGNAL_PASSES: &[Pass] = &[
 	crate::numbers::units::lower_sleep_durations,
+	// `now > 17h`, `now >= October`, `now ≈ 2026-10-14`: that part of now (partial_comparisons.rs), before units fold `time > 17h`
+	crate::time::partial_comparisons::lower,
 	crate::numbers::units::lower_quantity_comparisons,
 	crate::lowering::stored_values::lower,
 	crate::lowering::mutation::lower_deletes,

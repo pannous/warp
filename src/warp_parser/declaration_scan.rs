@@ -26,7 +26,7 @@ impl UserOperatorKind {
 	}
 }
 
-pub(super) const OPERATOR_FUNCTION_PREFIX: &str = "operator_";
+pub(super) use crate::operators::OPERATOR_FUNCTION_PREFIX;
 pub(super) const OPERATOR_KINDS: [(&str, UserOperatorKind); 3] =
 	[("prefix", UserOperatorKind::Prefix), ("suffix", UserOperatorKind::Suffix), ("infix", UserOperatorKind::Infix)];
 /// A user operator binds like the built-ins it resembles: suffix like the superscripts, prefix like unary minus, infix like `+`

@@ -4,6 +4,7 @@ mod test_analysis_memo;
 mod test_anonymous_application;
 mod test_anonymous_function_forms;
 mod test_any_result; // card def
+mod test_argument_cast;
 mod test_argument_kinds;
 mod test_argument_labels;
 mod test_arity_overloads;
@@ -91,6 +92,7 @@ mod test_library_word_values;
 mod test_list_conversion;
 mod test_list_fields; // card people-map
 mod test_map_phrase;
+mod test_member_phrases; // card xs-insert
 mod test_memoization;
 mod test_method_syntax_calls;
 mod test_method_words;

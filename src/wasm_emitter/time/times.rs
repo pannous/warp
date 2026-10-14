@@ -8,7 +8,8 @@ use super::super::lists::list_ops::RETURNED_ERROR;
 use super::super::WasmGcEmitter;
 use crate::node::Node;
 use crate::time::calendar::{
-	BUILTIN_RULES, DAYS_PER_ERA, DAY_SECONDS, EPOCH_SHIFT, HOUR, MINUTE, SECOND, YEARS_PER_ERA, ZONES,
+	BUILTIN_RULES, DATE_FIELD, DAYS_PER_ERA, DAY_SECONDS, EPOCH_SHIFT, HOUR, MINUTE, SECOND, TIME_OF_DAY_FIELD,
+	YEARS_PER_ERA, ZONES,
 };
 use crate::time::{
 	TimeForm, INSTANT_AT, MONTHS_SHIFT, OFFSET_SHIFT, TIME_FORMS, TIME_FORM_BITS, TIME_FORM_MASK, TZDATA_FIELD,
@@ -32,9 +33,23 @@ pub(in crate::wasm_emitter) const CIVIL_FROM_DAYS: &str = "civil_from_days";
 pub(in crate::wasm_emitter) const DAYS_FROM_CIVIL: &str = "days_from_civil";
 /// time_parts(form, position) -> (days, nanoseconds of the day): the calendar day and the clock of a position
 pub(in crate::wasm_emitter) const TIME_PARTS: &str = "time_parts";
-/// The fields time_field reads, as calendar::Time::field names them
-const TIME_FIELDS: [&str; 10] =
-	["year", "month", "day", "weekday", "day_of_year", "hour", "minute", "second", "epoch_seconds", "offset"];
+/// The fields time_field reads, as calendar::Time::field names them, then the parts (calendar::Time::part) as positions
+const TIME_FIELDS: [&str; 12] = [
+	"year",
+	"month",
+	"day",
+	"weekday",
+	"day_of_year",
+	"hour",
+	"minute",
+	"second",
+	"epoch_seconds",
+	"offset",
+	TIME_OF_DAY_FIELD,
+	DATE_FIELD,
+];
+/// The parts, a time of their form: `now.time` is a time of day, `now.date` a date
+const TIME_PARTS_FORMS: [(&str, TimeForm); 2] = [(TIME_OF_DAY_FIELD, TimeForm::Clock), (DATE_FIELD, TimeForm::Date)];
 /// The fields that read the position itself, not its wall clock
 const ABSOLUTE_FIELDS: [&str; 2] = [crate::time::EPOCH_SECONDS, "offset"];
 const NANOS_PER_MILLI: i64 = 1_000_000;
@@ -144,7 +159,7 @@ impl WasmGcEmitter {
 					I::Call(s.func_index(DAYS_FROM_CIVIL)),
 				];
 				day_of_year.extend([I::I64Sub, I::I64Const(1), I::I64Add]);
-				let values: [Vec<I<'static>>; 10] = [
+				let values: [Vec<I<'static>>; 12] = [
 					vec![I::LocalGet(year)],
 					vec![I::LocalGet(month)],
 					vec![I::LocalGet(day)],
@@ -182,6 +197,15 @@ impl WasmGcEmitter {
 						I::I64Add,
 					],
 					vec![I::LocalGet(offset)],
+					// whole seconds, as calendar::Time::part: 22:27:46
+					vec![
+						I::LocalGet(nanos),
+						I::I64Const(SECOND as i64),
+						I::I64DivS,
+						I::I64Const(SECOND as i64),
+						I::I64Mul,
+					],
+					vec![I::LocalGet(days)],
 				];
 				for (index, value) in values.iter().enumerate() {
 					Self::emit_list(
@@ -354,15 +378,22 @@ impl WasmGcEmitter {
 			]);
 			s.emit_text_allocation(f, position, address);
 			Self::emit_list(f, &[I::LocalGet(address), I::LocalSet(position)]);
+			// a time of day has no date
+			is_form(f, TimeForm::Clock);
+			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
 			digits(f, &[I::LocalGet(year)], 4);
 			put(f, b'-');
 			digits(f, &[I::LocalGet(month)], 2);
 			put(f, b'-');
 			digits(f, &[I::LocalGet(day)], 2);
+			f.instruction(&I::End);
 			// a date has no clock
 			is_form(f, TimeForm::Date);
 			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
+			is_form(f, TimeForm::Clock);
+			Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty)]);
 			put(f, b'T');
+			f.instruction(&I::End);
 			digits(f, &[I::LocalGet(nanos), I::I64Const(HOUR * SECOND as i64), I::I64DivU], 2);
 			put(f, b':');
 			digits(
@@ -370,12 +401,14 @@ impl WasmGcEmitter {
 				&[I::LocalGet(nanos), I::I64Const(MINUTE * SECOND as i64), I::I64DivU, I::I64Const(MINUTE), I::I64RemU],
 				2,
 			);
-			// seconds only when there are any, the fraction without its trailing zeros
+			// seconds only when there are any or it is a time of day (22:27:46), the fraction without its trailing zeros
 			Self::emit_list(f, &[I::LocalGet(nanos), I::I64Const(SECOND as i64), I::I64RemU, I::LocalSet(fraction)]);
 			let whole_seconds =
 				[I::LocalGet(nanos), I::I64Const(SECOND as i64), I::I64DivU, I::I64Const(MINUTE), I::I64RemU];
 			Self::emit_list(f, &whole_seconds);
-			Self::emit_list(f, &[I::LocalGet(fraction), I::I64Or, I::I64Const(0), I::I64Ne, I::If(BlockType::Empty)]);
+			Self::emit_list(f, &[I::LocalGet(fraction), I::I64Or, I::I64Const(0), I::I64Ne]);
+			is_form(f, TimeForm::Clock);
+			Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty)]);
 			put(f, b':');
 			digits(f, &whole_seconds, 2);
 			f.instruction(&I::End);
@@ -541,12 +574,14 @@ impl WasmGcEmitter {
 
 	/// time_of(info, position) of two constants: the node itself
 	pub(in crate::wasm_emitter) fn emit_time_constant(&self, func: &mut Function, info: i64, position: i64) {
+		Self::emit_list(func, &[I::I64Const((info << KIND_BITS) | Kind::Time as i64), I::I64Const(position)]);
+		self.emit_time_node_of_position(func);
+	}
+
+	/// The time node of the kind and the position on the stack
+	fn emit_time_node_of_position(&self, func: &mut Function) {
 		let (node, i64_box) = (self.type_manager.node_type, self.type_manager.i64_box_type);
-		#[rustfmt::skip]
-		Self::emit_list(func, &[
-			I::I64Const((info << KIND_BITS) | Kind::Time as i64), I::I64Const(position), I::StructNew(i64_box),
-			I::RefNull(HeapType::Concrete(node)), I::StructNew(node),
-		]);
+		Self::emit_list(func, &[I::StructNew(i64_box), I::RefNull(HeapType::Concrete(node)), I::StructNew(node)]);
 	}
 
 	/// Two times in node_order, whose locals `kinds` hold their kinds: the earlier one first; only the same form compares
@@ -608,9 +643,16 @@ impl WasmGcEmitter {
 				func.instruction(&I::End);
 			}
 		}
+		let part_form = TIME_PARTS_FORMS.iter().find(|(part, _)| *part == name).map(|(_, form)| *form);
+		if let Some(form) = part_form {
+			func.instruction(&I::I64Const(((form as i64) << KIND_BITS) | Kind::Time as i64));
+		}
 		Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull, I::I32Const(field as i32)]);
 		self.call(func, TIME_FIELD);
-		self.call(func, "new_int");
+		match part_form {
+			Some(_) => self.emit_time_node_of_position(func),
+			None => self.call(func, "new_int"),
+		}
 		Self::emit_list(func, &[I::Br(1), I::End]);
 	}
 

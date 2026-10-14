@@ -8,6 +8,8 @@
 //! A shader painted in a window (card paint-keeps) sends itself and its values:
 //! [SHADER_MARK][width][height][shader bytes][value count][shader][values], each value [name bytes][float count][array
 //! 0 or 1][name][floats as f32]; this process renders it on its own GPU device, no frame of pixels crosses.
+//! `window.width = 800` (card make-width) sends [RESIZE_MARK][width][height] in points: the window takes that size and
+//! keeps it, its frames scaled into it. The viewer tells its size as `size width height` (points) as it opens and resizes.
 
 use std::io::{BufRead, Read, Write};
 use std::process::{Child, Command, Stdio};
@@ -33,6 +35,8 @@ const RGBA_BYTES: usize = 4;
 const SHAPES_MARK: u32 = u32::MAX;
 /// In a frame's width: a shader and its values follow
 const SHADER_MARK: u32 = u32::MAX - 1;
+/// In a frame's width: the window's size the program asks for follows
+const RESIZE_MARK: u32 = u32::MAX - 2;
 const WORD_BYTES: usize = 4;
 /// One triangle covering the window, sampling the frame as a texture, nearest pixel (no blur when scaled up)
 const SHADER: &str = "
@@ -51,6 +55,8 @@ const TRIANGLE_CORNERS: u32 = 3;
 /// middle then): `input x y down key`, the pointer in the frame's pixels, down 1 while a button is, key as
 /// shader_holes.rs BUILTIN_HOLES says
 const INPUT_LINE: &str = "input";
+/// The line the viewer writes as its window opens or resizes: `size width height`, in points
+const SIZE_LINE: &str = "size";
 /// The arrows' codes, as a Mac's function keys: up, down, left, right
 const ARROW_CODES: [u32; 4] = [0xF700, 0xF701, 0xF702, 0xF703];
 /// NSTrackingArea's options: mouse moves, whether the window is key or not, over the whole view as it resizes
@@ -63,12 +69,14 @@ const TRACKING_IN_VISIBLE_RECT: usize = 0x200;
 fn follow_input(lines: impl BufRead) {
 	for line in lines.lines().map_while(Result::ok) {
 		let mut words = line.split_whitespace();
-		if words.next() != Some(INPUT_LINE) {
-			continue;
-		}
+		let kind = words.next();
 		let numbers: Vec<f32> = words.map_while(|word| word.parse().ok()).collect();
-		if let Ok(input) = numbers.try_into() {
-			warp_runtime::system_values::tell_window_input(input);
+		match (kind, numbers.as_slice()) {
+			(Some(INPUT_LINE), &[x, y, down, key]) => warp_runtime::system_values::tell_window_input([x, y, down, key]),
+			(Some(SIZE_LINE), &[width, height]) => {
+				warp_runtime::system_values::tell_window_size(width as i64, height as i64)
+			}
+			_ => {}
 		}
 	}
 }
@@ -121,6 +129,8 @@ pub enum Message {
 	Frame(Frame),
 	Shapes(Shapes),
 	Shader(ShaderFrame),
+	/// The window's size in points the program asks for
+	Resize(u32, u32),
 }
 
 impl Message {
@@ -129,6 +139,7 @@ impl Message {
 			Message::Frame(frame) => (frame.width, frame.height),
 			Message::Shapes(shapes) => (shapes.width, shapes.height),
 			Message::Shader(shader) => (shader.width, shader.height),
+			Message::Resize(width, height) => (*width, *height),
 		}
 	}
 }
@@ -210,6 +221,10 @@ pub fn read_message(reader: &mut impl Read) -> Option<Message> {
 	if first == SHADER_MARK {
 		return read_shader_frame(reader, second).map(Message::Shader);
 	}
+	if first == RESIZE_MARK {
+		let [height] = read_words(reader)?;
+		return Some(Message::Resize(second, height));
+	}
 	if first == SHAPES_MARK {
 		let [height, count] = read_words(reader)?;
 		let shapes = read_bytes(reader, count as usize * crate::graphics::gpu_canvas::SHAPE_BYTES)?;
@@ -234,6 +249,23 @@ fn read_bytes(reader: &mut impl Read, count: usize) -> Option<Vec<u8>> {
 
 /// The viewer of this run, started by the first paint
 static VIEWER: Mutex<Option<Child>> = Mutex::new(None);
+/// The window's size the program asked for (window.width = …), sent to a viewer as it starts
+static ASKED_SIZE: Mutex<Option<(u32, u32)>> = Mutex::new(None);
+
+/// [RESIZE_MARK][width][height]: the window's size in points
+pub fn resize_message(width: u32, height: u32) -> Vec<u8> {
+	words_bytes(&[RESIZE_MARK, width, height])
+}
+
+/// `window.width = 800`: the window's size in points, now if it shows, else as it opens
+pub fn resize(width: i64, height: i64) {
+	let (width, height) = (width.clamp(1, u32::MAX as i64) as u32, height.clamp(1, u32::MAX as i64) as u32);
+	if !VIEWER.lock().is_ok_and(|viewer| viewer.is_some()) {
+		*ASKED_SIZE.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some((width, height));
+	} else if let Err(failure) = show(&resize_message(width, height)) {
+		eprintln!("window.width: {failure}");
+	}
+}
 
 /// Show the pixels in the viewer's window, or why not (no viewer: the caller writes a PNG instead)
 pub fn show(frame: &[u8]) -> Result<(), String> {
@@ -257,7 +289,9 @@ pub fn show(frame: &[u8]) -> Result<(), String> {
 		*viewer = Some(child);
 	}
 	let input = viewer.as_mut().and_then(|child| child.stdin.as_mut()).expect("the viewer's stdin is piped");
-	let written = input.write_all(frame).and_then(|_| input.flush());
+	let asked = ASKED_SIZE.lock().ok().and_then(|mut asked| asked.take());
+	let asked = asked.map(|(width, height)| resize_message(width, height)).unwrap_or_default();
+	let written = input.write_all(&asked).and_then(|_| input.write_all(frame)).and_then(|_| input.flush());
 	written.map_err(|failure| {
 		*viewer = None;
 		warp_runtime::system_values::tell_window_open(false);
@@ -310,6 +344,8 @@ struct Viewer {
 	check: bool,
 	/// The event loop runs: a window may open
 	resumed: bool,
+	/// The size in points the program asked for before the window opened
+	asked: Option<(u32, u32)>,
 }
 
 /// The window and what draws into it
@@ -332,6 +368,8 @@ struct Screen {
 	pointer: (f64, f64),
 	button_down: bool,
 	key: u32,
+	/// The size in points the program set (window.width = …): frames of another size no longer resize the window
+	asked: Option<(u32, u32)>,
 }
 
 impl Viewer {
@@ -341,7 +379,7 @@ impl Viewer {
 			return;
 		};
 		let (width, height) = first.size();
-		match Screen::open(event_loop, width, height, self.check) {
+		match Screen::open(event_loop, (width, height), self.asked, self.check) {
 			Ok(screen) => self.screen = Some(screen),
 			Err(failure) => {
 				self.failure = Some(failure);
@@ -368,6 +406,8 @@ impl ApplicationHandler<Message> for Viewer {
 				screen.newest_shader = Some(shader);
 				screen.window.request_redraw();
 			}
+			(Some(screen), Message::Resize(width, height)) => screen.resize_to(width, height),
+			(None, Message::Resize(width, height)) => self.asked = Some((width, height)),
 			(None, message) => {
 				self.waiting.push(message);
 				self.open_for_waiting(event_loop);
@@ -379,7 +419,10 @@ impl ApplicationHandler<Message> for Viewer {
 		let Some(screen) = self.screen.as_mut() else { return };
 		match event {
 			WindowEvent::CloseRequested => event_loop.exit(),
-			WindowEvent::Resized(size) => screen.resize(size.width, size.height),
+			WindowEvent::Resized(size) => {
+				screen.resize(size.width, size.height);
+				screen.tell_size();
+			}
 			WindowEvent::CursorMoved { position, .. } => {
 				screen.pointer = screen.in_frame(position.x, position.y);
 				screen.tell_input();
@@ -457,8 +500,17 @@ fn shown_size(width: u32, height: u32) -> winit::dpi::Size {
 }
 
 impl Screen {
-	fn open(event_loop: &ActiveEventLoop, width: u32, height: u32, check: bool) -> Result<Screen, String> {
-		let attributes = Window::default_attributes().with_title(TITLE).with_inner_size(shown_size(width, height));
+	/// The window for a first frame of `frame_size`, at the size in points the program `asked` for, else one fitting the frame
+	fn open(
+		event_loop: &ActiveEventLoop,
+		frame_size: (u32, u32),
+		asked: Option<(u32, u32)>,
+		check: bool,
+	) -> Result<Screen, String> {
+		let size = asked.map_or(shown_size(frame_size.0, frame_size.1), |(width, height)| {
+			winit::dpi::LogicalSize::new(width, height).into()
+		});
+		let attributes = Window::default_attributes().with_title(TITLE).with_inner_size(size);
 		let window = Arc::new(
 			event_loop.create_window(attributes).map_err(|failure| format!("paint-window: no window: {failure}"))?,
 		);
@@ -511,7 +563,7 @@ impl Screen {
 			cache: None,
 		});
 		let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
-		Ok(Screen {
+		let screen = Screen {
 			window,
 			surface,
 			config,
@@ -527,7 +579,10 @@ impl Screen {
 			pointer: (0.0, 0.0),
 			button_down: false,
 			key: 0,
-		})
+			asked,
+		};
+		screen.tell_size();
+		Ok(screen)
 	}
 
 	/// The frame as the texture the next draw samples
@@ -591,7 +646,7 @@ impl Screen {
 				wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&self.sampler) },
 			],
 		}));
-		if self.frame_size != size && self.frame_size != (0, 0) {
+		if self.frame_size != size && self.frame_size != (0, 0) && self.asked.is_none() {
 			let _ = self.window.request_inner_size(shown_size(size.0, size.1));
 		}
 		if self.frame_size == (0, 0) {
@@ -601,6 +656,20 @@ impl Screen {
 			self.tell_input();
 		}
 		self.frame_size = size;
+	}
+
+	/// window.width = …: the window takes that size in points and keeps it
+	fn resize_to(&mut self, width: u32, height: u32) {
+		self.asked = Some((width, height));
+		let _ = self.window.request_inner_size(winit::dpi::LogicalSize::new(width, height));
+	}
+
+	/// The window's inner size in points as the program's side takes it (follow_input)
+	fn tell_size(&self) {
+		let size = self.window.inner_size().to_logical::<f64>(self.window.scale_factor());
+		let mut output = std::io::stdout().lock();
+		let _ =
+			writeln!(output, "{SIZE_LINE} {} {}", size.width.round(), size.height.round()).and_then(|_| output.flush());
 	}
 
 	/// The input as the program's side takes it (follow_input)

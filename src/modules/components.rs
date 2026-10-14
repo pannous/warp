@@ -1,6 +1,7 @@
 //! `use lib.wasm; lib.f(x)` (long form `use wasm "lib.wasm" as lib`): a WebAssembly component (a Rust crate built for wasm32-wasip2 with
 //! wit-bindgen, componentize-py's output, anything with a WIT interface) called through foreign_call
-//! (notes/stdlib_connectors.md). Each component is compiled once per path and process and instantiated once per
+//! (notes/stdlib_connectors.md). Each component is compiled once per path and process (its machine code cached on disk
+//! by module_cache) and instantiated once per
 //! thread, on an engine of its own with the component model (the programs' engines run core modules only), with WASI p2 for its imports. Values cross as JSON,
 //! like the other foreign runtimes: a Node argument becomes the WIT type the function declares, its result comes back as
 //! JSON (records objects, variants `{case: payload}`, enums texts, chars codepoints (P94), an `err` of a result an error).
@@ -139,7 +140,9 @@ fn compiled(path: &str) -> Result<Component, String> {
 	if let Some(component) = components.get(path) {
 		return Ok(component.clone());
 	}
-	let component = Component::from_file(engine(), path)
+	let component = std::fs::read(path)
+		.map_err(wasmtime::Error::from)
+		.and_then(|bytes| crate::run::module_cache::compiled_component(engine(), &bytes))
 		.map_err(|failure| format!("cannot load the component {path}: {failure:#}"))?;
 	components.insert(path.to_string(), component.clone());
 	Ok(component)

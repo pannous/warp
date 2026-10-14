@@ -429,6 +429,10 @@ fn special_form_kind(name: &str, items: &[Node], bracket: &Bracket, scope: &Scop
 			kind => kind,
 		});
 	}
+	// code is the node quoted (decision body-code)
+	if name == crate::words::AS_CODE && items.len() == 2 {
+		return Some(infer_type(&items[1], scope));
+	}
 	if RETURNING_KEYWORDS.contains(&name) && items.len() == 2 {
 		return Some(infer_type(&items[1], scope)); // `return x` is worth x
 	}
@@ -544,7 +548,12 @@ pub(super) fn element_kind(indexed: &Node, scope: &Scope) -> Option<Kind> {
 		return Some(Kind::Text); // a character, held as a node like any one-character text (see binding_kind)
 	}
 	let list_type = list_type_name(indexed, scope);
-	if list_type == MAP_WORD || list_type == NODE_LIST_TYPE || infer_type(indexed, scope) == Kind::Empty {
+	// a part of code (`parse("a; b")#2`) is any node
+	if list_type == MAP_WORD
+		|| super::is_code(indexed, scope)
+		|| list_type == NODE_LIST_TYPE
+		|| infer_type(indexed, scope) == Kind::Empty
+	{
 		return Some(Kind::Empty); // values of different types, or of a value held as a Node: held as a Node, like an optional
 	}
 	match list_type.strip_prefix("list of ").or_else(|| list_type.strip_prefix(MAP_TYPE_PREFIX))? {

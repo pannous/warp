@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 use warp::gc_engine;
-use warp::run::module_cache::{compiled_module_in, Origin};
+use warp::run::module_cache::{compiled_in, compiled_module_in, Origin};
 use wasmtime::{Linker, Module};
 
 const ANSWER_MODULE: &str = r#"(module (func (export "main") (result i64) i64.const 42))"#;
@@ -71,6 +71,19 @@ fn test_compiled_module_cache_holds_compiled_programs() {
 	let program = warp::wasm_emitter::compile("fib := it < 2 ? it : fib(it - 1) + fib(it - 2); fib(10)").unwrap();
 	let (_, first) = compiled_module_in(&cache, &engine, &program.bytes).unwrap();
 	let (_, second) = compiled_module_in(&cache, &engine, &program.bytes).unwrap();
+	assert_eq!((first, second), (Origin::Compiled, Origin::Cached));
+}
+
+/// `use lib.wasm` compiles a component once; later runs load its machine code (card takes-three: uniscript's took 0.9 s)
+#[test]
+fn test_compiled_module_cache_holds_components() {
+	let cache = fresh_cache("components");
+	let mut config = wasmtime::Config::new();
+	config.wasm_component_model(true);
+	let engine = wasmtime::Engine::new(&config).unwrap();
+	let component = r#"(component (core module (func (export "f"))))"#.as_bytes();
+	let (_, first) = compiled_in::<wasmtime::component::Component>(&cache, &engine, component).unwrap();
+	let (_, second) = compiled_in::<wasmtime::component::Component>(&cache, &engine, component).unwrap();
 	assert_eq!((first, second), (Origin::Compiled, Origin::Cached));
 }
 

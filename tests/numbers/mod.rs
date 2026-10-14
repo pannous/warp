@@ -1,7 +1,9 @@
 mod test_angle;
+mod test_arrow_operators; // card easy-add
 mod test_as_compound_unit; // card compound-unit
 mod test_average; // card average-undefined
 mod test_bend_laws; // card bend-style
+mod test_big_int_text; // card out-fuel
 mod test_big_ratio;
 mod test_compound_accumulator; // card compound-accumulator
 mod test_counting_units;
@@ -53,6 +55,7 @@ mod test_nearest_default; // card nearest-default-limit
 mod test_nearest_quiet; // card nearest-default-limit
 mod test_norm;
 mod test_number;
+mod test_number_methods; // card number-methods
 mod test_number_words;
 mod test_plus_minus;
 mod test_plus_minus_gaussian; // card plus-minus-gaussian

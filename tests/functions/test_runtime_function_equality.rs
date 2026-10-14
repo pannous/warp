@@ -26,3 +26,19 @@ fn closures_compare_their_captured_values() {
 	is!("make(n) := x => x + n; make(1) == make(1)", true);
 	is!("make(n) := x => x + n; make(1) == make(2)", false);
 }
+
+#[test] // a parameter named like a function is the parameter in its body: no static function comparison
+fn a_parameter_shadows_a_function_of_its_name() {
+	is!("class Q { k:int; name() := \"n\"; text() := \"q\" }; q = Q(1); f(name:any) := name is text; f(\"a\")", true);
+}
+
+#[test] // a loop variable named like a function holds the item where it is passed on, never the function
+fn a_loop_variable_shadows_a_function_of_its_name() {
+	is!("sample(x) := x; g(x) := x + 1; f(samples) := [g(sample) for sample in samples]; string(f([5, 6]))", "[6 7]");
+	is!("sample(x) := x; g(x) := x + 1; total = 0; for sample in [5] { total = g(sample) }; total", 6);
+}
+
+#[test] // a parameter named like a class's method is a value in its body: no prefix call of the method
+fn a_parameter_named_like_a_method_is_no_prefix_call() {
+	is!("class Q { k:int; foo() := \"n\" }; q = Q(1); f(foo) := contains(foo, \"-\"); f(\"a-b\")", true);
+}
