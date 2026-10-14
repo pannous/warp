@@ -781,7 +781,7 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 		// `def square := it * it` and `def add := a + b` keep their implicit parameters (later passes)
 		Node::Key(name, op @ (Op::Colon | Op::Assign), body)
 			if matches!(name.drop_meta(), Node::Symbol(_))
-				&& (op == Op::Colon || !crate::type_name_matching::uses_it(&body)) =>
+				&& (op == Op::Colon || !crate::analyzer::uses_it(&body)) =>
 		{
 			(
 				Node::List(vec![*name], Bracket::Round, Separator::None),

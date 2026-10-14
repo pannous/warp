@@ -101,15 +101,11 @@ pub fn parameter_slots(
 	}
 	if let [Node::Key(name, Op::Colon, type_name)] = parameters.as_slice() {
 		// `fibonacci number := … number … it …` uses both: the parameter keeps its name and `it` is the same value
-		if name == type_name && uses_it(&body) && !body.mentions(&name.name()) {
+		if name == type_name && crate::analyzer::uses_it(&body) && !body.mentions(&name.name()) {
 			parameters = vec![typed(IT, &type_name.name())];
 		}
 	}
 	Ok((parameters, body))
-}
-
-pub fn uses_it(node: &Node) -> bool {
-	node.mentions(IT)
 }
 
 /// The parameters of a spaced definition head `name words… = body` (also `:=`): its slots when a word is a known type
