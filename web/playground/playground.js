@@ -16,6 +16,12 @@ const STEAL_SECONDS = 0.005;
 const RESIZE_STEP = 20; // pixels per arrow key on a focused resizer
 const OLD_ANSWERS_KEY = "warp-playground-answers"; // the Ask era kept {topic: form, "ack:<topic>": "acknowledged"}
 const RUN_TIMEOUT_MS = 10000;
+// a run going on longer than this, or a program left running (timers, an animation), turns Run into Stop (card
+// playground-turn); a quick run never flickers
+const STOP_GRACE_MS = 500;
+const RUN_LABEL = "Run ▶";
+const STOP_LABEL = "Stop ■";
+const STOPPED = "stopped";
 const LOADING_STALL_MS = 30000; // the compiler's download shows a note when it made no progress this long
 // the origin a link of the shown program resolves against: "/about" is a page of the program, "https://…" is not
 const PROGRAM_ORIGIN = "http://program.invalid";
@@ -468,16 +474,35 @@ function stopAfterTimeout(run, milliseconds = RUN_TIMEOUT_MS) {
 const slept = (run, milliseconds) => stopAfterTimeout(run, run.deadline - Date.now() + milliseconds);
 
 // a program that does not stop blocks the worker: replace it
-function stopRun(run, message) {
+function stopRun(run, message, failed = !run.animating) {
 	worker.terminate();
 	startWorker();
-	finish(run, { value: message, error: !run.animating, printed: run.printed, paintings: run.paintings,
+	finish(run, { value: message, error: failed, printed: run.printed, paintings: run.paintings,
 		warnings: [], runtime_warnings: [], hints: [], notes: [] });
+}
+
+// the Run button while a program runs: Stop (card playground-turn)
+function showStop(stoppable) {
+	$("run").textContent = stoppable ? STOP_LABEL : RUN_LABEL;
+	$("run").title = stoppable ? "stop the program" : "Ctrl/Cmd-Enter";
+	$("run").classList.toggle("stop", stoppable);
+}
+const showsStop = () => $("run").classList.contains("stop");
+
+// Stop pressed: a run going on ends as stopped; a program left listening to its timers stops listening
+function stopPressed() {
+	if (pending) return stopRun(pending, STOPPED, false);
+	worker.terminate();
+	startWorker();
+	listenTo([]);
+	setStatus(STOPPED);
 }
 
 function finish(run, report) {
 	clearTimeout(run.timer);
+	clearTimeout(run.stopTimer);
 	if (pending === run) pending = undefined;
+	showStop(false); // the shown report's timers turn it back to Stop (listenTo)
 	run.resolve(report);
 }
 
@@ -494,6 +519,7 @@ async function runInWorker(code) {
 	return new Promise(resolve => {
 		const run = { id: ++nextRunId, resolve, printed: [], paintings: [], frame: 0, framesShown: {} };
 		stopAfterTimeout(run);
+		run.stopTimer = setTimeout(() => pending === run && showStop(true), STOP_GRACE_MS);
 		pending = run;
 		silence();
 		tellSystemValues();
@@ -720,6 +746,8 @@ function listenTo(labels) {
 	$("listening").hidden = labels.length === 0;
 	const hint = listening.has("key") ? "; click here, then type" : listening.size ? "; click here" : "";
 	$("listening").textContent = `listening: ${labels.join(", ")}${hint}`;
+	// timers and channels go on by themselves: the program still runs (page events wait for the user)
+	showStop(labels.some(label => !PAGE_EVENT.test(label)));
 }
 
 // a click on the output (on a canvas: its pixel), a key typed while the output has the focus
@@ -887,6 +915,7 @@ function runChanged() {
 // Run pressed (the button, Ctrl/Cmd-Enter): the old value gives way to "…" at once, and the old errors, warnings,
 // underlines and printed text go, so none is taken for the new run's (card g_oc54)
 function runPressed() {
+	if (showsStop()) return stopPressed();
 	showValue(PENDING_VALUE);
 	$("value").classList.remove("located");
 	$("value").onclick = null;
