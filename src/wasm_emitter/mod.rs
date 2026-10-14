@@ -19,26 +19,22 @@ mod constructors;
 pub(crate) use numbers::casts::is_called_conversion;
 pub use constructors::NEW_BOOL;
 mod config;
-mod equality;
 mod function_builder;
 mod import_manager;
 mod layout;
-pub(crate) mod library_ops;
 pub(crate) mod lists;
-mod node_api;
-pub use node_api::NODE_AT;
+pub use reflection::node_api::NODE_AT;
 pub(crate) mod time;
 pub use text::similarity::NUMBERS_SIMILAR;
 pub(crate) mod maps;
 pub use maps::map_backend::MAP_COPY_SUFFIX;
 pub(crate) use control::loop_control::{is_step, mark_step, split_step};
-mod reflection;
+pub(crate) mod reflection;
 mod string_table;
 pub(crate) mod text;
 mod type_manager;
 pub use control::try_guard::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
 pub(crate) mod host;
-mod witness;
 const WASI_START: &str = "_start";
 
 pub use numbers::big_int::{is_fixnum, EXACT_ARITHMETIC, EXACT_BUILDERS, INT_RUNTIME};
@@ -156,7 +152,7 @@ fn if_then_parts(node: &Node) -> Option<(&Node, &Node)> {
 }
 
 pub use config::EmitterConfig;
-pub use equality::{IS_TRUTHY, SAME_NODE, VALUES_EQUAL};
+pub use reflection::equality::{IS_TRUTHY, SAME_NODE, VALUES_EQUAL};
 pub use import_manager::ImportManager;
 pub use string_table::StringTable;
 pub use type_manager::TypeManager;
@@ -298,7 +294,7 @@ pub struct WasmGcEmitter {
 	list_abi: HashMap<String, lists::list_abi::ListAbi>,
 	/// The function being compiled returns a $NodeList
 	returns_list: bool,
-	compare_witness: Option<witness::WitnessTable>, // runtime dispatch of Comparable to user types (witness.rs)
+	compare_witness: Option<reflection::witness::WitnessTable>, // runtime dispatch of Comparable to user types (witness.rs)
 	closures: functions::closures::ClosureTypes,
 	/// The user function whose body is being compiled; None in main
 	compiling: Option<String>,
@@ -423,7 +419,7 @@ impl WasmGcEmitter {
 	/// Emit core GC types (String, Node, i64box, f64box)
 	fn emit_gc_types(&mut self) {
 		self.type_manager
-			.emit_gc_types(self.should_emit_function(node_api::NODE_AT));
+			.emit_gc_types(self.should_emit_function(reflection::node_api::NODE_AT));
 	}
 
 	// ═══════════════════════════════════════════════════════════════════════════
@@ -705,7 +701,7 @@ impl WasmGcEmitter {
 		// quoted or parsed code keeps its positions: node_at and $MetaNode only in a program that quotes or parses
 		// (cards data-meta, parse-word)
 		if node.mentions_any(&lists::list_emitter::QUOTE_WORDS) || node.mentions_any(&[crate::host::PARSE_CODE]) {
-			self.ctx.required_functions.insert(node_api::NODE_AT);
+			self.ctx.required_functions.insert(reflection::node_api::NODE_AT);
 		}
 		if crate::analyzer::makes_floats(&self.ctx, node) {
 			self.ctx.required_functions.insert(numbers::float_text::FLOAT_TEXT);
@@ -724,7 +720,7 @@ impl WasmGcEmitter {
 			}
 		});
 		self.written_operator_bound = key_operators.fold(self.written_operator_bound, i64::max);
-		self.writes_tags = library_ops::mentions_quoted_tag(node);
+		self.writes_tags = reflection::library_ops::mentions_quoted_tag(node);
 		host::component_adapters::add_dependencies(&mut self.ctx.required_functions);
 		numbers::uncertain::add_dependencies(&mut self.ctx.required_functions); // before the similarity's: uncertain_similar needs numbers_similar
 		self.require_function_text(); // before the similarity's: function_text needs values_equal
@@ -774,7 +770,7 @@ impl WasmGcEmitter {
 			Need::Function(name) => self.ctx.required_functions.contains(name),
 			Need::MathImport(key) => self.ctx.ffi_imports.contains_key(*key),
 			Need::KeyOperator(code) => {
-				*code <= self.written_operator_bound || !self.ctx.required_functions.contains(library_ops::LIST_TEXT)
+				*code <= self.written_operator_bound || !self.ctx.required_functions.contains(reflection::library_ops::LIST_TEXT)
 			}
 		}
 	}

@@ -5,7 +5,7 @@ Unblocks step 7 of tree patterns (notes/matching.md "Tree patterns", probes/matc
 ## What exists (probed 2026-10-13)
 - Code as data is a wasm Node already: `x = data (n * 1)` gives the key `n*1`, with `x.op` "*", `x.key` n,
   `x.value` 1, `x == data (n * 1)` yes, and `match x { data(n * 1) => "one" }` matches structurally.
-- The Node API (self-node-api, src/wasm_emitter/node_api.rs) reads and builds Nodes: `n.key`, `n.value`, `n.op`,
+- The Node API (self-node-api, src/wasm_emitter/reflection/node_api.rs) reads and builds Nodes: `n.key`, `n.value`, `n.op`,
   `n.name`, `n.bracket`, `type(n)`, `n#i`, `symbol(text)`, `key(left, op, right)`, `bracketed(items, "(")`.
 - A hole is a plain symbol: `data ($a + 0)` has the key `$a`, a symbol. The parser needs no change for holes.
 - `parse("n * 1")` of a constant text folds to `(data n*1)` (src/lowering/parse_word.rs, step parse-const). A grouped

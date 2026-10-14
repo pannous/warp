@@ -105,7 +105,7 @@ const TEXT_BUILTINS: [(&str, usize, Kind); 23] = [
 
 /// The text builtins and the node words (node_api.rs), which are called the same way
 fn builtins() -> impl Iterator<Item = &'static (&'static str, usize, Kind)> {
-	TEXT_BUILTINS.iter().chain(super::super::node_api::NODE_BUILTINS.iter())
+	TEXT_BUILTINS.iter().chain(super::super::reflection::node_api::NODE_BUILTINS.iter())
 }
 
 pub fn text_builtin_kind(name: &str, arguments: usize) -> Option<Kind> {
@@ -137,15 +137,15 @@ pub fn concatenates(left: Kind, right: Kind) -> bool {
 
 /// Runtime functions the text builtins call
 pub fn add_dependencies(required: &mut HashSet<&'static str>) {
-	super::super::node_api::add_dependencies(required);
+	super::super::reflection::node_api::add_dependencies(required);
 	// `catch e`: the caught error becomes an Error through error_of
 	if required.contains(crate::wasm_emitter::CAUGHT_ERROR) {
 		required.insert(ERROR_OF);
 	}
-	if required.contains(super::super::library_ops::LIST_TEXT) {
+	if required.contains(super::super::reflection::library_ops::LIST_TEXT) {
 		required.insert("list_join"); // emitted together, with the same helpers
 	}
-	if required.contains(super::super::library_ops::NODE_SLICE) {
+	if required.contains(super::super::reflection::library_ops::NODE_SLICE) {
 		required.extend(["text_chars", "list_join", "list_reverse"]);
 	}
 	if crate::library_words::MAP_WORD_FUNCTIONS
@@ -162,7 +162,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	}
 	// instance_copy is emitted with field_with, both looking into an instance's fields; `shallow` is tested for truth
 	if required.contains(crate::library_words::INSTANCE_COPY) {
-		required.extend([crate::library_words::FIELD_WITH, super::super::equality::IS_TRUTHY]);
+		required.extend([crate::library_words::FIELD_WITH, super::super::reflection::equality::IS_TRUTHY]);
 	}
 	if required.contains(crate::library_words::FIELD_WITH) {
 		required.insert(super::super::lists::list_ops::STRUCT_BODY); // an instance keeps its type
@@ -205,7 +205,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		required.insert("list_concat"); // of a non-list
 	}
 	if required.contains(super::super::lists::list_ops::NODE_ADD) {
-		required.extend(["list_concat", TEXT_CONCAT, TEXT_OF, super::super::library_ops::LIST_JOIN]);
+		required.extend(["list_concat", TEXT_CONCAT, TEXT_OF, super::super::reflection::library_ops::LIST_JOIN]);
 		// two lists added are concatenated, two texts too, a text and a number joined
 	}
 	if required.contains(super::super::numbers::casts::TEXT_AS_NUMBER) {
@@ -255,10 +255,10 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		required.extend(["exact_mul", "exact_add", "exact_sub"]);
 	}
 	if required.contains("list_sort") {
-		required.insert(super::super::library_ops::LIST_SORTED_BY);
+		required.insert(super::super::reflection::library_ops::LIST_SORTED_BY);
 	}
-	if required.contains(super::super::library_ops::LIST_SORTED_BY) {
-		required.extend([super::super::library_ops::NODE_ORDER, "text_chars", "list_join"]);
+	if required.contains(super::super::reflection::library_ops::LIST_SORTED_BY) {
+		required.extend([super::super::reflection::library_ops::NODE_ORDER, "text_chars", "list_join"]);
 	}
 	if [TEXT_FIND, TEXT_STARTS_WITH, TEXT_ENDS_WITH]
 		.iter()
@@ -280,8 +280,8 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains("list_join") {
 		required.extend([
 			TEXT_CONCAT,
-			super::super::library_ops::LIST_TEXT,
-			super::super::library_ops::TEXT_QUOTED,
+			super::super::reflection::library_ops::LIST_TEXT,
+			super::super::reflection::library_ops::TEXT_QUOTED,
 		]); // a nested list joins as "[…]", a text quoted
 	  // a float joins as its text, made only by a program with floats (analyzer::makes_floats)
 		if FLOAT_MAKERS.iter().any(|name| required.contains(name)) {
@@ -301,7 +301,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		required.extend([super::super::numbers::exact::EXACT_TEXT, TEXT_CONCAT]);
 	}
 	// codepoint_of reads a one-character text as its character
-	if required.contains(super::super::library_ops::CODEPOINT_OF) {
+	if required.contains(super::super::reflection::library_ops::CODEPOINT_OF) {
 		required.extend(["string_char_at", "text_grapheme_count"]);
 	}
 	if TEXT_ARGUMENT_USERS.iter().any(|name| required.contains(name)) {
@@ -328,7 +328,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		"list_reverse",
 		"text_chars",
 		"list_sort",
-		super::super::library_ops::NODE_ORDER,
+		super::super::reflection::library_ops::NODE_ORDER,
 	];
 	if calls_text_of.iter().any(|name| required.contains(name)) {
 		required.insert(TEXT_OF);
@@ -422,7 +422,7 @@ impl WasmGcEmitter {
 				self.emit_float_builtin(func, name, arguments);
 				self.emit_call(func, "new_float");
 			}
-			_ if super::super::node_api::NODE_BUILTINS
+			_ if super::super::reflection::node_api::NODE_BUILTINS
 				.iter()
 				.any(|(builtin, arity, _)| *builtin == name && *arity == arguments.len()) =>
 			{
@@ -655,7 +655,7 @@ impl WasmGcEmitter {
 			],
 		);
 		self.emit_call(func, "new_text");
-		self.emit_call(func, super::super::library_ops::LIST_JOIN);
+		self.emit_call(func, super::super::reflection::library_ops::LIST_JOIN);
 		func.instruction(&I::End);
 	}
 

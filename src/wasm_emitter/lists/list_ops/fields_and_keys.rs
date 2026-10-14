@@ -140,9 +140,9 @@ impl WasmGcEmitter {
 					self.emit_uncertain_field_lookup(func, held, &name);
 					self.emit_time_field_lookup(func, held, &name);
 					// a key's key, value, op and name, a list's bracket (node_api.rs)
-					if let Some(part) = super::super::super::node_api::node_part(&name) {
+					if let Some(part) = super::super::super::reflection::node_api::node_part(&name) {
 						Self::emit_list(func, &[I::LocalGet(held), I32Const(part)]);
-						self.emit_call(func, super::super::super::node_api::NODE_PART);
+						self.emit_call(func, super::super::super::reflection::node_api::NODE_PART);
 						func.instruction(&I::BrOnNonNull(0));
 					}
 					if let Some((_, fallback)) = FIELD_FALLBACKS.iter().find(|(field, _)| *field == name) {
@@ -944,7 +944,7 @@ impl WasmGcEmitter {
 				s.emit_cell_walk(f, cell, |f| {
 					// a meta entry `@name:value` is no key, value or entry of the map
 					s.emit_field(f, cell, 1);
-					s.call(f, super::super::super::equality::IS_META_ENTRY);
+					s.call(f, super::super::super::reflection::equality::IS_META_ENTRY);
 					Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::I64Const(SQUARE_LIST_KIND)]);
 					s.emit_field(f, cell, 1);
 					Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalGet(part)]);

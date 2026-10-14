@@ -776,7 +776,7 @@ impl WasmGcEmitter {
 			if self.emit_bare_uncertain_order(func, left, *op, right) {
 				return;
 			}
-			self.emit_call(func, library_ops::NODE_ORDER);
+			self.emit_call(func, reflection::library_ops::NODE_ORDER);
 			let sign_test = match op {
 				Op::Lt => I::I32LtS,
 				Op::Gt => I::I32GtS,

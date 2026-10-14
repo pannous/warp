@@ -4,7 +4,7 @@
 //! texts byte by byte (source text is NFC normalized), Int and Float numerically, lists and keys recursively.
 //! `is_truthy(x)` applies the rule `Node::is_falsy` already uses for `and`/`or`: empty values and errors are falsy.
 
-use super::WasmGcEmitter;
+use super::super::WasmGcEmitter;
 use crate::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -99,7 +99,7 @@ impl WasmGcEmitter {
 	/// `a same b` / `a === b` of two values that may be objects (instances, maps, lists): are they one (P208)? The
 	/// sides and whether the question is negated (`!==`); texts, ø and numbers known as such are no objects, `===`
 	/// compares their type and value
-	pub(super) fn object_identity<'a>(&self, node: &'a Node) -> Option<(&'a Node, &'a Node, bool)> {
+	pub(in crate::wasm_emitter) fn object_identity<'a>(&self, node: &'a Node) -> Option<(&'a Node, &'a Node, bool)> {
 		let Node::Key(left, op @ (Op::Identical | Op::NotIdentical), right) = node.drop_meta() else {
 			return None;
 		};
@@ -112,7 +112,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Push i64 1/0: are the two objects one
-	pub(super) fn emit_object_identity(&mut self, func: &mut Function, (left, right, negated): (&Node, &Node, bool)) {
+	pub(in crate::wasm_emitter) fn emit_object_identity(&mut self, func: &mut Function, (left, right, negated): (&Node, &Node, bool)) {
 		match (self.typed_list(left), self.typed_list(right)) {
 			// two typed arrays are one list when their list structs are one: their Nodes would be fresh copies
 			(Some((left, _)), Some((right, _))) => Self::emit_list(func, &[left.get(), right.get(), I::RefEq]),
@@ -130,7 +130,7 @@ impl WasmGcEmitter {
 
 	/// `a === b`: `a == b` of two values of the same type, else false (`!==` true): `0 === false` and `1 === 1.5` are
 	/// false (P196, card zero-false). A side whose static type is unknown (`value:any`) is told apart by its boolness only
-	pub(super) fn identity_as_equality(&self, node: &Node) -> Option<Node> {
+	pub(in crate::wasm_emitter) fn identity_as_equality(&self, node: &Node) -> Option<Node> {
 		let Node::Key(left, op @ (Op::Identical | Op::NotIdentical), right) = node.drop_meta() else {
 			return None;
 		};
@@ -166,7 +166,7 @@ impl WasmGcEmitter {
 
 	/// `cell_get(c)`: a cell's value, a Node of any kind
 	fn is_held_cell_value(&self, node: &Node) -> bool {
-		matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().name() == super::functions::cells::CELL_GET))
+		matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().name() == super::super::functions::cells::CELL_GET))
 	}
 
 	/// Push i64 1/0 for `left == right` or `left != right` compared by value
@@ -361,7 +361,7 @@ impl WasmGcEmitter {
 
 	/// A list cell (local `cell`) whose entry is a meta entry: compare its rest instead, `values_equal(rest, other)`;
 	/// `extra` pushes the comparison's further arguments (values_similar's tolerance)
-	pub(super) fn skip_meta_cell(&self, f: &mut Function, cell: u32, other: u32, recurse: u32, extra: &[I<'static>]) {
+	pub(in crate::wasm_emitter) fn skip_meta_cell(&self, f: &mut Function, cell: u32, other: u32, recurse: u32, extra: &[I<'static>]) {
 		let node = self.type_manager.node_type;
 		Self::test(f, cell, HeapType::Concrete(node));
 		f.instruction(&I::If(BlockType::Empty));
@@ -383,25 +383,25 @@ impl WasmGcEmitter {
 		Self::emit_list(f, &[I::Call(recurse), I::Return, I::End, I::End, I::End]);
 	}
 
-	pub(super) fn any_ref() -> ValType {
+	pub(in crate::wasm_emitter) fn any_ref() -> ValType {
 		Ref(RefType {
 			nullable: true,
 			heap_type: any_heap_type(),
 		})
 	}
 
-	pub(super) fn i31_heap() -> HeapType {
+	pub(in crate::wasm_emitter) fn i31_heap() -> HeapType {
 		HeapType::Abstract {
 			shared: false,
 			ty: AbstractHeapType::I31,
 		}
 	}
 
-	pub(super) fn test(func: &mut Function, local: u32, heap: HeapType) {
+	pub(in crate::wasm_emitter) fn test(func: &mut Function, local: u32, heap: HeapType) {
 		Self::emit_list(func, &[I::LocalGet(local), I::RefTestNonNull(heap)]);
 	}
 
-	pub(super) fn field(func: &mut Function, local: u32, struct_type: u32, field_index: u32) {
+	pub(in crate::wasm_emitter) fn field(func: &mut Function, local: u32, struct_type: u32, field_index: u32) {
 		Self::emit_list(
 			func,
 			&[
@@ -436,12 +436,12 @@ impl WasmGcEmitter {
 		}
 	}
 
-	pub(super) fn return_if(func: &mut Function, result: i32) {
+	pub(in crate::wasm_emitter) fn return_if(func: &mut Function, result: i32) {
 		Self::emit_list(func, &[I::If(BlockType::Empty), I::I32Const(result), I::Return, I::End]);
 	}
 
 	/// The f64 of a number payload: a float's value, an Int converted (an exact one, a ratio too, by exact_to_f64)
-	pub(super) fn number_as_f64(&self, func: &mut Function, local: u32) {
+	pub(in crate::wasm_emitter) fn number_as_f64(&self, func: &mut Function, local: u32) {
 		let (i64_box, f64_box) = (self.type_manager.i64_box_type, self.type_manager.f64_box_type);
 		Self::test(func, local, HeapType::Concrete(f64_box));
 		func.instruction(&I::If(BlockType::Result(ValType::F64)));
@@ -469,7 +469,7 @@ impl WasmGcEmitter {
 		[vec![types.i64_box_type, types.f64_box_type], exact].concat()
 	}
 
-	pub(super) fn is_number_payload(&self, func: &mut Function, local: u32) {
+	pub(in crate::wasm_emitter) fn is_number_payload(&self, func: &mut Function, local: u32) {
 		for (index, heap) in self.number_payload_types().into_iter().enumerate() {
 			Self::test(func, local, HeapType::Concrete(heap));
 			if index > 0 {
@@ -479,7 +479,7 @@ impl WasmGcEmitter {
 	}
 
 	/// An Int, a Float or a bool (an Int marked bool: `false == 0`, card bool-type)
-	pub(super) fn is_number_kind(func: &mut Function, kind_local: u32) {
+	pub(in crate::wasm_emitter) fn is_number_kind(func: &mut Function, kind_local: u32) {
 		let kinds = [Kind::Int as i64, Kind::Float as i64, crate::type_kinds::BOOL_KIND];
 		for kind in kinds {
 			Self::emit_list(func, &[I::LocalGet(kind_local), I::I64Const(kind), I::I64Eq]);
@@ -492,7 +492,7 @@ impl WasmGcEmitter {
 	/// Returns from values_equal: two lists are equal as sets of entries when every entry of each has an equal entry in the other.
 	/// Locals: 7 and 8 walk the cells of the list being checked and of the other, 9 flags that the entry was found.
 	/// `extra` pushes the comparison's further arguments (values_similar's tolerance)
-	pub(super) fn emit_unordered_entries_equal(
+	pub(in crate::wasm_emitter) fn emit_unordered_entries_equal(
 		f: &mut Function,
 		node: u32,
 		recurse: u32,

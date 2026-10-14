@@ -252,7 +252,7 @@ impl WasmGcEmitter {
 					s.emit_field(f, cell, 1);
 					s.call(f, MAP_INDEX_ADD);
 					s.emit_field(f, cell, 1);
-					s.call(f, super::super::equality::IS_META_ENTRY);
+					s.call(f, super::super::reflection::equality::IS_META_ENTRY);
 					Self::emit_list(
 						f,
 						&[
@@ -358,7 +358,7 @@ impl WasmGcEmitter {
 						I::LocalGet(entry),
 					],
 				);
-				s.call(f, super::super::equality::IS_META_ENTRY);
+				s.call(f, super::super::reflection::equality::IS_META_ENTRY);
 				Self::emit_list(
 					f,
 					&[

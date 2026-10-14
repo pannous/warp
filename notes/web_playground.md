@@ -63,7 +63,7 @@ Markup values show as warp data there (`p{class:"note" "hello"}`), not as HTML l
   limited to 4 KB on the main thread, and host calls (fetch, read) are synchronous XHR, allowed only in workers.
   A stuck program: the page terminates the worker after 10 s and starts a new one.
 - Reading a GC result: JavaScript cannot read struct fields, so modules built without `native` export 13 `reflect_*`
-  getters (src/wasm_emitter/reflection.rs, EmitterConfig.emit_reflection). reader.js walks the result into
+  getters (src/wasm_emitter/reflection/reflection.rs, EmitterConfig.emit_reflection). reader.js walks the result into
   `{kind, data, chain}` (chain = the value-field cells, flat, so long lists need no recursion), web::node_from_tree
   mirrors Node::from_gc_object. Floats travel as text when JSON cannot hold them (NaN, ±Infinity, -0).
 - Traps: the JS error's stack names the wasm functions (name section), plus the `trap_detail` global read through the

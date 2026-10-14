@@ -504,7 +504,7 @@ pub(super) fn infer_list_type(
 			if name == LIST_DROP_LAST {
 				return Kind::List;
 			}
-			if name == crate::wasm_emitter::library_ops::LIST_SORTED_BY {
+			if name == crate::wasm_emitter::reflection::library_ops::LIST_SORTED_BY {
 				// a list, or a text when it sorts a text's characters
 				return Kind::Empty;
 			}

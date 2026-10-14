@@ -336,7 +336,7 @@ impl WasmGcEmitter {
 			for (target, entry, _, _) in s.closures.entry_functions.clone() {
 				rebuild.instruction(&I::LocalGet(0));
 				s.emit_string_call(rebuild, &target, "new_symbol");
-				s.emit_call(rebuild, super::super::equality::VALUES_EQUAL);
+				s.emit_call(rebuild, super::super::reflection::equality::VALUES_EQUAL);
 				rebuild.instruction(&I::If(BlockType::Empty));
 				Self::emit_list(
 					rebuild,

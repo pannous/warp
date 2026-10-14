@@ -237,11 +237,11 @@ impl WasmGcEmitter {
 			|s, f| {
 				let (object, shallow, body) = (0, 1, 2);
 				f.instruction(&I::LocalGet(shallow));
-				s.call(f, super::super::equality::IS_TRUTHY);
+				s.call(f, super::super::super::reflection::equality::IS_TRUTHY);
 				f.instruction(&I::If(BlockType::Empty));
 				if has_instances {
 					f.instruction(&I::LocalGet(object));
-					s.call(f, super::super::lists::list_ops::STRUCT_BODY);
+					s.call(f, super::super::super::lists::list_ops::STRUCT_BODY);
 					Self::emit_list(
 						f,
 						&[
@@ -391,7 +391,7 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &s.forget_list_cursor_keeping_map_indexes());
 				let (fields, entry, kind, cells) = (0, 1, 2, 3);
 				Self::emit_list(f, &[I::LocalGet(fields), I::LocalGet(entry)]);
-				s.call(f, super::super::maps::map_index::MAP_INDEX_GROW);
+				s.call(f, super::super::super::maps::map_index::MAP_INDEX_GROW);
 				Self::emit_list(f, &[I::If(BlockType::Empty), I::Return, I::End]);
 				s.emit_field(f, fields, 0);
 				Self::emit_list(
@@ -458,9 +458,9 @@ impl WasmGcEmitter {
 				);
 				// in front of the first meta entry: the cell keeps the new field, a new cell after it the meta entry
 				s.emit_field(f, cells, 1);
-				s.call(f, super::super::equality::IS_META_ENTRY);
+				s.call(f, super::super::super::reflection::equality::IS_META_ENTRY);
 				f.instruction(&I::LocalGet(entry));
-				s.call(f, super::super::equality::IS_META_ENTRY);
+				s.call(f, super::super::super::reflection::equality::IS_META_ENTRY);
 				Self::emit_list(f, &[I::I32Eqz, I::I32And, I::If(BlockType::Empty), I::LocalGet(cells)]);
 				for field_index in 0..3 {
 					s.emit_field(f, cells, field_index);
@@ -535,7 +535,7 @@ impl WasmGcEmitter {
 				};
 				f.instruction(&I::LocalGet(object));
 				if has_instances {
-					s.call(f, super::super::lists::list_ops::STRUCT_BODY);
+					s.call(f, super::super::super::lists::list_ops::STRUCT_BODY);
 				}
 				f.instruction(&I::LocalSet(fields));
 				s.emit_field(f, fields, 0);
@@ -548,12 +548,12 @@ impl WasmGcEmitter {
 				f.instruction(&I::End);
 				// the name as a symbol like the names of an object literal
 				f.instruction(&I::LocalGet(name));
-				s.call(f, super::super::lists::list_ops::MAP_KEY_NAME);
+				s.call(f, super::super::super::lists::list_ops::MAP_KEY_NAME);
 				f.instruction(&I::LocalSet(name));
 				s.emit_require_kind(f, name, Kind::Symbol, "not_a_text");
 				// a map walked lately has an index: its entry takes the value, else the field is new
 				Self::emit_list(f, &[I::LocalGet(fields), I::LocalGet(name)]);
-				s.call(f, super::super::maps::map_index::MAP_INDEX_ENTRY);
+				s.call(f, super::super::super::maps::map_index::MAP_INDEX_ENTRY);
 				Self::emit_list(
 					f,
 					&[

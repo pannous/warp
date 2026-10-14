@@ -230,7 +230,7 @@ impl WasmGcEmitter {
 							},
 						],
 					);
-					s.call(f, super::super::super::equality::IS_META_ENTRY);
+					s.call(f, super::super::super::reflection::equality::IS_META_ENTRY);
 					Self::emit_list(
 						f,
 						&[

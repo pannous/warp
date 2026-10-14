@@ -7,7 +7,7 @@
 
 use super::super::numbers::float_text::FLOAT_TEXT;
 use super::super::layout::BYTE;
-use super::super::library_ops::NODE_ORDER;
+use super::super::reflection::library_ops::NODE_ORDER;
 use super::super::lists::list_ops::TEXT_AS_FLOAT;
 use super::super::text::similarity::NUMBERS_SIMILAR;
 use super::super::text::text_builtins::TEXT_CONCAT;

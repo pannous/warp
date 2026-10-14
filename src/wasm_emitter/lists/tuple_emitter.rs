@@ -126,7 +126,7 @@ impl WasmGcEmitter {
 				self.emit_call(func, "new_int");
 				Self::emit_list(func, &[I::LocalGet(count), I::I64Const(from_end - 1), I::I64Sub]);
 				self.emit_call(func, "new_int");
-				self.emit_call(func, super::super::library_ops::NODE_SLICE);
+				self.emit_call(func, super::super::reflection::library_ops::NODE_SLICE);
 				self.emit_store_destructured(func, unstarred(name), Kind::List);
 				continue;
 			}

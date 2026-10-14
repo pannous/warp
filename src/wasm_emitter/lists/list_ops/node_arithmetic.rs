@@ -327,7 +327,7 @@ impl WasmGcEmitter {
 						let (pointer, length) = s.allocate_string("");
 						Self::emit_list(f, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
 						s.call(f, "new_text");
-						s.call(f, super::super::super::library_ops::LIST_JOIN);
+						s.call(f, super::super::super::reflection::library_ops::LIST_JOIN);
 						Self::emit_list(f, &[I::Return, I::End]);
 					}
 					// an Error value fails with its own message (`x!` of ø is "unwrapped ø"), never as "not a number"

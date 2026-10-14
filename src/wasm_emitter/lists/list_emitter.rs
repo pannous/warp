@@ -16,7 +16,7 @@ const NODE_ARGUMENT_CALLS: [(&str, usize); 4] = [
 	(crate::declaration_forms::LIST_DROP_LAST, 1),
 	(crate::declaration_forms::LIST_BECOME, 2),
 	(super::super::lists::list_ops::LIST_EXTEND, 2),
-	(super::super::library_ops::LIST_SORTED_BY, 2),
+	(super::super::reflection::library_ops::LIST_SORTED_BY, 2),
 ];
 
 const BUILTIN_CALLS: [&str; 27] = [
@@ -46,7 +46,7 @@ const BUILTIN_CALLS: [&str; 27] = [
 	crate::time::INSTANT_AT,
 	crate::time::TIME_OF,
 	crate::time::TIME_IN_ZONE,
-	super::super::library_ops::LIST_SORTED_BY,
+	super::super::reflection::library_ops::LIST_SORTED_BY,
 ];
 
 const PRINT: &str = "print";
@@ -136,7 +136,7 @@ impl WasmGcEmitter {
 		let Some(name) = call_name(items, bracket, separator) else {
 			return false;
 		};
-		let Some((_, function)) = super::super::library_ops::LIBRARY_FUNCTIONS
+		let Some((_, function)) = super::super::reflection::library_ops::LIBRARY_FUNCTIONS
 			.iter()
 			.find(|(word, _)| *word == name)
 		else {

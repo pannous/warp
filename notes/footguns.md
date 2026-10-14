@@ -64,7 +64,7 @@
   and where the tz database lives (host import vs embedded table).
 
 ## strings-equality work area (2026-09-27)
-- Fixed: `==`/`!=`/`is` compare by value at runtime (`src/wasm_emitter/equality.rs`: `values_equal`, used when either
+- Fixed: `==`/`!=`/`is` compare by value at runtime (`src/wasm_emitter/reflection/equality.rs`: `values_equal`, used when either
   operand is text, list, ø, an indexed element or a ref-typed variable); `is` parses as `==`; conditions on text/list/ø
   use `is_truthy` (same rule as `Node::is_falsy`) instead of panicking; parser normalizes source to NFC; `#` on text
   decodes UTF-8 code points (bounds checked); `{a:1 a:2}` is a parse error (curly objects only; code may redefine).

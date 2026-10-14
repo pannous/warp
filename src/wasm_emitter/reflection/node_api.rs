@@ -92,7 +92,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 			SEPARATOR_CODE,
 			TEXT_OF,
 			TEXT_CONCAT,
-			super::text::text_builtins::ERROR_OF,
+			super::super::text::text_builtins::ERROR_OF,
 			"new_key",
 			"new_text",
 		]);
@@ -101,7 +101,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 
 impl WasmGcEmitter {
 	/// `symbol(text)`, `key(left, op, right)`, `bracketed(items, bracket)`, `separated(items, separator)`
-	pub(super) fn emit_node_builtin(&mut self, func: &mut Function, name: &str, arguments: &[Node]) {
+	pub(in crate::wasm_emitter) fn emit_node_builtin(&mut self, func: &mut Function, name: &str, arguments: &[Node]) {
 		for argument in arguments {
 			self.emit_node_instructions(func, argument);
 			func.instruction(&I::RefAsNonNull);
@@ -122,7 +122,7 @@ impl WasmGcEmitter {
 		}
 	}
 
-	pub(super) fn emit_node_api(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_node_api(&mut self) {
 		let node_ref = Ref(self.node_ref(false));
 		let nullable_node_ref = Ref(self.node_ref(true));
 		let node_type = self.type_manager.node_type;
@@ -270,7 +270,7 @@ impl WasmGcEmitter {
 							I::LocalSet(code),
 						],
 					);
-					let separators = super::separator_texts();
+					let separators = super::super::separator_texts();
 					let separators: Vec<(i64, &str)> =
 						separators.iter().map(|(code, text)| (*code, text.as_str())).collect();
 					s.emit_part_text(
@@ -386,7 +386,7 @@ impl WasmGcEmitter {
 			KIND_MASK << KIND_BITS,
 			UNKNOWN_BRACKET,
 		);
-		let separators = super::separator_texts();
+		let separators = super::super::separator_texts();
 		self.emit_relisted(
 			NEW_SEPARATED,
 			SEPARATOR_CODE,
@@ -632,7 +632,7 @@ impl WasmGcEmitter {
 		self.call(func, "new_text");
 		func.instruction(&I::LocalGet(text));
 		self.call(func, TEXT_CONCAT);
-		self.call(func, super::text::text_builtins::ERROR_OF);
+		self.call(func, super::super::text::text_builtins::ERROR_OF);
 		Self::emit_list(func, &[I::Return, I::End]);
 	}
 }

@@ -35,7 +35,7 @@ impl WasmGcEmitter {
 	/// `reverse(xs)`, `codepoint(c)`: a call of a library word the program does not define itself
 	pub(in crate::wasm_emitter) fn is_library_word_call(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> bool {
 		crate::analyzer::call_name(items, bracket, separator).is_some_and(|name| {
-			library_ops::LIBRARY_FUNCTIONS.iter().any(|(word, _)| *word == name)
+			reflection::library_ops::LIBRARY_FUNCTIONS.iter().any(|(word, _)| *word == name)
 				&& !self.ctx.user_functions.contains_key(name)
 		})
 	}
@@ -262,7 +262,7 @@ impl WasmGcEmitter {
 		let (pointer, length) = self.allocate_string("");
 		Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
 		self.emit_call(func, "new_text");
-		self.emit_call(func, library_ops::LIST_TEXT);
+		self.emit_call(func, reflection::library_ops::LIST_TEXT);
 		func.instruction(&I::End);
 		held
 	}
@@ -759,7 +759,7 @@ fn converts_to(type_name: &str) -> bool {
 pub(crate) fn is_called_conversion(type_name: &str) -> bool {
 	(converts_to(type_name) || type_name == super::super::numbers::exact::DECIMAL_WORD)
 		&& (crate::analyzer::type_word_kind(type_name).is_none() || super::super::numbers::radix::shown_radix(type_name).is_some())
-		&& !library_ops::LIBRARY_FUNCTIONS
+		&& !reflection::library_ops::LIBRARY_FUNCTIONS
 			.iter()
 			.any(|(word, _)| *word == type_name)
 }

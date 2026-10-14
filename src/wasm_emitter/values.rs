@@ -484,7 +484,7 @@ impl WasmGcEmitter {
 			Some(comment) => self.emit_node_instructions(func, &Node::Text(comment)),
 			None => self.emit_node_null(func),
 		}
-		self.emit_call(func, super::node_api::NODE_AT);
+		self.emit_call(func, super::reflection::node_api::NODE_AT);
 	}
 
 	pub(super) fn emit_list_structure_with(

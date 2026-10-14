@@ -35,8 +35,8 @@ const EMPTY_TEXT: &str = "ø";
 /// Names of the runtime functions, keyed by the library word
 pub const LIBRARY_FUNCTIONS: [(&str, &str); 20] = [
 	(
-		super::host::wasi_emitter::WASI_ENVIRONMENT,
-		super::host::wasi_emitter::WASI_ENVIRONMENT,
+		super::super::host::wasi_emitter::WASI_ENVIRONMENT,
+		super::super::host::wasi_emitter::WASI_ENVIRONMENT,
 	),
 	(crate::words::MAP_KEYS, crate::words::MAP_KEYS),
 	(crate::library_words::MAP_VALUES, crate::library_words::MAP_VALUES),
@@ -154,14 +154,14 @@ impl WasmGcEmitter {
 	}
 
 	/// Trap unless the node in local `local` has kind `expected`
-	pub(super) fn emit_require_kind(&self, func: &mut Function, local: u32, expected: Kind, error: &'static str) {
+	pub(in crate::wasm_emitter) fn emit_require_kind(&self, func: &mut Function, local: u32, expected: Kind, error: &'static str) {
 		self.emit_field(func, local, 0);
 		Self::emit_list(func, &[I::I64Const(expected as i64), I::I64Ne]);
 		self.emit_fail_if(func, error);
 	}
 
 	/// A one-character string is a Codepoint node: local `text` becomes the equivalent Text node of its UTF-8 bytes
-	pub(super) fn emit_codepoint_as_text(&self, func: &mut Function, text: u32) {
+	pub(in crate::wasm_emitter) fn emit_codepoint_as_text(&self, func: &mut Function, text: u32) {
 		Self::emit_list(func, &[I::LocalGet(text), I::RefAsNonNull]);
 		self.call(func, crate::wasm_emitter::text::text_builtins::TEXT_OF);
 		func.instruction(&I::LocalSet(text));
@@ -402,7 +402,7 @@ impl WasmGcEmitter {
 	/// Push the node in `local` (not null), a `key:value` entry as the one-entry map `{key:value}` it stands for, so its
 	/// text keeps the braces: `{a:{b:1}}` is the entry a:(b:1) at run time and would write a:b:1. A tag, an entry whose
 	/// value is a map (`data point{x:1}`), writes as an instance does, its name before its braces (card data-tag)
-	pub(super) fn emit_entry_in_braces(&self, f: &mut Function, local: u32) {
+	pub(in crate::wasm_emitter) fn emit_entry_in_braces(&self, f: &mut Function, local: u32) {
 		let node_type = self.type_manager.node_type;
 		let entry_kind_mask = (OP_INFO_MASK << KIND_BITS) | KIND_MASK;
 		let colon_entry_kind = (crate::operators::op_to_code(&crate::operators::Op::Colon) << KIND_BITS) | KEY_KIND;
@@ -485,7 +485,7 @@ impl WasmGcEmitter {
 
 /// A tag quoted as data anywhere in the program (`p = data point{x:1}`): an entry whose value is a map. Markup
 /// (`p{ "hello" }`) has the same shape but is no data, so a page's list_text needs no tag check
-pub(super) fn mentions_quoted_tag(node: &Node) -> bool {
+pub(in crate::wasm_emitter) fn mentions_quoted_tag(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::List(items, _, _) if crate::lowering::run_time_blocks::is_data(node) => {
 			items.iter().skip(1).any(mentions_tag)

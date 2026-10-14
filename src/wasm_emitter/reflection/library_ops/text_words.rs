@@ -463,7 +463,7 @@ impl WasmGcEmitter {
 				s.call(f, "new_text");
 				Self::emit_list(f, &[I::End, I::LocalSet(element), I::End]);
 				// an Int shown in hex joins as 0xFF (card hex-printing), in binary as 0b101 (card binary-int)
-				for radix in super::super::numbers::radix::RADIXES
+				for radix in super::super::super::numbers::radix::RADIXES
 					.iter()
 					.filter(|radix| s.ctx.func_registry.contains(radix.text_function))
 				{
@@ -610,14 +610,14 @@ impl WasmGcEmitter {
 					Self::emit_list(f, &[I::End, I::LocalGet(element)]);
 					new_text(f, space);
 					f.instruction(&I::Call(own_index));
-					s.call(f, super::super::text::text_builtins::TEXT_CONCAT);
+					s.call(f, super::super::super::text::text_builtins::TEXT_CONCAT);
 					is_map(f);
 					f.instruction(&I::If(BlockType::Result(node_ref)));
 					new_text(f, close_map);
 					f.instruction(&I::Else);
 					new_text(f, close);
 					f.instruction(&I::End);
-					s.call(f, super::super::text::text_builtins::TEXT_CONCAT);
+					s.call(f, super::super::super::text::text_builtins::TEXT_CONCAT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
 				// a ø item reads as ø, as Node::serialize writes it: also an empty map at the top (card print-empty-map)
@@ -632,25 +632,25 @@ impl WasmGcEmitter {
 				);
 				s.call(f, "new_text");
 				Self::emit_list(f, &[I::LocalSet(element), I::End]);
-				if s.should_emit_function(super::super::numbers::uncertain::UNCERTAIN_TEXT) {
+				if s.should_emit_function(super::super::super::numbers::uncertain::UNCERTAIN_TEXT) {
 					is_kind(f, Kind::Uncertain);
 					Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(element), I::RefAsNonNull]);
-					s.call(f, super::super::numbers::uncertain::UNCERTAIN_TEXT);
+					s.call(f, super::super::super::numbers::uncertain::UNCERTAIN_TEXT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
 				if s.shows_functions() {
 					masked_kind_is(f, Kind::Function); // its class in the info bits
 					Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(element), I::RefAsNonNull]);
-					s.call(f, super::super::functions::closures::FUNCTION_TEXT);
+					s.call(f, super::super::super::functions::closures::FUNCTION_TEXT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
-				if s.should_emit_function(super::super::time::times::TIME_TEXT) {
+				if s.should_emit_function(super::super::super::time::times::TIME_TEXT) {
 					masked_kind_is(f, Kind::Time); // the form in the info bits
 					Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(element), I::RefAsNonNull]);
-					s.call(f, super::super::time::times::TIME_TEXT);
+					s.call(f, super::super::super::time::times::TIME_TEXT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
-				if s.should_emit_function(super::super::numbers::float_text::FLOAT_TEXT) {
+				if s.should_emit_function(super::super::super::numbers::float_text::FLOAT_TEXT) {
 					is_kind(f, Kind::Float);
 					f.instruction(&I::If(BlockType::Empty));
 					s.emit_field(f, element, 1);
@@ -664,7 +664,7 @@ impl WasmGcEmitter {
 							},
 						],
 					);
-					s.call(f, super::super::numbers::float_text::FLOAT_TEXT);
+					s.call(f, super::super::super::numbers::float_text::FLOAT_TEXT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
 				if exact_numbers {

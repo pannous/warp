@@ -4,18 +4,18 @@
 //! The dispatcher is compiled after the user functions, whose indices it needs, and main installs it before anything
 //! runs; runtime functions compiled earlier reach it through the global with call_ref.
 
-use super::WasmGcEmitter;
+use super::super::WasmGcEmitter;
 use crate::traits::{witness_name, witness_type, COMPARE};
 use crate::type_kinds::Kind;
 use wasm_encoder::*;
 use Instruction as I;
 use ValType::Ref;
 
-pub(super) const INSTANCE_COMPARE: &str = "instance_compare";
+pub(in crate::wasm_emitter) const INSTANCE_COMPARE: &str = "instance_compare";
 const WITNESS_GLOBAL: &str = "compare·witness";
 
 #[derive(Clone, Copy)]
-pub(super) struct WitnessTable {
+pub(in crate::wasm_emitter) struct WitnessTable {
 	global: u32,
 	order_type: u32,
 	/// The dispatcher's function index, once compiled
@@ -37,7 +37,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The witness global and the type of an ordering function `(Node, Node) -> i32`; `None` when no type is Comparable
-	pub(super) fn compare_witness_table(&mut self) -> Option<WitnessTable> {
+	pub(in crate::wasm_emitter) fn compare_witness_table(&mut self) -> Option<WitnessTable> {
 		if let Some(table) = self.compare_witness {
 			return Some(table);
 		}
@@ -64,7 +64,7 @@ impl WasmGcEmitter {
 	}
 
 	/// In node_order: two instances (Key nodes) in locals `first` and `second` return the witness's order
-	pub(super) fn emit_instance_order(
+	pub(in crate::wasm_emitter) fn emit_instance_order(
 		&self,
 		func: &mut Function,
 		table: WitnessTable,
@@ -92,7 +92,7 @@ impl WasmGcEmitter {
 	}
 
 	/// instance_compare(a, b): the order of two instances by the witness of a's type; a type without one is not comparable
-	pub(super) fn emit_compare_dispatcher(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_compare_dispatcher(&mut self) {
 		let Some(table) = self.compare_witness else { return };
 		let node_type = self.type_manager.node_type;
 		let node_ref = Ref(self.node_ref(false));
@@ -112,7 +112,7 @@ impl WasmGcEmitter {
 					let (pointer, length) = s.allocate_string(&type_name);
 					Self::emit_list(func, &[I::I32Const(pointer as i32), I::I32Const(length as i32)]);
 					s.emit_call(func, "new_symbol");
-					s.emit_call(func, super::VALUES_EQUAL);
+					s.emit_call(func, super::super::VALUES_EQUAL);
 					Self::emit_list(
 						func,
 						&[
@@ -170,7 +170,7 @@ impl WasmGcEmitter {
 	}
 
 	/// At the start of main: fill the witness table
-	pub(super) fn emit_witness_installation(&self, func: &mut Function) {
+	pub(in crate::wasm_emitter) fn emit_witness_installation(&self, func: &mut Function) {
 		let Some(WitnessTable {
 			global,
 			dispatcher: Some(dispatcher),
@@ -183,7 +183,7 @@ impl WasmGcEmitter {
 	}
 
 	/// `ref.func` needs its functions declared in an element segment
-	pub(super) fn witness_dispatcher(&self) -> Option<u32> {
+	pub(in crate::wasm_emitter) fn witness_dispatcher(&self) -> Option<u32> {
 		self.compare_witness?.dispatcher
 	}
 }

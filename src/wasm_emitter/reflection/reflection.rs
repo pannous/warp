@@ -14,7 +14,7 @@ pub const PAYLOAD_TAGS: [&str; 10] = [
 ];
 
 impl WasmGcEmitter {
-	pub(super) fn emit_reflection(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_reflection(&mut self) {
 		let any = Ref(RefType {
 			nullable: true,
 			heap_type: any_heap_type(),
@@ -117,7 +117,7 @@ impl WasmGcEmitter {
 		);
 
 		// the parts of a ± value (Kind::Uncertain), only in programs that make one
-		let reads_floats = self.should_emit_function(super::numbers::uncertain::UNCERTAIN_NEW);
+		let reads_floats = self.should_emit_function(super::super::numbers::uncertain::UNCERTAIN_NEW);
 		if reads_floats {
 			self.reflect(
 				"reflect_float_count",

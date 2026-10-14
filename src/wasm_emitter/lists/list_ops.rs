@@ -540,7 +540,7 @@ impl WasmGcEmitter {
 					s.emit_cell_walk(func, current, |func| {
 						func.instruction(&I::LocalGet(count));
 						s.emit_field(func, current, 1);
-						s.call(func, super::super::equality::IS_META_ENTRY);
+						s.call(func, super::super::reflection::equality::IS_META_ENTRY);
 						Self::emit_list(func, &[I::I32Eqz, I::I64ExtendI32U, I::I64Add, I::LocalSet(count)]);
 					});
 
@@ -978,7 +978,7 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::LocalSet(1), I::Br(0), I::End, I::End]);
 		// meta entries `@name:value` sit behind every field (meta_entries.rs, field_with): arriving at one is past the end
 		self.emit_field(func, current, 1);
-		self.call(func, super::super::equality::IS_META_ENTRY);
+		self.call(func, super::super::reflection::equality::IS_META_ENTRY);
 		self.emit_fail_out_of_range_if(func, asked);
 		let cursors = self.read_cursors();
 		if !cursors.is_empty() {
