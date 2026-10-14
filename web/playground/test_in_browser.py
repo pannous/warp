@@ -163,9 +163,11 @@ served = []
 SERVED_SHOWN = 400  # the first requests: the page's and its workers' loading
 
 
+@functools.cache
 def include_dirs():
-	"""the compiler's own list, so both look in the same places"""
-	source = open(os.path.join(REPOSITORY, "src", "ffi_parser.rs"), encoding="utf-8").read()
+	"""the compiler's own list, so both look in the same places; read when the server starts, so a moved ffi_parser.rs
+	stops the run instead of failing each header request quietly"""
+	source = open(os.path.join(REPOSITORY, "src", "formats", "ffi_parser.rs"), encoding="utf-8").read()
 	return re.findall(r'"([^"]+)"', re.search(r"const INCLUDE_DIRS[^=]*=\s*&\[(.*?)\];", source, re.S).group(1))
 
 
@@ -189,6 +191,8 @@ SERVER_STARTED = time.time()
 
 
 def serve(binary, root=REPOSITORY):
+	include_dirs()
+
 	class Handler(http.server.SimpleHTTPRequestHandler):
 		def translate_path(self, path):
 			path = urllib.parse.unquote(urllib.parse.urlsplit(path).path)
