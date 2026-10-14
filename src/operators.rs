@@ -571,8 +571,8 @@ impl Op {
 	pub fn holds(&self, ordering: std::cmp::Ordering) -> bool {
 		use std::cmp::Ordering::*;
 		match self {
-			Op::Eq => ordering == Equal,
-			Op::Ne => ordering != Equal,
+			Op::Eq | Op::Identical => ordering == Equal,
+			Op::Ne | Op::NotIdentical => ordering != Equal,
 			Op::Lt => ordering == Less,
 			Op::Le => ordering != Greater,
 			Op::Gt => ordering == Greater,

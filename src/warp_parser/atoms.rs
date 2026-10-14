@@ -482,7 +482,7 @@ impl WarpParser {
 	}
 
 	pub(super) fn parse_symbol_with_suffix(&mut self) -> Node {
-		let version_len = crate::versions::tagged_literal_len(&self.chars[self.pos..]);
+		let version_len = crate::versions::literal_len(&self.chars[self.pos..]);
 		if version_len > 0 {
 			let literal = self.take_chars(version_len);
 			return Node::Symbol(literal);
