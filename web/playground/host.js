@@ -118,8 +118,11 @@ function programImports(holder, hooks) {
 			},
 			// `serve 8080 {…}` (src/web/web_server.rs): a page cannot listen on a port
 			serve_routes: port => { throw new Error(`serve ${port}: a server runs only in the native host (the warp CLI)`); },
-			// `header "name" "value"` in a route the page itself answers (a form without a server): no HTTP answer to carry it
-			response_header: () => {},
+			// `header "name" "value"` and `status 418` in a route: the answer's headers (runSubmitted), which a Worker's HTTP
+			// answer carries (cloud-worker.js); a form the page itself answers has no HTTP answer to carry them
+			response_header: (name, value) => {
+				(holder.answerHeaders ??= {})[plainOfTree(readNode(program(), name))] = String(plainOfTree(readNode(program(), value)));
+			},
 			// the host words (src/host.rs)
 			sleep: holder.sleep,
 			clock: () => BigInt(Date.now()),
@@ -503,9 +506,10 @@ function runPageEvent(holder, hooks, event, detail) {
 // lowering/web/serve.rs with_local_routes)
 function runSubmitted(holder, hooks, request) {
 	holder.warnings = [];
+	holder.answerHeaders = {};
 	const submitted = holder.exports[PAGE_SUBMITTED_EXPORT];
 	if (!submitted) return { failure: `a form sent ${request.method} ${request.path}, but the program has no route (post "${request.path}" {…})`, warnings: [] };
-	return outcomeOf(holder, hooks, () => submitted(buildValue(holder.exports, treeOfPlain(request))));
+	return { ...outcomeOf(holder, hooks, () => submitted(buildValue(holder.exports, treeOfPlain(request)))), headers: holder.answerHeaders };
 }
 
 // a timer's handler (on·every·<id>), given ø when it reads `event`, as natively (system_signals.rs call_handler)

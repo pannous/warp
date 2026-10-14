@@ -56,6 +56,8 @@ const STD_ALIASES: [StdAlias; 21] = [
 const WARP_FORMS: [StdAlias; 1] = [alias("json", "parse", "json", "parse_json", &[0])];
 /// Standard words called bare, `member(…)`, module "": `json(t)` is json.parse(t) (card json5-parse)
 const BARE_FORMS: [StdAlias; 1] = [alias("", "json", "json", "parse_json", &[0])];
+/// Standard words read as a member of any value, `value.member`: `x.json` is to_json(x) (card node-json)
+const MEMBER_FORMS: [StdAlias; 1] = [alias("", "json", "json", "to_json", &[0])];
 const USE_WORD: &str = "use";
 
 pub fn lower(program: Node) -> Node {
@@ -130,7 +132,7 @@ fn aliased(node: Node, kept: &[&str], used: &mut HashSet<&'static str>) -> Node 
 /// `module.member(arguments…)` of a known alias with as many arguments as it takes; a shape tuple stands for its items
 /// (`np.zeros((2, 3))` is zeros(2, 3))
 fn aliased_call<'a>(node: &'a Node, kept: &[&str]) -> Option<(&'static StdAlias, &'a [Node])> {
-	if let Some(bare) = bare_call(node, kept) {
+	if let Some(bare) = bare_call(node, kept).or_else(|| member_read(node, kept)) {
 		return Some(bare);
 	}
 	let Node::Key(module, Op::Dot, call) = node.drop_meta() else {
@@ -171,6 +173,18 @@ fn bare_call<'a>(node: &'a Node, kept: &[&str]) -> Option<(&'static StdAlias, &'
 		.iter()
 		.find(|form| form.member == word && form.order.len() == arguments.len() && !kept.contains(&form.member))
 		.map(|form| (form, arguments))
+}
+
+/// `x.json`: a member form read off any value, where the program names no such word itself (a field `json` wins)
+fn member_read<'a>(node: &'a Node, kept: &[&str]) -> Option<(&'static StdAlias, &'a [Node])> {
+	let Node::Key(value, Op::Dot, member) = node.drop_meta() else {
+		return None;
+	};
+	let member = member.drop_meta().symbol_name()?;
+	MEMBER_FORMS
+		.iter()
+		.find(|form| form.member == member && !kept.contains(&form.member))
+		.map(|form| (form, std::slice::from_ref(value.as_ref())))
 }
 
 /// The program with `use module` first for each module an alias brought

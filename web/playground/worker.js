@@ -207,6 +207,21 @@ async function workerBundle(code) {
 	}
 }
 
+// the members to offer after the code and a dot (completion.js, src/lowering/data/members.rs): a list of names
+function memberNames(code) {
+	const codeText = passText(code);
+	try {
+		const length = compiler.web_member_names(...codeText);
+		const names = JSON.parse(compilerText(compiler.web_report(), length));
+		compiler.web_free(...codeText);
+		return names;
+	} catch (crash) {
+		compiler = undefined; // as in evaluate: load it again
+		console.warn(`member completion failed: ${panicMessage ?? crash.message}`);
+		return [];
+	}
+}
+
 // a page event (playground.js): the live run's handler
 function handleEvent({ event, detail }) {
 	if (live) showHandled(live, runPageEvent(live, hooks, event, detail));
@@ -292,6 +307,10 @@ async function handleMessage(data) {
 	if (data.bundle !== undefined) { // the running program keeps running
 		if (!compiler) await loadCompiler();
 		return post({ type: "bundle", bundle: await workerBundle(data.bundle) });
+	}
+	if (data.members !== undefined) { // the running program keeps running
+		if (!compiler) await loadCompiler();
+		return post({ type: "members", id: data.id, names: memberNames(data.members) });
 	}
 	if (live) stopListening(live);
 	live = undefined;

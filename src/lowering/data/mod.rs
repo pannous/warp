@@ -7,6 +7,7 @@ use super::*;
 pub mod database_tables;
 pub mod doc_strings;
 pub mod introspection;
+pub mod members;
 pub mod meta_entries;
 pub mod printable;
 pub mod reflection;

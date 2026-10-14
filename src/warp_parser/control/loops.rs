@@ -131,6 +131,9 @@ impl WarpParser {
 		self.key_variables.extend(key_variable.clone());
 		let body = match body_word {
 			Some(word) => self.colon_body(word), // `for i in 0..n: body`, `for i in 0..n do body`
+			None if self.current_char() == ';' && self.closing_end_follows(&END_BLOCK_OPENERS) => {
+				self.semicolon_end_body(&variable, &iterable)
+			}
 			None => self.indented_lines_below().unwrap_or_else(|| self.parse_atom()),
 		};
 		if key_variable.is_some() {
@@ -138,6 +141,18 @@ impl WarpParser {
 		}
 		// kept as written: lowering/control/for_loop/headers.rs gives `for int in xs`, `for chars in text` their meaning
 		Some(for_in_loop(variable, iterable, body))
+	}
+
+	/// Ruby's `for x in xs; print x; end` (card print-end): the statements up to `end`, with a hint naming the braces
+	fn semicolon_end_body(&mut self, variable: &Node, iterable: &Node) -> Node {
+		let head = format!("for {} in {}", variable.serialize(), crate::normalize::operand_text(iterable));
+		crate::normalize::hint(
+			&format!("{head}; … end"),
+			&format!("{head} {{ … }}"),
+			"a loop's body goes in braces; `; … end` is Ruby's form",
+		);
+		self.advance();
+		self.parse_end_block(false)
 	}
 
 	/// The iterable of a loop header, its words up to the body: `for todo in todos sorted by priority {…}`,
