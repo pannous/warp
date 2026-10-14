@@ -6,7 +6,7 @@
 //! `try X else Y`). A jump out of a `try` (return, break, continue) lowers the depth first
 //! (`emit_leave_tries`).
 
-use super::WasmGcEmitter;
+use super::super::WasmGcEmitter;
 use crate::node::Node;
 use wasm_encoder::*;
 use Instruction as I;
@@ -21,7 +21,7 @@ const CAUGHT_ERROR_GLOBAL: &str = "caught_error_id";
 pub const CAUGHT_ERROR: &str = "caught_error";
 /// The tag thrown by runtime errors and the globals that track running `try`s
 #[derive(Clone, Copy)]
-pub(super) struct ErrorCatching {
+pub(in crate::wasm_emitter) struct ErrorCatching {
 	tag: u32,
 	depth_global: u32,
 	/// the id of the error the latest `try` caught, which `catch e` reads (caught_error)
@@ -29,13 +29,13 @@ pub(super) struct ErrorCatching {
 }
 
 /// Does the program contain a `try` that catches runtime errors (decided before the runtime functions are emitted)
-pub(super) fn guards_errors(node: &Node) -> bool {
+pub(in crate::wasm_emitter) fn guards_errors(node: &Node) -> bool {
 	node.mentions(RAN_WITHOUT_ERROR)
 }
 
 impl WasmGcEmitter {
 	/// Declare the tag `warp_error(id: i32)` and the global `try_depth`, once
-	pub(super) fn declare_error_catching(&mut self) -> ErrorCatching {
+	pub(in crate::wasm_emitter) fn declare_error_catching(&mut self) -> ErrorCatching {
 		if let Some(catching) = self.error_catching {
 			return catching;
 		}
@@ -63,7 +63,7 @@ impl WasmGcEmitter {
 		tag
 	}
 
-	pub(super) fn error_tag_names(&self) -> Option<NameMap> {
+	pub(in crate::wasm_emitter) fn error_tag_names(&self) -> Option<NameMap> {
 		self.error_catching.map(|catching| {
 			let mut names = NameMap::new();
 			names.append(catching.tag, ERROR_TAG_NAME);
@@ -88,7 +88,7 @@ impl WasmGcEmitter {
 
 	/// The body of a runtime error function: throw its id while a `try` runs, else trap (the runner names the error by
 	/// the trapping function)
-	pub(super) fn emit_error_body(&self, func: &mut Function, error_id: i32) {
+	pub(in crate::wasm_emitter) fn emit_error_body(&self, func: &mut Function, error_id: i32) {
 		if let Some(catching) = self.error_catching {
 			Self::emit_list(
 				func,
@@ -106,8 +106,8 @@ impl WasmGcEmitter {
 
 	/// Before a jump out of the frames from `target_frame` on (0 for `return`): the `try`s it leaves are over, so the depth
 	/// drops by their count, as their normal end would have done. Every exit path takes this, whatever its keyword.
-	pub(super) fn emit_leave_tries(&self, func: &mut Function, target_frame: usize) {
-		let frames = super::loop_control::open_frames(func);
+	pub(in crate::wasm_emitter) fn emit_leave_tries(&self, func: &mut Function, target_frame: usize) {
+		let frames = super::super::control::loop_control::open_frames(func);
 		let left = frames
 			.get(target_frame..)
 			.unwrap_or_default()
@@ -130,7 +130,7 @@ impl WasmGcEmitter {
 
 	/// `ran_without_error{statement}` as i64: 1 when the statement finished, 0 when a runtime error was thrown in it.
 	/// The depth goes up for the statement and back down on both paths.
-	pub(super) fn emit_ran_without_error(&mut self, func: &mut Function, statement: &Node) {
+	pub(in crate::wasm_emitter) fn emit_ran_without_error(&mut self, func: &mut Function, statement: &Node) {
 		let catching = self.declare_error_catching();
 		let statement = braces_removed(statement);
 		self.initialize_assigned_node(func, statement);
@@ -156,7 +156,7 @@ impl WasmGcEmitter {
 
 	/// `caught_error(finished, value)` as a Node: value when finished, else the Error of the caught error's id: a raised
 	/// value's text (the trap detail) or the runtime error's message
-	pub(super) fn emit_caught_error(&mut self, func: &mut Function, finished: &Node, value: &Node) {
+	pub(in crate::wasm_emitter) fn emit_caught_error(&mut self, func: &mut Function, finished: &Node, value: &Node) {
 		let catching = self.declare_error_catching();
 		let node_ref = ValType::Ref(self.node_ref(false));
 		self.emit_numeric_value(func, finished);
@@ -172,17 +172,17 @@ impl WasmGcEmitter {
 					I::If(BlockType::Result(node_ref)),
 				],
 			);
-			if *name == super::lists::list_ops::RETURNED_ERROR {
+			if *name == super::super::lists::list_ops::RETURNED_ERROR {
 				let detail = self.trap_detail_global();
 				Self::emit_list(func, &[I::GlobalGet(detail), I::RefAsNonNull]);
 			} else {
-				self.emit_string_call(func, &super::lists::list_ops::runtime_error_message(name), "new_text");
+				self.emit_string_call(func, &super::super::lists::list_ops::runtime_error_message(name), "new_text");
 			}
-			self.emit_call(func, super::text::text_builtins::ERROR_OF);
+			self.emit_call(func, super::super::text::text_builtins::ERROR_OF);
 			func.instruction(&I::Else);
 		}
 		self.emit_string_call(func, "error", "new_text");
-		self.emit_call(func, super::text::text_builtins::ERROR_OF);
+		self.emit_call(func, super::super::text::text_builtins::ERROR_OF);
 		names.iter().for_each(|_| {
 			func.instruction(&I::End);
 		});

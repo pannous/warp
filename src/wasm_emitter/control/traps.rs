@@ -1,5 +1,5 @@
 //! Traps: the detail and position lines of a trapped run, and the runtime error a trap means
-use super::*;
+use super::super::*;
 
 /// The `trap detail: <value>` line of a trapped run; an Error value raised as it is (Node arithmetic on an Error, a text
 /// builtin of an Error) names its message
@@ -33,7 +33,7 @@ fn unquoted(detail: &str) -> String {
 }
 
 /// The value a trace's `trap detail: …` line carries, its line breaks back
-pub(super) fn trap_detail(trace: &str) -> Option<String> {
+pub(in crate::wasm_emitter) fn trap_detail(trace: &str) -> Option<String> {
 	let line = trace.split_once(TRAP_DETAIL_PREFIX)?.1.lines().next()?;
 	let mut detail = String::with_capacity(line.len());
 	let mut characters = line.chars();
@@ -50,22 +50,22 @@ pub(super) fn trap_detail(trace: &str) -> Option<String> {
 }
 
 /// Why a unit word is an undefined variable: the static units pass left this quantity uncomputed
-pub(super) const UNIT_AT_RUN_TIME: &str =
+pub(in crate::wasm_emitter) const UNIT_AT_RUN_TIME: &str =
 	" (a unit: quantities compute in functions, loops, lists, branches and print, but not in this use yet; notes/units_runtime.md)";
 /// The global behind the export `trap_detail`: not a warp name, so no user global meets it
-pub(super) const TRAP_DETAIL_GLOBAL: &str = "trap·detail";
+pub(in crate::wasm_emitter) const TRAP_DETAIL_GLOBAL: &str = "trap·detail";
 /// The exported global where a program leaves the source position of the statement it runs, for its runtime errors
 pub const TRAP_POSITION: &str = "trap_position";
 /// How a trapped run carries that position into its error: `trap position: <line << 12 | column>`
 pub const TRAP_POSITION_PREFIX: &str = "trap position: ";
 /// The global behind the export `trap_position`
-pub(super) const TRAP_POSITION_GLOBAL: &str = "trap·position";
+pub(in crate::wasm_emitter) const TRAP_POSITION_GLOBAL: &str = "trap·position";
 
 /// The bits of the column in `trap_position`, an i32 (smaller code than an i64 per statement): columns to 4095
-pub(super) const COLUMN_BITS: u32 = 12;
+pub(in crate::wasm_emitter) const COLUMN_BITS: u32 = 12;
 
 /// A source position of the program as the i32 `trap_position` holds: the line above, the column below
-pub(super) fn encoded_position(position: &crate::compiler::meta::LineInfo) -> i32 {
+pub(in crate::wasm_emitter) fn encoded_position(position: &crate::compiler::meta::LineInfo) -> i32 {
 	((position.line_nr as i32) << COLUMN_BITS) | position.column.min((1 << COLUMN_BITS) - 1) as i32
 }
 
@@ -75,7 +75,7 @@ pub fn trap_position_line(encoded: i64) -> Option<String> {
 }
 
 /// The position a trace's `trap position: …` line carries
-pub(super) fn trap_position(trace: &str) -> Option<crate::compiler::meta::LineInfo> {
+pub(in crate::wasm_emitter) fn trap_position(trace: &str) -> Option<crate::compiler::meta::LineInfo> {
 	let encoded: i64 = trace
 		.split_once(TRAP_POSITION_PREFIX)?
 		.1
@@ -91,8 +91,8 @@ pub(super) fn trap_position(trace: &str) -> Option<crate::compiler::meta::LineIn
 	})
 }
 
-pub(super) const TERNARY_BRANCHES: &str = "`condition ? then : else`";
-pub(super) const IF_THEN: &str = "`if condition then ...`";
+pub(in crate::wasm_emitter) const TERNARY_BRANCHES: &str = "`condition ? then : else`";
+pub(in crate::wasm_emitter) const IF_THEN: &str = "`if condition then ...`";
 
 /// A trap is a runtime error of the program; any other failure (link, instantiation, validation) is an error
 /// of the compiler or the environment. Both become error values, never the unevaluated program.
@@ -116,7 +116,7 @@ pub(crate) fn failed_run(failure: anyhow::Error) -> Node {
 pub const EMPTY_RANGE: &str = "an empty list";
 
 /// "index out of range: 7 not in 1…3" from index_out_of_range_of's detail `7:3` (the index asked for, the list's count)
-pub(super) fn index_range_message(detail: &str) -> Option<String> {
+pub(in crate::wasm_emitter) fn index_range_message(detail: &str) -> Option<String> {
 	let numbers: Vec<i64> = detail
 		.split(|c: char| !(c.is_ascii_digit() || c == '-'))
 		.filter_map(|part| part.parse().ok())

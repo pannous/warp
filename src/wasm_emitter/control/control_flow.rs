@@ -1,11 +1,11 @@
 //! Ternaries, if/then/else and while loops
 
-use super::*;
+use super::super::*;
 
 impl WasmGcEmitter {
 	/// Emit ternary expression: condition ? then_expr : else_expr
 	/// Returns a Node reference, handling mixed-type branches (numbers, strings, etc.)
-	pub(super) fn emit_ternary(&mut self, func: &mut Function, condition: &Node, then_else: &Node) {
+	pub(in crate::wasm_emitter) fn emit_ternary(&mut self, func: &mut Function, condition: &Node, then_else: &Node) {
 		// Structure: condition ? Key(then, Colon, else)
 		let Node::Key(then_expr, Op::Colon, else_expr) = then_else.drop_meta() else {
 			self.emit_malformed(func, then_else, TERNARY_BRANCHES);
@@ -30,12 +30,12 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit ternary expression returning i64: condition ? then_expr : else_expr
-	pub(super) fn emit_ternary_numeric(&mut self, func: &mut Function, condition: &Node, then_else: &Node) {
+	pub(in crate::wasm_emitter) fn emit_ternary_numeric(&mut self, func: &mut Function, condition: &Node, then_else: &Node) {
 		self.emit_ternary_raw(func, condition, then_else, ValType::I64, Self::emit_numeric_value);
 	}
 
 	/// `c ? a : b` as a raw number, each branch by `emit` (emit_numeric_value i64, emit_float_value f64)
-	pub(super) fn emit_ternary_raw(
+	pub(in crate::wasm_emitter) fn emit_ternary_raw(
 		&mut self,
 		func: &mut Function,
 		condition: &Node,
@@ -52,12 +52,12 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit if-then-else returning i64: if condition then then_expr else else_expr
-	pub(super) fn emit_if_then_else_numeric(&mut self, func: &mut Function, left: &Node, else_expr: Option<&Node>) {
+	pub(in crate::wasm_emitter) fn emit_if_then_else_numeric(&mut self, func: &mut Function, left: &Node, else_expr: Option<&Node>) {
 		self.emit_if_then_else_raw(func, left, else_expr, ValType::I64, Self::emit_numeric_value);
 	}
 
 	/// `if c then a else b` as a raw number, each branch by `emit`; without else the value is 0
-	pub(super) fn emit_if_then_else_raw(
+	pub(in crate::wasm_emitter) fn emit_if_then_else_raw(
 		&mut self,
 		func: &mut Function,
 		left: &Node,
@@ -74,7 +74,7 @@ impl WasmGcEmitter {
 		self.emit_raw_branches(func, condition, &then_expr, else_expr, value_type, emit);
 	}
 
-	pub(super) fn emit_raw_branches(
+	pub(in crate::wasm_emitter) fn emit_raw_branches(
 		&mut self,
 		func: &mut Function,
 		condition: &Node,
@@ -98,7 +98,7 @@ impl WasmGcEmitter {
 	/// not when the program compiles: the other branch may be the only one taken
 	fn emit_raw_branch(&mut self, func: &mut Function, branch: &Node, emit: fn(&mut Self, &mut Function, &Node)) {
 		if matches!(branch.drop_meta(), Node::Empty) {
-			self.emit_runtime_error(func, super::lists::list_ops::NOT_A_NUMBER);
+			self.emit_runtime_error(func, super::super::lists::list_ops::NOT_A_NUMBER);
 		} else {
 			emit(self, func, branch);
 		}
@@ -107,7 +107,7 @@ impl WasmGcEmitter {
 	/// Emit if-then-else expression: if condition then then_expr [else else_expr]
 	/// Structure: Key(Key(Key(Empty, If, condition), Then, then_expr), Else, else_expr)
 	/// Or for if-then without else: Key(Key(Empty, If, condition), Then, then_expr)
-	pub(super) fn emit_if_then_else(&mut self, func: &mut Function, left: &Node, else_expr: Option<&Node>) {
+	pub(in crate::wasm_emitter) fn emit_if_then_else(&mut self, func: &mut Function, left: &Node, else_expr: Option<&Node>) {
 		// Extract condition and then_expr from structure
 		// Structure: Key(Key(Empty, If, condition), Then, then_expr)
 		let Some((condition, then_expr)) = if_then_parts(left) else {
@@ -201,7 +201,7 @@ impl WasmGcEmitter {
 
 	/// Emit while loop: (while condition) do body
 	/// If wrap_result is true, wraps result in Node; otherwise returns raw i64
-	pub(super) fn emit_while_loop_impl(&mut self, func: &mut Function, left: &Node, body: &Node, wrap_result: bool) {
+	pub(in crate::wasm_emitter) fn emit_while_loop_impl(&mut self, func: &mut Function, left: &Node, body: &Node, wrap_result: bool) {
 		let Node::Key(_, Op::While, condition) = left.drop_meta() else {
 			self.emit_malformed(func, left, "`while condition`");
 			return;
@@ -224,7 +224,7 @@ impl WasmGcEmitter {
 		);
 
 		func.instruction(&I::Block(BlockType::Empty));
-		let break_frame = loop_control::open_control_frames(func);
+		let break_frame = control::loop_control::open_control_frames(func);
 		func.instruction(&I::Loop(BlockType::Empty));
 		// a program that controls tasks: a task paused in the browser waits here (host task_poll)
 		if let Some(poll) = self.ffi_func_index(crate::host::TASK_POLL) {
@@ -239,7 +239,7 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::I32Eqz, I::BrIf(1)]);
 
 		Self::emit_list(func, &[I::I64Const(1), I::LocalSet(ran_local)]);
-		let (statements, step) = loop_control::split_step(body);
+		let (statements, step) = control::loop_control::split_step(body);
 		// a body ending in a text or list: that value is the loop's (P55)
 		let value = if wrap_result && self.ends_in_reference(&statements) {
 			self.loop_value(&statements)
@@ -254,9 +254,9 @@ impl WasmGcEmitter {
 		// without becoming the loop's value
 		let step_apart = step.is_some()
 			&& (value_local.is_some() || matches!(&statements, Node::List(items, _, _) if self.ends_in_number(items)));
-		if loop_control::has_jump(body) {
+		if control::loop_control::has_jump(body) {
 			func.instruction(&I::Block(BlockType::Empty));
-			self.enter_loop(break_frame, loop_control::open_control_frames(func));
+			self.enter_loop(break_frame, control::loop_control::open_control_frames(func));
 			self.emit_loop_body(func, &statements, result_local, value_local);
 			self.leave_loop();
 			func.instruction(&I::End);
@@ -277,7 +277,7 @@ impl WasmGcEmitter {
 				self.emit_block_value(func, step);
 				func.instruction(&I::Drop);
 			}
-			Some(step) if loop_control::has_jump(body) => self.emit_loop_body(func, step, result_local, None),
+			Some(step) if control::loop_control::has_jump(body) => self.emit_loop_body(func, step, result_local, None),
 			_ => {}
 		}
 		func.instruction(&I::Br(0));
@@ -315,7 +315,7 @@ impl WasmGcEmitter {
 
 	/// One pass of a loop body; a numeric value becomes the loop's value, a text or list one too when held in
 	/// value_local
-	pub(super) fn emit_loop_body(
+	pub(in crate::wasm_emitter) fn emit_loop_body(
 		&mut self,
 		func: &mut Function,
 		body: &Node,
@@ -369,12 +369,12 @@ impl WasmGcEmitter {
 		let ends_in_float =
 			kind == Kind::Float || statements.last().is_some_and(|last| self.get_type(last) == Kind::Float);
 		!body.is_nothing()
-			&& !loop_control::ends_in_jump(body)
+			&& !control::loop_control::ends_in_jump(body)
 			&& ((kind.is_ref() || ends_in_float) && !self.ends_in_number(&statements) || kind == Kind::Codepoint)
 	}
 
 	/// Declares the Node locals the loops of `body` hold their values in, after node_scratch
-	pub(super) fn declare_loop_values(&mut self, locals: &mut Vec<(u32, ValType)>, body: &Node) {
+	pub(in crate::wasm_emitter) fn declare_loop_values(&mut self, locals: &mut Vec<(u32, ValType)>, body: &Node) {
 		let declared = loop_nesting(body);
 		if declared > 0 {
 			locals.push((declared, Ref(self.node_ref(true))));
@@ -405,18 +405,18 @@ impl WasmGcEmitter {
 		})
 	}
 
-	pub(super) fn emit_while_loop(&mut self, func: &mut Function, left: &Node, body: &Node) {
+	pub(in crate::wasm_emitter) fn emit_while_loop(&mut self, func: &mut Function, left: &Node, body: &Node) {
 		self.emit_while_loop_impl(func, left, body, true);
 	}
 
-	pub(super) fn emit_while_loop_value(&mut self, func: &mut Function, left: &Node, body: &Node) {
+	pub(in crate::wasm_emitter) fn emit_while_loop_value(&mut self, func: &mut Function, left: &Node, body: &Node) {
 		self.emit_while_loop_impl(func, left, body, false);
 	}
 }
 
 /// The Node locals holding the values of loops whose bodies end in a text or list, one per nesting level
 #[derive(Default, Clone, Copy)]
-pub(super) struct LoopValues {
+pub(in crate::wasm_emitter) struct LoopValues {
 	declared: u32,
 	depth: u32,
 }

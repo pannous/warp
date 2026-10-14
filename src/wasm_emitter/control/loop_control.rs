@@ -5,7 +5,7 @@
 //! The `for` lowering marks its step (see `mark_step`) so `continue` cannot skip it.
 //! wasm labels are relative depths: a jump counts the control frames opened since its target.
 
-use super::WasmGcEmitter;
+use super::super::WasmGcEmitter;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use wasm_encoder::{Function, Instruction};

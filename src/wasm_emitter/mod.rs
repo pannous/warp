@@ -1,7 +1,6 @@
 //! WASM GC code emitter - generates WebAssembly modules with GC support
 
-mod traps;
-pub use traps::*;
+pub use control::traps::*;
 mod diagnostics;
 mod module_finish;
 mod node_functions;
@@ -11,10 +10,10 @@ pub(crate) use maps::raw_structs::*;
 
 pub(crate) mod numbers;
 pub(crate) mod component_adapters;
-mod control_flow;
+pub(crate) mod control;
 mod globals;
 mod user_function_calls;
-use control_flow::LoopValues;
+use control::control_flow::LoopValues;
 pub mod cells;
 mod closures;
 mod declared_values;
@@ -37,14 +36,12 @@ pub(crate) mod time;
 pub use text::similarity::NUMBERS_SIMILAR;
 pub(crate) mod maps;
 pub use maps::map_backend::MAP_COPY_SUFFIX;
-mod loop_control;
-pub(crate) use loop_control::{is_step, mark_step, split_step};
+pub(crate) use control::loop_control::{is_step, mark_step, split_step};
 mod reflection;
 mod string_table;
 pub(crate) mod text;
-mod try_guard;
 mod type_manager;
-pub use try_guard::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
+pub use control::try_guard::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
 pub(crate) mod wasi_emitter;
 mod witness;
 const WASI_START: &str = "_start";
@@ -231,7 +228,7 @@ pub struct WasmGcEmitter {
 	declares_list_types: bool,
 	/// Emitting data, not code: the value of an object entry or a quoted form, where unknown words stay words (P62)
 	data_context: bool,
-	error_catching: Option<try_guard::ErrorCatching>, // the tag and globals of that `try`
+	error_catching: Option<control::try_guard::ErrorCatching>, // the tag and globals of that `try`
 	memo_caches: HashMap<i64, (u32, u32)>, // per memoized function id: the globals of its values and known flags (memoization.rs)
 	extra_global_names: Vec<(u32, String)>,
 	number_constants: HashMap<(num_bigint::BigInt, num_bigint::BigInt), u32>, // a big or fractional literal's global, made on first use (exact.rs)
@@ -288,7 +285,7 @@ pub struct WasmGcEmitter {
 	source_position: Option<crate::compiler::meta::LineInfo>,
 	/// The position of the statement being emitted, which `trap_position` holds while it runs (emit_trap_position)
 	statement_position: Option<crate::compiler::meta::LineInfo>,
-	loop_labels: Vec<loop_control::LoopLabels>, // enclosing loops of the code being emitted, innermost last
+	loop_labels: Vec<control::loop_control::LoopLabels>, // enclosing loops of the code being emitted, innermost last
 	typed_lists: HashMap<String, lists::list_dispatch::TypedList>, // list variables of the body being emitted held as typed arrays
 	typed_globals: HashMap<String, (u32, lists::list_dispatch::TypedList)>, // globals held as typed arrays: their global and element type
 	typed_capture_globals: HashMap<u32, lists::list_dispatch::TypedList>,   // capture globals holding a typed list of main
@@ -739,7 +736,7 @@ impl WasmGcEmitter {
 		text::similarity::add_dependencies(&mut self.ctx.required_functions); // before the text builtins': values_equal needs text_of
 		text::text_builtins::add_dependencies(&mut self.ctx.required_functions);
 		self.require_list_marks(); // before any function emits a list writer, which reads marks_lists
-		self.guards_errors = try_guard::guards_errors(node);
+		self.guards_errors = control::try_guard::guards_errors(node);
 		let len = self.ctx.required_functions.len();
 		trace!(
 			"tree-shaking: {} functions required: {:?}",
