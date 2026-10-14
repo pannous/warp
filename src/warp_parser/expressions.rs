@@ -288,56 +288,6 @@ impl WarpParser {
 		))
 	}
 
-	/// The operator after `lhs` that the infix table does not hold, its width in characters and its binding power
-	pub(super) fn special_infix(&self, lhs: &Node) -> Option<(SpecialInfix, usize, (u8, u8))> {
-		// `def div(a,b) = …`: the word after a function keyword is the name, never an operator
-		if matches!(lhs.drop_meta(), Node::Symbol(keyword) if crate::operators::is_function_keyword(keyword)) {
-			return None;
-		}
-		// Python floor division glued to its operand, `7//2` and `x//=2` (`x // note` stays a comment), and `7 div 2`;
-		// `div{…}` and `div {…}` are the html tag, and data never computes
-		let word_division = self.matches_keyword("div") && !self.options.data_mode && !self.word_opens_block("div");
-		if word_division || self.at_floor_division() {
-			let compound = !word_division && self.peek_char(2) == '=';
-			let op = if compound { Op::Assign } else { Op::Div };
-			return Some((
-				SpecialInfix::FloorDivision { compound },
-				if compound || word_division { 3 } else { 2 },
-				op.binding_power(),
-			));
-		}
-		// the pipeline `xs |> f(a)` is the call `f(xs, a)`, `xs |> f` is `f(xs)` (F#, Elixir); it binds below arithmetic
-		// and above comparison: `xs |> sum > 3` is `sum(xs) > 3`
-		if self.at_pipeline() {
-			return Some((SpecialInfix::Pipeline, 2, PIPELINE_BINDING_POWER));
-		}
-		// Julia's dot call `f.(xs)`: a name, a dot, an opening parenthesis
-		let is_name = matches!(lhs.drop_meta(), Node::Symbol(_));
-		if is_name && self.current_char() == '.' && self.peek_char(1) == '(' && !self.options.data_mode {
-			return Some((SpecialInfix::DotCall, 1, Op::Dot.binding_power()));
-		}
-		// element-wise arithmetic `xs .+ 4` maps the operator over the list (D3: `xs + 4` asks, `xs + [4]` joins)
-		if let Some(op) = self.element_wise_operator() {
-			return Some((SpecialInfix::ElementWise(op), 2, op.binding_power()));
-		}
-		// membership `x in xs` binds like `==`, kept as the list [x in xs]: `if "Z" in v {…}`, `found = x in xs`;
-		// a unit word stays in the flat counting phrase: `number of chars in t`
-		let counts_units = matches!(lhs.drop_meta(), Node::Symbol(word) if crate::analyzer::text_unit(word).is_some());
-		// `item is in basket` reads as `item in basket`
-		let membership = [IS_IN_PHRASE, IN_KEYWORD]
-			.into_iter()
-			.find(|word| self.matches_keyword(word));
-		if let (Some(word), false) = (membership, counts_units) {
-			return Some((SpecialInfix::Membership(IN_KEYWORD), word.len(), Op::Eq.binding_power()));
-		}
-		// `xs contains x` binds like `x in xs`, in code only (data keeps the words as they are)
-		let containment = containment_words()
-			.iter()
-			.copied()
-			.find(|word| !self.options.data_mode && self.matches_keyword(word) && self.operand_after(word.len()));
-		containment.map(|word| (SpecialInfix::Membership(word), word.len(), Op::Eq.binding_power()))
-	}
-
 	/// The right operand of a special infix operator, None when it binds looser than `min_bp` (nothing consumed)
 	pub(super) fn at_pipeline(&self) -> bool {
 		self.current_char() == '|' && self.peek_char(1) == '>'
@@ -407,7 +357,7 @@ impl WarpParser {
 
 			if let Some(updated) = self
 				.try_parse_evaluate_bang(&lhs, min_bp)
-				.or_else(|| self.try_parse_control_suffix(&lhs, min_bp))
+				.or_else(|| self.try_parse_times(&lhs, min_bp))
 				.or_else(|| self.try_parse_test_word(&lhs, min_bp))
 				.or_else(|| self.try_parse_elvis(&lhs, min_bp))
 			{
@@ -419,12 +369,13 @@ impl WarpParser {
 			if self.pipe_takes_call && self.at_pipeline() {
 				break;
 			}
-			// Step 3a–e: the operators the infix table does not hold (`mod`, `//`, `|>`, `.+`, `in`, see SpecialInfix)
-			if let Some((infix, width, binding)) = self.special_infix(&lhs) {
-				let Some(operand) = self.special_operand(width, binding, min_bp) else {
+			// Julia's dot call `f.(xs)`: a name, a dot, an opening parenthesis
+			let is_name = matches!(lhs.drop_meta(), Node::Symbol(_));
+			if is_name && self.current_char() == '.' && self.peek_char(1) == '(' && !self.options.data_mode {
+				let Some(arguments) = self.special_operand(1, Op::Dot.binding_power(), min_bp) else {
 					break;
 				};
-				lhs = infix.applied(lhs, operand);
+				lhs = dot_call(lhs, arguments);
 				previous_comparand = None;
 				continue;
 			}
@@ -461,12 +412,17 @@ impl WarpParser {
 			};
 
 			let (l_bp, r_bp) = op.binding_power();
+			// a unit word stays in the flat counting phrase `number of chars in t`; `def contains(a,b) = …` names the
+			// function after its keyword
+			let membership_word = op == Op::In
+				&& matches!(lhs.drop_meta(), Node::Symbol(word)
+					if crate::analyzer::text_unit(word).is_some() || crate::operators::is_function_keyword(word));
 
 			// `sleep 1s and print "x"`: the statement ends before the `and`, the statement list runs both (parse_list_with_separators)
 			let ends_command =
 				op == Op::And && (self.in_command || (min_bp == 0 && is_command(&lhs))) && self.and_starts_statement();
 			// Stop if operator binds less tightly than our minimum
-			if ends_command || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
+			if ends_command || membership_word || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
 				break;
 			}
 			// `xs where #it > 1`, `[i for i in xs where -i < 0]`, `where to#i == n`: after `where` a glued `#` or `-`, or an
@@ -673,7 +629,9 @@ impl WarpParser {
 
 	/// The right operand of `op` without a block: a branch, a glued pair's value or an expression
 	fn parse_right_operand(&mut self, op: Op, glued_pair: bool, r_bp: u8) -> Node {
-		if matches!(op, Op::Then | Op::Else) {
+		if matches!(op, Op::If | Op::While) {
+			self.parse_condition()
+		} else if matches!(op, Op::Then | Op::Else) {
 			let outer = self.branch_bp.replace(r_bp);
 			let branch = self.parse_branch(r_bp);
 			let branch = self.branch_assignment(branch, r_bp);
@@ -904,10 +862,74 @@ fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Option<Node>) -
 			Node::Key(Box::new(lhs), Op::And, Box::new(next_comparison))
 		}
 		(_, Some((start, end))) if op == Op::Hash => call(SLICE_WORD, vec![lhs, start, end]),
+		// membership `x in xs` is kept as the list [x in xs]: `if "Z" in v {…}`, `found = x in xs`, `xs contains x`
+		_ if op == Op::In => {
+			let word = if written.ends_with(IN_KEYWORD) {
+				IN_KEYWORD
+			} else {
+				written
+			};
+			Node::List(
+				vec![lhs, Symbol(word.to_string()), rhs],
+				Bracket::None,
+				Separator::Space,
+			)
+		}
+		_ if op == Op::Pipe => piped(lhs, rhs),
+		_ if matches!(op, Op::If | Op::While) => guarded_statement(lhs, op, written, rhs),
+		// Java's and Scala's `import math.*`: a glob, nothing after the `*`, is the module whole
+		_ if written == ".*" && matches!(rhs, Empty) => {
+			crate::normalize::hint(
+				&format!("{}.*", lhs.serialize()),
+				&lhs.serialize(),
+				"warp imports a module whole",
+			);
+			lhs
+		}
+		// kept as written, lowering/broadcasting.rs lower_element_wise_operators gives it its meaning
+		_ if crate::operators::element_wise_operator(written).is_some() => Node::List(
+			vec![lhs, Symbol(written.to_string()), rhs],
+			Bracket::None,
+			Separator::Space,
+		),
+		_ if FLOOR_DIVISION_SPELLINGS.contains(&written) => call(FLOOR_QUOTIENT, vec![lhs, rhs]),
+		_ if written == FLOOR_DIVISION_ASSIGNMENT => {
+			let quotient = call(FLOOR_QUOTIENT, vec![lhs.clone(), rhs]);
+			Node::Key(Box::new(lhs), Op::Assign, Box::new(quotient))
+		}
 		_ if op == Op::To && written.starts_with(DOWN_WORD) => {
 			call(REVERSE_WORD, vec![Node::Key(Box::new(rhs), Op::To, Box::new(lhs))])
 		}
 		_ => Node::Key(Box::new(lhs), op, Box::new(rhs)),
+	}
+}
+
+/// A control word behind a statement: `x++ while c`, `a = 2 if c`, `i++ until c`, `a = 2 unless c`
+fn guarded_statement(statement: Node, guard: Op, word: &str, condition: Node) -> Node {
+	if guard == Op::While {
+		// a trailing `while` tests before the first round like the leading one; it is no do-while (user decision #22)
+		let (statement, test) = (
+			crate::normalize::operand_text(&statement),
+			crate::normalize::operand_text(&condition),
+		);
+		crate::normalize::hint(
+			&format!("{statement} {word} {test}"),
+			&format!("{word} {test} {{ {statement} }}"),
+			"a trailing loop word tests before the first round, the statement may never run",
+		);
+	}
+	let condition = if NEGATED_CONTROL_WORDS.iter().any(|(negated, _)| *negated == word) {
+		Node::Key(Box::new(Empty), Op::Not, Box::new(condition))
+	} else {
+		condition
+	};
+	match guard {
+		Op::While => while_do(condition, statement),
+		_ => Node::Key(
+			Box::new(Node::Key(Box::new(Empty), Op::If, Box::new(condition))),
+			Op::Then,
+			Box::new(statement),
+		),
 	}
 }
 

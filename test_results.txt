@@ -2612,6 +2612,7 @@ PASSED:
   ✓ numbers::test_static_units_data::test_lists_grow_with_quantities_of_their_unit
   ✓ numbers::test_static_units_data::test_object_fields_hold_quantities
   ✓ numbers::test_static_units_functions::a_function_with_a_default_takes_a_quantity
+  ✓ numbers::test_static_units_functions::a_quantity_default_fills_a_left_out_argument
   ✓ numbers::test_static_units_functions::test_a_unit_word_called_as_a_function_is_no_unit
   ✓ numbers::test_static_units_functions::test_dimension_errors_inside_functions_are_compile_errors
   ✓ numbers::test_static_units_functions::test_functions_take_and_give_quantities
@@ -5317,4 +5318,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5312 passed, 0 failed, 5312 total tested
+13 ignored, 5313 passed, 0 failed, 5313 total tested

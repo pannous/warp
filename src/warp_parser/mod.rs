@@ -154,11 +154,6 @@ const PYTHON_ROOT_CLASS: &str = "object";
 const RECORD_WORD: &str = "record";
 /// `1 upto 10` excludes 10 (wiki/range.md), asked about because readers expect either
 const UPTO: &str = "upto";
-const IS_IN_PHRASE: &str = "is in";
-/// `xs contains x` (and its synonyms, lowering/library_words.rs COLLECTION_CONTAINS): `x in xs` the other way round
-fn containment_words() -> &'static [&'static str] {
-	crate::library_words::synonyms(crate::library_words::COLLECTION_CONTAINS)
-}
 /// `for each item in basket` is `for item in basket`
 const EACH_WORD: &str = "each";
 /// `10 down to 1` is `reverse(1 to 10)`
@@ -167,12 +162,8 @@ const REVERSE_WORD: &str = "reverse";
 const EXCLUSIVE_DOTS: &str = "..";
 /// Topic of the Ask about `for i in 0..n-1`, which Kotlin reads inclusive
 const KOTLIN_RANGE: &str = "kotlin-range";
-const STATEMENT_MODIFIERS: [(&str, Op, bool); 4] = [
-	("if", Op::If, false),
-	("unless", Op::If, true),
-	("while", Op::While, false),
-	("until", Op::While, true),
-];
+/// The control words that negate their condition: `unless c` is `if not c`, `until c` is `while not c`
+const NEGATED_CONTROL_WORDS: [(&str, Op); 2] = [("unless", Op::If), ("until", Op::While)];
 /// Words that test a value for being ø or falsy, sugar for `not x`; `failed` tests for an Error value (is_error)
 const TEST_WORDS: [&str; 6] = ["empty", "missing", "absent", "unknown", "undefined", FAILED_WORD];
 const FAILED_WORD: &str = "failed";
@@ -372,57 +363,6 @@ fn with_arrow_bodies(mut items: Vec<Node>) -> Vec<Node> {
 	items
 }
 
-/// The infix operators continue_expr reads apart from the operator table
-enum SpecialInfix {
-	/// `7//2`, `7 div 2`, `x//=2`
-	FloorDivision { compound: bool },
-	/// `xs |> f(a)`
-	Pipeline,
-	/// `xs .+ 4`
-	ElementWise(Op),
-	/// `x in xs` and `xs contains x`: the list [lhs word operand]
-	Membership(&'static str),
-	/// Julia's dot call `f.(xs)`, `add.(xs, 10)`: f mapped over the first argument
-	DotCall,
-}
-
-impl SpecialInfix {
-	fn applied(self, lhs: Node, operand: Node) -> Node {
-		match self {
-			SpecialInfix::FloorDivision { compound } => {
-				let quotient = floor_division(lhs.clone(), operand);
-				if compound {
-					Node::Key(Box::new(lhs), Op::Assign, Box::new(quotient))
-				} else {
-					quotient
-				}
-			}
-			SpecialInfix::Pipeline => piped(lhs, operand),
-			// Java's and Scala's `import math.*`: a glob, nothing after the `*`, is the module whole
-			SpecialInfix::ElementWise(Op::Mul) if matches!(operand, Empty) => {
-				crate::normalize::hint(
-					&format!("{}.*", lhs.serialize()),
-					&lhs.serialize(),
-					"warp imports a module whole",
-				);
-				lhs
-			}
-			// kept as written, lowering/broadcasting.rs lower_element_wise_operators gives it its meaning
-			SpecialInfix::ElementWise(op) => Node::List(
-				vec![lhs, Symbol(crate::operators::element_wise_word(op)), operand],
-				Bracket::None,
-				Separator::Space,
-			),
-			SpecialInfix::Membership(word) => Node::List(
-				vec![lhs, Symbol(word.to_string()), operand],
-				Bracket::None,
-				Separator::Space,
-			),
-			SpecialInfix::DotCall => dot_call(lhs, operand),
-		}
-	}
-}
-
 /// `f.(xs, a)` → `map(xs, broadcast_item => f(broadcast_item, a))`
 fn dot_call(function: Node, arguments: Node) -> Node {
 	let mut arguments = match arguments.drop_meta() {
@@ -470,12 +410,12 @@ const AND_KEYWORD: &str = "and";
 /// Words a condition or subject follows: `xs where #it > 1` counts it, `where` takes no `#` index (card topo-sort-wasm);
 /// `match -3 {…}` matches -3, no subtraction from `match` (card match-negative-subject)
 const CLAUSE_WORDS: [&str; 3] = ["where", "match", "switch"];
-/// Words between two operands besides the operator words (operators::is_operator_word): membership, `div`, `of`
-const JOINING_WORDS: [&str; 4] = [IN_KEYWORD, "div", OF_WORD, "matches"];
+/// Words between two operands besides the operator words (operators::is_operator_word): `of`, `matches`
+const JOINING_WORDS: [&str; 2] = [OF_WORD, "matches"];
 
 /// A word joining two operands, never a call of the word before it: `a and b`, `n mod 100`, `x in xs`, `p is int`
 pub(crate) fn joins_operands(word: &str) -> bool {
-	crate::operators::is_operator_word(word) || JOINING_WORDS.contains(&word) || containment_words().contains(&word)
+	crate::operators::is_operator_word(word) || JOINING_WORDS.contains(&word)
 }
 pub const ASSERT_MARKER: &str = "assert·else";
 /// The words that start the fallback of `try X else Y`: `else`, classical `catch`, Python's `except` (P60)
@@ -676,12 +616,12 @@ fn is_music_accidental(c: char) -> bool {
 /// (a == b*(a//b) + a%b): floor(a/b) for a positive divisor, ceil(a/b) for a negative one. Each operand is evaluated
 /// once, and an exact quotient rounds exactly (wasm_emitter exact_euclid_div)
 pub const FLOOR_QUOTIENT: &str = "floor_quotient";
+/// The spellings of floor division in the operator table: `7//2`, `7 div 2` and the compound `x//=2`
+const FLOOR_DIVISION_SPELLINGS: [&str; 2] = ["//", "div"];
+const FLOOR_DIVISION_ASSIGNMENT: &str = "//=";
 
 /// `a | b`: the logical or, or `b(a)` when b names a function (pipes.rs)
 const PIPE_GLYPH: &str = "|";
-/// `|>` binds below range and arithmetic, above `as` and comparisons
-const PIPELINE_BINDING_POWER: (u8, u8) = (127, 128);
-
 /// `value |> f(args)` → `f(value, args)`, `value |> f` → `f(value)`; a braceless call is grouped, one argument:
 /// `square xs |> filter(p)` → `filter((square xs), p)`
 pub(crate) fn piped(value: Node, stage: Node) -> Node {
@@ -699,10 +639,6 @@ pub(crate) fn piped(value: Node, stage: Node) -> Node {
 		}
 		_ => Node::List(vec![stage, value], Bracket::Round, Separator::None),
 	}
-}
-
-fn floor_division(dividend: Node, divisor: Node) -> Node {
-	call(FLOOR_QUOTIENT, vec![dividend, divisor])
 }
 
 /// Read and parse a WARP file

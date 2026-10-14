@@ -224,17 +224,6 @@ impl WarpParser {
 		self.current_char() == '/' && self.peek_char(1) == '/' && divisor_follows && self.follows_operand_on_its_line()
 	}
 
-	/// `.+ .- .* ./` at the cursor: the element-wise form of the arithmetic operator (`./mozart.mp3` is a path)
-	pub(super) fn element_wise_operator(&self) -> Option<Op> {
-		if self.current_char() != '.' || self.starts_path_literal() {
-			return None;
-		}
-		let glyph = self.peek_char(1).to_string();
-		crate::operators::ELEMENT_WISE_OPERATORS
-			.into_iter()
-			.find(|op| op.as_str() == glyph)
-	}
-
 	/// `1 -1`, `[1 +1]`: a number, a space, then a sign glued to a number (D13). Asked: the list `[1 -1]` (the default,
 	/// a warning when unanswered) or the arithmetic `1 - 1`. Variables, calls and words keep subtracting: `x -1`.
 	/// Inside a list literal a space and a glued sign start the next item after anything (decision list-sign):
