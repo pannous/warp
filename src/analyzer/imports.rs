@@ -24,7 +24,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			.required_functions
 			.extend([crate::wasm_emitter::INT_RUNTIME, "new_int"]),
 		// `as hex`, `byte b`, `as binary`: values shown in hex or binary (cards hex-printing, binary-int)
-		Node::Symbol(name) if let Some(radix) = crate::wasm_emitter::radix::shown_radix(name) => {
+		Node::Symbol(name) if let Some(radix) = crate::wasm_emitter::numbers::radix::shown_radix(name) => {
 			ctx.required_functions
 				.extend([radix.as_function, radix.text_function, "list_join", "new_text"]);
 		}
@@ -47,11 +47,11 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 			if *op == Op::As && matches!(value.name().to_lowercase().as_str(), "string" | "str" | "text") {
 				ctx.required_functions.insert("list_join"); // `x as string` of a variable joins its text
 			}
-			if *op == Op::As && value.name().to_lowercase() == crate::wasm_emitter::exact::DECIMAL_WORD {
+			if *op == Op::As && value.name().to_lowercase() == crate::wasm_emitter::numbers::exact::DECIMAL_WORD {
 				ctx.required_functions.extend([
 					"list_join",
 					crate::wasm_emitter::INT_RUNTIME,
-					crate::wasm_emitter::exact::DECIMAL_TEXT,
+					crate::wasm_emitter::numbers::exact::DECIMAL_TEXT,
 				]); // `x as decimal`: a text
 			}
 			if *op == Op::As && value.name().to_lowercase() == "list" {
@@ -213,7 +213,7 @@ fn functions_of_operator(op: &Op) -> &'static [&'static str] {
 		Op::Inc | Op::Dec | Op::Neg | Op::Abs | Op::Square | Op::Cube => &[INT_RUNTIME, EXACT_ARITHMETIC],
 		Op::Xor => &[INT_RUNTIME],
 		Op::BitAnd | Op::BitOr => &[INT_RUNTIME, IS_TRUTHY],
-		Op::Div | Op::DivAssign => &[INT_RUNTIME, EXACT_ARITHMETIC, crate::wasm_emitter::exact::INT_GCD], // ratios: fast multi-limb division for their gcds
+		Op::Div | Op::DivAssign => &[INT_RUNTIME, EXACT_ARITHMETIC, crate::wasm_emitter::numbers::exact::INT_GCD], // ratios: fast multi-limb division for their gcds
 		op if op.is_arithmetic() || op.is_compound_assign() => &[INT_RUNTIME, EXACT_ARITHMETIC],
 		op if op.is_shift() => &[INT_RUNTIME],
 		_ => &[],

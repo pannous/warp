@@ -505,7 +505,7 @@ impl WasmGcEmitter {
 					let not_fixnum = |local| {
 						[
 							I::LocalGet(local),
-							I::I64Const(super::super::big_int::FIXNUM_OFFSET),
+							I::I64Const(super::super::numbers::big_int::FIXNUM_OFFSET),
 							I::I64Add,
 							I::I64Const(0),
 							I::I64LtS,

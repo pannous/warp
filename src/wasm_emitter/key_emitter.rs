@@ -175,9 +175,9 @@ impl WasmGcEmitter {
 			self.emit_call(
 				func,
 				if gaussian.is_some() {
-					super::uncertain::GAUSSIAN_NEW
+					super::numbers::uncertain::GAUSSIAN_NEW
 				} else {
-					super::uncertain::UNCERTAIN_NEW
+					super::numbers::uncertain::UNCERTAIN_NEW
 				},
 			);
 		} else {

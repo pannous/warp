@@ -16,7 +16,7 @@
 //! The runtime is emitted only when the program does integer arithmetic ("int_runtime").
 //! Opt-out: `expr as i64` computes `expr` with wrapping machine arithmetic.
 
-use super::WasmGcEmitter;
+use super::super::WasmGcEmitter;
 use crate::extensions::numbers::Number;
 use crate::node::Node;
 use crate::numbers::fixed_width::FixedWidth;
@@ -81,7 +81,7 @@ fn exact_f64(number: &Number) -> Option<f64> {
 		}
 		// a decimal literal means its digits (0.5 is 5/10): exact as an f64 when the f64 is that decimal (0.1 is not)
 		Number::Float(value) => {
-			let (numerator, denominator) = super::exact::decimal_fraction(value);
+			let (numerator, denominator) = super::super::numbers::exact::decimal_fraction(value);
 			let (numerator, denominator) = (i64::try_from(&numerator).ok()?, i64::try_from(&denominator).ok()?);
 			exact_f64(&Number::Quotient(numerator, denominator)).filter(|exact| *exact == value)
 		}
@@ -101,7 +101,7 @@ fn combine(left: IntRange, right: IntRange, op: impl Fn(i128, i128) -> Option<i1
 
 /// Euclidean `a % b` on machine i64s in locals a, b (r is scratch): `r = a rem_s b; r + ((r >> 63) & |b|)`,
 /// so 0 ≤ r < |b| as in mathematics (-7 % 3 → 2, 7 % -3 → 1); `rem` keeps the truncated i64.rem_s
-pub(super) fn euclidean_remainder(a: u32, b: u32, r: u32) -> Vec<Instruction<'static>> {
+pub(in crate::wasm_emitter) fn euclidean_remainder(a: u32, b: u32, r: u32) -> Vec<Instruction<'static>> {
 	let sign_mask = |local| [I::LocalGet(local), I::I64Const(63), I::I64ShrS];
 	let mut code = vec![I::LocalGet(a), I::LocalGet(b), I::I64RemS, I::LocalTee(r)];
 	code.extend(sign_mask(r));
@@ -181,12 +181,12 @@ impl WasmGcEmitter {
 	// Inline fast paths used by the expression emitter
 	// ═══════════════════════════════════════════════════════════════════════
 
-	pub(super) fn scratch(&self, index: u32) -> u32 {
+	pub(in crate::wasm_emitter) fn scratch(&self, index: u32) -> u32 {
 		self.int_scratch + index
 	}
 
 	/// Push i32 1 when every listed local holds a fixnum: `((x + OFFSET) | ...) >= 0`
-	pub(super) fn emit_fixnum_test(&self, func: &mut Function, locals: &[u32]) {
+	pub(in crate::wasm_emitter) fn emit_fixnum_test(&self, func: &mut Function, locals: &[u32]) {
 		Self::emit_offset_locals_test(func, locals, FIXNUM_OFFSET, &[I::I64Const(0), I::I64GeS]);
 	}
 
@@ -286,7 +286,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Stack [a, b] (Ints) → [a // b], the Euclidean quotient: (a - a % b) / b is exact on fixnums, else exact_euclid_div
-	pub(super) fn emit_euclidean_quotient(&mut self, func: &mut Function, left: IntRange, right: IntRange) {
+	pub(in crate::wasm_emitter) fn emit_euclidean_quotient(&mut self, func: &mut Function, left: IntRange, right: IntRange) {
 		if !self.int_runtime() {
 			return self.emit_call(func, "exact_euclid_div");
 		}
@@ -308,7 +308,7 @@ impl WasmGcEmitter {
 			return;
 		}
 		Self::emit_list(func, &[I::LocalGet(divisor), I::I64Eqz]);
-		self.emit_fail_if(func, super::list_ops::DIVIDE_BY_ZERO);
+		self.emit_fail_if(func, super::super::list_ops::DIVIDE_BY_ZERO);
 	}
 
 	fn emit_scratch_call(&mut self, func: &mut Function, name: &'static str) {
@@ -550,7 +550,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The fixed width (`byte`, `int8` …) the variable `node` was declared with
-	pub(super) fn declared_fixed_width(&self, node: &Node) -> Option<&'static FixedWidth> {
+	pub(in crate::wasm_emitter) fn declared_fixed_width(&self, node: &Node) -> Option<&'static FixedWidth> {
 		let Node::Symbol(name) = node.drop_meta() else {
 			return None;
 		};
@@ -559,7 +559,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Is the variable `node` declared a whole-number type (`int`, `long`, `byte` …, not `exact`)
-	pub(super) fn declared_whole(&self, node: &Node) -> bool {
+	pub(in crate::wasm_emitter) fn declared_whole(&self, node: &Node) -> bool {
 		let Node::Symbol(name) = node.drop_meta() else {
 			return false;
 		};
@@ -568,16 +568,16 @@ impl WasmGcEmitter {
 	}
 
 	/// Stack [Int] → [Int]: traps in INT_NOT_WHOLE when the Int is a ratio (`x:int = 3; x += 0.5`)
-	pub(super) fn emit_whole_check(&mut self, func: &mut Function) {
+	pub(in crate::wasm_emitter) fn emit_whole_check(&mut self, func: &mut Function) {
 		let value = self.scratch(2);
 		func.instruction(&I::LocalSet(value));
-		self.emit_require_whole(func, value, super::list_ops::INT_NOT_WHOLE);
+		self.emit_require_whole(func, value, super::super::list_ops::INT_NOT_WHOLE);
 		func.instruction(&I::LocalGet(value));
 	}
 
 	/// Stack [Int] → [Int] before storing to `target`: traps when the Int is no whole number or does not fit its declared
 	/// fixed width
-	pub(super) fn emit_fits_declared(&mut self, func: &mut Function, target: &Node) {
+	pub(in crate::wasm_emitter) fn emit_fits_declared(&mut self, func: &mut Function, target: &Node) {
 		if self.declared_whole(target) {
 			self.emit_whole_check(func);
 		}
@@ -586,7 +586,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Stack [Int] → [Int], trapping in `overflow_of_<type>` when the Int leaves the range of `width`
-	pub(super) fn emit_fixed_width_check(&mut self, func: &mut Function, width: Option<&'static FixedWidth>) {
+	pub(in crate::wasm_emitter) fn emit_fixed_width_check(&mut self, func: &mut Function, width: Option<&'static FixedWidth>) {
 		let Some(width) = width else { return };
 		let value = self.scratch(2);
 		func.instruction(&I::LocalSet(value));
@@ -724,7 +724,7 @@ impl WasmGcEmitter {
 	}
 
 	/// An Int literal built anew: a fixnum, else a $BigInt boxed into a new handle
-	pub(super) fn emit_built_int_literal(&mut self, func: &mut Function, number: &BigInt) {
+	pub(in crate::wasm_emitter) fn emit_built_int_literal(&mut self, func: &mut Function, number: &BigInt) {
 		if let Some(n) = i64::try_from(number).ok().filter(|n| is_fixnum(*n)) {
 			func.instruction(&I::I64Const(n));
 			return;
@@ -801,7 +801,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Push i32 1 when the Int in `local` is a ratio inside its handle (INLINE_RATIO_BASE)
-	pub(super) fn emit_inline_ratio_test(&self, func: &mut Function, local: u32) {
+	pub(in crate::wasm_emitter) fn emit_inline_ratio_test(&self, func: &mut Function, local: u32) {
 		Self::emit_list(
 			func,
 			&[
@@ -814,7 +814,7 @@ impl WasmGcEmitter {
 		);
 	}
 
-	pub(super) fn emit_inline_numerator(&self, func: &mut Function, local: u32) {
+	pub(in crate::wasm_emitter) fn emit_inline_numerator(&self, func: &mut Function, local: u32) {
 		Self::emit_list(
 			func,
 			&[
@@ -829,7 +829,7 @@ impl WasmGcEmitter {
 		);
 	}
 
-	pub(super) fn emit_inline_denominator(&self, func: &mut Function, local: u32) {
+	pub(in crate::wasm_emitter) fn emit_inline_denominator(&self, func: &mut Function, local: u32) {
 		Self::emit_list(
 			func,
 			&[I::LocalGet(local), I::I64Const(INLINE_NUMERATOR_BIAS - 1), I::I64And],
@@ -837,7 +837,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Push i32 1 when numerator and denominator (Int locals of a normalized ratio) fit inside a handle
-	pub(super) fn emit_inline_ratio_fits(&self, func: &mut Function, numerator: u32, denominator: u32) {
+	pub(in crate::wasm_emitter) fn emit_inline_ratio_fits(&self, func: &mut Function, numerator: u32, denominator: u32) {
 		Self::emit_list(
 			func,
 			&[
@@ -855,7 +855,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Push the handle of the ratio numerator/denominator that emit_inline_ratio_fits accepted
-	pub(super) fn emit_inline_ratio(&self, func: &mut Function, numerator: u32, denominator: u32) {
+	pub(in crate::wasm_emitter) fn emit_inline_ratio(&self, func: &mut Function, numerator: u32, denominator: u32) {
 		Self::emit_list(
 			func,
 			&[
@@ -887,7 +887,7 @@ impl WasmGcEmitter {
 		self.export_runtime_function("new_int");
 	}
 
-	pub(super) fn emit_heap_get(&self, func: &mut Function, handle_local: u32) {
+	pub(in crate::wasm_emitter) fn emit_heap_get(&self, func: &mut Function, handle_local: u32) {
 		Self::emit_list(
 			func,
 			&[
@@ -928,7 +928,7 @@ impl WasmGcEmitter {
 	// Runtime functions (emitted once, only when the program needs them)
 	// ═══════════════════════════════════════════════════════════════════════
 
-	pub(super) fn call(&self, func: &mut Function, name: &str) {
+	pub(in crate::wasm_emitter) fn call(&self, func: &mut Function, name: &str) {
 		func.instruction(&I::Call(self.func_index(name)));
 	}
 
@@ -1036,7 +1036,7 @@ impl WasmGcEmitter {
 
 /// The loop counters of `body` that stay in 0..i32::MAX: the item counters of for loops over lists (for_loop.rs
 /// INDEX_SUFFIX), only ever set to 0 and stepped by ++ (the loop stops below the item count, which is an i32)
-pub(super) fn bounded_counters(body: &Node) -> HashSet<String> {
+pub(in crate::wasm_emitter) fn bounded_counters(body: &Node) -> HashSet<String> {
 	let (mut counters, mut other_writes) = (HashSet::new(), HashSet::new());
 	body.visit(&mut |part| {
 		if let Node::Key(target, op, value) = part {

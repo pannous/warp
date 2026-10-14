@@ -12,7 +12,7 @@
 //! Division by zero yields the extended rationals' ±∞ = ±1/0 and NaN = 0/0 (never a quiet f64 NaN):
 //! ∞ + 1 = ∞, 1/∞ = 0, ∞ - ∞ = NaN, NaN equals only NaN. Truncating ∞ or NaN to an integer traps.
 
-use super::WasmGcEmitter;
+use super::super::WasmGcEmitter;
 use crate::wasm_emitter::layout::BYTE;
 use num_bigint::BigInt;
 use num_traits::One;
@@ -60,7 +60,7 @@ impl WasmGcEmitter {
 
 	/// A literal beyond the fixnums (a big Int, a ratio) from a global set on its first evaluation: built at every
 	/// evaluation, each one added a $BigInt or $Ratio to the handle heap, which keeps them until the run ends
-	pub(super) fn emit_number_constant(&mut self, func: &mut Function, numerator: &BigInt, denominator: &BigInt) {
+	pub(in crate::wasm_emitter) fn emit_number_constant(&mut self, func: &mut Function, numerator: &BigInt, denominator: &BigInt) {
 		let key = (numerator.clone(), denominator.clone());
 		let global = match self.number_constants.get(&key) {
 			Some(global) => *global,
@@ -481,7 +481,7 @@ impl WasmGcEmitter {
 			};
 			// P66: an exact division by zero is the catchable error divide_by_zero (0 is the fixnum 0)
 			Self::emit_list(f, &[I::LocalGet(1), I::I64Eqz]);
-			s.emit_fail_if(f, super::list_ops::DIVIDE_BY_ZERO);
+			s.emit_fail_if(f, super::super::list_ops::DIVIDE_BY_ZERO);
 			s.emit_fixnum_test(f, &[0, 1]);
 			Self::emit_list(
 				f,
@@ -632,7 +632,7 @@ impl WasmGcEmitter {
 			I::I64LtS,
 			I::I32Sub,
 		];
-		let calculates = self.should_emit_function(super::EXACT_ARITHMETIC);
+		let calculates = self.should_emit_function(super::super::EXACT_ARITHMETIC);
 		self.exact_dispatch(
 			"exact_cmp",
 			i32t,
@@ -747,7 +747,7 @@ impl WasmGcEmitter {
 		);
 
 		// exact_mod(a, b): Euclidean remainder, 0 ≤ r < |b|: the truncated remainder plus |b| when negative; locals: r
-		let euclidean_remainder = super::big_int::euclidean_remainder(0, 1, 2);
+		let euclidean_remainder = super::super::numbers::big_int::euclidean_remainder(0, 1, 2);
 		self.runtime_function("exact_mod", vec![i64t, i64t], vec![i64t], vec![i64t], |s, f| {
 			s.fixnum_division_shortcut(f, &euclidean_remainder);
 			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);

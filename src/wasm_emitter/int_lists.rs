@@ -155,7 +155,7 @@ impl WasmGcEmitter {
 				Self::emit_list(
 					f,
 					&[
-						I::I64Const(super::big_int::FIXNUM_OFFSET),
+						I::I64Const(super::numbers::big_int::FIXNUM_OFFSET),
 						I::I64Add,
 						I::I64Const(0),
 						I::I64LtS,

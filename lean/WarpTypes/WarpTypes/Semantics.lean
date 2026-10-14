@@ -143,7 +143,7 @@ def ratDisplay (q : Rat) : String :=
   let padded := String.ofList (List.replicate (digits - fraction.length) '0') ++ fraction
   (if q.num < 0 then "-" else "") ++ whole ++ (if digits = 0 then "" else "." ++ padded)
 
-/-- warp's float_text constants (src/wasm_emitter/float_text.rs): the most digits a float needs, positional exponents -/
+/-- warp's float_text constants (src/wasm_emitter/numbers/float_text.rs): the most digits a float needs, positional exponents -/
 def mostDigits : Nat := 17
 def smallestPositional : Int := -5
 def largestPositional : Int := 15

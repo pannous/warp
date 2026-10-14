@@ -377,7 +377,7 @@ impl WasmGcEmitter {
 
 	pub(super) fn emit_joining(&mut self, name: &'static str, nested: bool) {
 		let float_box = self.type_manager.f64_box_type;
-		let exact_numbers = self.should_emit_function(crate::wasm_emitter::exact::EXACT_TEXT);
+		let exact_numbers = self.should_emit_function(crate::wasm_emitter::numbers::exact::EXACT_TEXT);
 		let texts = [
 			self.allocate_string("["),
 			self.allocate_string("]"),
@@ -463,7 +463,7 @@ impl WasmGcEmitter {
 				s.call(f, "new_text");
 				Self::emit_list(f, &[I::End, I::LocalSet(element), I::End]);
 				// an Int shown in hex joins as 0xFF (card hex-printing), in binary as 0b101 (card binary-int)
-				for radix in super::super::radix::RADIXES
+				for radix in super::super::numbers::radix::RADIXES
 					.iter()
 					.filter(|radix| s.ctx.func_registry.contains(radix.text_function))
 				{
@@ -632,10 +632,10 @@ impl WasmGcEmitter {
 				);
 				s.call(f, "new_text");
 				Self::emit_list(f, &[I::LocalSet(element), I::End]);
-				if s.should_emit_function(super::super::uncertain::UNCERTAIN_TEXT) {
+				if s.should_emit_function(super::super::numbers::uncertain::UNCERTAIN_TEXT) {
 					is_kind(f, Kind::Uncertain);
 					Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(element), I::RefAsNonNull]);
-					s.call(f, super::super::uncertain::UNCERTAIN_TEXT);
+					s.call(f, super::super::numbers::uncertain::UNCERTAIN_TEXT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
 				if s.shows_functions() {
@@ -650,7 +650,7 @@ impl WasmGcEmitter {
 					s.call(f, super::super::times::TIME_TEXT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
-				if s.should_emit_function(super::super::float_text::FLOAT_TEXT) {
+				if s.should_emit_function(super::super::numbers::float_text::FLOAT_TEXT) {
 					is_kind(f, Kind::Float);
 					f.instruction(&I::If(BlockType::Empty));
 					s.emit_field(f, element, 1);
@@ -664,7 +664,7 @@ impl WasmGcEmitter {
 							},
 						],
 					);
-					s.call(f, super::super::float_text::FLOAT_TEXT);
+					s.call(f, super::super::numbers::float_text::FLOAT_TEXT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
 				if exact_numbers {
@@ -675,7 +675,7 @@ impl WasmGcEmitter {
 					f.instruction(&I::LocalSet(number));
 					s.emit_fixnum_test(f, &[number]);
 					Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::LocalGet(number)]);
-					s.call(f, crate::wasm_emitter::exact::EXACT_TEXT);
+					s.call(f, crate::wasm_emitter::numbers::exact::EXACT_TEXT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End, I::End]);
 				}
 			};

@@ -331,7 +331,7 @@ impl WasmGcEmitter {
 
 		// mag_divmod(a, b) -> (quotient, remainder) as two results, b nonzero: limb by limb where ratios need gcds, else the
 		// compact bit by bit division (web::test_bundle_budget)
-		if self.should_emit_function(super::super::exact::INT_GCD) {
+		if self.should_emit_function(super::super::super::numbers::exact::INT_GCD) {
 			self.emit_limbwise_divmod();
 		} else {
 			self.emit_bitwise_divmod();

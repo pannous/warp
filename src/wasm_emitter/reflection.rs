@@ -117,7 +117,7 @@ impl WasmGcEmitter {
 		);
 
 		// the parts of a ± value (Kind::Uncertain), only in programs that make one
-		let reads_floats = self.should_emit_function(super::uncertain::UNCERTAIN_NEW);
+		let reads_floats = self.should_emit_function(super::numbers::uncertain::UNCERTAIN_NEW);
 		if reads_floats {
 			self.reflect(
 				"reflect_float_count",

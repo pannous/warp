@@ -153,7 +153,8 @@ def rewrite_paths(parent, module, folder):
 			changed = re.sub(r"(?<![\w:$])" + parent_path + "::" + module + r"\b", parent_path + "::" + folder + "::" + module, changed)
 		if path.startswith(parent_directory + os.sep) and path not in BINARY_ROOTS:
 			depth = depth_below(path, parent)
-			if depth == 0:
+			globs_parent = re.search(r"^use " + "super::" * depth + r"\*;", changed, re.M)
+			if depth == 0 or globs_parent:
 				changed = re.sub(r"(?<![\w:$])(self::)?" + module + r"::", r"\g<1>" + folder + "::" + module + "::", changed)
 			changed = rewrite_super_paths(changed, depth, module, folder)
 		if changed != text:

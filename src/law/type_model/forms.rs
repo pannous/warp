@@ -469,7 +469,7 @@ pub(super) fn place_literal(declared: Option<&str>, value: &Node) -> Option<Stri
 	match value.drop_meta() {
 		Node::Number(Number::Int(n @ (0 | 1))) if declared == Some(BOOL_TYPE) => Some(format!(".bool {}", *n == 1)),
 		Node::Number(Number::Float(decimal)) if declared == Some(EXACT_TYPE) && decimal.is_finite() => {
-			let (numerator, denominator) = crate::wasm_emitter::exact::decimal_fraction(*decimal);
+			let (numerator, denominator) = crate::wasm_emitter::numbers::exact::decimal_fraction(*decimal);
 			Some(exact_number(numerator, denominator))
 		}
 		_ => None,

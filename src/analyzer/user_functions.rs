@@ -47,7 +47,7 @@ pub(crate) fn computed_literal_kind(value: &Node) -> Option<Kind> {
 pub(super) fn exact_literal_value(node: &Node) -> Option<crate::extensions::reals::Rational> {
 	match node.drop_meta() {
 		Node::Number(Number::Float(f)) if Number::is_exact_decimal(*f) => {
-			let (numerator, denominator) = crate::wasm_emitter::exact::decimal_fraction(*f);
+			let (numerator, denominator) = crate::wasm_emitter::numbers::exact::decimal_fraction(*f);
 			Some(crate::extensions::reals::Rational::new(numerator, denominator))
 		}
 		Node::Number(number @ (Number::Int(_) | Number::BigInt(_) | Number::Quotient(..) | Number::BigQuotient(_))) => {

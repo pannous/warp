@@ -335,8 +335,8 @@ impl WasmGcEmitter {
 						s.emit_fail_if_error(f, operand);
 					}
 					// a remainder of a value with uncertainty is not a number here
-					let uncertain = s.should_emit_function(super::super::uncertain::UNCERTAIN_NEW)
-						&& index < super::super::uncertain::UNCERTAIN_ARITHMETIC.len();
+					let uncertain = s.should_emit_function(super::super::numbers::uncertain::UNCERTAIN_NEW)
+						&& index < super::super::numbers::uncertain::UNCERTAIN_ARITHMETIC.len();
 					// a text, a character or a list is no number here: "x" * 2 is no 240
 					for operand in [0, 1] {
 						s.emit_field(f, operand, 0);
@@ -372,7 +372,7 @@ impl WasmGcEmitter {
 						s.is_uncertain(f, 0);
 						s.is_uncertain(f, 1);
 						Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty), I::LocalGet(0), I::LocalGet(1)]);
-						s.call(f, super::super::uncertain::UNCERTAIN_ARITHMETIC[index]);
+						s.call(f, super::super::numbers::uncertain::UNCERTAIN_ARITHMETIC[index]);
 						Self::emit_list(f, &[I::Return, I::End]);
 					}
 					for operand in [0, 1] {

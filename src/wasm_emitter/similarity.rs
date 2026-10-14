@@ -7,7 +7,7 @@
 use super::equality::IS_META_ENTRY;
 use super::text_builtins::{TEXT_OF, TEXT_ROUGH_TRIM};
 use super::text_unicode::CaseMapping;
-use super::uncertain::UNCERTAIN_SIMILAR;
+use super::numbers::uncertain::UNCERTAIN_SIMILAR;
 use super::{WasmGcEmitter, IS_TRUTHY, VALUES_EQUAL};
 use crate::library_words::{VALUES_ROUGH, VALUES_SIMILAR};
 use crate::node::Node;

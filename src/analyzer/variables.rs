@@ -61,7 +61,7 @@ pub(super) fn value_binding(value: &Node, scope: &Scope) -> (Kind, Option<Box<No
 		// `x = 255 as hex`, `x = 255 as byte`: x shows in hex too (card hex-printing), without the byte's range
 		Kind::Int
 			if let Node::Key(_, Op::As, target) = value.drop_meta()
-				&& let Some(radix) = crate::wasm_emitter::radix::shown_radix(&target.name()) =>
+				&& let Some(radix) = crate::wasm_emitter::numbers::radix::shown_radix(&target.name()) =>
 		{
 			Some(radix.word.to_string())
 		}

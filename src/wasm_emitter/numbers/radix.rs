@@ -2,7 +2,7 @@
 //! 2026-10-12): `5 as binary` (alias `bin`) shows as 0b101. They compute as plain ints; where such a value becomes a
 //! Node it is an Int marked with its radix's info above the kind bits (type_kinds), which list_join writes in that
 //! radix and the readers read back as the Int showing its literal
-use super::*;
+use super::super::*;
 use crate::type_kinds;
 use crate::wasm_emitter::layout::BYTE;
 
@@ -91,7 +91,7 @@ pub fn marked_literal(info: i64, value: i64) -> Option<String> {
 
 /// `x as hex`, `x as binary` compute as an int; the Node it becomes shows in that radix (emit_node_instructions).
 /// `as bin` is `as binary` with a got-it note
-pub(super) fn computed_type(target: &Node) -> Option<Node> {
+pub(in crate::wasm_emitter) fn computed_type(target: &Node) -> Option<Node> {
 	let name = target.name();
 	named_radix(&name)?;
 	if name.to_lowercase() == BINARY_ALIAS {
@@ -102,7 +102,7 @@ pub(super) fn computed_type(target: &Node) -> Option<Node> {
 
 impl WasmGcEmitter {
 	/// `x as hex`, `x as byte`, `x as binary`, a variable declared or assigned so
-	pub(super) fn shown_radix(&self, node: &Node) -> Option<&'static Radix> {
+	pub(in crate::wasm_emitter) fn shown_radix(&self, node: &Node) -> Option<&'static Radix> {
 		match node.drop_meta() {
 			Node::Key(_, Op::As, target) => shown_radix(&target.name()),
 			Node::Symbol(name) => self
@@ -114,7 +114,7 @@ impl WasmGcEmitter {
 		}
 	}
 
-	pub(super) fn emit_radix_runtimes(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_radix_runtimes(&mut self) {
 		for radix in &RADIXES {
 			self.emit_radix_runtime(radix);
 		}

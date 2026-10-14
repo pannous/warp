@@ -5,13 +5,13 @@
 //! its standard deviation, low and high one deviation from the value; its arithmetic propagates linearly and adds
 //! independent deviations in quadrature (gaussian_add and its siblings), so `(5 ± 1σ) + (2 ± 1σ)` is 7 ± 1.4σ
 
-use super::float_text::FLOAT_TEXT;
-use super::layout::BYTE;
-use super::library_ops::NODE_ORDER;
-use super::list_ops::TEXT_AS_FLOAT;
-use super::similarity::NUMBERS_SIMILAR;
-use super::text_builtins::TEXT_CONCAT;
-use super::WasmGcEmitter;
+use super::super::numbers::float_text::FLOAT_TEXT;
+use super::super::layout::BYTE;
+use super::super::library_ops::NODE_ORDER;
+use super::super::list_ops::TEXT_AS_FLOAT;
+use super::super::similarity::NUMBERS_SIMILAR;
+use super::super::text_builtins::TEXT_CONCAT;
+use super::super::WasmGcEmitter;
 use crate::node::Node;
 use crate::numbers::uncertain::{Extremum, CERTAINLY, INTERVAL_FIELDS, INTERVAL_WORDS, POSSIBLY, SIGMA};
 use crate::operators::Op;
@@ -24,7 +24,7 @@ pub const UNCERTAIN_NEW: &str = "uncertain_new";
 /// gaussian_new(value: f64, deviation: f64) -> node: a Gaussian `value ± deviationσ`
 pub const GAUSSIAN_NEW: &str = "gaussian_new";
 /// `(5 ± 1σ) + (2 ± 1)`: which of the two the result would be is unclear, so it fails
-pub(super) const INTERVAL_AND_GAUSSIAN: &str = "an_interval_and_a_gaussian_do_not_mix";
+pub(in crate::wasm_emitter) const INTERVAL_AND_GAUSSIAN: &str = "an_interval_and_a_gaussian_do_not_mix";
 /// gaussian_combine(value, a parts, ∂a, b parts, ∂b) -> node
 const GAUSSIAN_COMBINE: &str = "gaussian_combine";
 /// node_add and its siblings with a Gaussian operand, in NODE_ARITHMETIC's order
@@ -50,7 +50,7 @@ enum CertaintyMode {
 	Bare,
 }
 /// `5 ± -1`
-pub(super) const NEGATIVE_UNCERTAINTY: &str = "an_uncertainty_must_not_be_negative";
+pub(in crate::wasm_emitter) const NEGATIVE_UNCERTAINTY: &str = "an_uncertainty_must_not_be_negative";
 /// The arithmetic of node_add, node_sub, node_mul, node_div with an uncertain operand, in NODE_ARITHMETIC's order
 pub const UNCERTAIN_ARITHMETIC: [&str; 4] = ["uncertain_add", "uncertain_sub", "uncertain_mul", "uncertain_div"];
 /// uncertain_field(node, field) -> node or null: one of UNCERTAIN_FIELDS as a float
@@ -110,7 +110,7 @@ pub fn add_dependencies(required: &mut std::collections::HashSet<&'static str>) 
 
 impl WasmGcEmitter {
 	/// After text_as_float, before the node arithmetic, which calls these; uncertain_similar comes with the similarity ops
-	pub(super) fn emit_uncertain_runtime(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_uncertain_runtime(&mut self) {
 		if !self.should_emit_function(UNCERTAIN_NEW) {
 			return;
 		}
@@ -139,7 +139,7 @@ impl WasmGcEmitter {
 
 	/// `sin(x)`, `√x` of a value held as a Node in a program with ± values: through the word's uncertain_<word>, which maps
 	/// an interval. False otherwise, and the caller computes the word on a float
-	pub(super) fn emit_interval_word(&mut self, func: &mut Function, word: &str, argument: &Node) -> bool {
+	pub(in crate::wasm_emitter) fn emit_interval_word(&mut self, func: &mut Function, word: &str, argument: &Node) -> bool {
 		let Some((_, name, _)) = INTERVAL_WORDS.iter().find(|(known, _, _)| *known == word) else {
 			return false;
 		};
@@ -161,7 +161,7 @@ impl WasmGcEmitter {
 				func.instruction(&I::F64Abs);
 			}
 			"cbrt" => {
-				self.emit_libm_call(func, super::LIBM_CBRT);
+				self.emit_libm_call(func, super::super::LIBM_CBRT);
 			}
 			// imported when the program calls the word; a module emitting every runtime function has no call, nor import
 			import => {
@@ -301,7 +301,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Push an i32: is the Node in `local` uncertain
-	pub(super) fn is_uncertain(&self, func: &mut Function, local: u32) {
+	pub(in crate::wasm_emitter) fn is_uncertain(&self, func: &mut Function, local: u32) {
 		self.emit_field(func, local, 0);
 		Self::emit_kind_test(func, Kind::Uncertain as i64, I::I64Eq);
 	}
@@ -793,7 +793,7 @@ impl WasmGcEmitter {
 	/// uncertain_text(node) -> text: `7.0 ± 2.0`, as uncertain::Uncertain shows it read back (P219): the ± part to
 	/// 2 significant digits, the value to the same place; a ± part of 0 or ∞, or digits beyond an i64, as float_text
 	/// shows each. After float_text and text_concat, before list_join, which calls it
-	pub(super) fn emit_uncertain_text(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_uncertain_text(&mut self) {
 		if !self.should_emit_function(UNCERTAIN_TEXT) {
 			return;
 		}
@@ -1112,7 +1112,7 @@ impl WasmGcEmitter {
 
 	/// Push `node.name` of an uncertain node, else nothing found: the general lookup of `target.name` follows. The node is
 	/// in `held`, inside the lookup's block, which a found field leaves
-	pub(super) fn emit_uncertain_field_lookup(&mut self, func: &mut Function, held: u32, name: &str) {
+	pub(in crate::wasm_emitter) fn emit_uncertain_field_lookup(&mut self, func: &mut Function, held: u32, name: &str) {
 		let Some(field) = UNCERTAIN_FIELDS.iter().position(|(_, field)| *field == name) else {
 			return;
 		};
@@ -1132,7 +1132,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Replace the node in `local` by its value when it is uncertain: `<` and the other orders compare values
-	pub(super) fn emit_uncertain_as_value(&self, func: &mut Function, local: u32) {
+	pub(in crate::wasm_emitter) fn emit_uncertain_as_value(&self, func: &mut Function, local: u32) {
 		if !self.should_emit_function(UNCERTAIN_NEW) {
 			return;
 		}
@@ -1153,7 +1153,7 @@ impl WasmGcEmitter {
 	}
 
 	/// After numbers_similar, before values_similar
-	pub(super) fn emit_uncertain_similar(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_uncertain_similar(&mut self) {
 		if !self.should_emit_function(UNCERTAIN_SIMILAR) {
 			return;
 		}
@@ -1189,7 +1189,7 @@ impl WasmGcEmitter {
 
 impl WasmGcEmitter {
 	/// `certainly(y < x)`, `possibly(y < x)` (crate::numbers::uncertain::lower_certainty): an i64 0 or 1
-	pub(super) fn emit_certainty(&mut self, func: &mut Function, word: &str, comparison: &Node) {
+	pub(in crate::wasm_emitter) fn emit_certainty(&mut self, func: &mut Function, word: &str, comparison: &Node) {
 		let Node::Key(left, op, right) = comparison.drop_meta() else {
 			return self.emit_type_error(
 				func,
@@ -1215,7 +1215,7 @@ impl WasmGcEmitter {
 
 	/// After both operands of a bare ordering: the i64 verdict, or false with `overlap_warning` when ± values overlap.
 	/// False when the program has no ± values (the caller orders them itself)
-	pub(super) fn emit_bare_uncertain_order(&mut self, func: &mut Function, left: &Node, op: Op, right: &Node) -> bool {
+	pub(in crate::wasm_emitter) fn emit_bare_uncertain_order(&mut self, func: &mut Function, left: &Node, op: Op, right: &Node) -> bool {
 		if !self.should_emit_function(UNCERTAIN_ORDER) {
 			return false;
 		}
@@ -1250,14 +1250,14 @@ impl WasmGcEmitter {
 	}
 
 	/// uncertain_order: numbers as intervals of one point, anything else by node_order. After node_order
-	pub(super) fn emit_uncertain_order(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_uncertain_order(&mut self) {
 		if !self.should_emit_function(UNCERTAIN_ORDER) {
 			return;
 		}
 		let host_warn = self
 			.ctx
 			.func_registry
-			.get(super::text_builtins::HOST_WARN)
+			.get(super::super::text_builtins::HOST_WARN)
 			.map(|function| function.call_index as u32);
 		let warned = host_warn.map(|_| self.declare_global_of(ValType::I32, ConstExpr::i32_const(0)));
 		let node_ref = ValType::Ref(self.node_ref(false));

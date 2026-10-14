@@ -36,7 +36,7 @@ impl WasmGcEmitter {
 
 	/// The one nullable Node local of every function, after its int scratch locals
 	pub(super) fn node_scratch(&self) -> u32 {
-		self.int_scratch + big_int::INT_SCRATCH_LOCALS
+		self.int_scratch + numbers::big_int::INT_SCRATCH_LOCALS
 	}
 
 	/// A second Node scratch local: a container held while node_scratch serves its items (`a, b = xs` checking an item)

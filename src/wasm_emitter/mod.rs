@@ -10,28 +10,23 @@ mod raw_structs;
 pub use raw_structs::run_raw_struct;
 pub(crate) use raw_structs::*;
 
-mod arithmetic;
+pub(crate) mod numbers;
 pub(crate) mod component_adapters;
 mod control_flow;
 mod globals;
 mod user_function_calls;
 use control_flow::LoopValues;
-mod big_int;
-mod casts;
 pub mod cells;
 mod closures;
 mod declared_values;
 mod values;
 pub use closures::{CLOSURE_APPLY, CLOSURE_CAPTURED, CLOSURE_REBUILD};
 mod constructors;
-pub(crate) mod exact;
-pub(crate) mod radix;
-pub(crate) use casts::is_called_conversion;
+pub(crate) use numbers::casts::is_called_conversion;
 pub use constructors::NEW_BOOL;
 mod config;
 mod equality;
 mod ffi_emitter;
-mod float_text;
 mod function_builder;
 mod import_manager;
 pub(crate) mod int_lists;
@@ -50,7 +45,6 @@ mod text_unicode;
 mod time_arithmetic;
 pub(crate) mod time_zones;
 pub(crate) mod times;
-mod uncertain;
 pub use similarity::NUMBERS_SIMILAR;
 mod list_abi;
 pub(crate) mod list_ops;
@@ -71,7 +65,7 @@ pub(crate) mod wasi_emitter;
 mod witness;
 const WASI_START: &str = "_start";
 
-pub use big_int::{is_fixnum, EXACT_ARITHMETIC, EXACT_BUILDERS, INT_RUNTIME};
+pub use numbers::big_int::{is_fixnum, EXACT_ARITHMETIC, EXACT_BUILDERS, INT_RUNTIME};
 
 /// Something emission found it must have that the analysis pass did not request
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -738,7 +732,7 @@ impl WasmGcEmitter {
 			self.ctx.required_functions.insert(node_api::NODE_AT);
 		}
 		if crate::analyzer::makes_floats(&self.ctx, node) {
-			self.ctx.required_functions.insert(float_text::FLOAT_TEXT);
+			self.ctx.required_functions.insert(numbers::float_text::FLOAT_TEXT);
 		}
 		self.ctx
 			.required_functions
@@ -756,7 +750,7 @@ impl WasmGcEmitter {
 		self.written_operator_bound = key_operators.fold(self.written_operator_bound, i64::max);
 		self.writes_tags = library_ops::mentions_quoted_tag(node);
 		component_adapters::add_dependencies(&mut self.ctx.required_functions);
-		uncertain::add_dependencies(&mut self.ctx.required_functions); // before the similarity's: uncertain_similar needs numbers_similar
+		numbers::uncertain::add_dependencies(&mut self.ctx.required_functions); // before the similarity's: uncertain_similar needs numbers_similar
 		self.require_function_text(); // before the similarity's: function_text needs values_equal
 		similarity::add_dependencies(&mut self.ctx.required_functions); // before the text builtins': values_equal needs text_of
 		text_builtins::add_dependencies(&mut self.ctx.required_functions);
@@ -973,7 +967,7 @@ impl WasmGcEmitter {
 			.unwrap_or_else(|| self.find_typed_lists(node));
 		self.typed_maps = self.find_typed_maps(node);
 		self.typed_structs = self.find_typed_structs(node);
-		self.bounded_counters = big_int::bounded_counters(node);
+		self.bounded_counters = numbers::big_int::bounded_counters(node);
 
 		// Allocate strings and update Local data pointers
 		self.collect_and_allocate_strings(node);
@@ -994,7 +988,7 @@ impl WasmGcEmitter {
 			locals.push((temp_locals, ValType::I64));
 		}
 		self.int_scratch = var_count + temp_locals;
-		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
+		locals.push((numbers::big_int::INT_SCRATCH_LOCALS, ValType::I64));
 		locals.push((NODE_SCRATCH_LOCALS, Ref(self.node_ref(true)))); // node_scratch, container_scratch
 		self.declare_loop_values(&mut locals, node);
 
@@ -1061,9 +1055,9 @@ impl WasmGcEmitter {
 		// a float the analyzer did not foresee (makes_floats) may be shown: rerun with float_text
 		if name == "new_float"
 			&& self.should_emit_function("list_join")
-			&& !self.should_emit_function(float_text::FLOAT_TEXT)
+			&& !self.should_emit_function(numbers::float_text::FLOAT_TEXT)
 		{
-			self.discovered_needs.insert(Need::Function(float_text::FLOAT_TEXT));
+			self.discovered_needs.insert(Need::Function(numbers::float_text::FLOAT_TEXT));
 		}
 		self.ctx.used_functions.insert(name);
 		func.instruction(&I::Call(self.func_index(name)));

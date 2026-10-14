@@ -299,8 +299,8 @@ fn conversion_kind(target: &str) -> Option<Kind> {
 	match crate::type_tests::canonical_spec_word(target) {
 		"codepoint" => Some(Kind::Codepoint),
 		"list" => Some(Kind::List),
-		"text" | crate::wasm_emitter::exact::DECIMAL_WORD => Some(Kind::Text),
-		radix if crate::wasm_emitter::radix::named_radix(radix).is_some() => Some(Kind::Int),
+		"text" | crate::wasm_emitter::numbers::exact::DECIMAL_WORD => Some(Kind::Text),
+		radix if crate::wasm_emitter::numbers::radix::named_radix(radix).is_some() => Some(Kind::Int),
 		_ => None,
 	}
 }

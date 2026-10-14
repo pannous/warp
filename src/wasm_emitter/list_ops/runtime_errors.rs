@@ -30,7 +30,7 @@ pub(super) fn divided_index(index: &Node) -> Option<(&Node, &Node)> {
 pub(super) const WHOLE_NUMBER_FIX: &str = "fix: compute it with // (floor division) or `… as int`";
 pub(super) const RUNTIME_ERROR_FIXES: [(&str, &str); 6] = [
 	(
-		super::super::casts::INVALID_CODE_POINT,
+		super::super::numbers::casts::INVALID_CODE_POINT,
 		"a code point is 0…0x10FFFF, outside the surrogates 0xD800…0xDFFF",
 	),
 	(
@@ -98,10 +98,10 @@ pub const RUNTIME_ERRORS: [&str; 31] = [
 	DIVIDE_BY_ZERO,
 	INT_NOT_WHOLE,
 	super::super::declared_values::LIST_CANNOT_HOLD,
-	super::super::uncertain::NEGATIVE_UNCERTAINTY,
-	super::super::uncertain::INTERVAL_AND_GAUSSIAN,
+	super::super::numbers::uncertain::NEGATIVE_UNCERTAINTY,
+	super::super::numbers::uncertain::INTERVAL_AND_GAUSSIAN,
 	NOT_A_MAP,
-	super::super::casts::INVALID_CODE_POINT,
+	super::super::numbers::casts::INVALID_CODE_POINT,
 ];
 
 impl WasmGcEmitter {
@@ -168,7 +168,7 @@ impl WasmGcEmitter {
 		if !self.int_runtime() {
 			return; // without the big-int runtime an Int is always a plain i64
 		}
-		let fixnum_offset = super::super::big_int::FIXNUM_OFFSET;
+		let fixnum_offset = super::super::numbers::big_int::FIXNUM_OFFSET;
 		Self::emit_list(
 			func,
 			&[

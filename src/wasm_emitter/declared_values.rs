@@ -188,7 +188,7 @@ impl WasmGcEmitter {
 		{
 			let value = value.serialize();
 			let message = format!("{value} is a float where an exact {} is expected: declare it `number` to keep the float, truncate with `as int`, {}",
-				declared.name(), super::casts::nearest_hint(&value));
+				declared.name(), super::numbers::casts::nearest_hint(&value));
 			return self.emit_type_error(func, message);
 		}
 		let check = declared

@@ -344,7 +344,7 @@ impl Exporter {
 		match node.drop_meta() {
 			Node::Number(Number::Int(n)) => Ok(format!(".int ({n})")),
 			Node::Number(Number::Float(x)) if Number::is_exact_decimal(*x) => {
-				let (numerator, denominator) = crate::wasm_emitter::exact::decimal_fraction(*x);
+				let (numerator, denominator) = crate::wasm_emitter::numbers::exact::decimal_fraction(*x);
 				Ok(exact_number(numerator, denominator))
 			}
 			Node::Number(Number::Float(x)) => Ok(format!(".flt (Float.toBits ({x:?} : Float))")),

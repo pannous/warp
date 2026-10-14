@@ -408,10 +408,10 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 				Node::True
 			}
 		}
-		tag if tag == Kind::Int as i64 && crate::wasm_emitter::radix::radix_of_info(info).is_some() => {
+		tag if tag == Kind::Int as i64 && crate::wasm_emitter::numbers::radix::radix_of_info(info).is_some() => {
 			match payload_number(data) {
 				Some(Number::Int(value)) => Node::Number(Number::Int(value)).with_source_literal(
-					&crate::wasm_emitter::radix::marked_literal(info, value).expect("a radix mark"),
+					&crate::wasm_emitter::numbers::radix::marked_literal(info, value).expect("a radix mark"),
 				),
 				number => number.map_or_else(|| crate::node::error("unreadable Int"), Node::Number),
 			}

@@ -366,7 +366,7 @@ impl WasmGcEmitter {
 				.filter_map(|(index, param)| Some((param.name.clone(), self.struct_parameter(name, index)?.clone()))),
 		);
 		self.typed_structs = typed_structs;
-		self.bounded_counters = super::big_int::bounded_counters(&user_fn.body);
+		self.bounded_counters = super::numbers::big_int::bounded_counters(&user_fn.body);
 
 		// Declare locals (parameters are already accounted for); temps follow the variables, as in main
 		let num_params = user_fn.params.len() as u32;
@@ -377,7 +377,7 @@ impl WasmGcEmitter {
 		if temp_locals > 0 {
 			locals.push((temp_locals, ValType::I64));
 		}
-		locals.push((big_int::INT_SCRATCH_LOCALS, ValType::I64));
+		locals.push((numbers::big_int::INT_SCRATCH_LOCALS, ValType::I64));
 		locals.push((NODE_SCRATCH_LOCALS, Ref(self.node_ref(true)))); // node_scratch, container_scratch
 		self.declare_loop_values(&mut locals, &user_fn.body);
 		let mut func = Function::new(locals);

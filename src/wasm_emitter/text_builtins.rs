@@ -20,10 +20,10 @@ pub const TEXT_OF: &str = "text_of";
 const TEXT_ARGUMENT: &str = "text_argument";
 /// float_text when the analyzer saw floats (makes_floats), and the run-time functions that make floats
 const FLOAT_MAKERS: [&str; 4] = [
-	super::float_text::FLOAT_TEXT,
+	super::numbers::float_text::FLOAT_TEXT,
 	super::list_ops::TEXT_AS_FLOAT,
-	super::casts::TEXT_AS_NUMBER,
-	super::uncertain::UNCERTAIN_NEW,
+	super::numbers::casts::TEXT_AS_NUMBER,
+	super::numbers::uncertain::UNCERTAIN_NEW,
 ];
 /// The builtins that read their text through text_argument
 const TEXT_ARGUMENT_USERS: [&str; 5] = [BYTE_AT, BYTE_SLICE, TEXT_TRIM, TEXT_STARTS_WITH, TEXT_ENDS_WITH];
@@ -208,7 +208,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		required.extend(["list_concat", TEXT_CONCAT, TEXT_OF, super::library_ops::LIST_JOIN]);
 		// two lists added are concatenated, two texts too, a text and a number joined
 	}
-	if required.contains(super::casts::TEXT_AS_NUMBER) {
+	if required.contains(super::numbers::casts::TEXT_AS_NUMBER) {
 		required.extend([
 			super::list_ops::TEXT_AS_FLOAT,
 			super::INT_RUNTIME,
@@ -285,20 +285,20 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		]); // a nested list joins as "[…]", a text quoted
 	  // a float joins as its text, made only by a program with floats (analyzer::makes_floats)
 		if FLOAT_MAKERS.iter().any(|name| required.contains(name)) {
-			required.insert(super::float_text::FLOAT_TEXT);
+			required.insert(super::numbers::float_text::FLOAT_TEXT);
 		}
-		if required.contains(super::uncertain::UNCERTAIN_NEW) {
-			required.insert(super::uncertain::UNCERTAIN_TEXT); // `7.0 ± 2.0`
+		if required.contains(super::numbers::uncertain::UNCERTAIN_NEW) {
+			required.insert(super::numbers::uncertain::UNCERTAIN_TEXT); // `7.0 ± 2.0`
 		}
 		if required.contains(super::times::TIME_FIELD) {
 			required.insert(super::times::TIME_TEXT); // `2026-10-10T14:43:33.682Z`
 		}
 	} else {
-		required.remove(super::float_text::FLOAT_TEXT); // no float is shown as text
+		required.remove(super::numbers::float_text::FLOAT_TEXT); // no float is shown as text
 	}
 	// numbers that are no fixnum (big integers, ratios) join as their exact text, built by text_concat
 	if required.contains("list_join") && required.contains(super::INT_RUNTIME) {
-		required.extend([super::exact::EXACT_TEXT, TEXT_CONCAT]);
+		required.extend([super::numbers::exact::EXACT_TEXT, TEXT_CONCAT]);
 	}
 	// codepoint_of reads a one-character text as its character
 	if required.contains(super::library_ops::CODEPOINT_OF) {

@@ -35,7 +35,7 @@ const SCRATCH_BYTES: i32 = 20;
 const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
 
 impl WasmGcEmitter {
-	pub(super) fn emit_float_text(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_float_text(&mut self) {
 		if !self.should_emit_function(FLOAT_TEXT) {
 			return;
 		}

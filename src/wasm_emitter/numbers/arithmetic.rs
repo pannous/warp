@@ -1,10 +1,10 @@
 //! Arithmetic: operators, assignments and compound assignments, int and float operations, logical operators
 
-use super::*;
+use super::super::*;
 
 impl WasmGcEmitter {
 	/// Emit arithmetic operation: evaluate operands and apply operator
-	pub(super) fn emit_arithmetic(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+	pub(in crate::wasm_emitter) fn emit_arithmetic(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
 		if let Some(assignment) = self.update_as_assignment(left, op, right) {
 			self.emit_node_instructions(func, &assignment);
 			return;
@@ -24,7 +24,7 @@ impl WasmGcEmitter {
 		}
 		let run_time_power = *op == Op::Pow && self.arithmetic_type(left, op, right) == Kind::Data;
 		if let Some(function) = crate::analyzer::node_arithmetic(self.get_type(left), op, self.get_type(right))
-			.or(run_time_power.then_some(super::list_ops::NODE_POW))
+			.or(run_time_power.then_some(super::super::list_ops::NODE_POW))
 		{
 			self.emit_node_instructions(func, left);
 			self.emit_node_instructions(func, right);
@@ -65,7 +65,7 @@ impl WasmGcEmitter {
 		self.wrap_arithmetic_result(func, wrap);
 	}
 
-	pub(super) fn should_use_float(&self, left: &Node, right: &Node, op: &Op) -> bool {
+	pub(in crate::wasm_emitter) fn should_use_float(&self, left: &Node, right: &Node, op: &Op) -> bool {
 		// an assignment stores in its variable's kind: an exact variable (`x: rational = √2`) refuses a float value
 		// the way an exact parameter does
 		let stored_kind = left
@@ -79,7 +79,7 @@ impl WasmGcEmitter {
 		}
 	}
 
-	pub(super) fn emit_assign_or_define(
+	pub(in crate::wasm_emitter) fn emit_assign_or_define(
 		&mut self,
 		func: &mut Function,
 		left: &Node,
@@ -129,7 +129,7 @@ impl WasmGcEmitter {
 		true
 	}
 
-	pub(super) fn emit_inc_dec(&mut self, func: &mut Function, left: &Node, op: &Op) -> bool {
+	pub(in crate::wasm_emitter) fn emit_inc_dec(&mut self, func: &mut Function, left: &Node, op: &Op) -> bool {
 		if *op != Op::Inc && *op != Op::Dec {
 			return false;
 		}
@@ -158,7 +158,7 @@ impl WasmGcEmitter {
 	}
 
 	/// A local holding a float, or a global (`global b` in a function) that no local of the same name shadows
-	pub(super) fn is_float_variable(&self, node: &Node) -> bool {
+	pub(in crate::wasm_emitter) fn is_float_variable(&self, node: &Node) -> bool {
 		let Node::Symbol(name) = node.drop_meta() else {
 			return false;
 		};
@@ -168,7 +168,7 @@ impl WasmGcEmitter {
 		}
 	}
 
-	pub(super) fn emit_compound_assign(
+	pub(in crate::wasm_emitter) fn emit_compound_assign(
 		&mut self,
 		func: &mut Function,
 		left: &Node,
@@ -227,7 +227,7 @@ impl WasmGcEmitter {
 	}
 
 	/// `√x`, `-x`, `!x`, `‖x‖` where an Int is wanted
-	pub(super) fn emit_numeric_prefix(&mut self, func: &mut Function, located: &Node, op: &Op, right: &Node) {
+	pub(in crate::wasm_emitter) fn emit_numeric_prefix(&mut self, func: &mut Function, located: &Node, op: &Op, right: &Node) {
 		match op {
 			Op::Sqrt if self.get_type(right) == Kind::Codepoint => {
 				self.emit_type_error(
@@ -260,7 +260,7 @@ impl WasmGcEmitter {
 	}
 
 	/// A variable where an Int is wanted: a local, a global or `$n` (the n-th parameter)
-	pub(super) fn emit_numeric_symbol(&mut self, func: &mut Function, name: &str) {
+	pub(in crate::wasm_emitter) fn emit_numeric_symbol(&mut self, func: &mut Function, name: &str) {
 		// Handle $n parameter reference (e.g., $0 = first param), unless a parameter is named so: Swift's closure
 		// `{ $0 + k }` is lifted to closure_lambda(k, $0)
 		if let Some(rest) = name.strip_prefix('$').filter(|_| self.scope.lookup(name).is_none()) {
@@ -293,7 +293,7 @@ impl WasmGcEmitter {
 	}
 
 	/// A list where an Int is wanted: a call (of a user, FFI or builtin function), `return v`, or statements
-	pub(super) fn emit_numeric_list(
+	pub(in crate::wasm_emitter) fn emit_numeric_list(
 		&mut self,
 		func: &mut Function,
 		node: &Node,
@@ -351,7 +351,7 @@ impl WasmGcEmitter {
 	}
 
 	/// A variable where an f64 is wanted: an Int converted
-	pub(super) fn emit_float_symbol(&mut self, func: &mut Function, name: &str) {
+	pub(in crate::wasm_emitter) fn emit_float_symbol(&mut self, func: &mut Function, name: &str) {
 		if self.emit_typed_list_as_node(func, name) {
 			self.emit_call(func, "get_int_value");
 			self.emit_int_to_f64(func, None);
@@ -368,7 +368,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The value on the stack, stored as `kind` (`storage_type`), as f64
-	pub(super) fn emit_stored_as_f64(&mut self, func: &mut Function, kind: Kind) {
+	pub(in crate::wasm_emitter) fn emit_stored_as_f64(&mut self, func: &mut Function, kind: Kind) {
 		if kind.is_ref() {
 			self.emit_held_node_as_f64(func); // a Node of run-time kind: a Float stays one
 		} else if !kind.is_float() {
@@ -378,7 +378,7 @@ impl WasmGcEmitter {
 
 	/// A list where an f64 is wanted: a call of an FFI or user function (`(f)` without arguments too), a builtin, or
 	/// statements whose last one gives the value
-	pub(super) fn emit_float_list(
+	pub(in crate::wasm_emitter) fn emit_float_list(
 		&mut self,
 		func: &mut Function,
 		items: &[Node],
@@ -397,7 +397,7 @@ impl WasmGcEmitter {
 				self.emit_user_function_call_float(func, fn_name, &items[1..]);
 				return;
 			}
-			if super::text_builtins::text_builtin_kind(fn_name, items.len() - 1) == Some(Kind::Float) {
+			if super::super::text_builtins::text_builtin_kind(fn_name, items.len() - 1) == Some(Kind::Float) {
 				return self.emit_float_builtin(func, fn_name, &items[1..]);
 			}
 			// `float(x)` is `x as float` (a text parses its digits), `int(x)` is `x as int` (an int path of a float function)
@@ -436,7 +436,7 @@ impl WasmGcEmitter {
 	}
 
 	/// `x = v` where an Int is wanted: the value stored and left on the stack (0 for a Node variable holding a non-number)
-	pub(super) fn emit_numeric_assignment(&mut self, func: &mut Function, located: &Node, left: &Node, right: &Node) {
+	pub(in crate::wasm_emitter) fn emit_numeric_assignment(&mut self, func: &mut Function, located: &Node, left: &Node, right: &Node) {
 		if let Node::Key(node_expr, Op::Hash, index_expr) = left.drop_meta() {
 			self.emit_index_assignment(func, node_expr, index_expr, right);
 			return;
@@ -478,7 +478,7 @@ impl WasmGcEmitter {
 	}
 
 	/// `i++`, `i--` where an Int is wanted: the new value
-	pub(super) fn emit_numeric_step(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+	pub(in crate::wasm_emitter) fn emit_numeric_step(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
 		if let Some(assignment) = self.global_update_as_assignment(left, op, right) {
 			self.emit_numeric_value(func, &assignment);
 			return;
@@ -508,7 +508,7 @@ impl WasmGcEmitter {
 
 	/// `s += x` of a number s and a text x, or `s -= 1` of a text s (card text-crashes): the type error `s = s op x`
 	/// is, never the text's code points added
-	pub(super) fn emit_compound_type_error(
+	pub(in crate::wasm_emitter) fn emit_compound_type_error(
 		&mut self,
 		func: &mut Function,
 		left: &Node,
@@ -522,7 +522,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Stack [x, y] → [x op y] for `x op= y` on Ints; `/=` keeps an integer x an integer
-	pub(super) fn emit_int_compound_op(&mut self, func: &mut Function, op: &Op, right: &Node) {
+	pub(in crate::wasm_emitter) fn emit_int_compound_op(&mut self, func: &mut Function, op: &Op, right: &Node) {
 		match op {
 			Op::And => {
 				func.instruction(&I::I64And);
@@ -567,7 +567,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Push i32 1 when `left` is falsy (0 or 0.0), keeping its value in a scratch local (a float as its bits)
-	pub(super) fn emit_held_left_is_falsy(&mut self, func: &mut Function, left: &Node, is_float: bool) {
+	pub(in crate::wasm_emitter) fn emit_held_left_is_falsy(&mut self, func: &mut Function, left: &Node, is_float: bool) {
 		let held = self.scratch(LOGICAL_SCRATCH);
 		if is_float {
 			self.emit_float_value(func, left);
@@ -588,7 +588,7 @@ impl WasmGcEmitter {
 	}
 
 	/// The held left value, raw
-	pub(super) fn emit_held_left(&self, func: &mut Function, is_float: bool) {
+	pub(in crate::wasm_emitter) fn emit_held_left(&self, func: &mut Function, is_float: bool) {
 		func.instruction(&I::LocalGet(self.scratch(LOGICAL_SCRATCH)));
 		if is_float {
 			func.instruction(&I::F64ReinterpretI64);
@@ -596,7 +596,7 @@ impl WasmGcEmitter {
 	}
 
 	/// One branch of a numeric and/or: the held left value or right, raw
-	pub(super) fn emit_logical_branch(&mut self, func: &mut Function, is_left: bool, right: &Node, is_float: bool) {
+	pub(in crate::wasm_emitter) fn emit_logical_branch(&mut self, func: &mut Function, is_left: bool, right: &Node, is_float: bool) {
 		match (is_left, is_float) {
 			(true, _) => self.emit_held_left(func, is_float),
 			(false, true) => self.emit_float_value(func, right),
@@ -605,7 +605,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Apply an arithmetic operator to the two f64 on the stack. Mod is euclidean like the exact Ints, Rem truncates.
-	pub(super) fn emit_float_arithmetic(&mut self, func: &mut Function, op: &Op) {
+	pub(in crate::wasm_emitter) fn emit_float_arithmetic(&mut self, func: &mut Function, op: &Op) {
 		match op {
 			Op::Add => {
 				func.instruction(&I::F64Add);
@@ -625,16 +625,16 @@ impl WasmGcEmitter {
 		}
 	}
 
-	pub(super) fn push_float_scratch(&self, func: &mut Function, index: u32) {
+	pub(in crate::wasm_emitter) fn push_float_scratch(&self, func: &mut Function, index: u32) {
 		Self::emit_list(func, &[I::LocalGet(self.scratch(index)), I::F64ReinterpretI64]);
 	}
 
-	pub(super) fn pop_float_scratch(&self, func: &mut Function, index: u32) {
+	pub(in crate::wasm_emitter) fn pop_float_scratch(&self, func: &mut Function, index: u32) {
 		Self::emit_list(func, &[I::I64ReinterpretF64, I::LocalSet(self.scratch(index))]);
 	}
 
 	/// `a - |b| * floor(a / |b|)` (euclidean) or `a - b * trunc(a / b)`; the f64 operands live in the i64 scratch locals as bits
-	pub(super) fn emit_float_remainder(&mut self, func: &mut Function, euclidean: bool) {
+	pub(in crate::wasm_emitter) fn emit_float_remainder(&mut self, func: &mut Function, euclidean: bool) {
 		let (dividend, divisor) = (0, 1);
 		self.pop_float_scratch(func, divisor);
 		self.pop_float_scratch(func, dividend);
@@ -655,7 +655,7 @@ impl WasmGcEmitter {
 
 	/// base ^ exponent through libm's pow; a NaN (negative base with a fractional exponent) traps as invalid_number
 	/// Call a libm function (`m.pow`), imported once the emitter has found it is needed: false while it is not yet
-	pub(super) fn emit_libm_call(&mut self, func: &mut Function, key: &'static str) -> bool {
+	pub(in crate::wasm_emitter) fn emit_libm_call(&mut self, func: &mut Function, key: &'static str) -> bool {
 		let Some(index) = self.ffi_func_index(key) else {
 			self.discovered_needs.insert(Need::MathImport(key));
 			func.instruction(&I::Unreachable);
@@ -666,7 +666,7 @@ impl WasmGcEmitter {
 	}
 
 	/// f64 → its √ (a wasm instruction) or ∛ (libm's cbrt)
-	pub(super) fn emit_float_root(&mut self, func: &mut Function, root: &Op) {
+	pub(in crate::wasm_emitter) fn emit_float_root(&mut self, func: &mut Function, root: &Op) {
 		match root {
 			Op::Cbrt => {
 				// libm's cbrt may miss a perfect cube by an ulp (glibc: ∛27 = 3.0000000000000004): its nearest whole
@@ -697,7 +697,7 @@ impl WasmGcEmitter {
 		}
 	}
 
-	pub(super) fn emit_float_power(&mut self, func: &mut Function) {
+	pub(in crate::wasm_emitter) fn emit_float_power(&mut self, func: &mut Function) {
 		if !self.emit_libm_call(func, LIBM_POW) {
 			return;
 		}
@@ -709,7 +709,7 @@ impl WasmGcEmitter {
 		self.push_float_scratch(func, 0);
 	}
 
-	pub(super) fn emit_float_binary(
+	pub(in crate::wasm_emitter) fn emit_float_binary(
 		&mut self,
 		func: &mut Function,
 		left: &Node,
@@ -728,7 +728,7 @@ impl WasmGcEmitter {
 
 	/// `left op right` as an f64; `x ^ 2` is x * x: one rounding of the exact square, as pow gives it, without a libm
 	/// call per use
-	pub(super) fn emit_float_operation(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+	pub(in crate::wasm_emitter) fn emit_float_operation(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
 		self.emit_float_value(func, left);
 		if *op == Op::Pow && matches!(right.drop_meta(), Node::Number(Number::Int(2))) {
 			self.pop_float_scratch(func, 0);
@@ -741,7 +741,7 @@ impl WasmGcEmitter {
 		self.emit_float_arithmetic(func, op);
 	}
 
-	pub(super) fn emit_int_binary(
+	pub(in crate::wasm_emitter) fn emit_int_binary(
 		&mut self,
 		func: &mut Function,
 		left: &Node,
@@ -753,7 +753,7 @@ impl WasmGcEmitter {
 	}
 
 	/// Emit both operands as Ints and apply an arithmetic, xor or comparison operator
-	pub(super) fn emit_int_operands_op(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+	pub(in crate::wasm_emitter) fn emit_int_operands_op(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
 		// `s < "b"`, `c >= "0"` with a text: ordered by code points (node_order, as sort orders them); a value held as a
 		// Node (a cell's, another runtime's: `time.time() > 0`) by its value, an Int or a Float decided at run time
 		// (an element `xs#2` that is a character compares by its code point with a number, `x#2 > 50`)
@@ -822,11 +822,11 @@ impl WasmGcEmitter {
 	}
 
 	/// `local ± 1` for i++ / i--
-	pub(super) fn emit_int_step(
+	pub(in crate::wasm_emitter) fn emit_int_step(
 		&mut self,
 		func: &mut Function,
 		local_pos: u32,
-		range: super::big_int::IntRange,
+		range: super::super::numbers::big_int::IntRange,
 		op: &Op,
 	) {
 		Self::emit_list(func, &[I::LocalGet(local_pos), I::I64Const(1)]);
@@ -834,7 +834,7 @@ impl WasmGcEmitter {
 		self.emit_int_op(func, &step, range, Some((1, 1)));
 	}
 
-	pub(super) fn wrap_arithmetic_result(&mut self, func: &mut Function, wrap: ArithmeticWrap) {
+	pub(in crate::wasm_emitter) fn wrap_arithmetic_result(&mut self, func: &mut Function, wrap: ArithmeticWrap) {
 		match wrap {
 			ArithmeticWrap::Int => self.emit_call(func, "new_int"),
 			ArithmeticWrap::Float => self.emit_call(func, "new_float"),
@@ -843,7 +843,7 @@ impl WasmGcEmitter {
 
 	/// Emit truthy logical operations (and/or) when operands may be non-numeric
 	/// Returns a Node reference based on short-circuit evaluation
-	pub(super) fn emit_truthy_logical(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
+	pub(in crate::wasm_emitter) fn emit_truthy_logical(&mut self, func: &mut Function, left: &Node, op: &Op, right: &Node) {
 		let node_ref = RefType {
 			nullable: false,
 			heap_type: HeapType::Concrete(self.type_manager.node_type),
@@ -907,13 +907,13 @@ impl WasmGcEmitter {
 	}
 
 	/// The f64 of a number Node computed at run time: a Float's value, an Int converted
-	pub(super) fn emit_node_as_f64(&mut self, func: &mut Function, node: &Node) {
+	pub(in crate::wasm_emitter) fn emit_node_as_f64(&mut self, func: &mut Function, node: &Node) {
 		self.emit_node_instructions(func, node);
 		self.emit_held_node_as_f64(func);
 	}
 
 	/// The Node on the stack as f64: a Float's value, an Int's converted
-	pub(super) fn emit_held_node_as_f64(&mut self, func: &mut Function) {
+	pub(in crate::wasm_emitter) fn emit_held_node_as_f64(&mut self, func: &mut Function) {
 		let (node_type, float_box) = (self.type_manager.node_type, self.type_manager.f64_box_type);
 		let held = self.emit_held_node_is_float(func);
 		Self::emit_list(
@@ -959,7 +959,7 @@ impl WasmGcEmitter {
 	}
 
 	/// ‖x‖ of a number Node computed at run time: a Float's is a Float, an Int's stays exact
-	pub(super) fn emit_node_abs(&mut self, func: &mut Function, node: &Node) {
+	pub(in crate::wasm_emitter) fn emit_node_abs(&mut self, func: &mut Function, node: &Node) {
 		let node_ref = RefType {
 			nullable: false,
 			heap_type: HeapType::Concrete(self.type_manager.node_type),
