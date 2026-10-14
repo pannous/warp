@@ -16,7 +16,7 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		"net" => net(member, &arguments),
 		"os" => os(member, &arguments),
 		"store" => store(member, &arguments),
-		// `clipboard.write(text)` (lowering/system_values.rs)
+		// `clipboard.write(text)` (lowering/signals/system_values.rs)
 		#[cfg(feature = "native")]
 		"clipboard" => match (member, arguments.as_slice()) {
 			("write", [text]) => warp_runtime::system_values::write_clipboard(&text_of(text)?).map(|_| Node::Empty),

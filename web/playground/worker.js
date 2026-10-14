@@ -211,7 +211,7 @@ function handleEvent({ event, detail }) {
 	if (live) showHandled(live, runPageEvent(live, hooks, event, detail));
 }
 
-// what a handler gave, shown as the compiler shows a program's value: the output binding (src/lowering/event_signals.rs
+// what a handler gave, shown as the compiler shows a program's value: the output binding (src/lowering/signals/event_signals.rs
 // PAGE_VALUE), the program's last name read anew, else the handler's own value (a timer's only when it failed)
 function showHandled(holder, handled, timer = false) {
 	const binding = holder.exports[PAGE_VALUE] ?? holder.exports[PAGE_ROUTED_EXPORT];
@@ -234,7 +234,7 @@ function shownOf(outcome) {
 	return shown;
 }
 
-// markup with holes (PAGE_HOLE·<path>, src/lowering/event_signals.rs, card web-fine-holes): only the elements holding
+// markup with holes (PAGE_HOLE·<path>, src/lowering/signals/event_signals.rs, card web-fine-holes): only the elements holding
 // computed parts, or their computed texts alone between children (TEXT_HOLE), are read, the page gets those whose HTML changed; the whole value follows once the events pause.
 // False when there are none, or one fails (the whole value then shows the error)
 function showHoles(holder) {

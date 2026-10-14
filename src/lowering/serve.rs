@@ -786,7 +786,7 @@ fn without_serving(program: Node) -> Node {
 
 /// Each call of a server function in the page read from a main-level variable of its own, `f·rpc·0`. The shipped page
 /// leaves the server functions out and fetches it, `f·rpc·0 := fetch ["/rpc/f", [args]] ?? first value`, anew when an
-/// argument changes (lowering/fetch_signals.rs); its first value is what the call gave the prerender
+/// argument changes (lowering/signals/fetch_signals.rs); its first value is what the call gave the prerender
 /// (pipeline::prerendering), which keeps the functions and calls them, and exports the values as rpc·values (site.rs)
 fn asking_the_server(statements: Vec<Node>, servers: &[String]) -> Result<Vec<Node>, Node> {
 	let page_code: Vec<Node> = statements

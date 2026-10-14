@@ -137,7 +137,7 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   main polls at its start (which installs the handler) and before it returns; a ctrl-c also ends a `sleep` early
   (it sleeps in 10 ms slices once watching) and runs the handler. Test: tests/control/test_system_signals.rs
   (a real `warp run` gets a real SIGINT). The playground's host.js has `signal_poll` as a no-op.
-- Timers (P120, 2026-10-06): `on every 50 ms {…}` (src/lowering/system_signals.rs) is the handler `on·every·N()` and
+- Timers (P120, 2026-10-06): `on every 50 ms {…}` (src/lowering/signals/system_signals.rs) is the handler `on·every·N()` and
   `signal_listen(0, N, ms)` (one host word starts every timer, kind 0 every / 1 frame / 2 clock) where it is written; the runtime (crates/warp-runtime/src/system_signals.rs) runs due handlers
   at every check point (loop starts, sleeps, which wake for them, main's start and end). `warp run`, `warp <file>` and
   executables stay after main while a timer lives and say so once on stderr ("listening: every 5 seconds (ctrl-c to
@@ -175,7 +175,7 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   the next run: its canvas always shows. Replaces `while window_open { …; sleep 16ms }`.
 - Native keys (card native-keys, user: "on key must listen to native signals"): natively `on key {…}` gets the keys
   pressed over the paint window. system_values.rs queues each press (a key held that was not held before, from the
-  viewer's `input x y down key` lines) and `system_value("key_pressed")` pops one (0: none); lowering/system_signals.rs
+  viewer's `input x y down key` lines) and `system_value("key_pressed")` pops one (0: none); lowering/signals/system_signals.rs
   adds a frame handler after the first `on key` that emits `key{key: …}` per press, named as the page's
   KeyboardEvent.key: the character, ArrowUp/Down/Left/Right, Enter, Escape, Backspace, Tab (KEY_NAMES). Not for a page
   or a program serving its page (the page raises key itself). Not yet: keys in a terminal, the `warp app` web view.
@@ -205,7 +205,7 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   macOS `pmset -g batt` and `defaults read -g AppleInterfaceStyle`, Linux /sys/class/power_supply and `gsettings`;
   `online` is whether a UDP socket can connect to 1.1.1.1 (only the routing table is asked, nothing is sent). A
   reading is kept for a second, so polling costs at most one subprocess per value per second. A value the machine
-  cannot give is a loud run-time error ("battery: this Mac has no battery"). Listening: lowering/system_values.rs
+  cannot give is a loud run-time error ("battery: this Mac has no battery"). Listening: lowering/signals/system_values.rs
   marks the reads (`system·battery`) before signal_values::poll_shared, which treats them like shared values (a check
   in `on·shared` comparing with the last reading), adds the timer `on every 1000 ms` right after the first listener
   (so `warp run` stays and wakes once a second; it says "listening: every 1 second"), then makes the marks host calls.
@@ -232,7 +232,7 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   machine listening with `on message from "chat" {…}`, where `event` is the value; without a name both use the channel
   "warp". Natively (unix, src/channels.rs) a channel is the directory `<temp>/warp-channels/<channel>` of Unix datagram
   sockets, one per listener, removed when its run ends; a broadcast sends to each and drops dead ones. A listener is
-  a timer handler (`on·every·N`, every 20 ms, lowering/system_signals.rs) pulling `channel_pending` / `channel_next`,
+  a timer handler (`on·every·N`, every 20 ms, lowering/signals/system_signals.rs) pulling `channel_pending` / `channel_next`,
   so a listening program stays after main in `warp run` like one with a timer. The playground sends on a
   `BroadcastChannel` and receives on one (a queue the listener's timer empties), so programs in two tabs talk; Windows has no channels yet (named pipes).
 - `send` and named events across programs (P129, P129b, card signals-send; tests/control/test_named_broadcast.rs):

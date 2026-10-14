@@ -2,7 +2,7 @@
 // channels inside a run and between programs (BroadcastChannel, WebSocket), shared arrays and their listeners, and the
 // fetches that run without waiting (fetch_start)
 
-// the checks of the listeners on shared values (src/lowering/signal_values.rs), run at every check point
+// the checks of the listeners on shared values (src/lowering/signals/signal_values.rs), run at every check point
 const SHARED_HANDLER = "on·shared";
 const SOCKET_ADDRESS = /^wss?:\/\//; // src/web/web_sockets.rs SOCKET_SCHEMES
 const TEXT_REPLY_TYPE = "text/plain"; // src/web/web_server.rs TEXT_REPLY_TYPE: a text reply of a server function
@@ -612,7 +612,7 @@ function taskTree(value) {
 	return value ?? { kind: "0", data: null, chain: [] };
 }
 
-// `users := fetch url` (src/web/fetches.rs, src/lowering/fetch_signals.rs): fetch_start fetches without waiting. A Worker
+// `users := fetch url` (src/web/fetches.rs, src/lowering/signals/fetch_signals.rs): fetch_start fetches without waiting. A Worker
 // of the task pool fetches into shared memory, so a running main sees the reply at its check points (sleep, loop
 // starts: deliverFetches runs on·fetch·<id> there, as natively); else, and for a reply that comes after main returned,
 // the page runs the handler (worker.js hooks.arrived). A fetch started anew drops the reply of the one before, going
@@ -811,7 +811,7 @@ addHostPart({
 		// host_parts.rs, so a page that reads no clipboard carries none of it)
 		clipboard_text: () => buildValue(program(), treeOfPlain(self.askPage("clipboard", self.askPageClipboard).text)),
 		// channels between programs (src/channels.rs): a BroadcastChannel of the name, which reaches the other tabs and
-		// workers of this page's origin; the listener's timer (lowering/system_signals.rs) takes what arrived
+		// workers of this page's origin; the listener's timer (lowering/signals/system_signals.rs) takes what arrived
 		channel_listen: (id, channel) => listenOnChannel(holder, hooks, Number(id), plainOfTree(readNode(program(), channel))),
 		channel_pending: id => BigInt(holder.channels?.get(Number(id))?.messages.length ?? 0),
 		channel_next: id => buildValue(program(), treeOfPlain(holder.channels?.get(Number(id))?.messages.shift() ?? null)),
