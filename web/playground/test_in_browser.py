@@ -150,6 +150,8 @@ FRAME_SHADERS = "(the on frame shader samples keep painting)"
 FRAME_SHADER_SAMPLES = ["shader_brush", "shader_trails"]
 FRAME_SHADER_FIRST_MS = 15000  # the first frame's canvas: a software GPU takes long for a 1280×800 frame
 FRAME_SHADER_LOOK_AGAIN_MS = 3000
+# Chrome's SwiftShader drops the page canvas, so its 1280×800 frames come as pixels, which keep the page too busy to answer
+THROUGH_PIXELS = "through pixels, not in the page's canvas"
 # card shader-read: $previous(at) reads the frame the shader left before, as natively (tests/programs/
 # test_shader_builtins.rs a_shader_reads_its_previous_frame): three renders of a quarter red more give 192 red
 PREVIOUS_FRAME = "(a shader reads its previous frame)"
@@ -611,7 +613,7 @@ def brush_wrong():
 
 def frame_shaders_wrong():
 	"""each `on frame` shader sample still paints a few seconds in: its canvas changes between two looks"""
-	wrong = []
+	wrong, painted_through_pixels = [], False
 	for sample in FRAME_SHADER_SAMPLES:
 		browser("eval", f"void playground.chooseExample({json.dumps(sample)})")
 		shown = browser("eval", f"""(async () => {{
@@ -634,12 +636,16 @@ def frame_shaders_wrong():
 				for (let at = 0; at < data.length; at += 4093) sum = (sum * 31 + data[at]) >>> 0;
 				looks.push(`${{now.width}}×${{now.height}} #${{sum}}`);
 			}}
-			return looks[0] !== looks[1] && !looks.includes("no canvas") ? "painting" : `looks ${{looks.join(" then ")}}; ${{page()}}`;
+			const how = shown()?.gpu ? "" : " {THROUGH_PIXELS}";
+			return looks[0] !== looks[1] && !looks.includes("no canvas") ? `painting${{how}}` : `looks ${{looks.join(" then ")}}${{how}}; ${{page()}}`;
 		}})()""")
 		if NO_GPU in shown:
 			print(f"skip {FRAME_SHADERS} {sample}: this browser {NO_GPU}")
-		elif "painting" not in shown:
+		elif not shown and painted_through_pixels:
+			print(f"skip {FRAME_SHADERS} {sample}: no answer, the page busy painting {THROUGH_PIXELS}")
+		elif not shown.startswith('"painting'):
 			wrong.append(f"samples/{sample} stopped painting: {shown or 'the check gave no answer'}")
+		painted_through_pixels |= THROUGH_PIXELS in shown
 	return wrong
 
 

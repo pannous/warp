@@ -34,6 +34,13 @@ jobs:
     - name: Install agent-browser (headless Chrome)
       if: matrix.browser == '--chrome'
       run: npm install -g agent-browser && agent-browser install --with-deps
+    - name: Which program logs the uncaught exception
+      if: matrix.browser == '--firefox'
+      timeout-minutes: 5
+      run: |
+        (cd _site && python3 -m http.server 8000 >/dev/null 2>&1 &)
+        sleep 2
+        probes/firefox_webgpu/variants.sh http://127.0.0.1:8000/ || true
     - name: The GPU examples
       timeout-minutes: 10
       run: python3 web/playground/test_in_browser.py --examples $([ "${{ matrix.browser }}" = --firefox ] && echo --firefox) --site _site shader "(many GPU jobs in one run)" "(the on frame shader samples keep painting)" || true
