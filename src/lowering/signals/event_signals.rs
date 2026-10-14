@@ -101,7 +101,7 @@ pub fn lower(program: Node) -> Node {
 	let shows_page = statements.iter().any(crate::web::markup::is_markup);
 	let (raised, flagged) = raised_and_flagged(&statements, &program, &verbs, &variables);
 	let statements = subscribed_in_blocks(statements, &raised);
-	let raises = emitted_names(&program, &crate::pipeline::RAISE_WORDS.map(String::from));
+	let raises = emitted_names(&program, &crate::errors::run_time::RAISE_WORDS.map(String::from));
 	let statements = match without_unraised(&statements, &raised, &variables, &raises) {
 		Ok(kept) => kept,
 		Err(error) => return error,
