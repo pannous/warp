@@ -295,8 +295,8 @@ pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> 
 	linker.func_wrap(HOST_LIBRARY, GPU_RENDER, gpu_render)?;
 	linker.func_wrap(HOST_LIBRARY, TEXT_COVERAGE, text_coverage)?;
 	linker.func_wrap(HOST_LIBRARY, GPU_COMPUTE_LINEAR, gpu_compute_linear)?;
-	linker.func_wrap(HOST_LIBRARY, GPU_MAP_LINEAR, gpu_map_linear)?;
-	linker.func_wrap(HOST_LIBRARY, GPU_REDUCE_LINEAR, gpu_reduce_linear)?;
+	linker.func_wrap(HOST_LIBRARY, GPU_MAP_LINEAR, gpu_kernel_linear::<false>)?;
+	linker.func_wrap(HOST_LIBRARY, GPU_REDUCE_LINEAR, gpu_kernel_linear::<true>)?;
 	linker.func_wrap(HOST_LIBRARY, CHANNEL_SEND, channel_send)?;
 	linker.func_wrap(HOST_LIBRARY, DISPATCH_EVENT, dispatch_event)?;
 	linker.func_wrap(HOST_LIBRARY, PAINT, paint)?;

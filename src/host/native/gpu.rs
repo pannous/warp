@@ -136,66 +136,20 @@ pub(super) fn gpu_compute_linear(
 /// values of the program's numbers it reads, written into the block `target` of the same count; 1, or 0 without an
 /// adapter (a warning, once), when the program maps on the CPU. `keeping` (gpu_maps.rs KEEP_RESULT, SOURCE_KEPT): the
 /// result's buffer stays on the GPU for a later map of it, the source's items come from such a buffer
-pub(super) fn gpu_map_linear(
-	caller: Caller<'_, HostState>,
-	shader: HostNode,
-	source: i64,
-	values: HostNode,
-	target: i64,
-	workgroups: i64,
-	keeping: i64,
-) -> wasmtime::Result<i64> {
-	gpu_kernel_linear(
-		caller,
-		GPU_MAP_LINEAR,
-		shader,
-		source,
-		values,
-		target,
-		workgroups,
-		keeping,
-		false,
-	)
-}
-
-/// `s = sum(xs.map(x => …) @gpu)`, min, max: as gpu_map_linear, but each workgroup leaves its partial result in a cell
+///
+/// REDUCES, `s = sum(xs.map(x => …) @gpu)`, min, max: as a map, but each workgroup leaves its partial result in a cell
 /// after the values, and those, the only ones read back, go into the block `target` of `workgroups` cells
-pub(super) fn gpu_reduce_linear(
-	caller: Caller<'_, HostState>,
-	shader: HostNode,
-	source: i64,
-	values: HostNode,
-	target: i64,
-	workgroups: i64,
-	keeping: i64,
-) -> wasmtime::Result<i64> {
-	gpu_kernel_linear(
-		caller,
-		GPU_REDUCE_LINEAR,
-		shader,
-		source,
-		values,
-		target,
-		workgroups,
-		keeping,
-		true,
-	)
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(super) fn gpu_kernel_linear(
+pub(super) fn gpu_kernel_linear<const REDUCES: bool>(
 	mut caller: Caller<'_, HostState>,
-	word: &'static str,
 	shader: HostNode,
 	source: i64,
 	values: HostNode,
 	target: i64,
 	workgroups: i64,
 	keeping: i64,
-	reduces: bool,
 ) -> wasmtime::Result<i64> {
 	pub(super) static WARNED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-	let failure = gpu_failure(word);
+	let failure = gpu_failure(if REDUCES { GPU_REDUCE_LINEAR } else { GPU_MAP_LINEAR });
 	let automatic = keeping & crate::gpu_maps::AUTOMATIC != 0;
 	if let Err(problem) = crate::graphics::gpu::available() {
 		// a map the compiler switched says nothing: the program did not ask for the GPU
@@ -222,7 +176,7 @@ pub(super) fn gpu_kernel_linear(
 	}
 	let partials = kept.unwrap_or(0) + floats.len();
 	let workgroups = u32::try_from(workgroups).map_err(|_| failure(format!("{workgroups} workgroups")))?;
-	if reduces {
+	if REDUCES {
 		floats.resize(floats.len() + workgroups as usize, 0.0);
 	}
 	let keeping = crate::graphics::gpu::Keeping {
@@ -233,7 +187,7 @@ pub(super) fn gpu_kernel_linear(
 		&shader,
 		&floats,
 		workgroups,
-		if reduces { partials } else { 0 },
+		if REDUCES { partials } else { 0 },
 		keeping,
 	)
 	.map_err(&failure)?;
@@ -241,7 +195,7 @@ pub(super) fn gpu_kernel_linear(
 	if automatic {
 		crate::errors::diagnostic::report_runtime_warning_once(
 			crate::gpu_maps::AUTOMATIC_NOTICE,
-			&format!("{} of {items} items", if reduces { "a reduction" } else { "a map" }),
+			&format!("{} of {items} items", if REDUCES { "a reduction" } else { "a map" }),
 		);
 	}
 	Ok(1)
