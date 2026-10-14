@@ -277,10 +277,13 @@ Finder: `probes/duplicate_constants.py` (constants holding the same text or word
 - Distinct despite equal text, kept with their names: a word's role differs from the spelling (`VALUE_FIELD` vs.
   `VALUE_WORD`, `·` as UNIT_PRODUCT vs. NAME_SEPARATOR, `"wasm"` as runtime vs. extension, `MODULE_EXTENSIONS` of
   modules.rs (warp, wasp) vs. wasm_modules.rs (wasm, wat)); `EXTREMA` of min_max.rs pairs words with operators.
-- Waiting for open branches (their files move or change there; data/split-emitter/groups.txt, `*` lines): copies in
-  library_words, gpu_maps, class_methods, warp_parser/mod.rs, welcome_forms, signals/, database_tables, serve,
-  late_binding, effects, stored_values; and after layout-root/diagnostics-paths the non-word duplicates, each into one
-  home with `--home`: UNION_JOINER (law/type_model + declared_types), MODULE_FILE ×3 (web/route_split, deploy, site),
-  JSON_TYPE/TEXT_TYPE (web_server + dev_server), STACK_EXHAUSTED (law + host), MISSING_TARGET_SIGN (package_tools +
-  cargo_crates), WARP_CALL, FIRED_PREFIX ("once_fired_" ×2; signal_values' "signal·fired·" differs), STYLE ×6, the
-  same word lists EXTREMA/EXTREMUM_WORDS, run/file_type EXTENSIONS = modules MODULE_EXTENSIONS, CHANGE_WORDS ×2.
+- Second round (data/split-emitter/merges2.txt, after errors-paths): ADD DELETE EACH ERROR FLOAT FOR IN IS IS_ERROR LET
+  LIST MAP OF PRINT RETURN SELF (RECEIVER, RECEIVER_WORD) COUNT STR GLOBAL, and new homes DO ORD SPLIT LOG COPY.
+- Distinct, kept: Swift's closure `in` (SWIFT_IN), KERNEL_COUNT (gpu_maps), AWAIT_ALL_WORD, MINIMUM_KEYWORD (`from`
+  of versions), STATE_KEYWORD (`global` in effects), LET_TOPIC, the field and parameter names that spell a word
+  (NUMBER_FIELD, ERROR_FIELD, LIST_PARAMETER, MAP_PARAMETER, LIST_ANSWER, TEXT_HOLE, ANY_STEP), page_tests' TEXT_WORD.
+- Left: the non-word duplicates, each into one home with `--home`: UNION_JOINER (law/type_model + declared_types),
+  MODULE_FILE ×3 (web/route_split, deploy, site), JSON_TYPE/TEXT_TYPE (web_server + dev_server), STACK_EXHAUSTED
+  (law + host), MISSING_TARGET_SIGN (package_tools + cargo_crates), WARP_CALL, FIRED_PREFIX ("once_fired_" ×2;
+  signal_values' "signal·fired·" differs), STYLE ×6, the same word lists EXTREMA/EXTREMUM_WORDS, run/file_type
+  EXTENSIONS = modules MODULE_EXTENSIONS, CHANGE_WORDS ×2.
