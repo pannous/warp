@@ -834,9 +834,6 @@ PASSED:
   ✓ control::test_window_opens::reading_window_open_opens_the_window_once
   ✓ control::test_word_statements::a_glued_go_block_is_a_task
   ✓ control::test_word_statements::a_word_statement_in_a_block_is_no_call_of_the_next_lines
-  ✓ diagnostics::normalize::tests::test_hint_mode
-  ✓ diagnostics::normalize::tests::test_hint_position
-  ✓ diagnostics::normalize::tests::test_style_swap
   ✓ extensions::strings::tests::test_char_str_eq
   ✓ extensions::strings::tests::test_str_plus
   ✓ ffi::header::tests::test_extract_function_signature_multi_param
@@ -2301,6 +2298,9 @@ PASSED:
   ✓ node::test_serialized_text_escapes::a_quote_or_backslash_in_a_serialized_text_is_escaped
   ✓ node::test_text_operand_quotes::a_text_operand_keeps_its_quotes
   ✓ node::test_trailing_comment::comment_ending_a_line_belongs_to_its_item
+  ✓ normalize::tests::test_hint_mode
+  ✓ normalize::tests::test_hint_position
+  ✓ normalize::tests::test_style_swap
   ✓ numbers::test_angle::test_call
   ✓ numbers::test_angle::test_function_params
   ✓ numbers::test_angle::test_if
@@ -2417,7 +2417,6 @@ PASSED:
   ✓ numbers::test_hyperreals::test_epsilon_times_omega_is_one
   ✓ numbers::test_hyperreals::test_no_silent_approximation_of_hyperreals
   ✓ numbers::test_hyperreals::test_powers_expand_exactly
-  ✓ numbers::test_hyperreals::test_standard_part
   ✓ numbers::test_implicit_libm::test_libm_in_a_function_without_import
   ✓ numbers::test_implicit_libm::test_libm_on_a_runtime_value_without_import
   ✓ numbers::test_implicit_libm::test_user_function_named_like_libm_wins
@@ -5267,4 +5266,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5262 passed, 0 failed, 5262 total tested
+13 ignored, 5261 passed, 0 failed, 5261 total tested
