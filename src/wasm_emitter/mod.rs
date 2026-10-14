@@ -190,6 +190,8 @@ pub struct WasmGcEmitter {
 	written_operator_bound: i64,
 	/// The program quotes a tag (`data point{x:1}`), which list_text writes as an instance: only then does it check for one
 	writes_tags: bool,
+	/// The program parses code at run time (`parse(t)`): only then does a structure joining a text become its literal
+	parses_code: bool,
 	type_errors: Vec<String>,
 	/// The std modules the program calls through std_pure / std_io (STD_MODULES_SECTION), ANY_STD_MODULE for a module
 	/// named at run time
@@ -277,6 +279,7 @@ impl WasmGcEmitter {
 			inherited_needs: Default::default(),
 			written_operator_bound: crate::operators::op_to_code(&crate::operators::Op::Colon),
 			writes_tags: false,
+			parses_code: false,
 			type_errors: Vec::new(),
 			std_modules: Default::default(),
 			source_position: None,
@@ -577,6 +580,12 @@ impl WasmGcEmitter {
 		// (cards data-meta, parse-word)
 		if node.mentions_any(&lists::list_emitter::QUOTE_WORDS) || node.mentions_any(&[crate::host::PARSE_CODE]) {
 			self.ctx.required_functions.insert(reflection::node_api::NODE_AT);
+		}
+		// code parsed at run time holds any operator and joins a text as its literal (card print-parse)
+		if node.mentions_any(&[crate::host::PARSE_CODE]) {
+			self.ctx.required_functions.insert(reflection::library_ops::LIST_TEXT);
+			self.parses_code = true;
+			self.written_operator_bound = (crate::operators::OP_CODES.len() - 1) as i64;
 		}
 		if crate::analyzer::makes_floats(&self.ctx, node) {
 			self.ctx.required_functions.insert(numbers::float_text::FLOAT_TEXT);
