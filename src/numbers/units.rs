@@ -640,7 +640,9 @@ fn fold_comparisons(node: Node, constants: &Constants, clock: bool) -> Node {
 		return node.map_children(|child| fold_comparisons(child, constants, clock));
 	}
 	let is_clock = |side: &Node| clock && matches!(side.drop_meta(), Node::Symbol(name) if name == TIME_WORD);
-	if is_clock(left) || is_clock(right) {
+	// `x is time` tests the type (card anchor-time); `x == time` compares with the clock (the parser marks its operand)
+	let type_test = *op == Op::Eq && !crate::type_tests::is_equality_operand(right);
+	if is_clock(left) || (is_clock(right) && !type_test) {
 		let (duration, clock_left) = if is_clock(left) { (right, true) } else { (left, false) };
 		return match clock_milliseconds(&with_constants(duration, constants)) {
 			Ok(Some(amount)) => {

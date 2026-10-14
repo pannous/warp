@@ -47,6 +47,8 @@ pub const TIME_FORMS: [TimeForm; 5] =
 	[TimeForm::Instant, TimeForm::Date, TimeForm::Local, TimeForm::Duration, TimeForm::Zoned];
 /// The info bits of the form
 pub const TIME_FORM_MASK: i64 = 7;
+/// The type of every time, covering the type of each form (card anchor-time): `now is time`, `now is instant`
+pub const TIME_WORD: &str = "time";
 pub const TIME_FORM_BITS: i64 = 3;
 /// A duration's months above its days, which take 32 bits
 pub const MONTHS_SHIFT: i64 = TIME_FORM_BITS + 32;
@@ -55,8 +57,8 @@ pub const ZONE_INDEX_MASK: i64 = 0xff;
 pub const OFFSET_SHIFT: i64 = TIME_FORM_BITS + 8;
 
 impl TimeForm {
-	/// What `type(t)` says of a time of this form, wiki/time.md's words
-	pub fn name(self) -> &'static str {
+	/// What `type(t)` says of a time of this form, wiki/time.md's words; each a type under TIME_WORD
+	pub const fn name(self) -> &'static str {
 		match self {
 			TimeForm::Instant => "instant",
 			TimeForm::Date => "date",
@@ -616,6 +618,8 @@ fn apply(left: Value, op: Op, right: Value) -> Result<Value, String> {
 				_ => Err(format!("cannot apply + to a {} and a {}", left.kind(), right.kind())),
 			}
 		}
+		// `d is date` tests a type (card anchor-time), lowering's type tests answer it
+		(_, Op::Eq | Op::Ne, Value::Symbol(_)) => Err(UNSUPPORTED.to_string()),
 		// numbers and truths the run computes, the times in them folded
 		(left, _, right) if !left.is_temporal() && !right.is_temporal() => Err(UNSUPPORTED.to_string()),
 		(left, op, right) => Err(format!("cannot apply {op} to a {} and a {}", left.kind(), right.kind())),
