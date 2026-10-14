@@ -107,7 +107,7 @@ impl Lambda {
 }
 
 /// Lower the lambdas and iteration words whose function is known; an iteration word over a parameter is left for the
-/// specialisation of its function (function_values.rs)
+/// strict run, which calls it as a closure
 pub fn lower(node: Node) -> Node {
 	lowering(node, false)
 }
@@ -900,7 +900,7 @@ impl Lowering {
 
 	/// The function applied to the symbols `arguments`: the body of a literal function with its parameters replaced, or the call of a
 	/// defined function; anything else cannot be inlined
-	/// `Err(None)` when the function is not known yet (a parameter of a function that is specialised later)
+	/// `Err(None)` when the function is not known yet (a parameter, called as a closure by the strict run)
 	fn applied(
 		&self,
 		iteration: &Iteration,

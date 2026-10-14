@@ -480,3 +480,13 @@ signal family are warp-list-pattern's and left out. Samples = files in samples/,
 Well used (no cut proposed): library words 1909, tasks 1473, broadcasting 1199, blocks 955, switch/match 882, late
 binding 737, for loops 725, constant folding 670, lazy ranges 654, comprehensions 631, type tests 596, named
 arguments 574, markup tags 398, type constructors 370.
+
+## cleanup-drop-lambdas (2026-10-14, supervisor: stop at step 1)
+- Done: function_values.rs no longer specialises a function per function argument (`apply__double`); every call passes
+  a closure, a capture-free one made once (a global, wasm_emitter/closures.rs). 10M `apply(y => y*2+1, k)`: 0.25 s →
+  0.42 s. Side fixes: `f(*args)` of a closure spreads by count (variadic::run_time_spread), `f:(Int)->Int` parameters
+  are functions, a called returned closure may return a function (Z combinator).
+- Kept: the iteration templates of lambdas.rs (map filter each fold find any all reduce sort) stay the inlining rule
+  for literal lambdas. Library functions over closures measured 0.22 s → 0.45 s on 1M map/filter/sum (~3× without
+  compile time) and give untyped (any) results, for about −140 lines: not worth it.
+- Benchmarks: probes/cleanup/lambdas/bench_*.warp
