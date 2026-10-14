@@ -82,6 +82,30 @@ mod.rs (synonyms-table). Moves out of other files go first.
 | types/declarations.rs | atoms/type_declarations.rs: `type_declaration_follows`, `parse_type_declaration_body`, `parse_comma_names`, `skip_struct_words`, `skip_conformances`, `declared_type_after_blanks`, `class_keyword_after_blanks`, `identifier_after_blanks`, `parse_primary_constructor`, `variants_ahead`, `parse_sum_type`, `enum_with_values_ahead`, `parse_enum_with_values`, `variant_class`, `parse_type_parameters`, `any_for_type_parameters`, `untyped_parameters`, `without_case_keyword`, `statements`; lists.rs: `class_body`, `transform_fields_to_types`, `symbol_to_type`; atoms.rs: `type_parameter_names` |
 | types/expressions.rs | lists.rs: `joined_type_name`, `words_ahead_length`, `type_application_length`, `parse_type_application`, `with_type_phrases`, `without_ref_words`; mod.rs: `names_a_type`, `type_application_name`, `list_type_head`, `noted_list_type_head`; suffixes.rs: `try_parse_array_type_suffix` |
 
+## Root (`src/*.rs`, 56 flat files): proposed folders
+
+The user (2026-10-14): the root needs the most restructuring. File level first: `git mv` into a concept folder, with
+`pub use <folder>::<file>;` in lib.rs so `crate::<file>::…` paths stay valid (no use-site edits in the move commit);
+then a per-function pass over the big mixed files (main.rs, pipeline.rs, normalize.rs, diagnostic.rs, tasks.rs,
+modules.rs, wasm_modules.rs, cargo_crates.rs, effects.rs), whose table is added here when it starts.
+
+- stays at the root: lib.rs, main.rs, pipeline.rs, util.rs, extensions.rs + extensions/, words.rs, operators.rs,
+  type_kinds.rs, node/, warp_parser/, lowering/, analyzer/, wasm_emitter/
+- compiler/: compile_context, compile_time, analysis_memo, context, local, function, meta, dead_functions,
+  function_equality
+- analyzer/: effects (effect inference is analysis)
+- diagnostics/: diagnostic, fixits, normalize (hints toward canonical syntax), crash_card
+- numbers/: real, uncertain, fixed_width, units.rs + units/
+- time/: time.rs becomes time/mod.rs
+- text/: interpolation, uniscript_entities (+ .tsv), injection
+- formats/: wisp_parser, web_idl, ffi_parser, meta_section
+- modules/: modules.rs + modules/, wasm_modules, components, component_builder, cargo_crates, package_tools,
+  std_adapters, std_docs, foreign, binaryen
+- host/: host.rs + host/, host_parts, sandbox, channels, tasks, shared, database
+- run/: wasm_reader, file_type (`warp register`)
+- web/: markup, accessibility
+- law.rs + law/, graphics/, sound/, gc_traits/, ffi/: stay
+
 ## Lowering (`src/lowering/`, 112 files): proposed folders
 
 File-level first (pure `git mv` + mod paths), then per function inside each folder when the area starts (its table is
