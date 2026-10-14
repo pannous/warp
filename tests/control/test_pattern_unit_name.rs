@@ -39,6 +39,7 @@ fn a_program_variable_named_like_a_unit_is_no_unit() {
 	);
 }
 
+#[cfg(feature = "native")] // printed runs the warp binary
 #[test] // a bound `$h` is an argument like any name: `then print $h` prints the value (card if-host)
 fn a_dollar_name_is_a_call_argument() {
 	assert_eq!(
