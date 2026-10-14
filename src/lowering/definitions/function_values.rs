@@ -609,41 +609,10 @@ pub fn lower(program: Node) -> Node {
 	if let Some(error) = refused_partial_definition(&program, &found) {
 		return error;
 	}
-	let functions: HashSet<String> = found.iter().map(|definition| definition.name.clone()).collect();
-	let mut assigned_count = HashMap::new();
-	let mut alias_of = HashMap::new();
-	let mut alias_values = HashSet::new();
-	aliases(
-		&program,
-		&functions,
-		&mut assigned_count,
-		&mut alias_of,
-		&mut alias_values,
-	);
-	// an alias assigned once only
-	alias_of.retain(|name, _| assigned_count.get(name) == Some(&1));
-	let program = if alias_of.is_empty() {
-		program
-	} else {
-		replace_aliases(program, &alias_of, &alias_values)
-	};
-
+	let program = aliases_replaced(program, &found);
 	let mut found = Vec::new();
 	definitions(&program, &mut found);
-	let mut higher_order: HashMap<String, Vec<usize>> = HashMap::new();
-	loop {
-		let mut changed = false;
-		for definition in &found {
-			let indexes = function_parameters(definition, &higher_order);
-			if !indexes.is_empty() && higher_order.get(&definition.name) != Some(&indexes) {
-				higher_order.insert(definition.name.clone(), indexes);
-				changed = true;
-			}
-		}
-		if !changed {
-			break;
-		}
-	}
+	let higher_order = higher_order_parameters(&found);
 	if higher_order.is_empty() {
 		return program;
 	}
@@ -659,25 +628,69 @@ pub fn lower(program: Node) -> Node {
 		lambda_definitions: Vec::new(),
 	};
 	let program = arguments.rewrite(with_round_calls(program, &arguments.higher_order), &params);
-	// the lambdas' definitions go first among the program's statements: nesting the program in a list of its own hid
-	// its main level from the later passes (a handler's write to a main-level variable was refused)
-	let program = match (arguments.lambda_definitions.is_empty(), program.drop_meta()) {
+	let program = with_lambda_definitions_first(program, &arguments.lambda_definitions);
+	// `f(*args)` of a parameter f spreads into the function now known (variadic.rs kept the spread)
+	crate::variadic::lower(program)
+}
+
+/// `g = f` of a function f, assigned once only: g is f
+fn aliases_replaced(program: Node, found: &[Definition]) -> Node {
+	let functions: HashSet<String> = found.iter().map(|definition| definition.name.clone()).collect();
+	let mut assigned_count = HashMap::new();
+	let mut alias_of = HashMap::new();
+	let mut alias_values = HashSet::new();
+	aliases(
+		&program,
+		&functions,
+		&mut assigned_count,
+		&mut alias_of,
+		&mut alias_values,
+	);
+	// an alias assigned once only
+	alias_of.retain(|name, _| assigned_count.get(name) == Some(&1));
+	if alias_of.is_empty() {
+		program
+	} else {
+		replace_aliases(program, &alias_of, &alias_values)
+	}
+}
+
+/// The indexes of the parameters each function calls, until passing a function on to another one adds no more
+fn higher_order_parameters(found: &[Definition]) -> HashMap<String, Vec<usize>> {
+	let mut higher_order: HashMap<String, Vec<usize>> = HashMap::new();
+	loop {
+		let mut changed = false;
+		for definition in found {
+			let indexes = function_parameters(definition, &higher_order);
+			if !indexes.is_empty() && higher_order.get(&definition.name) != Some(&indexes) {
+				higher_order.insert(definition.name.clone(), indexes);
+				changed = true;
+			}
+		}
+		if !changed {
+			return higher_order;
+		}
+	}
+}
+
+/// The lambdas' definitions go first among the program's statements: nesting the program in a list of its own hid its
+/// main level from the later passes (a handler's write to a main-level variable was refused)
+fn with_lambda_definitions_first(program: Node, lambda_definitions: &[Node]) -> Node {
+	match (lambda_definitions.is_empty(), program.drop_meta()) {
 		(true, _) => program,
 		(false, Node::List(statements, bracket, separator))
 			if crate::variable_signals::is_statement_list(bracket, separator) =>
 		{
 			Node::List(
-				[arguments.lambda_definitions.clone(), statements.clone()].concat(),
+				[lambda_definitions, statements].concat(),
 				bracket.clone(),
 				separator.clone(),
 			)
 		}
 		(false, _) => Node::List(
-			[arguments.lambda_definitions.clone(), vec![program]].concat(),
+			[lambda_definitions, &[program]].concat(),
 			Bracket::Round,
 			Separator::Semicolon,
 		),
-	};
-	// `f(*args)` of a parameter f spreads into the function now known (variadic.rs kept the spread)
-	crate::variadic::lower(program)
+	}
 }
