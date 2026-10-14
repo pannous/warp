@@ -701,7 +701,48 @@ fn partial_application(items: &[Node]) -> Option<Node> {
 
 /// `def f(a, b) { body }`, `def f(x) := body`, `function g() { … }`: the definition `f(a, b) := body`
 pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
-	let (keyword, definition, mut result_type) = match items {
+	let (keyword, definition, mut result_type) = keyword_form(items)?;
+	if !matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word)) {
+		return None;
+	}
+	let definition = function_typed_result(extension_definition(definition));
+	let definition = match typed_result(&definition) {
+		Some((untyped, written_type)) => {
+			if matches!(definition, Node::Key(_, Op::Arrow, _)) {
+				hint_as_result(&definition, &written_type);
+			}
+			result_type = Some(written_type);
+			untyped
+		}
+		None => definition,
+	};
+	let (head, op, body) = definition_parts(definition)?;
+	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else {
+		return None;
+	};
+	let (name, arguments) = head_items.split_first()?;
+	let Node::Symbol(_) = name.drop_meta() else { return None };
+	let mut labeled_names = vec![];
+	let parameters = written_parameters(arguments, keyword.is_symbol(SWIFT_FUNCTION_KEYWORD), &mut labeled_names);
+	let body = with_label_names(body, labeled_names);
+	// Kotlin/Scala `def square(x) = x*x` defines as `:=` does, so the passes reading definitions see it (P143)
+	let op = if parameters.is_empty() { op } else { Op::Define };
+	let head = Node::List(
+		std::iter::once(name.clone()).chain(parameters).collect(),
+		Bracket::Round,
+		Separator::None,
+	);
+	let target = match result_type {
+		Some(result_type) => key(head, Op::Colon, result_type),
+		None => head,
+	};
+	Some(key(target, op, body))
+}
+
+/// The keyword, definition and result type of the ways a definition after a keyword is written: glued or curried
+/// heads, a tuple result type, `as int` before a block, Go's result types between the head and the body
+fn keyword_form(items: &[Node]) -> Option<(&Node, Node, Option<Node>)> {
+	Some(match items {
 		[keyword, glued] if glued_curried_definition(glued).is_some() => {
 			(keyword, glued_curried_definition(glued).expect("guarded"), None)
 		}
@@ -761,22 +802,12 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 			None,
 		),
 		_ => return None,
-	};
-	if !matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word)) {
-		return None;
-	}
-	let definition = function_typed_result(extension_definition(definition));
-	let definition = match typed_result(&definition) {
-		Some((untyped, written_type)) => {
-			if matches!(definition, Node::Key(_, Op::Arrow, _)) {
-				hint_as_result(&definition, &written_type);
-			}
-			result_type = Some(written_type);
-			untyped
-		}
-		None => definition,
-	};
-	let (head, op, body) = match definition {
+	})
+}
+
+/// The head, operator and body of a keyword's definition
+fn definition_parts(definition: Node) -> Option<(Node, Op, Node)> {
+	Some(match definition {
 		// `def test: print "test"` (wiki/signal.md), Ruby's endless `def twice = x * 2`: a function without parameters;
 		// `def square := it * it` and `def add := a + b` keep their implicit parameters (later passes)
 		Node::Key(name, op @ (Op::Colon | Op::Assign), body)
@@ -801,15 +832,13 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 			(parts[0].clone(), Op::Define, parts[1].clone())
 		}
 		_ => return None,
-	};
-	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else {
-		return None;
-	};
-	let (name, arguments) = head_items.split_first()?;
-	let Node::Symbol(_) = name.drop_meta() else { return None };
+	})
+}
+
+/// The parameters of a keyword's definition as written, their labels collected into `labeled_names`
+fn written_parameters(arguments: &[Node], is_swift: bool, labeled_names: &mut Vec<Node>) -> Vec<Node> {
 	// Swift's one labeled parameter `greet(person name: String)` arrives as the two words; a call's arguments come flat,
 	// so only Swift's keyword reads them so: `def add(a, b: int) -> int` has two parameters
-	let is_swift = keyword.is_symbol(SWIFT_FUNCTION_KEYWORD);
 	let arguments = match arguments {
 		[label, typed] if is_swift && argument_label(label, typed).is_some() => {
 			vec![Node::List(arguments.to_vec(), Bracket::None, Separator::Space)]
@@ -826,11 +855,9 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	// Python's markers `*` (keyword-only after it) and `/` (positional-only before it) take no argument
 	.filter(|parameter| !matches!(parameter.drop_meta(), Node::Key(left, Op::Mul | Op::Div, right) if matches!((left.drop_meta(), right.drop_meta()), (Node::Empty, Node::Empty))))
 	.map(name_then_type);
-	let mut labeled_names = vec![];
-	let mut parameters: Vec<Node> = parameters
-		.map(|parameter| labeled_parameter(parameter, &mut labeled_names))
+	let parameters: Vec<Node> = parameters
+		.map(|parameter| labeled_parameter(parameter, labeled_names))
 		.collect();
-	let body = with_label_names(body, labeled_names);
 	// `func add1(x int)`: the one parameter and its type arrive as two words; `func total(s Shape)` of a declared type;
 	// a comma separates parameters, so `def f(p, number)` keeps two
 	let comma_separated = arguments
@@ -839,21 +866,10 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	if let (false, [parameter, type_word]) = (comma_separated, parameters.as_slice()) {
 		let is_type_name = matches!(type_word.drop_meta(), Node::Symbol(word) if word.starts_with(char::is_uppercase));
 		if matches!(parameter.drop_meta(), Node::Symbol(_)) && (is_kinded_type_word(type_word) || is_type_name) {
-			parameters = vec![key(parameter.clone(), Op::Colon, type_word.clone())];
+			return vec![key(parameter.clone(), Op::Colon, type_word.clone())];
 		}
 	}
-	// Kotlin/Scala `def square(x) = x*x` defines as `:=` does, so the passes reading definitions see it (P143)
-	let op = if parameters.is_empty() { op } else { Op::Define };
-	let head = Node::List(
-		std::iter::once(name.clone()).chain(parameters).collect(),
-		Bracket::Round,
-		Separator::None,
-	);
-	let target = match result_type {
-		Some(result_type) => key(head, Op::Colon, result_type),
-		None => head,
-	};
-	Some(key(target, op, body))
+	parameters
 }
 
 /// Kotlin's extension method `fun Int.twice() = this * 2`: the function `twice(this:Int) := this * 2`, its receiver the
