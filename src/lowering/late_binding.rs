@@ -2,16 +2,15 @@
 //! time. A main-level variable a function reads and the program changes after the definition must be declared
 //! `global y` in that function; otherwise the change is a compile error where it is written, once a later call could
 //! observe it. A function defined in a function body reads that function's parameters and variables the same way: a
-//! change after its definition that a later call in the body could observe is an error, unless the nested function
-//! declares `nonlocal y` (card g-qUkY): then each call from the enclosing body reads its current value.
+//! change after its definition that a later call in the body could observe is an error, unless it is a nested `def`
+//! (card g-qUkY), which shares them: each call from the enclosing body reads their current values.
 //! A `def` without parameters that always gives the same value gets the "needless charging" note.
 //!
 //! Functions keep capturing by value at the definition (wasm_emitter `emit_closure_capture`): with this check every
 //! accepted program reads the same value either way, except a variable first bound after the definition, which is
 //! made a global so that the call reads it (`def f(x){x+k}; k=3; f(1)` → 4). A nested function `outer·inner` reads
 //! its captures as they are at each call the enclosing body makes (directly, through a sibling or passed as a value:
-//! wasm_emitter `refresh_enclosing_captures`), so `nonlocal y`
-//! needs no code of its own: the declaration only lifts the check and is dropped here. Writing y from inner waits.
+//! wasm_emitter `refresh_enclosing_captures`); a variable inner writes lives in a cell (nonlocal_cells.rs).
 
 use super::nodes::children_rewritten;
 use crate::analyzer::{captured_variables, collect_variables, declare_global, find_assignments, param_kind, Scope};
@@ -34,9 +33,6 @@ const GENERATED_NAME_MARK: char = '·';
 
 pub fn lower(program: Node) -> Result<Node, Node> {
 	let statements = program.sequence_statements().to_vec();
-	if let Some(declaration) = statements.iter().find(|statement| is_nonlocal_declaration(statement)) {
-		return Err(nonlocal_at_main_level_error(declaration));
-	}
 	let mut main = Scope::new();
 	collect_variables(&program, &mut main);
 	let declared = declared_global_reads(&statements, &main, false);
@@ -137,10 +133,6 @@ fn check_definitions(
 /// change of one after such a definition is an error once a later call in the body could observe it (card g-qUrk)
 fn check_function_body(function: &UserFunctionDef) -> Result<(), Node> {
 	let statements = body_statements(&function.body);
-	let nested = function.name.contains(NESTED_DEF_SEPARATOR); // `outer·inner`: outer checks its nonlocal declarations
-	if let Some(name) = declared_nonlocals(&function.body).first().filter(|_| !nested) {
-		return Err(nonlocal_without_enclosing_error(function, name));
-	}
 	let definitions: Vec<Definition> = definitions(&statements)
 		.into_iter()
 		.filter(|definition| !short_name_in(function, &definition.function.name).contains(NESTED_DEF_SEPARATOR))
@@ -156,26 +148,14 @@ fn check_function_body(function: &UserFunctionDef) -> Result<(), Node> {
 		&Node::List(statements.clone(), Bracket::None, Separator::Newline),
 		&mut enclosing,
 	);
-	for definition in &definitions {
-		let names = declared_nonlocals(&definition.function.body);
-		let Some(first) = names.first() else { continue };
-		if !definition.function.name.contains(NESTED_DEF_SEPARATOR) {
-			return Err(nonlocal_in_block_error(definition, first, function));
-		}
-		if let Some(name) = names.iter().find(|name| enclosing.lookup(name).is_none()) {
-			return Err(unbound_nonlocal_error(definition, name, function));
-		}
-	}
+	// a function defined with `def` in the body shares its variables: each call reads their current values
 	let declared = |definition: &Definition, name: &str| {
-		let mut found = false;
+		let mut found = definition.function.name.contains(NESTED_DEF_SEPARATOR);
 		definition
 			.function
 			.body
 			.visit(&mut |node| found |= global_read(node).is_some_and(|declared| declared == name));
 		found
-			|| declared_nonlocals(&definition.function.body)
-				.iter()
-				.any(|declared| declared == name)
 	};
 	check_definitions(&statements, &definitions, &enclosing, &declared, Some(function)).map(|_| ())
 }
@@ -208,7 +188,7 @@ fn is_nonlocal_declaration(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Key(keyword, Op::Colon, _) if keyword.is_symbol(NONLOCAL))
 }
 
-/// The program without its `nonlocal y` declarations: once checked they have no code
+/// The program without its `nonlocal y` declarations: once its cells are made they have no code
 fn without_nonlocal_declarations(program: Node) -> Node {
 	let mut found = false;
 	program.visit(&mut |node| found |= is_nonlocal_declaration(node));
@@ -216,55 +196,6 @@ fn without_nonlocal_declarations(program: Node) -> Node {
 		return program;
 	}
 	without_statements(program, &is_nonlocal_declaration)
-}
-
-/// The statement `nonlocal name` of the body, for the position of an error
-fn declaration_of(body: &Node, name: &str) -> Node {
-	body_statements(body)
-		.into_iter()
-		.find(|statement| nonlocal_names(statement).iter().any(|declared| declared == name))
-		.unwrap_or_else(|| body.clone())
-}
-
-/// `nonlocal y` among main's statements
-fn nonlocal_at_main_level_error(declaration: &Node) -> Node {
-	let name = nonlocal_names(declaration).into_iter().next().unwrap_or_default();
-	Diagnostic::at(declaration, format!("`nonlocal {name}` outside a function: main reads its own {name}; `nonlocal` belongs in a function defined in a function"))
-		.into_error()
-}
-
-/// `nonlocal y` in a function that no function encloses (Python: "nonlocal declaration not allowed at module level")
-fn nonlocal_without_enclosing_error(function: &UserFunctionDef, name: &str) -> Node {
-	Diagnostic::at(
-		&declaration_of(&function.body, name),
-		format!(
-			"`nonlocal {name}` in {}: no function encloses {}; declare `global {name}` to read main's {name}",
-			function.name, function.name
-		),
-	)
-	.into_error()
-}
-
-/// `inner := {nonlocal y; …}`: a block made a closure captures y when it is made; only `def inner(){…}` reads y anew
-fn nonlocal_in_block_error(definition: &Definition, name: &str, enclosing: &UserFunctionDef) -> Node {
-	let inner = short_name_in(enclosing, &definition.function.name);
-	Diagnostic::at(&declaration_of(&definition.function.body, name), format!("`nonlocal {name}` in {inner}: only a function defined with `def {inner}(){{…}}` reads the current {name} so far"))
-		.into_error()
-}
-
-/// `nonlocal y` in inner where the enclosing function has no y
-fn unbound_nonlocal_error(definition: &Definition, name: &str, enclosing: &UserFunctionDef) -> Node {
-	let inner = short_name_in(enclosing, &definition.function.name);
-	let outer = enclosing
-		.name
-		.rsplit(NESTED_DEF_SEPARATOR)
-		.next()
-		.unwrap_or(&enclosing.name);
-	Diagnostic::at(
-		&declaration_of(&definition.function.body, name),
-		format!("`nonlocal {name}` in {inner}: {outer} has no parameter or variable {name}"),
-	)
-	.into_error()
 }
 
 /// Between an enclosing function and a definition lifted out of its body: `outer·inner` (analyzer, card g-qUkY)
@@ -732,6 +663,6 @@ fn late_binding_error(
 	};
 	let inner = short_name_in(outer, function);
 	let outer = outer.name.rsplit(NESTED_DEF_SEPARATOR).next().unwrap_or(&outer.name);
-	Diagnostic::at(change, format!("{inner} reads {variable} of {outer} (line {}): declare `nonlocal {variable}` in {inner} to read its current value, or pass {variable} as a parameter", definition.line))
-		.fix(format!("nonlocal {variable}")).into_error()
+	Diagnostic::at(change, format!("{inner} reads {variable} of {outer} (line {}): a block keeps the values it was made with; define it with `def {inner}(){{…}}` to read the current {variable}, or pass {variable} as a parameter", definition.line))
+		.into_error()
 }

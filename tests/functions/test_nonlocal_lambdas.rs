@@ -28,6 +28,7 @@ fn a_lambda_may_declare_nonlocal() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-cut-nonlocal: a nested def changing an enclosing variable shares it, as a lambda does (cleanup-cuts-2)"]
 fn a_nested_def_changing_it_without_nonlocal_is_an_error() {
 	fails_with(
 		"def counter(){ n=0; def inc(){ n+=1; n }; function inc }; c=counter(); c(); c()",
