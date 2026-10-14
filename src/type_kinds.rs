@@ -45,6 +45,7 @@ const _: () =
 /// A kind field without its element mark, for the comparisons of whole kinds (bracket and kind)
 pub const UNMARKED_KIND: i64 = (1 << ELEMENT_MARK_SHIFT) - 1;
 const _: () = assert!(MARK_BOOL_BIT + ELEMENT_MARK_SHIFT < 63, "the element mark fits in the kind field");
+const _: () = assert!(CODE_MARK > SEPARATOR_MASK, "the code mark lies above the separator");
 
 /// The element mark of a node_kind_in mask, shifted to its place in the kind field
 pub fn element_mark(mask: i64) -> i64 {
