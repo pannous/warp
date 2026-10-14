@@ -3,11 +3,11 @@
 use crate::is;
 
 fn warnings_of(code: &str) -> (warp::Node, Vec<String>) {
-	warp::diagnostic::take_warnings();
+	warp::errors::diagnostic::take_warnings();
 	let value = warp::wasm_emitter::eval(code);
 	(
 		value,
-		warp::diagnostic::take_warnings()
+		warp::errors::diagnostic::take_warnings()
 			.iter()
 			.map(|warning| warning.to_string())
 			.collect(),

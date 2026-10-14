@@ -20,14 +20,14 @@ fn a_heavy_map_of_many_floats_runs_on_the_gpu_by_itself() {
 	let tolerance = crate::common::gpu_tolerance();
 	let program = format!("{}ys = xs.map(x => sin(x))\n", filled(AUTO_COUNT));
 	assert!(maps_on_gpu(&format!("{program}ys#1")));
-	warp::diagnostic::take_runtime_warnings();
+	warp::errors::diagnostic::take_runtime_warnings();
 	assert_eq!(
 		eval(&format!("{program}abs(ys#{AUTO_COUNT} - sin(1)) < {tolerance}")).serialize(),
 		"yes"
 	);
 	#[cfg(feature = "native")]
 	if warp::graphics::gpu::available().is_ok() {
-		let notices = warp::diagnostic::take_runtime_warnings();
+		let notices = warp::errors::diagnostic::take_runtime_warnings();
 		assert!(
 			notices
 				.iter()

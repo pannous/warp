@@ -1,5 +1,5 @@
 use std::time::{Duration, Instant};
-use warp::diagnostic::Diagnostic;
+use warp::errors::diagnostic::Diagnostic;
 use warp::node::{Bracket, Node, Separator};
 use warp::warp_parser::WarpParser;
 

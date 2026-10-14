@@ -1,7 +1,7 @@
 //! card markup-content: an element where HTML does not let it be warns where it is written, as the browser would move
 //! or drop it: a block inside p, anything but li in a list, a table cell outside a row, html inside markup. An element
 //! with no element around it (a component's own markup) is not judged
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 use warp::wasm_emitter::eval;
 
 fn warnings_of(code: &str) -> Vec<String> {

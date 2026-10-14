@@ -333,7 +333,7 @@ pub fn to_html(node: &Node) -> String {
 		&crate::warp_parser::parse(RENDER_PROGRAM),
 		&HashMap::from([(RENDERED.to_string(), node.clone())]),
 	);
-	match crate::diagnostic::quietly(|| crate::pipeline::eval_parsed(program, RENDER_PROGRAM)).drop_meta() {
+	match crate::errors::diagnostic::quietly(|| crate::pipeline::eval_parsed(program, RENDER_PROGRAM)).drop_meta() {
 		Node::Text(html) => html.clone(),
 		failed => format!("<pre>{}</pre>", escaped(&failed.serialize())),
 	}

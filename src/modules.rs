@@ -227,7 +227,7 @@ fn with_std_aliases(node: Node, aliases: &[(&str, &str)]) -> Node {
 	match node {
 		Node::Symbol(name) => match aliases.iter().find(|(alias, _)| *alias == name) {
 			Some((alias, class)) => {
-				crate::diagnostic::note_alias(alias, class);
+				crate::errors::diagnostic::note_alias(alias, class);
 				Node::Symbol(class.to_string())
 			}
 			None => Node::Symbol(name),

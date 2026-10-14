@@ -1,6 +1,6 @@
 // P68 (user, 2026-10-05): a braceless call whose argument holds an operator (`square 3 + square(4)`) keeps its reading,
 // square(3 + square(4)), with a got-it warning naming both readings
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 use warp::wasm_emitter::eval;
 use warp::Node;
 

@@ -100,10 +100,14 @@ impl Context {
 	}
 
 	/// The error of a call nothing resolves at `call`, as undefined_function_message says it
-	pub fn undefined_function_diagnostic(&self, call: &crate::node::Node, name: &str) -> crate::diagnostic::Diagnostic {
+	pub fn undefined_function_diagnostic(
+		&self,
+		call: &crate::node::Node,
+		name: &str,
+	) -> crate::errors::diagnostic::Diagnostic {
 		match self.unresolved_imports.get(name) {
 			Some(library) => {
-				crate::diagnostic::Diagnostic::at(call, crate::ffi::unresolved_import_message(name, library))
+				crate::errors::diagnostic::Diagnostic::at(call, crate::ffi::unresolved_import_message(name, library))
 			}
 			None => crate::ffi::undefined_function_diagnostic(call, name),
 		}

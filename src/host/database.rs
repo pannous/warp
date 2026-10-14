@@ -436,7 +436,7 @@ fn migrated(database: Handle, table: &str, schema: &[Node]) -> Result<Vec<(Strin
 		.iter()
 		.filter(|(name, _)| name != ID_COLUMN && !columns.iter().any(|(column, _, _)| column == name))
 	{
-		crate::diagnostic::report_runtime_warning(&format!(
+		crate::errors::diagnostic::report_runtime_warning(&format!(
 			"the table {table} keeps its column {name}, which the class no longer has (its data is kept)"
 		));
 	}
@@ -527,7 +527,7 @@ fn conversion_factor(table: &str, name: &str, stored_type: &str, column_type: &s
 				.any(|number| number.eq_ignore_ascii_case(stored_base)) =>
 		{
 			let (_, per_unit) = quantity(unit)?;
-			crate::diagnostic::report_runtime_warning(&format!("{column}: its plain numbers are read as {unit} (each × {per_unit} to the SI amount a unit field holds)"));
+			crate::errors::diagnostic::report_runtime_warning(&format!("{column}: its plain numbers are read as {unit} (each × {per_unit} to the SI amount a unit field holds)"));
 			Ok(per_unit)
 		}
 		(Some(_), None) => Err(format!("{column}: the unit would be lost, so it is not converted")),

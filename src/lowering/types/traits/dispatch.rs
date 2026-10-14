@@ -350,7 +350,7 @@ impl Dispatch {
 			};
 		}
 		if let Some(data) = written_data(value, &self.types.registry) {
-			crate::diagnostic::report(&field_warnings(value, &data, declared, &self.types.registry))?;
+			crate::errors::diagnostic::report(&field_warnings(value, &data, declared, &self.types.registry))?;
 			return Ok(data);
 		}
 		// `p: Point | text` takes a text too

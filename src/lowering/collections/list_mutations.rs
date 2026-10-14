@@ -98,7 +98,7 @@ pub(crate) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
 	let (value_word, rest_word) = match method {
 		name if is_removal_method(name) => {
 			if name == DELETE_METHOD {
-				crate::diagnostic::note_alias(DELETE_METHOD, REMOVE_METHOD);
+				crate::errors::diagnostic::note_alias(DELETE_METHOD, REMOVE_METHOD);
 			}
 			(REMOVED_VALUE_CALL, crate::library_words::MAP_WITHOUT)
 		}

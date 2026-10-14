@@ -1,6 +1,6 @@
 // card samples-html: the note "`// …` after code is a comment" is for `a // b`, which reads like a division; after a
 // text, an opening brace or a comma nothing could be divided, so the comment gets no note
-use warp::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
+use warp::errors::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
 use warp::normalize::capture_hints;
 
 fn slash_notes(code: &str) -> usize {

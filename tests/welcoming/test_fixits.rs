@@ -2,8 +2,8 @@
 //! every warning and ambiguity error offers each reading the user might have meant as an edit of the source
 //! (notes/fixits.md). Each test applies a fix to the source and checks that the result compiles, without a warning,
 //! to the reading the fix names.
-use warp::diagnostic::{take_error_diagnostics, take_warnings, with_warning_mode, Diagnostic, WarningMode};
-use warp::fixits::fixed;
+use warp::errors::diagnostic::{take_error_diagnostics, take_warnings, with_warning_mode, Diagnostic, WarningMode};
+use warp::errors::fixits::fixed;
 use warp::normalize::capture_hints;
 use warp::wasm_emitter::eval;
 

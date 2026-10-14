@@ -2,7 +2,7 @@
 //! and suffix words mixed with infix arithmetic (D9); a trailing percent `10%` is read as `10/100` here too
 
 use super::nodes::{call, children_rewritten, is_binding, key};
-use crate::diagnostic::{ask, reading, Ask, Fallback};
+use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};

@@ -1,7 +1,7 @@
 //! One diagnostic system (card warning-levels): every hint and warning has a level, hint < weak < normal < severe.
 //! What prints is a threshold (`--warnings=<level>`, `--no-hints` shows from weak); what fails is another
 //! (`use strict` and `--strict` fail from normal, `--strict=<level>`). Hints never fail.
-use warp::diagnostic::{with_warning_mode, Level, WarningMode, STRICT_LEVEL};
+use warp::errors::diagnostic::{with_warning_mode, Level, WarningMode, STRICT_LEVEL};
 use warp::normalize::{capture_hints, set_hint_mode, HintMode};
 use warp::wasm_emitter::eval;
 use warp::Node;

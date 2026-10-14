@@ -153,7 +153,7 @@ fn forms(node: Node) -> Node {
 				&& matches!(items[1].drop_meta(), Node::Key(_, Op::Assign, _))
 			{
 				crate::normalize::set_position_of(&items[0]);
-				crate::diagnostic::note_alias(CPP_AUTO_WORD, VAR_WORD);
+				crate::errors::diagnostic::note_alias(CPP_AUTO_WORD, VAR_WORD);
 				return var_declaration(Node::single_or_list(items[1..].to_vec(), bracket, separator));
 			}
 			if let Some(variable) = let_mut(&items) {
@@ -214,7 +214,7 @@ fn let_mut(items: &[Node]) -> Option<Node> {
 	}
 	let name = name.serialize();
 	crate::normalize::set_position_of(keyword);
-	crate::diagnostic::educate_once(
+	crate::errors::diagnostic::educate_once(
 		&format!("alias-let {modifier}"),
 		&format!("let {modifier} {name}"),
 		&format!("var {name}"),
@@ -464,7 +464,7 @@ fn when_listener(items: &[Node]) -> Option<Vec<Node>> {
 /// The one warning of every `when`, its fix the word this shape means
 fn when_meant(word: &Node, meant: &str) {
 	crate::normalize::set_position_of(word);
-	crate::diagnostic::educate_once(WHEN_TOPIC, WHEN_KEYWORD, meant, WHEN_REASON);
+	crate::errors::diagnostic::educate_once(WHEN_TOPIC, WHEN_KEYWORD, meant, WHEN_REASON);
 }
 
 /// The patterns and value of a `when` arm: `5 -> 50`, `1, 2 -> 10`, `is Circle -> 3`, `else -> 0`

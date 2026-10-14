@@ -3,7 +3,7 @@
 use std::cell::Cell;
 use warp::compiler::analysis_memo::analysed;
 use warp::compiler::context::Context;
-use warp::diagnostic::{report, take_warnings, Diagnostic};
+use warp::errors::diagnostic::{report, take_warnings, Diagnostic};
 use warp::warp_parser::parse;
 
 #[test]

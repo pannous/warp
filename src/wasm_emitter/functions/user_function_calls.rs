@@ -307,7 +307,7 @@ impl WasmGcEmitter {
 			returns_list: self.returns_list_abi(name),
 			returned_tuple: user_fn.tuple_kinds.clone(),
 			// a one-expression body is its own statement: run as a task, no caller's statement names its line
-			statement_position: crate::diagnostic::line_info(&user_fn.body),
+			statement_position: crate::errors::diagnostic::line_info(&user_fn.body),
 			..FunctionState::default()
 		});
 		// declared globals are changed in place, never shadowed by a local of the same name

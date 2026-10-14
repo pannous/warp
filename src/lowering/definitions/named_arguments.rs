@@ -5,7 +5,7 @@
 //! argument stays an error.
 
 use super::nodes::{children_rewritten, key, parameter_word, Counter};
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::min_max::{is_plain, with_bindings};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;

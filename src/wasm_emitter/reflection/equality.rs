@@ -5,7 +5,7 @@
 //! `is_truthy(x)` applies the rule `Node::is_falsy` already uses for `and`/`or`: empty values and errors are falsy.
 
 use super::super::WasmGcEmitter;
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::{any_heap_type, Kind, KIND_MASK};
@@ -219,7 +219,7 @@ impl WasmGcEmitter {
 		let (a, b) = (left.serialize(), right.serialize());
 		let (a, b, logical) = (a.trim(), b.trim(), op.logical_twin());
 		let written = format!("{a} {op} {b}");
-		let warning = crate::diagnostic::Diagnostic::at(
+		let warning = crate::errors::diagnostic::Diagnostic::at(
 			condition,
 			format!(
 				"`{written}` combines the bits of two whole numbers, true when the result is not 0; write `{a} {logical} {b}` for \
@@ -228,10 +228,10 @@ impl WasmGcEmitter {
 		)
 		.offer(format!("the logical {logical}"), &written, format!("{a} {logical} {b}"))
 		.offer("a test of the bits", &written, format!("({written}) != 0"));
-		if crate::diagnostic::warned_before(&warning) {
+		if crate::errors::diagnostic::warned_before(&warning) {
 			return;
 		}
-		if crate::diagnostic::report(std::slice::from_ref(&warning)).is_err() {
+		if crate::errors::diagnostic::report(std::slice::from_ref(&warning)).is_err() {
 			self.type_errors.push(self.located(warning.to_string()));
 		}
 	}

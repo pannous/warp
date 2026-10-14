@@ -3,7 +3,7 @@
 //! object as code: each `key: value` is the call `key(value)` (`help!`)
 use crate::common::fails_with;
 use crate::is;
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 use warp::wasm_emitter::eval;
 
 #[test]

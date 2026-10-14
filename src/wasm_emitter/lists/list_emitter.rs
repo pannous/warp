@@ -245,7 +245,10 @@ impl WasmGcEmitter {
 					repeated.serialize(),
 					crate::analyzer::kind_with_article(kind)
 				);
-				self.emit_type_error(func, crate::diagnostic::Diagnostic::at(repeated, reason).to_string());
+				self.emit_type_error(
+					func,
+					crate::errors::diagnostic::Diagnostic::at(repeated, reason).to_string(),
+				);
 			}
 		}
 		true
@@ -695,7 +698,7 @@ impl WasmGcEmitter {
 		let kind_mask = crate::type_tests::runtime_kind_mask(spec).filter(|_| unknown && !declared_type);
 		// a loop `for T in xs` filters only when its test is left to run time
 		if map_test || kind_mask.is_some() || declared_type {
-			let announced = filter_loop.map_or(Ok(0), |filter| crate::diagnostic::ask(&filter.question));
+			let announced = filter_loop.map_or(Ok(0), |filter| crate::errors::diagnostic::ask(&filter.question));
 			if let Err(error) = announced {
 				let message = match error {
 					Node::Error(reason) => reason.drop_meta().name(),
@@ -1013,7 +1016,7 @@ impl WasmGcEmitter {
 				}
 				continue;
 			}
-			self.statement_position = crate::diagnostic::line_info(item);
+			self.statement_position = crate::errors::diagnostic::line_info(item);
 			self.emit_trap_position(func);
 			if Some(i) == last_statement {
 				emit(self, func, item);
@@ -1040,7 +1043,7 @@ impl WasmGcEmitter {
 		first: &'a Node,
 		second: &'a Node,
 	) -> Option<(&'a Node, &'a Node)> {
-		use crate::diagnostic::{ask, reading, Ask, Fallback};
+		use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
 		if call == crate::list_mutations::INSERT_AT_CALL {
 			return Some((first, second));
 		}
@@ -1126,21 +1129,22 @@ impl WasmGcEmitter {
 			return None;
 		}
 		let written = Node::List(items.to_vec(), bracket.clone(), separator.clone());
-		let text = crate::diagnostic::written_text(&written);
+		let text = crate::errors::diagnostic::written_text(&written);
 		let Some(name) = items
 			.iter()
 			.find_map(|item| self.unknown_word(item).filter(|name| self.is_undefined_word(name)))
 		else {
-			let assigned = crate::diagnostic::written_text(assigned?);
-			let dropped = crate::diagnostic::written_text(&Node::List(atoms.to_vec(), Bracket::None, Separator::Space));
+			let assigned = crate::errors::diagnostic::written_text(assigned?);
+			let dropped =
+				crate::errors::diagnostic::written_text(&Node::List(atoms.to_vec(), Bracket::None, Separator::Space));
 			let message = format!("`{dropped}` after `{assigned}` does nothing; join it to the value with an operator, or start a new statement");
-			return Some(crate::diagnostic::Diagnostic::at(&written, message).remembered());
+			return Some(crate::errors::diagnostic::Diagnostic::at(&written, message).remembered());
 		};
 		let diagnostic = match crate::modules::std_module_defining(&name) {
 			Some(_) => crate::ffi::undefined_function_diagnostic(&written, &name),
 			None => self
 				.offer_near_name(
-					crate::diagnostic::Diagnostic::at(
+					crate::errors::diagnostic::Diagnostic::at(
 						&written,
 						format!("undefined: {name} in `{text}`; define {name}, or write `data {text}` for data"),
 					),
@@ -1160,7 +1164,7 @@ impl WasmGcEmitter {
 
 	/// `pirnt`: a lone word that names nothing but is one or two letters away from a defined name; a got-it warning
 	pub(in crate::wasm_emitter) fn warn_near_miss(&self, word: &str) -> Result<(), Node> {
-		use crate::diagnostic::{ask, reading, Ask, Fallback};
+		use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
 		if word.chars().count() < 3 || self.is_known_word(word) {
 			return Ok(());
 		}
@@ -1199,9 +1203,9 @@ impl WasmGcEmitter {
 	/// The fix of a misspelled `word`, when it is near a name
 	pub(in crate::wasm_emitter) fn offer_near_name(
 		&self,
-		diagnostic: crate::diagnostic::Diagnostic,
+		diagnostic: crate::errors::diagnostic::Diagnostic,
 		word: &str,
-	) -> crate::diagnostic::Diagnostic {
+	) -> crate::errors::diagnostic::Diagnostic {
 		match self.near_name(word) {
 			Some(near) => diagnostic.offer(format!("the name {near}"), word, near),
 			None => diagnostic,

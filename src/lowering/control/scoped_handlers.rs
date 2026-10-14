@@ -2,7 +2,7 @@
 //! cleanup-drop-scoped-handlers, notes/scoped_handlers.md): the form is an error naming the program-wide `on ask {…}`
 
 use super::nodes::{children_rewritten, phrase_words};
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::words::{IN_WORD, ON_WORD};
 

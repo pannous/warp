@@ -63,7 +63,7 @@ impl WarpParser {
 			return Some(missing_closer(
 				format!("the {{ of `{word} {{ … }}` is never closed"),
 				"}",
-				crate::fixits::end_of_source(&self.input),
+				crate::errors::fixits::end_of_source(&self.input),
 			));
 		};
 		let source: String = self.chars[start..end].iter().collect();
