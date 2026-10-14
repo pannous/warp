@@ -268,6 +268,22 @@ PASSED:
   ✓ control::test_function_dir::a_later_dir_leaves_an_earlier_line_alone
   ✓ control::test_function_dir::dir_of_a_function_lists_what_reflection_knows
   ✓ control::test_function_dir::the_type_of_a_function_is_function
+  ✓ control::test_function_objects::a_classes_methods_are_its_functions
+  ✓ control::test_function_objects::a_function_in_a_list_prints_by_its_name
+  ✓ control::test_function_objects::a_function_knows_its_name_and_return_type
+  ✓ control::test_function_objects::a_function_value_answers_at_run_time
+  ✓ control::test_function_objects::a_maps_own_description_stays_its_value
+  ✓ control::test_function_objects::a_modules_methods_are_its_functions
+  ✓ control::test_function_objects::a_printed_function_shows_its_doc_and_definition
+  ✓ control::test_function_objects::a_values_methods_are_its_types_functions
+  ✓ control::test_function_objects::description_is_doc
+  ✓ control::test_function_objects::full_is_the_doc_and_the_definition
+  ✓ control::test_function_objects::only_the_comment_directly_above_is_the_doc
+  ✓ control::test_function_objects::printing_a_function_without_parameters_calls_it_and_warns
+  ✓ control::test_function_objects::representation_is_dump
+  ✓ control::test_function_objects::returns_is_return_type
+  ✓ control::test_function_objects::the_type_of_a_function_names_its_signature
+  ✓ control::test_function_objects::the_words_of_a_function_reference
   ✓ control::test_glued_block_words::a_glued_do_runs_its_block
   ✓ control::test_glued_block_words::a_glued_loop_runs_its_block
   ✓ control::test_go_blocks::a_failure_nobody_awaits_ends_the_run
@@ -2050,7 +2066,6 @@ PASSED:
   ✓ modules::test_module_classes::a_used_modules_class_has_its_methods
   ✓ modules::test_module_classes::the_programs_own_class_wins
   ✓ modules::test_module_error_file::a_modules_unknown_word_names_its_file
-  ✓ modules::test_module_function_dir::a_used_module_function_reflects_like_the_program_own
   ✓ modules::test_module_meta::an_imported_warp_module_reflects_its_functions
   ✓ modules::test_module_meta::the_meta_section_names_functions_and_classes
   ✓ modules::test_module_signals::a_listener_sees_the_writes_of_a_used_module
@@ -3223,8 +3238,11 @@ PASSED:
   ✓ programs::test_kitchensink::test_kitchensink_wasmtime_execution
   ✓ programs::test_midi::a_broken_file_fails_loudly
   ✓ programs::test_midi::a_file_of_another_program_reads_with_running_status_and_tempo
+  ✓ programs::test_midi::a_message_waits_for_the_sounds_before_it
+  ✓ programs::test_midi::at_places_a_message
   ✓ programs::test_midi::headless_messages_are_named
   ✓ programs::test_midi::listing_outputs_needs_a_backend_or_names_the_missing_one
+  ✓ programs::test_midi::midi_notes_follow_one_another
   ✓ programs::test_midi::native_input_is_a_loud_error
   ✓ programs::test_midi::notes_survive_a_midi_file
   ✓ programs::test_music_values::a_frequency_reads_as_its_note
@@ -3354,8 +3372,13 @@ PASSED:
   ✓ programs::test_sound_patterns::a_cycle_lasts_its_seconds_whatever_its_steps
   ✓ programs::test_sound_patterns::a_live_loop_is_a_voice_that_repeats
   ✓ programs::test_sound_patterns::a_rest_is_silent
+  ✓ programs::test_sound_patterns::alternation_takes_one_per_cycle_in_turn
+  ✓ programs::test_sound_patterns::chance_drops_some_cycles_the_same_each_run
+  ✓ programs::test_sound_patterns::elongation_holds_a_step_longer
   ✓ programs::test_sound_patterns::euclid_spreads_three_notes_over_eight_steps
   ✓ programs::test_sound_patterns::live_loops_play_along
+  ✓ programs::test_sound_patterns::named_live_loops_are_awaited_each
+  ✓ programs::test_sound_patterns::nested_alternation_turns_on_its_own_visits
   ✓ programs::test_sound_patterns::pattern_samples_ends_each_event_at_its_cumulated_seconds
   ✓ programs::test_sound_patterns::swing_holds_the_first_note_longer
   ✓ programs::test_sound_render::a_render_takes_the_sounds_after_the_last_one
@@ -4574,6 +4597,7 @@ PASSED:
   ✓ web::test_assistant_edits::a_diff_changes_only_the_lines_it_names
   ✓ web::test_assistant_edits::a_diff_that_no_longer_fits_says_so
   ✓ web::test_assistant_edits::a_whole_program_replaces_only_the_lines_that_differ
+  ✓ web::test_assistant_proxy::the_assistant_proxy_answers_only_the_playground
   ✓ web::test_async_data::a_body_that_is_no_json_is_the_text
   ✓ web::test_async_data::a_changed_url_variable_fetches_anew
   ✓ web::test_async_data::a_failed_fetch_is_the_error
@@ -4710,6 +4734,7 @@ PASSED:
   ✓ web::test_keyed_lists::a_key_names_the_element_of_an_item
   ✓ web::test_keyed_lists::a_key_on_its_own_line_names_the_element
   ✓ web::test_keyed_lists::a_list_inside_an_element_gives_its_children
+  ✓ web::test_keyword_registry::keywords_of_passes_are_highlighted
   ✓ web::test_markup_holes::a_page_binds_each_hole
   ✓ web::test_markup_holes::fixed_markup_or_a_computed_root_has_no_holes
   ✓ web::test_markup_holes::the_elements_holding_computed_parts_are_the_holes
@@ -5326,8 +5351,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ web::test_assistant_proxy::the_assistant_proxy_answers_only_the_playground
-  ✗ web::test_keyword_registry::keywords_of_passes_are_highlighted
+  ✗ modules::test_module_function_dir::a_used_module_function_reflects_like_the_program_own
 
 SUMMARY:
-13 ignored, 5323 passed, 2 failed, 5325 total tested
+13 ignored, 5348 passed, 1 failed, 5349 total tested
