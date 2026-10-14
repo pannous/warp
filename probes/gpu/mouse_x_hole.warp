@@ -1,4 +1,4 @@
-// card values-number: $mouse_x in a shader block is the pointer's x (the system value mouse_x), as $mouse.x is
+// card values-number: $mouse.x is the pointer's x; $mouse_x works too, with a hint to write $mouse.x
 s = shader {
 	@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
 		return vec4f(select(0.0, 1.0, $mouse_x == $mouse.x), 0.0, 0.0, 1.0);
