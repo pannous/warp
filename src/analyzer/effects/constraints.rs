@@ -42,10 +42,9 @@ impl fmt::Display for EffectViolation {
 fn constraint_names(node: &Node) -> Option<Vec<String>> {
 	match node.drop_meta() {
 		Node::Symbol(name) => Some(vec![name.clone()]),
-		Node::List(items, _, _) => items
-			.iter()
-			.map(|item| constraint_names(item).and_then(|n| n.into_iter().next()))
-			.collect(),
+		Node::List(items, _, _) => {
+			items.iter().map(|item| constraint_names(item).and_then(|n| n.into_iter().next())).collect()
+		}
 		_ => None,
 	}
 }
@@ -89,10 +88,7 @@ fn constrained_statements(items: &[Node]) -> Vec<(usize, usize)> {
 	let mut index = 0;
 	while index < items.len() {
 		let trailing = if split_constraint(&items[index]).is_some() {
-			items[index + 1..]
-				.iter()
-				.take_while(|item| is_effect_name(item))
-				.count()
+			items[index + 1..].iter().take_while(|item| is_effect_name(item)).count()
 		} else {
 			0
 		};
@@ -110,18 +106,10 @@ pub(super) fn constraints(program: &Node) -> Vec<(String, Constraint)> {
 
 fn collect_constraints(node: &Node, found: &mut Vec<(String, Constraint)>) {
 	if let Some((definition, (allowed, events))) = split_constraint(node) {
-		let (line, column) = node
-			.get_lineinfo()
-			.map(|info| (info.line_nr, info.column))
-			.unwrap_or_default();
+		let (line, column) = node.get_lineinfo().map(|info| (info.line_nr, info.column)).unwrap_or_default();
 		found.push((
 			definition.defined_name().expect("checked by split_constraint"),
-			Constraint {
-				allowed,
-				events,
-				line,
-				column,
-			},
+			Constraint { allowed, events, line, column },
 		));
 		return;
 	}

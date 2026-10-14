@@ -176,10 +176,7 @@ fn test_chaining() {
 #[test]
 fn test_type_mismatch_add() {
 	let result = &Node::text("hello") + &Node::int(5);
-	assert!(
-		matches!(result.drop_meta(), Node::Error(_)) && result.to_string().contains("Cannot add"),
-		"{result:?}"
-	);
+	assert!(matches!(result.drop_meta(), Node::Error(_)) && result.to_string().contains("Cannot add"), "{result:?}");
 }
 
 #[test]
@@ -203,10 +200,7 @@ fn test_type_mismatch_mul() {
 #[test]
 fn test_type_mismatch_div() {
 	let result = &Node::List(vec![], Bracket::Square, Separator::None) / &Node::int(5);
-	assert!(
-		matches!(result.drop_meta(), Node::Error(_)) && result.to_string().contains("Cannot divide"),
-		"{result:?}"
-	);
+	assert!(matches!(result.drop_meta(), Node::Error(_)) && result.to_string().contains("Cannot divide"), "{result:?}");
 }
 
 #[test]

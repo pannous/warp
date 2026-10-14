@@ -15,11 +15,7 @@ use std::collections::{HashMap, HashSet};
 /// the widening of an Int literal assigned to a float becomes an explicit Float literal, a codepoint assigned to a text a Text
 pub fn lower_declarations(node: Node) -> Node {
 	let variables = assigned_names(&node);
-	let mut names = Names {
-		values: names_used_as_values(&node),
-		variables,
-		texts: text_variables(&node),
-	};
+	let mut names = Names { values: names_used_as_values(&node), variables, texts: text_variables(&node) };
 	names.values.extend(names.variables.iter().cloned());
 	lower_declarations_among(node, &names)
 }
@@ -41,9 +37,7 @@ pub(crate) fn parameter_copies(
 	match node {
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) =>
 		{
-			let Node::List(items, _, _) = head.drop_meta() else {
-				unreachable!("guarded")
-			};
+			let Node::List(items, _, _) = head.drop_meta() else { unreachable!("guarded") };
 			let function = items[0].name();
 			let mut body = parameter_copies(*body, maps, texts);
 			// a parameter that is assigned (`arr = swap(arr, i, j)`) would convert at every assignment: it keeps walking
@@ -74,11 +68,7 @@ pub(crate) fn parameter_copies(
 /// a text, or a parameter of the calling function that is one of these in turn. They keep the generic way: an array
 /// copy would hold the text as its one item, and `source[i]` read the whole text (card self-lexer)
 pub(crate) fn text_parameters(program: &Node) -> HashSet<(String, usize)> {
-	let mut calls = TextCalls {
-		texts: TextValues::of(program),
-		found: HashSet::new(),
-		passed_on: vec![],
-	};
+	let mut calls = TextCalls { texts: TextValues::of(program), found: HashSet::new(), passed_on: vec![] };
 	calls.visit(program, None);
 	let mut changed = true;
 	while changed {
@@ -147,10 +137,7 @@ struct TextValues {
 
 impl TextValues {
 	fn of(program: &Node) -> Self {
-		let no_holders = TextValues {
-			holders: HashSet::new(),
-			fields: text_fields(program),
-		};
+		let no_holders = TextValues { holders: HashSet::new(), fields: text_fields(program) };
 		TextValues {
 			holders: variables_only_given(program, |value| no_holders.given_by(value)),
 			fields: no_holders.fields,
@@ -241,11 +228,7 @@ pub(crate) fn map_parameters(program: &Node) -> HashMap<(String, usize), bool> {
 			}
 		}
 	});
-	passed
-		.into_iter()
-		.filter(|(_, (maps, _))| *maps)
-		.map(|(position, (_, literals))| (position, literals))
-		.collect()
+	passed.into_iter().filter(|(_, (maps, _))| *maps).map(|(position, (_, literals))| (position, literals)).collect()
 }
 
 /// Every list of the program but a definition's head `(f a b) := …`, which names parameters and calls nothing
@@ -292,11 +275,7 @@ pub(crate) fn indexes(body: &Node, name: &str) -> bool {
 	loops.into_iter().for_each(|body| {
 		body.visit(&mut |part| {
 			let Node::Key(list, Op::Hash, index) = part else { return };
-			let counted = if matches!(list.drop_meta(), Node::Empty) {
-				index
-			} else {
-				list
-			};
+			let counted = if matches!(list.drop_meta(), Node::Empty) { index } else { list };
 			found |= !looks_up_a_key(index, &key_variables) && counted.is_symbol(name);
 		})
 	});
@@ -406,11 +385,7 @@ pub(crate) fn assigns(body: &Node, name: &str) -> bool {
 pub(crate) fn with_copy(body: Node, name: &str, suffix: &str) -> Node {
 	let copy = format!("{name}{suffix}");
 	let renamed = rename_symbol(body, name, &copy);
-	let start = Node::Key(
-		Box::new(Node::Symbol(copy)),
-		Op::Assign,
-		Box::new(Node::Symbol(name.to_string())),
-	);
+	let start = Node::Key(Box::new(Node::Symbol(copy)), Op::Assign, Box::new(Node::Symbol(name.to_string())));
 	match renamed {
 		Node::List(items, Bracket::Curly, separator) => Node::List(
 			std::iter::once(start).chain(items).collect(),
@@ -456,10 +431,7 @@ fn variables_only_given(program: &Node, wanted: impl Fn(&Node) -> bool) -> HashS
 		let updates_itself = matches!(value.drop_meta(), Node::Key(left, _, _) if left.is_symbol(name));
 		*only.entry(name.clone()).or_insert(true) &= updates_itself || wanted(value.drop_meta());
 	});
-	only.into_iter()
-		.filter(|(_, given)| *given)
-		.map(|(name, _)| name)
-		.collect()
+	only.into_iter().filter(|(_, given)| *given).map(|(name, _)| name).collect()
 }
 
 /// Words that stand as values somewhere: not as the head of a call, a type annotation (`x:int`, `as int`) or the
@@ -522,16 +494,10 @@ pub(crate) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		// `fast x=v` → `x:fast=v`, parsed either as `(fast x)=v` or as the statement pair `fast (x=v)`;
 		// `double(x) := x+x` and `double x := x+x` stay function definitions
 		Node::Key(target, Op::Assign, value) if let Some((type_name, name)) = number_type_prefix(&target) => {
-			lower(Node::Key(
-				Box::new(Node::Key(Box::new(name), Op::Colon, Box::new(type_name))),
-				Op::Assign,
-				value,
-			))
+			lower(Node::Key(Box::new(Node::Key(Box::new(name), Op::Colon, Box::new(type_name))), Op::Assign, value))
 		}
 		Node::List(items, bracket, separator)
-			if items
-				.windows(2)
-				.any(|pair| paired_declaration(&pair[0], &pair[1]).is_some()) =>
+			if items.windows(2).any(|pair| paired_declaration(&pair[0], &pair[1]).is_some()) =>
 		{
 			Node::single_or_list(with_paired_declarations(items, lower), bracket, separator)
 		}
@@ -636,10 +602,7 @@ fn typed_assignment(target: Box<Node>, op: Op, value: Node) -> Node {
 	let Node::Key(name, Op::Colon, type_name) = target.drop_meta() else {
 		return Node::Key(target, op, value);
 	};
-	if !matches!(
-		(name.drop_meta(), type_name.drop_meta()),
-		(Node::Symbol(_), Node::Symbol(_))
-	) {
+	if !matches!((name.drop_meta(), type_name.drop_meta()), (Node::Symbol(_), Node::Symbol(_))) {
 		return Node::Key(target, op, value);
 	}
 	let value = match (builtin_type_kind(&type_name.name()), value.drop_meta()) {
@@ -651,11 +614,7 @@ fn typed_assignment(target: Box<Node>, op: Op, value: Node) -> Node {
 		(Some(Kind::Text), Node::Char(character)) => Box::new(Node::Text(character.to_string())),
 		_ => value,
 	};
-	Node::Key(
-		Box::new(Node::meta(name.drop_meta().clone(), type_name.drop_meta().clone())),
-		op,
-		value,
-	)
+	Node::Key(Box::new(Node::meta(name.drop_meta().clone(), type_name.drop_meta().clone())), op, value)
 }
 
 /// `add "c" to x` of a text: the text grows (wiki row 29); a list gets the element in place, `xs += [v]` like Python's
@@ -665,22 +624,14 @@ fn appended(list: Box<Node>, element: Node, names: &Names) -> Node {
 		let appended = Node::Key(list.clone(), Op::Add, Box::new(element));
 		return Node::Key(list, Op::Assign, Box::new(appended));
 	}
-	Node::Key(
-		list,
-		Op::AddAssign,
-		Box::new(Node::List(vec![element], Bracket::Square, Separator::Space)),
-	)
+	Node::Key(list, Op::AddAssign, Box::new(Node::List(vec![element], Bracket::Square, Separator::Space)))
 }
 
 /// A rewritten declaration and the items after it, as they were grouped
 fn followed(declared: Node, rest: &[Node], bracket: &Bracket, separator: &Separator) -> Node {
 	match rest {
 		[] => declared,
-		rest => Node::List(
-			[vec![declared], rest.to_vec()].concat(),
-			bracket.clone(),
-			separator.clone(),
-		),
+		rest => Node::List([vec![declared], rest.to_vec()].concat(), bracket.clone(), separator.clone()),
 	}
 }
 
@@ -696,11 +647,7 @@ fn postfix_list_declaration(items: &[Node], bracket: &Bracket, separator: &Separ
 		return None;
 	};
 	let typed_name = |name: &Node| {
-		Node::Key(
-			Box::new(name.clone()),
-			Op::Colon,
-			Box::new(Node::Symbol(format!("{LIST_OF_PREFIX}{element}"))),
-		)
+		Node::Key(Box::new(name.clone()), Op::Colon, Box::new(Node::Symbol(format!("{LIST_OF_PREFIX}{element}"))))
 	};
 	let declared = match list.drop_meta() {
 		Node::Symbol(word) if word == LIST_WORD => typed_name(name),
@@ -769,11 +716,7 @@ fn maybe_type_declaration(items: &[Node], bracket: &Bracket, separator: &Separat
 		return None;
 	}
 	let optional = |word: &Node| match word.drop_meta() {
-		Node::Symbol(word) => Some(Node::Key(
-			name.clone(),
-			Op::Colon,
-			Box::new(Node::Symbol(format!("{word}?"))),
-		)),
+		Node::Symbol(word) => Some(Node::Key(name.clone(), Op::Colon, Box::new(Node::Symbol(format!("{word}?"))))),
 		_ => None,
 	};
 	let declared = match typed.drop_meta() {
@@ -870,11 +813,8 @@ pub(crate) fn prefixed_declaration(type_name: &Node, next: &Node) -> Option<Node
 		Node::Key(name, op @ (Op::Assign | Op::Define), value)
 			if is_declaration_type(type_name) && matches!(name.drop_meta(), Node::Symbol(_)) =>
 		{
-			let target = Node::Key(
-				Box::new(name.drop_meta().clone()),
-				Op::Colon,
-				Box::new(type_name.drop_meta().clone()),
-			);
+			let target =
+				Node::Key(Box::new(name.drop_meta().clone()), Op::Colon, Box::new(type_name.drop_meta().clone()));
 			Some(Node::Key(Box::new(target), *op, value.clone()))
 		}
 		_ => None,

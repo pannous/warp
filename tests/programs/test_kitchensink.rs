@@ -61,20 +61,10 @@ fn test_node(name: &str, node: Node) {
 	let bytes = emitter.finish();
 
 	// Verify WASM magic number
-	assert_eq!(
-		&bytes[0..4],
-		&[0x00, 0x61, 0x73, 0x6D],
-		"{}: Invalid WASM magic number",
-		name
-	);
+	assert_eq!(&bytes[0..4], &[0x00, 0x61, 0x73, 0x6D], "{}: Invalid WASM magic number", name);
 
 	// Verify WASM version
-	assert_eq!(
-		&bytes[4..8],
-		&[0x01, 0x00, 0x00, 0x00],
-		"{}: Invalid WASM version",
-		name
-	);
+	assert_eq!(&bytes[4..8], &[0x01, 0x00, 0x00, 0x00], "{}: Invalid WASM version", name);
 
 	// Validate with wasmparser
 	use wasmparser::{Validator, WasmFeatures};
@@ -137,9 +127,7 @@ fn test_kitchensink_complex_tree() {
 	features.set(WasmFeatures::GC, true);
 
 	let mut validator = Validator::new_with_features(features);
-	validator
-		.validate_all(&bytes)
-		.expect("Complex tree WASM validation failed");
+	validator.validate_all(&bytes).expect("Complex tree WASM validation failed");
 
 	// Check data section has all strings
 	let filename = "out/kitchensink_complex_tree.wasm";

@@ -66,11 +66,7 @@ pub(crate) fn unit_count(node: &Node) -> Option<Node> {
 		let Node::Symbol(word) = unit.drop_meta() else {
 			return None;
 		};
-		Some(Node::Key(
-			Box::new(text),
-			Op::Dot,
-			Box::new(Node::Symbol(text_unit(word)?.to_string())),
-		))
+		Some(Node::Key(Box::new(text), Op::Dot, Box::new(Node::Symbol(text_unit(word)?.to_string()))))
 	};
 	match node.drop_meta() {
 		Node::List(items, _, _) if items.len() == 1 => unit_count(&items[0]),
@@ -102,11 +98,7 @@ pub(crate) fn hashed_unit_count(items: &[Node]) -> Option<Node> {
 		return None;
 	};
 	let counted = rest_of(items, 2, &Bracket::None, &Separator::Space);
-	Some(Node::Key(
-		Box::new(counted),
-		Op::Dot,
-		Box::new(Node::Symbol(text_unit(word)?.to_string())),
-	))
+	Some(Node::Key(Box::new(counted), Op::Dot, Box::new(Node::Symbol(text_unit(word)?.to_string()))))
 }
 
 /// `x size`, `x count`, `x length`, `x number`: a counting property word after a name is the getter `x.size`,
@@ -152,19 +144,9 @@ pub(crate) fn print_walk(items: &[Node], variables: &HashSet<String>) -> Option<
 	if !print.is_symbol("print") || !in_word.is_symbol("in") || variables.contains(name) {
 		return None;
 	}
-	let body = Node::List(
-		vec![print.clone(), Node::Symbol(name.clone())],
-		Bracket::Curly,
-		Separator::Space,
-	);
+	let body = Node::List(vec![print.clone(), Node::Symbol(name.clone())], Bracket::Curly, Separator::Space);
 	Some(Node::List(
-		vec![
-			Node::Symbol("for".into()),
-			Node::Symbol(name.clone()),
-			in_word.clone(),
-			collection.clone(),
-			body,
-		],
+		vec![Node::Symbol("for".into()), Node::Symbol(name.clone()), in_word.clone(), collection.clone(), body],
 		Bracket::None,
 		Separator::Space,
 	))
@@ -183,11 +165,7 @@ pub(crate) fn counting_phrase(
 	}
 	let in_unit = |counted: Node, unit: &Node| {
 		let unit = text_unit(unit.symbol_name()?)?;
-		Some(Node::Key(
-			Box::new(counted),
-			Op::Dot,
-			Box::new(Node::Symbol(unit.to_string())),
-		))
+		Some(Node::Key(Box::new(counted), Op::Dot, Box::new(Node::Symbol(unit.to_string()))))
 	};
 	match items {
 		[count, counted] if count.symbol_name().is_some_and(is_counting_property) => {
@@ -231,13 +209,8 @@ pub(crate) fn range_elements(range: &Node) -> Option<Node> {
 		return None;
 	};
 	let last = if *op == Op::To { *end } else { end - 1 };
-	(start <= &last && last - start < LITERAL_RANGE_MAX_LENGTH).then(|| {
-		Node::List(
-			(*start..=last).map(Node::int).collect(),
-			Bracket::Square,
-			Separator::Space,
-		)
-	})
+	(start <= &last && last - start < LITERAL_RANGE_MAX_LENGTH)
+		.then(|| Node::List((*start..=last).map(Node::int).collect(), Bracket::Square, Separator::Space))
 }
 
 /// The name a range of computed bounds collects its list under where no variable is assigned (`print a..b`)
@@ -264,22 +237,12 @@ pub(crate) fn computed_range(target: &Node, range: &Node) -> Option<Node> {
 		Separator::Semicolon,
 	);
 	let walk = Node::List(
-		vec![
-			Node::Symbol("for".into()),
-			item,
-			Node::Symbol("in".into()),
-			range.clone(),
-			body,
-		],
+		vec![Node::Symbol("for".into()), item, Node::Symbol("in".into()), range.clone(), body],
 		Bracket::None,
 		Separator::Space,
 	);
 	let start = Node::Key(Box::new(items.clone()), Op::Assign, Box::new(Node::Empty));
-	Some(Node::List(
-		vec![start, walk, items],
-		Bracket::Round,
-		Separator::Semicolon,
-	))
+	Some(Node::List(vec![start, walk, items], Bracket::Round, Separator::Semicolon))
 }
 
 pub(super) fn require_counter(ctx: &mut Context, counter: &'static str) {

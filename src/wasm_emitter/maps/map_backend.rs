@@ -30,14 +30,8 @@ const NODE_MAP_SLOT: &str = "node_map_slot";
 const NODE_MAP_RESLOT: &str = "node_map_reslot";
 const NODE_MAP_REMOVE: &str = "node_map_remove";
 /// The functions a program using a map variable calls; the rest come with them
-pub(in crate::wasm_emitter) const NODE_MAP_FUNCTIONS: [&str; 6] = [
-	NODE_MAP_NEW,
-	NODE_MAP_SET,
-	NODE_MAP_LOOKUP,
-	NODE_MAP_AS_NODE,
-	NODE_MAP_OF,
-	NODE_MAP_REMOVE,
-];
+pub(in crate::wasm_emitter) const NODE_MAP_FUNCTIONS: [&str; 6] =
+	[NODE_MAP_NEW, NODE_MAP_SET, NODE_MAP_LOOKUP, NODE_MAP_AS_NODE, NODE_MAP_OF, NODE_MAP_REMOVE];
 /// Words that read a map without holding on to it, besides those reading any collection (reads_collection): a map
 /// variable given to them stays a hash table
 const MAP_READING_WORDS: [&str; 5] = [
@@ -135,10 +129,7 @@ impl WasmGcEmitter {
 			&mut used_whole,
 		);
 		excluded.extend(used_whole);
-		started
-			.into_iter()
-			.filter(|name| keyed.contains(name) && !excluded.contains(name))
-			.collect()
+		started.into_iter().filter(|name| keyed.contains(name) && !excluded.contains(name)).collect()
 	}
 
 	/// The variables a typed backend (hash table, struct) never holds: globals, captured ones and those assigned in a
@@ -195,22 +186,12 @@ impl WasmGcEmitter {
 		self.emit_node_instructions(func, key);
 		self.emit_call(func, NODE_MAP_LOOKUP);
 		Self::emit_list(func, &[I::RefIsNull, I::I32Eqz, I::I64ExtendI32U]);
-		self.emit_call(
-			func,
-			if word == COLLECTION_CONTAINS {
-				super::super::NEW_BOOL
-			} else {
-				"new_int"
-			},
-		);
+		self.emit_call(func, if word == COLLECTION_CONTAINS { super::super::NEW_BOOL } else { "new_int" });
 		true
 	}
 
 	pub(in crate::wasm_emitter) fn node_map_ref(&self) -> RefType {
-		RefType {
-			nullable: true,
-			heap_type: HeapType::Concrete(self.type_manager.node_map_type),
-		}
+		RefType { nullable: true, heap_type: HeapType::Concrete(self.type_manager.node_map_type) }
 	}
 
 	/// `m = {}`, `m = {a:1}`, `m·map = m`: a table in m's slot, left on the stack; `m = field_with(m, k, v)` sets the
@@ -267,14 +248,7 @@ impl WasmGcEmitter {
 		let map = self.type_manager.node_map_type;
 		Self::emit_list(
 			func,
-			&[
-				slot.get(),
-				I::StructGet {
-					struct_type_index: map,
-					field_index: COUNT,
-				},
-				I::I64ExtendI32U,
-			],
+			&[slot.get(), I::StructGet { struct_type_index: map, field_index: COUNT }, I::I64ExtendI32U],
 		);
 	}
 
@@ -289,33 +263,15 @@ impl WasmGcEmitter {
 			return;
 		}
 		let (node, string) = (self.type_manager.node_type, self.type_manager.string_type);
-		let (map, array, slots) = (
-			self.type_manager.node_map_type,
-			self.type_manager.node_array_type,
-			self.type_manager.limbs_type,
-		);
+		let (map, array, slots) =
+			(self.type_manager.node_map_type, self.type_manager.node_array_type, self.type_manager.limbs_type);
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let map_ref = Ref(self.node_map_ref());
-		let slots_ref = Ref(RefType {
-			nullable: true,
-			heap_type: HeapType::Concrete(slots),
-		});
-		let array_ref = Ref(RefType {
-			nullable: true,
-			heap_type: HeapType::Concrete(array),
-		});
+		let slots_ref = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(slots) });
+		let array_ref = Ref(RefType { nullable: true, heap_type: HeapType::Concrete(array) });
 		let int = ValType::I32;
 		let field = |f: &mut Function, local: u32, index: u32| {
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(local),
-					I::StructGet {
-						struct_type_index: map,
-						field_index: index,
-					},
-				],
-			)
+			Self::emit_list(f, &[I::LocalGet(local), I::StructGet { struct_type_index: map, field_index: index }])
 		};
 		let null_node = I::RefNull(HeapType::Concrete(node));
 
@@ -326,12 +282,7 @@ impl WasmGcEmitter {
 			}
 			Self::emit_list(
 				f,
-				&[
-					I::I32Const(EMPTY_SLOT),
-					I::I32Const(FIRST_SLOTS),
-					I::ArrayNew(slots),
-					I::StructNew(map),
-				],
+				&[I::I32Const(EMPTY_SLOT), I::I32Const(FIRST_SLOTS), I::ArrayNew(slots), I::StructNew(map)],
 			);
 		});
 
@@ -344,10 +295,7 @@ impl WasmGcEmitter {
 					f,
 					&[
 						I::RefCastNonNull(HeapType::Concrete(string)),
-						I::StructGet {
-							struct_type_index: string,
-							field_index: index,
-						},
+						I::StructGet { struct_type_index: string, field_index: index },
 						I::LocalSet(local),
 					],
 				);
@@ -364,11 +312,7 @@ impl WasmGcEmitter {
 					I::BrIf(1),
 					I::LocalGet(hash),
 					I::LocalGet(pointer),
-					I::I32Load8U(MemArg {
-						offset: 0,
-						align: 0,
-						memory_index: 0,
-					}),
+					I::I32Load8U(MemArg { offset: 0, align: 0, memory_index: 0 }),
 					I::I32Xor,
 					I::I32Const(FNV_PRIME),
 					I::I32Mul,
@@ -400,14 +344,7 @@ impl WasmGcEmitter {
 				field(f, 0, SLOTS);
 				Self::emit_list(
 					f,
-					&[
-						I::LocalTee(table),
-						I::ArrayLen,
-						I::I32Const(1),
-						I::I32Sub,
-						I::LocalSet(mask),
-						I::LocalGet(1),
-					],
+					&[I::LocalTee(table), I::ArrayLen, I::I32Const(1), I::I32Sub, I::LocalSet(mask), I::LocalGet(1)],
 				);
 				s.call(f, NODE_MAP_HASH);
 				Self::emit_list(
@@ -436,10 +373,7 @@ impl WasmGcEmitter {
 						I::LocalGet(entry),
 						I::ArrayGet(array),
 						I::RefAsNonNull,
-						I::StructGet {
-							struct_type_index: node,
-							field_index: 1,
-						},
+						I::StructGet { struct_type_index: node, field_index: 1 },
 					],
 				);
 				s.emit_field(f, 1, 1);
@@ -475,10 +409,7 @@ impl WasmGcEmitter {
 					I::I32Const(EMPTY_SLOT),
 					I::LocalGet(1),
 					I::ArrayNew(slots),
-					I::StructSet {
-						struct_type_index: map,
-						field_index: SLOTS,
-					},
+					I::StructSet { struct_type_index: map, field_index: SLOTS },
 					I::I32Const(0),
 					I::LocalSet(entry),
 					I::Block(BlockType::Empty),
@@ -538,16 +469,7 @@ impl WasmGcEmitter {
 					],
 				);
 				field(f, 0, VALUES);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(entry),
-						I::LocalGet(2),
-						I::ArraySet(array),
-						I::Return,
-						I::End,
-					],
-				);
+				Self::emit_list(f, &[I::LocalGet(entry), I::LocalGet(2), I::ArraySet(array), I::Return, I::End]);
 				// a new entry: room for it, then key, value and slot
 				field(f, 0, COUNT);
 				f.instruction(&I::LocalTee(count));
@@ -572,17 +494,11 @@ impl WasmGcEmitter {
 						&[
 							I::I32Const(0),
 							I::LocalGet(count),
-							I::ArrayCopy {
-								array_type_index_dst: array,
-								array_type_index_src: array,
-							},
+							I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
 							I::LocalGet(0),
 							I::LocalGet(grown),
 							I::RefAsNonNull,
-							I::StructSet {
-								struct_type_index: map,
-								field_index: part,
-							},
+							I::StructSet { struct_type_index: map, field_index: part },
 						],
 					);
 				}
@@ -603,10 +519,7 @@ impl WasmGcEmitter {
 						I::I32Const(1),
 						I::I32Add,
 						I::LocalTee(count),
-						I::StructSet {
-							struct_type_index: map,
-							field_index: COUNT,
-						},
+						I::StructSet { struct_type_index: map, field_index: COUNT },
 						I::LocalGet(count),
 						I::I32Const(1),
 						I::I32Shl,
@@ -633,82 +546,56 @@ impl WasmGcEmitter {
 			field(f, 0, SLOTS);
 			Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(name), I::RefAsNonNull]);
 			s.call(f, NODE_MAP_SLOT);
-			Self::emit_list(
-				f,
-				&[
-					I::ArrayGet(slots),
-					I::LocalTee(entry),
-					I::I32Const(EMPTY_SLOT),
-					I::I32Eq,
-				],
-			);
+			Self::emit_list(f, &[I::ArrayGet(slots), I::LocalTee(entry), I::I32Const(EMPTY_SLOT), I::I32Eq]);
 			Self::emit_list(f, &return_missing);
 		};
 
 		// node_map_remove(map, key): the entry of that name gone, the later ones moved up a place; the slots placed again
-		self.runtime_function(
-			NODE_MAP_REMOVE,
-			vec![map_ref, node_ref],
-			vec![],
-			vec![nullable, int, int],
-			|s, f| {
-				let (name, entry, count) = (2, 3, 4);
-				find_entry(s, f, name, entry, &[]);
-				field(f, 0, COUNT);
-				Self::emit_list(f, &[I::I32Const(1), I::I32Sub, I::LocalSet(count)]);
-				for part in [KEYS, VALUES] {
-					field(f, 0, part);
-					f.instruction(&I::LocalGet(entry));
-					field(f, 0, part);
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(entry),
-							I::I32Const(1),
-							I::I32Add,
-							I::LocalGet(count),
-							I::LocalGet(entry),
-							I::I32Sub,
-							I::ArrayCopy {
-								array_type_index_dst: array,
-								array_type_index_src: array,
-							},
-						],
-					);
-					field(f, 0, part);
-					Self::emit_list(f, &[I::LocalGet(count), null_node.clone(), I::ArraySet(array)]);
-				}
+		self.runtime_function(NODE_MAP_REMOVE, vec![map_ref, node_ref], vec![], vec![nullable, int, int], |s, f| {
+			let (name, entry, count) = (2, 3, 4);
+			find_entry(s, f, name, entry, &[]);
+			field(f, 0, COUNT);
+			Self::emit_list(f, &[I::I32Const(1), I::I32Sub, I::LocalSet(count)]);
+			for part in [KEYS, VALUES] {
+				field(f, 0, part);
+				f.instruction(&I::LocalGet(entry));
+				field(f, 0, part);
 				Self::emit_list(
 					f,
 					&[
-						I::LocalGet(0),
+						I::LocalGet(entry),
+						I::I32Const(1),
+						I::I32Add,
 						I::LocalGet(count),
-						I::StructSet {
-							struct_type_index: map,
-							field_index: COUNT,
-						},
-						I::LocalGet(0),
+						I::LocalGet(entry),
+						I::I32Sub,
+						I::ArrayCopy { array_type_index_dst: array, array_type_index_src: array },
 					],
 				);
-				field(f, 0, SLOTS);
-				f.instruction(&I::ArrayLen);
-				s.call(f, NODE_MAP_RESLOT);
-			},
-		);
+				field(f, 0, part);
+				Self::emit_list(f, &[I::LocalGet(count), null_node.clone(), I::ArraySet(array)]);
+			}
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(0),
+					I::LocalGet(count),
+					I::StructSet { struct_type_index: map, field_index: COUNT },
+					I::LocalGet(0),
+				],
+			);
+			field(f, 0, SLOTS);
+			f.instruction(&I::ArrayLen);
+			s.call(f, NODE_MAP_RESLOT);
+		});
 
 		// node_map_lookup(map, key): the value of the entry of that name; null when there is none or the key is no name
-		self.runtime_function(
-			NODE_MAP_LOOKUP,
-			vec![map_ref, node_ref],
-			vec![nullable],
-			vec![nullable, int],
-			|s, f| {
-				let (name, entry) = (2, 3);
-				find_entry(s, f, name, entry, std::slice::from_ref(&null_node));
-				field(f, 0, VALUES);
-				Self::emit_list(f, &[I::LocalGet(entry), I::ArrayGet(array)]);
-			},
-		);
+		self.runtime_function(NODE_MAP_LOOKUP, vec![map_ref, node_ref], vec![nullable], vec![nullable, int], |s, f| {
+			let (name, entry) = (2, 3);
+			find_entry(s, f, name, entry, std::slice::from_ref(&null_node));
+			field(f, 0, VALUES);
+			Self::emit_list(f, &[I::LocalGet(entry), I::ArrayGet(array)]);
+		});
 
 		// node_map_of(node): the table of a map Node: ø none, an entry `k:v` one, a curly list its entries (a missing
 		// value as ø); anything else is no map
@@ -726,17 +613,11 @@ impl WasmGcEmitter {
 							I::LocalGet(table),
 							I::LocalGet(entry),
 							I::RefAsNonNull,
-							I::StructGet {
-								struct_type_index: node,
-								field_index: 1,
-							},
+							I::StructGet { struct_type_index: node, field_index: 1 },
 							I::RefCastNonNull(HeapType::Concrete(node)),
 							I::LocalGet(entry),
 							I::RefAsNonNull,
-							I::StructGet {
-								struct_type_index: node,
-								field_index: 2,
-							},
+							I::StructGet { struct_type_index: node, field_index: 2 },
 							I::RefIsNull,
 							I::If(BlockType::Result(node_ref)),
 						],
@@ -748,10 +629,7 @@ impl WasmGcEmitter {
 							I::Else,
 							I::LocalGet(entry),
 							I::RefAsNonNull,
-							I::StructGet {
-								struct_type_index: node,
-								field_index: 2,
-							},
+							I::StructGet { struct_type_index: node, field_index: 2 },
 							I::RefAsNonNull,
 							I::End,
 						],
@@ -764,10 +642,7 @@ impl WasmGcEmitter {
 						&[
 							I::LocalGet(local),
 							I::RefAsNonNull,
-							I::StructGet {
-								struct_type_index: node,
-								field_index: 0,
-							},
+							I::StructGet { struct_type_index: node, field_index: 0 },
 						],
 					);
 					Self::emit_kind_test(f, expected, I::I64Eq);
@@ -778,10 +653,7 @@ impl WasmGcEmitter {
 					&[
 						I::LocalSet(table),
 						I::LocalGet(0),
-						I::StructGet {
-							struct_type_index: node,
-							field_index: 0,
-						},
+						I::StructGet { struct_type_index: node, field_index: 0 },
 						I::I64Const(KIND_MASK),
 						I::I64And,
 						I::LocalTee(kind),
@@ -826,10 +698,7 @@ impl WasmGcEmitter {
 						I::BrIf(1),
 						I::LocalGet(cell),
 						I::RefAsNonNull,
-						I::StructGet {
-							struct_type_index: node,
-							field_index: 1,
-						},
+						I::StructGet { struct_type_index: node, field_index: 1 },
 						I::RefCastNullable(HeapType::Concrete(node)),
 						I::LocalTee(entry),
 						I::RefIsNull,
@@ -848,10 +717,7 @@ impl WasmGcEmitter {
 						I::End,
 						I::LocalGet(cell),
 						I::RefAsNonNull,
-						I::StructGet {
-							struct_type_index: node,
-							field_index: 2,
-						},
+						I::StructGet { struct_type_index: node, field_index: 2 },
 						I::LocalSet(cell),
 						I::Br(0),
 						I::End,
@@ -864,71 +730,65 @@ impl WasmGcEmitter {
 
 		// node_map_as_node(map): ø, the one entry, or the curly list of the entries in their order
 		let colon = crate::operators::op_to_code(&Op::Colon);
-		self.runtime_function(
-			NODE_MAP_AS_NODE,
-			vec![map_ref],
-			vec![node_ref],
-			vec![int, nullable],
-			|s, f| {
-				let (entry, rest) = (1, 2);
-				let entry_node = |s: &Self, f: &mut Function| {
-					for part in [KEYS, VALUES] {
-						field(f, 0, part);
-						Self::emit_list(f, &[I::LocalGet(entry), I::ArrayGet(array), I::RefAsNonNull]);
-					}
-					f.instruction(&I::I64Const(colon));
-					s.call(f, "new_key");
-				};
-				field(f, 0, COUNT);
-				Self::emit_list(f, &[I::LocalTee(entry), I::I32Eqz, I::If(BlockType::Empty)]);
-				s.call(f, "new_empty");
-				Self::emit_list(
-					f,
-					&[
-						I::Return,
-						I::End,
-						I::LocalGet(entry),
-						I::I32Const(1),
-						I::I32Eq,
-						I::If(BlockType::Empty),
-						I::I32Const(0),
-						I::LocalSet(entry),
-					],
-				);
-				entry_node(s, f);
-				Self::emit_list(
-					f,
-					&[
-						I::Return,
-						I::End,
-						I::Block(BlockType::Empty),
-						I::Loop(BlockType::Empty),
-						I::LocalGet(entry),
-						I::I32Eqz,
-						I::BrIf(1),
-						I::LocalGet(entry),
-						I::I32Const(1),
-						I::I32Sub,
-						I::LocalSet(entry),
-						I::I64Const(CURLY_LIST_KIND),
-					],
-				);
-				entry_node(s, f);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(rest),
-						I::StructNew(node),
-						I::LocalSet(rest),
-						I::Br(0),
-						I::End,
-						I::End,
-						I::LocalGet(rest),
-						I::RefAsNonNull,
-					],
-				);
-			},
-		);
+		self.runtime_function(NODE_MAP_AS_NODE, vec![map_ref], vec![node_ref], vec![int, nullable], |s, f| {
+			let (entry, rest) = (1, 2);
+			let entry_node = |s: &Self, f: &mut Function| {
+				for part in [KEYS, VALUES] {
+					field(f, 0, part);
+					Self::emit_list(f, &[I::LocalGet(entry), I::ArrayGet(array), I::RefAsNonNull]);
+				}
+				f.instruction(&I::I64Const(colon));
+				s.call(f, "new_key");
+			};
+			field(f, 0, COUNT);
+			Self::emit_list(f, &[I::LocalTee(entry), I::I32Eqz, I::If(BlockType::Empty)]);
+			s.call(f, "new_empty");
+			Self::emit_list(
+				f,
+				&[
+					I::Return,
+					I::End,
+					I::LocalGet(entry),
+					I::I32Const(1),
+					I::I32Eq,
+					I::If(BlockType::Empty),
+					I::I32Const(0),
+					I::LocalSet(entry),
+				],
+			);
+			entry_node(s, f);
+			Self::emit_list(
+				f,
+				&[
+					I::Return,
+					I::End,
+					I::Block(BlockType::Empty),
+					I::Loop(BlockType::Empty),
+					I::LocalGet(entry),
+					I::I32Eqz,
+					I::BrIf(1),
+					I::LocalGet(entry),
+					I::I32Const(1),
+					I::I32Sub,
+					I::LocalSet(entry),
+					I::I64Const(CURLY_LIST_KIND),
+				],
+			);
+			entry_node(s, f);
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(rest),
+					I::StructNew(node),
+					I::LocalSet(rest),
+					I::Br(0),
+					I::End,
+					I::End,
+					I::LocalGet(rest),
+					I::RefAsNonNull,
+				],
+			);
+		});
 	}
 }
 
@@ -950,12 +810,8 @@ pub(in crate::wasm_emitter) fn entry_update(name: &str, value: &Node) -> Option<
 	let [_, _, key, entry_value] = items.as_slice() else {
 		return None;
 	};
-	crate::library_words::is_field_update_of(name, value).then(|| {
-		(
-			Node::Key(Box::new(key.clone()), Op::Add, Box::new(crate::node::int(1))),
-			entry_value.clone(),
-		)
-	})
+	crate::library_words::is_field_update_of(name, value)
+		.then(|| (Node::Key(Box::new(key.clone()), Op::Add, Box::new(crate::node::int(1))), entry_value.clone()))
 }
 
 /// `map_without(m, key)` removing an entry of the variable m itself: the key
@@ -1001,11 +857,7 @@ fn without_reads(node: Node, functions: &BTreeMap<String, UserFunctionDef>) -> N
 		Node::List(items, bracket, separator) if items.first().is_some_and(is_reading_word) => {
 			let mut items = items.into_iter();
 			let word = items.next().expect("guarded");
-			Node::List(
-				std::iter::once(word).chain(items.map(read)).collect(),
-				bracket,
-				separator,
-			)
+			Node::List(std::iter::once(word).chain(items.map(read)).collect(), bracket, separator)
 		}
 		// `m same n` asks for the one Node
 		Node::Key(left, op, right) if op.is_comparison() && !matches!(op, Op::Identical | Op::NotIdentical) => {

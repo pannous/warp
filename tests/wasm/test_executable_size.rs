@@ -39,22 +39,14 @@ fn test_executable_exports_only_what_the_stub_calls() {
 	assert_eq!(printed_by(&executable), "49\n");
 	let exports = carried_exports(&executable);
 	assert!(exports.contains(&"main".to_string()), "{exports:?}");
-	assert!(
-		!exports
-			.iter()
-			.any(|name| name == "square" || name == "get_kind" || name == "list_at"),
-		"{exports:?}"
-	);
+	assert!(!exports.iter().any(|name| name == "square" || name == "get_kind" || name == "list_at"), "{exports:?}");
 }
 
 #[test]
 fn test_executable_keeps_its_handlers() {
 	let executable = built_executable("size_on_exit", "on exit { print \"bye\" }\nprint \"hello\"");
 	let printed = printed_by(&executable);
-	assert!(
-		printed.starts_with("hello\n") && printed.ends_with("bye\n"),
-		"{printed}"
-	);
+	assert!(printed.starts_with("hello\n") && printed.ends_with("bye\n"), "{printed}");
 }
 
 #[test]

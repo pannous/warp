@@ -84,23 +84,13 @@ impl InstanceTypes {
 					}
 					// `xs: [C] = …` of a declared list type (before the instance case: the name of `[C]` is C)
 					(Node::Key(name, Op::Colon, type_node), _) if self.declared_element(type_node).is_some() => {
-						Self::bind(
-							variables,
-							&name.name(),
-							self.declared_element(type_node).map(Shape::ListOf),
-							false,
-						)
+						Self::bind(variables, &name.name(), self.declared_element(type_node).map(Shape::ListOf), false)
 					}
 					// `d:docx = …` of a declared type
 					(Node::Key(name, Op::Colon, type_node), _)
 						if self.registry.get_by_name(&type_node.drop_meta().name()).is_some() =>
 					{
-						Self::bind(
-							variables,
-							&name.name(),
-							Some(Shape::Instance(type_node.drop_meta().name())),
-							false,
-						)
+						Self::bind(variables, &name.name(), Some(Shape::Instance(type_node.drop_meta().name())), false)
 					}
 					(_, Some(head)) => Self::bind(results, &head[0].name(), self.shape(value), is_plain),
 					_ => {}
@@ -140,12 +130,7 @@ impl InstanceTypes {
 		let shape_of = |parameter: &Node| match parameter.drop_meta() {
 			Node::Key(name, Op::Colon, type_node) => {
 				let type_name = type_node.drop_meta().name();
-				Some((
-					name.name(),
-					self.registry
-						.get_by_name(&type_name)
-						.map(|_| Shape::Instance(type_name)),
-				))
+				Some((name.name(), self.registry.get_by_name(&type_name).map(|_| Shape::Instance(type_name))))
 			}
 			Node::Key(name, Op::Assign, _) => Some((name.name(), None)),
 			Node::Symbol(name) => Some((name.clone(), None)),
@@ -175,10 +160,7 @@ impl InstanceTypes {
 
 	/// Is `name` a field of any declared type: `v.x` then reads the field at run time, whatever v holds
 	pub fn is_declared_field(&self, name: &str) -> bool {
-		self.registry
-			.types()
-			.iter()
-			.any(|type_def| type_def.fields.iter().any(|field| field.name == name))
+		self.registry.types().iter().any(|type_def| type_def.fields.iter().any(|field| field.name == name))
 	}
 
 	/// Does `list` hold instances of a declared type with the field `name`: `people.name` then reads it of each
@@ -268,9 +250,7 @@ impl InstanceTypes {
 		match (diverges(then), diverges(otherwise)) {
 			(true, _) => self.shape(otherwise),
 			(_, true) => self.shape(then),
-			_ => self
-				.shape(then)
-				.filter(|shape| self.shape(otherwise).as_ref() == Some(shape)),
+			_ => self.shape(then).filter(|shape| self.shape(otherwise).as_ref() == Some(shape)),
 		}
 	}
 
@@ -281,10 +261,7 @@ impl InstanceTypes {
 			return None;
 		};
 		let type_def = self.registry.get_by_name(&type_name)?;
-		let entries = type_def
-			.fields
-			.iter()
-			.map(|field| key(Node::Symbol(field.name.clone()), Op::Colon, Node::Empty));
+		let entries = type_def.fields.iter().map(|field| key(Node::Symbol(field.name.clone()), Op::Colon, Node::Empty));
 		Some(Node::List(entries.collect(), Bracket::Curly, Separator::Space))
 	}
 }

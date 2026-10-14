@@ -99,15 +99,7 @@ impl WasmGcEmitter {
 				put(f, b'0');
 				Self::emit_list(
 					f,
-					&[
-						I::LocalGet(count),
-						I::I32Const(1),
-						I::I32Sub,
-						I::LocalSet(count),
-						I::Br(0),
-						I::End,
-						I::End,
-					],
+					&[I::LocalGet(count), I::I32Const(1), I::I32Sub, I::LocalSet(count), I::Br(0), I::End, I::End],
 				);
 			};
 
@@ -115,36 +107,15 @@ impl WasmGcEmitter {
 			return_text(f, not_a_number);
 			Self::emit_list(
 				f,
-				&[
-					I::End,
-					I::LocalGet(x),
-					I::F64Const(f64::INFINITY.into()),
-					I::F64Eq,
-					I::If(BlockType::Empty),
-				],
+				&[I::End, I::LocalGet(x), I::F64Const(f64::INFINITY.into()), I::F64Eq, I::If(BlockType::Empty)],
 			);
 			return_text(f, infinity);
 			Self::emit_list(
 				f,
-				&[
-					I::End,
-					I::LocalGet(x),
-					I::F64Const(f64::NEG_INFINITY.into()),
-					I::F64Eq,
-					I::If(BlockType::Empty),
-				],
+				&[I::End, I::LocalGet(x), I::F64Const(f64::NEG_INFINITY.into()), I::F64Eq, I::If(BlockType::Empty)],
 			);
 			return_text(f, negative_infinity);
-			Self::emit_list(
-				f,
-				&[
-					I::End,
-					I::LocalGet(x),
-					I::F64Const(0.0.into()),
-					I::F64Eq,
-					I::If(BlockType::Empty),
-				],
-			);
+			Self::emit_list(f, &[I::End, I::LocalGet(x), I::F64Const(0.0.into()), I::F64Eq, I::If(BlockType::Empty)]);
 			return_text(f, zero);
 			f.instruction(&I::End);
 
@@ -211,26 +182,11 @@ impl WasmGcEmitter {
 					],
 				);
 				copy(f, &[I::I32Const(0)], &all);
-				zeros(
-					f,
-					&[
-						I::LocalGet(exponent),
-						I::LocalGet(significant),
-						I::I32Sub,
-						I::I32Const(1),
-						I::I32Add,
-					],
-				);
+				zeros(f, &[I::LocalGet(exponent), I::LocalGet(significant), I::I32Sub, I::I32Const(1), I::I32Add]);
 				// 1.5: the point after exponent+1 digits
 				Self::emit_list(
 					f,
-					&[
-						I::Else,
-						I::LocalGet(exponent),
-						I::I32Const(0),
-						I::I32GeS,
-						I::If(BlockType::Empty),
-					],
+					&[I::Else, I::LocalGet(exponent), I::I32Const(0), I::I32GeS, I::If(BlockType::Empty)],
 				);
 				let whole = [I::LocalGet(exponent), I::I32Const(1), I::I32Add];
 				copy(f, &[I::I32Const(0)], &whole);
@@ -238,13 +194,7 @@ impl WasmGcEmitter {
 				copy(
 					f,
 					&whole,
-					&[
-						I::LocalGet(significant),
-						I::LocalGet(exponent),
-						I::I32Sub,
-						I::I32Const(1),
-						I::I32Sub,
-					],
+					&[I::LocalGet(significant), I::LocalGet(exponent), I::I32Sub, I::I32Const(1), I::I32Sub],
 				);
 				// 0.0015: zero, point, zeros, the digits
 				f.instruction(&I::Else);
@@ -257,31 +207,14 @@ impl WasmGcEmitter {
 			// 1.5e20: one digit, the point and the rest, then the exponent
 			f.instruction(&I::Else);
 			copy(f, &[I::I32Const(0)], &[I::I32Const(1)]);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(significant),
-					I::I32Const(1),
-					I::I32GtS,
-					I::If(BlockType::Empty),
-				],
-			);
+			Self::emit_list(f, &[I::LocalGet(significant), I::I32Const(1), I::I32GtS, I::If(BlockType::Empty)]);
 			put(f, b'.');
-			copy(
-				f,
-				&[I::I32Const(1)],
-				&[I::LocalGet(significant), I::I32Const(1), I::I32Sub],
-			);
+			copy(f, &[I::I32Const(1)], &[I::LocalGet(significant), I::I32Const(1), I::I32Sub]);
 			f.instruction(&I::End);
 			put(f, b'e');
 			Self::emit_list(
 				f,
-				&[
-					I::LocalGet(position),
-					I::LocalGet(position),
-					I::LocalGet(exponent),
-					I::I64ExtendI32S,
-				],
+				&[I::LocalGet(position), I::LocalGet(position), I::LocalGet(exponent), I::I64ExtendI32S],
 			);
 			s.call(f, "int_to_decimal");
 			Self::emit_list(f, &[I::I32Add, I::LocalSet(position), I::End]);
@@ -295,21 +228,7 @@ impl WasmGcEmitter {
 	/// reader rounds half to even); the multiple of the largest power of ten among them, nearest x (half to even)
 	fn emit_float_digits(&mut self) {
 		let (f64t, i64t) = (ValType::F64, ValType::I64);
-		let locals = vec![
-			ValType::I32,
-			ValType::I32,
-			f64t,
-			f64t,
-			i64t,
-			f64t,
-			i64t,
-			i64t,
-			i64t,
-			f64t,
-			f64t,
-			f64t,
-			i64t,
-		];
+		let locals = vec![ValType::I32, ValType::I32, f64t, f64t, i64t, f64t, i64t, i64t, i64t, f64t, f64t, f64t, i64t];
 		self.runtime_function(FLOAT_DIGITS, vec![f64t], vec![i64t, ValType::I32], locals, |s, f| {
 			let (x, exponent, shift, hi, lo, whole, fraction, low, high, power, mantissa, below, above, multiple) =
 				(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13);
@@ -334,16 +253,8 @@ impl WasmGcEmitter {
 					I::LocalSet(exponent),
 				]
 			};
-			Self::emit_while(
-				f,
-				&[I::LocalGet(mantissa), I::F64Const(10.0.into()), I::F64Ge],
-				&step(I::F64Div, 1),
-			);
-			Self::emit_while(
-				f,
-				&[I::LocalGet(mantissa), I::F64Const(1.0.into()), I::F64Lt],
-				&step(I::F64Mul, -1),
-			);
+			Self::emit_while(f, &[I::LocalGet(mantissa), I::F64Const(10.0.into()), I::F64Ge], &step(I::F64Div, 1));
+			Self::emit_while(f, &[I::LocalGet(mantissa), I::F64Const(1.0.into()), I::F64Lt], &step(I::F64Mul, -1));
 			// x · 10^shift has 17 digits
 			let at_least = |bound: f64| {
 				[
@@ -360,16 +271,8 @@ impl WasmGcEmitter {
 					I::I32Or,
 				]
 			};
-			let shift_by = |step: i32| {
-				[
-					I::LocalGet(shift),
-					I::I32Const(step),
-					I::I32Add,
-					I::LocalSet(shift),
-					I::Br(1),
-					I::End,
-				]
-			};
+			let shift_by =
+				|step: i32| [I::LocalGet(shift), I::I32Const(step), I::I32Add, I::LocalSet(shift), I::Br(1), I::End];
 			Self::emit_list(
 				f,
 				&[
@@ -407,15 +310,8 @@ impl WasmGcEmitter {
 				],
 			);
 			// the gaps to the neighbours; the largest float's upper one is its lower
-			let neighbour = |step: i64| {
-				[
-					I::LocalGet(x),
-					I::I64ReinterpretF64,
-					I::I64Const(step),
-					I::I64Add,
-					I::F64ReinterpretI64,
-				]
-			};
+			let neighbour =
+				|step: i64| [I::LocalGet(x), I::I64ReinterpretF64, I::I64Const(step), I::I64Add, I::F64ReinterpretI64];
 			Self::emit_list(f, &[I::LocalGet(x)]);
 			Self::emit_list(f, &neighbour(-1));
 			Self::emit_list(f, &[I::F64Sub, I::LocalTee(below)]);
@@ -455,14 +351,7 @@ impl WasmGcEmitter {
 			let bound = |f: &mut Function, rounded: I<'static>, local: u32, exclude: I<'static>| {
 				Self::emit_list(
 					f,
-					&[
-						I::LocalGet(hi),
-						I::I64TruncF64S,
-						I::LocalGet(lo),
-						rounded.clone(),
-						I::I64TruncF64S,
-						I::I64Add,
-					],
+					&[I::LocalGet(hi), I::I64TruncF64S, I::LocalGet(lo), rounded.clone(), I::I64TruncF64S, I::I64Add],
 				);
 				odd_and_whole(f, rounded);
 				Self::emit_list(f, &[exclude, I::LocalSet(local)]);
@@ -489,10 +378,7 @@ impl WasmGcEmitter {
 				&[&lowest_multiple[..], &[I::LocalGet(high), I::I64LeS]].concat(),
 				&[I::LocalGet(power), I::I64Const(10), I::I64Mul, I::LocalSet(power)],
 			);
-			Self::emit_list(
-				f,
-				&[I::LocalGet(power), I::I64Const(10), I::I64DivS, I::LocalSet(power)],
-			);
+			Self::emit_list(f, &[I::LocalGet(power), I::I64Const(10), I::I64DivS, I::LocalSet(power)]);
 			// its multiple nearest x · 10^shift: the one below or the next, by twice the distance minus the power
 			Self::emit_list(
 				f,
@@ -577,240 +463,207 @@ impl WasmGcEmitter {
 		let f64t = ValType::F64;
 		let mut locals = vec![f64t; 11];
 		locals.extend([ValType::I32, ValType::I32]);
-		self.runtime_function(
-			FLOAT_SCALED,
-			vec![f64t, f64t, ValType::I32],
-			vec![f64t, f64t],
-			locals,
-			|_, f| {
-				let (
-					x,
-					gap,
-					shift,
-					hi,
-					lo,
-					power,
-					carried,
-					quotient,
-					product,
-					a_hi,
-					a_lo,
-					b_hi,
-					b_lo,
-					scale,
-					step,
-					count,
-				) = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
-				let rescaled = |beyond: I<'static>, exponent: i32| {
-					let by = |local: u32| {
-						[
-							I::LocalGet(local),
-							I::F64Const(2f64.powi(-exponent).into()),
-							I::F64Mul,
-							I::LocalSet(local),
-						]
-					};
-					[
-						&[
-							I::LocalGet(x),
-							I::F64Const(2f64.powi(exponent.signum() * RESCALE_BEYOND).into()),
-							beyond,
-							I::If(BlockType::Empty),
-						][..],
-						&by(x),
-						&by(gap),
-						&[I::F64Const(2f64.powi(exponent).into()), I::LocalSet(scale), I::End],
-					]
-					.concat()
+		self.runtime_function(FLOAT_SCALED, vec![f64t, f64t, ValType::I32], vec![f64t, f64t], locals, |_, f| {
+			let (x, gap, shift, hi, lo, power, carried, quotient, product, a_hi, a_lo, b_hi, b_lo, scale, step, count) =
+				(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+			let rescaled = |beyond: I<'static>, exponent: i32| {
+				let by = |local: u32| {
+					[I::LocalGet(local), I::F64Const(2f64.powi(-exponent).into()), I::F64Mul, I::LocalSet(local)]
 				};
-				Self::emit_list(f, &[I::F64Const(1.0.into()), I::LocalSet(scale)]);
-				Self::emit_list(f, &rescaled(I::F64Ge, RESCALE_BY));
-				Self::emit_list(f, &rescaled(I::F64Lt, -RESCALE_BY));
-				Self::emit_list(
-					f,
-					&[I::LocalGet(gap), I::F64Const(0.5.into()), I::F64Mul, I::LocalSet(lo)],
-				);
-				let split = |f: &mut Function, value: u32, high: u32, low: u32| {
-					Self::emit_list(
-						f,
-						&[
-							I::F64Const(SPLITTER.into()),
-							I::LocalGet(value),
-							I::F64Mul,
-							I::LocalTee(high),
-							I::LocalGet(high),
-							I::LocalGet(value),
-							I::F64Sub,
-							I::F64Sub,
-							I::LocalSet(high),
-							I::LocalGet(value),
-							I::LocalGet(high),
-							I::F64Sub,
-							I::LocalSet(low),
-						],
-					);
-				};
-				// product = a · b rounded, its error left on the stack
-				let exact_product = |f: &mut Function, a: u32, b: u32| {
-					Self::emit_list(f, &[I::LocalGet(a), I::LocalGet(b), I::F64Mul, I::LocalSet(product)]);
-					split(f, a, a_hi, a_lo);
-					split(f, b, b_hi, b_lo);
-					Self::emit_list(
-						f,
-						&[
-							I::LocalGet(a_hi),
-							I::LocalGet(b_hi),
-							I::F64Mul,
-							I::LocalGet(product),
-							I::F64Sub,
-							I::LocalGet(a_hi),
-							I::LocalGet(b_lo),
-							I::F64Mul,
-							I::F64Add,
-							I::LocalGet(a_lo),
-							I::LocalGet(b_hi),
-							I::F64Mul,
-							I::F64Add,
-							I::LocalGet(a_lo),
-							I::LocalGet(b_lo),
-							I::F64Mul,
-							I::F64Add,
-						],
-					);
-				};
-				let clamp = |bound: i32, below: I<'static>| {
-					[
-						I::LocalGet(step),
-						I::I32Const(bound),
-						I::LocalGet(step),
-						I::I32Const(bound),
-						below,
-						I::Select,
-						I::LocalSet(step),
-					]
-				};
-				Self::emit_list(
-					f,
+				[
 					&[
 						I::LocalGet(x),
-						I::LocalSet(hi),
-						I::Block(BlockType::Empty),
-						I::Loop(BlockType::Empty),
-						I::LocalGet(shift),
-						I::I32Eqz,
-						I::BrIf(1),
-						I::LocalGet(shift),
-						I::LocalSet(step),
-					],
-				);
-				Self::emit_list(f, &clamp(EXACT_POWER, I::I32LtS));
-				Self::emit_list(f, &clamp(-EXACT_POWER, I::I32GtS));
+						I::F64Const(2f64.powi(exponent.signum() * RESCALE_BEYOND).into()),
+						beyond,
+						I::If(BlockType::Empty),
+					][..],
+					&by(x),
+					&by(gap),
+					&[I::F64Const(2f64.powi(exponent).into()), I::LocalSet(scale), I::End],
+				]
+				.concat()
+			};
+			Self::emit_list(f, &[I::F64Const(1.0.into()), I::LocalSet(scale)]);
+			Self::emit_list(f, &rescaled(I::F64Ge, RESCALE_BY));
+			Self::emit_list(f, &rescaled(I::F64Lt, -RESCALE_BY));
+			Self::emit_list(f, &[I::LocalGet(gap), I::F64Const(0.5.into()), I::F64Mul, I::LocalSet(lo)]);
+			let split = |f: &mut Function, value: u32, high: u32, low: u32| {
 				Self::emit_list(
 					f,
 					&[
-						I::I32Const(0),
-						I::LocalGet(step),
-						I::I32Sub,
-						I::LocalGet(step),
-						I::LocalGet(step),
-						I::I32Const(0),
-						I::I32LtS,
-						I::Select,
-						I::LocalSet(count),
-						I::F64Const(1.0.into()),
-						I::LocalSet(power),
-						I::LocalGet(lo),
-						I::LocalSet(carried),
-					],
-				);
-				Self::emit_while(
-					f,
-					&[I::LocalGet(count), I::I32Const(0), I::I32GtS],
-					&[
-						I::LocalGet(power),
-						I::F64Const(10.0.into()),
+						I::F64Const(SPLITTER.into()),
+						I::LocalGet(value),
 						I::F64Mul,
-						I::LocalSet(power),
-						I::LocalGet(count),
-						I::I32Const(1),
-						I::I32Sub,
-						I::LocalSet(count),
+						I::LocalTee(high),
+						I::LocalGet(high),
+						I::LocalGet(value),
+						I::F64Sub,
+						I::F64Sub,
+						I::LocalSet(high),
+						I::LocalGet(value),
+						I::LocalGet(high),
+						I::F64Sub,
+						I::LocalSet(low),
 					],
 				);
-				Self::emit_list(
-					f,
-					&[I::LocalGet(step), I::I32Const(0), I::I32GtS, I::If(BlockType::Empty)],
-				);
-				exact_product(f, hi, power);
+			};
+			// product = a · b rounded, its error left on the stack
+			let exact_product = |f: &mut Function, a: u32, b: u32| {
+				Self::emit_list(f, &[I::LocalGet(a), I::LocalGet(b), I::F64Mul, I::LocalSet(product)]);
+				split(f, a, a_hi, a_lo);
+				split(f, b, b_hi, b_lo);
 				Self::emit_list(
 					f,
 					&[
-						I::LocalGet(carried),
-						I::LocalGet(power),
+						I::LocalGet(a_hi),
+						I::LocalGet(b_hi),
 						I::F64Mul,
-						I::F64Add,
-						I::LocalSet(lo),
-						I::LocalGet(product),
-						I::LocalSet(hi),
-						I::Else,
-						I::LocalGet(hi),
-						I::LocalGet(power),
-						I::F64Div,
-						I::LocalSet(quotient),
-					],
-				);
-				exact_product(f, quotient, power);
-				Self::emit_list(
-					f,
-					&[
-						I::LocalSet(b_lo),
-						I::LocalGet(hi),
 						I::LocalGet(product),
 						I::F64Sub,
+						I::LocalGet(a_hi),
 						I::LocalGet(b_lo),
-						I::F64Sub,
-						I::LocalGet(carried),
+						I::F64Mul,
 						I::F64Add,
-						I::LocalGet(power),
-						I::F64Div,
-						I::LocalSet(lo),
-						I::LocalGet(quotient),
-						I::LocalSet(hi),
-						I::End,
+						I::LocalGet(a_lo),
+						I::LocalGet(b_hi),
+						I::F64Mul,
+						I::F64Add,
+						I::LocalGet(a_lo),
+						I::LocalGet(b_lo),
+						I::F64Mul,
+						I::F64Add,
 					],
 				);
-				// hi + lo renormalized, so hi is the nearest float
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(hi),
-						I::LocalGet(lo),
-						I::F64Add,
-						I::LocalSet(product),
-						I::LocalGet(lo),
-						I::LocalGet(product),
-						I::LocalGet(hi),
-						I::F64Sub,
-						I::F64Sub,
-						I::LocalSet(lo),
-						I::LocalGet(product),
-						I::LocalSet(hi),
-						I::LocalGet(shift),
-						I::LocalGet(step),
-						I::I32Sub,
-						I::LocalSet(shift),
-						I::Br(0),
-						I::End,
-						I::End,
-						I::LocalGet(hi),
-						I::LocalGet(scale),
-						I::F64Mul,
-						I::LocalGet(lo),
-						I::LocalGet(scale),
-						I::F64Mul,
-					],
-				);
-			},
-		);
+			};
+			let clamp = |bound: i32, below: I<'static>| {
+				[
+					I::LocalGet(step),
+					I::I32Const(bound),
+					I::LocalGet(step),
+					I::I32Const(bound),
+					below,
+					I::Select,
+					I::LocalSet(step),
+				]
+			};
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(x),
+					I::LocalSet(hi),
+					I::Block(BlockType::Empty),
+					I::Loop(BlockType::Empty),
+					I::LocalGet(shift),
+					I::I32Eqz,
+					I::BrIf(1),
+					I::LocalGet(shift),
+					I::LocalSet(step),
+				],
+			);
+			Self::emit_list(f, &clamp(EXACT_POWER, I::I32LtS));
+			Self::emit_list(f, &clamp(-EXACT_POWER, I::I32GtS));
+			Self::emit_list(
+				f,
+				&[
+					I::I32Const(0),
+					I::LocalGet(step),
+					I::I32Sub,
+					I::LocalGet(step),
+					I::LocalGet(step),
+					I::I32Const(0),
+					I::I32LtS,
+					I::Select,
+					I::LocalSet(count),
+					I::F64Const(1.0.into()),
+					I::LocalSet(power),
+					I::LocalGet(lo),
+					I::LocalSet(carried),
+				],
+			);
+			Self::emit_while(
+				f,
+				&[I::LocalGet(count), I::I32Const(0), I::I32GtS],
+				&[
+					I::LocalGet(power),
+					I::F64Const(10.0.into()),
+					I::F64Mul,
+					I::LocalSet(power),
+					I::LocalGet(count),
+					I::I32Const(1),
+					I::I32Sub,
+					I::LocalSet(count),
+				],
+			);
+			Self::emit_list(f, &[I::LocalGet(step), I::I32Const(0), I::I32GtS, I::If(BlockType::Empty)]);
+			exact_product(f, hi, power);
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(carried),
+					I::LocalGet(power),
+					I::F64Mul,
+					I::F64Add,
+					I::LocalSet(lo),
+					I::LocalGet(product),
+					I::LocalSet(hi),
+					I::Else,
+					I::LocalGet(hi),
+					I::LocalGet(power),
+					I::F64Div,
+					I::LocalSet(quotient),
+				],
+			);
+			exact_product(f, quotient, power);
+			Self::emit_list(
+				f,
+				&[
+					I::LocalSet(b_lo),
+					I::LocalGet(hi),
+					I::LocalGet(product),
+					I::F64Sub,
+					I::LocalGet(b_lo),
+					I::F64Sub,
+					I::LocalGet(carried),
+					I::F64Add,
+					I::LocalGet(power),
+					I::F64Div,
+					I::LocalSet(lo),
+					I::LocalGet(quotient),
+					I::LocalSet(hi),
+					I::End,
+				],
+			);
+			// hi + lo renormalized, so hi is the nearest float
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(hi),
+					I::LocalGet(lo),
+					I::F64Add,
+					I::LocalSet(product),
+					I::LocalGet(lo),
+					I::LocalGet(product),
+					I::LocalGet(hi),
+					I::F64Sub,
+					I::F64Sub,
+					I::LocalSet(lo),
+					I::LocalGet(product),
+					I::LocalSet(hi),
+					I::LocalGet(shift),
+					I::LocalGet(step),
+					I::I32Sub,
+					I::LocalSet(shift),
+					I::Br(0),
+					I::End,
+					I::End,
+					I::LocalGet(hi),
+					I::LocalGet(scale),
+					I::F64Mul,
+					I::LocalGet(lo),
+					I::LocalGet(scale),
+					I::F64Mul,
+				],
+			);
+		});
 	}
 }

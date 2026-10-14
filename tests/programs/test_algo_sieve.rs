@@ -24,9 +24,7 @@ fn probe_sieve_snippets() {
 			Err(e) => println!(
 				"PROBE {} => PANIC {:?}",
 				file,
-				e.downcast_ref::<String>()
-					.cloned()
-					.or(e.downcast_ref::<&str>().map(|s| s.to_string()))
+				e.downcast_ref::<String>().cloned().or(e.downcast_ref::<&str>().map(|s| s.to_string()))
 			),
 		}
 	}

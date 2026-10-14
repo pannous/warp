@@ -4,12 +4,7 @@ use warp::wasm_emitter::compile;
 use warp::{FieldDef, RawFieldValue, TypeDef, WasmGcEmitter};
 use wasmparser::{BinaryReader, KnownCustom, Parser, Payload};
 
-const PROGRAMS: [&str; 4] = [
-	"try 1 + [1 2]#5 else 7",
-	"def square(x):=x*x; square(3)",
-	"x=[1,2,3]; x#2",
-	"\"hi\" + 3",
-];
+const PROGRAMS: [&str; 4] = ["try 1 + [1 2]#5 else 7", "def square(x):=x*x; square(3)", "x=[1,2,3]; x#2", "\"hi\" + 3"];
 
 /// Ids of the name subsections of `bytes`, in the order they are written.
 fn name_subsection_ids(bytes: &[u8]) -> Vec<u8> {
@@ -32,10 +27,7 @@ fn name_subsection_ids(bytes: &[u8]) -> Vec<u8> {
 
 fn assert_ascending(bytes: &[u8], what: &str) {
 	let ids = name_subsection_ids(bytes);
-	assert!(
-		ids.windows(2).all(|pair| pair[0] < pair[1]),
-		"{what}: name subsection ids {ids:?} not strictly ascending"
-	);
+	assert!(ids.windows(2).all(|pair| pair[0] < pair[1]), "{what}: name subsection ids {ids:?} not strictly ascending");
 }
 
 #[test]
@@ -52,14 +44,8 @@ fn name_subsections_ascend_in_raw_struct_modules() {
 		name: "Person".to_string(),
 		tag: 100,
 		fields: vec![
-			FieldDef {
-				name: "name".to_string(),
-				type_name: "String".to_string(),
-			},
-			FieldDef {
-				name: "age".to_string(),
-				type_name: "i64".to_string(),
-			},
+			FieldDef { name: "name".to_string(), type_name: "String".to_string() },
+			FieldDef { name: "age".to_string(), type_name: "i64".to_string() },
 		],
 		wasm_type_idx: None,
 	};

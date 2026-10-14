@@ -6,10 +6,7 @@ const SIMPLIFY: &str = "simplify(code) := match code {\n\tdata($a + 0) => a\n\td
 
 #[test]
 fn code_pattern_matches_code_parsed_at_run_time() {
-	is!(
-		&format!("{SIMPLIFY}t = \"n * \" + \"1\"\nsimplify(parse(t)) == data n"),
-		true
-	);
+	is!(&format!("{SIMPLIFY}t = \"n * \" + \"1\"\nsimplify(parse(t)) == data n"), true);
 	is!(&format!("{SIMPLIFY}simplify(parse(\"y + 0\")) == data y"), true);
 }
 

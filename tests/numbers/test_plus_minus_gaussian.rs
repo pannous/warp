@@ -30,10 +30,7 @@ fn a_math_word_scales_the_deviation_by_its_slope() {
 fn a_value_met_twice_is_one_error() {
 	assert_eq!(eval("x = 5 ± 1σ; str(x - x)"), "0 ± 0σ");
 	assert_eq!(eval("x = 5 ± 1σ; str(x + x)"), "10.0 ± 2.0σ");
-	assert_eq!(
-		eval("x = 1 ± 0.1σ; y = 2 ± 0.1σ; z = x + y; str(z - x)"),
-		"2.00 ± 0.10σ"
-	);
+	assert_eq!(eval("x = 1 ± 0.1σ; y = 2 ± 0.1σ; z = x + y; str(z - x)"), "2.00 ± 0.10σ");
 }
 
 // P219's two digits: a ± part just under a power of ten rounds up to it

@@ -14,10 +14,7 @@ fn an_any_parameter_takes_every_kind() {
 /// P173 (user, 2026-10-07): a parameter called with two kinds takes any value, silently (was "annotate it, e.g. want:any")
 #[test]
 fn a_parameter_called_with_two_kinds_takes_any() {
-	is!(
-		"check(got, want) := got == want; [check(1, 1), check(\"ab\", \"cd\")]",
-		parse("[1 0]")
-	);
+	is!("check(got, want) := got == want; [check(1, 1), check(\"ab\", \"cd\")]", parse("[1 0]"));
 }
 
 /// a number and a text whose kinds are known only at run time join as when they are known: 1 + "x" is "1x" (was the
@@ -42,16 +39,7 @@ fn an_any_result_joins_a_text() {
 /// is no list (was "int + list": the list argument made x a list everywhere)
 #[test]
 fn a_parameter_tested_for_its_kind_takes_any() {
-	is!(
-		"def total(x) = if x is list then sum(x.map(y => total(y))) else x; total([1 [2 3] [4 [5]]])",
-		15
-	);
-	is!(
-		"def total(x){ if x is list { s=0; for y in x { s += total(y) }; return s }; x }; total([1 [2 3]])",
-		6
-	);
-	is!(
-		"def depth(x) = if x is list then 1 + max(x.map(depth)) else 0; depth([1 [2 [3]]])",
-		3
-	);
+	is!("def total(x) = if x is list then sum(x.map(y => total(y))) else x; total([1 [2 3] [4 [5]]])", 15);
+	is!("def total(x){ if x is list { s=0; for y in x { s += total(y) }; return s }; x }; total([1 [2 3]])", 6);
+	is!("def depth(x) = if x is list then 1 + max(x.map(depth)) else 0; depth([1 [2 [3]]])", 3);
 }

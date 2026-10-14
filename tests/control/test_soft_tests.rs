@@ -32,10 +32,7 @@ fn a_plain_run_skips_the_tests() {
 #[test]
 fn under_test_the_value_is_the_summary() {
 	assert_eq!(for_tests(|| eval(PASSING)), Node::Text("✓ 3 tests passed".into()));
-	assert_eq!(
-		for_tests(|| eval("test 1 + 1 == 2")),
-		Node::Text("✓ 1 test passed".into())
-	);
+	assert_eq!(for_tests(|| eval("test 1 + 1 == 2")), Node::Text("✓ 1 test passed".into()));
 	match for_tests(|| eval(FAILING)) {
 		Node::Error(message) => assert!(message.serialize().contains("2 of 4 failed"), "{message:?}"),
 		other => panic!("expected the Error 2 of 4 failed, got {other:?}"),
@@ -56,10 +53,7 @@ fn warp_test_prints_the_failures_and_exits_nonzero() {
 	let run = |name: &str, program: &str| {
 		let file = directory.join(name);
 		std::fs::write(&file, program).expect("write the program");
-		crate::common::warp_command()
-			.args(["test", &file.to_string_lossy()])
-			.output()
-			.expect("warp runs")
+		crate::common::warp_command().args(["test", &file.to_string_lossy()]).output().expect("warp runs")
 	};
 	let passed = run("passing.warp", PASSING);
 	assert_eq!(String::from_utf8_lossy(&passed.stdout).trim(), "✓ 3 tests passed");
@@ -67,10 +61,7 @@ fn warp_test_prints_the_failures_and_exits_nonzero() {
 	let failed = run("failing.warp", FAILING);
 	let printed = String::from_utf8_lossy(&failed.stdout);
 	assert!(printed.contains("✗ test square(3) == 10\n"), "{printed}");
-	assert!(
-		printed.contains("✗ \"squares\": assertion failed: square(4) == 15\n"),
-		"{printed}"
-	);
+	assert!(printed.contains("✗ \"squares\": assertion failed: square(4) == 15\n"), "{printed}");
 	assert!(printed.trim_end().ends_with("2 of 4 failed"), "{printed}");
 	assert_eq!(failed.status.code(), Some(1));
 }

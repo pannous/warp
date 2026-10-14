@@ -43,34 +43,18 @@ fn file_card(info: &PanicHookInfo) {
 	}
 	let message = panic_message(info);
 	let headline = message.lines().next().unwrap_or_default();
-	let backtrace: String = std::backtrace::Backtrace::force_capture()
-		.to_string()
-		.chars()
-		.take(BACKTRACE_CHARS)
-		.collect();
-	let panic_place = || {
-		info.location().map_or("an unknown place".to_string(), |place| {
-			format!("{}:{}", place.file(), place.line())
-		})
-	};
+	let backtrace: String =
+		std::backtrace::Backtrace::force_capture().to_string().chars().take(BACKTRACE_CHARS).collect();
+	let panic_place =
+		|| info.location().map_or("an unknown place".to_string(), |place| format!("{}:{}", place.file(), place.line()));
 	let location = first_warp_frame(&backtrace).unwrap_or_else(panic_place);
 	// without the line: an edit above the crash moves it, the crash stays the same
 	let fingerprint = format!("{} {headline}", location.split(" at ").next().unwrap_or_default());
 	let filed_list = filed_list(checkout);
-	if std::fs::read_to_string(&filed_list)
-		.unwrap_or_default()
-		.lines()
-		.any(|line| line == fingerprint)
-	{
-		return eprintln!(
-			"warp: this crash has a card on the to-do board already ({})",
-			filed_list.display()
-		);
+	if std::fs::read_to_string(&filed_list).unwrap_or_default().lines().any(|line| line == fingerprint) {
+		return eprintln!("warp: this crash has a card on the to-do board already ({})", filed_list.display());
 	}
-	let title: String = format!("crash in {location}: {headline}")
-		.chars()
-		.take(TITLE_CHARS)
-		.collect();
+	let title: String = format!("crash in {location}: {headline}").chars().take(TITLE_CHARS).collect();
 	let command_line = std::env::args().collect::<Vec<_>>().join(" ");
 	// todo urgent reads the Fingerprint and Build lines (~/dev/bin/todo, CRASH_FINGERPRINT and CRASH_BUILD)
 	let body = format!(
@@ -95,10 +79,8 @@ fn file_card(info: &PanicHookInfo) {
 }
 
 fn filed_list(checkout: &Path) -> PathBuf {
-	std::env::var_os("HOME").map_or_else(
-		|| checkout.join("data/crash_cards.txt"),
-		|home| Path::new(&home).join(FILED_LIST),
-	)
+	std::env::var_os("HOME")
+		.map_or_else(|| checkout.join("data/crash_cards.txt"), |home| Path::new(&home).join(FILED_LIST))
 }
 
 /// The branch checked out where this warp was built (a worker's worktree, or main in the user's checkout)
@@ -124,9 +106,8 @@ pub fn first_warp_frame(backtrace: &str) -> Option<String> {
 		number.parse::<usize>().ok()?;
 		let source = lines.get(index + 1).and_then(|next| next.trim().strip_prefix("at "));
 		let foreign = |path: &str| FOREIGN_SOURCES.iter().any(|marker| path.contains(marker));
-		let own_source = source
-			.filter(|path| !foreign(path))
-			.and_then(|path| path.find("/src/").map(|start| &path[start + 1..]));
+		let own_source =
+			source.filter(|path| !foreign(path)).and_then(|path| path.find("/src/").map(|start| &path[start + 1..]));
 		match own_source {
 			Some(path) if !path.starts_with("src/diagnostics/crash_card.rs") => Some(format!("{name} at {path}")),
 			_ if name.contains("warp::") && !name.contains("crash_card") => Some(name.to_string()),
@@ -145,17 +126,11 @@ fn panic_message(info: &PanicHookInfo) -> String {
 }
 
 fn remember(filed_list: &Path, fingerprint: &str) {
-	let appended = filed_list
-		.parent()
-		.map_or(Ok(()), std::fs::create_dir_all)
-		.and_then(|_| {
-			let mut list = std::fs::OpenOptions::new().create(true).append(true).open(filed_list)?;
-			writeln!(list, "{fingerprint}")
-		});
+	let appended = filed_list.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|_| {
+		let mut list = std::fs::OpenOptions::new().create(true).append(true).open(filed_list)?;
+		writeln!(list, "{fingerprint}")
+	});
 	if let Err(failure) = appended {
-		eprintln!(
-			"warp: cannot note the filed crash card in {}: {failure}",
-			filed_list.display()
-		);
+		eprintln!("warp: cannot note the filed crash card in {}: {failure}", filed_list.display());
 	}
 }

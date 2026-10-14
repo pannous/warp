@@ -12,10 +12,7 @@ fn cast(value: &str, read: &str) -> String {
 
 #[test]
 fn a_fitting_value_is_itself() {
-	is!(
-		&cast("json('{\"port\": 8080, \"host\": \"localhost\"}')", "c.port"),
-		8080
-	);
+	is!(&cast("json('{\"port\": 8080, \"host\": \"localhost\"}')", "c.port"), 8080);
 }
 
 #[test]
@@ -31,17 +28,11 @@ fn a_missing_optional_field_stays_missing() {
 
 #[test]
 fn the_original_is_not_changed() {
-	is!(
-		&format!("{CONFIG}m = {{port: \"80\", host: \"x\"}}\nc = m as Config\nm.port"),
-		"80"
-	);
+	is!(&format!("{CONFIG}m = {{port: \"80\", host: \"x\"}}\nc = m as Config\nm.port"), "80");
 }
 
 #[test]
 fn a_field_that_does_not_convert_is_named() {
-	fails_with(
-		&cast("{port: \"abc\", host: \"x\"}", "c"),
-		"port of Config takes an int, got \"abc\"",
-	);
+	fails_with(&cast("{port: \"abc\", host: \"x\"}", "c"), "port of Config takes an int, got \"abc\"");
 	fails_with(&cast("{host: \"x\"}", "c"), "port of Config is missing");
 }

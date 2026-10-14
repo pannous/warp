@@ -129,10 +129,7 @@ impl WasmGcEmitter {
 		let (node_type, i64_box) = (self.type_manager.node_type, self.type_manager.i64_box_type);
 		let node_ref = Ref(self.node_ref(false));
 		self.runtime_function(radix.as_function, vec![node_ref], vec![node_ref], vec![], |_, f| {
-			let field = |index: u32| I::StructGet {
-				struct_type_index: node_type,
-				field_index: index,
-			};
+			let field = |index: u32| I::StructGet { struct_type_index: node_type, field_index: index };
 			Self::emit_list(
 				f,
 				&[

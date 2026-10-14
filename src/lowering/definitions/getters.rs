@@ -32,10 +32,7 @@ pub(crate) fn getter_name(statement: &Node) -> Option<&str> {
 	let Node::Symbol(name) = left.drop_meta() else {
 		return None;
 	};
-	let function_like = matches!(
-		body.drop_meta(),
-		Node::List(_, Bracket::Curly, _) | Node::Key(_, Op::Arrow, _)
-	);
+	let function_like = matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _) | Node::Key(_, Op::Arrow, _));
 	(!function_like && !crate::analyzer::takes_implicit_parameter(body)).then_some(name.as_str())
 }
 
@@ -48,11 +45,7 @@ fn lower_in(node: Node, active: &[Getter]) -> Node {
 	let active = if shadowed.is_empty() {
 		active
 	} else {
-		narrowed = active
-			.iter()
-			.filter(|getter| !shadowed.contains(&getter.name))
-			.cloned()
-			.collect();
+		narrowed = active.iter().filter(|getter| !shadowed.contains(&getter.name)).cloned().collect();
 		&narrowed
 	};
 	match node {
@@ -65,11 +58,7 @@ fn lower_in(node: Node, active: &[Getter]) -> Node {
 		Node::Key(left, op, right)
 			if is_binding(&op) && matches!(left.drop_meta(), Node::Symbol(name) if is_active(active, name)) =>
 		{
-			let getter = active
-				.iter()
-				.rev()
-				.find(|getter| left.drop_meta().name() == getter.name)
-				.expect("guarded");
+			let getter = active.iter().rev().find(|getter| left.drop_meta().name() == getter.name).expect("guarded");
 			assignment_error(&Node::Key(left.clone(), op, right), getter)
 		}
 		Node::Key(left, Op::Colon, right) if matches!(left.drop_meta(), Node::Symbol(_)) => {
@@ -98,17 +87,11 @@ fn lower_statements(items: Vec<Node>, active: &[Getter]) -> Vec<Node> {
 	let mut lowered = Vec::with_capacity(items.len());
 	for index in 0..items.len() {
 		let item = &items[index];
-		match getter_name(item)
-			.filter(|name| !applied_in(&items[index + 1..], name))
-			.map(str::to_string)
-		{
+		match getter_name(item).filter(|name| !applied_in(&items[index + 1..], name)).map(str::to_string) {
 			Some(name) => {
 				lowered.push(lower_in(getter_definition(item.clone()), &active));
 				active.retain(|getter| getter.name != name);
-				active.push(Getter {
-					written: written_definition(item),
-					name,
-				});
+				active.push(Getter { written: written_definition(item), name });
 			}
 			None => lowered.push(lower_in(item.clone(), &active)),
 		}
@@ -156,13 +139,7 @@ fn locals_of(definition: &Node) -> Vec<String> {
 				.map(|(_, name)| name.clone())
 				.collect();
 			let looped = crate::lowering::for_loop::loop_variables(&function.body);
-			function
-				.params
-				.into_iter()
-				.map(|param| param.name)
-				.chain(assigned)
-				.chain(looped)
-				.collect::<Vec<_>>()
+			function.params.into_iter().map(|param| param.name).chain(assigned).chain(looped).collect::<Vec<_>>()
 		})
 		.collect()
 }
@@ -184,11 +161,9 @@ fn getter_definition(statement: Node) -> Node {
 	match statement {
 		meta @ Node::Meta { .. } => meta.under_meta(getter_definition),
 		Node::Key(left, Op::Define, body) => match left.drop_meta() {
-			Node::Symbol(name) => Node::Key(
-				Box::new(Node::meta(call(name, vec![]), symbol(BARE_GETTER_MARK))),
-				Op::Define,
-				body,
-			),
+			Node::Symbol(name) => {
+				Node::Key(Box::new(Node::meta(call(name, vec![]), symbol(BARE_GETTER_MARK))), Op::Define, body)
+			}
 			_ => Node::Key(left, Op::Define, body),
 		},
 		other => other,

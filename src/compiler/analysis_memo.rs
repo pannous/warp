@@ -66,11 +66,7 @@ pub fn analysed(context: &mut Context, program: &Node, analyse: impl FnOnce(&mut
 		return analyse(context, program);
 	};
 	if let Some(analysis) = REMEMBERED_ANALYSES.with(|remembered| {
-		remembered
-			.borrow()
-			.iter()
-			.find(|(known, _)| *known == key)
-			.map(|(_, analysis)| analysis.clone())
+		remembered.borrow().iter().find(|(known, _)| *known == key).map(|(_, analysis)| analysis.clone())
 	}) {
 		return analysis.into(context);
 	}

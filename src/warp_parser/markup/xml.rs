@@ -90,10 +90,7 @@ impl WarpParser {
 
 	/// A `;` that ends its line is a statement terminator of the same strength as the newline after it
 	pub(crate) fn only_blanks_before_newline(&self) -> bool {
-		self.chars[self.pos..]
-			.iter()
-			.find(|ch| !matches!(ch, ' ' | '\t' | '\r'))
-			== Some(&'\n')
+		self.chars[self.pos..].iter().find(|ch| !matches!(ch, ' ' | '\t' | '\r')) == Some(&'\n')
 	}
 
 	/// Parse XML tag: <tag attr="value">content</tag> or <tag />
@@ -159,10 +156,7 @@ impl WarpParser {
 				self.advance(); // skip '<'
 				let closing_name = self.parse_closing_tag();
 				if closing_name != tag_name {
-					return error(&format!(
-						"Mismatched tags: <{}> closed with </{}>",
-						tag_name, closing_name
-					));
+					return error(&format!("Mismatched tags: <{}> closed with </{}>", tag_name, closing_name));
 				}
 				break;
 			}

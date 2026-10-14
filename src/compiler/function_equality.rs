@@ -67,11 +67,7 @@ impl Function {
 	}
 
 	fn parameter_names(&self) -> Vec<String> {
-		self.definition
-			.parameters
-			.iter()
-			.map(|(name, _)| name.clone())
-			.collect()
+		self.definition.parameters.iter().map(|(name, _)| name.clone()).collect()
 	}
 
 	fn normal_body(&self) -> Node {
@@ -92,11 +88,8 @@ impl Function {
 
 /// The body with parameters renamed to their positions and self-reference to `$self`.
 fn normal_body(name: &str, parameters: &[String], body: &Node) -> Node {
-	let mut names: HashMap<String, String> = parameters
-		.iter()
-		.enumerate()
-		.map(|(i, parameter)| (parameter.clone(), format!("${i}")))
-		.collect();
+	let mut names: HashMap<String, String> =
+		parameters.iter().enumerate().map(|(i, parameter)| (parameter.clone(), format!("${i}"))).collect();
 	names.insert(name.to_string(), SELF.to_string());
 	canonical(body, &names)
 }
@@ -105,10 +98,8 @@ fn normal_body(name: &str, parameters: &[String], body: &Node) -> Node {
 /// written alike (`x => x + 1`, `y => y + 1`), what the run time compares function values by (card runtime-function)
 pub fn written_form(name: &str, parameters: &[(String, Option<Node>)], body: &Node) -> String {
 	let names: Vec<String> = parameters.iter().map(|(name, _)| name.clone()).collect();
-	let types: Vec<String> = parameters
-		.iter()
-		.map(|(_, annotation)| annotation.as_ref().map(Node::serialize).unwrap_or_default())
-		.collect();
+	let types: Vec<String> =
+		parameters.iter().map(|(_, annotation)| annotation.as_ref().map(Node::serialize).unwrap_or_default()).collect();
 	format!("{types:?} {:?}", normal_body(name, &names, body))
 }
 
@@ -118,11 +109,9 @@ fn canonical(node: &Node, names: &HashMap<String, String>) -> Node {
 		Node::List(items, Bracket::Round | Bracket::Curly | Bracket::None, _) if items.len() == 1 => {
 			canonical(&items[0], names)
 		}
-		Node::List(items, bracket, separator) => Node::List(
-			items.iter().map(|item| canonical(item, names)).collect(),
-			bracket.clone(),
-			separator.clone(),
-		),
+		Node::List(items, bracket, separator) => {
+			Node::List(items.iter().map(|item| canonical(item, names)).collect(), bracket.clone(), separator.clone())
+		}
 		Node::Key(left, op, right) => {
 			Node::Key(Box::new(canonical(left, names)), *op, Box::new(canonical(right, names)))
 		}
@@ -138,16 +127,10 @@ pub fn decide_comparisons(node: Node) -> Node {
 		return node;
 	}
 	// analysing every definition is costly (a fresh analysis each): first only those naming a compared word
-	let words: Vec<&str> = compared
-		.iter()
-		.flat_map(|(left, right)| [left.as_str(), right.as_str()])
-		.collect();
+	let words: Vec<&str> = compared.iter().flat_map(|(left, right)| [left.as_str(), right.as_str()]).collect();
 	let candidates = collect_functions_where(&node, |item| item.mentions_any(&words));
 	let is_function = |name: &str| candidates.iter().any(|function| function.name() == name);
-	if !compared
-		.iter()
-		.any(|(left, right)| is_function(left) && is_function(right))
-	{
+	if !compared.iter().any(|(left, right)| is_function(left) && is_function(right)) {
 		return node;
 	}
 	let functions = collect_functions_where(&node, |_| true);
@@ -177,11 +160,7 @@ fn collect_functions_where(node: &Node, wanted: impl Fn(&Node) -> bool) -> Vec<F
 		.filter_map(|item| {
 			let definition = law::function_definition(item)?;
 			let types = law::declared_parameter_types(item);
-			let domains = definition
-				.parameters
-				.iter()
-				.map(|(name, _)| domain(types.get(name)))
-				.collect();
+			let domains = definition.parameters.iter().map(|(name, _)| domain(types.get(name))).collect();
 			Some(Function { definition, domains })
 		})
 		.collect()
@@ -212,29 +191,15 @@ fn rewrite(node: Node, functions: &[Function], failure: &mut Option<Node>) -> No
 					}
 				};
 			}
-			Node::Key(
-				Box::new(rewrite(*left, functions, failure)),
-				op,
-				Box::new(rewrite(*right, functions, failure)),
-			)
+			Node::Key(Box::new(rewrite(*left, functions, failure)), op, Box::new(rewrite(*right, functions, failure)))
 		}
-		Node::Key(left, op, right) => Node::Key(
-			Box::new(rewrite(*left, functions, failure)),
-			op,
-			Box::new(rewrite(*right, functions, failure)),
-		),
-		Node::List(items, bracket, separator) => Node::List(
-			items
-				.into_iter()
-				.map(|item| rewrite(item, functions, failure))
-				.collect(),
-			bracket,
-			separator,
-		),
-		Node::Meta { node: inner, data } => Node::Meta {
-			node: Box::new(rewrite(*inner, functions, failure)),
-			data,
-		},
+		Node::Key(left, op, right) => {
+			Node::Key(Box::new(rewrite(*left, functions, failure)), op, Box::new(rewrite(*right, functions, failure)))
+		}
+		Node::List(items, bracket, separator) => {
+			Node::List(items.into_iter().map(|item| rewrite(item, functions, failure)).collect(), bracket, separator)
+		}
+		Node::Meta { node: inner, data } => Node::Meta { node: Box::new(rewrite(*inner, functions, failure)), data },
 		other => other,
 	}
 }
@@ -266,11 +231,8 @@ fn decide(f: &Function, g: &Function, functions: &[Function]) -> Result<bool, No
 }
 
 fn rename_parameters(g: &Function, names: &[String]) -> Node {
-	let renaming: HashMap<String, Node> = g
-		.parameter_names()
-		.into_iter()
-		.zip(names.iter().map(|name| Node::Symbol(name.clone())))
-		.collect();
+	let renaming: HashMap<String, Node> =
+		g.parameter_names().into_iter().zip(names.iter().map(|name| Node::Symbol(name.clone()))).collect();
 	law::substitute(&g.definition.body, &renaming)
 }
 
@@ -284,16 +246,8 @@ fn comparison_law(f: &Function, g: &Function) -> Law {
 	let arguments = names.join(", ");
 	let statement =
 		crate::warp_parser::WarpParser::parse(&format!("{}({arguments}) == {}({arguments})", f.name(), g.name()));
-	let variables = names
-		.into_iter()
-		.zip(f.definition.parameters.iter().map(|(_, kind)| *kind))
-		.collect();
-	Law {
-		name: None,
-		function: f.name().to_string(),
-		statement,
-		variables,
-	}
+	let variables = names.into_iter().zip(f.definition.parameters.iter().map(|(_, kind)| *kind)).collect();
+	Law { name: None, function: f.name().to_string(), statement, variables }
 }
 
 fn lawful(functions: &[Function]) -> Lawful {
@@ -312,22 +266,13 @@ fn enumerate(f: &Function, g: &Function, functions: &[Function]) -> Result<bool,
 			.variables
 			.iter()
 			.enumerate()
-			.map(|(i, (name, _))| {
-				(
-					name.clone(),
-					if (bits >> i) & 1 == 1 { Node::True } else { Node::False },
-				)
-			})
+			.map(|(i, (name, _))| (name.clone(), if (bits >> i) & 1 == 1 { Node::True } else { Node::False }))
 			.collect();
 		match law::check_instance(&lawful, &law, &bindings, "") {
 			Verdict::Holds => {}
 			Verdict::Violated(_) => return Ok(false),
 			Verdict::Unknown(why) => {
-				return Err(crate::node::error(&format!(
-					"undecidable: {} == {}: {why}",
-					f.name(),
-					g.name()
-				)))
+				return Err(crate::node::error(&format!("undecidable: {} == {}: {why}", f.name(), g.name())))
 			}
 		}
 	}
@@ -340,10 +285,7 @@ fn undecidable(f: &Function, g: &Function, functions: &[Function]) -> Node {
 		f.name(),
 		g.name()
 	);
-	let testable = f.arity() > 0
-		&& f.domains
-			.iter()
-			.all(|domain| matches!(domain, Domain::Exact | Domain::Float));
+	let testable = f.arity() > 0 && f.domains.iter().all(|domain| matches!(domain, Domain::Exact | Domain::Float));
 	if !testable {
 		return crate::node::error(&head);
 	}
@@ -396,10 +338,7 @@ impl Polynomial {
 	fn variable(index: usize, arity: usize) -> Polynomial {
 		let mut exponents = vec![0; arity];
 		exponents[index] = 1;
-		Polynomial {
-			terms: BTreeMap::from([(exponents, Rational::integer(BigInt::one()))]),
-			arity,
-		}
+		Polynomial { terms: BTreeMap::from([(exponents, Rational::integer(BigInt::one()))]), arity }
 	}
 
 	fn as_constant(&self) -> Option<Rational> {
@@ -427,25 +366,16 @@ impl Polynomial {
 		for (exponents, coefficient) in &other.terms {
 			Self::add_term(&mut terms, exponents.clone(), coefficient.clone());
 		}
-		Polynomial {
-			terms,
-			arity: self.arity,
-		}
+		Polynomial { terms, arity: self.arity }
 	}
 
 	fn scale(&self, factor: &Rational) -> Polynomial {
 		if factor.is_zero() {
 			return Polynomial::constant(factor.clone(), self.arity);
 		}
-		let terms = self
-			.terms
-			.iter()
-			.map(|(exponents, coefficient)| (exponents.clone(), coefficient.mul(factor)))
-			.collect();
-		Polynomial {
-			terms,
-			arity: self.arity,
-		}
+		let terms =
+			self.terms.iter().map(|(exponents, coefficient)| (exponents.clone(), coefficient.mul(factor))).collect();
+		Polynomial { terms, arity: self.arity }
 	}
 
 	fn neg(&self) -> Polynomial {
@@ -463,10 +393,7 @@ impl Polynomial {
 				return None;
 			}
 		}
-		Some(Polynomial {
-			terms,
-			arity: self.arity,
-		})
+		Some(Polynomial { terms, arity: self.arity })
 	}
 
 	fn pow(&self, power: u32) -> Option<Polynomial> {

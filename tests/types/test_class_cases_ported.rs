@@ -14,43 +14,22 @@ fn fields_have_defaults() {
 #[test]
 fn methods_read_fields_with_or_without_self() {
 	is!("class rect{w:int; h:int; area() := w * h}; rect(3, 4).area()", 12);
-	is!(
-		"class rect{w:int; h:int; area() := self.w * self.h}; rect(3, 4).area()",
-		12
-	);
-	is!(
-		"class account{balance:int; after(amount:int) := balance + amount}; account(10).after(5)",
-		15
-	);
+	is!("class rect{w:int; h:int; area() := self.w * self.h}; rect(3, 4).area()", 12);
+	is!("class account{balance:int; after(amount:int) := balance + amount}; account(10).after(5)", 15);
 }
 
 #[test]
 fn a_method_calls_another_method_without_self() {
 	// Java/C#/Kotlin: an unqualified call inside a method is a call on this
-	is!(
-		"class rect{w:int; h:int; area() := w * h; twice() := 2 * area()}; rect(3, 4).twice()",
-		24
-	);
-	is!(
-		"class rect{w:int; h:int; area() := w * h; twice() := 2 * self.area()}; rect(3, 4).twice()",
-		24
-	);
-	is!(
-		"class square{side:int; area := side * side; twice() := 2 * area}; square(3).twice()",
-		18
-	);
+	is!("class rect{w:int; h:int; area() := w * h; twice() := 2 * area()}; rect(3, 4).twice()", 24);
+	is!("class rect{w:int; h:int; area() := w * h; twice() := 2 * self.area()}; rect(3, 4).twice()", 24);
+	is!("class square{side:int; area := side * side; twice() := 2 * area}; square(3).twice()", 18);
 }
 
 #[test]
 fn a_subclass_method_calls_an_inherited_method_without_self() {
-	is!(
-		"class a{x:int; f() := x}; class b extends a{g() := f() + 1}; b(1).g()",
-		2
-	);
-	is!(
-		"class a{x:int; f() := x}; class b extends a{g() := f() + 1}; class c extends b{h() := g() + 1}; c(1).h()",
-		3
-	);
+	is!("class a{x:int; f() := x}; class b extends a{g() := f() + 1}; b(1).g()", 2);
+	is!("class a{x:int; f() := x}; class b extends a{g() := f() + 1}; class c extends b{h() := g() + 1}; c(1).h()", 3);
 }
 
 #[test]
@@ -66,18 +45,9 @@ fn an_override_calls_the_parent_method_with_super() {
 #[test]
 fn a_subclass_instance_is_its_parent_type() {
 	// Java `instanceof`, Python `isinstance`
-	is!(
-		"class animal{name}; class dog extends animal{}; dog(\"Rex\") is animal",
-		true
-	);
-	is!(
-		"class animal{name}; class dog extends animal{}; d = dog(\"Rex\"); d is dog",
-		true
-	);
-	is!(
-		"class animal{name}; class dog extends animal{}; animal(\"Cat\") is dog",
-		false
-	);
+	is!("class animal{name}; class dog extends animal{}; dog(\"Rex\") is animal", true);
+	is!("class animal{name}; class dog extends animal{}; d = dog(\"Rex\"); d is dog", true);
+	is!("class animal{name}; class dog extends animal{}; animal(\"Cat\") is dog", false);
 }
 
 #[test]
@@ -94,19 +64,10 @@ fn instances_compare_by_value() {
 
 #[test]
 fn objects_change_and_copy() {
-	is!(
-		"class counter{n:int; inc() := n += 1}; c = counter(0); c.inc(); c.inc(); c.n",
-		2
-	);
-	is!(
-		"class person{name; age:int}; p = person(\"Ann\", 40); p.age = 41; p.age",
-		41
-	);
+	is!("class counter{n:int; inc() := n += 1}; c = counter(0); c.inc(); c.inc(); c.n", 2);
+	is!("class person{name; age:int}; p = person(\"Ann\", 40); p.age = 41; p.age", 41);
 	// Kotlin `copy`, a method giving a changed new instance
-	is!(
-		"class point{x:int; y:int; moved(dx:int) := point(x + dx, y)}; point(1, 2).moved(3).x",
-		4
-	);
+	is!("class point{x:int; y:int; moved(dx:int) := point(x + dx, y)}; point(1, 2).moved(3).x", 4);
 }
 
 #[test]
@@ -134,50 +95,29 @@ fn a_stack_class_pushes_onto_its_list() {
 
 #[test]
 fn a_list_field_grows_by_add() {
-	is!(
-		"class Holder{items:[int]}; p = Holder([]); p.items.add(1); p.items.add(5); count(p.items)",
-		2
-	);
-	is!(
-		"class Holder{items:[int]}; p = Holder([3]); p.items.insert(9, at:1); p.items#2",
-		9
-	);
+	is!("class Holder{items:[int]}; p = Holder([]); p.items.add(1); p.items.add(5); count(p.items)", 2);
+	is!("class Holder{items:[int]}; p = Holder([3]); p.items.insert(9, at:1); p.items#2", 9);
 }
 
 #[test]
 fn static_members_belong_to_the_class() {
 	// P122 (user, 2026-10-06): `static k = 3` is a member of the class, read as C.k and c.k, never stored per instance
 	is!("class Circle{r:int; static k = 3}; Circle.k + Circle(1).k", 6);
-	is!(
-		"class Circle{r:int; static k = 3; area() := k * r}; Circle(2).area()",
-		6
-	);
-	is!(
-		"class Cm{r:int; static unit = \"cm\"}; class M{s:int; static unit = \"m\"}; Cm.unit + M.unit",
-		"cmm"
-	);
-	crate::common::fails_with(
-		"class Circle{r:int; static k = 3}; Circle(1, 2)",
-		"Circle takes 1 fields, got 2",
-	);
+	is!("class Circle{r:int; static k = 3; area() := k * r}; Circle(2).area()", 6);
+	is!("class Cm{r:int; static unit = \"cm\"}; class M{s:int; static unit = \"m\"}; Cm.unit + M.unit", "cmm");
+	crate::common::fails_with("class Circle{r:int; static k = 3}; Circle(1, 2)", "Circle takes 1 fields, got 2");
 }
 
 #[test]
 fn a_static_counter_changes_from_methods_and_outside() {
 	is!("class Clicker{r:int; static clicks = 0; click() := clicks += 1}; x = Clicker(1); x.click(); x.click(); Clicker.clicks", 2);
-	is!(
-		"class Clicker{r:int; static clicks = 0}; Clicker.clicks = 5; Clicker.clicks",
-		5
-	);
+	is!("class Clicker{r:int; static clicks = 0}; Clicker.clicks = 5; Clicker.clicks", 5);
 }
 
 #[test]
 fn a_static_method_is_called_on_the_class() {
 	// Java static factory, Python @classmethod / @staticmethod
-	is!(
-		"class Circle{r:int; static doubled(x:int) := Circle(x * 2)}; Circle.doubled(4).r",
-		8
-	);
+	is!("class Circle{r:int; static doubled(x:int) := Circle(x * 2)}; Circle.doubled(4).r", 8);
 }
 
 const POINT: &str = "class Point{x:int; y:int}; p = Point(1, 2); ";
@@ -185,10 +125,7 @@ const POINT: &str = "class Point{x:int; y:int}; p = Point(1, 2); ";
 #[test]
 fn an_object_has_one_text_form() {
 	// P123 (user, 2026-10-06): `Point{x:1 y:2}` everywhere, the constructor form (Python __repr__, Kotlin data class toString)
-	assert_eq!(
-		warp::wasm_emitter::eval(&format!("{POINT}p")).serialize(),
-		"Point{x:1 y:2}"
-	);
+	assert_eq!(warp::wasm_emitter::eval(&format!("{POINT}p")).serialize(), "Point{x:1 y:2}");
 	assert_eq!(
 		warp::wasm_emitter::eval(&format!("{POINT}[p, Point(3, 4)]")).serialize(),
 		"[Point{x:1 y:2} Point{x:3 y:4}]"
@@ -200,9 +137,6 @@ fn an_object_has_one_text_form() {
 	#[cfg(feature = "native")]
 	{
 		assert_eq!(crate::common::printed(&format!("{POINT}print p")), "Point{x:1 y:2}\n");
-		assert_eq!(
-			crate::common::printed(&format!("{POINT}print [p]")),
-			"[Point{x:1 y:2}]\n"
-		);
+		assert_eq!(crate::common::printed(&format!("{POINT}print [p]")), "[Point{x:1 y:2}]\n");
 	}
 }

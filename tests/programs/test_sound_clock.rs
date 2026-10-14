@@ -13,11 +13,7 @@ fn printed(program: &str) -> (String, std::time::Duration) {
 	let started = std::time::Instant::now();
 	let run = command.args(["--no-ask", "eval", program]).output().unwrap();
 	let printed = String::from_utf8_lossy(&run.stdout).into_owned();
-	assert!(
-		run.status.success(),
-		"{printed} {}",
-		String::from_utf8_lossy(&run.stderr)
-	);
+	assert!(run.status.success(), "{printed} {}", String::from_utf8_lossy(&run.stderr));
 	(printed, started.elapsed())
 }
 
@@ -34,10 +30,7 @@ fn last_number(output: &str) -> f64 {
 fn assert_queued(program: &str, seconds: f64) {
 	let (output, took) = printed(&format!("{program}\nsound_queued()"));
 	let queued = last_number(&output);
-	assert!(
-		queued <= seconds && queued >= seconds - took.as_secs_f64(),
-		"{queued} queued of {seconds} after {took:?}"
-	);
+	assert!(queued <= seconds && queued >= seconds - took.as_secs_f64(), "{queued} queued of {seconds} after {took:?}");
 }
 
 #[test]
@@ -49,9 +42,7 @@ fn sounds_queue_on_the_audio_clock() {
 
 #[test]
 fn stop_sound_empties_the_queue() {
-	assert!(printed("use sound\nplay(C4, 2s)\nstop_sound\nsound_queued()")
-		.0
-		.contains('0'));
+	assert!(printed("use sound\nplay(C4, 2s)\nstop_sound\nsound_queued()").0.contains('0'));
 }
 
 #[test]

@@ -52,10 +52,7 @@ fn manifest(module: &[u8]) -> Result<Vec<(String, Vec<String>)>, String> {
 	let mut routes: Vec<(usize, u32)> = names
 		.iter()
 		.filter_map(|(&function, name)| {
-			name.strip_prefix(ROUTE_FUNCTION_PREFIX)?
-				.parse()
-				.ok()
-				.map(|route| (route, function))
+			name.strip_prefix(ROUTE_FUNCTION_PREFIX)?.parse().ok().map(|route| (route, function))
 		})
 		.collect();
 	routes.sort();
@@ -69,23 +66,17 @@ fn manifest(module: &[u8]) -> Result<Vec<(String, Vec<String>)>, String> {
 		})
 		.collect();
 	let shared = graph.reached(&roots, &route_functions);
-	let reached: Vec<Vec<bool>> = route_functions
-		.iter()
-		.map(|&function| graph.reached(&[function], &route_functions))
-		.collect();
+	let reached: Vec<Vec<bool>> =
+		route_functions.iter().map(|&function| graph.reached(&[function], &route_functions)).collect();
 	let mut manifest = vec![];
 	for (position, &(route, _)) in routes.iter().enumerate() {
 		let own = (0..shared.len()).filter(|&defined| {
 			reached[position][defined]
 				&& !shared[defined]
-				&& !reached
-					.iter()
-					.enumerate()
-					.any(|(other, by)| other != position && by[defined])
+				&& !reached.iter().enumerate().any(|(other, by)| other != position && by[defined])
 		});
-		let own_names: Vec<String> = own
-			.filter_map(|defined| names.get(&(defined as u32 + graph.imported)).cloned())
-			.collect();
+		let own_names: Vec<String> =
+			own.filter_map(|defined| names.get(&(defined as u32 + graph.imported)).cloned()).collect();
 		if !own_names.is_empty() {
 			manifest.push((format!("{ROUTE_MODULE_PREFIX}{route}"), own_names));
 		}
@@ -96,9 +87,7 @@ fn manifest(module: &[u8]) -> Result<Vec<(String, Vec<String>)>, String> {
 /// The program's own functions, exported only for tasks (host.rs USER_FUNCTIONS_SECTION): a task runs them by name in
 /// an instance of its own, without the route's module, so with tasks they stay
 fn movable_exports(module: &[u8]) -> Result<Vec<String>, String> {
-	let spawns_tasks = crate::host::host_parts::imports_of(module)?
-		.iter()
-		.any(|(_, name)| name == TASK_SPAWN_VALUES);
+	let spawns_tasks = crate::host::host_parts::imports_of(module)?.iter().any(|(_, name)| name == TASK_SPAWN_VALUES);
 	match spawns_tasks {
 		true => Ok(vec![]),
 		false => crate::host::host_parts::section_names(module, USER_FUNCTIONS_SECTION, USER_FUNCTIONS_SEPARATOR),
@@ -129,20 +118,15 @@ fn function_names(module: &[u8]) -> wasmparser::Result<HashMap<u32, String>> {
 
 /// wasm-split --multi-split in a folder of its own: the primary module and one module per manifest entry
 fn wasm_split(module: &[u8], manifest: &[(String, Vec<String>)]) -> Result<RouteModules, String> {
-	let folder = std::env::temp_dir().join(format!(
-		"warp-route-split-{}-{:?}",
-		std::process::id(),
-		std::thread::current().id()
-	));
+	let folder =
+		std::env::temp_dir().join(format!("warp-route-split-{}-{:?}", std::process::id(), std::thread::current().id()));
 	std::fs::create_dir_all(&folder).map_err(|failure| format!("cannot make {}: {failure}", folder.display()))?;
 	let written = |name: &str, bytes: &[u8]| {
 		std::fs::write(folder.join(name), bytes).map_err(|failure| format!("cannot write {name}: {failure}"))
 	};
 	written(MODULE_FILE, module)?;
-	let lines: Vec<String> = manifest
-		.iter()
-		.map(|(name, functions)| format!("{name}\n{}\n", functions.join("\n")))
-		.collect();
+	let lines: Vec<String> =
+		manifest.iter().map(|(name, functions)| format!("{name}\n{}\n", functions.join("\n"))).collect();
 	written(MANIFEST_FILE, lines.join("\n").as_bytes())?;
 	let output = Command::new(WASM_SPLIT)
 		.current_dir(&folder)
@@ -168,15 +152,9 @@ fn wasm_split(module: &[u8], manifest: &[(String, Vec<String>)]) -> Result<Route
 			let routes = manifest.iter().map(|(name, _)| {
 				read(&format!("{name}{WASM_EXTENSION}")).map(|bytes| (format!("{name}{WASM_EXTENSION}"), bytes))
 			});
-			Ok(RouteModules {
-				primary,
-				routes: routes.collect::<Result<_, _>>()?,
-			})
+			Ok(RouteModules { primary, routes: routes.collect::<Result<_, _>>()? })
 		}),
-		false => Err(format!(
-			"{WASM_SPLIT} failed: {}",
-			String::from_utf8_lossy(&output.stderr).trim()
-		)),
+		false => Err(format!("{WASM_SPLIT} failed: {}", String::from_utf8_lossy(&output.stderr).trim())),
 	};
 	let _ = std::fs::remove_dir_all(&folder);
 	split

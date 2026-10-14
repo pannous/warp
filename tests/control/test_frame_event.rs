@@ -9,18 +9,10 @@ use crate::common::warp_command;
 fn a_frame_handler_runs_once_without_a_window() {
 	let file = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("on_frame.warp");
 	std::fs::write(&file, "n = 0\non frame { n += 1; print n }\nprint \"ready\"\n").expect("write the program");
-	let run = warp_command()
-		.args(["run", file.to_str().unwrap()])
-		.env("WARP_NO_WINDOW", "1")
-		.output()
-		.expect("warp runs");
+	let run =
+		warp_command().args(["run", file.to_str().unwrap()]).env("WARP_NO_WINDOW", "1").output().expect("warp runs");
 	let said = String::from_utf8_lossy(&run.stdout);
-	assert_eq!(
-		said.lines().collect::<Vec<_>>(),
-		["ready", "1"],
-		"{}",
-		String::from_utf8_lossy(&run.stderr)
-	);
+	assert_eq!(said.lines().collect::<Vec<_>>(), ["ready", "1"], "{}", String::from_utf8_lossy(&run.stderr));
 }
 
 #[test]
@@ -36,8 +28,5 @@ fn on_key_hears_the_paint_windows_keys() {
 	for key in ['a' as u32, 0, 0xF700, 0] {
 		warp_runtime::system_values::tell_window_key(key as f32);
 	}
-	crate::is!(
-		"keys = \"\"\non key { keys = keys + event.key + \" \" }\nsleep(100 ms)\nkeys",
-		"a ArrowUp "
-	);
+	crate::is!("keys = \"\"\non key { keys = keys + event.key + \" \" }\nsleep(100 ms)\nkeys", "a ArrowUp ");
 }

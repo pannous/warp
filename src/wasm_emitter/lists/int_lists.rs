@@ -11,16 +11,8 @@ pub const INTS_TO_LIST: &str = "ints_to_list";
 /// list_to_ints(list, address, room) -> count: the list's first `room` Ints as i64 at `address` (paint's pixels, negatives
 /// as their magnitude), -1 when an item is no fixnum Int and the host reads the list itself
 pub const LIST_TO_INTS: &str = "list_to_ints";
-const U32: MemArg = MemArg {
-	offset: 0,
-	align: 2,
-	memory_index: 0,
-};
-const I64: MemArg = MemArg {
-	offset: 0,
-	align: 3,
-	memory_index: 0,
-};
+const U32: MemArg = MemArg { offset: 0, align: 2, memory_index: 0 };
+const I64: MemArg = MemArg { offset: 0, align: 3, memory_index: 0 };
 const SQUARE_BRACKET: i64 = 1;
 const NOT_INTS: i32 = -1;
 /// A pixel beyond the machine ints: its magnitude i64::MAX has every color bit set
@@ -76,17 +68,7 @@ impl WasmGcEmitter {
 				s.call(f, "new_int");
 				Self::emit_list(f, &[I::LocalGet(rest), I::I64Const(SQUARE_BRACKET)]);
 				s.call(f, "new_list");
-				Self::emit_list(
-					f,
-					&[
-						I::LocalSet(rest),
-						I::Br(0),
-						I::End,
-						I::End,
-						I::LocalGet(rest),
-						I::RefAsNonNull,
-					],
-				);
+				Self::emit_list(f, &[I::LocalSet(rest), I::Br(0), I::End, I::End, I::LocalGet(rest), I::RefAsNonNull]);
 			},
 		);
 	}
@@ -95,17 +77,8 @@ impl WasmGcEmitter {
 		let nullable = self.node_ref(true);
 		let (node_type, box_type) = (self.type_manager.node_type, self.type_manager.i64_box_type);
 		let (int_array, int_list) = (self.type_manager.int_array_type, self.type_manager.int_list_type);
-		let int_list_ref = ValType::Ref(RefType {
-			nullable: true,
-			heap_type: HeapType::Concrete(int_list),
-		});
-		let locals = vec![
-			ValType::I32,
-			ValType::Ref(nullable),
-			ValType::I64,
-			ValType::Ref(nullable),
-			int_list_ref,
-		];
+		let int_list_ref = ValType::Ref(RefType { nullable: true, heap_type: HeapType::Concrete(int_list) });
+		let locals = vec![ValType::I32, ValType::Ref(nullable), ValType::I64, ValType::Ref(nullable), int_list_ref];
 		self.exported_function(
 			LIST_TO_INTS,
 			vec![ValType::Ref(RefType::ANYREF), ValType::I32, ValType::I32],
@@ -134,18 +107,12 @@ impl WasmGcEmitter {
 						I::I32GeU,
 						I::LocalGet(count),
 						I::LocalGet(ints),
-						I::StructGet {
-							struct_type_index: int_list,
-							field_index: 0,
-						},
+						I::StructGet { struct_type_index: int_list, field_index: 0 },
 						I::I32GeU,
 						I::I32Or,
 						I::BrIf(1),
 						I::LocalGet(ints),
-						I::StructGet {
-							struct_type_index: int_list,
-							field_index: 1,
-						},
+						I::StructGet { struct_type_index: int_list, field_index: 1 },
 						I::LocalGet(count),
 						I::ArrayGet(int_array),
 						I::LocalTee(value),
@@ -183,33 +150,14 @@ impl WasmGcEmitter {
 				s.emit_empty_as_null(f, cell);
 				Self::emit_list(
 					f,
-					&[
-						I::LocalGet(cell),
-						I::RefIsNull,
-						I::If(BlockType::Empty),
-						I::I32Const(0),
-						I::Return,
-						I::End,
-					],
+					&[I::LocalGet(cell), I::RefIsNull, I::If(BlockType::Empty), I::I32Const(0), I::Return, I::End],
 				);
 				kind_is(f, cell, Kind::List);
-				Self::emit_list(
-					f,
-					&[
-						I::I32Eqz,
-						I::If(BlockType::Empty),
-						I::I32Const(NOT_INTS),
-						I::Return,
-						I::End,
-					],
-				);
+				Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::I32Const(NOT_INTS), I::Return, I::End]);
 				s.emit_cell_walk(f, cell, |f| {
 					Self::emit_list(f, &[I::LocalGet(count), I::LocalGet(room), I::I32GeU, I::BrIf(1)]);
 					s.emit_field(f, cell, 1);
-					Self::emit_list(
-						f,
-						&[I::RefCastNullable(HeapType::Concrete(node_type)), I::LocalSet(item)],
-					);
+					Self::emit_list(f, &[I::RefCastNullable(HeapType::Concrete(node_type)), I::LocalSet(item)]);
 					// an Int whose payload is an $i64box (not a big Int's handle), else the host reads the list
 					Self::emit_list(
 						f,
@@ -241,10 +189,7 @@ impl WasmGcEmitter {
 						f,
 						&[
 							I::RefCastNonNull(HeapType::Concrete(box_type)),
-							I::StructGet {
-								struct_type_index: box_type,
-								field_index: 0,
-							},
+							I::StructGet { struct_type_index: box_type, field_index: 0 },
 							I::LocalSet(value),
 						],
 					);

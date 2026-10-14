@@ -18,8 +18,5 @@ def pop(st) {
 #[test]
 fn a_comprehension_beside_an_own_push_function() {
 	is!(&format!("{STACK}push(s, 1)\npush(s, 2)\npush(s, 3)\npop(s)"), 3);
-	is!(
-		&format!("{STACK}push(s, 1)\npush(s, 2)\npush(s, 3)\npop(s)\nn = #s.items\nn"),
-		2
-	);
+	is!(&format!("{STACK}push(s, 1)\npush(s, 2)\npush(s, 3)\npop(s)\nn = #s.items\nn"), 2);
 }

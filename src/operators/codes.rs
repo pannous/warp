@@ -84,11 +84,7 @@ pub fn op_named(text: &str) -> Option<Op> {
 
 /// Decode i64 back to Op
 pub fn code_to_op(code: i64) -> Op {
-	usize::try_from(code)
-		.ok()
-		.and_then(|index| OP_CODES.get(index))
-		.copied()
-		.unwrap_or(Op::None)
+	usize::try_from(code).ok().and_then(|index| OP_CODES.get(index)).copied().unwrap_or(Op::None)
 }
 
 /// What Node::serialize writes between an entry's key and value, by operator code: `x+1`, `0.1 as float`, nothing for

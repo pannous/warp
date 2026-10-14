@@ -29,10 +29,7 @@ fn an_uncaught_adapter_failure_stays_loud() {
 fn try_catches_a_file_or_http_failure() {
 	is!("try write(\"/no/such/folder/x.txt\", \"x\") else 7", 7);
 	is!(
-		&format!(
-			"use net\ntry post(\"{}\", \"x\") else \"caught\"",
-			crate::common::serve("401 Unauthorized", "no")
-		),
+		&format!("use net\ntry post(\"{}\", \"x\") else \"caught\"", crate::common::serve("401 Unauthorized", "no")),
 		"caught"
 	);
 }

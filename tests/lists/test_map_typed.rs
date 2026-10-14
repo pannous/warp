@@ -20,14 +20,8 @@ fn map_and_filter_of_a_typed_list_take_linear_time() {
 #[test]
 fn an_append_while_the_list_is_aliased_still_makes_a_new_list() {
 	is!("xs = [1]; ys = xs; xs = xs + [2]; [#xs, #ys]", warp::parse("[2 1]"));
-	is!(
-		"out = []; d = []; for i in 1 to 3 { d = out; out = out + [i] }; [#d, #out]",
-		warp::parse("[2 3]")
-	);
-	is!(
-		"out = []; d = out; for i in 1 to 3 { out = out + [i] }; [#d, #out]",
-		warp::parse("[0 3]")
-	);
+	is!("out = []; d = []; for i in 1 to 3 { d = out; out = out + [i] }; [#d, #out]", warp::parse("[2 3]"));
+	is!("out = []; d = out; for i in 1 to 3 { out = out + [i] }; [#d, #out]", warp::parse("[0 3]"));
 }
 
 // a variable given a second map's result: each map's own list is aliased only at its end

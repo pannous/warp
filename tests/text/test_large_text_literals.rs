@@ -12,8 +12,6 @@ fn a_text_literal_larger_than_a_page_fits() {
 
 #[test]
 fn text_literals_larger_than_a_page_together_fit() {
-	let literals: Vec<String> = (0..20)
-		.map(|i| format!("#\"{}\"", "abcdefghij".repeat(500 + i)))
-		.collect();
+	let literals: Vec<String> = (0..20).map(|i| format!("#\"{}\"", "abcdefghij".repeat(500 + i))).collect();
 	is!(&format!("[{}]#20", literals.join(", ")), 5190);
 }

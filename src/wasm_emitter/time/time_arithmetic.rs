@@ -80,13 +80,7 @@ fn is_time_where(kind: u32, duration: bool) -> Emit {
 }
 
 fn is_kind(kind: u32, wanted: Kind) -> Emit {
-	vec![
-		I::LocalGet(kind),
-		I::I64Const(KIND_MASK),
-		I::I64And,
-		I::I64Const(wanted as i64),
-		I::I64Eq,
-	]
+	vec![I::LocalGet(kind), I::I64Const(KIND_MASK), I::I64And, I::I64Const(wanted as i64), I::I64Eq]
 }
 
 fn is_operator(index: usize) -> Emit {
@@ -164,11 +158,7 @@ impl WasmGcEmitter {
 				Self::emit_if(f, &is_operator(2), |f| {
 					Self::emit_if(
 						f,
-						&[
-							both(is_time_where(KIND_A, true), is_kind(KIND_B, Kind::Int)),
-							vec![I::I32Eqz],
-						]
-						.concat(),
+						&[both(is_time_where(KIND_A, true), is_kind(KIND_B, Kind::Int)), vec![I::I32Eqz]].concat(),
 						|f| s.emit_time_failure(f, NOT_ARITHMETIC),
 					);
 					for (part, local) in PARTS {
@@ -186,57 +176,39 @@ impl WasmGcEmitter {
 				// +1 for +, -1 for -
 				Self::emit_list(
 					f,
-					&[
-						I::I64Const(1),
-						I::I64Const(-1),
-						I::LocalGet(OPERATOR),
-						I::I32Eqz,
-						I::Select,
-						I::LocalSet(SIGN),
-					],
+					&[I::I64Const(1), I::I64Const(-1), I::LocalGet(OPERATOR), I::I32Eqz, I::Select, I::LocalSet(SIGN)],
 				);
+				Self::emit_if(f, &both(is_time_where(KIND_A, true), is_time_where(KIND_B, true)), |f| {
+					for (part, local) in PARTS {
+						Self::emit_list(
+							f,
+							&[
+								part_of(KIND_B, POSITION_B, part),
+								vec![I::LocalGet(SIGN), I::I64Mul],
+								part_of(KIND_A, POSITION_A, part),
+								vec![I::I64Add, I::LocalSet(local)],
+							]
+							.concat(),
+						);
+					}
+					s.emit_return_duration(f);
+				});
+				Self::emit_if(f, &both(is_time_where(KIND_A, false), is_time_where(KIND_B, true)), |f| {
+					for (part, local) in PARTS {
+						Self::emit_list(
+							f,
+							&[
+								part_of(KIND_B, POSITION_B, part),
+								vec![I::LocalGet(SIGN), I::I64Mul, I::LocalSet(local)],
+							]
+							.concat(),
+						);
+					}
+					s.emit_shift_time(f);
+				});
 				Self::emit_if(
 					f,
-					&both(is_time_where(KIND_A, true), is_time_where(KIND_B, true)),
-					|f| {
-						for (part, local) in PARTS {
-							Self::emit_list(
-								f,
-								&[
-									part_of(KIND_B, POSITION_B, part),
-									vec![I::LocalGet(SIGN), I::I64Mul],
-									part_of(KIND_A, POSITION_A, part),
-									vec![I::I64Add, I::LocalSet(local)],
-								]
-								.concat(),
-							);
-						}
-						s.emit_return_duration(f);
-					},
-				);
-				Self::emit_if(
-					f,
-					&both(is_time_where(KIND_A, false), is_time_where(KIND_B, true)),
-					|f| {
-						for (part, local) in PARTS {
-							Self::emit_list(
-								f,
-								&[
-									part_of(KIND_B, POSITION_B, part),
-									vec![I::LocalGet(SIGN), I::I64Mul, I::LocalSet(local)],
-								]
-								.concat(),
-							);
-						}
-						s.emit_shift_time(f);
-					},
-				);
-				Self::emit_if(
-					f,
-					&both(
-						both(is_time_where(KIND_A, false), is_time_where(KIND_B, false)),
-						is_operator(1),
-					),
+					&both(both(is_time_where(KIND_A, false), is_time_where(KIND_B, false)), is_operator(1)),
 					|f| s.emit_time_difference(f),
 				);
 				s.emit_time_failure(f, NOT_ARITHMETIC);
@@ -297,36 +269,17 @@ impl WasmGcEmitter {
 				I::I32Or,
 			];
 			Self::emit_if(f, &has_calendar_parts, |f| self.emit_time_failure(f, NO_CALENDAR));
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(POSITION_A),
-					I::LocalGet(NANOS),
-					I::I64Add,
-					I::LocalSet(POSITION_A),
-				],
-			);
+			Self::emit_list(f, &[I::LocalGet(POSITION_A), I::LocalGet(NANOS), I::I64Add, I::LocalSet(POSITION_A)]);
 			self.emit_return_time(f, KIND_A, POSITION_A);
 		});
 		Self::emit_if(
 			f,
-			&[
-				is_form(TimeForm::Date),
-				vec![I::LocalGet(NANOS), I::I64Const(0), I::I64Ne, I::I32And],
-			]
-			.concat(),
+			&[is_form(TimeForm::Date), vec![I::LocalGet(NANOS), I::I64Const(0), I::I64Ne, I::I32And]].concat(),
 			|f| self.emit_time_failure(f, NO_TIME_OF_DAY),
 		);
 		Self::emit_list(f, &[I::LocalGet(FORM), I::LocalGet(POSITION_A)]);
 		self.call(f, TIME_PARTS);
-		Self::emit_list(
-			f,
-			&[
-				I::LocalSet(DAY_PART_NANOS),
-				I::LocalSet(EPOCH_DAY),
-				I::LocalGet(EPOCH_DAY),
-			],
-		);
+		Self::emit_list(f, &[I::LocalSet(DAY_PART_NANOS), I::LocalSet(EPOCH_DAY), I::LocalGet(EPOCH_DAY)]);
 		self.call(f, CIVIL_FROM_DAYS);
 		Self::emit_list(f, &[I::LocalSet(DAY), I::LocalSet(MONTH), I::LocalSet(YEAR)]);
 		// the month count first, then the days: 2024-01-31 + 1 month is rejected, + 1 month 2 days is 2024-02-31 + 2
@@ -423,15 +376,7 @@ impl WasmGcEmitter {
 				I::I32Eqz,
 			];
 			Self::emit_if(f, &has_calendar_parts, |f| {
-				Self::emit_list(
-					f,
-					&[
-						I::LocalGet(ZONE),
-						I::LocalGet(POSITION_A),
-						I::LocalGet(NANOS),
-						I::I64Add,
-					],
-				);
+				Self::emit_list(f, &[I::LocalGet(ZONE), I::LocalGet(POSITION_A), I::LocalGet(NANOS), I::I64Add]);
 				self.call(f, ZONED_NODE);
 				f.instruction(&I::Return);
 			});
@@ -464,15 +409,7 @@ impl WasmGcEmitter {
 		Self::emit_if(f, &[I::LocalGet(IS_ZONED), I::I64Const(0), I::I64Ne], |f| {
 			Self::emit_list(f, &[I::I64Const(REJECT), I::LocalSet(SPARE)]);
 			self.emit_resolved_instant(f, ZONE, POSITION_A, SPARE, SIGN);
-			Self::emit_list(
-				f,
-				&[
-					I::LocalGet(ZONE),
-					I::LocalGet(POSITION_A),
-					I::LocalGet(EXACT_NANOS),
-					I::I64Add,
-				],
-			);
+			Self::emit_list(f, &[I::LocalGet(ZONE), I::LocalGet(POSITION_A), I::LocalGet(EXACT_NANOS), I::I64Add]);
 			self.call(f, ZONED_NODE);
 			f.instruction(&I::Return);
 		});
@@ -481,26 +418,12 @@ impl WasmGcEmitter {
 	/// `a - b` of two times of one form: days between dates, else an exact duration
 	fn emit_time_difference(&mut self, f: &mut Function) {
 		let form_of = |kind: u32| {
-			vec![
-				I::LocalGet(kind),
-				I::I64Const(KIND_BITS),
-				I::I64ShrU,
-				I::I64Const(TIME_FORM_MASK),
-				I::I64And,
-			]
+			vec![I::LocalGet(kind), I::I64Const(KIND_BITS), I::I64ShrU, I::I64Const(TIME_FORM_MASK), I::I64And]
 		};
 		Self::emit_if(f, &[form_of(KIND_A), form_of(KIND_B), vec![I::I64Ne]].concat(), |f| {
 			self.emit_time_failure(f, MISMATCHED)
 		});
-		Self::emit_list(
-			f,
-			&[
-				I::LocalGet(POSITION_A),
-				I::LocalGet(POSITION_B),
-				I::I64Sub,
-				I::LocalSet(NANOS),
-			],
-		);
+		Self::emit_list(f, &[I::LocalGet(POSITION_A), I::LocalGet(POSITION_B), I::I64Sub, I::LocalSet(NANOS)]);
 		Self::emit_if(
 			f,
 			&[
@@ -518,10 +441,7 @@ impl WasmGcEmitter {
 				f.instruction(&I::Return);
 			},
 		);
-		Self::emit_list(
-			f,
-			&[I::I64Const(0), I::LocalSet(MONTHS), I::I64Const(0), I::LocalSet(DAYS)],
-		);
+		Self::emit_list(f, &[I::I64Const(0), I::LocalSet(MONTHS), I::I64Const(0), I::LocalSet(DAYS)]);
 		self.emit_return_duration(f);
 	}
 

@@ -13,11 +13,7 @@ const FULL_HD: (u32, u32) = (1920, 1080);
 const MOST_MESSAGE_BYTES: usize = 1024;
 
 fn values() -> Vec<ShaderValue> {
-	let value = |name: &str, floats: Vec<f32>, array| ShaderValue {
-		name: name.into(),
-		floats,
-		array,
-	};
+	let value = |name: &str, floats: Vec<f32>, array| ShaderValue { name: name.into(), floats, array };
 	vec![
 		value("width", vec![64.0], false),
 		value("tone", vec![0.25], false),
@@ -32,15 +28,9 @@ fn a_shader_frame_crosses_to_the_paint_window_whole_and_small() {
 	let Some(Message::Shader(read)) = read_message(&mut message.as_slice()) else {
 		panic!("no shader frame read back")
 	};
-	assert_eq!(
-		(read.width, read.height, read.shader.as_str()),
-		(FULL_HD.0, FULL_HD.1, SHADER)
-	);
+	assert_eq!((read.width, read.height, read.shader.as_str()), (FULL_HD.0, FULL_HD.1, SHADER));
 	let floats = |values: &[ShaderValue]| -> Vec<_> {
-		values
-			.iter()
-			.map(|value| (value.name.clone(), value.floats.clone(), value.array))
-			.collect()
+		values.iter().map(|value| (value.name.clone(), value.floats.clone(), value.array)).collect()
 	};
 	assert_eq!(floats(&read.values), floats(&values()));
 }
@@ -49,12 +39,7 @@ fn a_shader_frame_crosses_to_the_paint_window_whole_and_small() {
 fn the_paint_window_renders_what_paint_renders() {
 	let Ok(rendered) = warp::graphics::gpu::with_device(|device, queue| {
 		let texture = warp::graphics::gpu::render_texture(device, queue, SHADER, 64, 48, &values(), None)?;
-		warp::graphics::gpu::image_rgba(
-			device,
-			queue,
-			device.create_command_encoder(&Default::default()),
-			&texture,
-		)
+		warp::graphics::gpu::image_rgba(device, queue, device.create_command_encoder(&Default::default()), &texture)
 	}) else {
 		return eprintln!("no GPU here");
 	};
@@ -68,8 +53,5 @@ fn a_shader_that_does_not_compile_fails_before_it_reaches_the_window() {
 		return eprintln!("no GPU here");
 	}
 	let problem = warp::graphics::gpu::checked_values("@fragment fn main( {", 64, 48, &[]).err();
-	assert!(
-		problem.is_some_and(|problem| problem.contains("expected")),
-		"it compiled"
-	);
+	assert!(problem.is_some_and(|problem| problem.contains("expected")), "it compiled");
 }

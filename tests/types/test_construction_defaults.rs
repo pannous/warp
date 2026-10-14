@@ -19,8 +19,5 @@ fn each_instance_gets_its_own_default() {
 
 #[test]
 fn a_nested_construction_default_is_constructed_too() {
-	is!(
-		"class Point { x: int = 3 }; class A { p: Point = Point() }; class C { a: A = A() }; C().a.p.x",
-		3
-	);
+	is!("class Point { x: int = 3 }; class A { p: Point = Point() }; class C { a: A = A() }; C().a.p.x", 3);
 }

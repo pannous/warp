@@ -20,11 +20,7 @@ fn a_wgsl_error_names_its_place_in_the_program() {
 		.args(["--no-ask", "eval", BROKEN_PROGRAM])
 		.output()
 		.unwrap();
-	let said = format!(
-		"{}{}",
-		String::from_utf8_lossy(&run.stdout),
-		String::from_utf8_lossy(&run.stderr)
-	);
+	let said = format!("{}{}", String::from_utf8_lossy(&run.stdout), String::from_utf8_lossy(&run.stderr));
 	if said.contains("no WebGPU adapter") {
 		return crate::common::announce_skip("a WebGPU adapter", module_path!());
 	}

@@ -74,16 +74,10 @@ fn dollar_arguments_and_templates_keep_working() {
 	let injected = "name=\"x' OR '1'='1\";q=sql \"SELECT * FROM t WHERE name = $name\"";
 	is!(&format!("{injected};q#1"), "SELECT * FROM t WHERE name = ?");
 	is!(&format!("{injected};q#2"), "x' OR '1'='1");
-	is!(
-		"name=\"x\";q=sql \"SELECT * FROM t WHERE name = \\(name)\";q#1",
-		"SELECT * FROM t WHERE name = ?"
-	);
+	is!("name=\"x\";q=sql \"SELECT * FROM t WHERE name = \\(name)\";q#1", "SELECT * FROM t WHERE name = ?");
 	is!("file=\"a b\";c=sh \"rm -f \\(file)\";c#3", "a b");
 	// a bare $name stays a sql/sh hole, also next to curly ones
-	is!(
-		"a=\"x\";b=\"y\";q=sql \"SELECT * FROM t WHERE a = $a AND b = ${b}\";q#3",
-		"y"
-	);
+	is!("a=\"x\";b=\"y\";q=sql \"SELECT * FROM t WHERE a = $a AND b = ${b}\";q#3", "y");
 	is!(
 		"a=\"x\";b=\"y\";q=sql \"SELECT * FROM t WHERE a = $a AND b = ${b}\";q#1",
 		"SELECT * FROM t WHERE a = ? AND b = ?"
@@ -105,10 +99,7 @@ fn round_dollar_holes_interpolate_like_curly_ones() {
 	is!("x=3; \"a $(x+1) b $(x*(x+1))\"", "a 4 b 12");
 	is!("name=\"Bob\"; \"hi $(name)! $name\"", "hi Bob! $name");
 	is!("\"a\\$(b)\"", "a$(b)"); // an escaped dollar is never a hole
-	is!(
-		"a=\"x\";q=sql \"SELECT * FROM t WHERE a = $(a)\";q#1",
-		"SELECT * FROM t WHERE a = ?"
-	);
+	is!("a=\"x\";q=sql \"SELECT * FROM t WHERE a = $(a)\";q#1", "SELECT * FROM t WHERE a = ?");
 	assert_eq!(hints_of("x=1; \"a $(x) b\""), vec![]); // user, 2026-10-09: no hint
 }
 

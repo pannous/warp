@@ -23,27 +23,15 @@ fn compiler_failure(sample: &str) -> Option<String> {
 		Ok(result) => result,
 		Err(_) => "panicked".to_string(),
 	};
-	COMPILER_FAILURES
-		.iter()
-		.any(|failure| result.contains(failure))
-		.then(|| format!("{sample}: {result}"))
+	COMPILER_FAILURES.iter().any(|failure| result.contains(failure)).then(|| format!("{sample}: {result}"))
 }
 
 fn slice_runs_cleanly(slice: usize) {
 	let samples = runnable_samples();
-	assert!(
-		samples.len() >= MINIMUM_SAMPLES,
-		"only {} samples found: {samples:?}",
-		samples.len()
-	);
-	let failures: Vec<String> = crate::common::sample_slice(&samples, slice)
-		.filter_map(|sample| compiler_failure(sample))
-		.collect();
-	assert!(
-		failures.is_empty(),
-		"compiler errors in samples:\n{}",
-		failures.join("\n")
-	);
+	assert!(samples.len() >= MINIMUM_SAMPLES, "only {} samples found: {samples:?}", samples.len());
+	let failures: Vec<String> =
+		crate::common::sample_slice(&samples, slice).filter_map(|sample| compiler_failure(sample)).collect();
+	assert!(failures.is_empty(), "compiler errors in samples:\n{}", failures.join("\n"));
 }
 
 #[test]

@@ -48,11 +48,7 @@ fn program_with_rows(folder: &str, code: &str, adding: &str) -> std::path::PathB
 }
 
 fn agent() -> ureq::Agent {
-	ureq::Agent::config_builder()
-		.max_redirects(0)
-		.http_status_as_error(false)
-		.build()
-		.into()
+	ureq::Agent::config_builder().max_redirects(0).http_status_as_error(false).build().into()
 }
 
 fn url(path: &str) -> String {
@@ -79,31 +75,14 @@ fn a_form_posts_to_a_served_route() {
 		.send("title=tea")
 		.expect("an answer");
 	assert_eq!(browser.status().as_u16(), 303);
-	assert_eq!(
-		browser
-			.headers()
-			.get("Location")
-			.and_then(|location| location.to_str().ok()),
-		Some("/list?all=1")
-	);
+	assert_eq!(browser.headers().get("Location").and_then(|location| location.to_str().ok()), Some("/list?all=1"));
 	let _ = browser.body_mut().read_to_string();
-	let toggled = agent()
-		.post(&url("/todos/3/toggle"))
-		.send("")
-		.expect("an answer")
-		.body_mut()
-		.read_to_string()
-		.expect("a text");
+	let toggled =
+		agent().post(&url("/todos/3/toggle")).send("").expect("an answer").body_mut().read_to_string().expect("a text");
 	assert_eq!(toggled, "6");
 	let not_an_int = agent().post(&url("/todos/x/toggle")).send("").expect("an answer");
 	assert_eq!(not_an_int.status().as_u16(), 404);
-	let hello = agent()
-		.get(&url("/hello/Ann"))
-		.call()
-		.expect("an answer")
-		.body_mut()
-		.read_to_string()
-		.expect("a text");
+	let hello = agent().get(&url("/hello/Ann")).call().expect("an answer").body_mut().read_to_string().expect("a text");
 	assert_eq!(hello, "hi Ann");
 	server.join().expect("the server thread");
 }
@@ -131,10 +110,7 @@ fn a_path_parameter_filters_a_table() {
 fn a_failing_route_answers_its_failure() {
 	const FAILING_PORT: u16 = 18640;
 	let server = served_from(FAILING_PORT, "get \"/boom\" { xs = [1, 2]; xs#5 }", None, 1);
-	let mut answer = agent()
-		.get(&format!("http://127.0.0.1:{FAILING_PORT}/boom"))
-		.call()
-		.expect("an answer");
+	let mut answer = agent().get(&format!("http://127.0.0.1:{FAILING_PORT}/boom")).call().expect("an answer");
 	assert_eq!(answer.status().as_u16(), 500);
 	let message = answer.body_mut().read_to_string().expect("a text");
 	assert!(message.contains("index out of range"), "{message}");
@@ -168,10 +144,7 @@ fn a_page_starts_from_rows_of_a_server_table() {
 // runs, its routes do not
 #[test]
 fn routes_without_a_server_wait_for_the_page() {
-	crate::is!(
-		&format!("items = [1]\n{PROGRAM}\npost \"/items\" {{ items.add(2) }}\ncount(items)"),
-		1
-	);
+	crate::is!(&format!("items = [1]\n{PROGRAM}\npost \"/items\" {{ items.add(2) }}\ncount(items)"), 1);
 }
 
 // samples/todo_app.warp served, as the samples check asks it with curl: a todo is created, toggled and listed
@@ -192,25 +165,12 @@ fn the_todo_sample_creates_toggles_and_lists() {
 			.read_to_string()
 			.expect("a text")
 	};
-	let got = |path: &str| {
-		agent()
-			.get(&at(path))
-			.call()
-			.expect("an answer")
-			.body_mut()
-			.read_to_string()
-			.expect("a text")
-	};
+	let got =
+		|path: &str| agent().get(&at(path)).call().expect("an answer").body_mut().read_to_string().expect("a text");
 	assert_eq!(posted("/todos", "title=tea"), r#"{"title":"tea","done":false,"id":1}"#);
-	assert_eq!(
-		posted("/todos", "title=buy+milk"),
-		r#"{"title":"buy milk","done":false,"id":2}"#
-	);
+	assert_eq!(posted("/todos", "title=buy+milk"), r#"{"title":"buy milk","done":false,"id":2}"#);
 	assert_eq!(posted("/todos/1/toggle", ""), r#"{"title":"tea","done":true,"id":1}"#);
-	assert_eq!(
-		got("/api/todos"),
-		r#"[{"title":"tea","done":true,"id":1},{"title":"buy milk","done":false,"id":2}]"#
-	);
+	assert_eq!(got("/api/todos"), r#"[{"title":"tea","done":true,"id":1},{"title":"buy milk","done":false,"id":2}]"#);
 	assert_eq!(got("/api/open"), r#"[{"title":"buy milk","done":false,"id":2}]"#);
 	server.join().expect("the server thread");
 }
@@ -281,10 +241,7 @@ fn the_todo_sample_takes_a_users_edits() {
 			.header("Content-Type", FORM_TYPE)
 			.send(body)
 			.expect("an answer");
-		(
-			answer.status().as_u16(),
-			answer.body_mut().read_to_string().expect("a text"),
-		)
+		(answer.status().as_u16(), answer.body_mut().read_to_string().expect("a text"))
 	};
 	let got = |path: &str| {
 		agent()
@@ -296,32 +253,19 @@ fn the_todo_sample_takes_a_users_edits() {
 			.expect("a text")
 	};
 	let (_, milk) = answer("/todos", "title=milk&priority=2");
-	assert!(
-		milk.contains(r#""title":"milk""#) && milk.contains(r#""priority":2"#),
-		"{milk}"
-	);
+	assert!(milk.contains(r#""title":"milk""#) && milk.contains(r#""priority":2"#), "{milk}");
 	let (_, bread) = answer("/todos", "title=bread&priority=1");
 	assert!(bread.contains(r#""id":3"#), "{bread}");
 	let (status, refused) = answer("/todos", "title=&priority=1");
-	assert_eq!(
-		(status, refused.contains("a todo needs a title")),
-		(500, true),
-		"{refused}"
-	);
+	assert_eq!((status, refused.contains("a todo needs a title")), (500, true), "{refused}");
 	let (_, toggled) = answer("/todos/1/toggle", "");
-	assert!(
-		toggled.contains(r#""title":"tea","done":true"#) && toggled.contains(r#""priority":0"#),
-		"{toggled}"
-	);
+	assert!(toggled.contains(r#""title":"tea","done":true"#) && toggled.contains(r#""priority":0"#), "{toggled}");
 	let (_, renamed) = answer("/todos/2/title", "title=oat+milk");
 	assert!(renamed.contains(r#""title":"oat milk""#), "{renamed}");
 	answer("/todos/3/delete", "");
 	let listed = got("/api/todos");
 	let position = |title: &str| listed.find(&format!(r#""title":"{title}""#));
-	assert!(
-		position("tea") < position("oat milk") && position("bread").is_none(),
-		"{listed}"
-	);
+	assert!(position("tea") < position("oat milk") && position("bread").is_none(), "{listed}");
 	let page = got("/");
 	assert!(page.contains("Todos (1 open)"), "{page}");
 	server.join().expect("the server thread");
@@ -343,27 +287,15 @@ fn a_refused_request_answers_400_or_404() {
 	let at = |path: &str| format!("http://127.0.0.1:{REFUSING_PORT}{path}");
 	let answer = |path: &str, body: &str, browser: bool| {
 		let request = agent().post(&at(path)).header("Content-Type", FORM_TYPE);
-		let request = if browser {
-			request.header("Accept", "text/html,*/*").header("Referer", &at("/"))
-		} else {
-			request
-		};
+		let request =
+			if browser { request.header("Accept", "text/html,*/*").header("Referer", &at("/")) } else { request };
 		let mut answer = request.send(body).expect("an answer");
-		(
-			answer.status().as_u16(),
-			answer.body_mut().read_to_string().expect("a text"),
-		)
+		(answer.status().as_u16(), answer.body_mut().read_to_string().expect("a text"))
 	};
 	let (status, page) = answer("/todos", "title=&priority=1", true);
 	assert_eq!(status, 400, "{page}");
-	assert!(
-		page.contains("a todo needs a title") && page.contains("Todos (1 open)"),
-		"{page}"
-	);
-	assert_eq!(
-		answer("/todos", "priority=1", false),
-		(400, "missing field title".to_string())
-	);
+	assert!(page.contains("a todo needs a title") && page.contains("Todos (1 open)"), "{page}");
+	assert_eq!(answer("/todos", "priority=1", false), (400, "missing field title".to_string()));
 	assert_eq!(answer("/todos/9/delete", "", false).0, 404);
 	assert_eq!(answer("/todos", "title=tea&priority=x", false).0, 500);
 	server.join().expect("the server thread");

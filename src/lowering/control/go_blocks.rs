@@ -82,23 +82,13 @@ impl GoBlocks {
 			// `for i in …`: the loop variable
 			Node::List(items, bracket, separator) if items.len() > 2 && items[0].drop_meta().name() == FOR_WORD => {
 				let known = [known.to_vec(), vec![items[1].drop_meta().name()]].concat();
-				Node::List(
-					items.into_iter().map(|item| self.lower(item, &known)).collect(),
-					bracket,
-					separator,
-				)
+				Node::List(items.into_iter().map(|item| self.lower(item, &known)).collect(), bracket, separator)
 			}
 			// `f(x) := …`: the parameters
 			Node::Key(head, Op::Define, body) if matches!(head.drop_meta(), Node::List(_, Bracket::Round, _)) => {
-				let Node::List(items, _, _) = head.drop_meta() else {
-					unreachable!("guarded")
-				};
+				let Node::List(items, _, _) = head.drop_meta() else { unreachable!("guarded") };
 				let parameters: Vec<String> = items[1..].iter().map(parameter_word).collect();
-				Node::Key(
-					head,
-					Op::Define,
-					Box::new(self.lower(*body, &[known.to_vec(), parameters].concat())),
-				)
+				Node::Key(head, Op::Define, Box::new(self.lower(*body, &[known.to_vec(), parameters].concat())))
 			}
 			// `x => …`, `(x, y) => …`
 			Node::Key(parameters, Op::Arrow, body) => {
@@ -106,11 +96,7 @@ impl GoBlocks {
 					Node::List(items, _, _) => items.iter().map(parameter_word).collect(),
 					single => vec![parameter_word(single)],
 				};
-				Node::Key(
-					parameters,
-					Op::Arrow,
-					Box::new(self.lower(*body, &[known.to_vec(), names].concat())),
-				)
+				Node::Key(parameters, Op::Arrow, Box::new(self.lower(*body, &[known.to_vec(), names].concat())))
 			}
 			other => other.map_children(|child| self.lower(child, known)),
 		}
@@ -120,17 +106,12 @@ impl GoBlocks {
 	fn function_of(&self, block: Node, known: &[String]) -> Node {
 		let mut definitions = self.definitions.borrow_mut();
 		let name = Node::Symbol(format!("{BLOCK_FUNCTION_PREFIX}{}", definitions.len() + 1));
-		let inputs: Vec<String> = block
-			.symbols_read()
-			.into_iter()
-			.filter(|symbol| known.contains(symbol))
-			.collect();
+		let inputs: Vec<String> = block.symbols_read().into_iter().filter(|symbol| known.contains(symbol)).collect();
 		// each input under a name of its own: a parameter named like a function of the program (`inc = x => x + 1`)
 		// would read as that function
 		let parameter = |input: &String| Node::Symbol(format!("{input}{INPUT_SUFFIX}"));
-		let block = inputs.iter().fold(block, |block, input| {
-			crate::library_words::substitute(block, input, &parameter(input))
-		});
+		let block =
+			inputs.iter().fold(block, |block, input| crate::library_words::substitute(block, input, &parameter(input)));
 		let head = parens([vec![name.clone()], inputs.iter().map(parameter).collect()].concat());
 		definitions.push(key(head, Op::Define, block));
 		parens([vec![name], inputs.into_iter().map(Node::Symbol).collect()].concat())
@@ -183,10 +164,7 @@ fn task_phrases(node: Node, phrases: &Phrases) -> Node {
 		}
 		Node::Key(awaited, Op::Or, fallback) if matches!(awaited.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().name() == AWAIT_WORD)) =>
 		{
-			let guarded = call(
-				crate::warp_parser::TRY_MARKER,
-				vec![*awaited, task_phrases(*fallback, phrases)],
-			);
+			let guarded = call(crate::warp_parser::TRY_MARKER, vec![*awaited, task_phrases(*fallback, phrases)]);
 			task_phrases_inside(guarded, phrases)
 		}
 		other => other.map_children(|child| task_phrases(child, phrases)),

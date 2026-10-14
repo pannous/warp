@@ -17,10 +17,7 @@ fn alias_notes(code: &str) -> Vec<(String, String)> {
 fn constant_is_an_alias_of_const() {
 	is!("constant x = 3; x", 3);
 	fails_with("constant x = 3; x = 4", "x is const");
-	assert_eq!(
-		alias_notes("constant x = 3; x"),
-		vec![("constant".to_string(), "const".to_string())]
-	);
+	assert_eq!(alias_notes("constant x = 3; x"), vec![("constant".to_string(), "const".to_string())]);
 	assert_eq!(alias_notes("const x = 3; x"), vec![]);
 	is!("constant = 5; constant + 1", 6);
 	assert_eq!(alias_notes("constant = 5; constant + 1"), vec![]);

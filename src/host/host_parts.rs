@@ -16,13 +16,7 @@ pub type Script = (&'static str, &'static str);
 pub const WASI_LIBRARY: &str = "wasi_snapshot_preview1";
 pub const TASK_WORD_PREFIXES: [&str; 3] = ["task_", "channel_", "shared_"];
 /// The words of WebGPU, which answers asynchronously: their jobs run on a task Worker (host-gpu.js)
-pub const GPU_WORDS: [&str; 5] = [
-	GPU_COMPUTE,
-	GPU_COMPUTE_LINEAR,
-	GPU_MAP_LINEAR,
-	GPU_REDUCE_LINEAR,
-	GPU_RENDER,
-];
+pub const GPU_WORDS: [&str; 5] = [GPU_COMPUTE, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER];
 
 /// The text of web/playground scripts, joined; empty without the native feature, where only the names are needed
 #[cfg(feature = "native")]
@@ -37,10 +31,7 @@ macro_rules! script_text {
 }
 
 /// The scripts every page loads before the parts of the host
-pub const HOST_SCRIPTS: [Script; 2] = [
-	("reader.js", script_text!("reader.js")),
-	("host.js", script_text!("host.js")),
-];
+pub const HOST_SCRIPTS: [Script; 2] = [("reader.js", script_text!("reader.js")), ("host.js", script_text!("host.js"))];
 
 /// A part of host.js (its addHostPart): shipped when the module imports a word it gives, with the parts it needs
 pub struct HostPart {
@@ -126,9 +117,7 @@ pub const HOST_PARTS: [HostPart; 11] = [
 
 /// host.js with reader.js and the parts of the host a module imports words of, with the parts they need
 pub fn host_scripts_of(module: &[u8]) -> Result<Vec<Script>, String> {
-	let std_imports = std_modules_of(module)?
-		.into_iter()
-		.map(|name| (STD_MODULES_SECTION.to_string(), name));
+	let std_imports = std_modules_of(module)?.into_iter().map(|name| (STD_MODULES_SECTION.to_string(), name));
 	let imports: Vec<(String, String)> = imports_of(module)?.into_iter().chain(std_imports).collect();
 	let imported = |part: &HostPart| imports.iter().any(|(module, name)| (part.gives)(module, name));
 	let needed: Vec<&str> = HOST_PARTS
@@ -136,10 +125,7 @@ pub fn host_scripts_of(module: &[u8]) -> Result<Vec<Script>, String> {
 		.filter(|part| imported(part))
 		.flat_map(|part| part.needs.iter().copied().chain([part.script.0]))
 		.collect();
-	let parts = HOST_PARTS
-		.iter()
-		.map(|part| part.script)
-		.filter(|(name, _)| needed.contains(name));
+	let parts = HOST_PARTS.iter().map(|part| part.script).filter(|(name, _)| needed.contains(name));
 	Ok(HOST_SCRIPTS.into_iter().chain(parts).collect())
 }
 
@@ -183,14 +169,12 @@ pub fn imports_of(module: &[u8]) -> Result<Vec<(String, String)>, String> {
 
 /// Does the module export a function of this name
 pub fn exports(module: &[u8], name: &str) -> bool {
-	wasmparser::Parser::new(0)
-		.parse_all(module)
-		.any(|payload| match payload {
-			Ok(wasmparser::Payload::ExportSection(exports)) => {
-				exports.into_iter().flatten().any(|export| export.name == name)
-			}
-			_ => false,
-		})
+	wasmparser::Parser::new(0).parse_all(module).any(|payload| match payload {
+		Ok(wasmparser::Payload::ExportSection(exports)) => {
+			exports.into_iter().flatten().any(|export| export.name == name)
+		}
+		_ => false,
+	})
 }
 
 /// The module of `code`'s Worker and the host scripts it needs (reader.js, host.js, its parts), which come before

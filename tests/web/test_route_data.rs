@@ -15,14 +15,8 @@ fn contains(bytes: &[u8], text: &str) -> bool {
 #[test]
 fn a_route_reading_a_table_ships_without_it() {
 	let files = warp::web::site::files(PROGRAM, "users", false).expect("the page builds");
-	let file = |wanted: &str| {
-		files
-			.iter()
-			.find(|(name, _)| name == wanted)
-			.unwrap_or_else(|| panic!("{wanted}"))
-			.1
-			.clone()
-	};
+	let file =
+		|wanted: &str| files.iter().find(|(name, _)| name == wanted).unwrap_or_else(|| panic!("{wanted}")).1.clone();
 	let page = String::from_utf8_lossy(&file("index.html")).into_owned();
 	assert!(page.contains("<p>home</p>"), "{page}");
 	let module = file("app.wasm");

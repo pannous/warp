@@ -96,9 +96,7 @@ fn collect_lambda_names(node: &Node, names: &mut HashSet<String>) {
 		{
 			names.insert(name.name());
 		}
-		Node::Key(left, _, right) => [left, right]
-			.into_iter()
-			.for_each(|side| collect_lambda_names(side, names)),
+		Node::Key(left, _, right) => [left, right].into_iter().for_each(|side| collect_lambda_names(side, names)),
 		Node::List(items, _, _) => items.iter().for_each(|item| collect_lambda_names(item, names)),
 		_ => {}
 	}
@@ -177,14 +175,7 @@ fn forms(node: Node) -> Node {
 		}
 		Node::Key(parameters, Op::Arrow, body) if destructured_parameters(&parameters).is_some() => {
 			let (parameters, fields) = destructured_parameters(&parameters).expect("guarded");
-			lambda(
-				parameters,
-				Node::List(
-					[fields, vec![forms(*body)]].concat(),
-					Bracket::Curly,
-					Separator::Semicolon,
-				),
-			)
+			lambda(parameters, Node::List([fields, vec![forms(*body)]].concat(), Bracket::Curly, Separator::Semicolon))
 		}
 		// `f = lambda *xs: …`, JS `f = (...xs) => …`: the definition `f(*xs) := …`, which variadic.rs reads
 		Node::Key(name, Op::Assign, value) if starred_lambda(&name, &value).is_some() => {
@@ -202,9 +193,7 @@ fn let_mut(items: &[Node]) -> Option<Node> {
 	let Node::Key(name, Op::Assign, _) = declaration.drop_meta() else {
 		return None;
 	};
-	let modifier = modifier
-		.symbol_name()
-		.filter(|word| crate::words::MUTABLE_WORDS.contains(word))?;
+	let modifier = modifier.symbol_name().filter(|word| crate::words::MUTABLE_WORDS.contains(word))?;
 	if !keyword.is_symbol(LET_WORD) {
 		return None;
 	}
@@ -221,19 +210,12 @@ fn let_mut(items: &[Node]) -> Option<Node> {
 
 /// `var x = 1`
 fn var_declaration(declaration: Node) -> Node {
-	Node::List(
-		vec![symbol(VAR_WORD), forms(declaration)],
-		Bracket::None,
-		Separator::None,
-	)
+	Node::List(vec![symbol(VAR_WORD), forms(declaration)], Bracket::None, Separator::None)
 }
 
 /// Go's `q, r := f(x)`: names taking the values apart, `q, r = f(x)` (`r := …` alone would define a getter)
 fn go_destructuring(mut items: Vec<Node>, separator: &Separator) -> Vec<Node> {
-	let Some(position) = items
-		.iter()
-		.position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Define, _)))
-	else {
+	let Some(position) = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Define, _))) else {
 		return items;
 	};
 	let is_name = |node: &Node| matches!(node.drop_meta(), Node::Symbol(_));
@@ -328,11 +310,7 @@ pub(crate) fn with_match_cases(mut items: Vec<Node>, convert: impl Fn(&Node) -> 
 		2 => {
 			if let Node::List(pair, bracket, separator) = items[1].drop_meta() {
 				if let [subject, cases] = pair.as_slice() {
-					items[1] = Node::List(
-						vec![subject.clone(), convert(cases)],
-						bracket.clone(),
-						separator.clone(),
-					);
+					items[1] = Node::List(vec![subject.clone(), convert(cases)], bracket.clone(), separator.clone());
 				}
 			}
 		}
@@ -345,11 +323,7 @@ fn colon_cases(block: &Node) -> Node {
 	let Node::List(cases, Bracket::Curly, separator) = block.drop_meta() else {
 		return block.clone();
 	};
-	Node::List(
-		cases.iter().map(colon_case).collect(),
-		Bracket::Curly,
-		separator.clone(),
-	)
+	Node::List(cases.iter().map(colon_case).collect(), Bracket::Curly, separator.clone())
 }
 
 fn colon_case(case: &Node) -> Node {
@@ -361,14 +335,8 @@ fn colon_case(case: &Node) -> Node {
 		// Swift's `case .north: 1` (read as the member `case.north`) and `case Direction.north: 1`
 		Node::Key(label, Op::Colon, body) if matches!(label.drop_meta(), Node::Key(word, Op::Dot, _) if word.is_symbol(CASE_WORD)) =>
 		{
-			let Node::Key(_, _, member) = label.drop_meta() else {
-				unreachable!("guarded")
-			};
-			Node::Key(
-				Box::new(Node::Key(Box::new(Node::Empty), Op::Dot, member.clone())),
-				Op::Colon,
-				body.clone(),
-			)
+			let Node::Key(_, _, member) = label.drop_meta() else { unreachable!("guarded") };
+			Node::Key(Box::new(Node::Key(Box::new(Node::Empty), Op::Dot, member.clone())), Op::Colon, body.clone())
 		}
 		Node::List(words, _, _) if matches!(words.as_slice(), [word, _] if word.is_symbol(CASE_WORD)) => {
 			words[1].clone()
@@ -418,21 +386,13 @@ fn when_chain(items: &[Node]) -> Option<Node> {
 		(Some(subject), pattern) => key(subject.clone(), Op::Eq, pattern),
 		(None, pattern) => pattern,
 	};
-	arms.into_iter()
-		.rev()
-		.fold(None, |otherwise: Option<Node>, (patterns, value)| {
-			let condition = patterns
-				.into_iter()
-				.map(condition)
-				.reduce(|left, right| key(left, Op::Or, right))?;
-			let template = if otherwise.is_some() { WHEN_ARM } else { LAST_WHEN_ARM };
-			let bindings = [
-				("CONDITION", condition),
-				("VALUE", forms(value)),
-				("OTHERWISE", otherwise.unwrap_or(Node::Empty)),
-			];
-			Some(super::nodes::filled(template, bindings))
-		})
+	arms.into_iter().rev().fold(None, |otherwise: Option<Node>, (patterns, value)| {
+		let condition = patterns.into_iter().map(condition).reduce(|left, right| key(left, Op::Or, right))?;
+		let template = if otherwise.is_some() { WHEN_ARM } else { LAST_WHEN_ARM };
+		let bindings =
+			[("CONDITION", condition), ("VALUE", forms(value)), ("OTHERWISE", otherwise.unwrap_or(Node::Empty))];
+		Some(super::nodes::filled(template, bindings))
+	})
 }
 
 /// `when click {…}` is `on click {…}`, `when x > 3 {…}` is `whenever x > 3 {…}` (card signals-shape, user 2026-10-08):
@@ -442,17 +402,11 @@ fn when_listener(items: &[Node]) -> Option<Vec<Node>> {
 	let Node::List(statements, Bracket::Curly, _) = body.drop_meta() else {
 		return None;
 	};
-	let has_arms = statements
-		.iter()
-		.any(|statement| matches!(statement.drop_meta(), Node::Key(_, Op::Arrow, _)));
+	let has_arms = statements.iter().any(|statement| matches!(statement.drop_meta(), Node::Key(_, Op::Arrow, _)));
 	if !word.is_symbol(WHEN_KEYWORD) || has_arms {
 		return None;
 	}
-	let listener = if matches!(subject.drop_meta(), Node::Symbol(_)) {
-		ON_WORD
-	} else {
-		WHENEVER_WORD
-	};
+	let listener = if matches!(subject.drop_meta(), Node::Symbol(_)) { ON_WORD } else { WHENEVER_WORD };
 	when_meant(word, listener);
 	Some(vec![symbol(listener), subject.clone(), body.clone()])
 }
@@ -538,13 +492,8 @@ fn without_type_parameters(node: Node, names: &[String]) -> Node {
 		// `head -> T { body }`, `head: T { body }`: the definition `(head { body })`
 		Node::Key(head, Op::Arrow | Op::Colon, typed_body) if matches!(typed_body.drop_meta(), Node::List(parts, Bracket::None, Separator::Space) if parts.len() == 2 && is_type_parameter(&parts[0])) =>
 		{
-			let Node::List(parts, _, _) = typed_body.drop_meta() else {
-				unreachable!("guarded")
-			};
-			parens(vec![
-				without_type_parameters(*head, names),
-				without_type_parameters(parts[1].clone(), names),
-			])
+			let Node::List(parts, _, _) = typed_body.drop_meta() else { unreachable!("guarded") };
+			parens(vec![without_type_parameters(*head, names), without_type_parameters(parts[1].clone(), names)])
 		}
 		// `x: T`, `xs: Vec<T>`: the parameter x
 		Node::Key(name, Op::Colon, kind) if is_type_parameter(&kind) => without_type_parameters(*name, names),
@@ -556,17 +505,13 @@ fn without_type_parameters(node: Node, names: &[String]) -> Node {
 		}
 		// Swift's `_ x: T`: without its type `_ x` would read as a placeholder `_` (partial application), so the label goes too
 		Node::List(items, bracket, separator)
-			if items
-				.windows(2)
-				.any(|pair| pair[0].is_symbol(WILDCARD) && generic_parameter(&pair[1], names)) =>
+			if items.windows(2).any(|pair| pair[0].is_symbol(WILDCARD) && generic_parameter(&pair[1], names)) =>
 		{
 			let mut kept: Vec<Node> = Vec::new();
 			for item in items {
 				if generic_parameter(&item, names) && kept.last().is_some_and(|label| label.is_symbol(WILDCARD)) {
 					kept.pop();
-					let Node::Key(name, _, _) = item.drop_meta() else {
-						unreachable!("a generic parameter")
-					};
+					let Node::Key(name, _, _) = item.drop_meta() else { unreachable!("a generic parameter") };
 					crate::normalize::set_position_of(&item);
 					crate::normalize::hint(
 						&format!("{WILDCARD} {}", item.serialize()),
@@ -584,11 +529,7 @@ fn without_type_parameters(node: Node, names: &[String]) -> Node {
 
 /// `T`, `Vec<T>` (the parser's symbol `Vec of T`), `[T]` of a type parameter T
 fn mentions_type_parameter(kind: &Node, names: &[String]) -> bool {
-	kind.mentions_where(|words| {
-		words
-			.split_whitespace()
-			.any(|word| names.iter().any(|name| name == word))
-	})
+	kind.mentions_where(|words| words.split_whitespace().any(|word| names.iter().any(|name| name == word)))
 }
 
 /// `x: T`, `xs: Vec<T>` of a type parameter T
@@ -623,27 +564,20 @@ fn block_reduction(items: &[Node]) -> Option<Node> {
 	let Node::Key(subject, Op::Dot, word) = method.drop_meta() else {
 		return None;
 	};
-	let &(reduction, iteration) = BLOCK_REDUCTIONS
-		.iter()
-		.find(|(reduction, _)| word.is_symbol(reduction))?;
+	let &(reduction, iteration) = BLOCK_REDUCTIONS.iter().find(|(reduction, _)| word.is_symbol(reduction))?;
 	if !matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)) {
 		return None;
 	}
 	let call = |word: &str, arguments: Vec<Node>| call(word, arguments);
-	Some(call(
-		reduction,
-		vec![call(iteration, vec![subject.as_ref().clone(), block.clone()])],
-	))
+	Some(call(reduction, vec![call(iteration, vec![subject.as_ref().clone(), block.clone()])]))
 }
 
 /// `list.zip(a, b)`, `math.gcd(4, 6)`, JS's `Math.sqrt(16)`: a module's word called through the module's name is the
 /// word itself, with a note (a program's own variable `text` keeps its methods)
 fn qualified_module_calls(node: Node) -> Node {
 	let names = crate::soft_keywords::names_given(&node);
-	let modules: Vec<&str> = crate::modules::std_module_names()
-		.chain(FOREIGN_MODULES)
-		.filter(|module| !names.contains(*module))
-		.collect();
+	let modules: Vec<&str> =
+		crate::modules::std_module_names().chain(FOREIGN_MODULES).filter(|module| !names.contains(*module)).collect();
 	module_calls(node, &modules)
 }
 
@@ -709,9 +643,8 @@ pub(crate) fn module_calls(node: Node, modules: &[&str]) -> Node {
 				Node::List(items, _, _) => items[0].name(),
 				_ => unreachable!("guarded"),
 			};
-			if let Some((_, _, own_word)) = QUALIFIED_WORDS
-				.iter()
-				.find(|(owner, written, _)| module.is_symbol(owner) && *written == word)
+			if let Some((_, _, own_word)) =
+				QUALIFIED_WORDS.iter().find(|(owner, written, _)| module.is_symbol(owner) && *written == word)
 			{
 				let Node::List(mut items, bracket, separator) = call.drop_meta().clone() else {
 					unreachable!("guarded")
@@ -774,11 +707,7 @@ fn assigned_braceless_function(items: &[Node]) -> Option<Node> {
 		[single] => single.clone(),
 		several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
 	};
-	Some(Node::Key(
-		name.clone(),
-		*op,
-		Box::new(lambda(function_parameters(head)?, forms(body))),
-	))
+	Some(Node::Key(name.clone(), *op, Box::new(lambda(function_parameters(head)?, forms(body)))))
 }
 
 /// JS `({a, b}, k) => …`: an object parameter taken apart, `(object·0, k) => { a = object·0.a; b = object·0.b; … }`.
@@ -848,9 +777,8 @@ fn aliased_method(method: Node, own: &HashSet<String>) -> Node {
 		Node::List(items, Bracket::Round, _) if !items.is_empty() => (items[0].name(), true),
 		_ => (method.name(), false),
 	};
-	let Some((written, warp_word)) = METHOD_ALIASES
-		.iter()
-		.find(|(written, _)| *written == word && !own.contains(*written))
+	let Some((written, warp_word)) =
+		METHOD_ALIASES.iter().find(|(written, _)| *written == word && !own.contains(*written))
 	else {
 		return method;
 	};
@@ -864,11 +792,7 @@ fn aliased_method(method: Node, own: &HashSet<String>) -> Node {
 	match method.drop_meta() {
 		Node::List(items, bracket, separator) => {
 			let arguments = items[1..].iter().cloned();
-			Node::List(
-				[symbol(warp_word)].into_iter().chain(arguments).collect(),
-				bracket.clone(),
-				separator.clone(),
-			)
+			Node::List([symbol(warp_word)].into_iter().chain(arguments).collect(), bracket.clone(), separator.clone())
 		}
 		_ => symbol(warp_word),
 	}

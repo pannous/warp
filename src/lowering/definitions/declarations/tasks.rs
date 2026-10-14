@@ -16,11 +16,8 @@ pub(super) const TASK_VALUE: &str = "task·value";
 /// until resolve_tasks knows whether the started functions run on threads
 pub(super) const TASK_LIST: &str = "task·list";
 /// The reads `await` names: `await job`, `await all jobs`; the others (`job + 1`) wait unsaid, which warns
-pub(super) const AWAITED_MARKERS: [(&str, &str); 3] = [
-	(TASK_VALUE, "task·awaited"),
-	(TASK_LIST, "task·awaited·list"),
-	(TASK_ELEMENT, "task·awaited·element"),
-];
+pub(super) const AWAITED_MARKERS: [(&str, &str); 3] =
+	[(TASK_VALUE, "task·awaited"), (TASK_LIST, "task·awaited·list"), (TASK_ELEMENT, "task·awaited·element")];
 pub(super) const IMPLICIT_WAIT_TOPIC: &str = "implicit-await";
 pub(super) const TASK_ELEMENT: &str = "task·element";
 /// `await any [a, b]`: the result of the first task to finish (Promise.race)
@@ -104,14 +101,7 @@ pub fn lower_tasks(node: Node) -> Node {
 	});
 	started.retain(|_, function| functions.contains(function));
 	let job_lists = job_lists(&node, &functions);
-	Tasks {
-		words,
-		tasks,
-		started,
-		functions,
-		job_lists,
-	}
-	.lower(node)
+	Tasks { words, tasks, started, functions, job_lists }.lower(node)
 }
 
 /// `job = go f(x)`: the task variable and the words of its start
@@ -151,11 +141,8 @@ pub(super) fn awaited_starts(node: Node, counter: &Counter) -> Node {
 					if !started.is_empty() && await_word.name() == TASK_WORDS[1] && go_word.name() == TASK_WORDS[0] =>
 				{
 					let job = fresh_job(counter);
-					let start = Node::List(
-						[vec![go_word.clone()], started.to_vec()].concat(),
-						Bracket::None,
-						Separator::Space,
-					);
+					let start =
+						Node::List([vec![go_word.clone()], started.to_vec()].concat(), Bracket::None, Separator::Space);
 					let assignment = key(job.clone(), Op::Assign, start);
 					let awaited = Node::List(vec![await_word.clone(), job], Bracket::None, Separator::Space);
 					Node::List(vec![assignment, awaited], Bracket::Round, Separator::Semicolon)
@@ -200,19 +187,11 @@ pub(super) fn awaited_starts(node: Node, counter: &Counter) -> Node {
 						.collect();
 					if first {
 						let first_result = results.into_iter().next().expect("a started task");
-						return Node::List(
-							[starts, vec![first_result]].concat(),
-							Bracket::Round,
-							Separator::Semicolon,
-						);
+						return Node::List([starts, vec![first_result]].concat(), Bracket::Round, Separator::Semicolon);
 					}
 					let results = Node::List(results, list_bracket, list_separator);
 					let value = if racing {
-						Node::List(
-							vec![await_word.clone(), all_word.clone(), results],
-							Bracket::None,
-							Separator::Space,
-						)
+						Node::List(vec![await_word.clone(), all_word.clone(), results], Bracket::None, Separator::Space)
 					} else {
 						results
 					};
@@ -247,18 +226,14 @@ pub(super) fn job_lists(
 	let mut lists: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
 	node.visit(&mut |part| {
 		let (list, started_functions) = match part {
-			Node::Key(receiver, Op::Dot, method) => (
-				receiver,
-				added_start(method).map(|(function, _)| function).into_iter().collect(),
-			),
+			Node::Key(receiver, Op::Dot, method) => {
+				(receiver, added_start(method).map(|(function, _)| function).into_iter().collect())
+			}
 			Node::Key(target, Op::Assign | Op::Define, value) => (target, listed_starts(value)),
 			_ => return,
 		};
 		let Node::Symbol(list) = list.drop_meta() else { return };
-		for function in started_functions
-			.into_iter()
-			.filter(|function| functions.contains(function))
-		{
+		for function in started_functions.into_iter().filter(|function| functions.contains(function)) {
 			let started = lists.entry(list.clone()).or_default();
 			if !started.contains(&function) {
 				started.push(function);
@@ -344,10 +319,7 @@ pub(super) fn awaited(node: Node) -> Node {
 
 /// The read as `await` would name it, and whether it was named so: `task·awaited` is `task·value` said
 pub(super) fn read_marker(head: &str) -> (&str, bool) {
-	AWAITED_MARKERS
-		.iter()
-		.find(|(_, named)| *named == head)
-		.map_or((head, false), |(read, _)| (*read, true))
+	AWAITED_MARKERS.iter().find(|(_, named)| *named == head).map_or((head, false), |(read, _)| (*read, true))
 }
 
 #[derive(Clone)]
@@ -376,10 +348,9 @@ impl Tasks<'_> {
 	pub(super) fn control(&self, subject: &Node, control: &str) -> Node {
 		let variable = task_variable(subject).name();
 		match self.started.get(&variable) {
-			Some(function) => call(
-				TASK_CONTROL_MARK,
-				vec![Node::Symbol(variable), Node::Symbol(function.clone()), symbol(control)],
-			),
+			Some(function) => {
+				call(TASK_CONTROL_MARK, vec![Node::Symbol(variable), Node::Symbol(function.clone()), symbol(control)])
+			}
 			None => nothing_to_stop(&Node::Symbol(variable), control),
 		}
 	}
@@ -406,9 +377,7 @@ impl Tasks<'_> {
 
 	/// A read of a job list or of one of its jobs: its results once the jobs are done
 	pub(super) fn job_list_read(&self, list: &str, read: Node, marker_word: &str) -> Node {
-		let functions = self.job_lists[list]
-			.iter()
-			.map(|function| Node::Symbol(function.clone()));
+		let functions = self.job_lists[list].iter().map(|function| Node::Symbol(function.clone()));
 		call(marker_word, [vec![read], functions.collect()].concat())
 	}
 
@@ -422,10 +391,7 @@ impl Tasks<'_> {
 			.into_iter()
 			.filter(|name| !own_tasks.contains(name))
 			.collect();
-		if !shadowed
-			.iter()
-			.any(|name| self.started.contains_key(name) || self.job_lists.contains_key(name))
-		{
+		if !shadowed.iter().any(|name| self.started.contains_key(name) || self.job_lists.contains_key(name)) {
 			return self.lower_unshadowed(node);
 		}
 		let mut narrowed = self.clone();
@@ -450,20 +416,15 @@ impl Tasks<'_> {
 				if matches!(receiver.drop_meta(), Node::Symbol(name) if self.job_lists.contains_key(name))
 					&& added_task(&method).is_some() =>
 			{
-				let started = self
-					.task_statement(&added_task(&method).expect("guarded"))
-					.expect("a go of a user function");
+				let started =
+					self.task_statement(&added_task(&method).expect("guarded")).expect("a go of a user function");
 				Node::Key(receiver, Op::Dot, Box::new(call(ADD_WORD, vec![started])))
 			}
 			// `jobs#2`: the result of that job
 			Node::Key(list, Op::Hash, index) if matches!(list.drop_meta(), Node::Symbol(name) if self.job_lists.contains_key(name)) =>
 			{
 				let name = word(&list);
-				self.job_list_read(
-					&name,
-					Node::Key(list, Op::Hash, Box::new(self.lower(*index))),
-					TASK_ELEMENT,
-				)
+				self.job_list_read(&name, Node::Key(list, Op::Hash, Box::new(self.lower(*index))), TASK_ELEMENT)
 			}
 			// `jobs = []`, `job = go f(x)`: the variable itself holds the jobs, the task
 			Node::Key(target, op @ (Op::Assign | Op::Define), value) if matches!(target.drop_meta(), Node::Symbol(name) if self.job_lists.contains_key(name) || self.started.contains_key(name)) => {
@@ -477,10 +438,8 @@ impl Tasks<'_> {
 					return if is_task_handler { handled } else { self.lower(handled) };
 				}
 				// `await any [a, b]` and `await job within 100 ms` read the tasks themselves, before a read of one waits
-				if let Some(race) = self
-					.raced(&items)
-					.or_else(|| self.within(&items, None))
-					.or_else(|| self.within_or(&items))
+				if let Some(race) =
+					self.raced(&items).or_else(|| self.within(&items, None)).or_else(|| self.within_or(&items))
 				{
 					return race;
 				}
@@ -501,9 +460,7 @@ impl Tasks<'_> {
 			// `x = await job within 100 ms or 0`
 			Node::Key(left, Op::Or, right) if matches!(left.drop_meta(), Node::List(items, _, _) if self.within(items, Some(right.as_ref().clone())).is_some()) =>
 			{
-				let Node::List(items, _, _) = left.drop_meta() else {
-					unreachable!("guarded")
-				};
+				let Node::List(items, _, _) = left.drop_meta() else { unreachable!("guarded") };
 				self.within(items, Some(*right)).expect("guarded")
 			}
 			other => children_rewritten(other, |child| self.lower(child)),
@@ -548,9 +505,7 @@ impl Tasks<'_> {
 		// `await job within 100 ms or 0` as one statement: the `or` holds the duration and the fallback
 		let (deadline, fallback) = match (deadline, fallback) {
 			([single], None) if matches!(single.drop_meta(), Node::Key(_, Op::Or, _)) => {
-				let Node::Key(duration, _, value) = single.drop_meta() else {
-					unreachable!("guarded")
-				};
+				let Node::Key(duration, _, value) = single.drop_meta() else { unreachable!("guarded") };
 				(duration.as_ref().clone(), Some(value.as_ref().clone()))
 			}
 			([single], fallback) => (single.clone(), fallback),
@@ -570,11 +525,7 @@ impl Tasks<'_> {
 		);
 		let timed_out = match &fallback {
 			Some(value) => value.clone(),
-			None => Node::List(
-				vec![symbol(RAISE_WORD), symbol(TIMEOUT_EVENT)],
-				Bracket::None,
-				Separator::Space,
-			),
+			None => Node::List(vec![symbol(RAISE_WORD), symbol(TIMEOUT_EVENT)], Bracket::None, Separator::Space),
 		};
 		let written = format!("await {} within {milliseconds} ms", job_name.serialize().trim());
 		let outcome = fallback.as_ref().map_or_else(
@@ -591,11 +542,7 @@ impl Tasks<'_> {
 		let result = if_then_else(
 			runs,
 			// a sequence, not a block: a Node result would take `{stop; 0}` as data
-			Node::List(
-				vec![self.control(job, TASK_CONTROLS[0]), timed_out],
-				Bracket::None,
-				Separator::Semicolon,
-			),
+			Node::List(vec![self.control(job, TASK_CONTROLS[0]), timed_out], Bracket::None, Separator::Semicolon),
 			awaited_job,
 		);
 		Some(Node::List(
@@ -689,22 +636,16 @@ impl Tasks<'_> {
 				)
 			})
 			.collect();
-		checks.push(if_then(
-			winner_is(0),
-			block(vec![call(SLEEP_WORD, vec![crate::node::int(RACE_POLL_MILLISECONDS)])]),
-		));
+		checks
+			.push(if_then(winner_is(0), block(vec![call(SLEEP_WORD, vec![crate::node::int(RACE_POLL_MILLISECONDS)])])));
 		let waiting = key(key(Node::Empty, Op::While, winner_is(0)), Op::Do, block(checks));
 		// the race is the `await`: reading the winner waits as said, no warning (card await-warns)
 		let awaited_job =
 			|job: &Node| awaited(self.value_of(&word(&task_variable(job))).unwrap_or_else(|| job.clone()));
 		let (last, first) = listed.split_last().expect("not empty");
-		let result = first
-			.iter()
-			.enumerate()
-			.rev()
-			.fold(awaited_job(last), |otherwise, (index, job)| {
-				if_then_else(winner_is(index + 1), awaited_job(job), otherwise)
-			});
+		let result = first.iter().enumerate().rev().fold(awaited_job(last), |otherwise, (index, job)| {
+			if_then_else(winner_is(index + 1), awaited_job(job), otherwise)
+		});
 		Some(Node::List(
 			vec![assign(&winner, crate::node::int(0)), waiting, result],
 			Bracket::Round,
@@ -718,8 +659,7 @@ impl Tasks<'_> {
 			[once, subject @ .., handler] if word(once) == crate::words::ONCE_WORD => {
 				let subject = subject.iter().find(|item| word(item) != "the")?;
 				let (event, body) = handler_parts(handler)?;
-				self.is_task(subject)
-					.then(|| self.handler(subject, &word(&event), &body))
+				self.is_task(subject).then(|| self.handler(subject, &word(&event), &body))
 			}
 			// `on download.stop : body`
 			[on, handler] if word(on) == ON_WORD => {
@@ -727,8 +667,7 @@ impl Tasks<'_> {
 				let Node::Key(subject, Op::Dot, event) = signal.drop_meta() else {
 					return None;
 				};
-				self.is_task(subject)
-					.then(|| self.handler(subject, &control_word(event), &body))
+				self.is_task(subject).then(|| self.handler(subject, &control_word(event), &body))
 			}
 			_ => None,
 		}
@@ -738,11 +677,7 @@ impl Tasks<'_> {
 	/// never runs
 	pub(super) fn handler(&self, subject: &Node, event: &str, body: &Node) -> Node {
 		if let Some(function) = self.started.get(&subject.name()) {
-			let event = if FINISH_EVENTS.contains(&event) {
-				FINISH_EVENT
-			} else {
-				event
-			};
+			let event = if FINISH_EVENTS.contains(&event) { FINISH_EVENT } else { event };
 			return call(
 				TASK_ON,
 				vec![
@@ -811,23 +746,17 @@ pub fn resolve_tasks(node: Node) -> Node {
 		}
 		TaskPath::Values(parameters, definition.return_kind)
 	};
-	let node = TaskHandlers {
-		path: &path,
-		count: Counter::default(),
-	}
-	.lower(node, &[]);
+	let node = TaskHandlers { path: &path, count: Counter::default() }.lower(node, &[]);
 	let wrapped = std::cell::RefCell::new(std::collections::BTreeMap::new());
 	// the guardable functions, with the type word their Node result converts back to (it comes back from the host as a Node)
 	let guardable = |function: &str| {
-		context
-			.user_functions
-			.get(function)
-			.filter(|definition| definition.tuple_kinds.is_empty())
-			.map(|definition| match definition.return_kind {
+		context.user_functions.get(function).filter(|definition| definition.tuple_kinds.is_empty()).map(|definition| {
+			match definition.return_kind {
 				Kind::Int => Some("int"),
 				Kind::Float => Some("float"),
 				_ => None, // a Node (a text, a list, an Error) is used as it comes
-			})
+			}
+		})
 	};
 	let node = guarded_calls(node, &guardable, &wrapped);
 	let node = resolved(node, &path, &wrapped);
@@ -855,10 +784,7 @@ impl TaskHandler {
 			Node::Number(crate::extensions::numbers::Number::Int(self.status)),
 		);
 		let condition = key(not_handled, Op::And, status);
-		if_then(
-			condition,
-			block(vec![assign(&self.flag, Node::True), self.body.clone()]),
-		)
+		if_then(condition, block(vec![assign(&self.flag, Node::True), self.body.clone()]))
 	}
 
 	/// At the end of the block: a finish or stop handler waits for the task, a pause handler does not
@@ -905,15 +831,9 @@ impl TaskHandlers<'_> {
 				}
 				continue;
 			}
-			let Node::List(parts, _, _) = item.drop_meta() else {
-				unreachable!("a handler is a list")
-			};
-			let (job, function, event, body) = (
-				parts[1].clone(),
-				word(&parts[2]),
-				word(&parts[3]),
-				self.lower(parts[4].clone(), &[]),
-			);
+			let Node::List(parts, _, _) = item.drop_meta() else { unreachable!("a handler is a list") };
+			let (job, function, event, body) =
+				(parts[1].clone(), word(&parts[2]), word(&parts[3]), self.lower(parts[4].clone(), &[]));
 			if (self.path)(&function) == TaskPath::Inline {
 				// the task finished where it started: a finish handler runs now, one of a stop or pause never
 				out.push(match event.as_str() {
@@ -935,12 +855,7 @@ impl TaskHandlers<'_> {
 			};
 			let flag = format!("{HANDLED_PREFIX}{}", self.count.next_number());
 			out.push(crate::variable_signals::assign(&flag, Node::False));
-			let handler = TaskHandler {
-				job,
-				status,
-				body,
-				flag,
-			};
+			let handler = TaskHandler { job, status, body, flag };
 			active.push(handler.clone());
 			own.push(handler);
 		}
@@ -969,10 +884,8 @@ pub(crate) fn with_node_wrappers(node: Node, wrapped: &std::collections::BTreeMa
 			}
 		}
 	});
-	let wrapped: Vec<(&String, &usize)> = wrapped
-		.iter()
-		.filter(|(function, _)| !defined.contains(&format!("{function}{NODE_WRAPPER_SUFFIX}")))
-		.collect();
+	let wrapped: Vec<(&String, &usize)> =
+		wrapped.iter().filter(|(function, _)| !defined.contains(&format!("{function}{NODE_WRAPPER_SUFFIX}"))).collect();
 	if wrapped.is_empty() {
 		return node;
 	}
@@ -992,11 +905,8 @@ pub(crate) fn with_node_wrappers(node: Node, wrapped: &std::collections::BTreeMa
 			};
 			let call = call(&function.clone(), (0..*count).map(argument).collect());
 			let result = symbol(WRAPPER_RESULT);
-			let body = Node::List(
-				vec![key(result.clone(), Op::Assign, call), result],
-				Bracket::Curly,
-				Separator::Semicolon,
-			);
+			let body =
+				Node::List(vec![key(result.clone(), Op::Assign, call), result], Bracket::Curly, Separator::Semicolon);
 			key(head, Op::Define, body)
 		})
 		.collect();
@@ -1027,10 +937,8 @@ pub(super) fn forwarded_raises(
 	node: Node,
 	wrapped: &std::cell::RefCell<std::collections::BTreeMap<String, usize>>,
 ) -> Node {
-	let handlers: std::collections::HashSet<String> = crate::event_signals::handled_signals(&node)
-		.into_iter()
-		.map(|(_, function)| function)
-		.collect();
+	let handlers: std::collections::HashSet<String> =
+		crate::event_signals::handled_signals(&node).into_iter().map(|(_, function)| function).collect();
 	if handlers.is_empty() {
 		return node;
 	}
@@ -1042,9 +950,7 @@ pub(super) fn forwarded_raises(
 		match node {
 			Node::Key(head, Op::Define, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if handlers.contains(&word(&items[0]))) =>
 			{
-				let Node::List(items, _, _) = head.drop_meta() else {
-					unreachable!("guarded")
-				};
+				let Node::List(items, _, _) = head.drop_meta() else { unreachable!("guarded") };
 				let function = word(&items[0]);
 				wrapped.borrow_mut().insert(function.clone(), items.len() - 1);
 				let arguments = Node::List(items[1..].to_vec(), Bracket::Square, Separator::Colon);
@@ -1076,13 +982,7 @@ pub(super) const BODY_PLACEHOLDER: &str = "handler_body_placeholder";
 /// `try` catches, before the result is read
 pub(super) fn checked_await(job: &Node, crossing: Crossing) -> Node {
 	use crate::host::{TASK_CHECK, TASK_FAILURE, TASK_JOIN};
-	let check = call(
-		TASK_CHECK,
-		vec![
-			call(TASK_JOIN, vec![job.clone()]),
-			call(TASK_FAILURE, vec![job.clone()]),
-		],
-	);
+	let check = call(TASK_CHECK, vec![call(TASK_JOIN, vec![job.clone()]), call(TASK_FAILURE, vec![job.clone()])]);
 	let result = call(crate::host::TASK_AWAIT_VALUE, vec![job.clone()]);
 	let result = match crossing {
 		Crossing::AsIs => result,
@@ -1128,10 +1028,7 @@ pub(super) fn guarded_calls(
 		Node::List(items, bracket, separator)
 			if items.len() >= 3 && word(&items[0]) == crate::warp_parser::TRY_MARKER =>
 		{
-			let items: Vec<Node> = items
-				.into_iter()
-				.map(|item| guarded_calls(item, guardable, wrapped))
-				.collect();
+			let items: Vec<Node> = items.into_iter().map(|item| guarded_calls(item, guardable, wrapped)).collect();
 			let guarded = match items[1].drop_meta() {
 				Node::List(called, Bracket::Round, _) if matches!(called.first().map(Node::drop_meta), Some(Node::Symbol(function)) if guardable(function).is_some()) =>
 				{
@@ -1150,11 +1047,7 @@ pub(super) fn guarded_calls(
 				}
 				_ => items[1].clone(),
 			};
-			Node::List(
-				[vec![items[0].clone(), guarded], items[2..].to_vec()].concat(),
-				bracket,
-				separator,
-			)
+			Node::List([vec![items[0].clone(), guarded], items[2..].to_vec()].concat(), bracket, separator)
 		}
 		other => other.map_children(|child| guarded_calls(child, guardable, wrapped)),
 	}
@@ -1162,9 +1055,8 @@ pub(super) fn guarded_calls(
 
 /// Every result of a job list: `jobs.map(awaited_job => <checked await of awaited_job>)`
 pub(super) fn awaited_jobs(list: &Node, crossing: Crossing) -> Node {
-	let template = crate::warp_parser::parse(&format!(
-		"{TASK_LIST_PLACEHOLDER}.map({AWAITED_JOB} => {AWAITED_PLACEHOLDER})"
-	));
+	let template =
+		crate::warp_parser::parse(&format!("{TASK_LIST_PLACEHOLDER}.map({AWAITED_JOB} => {AWAITED_PLACEHOLDER})"));
 	let awaited = checked_await(&symbol(AWAITED_JOB), crossing);
 	let template = crate::library_words::substitute(template, TASK_LIST_PLACEHOLDER, list);
 	crate::library_words::substitute(template, AWAITED_PLACEHOLDER, &awaited)
@@ -1197,11 +1089,7 @@ pub(super) fn resolved(
 							// a character crosses as a one-character text, as a variable holds it
 							let arguments = arguments
 								.into_iter()
-								.zip(
-									parameters
-										.iter()
-										.chain(std::iter::repeat(&crate::type_kinds::Kind::Empty)),
-								)
+								.zip(parameters.iter().chain(std::iter::repeat(&crate::type_kinds::Kind::Empty)))
 								.map(|(argument, kind)| match argument.drop_meta() {
 									Node::Char(character) => Node::Text(character.to_string()),
 									_ if *kind == crate::type_kinds::Kind::Float => float(argument),
@@ -1213,10 +1101,7 @@ pub(super) fn resolved(
 							let started = format!("{function}{NODE_WRAPPER_SUFFIX}");
 							call(
 								TASK_SPAWN_VALUES,
-								vec![
-									Node::Text(started),
-									Node::List(arguments, Bracket::Square, Separator::Colon),
-								],
+								vec![Node::Text(started), Node::List(arguments, Bracket::Square, Separator::Colon)],
 							)
 						}
 						TaskPath::Inline => parens(items[1..].to_vec()),
@@ -1230,9 +1115,7 @@ pub(super) fn resolved(
 					}
 				}
 				TASK_LIST | TASK_ELEMENT => {
-					let threaded = items[2..]
-						.iter()
-						.all(|function| path(&word(function)) != TaskPath::Inline);
+					let threaded = items[2..].iter().all(|function| path(&word(function)) != TaskPath::Inline);
 					let crossing = crossing(&items[2..], path);
 					match (threaded, read == TASK_LIST) {
 						(false, _) => items[1].clone(),
@@ -1246,9 +1129,7 @@ pub(super) fn resolved(
 						TASK_CONTROL,
 						vec![
 							items[1].clone(),
-							Node::Number(crate::extensions::numbers::Number::Int(control_operation(&word(
-								&items[3],
-							)))),
+							Node::Number(crate::extensions::numbers::Number::Int(control_operation(&word(&items[3])))),
 						],
 					),
 				},
@@ -1267,25 +1148,16 @@ pub(super) fn unsaid_wait(read: &str, items: &[Node], path: &dyn Fn(&str) -> Tas
 		TASK_LIST | TASK_ELEMENT => &items[2..],
 		_ => return None,
 	};
-	if functions
-		.iter()
-		.any(|function| path(&word(function)) == TaskPath::Inline)
-	{
+	if functions.iter().any(|function| path(&word(function)) == TaskPath::Inline) {
 		return None; // it ran where it started: nothing to wait for
 	}
 	let written = crate::errors::diagnostic::written_text(&items[1]);
-	let (all, verb) = if read == TASK_LIST {
-		("all ", "waits for every task in it")
-	} else {
-		("", "waits for the task")
-	};
+	let (all, verb) =
+		if read == TASK_LIST { ("all ", "waits for every task in it") } else { ("", "waits for the task") };
 	let question = crate::errors::diagnostic::Ask::new(
 		IMPLICIT_WAIT_TOPIC,
 		format!("{written} is used as its value: the program {verb} here; write `await {all}{written}` to say so"),
-		vec![crate::errors::diagnostic::reading(
-			"wait here",
-			&format!("await {all}{written}"),
-		)],
+		vec![crate::errors::diagnostic::reading("wait here", &format!("await {all}{written}"))],
 		crate::errors::diagnostic::Fallback::Warning,
 	)
 	.written(&written)
@@ -1338,10 +1210,7 @@ pub(super) fn control_word(node: &Node) -> String {
 pub(super) fn nothing_to_stop(subject: &Node, control: &str) -> Node {
 	never_happens(
 		subject,
-		&format!(
-			"{control} {} has nothing to stop: a task finishes where it starts",
-			subject.name()
-		),
+		&format!("{control} {} has nothing to stop: a task finishes where it starts", subject.name()),
 	)
 }
 
