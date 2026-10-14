@@ -11,6 +11,7 @@ PASSED:
   ✓ control::test_async_ports::await_within_a_deadline
   ✓ control::test_async_ports::gather_nested_and_wait_group_forms
   ✓ control::test_atomic_arrays::atomic_is_shared
+  ✓ control::test_await_any_unwarned::await_any_with_a_racer_that_never_blocks_does_not_warn
   ✓ control::test_await_any_values::await_any_of_computed_values_answers
   ✓ control::test_await_any_variables::await_any_of_task_variables_gives_the_first_to_finish
   ✓ control::test_await_go::await_of_a_start_is_the_result
@@ -5314,7 +5315,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ control::test_await_any_unwarned::await_any_with_a_racer_that_never_blocks_does_not_warn
 
 SUMMARY:
-13 ignored, 5311 passed, 1 failed, 5312 total tested
+13 ignored, 5312 passed, 0 failed, 5312 total tested

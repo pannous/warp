@@ -60,7 +60,6 @@ const COUNT_SUBSTRING_TEMPLATE: &str = "count(split(counted_haystack, counted_ne
 const FOR_WORD: &str = "for";
 /// `log(x)` is libm's natural logarithm; `log(x, base)` divides by the base's
 const LOG_WORD: &str = "log";
-const OF_WORD: &str = "of";
 
 /// Canonical word and the spellings that mean it
 const SYNONYMS: [(&str, &[&str]); 31] = [
@@ -807,15 +806,6 @@ impl Lowering {
 
 	/// `word(x, args)` and `word x args`
 	fn word_call(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
-		// `x = sum of xs`, `f() := sum of xs`: an assigned value nests the words after the first, `[sum, [of, xs]]`
-		if let [head, Node::List(rest, Bracket::None, Separator::Space)] = items {
-			if rest.first().is_some_and(is_of) {
-				return self.word_call(&[vec![head.clone()], rest.clone()].concat(), bracket, separator);
-			}
-		}
-		if let Some(lookup) = self.of_lookup(items) {
-			return Some(lookup);
-		}
 		if let Some(membership) = self.membership(items).or_else(|| self.containment(items)) {
 			return Some(membership);
 		}
@@ -845,27 +835,12 @@ impl Lowering {
 				return Some(key(log_of(value), Op::Div, log_of(base)));
 			}
 		}
-		// `first 3 of xs` is `first_items(xs, 3)`
-		if let [_, argument, of, object] = items {
-			if let (true, Some(word)) = (is_of(of), self.arity_variant(head, 2)) {
-				return Some(self.call(
-					word,
-					&items[0],
-					vec![self.expand(object.clone()), self.expand(argument.clone())],
-					false,
-				));
-			}
-		}
-		// `first of xs` has one argument, as `first sorted xs`: a library word after it is its argument's prefix
+		// `first sorted xs` has one argument: a library word after it is its argument's prefix
 		let prefixes_its_argument = *bracket == Bracket::None
 			&& items
 				.get(1)
 				.is_some_and(|next| self.library_word(&next.drop_meta().name()).is_some());
-		let argument_count = if items.get(1).is_some_and(is_of) || prefixes_its_argument {
-			1
-		} else {
-			items.len() - 1
-		};
+		let argument_count = if prefixes_its_argument { 1 } else { items.len() - 1 };
 		let word = self.library_word_for(head, argument_count)?;
 		// `sorted "listen" == sorted "silent"`: the word takes the operand of the comparison, as a defined function of `it` does
 		if let ([_, argument], Bracket::None, Separator::Space) = (items, bracket, separator) {
@@ -873,16 +848,6 @@ impl Lowering {
 				return Some(with_first_comparand(argument.clone(), &|operand| {
 					self.call(word, &items[0], vec![operand], true)
 				}));
-			}
-		}
-		if let [_, of, rest @ ..] = items {
-			if is_of(of) && !rest.is_empty() {
-				// `first of xs` is `first(xs)`
-				let argument = match rest {
-					[single] => single.clone(),
-					_ => Node::List(rest.to_vec(), Bracket::None, Separator::Space),
-				};
-				return Some(self.call(word, &items[0], vec![argument], false));
 			}
 		}
 		let is_call = call_name(items, bracket, separator).is_some();
@@ -1104,9 +1069,15 @@ impl Lowering {
 				Separator::None,
 			));
 		}
+		// `f.effects` of a function, not of a variable: the query effects.rs answers
+		let is_effects_query = name == crate::effects::EFFECTS_WORD
+			&& receiver
+				.symbol_name()
+				.is_some_and(|function| !self.plain.contains(function));
 		let is_known = counting_method(name, &self.context).is_some()
 			|| is_list_mutating_method(name)
-			|| self.context.user_functions.contains_key(name);
+			|| self.context.user_functions.contains_key(name)
+			|| is_effects_query;
 		let is_call_result =
 			matches!(receiver.drop_meta(), Node::Symbol(variable) if self.call_results.contains(variable));
 		let is_object = literal.is_some()
@@ -1468,9 +1439,4 @@ fn keyword_definition_parameters(items: &[Node]) -> Option<Vec<String>> {
 			})
 			.collect(),
 	)
-}
-
-/// The word `of` (`first of xs`, `name of person`)
-fn is_of(node: &Node) -> bool {
-	node.is_symbol(OF_WORD)
 }

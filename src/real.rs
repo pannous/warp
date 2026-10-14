@@ -118,7 +118,7 @@ fn real_variables(program: &Node) -> HashMap<String, Node> {
 			}
 		}
 	});
-	let parameters = crate::lowering::memoization::parameter_names(program);
+	let parameters = crate::analyzer::function_definitions(program).parameter_names();
 	assignments
 		.into_iter()
 		.filter_map(|(name, mut values)| {

@@ -1,6 +1,7 @@
 //! The keywords and marks the parser and several lowering passes look for, a leaf module: it depends on nothing
 
 pub const COUNT_WORD: &str = "count";
+pub const EACH_WORD: &str = "each";
 pub const FOR_WORD: &str = "for";
 pub const FROM_WORD: &str = "from";
 pub const GLOBAL_WORD: &str = "global";

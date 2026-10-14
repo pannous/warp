@@ -14,7 +14,7 @@ use super::nodes::{
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_name_matching::prepositions_among;
-use crate::words::{PHRASE_MARK, SLOT};
+use crate::words::{OF_WORD, PHRASE_MARK, SLOT};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -70,6 +70,23 @@ pub fn lower(program: Node) -> Node {
 	}
 	let variables = assigned_names(&program);
 	rewrite(program, &Phrases { forms, variables })
+}
+
+/// The functions the program defines as a phrase with `of`, `to get cents of coin: …`: their calls keep their `of`
+/// (of_lookups.rs)
+pub fn of_phrase_names(program: &Node) -> HashSet<String> {
+	let mut forms = HashMap::new();
+	collect_patterns(program, &mut forms);
+	forms
+		.into_iter()
+		.filter(|(_, patterns)| {
+			patterns
+				.iter()
+				.flatten()
+				.any(|part| *part == Part::Word(OF_WORD.to_string()))
+		})
+		.map(|(name, _)| name)
+		.collect()
 }
 
 fn assigned_names(program: &Node) -> HashSet<String> {

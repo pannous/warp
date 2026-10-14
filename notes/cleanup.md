@@ -490,3 +490,13 @@ arguments 574, markup tags 398, type constructors 370.
   for literal lambdas. Library functions over closures measured 0.22 s → 0.45 s on 1M map/filter/sum (~3× without
   compile time) and give untyped (any) results, for about −140 lines: not worth it.
 - Benchmarks: probes/cleanup/lambdas/bench_*.warp
+## `a of b` is `b.a` (card cleanup-of-is-dot, 2026-10-14)
+One SUGAR pass, lowering/of_lookups.rs, right after interpolation, rewrites every `a of b` to `b.a` (`first 3 of xs` →
+`xs.first(3)`, `byte count of t` → `t.bytes`, `name of people with age > 20` → the field of the filtered list); every
+later pass reads only the dot form. Gone: the special `of` arms in library_words, objects, broadcasting, lazy_reads,
+reflection, comprehensions' call-argument block, and signal_values' token scanner. Not lookups: a collection type
+phrase `list of int` and a spaced definition `square of a number = …`. Measured: about −50 net src lines, not the
+card's −700: reflection's fields/methods/dir code is feature code, not `of` handling. New forms that work now:
+`params of f`, `a of xs` (a field of every element), `name of p + "b"`.
+Trap found: the old signal_values reflected_lists rebuilt every list and unwrapped one-item unbracketed lists on the
+way; `func add<T>(_ a: T, …)` relied on it, so the new walk keeps that unwrap explicitly.
