@@ -21,6 +21,7 @@ mod test_module_function_dir; // card use-math
 mod test_module_meta; // card reflection-foreign-meta
 mod test_module_signals;
 mod test_netbase_package;
+mod test_node_json; // card node-json
 mod test_package_hints; // card hints-fire
 mod test_package_pin;
 #[cfg(feature = "native")] // files beside the program: not in the browser build
