@@ -48,6 +48,7 @@ mod test_mixed_units; // card units-mixed
 mod test_named_unit_fields; // card map-units
 mod test_nan_observed;
 mod test_nearest; // card nearest-helper
+mod test_nearest_quiet; // card nearest-default-limit
 mod test_norm;
 mod test_number;
 mod test_number_words;

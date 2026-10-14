@@ -54,6 +54,7 @@ mod test_times_phrase; // card self-parser
 mod test_trailing_annotation;
 mod test_unary_plus;
 mod test_uniscript_entities;
+mod test_uniscript_hyphen_names; // card uniscript-literal-hyphen
 mod test_url_literal; // card add-http
 mod test_warp_format;
 mod test_warp_position;
