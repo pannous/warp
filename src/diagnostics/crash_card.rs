@@ -74,7 +74,7 @@ fn file_card(info: &PanicHookInfo) {
 	let command_line = std::env::args().collect::<Vec<_>>().join(" ");
 	// todo urgent reads the Fingerprint and Build lines (~/dev/bin/todo, CRASH_FINGERPRINT and CRASH_BUILD)
 	let body = format!(
-		"Filed by warp's panic hook (src/crash_card.rs).\n\nFingerprint: `{fingerprint}`\nBuild: `{SOURCE_CHECKOUT}` on branch `{}`\n\n`{command_line}`\n\n```\n{message}\n```\n\n```\n{backtrace}\n```",
+		"Filed by warp's panic hook (src/diagnostics/crash_card.rs).\n\nFingerprint: `{fingerprint}`\nBuild: `{SOURCE_CHECKOUT}` on branch `{}`\n\n`{command_line}`\n\n```\n{message}\n```\n\n```\n{backtrace}\n```",
 		current_branch(checkout)
 	);
 	let mut todo = Command::new("todo");
@@ -128,7 +128,7 @@ pub fn first_warp_frame(backtrace: &str) -> Option<String> {
 			.filter(|path| !foreign(path))
 			.and_then(|path| path.find("/src/").map(|start| &path[start + 1..]));
 		match own_source {
-			Some(path) if !path.starts_with("src/crash_card.rs") => Some(format!("{name} at {path}")),
+			Some(path) if !path.starts_with("src/diagnostics/crash_card.rs") => Some(format!("{name} at {path}")),
 			_ if name.contains("warp::") && !name.contains("crash_card") => Some(name.to_string()),
 			_ => None,
 		}

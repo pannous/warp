@@ -3,6 +3,9 @@
 
 move_module.py <module> <folder>                 e.g. move_module.py real numbers
 move_module.py <parent>/<module> <folder>        e.g. move_module.py wasm_emitter/arithmetic numbers
+move_module.py <module> <folder> --keep-paths    every use stays: `pub use <folder>::<module>;` keeps the old path
+
+--keep-paths is for a module with many users, until a quiet window rewrites them (notes/restructuring.md).
 
 src/<parent>/<module>.rs (and src/<parent>/<module>/) go to src/<parent>/<folder>/; the `mod` line with its attributes
 leaves the parent's module file for the folder's mod.rs (created when missing and declared in place of the old line).
@@ -170,6 +173,10 @@ def rewrite_file_mentions(parent, module, folder):
 		if relative not in ("notes/decisions.md", "AGENTS.md"):
 			path = os.path.join(REPO, relative)
 			write(path, re.sub(r"\b" + re.escape(old) + r"(?=\.rs|/)", new, read(path)))
+	# os.path.join(REPOSITORY, "src", "ffi_parser.rs") broke the browser runner after layout-root: such joins need a hand
+	joined = subprocess.run(["git", "-C", REPO, "grep", "-nE", r"[\"']" + module + r"\.rs[\"']"], capture_output=True, text=True)
+	if joined.stdout:
+		print(f"check these path joins by hand:\n{joined.stdout}")
 
 
 def take_declaration(text, module):
@@ -213,12 +220,23 @@ def split_target(argument):
 	return parent, module
 
 
+def kept_path(parent_text, folder, module, declaration):
+	"""`pub use folder::module;` (with the module's attributes) after `mod folder;`: the old path stays valid"""
+	lines = parent_text.split("\n")
+	folder_line = next(i for i, text in enumerate(lines) if re.match(MOD_LINE.format(folder), text))
+	reexport = declaration[:-1] + ["pub use " + folder + "::" + module + ";"]
+	return "\n".join(lines[:folder_line + 1] + reexport + lines[folder_line + 1:])
+
+
 def main():
-	(parent, module), folder = split_target(sys.argv[1]), sys.argv[2]
+	keep_paths = "--keep-paths" in sys.argv
+	target_argument, folder = [argument for argument in sys.argv[1:] if argument != "--keep-paths"]
+	parent, module = split_target(target_argument)
 	parent_file = module_file(parent)
 	parent_text, declaration, line = take_declaration(read(parent_file), module)
 	public = any(re.match(r"^pub mod ", text) for text in declaration)
-	write(parent_file, declare_folder(parent_text, folder, line, public))
+	parent_text = declare_folder(parent_text, folder, line, public)
+	write(parent_file, kept_path(parent_text, folder, module, declaration) if keep_paths else parent_text)
 	source_directory = os.path.join(SOURCE, parent)
 	target = os.path.join(source_directory, folder)
 	# checked before the folder exists: a folder named like its member (reflection/reflection.rs) is not the member's
@@ -227,14 +245,15 @@ def main():
 	moved = [os.path.join(source_directory, module + ".rs")] + (list(files_below(module_directory)) if has_directory else [])
 	os.makedirs(target, exist_ok=True)
 	declare(os.path.join(target, "mod.rs"), opened_to_parent(declaration, parent))
-	rewrite_paths(parent, module, folder)
+	if not keep_paths:
+		rewrite_paths(parent, module, folder)
 	for path in moved:
 		write(path, deepen_moved_file(read(path), depth_below(path, parent), parent))
 	git_mv(moved[0], os.path.join(target, module + ".rs"))
 	if has_directory:
 		git_mv(module_directory, os.path.join(target, module))
 	rewrite_file_mentions(parent, module, folder)
-	print(f"{sys.argv[1]} → {os.path.join(parent, folder, module)}")
+	print(f"{target_argument} → {os.path.join(parent, folder, module)}")
 
 
 if __name__ == "__main__":
