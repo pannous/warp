@@ -64,6 +64,11 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   `gcd is function` is yes.
 - parse-type (2026-10-14, from the user's draft "key !?!?!"): an operator node reports type `operation`
   (`parse("1+1").type`, `a<b`; alias `expression`), a pair `a:1` stays `key`; `.op` keeps the operator.
+- time-word (2026-10-14): a bare `time` is always the type (`print time` prints the type); `time.now` is a class
+  member = `now`. instant, date, local time, zoned time, duration are subtypes of time (anchor-time).
+  `now > 17h` / `now >= October` / `now ≈ 2026-10-14` compare the matching part; `==` stays exact (`now == 2026-10-14` no).
+- canvas-size (2026-10-14): `window.width/height`, `display.width/height`, `canvas.width/height` are writable properties,
+  natively and in the playground; a bare top-level `width` works too, with a did-you-mean naming the three.
 - nearest-limit (2026-10-14): `nearest(x, rational)` limits the denominator to 1,000,000 like Python's
   limit_denominator (sqrt 2 → 665857/470832); `limit = 0` gives the exact fraction of the float.
 - float-as-rational (2026-10-14): `x as rational` / `rational(x)` of a float is the exact fraction of its shortest
