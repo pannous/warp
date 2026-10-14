@@ -676,7 +676,7 @@ const STD_MODULE_ALIASES: [(&str, &str); 1] = [("graphics", "draw")];
 /// The standard modules' folder (P194: std/ merged into lib/), embedded in the binary
 const STD_FOLDER: &str = "lib";
 /// lib/prelude.warp: the warp-written words of every program, loaded when mentioned (Loader::use_prelude)
-const PRELUDE_MODULE: &str = "prelude";
+pub(crate) const PRELUDE_MODULE: &str = "prelude";
 /// Between a module's name and its word in a qualified definition name, as between a nested function's outer and own
 const QUALIFIER: char = '·';
 /// P171: module words a program calls without their `use` (the prelude); only these definitions come along

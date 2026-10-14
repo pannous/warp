@@ -101,3 +101,11 @@ Warp notation text (parsed by the reader we already have), one map:
 
 Text holes: interpolation is the first source pass (card interpolation-source), so `"\(f.params)"` and every other
 reflection word work inside `\(…)` like plain statements.
+
+Module words (cards help-undefined, joinable-error; src/lowering/data/word_help.rs): `help(sound)` is the module's
+index (std_docs::module_help, as `warp help sound`), `help(midi)` the word's head and comment, answered before
+reflection.rs (which would read help(sound) as the word sound). After modules::resolve, `help(x)` and
+`function(x).dump` / `(function x).dump` of a name known only at run time look x up in a map literal of the used
+modules' words plus the program's functions (`if T has x then T[x] else error(…)`). `function trick` is still the
+function reference P82; where trick is no function but a variable, its value is the name. std_docs now indexes
+`global x = …` and `def f(x) {…}` definitions too; a prelude word's help stays its head (test_library_signatures).

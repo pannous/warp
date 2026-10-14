@@ -361,6 +361,9 @@ const SUGAR_PASSES: &[Pass] = &[
 	// `dir(time)`: the names of the standard module (introspection.rs), before any pass reads time as a value
 	crate::lowering::introspection::lower,
 	// `f.effects`, `e.listeners`: the reflection words' dot forms (reflection.rs), before any pass reads them as fields
+	// `help(sound)`, `help(midi)`: a standard module's index, a word's head and comment (word_help.rs), before reflection.rs
+	// answers help(sound) with the signature of the word sound
+	crate::lowering::word_help::lower,
 	crate::lowering::reflection::lower,
 	// `root` is sqrt (word_operators.rs), before pipes.rs reads `2|square|root`
 	crate::lowering::word_operators::lower,
@@ -424,6 +427,8 @@ const MODULE_PASSES: &[Pass] = &[
 	crate::lowering::reflection::lower_module_words,
 	// again: `dir(is_square)`, `is_square.params` of a used module's function, which joined the program in resolve
 	crate::lowering::reflection::lower,
+	// `help(trick)`, `function(trick).dump` of a name known at run time: a table of the used modules' words (word_help.rs)
+	crate::lowering::word_help::lower_named_words,
 ];
 
 /// Stored values, system values, signals and events, pages
