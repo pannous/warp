@@ -8,42 +8,8 @@ use crate::type_kinds::Kind;
 use crate::words::CONSTANT_KEYWORDS;
 use std::collections::{HashMap, HashSet};
 
-/// Statement words whose argument is never their property: `return count` is no `return.count`
 const PRINT_CALL: &str = "print";
-/// The error for a user function named like a type word; `{name}` is the word
-const TYPE_WORD_FUNCTION_CLASH: &str = "{name} is a type; rename your function";
 const RETURNING_KEYWORDS: [&str; 2] = ["return", "yield"];
-const PROPERTYLESS_KEYWORDS: [&str; 6] = ["return", "yield", PRINT_CALL, "println", "puts", "not"];
-
-fn is_constant_keyword(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if CONSTANT_KEYWORDS.contains(&word.as_str()))
-}
-
-/// `var x = 1` announces a reassignable variable, plain `x = 1`
-const VAR_KEYWORD: &str = "var";
-/// `let x = 1` binds x once: any change of it is an error naming `var` (user, card let-reassign; check_constants)
-const IMMUTABLE_LET: &str = "let";
-
-pub(crate) fn is_declaration_keyword(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if is_declaration_word(word))
-}
-
-/// `var`, `let`, `const`, `val` …: a word declaring the name after it
-pub(crate) fn is_declaration_word(word: &str) -> bool {
-	CONSTANT_KEYWORDS.contains(&word) || word == VAR_KEYWORD || word == IMMUTABLE_LET
-}
-
-/// The words counting a value's elements, as `count x`, `x.size`, `len(x)`: the one table every pass asks, through
-/// is_counting_word (a class's own size method is looked up in this order)
-pub(crate) const COUNTING_WORDS: [&str; 4] = ["size", "count", "len", "length"];
-/// `byte_size(x)`, `x.byte_size`: the bytes of x, as `x.bytes` (size is the element count, user decision P40)
-const BYTE_SIZE: &str = "byte_size";
-/// `x.number` counts too, but `number x` is the type conversion, not a count
-const NUMBER_PROPERTY: &str = "number";
-
-pub(crate) fn is_counting_property(word: &str) -> bool {
-	word == NUMBER_PROPERTY || is_counting_word(word)
-}
 
 /// Check if a node is pure data (not a statement/function call)
 fn is_data_node(node: &Node) -> bool {
