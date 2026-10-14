@@ -460,7 +460,9 @@ fn evaluate(node: &Node) -> Result<Value, String> {
 		Node::Number(Number::Int(n)) => Ok(Value::Int(*n)),
 		Node::Text(text) => Ok(Value::Text(text.clone())),
 		// a unit word only where only_time_words lets one stand: `1 day as h`
-		Node::Symbol(name) if is_time_word(name) || crate::numbers::units::names_unit(name) => Ok(Value::Symbol(name.clone())),
+		Node::Symbol(name) if is_time_word(name) || crate::numbers::units::names_unit(name) => {
+			Ok(Value::Symbol(name.clone()))
+		}
 		Node::Key(left, op, right) => binary(left, *op, right),
 		Node::List(items, _, separator) => list(node, items, separator.clone()),
 		_ => Err(not_evaluated(node)),
