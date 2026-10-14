@@ -5,7 +5,7 @@ pub(super) use crate::injection::literal_text;
 pub(super) use crate::lowering::nodes::parameter_word;
 use crate::lowering::{function_head, DefinitionForm, FunctionHead};
 
-pub(super) fn unsupported(node: &Node) -> Lean {
+pub(super) fn outside_w0(node: &Node) -> Lean {
 	Err(format!("not in W0: {}", node.serialize().trim()))
 }
 
@@ -285,7 +285,7 @@ fn is_exported(definition: &FunctionHead) -> bool {
 }
 
 /// `a, b = xs` and `a, b = 1, 2`: the names and the values after `=` (one: a list to take apart)
-pub(super) fn destructuring(items: &[Node]) -> Option<(Vec<String>, Vec<&Node>)> {
+pub(super) fn destructuring_assignment(items: &[Node]) -> Option<(Vec<String>, Vec<&Node>)> {
 	let assignment = items
 		.iter()
 		.position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)))?;

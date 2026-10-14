@@ -312,7 +312,7 @@ pub(super) fn class_attributes(node: Node, qualified: &[(String, String)]) -> No
 			let is_attribute = |item: &Node| {
 				method_parts(item).is_none()
 					&& has_value(item)
-					&& field_name(item).is_some_and(|field| qualified.contains(&(class.clone(), field)))
+					&& declared_field_name(item).is_some_and(|field| qualified.contains(&(class.clone(), field)))
 			};
 			let items = class_items(&body);
 			if !items.iter().any(|item| is_attribute(item) && !is_static(item)) {

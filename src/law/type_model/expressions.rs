@@ -433,7 +433,7 @@ impl Exporter {
 				[call, message] if call.is_symbol(ERROR_CALL) => match message.drop_meta() {
 					Node::Text(message) => Ok(format!(".fail {}", quoted(message))),
 					Node::Char(letter) => Ok(format!(".fail {}", quoted(&letter.to_string()))),
-					_ => unsupported(node),
+					_ => outside_w0(node),
 				},
 				[call, value] if call.is_symbol(IS_ERROR_CALL) => Ok(format!(".failed ({})", self.expression(value)?)),
 				[call]
@@ -503,7 +503,7 @@ impl Exporter {
 					};
 					Ok(format!(".call {} ({argument})", quoted(&call.name())))
 				}
-				_ => unsupported(node),
+				_ => outside_w0(node),
 			},
 			// `i++` and `++i` are `i = i + 1`, both giving the new value
 			Node::Key(left, op @ (Op::Inc | Op::Dec), right) => match [left, right]
@@ -517,12 +517,12 @@ impl Exporter {
 						&Node::Key(target.clone(), step, Box::new(Node::Number(Number::Int(1)))),
 					)
 				}
-				None => unsupported(node),
+				None => outside_w0(node),
 			},
 			// `s += 2` is `s = s + 2`
 			Node::Key(target, op, value) if op.is_compound_assign() => match target.drop_meta() {
 				Node::Symbol(name) => self.assignment(name, &Node::Key(target.clone(), op.base_op(), value.clone())),
-				_ => unsupported(node),
+				_ => outside_w0(node),
 			},
 			Node::Key(target, Op::Assign, value) => match target.drop_meta() {
 				Node::Symbol(name) => self.assignment(name, value),
@@ -553,7 +553,7 @@ impl Exporter {
 						self.expression(value)?
 					))
 				}
-				_ => unsupported(node),
+				_ => outside_w0(node),
 			},
 			// `xs.add(v)` changes the shared list xs holds; a function local's list is a value: `xs = xs ++ [v]`
 			Node::Key(list, Op::Dot, call) => match (list.drop_meta(), call.drop_meta()) {
@@ -575,7 +575,7 @@ impl Exporter {
 				{
 					let item = self.expression(&items[1])?;
 					if !self.list_names.contains(name) {
-						return unsupported(node);
+						return outside_w0(node);
 					}
 					Ok(format!(".push (.glob {}) ({item})", quoted(name)))
 				}
@@ -594,20 +594,20 @@ impl Exporter {
 					Ok(format!(".get ({}) {}", self.expression(list)?, quoted(field)))
 				}
 				(_, Node::Symbol(method)) if crate::analyzer::is_counting_word(method) => self.tally(list, None, false),
-				_ => unsupported(node),
+				_ => outside_w0(node),
 			},
 			Node::Key(if_then, Op::Else, otherwise) => match if_then.drop_meta() {
 				Node::Key(condition, Op::Then, then) => match condition.drop_meta() {
 					Node::Key(empty, Op::If, condition) if empty.is_nothing() => {
 						self.conditional(condition, then, otherwise)
 					}
-					_ => unsupported(node),
+					_ => outside_w0(node),
 				},
-				_ => unsupported(node),
+				_ => outside_w0(node),
 			},
 			Node::Key(condition, Op::Question, branches) => match branches.drop_meta() {
 				Node::Key(then, Op::Colon, otherwise) => self.conditional(condition, then, otherwise),
-				_ => unsupported(node),
+				_ => outside_w0(node),
 			},
 			Node::Key(condition, Op::Then, then) => match condition.drop_meta() {
 				Node::Key(empty, Op::If, condition) if empty.is_nothing() => Ok(format!(
@@ -615,13 +615,13 @@ impl Exporter {
 					self.expression(condition)?,
 					self.expression(then)?
 				)),
-				_ => unsupported(node),
+				_ => outside_w0(node),
 			},
 			Node::Key(condition, Op::Do, body) => match condition.drop_meta() {
 				Node::Key(empty, Op::While, condition) if empty.is_nothing() => self
 					.binary(".loop", condition, body)
 					.map(|lean| format!("{lean} {UNIT_TYPE}")),
-				_ => unsupported(node),
+				_ => outside_w0(node),
 			},
 			Node::Key(left, Op::Add, right) if is_list_literal(left) || is_list_literal(right) => {
 				self.binary(".append", left, right)
@@ -676,7 +676,7 @@ impl Exporter {
 					.iter()
 					.any(|bound| matches!(bound.drop_meta(), Node::Text(_) | Node::Char(_))) =>
 			{
-				unsupported(node)
+				outside_w0(node)
 			}
 			Node::Key(from, Op::Range, to) => self.binary(".range", from, to),
 			Node::Key(left, Op::Coalesce, right) => self.binary(".orElse", left, right),
@@ -686,7 +686,7 @@ impl Exporter {
 				self.expression(from)?,
 				self.expression(to)?
 			)),
-			_ => unsupported(node),
+			_ => outside_w0(node),
 		}
 	}
 }

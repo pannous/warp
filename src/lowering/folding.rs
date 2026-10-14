@@ -61,7 +61,7 @@ fn with_constant_free_variables(statement: Node, statements: &[Node], index: usi
 		return statement;
 	};
 	let is_head = matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if *name == function.name));
-	if !is_head || defines_functions(body) {
+	if !is_head || contains_definition(body) {
 		return statement;
 	}
 	let constants: Vec<(String, Node)> = captured_variables(function, main)
@@ -121,7 +121,7 @@ fn is_plain_symbol(node: &Node) -> bool {
 }
 
 /// A function or lambda defined inside the body: its parameters could shadow a main-level name
-fn defines_functions(body: &Node) -> bool {
+fn contains_definition(body: &Node) -> bool {
 	let mut found = false;
 	body.visit(&mut |node| found |= matches!(node, Node::Key(_, Op::Define | Op::FatArrow | Op::Arrow, _)));
 	found

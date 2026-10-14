@@ -127,9 +127,9 @@ impl Lowering<'_> {
 	fn switch(&self, items: &[Node]) -> Option<Node> {
 		let (head, subject, cases) = split_switch(items)?;
 		if let Node::Key(..) = cases.drop_meta() {
-			let block = leftmost(cases);
+			let block = leftmost_operand(cases);
 			let switch = self.switch(&[head.clone(), subject.clone(), block.clone()])?;
-			return Some(with_leftmost(cases.clone(), switch));
+			return Some(with_leftmost_operand(cases.clone(), switch));
 		}
 		let Node::Symbol(word) = head.drop_meta() else {
 			return None;
@@ -201,17 +201,17 @@ pub(crate) fn is_switch_head(head: &Node) -> bool {
 }
 
 /// The leftmost operand of an operator chain
-fn leftmost(node: &Node) -> &Node {
+fn leftmost_operand(node: &Node) -> &Node {
 	match node.drop_meta() {
-		Node::Key(left, _, _) => leftmost(left),
+		Node::Key(left, _, _) => leftmost_operand(left),
 		_ => node,
 	}
 }
 
-fn with_leftmost(node: Node, replacement: Node) -> Node {
+fn with_leftmost_operand(node: Node, replacement: Node) -> Node {
 	match node {
-		Node::Key(left, op, right) => Node::Key(Box::new(with_leftmost(*left, replacement)), op, right),
-		meta @ Node::Meta { .. } => meta.under_meta(|node| with_leftmost(node, replacement)),
+		Node::Key(left, op, right) => Node::Key(Box::new(with_leftmost_operand(*left, replacement)), op, right),
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_leftmost_operand(node, replacement)),
 		_ => replacement,
 	}
 }
@@ -287,7 +287,7 @@ fn every_item_test(each: &Node, items: Node, bindings: &mut Vec<Node>, names: &N
 	};
 	statements.push(walking_loop(&item, items, vec![verdict]));
 	statements.push(held);
-	sequence(statements)
+	semicolon_sequence(statements)
 }
 
 /// The names a pattern binds, in order
@@ -597,7 +597,7 @@ fn case_test(subject: &Node, case: Case, names: &Names) -> (Node, Node) {
 	};
 	let test = match guard {
 		Some(guard) => {
-			let guard = sequence([bindings.clone(), vec![guard]].concat());
+			let guard = semicolon_sequence([bindings.clone(), vec![guard]].concat());
 			match test {
 				Node::True => guard, // a class pattern `Circle(r)` arrives as `_` guarded by its type test
 				test => key(test, Op::And, guard),
@@ -608,7 +608,7 @@ fn case_test(subject: &Node, case: Case, names: &Names) -> (Node, Node) {
 	let body = if bindings.is_empty() {
 		case.body
 	} else {
-		sequence([bindings, vec![case.body]].concat())
+		semicolon_sequence([bindings, vec![case.body]].concat())
 	};
 	(test, body)
 }
@@ -705,7 +705,7 @@ pub(crate) fn is_pattern(subject: &Node, pattern: &Node, names: &Names) -> Optio
 		mut tests, bindings, ..
 	} = Matched::of(pattern, subject.clone(), names);
 	if !bindings.is_empty() {
-		tests.push(sequence([bindings, vec![Node::True]].concat()));
+		tests.push(semicolon_sequence([bindings, vec![Node::True]].concat()));
 	}
 	Some(joined(tests, Op::And))
 }
@@ -792,7 +792,7 @@ fn split_guard(case_key: &Node) -> (Node, Option<Node>) {
 	}
 }
 
-fn sequence(statements: Vec<Node>) -> Node {
+fn semicolon_sequence(statements: Vec<Node>) -> Node {
 	match <[Node; 1]>::try_from(statements) {
 		Ok([single]) => single,
 		Err(statements) => Node::List(statements, Bracket::Round, Separator::Semicolon),

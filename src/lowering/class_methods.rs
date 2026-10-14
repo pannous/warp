@@ -368,7 +368,7 @@ pub(crate) fn class_fields(node: &Node) -> ClassFields {
 			let typed = class_items(body)
 				.iter()
 				.filter(|item| method_parts(item).is_none())
-				.filter_map(|item| Some((field_name(item)?, field_type_name(item))))
+				.filter_map(|item| Some((declared_field_name(item)?, field_type_name(item))))
 				.collect();
 			fields.insert(name.drop_meta().name(), typed);
 		}
@@ -388,7 +388,7 @@ pub fn check_self_typed_fields(program: &Node) -> Option<crate::diagnostic::Diag
 			.filter(|item| method_parts(item).is_none())
 			.find(|item| field_type_name(item) == class);
 		if let Some(field) = field.filter(|_| unfillable.is_none()) {
-			let field_name = field_name(&field).unwrap_or_default();
+			let field_name = declared_field_name(&field).unwrap_or_default();
 			unfillable = Some(
 				crate::diagnostic::Diagnostic::at(
 					&field,
@@ -411,7 +411,7 @@ pub(crate) fn field_declarations(body: &Node) -> Vec<(String, String, Option<Nod
 				Node::Key(_, Op::Assign, value) => Some(value.as_ref().clone()),
 				_ => None,
 			};
-			Some((field_name(item)?, field_type_name(item), default))
+			Some((declared_field_name(item)?, field_type_name(item), default))
 		})
 		.collect()
 }
@@ -420,7 +420,7 @@ pub(crate) fn field_declarations(body: &Node) -> Vec<(String, String, Option<Nod
 pub(crate) fn fields_marked(body: &Node, attribute: &str) -> Vec<(String, Node)> {
 	class_items(body)
 		.iter()
-		.filter_map(|item| Some((field_name(item)?, field_attribute(item, attribute)?.clone())))
+		.filter_map(|item| Some((declared_field_name(item)?, field_attribute(item, attribute)?.clone())))
 		.collect()
 }
 
@@ -472,7 +472,7 @@ pub(crate) fn class_layouts(node: &Node) -> std::collections::HashMap<String, Cl
 						methods.push(method)
 					}
 					Some(_) => {}
-					None => fields.extend(field_name(&item)),
+					None => fields.extend(declared_field_name(&item)),
 				}
 			}
 			layouts.insert(
@@ -773,7 +773,7 @@ fn shared_method_traits(node: &Node) -> Vec<Node> {
 fn instance_member(item: &Node) -> Option<(String, Vec<Node>)> {
 	match (is_static(item), method_parts(item)) {
 		(false, Some((name, parameters, _))) => Some((name, parameters)),
-		(true, None) => field_name(item).map(|name| (name, vec![])),
+		(true, None) => declared_field_name(item).map(|name| (name, vec![])),
 		_ => None,
 	}
 }
@@ -944,7 +944,7 @@ fn split_class(node: &Node, changing: &mut Changing) -> Option<(Node, Vec<Node>)
 	if methods.is_empty() && statics.is_empty() && constructors.is_empty() {
 		return None;
 	}
-	let mut field_names: Vec<String> = fields.iter().filter_map(field_name).collect();
+	let mut field_names: Vec<String> = fields.iter().filter_map(declared_field_name).collect();
 	// a field only the constructor sets is optional: ø until it runs
 	for (parameters, body) in constructors.iter().filter_map(constructor_parts) {
 		let parameter_names: Vec<String> = parameters
@@ -1012,7 +1012,9 @@ fn split_class(node: &Node, changing: &mut Changing) -> Option<(Node, Vec<Node>)
 /// getter `k(self:class) := class·k`, so an instance reads it too (`c.k`)
 fn static_definitions(members: &Members, member: &Node) -> Vec<Node> {
 	let class = members.class;
-	let Some(name) = field_name(member) else { return vec![] };
+	let Some(name) = declared_field_name(member) else {
+		return vec![];
+	};
 	let Node::Key(_, Op::Assign, value) = member.drop_meta() else {
 		return vec![];
 	};
@@ -1047,11 +1049,11 @@ fn method_parts(item: &Node) -> Option<(String, Vec<Node>, Node)> {
 }
 
 /// `name`, `age:int`, `left?`, `x:int=0`, `k = 3`: the name of a field
-fn field_name(item: &Node) -> Option<String> {
+fn declared_field_name(item: &Node) -> Option<String> {
 	match item.drop_meta() {
 		Node::Symbol(name) => Some(name.trim_end_matches(FIELD_MARKS).to_string()),
 		Node::Key(field, Op::Colon, _) => Some(field.drop_meta().name().trim_end_matches(FIELD_MARKS).to_string()),
-		Node::Key(field, Op::Assign, _) => field_name(field),
+		Node::Key(field, Op::Assign, _) => declared_field_name(field),
 		_ => None,
 	}
 }

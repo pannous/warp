@@ -234,10 +234,10 @@ pub(crate) fn it_function(node: &Node) -> Option<Node> {
 
 /// `a > b`, also as the one statement of a block, and any other bool: `a < b or a == b and c`, `if … then a < b else …`
 /// (card sort-comparator)
-fn is_comparison(body: &Node) -> bool {
+fn is_boolean_body(body: &Node) -> bool {
 	match body.drop_meta() {
 		Node::Key(_, op, _) if COMPARISONS.contains(op) => true,
-		Node::List(items, _, _) if items.len() == 1 => is_comparison(&items[0]),
+		Node::List(items, _, _) if items.len() == 1 => is_boolean_body(&items[0]),
 		_ => crate::analyzer::is_boolean(body, &crate::analyzer::Scope::new()),
 	}
 }
@@ -989,13 +989,13 @@ impl Lowering {
 	/// A function whose result is a comparison: `(a b) => a > b`, `>`, `def before(a,b){ a < b }`
 	fn compares(&self, function: &Node) -> bool {
 		match literal_function(function) {
-			Some(lambda) => is_comparison(&lambda.body),
+			Some(lambda) => is_boolean_body(&lambda.body),
 			None => match function.drop_meta() {
 				Node::Symbol(name) => self
 					.context
 					.user_functions
 					.get(name)
-					.is_some_and(|defined| is_comparison(&defined.body)),
+					.is_some_and(|defined| is_boolean_body(&defined.body)),
 				_ => false,
 			},
 		}

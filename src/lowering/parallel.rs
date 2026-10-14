@@ -192,7 +192,7 @@ pub(crate) fn loop_in_tasks(variable: Node, list: Node, body: Node, number: usiz
 			symbol(FOR_WORD),
 			variable,
 			symbol(IN_WORD),
-			temporary("part", number),
+			temporary_symbol("part", number),
 			body,
 		],
 		Bracket::None,
@@ -282,7 +282,7 @@ fn filled(program: &str, number: usize, fills: &[(&str, Node)]) -> Node {
 }
 
 /// `part` of the third parallel map or loop: `parallel·part·3`
-fn temporary(name: &str, number: usize) -> Node {
+fn temporary_symbol(name: &str, number: usize) -> Node {
 	Node::Symbol(crate::library_words::temporary_name(&[
 		TEMPORARY_BASE,
 		name,

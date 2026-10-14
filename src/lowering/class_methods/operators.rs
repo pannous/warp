@@ -464,7 +464,12 @@ fn plain_variables(node: &Node) -> std::collections::HashSet<String> {
 		}
 		Node::Type { body, .. } => {
 			let typed_by_word = |item: &&Node| crate::analyzer::type_word_kind(&field_type_name(item)).is_some();
-			plain.extend(class_items(body).iter().filter(typed_by_word).filter_map(field_name))
+			plain.extend(
+				class_items(body)
+					.iter()
+					.filter(typed_by_word)
+					.filter_map(declared_field_name),
+			)
 		}
 		Node::List(items, _, _)
 			if crate::lowering::nodes::for_in_variable(items).is_some() && items.get(3).is_some_and(is_plain_value) =>

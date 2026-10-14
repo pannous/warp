@@ -465,12 +465,12 @@ fn reads_any(node: &Node, names: &dyn Fn(&str) -> bool) -> bool {
 }
 
 /// `3*4` for the body, `clock()` for the call `(clock)`, as it was written
-fn written_text(node: &Node) -> String {
+fn call_as_written(node: &Node) -> String {
 	match node.drop_meta() {
 		Node::List(items, Bracket::Round, Separator::None)
 			if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
 		{
-			let arguments: Vec<String> = items[1..].iter().map(written_text).collect();
+			let arguments: Vec<String> = items[1..].iter().map(call_as_written).collect();
 			format!("{}({})", items[0].drop_meta().serialize().trim(), arguments.join(", "))
 		}
 		other => other.serialize().trim().to_string(),
@@ -503,7 +503,7 @@ fn note_charging(
 	if generated(&function.name) || reads_any(&function.body, &generated) {
 		return Ok(());
 	}
-	let value = written_text(&function.body);
+	let value = call_as_written(&function.body);
 	let name = &function.name;
 	let written = match (is_def, definition.bare) {
 		(true, _) => format!("def {name}(): {value}"),

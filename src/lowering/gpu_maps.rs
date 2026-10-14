@@ -111,7 +111,7 @@ fn automatic_in(node: Node, is_linear_floats: &impl Fn(&Node) -> bool, pinned: b
 		_ => None,
 	};
 	if let Some(marked) = marked {
-		return with_value(node, marked);
+		return with_assigned_value(node, marked);
 	}
 	node.map_children(|child| automatic_in(child, is_linear_floats, pinned))
 }
@@ -159,9 +159,9 @@ fn automatic_value(value: &Node, is_linear_floats: &impl Fn(&Node) -> bool) -> O
 }
 
 /// The assignment with its value replaced
-fn with_value(statement: Node, value: Node) -> Node {
+fn with_assigned_value(statement: Node, value: Node) -> Node {
 	match statement {
-		meta @ Node::Meta { .. } => meta.under_meta(|node| with_value(node, value)),
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_assigned_value(node, value)),
 		Node::Key(target, op, _) => Node::Key(target, op, Box::new(value)),
 		other => other,
 	}
@@ -875,7 +875,7 @@ impl Translation {
 				*out += "}\n";
 				Some(())
 			}
-			Node::Key(target, op, _) if is_assignment(*op) && matches!(target.drop_meta(), Node::Symbol(_)) => {
+			Node::Key(target, op, _) if is_assigning_op(*op) && matches!(target.drop_meta(), Node::Symbol(_)) => {
 				self.statement(node, out)?;
 				*out += &format!("return {};\n", self.result(target)?);
 				Some(())
@@ -914,7 +914,7 @@ impl Translation {
 			return Some(());
 		}
 		match node.drop_meta() {
-			Node::Key(target, op, value) if is_assignment(*op) => {
+			Node::Key(target, op, value) if is_assigning_op(*op) => {
 				let Node::Symbol(name) = target.drop_meta() else {
 					return None;
 				};
@@ -1107,7 +1107,7 @@ fn comparison(op: Op) -> Option<&'static str> {
 	})
 }
 
-fn is_assignment(op: Op) -> bool {
+fn is_assigning_op(op: Op) -> bool {
 	matches!(op, Op::Assign | Op::Define) || op.is_compound_assign()
 }
 
@@ -1166,7 +1166,7 @@ fn assigned_names(node: &Node, names: &mut Vec<String>) {
 		}
 	};
 	node.visit(&mut |part| match part.drop_meta() {
-		Node::Key(target, op, _) if is_assignment(*op) => {
+		Node::Key(target, op, _) if is_assigning_op(*op) => {
 			if let Node::Symbol(name) = target.drop_meta() {
 				add(name.clone());
 			}

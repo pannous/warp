@@ -178,7 +178,7 @@ fn defining(node: &Node, declared: &HashSet<String>, operation: &str) -> HashSet
 		}
 		if let Some(type_name) = declared
 			.iter()
-			.find(|type_name| defines_function(part, &witness_name(operation, type_name)))
+			.find(|type_name| defines_function_named(part, &witness_name(operation, type_name)))
 		{
 			types.insert(type_name.clone());
 		}
@@ -186,7 +186,7 @@ fn defining(node: &Node, declared: &HashSet<String>, operation: &str) -> HashSet
 	types
 }
 
-fn defines_function(node: &Node, name: &str) -> bool {
+fn defines_function_named(node: &Node, name: &str) -> bool {
 	let Node::Key(head, Op::Define | Op::Assign, _) = node else {
 		return false;
 	};

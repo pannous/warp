@@ -38,7 +38,7 @@ const ERROR_MARK: &str = ": error";
 
 type Lean = Result<String, String>;
 
-fn unsupported(node: &Node) -> Lean {
+fn not_exportable(node: &Node) -> Lean {
 	Err(format!("not exportable to Lean: {}", node.serialize().trim()))
 }
 
@@ -95,7 +95,7 @@ fn term(node: &Node) -> Lean {
 		)),
 		Node::Key(base, Op::Pow, exponent) => match exponent.drop_meta() {
 			Node::Number(Number::Int(n)) if *n >= 0 => Ok(format!("({} ^ {})", term(base)?, n)),
-			_ => unsupported(node),
+			_ => not_exportable(node),
 		},
 		Node::Key(condition, Op::Question, branches) => match branches.drop_meta() {
 			Node::Key(yes, Op::Colon, no) => Ok(format!(
@@ -104,7 +104,7 @@ fn term(node: &Node) -> Lean {
 				term(yes)?,
 				term(no)?
 			)),
-			_ => unsupported(node),
+			_ => not_exportable(node),
 		},
 		Node::Key(head, Op::Else, no) => match head.drop_meta() {
 			Node::Key(if_part, Op::Then, yes) => match if_part.drop_meta() {
@@ -114,9 +114,9 @@ fn term(node: &Node) -> Lean {
 					term(yes)?,
 					term(no)?
 				)),
-				_ => unsupported(node),
+				_ => not_exportable(node),
 			},
-			_ => unsupported(node),
+			_ => not_exportable(node),
 		},
 		Node::Key(..) => Ok(format!(
 			"(if {} then {} else {})",
@@ -129,7 +129,7 @@ fn term(node: &Node) -> Lean {
 			let parts: Result<Vec<String>, String> = items.iter().map(term).collect();
 			Ok(format!("({})", parts?.join(" ")))
 		}
-		_ => unsupported(node),
+		_ => not_exportable(node),
 	}
 }
 

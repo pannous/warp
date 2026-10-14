@@ -194,7 +194,7 @@ impl Exporter {
 			Node::List(items, Bracket::Square, _) if items.len() == 1 => {
 				Ok(format!("{LIST_TYPE_PREFIX}({})", self.annotation_type(&items[0])?))
 			}
-			other => unsupported(other),
+			other => outside_w0(other),
 		}
 	}
 
@@ -204,7 +204,7 @@ impl Exporter {
 			Node::Symbol(parameter) => Ok((parameter.clone(), ANY_TYPE.to_string())),
 			Node::Key(parameter, Op::Colon, annotation) => Ok((parameter.name(), self.annotation_type(annotation)?)),
 			Node::Key(parameter, Op::Assign, _) => self.parameter_type(parameter),
-			other => Err(unsupported(other).unwrap_err()),
+			other => Err(outside_w0(other).unwrap_err()),
 		}
 	}
 
@@ -553,16 +553,16 @@ impl Exporter {
 					self.names.insert(name.clone(), None);
 					Ok(format!(".charged {} ({})", quoted(name), self.expression(body)?))
 				}
-				_ => unsupported(statement),
+				_ => outside_w0(statement),
 			},
 			Node::List(items, _, _) if items.len() == 2 && items[0].is_symbol(CONSTANT_KEYWORD) => {
 				match items[1].drop_meta() {
 					Node::Key(target, Op::Assign, value) => self.binding(target, ".const", value),
-					other => unsupported(other),
+					other => outside_w0(other),
 				}
 			}
-			Node::List(items, Bracket::None, Separator::Colon) if destructuring(items).is_some() => {
-				let (names, values) = destructuring(items).expect("a destructuring");
+			Node::List(items, Bracket::None, Separator::Colon) if destructuring_assignment(items).is_some() => {
+				let (names, values) = destructuring_assignment(items).expect("a destructuring");
 				match values[..] {
 					[list] => self.destructure(&names, list),
 					_ => self.assign_tuple(&names, &values),
@@ -700,7 +700,7 @@ impl Exporter {
 		let (name, annotation) = match target.drop_meta() {
 			Node::Symbol(name) => (name.clone(), None),
 			Node::Key(name, Op::Colon, annotation) => (name.name(), Some(self.annotation_type(annotation)?)),
-			other => return unsupported(other),
+			other => return outside_w0(other),
 		};
 		if annotation.is_none() && is_evident_bool(value) {
 			self.bool_names.push(name.clone());

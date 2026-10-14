@@ -619,7 +619,7 @@ fn data_read(node: Node, pattern: &str, reads_server_data: &dyn Fn(&Node) -> boo
 	if !reads_server_data(&node) {
 		return node;
 	}
-	if is_markup(&node) {
+	if is_markup_or_block(&node) {
 		return node.map_children(|child| data_read(child, pattern, reads_server_data, functions));
 	}
 	let name = format!("{ROUTE_DATA_PREFIX}{}", functions.len());
@@ -647,7 +647,7 @@ fn data_read(node: Node, pattern: &str, reads_server_data: &dyn Fn(&Node) -> boo
 }
 
 /// `h1{…}`, `{…}`: markup or a block, whose items are looked into
-fn is_markup(node: &Node) -> bool {
+fn is_markup_or_block(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::List(_, Bracket::Curly, _) => true,
 		Node::List(items, _, _) => {
