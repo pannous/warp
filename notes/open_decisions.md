@@ -9,6 +9,8 @@ the wiki).
 (none)
 
 ## Parked (user: "later")
+- body-statements (2026-10-14): a function body looped like a list of statements, each statement with its kind
+  (operation, call, assignment…); `.kind` was dropped from body-code until then.
 - unit-edges (warp-operator-shall, cards cleanup-units-answer and cleanup-units-interpreter): eight ignored
   cleanup-edge tests, kept or retired? Constant `1950 cm ± 50` folding (now at run time, prints right again), ranges
   with a unit (`1900 - 2000 AD`, descending, the "different units" error, `1900 - 2000 AD == 1950 AD ± 50`: three

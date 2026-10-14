@@ -25,6 +25,9 @@ const SERVER_WORD: &str = "server";
 /// `header "name" "value"` and `status 418` in a route's body (with_answer_headers)
 const HEADER_WORD: &str = "header";
 const STATUS_WORD: &str = "status";
+/// a hosted page route's answer (answered_page)
+const CONTENT_TYPE_HEADER: &str = "Content-Type";
+const HTML_TYPE: &str = "text/html; charset=utf-8";
 const RPC_PREFIX: &str = "/rpc/";
 const RPC_METHOD: &str = "POST";
 /// `f·rpc·0`: the value of the page's first call of the server function f
@@ -76,7 +79,7 @@ pub fn lower(program: Node) -> Node {
 		return without_serving(program);
 	}
 	let port = crate::compiler::compile_context::read(|context| context.serving_port);
-	let program = if port.is_none() { with_local_routes(program) } else { program };
+	let program = if port.is_none() { with_local_routes(hosted_serving(program)) } else { program };
 	let program = match program {
 		single
 			if port.is_some()
@@ -171,6 +174,10 @@ pub fn with_default_routes(program: Node) -> Node {
 		}
 		_ => (vec![program.clone()], Separator::Newline),
 	};
+	if statements.iter().any(crate::routes::is_route) {
+		statements = statements.into_iter().map(|statement| answered_page(&statement).unwrap_or(statement)).collect();
+		return Node::List(statements, Bracket::None, separator);
+	}
 	if statements.iter().any(is_serving_statement) {
 		return program;
 	}
@@ -192,6 +199,69 @@ pub fn with_default_routes(program: Node) -> Node {
 		None => crate::warp_parser::parse(&format!("get {PAGE_ROUTE:?} {{ [{}] }}", index.unwrap_or_default())),
 	});
 	Node::List(statements, Bracket::None, separator)
+}
+
+/// A run without a server (the playground, `warp run`) has a page but answers no requests: each top-level `get "/path"
+/// {…}` is also the page at its path, `route "/path" {…}` (cards square-int, recognized-browser: `get "/" {"ok"}` shows
+/// "ok", the address bar's /square/9 shows `get "/square/:n:int" { n*n }`'s 81). A block reading the request has no
+/// page: there is no request; its `status`/`header` lines answer nothing there (host.js response_header)
+pub fn with_page_routes(program: Node) -> Node {
+	let mode = crate::pipeline::compile_mode();
+	let serving = crate::compiler::compile_context::read(|context| context.serving_port).is_some();
+	if serving || mode.for_a_page || mode.for_wagi || mode.for_hosting {
+		return program;
+	}
+	let (statements, separator) = match program.drop_meta() {
+		Node::List(statements, Bracket::None, separator @ (Separator::Newline | Separator::Semicolon)) => {
+			(statements.clone(), separator.clone())
+		}
+		single if !top_level_routes(single).is_empty() => (vec![program.clone()], Separator::Newline),
+		_ => return program,
+	};
+	let page_routes = |statement: &Node| -> Vec<Node> {
+		top_level_routes(statement)
+			.into_iter()
+			.filter(|(method, _, body)| method == "GET" && !reads_the_request(body))
+			.map(|(_, path, body)| {
+				Node::List(
+					vec![symbol(crate::routes::ROUTE_WORD), path, with_answer_headers(body)],
+					Bracket::None,
+					Separator::Space,
+				)
+			})
+			.collect()
+	};
+	if !statements.iter().any(|statement| !page_routes(statement).is_empty()) {
+		return program;
+	}
+	// each page after its `get`: a program going on after it keeps its last statement as its value
+	let statements = statements
+		.into_iter()
+		.flat_map(|statement| {
+			let pages = page_routes(&statement);
+			std::iter::once(statement).chain(pages)
+		})
+		.collect();
+	Node::List(statements, Bracket::None, separator)
+}
+
+fn reads_the_request(body: &Node) -> bool {
+	body.mentions_where(|name| name == REQUEST_WORD || name.starts_with(FIELD_MARK))
+}
+
+/// A hosted page route answers GET at its path with its page's HTML, rendered by the Worker (cards program-answers,
+/// host-available): `route "/" { a{…} }` → `get "/" { header "Content-Type" "text/html…"; to_html(a{…}) }`; links
+/// load the next page from the Worker. A route holding routes or a layout's outlet stays a route
+fn answered_page(statement: &Node) -> Option<Node> {
+	let (pattern, mut body) = crate::routes::route(statement)?;
+	if body.iter().any(|item| crate::routes::is_route(item) || item.mentions_any(&[crate::routes::OUTLET])) {
+		return None;
+	}
+	let shown = body.pop()?;
+	body.push(crate::warp_parser::parse(&format!("{HEADER_WORD} {CONTENT_TYPE_HEADER:?} {HTML_TYPE:?}")));
+	body.push(call(super::page_html::TO_HTML, vec![shown]));
+	let block = Node::List(body, Bracket::Curly, Separator::Newline);
+	Some(Node::List(vec![symbol(QUERY_METHOD), text(&pattern), block], Bracket::None, Separator::Space))
 }
 
 /// `square(n) := n*n` → ("/square/:n", "square(n)"); `twice := it * 2` → ("/twice/:value", "twice(value)")
@@ -240,6 +310,32 @@ fn top_level_statements(code: &str) -> Vec<Node> {
 /// `serve PORT {…}` or a top-level `get "/api" {…}`: the server's alone, the page leaves it out
 fn is_serving(statement: &Node) -> bool {
 	served(statement).is_some() || !top_level_routes(statement).is_empty()
+}
+
+/// Hosted (`warp deploy`), `serve PORT { get "/" {…} }` is its routes: the Worker answers them, the port was the local
+/// server's (card deploy-single-route)
+fn hosted_serving(program: Node) -> Node {
+	if !crate::pipeline::compile_mode().for_hosting {
+		return program;
+	}
+	let routes_of = |statement: Node| -> Vec<Node> {
+		match served(&statement) {
+			Some((_, routes)) => routes
+				.into_iter()
+				.map(|(method, path, body)| {
+					Node::List(vec![symbol(&method.to_lowercase()), path, body], Bracket::None, Separator::Space)
+				})
+				.collect(),
+			None => vec![statement],
+		}
+	};
+	match program {
+		Node::List(statements, bracket @ Bracket::None, separator @ (Separator::Newline | Separator::Semicolon)) => {
+			Node::List(statements.into_iter().flat_map(routes_of).collect(), bracket, separator)
+		}
+		single if served(&single).is_some() => Node::List(routes_of(single), Bracket::None, Separator::Newline),
+		other => other,
+	}
 }
 
 /// The route a top-level `get "/api" {…}` statement is
@@ -576,8 +672,11 @@ fn with_generated_names(node: Node) -> Node {
 /// route·N(request), as served, and page·submitted(request) calls the one answering the request of a form of the page.
 /// Like an event handler, a route changes the page's variables: those it mentions are its globals
 fn with_local_routes(program: Node) -> Node {
-	let Node::List(statements, bracket, separator) = program else {
-		return program;
+	let (statements, bracket, separator) = match program {
+		// a program of routes only, one or several on a line, is one list of words (card deploy-single-route)
+		words if !top_level_routes(&words).is_empty() => (vec![words], Bracket::None, Separator::Newline),
+		Node::List(statements, bracket, separator) => (statements, bracket, separator),
+		other => return other,
 	};
 	let Some(first_route) = statements.iter().position(|statement| !top_level_routes(statement).is_empty()) else {
 		return Node::List(statements, bracket, separator);
