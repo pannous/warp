@@ -505,16 +505,6 @@ fn declared_name(declaration: &Node) -> Option<String> {
 	}
 }
 
-/// `global x` and `global x = v` statements anywhere in a function body
-fn globals_declared_in(body: &Node) -> Vec<String> {
-	match body.drop_meta() {
-		Node::Key(keyword, Op::Colon, declaration) if super::is_global_keyword(keyword) => {
-			declared_name(declaration).into_iter().collect()
-		}
-		other => other.parts().into_iter().flat_map(globals_declared_in).collect(),
-	}
-}
-
 fn dimension_error(op: Op, left: &Signature, right: &Signature) -> Stop {
 	Stop::Error(format!(
 		"DimensionError: {} {op} {}: incompatible units",
