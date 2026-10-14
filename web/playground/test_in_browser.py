@@ -132,7 +132,8 @@ GPU_JOBS_NEVER = "Out of memory"
 # the console lines a check makes on purpose: Chrome logs the broken shader's WGSL error itself
 # Firefox's WebGPU: one anonymous uncaught exception of the page during the 400 jobs, all values right (card
 # firefox-gpu-jobs-uncaught)
-EXPECTED_CONSOLE = {SHADER_ERROR: "Error while parsing WGSL", GPU_JOBS: "uncaught exception: undefined"}
+# and Firefox its own two lines of the broken shader
+EXPECTED_CONSOLE = {SHADER_ERROR: ["Error while parsing WGSL", "errors while creating shader module", "parsing error"], GPU_JOBS: ["uncaught exception: undefined"]}
 # card safari-shared-buffers: a task's answer buffer, like a GPU job's, is reused once read
 MANY_TASKS = "(many tasks in one run)"
 MANY_TASKS_CODE = """twice(x) := x * 2
@@ -152,8 +153,7 @@ FRAME_SHADERS = "(the on frame shader samples keep painting)"
 FRAME_SHADER_SAMPLES = ["shader_brush", "shader_trails"]
 FRAME_SHADER_FIRST_MS = 15000  # the first frame's canvas: a software GPU takes long for a 1280×800 frame
 FRAME_SHADER_LOOK_AGAIN_MS = 3000
-# Chrome's SwiftShader drops the page canvas, so its 1280×800 frames come as pixels, which keep the page too busy to answer
-THROUGH_PIXELS = "through pixels, not in the page's canvas"
+THROUGH_PIXELS = "through pixels, not into the page's canvas"  # Chrome's SwiftShader drops the page canvas
 # card shader-read: $previous(at) reads the frame the shader left before, as natively (tests/programs/
 # test_shader_builtins.rs a_shader_reads_its_previous_frame): three renders of a quarter red more give 192 red
 PREVIOUS_FRAME = "(a shader reads its previous frame)"
@@ -516,16 +516,10 @@ def clipboard_read_wrong():
 	return [] if CLIPBOARD_TEXT in read else [f"clipboard read: {read!r}, expected {CLIPBOARD_TEXT!r}"]
 
 
-def gpu_page_wrong():
-	"""named arrays come back by name, and a painted shader shows red in the GPU's own canvas; skipped loudly without
-	WebGPU (the runner's Firefox)"""
-	computed = run_code(NAMED_ARRAYS)
-	if NO_GPU in computed:
-		print(f"skip {GPU_PAGE}: this browser {NO_GPU}")
-		return []
-	wrong = [f"named arrays: {computed!r}, expected {shown!r} in it" for shown in NAMED_ARRAYS_SHOWN if shown not in computed]
+def red_shader_shown():
+	"""the value of painting RED_SHADER and how its canvas shows: drawn by the GPU, its red, why the page canvas failed"""
 	painted = run_code(RED_SHADER)
-	shown = browser("eval", f"""(async () => {{
+	return painted, browser("eval", f"""(async () => {{
 		await new Promise(done => setTimeout(done, {CANVAS_SETTLE_MS}));
 		const canvas = [...document.querySelectorAll("#paintings canvas")].at(-1);
 		if (!canvas) return "no canvas";
@@ -534,6 +528,17 @@ def gpu_page_wrong():
 		const failed = [...document.querySelectorAll("#diagnostics li")].map(item => item.textContent).find(text => text.includes({json.dumps(CANVAS_FAILED)}));
 		return `gpu ${{canvas.gpu === true}} red ${{copy.getImageData(4, 4, 1, 1).data[0]}} ${{failed ?? ""}}`;
 	}})()""")
+
+
+def gpu_page_wrong():
+	"""named arrays come back by name, and a painted shader shows red in the GPU's own canvas; skipped loudly without
+	WebGPU (the runner's Firefox)"""
+	computed = run_code(NAMED_ARRAYS)
+	if NO_GPU in computed:
+		print(f"skip {GPU_PAGE}: this browser {NO_GPU}")
+		return []
+	wrong = [f"named arrays: {computed!r}, expected {shown!r} in it" for shown in NAMED_ARRAYS_SHOWN if shown not in computed]
+	painted, shown = red_shader_shown()
 	if CANVAS_FAILED in shown:
 		print(f"skip {GPU_PAGE} (its page canvas): {shown}")
 	expected = "red 255" if CANVAS_FAILED in shown else "gpu true red 255"
@@ -614,8 +619,14 @@ def brush_wrong():
 
 
 def frame_shaders_wrong():
-	"""each `on frame` shader sample still paints a few seconds in: its canvas changes between two looks"""
-	wrong, painted_through_pixels = [], False
+	"""each `on frame` shader sample still paints a few seconds in: its canvas changes between two looks; skipped loudly
+	where shaders don't paint into the page's canvas (the bug was there), whose 1280×800 pixel frames keep the page
+	too busy to answer"""
+	painted, shown = red_shader_shown()
+	if NO_GPU in painted or "gpu true" not in shown:
+		print(f"skip {FRAME_SHADERS}: this browser paints shaders {THROUGH_PIXELS} ({painted!r}, {shown!r})")
+		return []
+	wrong = []
 	for sample in FRAME_SHADER_SAMPLES:
 		browser("eval", f"void playground.chooseExample({json.dumps(sample)})")
 		shown = browser("eval", f"""(async () => {{
@@ -638,16 +649,12 @@ def frame_shaders_wrong():
 				for (let at = 0; at < data.length; at += 4093) sum = (sum * 31 + data[at]) >>> 0;
 				looks.push(`${{now.width}}×${{now.height}} #${{sum}}`);
 			}}
-			const how = shown()?.gpu ? "" : " {THROUGH_PIXELS}";
-			return looks[0] !== looks[1] && !looks.includes("no canvas") ? `painting${{how}}` : `looks ${{looks.join(" then ")}}${{how}}; ${{page()}}`;
+			return looks[0] !== looks[1] && !looks.includes("no canvas") ? "painting" : `looks ${{looks.join(" then ")}}; ${{page()}}`;
 		}})()""")
 		if NO_GPU in shown:
 			print(f"skip {FRAME_SHADERS} {sample}: this browser {NO_GPU}")
-		elif not shown and painted_through_pixels:
-			print(f"skip {FRAME_SHADERS} {sample}: no answer, the page busy painting {THROUGH_PIXELS}")
-		elif not shown.startswith('"painting'):
+		elif "painting" not in shown:
 			wrong.append(f"samples/{sample} stopped painting: {shown or 'the check gave no answer'}")
-		painted_through_pixels |= THROUGH_PIXELS in shown
 	return wrong
 
 
@@ -741,8 +748,8 @@ def check_examples(names, page_url=None, site=None):
 	samples = json.loads(json.loads(browser("eval", "JSON.stringify(Object.keys(SAMPLES).sort())")))
 	failures = []
 	def verdict(name, wrong):
-		expected = EXPECTED_CONSOLE.get(name)
-		wrong += [f"console {message}" for message in console.take() if not (expected and expected in message)]
+		expected = EXPECTED_CONSOLE.get(name, [])
+		wrong += [f"console {message}" for message in console.take() if not any(line in message for line in expected)]
 		print(f"{'FAIL' if wrong else 'ok  '} {name}" + "".join(f"\n     {line}" for line in wrong))
 		if wrong:
 			failures.append(name)
