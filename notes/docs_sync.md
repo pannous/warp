@@ -5,12 +5,12 @@ guide-expert.md) in line with main. Card docs-sync, session warp-docs-sync.
 
 ## Last swept
 
-- main commit **a4f4a44dc** (2026-10-14; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27, docs-sync-3 3f01a83b5, keeper 264c844a4, 17b6b455b, 0c2b20013, c1f479e10 (the src regrouping), d19060ec9, 9d84077f6, 6915e892b, 0bcbc6caf, 3801056ee and batch 2eae7fde9 (wiki eb3c384), batch de70c437b, batches 5899b83d1, c65c6a241, 9e6fbf8db, f689a6665, 63ad6eb73, 66dd216a9 (units refactor: no page shows unit tolerances or ranges, nothing to change) 43384c15e, 3be3d7d25 (internal) and eb64602c1 (cargo debug builds already in wiki/cargo.md; C types and Node accessors internal) bcb3f966b (wiki node.md: built lists == written) 2518ccd57 (fix, internal) 3f60ecd4d (wiki cli.md: warp code argument) de4b71071 (wiki function.md: hole fix error) c9c928e54 (matching.md to-get fence runs, routes already quoted) 967d8ce4a (wiki sound.md: fade duration) 9c68b36af (wiki W0.md: first types run) and a4f4a44dc (wiki pattern-matching.md: two-key map)), checked with
+- main commit **525f1bd69** (2026-10-14; sweeps docs-sync 19f021863, docs-sync-2 48e5f3b27, docs-sync-3 3f01a83b5, keeper 264c844a4, 17b6b455b, 0c2b20013, c1f479e10 (the src regrouping), d19060ec9, 9d84077f6, 6915e892b, 0bcbc6caf, 3801056ee and batch 2eae7fde9 (wiki eb3c384), batch de70c437b, batches 5899b83d1, c65c6a241, 9e6fbf8db, f689a6665, 63ad6eb73, 66dd216a9 (units refactor: no page shows unit tolerances or ranges, nothing to change) 43384c15e, 3be3d7d25 (internal) and eb64602c1 (cargo debug builds already in wiki/cargo.md; C types and Node accessors internal) bcb3f966b (wiki node.md: built lists == written) 2518ccd57 (fix, internal) 3f60ecd4d (wiki cli.md: warp code argument) de4b71071 (wiki function.md: hole fix error) c9c928e54 (matching.md to-get fence runs, routes already quoted) 967d8ce4a (wiki sound.md: fade duration) 9c68b36af (wiki W0.md: first types run) a4f4a44dc (wiki pattern-matching.md: two-key map) and 525f1bd69 (units interpreter cut, no page change)), checked with
   /Users/me/dev/bin/warp (19f021863) and, for 17b6b455b and 0c2b20013, a debug build copied to scratch/docs_sync/warp.
 - notes/decisions.md read through its end at that commit.
 
-The next sweep starts with `git log --oneline a4f4a44dc..origin/main | grep -E 'feature|fix:'` and the decisions added
-since (`git diff a4f4a44dc origin/main -- notes/decisions.md`; decisions.md is grouped by topic since 13d194eec).
+The next sweep starts with `git log --oneline 525f1bd69..origin/main | grep -E 'feature|fix:'` and the decisions added
+since (`git diff 525f1bd69 origin/main -- notes/decisions.md`; decisions.md is grouped by topic since 13d194eec).
 
 ## How
 
@@ -59,8 +59,9 @@ replacement, with no card (a user decision, not a gap):
 - generators/yield: wiki/trait.md, zig.md (count_to), keyword.md's yield row if Ruby's block yield goes too.
 - compile-time lambdas, natural phrases (parked), OCaml let-in and `fun`, Elixir `def …, do:`, C++ `[](…){…}`,
   R/PHP forms (to `use R` / `use PHP`): grep the wiki for examples when each lands.
-- units interpreter edge cases (cleanup-edge: `1950 cm ± 50`, `1900 - 2000 cm`/`AD` ranges, `5 m ± 1 s`): no wiki
-  example today (checked 66dd216a9); grep again for `±` and unit ranges.
+- units interpreter: cut at 525f1bd69 (cleanup-units-interpreter); unit.md, int.md, number.md, overflow.md fences
+  run on a fresh build, no page shows a unit range or a tolerance in a unit (notes.md:11 "7000-6000 BC" is a loose
+  idea). Done.
 - reflection dot words → `a of b` ≡ `b.a`; traits as a thin alias of classes; ORM only `stored people: [Person]`.
 
 ## Not swept yet
