@@ -2,7 +2,7 @@
 // at a rate, sliced and looped; checked by rendering, so silently
 #![cfg(feature = "native")]
 use super::test_sound_voices::rendered;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const RATE: usize = 22050;
@@ -20,14 +20,14 @@ fn tone_file(name: &str) -> PathBuf {
 	path
 }
 
-fn of_sample(path: &PathBuf, program: &str) -> String {
+fn of_sample(path: &Path, program: &str) -> String {
 	format!("use sound\nkick = sample(\"{}\")\n{program}", path.display())
 }
 
 #[test]
 fn a_wav_plays_back_as_recorded() {
 	let path = tone_file("recorded");
-	let (_, original) = rendered("original", &format!("use sound\ntone(440Hz, 0.5s)\nrender_sound(\"SONG\")"));
+	let (_, original) = rendered("original", "use sound\ntone(440Hz, 0.5s)\nrender_sound(\"SONG\")");
 	let (seconds, played) = rendered("played", &of_sample(&path, "play(kick)\nrender_sound(\"SONG\")"));
 	assert_eq!(seconds, "0.5");
 	assert_eq!(played, original);

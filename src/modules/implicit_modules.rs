@@ -62,7 +62,8 @@ pub(crate) const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 /// is never compiled (its parameters would have no kinds)
 /// An implicit module with classes (units: `quantity("5 km")` gives a Quantity) in front of the program, the definitions
 /// it needs only, before class_methods: the instances its functions give then take their class's operators and methods.
-/// The program defining them now, implicit_std_modules loads it no more, nor its own `use units`
+/// The program defining them now, implicit_std_modules loads it no more, nor its own `use units`. A class of fields
+/// only (sound's Sample) needs no such move: the module stays a used module, its words lowered as before (note names)
 pub(crate) fn with_implicit_class_modules(mut program: Node) -> Node {
 	for (module, needed) in IMPLICIT_MODULES {
 		if !needed(&program) {
@@ -70,7 +71,7 @@ pub(crate) fn with_implicit_class_modules(mut program: Node) -> Node {
 		}
 		let source = std_module(module).expect("an implicit module is embedded");
 		let definitions = statements(crate::normalize::without_hints(|| WarpParser::parse(source)));
-		if definitions.iter().any(is_class) {
+		if definitions.iter().any(crate::node::is_class_with_methods) {
 			program = with_needed_definitions(without_use_of(program, module), definitions);
 		}
 	}
