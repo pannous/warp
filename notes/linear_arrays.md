@@ -27,7 +27,7 @@ picking it automatically."
 - Int cells are i64 and wrap on overflow (no big integers in a cell), unlike the automatic typed arrays.
 
 ## Implementation
-- src/lowering/shared_arrays.rs: the rewrite of `shared` arrays, with a storage kind (Host / Linear) choosing the words.
+- src/lowering/collections/shared_arrays.rs: the rewrite of `shared` arrays, with a storage kind (Host / Linear) choosing the words.
 - src/wasm_emitter/linear_arrays.rs: `linear_new/count/get/set/add` and `getf/setf/addf`, the module's own functions;
   called like C functions (signatures in crate::ffi under the library `linear`, which import_manager never imports and
   effects counts as pure), so every context gets typed i64/f64 calls.

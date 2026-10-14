@@ -706,7 +706,7 @@ fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Option<Node>) -
 			);
 			lhs
 		}
-		// kept as written, lowering/broadcasting.rs lower_element_wise_operators gives it its meaning
+		// kept as written, lowering/collections/broadcasting.rs lower_element_wise_operators gives it its meaning
 		_ if crate::operators::element_wise_operator(written).is_some() => Node::List(
 			vec![lhs, Symbol(written.to_string()), rhs],
 			Bracket::None,

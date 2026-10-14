@@ -1,4 +1,4 @@
-//! Shared arrays natively (user decision P33 step 6, lowering/shared_arrays.rs): the host holds them for the whole run,
+//! Shared arrays natively (user decision P33 step 6, lowering/collections/shared_arrays.rs): the host holds them for the whole run,
 //! every instance (the program and its tasks) reaches them through the host words, each cell an atomic Int.
 
 use crate::host::{HostState, HOST_LIBRARY, SHARED_FLOAT_WORDS, SHARED_WORDS, SHARED_WRITES};

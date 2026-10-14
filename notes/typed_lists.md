@@ -119,7 +119,7 @@ checked like a declared scalar:
   `names: texts = [420]`, a reassignment `names = [420]`, an append `names.add(420)` / `names = names + [420]`, an element
   `names#1 = 420`; a field's constructor (`type_constructor::field_error`) and its append `b.items.add(420)`
   (`struct_backend::misfit_list_item`).
-- Items known only at run time are checked at the store (lowering/list_element_checks.rs, first MEANING pass):
+- Items known only at run time are checked at the store (lowering/collections/list_element_checks.rs, first MEANING pass):
   `if not (v is text) { raise "…" }` as a statement before the store, a call's item held in a temporary `checked·N`
   first, a whole list from a call checked item by item. The store keeps its form, so a typed int list stays an array.
 - `names = other + [v]` checks the items of `other` in a for-loop too, unless `other` is `names` itself or declared
@@ -133,7 +133,7 @@ checked like a declared scalar:
 - Parameters (`f(xs: texts)` called with `[420]`): warp-7c's param-types work (functions2, checks.rs
   `declared_element_type`, `elements_fit`).
 - A receiver inside an element (`bags#1.n = 5`, `bags#1.items.add(v)`, `bags#1.items#1 = v`) is taken out into
-  `nested·N`, changed, checked and written back (lowering/nested_index.rs); a receiver that is a call's result
+  `nested·N`, changed, checked and written back (lowering/collections/nested_index.rs); a receiver that is a call's result
   (`make().n = 5`) is the error "make() gives a copy" (card list-field-receivers).
 - A character stored into a list of unknown static type (one read from a field) goes as its Node; node_with_at took
   it as an Int, so `x#1 = "z"` gave `[122]` (list_ops `is_exact_int_element`).
