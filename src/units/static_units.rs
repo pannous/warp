@@ -190,7 +190,9 @@ impl Inference {
 		let mut definitions = HashMap::new();
 		program.visit(&mut |node| {
 			if let Some((name, definition)) = function_definition(node) {
-				definitions.insert((name, definition.parameters.len()), definition);
+				for arity in definition.required()..=definition.parameters.len() {
+					definitions.insert((name.clone(), arity), definition.clone());
+				}
 			}
 		});
 		Inference {
@@ -523,26 +525,40 @@ fn dimension_error(op: Op, left: &Signature, right: &Signature) -> Stop {
 #[derive(Clone)]
 struct Definition {
 	parameters: Vec<String>,
+	/// `t = 1s`: what a call leaving the parameter out gives
+	defaults: Vec<Option<Node>>,
 	body: Node,
+}
+
+impl Definition {
+	/// The fewest arguments a call gives: the parameters before the trailing defaults
+	fn required(&self) -> usize {
+		self.defaults
+			.iter()
+			.rposition(Option::is_none)
+			.map_or(0, |last| last + 1)
+	}
 }
 
 fn function_definition(node: &Node) -> Option<(String, Definition)> {
 	let definition =
 		function_head(node).filter(|definition| definition.is_glued_head() && definition.plain_operator().is_some())?;
-	let parameters = definition
+	let (parameters, defaults) = definition
 		.written_parameters
 		.iter()
 		.map(|parameter| match parameter.drop_meta() {
-			Node::Symbol(name) => Some(name.clone()),
-			// `t = 0.05`: a call giving every argument specialises it; one leaving t out is no specialisation
-			Node::Key(name, Op::Colon | Op::Assign, _) => Some(name.name()),
+			Node::Symbol(name) => Some((name.clone(), None)),
+			Node::Key(name, Op::Colon, _) => Some((name.name(), None)),
+			// `t = 1s`: a call leaving t out gives the default
+			Node::Key(name, Op::Assign, default) => Some((name.name(), Some(default.as_ref().clone()))),
 			_ => None,
 		})
-		.collect::<Option<Vec<_>>>()?;
+		.collect::<Option<(Vec<_>, Vec<_>)>>()?;
 	Some((
 		definition.name.to_string(),
 		Definition {
 			parameters,
+			defaults,
 			body: definition.body.clone(),
 		},
 	))
@@ -714,12 +730,8 @@ fn object_entries(value: &Node) -> Option<Vec<(Node, Op, Node)>> {
 impl Inference {
 	fn infer(&mut self, node: Node) -> Result<(Node, Signature), Stop> {
 		if let Some((_, definition)) = function_definition(&node) {
-			// a body with unit literals compiles only in its specialisations
-			let kept = if self.has_units(&definition.body) {
-				Node::Empty
-			} else {
-				node
-			};
+			// a body or default with unit literals compiles only in its specialisations
+			let kept = if self.has_units(&definition) { Node::Empty } else { node };
 			return Ok((kept, vec![]));
 		}
 		if let Some(construction) = self.named_construction(&node) {
