@@ -27,9 +27,6 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - cleanup-bold (2026-10-14): "get rid of everything you can without asking": clearly superfluous code, duplicate
   paths, unused or rarely-run branches go without a question; we have everything in GitHub. The suite may drop to
   80 % passing (failures marked cleanup-edge as above, so they stay countable); samples and the tour should still run.
-- implicit-key (2026-10-14): `key` has a special role and stays a highlighted word: in a loop over a map it names
-  the current key, like `it` names the current item (`for {a:1} { print key }` prints a; a written loop variable
-  `for key in {a:1}` gets a too). Sublime colors it as an implicit name with it, self, result (probes/implicit_key.warp).
 - restructuring (2026-10-14): new major roadmap after the diff review found few duplicates. Inventory every function
   by name, move functions to the file their concept belongs to (a general parser holds no keyword-specific syntax:
   `finish_if_prefix` goes to e.g. control/if.rs), and have agents check suspiciously similar names for true
