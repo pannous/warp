@@ -4,8 +4,9 @@
 //! velocity (1..127); a file is a list of them flattened. Files are format 0, 480 ticks a quarter at 120 beats per
 //! minute (960 ticks a second), so a millisecond is a whole number of ticks to within 5%: ticks are rounded, not kept.
 //! Live output goes to `sendmidi` when the user may hear it; headless (tests, CI, WARP_NO_WINDOW) only a
-//! `midi out <port>: 90 3c 64` line on stderr, as sound prints its WAV. Live input has no backend yet, natively or in the
-//! playground (its Web MIDI input stays on the page, out of the program's Worker): it fails loudly (card midi-receive).
+//! `midi out <port>: 90 3c 64` line on stderr, as sound prints its WAV. A message goes out at its voice's moment like a
+//! sound (card midi-clock): after the sounds before it, or at an `at`'s time. Live input has no backend yet, natively or
+//! in the playground (its Web MIDI input stays on the page, out of the program's Worker): it fails loudly (card midi-receive).
 
 use std::process::Command;
 
@@ -192,24 +193,33 @@ fn read_track(
 	Ok(())
 }
 
-/// A message of up to three bytes to the output `port` ("" the first one)
+/// A message of up to three bytes to the output `port` ("" the first one), at its voice's moment (card midi-clock):
+/// after the sounds queued before it, or at an `at`'s time; headless the line names that place on the voice
 pub fn send(port: &str, bytes: &[u8]) -> Result<(), String> {
 	if bytes.is_empty() {
 		return Err("a MIDI message has at least a status byte".into());
 	}
 	let hex = bytes.iter().map(|byte| format!("{byte:02x}")).collect::<Vec<_>>();
 	if !crate::graphics::paint::shows_windows() {
-		eprintln!("midi out {port}: {}", hex.join(" "));
+		let (_, place) = crate::sound::moment();
+		let at = if place > 0.0 { format!(" at {place:.3} s") } else { String::new() };
+		eprintln!("midi out {port}: {}{at}", hex.join(" "));
 		return Ok(());
 	}
+	crate::host::sandbox::check_process("midi.send")?;
+	let port = port.to_string();
+	crate::sound::on_clock(move || sent(&port, &hex))
+}
+
+/// The message's hex bytes handed to the sender now
+fn sent(port: &str, hex: &[String]) -> Result<(), String> {
 	let port = if port.is_empty() {
 		outputs()?.into_iter().next().ok_or("no MIDI output devices found")?
 	} else {
 		port.to_string()
 	};
-	crate::host::sandbox::check_process("midi.send")?;
 	let status =
-		Command::new(SENDER).args(["dev", &port, "hex"]).args(&hex).status().map_err(|failure| no_backend(&failure))?;
+		Command::new(SENDER).args(["dev", &port, "hex"]).args(hex).status().map_err(|failure| no_backend(&failure))?;
 	status.success().then_some(()).ok_or_else(|| format!("{SENDER} failed ({status}) sending to {port}"))
 }
 

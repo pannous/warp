@@ -63,7 +63,13 @@ Natively a message goes to `sendmidi` (brew install gbevin/tools/sendmidi; missi
 `midi out <port>: 90 3c 64` on stderr. Browser: Web MIDI on the page (playground.js sendMidi, first output or by name,
 failures to the console). Open, each failing loudly today (card midi-receive): `midi_receive()` (no CoreMIDI binding natively: needs the midir
 crate or libloading CoreMIDI; in the browser the page's input would have to be handed to the Worker), `midi_outputs()` in the
-browser (a Worker cannot wait for the page's device list), clock-timed MIDI (messages are immediate, not scheduled with `at`; card midi-clock).
+browser (a Worker cannot wait for the page's device list), 
+Clock-timed built (card midi-clock): a message goes out at its voice's moment (sound.rs moment / on_clock): after the
+sounds queued before it, at an `at`'s time, in a task on its own voice; natively a thread sleeping until then (wait_sound
+and the process's end wait for it, stop_sound drops it), headless the line names the place (`midi out : 90 40 64 at 0.500 s`),
+in the browser Web MIDI's own timestamp (host-sound.js voiceSounded(0).at → playground.js output.send(message, time)).
+`midi_note(pitch, duration, velocity, channel)` is on, the voice resting the duration (std_io sound.rest: the voice goes on
+without a sound), off. Messages from task Workers in the browser still go nowhere (not relayed to the page).
 A loop variable named `note` inside lib/sound.warp breaks: `note` is the module's own word ("not a list").
 
 ## Probes and quirks (from the warp-sound handover, 2026-10-10)
