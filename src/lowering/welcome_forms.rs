@@ -254,7 +254,9 @@ fn forms(node: Node) -> Node {
 
 /// Rust's `let mut x = 1`: `var x = 1`, with a note naming var
 fn let_mut(keyword: &Node, modifier: &Node, declaration: &Node, name: &Node) -> Option<Node> {
-	let modifier = modifier.symbol_name().filter(|word| crate::words::MUTABLE_WORDS.contains(word))?;
+	let modifier = modifier
+		.symbol_name()
+		.filter(|word| crate::words::MUTABLE_WORDS.contains(word))?;
 	let name = name.serialize();
 	crate::normalize::set_position_of(keyword);
 	crate::diagnostic::educate_once(
