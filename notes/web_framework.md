@@ -535,7 +535,7 @@ Each step is useful on its own and is what the next ones stand on.
   objects, promises and overloads with differing returns stay untyped foreign values. Fixed alongside: `(f() as text)`
   / `str(…)` of a foreign call gave the source of the call (emitter mentions_call now counts host::VALUE_GIVING_WORDS).
 - Nullable results (card text-generally): `DOMString?` is `text?` (web_idl.rs optional_result_type), lowered by
-  src/lowering/optional_casts.rs: `x as T?` keeps ø, any other value is cast to T, the call held once in `optional·N`.
+  src/lowering/types/optional_casts.rs: `x as T?` keeps ø, any other value is cast to T, the call held once in `optional·N`.
   Natively a JS null (getItem of a missing key) arrives as ø (foreign.rs plain), no longer as a handle of null.
 - DOM (slice 5): the bundle adds Document, Element, NodeList, HTMLCollection, DOMTokenList, Event and every
   HTML…Element of html.idl (lib/web.webidl ~100 KB; arguments in scripts/webidl_bundle.py's docstring). What an

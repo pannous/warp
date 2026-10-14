@@ -15,7 +15,7 @@ program the model rejects, that is a **hole** (listed at the end, each with its 
 Warp has no single type checker. Static typing is spread over passes that each refuse one kind of mistake:
 `analyzer::check_type_errors`/`check_assignment` (variable kinds), `check_kind_changes` (P45), `check_declared_types`
 (`x:int = …`), `check_constants` (P130), charged `:=` (P71/P138), parameter checks in user_functions.rs (P49) and
-lowering/traits.rs `admit`, and the operator checks in inference.rs `node_arithmetic`. The model W0 is the single
+lowering/types/traits.rs `admit`, and the operator checks in inference.rs `node_arithmetic`. The model W0 is the single
 judgment those passes approximate. The contract: **warp rejects ⇐ W0 rejects** (soundness of the implementation is
 what we want; every program W0 rejects should be refused by warp at compile time). Warp may refuse more (it refuses
 ambiguous forms per notes/welcoming.md), never less, except at a listed hole.

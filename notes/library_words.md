@@ -96,7 +96,7 @@ Any other hyphenated name stays a symbol. test_hyphen_units stays ignored: it ne
 
 # Type tests
 
-`src/lowering/type_tests.rs` (first lowering pass): a type phrase after `is` (or `==`) turns equality into `is_type(x, "spec")`:
+`src/lowering/types/type_tests.rs` (first lowering pass): a type phrase after `is` (or `==`) turns equality into `is_type(x, "spec")`:
 `3 is int`, `x is a number` (a/an optional), `[1 2] is list of int`, `[1 2] is ints`, `π is real`. The emitter answers it statically from the
 name `type(x)` reports (`static_type_name`); `type_matches`: `number` covers int, rational, real, float; `real` covers int, rational,
 real; `rational` covers int; `list of number` covers every list of numbers; `text` also accepts a codepoint (a one-character string).

@@ -137,7 +137,7 @@ Item patterns (step 3, card list-pattern): `[[n, s]...]` in a list pattern's res
 matches; each name binds the list of its values (switch::every_item_test, a while loop over the rest slice).
 Named patterns (step 4, card patterns-values, user: the keyword): `pattern Adult = {age: >= 18}`; `x is Adult`, arms
 `Adult =>`, `it is Adult and Admin`; names inside bind. A plain `Name = …` is a value; one whose right side only a
-pattern can be (`_`, `..`, an item pattern) is an error with the fix `pattern Name = …` (src/lowering/named_patterns.rs,
+pattern can be (`_`, `..`, an item pattern) is an error with the fix `pattern Name = …` (src/lowering/types/named_patterns.rs,
 substitutes the pattern before lower_where).
 Probes: probes/matching/arms.warp, whole_value.warp; inventory with a fresh build: 35 of 48 before tuples, is and
 bare names.

@@ -118,7 +118,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 
 ## 2026-10-05 fix-is-declaration
 - `x is number 9` of a name assigned nowhere (and no parameter) declares it, `x:number = 9` (wiki Features.md,
-  inventions.md); of a variable it stays the type-and-value test (lowering/type_tests.rs is_declaration).
+  inventions.md); of a variable it stays the type-and-value test (lowering/types/type_tests.rs is_declaration).
 
 ## 2026-10-05 fix-raise
 - `raise X` / `throw X` / `raise error("m")`: the builtin raise(X) fails the run through returned_error with X as its
