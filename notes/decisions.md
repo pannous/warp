@@ -9,6 +9,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 (2026-09-29/30).
 
 ## Priorities and process
+- reviewer-role (2026-10-15, user: "definitely yes"): warp-reviewer reviews each merge request's diff in parallel with
+  the Integrator's gate, polishes small things itself in a follow-up commit, vetoes unsound changes before the push,
+  and sends structural findings to the Refactorer as cards.
 - matching-first (2026-10-13): the matching roadmap (card matching-create) comes before any further self-hosting.
 - self-hosting (2026-10-12): for dogfooding, independence from Rust and as a showcase; parser first, each warp part a
   twin of its Rust part with a differential test over every sample; gaps are fixed in the language (notes/self_hosting.md).
@@ -78,6 +81,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   submitted field's value.
 - call-as-grouping (2026-10-15): `f x as T` is `f(x as T)` everywhere, like `f 2 + 1` = `f(2 + 1)`, with a warning
   naming `f(x as T)` and `(f x) as T`; dispatch on the result goes via `pdf p = render "x"` or `(render "x") as pdf`.
+- uniscript-binary-import (2026-10-15, user: "definitely yes"): ~/dev/uniscript gets wasm-only c/ffi additions
+  (malloc/free, uniscript_error, uniscript_warnings) and release v1.0.8 ships uniscript_c.wasm + uniscript_c.h;
+  `use uniscript` imports the prebuilt module (1.45–2.9 s → 0.27–0.57 s per run).
 - chars-codepoints (2026-10-14, the user's draft `['a','b','c']`): `"abc".chars` is a list of characters (codepoints),
   printing `['a' 'b' 'c']`; a literal `['a' 'b']` keeps its characters; `'a' == "a"` stays yes. A one-character text is a character, so
   `["a" "b"]` prints `['a' 'b']` and `["a" "bc"]` prints `['a' "bc"]`.
