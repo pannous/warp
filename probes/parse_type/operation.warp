@@ -1,0 +1,3 @@
+print parse("1+1").type
+print parse("a:1").type
+print parse("1+1") is expression
