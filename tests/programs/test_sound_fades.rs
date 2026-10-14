@@ -38,7 +38,7 @@ fn loudest(samples: &[i16], from: f64, to: f64) -> i16 {
 
 #[test]
 fn fade_sound_ramps_a_sound_down_in_the_render() {
-	let samples = rendered_samples("h = tone(440Hz, 1s)\nfade_sound(h, 0, 0.4)", "out");
+	let samples = rendered_samples("h = tone 440Hz for 1s\nfade_sound(h, 0, 0.4)", "out");
 	assert!(
 		loudest(&samples, 0.02, 0.1) > 3 * loudest(&samples, 0.32, 0.38),
 		"the ramp goes down"
@@ -49,15 +49,21 @@ fn fade_sound_ramps_a_sound_down_in_the_render() {
 /// Headless nothing plays, so the speaker stays at the start: however long the program takes, its fade begins there
 #[test]
 fn a_headless_fade_waits_for_no_clock() {
-	let samples = rendered_samples("a = tone(440Hz, 1s)\nsleep 500ms\nfade_sound(a, 0, 0.1)", "slow");
+	let samples = rendered_samples("a = tone 440Hz for 1s\nsleep 500ms\nfade_sound(a, 0, 0.1)", "slow");
 	assert!(loudest(&samples, 0.3, 0.9) < QUIET, "a faded out from the start");
 }
 
 #[test]
 fn fade_sound_of_one_handle_leaves_the_others() {
-	let samples = rendered_samples("a = tone(440Hz, 1s)\nb = tone(440Hz, 1s)\nfade_sound(a, 0, 0.1)", "one");
+	let samples = rendered_samples(
+		"a = tone 440Hz for 1s\nb = tone 440Hz for 1s\nfade_sound(a, 0, 0.1)",
+		"one",
+	);
 	assert!(loudest(&samples, 0.3, 0.9) < QUIET, "a faded out");
 	assert!(loudest(&samples, 1.1, 1.9) > 1000, "b plays on");
-	let samples = rendered_samples("a = tone(440Hz, 1s)\nb = tone(440Hz, 1s)\nfade_sound(0, 0, 0.1)", "all");
+	let samples = rendered_samples(
+		"a = tone 440Hz for 1s\nb = tone 440Hz for 1s\nfade_sound(0, 0, 0.1)",
+		"all",
+	);
 	assert!(loudest(&samples, 0.3, 1.9) < QUIET, "handle 0 fades all");
 }

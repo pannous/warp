@@ -7,7 +7,7 @@ use crate::is;
 const SONG: &str = "rendered/song.wav";
 
 fn rendered(then: &str) -> String {
-	format!("use sound\nplay(C4, 0.1s)\nmelody([C4 E4], 0.05s)\nseconds = render_sound(\"{SONG}\")\nwav = read(\"{SONG}\")\n{then}")
+	format!("use sound\nplay C4 for 0.1s\nmelody [C4 E4] each 0.05s\nseconds = render_sound(\"{SONG}\")\nwav = read(\"{SONG}\")\n{then}")
 }
 
 #[test]
@@ -28,6 +28,6 @@ fn a_rendered_wav_is_a_file_of_the_page() {
 
 #[test]
 fn a_render_takes_the_sounds_after_the_last_one() {
-	is!("use sound\nplay(C4, 0.2s)\nrender_sound(\"first.wav\")\nplay(E4, 0.1s)\nround(render_sound(\"second.wav\") * 10)", 1);
+	is!("use sound\nplay C4 for 0.2s\nrender_sound(\"first.wav\")\nplay E4 for 0.1s\nround(render_sound(\"second.wav\") * 10)", 1);
 	is!("use sound\nround(render_sound(\"nothing.wav\"))", 0);
 }

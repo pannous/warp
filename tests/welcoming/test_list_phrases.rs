@@ -4,7 +4,6 @@
 use crate::is;
 use warp::warp_parser::parse;
 
-#[ignore = "parked: may be re-implemented purely via preposition parameters"]
 #[test]
 fn keep_only_a_property() {
 	is!("[3, -1, 2, -4].keep only positive", parse("[3 2]"));
@@ -14,7 +13,6 @@ fn keep_only_a_property() {
 	is!("small(n) := n < 3; [1, 2, 3, 4].keep only small", parse("[1 2]"));
 }
 
-#[ignore = "parked: may be re-implemented purely via preposition parameters"]
 #[test]
 fn sort_by_a_key() {
 	is!("[\"bbb\", \"a\", \"cc\"].sort by size", parse("['a' \"cc\" \"bbb\"]"));
@@ -25,13 +23,11 @@ fn sort_by_a_key() {
 	);
 }
 
-#[ignore = "parked: may be re-implemented purely via preposition parameters"]
 #[test]
 fn take_first_n() {
 	is!("[1, 2, 3, 4].take first 2", parse("[1 2]"));
 }
 
-#[ignore = "parked: may be re-implemented purely via preposition parameters"]
 #[test]
 fn a_chain_of_phrases() {
 	is!("words = [\"ccc\", \"\", \"a\", \"bb\"]\nfull(t) := count(t) > 0\nresult = words\n    .keep only full\n    .sort by size\n    .take first 2\nresult", parse("['a' \"bb\"]"));
@@ -45,7 +41,6 @@ fn a_method_of_a_parenthesized_filter() {
 }
 
 /// card todo-app robustness: `todos sorted by priority` as written without a dot, and `sorted` as `sort`
-#[ignore = "parked: may be re-implemented purely via preposition parameters"]
 #[test]
 fn sorted_by_a_field_without_a_dot() {
 	is!(

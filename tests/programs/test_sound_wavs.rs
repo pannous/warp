@@ -20,7 +20,7 @@ fn sound_paths(tmpdir: &std::path::Path, program: &str) -> Vec<String> {
 fn each_run_writes_wavs_of_its_own() {
 	let tmpdir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("sound-wavs");
 	std::fs::create_dir_all(&tmpdir).unwrap();
-	let program = "play(C4, 5ms)\nplay(E4, 5ms)\n7";
+	let program = "play C4 for 5ms\nplay E4 for 5ms\n7";
 	let (first, second) = (sound_paths(&tmpdir, program), sound_paths(&tmpdir, program));
 	assert_eq!((first.len(), second.len()), (2, 2), "{first:?} {second:?}");
 	assert_ne!(first[0], first[1]);

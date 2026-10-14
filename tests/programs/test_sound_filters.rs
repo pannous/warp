@@ -44,7 +44,7 @@ fn vibrato_bends_the_pitch() {
 #[test]
 fn unison_voices_are_detuned() {
 	is!("use sound\nunison = 3\ndetune = 0.2\nv = voices_of([440])\ncount(v) == 3 and v[1] == 440 and v[0] < 440 and v[2] > 440", true);
-	is!("unison = 2\nplay(C4, 5ms)\n1", 1);
+	is!("unison = 2\nplay C4 for 5ms\n1", 1);
 }
 
 // card out-variable: a program's own `out` and the filter's local `out` stay apart, whatever type the program's holds

@@ -83,8 +83,8 @@ fn fade_sound_takes_a_handle_of_the_run() {
 			.trim_start_matches("» ")
 			.to_string()
 	};
-	assert_eq!(printed("h = play(C4, 5ms)\nfade_sound(h, 0, 0.002)\n7"), "7");
-	assert!(printed("play(C4, 5ms)\nfade_sound(9, 0)").contains("no sound 9 in this run"));
+	assert_eq!(printed("h = play C4 for 5ms\nfade_sound(h, 0, 0.002)\n7"), "7");
+	assert!(printed("play C4 for 5ms\nfade_sound(9, 0)").contains("no sound 9 in this run"));
 }
 
 // card real-time: a signal's blocks (one handle, 512 samples at 44.1 kHz each) on a 48 kHz device join without a gap

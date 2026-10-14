@@ -1,5 +1,5 @@
 // Card statement-block: a block of one statement runs it as a program of that statement does, also when its word is a
-// a function has several definitions (`play(x)`, `play(x, duration)`): `f() := {play("x.wav")}`
+// phrase (`to add a to b`) or has several definitions (`to play x`, `to play x for duration`): `f() := {play "x.wav"}`
 // plays, it returned the data `{play "x.wav"}`; `x = {…}` still assigns the data as written
 use crate::is;
 use warp::wasm_emitter::eval;
@@ -8,7 +8,6 @@ const BOOP: &str = "to boop x: x + 1; to boop x for y: x + y; ";
 const MISSING_FILE_ERROR: &str = "cannot open x.wav";
 
 #[test]
-#[ignore = "parked: may be re-implemented purely via preposition parameters"]
 fn a_block_of_one_phrase_call_runs_it() {
 	is!("to add a to b: a + b; f() := {add 1 to 2}; f()", 3);
 	is!(&format!("{BOOP}f() := {{boop 2}}; f()"), 3);

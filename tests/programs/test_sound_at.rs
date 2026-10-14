@@ -10,7 +10,7 @@ const RATE: usize = 22050;
 fn a_statement_sounds_inside_another() {
 	let (seconds, samples) = rendered(
 		"inside",
-		"use sound\nplay(C4, 0.5s)\nat 0.1s play(E4, 0.2s)\nrender_sound(\"SONG\")",
+		"use sound\nplay C4 for 0.5s\nat 0.1s play E4 for 0.2s\nrender_sound(\"SONG\")",
 	);
 	assert_eq!(seconds, "0.5");
 	assert_eq!(samples.len(), RATE / 2);
@@ -18,7 +18,7 @@ fn a_statement_sounds_inside_another() {
 
 #[test]
 fn beats_place_a_block() {
-	let program = "use sound\ntempo = 120\nat 2 beats play(C4, 1 beat)\nat 0 beats { play(E4, 0.25s)\nplay(G4, 0.25s) }\nrender_sound(\"SONG\")";
+	let program = "use sound\ntempo = 120\nat 2 beats play C4 for 1 beat\nat 0 beats { play E4 for 0.25s\nplay G4 for 0.25s }\nrender_sound(\"SONG\")";
 	let (seconds, samples) = rendered("beats", program);
 	assert_eq!(seconds, "1.5");
 	assert!(
@@ -31,7 +31,7 @@ fn beats_place_a_block() {
 fn the_silence_before_stays_and_the_voice_goes_on() {
 	let (seconds, samples) = rendered(
 		"before",
-		"use sound\nat 1s beep()\nplay(C4, 0.1s)\nrender_sound(\"SONG\")",
+		"use sound\nat 1s beep()\nplay C4 for 0.1s\nrender_sound(\"SONG\")",
 	);
 	assert!(seconds.starts_with("1.15"), "{seconds}"); // the beep's 0.15 s to the whole sample
 	assert!(

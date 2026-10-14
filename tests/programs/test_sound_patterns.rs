@@ -33,14 +33,17 @@ fn a_bar_without_duration() {
 
 #[test]
 fn a_rest_is_silent() {
-	let (_, samples) = rendered("rest", "use sound\npattern(\"~ c4\", 1s)\nrender_sound(\"SONG\")");
+	let (_, samples) = rendered("rest", "use sound\npattern \"~ c4\" for 1s\nrender_sound(\"SONG\")");
 	assert!(silent(&samples[..RATE / 2 - 10]), "the rest");
 	assert!(!silent(&samples[RATE / 2..]), "the note");
 }
 
 #[test]
 fn euclid_spreads_three_notes_over_eight_steps() {
-	let (_, samples) = rendered("euclid", "use sound\npattern(\"c4(3,8)\", 1s)\nrender_sound(\"SONG\")");
+	let (_, samples) = rendered(
+		"euclid",
+		"use sound\npattern \"c4(3,8)\" for 1s\nrender_sound(\"SONG\")",
+	);
 	let sounding: Vec<bool> = (0..8)
 		.map(|step| !silent(&samples[step * RATE / 8 + 50..(step + 1) * RATE / 8 - 50]))
 		.collect();
@@ -49,10 +52,10 @@ fn euclid_spreads_three_notes_over_eight_steps() {
 
 #[test]
 fn swing_holds_the_first_note_longer() {
-	let (_, straight) = rendered("straight", "use sound\npattern(\"c4 ~\", 1s)\nrender_sound(\"SONG\")");
+	let (_, straight) = rendered("straight", "use sound\npattern \"c4 ~\" for 1s\nrender_sound(\"SONG\")");
 	let (_, swung) = rendered(
 		"swung",
-		"use sound\nswing = 1\npattern(\"c4 ~\", 1s)\nrender_sound(\"SONG\")",
+		"use sound\nswing = 1\npattern \"c4 ~\" for 1s\nrender_sound(\"SONG\")",
 	);
 	assert!(silent(&straight[RATE * 6 / 10..RATE * 9 / 10]));
 	assert!(
@@ -63,17 +66,14 @@ fn swing_holds_the_first_note_longer() {
 
 #[test]
 fn a_live_loop_is_a_voice_that_repeats() {
-	let (seconds, samples) = rendered(
-		"loop",
-		"use sound\ntempo = 120\nlive_loop 3 { pattern(\"c4 e4\", 1 beat) }\nawait live_voice\nrender_sound(\"SONG\")",
-	);
+	let (seconds, samples) = rendered("loop", "use sound\ntempo = 120\nlive_loop 3 { pattern \"c4 e4\" for 1 beat }\nawait live_voice\nrender_sound(\"SONG\")");
 	assert_eq!(seconds, "1.5");
 	assert_eq!(samples.len(), RATE * 3 / 2);
 }
 
 #[test]
 fn live_loops_play_along() {
-	let program = "use sound\ntempo = 120\nlive_loop 2 { pattern(\"c4 e4\", 1 beat) }\nplay(G3, 1 bar)\nawait live_voice\nrender_sound(\"SONG\")";
+	let program = "use sound\ntempo = 120\nlive_loop 2 { pattern \"c4 e4\" for 1 beat }\nplay G3 for 1 bar\nawait live_voice\nrender_sound(\"SONG\")";
 	let (seconds, _) = rendered("along", program);
 	assert_eq!(seconds, "2");
 }

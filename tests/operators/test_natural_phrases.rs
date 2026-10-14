@@ -11,7 +11,6 @@ fn modulo_is_mod() {
 
 /// a function word the parser reads as a prefix operator is a sort key too
 #[test]
-#[ignore = "parked: may be re-implemented purely via preposition parameters"]
 fn sort_by_a_prefix_function() {
 	is!("numbers = [3, -5, 2]; numbers.sort by abs", warp::ints(vec![2, 3, -5]));
 	is!(
@@ -35,7 +34,6 @@ fn number_word_hint_is_where_it_is_written() {
 
 /// card glued-chain: on one line `abs.take` is the key abs, then the method take, not abs of `.take`
 #[test]
-#[ignore = "parked: may be re-implemented purely via preposition parameters"]
 fn glued_chain_after_a_prefix_function() {
 	is!(
 		"xs = [3, -1, 2]; xs.keep only positive.sort by abs.take first 1",

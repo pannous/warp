@@ -2,7 +2,6 @@
 // last word its parameter: `with subject title` is called `with subject "hi"`
 use crate::is;
 
-#[ignore = "parked: may be re-implemented purely via preposition parameters"]
 #[test]
 fn an_unused_word_after_a_preposition_belongs_to_the_phrase() {
 	is!(
@@ -15,14 +14,12 @@ fn an_unused_word_after_a_preposition_belongs_to_the_phrase() {
 	);
 }
 
-#[ignore = "parked: may be re-implemented purely via preposition parameters"]
 #[test]
 fn used_words_stay_parameters() {
 	is!("to add number a to number b: a+b; add 1 to 2", 3);
 	is!("to f x y: y; f 1 2", 2);
 }
 
-#[ignore = "parked: may be re-implemented purely via preposition parameters"]
 #[test]
 fn the_phrases_sample_runs() {
 	is!("samples/phrases.warp", "hi for a@b: see you");
