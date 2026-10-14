@@ -11,6 +11,7 @@ use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::wasm_emitter::time_zones::{EARLIER, LATER, REJECT};
 pub use calendar::{with_rules, Disambiguation, Duration, Overflow, Time, TzRules, Zone, Zoned};
+use std::collections::{HashMap, HashSet};
 
 pub const NOW_WORD: &str = "now";
 /// instant_at(milliseconds since 1970): the instant node `now` is at run time
@@ -207,11 +208,59 @@ pub fn lower(program: Node) -> Node {
 	if !mentions_time(&program) || !needs_folding(&program) {
 		return program;
 	}
-	fold_constants(program)
+	let constants = time_constants(&program);
+	fold_constants(program, &constants)
+}
+
+/// The variables assigned a constant time expression once and never a parameter: `d = 1 day` (card
+/// duration-var-in-unit), so `d in h` converts at compile time like `1 day in h`
+fn time_constants(program: &Node) -> HashMap<String, Node> {
+	let mut assigned: HashMap<String, Vec<Node>> = HashMap::new();
+	let mut parameters = HashSet::new();
+	program.visit(&mut |part| match part {
+		Node::Key(head, Op::Define, _) if matches!(head.drop_meta(), Node::List(..)) => head.visit(&mut |word| {
+			if let Node::Symbol(name) = word {
+				parameters.insert(name.clone());
+			}
+		}),
+		Node::Key(target, op, value) if matches!(op, Op::Assign | Op::Define) || op.is_compound_assign() => {
+			if let Node::Symbol(name) = target.drop_meta() {
+				assigned.entry(name.clone()).or_default().push(value.as_ref().clone());
+			}
+		}
+		_ => {}
+	});
+	assigned
+		.into_iter()
+		.filter(|(name, values)| !parameters.contains(name) && values.len() == 1)
+		.filter_map(|(name, mut values)| {
+			let value = values.remove(0);
+			(mentions_time(&value) && only_time_words(&value)).then_some((name, value))
+		})
+		.collect()
+}
+
+/// `d in h` of a time constant d: `<its value> in h`
+fn with_constant_subject(node: Node, constants: &HashMap<String, Node>) -> Node {
+	match node {
+		Node::List(mut items, bracket, separator) if converted_to_unit(&items) => {
+			if let Node::Symbol(name) = items[0].drop_meta() {
+				if let Some(value) = constants.get(name) {
+					items[0] = value.clone();
+				}
+			}
+			Node::List(items, bracket, separator)
+		}
+		Node::Key(subject, Op::As, unit) if matches!(subject.drop_meta(), Node::Symbol(name) if constants.contains_key(name)) => {
+			Node::Key(Box::new(constants[&subject.name()].clone()), Op::As, unit)
+		}
+		other => other,
+	}
 }
 
 /// The largest expressions of time literals and time words alone, folded: what remains runs
-fn fold_constants(node: Node) -> Node {
+fn fold_constants(node: Node, constants: &HashMap<String, Node>) -> Node {
+	let node = with_constant_subject(node, constants);
 	if mentions_time(&node) && only_time_words(&node) {
 		match evaluate(&node) {
 			// a quantity, `2 hours in minutes`: written as `120min` for the units' lowering
@@ -227,14 +276,17 @@ fn fold_constants(node: Node) -> Node {
 		Node::Data(_) if time_data(&node) => not_at_run_time_yet(&node.serialize()),
 		// `(t in "UTC").year`: the group around a placement is its call's own
 		Node::List(mut items, Bracket::Round, _) if items.len() == 1 && zone_placement(&items[0]).is_some() => {
-			fold_constants(items.remove(0))
+			fold_constants(items.remove(0), constants)
 		}
 		Node::List(..) if zone_placement(&node).is_some() => {
 			let (time, zone, choice) = zone_placement(&node).expect("guarded");
 			let number = |n: i64| Node::Number(Number::Int(n));
-			crate::lowering::nodes::call(TIME_IN_ZONE, vec![fold_constants(time), number(zone), number(choice)])
+			crate::lowering::nodes::call(
+				TIME_IN_ZONE,
+				vec![fold_constants(time, constants), number(zone), number(choice)],
+			)
 		}
-		other => other.map_children(fold_constants),
+		other => other.map_children(|child| fold_constants(child, constants)),
 	}
 }
 
@@ -282,6 +334,9 @@ fn only_time_words(node: &Node) -> bool {
 		Node::Symbol(word) => is_time_word(word),
 		// a field name: `2024-02-29.month`
 		Node::Key(owner, Op::Dot, field) if matches!(field.drop_meta(), Node::Symbol(_)) => only_time_words(owner),
+		Node::Key(left, Op::As, unit) if matches!(unit.drop_meta(), Node::Symbol(word) if crate::units::names_unit(word)) => {
+			only_time_words(left)
+		}
 		Node::Key(left, _, right) => only_time_words(left) && only_time_words(right),
 		// a duration in a unit of the units module: `1 day in h`
 		Node::List(items, _, _) if converted_to_unit(items) => only_time_words(&items[0]),
@@ -295,7 +350,7 @@ fn converted_to_unit(items: &[Node]) -> bool {
 	match items {
 		[_, keyword, unit] => {
 			(keyword.is_symbol("in") || keyword.is_symbol("as"))
-				&& matches!(unit.drop_meta(), Node::Symbol(word) if crate::units::names_unit(word))
+				&& matches!(unit.drop_meta(), Node::Symbol(word) if crate::units::names_unit(word) || is_time_word(word))
 		}
 		_ => false,
 	}
