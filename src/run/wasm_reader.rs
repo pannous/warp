@@ -452,31 +452,9 @@ fn struct_node<T>(
 	let mut node = |val: &Val| node_along(val, store, memory, path);
 	match tag {
 		t if t == Kind::Empty as u8 => Node::Empty,
-		t if t == Kind::Int as u8 && high_byte == crate::type_kinds::BOOL_INFO => match read_payload(store, &data) {
-			Ok(Number::Int(0)) => Node::False,
-			_ => Node::True,
-		},
-		t if t == Kind::Int as u8 && crate::wasm_emitter::numbers::radix::radix_of_info(high_byte).is_some() => {
-			match read_payload(store, &data) {
-				Ok(Number::Int(value)) => Node::Number(Number::Int(value)).with_source_literal(
-					&crate::wasm_emitter::numbers::radix::marked_literal(high_byte, value).expect("a radix mark"),
-				),
-				Ok(number) => Node::Number(number),
-				Err(failure) => Node::Error(Box::new(Node::Text(format!("unreadable Int: {failure}")))),
-			}
-		}
-		t if t == Kind::Int as u8 => match read_payload(store, &data) {
-			Ok(number) => Node::Number(number),
-			Err(failure) => Node::Error(Box::new(Node::Text(format!("unreadable Int: {failure}")))),
-		},
+		t if t == Kind::Int as u8 => int_node(store, &data, high_byte),
 		t if t == Kind::Float as u8 => Node::Number(Number::Float(boxed_f64(store, &data).unwrap_or(0.0))),
-		t if t == Kind::Codepoint as u8 => {
-			let code = data
-				.unwrap_anyref()
-				.and_then(|reference| reference.unwrap_i31(&*store).ok())
-				.map(|code| code.get_u32());
-			Node::Char(code.and_then(char::from_u32).unwrap_or('\0'))
-		}
+		t if t == Kind::Codepoint as u8 => char_node(store, &data),
 		t if t == Kind::Text as u8 => Node::Text(text_of(store, &data, memory)),
 		t if t == Kind::Symbol as u8 => Node::Symbol(text_of(store, &data, memory)),
 		t if t == Kind::Error as u8 => Node::Error(Box::new(Node::Text(text_of(store, &data, memory)))),
@@ -503,14 +481,7 @@ fn struct_node<T>(
 			memory,
 			path,
 		),
-		t if t == Kind::Data as u8 => {
-			let type_name = text_of(store, &data, memory);
-			Node::Data(crate::compiler::meta::DataValue {
-				data: Box::new(format!("<wasm data: {type_name}>")),
-				type_name,
-				data_type: crate::compiler::meta::DataType::Other,
-			})
-		}
+		t if t == Kind::Data as u8 => data_node(text_of(store, &data, memory)),
 		// a closure reads as the name of its function
 		t if t == Kind::Function as u8 => match child.unwrap_anyref() {
 			Some(_) => node(&child),
@@ -526,6 +497,43 @@ fn struct_node<T>(
 		}
 		_ => Node::Text(format!("Unknown Kind: {tag}")),
 	}
+}
+
+/// An Int: a bool marked BOOL_INFO, one written in a radix (`0xff`) keeps its spelling
+fn int_node<T>(store: &mut StoreContextMut<'_, T>, data: &Val, high_byte: i64) -> Node {
+	let number = read_payload(store, data);
+	if high_byte == crate::type_kinds::BOOL_INFO {
+		return match number {
+			Ok(Number::Int(0)) => Node::False,
+			_ => Node::True,
+		};
+	}
+	match number {
+		Ok(Number::Int(value)) if crate::wasm_emitter::numbers::radix::radix_of_info(high_byte).is_some() => {
+			Node::Number(Number::Int(value)).with_source_literal(
+				&crate::wasm_emitter::numbers::radix::marked_literal(high_byte, value).expect("a radix mark"),
+			)
+		}
+		Ok(number) => Node::Number(number),
+		Err(failure) => Node::Error(Box::new(Node::Text(format!("unreadable Int: {failure}")))),
+	}
+}
+
+fn char_node<T>(store: &mut StoreContextMut<'_, T>, data: &Val) -> Node {
+	let code = data
+		.unwrap_anyref()
+		.and_then(|reference| reference.unwrap_i31(&*store).ok())
+		.map(|code| code.get_u32());
+	Node::Char(code.and_then(char::from_u32).unwrap_or('\0'))
+}
+
+/// A Data node is read back as the name of its type only
+fn data_node(type_name: String) -> Node {
+	Node::Data(crate::compiler::meta::DataValue {
+		data: Box::new(format!("<wasm data: {type_name}>")),
+		type_name,
+		data_type: crate::compiler::meta::DataType::Other,
+	})
 }
 
 /// The items of a list of cons cells, walked in a loop (a long list must not take a stack frame per item): each cell's
