@@ -1,6 +1,9 @@
 //! Type declarations: `class`, `struct`, `type`, `record` with their bodies, conformances, primary constructors, type parameters, sum types and enums with values
 use super::*;
 
+/// What follows the name of a lowercase type declaration: `type point {…}`, `type size = u32`, `type pair<T>`
+pub(crate) const TYPE_BODY_STARTS: [char; 4] = ['{', '=', ':', '<'];
+
 impl WarpParser {
 	/// `class Name {…}`, `struct`, `type Name {…}`, `record Name {…}`; `class:"btn"`, `type:email` (html attributes),
 	/// `class="btn"`, `type = "text"` (html attributes, P188), `x.class`, `type(x)` and `type 3.5` are no declarations
@@ -21,7 +24,7 @@ impl WarpParser {
 	}
 
 	/// After `type`: a capitalized name (`type Point`) or any name with its body (`type point {…}`, `type size = u32`)
-	pub(super) fn type_declaration_follows(&self) -> bool {
+	pub(crate) fn type_declaration_follows(&self) -> bool {
 		if !self.name_after_blanks() {
 			return false;
 		}
@@ -51,7 +54,7 @@ impl WarpParser {
 		declaration
 	}
 
-	pub(super) fn parse_type_declaration_body(&mut self) -> Node {
+	pub(crate) fn parse_type_declaration_body(&mut self) -> Node {
 		self.skip_whitespace();
 		let type_name = or_return_error!(self.parse_symbol());
 		let type_name = self.joined_type_name(type_name);
@@ -212,7 +215,7 @@ impl WarpParser {
 	}
 
 	/// `Walker, Swimmer`: names separated by commas
-	pub(super) fn parse_comma_names(&mut self) -> Result<Vec<Node>, String> {
+	pub(crate) fn parse_comma_names(&mut self) -> Result<Vec<Node>, String> {
 		let mut names = vec![];
 		loop {
 			self.skip_whitespace();
@@ -226,7 +229,7 @@ impl WarpParser {
 	}
 
 	/// Go's `type Point struct {…}`, WebAssembly's `type Node: gc struct {…}`: the words before the fields
-	pub(super) fn skip_struct_words(&mut self) {
+	pub(crate) fn skip_struct_words(&mut self) {
 		for word in [GC_WORD, GO_STRUCT_WORD] {
 			if self.matches_keyword(word) {
 				self.advance_by(word.len());
@@ -239,7 +242,7 @@ impl WarpParser {
 	/// `struct Square: Shape {`, Kotlin's `class Square(…) : Shape {`: the parent and the claimed traits. A type conforms
 	/// to a trait by defining its operations (notes/traits.md T2); a named one is a claim, checked (P177). Kotlin's
 	/// superclass `: Shape()` (its constructor called) is the parent, as `extends Shape`
-	pub(super) fn skip_conformances(&mut self) -> Option<(Option<String>, Vec<Node>)> {
+	pub(crate) fn skip_conformances(&mut self) -> Option<(Option<String>, Vec<Node>)> {
 		let blanks = (0..)
 			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
 			.count();
@@ -280,7 +283,7 @@ impl WarpParser {
 	}
 
 	/// The name of a declared type after blanks: `new Point(…)`
-	pub(super) fn declared_type_after_blanks(&self) -> bool {
+	pub(crate) fn declared_type_after_blanks(&self) -> bool {
 		let blanks = (0..)
 			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
 			.count();
@@ -292,7 +295,7 @@ impl WarpParser {
 	}
 
 	/// `class` or `struct` after blanks, the word a class modifier stands before
-	pub(super) fn class_keyword_after_blanks(&self) -> Option<&'static str> {
+	pub(crate) fn class_keyword_after_blanks(&self) -> Option<&'static str> {
 		let blanks = self.blanks_ahead();
 		TYPE_DECLARATION_WORDS.into_iter().find(|keyword| {
 			keyword
@@ -303,20 +306,14 @@ impl WarpParser {
 		})
 	}
 
-	pub(super) fn blanks_ahead(&self) -> usize {
-		(0..)
-			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
-			.count()
-	}
-
 	/// `constant x`: a name after one or more blanks
-	pub(super) fn identifier_after_blanks(&self) -> bool {
+	pub(crate) fn identifier_after_blanks(&self) -> bool {
 		let blanks = self.blanks_ahead();
 		blanks > 0 && (self.peek_char(blanks).is_alphabetic() || self.peek_char(blanks) == '_')
 	}
 
 	/// Kotlin's primary constructor `class Point(val x: Int, var y: Int = 0)`: its parameters are the fields
-	pub(super) fn parse_primary_constructor(&mut self) -> Vec<Node> {
+	pub(crate) fn parse_primary_constructor(&mut self) -> Vec<Node> {
 		let parameters = statements(self.parse_bracketed('('));
 		parameters
 			.into_iter()
@@ -344,7 +341,7 @@ impl WarpParser {
 
 	/// `= Some(T) | None`, `: red | rgb(int, int, int)`, Elm's `= Failure HttpError | …` on lines of their own: the
 	/// offset after the `=` or `:` when the declaration lists alternatives one of which carries a payload
-	pub(super) fn variants_ahead(&self) -> Option<usize> {
+	pub(crate) fn variants_ahead(&self) -> Option<usize> {
 		let blanks = (0..)
 			.take_while(|&offset| self.peek_char(offset).is_whitespace())
 			.count();
@@ -392,7 +389,7 @@ impl WarpParser {
 	/// The sum type `Name = A(T) | B | C(x: int)` (card sum-types): the class Name without fields and a class extending
 	/// it for each variant with a payload, its fields in order (an unnamed one is `value`, several `value1`, `value2`…);
 	/// a variant without payload is its name, a symbol (`None` stays ø)
-	pub(super) fn parse_sum_type(&mut self, type_name: String, type_parameters: &[String], start: usize) -> Node {
+	pub(crate) fn parse_sum_type(&mut self, type_name: String, type_parameters: &[String], start: usize) -> Node {
 		self.advance_by(start);
 		let mut declarations = vec![];
 		let mut bare_variants = vec![];
@@ -428,7 +425,7 @@ impl WarpParser {
 	}
 
 	/// ` Shape { Circle(r), … }` after `enum`: a case followed by its values in parentheses
-	pub(super) fn enum_with_values_ahead(&self) -> bool {
+	pub(crate) fn enum_with_values_ahead(&self) -> bool {
 		let mut offset = (0..)
 			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
 			.count();
@@ -459,7 +456,7 @@ impl WarpParser {
 
 	/// `enum Shape { Circle(r), Rect(w, h), Dot }`, Swift's `case circle(radius: Double)` lines: each case with values a
 	/// class extending Shape, the others its variants by name, as the sum type `Circle(r) | Rect(w, h) | Dot`
-	pub(super) fn parse_enum_with_values(&mut self) -> Node {
+	pub(crate) fn parse_enum_with_values(&mut self) -> Node {
 		self.skip_spaces();
 		let type_name = or_return_error!(self.parse_symbol());
 		self.skip_whitespace();
@@ -490,7 +487,7 @@ impl WarpParser {
 		crate::lowering::sum_variants::sum_type(type_name, bare_variants, declarations)
 	}
 
-	pub(super) fn variant_class(
+	pub(crate) fn variant_class(
 		&mut self,
 		type_name: &str,
 		variant: String,
@@ -541,7 +538,7 @@ impl WarpParser {
 	}
 
 	/// `<T>`, `<A, B>`, `[T]`: the names of the type parameters of a declared type
-	pub(super) fn parse_type_parameters(&mut self) -> Result<Vec<String>, String> {
+	pub(crate) fn parse_type_parameters(&mut self) -> Result<Vec<String>, String> {
 		let close = if self.current_char() == '[' { ']' } else { '>' };
 		self.advance(); // < or [
 		let mut names = vec![];
@@ -564,11 +561,84 @@ impl WarpParser {
 			}
 		}
 	}
+
+	/// A class body's members with their field types: `{x: int; double() := …}`. A body of one C-style method
+	/// (`{int bar(){ 42 }}`) groups as the words `int` and `bar(){…}`: it is one member, not two fields
+	pub(crate) fn class_body(block: Node) -> Node {
+		let block = match block {
+			Node::List(items, Bracket::Curly, Separator::Space) if is_typed_method(&items) => Node::List(
+				vec![Node::List(items, Bracket::None, Separator::Space)],
+				Bracket::Curly,
+				Separator::Semicolon,
+			),
+			other => other,
+		};
+		Self::transform_fields_to_types(block)
+	}
+
+	/// Transform field definitions: Key(name, op, Symbol) -> Key(name, op, Type)
+	/// Used for class/struct definitions to convert type names to Type nodes
+	pub(crate) fn transform_fields_to_types(node: Node) -> Node {
+		match node {
+			// a keyword method (`def scaled(k) { side * k }`) or a constructor (`init(n) {…}`) in a class body: its body is
+			// code, no field types
+			Node::List(items, bracket, sep) if items.first().is_some_and(starts_code) => {
+				Node::List(items, bracket, sep)
+			}
+			Node::List(items, bracket, sep) => {
+				let mut transformed: Vec<Node> = with_type_phrases(without_ref_words(items))
+					.into_iter()
+					.map(Self::transform_fields_to_types)
+					.collect();
+				// the line `left: ref Node?` is the one field once its `ref` is read
+				if bracket == Bracket::None
+					&& transformed.len() == 1
+					&& matches!(transformed[0].drop_meta(), Node::Key(_, Op::Colon, _))
+				{
+					return transformed.remove(0);
+				}
+				// the line `left: ref Node? right: ref Node?` among others: its fields are fields of the body
+				// a typed field, not a property with its block (`age:{2026 - birthday} set{…}`)
+				let is_field = |item: &Node| matches!(item.drop_meta(), Node::Key(_, Op::Colon, value) if !matches!(value.drop_meta(), Node::List(_, Bracket::Curly, _)));
+				let row_of_fields = |item: &Node| matches!(item.drop_meta(), Node::List(row, Bracket::None, Separator::Space) if row.iter().all(is_field));
+				if sep != Separator::Space && transformed.iter().any(row_of_fields) {
+					transformed = transformed
+						.into_iter()
+						.flat_map(|item| match item.drop_meta() {
+							Node::List(row, Bracket::None, Separator::Space) if row.iter().all(is_field) => row.clone(),
+							_ => vec![item],
+						})
+						.collect();
+				}
+				Node::List(transformed, bracket, sep)
+			}
+			// a method in a class body (`greet() := …`): its body is code, no field type
+			Node::Key(name, Op::Define, value) => Node::Key(name, Op::Define, value),
+			Node::Key(name, op, value) => {
+				let type_node = Self::symbol_to_type(*value);
+				Node::Key(name, op, Box::new(type_node))
+			}
+			meta @ Node::Meta { .. } => meta.under_meta(Self::transform_fields_to_types),
+			other => other,
+		}
+	}
+
+	/// Convert a Symbol to a Type node (for type references)
+	pub(crate) fn symbol_to_type(node: Node) -> Node {
+		match node {
+			Node::Symbol(s) => Node::Type {
+				name: Box::new(Node::Symbol(s)),
+				body: Box::new(Empty),
+			},
+			meta @ Node::Meta { .. } => meta.under_meta(Self::symbol_to_type),
+			other => other,
+		}
+	}
 }
 
 /// A class body with each type parameter used as a type read as any type: a field `item:T` holds any value, a
 /// parameter `with(x:T)` takes any
-pub(super) fn any_for_type_parameters(node: Node, parameters: &[String]) -> Node {
+pub(crate) fn any_for_type_parameters(node: Node, parameters: &[String]) -> Node {
 	let is_parameter = |node: &Node| match node.drop_meta() {
 		Node::Symbol(name) => parameters.contains(name),
 		Node::Type { name, body } => body.is_empty_node() && parameters.contains(&name.drop_meta().name()),
@@ -588,7 +658,7 @@ pub(super) fn any_for_type_parameters(node: Node, parameters: &[String]) -> Node
 }
 
 /// A method head with each parameter of a type parameter untyped: `with(x:T)` is `with(x)`
-pub(super) fn untyped_parameters(head: Node, is_parameter: &dyn Fn(&Node) -> bool) -> Node {
+pub(crate) fn untyped_parameters(head: Node, is_parameter: &dyn Fn(&Node) -> bool) -> Node {
 	match head {
 		Node::Key(name, Op::Colon, kind) if is_parameter(&kind) => *name,
 		other => other.map_children(|child| untyped_parameters(child, is_parameter)),
@@ -596,7 +666,7 @@ pub(super) fn untyped_parameters(head: Node, is_parameter: &dyn Fn(&Node) -> boo
 }
 
 /// Swift's `case circle(radius: Double)`: the case without its keyword
-pub(super) fn without_case_keyword(case: &Node) -> Node {
+pub(crate) fn without_case_keyword(case: &Node) -> Node {
 	match case.drop_meta() {
 		Node::List(words, _, _) if words.len() == 2 && words[0].drop_meta().name() == CASE_KEYWORD => words[1].clone(),
 		_ => case.clone(),
@@ -604,7 +674,7 @@ pub(super) fn without_case_keyword(case: &Node) -> Node {
 }
 
 /// The items of a block or parameter list `{a; b}`, `(a, b)`; a block of one statement `{fun sum() = x}` is that one
-pub(super) fn statements(block: Node) -> Vec<Node> {
+pub(crate) fn statements(block: Node) -> Vec<Node> {
 	match block {
 		Node::List(items, _, Separator::Colon | Separator::Semicolon | Separator::Newline) => items,
 		Empty => vec![],
@@ -613,4 +683,31 @@ pub(super) fn statements(block: Node) -> Vec<Node> {
 		}
 		single => vec![single],
 	}
+}
+
+/// `T, F: Fn(i32) -> i32` → `T F`: the names before each bound
+pub(crate) fn type_parameter_names(written: &str) -> Vec<String> {
+	let mut depth = 0;
+	let mut parts = vec![String::new()];
+	for ch in written.chars() {
+		match ch {
+			'<' | '(' => depth += 1,
+			'>' | ')' => depth -= 1,
+			',' if depth == 0 => parts.push(String::new()),
+			_ => {}
+		}
+		if ch != ',' || depth != 0 {
+			parts.last_mut().expect("one part").push(ch);
+		}
+	}
+	parts
+		.iter()
+		.filter_map(|part| {
+			part.split(':')
+				.next()
+				.map(str::trim)
+				.filter(|name| !name.is_empty())
+				.map(str::to_string)
+		})
+		.collect()
 }

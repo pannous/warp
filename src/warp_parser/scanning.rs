@@ -305,6 +305,12 @@ impl WarpParser {
 	pub(super) fn at_identifier_start(&self) -> bool {
 		self.current_char().is_alphabetic() || self.current_char() == '_'
 	}
+
+	pub(crate) fn blanks_ahead(&self) -> usize {
+		(0..)
+			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
+			.count()
+	}
 }
 
 const MAX_DIVISOR_NAME_LENGTH: usize = 2;

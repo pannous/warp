@@ -197,6 +197,59 @@ impl WarpParser {
 		let before = &self.chars[..self.pos];
 		before.ends_with(&['\t']) || before.ends_with(&[' ', ' '])
 	}
+
+	/// `class circle{pi = 3}`, `class C{pi:int}`: a named number declared in a type body names the type's own field, which
+	/// shadows nothing outside; the type's methods read the field
+	pub(crate) fn names_field(&mut self, symbol: &str, constant: &Node) -> bool {
+		// `{empty: yes}`, `class Cell{empty: bool}`: a key named like ø is a name (card object-empty-field)
+		let is_word = symbol.chars().all(char::is_alphabetic);
+		if matches!(constant, Node::Empty) && is_word && self.type_annotation_follows() && self.peek_char(1) != ':' {
+			return true;
+		}
+		if !matches!(constant, Node::Number(_)) {
+			return false;
+		}
+		let declares = self.assignment_follows() || self.type_annotation_follows();
+		let Some(fields) = self.type_fields.as_mut() else {
+			return false;
+		};
+		if declares {
+			fields.insert(symbol.to_string());
+		}
+		fields.contains(symbol)
+	}
+
+	/// `:type` right after the name (`pi:int`, `pi: int`), not the definition `:=` nor a ternary's `c ? pi : 0`
+	fn type_annotation_follows(&self) -> bool {
+		self.current_char() == ':' && self.peek_char(1) != '='
+	}
+
+	/// `pi = 4` (P130, user: "loud error, if it was declared constant before which it should be"): a named number is a
+	/// declared constant, an assignment to it is an error
+	pub(crate) fn refuse_constant_assignment(&self, symbol: &str) -> Option<Node> {
+		let column = self.column.saturating_sub(symbol.chars().count());
+		let message = format!("{symbol} is a constant");
+		self.assignment_follows().then(|| {
+			Diagnostic {
+				message,
+				line: self.line_nr,
+				column,
+				..Default::default()
+			}
+			.fix("another name")
+			.into_error()
+		})
+	}
+
+	/// `= …` or `:= …` after blanks, not the comparison `==` nor the arrow `=>`
+	fn assignment_follows(&self) -> bool {
+		let blanks = (0..)
+			.take_while(|&offset| matches!(self.peek_char(offset), ' ' | '\t'))
+			.count();
+		let defines = self.peek_char(blanks) == ':' && self.peek_char(blanks + 1) == '=';
+		let assigns = self.peek_char(blanks) == '=' && !matches!(self.peek_char(blanks + 1), '=' | '>'); // `None => 0` is a match arm
+		defines || assigns
+	}
 }
 
 /// `global a, b` as parsed: the declarations `global: a`, `global: b`

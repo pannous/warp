@@ -44,7 +44,6 @@ pub(crate) use pipes::*;
 mod control;
 mod definitions;
 mod expressions;
-mod lists;
 mod literals;
 pub(crate) use expressions::*;
 pub use literals::shader_blocks;
