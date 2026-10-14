@@ -20,6 +20,9 @@ const LABEL: &str = "label";
 const HTML: &str = "html";
 /// a style sheet's items are rules: `html { … }` there styles the element, it makes none
 const STYLE: &str = "style";
+const META: &str = "meta";
+/// Keys of html that are facts for the page's head, besides `meta: {…}` (decision html-meta, lib/markup.warp html_is_page_fact)
+const PAGE_FACTS: [&str; 2] = ["title", "description"];
 const FORM_FIELDS: [&str; 3] = ["input", "select", "textarea"];
 /// input types that need no label: they say what they do or are not shown
 const SELF_LABELED_INPUTS: [&str; 5] = ["hidden", "submit", "button", "reset", "image"];
@@ -378,8 +381,8 @@ fn markup_mistakes<'a>(element: &Element<'a>, defined: &HashSet<String>) -> Vec<
 		crate::extensions::strings::near_miss(word, names).unwrap_or(otherwise)
 	};
 	let mut mistakes = vec![];
-	// a style sheet's items are rules, no attributes
-	if element.tag == STYLE {
+	// a style sheet's items are rules, no attributes; `meta: {author: "Ann"}` of html names metas (page facts)
+	if element.tag == STYLE || names_metas(element) {
 		return mistakes;
 	}
 	for tag in element
@@ -394,6 +397,7 @@ fn markup_mistakes<'a>(element: &Element<'a>, defined: &HashSet<String>) -> Vec<
 		.attributes
 		.iter()
 		.filter(|(name, _)| !element.blocks.contains(name))
+		.filter(|(name, _)| !(element.tag == HTML && PAGE_FACTS.contains(&name.as_str())))
 	{
 		let renders = crate::web::markup::names_attribute(name)
 			|| WARP_ELEMENT_WORDS.contains(&name.as_str())
@@ -462,6 +466,17 @@ fn block_name(item: &Node) -> Option<String> {
 		},
 		_ => None,
 	}
+}
+
+/// `meta: {author: "Ann"}` of html: page facts, no meta element of its own attributes (`charset`, `name`)
+fn names_metas(element: &Element) -> bool {
+	let meta_attributes = crate::web::markup::meta_attribute_names();
+	element.tag == META
+		&& element.parent.as_deref() == Some(HTML)
+		&& !element
+			.attributes
+			.iter()
+			.any(|(name, _)| meta_attributes.contains(name))
 }
 
 /// A block's name no element, attribute nor warp word: `divv` of `divv{ "hi" }`
