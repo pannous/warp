@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Pure move of Rust functions, consts, statics and type aliases between files (notes/restructuring.md).
 
-move_fn.py <search_dir> <target_file> <name>... [--impl TYPE]
+move_fn.py <search_dir> <target_file> <name>... [--impl TYPE] [--from FILE]
+
+--from takes the items from that one file only: names defined elsewhere too (`show`, `fail`) stay unambiguous.
 
 Each named item (with its doc comments and attributes) is cut from the one file under <search_dir> that defines it and
 appended to <target_file>: methods into the target's last `impl TYPE {` block (created when missing), free functions
@@ -153,8 +155,11 @@ def main():
 	parser.add_argument("target")
 	parser.add_argument("names", nargs="+")
 	parser.add_argument("--impl", default="WarpParser")
+	parser.add_argument("--from", dest="source")
 	arguments = parser.parse_args()
 	sources = [os.path.join(root, file) for root, _, files in os.walk(arguments.search_dir) for file in files if file.endswith(".rs")]
+	if arguments.source:
+		sources = [arguments.source]
 	located = []
 	for name in arguments.names:
 		holders = [path for path in sources if os.path.abspath(path) != os.path.abspath(arguments.target) and function_line(open(path).read().split("\n"), name)]
