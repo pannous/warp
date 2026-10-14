@@ -687,8 +687,10 @@ function sendPaintCanvas({ id, width, height, port, replaces }) {
 	canvas.gpu = true;
 	paintCanvases.delete(replaces);
 	paintCanvases.set(id, canvas);
+	console.warn("gpu trace page sendPaintCanvas", id);
 	const offscreen = canvas.transferControlToOffscreen();
 	port.postMessage({ canvas: offscreen }, [offscreen]);
+	console.warn("gpu trace page sent", id);
 }
 
 // ⛶ (card little-full): the last painting fills the screen at its own aspect ratio, Esc or ⛶ again leaves; a click
