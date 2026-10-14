@@ -4,7 +4,7 @@ use super::*;
 
 impl WarpParser {
 	/// Parse XML text content (everything until '<' or end of input)
-	pub(super) fn parse_xml_text_content(&mut self) -> String {
+	pub(crate) fn parse_xml_text_content(&mut self) -> String {
 		let mut text = String::new();
 		while !self.end_of_input() && self.current_char() != '<' {
 			text.push(self.current_char());
@@ -14,7 +14,7 @@ impl WarpParser {
 	}
 
 	/// Skip XML processing instruction: <?xml ... ?>
-	pub(super) fn skip_processing_instruction(&mut self) -> Node {
+	pub(crate) fn skip_processing_instruction(&mut self) -> Node {
 		self.advance(); // skip '?'
 		while !self.end_of_input() {
 			if self.current_char() == '?' && self.peek_char(1) == '>' {
@@ -27,7 +27,7 @@ impl WarpParser {
 	}
 
 	/// Skip XML comment: <!--...-->
-	pub(super) fn skip_xml_comment(&mut self) -> Node {
+	pub(crate) fn skip_xml_comment(&mut self) -> Node {
 		self.advance_by(2); // skip '--'
 		while !self.end_of_input() {
 			if self.current_char() == '-' && self.peek_char(1) == '-' && self.peek_char(2) == '>' {
@@ -41,7 +41,7 @@ impl WarpParser {
 
 	/// Skip DOCTYPE declaration: <!DOCTYPE ...>
 	/// Handles both simple and complex DOCTYPE with internal subset
-	pub(super) fn skip_doctype(&mut self) -> Node {
+	pub(crate) fn skip_doctype(&mut self) -> Node {
 		// Skip until '>', handling nested brackets in internal subset
 		let mut bracket_depth = 0;
 
@@ -64,7 +64,7 @@ impl WarpParser {
 	}
 
 	/// Parse CDATA section: <![CDATA[...]]>
-	pub(super) fn parse_cdata(&mut self) -> Node {
+	pub(crate) fn parse_cdata(&mut self) -> Node {
 		// Expect: [CDATA[
 		let marker = "[CDATA[";
 		if !marker.chars().enumerate().all(|(i, c)| self.peek_char(i) == c) {
@@ -84,12 +84,12 @@ impl WarpParser {
 		Node::Text(content)
 	}
 
-	pub(super) fn is_at_line_end(&self) -> bool {
+	pub(crate) fn is_at_line_end(&self) -> bool {
 		self.column == 0 && self.current_char() == '\n' || self.pos >= self.chars.len()
 	}
 
 	/// A `;` that ends its line is a statement terminator of the same strength as the newline after it
-	pub(super) fn only_blanks_before_newline(&self) -> bool {
+	pub(crate) fn only_blanks_before_newline(&self) -> bool {
 		self.chars[self.pos..]
 			.iter()
 			.find(|ch| !matches!(ch, ' ' | '\t' | '\r'))
@@ -97,7 +97,7 @@ impl WarpParser {
 	}
 
 	/// Parse XML tag: <tag attr="value">content</tag> or <tag />
-	pub(super) fn parse_xml_tag(&mut self) -> Node {
+	pub(crate) fn parse_xml_tag(&mut self) -> Node {
 		self.advance(); // skip '<'
 
 		// Handle XML directives and special constructs

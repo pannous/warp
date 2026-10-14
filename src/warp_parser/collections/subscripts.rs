@@ -44,7 +44,7 @@ pub fn subscript(target: Node, index: Node) -> Node {
 }
 
 /// A negative number or a negated expression: `-1`, `-k`
-pub(super) fn counts_from_the_end(index: &Node) -> bool {
+pub(crate) fn counts_from_the_end(index: &Node) -> bool {
 	match index.drop_meta() {
 		Node::Number(n) => f64::from(*n) < 0.0,
 		Node::Key(empty, Op::Sub, _) => matches!(empty.drop_meta(), Empty),
@@ -54,7 +54,7 @@ pub(super) fn counts_from_the_end(index: &Node) -> bool {
 
 /// The 0-based start and exclusive end of a slice index, ø where omitted (Python's `a[1:]`, `a[:2]`);
 /// an inclusive range `start...last` ends after last
-pub(super) fn slice_bounds(index: &Node) -> Option<(Node, Node)> {
+pub(crate) fn slice_bounds(index: &Node) -> Option<(Node, Node)> {
 	let Node::Key(start, op, end) = index.drop_meta() else {
 		return None;
 	};
@@ -70,7 +70,7 @@ pub(super) fn slice_bounds(index: &Node) -> Option<(Node, Node)> {
 
 /// `xs#a..b` reads as the range from the value xs#a; P58 (user: "create a strong warning"): a warning naming the slice
 /// `xs#(a..b)` and the range `(xs#a)..b`
-pub(super) fn hash_range_warning(lhs: &Node, op: Op, written: &str, rhs: &Node) -> Option<Diagnostic> {
+pub(crate) fn hash_range_warning(lhs: &Node, op: Op, written: &str, rhs: &Node) -> Option<Diagnostic> {
 	let Node::Key(target, Op::Hash, index) = lhs.drop_meta() else {
 		return None;
 	};
@@ -94,7 +94,7 @@ pub(super) fn hash_range_warning(lhs: &Node, op: Op, written: &str, rhs: &Node) 
 
 /// `xs#(a…b)`, `xs#(a..b)`: the 0-based start and exclusive end of a 1-based slice (`xs#a` is 1-based); only a range in
 /// parentheses, `xs#a..b` stays the range from the value xs#a
-pub(super) fn hash_slice_bounds(index: &Node) -> Option<(Node, Node)> {
+pub(crate) fn hash_slice_bounds(index: &Node) -> Option<(Node, Node)> {
 	let Node::List(items, Bracket::Round, _) = index.drop_meta() else {
 		return None;
 	};
@@ -112,7 +112,7 @@ pub(super) fn hash_slice_bounds(index: &Node) -> Option<(Node, Node)> {
 }
 
 /// A slice bound shifted by `shift`; an open bound (`s[2…]`, `s[…3]`) stays open, ø
-pub(super) fn unless_open(bound: &Node, shift: impl Fn(&Node) -> Node) -> Node {
+pub(crate) fn unless_open(bound: &Node, shift: impl Fn(&Node) -> Node) -> Node {
 	match bound.drop_meta() {
 		Node::Empty => Node::Empty,
 		_ => shift(bound),

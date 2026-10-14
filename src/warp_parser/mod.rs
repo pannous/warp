@@ -13,8 +13,8 @@ use std::fs::read_to_string;
 use crate::node::ATTRIBUTE_MARK;
 mod declaration_scan;
 pub use declaration_scan::*;
-mod subscripts;
-pub use subscripts::*;
+mod collections;
+pub use collections::*;
 
 /// The value of a `Result<_, String>`; an error returns from the parse function as an error node
 macro_rules! or_return_error {
@@ -27,8 +27,8 @@ macro_rules! or_return_error {
 }
 
 mod lookahead;
+mod markup;
 mod scanning;
-mod xml;
 pub use lookahead::PREFIX_OPERATOR_WORDS;
 mod atoms;
 mod blocks;
