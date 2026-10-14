@@ -1,7 +1,7 @@
 //! card attribute-values: an attribute value of the wrong kind warns where it is written: a text for a boolean
 //! attribute (`checked: "no"` leaves it out, as `checked: "yes"` does), a word for a number attribute, a number for an
 //! address
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 use warp::wasm_emitter::eval;
 
 fn warnings_of(code: &str) -> Vec<String> {

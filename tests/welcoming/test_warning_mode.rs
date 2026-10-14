@@ -3,7 +3,7 @@
 //! `warning(message)` reports at runtime: "" as a warning, an Error value when warnings are errors.
 
 use crate::is;
-use warp::diagnostic::{take_runtime_warnings, with_warning_mode, WarningMode};
+use warp::errors::diagnostic::{take_runtime_warnings, with_warning_mode, WarningMode};
 use warp::wasm_emitter::eval;
 use warp::{error, Node};
 

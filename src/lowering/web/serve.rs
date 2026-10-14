@@ -256,7 +256,7 @@ pub fn serves_itself(code: &str) -> bool {
 
 /// The program's statements, read quietly: running it says its hints and warnings
 fn top_level_statements(code: &str) -> Vec<Node> {
-	crate::diagnostic::quietly(|| crate::warp_parser::parse(code))
+	crate::errors::diagnostic::quietly(|| crate::warp_parser::parse(code))
 		.drop_meta()
 		.sequence_statements()
 		.to_vec()
@@ -1026,7 +1026,7 @@ fn local_argument(call: &Node, main_variables: &HashSet<String>, functions: &Has
 		.flat_map(crate::variable_signals::symbols)
 		.find(|symbol| !known(symbol))?;
 	let name = callee(call);
-	Some(crate::diagnostic::Diagnostic::at(call, format!("the page asks the server for {name}(…) before its code runs, so it sends main-level values only, not {local}: compute {local} at the main level or call {name} from a function of the server (POST {RPC_PREFIX}{name}, notes/server_routes.md)")).into_error())
+	Some(crate::errors::diagnostic::Diagnostic::at(call, format!("the page asks the server for {name}(…) before its code runs, so it sends main-level values only, not {local}: compute {local} at the main level or call {name} from a function of the server (POST {RPC_PREFIX}{name}, notes/server_routes.md)")).into_error())
 }
 
 /// `serve port {routes}`: the port and each route's method, path and body

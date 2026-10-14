@@ -2,7 +2,7 @@
 //! nothing, and assigning a mutating call (`y = x.upper!`) changes x too: both warn and name the intended forms
 use crate::common::fails_with;
 use crate::is;
-use warp::diagnostic::{with_warning_mode, WarningMode};
+use warp::errors::diagnostic::{with_warning_mode, WarningMode};
 
 #[test]
 fn a_discarded_pure_call_warns() {

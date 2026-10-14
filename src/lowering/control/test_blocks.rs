@@ -76,7 +76,8 @@ fn run_test(statement: Node) -> Vec<Node> {
 	let lowered = match test_of(&statement) {
 		Some(Test::Soft(condition)) => {
 			let serialized = || format!("{TEST_WORD} {}", condition.serialize().trim());
-			let written = Node::Text(crate::diagnostic::written_statement(&statement).unwrap_or_else(serialized));
+			let written =
+				Node::Text(crate::errors::diagnostic::written_statement(&statement).unwrap_or_else(serialized));
 			substitute(substitute(template(SOFT_CHECK), CONDITION, &condition), NAME, &written)
 		}
 		Some(Test::Named(name, body)) => {

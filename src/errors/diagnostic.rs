@@ -2,7 +2,7 @@
 //! Errors become `Node::Error` values (never panics); warnings (lints) are reported and compilation continues.
 
 use crate::compiler::compile_context;
-use crate::fixits::Fix;
+use crate::errors::fixits::Fix;
 use crate::node::Node;
 use std::fmt;
 
@@ -97,7 +97,7 @@ impl Diagnostic {
 
 	/// Offer a reading as an applicable fix: `written` (as in the source, spacing aside) becomes `replacement`
 	pub fn offer(self, meaning: impl Into<String>, written: impl Into<String>, replacement: impl Into<String>) -> Self {
-		self.offering(crate::fixits::fix(meaning, written, replacement))
+		self.offering(crate::errors::fixits::fix(meaning, written, replacement))
 	}
 
 	pub fn offering(mut self, offered: Fix) -> Self {
@@ -759,7 +759,7 @@ pub fn reading(meaning: &str, explicit_form: &str) -> Reading {
 
 impl Reading {
 	pub fn replacing(self, written: impl Into<String>, replacement: impl Into<String>) -> Self {
-		let fix = crate::fixits::fix(&self.meaning, written, replacement);
+		let fix = crate::errors::fixits::fix(&self.meaning, written, replacement);
 		self.fixed_by(fix)
 	}
 
@@ -848,7 +848,7 @@ impl Ask {
 			reading
 				.fix
 				.clone()
-				.unwrap_or_else(|| crate::fixits::fix(&reading.meaning, &self.written, &reading.explicit_form))
+				.unwrap_or_else(|| crate::errors::fixits::fix(&reading.meaning, &self.written, &reading.explicit_form))
 		});
 		fixes.fold(diagnostic, Diagnostic::offering)
 	}
@@ -1068,7 +1068,7 @@ pub fn educate_once(topic: &str, written: &str, preferred: &str, reason: &str) {
 }
 
 /// `educate_once` with advice (normalize::advise): `fix` is its "I meant" edit, none for `subscribe before the loop`
-pub fn advise_once(topic: &str, written: &str, preferred: &str, reason: &str, fix: Option<crate::fixits::Fix>) {
+pub fn advise_once(topic: &str, written: &str, preferred: &str, reason: &str, fix: Option<crate::errors::fixits::Fix>) {
 	let silenced = is_quiet()
 		|| is_acknowledged(topic, written)
 		|| silenced_by_comment(crate::compiler::compile_context::read(|context| {

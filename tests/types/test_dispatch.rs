@@ -170,9 +170,9 @@ fn a_method_named_like_a_field_keeps_both_and_warns() {
 	is!(&with(SIZED, "b.size"), 3);
 	is!(&with(SIZED, "size(b)"), 30);
 	is!(&with(SIZED, "b.size()"), 30);
-	warp::diagnostic::take_warnings();
+	warp::errors::diagnostic::take_warnings();
 	warp::wasm_emitter::eval(&with(SIZED, "b.size"));
-	let warnings = warp::diagnostic::take_warnings();
+	let warnings = warp::errors::diagnostic::take_warnings();
 	assert!(
 		warnings
 			.iter()

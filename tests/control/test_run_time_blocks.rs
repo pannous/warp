@@ -1,6 +1,6 @@
 // Run-time `!` (wiki/charged.md §5, notes/runtime_eval.md, package 4). Step 0, user 2026-10-05: "give a compiler
 // warning if the code contains unresolved symbol arithmetic": a block over names the program defines nowhere.
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 
 fn warnings_of(code: &str) -> Vec<String> {
 	take_warnings();

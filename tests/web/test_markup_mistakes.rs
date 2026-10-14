@@ -1,7 +1,7 @@
 //! Is our HTML type safe (card our-html): markup that would render wrong is warned about where it is written, with the
 //! near name as its fix: a key no attribute (shown as text), a handler of no event, an input type the browser does not
 //! know, content of an element that takes none, a block under a name no element
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 use warp::wasm_emitter::eval;
 
 fn warnings_of(code: &str) -> Vec<String> {
@@ -53,9 +53,9 @@ fn an_unknown_tag_among_markup_warns() {
 	warns("div{ divv{ \"hi\" } }", "divv is no element: it shows as text");
 	warns("ul{ lli{ \"x\" } }", "lli is no element: it shows as text");
 	// said once, as written: the run's markup holds it as the attribute divv: "hi"
-	warp::diagnostic::take_runtime_warnings();
+	warp::errors::diagnostic::take_runtime_warnings();
 	let warned = warnings_of("div{ divv{ \"hi\" } }");
-	let at_run_time = warp::diagnostic::take_runtime_warnings();
+	let at_run_time = warp::errors::diagnostic::take_runtime_warnings();
 	assert!(
 		!warned
 			.iter()

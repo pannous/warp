@@ -13,7 +13,7 @@
 //! Any `!` left (known only at run time) is mutation.rs's: a name unwraps, any other expression is a loud error.
 
 use super::nodes::{call, children_rewritten, is_block, key};
-use crate::diagnostic::{ask, reading, Ask, Fallback};
+use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
 use crate::mutation::bang_target;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;

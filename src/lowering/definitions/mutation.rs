@@ -4,7 +4,7 @@
 //! `x = upper x`. A lone `x!`, `f!` or `{…}!` keeps evaluating.
 
 use super::nodes::{call, children_rewritten, int, key, written_entry};
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -40,7 +40,7 @@ pub fn warn_discarded(program: Node) -> Node {
 		}
 		_ => {}
 	});
-	match crate::diagnostic::report(&warnings) {
+	match crate::errors::diagnostic::report(&warnings) {
 		Err(error) => error,
 		Ok(()) => program,
 	}

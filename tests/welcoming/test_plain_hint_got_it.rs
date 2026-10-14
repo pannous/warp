@@ -1,6 +1,6 @@
 // card hints-dismissed: a plain hint ("prefer xs#1 over xs[0]") is a got-it hint too: "a" silences every hint of its
 // reason, "y" the one expression, for good (the acknowledgements file; the CLI keeps it in the home folder)
-use warp::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
+use warp::errors::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
 use warp::normalize::capture_hints;
 
 const INDEXING: &str = "xs = [1 2 3]; xs[0] + xs[1]";

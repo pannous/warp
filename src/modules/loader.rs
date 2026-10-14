@@ -122,11 +122,11 @@ impl Sibling {
 			let module = WarpParser::parse(&self.source);
 			let parsed = match module.first_error() {
 				Some(failure) => {
-					let warning = crate::diagnostic::Diagnostic::at(
+					let warning = crate::errors::diagnostic::Diagnostic::at(
 						&module,
 						format!("folder scope skips {}: {}", self.path.display(), failure.serialize()),
 					);
-					crate::diagnostic::report(&[warning])?;
+					crate::errors::diagnostic::report(&[warning])?;
 					vec![]
 				}
 				None => statements(with_module_directory(module, &folder_of(&self.path))),
@@ -333,7 +333,9 @@ impl<'a> Loader<'a> {
 				"{} shadows the standard module {name}: its text differs from the one warp embeds",
 				path.display()
 			);
-			crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(statement, shadowing).weak()])?;
+			crate::errors::diagnostic::report(&[
+				crate::errors::diagnostic::Diagnostic::at(statement, shadowing).weak()
+			])?;
 		}
 		self.load(import, name, path)
 	}
@@ -465,7 +467,7 @@ impl<'a> Loader<'a> {
 		let shown = shown_path(&path);
 		let module = crate::compiler::meta::parsing_file(&shown.to_string_lossy(), || WarpParser::parse(source));
 		if let Some(failure) = module.first_error() {
-			return Err(crate::diagnostic::located_in_file(failure, &shown));
+			return Err(crate::errors::diagnostic::located_in_file(failure, &shown));
 		}
 		// classes insert_module_classes put in front of the program already: left out before the module's passes lower them
 		let classes_early = import == Import::Use && {

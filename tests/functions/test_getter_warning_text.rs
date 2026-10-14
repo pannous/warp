@@ -1,9 +1,9 @@
 // card g-_cHQ: the warning of an effectful getter quotes a short body (`t runs clock() at every read`) but names a
 // long one only as its code, instead of spelling out the whole block
 fn getter_warning(code: &str) -> String {
-	warp::diagnostic::take_warnings();
+	warp::errors::diagnostic::take_warnings();
 	warp::wasm_emitter::eval(code);
-	let warnings = warp::diagnostic::take_warnings();
+	let warnings = warp::errors::diagnostic::take_warnings();
 	warnings
 		.into_iter()
 		.map(|warning| warning.message)

@@ -191,7 +191,7 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 		.then(|| lists::list_ops::runtime_error_message(lists::list_ops::DIVIDE_BY_ZERO));
 	let message = runtime_error.or(exact_trap).or(divide_trap).unwrap_or(trap);
 	match trap_position(trace) {
-		Some(position) => crate::node::error(&crate::diagnostic::located_at(message, &position)),
+		Some(position) => crate::node::error(&crate::errors::diagnostic::located_at(message, &position)),
 		None => crate::node::error(&message),
 	}
 }

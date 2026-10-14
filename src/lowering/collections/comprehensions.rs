@@ -150,8 +150,10 @@ fn fields_of_it(condition: Node, fields: &[String], variables: &HashSet<String>)
 				"{name} is the variable {name} here, not the field of each element: write {} for the field",
 				field_of_it.serialize()
 			);
-			match crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(&Node::Symbol(name.clone()), warning)])
-			{
+			match crate::errors::diagnostic::report(&[crate::errors::diagnostic::Diagnostic::at(
+				&Node::Symbol(name.clone()),
+				warning,
+			)]) {
 				Ok(()) => Node::Symbol(name),
 				Err(error) => error,
 			}

@@ -225,7 +225,7 @@ fn with_values(
 					.collect::<Vec<_>>()
 					.join(", ")
 			);
-			return crate::diagnostic::Diagnostic::at(&items[VALUES_INDEX], message).into_error();
+			return crate::errors::diagnostic::Diagnostic::at(&items[VALUES_INDEX], message).into_error();
 		}
 	}
 	Node::List(items, bracket.clone(), separator.clone()).with_meta_of(&node)

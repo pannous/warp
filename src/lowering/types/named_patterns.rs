@@ -8,7 +8,7 @@ use super::nodes::is_type_word;
 use super::nodes::{children_rewritten, key};
 use super::switch::{is_list_pattern, is_map_pattern, is_switch_head, map_field, rest_pattern, split_switch, WILDCARD};
 use super::tree_walks::{FIND_WORD, REPLACE_WORD};
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use std::collections::HashMap;

@@ -383,7 +383,7 @@ fn refuse_comma_next_to_comparison(items: &[Node]) -> Result<(), Node> {
 		.collect::<Vec<_>>()
 		.join(", ");
 	let message = format!("`{written}`: a comma next to {op} needs parentheses, the comma binds looser than {op}: write `{all_values}` or `{apart}`");
-	Err(crate::diagnostic::Diagnostic::at(item, message)
+	Err(crate::errors::diagnostic::Diagnostic::at(item, message)
 		.offer("compare all the values", written.clone(), all_values)
 		.offer("keep the comparison apart", written, apart)
 		.into_error())

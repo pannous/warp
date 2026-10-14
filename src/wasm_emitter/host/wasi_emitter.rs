@@ -166,7 +166,10 @@ impl WasmGcEmitter {
 					"{word} of {} has no runtime text yet",
 					crate::analyzer::kind_with_article(kind)
 				);
-				self.emit_type_error(func, crate::diagnostic::Diagnostic::at(value, reason).to_string());
+				self.emit_type_error(
+					func,
+					crate::errors::diagnostic::Diagnostic::at(value, reason).to_string(),
+				);
 			}
 		}
 	}

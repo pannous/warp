@@ -6,7 +6,7 @@
 
 use super::nodes::{call, children_rewritten, is_return, key, parameter_name};
 use crate::compiler::context::{Context, Param, UserFunctionDef};
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::lambdas::arrow_lambda;
 use crate::library_words::collect_assigned_names;
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -138,7 +138,7 @@ pub fn needs_a_function(needer: &str, parameter: Option<&str>, value: &Node, fix
 		value.serialize(),
 		crate::analyzer::kind_with_article(kind)
 	);
-	crate::diagnostic::Diagnostic::at(value, message).into_error()
+	crate::errors::diagnostic::Diagnostic::at(value, message).into_error()
 }
 
 /// A function value known only at run time: a variable, a lambda, a call that may return a function, an

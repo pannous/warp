@@ -233,7 +233,7 @@ fn aliased_method(written: &str, defined: &[String]) -> Option<String> {
 	let method = candidates
 		.into_iter()
 		.find(|candidate| defined.iter().any(|method| method == candidate))?;
-	crate::diagnostic::note_alias(written, method);
+	crate::errors::diagnostic::note_alias(written, method);
 	Some(method.to_string())
 }
 
@@ -321,7 +321,7 @@ fn with_json_classes(node: Node, classes: &Node) -> Node {
 				return Node::Key(module, Op::Dot, member);
 			};
 			let argument = items.get(1).cloned().unwrap_or(Node::Empty);
-			crate::diagnostic::note_alias(
+			crate::errors::diagnostic::note_alias(
 				&format!("{written_module}.{written_member}"),
 				if word.is_empty() { "the instance" } else { word },
 			);
@@ -378,7 +378,7 @@ pub(crate) fn class_fields(node: &Node) -> ClassFields {
 
 /// `class Tree{left: Tree}`: a field of the class's own type without `?` could never be filled, every Tree needing a
 /// Tree first (card empty-field, user decision: strict, the fix `left: Tree?`)
-pub fn check_self_typed_fields(program: &Node) -> Option<crate::diagnostic::Diagnostic> {
+pub fn check_self_typed_fields(program: &Node) -> Option<crate::errors::diagnostic::Diagnostic> {
 	let mut unfillable = None;
 	program.visit(&mut |part| {
 		let Node::Type { name, body } = part else { return };
@@ -390,7 +390,7 @@ pub fn check_self_typed_fields(program: &Node) -> Option<crate::diagnostic::Diag
 		if let Some(field) = field.filter(|_| unfillable.is_none()) {
 			let field_name = declared_field_name(&field).unwrap_or_default();
 			unfillable = Some(
-				crate::diagnostic::Diagnostic::at(
+				crate::errors::diagnostic::Diagnostic::at(
 					&field,
 					format!("{field_name} can never be filled: every {class} needs a {class} first"),
 				)

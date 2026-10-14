@@ -43,12 +43,12 @@ fn a_field_added_to_the_class_adds_a_column() {
 #[test]
 fn a_field_removed_from_the_class_keeps_its_column_with_a_warning() {
 	eval("class Car{make: text; color: text}\ncars: [Car] = database.cars_shrunk\ncars.add(Car(\"VW\", \"red\"))");
-	warp::diagnostic::take_runtime_warnings();
+	warp::errors::diagnostic::take_runtime_warnings();
 	is!(
 		"class Car{make: text}\ncars: [Car] = database.cars_shrunk\ncars#1.make",
 		"VW"
 	);
-	let warnings = warp::diagnostic::take_runtime_warnings();
+	let warnings = warp::errors::diagnostic::take_runtime_warnings();
 	assert!(warnings.iter().any(|warning| warning.contains("color")), "{warnings:?}");
 }
 
@@ -110,14 +110,14 @@ fn a_unit_field_is_stored_and_migrates_within_its_quantity() {
 		"the unit would be lost",
 	);
 	eval(&runs("distance: int", "runs_plain", "runs.add(Run(3))"));
-	warp::diagnostic::take_runtime_warnings();
+	warp::errors::diagnostic::take_runtime_warnings();
 	assert_eq!(
 		eval(&runs("distance: km", "runs_plain", "runs#1.distance"))
 			.serialize()
 			.trim(),
 		"3km"
 	);
-	let warnings = warp::diagnostic::take_runtime_warnings();
+	let warnings = warp::errors::diagnostic::take_runtime_warnings();
 	assert!(
 		warnings.iter().any(|warning| warning.contains("read as km")),
 		"{warnings:?}"

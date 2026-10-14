@@ -1,9 +1,9 @@
 // card crash-closure: a crash card names the frame that crashed, not the panic hooks above the unwind
-use warp::crash_card::first_warp_frame;
+use warp::errors::crash_card::first_warp_frame;
 
 /// The parser crash of card crash-closure, shortened: main.rs's closed-pipe hook sits above the unwind
-const BACKTRACE: &str = "   3: warp::crash_card::file_card
-   4: warp::crash_card::install::{closure#0}
+const BACKTRACE: &str = "   3: warp::errors::crash_card::file_card
+   4: warp::errors::crash_card::install::{closure#0}
    5: <alloc::boxed::Box<dyn core::ops::function::Fn<(&std::panic::PanicHookInfo,)>> as core::ops::function::Fn<(&std::panic::PanicHookInfo,)>>::call
    6: {closure#0}
              at /Users/me/dev/angles/warp.worktrees.noindex/integrate/src/main.rs:171:3

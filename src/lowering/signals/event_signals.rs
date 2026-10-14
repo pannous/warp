@@ -218,8 +218,11 @@ pub fn lower(program: Node) -> Node {
 			&& !serves_its_page(&statements)
 	}) {
 		let warning = format!("on {name}: {name} comes from the playground page; a native run never raises it");
-		if let Err(error) =
-			crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(&statements[*index], warning).weak()])
+		if let Err(error) = crate::errors::diagnostic::report(&[crate::errors::diagnostic::Diagnostic::at(
+			&statements[*index],
+			warning,
+		)
+		.weak()])
 		{
 			return error;
 		}
@@ -247,7 +250,7 @@ pub fn lower(program: Node) -> Node {
 			"endless emit loop: {}; emit one of them under a condition",
 			steps.join(", ")
 		);
-		return crate::diagnostic::Diagnostic::at(&statements[*index], message).into_error();
+		return crate::errors::diagnostic::Diagnostic::at(&statements[*index], message).into_error();
 	}
 	let handler_lines: HashSet<usize> = handlers.iter().map(|(index, _, _)| *index).collect();
 	let lowered = statements
@@ -299,7 +302,7 @@ fn without_unraised(
 			.map(|(_, (name, _, _))| name)
 			.filter(|name| !raised.contains(name) && !from_outside(name))
 	};
-	let warnings: Vec<crate::diagnostic::Diagnostic> = statements
+	let warnings: Vec<crate::errors::diagnostic::Diagnostic> = statements
 		.iter()
 		.filter_map(|statement| {
 			unraised(statement).map(|name| {
@@ -309,7 +312,7 @@ fn without_unraised(
 						.map(|near| format!("; did you mean {near}?"))
 						.unwrap_or_default(),
 				};
-				crate::diagnostic::Diagnostic::at(
+				crate::errors::diagnostic::Diagnostic::at(
 					statement,
 					format!("on {name}: nothing emits {name}, so this handler never runs{hint}"),
 				)
@@ -318,7 +321,7 @@ fn without_unraised(
 		})
 		.collect();
 	if !warnings.is_empty() {
-		crate::diagnostic::report(&warnings)?;
+		crate::errors::diagnostic::report(&warnings)?;
 	}
 	Ok(statements
 		.iter()
@@ -448,7 +451,7 @@ fn subscriptions(node: Node, raised: &HashSet<String>, subscribed: &mut Vec<Stri
 		if in_loop {
 			let reason = format!("a handler in a loop subscribes once per pass: each emit {event} runs all of them; subscribe before the loop unless that is meant");
 			crate::normalize::set_position_of(&node);
-			crate::diagnostic::advise_once(
+			crate::errors::diagnostic::advise_once(
 				LOOP_SUBSCRIPTION_TOPIC,
 				&format!("on {event} {{…}}"),
 				"on … before the loop",
@@ -1033,7 +1036,7 @@ fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[Str
 		};
 		if EMIT_ALIASES.contains(&verb.as_str()) {
 			crate::normalize::set_position_of(&node);
-			crate::diagnostic::educate_once(
+			crate::errors::diagnostic::educate_once(
 				EMIT_TOPIC,
 				&verb,
 				"emit",
@@ -1052,7 +1055,7 @@ fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[Str
 			None => {
 				// P202: an emit no handler anywhere receives does nothing, with a got-it note
 				crate::normalize::set_position_of(&node);
-				crate::diagnostic::advise_once(
+				crate::errors::diagnostic::advise_once(
 					UNHANDLED_TOPIC,
 					&format!("emit {name}"),
 					&format!("on {name} {{…}}"),

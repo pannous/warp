@@ -1,7 +1,7 @@
 //! A user function named like a type word (`double`, `int`…) is a loud error: the word is a type, rename the function
 
 use crate::is;
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 use warp::wasm_emitter::eval;
 use warp::Node;
 

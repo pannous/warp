@@ -199,7 +199,7 @@ fn collection_declarations(node: Node, named: &[&str]) -> Node {
 		Some((written, meaning, name, value)) => {
 			if written != meaning {
 				crate::normalize::set_position_of(&node);
-				crate::diagnostic::note_alias(written, meaning);
+				crate::errors::diagnostic::note_alias(written, meaning);
 			}
 			let target = Node::Key(name, Op::Colon, Box::new(symbol(meaning)));
 			key(target, Op::Assign, collection_declarations(*value, named))
@@ -410,21 +410,21 @@ fn colon_iteration(items: &[Node]) -> Option<Node> {
 				word.drop_meta().name(),
 				crate::normalize::operand_text(value)
 			);
-			let question = crate::diagnostic::Ask::new(
+			let question = crate::errors::diagnostic::Ask::new(
 				crate::for_loop::headers::FILTER_LOOP_TOPIC,
 				format!("`{written}: …` visits only the items that pass its filter"),
-				vec![crate::diagnostic::reading(
+				vec![crate::errors::diagnostic::reading(
 					"filter the items",
 					&format!(
 						"for it in … {{ if it {op} {} {{ … }} }}",
 						crate::normalize::operand_text(value)
 					),
 				)],
-				crate::diagnostic::Fallback::Warning,
+				crate::errors::diagnostic::Fallback::Warning,
 			)
 			.written(&written)
 			.at_node(word);
-			if let Err(error) = crate::diagnostic::ask(&question) {
+			if let Err(error) = crate::errors::diagnostic::ask(&question) {
 				return Some(error);
 			}
 			let guarded = if_then(condition, body);

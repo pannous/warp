@@ -87,7 +87,7 @@ impl WarpParser {
 			&& !self.options.wit_mode;
 		if quote == BACKTICK {
 			set_hint_position(quote_line, quote_column);
-			crate::diagnostic::educate_once(
+			crate::errors::diagnostic::educate_once(
 				BACKTICK_TOPIC,
 				"`…${x}…`",
 				"\"…\\(x)…\"",
@@ -104,7 +104,11 @@ impl WarpParser {
 				let message = format!(
 					"Unterminated string: the text opened at {quote_line}:{quote_column} has no closing `{closing}`"
 				);
-				return missing_closer(message, closing, crate::fixits::end_of_line(&self.input, quote_line));
+				return missing_closer(
+					message,
+					closing,
+					crate::errors::fixits::end_of_line(&self.input, quote_line),
+				);
 			}
 			if ch == closing {
 				self.advance(); // skip closing quote
@@ -223,7 +227,7 @@ impl WarpParser {
 	/// `\:xyzzy` names no entity: it stays as written and warns; in strict mode the warning is the error
 	pub(crate) fn warn_unknown_entity(&self, name: &str, column: usize) -> Result<(), Node> {
 		let message = crate::text::uniscript_entities::unknown_entity(name);
-		crate::diagnostic::report(&[Diagnostic {
+		crate::errors::diagnostic::report(&[Diagnostic {
 			message,
 			line: self.line_nr,
 			column,
@@ -237,7 +241,7 @@ impl WarpParser {
 			return None;
 		}
 		set_hint_position(self.line_nr, self.column);
-		crate::diagnostic::educate_once(
+		crate::errors::diagnostic::educate_once(
 			F_STRING_TOPIC,
 			"f\"…{x}…\"",
 			"\"…\\(x)…\"",

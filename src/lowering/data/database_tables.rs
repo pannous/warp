@@ -658,14 +658,18 @@ fn opened(statement: &Node, tables: &BTreeMap<String, Table>, file: &str, open: 
 			"register {unopened} before {variable}: {}.{field} points to its rows",
 			table.class
 		);
-		return Some(vec![crate::diagnostic::Diagnostic::at(statement, message).into_error()]);
+		return Some(vec![
+			crate::errors::diagnostic::Diagnostic::at(statement, message).into_error()
+		]);
 	}
 	if let Some(members) = table.members.iter().find(|members| members.back.is_none()) {
 		let message = format!(
 			"{}.{} lists rows of {}, whose class has no field of class {} pointing back",
 			table.class, members.field, members.table, table.class
 		);
-		return Some(vec![crate::diagnostic::Diagnostic::at(statement, message).into_error()]);
+		return Some(vec![
+			crate::errors::diagnostic::Diagnostic::at(statement, message).into_error()
+		]);
 	}
 	open.push(variable.clone());
 	// the row is [id, column values…] in the order of the columns

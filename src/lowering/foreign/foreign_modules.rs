@@ -646,7 +646,7 @@ impl Foreign<'_> {
 			.filter(|(runtime, _)| runtime == JS_RUNTIME)?
 			.clone();
 		if let Err(problem) = crate::formats::web_idl::check_constructor(&module, arguments.len()) {
-			return Some(crate::diagnostic::Diagnostic::at(node, problem).into_error());
+			return Some(crate::errors::diagnostic::Diagnostic::at(node, problem).into_error());
 		}
 		let arguments = arguments
 			.iter()
@@ -681,7 +681,7 @@ impl Foreign<'_> {
 			false => Ok(()),
 		};
 		if let Err(problem) = checked {
-			return Some(crate::diagnostic::Diagnostic::at(target, problem).into_error());
+			return Some(crate::errors::diagnostic::Diagnostic::at(target, problem).into_error());
 		}
 		Some(foreign_call(
 			&runtime,
@@ -763,7 +763,7 @@ impl Foreign<'_> {
 				let call = foreign_call(&runtime, module, &member, is_call, arguments);
 				// a declared text, bool, int or float is a warp value: `crypto.randomUUID().upper()` is warp's upper; `text?` keeps ø
 				return match result_type {
-					Err(problem) => crate::diagnostic::Diagnostic::at(&node, problem).into_error(),
+					Err(problem) => crate::errors::diagnostic::Diagnostic::at(&node, problem).into_error(),
 					Ok(Some(warp_type)) => key(call, Op::As, Node::Symbol(warp_type)),
 					Ok(None) => call,
 				};

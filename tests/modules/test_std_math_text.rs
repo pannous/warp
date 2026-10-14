@@ -46,9 +46,9 @@ fn use_text_brings_title_slug_truncate() {
 
 #[test]
 fn comprehensions_in_module_and_program_ask_nothing() {
-	warp::diagnostic::take_warnings();
+	warp::errors::diagnostic::take_warnings();
 	let value = warp::wasm_emitter::eval("use text; [capitalize(w) for w in words(\"ab cd\")]#2");
-	let warnings: Vec<String> = warp::diagnostic::take_warnings()
+	let warnings: Vec<String> = warp::errors::diagnostic::take_warnings()
 		.iter()
 		.map(|warning| warning.to_string())
 		.collect();

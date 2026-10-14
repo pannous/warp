@@ -31,7 +31,7 @@ pub(crate) fn list_type_head(name: &str) -> &str {
 /// list_type_head, with a note naming warp's word for a foreign one
 pub(crate) fn noted_list_type_head(name: &str) -> &str {
 	if FOREIGN_LIST_HEADS.contains(&name) {
-		crate::diagnostic::note_alias(name, LIST_HEAD);
+		crate::errors::diagnostic::note_alias(name, LIST_HEAD);
 	}
 	list_type_head(name)
 }

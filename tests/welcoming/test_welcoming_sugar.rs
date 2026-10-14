@@ -138,7 +138,7 @@ fn a_glued_hash_name_statement_counts() {
 
 #[test]
 fn the_let_note_is_shown_until_acknowledged() {
-	use warp::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
+	use warp::errors::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
 	use warp::normalize::capture_hints;
 	warp::normalize::set_style(warp::normalize::Style::canonical()); // the default leaves let and := open (user #12)
 	let let_hints = || {
@@ -175,7 +175,7 @@ fn a_hash_glued_to_an_expression_counts_at_line_start() {
 
 #[test]
 fn a_spaced_double_slash_is_always_a_comment_and_says_so_once() {
-	use warp::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
+	use warp::errors::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
 	use warp::normalize::capture_hints;
 	// user decision 2026-10-08: `//` before a space is a comment, `x //= 3` and `a//b` divide
 	is!("items=[1 2 3 4 5]\nmid = len(items) // 2\nmid", 5);

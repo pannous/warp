@@ -1,6 +1,6 @@
 //! Accessible markup (card web-a11y, src/web/accessibility.rs): welcoming warnings for markup a screen reader or keyboard
 //! user cannot use, each at the element as written with a fix
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 use warp::wasm_emitter::eval;
 
 fn warnings_of(code: &str) -> Vec<String> {
@@ -101,9 +101,9 @@ fn style_sheet_rules_are_no_elements() {
 #[test]
 fn markup_built_at_run_time_is_checked() {
 	let runtime_warnings_of = |code: &str| {
-		warp::diagnostic::take_runtime_warnings();
+		warp::errors::diagnostic::take_runtime_warnings();
 		eval(code);
-		warp::diagnostic::take_runtime_warnings()
+		warp::errors::diagnostic::take_runtime_warnings()
 	};
 	assert_eq!(runtime_warnings_of("tag = \"img\"\ndiv{ (tag): { src: \"a.png\" } (tag): { src: \"b.png\" } }"),
 		vec!["markup built at run time: img without alt: a screen reader reads its file name; fix: alt: \"what it shows\", or alt: \"\" for a decoration"]);

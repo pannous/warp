@@ -1,7 +1,7 @@
 // D14 (user 2026-10-03) gave `x in list` the 1-based position; in-bool (user 2026-10-12) made it yes/no, the position
 // comes from `xs.index_of(x)`. Round 3: "Never warn".
 use crate::is;
-use warp::diagnostic::{with_warning_mode, WarningMode};
+use warp::errors::diagnostic::{with_warning_mode, WarningMode};
 
 #[test]
 fn in_gives_yes_or_no() {
