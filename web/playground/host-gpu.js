@@ -136,9 +136,11 @@ function builtinValues(shader, width, height) {
 // the task Worker's side of a page canvas: the OffscreenCanvas the page sends through `port`, drawn on through WebGPU
 async function gpuCanvas({ id, port, replaces }) {
 	gpuTrace("gpuCanvas start", id);
+	const arrived = new Promise(resolve => port.onmessage = ({ data }) => resolve(data.canvas));
+	port.onmessageerror = event => gpuTrace("gpuCanvas messageerror", event.data);
 	const device = await theGpuDevice(); // without an adapter that error, as gpu_render's
 	gpuTrace("gpuCanvas device", id);
-	const canvas = await new Promise(resolve => port.onmessage = ({ data }) => resolve(data.canvas));
+	const canvas = await arrived;
 	gpuTrace("gpuCanvas got", canvas);
 	port.close();
 	paintCanvases.delete(replaces);
