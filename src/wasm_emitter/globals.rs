@@ -120,36 +120,26 @@ impl WasmGcEmitter {
 			&self.user_function_kinds(),
 			&self.ctx.closure_variable_targets,
 		);
-		let mut names: Vec<&String> = main
-			.globals
-			.keys()
-			.filter(|name| !self.ctx.user_globals.contains_key(*name))
-			.collect();
+		let mut names: Vec<&String> =
+			main.globals.keys().filter(|name| !self.ctx.user_globals.contains_key(*name)).collect();
 		names.sort();
 		// a task's instance copies globals as Nodes, so a program with tasks keeps none in an array or map of its own type
 		let (typed, typed_maps) = if self.spawns_tasks() {
 			Default::default()
 		} else {
-			(
-				self.find_typed_globals(program, &main),
-				self.find_typed_map_globals(program, &main.globals),
-			)
+			(self.find_typed_globals(program, &main), self.find_typed_map_globals(program, &main.globals))
 		};
 		for name in names {
 			if typed_maps.contains(name) {
 				let global = self.declare_typed_map_global();
-				self.ctx
-					.user_globals
-					.insert(name.to_string(), (global, main.globals[name].kind));
+				self.ctx.user_globals.insert(name.to_string(), (global, main.globals[name].kind));
 				self.typed_map_globals.insert(name.to_string(), global);
 				continue;
 			}
 			match typed.get(name) {
 				Some(&list) => {
 					let global = self.declare_typed_list_global(list.element);
-					self.ctx
-						.user_globals
-						.insert(name.to_string(), (global, main.globals[name].kind));
+					self.ctx.user_globals.insert(name.to_string(), (global, main.globals[name].kind));
 					self.typed_globals.insert(name.to_string(), (global, list));
 				}
 				None => {
@@ -203,11 +193,7 @@ impl WasmGcEmitter {
 		} else {
 			ConstExpr::i64_const(0)
 		};
-		let val_type = if kind.is_ref() {
-			Ref(self.node_ref(true))
-		} else {
-			self.storage_type(kind)
-		};
+		let val_type = if kind.is_ref() { Ref(self.node_ref(true)) } else { self.storage_type(kind) };
 		self.declare_global_of(val_type, init_expr)
 	}
 
@@ -227,14 +213,7 @@ impl WasmGcEmitter {
 	}
 
 	fn add_global(&mut self, val_type: ValType, mutable: bool, init_expr: ConstExpr) -> u32 {
-		self.globals.global(
-			GlobalType {
-				val_type,
-				mutable,
-				shared: false,
-			},
-			&init_expr,
-		);
+		self.globals.global(GlobalType { val_type, mutable, shared: false }, &init_expr);
 		self.next_global_idx += 1;
 		self.next_global_idx - 1
 	}

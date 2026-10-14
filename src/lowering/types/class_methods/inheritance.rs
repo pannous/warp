@@ -67,20 +67,10 @@ pub(super) fn taking_in_mixins(node: Node, mixins: &[(String, Vec<Node>)]) -> Re
 			})
 		}
 		Node::List(items, bracket, separator) => {
-			let items = items
-				.into_iter()
-				.map(|item| taking_in_mixins(item, mixins))
-				.collect::<Result<Vec<_>, _>>()?;
-			Ok(Node::List(
-				items.into_iter().filter(|item| !matches!(item, Node::Empty)).collect(),
-				bracket,
-				separator,
-			))
+			let items = items.into_iter().map(|item| taking_in_mixins(item, mixins)).collect::<Result<Vec<_>, _>>()?;
+			Ok(Node::List(items.into_iter().filter(|item| !matches!(item, Node::Empty)).collect(), bracket, separator))
 		}
-		Node::Meta { node, data } => Ok(Node::Meta {
-			node: Box::new(taking_in_mixins(*node, mixins)?),
-			data,
-		}),
+		Node::Meta { node, data } => Ok(Node::Meta { node: Box::new(taking_in_mixins(*node, mixins)?), data }),
 		other => Ok(other),
 	}
 }
@@ -100,9 +90,7 @@ pub(super) fn inherit(node: Node) -> Result<(Node, Vec<Node>), Node> {
 	let mut classes: Vec<(String, Option<String>, Vec<Node>)> = vec![];
 	node.visit(&mut |part| {
 		if let Node::Type { name, body } = part {
-			let parent = name
-				.attribute(crate::warp_parser::EXTENDS_KEYWORD)
-				.map(|parent| parent.drop_meta().name());
+			let parent = name.attribute(crate::warp_parser::EXTENDS_KEYWORD).map(|parent| parent.drop_meta().name());
 			classes.push((name.drop_meta().name(), parent, class_items(body)));
 		}
 	});
@@ -127,10 +115,7 @@ pub(super) fn inherited_items(
 	visiting: &mut Vec<String>,
 ) -> Result<Vec<Node>, Node> {
 	if visiting.iter().any(|seen| seen == class) {
-		return Err(crate::node::error(&format!(
-			"class {class} extends itself through {}",
-			visiting.join(", ")
-		)));
+		return Err(crate::node::error(&format!("class {class} extends itself through {}", visiting.join(", "))));
 	}
 	let Some((_, parent, own)) = classes.iter().find(|(name, _, _)| name == class) else {
 		let child = visiting.last().cloned().unwrap_or_default();
@@ -143,16 +128,10 @@ pub(super) fn inherited_items(
 	let inherited = inherited_items(parent, classes, visiting)?;
 	visiting.pop();
 	let mut called = vec![];
-	let own: Vec<Node> = own
-		.iter()
-		.cloned()
-		.map(|item| super_calls(item, class, &mut called))
-		.collect();
+	let own: Vec<Node> = own.iter().cloned().map(|item| super_calls(item, class, &mut called)).collect();
 	let mut parent_versions = vec![];
 	for method in called {
-		let Some(version) = inherited
-			.iter()
-			.find(|item| method_parts(item).is_some_and(|(name, _, _)| name == method))
+		let Some(version) = inherited.iter().find(|item| method_parts(item).is_some_and(|(name, _, _)| name == method))
 		else {
 			return Err(crate::node::error(&format!(
 				"{class} calls {SUPER}.{method}, but {parent} has no method {method}"
@@ -161,9 +140,7 @@ pub(super) fn inherited_items(
 		parent_versions.push(renamed(version, &format!("{method}{SUPER_INFIX}{class}")));
 	}
 	let own_names: Vec<String> = own.iter().filter_map(item_name).collect();
-	let kept = inherited
-		.into_iter()
-		.filter(|item| item_name(item).is_none_or(|name| !own_names.contains(&name)));
+	let kept = inherited.into_iter().filter(|item| item_name(item).is_none_or(|name| !own_names.contains(&name)));
 	Ok(kept.chain(parent_versions).chain(own).collect())
 }
 
@@ -173,22 +150,15 @@ pub(super) fn super_calls(node: Node, class: &str, called: &mut Vec<String>) -> 
 		return node.map_children(|child| super_calls(child, class, called));
 	};
 	if object.drop_meta().name() != SUPER || !matches!(object.drop_meta(), Node::Symbol(_)) {
-		return key(
-			super_calls(*object, class, called),
-			Op::Dot,
-			super_calls(*member, class, called),
-		);
+		return key(super_calls(*object, class, called), Op::Dot, super_calls(*member, class, called));
 	}
 	let member = match member.drop_meta().clone() {
 		Node::Symbol(name) => parent_version(name, class, called),
 		Node::List(items, Bracket::Round, separator)
 			if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
 		{
-			let arguments: Vec<Node> = items[1..]
-				.iter()
-				.cloned()
-				.map(|argument| super_calls(argument, class, called))
-				.collect();
+			let arguments: Vec<Node> =
+				items[1..].iter().cloned().map(|argument| super_calls(argument, class, called)).collect();
 			let name = parent_version(items[0].drop_meta().name(), class, called);
 			Node::List([vec![name], arguments].concat(), Bracket::Round, separator)
 		}
@@ -216,11 +186,9 @@ pub(super) fn renamed(method: &Node, name: &str) -> Node {
 		return with_result_type(untyped, Some(result_type));
 	}
 	let head = match head.drop_meta() {
-		Node::List(parts, bracket, separator) => Node::List(
-			[vec![symbol(name)], parts[1..].to_vec()].concat(),
-			bracket.clone(),
-			separator.clone(),
-		),
+		Node::List(parts, bracket, separator) => {
+			Node::List([vec![symbol(name)], parts[1..].to_vec()].concat(), bracket.clone(), separator.clone())
+		}
 		_ => symbol(name),
 	};
 	Node::Key(Box::new(head), Op::Define, body.clone())
@@ -228,9 +196,7 @@ pub(super) fn renamed(method: &Node, name: &str) -> Node {
 
 /// The name a class item defines: a field or a method
 pub(super) fn item_name(item: &Node) -> Option<String> {
-	method_parts(item)
-		.map(|(name, _, _)| name)
-		.or_else(|| declared_field_name(item))
+	method_parts(item).map(|(name, _, _)| name).or_else(|| declared_field_name(item))
 }
 
 /// Every class that extends another with all its items, its name without the parent
@@ -245,17 +211,11 @@ pub(super) fn with_inherited(node: Node, classes: &[(String, Option<String>, Vec
 			})
 		}
 		Node::List(items, bracket, separator) => Ok(Node::List(
-			items
-				.into_iter()
-				.map(|item| with_inherited(item, classes))
-				.collect::<Result<_, _>>()?,
+			items.into_iter().map(|item| with_inherited(item, classes)).collect::<Result<_, _>>()?,
 			bracket,
 			separator,
 		)),
-		Node::Meta { node, data } => Ok(Node::Meta {
-			node: Box::new(with_inherited(*node, classes)?),
-			data,
-		}),
+		Node::Meta { node, data } => Ok(Node::Meta { node: Box::new(with_inherited(*node, classes)?), data }),
 		other => Ok(other),
 	}
 }

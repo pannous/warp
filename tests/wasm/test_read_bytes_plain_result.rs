@@ -56,9 +56,6 @@ fn an_unreadable_result_is_an_error_not_a_panic() {
 	for wat_source in [I31_RESULT, FUNCREF_RESULT, TWO_RESULTS, NO_ENTRY_POINT] {
 		let outcome = std::panic::catch_unwind(|| read(wat_source));
 		let outcome = outcome.unwrap_or_else(|_| panic!("read_bytes panicked on {wat_source}"));
-		assert!(
-			matches!(outcome, Err(_) | Ok(Node::Error(_))),
-			"{wat_source} gave {outcome:?}"
-		);
+		assert!(matches!(outcome, Err(_) | Ok(Node::Error(_))), "{wat_source} gave {outcome:?}");
 	}
 }

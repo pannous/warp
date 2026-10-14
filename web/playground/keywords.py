@@ -19,7 +19,7 @@ def read_all(patterns):
 	return "\n".join(read(path) for pattern in patterns for path in sorted(glob.glob(pattern, recursive=True)))
 
 def listed(source, name):
-	return re.findall(r'"([^"]+)"', re.search(rf"const {name}: \[&str; \d+\] = \[(.*?)\];", source, re.S).group(1))
+	return re.findall(r'"([^"]+)"', re.search(rf"const {name}: \[&str; \d+\] =\s*\[(.*?)\];", source, re.S).group(1))
 
 # the standard modules `use` completes (completion.js): STD_MODULES' names, their aliases, the named constants'
 def module_names(modules):

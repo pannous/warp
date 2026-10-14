@@ -38,11 +38,7 @@ pub(crate) fn explain_runtime_error(result: Node, exclusive_range: bool) -> Node
 			None => assumed.push((guess, vec![position])),
 		}
 	}
-	lines.extend(
-		assumed
-			.into_iter()
-			.map(|(guess, positions)| format!("assumed at {}: {guess}", positions.join(", "))),
-	);
+	lines.extend(assumed.into_iter().map(|(guess, positions)| format!("assumed at {}: {guess}", positions.join(", "))));
 	match lines.len() {
 		1 => result,
 		_ => crate::node::error(&lines.join("\n  ")),

@@ -15,14 +15,9 @@ fn hints_with(style: Style, code: &str) -> Vec<String> {
 
 #[test]
 fn every_function_definition_form_compiles_without_a_hint_by_default() {
-	for code in [
-		"f(x) := x*2",
-		"def f(x): x*2",
-		"fn f(x) = x*2",
-		"fun f(x) = x*2",
-		"function f(x) { x*2 }",
-		"define f(x): x*2",
-	] {
+	for code in
+		["f(x) := x*2", "def f(x): x*2", "fn f(x) = x*2", "fun f(x) = x*2", "function f(x) { x*2 }", "define f(x): x*2"]
+	{
 		assert_eq!(hints_with(Style::default(), code), Vec::<String>::new(), "{code}");
 		is!(&format!("{code}; f(3)"), 6);
 	}
@@ -30,10 +25,7 @@ fn every_function_definition_form_compiles_without_a_hint_by_default() {
 
 #[test]
 fn an_explicit_function_style_still_hints() {
-	let style = Style {
-		function_def: FunctionStyle::ColonEquals,
-		..Style::default()
-	};
+	let style = Style { function_def: FunctionStyle::ColonEquals, ..Style::default() };
 	assert_eq!(hints_with(style, "def f(x): x*2"), vec!["def f(x): ...".to_string()]);
 }
 
@@ -64,9 +56,6 @@ fn any_axis_can_stop_caring() {
 	] {
 		assert_eq!(hints_with(relaxed.clone(), code), Vec::<String>::new(), "{code}");
 	}
-	assert!(
-		!hints_with(Style::default(), "1 && 0").is_empty(),
-		"the default still cares about logical operators"
-	);
+	assert!(!hints_with(Style::default(), "1 && 0").is_empty(), "the default still cares about logical operators");
 	let _ = eval("1");
 }

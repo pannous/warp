@@ -78,11 +78,9 @@ fn component_uses(node: Node) -> Node {
 	};
 	match (module, node) {
 		(Some(Err(problem)), _) => crate::node::error(&problem),
-		(Some(Ok(module)), Node::List(_, bracket, separator)) => Node::List(
-			vec![symbol(USE_WORD), symbol(COMPONENT_RUNTIME), module],
-			bracket,
-			separator,
-		),
+		(Some(Ok(module)), Node::List(_, bracket, separator)) => {
+			Node::List(vec![symbol(USE_WORD), symbol(COMPONENT_RUNTIME), module], bracket, separator)
+		}
 		(_, node) => node.map_children(component_uses),
 	}
 }
@@ -107,9 +105,7 @@ fn component_module(items: &[Node]) -> Option<Result<Node, String>> {
 		// `use nothere as x`: no C library without functions
 		(None, Some(_)) if !crate::modules::resolves(&written) => Err(format!(
 			"no module, component or library {written}; {}",
-			listing(&known_components(&crate::modules::beside_program(&format!(
-				"{written}{COMPONENT_EXTENSION}"
-			))))
+			listing(&known_components(&crate::modules::beside_program(&format!("{written}{COMPONENT_EXTENSION}"))))
 		)),
 		(None, _) => return None,
 	};
@@ -146,9 +142,7 @@ fn crate_component(name: &str) -> Result<String, String> {
 
 #[cfg(not(feature = "native"))]
 fn crate_component(name: &str) -> Result<String, String> {
-	Err(format!(
-		"use cargo {name} builds the crate with cargo: only the native warp can (card use-cargo-playground)"
-	))
+	Err(format!("use cargo {name} builds the crate with cargo: only the native warp can (card use-cargo-playground)"))
 }
 
 /// `rust_demo.wasm` as written, `rust_demo` where there is a component of that name: natively the file the loader finds,
@@ -177,9 +171,7 @@ fn listing(components: &[String]) -> String {
 }
 
 fn component_name(path: &str) -> String {
-	Path::new(path)
-		.file_stem()
-		.map_or_else(String::new, |stem| stem.to_string_lossy().into_owned())
+	Path::new(path).file_stem().map_or_else(String::new, |stem| stem.to_string_lossy().into_owned())
 }
 
 /// A file that is no component, else none or unreadable here
@@ -198,10 +190,7 @@ fn bare_component(name: &str) -> Option<String> {
 /// The components in the folder of `path`
 #[cfg(not(all(target_arch = "wasm32", not(feature = "native"))))]
 fn known_components(path: &str) -> Vec<String> {
-	let folder = Path::new(path)
-		.parent()
-		.filter(|folder| !folder.as_os_str().is_empty())
-		.unwrap_or(Path::new("."));
+	let folder = Path::new(path).parent().filter(|folder| !folder.as_os_str().is_empty()).unwrap_or(Path::new("."));
 	let files = std::fs::read_dir(folder)
 		.into_iter()
 		.flatten()
@@ -232,12 +221,7 @@ fn bare_component(name: &str) -> Option<String> {
 #[cfg(all(target_arch = "wasm32", not(feature = "native")))]
 fn known_components(_path: &str) -> Vec<String> {
 	crate::web::read_text(PAGE_COMPONENTS).map_or_else(Vec::new, |names| {
-		names
-			.lines()
-			.map(str::trim)
-			.filter(|name| !name.is_empty())
-			.map(String::from)
-			.collect()
+		names.lines().map(str::trim).filter(|name| !name.is_empty()).map(String::from).collect()
 	})
 }
 
@@ -277,11 +261,7 @@ fn foreign_use(items: &[Node]) -> Option<(String, (String, String))> {
 			(module.clone(), module.rsplit('.').next().unwrap_or(&module).to_string())
 		}
 	};
-	let module = if runtime == COMPONENT_RUNTIME {
-		crate::modules::beside_program(&module)
-	} else {
-		module
-	};
+	let module = if runtime == COMPONENT_RUNTIME { crate::modules::beside_program(&module) } else { module };
 	Some((alias, (runtime.clone(), module)))
 }
 
@@ -414,16 +394,7 @@ fn operator_member(op: &Op) -> Option<&'static str> {
 }
 
 fn foreign_call(runtime: &str, module: Node, member: &str, is_call: bool, arguments: Node) -> Node {
-	call(
-		crate::host::FOREIGN_CALL,
-		vec![
-			text(runtime),
-			module,
-			text(member),
-			Node::int(i64::from(is_call)),
-			arguments,
-		],
-	)
+	call(crate::host::FOREIGN_CALL, vec![text(runtime), module, text(member), Node::int(i64::from(is_call)), arguments])
 }
 
 /// `foreign_call("js", receiver, member, call, arguments)`, a JavaScript attribute read or method call: its receiver,
@@ -448,13 +419,7 @@ fn javascript_member(node: &Node) -> Option<(&Node, &str, bool, &Node)> {
 
 /// `operator.member(arguments…)` in `runtime`
 fn operator_call(runtime: &str, member: &str, arguments: Vec<Node>) -> Node {
-	foreign_call(
-		runtime,
-		text(OPERATOR_MODULE),
-		member,
-		true,
-		Node::List(arguments, Bracket::Square, Separator::Space),
-	)
+	foreign_call(runtime, text(OPERATOR_MODULE), member, true, Node::List(arguments, Bracket::Square, Separator::Space))
 }
 
 impl Foreign<'_> {
@@ -473,11 +438,7 @@ impl Foreign<'_> {
 			Node::Key(empty, op @ (Op::Neg | Op::Sub | Op::Hash), operand) if empty.is_empty_node() => {
 				let operand = self.rewrite(operand.as_ref().clone());
 				let runtime = self.foreign_value(&operand)?;
-				Some(operator_call(
-					&runtime,
-					if *op == Op::Hash { "len" } else { "neg" },
-					vec![operand],
-				))
+				Some(operator_call(&runtime, if *op == Op::Hash { "len" } else { "neg" }, vec![operand]))
 			}
 			// `a#2`, 1-based: the item at 0-based 1
 			Node::Key(indexed, Op::Hash, index) => {
@@ -489,20 +450,13 @@ impl Foreign<'_> {
 			Node::Key(left, op, right)
 				if operator_member(op).is_some() && !(*op == Op::Eq && crate::type_tests::begins_type_test(right)) =>
 			{
-				let (left, right) = (
-					self.rewrite(left.as_ref().clone()),
-					self.rewrite(right.as_ref().clone()),
-				);
+				let (left, right) = (self.rewrite(left.as_ref().clone()), self.rewrite(right.as_ref().clone()));
 				if let (Some(_), Some(member)) = (self.component_handle(&left), component_operator(op)) {
 					let arguments = Node::List(vec![right], Bracket::Square, Separator::Space);
 					return Some(foreign_call(COMPONENT_RUNTIME, left, member, true, arguments));
 				}
 				let runtime = self.foreign_value(&left).or_else(|| self.foreign_value(&right))?;
-				Some(operator_call(
-					&runtime,
-					operator_member(op).expect("guarded"),
-					vec![left, right],
-				))
+				Some(operator_call(&runtime, operator_member(op).expect("guarded"), vec![left, right]))
 			}
 			// `count a`, `len(a)`
 			Node::List(items, _, _) if matches!(items.as_slice(), [word, _] if matches!(word.drop_meta(), Node::Symbol(word) if crate::analyzer::is_counting_word(word))) =>
@@ -569,10 +523,7 @@ impl Foreign<'_> {
 		match receiver.drop_meta() {
 			Node::Symbol(name) => match self.modules.get(name) {
 				Some((runtime, module)) if runtime == JS_RUNTIME => global(module, name),
-				_ => Ok(self
-					.web_idl_values
-					.get(name)
-					.map(|interface| (interface.clone(), name.clone()))),
+				_ => Ok(self.web_idl_values.get(name).map(|interface| (interface.clone(), name.clone()))),
 			},
 			// the global inside a lowered read
 			Node::Text(name) => global(name, name),
@@ -587,11 +538,7 @@ impl Foreign<'_> {
 				let Some((interface, path)) = self.web_idl_receiver(inner)? else {
 					return Ok(None);
 				};
-				let read = if is_call {
-					format!("{path}.{member}(…)")
-				} else {
-					format!("{path}.{member}")
-				};
+				let read = if is_call { format!("{path}.{member}(…)") } else { format!("{path}.{member}") };
 				let context = match arguments.drop_meta() {
 					Node::List(items, _, _) => match items.first().map(Node::drop_meta) {
 						Some(Node::Text(context_id)) => {
@@ -625,9 +572,7 @@ impl Foreign<'_> {
 			return Ok(None);
 		};
 		crate::formats::web_idl::check_member(&interface, &path, member, is_call.then_some(count))?;
-		Ok(crate::formats::web_idl::optional_result_type(
-			&interface, member, is_call,
-		))
+		Ok(crate::formats::web_idl::optional_result_type(&interface, member, is_call))
 	}
 
 	/// `URL("https://…")` of `use js URL`: the constructor called, JavaScript's `new`, checked by WebIDL when it declares
@@ -640,19 +585,11 @@ impl Foreign<'_> {
 		let Node::Symbol(name) = head.drop_meta() else {
 			return None;
 		};
-		let (runtime, module) = self
-			.modules
-			.get(name)
-			.filter(|(runtime, _)| runtime == JS_RUNTIME)?
-			.clone();
+		let (runtime, module) = self.modules.get(name).filter(|(runtime, _)| runtime == JS_RUNTIME)?.clone();
 		if let Err(problem) = crate::formats::web_idl::check_constructor(&module, arguments.len()) {
 			return Some(crate::errors::diagnostic::Diagnostic::at(node, problem).into_error());
 		}
-		let arguments = arguments
-			.iter()
-			.cloned()
-			.map(|argument| self.rewrite(argument))
-			.collect();
+		let arguments = arguments.iter().cloned().map(|argument| self.rewrite(argument)).collect();
 		Some(foreign_call(
 			&runtime,
 			Node::Text(module),
@@ -758,26 +695,16 @@ impl Foreign<'_> {
 			let arguments = self.arguments_rewritten(&items[1..]);
 			// `semver.Version.parse(t)`: the static function `[static]version.parse` of the component
 			return Some(match type_read(&receiver) {
-				Some((path, resource)) => foreign_call(
-					COMPONENT_RUNTIME,
-					path,
-					&format!("{resource}.{}", items[0].name()),
-					true,
-					arguments,
-				),
+				Some((path, resource)) => {
+					foreign_call(COMPONENT_RUNTIME, path, &format!("{resource}.{}", items[0].name()), true, arguments)
+				}
 				None => foreign_call(COMPONENT_RUNTIME, receiver, &items[0].name(), true, arguments),
 			});
 		}
 		// `v.major` of a handle whose resource has a method `major` without arguments (a Rust struct's field)
 		if let (Node::Symbol(field), Some((path, kind))) = (member.drop_meta(), self.component_handle(&receiver)) {
 			if has_method(&path, &kind, field) {
-				return Some(foreign_call(
-					COMPONENT_RUNTIME,
-					receiver,
-					field,
-					true,
-					self.arguments_rewritten(&[]),
-				));
+				return Some(foreign_call(COMPONENT_RUNTIME, receiver, field, true, self.arguments_rewritten(&[])));
 			}
 		}
 		None
@@ -810,11 +737,7 @@ impl Foreign<'_> {
 	}
 
 	fn arguments_rewritten(&mut self, arguments: &[Node]) -> Node {
-		let arguments = arguments
-			.iter()
-			.cloned()
-			.map(|argument| self.rewrite(argument))
-			.collect();
+		let arguments = arguments.iter().cloned().map(|argument| self.rewrite(argument)).collect();
 		Node::List(arguments, Bracket::Square, Separator::Space)
 	}
 

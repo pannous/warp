@@ -58,9 +58,5 @@ fn parser_progress() {
 		.collect();
 	std::fs::create_dir_all(std::path::Path::new(MATCHING).parent().unwrap()).unwrap();
 	std::fs::write(MATCHING, matching.join("\n") + "\n").unwrap();
-	println!(
-		"{} of {} sources parse as in Rust, listed in {MATCHING}",
-		matching.len(),
-		all.len()
-	);
+	println!("{} of {} sources parse as in Rust, listed in {MATCHING}", matching.len(), all.len());
 }

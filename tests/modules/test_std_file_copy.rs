@@ -5,11 +5,7 @@ use warp::wasm_emitter::eval;
 fn with_collections_copy(test: &str, code: &str) -> String {
 	let folder = crate::common::scratch_directory(test);
 	std::fs::create_dir_all(&folder).expect("scratch folder");
-	std::fs::write(
-		folder.join("collections.warp"),
-		include_str!("../../lib/collections.warp"),
-	)
-	.expect("the copy");
+	std::fs::write(folder.join("collections.warp"), include_str!("../../lib/collections.warp")).expect("the copy");
 	let result = warp::modules::with_program_file(&folder.join("app.warp"), || eval(code));
 	std::fs::remove_dir_all(&folder).ok();
 	result.serialize().trim().to_string()
@@ -17,10 +13,7 @@ fn with_collections_copy(test: &str, code: &str) -> String {
 
 #[test]
 fn a_copy_of_a_std_module_knows_the_foreign_names() {
-	assert_eq!(
-		with_collections_copy("std_file_set", "use collections; s = HashSet([1 2 2]); s.size()"),
-		"2"
-	);
+	assert_eq!(with_collections_copy("std_file_set", "use collections; s = HashSet([1 2 2]); s.size()"), "2");
 	assert_eq!(
 		with_collections_copy(
 			"std_file_deque",

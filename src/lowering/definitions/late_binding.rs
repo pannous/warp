@@ -57,10 +57,7 @@ pub fn lower(program: Node) -> Result<Node, Node> {
 	late_bound.extend(declared);
 	late_bound.sort();
 	late_bound.dedup();
-	Ok(declare_global(
-		without_nonlocal_declarations(crate::nonlocal_cells::lower(program)),
-		&late_bound,
-	))
+	Ok(declare_global(without_nonlocal_declarations(crate::nonlocal_cells::lower(program)), &late_bound))
 }
 
 /// The late-binding check of the functions defined in `statements` whose free variables `scope` binds: main's
@@ -75,10 +72,7 @@ fn check_definitions(
 ) -> Result<Vec<String>, Node> {
 	let callers = callers(definitions, &|name| written_names(enclosing, name));
 	// asked for every free variable of every definition: worked out once per statement and per definition
-	let defines_functions: Vec<bool> = statements
-		.iter()
-		.map(|statement| !functions_in(statement).is_empty())
-		.collect();
+	let defines_functions: Vec<bool> = statements.iter().map(|statement| !functions_in(statement).is_empty()).collect();
 	let mut late_bound: Vec<String> = vec![];
 	for definition in definitions {
 		let free: Vec<String> = captured_variables(&definition.function, scope)
@@ -111,9 +105,8 @@ fn check_definitions(
 				}
 				_ => changes.as_slice(),
 			};
-			let Some(change) = checked
-				.iter()
-				.find(|change| observed_after(statements, change, &callers[&definition.function.name]))
+			let Some(change) =
+				checked.iter().find(|change| observed_after(statements, change, &callers[&definition.function.name]))
 			else {
 				continue;
 			};
@@ -144,17 +137,11 @@ fn check_function_body(function: &UserFunctionDef) -> Result<(), Node> {
 	for param in &function.params {
 		enclosing.define(param.name.clone(), None, param_kind(param));
 	}
-	collect_variables(
-		&Node::List(statements.clone(), Bracket::None, Separator::Newline),
-		&mut enclosing,
-	);
+	collect_variables(&Node::List(statements.clone(), Bracket::None, Separator::Newline), &mut enclosing);
 	// a function defined with `def` in the body shares its variables: each call reads their current values
 	let declared = |definition: &Definition, name: &str| {
 		let mut found = definition.function.name.contains(NESTED_DEF_SEPARATOR);
-		definition
-			.function
-			.body
-			.visit(&mut |node| found |= global_read(node).is_some_and(|declared| declared == name));
+		definition.function.body.visit(&mut |node| found |= global_read(node).is_some_and(|declared| declared == name));
 		found
 	};
 	check_definitions(&statements, &definitions, &enclosing, &declared, Some(function)).map(|_| ())
@@ -176,10 +163,7 @@ pub(crate) fn nonlocal_names(node: &Node) -> Vec<String> {
 	}
 	match names.drop_meta() {
 		Node::Symbol(name) => vec![name.clone()],
-		Node::List(items, _, _) => items
-			.iter()
-			.filter_map(|item| item.symbol_name().map(String::from))
-			.collect(),
+		Node::List(items, _, _) => items.iter().filter_map(|item| item.symbol_name().map(String::from)).collect(),
 		_ => vec![],
 	}
 }
@@ -203,9 +187,7 @@ const NESTED_DEF_SEPARATOR: &str = "·";
 
 /// `inner` for `outer·inner` defined in the body of `outer`
 fn short_name_in<'a>(enclosing: &UserFunctionDef, name: &'a str) -> &'a str {
-	name.strip_prefix(enclosing.name.as_str())
-		.and_then(|rest| rest.strip_prefix(NESTED_DEF_SEPARATOR))
-		.unwrap_or(name)
+	name.strip_prefix(enclosing.name.as_str()).and_then(|rest| rest.strip_prefix(NESTED_DEF_SEPARATOR)).unwrap_or(name)
 }
 
 /// The names a call of the function `name` may be written with: in a function body both `inner` and the lifted
@@ -215,10 +197,7 @@ fn written_names(enclosing: Option<&UserFunctionDef>, name: &str) -> Vec<String>
 		None => vec![name.to_string()],
 		Some(outer) => {
 			let short = short_name_in(outer, name);
-			vec![
-				short.to_string(),
-				format!("{}{NESTED_DEF_SEPARATOR}{short}", outer.name),
-			]
+			vec![short.to_string(), format!("{}{NESTED_DEF_SEPARATOR}{short}", outer.name)]
 		}
 	}
 }
@@ -246,15 +225,9 @@ pub(crate) fn map_statements(program: Node, transform: &mut dyn FnMut(Node) -> N
 			Node::List(items.into_iter().map(transform).collect(), Bracket::None, separator)
 		}
 		Node::Meta { node, data }
-			if matches!(
-				node.drop_meta(),
-				Node::List(_, Bracket::None, Separator::Semicolon | Separator::Newline)
-			) =>
+			if matches!(node.drop_meta(), Node::List(_, Bracket::None, Separator::Semicolon | Separator::Newline)) =>
 		{
-			Node::Meta {
-				node: Box::new(map_statements(*node, transform)),
-				data,
-			}
+			Node::Meta { node: Box::new(map_statements(*node, transform)), data }
 		}
 		single => transform(single),
 	}
@@ -293,10 +266,7 @@ pub fn split_global_assignments(node: Node) -> Node {
 	let split = |item: Node| match item.drop_meta() {
 		Node::Key(keyword, Op::Colon, assignment) if keyword.is_symbol(GLOBAL_WORD) => match assignment.drop_meta() {
 			Node::Key(name, Op::Assign, _) if matches!(name.drop_meta(), Node::Symbol(_)) => {
-				vec![
-					Node::Key(keyword.clone(), Op::Colon, name.clone()),
-					assignment.as_ref().clone(),
-				]
+				vec![Node::Key(keyword.clone(), Op::Colon, name.clone()), assignment.as_ref().clone()]
 			}
 			_ => vec![item],
 		},
@@ -304,11 +274,7 @@ pub fn split_global_assignments(node: Node) -> Node {
 	};
 	let count = items.len();
 	let items: Vec<Node> = items.into_iter().flat_map(split).collect();
-	let separator = if items.len() > count && separator == Separator::None {
-		Separator::Semicolon
-	} else {
-		separator
-	};
+	let separator = if items.len() > count && separator == Separator::None { Separator::Semicolon } else { separator };
 	Node::List(items, Bracket::Curly, separator)
 }
 
@@ -349,9 +315,7 @@ fn without_global_reads(program: Node, declared: &[String]) -> Node {
 	if declared.is_empty() {
 		return program;
 	}
-	without_statements(program, &|item| {
-		global_read(item).is_some_and(|name| declared.contains(name))
-	})
+	without_statements(program, &|item| global_read(item).is_some_and(|name| declared.contains(name)))
 }
 
 /// The function definitions among the program's statements without their statements that are `dropped`, at any depth
@@ -471,10 +435,7 @@ fn warn_effectful_getter(name: &str, value: &str, written: &str, at: &Node) -> R
 	let question = Ask::new(
 		EFFECTFUL_GETTER_TOPIC,
 		message,
-		vec![
-			reading("at every read", written),
-			reading("one value", &format!("{name} = {value}")),
-		],
+		vec![reading("at every read", written), reading("one value", &format!("{name} = {value}"))],
 		Fallback::Warning,
 	)
 	.written(written)
@@ -493,13 +454,7 @@ fn definitions(statements: &[Node]) -> Vec<Definition> {
 				let getter_left =
 					getter_definition_left(statement, &function.name).filter(|_| function.params.is_empty());
 				let bare = getter_left.is_some_and(crate::getters::is_written_bare);
-				Definition {
-					index,
-					function,
-					line: line_of(statement),
-					getter: getter_left.is_some(),
-					bare,
-				}
+				Definition { index, function, line: line_of(statement), getter: getter_left.is_some(), bare }
 			})
 		})
 		.collect()
@@ -532,10 +487,8 @@ fn getter_definition_left<'a>(statement: &'a Node, name: &str) -> Option<&'a Nod
 fn callers(definitions: &[Definition], written: &dyn Fn(&str) -> Vec<String>) -> HashMap<String, HashSet<String>> {
 	let names: HashSet<&String> = definitions.iter().map(|definition| &definition.function.name).collect();
 	let spellings: HashMap<&String, Vec<String>> = names.iter().map(|name| (*name, written(name))).collect();
-	let mut callers: HashMap<String, HashSet<String>> = names
-		.iter()
-		.map(|name| ((*name).clone(), HashSet::from([(*name).clone()])))
-		.collect();
+	let mut callers: HashMap<String, HashSet<String>> =
+		names.iter().map(|name| ((*name).clone(), HashSet::from([(*name).clone()]))).collect();
 	// each body's callees once: the loop below runs until nothing changes
 	let callees: Vec<Vec<&String>> = definitions
 		.iter()
@@ -584,19 +537,15 @@ fn changes_after<'a>(
 		.skip(index + 1)
 		.filter(|(index, _)| !defines_functions[*index])
 		.flat_map(|(index, statement)| {
-			changes_in(statement, variable)
-				.into_iter()
-				.map(move |node| Change { index, node })
+			changes_in(statement, variable).into_iter().map(move |node| Change { index, node })
 		})
 		.collect()
 }
 
 /// Assignments of `variable` (`y = …`, `y += …`, `xs#i = …`) and in-place mutations (`xs.add(v)`, `xs.pop()`)
 pub(crate) fn changes_in<'a>(node: &'a Node, variable: &str) -> Vec<&'a Node> {
-	let mut found: Vec<&Node> = find_assignments(node, &|name| name == variable)
-		.into_iter()
-		.map(|(node, _)| node)
-		.collect();
+	let mut found: Vec<&Node> =
+		find_assignments(node, &|name| name == variable).into_iter().map(|(node, _)| node).collect();
 	found.extend(mutating_calls(node, variable));
 	found
 }
@@ -625,10 +574,7 @@ fn is_mutating_call(call: &Node) -> bool {
 /// The variables `statements` bind
 fn variables_of(statements: &[Node]) -> Scope {
 	let mut scope = Scope::new();
-	collect_variables(
-		&Node::List(statements.to_vec(), Bracket::None, Separator::Newline),
-		&mut scope,
-	);
+	collect_variables(&Node::List(statements.to_vec(), Bracket::None, Separator::Newline), &mut scope);
 	scope
 }
 

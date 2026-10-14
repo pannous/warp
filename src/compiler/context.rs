@@ -16,12 +16,7 @@ pub struct Param {
 
 impl Param {
 	pub fn untyped(name: &str) -> Self {
-		Param {
-			name: name.to_string(),
-			annotation: None,
-			default: None,
-			used_as: None,
-		}
+		Param { name: name.to_string(), annotation: None, default: None, used_as: None }
 	}
 }
 

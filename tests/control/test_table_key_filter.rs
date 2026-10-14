@@ -13,13 +13,7 @@ fn program(rest: &str) -> String {
 #[test]
 fn rows_whose_foreign_key_is_a_given_row() {
 	eval(&program(SEED));
-	is!(
-		&program("red = teams#1\n(people where it.team == red).map(p => p.name)"),
-		warp::texts(vec!["Ann"])
-	);
+	is!(&program("red = teams#1\n(people where it.team == red).map(p => p.name)"), warp::texts(vec!["Ann"]));
 	is!(&program("count(people where it.team != teams#1)"), 2);
-	is!(
-		&program("(people where it.team == ø).map(p => p.name)"),
-		warp::texts(vec!["Cy"])
-	);
+	is!(&program("(people where it.team == ø).map(p => p.name)"), warp::texts(vec!["Cy"]));
 }

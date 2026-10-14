@@ -17,21 +17,12 @@ pub(super) fn inline(program: &Node) -> Result<Node, String> {
 	let words: Vec<Node> = LIBRARY_WORDS
 		.iter()
 		.filter(|(word, _)| own.iter().any(|statement| calls(statement, word)) && !defines(&own, word))
-		.flat_map(|(_, source)| {
-			statements(&crate::warp_parser::parse(source))
-				.into_iter()
-				.cloned()
-				.collect::<Vec<_>>()
-		})
+		.flat_map(|(_, source)| statements(&crate::warp_parser::parse(source)).into_iter().cloned().collect::<Vec<_>>())
 		.collect();
 	if words.is_empty() {
 		return Ok(with_modules);
 	}
-	Ok(Node::List(
-		words.into_iter().chain(parts.into_iter().cloned()).collect(),
-		Bracket::None,
-		Separator::Semicolon,
-	))
+	Ok(Node::List(words.into_iter().chain(parts.into_iter().cloned()).collect(), Bracket::None, Separator::Semicolon))
 }
 
 /// whether node calls the word: `sum xs`, `sum(xs)`
@@ -44,9 +35,7 @@ fn calls(node: &Node, word: &str) -> bool {
 }
 
 fn defines(program: &[&Node], word: &str) -> bool {
-	program
-		.iter()
-		.any(|statement| function_definition(statement).is_some_and(|definition| definition.name == word))
+	program.iter().any(|statement| function_definition(statement).is_some_and(|definition| definition.name == word))
 }
 
 fn inline_modules(program: &Node) -> Result<Node, String> {
@@ -54,11 +43,7 @@ fn inline_modules(program: &Node) -> Result<Node, String> {
 	if !parts.iter().any(|statement| used_module(statement).is_some()) {
 		return Ok(program.clone());
 	}
-	let own: Vec<&Node> = parts
-		.iter()
-		.copied()
-		.filter(|statement| used_module(statement).is_none())
-		.collect();
+	let own: Vec<&Node> = parts.iter().copied().filter(|statement| used_module(statement).is_none()).collect();
 	let mut inlined = vec![];
 	for statement in &parts {
 		match used_module(statement) {

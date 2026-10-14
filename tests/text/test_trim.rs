@@ -6,10 +6,7 @@ fn trim_drops_whitespace_at_both_ends() {
 	is!("\"  hi \".trim()", "hi");
 	is!("trim(\"\\t a b \\n\")", "a b");
 	is!("s = \"   \"; #s.trim()", 0);
-	is!(
-		"lines = \" x , y \".split(\",\"); lines.map(l => l.trim()).join(\"|\")",
-		"x|y"
-	);
+	is!("lines = \" x , y \".split(\",\"); lines.map(l => l.trim()).join(\"|\")", "x|y");
 }
 
 /// `strip` is Python's spelling of trim; `s.trim` needs no parentheses, like `s.upper`

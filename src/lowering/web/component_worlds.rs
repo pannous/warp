@@ -71,17 +71,10 @@ impl World {
 			self.items
 				.iter()
 				.filter(|item| item.direction == direction)
-				.flat_map(|item| {
-					item.functions
-						.iter()
-						.map(|function| (item.name.clone(), function.clone()))
-				})
+				.flat_map(|item| item.functions.iter().map(|function| (item.name.clone(), function.clone())))
 				.collect()
 		};
-		WorldFunctions {
-			exports: of(EXPORT_DIRECTION),
-			imports: of(IMPORT_WORD),
-		}
+		WorldFunctions { exports: of(EXPORT_DIRECTION), imports: of(IMPORT_WORD) }
 	}
 }
 
@@ -99,11 +92,7 @@ pub fn lower(node: Node) -> Node {
 fn without_components(node: Node) -> Node {
 	match node {
 		Node::List(items, bracket, separator) => Node::List(
-			items
-				.into_iter()
-				.filter(|item| component(item).is_none())
-				.map(without_components)
-				.collect(),
+			items.into_iter().filter(|item| component(item).is_none()).map(without_components).collect(),
 			bracket,
 			separator,
 		),
@@ -134,10 +123,7 @@ fn import_calls(node: Node, imports: &[(String, Signature)]) -> Node {
 			.any(|(imported, signature)| *imported == interface && signature.name == underscores_to_dashes(&function))
 		{
 			let arguments = arguments.into_iter().map(|argument| import_calls(argument, imports));
-			return crate::node::call(
-				&import_name(&interface, &underscores_to_dashes(&function)),
-				arguments.collect(),
-			);
+			return crate::node::call(&import_name(&interface, &underscores_to_dashes(&function)), arguments.collect());
 		}
 	}
 	node.map_children(|child| import_calls(child, imports))
@@ -152,10 +138,7 @@ pub fn world(program: &Node) -> Result<World, String> {
 		interfaces.extend(declaration(node, INTERFACE_WORD));
 	});
 	let [(name, body)] = components.as_slice() else {
-		return Err(format!(
-			"{} component declarations: a world is declared by one",
-			components.len()
-		));
+		return Err(format!("{} component declarations: a world is declared by one", components.len()));
 	};
 	let interfaces: Vec<(String, Vec<Signature>)> = interfaces
 		.iter()
@@ -178,18 +161,10 @@ pub fn world(program: &Node) -> Result<World, String> {
 				)?,
 				block => signatures(block)?,
 			};
-			Ok(WorldItem {
-				direction,
-				name: underscores_to_dashes(&name),
-				functions,
-			})
+			Ok(WorldItem { direction, name: underscores_to_dashes(&name), functions })
 		})
 		.collect::<Result<_, String>>()?;
-	Ok(World {
-		name: underscores_to_dashes(name),
-		interfaces,
-		items,
-	})
+	Ok(World { name: underscores_to_dashes(name), interfaces, items })
 }
 
 /// The WIT of the program's component: its package with the program's interfaces, and its world
@@ -203,11 +178,7 @@ pub fn world_wit(program: &Node) -> Result<String, String> {
 	for item in &world.items {
 		wit += &format!(
 			"{INDENT}{}\n",
-			block_text(
-				&format!("{} {}: interface", item.direction, item.name),
-				&item.functions,
-				INDENT
-			)
+			block_text(&format!("{} {}: interface", item.direction, item.name), &item.functions, INDENT)
 		);
 	}
 	Ok(wit + "}\n")
@@ -270,12 +241,8 @@ fn signatures(block: &Node) -> Result<Vec<Signature>, String> {
 		.as_items()
 		.iter()
 		.map(|member| {
-			signature(member).ok_or_else(|| {
-				format!(
-					"an interface member is `name: (types) -> type`, not {}",
-					member.serialize()
-				)
-			})
+			signature(member)
+				.ok_or_else(|| format!("an interface member is `name: (types) -> type`, not {}", member.serialize()))
 		})
 		.collect()
 }
@@ -292,42 +259,25 @@ fn signature(member: &Node) -> Option<Signature> {
 		Node::Empty => None,
 		other => Some(wit_type(other)?),
 	};
-	Some(Signature {
-		name: underscores_to_dashes(&name.drop_meta().name()),
-		parameters,
-		result,
-	})
+	Some(Signature { name: underscores_to_dashes(&name.drop_meta().name()), parameters, result })
 }
 
 fn wit_type(node: &Node) -> Option<String> {
 	let word = node.drop_meta().name();
-	WIT_TYPES
-		.iter()
-		.find(|(warp, _)| *warp == word)
-		.map(|(_, wit)| wit.to_string())
+	WIT_TYPES.iter().find(|(warp, _)| *warp == word).map(|(_, wit)| wit.to_string())
 }
 
 /// `header { name: func(p1: s32) -> s32; … }`, the members indented one level below `indent`
 fn block_text(header: &str, functions: &[Signature], indent: &str) -> String {
-	let lines: String = functions
-		.iter()
-		.map(|function| format!("{indent}{INDENT}{}\n", function_text(function)))
-		.collect();
+	let lines: String =
+		functions.iter().map(|function| format!("{indent}{INDENT}{}\n", function_text(function))).collect();
 	format!("{header} {{\n{lines}{indent}}}")
 }
 
 fn function_text(function: &Signature) -> String {
-	let parameters: Vec<String> = function
-		.parameters
-		.iter()
-		.enumerate()
-		.map(|(index, kind)| format!("p{}: {kind}", index + 1))
-		.collect();
-	let result = function
-		.result
-		.as_ref()
-		.map(|result| format!(" -> {result}"))
-		.unwrap_or_default();
+	let parameters: Vec<String> =
+		function.parameters.iter().enumerate().map(|(index, kind)| format!("p{}: {kind}", index + 1)).collect();
+	let result = function.result.as_ref().map(|result| format!(" -> {result}")).unwrap_or_default();
 	format!("{}: func({}){result};", function.name, parameters.join(", "))
 }
 

@@ -66,10 +66,7 @@ fn a_site_with_transitions_carries_their_script() {
 		site.files
 	};
 	let with = scripts("div{ ul{ li{ key: 1 starting-style: { opacity: 0 } transition: opacity 150ms \"milk\" } } }");
-	assert_eq!(
-		with[with.len() - 3..],
-		["markup.js", "markup-transitions.js", "site.js"]
-	);
+	assert_eq!(with[with.len() - 3..], ["markup.js", "markup-transitions.js", "site.js"]);
 	assert!(!scripts("div{ p{ \"hello\" } }").contains(&"markup-transitions.js".to_string()));
 }
 

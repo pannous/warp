@@ -11,11 +11,7 @@ const KOTLIN_BOUND: &str = "n=3; s=0; for i in 0..n-1 { s+=i }; s";
 /// The `let` notes of the canonical style (the default leaves let and := open, user #12)
 fn let_notes(code: &str) -> usize {
 	warp::normalize::set_style(warp::normalize::Style::canonical());
-	let notes = capture_hints(|| eval(code))
-		.1
-		.iter()
-		.filter(|hint| hint.original.starts_with("let "))
-		.count();
+	let notes = capture_hints(|| eval(code)).1.iter().filter(|hint| hint.original.starts_with("let ")).count();
 	warp::normalize::set_style(warp::normalize::Style::default());
 	notes
 }
@@ -32,21 +28,12 @@ fn an_eval_does_not_see_the_assumptions_of_the_one_before() {
 #[test]
 fn every_eval_shows_its_educate_once_note() {
 	assert_eq!(let_notes("let x = 3; x"), 1);
-	assert_eq!(
-		let_notes("let y = 4; y"),
-		1,
-		"the note of the first program hid the second one's"
-	);
+	assert_eq!(let_notes("let y = 4; y"), 1, "the note of the first program hid the second one's");
 }
 
 #[test]
 fn a_got_it_without_a_file_lasts_one_eval_and_never_changes_the_value() {
-	let bound_warnings = || {
-		take_warnings()
-			.iter()
-			.filter(|warning| warning.message.contains("loop bound"))
-			.count()
-	};
+	let bound_warnings = || take_warnings().iter().filter(|warning| warning.message.contains("loop bound")).count();
 	with_acknowledger(Acknowledging(vec!["kotlin-range".to_string()]), || {
 		take_warnings();
 		assert_eq!(eval(KOTLIN_BOUND), 1, "the default, exclusive: 0+1");

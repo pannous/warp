@@ -17,21 +17,12 @@ get "/nested" { {name: "x", tags: ["a", "b"], inner: {k: no}} }"#;
 pub(super) fn answer(module: &Module, path: &str) -> String {
 	let stdout = MemoryOutputPipe::new(OUTPUT_CAPACITY);
 	let mut context = WasiCtxBuilder::new();
-	context
-		.env("REQUEST_METHOD", "GET")
-		.env("PATH_INFO", path)
-		.stdout(stdout.clone());
+	context.env("REQUEST_METHOD", "GET").env("PATH_INFO", path).stdout(stdout.clone());
 	let mut store = Store::new(module.engine(), context.build_p1());
 	let mut linker: Linker<WasiP1Ctx> = Linker::new(module.engine());
 	p1::add_to_linker_sync(&mut linker, |context| context).unwrap();
-	let start = linker
-		.instantiate(&mut store, module)
-		.unwrap()
-		.get_typed_func::<(), ()>(&mut store, "_start")
-		.unwrap();
-	start
-		.call(&mut store, ())
-		.unwrap_or_else(|trap| panic!("GET {path}: {trap:?}"));
+	let start = linker.instantiate(&mut store, module).unwrap().get_typed_func::<(), ()>(&mut store, "_start").unwrap();
+	start.call(&mut store, ()).unwrap_or_else(|trap| panic!("GET {path}: {trap:?}"));
 	drop(store);
 	String::from_utf8_lossy(&stdout.contents()).into_owned()
 }
@@ -41,14 +32,7 @@ fn each_route_answers_as_wagi() {
 	let wasm = warp::pipeline::for_wagi(|| warp::wasm_emitter::compile(ROUTES)).expect("the WAGI module builds");
 	let engine = Engine::new(&warp_runtime::engine::deterministic_config()).unwrap();
 	let module = Module::new(&engine, &wasm.bytes).unwrap();
-	let body = |path| {
-		answer(&module, path)
-			.rsplit("\n\n")
-			.next()
-			.unwrap()
-			.trim_end()
-			.to_string()
-	};
+	let body = |path| answer(&module, path).rsplit("\n\n").next().unwrap().trim_end().to_string();
 	assert_eq!(body("/"), "hello from the edge");
 	assert_eq!(body("/fib/20"), r#"{"n":20,"fib":6765}"#);
 	assert_eq!(body("/list"), r#"[1,2.5,"a",true,[3]]"#);

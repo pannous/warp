@@ -14,17 +14,7 @@ fn program(rest: &str) -> String {
 fn a_filtered_comprehension_over_a_table_reads_only_its_rows() {
 	eval(&program("for i in 1 to 50 { people.add(Person(\"N\" + i, i)) }"));
 	let before = warp::host::database::rows_read();
-	is!(
-		&program("names = [p.name for p in people if p.age > 47]\nnames#1 + names#3"),
-		"N48N50"
-	);
-	assert_eq!(
-		warp::host::database::rows_read(),
-		before + 3,
-		"the comprehension read other rows than its three"
-	);
-	is!(
-		&program("least = 49\ncount([p.age * 2 for p in people if p.age >= least and p.name != \"N50\"])"),
-		1
-	);
+	is!(&program("names = [p.name for p in people if p.age > 47]\nnames#1 + names#3"), "N48N50");
+	assert_eq!(warp::host::database::rows_read(), before + 3, "the comprehension read other rows than its three");
+	is!(&program("least = 49\ncount([p.age * 2 for p in people if p.age >= least and p.name != \"N50\"])"), 1);
 }

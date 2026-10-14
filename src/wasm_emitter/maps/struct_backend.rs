@@ -40,21 +40,14 @@ impl WasmGcEmitter {
 	pub(in crate::wasm_emitter) fn emit_instance_types(&mut self) {
 		let types: Vec<TypeDef> = self.ctx.type_registry.types().to_vec();
 		for type_def in types {
-			let fields: Vec<(String, Kind)> = type_def
-				.fields
-				.iter()
-				.map(|field| (field.name.clone(), stored_kind(&field.type_name)))
-				.collect();
+			let fields: Vec<(String, Kind)> =
+				type_def.fields.iter().map(|field| (field.name.clone(), stored_kind(&field.type_name))).collect();
 			let wasm_fields = fields
 				.iter()
-				.map(|(_, kind)| FieldType {
-					element_type: StorageType::Val(self.storage_type(*kind)),
-					mutable: true,
-				})
+				.map(|(_, kind)| FieldType { element_type: StorageType::Val(self.storage_type(*kind)), mutable: true })
 				.collect();
 			let type_index = self.type_manager.add_struct_type(wasm_fields);
-			self.instance_types
-				.insert(type_def.name.clone(), InstanceType { type_index, fields });
+			self.instance_types.insert(type_def.name.clone(), InstanceType { type_index, fields });
 		}
 	}
 
@@ -79,15 +72,14 @@ impl WasmGcEmitter {
 					let (index, written) = entry_update(name, value).expect("guarded");
 					writes.push((name.clone(), index, written));
 				}
-				Node::Symbol(name) if matches!(op, Op::Assign | Op::Define) => match self
-					.constructed_class(value)
-					.or_else(|| struct_call_class(value, results))
-				{
-					Some(class) if classes.get(name).is_none_or(|known| *known == class) => {
-						classes.insert(name.clone(), class);
+				Node::Symbol(name) if matches!(op, Op::Assign | Op::Define) => {
+					match self.constructed_class(value).or_else(|| struct_call_class(value, results)) {
+						Some(class) if classes.get(name).is_none_or(|known| *known == class) => {
+							classes.insert(name.clone(), class);
+						}
+						_ => excluded.push(name.clone()),
 					}
-					_ => excluded.push(name.clone()),
-				},
+				}
 				Node::Symbol(name) if is_update(op) => excluded.push(name.clone()),
 				Node::Key(instance, Op::Hash, index)
 					if matches!(op, Op::Assign | Op::Define) || op.is_compound_assign() =>
@@ -140,10 +132,7 @@ impl WasmGcEmitter {
 	/// Is the value certainly no value of the number field's kind: a text, a list, a float for an int field
 	fn misfits(&self, value: &Node, kind: Kind) -> bool {
 		let given = self.given_kind(value);
-		let known = matches!(
-			given,
-			Kind::Int | Kind::Float | Kind::Text | Kind::Codepoint | Kind::List
-		);
+		let known = matches!(given, Kind::Int | Kind::Float | Kind::Text | Kind::Codepoint | Kind::List);
 		!kind.is_ref() && known && given != kind && !(kind == Kind::Float && given == Kind::Int)
 	}
 
@@ -162,10 +151,7 @@ impl WasmGcEmitter {
 	}
 
 	pub(in crate::wasm_emitter) fn instance_ref(&self, class: &str) -> RefType {
-		RefType {
-			nullable: true,
-			heap_type: HeapType::Concrete(self.instance_types[class].type_index),
-		}
+		RefType { nullable: true, heap_type: HeapType::Concrete(self.instance_types[class].type_index) }
 	}
 
 	/// The local slot and class of `target` when it is a struct variable
@@ -181,12 +167,7 @@ impl WasmGcEmitter {
 	fn field_access(&self, target: &Node, index: &Node) -> Option<FieldAccess> {
 		let (slot, instance) = self.typed_struct(target)?;
 		let (field_index, kind) = field_of(instance, index)?;
-		Some(FieldAccess {
-			slot,
-			type_index: instance.type_index,
-			field_index,
-			kind,
-		})
+		Some(FieldAccess { slot, type_index: instance.type_index, field_index, kind })
 	}
 
 	fn emit_field_get(&self, func: &mut Function, access: &FieldAccess) {
@@ -194,10 +175,7 @@ impl WasmGcEmitter {
 			func,
 			&[
 				I::LocalGet(access.slot),
-				I::StructGet {
-					struct_type_index: access.type_index,
-					field_index: access.field_index,
-				},
+				I::StructGet { struct_type_index: access.type_index, field_index: access.field_index },
 			],
 		);
 	}
@@ -226,10 +204,7 @@ impl WasmGcEmitter {
 		target: &Node,
 		index: &Node,
 	) -> bool {
-		let Some(access) = self
-			.field_access(target, index)
-			.filter(|access| access.kind == Kind::Int)
-		else {
+		let Some(access) = self.field_access(target, index).filter(|access| access.kind == Kind::Int) else {
 			return false;
 		};
 		self.emit_field_get(func, &access);
@@ -253,12 +228,8 @@ impl WasmGcEmitter {
 			return true;
 		}
 		let class = self.typed_structs[&target.drop_meta().name()].clone();
-		let field = &self
-			.ctx
-			.type_registry
-			.get_by_name(&class)
-			.expect("a declared class")
-			.fields[access.field_index as usize];
+		let field =
+			&self.ctx.type_registry.get_by_name(&class).expect("a declared class").fields[access.field_index as usize];
 		// a union field `size: int | text` is stored as a Node: its literal is checked against the parts
 		let literal_misfit = crate::analyzer::literal_misfit(&field.type_name, value);
 		if self.misfits(value, access.kind) || literal_misfit.is_some() {
@@ -277,13 +248,8 @@ impl WasmGcEmitter {
 		func.instruction(&I::LocalGet(access.slot));
 		let class = self.typed_structs[&target.drop_meta().name()].clone();
 		self.emit_field_value(func, &class, access.field_index as usize, value, access.kind);
-		func.instruction(&I::StructSet {
-			struct_type_index: access.type_index,
-			field_index: access.field_index,
-		});
-		let key = crate::warp_parser::subscript_key(index)
-			.expect("a field by name")
-			.clone();
+		func.instruction(&I::StructSet { struct_type_index: access.type_index, field_index: access.field_index });
+		let key = crate::warp_parser::subscript_key(index).expect("a field by name").clone();
 		self.emit_assigned_entry_value(func, target, &key, value);
 		true
 	}
@@ -322,9 +288,7 @@ impl WasmGcEmitter {
 		if let Some(callee) = super::super::lists::list_abi::called_function(value)
 			.filter(|callee| self.struct_results.contains_key(*callee))
 		{
-			let Node::List(items, _, _) = value.drop_meta() else {
-				unreachable!("a call")
-			};
+			let Node::List(items, _, _) = value.drop_meta() else { unreachable!("a call") };
 			let user_fn = self.ctx.user_functions[callee].clone();
 			self.emit_user_function_call_inner(func, &user_fn, &items[1..]);
 			func.instruction(&I::LocalTee(slot));
@@ -341,12 +305,8 @@ impl WasmGcEmitter {
 
 	/// The value of a field as its kind stores it; an int field never takes a fraction (`p.x = 0.5` traps)
 	fn emit_field_value(&mut self, func: &mut Function, class: &str, field_index: usize, value: &Node, kind: Kind) {
-		let field = self
-			.ctx
-			.type_registry
-			.get_by_name(class)
-			.and_then(|type_def| type_def.fields.get(field_index))
-			.cloned();
+		let field =
+			self.ctx.type_registry.get_by_name(class).and_then(|type_def| type_def.fields.get(field_index)).cloned();
 		let declared = field.as_ref().map(|field| Node::Symbol(field.type_name.clone()));
 		self.emit_declared_value(func, declared.as_ref(), value, kind);
 		// an optional int is stored as a Node (ø or the number): no whole check there
@@ -371,11 +331,7 @@ impl WasmGcEmitter {
 			.fields
 			.iter()
 			.map(|(field, _)| {
-				Node::Key(
-					Box::new(Node::Symbol(field.clone())),
-					Op::Colon,
-					Box::new(field_read(name, field)),
-				)
+				Node::Key(Box::new(Node::Symbol(field.clone())), Op::Colon, Box::new(field_read(name, field)))
 			})
 			.collect();
 		let instance = crate::type_constructor::instance_node(&class, entries);
@@ -390,10 +346,8 @@ impl WasmGcEmitter {
 	/// so no caller sees a change by reference, and the result is a struct (`c.inc()` of a method changing c)
 	pub(in crate::wasm_emitter) fn find_struct_abi(&self, program: &Node) -> StructAbi {
 		let functions = self.directly_called_functions();
-		let mut candidates: Vec<StructFunction> = functions
-			.iter()
-			.filter_map(|function| self.struct_function(function))
-			.collect();
+		let mut candidates: Vec<StructFunction> =
+			functions.iter().filter_map(|function| self.struct_function(function)).collect();
 		// greatest fixpoint: a function giving a struct needs callers whose variables are structs, which they are only
 		// while the functions they are assigned from give structs
 		loop {
@@ -402,10 +356,7 @@ impl WasmGcEmitter {
 				.filter_map(|candidate| Some((candidate.name.clone(), candidate.result.clone()?)))
 				.collect();
 			let abi = (
-				candidates
-					.iter()
-					.map(|candidate| (candidate.name.clone(), candidate.classes.clone()))
-					.collect(),
+				candidates.iter().map(|candidate| (candidate.name.clone(), candidate.classes.clone())).collect(),
 				results,
 			);
 			let trees: Vec<(&Node, HashMap<String, String>)> =
@@ -416,24 +367,16 @@ impl WasmGcEmitter {
 						(function.body.as_ref(), variables)
 					}))
 					.collect();
-			let kept: Vec<StructFunction> = candidates
-				.iter()
-				.filter(|candidate| candidate.called_as_such(&trees, self))
-				.cloned()
-				.collect();
+			let kept: Vec<StructFunction> =
+				candidates.iter().filter(|candidate| candidate.called_as_such(&trees, self)).cloned().collect();
 			if kept.len() == candidates.len() {
 				break;
 			}
 			candidates = kept;
 		}
-		let abi = candidates
-			.iter()
-			.map(|candidate| (candidate.name.clone(), candidate.classes.clone()))
-			.collect();
-		let results = candidates
-			.into_iter()
-			.filter_map(|candidate| Some((candidate.name, candidate.result?)))
-			.collect();
+		let abi = candidates.iter().map(|candidate| (candidate.name.clone(), candidate.classes.clone())).collect();
+		let results =
+			candidates.into_iter().filter_map(|candidate| Some((candidate.name, candidate.result?))).collect();
 		(abi, results)
 	}
 
@@ -476,29 +419,17 @@ impl WasmGcEmitter {
 			return None;
 		}
 		let changed = changed.and_then(|name| {
-			function
-				.params
-				.iter()
-				.position(|param| param.name == name)
-				.filter(|index| classes[*index].is_some())
+			function.params.iter().position(|param| param.name == name).filter(|index| classes[*index].is_some())
 		});
 		let result = result.filter(|_| changed.is_some());
 		let params = function.params.iter().map(|param| param.name.clone()).collect();
-		Some(StructFunction {
-			name: function.name.clone(),
-			params,
-			classes,
-			changed,
-			result,
-		})
+		Some(StructFunction { name: function.name.clone(), params, classes, changed, result })
 	}
 
 	/// The body of a function giving back its struct parameter: its statements, then that struct
 	pub(in crate::wasm_emitter) fn emit_struct_result_body(&mut self, func: &mut Function, body: &Node) {
 		self.emit_body_then(func, body, |emitter, func, last| {
-			let (slot, _) = emitter
-				.typed_struct(last)
-				.expect("find_struct_abi: the result is the struct parameter");
+			let (slot, _) = emitter.typed_struct(last).expect("find_struct_abi: the result is the struct parameter");
 			func.instruction(&I::LocalGet(slot));
 		});
 	}
@@ -534,15 +465,9 @@ pub(in crate::wasm_emitter) fn without_final_variable(body: &Node) -> Node {
 	match body.drop_meta() {
 		Node::List(statements, bracket, separator)
 			if matches!(separator, Separator::Semicolon | Separator::Newline)
-				&& statements
-					.last()
-					.is_some_and(|last| matches!(last.drop_meta(), Node::Symbol(_))) =>
+				&& statements.last().is_some_and(|last| matches!(last.drop_meta(), Node::Symbol(_))) =>
 		{
-			Node::List(
-				statements[..statements.len() - 1].to_vec(),
-				bracket.clone(),
-				separator.clone(),
-			)
+			Node::List(statements[..statements.len() - 1].to_vec(), bracket.clone(), separator.clone())
 		}
 		_ => body.clone(),
 	}
@@ -601,9 +526,7 @@ pub(in crate::wasm_emitter) fn used_whole(
 
 /// The class of the struct a call of a function giving one back gives
 fn struct_call_class(value: &Node, results: &HashMap<String, String>) -> Option<String> {
-	results
-		.get(super::super::lists::list_abi::called_function(value)?)
-		.cloned()
+	results.get(super::super::lists::list_abi::called_function(value)?).cloned()
 }
 
 /// A function taking structs: the class of each struct parameter, the parameter it changes or gives back, and the
@@ -623,29 +546,21 @@ impl StructFunction {
 	fn called_as_such(&self, trees: &[(&Node, HashMap<String, String>)], emitter: &WasmGcEmitter) -> bool {
 		let passes = |call: &[Node], variables: &HashMap<String, String>| {
 			call.len() == self.classes.len() + 1
-				&& call[1..]
-					.iter()
-					.zip(&self.classes)
-					.all(|(argument, class)| match class {
-						None => true,
-						Some(class) => match argument.drop_meta() {
-							Node::Symbol(name) => variables.get(name) == Some(class),
-							_ => emitter.constructed_class(argument).as_ref() == Some(class),
-						},
-					})
+				&& call[1..].iter().zip(&self.classes).all(|(argument, class)| match class {
+					None => true,
+					Some(class) => match argument.drop_meta() {
+						Node::Symbol(name) => variables.get(name) == Some(class),
+						_ => emitter.constructed_class(argument).as_ref() == Some(class),
+					},
+				})
 		};
 		// the definition's head `f(p:P, k)`
 		let is_head = |call: &[Node]| {
 			call.len() == self.params.len() + 1
-				&& call[1..]
-					.iter()
-					.zip(&self.params)
-					.all(|(argument, param)| match argument.drop_meta() {
-						Node::Key(name, Op::Colon, _) => names(name, param),
-						other => names(other, param),
-					}) && call[1..]
-				.iter()
-				.any(|argument| matches!(argument.drop_meta(), Node::Key(_, Op::Colon, _)))
+				&& call[1..].iter().zip(&self.params).all(|(argument, param)| match argument.drop_meta() {
+					Node::Key(name, Op::Colon, _) => names(name, param),
+					other => names(other, param),
+				}) && call[1..].iter().any(|argument| matches!(argument.drop_meta(), Node::Key(_, Op::Colon, _)))
 		};
 		let (mut mentions, mut heads, mut calls, mut replacing) = (0, 0, 0, 0);
 		for (tree, variables) in trees {
@@ -693,11 +608,7 @@ fn field_of(instance: &InstanceType, index: &Node) -> Option<(u32, Kind)> {
 
 /// `name#field`, the lowered `name.field`
 fn field_read(name: &str, field: &str) -> Node {
-	let one_based = Node::Key(
-		Box::new(Node::Text(field.to_string())),
-		Op::Add,
-		Box::new(crate::node::int(1)),
-	);
+	let one_based = Node::Key(Box::new(Node::Text(field.to_string())), Op::Add, Box::new(crate::node::int(1)));
 	Node::Key(Box::new(Node::Symbol(name.to_string())), Op::Hash, Box::new(one_based))
 }
 

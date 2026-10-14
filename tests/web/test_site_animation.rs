@@ -23,17 +23,12 @@ fn built_in_time(code: &'static str, name: &'static str) -> Vec<String> {
 #[test]
 fn an_endless_animation_builds() {
 	let files = built_in_time("use draw\ncanvas(8, 8)\nframes = 0\nwhile yes {\n\tframes += 1\n\tdot(frames % 8, 1, red)\n\tshow()\n\tsleep 16 ms\n}", "endless-animation");
-	assert!(
-		files.contains(&"index.html".to_string()) && files.contains(&"app.wasm".to_string()),
-		"{files:?}"
-	);
+	assert!(files.contains(&"index.html".to_string()) && files.contains(&"app.wasm".to_string()), "{files:?}");
 }
 
 #[test]
 fn an_endless_sleeping_loop_builds() {
-	let files = built_in_time(
-		"ticks = 0\nwhile yes {\n\tticks += 1\n\tsleep 16 ms\n}\np{ \"ticks\" }",
-		"endless-sleep",
-	);
+	let files =
+		built_in_time("ticks = 0\nwhile yes {\n\tticks += 1\n\tsleep 16 ms\n}\np{ \"ticks\" }", "endless-sleep");
 	assert!(files.contains(&"index.html".to_string()), "{files:?}");
 }

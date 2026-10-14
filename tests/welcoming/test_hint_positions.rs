@@ -16,13 +16,7 @@ fn line_of_hint(code: &str, canonical: &str) -> usize {
 
 #[test]
 fn a_lowering_hint_names_its_node() {
-	assert_eq!(
-		line_of_hint(
-			"n = 3\nlinear xs = int[n]\nxs#1 = 7\nprint 1\nprint 2\nxs#1",
-			"xs = int[n]"
-		),
-		2
-	);
+	assert_eq!(line_of_hint("n = 3\nlinear xs = int[n]\nxs#1 = 7\nprint 1\nprint 2\nxs#1", "xs = int[n]"), 2);
 	assert_eq!(
 		line_of_hint(
 			"x = 1\n\nfunc greet(person name: String) -> String { \"Hello \" + name }\ngreet(person: \"Swift\")",

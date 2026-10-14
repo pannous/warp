@@ -41,18 +41,13 @@ pub fn lower(program: Node) -> Node {
 						Separator::Semicolon,
 					))),
 				};
-				lowered.push(Node::Type {
-					name: Box::new(without_file_class_mark(*name.clone())),
-					body,
-				});
+				lowered.push(Node::Type { name: Box::new(without_file_class_mark(*name.clone())), body });
 			}
 			_ => lowered.push(statement),
 		}
 	}
 	let program = Node::List(lowered, Bracket::None, separator);
-	namespaces
-		.iter()
-		.fold(program, |program, namespace| unqualified(program, namespace))
+	namespaces.iter().fold(program, |program, namespace| unqualified(program, namespace))
 }
 
 /// `namespace test`

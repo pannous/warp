@@ -3,28 +3,17 @@ use super::*;
 
 /// The code with each placeholder as its node and the generated variables named
 pub(super) fn generated<'a>(code: &str, placeholders: impl IntoIterator<Item = (&'a str, Node)>) -> Node {
-	let names = GENERATED_NAMES
-		.iter()
-		.map(|(written, name)| (written.to_string(), symbol(name)));
+	let names = GENERATED_NAMES.iter().map(|(written, name)| (written.to_string(), symbol(name)));
 	// generated after times_phrases ran: `n times "?, "` gets its meaning here
 	crate::law::substitute(
 		&crate::lowering::times_phrases::lower(parse(code)),
-		&names
-			.chain(
-				placeholders
-					.into_iter()
-					.map(|(placeholder, node)| (placeholder.to_string(), node)),
-			)
-			.collect(),
+		&names.chain(placeholders.into_iter().map(|(placeholder, node)| (placeholder.to_string(), node))).collect(),
 	)
 }
 
 /// The placeholders of a table's lazy parts as their names: `table_load` of people is `people·load`
 pub(super) fn lazy_names(variable: &str) -> Vec<(&'static str, Node)> {
-	LAZY_PARTS
-		.iter()
-		.map(|(placeholder, part)| (*placeholder, Node::Symbol(lazy_name(variable, part))))
-		.collect()
+	LAZY_PARTS.iter().map(|(placeholder, part)| (*placeholder, Node::Symbol(lazy_name(variable, part)))).collect()
 }
 
 pub(super) fn lazy_name(variable: &str, part: &str) -> String {
@@ -102,20 +91,12 @@ impl LazyReads<'_> {
 					&& let Some(variable) = self.table_of(listed)
 					&& matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
 			{
-				paged_loop(
-					&item.drop_meta().name(),
-					&variable,
-					&self.tables[&variable].class,
-					self.read(body.clone()),
-				)
+				paged_loop(&item.drop_meta().name(), &variable, &self.tables[&variable].class, self.read(body.clone()))
 			}
 			// the row keeps its class, so `cups#1.size` reads the field, not the builtin word (card orm-size-field)
 			Node::Key(left, Op::Hash, position) if let Some(variable) = self.table_of(&left) => {
 				let row = called(lazy_name(&variable, "at"), Some(self.read(*position)));
-				Node::meta(
-					row,
-					Node::data(crate::lowering::traits::TypedAs(self.tables[&variable].class.clone())),
-				)
+				Node::meta(row, Node::data(crate::lowering::traits::TypedAs(self.tables[&variable].class.clone())))
 			}
 			Node::Key(left, Op::Dot, right) => self.method_read(left, right),
 			Node::Key(target, op, value)
@@ -183,22 +164,15 @@ impl LazyReads<'_> {
 
 	/// A class's own field named like a table is the field
 	fn class_read(&self, name: Box<Node>, body: Node) -> Node {
-		let fields: Vec<String> = crate::class_methods::field_declarations(&body)
-			.into_iter()
-			.map(|(field, ..)| field)
-			.collect();
+		let fields: Vec<String> =
+			crate::class_methods::field_declarations(&body).into_iter().map(|(field, ..)| field).collect();
 		let visible: BTreeMap<String, Table> = self
 			.tables
 			.iter()
 			.filter(|(variable, _)| !fields.contains(variable))
 			.map(|(variable, table)| (variable.clone(), table.clone()))
 			.collect();
-		Node::Type {
-			name,
-			body: Box::new(in_method_bodies(body, &|child| {
-				with_lazy_reads(child, &visible, self.own)
-			})),
-		}
+		Node::Type { name, body: Box::new(in_method_bodies(body, &|child| with_lazy_reads(child, &visible, self.own))) }
 	}
 }
 
@@ -206,9 +180,7 @@ impl LazyReads<'_> {
 pub(super) fn sliced(variable: &str, from: Node, until: Node) -> Node {
 	generated(
 		&format!("{SLICED}({FROM_PLACEHOLDER}, {VALUE_PLACEHOLDER})"),
-		[(FROM_PLACEHOLDER, from), (VALUE_PLACEHOLDER, until)]
-			.into_iter()
-			.chain(lazy_names(variable)),
+		[(FROM_PLACEHOLDER, from), (VALUE_PLACEHOLDER, until)].into_iter().chain(lazy_names(variable)),
 	)
 }
 
@@ -241,11 +213,8 @@ pub(super) fn paged_loop(element: &str, variable: &str, class: &str, body: Node)
 	};
 	// the body's statements follow the element's in one block: a nested block of expressions would read as a list
 	let element_read = generated(&format!("{element}: {class} = {STREAMED}({LOOP_POSITION})"), names());
-	let statements = Node::List(
-		[vec![element_read], body.body_statements()].concat(),
-		Bracket::Curly,
-		Separator::Semicolon,
-	);
+	let statements =
+		Node::List([vec![element_read], body.body_statements()].concat(), Bracket::Curly, Separator::Semicolon);
 	let code = format!("{LOOP_END} = {COUNTED}()\nfor {LOOP_POSITION} in 1 to {LOOP_END} {VALUE_PLACEHOLDER}");
 	let lowered = generated(&code, names().chain([(VALUE_PLACEHOLDER, statements)]));
 	Node::List(lowered.children(), Bracket::None, Separator::Semicolon)
@@ -329,19 +298,13 @@ pub(super) fn referenced(table: &Table, field: &str, id: &str) -> String {
 
 /// The instance of the row of the other table whose id is the value of `id`, found in its identity map, ø when none
 pub(super) fn referenced_instance(table: &Table, field: &str, id: &str) -> String {
-	format!(
-		"{}.{INSTANCE_OF_WORD}({id})",
-		table.reference(field).unwrap_or_default()
-	)
+	format!("{}.{INSTANCE_OF_WORD}({id})", table.reference(field).unwrap_or_default())
 }
 
 /// A foreign key to the table's own class (`boss: Person?`): its rows are read while the table loads, so they are
 /// matched in the list read so far rather than in the identity map, whose finding would load the table again
 pub(super) fn is_own_reference(table: &Table, field: &str) -> bool {
-	table
-		.fields
-		.iter()
-		.any(|(name, field_type, _)| name == field && class_of(field_type) == table.class)
+	table.fields.iter().any(|(name, field_type, _)| name == field && class_of(field_type) == table.class)
 }
 
 /// The rows of the table the foreign key `field` points to whose id is the value of `id`: one, or none when dangling

@@ -5,18 +5,9 @@ const SECRET: &str = "s3cret-token";
 
 fn site(program: &str) -> (String, Vec<u8>) {
 	let files = warp::web::site::files(program, "rpc", false).expect("the page builds");
-	let file = |wanted: &str| {
-		files
-			.iter()
-			.find(|(name, _)| name == wanted)
-			.unwrap_or_else(|| panic!("{wanted}"))
-			.1
-			.clone()
-	};
-	(
-		String::from_utf8_lossy(&file("index.html")).into_owned(),
-		file("app.wasm"),
-	)
+	let file =
+		|wanted: &str| files.iter().find(|(name, _)| name == wanted).unwrap_or_else(|| panic!("{wanted}")).1.clone();
+	(String::from_utf8_lossy(&file("index.html")).into_owned(), file("app.wasm"))
 }
 
 fn contains(bytes: &[u8], text: &str) -> bool {
@@ -28,10 +19,7 @@ fn a_call_in_markup_asks_the_server() {
 	let (page, module) =
 		site("server def motto() { token = \"s3cret-token\"; \"motto \" + token#1 }\np{ \"said: \" + motto() }");
 	assert!(page.contains("<p>said: motto s</p>"), "{page}");
-	assert!(
-		!contains(&module, SECRET),
-		"the server function's body shipped in app.wasm"
-	);
+	assert!(!contains(&module, SECRET), "the server function's body shipped in app.wasm");
 	assert!(contains(&module, "/rpc/motto"));
 }
 
@@ -66,8 +54,5 @@ fn a_call_with_a_local_argument_is_refused() {
 // the page's first value of a call: `x := fetch url ?? default` starts as the default and stays it when the fetch fails
 #[test]
 fn a_fetch_starts_from_its_default() {
-	crate::is!(
-		"users := fetch \"http://127.0.0.1:9/users\" ?? [\"none\"]\ncount(users)",
-		1
-	);
+	crate::is!("users := fetch \"http://127.0.0.1:9/users\" ?? [\"none\"]\ncount(users)", 1);
 }

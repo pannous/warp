@@ -48,10 +48,7 @@ fn kotlin_vararg_and_csharp_params() {
 #[test]
 fn spreading_into_a_function_parameter() {
 	is!("def apply(f, *args){ f(*args) }; apply((a, b) => a * b, 3, 4)", 12);
-	is!(
-		"def apply(f, *args){ f(*args) }; def add(a, b){ a + b }; apply(add, 3, 4)",
-		7
-	);
+	is!("def apply(f, *args){ f(*args) }; def add(a, b){ a + b }; apply(add, 3, 4)", 7);
 }
 
 /// card list-spread: a spread inside a list literal splices the list's items in (JS `[...xs, 4]`, Python `[*xs, 4]`)

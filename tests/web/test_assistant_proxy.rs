@@ -4,18 +4,8 @@ use std::process::Command;
 
 #[test]
 fn the_assistant_proxy_answers_only_the_playground() {
-	let output = Command::new("node")
-		.arg("web/assistant/test_assistant.mjs")
-		.output()
-		.expect("node runs");
-	let report = format!(
-		"{}{}",
-		String::from_utf8_lossy(&output.stdout),
-		String::from_utf8_lossy(&output.stderr)
-	);
+	let output = Command::new("node").arg("web/assistant/test_assistant.mjs").output().expect("node runs");
+	let report = format!("{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
 	assert!(output.status.success(), "{report}");
-	assert!(
-		report.contains("all checks passed") || report.contains("SKIPPED"),
-		"{report}"
-	);
+	assert!(report.contains("all checks passed") || report.contains("SKIPPED"), "{report}");
 }

@@ -16,10 +16,7 @@ fn test_a_date_plus_a_duration() {
 	assert_eq!(eval("d = 2024-02-28; print d; d + 1 day"), date(2024, 2, 29));
 	assert_eq!(eval("d = 2024-02-28; print d; 2 days + d"), date(2024, 3, 1));
 	assert_eq!(eval("d = 2024-03-01; print d; d - 1 day"), date(2024, 2, 29));
-	assert_eq!(
-		eval("d = 2024-01-15; n = 3; print n; d + n * 1 month"),
-		date(2024, 4, 15)
-	);
+	assert_eq!(eval("d = 2024-01-15; n = 3; print n; d + n * 1 month"), date(2024, 4, 15));
 	assert_eq!(eval("d = 2024-01-31; print d; d + 1 year"), date(2025, 1, 31));
 }
 
@@ -47,68 +44,32 @@ fn test_time_minus_time() {
 	is!("a = 2024-03-01; b = 2024-02-01; print a; a - b", 29);
 	assert_eq!(
 		eval("a = 2024-01-01T10:00; b = 2024-01-01T08:30; print a; a - b"),
-		Node::data(Duration {
-			nanos: 5_400_000_000_000,
-			..Duration::default()
-		})
+		Node::data(Duration { nanos: 5_400_000_000_000, ..Duration::default() })
 	);
 	assert_eq!(
 		eval("a = 2024-01-01T08:00:00Z; b = 2024-01-01T08:00:01.5Z; print a; a - b"),
-		Node::data(Duration {
-			nanos: -1_500_000_000,
-			..Duration::default()
-		})
+		Node::data(Duration { nanos: -1_500_000_000, ..Duration::default() })
 	);
-	fails_with(
-		"a = 2024-01-01; b = 2024-01-01T10:00; print a; a - b",
-		"no implicit conversion between kinds of time",
-	);
+	fails_with("a = 2024-01-01; b = 2024-01-01T10:00; print a; a - b", "no implicit conversion between kinds of time");
 }
 
 #[test]
 fn test_durations_add_and_scale() {
-	assert_eq!(
-		eval("a = 1 month; b = 2 days; print a; a + b"),
-		Node::data(Duration {
-			months: 1,
-			days: 2,
-			nanos: 0
-		})
-	);
-	assert_eq!(
-		eval("a = 1 month; b = 2 days; print a; a - b"),
-		Node::data(Duration {
-			months: 1,
-			days: -2,
-			nanos: 0
-		})
-	);
+	assert_eq!(eval("a = 1 month; b = 2 days; print a; a + b"), Node::data(Duration { months: 1, days: 2, nanos: 0 }));
+	assert_eq!(eval("a = 1 month; b = 2 days; print a; a - b"), Node::data(Duration { months: 1, days: -2, nanos: 0 }));
 	assert_eq!(
 		eval("a = 3 hours; n = 2; print n; a * n"),
-		Node::data(Duration {
-			nanos: 21_600_000_000_000,
-			..Duration::default()
-		})
+		Node::data(Duration { nanos: 21_600_000_000_000, ..Duration::default() })
 	);
 	assert_eq!(
 		eval("a = 3 hours; n = 2; print n; n * a"),
-		Node::data(Duration {
-			nanos: 21_600_000_000_000,
-			..Duration::default()
-		})
+		Node::data(Duration { nanos: 21_600_000_000_000, ..Duration::default() })
 	);
 }
 
 #[test]
 fn test_juxtaposed_durations_run() {
-	assert_eq!(
-		eval("m = 1 month 2 days; print m; m"),
-		Node::data(Duration {
-			months: 1,
-			days: 2,
-			nanos: 0
-		})
-	);
+	assert_eq!(eval("m = 1 month 2 days; print m; m"), Node::data(Duration { months: 1, days: 2, nanos: 0 }));
 	assert_eq!(eval("d = 2024-01-15; print d; d + 1 month 2 days"), date(2024, 2, 17));
 }
 
@@ -131,12 +92,5 @@ fn test_constant_times_fold_and_the_run_does_the_rest() {
 	is!("2024-02-29 < 2024-03-01 and 2024-01-01 < 2024-02-01", 1);
 	is!("1 day != 2 days", 1);
 	assert_eq!(eval("2024-01-01; 2024-02-01"), date(2024, 2, 1));
-	assert_eq!(
-		eval("2 * 1 day"),
-		Node::data(Duration {
-			months: 0,
-			days: 2,
-			nanos: 0
-		})
-	);
+	assert_eq!(eval("2 * 1 day"), Node::data(Duration { months: 0, days: 2, nanos: 0 }));
 }

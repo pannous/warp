@@ -3,10 +3,7 @@ use crate::common::fails_with;
 
 #[test]
 fn a_rebuilt_node_reports_the_position_of_its_parts() {
-	fails_with(
-		"class dot{x:int}\nsmallest(xs: Comparable list) := (sort xs)#1\nsmallest([dot(3) dot(1)])",
-		"at 3:",
-	);
+	fails_with("class dot{x:int}\nsmallest(xs: Comparable list) := (sort xs)#1\nsmallest([dot(3) dot(1)])", "at 3:");
 	fails_with("x = 1\ny = x + \"a\" * [1]", "at 2:");
 }
 

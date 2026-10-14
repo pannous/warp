@@ -17,35 +17,20 @@ fn timed_in_loop(statement: &str) -> String {
 fn map_and_filter_in_a_loop_body_take_linear_time() {
 	is!(&timed_in_loop("d = xs.map(x => x * 2)"), ITEMS);
 	is!(&timed_in_loop("d = xs.filter(x => x >= 0)"), ITEMS);
-	is!(
-		&timed_in_loop("out = []; for x in xs { out = out + [x + 1] }; d = out"),
-		ITEMS
-	);
+	is!(&timed_in_loop("out = []; for x in xs { out = out + [x + 1] }; d = out"), ITEMS);
 }
 
 /// Card map-predeclared: the result variable declared empty before the loop is a typed array too
 #[test]
 fn map_into_a_variable_declared_before_the_loop_takes_linear_time() {
-	is!(
-		&timed_in_loop("d = xs.map(x => x * 2)").replace("for round", "d = []; for round"),
-		ITEMS
-	);
-	is!(
-		"d = []; for r in 1 to 3 { d = [r].map(x => x * 2) }; d",
-		warp::parse("[6]")
-	);
-	is!(
-		"d = ø; e = []; for r in 1 to 3 { e = d; d = [r] }; [d, e]",
-		warp::parse("[[3] [2]]")
-	);
+	is!(&timed_in_loop("d = xs.map(x => x * 2)").replace("for round", "d = []; for round"), ITEMS);
+	is!("d = []; for r in 1 to 3 { d = [r].map(x => x * 2) }; d", warp::parse("[6]"));
+	is!("d = ø; e = []; for r in 1 to 3 { e = d; d = [r] }; [d, e]", warp::parse("[[3] [2]]"));
 }
 
 #[test]
 fn an_alias_after_the_fresh_list_still_parts_on_append() {
-	is!(
-		"old = []; for r in 1 to 3 { out = [9]; old = out; out = out + [r] }; [old, out]",
-		warp::parse("[[9] [9 3]]")
-	);
+	is!("old = []; for r in 1 to 3 { out = [9]; old = out; out = out + [r] }; [old, out]", warp::parse("[[9] [9 3]]"));
 	is!(
 		"out = []; old = []; for r in 1 to 3 { if r == 2 { out = [] }; old = out; out = out + [r] }; old",
 		warp::parse("[2]")

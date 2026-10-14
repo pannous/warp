@@ -6,21 +6,11 @@ use warp::warp_parser::WarpParser;
 fn index_hints(code: &str) -> Vec<String> {
 	set_hint_mode(HintMode::Always);
 	let (_, hints) = capture_hints(|| WarpParser::parse(code));
-	hints
-		.into_iter()
-		.filter(|hint| hint.reason.contains("indexing"))
-		.map(|hint| hint.original)
-		.collect()
+	hints.into_iter().filter(|hint| hint.reason.contains("indexing")).map(|hint| hint.original).collect()
 }
 
 #[test]
 fn only_a_number_index_gets_the_hash_hint() {
-	assert_eq!(
-		index_hints("hidden_bias=[1 2 3]; hidden_bias[1]"),
-		vec!["hidden_bias[1]"]
-	);
-	assert_eq!(
-		index_hints("hidden_bias=[1 2 3]; j=0; hidden_bias[j]"),
-		Vec::<String>::new()
-	);
+	assert_eq!(index_hints("hidden_bias=[1 2 3]; hidden_bias[1]"), vec!["hidden_bias[1]"]);
+	assert_eq!(index_hints("hidden_bias=[1 2 3]; j=0; hidden_bias[j]"), Vec::<String>::new());
 }

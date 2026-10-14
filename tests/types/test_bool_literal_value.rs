@@ -4,10 +4,7 @@ use warp::Node;
 
 fn is_yes(code: &str) {
 	let value = warp::pipeline::eval(code);
-	assert!(
-		matches!(value.drop_meta(), Node::True),
-		"{code} gives {value:?}, not yes"
-	);
+	assert!(matches!(value.drop_meta(), Node::True), "{code} gives {value:?}, not yes");
 }
 
 #[test]

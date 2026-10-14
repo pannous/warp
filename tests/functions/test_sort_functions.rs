@@ -24,10 +24,7 @@ fn sort_with_comparator() {
 
 #[test]
 fn sort_with_key() {
-	assert_eq!(
-		printed("xs=[\"bb\",\"ccc\",\"a\"]; sorted(xs, key: s => s.length)"),
-		"[\"a\" \"bb\" \"ccc\"]"
-	); // Python key=
+	assert_eq!(printed("xs=[\"bb\",\"ccc\",\"a\"]; sorted(xs, key: s => s.length)"), "[\"a\" \"bb\" \"ccc\"]"); // Python key=
 	assert_eq!(printed("xs=[3,-1,2]; xs.sortedBy { it*it }"), "[-1 2 3]"); // Kotlin sortedBy
 	assert_eq!(printed("xs=[3,-1,2]; xs.sort_by(x => -x)"), "[3 2 -1]"); // Ruby sort_by
 }
@@ -54,10 +51,7 @@ fn sort_is_stable() {
 #[test]
 fn sort_with_defined_function() {
 	assert_eq!(printed("def desc(a,b){ b-a }; sorted([1,3,2], desc)"), "[3 2 1]");
-	assert_eq!(
-		printed("def size(s){ s.length }; sorted([\"bb\",\"ccc\",\"a\"], size)"),
-		"[\"a\" \"bb\" \"ccc\"]"
-	);
+	assert_eq!(printed("def size(s){ s.length }; sorted([\"bb\",\"ccc\",\"a\"], size)"), "[\"a\" \"bb\" \"ccc\"]");
 }
 
 #[test]
@@ -74,25 +68,16 @@ fn sort_with_boolean_comparator() {
 	let words = "words = [\"banana\" \"fig\" \"apple\" \"kiwi\" \"plum\"]; ";
 	let by_length_then_alpha = "[\"fig\" \"kiwi\" \"plum\" \"apple\" \"banana\"]";
 	assert_eq!(
-		printed(&format!(
-			"{words}sort(words, {{if $0.length == $1.length : $0 < $1 else $0.length < $1.length}})"
-		)),
+		printed(&format!("{words}sort(words, {{if $0.length == $1.length : $0 < $1 else $0.length < $1.length}})")),
 		by_length_then_alpha
 	);
 	assert_eq!(
-		printed(&format!(
-			"{words}sort(words, {{if $0.length == $1.length then $0 < $1 else $0.length < $1.length}})"
-		)),
+		printed(&format!("{words}sort(words, {{if $0.length == $1.length then $0 < $1 else $0.length < $1.length}})")),
 		by_length_then_alpha
 	);
 	assert_eq!(
-		printed(&format!(
-			"{words}sort(words, {{$0.length < $1.length or $0.length == $1.length and $0 < $1}})"
-		)),
+		printed(&format!("{words}sort(words, {{$0.length < $1.length or $0.length == $1.length and $0 < $1}})")),
 		by_length_then_alpha
 	);
-	assert_eq!(
-		printed("def before(a,b){ a > b and yes }; sorted([1,3,2], before)"),
-		"[3 2 1]"
-	);
+	assert_eq!(printed("def before(a,b){ a > b and yes }; sorted([1,3,2], before)"), "[3 2 1]");
 }
