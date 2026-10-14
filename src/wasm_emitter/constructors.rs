@@ -73,6 +73,23 @@ impl WasmGcEmitter {
 			Self::emit_list(func, &[I::Else, I::LocalGet(0), I::End]);
 		});
 	}
+
+	/// `as_code(node) -> ref $Node`: a new top node marked as code (type_kinds::CODE_MARK), its parts shared
+	fn emit_as_code(&mut self) {
+		if !self.should_emit_function(crate::words::AS_CODE) {
+			return;
+		}
+		let node_type = self.type_manager.node_type;
+		let node_ref = Ref(self.node_ref(false));
+		self.runtime_function(crate::words::AS_CODE, vec![node_ref], vec![node_ref], vec![], |_, func| {
+			let field = |index: u32| I::StructGet { struct_type_index: node_type, field_index: index };
+			#[rustfmt::skip]
+			Self::emit_list(func, &[
+				I::LocalGet(0), field(0), I::I64Const(type_kinds::CODE_MARK), I::I64Or,
+				I::LocalGet(0), field(1), I::LocalGet(0), field(2), I::StructNew(node_type),
+			]);
+		});
+	}
 }
 
 pub const NEW_BOOL: &str = "new_bool";
@@ -103,6 +120,7 @@ pub fn emit_all_constructors(emitter: &mut WasmGcEmitter) {
 		);
 	}
 	emitter.emit_new_bool();
+	emitter.emit_as_code();
 	emitter.emit_node_constructor(
 		"new_float",
 		Kind::Float,

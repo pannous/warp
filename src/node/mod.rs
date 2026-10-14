@@ -1075,17 +1075,6 @@ fn writes_as_prefix(op: &Op) -> bool {
 	op.is_prefix() || matches!(op, Op::Hash | Op::Sub | Op::Add | Op::If | Op::While)
 }
 
-/// `class Quantity { … plus(o) := … }`: a class definition with a method, not only fields (`class Sample { rate: int }`)
-pub(crate) fn is_class_with_methods(statement: &Node) -> bool {
-	match statement.drop_meta() {
-		Type { body, .. } => match body.drop_meta() {
-			List(items, _, _) => items.iter().any(is_class_code),
-			single => is_class_code(single),
-		},
-		_ => false,
-	}
-}
-
 /// An item of a class body that is code, a method in any of its forms (`f() := …`, `fn f() {…}`, `f = x => …`), not a
 /// field declaration (`name: text`, `age: int = 0`): the lowering passes reach it as they reach a function
 fn is_class_code(item: &Node) -> bool {

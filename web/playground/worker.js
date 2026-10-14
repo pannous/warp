@@ -62,11 +62,12 @@ const hooks = {
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
 	paint: (pixels, width, height, canvas) => post({ type: "paint", pixels, width, height, canvas }),
-	gpuCanvas: ({ port, ...canvas }) => self.postMessage({ type: "gpu canvas", port, ...canvas }, [port]), // host-gpu.js gpuPainted
+	gpuCanvas: canvas => post({ type: "gpu canvas", ...canvas }), // host-gpu.js gpuPainted
 	sound: sound => self.playSamples(sound),
 	sleeping: milliseconds => post({ type: "sleep", milliseconds }),
 	tasksInline: reason => post({ type: "tasks inline", reason }),
 	notify: text => post({ type: "notify", text }),
+	resizeWindow: (width, height) => post({ type: "window", width, height }), // window.width = 800 (canvas.js)
 	dispatch: event => post({ type: "dispatch", event }), // playground.js dispatchToPage
 	listen: (holder, events) => {
 		live = holder;
@@ -190,8 +191,8 @@ function handleSubmit(request) {
 	if (live) showHandled(live, runSubmitted(live, hooks, request));
 }
 
-// the playground's Deploy (deploy.js): the program's Worker module and its host scripts' names (src/web/mod.rs
-// worker_bundle), `{scripts, module}` or `{error}`
+// the playground's Deploy (deploy.js): the program's Worker module and the query naming the scripts warp-hosting
+// composes its Worker of (src/web/mod.rs worker_bundle), `{query, module}` or `{error}`
 async function workerBundle(code) {
 	const codeText = passText(code);
 	try {
@@ -199,7 +200,7 @@ async function workerBundle(code) {
 		const report = JSON.parse(compilerText(compiler.web_report(), length));
 		const module = report.error ? undefined : new Uint8Array(compiler.memory.buffer, compiler.web_bundle_module(), report.module_length).slice();
 		compiler.web_free(...codeText);
-		return { scripts: report.scripts, module, error: report.error };
+		return { query: report.query, module, error: report.error };
 	} catch (crash) {
 		compiler = undefined; // as in evaluate: load it again
 		return { error: `compiler crashed: ${panicMessage ?? crash.message}` };

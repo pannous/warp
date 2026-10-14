@@ -1,15 +1,17 @@
-// card time-day-value (the user's example `if time < 24h : print ("There's still some time left today.")`): `time` is
-// the local time of day, a duration since midnight (as `on every day at 9am` reads the clock), compared with a duration;
-// a comparison of constant quantities is decided when compiled, so it works in a condition and with a variable
+// card time-day-value (the user's example `if time < 24h : print ("There's still some time left today.")`): `now`
+// compared with a duration is the local time of day, a duration since midnight (as `on every day at 9am` reads the
+// clock); a comparison of constant quantities is decided when compiled, so it works in a condition and with a variable.
+// A bare `time` is the type (user decision print-time, which changed these from `time` to `now`)
 use crate::common::fails_with;
 use crate::is;
 
 #[test]
 fn time_is_the_time_of_day() {
-	is!("if time < 24h : \"still today\"", "still today");
-	is!("if time < 0 h : \"never\" else \"always\"", "always");
-	is!("time >= 0 ms and time < 1 day", 1);
-	fails_with("time < 2 m", "DimensionError");
+	is!("if now < 24h : \"still today\"", "still today");
+	is!("if now < 0 h : \"never\" else \"always\"", "always");
+	is!("now >= 0 ms and now < 1 day", 1);
+	fails_with("now < 2 m", "DimensionError");
+	fails_with("time < 24h", "now < 24h");
 }
 
 #[test]

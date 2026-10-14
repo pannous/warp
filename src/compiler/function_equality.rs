@@ -135,7 +135,7 @@ pub fn decide_comparisons(node: Node) -> Node {
 	}
 	let functions = collect_functions_where(&node, |_| true);
 	let mut failure = None;
-	let decided = rewrite(node, &functions, &mut failure);
+	let decided = rewrite(node, &functions, &[], &mut failure);
 	failure.unwrap_or(decided)
 }
 
@@ -166,17 +166,30 @@ fn collect_functions_where(node: &Node, wanted: impl Fn(&Node) -> bool) -> Vec<F
 		.collect()
 }
 
-fn named<'a>(node: &Node, functions: &'a [Function]) -> Option<&'a Function> {
+fn named<'a>(node: &Node, functions: &'a [Function], shadowed: &[String]) -> Option<&'a Function> {
 	match node.drop_meta() {
-		Node::Symbol(name) => functions.iter().find(|function| function.name() == name.as_str()),
+		Node::Symbol(name) if !shadowed.contains(name) => {
+			functions.iter().find(|function| function.name() == name.as_str())
+		}
 		_ => None,
 	}
 }
 
-fn rewrite(node: Node, functions: &[Function], failure: &mut Option<Node>) -> Node {
+/// The names a function definition's parameters shadow in its body (`f(name) := name == text`), with the outer ones
+fn shadowed_within(node: &Node, shadowed: &[String]) -> Option<Vec<String>> {
+	if !matches!(node.drop_meta(), Node::Key(_, Op::Define | Op::Assign, _)) {
+		return None;
+	}
+	let definition = law::function_definition(node)?;
+	Some(shadowed.iter().cloned().chain(definition.parameters.into_iter().map(|(name, _)| name)).collect())
+}
+
+fn rewrite(node: Node, functions: &[Function], shadowed: &[String], failure: &mut Option<Node>) -> Node {
+	let inner_shadowed = shadowed_within(&node, shadowed);
+	let shadowed = inner_shadowed.as_deref().unwrap_or(shadowed);
 	match node {
 		Node::Key(left, op @ (Op::Eq | Op::Ne), right) => {
-			if let (Some(f), Some(g)) = (named(&left, functions), named(&right, functions)) {
+			if let (Some(f), Some(g)) = (named(&left, functions, shadowed), named(&right, functions, shadowed)) {
 				return match decide(f, g, functions) {
 					Ok(equal) => {
 						if equal == matches!(op, Op::Eq) {
@@ -191,15 +204,25 @@ fn rewrite(node: Node, functions: &[Function], failure: &mut Option<Node>) -> No
 					}
 				};
 			}
-			Node::Key(Box::new(rewrite(*left, functions, failure)), op, Box::new(rewrite(*right, functions, failure)))
+			Node::Key(
+				Box::new(rewrite(*left, functions, shadowed, failure)),
+				op,
+				Box::new(rewrite(*right, functions, shadowed, failure)),
+			)
 		}
-		Node::Key(left, op, right) => {
-			Node::Key(Box::new(rewrite(*left, functions, failure)), op, Box::new(rewrite(*right, functions, failure)))
+		Node::Key(left, op, right) => Node::Key(
+			Box::new(rewrite(*left, functions, shadowed, failure)),
+			op,
+			Box::new(rewrite(*right, functions, shadowed, failure)),
+		),
+		Node::List(items, bracket, separator) => Node::List(
+			items.into_iter().map(|item| rewrite(item, functions, shadowed, failure)).collect(),
+			bracket,
+			separator,
+		),
+		Node::Meta { node: inner, data } => {
+			Node::Meta { node: Box::new(rewrite(*inner, functions, shadowed, failure)), data }
 		}
-		Node::List(items, bracket, separator) => {
-			Node::List(items.into_iter().map(|item| rewrite(item, functions, failure)).collect(), bracket, separator)
-		}
-		Node::Meta { node: inner, data } => Node::Meta { node: Box::new(rewrite(*inner, functions, failure)), data },
 		other => other,
 	}
 }

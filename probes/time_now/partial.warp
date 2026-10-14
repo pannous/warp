@@ -1,0 +1,10 @@
+print time
+print time.now
+print now.time
+print now.date
+print now.time + 2 hours
+print type(now.time)
+print now == now
+print now > 17h
+print now >= October
+print now ≈ 2026-10-14

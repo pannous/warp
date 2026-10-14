@@ -11,6 +11,8 @@ pub use spellings::*;
 
 /// Keywords that introduce function definitions
 pub const FUNCTION_KEYWORDS: [&str; 6] = ["fun", "fn", "def", "define", "function", "func"];
+/// `infix operator ⊕ := …` defines the function `operator_⊕`, which each use of ⊕ calls
+pub const OPERATOR_FUNCTION_PREFIX: &str = "operator_";
 
 pub fn is_function_keyword(s: &str) -> bool {
 	FUNCTION_KEYWORDS.contains(&s)
@@ -196,6 +198,12 @@ impl Op {
 
 	pub fn is_equality(&self) -> bool {
 		matches!(self, Op::Eq | Op::Ne)
+	}
+
+	/// An operator the parser knows but the language gives no meaning of its own: a declaration gives it one,
+	/// `infix operator ↑(x: number, n: number) := …` (lib/prelude.warp), and its use is the call of that declaration
+	pub fn is_declared_only(&self) -> bool {
+		matches!(self, Op::ArrowUp | Op::ArrowDown)
 	}
 
 	/// Check if this is a logical operator (and, or, xor)

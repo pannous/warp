@@ -1,6 +1,6 @@
 # Dispatch on return type (D10)
 
-User decision (P17, notes/open_decisions.md): "Dispatch on return type" (un-parked). `render "hello" as pdf` and
+User decision (P17, notes/open_decisions.md): "Dispatch on return type" (un-parked). `(render "hello") as pdf` and
 `docx example = render "x"` pick the overload of `render` by the expected result type; when the expected type picks no
 single overload, the first-declared one is taken with a got-it warning naming the explicit form.
 
@@ -23,28 +23,29 @@ Definitions of one name whose result types are not all known stay what they were
 ## The expected type of a call
 | context                         | expected type |
 |---------------------------------|---------------|
-| `render "x" as pdf`, `(render "x") as pdf` | pdf  |
+| `(render "x") as pdf`           | pdf  |
 | `docx d = render "x"`, `d:docx = render "x"` | docx |
 | `save(render "x")` with `save(d:docx)` | docx (the parameter's declared type) |
 | anything else                   | none          |
 
-A function defined once with a known result type takes `render "x" as pdf` and `(render "x") as pdf` as naming that
-result, not as converting (only the spaced call: `square(2.7 as int)` still converts its argument).
+A function defined once with a known result type takes `(render "x") as pdf` as naming that result, not as converting.
+The ungrouped `render "x" as pdf` casts the argument, render("x" as pdf), with the warning argument-cast (user decision
+B, card parameter-named-number: `f x as T` is f(x as T) everywhere).
 A call with an expected type that one overload returns calls it (`render·pdf("x")`; the `as pdf` is then redundant and
 dropped). Otherwise the first-declared overload is taken with the got-it warning (diagnostic::ask, Fallback::Warning,
-topic `return-type`): `render has variants returning pdf, docx: which does render "x" mean? (taking pdf); fix: render "x" as pdf`.
+topic `return-type`): `render has variants returning pdf, docx: which does render "x" mean? (taking pdf); fix: (render "x") as pdf`.
 
 ### Companions (card int-let)
 A function f without overloads but with a companion `f_as(…, type:text)` gets its expected type at run time:
 `x:int = agent "33/3"` calls `agent_as("33/3", "int") as int` (lib/agent.warp asks Claude for a JSON value of that type
 and parses it). The `as T` stays for a built-in type word, since the companion's answer has no static type (`yes` shows as yes,
 not 1). Companions are found by operation (`agent·1` of lower_arity_overloads is `agent`), and modules.rs links `f_as`
-whenever it links f, because the call to it only appears here. `agent "is 7 prime" as bool` works too. Live check:
+whenever it links f, because the call to it only appears here. `(agent "is 7 prime") as bool` works too. Live check:
 probes/agent_types.sh.
 
 ## Lowering
 src/lowering/definitions/overloads.rs, right after type_constructor (constructions are instances by then) and before the trait passes and
-library_words, so `x = render "x" as pdf; x.body` reads a field: traits::InstanceTypes knows the result shape of a user
+library_words, so `x = (render "x") as pdf; x.body` reads a field: traits::InstanceTypes knows the result shape of a user
 function from its body.
 
 # Methods: dispatch on the first argument's class (card dispatch, user 2026-10-12)

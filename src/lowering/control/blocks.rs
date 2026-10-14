@@ -120,6 +120,14 @@ fn sealed_code(node: &Node) -> Option<&Node> {
 	}
 }
 
+/// `as_code(data e)`: e as code, of the type code (decision body-code)
+pub(crate) fn quoted_code(code: Node) -> Node {
+	crate::node::call(
+		crate::words::AS_CODE,
+		vec![Node::List(vec![symbol(DATA_WORD), code], Bracket::None, Separator::Space)],
+	)
+}
+
 /// `data e` with e sealed
 pub(crate) fn quote(code: Node) -> Node {
 	let code = match sealed_code(&code) {

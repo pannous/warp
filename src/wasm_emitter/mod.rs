@@ -559,6 +559,9 @@ impl WasmGcEmitter {
 		if node.mentions_any(&lists::list_emitter::QUOTE_WORDS) || node.mentions_any(&[crate::host::PARSE_CODE]) {
 			self.ctx.required_functions.insert(reflection::node_api::NODE_AT);
 		}
+		if node.mentions_any(&[crate::words::AS_CODE]) {
+			self.ctx.required_functions.insert(crate::words::AS_CODE);
+		}
 		// code parsed at run time holds any operator and joins a text as its literal (card print-parse)
 		if node.mentions_any(&[crate::host::PARSE_CODE]) {
 			self.ctx.required_functions.insert(reflection::library_ops::LIST_TEXT);

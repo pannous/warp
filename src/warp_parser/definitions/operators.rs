@@ -32,10 +32,14 @@ pub(crate) fn declared_operator(kind: UserOperatorKind, words: &[&str]) -> Optio
 		[OPERATOR_WORD, head, ..] | [head, ..] if kind == UserOperatorKind::Infix && words.contains(&":=") => head,
 		_ => return None,
 	};
-	let word: String = head.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+	// a word, or a glyph with its parameters: `infix operator ↑(x: number, n: number) := …` (card easy-add)
+	let word: String = match head.starts_with(char::is_alphabetic) {
+		true => head.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect(),
+		false => head.chars().take_while(|c| *c != '(').collect(),
+	};
 	let parameters = &head[word.len()..];
-	let is_word = word.starts_with(char::is_alphabetic) && word != OPERATOR_WORD;
-	(is_word && (parameters.is_empty() || parameters.starts_with('('))).then_some(word)
+	let is_operator = (word.starts_with(char::is_alphabetic) && word != OPERATOR_WORD) || is_operator_glyph(&word);
+	(is_operator && (parameters.is_empty() || parameters.starts_with('('))).then_some(word)
 }
 
 /// `divides`: a declared operator that is a word, ending where the word ends (not `dividesx`)
@@ -53,14 +57,23 @@ pub(crate) fn scan_user_operators(source: &str) -> Vec<UserOperator> {
 	found
 }
 
-/// The operators a source itself declares: `prefix|suffix|infix operator ⊕ := body` and the pattern `a ⊕ b := body` (infix)
+/// The kind a declaration's first word declares: `prefix|suffix|infix operator ⊕`, and `operator ⊕` alone is infix (card
+/// operator-infix)
+fn declared_kind(word: &str) -> Option<UserOperatorKind> {
+	match word {
+		OPERATOR_WORD => Some(UserOperatorKind::Infix),
+		_ => OPERATOR_KINDS.iter().find(|(keyword, _)| *keyword == word).map(|(_, kind)| *kind),
+	}
+}
+
+/// The operators a source itself declares: `[prefix|suffix|infix] operator ⊕ := body` and the pattern `a ⊕ b := body` (infix)
 pub(crate) fn declared_operators(source: &str) -> Vec<UserOperator> {
 	let mut found: Vec<UserOperator> = Vec::new();
 	for statement in source.lines().flat_map(|line| line.split(';')) {
 		let words: Vec<&str> = statement.split_whitespace().collect();
 		let by_kind = words.split_first().and_then(|(word, rest)| {
-			let (_, kind) = OPERATOR_KINDS.iter().find(|(keyword, _)| keyword == word)?;
-			Some((declared_operator(*kind, rest)?, *kind))
+			let kind = declared_kind(word)?;
+			Some((declared_operator(kind, rest)?, kind))
 		});
 		let declared = by_kind.or_else(|| match words.as_slice() {
 			[left, glyph, right, ":=", ..]
@@ -157,16 +170,31 @@ impl WarpParser {
 
 	/// The length of the balanced `(…)` at `offset`, None when none starts there or it never closes
 	pub(crate) fn parenthesis_length(&self, offset: usize) -> Option<usize> {
+		self.scan_parentheses(offset).map(|(length, _)| length)
+	}
+
+	/// Whether the `(…)` at `offset` separates items with a comma of its own (not one in a nested group or a text)
+	fn holds_top_level_comma(&self, offset: usize) -> bool {
+		self.scan_parentheses(offset).is_some_and(|(_, comma)| comma)
+	}
+
+	/// The balanced `(…)` at `offset`: its length and whether a comma of its own separates items; brackets and commas
+	/// inside a text or a nested group are none of its own
+	fn scan_parentheses(&self, offset: usize) -> Option<(usize, bool)> {
 		if self.peek_char(offset) != '(' {
 			return None;
 		}
-		let mut depth = 0;
-		for length in 0.. {
-			match self.peek_char(offset + length) {
-				'(' => depth += 1,
-				')' if depth == 1 => return Some(length + 1),
-				')' => depth -= 1,
-				'\0' => return None,
+		let (mut depth, mut quote, mut comma) = (0, None, false);
+		for index in offset.. {
+			match (self.peek_char(index), quote) {
+				('\0', _) => return None,
+				(c, Some(open)) if c == open && self.peek_char(index - 1) != '\\' => quote = None,
+				(_, Some(_)) => {}
+				(c @ ('"' | '\''), None) => quote = Some(c),
+				('(' | '[' | '{', None) => depth += 1,
+				(')' | ']' | '}', None) if depth == 1 => return Some((index - offset + 1, comma)),
+				(')' | ']' | '}', None) => depth -= 1,
+				(',', None) if depth == 1 => comma = true,
 				_ => {}
 			}
 		}
@@ -220,7 +248,10 @@ impl WarpParser {
 	pub(crate) fn try_parse_user_infix(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
 		let operator = self.user_operator_at(&[UserOperatorKind::Infix])?;
 		let (left_bp, right_bp) = (operator.level, operator.level + 1);
-		if left_bp < min_bp {
+		// `print matches("abd", "a.c$")`: a word glued to `(both, operands)` is its call, as `f(x, y)` is; a right operand
+		// never holds a comma, so `"abc" matches("a.c")` stays infix (card use-regex)
+		let is_glued_call = is_operator_word(&operator.glyph) && self.holds_top_level_comma(operator.glyph.len());
+		if left_bp < min_bp || is_glued_call {
 			return None;
 		}
 		self.advance_by(operator.glyph.len());
@@ -263,14 +294,14 @@ impl WarpParser {
 				Err(message) => error(&message),
 			});
 		}
-		let (_, kind) = OPERATOR_KINDS.iter().find(|(keyword, _)| *keyword == word)?;
-		let glyph: Vec<char> = declared_operator(*kind, &words)?.chars().collect();
+		let kind = declared_kind(word)?;
+		let glyph: Vec<char> = declared_operator(kind, &words)?.chars().collect();
 		let has_operator_word = words.first() == Some(&OPERATOR_WORD);
 		self.skip_spaces();
 		if has_operator_word {
 			self.advance_by(OPERATOR_WORD.chars().count());
 			self.skip_spaces();
-		} else if is_operator_word(&glyph) {
+		} else if is_operator_word(&glyph) && word != OPERATOR_WORD {
 			self.set_hint_pos();
 			let name: String = glyph.iter().collect();
 			crate::errors::diagnostic::educate_once(

@@ -328,3 +328,18 @@ plan: warp functions compiled to WGSL, so the work around a shader (spectrum(), 
   Next, after the Rust cleanup (user decision cleanup-only, 2026-10-13): step 5, the tunnel shader of
   samples/gpu_visualizer.warp written in warp. It needs vectors (vec2f…vec4f) in the translation, and arrays as
   values (`levels`).
+
+## Shaders in the browsers' playground (cards shaders-firefox, https-pannous, very-fast, 2026-10-14)
+- CI's browsers had no real canvas path: Linux Firefox keeps WebGPU off (every GPU example skipped as "no adapter"),
+  Chrome's SwiftShader drops the page canvas, so shaders came back as pixels. The Firefox tour now turns WebGPU on
+  (FIREFOX_PREFS `dom.webgpu.enabled`, `gfx.webgpu.ignore-blocklist`, lavapipe from mesa-vulkan-drivers): the only
+  CI browser drawing a shader into the page's canvas, as users' browsers with a GPU do.
+- Firefox lost an OffscreenCanvas posted into a MessagePort whose other end was itself still on its way to the task
+  Worker (the program's Worker made the channel); only a Firefox-internal "uncaught exception: undefined" said so, and
+  the program hung in Atomics.wait. The page now posts the canvas straight to the task Worker it made
+  (task-workers.js postToTaskWorker, by `taskWorkerId`).
+- An `on frame` painting arrives after the run's report (playground.js showEventOutput), where the GPU canvas's id
+  was never mapped to its canvas: the page showed "1" instead of the brush, so on any real GPU the `on frame` shader
+  samples vanished after their first frame. paintingOf maps it in both places; a pixel frame is redrawn in place.
+- Probes: probes/firefox_webgpu/check.sh (WebGPU steps on the page and in a Worker), variants.sh (programs run one by
+  one with the console after each); firefox_driver.mjs takes FIREFOX_PREFS and names an error's line and realm.

@@ -59,11 +59,13 @@ exact-decimal list decision (warp-numbers) lands.
 formats 0 and 1, running status, tempo changes) of notes `[start s, pitch, length s, velocity]`; they cross to the host as
 flat whole numbers `[start ms, key, length ms, velocity …]` (src/sound/midi.rs natively, host-files.js midiFileOf / midiNotesOf in
 the browser, the same codec twice). `midi_on(pitch, velocity = 100, channel = 1)`, `midi_off`, `midi_send(status, d1, d2, port)`.
-Natively a message goes to `sendmidi` (brew install gbevin/tools/sendmidi; missing → a loud error naming it), headless only
-`midi out <port>: 90 3c 64` on stderr. Browser: Web MIDI on the page (playground.js sendMidi, first output or by name,
-failures to the console). Open, each failing loudly today (card midi-receive): `midi_receive()` (no CoreMIDI binding natively: needs the midir
-crate or libloading CoreMIDI; in the browser the page's input would have to be handed to the Worker), `midi_outputs()` in the
-browser (a Worker cannot wait for the page's device list), 
+Natively messages go through midir (CoreMIDI, ALSA, WinMM; card midi-receive): an output or input is opened by name
+(exactly, else the first containing it; "" the first device) and kept open for the run; headless only
+`midi out <port>: 90 3c 64` on stderr. `midi_inputs()`, `midi_outputs()` list the devices (ø without any).
+`midi_receive(port = "", seconds = 0)` gives the next message [status, data1, data2], waiting for it (seconds > 0: at
+most that long, then ø); messages between two calls queue up. tests/programs/test_midi.rs plays a CoreMIDI virtual
+source into a program (macOS). Browser: Web MIDI on the page (playground.js sendMidi, first output or by name, failures
+to the console); `midi_receive`, `midi_inputs`, `midi_outputs` fail loudly there (a Worker cannot wait for the page).
 Clock-timed built (card midi-clock): a message goes out at its voice's moment (sound.rs moment / on_clock): after the
 sounds queued before it, at an `at`'s time, in a task on its own voice; natively a thread sleeping until then (wait_sound
 and the process's end wait for it, stop_sound drops it), headless the line names the place (`midi out : 90 40 64 at 0.500 s`),
@@ -131,8 +133,18 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    == C5 to the hundredth) and multiplies any other frequency; `chord(root, kind)`, `scale(root, kind)` are lists of
    notes, kinds in lib chord_intervals / scale_intervals, written as a word the program doesn't define (only directly
    in the call: `f(major)` passes an undefined symbol) or as a text. Notes stay frequencies at run time; sound's
-   transpose/2 and matrix's transpose/1 coexist. Still to build: a `Note` value (pitch class, octave, cents) that
-   prints as its name, intervals as values, just intonation, velocity (card note-value).
+   transpose/2 and matrix's transpose/1 coexist.
+   Note values built (card note-value, tests/programs/test_note_values.rs): `note(pitch)` (alias note_value) is lib
+   `class Note {key, cents}` with text() (prints "C4", "A4+20c"), hertz(), octave(), name(), plus/minus semitones,
+   equals; `note("C#4")`: music_words lowers a note-name text in a call of note like the bare name; `interval(low,
+   high)` is semitones; play/melody take Notes (hertz_of). Bare names stay frequencies (user decision 2026-10-14: the
+   word note, `C4` stays 261.63; note(text) gave the frequency before, now note_hertz). Lib trap: test a pitch against
+   a class only after si_amount (a quantity `is Note` fails statically, card quantity-is-class), and typed overloads
+   can't see a module call's type (`note(midi_hertz(60))` fits no variant). How a std module's class with methods
+   works for a module that stays a used module: insert_module_classes puts the needed classes of used AND implicit
+   modules in front (units excepted: it still moves whole, MODULES_COMPILED_AS_PROGRAM, its methods need its number
+   words as program code), and records the module functions returning such a class (module_returned_classes) so
+   class_methods types `n = note(C4)` for `n + 7`. Still to build: just intonation, velocity, named intervals.
 3. Built (2026-10-10, samples/synth.warp, tests/programs/test_sound_synth.rs): the ADSR envelope of every note,
    module settings `attack`, `decay` (seconds), `sustain` (a share), `release` (seconds), defaults 5 ms / 0 / 1 / 5 ms
    = the old click-free fade; `wave_shape = "noise"`; gain in decibels, `loudness = -6 dB` (`-6dB`, `x = -6 dB`;
@@ -237,6 +249,15 @@ how often the voice played the same pattern text before (lib pattern_cycle, the 
 counts its own). The chance is a hash of `pattern_seed` (setting, 0), the cycle and the item's place, not random(): the same
 each run and each render, and the program's own random sequence stays untouched. `live_loop drums 4 { … }` names the voice
 (`await drums`), the unnamed form keeps `live_voice`.
+Built (card live-redefine, tests/programs/test_live_redefine.rs): a named loop defined again in the same block
+(`at 2 bars live_loop bass { … }`) is no new voice: music_words with_live_loops makes the first definition a voice
+choosing each cycle among all the blocks, the later ones set `bass_since#k = sound_moment()` (a shared float array,
+-1 unset). sound_moment (host word sound.moment, natively seconds of the voice's moment on RUN_CLOCK, in the
+playground voiceMoment on the Workers' shared clock) is where the voice's next sound would start; a cycle plays the
+latest block whose moment it reached, 50 ms early counting (voices start microseconds apart). The first definition's
+count stays; `live_loop name { … }` without one is endless (heard voices pace 0.5 s ahead, silent runs don't).
+Still open: playground live reload (Run again while playing keeps the clock and redefines loops by name), a
+redefined block's variables must exist when the voice starts.
 Still open: an endless loop (card live-redefine) whose block is redefined while it plays (needs the playground's live
 reload and voice stealing).
 

@@ -409,6 +409,12 @@ fn method_parts(method: &Node) -> Option<(&Node, &String, Vec<Node>)> {
 	Some((word_node, name, arguments))
 }
 
+/// `x.sqrt`, `x.abs()`: the prefix operator the word names (`sqrt x`, `abs x`) applied to the receiver
+fn prefix_operator_method(receiver: &Node, name: &str) -> Option<Node> {
+	let (_, operator) = crate::warp_parser::PREFIX_OPERATOR_WORDS.into_iter().find(|(word, _)| *word == name)?;
+	Some(key(Node::Empty, operator, receiver.clone()))
+}
+
 /// The call `word(receiver, arguments…)`
 fn word_call(word_node: &Node, receiver: &Node, arguments: Vec<Node>) -> Node {
 	Node::List([vec![word_node.clone(), receiver.clone()], arguments].concat(), Bracket::Round, Separator::None)
@@ -811,7 +817,7 @@ impl Lowering {
 		if is_field && !has_arguments {
 			return Some(field_lookup(receiver, name, word_node));
 		}
-		// `x.chars` stays the count of characters; `chars x`, `chars(x)` and the call `x.chars()` are the list
+		// `x.chars`, `x.chars()`, `chars x` and `chars(x)` are all the list (user 2026-10-14, card abc-chars)
 		let is_called = matches!(method.drop_meta(), Node::List(..));
 		// `n.first` of a person with a field first reads the field, not the library word first
 		if !is_called && self.instances.is_instance_field(receiver, name) {
@@ -842,6 +848,15 @@ impl Lowering {
 		let is_object = literal.is_some() || self.is_object(receiver, name) || self.may_hold_object(receiver);
 		if is_object && !is_known && !has_arguments {
 			return Some(field_lookup(receiver, name, word_node));
+		}
+		// `x.round`, `x.sqrt`: the number word applied to x, as `x.round()` and `sqrt x` are (x.word is word(x))
+		if !has_arguments {
+			if let Some(operation) = prefix_operator_method(receiver, name) {
+				return Some(operation);
+			}
+			if crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name.as_str()) {
+				return Some(word_call(word_node, receiver, vec![]));
+			}
 		}
 		// `x.type`, `x.type()`: `type(x)`, once no field of that name can be meant
 		if name == crate::type_tests::TYPE_WORD && !has_arguments {

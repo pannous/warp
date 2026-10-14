@@ -14,8 +14,8 @@ pub const TEXT_HEAP_EXPORT: &str = "text_heap";
 pub use warp_runtime::host_words::{
 	CLIPBOARD_TEXT, CLOCK, EXIT, FETCH_HANDLER_PREFIX, FILE_HANDLER_PREFIX, GPU_COMPUTE, GPU_COMPUTE_LINEAR,
 	GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER, HOST_LIBRARY, INTERRUPT_HANDLER, LOCAL_OFFSET, NOTIFY, PAGE_PATH,
-	RANDOM, RANDOM_BELOW, RANDOM_SEED, SHARED_HANDLER, SIGNAL_LISTEN, SIGNAL_POLL, SIGNAL_WATCH, SLEEP, SYSTEM_VALUE,
-	TEXT_COVERAGE, TIMER_HANDLER_PREFIX,
+	RANDOM, RANDOM_BELOW, RANDOM_SEED, SET_SYSTEM_VALUE, SHARED_HANDLER, SIGNAL_LISTEN, SIGNAL_POLL, SIGNAL_WATCH,
+	SLEEP, SYSTEM_VALUE, TEXT_COVERAGE, TIMER_HANDLER_PREFIX,
 };
 pub const TASK_CONTROL: &str = "task_control";
 /// `go f(x)` on a thread (tasks.rs) of a function of numbers, texts, characters or lists: task_spawn_values(name, [arguments]) → task id,
@@ -171,7 +171,7 @@ pub const VALUE_GIVING_WORDS: [&str; 15] = [
 use wasm_encoder::ValType::{F64, I32, I64};
 const NODE: wasm_encoder::ValType = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
 /// name, parameters, results of each host word
-pub const HOST_WORD_SIGNATURES: [(&str, &[wasm_encoder::ValType], &[wasm_encoder::ValType]); 65] = [
+pub const HOST_WORD_SIGNATURES: [(&str, &[wasm_encoder::ValType], &[wasm_encoder::ValType]); 66] = [
 	(DRAW_SHAPE, &[I64, F64, F64, F64, F64, I64], &[]),
 	(DRAW_SHOW, &[I64, I64], &[]),
 	(GPU_COMPUTE, &[NODE, NODE, I64], &[NODE]),
@@ -211,6 +211,7 @@ pub const HOST_WORD_SIGNATURES: [(&str, &[wasm_encoder::ValType], &[wasm_encoder
 	(SIGNAL_LISTEN, &[I64, I64, I64], &[]),
 	(SIGNAL_WATCH, &[I64, I32], &[]),
 	(SYSTEM_VALUE, &[I32], &[I64]),
+	(SET_SYSTEM_VALUE, &[I32, I64], &[]),
 	(EXIT, &[I64], &[]),
 	(TASK_CONTROL, &[I64, I64], &[I64]),
 	(TASK_SPAWN_VALUES, &[I32, NODE], &[I64]),
@@ -261,6 +262,7 @@ pub mod channels;
 #[cfg(feature = "native")]
 pub mod database;
 pub mod host_parts;
+pub mod page_parts;
 pub use aliases::*;
 mod fetch;
 pub use fetch::*;

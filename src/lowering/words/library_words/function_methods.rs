@@ -87,6 +87,13 @@ fn function_methods_as_calls(
 		Node::Key(receiver, Op::Dot, method) => {
 			let (receiver, method) = (lowered(*receiver), lowered(*method));
 			match method.drop_meta() {
+				Node::List(items, Bracket::Round, _)
+					if let [word] = items.as_slice()
+						&& let Some(name) = word.symbol_name().filter(|name| !defined.contains(*name))
+						&& let Some(operation) = prefix_operator_method(&receiver, name) =>
+				{
+					operation
+				}
 				Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if is_function(name, items.len() - 1, defined)) => {
 					parens([vec![items[0].clone(), receiver], items[1..].to_vec()].concat())
 				}

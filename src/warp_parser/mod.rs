@@ -172,6 +172,8 @@ const UPTO: &str = "upto";
 const DOWN_WORD: &str = "down";
 const REVERSE_WORD: &str = "reverse";
 const EXCLUSIVE_DOTS: &str = "..";
+/// Topic of the Ask about `f x as T`, which casts the argument (card parameter-named-number)
+const ARGUMENT_CAST: &str = "argument-cast";
 /// Topic of the Ask about `for i in 0..n-1`, which Kotlin reads inclusive
 const KOTLIN_RANGE: &str = "kotlin-range";
 /// The control words that negate their condition: `unless c` is `if not c`, `until c` is `while not c`
