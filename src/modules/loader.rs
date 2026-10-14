@@ -335,17 +335,21 @@ impl<'a> Loader<'a> {
 				false => Err(self.not_found(name, import)),
 			};
 		};
+		use crate::errors::diagnostic::{report, Diagnostic};
+		let shadows = |shadowed: String| Diagnostic::at(statement, format!("{} shadows {shadowed}", path.display()));
+		if let Some(repository) = package_repository(name).filter(|_| import == Import::Use) {
+			report(&[shadows(format!(
+				"the package {name} ({repository}): rename the file to use the package"
+			))])?;
+		}
 		if let Some(requirement) = &used.requirement {
 			check_version(name, &path, requirement)?;
 		}
 		if std_module(name).is_some() && !edited_since_build(&path) {
-			let shadowing = format!(
-				"{} shadows the standard module {name}: its text differs from the one warp embeds",
-				path.display()
-			);
-			crate::errors::diagnostic::report(&[
-				crate::errors::diagnostic::Diagnostic::at(statement, shadowing).weak()
-			])?;
+			report(&[shadows(format!(
+				"the standard module {name}: its text differs from the one warp embeds"
+			))
+			.weak()])?;
 		}
 		self.load(import, name, path)
 	}
