@@ -9,9 +9,9 @@
 //! time. Live input (card midi-receive) comes natively from an input kept open for the run; the playground's Web MIDI
 //! input stays on the page, out of the program's Worker, and fails loudly there.
 
-use midir::{MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};
+use midir::{MidiIO, MidiInput, MidiInputConnection, MidiOutput, MidiOutputConnection};
 use std::collections::HashMap;
-use std::sync::{mpsc, LazyLock, Mutex};
+use std::sync::{mpsc, Arc, LazyLock, Mutex};
 
 const TICKS_PER_QUARTER: u32 = 480;
 const MICROSECONDS_PER_QUARTER: u32 = 500_000;
@@ -222,11 +222,10 @@ pub fn send(port: &str, bytes: &[u8]) -> Result<(), String> {
 /// The message to its output, connected once and kept open for the run
 fn sent(port: &str, bytes: &[u8]) -> Result<(), String> {
 	let mut outputs = OUTPUTS.lock().map_err(|_| "the MIDI outputs are poisoned")?;
-	let name = chosen_port(port, &outputs_of(&midi_output()?), "output")?;
+	let name = chosen_port(port, &port_names(&midi_output()?), "output")?;
 	if !outputs.contains_key(&name) {
 		let output = midi_output()?;
-		let device = output.ports().into_iter().find(|device| output.port_name(device).ok().as_deref() == Some(&name));
-		let device = device.ok_or_else(|| format!("the MIDI output {name} is gone"))?;
+		let device = port_named(&output, &name, "output")?;
 		let connection =
 			output.connect(&device, CLIENT).map_err(|failure| format!("cannot open MIDI output {name}: {failure}"))?;
 		outputs.insert(name.clone(), connection);
@@ -238,25 +237,30 @@ fn sent(port: &str, bytes: &[u8]) -> Result<(), String> {
 /// The names of the MIDI outputs the system has
 pub fn outputs() -> Result<Vec<String>, String> {
 	crate::host::sandbox::check_process("midi.outputs")?;
-	Ok(outputs_of(&midi_output()?))
+	Ok(port_names(&midi_output()?))
 }
 
 /// The names of the MIDI inputs the system has
 pub fn inputs() -> Result<Vec<String>, String> {
 	crate::host::sandbox::check_process("midi.inputs")?;
-	Ok(inputs_of(&midi_input()?))
+	Ok(port_names(&midi_input()?))
 }
 
 /// The next message from the input `port` ("" the first one): its bytes, waiting for it; `seconds` > 0 waits that long
-/// at most, then `None`. The input stays open for the run, so no message between two calls is lost
+/// at most, then `None`. The input stays open for the run, so no message between two calls is lost; the inputs' lock
+/// is released before waiting, so a task waiting on one input never holds up another's
 pub fn receive(port: &str, seconds: f64) -> Result<Option<Vec<u8>>, String> {
 	crate::host::sandbox::check_process("midi.receive")?;
-	let mut inputs = INPUTS.lock().map_err(|_| "the MIDI inputs are poisoned")?;
-	let name = chosen_port(port, &inputs_of(&midi_input()?), "input")?;
-	if !inputs.contains_key(&name) {
-		inputs.insert(name.clone(), opened_input(&name)?);
-	}
-	let messages = &inputs[&name].messages;
+	let (name, messages) = {
+		let mut inputs = INPUTS.lock().map_err(|_| "the MIDI inputs are poisoned")?;
+		let name = chosen_port(port, &port_names(&midi_input()?), "input")?;
+		if !inputs.contains_key(&name) {
+			inputs.insert(name.clone(), opened_input(&name)?);
+		}
+		let messages = inputs[&name].messages.clone();
+		(name, messages)
+	};
+	let messages = messages.lock().map_err(|_| format!("the MIDI input {name} is poisoned"))?;
 	match seconds > 0.0 {
 		true => match messages.recv_timeout(std::time::Duration::from_secs_f64(seconds)) {
 			Ok(message) => Ok(Some(message)),
@@ -270,13 +274,12 @@ pub fn receive(port: &str, seconds: f64) -> Result<Option<Vec<u8>>, String> {
 /// An open input whose messages queue up for receive
 struct Input {
 	_connection: MidiInputConnection<()>,
-	messages: mpsc::Receiver<Vec<u8>>,
+	messages: Arc<Mutex<mpsc::Receiver<Vec<u8>>>>,
 }
 
 fn opened_input(name: &str) -> Result<Input, String> {
 	let input = midi_input()?;
-	let device = input.ports().into_iter().find(|device| input.port_name(device).ok().as_deref() == Some(name));
-	let device = device.ok_or_else(|| format!("the MIDI input {name} is gone"))?;
+	let device = port_named(&input, name, "input")?;
 	let (queue, messages) = mpsc::channel();
 	let forward = move |_stamp: u64, message: &[u8], _: &mut ()| {
 		let _ = queue.send(message.to_vec());
@@ -284,7 +287,7 @@ fn opened_input(name: &str) -> Result<Input, String> {
 	let connection = input
 		.connect(&device, CLIENT, forward, ())
 		.map_err(|failure| format!("cannot open MIDI input {name}: {failure}"))?;
-	Ok(Input { _connection: connection, messages })
+	Ok(Input { _connection: connection, messages: Arc::new(Mutex::new(messages)) })
 }
 
 /// The device named `wanted` (exactly, else the first whose name contains it), "" the first one
@@ -307,10 +310,11 @@ fn midi_input() -> Result<MidiInput, String> {
 	MidiInput::new(CLIENT).map_err(|failure| format!("no MIDI input: {failure}"))
 }
 
-fn outputs_of(output: &MidiOutput) -> Vec<String> {
-	output.ports().iter().filter_map(|device| output.port_name(device).ok()).collect()
+fn port_names(io: &impl MidiIO) -> Vec<String> {
+	io.ports().iter().filter_map(|device| io.port_name(device).ok()).collect()
 }
 
-fn inputs_of(input: &MidiInput) -> Vec<String> {
-	input.ports().iter().filter_map(|device| input.port_name(device).ok()).collect()
+fn port_named<T: MidiIO>(io: &T, name: &str, direction: &str) -> Result<T::Port, String> {
+	let device = io.ports().into_iter().find(|device| io.port_name(device).ok().as_deref() == Some(name));
+	device.ok_or_else(|| format!("the MIDI {direction} {name} is gone"))
 }
