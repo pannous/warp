@@ -321,7 +321,7 @@ impl WarpParser {
 	}
 
 	/// `n times {body}`, `n times: body`, `n times [x]`, `n times "ab"`: the phrase [n times operand] as written, which
-	/// lowering/times_phrases.rs makes a loop, a filled list or a repeated text
+	/// lowering/words/times_phrases.rs makes a loop, a filled list or a repeated text
 	pub(crate) fn parse_times_loop(&mut self, count: Node) -> Node {
 		self.skip_spaces();
 		let operand = match self.current_char() {

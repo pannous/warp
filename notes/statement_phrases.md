@@ -27,7 +27,7 @@ like `try X else Y`. The condition runs up to the `return`.
 lowering/control/go_blocks.rs `after_parts` turns the marker (and the older flat form) into `go { while not (C) { sleep(1) }; V }`.
 
 ## Number words (P184)
-`one plus two` is 3: lowering/number_words.rs turns the words zero…twenty and thirty…ninety into Ints, each with a
+`one plus two` is 3: lowering/words/number_words.rs turns the words zero…twenty and thirty…ninety into Ints, each with a
 "prefer 1 over one" hint. A word the program names (variable, parameter, function, also C-style `int one()`) stays
 the program's: the pass runs after declarations::lower_spaced_definitions so `soft_keywords::program_names` sees those.
 Keys (`{one: 1}`) and members (`x.one`) stay words. Not done: compounds (`twenty one`, `one hundred`).

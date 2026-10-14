@@ -8,7 +8,7 @@ Unblocks step 7 of tree patterns (notes/matching.md "Tree patterns", probes/matc
 - The Node API (self-node-api, src/wasm_emitter/node_api.rs) reads and builds Nodes: `n.key`, `n.value`, `n.op`,
   `n.name`, `n.bracket`, `type(n)`, `n#i`, `symbol(text)`, `key(left, op, right)`, `bracketed(items, "(")`.
 - A hole is a plain symbol: `data ($a + 0)` has the key `$a`, a symbol. The parser needs no change for holes.
-- `parse("n * 1")` of a constant text folds to `(data n*1)` (src/lowering/parse_word.rs, step parse-const). A grouped
+- `parse("n * 1")` of a constant text folds to `(data n*1)` (src/lowering/words/parse_word.rs, step parse-const). A grouped
   `(data …)` reads like a variable holding data: `.op`/`.key`, either side of `==` (library_words.rs may_hold_object,
   equality.rs is_structured_value).
 - Backticks are template text (`Hello ${name}`, with a hint toward double quotes). So `` `n * 1` `` is the text

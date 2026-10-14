@@ -78,7 +78,7 @@ pub const SHARED_FLOAT_WORDS: [&str; 3] = ["shared_getf", "shared_setf", "shared
 /// values, definitions) compiles the block with the names bound to the values the program had where it ran it and the
 /// program's function definitions, runs it, and gives its value
 pub const RUN_BLOCK: &str = "run_block";
-/// parse_code(text): the code a text known only at run time holds, as data (card parse-runtime, lowering/parse_word.rs):
+/// parse_code(text): the code a text known only at run time holds, as data (card parse-runtime, lowering/words/parse_word.rs):
 /// natively the Rust parser, in the browser run_block's compiler instance (host-compiler.js)
 pub const PARSE_CODE: &str = "parse_code";
 /// block·value(index): the number a block run at run time reads, of the values its run_block call passed
