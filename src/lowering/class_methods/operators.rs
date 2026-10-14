@@ -215,10 +215,7 @@ impl Specializations<'_> {
 		variants: &std::collections::HashMap<String, std::collections::BTreeSet<Vec<Option<String>>>>,
 	) -> Node {
 		match node {
-			Node::Meta { node, data } => Node::Meta {
-				node: Box::new(self.with_copies(*node, variants)),
-				data,
-			},
+			meta @ Node::Meta { .. } => meta.under_meta(|node| self.with_copies(node, variants)),
 			Node::List(items, Bracket::None, separator) => {
 				let copies = |item: &Node| {
 					let Node::Key(head, Op::Define, body) = item.drop_meta() else {

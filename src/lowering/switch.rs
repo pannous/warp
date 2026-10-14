@@ -211,10 +211,7 @@ fn leftmost(node: &Node) -> &Node {
 fn with_leftmost(node: Node, replacement: Node) -> Node {
 	match node {
 		Node::Key(left, op, right) => Node::Key(Box::new(with_leftmost(*left, replacement)), op, right),
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_leftmost(*node, replacement)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_leftmost(node, replacement)),
 		_ => replacement,
 	}
 }

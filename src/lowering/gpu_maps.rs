@@ -161,10 +161,7 @@ fn automatic_value(value: &Node, is_linear_floats: &impl Fn(&Node) -> bool) -> O
 /// The assignment with its value replaced
 fn with_value(statement: Node, value: Node) -> Node {
 	match statement {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_value(*node, value)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_value(node, value)),
 		Node::Key(target, op, _) => Node::Key(target, op, Box::new(value)),
 		other => other,
 	}
@@ -302,10 +299,7 @@ fn reads_only_items(node: &Node, name: &str) -> bool {
 /// The assignment with `attribute` on its value
 fn with_attribute_on_value(statement: Node, attribute: &str) -> Node {
 	match statement {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(with_attribute_on_value(*node, attribute)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_attribute_on_value(node, attribute)),
 		Node::Key(target, op, value) => Node::Key(target, op, Box::new(value.with_attribute(attribute, Node::True))),
 		other => other,
 	}

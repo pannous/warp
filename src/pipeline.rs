@@ -735,10 +735,7 @@ fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModu
 /// The program with its last statement `x` printed: `print(x)`; a declaration or a print stays as it is
 fn printing_result(program: Node) -> Node {
 	match program {
-		Node::Meta { node, data } => Node::Meta {
-			node: Box::new(printing_result(*node)),
-			data,
-		},
+		meta @ Node::Meta { .. } => meta.under_meta(printing_result),
 		Node::List(mut statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
 			if let Some(last) = statements.pop() {
 				statements.push(printing_result(last));
