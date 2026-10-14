@@ -131,7 +131,7 @@ pub use wasm_emitter::WasmGcEmitter;
 #[cfg(feature = "native")]
 pub use host::{create_host_linker, link_host_functions, HostState};
 // Functions
-pub use function::{kind_to_valtype, Arg, Function, FunctionRegistry, Signature, ABI};
+pub use function::{Arg, Function, FunctionRegistry, Signature};
 // Local (unified struct for variables)
 pub use local::Local;
 // New gc_traits module with rasm-style ergonomic GC struct access

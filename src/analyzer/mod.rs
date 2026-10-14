@@ -1,7 +1,6 @@
 use crate::context::{Context, Param, UserFunctionDef};
 use crate::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
-use crate::function::{Function, FunctionRegistry};
 use crate::local::Local;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
