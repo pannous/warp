@@ -14,12 +14,12 @@
 //! kind carries the class of its target's written form (written_form, wasm_emitter/closures.rs function_kind), equal
 //! classes compare the captured values; different forms are different functions there (card runtime-function)
 use crate::extensions::numbers::Number;
+use crate::extensions::reals::Rational;
 use crate::law::{self, FunctionDefinition, Law, Lawful, Verdict};
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use num_bigint::BigInt;
-use num_integer::Integer;
-use num_traits::{One, Signed, ToPrimitive, Zero};
+use num_traits::{One, ToPrimitive, Zero};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap};
 use std::hash::{Hash, Hasher};
@@ -358,87 +358,32 @@ fn undecidable(f: &Function, g: &Function, functions: &[Function]) -> Node {
 
 // ==================== polynomial normal form ====================
 
-/// Exact coefficient, denominator positive and coprime with the numerator.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct Ratio {
-	numerator: BigInt,
-	denominator: BigInt,
+/// The exact value of a number: none for floats (not exact), NaN and infinities (not in a ring)
+fn exact_ratio(number: &Number) -> Option<Rational> {
+	match number {
+		Number::Quotient(_, 0) => None,
+		Number::Int(_) | Number::Quotient(..) | Number::BigQuotient(_) | Number::BigInt(_) => Some(number.to_rational()),
+		_ => None,
+	}
 }
 
-impl Ratio {
-	fn new(numerator: BigInt, denominator: BigInt) -> Option<Ratio> {
-		if denominator.is_zero() {
-			return None;
-		}
-		let divisor = numerator.gcd(&denominator);
-		let (mut numerator, mut denominator) = (numerator / &divisor, denominator / &divisor);
-		if denominator.is_negative() {
-			numerator = -numerator;
-			denominator = -denominator;
-		}
-		Some(Ratio { numerator, denominator })
+/// A whole exponent small enough to expand
+fn small_exponent(ratio: &Rational) -> Option<u32> {
+	if !ratio.is_integer() {
+		return None;
 	}
-
-	fn integer(value: BigInt) -> Ratio {
-		Ratio {
-			numerator: value,
-			denominator: BigInt::one(),
-		}
-	}
-
-	fn of(number: &Number) -> Option<Ratio> {
-		match number {
-			Number::Int(value) => Some(Ratio::integer(BigInt::from(*value))),
-			Number::Quotient(numerator, denominator) => {
-				Ratio::new(BigInt::from(*numerator), BigInt::from(*denominator))
-			}
-			Number::BigQuotient(q) => Ratio::new(q.numerator.clone(), q.denominator.clone()),
-			Number::BigInt(value) => Some(Ratio::integer((**value).clone())),
-			_ => None, // floats are not exact, NaN and infinities are not in a ring
-		}
-	}
-
-	fn is_zero(&self) -> bool {
-		self.numerator.is_zero()
-	}
-
-	fn add(&self, other: &Ratio) -> Ratio {
-		Ratio::new(
-			&self.numerator * &other.denominator + &other.numerator * &self.denominator,
-			&self.denominator * &other.denominator,
-		)
-		.expect("nonzero denominators")
-	}
-
-	fn mul(&self, other: &Ratio) -> Ratio {
-		Ratio::new(
-			&self.numerator * &other.numerator,
-			&self.denominator * &other.denominator,
-		)
-		.expect("nonzero denominators")
-	}
-
-	fn inverse(&self) -> Option<Ratio> {
-		Ratio::new(self.denominator.clone(), self.numerator.clone())
-	}
-
-	fn small_exponent(&self) -> Option<u32> {
-		if !self.denominator.is_one() {
-			return None;
-		}
-		self.numerator.to_u32().filter(|power| *power <= MAX_POWER)
-	}
+	ratio.numerator.to_u32().filter(|power| *power <= MAX_POWER)
 }
 
 /// Sparse polynomial: exponent vector (one entry per parameter) → nonzero coefficient.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Polynomial {
-	terms: BTreeMap<Vec<u32>, Ratio>,
+	terms: BTreeMap<Vec<u32>, Rational>,
 	arity: usize,
 }
 
 impl Polynomial {
-	fn constant(value: Ratio, arity: usize) -> Polynomial {
+	fn constant(value: Rational, arity: usize) -> Polynomial {
 		let mut terms = BTreeMap::new();
 		if !value.is_zero() {
 			terms.insert(vec![0; arity], value);
@@ -450,20 +395,20 @@ impl Polynomial {
 		let mut exponents = vec![0; arity];
 		exponents[index] = 1;
 		Polynomial {
-			terms: BTreeMap::from([(exponents, Ratio::integer(BigInt::one()))]),
+			terms: BTreeMap::from([(exponents, Rational::integer(BigInt::one()))]),
 			arity,
 		}
 	}
 
-	fn as_constant(&self) -> Option<Ratio> {
+	fn as_constant(&self) -> Option<Rational> {
 		match self.terms.len() {
-			0 => Some(Ratio::integer(BigInt::zero())),
+			0 => Some(Rational::integer(BigInt::zero())),
 			1 => self.terms.get(&vec![0; self.arity]).cloned(),
 			_ => None,
 		}
 	}
 
-	fn add_term(terms: &mut BTreeMap<Vec<u32>, Ratio>, exponents: Vec<u32>, coefficient: Ratio) {
+	fn add_term(terms: &mut BTreeMap<Vec<u32>, Rational>, exponents: Vec<u32>, coefficient: Rational) {
 		let sum = match terms.get(&exponents) {
 			Some(existing) => existing.add(&coefficient),
 			None => coefficient,
@@ -486,7 +431,7 @@ impl Polynomial {
 		}
 	}
 
-	fn scale(&self, factor: &Ratio) -> Polynomial {
+	fn scale(&self, factor: &Rational) -> Polynomial {
 		if factor.is_zero() {
 			return Polynomial::constant(factor.clone(), self.arity);
 		}
@@ -502,7 +447,7 @@ impl Polynomial {
 	}
 
 	fn neg(&self) -> Polynomial {
-		self.scale(&Ratio::integer(-BigInt::one()))
+		self.scale(&Rational::integer(-BigInt::one()))
 	}
 
 	fn mul(&self, other: &Polynomial) -> Option<Polynomial> {
@@ -523,7 +468,7 @@ impl Polynomial {
 	}
 
 	fn pow(&self, power: u32) -> Option<Polynomial> {
-		let mut result = Polynomial::constant(Ratio::integer(BigInt::one()), self.arity);
+		let mut result = Polynomial::constant(Rational::integer(BigInt::one()), self.arity);
 		for _ in 0..power {
 			result = result.mul(self)?;
 		}
@@ -536,7 +481,7 @@ fn polynomial(node: &Node, parameters: &[String]) -> Option<Polynomial> {
 	let arity = parameters.len();
 	let of = |inner: &Node| polynomial(inner, parameters);
 	match node.drop_meta() {
-		Node::Number(number) => Some(Polynomial::constant(Ratio::of(number)?, arity)),
+		Node::Number(number) => Some(Polynomial::constant(exact_ratio(number)?, arity)),
 		Node::Symbol(name) => Some(Polynomial::variable(parameters.iter().position(|p| p == name)?, arity)),
 		Node::List(items, Bracket::Round | Bracket::Curly | Bracket::None, _) if items.len() == 1 => of(&items[0]),
 		Node::Key(left, op, right) => match (left.drop_meta(), op, right.drop_meta()) {
@@ -550,7 +495,7 @@ fn polynomial(node: &Node, parameters: &[String]) -> Option<Polynomial> {
 					Op::Sub => Some(a.add(&b.neg())),
 					Op::Mul => a.mul(&b),
 					Op::Div => Some(a.scale(&b.as_constant()?.inverse()?)),
-					Op::Pow => a.pow(b.as_constant()?.small_exponent()?),
+					Op::Pow => a.pow(small_exponent(&b.as_constant()?)?),
 					_ => None,
 				}
 			}
