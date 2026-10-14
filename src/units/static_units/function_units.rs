@@ -61,6 +61,7 @@ impl Inference {
 					.map(|text| text.map(|text| (text, vec![])))
 			}
 			[head, value] if call_or_words && TEXT_WORDS.iter().any(|text| word(head, text)) => Some((|| {
+				let written = value.clone();
 				let (value, signature) = self.infer(value.clone())?;
 				if signature.is_empty() {
 					return Ok((
@@ -68,7 +69,8 @@ impl Inference {
 						vec![],
 					));
 				}
-				Ok((self.as_text(value, &signature, None, AMOUNT_TEXT)?, vec![]))
+				let shown_units = self.shown_factors(&written, &signature);
+				Ok((self.as_text(value, &signature, Some(shown_units), AMOUNT_TEXT)?, vec![]))
 			})()),
 			[head, value]
 				if call_or_words && word(head, PRINT_WORD) && self.whole_text(value, PRINTED_AMOUNT_TEXT).is_some() =>
@@ -83,9 +85,10 @@ impl Inference {
 				})
 			}
 			[head, value] if call_or_words && word(head, PRINT_WORD) => Some((|| {
-				let shown_units = conversion_target(value);
+				let (written, conversion) = (value.clone(), conversion_target(value));
 				let (value, signature) = self.infer(value.clone())?;
-				let text = self.as_text(value, &signature, shown_units, PRINTED_AMOUNT_TEXT)?;
+				let shown_units = conversion.unwrap_or_else(|| self.shown_factors(&written, &signature));
+				let text = self.as_text(value, &signature, Some(shown_units), PRINTED_AMOUNT_TEXT)?;
 				Ok((
 					Node::List(vec![head.clone(), text], bracket.clone(), separator.clone()),
 					vec![],

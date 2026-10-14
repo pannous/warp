@@ -53,3 +53,14 @@ fn test_a_word_before_a_unit_name_is_no_amount() {
 	));
 	assert!(!eval("use m; 3").serialize().contains("undefined variable: use"));
 }
+
+// card print-print: a quantity shows in the finest unit written in its own expression and the values it reads, not in
+// the finest unit of the whole program
+#[test]
+fn each_quantity_shows_in_its_own_written_unit() {
+	assert_eq!(shown("a = 2 h; b = 120 min; a"), "2h");
+	assert_eq!(shown("a = 2 h; b = 120 min; str(a)"), "\"2h\"");
+	assert_eq!(shown("a = 2 h; b = 120 min; str(b)"), "\"120min\"");
+	assert_eq!(shown("x = 1 km; y = 1 m; x + y"), "1001m");
+	assert_eq!(shown("t = 0 h; t += 20 min; t"), "20min");
+}
