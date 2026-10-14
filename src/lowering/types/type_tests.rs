@@ -57,7 +57,7 @@ use crate::type_kinds::Kind as K;
 /// (`t = int`, `type(π) == real`). `number` covers every number, `real` the exact numbers and π, `rational` the whole
 /// numbers too, `text` a one-character string (a codepoint); `list` and ø both hold the empty list, as `count` takes
 /// it; a ± value is a number. The fixed widths (`int8`, `uint16` …) are src/numbers/fixed_width.rs
-const BUILTIN_TYPES: [BuiltinType; 23] = [
+const BUILTIN_TYPES: [BuiltinType; 24] = [
 	builtin("int", &["integer", "long", "i64", "i32"], &[], Some(K::Int), &[K::Int as i64]),
 	builtin("rational", &[], &["int"], Some(K::Int), &[K::Int as i64, K::Float as i64]),
 	builtin(REAL_WORD, &["exact"], &["rational"], Some(K::Empty), &[K::Int as i64, K::Float as i64]),
