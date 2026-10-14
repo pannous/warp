@@ -111,18 +111,6 @@ const LIBM_POW: &str = "m.pow";
 /// ffi_imports key of libm's cbrt for ∛ of a run-time value
 const LIBM_CBRT: &str = "m.cbrt";
 
-/// Traps of the exact runtime with the message a user should read instead of a wasm backtrace
-const EXACT_TRAP_MESSAGES: [(&str, &str); 2] = [
-	("int_shift_", "a shift needs an integer and a count from 0 to 65536"),
-	("exact_pow", "an exact power needs an integer exponent"),
-];
-
-/// An index out of range in a program with an exclusive range is often an end the writer meant to include
-/// The exported global where a program leaves the value a runtime error is about (the subject of a missed switch)
-pub const TRAP_DETAIL: &str = "trap_detail";
-/// How a trapped run carries that value into its error: `trap detail: <value>`
-pub const TRAP_DETAIL_PREFIX: &str = "trap detail: ";
-
 /// The condition and the then-branch of `if condition then branch`
 /// The call `join(list, separator)`: the items' text forms with the separator between them
 pub(super) fn join_call(list: Node, separator: &str) -> Node {

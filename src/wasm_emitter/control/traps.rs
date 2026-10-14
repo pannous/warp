@@ -1,6 +1,17 @@
 //! Traps: the detail and position lines of a trapped run, and the runtime error a trap means
 use super::super::*;
 
+/// Traps of the exact runtime with the message a user should read instead of a wasm backtrace
+pub(crate) const EXACT_TRAP_MESSAGES: [(&str, &str); 2] = [
+	("int_shift_", "a shift needs an integer and a count from 0 to 65536"),
+	("exact_pow", "an exact power needs an integer exponent"),
+];
+/// An index out of range in a program with an exclusive range is often an end the writer meant to include
+/// The exported global where a program leaves the value a runtime error is about (the subject of a missed switch)
+pub const TRAP_DETAIL: &str = "trap_detail";
+/// How a trapped run carries that value into its error: `trap detail: <value>`
+pub const TRAP_DETAIL_PREFIX: &str = "trap detail: ";
+
 /// The `trap detail: <value>` line of a trapped run; an Error value raised as it is (Node arithmetic on an Error, a text
 /// builtin of an Error) names its message
 pub fn trap_detail_line(detail: &Node) -> String {
@@ -193,5 +204,85 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 	match trap_position(trace) {
 		Some(position) => crate::node::error(&crate::diagnostic::located_at(message, &position)),
 		None => crate::node::error(&message),
+	}
+}
+
+impl WasmGcEmitter {
+	/// `error "…"` where a number is wanted (the branch of an Int if, analyzer::raises_error): it cannot be an Error value,
+	/// so it fails the run with its message through `returned_error`, which `try` catches; true when it was one
+	pub(crate) fn emit_raised_error(&mut self, func: &mut Function, node: &Node) -> bool {
+		let Some(message) = returned_error_message(node) else {
+			return false;
+		};
+		self.emit_trap_detail(func, message);
+		self.emit_runtime_error(func, lists::list_ops::RETURNED_ERROR);
+		true
+	}
+
+	/// The value of `return x` as the function gives it back: a Node, an f64 or an i64; `return error "…"` from a
+	/// function of numbers fails the run with the message, it cannot give back an Error value
+	pub(crate) fn emit_returned_value(&mut self, func: &mut Function, value: &Node) {
+		if self.returns_list {
+			self.emit_list_abi_value(func, value);
+		} else if let Some(message) = returned_error_message(value).filter(|_| !self.returns_node) {
+			self.emit_trap_detail(func, message);
+			self.emit_runtime_error(func, lists::list_ops::RETURNED_ERROR);
+		} else if self.returns_node {
+			self.emit_node_instructions(func, value);
+		} else if self.returns_float {
+			self.emit_float_value(func, value);
+		} else {
+			self.emit_numeric_value(func, value);
+		}
+	}
+
+	/// Leave `value` in the exported global `trap_detail` (declared on first use), for the runtime error that follows
+	/// to name it: the runner reads it after the trap (wasm_reader::with_trap_detail)
+	pub(crate) fn emit_trap_detail(&mut self, func: &mut Function, value: &Node) {
+		self.trap_detail_global();
+		self.emit_global_store(func, TRAP_DETAIL_GLOBAL, value);
+		func.instruction(&I::Drop);
+	}
+
+	/// Leave the position of the statement being emitted in the exported global `trap_position`, for a runtime error of
+	/// it to name: the runner reads it after the trap (wasm_reader::with_trap_detail). Again after a call, whose
+	/// statements left theirs. A statement of a module or of generated code (meta::GENERATED_FILE) clears it: a position
+	/// in another file would be read as the program's
+	pub(crate) fn emit_trap_position(&mut self, func: &mut Function) {
+		let Some(position) = self.statement_position.as_ref().filter(|position| position.line_nr > 0) else {
+			return;
+		};
+		let encoded = match position.file {
+			None => encoded_position(position),
+			Some(_) => 0,
+		};
+		let global = self.trap_position_global();
+		Self::emit_list(func, &[I32Const(encoded), I::GlobalSet(global)]);
+	}
+
+	/// The index of the exported global `trap_position`, declared on first use
+	fn trap_position_global(&mut self) -> u32 {
+		if let Some((index, _)) = self.ctx.user_globals.get(TRAP_POSITION_GLOBAL) {
+			return *index;
+		}
+		let index = self.declare_global_of(ValType::I32, ConstExpr::i32_const(0));
+		self.exports.export(TRAP_POSITION, ExportKind::Global, index);
+		self.ctx
+			.user_globals
+			.insert(TRAP_POSITION_GLOBAL.to_string(), (index, Kind::Int));
+		index
+	}
+
+	/// The index of the exported global `trap_detail`, declared on first use
+	pub(crate) fn trap_detail_global(&mut self) -> u32 {
+		if let Some((index, _)) = self.ctx.user_globals.get(TRAP_DETAIL_GLOBAL) {
+			return *index;
+		}
+		let index = self.declare_mutable_global(Kind::Empty);
+		self.exports.export(TRAP_DETAIL, ExportKind::Global, index);
+		self.ctx
+			.user_globals
+			.insert(TRAP_DETAIL_GLOBAL.to_string(), (index, Kind::Empty));
+		index
 	}
 }
