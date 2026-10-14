@@ -105,7 +105,8 @@ fn folded_exact(node: Node) -> Node {
 	children_rewritten(node, folded_exact)
 }
 
-/// Variables assigned once, to a value that mentions an exact real (`x=π`): their type is the type of that value
+/// Variables assigned once, to a value whose type lowering would change (`x=π`, `x=sqrt(2)`): their type is the type of
+/// that value, as the value's own is (`sqrt(2) is real`)
 fn real_variables(program: &Node) -> HashMap<String, Node> {
 	let mut assignments: HashMap<String, Vec<Node>> = HashMap::new();
 	program.visit(&mut |node| {
@@ -122,7 +123,7 @@ fn real_variables(program: &Node) -> HashMap<String, Node> {
 	assignments
 		.into_iter()
 		.filter_map(|(name, mut values)| {
-			(values.len() == 1 && mentions_real(&values[0]) && !parameters.contains(&name))
+			(values.len() == 1 && known_before_lowering(&values[0]) && !parameters.contains(&name))
 				.then(|| (name, values.remove(0)))
 		})
 		.collect()
