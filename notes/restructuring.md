@@ -233,3 +233,21 @@ inventory of main (9fdebbb1b) has 7 names that are new since:
 `is_kinded_type_word` (analyzer::type_word_kind), `is_kinded_type_or_any` (function heads),
 `is_kinded_or_testable_type` (units). The parser's local closure in typed_parameter is the kinded set again.
 Seven constants spell "it" (card duplicate-constants).
+
+### Duplicate constants (card duplicate-constants, split-emitter, 2026-10-14)
+
+Finder: `probes/duplicate_constants.py` (constants holding the same text or word list); merger:
+`scripts/merge_constant.py [--home <file>] NAME file:LOCAL…` (spec of the first round: data/split-emitter/merges.txt).
+- Merged into src/words.rs (branch words-table): `IMPLICIT_PARAMETER` (seven "it"s) and 36 language words: FOR IN EACH
+  COUNT RETURN OF MAP GLOBAL ANY ADD ALL AT CHR DELETE DIR DOT ERROR FLOAT GO IS IS_ERROR LET LIST NUMBER ON PAIR POP
+  PRINT RAISE REAL SELF SEND SORT STR SYMBOL TEXT (`<NAME>_WORD`, ANY_TYPE).
+- Distinct despite equal text, kept with their names: a word's role differs from the spelling (`VALUE_FIELD` vs.
+  `VALUE_WORD`, `·` as UNIT_PRODUCT vs. NAME_SEPARATOR, `"wasm"` as runtime vs. extension, `MODULE_EXTENSIONS` of
+  modules.rs (warp, wasp) vs. wasm_modules.rs (wasm, wat)); `EXTREMA` of min_max.rs pairs words with operators.
+- Waiting for open branches (their files move or change there; data/split-emitter/groups.txt, `*` lines): copies in
+  library_words, gpu_maps, class_methods, warp_parser/mod.rs, welcome_forms, signals/, database_tables, serve,
+  late_binding, effects, stored_values; and after layout-root/diagnostics-paths the non-word duplicates, each into one
+  home with `--home`: UNION_JOINER (law/type_model + declared_types), MODULE_FILE ×3 (web/route_split, deploy, site),
+  JSON_TYPE/TEXT_TYPE (web_server + dev_server), STACK_EXHAUSTED (law + host), MISSING_TARGET_SIGN (package_tools +
+  cargo_crates), WARP_CALL, FIRED_PREFIX ("once_fired_" ×2; signal_values' "signal·fired·" differs), STYLE ×6, the
+  same word lists EXTREMA/EXTREMUM_WORDS, run/file_type EXTENSIONS = modules MODULE_EXTENSIONS, CHANGE_WORDS ×2.
