@@ -14,10 +14,10 @@
 
 use super::super::WasmGcEmitter;
 use crate::wasm_emitter::layout::BYTE;
-use Instruction as I;
 use num_bigint::BigInt;
 use num_traits::One;
 use wasm_encoder::*;
+use Instruction as I;
 
 /// Largest shift count: `1 << n` allocates n bits, a bigger count is a runtime error instead of an out-of-memory
 pub const MAX_SHIFT_COUNT: i64 = 1 << 16;
