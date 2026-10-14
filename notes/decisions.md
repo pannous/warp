@@ -64,8 +64,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   `gcd is function` is yes.
 - parse-type (2026-10-14, from the user's draft "key !?!?!"): an operator node reports type `operation`
   (`parse("1+1").type`, `a<b`; alias `expression`), a pair `a:1` stays `key`; `.op` keeps the operator.
-- time-word (2026-10-14): a bare `time` is always the type (`print time` prints `type time`, as every type value
-  prints `type int`, `type Person`: type-print); the class member
+- time-word (2026-10-14): a bare `time` is always the type (`print time` prints `class time`, as every type value
+  prints `class int`, `class Person`: type-print; not `type time`, which pasted back evaluates to `type`); the class member
   `time.now` is the local time of day, printing 22:27:46 (= `now.time`). instant, date, local time, zoned time, duration are subtypes of time (anchor-time).
   `now > 17h` / `now >= October` / `now ≈ 2026-10-14` compare the matching part; `==` stays exact (`now == 2026-10-14` no).
   `now.time` is the local time of day, printing 22:27:46 (`now.date` the date); the old `time > 18h` special case
