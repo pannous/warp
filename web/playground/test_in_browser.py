@@ -88,6 +88,10 @@ COMPLETIONS = [
 	("xs = 1\nxs_a = 2\nxs_b = 3\nxs", ["Tab", "Enter"], "xs = 1\nxs_a = 2\nxs_b = 3\nxs\n"),
 ]
 KEY_CODES = {"Tab": 9, "Enter": 13}
+MEMBER_COMPLETION = "(members listed after a dot)"  # card member-completion: completion.js asks the compiler (members.rs)
+MEMBER_CODE = "xs = [1 2]; xs"
+MEMBERS_LISTED = ["count", "sum", "map", "unique"]
+MEMBERS_WAIT_MS = 10000
 CLIPBOARD_READ = "(a program reads the clipboard)"  # card web-apis-rest: host.js clipboard_text asks the page
 CLIPBOARD_TEXT = "copied by the page"
 # card web-apis-rest: gpu_compute over named arrays, and paint of a shader drawn straight into the page's canvas
@@ -493,6 +497,25 @@ def file_kept_wrong(page_url):
 	return [] if FILE_KEPT_TEXT in read else [f"read after a reload: {read!r}, expected {FILE_KEPT_TEXT!r}"]
 
 
+def member_completion_wrong():
+	"""Tab after `xs.` of a list lists its members, which come from the compiler's worker: the list shows them"""
+	shown = browser("eval", f"""(async () => {{
+		const editor = document.querySelector(".CodeMirror").CodeMirror;
+		editor.focus();
+		editor.setValue({json.dumps(MEMBER_CODE)});
+		editor.setCursor(0, {len(MEMBER_CODE)});
+		editor.replaceSelection(".");
+		editor.triggerOnKeyDown({{ type: "keydown", keyCode: {KEY_CODES["Tab"]}, preventDefault() {{}}, stopPropagation() {{}} }});
+		const list = document.querySelector(".completions");
+		const deadline = Date.now() + {MEMBERS_WAIT_MS};
+		while ((!list || list.hidden) && Date.now() < deadline) await new Promise(done => setTimeout(done, 100));
+		return list && !list.hidden ? [...list.children].map(item => item.textContent).join(" ") : "no list";
+	}})()""")
+	listed = json.loads(shown) if shown.startswith('"') else shown or browser_complaint
+	missing = [name for name in MEMBERS_LISTED if name not in listed.split()]
+	return [f"{MEMBER_CODE}. then Tab listed {listed!r}, missing {missing}"] if missing else []
+
+
 def clipboard_read_wrong():
 	"""a program reads what the page copied; skipped loudly when the browser refuses the page its own clipboard"""
 	refused = browser("eval", f"""(async () => {{
@@ -711,7 +734,7 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()

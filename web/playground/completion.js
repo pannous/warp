@@ -4,7 +4,10 @@
 //   standard modules;
 // - `\:` and `<:` list the uniscript entities (src/text/uniscript_entities.tsv, entities.tsv here) with their character, and
 //   a chosen one becomes its character: `\:alpha` → α;
-// - a typed `<:name>` becomes its character at its `>`; undo brings the tag back.
+// - a typed `<:name>` becomes its character at its `>`; undo brings the tag back;
+// - after `receiver.` the receiver's members: `xs = [1 2]; xs.` lists count, sum, map … (card member-completion), as
+//   the compiler finds them (src/lowering/data/members.rs, asked through playground.js askMembers), as the console's
+//   Tab does.
 // Tab and Enter take the chosen one (the first, or another chosen with Up/Down), Esc closes; Enter is a new line when
 // nothing was chosen and the word typed is a whole word already (`print`, a name of the code). Tab after a word with
 // no list open lists its completions from the first letter on, or takes the only one (cards code-completion-must,
@@ -16,6 +19,8 @@ const TYPED_TAG = /<:([A-Za-z][A-Za-z0-9-]*)>$/;
 const WORD_BEFORE = /[A-Za-z_][A-Za-z0-9_]*$/;
 const WORDS = /[A-Za-z_][A-Za-z0-9_]*/g;
 const USE_BEFORE = /\b(use|import|include)\s+[A-Za-z_]*$/;
+const MEMBER_BEFORE = /[\w\])}"']\.([A-Za-z_][A-Za-z0-9_]*)?$/; // `xs.`, `[1 2].ma`, `"hi".up`
+const DECIMAL_BEFORE = /(^|[^\w.])\d+\.\d*$/; // `3.`, a number being typed
 const SHORTEST_PREFIX = 2; // words: a list from the second letter on
 const MOST_SHOWN = 12;
 
@@ -74,13 +79,15 @@ async function entityChoices(prefix) {
 		.map(([name, characters]) => ({ text: characters, label: name, shown: characters }));
 }
 
-function startCompletion(editor) {
+// askMembers(code) → a promise of the names to offer after the code and a dot
+function startCompletion(editor, askMembers = async () => []) {
 	const list = document.createElement("ul");
 	list.className = "completions";
 	list.hidden = true;
 	document.body.append(list);
 	let open; // { from, to, choices, chosen }
 	let asked = 0; // the newest request: an older one's entities arrive too late to show
+	let members = {}; // the code before the dot last asked about and the promise of its names: `xs.m`, `xs.ma` ask once
 
 	const close = () => {
 		open = undefined;
@@ -98,7 +105,10 @@ function startCompletion(editor) {
 		open.moved = true;
 		showChosen();
 	};
-	const showChosen = () => [...list.children].forEach((item, index) => item.classList.toggle("chosen", index === open.chosen));
+	const showChosen = () => [...list.children].forEach((item, index) => {
+		item.classList.toggle("chosen", index === open.chosen);
+		if (index === open.chosen) item.scrollIntoView?.({ block: "nearest" });
+	});
 	const keys = {
 		Up: () => choose(-1),
 		Down: () => choose(1),
@@ -135,9 +145,24 @@ function startCompletion(editor) {
 		return { cursor, line, word, from: { line: cursor.line, ch: cursor.ch - word.length } };
 	};
 
+	const isMemberPlace = line => MEMBER_BEFORE.test(line) && !DECIMAL_BEFORE.test(line);
+	// the receiver's members starting with the word typed after its dot, and whether that word is one already
+	const memberChoices = async (cursor, word) => {
+		const code = editor.getRange({ line: 0, ch: 0 }, { line: cursor.line, ch: cursor.ch - word.length - 1 });
+		if (members.code !== code) members = { code, names: askMembers(code) };
+		const names = await members.names;
+		const choices = names.filter(name => name.startsWith(word) && name !== word).map(name => ({ text: name }));
+		return { choices, whole: names.includes(word) };
+	};
+
 	const update = async () => {
 		const { cursor, line, word, from } = typed();
 		const request = ++asked;
+		if (isMemberPlace(line)) {
+			const { choices, whole } = await memberChoices(cursor, word);
+			if (request === asked) show(from, cursor, choices, whole);
+			return;
+		}
 		const entity = line.match(ENTITY_OPENERS);
 		if (entity) {
 			const choices = await entityChoices(entity[2] ?? "");
@@ -152,6 +177,7 @@ function startCompletion(editor) {
 	// Tab after a word, no list open: its only completion taken, or its completions listed; else Tab indents
 	const completeWord = () => {
 		const { cursor, line, word, from } = typed();
+		if (isMemberPlace(line)) return void update();
 		const choices = word ? wordChoices(editor, word, line) : [];
 		if (choices.length === 0) return CodeMirror.Pass;
 		if (choices.length === 1) return editor.replaceRange(choices[0].text, from, cursor, "+complete");
