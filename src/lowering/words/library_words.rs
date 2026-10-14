@@ -394,10 +394,10 @@ fn call_results(node: &Node, context: &Context) -> HashSet<String> {
 fn raise_call(items: &[Node], shadowed: &HashSet<String>) -> Option<Node> {
 	let [word, raised] = items else { return None };
 	let is_raise_word = |raise: &&str| word.is_symbol(raise) && !shadowed.contains(*raise);
-	if !crate::pipeline::RAISE_WORDS.iter().any(is_raise_word) {
+	if !crate::errors::run_time::RAISE_WORDS.iter().any(is_raise_word) {
 		return None;
 	}
-	let message = crate::pipeline::returned_error_message(raised)
+	let message = crate::errors::run_time::returned_error_message(raised)
 		.unwrap_or(raised)
 		.clone();
 	// the message is a text, so `catch e` reads it whatever was raised (`raise 42`: "42"); a word (`raise oops`) is its name

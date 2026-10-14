@@ -77,7 +77,7 @@ pub const RUN_BLOCK: &str = "run_block";
 /// natively the Rust parser, in the browser run_block's compiler instance (host-compiler.js)
 pub const PARSE_CODE: &str = "parse_code";
 /// block·value(index): the number a block run at run time reads, of the values its run_block call passed
-/// (pipeline::eval_block): the block is compiled as a function of them, the same module for other values
+/// (compiler::run_time_blocks::eval_block): the block is compiled as a function of them, the same module for other values
 pub const BLOCK_VALUE: &str = "block·value";
 pub use warp_runtime::host_words::FOREIGN_CALL;
 /// paint(pixels, width, height): the pixels (a list, row after row, nonzero ink, 0 paper) drawn on the canvas of the

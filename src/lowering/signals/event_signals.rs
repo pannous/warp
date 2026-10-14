@@ -118,7 +118,7 @@ pub fn lower(program: Node) -> Node {
 		&statements,
 		&raised,
 		&variables,
-		&emitted_names(&program, &crate::pipeline::RAISE_WORDS.map(String::from)),
+		&emitted_names(&program, &crate::errors::run_time::RAISE_WORDS.map(String::from)),
 	) {
 		Ok(kept) => kept,
 		Err(error) => return error,

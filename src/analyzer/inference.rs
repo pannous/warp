@@ -576,7 +576,7 @@ pub(crate) fn raises_error(branch: &Node) -> bool {
 		Node::List(statements, Bracket::Curly, _) if !statements.is_empty() => {
 			raises_error(&statements[statements.len() - 1])
 		}
-		other => crate::pipeline::returned_error_message(other).is_some(),
+		other => crate::errors::run_time::returned_error_message(other).is_some(),
 	}
 }
 

@@ -118,7 +118,7 @@ pub(super) fn infer_function_return_kind(
 			Node::List(items, _, _) if items.len() == 2 && items[0].is_symbol("return") => &items[1],
 			other => other,
 		};
-		crate::pipeline::returned_error_message(value).is_some() // `error("…")` or `raise …`
+		crate::errors::run_time::returned_error_message(value).is_some() // `error("…")` or `raise …`
 	};
 	// `if c { return "text" }; …`: a returned Node makes the function return Nodes
 	// (`return [dist, prev]`: a List when every returned Node is one)
