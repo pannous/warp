@@ -10,7 +10,7 @@ const DEV_OVERLAY_STYLE = "position:fixed;inset:0;z-index:2147483647;margin:0;pa
 // the failing word as the playground's editor marks it (playground.css .marked-error)
 const DEV_MARK_STYLE = "text-decoration:underline wavy #ff7b6e 2px;text-decoration-skip-ink:none;text-underline-offset:3px;" +
 	"background:rgba(255,123,110,.14)";
-// an excerpt of src/diagnostic.rs excerpt: `  2 | source` over `    |   ^^^`
+// an excerpt of src/diagnostics/diagnostic.rs excerpt: `  2 | source` over `    |   ^^^`
 const EXCERPT_SOURCE = /^ +\d+ \| /;
 const EXCERPT_CARETS = /^ +\| ([\t ]*)(\^+)$/;
 

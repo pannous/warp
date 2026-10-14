@@ -15,7 +15,7 @@ pub struct Diagnostic {
 	pub file: Option<String>,
 	/// How to fix it, in words (shown after `; fix: `)
 	pub fix: Option<String>,
-	/// The same as edits a host applies: one per reading the user might have meant (src/fixits.rs)
+	/// The same as edits a host applies: one per reading the user might have meant (src/diagnostics/fixits.rs)
 	pub fixes: Vec<Fix>,
 	/// The kind of warning, which "got it" silences (an Ask's topic)
 	pub topic: Option<String>,

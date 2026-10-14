@@ -4,11 +4,11 @@ User, 2026-10-05: "suggest fixes and a mechanism to apply the fixes in the web d
 in case the user did indeed intend something different". Builds the "Later: change the code" of notes/welcoming.md.
 
 ## Mechanism
-- `fixits::Fix { meaning, written, replacement, at }` (src/fixits.rs): one reading the user might have meant. `written`
+- `fixits::Fix { meaning, written, replacement, at }` (src/diagnostics/fixits.rs): one reading the user might have meant. `written`
   is the text as the compiler shows it (serialized: spacing and list commas may differ from the source), `at` an
   optional position when the text stands elsewhere than the diagnostic (main's `n=0` for `global n=0`), `also` the
   further edits one reading needs elsewhere (`.and(written, replacement, at)`: a data key and its reads).
-- `Diagnostic.fixes: Vec<Fix>` and `Diagnostic.topic` (src/diagnostic.rs); `.offer(meaning, written, replacement)`
+- `Diagnostic.fixes: Vec<Fix>` and `Diagnostic.topic` (src/diagnostics/diagnostic.rs); `.offer(meaning, written, replacement)`
   adds one, dropping a fix that changes nothing (the reading already written). Every `Ask` turns each reading into a
   fix by itself (`written` → `explicit_form`); a reading whose edit differs says so with `reading(..).replacing(written,
   replacement)` or `.fixed_by(fix)`. The prose `fix` stays as it was (messages unchanged).

@@ -103,7 +103,7 @@
 - Fixed: declared types enforced (`x:int=5;x="five"` → Error with position and fix-it; `x:float=5` widens), null-use check
   (`x=ø; x+1` → Error, narrowed inside `if x {…}`), `a and b or c` lint (stderr warning + `analyzer::lint`), float and
   >32-bit conditions (`if 0.5`, `if 2^32` were falsy), parser now consumes `ø` in `parse_atom` (`if ø {…}` was garbage).
-- Mechanism: `src/diagnostic.rs` (`Diagnostic::at(node,…).fix(…)` → "msg at line:col; fix: …"), `analyzer::diagnose` runs
+- Mechanism: `src/diagnostics/diagnostic.rs` (`Diagnostic::at(node,…).fix(…)` → "msg at line:col; fix: …"), `analyzer::diagnose` runs
   before emission in `eval_parsed`, `declaration_forms::lower_declarations` turns `x:T=v` into a typed local (type kept as Meta on x).
   Truthiness rides on the strings-equality agent's `emit_condition`/`is_truthy`; I added the float/i64 != 0 branch.
 - Decided: empty values falsy, uniformly (Footguns.md → Empty values, with alternatives).

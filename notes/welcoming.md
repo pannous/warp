@@ -57,7 +57,7 @@ User decisions from that round:
 - an expression of `it` where a function is expected is that function: `xs.map(it * 2)`, `apply(it + 3, 1)`; inside a
   function of one parameter its `it` stays the argument function's (card map-it, src/lowering/definitions/lambdas.rs it_function)
 
-## Ask: how it works (src/diagnostic.rs)
+## Ask: how it works (src/diagnostics/diagnostic.rs)
 - `Ask { topic, written, question, readings: [Reading{meaning, explicit_form}], default, fallback: Fallback::{Warning, Error}, line, column }`;
   `ask(&Ask) -> Result<usize, Node>` returns the default reading or the error. It never asks and never remembers a reading.
 - Fallback Warning prints `warning: <question> (taking <default>) at l:c; fix: <explicit form>` and takes the default.

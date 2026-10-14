@@ -449,7 +449,7 @@ addHostPart({
 			}
 			return kernel(shader, kernelNumbers(items, outer, reductions), workgroups, first, { keep });
 		};
-		// as src/diagnostic.rs report_runtime_warning_once: the notice once a run, its detail after a colon
+		// as src/diagnostics/diagnostic.rs report_runtime_warning_once: the notice once a run, its detail after a colon
 		const warnOnce = (notice, detail) => {
 			if (!holder.warnings.some(warning => warning.startsWith(notice))) holder.warnings.push(`${notice}: ${detail}`);
 		};
