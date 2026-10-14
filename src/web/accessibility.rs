@@ -559,6 +559,8 @@ fn collect<'a>(
 				.into_iter()
 				.for_each(|part| collect(part, classes, inside_label, parent, found));
 		}
+		// `{a: 2} is {a: h}`: compared values, or a pattern, are never rendered, so they hold no elements
+		Node::Key(_, op, _) if op.is_relation() => {}
 		Node::Key(left, _, right) => {
 			collect(left, classes, inside_label, parent, found);
 			collect(right, classes, inside_label, parent, found);
