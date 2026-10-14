@@ -695,7 +695,7 @@ pub fn lower_sleep_durations(program: Node) -> Node {
 /// quantities, also of a main-level variable assigned one once (`x = 2 km; if x > 1500 m : …`), is its answer 1 or 0,
 /// and such a variable no other statement reads is dropped; the word `time` of a program that names nothing so is the
 /// local time of day, compared with a constant duration in milliseconds: `time < 24h` is
-/// `system·time of day < 86400000` (lowering/system_values.rs reads it, so `whenever time > 18h {…}` listens too)
+/// `system·time of day < 86400000` (lowering/signals/system_values.rs reads it, so `whenever time > 18h {…}` listens too)
 pub fn lower_quantity_comparisons(program: Node) -> Node {
 	shadowing(&program.clone(), || quantity_comparisons_folded(program))
 }

@@ -61,7 +61,7 @@ Each step is useful on its own and is what the next ones stand on.
   whose last line is `users` show it. A fetch with `timeout` keeps the old meaning (fetched on each read).
 - A URL reading main-level variables (`"/api/users?page=" + page`) is fetched anew when one changes; a reply of an
   older fetch of the same name is dropped.
-- Lowering (src/lowering/fetch_signals.rs): the variables users, users·loading, users·error, the call
+- Lowering (src/lowering/signals/fetch_signals.rs): the variables users, users·loading, users·error, the call
   `fetch_start(0, url)` and the handler `on·fetch·0`, which takes `fetch_reply(0)` = [value, error]. Natively
   (src/web/fetches.rs) a thread fetches and the runtime runs the handler at the next check point (warp-runtime
   system_signals await_ready; `warp run` stays until the reply arrived); in the page a task Worker fetches into shared
@@ -375,7 +375,7 @@ Each step is useful on its own and is what the next ones stand on.
   database in the browser. Checked by hand in the playground across reloads; a built site's path is not yet checked
   in a browser (card web-database-site). Probe: probes/stores/database.warp.
 - Clipboard (P188, navigator.clipboard's names; warp-03's default): `clipboard.write(text)` is the std word
-  std_io("clipboard", "write", [text]) (lowering/system_values.rs): pbcopy / wl-copy / xclip natively, in a page
+  std_io("clipboard", "write", [text]) (lowering/signals/system_values.rs): pbcopy / wl-copy / xclip natively, in a page
   markup.js copyText (navigator.clipboard.writeText, which needs a recent click; a refusal goes to the console), from a
   Worker through its page (self.writeClipboard). `clipboard.read()` is `clipboard` (natively pbpaste). In the browser
   (card web-apis-rest, 2026-10-10, warp-web) the program's Worker asks its page (host-tasks.js askPage, the word in

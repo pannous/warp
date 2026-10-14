@@ -1,5 +1,5 @@
 //! Key names in a key handler (card key-if): inside `on key {…}` a bare `key` is the pressed key, `event.key`, and the
-//! key words name keys as the page's KeyboardEvent.key does (natively lowering/system_signals.rs KEY_NAMES), so
+//! key words name keys as the page's KeyboardEvent.key does (natively lowering/signals/system_signals.rs KEY_NAMES), so
 //! `on key { if key == ESC { exit } }` reads as written. A program's own variable (`key`, `UP`) stays its own. A
 //! comparison with a word that names nothing (`key == ESCAPEE`, `key == q`) never holds, which a warning says.
 //! The key words compare with `held_key` anywhere too (card held-key): `held_key == LEFT` is `held_key == "ArrowLeft"`.

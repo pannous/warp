@@ -385,7 +385,7 @@ const PAGE_HOLES = "page·holes"; // a page with components renders once, its ho
 const PATH_JOINER = "·";
 const TEXT_HOLE = "text"; // page·hole·<path>·text·<n>: the text after n children of that element (card web-fine-text-nodes)
 
-// the holes of a page's markup (src/lowering/event_signals.rs hole_name): each binding's name and where it shows, its
+// the holes of a page's markup (src/lowering/signals/event_signals.rs hole_name): each binding's name and where it shows, its
 // element's path from the root and, for a text, the element's children before it
 function pageHoles(exports) {
 	return Object.keys(exports).filter(name => name.startsWith(PAGE_HOLE + PATH_JOINER)).map(name => {
@@ -413,7 +413,7 @@ function holePatches(exports) {
 	}
 }
 
-// `on exit {…}` (src/lowering/event_signals.rs, natively system_signals.rs with_exit_handler): on·exit runs once after
+// `on exit {…}` (src/lowering/signals/event_signals.rs, natively system_signals.rs with_exit_handler): on·exit runs once after
 // main returns or `exit(code)` ends it, never after a failure
 function withExitHandler(holder, exports, call) {
 	const handler = exports["on·exit"];
@@ -470,7 +470,7 @@ function outcomeOf(holder, hooks, call) {
 	}
 }
 
-// the page events a program handles (src/lowering/event_signals.rs PAGE_EVENTS, and an element's FIELD_EVENTS):
+// the page events a program handles (src/lowering/signals/event_signals.rs PAGE_EVENTS, and an element's FIELD_EVENTS):
 // `on click {…}` exports on·click·node
 const PAGE_EVENT_HANDLER = /^on·((?:click|key|input)(?:·\d+)?|(?:change|focus|blur)·\d+)·node$/;
 function pageEvents(exports) {

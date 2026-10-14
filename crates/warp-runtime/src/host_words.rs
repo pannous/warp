@@ -56,10 +56,10 @@ pub const VIEW_HEIGHT: &str = "view_height";
 /// Whether `use draw` draws on the GPU (src/graphics/gpu_canvas.rs): natively in a window, or as WARP_DRAW says; never on a page
 pub const GPU_DRAWING: &str = "gpu_drawing";
 /// The next key pressed over the paint window, its code (0: none left), each press read once: natively `on key {…}`
-/// (lowering/system_signals.rs); not a value a program names
+/// (lowering/signals/system_signals.rs); not a value a program names
 pub const KEY_PRESSED: &str = "key_pressed";
 /// Whether a click over the paint window is left to read (1, then it is the click read) or none (0), each click read
-/// once, and that click's place: natively `on click {…}` (lowering/system_signals.rs); not values a program names
+/// once, and that click's place: natively `on click {…}` (lowering/signals/system_signals.rs); not values a program names
 pub const CLICK_PRESSED: &str = "click_pressed";
 pub const CLICK_X: &str = "click_x";
 pub const CLICK_Y: &str = "click_y";
@@ -110,7 +110,7 @@ pub const HANDLER_PREFIX: &str = "on·";
 pub const FILE_HANDLER_PREFIX: &str = "on·file·";
 /// `exit(code)` ends the run, not the process (P121, system_signals.rs ExitRequest)
 pub const EXIT: &str = "exit";
-/// The exported handler of `on interrupt {…}` (src/lowering/event_signals.rs)
+/// The exported handler of `on interrupt {…}` (src/lowering/signals/event_signals.rs)
 pub const INTERRUPT_HANDLER: &str = "on·interrupt";
 /// The exported handler of `on exit {…}`, run once as the run ends (system_signals.rs run_exit_handler)
 pub const EXIT_HANDLER: &str = "on·exit";
@@ -118,7 +118,7 @@ pub const EXIT_HANDLER: &str = "on·exit";
 pub const TIMER_HANDLER_PREFIX: &str = "on·every·";
 /// `on·fetch·0`: the handler run when the reply of the first `users := fetch url` arrived (src/web/fetches.rs)
 pub const FETCH_HANDLER_PREFIX: &str = "on·fetch·";
-/// The checks of the listeners on shared values (P106), polled at every check point (lowering/signal_values.rs)
+/// The checks of the listeners on shared values (P106), polled at every check point (lowering/signals/signal_values.rs)
 pub const SHARED_HANDLER: &str = "on·shared";
 /// The words link_host_words provides
 pub const BASIC_HOST_WORDS: [&str; 11] = [

@@ -99,7 +99,7 @@ pub const CHANNEL_PENDING: &str = "channel_pending";
 pub const CHANNEL_NEXT: &str = "channel_next";
 pub const CHANNEL_SEND: &str = "channel_send";
 /// dispatch_event(name, detail): an emit no handler of a page's program receives, as a DOM CustomEvent on the page
-/// (card page-custom-event, lowering/event_signals.rs; host.js; natively the headless page keeps it)
+/// (card page-custom-event, lowering/signals/event_signals.rs; host.js; natively the headless page keeps it)
 pub const DISPATCH_EVENT: &str = "dispatch_event";
 /// std_pure(module, member, arguments) and std_io(…): the standard library's adapters (src/modules/std_adapters.rs, host.js),
 /// called by the words of lib/<module>.warp; std_pure's words have no effect (json), std_io's touch the outside
@@ -123,7 +123,7 @@ pub const RESPONSE_HEADER: &str = "response_header";
 pub const STATUS_HEADER: &str = "Status";
 /// `users := fetch url` (src/web/fetches.rs): fetch_start(id, url) fetches without waiting, the handler on·fetch·id runs once
 /// the reply arrived, fetch_reply(id) → [value, error]: the parsed JSON (else the text) and ø, or ø and the failure
-/// `users := fetch url` (lowering/fetch_signals.rs)
+/// `users := fetch url` (lowering/signals/fetch_signals.rs)
 pub const FETCH_WORD: &str = "fetch";
 pub const FETCH_START: &str = "fetch_start";
 pub const FETCH_REPLY: &str = "fetch_reply";

@@ -1,4 +1,4 @@
-//! Async data (card web-async, notes/web_framework.md "Async data"): `users := fetch "/api/users"` (lowering/fetch_signals.rs)
+//! Async data (card web-async, notes/web_framework.md "Async data"): `users := fetch "/api/users"` (lowering/signals/fetch_signals.rs)
 //! calls fetch_start(id, url), which fetches on a thread of its own while the program goes on; the handler on·fetch·id
 //! runs at the first check point after the reply arrived (warp-runtime system_signals await_ready) and takes it with
 //! fetch_reply(id): [value, ø] with the JSON parsed (any other body the text), or [ø, failure].

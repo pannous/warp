@@ -5,7 +5,7 @@
 //! of the name is its call. A raise whose name no handler listens to stays the exception (try catches it).
 //! Page events (phase 7): `on click {…}` and `on key {…}` are kept without a raise and get the wrapper
 //! `on·click·node([event])` (declarations::with_node_wrappers): the browser playground calls it when the page sees the
-//! event (web/playground/worker.js); natively `on key` hears the paint window (lowering/system_signals.rs), the others
+//! event (web/playground/worker.js); natively `on key` hears the paint window (lowering/signals/system_signals.rs), the others
 //! nothing, which a warning says. System events (`on interrupt`) are
 //! kept the same way: the runtime calls their handlers (notes/system_signals.md).
 

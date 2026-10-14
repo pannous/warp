@@ -5,7 +5,7 @@
 //! macOS asks `pmset` and `defaults`, Linux /sys and `gsettings`; `online` is whether a route to the internet exists
 //! (a UDP connect sends nothing). A value the platform cannot give is a loud error, never a made-up reading.
 //! `mouse_x`, `mouse_y`, `mouse_down`: natively the pointer over the paint window (window_input), read each time;
-//! `key_down` whether a key is held over it, `key code held` which (lowering/system_values.rs names it `held_key`);
+//! `key_down` whether a key is held over it, `key code held` which (lowering/signals/system_values.rs names it `held_key`);
 //! `window_open` whether that window shows; read before any paint, it opens the window (blank) where one can show.
 //! The clipboard is watched by its change count, which reads no content: macOS asks the user before a program reads
 //! what another one copied, so the text is read only when the program asks for it (`clipboard`, clipboard_text).
