@@ -62,8 +62,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   function printed on its own shows doc + definition (reflection).
 - function-type (2026-10-14): `type(gcd)` prints `function: (a, b) -> int`, the kind followed by the signature;
   `gcd is function` is yes.
-- parse-type (2026-10-14, from the user's draft "key !?!?!"): an operator node reports type `operation`
-  (`parse("1+1").type`, `a<b`; alias `expression`), a pair `a:1` stays `key`; `.op` keeps the operator.
+- parse-type (2026-10-14, from the user's draft "key !?!?!"; refined by body-code): `parse("1+1").type` is `code`,
+  not `key`; `.op` keeps the operator.
 - time-word (2026-10-14): a bare `time` is always the type (`print time` prints `class time`, as every type value
   prints `class int`, `class Person`: type-print; not `type time`, which pasted back evaluates to `type`; `class int` without
   a body is the reference to that class, like `function f`, so the printout reads back); the class member
@@ -77,8 +77,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   printing `['a' 'b' 'c']`; a literal `['a' 'b']` keeps its characters; `'a' == "a"` stays yes. A one-character text is a character, so
   `["a" "b"]` prints `['a' 'b']` and `["a" "bc"]` prints `['a' "bc"]`.
 - body-code (2026-10-14, the user's draft "body should be block/code type?"): `type f.body` is `code` for any quoted
-  program part (`f.body is code`); printing shows its source; `{x; x+1}` never types as map. How its syntactic form is
-  exposed (`.kind`?) is being clarified with the user.
+  program part (`f.body is code`); printing shows its source; `{x; x+1}` never types as map. No `.kind` member for now
+  (parked: a body iterated as a list of statements, each with its kind).
 - nearest-limit (2026-10-14): `nearest(x, rational)` limits the denominator to 1,000,000 like Python's
   limit_denominator (sqrt 2 → 665857/470832); `limit = 0` gives the exact fraction of the float.
 - float-as-rational (2026-10-14): `x as rational` / `rational(x)` of a float is the exact fraction of its shortest
