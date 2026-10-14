@@ -13,10 +13,13 @@ pub(crate) const REPLACED_DIRECTORY: &str = ".replaced";
 pub(crate) static FETCHING: Mutex<()> = Mutex::new(());
 
 /// A package of the registry: `name: "git url"` follows the default branch,
-/// `name: {repository: "git url", version: 1.2.3}` is pinned to the git tag of that version
+/// `name: {repository: "git url", version: 1.2.3}` is pinned to the git tag of that version;
+/// `library: "x"` there: warp calls the package's prebuilt core module x.wasm (its release asset, header x.h beside it)
+/// through warp's binding lib/packages/<name>.warp instead of compiling the package's module
 pub(super) struct Registered {
 	pub(super) url: String,
 	pub(super) pinned: Option<Version>,
+	pub(super) library: Option<String>,
 }
 
 pub(super) fn registered(name: &str) -> Option<Registered> {
@@ -28,9 +31,16 @@ pub(super) fn registered(name: &str) -> Option<Registered> {
 			return None;
 		}
 		match value.drop_meta() {
-			Node::Text(url) => Some(Registered { url: url.clone(), pinned: None }),
+			Node::Text(url) => Some(Registered { url: url.clone(), pinned: None, library: None }),
 			pinned => match pinned["repository"].drop_meta() {
-				Node::Text(url) => Some(Registered { url: url.clone(), pinned: Some(version_of(&pinned["version"])?) }),
+				Node::Text(url) => Some(Registered {
+					url: url.clone(),
+					pinned: Some(version_of(&pinned["version"])?),
+					library: match pinned["library"].drop_meta() {
+						Node::Text(library) => Some(library.clone()),
+						_ => None,
+					},
+				}),
 				_ => None,
 			},
 		}
@@ -45,6 +55,18 @@ pub fn package_repository(name: &str) -> Option<String> {
 /// The version a package is pinned to in the registry, None for one that follows its default branch
 pub fn pinned_version(name: &str) -> Option<Version> {
 	registered(name).and_then(|package| package.pinned)
+}
+
+/// warp's side of a package's library: lib/packages/<name>.warp, which imports it
+const LIBRARY_BINDINGS: [(&str, &str); 1] = [("uniscript", include_str!("../../lib/packages/uniscript.warp"))];
+
+pub(super) fn library_binding(name: &str) -> Option<&'static str> {
+	LIBRARY_BINDINGS.iter().find(|(package, _)| *package == name).map(|(_, source)| *source)
+}
+
+/// The prebuilt core module a package is called through, packages.warp's `library`
+pub fn package_library(name: &str) -> Option<String> {
+	registered(name).and_then(|package| package.library)
 }
 
 /// Where the pinned version of a package is cloned once per machine: ~/.cache/warp/packages/<name>@<version>
