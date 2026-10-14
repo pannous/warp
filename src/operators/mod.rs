@@ -216,6 +216,18 @@ impl Op {
 		matches!(self, Op::BitAnd | Op::BitOr)
 	}
 
+	/// An operator computing a value from its operands, `1+1`, `a<b`, `-x`: a Key of it is an operation, while a pair
+	/// `a:1`, a binding `a=1`, a lookup `a.b` stay keys (decision parse-type)
+	pub fn is_operation(&self) -> bool {
+		self.is_arithmetic()
+			|| self.is_shift()
+			|| self.is_relation()
+			|| self.is_logical()
+			|| self.is_bitwise()
+			|| (self.is_prefix() || self.is_suffix()) && !self.is_write()
+			|| matches!(self, Op::LogBase | Op::LogOf | Op::PlusMinus | Op::Coalesce | Op::ArrowUp | Op::ArrowDown)
+	}
+
 	/// Check if this is a compound assignment operator (+=, -=, etc.)
 	pub fn is_compound_assign(&self) -> bool {
 		matches!(

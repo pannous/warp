@@ -600,7 +600,7 @@ impl WasmGcEmitter {
 	}
 
 	/// `type(x)` reads the value's type at run time: for a value held as a Node, a variable that may hold a ratio (an exact
-	/// number of Int kind), a Key that may be an instance of a declared type
+	/// number of Int kind), a Key that may be an instance of a declared type or an operation
 	fn type_known_only_at_run_time(&self, subject: &Node) -> bool {
 		if crate::analyzer::is_boolean(subject, &self.scope)
 			|| matches!(subject.drop_meta(), Node::Number(_) | Node::Empty)
@@ -611,7 +611,8 @@ impl WasmGcEmitter {
 		match self.get_type(subject) {
 			crate::Kind::Empty | crate::Kind::Data => true,
 			crate::Kind::Int => self.int_runtime(),
-			crate::Kind::Key => !self.ctx.type_registry.types().is_empty(),
+			// a key may be an instance of a declared type or an operation (`parse("1+1")`)
+			crate::Kind::Key => true,
 			crate::Kind::List => self.may_be_map(subject),
 			_ => false,
 		}
@@ -677,7 +678,10 @@ impl WasmGcEmitter {
 		// `s#1 is char`: an item of a text is typed text but is a code point at run time
 		let item_of_text = self.static_type_name(subject) == TEXT_WORD
 			&& crate::type_tests::canonical_spec_word(spec) == CODEPOINT_TYPE;
-		let unknown = spec == ERROR_WORD || item_of_text || self.has_unknown_static_type(subject);
+		// only the run time tells an operation from a pair
+		let operation_of_key = self.get_type(subject) == Kind::Key
+			&& crate::type_tests::canonical_spec_word(spec) == crate::words::OPERATION_WORD;
+		let unknown = spec == ERROR_WORD || item_of_text || operation_of_key || self.has_unknown_static_type(subject);
 		let declared_type = self.ctx.type_registry.get_by_name(spec).is_some();
 		let map_spec = crate::type_tests::canonical_spec_word(spec) == MAP_WORD;
 		let known_map = crate::analyzer::held_map_type(subject, &self.scope).is_some();

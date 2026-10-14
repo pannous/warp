@@ -64,11 +64,17 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   `gcd is function` is yes.
 - parse-type (2026-10-14, from the user's draft "key !?!?!"): an operator node reports type `operation`
   (`parse("1+1").type`, `a<b`; alias `expression`), a pair `a:1` stays `key`; `.op` keeps the operator.
-- time-word (2026-10-14): a bare `time` is always the type (`print time` prints the type); `time.now` is a class
-  member = `now`. instant, date, local time, zoned time, duration are subtypes of time (anchor-time).
+- time-word (2026-10-14): a bare `time` is always the type (`print time` prints `class time`, as every type value
+  prints `class int`, `class Person`: type-print; not `type time`, which pasted back evaluates to `type`; `class int` without
+  a body is the reference to that class, like `function f`, so the printout reads back); the class member
+  `time.now` is the local time of day, printing 22:27:46 (= `now.time`). instant, date, local time, zoned time, duration are subtypes of time (anchor-time).
   `now > 17h` / `now >= October` / `now ≈ 2026-10-14` compare the matching part; `==` stays exact (`now == 2026-10-14` no).
+  `now.time` is the local time of day, printing 22:27:46 (`now.date` the date); the old `time > 18h` special case
+  goes: an error with the fix `now > 18h`.
 - canvas-size (2026-10-14): `window.width/height`, `display.width/height`, `canvas.width/height` are writable properties,
   natively and in the playground; a bare top-level `width` works too, with a did-you-mean naming the three.
+- chars-codepoints (2026-10-14, the user's draft `['a','b','c']`): `"abc".chars` is a list of characters (codepoints),
+  printing `['a' 'b' 'c']`; a literal `['a' 'b']` keeps its characters; `'a' == "a"` stays yes.
 - nearest-limit (2026-10-14): `nearest(x, rational)` limits the denominator to 1,000,000 like Python's
   limit_denominator (sqrt 2 → 665857/470832); `limit = 0` gives the exact fraction of the float.
 - float-as-rational (2026-10-14): `x as rational` / `rational(x)` of a float is the exact fraction of its shortest
@@ -247,7 +253,6 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   dimension, exact or a ratio; long unit names work. Unit sums use the finer unit. Quantities print without a space
   (`500m`); P231 print rounds quantities to a decimal, str() keeps the exact value. #31 `min` stays the function,
   `d` free.
-- `time` is the local time of day as a duration since midnight; `time < 12` fails with the hint `12h`.
 
 ## Text
 - Text + anything concatenates in its str() form (2026-10-02, extended 2026-10-10); a function stays an error. A
@@ -389,6 +394,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - P48 custom operators: `prefix operator ⁻ := …`, `suffix`, `infix operator ⊕ := left+right`; word infix operators
   `infix operator divides(d, n) := …`. P54 only declared operators are ranked (`has precedence above +`). P166
   element-wise operators on plain numbers act plainly.
+- easy-add (2026-10-14): `x↑n` is power and `x↓b` is log only for numbers: they are typed infix operators
+  (`infix operator ↑(x: number, n: number) := x ^ n`), not a fixed lowering, so other types define their own.
+- values-number (2026-10-14): a system value is spelled `$mouse.x`; `$mouse_x` gives a hint naming `mouse.x`.
 - D6 `|` is one operator dispatched on types: logical or, or pipe (`2|square|root`). operator-shall (2026-10-13): `&`
   and `|` of two whole numbers combine bits; `and`/`or`/`&&`/`||` stay logical; bits as a condition warn.
   amp-compose: `&` of two functions composes in reading order, `∘` alias. P158 `then` pipes only into a stage
