@@ -48,8 +48,10 @@ major corrections go to warp-interviewer, tiny fixes are made directly.
 
 ## Pending cuts (decision cleanup-cuts, foreign-spellings, 2026-10-13)
 
-Decided, not cut yet; the features still work, so the pages stay until the cut lands, then:
-- scoped handlers `on … in {…}`: wiki/effects.md (the whole "Whoever calls it answers" part).
+Decided, not cut yet; the features still work, so the pages stay until the cut lands (supervisor 2026-10-14: the big
+cuts land about 10:00, start when warp-integrator reports them), then remove each dropped form or rewrite it to its
+replacement, with no card (a user decision, not a gap):
+- scoped handlers `on … in {…}`: wiki/effects.md (the whole "Whoever calls it answers" part) → the program-wide `on`.
 - spaced type heads (lands with the cleanup-park-phrases cut; cleanup-drop-type-name-params was withdrawn) `fib int i`, `foo of int`, `square of a number`,
   `combine number with number` → `fib(i:int) := …`: wiki/=.md:11, Bad.md:51, type.md:59, function.md:5 (list of
   natural forms), inventions.md:42/96/137, Purpose.md:455, Features.md:60 (`++ of a number reference`).
@@ -57,6 +59,8 @@ Decided, not cut yet; the features still work, so the pages stay until the cut l
 - generators/yield: wiki/trait.md, zig.md (count_to), keyword.md's yield row if Ruby's block yield goes too.
 - compile-time lambdas, natural phrases (parked), OCaml let-in and `fun`, Elixir `def …, do:`, C++ `[](…){…}`,
   R/PHP forms (to `use R` / `use PHP`): grep the wiki for examples when each lands.
+- units interpreter edge cases (cleanup-edge: `1950 cm ± 50`, `1900 - 2000 cm`/`AD` ranges, `5 m ± 1 s`): no wiki
+  example today (checked 66dd216a9); grep again for `±` and unit ranges.
 - reflection dot words → `a of b` ≡ `b.a`; traits as a thin alias of classes; ORM only `stored people: [Person]`.
 
 ## Not swept yet
