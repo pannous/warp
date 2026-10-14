@@ -19,7 +19,7 @@ fn a_text_joins_anything_in_its_text_form() {
 	is!("\"k: \" + {a:1}", "k: {a:1}");
 	is!("\"x\" + ø", "xø");
 	is!("s = \"a\"\ns += [1 2]\ns", "a[1 2]");
-	is!("class P{name: text; age: int}\npeople = [P(\"Al\", 30), P(\"Bo\", 50)]\n\"oldest first: \" + (people sorted by -it.age).map(p => p.name)", "oldest first: [\"Bo\" \"Al\"]");
+	is!("class P{name: text; age: int}\npeople = [P(\"Al\", 30), P(\"Bo\", 50)]\n\"oldest first: \" + people.sort_by(p => -p.age).map(p => p.name)", "oldest first: [\"Bo\" \"Al\"]");
 }
 
 #[test]

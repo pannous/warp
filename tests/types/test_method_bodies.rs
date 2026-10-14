@@ -20,6 +20,7 @@ fn same_in_method(body: &str) {
 }
 
 #[test]
+#[ignore = "parked: may be re-implemented purely via preposition parameters"]
 fn phrases_in_a_method() {
 	is!(
 		"class C{ n: int; fn f(xs) := count(xs.keep only positive) }; C(3).f([1, -2])",

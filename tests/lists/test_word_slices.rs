@@ -9,6 +9,7 @@ fn sliced(phrase: &str) -> String {
 	format!("{XS}{phrase}")
 }
 
+#[ignore = "parked: may be re-implemented purely via preposition parameters"]
 #[test]
 fn hash_positions_slice() {
 	is!(&sliced("xs from #2 to #4"), ints(vec![20, 30, 40]));
@@ -20,6 +21,7 @@ fn hash_positions_slice() {
 	is!(&sliced("f(x) := count x; f(xs from #2 to #3)"), 2);
 }
 
+#[ignore = "parked: may be re-implemented purely via preposition parameters"]
 #[test]
 fn ordinal_positions_slice() {
 	is!(&sliced("xs from second to fourth"), ints(vec![20, 30, 40]));
@@ -32,6 +34,7 @@ fn ordinal_positions_slice() {
 }
 
 /// `xs up to 2` may mean the item 2: the error names both position forms
+#[ignore = "parked: may be re-implemented purely via preposition parameters"]
 #[test]
 fn a_bare_number_is_no_position() {
 	crate::common::fails_with(&sliced("xs up to 2"), "xs up to #2 or xs up to second");
@@ -42,6 +45,7 @@ fn a_bare_number_is_no_position() {
 }
 
 /// other uses of from and to keep their meaning
+#[ignore = "parked: may be re-implemented purely via preposition parameters"]
 #[test]
 fn other_from_and_to_stay() {
 	is!("count(1 to 3)", 3);

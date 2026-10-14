@@ -242,7 +242,7 @@ fn an_empty_filter_answers_an_empty_list() {
 // title edit, the list sorted by priority, the open ones counted in the header, an empty title refused with a message
 const EDITED_TODO_APP: &str = r#"class Todo{title: text; done: bool; priority: int}
 stored todos: [Todo]
-get "/api/todos" { todos sorted by priority }
+get "/api/todos" { todos.sort_by(it => it.priority) }
 post "/todos" {
 	if not request.body.title { raise "a todo needs a title" }
 	todos.add(Todo(request.body.title, false, int(request.body.priority)))
@@ -261,7 +261,7 @@ post "/todos/:id:int/delete" { todos.remove((todos where it.id == id)#1) }
 route "/" {
 	div{
 		h1{ "Todos (" + count(todos where not done) + " open)" }
-		ul{ for todo in todos sorted by priority { li{ todo.title } } }
+		ul{ for todo in todos.sort_by(it => it.priority) { li{ todo.title } } }
 	}
 }"#;
 

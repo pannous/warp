@@ -113,3 +113,13 @@
 - Reuse helpers on `WasmEmitter`; keep callers responsible for computing any nonstandard pointer or length expression.
 - Extract the repeated closure entry-field load into one helper without changing closure layout or call behavior.
 - Establish and rerun focused text and closure test baselines, then run formatting, clippy, and the wasm32 check.
+
+# Park natural phrases
+
+- Remove the dedicated `phrase_calls`, `list_phrases`, and `word_slices` lowering passes and their parser marker.
+- Keep the general call, method, filtering, sorting, and slice forms; rewrite repository samples to those forms.
+- Mark only tests whose contract is the parked syntax as ignored with the card's reimplementation note; preserve tests
+  for general preposition operators such as list/text `add … to …`.
+- Remove stale documentation of the parked forms and record the retained explicit equivalents.
+- Establish and rerun the focused phrase, list-phrase, and word-slice filters, then run formatting, clippy, and the
+  wasm32 library check.

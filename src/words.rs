@@ -40,10 +40,6 @@ pub const MAP_KEYS: &str = "map_keys";
 pub const SLICE: &str = "slice";
 /// `x!` that changes nothing unwraps x (library_words: ø is a loud error)
 pub const UNWRAP: &str = "unwrap";
-/// The Meta key the parser puts on the head of a `to` phrase: its pattern as text, `_ to _`
-pub const PHRASE_MARK: &str = "phrase";
-/// A parameter slot in a pattern
-pub const SLOT: &str = "_";
 /// `instance_of(x, "square")`: 1 when x is an instance of the declared type, else 0 (the emitter reads the type name of
 /// the instance at run time)
 pub const INSTANCE_OF: &str = "instance_of";
