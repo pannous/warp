@@ -2,6 +2,7 @@ mod test_angle;
 mod test_as_compound_unit; // card compound-unit
 mod test_average; // card average-undefined
 mod test_bend_laws; // card bend-style
+mod test_big_int_text; // card out-fuel
 mod test_big_ratio;
 mod test_compound_accumulator; // card compound-accumulator
 mod test_counting_units;
