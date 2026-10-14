@@ -16,6 +16,10 @@ const PORT = 8893; // outside the test suite's 87xx ports and test_hosting's 88x
 const PLAYGROUND_PORT = 8894;
 const INSPECTOR_PORT = 9333; // not wrangler's default 9229, which another wrangler dev may hold
 const PROXY = `http://localhost:${PORT}`;
+// card failed-load: a second proxy whose own key the API refuses
+const REFUSED_PORT = 8895;
+const REFUSED_INSPECTOR_PORT = 9334;
+const REFUSED_KEY = "sk-ant-refused-by-the-api";
 const ORIGIN = `http://localhost:${PLAYGROUND_PORT}`;
 const TURNSTILE_PASSING_SECRET = "1x0000000000000000000000000000000AA"; // Cloudflare's test secret: every token passes
 const RATE_LIMIT = 20; // wrangler.toml PER_ADDRESS
@@ -27,7 +31,7 @@ if (!KEY) {
 	process.exit(0);
 }
 
-const post = (path, body, headers = {}) => fetch(`${PROXY}${path}`, { method: "POST", headers: { origin: ORIGIN, "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
+const post = (path, body, headers = {}, proxy = PROXY) => fetch(`${proxy}${path}`, { method: "POST", headers: { origin: ORIGIN, "content-type": "application/json", ...headers }, body: JSON.stringify(body) });
 
 async function waitFor(url) {
 	const until = Date.now() + STARTUP_MS;
@@ -40,16 +44,23 @@ async function waitFor(url) {
 
 mkdirSync(WORK, { recursive: true });
 execFileSync("python3", [join(PLAYGROUND, "keywords.py"), join(PLAYGROUND, "keywords.js")], { cwd: ROOT }); // keywords.txt, a guide
-const environment = join(WORK, ".env");
-writeFileSync(environment, `ANTHROPIC_API_KEY=${KEY}\nTURNSTILE_SECRET=${TURNSTILE_PASSING_SECRET}\nSESSION_SECRET=${randomBytes(32).toString("hex")}\n`, { mode: 0o600 });
 const site = spawn("python3", ["-m", "http.server", String(PLAYGROUND_PORT), "--bind", "127.0.0.1"], { cwd: PLAYGROUND, stdio: "ignore" });
-const worker = spawn("npx", ["wrangler", "dev", "--port", String(PORT), "--inspector-port", String(INSPECTOR_PORT), "--env-file", environment,
-	"--var", `PLAYGROUND_ORIGIN:${ORIGIN}`], { cwd: import.meta.dirname, stdio: ["ignore", "ignore", "inherit"], detached: true }); // its own group: workerd goes with it
-stopGroupOnExit(worker);
+const workers = [];
+
+// the proxy under wrangler dev with that Anthropic key, answering once it has started
+async function startedProxy(key, port, inspectorPort) {
+	const environment = join(WORK, `.env-${port}`);
+	writeFileSync(environment, `ANTHROPIC_API_KEY=${key}\nTURNSTILE_SECRET=${TURNSTILE_PASSING_SECRET}\nSESSION_SECRET=${randomBytes(32).toString("hex")}\n`, { mode: 0o600 });
+	const worker = spawn("npx", ["wrangler", "dev", "--port", String(port), "--inspector-port", String(inspectorPort), "--env-file", environment,
+		"--var", `PLAYGROUND_ORIGIN:${ORIGIN}`], { cwd: import.meta.dirname, stdio: ["ignore", "ignore", "inherit"], detached: true }); // its own group: workerd goes with it
+	stopGroupOnExit(worker);
+	workers.push({ worker, environment });
+	await waitFor(`http://localhost:${port}`);
+	rmSync(environment); // wrangler has read it
+}
 
 try {
-	await waitFor(PROXY);
-	rmSync(environment); // wrangler has read it
+	await startedProxy(KEY, PORT, INSPECTOR_PORT);
 
 	const elsewhere = await fetch(`${PROXY}/session`, { method: "POST", headers: { origin: "https://example.com" }, body: "{}" });
 	assert.equal(elsewhere.status, 403, "another page's request is refused");
@@ -73,12 +84,24 @@ try {
 	assert.equal((await ask({ task: "chat", messages: [{ role: "user", content: "x".repeat(30000) }] })).status, 413, "long input is refused");
 	assert.equal((await post("/messages", { task: "completion", messages: [{ role: "user", content: "x‸" }] }, { authorization: `Bearer 1.${session.split(".")[1]}` })).status, 401, "an expired or altered session is refused");
 
+	// the API refusing the proxy's own key is the proxy's failure, said as such, not a 401 that renews the session
+	await startedProxy(REFUSED_KEY, REFUSED_PORT, REFUSED_INSPECTOR_PORT);
+	const refusedProxy = `http://localhost:${REFUSED_PORT}`;
+	const refusedSession = (await (await post("/session", { turnstile: "XXXX.DUMMY.TOKEN.XXXX" }, {}, refusedProxy)).json()).session;
+	const refused = await post("/messages", { task: "completion", messages: [{ role: "user", content: "x‸" }] }, { authorization: `Bearer ${refusedSession}` }, refusedProxy);
+	const refusal = await refused.json();
+	assert.equal(refused.status, 502, JSON.stringify(refusal));
+	assert.match(refusal.error.message, /key was refused/);
+
 	const statuses = [];
 	for (let request = 0; request < RATE_LIMIT + 2; request++) statuses.push((await post("/messages", {})).status);
 	assert.ok(statuses.includes(429), `rate-limited per address: ${statuses}`);
+
 	console.log("assistant proxy: all checks passed");
 } finally {
-	rmSync(environment, { force: true });
-	stopGroup(worker);
+	for (const { worker, environment } of workers) {
+		rmSync(environment, { force: true });
+		stopGroup(worker);
+	}
 	site.kill();
 }
