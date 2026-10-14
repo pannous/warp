@@ -24,10 +24,7 @@ fn lengths_keep_their_units() {
 		html_of("div{ style{\n\t.card { border: 1px solid \"red\" }\n} }"),
 		"<div><style>.card { border: 1px solid red }</style></div>"
 	);
-	assert_eq!(
-		html_of("p{ style: { flex: 1 1 } \"x\" }"),
-		"<p style=\"flex: 1 1\">x</p>"
-	);
+	assert_eq!(html_of("p{ style: { flex: 1 1 } \"x\" }"), "<p style=\"flex: 1 1\">x</p>");
 }
 
 // a blank before `.x` or `#x` in a selector is the descendant combinator, and a rule after another on the same line
@@ -47,10 +44,7 @@ fn descendant_selectors_and_rules_on_one_line() {
 // a class or id selector with a lone value is its color (card style-selectors); one declaration in braces stays a rule
 #[test]
 fn a_selector_with_a_value_is_its_color() {
-	assert_eq!(
-		html_of("div{ style{ #done = \"red\" } }"),
-		"<div><style>#done { color: red }</style></div>"
-	);
+	assert_eq!(html_of("div{ style{ #done = \"red\" } }"), "<div><style>#done { color: red }</style></div>");
 	assert_eq!(
 		html_of("div{ style{ .done: \"red\"; .open = green } }"),
 		"<div><style>.done { color: red } .open { color: green }</style></div>"

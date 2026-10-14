@@ -91,11 +91,7 @@ pub(super) fn one_expression(words: &[Node]) -> Node {
 
 /// The call print(a, b, …): its arguments are separated by commas, like Python's
 pub(crate) fn print_call(arguments: impl IntoIterator<Item = Node>) -> Node {
-	Node::List(
-		[Symbol(PRINT_WORD.to_string())].into_iter().chain(arguments).collect(),
-		Bracket::Round,
-		Separator::None,
-	)
+	Node::List([Symbol(PRINT_WORD.to_string())].into_iter().chain(arguments).collect(), Bracket::Round, Separator::None)
 }
 
 /// The arguments of `print(…)`: words separated by spaces (`print(upper "a")`) are one, else each item is one
@@ -120,11 +116,7 @@ pub(crate) fn print_arguments_of(call: &[Node], bracket: &Bracket) -> Vec<Node> 
 /// `print first xs` prints the one expression `first xs`, and in `print a, b` the comma binds looser than the space,
 /// so the comma list [[print a], b] becomes the call print(a, b)
 pub(super) fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separator) -> Node {
-	let items = if separator == Separator::Space {
-		with_arrow_bodies(items)
-	} else {
-		items
-	};
+	let items = if separator == Separator::Space { with_arrow_bodies(items) } else { items };
 	let items = match separator {
 		Separator::Space if bracket != Bracket::Square => {
 			guarded_command(&items).map_or(items, |guarded| vec![guarded])

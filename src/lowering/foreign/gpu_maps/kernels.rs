@@ -60,9 +60,7 @@ pub(crate) fn gpu_reduction(value: &Node) -> Option<(Reduction, Node)> {
 	let [word, argument] = items.as_slice() else {
 		return None;
 	};
-	let reduction = REDUCTIONS
-		.into_iter()
-		.find(|reduction| word.drop_meta().name() == reduction.word())?;
+	let reduction = REDUCTIONS.into_iter().find(|reduction| word.drop_meta().name() == reduction.word())?;
 	let argument = match argument.drop_meta() {
 		Node::List(inner, crate::node::Bracket::Round, _) if inner.len() == 1 => &inner[0],
 		_ => argument,
@@ -117,17 +115,9 @@ pub(crate) fn kernel(lambda: &Node) -> Option<Kernel> {
 	let Node::Symbol(parameter) = parameter.drop_meta() else {
 		return None;
 	};
-	let mut translation = Translation {
-		parameter: parameter.clone(),
-		..Translation::default()
-	};
+	let mut translation = Translation { parameter: parameter.clone(), ..Translation::default() };
 	let computed = translation.expression(body)?;
-	let Translation {
-		outer,
-		heavy,
-		functions,
-		..
-	} = translation;
+	let Translation { outer, heavy, functions, .. } = translation;
 	Some(Kernel {
 		computed,
 		outer,
@@ -169,13 +159,7 @@ pub(crate) fn with_program_functions<T>(program: &Node, run: impl FnOnce() -> T)
 		.filter_map(crate::law::function_definition)
 		.map(|definition| {
 			let parameters = definition.parameters.into_iter().map(|(name, _)| name).collect();
-			(
-				definition.name,
-				ProgramFunction {
-					parameters,
-					body: definition.body,
-				},
-			)
+			(definition.name, ProgramFunction { parameters, body: definition.body })
 		})
 		.collect();
 	crate::compiler::compile_context::scoped(|context| &mut context.program_functions, functions, run)
@@ -267,11 +251,7 @@ impl Translation {
 			}
 			_ => {
 				self.heavy = true;
-				Some(format!(
-					"pow({}, {})",
-					self.expression(base)?,
-					self.expression(exponent)?
-				))
+				Some(format!("pow({}, {})", self.expression(base)?, self.expression(exponent)?))
 			}
 		}
 	}
@@ -285,11 +265,7 @@ impl Translation {
 			Op::Mod => "%",
 			_ => return None,
 		};
-		Some(format!(
-			"({} {symbol} {})",
-			self.expression(left)?,
-			self.expression(right)?
-		))
+		Some(format!("({} {symbol} {})", self.expression(left)?, self.expression(right)?))
 	}
 
 	/// A call of a program function, or of a WGSL function of one or two arguments
@@ -317,11 +293,7 @@ impl Translation {
 	/// `condition ? then : otherwise` in an expression
 	fn selected(&mut self, condition: &Node, then: &Node, otherwise: &Node) -> Option<String> {
 		let condition = self.condition(condition)?;
-		Some(format!(
-			"select({}, {}, {condition})",
-			self.expression(otherwise)?,
-			self.expression(then)?
-		))
+		Some(format!("select({}, {}, {condition})", self.expression(otherwise)?, self.expression(then)?))
 	}
 
 	/// A condition as a WGSL bool: comparisons, and, or, not; a number is true unless 0
@@ -332,18 +304,11 @@ impl Translation {
 			}
 			Node::Key(left, op @ (Op::And | Op::Or), right) => {
 				let symbol = if *op == Op::And { "&&" } else { "||" };
-				Some(format!(
-					"({} {symbol} {})",
-					self.condition(left)?,
-					self.condition(right)?
-				))
+				Some(format!("({} {symbol} {})", self.condition(left)?, self.condition(right)?))
 			}
-			Node::Key(left, op, right) if comparison(*op).is_some() => Some(format!(
-				"({} {} {})",
-				self.expression(left)?,
-				comparison(*op)?,
-				self.expression(right)?
-			)),
+			Node::Key(left, op, right) if comparison(*op).is_some() => {
+				Some(format!("({} {} {})", self.expression(left)?, comparison(*op)?, self.expression(right)?))
+			}
 			Node::List(items, _, _) if items.len() == 1 => self.condition(&items[0]),
 			_ => Some(format!("({} != 0.0)", self.expression(node)?)),
 		}
@@ -413,11 +378,7 @@ impl Translation {
 
 	fn selected_color(&mut self, condition: &Node, then: &Node, otherwise: &Node) -> Option<String> {
 		let condition = self.condition(condition)?;
-		Some(format!(
-			"select({}, {}, {condition})",
-			self.color(otherwise)?,
-			self.color(then)?
-		))
+		Some(format!("select({}, {}, {condition})", self.color(otherwise)?, self.color(then)?))
 	}
 
 	/// A function's value as its WGSL function returns it: a color or a number
@@ -449,11 +410,8 @@ impl Translation {
 		let returned = self.returned(&called.body, &mut body);
 		(self.parameter, self.locals, self.color_result) = caller;
 		returned?;
-		let parameters: Vec<String> = called
-			.parameters
-			.iter()
-			.map(|parameter| format!("{PARAMETER_PREFIX}{parameter}: f32"))
-			.collect();
+		let parameters: Vec<String> =
+			called.parameters.iter().map(|parameter| format!("{PARAMETER_PREFIX}{parameter}: f32")).collect();
 		Some(format!(
 			"fn {translated_name}({}) -> {} {{\n{declared}{body}}}",
 			parameters.join(", "),
@@ -497,9 +455,7 @@ impl Translation {
 	/// One statement of a function in WGSL into `out`: an assignment, if, while, `for i in a..b`, return, a block
 	fn statement(&mut self, node: &Node, out: &mut String) -> Option<()> {
 		if let Some(statements) = block_statements(node) {
-			return statements
-				.iter()
-				.try_for_each(|statement| self.statement(statement, out));
+			return statements.iter().try_for_each(|statement| self.statement(statement, out));
 		}
 		if let Some(value) = returned_value(node) {
 			*out += &format!("return {};\n", self.result(value)?);
@@ -507,11 +463,8 @@ impl Translation {
 		}
 		if let Some((variable, from, op, to, body)) = range_loop(node) {
 			self.heavy = true;
-			let (variable, from, to) = (
-				format!("{VARIABLE_PREFIX}{variable}"),
-				self.expression(from)?,
-				self.expression(to)?,
-			);
+			let (variable, from, to) =
+				(format!("{VARIABLE_PREFIX}{variable}"), self.expression(from)?, self.expression(to)?);
 			let below = if op == Op::To { "<=" } else { "<" };
 			*out += &format!("for ({variable} = {from}; {variable} {below} {to}; {variable} = {variable} + 1.0) {{\n");
 			self.statement(body, out)?;
@@ -664,10 +617,7 @@ fn painted_function(node: &Node) -> Option<Node> {
 				true => String::new(),
 				false => format!(", {{{}}}", entries.join(", ")),
 			};
-			format!(
-				"{PAINT_WORD}({}, {width}, {height}{values})",
-				Node::Text(shader).serialize()
-			)
+			format!("{PAINT_WORD}({}, {width}, {height}{values})", Node::Text(shader).serialize())
 		}
 		None => format!(
 			"{PAINT_WORD}([{name}(i % ({width}), i//({width})) for i in 0..(({width}) * ({height}))], {width}, {height})"
@@ -682,17 +632,10 @@ fn painted_function(node: &Node) -> Option<Node> {
 /// The fragment shader painting each pixel the color of `function` at its column and row, and the program's numbers
 /// it reads; none where WGSL cannot compute the function
 fn fragment_shader(name: &str, function: &ProgramFunction) -> Option<(String, Vec<String>)> {
-	let mut translation = Translation {
-		uniforms: true,
-		..Translation::default()
-	};
+	let mut translation = Translation { uniforms: true, ..Translation::default() };
 	let pixel = vec!["floor(at.x)".to_string(), "floor(at.y)".to_string()];
 	let painted = translation.call_translated(name, function, pixel, true)?;
-	let functions: String = translation
-		.functions
-		.iter()
-		.map(|function| format!("{function}\n"))
-		.collect();
+	let functions: String = translation.functions.iter().map(|function| format!("{function}\n")).collect();
 	let shader = format!(
 		"{functions}@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {{\n\treturn {painted};\n}}"
 	);

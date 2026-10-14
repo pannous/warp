@@ -158,9 +158,7 @@ mod linking {
 			)
 		})?;
 		// the top 53 bits make a uniform f64 in [0, 1)
-		linker.func_wrap(HOST_LIBRARY, RANDOM, || {
-			(next_random() >> 11) as f64 / (1u64 << 53) as f64
-		})?;
+		linker.func_wrap(HOST_LIBRARY, RANDOM, || (next_random() >> 11) as f64 / (1u64 << 53) as f64)?;
 		linker.func_wrap(HOST_LIBRARY, RANDOM_BELOW, |bound: i64| {
 			if bound <= 0 {
 				0
@@ -168,9 +166,7 @@ mod linking {
 				(next_random() % bound as u64) as i64
 			}
 		})?;
-		linker.func_wrap(HOST_LIBRARY, RANDOM_SEED, |seed: i64| {
-			RANDOM_STATE.set(seeded_state(seed as u64))
-		})?;
+		linker.func_wrap(HOST_LIBRARY, RANDOM_SEED, |seed: i64| RANDOM_STATE.set(seeded_state(seed as u64)))?;
 		linker.func_wrap(HOST_LIBRARY, CLOCK, milliseconds_since_epoch)?;
 		linker.func_wrap(HOST_LIBRARY, LOCAL_OFFSET, system_signals::local_offset_at)?;
 		linker.func_wrap(HOST_LIBRARY, SIGNAL_POLL, |mut caller: Caller<'_, T>| {
@@ -186,14 +182,10 @@ mod linking {
 				Ok(())
 			},
 		)?;
-		linker.func_wrap(
-			HOST_LIBRARY,
-			SYSTEM_VALUE,
-			|mut caller: Caller<'_, T>, name: i32| -> Result<i64> {
-				let name = c_string(&mut caller, name)?;
-				crate::system_values::read(&name).map_err(wasmtime::Error::msg)
-			},
-		)?;
+		linker.func_wrap(HOST_LIBRARY, SYSTEM_VALUE, |mut caller: Caller<'_, T>, name: i32| -> Result<i64> {
+			let name = c_string(&mut caller, name)?;
+			crate::system_values::read(&name).map_err(wasmtime::Error::msg)
+		})?;
 		linker.func_wrap(HOST_LIBRARY, EXIT, |code: i64| -> Result<()> {
 			Err(wasmtime::Error::new(system_signals::ExitRequest(code as i32)))
 		})?;
@@ -208,10 +200,7 @@ mod linking {
 			.ok_or_else(|| wasmtime::Error::msg("no memory export"))?;
 		let bytes = memory.data(&*caller);
 		let start = (pointer as usize).min(bytes.len());
-		let end = bytes[start..]
-			.iter()
-			.position(|byte| *byte == 0)
-			.map_or(bytes.len(), |length| start + length);
+		let end = bytes[start..].iter().position(|byte| *byte == 0).map_or(bytes.len(), |length| start + length);
 		Ok(String::from_utf8_lossy(&bytes[start..end]).into_owned())
 	}
 

@@ -104,11 +104,9 @@ fn is_type_head(node: &Node) -> bool {
 
 /// Where the object starting `at` ends: after its item, or with a qualifier (`people where …`) at the end of the phrase
 fn phrase_end(items: &[Node], at: usize) -> usize {
-	let qualified = items.get(at + 1).is_some_and(|word| {
-		[WHERE_KEYWORD, WITH_WORD, WITHOUT_WORD]
-			.iter()
-			.any(|qualifier| word.is_symbol(qualifier))
-	});
+	let qualified = items
+		.get(at + 1)
+		.is_some_and(|word| [WHERE_KEYWORD, WITH_WORD, WITHOUT_WORD].iter().any(|qualifier| word.is_symbol(qualifier)));
 	if qualified {
 		items.len()
 	} else {

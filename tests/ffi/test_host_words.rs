@@ -5,10 +5,7 @@ use crate::is;
 #[test]
 fn test_random_stays_in_range() {
 	is!("r = random(); r >= 0 and r < 1", true);
-	is!(
-		"ok = 1; for i in 1 to 100 { r = random(10); if r < 0 or r >= 10 { ok = 0 } }; ok",
-		1
-	);
+	is!("ok = 1; for i in 1 to 100 { r = random(10); if r < 0 or r >= 10 { ok = 0 } }; ok", 1);
 	is!("random(1)", 0);
 }
 

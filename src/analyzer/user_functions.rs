@@ -38,13 +38,8 @@ pub fn widen_globals_by_functions<'a>(
 ) -> bool {
 	let mut widened_any = false;
 	for function in functions {
-		let scope = function_body_scope(
-			&function.params,
-			&function.body,
-			function_kinds,
-			globals,
-			closure_variable_targets,
-		);
+		let scope =
+			function_body_scope(&function.params, &function.body, function_kinds, globals, closure_variable_targets);
 		widened_any |= widen_globals(globals, &scope.globals);
 	}
 	widened_any
@@ -80,10 +75,7 @@ pub(super) fn infer_tuple_kinds(
 	let scope = function_body_scope(params, body, function_kinds, globals, closure_variable_targets);
 	let mut kinds: Vec<Option<Kind>> = vec![None; arity];
 	body.visit(&mut |node| {
-		for (kind, value) in kinds
-			.iter_mut()
-			.zip(crate::tuples::returned_values(node).unwrap_or_default())
-		{
+		for (kind, value) in kinds.iter_mut().zip(crate::tuples::returned_values(node).unwrap_or_default()) {
 			let value_kind = infer_type(value, &scope);
 			*kind = Some(match *kind {
 				None => value_kind,
@@ -185,10 +177,7 @@ fn is_while_do(node: &Node) -> bool {
 /// `f(1, w = 1e-9)` gives w a float
 fn takes_passed_kind(param: &Param) -> bool {
 	param.annotation.is_none()
-		&& param
-			.default
-			.as_ref()
-			.is_none_or(|value| argument_literal_kind(value) == Some(Kind::Int))
+		&& param.default.as_ref().is_none_or(|value| argument_literal_kind(value) == Some(Kind::Int))
 }
 
 /// A parameter takes its declared `x:type` kind, else the kind of its default value (a fresh value per call); otherwise Int
@@ -313,11 +302,7 @@ impl Usages {
 			Some(Kind::Data)
 		} else if self.indexed.contains(name) {
 			// a counted sequence joined to a text is a text; joined alone it may be any value (`"set " + value`)
-			Some(if self.texted.contains(name) {
-				Kind::Text
-			} else {
-				Kind::List
-			})
+			Some(if self.texted.contains(name) { Kind::Text } else { Kind::List })
 		} else {
 			None
 		}
@@ -326,16 +311,8 @@ impl Usages {
 	fn typed(&self, param: Param) -> Param {
 		// `if x is list then … else x`: a parameter tested for its kind takes any value, as if written `x:any` (card recursive-sum)
 		let takes_any = self.tested.contains(&param.name) && param.annotation.is_none() && param.default.is_none();
-		let annotation = if takes_any {
-			Some(Node::Symbol(ANY_TYPE.to_string()))
-		} else {
-			param.annotation
-		};
-		Param {
-			used_as: self.used_as(&param.name),
-			annotation,
-			..param
-		}
+		let annotation = if takes_any { Some(Node::Symbol(ANY_TYPE.to_string())) } else { param.annotation };
+		Param { used_as: self.used_as(&param.name), annotation, ..param }
 	}
 }
 
@@ -464,11 +441,8 @@ pub(super) fn infer_forwarded_parameters(ctx: &mut Context) {
 			return;
 		}
 		for (name, index, kind) in forwarded {
-			ctx.user_functions
-				.get_mut(&name)
-				.expect("collected from user functions")
-				.params[index]
-				.used_as = Some(kind);
+			ctx.user_functions.get_mut(&name).expect("collected from user functions").params[index].used_as =
+				Some(kind);
 		}
 	}
 }
@@ -513,16 +487,11 @@ pub(super) fn analyse_user_functions(ctx: &mut Context, node: &Node) {
 	ctx.field_kinds = program_field_kinds(node);
 	let mut globals = with_closure_captures(ctx, node, globals);
 	refine_return_kinds(ctx, &globals);
-	let return_kinds: HashMap<String, Kind> = ctx
-		.user_functions
-		.iter()
-		.map(|(name, function)| (name.clone(), function.return_kind))
-		.collect();
+	let return_kinds: HashMap<String, Kind> =
+		ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect();
 	// `global g = 0.3; g = f(-9)` with an f that returns a Node: only the return kinds tell that main's g holds one
-	let widened_by_main = widen_globals(
-		&mut globals,
-		&declared_globals_in(Scope::with_function_kinds(return_kinds.clone()), node),
-	);
+	let widened_by_main =
+		widen_globals(&mut globals, &declared_globals_in(Scope::with_function_kinds(return_kinds.clone()), node));
 	if widen_globals_by_functions(
 		&mut globals,
 		ctx.user_functions.values(),
@@ -583,11 +552,7 @@ pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &Hash
 	}
 	let mut changed = false;
 	for ((name, index), kinds) in passed {
-		let param = &mut ctx
-			.user_functions
-			.get_mut(&name)
-			.expect("collected from known functions")
-			.params[index];
+		let param = &mut ctx.user_functions.get_mut(&name).expect("collected from known functions").params[index];
 		// passed only values held as Nodes (a loop variable over a list parameter): a Node, no int, and no list guessed
 		// from indexing (capitalize(w) for the elements of a function's list result)
 		// passed a Node and else only ints (`rect(x, levels[i], …)` and `rect(x, 2, …)`): the Node may hold a float, which an
@@ -607,10 +572,7 @@ pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &Hash
 			changed = true;
 			continue;
 		}
-		let kinds: Vec<Kind> = kinds
-			.into_iter()
-			.filter(|kind| *kind != Kind::Int && *kind != Kind::Empty)
-			.collect();
+		let kinds: Vec<Kind> = kinds.into_iter().filter(|kind| *kind != Kind::Int && *kind != Kind::Empty).collect();
 		let [kind] = kinds.as_slice() else { continue };
 		// a parameter the body counts or indexes is guessed a list, until the calls pass it only texts
 		let guessed = matches!(param.used_as, None | Some(Kind::Int))
@@ -635,17 +597,13 @@ pub(crate) fn called_functions(items: &[Node]) -> Vec<(String, Vec<&Node>)> {
 		_ => None,
 	};
 	match head.as_str() {
-		crate::declarations::TASK_GO => started
-			.map(|name| (name, items[2..].iter().collect()))
-			.into_iter()
-			.collect(),
+		crate::declarations::TASK_GO => started.map(|name| (name, items[2..].iter().collect())).into_iter().collect(),
 		crate::host::TASK_SPAWN_VALUES | crate::host::GUARDED_CALL => match (started, items.get(2)) {
 			(Some(wrapper), Some(list)) => {
 				let mut calls = vec![(wrapper.clone(), vec![list])];
-				if let (Some(function), Node::List(arguments, _, _)) = (
-					wrapper.strip_suffix(crate::declarations::NODE_WRAPPER_SUFFIX),
-					list.drop_meta(),
-				) {
+				if let (Some(function), Node::List(arguments, _, _)) =
+					(wrapper.strip_suffix(crate::declarations::NODE_WRAPPER_SUFFIX), list.drop_meta())
+				{
 					calls.push((function.to_string(), arguments.iter().collect()));
 				}
 				calls
@@ -671,16 +629,11 @@ pub(super) fn collect_argument_kinds(
 			for (name, arguments) in called_functions(items) {
 				if let Some(function) = ctx.user_functions.get(&name) {
 					for (index, argument) in arguments.into_iter().enumerate().take(function.params.len()) {
-						passed
-							.entry((name.clone(), index))
-							.or_default()
-							.insert(infer_type(argument, scope));
+						passed.entry((name.clone(), index)).or_default().insert(infer_type(argument, scope));
 					}
 				}
 			}
-			items
-				.iter()
-				.for_each(|item| collect_argument_kinds(item, scope, ctx, passed));
+			items.iter().for_each(|item| collect_argument_kinds(item, scope, ctx, passed));
 		}
 		Node::Key(left, _, right) => {
 			collect_argument_kinds(left, scope, ctx, passed);
@@ -706,10 +659,7 @@ pub(super) fn with_closure_captures(
 	let mut functions: Vec<&UserFunctionDef> = ctx.user_functions.values().collect();
 	functions.sort_by(|a, b| a.name.cmp(&b.name));
 	for function in functions {
-		let enclosing = ctx
-			.enclosing_functions
-			.get(&function.name)
-			.and_then(|name| ctx.user_functions.get(name));
+		let enclosing = ctx.enclosing_functions.get(&function.name).and_then(|name| ctx.user_functions.get(name));
 		let captured: Vec<(String, Kind)> = match enclosing {
 			Some(enclosing) => {
 				let mut enclosing_scope = Scope::with_function_kinds(known_function_kinds(ctx));
@@ -730,9 +680,7 @@ pub(super) fn with_closure_captures(
 		// the binding itself, its declared or literal type with it (`k = {a: 10}`: `k.a` is an Int there too)
 		for (name, kind) in captured {
 			let binding = outer.lookup(&name).cloned().map(|local| Local { kind, ..local });
-			globals
-				.entry(name.clone())
-				.or_insert_with(|| binding.unwrap_or_else(|| Local::new(0, name, kind)));
+			globals.entry(name.clone()).or_insert_with(|| binding.unwrap_or_else(|| Local::new(0, name, kind)));
 		}
 	}
 	globals
@@ -752,14 +700,9 @@ fn declared_globals_in(mut scope: Scope, program: &Node) -> HashMap<String, Loca
 pub fn applicable_function_names(node: &Node) -> HashSet<String> {
 	let mut ctx = Context::new();
 	extract_user_functions_inner(&mut ctx, node);
-	let user_functions = ctx
-		.user_functions
-		.into_iter()
-		.filter(|(_, function)| !function.params.is_empty())
-		.map(|(name, _)| name);
-	user_functions
-		.chain(crate::numbers::real::FUNCTIONS.iter().map(|name| name.to_string()))
-		.collect()
+	let user_functions =
+		ctx.user_functions.into_iter().filter(|(_, function)| !function.params.is_empty()).map(|(name, _)| name);
+	user_functions.chain(crate::numbers::real::FUNCTIONS.iter().map(|name| name.to_string())).collect()
 }
 
 /// A lifted lambda is never called by name (closures.rs): its captured values take the kinds of the variables captured (a
@@ -804,35 +747,19 @@ fn closure_parameter_kinds(
 			passed_by_closure_call(ctx, node, &value_kind, &mut passed);
 		});
 	}
-	inferred.extend(
-		passed
-			.into_iter()
-			.filter_map(|((target, index), kinds)| Some((target, index, passed_kind(&kinds)?))),
-	);
+	inferred
+		.extend(passed.into_iter().filter_map(|((target, index), kinds)| Some((target, index, passed_kind(&kinds)?))));
 	inferred
 }
 
 /// The kinds of each scope's parameters and variables, the program's and each function's: `m = float(2.5)` captured
 /// by a closure is a float
 fn scope_kinds<'a>(ctx: &'a Context, program: &'a Node) -> Vec<(&'a Node, HashMap<String, Kind>)> {
-	let function_kinds: HashMap<String, Kind> = ctx
-		.user_functions
-		.iter()
-		.map(|(name, function)| (name.clone(), function.return_kind))
-		.collect();
+	let function_kinds: HashMap<String, Kind> =
+		ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect();
 	let kinds_of = |params: &[Param], body: &Node| -> HashMap<String, Kind> {
-		let scope = function_body_scope(
-			params,
-			body,
-			&function_kinds,
-			&HashMap::new(),
-			&ctx.closure_variable_targets,
-		);
-		scope
-			.locals
-			.into_iter()
-			.map(|(name, local)| (name, local.kind))
-			.collect()
+		let scope = function_body_scope(params, body, &function_kinds, &HashMap::new(), &ctx.closure_variable_targets);
+		scope.locals.into_iter().map(|(name, local)| (name, local.kind)).collect()
 	};
 	std::iter::once((program, kinds_of(&[], program)))
 		.chain(
@@ -858,18 +785,13 @@ fn passed_by_closure_call(
 		return;
 	};
 	for (target, captured) in ctx.closure_targets.iter().filter(|(target, captured)| {
-		ctx.user_functions
-			.get(target)
-			.is_some_and(|function| function.params.len() == captured + arity)
+		ctx.user_functions.get(target).is_some_and(|function| function.params.len() == captured + arity)
 	}) {
 		for (index, argument) in items[2..].iter().enumerate() {
 			// an Int is certain only as a literal: an unknown variable reads as one too
 			let kind = value_kind(argument)
 				.filter(|kind| *kind != Kind::Int || argument_literal_kind(argument) == Some(Kind::Int));
-			passed
-				.entry((target.clone(), captured + index))
-				.or_default()
-				.extend(kind);
+			passed.entry((target.clone(), captured + index)).or_default().extend(kind);
 		}
 	}
 }
@@ -878,10 +800,7 @@ fn passed_by_closure_call(
 fn kinds_given(ctx: &mut Context, inferred: Vec<(String, usize, Kind)>) -> bool {
 	let mut changed = false;
 	for (target, index, kind) in inferred {
-		let Some(param) = ctx
-			.user_functions
-			.get_mut(&target)
-			.and_then(|function| function.params.get_mut(index))
+		let Some(param) = ctx.user_functions.get_mut(&target).and_then(|function| function.params.get_mut(index))
 		else {
 			continue;
 		};
@@ -913,11 +832,7 @@ pub fn kind_with_article(kind: Kind) -> String {
 
 /// `a photo`, `an Int`, `an image`
 pub fn with_article(name: &str) -> String {
-	let article = if name.starts_with(|first: char| "AEIOUaeiou".contains(first)) {
-		"an"
-	} else {
-		"a"
-	};
+	let article = if name.starts_with(|first: char| "AEIOUaeiou".contains(first)) { "an" } else { "a" };
 	format!("{article} {name}")
 }
 
@@ -932,12 +847,7 @@ pub(crate) fn literal_variable_kinds(program: &Node, ctx: &Context) -> HashMap<S
 pub(super) fn variable_kinds(program: &Node, ctx: &Context, unknown_keeps_kind: bool) -> HashMap<String, Kind> {
 	let mut kinds: HashMap<String, Option<Kind>> = HashMap::new();
 	// a parameter of the same name shadows the variable; not for closures, whose captured parameters bear its name
-	for param in ctx
-		.user_functions
-		.values()
-		.flat_map(|function| &function.params)
-		.filter(|_| !unknown_keeps_kind)
-	{
+	for param in ctx.user_functions.values().flat_map(|function| &function.params).filter(|_| !unknown_keeps_kind) {
 		kinds.insert(param.name.clone(), None);
 	}
 	let mut literal: HashSet<String> = HashSet::new();
@@ -1027,9 +937,8 @@ pub(super) fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 				}
 				ctx.parameter_conflicts.extend(judge.digits_lost(argument, param));
 				// `g("a")`: a one-character text is parsed as a Codepoint; the parameter holds any text, as for a default
-				if let Some(kind) = judge
-					.kind(argument)
-					.map(|kind| if kind == Kind::Codepoint { Kind::Text } else { kind })
+				if let Some(kind) =
+					judge.kind(argument).map(|kind| if kind == Kind::Codepoint { Kind::Text } else { kind })
 				{
 					let kinds = argument_kinds.entry((name.clone(), index)).or_default();
 					if !kinds.contains(&kind) {
@@ -1055,12 +964,9 @@ impl ArgumentJudge {
 	fn of(ctx: &Context, program: &Node) -> ArgumentJudge {
 		// a parameter of the same name shadows the variable (as in literal_variable_kinds)
 		let mut decimal_variables = decimal_variables(program);
-		ctx.user_functions
-			.values()
-			.flat_map(|function| &function.params)
-			.for_each(|param| {
-				decimal_variables.remove(&param.name);
-			});
+		ctx.user_functions.values().flat_map(|function| &function.params).for_each(|param| {
+			decimal_variables.remove(&param.name);
+		});
 		ArgumentJudge {
 			variable_kinds: literal_variable_kinds(program, ctx),
 			bool_variables: bool_variables(program),
@@ -1113,11 +1019,9 @@ impl ArgumentJudge {
 /// (card bool-loses: `show(b) := "got " + b; show(1<2)` gave "got 1")
 fn type_bool_parameters(ctx: &mut Context, given_bools: HashMap<(String, usize), bool>) {
 	for ((name, index), _) in given_bools.into_iter().filter(|(_, all_bools)| *all_bools) {
-		let param = &mut ctx
-			.user_functions
-			.get_mut(&name)
-			.expect("call sites were collected from known functions")
-			.params[index];
+		let param =
+			&mut ctx.user_functions.get_mut(&name).expect("call sites were collected from known functions").params
+				[index];
 		if param.annotation.is_none() && param.default.is_none() {
 			param.annotation = Some(Node::Symbol(crate::analyzer::BOOL_TYPE.to_string()));
 		}
@@ -1133,12 +1037,7 @@ fn add_assigned_kinds(ctx: &Context, argument_kinds: &mut HashMap<(String, usize
 				let kinds = argument_kinds
 					.entry((name.clone(), index))
 					.or_insert_with(|| vec![param.used_as.unwrap_or(Kind::Int)]);
-				kinds.extend(
-					assigned
-						.into_iter()
-						.filter(|kind| !kinds.contains(kind))
-						.collect::<Vec<_>>(),
-				);
+				kinds.extend(assigned.into_iter().filter(|kind| !kinds.contains(kind)).collect::<Vec<_>>());
 			}
 		}
 	}
@@ -1147,10 +1046,7 @@ fn add_assigned_kinds(ctx: &Context, argument_kinds: &mut HashMap<(String, usize
 /// An untyped parameter given one kind holds it (Int stays the usage kind); given several kinds, any value
 fn type_parameters_by_arguments(ctx: &mut Context, argument_kinds: HashMap<(String, usize), Vec<Kind>>) {
 	for ((name, index), kinds) in argument_kinds {
-		let function = ctx
-			.user_functions
-			.get_mut(&name)
-			.expect("call sites were collected from known functions");
+		let function = ctx.user_functions.get_mut(&name).expect("call sites were collected from known functions");
 		let param = &mut function.params[index];
 		if param.annotation.is_some() || param.default.is_some() {
 			continue;
@@ -1190,27 +1086,17 @@ fn assigned_literal_kinds(body: &Node, name: &str) -> Vec<Kind> {
 /// until the kinds settle: a call of a float-returning function is itself Float. After the first round only the
 /// functions naming one whose kinds changed are inferred again (a closure call's kind joins its targets', unnamed)
 pub(super) fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, Local>) {
-	let mut function_kinds: HashMap<String, Kind> = ctx
-		.user_functions
-		.keys()
-		.map(|name| (name.clone(), Kind::Int))
-		.collect();
+	let mut function_kinds: HashMap<String, Kind> =
+		ctx.user_functions.keys().map(|name| (name.clone(), Kind::Int)).collect();
 	function_kinds.extend(ctx.field_kinds.clone());
 	let mut stale: Vec<&UserFunctionDef> = ctx.user_functions.values().collect();
 	for _ in 0..=ctx.user_functions.len() {
 		let inferred: Vec<(String, Kind)> = stale
 			.iter()
-			.map(|function| {
-				(
-					function.name.clone(),
-					settled_return_kind(function, ctx, &function_kinds, globals),
-				)
-			})
+			.map(|function| (function.name.clone(), settled_return_kind(function, ctx, &function_kinds, globals)))
 			.collect();
-		let tuples: Vec<(String, String, Kind)> = stale
-			.iter()
-			.flat_map(|function| element_kinds(function, ctx, &function_kinds, globals))
-			.collect();
+		let tuples: Vec<(String, String, Kind)> =
+			stale.iter().flat_map(|function| element_kinds(function, ctx, &function_kinds, globals)).collect();
 		let changed: HashSet<String> = inferred
 			.iter()
 			.map(|(name, kind)| (name, name, kind))
@@ -1241,13 +1127,7 @@ fn settled_return_kind(
 	globals: &HashMap<String, Local>,
 ) -> Kind {
 	let returned = |kinds: &HashMap<String, Kind>| {
-		infer_function_return_kind(
-			&function.params,
-			&function.body,
-			kinds,
-			globals,
-			&ctx.closure_variable_targets,
-		)
+		infer_function_return_kind(&function.params, &function.body, kinds, globals, &ctx.closure_variable_targets)
 	};
 	let kind = crate::closures::closure_call_kind(&function.name, ctx, function_kinds)
 		.unwrap_or_else(|| returned(function_kinds));
@@ -1269,23 +1149,12 @@ fn element_kinds(
 	function_kinds: &HashMap<String, Kind>,
 	globals: &HashMap<String, Local>,
 ) -> Vec<(String, String, Kind)> {
-	let kinds = infer_tuple_kinds(
-		&function.params,
-		&function.body,
-		function_kinds,
-		globals,
-		&ctx.closure_variable_targets,
-	);
+	let kinds =
+		infer_tuple_kinds(&function.params, &function.body, function_kinds, globals, &ctx.closure_variable_targets);
 	kinds
 		.into_iter()
 		.enumerate()
-		.map(|(index, kind)| {
-			(
-				function.name.clone(),
-				crate::tuples::element_key(&function.name, index),
-				kind,
-			)
-		})
+		.map(|(index, kind)| (function.name.clone(), crate::tuples::element_key(&function.name, index), kind))
 		.collect()
 }
 

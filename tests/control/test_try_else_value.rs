@@ -12,10 +12,7 @@ fn an_arrow_fallback_is_a_function_value() {
 		let value = eval(code);
 		assert!(!matches!(value, warp::Node::Error(_)), "{code}: {value:?}");
 		assert_ne!(value, warp::Node::Text(CAUGHT_MESSAGE.to_string()), "{code}");
-		assert!(
-			value.serialize().contains("lambda"),
-			"{code}: the fallback is the function it is, got {value:?}"
-		);
+		assert!(value.serialize().contains("lambda"), "{code}: the fallback is the function it is, got {value:?}");
 	}
 }
 

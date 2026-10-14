@@ -46,24 +46,9 @@ pub const INTERVAL_WORDS: [(&str, &str, &[Extremum]); 23] = [
 	("cbrt", "uncertain_cbrt", &[]),
 	("abs", "uncertain_abs", &LEAST_AT_ZERO),
 	("fabs", "uncertain_fabs", &LEAST_AT_ZERO),
-	(
-		"sin",
-		"uncertain_sin",
-		&[turns(HALF_PI, TAU, true, 1.0), turns(-HALF_PI, TAU, false, -1.0)],
-	),
-	(
-		"cos",
-		"uncertain_cos",
-		&[turns(0.0, TAU, true, 1.0), turns(PI, TAU, false, -1.0)],
-	),
-	(
-		"tan",
-		"uncertain_tan",
-		&[
-			turns(HALF_PI, PI, true, f64::INFINITY),
-			turns(HALF_PI, PI, false, f64::NEG_INFINITY),
-		],
-	),
+	("sin", "uncertain_sin", &[turns(HALF_PI, TAU, true, 1.0), turns(-HALF_PI, TAU, false, -1.0)]),
+	("cos", "uncertain_cos", &[turns(0.0, TAU, true, 1.0), turns(PI, TAU, false, -1.0)]),
+	("tan", "uncertain_tan", &[turns(HALF_PI, PI, true, f64::INFINITY), turns(HALF_PI, PI, false, f64::NEG_INFINITY)]),
 	("asin", "uncertain_asin", &[]),
 	("acos", "uncertain_acos", &[]),
 	("atan", "uncertain_atan", &[]),
@@ -100,18 +85,8 @@ impl Uncertain {
 	/// From the run-time array [value, low, high], a Gaussian's [value, low, high, σ, its contributions…]
 	pub fn from_parts(parts: &[f64]) -> Option<Uncertain> {
 		match *parts {
-			[value, low, high] => Some(Uncertain {
-				value,
-				low,
-				high,
-				gaussian: false,
-			}),
-			[value, low, high, _, ..] => Some(Uncertain {
-				value,
-				low,
-				high,
-				gaussian: true,
-			}),
+			[value, low, high] => Some(Uncertain { value, low, high, gaussian: false }),
+			[value, low, high, _, ..] => Some(Uncertain { value, low, high, gaussian: true }),
 			_ => None,
 		}
 	}
@@ -160,14 +135,7 @@ impl fmt::Display for Uncertain {
 				(x / 10f64.powi(place)).round() * 10f64.powi(place)
 			}
 		};
-		write!(
-			f,
-			"{:.*} ± {:.*}{sigma}",
-			decimals,
-			rounded(self.value),
-			decimals,
-			rounded(radius)
-		)
+		write!(f, "{:.*} ± {:.*}{sigma}", decimals, rounded(self.value), decimals, rounded(radius))
 	}
 }
 
@@ -207,12 +175,8 @@ pub fn lower_certainty(node: Node) -> Node {
 		_ => return node,
 	};
 	let comparison = Node::Key(Box::new(compared.clone()), *op, right.clone());
-	Node::List(
-		vec![Node::Symbol(word.drop_meta().name()), comparison],
-		Bracket::None,
-		Separator::Space,
-	)
-	.with_meta_of(&node)
+	Node::List(vec![Node::Symbol(word.drop_meta().name()), comparison], Bracket::None, Separator::Space)
+		.with_meta_of(&node)
 }
 
 /// Marks the type `number` of a parameter that may hold a ± value: held as a Node and checked for a number at run time
@@ -354,17 +318,14 @@ fn unsaid_ordering(node: &Node, left: &Node, op: Op, right: &Node) -> Diagnostic
 	let written = format!("{left} {op} {right}");
 	let readings = [CERTAINLY, POSSIBLY].map(|word| format!("{left} {word} {op} {right}"));
 	let by_value = format!("{left}.value {op} {right}");
-	Diagnostic::at(
-		node,
-		format!("{written} compares a ± value: an overlap is neither yes nor no"),
-	)
-	.fix(format!(
-		"write `{}` (the whole interval), `{}` (some of it) or `{by_value}` (its value)",
-		readings[0], readings[1]
-	))
-	.offer("the whole interval", &written, &readings[0])
-	.offer("some of the interval", &written, &readings[1])
-	.offer("its value", &written, &by_value)
+	Diagnostic::at(node, format!("{written} compares a ± value: an overlap is neither yes nor no"))
+		.fix(format!(
+			"write `{}` (the whole interval), `{}` (some of it) or `{by_value}` (its value)",
+			readings[0], readings[1]
+		))
+		.offer("the whole interval", &written, &readings[0])
+		.offer("some of the interval", &written, &readings[1])
+		.offer("its value", &written, &by_value)
 }
 
 /// The warning of a bare ordering whose operands turn out to overlap at run time (the compiler knew no ±)

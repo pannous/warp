@@ -11,13 +11,7 @@ const UPTO_LOOP: &str = "x=0; for i in 1 upto 4 {x+=i}; x";
 fn upto_warnings(code: &str) -> (Node, usize) {
 	take_warnings();
 	let value = eval(code);
-	(
-		value,
-		take_warnings()
-			.iter()
-			.filter(|warning| warning.message.contains("upto"))
-			.count(),
-	)
+	(value, take_warnings().iter().filter(|warning| warning.message.contains("upto")).count())
 }
 
 fn acknowledging(topics: &[&str]) -> Acknowledging {
@@ -44,23 +38,12 @@ fn got_it_silences_the_warning_but_never_changes_the_program() {
 	let _ = std::fs::remove_file(path);
 	with_acknowledger(acknowledging(&["upto"]), || {
 		use_acknowledgements_file(path);
-		assert_eq!(
-			upto_warnings(UPTO_LOOP),
-			(Node::int(6), 1),
-			"shown once more, then acknowledged"
-		);
+		assert_eq!(upto_warnings(UPTO_LOOP), (Node::int(6), 1), "shown once more, then acknowledged");
 	});
 	with_acknowledger(acknowledging(&[]), || {
 		use_acknowledgements_file(path);
-		assert_eq!(
-			upto_warnings(UPTO_LOOP),
-			(Node::int(6), 0),
-			"acknowledged in an earlier run: silent, same value"
-		);
-		assert!(
-			matches!(eval(&format!("use strict\n{UPTO_LOOP}")), Node::Error(_)),
-			"strict never guesses"
-		);
+		assert_eq!(upto_warnings(UPTO_LOOP), (Node::int(6), 0), "acknowledged in an earlier run: silent, same value");
+		assert!(matches!(eval(&format!("use strict\n{UPTO_LOOP}")), Node::Error(_)), "strict never guesses");
 	});
 	std::fs::remove_file(path).unwrap();
 }
@@ -68,10 +51,7 @@ fn got_it_silences_the_warning_but_never_changes_the_program() {
 #[test]
 fn a_dangerous_ambiguity_stays_an_error_even_when_acknowledged() {
 	with_acknowledger(acknowledging(&["list-times"]), || match eval("[0]*3") {
-		Node::Error(message) => assert!(
-			message.to_string().contains("`3 times [0]` for repeat the list"),
-			"{message}"
-		),
+		Node::Error(message) => assert!(message.to_string().contains("`3 times [0]` for repeat the list"), "{message}"),
 		other => panic!("expected the list-times error, got {other:?}"),
 	});
 }
@@ -92,11 +72,7 @@ fn a_host_list_of_acknowledged_topics_silences_notes_and_warnings_before_they_sh
 	assert_eq!(report["value"], "6");
 	assert_eq!(report["warnings"], serde_json::json!([]));
 	assert!(
-		report["hints"]
-			.as_array()
-			.unwrap()
-			.iter()
-			.all(|hint| !hint["original"].as_str().unwrap().starts_with("let ")),
+		report["hints"].as_array().unwrap().iter().all(|hint| !hint["original"].as_str().unwrap().starts_with("let ")),
 		"{report}"
 	);
 	assert_eq!(report["notes"], serde_json::json!([]));

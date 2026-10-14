@@ -30,9 +30,7 @@ fn local_names(bytes: &[u8]) -> Vec<String> {
 }
 
 fn compiled(program: &str) -> Vec<u8> {
-	compile(program)
-		.unwrap_or_else(|answer| panic!("{program} compiled to constant {answer:?}"))
-		.bytes
+	compile(program).unwrap_or_else(|answer| panic!("{program} compiled to constant {answer:?}")).bytes
 }
 
 #[test]

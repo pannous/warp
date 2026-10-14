@@ -15,10 +15,7 @@ fn test_cargo_crate_free_functions() {
 fn test_cargo_crate_struct_is_a_resource() {
 	is!("use cargo regex; regex.escape(\"a.b\")", "a\\.b");
 	is!("use cargo regex; r = regex.Regex(\"a+\"); r.is_match(\"caaat\")", true);
-	is!(
-		"use cargo regex; r = regex.Regex(\"a+\"); r.replace_all(\"caaat\", \"-\")",
-		"c-t"
-	);
+	is!("use cargo regex; r = regex.Regex(\"a+\"); r.replace_all(\"caaat\", \"-\")", "c-t");
 	is!("use cargo regex; r = regex.Regex(\"[0-9]+\"); r.as_str()", "[0-9]+");
 }
 
@@ -38,10 +35,7 @@ fn test_cargo_crate_texts_pass_as_bytes() {
 fn test_cargo_crate_type_functions_fields_and_display() {
 	is!("use cargo semver; v = semver.Version.parse(\"1.2.3\"); v.minor + 1", 3);
 	is!("use cargo semver; semver.Version.parse(\"1.2.3\").to_string()", "1.2.3");
-	is!(
-		"use cargo semver; r = semver.VersionReq.parse(\">=1.2\"); r.matches(semver.Version.parse(\"1.3.0\"))",
-		true
-	);
+	is!("use cargo semver; r = semver.VersionReq.parse(\">=1.2\"); r.matches(semver.Version.parse(\"1.3.0\"))", true);
 }
 
 #[test]
@@ -55,25 +49,17 @@ fn test_cargo_crate_without_callable_functions_is_refused() {
 fn test_cargo_crate_prebuilt_download() {
 	let directory = std::path::PathBuf::from(format!("scratch/crate-downloads-{}", std::process::id()));
 	let wasm = warp::modules::cargo_crates::download("strsim", &directory).unwrap();
-	let program = format!(
-		"use wasm \"{}\" as strsim; strsim.levenshtein(\"kitten\", \"sitting\")",
-		wasm.display()
-	);
+	let program = format!("use wasm \"{}\" as strsim; strsim.levenshtein(\"kitten\", \"sitting\")", wasm.display());
 	is!(&program, 3);
 	std::fs::remove_dir_all(&directory).unwrap();
-	assert!(
-		warp::modules::cargo_crates::download("no_such_crate_xyz_warp", &directory)
-			.unwrap_err()
-			.contains("not hosted")
-	);
+	assert!(warp::modules::cargo_crates::download("no_such_crate_xyz_warp", &directory)
+		.unwrap_err()
+		.contains("not hosted"));
 }
 
 /// card use-cargo-debug-names: crate components keep their name section, so a trap's backtrace names the Rust
 /// functions (demangled) instead of `<wasm function 2106>` (regex-automata itself is inlined)
 #[test]
 fn test_cargo_crate_trap_names_rust_functions() {
-	fails_with(
-		"use cargo regex; r = regex.Regex(\"a\"); r.shortest_match_at(\"abc\", 10)",
-		"RegexResource",
-	);
+	fails_with("use cargo regex; r = regex.Regex(\"a\"); r.shortest_match_at(\"abc\", 10)", "RegexResource");
 }

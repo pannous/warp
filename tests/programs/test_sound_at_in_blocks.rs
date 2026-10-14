@@ -13,9 +13,6 @@ fn at_inside_a_loop_places_each_pass() {
 
 #[test]
 fn at_inside_an_if() {
-	let (seconds, _) = rendered(
-		"at_if",
-		"use sound\nif yes { at 0 bars play(C4, 0.5s) }\nrender_sound(\"SONG\")",
-	);
+	let (seconds, _) = rendered("at_if", "use sound\nif yes { at 0 bars play(C4, 0.5s) }\nrender_sound(\"SONG\")");
 	assert_eq!(seconds, "0.5");
 }

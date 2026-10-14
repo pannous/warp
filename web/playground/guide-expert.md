@@ -66,7 +66,7 @@ Booleans are `yes` and `no`, with word operators `and`, `or`, `not`.
 x = 5; if x > 9 : "big" else if x > 3 : "medium" else "small"
 ```
 
-### Matching
+## Matching
 
 `match` (or `switch`) takes keys with alternatives, ranges, types and guards; `other`, `_`, `default` catch the rest.
 

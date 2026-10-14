@@ -28,22 +28,13 @@ fn map_arms_match_at_any_depth() {
 	let arms = "{status: 200, body: {user: {name, email}}} => name + \" <\" + email + \">\"; \
 		{status: 404} => \"missing\"; {error: message} => message";
 	is!(&format!("{RESPONSE}match response {{ {arms} }}"), "Ann <ann@x.org>");
-	is!(
-		&format!("response = {{status: 404}}; match response {{ {arms} }}"),
-		"missing"
-	);
-	is!(
-		&format!("response = {{error: \"down\"}}; match response {{ {arms} }}"),
-		"down"
-	);
+	is!(&format!("response = {{status: 404}}; match response {{ {arms} }}"), "missing");
+	is!(&format!("response = {{error: \"down\"}}; match response {{ {arms} }}"), "down");
 }
 
 #[test]
 fn is_with_a_map_pattern_binds_its_names() {
 	is!("x = {name: \"Ann\", age: 3}; if x is {age} then age else 0", 3);
 	is!("x = {name: \"Ann\", age: 3}; if x is {size} then size else 0", 0);
-	is!(
-		&format!("{RESPONSE}if response is {{body: {{user: {{name}}}}}} then name else \"\""),
-		"Ann"
-	);
+	is!(&format!("{RESPONSE}if response is {{body: {{user: {{name}}}}}} then name else \"\""), "Ann");
 }

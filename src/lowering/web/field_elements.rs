@@ -34,11 +34,7 @@ fn field_element(target: &Node) -> Option<(Node, Node, String)> {
 	let (Node::Symbol(object), Node::Symbol(member)) = (object.drop_meta(), member.drop_meta()) else {
 		return None;
 	};
-	Some((
-		field.as_ref().clone(),
-		index.as_ref().clone(),
-		format!("{object}·{member}{ELEMENTS_SUFFIX}"),
-	))
+	Some((field.as_ref().clone(), index.as_ref().clone(), format!("{object}·{member}{ELEMENTS_SUFFIX}")))
 }
 
 fn written_back(field: Node, index: Node, op: Op, value: Node, name: String) -> Node {

@@ -20,9 +20,6 @@ fn indexed_parameter_can_be_called_repeatedly_and_combined() {
 
 #[test]
 fn a_list_literal_assigned_to_a_parameter() {
-	is!(
-		"def qp(arr, lo) { arr = [2]; return arr }; qp([1], 0)",
-		warp::ints(vec![2])
-	);
+	is!("def qp(arr, lo) { arr = [2]; return arr }; qp([1], 0)", warp::ints(vec![2]));
 	is!("def qp(arr) { b = [2]; arr = b; arr }; qp([1])", warp::ints(vec![2]));
 }

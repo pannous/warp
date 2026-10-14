@@ -116,11 +116,7 @@ pub fn kept_count(block: i64) -> Option<usize> {
 }
 
 fn kept_buffer(block: i64) -> Option<(wgpu::Buffer, usize)> {
-	KEPT.lock()
-		.ok()?
-		.iter()
-		.find(|(kept, _, _)| *kept == block)
-		.map(|(_, buffer, count)| (buffer.clone(), *count))
+	KEPT.lock().ok()?.iter().find(|(kept, _, _)| *kept == block).map(|(_, buffer, count)| (buffer.clone(), *count))
 }
 
 /// As compute_from, the items taken from a kept buffer and the result's buffer kept, as `keeping` says
@@ -132,9 +128,7 @@ pub fn compute_kept(
 	keeping: Keeping,
 ) -> Result<Vec<f32>, String> {
 	let bytes: Vec<u8> = numbers.iter().flat_map(|number| number.to_le_bytes()).collect();
-	Ok(words(&compute_bytes(shader, &bytes, workgroups, first, keeping)?)
-		.map(f32::from_le_bytes)
-		.collect())
+	Ok(words(&compute_bytes(shader, &bytes, workgroups, first, keeping)?).map(f32::from_le_bytes).collect())
 }
 
 /// The element type of the numbers a compute shader reads at @binding(0): f32 unless it declares array<i32> or array<u32>
@@ -156,10 +150,7 @@ pub fn element_of(shader: &str) -> Element {
 pub fn compute_ints(shader: &str, numbers: &[i64], workgroups: u32, element: Element) -> Result<Vec<i64>, String> {
 	let numbers: Vec<f64> = numbers.iter().map(|&number| number as f64).collect();
 	let left = compute_bytes(shader, &encoded(&numbers, element)?, workgroups, 0, Keeping::default())?;
-	Ok(decoded(&left, element)
-		.into_iter()
-		.map(|number| number as i64)
-		.collect())
+	Ok(decoded(&left, element).into_iter().map(|number| number as i64).collect())
 }
 
 /// The numbers as the shader's 4-byte elements: f32, or i32 / u32, which must hold them
@@ -226,22 +217,9 @@ pub fn compute_named(
 	workgroups: u32,
 ) -> Result<Vec<(String, Element, Vec<f64>)>, String> {
 	let declared = storage_arrays(shader);
-	let names = || {
-		declared
-			.iter()
-			.map(|array| array.name.as_str())
-			.collect::<Vec<_>>()
-			.join(", ")
-	};
-	if let Some(missing) = declared
-		.iter()
-		.find(|array| !arrays.iter().any(|(name, _)| *name == array.name))
-	{
-		return Err(format!(
-			"the shader's array {} has no numbers: give each of {}",
-			missing.name,
-			names()
-		));
+	let names = || declared.iter().map(|array| array.name.as_str()).collect::<Vec<_>>().join(", ");
+	if let Some(missing) = declared.iter().find(|array| !arrays.iter().any(|(name, _)| *name == array.name)) {
+		return Err(format!("the shader's array {} has no numbers: give each of {}", missing.name, names()));
 	}
 	let buffers = arrays
 		.iter()
@@ -258,10 +236,7 @@ pub fn compute_named(
 		.collect::<Result<Vec<_>, String>>()?;
 	let left = compute_buffers(
 		shader,
-		&buffers
-			.iter()
-			.map(|(binding, _, bytes)| (*binding, bytes.as_slice()))
-			.collect::<Vec<_>>(),
+		&buffers.iter().map(|(binding, _, bytes)| (*binding, bytes.as_slice())).collect::<Vec<_>>(),
 		workgroups,
 	)?;
 	Ok(arrays
@@ -286,10 +261,7 @@ fn compute_buffers(shader: &str, buffers: &[(u32, &[u8])], workgroups: u32) -> R
 			})
 		})
 		.collect();
-	let readbacks: Vec<wgpu::Buffer> = storages
-		.iter()
-		.map(|storage| readback_of(device, storage.size()))
-		.collect();
+	let readbacks: Vec<wgpu::Buffer> = storages.iter().map(|storage| readback_of(device, storage.size())).collect();
 	let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
 	let pipeline = compute_pipeline(device, shader)?;
 	let entries: Vec<wgpu::BindGroupEntry> = buffers
@@ -383,10 +355,7 @@ fn compute_bytes(
 	let bindings = device.create_bind_group(&wgpu::BindGroupDescriptor {
 		label: Some("gpu_compute numbers"),
 		layout: &pipeline.get_bind_group_layout(0),
-		entries: &[wgpu::BindGroupEntry {
-			binding: BINDING,
-			resource: storage.as_entire_binding(),
-		}],
+		entries: &[wgpu::BindGroupEntry { binding: BINDING, resource: storage.as_entire_binding() }],
 	});
 	let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 	if let Some((buffer, count)) = &kept {
@@ -476,10 +445,8 @@ fn prepared(device: &wgpu::Device, shader: &str, values: &[ShaderValue]) -> Resu
 	let source = match reads_previous {
 		true => format!(
 			"{}{FULL_IMAGE_VERTICES}{declarations}{PREVIOUS_FRAME}",
-			shader.replace(
-				&format!("{VALUES_NAME}.{}", crate::graphics::shader_holes::PREVIOUS_HOLE),
-				PREVIOUS_FUNCTION
-			)
+			shader
+				.replace(&format!("{VALUES_NAME}.{}", crate::graphics::shader_holes::PREVIOUS_HOLE), PREVIOUS_FUNCTION)
 		),
 		false => format!("{shader}{FULL_IMAGE_VERTICES}{declarations}"),
 	};
@@ -496,27 +463,14 @@ fn drawn_image(
 	values: &[ShaderValue],
 	view_format: Option<wgpu::TextureFormat>,
 ) -> Result<(wgpu::Texture, wgpu::CommandEncoder), String> {
-	let (
-		Painter {
-			pipeline,
-			bindings_layout,
-		},
-		bytes,
-	) = prepared(device, shader, values)?;
+	let (Painter { pipeline, bindings_layout }, bytes) = prepared(device, shader, values)?;
 	let reads_previous = reads_value(shader, crate::graphics::shader_holes::PREVIOUS_HOLE);
-	let size = wgpu::Extent3d {
-		width,
-		height,
-		depth_or_array_layers: 1,
-	};
+	let size = wgpu::Extent3d { width, height, depth_or_array_layers: 1 };
 	let previous = reads_previous.then(|| previous_frame(device, shader, size));
 	let bindings = bindings_layout.map(|layout| bindings(device, &layout, &bytes, previous.as_ref()));
 	let usage =
 		wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC | wgpu::TextureUsages::TEXTURE_BINDING;
-	let view_formats: Vec<_> = view_format
-		.into_iter()
-		.filter(|format| *format != IMAGE_FORMAT)
-		.collect();
+	let view_formats: Vec<_> = view_format.into_iter().filter(|format| *format != IMAGE_FORMAT).collect();
 	let image = device.create_texture(&wgpu::TextureDescriptor {
 		label: Some("gpu_render image"),
 		size,
@@ -560,13 +514,7 @@ pub fn image_rgba(
 	encoder: wgpu::CommandEncoder,
 	image: &wgpu::Texture,
 ) -> Result<Vec<u8>, String> {
-	checked_image_rgba(
-		device,
-		queue,
-		encoder,
-		image,
-		device.push_error_scope(wgpu::ErrorFilter::Validation),
-	)
+	checked_image_rgba(device, queue, encoder, image, device.push_error_scope(wgpu::ErrorFilter::Validation))
 }
 
 fn checked_image_rgba(
@@ -586,17 +534,11 @@ fn checked_image_rgba(
 		usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
 		mapped_at_creation: false,
 	});
-	let layout = wgpu::TexelCopyBufferLayout {
-		offset: 0,
-		bytes_per_row: Some(row_bytes),
-		rows_per_image: Some(height),
-	};
+	let layout =
+		wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(row_bytes), rows_per_image: Some(height) };
 	encoder.copy_texture_to_buffer(
 		image.as_image_copy(),
-		wgpu::TexelCopyBufferInfo {
-			buffer: &readback,
-			layout,
-		},
+		wgpu::TexelCopyBufferInfo { buffer: &readback, layout },
 		size,
 	);
 	queue.submit([encoder.finish()]);
@@ -613,12 +555,7 @@ static PREVIOUS_FRAMES: LazyLock<Mutex<HashMap<String, wgpu::Texture>>> = LazyLo
 
 /// The view of the frame the shader left last, a black one when it left none of this size
 fn previous_frame(device: &wgpu::Device, shader: &str, size: wgpu::Extent3d) -> wgpu::TextureView {
-	let kept = PREVIOUS_FRAMES
-		.lock()
-		.unwrap()
-		.get(shader)
-		.filter(|frame| frame.size() == size)
-		.cloned();
+	let kept = PREVIOUS_FRAMES.lock().unwrap().get(shader).filter(|frame| frame.size() == size).cloned();
 	let frame = kept.unwrap_or_else(|| {
 		device.create_texture(&wgpu::TextureDescriptor {
 			label: Some("gpu_render previous frame"),
@@ -689,19 +626,12 @@ pub fn uniform_layout(values: &[ShaderValue]) -> Result<(String, Vec<u8>), Strin
 	let mut bytes = Vec::new();
 	for ShaderValue { name, floats, array } in values {
 		let (wgsl_type, alignment) = match floats.len() {
-			_ if *array => (
-				format!("array<vec4f, {}>", floats.len().div_ceil(VECTOR_FLOATS).max(1)),
-				16,
-			),
+			_ if *array => (format!("array<vec4f, {}>", floats.len().div_ceil(VECTOR_FLOATS).max(1)), 16),
 			1 => ("f32".into(), 4),
 			2 => ("vec2f".into(), 8),
 			3 => ("vec3f".into(), 16),
 			4 => ("vec4f".into(), 16),
-			count => {
-				return Err(format!(
-					"{VALUES_NAME}.{name} is one number or a list of two to four, got {count}"
-				))
-			}
+			count => return Err(format!("{VALUES_NAME}.{name} is one number or a list of two to four, got {count}")),
 		};
 		bytes.resize(bytes.len().next_multiple_of(alignment), 0);
 		bytes.extend(floats.iter().flat_map(|float| float.to_le_bytes()));
@@ -794,10 +724,7 @@ fn painter(device: &wgpu::Device, source: String, takes_values: bool, reads_prev
 	if painters.len() >= PAINTERS_KEPT {
 		painters.clear();
 	}
-	let painter = Painter {
-		pipeline,
-		bindings_layout,
-	};
+	let painter = Painter { pipeline, bindings_layout };
 	painters.insert(source, painter.clone());
 	Ok(painter)
 }
@@ -817,20 +744,15 @@ fn bindings(
 			usage: wgpu::BufferUsages::UNIFORM,
 		})
 	});
-	let values = buffer.as_ref().map(|buffer| wgpu::BindGroupEntry {
-		binding: VALUES_BINDING,
-		resource: buffer.as_entire_binding(),
-	});
+	let values = buffer
+		.as_ref()
+		.map(|buffer| wgpu::BindGroupEntry { binding: VALUES_BINDING, resource: buffer.as_entire_binding() });
 	let previous = previous.map(|view| wgpu::BindGroupEntry {
 		binding: PREVIOUS_FRAME_BINDING,
 		resource: wgpu::BindingResource::TextureView(view),
 	});
 	let entries: Vec<_> = values.into_iter().chain(previous).collect();
-	device.create_bind_group(&wgpu::BindGroupDescriptor {
-		label: Some("gpu_render values"),
-		layout,
-		entries: &entries,
-	})
+	device.create_bind_group(&wgpu::BindGroupDescriptor { label: Some("gpu_render values"), layout, entries: &entries })
 }
 
 /// The shader's module, or where and why it does not compile
@@ -868,17 +790,11 @@ fn read_backs(
 	for readback in readbacks {
 		readback.slice(..).map_async(wgpu::MapMode::Read, |_| {});
 	}
-	device
-		.poll(wgpu::PollType::wait_indefinitely())
-		.map_err(|problem| problem.to_string())?;
+	device.poll(wgpu::PollType::wait_indefinitely()).map_err(|problem| problem.to_string())?;
 	readbacks
 		.iter()
 		.map(|readback| {
-			readback
-				.slice(..)
-				.get_mapped_range()
-				.map(|view| view.to_vec())
-				.map_err(|problem| problem.to_string())
+			readback.slice(..).get_mapped_range().map(|view| view.to_vec()).map_err(|problem| problem.to_string())
 		})
 		.collect()
 }
@@ -901,8 +817,6 @@ fn compile_errors(module: &wgpu::ShaderModule) -> Vec<String> {
 /// innermost cause (`Unable to find entry point 'main'`)
 fn essence(report: &str) -> String {
 	let lines = || report.lines().map(str::trim).filter(|line| !line.is_empty());
-	let cause = lines()
-		.find_map(|line| line.split_once("error: ").map(|(_, why)| why))
-		.or_else(|| lines().next_back());
+	let cause = lines().find_map(|line| line.split_once("error: ").map(|(_, why)| why)).or_else(|| lines().next_back());
 	cause.unwrap_or(report).to_string()
 }

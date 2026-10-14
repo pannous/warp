@@ -71,11 +71,7 @@ pub enum CResult {
 impl Export {
 	/// Does a call need the module's memory: a text or an out-pointer crosses, or the result changes type
 	pub fn crosses_c_values(&self) -> bool {
-		self.c_result != CResult::Number
-			|| self
-				.c_parameters
-				.iter()
-				.any(|parameter| *parameter != CParameter::Number)
+		self.c_result != CResult::Number || self.c_parameters.iter().any(|parameter| *parameter != CParameter::Number)
 	}
 }
 
@@ -94,9 +90,7 @@ pub fn module_bytes(path: &str) -> Result<Vec<u8>, String> {
 		return Ok(bytes);
 	}
 	#[cfg(feature = "native")]
-	return wat::parse_bytes(&bytes)
-		.map(|binary| binary.into_owned())
-		.map_err(|failure| format!("{path}: {failure}"));
+	return wat::parse_bytes(&bytes).map(|binary| binary.into_owned()).map_err(|failure| format!("{path}: {failure}"));
 	#[cfg(not(feature = "native"))]
 	Err(format!("{path}: a module in WAT text needs the native build"))
 }
@@ -115,23 +109,16 @@ pub fn component_export_names(path: &str) -> Result<Vec<String>, String> {
 	let named = |name: &str, entity: &ComponentEntityType| {
 		let exported = matches!(
 			entity,
-			ComponentEntityType::Func(_)
-				| ComponentEntityType::Type {
-					created: ComponentAnyTypeId::Resource(_),
-					..
-				}
+			ComponentEntityType::Func(_) | ComponentEntityType::Type { created: ComponentAnyTypeId::Resource(_), .. }
 		);
 		(exported && !name.starts_with('[')).then(|| name.replace('-', "_"))
 	};
 	let mut names = vec![];
 	for name in component_export_section_names(&bytes).map_err(failure)? {
 		match types.component_item_for_export(&name).map(|item| &item.ty) {
-			Some(ComponentEntityType::Instance(interface)) => names.extend(
-				types[*interface]
-					.exports
-					.iter()
-					.filter_map(|(inner, item)| named(inner, &item.ty)),
-			),
+			Some(ComponentEntityType::Instance(interface)) => {
+				names.extend(types[*interface].exports.iter().filter_map(|(inner, item)| named(inner, &item.ty)))
+			}
 			Some(entity) => names.extend(named(&name, entity)),
 			None => {}
 		}
@@ -166,12 +153,10 @@ pub fn exports(path: &str) -> &'static HashMap<String, Export> {
 	if let Some((_, exports)) = read.iter().find(|(read_path, _)| read_path == path) {
 		return exports;
 	}
-	let found = module_bytes(path)
-		.and_then(|bytes| read_exports(path, &bytes))
-		.unwrap_or_else(|failure| {
-			eprintln!("[wasm] {failure}");
-			HashMap::new()
-		});
+	let found = module_bytes(path).and_then(|bytes| read_exports(path, &bytes)).unwrap_or_else(|failure| {
+		eprintln!("[wasm] {failure}");
+		HashMap::new()
+	});
 	let exports: &'static HashMap<String, Export> = Box::leak(Box::new(found));
 	read.push((path.to_string(), exports));
 	exports
@@ -222,14 +207,12 @@ fn module_sections(path: &str, bytes: &[u8]) -> Result<ModuleSections, String> {
 			Payload::TypeSection(reader) => {
 				for group in reader {
 					// a warp module's GC struct and array types too: only function types are of exports warp calls
-					sections
-						.types
-						.extend(group.map_err(failure)?.into_types().map(
-							|sub_type| match sub_type.composite_type.inner {
-								wasmparser::CompositeInnerType::Func(function_type) => Some(function_type),
-								_ => None,
-							},
-						));
+					sections.types.extend(group.map_err(failure)?.into_types().map(|sub_type| {
+						match sub_type.composite_type.inner {
+							wasmparser::CompositeInnerType::Func(function_type) => Some(function_type),
+							_ => None,
+						}
+					}));
 				}
 			}
 			Payload::ImportSection(reader) => {
@@ -272,9 +255,7 @@ fn module_sections(path: &str, bytes: &[u8]) -> Result<ModuleSections, String> {
 			Payload::ExportSection(reader) => {
 				for export in reader {
 					let export = export.map_err(failure)?;
-					sections
-						.exported
-						.push((export.name.to_string(), export.kind, export.index as usize));
+					sections.exported.push((export.name.to_string(), export.kind, export.index as usize));
 				}
 			}
 			_ => {}
@@ -310,25 +291,12 @@ fn function_export(
 		.filter(|names| names.len() == params.len());
 	let parameters = named.unwrap_or_else(|| {
 		(0..params.len() as u32)
-			.map(|local| {
-				names
-					.and_then(|names| names.get(&local))
-					.cloned()
-					.unwrap_or_else(|| format!("${local}"))
-			})
+			.map(|local| names.and_then(|names| names.get(&local)).cloned().unwrap_or_else(|| format!("${local}")))
 			.collect()
 	});
 	let crosses_nodes =
 		number_types(function_type.params()).is_none() || number_types(function_type.results()).is_none();
-	Some(export(
-		library,
-		name,
-		params,
-		results,
-		Role::Function,
-		parameters,
-		node_result.filter(|_| crosses_nodes),
-	))
+	Some(export(library, name, params, results, Role::Function, parameters, node_result.filter(|_| crosses_nodes)))
 }
 
 /// The exports of a global of a number type: its getter, and a mutable one's setter
@@ -339,26 +307,14 @@ fn global_exports(sections: &ModuleSections, library: &'static str, name: &str, 
 	let Some(value_type) = number_types(&[global.content_type]) else {
 		return vec![];
 	};
-	let role = Role::Global {
-		mutable: global.mutable,
-	};
-	let getter = (
-		name.to_string(),
-		export(library, name, vec![], value_type.clone(), role, vec![], None),
-	);
+	let role = Role::Global { mutable: global.mutable };
+	let getter = (name.to_string(), export(library, name, vec![], value_type.clone(), role, vec![], None));
 	if !global.mutable {
 		return vec![getter];
 	}
 	let setter_name = format!("{SETTER_PREFIX}{name}");
-	let setter = export(
-		library,
-		&setter_name,
-		value_type.clone(),
-		value_type,
-		Role::Setter,
-		vec![name.to_string()],
-		None,
-	);
+	let setter =
+		export(library, &setter_name, value_type.clone(), value_type, Role::Setter, vec![name.to_string()], None);
 	vec![(setter_name, setter), getter]
 }
 
@@ -393,17 +349,11 @@ pub(crate) fn with_header_types(path: &str, exports: &mut HashMap<String, Export
 		return;
 	};
 	for declared in parse_header_file(header, path) {
-		let Some(export) = exports
-			.get_mut(&declared.name)
-			.filter(|export| export.role == Role::Function)
-		else {
+		let Some(export) = exports.get_mut(&declared.name).filter(|export| export.role == Role::Function) else {
 			continue;
 		};
 		let c_parameters = c_parameters(&declared.param_types);
-		let first_out = declared
-			.param_types
-			.iter()
-			.find(|c_type| pointer_kind(c_type) == Some(CPointer::Out));
+		let first_out = declared.param_types.iter().find(|c_type| pointer_kind(c_type) == Some(CPointer::Out));
 		let c_result = match pointer_kind(&declared.return_type) {
 			Some(CPointer::Text) => CResult::Text,
 			None if c_parameters.contains(&CParameter::Buffer) => CResult::Buffer,
@@ -433,14 +383,10 @@ pub(crate) fn with_header_types(path: &str, exports: &mut HashMap<String, Export
 		{
 			export.parameters = declared.param_names.clone();
 		}
-		export.parameters = (0..c_parameters.len())
-			.filter(warp_parameter)
-			.map(|index| export.parameters[index].clone())
-			.collect();
-		export.signature.params = (0..c_parameters.len())
-			.filter(warp_parameter)
-			.map(|index| export.signature.params[index])
-			.collect();
+		export.parameters =
+			(0..c_parameters.len()).filter(warp_parameter).map(|index| export.parameters[index].clone()).collect();
+		export.signature.params =
+			(0..c_parameters.len()).filter(warp_parameter).map(|index| export.signature.params[index]).collect();
 		export.signature.results = match c_result {
 			CResult::Text | CResult::Out { text: true } | CResult::Buffer => {
 				vec![wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF)]
@@ -480,9 +426,7 @@ pub(crate) fn c_parameters(c_types: &[String]) -> Vec<CParameter> {
 pub(crate) fn is_count(c_type: &str) -> bool {
 	let words: Vec<&str> = c_type.split_whitespace().filter(|word| *word != "const").collect();
 	!c_type.contains('*')
-		&& words
-			.first()
-			.is_some_and(|first| *first == "unsigned" || *first == "size_t" || first.starts_with("uint"))
+		&& words.first().is_some_and(|first| *first == "unsigned" || *first == "size_t" || first.starts_with("uint"))
 }
 
 /// A writable pointer to an unsigned count (`uLongf *destLen` spelled `unsigned long *destLen`)
@@ -495,10 +439,7 @@ pub(crate) fn node_result(function: &Node) -> Option<crate::type_kinds::Kind> {
 	let Node::Text(signature) = function["signature"].drop_meta() else {
 		return None;
 	};
-	let result = signature
-		.rsplit_once("-> ")
-		.map(|(_, result)| result.trim())
-		.unwrap_or_default();
+	let result = signature.rsplit_once("-> ").map(|(_, result)| result.trim()).unwrap_or_default();
 	Some(crate::analyzer::type_word_kind(result).unwrap_or(crate::type_kinds::Kind::Empty))
 }
 

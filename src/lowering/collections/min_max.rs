@@ -18,11 +18,8 @@ const FOLD_LIST: &str = "fold_list_placeholder";
 
 /// Pseudo-call the emitter turns into the runtime error `<extremum> of an empty list`
 pub const EMPTY_EXTREMUM_CALL: &str = "empty_extremum";
-pub const EMPTY_LIST_ERRORS: [(&str, &str); 3] = [
-	("min", "min_of_an_empty_list"),
-	("max", "max_of_an_empty_list"),
-	("reduce", "reduce_of_an_empty_list"),
-];
+pub const EMPTY_LIST_ERRORS: [(&str, &str); 3] =
+	[("min", "min_of_an_empty_list"), ("max", "max_of_an_empty_list"), ("reduce", "reduce_of_an_empty_list")];
 
 pub fn is_extremum(name: &str) -> bool {
 	EXTREMA.iter().any(|(extremum, _)| *extremum == name)
@@ -33,18 +30,12 @@ pub fn lower(node: Node) -> Node {
 		return node;
 	}
 	let context = crate::analyzer::function_definitions(&node);
-	let builtins: Vec<(&str, Op)> = EXTREMA
-		.into_iter()
-		.filter(|(name, _)| !context.user_functions.contains_key(*name))
-		.collect();
+	let builtins: Vec<(&str, Op)> =
+		EXTREMA.into_iter().filter(|(name, _)| !context.user_functions.contains_key(*name)).collect();
 	if builtins.is_empty() {
 		return node;
 	}
-	Lowering {
-		builtins,
-		temporaries: Counter::starting_at(1),
-	}
-	.expand(node)
+	Lowering { builtins, temporaries: Counter::starting_at(1) }.expand(node)
 }
 
 struct Lowering<'a> {
@@ -57,8 +48,7 @@ impl Lowering<'_> {
 		match node {
 			Node::List(items, bracket, separator) => {
 				let items: Vec<Node> = items.into_iter().map(|item| self.expand(item)).collect();
-				self.extremum(&items, &bracket, &separator)
-					.unwrap_or(Node::List(items, bracket, separator))
+				self.extremum(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
 			}
 			other => children_rewritten(other, |child| self.expand(child)),
 		}
@@ -68,9 +58,7 @@ impl Lowering<'_> {
 		// `max xs`, `max [1 5 2]`: one argument without parentheses is a call too
 		let prefix = matches!((bracket, separator, items), (Bracket::None, Separator::Space, [head, _]) if matches!(head.drop_meta(), Node::Symbol(_)));
 		let head = items.first()?.drop_meta().name();
-		let name = call_name(items, bracket, separator)
-			.map(str::to_string)
-			.or_else(|| prefix.then_some(head))?;
+		let name = call_name(items, bracket, separator).map(str::to_string).or_else(|| prefix.then_some(head))?;
 		let name = name.as_str();
 		let (_, better) = *self.builtins.iter().find(|(builtin, _)| *builtin == name)?;
 		let listed = list_literal_items(&items[1..]);

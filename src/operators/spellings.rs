@@ -155,14 +155,8 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 136] = [
 ];
 /// Spellings of a negated operator, each with the spelling it negates: `a nand b` is `not (a and b)` (wiki/operator.md:
 /// `nand ¬&`, Unicode's ⊼), `x is not 4` and `x isn't 4` are `not (x is 4)`
-pub(crate) const NEGATED_SPELLINGS: [(&str, &str); 6] = [
-	("nand", "and"),
-	("¬&", "and"),
-	("⊼", "and"),
-	("is not", "is"),
-	("isn't", "is"),
-	("isn’t", "is"),
-];
+pub(crate) const NEGATED_SPELLINGS: [(&str, &str); 6] =
+	[("nand", "and"), ("¬&", "and"), ("⊼", "and"), ("is not", "is"), ("isn't", "is"), ("isn’t", "is")];
 /// Glyphs that are fine as written, so no style hint suggests the ASCII spelling of their operator
 pub(crate) const PLAIN_GLYPHS: &str = "×÷≤≥≠≈⋍±¬⌞⌟…";
 /// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)
@@ -182,26 +176,19 @@ pub const OPERATOR_METHODS: [(Op, &[&str]); 9] = [
 
 /// The spelling a negated spelling negates: `and` for `nand`
 pub fn negated_spelling(spelling: &str) -> Option<&'static str> {
-	NEGATED_SPELLINGS
-		.iter()
-		.find(|(negated, _)| *negated == spelling)
-		.map(|(_, positive)| *positive)
+	NEGATED_SPELLINGS.iter().find(|(negated, _)| *negated == spelling).map(|(_, positive)| *positive)
 }
 
 /// Every spelling with its operator, the negated ones with the operator they negate
 pub fn all_spellings() -> impl Iterator<Item = (&'static str, Op)> {
-	let negated = NEGATED_SPELLINGS
-		.into_iter()
-		.filter_map(|(negated, positive)| Some((negated, spelled_operator(positive)?)));
+	let negated =
+		NEGATED_SPELLINGS.into_iter().filter_map(|(negated, positive)| Some((negated, spelled_operator(positive)?)));
 	OPERATOR_SPELLINGS.into_iter().chain(negated)
 }
 
 /// The operator a spelling stands for: `and` and `∧` for And, `+` for Add
 pub fn spelled_operator(spelling: &str) -> Option<Op> {
-	OPERATOR_SPELLINGS
-		.iter()
-		.find(|(known, _)| *known == spelling)
-		.map(|(_, op)| *op)
+	OPERATOR_SPELLINGS.iter().find(|(known, _)| *known == spelling).map(|(_, op)| *op)
 }
 
 /// A glyph spelling of an operator the style hints replace by the canonical spelling: `–` by `-`, `∧` by `and`
@@ -223,17 +210,12 @@ pub fn element_wise_word(op: Op) -> String {
 
 /// The operator an element-wise word applies to each element, `*` of `.*`
 pub fn element_wise_operator(word: &str) -> Option<Op> {
-	ELEMENT_WISE_OPERATORS
-		.into_iter()
-		.find(|op| element_wise_word(*op) == word)
+	ELEMENT_WISE_OPERATORS.into_iter().find(|op| element_wise_word(*op) == word)
 }
 
 /// The method an operator on an instance calls, `plus` for `+`
 pub fn operator_method(op: Op) -> Option<&'static str> {
-	OPERATOR_METHODS
-		.iter()
-		.find(|(known, _)| *known == op)
-		.map(|(_, names)| names[0])
+	OPERATOR_METHODS.iter().find(|(known, _)| *known == op).map(|(_, names)| names[0])
 }
 
 impl Op {

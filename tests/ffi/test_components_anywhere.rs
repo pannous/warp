@@ -21,10 +21,7 @@ fn test_a_component_is_called_in_every_host() {
 			warp::node::Separator::Space
 		)
 	);
-	is!(
-		&using("s = r.stats_of(\"hello big world\"); [s.words, s.letters]"),
-		ints(vec![3, 13])
-	);
+	is!(&using("s = r.stats_of(\"hello big world\"); [s.words, s.letters]"), ints(vec![3, 13]));
 	is!(&using("r.sides(\"square\")"), 4);
 	is!(&using("r.checked_sqrt(16.0)"), 4.0);
 }
@@ -32,10 +29,7 @@ fn test_a_component_is_called_in_every_host() {
 #[test]
 fn test_resources_of_a_component_are_handles_in_every_host() {
 	is!(&using("c = r.counter(5); c.increment(2); c.value()"), 7);
-	is!(
-		&using("a = r.Counter(2); b = r.counter(3); m = r.merged(a, b); m.value()"),
-		5
-	);
+	is!(&using("a = r.Counter(2); b = r.counter(3); m = r.merged(a, b); m.value()"), 5);
 	is!(&using("a = r.counter(2); b = r.counter(3); r.total([a, b])"), 5);
 }
 
@@ -45,10 +39,7 @@ fn test_component_failures_are_loud_in_every_host() {
 	fails_with(&using("r.nope(1)"), "exports no function nope; it exports fib");
 	fails_with(&using("r.fib(1, 2)"), "fib takes 1 arguments");
 	fails_with(&using("c = r.counter(1); c.nope()"), "a counter has no method nope");
-	fails_with(
-		"use wasm \"no/such.wasm\" as lib; lib.f(1)",
-		"cannot load the component",
-	);
+	fails_with("use wasm \"no/such.wasm\" as lib; lib.f(1)", "cannot load the component");
 }
 
 /// P94 (user, 2026-10-06): a WIT `char` is warp's Codepoint, in both directions
@@ -58,11 +49,7 @@ fn test_a_wit_char_is_a_codepoint_in_every_host() {
 	is!(&using("r.next_char('a')"), Node::Char('b'));
 	is!(
 		&using("r.letters(\"a1b\")"),
-		Node::List(
-			vec![Node::Char('a'), Node::Char('b')],
-			Bracket::Square,
-			Separator::Space
-		)
+		Node::List(vec![Node::Char('a'), Node::Char('b')], Bracket::Square, Separator::Space)
 	);
 	is!(&using("r.next_char(r.next_char('a'))"), Node::Char('c'));
 }

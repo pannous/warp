@@ -13,11 +13,5 @@ fn wit_type_arguments_close_at_the_first_angle_bracket() {
 
 #[test]
 fn wit_struct_is_a_plain_word() {
-	assert_eq!(
-		parse_wit("enum kind {\n vec,\n struct,\n other,\n}")
-			.serialize()
-			.matches("struct")
-			.count(),
-		1
-	);
+	assert_eq!(parse_wit("enum kind {\n vec,\n struct,\n other,\n}").serialize().matches("struct").count(), 1);
 }

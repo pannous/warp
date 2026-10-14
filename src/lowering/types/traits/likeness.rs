@@ -18,10 +18,7 @@ pub(super) fn like_declaration(node: &Node) -> Option<Likeness> {
 	else {
 		return None;
 	};
-	(word == LIKE_WORD).then(|| Likeness {
-		kind: kind.clone(),
-		like: like.clone(),
-	})
+	(word == LIKE_WORD).then(|| Likeness { kind: kind.clone(), like: like.clone() })
 }
 
 /// A likeness naming something that is no declared type: the error of the program
@@ -63,17 +60,10 @@ pub(super) fn field_warnings(value: &Node, data: &Node, declared: &str, registry
 		.filter(|field| registry.is_required(type_def, field) && !given.contains(&field.name))
 		.map(|field| field.name.clone())
 		.collect();
-	let extra: Vec<String> = given
-		.iter()
-		.filter(|name| !type_def.fields.iter().any(|field| field.name == **name))
-		.cloned()
-		.collect();
+	let extra: Vec<String> =
+		given.iter().filter(|name| !type_def.fields.iter().any(|field| field.name == **name)).cloned().collect();
 	let warning = |fields: &[String], message: &str, fix: &str| {
-		let (field_word, pronoun) = if fields.len() == 1 {
-			("field", "it")
-		} else {
-			("fields", "them")
-		};
+		let (field_word, pronoun) = if fields.len() == 1 { ("field", "it") } else { ("fields", "them") };
 		let fill = |template: &str| {
 			template
 				.replace("DATA", &value.serialize())
@@ -120,9 +110,7 @@ pub(super) fn names_classes(type_name: &str, registry: &TypeRegistry) -> bool {
 /// `image is not a photo`, with the fix `declare image like photo`
 pub(super) fn not_like(argument: &Node, needs: &str, given: &str, declared: &str) -> Node {
 	let fill = |template: &str| template.replace("GIVEN", given).replace("DECLARED", declared);
-	Diagnostic::at(argument, format!("{needs}: {}", fill(NOT_LIKE_MESSAGE)))
-		.fix(fill(NOT_LIKE_FIX))
-		.into_error()
+	Diagnostic::at(argument, format!("{needs}: {}", fill(NOT_LIKE_MESSAGE))).fix(fill(NOT_LIKE_FIX)).into_error()
 }
 
 pub(super) fn declare(node: Node, errors: &mut Vec<Node>) -> Node {

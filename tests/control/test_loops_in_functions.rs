@@ -15,8 +15,5 @@ fn a_while_loop_in_a_function_keeps_its_parameter() {
 
 #[test]
 fn a_multi_line_function_with_a_loop() {
-	is!(
-		"sum(n) := {\n  s = 0\n  i = 0\n  while i < n {\n    s += i\n    i++\n  }\n  s\n}\nsum(4)",
-		6
-	);
+	is!("sum(n) := {\n  s = 0\n  i = 0\n  while i < n {\n    s += i\n    i++\n  }\n  s\n}\nsum(4)", 6);
 }

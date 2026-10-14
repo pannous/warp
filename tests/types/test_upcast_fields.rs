@@ -8,18 +8,9 @@ const SHAPES: &str = "class Shape { name: text }; class Circle extends Shape { r
 
 #[test]
 fn a_subclass_field_through_the_declared_parent_is_an_error() {
-	fails_with(
-		&format!("{SHAPES}s: Shape = Circle(\"a\", 2); s.r"),
-		"Shape has no field r",
-	);
-	fails_with(
-		&format!("{SHAPES}f(s: Shape) := s.r; f(Circle(\"a\", 2))"),
-		"Shape has no field r",
-	);
-	fails_with(
-		"type Color = red | rgb(r: int, g: int, b: int); c: Color = rgb(1, 2, 3); c.r",
-		"Color has no field r",
-	);
+	fails_with(&format!("{SHAPES}s: Shape = Circle(\"a\", 2); s.r"), "Shape has no field r");
+	fails_with(&format!("{SHAPES}f(s: Shape) := s.r; f(Circle(\"a\", 2))"), "Shape has no field r");
+	fails_with("type Color = red | rgb(r: int, g: int, b: int); c: Color = rgb(1, 2, 3); c.r", "Color has no field r");
 	fails_with(&format!("{SHAPES}s: Shape = Circle(\"a\", 2); s.r"), "s as Circle");
 }
 
@@ -27,18 +18,9 @@ fn a_subclass_field_through_the_declared_parent_is_an_error() {
 fn a_cast_or_a_match_reads_it() {
 	is!(&format!("{SHAPES}s: Shape = Circle(\"a\", 2); (s as Circle).r"), 2);
 	is!(&format!("{SHAPES}s: Shape = Circle(\"a\", 2); c = s as Circle; c.r"), 2);
-	is!(
-		&format!("{SHAPES}s: Shape = Circle(\"a\", 2); match s {{ Circle(r) => r; _ => 0 }}"),
-		2
-	);
-	is!(
-		&format!("{SHAPES}s: Shape = Circle(\"a\", 2); if s is Circle {{ s.r }} else {{ 0 }}"),
-		2
-	);
-	fails_with(
-		&format!("{SHAPES}s: Shape = Shape(\"a\"); (s as Circle).r"),
-		"is no Circle",
-	);
+	is!(&format!("{SHAPES}s: Shape = Circle(\"a\", 2); match s {{ Circle(r) => r; _ => 0 }}"), 2);
+	is!(&format!("{SHAPES}s: Shape = Circle(\"a\", 2); if s is Circle {{ s.r }} else {{ 0 }}"), 2);
+	fails_with(&format!("{SHAPES}s: Shape = Shape(\"a\"); (s as Circle).r"), "is no Circle");
 }
 
 #[test]

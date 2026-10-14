@@ -34,12 +34,7 @@ fn parser_alias_notes_point_at_the_word() {
 	warp::normalize::clear_shown_hints();
 	let code = "x = 1\nprintln x\n  writeln 2\nconstant y = 3";
 	let (_, hints) = warp::normalize::capture_hints(|| warp::wasm_emitter::eval(code));
-	let position = |written: &str| {
-		hints
-			.iter()
-			.find(|hint| hint.original == written)
-			.map(|hint| hint.position.clone())
-	};
+	let position = |written: &str| hints.iter().find(|hint| hint.original == written).map(|hint| hint.position.clone());
 	assert_eq!(position("println"), Some("2:1".to_string()), "{hints:?}");
 	assert_eq!(position("writeln"), Some("3:3".to_string()), "{hints:?}");
 	assert_eq!(position("constant"), Some("4:1".to_string()), "{hints:?}");

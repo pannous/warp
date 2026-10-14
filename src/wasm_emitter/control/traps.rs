@@ -19,10 +19,7 @@ pub fn trap_detail_line(detail: &Node) -> String {
 		value => value.serialize(),
 	};
 	// one line in the trace, whatever lines the value has: `\` and line breaks escaped, trap_detail reads them back
-	format!(
-		"{TRAP_DETAIL_PREFIX}{}",
-		shown.replace('\\', "\\\\").replace('\n', "\\n")
-	)
+	format!("{TRAP_DETAIL_PREFIX}{}", shown.replace('\\', "\\\\").replace('\n', "\\n"))
 }
 
 /// A detail written as a quoted text is the message it quotes, the `\` before a quote or `\` undone (`"a \"b\""` is
@@ -48,13 +45,11 @@ pub(in crate::wasm_emitter) fn trap_detail(trace: &str) -> Option<String> {
 	let mut detail = String::with_capacity(line.len());
 	let mut characters = line.chars();
 	while let Some(character) = characters.next() {
-		detail.push(
-			match (character, (character == '\\').then(|| characters.next()).flatten()) {
-				(_, Some('n')) => '\n',
-				(_, Some(escaped)) => escaped,
-				(plain, None) => plain,
-			},
-		);
+		detail.push(match (character, (character == '\\').then(|| characters.next()).flatten()) {
+			(_, Some('n')) => '\n',
+			(_, Some(escaped)) => escaped,
+			(plain, None) => plain,
+		});
 	}
 	Some(detail)
 }
@@ -86,14 +81,7 @@ pub fn trap_position_line(encoded: i64) -> Option<String> {
 
 /// The position a trace's `trap position: …` line carries
 pub(in crate::wasm_emitter) fn trap_position(trace: &str) -> Option<crate::compiler::meta::LineInfo> {
-	let encoded: i64 = trace
-		.split_once(TRAP_POSITION_PREFIX)?
-		.1
-		.lines()
-		.next()?
-		.trim()
-		.parse()
-		.ok()?;
+	let encoded: i64 = trace.split_once(TRAP_POSITION_PREFIX)?.1.lines().next()?.trim().parse().ok()?;
 	Some(crate::compiler::meta::LineInfo {
 		line_nr: (encoded >> COLUMN_BITS) as usize,
 		column: (encoded & ((1 << COLUMN_BITS) - 1)) as usize,
@@ -108,10 +96,7 @@ pub(in crate::wasm_emitter) const IF_THEN: &str = "`if condition then ...`";
 /// of the compiler or the environment. Both become error values, never the unevaluated program.
 #[cfg(feature = "native")]
 pub(crate) fn failed_run(failure: anyhow::Error) -> Node {
-	if let Some(task) = failure
-		.chain()
-		.find_map(|cause| cause.downcast_ref::<crate::host::tasks::TaskFailure>())
-	{
+	if let Some(task) = failure.chain().find_map(|cause| cause.downcast_ref::<crate::host::tasks::TaskFailure>()) {
 		return crate::node::error(&task.0);
 	}
 	let trap = match failure.downcast_ref::<wasmtime::Trap>() {
@@ -140,22 +125,13 @@ pub const EMPTY_RANGE: &str = "an empty list";
 
 /// "index out of range: 7 not in 1…3" from index_out_of_range_of's detail `7:3` (the index asked for, the list's count)
 pub(in crate::wasm_emitter) fn index_range_message(detail: &str) -> Option<String> {
-	let numbers: Vec<i64> = detail
-		.split(|c: char| !(c.is_ascii_digit() || c == '-'))
-		.filter_map(|part| part.parse().ok())
-		.collect();
+	let numbers: Vec<i64> =
+		detail.split(|c: char| !(c.is_ascii_digit() || c == '-')).filter_map(|part| part.parse().ok()).collect();
 	let [index, count] = numbers.as_slice() else {
 		return None;
 	};
-	let range = if *count == 0 {
-		EMPTY_RANGE.to_string()
-	} else {
-		format!("1…{count}")
-	};
-	Some(format!(
-		"{}: {index} not in {range}",
-		lists::list_ops::runtime_error_message("index_out_of_range")
-	))
+	let range = if *count == 0 { EMPTY_RANGE.to_string() } else { format!("1…{count}") };
+	Some(format!("{}: {index} not in {range}", lists::list_ops::runtime_error_message("index_out_of_range")))
 }
 
 /// The runtime error a trap means, read from its trace: the function names on the stack and the `trap detail: …`
@@ -164,10 +140,7 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 	let missing_field = trace.split_once(lists::list_ops::NO_FIELD_PREFIX).map(|(_, rest)| {
 		// a meta key starts with its mark (`no_field_@source`); a later `@` begins the url of a Firefox or Safari frame
 		let mark = rest.strip_prefix(crate::node::ATTRIBUTE_MARK).map_or("", |_| "@");
-		let name: String = rest[mark.len()..]
-			.chars()
-			.take_while(|c| c.is_alphanumeric() || *c == '_')
-			.collect();
+		let name: String = rest[mark.len()..].chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
 		format!("{}{mark}{name}", lists::list_ops::NO_FIELD_MESSAGE)
 	});
 	let no_case = trace.split_once(crate::switch::NO_CASE_PREFIX).map(|(_, rest)| {
@@ -177,12 +150,10 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 			None => format!("no case for {label}"),
 		}
 	});
-	let overflow = trace
-		.split_once(crate::numbers::fixed_width::OVERFLOW_PREFIX)
-		.map(|(_, rest)| {
-			let type_name: String = rest.chars().take_while(|c| c.is_alphanumeric()).collect();
-			crate::numbers::fixed_width::overflow_message(&type_name)
-		});
+	let overflow = trace.split_once(crate::numbers::fixed_width::OVERFLOW_PREFIX).map(|(_, rest)| {
+		let type_name: String = rest.chars().take_while(|c| c.is_alphanumeric()).collect();
+		crate::numbers::fixed_width::overflow_message(&type_name)
+	});
 	// `return error "…"` from a number function: the message is the trap detail
 	let returned_error = trace
 		.contains(lists::list_ops::RETURNED_ERROR)
@@ -198,13 +169,8 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 		.then(|| trap_detail(trace))
 		.flatten()
 		.map(|item| unjoinable_message(&item));
-	let runtime_error = returned_error
-		.or(index_range)
-		.or(unjoinable)
-		.or(missing_field)
-		.or(no_case)
-		.or(overflow)
-		.or_else(|| {
+	let runtime_error =
+		returned_error.or(index_range).or(unjoinable).or(missing_field).or(no_case).or(overflow).or_else(|| {
 			lists::list_ops::RUNTIME_ERRORS
 				.iter()
 				.find(|name| trace.contains(*name))
@@ -285,9 +251,7 @@ impl WasmGcEmitter {
 		}
 		let index = self.declare_global_of(ValType::I32, ConstExpr::i32_const(0));
 		self.exports.export(TRAP_POSITION, ExportKind::Global, index);
-		self.ctx
-			.user_globals
-			.insert(TRAP_POSITION_GLOBAL.to_string(), (index, Kind::Int));
+		self.ctx.user_globals.insert(TRAP_POSITION_GLOBAL.to_string(), (index, Kind::Int));
 		index
 	}
 
@@ -298,9 +262,7 @@ impl WasmGcEmitter {
 		}
 		let index = self.declare_mutable_global(Kind::Empty);
 		self.exports.export(TRAP_DETAIL, ExportKind::Global, index);
-		self.ctx
-			.user_globals
-			.insert(TRAP_DETAIL_GLOBAL.to_string(), (index, Kind::Empty));
+		self.ctx.user_globals.insert(TRAP_DETAIL_GLOBAL.to_string(), (index, Kind::Empty));
 		index
 	}
 }

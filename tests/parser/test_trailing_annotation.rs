@@ -13,14 +13,8 @@ fn assigned_value(code: &str) -> Node {
 fn a_trailing_annotation_marks_the_expression_before_it() {
 	let mapped = assigned_value("ys = xs.map(f) @parallel");
 	assert_eq!(mapped.attribute("parallel"), Some(&Node::True));
-	assert!(
-		matches!(mapped.drop_meta(), Node::Key(_, Op::Dot, _)),
-		"the map call itself: {mapped:?}"
-	);
-	assert_eq!(
-		assigned_value("x = 1 @unit(cm)").attribute("unit").map(Node::serialize),
-		Some("cm".to_string())
-	);
+	assert!(matches!(mapped.drop_meta(), Node::Key(_, Op::Dot, _)), "the map call itself: {mapped:?}");
+	assert_eq!(assigned_value("x = 1 @unit(cm)").attribute("unit").map(Node::serialize), Some("cm".to_string()));
 	let Node::List(statements, _, _) = parse("ys = xs.map(f) @parallel; 3").drop_meta().clone() else {
 		panic!("expected two statements")
 	};

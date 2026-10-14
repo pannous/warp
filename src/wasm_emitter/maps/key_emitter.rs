@@ -70,9 +70,8 @@ impl WasmGcEmitter {
 		// Skip user function definitions - they're already compiled; a definition's value is ø: `square := it*it` or
 		// `f(x) := x + 1` alone is a program of no value
 		let definition = Node::Key(Box::new(left.clone()), *op, Box::new(right.clone()));
-		if let Some(name) = self
-			.defined_function_name(&definition)
-			.filter(|name| self.ctx.user_functions.contains_key(name))
+		if let Some(name) =
+			self.defined_function_name(&definition).filter(|name| self.ctx.user_functions.contains_key(name))
 		{
 			self.emit_closure_capture(func, &name);
 			self.emit_call(func, "new_empty");
@@ -98,10 +97,8 @@ impl WasmGcEmitter {
 			let declared = self.declared_type_of(left);
 			self.emit_declared_value(func, declared.as_ref(), right, crate::Kind::Empty);
 			let written = self.scope.lookup(name).is_some_and(|local| local.declared);
-			if let Some(mark) = declared
-				.as_ref()
-				.filter(|_| written)
-				.and_then(|declared| self.element_mark_of(declared))
+			if let Some(mark) =
+				declared.as_ref().filter(|_| written).and_then(|declared| self.element_mark_of(declared))
 			{
 				func.instruction(&I::I64Const(mark));
 				self.emit_call(func, super::super::declared_values::LIST_MARK);
@@ -413,11 +410,7 @@ impl WasmGcEmitter {
 			return false;
 		}
 		let extended = Node::List(
-			vec![
-				Node::Symbol(super::super::lists::list_ops::LIST_EXTEND.to_string()),
-				left.clone(),
-				right.clone(),
-			],
+			vec![Node::Symbol(super::super::lists::list_ops::LIST_EXTEND.to_string()), left.clone(), right.clone()],
 			Bracket::Round,
 			Separator::None,
 		);

@@ -18,11 +18,9 @@ pub fn classes(path: &str) -> Vec<Node> {
 	classes
 		.iter()
 		.filter_map(|class| match class[crate::reflection::DEFINITION_WORD].drop_meta() {
-			Node::Text(definition) => Some(
-				crate::normalize::without_hints(|| crate::warp_parser::parse(definition))
-					.drop_meta()
-					.clone(),
-			),
+			Node::Text(definition) => {
+				Some(crate::normalize::without_hints(|| crate::warp_parser::parse(definition)).drop_meta().clone())
+			}
 			_ => None,
 		})
 		.collect()
@@ -44,10 +42,7 @@ pub fn with_bare_classes(node: Node, alias: &str, classes: &[String]) -> Node {
 
 /// The name a module's exports are qualified with: its file stem (`fourty_two.twice(21)`)
 pub fn module_alias(path: &str) -> String {
-	Path::new(path)
-		.file_stem()
-		.map(|stem| stem.to_string_lossy().into_owned())
-		.unwrap_or_default()
+	Path::new(path).file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default()
 }
 
 /// The import of `export` qualified by its module's alias: `fourty_two.twice`, which no builtin of the same name hides
@@ -80,10 +75,8 @@ pub fn rewrite_uses(program: Node, modules: &[String]) -> Node {
 		})
 		.collect();
 	let rewritten = set_globals(program, &globals, modules).and_then(|program| {
-		let reads: HashMap<String, Node> = globals
-			.keys()
-			.map(|global| (global.to_string(), call(global, vec![])))
-			.collect();
+		let reads: HashMap<String, Node> =
+			globals.keys().map(|global| (global.to_string(), call(global, vec![]))).collect();
 		qualify(crate::law::substitute(&program, &reads), modules)
 	});
 	rewritten.unwrap_or_else(|failure| failure)
@@ -96,24 +89,23 @@ pub(crate) fn assigned_global(
 	modules: &[String],
 ) -> Option<(String, bool, String)> {
 	match target.drop_meta() {
-		Node::Symbol(global) => globals
-			.get(global)
-			.map(|mutable| (global.clone(), *mutable, format!("{SETTER_PREFIX}{global}"))),
+		Node::Symbol(global) => {
+			globals.get(global).map(|mutable| (global.clone(), *mutable, format!("{SETTER_PREFIX}{global}")))
+		}
 		Node::Key(receiver, Op::Dot, member) => {
 			let (Node::Symbol(alias), Node::Symbol(global)) = (receiver.drop_meta(), member.drop_meta()) else {
 				return None;
 			};
-			modules
-				.iter()
-				.filter(|path| module_alias(path) == *alias)
-				.find_map(|path| match exports(path).get(global)?.role {
+			modules.iter().filter(|path| module_alias(path) == *alias).find_map(|path| {
+				match exports(path).get(global)?.role {
 					Role::Global { mutable } => Some((
 						format!("{alias}.{global}"),
 						mutable,
 						qualified(path, &format!("{SETTER_PREFIX}{global}")),
 					)),
 					_ => None,
-				})
+				}
+			})
 		}
 		_ => None,
 	}
@@ -170,18 +162,13 @@ pub(crate) fn is_module_function(node: &Node, modules: &[String]) -> bool {
 		return false;
 	};
 	modules.iter().any(|path| {
-		module_alias(path) == *alias
-			&& exports(path)
-				.get(export)
-				.is_some_and(|export| export.role == Role::Function)
+		module_alias(path) == *alias && exports(path).get(export).is_some_and(|export| export.role == Role::Function)
 	})
 }
 
 pub(crate) fn qualify(node: Node, modules: &[String]) -> Result<Node, Node> {
 	let module_of = |alias: &str, export: &str| {
-		modules
-			.iter()
-			.find(|path| module_alias(path) == alias && exports(path).contains_key(export))
+		modules.iter().find(|path| module_alias(path) == alias && exports(path).contains_key(export))
 	};
 	match node.drop_meta() {
 		// `m.f.params`: a word of the function itself, not of its result (reflection.rs reads it off warp.meta)
@@ -202,30 +189,21 @@ pub(crate) fn qualify(node: Node, modules: &[String]) -> Result<Node, Node> {
 					_ => (String::new(), vec![]),
 				};
 				if let Some(path) = module_of(alias, &export) {
-					let arguments = arguments
-						.into_iter()
-						.map(|argument| qualify(argument, modules))
-						.collect::<Result<_, _>>()?;
-					return Ok(call(
-						&qualified(path, &export),
-						ordered_arguments(path, &export, arguments)?,
-					));
+					let arguments =
+						arguments.into_iter().map(|argument| qualify(argument, modules)).collect::<Result<_, _>>()?;
+					return Ok(call(&qualified(path, &export), ordered_arguments(path, &export, arguments)?));
 				}
 			}
 		}
 		Node::List(items, _, _) => {
 			if let Some((Node::Symbol(name), arguments)) = items.split_first() {
 				let cast = crate::analyzer::type_word_kind(&name.to_lowercase());
-				let exporting = modules.iter().find(|path| {
-					exports(path)
-						.get(name)
-						.is_some_and(|export| export.role == Role::Function)
-				});
+				let exporting = modules
+					.iter()
+					.find(|path| exports(path).get(name).is_some_and(|export| export.role == Role::Function));
 				if let (Some(kind), Some(path)) = (cast, exporting) {
-					let written: Vec<String> = arguments
-						.iter()
-						.map(|argument| argument.serialize().trim().to_string())
-						.collect();
+					let written: Vec<String> =
+						arguments.iter().map(|argument| argument.serialize().trim().to_string()).collect();
 					let written = written.join(", ");
 					let message = format!(
 						"{name} is ambiguous: {}({written}) for the export, {written} as {kind} for the cast",
@@ -234,9 +212,7 @@ pub(crate) fn qualify(node: Node, modules: &[String]) -> Result<Node, Node> {
 					return Err(crate::node::error(&message));
 				}
 				// `minus(amount: 2, from: 10)`: an export called by its parameter names
-				let named = arguments
-					.iter()
-					.any(|argument| crate::named_arguments::named_argument(argument).is_some());
+				let named = arguments.iter().any(|argument| crate::named_arguments::named_argument(argument).is_some());
 				if let (true, Some(path)) = (named, exporting) {
 					let arguments = arguments
 						.iter()
@@ -255,24 +231,12 @@ pub(crate) fn qualify(node: Node, modules: &[String]) -> Result<Node, Node> {
 /// The arguments of a call of the function `export` in its parameter order, a named one (`amount: 2`, `amount=2`) at its
 /// parameter of the module's name section; an unknown name or a wrong count is an error showing the parameters
 pub(crate) fn ordered_arguments(path: &str, export: &str, arguments: Vec<Node>) -> Result<Vec<Node>, Node> {
-	let Some(
-		found @ Export {
-			role: Role::Function,
-			parameters,
-			..
-		},
-	) = exports(path).get(export)
-	else {
+	let Some(found @ Export { role: Role::Function, parameters, .. }) = exports(path).get(export) else {
 		return Ok(arguments);
 	};
 	let signature = format!("{}({})", qualified(path, export), parameters.join(", "));
-	let wrong_count = || {
-		crate::node::error(&format!(
-			"{signature} takes {} arguments, got {}",
-			parameters.len(),
-			arguments.len()
-		))
-	};
+	let wrong_count =
+		|| crate::node::error(&format!("{signature} takes {} arguments, got {}", parameters.len(), arguments.len()));
 	// the lengths of texts may be left out (CParameter::TextLength): the call passes the texts' own lengths then
 	let passed = found.c_parameters.iter().filter(|parameter| parameter.is_passed());
 	let lengths: Vec<usize> = passed
@@ -292,20 +256,12 @@ pub(crate) fn ordered_arguments(path: &str, export: &str, arguments: Vec<Node>) 
 				(slot, value)
 			}
 			None => (
-				(0..slots.len())
-					.find(|index| slots[*index].is_none() && !left_out(*index))
-					.ok_or_else(wrong_count)?,
+				(0..slots.len()).find(|index| slots[*index].is_none() && !left_out(*index)).ok_or_else(wrong_count)?,
 				argument,
 			),
 		};
 		slots[slot] = Some(value.clone());
 	}
-	let given = slots
-		.into_iter()
-		.enumerate()
-		.filter(|(index, slot)| slot.is_some() || !left_out(*index));
-	given
-		.map(|(_, slot)| slot)
-		.collect::<Option<Vec<_>>>()
-		.ok_or_else(wrong_count)
+	let given = slots.into_iter().enumerate().filter(|(index, slot)| slot.is_some() || !left_out(*index));
+	given.map(|(_, slot)| slot).collect::<Option<Vec<_>>>().ok_or_else(wrong_count)
 }

@@ -4,18 +4,12 @@ use crate::is;
 
 #[test]
 fn a_parameter_may_walk_what_another_function_assigned_a_number() {
-	is!(
-		"f(x) := { pitch = 440; 0.3 }\ng(pitch) := [p for p in pitch]\ng([1, 2])",
-		warp::ints(vec![1, 2])
-	);
+	is!("f(x) := { pitch = 440; 0.3 }\ng(pitch) := [p for p in pitch]\ng([1, 2])", warp::ints(vec![1, 2]));
 }
 
 #[test]
 fn a_parameter_is_not_typed_by_another_functions_real_value() {
-	is!(
-		"f(t) := { pitch = pi * t; 0.3 }\nh(pitch) := if pitch is list then 1 else 2\nh(4.0)",
-		2
-	);
+	is!("f(t) := { pitch = pi * t; 0.3 }\nh(pitch) := if pitch is list then 1 else 2\nh(4.0)", 2);
 }
 
 #[cfg(feature = "native")]

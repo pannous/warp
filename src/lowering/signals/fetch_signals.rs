@@ -40,11 +40,7 @@ pub fn lower(program: Node) -> Node {
 	let main_variables: HashSet<String> = main_level_variables(&statements)
 		.into_iter()
 		.chain(fetched.iter().flat_map(|fetched| {
-			[
-				fetched.name.clone(),
-				generated(&fetched.name, LOADING_FIELD),
-				generated(&fetched.name, ERROR_FIELD),
-			]
+			[fetched.name.clone(), generated(&fetched.name, LOADING_FIELD), generated(&fetched.name, ERROR_FIELD)]
 		}))
 		.collect();
 	let mut count = 0;
@@ -69,20 +65,14 @@ pub fn lower(program: Node) -> Node {
 			.collect();
 		sources.dedup();
 		for source in sources {
-			let bindings: HashMap<String, Node> = bindings
-				.clone()
-				.into_iter()
-				.chain([("SOURCE".to_string(), Node::Symbol(source))])
-				.collect();
+			let bindings: HashMap<String, Node> =
+				bindings.clone().into_iter().chain([("SOURCE".to_string(), Node::Symbol(source))]).collect();
 			lowered.extend(instantiated(REFETCH_TEMPLATE, &bindings));
 		}
 		count += 1;
 	}
 	let names: Vec<String> = fetched.into_iter().map(|fetched| fetched.name).collect();
-	let lowered = lowered
-		.into_iter()
-		.map(|statement| with_live_regions(statement, &names))
-		.collect();
+	let lowered = lowered.into_iter().map(|statement| with_live_regions(statement, &names)).collect();
 	with_state_variables(Node::List(lowered, bracket, separator), &names)
 }
 
@@ -90,9 +80,7 @@ pub fn lower(program: Node) -> Node {
 fn with_live_regions(node: Node, names: &[String]) -> Node {
 	let names_read: Vec<&str> = names.iter().map(String::as_str).collect();
 	let shows_fetched = element_items(&node).is_some_and(|items| {
-		items
-			.iter()
-			.any(|item| element_items(item.drop_meta()).is_none() && item.mentions_any(&names_read))
+		items.iter().any(|item| element_items(item.drop_meta()).is_none() && item.mentions_any(&names_read))
 	});
 	if !shows_fetched {
 		return node.map_children(|child| with_live_regions(child, names));
@@ -101,13 +89,8 @@ fn with_live_regions(node: Node, names: &[String]) -> Node {
 		let sets_live = items
 			.iter()
 			.any(|item| matches!(item.drop_meta(), Node::Key(name, Op::Colon, _) if name.is_symbol(LIVE_ATTRIBUTE)));
-		let live = (!sets_live).then(|| {
-			Node::Key(
-				Box::new(symbol(LIVE_ATTRIBUTE)),
-				Op::Colon,
-				Box::new(Node::Text(POLITE.to_string())),
-			)
-		});
+		let live = (!sets_live)
+			.then(|| Node::Key(Box::new(symbol(LIVE_ATTRIBUTE)), Op::Colon, Box::new(Node::Text(POLITE.to_string()))));
 		live.into_iter().chain(items).collect()
 	})
 }
@@ -131,11 +114,7 @@ fn async_fetch(statement: &Node) -> Option<Fetched> {
 		fetch => (fetch, None),
 	};
 	match crate::host::fetch_call(fetch)? {
-		(url, None) => Some(Fetched {
-			name: name.clone(),
-			url,
-			default,
-		}),
+		(url, None) => Some(Fetched { name: name.clone(), url, default }),
 		_ => None,
 	}
 }
@@ -152,12 +131,7 @@ fn bindings(name: &str, url: &Node, default: Option<Node>, id: usize) -> HashMap
 		("DEFAULT".to_string(), default.clone().unwrap_or(Node::Empty)),
 	]);
 	let arrived = crate::law::substitute(
-		crate::warp_parser::parse(if default.is_some() {
-			ARRIVED_OR_DEFAULT
-		} else {
-			ARRIVED_VALUE
-		})
-		.drop_meta(),
+		crate::warp_parser::parse(if default.is_some() { ARRIVED_OR_DEFAULT } else { ARRIVED_VALUE }).drop_meta(),
 		&reply,
 	);
 	HashMap::from([
@@ -175,10 +149,7 @@ fn bindings(name: &str, url: &Node, default: Option<Node>, id: usize) -> HashMap
 /// The statements of a template with its placeholders bound
 fn instantiated(template: &str, bindings: &HashMap<String, Node>) -> Vec<Node> {
 	let (statements, _, _) = crate::variable_signals::main_statements(&crate::warp_parser::parse(template));
-	statements
-		.iter()
-		.map(|statement| crate::law::substitute(statement.drop_meta(), bindings))
-		.collect()
+	statements.iter().map(|statement| crate::law::substitute(statement.drop_meta(), bindings)).collect()
 }
 
 /// `users.loading` and `users.error` anywhere in the program are the variables users·loading and users·error

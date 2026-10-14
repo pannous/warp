@@ -190,11 +190,7 @@ fn check_items(items: &[Node], positioned: &Node) {
 		("len", [argument]) => {
 			let counted = operand_text(argument);
 			let counted = counted.trim_matches(|c| c == '(' || c == ')');
-			hint(
-				&format!("len({counted})"),
-				&format!("#{counted}"),
-				"use # prefix for length",
-			);
+			hint(&format!("len({counted})"), &format!("#{counted}"), "use # prefix for length");
 		}
 		(word, [definition, ..]) if crate::operators::is_function_keyword(word) => {
 			if let Some((name, parameters, body_form)) = signature_of(definition) {

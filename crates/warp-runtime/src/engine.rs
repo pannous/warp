@@ -50,10 +50,7 @@ fn main_stack_bytes() -> usize {
 
 #[cfg(all(unix, not(target_os = "macos")))]
 fn main_stack_bytes() -> usize {
-	let mut limit = libc::rlimit {
-		rlim_cur: 0,
-		rlim_max: 0,
-	};
+	let mut limit = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
 	// SAFETY: fills the limit it is given
 	let known = unsafe { libc::getrlimit(libc::RLIMIT_STACK, &mut limit) } == 0;
 	match known {
@@ -93,9 +90,7 @@ const BYTES_PER_MB: usize = 1 << 20;
 pub fn memory_cap_bytes() -> usize {
 	static CAP: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
 	*CAP.get_or_init(|| {
-		let megabytes = std::env::var(MEMORY_CAP_VARIABLE)
-			.ok()
-			.and_then(|value| value.trim().parse().ok());
+		let megabytes = std::env::var(MEMORY_CAP_VARIABLE).ok().and_then(|value| value.trim().parse().ok());
 		megabytes.unwrap_or(DEFAULT_MEMORY_CAP_MB).saturating_mul(BYTES_PER_MB)
 	})
 }

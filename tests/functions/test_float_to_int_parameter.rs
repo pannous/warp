@@ -6,10 +6,7 @@ use crate::is;
 fn a_float_for_an_int_parameter_is_refused() {
 	fails_with("f(x:int) := x+1; f(2.5)", "2.5 is no int: write 2.5 as int");
 	fails_with("f(x:int) := x+1; y=2.5; f(y)", "y is no int: write y as int");
-	fails_with(
-		"fun addi(int x,int y){x+y};addi(2.2,2.2)",
-		"2.2 is no int: write 2.2 as int",
-	);
+	fails_with("fun addi(int x,int y){x+y};addi(2.2,2.2)", "2.2 is no int: write 2.2 as int");
 }
 
 #[test]

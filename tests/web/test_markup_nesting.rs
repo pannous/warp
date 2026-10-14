@@ -33,10 +33,8 @@ fn right_nesting_stays_quiet() {
 		"cell(x) := td{ x }\ncell(1)",
 		"html{ body{ p{ \"x\" } } }",
 	] {
-		let mistakes: Vec<String> = warnings_of(code)
-			.into_iter()
-			.filter(|warning| warning.contains(" inside "))
-			.collect();
+		let mistakes: Vec<String> =
+			warnings_of(code).into_iter().filter(|warning| warning.contains(" inside ")).collect();
 		assert_eq!(mistakes, Vec::<String>::new(), "{code}");
 	}
 }

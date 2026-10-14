@@ -43,11 +43,7 @@ impl WasmGcEmitter {
 		let depth_global = self.declare_named_global(ValType::I32, ConstExpr::i32_const(0), TRY_DEPTH_GLOBAL.into());
 		let caught_global =
 			self.declare_named_global(ValType::I32, ConstExpr::i32_const(-1), CAUGHT_ERROR_GLOBAL.into());
-		let catching = ErrorCatching {
-			tag,
-			depth_global,
-			caught_global,
-		};
+		let catching = ErrorCatching { tag, depth_global, caught_global };
 		self.error_catching = Some(catching);
 		catching
 	}
@@ -56,10 +52,7 @@ impl WasmGcEmitter {
 	fn declare_i32_tag(&mut self) -> u32 {
 		let tag = self.tags.len();
 		let tag_type = self.type_manager.function_type(vec![ValType::I32], vec![]);
-		self.tags.tag(TagType {
-			kind: TagKind::Exception,
-			func_type_idx: tag_type,
-		});
+		self.tags.tag(TagType { kind: TagKind::Exception, func_type_idx: tag_type });
 		tag
 	}
 
@@ -108,12 +101,7 @@ impl WasmGcEmitter {
 	/// drops by their count, as their normal end would have done. Every exit path takes this, whatever its keyword.
 	pub(in crate::wasm_emitter) fn emit_leave_tries(&self, func: &mut Function, target_frame: usize) {
 		let frames = super::super::control::loop_control::open_frames(func);
-		let left = frames
-			.get(target_frame..)
-			.unwrap_or_default()
-			.iter()
-			.filter(|is_try| **is_try)
-			.count();
+		let left = frames.get(target_frame..).unwrap_or_default().iter().filter(|is_try| **is_try).count();
 		let Some(catching) = self.error_catching.filter(|_| left > 0) else {
 			return;
 		};
@@ -137,12 +125,7 @@ impl WasmGcEmitter {
 		let step_depth = |func: &mut Function, step: I<'static>| {
 			Self::emit_list(
 				func,
-				&[
-					I::GlobalGet(catching.depth_global),
-					I::I32Const(1),
-					step,
-					I::GlobalSet(catching.depth_global),
-				],
+				&[I::GlobalGet(catching.depth_global), I::I32Const(1), step, I::GlobalSet(catching.depth_global)],
 			);
 		};
 		step_depth(func, I::I32Add);
@@ -176,11 +159,7 @@ impl WasmGcEmitter {
 				let detail = self.trap_detail_global();
 				Self::emit_list(func, &[I::GlobalGet(detail), I::RefAsNonNull]);
 			} else {
-				self.emit_string_call(
-					func,
-					&super::super::lists::list_ops::runtime_error_message(name),
-					"new_text",
-				);
+				self.emit_string_call(func, &super::super::lists::list_ops::runtime_error_message(name), "new_text");
 			}
 			self.emit_call(func, super::super::text::text_builtins::ERROR_OF);
 			func.instruction(&I::Else);
@@ -202,11 +181,7 @@ impl WasmGcEmitter {
 			return;
 		};
 		let Node::Symbol(name) = target.drop_meta() else { return };
-		let Some(local) = self
-			.scope
-			.lookup(name)
-			.filter(|local| local.kind.is_ref())
-			.map(|local| local.position)
+		let Some(local) = self.scope.lookup(name).filter(|local| local.kind.is_ref()).map(|local| local.position)
 		else {
 			return;
 		};

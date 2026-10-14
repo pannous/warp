@@ -9,10 +9,7 @@ fn shown(code: &str) -> String {
 #[test]
 fn a_python_boolean_is_a_bool() {
 	assert_eq!(shown("use python math; math.isnan(1)"), "no");
-	assert_eq!(
-		shown("use python \"fractions\"; f = fractions.Fraction(1, 2); f < 1"),
-		"yes"
-	);
+	assert_eq!(shown("use python \"fractions\"; f = fractions.Fraction(1, 2); f < 1"), "yes");
 	assert_eq!(shown("use python math; [math.isnan(1)]"), "[no]");
 }
 

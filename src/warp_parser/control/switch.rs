@@ -16,10 +16,7 @@ impl WarpParser {
 	/// The cursor is in the key of a match arm: `=>` follows before the statement or block ends (`1 | 2 | 3 => …`)
 	pub(crate) fn in_arm_key(&self) -> bool {
 		let rest = &self.chars[self.pos.min(self.chars.len())..];
-		let end = rest
-			.iter()
-			.position(|ch| matches!(ch, ';' | '\n' | '{' | '}'))
-			.unwrap_or(rest.len());
+		let end = rest.iter().position(|ch| matches!(ch, ';' | '\n' | '{' | '}')).unwrap_or(rest.len());
 		rest[..end].windows(2).any(|pair| pair == ['=', '>'])
 	}
 }

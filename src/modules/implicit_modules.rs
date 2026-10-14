@@ -53,9 +53,7 @@ pub(crate) const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 	}),
 	(UNITS_MODULE, |program| calls_undefined(program, QUANTITY)),
 	(AGENT_MODULE, |program| calls_undefined(program, AGENT_MODULE)),
-	(SOUND_MODULE, |program| {
-		first_called_undefined(program, SOUND_SETUP_FREE_WORDS).is_some()
-	}),
+	(SOUND_MODULE, |program| first_called_undefined(program, SOUND_SETUP_FREE_WORDS).is_some()),
 	("wagi", |_| crate::pipeline::compile_mode().for_wagi),
 ];
 
@@ -111,16 +109,10 @@ pub(crate) fn with_type_module_uses(program: Node) -> Node {
 	// `from list import zip` brings only zip: the module's other words stay out (test_from_import)
 	let imported =
 		|statement: &Node| used_module(statement).or_else(|| imported_words(statement).map(|(used, _, _)| used));
-	let used: HashSet<String> = statements_of(&program)
-		.iter()
-		.filter_map(imported)
-		.map(|used| used.name)
-		.collect();
+	let used: HashSet<String> = statements_of(&program).iter().filter_map(imported).map(|used| used.name).collect();
 	let type_modules = type_modules();
 	let is_module_name = |receiver: &Node| {
-		receiver
-			.symbol_name()
-			.is_some_and(|name| std_module(name).is_some() && !defined.contains(name))
+		receiver.symbol_name().is_some_and(|name| std_module(name).is_some() && !defined.contains(name))
 	};
 	let only_provider = |method: &String| match type_modules
 		.iter()
@@ -141,30 +133,19 @@ pub(crate) fn with_type_module_uses(program: Node) -> Node {
 	modules.dedup();
 	with_statements_first(
 		program,
-		modules
-			.into_iter()
-			.map(|module| WarpParser::parse(&format!("use {module}")))
-			.collect(),
+		modules.into_iter().map(|module| WarpParser::parse(&format!("use {module}"))).collect(),
 	)
 }
 
 /// Whether the program plays sound: it calls a sound word or says `use sound` (lowering/words/music_words.rs reads its note names)
 pub fn uses_sound(program: &Node) -> bool {
 	first_called_undefined(program, SOUND_WORDS).is_some()
-		|| statements_of(program)
-			.iter()
-			.filter_map(used_module)
-			.any(|used| used.name == SOUND_MODULE)
+		|| statements_of(program).iter().filter_map(used_module).any(|used| used.name == SOUND_MODULE)
 }
 
 /// A rare sound word the program calls: without `use sound` its error names the `use` (card bizarre-global)
 pub(crate) fn rare_sound_word(program: &Node) -> Option<&'static str> {
-	first_called_undefined(
-		program,
-		SOUND_WORDS
-			.into_iter()
-			.filter(|word| !SOUND_SETUP_FREE_WORDS.contains(word)),
-	)
+	first_called_undefined(program, SOUND_WORDS.into_iter().filter(|word| !SOUND_SETUP_FREE_WORDS.contains(word)))
 }
 
 /// Whether the program calls `word` without defining it
@@ -175,9 +156,7 @@ pub(crate) fn calls_undefined(program: &Node, word: &str) -> bool {
 /// The first of `words` the program calls without defining it
 pub(crate) fn first_called_undefined<'a>(program: &Node, words: impl IntoIterator<Item = &'a str>) -> Option<&'a str> {
 	let called = called_names(statements_of(program));
-	words
-		.into_iter()
-		.find(|word| called.contains(*word) && defined(program, word).is_none())
+	words.into_iter().find(|word| called.contains(*word) && defined(program, word).is_none())
 }
 
 pub(crate) fn mentions_file_url(program: &Node) -> bool {

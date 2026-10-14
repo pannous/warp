@@ -6,11 +6,7 @@ use warp::warp_parser::WarpParser;
 fn index_hints(code: &str) -> Vec<String> {
 	set_hint_mode(HintMode::Always);
 	let (_, hints) = capture_hints(|| WarpParser::parse(code));
-	hints
-		.into_iter()
-		.filter(|hint| hint.reason.contains("indexing"))
-		.map(|hint| hint.original)
-		.collect()
+	hints.into_iter().filter(|hint| hint.reason.contains("indexing")).map(|hint| hint.original).collect()
 }
 
 #[test]

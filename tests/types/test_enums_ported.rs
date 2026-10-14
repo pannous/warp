@@ -6,10 +6,7 @@ use crate::is;
 fn a_swift_enum_matched_with_switch_case() {
 	let direction = "enum Direction { case north, south }\nlet d = Direction.south\n";
 	is!(&format!("{direction}switch d {{ case .north: 1; case .south: 2 }}"), 2);
-	is!(
-		&format!("{direction}switch d {{ case Direction.north: 1; default: 3 }}"),
-		3
-	);
+	is!(&format!("{direction}switch d {{ case Direction.north: 1; default: 3 }}"), 3);
 }
 
 #[test]
@@ -29,8 +26,5 @@ fn a_kotlin_sealed_class_matched_by_type() {
 
 #[test]
 fn a_rust_enum_matched_by_path() {
-	is!(
-		"enum Color { Red, Green }\nlet c = Color::Green;\nmatch c { Color::Red => 1, Color::Green => 2 }",
-		2
-	);
+	is!("enum Color { Red, Green }\nlet c = Color::Green;\nmatch c { Color::Red => 1, Color::Green => 2 }", 2);
 }

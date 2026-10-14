@@ -81,10 +81,7 @@ pub fn destructuring(node: &Node) -> Option<(Vec<String>, &[Node])> {
 	let Node::List(names, _, _) = names.drop_meta() else {
 		return None;
 	};
-	Some((
-		names.iter().filter_map(Node::symbol_name).map(String::from).collect(),
-		values,
-	))
+	Some((names.iter().filter_map(Node::symbol_name).map(String::from).collect(), values))
 }
 
 /// How many values a function body returns with `return a, b`; None when every return gives one value
@@ -119,23 +116,14 @@ fn regroup_return(items: &[Node]) -> Option<Node> {
 
 fn with_trailing_return(node: &Node, more: &[Node]) -> Option<Node> {
 	match node {
-		Node::Meta { node, data } => Some(Node::Meta {
-			node: Box::new(with_trailing_return(node, more)?),
-			data: data.clone(),
-		}),
-		Node::Key(left, op, right) => Some(Node::Key(
-			left.clone(),
-			*op,
-			Box::new(with_trailing_return(right, more)?),
-		)),
+		Node::Meta { node, data } => {
+			Some(Node::Meta { node: Box::new(with_trailing_return(node, more)?), data: data.clone() })
+		}
+		Node::Key(left, op, right) => Some(Node::Key(left.clone(), *op, Box::new(with_trailing_return(right, more)?))),
 		Node::List(items, Bracket::None, Separator::Space)
 			if items.len() == 2 && items[0].is_symbol(crate::words::RETURN_WORD) =>
 		{
-			Some(Node::List(
-				items.iter().chain(more).cloned().collect(),
-				Bracket::None,
-				Separator::Space,
-			))
+			Some(Node::List(items.iter().chain(more).cloned().collect(), Bracket::None, Separator::Space))
 		}
 		_ => None,
 	}
@@ -145,9 +133,7 @@ fn with_trailing_return(node: &Node, more: &[Node]) -> Option<Node> {
 pub(crate) fn destructured_names(statement: &Node) -> Vec<String> {
 	let targets: Vec<Node> = match statement.drop_meta() {
 		Node::List(items, Bracket::None, Separator::Colon) => {
-			let assignment = items
-				.iter()
-				.position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)));
+			let assignment = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)));
 			match assignment.map(|at| (at, items[at].drop_meta())) {
 				Some((at, Node::Key(last, _, _))) => items[..at].iter().chain([last.as_ref()]).cloned().collect(),
 				_ => vec![],
@@ -160,10 +146,7 @@ pub(crate) fn destructured_names(statement: &Node) -> Vec<String> {
 	if targets.iter().all(is_target) {
 		targets.iter().for_each(|target| {
 			target.visit(&mut |part| {
-				names.extend(
-					part.symbol_name()
-						.map(|name| name.trim_start_matches(STARRED).to_string()),
-				)
+				names.extend(part.symbol_name().map(|name| name.trim_start_matches(STARRED).to_string()))
 			})
 		});
 	}
@@ -172,28 +155,19 @@ pub(crate) fn destructured_names(statement: &Node) -> Vec<String> {
 
 /// `x, (y = v), w` → `$destructure (x, y) v w`; `(x, y) = v, w` the same
 fn regroup_destructuring(items: &[Node]) -> Option<Node> {
-	let assignment = items
-		.iter()
-		.position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)))?;
+	let assignment = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)))?;
 	let Node::Key(last_name, Op::Assign, first_value) = items[assignment].drop_meta() else {
 		return None;
 	};
 	let names: Vec<Node> = match (assignment, bracketed_targets(last_name)) {
 		(0, Some(targets)) => targets.to_vec(),
 		(0, None) => return None,
-		_ => items[..assignment]
-			.iter()
-			.chain([last_name.as_ref()])
-			.cloned()
-			.collect(),
+		_ => items[..assignment].iter().chain([last_name.as_ref()]).cloned().collect(),
 	};
 	if !names.iter().all(is_target) {
 		return None;
 	}
-	let values: Vec<Node> = std::iter::once(first_value.as_ref())
-		.chain(&items[assignment + 1..])
-		.cloned()
-		.collect();
+	let values: Vec<Node> = std::iter::once(first_value.as_ref()).chain(&items[assignment + 1..]).cloned().collect();
 	let written = Node::List(items.to_vec(), Bracket::None, Separator::Colon).serialize();
 	Some(destructure(names, values, written.trim(), ""))
 }
@@ -213,11 +187,7 @@ fn regroup_declared_destructuring(items: &[Node]) -> Option<Node> {
 	}
 	let targets: Vec<Node> = std::iter::once(target.clone()).chain(rest.iter().cloned()).collect();
 	let destructuring = regroup_destructuring(&targets)?;
-	Some(Node::List(
-		vec![keyword.clone(), destructuring],
-		Bracket::None,
-		Separator::Space,
-	))
+	Some(Node::List(vec![keyword.clone(), destructuring], Bracket::None, Separator::Space))
 }
 
 /// `[a, b] = v` and `(a, b) = v`: the bracketed targets assigned one value
@@ -250,10 +220,7 @@ fn is_target(node: &Node) -> bool {
 
 /// `$destructure (names) values…`; a nested target `(a, b)` takes a hidden name, unpacked by a following statement
 fn destructure(names: Vec<Node>, values: Vec<Node>, written: &str, path: &str) -> Node {
-	let starred = names
-		.iter()
-		.filter(|name| name.symbol_name().is_some_and(|name| name.starts_with(STARRED)))
-		.count();
+	let starred = names.iter().filter(|name| name.symbol_name().is_some_and(|name| name.starts_with(STARRED))).count();
 	if starred > 1 {
 		return error("only one name may take the rest (`*rest`) in an unpacking");
 	}
@@ -264,11 +231,7 @@ fn destructure(names: Vec<Node>, values: Vec<Node>, written: &str, path: &str) -
 		values
 	};
 	if values.len() > 1 && values.len() != names.len() {
-		return error(&format!(
-			"`{written}` gives {} values for {} names",
-			values.len(),
-			names.len()
-		));
+		return error(&format!("`{written}` gives {} values for {} names", values.len(), names.len()));
 	}
 	let mut nested = vec![];
 	let names: Vec<Node> = names
@@ -277,12 +240,7 @@ fn destructure(names: Vec<Node>, values: Vec<Node>, written: &str, path: &str) -
 		.map(|(index, name)| match bracketed_targets(&name) {
 			Some(targets) => {
 				let hidden = Node::Symbol(format!("{UNPACKED}{path}·{index}"));
-				nested.push(destructure(
-					targets.to_vec(),
-					vec![hidden.clone()],
-					written,
-					&format!("{path}·{index}"),
-				));
+				nested.push(destructure(targets.to_vec(), vec![hidden.clone()], written, &format!("{path}·{index}")));
 				hidden
 			}
 			None => name,
@@ -290,19 +248,11 @@ fn destructure(names: Vec<Node>, values: Vec<Node>, written: &str, path: &str) -
 		.collect();
 	let head = symbol(DESTRUCTURE);
 	let names = Node::List(names, Bracket::Round, Separator::Colon);
-	let statement = Node::List(
-		[head, names].into_iter().chain(values).collect(),
-		Bracket::None,
-		Separator::Space,
-	);
+	let statement = Node::List([head, names].into_iter().chain(values).collect(), Bracket::None, Separator::Space);
 	if nested.is_empty() {
 		return statement;
 	}
-	Node::List(
-		std::iter::once(statement).chain(nested).collect(),
-		Bracket::None,
-		Separator::Semicolon,
-	)
+	Node::List(std::iter::once(statement).chain(nested).collect(), Bracket::None, Separator::Semicolon)
 }
 
 /// A function that returns several values does so on every return, and ends with such a return
@@ -335,11 +285,8 @@ fn check_definition(node: &Node) -> Option<Node> {
 		}
 		other => returned_values(other).is_some(),
 	};
-	(!ends_with_return).then(|| {
-		error(&format!(
-			"{name} returns {arity} values, so it must end with `return` and {arity} values"
-		))
-	})
+	(!ends_with_return)
+		.then(|| error(&format!("{name} returns {arity} values, so it must end with `return` and {arity} values")))
 }
 
 /// `a == b` among comma values (the first may assign it, `x = a == b, c`): its position, item, sides and operator
@@ -358,10 +305,8 @@ fn comparison_in(index: usize, item: &Node) -> Option<(usize, &Node, &Node, Op, 
 /// which misleads, so a comma next to a comparison without parentheses is an error asking for them (user, P227: "insist
 /// on braces to avoid errors"), with both parenthesized readings as fixes
 fn refuse_comma_next_to_comparison(items: &[Node]) -> Result<(), Node> {
-	let Some((index, item, left, op, right)) = items
-		.iter()
-		.enumerate()
-		.find_map(|(index, item)| comparison_in(index, item))
+	let Some((index, item, left, op, right)) =
+		items.iter().enumerate().find_map(|(index, item)| comparison_in(index, item))
 	else {
 		return Ok(());
 	};

@@ -15,15 +15,9 @@ fn a_program_may_define_its_own_go() {
 #[test]
 fn a_finished_tasks_handler_runs_and_a_stop_handler_never() {
 	is!("job = go 3; once job finishes: x = 7; x", 7);
-	is!(
-		"download(u) := u + 1; job = go download(1); once the download finishes: y = 5; y + job",
-		7
-	);
+	is!("download(u) := u + 1; job = go download(1); once the download finishes: y = 5; y + job", 7);
 	is!("job = go 3; once job pauses: print \"held\"; await job", 3);
-	is!(
-		"download(u) := u; job = go download(2); on download.stop : print \"cancelled\"; job",
-		2
-	);
+	is!("download(u) := u; job = go download(2); on download.stop : print \"cancelled\"; job", 2);
 }
 
 #[test]

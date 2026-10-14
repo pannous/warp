@@ -19,10 +19,7 @@ fn index_writes_of_a_concatenated_list_take_constant_time() {
 
 #[test]
 fn a_concatenation_is_a_copy_of_both_lists() {
-	is!(
-		"xs = [1 2]; ys = [3]; c = xs + ys; xs[0] = 9; ys.add(4); c",
-		warp::parse("[1 2 3]")
-	);
+	is!("xs = [1 2]; ys = [3]; c = xs + ys; xs[0] = 9; ys.add(4); c", warp::parse("[1 2 3]"));
 	is!("xs = [1 2]; c = xs + xs; xs.add(5); [#c, #xs]", warp::parse("[4 3]"));
 }
 
@@ -34,13 +31,7 @@ const BULK_MILLISECONDS: i64 = 300;
 #[test]
 fn concatenated_arrays_copy_in_bulk() {
 	is!(&format!("xs = []; for i in 0..{BULK_ITEMS} {{ xs.push(i) }}; t0 = clock(); for k in 0..10 {{ c = xs + xs }}; if clock() - t0 < {BULK_MILLISECONDS} then c[{BULK_ITEMS} + 2] else -1"), 2);
-	is!(
-		"xs = [1 2]; ys = [3]; c = xs + ys + [4 5] + xs; c[5] = 9; [c[4], c[5], #c, #xs]",
-		warp::parse("[5 9 7 2]")
-	);
+	is!("xs = [1 2]; ys = [3]; c = xs + ys + [4 5] + xs; c[5] = 9; [c[4], c[5], #c, #xs]", warp::parse("[5 9 7 2]"));
 	is!("xs = [1.5 2.5]; ys = []; ys.add(0.5); c = ys + xs; c[1] + c[2]", 4.0);
-	is!(
-		"xs = [1 2]; e = []; e.add(3); e[0] = 7; c = e + xs; c",
-		warp::parse("[7 1 2]")
-	);
+	is!("xs = [1 2]; e = []; e.add(3); e[0] = 7; c = e + xs; c", warp::parse("[7 1 2]"));
 }

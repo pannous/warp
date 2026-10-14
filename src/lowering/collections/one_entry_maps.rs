@@ -14,9 +14,7 @@ use std::collections::{HashMap, HashSet};
 /// `map_of_entry(x)`: the lone entry x as the map of it, any other value itself (wasm_emitter list_ops.rs)
 pub const MAP_OF_ENTRY: &str = "map_of_entry";
 /// The methods changing a map in place, which a lone pair can't take
-const CHANGING_METHODS: [&str; 9] = [
-	"pop", "remove", "delete", "add", "append", "push", "insert", "put", "set",
-];
+const CHANGING_METHODS: [&str; 9] = ["pop", "remove", "delete", "add", "append", "push", "insert", "put", "set"];
 
 pub fn lower(node: Node) -> Node {
 	let functions = defined_functions(&node);
@@ -90,9 +88,7 @@ fn changing_receiver(node: &Node) -> Option<&str> {
 				Node::List(items, _, _) => items.first().and_then(Node::symbol_name),
 				other => other.symbol_name(),
 			};
-			method
-				.filter(|method| CHANGING_METHODS.contains(method))
-				.and(receiver.symbol_name())
+			method.filter(|method| CHANGING_METHODS.contains(method)).and(receiver.symbol_name())
 		}
 		Node::Key(receiver, Op::AddAssign, _) => receiver.symbol_name(),
 		_ => None,
@@ -129,9 +125,8 @@ fn upgraded(node: Node, functions: &Functions, changed: &HashSet<String>) -> Nod
 			let takes = takes.unwrap_or_default();
 			let mut items = items.into_iter().map(|item| upgraded(item, functions, changed));
 			let head = items.next().into_iter();
-			let arguments = items
-				.zip(takes)
-				.map(|(argument, takes_map)| if takes_map { as_map(argument) } else { argument });
+			let arguments =
+				items.zip(takes).map(|(argument, takes_map)| if takes_map { as_map(argument) } else { argument });
 			Node::List(head.chain(arguments).collect(), bracket, separator)
 		}
 		other => other.map_children(|child| upgraded(child, functions, changed)),

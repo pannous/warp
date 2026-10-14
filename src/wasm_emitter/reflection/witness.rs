@@ -25,13 +25,8 @@ pub(in crate::wasm_emitter) struct WitnessTable {
 impl WasmGcEmitter {
 	/// The declared types that define `compare(a:T, b:T)`, in a stable order
 	fn comparable_types(&self) -> Vec<String> {
-		let mut types: Vec<String> = self
-			.ctx
-			.user_functions
-			.keys()
-			.filter_map(|name| witness_type(name, COMPARE))
-			.map(str::to_string)
-			.collect();
+		let mut types: Vec<String> =
+			self.ctx.user_functions.keys().filter_map(|name| witness_type(name, COMPARE)).map(str::to_string).collect();
 		types.sort();
 		types
 	}
@@ -45,20 +40,11 @@ impl WasmGcEmitter {
 			return None;
 		}
 		let node_ref = Ref(self.node_ref(false));
-		let order_type = self
-			.type_manager
-			.function_type(vec![node_ref, node_ref], vec![ValType::I32]);
-		let witness_ref = RefType {
-			nullable: true,
-			heap_type: HeapType::Concrete(order_type),
-		};
+		let order_type = self.type_manager.function_type(vec![node_ref, node_ref], vec![ValType::I32]);
+		let witness_ref = RefType { nullable: true, heap_type: HeapType::Concrete(order_type) };
 		let global = self.declare_global_of(Ref(witness_ref), ConstExpr::ref_null(HeapType::Concrete(order_type)));
 		self.exports.export(WITNESS_GLOBAL, ExportKind::Global, global);
-		let table = WitnessTable {
-			global,
-			order_type,
-			dispatcher: None,
-		};
+		let table = WitnessTable { global, order_type, dispatcher: None };
 		self.compare_witness = Some(table);
 		Some(table)
 	}
@@ -115,12 +101,7 @@ impl WasmGcEmitter {
 					s.emit_call(func, super::super::VALUES_EQUAL);
 					Self::emit_list(
 						func,
-						&[
-							I::If(BlockType::Empty),
-							I::LocalGet(first),
-							I::LocalGet(second),
-							I::Call(index),
-						],
+						&[I::If(BlockType::Empty), I::LocalGet(first), I::LocalGet(second), I::Call(index)],
 					);
 					if witness.return_kind.is_float() {
 						let zero = I::F64Const(Ieee64::new(0f64.to_bits()));
@@ -163,20 +144,12 @@ impl WasmGcEmitter {
 				func.instruction(&I::Unreachable);
 			},
 		);
-		self.compare_witness = Some(WitnessTable {
-			dispatcher: Some(index),
-			..table
-		});
+		self.compare_witness = Some(WitnessTable { dispatcher: Some(index), ..table });
 	}
 
 	/// At the start of main: fill the witness table
 	pub(in crate::wasm_emitter) fn emit_witness_installation(&self, func: &mut Function) {
-		let Some(WitnessTable {
-			global,
-			dispatcher: Some(dispatcher),
-			..
-		}) = self.compare_witness
-		else {
+		let Some(WitnessTable { global, dispatcher: Some(dispatcher), .. }) = self.compare_witness else {
 			return;
 		};
 		Self::emit_list(func, &[I::RefFunc(dispatcher), I::GlobalSet(global)]);

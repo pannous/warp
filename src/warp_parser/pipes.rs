@@ -14,11 +14,7 @@ pub(super) fn dot_call(function: Node, arguments: Node) -> Node {
 	}
 	let list = arguments.remove(0);
 	let item = Symbol(BROADCAST_ITEM.to_string());
-	let applied = Node::List(
-		[vec![function, item.clone()], arguments].concat(),
-		Bracket::Round,
-		Separator::None,
-	);
+	let applied = Node::List([vec![function, item.clone()], arguments].concat(), Bracket::Round, Separator::None);
 	let each = Node::Key(Box::new(item), Op::FatArrow, Box::new(applied));
 	call(MAP_WORD, vec![list, each])
 }
