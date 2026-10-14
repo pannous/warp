@@ -8,6 +8,7 @@ use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex, Once};
 use std::time::SystemTime;
+use wasmtime::component::Component;
 use wasmtime::{Engine, Module, Precompiled, Result};
 
 /// Environment variable naming the cache directory; `off` compiles every module without the cache
@@ -27,6 +28,39 @@ const MAX_MODULES_IN_MEMORY: usize = 512;
 static PRUNE_ONCE: Once = Once::new();
 /// The modules of the shared gc_engine compiled or loaded in this process: running one again is a lookup
 static IN_MEMORY: LazyLock<Mutex<HashMap<String, Module>>> = LazyLock::new(Mutex::default);
+
+/// What the cache holds: wasmtime's compiled code of a core module or of a component
+pub trait CompiledCode: Sized {
+	fn compile(engine: &Engine, bytes: &[u8]) -> Result<Self>;
+	/// # Safety
+	/// `bytes` must be wasmtime's own serialized output (see cached_code)
+	unsafe fn deserialize(engine: &Engine, bytes: &[u8]) -> Result<Self>;
+	fn serialize(&self) -> Result<Vec<u8>>;
+}
+
+impl CompiledCode for Module {
+	fn compile(engine: &Engine, bytes: &[u8]) -> Result<Self> {
+		Module::new(engine, bytes)
+	}
+	unsafe fn deserialize(engine: &Engine, bytes: &[u8]) -> Result<Self> {
+		unsafe { Module::deserialize(engine, bytes) }
+	}
+	fn serialize(&self) -> Result<Vec<u8>> {
+		Module::serialize(self)
+	}
+}
+
+impl CompiledCode for Component {
+	fn compile(engine: &Engine, bytes: &[u8]) -> Result<Self> {
+		Component::new(engine, bytes)
+	}
+	unsafe fn deserialize(engine: &Engine, bytes: &[u8]) -> Result<Self> {
+		unsafe { Component::deserialize(engine, bytes) }
+	}
+	fn serialize(&self) -> Result<Vec<u8>> {
+		Component::serialize(self)
+	}
+}
 
 /// Where a module came from
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,6 +90,20 @@ pub fn compiled_module(engine: &Engine, bytes: &[u8]) -> Result<Module> {
 
 /// compiled_module with the cache in `directory` and without this process's modules, and where the module came from
 pub fn compiled_module_in(directory: &Path, engine: &Engine, bytes: &[u8]) -> Result<(Module, Origin)> {
+	compiled_in(directory, engine, bytes)
+}
+
+/// A component (`use lib.wasm`) compiled for `engine`, from the cache when it holds it: compiling uniscript's
+/// component takes most of a second (card takes-three)
+pub fn compiled_component(engine: &Engine, bytes: &[u8]) -> Result<Component> {
+	match cache_directory() {
+		Some(directory) => Ok(compiled_in(&directory, engine, bytes)?.0),
+		None => Component::new(engine, bytes),
+	}
+}
+
+/// A module or component compiled for `engine` with the cache in `directory`, and where it came from
+pub fn compiled_in<Code: CompiledCode>(directory: &Path, engine: &Engine, bytes: &[u8]) -> Result<(Code, Origin)> {
 	load_or_compile(directory, &cache_key(engine, bytes), engine, bytes)
 }
 
@@ -74,13 +122,18 @@ fn remember(key: String, module: &Module) {
 	}
 }
 
-fn load_or_compile(directory: &Path, key: &str, engine: &Engine, bytes: &[u8]) -> Result<(Module, Origin)> {
+fn load_or_compile<Code: CompiledCode>(
+	directory: &Path,
+	key: &str,
+	engine: &Engine,
+	bytes: &[u8],
+) -> Result<(Code, Origin)> {
 	let path = directory.join(format!("{key}.{COMPILED_EXTENSION}"));
-	if let Some(module) = cached_module(engine, &path) {
+	if let Some(module) = cached_code(engine, &path) {
 		return Ok((module, Origin::Cached));
 	}
-	let module = Module::new(engine, bytes)?;
-	if let Err(failure) = store_module(directory, &path, &module) {
+	let module = Code::compile(engine, bytes)?;
+	if let Err(failure) = store_code(directory, &path, &module) {
 		eprintln!("warning: module cache {}: {failure}", directory.display());
 	}
 	Ok((module, Origin::Compiled))
@@ -114,7 +167,7 @@ fn cache_key(engine: &Engine, bytes: &[u8]) -> String {
 }
 
 /// The module at `path`, when there is one wasmtime accepts for `engine`; a hit counts as a use for pruning
-fn cached_module(engine: &Engine, path: &Path) -> Option<Module> {
+fn cached_code<Code: CompiledCode>(engine: &Engine, path: &Path) -> Option<Code> {
 	if !path.exists() {
 		return None;
 	}
@@ -122,8 +175,8 @@ fn cached_module(engine: &Engine, path: &Path) -> Option<Module> {
 	// macOS's default limit of 256 open files (EMFILE in tests, card targeted-tests)
 	let loaded = fs::read(path).map_err(wasmtime::Error::from).and_then(|bytes| {
 		// SAFETY: deserialize trusts the file to be wasmtime's own output: only this module writes the cache directory,
-		// atomically (store_module), and wasmtime still rejects a file of another version or engine configuration
-		unsafe { Module::deserialize(engine, &bytes) }
+		// atomically (store_code), and wasmtime still rejects a file of another version or engine configuration
+		unsafe { Code::deserialize(engine, &bytes) }
 	});
 	match loaded {
 		Ok(module) => {
@@ -138,7 +191,7 @@ fn cached_module(engine: &Engine, path: &Path) -> Option<Module> {
 }
 
 /// Write the compiled module to a private file and rename it into place, so parallel runs never read half a file
-fn store_module(directory: &Path, path: &Path, module: &Module) -> Result<()> {
+fn store_code(directory: &Path, path: &Path, module: &impl CompiledCode) -> Result<()> {
 	fs::create_dir_all(directory)?;
 	PRUNE_ONCE.call_once(|| prune(directory));
 	let staging = path.with_extension(format!("{}-{:?}.tmp", std::process::id(), std::thread::current().id()));
