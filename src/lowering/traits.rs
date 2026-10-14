@@ -40,14 +40,10 @@ pub const TRAIT_KEYWORDS: [&str; 8] = [
 ];
 pub const WITNESS_SEPARATOR: char = '·';
 const SORT_WORD: &str = "sort";
-/// The annotation `xs: T list` (analyzer::with_list_annotation)
-const LIST_OF_PREFIX: &str = "list of ";
 /// The parameter name a fix shows for an operation declared without parameters, `trait shape{area}`
 const DEFAULT_PARAMETER: &str = "x";
 /// The word after a trait in a list annotation `xs: shape list`
 const LIST_WORD: &str = "list";
-/// The receiver a foreign signature names, Rust's `fn area(&self)`
-const SELF_WORD: &str = "self";
 /// A method's position taking any value, in its name `describe·any·Ship` and its messages
 const ANY_WORD: &str = "any";
 /// Static type names (`type(x)`) of the built-in kinds that `node_order` orders
@@ -464,21 +460,13 @@ fn declaration(node: &Node) -> Option<Result<Trait, Node>> {
 			.into_error()));
 	}
 	let requirements = match requirements.drop_meta() {
-		// Kotlin's `fun area(): Int`, Swift's `func area() -> Double` on one line: the keyword stands apart from the signature
-		Node::List(items, Bracket::Curly, _) => items
-			.iter()
-			.filter(
-				|item| !matches!(item.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word)),
-			)
-			.cloned()
-			.collect(),
+		Node::List(items, Bracket::Curly, _) => items.clone(),
 		Node::Empty => vec![],
 		single => vec![single.clone()],
 	};
 	let operations = requirements.iter().map(|requirement| {
 		operation(requirement)
 			.or_else(|| default_method(requirement))
-			.or_else(|| foreign_signature(requirement))
 			.or_else(|| function_type_member(requirement))
 			.ok_or_else(|| {
 				let message = format!(
@@ -520,42 +508,8 @@ fn operation(requirement: &Node) -> Option<Operation> {
 	})
 }
 
-/// A method signature as other languages write it in an interface, its receiver implicit: Java's `double area()`,
-/// Kotlin's `fun area(): Int`, Swift's `func area() -> Double`, Go's `Area() float64`, TypeScript's `area(): number`,
-/// Rust's `fn area(&self) -> f64`: the operation `area(x)` (the result type and parameter types dropped)
-fn foreign_signature(requirement: &Node) -> Option<Operation> {
-	let (name, parameters) = signature_call(requirement)?;
-	let is_receiver = |parameter: &Node| {
-		parameter.is_symbol(SELF_WORD)
-			|| matches!(parameter.drop_meta(), Node::Key(_, _, word) if word.drop_meta().name() == SELF_WORD)
-	};
-	let names = parameters
-		.iter()
-		.filter(|parameter| !is_receiver(parameter))
-		.map(|parameter| match parameter.drop_meta() {
-			Node::Key(name, Op::Colon, _) => Some(name.drop_meta().name()),
-			Node::Symbol(name) => Some(name.clone()),
-			// Java's `int n`, Go's `n int`: the word that is no type
-			Node::List(words, _, _) => words
-				.iter()
-				.map(|word| word.drop_meta().name())
-				.find(|word| crate::analyzer::type_word_kind(word).is_none()),
-			_ => None,
-		});
-	let names: Vec<String> = std::iter::once(Some(DEFAULT_PARAMETER.to_string()))
-		.chain(names)
-		.collect::<Option<_>>()?;
-	Some(Operation {
-		name,
-		parameters: names,
-		symmetric: false,
-		contract: None,
-		default: None,
-	})
-}
-
 /// A member typed as a function, as WIT and TypeScript write an interface: `add: (i32, i32) -> i32` is the operation
-/// `add(p1, p2)` (the types dropped, as in foreign_signature)
+/// `add(p1, p2)` (the types dropped)
 fn function_type_member(requirement: &Node) -> Option<Operation> {
 	let Node::Key(member, Op::Arrow, _) = requirement.drop_meta() else {
 		return None;
@@ -579,28 +533,6 @@ fn function_type_member(requirement: &Node) -> Option<Operation> {
 		contract: None,
 		default: None,
 	})
-}
-
-/// The name and parameters of the first call in a signature, through its keyword, result type and modifiers
-fn signature_call(node: &Node) -> Option<(String, Vec<Node>)> {
-	match node.drop_meta() {
-		Node::List(items, Bracket::Round, _) => match items.split_first()?.0.drop_meta() {
-			Node::Symbol(name) => Some((
-				name.clone(),
-				items[1..]
-					.iter()
-					.flat_map(|parameter| match parameter.drop_meta() {
-						Node::List(group, Bracket::Round, _) => group.clone(),
-						_ => vec![parameter.clone()],
-					})
-					.collect(),
-			)),
-			_ => None,
-		},
-		Node::List(items, _, _) => items.iter().find_map(signature_call),
-		Node::Key(left, Op::Colon | Op::Arrow, _) => signature_call(left),
-		_ => None,
-	}
 }
 
 /// `describe(s) := body` inside a trait: the operation with its default body
@@ -978,34 +910,6 @@ fn instance_signatures(node: &Node, registry: &TypeRegistry) -> HashMap<String, 
 		.values()
 		.map(|function| (function.name.clone(), signature(function)))
 		.filter(|(_, params)| params.iter().any(|(_, declared)| declared.is_some()))
-		.collect()
-}
-
-/// Every function's parameters annotated `list of <trait>` (`xs: Comparable list`): their positions and traits
-fn trait_constraints(node: &Node, traits: &Traits) -> HashMap<String, Vec<(usize, String)>> {
-	let context = crate::analyzer::function_definitions(node);
-	let constraint = |param: &crate::context::Param| {
-		param
-			.annotation
-			.as_ref()?
-			.name()
-			.strip_prefix(LIST_OF_PREFIX)
-			.filter(|element| traits.is_trait(element))
-			.map(str::to_string)
-	};
-	context
-		.user_functions
-		.values()
-		.map(|function| {
-			let constrained = function
-				.params
-				.iter()
-				.enumerate()
-				.filter_map(|(index, param)| Some((index, constraint(param)?)))
-				.collect::<Vec<_>>();
-			(function.name.clone(), constrained)
-		})
-		.filter(|(_, constrained)| !constrained.is_empty())
 		.collect()
 }
 

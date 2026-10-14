@@ -19,7 +19,6 @@ pub fn lower_dispatch(node: Node) -> Node {
 	let witnesses = defined_functions(&node);
 	let signatures = instance_signatures(&node, &types.registry);
 	let traits = Traits::of(&node);
-	let constraints = trait_constraints(&node, &traits);
 	let enums = crate::lowering::sum_variants::sum_types(&node)
 		.into_iter()
 		.filter(|(_, variants)| variants.is_plain())
@@ -30,7 +29,6 @@ pub fn lower_dispatch(node: Node) -> Node {
 		types,
 		witnesses,
 		signatures,
-		constraints,
 		enums,
 		likenesses,
 		missing: RefCell::new(None),
@@ -140,8 +138,6 @@ pub(super) struct Dispatch {
 	witnesses: Vec<String>,
 	/// Per function, its parameters and the declared type each one takes (`p:photo`), if any
 	signatures: HashMap<String, Vec<(String, Option<String>)>>,
-	/// Per function, the positions of its parameters `xs: Comparable list` and the trait their elements need
-	constraints: HashMap<String, Vec<(usize, String)>>,
 	/// The plain enums, `enum Coin { Penny, Dime }`: an int becomes one of their cases explicitly, `1 as Coin`
 	enums: std::collections::HashSet<String>,
 	/// The `image like photo` declarations
@@ -265,9 +261,6 @@ impl Dispatch {
 	}
 
 	pub(super) fn call(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
-		if let Some(error) = self.unmet_constraint(items, bracket, separator) {
-			return Some(error);
-		}
 		if let Some(name) = call_name(items, bracket, separator) {
 			match (name, &items[1..]) {
 				(SORT_WORD, [list]) => {
@@ -316,29 +309,6 @@ impl Dispatch {
 			))),
 			None => self.operation_call(items, bracket, separator),
 		}
-	}
-
-	/// `smallest([dot(1)])` of `smallest(xs: Comparable list)`: the error when the elements' type lacks an operation of the trait
-	pub(super) fn unmet_constraint(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
-		let name = called_name(items, bracket, separator)?;
-		for (index, trait_name) in self.constraints.get(name)? {
-			let Some(argument) = items.get(index + 1) else { continue };
-			let Some(Shape::ListOf(type_name)) = self.types.shape(argument) else {
-				continue;
-			};
-			let required = self.traits.named(trait_name)?;
-			if let Some(operation) = self.traits.missing(required, &type_name, &self.witnesses) {
-				let call = Node::List(items.to_vec(), Bracket::Round, Separator::None);
-				return self.fail(missing_conformance(
-					&call,
-					&type_name,
-					required,
-					operation,
-					&format!("{name}({})", argument.serialize()),
-				));
-			}
-		}
-		None
 	}
 
 	/// The value given for a place of declared type T (a parameter, a typed variable): the value to use, or the error.

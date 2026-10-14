@@ -80,12 +80,11 @@ the other operations (`area(s:square)`) but not this one; lower_conformances the
 `x in xs` (position) and `xs.has(x)` of an instance whose type overrides `equals` search the list with `equals·T`
 (traits::position_by_equals, a loop lowered in lower_dispatch); without an override they compare structurally.
 
-## Generic constraints (2026-10-04)
-`smallest(xs: Comparable list) := (sort xs)#1`: the annotation `xs: T list` (analyzer::with_list_annotation; the parser
-leaves `list` as the next signature item) is `list of T`, T a type word, a declared type or a trait. A list of a trait
-holds Nodes; where the function is called with a list of instances of a known type, each operation of the trait must
-have its witness (traits::unmet_constraint): `dot is not Comparable: smallest([dot{x:3}]) needs compare(a:dot, b:dot)`.
-Lists of numbers or texts pass (sorted by value at run time). `xs: list of T` reads the same.
+## Generic constraints (2026-10-04, checks dropped by cleanup-traits-alias 2026-10-14)
+`smallest(xs: Comparable list) := (sort xs)#1`: the annotation `xs: T list` (analyzer::with_list_annotation) is
+`list of T`, T a type word, a declared type or a trait; a list of a trait holds Nodes. The elements are no longer
+checked at the call (`dot is not Comparable: smallest([dot{x:3}]) needs …` is gone); sort reports `not comparable` at
+run time.
 
 ## Fixed on the way
 `x = sort [3 1]; x#1` trapped (sort/split/reverse results were held as Ints), `(sort xs)#1` indexed the data list
@@ -103,9 +102,9 @@ The pass runs right after type_constructor: later passes would read `for x in b`
 - `f(s:Shape)` of a declared trait is untyped (traits::lower_trait_parameters before class_methods, again in
   lower_declarations for definitions later passes make): it takes any conforming instance. `xs: shape list` keeps its
   annotation (generic constraints above).
-- Declarations as other languages write them: the spaced `trait Shape { area }`, Java's `double area();`, Kotlin's
-  `fun area(): Int`, Swift's `func area() -> Double`, Go's `Area() float64` and `type Shape interface {…}`,
-  TypeScript's `area(): number`, Rust's `fn area(&self) -> f64` (traits::foreign_signature: the receiver implicit).
+- Declarations: the spaced `trait Shape { area }` and WIT/TypeScript members `add: (i32, i32) -> i32`. The foreign
+  method signatures (Java `double area();`, Kotlin `fun area(): Int`, Swift, Go, TypeScript, Rust `fn area(&self)`)
+  were dropped by cleanup-traits-alias (2026-10-14, foreign-spellings: aliases, not lowering code).
 - A class naming its traits, `implements Shape` (Java, TypeScript), `: Shape` (Swift, Kotlin), is skipped with a got-it
   note (topic conformance-list): conformance is structural (T2). Not a checked claim yet.
 

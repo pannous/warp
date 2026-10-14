@@ -14,6 +14,7 @@ fn a_class_method_satisfies_a_trait_operation() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-traits-alias: Java/Kotlin/Swift/Go/TS/Rust method signatures in a trait body are no trait operations any more (WIT `add: (i32) -> i32` members stay)"]
 fn interfaces_as_other_languages_write_them() {
 	is!("interface Shape { double area(); }\nclass Square implements Shape {\n  double side;\n  Square(double s) { side = s; }\n  public double area() { return side * side; }\n}\nnew Square(3).area()", 9);
 	is!("protocol Shape { func area() -> Double }\nstruct Square: Shape { var side: Double; func area() -> Double { side * side } }\nSquare(side: 3).area()", 9);
