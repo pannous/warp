@@ -881,6 +881,7 @@ PASSED:
   ✓ ffi::test_cargo_crates::test_cargo_crate_prebuilt_download
   ✓ ffi::test_cargo_crates::test_cargo_crate_struct_is_a_resource
   ✓ ffi::test_cargo_crates::test_cargo_crate_texts_pass_as_bytes
+  ✓ ffi::test_cargo_crates::test_cargo_crate_trap_names_rust_functions
   ✓ ffi::test_cargo_crates::test_cargo_crate_type_functions_fields_and_display
   ✓ ffi::test_cargo_crates::test_cargo_crate_without_callable_functions_is_refused
   ✓ ffi::test_component_drop::a_dropped_handle_is_refused
@@ -3925,6 +3926,7 @@ PASSED:
   ✓ types::test_date_arithmetic_at_run_time::test_a_date_plus_a_duration
   ✓ types::test_date_arithmetic_at_run_time::test_a_local_time_and_an_instant_plus_a_duration
   ✓ types::test_date_arithmetic_at_run_time::test_arithmetic_prints
+  ✓ types::test_date_arithmetic_at_run_time::test_constant_times_fold_and_the_run_does_the_rest
   ✓ types::test_date_arithmetic_at_run_time::test_durations_add_and_scale
   ✓ types::test_date_arithmetic_at_run_time::test_juxtaposed_durations_run
   ✓ types::test_date_arithmetic_at_run_time::test_month_overflow_is_rejected_at_run_time
@@ -5382,4 +5384,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5377 passed, 0 failed, 5377 total tested
+13 ignored, 5379 passed, 0 failed, 5379 total tested
