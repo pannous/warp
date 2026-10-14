@@ -7,6 +7,7 @@
 //! and downloaded instead (release crates-<generation>), so most users need no cargo.
 //! The wrappers are members of one cargo workspace (~/.cache/warp/crates/Cargo.toml), so a configured target-dir is
 //! honoured and a user without one gets that workspace's single target/.
+use crate::modules::package_tools::MISSING_TARGET_SIGN;
 use crate::modules::package_tools::{download_bytes, write_atomically};
 use crate::versions::Version;
 use serde_json::Value;
@@ -42,7 +43,6 @@ const TARGET: &str = "wasm32-wasip2";
 const WRAPPER_PREFIX: &str = "warp-crate-";
 /// rounds of dropping the functions the compiler refused
 const BUILD_ROUNDS: usize = 12;
-const MISSING_TARGET_SIGN: &str = "target may not be installed";
 /// one wrapper build at a time within a process; cargo locks the target directory across processes
 static BUILDING: Mutex<()> = Mutex::new(());
 

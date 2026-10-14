@@ -16,7 +16,12 @@ WORDS_FILE = "src/words.rs"
 
 def definition(text, name):
 	"""The match of the `const NAME …;` item with its doc comment, or None"""
-	return re.search(r"((?:^[ \t]*///[^\n]*\n)*)^[ \t]*(?:pub(?:\([^)]*\))? )?const " + name + r"\b[^=]*=\s*([^;]*);\n", text, re.M)
+	return re.search(r"((?:^[ \t]*///[^\n]*\n)*)^[ \t]*(?:pub(?:\([^)]*\))? )?const " + name + r"\b:\s*([^=]*?)\s*=\s*([^;]*);\n", text, re.M)
+
+
+def visible_to_crate(text, name):
+	"""The text with a private or pub(super) NAME widened to pub(crate): the copies' files use it"""
+	return re.sub(r"^([ \t]*)(?:pub\(super\) )?const " + name + r"\b", r"\1pub(crate) const " + name, text, flags=re.M)
 
 
 def module_path(path):
@@ -43,15 +48,18 @@ def main():
 	name, copies = arguments[0], [argument.split(":") for argument in arguments[1:]]
 	words = open(home).read()
 	canonical = definition(words, name)
+	if canonical:
+		words = visible_to_crate(words, name)
+		open(home, "w").write(words)
 	for path, local in copies:
 		text = open(path).read()
 		copy = definition(text, local)
 		if not copy:
 			sys.exit(f"{path}: no const {local}")
-		if canonical and canonical.group(2).strip() != copy.group(2).strip():
-			sys.exit(f"{path}: {local} = {copy.group(2)}, but {module_path(home)}::{name} = {canonical.group(2)}")
+		if canonical and canonical.group(3).strip() != copy.group(3).strip():
+			sys.exit(f"{path}: {local} = {copy.group(3)}, but {module_path(home)}::{name} = {canonical.group(3)}")
 		if not canonical:
-			words = words.rstrip("\n") + f"\n{copy.group(1)}pub const {name}: &str = {copy.group(2)};\n"
+			words = words.rstrip("\n") + f"\n{copy.group(1)}pub const {name}: {copy.group(2)} = {copy.group(3)};\n"
 			open(home, "w").write(words)
 			canonical = definition(words, name)
 		text = text[:copy.start()] + text[copy.end():]

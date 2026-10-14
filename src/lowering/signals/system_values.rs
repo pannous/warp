@@ -14,6 +14,7 @@
 
 use super::nodes::{arguments_rewritten, call, key};
 use crate::declarations::word;
+use crate::lowering::signals::system_signals::CHANGE_WORDS;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::time::NOW_WORD;
@@ -32,7 +33,6 @@ pub const SYSTEM_PREFIX: &str = "system·";
 /// they meet (`col + 0.5 - mouse_x`) convert once at that use instead of making every later step exact
 const FLOAT_VALUES: [&str; 2] = [MOUSE_X, MOUSE_Y];
 const LISTENER_WORDS: [&str; 3] = ["whenever", "once", "on"];
-const CHANGE_WORDS: [&str; 2] = ["change", "changes"];
 /// The timer that keeps a listening program and wakes it for the checks
 const KEEP_LISTENING: &str = "on every 1000ms {}";
 const CLIPBOARD_READ: &str = "read";

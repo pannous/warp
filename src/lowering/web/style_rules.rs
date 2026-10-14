@@ -8,8 +8,8 @@
 use super::nodes::key;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::STYLE_WORD;
 
-const STYLE: &str = "style";
 const SELECTOR_VALUE_PROPERTY: &str = "color";
 const CLASS_OR_ID: [char; 2] = ['.', '#'];
 const CSS_UNITS: [&str; 17] =
@@ -27,7 +27,7 @@ fn style_block(node: &Node) -> Option<Node> {
 	let Node::List(items, Bracket::Curly, separator) = body.drop_meta() else {
 		return None;
 	};
-	name.is_symbol(STYLE).then(|| {
+	name.is_symbol(STYLE_WORD).then(|| {
 		Node::Key(
 			name.clone(),
 			Op::Colon,

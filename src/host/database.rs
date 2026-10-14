@@ -3,6 +3,7 @@
 //! A connection per file and thread; inline code's tables (database_tables::TABLES_FILE) live in memory per thread.
 
 use crate::lowering::database_tables::OPTIONAL_MARK;
+use crate::lowering::database_tables::WARP_CALL;
 use crate::node::{Bracket, Node, Separator};
 use crate::Number;
 use std::collections::HashMap;
@@ -27,8 +28,6 @@ const LOSSLESS_ORDER: [&str; 3] = ["INTEGER", "REAL", "TEXT"];
 const NUMBER_COLUMNS: [&str; 2] = ["INTEGER", "REAL"];
 /// The column of a unit field (`NUMERIC km`): NUMERIC keeps a whole SI amount an integer, as the program holds it
 const UNIT_COLUMN: &str = "NUMERIC";
-/// The SQL function a filter's query calls a warp function through: `warp_call('function', arguments…)`
-const WARP_CALL: &str = "warp_call";
 /// How long a write waits for another connection's (another program or thread) before "database is locked"
 const BUSY_MILLISECONDS: c_int = 5000;
 /// A folder set by cargo's test runs (.cargo/config.toml): each test thread keeps a sample's tables in its own copy there

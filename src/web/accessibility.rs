@@ -11,6 +11,7 @@
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
+use crate::words::STYLE_WORD;
 use std::collections::HashSet;
 
 const IMAGE: &str = "img";
@@ -18,8 +19,6 @@ const LINK: &str = "a";
 const BUTTON: &str = "button";
 const LABEL: &str = "label";
 const HTML: &str = "html";
-/// a style sheet's items are rules: `html { … }` there styles the element, it makes none
-const STYLE: &str = "style";
 const META: &str = "meta";
 /// Keys of html that are facts for the page's head, besides `meta: {…}` (decision html-meta, lib/markup.warp html_is_page_fact)
 const PAGE_FACTS: [&str; 2] = ["title", "description"];
@@ -362,7 +361,7 @@ fn markup_mistakes<'a>(element: &Element<'a>, defined: &HashSet<String>) -> Vec<
 	};
 	let mut mistakes = vec![];
 	// a style sheet's items are rules, no attributes; `meta: {author: "Ann"}` of html names metas (page facts)
-	if element.tag == STYLE || names_metas(element) {
+	if element.tag == STYLE_WORD || names_metas(element) {
 		return mistakes;
 	}
 	for tag in element.blocks.iter().filter(|tag| is_unknown_tag(tag) && !defined.contains(*tag)) {
@@ -485,7 +484,7 @@ fn collect<'a>(
 			events,
 			blocks: items.iter().filter_map(|item| block_name(item)).collect(),
 		});
-		if tag == STYLE {
+		if tag == STYLE_WORD {
 			return;
 		}
 		let inside_label = inside_label || tag == LABEL;

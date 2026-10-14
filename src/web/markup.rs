@@ -4,6 +4,7 @@
 
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
+use crate::words::STYLE_WORD;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
@@ -24,8 +25,6 @@ const KEY: &str = "key";
 /// The value in place of the name `rendered`, assigned first: as an argument `ul: {…}` would name a parameter
 const RENDER_PROGRAM: &str = "use markup\nshown = rendered\nto_html(shown)";
 const RENDERED: &str = "rendered";
-/// the element of a style sheet and the attribute of an inline style (card web-styles)
-const STYLE: &str = "style";
 /// the attribute naming the component of an element, whose style sheets style only its elements (card web-scoped)
 pub const SCOPE_ATTRIBUTE: &str = "data-warp-scope";
 /// how deep holes go: a component showing itself inside would go on
@@ -307,7 +306,7 @@ pub fn is_style_sheet(node: &Node) -> bool {
 	let Node::Key(name, Op::Colon, value) = node.drop_meta() else {
 		return false;
 	};
-	name.drop_meta().name() == STYLE && !is_declarations(value)
+	name.drop_meta().name() == STYLE_WORD && !is_declarations(value)
 }
 
 /// `{ color: theme padding: 8 }`: CSS properties with plain values

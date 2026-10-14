@@ -21,7 +21,7 @@ use wasmtime_wasi::{p1, FsPerms, I32Exit, WasiCtxBuilder};
 
 const WASI_TARGET: &str = "wasm32-wasip1";
 /// rustc's note when the standard library of a target is missing ("… the `wasm32-wasip1` target may not be installed")
-const MISSING_TARGET_SIGN: &str = "target may not be installed";
+pub(crate) const MISSING_TARGET_SIGN: &str = "target may not be installed";
 const WASM_EXTENSION: &str = "wasm";
 const WASM_MAGIC: &[u8] = b"\0asm";
 /// `<name>@<version>` + this, next to the pinned clone in the package cache
