@@ -1,0 +1,3 @@
+// card get-phrase-result: a phrase starting with get is a call, not an HTTP route
+to get cents of coin: coin * 2
+get cents of 3
