@@ -23,7 +23,7 @@ const STATEMENT_WORDS: [&str; 17] = [
 ];
 
 pub(crate) fn names_a_function(name: &str) -> bool {
-	!is_type_word(name)
+	!is_kinded_type_or_any(name)
 		&& !ARTICLES.contains(&name)
 		&& !PREPOSITIONS.contains(&name)
 		&& !STATEMENT_WORDS.contains(&name)
@@ -32,8 +32,8 @@ pub(crate) fn names_a_function(name: &str) -> bool {
 		&& !crate::operators::FUNCTION_KEYWORDS.contains(&name)
 }
 
-/// A known type word of a head: `fib int i`, `foo of any`
-fn is_type_word(word: &str) -> bool {
+/// A type word of a head: a type with a value kind (analyzer::type_word_kind) or `any`: `fib int i`, `foo of any`
+fn is_kinded_type_or_any(word: &str) -> bool {
 	type_word_kind(word).is_some() || word == crate::words::ANY_TYPE
 }
 
@@ -117,8 +117,8 @@ pub fn uses_it(node: &Node) -> bool {
 pub fn spaced_parameters(words: &[&str], body: &Node) -> Option<Result<(Vec<Node>, Node), String>> {
 	words
 		.iter()
-		.any(|word| is_type_word(word))
-		.then(|| parameter_slots(words, body, &is_type_word))
+		.any(|word| is_kinded_type_or_any(word))
+		.then(|| parameter_slots(words, body, &is_kinded_type_or_any))
 }
 
 /// The statement `name words… last = body` (parsed as the items `name`, `words…`, `last=body`) as `name(params) := body`
@@ -141,7 +141,7 @@ fn typed_return(type_name: &Node, definition: &Node) -> Option<Node> {
 	// `function square(n){…}` names no return type: a definition keyword is no type word here
 	type_name
 		.symbol_name()
-		.filter(|word| (is_type_word(word) || is_union(word)) && !crate::operators::FUNCTION_KEYWORDS.contains(word))?;
+		.filter(|word| (is_kinded_type_or_any(word) || is_union(word)) && !crate::operators::FUNCTION_KEYWORDS.contains(word))?;
 	let type_name = type_name.drop_meta();
 	match definition.drop_meta() {
 		Node::Key(head, op @ (Op::Assign | Op::Define), body) if is_call_head(head) => {
@@ -323,7 +323,7 @@ pub fn lower_prefixed_declarations(node: Node) -> Node {
 
 fn prefixed_declaration(items: &[Node]) -> Option<Node> {
 	let [type_name, declaration] = items else { return None };
-	type_name.symbol_name().filter(|word| is_type_word(word))?;
+	type_name.symbol_name().filter(|word| is_kinded_type_or_any(word))?;
 	let Node::Key(name, Op::Assign, value) = declaration.drop_meta() else {
 		return None;
 	};

@@ -282,7 +282,7 @@ fn without_use_of(program: Node, module: &str) -> Node {
 /// The standard modules named after a type with their words, the methods of that type: list, map, text
 pub fn type_modules() -> Vec<(&'static str, &'static [String])> {
 	std_module_names()
-		.filter(|module| crate::type_tests::is_type_word(module))
+		.filter(|module| crate::type_tests::is_builtin_type_word(module))
 		.filter_map(|module| Some((module, std_module_definitions(module)?)))
 		.collect()
 }

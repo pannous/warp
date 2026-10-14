@@ -305,7 +305,7 @@ pub fn is_standard_function(name: &str) -> bool {
 /// does: `word == reverse word` compares with `reverse(word)`, `1 == first xs` with `first(xs)`. A type word stays a
 /// type: `x: list int`
 pub fn is_operand_word(name: &str) -> bool {
-	canonical_word(name).is_some_and(|word| arity(word) == 1 && !crate::type_tests::is_type_word(word))
+	canonical_word(name).is_some_and(|word| arity(word) == 1 && !crate::type_tests::is_builtin_type_word(word))
 }
 
 /// The spelling word lists name a library word by (`sorted` → sort); any other name as it is
