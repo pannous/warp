@@ -29,8 +29,39 @@ function serveTaskWorkers(programWorker) {
 	return programWorker;
 }
 
-// `clipboard` in a Worker (host-tasks.js askPage): the page's text into the Worker's shared buffer
-const pasteInto = shared => answerInto(shared, async () => ({ text: await navigator.clipboard.readText() }));
+// `clipboard` in a Worker (host-tasks.js askPage): the page's text into the Worker's shared buffer. A browser that reads
+// the clipboard only right after the user acted (Firefox; Chrome when the page has no focus) refuses a run's read: a
+// button then asks for it, and its click reads (card dir-clipboard)
+const pasteInto = shared => answerInto(shared, async () => ({ text: await withPermission(CLIPBOARD_ASK, () => navigator.clipboard.readText()) }));
+const CLIPBOARD_ASK = "📋 the program reads the clipboard: click to allow";
+const PERMISSION_WAIT_MS = 60000; // host-tasks.js PAGE_ANSWER_MS: the Worker waits no longer
+const ASKING_CLASS = "permission-ask";
+const ASKING_STYLE = "position:fixed;bottom:1em;left:50%;transform:translateX(-50%);z-index:9;padding:.6em 1em;font:inherit;cursor:pointer";
+
+// `use`'s answer; when the browser refuses it (NotAllowedError), a button the user clicks to let it run again
+async function withPermission(ask, use) {
+	try {
+		return await use();
+	} catch (failure) {
+		if (failure?.name !== "NotAllowedError") throw failure;
+		return afterClick(ask, use);
+	}
+}
+
+function afterClick(ask, use) {
+	document.querySelectorAll(`.${ASKING_CLASS}`).forEach(asking => asking.remove()); // an earlier run's question
+	const button = Object.assign(document.createElement("button"), { className: ASKING_CLASS, textContent: ask });
+	button.style.cssText = ASKING_STYLE;
+	document.body.append(button);
+	return new Promise((resolve, reject) => {
+		const timeout = setTimeout(() => { button.remove(); reject(new Error(`not allowed: nobody clicked "${ask}"`)); }, PERMISSION_WAIT_MS);
+		button.onclick = () => {
+			clearTimeout(timeout);
+			button.remove();
+			use().then(resolve, reject);
+		};
+	});
+}
 
 // the page's answer to a waiting Worker, or {error}, as JSON in its shared buffer: host-tasks.js writeShared's layout
 // ([state, length] as Int32, then the JSON), the state set last for the Worker waiting on it
