@@ -15,7 +15,8 @@ pub const CACHE_VARIABLE: &str = "WARP_MODULE_CACHE";
 const CACHE_OFF: &str = "off";
 /// Below the home directory, next to the package cache (modules.rs)
 const DEFAULT_CACHE: &str = ".cache/warp/modules";
-const COMPILED_EXTENSION: &str = "cwasm";
+/// wasmtime's ahead-of-time output: the cache's files, and what `warp app.cwasm` runs as it is
+pub const COMPILED_EXTENSION: &str = "cwasm";
 /// A cache grown past this size drops its least recently used modules down to half of it (a test suite run writes
 /// a few thousand modules of 100–200 KB)
 const MAX_CACHE_BYTES: u64 = 1 << 30;
