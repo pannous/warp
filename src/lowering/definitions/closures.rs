@@ -38,11 +38,11 @@ pub fn referenced_function(node: &Node) -> Option<String> {
 		_ => referenced_function(inner),
 	}
 }
-const CLOSURE_CALL_PREFIX: &str = "closure_call_";
+pub(crate) const CLOSURE_CALL_PREFIX: &str = "closure_call_";
 /// `h·capture·0`: a captured value of the closure variable h, read once (hoist_captures); `closure_lambda_1·captured·0(h)` reads it
 const CAPTURE_LOCAL_MARK: &str = "·capture·";
 const CAPTURE_READER_MARK: &str = "·captured·";
-const LIFTED_PREFIX: &str = "closure_lambda_";
+pub(crate) const LIFTED_PREFIX: &str = "closure_lambda_";
 
 /// A function the compiler made of a lambda (`x => x + n`), no name the program wrote
 pub fn is_lambda_function(name: &str) -> bool {
