@@ -903,6 +903,10 @@ impl Blocks {
 		if let Some(prefixed) = prefixed_group(&node) {
 			return self.rewrite(prefixed);
 		}
+		// `data (j: 1⏎ k: n * 1)` is code as written: its `k:` binds no block (tree-patterns step 7)
+		if quoted_data(&node).is_some() {
+			return node;
+		}
 		// `o.s1!`: the parser marks the field it was reading (as for `x.upper!`)
 		if let Node::Key(object, Op::Dot, field) = node.drop_meta() {
 			if let Some((field, _)) = bang_target(field) {
