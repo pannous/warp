@@ -7,14 +7,14 @@ use super::*;
 pub(crate) fn field_holding_lambda(item: Node) -> Node {
 	match item {
 		meta @ Node::Meta { .. } => meta.under_meta(field_holding_lambda),
-		Node::Key(head, Op::Arrow, body) => match head.drop_meta() {
+		Node::Key(head, Op::FatArrow, body) => match head.drop_meta() {
 			Node::Key(key, Op::Colon, parameter)
 				if matches!(key.drop_meta(), Symbol(_)) && is_parameter_word(parameter) =>
 			{
-				let lambda = Node::Key(parameter.clone(), Op::Arrow, body);
+				let lambda = Node::Key(parameter.clone(), Op::FatArrow, body);
 				Node::Key(key.clone(), Op::Colon, Box::new(lambda))
 			}
-			_ => Node::Key(head, Op::Arrow, body),
+			_ => Node::Key(head, Op::FatArrow, body),
 		},
 		other => other,
 	}
@@ -27,7 +27,7 @@ impl WarpParser {
 		let parameters = self.parse_bracketed('(');
 		self.skip_spaces();
 		let body = self.parse_expr(Op::Assign.binding_power().1);
-		Node::Key(Box::new(parameters), Op::Arrow, Box::new(body))
+		Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body))
 	}
 
 	/// `\x ->`, `\a b ->`: names and an arrow after the backslash (`\alpha` alone is an entity)
@@ -67,7 +67,7 @@ impl WarpParser {
 			_ => Node::List(names, Bracket::Round, Separator::Colon),
 		};
 		let body = self.parse_expr(Op::Assign.binding_power().1);
-		Node::Key(Box::new(parameters), Op::Arrow, Box::new(body))
+		Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body))
 	}
 
 	/// `<T, F: Fn(i32) -> i32>` glued to a function's name and followed by its parameters: its length
@@ -106,7 +106,7 @@ impl WarpParser {
 			return error("a stabby lambda `->(x) { … }` needs its body in braces");
 		}
 		let body = self.parse_bracketed('{');
-		Node::Key(Box::new(parameters), Op::Arrow, Box::new(body))
+		Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body))
 	}
 
 	/// Python's `lambda a, b=2: a + b`, `lambda *xs: …`, `lambda: 42` at the cursor: the parameters as one group (the
@@ -136,6 +136,6 @@ impl WarpParser {
 		self.skip_spaces();
 		let body = self.parse_expr(Op::Assign.binding_power().1);
 		let body = self.continue_expr(body, 0);
-		Some(Node::Key(Box::new(parameters), Op::Arrow, Box::new(body)))
+		Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body)))
 	}
 }

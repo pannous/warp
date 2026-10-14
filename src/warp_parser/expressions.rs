@@ -70,8 +70,8 @@ impl WarpParser {
 		} else if let Some(operator) = self.try_parse_operator_value() {
 			operator
 		} else if let Some(parameters) = self.pipe_parameters() {
-			let body = self.parse_expr(Op::Arrow.binding_power().1);
-			Node::Key(Box::new(parameters), Op::Arrow, Box::new(body))
+			let body = self.parse_expr(Op::FatArrow.binding_power().1);
+			Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body))
 		} else {
 			self.parse_atom()
 		};
@@ -429,7 +429,8 @@ impl WarpParser {
 			let value = self.parse_expr(r_bp);
 			self.glued_pair_bp = outer;
 			value
-		} else if matches!(op, Op::Range | Op::To) && self.peek_operator().is_some_and(|(next, _)| next == Op::Arrow) {
+		} else if matches!(op, Op::Range | Op::To) && self.peek_operator().is_some_and(|(next, _)| next == Op::FatArrow)
+		{
 			Empty // the match arm `65.. => "senior"`: a range without end
 		} else if matches!(op, Op::And | Op::Or) && self.take_braceless_print() {
 			// `it%2 and print it`, `x || print "none"`: print takes the rest of the statement, as at its start

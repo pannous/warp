@@ -21,7 +21,7 @@ pub(crate) fn is_typed_method(words: &[Node]) -> bool {
 /// for its trailing block
 pub(crate) fn assigned_method_call(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::Key(_, Op::Assign | Op::Define | Op::Arrow, value) => {
+		Node::Key(_, Op::Assign | Op::Define | Op::Arrow | Op::FatArrow, value) => {
 			matches!(value.drop_meta(), Node::Key(_, Op::Dot, method) if matches!(method.drop_meta(), Symbol(_)))
 				|| assigned_method_call(value)
 		}
@@ -283,6 +283,6 @@ impl WarpParser {
 				Separator::Colon,
 			),
 		};
-		Some(Node::Key(Box::new(parameters), Op::Arrow, Box::new(body)))
+		Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body)))
 	}
 }

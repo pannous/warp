@@ -19,7 +19,7 @@ pub(super) fn dot_call(function: Node, arguments: Node) -> Node {
 		Bracket::Round,
 		Separator::None,
 	);
-	let each = Node::Key(Box::new(item), Op::Arrow, Box::new(applied));
+	let each = Node::Key(Box::new(item), Op::FatArrow, Box::new(applied));
 	call(MAP_WORD, vec![list, each])
 }
 

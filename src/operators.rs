@@ -13,7 +13,7 @@ const PREFIX_BP: u8 = 162;
 /// Every spelling of an infix or prefix operator the parser reads: symbols, Unicode glyphs and words (wiki/alias.md,
 /// wiki/operator.md). The canonical spelling is Op::as_str, every other one an alias; the parser takes the longest
 /// spelling that fits (lookahead.rs peek_operator), the style hints name the canonical one (normalize.rs)
-pub const OPERATOR_SPELLINGS: [(&str, Op); 139] = [
+pub const OPERATOR_SPELLINGS: [(&str, Op); 136] = [
 	(":", Op::Colon),
 	(".", Op::Dot),
 	("?.", Op::SafeDot),
@@ -24,13 +24,13 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 139] = [
 	("=", Op::Assign),
 	("<-", Op::Assign), // R's `x <- 3` (P145)
 	("->", Op::Arrow),
-	("=>", Op::Arrow),
+	("=>", Op::FatArrow),
 	("+", Op::Add),
 	("plus", Op::Add),
-	("add", Op::Add),
+	// ("add", Op::Add), // card word-operators: clashes with xs.add(…), add:(…) members, `add x to y`
 	("-", Op::Sub),
 	("minus", Op::Sub),
-	("subtract", Op::Sub),
+	// ("subtract", Op::Sub), // card word-operators
 	// the dashes 0x2010..0x2015 and the minus sign 0x2212 all mean `-`
 	("‐", Op::Sub),
 	("‑", Op::Sub),
@@ -44,7 +44,7 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 139] = [
 	// the unit product of a printed quantity (`6 m·kg`); generated names use `·` only after parsing
 	("·", Op::Mul),
 	("⋅", Op::Mul),
-	("times", Op::Mul),
+	// ("times", Op::Mul), // card word-operators: `3 times {…}` is a loop
 	("/", Op::Div),
 	("÷", Op::Div),
 	("divided by", Op::Div),
@@ -274,6 +274,7 @@ pub enum Op {
 	Define,    // :=  definition
 	Assign,    // =   assignment
 	Arrow,     // ->  arrow/lambda/return type
+	FatArrow,  // =>  only while parsing: the spelling binds and reads as in JS; parse() makes it Arrow, one arrow for warp
 	ArrowUp,   // ↑  e.g. exponential x^n
 	ArrowDown, // ↓ e.g. logarithmic   log(x)/log(base)
 
@@ -433,10 +434,11 @@ impl Op {
 			Op::Do => (77, 10),   // do binds very loosely to capture whole body including assignments
 
 			// Structural/Key operators (existing, adjusted for consistency)
-			Op::Colon => (80, 81),  // type annotation: a:b:c → a:(b:c)
-			Op::Arrow => (70, 58),  // right-assoc: a->b->c is a->(b->c); the body takes an assignment as in JS: x => total += x
-			Op::Define => (60, 59), // right-assoc: a:=b:=c → a:=(b:=c)
-			Op::Assign => (60, 59), // right-assoc: a=b=c → a=(b=c)
+			Op::Colon => (80, 81),    // type annotation: a:b:c → a:(b:c)
+			Op::Arrow => (70, 69),    // right-assoc: a->b->c → a->(b->c); a return type `-> (Int, Int)` stays one type
+			Op::FatArrow => (70, 58), // `=>` as JS: the body takes an assignment, x => total += x
+			Op::Define => (60, 59),   // right-assoc: a:=b:=c → a:=(b:=c)
+			Op::Assign => (60, 59),   // right-assoc: a=b=c → a=(b=c)
 
 			// Compound assignment (same precedence as assignment)
 			Op::AddAssign
@@ -471,6 +473,7 @@ impl Op {
 			Op::Define => ":=",
 			Op::Assign => "=",
 			Op::Arrow => "->",
+			Op::FatArrow => "=>",
 			Op::ArrowUp => "↑",
 			Op::ArrowDown => "↓",
 

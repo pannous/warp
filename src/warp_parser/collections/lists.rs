@@ -4,7 +4,7 @@ use super::*;
 /// `(x => print x)`: `=>` binds looser than the space, so the words after a lambda's arrow are its body (`print x`), not
 /// further items; a run of entries `1 => "a" 2 => "b"` stays a list of pairs
 pub(crate) fn with_arrow_bodies(mut items: Vec<Node>) -> Vec<Node> {
-	let is_arrow = |node: &Node| matches!(node.drop_meta(), Node::Key(_, Op::Arrow, _));
+	let is_arrow = |node: &Node| matches!(node.drop_meta(), Node::Key(_, Op::FatArrow, _));
 	let Some(arrow) = items.iter().position(is_arrow) else {
 		return items;
 	};
