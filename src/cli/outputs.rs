@@ -38,7 +38,7 @@ pub(crate) fn compiled_output_path(target: &str) -> String {
 
 /// `warp compile --aot`: the module compiled to machine code for this machine and wasmtime version, next to the .wasm
 pub(crate) fn write_machine_code(bytes: &[u8], wasm_path: &str) {
-	let path = std::path::Path::new(wasm_path).with_extension(MACHINE_CODE_EXTENSION);
+	let path = std::path::Path::new(wasm_path).with_extension(COMPILED_EXTENSION);
 	let (engine, _) = wasm_reader::engine_for(bytes);
 	match engine.precompile_module(bytes) {
 		Ok(machine_code) => {
