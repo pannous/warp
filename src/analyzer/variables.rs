@@ -129,11 +129,8 @@ pub(super) fn collect_variables_inner(
 		}
 		// Define (:=) always creates a variable, Assign (=) only outside structure context
 		Node::Key(left, Op::Define, right) => {
-			if let Some(name) = left.symbol_name().filter(|_| !skip_first_assign) {
-				if scope.lookup(name).is_none() && !scope.is_global(name) {
-					let kind = binding_kind(right, scope);
-					scope.define(name.to_string(), None, kind);
-				}
+			if !skip_first_assign {
+				define_new(left, right, scope);
 			}
 			visit(right, scope)
 		}
@@ -149,19 +146,7 @@ pub(super) fn collect_variables_inner(
 		// the value's variables come first, as for `=`: `r += (t = l[b]; t)` (a lowered max) widens r by t's kind
 		Node::Key(left, op, right) if op.is_compound_assign() => {
 			let inner_temporaries = visit(right, scope);
-			if let Some(name) = left.symbol_name() {
-				mark_ratio(left, right, scope);
-				widen_to_float(scope, name, right);
-				// `out += x` of a number of run-time kind may add a float, as `out = out + x` does; an evident other kind
-				// (`s += "ab"` of an Int) stays the type error of emit_compound_type_error
-				if crate::analyzer::inference::is_run_time_kind(&binding_kind(right, scope)) {
-					widen_to_node(scope, name, &Node::Key(left.clone(), op.base_op(), right.clone()));
-				}
-				// `xs += [v]` (a lowered `xs.push(v)`) types xs as `xs = xs + [v]` does
-				if *op == Op::AddAssign {
-					type_list_by_first_append(name, &Node::Key(left.clone(), Op::Add, right.clone()), scope);
-				}
-			}
+			widen_by_compound_assign(left, op, right, scope);
 			visit(left, scope) + inner_temporaries
 		}
 		// While loop needs temp locals for the result and for "the body ran"
@@ -176,6 +161,42 @@ pub(super) fn collect_variables_inner(
 			.sum(),
 		Node::List(items, _, _) => items.iter().map(|item| visit(item, scope)).sum(),
 		_ => 0,
+	}
+}
+
+/// `x := v` of a name not yet a local or global defines it
+fn define_new(left: &Node, right: &Node, scope: &mut Scope) {
+	if let Some(name) = left.symbol_name() {
+		if scope.lookup(name).is_none() && !scope.is_global(name) {
+			let kind = binding_kind(right, scope);
+			scope.define(name.to_string(), None, kind);
+		}
+	}
+}
+
+/// `x += v` widens x by the kind of v: a ratio, a float, a Node of run-time kind, a list by its first append
+fn widen_by_compound_assign(left: &Node, op: &Op, right: &Node, scope: &mut Scope) {
+	let Some(name) = left.symbol_name() else {
+		return;
+	};
+	mark_ratio(left, right, scope);
+	widen_to_float(scope, name, right);
+	// `out += x` of a number of run-time kind may add a float, as `out = out + x` does; an evident other kind
+	// (`s += "ab"` of an Int) stays the type error of emit_compound_type_error
+	if crate::analyzer::inference::is_run_time_kind(&binding_kind(right, scope)) {
+		widen_to_node(
+			scope,
+			name,
+			&Node::Key(Box::new(left.clone()), op.base_op(), Box::new(right.clone())),
+		);
+	}
+	// `xs += [v]` (a lowered `xs.push(v)`) types xs as `xs = xs + [v]` does
+	if *op == Op::AddAssign {
+		type_list_by_first_append(
+			name,
+			&Node::Key(Box::new(left.clone()), Op::Add, Box::new(right.clone())),
+			scope,
+		);
 	}
 }
 
