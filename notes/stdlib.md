@@ -245,7 +245,7 @@ every word lives today and what still moves.
 | … RUNTIME_WORDS | words lowered to runtime calls | 17 |
 | … EXPANDED_WORDS | warp templates kept as Rust strings: list round_to first last sum replace is_digit is_alpha unwrap is_alphanumeric | 10 |
 | src/wasm_emitter/library_ops.rs LIBRARY_FUNCTIONS | runtime functions in wasm: keys values entries contains index_of get without ord chars field_with reverse sort upper lower split join slice | 17 |
-| src/wasm_emitter/text_builtins.rs TEXT_BUILTINS | text runtime functions | 21 |
+| src/wasm_emitter/text/text_builtins.rs TEXT_BUILTINS | text runtime functions | 21 |
 | src/wasm_emitter/list_emitter.rs BUILTIN_CALLS | list runtime calls | 18 |
 | src/numbers/real.rs FUNCTIONS | exact-real functions | 6 |
 | src/host.rs HOST_WORDS | host imports (print, clock, fetch, paint, clipboard, notify, tasks, foreign_call, gpu, std_pure/std_io …) | 55 |

@@ -85,7 +85,7 @@ impl Operations {
 				let items_of = |value: &Node| self.call(ITERATE_OPERATION, &self.iterable, value);
 				let called = match items.as_slice() {
 					[word, value]
-						if is_text_word(word) || word.name() == crate::wasm_emitter::text_builtins::TEXT_FORM =>
+						if is_text_word(word) || word.name() == crate::wasm_emitter::text::text_builtins::TEXT_FORM =>
 					{
 						text_call(value)
 					}

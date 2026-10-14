@@ -63,7 +63,7 @@ const LOG_WORD: &str = "log";
 
 /// Canonical word and the spellings that mean it
 const SYNONYMS: [(&str, &[&str]); 31] = [
-	(crate::wasm_emitter::text_builtins::WARNING, &["warn"]),
+	(crate::wasm_emitter::text::text_builtins::WARNING, &["warn"]),
 	// Python's tuple(xs) (card python-stdlib)
 	(LIST_WORD, &["tuple"]),
 	(MAP_KEYS, &["keys"]),
@@ -298,7 +298,7 @@ pub fn is_standard_function(name: &str) -> bool {
 	is_library_word(name)
 		|| crate::min_max::is_extremum(name)
 		|| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name)
-		|| crate::wasm_emitter::text_builtins::is_text_builtin(name)
+		|| crate::wasm_emitter::text::text_builtins::is_text_builtin(name)
 }
 
 /// A library word of one argument takes the name after it as that argument inside an operand, as a defined function
@@ -422,9 +422,9 @@ fn raise_call(items: &[Node], shadowed: &HashSet<String>) -> Option<Node> {
 	// the message is a text, so `catch e` reads it whatever was raised (`raise 42`: "42"); a word (`raise oops`) is its name
 	let message = match message.drop_meta() {
 		Node::Text(_) | Node::Symbol(_) => message,
-		_ => call(crate::wasm_emitter::text_builtins::TEXT_FORM, vec![message]),
+		_ => call(crate::wasm_emitter::text::text_builtins::TEXT_FORM, vec![message]),
 	};
-	Some(call(crate::wasm_emitter::text_builtins::RAISE, vec![message]))
+	Some(call(crate::wasm_emitter::text::text_builtins::RAISE, vec![message]))
 }
 
 /// Method syntax for builtin functions: the called method `x.f(args)` is `f(x, args)` when f is a rounding, extremum,
@@ -442,7 +442,7 @@ pub fn lower_function_methods(node: Node) -> Node {
 	// a libc function is no method: `m.remove(k)` is the map's, not stdio's remove(path)
 	let is_libm = |name: &str| crate::ffi::get_ffi_signature(name).is_some_and(|signature| signature.library != "c");
 	let is_builtin = |name: &str, arguments: usize| {
-		let is_text_builtin = crate::wasm_emitter::text_builtins::text_builtin_kind(name, arguments + 1).is_some();
+		let is_text_builtin = crate::wasm_emitter::text::text_builtins::text_builtin_kind(name, arguments + 1).is_some();
 		crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name)
 			|| crate::min_max::is_extremum(name)
 			|| is_text_builtin
@@ -1148,7 +1148,7 @@ impl Lowering {
 			return copy_call(receiver.clone(), shallow_flag(shallow));
 		}
 		// a text builtin's own arity check names its values (`trim takes 1 value, got 2`)
-		let checks_itself = crate::wasm_emitter::text_builtins::is_text_builtin(word);
+		let checks_itself = crate::wasm_emitter::text::text_builtins::is_text_builtin(word);
 		// a prelude parameter with a default may be left out: its definition fills it in
 		let fewest = wanted - crate::modules::prelude_word_defaults(word);
 		if !(fewest..=wanted).contains(&arguments.len()) && !checks_itself {
@@ -1274,7 +1274,7 @@ impl Lowering {
 		self.instantiate_template(
 			&format!(
 				"(if {condition_placeholder} {{1}} else {{{}({TRY_FALLBACK_PLACEHOLDER})}})",
-				crate::wasm_emitter::text_builtins::RAISE
+				crate::wasm_emitter::text::text_builtins::RAISE
 			),
 			&[
 				(condition_placeholder, &condition),

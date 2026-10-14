@@ -4,11 +4,11 @@
 //! instances entry by entry with ≈ again, anything else by values_equal. `a ~ b` (P211, values_rough) is the same with
 //! its own tolerance, texts also without the whitespace and punctuation around them (text_rough_trim).
 
-use super::equality::IS_META_ENTRY;
-use super::text_builtins::{TEXT_OF, TEXT_ROUGH_TRIM};
-use super::text_unicode::CaseMapping;
-use super::numbers::uncertain::UNCERTAIN_SIMILAR;
-use super::{WasmGcEmitter, IS_TRUTHY, VALUES_EQUAL};
+use super::super::equality::IS_META_ENTRY;
+use super::super::text::text_builtins::{TEXT_OF, TEXT_ROUGH_TRIM};
+use super::super::text::text_unicode::CaseMapping;
+use super::super::numbers::uncertain::UNCERTAIN_SIMILAR;
+use super::super::{WasmGcEmitter, IS_TRUTHY, VALUES_EQUAL};
 use crate::library_words::{VALUES_ROUGH, VALUES_SIMILAR};
 use crate::node::Node;
 use crate::type_kinds::{Kind, BOOL_KIND, CURLY_LIST_KIND};
@@ -39,7 +39,7 @@ pub fn add_dependencies(required: &mut std::collections::HashSet<&'static str>) 
 
 impl WasmGcEmitter {
 	/// Push i64 1/0 for `values_similar(a, b, tolerance)` or `values_rough(a, b, tolerance)`, the function given
-	pub(super) fn emit_similarity(
+	pub(in crate::wasm_emitter) fn emit_similarity(
 		&mut self,
 		func: &mut Function,
 		function: &str,
@@ -70,7 +70,7 @@ impl WasmGcEmitter {
 	}
 
 	/// After the library ops (text_fold shares text_lower's emitter) and the equality ops
-	pub(super) fn emit_similarity_ops(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_similarity_ops(&mut self) {
 		if self.should_emit_function(NUMBERS_SIMILAR) {
 			self.emit_numbers_similar();
 		}

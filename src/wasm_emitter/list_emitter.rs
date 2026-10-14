@@ -119,7 +119,7 @@ impl WasmGcEmitter {
 			|| name == crate::words::IS_TYPE
 			|| ROUNDING_FUNCTIONS.contains(&name)
 			|| crate::analyzer::counting_function(name, &self.ctx).is_some()
-			|| super::text_builtins::is_text_builtin(name)
+			|| super::text::text_builtins::is_text_builtin(name)
 			// a C function resolves once imported (`use c`, `import f from "c"`, libm's implicit imports): known but not
 			// imported it is an error that says so (ffi::undefined_function_message), never data
 			|| crate::ffi::get_ffi_signature(name).is_some_and(|signature| !matches!(signature.library, "c" | "m"))
@@ -199,7 +199,7 @@ impl WasmGcEmitter {
 			if !matches!(items, [_, argument] if self.emit_interval_word(func, fn_name, argument)) {
 				self.emit_ffi_call(func, fn_name, &items[1..], None);
 			}
-		} else if items.len() >= 2 && super::text_builtins::text_builtin_kind(fn_name, items.len() - 1).is_some() {
+		} else if items.len() >= 2 && super::text::text_builtins::text_builtin_kind(fn_name, items.len() - 1).is_some() {
 			self.emit_text_builtin(func, fn_name, &items[1..]);
 		} else {
 			return false;

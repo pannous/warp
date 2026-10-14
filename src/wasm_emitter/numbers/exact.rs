@@ -1015,7 +1015,7 @@ impl WasmGcEmitter {
 			vec![i64t, i64t, i64t, i64t, nullable],
 			|s, f| {
 				let (value, numerator, denominator, rest, scale, fraction) = (0, 1, 2, 3, 4, 5);
-				let concat = |f: &mut Function| s.call(f, crate::wasm_emitter::text_builtins::TEXT_CONCAT);
+				let concat = |f: &mut Function| s.call(f, crate::wasm_emitter::text::text_builtins::TEXT_CONCAT);
 				f.instruction(&I::LocalGet(value));
 				s.call(f, "is_ratio");
 				Self::emit_list(f, &[I::I32Eqz, I::If(BlockType::Empty), I::LocalGet(value)]);
@@ -1160,7 +1160,7 @@ impl WasmGcEmitter {
 		self.runtime_function(DECIMAL_TEXT, vec![i64t], vec![node_ref], locals, |s, f| {
 			let (value, numerator, denominator, rest, before_period, fives, period, power, length, address, at, prefix) =
 				(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11);
-			let concat = |f: &mut Function| s.call(f, crate::wasm_emitter::text_builtins::TEXT_CONCAT);
+			let concat = |f: &mut Function| s.call(f, crate::wasm_emitter::text::text_builtins::TEXT_CONCAT);
 			let exact_text_if = |f: &mut Function| {
 				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(value)]);
 				s.call(f, EXACT_TEXT);

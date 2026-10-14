@@ -305,7 +305,7 @@ impl WasmGcEmitter {
 						is_text(f, 0);
 						is_text(f, 1);
 						Self::emit_list(f, &[I::I32And, I::If(BlockType::Empty), I::LocalGet(0), I::LocalGet(1)]);
-						s.call(f, super::super::text_builtins::TEXT_CONCAT);
+						s.call(f, super::super::text::text_builtins::TEXT_CONCAT);
 						Self::emit_list(f, &[I::Return, I::End]);
 						// a text and a number: the number's text joined to it, as `1 + "x"` is "1x" when the kinds are known
 						is_text(f, 0);
@@ -313,9 +313,9 @@ impl WasmGcEmitter {
 						Self::emit_list(f, &[I::I32Or, I::If(BlockType::Empty)]);
 						let node_type = s.type_manager.node_type;
 						Self::emit_list(f, &[I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(0)]);
-						s.call(f, super::super::text_builtins::TEXT_OF);
+						s.call(f, super::super::text::text_builtins::TEXT_OF);
 						Self::emit_list(f, &[I::I64Const(crate::type_kinds::SQUARE_LIST_KIND), I::LocalGet(1)]);
-						s.call(f, super::super::text_builtins::TEXT_OF);
+						s.call(f, super::super::text::text_builtins::TEXT_OF);
 						Self::emit_list(
 							f,
 							&[

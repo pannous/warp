@@ -10,7 +10,7 @@ use crate::lowering::nodes::children_rewritten;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::text::injection::{parts_with, Part};
-use crate::wasm_emitter::text_builtins::TEXT_FORM;
+use crate::wasm_emitter::text::text_builtins::TEXT_FORM;
 
 /// Meta key marking a text literal as a template
 const TEMPLATE_MARK: &str = "template";

@@ -172,7 +172,7 @@ impl TextValues {
 			Node::List(items, _, _) => match items.split_first() {
 				Some((head, arguments)) => head.symbol_name().is_some_and(|word| {
 					crate::library_words::result_kind(word) == Some(Kind::Text)
-						|| crate::wasm_emitter::text_builtins::text_builtin_kind(word, arguments.len())
+						|| crate::wasm_emitter::text::text_builtins::text_builtin_kind(word, arguments.len())
 							== Some(Kind::Text)
 				}),
 				None => false,

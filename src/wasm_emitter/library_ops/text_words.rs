@@ -610,14 +610,14 @@ impl WasmGcEmitter {
 					Self::emit_list(f, &[I::End, I::LocalGet(element)]);
 					new_text(f, space);
 					f.instruction(&I::Call(own_index));
-					s.call(f, super::super::text_builtins::TEXT_CONCAT);
+					s.call(f, super::super::text::text_builtins::TEXT_CONCAT);
 					is_map(f);
 					f.instruction(&I::If(BlockType::Result(node_ref)));
 					new_text(f, close_map);
 					f.instruction(&I::Else);
 					new_text(f, close);
 					f.instruction(&I::End);
-					s.call(f, super::super::text_builtins::TEXT_CONCAT);
+					s.call(f, super::super::text::text_builtins::TEXT_CONCAT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
 				// a ø item reads as ø, as Node::serialize writes it: also an empty map at the top (card print-empty-map)

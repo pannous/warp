@@ -39,13 +39,10 @@ mod list_emitter;
 pub(crate) mod list_sharing;
 mod node_api;
 pub use node_api::NODE_AT;
-mod similarity;
-mod text_rooms;
-mod text_unicode;
 mod time_arithmetic;
 pub(crate) mod time_zones;
 pub(crate) mod times;
-pub use similarity::NUMBERS_SIMILAR;
+pub use text::similarity::NUMBERS_SIMILAR;
 mod list_abi;
 pub(crate) mod list_ops;
 mod map_backend;
@@ -56,7 +53,7 @@ mod loop_control;
 pub(crate) use loop_control::{is_step, mark_step, split_step};
 mod reflection;
 mod string_table;
-pub(crate) mod text_builtins;
+pub(crate) mod text;
 mod try_guard;
 mod tuple_emitter;
 mod type_manager;
@@ -752,8 +749,8 @@ impl WasmGcEmitter {
 		component_adapters::add_dependencies(&mut self.ctx.required_functions);
 		numbers::uncertain::add_dependencies(&mut self.ctx.required_functions); // before the similarity's: uncertain_similar needs numbers_similar
 		self.require_function_text(); // before the similarity's: function_text needs values_equal
-		similarity::add_dependencies(&mut self.ctx.required_functions); // before the text builtins': values_equal needs text_of
-		text_builtins::add_dependencies(&mut self.ctx.required_functions);
+		text::similarity::add_dependencies(&mut self.ctx.required_functions); // before the text builtins': values_equal needs text_of
+		text::text_builtins::add_dependencies(&mut self.ctx.required_functions);
 		self.require_list_marks(); // before any function emits a list writer, which reads marks_lists
 		self.guards_errors = try_guard::guards_errors(node);
 		let len = self.ctx.required_functions.len();

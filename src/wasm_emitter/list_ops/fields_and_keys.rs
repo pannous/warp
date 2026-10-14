@@ -211,7 +211,7 @@ impl WasmGcEmitter {
 			|s, f| {
 				let name = 1;
 				f.instruction(&I::LocalGet(0));
-				s.call(f, super::super::text_builtins::TEXT_OF);
+				s.call(f, super::super::text::text_builtins::TEXT_OF);
 				f.instruction(&I::LocalSet(name));
 				s.emit_field(f, name, 0);
 				Self::emit_list(
@@ -1095,8 +1095,8 @@ impl WasmGcEmitter {
 							I::LocalGet(wanted),
 						],
 					);
-					s.call(f, super::super::text_builtins::TEXT_OF);
-					s.call(f, super::super::text_builtins::TEXT_FIND);
+					s.call(f, super::super::text::text_builtins::TEXT_OF);
+					s.call(f, super::super::text::text_builtins::TEXT_FIND);
 					if !positional {
 						Self::emit_list(f, &[I::I64Const(0), I::I64Ne, I::I64ExtendI32U]);
 					}

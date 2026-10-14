@@ -244,9 +244,9 @@ fn functions_of_call(word: &str) -> &'static [&'static str] {
 		REMOVED_VALUE_CALL => &[MAP_GET_OR, MAP_WITHOUT],
 		INSERT_AT_CALL | INSERT_EITHER_CALL => &[INSERT_AT_CALL],
 		crate::words::IS_TYPE => &[crate::type_tests::NODE_KIND_IN],
-		crate::wasm_emitter::text_builtins::TEXT_FORM => &["list_join"],
+		crate::wasm_emitter::text::text_builtins::TEXT_FORM => &["list_join"],
 		// IEEE bits beyond the fixnums are BigInts
-		crate::wasm_emitter::text_builtins::FLOAT_BITS | crate::wasm_emitter::text_builtins::BITS_FLOAT => {
+		crate::wasm_emitter::text::text_builtins::FLOAT_BITS | crate::wasm_emitter::text::text_builtins::BITS_FLOAT => {
 			&[crate::wasm_emitter::INT_RUNTIME]
 		}
 		FIELD_WITH => &[FIELD_WITH, crate::wasm_emitter::VALUES_EQUAL],
@@ -528,7 +528,7 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 					.contains(&name.as_str())
 					{
 						ctx.required_functions
-							.insert(crate::wasm_emitter::text_builtins::ERROR_OF);
+							.insert(crate::wasm_emitter::text::text_builtins::ERROR_OF);
 					}
 					// an image's pixels cross in one call (wasm_emitter/int_lists.rs)
 					if [crate::host::GPU_RENDER, crate::host::TEXT_COVERAGE].contains(&name.as_str()) {

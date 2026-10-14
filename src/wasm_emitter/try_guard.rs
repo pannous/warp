@@ -178,11 +178,11 @@ impl WasmGcEmitter {
 			} else {
 				self.emit_string_call(func, &super::list_ops::runtime_error_message(name), "new_text");
 			}
-			self.emit_call(func, super::text_builtins::ERROR_OF);
+			self.emit_call(func, super::text::text_builtins::ERROR_OF);
 			func.instruction(&I::Else);
 		}
 		self.emit_string_call(func, "error", "new_text");
-		self.emit_call(func, super::text_builtins::ERROR_OF);
+		self.emit_call(func, super::text::text_builtins::ERROR_OF);
 		names.iter().for_each(|_| {
 			func.instruction(&I::End);
 		});

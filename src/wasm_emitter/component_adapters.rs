@@ -44,7 +44,7 @@ const ADAPTER_NEEDS: [&str; 5] = [
 	"new_int",
 	"new_float",
 	"get_int_value",
-	super::text_builtins::TEXT_OF,
+	super::text::text_builtins::TEXT_OF,
 ];
 
 /// Does the program compile as a component crossing the boundary: exporting or importing a function
@@ -305,7 +305,7 @@ impl WasmGcEmitter {
 
 	/// The text node on the stack written to a fresh return area as pointer and length: the area's address
 	fn emit_text_out(&mut self, f: &mut Function, text: u32, length: u32, address: u32) {
-		self.emit_call(f, super::text_builtins::TEXT_OF);
+		self.emit_call(f, super::text::text_builtins::TEXT_OF);
 		Self::emit_list(
 			f,
 			&[

@@ -366,7 +366,7 @@ fn called_method(member: &Node) -> Option<&Vec<Node>> {
 fn is_warp_method(name: &str) -> bool {
 	crate::library_words::is_library_word(name)
 		|| crate::declaration_forms::is_list_mutating_method(name)
-		|| (1..=3).any(|arity| crate::wasm_emitter::text_builtins::text_builtin_kind(name, arity).is_some())
+		|| (1..=3).any(|arity| crate::wasm_emitter::text::text_builtins::text_builtin_kind(name, arity).is_some())
 }
 
 /// The resource a component's function or method gives (src/modules/components.rs); the browser build reads no component

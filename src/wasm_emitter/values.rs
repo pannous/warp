@@ -216,7 +216,7 @@ impl WasmGcEmitter {
 			}
 		}
 		if let [Node::Symbol(fn_name), arguments @ ..] = items {
-			match (text_builtins::text_builtin_kind(fn_name, arguments.len()), arguments) {
+			match (text::text_builtins::text_builtin_kind(fn_name, arguments.len()), arguments) {
 				(Some(Kind::Int), _) => {
 					self.emit_integer_text_builtin(func, fn_name, arguments);
 					return true;

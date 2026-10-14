@@ -40,7 +40,7 @@ impl WasmGcEmitter {
 	/// If the left text (local `left` its address, `left_length` its length) ends where a room is used up and the
 	/// right text's bytes fit into that room, copy them there and branch out by `depth`; local `room` is scratch. An
 	/// empty left text there (a slice at a room's end) grows there too: the room's own text keeps its bytes
-	pub(super) fn emit_grow_in_room(
+	pub(in crate::wasm_emitter) fn emit_grow_in_room(
 		&mut self,
 		func: &mut Function,
 		left: u32,
@@ -107,7 +107,7 @@ impl WasmGcEmitter {
 
 	/// The text just copied to `address` with `length` bytes, the heap starting after it: a long one gets as much room
 	/// again behind it, in the next room; local `room` is scratch
-	pub(super) fn emit_room_behind(&mut self, func: &mut Function, address: u32, length: u32, room: u32) {
+	pub(in crate::wasm_emitter) fn emit_room_behind(&mut self, func: &mut Function, address: u32, length: u32, room: u32) {
 		let (table, next) = self.text_room_globals();
 		let heap = self.text_heap_global.expect("emit_text_heap_global before rooms");
 		let bump_heap = |amount: u32| [I::GlobalGet(heap), I::LocalGet(amount), I::I32Add, I::GlobalSet(heap)];

@@ -33,7 +33,7 @@ const OUTPUT_FACTOR: i32 = 3;
 
 /// How text_upper, text_lower and text_fold map a code point
 #[derive(Clone, Copy)]
-pub(super) enum CaseMapping {
+pub(in crate::wasm_emitter) enum CaseMapping {
 	Upper,
 	Lower,
 	/// lower case without accents: `í` is `i`, `É` is `e` (a letter whose canonical decomposition adds only combining
@@ -312,7 +312,7 @@ impl WasmGcEmitter {
 	}
 
 	/// text_upper(text) / text_lower(text) / text_fold(text): a fresh text with every code point mapped
-	pub(super) fn emit_text_case(&mut self, name: &'static str, mapping: CaseMapping) {
+	pub(in crate::wasm_emitter) fn emit_text_case(&mut self, name: &'static str, mapping: CaseMapping) {
 		if !self.should_emit_function(name) {
 			return;
 		}
@@ -519,7 +519,7 @@ impl WasmGcEmitter {
 	}
 
 	/// text_reverse(text): a fresh text with the code points in the opposite order
-	pub(super) fn emit_text_reverse(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_text_reverse(&mut self) {
 		// list_reverse, which text_split also uses, hands a text on to it
 		if !["list_reverse", "text_reverse", "text_split"]
 			.iter()
@@ -606,7 +606,7 @@ impl WasmGcEmitter {
 	}
 
 	/// text_chars(text): the list of its code points as characters
-	pub(super) fn emit_text_chars(&mut self) {
+	pub(in crate::wasm_emitter) fn emit_text_chars(&mut self) {
 		if !self.should_emit_function("text_chars") {
 			return;
 		}

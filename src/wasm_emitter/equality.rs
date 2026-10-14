@@ -429,7 +429,7 @@ impl WasmGcEmitter {
 				func.instruction(&I::LocalGet(local));
 				if local == character {
 					func.instruction(&I::RefCastNonNull(HeapType::Concrete(node)));
-					self.call(func, crate::wasm_emitter::text_builtins::TEXT_OF);
+					self.call(func, crate::wasm_emitter::text::text_builtins::TEXT_OF);
 				}
 			}
 			Self::emit_list(func, &[I::Call(recurse), I::Return, I::End]);

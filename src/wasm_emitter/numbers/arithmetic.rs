@@ -397,7 +397,7 @@ impl WasmGcEmitter {
 				self.emit_user_function_call_float(func, fn_name, &items[1..]);
 				return;
 			}
-			if super::super::text_builtins::text_builtin_kind(fn_name, items.len() - 1) == Some(Kind::Float) {
+			if super::super::text::text_builtins::text_builtin_kind(fn_name, items.len() - 1) == Some(Kind::Float) {
 				return self.emit_float_builtin(func, fn_name, &items[1..]);
 			}
 			// `float(x)` is `x as float` (a text parses its digits), `int(x)` is `x as int` (an int path of a float function)

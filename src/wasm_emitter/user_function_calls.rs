@@ -689,7 +689,7 @@ impl WasmGcEmitter {
 			self.emit_declared_value(func, param.annotation.as_ref(), argument, expected);
 			if expected == Kind::Text && given == Kind::Codepoint {
 				// f("a") for f(t:text): "a" lexes as a character
-				self.emit_call(func, text_builtins::TEXT_OF);
+				self.emit_call(func, text::text_builtins::TEXT_OF);
 			}
 		}
 

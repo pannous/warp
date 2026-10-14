@@ -199,7 +199,7 @@ impl WasmGcEmitter {
 	/// The text node of a run-time text in the node scratch local, as a Text (a character becomes one)
 	fn emit_runtime_text_node(&mut self, func: &mut Function, node: &Node) -> u32 {
 		self.emit_node_instructions(func, node);
-		self.emit_call(func, super::text_builtins::TEXT_OF);
+		self.emit_call(func, super::text::text_builtins::TEXT_OF);
 		let text = self.node_scratch();
 		func.instruction(&I::LocalSet(text));
 		text
@@ -224,7 +224,7 @@ impl WasmGcEmitter {
 	pub(super) fn emit_string_ptr_only(&mut self, func: &mut Function, node: &Node) {
 		if self.is_runtime_text(node) {
 			self.emit_node_instructions(func, node);
-			self.emit_call(func, super::text_builtins::C_STRING);
+			self.emit_call(func, super::text::text_builtins::C_STRING);
 			return;
 		}
 		let pointer = match self.compile_time_string(node) {

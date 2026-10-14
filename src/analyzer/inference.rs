@@ -74,7 +74,7 @@ fn concatenation_kind(left: Kind, right: Kind) -> Option<Kind> {
 	{
 		Some(Kind::List)
 	} else {
-		crate::wasm_emitter::text_builtins::concatenates(left, right).then_some(Kind::Text)
+		crate::wasm_emitter::text::text_builtins::concatenates(left, right).then_some(Kind::Text)
 	}
 }
 
@@ -430,7 +430,7 @@ pub(super) fn infer_list_type(
 				Kind::Empty
 			};
 		}
-		if let Some(kind) = crate::wasm_emitter::text_builtins::text_builtin_kind(name, items.len() - 1) {
+		if let Some(kind) = crate::wasm_emitter::text::text_builtins::text_builtin_kind(name, items.len() - 1) {
 			return kind;
 		}
 		if name == crate::warp_parser::TEXT_TIMES {

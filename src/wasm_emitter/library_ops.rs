@@ -20,7 +20,7 @@ const OP_INFO_MASK: i64 = 0xff;
 /// An operator's text in list_text's table: its pointer and length, two i32 words
 const OPERATOR_ENTRY_BYTES: i32 = 2;
 use crate::wasm_emitter::layout::BYTE;
-use crate::wasm_emitter::text_unicode::CaseMapping;
+use crate::wasm_emitter::text::text_unicode::CaseMapping;
 
 const KEY_KIND: i64 = Kind::Key as i64;
 /// An i64 has at most 19 digits, plus the sign
@@ -163,7 +163,7 @@ impl WasmGcEmitter {
 	/// A one-character string is a Codepoint node: local `text` becomes the equivalent Text node of its UTF-8 bytes
 	pub(super) fn emit_codepoint_as_text(&self, func: &mut Function, text: u32) {
 		Self::emit_list(func, &[I::LocalGet(text), I::RefAsNonNull]);
-		self.call(func, crate::wasm_emitter::text_builtins::TEXT_OF);
+		self.call(func, crate::wasm_emitter::text::text_builtins::TEXT_OF);
 		func.instruction(&I::LocalSet(text));
 	}
 

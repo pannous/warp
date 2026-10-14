@@ -9,7 +9,7 @@ use crate::node::Node;
 use crate::operators::OP_CODES;
 use crate::type_kinds::{Kind, KIND_BITS, KIND_MASK, SEPARATOR_MASK, SEPARATOR_SHIFT};
 use crate::wasm_emitter::layout::BYTE;
-use crate::wasm_emitter::text_builtins::{TEXT_CONCAT, TEXT_OF};
+use crate::wasm_emitter::text::text_builtins::{TEXT_CONCAT, TEXT_OF};
 use crate::wasm_emitter::WasmGcEmitter;
 use std::collections::HashSet;
 use wasm_encoder::*;
@@ -92,7 +92,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 			SEPARATOR_CODE,
 			TEXT_OF,
 			TEXT_CONCAT,
-			super::text_builtins::ERROR_OF,
+			super::text::text_builtins::ERROR_OF,
 			"new_key",
 			"new_text",
 		]);
@@ -632,7 +632,7 @@ impl WasmGcEmitter {
 		self.call(func, "new_text");
 		func.instruction(&I::LocalGet(text));
 		self.call(func, TEXT_CONCAT);
-		self.call(func, super::text_builtins::ERROR_OF);
+		self.call(func, super::text::text_builtins::ERROR_OF);
 		Self::emit_list(func, &[I::Return, I::End]);
 	}
 }

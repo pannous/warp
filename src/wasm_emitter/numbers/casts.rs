@@ -252,7 +252,7 @@ impl WasmGcEmitter {
 				I::RefAsNonNull,
 			],
 		);
-		self.emit_call(func, text_builtins::TEXT_OF);
+		self.emit_call(func, text::text_builtins::TEXT_OF);
 		Self::emit_list(func, &[I::Else, I::I64Const(crate::type_kinds::SQUARE_LIST_KIND)]);
 		self.emit_entry_in_braces(func, held);
 		Self::emit_list(

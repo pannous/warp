@@ -9,8 +9,8 @@ use super::super::numbers::float_text::FLOAT_TEXT;
 use super::super::layout::BYTE;
 use super::super::library_ops::NODE_ORDER;
 use super::super::list_ops::TEXT_AS_FLOAT;
-use super::super::similarity::NUMBERS_SIMILAR;
-use super::super::text_builtins::TEXT_CONCAT;
+use super::super::text::similarity::NUMBERS_SIMILAR;
+use super::super::text::text_builtins::TEXT_CONCAT;
 use super::super::WasmGcEmitter;
 use crate::node::Node;
 use crate::numbers::uncertain::{Extremum, CERTAINLY, INTERVAL_FIELDS, INTERVAL_WORDS, POSSIBLY, SIGMA};
@@ -1257,7 +1257,7 @@ impl WasmGcEmitter {
 		let host_warn = self
 			.ctx
 			.func_registry
-			.get(super::super::text_builtins::HOST_WARN)
+			.get(super::super::text::text_builtins::HOST_WARN)
 			.map(|function| function.call_index as u32);
 		let warned = host_warn.map(|_| self.declare_global_of(ValType::I32, ConstExpr::i32_const(0)));
 		let node_ref = ValType::Ref(self.node_ref(false));

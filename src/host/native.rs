@@ -51,10 +51,10 @@ fn error_in_program(caller: &mut Caller<'_, HostState>, reason: &str) -> wasmtim
 	let text = built_in_program(
 		caller,
 		&Node::Text(reason.to_string()),
-		crate::wasm_emitter::text_builtins::ERROR_OF,
+		crate::wasm_emitter::text::text_builtins::ERROR_OF,
 	)?;
 	let error_of = caller
-		.get_export(crate::wasm_emitter::text_builtins::ERROR_OF)
+		.get_export(crate::wasm_emitter::text::text_builtins::ERROR_OF)
 		.and_then(Extern::into_func)
 		.ok_or_else(|| wasmtime::Error::msg("no exported error_of"))?;
 	let mut error = [Val::AnyRef(None)];
