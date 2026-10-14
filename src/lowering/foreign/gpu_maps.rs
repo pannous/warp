@@ -8,6 +8,7 @@
 //! block or its function keeps it on the CPU in f64, and WARP_GPU=off keeps a whole run there (@gpu included)
 
 use super::nodes::{branches, if_then_parts};
+use crate::compiler::compile_context;
 use crate::node::Node;
 use crate::operators::Op;
 
@@ -555,15 +556,9 @@ fn is_light(lambda: &Node) -> bool {
 
 /// A program's function a kernel may call: its parameters and body
 #[derive(Clone)]
-struct ProgramFunction {
+pub(crate) struct ProgramFunction {
 	parameters: Vec<String>,
 	body: Node,
-}
-
-thread_local! {
-	/// The functions of the program being lowered, by name (card gpu-functions)
-	static PROGRAM_FUNCTIONS: std::cell::RefCell<std::collections::HashMap<String, ProgramFunction>> =
-		Default::default();
 }
 
 /// `run` knowing the functions `program` defines, so a kernel may call them
@@ -586,14 +581,11 @@ pub(crate) fn with_program_functions<T>(program: &Node, run: impl FnOnce() -> T)
 			)
 		})
 		.collect();
-	let before = PROGRAM_FUNCTIONS.with(|known| known.replace(functions));
-	let result = run();
-	PROGRAM_FUNCTIONS.with(|known| known.replace(before));
-	result
+	compile_context::scoped(|context| &mut context.program_functions, functions, run)
 }
 
 fn program_function(name: &str) -> Option<ProgramFunction> {
-	PROGRAM_FUNCTIONS.with(|known| known.borrow().get(name).cloned())
+	compile_context::read(|context| context.program_functions.get(name).cloned())
 }
 
 #[derive(Default)]

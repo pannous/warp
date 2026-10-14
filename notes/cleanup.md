@@ -133,7 +133,8 @@ scopes together with the acknowledger statics of F; MODULE_DEFINITIONS and EARLY
 lives beside PROGRAM_FILE and MODULE_FILES of A (a candidate for the compile context, not for the output).
 
 C. Fresh-name counters, never reset, so a name depends on what compiled before (card cleanup-fresh-names): RACES
-(declarations/tasks), ITEM_LOOPS (switch).
+(declarations/tasks), ITEM_LOOPS (switch). Done: one numbering per outermost compile (nodes::fresh_number); its
+counter and compile depth are CompileContext fields since 2026-10-14, as is gpu_maps' PROGRAM_FUNCTIONS (scoped).
 
 D. Caches, kept: REMEMBERED_ANALYSES (analysis_memo), BLOCK_MODULES and COMPILED_BLOCKS (pipeline), LOADED
 (components), FETCHED (web).
@@ -148,9 +149,16 @@ RUNTIME_WARNINGS (diagnostic).
 F. User acknowledgements, kept (the user's got-it answers): ACKNOWLEDGED_TOPICS, ACKNOWLEDGEMENTS_FILE, ACKNOWLEDGER
 (diagnostic).
 
-Order: fresh-names (S), then compile-context (M), then diagnostic-sink (M). The `set` statics in A are the ones that
-leak from one compile into the next. Process-wide statics (`static`, OnceLock tables) are not in scope; the ffi
-tables belong to cleanup-ffi-headers.
+G. Re-entrancy guard, kept: READING_PRELUDE (std_modules) stops the prelude's own parse from waiting for the
+OnceLock it fills; it belongs to that process-wide table, not to a compile.
+
+Status 2026-10-14: 39 thread-locals left, down from 69: of compile state only CONTEXT and DIAGNOSTICS, the rest is D–G
+and NOTES_SHOWN. Process-wide `static`s, checked: caches of outside facts (ffi STRUCT_TYPES and LOADED_LIBRARIES,
+gc_traits REGISTRY of name sections, module_cache IN_MEMORY, components COMPILED, SQLITE), locks serializing
+outside tools (NATIVE_CALL_TURN, MODEL_LOCK, FETCHING, BUILDING, PROVIDING), the one terminal's output settings
+(SHOWN_FROM, ANY_HINT_PRINTED, SHOWN_SOURCE: a program may compile on another thread), the process's devices (graphics,
+sound, VIEWER) and PROCESS_SANDBOXED, FILED. None is compile state. Left open: a scoped context per compile in place of
+the `set` fields (see A).
 
 ## src/analyzer/, src/warp_parser/, src/node/ (card cleanup-analyzer, session warp-types)
 
