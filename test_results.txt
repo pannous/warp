@@ -3434,6 +3434,7 @@ PASSED:
   ✓ programs::test_sound::the_note_table_matches_note
   ✓ programs::test_task_sound::a_sound_in_a_task_plays_its_length
   ✓ programs::test_task_sound::a_task_reads_the_programs_globals
+  ✓ programs::test_warp_command::an_assigned_command_word_is_a_variable
   ✓ programs::test_warp_command::debug_build_names_its_commit
   ✓ programs::test_warp_command::version_names_the_branch
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
@@ -4826,6 +4827,7 @@ PASSED:
   ✓ web::test_routes::without_a_matching_route_the_page_says_so
   ✓ web::test_safari_imports::safaris_engine_reads_the_imports_of_a_task_program
   ✓ web::test_safari_imports::the_page_never_asks_the_engine_for_import_or_export_descriptors
+  ✓ web::test_sandbox_refusals::a_sandboxed_program_reaches_the_network
   ✓ web::test_sandbox_refusals::a_sandboxed_program_starts_no_process_and_calls_no_c
   ✓ web::test_sandbox_refusals::a_sandboxed_program_writes_inside_its_state_folder
   ✓ web::test_sandbox_refusals::a_sandboxed_program_writes_nothing_outside_its_state_folder
@@ -5383,7 +5385,6 @@ PASSED:
   ✓ wisp_parser::tests::test_wisp_tag
 
 FAILED:
-  ✗ web::test_sandbox_refusals::a_sandboxed_program_reaches_the_network
 
 SUMMARY:
-13 ignored, 5380 passed, 1 failed, 5381 total tested
+13 ignored, 5382 passed, 0 failed, 5382 total tested
