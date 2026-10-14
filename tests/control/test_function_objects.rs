@@ -81,3 +81,43 @@ fn a_values_methods_are_its_types_functions() {
 	is!("s = \"hi\"\ncount(s.methods) == count(dir(s))", true);
 	is!("m = {methods: 3}\nm.methods", 3);
 }
+
+// other names of a function's words (user): read as the canonical word, with a note naming it
+#[test]
+fn description_is_doc() {
+	is!(&format!("{TWICE}twice.description"), "doubles a number");
+	is!(
+		&format!("{TWICE}fs = [function twice]\nfs#1.description"),
+		"doubles a number"
+	);
+}
+
+#[test]
+fn returns_is_return_type() {
+	is!(&format!("{TWICE}twice.returns"), "int");
+	is!(&format!("{TWICE}fs = [function twice]\nfs#1.returns"), "int");
+}
+
+#[test]
+fn representation_is_dump() {
+	is!(&format!("{TWICE}twice.representation"), "twice(x) := x*2");
+	is!(
+		&format!("{TWICE}fs = [function twice]\nfs#1.representation"),
+		"twice(x) := x*2"
+	);
+}
+
+// `f.full`: what `print f` shows
+#[test]
+fn full_is_the_doc_and_the_definition() {
+	is!(&format!("{TWICE}twice.full"), "# doubles a number\ntwice(x) := x*2");
+	is!(
+		&format!("{TWICE}fs = [function twice]\nfs#1.full"),
+		"# doubles a number\ntwice(x) := x*2"
+	);
+}
+
+#[test]
+fn a_maps_own_description_stays_its_value() {
+	is!("m = {description: 3}\nm.description", 3);
+}

@@ -40,14 +40,16 @@ const FUNCTION_DOC: &str = "function_doc";
 const FUNCTION_SIGNATURE: &str = "function_signature";
 const FUNCTION_RETURN_TYPE: &str = "function_return_type";
 const FUNCTION_DEFINITION: &str = "function_definition";
+const FUNCTION_FULL: &str = "function_full";
 /// The reflection words a function value answers at run time (`fs#1.doc`, `methods(math) map .doc`; card
 /// module-methods), each a field read's fallback (fields_and_keys.rs FIELD_FALLBACKS): word → its table
-pub const FUNCTION_WORDS: [(&str, &str); 5] = [
+pub const FUNCTION_WORDS: [(&str, &str); 6] = [
 	("name", FUNCTION_NAME),
 	("doc", FUNCTION_DOC),
 	("signature", FUNCTION_SIGNATURE),
 	("return_type", FUNCTION_RETURN_TYPE),
 	("dump", FUNCTION_DEFINITION),
+	("full", FUNCTION_FULL),
 ];
 
 /// What a function table gives a value it has no text for
@@ -943,11 +945,7 @@ impl WasmGcEmitter {
 	fn printed_function(&self, target: &str, captured: usize) -> String {
 		match self.ctx.user_functions.get(target) {
 			Some(function) if !crate::closures::is_lambda_function(target) => {
-				let definition = crate::lowering::reflection::definition(function);
-				match &function.doc {
-					Some(doc) => format!("# {}\n{definition}", doc.replace('\n', "\n# ")),
-					None => definition,
-				}
+				crate::lowering::reflection::printed(function)
 			}
 			_ => self.function_text_of(target, captured),
 		}
@@ -961,6 +959,7 @@ impl WasmGcEmitter {
 			(FUNCTION_SIGNATURE, Some(function)) => crate::lowering::reflection::signature(function),
 			(FUNCTION_RETURN_TYPE, Some(function)) => function.return_kind.to_string(),
 			(FUNCTION_DEFINITION, Some(function)) => crate::lowering::reflection::definition(function),
+			(FUNCTION_FULL, _) => self.printed_function(target, captured),
 			_ => self.function_text_of(target, captured),
 		}
 	}

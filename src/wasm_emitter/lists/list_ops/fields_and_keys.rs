@@ -27,6 +27,7 @@ const FIELD_FALLBACKS: [(&str, &str); 2] = [
 
 /// The function a field read of `name` falls back to (FIELD_FALLBACKS)
 pub fn field_fallback(name: &str) -> Option<&'static str> {
+	let name = crate::lowering::reflection::canonical_word(name).unwrap_or(name);
 	FIELD_FALLBACKS
 		.into_iter()
 		.chain(crate::wasm_emitter::functions::closures::FUNCTION_WORDS)
