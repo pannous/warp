@@ -67,6 +67,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - time-word (2026-10-14): a bare `time` is always the type (`print time` prints the type); `time.now` is a class
   member = `now`. instant, date, local time, zoned time, duration are subtypes of time (anchor-time).
   `now > 17h` / `now >= October` / `now ≈ 2026-10-14` compare the matching part; `==` stays exact (`now == 2026-10-14` no).
+  `now.time` is the local time of day, printing 22:27:46 (`now.date` the date); the old `time > 18h` special case
+  goes: an error with the fix `now > 18h`.
 - canvas-size (2026-10-14): `window.width/height`, `display.width/height`, `canvas.width/height` are writable properties,
   natively and in the playground; a bare top-level `width` works too, with a did-you-mean naming the three.
 - nearest-limit (2026-10-14): `nearest(x, rational)` limits the denominator to 1,000,000 like Python's
