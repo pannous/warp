@@ -183,12 +183,12 @@ impl WarpParser {
 					}
 				}
 			}
-			'\\' if let Some((name, length)) = crate::uniscript_entities::entity_name_at(&self.chars, self.pos) => {
+			'\\' if let Some((name, length)) = crate::text::uniscript_entities::entity_name_at(&self.chars, self.pos) => {
 				let warned = self.warn_unknown_entity(&name, self.column);
 				self.advance_by(length);
 				warned.map_or_else(|strict| strict, |()| Node::Text(format!("\\:{name}")))
 			}
-			'\\' if let Some(name) = crate::uniscript_entities::bare_entity_name_at(&self.chars, self.pos) => {
+			'\\' if let Some(name) = crate::text::uniscript_entities::bare_entity_name_at(&self.chars, self.pos) => {
 				self.advance_by(name.len() + 1);
 				Diagnostic::default()
 					.message(format!("a uniscript entity is written \\:{name}, not \\{name}"))

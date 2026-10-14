@@ -117,7 +117,7 @@ pub enum LibmSource {
 /// The libm functions the system headers declare (none from glibc, which declares them through macros)
 #[cfg(feature = "native")]
 pub fn libm_header_signatures() -> Vec<FfiHeaderSignature> {
-	crate::ffi_parser::find_library_headers(LIBM)
+	crate::formats::ffi_parser::find_library_headers(LIBM)
 		.iter()
 		.flat_map(|header| parse_header_file(header, LIBM))
 		.collect()
@@ -465,7 +465,7 @@ pub fn link_dynamic_library(
 	};
 
 	// Parse headers to discover function signatures
-	let header_paths = crate::ffi_parser::find_library_headers(lib_name);
+	let header_paths = crate::formats::ffi_parser::find_library_headers(lib_name);
 	if header_paths.is_empty() {
 		return Ok(0);
 	}

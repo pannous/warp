@@ -29,9 +29,9 @@ fn the_meta_section_names_functions_and_classes() {
 		"class P{width:int; height:int; area() := width * height}\nf(a:int) := a + 1\nf(P(1, 2).area())",
 	)
 	.expect("a module");
-	let functions = warp::meta_section::entry(&module.bytes, "functions").expect("a functions entry");
+	let functions = warp::formats::meta_section::entry(&module.bytes, "functions").expect("a functions entry");
 	assert_eq!(functions["f"]["signature"].serialize(), "\"(a:int) -> int\"");
-	let classes = warp::meta_section::entry(&module.bytes, "classes").expect("a classes entry");
+	let classes = warp::formats::meta_section::entry(&module.bytes, "classes").expect("a classes entry");
 	assert_eq!(classes["P"]["fields"].serialize(), "[\"width\" \"height\"]");
 	assert_eq!(classes["P"]["methods"].serialize(), "[\"area\"]");
 }

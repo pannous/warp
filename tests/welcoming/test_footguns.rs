@@ -730,7 +730,7 @@ fn test_division_by_zero_is_extended_rational() {
 
 #[test]
 fn test_sql_holes_are_parameters_not_text() {
-	use warp::injection::{template, Language::Sql};
+	use warp::text::injection::{template, Language::Sql};
 	let query = template(Sql, "SELECT * FROM t WHERE name = $name AND age > ${min+1}").unwrap();
 	assert_eq!(query.query(), Some("SELECT * FROM t WHERE name = ? AND age > ?"));
 	assert_eq!(query.holes.len(), 2);
@@ -757,7 +757,7 @@ fn test_sql_from_built_text_is_rejected() {
 
 #[test]
 fn test_shell_holes_are_whole_arguments() {
-	use warp::injection::{template, Language::Shell};
+	use warp::text::injection::{template, Language::Shell};
 	let command = template(Shell, "rm -f $file").unwrap();
 	assert_eq!(command.text, [Some("rm".to_string()), Some("-f".to_string()), None]);
 	assert_eq!(command.holes, [Node::Symbol("file".into())]);

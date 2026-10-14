@@ -7,7 +7,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::OnceLock;
 
-const BUNDLE: &str = include_str!("../lib/web.webidl");
+const BUNDLE: &str = include_str!("../../lib/web.webidl");
 /// The interface whose attributes are a page's globals (`navigator`, `localStorage`, `crypto` through its mixins)
 const PAGE_SCOPE: &str = "Window";
 /// Where a program's globals come from: a page natively (node mirrors it, a built site runs there); the playground and

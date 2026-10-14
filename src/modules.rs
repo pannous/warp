@@ -1109,7 +1109,7 @@ fn template_holes(statements: &[Node]) -> Vec<Node> {
 	fn collect(node: &Node, holes: &mut Vec<Node>) {
 		match node {
 			Node::Meta { node: inner, .. } => {
-				holes.extend(crate::interpolation::holes(node));
+				holes.extend(crate::text::interpolation::holes(node));
 				collect(inner, holes);
 			}
 			Node::Key(left, _, right) => {
@@ -1157,7 +1157,7 @@ fn mentioned_names(statements: &[Node]) -> Vec<String> {
 			}
 			Node::List(items, _, _) => items.iter().for_each(|item| collect(item, names)),
 			// an interpolation is lowered after the modules are resolved: `"\(zip(a, b))"` calls zip
-			Node::Meta { node: inner, .. } => crate::interpolation::holes(node)
+			Node::Meta { node: inner, .. } => crate::text::interpolation::holes(node)
 				.iter()
 				.chain([inner.as_ref()])
 				.for_each(|part| collect(part, names)),

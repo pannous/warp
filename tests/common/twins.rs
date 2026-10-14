@@ -71,7 +71,7 @@ pub fn node_view(node: &Node) -> Node {
 		Node::Data(data) => tagged(
 			"data",
 			[Node::text(
-				&warp::units::describe(data).unwrap_or_else(|| format!("Data({data:?})")),
+				&warp::numbers::units::describe(data).unwrap_or_else(|| format!("Data({data:?})")),
 			)],
 		),
 		Node::Meta { node: inner, .. } => meta_view(node, inner),

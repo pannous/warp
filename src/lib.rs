@@ -58,7 +58,6 @@ pub mod database;
 pub mod diagnostic;
 pub mod effects;
 pub mod ffi;
-pub mod ffi_parser;
 #[cfg(all(feature = "native", target_os = "macos"))]
 pub mod file_type;
 pub mod fixits;
@@ -69,13 +68,11 @@ pub mod function_equality;
 pub mod graphics;
 pub mod host;
 pub mod host_parts;
-pub mod injection;
-pub mod interpolation;
+pub mod text;
 pub mod law;
 pub mod local;
 pub mod markup;
 pub mod meta;
-pub mod meta_section;
 pub mod modules;
 pub mod normalize;
 pub mod operators;
@@ -93,14 +90,12 @@ pub mod std_docs;
 #[cfg(feature = "native")]
 pub mod tasks;
 pub mod time;
-pub mod uniscript_entities;
 pub mod warp_parser;
 pub mod wasm_modules;
 #[cfg(feature = "native")]
 pub mod wasm_reader;
 pub mod web;
-pub mod web_idl;
-pub mod wisp_parser;
+pub mod formats;
 
 // ==================== Core Re-exports ====================
 // Node AST - the heart of warp
@@ -114,7 +109,7 @@ pub use node::{
 pub use node::Node::{Char, Data, Empty, Error, False, Key, Meta, Symbol, Text, True};
 // Parser
 pub use warp_parser::{parse, parse_data, parse_file, parse_xml, WarpParser};
-pub use wisp_parser::{emit_wisp, parse_wisp, WispEmitter, WispParser};
+pub use formats::wisp_parser::{emit_wisp, parse_wisp, WispEmitter, WispParser};
 // Type system
 pub use type_kinds::{
 	extract_instance_values, AstKind, FieldDef, Kind, NodeKind, RawFieldValue, TypeDef, TypeRegistry,

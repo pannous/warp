@@ -267,7 +267,7 @@ fn factors_of(text: &str) -> Option<Vec<Factor>> {
 
 /// The module with the `units` entry of the units of its result, when the last lowered program's result has units
 pub(crate) fn with_result_units(bytes: Vec<u8>) -> Vec<u8> {
-	crate::meta_section::with_entries(bytes, result_units_entry().into_iter().collect())
+	crate::formats::meta_section::with_entries(bytes, result_units_entry().into_iter().collect())
 }
 
 /// The `units` entry of the last lowered program's result, when it has units
@@ -293,7 +293,7 @@ pub fn with_module_units(bytes: &[u8], result: Node) -> Node {
 }
 
 fn module_units(bytes: &[u8]) -> Option<ResultUnits> {
-	let Node::Text(text) = crate::meta_section::entry(bytes, UNITS_ENTRY)? else {
+	let Node::Text(text) = crate::formats::meta_section::entry(bytes, UNITS_ENTRY)? else {
 		return None;
 	};
 	if !text.contains(FIELD_MARK) {

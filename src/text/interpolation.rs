@@ -6,7 +6,7 @@
 //! injection::parts) marked as a template, so `sql "…"` / `sh "…"` still see the literal and turn holes into parameters.
 //! Every other template becomes text building here: `"a \(x) b"` → `"a " + text_form(x) + " b"`.
 
-use crate::injection::{parts_with, Part};
+use crate::text::injection::{parts_with, Part};
 use crate::lowering::nodes::children_rewritten;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -67,7 +67,7 @@ pub fn interpolated_mentioning(node: &Node, mentions: impl Fn(&Node) -> bool) ->
 /// The first source pass: `sql "…"` / `sh "…"` templates become parameterized calls, every other template the
 /// concatenation of its pieces, so each later pass reads the holes as code (`"\(area.params)"`)
 pub fn lower_program(program: Node) -> Node {
-	crate::injection::lower_templates(program)
+	crate::text::injection::lower_templates(program)
 		.map(lower)
 		.unwrap_or_else(|error| error)
 }

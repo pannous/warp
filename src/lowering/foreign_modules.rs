@@ -566,7 +566,7 @@ impl Foreign<'_> {
 	/// `document.getElementById(id)`: Element); Err for a global only a page has
 	fn web_idl_receiver(&self, receiver: &Node) -> Result<Option<(String, String)>, String> {
 		let global = |name: &str, path: &str| {
-			Ok(crate::web_idl::global_interface(name)?.map(|interface| (interface, path.to_string())))
+			Ok(crate::formats::web_idl::global_interface(name)?.map(|interface| (interface, path.to_string())))
 		};
 		match receiver.drop_meta() {
 			Node::Symbol(name) => match self.modules.get(name) {
@@ -583,7 +583,7 @@ impl Foreign<'_> {
 					return Ok(None);
 				};
 				if let (CONSTRUCTOR_MEMBER, Node::Text(interface)) = (member, inner.drop_meta()) {
-					return Ok(crate::web_idl::constructible(interface)
+					return Ok(crate::formats::web_idl::constructible(interface)
 						.then(|| (interface.clone(), format!("{interface}(…)"))));
 				}
 				let Some((interface, path)) = self.web_idl_receiver(inner)? else {
@@ -597,14 +597,14 @@ impl Foreign<'_> {
 				let context = match arguments.drop_meta() {
 					Node::List(items, _, _) => match items.first().map(Node::drop_meta) {
 						Some(Node::Text(context_id)) => {
-							crate::web_idl::context_interface(&interface, member, context_id)
+							crate::formats::web_idl::context_interface(&interface, member, context_id)
 						}
 						_ => None,
 					},
 					_ => None,
 				};
 				Ok(context
-					.or_else(|| crate::web_idl::result_interface(&interface, member, is_call))
+					.or_else(|| crate::formats::web_idl::result_interface(&interface, member, is_call))
 					.map(|interface| (interface, read)))
 			}
 		}
@@ -626,8 +626,8 @@ impl Foreign<'_> {
 		let Some((interface, path)) = self.web_idl_receiver(receiver)? else {
 			return Ok(None);
 		};
-		crate::web_idl::check_member(&interface, &path, member, is_call.then_some(count))?;
-		Ok(crate::web_idl::optional_result_type(&interface, member, is_call))
+		crate::formats::web_idl::check_member(&interface, &path, member, is_call.then_some(count))?;
+		Ok(crate::formats::web_idl::optional_result_type(&interface, member, is_call))
 	}
 
 	/// `URL("https://…")` of `use js URL`: the constructor called, JavaScript's `new`, checked by WebIDL when it declares
@@ -645,7 +645,7 @@ impl Foreign<'_> {
 			.get(name)
 			.filter(|(runtime, _)| runtime == JS_RUNTIME)?
 			.clone();
-		if let Err(problem) = crate::web_idl::check_constructor(&module, arguments.len()) {
+		if let Err(problem) = crate::formats::web_idl::check_constructor(&module, arguments.len()) {
 			return Some(crate::diagnostic::Diagnostic::at(node, problem).into_error());
 		}
 		let arguments = arguments
@@ -675,7 +675,7 @@ impl Foreign<'_> {
 		let (runtime, module) = self.receiver(&receiver)?;
 		let checked = match runtime == JS_RUNTIME {
 			true => self.web_idl_receiver(&receiver).and_then(|declared| match declared {
-				Some((interface, path)) => crate::web_idl::check_member(&interface, &path, member, None),
+				Some((interface, path)) => crate::formats::web_idl::check_member(&interface, &path, member, None),
 				None => Ok(()),
 			}),
 			false => Ok(()),
@@ -730,7 +730,7 @@ impl Foreign<'_> {
 		}
 		// `"id \(crypto.randomUUID())"`: the holes are calls of this pass, the text is built later (interpolation.rs)
 		if let Some(text) =
-			crate::interpolation::interpolated_mentioning(&node, |hole| self.mentions_foreign_name(hole))
+			crate::text::interpolation::interpolated_mentioning(&node, |hole| self.mentions_foreign_name(hole))
 		{
 			return self.rewrite(text);
 		}

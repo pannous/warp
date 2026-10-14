@@ -98,7 +98,7 @@ impl WarpParser {
 			if ch == closing {
 				self.advance(); // skip closing quote
 				if is_template {
-					return crate::interpolation::template_text(&template);
+					return crate::text::interpolation::template_text(&template);
 				}
 				return self.quoted_text(s.nfc().collect(), quote, (quote_line, quote_column), interpolates);
 			}
@@ -133,11 +133,11 @@ impl WarpParser {
 				match escaped {
 					'\0' => continue, // `"\` ends the source: the loop reports the unterminated text
 					':' if interpolates && self.peek_char(1).is_ascii_alphabetic() => {
-						let Some((name, length)) = crate::uniscript_entities::entity_name_at(&self.chars, self.pos - 1)
+						let Some((name, length)) = crate::text::uniscript_entities::entity_name_at(&self.chars, self.pos - 1)
 						else {
 							unreachable!("a letter follows")
 						};
-						let Some(characters) = crate::uniscript_entities::entity(&name) else {
+						let Some(characters) = crate::text::uniscript_entities::entity(&name) else {
 							if let Err(strict) = self.warn_unknown_entity(&name, self.column - 1) {
 								return strict;
 							}
@@ -210,7 +210,7 @@ impl WarpParser {
 
 	/// `\:xyzzy` names no entity: it stays as written and warns; in strict mode the warning is the error
 	pub(super) fn warn_unknown_entity(&self, name: &str, column: usize) -> Result<(), Node> {
-		let message = crate::uniscript_entities::unknown_entity(name);
+		let message = crate::text::uniscript_entities::unknown_entity(name);
 		crate::diagnostic::report(&[Diagnostic {
 			message,
 			line: self.line_nr,

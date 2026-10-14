@@ -248,7 +248,7 @@ pub fn header_sig_to_ffi_sig(hsig: &FfiHeaderSignature) -> Option<FfiSignature> 
 
 /// Get standard header file paths for a library (delegates to ffi_parser)
 pub fn get_library_header_paths(library: &str) -> Vec<String> {
-	crate::ffi_parser::find_library_headers(resolve_library_alias(library))
+	crate::formats::ffi_parser::find_library_headers(resolve_library_alias(library))
 }
 
 /// glibc's math.h declares libm through the macros of this header: `__MATHCALL (sqrt,, (_Mdouble_ __x));`
@@ -274,9 +274,9 @@ fn with_glibc_mathcalls(content: String, header_path: &str) -> String {
 		.map(|dir| dir.to_string_lossy().to_string())
 		.unwrap_or_default();
 	let dirs: Vec<String> = std::iter::once(header_dir)
-		.chain(crate::ffi_parser::include_dirs())
+		.chain(crate::formats::ffi_parser::include_dirs())
 		.collect();
-	match crate::ffi_parser::find_header_in(GLIBC_MATHCALLS, &dirs).and_then(|path| crate::web::read_text(&path)) {
+	match crate::formats::ffi_parser::find_header_in(GLIBC_MATHCALLS, &dirs).and_then(|path| crate::web::read_text(&path)) {
 		Some(mathcalls) => format!("{content}\n{}", expand_glibc_math_macros(&mathcalls)),
 		None => content,
 	}

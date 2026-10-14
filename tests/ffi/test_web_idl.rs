@@ -45,16 +45,16 @@ fn a_worker_has_no_local_storage_and_its_own_navigator() {
 #[cfg(feature = "native")]
 #[test]
 fn a_page_has_local_storage_and_the_clipboard() {
-	assert!(warp::web_idl::check("localStorage", "getItem", Some(1)).is_ok());
-	assert!(warp::web_idl::check("localStorage", "setItem", Some(1))
+	assert!(warp::formats::web_idl::check("localStorage", "getItem", Some(1)).is_ok());
+	assert!(warp::formats::web_idl::check("localStorage", "setItem", Some(1))
 		.is_err_and(|error| error.contains("setItem(DOMString key, DOMString value)")));
-	assert!(warp::web_idl::check("navigator", "clipboard", None).is_ok());
+	assert!(warp::formats::web_idl::check("navigator", "clipboard", None).is_ok());
 }
 
 #[test]
 fn a_global_is_a_namespace_or_an_attribute_of_the_scope_not_an_interface() {
 	is!("use js navigator; navigator.hardwareConcurrency > 0", 1);
-	assert!(warp::web_idl::check("Storage", "anything", None).is_ok()); // the constructor, no instance
+	assert!(warp::formats::web_idl::check("Storage", "anything", None).is_ok()); // the constructor, no instance
 }
 
 // an attribute's value is typed by its interface: navigator.clipboard is a Clipboard, also held in a variable
@@ -77,11 +77,11 @@ fn a_declared_primitive_result_is_a_warp_value() {
 	is!("use js crypto; count crypto.randomUUID().upper()", 36);
 	is!("use js crypto; id = crypto.randomUUID(); count id", 36);
 	is!("use js navigator; navigator.hardwareConcurrency + 0.5 > 1", 1);
-	eq!(warp::web_idl::result_type("Crypto", "randomUUID", true), Some("text"));
-	eq!(warp::web_idl::result_type("Navigator", "onLine", false), Some("bool"));
-	eq!(warp::web_idl::result_type("Performance", "now", true), Some("float"));
-	eq!(warp::web_idl::result_type("Storage", "getItem", true), None); // DOMString? may be ø
-	eq!(warp::web_idl::result_type("Navigator", "clipboard", false), None); // an object
+	eq!(warp::formats::web_idl::result_type("Crypto", "randomUUID", true), Some("text"));
+	eq!(warp::formats::web_idl::result_type("Navigator", "onLine", false), Some("bool"));
+	eq!(warp::formats::web_idl::result_type("Performance", "now", true), Some("float"));
+	eq!(warp::formats::web_idl::result_type("Storage", "getItem", true), None); // DOMString? may be ø
+	eq!(warp::formats::web_idl::result_type("Navigator", "clipboard", false), None); // an object
 }
 
 // the text of a foreign call is the text of its value, not of the call
@@ -94,15 +94,15 @@ fn a_foreign_calls_value_as_text() {
 #[test]
 fn a_nullable_result_is_optional() {
 	eq!(
-		warp::web_idl::optional_result_type("Storage", "getItem", true),
+		warp::formats::web_idl::optional_result_type("Storage", "getItem", true),
 		Some("text?".to_string())
 	);
 	eq!(
-		warp::web_idl::optional_result_type("Crypto", "randomUUID", true),
+		warp::formats::web_idl::optional_result_type("Crypto", "randomUUID", true),
 		Some("text".to_string())
 	);
 	eq!(
-		warp::web_idl::optional_result_type("Navigator", "clipboard", false),
+		warp::formats::web_idl::optional_result_type("Navigator", "clipboard", false),
 		None
 	);
 }
@@ -132,13 +132,13 @@ fn the_dom_is_typed() {
 		"use js document; document.getElementById(\"x\").valu",
 		"did you mean value",
 	);
-	assert!(warp::web_idl::check_member("Element", "e", "value", None).is_ok()); // HTMLInputElement's
+	assert!(warp::formats::web_idl::check_member("Element", "e", "value", None).is_ok()); // HTMLInputElement's
 	eq!(
-		warp::web_idl::result_interface("Document", "getElementById", true),
+		warp::formats::web_idl::result_interface("Document", "getElementById", true),
 		Some("Element".to_string())
 	);
 	eq!(
-		warp::web_idl::result_interface("Document", "body", false),
+		warp::formats::web_idl::result_interface("Document", "body", false),
 		Some("HTMLElement".to_string())
 	);
 }
@@ -154,11 +154,11 @@ fn the_global_object_is_typed() {
 		"(Response in WebIDL) has no member stauts; did you mean status",
 	);
 	eq!(
-		warp::web_idl::result_interface("Window", "fetch", true),
+		warp::formats::web_idl::result_interface("Window", "fetch", true),
 		Some("Response".to_string())
 	);
-	eq!(warp::web_idl::result_type("Response", "text", true), Some("text")); // Promise<USVString>
-	eq!(warp::web_idl::result_type("Response", "status", false), Some("int"));
+	eq!(warp::formats::web_idl::result_type("Response", "text", true), Some("text")); // Promise<USVString>
+	eq!(warp::formats::web_idl::result_type("Response", "status", false), Some("int"));
 }
 
 #[cfg(not(feature = "native"))]
@@ -206,7 +206,7 @@ fn a_canvas_context_is_typed() {
 		"(GPU in WebIDL) has no member requestAdaptor; did you mean requestAdapter",
 	);
 	eq!(
-		warp::web_idl::context_interface("OffscreenCanvas", "getContext", "2d"),
+		warp::formats::web_idl::context_interface("OffscreenCanvas", "getContext", "2d"),
 		Some("OffscreenCanvasRenderingContext2D".to_string())
 	);
 }

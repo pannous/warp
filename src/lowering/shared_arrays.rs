@@ -458,7 +458,7 @@ impl Rewrite<'_> {
 		// `"a \(xs#1)"`: the holes' expressions as code now, so their shared names are rewritten like any others
 		let mentioned = |hole: &Node| mentions_any(hole, &self.names(function));
 		if let Some(text) = matches!(node, Node::Meta { .. })
-			.then(|| crate::interpolation::interpolated_mentioning(&node, mentioned))
+			.then(|| crate::text::interpolation::interpolated_mentioning(&node, mentioned))
 			.flatten()
 		{
 			return self.node(text, function);

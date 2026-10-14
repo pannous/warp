@@ -271,7 +271,7 @@ fn read_exports(path: &str, bytes: &[u8]) -> Result<HashMap<String, Export>, Str
 		}
 	}
 	// a warp module names its functions' parameters in warp.meta, other modules may in the name section
-	let functions_meta = crate::meta_section::entry(bytes, crate::lowering::reflection::META_FUNCTIONS);
+	let functions_meta = crate::formats::meta_section::entry(bytes, crate::lowering::reflection::META_FUNCTIONS);
 	let meta_parameters = |name: &str| {
 		functions_meta.as_ref().map(|functions| {
 			crate::lowering::reflection::entry_names(&functions[name][crate::lowering::reflection::PARAMS_WORDS[0]])
@@ -619,7 +619,7 @@ fn number_types(types: &[wasmparser::ValType]) -> Option<Vec<wasm_encoder::ValTy
 pub fn classes(path: &str) -> Vec<Node> {
 	let Some(Node::List(classes, _, _)) = module_bytes(path)
 		.ok()
-		.and_then(|bytes| crate::meta_section::entry(&bytes, crate::reflection::META_CLASSES))
+		.and_then(|bytes| crate::formats::meta_section::entry(&bytes, crate::reflection::META_CLASSES))
 	else {
 		return vec![];
 	};

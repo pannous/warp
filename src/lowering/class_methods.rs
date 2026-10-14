@@ -1098,7 +1098,7 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 		statics,
 	};
 	// the holes of `"#\(n)"` as code first, so a field in one is read from self too
-	let body = crate::interpolation::lower_program(body);
+	let body = crate::text::interpolation::lower_program(body);
 	let body = receiver_reads(body, &readable);
 	let receiver = symbol(RECEIVER);
 	let changes = match changes_fields_of(&body, RECEIVER) {
