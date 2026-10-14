@@ -161,7 +161,7 @@ probes/matching/tree_patterns.warp. Steps, each its own sub-card of matching:
    find done (src/lowering/tree_walks.rs): each `subject find P` (P a map, list or named pattern) becomes a call of a
    generated recursive walker `find·N`, defined from a source template; result: the one name's values, a map of the
    names, or the matching subtrees. Tests tests/control/test_tree_find.rs, probe probes/matching/tree_find.warp.
-   `found = [[…]] find P` walks the literal, as after a list variable (lists.rs with_applied_word, card found-find).
+   Open: `found = [[…]] find P` parses as an assignment first (card found-find; its parser special case was removed by cleanup-found-find, the general fix belongs in assignment parsing).
    replace done (same file, renamed tree_walks.rs): `tree replace P with Q` rebuilds lists (bracketed/separated keep the
    bracket), maps (`keys`, `r[k] = …`) and keys (`key(left, op, right)`), children first, then rewrites the node. Data
    and code alike: `code replace data($a * 1) with a`. In a function body the words come in nested pairs and `with Q`
