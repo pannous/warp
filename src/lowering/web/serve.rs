@@ -746,8 +746,6 @@ fn asking_the_server(statements: Vec<Node>, servers: &[String]) -> Result<Vec<No
 		.cloned()
 		.collect();
 	let calls = server_calls(&page_code, servers);
-	// a page calling no server function needs none of them, prerendered or not
-	let prerendering = crate::pipeline::compile_mode().prerendering && !calls.is_empty();
 	let main_variables = crate::event_signals::main_level_variables(&page_code);
 	let functions: HashSet<String> = statements
 		.iter()
@@ -771,14 +769,44 @@ fn asking_the_server(statements: Vec<Node>, servers: &[String]) -> Result<Vec<No
 				.unwrap_or_else(|| format!("{}{RPC_VALUE_INFIX}{index}", callee(call)))
 		})
 		.collect();
-	let read = |node: Node| with_calls_read(node, &calls, &names);
-	let asking = |index: usize| {
+	// a page calling no server function needs none of them, prerendered or not
+	let prerendering = crate::pipeline::compile_mode().prerendering && !calls.is_empty();
+	let server = ServerCalls {
+		calls,
+		names,
+		prerendering,
+	};
+	let mut kept = server.statements_asking(statements, &main_variables);
+	if prerendering {
+		server.with_rpc_functions(&mut kept, main_variables);
+	}
+	Ok(kept)
+}
+
+/// The calls of server functions in a page and the variables their values are read from
+struct ServerCalls {
+	calls: Vec<Node>,
+	names: Vec<String>,
+	prerendering: bool,
+}
+
+impl ServerCalls {
+	fn read(&self, node: Node) -> Node {
+		with_calls_read(node, &self.calls, &self.names)
+	}
+
+	/// The call of server function `index` and the statement giving its variable the value: the call itself when
+	/// prerendering, else its fetch, first the value the prerender got
+	fn asking(&self, index: usize) -> (Node, Node) {
 		let call = Node::List(
-			call_items(&calls[index]).into_iter().map(&read).collect(),
+			call_items(&self.calls[index])
+				.into_iter()
+				.map(|item| self.read(item))
+				.collect(),
 			Bracket::Round,
 			Separator::None,
 		);
-		let value = if prerendering {
+		let value = if self.prerendering {
 			call.clone()
 		} else {
 			let fetch = Node::List(
@@ -794,49 +822,66 @@ fn asking_the_server(statements: Vec<Node>, servers: &[String]) -> Result<Vec<No
 				}),
 			)
 		};
-		let op = if prerendering { Op::Assign } else { Op::Define };
-		(call, key(Node::Symbol(names[index].clone()), op, value))
-	};
-	let mut kept = vec![];
-	let mut asked_in_place = HashSet::new();
-	for statement in statements {
-		match server_definition(&statement) {
-			Some(definition) if prerendering => kept.push(definition),
-			Some(_) => {}
-			None => match calls.iter().position(|call| defined_as(&statement, call).is_some()) {
-				Some(index) => {
-					asked_in_place.insert(index);
-					kept.push(asking(index).1);
-				}
-				None => kept.push(read(statement)),
-			},
+		let op = if self.prerendering { Op::Assign } else { Op::Define };
+		(call, key(Node::Symbol(self.names[index].clone()), op, value))
+	}
+
+	/// The page's statements with each call read from its variable, asked where it is named (`g := f(x)`) or else
+	/// before its first use; the server functions only when prerendering
+	fn statements_asking(&self, statements: Vec<Node>, main_variables: &HashSet<String>) -> Vec<Node> {
+		let mut kept = vec![];
+		let mut asked_in_place = HashSet::new();
+		for statement in statements {
+			match server_definition(&statement) {
+				Some(definition) if self.prerendering => kept.push(definition),
+				Some(_) => {}
+				None => match self
+					.calls
+					.iter()
+					.position(|call| defined_as(&statement, call).is_some())
+				{
+					Some(index) => {
+						asked_in_place.insert(index);
+						kept.push(self.asking(index).1);
+					}
+					None => kept.push(self.read(statement)),
+				},
+			}
 		}
+		let mut asked: Vec<(usize, usize, Node)> = (0..self.calls.len())
+			.filter(|index| !asked_in_place.contains(index))
+			.map(|index| {
+				let (call, statement) = self.asking(index);
+				(
+					asked_at(&kept, &self.names[index], &call, main_variables),
+					index,
+					statement,
+				)
+			})
+			.collect();
+		// the last first: an inner call (a later index) before the call around it
+		asked.sort_by_key(|(position, index, _)| std::cmp::Reverse((*position, std::cmp::Reverse(*index))));
+		for (position, _, statement) in asked {
+			kept.insert(position, statement);
+		}
+		kept
 	}
-	let mut asked: Vec<(usize, usize, Node)> = (0..calls.len())
-		.filter(|index| !asked_in_place.contains(index))
-		.map(|index| {
-			let (call, statement) = asking(index);
-			(asked_at(&kept, &names[index], &call, &main_variables), index, statement)
-		})
-		.collect();
-	// the last first: an inner call (a later index) before the call around it
-	asked.sort_by_key(|(position, index, _)| std::cmp::Reverse((*position, std::cmp::Reverse(*index))));
-	for (position, _, statement) in asked {
-		kept.insert(position, statement);
-	}
-	if prerendering {
+
+	/// The prerender's functions RPC_REQUESTS and RPC_VALUES, first: the last statement shows the page
+	fn with_rpc_functions(&self, kept: &mut Vec<Node>, main_variables: HashSet<String>) {
 		let values = Node::List(
-			names.iter().cloned().map(Node::Symbol).collect(),
+			self.names.iter().cloned().map(Node::Symbol).collect(),
 			Bracket::Square,
 			Separator::Colon,
 		);
 		let requests = Node::List(
-			(0..calls.len()).map(|index| rpc_request(&asking(index).0)).collect(),
+			(0..self.calls.len())
+				.map(|index| rpc_request(&self.asking(index).0))
+				.collect(),
 			Bracket::Square,
 			Separator::Colon,
 		);
-		let globals: HashSet<String> = main_variables.into_iter().chain(names).collect();
-		// first: the last statement shows the page
+		let globals: HashSet<String> = main_variables.into_iter().chain(self.names.iter().cloned()).collect();
 		kept.insert(
 			0,
 			crate::event_signals::function_with_globals(RPC_VALUES, false, &[values], &globals),
@@ -846,7 +891,6 @@ fn asking_the_server(statements: Vec<Node>, servers: &[String]) -> Result<Vec<No
 			crate::event_signals::function_with_globals(RPC_REQUESTS, false, &[requests], &globals),
 		);
 	}
-	Ok(kept)
 }
 
 fn server_names(statements: &[Node]) -> Vec<String> {
