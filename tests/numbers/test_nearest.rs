@@ -35,10 +35,8 @@ fn float_to_exact_refusals_name_nearest() {
 		"x: rational = sqrt(2)",
 		"truncate with `as int`, or use nearest(√(2), rational) for the closest fraction",
 	);
-	fails_with(
-		"sqrt(2) as rational",
-		"or use nearest(√(2), rational) for the closest fraction",
-	);
+	// decision float-as-rational: `as rational` of a float is the fraction of its printed digits
+	is!("sqrt(2) as rational == 14142135623730951/10000000000000000", true);
 }
 
 #[test]
