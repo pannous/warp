@@ -14,6 +14,8 @@ print help(Point)
 print help(p)
 
 // a function knows its parameters and its signature
+
+// the area of a rectangle
 area(width: int, height: int) := width * height
 print "area takes \(area.params): \(area.signature)"
 print "$(area.body)"
@@ -26,3 +28,11 @@ print type(&area)
 print dir(area)
 print type(area)
 print area.body
+
+// every property of a function also answers to a familiar name
+print area.doc              // the comment above the definition
+print area.description      // the same
+print area.return_type
+print area.returns          // the same
+print area.representation   // the same as area.dump: the definition
+print area.full             // what print area shows: the doc line and the definition
