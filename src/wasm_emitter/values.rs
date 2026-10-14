@@ -80,7 +80,7 @@ impl WasmGcEmitter {
 			// `x as int` of an Int, what a declared result type `-> int` lowers to: x, a ratio truncated, without a box
 			Node::Key(value, Op::As, target)
 				if self.get_type(value) == Kind::Int
-					&& is_int_type_word(target)
+					&& super::numbers::casts::is_int_type_word(target)
 					&& !self.computes_at_run_time_kind(value) =>
 			{
 				self.emit_int_value_truncated(func, value)
@@ -511,13 +511,6 @@ impl WasmGcEmitter {
 			self.emit_type_error(func, "internal error: new_list is not available".to_string());
 		}
 	}
-}
-
-/// `int`, `Int`, `integer`: the type `x as int` converts to; `as i64` wraps (casts.rs WRAPPING_INT_WORDS)
-pub(super) fn is_int_type_word(target: &Node) -> bool {
-	let word = target.drop_meta().name().to_lowercase();
-	crate::type_tests::canonical_spec_word(&word) == "int"
-		&& !super::numbers::casts::WRAPPING_INT_WORDS.contains(&word.as_str())
 }
 
 /// The info of a list of these items: one item stands between no separators (`[a]` parses Space-separated)

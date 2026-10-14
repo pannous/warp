@@ -17,7 +17,7 @@ mod values;
 pub use functions::closures::{CLOSURE_APPLY, CLOSURE_CAPTURED, CLOSURE_REBUILD};
 mod constructors;
 pub use constructors::NEW_BOOL;
-pub(crate) use numbers::casts::is_called_conversion;
+pub(crate) use numbers::casts::{is_called_conversion, ROUNDING_FUNCTIONS};
 mod config;
 mod function_builder;
 mod import_manager;
@@ -90,19 +90,6 @@ pub(crate) const OUTPUT_CALLS: [&str; 5] = [
 	OUTPUT_WORDS[2],
 	OUTPUT_WORDS[3],
 ];
-
-/// Builtins that round a float to an exact Int
-pub(crate) const ROUNDING_FUNCTIONS: [&str; 6] = [
-	"ceil",
-	"floor",
-	"round",
-	"round_half_up",
-	"round_half_even",
-	crate::warp_parser::FLOOR_QUOTIENT,
-];
-
-/// 2^63: floats with a magnitude at or beyond it do not fit an i64
-const I64_RANGE_LIMIT: f64 = 9223372036854775808.0;
 
 /// The condition and the then-branch of `if condition then branch`
 /// The call `join(list, separator)`: the items' text forms with the separator between them
@@ -759,39 +746,6 @@ impl WasmGcEmitter {
 	/// Allocate a string in linear memory
 	fn allocate_string(&mut self, s: &str) -> (u32, u32) {
 		self.string_table.allocate(s)
-	}
-
-	/// f64 on the stack → exact Int, truncated toward zero: the explicit casts `as int` and `int(x)`, and the
-	/// rounding functions. There is no f64 → bignum path, so a NaN or a value beyond i64 fails cleanly.
-	fn emit_truncating_cast(&mut self, func: &mut Function) {
-		self.emit_truncating_cast_via(func, self.scratch(0));
-	}
-
-	/// emit_truncating_cast through the i64 local `value_bits` (a runtime function has no scratch locals)
-	pub(super) fn emit_truncating_cast_via(&mut self, func: &mut Function, value_bits: u32) {
-		Self::emit_list(func, &[I::I64ReinterpretF64, I::LocalSet(value_bits)]);
-		Self::emit_list(
-			func,
-			&[
-				I::LocalGet(value_bits),
-				I::F64ReinterpretI64,
-				I::F64Abs,
-				I::F64Const(I64_RANGE_LIMIT.into()),
-				I::F64Lt,
-				I::I32Eqz,
-			],
-		);
-		self.emit_fail_if(func, "float_out_of_int_range");
-		Self::emit_list(func, &[I::LocalGet(value_bits), I::F64ReinterpretI64, I::I64TruncF64S]);
-		self.emit_int_from_machine_in(func, value_bits);
-	}
-
-	/// A float has no implicit exact value: reading it as an Int is refused instead of truncated
-	fn emit_float_in_exact_context(&mut self, func: &mut Function, what: &str) {
-		let message = format!(
-			"{what} is a float where an exact Int is expected: use it in float arithmetic or truncate with `as int`"
-		);
-		self.emit_type_error(func, message);
 	}
 
 	/// Node locals not first assigned by a statement of the body itself (`if c { n = "a" } else { n = "b" }; n`) start
