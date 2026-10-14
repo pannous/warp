@@ -13,12 +13,13 @@ fn print_shows_a_list_of_functions() {
 	assert_eq!(printed.trim(), "[f x => x*2 (a, b) => a+b]");
 }
 
-/// card print-function-ref: `&f` and an alias of it are the function f, printed by its name
+/// card print-function-ref: `&f` and an alias of it are the function f, printed on its own as its definition (user
+/// decision on card module-methods; in a list by its name)
 #[test]
 #[cfg(feature = "native")]
 fn print_shows_a_function_reference() {
-	assert_eq!(crate::common::printed("f(x) := x + 1; print &f").trim(), "f");
-	assert_eq!(crate::common::printed("f(x) := x + 1; g = &f; print g").trim(), "f");
+	assert_eq!(crate::common::printed("f(x) := x + 1; print &f").trim(), "f(x) := x+1");
+	assert_eq!(crate::common::printed("f(x) := x + 1; g = &f; print g").trim(), "f(x) := x+1");
 	assert_eq!(crate::common::printed("f(x) := x + 1; g = &f; print g(2)").trim(), "3");
 	assert_eq!(crate::common::printed("f(x) := x + 1; g = &f; print g 2").trim(), "3");
 }
