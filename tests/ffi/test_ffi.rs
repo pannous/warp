@@ -403,7 +403,7 @@ fn test_ffi_header_parser() {
 
 	let func = parse_declaration("double sin(double x);", "m").unwrap();
 	assert_eq!(func.name, "sin");
-	assert_eq!(func.signature.parameters.len(), 1);
+	assert_eq!(func.param_types.len(), 1);
 }
 
 #[test]

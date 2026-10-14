@@ -668,6 +668,18 @@ pub(crate) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 	}
 }
 
+/// A rewritten declaration and the items after it, as they were grouped
+fn followed(declared: Node, rest: &[Node], bracket: &Bracket, separator: &Separator) -> Node {
+	match rest {
+		[] => declared,
+		rest => Node::List(
+			[vec![declared], rest.to_vec()].concat(),
+			bracket.clone(),
+			separator.clone(),
+		),
+	}
+}
+
 /// `xs:float list = [0.5]` (parsed as the items `xs:float`, `list = [0.5]`) is `xs:"list of float" = [0.5]`
 fn postfix_list_declaration(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
 	let [declaration, list, rest @ ..] = items else {
@@ -693,14 +705,7 @@ fn postfix_list_declaration(items: &[Node], bracket: &Bracket, separator: &Separ
 		}
 		_ => return None,
 	};
-	Some(match rest {
-		[] => declared,
-		rest => Node::List(
-			[vec![declared], rest.to_vec()].concat(),
-			bracket.clone(),
-			separator.clone(),
-		),
-	})
+	Some(followed(declared, rest, bracket, separator))
 }
 
 /// `x:list of int=[1 2]` (parsed as the items `x:list`, `of`, `int=[1 2]`) is `x:"list of int"=[1 2]`, the same type as `x:list<int>`;
@@ -745,14 +750,7 @@ pub(crate) fn of_type_declaration(items: &[Node], bracket: &Bracket, separator: 
 		Some((op, value)) => Node::Key(Box::new(typed_name), op, value),
 		None => typed_name,
 	};
-	match &items[next..] {
-		[] => Some(declared),
-		rest => Some(Node::List(
-			[vec![declared], rest.to_vec()].concat(),
-			bracket.clone(),
-			separator.clone(),
-		)),
-	}
+	Some(followed(declared, &items[next..], bracket, separator))
 }
 
 /// `x: maybe int = 1`, `x: maybe int`: the optional type `int?`
@@ -780,14 +778,7 @@ fn maybe_type_declaration(items: &[Node], bracket: &Bracket, separator: &Separat
 		}
 		word => optional(word)?,
 	};
-	Some(match rest {
-		[] => declared,
-		rest => Node::List(
-			[vec![declared], rest.to_vec()].concat(),
-			bracket.clone(),
-			separator.clone(),
-		),
-	})
+	Some(followed(declared, rest, bracket, separator))
 }
 
 /// `{a:1 b:2}(key)`: applying an object to a key looks it up, like `{a:1 b:2}[key]`

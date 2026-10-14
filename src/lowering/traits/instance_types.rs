@@ -236,14 +236,10 @@ impl InstanceTypes {
 				self.results.get(&method).cloned().flatten()
 			}
 			// `c ? a : b`, `if c then a else b`: the shape both branches share
-			Node::Key(_, Op::Question, branches) => match branches.drop_meta() {
-				Node::Key(then, Op::Colon, otherwise) => self.branches_shape(then, otherwise),
-				_ => None,
-			},
-			Node::Key(condition_then, Op::Else, otherwise) => match condition_then.drop_meta() {
-				Node::Key(_, Op::Then, then) => self.branches_shape(then, otherwise),
-				_ => None,
-			},
+			_ if crate::lowering::nodes::branches(node).is_some() => {
+				let (_, then, otherwise) = crate::lowering::nodes::branches(node)?;
+				self.branches_shape(then, otherwise)
+			}
 			Node::List(items, _, separator) => match items.as_slice() {
 				// `sort xs`, `sort(xs)`
 				[word, list] if word.name() == SORT_WORD => {

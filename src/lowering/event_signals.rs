@@ -106,12 +106,6 @@ pub fn lower(program: Node) -> Node {
 		.into_iter()
 		.chain(listed.iter().cloned())
 		.collect();
-	// an emit only block handlers answer (scoped_handlers.rs) is handled though no `on` of the program is
-	let block_handled: HashSet<String> = raised
-		.iter()
-		.filter(|event| crate::scoped_handlers::has_block_handler(&program, event))
-		.cloned()
-		.collect();
 	// so does an event with a named handler: the name is the handler's place among all of the event's handlers
 	let with_names = statements
 		.iter()
@@ -162,7 +156,7 @@ pub fn lower(program: Node) -> Node {
 		// an emit nobody listens to does nothing
 		let statements: Vec<Node> = statements
 			.into_iter()
-			.map(|statement| emits_as_calls(statement, &HashMap::new(), &verbs, &block_handled))
+			.map(|statement| emits_as_calls(statement, &HashMap::new(), &verbs))
 			.collect();
 		if !statements.iter().any(defines_timer) {
 			return Node::List(statements, bracket, separator);
@@ -274,7 +268,7 @@ pub fn lower(program: Node) -> Node {
 			None => Some(statement),
 		});
 	let lowered: Vec<Node> = lowered
-		.map(|statement| emits_as_calls(statement, &bodies, &verbs, &block_handled))
+		.map(|statement| emits_as_calls(statement, &bodies, &verbs))
 		.collect();
 	let page_handlers: std::collections::BTreeMap<String, usize> = bodies
 		.iter()
@@ -1066,12 +1060,7 @@ fn unconditional_emits(body: &Node, verbs: &[String]) -> Vec<String> {
 
 /// Each `emit name{data}` with handlers is the call `on·name(data)`, `on·name()` when no handler reads `event`; one
 /// nobody handles is ø, nothing
-fn emits_as_calls(
-	node: Node,
-	handled: &HashMap<String, Vec<Node>>,
-	verbs: &[String],
-	block_handled: &HashSet<String>,
-) -> Node {
+fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[String]) -> Node {
 	if let Some((name, data)) = emitted(&node, verbs) {
 		let verb = match node.drop_meta() {
 			Node::List(items, _, _) => items.first().map(word).unwrap_or_default(),
@@ -1092,21 +1081,19 @@ fn emits_as_calls(
 				call(&handler_function_name(&name), arguments)
 			}
 			// card page-custom-event: in a page it reaches the page, as a CustomEvent of its name with the data as detail
-			None if crate::pipeline::compile_mode().renders_itself() && !block_handled.contains(&name) => {
+			None if crate::pipeline::compile_mode().renders_itself() => {
 				call(crate::host::DISPATCH_EVENT, vec![Node::Text(name.clone()), data])
 			}
 			None => {
 				// P202: an emit no handler anywhere receives does nothing, with a got-it note
-				if !block_handled.contains(&name) {
-					crate::normalize::set_position_of(&node);
-					crate::diagnostic::advise_once(
-						UNHANDLED_TOPIC,
-						&format!("emit {name}"),
-						&format!("on {name} {{…}}"),
-						&format!("no handler for event {name}: this emit does nothing"),
-						None,
-					);
-				}
+				crate::normalize::set_position_of(&node);
+				crate::diagnostic::advise_once(
+					UNHANDLED_TOPIC,
+					&format!("emit {name}"),
+					&format!("on {name} {{…}}"),
+					&format!("no handler for event {name}: this emit does nothing"),
+					None,
+				);
 				Node::Empty
 			}
 		};
@@ -1118,7 +1105,7 @@ fn emits_as_calls(
 			call
 		};
 	}
-	children_rewritten(node, |child| emits_as_calls(child, handled, verbs, block_handled))
+	children_rewritten(node, |child| emits_as_calls(child, handled, verbs))
 }
 
 /// The variables the main level assigns (`n = 0`, `n += 1`, `n: int = 0`)

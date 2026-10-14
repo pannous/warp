@@ -71,7 +71,6 @@ pub(super) enum Effect<'a> {
 	On {
 		event: String,
 		handler: &'a Node,
-		body: Option<&'a Node>,
 	},
 	Emit {
 		event: String,
@@ -94,48 +93,12 @@ pub(super) fn effect(node: &Node) -> Option<Effect<'_>> {
 	let Node::List(items, _, _) = node.drop_meta() else {
 		return None;
 	};
-	// `on ev {h} in {body}` as a value parses as `(on ev {h}) in {body}`
-	if let [handled, keyword, body] = items.as_slice() {
-		if keyword.is_symbol(IN_KEYWORD) {
-			if let Some(Effect::On {
-				event,
-				handler,
-				body: None,
-			}) = effect(handled)
-			{
-				return Some(Effect::On {
-					event,
-					handler,
-					body: Some(body),
-				});
-			}
-		}
-	}
 	let (first, rest) = items.split_first()?;
 	if first.is_symbol(ON_KEYWORD) {
-		// `a = on ask {2} in {…}` groups the words after `on`: `on (ask {2})`
-		let rest = match rest {
-			[grouped] => match grouped.drop_meta() {
-				Node::List(words, Bracket::None, Separator::Space) => words.as_slice(),
-				_ => rest,
-			},
-			_ => rest,
-		};
 		let (last, words) = rest.split_last()?;
 		let event = event_name(words)?;
-		return match last.drop_meta() {
-			Node::List(_, Bracket::Curly, _) => Some(Effect::On {
-				event,
-				handler: last,
-				body: None,
-			}),
-			Node::List(parts, _, _) if parts.len() == 3 && parts[1].is_symbol(IN_KEYWORD) => Some(Effect::On {
-				event,
-				handler: &parts[0],
-				body: Some(&parts[2]),
-			}),
-			_ => None,
-		};
+		return matches!(last.drop_meta(), Node::List(_, Bracket::Curly, _))
+			.then_some(Effect::On { event, handler: last });
 	}
 	if !first.is_symbol(EMIT_KEYWORD) {
 		return None;

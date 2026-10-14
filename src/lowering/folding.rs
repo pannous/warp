@@ -5,7 +5,7 @@
 //! The values come from running the definitions and the calls as one small module, so they are exactly what the
 //! program computes; a call that fails or runs out of fuel stays a call.
 
-use super::nodes::{call, children_rewritten, key};
+use super::nodes::{branches, call, children_rewritten, key};
 use crate::analyzer::{captured_variables, collect_variables, Scope, CHECKED_RESULT};
 use crate::effects::EffectReport;
 use crate::extensions::numbers::Number;
@@ -161,14 +161,7 @@ fn computed(node: Node) -> Node {
 				_ => node,
 			}
 		}
-		Node::Key(if_then, Op::Else, _) => match if_then.drop_meta() {
-			Node::Key(head, Op::Then, _) => match head.drop_meta() {
-				Node::Key(_, Op::If, condition) if is_int_comparison(condition) => decided(node),
-				_ => node,
-			},
-			_ => node,
-		},
-		Node::Key(condition, Op::Question, _) if is_int_comparison(condition) => decided(node),
+		_ if branches(&node).is_some_and(|(condition, ..)| is_int_comparison(condition)) => decided(node),
 		_ => node,
 	}
 }
@@ -600,6 +593,9 @@ fn decided(node: Node) -> Node {
 		Node::Number(Number::Int(value)) => Some(*value),
 		_ => None,
 	};
+	if let Some((condition, chosen, otherwise)) = branches(&node).filter(|(condition, ..)| int(condition).is_some()) {
+		return if int(condition) != Some(0) { chosen } else { otherwise }.clone();
+	}
 	match node.drop_meta() {
 		Node::Key(left, op, right) if int(left).is_some() && int(right).is_some() => {
 			let (a, b) = (int(left).expect("guarded"), int(right).expect("guarded"));
@@ -617,33 +613,6 @@ fn decided(node: Node) -> Node {
 			};
 			value.map_or(node.clone(), |value| Node::Number(Number::Int(value)))
 		}
-		// `if c then a else b` with c decided
-		Node::Key(if_then, Op::Else, otherwise) => match if_then.drop_meta() {
-			Node::Key(head, Op::Then, chosen) => match head.drop_meta() {
-				Node::Key(empty, Op::If, condition)
-					if matches!(empty.drop_meta(), Node::Empty) && int(condition).is_some() =>
-				{
-					if int(condition) != Some(0) {
-						chosen.as_ref().clone()
-					} else {
-						otherwise.as_ref().clone()
-					}
-				}
-				_ => node,
-			},
-			_ => node,
-		},
-		// `c ? a : b` with c decided
-		Node::Key(condition, Op::Question, branches) if int(condition).is_some() => match branches.drop_meta() {
-			Node::Key(chosen, Op::Colon, otherwise) => {
-				if int(condition) != Some(0) {
-					chosen.as_ref().clone()
-				} else {
-					otherwise.as_ref().clone()
-				}
-			}
-			_ => node,
-		},
 		_ => node,
 	}
 }

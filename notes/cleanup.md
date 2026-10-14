@@ -116,6 +116,8 @@ A. Compile context, to become one `CompileContext` beside `CompileMode` (card cl
 | BOOL_FUNCTIONS | analyzer/booleans | set | functions known to return a bool |
 | WRITTEN_PROBLEMS | accessibility | pass | accessibility problems the source states itself |
 
+Done (2026-10-14): all of A are fields of src/compile_context.rs `CompileContext`, one thread-local; `compile_context::scoped(field, value, run)` replaces the per-static `util::scoped` calls and pipeline's with_flag / set_mode_flag, `read` and `change` the `.with(|cell| …)` accessors, and single-caller accessors (hint_line, module_files, is_module_definition, comments_as_meta, serving_port, server_value, sandbox::confined) are gone. Not done: a reset of the `set` fields per compile, since an inner compile (a module, the renderer) would wipe the outer one's kernels and module definitions; that needs a scoped context per compile, not a reset.
+
 B. Compile output, to become one `Diagnostics` sink taken once per compile (card cleanup-diagnostic-sink)
 
 | static | module | lives |
@@ -333,6 +335,13 @@ Left (each changes behaviour or needs care):
   Candidates (forms rejected by accident, no test pins them): the Lean export skips `def f(x) := body`, untyped
   `def f(x): body` and `def (f x) {…}`; three is_call_head functions mean different things (nodes: round + word,
   traits: round + word without parameters, variable_signals: round only).
+- (cleanup-traits-alias, 2026-10-14) Of src/lowering/traits* (2572 lines) only about 700 are trait code; the rest is
+  class dispatch (generics.rs multiple dispatch, dispatch.rs `<`/`==`/sort on instances, instance_types.rs static
+  shapes, likeness.rs `like`, op·T witnesses that class methods and overloads use too; notes on card
+  methods-as-dispatch). The element check of `xs: Comparable list` is now Dispatch::admit's (a trait list is a
+  declared parameter type like a class), dropping trait_constraints / unmet_constraint (−33). Foreign signatures and
+  the element check stay (interviewer: rust-forms-welcome, list element checks kept). A mixin rewrite of traits saves
+  ~40 lines and loses free-function default methods.
 - soft_keywords::parameter_name accepts only `:` / `=` keys and does not recurse, unlike nodes::parameter_name;
   go_blocks / named_arguments / parameter_shapes have their own parameter_name returning String or Node.
 - (cleanup-big-files) class_methods.rs (~1920 lines): child modules (`use super::*`, items pub(super)) class_methods/operators.rs

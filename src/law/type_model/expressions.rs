@@ -165,7 +165,7 @@ impl Exporter {
 		};
 		let list = self.expression(list)?;
 		self.locals.push(variable.clone());
-		let body = self.breaking_in(None, |exporter| exporter.block(body));
+		let body = self.block(body);
 		self.locals.pop();
 		Ok(format!(".forIn {} ({list}) ({}) {UNIT_TYPE}", quoted(&variable), body?))
 	}
@@ -177,7 +177,7 @@ impl Exporter {
 			other => return Err(format!("not in W0: the lambda parameters {}", other.serialize().trim())),
 		};
 		self.locals.push(parameter.clone());
-		let body = self.breaking_in(None, |exporter| exporter.block(body));
+		let body = self.block(body);
 		self.locals.pop();
 		Ok(format!(".lam {} ({})", quoted(&parameter), body?))
 	}
@@ -386,7 +386,7 @@ impl Exporter {
 				self.sequence(items)
 			}
 			_ if effect(node).is_some() => self.effect(effect(node).expect("an effect")),
-			Node::Symbol(word) if word == BREAK_KEYWORD => self.abort(None),
+			Node::Symbol(word) if word == BREAK_KEYWORD => Err("not in W0: a break".to_string()),
 			// `global y` in a function only declares: the name is main-level and assignable there
 			_ if global_declaration(node)
 				.is_some_and(|(name, value)| value.is_none() && self.names.contains_key(name)) =>
@@ -394,7 +394,7 @@ impl Exporter {
 				Ok(UNIT_TYPE.to_string())
 			}
 			Node::List(items, _, _) if items.len() == 2 && items[0].is_symbol(BREAK_KEYWORD) => {
-				self.abort(Some(&items[1]))
+				Err("not in W0: a break".to_string())
 			}
 			Node::List(items, _, _)
 				if items
@@ -618,11 +618,9 @@ impl Exporter {
 				_ => unsupported(node),
 			},
 			Node::Key(condition, Op::Do, body) => match condition.drop_meta() {
-				Node::Key(empty, Op::While, condition) if empty.is_nothing() => self.breaking_in(None, |exporter| {
-					exporter
-						.binary(".loop", condition, body)
-						.map(|lean| format!("{lean} {UNIT_TYPE}"))
-				}),
+				Node::Key(empty, Op::While, condition) if empty.is_nothing() => self
+					.binary(".loop", condition, body)
+					.map(|lean| format!("{lean} {UNIT_TYPE}")),
 				_ => unsupported(node),
 			},
 			Node::Key(left, Op::Add, right) if is_list_literal(left) || is_list_literal(right) => {

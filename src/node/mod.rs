@@ -6,8 +6,6 @@ use crate::meta::{DataType, DataValue, LineInfo};
 use crate::node::Node::*;
 use crate::operators::{is_function_keyword, Op};
 use crate::type_kinds::Kind;
-#[cfg(feature = "native")]
-use crate::wasm_reader::GcObject;
 use serde::{Deserialize, Serialize};
 use std::cmp::PartialEq;
 use std::fmt;
@@ -300,12 +298,6 @@ impl Node {
 			}
 			_ => String::new(),
 		}
-	}
-
-	/// Convert compact 3-field WASM GC object to Node
-	#[cfg(feature = "native")]
-	pub fn from_gc_object(obj: &GcObject) -> Node {
-		obj.to_node()
 	}
 
 	/// Placeholder for a missing feature: an error value, never a fake result

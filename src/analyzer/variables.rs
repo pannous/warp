@@ -170,14 +170,6 @@ pub(super) fn collect_variables_inner(
 			.iter()
 			.map(|item| collect_variables_inner(item, scope, false, false))
 			.sum(),
-		// `ran_without_abort(i, {…})` keeps the try depth of its start in a temp local (try_guard.rs)
-		Node::List(items, Bracket::Round, Separator::None)
-			if items
-				.first()
-				.is_some_and(|head| head.is_symbol(crate::wasm_emitter::RAN_WITHOUT_ABORT)) =>
-		{
-			1 + items.iter().map(|item| visit(item, scope)).sum::<u32>()
-		}
 		Node::List(items, _, _) => items.iter().map(|item| visit(item, scope)).sum(),
 		_ => 0,
 	}
@@ -745,7 +737,7 @@ pub fn resolve_main_variable_assignments(program: Node) -> Result<Node, Node> {
 	// a used module's functions never see the program's variables (card module-locals)
 	for function in functions
 		.into_iter()
-		.filter(|function| !crate::modules::is_module_definition(&function.name))
+		.filter(|function| !crate::compile_context::read(|context| context.module_definitions.contains(&function.name)))
 	{
 		let looped = crate::lowering::for_loop::loop_variables(&function.body);
 		let is_main_variable = |name: &String| {

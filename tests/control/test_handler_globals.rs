@@ -5,6 +5,7 @@ use crate::common::fails_with;
 use crate::is;
 
 #[test]
+#[ignore = "cleanup-edge: cleanup-drop-scoped-handlers: block-scoped handlers `on e {…} in {…}` were dropped"]
 fn a_handler_assigns_an_emitted_value_to_a_global() {
 	is!(
 		"y=0; on ask { 1 } in { on ask { y = emit ask; y + 10 } in { emit ask } }",

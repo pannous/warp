@@ -19,10 +19,6 @@ pub struct LineInfo {
 #[cfg(debug_assertions)]
 const DEBUG_LINE_LENGTH: usize = 80;
 
-thread_local! {
-	static PARSED_FILE: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
-}
-
 impl LineInfo {
 	/// A position the parser records, in the module file being parsed (parsing_file) if any
 	/// (the start of the source `line`, kept in debug builds only: a whole long line in every node made a 30 KB literal
@@ -33,7 +29,7 @@ impl LineInfo {
 			column,
 			#[cfg(debug_assertions)]
 			line: line.chars().take(DEBUG_LINE_LENGTH).collect(),
-			file: PARSED_FILE.with(|file| file.borrow().clone()),
+			file: crate::compile_context::read(|context| context.parsed_file.clone()),
 		}
 	}
 
@@ -56,7 +52,7 @@ pub const GENERATED_FILE: &str = "generated";
 
 /// `parse` with the positions it records marked as in `file`: a module's, so its failures name it
 pub fn parsing_file<T>(file: &str, parse: impl FnOnce() -> T) -> T {
-	crate::util::scoped(&PARSED_FILE, Some(file.to_string()), parse)
+	crate::compile_context::scoped(|context| &mut context.parsed_file, Some(file.to_string()), parse)
 }
 
 // Custom trait for cloneable Any types with equality support

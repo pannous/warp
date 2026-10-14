@@ -1,7 +1,7 @@
 //! Ruby blocks (card functions-ruby-yield): `yield v` in a function calls the block its caller passes after the
 //! arguments, `each_twice { |x| total += x }`, `twice(3) { |x| … }`, `apply(3) do |x| … end`. Such a function gets the
 //! block as its last parameter, `yield a, b` becomes `yield·block(a, b)`. Only functions some call passes a block to
-//! are rewritten: `yield` stays free for generators.
+//! are rewritten.
 //! A block after a call that leaves a parameter of the function without its value is that argument too (Kotlin's and
 //! Swift's trailing closure, card web-components): `Card("Hi") { p:"text" }` passes the children, `apply(3) { it*2 }`
 //! the function.
@@ -35,12 +35,12 @@ pub fn lower(node: Node) -> Node {
 	with_block_parameters(node, &called_with_block)
 }
 
-pub(crate) fn is_yield(node: &Node) -> bool {
+fn is_yield(node: &Node) -> bool {
 	node.is_symbol(YIELD_WORD)
 }
 
 /// `yield`, `yield v` or `yield a, b`: the values yielded
-pub(crate) fn yielded(node: &Node) -> Option<Vec<Node>> {
+fn yielded(node: &Node) -> Option<Vec<Node>> {
 	match node.drop_meta() {
 		_ if is_yield(node) => Some(vec![]),
 		Node::List(items, _, Separator::Space | Separator::None) if items.first().is_some_and(is_yield) => {
@@ -117,7 +117,7 @@ fn call_parts(node: &Node, takers: &HashMap<String, BlockTaker>) -> Option<(Stri
 }
 
 /// `(3)` and `(a, b)` hold the arguments
-pub(crate) fn arguments(node: &Node) -> Vec<Node> {
+fn arguments(node: &Node) -> Vec<Node> {
 	match node.drop_meta() {
 		Node::List(items, Bracket::Round, Separator::Colon) => items.clone(),
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => items.clone(),
