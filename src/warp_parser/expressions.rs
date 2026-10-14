@@ -5,8 +5,6 @@ use crate::words::{EMIT_ALIASES, EMIT_WORDS};
 
 /// Characters that end a statement: a body cannot start with them
 const BODY_ENDS: [char; 7] = ['\0', ';', ',', '\n', '}', ')', ']'];
-/// The type words of a text: `k:text` names a key in `m[k]` (card text-key)
-const TEXT_TYPE_WORDS: [&str; 3] = ["text", "string", "str"];
 
 impl WarpParser {
 	/// The head of a definition, `f`, `f x` or `f(x)`, makes f a function the rest of the source calls
@@ -887,7 +885,7 @@ impl WarpParser {
 		}
 		let holds_text = match (op, rhs.drop_meta()) {
 			(Op::Assign | Op::Define, Node::Text(_)) => true,
-			(Op::Colon, Node::Symbol(type_word)) => TEXT_TYPE_WORDS.contains(&type_word.as_str()),
+			(Op::Colon, Node::Symbol(type_word)) => crate::type_tests::is_text_type_word(type_word),
 			_ => false,
 		};
 		if holds_text {
