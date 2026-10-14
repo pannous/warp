@@ -22,6 +22,9 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   `cargo check --offline --lib --target wasm32-unknown-unknown --no-default-features`, and compile the browser test
   build (native-only API in a test broke it twice): `tests/queue.sh cargo --offline test --target wasm32-wasip1
   --no-default-features --test tests --no-run`. Both with zero warnings (CI denies them).
+- Reviewer (notes/agents/reviewer.md): it reviews each merge request while you gate, never in front of you. Before a
+  push, leave out a branch warp-reviewer vetoed (drop it from the batch); its polish tips come as new tips for the
+  next batch. A missing review never holds a push.
 - Push `HEAD:main` only at 0 failed and no drop in the test count (a drop must be explained, e.g. removed duplicates).
   Push exactly the hash the suite ran on (`git push origin <tested-hash>:main`), never a branch ref that may have
   moved: workers push new tips mid-run, so never re-merge `origin/<branch>` between the run and the push.
