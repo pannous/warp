@@ -162,7 +162,7 @@ impl ElementChecks {
 					value => value,
 				}
 			}
-			None if matches!(value.drop_meta(), Node::Empty) || checked_at_compile_time(&value, tests) => value,
+			None if value.is_empty_node() || checked_at_compile_time(&value, tests) => value,
 			None => {
 				let list = self.temporary();
 				checks.push(assign(list.clone(), value));

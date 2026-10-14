@@ -227,7 +227,9 @@ pub(super) fn renamed(method: &Node, name: &str) -> Node {
 
 /// The name a class item defines: a field or a method
 pub(super) fn item_name(item: &Node) -> Option<String> {
-	method_parts(item).map(|(name, _, _)| name).or_else(|| field_name(item))
+	method_parts(item)
+		.map(|(name, _, _)| name)
+		.or_else(|| declared_field_name(item))
 }
 
 /// Every class that extends another with all its items, its name without the parent

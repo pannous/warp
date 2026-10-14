@@ -603,7 +603,7 @@ impl WasmGcEmitter {
 
 	/// A value whose kind is known only at run time (a map value, arithmetic of an any value, a stored error), not ø itself
 	pub(crate) fn holds_run_time_kind(&self, operand: &Node) -> bool {
-		matches!(self.get_type(operand), Kind::Empty | Kind::Data) && !matches!(operand.drop_meta(), Node::Empty)
+		matches!(self.get_type(operand), Kind::Empty | Kind::Data) && !operand.is_empty_node()
 	}
 
 	/// A text operand as is, anything else in its text form; the implicit conversion is hinted

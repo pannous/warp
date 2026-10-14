@@ -42,7 +42,7 @@ impl Picking {
 			return None;
 		};
 		match operand.drop_meta() {
-			Node::Key(_, Op::Hash, index) if !matches!(index.drop_meta(), Node::Empty) => {
+			Node::Key(_, Op::Hash, index) if !index.is_empty_node() => {
 				Some(self.picked_call(operand.clone(), arguments))
 			}
 			Node::Key(left, op, right) => self

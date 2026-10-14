@@ -131,9 +131,7 @@ impl Lowering {
 			{
 				Some(self.sum(&range_of(&items[1])?))
 			}
-			Node::Key(empty, Op::Hash, counted) if matches!(empty.drop_meta(), Node::Empty) => {
-				Some(self.length(&range_of(counted)?))
-			}
+			Node::Key(empty, Op::Hash, counted) if empty.is_empty_node() => Some(self.length(&range_of(counted)?)),
 			Node::Key(range, Op::Dot, word) if self.counts && word.is_symbol(COUNT_WORD) => {
 				Some(self.length(&range_of(range)?))
 			}
@@ -252,7 +250,10 @@ fn replaceable(statements: &[Node], position: usize, readers: &RangeReaders) -> 
 		return None;
 	}
 	let (before, after) = (&statements[..position], &statements[position + 1..]);
-	let bound_names: Vec<String> = [&range.start, &range.end].into_iter().flat_map(symbols).collect();
+	let bound_names: Vec<String> = [&range.start, &range.end]
+		.into_iter()
+		.flat_map(crate::variable_signals::symbols)
+		.collect();
 	let unchanged = |name: &str| !after.iter().any(|statement| changes(statement, name));
 	let read_only = before
 		.iter()
@@ -269,16 +270,6 @@ fn replaceable(statements: &[Node], position: usize, readers: &RangeReaders) -> 
 			Node::List(vec![range.whole.clone()], Bracket::Round, Separator::None),
 		)
 	})
-}
-
-fn symbols(node: &Node) -> Vec<String> {
-	let mut names = vec![];
-	node.visit(&mut |part| {
-		if let Node::Symbol(name) = part {
-			names.push(name.clone())
-		}
-	});
-	names
 }
 
 /// Whether `node` assigns or updates `name`, its items or its fields
@@ -339,7 +330,7 @@ fn only_read(node: &Node, name: &str, readers: &RangeReaders) -> bool {
 			.iter()
 			.enumerate()
 			.all(|(at, item)| (is_name(item) && at > 0 && items[at - 1].is_symbol("in")) || reads(item)),
-		Node::Key(empty, Op::Hash, counted) if matches!(empty.drop_meta(), Node::Empty) && is_name(counted) => true,
+		Node::Key(empty, Op::Hash, counted) if empty.is_empty_node() && is_name(counted) => true,
 		Node::Key(list, Op::Hash, index) if is_name(list) => is_position(index) && reads(index),
 		Node::Key(list, Op::Dot, method) if is_name(list) => reading_method(method) && reads(method),
 		Node::Key(head, Op::Define, body) if matches!(head.drop_meta(), Node::List(..)) => !body.mentions_any(&[name]),
@@ -439,7 +430,7 @@ fn bounds_name(function: &str, positions: &[usize]) -> String {
 	)
 }
 
-fn bound_names(parameter: &str) -> [String; 2] {
+fn range_bound_names(parameter: &str) -> [String; 2] {
 	[
 		format!("{parameter}{TEMPORARY_SEPARATOR}start"),
 		format!("{parameter}{TEMPORARY_SEPARATOR}end"),
@@ -538,7 +529,7 @@ fn bounds_copies(statement: &Node, readers: &RangeReaders, copies: &mut Copies) 
 					new_parameters.push(parameter.drop_meta().clone());
 					continue;
 				}
-				let [start, end] = bound_names(&parameter.name()).map(Node::Symbol);
+				let [start, end] = range_bound_names(&parameter.name()).map(Node::Symbol);
 				let range = Node::List(
 					vec![key(start.clone(), Op::Range, end.clone())],
 					Bracket::Round,

@@ -33,7 +33,7 @@ pub fn lower(node: Node) -> Node {
 	}
 	let assigned = assigned_names(&node);
 	let node = flag_arguments(node, &functions, &assigned);
-	let types = declared_types(&node);
+	let types = super::nodes::declared_class_names(&node);
 	crate::compiler::compile_context::change(|context| context.declared_types = types);
 	let mut unknown = None;
 	collect_extras(&node, &mut functions, &mut unknown);
@@ -278,16 +278,6 @@ fn parameter_default(parameter: &Node) -> Option<Node> {
 		Node::Key(_, Op::Assign, default) => Some(default.as_ref().clone()),
 		_ => None,
 	}
-}
-
-fn declared_types(node: &Node) -> std::collections::HashSet<String> {
-	let mut types = std::collections::HashSet::new();
-	node.visit(&mut |part| {
-		if let Node::Type { name, .. } = part {
-			types.insert(name.name());
-		}
-	});
-	types
 }
 
 fn is_type(name: &str) -> bool {

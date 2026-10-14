@@ -445,7 +445,7 @@ pub(crate) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 			_ => assignment_mismatch(assignment, name, base, value),
 		};
 	}
-	if matches!(value.drop_meta(), Node::Empty) && builtin_type_kind(type_name).is_some() {
+	if value.is_empty_node() && builtin_type_kind(type_name).is_some() {
 		let message = format!("type mismatch: {name} is declared {type_name}, cannot assign ø");
 		return Some(
 			Diagnostic::at(assignment, message)

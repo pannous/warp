@@ -1,9 +1,11 @@
 //! Reading warp forms for the export: literals and type words, `on`/`emit` effects, definitions and their heads, locals and late binding
 use super::*;
+pub(super) use crate::declaration_forms::is_list_literal;
+pub(super) use crate::injection::literal_text;
 pub(super) use crate::lowering::nodes::parameter_word;
 use crate::lowering::{function_head, DefinitionForm, FunctionHead};
 
-pub(super) fn unsupported(node: &Node) -> Lean {
+pub(super) fn outside_w0(node: &Node) -> Lean {
 	Err(format!("not in W0: {}", node.serialize().trim()))
 }
 
@@ -78,17 +80,6 @@ pub(super) enum Effect<'a> {
 	},
 }
 
-pub(super) fn event_name(words: &[Node]) -> Option<String> {
-	let words: Option<Vec<String>> = words
-		.iter()
-		.map(|word| match word.drop_meta() {
-			Node::Symbol(word) => Some(word.clone()),
-			_ => None,
-		})
-		.collect();
-	words.filter(|words| !words.is_empty()).map(|words| words.join(" "))
-}
-
 pub(super) fn effect(node: &Node) -> Option<Effect<'_>> {
 	let Node::List(items, _, _) = node.drop_meta() else {
 		return None;
@@ -96,7 +87,7 @@ pub(super) fn effect(node: &Node) -> Option<Effect<'_>> {
 	let (first, rest) = items.split_first()?;
 	if first.is_symbol(ON_KEYWORD) {
 		let (last, words) = rest.split_last()?;
-		let event = event_name(words)?;
+		let event = crate::event_signals::event_name(words.iter())?;
 		return matches!(last.drop_meta(), Node::List(_, Bracket::Curly, _))
 			.then_some(Effect::On { event, handler: last });
 	}
@@ -119,13 +110,13 @@ pub(super) fn effect(node: &Node) -> Option<Effect<'_>> {
 			let mut words = words.to_vec();
 			words.push((**word).clone());
 			return Some(Effect::Emit {
-				event: event_name(&words)?,
+				event: crate::event_signals::event_name(words.iter())?,
 				payload: payload?,
 			});
 		}
 	}
 	Some(Effect::Emit {
-		event: event_name(rest)?,
+		event: crate::event_signals::event_name(rest.iter())?,
 		payload: vec![],
 	})
 }
@@ -177,15 +168,6 @@ pub(super) fn map_entries(node: &Node) -> Option<Vec<(String, &Node)>> {
 pub(super) fn bracket_index(index: &Node) -> Option<&Node> {
 	match index.drop_meta() {
 		Node::Key(key, Op::Add, one) if matches!(one.drop_meta(), Node::Number(Number::Int(1))) => Some(key),
-		_ => None,
-	}
-}
-
-/// the text of a text literal (a one-letter one parses as a codepoint)
-pub(super) fn literal_text(node: &Node) -> Option<String> {
-	match node.drop_meta() {
-		Node::Text(text) => Some(text.clone()),
-		Node::Char(letter) => Some(letter.to_string()),
 		_ => None,
 	}
 }
@@ -251,10 +233,6 @@ pub(super) fn without_tail_return(body: &Node) -> Node {
 	}
 }
 
-pub(super) fn is_list_literal(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(_, Bracket::Square, _))
-}
-
 /// The statements of a program or block: an unbracketed `;`/newline list, else the one node
 pub(super) fn statements(node: &Node) -> Vec<&Node> {
 	node.drop_meta().sequence_statements().iter().collect()
@@ -307,7 +285,7 @@ fn is_exported(definition: &FunctionHead) -> bool {
 }
 
 /// `a, b = xs` and `a, b = 1, 2`: the names and the values after `=` (one: a list to take apart)
-pub(super) fn destructuring(items: &[Node]) -> Option<(Vec<String>, Vec<&Node>)> {
+pub(super) fn destructuring_assignment(items: &[Node]) -> Option<(Vec<String>, Vec<&Node>)> {
 	let assignment = items
 		.iter()
 		.position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)))?;
@@ -442,7 +420,7 @@ pub(super) fn first_value_is_list(body: &Node, local: &str) -> bool {
 		Node::Key(target, Op::Assign, value)
 			if first.is_none() && matches!(target.drop_meta(), Node::Symbol(name) if name == local) =>
 		{
-			first = Some(is_list_literal(value) || matches!(value.drop_meta(), Node::Empty));
+			first = Some(is_list_literal(value) || value.is_empty_node());
 		}
 		_ => {}
 	});

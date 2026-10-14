@@ -312,7 +312,7 @@ pub(super) fn class_attributes(node: Node, qualified: &[(String, String)]) -> No
 			let is_attribute = |item: &Node| {
 				method_parts(item).is_none()
 					&& has_value(item)
-					&& field_name(item).is_some_and(|field| qualified.contains(&(class.clone(), field)))
+					&& declared_field_name(item).is_some_and(|field| qualified.contains(&(class.clone(), field)))
 			};
 			let items = class_items(&body);
 			if !items.iter().any(|item| is_attribute(item) && !is_static(item)) {
@@ -558,7 +558,7 @@ pub(super) fn as_member(definition: Node) -> Node {
 	let is_self = |parameter: &Node| match parameter.drop_meta() {
 		Node::Symbol(word) => word == RECEIVER,
 		Node::Key(word, Op::Colon, _) => word.drop_meta().name() == RECEIVER,
-		Node::Key(empty, _, word) => matches!(empty.drop_meta(), Node::Empty) && word.drop_meta().name() == RECEIVER,
+		Node::Key(empty, _, word) => empty.is_empty_node() && word.drop_meta().name() == RECEIVER,
 		_ => false,
 	};
 	let parameters = match parameters.first() {

@@ -47,7 +47,7 @@ pub fn subscript(target: Node, index: Node) -> Node {
 pub(super) fn counts_from_the_end(index: &Node) -> bool {
 	match index.drop_meta() {
 		Node::Number(n) => f64::from(*n) < 0.0,
-		Node::Key(empty, Op::Sub, _) => matches!(empty.drop_meta(), Empty),
+		Node::Key(empty, Op::Sub, _) => empty.is_empty_node(),
 		_ => false,
 	}
 }

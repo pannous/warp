@@ -1,6 +1,7 @@
 //! Operators on instances (wiki/operator.md): `a + b` calls the class's `plus`, quantities with run-time units, and
 //! functions specialized by the classes of their arguments
 use super::*;
+use crate::lowering::nodes::method_call;
 
 /// `a + b` of an instance a whose class defines the operator's method (`plus`, Python's `__add__`, wiki/operator.md):
 /// the method call `a.plus(b)`; an operation of such calls is an instance of the same class (`a + b + c`)
@@ -354,7 +355,7 @@ pub(super) fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Opt
 			let class = class.or_else(|| operand_class(&left, operands));
 			let right_class = right_class.or_else(|| operand_class(&right, operands));
 			// `"v: " + q` of a run-time quantity q joins its text, as a static quantity does (card quantity-falls)
-			if op == Op::Add && (is_text(&left) || is_text(&right)) {
+			if op == Op::Add && (is_plain_text(&left) || is_plain_text(&right)) {
 				return (key(joined_text(left, class), op, joined_text(right, right_class)), None);
 			}
 			let (left, class, right) = with_run_time_units(left, class, right, right_class, operands);
@@ -364,7 +365,7 @@ pub(super) fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Opt
 					.iter()
 					.find(|(owner, known, _)| owner == class && *known == op)
 			}) {
-				Some((_, _, method)) => (method_call(left, method, right), class),
+				Some((_, _, method)) => (method_call(left, method, vec![right]), class),
 				None if class.is_none() && may_hold_instance(&left, operands) => {
 					(dispatched_operator(left, op, right, operands), None)
 				}
@@ -383,7 +384,7 @@ pub(super) fn with_operator_calls(node: Node, operands: &Operands) -> (Node, Opt
 					method_call(
 						quantity,
 						CONVERSION_METHOD,
-						Node::Text(crate::numbers::units::unit_suffix(&units)),
+						vec![Node::Text(crate::numbers::units::unit_suffix(&units))],
 					),
 					run_time.map(str::to_string),
 				),
@@ -463,7 +464,12 @@ fn plain_variables(node: &Node) -> std::collections::HashSet<String> {
 		}
 		Node::Type { body, .. } => {
 			let typed_by_word = |item: &&Node| crate::analyzer::type_word_kind(&field_type_name(item)).is_some();
-			plain.extend(class_items(body).iter().filter(typed_by_word).filter_map(field_name))
+			plain.extend(
+				class_items(body)
+					.iter()
+					.filter(typed_by_word)
+					.filter_map(declared_field_name),
+			)
 		}
 		Node::List(items, _, _)
 			if crate::lowering::nodes::for_in_variable(items).is_some() && items.get(3).is_some_and(is_plain_value) =>
@@ -483,7 +489,7 @@ fn dispatched_operator(left: Node, op: Op, right: Node, operands: &Operands) -> 
 		super::by_class(
 			&left,
 			class,
-			method_call(left.clone(), method, right.clone()),
+			method_call(left.clone(), method, vec![right.clone()]),
 			otherwise,
 		)
 	})
@@ -545,7 +551,7 @@ pub(super) fn quantities_reduced(quantities: Node) -> Node {
 	let added = key(
 		parameters,
 		Op::FatArrow,
-		method_call(sum, operator_method(Op::Add).expect("plus"), item),
+		method_call(sum, operator_method(Op::Add).expect("plus"), vec![item]),
 	);
 	let reduced = key(quantities, Op::Dot, call(REDUCE_WORD, vec![added]));
 	Node::meta(
@@ -558,15 +564,6 @@ pub(super) fn quantities_reduced(quantities: Node) -> Node {
 
 pub(super) fn amount_of(quantity: Node) -> Node {
 	key(quantity, Op::Dot, symbol(QUANTITY_AMOUNT))
-}
-
-pub(super) fn method_call(receiver: Node, method: &str, argument: Node) -> Node {
-	let receiver = match receiver.drop_meta() {
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => items[0].clone(),
-		_ => receiver,
-	};
-	let call = call(method, vec![argument]);
-	key(receiver, Op::Dot, call)
 }
 
 /// `2 km < q`, `q + 1 m` of a run-time quantity q: the unit written in the program is one too (card units-mixed); the
@@ -617,7 +614,7 @@ pub(super) fn operand_class(operand: &Node, operands: &Operands) -> Option<Strin
 	}
 }
 
-pub(super) fn is_text(node: &Node) -> bool {
+pub(super) fn is_plain_text(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Text(_))
 }
 

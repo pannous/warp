@@ -3,7 +3,7 @@
 //! global reads as its value. The program imports them from the module's path (import module name), the runner links
 //! each import to the module instantiated once per run (notes/wasm_modules.md).
 use crate::ffi::FfiSignature;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{call, Bracket, Node};
 use crate::operators::Op;
 use std::collections::HashMap;
 use std::path::Path;
@@ -695,14 +695,6 @@ pub fn rewrite_uses(program: Node, modules: &[String]) -> Node {
 		qualify(crate::law::substitute(&program, &reads), modules)
 	});
 	rewritten.unwrap_or_else(|failure| failure)
-}
-
-fn call(name: &str, arguments: Vec<Node>) -> Node {
-	Node::List(
-		[vec![Node::Symbol(name.to_string())], arguments].concat(),
-		Bracket::Round,
-		Separator::None,
-	)
 }
 
 /// An assignment target naming an exported global, `g` or `m.g`: as written, whether it is mutable, its setter import

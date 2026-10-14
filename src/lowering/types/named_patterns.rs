@@ -83,7 +83,7 @@ fn is_open_part(part: &Node) -> bool {
 	rest_pattern(part) == Some(None)
 		|| part.is_symbol(WILDCARD)
 		|| matches!(part.drop_meta(), Node::Key(each, Op::Range | Op::To, end)
-			if matches!(end.drop_meta(), Node::Empty) && matches!(each.drop_meta(), Node::List(..)))
+			if end.is_empty_node() && matches!(each.drop_meta(), Node::List(..)))
 		|| matches!(part.drop_meta(), Node::Key(_, Op::Colon, value) if is_open_part(value))
 		|| is_open(part)
 }

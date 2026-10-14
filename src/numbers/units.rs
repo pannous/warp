@@ -265,7 +265,7 @@ fn with_written_amount(node: Node) -> Node {
 			}
 		}
 		Node::Key(conversion, op @ (Op::Square | Op::Cube), nothing)
-			if matches!(nothing.drop_meta(), Node::Empty) && powered_conversion(&conversion, op).is_some() =>
+			if nothing.is_empty_node() && powered_conversion(&conversion, op).is_some() =>
 		{
 			let Node::Key(quantity, Op::As, unit) = conversion.drop_meta().clone() else {
 				unreachable!("a powered conversion is an `as`")
@@ -336,7 +336,7 @@ fn with_unit_aliases(node: Node, aliases: &[(&str, &str)]) -> Node {
 		}
 		Node::Symbol(name) => expansion(&Node::Symbol(name.clone())).unwrap_or(Node::Symbol(name)),
 		// a field's type, `speed: mph`
-		Node::Type { name, body } if matches!(body.drop_meta(), Node::Empty) && expansion(&name).is_some() => {
+		Node::Type { name, body } if body.is_empty_node() && expansion(&name).is_some() => {
 			expansion(&name).expect("guarded")
 		}
 		Node::Type { name, body } => Node::Type {
@@ -704,7 +704,7 @@ fn quantity_comparisons_folded(program: Node) -> Node {
 	if !(needs_quantities(&program) || program.mentions(TIME_WORD)) {
 		return program;
 	}
-	let bound = crate::system_values::bound_names(&program);
+	let bound = crate::system_values::assigned_symbols(&program);
 	let constants = constant_quantities(&program);
 	let clock = !bound.contains(TIME_WORD);
 	let folded = fold_comparisons(program, &constants, clock);

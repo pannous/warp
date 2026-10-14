@@ -163,7 +163,7 @@ pub(super) fn collect_variables_inner(
 		// While loop needs temp locals for the result and for "the body ran"
 		Node::Key(left, Op::Do, right) => 2 + visit(left, scope) + visit(right, scope),
 		// Integer abs needs a temp local for the if-then-else pattern
-		Node::Key(left, Op::Abs, right) if matches!(left.drop_meta(), Node::Empty) => 1 + visit(right, scope),
+		Node::Key(left, Op::Abs, right) if left.is_empty_node() => 1 + visit(right, scope),
 		Node::Key(left, _, right) => visit(left, scope) + visit(right, scope),
 		// a group of statements in a structure is code: `ul{ (made = ø; for … ; made) }`, a lowered `[li{t} for t in ts]`
 		Node::List(items, Bracket::Round, Separator::Semicolon | Separator::Newline) => items
@@ -400,8 +400,7 @@ pub(super) fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
 			|| [a, b].iter().all(|kind| matches!(kind, Kind::Text | Kind::Codepoint))
 	};
 	// a value of run-time kind may be anything: `for item in basket` after `item = 2`, `total = total + run.load`
-	let run_time_value =
-		crate::analyzer::inference::is_run_time_kind(&assigned) && !matches!(value.drop_meta(), Node::Empty);
+	let run_time_value = crate::analyzer::inference::is_run_time_kind(&assigned) && !value.is_empty_node();
 	let other_kind = run_time_value || CONCRETE_KINDS.contains(&assigned) && !mixes(local.kind, assigned);
 	if CONCRETE_KINDS.contains(&local.kind) && other_kind {
 		local.kind = Kind::Empty;
@@ -887,7 +886,7 @@ pub(crate) fn declare_global(program: Node, names: &[String]) -> Node {
 		single => (vec![single], Bracket::None, Separator::Newline),
 	};
 	for name in names {
-		let assigns = |assignment: &&Node| matches!(assignment, Node::Key(target, Op::Assign, _) if declared_name(target) == Some(name));
+		let assigns = |assignment: &&Node| matches!(assignment, Node::Key(target, Op::Assign, _) if name_before_type(target) == Some(name));
 		let found = items.iter().enumerate().find_map(|(index, item)| {
 			statement_assignment(item)
 				.filter(assigns)
@@ -913,10 +912,10 @@ fn statement_assignment(item: &Node) -> Option<&Node> {
 }
 
 /// The variable a declaration binds: `k` of `k` and of the typed `k: int`
-fn declared_name(target: &Node) -> Option<&String> {
+fn name_before_type(target: &Node) -> Option<&String> {
 	match target.drop_meta() {
 		Node::Symbol(name) => Some(name),
-		Node::Key(name, Op::Colon, _) => declared_name(name),
+		Node::Key(name, Op::Colon, _) => name_before_type(name),
 		_ => None,
 	}
 }

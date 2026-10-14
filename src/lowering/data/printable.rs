@@ -17,7 +17,7 @@ const ITERATE_OPERATION: &str = "iterate";
 const PRINT_WORD: &str = "print";
 
 pub fn lower(node: Node) -> Node {
-	let declared = declared_types(&node);
+	let declared = super::nodes::declared_class_names(&node);
 	let (printable, iterable) = (
 		defining(&node, &declared, TEXT_OPERATION),
 		defining(&node, &declared, ITERATE_OPERATION),
@@ -168,16 +168,6 @@ pub(crate) fn is_text_word(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Symbol(word) if crate::type_tests::is_text_type_word(word))
 }
 
-fn declared_types(node: &Node) -> HashSet<String> {
-	let mut types = HashSet::new();
-	node.visit(&mut |part| {
-		if let Node::Type { name, .. } = part {
-			types.insert(name.name());
-		}
-	});
-	types
-}
-
 /// The declared types with a definition of `operation`, or with its witness already (a class's `text()` method is
 /// `text·V` by now)
 fn defining(node: &Node, declared: &HashSet<String>, operation: &str) -> HashSet<String> {
@@ -188,7 +178,7 @@ fn defining(node: &Node, declared: &HashSet<String>, operation: &str) -> HashSet
 		}
 		if let Some(type_name) = declared
 			.iter()
-			.find(|type_name| defines_function(part, &witness_name(operation, type_name)))
+			.find(|type_name| defines_function_named(part, &witness_name(operation, type_name)))
 		{
 			types.insert(type_name.clone());
 		}
@@ -196,7 +186,7 @@ fn defining(node: &Node, declared: &HashSet<String>, operation: &str) -> HashSet
 	types
 }
 
-fn defines_function(node: &Node, name: &str) -> bool {
+fn defines_function_named(node: &Node, name: &str) -> bool {
 	let Node::Key(head, Op::Define | Op::Assign, _) = node else {
 		return false;
 	};

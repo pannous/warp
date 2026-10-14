@@ -4,7 +4,7 @@
 //! `xs.take first 10` is `xs.slice(0, 10)`. The parser reads a chain `xs.keep only positive.sort by size` as one list
 //! `[xs.keep, only, positive.sort, by, size]`: each `.method` binds to the word before it.
 
-use super::nodes::{call, key, phrase_words as words, symbol};
+use super::nodes::{call, key, method_call, phrase_words as words, symbol};
 use crate::compiler::context::Context;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -80,7 +80,7 @@ fn sorted_by(items: &[Node], context: &Context) -> Option<Node> {
 /// The key of `sort by it.age` as `it => it.age`, of `sort by size` as key names it
 fn sort_key(written: &Node, context: &Context) -> Option<Node> {
 	let it = crate::words::IMPLICIT_PARAMETER;
-	match crate::lambdas::mentions(written, it) {
+	match written.mentions(it) {
 		true => Some(key(symbol(it), Op::Arrow, written.clone())),
 		false => key_function(written, context),
 	}
@@ -214,13 +214,4 @@ fn key_function(argument: &Node, context: &Context) -> Option<Node> {
 		false => key(element.clone(), Op::Dot, argument.clone()),
 	};
 	Some(key(element, Op::Arrow, value))
-}
-
-fn method_call(receiver: Node, method: &str, arguments: Vec<Node>) -> Node {
-	let call = Node::List(
-		[vec![symbol(method)], arguments].concat(),
-		Bracket::Round,
-		Separator::None,
-	);
-	key(receiver, Op::Dot, call)
 }

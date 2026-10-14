@@ -9,7 +9,7 @@ use crate::words::FILE_CLASS_MARK;
 const NAMESPACE_WORD: &str = "namespace";
 
 /// The class name without the parser's mark, which is its outermost attribute
-fn unmarked(name: Node) -> Node {
+fn without_file_class_mark(name: Node) -> Node {
 	match name {
 		Node::Meta { node, data } if matches!(data.as_ref(), Node::Key(key, _, _) if key.name().ends_with(FILE_CLASS_MARK)) => {
 			*node
@@ -42,7 +42,7 @@ pub fn lower(program: Node) -> Node {
 					))),
 				};
 				lowered.push(Node::Type {
-					name: Box::new(unmarked(*name.clone())),
+					name: Box::new(without_file_class_mark(*name.clone())),
 					body,
 				});
 			}

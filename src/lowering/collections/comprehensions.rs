@@ -84,7 +84,7 @@ impl Lists {
 				}
 			}
 			Node::Key(target, Op::Assign | Op::Define, value) => {
-				variables.extend(bound_names(target));
+				variables.extend(comprehension_variables(target));
 				if let (Node::Symbol(list), Some(class_fields)) = (
 					target.drop_meta(),
 					instances_class(value).and_then(|class| classes.get(class)),
@@ -126,11 +126,11 @@ fn instances_class(value: &Node) -> Option<&str> {
 }
 
 /// The names a definition or assignment binds: `x`, `x: int`, the parameters of `f(a, b: int)`
-pub(crate) fn bound_names(target: &Node) -> Vec<String> {
+pub(crate) fn comprehension_variables(target: &Node) -> Vec<String> {
 	match target.drop_meta() {
 		Node::Symbol(name) => vec![name.clone()],
-		Node::Key(name, Op::Colon, _) => bound_names(name),
-		Node::List(items, _, _) => items.iter().skip(1).flat_map(bound_names).collect(),
+		Node::Key(name, Op::Colon, _) => comprehension_variables(name),
+		Node::List(items, _, _) => items.iter().skip(1).flat_map(comprehension_variables).collect(),
 		_ => vec![],
 	}
 }
@@ -326,7 +326,7 @@ fn comprehension_over_table(items: &[Node], lists: &mut Lists) -> Option<Vec<Nod
 		return None;
 	};
 	let condition = phrase(rest);
-	if crate::lambdas::mentions(&condition, crate::words::IMPLICIT_PARAMETER) {
+	if condition.mentions(crate::words::IMPLICIT_PARAMETER) {
 		return None;
 	}
 	let condition = substitute(condition, name, &symbol(crate::words::IMPLICIT_PARAMETER));
@@ -342,7 +342,7 @@ fn comprehension_over_table(items: &[Node], lists: &mut Lists) -> Option<Vec<Nod
 
 /// `[it, (for it in xs if), condition]`, as the parser groups a comprehension
 fn where_comprehension(subject: &Node, condition: &Node) -> Node {
-	if !crate::lambdas::mentions(condition, crate::words::IMPLICIT_PARAMETER) {
+	if !condition.mentions(crate::words::IMPLICIT_PARAMETER) {
 		let subject = subject.serialize();
 		let field_hint = field_condition(condition)
 			.map(|(field, written)| format!(", or {subject} where {written} for a field {field} of each element"))
@@ -575,7 +575,7 @@ fn qualifiers(clause: &Node, rest: &[Node]) -> Option<Vec<Qualifier>> {
 	let mut found = vec![Qualifier::Each(variable.clone(), sequence.clone())];
 	match (tail, rest) {
 		([], []) => {}
-		([nothing], []) if matches!(nothing.drop_meta(), Node::Empty) => {}
+		([nothing], []) if nothing.is_empty_node() => {}
 		([nested], _) if starts_with_for(nested) => found.extend(qualifiers(nested, rest)?),
 		([filter_word], [_, ..]) if filter_word.is_symbol(IF_WORD) || filter_word.is_symbol(WHERE_KEYWORD) => {
 			let end = rest.iter().position(starts_with_for).unwrap_or(rest.len());

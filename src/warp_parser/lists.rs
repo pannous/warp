@@ -1,6 +1,7 @@
 //! Symbols, type applications and bracketed lists, separators and grouping
 
 use super::*;
+use crate::lowering::nodes::is_block;
 
 impl WarpParser {
 	/// At the closing bracket `close` (or the end of the input), or at the end of a bracketless group
@@ -589,10 +590,6 @@ fn assigned_method_call(node: &Node) -> bool {
 		}
 		_ => false,
 	}
-}
-
-fn is_block(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _))
 }
 
 /// `f(xs) := xs.map { it*10 }` is `f(xs) := (xs.map {it*10})`: the block belongs to the method call, not to the statement

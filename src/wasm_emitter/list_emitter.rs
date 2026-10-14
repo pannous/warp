@@ -1289,7 +1289,7 @@ impl WasmGcEmitter {
 		} else if self.is_ref_update(item)
 			|| self.is_output_call(item)
 			|| self.is_ref_value(item)
-			|| matches!(item.drop_meta(), Node::Empty)
+			|| item.is_empty_node()
 			|| destructured.is_some_and(|kind| kind.is_ref())
 		{
 			self.emit_node_instructions(func, item);
@@ -1314,7 +1314,7 @@ impl WasmGcEmitter {
 	fn is_float_read(&self, node: &Node) -> bool {
 		let read = match node.drop_meta() {
 			Node::List(items, Bracket::Round, _) => matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))),
-			Node::Key(list, Op::Hash, _) => !matches!(list.drop_meta(), Node::Empty),
+			Node::Key(list, Op::Hash, _) => !list.is_empty_node(),
 			_ => false,
 		};
 		read && self.get_type(node).is_float()
@@ -1403,7 +1403,7 @@ impl WasmGcEmitter {
 			Node::Symbol(_) | Node::List(_, Bracket::Round, _) => self.get_type(item).is_ref(),
 			Node::Key(_, op, _) if op.is_arithmetic() => self.get_type(item).is_ref(),
 			// `levels[i]` of a list a function gave: an element held as a Node, whatever number it is
-			Node::Key(list, Op::Hash, _) if !matches!(list.drop_meta(), Node::Empty) => {
+			Node::Key(list, Op::Hash, _) if !list.is_empty_node() => {
 				matches!(self.get_type(item), Kind::Empty) || self.get_type(item).is_ref()
 			}
 			_ => false,

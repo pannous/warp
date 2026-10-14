@@ -102,9 +102,7 @@ impl WasmGcEmitter {
 			}
 			// an array of Ints or Floats holds no character: its fast read stays
 			Node::Key(list, Op::Hash, index)
-				if !matches!(list.drop_meta(), Node::Empty)
-					&& !self.holds_only_numbers(list)
-					&& !self.map_is_indexed_by_key(index) =>
+				if !list.is_empty_node() && !self.holds_only_numbers(list) && !self.map_is_indexed_by_key(index) =>
 			{
 				self.emit_list_element_node(func, list, index);
 				let held = self.node_scratch();

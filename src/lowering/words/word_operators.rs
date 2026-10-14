@@ -66,9 +66,7 @@ fn operators(node: Node, aliases: &[(&str, &str, Op)]) -> Node {
 fn log_calls(node: Node) -> Node {
 	match node {
 		Node::Key(base, Op::LogBase, value) => call(LOG, vec![log_calls(*value), log_calls(*base)]),
-		Node::Key(value, Op::LogOf, base) if matches!(base.drop_meta(), Node::Empty) => {
-			call(NATURAL_LOG, vec![log_calls(*value)])
-		}
+		Node::Key(value, Op::LogOf, base) if base.is_empty_node() => call(NATURAL_LOG, vec![log_calls(*value)]),
 		Node::Key(value, Op::LogOf, base) => call(LOG, vec![log_calls(*value), log_calls(*base)]),
 		other => other.map_children(log_calls),
 	}

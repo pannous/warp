@@ -4,7 +4,7 @@
 //! becomes `closure_call_1(f, x)`, a helper per arity that call_refs the closure's entry (wasm_emitter/closures.rs).
 //! notes/closures.md describes the representation.
 
-use super::nodes::{call, children_rewritten, key, parameter_name};
+use super::nodes::{call, children_rewritten, is_return, key, parameter_name};
 use crate::compiler::context::{Context, Param, UserFunctionDef};
 use crate::diagnostic::Diagnostic;
 use crate::lambdas::arrow_lambda;
@@ -359,11 +359,6 @@ fn gives_reference(node: &Node) -> bool {
 	}
 }
 
-/// `return value`
-fn is_return(items: &[Node]) -> bool {
-	matches!(items, [word, _] if word.is_symbol("return"))
-}
-
 /// The variable or field a node names: `s`, `s.fs` (a field lookup `s#("fs"+1)` after mutation.rs), `s.a.fs`
 fn holder_path(node: &Node) -> Option<String> {
 	match node.drop_meta() {
@@ -631,7 +626,7 @@ impl Lifting {
 			return self.lift(lambda.params, lambda.body, bound);
 		}
 		// `data e` is the code as written: an object's function entry `f: x => x * a`, whose function blocks.rs defined
-		if is_data(&node) {
+		if crate::run_time_blocks::is_data(&node) {
 			return node;
 		}
 		match node {
@@ -1182,9 +1177,4 @@ pub fn is_typed_closure_call(function: &UserFunctionDef) -> bool {
 		&& function.params[1..]
 			.iter()
 			.all(|param| matches!(param.used_as, Some(Kind::Int | Kind::Float)))
-}
-
-/// `data e` (blocks.rs)
-fn is_data(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(items, Bracket::None, Separator::Space) if items.len() == 2 && items[0].drop_meta().name() == crate::blocks::DATA_WORD)
 }

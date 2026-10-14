@@ -107,7 +107,7 @@ pub(super) fn go_method(words: &[Node]) -> Option<(String, Vec<Node>)> {
 		_ => return None,
 	};
 	let class = match class {
-		Node::Key(empty, Op::Mul, class) if matches!(empty.drop_meta(), Node::Empty) => class.drop_meta(),
+		Node::Key(empty, Op::Mul, class) if empty.is_empty_node() => class.drop_meta(),
 		class => class,
 	};
 	let (Node::Symbol(variable), Node::Symbol(class)) = (variable, class) else {

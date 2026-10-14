@@ -577,7 +577,7 @@ impl Resolver<'_> {
 	/// Every symbol naming a known function counts as a call; nested definitions and
 	/// import declarations are skipped (definitions are analyzed on their own).
 	fn collect(&self, node: &Node, function: &mut FunctionEffects) {
-		if self.is_definition(node) || is_declaration(node) {
+		if self.is_definition(node) || is_import_statement(node) {
 			return;
 		}
 		match node.drop_meta() {
@@ -1021,7 +1021,7 @@ fn leading_symbol(node: &Node) -> Option<String> {
 }
 
 /// `import f from lib` / `use lib`
-fn is_declaration(node: &Node) -> bool {
+fn is_import_statement(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::List(items, _, _) => {
 			matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::modules::is_import_keyword(word))

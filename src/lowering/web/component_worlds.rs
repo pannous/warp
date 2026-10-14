@@ -128,13 +128,13 @@ fn import_calls(node: Node, imports: &[(String, Signature)]) -> Node {
 			},
 			_ => (String::new(), vec![]),
 		};
-		let interface = kebab(&receiver.drop_meta().name());
+		let interface = underscores_to_dashes(&receiver.drop_meta().name());
 		if imports
 			.iter()
-			.any(|(imported, signature)| *imported == interface && signature.name == kebab(&function))
+			.any(|(imported, signature)| *imported == interface && signature.name == underscores_to_dashes(&function))
 		{
 			let arguments = arguments.into_iter().map(|argument| import_calls(argument, imports));
-			let callee = Node::Symbol(import_name(&interface, &kebab(&function)));
+			let callee = Node::Symbol(import_name(&interface, &underscores_to_dashes(&function)));
 			return Node::List(
 				std::iter::once(callee).chain(arguments).collect(),
 				Bracket::Round,
@@ -161,7 +161,7 @@ pub fn world(program: &Node) -> Result<World, String> {
 	};
 	let interfaces: Vec<(String, Vec<Signature>)> = interfaces
 		.iter()
-		.map(|(name, body)| Ok((kebab(name), signatures(body)?)))
+		.map(|(name, body)| Ok((underscores_to_dashes(name), signatures(body)?)))
 		.collect::<Result<_, String>>()?;
 	let items = body
 		.as_items()
@@ -182,13 +182,13 @@ pub fn world(program: &Node) -> Result<World, String> {
 			};
 			Ok(WorldItem {
 				direction,
-				name: kebab(&name),
+				name: underscores_to_dashes(&name),
 				functions,
 			})
 		})
 		.collect::<Result<_, String>>()?;
 	Ok(World {
-		name: kebab(name),
+		name: underscores_to_dashes(name),
 		interfaces,
 		items,
 	})
@@ -295,7 +295,7 @@ fn signature(member: &Node) -> Option<Signature> {
 		other => Some(wit_type(other)?),
 	};
 	Some(Signature {
-		name: kebab(&name.drop_meta().name()),
+		name: underscores_to_dashes(&name.drop_meta().name()),
 		parameters,
 		result,
 	})
@@ -334,6 +334,6 @@ fn function_text(function: &Signature) -> String {
 }
 
 /// WIT names are kebab-case: `my_component` is my-component
-fn kebab(name: &str) -> String {
+fn underscores_to_dashes(name: &str) -> String {
 	name.replace('_', "-")
 }

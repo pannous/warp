@@ -139,7 +139,7 @@ impl SuffixWords {
 fn lower_node(node: Node, functions: &SuffixWords) -> Node {
 	match node {
 		// `10%`: a percent is a hundredth, `10/100`
-		Node::Key(left, Op::Mod, right) if matches!(right.drop_meta(), Node::Empty) => {
+		Node::Key(left, Op::Mod, right) if right.is_empty_node() => {
 			key(lower_node(*left, functions), Op::Div, Node::int(PERCENT))
 		}
 		Node::List(items, bracket, separator) => {
@@ -154,7 +154,7 @@ fn lower_node(node: Node, functions: &SuffixWords) -> Node {
 }
 
 /// `1`, `-1`, `"a"`, `'a'`
-fn is_literal(node: &Node) -> bool {
+fn is_number_or_text(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Key(_, Op::Neg, number) => matches!(number.drop_meta(), Node::Number(_)),
 		other => matches!(other, Node::Number(_) | Node::Text(_) | Node::Char(_)),
@@ -170,7 +170,7 @@ fn bare_list_assignment(items: &[Node], bracket: &Bracket, separator: &Separator
 	let Node::Key(name, Op::Assign, value) = first.drop_meta() else {
 		return None;
 	};
-	if rest.is_empty() || !is_literal(value) || !rest.iter().all(is_literal) {
+	if rest.is_empty() || !is_number_or_text(value) || !rest.iter().all(is_number_or_text) {
 		return None;
 	}
 	let values = std::iter::once(value.as_ref().clone())

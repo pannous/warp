@@ -57,7 +57,6 @@ const KERNEL_COUNT: &str = "count";
 const FUNCTION_PREFIX: &str = "warp_";
 const VARIABLE_PREFIX: &str = "v_";
 const PARAMETER_PREFIX: &str = "a_";
-const RETURN_WORD: &str = "return";
 /// paint(f, width, height) of a warp function f(x, y) (step 4 of card gpu-functions): f's colors and numbers
 const PAINT_WORD: &str = "paint";
 const RGB_WORD: &str = "rgb";
@@ -112,7 +111,7 @@ fn automatic_in(node: Node, is_linear_floats: &impl Fn(&Node) -> bool, pinned: b
 		_ => None,
 	};
 	if let Some(marked) = marked {
-		return with_value(node, marked);
+		return with_assigned_value(node, marked);
 	}
 	node.map_children(|child| automatic_in(child, is_linear_floats, pinned))
 }
@@ -160,9 +159,9 @@ fn automatic_value(value: &Node, is_linear_floats: &impl Fn(&Node) -> bool) -> O
 }
 
 /// The assignment with its value replaced
-fn with_value(statement: Node, value: Node) -> Node {
+fn with_assigned_value(statement: Node, value: Node) -> Node {
 	match statement {
-		meta @ Node::Meta { .. } => meta.under_meta(|node| with_value(node, value)),
+		meta @ Node::Meta { .. } => meta.under_meta(|node| with_assigned_value(node, value)),
 		Node::Key(target, op, _) => Node::Key(target, op, Box::new(value)),
 		other => other,
 	}
@@ -290,7 +289,7 @@ fn reads_only_items(node: &Node, name: &str) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(symbol) => symbol != name,
 		Node::Key(list, Op::Hash, index) if is_name(list) => reads_only_items(index, name),
-		Node::Key(empty, Op::Hash, list) if matches!(empty.drop_meta(), Node::Empty) && is_name(list) => true,
+		Node::Key(empty, Op::Hash, list) if empty.is_empty_node() && is_name(list) => true,
 		Node::Key(left, _, right) => reads_only_items(left, name) && reads_only_items(right, name),
 		Node::List(items, _, _) => items.iter().all(|item| reads_only_items(item, name)),
 		_ => true,
@@ -640,7 +639,7 @@ impl Translation {
 			Node::Number(number) if !matches!(number, crate::extensions::numbers::Number::Complex(..)) => {
 				Some(float_literal(f64::from(*number)))
 			}
-			Node::Key(empty, op, operand) if matches!(empty.drop_meta(), Node::Empty) => match op {
+			Node::Key(empty, op, operand) if empty.is_empty_node() => match op {
 				Op::Neg => Some(format!("(-{})", self.expression(operand)?)),
 				Op::Sqrt => Some(format!("sqrt({})", self.expression(operand)?)),
 				Op::Abs => Some(format!("abs({})", self.expression(operand)?)),
@@ -723,7 +722,7 @@ impl Translation {
 	/// A condition as a WGSL bool: comparisons, and, or, not; a number is true unless 0
 	fn condition(&mut self, node: &Node) -> Option<String> {
 		match node.drop_meta() {
-			Node::Key(empty, Op::Not, operand) if matches!(empty.drop_meta(), Node::Empty) => {
+			Node::Key(empty, Op::Not, operand) if empty.is_empty_node() => {
 				Some(format!("!{}", self.condition(operand)?))
 			}
 			Node::Key(left, op @ (Op::And | Op::Or), right) => {
@@ -876,7 +875,7 @@ impl Translation {
 				*out += "}\n";
 				Some(())
 			}
-			Node::Key(target, op, _) if is_assignment(*op) && matches!(target.drop_meta(), Node::Symbol(_)) => {
+			Node::Key(target, op, _) if is_assigning_op(*op) && matches!(target.drop_meta(), Node::Symbol(_)) => {
 				self.statement(node, out)?;
 				*out += &format!("return {};\n", self.result(target)?);
 				Some(())
@@ -915,7 +914,7 @@ impl Translation {
 			return Some(());
 		}
 		match node.drop_meta() {
-			Node::Key(target, op, value) if is_assignment(*op) => {
+			Node::Key(target, op, value) if is_assigning_op(*op) => {
 				let Node::Symbol(name) = target.drop_meta() else {
 					return None;
 				};
@@ -946,7 +945,7 @@ impl Translation {
 				let Node::Key(empty, Op::While, condition) = condition.drop_meta() else {
 					return None;
 				};
-				if !matches!(empty.drop_meta(), Node::Empty) {
+				if !empty.is_empty_node() {
 					return None;
 				}
 				self.heavy = true;
@@ -1108,7 +1107,7 @@ fn comparison(op: Op) -> Option<&'static str> {
 	})
 }
 
-fn is_assignment(op: Op) -> bool {
+fn is_assigning_op(op: Op) -> bool {
 	matches!(op, Op::Assign | Op::Define) || op.is_compound_assign()
 }
 
@@ -1129,7 +1128,7 @@ fn block_statements(node: &Node) -> Option<&[Node]> {
 /// `return v`: v
 fn returned_value(node: &Node) -> Option<&Node> {
 	match node.drop_meta() {
-		Node::List(items, _, _) if items.len() == 2 && items[0].is_symbol(RETURN_WORD) => Some(&items[1]),
+		Node::List(items, _, _) if items.len() == 2 && items[0].is_symbol(crate::words::RETURN_WORD) => Some(&items[1]),
 		_ => None,
 	}
 }
@@ -1167,7 +1166,7 @@ fn assigned_names(node: &Node, names: &mut Vec<String>) {
 		}
 	};
 	node.visit(&mut |part| match part.drop_meta() {
-		Node::Key(target, op, _) if is_assignment(*op) => {
+		Node::Key(target, op, _) if is_assigning_op(*op) => {
 			if let Node::Symbol(name) = target.drop_meta() {
 				add(name.clone());
 			}

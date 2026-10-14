@@ -113,7 +113,7 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 				.collect();
 			// an empty `[]` fits any type of list: `{A:[["B", 4]], B:[]}` is a `map of list of list`
 			let is_empty_list = |value: &&Node| {
-				matches!(value.drop_meta(), Node::Empty)
+				value.is_empty_node()
 					|| matches!(value.drop_meta(), Node::List(items, Bracket::Square, _) if items.is_empty())
 			};
 			let typed: Vec<&Node> = values.iter().copied().filter(|value| !is_empty_list(value)).collect();
@@ -258,7 +258,7 @@ pub fn literal_number_type_word(node: &Node) -> Option<&'static str> {
 }
 
 pub(in crate::analyzer) fn element_type_word(item: &Node, scope: &Scope) -> String {
-	if matches!(item.drop_meta(), Node::Empty) {
+	if item.is_empty_node() {
 		return crate::type_tests::EMPTY_TYPE.to_string();
 	}
 	literal_number_type_word(item)

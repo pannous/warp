@@ -814,14 +814,14 @@ pub(crate) fn subject_and_body(rest: &[Node]) -> Option<(Node, Node)> {
 /// `big() {body}` arrives as `big(ø) {body}`: the call `big()`
 fn without_empty_argument(call: &Node) -> Node {
 	match call.drop_meta() {
-		Node::List(items, _, _) if items.len() == 2 && is_nothing(&items[1]) => {
+		Node::List(items, _, _) if items.len() == 2 && is_nothing_or_empty_list(&items[1]) => {
 			Node::List(vec![items[0].clone()], Bracket::Round, Separator::None)
 		}
 		_ => call.clone(),
 	}
 }
 
-fn is_nothing(node: &Node) -> bool {
+fn is_nothing_or_empty_list(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Empty => true,
 		Node::List(items, _, _) => items.is_empty(),

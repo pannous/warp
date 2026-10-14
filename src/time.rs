@@ -431,7 +431,7 @@ fn mentions_time(node: &Node) -> bool {
 /// The start of what the evaluator does not know: the run time takes those programs
 const UNSUPPORTED: &str = "not evaluated at compile time:";
 
-fn unsupported(node: &Node) -> String {
+fn not_evaluated(node: &Node) -> String {
 	format!("{UNSUPPORTED} `{node}`")
 }
 
@@ -454,7 +454,7 @@ fn evaluate(node: &Node) -> Result<Value, String> {
 			} else if let Some(duration) = data.downcast_ref::<Duration>() {
 				Ok(Value::Duration(*duration))
 			} else {
-				Err(unsupported(node))
+				Err(not_evaluated(node))
 			}
 		}
 		Node::Number(Number::Int(n)) => Ok(Value::Int(*n)),
@@ -463,20 +463,20 @@ fn evaluate(node: &Node) -> Result<Value, String> {
 		Node::Symbol(name) if is_time_word(name) || crate::units::names_unit(name) => Ok(Value::Symbol(name.clone())),
 		Node::Key(left, op, right) => binary(left, *op, right),
 		Node::List(items, _, separator) => list(node, items, separator.clone()),
-		_ => Err(unsupported(node)),
+		_ => Err(not_evaluated(node)),
 	}
 }
 
 fn list(node: &Node, items: &[Node], separator: Separator) -> Result<Value, String> {
 	match items {
 		[head, ..] if head.is_symbol(INSTANT_AT) => Ok(Value::Time(now())),
-		[head, ..] if head.is_symbol(TIME_OF) => Err(unsupported(node)),
+		[head, ..] if head.is_symbol(TIME_OF) => Err(not_evaluated(node)),
 		[single] => evaluate(single),
 		[time, keyword, zone] if keyword.is_symbol("in") => place_in_zone(time, zone),
 		[head, args @ ..] if separator == Separator::None && head.is_symbol("date") => construct_date(args),
 		[head, args @ ..] if separator == Separator::None && head.is_symbol("add") => add(args),
 		[head, args @ ..] if separator == Separator::None && head.is_symbol("zoned") => zoned(args),
-		_ => Err(unsupported(node)),
+		_ => Err(not_evaluated(node)),
 	}
 }
 
@@ -522,7 +522,7 @@ fn options(function: &str, options: &[Node]) -> Result<(Overflow, Disambiguation
 	let (mut overflow, mut choice) = (Overflow::Reject, Disambiguation::Reject);
 	for option in options {
 		let Node::Key(name, Op::Colon, value) = option.drop_meta() else {
-			return Err(unsupported(option));
+			return Err(not_evaluated(option));
 		};
 		let mode = match evaluate(value)? {
 			Value::Symbol(mode) | Value::Text(mode) => mode,
@@ -588,7 +588,7 @@ fn binary(left: &Node, op: Op, right: &Node) -> Result<Value, String> {
 	match op {
 		Op::Dot => {
 			let Node::Symbol(field) = right.drop_meta() else {
-				return Err(unsupported(right));
+				return Err(not_evaluated(right));
 			};
 			match evaluate(left)? {
 				// The time zone rules version a zoned time was resolved with
@@ -596,7 +596,7 @@ fn binary(left: &Node, op: Op, right: &Node) -> Result<Value, String> {
 					Ok(Value::Text(zoned.rules.version.to_string()))
 				}
 				// the wall clock of an instant is the one where the program runs
-				Value::Time(Time::Instant(_)) if field != EPOCH_SECONDS => Err(unsupported(right)),
+				Value::Time(Time::Instant(_)) if field != EPOCH_SECONDS => Err(not_evaluated(right)),
 				Value::Time(time) => time.field(field).map(Value::Int),
 				Value::Duration(duration) => duration.field(field).map(Value::Int),
 				other => Err(format!("{} has no field {field}", other.kind())),

@@ -51,7 +51,7 @@ pub fn mark_declarations(node: Node) -> Node {
 	if !node.mentions_any(&[POSITION_TYPE, INDEX_TYPE]) {
 		return node;
 	}
-	let bound = bound_names(&node);
+	let bound = assigned_or_declared_names(&node);
 	let free_type_words: Vec<&str> = [POSITION_TYPE, INDEX_TYPE]
 		.into_iter()
 		.filter(|word| !bound.contains(*word))
@@ -296,7 +296,7 @@ fn assignments(node: &Node) -> Vec<(String, Node)> {
 }
 
 /// The names a program assigns or declares
-fn bound_names(node: &Node) -> HashSet<String> {
+fn assigned_or_declared_names(node: &Node) -> HashSet<String> {
 	let declared: Vec<String> = node.assigned_names(|op| *op == Op::Colon);
 	assignments(node)
 		.into_iter()

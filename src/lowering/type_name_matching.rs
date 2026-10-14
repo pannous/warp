@@ -3,6 +3,7 @@
 //! `foo of int = it+it` → `foo(it:int) := …`; the `to` phrase `to square a number:` shares `parameter_slots`.
 
 use super::nodes::{call, is_block, is_call_head, key, spaced_statement};
+use super::nodes::{is_return, typed};
 use crate::analyzer::type_word_kind;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -34,10 +35,6 @@ pub(crate) fn names_a_function(name: &str) -> bool {
 /// A known type word of a head: `fib int i`, `foo of any`
 fn is_type_word(word: &str) -> bool {
 	type_word_kind(word).is_some() || word == crate::words::ANY_TYPE
-}
-
-fn typed(name: &str, type_name: &str) -> Node {
-	key(symbol(name), Op::Colon, symbol(type_name))
 }
 
 /// Which head words are prepositions
@@ -333,10 +330,8 @@ fn is_error_value(value: &Node) -> bool {
 	}
 }
 
-const RETURN: &str = "return";
-
-fn is_return(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(items, _, _) if items.len() == 2 && items[0].symbol_name() == Some(RETURN))
+fn is_return_statement(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(items, _, _) if is_return(items))
 }
 
 /// The body with every value it gives back converted: each `return e` and the last statement of a block
@@ -349,14 +344,14 @@ fn converted_last(body: Node, type_name: &Node) -> Node {
 	match body.drop_meta().clone() {
 		Node::List(mut items, Bracket::Curly, separator) if is_statement_block(&body) => {
 			let last = items.pop().expect("not empty");
-			items.push(if is_return(&last) {
+			items.push(if is_return_statement(&last) {
 				last
 			} else {
 				as_type(last, type_name)
 			});
 			Node::List(items, Bracket::Curly, separator)
 		}
-		body if is_return(&body) => body,
+		body if is_return_statement(&body) => body,
 		// `{cube 3}`: its one statement, so the check reads `cube 3` as a call, not a block value
 		Node::List(items, Bracket::Curly, Separator::Space) => {
 			as_type(Node::List(items, Bracket::None, Separator::Space), type_name)
@@ -367,7 +362,7 @@ fn converted_last(body: Node, type_name: &Node) -> Node {
 
 fn converted_returns(node: Node, type_name: &Node) -> Node {
 	match node {
-		Node::List(mut items, bracket, separator) if items.len() == 2 && items[0].symbol_name() == Some(RETURN) => {
+		Node::List(mut items, bracket, separator) if is_return(&items) => {
 			let value = items.pop().expect("two items");
 			items.push(as_type(value, type_name));
 			Node::List(items, bracket, separator)

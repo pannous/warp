@@ -11,7 +11,7 @@
 
 use super::blocks::DATA_WORD;
 use super::nodes::{call, template};
-use super::switch::{bound_names, code_pattern, is_list_pattern, is_map_pattern};
+use super::switch::{code_pattern, is_list_pattern, is_map_pattern, pattern_bindings};
 use crate::analyzer::TEMPORARY_SEPARATOR;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -203,7 +203,7 @@ fn walker(number: usize, words: &[Node]) -> Node {
 
 /// What a find collects of a match: its one name, a map of its names, or the matching node itself
 fn found_result(pattern: &Node, node: &Node) -> Node {
-	match bound_names(pattern).as_slice() {
+	match pattern_bindings(pattern).as_slice() {
 		[] => node.clone(),
 		[name] => name.clone(),
 		names => Node::List(

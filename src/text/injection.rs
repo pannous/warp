@@ -419,7 +419,7 @@ fn language_of(node: &Node) -> Option<Language> {
 }
 
 /// `"…"` or `("…")`; anything computed is refused
-fn literal_text(node: &Node) -> Option<String> {
+pub(crate) fn literal_text(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Text(text) => Some(text.clone()),
 		Node::Char(c) => Some(c.to_string()),

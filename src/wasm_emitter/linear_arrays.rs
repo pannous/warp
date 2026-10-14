@@ -71,7 +71,7 @@ pub fn is_float_kernel(parameter: &str, body: &Node) -> bool {
 			is_float_kernel(parameter, left) && is_float_kernel(parameter, right)
 		}
 		Node::Key(empty, op, operand)
-			if matches!(empty.drop_meta(), Node::Empty) && KERNEL_PREFIX.iter().any(|(known, _, _)| known == op) =>
+			if empty.is_empty_node() && KERNEL_PREFIX.iter().any(|(known, _, _)| known == op) =>
 		{
 			is_float_kernel(parameter, operand)
 		}
@@ -499,7 +499,7 @@ fn emit_kernel(func: &mut Function, parameter: &str, body: &Node, value: u32, la
 			}
 		}
 		Node::Key(empty, op, operand)
-			if matches!(empty.drop_meta(), Node::Empty)
+			if empty.is_empty_node()
 				&& let Some(known) = KERNEL_PREFIX.iter().find(|(known, _, _)| known == op) =>
 		{
 			emit_kernel(func, parameter, operand, value, lanes);

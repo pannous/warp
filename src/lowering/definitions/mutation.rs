@@ -222,7 +222,7 @@ fn unwrapped(name: Node) -> Node {
 		}
 	}
 	// `ø!`: P73 force — Empty unwraps like a name holding ø
-	if matches!(name.drop_meta(), Node::Empty) {
+	if name.is_empty_node() {
 		return call(UNWRAP, vec![name]);
 	}
 	// `now!`: the time the run reads where it stands (card data-run-now)

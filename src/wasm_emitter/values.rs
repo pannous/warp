@@ -140,7 +140,7 @@ impl WasmGcEmitter {
 				self.emit_int_operands_op(func, left, op, right);
 			}
 			// Prefix operators: √x, -x, !x, ‖x‖, #x (count)
-			Node::Key(left, op, right) if op.is_prefix() && matches!(left.drop_meta(), Node::Empty) => {
+			Node::Key(left, op, right) if op.is_prefix() && left.is_empty_node() => {
 				self.emit_numeric_prefix(func, located, op, right)
 			}
 			// `xs.size`, `xs.count`, `xs.bytes`: the raw i64 of the counting getter
@@ -149,7 +149,7 @@ impl WasmGcEmitter {
 				self.emit_list_count(func, counted, counter);
 			}
 			// Prefix # means count/length: #list returns element count
-			Node::Key(left, Op::Hash, right) if matches!(left.drop_meta(), Node::Empty) => {
+			Node::Key(left, Op::Hash, right) if left.is_empty_node() => {
 				self.emit_list_count(func, right, "node_count");
 			}
 			// Index operator: list#index (1-based)
@@ -349,18 +349,18 @@ impl WasmGcEmitter {
 				self.emit_float_operation(func, left, op, right);
 			}
 			// Prefix operators: √x, ∛x (return f64)
-			Node::Key(left, root @ (Op::Sqrt | Op::Cbrt), right) if matches!(left.drop_meta(), Node::Empty) => {
+			Node::Key(left, root @ (Op::Sqrt | Op::Cbrt), right) if left.is_empty_node() => {
 				self.emit_float_value(func, right);
 				self.emit_float_root(func, root);
 			}
 			// Prefix negation: -x (returns f64)
-			Node::Key(left, Op::Neg, right) if matches!(left.drop_meta(), Node::Empty) => {
+			Node::Key(left, Op::Neg, right) if left.is_empty_node() => {
 				func.instruction(&I::F64Const(0.0.into()));
 				self.emit_float_value(func, right);
 				func.instruction(&I::F64Sub);
 			}
 			// Prefix abs: ‖x‖ (returns f64)
-			Node::Key(left, Op::Abs, right) if matches!(left.drop_meta(), Node::Empty) => {
+			Node::Key(left, Op::Abs, right) if left.is_empty_node() => {
 				self.emit_float_value(func, right);
 				func.instruction(&I::F64Abs);
 			}

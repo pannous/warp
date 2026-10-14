@@ -234,10 +234,10 @@ pub(crate) fn it_function(node: &Node) -> Option<Node> {
 
 /// `a > b`, also as the one statement of a block, and any other bool: `a < b or a == b and c`, `if … then a < b else …`
 /// (card sort-comparator)
-fn is_comparison(body: &Node) -> bool {
+fn is_boolean_body(body: &Node) -> bool {
 	match body.drop_meta() {
 		Node::Key(_, op, _) if COMPARISONS.contains(op) => true,
-		Node::List(items, _, _) if items.len() == 1 => is_comparison(&items[0]),
+		Node::List(items, _, _) if items.len() == 1 => is_boolean_body(&items[0]),
 		_ => crate::analyzer::is_boolean(body, &crate::analyzer::Scope::new()),
 	}
 }
@@ -262,19 +262,10 @@ fn dangling_operator(node: &Node) -> Option<(Node, Node)> {
 	let Node::Key(operand, op, nothing) = node.drop_meta() else {
 		return None;
 	};
-	if !matches!(nothing.drop_meta(), Node::Empty) || matches!(operand.drop_meta(), Node::Empty) {
+	if !nothing.is_empty_node() || operand.is_empty_node() {
 		return None;
 	}
 	Some((operand.as_ref().clone(), operator_symbol(*op)?))
-}
-
-pub(crate) fn mentions(node: &Node, name: &str) -> bool {
-	match node.drop_meta() {
-		Node::Symbol(symbol) => symbol == name,
-		Node::Key(left, _, right) => mentions(left, name) || mentions(right, name),
-		Node::List(items, _, _) => items.iter().any(|item| mentions(item, name)),
-		_ => false,
-	}
 }
 
 /// `a-b` in the body of `(a b)->a-b` reads as one hyphenated name: it is the difference when its parts are parameters
@@ -474,7 +465,7 @@ fn block_lambda(node: &Node) -> Option<Lambda> {
 		many if *separator == Separator::Space => Node::List(many.to_vec(), Bracket::None, Separator::Space),
 		many => Node::List(many.to_vec(), Bracket::Round, separator.clone()),
 	};
-	let params = if mentions(&body, IMPLICIT_PARAMETER) {
+	let params = if body.mentions(IMPLICIT_PARAMETER) {
 		vec![IMPLICIT_PARAMETER.to_string()]
 	} else {
 		shorthand_parameters(&body)
@@ -564,7 +555,7 @@ fn swift_closure(items: &[Node]) -> Option<Lambda> {
 	};
 	params
 		.iter()
-		.any(|param| mentions(&body, param))
+		.any(|param| body.mentions(param))
 		.then(|| Lambda::new(params, body))
 }
 
@@ -989,13 +980,13 @@ impl Lowering {
 	/// A function whose result is a comparison: `(a b) => a > b`, `>`, `def before(a,b){ a < b }`
 	fn compares(&self, function: &Node) -> bool {
 		match literal_function(function) {
-			Some(lambda) => is_comparison(&lambda.body),
+			Some(lambda) => is_boolean_body(&lambda.body),
 			None => match function.drop_meta() {
 				Node::Symbol(name) => self
 					.context
 					.user_functions
 					.get(name)
-					.is_some_and(|defined| is_comparison(&defined.body)),
+					.is_some_and(|defined| is_boolean_body(&defined.body)),
 				_ => false,
 			},
 		}

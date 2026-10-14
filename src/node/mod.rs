@@ -85,6 +85,10 @@ impl Node {
 	pub fn is_nil(&self) -> bool {
 		*self == Empty
 	}
+	/// ø itself, under any metadata: unlike `is_nil`, an empty text, list or zero is not
+	pub fn is_empty_node(&self) -> bool {
+		matches!(self.drop_meta(), Empty)
+	}
 	/// ø or a block without statements: `{}` evaluates to nothing
 	pub fn is_nothing(&self) -> bool {
 		match self.drop_meta() {
