@@ -3,7 +3,7 @@
 //! reflection): its functions themselves, `function gcd` for each. A program's own `dir` or `methods`, or its own name
 //! of the module, wins
 
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use std::collections::HashSet;
 
@@ -26,11 +26,7 @@ fn listed_names(node: Node, words: &[&str], defined: &HashSet<String>) -> Node {
 	let answer = match module_word(&node) {
 		Some((word, module)) if words.contains(&word) => module_names(module, defined).map(|names| match word {
 			DIR_WORD => crate::reflection::text_list(names),
-			_ => Node::List(
-				names.iter().cloned().map(crate::closures::function_reference).collect(),
-				Bracket::Square,
-				Separator::Space,
-			),
+			_ => crate::reflection::function_list(names),
 		}),
 		_ => None,
 	};

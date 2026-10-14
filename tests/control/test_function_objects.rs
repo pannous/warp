@@ -57,3 +57,27 @@ fn a_function_in_a_list_prints_by_its_name() {
 fn printing_a_function_without_parameters_calls_it_and_warns() {
 	crate::common::warns_with("hi() := \"hello\"\nprint hi", "hello", "write `print function hi`");
 }
+
+#[test]
+fn a_classes_methods_are_its_functions() {
+	const DOG: &str = "class Dog { name: text; bark() := \"wuff \" + name }\nd = Dog(\"rex\")\n";
+	is!(&format!("{DOG}fs = d.methods\nfs#1(d)"), "wuff rex");
+	is!(
+		&format!("{DOG}[m.name for m in methods(Dog)]"),
+		warp::texts(vec!["bark"])
+	);
+}
+
+#[test]
+fn the_type_of_a_function_names_its_signature() {
+	is!("use math\ntype(gcd)", "function: (a, b) -> int");
+	is!("use math\n(function gcd) is function", true);
+	is!("type(sqrt)", "function: (x:number) -> number");
+}
+
+#[test]
+fn a_values_methods_are_its_types_functions() {
+	is!("fs = methods(\"hi\")\nfs#1.name", "repeat");
+	is!("s = \"hi\"\ncount(s.methods) == count(dir(s))", true);
+	is!("m = {methods: 3}\nm.methods", 3);
+}

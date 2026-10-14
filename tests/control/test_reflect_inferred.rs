@@ -21,11 +21,11 @@ fn a_field_named_type_is_read_as_written() {
 fn extension_methods_are_listed() {
 	let twice = "fun P.twice() = this.x * 2";
 	is!(
-		&format!("{MAKE}; {twice}; P.methods"),
+		&format!("{MAKE}; {twice}; [m.name for m in P.methods]"),
 		warp::texts(vec!["sum", "twice"])
 	);
 	is!(
-		&format!("{MAKE}; {twice}; P(3).methods"),
+		&format!("{MAKE}; {twice}; [m.name for m in P(3).methods]"),
 		warp::texts(vec!["sum", "twice"])
 	);
 	is!(

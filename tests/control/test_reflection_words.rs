@@ -46,8 +46,15 @@ fn an_instances_fields_and_their_aliases() {
 
 #[test]
 fn a_classes_methods() {
-	is!(&format!("{POINT}; p.methods"), warp::texts(vec!["sq"]));
-	is!(&format!("{POINT}; P.methods"), warp::texts(vec!["sq"]));
+	// the methods themselves (decision reflection, card module-methods): their names
+	is!(
+		&format!("{POINT}; [m.name for m in p.methods]"),
+		warp::texts(vec!["sq"])
+	);
+	is!(
+		&format!("{POINT}; [m.name for m in P.methods]"),
+		warp::texts(vec!["sq"])
+	);
 }
 
 #[test]
@@ -122,7 +129,7 @@ fn fields_of_an_instance_known_at_run_time() {
 		warp::texts(vec!["z"])
 	);
 	is!(
-		&format!("{POINT}; f(o) := o.methods; f(P(1, 2))"),
+		&format!("{POINT}; f(o) := o.methods; [m.name for m in f(P(1, 2))]"),
 		warp::texts(vec!["sq"])
 	);
 	is!(

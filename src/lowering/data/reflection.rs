@@ -32,6 +32,8 @@ const DISPATCH_TEMPLATE: &str = "if RECEIVER is CLASS then NAMES else OTHERWISE"
 const DIR_OTHERWISE_TEMPLATE: &str = "if RECEIVER is map then RECEIVER.keys else OTHERWISE";
 /// A map's `dir` lists its keys, not the map module's words
 const MAP_WORD: &str = "map";
+const TEXT_MODULE: &str = "text";
+const LIST_MODULE: &str = "list";
 pub(crate) const PARAMS_WORDS: [&str; 2] = ["params", "parameters"];
 const SIGNATURE_WORD: &str = "signature";
 /// `f.body`: the body as written, as data (card g_X_3s)
@@ -234,6 +236,11 @@ fn function_named(subject: &Node) -> Option<&str> {
 	}
 }
 
+/// `type(gcd)`: `function: (a, b) -> int`, the kind and the signature (user decision on card module-methods)
+fn function_type(signature: &str) -> Node {
+	Node::Text(format!("{}: {signature}", crate::type_kinds::Kind::Function))
+}
+
 /// `(a, b) -> int` → `int`
 fn return_type(signature: &str) -> String {
 	signature
@@ -266,12 +273,13 @@ fn function_word(node: &Node, functions: &Functions, defined: &HashSet<String>) 
 		return match word {
 			DIR_WORD => Some(text_list(&LIBRARY_FUNCTION_WORDS.map(String::from))),
 			HELP_WORD => Some(Node::Text(format!("{name}{signature}"))),
+			crate::type_tests::TYPE_WORD => Some(function_type(&signature)),
 			_ => None,
 		};
 	}
 	match word {
 		DIR_WORD => Some(text_list(&FUNCTION_WORDS.map(String::from))),
-		crate::type_tests::TYPE_WORD => Some(Node::Symbol(crate::type_kinds::Kind::Function.to_string())),
+		crate::type_tests::TYPE_WORD => Some(function_type(&signature(&functions[name]))),
 		HELP_WORD => Some(Node::Text(help_text(&functions[name]))),
 		_ => None,
 	}
@@ -463,6 +471,8 @@ struct Objects {
 	defined: HashSet<String>,
 	/// what is known of expressions that are no variable: `teams#1` of `teams: [Team]`
 	shapes: Option<crate::traits::InstanceTypes>,
+	/// the type module of each variable given a text or list literal: `s = "hi"` → text
+	literal_types: HashMap<String, &'static str>,
 }
 
 pub fn lower_objects(node: Node) -> Node {
@@ -480,6 +490,7 @@ pub fn lower_objects(node: Node) -> Node {
 	let objects = Objects {
 		instances: crate::class_methods::instance_classes(&node, &classes),
 		maps: map_keys(&node),
+		literal_types: literal_types(&node),
 		defined: crate::library_words::defined_names(&node),
 		layouts,
 		shapes: Some(crate::traits::InstanceTypes::of(&node)),
@@ -686,7 +697,10 @@ impl Objects {
 		if self.defined.contains(word) {
 			return None;
 		}
-		let written = || key(subject.clone(), Op::Dot, symbol(word));
+		let written = || match word {
+			METHODS_WORD => self.value_methods(subject),
+			_ => key(subject.clone(), Op::Dot, symbol(word)),
+		};
 		if let Some(reflected) = self.module_member_word(subject, word) {
 			return Some(reflected);
 		}
@@ -697,7 +711,9 @@ impl Objects {
 			return None;
 		}
 		let Some(name) = subject.symbol_name() else {
-			return self.dispatched(subject, word, written());
+			return self
+				.dispatched(subject, word, written())
+				.or_else(|| (word == METHODS_WORD).then(written));
 		};
 		if let Some(class) = self.class_of(name) {
 			let is_instance = self.instances.contains_key(name);
@@ -706,7 +722,7 @@ impl Objects {
 				_ if CLASS_WORDS.contains(&word) && is_instance => {
 					Some(call(crate::type_tests::TYPE_WORD, vec![subject.clone()]))
 				}
-				_ => self.listed(class, word).map(|names| text_list(&names)),
+				_ => self.listed(class, word).map(|names| word_list(word, &names)),
 			};
 		}
 		if let Some(exports) = self.modules.get(name) {
@@ -716,7 +732,9 @@ impl Objects {
 			Some(keys) => {
 				(FIELDS_WORDS.contains(&word) && !keys.iter().any(|key| key == word)).then(|| self.map_keys(subject))
 			}
-			None => self.dispatched(subject, word, written()),
+			None => self
+				.dispatched(subject, word, written())
+				.or_else(|| (word == METHODS_WORD).then(written)),
 		}
 	}
 
@@ -801,10 +819,26 @@ impl Objects {
 			let names = match (self.has_member(class, word), names_class) {
 				(true, _) => written.clone(),
 				(false, true) => call(crate::type_tests::TYPE_WORD, vec![subject.clone()]),
-				(false, false) => text_list(&self.listed(class, word).unwrap_or_default()),
+				(false, false) => word_list(word, &self.listed(class, word).unwrap_or_default()),
 			};
 			type_dispatch(subject, class, names, otherwise)
 		}))
+	}
+
+	/// `methods("hi")`, `xs.methods` of a value that is no instance of the program's classes: the words of the module
+	/// named after its type, the functions themselves (`methods([1 2])` lists the list module's); a type known only at
+	/// run time picks among the type modules, else none
+	fn value_methods(&self, subject: &Node) -> Node {
+		let known = literal_type(subject).or_else(|| self.literal_types.get(subject.symbol_name()?).copied());
+		let modules = crate::modules::type_modules()
+			.into_iter()
+			.filter(|(module, _)| known.is_none_or(|known| known == *module));
+		if let (Some(_), [(_, words)]) = (known, modules.clone().collect::<Vec<_>>().as_slice()) {
+			return function_list(words);
+		}
+		modules.rev().fold(function_list(&[]), |otherwise, (module, words)| {
+			type_dispatch(subject, module, function_list(words), otherwise)
+		})
 	}
 
 	fn map_keys(&self, subject: &Node) -> Node {
@@ -861,6 +895,28 @@ fn dir_otherwise(subject: &Node) -> Node {
 	)
 }
 
+/// The type module of a text or list literal
+fn literal_type(value: &Node) -> Option<&'static str> {
+	match value.drop_meta() {
+		Node::Text(_) => Some(TEXT_MODULE),
+		Node::List(_, Bracket::Square, _) => Some(LIST_MODULE),
+		_ => None,
+	}
+}
+
+/// The variables a text or list literal is assigned to, with that literal's type module
+fn literal_types(node: &Node) -> HashMap<String, &'static str> {
+	let mut types = HashMap::new();
+	node.visit(&mut |part| {
+		if let Node::Key(target, Op::Assign | Op::Define | Op::Colon, value) = part {
+			if let (Some(name), Some(module)) = (target.symbol_name(), literal_type(value)) {
+				types.insert(name.to_string(), module);
+			}
+		}
+	});
+	types
+}
+
 fn with_object_words(node: Node, objects: &Objects) -> Node {
 	// `o.members = v`, `o.members.add(p)`: a field as a place, no reflection word (card orm-members)
 	if let Node::Key(place, op, rest) = node.drop_meta() {
@@ -888,6 +944,12 @@ fn with_object_words(node: Node, objects: &Objects) -> Node {
 		{
 			objects.help(&items[1])
 		}
+		// `methods(P)` is `P.methods`
+		Node::List(items, Bracket::Round | Bracket::None, _)
+			if items.len() == 2 && items[0].symbol_name() == Some(METHODS_WORD) =>
+		{
+			objects.dot_word(&items[1], METHODS_WORD)
+		}
 		_ => None,
 	};
 	reflected.unwrap_or_else(|| node.map_children(|child| with_object_words(child, objects)))
@@ -904,7 +966,24 @@ fn is_field_place(place: &Node, op: &Op, rest: &Node) -> bool {
 	mutates && matches!(place.drop_meta(), Node::Key(_, Op::Dot, _))
 }
 
-/// Names as a list of texts, as `dir(time)` gives them
+/// What a reflection word lists of a class: its methods themselves, `function sq` for each (decision reflection,
+/// card module-methods), its fields and dir's names as texts
+fn word_list(word: &str, names: &[String]) -> Node {
+	match word {
+		METHODS_WORD => function_list(names),
+		_ => text_list(names),
+	}
+}
+
+/// The functions of these names themselves, `[function gcd, function lcm]`
+pub(crate) fn function_list(names: &[String]) -> Node {
+	Node::List(
+		names.iter().cloned().map(crate::closures::function_reference).collect(),
+		Bracket::Square,
+		Separator::Space,
+	)
+}
+
 /// The names a reflection word lists for a class of these fields and methods: either, or both for `dir`
 fn listed_names(fields: Vec<String>, methods: Vec<String>, word: &str) -> Option<Vec<String>> {
 	match word {
