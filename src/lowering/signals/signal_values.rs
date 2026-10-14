@@ -83,55 +83,100 @@ pub fn poll_shared(program: Node) -> Node {
 	if shared.is_empty() || !crate::variable_signals::is_statement_list(&bracket, &separator) {
 		return program;
 	}
-	let mut main_variables = crate::event_signals::main_level_variables(&statements);
-	let counted = crate::shared_arrays::shared_names(&program);
-	let (mut lowered, mut checks, mut flags, mut seen_count) = (vec![], vec![], vec![], 0);
+	let mut polls = SharedPolls {
+		main_variables: crate::event_signals::main_level_variables(&statements),
+		counted: crate::shared_arrays::shared_names(&program),
+		shared,
+		lowered: vec![],
+		checks: vec![],
+		flags: vec![],
+		seen_count: 0,
+	};
 	for statement in statements {
+		polls.lower(statement);
+	}
+	if polls.checks.is_empty() {
+		return program;
+	}
+	// a shared value is no global of the instance: shared_arrays makes its uses host words
+	let globals: HashSet<String> = polls.main_variables.difference(&polls.shared).cloned().collect();
+	let handler =
+		crate::event_signals::function_with_globals(crate::host::SHARED_HANDLER, false, &polls.checks, &globals);
+	let starts = polls.flags.iter().map(|flag| assign(flag, Node::False));
+	Node::List(
+		starts.chain(std::iter::once(handler)).chain(polls.lowered).collect(),
+		bracket,
+		separator,
+	)
+}
+
+/// poll_shared's main-level statements, the checks of on·shared and the flags and seen values they keep
+struct SharedPolls {
+	shared: HashSet<String>,
+	/// the shared values whose writes are counted (shared_writes)
+	counted: Vec<String>,
+	main_variables: HashSet<String>,
+	lowered: Vec<Node>,
+	checks: Vec<Node>,
+	flags: Vec<String>,
+	seen_count: usize,
+}
+
+impl SharedPolls {
+	fn lower(&mut self, statement: Node) {
 		let parts = listener_parts(&statement)
-			.filter(|(_, subject, _)| symbols(subject).iter().any(|name| shared.contains(name)));
+			.filter(|(_, subject, _)| symbols(subject).iter().any(|name| self.shared.contains(name)));
 		let Some((listener_word, subject, body)) = parts else {
-			lowered.push(statement);
-			continue;
+			self.lowered.push(statement);
+			return;
 		};
-		let polling = format!("{POLLING_PREFIX}{}", flags.len());
+		let polling = format!("{POLLING_PREFIX}{}", self.flags.len());
 		// `on set n` of a shared value runs once per write, also for writes a task made between two polls
-		let counted_name = match (listener_word, subject.drop_meta()) {
-			(ListenerWord::Set, Node::Symbol(name)) if counted.contains(name) => Some(name.clone()),
-			_ => None,
-		};
-		if let Some(name) = counted_name {
-			let (writes, running) = (
-				format!("{WRITES_PREFIX}{}", flags.len()),
-				format!("{POLLING_PREFIX}{}_running", flags.len()),
-			);
-			// the loop's start polls again: the running flag keeps that inner check out
-			let each_write = format!(
-				"if {polling} and not {running} {{ {running} = true; while {writes} < {}({name}) {{ {writes} += 1; BODY }}; {running} = false }}",
-				crate::host::SHARED_WRITES
-			);
-			let body = with_value(&body, &subject);
-			checks.push(super::nodes::filled(&each_write, [("BODY", body)]));
-			lowered.push(
-				crate::warp_parser::parse(&format!("{writes} = {}({name})", crate::host::SHARED_WRITES))
-					.drop_meta()
-					.clone(),
-			);
-			lowered.push(assign(&polling, Node::True));
-			flags.extend([polling, running]);
-			main_variables.extend(flags.iter().cloned().chain([writes]));
-			continue;
+		match (listener_word, subject.drop_meta()) {
+			(ListenerWord::Set, Node::Symbol(name)) if self.counted.contains(name) => {
+				let name = name.clone();
+				self.each_write(polling, &name, &subject, &body)
+			}
+			_ => self.on_change(polling, listener_word, subject, body),
 		}
+	}
+
+	/// `on set n` of a counted shared value: the body once per write since the last poll
+	fn each_write(&mut self, polling: String, name: &str, subject: &Node, body: &Node) {
+		let (writes, running) = (
+			format!("{WRITES_PREFIX}{}", self.flags.len()),
+			format!("{POLLING_PREFIX}{}_running", self.flags.len()),
+		);
+		// the loop's start polls again: the running flag keeps that inner check out
+		let each_write = format!(
+			"if {polling} and not {running} {{ {running} = true; while {writes} < {}({name}) {{ {writes} += 1; BODY }}; {running} = false }}",
+			crate::host::SHARED_WRITES
+		);
+		let body = with_value(body, subject);
+		self.checks.push(super::nodes::filled(&each_write, [("BODY", body)]));
+		self.lowered.push(
+			crate::warp_parser::parse(&format!("{writes} = {}({name})", crate::host::SHARED_WRITES))
+				.drop_meta()
+				.clone(),
+		);
+		self.lowered.push(assign(&polling, Node::True));
+		self.flags.extend([polling, running]);
+		self.main_variables.extend(self.flags.iter().cloned().chain([writes]));
+	}
+
+	/// A listener on watched values: it runs when one differs from the value seen last
+	fn on_change(&mut self, polling: String, listener_word: ListenerWord, subject: Node, body: Node) {
 		let watched = unique(
 			symbols(&subject)
 				.into_iter()
-				.filter(|name| shared.contains(name) || main_variables.contains(name))
+				.filter(|name| self.shared.contains(name) || self.main_variables.contains(name))
 				.collect(),
 		);
 		let seen: Vec<(String, String)> = watched
 			.into_iter()
 			.map(|name| {
-				seen_count += 1;
-				(name, format!("{SEEN_PREFIX}{}", seen_count - 1))
+				self.seen_count += 1;
+				(name, format!("{SEEN_PREFIX}{}", self.seen_count - 1))
 			})
 			.collect();
 		let changed = seen
@@ -143,45 +188,39 @@ pub fn poll_shared(program: Node) -> Node {
 			.first()
 			.map(|(name, _)| Node::Symbol(name.clone()))
 			.expect("a watched value");
-		let check = match listener_word {
-			ListenerWord::Set | ListenerWord::Change => with_value(&body, &value),
-			ListenerWord::Whenever => {
-				let (held, was) = (
-					format!("{POLLING_PREFIX}{}_held", flags.len()),
-					format!("{POLLING_PREFIX}{}_was", flags.len()),
-				);
-				flags.extend([held.clone(), was.clone()]);
-				crate::variable_signals::edge_check(&held, &was, subject, body)
-			}
-			ListenerWord::Once => {
-				let fired = format!("{POLLING_PREFIX}{}_fired", flags.len());
-				flags.push(fired.clone());
-				let condition = key(key(Node::Empty, Op::Not, Node::Symbol(fired.clone())), Op::And, subject);
-				if_then(condition, block(vec![assign(&fired, Node::True), body]))
-			}
-		};
+		let check = self.check(listener_word, subject, body, &value);
 		let remember = seen.iter().map(|(name, last)| assign(last, Node::Symbol(name.clone())));
-		checks.push(if_then(
+		self.checks.push(if_then(
 			key(Node::Symbol(polling.clone()), Op::And, changed),
 			block(remember.clone().chain([check]).collect()),
 		));
-		lowered.extend(remember);
-		lowered.push(assign(&polling, Node::True));
-		flags.push(polling);
-		main_variables.extend(flags.iter().cloned().chain(seen.into_iter().map(|(_, last)| last)));
+		self.lowered.extend(remember);
+		self.lowered.push(assign(&polling, Node::True));
+		self.flags.push(polling);
+		self.main_variables
+			.extend(self.flags.iter().cloned().chain(seen.into_iter().map(|(_, last)| last)));
 	}
-	if checks.is_empty() {
-		return program;
+
+	/// What the listener does on a change: whenever and once keep a flag of their own
+	fn check(&mut self, listener_word: ListenerWord, subject: Node, body: Node, value: &Node) -> Node {
+		match listener_word {
+			ListenerWord::Set | ListenerWord::Change => with_value(&body, value),
+			ListenerWord::Whenever => {
+				let (held, was) = (
+					format!("{POLLING_PREFIX}{}_held", self.flags.len()),
+					format!("{POLLING_PREFIX}{}_was", self.flags.len()),
+				);
+				self.flags.extend([held.clone(), was.clone()]);
+				crate::variable_signals::edge_check(&held, &was, subject, body)
+			}
+			ListenerWord::Once => {
+				let fired = format!("{POLLING_PREFIX}{}_fired", self.flags.len());
+				self.flags.push(fired.clone());
+				let condition = key(key(Node::Empty, Op::Not, Node::Symbol(fired.clone())), Op::And, subject);
+				if_then(condition, block(vec![assign(&fired, Node::True), body]))
+			}
+		}
 	}
-	// a shared value is no global of the instance: shared_arrays makes its uses host words
-	let globals: HashSet<String> = main_variables.difference(&shared).cloned().collect();
-	let handler = crate::event_signals::function_with_globals(crate::host::SHARED_HANDLER, false, &checks, &globals);
-	let starts = flags.iter().map(|flag| assign(flag, Node::False));
-	Node::List(
-		starts.chain(std::iter::once(handler)).chain(lowered).collect(),
-		bracket,
-		separator,
-	)
 }
 
 /// Listeners inside functions on their parameters or on main-level variables become subscriptions made at run time
@@ -482,48 +521,13 @@ impl Subscriptions {
 		if watched.is_empty() {
 			return None;
 		}
-		let value = symbol(VALUE_WORD);
 		let mut statements = vec![];
 		// `old` in `on set` / `on change` reads the listener closure's old value
 		let body = match (listener_word, with_old(&body, &self.main_variables)) {
 			(ListenerWord::Set | ListenerWord::Change, Some(with_old)) => with_old(&symbol(OLD_WORD)),
 			_ => body,
 		};
-		let check = match listener_word {
-			ListenerWord::Set => with_value(&body, &value),
-			ListenerWord::Change => if_then(
-				key(value.clone(), Op::Ne, symbol(OLD_WORD)),
-				block(vec![with_value(&body, &value)]),
-			),
-			// P156: when the condition becomes true; the cell holds whether it held at the last write
-			ListenerWord::Whenever => {
-				let held = format!("{HELD_PREFIX}{}", self.fired);
-				self.fired += 1;
-				statements.push(assign(&held, call(CELL_NEW, vec![Node::False])));
-				let held_cell = Node::Symbol(held);
-				// cells hold nodes: compared, not read as conditions
-				let not_before = key(symbol(WAS_WORD), Op::Eq, Node::False);
-				let holds = key(call(CELL_GET, vec![held_cell.clone()]), Op::Eq, Node::True);
-				let became_true = key(holds, Op::And, not_before);
-				let parts = vec![
-					assign(WAS_WORD, call(CELL_GET, vec![held_cell.clone()])),
-					call(CELL_SET, vec![held_cell, subject]),
-					if_then(became_true, block(vec![body])),
-				];
-				Node::List(parts, Bracket::Round, Separator::Semicolon)
-			}
-			ListenerWord::Once => {
-				let fired = format!("{FIRED_PREFIX}{}", self.fired);
-				self.fired += 1;
-				statements.push(assign(&fired, call(CELL_NEW, vec![Node::False])));
-				let not_fired = key(call(CELL_GET, vec![Node::Symbol(fired.clone())]), Op::Eq, Node::False);
-				let condition = key(not_fired, Op::And, subject);
-				if_then(
-					condition,
-					block(vec![call(CELL_SET, vec![Node::Symbol(fired), Node::True]), body]),
-				)
-			}
-		};
+		let check = self.listener_check(listener_word, subject, body, &mut statements);
 		// the listener shares the main-level variables it changes, as a named one does (P124)
 		// the watched cells it captures are no globals
 		let captured: Vec<&str> = [VALUE_WORD, OLD_WORD]
@@ -532,30 +536,9 @@ impl Subscriptions {
 			.collect();
 		let globals =
 			crate::event_signals::global_declarations(std::slice::from_ref(&check), &self.main_variables, &captured);
-		// a sequence, not a block: the declarations move to the main level, and a block of the check alone reads as data
-		let closure_check = Node::List(
-			globals.iter().cloned().chain([check.clone()]).collect(),
-			Bracket::Round,
-			Separator::Semicolon,
-		);
-		// every listener closure of one arity returns one kind (wasm_emitter/closures.rs): 0
-		let listener = from_template(
-			&format!("({VALUE_WORD}, {OLD_PLACEHOLDER}) => {{ {CHECK_PLACEHOLDER}; 0 }}"),
-			&[(CHECK_PLACEHOLDER, closure_check)],
-		);
-		// a named listener (P128) is a function of that name, and remembers where it sits in each list
 		let listener = match name {
-			Some(name) => {
-				let head = call(name, vec![symbol(VALUE_WORD), symbol(OLD_WORD)]);
-				let body = globals.into_iter().chain([check, crate::node::int(0)]).collect();
-				statements.push(key(head, Op::Define, block(body)));
-				for variable in &watched {
-					let place = call(COUNT_WORD, vec![call(SIGNAL_LISTENERS, vec![signal_node(variable)])]);
-					statements.push(assign(&index_name(name, variable), place));
-				}
-				symbol(name)
-			}
-			None => listener,
+			Some(name) => listener_function(name, globals, check, &watched, &mut statements),
+			None => listener_closure(globals, check),
 		};
 		for name in watched {
 			let signal = signal_node(&name);
@@ -572,6 +555,84 @@ impl Subscriptions {
 			block(statements)
 		})
 	}
+
+	/// What the listener does with the new `value`; whenever and once first make their flag cell in `statements`
+	fn listener_check(
+		&mut self,
+		listener_word: ListenerWord,
+		subject: Node,
+		body: Node,
+		statements: &mut Vec<Node>,
+	) -> Node {
+		let value = symbol(VALUE_WORD);
+		match listener_word {
+			ListenerWord::Set => with_value(&body, &value),
+			ListenerWord::Change => if_then(
+				key(value.clone(), Op::Ne, symbol(OLD_WORD)),
+				block(vec![with_value(&body, &value)]),
+			),
+			// P156: when the condition becomes true; the cell holds whether it held at the last write
+			ListenerWord::Whenever => {
+				let held_cell = Node::Symbol(self.flag_cell(HELD_PREFIX, statements));
+				// cells hold nodes: compared, not read as conditions
+				let not_before = key(symbol(WAS_WORD), Op::Eq, Node::False);
+				let holds = key(call(CELL_GET, vec![held_cell.clone()]), Op::Eq, Node::True);
+				let became_true = key(holds, Op::And, not_before);
+				let parts = vec![
+					assign(WAS_WORD, call(CELL_GET, vec![held_cell.clone()])),
+					call(CELL_SET, vec![held_cell, subject]),
+					if_then(became_true, block(vec![body])),
+				];
+				Node::List(parts, Bracket::Round, Separator::Semicolon)
+			}
+			ListenerWord::Once => {
+				let fired = Node::Symbol(self.flag_cell(FIRED_PREFIX, statements));
+				let not_fired = key(call(CELL_GET, vec![fired.clone()]), Op::Eq, Node::False);
+				let condition = key(not_fired, Op::And, subject);
+				if_then(condition, block(vec![call(CELL_SET, vec![fired, Node::True]), body]))
+			}
+		}
+	}
+
+	/// `signal·fired·0 = cell_new(false)`: a new flag cell of a listener, its name
+	fn flag_cell(&mut self, prefix: &str, statements: &mut Vec<Node>) -> String {
+		let flag = format!("{prefix}{}", self.fired);
+		self.fired += 1;
+		statements.push(assign(&flag, call(CELL_NEW, vec![Node::False])));
+		flag
+	}
+}
+
+/// `(value, signal·old) => {check; 0}`: every listener closure of one arity returns one kind (wasm_emitter/closures.rs)
+fn listener_closure(globals: Vec<Node>, check: Node) -> Node {
+	// a sequence, not a block: the declarations move to the main level, and a block of the check alone reads as data
+	let closure_check = Node::List(
+		globals.into_iter().chain([check]).collect(),
+		Bracket::Round,
+		Separator::Semicolon,
+	);
+	from_template(
+		&format!("({VALUE_WORD}, {OLD_PLACEHOLDER}) => {{ {CHECK_PLACEHOLDER}; 0 }}"),
+		&[(CHECK_PLACEHOLDER, closure_check)],
+	)
+}
+
+/// A named listener (P128) is a function of that name, and remembers where it sits in each list
+fn listener_function(
+	name: &str,
+	globals: Vec<Node>,
+	check: Node,
+	watched: &[String],
+	statements: &mut Vec<Node>,
+) -> Node {
+	let head = call(name, vec![symbol(VALUE_WORD), symbol(OLD_WORD)]);
+	let body = globals.into_iter().chain([check, crate::node::int(0)]).collect();
+	statements.push(key(head, Op::Define, block(body)));
+	for variable in watched {
+		let place = call(COUNT_WORD, vec![call(SIGNAL_LISTENERS, vec![signal_node(variable)])]);
+		statements.push(assign(&index_name(name, variable), place));
+	}
+	symbol(name)
 }
 
 /// The escaping variables become signals: made at their first main-level write, set and read through their cell
