@@ -125,7 +125,7 @@ Parameter patterns (card parameter-patterns, lowering/parameter_patterns.rs): `a
 `total(Point{x, y}) := x + y`. Each pattern parameter gets a numbered name (`list·1`, `point·1: Point`), and the body
 becomes a match on it, so another shape is the match's "no case" error and a non-Point the call's type error.
 Probe: probes/matching/parameter_patterns.warp. Open: a user `sum(p: Point)` called with 5 runs the library sum
-(card sum-point).
+(card sum-point; its error special case was removed by cleanup-sum-point, a general fix belongs in overload dispatch).
 Pattern names are declared `let` (switch::bind), the arm's own locals: no local-or-global question (card pattern-names).
 Class arms `Point{x, y} =>` bind with `let` too (class_methods/destructuring.rs bound_parts, card
 param-pattern-local-warning); that `let x = p.x; let y = …` once read as a Haskell definition named let

@@ -284,16 +284,6 @@ pub fn is_field_update_of(name: &str, value: &Node) -> bool {
 	word.name() == FIELD_WITH && matches!(map.drop_meta(), Node::Symbol(map) if map == name)
 }
 
-/// Library words of a list, text or map that refuse a number (`sum(5)`, `sort(5)`): a user's typed method of one is
-/// what a number would call (traits/generics.rs)
-const COLLECTION_WORDS: [&str; 9] = [
-	SUM_WORD, "sort", "reverse", "first", "last", "keys", "values", "chars", "upper",
-];
-
-pub fn takes_no_number(name: &str) -> bool {
-	COLLECTION_WORDS.contains(&canonical_spelling(name))
-}
-
 pub fn is_runtime_word(name: &str) -> bool {
 	RUNTIME_WORDS.iter().any(|(word, _)| *word == name)
 }
