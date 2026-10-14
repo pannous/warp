@@ -1,33 +1,6 @@
 //! The functions of an emitted module by name: imports first, then code functions, each with its call index
 
-use crate::type_kinds::Kind;
 use std::collections::HashMap;
-
-/// Function argument/parameter with name and type
-#[derive(Debug, Clone, PartialEq)]
-pub struct Arg {
-	pub name: String,
-	pub kind: Kind,
-}
-
-impl Arg {
-	pub fn new(name: impl Into<String>, kind: Kind) -> Self {
-		Arg { name: name.into(), kind }
-	}
-}
-
-/// Function type signature with parameters and return types
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct Signature {
-	pub parameters: Vec<Arg>,
-	pub return_types: Vec<Kind>,
-}
-
-impl Signature {
-	pub fn new() -> Self {
-		Self::default()
-	}
-}
 
 /// A function of the module: its name, whether it is imported, and the index a call instruction names
 #[derive(Debug, Clone)]
