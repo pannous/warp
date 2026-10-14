@@ -10,6 +10,20 @@ use Instruction as I;
 
 use super::super::{items_info, WasmGcEmitter, ROUNDING_FUNCTIONS};
 
+/// The kinds of a local that no call reaches: `n = 2; n(3)` is an error (reject_variable_applied); a function, block,
+/// pointer or node-typed local may hold something callable
+const PLAIN_VALUE_KINDS: [Kind; 9] = [
+	Kind::Int,
+	Kind::Int32,
+	Kind::Float,
+	Kind::Float32,
+	Kind::Text,
+	Kind::Codepoint,
+	Kind::List,
+	Kind::Uncertain,
+	Kind::Time,
+];
+
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
 /// Runtime functions called from lowered code with their node arguments, and how many those are
 const NODE_ARGUMENT_CALLS: [(&str, usize); 4] = [
@@ -169,6 +183,9 @@ impl WasmGcEmitter {
 		bracket: &Bracket,
 		separator: &Separator,
 	) -> bool {
+		if self.reject_variable_applied(func, items, bracket, separator) {
+			return true;
+		}
 		let Some(name) = call_name(items, bracket, separator) else {
 			return false;
 		};
@@ -377,10 +394,10 @@ impl WasmGcEmitter {
 		}
 
 		// Check for introspection and math functions; `[count, a]` lists two items; a global `count` does not hide the word
-		// (lib/markup.warp's count(items) under a program's `count = 0`), a local one is an error (emit_shadowed_counting)
+		// (lib/markup.warp's count(items) under a program's `count = 0`), a local one is an error (reject_variable_applied)
 		if items.len() == 2 && !(*bracket == Bracket::Square && *separator == Separator::Colon) {
 			if let Node::Symbol(fn_name) = items[0].drop_meta() {
-				if self.emit_shadowed_counting(func, fn_name, &items[1])
+				if self.reject_variable_applied(func, items, bracket, separator)
 					|| (self.scope.lookup(fn_name).is_none() && self.emit_introspection_fn(func, fn_name, &items[1]))
 				{
 					return;
@@ -762,30 +779,42 @@ impl WasmGcEmitter {
 		true
 	}
 
-	/// Emit introspection functions: type, count, length, size, ceil, floor, round
-	/// Returns true if the function was handled
-	/// `count = 0; count(users)`: a local variable named like a counting word, applied to a value, neither counts nor
-	/// lists quietly; the error names the variable (card count-shadowed). A global of that name leaves the word to the
-	/// functions, which call it (lib/markup.warp's count(items))
-	pub(in crate::wasm_emitter) fn emit_shadowed_counting(
+	/// `n = 2; n(3)`, `count = 0; count(users)`: a local holding a plain value, applied to values, neither calls a
+	/// function of that name nor lists quietly; the error names the variable (cards error-local, count-shadowed). A
+	/// global of that name leaves the word to the functions, which call it (lib/markup.warp's count(items)); a local
+	/// holding a function or a block is called
+	pub(in crate::wasm_emitter) fn reject_variable_applied(
 		&mut self,
 		func: &mut Function,
-		name: &str,
-		argument: &Node,
+		items: &[Node],
+		bracket: &Bracket,
+		separator: &Separator,
 	) -> bool {
-		let shadowed = self.scope.lookup(name).is_some()
-			&& !self.ctx.user_functions.contains_key(name)
-			&& crate::analyzer::counting_function(name, &self.ctx).is_some();
-		if shadowed {
-			let argument = crate::normalize::operand_text(argument);
-			self.emit_type_error(
-				func,
-				format!("`{name}` is a variable here, so {name}({argument}) cannot count: rename the variable"),
-			);
+		let Some(name) = call_name(items, bracket, separator).filter(|_| items.len() >= 2) else {
+			return false;
+		};
+		let holds_plain_value = self
+			.scope
+			.lookup(name)
+			.is_some_and(|local| PLAIN_VALUE_KINDS.contains(&local.kind))
+			&& !self.ctx.user_functions.contains_key(name);
+		if holds_plain_value {
+			let arguments: Vec<String> = items[1..].iter().map(crate::normalize::operand_text).collect();
+			let call = format!("{name}({})", arguments.join(", "));
+			// a counting word stays a word; any other name has no function, as ffi::undefined_function_message says
+			let message = match crate::analyzer::counting_function(name, &self.ctx) {
+				Some(_) => format!("`{name}` is a variable here, so {call} cannot count: rename the variable"),
+				None => format!(
+					"undefined function: {name} (`{name}` is a variable here, so {call} calls nothing: rename the variable)"
+				),
+			};
+			self.emit_type_error(func, message);
 		}
-		shadowed
+		holds_plain_value
 	}
 
+	/// Emit introspection functions: type, count, length, size, ceil, floor, round
+	/// Returns true if the function was handled
 	pub(in crate::wasm_emitter) fn emit_introspection_fn(
 		&mut self,
 		func: &mut Function,
