@@ -68,6 +68,8 @@ PASSED:
   ✓ control::test_clipboard::reading_the_clipboard_is_one_host_call
   ✓ control::test_clipboard::the_change_count_is_read_without_the_content
   ✓ control::test_clipboard::writing_the_clipboard_is_the_std_word
+  ✓ control::test_code_hole_calls::a_key_pattern_matches_after_a_call_was_passed
+  ✓ control::test_code_hole_calls::every_arm_in_one_list
   ✓ control::test_code_holes::a_code_pattern_without_a_match_falls_through
   ✓ control::test_code_holes::a_hole_binds_the_subtree
   ✓ control::test_code_holes::a_hole_matches_inside_a_call
@@ -2052,6 +2054,8 @@ PASSED:
   ✓ modules::test_package_pin::a_clean_unpinned_clone_makes_way_for_the_pin
   ✓ modules::test_package_pin::a_pinned_package_links_its_cached_version
   ✓ modules::test_package_pin::header_signatures_are_parsed_once
+  ✓ modules::test_package_shadow::a_file_named_like_a_package_shadows_it_loudly
+  ✓ modules::test_package_shadow::a_required_version_names_the_shadowing_file_too
   ✓ modules::test_package_tools::a_package_tool_lives_in_the_package_build_directory
   ✓ modules::test_package_tools::a_package_tool_runs_in_the_package_directory
   ✓ modules::test_package_tools::a_package_without_a_tool_says_so
@@ -4549,7 +4553,6 @@ PASSED:
   ✓ web::test_assistant_edits::a_diff_changes_only_the_lines_it_names
   ✓ web::test_assistant_edits::a_diff_that_no_longer_fits_says_so
   ✓ web::test_assistant_edits::a_whole_program_replaces_only_the_lines_that_differ
-  ✓ web::test_assistant_proxy::the_assistant_proxy_answers_only_the_playground
   ✓ web::test_async_data::a_body_that_is_no_json_is_the_text
   ✓ web::test_async_data::a_changed_url_variable_fetches_anew
   ✓ web::test_async_data::a_failed_fetch_is_the_error
@@ -4686,7 +4689,6 @@ PASSED:
   ✓ web::test_keyed_lists::a_key_names_the_element_of_an_item
   ✓ web::test_keyed_lists::a_key_on_its_own_line_names_the_element
   ✓ web::test_keyed_lists::a_list_inside_an_element_gives_its_children
-  ✓ web::test_keyword_registry::keywords_of_passes_are_highlighted
   ✓ web::test_markup_holes::a_page_binds_each_hole
   ✓ web::test_markup_holes::fixed_markup_or_a_computed_root_has_no_holes
   ✓ web::test_markup_holes::the_elements_holding_computed_parts_are_the_holes
@@ -5300,7 +5302,9 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ web::test_assistant_proxy::the_assistant_proxy_answers_only_the_playground
+  ✗ web::test_keyword_registry::keywords_of_passes_are_highlighted
   ✗ web::test_sandbox_refusals::a_sandboxed_program_reaches_the_network
 
 SUMMARY:
-13 ignored, 5297 passed, 1 failed, 5298 total tested
+13 ignored, 5299 passed, 3 failed, 5302 total tested
