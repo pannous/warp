@@ -10,13 +10,13 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::while_do;
 use crate::wasm_emitter::{is_step, mark_step};
+use crate::words::IMPLICIT_PARAMETER;
 use std::collections::HashSet;
 
 pub mod headers;
 
 const FOR_KEYWORD: &str = "for";
 const IN_KEYWORD: &str = "in";
-const IMPLICIT_VARIABLE: &str = "it";
 const RANGE_CALL: &str = "range";
 const FIRST_INDEX: i64 = 0;
 /// `for c in x to 'e'`: the codepoint counter `c·code`, read with ord and made a letter with chr
@@ -126,7 +126,7 @@ fn for_in(items: &[Node]) -> Option<Node> {
 	};
 	let mut body = body.body_statements();
 	// `for word in text: print it`: it is the loop variable too
-	if matches!(names.as_slice(), [name] if name != IMPLICIT_VARIABLE && !crate::lambdas::is_inlined_loop_variable(&name.name()))
+	if matches!(names.as_slice(), [name] if name != IMPLICIT_PARAMETER && !crate::lambdas::is_inlined_loop_variable(&name.name()))
 	{
 		body = body.into_iter().map(|statement| it_as(statement, variable)).collect();
 	}
@@ -147,7 +147,7 @@ fn for_in(items: &[Node]) -> Option<Node> {
 /// if's branches are no such blocks)
 fn it_as(node: Node, variable: &Node) -> Node {
 	match node {
-		Node::Symbol(name) if name == IMPLICIT_VARIABLE => variable.clone(),
+		Node::Symbol(name) if name == IMPLICIT_PARAMETER => variable.clone(),
 		// an if's branches are the loop's own statements: `if x > 2 { s += it }`
 		Node::Key(left, op @ (Op::Then | Op::Else), right) => {
 			key(it_as(*left, variable), op, branch_it_as(*right, variable))
@@ -262,7 +262,7 @@ fn for_it(items: &[Node]) -> Option<Node> {
 	}
 	for_in(&[
 		keyword.clone(),
-		symbol(IMPLICIT_VARIABLE),
+		symbol(IMPLICIT_PARAMETER),
 		symbol(IN_KEYWORD),
 		iterable.clone(),
 		body.clone(),

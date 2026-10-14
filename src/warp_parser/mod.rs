@@ -63,7 +63,6 @@ use unicode_normalization::UnicodeNormalization;
 /// Largest exponent written out as an exact integer literal (1e4096 has 4097 digits)
 /// What follows the scheme of a URL read as one text, whatever the scheme: `https://pannous.com`, `ssh://host` (card add-http)
 const URL_MARK: &str = "://";
-pub const IT_WORD: &str = "it";
 /// The item of the map a Julia dot call `f.(xs)` lowers to
 const BROADCAST_ITEM: &str = "broadcast_item";
 const MAP_WORD: &str = "map";

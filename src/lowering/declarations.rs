@@ -8,6 +8,7 @@ use super::nodes::{
 };
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
+use crate::words::IMPLICIT_PARAMETER;
 use crate::words::{ON_WORD, RETURN_WORD};
 
 mod tasks;
@@ -47,7 +48,6 @@ const EXTENSION_WORD: &str = "extension";
 /// The implicit parameter of a function: `double := it * 2`
 /// `each xs: body`, `all xs: body`: a for loop over xs, the item is `it` (wiki/iteration.md)
 const COLON_ITERATION_WORDS: [&str; 2] = ["each", "all"];
-const IT_PARAMETER: &str = "it";
 /// Ruby's `def f(x) … end`
 const END_WORD: &str = "end";
 const FLAGS_WORD: &str = "flags";
@@ -404,7 +404,7 @@ fn colon_iteration(items: &[Node]) -> Option<Node> {
 	// `all numbers > 2: body`: the comparison acts on every item (wiki/iteration.md), a filter loop (P46, its warning)
 	let (list, body) = match list.drop_meta() {
 		Node::Key(collection, op, value) if op.is_comparison() => {
-			let condition = Node::Key(Box::new(symbol(IT_PARAMETER)), *op, value.clone());
+			let condition = Node::Key(Box::new(symbol(IMPLICIT_PARAMETER)), *op, value.clone());
 			let written = format!(
 				"{} {op} {}",
 				word.drop_meta().name(),
@@ -512,7 +512,7 @@ fn bind_it(node: Node, parameter: &str, is_value: bool) -> Node {
 			.collect()
 	};
 	match node {
-		Node::Symbol(name) if name == IT_PARAMETER => symbol(parameter),
+		Node::Symbol(name) if name == IMPLICIT_PARAMETER => symbol(parameter),
 		// a lambda of its own `it`: `mk(k) := it => it * k`
 		Node::Key(ref parameters, Op::FatArrow, _) if names_it(parameters) => node,
 		// `{it * k}`, Swift's `{ $0 + k }`
@@ -554,7 +554,7 @@ fn bind_it(node: Node, parameter: &str, is_value: bool) -> Node {
 /// `it` or `(it, …)`: lambda parameters that bind `it`
 fn names_it(parameters: &Node) -> bool {
 	match parameters.drop_meta() {
-		Node::Symbol(name) => name == IT_PARAMETER,
+		Node::Symbol(name) => name == IMPLICIT_PARAMETER,
 		Node::List(items, _, _) => items.iter().any(names_it),
 		_ => false,
 	}
@@ -588,7 +588,7 @@ fn one_parameter(head: &Node) -> Option<String> {
 		other => other,
 	};
 	match parameter {
-		Node::Symbol(parameter) if parameter != IT_PARAMETER => Some(parameter.clone()),
+		Node::Symbol(parameter) if parameter != IMPLICIT_PARAMETER => Some(parameter.clone()),
 		_ => None,
 	}
 }
@@ -935,7 +935,7 @@ fn smart_scope(items: &[Node]) -> Option<Node> {
 /// The body with `it` read as the receiver
 fn renamed_it(node: Node, receiver: &Node) -> Node {
 	match node {
-		Node::Symbol(word) if word == crate::warp_parser::IT_WORD => receiver.clone(),
+		Node::Symbol(word) if word == crate::words::IMPLICIT_PARAMETER => receiver.clone(),
 		other => other.map_children(|child| renamed_it(child, receiver)),
 	}
 }

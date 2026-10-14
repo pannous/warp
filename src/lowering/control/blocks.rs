@@ -17,13 +17,13 @@ use crate::diagnostic::{ask, reading, Ask, Fallback};
 use crate::mutation::bang_target;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::IMPLICIT_PARAMETER;
 use std::collections::HashMap;
 
 /// The data prefix a bare block name becomes: the block as it is written (list_emitter emit_quoted)
 pub(crate) const DATA_WORD: &str = "data";
 /// The got-it topic of `x : a+b`, which keeps a block where a value may have been meant
 const BLOCK_TOPIC: &str = "uncharged-block";
-const IT: &str = "it";
 /// Prefixes of a block: `code e`, `block e` (synonyms, wiki/charged.md section 4)
 const BLOCK_WORDS: [&str; 2] = ["code", "block"];
 /// The got-it topic of `!` on data
@@ -301,7 +301,8 @@ fn value_entry(entry: &Node) -> Option<(&Node, &Node)> {
 	match entry.drop_meta() {
 		Node::Key(field, Op::Assign, value) => Some((field, value)),
 		Node::Key(field, Op::Define, value)
-			if !crate::warp_parser::mentions(value, IT) && crate::getters::getter_name(entry).is_none() =>
+			if !crate::warp_parser::mentions(value, IMPLICIT_PARAMETER)
+				&& crate::getters::getter_name(entry).is_none() =>
 		{
 			Some((field, value))
 		}
@@ -327,8 +328,9 @@ fn function_entry(entry: &Node) -> Option<(String, Vec<Node>, Node)> {
 		Node::Key(head, Op::Define, body) => match head.drop_meta() {
 			Node::Symbol(field) => match lambda(body) {
 				Some((parameters, body)) => Some((field.clone(), parameter_list(parameters), body)),
-				None => (crate::warp_parser::mentions(body, IT) || crate::getters::getter_name(entry).is_some())
-					.then(|| (field.clone(), vec![], body.as_ref().clone())),
+				None => (crate::warp_parser::mentions(body, IMPLICIT_PARAMETER)
+					|| crate::getters::getter_name(entry).is_some())
+				.then(|| (field.clone(), vec![], body.as_ref().clone())),
 			},
 			Node::List(items, Bracket::Round, Separator::None) => match items.split_first() {
 				Some((name, parameters)) if matches!(name.drop_meta(), Node::Symbol(_)) => {
@@ -350,7 +352,7 @@ fn function_entry(entry: &Node) -> Option<(String, Vec<Node>, Node)> {
 /// function entries
 fn object_assignment(node: Node) -> Node {
 	if let Node::Key(target, Op::Define, value) = node.drop_meta() {
-		let mentions_it = |entry: &Node| crate::warp_parser::mentions(entry, IT);
+		let mentions_it = |entry: &Node| crate::warp_parser::mentions(entry, IMPLICIT_PARAMETER);
 		let only_functions_mention_it = |entries: &Vec<Node>| {
 			entries.iter().any(mentions_it)
 				&& entries
@@ -389,7 +391,11 @@ fn statement_block(value: &Node) -> Option<Node> {
 		.iter()
 		.any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Arrow | Op::FatArrow, _)))
 		|| crate::lambdas::arrow_lambda(value).is_some();
-	if items.is_empty() || object_entries(value).is_some() || crate::warp_parser::mentions(value, IT) || lambda {
+	if items.is_empty()
+		|| object_entries(value).is_some()
+		|| crate::warp_parser::mentions(value, IMPLICIT_PARAMETER)
+		|| lambda
+	{
 		return None;
 	}
 	if !statements && !matches!(items.as_slice(), [single] if is_computed(single)) {
@@ -720,8 +726,8 @@ impl Blocks {
 		}
 		let takes_object = !fields.is_empty();
 		if takes_object {
-			if parameters.is_empty() && crate::warp_parser::mentions(&body, IT) {
-				parameters.push(symbol(IT));
+			if parameters.is_empty() && crate::warp_parser::mentions(&body, IMPLICIT_PARAMETER) {
+				parameters.push(symbol(IMPLICIT_PARAMETER));
 			}
 			parameters.insert(0, Node::Symbol(object_parameter(object)));
 		}

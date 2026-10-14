@@ -11,6 +11,7 @@ use crate::declarations::word;
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::stored_values::DATABASE_WORDS;
+use crate::words::IMPLICIT_PARAMETER;
 use std::collections::HashSet;
 
 const SERVE_WORD: &str = "serve";
@@ -61,7 +62,6 @@ const WAGI_HEADER: &str = "wagi_header";
 
 /// with_default_routes: the page of a hosted program's value, and what a function's `it` is called in its route
 const PAGE_ROUTE: &str = "/";
-const IMPLICIT_PARAMETER: &str = "it";
 const ROUTE_ARGUMENT: &str = "value";
 const USE_WORD: &str = "use";
 

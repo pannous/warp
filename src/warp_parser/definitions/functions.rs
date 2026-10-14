@@ -99,7 +99,7 @@ pub(crate) fn defined_function_name(target: &Node) -> Option<String> {
 pub(crate) fn is_function_block(name: &Node, block: &Node) -> bool {
 	matches!(name.drop_meta(), Node::Symbol(_))
 		&& matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _))
-		&& mentions(block, "it")
+		&& mentions(block, crate::words::IMPLICIT_PARAMETER)
 }
 
 impl WarpParser {

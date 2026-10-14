@@ -33,7 +33,7 @@ pub(in crate::analyzer) fn extract_user_functions_in(ctx: &mut Context, node: &N
 						let written_call = *bracket == Bracket::Round; // `f() := [1, 2]` defines f without parameters
 						if !params.is_empty() || implicit_param || written_call {
 							let params = if params.is_empty() && implicit_param {
-								vec![Param::untyped("it")]
+								vec![Param::untyped(crate::words::IMPLICIT_PARAMETER)]
 							} else {
 								params
 							};
@@ -48,7 +48,11 @@ pub(in crate::analyzer) fn extract_user_functions_in(ctx: &mut Context, node: &N
 				if uses_it(body) || uses_dollar_param(body) || is_statement_block(body) {
 					// a block of statements takes `it` when it reads it outside its own `for 1..n {…it…}` loops
 					let takes_it = !is_statement_block(body) || uses_it_outside_loops(body) || uses_dollar_param(body);
-					let params = if takes_it { vec![Param::untyped("it")] } else { vec![] };
+					let params = if takes_it {
+						vec![Param::untyped(crate::words::IMPLICIT_PARAMETER)]
+					} else {
+						vec![]
+					};
 					register_user_function(ctx, name, params, body, enclosing);
 					return;
 				}

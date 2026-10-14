@@ -47,8 +47,13 @@ pub(super) fn braced_it_body(head: &Node, body: &Node) -> Option<Diagnostic> {
 		Node::List(items, _, _) if items.len() == 1 => items[0].clone(),
 		other => other.clone(),
 	};
-	let substituted =
-		|word: &str| crate::library_words::substitute(statement.clone(), "it", &Node::Symbol(word.to_string()));
+	let substituted = |word: &str| {
+		crate::library_words::substitute(
+			statement.clone(),
+			crate::words::IMPLICIT_PARAMETER,
+			&Node::Symbol(word.to_string()),
+		)
+	};
 	let written = format!("{name}({parameter}) := {}", body.serialize().trim());
 	let as_parameter = format!("{name}({parameter}) := {}", substituted(parameter).serialize().trim());
 	let as_lambda = format!("{name}({parameter}) := x => {}", substituted("x").serialize().trim());
@@ -80,7 +85,7 @@ pub(in crate::analyzer) fn it_loop(items: &[Node]) -> Option<(&Node, &Node)> {
 /// Does a function body read its implicit parameter `it`, not counting the `it` its loops bind?
 pub(in crate::analyzer) fn uses_it_outside_loops(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::Symbol(word) => word == "it",
+		Node::Symbol(word) => word == crate::words::IMPLICIT_PARAMETER,
 		Node::Key(left, _, right) => uses_it_outside_loops(left) || uses_it_outside_loops(right),
 		Node::List(items, _, _) if let Some((iterable, _)) = it_loop(items) => uses_it_outside_loops(iterable),
 		Node::List(items, _, _) => items.iter().any(uses_it_outside_loops),
@@ -96,8 +101,11 @@ pub(in crate::analyzer) fn hidden_function_it(body: &Node, warnings: &mut Vec<Di
 	body.visit(&mut |node| {
 		if let Node::List(items, _, _) = node {
 			if it_loop(items).is_some_and(|(_, body)| uses_it(body)) {
-				let renamed =
-					crate::library_words::substitute(node.clone(), "it", &Node::Symbol(FUNCTION_IT.to_string()));
+				let renamed = crate::library_words::substitute(
+					node.clone(),
+					crate::words::IMPLICIT_PARAMETER,
+					&Node::Symbol(FUNCTION_IT.to_string()),
+				);
 				let explicit = format!("{FUNCTION_IT}=it; {}", renamed.serialize().trim());
 				warnings.push(
 					Diagnostic::at(node, "the loop's `it` hides the function's `it` inside the loop")

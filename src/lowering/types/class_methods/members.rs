@@ -129,8 +129,8 @@ pub(super) fn accessors(words: &[Node]) -> Option<Vec<Node>> {
 		{
 			let name = name.drop_meta().name();
 			// `it` is the new value; named apart, so no pass reads the block as a lambda of `it`
-			let new_value = Node::Symbol(format!("{}{SETTER_SUFFIX}", crate::warp_parser::IT_WORD));
-			let setter = renamed_symbol(setter.as_ref().clone(), crate::warp_parser::IT_WORD, &new_value);
+			let new_value = Node::Symbol(format!("{}{SETTER_SUFFIX}", crate::words::IMPLICIT_PARAMETER));
+			let setter = renamed_symbol(setter.as_ref().clone(), crate::words::IMPLICIT_PARAMETER, &new_value);
 			Some(vec![
 				method(&name, vec![], getter),
 				method(&format!("{name}{SETTER_SUFFIX}"), vec![new_value], &setter),
