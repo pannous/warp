@@ -199,10 +199,7 @@ pub struct FunctionEffects {
 	/// Directly resolved callees (user functions and externals)
 	pub calls: BTreeSet<String>,
 	pub declared: Option<Constraint>,
-	/// `effects` as `effects of f` and `! Pure` see them: without the State of the effect-handler plumbing
-	/// (scoped_handlers.rs), which a block handler keeps to itself
-	pub reported: EffectSet,
-	/// The events the function emits that no enclosing block handler answers (card effect-handlers): named effects
+	/// The events the function emits (card effect-handlers): named effects
 	pub events: BTreeSet<String>,
 	/// The events its body itself emits
 	pub own_events: BTreeSet<String>,
@@ -265,16 +262,12 @@ impl EffectReport {
 		let resolver = Resolver { context: &context };
 
 		let mut report = EffectReport::default();
-		let (plumbing_globals, user_globals): (Vec<String>, Vec<String>) = main_level_globals(program)
-			.into_iter()
-			.partition(|name| crate::scoped_handlers::is_plumbing_variable(name));
+		let user_globals = main_level_globals(program);
 		for (name, definition) in &context.user_functions {
 			let mut function = resolver.function(&definition.body);
 			let parameters: Vec<&str> = definition.params.iter().map(|param| param.name.as_str()).collect();
 			if reads_global(&definition.body, &user_globals, &parameters) {
 				function.perform(State); // shared state read at call time (wiki/charged.md §3): never folded nor memoized
-			} else if reads_global(&definition.body, &plumbing_globals, &parameters) {
-				function.perform_unreported(State); // the active effect handler, which `effects of f` does not show
 			}
 			if function.calls.contains(name) && !recursion_shrinks(name, &parameters, &definition.body) {
 				function.perform(Div);
@@ -348,16 +341,9 @@ impl EffectReport {
 					.fold(self.functions[&name].effects, |all, callee| {
 						all.union(self.effects_of(callee).unwrap_or_default())
 					});
-				let reported = self.functions[&name]
-					.calls
-					.iter()
-					.fold(self.functions[&name].reported, |all, callee| {
-						all.union(self.reported_effects_of(callee))
-					});
 				let function = self.functions.get_mut(&name).expect("known function");
-				changed |= function.effects != inferred || function.reported != reported;
+				changed |= function.effects != inferred;
 				function.effects = inferred;
-				function.reported = reported;
 			}
 			if !changed {
 				return;
@@ -370,7 +356,7 @@ impl EffectReport {
 			.iter()
 			.filter_map(|(name, function)| {
 				let constraint = function.declared.clone()?;
-				let excess = function.reported.minus(constraint.allowed).observable();
+				let excess = function.effects.minus(constraint.allowed).observable();
 				let excess_events: BTreeSet<String> = function.events.difference(&constraint.events).cloned().collect();
 				let chain = match (excess.iter().next(), excess_events.iter().next()) {
 					(Some(effect), _) => self.call_chain(name, effect),
@@ -397,14 +383,6 @@ impl EffectReport {
 			.map(|f| f.effects)
 			.or_else(|| self.externals.get(name).map(|e| e.effects))
 			.or_else(|| trusted_external(name).map(|e| e.effects))
-	}
-
-	fn reported_effects_of(&self, name: &str) -> EffectSet {
-		self.functions
-			.get(name)
-			.map(|f| f.reported)
-			.or_else(|| self.effects_of(name))
-			.unwrap_or_default()
 	}
 
 	/// The events of each function as the source program emits them (`program` as written, before the passes lower its
@@ -515,7 +493,7 @@ impl EffectReport {
 
 	fn query_answer(&self, name: &str) -> Node {
 		match (self.functions.get(name), self.effects_of(name)) {
-			(Some(function), _) => effects_node(function.reported, &function.events),
+			(Some(function), _) => effects_node(function.effects, &function.events),
 			(None, Some(effects)) => effects_node(effects, &BTreeSet::new()),
 			(None, None) => Node::Error(Box::new(Node::Text(format!("effects of {name}: unknown function")))),
 		}
@@ -603,8 +581,6 @@ impl Resolver<'_> {
 			return;
 		}
 		match node.drop_meta() {
-			// `global effect_handler_active_ask`: the handler plumbing's own state (scoped_handlers.rs)
-			_ if is_plumbing_declaration(node) => function.perform_unreported(State),
 			Node::Symbol(name) if name == STATE_KEYWORD => function.perform(State),
 			Node::Symbol(name) if self.resolves(name) => {
 				function.calls.insert(name.clone());
@@ -654,37 +630,10 @@ impl Resolver<'_> {
 
 impl FunctionEffects {
 	fn perform(&mut self, effect: Effect) {
-		self.perform_unreported(effect);
-		self.reported = self.reported.union(EffectSet::of(&[effect]));
-	}
-
-	/// An effect the analysis keeps (nothing folds or memoizes the function) that `effects of f` does not show
-	fn perform_unreported(&mut self, effect: Effect) {
 		let effect = EffectSet::of(&[effect]);
 		self.own = self.own.union(effect);
 		self.effects = self.effects.union(effect);
 	}
-}
-
-/// `global effect_handler_active_ask` (`global:…` once lowered): a declaration of handler plumbing variables only
-fn is_plumbing_declaration(node: &Node) -> bool {
-	let (keyword, variables): (&Node, Vec<&Node>) = match node.drop_meta() {
-		Node::List(items, _, _) => match items.split_first() {
-			Some((keyword, variables)) => (keyword, variables.iter().collect()),
-			None => return false,
-		},
-		Node::Key(keyword, Op::Colon, variable) => (keyword, vec![variable]),
-		_ => return false,
-	};
-	let names: Vec<String> = variables
-		.into_iter()
-		.flat_map(crate::variable_signals::symbols)
-		.collect();
-	keyword.drop_meta().name() == STATE_KEYWORD
-		&& !names.is_empty()
-		&& names
-			.iter()
-			.all(|name| crate::scoped_handlers::is_plumbing_variable(name))
 }
 
 /// The effects and then the events: as a value texts like the other reflection words' answers (`f.params`), `"IO"`,
@@ -752,15 +701,7 @@ pub fn event_effects(program: &Node) -> BTreeMap<String, (BTreeSet<String>, BTre
 			let reached: BTreeSet<String> = function
 				.calls
 				.iter()
-				.flat_map(|(callee, handled)| {
-					events
-						.get(callee)
-						.into_iter()
-						.flatten()
-						.filter(|event| !handled.contains(*event))
-						.cloned()
-						.collect::<Vec<_>>()
-				})
+				.flat_map(|callee| events.get(callee).into_iter().flatten().cloned().collect::<Vec<_>>())
 				.collect();
 			let all = events.get_mut(name).expect("every function has its events");
 			let before = all.len();
@@ -779,44 +720,34 @@ pub fn event_effects(program: &Node) -> BTreeMap<String, (BTreeSet<String>, BTre
 	}
 }
 
-/// The events a body emits itself and the calls it makes, each with the events the block handlers around it answer
+/// The events a body emits itself and the calls it makes
 #[derive(Default)]
 struct EventUses {
 	own: BTreeSet<String>,
-	calls: Vec<(String, BTreeSet<String>)>,
+	calls: Vec<String>,
 }
 
 impl EventUses {
 	fn of(body: &Node, functions: &BTreeSet<String>, verbs: &[String]) -> Self {
 		let mut uses = EventUses::default();
-		uses.collect(body, &BTreeSet::new(), functions, verbs);
+		uses.collect(body, functions, verbs);
 		uses
 	}
 
-	fn collect(&mut self, node: &Node, handled: &BTreeSet<String>, functions: &BTreeSet<String>, verbs: &[String]) {
+	fn collect(&mut self, node: &Node, functions: &BTreeSet<String>, verbs: &[String]) {
 		if defined_name(node).is_some_and(|name| functions.contains(&name)) {
 			return; // a definition has its own events
 		}
-		if let Some((event, body, block)) = crate::scoped_handlers::scoped_handler(node) {
-			self.collect(&body, handled, functions, verbs); // an emit in the handler reaches the next handler out
-			let mut inside = handled.clone();
-			inside.insert(event);
-			return self.collect(&block, &inside, functions, verbs);
-		}
 		if let Some((event, data)) = crate::event_signals::emitted(node, verbs) {
-			if !handled.contains(&event) {
-				self.own.insert(event);
-			}
-			return self.collect(&data, handled, functions, verbs);
+			self.own.insert(event);
+			return self.collect(&data, functions, verbs);
 		}
 		match node.drop_meta() {
-			Node::Symbol(name) if functions.contains(name) => self.calls.push((name.clone(), handled.clone())),
-			Node::List(items, _, _) => items
-				.iter()
-				.for_each(|item| self.collect(item, handled, functions, verbs)),
+			Node::Symbol(name) if functions.contains(name) => self.calls.push(name.clone()),
+			Node::List(items, _, _) => items.iter().for_each(|item| self.collect(item, functions, verbs)),
 			Node::Key(left, _, right) => {
-				self.collect(left, handled, functions, verbs);
-				self.collect(right, handled, functions, verbs);
+				self.collect(left, functions, verbs);
+				self.collect(right, functions, verbs);
 			}
 			_ => {}
 		}

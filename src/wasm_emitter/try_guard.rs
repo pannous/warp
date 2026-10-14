@@ -19,22 +19,6 @@ const CAUGHT_ERROR_GLOBAL: &str = "caught_error_id";
 /// `caught_error(finished, value)` (P67, library_words::lower_try_binding): the Error `catch e` binds: value when the
 /// guarded statement finished (it gave back an Error), else the runtime error the latest `try` caught, by its id
 pub const CAUGHT_ERROR: &str = "caught_error";
-/// `ran_without_abort(i, {statement})` (scoped_handlers.rs, notes/effect_handlers.md step 3): 1 when the statement
-/// finished, 0 when the block handler i aborted it with `break value`
-pub const RAN_WITHOUT_ABORT: &str = "ran_without_abort";
-/// `abort_to(i)`: block handler i ends its block, however deep the emit was
-pub const ABORT_TO: &str = "abort_to";
-const ABORT_TAG_NAME: &str = "warp_abort";
-const ABORT_PAYLOAD_GLOBAL: &str = "aborting_handler";
-
-/// The tag an aborting handler throws, apart from warp_error so no `try` catches it, and the global holding its payload
-/// while a block checks whether the abort is its own
-#[derive(Clone, Copy)]
-pub(super) struct AbortCatching {
-	tag: u32,
-	payload_global: u32,
-}
-
 /// The tag thrown by runtime errors and the globals that track running `try`s
 #[derive(Clone, Copy)]
 pub(super) struct ErrorCatching {
@@ -79,74 +63,12 @@ impl WasmGcEmitter {
 		tag
 	}
 
-	/// Declare the tag `warp_abort(handler: i32)` and the global its catcher reads the payload into, once
-	fn declare_abort_catching(&mut self) -> AbortCatching {
-		if let Some(catching) = self.abort_catching {
-			return catching;
-		}
-		let tag = self.declare_i32_tag();
-		let payload_global =
-			self.declare_named_global(ValType::I32, ConstExpr::i32_const(0), ABORT_PAYLOAD_GLOBAL.into());
-		let catching = AbortCatching { tag, payload_global };
-		self.abort_catching = Some(catching);
-		catching
-	}
-
 	pub(super) fn error_tag_names(&self) -> Option<NameMap> {
-		let tags: Vec<(u32, &str)> = self
-			.error_catching
-			.map(|catching| (catching.tag, ERROR_TAG_NAME))
-			.into_iter()
-			.chain(self.abort_catching.map(|catching| (catching.tag, ABORT_TAG_NAME)))
-			.collect();
-		(!tags.is_empty()).then(|| {
+		self.error_catching.map(|catching| {
 			let mut names = NameMap::new();
-			let mut tags = tags;
-			tags.sort();
-			tags.into_iter().for_each(|(tag, name)| names.append(tag, name));
+			names.append(catching.tag, ERROR_TAG_NAME);
 			names
 		})
-	}
-
-	/// `abort_to(i)`: throw i to the block of handler i; the stack after it is unreachable, so it fits any type
-	pub(super) fn emit_abort_to(&mut self, func: &mut Function, handler: &Node) {
-		let catching = self.declare_abort_catching();
-		self.emit_numeric_value(func, handler);
-		Self::emit_list(func, &[I::I32WrapI64, I::Throw(catching.tag), I::Unreachable]);
-	}
-
-	/// `ran_without_abort(i, {statement})` as i64: 1 when the statement finished, 0 when handler i aborted it. Another
-	/// handler's abort goes on to its own block. The `try`s an abort jumped out of never ended: try_depth is put back
-	/// to what it was here (an i64 temp local, analyzer collect_variables counts it)
-	pub(super) fn emit_ran_without_abort(&mut self, func: &mut Function, handler: &Node, statement: &Node) {
-		let catching = self.declare_abort_catching();
-		let saved_depth = self.next_temp_local;
-		self.next_temp_local += 1;
-		let depth = self.error_catching.map(|errors| errors.depth_global);
-		if let Some(depth) = depth {
-			Self::emit_list(func, &[I::GlobalGet(depth), I::I64ExtendI32U, I::LocalSet(saved_depth)]);
-		}
-		let statement = braces_removed(statement);
-		self.initialize_assigned_node(func, statement);
-		self.emit_try_table(func, catching.tag, statement); // caught: the aborting handler
-		Self::emit_list(func, &[I::I64Const(1), I::Br(1), I::End]); // caught
-		func.instruction(&I::GlobalSet(catching.payload_global));
-		Self::emit_list(func, &[I::GlobalGet(catching.payload_global), I::I64ExtendI32U]);
-		self.emit_numeric_value(func, handler);
-		Self::emit_list(
-			func,
-			&[
-				I::I64Ne,
-				I::If(BlockType::Empty),
-				I::GlobalGet(catching.payload_global),
-				I::Throw(catching.tag),
-				I::End,
-			],
-		);
-		if let Some(depth) = depth {
-			Self::emit_list(func, &[I::LocalGet(saved_depth), I::I32WrapI64, I::GlobalSet(depth)]);
-		}
-		Self::emit_list(func, &[I::I64Const(0), I::End]);
 	}
 
 	/// Opens the blocks `finished` (i64) and `caught` (i32, the thrown payload) and runs the statement in a try_table

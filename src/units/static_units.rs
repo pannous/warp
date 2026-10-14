@@ -2,7 +2,7 @@
 //! amount counts from absolute zero, its unit's zero is added where it is written and taken off where it shows. Each expression's unit signature (dimension → power) is inferred
 //! here and checked (`+ - ==` of different signatures is a DimensionError at compile time), each unit literal becomes its
 //! amount in SI base units (`5 km` → 5000, `5 cm` → 1/20), and the program's final value is converted back to the finest
-//! written unit after the run (`RESULT_UNITS`). Stage 2: a function called with quantities (or whose body has unit
+//! written unit after the run (`result_units` of the compile context). Stage 2: a function called with quantities (or whose body has unit
 //! literals) is specialised per unit signature of its arguments, `speed·u0`. A quantity anywhere these stages do not
 //! cover (lists, interpolation, recursion) leaves the program unchanged: the unit stays the loud undefined-variable error.
 //! Stage 3: `print q`, `"text " + q` and a final value show the unit (`str(amount / unit) + "km"` at run time), `q as km`
@@ -27,7 +27,6 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
-use std::cell::RefCell;
 use std::collections::HashMap;
 pub(crate) use unit_fields::unit_type;
 pub(crate) use unit_fields::{lower_field_tolerances, si_quantity};
@@ -71,11 +70,6 @@ type Fields = Vec<(String, Signature)>;
 pub(crate) enum ResultUnits {
 	Whole(Vec<Factor>),
 	Fields(Vec<(String, Vec<Factor>)>),
-}
-
-thread_local! {
-	/// The units of the final value of the last lowered program, to convert its run-time amount back (pipeline::eval_program)
-	static RESULT_UNITS: RefCell<Option<ResultUnits>> = const { RefCell::new(None) };
 }
 
 /// Why a program is no stage-1 program: `Unsupported` leaves it unchanged, `Error` is a compile error, `Recursive` is a
@@ -142,7 +136,7 @@ fn lower_shadowed(program: &Node) -> Option<Result<Node, Node>> {
 				ResultUnits::Whole(factors) => !factors.is_empty(),
 				ResultUnits::Fields(fields) => !fields.is_empty(),
 			};
-			RESULT_UNITS.with(|cell| *cell.borrow_mut() = has_units.then_some(units));
+			crate::compile_context::change(|context| context.result_units = has_units.then_some(units));
 			Some(Ok(node))
 		}
 		Err(Stop::Error(message)) => Some(Err(crate::node::error(&message))),
@@ -236,7 +230,7 @@ fn written_units(node: &Node) -> Vec<&'static Unit> {
 
 /// The units the last lowered program's final value has, once (None for a plain number)
 pub(crate) fn take_result_units() -> Option<ResultUnits> {
-	RESULT_UNITS.with(|cell| cell.borrow_mut().take())
+	crate::compile_context::change(|context| context.result_units.take())
 }
 
 /// The entry of the module's `warp.meta` section (meta_section.rs) naming the units of `main`'s result (`km:1 h:-1`), or
