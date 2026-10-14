@@ -5,7 +5,7 @@
 
 use super::blocks::DATA_WORD;
 use crate::host::PARSE_CODE;
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
 const PARSE_WORD: &str = "parse";
@@ -40,13 +40,9 @@ fn parsed(node: Node) -> Node {
 		// grouped: a bare `data e` left of an operator is no value yet (`(data e) == x` is)
 		Some(code) => {
 			let data = Node::List(vec![symbol(DATA_WORD), code], Bracket::None, Separator::Space);
-			Node::List(vec![data], Bracket::Round, Separator::None)
+			parens(vec![data])
 		}
-		None => Node::List(
-			vec![symbol(PARSE_CODE), parsed(argument)],
-			Bracket::Round,
-			Separator::None,
-		),
+		None => parens(vec![symbol(PARSE_CODE), parsed(argument)]),
 	}
 }
 

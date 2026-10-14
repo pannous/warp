@@ -2,7 +2,7 @@
 //! `p.phone-number` of an object without that field
 
 use crate::analyzer::{assigned_names, data_binding, function_definitions};
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::lowering::nodes::children_rewritten;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;

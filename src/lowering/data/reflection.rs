@@ -187,7 +187,7 @@ fn function_word(node: &Node, functions: &Functions, defined: &HashSet<String>) 
 	match word {
 		DIR_WORD => Some(text_list(&FUNCTION_WORDS.map(String::from))),
 		crate::type_tests::TYPE_WORD => Some(Node::Symbol(crate::type_kinds::Kind::Function.to_string())),
-		HELP_WORD => Some(Node::Text(format!("{name}{}", signature(&functions[name])))),
+		HELP_WORD => Some(Node::Text(help_text(&functions[name]))),
 		_ => None,
 	}
 }
@@ -292,7 +292,7 @@ fn balanced_end(text: &str) -> Option<usize> {
 	None
 }
 
-fn user_functions(program: &Node) -> Functions {
+pub(super) fn user_functions(program: &Node) -> Functions {
 	let mut context = crate::compiler::context::Context::new();
 	crate::analyzer::extract_user_functions(&mut context, program);
 	context.user_functions
@@ -311,7 +311,7 @@ fn meta_map(entries: Vec<(&str, Node)>) -> Node {
 }
 
 /// `area(width:int, height:int) := width * height`: the parameters as declared (no inferred types), the body as written
-fn definition(function: &crate::compiler::context::UserFunctionDef) -> String {
+pub(super) fn definition(function: &crate::compiler::context::UserFunctionDef) -> String {
 	let params: Vec<String> = function
 		.params
 		.iter()
@@ -332,6 +332,11 @@ fn definition(function: &crate::compiler::context::UserFunctionDef) -> String {
 		params.join(", "),
 		function.body.serialize()
 	)
+}
+
+/// `help(area)`: `area(width:int, height:int) -> int`
+pub(super) fn help_text(function: &crate::compiler::context::UserFunctionDef) -> String {
+	format!("{}{}", function.name, signature(function))
 }
 
 /// `(a:int, b:int) -> int`: each parameter with its declared or demanded type, the result's kind when known

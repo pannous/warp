@@ -8,9 +8,9 @@
 use super::nodes::{call, children_rewritten, is_kinded_type_word, key, named_assignment, Counter};
 use crate::analyzer::call_name;
 use crate::compiler::context::Context;
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::library_words::substitute;
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
 use crate::words::{EACH_WORD, IMPLICIT_PARAMETER, ON_WORD, SORT_WORD};
@@ -617,7 +617,7 @@ fn definition(name: &str, lambda: Lambda) -> Node {
 	// a result type converts the body, as `f(a:number):number := …` is lowered before this pass runs
 	let body = match lambda.result_type {
 		Some(result_type) => {
-			let grouped = Node::List(vec![lambda.body], Bracket::Round, Separator::None);
+			let grouped = parens(vec![lambda.body]);
 			key(grouped, Op::As, result_type)
 		}
 		None => lambda.body,

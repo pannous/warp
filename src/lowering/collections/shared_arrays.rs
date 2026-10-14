@@ -137,7 +137,7 @@ fn lower_knowing_functions(node: Node) -> Node {
 		} else {
 			"int"
 		};
-		crate::diagnostic::educate_once(LINEAR_TOPIC, &format!("linear xs = {array}[n]"), &format!("xs = {array}[n]"),
+		crate::errors::diagnostic::educate_once(LINEAR_TOPIC, &format!("linear xs = {array}[n]"), &format!("xs = {array}[n]"),
 			"the compiler picks where a list of numbers lives by itself, linear memory included; `linear` only forces it");
 	}
 	let functions = definitions(&node);
@@ -463,30 +463,7 @@ impl Rewrite<'_> {
 			return self.node(text, function);
 		}
 		if let Some((name, first, kind)) = declaration(&node) {
-			let count = if kind.value {
-				crate::node::int(VALUE_CELL)
-			} else {
-				self.node(first.clone(), function)
-			};
-			let created = key(
-				Node::Symbol(name.clone()),
-				Op::Assign,
-				builtin(kind.storage.new_and_count().0, vec![count]),
-			);
-			if !kind.value {
-				return created;
-			}
-			// `n = shared_new(1); shared_set(n, 1, v)`: the value is set once the name holds its cell
-			let [_, set, _] = element_words(kind);
-			let first = builtin(
-				set,
-				vec![
-					Node::Symbol(name),
-					crate::node::int(VALUE_CELL),
-					cell_value(self.node(first, function), kind.element),
-				],
-			);
-			return Node::List(vec![created, first], Bracket::None, Separator::Semicolon);
+			return self.declared(name, first, kind, function);
 		}
 		match node {
 			// a definition: its body sees its own shared parameters
@@ -500,145 +477,14 @@ impl Rewrite<'_> {
 			}
 			Node::Key(target, op, value) => {
 				let names = self.names(function);
-				match (target.drop_meta(), op) {
-					// `s = sum(xs.map(x => …) @gpu)`, min, max: reduced on the GPU, only a partial result per workgroup read back
-					(Node::Symbol(_), Op::Assign)
-						if let Some((reduction, map)) = crate::gpu_maps::gpu_reduction(&value)
-							&& let Some((array, _, kernel)) = gpu_kernel_map(&map) =>
-					{
-						let on_cpu = self.node(value.as_ref().clone(), function);
-						gpu_reduced(
-							&target,
-							reduction,
-							&array,
-							&kernel,
-							on_cpu,
-							&names,
-							crate::gpu_maps::keeping(&value),
-						)
-					}
-					// `ys = xs.map(x => …) @gpu` of a linear float array: the lambda as a WGSL kernel, the CPU's map without an adapter
-					(Node::Symbol(_), Op::Assign)
-						if shared(&target, &names).is_some()
-							&& let Some((array, lambda, kernel)) = gpu_kernel_map(&value) =>
-					{
-						let keeping = crate::gpu_maps::keeping(&value);
-						if is_linear_floats(&array, &names) {
-							gpu_mapped(&target, &array, &lambda, kernel, keeping)
-						} else {
-							let (copy, block) = copied_into_block(&target, &array);
-							Node::List(
-								vec![copy, gpu_mapped(&target, &block, &lambda, kernel, keeping)],
-								Bracket::None,
-								Separator::Semicolon,
-							)
-						}
-					}
-					// `ys = xs.map(x => x * 0.5 + 1)` of a linear float array: its float kernel makes ys, a new linear array
-					(Node::Symbol(_), Op::Assign)
-						if shared(&target, &names).is_some()
-							&& let Some((array, kernel)) = float_map(&value, &names) =>
-					{
-						let mapped = builtin(&kernel, vec![array.clone()]);
-						if value.attribute(crate::parallel::SPLIT_ATTRIBUTE).is_some() {
-							split_mapped(&target, &array, &kernel, mapped)
-						} else {
-							Node::Key(target, op, Box::new(mapped))
-						}
-					}
-					(Node::Symbol(_), Op::Assign)
-						if shared(&target, &names).is_some()
-							&& let Some((array, lambda)) = numeric_map(&value, &names) =>
-					{
-						block_mapped(&target, &array, &lambda, "map_loop", &[])
-					}
-					// `ys = gpu_compute(shader, xs, w)` of a linear float array: ys names the same block
-					(Node::Symbol(_), Op::Assign)
-						if shared(&target, &names).is_some() && gpu_compute_of_linear_floats(&value, &names) =>
-					{
-						Node::Key(target, op, Box::new(self.node(*value, function)))
-					}
-					// `n = n + v`, `n = n - v`: the atomic add, as `n += v`, so no task's update is lost
-					(name, Op::Assign)
-						if let Some(kind) = shared_value(name, &names)
-							&& let Some((op, added)) = self_update(name, &value) =>
-					{
-						let [_, _, add] = element_words(kind);
-						builtin(
-							add,
-							vec![
-								name.clone(),
-								crate::node::int(VALUE_CELL),
-								signed(self.node(added, function), op),
-							],
-						)
-					}
-					// `n = v`, `n += v` of a shared value
-					(name, Op::Assign) if let Some(kind) = shared_value(name, &names) => {
-						let [_, set, _] = element_words(kind);
-						builtin(
-							set,
-							vec![
-								name.clone(),
-								crate::node::int(VALUE_CELL),
-								cell_value(self.node(*value, function), kind.element),
-							],
-						)
-					}
-					(name, Op::AddAssign | Op::SubAssign) if let Some(kind) = shared_value(name, &names) => {
-						let [_, _, add] = element_words(kind);
-						builtin(
-							add,
-							vec![
-								name.clone(),
-								crate::node::int(VALUE_CELL),
-								signed(self.node(*value, function), op),
-							],
-						)
-					}
-					(Node::Key(array, Op::Hash, index), Op::Assign) if let Some(kind) = shared(array, &names) => {
-						let [_, set, _] = element_words(kind);
-						builtin(
-							set,
-							vec![
-								array.as_ref().clone(),
-								self.node(index.as_ref().clone(), function),
-								self.node(*value, function),
-							],
-						)
-					}
-					(Node::Key(array, Op::Hash, index), Op::AddAssign | Op::SubAssign)
-						if let Some(kind) = shared(array, &names) =>
-					{
-						let [_, _, add] = element_words(kind);
-						builtin(
-							add,
-							vec![
-								array.as_ref().clone(),
-								self.node(index.as_ref().clone(), function),
-								signed(self.node(*value, function), op),
-							],
-						)
-					}
-					(array, Op::Hash)
-						if !value.is_empty_node()
-							&& let Some(kind) = shared(array, &names) =>
-					{
-						let [get, _, _] = element_words(kind);
-						builtin(get, vec![array.clone(), self.node(*value, function)])
-					}
-					// `#xs`, `xs.count`
-					(Node::Empty, Op::Hash) if let Some(kind) = shared(&value, &names) => {
-						builtin(kind.storage.new_and_count().1, vec![*value])
-					}
-					(array, Op::Dot)
-						if let Some(kind) = shared(array, &names)
-							&& crate::analyzer::is_counting_word(&value.name()) =>
-					{
-						builtin(kind.storage.new_and_count().1, vec![array.clone()])
-					}
-					_ => key(self.node(*target, function), op, self.node(*value, function)),
-				}
+				let rewritten = match (target.drop_meta(), op) {
+					(Node::Symbol(_), Op::Assign) => self.array_assigned(&target, &value, &names, function),
+					_ => None,
+				};
+				rewritten
+					.or_else(|| self.value_written(target.drop_meta(), op, &value, &names, function))
+					.or_else(|| self.cell_accessed(target.drop_meta(), op, &value, &names, function))
+					.unwrap_or_else(|| key(self.node(*target, function), op, self.node(*value, function)))
 			}
 			// `shared_writes(n)` (signal_values::poll_shared) takes the array, not its value
 			Node::List(ref items, _, _)
@@ -648,109 +494,7 @@ impl Rewrite<'_> {
 			{
 				node
 			}
-			Node::List(items, bracket, separator) => {
-				let names = self.names(function);
-				// a shared value given to a function that shares it goes as its cell, not as its value
-				let passed = called_function(&Node::List(items.clone(), bracket.clone(), separator.clone()))
-					.and_then(|(callee, _)| self.shared_parameters.get(&callee).cloned())
-					.unwrap_or_default();
-				let starts_task = items
-					.first()
-					.is_some_and(|head| head.name() == crate::declarations::TASK_GO);
-				let offset = if starts_task { 2 } else { 1 };
-				let linear_argument = items
-					.iter()
-					.skip(offset)
-					.find(|item| shared(item, &names).is_some_and(|kind| kind.storage == Storage::Linear));
-				if let (true, Some(array)) = (starts_task, linear_argument) {
-					return crate::diagnostic::Diagnostic::at(array, format!("a task cannot take the linear array {}: it lives in this task's memory; `shared {} = int[n]` shares one", array.name(), array.name())).into_error();
-				}
-				match items.as_slice() {
-					[word, array]
-						if word.name() == crate::wasm_emitter::lists::linear_arrays::LINEAR_ADDRESS
-							&& shared(array, &names).is_some_and(|kind| kind.storage == Storage::Linear) =>
-					{
-						array.clone()
-					}
-					[word, array]
-						if crate::analyzer::is_counting_word(&word.name())
-							&& let Some(kind) = shared(array, &names) =>
-					{
-						builtin(kind.storage.new_and_count().1, vec![array.clone()])
-					}
-					[word, left, right]
-						if word.name() == crate::wasm_emitter::lists::linear_arrays::LINEAR_DOT
-							&& is_linear_floats(left, &names)
-							&& is_linear_floats(right, &names) =>
-					{
-						builtin(&word.name(), vec![left.clone(), right.clone()])
-					}
-					[word, shader, array, workgroups]
-						if word.name() == crate::host::GPU_COMPUTE && is_linear_floats(array, &names) =>
-					{
-						builtin(
-							crate::host::GPU_COMPUTE_LINEAR,
-							vec![
-								self.node(shader.clone(), function),
-								array.clone(),
-								self.node(workgroups.clone(), function),
-							],
-						)
-					}
-					// `for x in xs {…}` over an array: over its indexes, x read from each cell
-					[word, item, in_word, array, body]
-						if word.name() == "for"
-							&& in_word.name() == "in"
-							&& let Some(kind) = shared(array, &names) =>
-					{
-						let index =
-							Node::Symbol(format!("{}{}index", array.name(), crate::analyzer::TEMPORARY_SEPARATOR));
-						let read = key(
-							item.clone(),
-							Op::Assign,
-							builtin(element_words(kind)[0], vec![array.clone(), index.clone()]),
-						);
-						let statements = match self.node(body.clone(), function).drop_meta().clone() {
-							Node::List(statements, Bracket::Curly, Separator::Semicolon | Separator::Newline) => {
-								statements
-							}
-							Node::List(statement, Bracket::Curly, separator) => {
-								vec![Node::List(statement, Bracket::None, separator)]
-							}
-							other => vec![other],
-						};
-						let indexes = key(
-							crate::node::int(1),
-							Op::To,
-							builtin(kind.storage.new_and_count().1, vec![array.clone()]),
-						);
-						let body = Node::List([vec![read], statements].concat(), Bracket::Curly, Separator::Semicolon);
-						Node::List(
-							vec![word.clone(), index, in_word.clone(), indexes, body],
-							bracket,
-							separator,
-						)
-					}
-					_ => Node::List(
-						items
-							.into_iter()
-							.enumerate()
-							.map(|(index, item)| match index.checked_sub(offset) {
-								Some(argument)
-									if passed.contains_key(&argument)
-										&& (shared_value(&item, &names).is_some()
-											|| shared(&item, &names).is_some()) =>
-								{
-									item
-								}
-								_ => self.node(item, function),
-							})
-							.collect(),
-						bracket,
-						separator,
-					),
-				}
-			}
+			Node::List(items, bracket, separator) => self.listed(items, bracket, separator, function),
 			meta @ Node::Meta { .. } => meta.under_meta(|node| self.node(node, function)),
 			// an array as a whole: the list of its cells
 			Node::Symbol(_) if let Some(kind) = shared(&node, &self.names(function)) => collected(&node, kind),
@@ -765,6 +509,271 @@ impl Rewrite<'_> {
 			}
 			other => other,
 		}
+	}
+
+	/// `shared xs = int[n]`: the array of n cells; a shared value one cell, set once the name holds it
+	fn declared(&self, name: String, first: Node, kind: Shared, function: Option<&str>) -> Node {
+		let count = if kind.value {
+			crate::node::int(VALUE_CELL)
+		} else {
+			self.node(first.clone(), function)
+		};
+		let created = key(
+			Node::Symbol(name.clone()),
+			Op::Assign,
+			builtin(kind.storage.new_and_count().0, vec![count]),
+		);
+		if !kind.value {
+			return created;
+		}
+		// `n = shared_new(1); shared_set(n, 1, v)`: the value is set once the name holds its cell
+		let [_, set, _] = element_words(kind);
+		let first = builtin(
+			set,
+			vec![
+				Node::Symbol(name),
+				crate::node::int(VALUE_CELL),
+				cell_value(self.node(first, function), kind.element),
+			],
+		);
+		Node::List(vec![created, first], Bracket::None, Separator::Semicolon)
+	}
+
+	/// `ys = …` of an array mapped or computed: on the GPU, by a float kernel or a loop over the block's cells
+	fn array_assigned(
+		&self,
+		target: &Node,
+		value: &Node,
+		names: &HashMap<String, Shared>,
+		function: Option<&str>,
+	) -> Option<Node> {
+		// `s = sum(xs.map(x => …) @gpu)`, min, max: reduced on the GPU, only a partial result per workgroup read back
+		let reduced = crate::gpu_maps::gpu_reduction(value)
+			.and_then(|(reduction, map)| gpu_kernel_map(&map).map(|(array, _, kernel)| (reduction, array, kernel)));
+		if let Some((reduction, array, kernel)) = reduced {
+			let on_cpu = self.node(value.clone(), function);
+			return Some(gpu_reduced(
+				target,
+				reduction,
+				&array,
+				&kernel,
+				on_cpu,
+				names,
+				crate::gpu_maps::keeping(value),
+			));
+		}
+		shared(target, names)?;
+		// `ys = xs.map(x => …) @gpu` of a linear float array: the lambda as a WGSL kernel, the CPU's map without an adapter
+		if let Some((array, lambda, kernel)) = gpu_kernel_map(value) {
+			let keeping = crate::gpu_maps::keeping(value);
+			if is_linear_floats(&array, names) {
+				return Some(gpu_mapped(target, &array, &lambda, kernel, keeping));
+			}
+			let (copy, block) = copied_into_block(target, &array);
+			return Some(Node::List(
+				vec![copy, gpu_mapped(target, &block, &lambda, kernel, keeping)],
+				Bracket::None,
+				Separator::Semicolon,
+			));
+		}
+		// `ys = xs.map(x => x * 0.5 + 1)` of a linear float array: its float kernel makes ys, a new linear array
+		if let Some((array, kernel)) = float_map(value, names) {
+			let mapped = builtin(&kernel, vec![array.clone()]);
+			return Some(match value.attribute(crate::parallel::SPLIT_ATTRIBUTE) {
+				Some(_) => split_mapped(target, &array, &kernel, mapped),
+				None => key(target.clone(), Op::Assign, mapped),
+			});
+		}
+		if let Some((array, lambda)) = numeric_map(value, names) {
+			return Some(block_mapped(target, &array, &lambda, "map_loop", &[]));
+		}
+		// `ys = gpu_compute(shader, xs, w)` of a linear float array: ys names the same block
+		gpu_compute_of_linear_floats(value, names)
+			.then(|| key(target.clone(), Op::Assign, self.node(value.clone(), function)))
+	}
+
+	/// `n = v`, `n += v` of a shared value; `n = n + v`, `n = n - v` as the atomic add, as `n += v`, so no task's update
+	/// is lost
+	fn value_written(
+		&self,
+		name: &Node,
+		op: Op,
+		value: &Node,
+		names: &HashMap<String, Shared>,
+		function: Option<&str>,
+	) -> Option<Node> {
+		let kind = shared_value(name, names)?;
+		let [_, set, add] = element_words(kind);
+		let cell = |word: &str, value: Node| builtin(word, vec![name.clone(), crate::node::int(VALUE_CELL), value]);
+		match op {
+			Op::Assign if let Some((op, added)) = self_update(name, value) => {
+				Some(cell(add, signed(self.node(added, function), op)))
+			}
+			Op::Assign => Some(cell(set, cell_value(self.node(value.clone(), function), kind.element))),
+			Op::AddAssign | Op::SubAssign => Some(cell(add, signed(self.node(value.clone(), function), op))),
+			_ => None,
+		}
+	}
+
+	/// `xs#i = v`, `xs#i += v`, `xs#i`, `#xs` and `xs.count` of a shared array
+	fn cell_accessed(
+		&self,
+		target: &Node,
+		op: Op,
+		value: &Node,
+		names: &HashMap<String, Shared>,
+		function: Option<&str>,
+	) -> Option<Node> {
+		let rewritten = |node: &Node| self.node(node.clone(), function);
+		match (target, op) {
+			(Node::Key(array, Op::Hash, index), Op::Assign) => {
+				let [_, set, _] = element_words(shared(array, names)?);
+				Some(builtin(
+					set,
+					vec![array.as_ref().clone(), rewritten(index), rewritten(value)],
+				))
+			}
+			(Node::Key(array, Op::Hash, index), Op::AddAssign | Op::SubAssign) => {
+				let [_, _, add] = element_words(shared(array, names)?);
+				Some(builtin(
+					add,
+					vec![array.as_ref().clone(), rewritten(index), signed(rewritten(value), op)],
+				))
+			}
+			(array, Op::Hash)
+				if !value.is_empty_node()
+					&& let Some(kind) = shared(array, names) =>
+			{
+				let [get, _, _] = element_words(kind);
+				Some(builtin(get, vec![array.clone(), rewritten(value)]))
+			}
+			// `#xs`, `xs.count`
+			(Node::Empty, Op::Hash) => Some(builtin(
+				shared(value, names)?.storage.new_and_count().1,
+				vec![value.clone()],
+			)),
+			(array, Op::Dot) if crate::analyzer::is_counting_word(&value.name()) => Some(builtin(
+				shared(array, names)?.storage.new_and_count().1,
+				vec![array.clone()],
+			)),
+			_ => None,
+		}
+	}
+
+	/// A call or list: words of arrays rewritten, a loop over an array's cells, a shared value passed as its cell to a
+	/// function that shares it; a task cannot take a linear array
+	fn listed(&self, items: Vec<Node>, bracket: Bracket, separator: Separator, function: Option<&str>) -> Node {
+		let names = self.names(function);
+		// a shared value given to a function that shares it goes as its cell, not as its value
+		let passed = called_function(&Node::List(items.clone(), bracket.clone(), separator.clone()))
+			.and_then(|(callee, _)| self.shared_parameters.get(&callee).cloned())
+			.unwrap_or_default();
+		let starts_task = items
+			.first()
+			.is_some_and(|head| head.name() == crate::declarations::TASK_GO);
+		let offset = if starts_task { 2 } else { 1 };
+		let linear_argument = items
+			.iter()
+			.skip(offset)
+			.find(|item| shared(item, &names).is_some_and(|kind| kind.storage == Storage::Linear));
+		if let (true, Some(array)) = (starts_task, linear_argument) {
+			return crate::errors::diagnostic::Diagnostic::at(array, format!("a task cannot take the linear array {}: it lives in this task's memory; `shared {} = int[n]` shares one", array.name(), array.name())).into_error();
+		}
+		if let Some(word) = self.array_word(&items, &names, function) {
+			return word;
+		}
+		// `for x in xs {…}` over an array: over its indexes, x read from each cell
+		let over_cells = match items.as_slice() {
+			[word, item, in_word, array, body] if word.name() == "for" && in_word.name() == "in" => {
+				shared(array, &names).map(|kind| (word, item, in_word, array, body, kind))
+			}
+			_ => None,
+		};
+		if let Some((word, item, in_word, array, body, kind)) = over_cells {
+			let indexes = key(
+				crate::node::int(1),
+				Op::To,
+				builtin(kind.storage.new_and_count().1, vec![array.clone()]),
+			);
+			let index = Node::Symbol(format!("{}{}index", array.name(), crate::analyzer::TEMPORARY_SEPARATOR));
+			let body = self.cells_looped(item, array, &index, kind, body, function);
+			return Node::List(
+				vec![word.clone(), index, in_word.clone(), indexes, body],
+				bracket,
+				separator,
+			);
+		}
+		let arguments = items
+			.into_iter()
+			.enumerate()
+			.map(|(index, item)| match index.checked_sub(offset) {
+				Some(argument)
+					if passed.contains_key(&argument)
+						&& (shared_value(&item, &names).is_some() || shared(&item, &names).is_some()) =>
+				{
+					item
+				}
+				_ => self.node(item, function),
+			});
+		Node::List(arguments.collect(), bracket, separator)
+	}
+
+	/// The words of linear arrays: its address, count, dot product and gpu_compute over its block
+	fn array_word(&self, items: &[Node], names: &HashMap<String, Shared>, function: Option<&str>) -> Option<Node> {
+		use crate::wasm_emitter::lists::linear_arrays::{LINEAR_ADDRESS, LINEAR_DOT};
+		match items {
+			[word, array]
+				if word.name() == LINEAR_ADDRESS
+					&& shared(array, names).is_some_and(|kind| kind.storage == Storage::Linear) =>
+			{
+				Some(array.clone())
+			}
+			[word, array] if crate::analyzer::is_counting_word(&word.name()) => Some(builtin(
+				shared(array, names)?.storage.new_and_count().1,
+				vec![array.clone()],
+			)),
+			[word, left, right]
+				if word.name() == LINEAR_DOT && is_linear_floats(left, names) && is_linear_floats(right, names) =>
+			{
+				Some(builtin(&word.name(), vec![left.clone(), right.clone()]))
+			}
+			[word, shader, array, workgroups]
+				if word.name() == crate::host::GPU_COMPUTE && is_linear_floats(array, names) =>
+			{
+				Some(builtin(
+					crate::host::GPU_COMPUTE_LINEAR,
+					vec![
+						self.node(shader.clone(), function),
+						array.clone(),
+						self.node(workgroups.clone(), function),
+					],
+				))
+			}
+			_ => None,
+		}
+	}
+
+	/// The body of `for item in array`, looping over the array's indexes: item read from the cell at index first
+	fn cells_looped(
+		&self,
+		item: &Node,
+		array: &Node,
+		index: &Node,
+		kind: Shared,
+		body: &Node,
+		function: Option<&str>,
+	) -> Node {
+		let read = key(
+			item.clone(),
+			Op::Assign,
+			builtin(element_words(kind)[0], vec![array.clone(), index.clone()]),
+		);
+		let statements = match self.node(body.clone(), function).drop_meta().clone() {
+			Node::List(statements, Bracket::Curly, Separator::Semicolon | Separator::Newline) => statements,
+			Node::List(statement, Bracket::Curly, separator) => vec![Node::List(statement, Bracket::None, separator)],
+			other => vec![other],
+		};
+		Node::List([vec![read], statements].concat(), Bracket::Curly, Separator::Semicolon)
 	}
 }
 

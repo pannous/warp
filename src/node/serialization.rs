@@ -107,13 +107,7 @@ impl Node {
 					format!("{}{}{}", bracket, nodes[0].item_text(), close)
 				} else {
 					let items: Vec<String> = nodes.iter().map(Node::item_text).collect();
-					let separator = separator.to_string();
-					let joint = if separator.ends_with(char::is_whitespace) {
-						separator
-					} else {
-						separator + " "
-					};
-					format!("{}{}{}", bracket, items.join(&joint), close)
+					format!("{}{}{}", bracket, items.join(&separator.joint()), close)
 				}
 			}
 			// the operand a prefix or suffix operator lacks is ø in the tree, not in the text: `#x`, `not x`, `x++`

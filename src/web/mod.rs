@@ -25,9 +25,9 @@ pub mod web_sockets;
 pub mod webview;
 
 use crate::compiler::meta::{DataType, DataValue};
-use crate::diagnostic::{self, Acknowledger};
+use crate::errors::diagnostic::{self, Acknowledger};
+use crate::errors::fixits::{self, Fix};
 use crate::extensions::numbers::Number;
-use crate::fixits::{self, Fix};
 use crate::node::{Bracket, Node, Separator};
 use crate::type_kinds::KIND_BITS;
 use crate::type_kinds::{Kind, KIND_MASK};
@@ -59,11 +59,11 @@ impl Acknowledger for PageAcknowledger {
 	}
 
 	/// The page answers later, with its "got it" buttons: this expression, or all of the kind
-	fn acknowledge(&self, topic: &str, written: &str) -> crate::diagnostic::GotIt {
+	fn acknowledge(&self, topic: &str, written: &str) -> crate::errors::diagnostic::GotIt {
 		self.notes
 			.borrow_mut()
 			.push((topic.to_string(), diagnostic::expression_key(topic, written)));
-		crate::diagnostic::GotIt::No
+		crate::errors::diagnostic::GotIt::No
 	}
 }
 
@@ -283,13 +283,18 @@ pub fn eval_block_report(request: &Value) -> Value {
 			.text_value()
 			.ok_or_else(|| format!("{}: needs a text", crate::host::PARSE_CODE))
 			.and_then(|source| crate::lowering::parse_word::code_of(&source)),
-		None => crate::pipeline::eval_block(tree("block"), &tree("names"), &tree("values"), &tree("definitions")),
+		None => crate::compiler::run_time_blocks::eval_block(
+			tree("block"),
+			&tree("names"),
+			&tree("values"),
+			&tree("definitions"),
+		),
 	};
 	match outcome {
 		Err(message) => json!({ "error": message }),
 		Ok(result) => match tree_of(&result) {
 			Some(tree) => json!({ "result": tree }),
-			None => json!({ "error": crate::pipeline::cannot_hand_back(&result) }),
+			None => json!({ "error": crate::compiler::run_time_blocks::cannot_hand_back(&result) }),
 		},
 	}
 }

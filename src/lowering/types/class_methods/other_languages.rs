@@ -1,6 +1,7 @@
 //! Classes as other languages write them: Rust's `impl Point {…}`, Go's `func (p Point) Sum() int {…}`, Ruby's
 //! `Point.new(1, 2)`, and the text, equality and order methods by their other names (`toString`, `__eq__`, `compareTo`)
 use super::*;
+use crate::node::parens;
 
 /// Rust's `impl Point { fn sum(&self) -> i32 {…} }` (and `impl Trait for Point {…}`): its functions are methods of
 /// the class Point, the impl block itself goes
@@ -149,7 +150,7 @@ pub(super) fn constructed_by_new(node: Node, classes: &[String]) -> Node {
 		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [new, call] if new.drop_meta().name() == RUBY_NEW_WORD && classes.contains(&leading_name(call))) =>
 		{
 			let call = items[1].clone();
-			crate::diagnostic::note_alias(
+			crate::errors::diagnostic::note_alias(
 				&format!("{RUBY_NEW_WORD} {}", leading_name(&call)),
 				&leading_name(&call),
 			);
@@ -162,7 +163,7 @@ pub(super) fn constructed_by_new(node: Node, classes: &[String]) -> Node {
 		{
 			let class_name = class.drop_meta().name();
 			crate::normalize::set_position_of(&class);
-			crate::diagnostic::note_alias(&format!("{class_name}.{RUBY_NEW_WORD}"), &class_name);
+			crate::errors::diagnostic::note_alias(&format!("{class_name}.{RUBY_NEW_WORD}"), &class_name);
 			let arguments = match member.drop_meta().clone() {
 				Node::List(items, _, _) => items[1..]
 					.iter()
@@ -171,7 +172,7 @@ pub(super) fn constructed_by_new(node: Node, classes: &[String]) -> Node {
 					.collect(),
 				_ => vec![],
 			};
-			Node::List([vec![*class], arguments].concat(), Bracket::Round, Separator::None)
+			parens([vec![*class], arguments].concat())
 		}
 		other => other.map_children(|child| constructed_by_new(child, classes)),
 	}
@@ -217,7 +218,7 @@ pub(super) fn witness_method(item: Node, class: &str) -> Node {
 		return item;
 	};
 	if *witness != method {
-		crate::diagnostic::note_alias(&method, witness);
+		crate::errors::diagnostic::note_alias(&method, witness);
 	}
 	let typed = |parameter: Node| match parameter.drop_meta() {
 		Node::Symbol(_) if *witness != "text" => key(parameter, Op::Colon, symbol(class)),

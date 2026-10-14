@@ -5,8 +5,8 @@
 //! another type than its field's, is a compile error.
 
 use super::nodes::key;
-use crate::diagnostic::Diagnostic;
-use crate::node::{Bracket, Node, Separator};
+use crate::errors::diagnostic::Diagnostic;
+use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
 use std::collections::HashMap;
@@ -49,11 +49,7 @@ fn unshaped(node: Node, shapes: &mut Shapes) -> Node {
 				Some(_) => parameter_name(&parameter),
 				None => parameter,
 			});
-			let head = Node::List(
-				std::iter::once(Node::Symbol(name)).chain(plain).collect(),
-				Bracket::Round,
-				Separator::None,
-			);
+			let head = parens(std::iter::once(Node::Symbol(name)).chain(plain).collect());
 			key(head, op, unshaped(*body, shapes))
 		}
 		other => other.map_children(|child| unshaped(child, shapes)),
@@ -210,21 +206,15 @@ fn constructions(arguments: &[Node]) -> Vec<Node> {
 
 /// The entries of an object literal `{name:"Dick"}`, also constructed `person{name:"Dick"}` or tagged `Person:{…}`
 fn object_entries(node: &Node) -> Option<Vec<(String, Node)>> {
+	let tagged = |kind: &Node| matches!(kind.drop_meta(), Node::Symbol(_));
 	match node.drop_meta() {
-		Node::List(entries, Bracket::Curly, _) => entries
-			.iter()
-			.map(|entry| match entry.drop_meta() {
-				Node::Key(key, Op::Colon, value) => Some((key.name(), value.as_ref().clone())),
-				_ => None,
-			})
-			.collect(),
-		Node::List(items, Bracket::None | Bracket::Round, _) => match items.as_slice() {
-			[kind, object] if matches!(kind.drop_meta(), Node::Symbol(_)) => object_entries(object),
-			_ => None,
-		},
-		Node::Key(kind, Op::Colon | Op::None, object) if matches!(kind.drop_meta(), Node::Symbol(_)) => {
+		Node::List(items, Bracket::None | Bracket::Round, _)
+			if let [kind, object] = items.as_slice()
+				&& tagged(kind) =>
+		{
 			object_entries(object)
 		}
-		_ => None,
+		Node::Key(kind, Op::Colon | Op::None, object) if tagged(kind) => object_entries(object),
+		_ => crate::library_words::object_entries(node),
 	}
 }

@@ -5,8 +5,8 @@
 //! definition. Not getters: `name := {…}` (a block or a list), `name := x => …` and `name := …it…` (functions), and a
 //! name applied to arguments later (`sum := fold +; sum [1 2 3]`, a function value).
 
-use super::nodes::{call, children_rewritten, is_binding, key};
-use crate::diagnostic::Diagnostic;
+use super::nodes::{arguments_rewritten, call, children_rewritten, is_binding, key};
+use crate::errors::diagnostic::Diagnostic;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -79,31 +79,14 @@ fn lower_in(node: Node, active: &[Getter]) -> Node {
 		Node::Key(left, Op::Dot, right) => {
 			let right = match right.drop_meta().clone() {
 				Node::List(items, bracket, separator) if items.len() > 1 => {
-					let mut items = items.into_iter();
-					let method = items.next().expect("a method");
-					Node::List(
-						std::iter::once(method)
-							.chain(items.map(|item| lower_in(item, active)))
-							.collect(),
-						bracket,
-						separator,
-					)
+					arguments_rewritten(items, bracket, separator, |item| lower_in(item, active))
 				}
 				_ => *right,
 			};
 			key(lower_in(*left, active), Op::Dot, right)
 		}
-		Node::List(items, Bracket::Round, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if is_active(active, head)) =>
-		{
-			let mut items = items.into_iter();
-			let head = items.next().expect("a head");
-			Node::List(
-				std::iter::once(head)
-					.chain(items.map(|item| lower_in(item, active)))
-					.collect(),
-				Bracket::Round,
-				separator,
-			)
+		Node::List(items, Bracket::Round, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if is_active(active, head)) => {
+			arguments_rewritten(items, Bracket::Round, separator, |item| lower_in(item, active))
 		}
 		other => children_rewritten(other, |child| lower_in(child, active)),
 	}

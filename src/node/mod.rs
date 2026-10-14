@@ -922,6 +922,16 @@ impl Separator {
 		matches!(self, Separator::Semicolon | Separator::Newline)
 	}
 
+	/// The text between two items of a written list: `, ` `; ` or a whitespace separator as is (one space for none)
+	pub fn joint(&self) -> String {
+		let separator = self.to_string();
+		if separator.ends_with(char::is_whitespace) {
+			separator
+		} else {
+			separator + " "
+		}
+	}
+
 	pub fn to_char(&self) -> Option<char> {
 		match self {
 			Separator::Space => Some(' '),

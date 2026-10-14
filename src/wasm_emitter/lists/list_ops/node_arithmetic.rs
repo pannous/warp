@@ -726,7 +726,7 @@ impl WasmGcEmitter {
 			"got it: the text repeated".to_string()
 		};
 		crate::normalize::set_position_of(count);
-		crate::diagnostic::educate_once(
+		crate::errors::diagnostic::educate_once(
 			TEXT_REPEAT_TOPIC,
 			written,
 			&format!("{count_written} times {text_written}"),

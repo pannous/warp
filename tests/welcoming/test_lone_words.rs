@@ -1,7 +1,7 @@
 // Unknown words (user, 2026-10-05, refining P62/P63): a word alone is a symbol, with a near-miss warning when it is close to
 // a defined name; a word applied to an argument is an error, brackets change nothing; `data …` is the data prefix
 use crate::common::fails_with;
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 use warp::wasm_emitter::eval;
 
 fn warns_near_miss(code: &str) -> bool {

@@ -16,7 +16,7 @@
 
 use super::memoization::definition_parts;
 use super::nodes::{call, key};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{AT_WORD, FLOAT_WORD};
 use std::collections::{HashMap, HashSet};
@@ -250,11 +250,7 @@ fn with_float_parameters(node: Node, functions: &HashSet<String>) -> Node {
 			});
 			rebuild(
 				Node::List(typed.collect(), bracket.clone(), separator.clone()),
-				key(
-					Node::List(vec![body], Bracket::Round, Separator::None),
-					Op::As,
-					Node::symbol(FLOAT_WORD),
-				),
+				key(parens(vec![body]), Op::As, Node::symbol(FLOAT_WORD)),
 			)
 		}
 		_ => node,

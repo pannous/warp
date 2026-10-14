@@ -84,6 +84,10 @@ Rules
 Order: the lowering passes first, then the analyzer, then the emitter. Each stage can start before the previous one
 is complete; only the bootstrap waits for all three.
 
+- Next item of this roadmap (user, 2026-10-14; card standalone-math-units): lib/math.warp and lib/units.warp become
+  complete standalone warp files, and the parser fetches its lists of special functions and special operators from
+  them instead of hard-coded Rust tables.
+
 - Lowering passes first. src/pipeline.rs runs ~150 passes, each `fn(Node) -> Node`, in SOURCE_PHASES and
   MEANING_PASSES (~50k lines in src/lowering). A pass is the smallest unit with a twin: one function, one input tree,
   one output tree.

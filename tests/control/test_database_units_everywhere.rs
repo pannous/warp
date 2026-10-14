@@ -40,12 +40,12 @@ fn a_unit_column_migrates_within_its_quantity() {
 #[test]
 fn plain_numbers_given_a_unit_are_read_as_it() {
 	eval(&runs("distance: int", "plain_everywhere", "runs.add(Run(3))"));
-	warp::diagnostic::take_runtime_warnings();
+	warp::errors::diagnostic::take_runtime_warnings();
 	assert_eq!(
 		value(&runs("distance: km", "plain_everywhere", "runs#1.distance")),
 		"3km"
 	);
-	let warnings = warp::diagnostic::take_runtime_warnings();
+	let warnings = warp::errors::diagnostic::take_runtime_warnings();
 	assert!(
 		warnings.iter().any(|warning| warning.contains("read as km")),
 		"{warnings:?}"

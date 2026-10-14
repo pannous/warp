@@ -85,3 +85,12 @@ fn the_loop_variable_name_picks_the_text_unit() {
 		"a b,c,"
 	);
 }
+
+#[test] // a braceless call is a loop header's last bound, before any body form (card count-xs-int)
+fn a_braceless_call_ends_the_loop_range() {
+	is!("xs=[5,6,7]; s=0; for i in 1 to count xs { s+=i }; s", 6);
+	is!("xs=[5,6,7]; s=0; for i in 1 to count xs do s+=i; s", 6);
+	is!("xs=[5,6,7]; s=0; for i in 1 to count xs:\n  s+=i\ns", 6);
+	is!("xs=[5,6,7]; s=0; for i in 1 to count xs\n  s+=i\ns", 6);
+	is!("xs=[5,6,7]; s=0; for x in reverse xs { s=s*10+x }; s", 765);
+}

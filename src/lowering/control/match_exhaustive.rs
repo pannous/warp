@@ -6,7 +6,7 @@
 //! (a guard, alternatives, a comparison), keeps the run-time error "no case for …".
 
 use super::sum_variants::sum_types;
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use crate::words::{IS_WORD, SWITCH_WORDS};

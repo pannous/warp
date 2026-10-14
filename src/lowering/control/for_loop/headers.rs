@@ -3,8 +3,9 @@
 //! `for (even number) in xs` only the items the condition holds for (each filter announced, P46); `for chars in text`
 //! walks the text by that unit, `for word in text`, `for line in text` and `for byte in text` by words, lines and bytes.
 
-use crate::diagnostic::{ask, reading, Ask, Fallback};
-use crate::node::{call, Bracket, Node, Separator};
+use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
+use crate::lowering::nodes::arguments_rewritten;
+use crate::node::{call, parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{for_in_loop, mentions};
 use crate::words::{FOR_WORD, IMPLICIT_PARAMETER, INSTANCE_OF, IN_WORD, IS_TYPE};
@@ -64,7 +65,7 @@ impl Headers {
 			[for_word, variable, in_word, iterable, body]
 				if for_word.is_symbol(FOR_WORD) && in_word.is_symbol(IN_WORD) =>
 			{
-				let at = crate::diagnostic::position(&node).unwrap_or_default();
+				let at = crate::errors::diagnostic::position(&node).unwrap_or_default();
 				let (variable, iterable, body) = (variable.clone(), iterable.clone(), body.clone());
 				self.loop_meaning(variable, iterable, body, at)
 					.unwrap_or_else(|error| error)
@@ -319,17 +320,10 @@ fn type_filter_header(name: &str, iterable: &Node, body: &Node) -> Option<(Strin
 fn item_named(node: Node, name: &str, item: &Node) -> Node {
 	match node {
 		Node::Symbol(symbol) if symbol == name => item.clone(),
-		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if head == name) =>
-		{
-			let mut items = items.into_iter();
-			let head = items.next().expect("a head");
-			Node::List(
-				std::iter::once(head)
-					.chain(items.map(|part| item_named(part, name, item)))
-					.collect(),
-				Bracket::Round,
-				Separator::None,
-			)
+		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if head == name) => {
+			arguments_rewritten(items, Bracket::Round, Separator::None, |part| {
+				item_named(part, name, item)
+			})
 		}
 		other => other.map_children(|child| item_named(child, name, item)),
 	}
@@ -386,7 +380,7 @@ fn bytes_of(text: &Node) -> Node {
 		Box::new(call("byte_at", vec![text.clone(), offset])),
 	);
 	Node::Key(
-		Box::new(Node::List(vec![offsets], Bracket::Round, Separator::None)),
+		Box::new(parens(vec![offsets])),
 		Op::Dot,
 		Box::new(call("map", vec![byte])),
 	)

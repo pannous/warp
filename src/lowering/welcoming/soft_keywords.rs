@@ -4,7 +4,7 @@
 //! loud error. Passes that give a soft keyword its meaning ask `program_names` whether the program took the word.
 
 use super::nodes::parameter_name;
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 
@@ -150,7 +150,7 @@ fn first_refused(node: &Node, top_level: bool) -> Option<Node> {
 fn note_local_names(program: &Node) {
 	walk_names(program, &mut |name, role| {
 		if SOFT_KEYWORDS.contains(&name) {
-			crate::diagnostic::educate_once(
+			crate::errors::diagnostic::educate_once(
 				&format!("{TOPIC}-{name}"),
 				name,
 				name,

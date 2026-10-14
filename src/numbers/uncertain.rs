@@ -1,7 +1,7 @@
 //! `x ± r` at run time (card plus-minus, notes/plus_minus.md, decision P217): an interval with its value, flowing
 //! through arithmetic with worst-case bounds. The run-time form is wasm_emitter/uncertain.rs; this is the value read back
 
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::NUMBER_WORD;

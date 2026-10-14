@@ -43,9 +43,11 @@ mod test_parser_runtime_positions; // card runtime-parser
 mod test_plain_hint_got_it; // card hints-dismissed
 mod test_quiet_hints;
 mod test_relaxed_pragma;
+mod test_script_pragma;
 mod test_slash_comment_after_value;
 mod test_slash_comment_needs_space;
 mod test_slash_comment_prose_operators; // card comment-after
+mod test_sleep_seconds;
 mod test_sleep_unit_shadow;
 mod test_sleep_unit_warning;
 mod test_strict_warning_statement; // card under-use
@@ -54,6 +56,7 @@ mod test_ternary_hint_got_it; // card hint-dismiss
 mod test_undefined_in_text_sum; // card compile-path
 mod test_unknown_prefix_word;
 mod test_unknown_word_error;
+mod test_variable_applied; // card error-local
 mod test_warning_levels; // card warning-levels
 mod test_warning_mode;
 mod test_welcoming_ask;

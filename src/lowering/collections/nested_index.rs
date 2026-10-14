@@ -7,7 +7,7 @@
 //! (`make().n = 5`) would change a copy nobody keeps, so it is an error.
 
 use super::nodes::assign;
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 

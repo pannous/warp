@@ -23,6 +23,7 @@ mod test_empty_list_argument;
 mod test_empty_list_concat; // card null-typed
 mod test_empty_list_count;
 mod test_field_count;
+mod test_filter_element_scope;
 mod test_find_any_all;
 mod test_first_items; // card first-first
 mod test_float_array_writes;

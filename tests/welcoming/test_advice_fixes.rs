@@ -1,6 +1,6 @@
 //! Advice whose preferred form can replace some text offers it as an "I meant" fix (card advise-fix): the playground
 //! shows it as a button like a hint's; advice that names no replacement (`on … before the loop`) stays without one
-use warp::fixits::{fixed, Fix};
+use warp::errors::fixits::{fixed, Fix};
 use warp::normalize::{capture_hints, CapturedHint};
 use warp::wasm_emitter::eval;
 

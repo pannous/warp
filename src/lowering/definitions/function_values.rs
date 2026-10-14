@@ -9,7 +9,7 @@ use crate::closures::may_be_function_value;
 use crate::lambdas::lambda_definition;
 use crate::library_words::{arity, canonical_spelling, is_standard_function};
 use crate::modules::prelude_word_arity;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
 
@@ -78,7 +78,7 @@ fn refuse_called_bare_results(program: &Node, found: &[Definition]) -> Result<()
 	let function = &results[&variable];
 	let nested = &returning[function];
 	let message = format!("{variable} holds no function: {function} ends with `{nested}`, which calls {nested} (a bare name is a call); fix: return the function with `function {nested}`");
-	Err(crate::diagnostic::Diagnostic::at(call, message).into_error())
+	Err(crate::errors::diagnostic::Diagnostic::at(call, message).into_error())
 }
 
 /// `inc := add 1` of `add(a, b)`: a definition leaving out an argument is no partial application, which needs the hole
@@ -124,7 +124,7 @@ fn refused_partial_definition(program: &Node, found: &[Definition]) -> Option<No
 			written.join(" ")
 		);
 		refused = Some(
-			crate::diagnostic::Diagnostic::at(value, message)
+			crate::errors::diagnostic::Diagnostic::at(value, message)
 				.fix(format!("{name} := {partial}"))
 				.into_error(),
 		);
@@ -554,13 +554,11 @@ fn round_calls(node: Node, function_params: &[String]) -> Node {
 			if items.len() > 1
 				&& matches!(items[0].drop_meta(), Node::Symbol(name) if function_params.contains(name)) =>
 		{
-			Node::List(
+			parens(
 				items
 					.into_iter()
 					.map(|item| round_calls(item, function_params))
 					.collect(),
-				Bracket::Round,
-				Separator::None,
 			)
 		}
 		other => other.map_children(|child| round_calls(child, function_params)),

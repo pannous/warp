@@ -612,7 +612,7 @@ pub(super) fn ask_local_or_global(
 	function: &str,
 	main_assignment: Option<&Node>,
 ) -> Result<usize, Node> {
-	use crate::diagnostic::{ask, reading, Ask, Fallback};
+	use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
 	let question =
 		format!("does `{name} = …` inside {function} make a new local of {function}, or change the main-level {name}?");
 	let main_level = reading(&format!("the main-level {name}"), &format!("global {name}"));
@@ -631,9 +631,9 @@ pub(super) fn ask_local_or_global(
 }
 
 /// `global n=0` where main assigns n: the fix that makes every `n = …` change main's n; none without such an assignment
-fn global_at_main(meaning: &str, name: &str, main_assignment: Option<&Node>) -> Option<crate::fixits::Fix> {
-	let (line, column) = main_assignment.and_then(crate::diagnostic::position)?;
-	Some(crate::fixits::fix(meaning, format!("{name} ="), format!("global {name} =")).at(line, column))
+fn global_at_main(meaning: &str, name: &str, main_assignment: Option<&Node>) -> Option<crate::errors::fixits::Fix> {
+	let (line, column) = main_assignment.and_then(crate::errors::diagnostic::position)?;
+	Some(crate::errors::fixits::fix(meaning, format!("{name} ="), format!("global {name} =")).at(line, column))
 }
 
 /// `let n = …`, `var n = …`, `const n = …` in `body`: n is explicitly the function's own

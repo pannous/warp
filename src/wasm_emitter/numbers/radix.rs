@@ -95,7 +95,7 @@ pub(in crate::wasm_emitter) fn computed_type(target: &Node) -> Option<Node> {
 	let name = target.name();
 	named_radix(&name)?;
 	if name.to_lowercase() == BINARY_ALIAS {
-		crate::diagnostic::note_alias(BINARY_ALIAS, BINARY.word);
+		crate::errors::diagnostic::note_alias(BINARY_ALIAS, BINARY.word);
 	}
 	Some(Node::Symbol("int".into()))
 }

@@ -16,7 +16,7 @@ fn a_parallel_map_gives_the_results_in_order() {
 #[test]
 fn a_parallel_map_runs_its_items_at_once() {
 	is!(
-		"slow(x) := { sleep(500); x }; started = clock(); ys = @parallel [1,2,3].map(slow); clock() - started < 1200",
+		"slow(x) := { sleep(500ms); x }; started = clock(); ys = @parallel [1,2,3].map(slow); clock() - started < 1200",
 		true
 	);
 }
@@ -57,7 +57,7 @@ fn go_for_runs_its_iterations_in_parallel() {
 
 #[test]
 fn a_parallel_loop_updating_a_copy_warns() {
-	use warp::diagnostic::{with_warning_mode, WarningMode};
+	use warp::errors::diagnostic::{with_warning_mode, WarningMode};
 	with_warning_mode(WarningMode::Error, || {
 		crate::common::fails_with("t = 0; go for x in [1,2] { t += x }; t", "shared t")
 	});
@@ -80,7 +80,7 @@ fn a_parallel_all_call_runs_its_items_at_once() {
 /// `@parallel` on a form it can't split into tasks says so instead of running it sequentially without a word
 #[test]
 fn a_parallel_form_that_runs_sequentially_warns() {
-	use warp::diagnostic::{with_warning_mode, WarningMode};
+	use warp::errors::diagnostic::{with_warning_mode, WarningMode};
 	with_warning_mode(WarningMode::Error, || {
 		crate::common::fails_with("square(x) := x * x; xs = [1, 2, 3]; @parallel square xs", "@parallel")
 	});

@@ -21,10 +21,10 @@
 use super::listeners;
 use super::nodes::call;
 use crate::declarations::word;
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::event_signals::{event_name, function_with_globals, main_level_variables};
 use crate::extensions::numbers::Number;
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::node::{parens, symbol, Bracket, Node};
 use crate::operators::Op;
 use crate::words::{AT_WORD, FROM_WORD, ON_WORD, SEND_WORD};
 use warp_runtime::host_words::{CLOCK_WEEKDAYS, LISTEN_CLOCK, LISTEN_EVERY, LISTEN_FRAME};
@@ -169,7 +169,7 @@ fn lower_timers(program: Node) -> Node {
 			let handler = format!("{}{watches}", crate::host::FILE_HANDLER_PREFIX);
 			lowered.push(function_with_globals(&handler, false, &[body], &main_variables));
 			let start = [symbol(crate::host::SIGNAL_WATCH), Node::int(watches as i64), path];
-			lowered.push(Node::List(start.to_vec(), Bracket::Round, Separator::None));
+			lowered.push(parens(start.to_vec()));
 			watches += 1;
 			continue;
 		}

@@ -127,12 +127,12 @@ pub fn get_signatures_from_headers(library: &str) -> &'static HashMap<String, Ff
 }
 
 /// The error of a call nothing resolves at `call`; a word of a standard module offers to add its `use` line
-pub fn undefined_function_diagnostic(call: &crate::node::Node, name: &str) -> crate::diagnostic::Diagnostic {
-	let diagnostic = crate::diagnostic::Diagnostic::at(call, undefined_function_message(name));
+pub fn undefined_function_diagnostic(call: &crate::node::Node, name: &str) -> crate::errors::diagnostic::Diagnostic {
+	let diagnostic = crate::errors::diagnostic::Diagnostic::at(call, undefined_function_message(name));
 	match crate::modules::std_module_defining(name)
 		.filter(|module| crate::modules::module_file_shadowing(module).is_none())
 	{
-		Some(module) => diagnostic.offering(crate::fixits::added_first_line(
+		Some(module) => diagnostic.offering(crate::errors::fixits::added_first_line(
 			format!("{name} from the standard module {module}"),
 			format!("use {module}"),
 		)),

@@ -5,7 +5,7 @@
 # Methods with common names (len, new) stay pub when a test mentions the word: not exhaustive, no false positives
 # except in-file #[cfg(test)] modules, which clippy --all-targets then reports
 import re, subprocess
-outside_files = subprocess.run(["git","ls-files","tests","crates","web","build.rs","src/main.rs","src/page_main.rs"],capture_output=True,text=True).stdout.split()
+outside_files = subprocess.run(["git","ls-files","tests","crates","web","build.rs","src/main.rs","src/cli","src/page_main.rs"],capture_output=True,text=True).stdout.split()
 outside = set()
 for f in outside_files:
     if f.endswith((".rs",".js",".html",".ts")):
@@ -13,7 +13,7 @@ for f in outside_files:
         except Exception: pass
 public_fn = re.compile(r"^(\s*)pub ((?:const |unsafe |async )*fn ([a-z_][a-z_0-9]*))", re.M)
 for f in subprocess.run(["git","ls-files","src"],capture_output=True,text=True).stdout.split():
-    if not f.endswith(".rs") or f in ("src/main.rs","src/page_main.rs"): continue
+    if not f.endswith(".rs") or f in ("src/main.rs","src/page_main.rs") or f.startswith("src/cli/"): continue
     text = open(f).read()
     changed = public_fn.sub(lambda m: m.group(0) if m.group(3) in outside else f"{m.group(1)}pub(crate) {m.group(2)}", text)
     changed = re.sub(r"^(\s*)pub use ", r"\1pub(crate) use ", changed, flags=re.M)

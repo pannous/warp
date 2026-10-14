@@ -6,13 +6,13 @@ use crate::is;
 #[test]
 #[cfg(feature = "native")]
 fn a_block_run_in_a_loop_with_changing_numbers_compiles_once() {
-	let before = warp::pipeline::compiled_blocks();
+	let before = warp::compiler::run_time_blocks::compiled_blocks();
 	is!(
 		"xs = [data a*2 + f, data 0]; s = 0; a = 0; f = 0.5; for i in 1..20 { a = i; f = f + 1; s += xs#1! }; s",
 		579.5
 	);
 	assert_eq!(
-		warp::pipeline::compiled_blocks() - before,
+		warp::compiler::run_time_blocks::compiled_blocks() - before,
 		1,
 		"the block compiled once for 19 runs"
 	);

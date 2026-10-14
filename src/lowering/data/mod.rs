@@ -11,3 +11,4 @@ pub mod printable;
 pub mod reflection;
 pub mod stored_values;
 pub mod versions;
+pub mod word_help;

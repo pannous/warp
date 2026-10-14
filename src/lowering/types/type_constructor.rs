@@ -4,8 +4,8 @@
 
 use super::nodes::{children_rewritten, key};
 use crate::analyzer::{call_name, collect_all_types, list_element_type, literal_misfit, misfit_item, not_whole_note};
-use crate::diagnostic::Diagnostic;
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::errors::diagnostic::Diagnostic;
+use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::{TypeDef, TypeRegistry};
 
@@ -106,7 +106,7 @@ impl Classes<'_> {
 	/// The instance passed through its class's constructor without parameters, when the class has one
 	fn constructed(&self, class: &str, instance: Node) -> Node {
 		match self.constructor(class, 0) {
-			Some(constructor) => Node::List(vec![constructor, instance], Bracket::Round, Separator::None),
+			Some(constructor) => parens(vec![constructor, instance]),
 			None => instance,
 		}
 	}

@@ -289,19 +289,11 @@ pub(crate) fn collect_outer_assigned_names(node: &Node, names: &mut HashSet<Stri
 	if function_definition(node).is_some() {
 		return;
 	}
-	match node.drop_meta() {
-		Node::Key(target, Op::Assign | Op::Define, value) => {
-			if let Node::Symbol(name) = target.drop_meta() {
-				names.insert(name.clone());
-			}
-			collect_outer_assigned_names(value, names);
-		}
-		Node::Key(left, _, right) => {
-			collect_outer_assigned_names(left, names);
-			collect_outer_assigned_names(right, names);
-		}
-		Node::List(items, _, _) => items.iter().for_each(|item| collect_outer_assigned_names(item, names)),
-		_ => {}
+	if let Node::Key(target, Op::Assign | Op::Define, _) = node.drop_meta() {
+		names.extend(target.symbol_name().map(String::from));
+	}
+	for part in node.drop_meta().parts() {
+		collect_outer_assigned_names(part, names);
 	}
 }
 

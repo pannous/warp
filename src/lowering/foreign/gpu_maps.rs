@@ -198,11 +198,7 @@ fn composed(first: &Node, then: &Node) -> Option<Node> {
 	if name != then_name && crate::warp_parser::mentions(then_body, name) {
 		return None;
 	}
-	let grouped = Node::List(
-		vec![body.as_ref().clone()],
-		crate::node::Bracket::Round,
-		crate::node::Separator::None,
-	);
+	let grouped = crate::node::parens(vec![body.as_ref().clone()]);
 	let body = crate::library_words::substitute(then_body.as_ref().clone(), then_name, &grouped);
 	Some(Node::Key(parameter.clone(), Op::Arrow, Box::new(body)))
 }
@@ -410,7 +406,7 @@ fn writes(node: &Node, name: &str) -> bool {
 /// strict)
 pub fn warn_unapplied(node: Node) -> Node {
 	if let Some(both) = both_gpu_and_cpu(&node) {
-		return crate::diagnostic::Diagnostic::at(
+		return crate::errors::diagnostic::Diagnostic::at(
 			&both,
 			"@gpu and @cpu on the same map: keep one (@cpu: exact, on the CPU; @gpu: f32, on the GPU)",
 		)
@@ -418,7 +414,7 @@ pub fn warn_unapplied(node: Node) -> Node {
 	}
 	let mut warnings = vec![];
 	collect_unapplied(&node, &mut warnings);
-	match crate::diagnostic::report(&warnings) {
+	match crate::errors::diagnostic::report(&warnings) {
 		Ok(()) => node,
 		Err(error) => error,
 	}
@@ -437,9 +433,10 @@ fn both_gpu_and_cpu(node: &Node) -> Option<Node> {
 	}
 }
 
-fn collect_unapplied(node: &Node, warnings: &mut Vec<crate::diagnostic::Diagnostic>) {
+fn collect_unapplied(node: &Node, warnings: &mut Vec<crate::errors::diagnostic::Diagnostic>) {
 	let warn = |warnings: &mut Vec<_>, reason: String| {
-		warnings.push(crate::diagnostic::Diagnostic::at(node, format!("{reason}, so this runs on the CPU")).weak())
+		warnings
+			.push(crate::errors::diagnostic::Diagnostic::at(node, format!("{reason}, so this runs on the CPU")).weak())
 	};
 	match node.drop_meta() {
 		Node::Key(target, Op::Assign, value)

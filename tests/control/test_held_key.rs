@@ -33,9 +33,9 @@ fn held_key_compares_with_the_key_words() {
 		lowered.contains(r#""ArrowLeft""#) && lowered.contains(r#""Escape""#),
 		"{lowered}"
 	);
-	warp::diagnostic::take_warnings();
+	warp::errors::diagnostic::take_warnings();
 	warp::wasm_emitter::eval("held_key == LEFTT");
-	let warned = warp::diagnostic::take_warnings()
+	let warned = warp::errors::diagnostic::take_warnings()
 		.into_iter()
 		.filter(|warning| warning.message.contains("LEFTT names nothing"))
 		.count();

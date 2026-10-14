@@ -119,7 +119,7 @@ pub(super) fn infer_function_return_kind(
 			Node::List(items, _, _) if items.len() == 2 && items[0].is_symbol("return") => &items[1],
 			other => other,
 		};
-		crate::pipeline::returned_error_message(value).is_some() // `error("…")` or `raise …`
+		crate::errors::run_time::returned_error_message(value).is_some() // `error("…")` or `raise …`
 	};
 	// `if c { return "text" }; …`: a returned Node makes the function return Nodes
 	// (`return [dist, prev]`: a List when every returned Node is one)
@@ -566,10 +566,12 @@ pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &Hash
 		// int parameter refused at run time ("not an int"), so it takes the Node
 		let unknown = matches!(param.used_as, None | Some(Kind::List | Kind::Int));
 		let only_nodes_and_ints = kinds.iter().all(|kind| matches!(kind, Kind::Empty | Kind::Int));
-		// passed only keys (a pair, quoted code `data (n * 1)`) where indexing guessed a list: a Node, which `c#1`
-		// indexes as it is; a list parameter would wrap the key into a list of one (card alias-indexed-param)
-		let only_keys = kinds.iter().all(|kind| *kind == Kind::Key);
-		let keys_for_a_guessed_list = only_keys && param.used_as == Some(Kind::List);
+		// passed keys (a pair, quoted code `data (n * 1)`), maybe beside lists (`data (g(y, z))`), where indexing guessed
+		// a list: a Node, which `c#1` indexes as it is; a list parameter would wrap the key into a list of one (card
+		// alias-indexed-param) and fold its key tests to false (card code-hole-arm-state)
+		let keys_and_lists =
+			kinds.contains(&Kind::Key) && kinds.iter().all(|kind| matches!(kind, Kind::Key | Kind::List));
+		let keys_for_a_guessed_list = keys_and_lists && param.used_as == Some(Kind::List);
 		if (kinds.contains(&Kind::Empty) && only_nodes_and_ints && unknown || keys_for_a_guessed_list)
 			&& takes_passed_kind(param)
 		{
@@ -887,30 +889,41 @@ pub(super) fn variable_kinds(program: &Node, ctx: &Context, unknown_keeps_kind: 
 		kinds.insert(param.name.clone(), None);
 	}
 	let mut literal: HashSet<String> = HashSet::new();
-	program.visit(&mut |node| {
-		let Node::Key(target, Op::Assign | Op::Define, value) = node else {
-			return;
-		};
-		let Node::Symbol(name) = target.drop_meta() else { return };
+	let kinds = agreeing_kinds(program, kinds, |name, value| {
 		let kind = argument_literal_kind(value);
 		if kind.is_none() && unknown_keeps_kind {
-			return;
+			return None;
 		}
-		literal.insert(name.clone());
-		kinds
-			.entry(name.clone())
-			.and_modify(|known| {
-				if *known != kind {
-					*known = None
-				}
-			})
-			.or_insert(kind);
+		literal.insert(name.to_string());
+		Some(kind)
 	});
 	kinds
 		.into_iter()
 		.filter(|(name, _)| !unknown_keeps_kind || literal.contains(name))
 		.filter_map(|(name, kind)| Some((name, kind?)))
 		.collect()
+}
+
+/// The kind all assignments of each variable agree on, None where two disagree; `kind_of` an assignment's value, None
+/// to skip it
+pub(crate) fn agreeing_kinds(
+	program: &Node,
+	mut kinds: HashMap<String, Option<Kind>>,
+	mut kind_of: impl FnMut(&str, &Node) -> Option<Option<Kind>>,
+) -> HashMap<String, Option<Kind>> {
+	program.visit(&mut |node| {
+		if let Node::Key(target, Op::Assign | Op::Define, value) = node {
+			if let Node::Symbol(name) = target.drop_meta() {
+				if let Some(kind) = kind_of(name, value) {
+					kinds
+						.entry(name.clone())
+						.and_modify(|known| *known = known.filter(|known| Some(*known) == kind))
+						.or_insert(kind);
+				}
+			}
+		}
+	});
+	kinds
 }
 
 /// Variables assigned a decimal literal (`y = 2.5`, `y = 3.0`)

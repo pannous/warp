@@ -155,6 +155,6 @@ while time < seconds {
 	bass = (levels#1 + levels#2 + levels#3 + levels#4) / 4
 	treble = (levels#11 + levels#12 + levels#13 + levels#14) / 4
 	paint(tunnel, width, height)
-	sleep(max(0, frame_milliseconds - (clock() - frame_started)))
+	sleep(max(0, frame_milliseconds - (clock() - frame_started)) / 1000)
 	time = (clock() - started) / 1000.0
 }

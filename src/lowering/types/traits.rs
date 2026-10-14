@@ -8,8 +8,8 @@
 
 use super::nodes::{call, called_name, children_rewritten, if_then, if_then_else, key};
 use crate::analyzer::{call_name, collect_all_types};
-use crate::diagnostic::Diagnostic;
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::errors::diagnostic::Diagnostic;
+use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_constructor::{instance_parts, Instance};
 use crate::type_kinds::TypeRegistry;
@@ -365,12 +365,10 @@ fn with_default_methods(node: Node, traits: &[Trait]) -> Node {
 						),
 						_ => Node::Symbol(parameter.clone()),
 					});
-				let head = Node::List(
+				let head = parens(
 					std::iter::once(Node::Symbol(operation.name.clone()))
 						.chain(parameters)
 						.collect(),
-					Bracket::Round,
-					Separator::None,
 				);
 				definitions.push(key(head, Op::Define, body.clone()));
 			}
@@ -637,7 +635,7 @@ pub fn lower_conformances(node: Node) -> Node {
 		return node;
 	}
 	let traits = Traits::of(&node);
-	if let Err(error) = crate::diagnostic::report(&field_method_warnings(&node, &registry)) {
+	if let Err(error) = crate::errors::diagnostic::report(&field_method_warnings(&node, &registry)) {
 		return error;
 	}
 	let generics = generic_functions(&node, &registry, &traits);
@@ -684,11 +682,7 @@ fn operation_calls(node: Node, registry: &TypeRegistry, traits: &Traits, generic
 			let arguments = std::iter::once(*receiver)
 				.chain(arguments)
 				.map(|argument| operation_calls(argument, registry, traits, generics));
-			Node::List(
-				std::iter::once(name).chain(arguments).collect(),
-				Bracket::Round,
-				Separator::None,
-			)
+			parens(std::iter::once(name).chain(arguments).collect())
 		}
 		other => other.map_children(|child| operation_calls(child, registry, traits, generics)),
 	}

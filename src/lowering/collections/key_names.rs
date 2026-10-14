@@ -5,7 +5,7 @@
 //! The key words compare with `held_key` anywhere too (card held-key): `held_key == LEFT` is `held_key == "ArrowLeft"`.
 
 use super::nodes::key;
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::event_signals::{main_level_variables, EVENT_WORD};
 use crate::node::{symbol, Node};
 use crate::operators::Op;
@@ -45,7 +45,7 @@ pub fn lower(program: Node) -> Node {
 	let (statements, _, _) = crate::variable_signals::main_statements(&program);
 	let mut warnings = vec![];
 	let named = with_key_names(program, &main_level_variables(&statements), &mut warnings);
-	match crate::diagnostic::report(&warnings) {
+	match crate::errors::diagnostic::report(&warnings) {
 		Ok(()) => named,
 		Err(error) => error,
 	}
@@ -56,7 +56,7 @@ pub fn lower_held_comparisons(program: Node) -> Node {
 	let (statements, _, _) = crate::variable_signals::main_statements(&program);
 	let mut warnings = vec![];
 	let named = held_comparisons(program, &main_level_variables(&statements), &mut warnings);
-	match crate::diagnostic::report(&warnings) {
+	match crate::errors::diagnostic::report(&warnings) {
 		Ok(()) => named,
 		Err(error) => error,
 	}

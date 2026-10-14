@@ -1,6 +1,6 @@
 use crate::compiler::context::{Context, Param, UserFunctionDef};
 use crate::compiler::local::Local;
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};

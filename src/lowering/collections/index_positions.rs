@@ -10,10 +10,10 @@
 
 use super::memoization::definition_parts;
 use super::nodes::{children_rewritten, for_in_variable, key, parameter_name};
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::library_words::COLLECTION_POSITION;
 use crate::list_mutations::{insert_position, INSERT_METHOD};
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::SubscriptOffset;
 use crate::words::AT_WORD;
@@ -108,7 +108,7 @@ fn converted(node: Node, counted: &HashMap<String, Count>) -> Node {
 		}
 		Node::List(items, Bracket::Round, Separator::None) if is_call(&items, INSERT_METHOD) => {
 			let items = items.into_iter().map(|item| at_index(item, counted)).collect();
-			Node::List(items, Bracket::Round, Separator::None)
+			parens(items)
 		}
 		other => other,
 	}

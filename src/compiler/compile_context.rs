@@ -3,7 +3,8 @@
 //! (the emitter, the runner) read is written with `change`. Closures given to `read` and `change` only touch fields:
 //! nothing in them compiles, or the context would be borrowed twice.
 use crate::analyzer::effects::Capability;
-use crate::diagnostic::WarningMode;
+use crate::errors::diagnostic::WarningMode;
+use crate::gpu_maps::ProgramFunction;
 use crate::lowering::component_worlds::WorldFunctions;
 use crate::node::Node;
 use crate::normalize::{HintMode, HintPosition, Style};
@@ -58,6 +59,12 @@ pub struct CompileContext {
 	pub float_kernels: HashMap<String, (String, Node)>,
 	/// the problems of the markup as written: the markup a run hands back does not repeat them
 	pub written_problems: HashSet<String>,
+	/// the functions of the program being lowered, by name: a GPU kernel may call them (card gpu-functions)
+	pub(crate) program_functions: HashMap<String, ProgramFunction>,
+	/// the number of the next temporary the compile invents across passes (`race·0`, `item·0`)
+	pub fresh_number: usize,
+	/// how deep in compiles we are: only the outermost one starts its fresh numbers from 0
+	pub compile_depth: usize,
 }
 
 impl Default for CompileContext {
@@ -87,6 +94,9 @@ impl Default for CompileContext {
 			bool_functions: HashSet::new(),
 			float_kernels: HashMap::new(),
 			written_problems: HashSet::new(),
+			program_functions: HashMap::new(),
+			fresh_number: 0,
+			compile_depth: 0,
 		}
 	}
 }

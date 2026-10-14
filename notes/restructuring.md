@@ -124,6 +124,30 @@ A module whose path many files use (and open branches keep adding uses of) moves
 Applied: diagnostics/ (diagnostic 173 using files, normalize 115, fixits 12, crash_card 2) on branch
 layout-diagnostics; step 2 is pending. time.rs → time/mod.rs needed no path changes (branch layout-time).
 
+### Per-function pass over the root files (card layout-root)
+
+One chain of branches, all pure moves: layout-main → layout-pipeline → layout-modules (5e83c8849) → layout-root-6 →
+layout-root-7, and layout-root-8 on main (sent 2026-10-14). Each root file or mod.rs re-exports its new children, so `crate::…` paths stay.
+Users were updated only where few files use them (run_time_blocks, errors/run_time).
+
+The rule (user 2026-10-14): split a file by concept, never for its length; ~500 lines is fine. type_kinds.rs was split
+and then reverted (5e83c8849): its entries are related enough for one file.
+
+| from | to |
+|---|---|
+| main.rs (1291 → 463) | src/cli/: flags, outputs, executables, display, serve, console |
+| pipeline.rs (1042 → 623) | compiler/compile_mode.rs (CompileMode, `for_*`; pipeline re-exports), compiler/run_time_blocks.rs, errors/run_time.rs |
+| modules.rs (1214 → 180) | modules/: use_statements, implicit_modules, needed_definitions, declarations, program_file; std/package/loader items to their files |
+| normalize.rs | normalize/: positions, style, hints, check_style, mod.rs (core hint functions) |
+| operators.rs | operators/: spellings, binding_power, codes, mod.rs (Op and its kinds) |
+| law.rs (504 → 383) | law/asserted.rs, law/property_tests.rs |
+| host.rs (365 → 281) | host/fetch.rs, host/aliases.rs; host.rs keeps the host word registry |
+| modules/wasm_modules.rs | wasm_modules/: exports, c_calls, program_uses, linking (native) |
+| analyzer/effects.rs | effects/: termination (Div), constraints, events, queries, resolver; mod.rs keeps the effect sets and the report |
+| errors/diagnostic.rs | diagnostic/: positions (where, excerpts), asks (ambiguities, got it); mod.rs keeps reporting and pragmas |
+| host/tasks.rs | tasks/: values, channels, pool; mod.rs keeps the task table |
+| modules/cargo_crates.rs | cargo_crates/: rustdoc (reading the API), wrapper (WIT and Rust generation), compile (cargo build); mod.rs keeps download and cache (layout-root-8, on main after cleanup-roots) |
+
 ## Lowering (`src/lowering/`, 112 files): proposed folders
 
 File-level first (pure `git mv` + mod paths), then per function inside each folder when the area starts (its table is
@@ -152,8 +176,9 @@ Owned by open branches (warp-operator-shall: the big lowering files; warp-cleanu
 with the owner before each folder move.
 
 Status (branches layout-lowering-signals … -control, 2026-10-14): all folders exist. Each folder mod.rs does
-`use super::*`, so moved files kept every `super::x` path unchanged. Only welcome_forms is still flat, until
-foreign-spellings lands (park-phrases deleted phrase_calls, list_phrases and word_slices).
+`use super::*`, so moved files kept every `super::x` path unchanged. welcome_forms joined welcoming/ last (branch
+layout-welcoming, after rs-private); park-phrases deleted phrase_calls, list_phrases and word_slices. Only folding,
+nodes and pipes stay flat in src/lowering: they serve every folder.
 
 ### Lowering per function (branch layout-lowering-functions)
 

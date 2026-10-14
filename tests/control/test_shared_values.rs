@@ -14,7 +14,7 @@ fn a_shared_value_reads_writes_and_adds() {
 #[test]
 fn a_go_block_writes_a_shared_value() {
 	is!(
-		"shared done = false; go { sleep(50); done = true }; sleep(500); done",
+		"shared done = false; go { sleep(50ms); done = true }; sleep(500ms); done",
 		true
 	);
 	is!("shared hits = 0; jobs = []; for i in 1..5 { jobs.add(go { for j in 1 to 100 { hits += 1 }; 0 }) }; await all jobs; hits", 400);

@@ -84,6 +84,9 @@ const TEXT_HOLE: &str = "text";
 /// The events the system raises: the runtime calls their handlers (notes/system_signals.md)
 pub const SYSTEM_EVENTS: [&str; 2] = ["interrupt", "exit"];
 
+/// A handler: the index of its statement, its event and its body
+type Handler = (usize, String, Node);
+
 pub fn lower(program: Node) -> Node {
 	let Node::List(statements, bracket, separator) = program.drop_meta().clone() else {
 		return program;
@@ -93,90 +96,24 @@ pub fn lower(program: Node) -> Node {
 		Ok(None) => (statements, program),
 		Err(error) => return error,
 	};
-	// an event whose listeners are named is handled even when nothing raises it yet (`count listeners of tick`), and
-	// every handler of it gets a flag as a named one has, so any of them can be listed and removed (card event-handlers)
 	let variables = main_level_variables(&statements);
-	let listed: HashSet<String> = listed_events(&program)
-		.into_iter()
-		.filter(|event| !variables.contains(event))
-		.collect();
 	let verbs = emit_verbs(&program);
 	let shows_page = statements.iter().any(crate::web::markup::is_markup);
-	let raised: HashSet<String> = emitted_names(&program, &verbs)
-		.into_iter()
-		.chain(listed.iter().cloned())
-		.collect();
-	// so does an event with a named handler: the name is the handler's place among all of the event's handlers
-	let with_names = statements
-		.iter()
-		.filter_map(named_handler)
-		.filter(|(listener, _)| listener.is_some())
-		.map(|(_, (event, _, _))| event);
-	let flagged: HashSet<String> = listed.into_iter().chain(with_names).collect();
+	let (raised, flagged) = raised_and_flagged(&statements, &program, &verbs, &variables);
 	let statements = subscribed_in_blocks(statements, &raised);
-	let kept = match without_unraised(
-		&statements,
-		&raised,
-		&variables,
-		&emitted_names(&program, &crate::pipeline::RAISE_WORDS.map(String::from)),
-	) {
+	let raises = emitted_names(&program, &crate::errors::run_time::RAISE_WORDS.map(String::from));
+	let statements = match without_unraised(&statements, &raised, &variables, &raises) {
 		Ok(kept) => kept,
 		Err(error) => return error,
 	};
-	let statements = kept;
 	let mut flags: Vec<(String, Node)> = vec![];
 	let mut named: Vec<(String, String)> = vec![];
 	let mut user_named: Vec<(String, String)> = vec![];
-	let handlers: Vec<(usize, String, Node)> = statements
-		.iter()
-		.enumerate()
-		.filter_map(|(index, statement)| {
-			named_handler(statement).map(|(listener, (name, body, once))| (index, listener, name, body, once))
-		})
-		.filter(|(_, _, name, _, _)| {
-			raised.contains(name) || is_page_event(name) || SYSTEM_EVENTS.contains(&name.as_str())
-		})
-		.map(|(index, listener, name, body, once)| {
-			let body = if once { run_once(body, &mut flags) } else { body };
-			user_named.extend(listener.iter().map(|listener| (listener.clone(), name.clone())));
-			let listener = listener.or_else(|| {
-				flagged
-					.contains(&name)
-					.then(|| format!("{}{HANDLER_SUFFIX}{index}", name.replace(' ', "_")))
-			});
-			let body = match listener {
-				Some(listener) => listening(body, &listener, &name, &mut flags, &mut named),
-				None => body,
-			};
-			(index, name, body)
-		})
-		.collect();
+	let handlers = collected_handlers(&statements, &raised, &flagged, &mut flags, &mut named, &mut user_named);
 	if handlers.is_empty() {
-		// a program with timers stays like one with page events (system_signals.rs, before this pass made them)
-		// an emit nobody listens to does nothing
-		let statements: Vec<Node> = statements
-			.into_iter()
-			.map(|statement| emits_as_calls(statement, &HashMap::new(), &verbs, shows_page))
-			.collect();
-		if !statements.iter().any(defines_timer) {
-			return Node::List(statements, bracket, separator);
-		}
-		let main_variables = main_level_variables(&statements);
-		return Node::List(with_output_binding(statements, &main_variables), bracket, separator);
+		return without_handlers(statements, &verbs, shows_page, bracket, separator);
 	}
-	let unnamed = |event: &str| {
-		handlers.iter().filter(|(_, name, _)| name == event).count()
-			- named.iter().filter(|(_, other)| other == event).count()
-	};
-	let listeners = Listeners {
-		counts: handlers
-			.iter()
-			.map(|(_, name, _)| (name.clone(), unnamed(name)))
-			.collect(),
-		// a handler nothing emits is gone: its name binds nothing
-		bound: statements.iter().flat_map(assigned_and_loop_names).collect(),
-		named,
-	};
+	let listeners = Listeners::of(&statements, &handlers, named);
 	// `h = on alarm {…}`: h is its place among alarm's handlers, an entry of `listeners of alarm`
 	flags.extend(user_named.iter().filter_map(|(listener, event)| {
 		listeners
@@ -188,7 +125,7 @@ pub fn lower(program: Node) -> Node {
 		.map(|statement| reflected(statement, &listeners))
 		.collect();
 	// a handler may remove itself (`if taken == 2 {remove h from listeners of tick}`)
-	let handlers: Vec<(usize, String, Node)> = handlers
+	let handlers: Vec<Handler> = handlers
 		.into_iter()
 		.map(|(index, name, body)| (index, name, reflected(body, &listeners)))
 		.collect();
@@ -204,54 +141,145 @@ pub fn lower(program: Node) -> Node {
 		.map(|(flag, initial)| assign(flag, initial.clone()))
 		.chain(statements)
 		.collect();
-	let handlers: Vec<(usize, String, Node)> = handlers
+	let handlers: Vec<Handler> = handlers
 		.into_iter()
 		.map(|(index, name, body)| (index + flags.len(), name, body))
 		.collect();
-	// an element's handler (`input·1`, written or made by `bind:`) goes with the markup it shows: only the program's own
-	// `on submit {…}` waits in vain
 	#[cfg(feature = "native")]
-	if let Some((index, name, _)) = handlers.iter().find(|(_, name, _)| {
+	if let Err(error) = warn_unraised_page_event(&statements, &handlers, &raised) {
+		return error;
+	}
+	handlers_as_functions(statements, &handlers, &verbs, shows_page, bracket, separator)
+}
+
+/// The events raised: emitted, or with listed listeners. An event whose listeners are listed is handled even when
+/// nothing raises it yet (`count listeners of tick`), and every handler of it gets a flag as a named one has, so any
+/// of them can be listed and removed (card event-handlers); so does an event with a named handler: the name is the
+/// handler's place among all of the event's handlers
+fn raised_and_flagged(
+	statements: &[Node],
+	program: &Node,
+	verbs: &[String],
+	variables: &HashSet<String>,
+) -> (HashSet<String>, HashSet<String>) {
+	let listed: HashSet<String> = listed_events(program)
+		.into_iter()
+		.filter(|event| !variables.contains(event))
+		.collect();
+	let raised = emitted_names(program, verbs)
+		.into_iter()
+		.chain(listed.iter().cloned())
+		.collect();
+	let with_names = statements
+		.iter()
+		.filter_map(named_handler)
+		.filter(|(listener, _)| listener.is_some())
+		.map(|(_, (event, _, _))| event);
+	(raised, listed.into_iter().chain(with_names).collect())
+}
+
+/// The handlers of raised, page and system events: a `once` one runs at its first raise only, a named or flagged one
+/// gets its listening flag. Collects the flags with their initial values, the flagged handlers by name and event and
+/// the user's names of handlers (`h = on alarm {…}`) by event
+fn collected_handlers(
+	statements: &[Node],
+	raised: &HashSet<String>,
+	flagged: &HashSet<String>,
+	flags: &mut Vec<(String, Node)>,
+	named: &mut Vec<(String, String)>,
+	user_named: &mut Vec<(String, String)>,
+) -> Vec<Handler> {
+	statements
+		.iter()
+		.enumerate()
+		.filter_map(|(index, statement)| {
+			named_handler(statement).map(|(listener, (name, body, once))| (index, listener, name, body, once))
+		})
+		.filter(|(_, _, name, _, _)| {
+			raised.contains(name) || is_page_event(name) || SYSTEM_EVENTS.contains(&name.as_str())
+		})
+		.map(|(index, listener, name, body, once)| {
+			let body = if once { run_once(body, flags) } else { body };
+			user_named.extend(listener.iter().map(|listener| (listener.clone(), name.clone())));
+			let listener = listener.or_else(|| {
+				flagged
+					.contains(&name)
+					.then(|| format!("{}{HANDLER_SUFFIX}{index}", name.replace(' ', "_")))
+			});
+			let body = match listener {
+				Some(listener) => listening(body, &listener, &name, flags, named),
+				None => body,
+			};
+			(index, name, body)
+		})
+		.collect()
+}
+
+/// A program without handlers: an emit nobody listens to does nothing; a program with timers stays like one with page
+/// events (system_signals.rs, before this pass made them)
+fn without_handlers(
+	statements: Vec<Node>,
+	verbs: &[String],
+	shows_page: bool,
+	bracket: Bracket,
+	separator: Separator,
+) -> Node {
+	let statements: Vec<Node> = statements
+		.into_iter()
+		.map(|statement| emits_as_calls(statement, &HashMap::new(), verbs, shows_page))
+		.collect();
+	if !statements.iter().any(defines_timer) {
+		return Node::List(statements, bracket, separator);
+	}
+	let main_variables = main_level_variables(&statements);
+	Node::List(with_output_binding(statements, &main_variables), bracket, separator)
+}
+
+/// An element's handler (`input·1`, written or made by `bind:`) goes with the markup it shows: only the program's own
+/// `on submit {…}` waits in vain, which a warning says
+#[cfg(feature = "native")]
+fn warn_unraised_page_event(statements: &[Node], handlers: &[Handler], raised: &HashSet<String>) -> Result<(), Node> {
+	let Some((index, name, _)) = handlers.iter().find(|(_, name, _)| {
 		is_page_event(name)
 			&& !name.contains(ELEMENT_EVENT_JOINER)
 			&& !raised.contains(name)
 			&& !crate::pipeline::compile_mode().for_a_page
-			&& !serves_its_page(&statements)
-	}) {
-		let warning = format!("on {name}: {name} comes from the playground page; a native run never raises it");
-		if let Err(error) =
-			crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(&statements[*index], warning).weak()])
-		{
-			return error;
-		}
-	}
+			&& !serves_its_page(statements)
+	}) else {
+		return Ok(());
+	};
+	let warning = format!("on {name}: {name} comes from the playground page; a native run never raises it");
+	crate::errors::diagnostic::report(&[crate::errors::diagnostic::Diagnostic::at(&statements[*index], warning).weak()])
+}
+
+/// The handlers of each event as one function `on·alarm(event)` where the first of them was written, each emit its
+/// call; an endless emit loop between handlers is an error
+fn handlers_as_functions(
+	statements: Vec<Node>,
+	handlers: &[Handler],
+	verbs: &[String],
+	shows_page: bool,
+	bracket: Bracket,
+	separator: Separator,
+) -> Node {
 	let main_variables = main_level_variables(&statements);
 	let mut bodies: HashMap<String, Vec<Node>> = HashMap::new();
 	let mut first_handler: HashMap<usize, String> = HashMap::new();
-	for (index, name, body) in &handlers {
+	for (index, name, body) in handlers {
 		if !bodies.contains_key(name) {
 			first_handler.insert(*index, name.clone());
 		}
 		bodies.entry(name.clone()).or_default().push(body.clone());
 	}
-	if let Some(cycle) = emit_cycle(&bodies, &verbs) {
+	if let Some(cycle) = emit_cycle(&bodies, verbs) {
 		let (index, _) = first_handler
 			.iter()
 			.find(|(_, name)| **name == cycle[0])
 			.expect("a cycle runs through handlers");
-		let steps: Vec<String> = cycle
-			.iter()
-			.zip(cycle.iter().cycle().skip(1))
-			.map(|(from, to)| format!("on {from} emits {to}"))
-			.collect();
-		let message = format!(
-			"endless emit loop: {}; emit one of them under a condition",
-			steps.join(", ")
-		);
-		return crate::diagnostic::Diagnostic::at(&statements[*index], message).into_error();
+		return endless_emit_loop(&statements[*index], &cycle);
 	}
 	let handler_lines: HashSet<usize> = handlers.iter().map(|(index, _, _)| *index).collect();
-	let lowered = statements
+	let lowered: Vec<Node> = statements
 		.into_iter()
 		.enumerate()
 		.filter_map(|(index, statement)| match first_handler.get(&index) {
@@ -266,9 +294,8 @@ pub fn lower(program: Node) -> Node {
 			)),
 			None if handler_lines.contains(&index) => None,
 			None => Some(statement),
-		});
-	let lowered: Vec<Node> = lowered
-		.map(|statement| emits_as_calls(statement, &bodies, &verbs, shows_page))
+		})
+		.map(|statement| emits_as_calls(statement, &bodies, verbs, shows_page))
 		.collect();
 	let page_handlers: std::collections::BTreeMap<String, usize> = bodies
 		.iter()
@@ -282,6 +309,20 @@ pub fn lower(program: Node) -> Node {
 		lowered
 	};
 	crate::declarations::with_node_wrappers(Node::List(lowered, bracket, separator), &page_handlers)
+}
+
+/// The error of handlers emitting each other in a circle, at the first of them
+fn endless_emit_loop(handler: &Node, cycle: &[String]) -> Node {
+	let steps: Vec<String> = cycle
+		.iter()
+		.zip(cycle.iter().cycle().skip(1))
+		.map(|(from, to)| format!("on {from} emits {to}"))
+		.collect();
+	let message = format!(
+		"endless emit loop: {}; emit one of them under a condition",
+		steps.join(", ")
+	);
+	crate::errors::diagnostic::Diagnostic::at(handler, message).into_error()
 }
 
 /// `on conect {…}` where nothing raises conect never runs (Node's emitter.on("conect") is silent): a warning, naming
@@ -300,7 +341,7 @@ fn without_unraised(
 			.map(|(_, (name, _, _))| name)
 			.filter(|name| !raised.contains(name) && !from_outside(name))
 	};
-	let warnings: Vec<crate::diagnostic::Diagnostic> = statements
+	let warnings: Vec<crate::errors::diagnostic::Diagnostic> = statements
 		.iter()
 		.filter_map(|statement| {
 			unraised(statement).map(|name| {
@@ -310,7 +351,7 @@ fn without_unraised(
 						.map(|near| format!("; did you mean {near}?"))
 						.unwrap_or_default(),
 				};
-				crate::diagnostic::Diagnostic::at(
+				crate::errors::diagnostic::Diagnostic::at(
 					statement,
 					format!("on {name}: nothing emits {name}, so this handler never runs{hint}"),
 				)
@@ -319,7 +360,7 @@ fn without_unraised(
 		})
 		.collect();
 	if !warnings.is_empty() {
-		crate::diagnostic::report(&warnings)?;
+		crate::errors::diagnostic::report(&warnings)?;
 	}
 	Ok(statements
 		.iter()
@@ -449,7 +490,7 @@ fn subscriptions(node: Node, raised: &HashSet<String>, subscribed: &mut Vec<Stri
 		if in_loop {
 			let reason = format!("a handler in a loop subscribes once per pass: each emit {event} runs all of them; subscribe before the loop unless that is meant");
 			crate::normalize::set_position_of(&node);
-			crate::diagnostic::advise_once(
+			crate::errors::diagnostic::advise_once(
 				LOOP_SUBSCRIPTION_TOPIC,
 				&format!("on {event} {{…}}"),
 				"on … before the loop",
@@ -535,6 +576,22 @@ struct Listeners {
 }
 
 impl Listeners {
+	fn of(statements: &[Node], handlers: &[Handler], named: Vec<(String, String)>) -> Self {
+		let unnamed = |event: &str| {
+			handlers.iter().filter(|(_, name, _)| name == event).count()
+				- named.iter().filter(|(_, other)| other == event).count()
+		};
+		Listeners {
+			counts: handlers
+				.iter()
+				.map(|(_, name, _)| (name.clone(), unnamed(name)))
+				.collect(),
+			// a handler nothing emits is gone: its name binds nothing
+			bound: statements.iter().flat_map(assigned_and_loop_names).collect(),
+			named,
+		}
+	}
+
 	fn flags(&self, event: &str) -> Vec<String> {
 		self.named
 			.iter()
@@ -1034,7 +1091,7 @@ fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[Str
 		};
 		if EMIT_ALIASES.contains(&verb.as_str()) {
 			crate::normalize::set_position_of(&node);
-			crate::diagnostic::educate_once(
+			crate::errors::diagnostic::educate_once(
 				EMIT_TOPIC,
 				&verb,
 				"emit",
@@ -1054,7 +1111,7 @@ fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[Str
 			None => {
 				// P202: an emit no handler anywhere receives does nothing, with a got-it note
 				crate::normalize::set_position_of(&node);
-				crate::diagnostic::advise_once(
+				crate::errors::diagnostic::advise_once(
 					UNHANDLED_TOPIC,
 					&format!("emit {name}"),
 					&format!("on {name} {{…}}"),

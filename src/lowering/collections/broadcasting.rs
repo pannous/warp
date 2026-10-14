@@ -9,7 +9,7 @@
 use super::nodes::{call, children_rewritten, is_colon_pair, key, Counter};
 use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::traits::InstanceTypes;
 use crate::type_kinds::Kind;
@@ -143,7 +143,7 @@ fn all_calls(node: Node) -> Node {
 				return Node::List(calls, Bracket::Square, element_separator.clone());
 			}
 			let item = symbol(ALL_ITEM);
-			let applied = Node::List(vec![function.clone(), item.clone()], Bracket::Round, Separator::None);
+			let applied = parens(vec![function.clone(), item.clone()]);
 			let each = key(item, Op::Arrow, applied);
 			call(MAP_WORD, vec![all_calls(list.clone()), each])
 		}
@@ -235,7 +235,7 @@ fn ambiguous_call(at: &Node, name: &str, argument: &str, op: &Op, right: &str) -
 	let written = format!("{name} {argument} {op} {right}");
 	let call_compared = format!("({name} {argument}) {op} {right}");
 	let comparison_argument = format!("{name}({argument} {op} {right})");
-	crate::diagnostic::Diagnostic::at(
+	crate::errors::diagnostic::Diagnostic::at(
 		at,
 		format!("{written} is ambiguous; write {call_compared} or {comparison_argument}"),
 	)
@@ -888,7 +888,7 @@ impl Broadcast {
 		Some(each_item(list, |item| {
 			let mut call = items.to_vec();
 			call[index + 1] = item;
-			Node::List(call, Bracket::Round, Separator::None)
+			parens(call)
 		}))
 	}
 
@@ -956,13 +956,8 @@ impl Broadcast {
 	/// `xs * ys` of two lists, as `dot(xs, ys)`: `sum(xs .* ys)` (card g_n8GI)
 	fn inner_product(&self, left: Node, right: Node) -> Node {
 		let sum = [symbol(SUM_WORD), element_wise(left, Op::Mul, right)];
-		self.fused_sum(&sum, &Bracket::Round).unwrap_or_else(|| {
-			Node::List(
-				vec![sum[0].clone(), self.rewrite(sum[1].clone())],
-				Bracket::Round,
-				Separator::None,
-			)
-		})
+		self.fused_sum(&sum, &Bracket::Round)
+			.unwrap_or_else(|| parens(vec![sum[0].clone(), self.rewrite(sum[1].clone())]))
 	}
 
 	/// A list literal that is no object, or a variable only ever assigned one

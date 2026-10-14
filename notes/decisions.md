@@ -16,7 +16,20 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   are in and the Rust code is cleaned up (topic cleanup); the existing twins stay.
 - cleanup-only (2026-10-13): until the big Rust cleanup is done, new tasks come only from the cleanup roadmap; other
   workers finish what they hold; the Codex timer takes only cleanup cards; urgent Now cards still go out.
-  Exception: use-cargo (crate components, downloads) keeps going, "important and doesn't touch the cleanup much".
+  Exception: use-cargo (crate components, downloads) keeps going, "important and doesn't touch the cleanup much".- weekly-cleanup (2026-10-14, user): a fresh cleanup roadmap every week (topic `cleanup-w<week>`, e.g. cleanup-w42);
+  new cleanup cards go into the current week's topic (`todo add "…" --topic cleanup-w42`). Older roadmaps stay as
+  they are, solved cards Done in them. Chores that should run regularly get `todo repeat <card> <days>`, and the
+  daily `todo recur` brings them back to Next; they are not copied into each new roadmap.
+- long-functions (2026-10-14, user): splitting an overly long function is a cleanup card of its own, also when it
+  adds a few lines; the "only if it removes lines" rule is for deduplication, not for splits. Split by concept (one
+  named helper per case group or per embedded warp template), not into numbered parts.
+- reflection (2026-10-14, user; card module-methods): function objects have .name, .signature, .return_type,
+  .parameters and .doc (a Python-like doc string, card doc-strings); printing one shows its doc as a comment line
+  above its typed .dump. methods(module|class|value) returns the plain list of function objects, descriptions on
+  demand (`methods(math) map .doc`). `use reflection` (reflection mode) adds compilation unit, compiler, origin,
+  wasm index and effects. A bare name never becomes the function value implicitly (the `print now` case: a
+  parameterless function must stay a call, so in a mixed list some names would print and others would be called): `function f` stays explicit, and a bare parameterless
+  function inside print/help/dump/type gets a warning that it was called, hint `function now`.
 - cleanup-means-fewer-lines (2026-10-13): the cleanup's metric is lines removed: simpler, more general, more elegant
   code. Splitting files or functions alone is not a goal ("not that impressed by splitting"). Each cleanup merge
   request states its net src/ line delta; baseline 161132 lines of src/*.rs at eaa40f98b.
@@ -42,7 +55,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   program's arguments as a list), `cwd`, `glob("*.toml")`, `stdin`/`input`, `sleep`, `exit n`. `use relaxed` stays
   the hint switch alone. P45's "script mode" is this pragma.
 - sleep-seconds (2026-10-14): a bare number in `sleep 0.3` means seconds everywhere (like sh and Python), with the
-  "needs a unit" warning suggesting `0.3s`; demo samples written with bare ms move to `300ms`.
+  "needs a unit" warning suggesting `0.3s`; demo samples written with bare ms move to `300ms`. Run-time plain-number values count seconds too (`f(t) := sleep(t)`); no warning under `use script`.
+- help-prints (2026-10-14): a statement-level `help(x)` prints, as in Python; inside an expression it returns the text
+  (`t = help(x)` silent, `print help(x)` prints once).
 - restructuring (2026-10-14): new major roadmap after the diff review found few duplicates. Inventory every function
   by name, move functions to the file their concept belongs to (a general parser holds no keyword-specific syntax:
   `finish_if_prefix` goes to e.g. control/if.rs), and have agents check suspiciously similar names for true

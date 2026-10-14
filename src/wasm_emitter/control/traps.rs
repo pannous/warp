@@ -122,6 +122,19 @@ pub(crate) fn failed_run(failure: anyhow::Error) -> Node {
 	trap_error(&format!("{:?}", failure), trap.to_string())
 }
 
+/// The characters of an item an unjoinable-item error shows: enough to know it, short enough for one line
+const SHOWN_ITEM_LENGTH: usize = 60;
+const JOINABLE_HINT: &str = "join takes texts and numbers: write the item as text first, as \"{x}\" does";
+
+/// "not a joinable item: a key ('a'.dump), …" from not_a_joinable_item's detail, the item serialized
+pub(in crate::wasm_emitter) fn unjoinable_message(item: &str) -> String {
+	let kind = crate::normalize::without_hints(|| crate::warp_parser::parse_data(item)).kind();
+	let shown: String = item.chars().take(SHOWN_ITEM_LENGTH).collect();
+	let ellipsis = if shown.len() < item.len() { "…" } else { "" };
+	let words = lists::list_ops::runtime_error_message(lists::list_ops::NOT_JOINABLE);
+	format!("{words}: a {kind} ({shown}{ellipsis}); {JOINABLE_HINT}")
+}
+
 /// How an index error of an empty list ends: a lookup that found nothing (a served route answers it 404)
 pub const EMPTY_RANGE: &str = "an empty list";
 
@@ -180,8 +193,14 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 		.contains(lists::list_ops::INDEX_OUT_OF_RANGE_OF)
 		.then(|| index_range_message(&trap_detail(trace)?))
 		.flatten();
+	let unjoinable = trace
+		.contains(lists::list_ops::NOT_JOINABLE)
+		.then(|| trap_detail(trace))
+		.flatten()
+		.map(|item| unjoinable_message(&item));
 	let runtime_error = returned_error
 		.or(index_range)
+		.or(unjoinable)
 		.or(missing_field)
 		.or(no_case)
 		.or(overflow)
@@ -201,7 +220,7 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 		.then(|| lists::list_ops::runtime_error_message(lists::list_ops::DIVIDE_BY_ZERO));
 	let message = runtime_error.or(exact_trap).or(divide_trap).unwrap_or(trap);
 	match trap_position(trace) {
-		Some(position) => crate::node::error(&crate::diagnostic::located_at(message, &position)),
+		Some(position) => crate::node::error(&crate::errors::diagnostic::located_at(message, &position)),
 		None => crate::node::error(&message),
 	}
 }

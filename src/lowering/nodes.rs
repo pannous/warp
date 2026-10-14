@@ -283,31 +283,24 @@ impl Counter {
 	}
 }
 
-thread_local! {
-	/// The numbers of the temporaries a compile invents across passes (`race·0`, `item·0`)
-	static FRESH_NUMBERS: Counter = const { Counter::starting_at(0) };
-	/// How deep in compiles we are: a nested compile continues the numbers of the one around it, so their names never meet
-	static COMPILE_DEPTH: Cell<usize> = const { Cell::new(0) };
-}
-
 /// The next number for a temporary that has to differ from all others of the compile
 pub(crate) fn fresh_number() -> usize {
-	FRESH_NUMBERS.with(Counter::next_number)
+	crate::compiler::compile_context::change(|context| {
+		context.fresh_number += 1;
+		context.fresh_number - 1
+	})
 }
 
-/// Run a compile whose fresh numbers start from 0 when it is the outermost one, so a program lowers alike every time
+/// Run a compile whose fresh numbers start from 0 when it is the outermost one, so a program lowers alike every time;
+/// a nested compile continues the numbers of the one around it, so their names never meet
 pub(crate) fn numbering_fresh_names<R>(compile: impl FnOnce() -> R) -> R {
-	struct Leave;
-	impl Drop for Leave {
-		fn drop(&mut self) {
-			COMPILE_DEPTH.with(|depth| depth.set(depth.get() - 1));
+	let depth = crate::compiler::compile_context::change(|context| {
+		if context.compile_depth == 0 {
+			context.fresh_number = 0;
 		}
-	}
-	if COMPILE_DEPTH.with(|depth| depth.replace(depth.get() + 1)) == 0 {
-		FRESH_NUMBERS.with(|numbers| numbers.0.set(0));
-	}
-	let _leave = Leave;
-	compile()
+		context.compile_depth
+	});
+	crate::compiler::compile_context::scoped(|context| &mut context.compile_depth, depth + 1, compile)
 }
 
 /// `x = value`: the name and the value
@@ -505,4 +498,20 @@ pub(crate) fn method_call(receiver: Node, method: &str, arguments: Vec<Node>) ->
 /// `return value`, as the items of a statement
 pub(crate) fn is_return(items: &[Node]) -> bool {
 	matches!(items, [word, _] if word.is_symbol(crate::words::RETURN_WORD))
+}
+
+/// The list with its head kept and each later item rewritten: a call's name stays, its arguments change
+pub(crate) fn arguments_rewritten(
+	items: Vec<Node>,
+	bracket: Bracket,
+	separator: Separator,
+	mut rewrite: impl FnMut(Node) -> Node,
+) -> Node {
+	let mut items = items.into_iter();
+	let head = items.next();
+	Node::List(
+		head.into_iter().chain(items.map(&mut rewrite)).collect(),
+		bracket,
+		separator,
+	)
 }

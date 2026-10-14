@@ -98,7 +98,7 @@ pub(crate) fn check_constants(node: &Node, constants: &mut HashMap<String, (Stri
 						format!("{place} is const and already {bound}: {assignment} changes nothing"),
 					)
 					.fix("remove the redundant assignment".to_string());
-					if crate::diagnostic::report(std::slice::from_ref(&redundant)).is_err() {
+					if crate::errors::diagnostic::report(std::slice::from_ref(&redundant)).is_err() {
 						return Some(redundant);
 					}
 				}

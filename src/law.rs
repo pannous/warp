@@ -8,8 +8,12 @@
 //! Assurance rises without changing the source:
 //! stated → asserted (debug builds, at concrete call sites) → tested (generated inputs) → proved (Lean).
 //! Laws will later attach to the semantic FunctionDecl; until that IR exists they live beside the Node AST.
+mod asserted;
 pub mod lean;
 pub mod type_model;
+pub use asserted::*;
+mod property_tests;
+pub use property_tests::*;
 
 use crate::analyzer::extract_user_functions;
 use crate::compiler::context::Context;
@@ -23,13 +27,6 @@ use std::fmt;
 
 pub const LAW_KEYWORD: &str = "law";
 pub const PROPERTY_TRIALS: usize = 64;
-const RANDOM_SEED: u64 = 0x9E37_79B9_7F4A_7C15;
-const RANDOM_INT_RANGE: i64 = 1000;
-/// Keep machine-word boundaries in the generated corpus even though Warp Int promotes on overflow.
-const EDGE_INTS: [i64; 9] = [0, 1, -1, 2, -2, i64::MAX, i64::MIN, 3_037_000_500, -3_037_000_500];
-const EDGE_FLOATS: [f64; 5] = [0.0, 1.0, -1.0, 0.5, -2.5];
-/// The wasm trap of a recursion deeper than the stack
-const STACK_EXHAUSTED: &str = "call stack exhausted";
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Law {
@@ -347,124 +344,6 @@ fn describe(bindings: &HashMap<String, Node>) -> String {
 		.collect();
 	pairs.sort();
 	format!("counterexample {}", pairs.join(" "))
-}
-
-// ==================== asserted ====================
-
-fn is_closed(node: &Node, functions: &[FunctionDefinition]) -> bool {
-	let mut closed = true;
-	node.visit(&mut |inner| {
-		if let Node::Symbol(name) = inner {
-			if !functions.iter().any(|f| &f.name == name) {
-				closed = false;
-			}
-		}
-	});
-	closed
-}
-
-/// Bind law variables by matching law calls `f(x, y)` against concrete program calls `f(3, 4)`.
-fn observed_bindings(lawful: &Lawful, law: &Law) -> Vec<HashMap<String, Node>> {
-	let mut patterns: Vec<(&str, Vec<String>)> = vec![];
-	law.statement.visit(&mut |node| {
-		if let Some((name, args)) = node.call_parts() {
-			let names: Vec<String> = args
-				.iter()
-				.filter_map(|a| match a.drop_meta() {
-					Node::Symbol(var) if law.variables.iter().any(|(v, _)| v == var) => Some(var.clone()),
-					_ => None,
-				})
-				.collect();
-			if !args.is_empty() && names.len() == args.len() {
-				patterns.push((name, names));
-			}
-		}
-	});
-	let mut bindings = vec![];
-	lawful.program.visit(&mut |node| {
-		if let Some((name, args)) = node.call_parts() {
-			for (pattern, vars) in &patterns {
-				let covers_all = law.variables.iter().all(|(v, _)| vars.contains(v));
-				if *pattern == name
-					&& vars.len() == args.len()
-					&& covers_all && args.iter().all(|a| is_closed(a, &lawful.functions))
-				{
-					bindings.push(vars.iter().cloned().zip(args.iter().cloned()).collect());
-				}
-			}
-		}
-	});
-	bindings
-}
-
-/// Debug builds check every law at the concrete call sites of the program; a violation replaces the result.
-pub fn assert_laws(lawful: &Lawful, code: &str) -> Option<Node> {
-	if !cfg!(debug_assertions) {
-		return None;
-	}
-	for law in &lawful.laws {
-		for bindings in observed_bindings(lawful, law) {
-			if let Verdict::Violated(why) = check_instance(lawful, law, &bindings, code) {
-				return Some(Node::Error(Box::new(Node::Text(format!("{} violated: {}", law, why)))));
-			}
-		}
-	}
-	None
-}
-
-// ==================== tested ====================
-
-/// Deterministic xorshift so failures reproduce without a rand dependency.
-struct Generator(u64);
-
-impl Generator {
-	fn next(&mut self) -> u64 {
-		self.0 ^= self.0 << 13;
-		self.0 ^= self.0 >> 7;
-		self.0 ^= self.0 << 17;
-		self.0
-	}
-
-	fn value(&mut self, kind: Kind, trial: usize) -> Node {
-		let pick = |edges: usize| trial < edges;
-		match kind {
-			Kind::Float if pick(EDGE_FLOATS.len()) => Node::Number(Number::Float(EDGE_FLOATS[trial])),
-			Kind::Float => {
-				let unit = (self.next() >> 11) as f64 / (1u64 << 53) as f64;
-				Node::Number(Number::Float((unit * 2.0 - 1.0) * RANDOM_INT_RANGE as f64))
-			}
-			_ if pick(EDGE_INTS.len()) => Node::Number(Number::Int(EDGE_INTS[trial])),
-			_ => Node::Number(Number::Int(
-				(self.next() % (2 * RANDOM_INT_RANGE as u64 + 1)) as i64 - RANDOM_INT_RANGE,
-			)),
-		}
-	}
-}
-
-/// An instance recursing deeper than the wasm stack (`sum_to(i64::MAX)`) is skipped: no verdict, Lean decides
-pub fn property_test(lawful: &Lawful, law: &Law, trials: usize, code: &str) -> Verdict {
-	let mut generator = Generator(RANDOM_SEED);
-	let (mut run, mut too_deep) = (0, 0);
-	for trial in 0..trials {
-		let bindings: HashMap<String, Node> = law
-			.variables
-			.iter()
-			.map(|(name, kind)| (name.clone(), generator.value(*kind, trial)))
-			.collect();
-		run += 1;
-		match check_instance(lawful, law, &bindings, code) {
-			Verdict::Holds => {}
-			Verdict::Unknown(why) if why.contains(STACK_EXHAUSTED) => too_deep += 1,
-			other => return other,
-		}
-		if law.variables.is_empty() {
-			break;
-		}
-	}
-	match too_deep == run {
-		true => Verdict::Unknown(format!("every instance recursed too deep to run ({STACK_EXHAUSTED})")),
-		false => Verdict::Holds,
-	}
 }
 
 // ==================== verify ====================

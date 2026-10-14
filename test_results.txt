@@ -68,6 +68,8 @@ PASSED:
   ✓ control::test_clipboard::reading_the_clipboard_is_one_host_call
   ✓ control::test_clipboard::the_change_count_is_read_without_the_content
   ✓ control::test_clipboard::writing_the_clipboard_is_the_std_word
+  ✓ control::test_code_hole_calls::a_key_pattern_matches_after_a_call_was_passed
+  ✓ control::test_code_hole_calls::every_arm_in_one_list
   ✓ control::test_code_holes::a_code_pattern_without_a_match_falls_through
   ✓ control::test_code_holes::a_hole_binds_the_subtree
   ✓ control::test_code_holes::a_hole_matches_inside_a_call
@@ -223,6 +225,7 @@ PASSED:
   ✓ control::test_filter_loops::test_a_condition_loop_visits_only_matching_items
   ✓ control::test_filter_loops::test_a_filter_warns_once_with_its_explicit_form
   ✓ control::test_filter_loops::test_plain_loops_do_not_filter
+  ✓ control::test_for_forms::a_braceless_call_ends_the_loop_range
   ✓ control::test_for_forms::block_after_a_chained_iterable
   ✓ control::test_for_forms::c_style_for_with_a_space_or_without_braces
   ✓ control::test_for_forms::each_starts_a_loop
@@ -415,6 +418,15 @@ PASSED:
   ✓ control::test_named_patterns::is_tests_a_named_pattern
   ✓ control::test_named_patterns::named_patterns_combine_with_and
   ✓ control::test_named_patterns::the_word_pattern_stays_a_call_outside_a_definition
+  ✓ control::test_named_reflection::a_help_statement_prints
+  ✓ control::test_named_reflection::a_name_that_is_no_word_is_named_in_the_error
+  ✓ control::test_named_reflection::an_unjoinable_item_names_its_kind
+  ✓ control::test_named_reflection::dump_of_a_function_named_at_run_time
+  ✓ control::test_named_reflection::every_word_of_a_module_dumps_and_helps
+  ✓ control::test_named_reflection::help_in_an_expression_does_not_print
+  ✓ control::test_named_reflection::help_of_a_module_word_has_its_comment
+  ✓ control::test_named_reflection::help_of_a_name_known_at_run_time
+  ✓ control::test_named_reflection::help_of_a_standard_module_is_its_index
   ✓ control::test_not_condition_block::a_comparison_with_empty_in_a_group
   ✓ control::test_not_condition_block::a_negated_condition_in_a_loop
   ✓ control::test_not_condition_block::a_negated_condition_takes_its_block
@@ -447,6 +459,8 @@ PASSED:
   ✓ control::test_parallel_map::a_parallel_map_takes_a_function_value
   ✓ control::test_parallel_map::go_for_runs_its_iterations_in_parallel
   ✓ control::test_parallel_map::go_maps_in_parallel
+  ✓ control::test_parsed_code_patterns::code_pattern_matches_code_parsed_at_run_time
+  ✓ control::test_parsed_code_patterns::quoted_statements_bind_no_blocks
   ✓ control::test_pattern_unit_name::a_dollar_name_binds_without_a_warning
   ✓ control::test_pattern_unit_name::a_dollar_name_is_a_call_argument
   ✓ control::test_pattern_unit_name::a_list_item_named_like_a_unit_binds
@@ -1707,6 +1721,8 @@ PASSED:
   ✓ lists::test_empty_list_count::the_counting_properties_of_an_empty_list_need_no_null_check
   ✓ lists::test_field_count::a_parameter_counts_with_the_call_form
   ✓ lists::test_field_count::test_count_of_a_field
+  ✓ lists::test_filter_element_scope::a_number_filter_beside_a_class_filter
+  ✓ lists::test_filter_element_scope::one_loop_variable_over_numbers_and_instances
   ✓ lists::test_find_any_all::any_and_all_answer_yes_or_no
   ✓ lists::test_find_any_all::find_any_and_all_test_the_elements
   ✓ lists::test_first_items::first_and_last_take_a_number_of_items
@@ -2038,6 +2054,8 @@ PASSED:
   ✓ modules::test_package_pin::a_clean_unpinned_clone_makes_way_for_the_pin
   ✓ modules::test_package_pin::a_pinned_package_links_its_cached_version
   ✓ modules::test_package_pin::header_signatures_are_parsed_once
+  ✓ modules::test_package_shadow::a_file_named_like_a_package_shadows_it_loudly
+  ✓ modules::test_package_shadow::a_required_version_names_the_shadowing_file_too
   ✓ modules::test_package_tools::a_package_tool_lives_in_the_package_build_directory
   ✓ modules::test_package_tools::a_package_tool_runs_in_the_package_directory
   ✓ modules::test_package_tools::a_package_without_a_tool_says_so
@@ -3545,6 +3563,7 @@ PASSED:
   ✓ text::test_print_gives_nothing::the_console_shows_no_value_after_a_print
   ✓ text::test_print_juxtaposed::a_text_next_to_values_prints_joined
   ✓ text::test_print_juxtaposed::the_joined_text_is_written
+  ✓ text::test_print_list_shapes::printed_data_lists_keep_their_shape
   ✓ text::test_print_lists::print_of_a_list_gives_nothing
   ✓ text::test_print_lists::print_of_a_list_writes_its_text
   ✓ text::test_print_runtime_number::a_runtime_number_prints
@@ -4534,7 +4553,6 @@ PASSED:
   ✓ web::test_assistant_edits::a_diff_changes_only_the_lines_it_names
   ✓ web::test_assistant_edits::a_diff_that_no_longer_fits_says_so
   ✓ web::test_assistant_edits::a_whole_program_replaces_only_the_lines_that_differ
-  ✓ web::test_assistant_proxy::the_assistant_proxy_answers_only_the_playground
   ✓ web::test_async_data::a_body_that_is_no_json_is_the_text
   ✓ web::test_async_data::a_changed_url_variable_fetches_anew
   ✓ web::test_async_data::a_failed_fetch_is_the_error
@@ -4671,13 +4689,13 @@ PASSED:
   ✓ web::test_keyed_lists::a_key_names_the_element_of_an_item
   ✓ web::test_keyed_lists::a_key_on_its_own_line_names_the_element
   ✓ web::test_keyed_lists::a_list_inside_an_element_gives_its_children
-  ✓ web::test_keyword_registry::keywords_of_passes_are_highlighted
   ✓ web::test_markup_holes::a_page_binds_each_hole
   ✓ web::test_markup_holes::fixed_markup_or_a_computed_root_has_no_holes
   ✓ web::test_markup_holes::the_elements_holding_computed_parts_are_the_holes
   ✓ web::test_markup_lines::a_line_of_attributes_renders_as_attributes
   ✓ web::test_markup_lines::an_aria_attribute_renders
   ✓ web::test_markup_mistakes::a_class_literal_field_named_like_an_element_is_no_markup
+  ✓ web::test_markup_mistakes::a_custom_element_with_a_dash_renders
   ✓ web::test_markup_mistakes::a_data_map_key_named_like_an_element_is_no_markup
   ✓ web::test_markup_mistakes::a_nested_data_map_is_no_markup
   ✓ web::test_markup_mistakes::an_unknown_attribute_warns
@@ -4743,7 +4761,6 @@ PASSED:
   ✓ web::test_routes::without_a_matching_route_the_page_says_so
   ✓ web::test_safari_imports::safaris_engine_reads_the_imports_of_a_task_program
   ✓ web::test_safari_imports::the_page_never_asks_the_engine_for_import_or_export_descriptors
-  ✓ web::test_sandbox_refusals::a_sandboxed_program_reaches_the_network
   ✓ web::test_sandbox_refusals::a_sandboxed_program_starts_no_process_and_calls_no_c
   ✓ web::test_sandbox_refusals::a_sandboxed_program_writes_inside_its_state_folder
   ✓ web::test_sandbox_refusals::a_sandboxed_program_writes_nothing_outside_its_state_folder
@@ -5149,10 +5166,16 @@ PASSED:
   ✓ welcoming::test_plain_hint_got_it::an_acknowledged_kind_of_hint_stays_away
   ✓ welcoming::test_quiet_hints::legitimate_forms_get_no_hint
   ✓ welcoming::test_relaxed_pragma::a_relaxed_program_shows_no_hints
+  ✓ welcoming::test_script_pragma::a_script_has_the_scripting_words
+  ✓ welcoming::test_script_pragma::a_script_reads_its_input
+  ✓ welcoming::test_script_pragma::a_script_shows_no_hints
+  ✓ welcoming::test_script_pragma::inline_code_exits_with_its_exit_status
   ✓ welcoming::test_slash_comment_after_value::a_comment_after_a_text_gets_no_division_note
   ✓ welcoming::test_slash_comment_needs_space::slash_slash_with_space_is_a_comment
   ✓ welcoming::test_slash_comment_needs_space::slash_slash_without_space_divides
   ✓ welcoming::test_slash_comment_prose_operators::prose_with_operator_characters_gets_no_division_note
+  ✓ welcoming::test_sleep_seconds::a_bare_sleep_number_counts_seconds
+  ✓ welcoming::test_sleep_seconds::the_bare_sleep_warning_suggests_seconds
   ✓ welcoming::test_sleep_unit_shadow::a_unit_named_variable_keeps_other_durations
   ✓ welcoming::test_sleep_unit_warning::a_statement_after_sleep_is_no_duration
   ✓ welcoming::test_sleep_unit_warning::sleep_without_a_unit_warns
@@ -5169,6 +5192,8 @@ PASSED:
   ✓ welcoming::test_unknown_word_error::test_an_unknown_word_with_a_value_is_an_error_in_code
   ✓ welcoming::test_unknown_word_error::test_data_contexts_keep_unknown_words
   ✓ welcoming::test_unknown_word_error::test_known_words_are_untouched
+  ✓ welcoming::test_variable_applied::a_local_holding_a_plain_value_applied_to_a_value_is_an_error
+  ✓ welcoming::test_variable_applied::locals_holding_functions_and_data_lists_stay
   ✓ welcoming::test_warning_levels::capture_hints_still_returns_the_hints
   ✓ welcoming::test_warning_levels::levels_are_ordered_and_named
   ✓ welcoming::test_warning_levels::no_hints_hides_only_the_hints
@@ -5277,6 +5302,9 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ web::test_assistant_proxy::the_assistant_proxy_answers_only_the_playground
+  ✗ web::test_keyword_registry::keywords_of_passes_are_highlighted
+  ✗ web::test_sandbox_refusals::a_sandboxed_program_reaches_the_network
 
 SUMMARY:
-13 ignored, 5274 passed, 0 failed, 5274 total tested
+13 ignored, 5299 passed, 3 failed, 5302 total tested

@@ -132,12 +132,12 @@ fn get_from(port: u16, path: &str) -> String {
 // its page's events come from the page it serves: no "a native run never raises it" warning
 #[test]
 fn a_served_page_s_events_draw_no_warning() {
-	warp::diagnostic::take_warnings();
+	warp::errors::diagnostic::take_warnings();
 	let lowered = warp::pipeline::lower(
 		"clicks = 0\nserve 18434 { get \"/n\" { clicks } }\ndiv{ button{ on click { clicks += 1 } \"+\" } }",
 	);
 	assert!(lowered.is_ok(), "{lowered:?}");
-	let warnings = warp::diagnostic::take_warnings();
+	let warnings = warp::errors::diagnostic::take_warnings();
 	assert!(
 		warnings
 			.iter()

@@ -2,7 +2,7 @@
 //! remembers an answer that changes what the program means. A guessable one takes its default with a warning that is
 //! shown until the user says "got it"; a dangerous one stays an error naming the explicit forms
 use crate::is;
-use warp::diagnostic::{take_warnings, use_acknowledgements_file, with_acknowledger, Acknowledging};
+use warp::errors::diagnostic::{take_warnings, use_acknowledgements_file, with_acknowledger, Acknowledging};
 use warp::wasm_emitter::eval;
 use warp::*;
 

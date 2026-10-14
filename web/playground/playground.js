@@ -308,7 +308,7 @@ function roomBelowPaintings(paneStyle) {
 		+ pixels(paneStyle.paddingBottom) + pixels(paneStyle.borderBottomWidth) + pixels(getComputedStyle(document.body).paddingBottom);
 }
 
-// `loop { …; show(); sleep(16) }`: each sleep starts an animation's next frame, what the run paints or prints in it
+// `loop { …; show(); sleep(16ms) }`: each sleep starts an animation's next frame, what the run paints or prints in it
 // replaces the last frame's; frames keep the run alive past RUN_TIMEOUT_MS, the next run stops it (cards
 // drawing-frames, snake-frames)
 function startsFrame(run, output) {

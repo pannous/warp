@@ -8,7 +8,7 @@
 
 use super::go_blocks::AWAIT_WORD;
 use super::nodes::{is_call_head, key};
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{FOR_WORD, GO_WORD, IN_WORD, MAP_WORD};
 
@@ -61,15 +61,7 @@ pub(crate) fn kernel_map(list: &Node, function: &Node) -> Option<Node> {
 	if !matches!(list.drop_meta(), Node::Symbol(_)) {
 		return None;
 	}
-	let map = key(
-		list.clone(),
-		Op::Dot,
-		Node::List(
-			vec![symbol(MAP_WORD), function.clone()],
-			Bracket::Round,
-			Separator::None,
-		),
-	);
+	let map = key(list.clone(), Op::Dot, parens(vec![symbol(MAP_WORD), function.clone()]));
 	if crate::wasm_emitter::lists::linear_arrays::is_float_kernel(&parameter.name(), body) {
 		Some(map.with_attribute(SPLIT_ATTRIBUTE, Node::True))
 	} else {
@@ -85,7 +77,8 @@ pub(crate) fn sequential_warning(node: &Node) -> Option<Node> {
 	}
 	let message =
 		"@parallel runs this in sequence: only `xs.map(f)`, `f all xs` and `go for x in xs { … }` run in parallel";
-	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(node, message.to_string()).weak()]).err()
+	crate::errors::diagnostic::report(&[crate::errors::diagnostic::Diagnostic::at(node, message.to_string()).weak()])
+		.err()
 }
 
 /// `@parallel` (or another attribute, `@gpu`) on a form or on the start of its first part: `@parallel xs.map(f)`
@@ -308,5 +301,5 @@ fn copied_updates(body: &Node, shared: &[String]) -> Option<Node> {
 	let message = format!(
 		"{name} is updated in a parallel loop: every task updates its own copy; share it: `shared {name} = …` (P106)"
 	);
-	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(&at, message).severe()]).err()
+	crate::errors::diagnostic::report(&[crate::errors::diagnostic::Diagnostic::at(&at, message).severe()]).err()
 }

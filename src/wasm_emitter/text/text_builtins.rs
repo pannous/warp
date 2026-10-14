@@ -373,7 +373,8 @@ impl WasmGcEmitter {
 			}
 			// warnings are errors: the run stops as at `raise`, also where the warning's value is dropped (card under-use)
 			(WARNING | RAISE_WORD, [message])
-				if name == RAISE_WORD || crate::diagnostic::warning_mode().fails(crate::diagnostic::Level::Normal) =>
+				if name == RAISE_WORD
+					|| crate::errors::diagnostic::warning_mode().fails(crate::errors::diagnostic::Level::Normal) =>
 			{
 				self.emit_trap_detail(func, message);
 				self.emit_runtime_error(func, super::super::lists::list_ops::RETURNED_ERROR);

@@ -1,6 +1,82 @@
 //! The standard modules: embedded lib/<module>.warp sources, their names and words, and the prelude words with their parameters
 use super::*;
 
+/// The standard library's modules written in warp (notes/stdlib.md), embedded so `use list` needs no files
+pub(crate) const STD_MODULES: [(&str, &str); 26] = [
+	(PRELUDE_MODULE, include_str!("../../lib/prelude.warp")),
+	("memory", include_str!("../../lib/memory.warp")),
+	("net", include_str!("../../lib/net.warp")),
+	("collections", include_str!("../../lib/collections.warp")),
+	("hash", include_str!("../../lib/hash.warp")),
+	("regex", include_str!("../../lib/regex.warp")),
+	("file", include_str!("../../lib/file.warp")),
+	("json", include_str!("../../lib/json.warp")),
+	("os", include_str!("../../lib/os.warp")),
+	("list", include_str!("../../lib/list.warp")),
+	("math", include_str!("../../lib/math.warp")),
+	("text", include_str!("../../lib/text.warp")),
+	("random", include_str!("../../lib/random.warp")),
+	("map", include_str!("../../lib/map.warp")),
+	("time", include_str!("../../lib/time.warp")),
+	("matrix", include_str!("../../lib/matrix.warp")),
+	("draw", include_str!("../../lib/draw.warp")),
+	("markup", include_str!("../../lib/markup.warp")),
+	("router", include_str!("../../lib/router.warp")),
+	("wagi", include_str!("../../lib/wagi.warp")),
+	("i18n", include_str!("../../lib/i18n.warp")),
+	(UNITS_MODULE, include_str!("../../lib/units.warp")),
+	(AGENT_MODULE, include_str!("../../lib/agent.warp")),
+	(SOUND_MODULE, include_str!("../../lib/sound.warp")),
+	("R", include_str!("../../lib/R.warp")),
+	("PHP", include_str!("../../lib/PHP.warp")),
+];
+/// Other names of standard modules (word choices are aliases): `use graphics` is `use draw`
+pub(crate) const STD_MODULE_ALIASES: [(&str, &str); 1] = [("graphics", "draw")];
+/// The standard modules' folder (P194: std/ merged into lib/), embedded in the binary
+pub(crate) const STD_FOLDER: &str = "lib";
+/// lib/prelude.warp: the warp-written words of every program, loaded when mentioned (Loader::use_prelude)
+pub(crate) const PRELUDE_MODULE: &str = "prelude";
+/// Between a module's name and its word in a qualified definition name, as between a nested function's outer and own
+pub(crate) const QUALIFIER: char = '·';
+/// P171: module words a program calls without their `use` (the prelude); only these definitions come along
+pub(crate) const PRELUDE_WORDS: [(&str, &[&str]); 2] = [
+	("file", &["write", "exists", "write_bytes", "read_bytes"]),
+	("os", &["exec"]),
+];
+/// Other languages' names of the standard modules' classes and words (Java, Python, Rust, C#), each read as warp's with
+/// a note, when a used module defines that word
+pub(crate) const STD_ALIASES: [(&str, &str); 27] = [
+	("HashSet", "Set"),
+	("TreeSet", "Set"),
+	("LinkedHashSet", "Set"),
+	("frozenset", "Set"),
+	("ArrayDeque", "Deque"),
+	("VecDeque", "Deque"),
+	("deque", "Deque"),
+	("OrderedDict", "OrderedMap"),
+	("LinkedHashMap", "OrderedMap"),
+	// P169: the C library's historic names of `use math`'s words (atan2 takes y first, angle(x, y) does not: no alias)
+	// sqrt and cbrt are the operators √ and ∛ already
+	("pow", "power"),
+	("exp", "exponential"),
+	("log2", "binary_log"),
+	("log10", "decimal_log"),
+	("sin", "sine"),
+	("cos", "cosine"),
+	("tan", "tangent"),
+	("asin", "arc_sine"),
+	("acos", "arc_cosine"),
+	("atan", "arc_tangent"),
+	("sinh", "hyperbolic_sine"),
+	("cosh", "hyperbolic_cosine"),
+	("tanh", "hyperbolic_tangent"),
+	("hypot", "hypotenuse"),
+	("ceil", "ceiling"),
+	("trunc", "whole_part"),
+	("fmod", "remainder"),
+	("ln", "natural_log"),
+];
+
 /// warp's own lib/<module>.warp of a standard module: the source the binary embeds (natively the lib folder of the
 /// repository it was built from, or any file of the same text: lib/ of another warp checkout, card local-lib; in the
 /// browser lib/ of the served repository, the page's file root)
@@ -213,4 +289,22 @@ pub fn std_module_list(module: &str, list: &str) -> Vec<String> {
 pub fn module_file_shadowing(module: &str) -> Option<PathBuf> {
 	let folder = program_file().as_deref().map(folder_of);
 	Loader::new(&SEARCH_DIRECTORIES, folder).find(module)
+}
+
+/// `HashSet(xs)` as `Set(xs)`, with a note
+pub(crate) fn with_std_aliases(node: Node, aliases: &[(&str, &str)]) -> Node {
+	// a note points at the innermost positioned node around the written word
+	if node.get_lineinfo().is_some() {
+		crate::normalize::set_position_of(&node);
+	}
+	match node {
+		Node::Symbol(name) => match aliases.iter().find(|(alias, _)| *alias == name) {
+			Some((alias, class)) => {
+				crate::errors::diagnostic::note_alias(alias, class);
+				Node::Symbol(class.to_string())
+			}
+			None => Node::Symbol(name),
+		},
+		other => other.map_children(|child| with_std_aliases(child, aliases)),
+	}
 }

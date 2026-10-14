@@ -29,6 +29,13 @@ jobs = []
 for i in 1 to 5 { jobs.add(go square(i)) }
 print await all jobs
 
+// a race: await any gives the first task to finish; a channel hands values between tasks
+gate = channel()
+slow(g) := { g.receive(); "slow" }
+quick() := { sleep(10ms); "quick" }
+print await any [go slow(gate), go quick()]
+gate.send(0)
+
 // or the same as a parallel map (map stays: plain broadcasting `square [1, 2, 3]` runs inline, not in tasks)
 print @parallel [1, 2, 3].map(square)
 

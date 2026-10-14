@@ -112,13 +112,16 @@ impl InstanceTypes {
 				self.collect(right, variables, results);
 			}
 			Node::List(items, _, _) => {
-				// `for x in xs`: x is an item of xs
+				// `for x in xs`: x is an item of xs; of other items too it is shapeless (filters share one element name)
 				if let [keyword, variable, in_word, list, ..] = items.as_slice() {
 					if keyword.name() == FOR_WORD && in_word.name() == IN_WORD {
-						if let (Node::Symbol(name), Some(Shape::ListOf(type_name))) =
-							(variable.drop_meta(), self.shape(list))
-						{
-							Self::bind(variables, name, Some(Shape::Instance(type_name)), false);
+						if let Node::Symbol(name) = variable.drop_meta() {
+							match self.shape(list) {
+								Some(Shape::ListOf(type_name)) => {
+									Self::bind(variables, name, Some(Shape::Instance(type_name)), false)
+								}
+								_ => Self::bind(variables, name, None, self.final_round),
+							}
 						}
 					}
 				}

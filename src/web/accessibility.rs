@@ -8,7 +8,7 @@
 //! Markup built at run time (a computed tag, card web-a11y-runtime) is checked as the run hands it back: its problems
 //! that the markup as written did not show are runtime warnings, each once a run.
 
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use std::collections::HashSet;
@@ -152,7 +152,7 @@ pub fn check_rendered(markup: &Node) {
 	collect(&markup, &HashSet::new(), false, None, &mut elements);
 	for (_, message, fix) in problems(&elements, &HashSet::new()) {
 		if !crate::compiler::compile_context::read(|context| context.written_problems.contains(&message)) {
-			crate::diagnostic::report_runtime_warning_once(&format!("{RUN_TIME_NOTICE}: {message}; fix"), &fix);
+			crate::errors::diagnostic::report_runtime_warning_once(&format!("{RUN_TIME_NOTICE}: {message}; fix"), &fix);
 		}
 	}
 }
@@ -258,7 +258,7 @@ fn written_attribute(item: &Node) -> Option<(String, &Node)> {
 	let Node::Symbol(name) = name.drop_meta() else {
 		return None;
 	};
-	if crate::web::markup::is_element_tag(name) {
+	if crate::web::markup::is_element_tag(name) || crate::web::markup::is_custom_element(name) {
 		return None;
 	}
 	Some((name.clone(), value.drop_meta()))

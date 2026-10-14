@@ -13,7 +13,7 @@
 use super::listeners;
 use super::nodes::{block, children_rewritten, if_then, key, Counter};
 use crate::declarations::{handler_parts, word};
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{ONCE_WORD, ON_WORD, WHENEVER_WORD};
 use std::collections::{HashMap, HashSet};
@@ -250,20 +250,21 @@ impl Signals {
 			let never_fires = format!("{keyword} {} never fires", condition.serialize().trim());
 			let value_text = value.serialize().trim().to_string();
 			let warning = match symbols(value).is_empty() {
-				true => {
-					crate::diagnostic::Diagnostic::at(statement, format!("{never_fires}: nothing writes {name} again"))
-				}
+				true => crate::errors::diagnostic::Diagnostic::at(
+					statement,
+					format!("{never_fires}: nothing writes {name} again"),
+				),
 				false => {
 					let derived = format!("{name} := {value_text}");
 					let message = format!(
 						"{never_fires}: {name} is a copy of {value_text} that nothing writes again; did you mean {derived}?"
 					);
-					crate::diagnostic::Diagnostic::at(statement, message)
+					crate::errors::diagnostic::Diagnostic::at(statement, message)
 						.fix(derived.clone())
 						.offer("a derived value", format!("{name} = {value_text}"), derived)
 				}
 			};
-			if let Err(error) = crate::diagnostic::report(&[warning.severe()]) {
+			if let Err(error) = crate::errors::diagnostic::report(&[warning.severe()]) {
 				return Some(error);
 			}
 		}
@@ -693,7 +694,7 @@ pub(crate) fn subject_and_body(rest: &[Node]) -> Option<(Node, Node)> {
 fn without_empty_argument(call: &Node) -> Node {
 	match call.drop_meta() {
 		Node::List(items, _, _) if items.len() == 2 && is_nothing_or_empty_list(&items[1]) => {
-			Node::List(vec![items[0].clone()], Bracket::Round, Separator::None)
+			parens(vec![items[0].clone()])
 		}
 		_ => call.clone(),
 	}

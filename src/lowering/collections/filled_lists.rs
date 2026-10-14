@@ -93,21 +93,21 @@ pub(crate) fn list_times(key: &Node, positioned: &Node) -> Option<Node> {
 		crate::normalize::operand_text(count),
 	);
 	let readings = vec![
-		crate::diagnostic::reading("repeat the list", &format!("{count_text} times {list_text}")),
-		crate::diagnostic::reading(
+		crate::errors::diagnostic::reading("repeat the list", &format!("{count_text} times {list_text}")),
+		crate::errors::diagnostic::reading(
 			"multiply each element",
 			&format!("{list_text}.map(x => x*{count_text})"),
 		),
 	];
-	let question = crate::diagnostic::Ask::new(
+	let question = crate::errors::diagnostic::Ask::new(
 		LIST_TIMES_TOPIC,
 		format!("type error: list * number: does `{written}` repeat the list or multiply each element?"),
 		readings,
-		crate::diagnostic::Fallback::Error,
+		crate::errors::diagnostic::Fallback::Error,
 	)
 	.written(&written)
 	.at_node(positioned);
-	Some(match crate::diagnostic::ask(&question) {
+	Some(match crate::errors::diagnostic::ask(&question) {
 		Ok(0) => filled_list(count.clone(), list)
 			.unwrap_or_else(|| crate::node::error("`n times [x]` repeats one element: `3 times [0]`")),
 		Ok(_) => lower_list_times(element_wise(list.clone(), Op::Mul, count.clone())),
@@ -141,19 +141,19 @@ pub(crate) fn list_plus(key: &Node, positioned: &Node) -> Option<Node> {
 		false => ("prepend", format!("[{number_text}] + {list_text}")),
 	};
 	let readings = vec![
-		crate::diagnostic::reading(joining, &joined),
-		crate::diagnostic::reading("add to each element", &format!("{list_text} .+ {number_text}")),
+		crate::errors::diagnostic::reading(joining, &joined),
+		crate::errors::diagnostic::reading("add to each element", &format!("{list_text} .+ {number_text}")),
 	];
-	let question = crate::diagnostic::Ask::new(
+	let question = crate::errors::diagnostic::Ask::new(
 		LIST_PLUS_TOPIC,
 		format!("type error: list + number: does `{written}` {joining} {number_text} or add it to each element?"),
 		readings,
-		crate::diagnostic::Fallback::Error,
+		crate::errors::diagnostic::Fallback::Error,
 	)
 	.written(&written)
 	.at_node(positioned);
 	let singleton = Node::List(vec![number.clone()], Bracket::Square, Separator::Space);
-	Some(match crate::diagnostic::ask(&question) {
+	Some(match crate::errors::diagnostic::ask(&question) {
 		Ok(0) if list_first => Node::Key(Box::new(list.clone()), Op::Add, Box::new(singleton)),
 		Ok(0) => Node::Key(Box::new(singleton), Op::Add, Box::new(list.clone())),
 		Ok(_) => element_wise(list.clone(), Op::Add, number.clone()),

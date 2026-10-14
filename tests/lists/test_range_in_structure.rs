@@ -1,7 +1,7 @@
 // A range held by a structure (card range-descriptor): an object field, a list item, a list variable inside a list.
 // `r: 1..n` and `r = 1..n` are the same range: `..` already says it is a value, no block (user, 2026-10-09)
 use crate::is;
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 use warp::ints;
 
 #[test]

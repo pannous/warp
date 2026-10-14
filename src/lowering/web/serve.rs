@@ -9,7 +9,7 @@
 use super::nodes::{call, key};
 use crate::database_tables::{stored_table, table_store};
 use crate::declarations::word;
-use crate::node::{symbol, text, Bracket, Node, Separator};
+use crate::node::{parens, symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::stored_values::DATABASE_WORD;
 use crate::words::IMPLICIT_PARAMETER;
@@ -257,7 +257,7 @@ pub fn serves_itself(code: &str) -> bool {
 
 /// The program's statements, read quietly: running it says its hints and warnings
 fn top_level_statements(code: &str) -> Vec<Node> {
-	crate::diagnostic::quietly(|| crate::warp_parser::parse(code))
+	crate::errors::diagnostic::quietly(|| crate::warp_parser::parse(code))
 		.drop_meta()
 		.sequence_statements()
 		.to_vec()
@@ -773,11 +773,7 @@ fn asking_the_server(statements: Vec<Node>, servers: &[String]) -> Result<Vec<No
 		.collect();
 	let read = |node: Node| with_calls_read(node, &calls, &names);
 	let asking = |index: usize| {
-		let call = Node::List(
-			call_items(&calls[index]).into_iter().map(&read).collect(),
-			Bracket::Round,
-			Separator::None,
-		);
+		let call = parens(call_items(&calls[index]).into_iter().map(&read).collect());
 		let value = if prerendering {
 			call.clone()
 		} else {
@@ -980,7 +976,7 @@ fn local_argument(call: &Node, main_variables: &HashSet<String>, functions: &Has
 		.flat_map(crate::variable_signals::symbols)
 		.find(|symbol| !known(symbol))?;
 	let name = callee(call);
-	Some(crate::diagnostic::Diagnostic::at(call, format!("the page asks the server for {name}(…) before its code runs, so it sends main-level values only, not {local}: compute {local} at the main level or call {name} from a function of the server (POST {RPC_PREFIX}{name}, notes/server_routes.md)")).into_error())
+	Some(crate::errors::diagnostic::Diagnostic::at(call, format!("the page asks the server for {name}(…) before its code runs, so it sends main-level values only, not {local}: compute {local} at the main level or call {name} from a function of the server (POST {RPC_PREFIX}{name}, notes/server_routes.md)")).into_error())
 }
 
 /// `serve port {routes}`: the port and each route's method, path and body
@@ -1038,11 +1034,7 @@ fn rpc_route(definition: &Node) -> Option<Route> {
 	let (name, parameters) = defined_function(definition)?;
 	let arguments = (1..=parameters).map(|index| crate::warp_parser::parse(&format!("{REQUEST_WORD}.body#{index}")));
 	// built, not parsed: a generated name's `·` would parse as a product
-	let call = Node::List(
-		std::iter::once(Node::Symbol(name.clone())).chain(arguments).collect(),
-		Bracket::Round,
-		Separator::None,
-	);
+	let call = parens(std::iter::once(Node::Symbol(name.clone())).chain(arguments).collect());
 	Some((
 		RPC_METHOD.to_string(),
 		Node::Text(format!("{RPC_PREFIX}{name}")),

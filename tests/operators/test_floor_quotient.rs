@@ -24,9 +24,9 @@ fn floor_of_an_exact_number_beyond_f64() {
 
 #[test]
 fn floor_division_warns_nothing_about_percent() {
-	let _ = warp::diagnostic::take_warnings();
+	let _ = warp::errors::diagnostic::take_warnings();
 	is!("-7//2", -4);
-	assert!(warp::diagnostic::take_warnings()
+	assert!(warp::errors::diagnostic::take_warnings()
 		.iter()
 		.all(|warning| !warning.to_string().contains('%')));
 }

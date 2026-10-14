@@ -13,9 +13,9 @@
 //! Any `!` left (known only at run time) is mutation.rs's: a name unwraps, any other expression is a loud error.
 
 use super::nodes::{call, children_rewritten, is_block, key};
-use crate::diagnostic::{ask, reading, Ask, Fallback};
+use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
 use crate::mutation::bang_target;
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::IMPLICIT_PARAMETER;
 use std::collections::HashMap;
@@ -189,7 +189,7 @@ fn prefixed_group(node: &Node) -> Option<Node> {
 /// In a body: `param!` the argument's code (a group), a bare `param` the argument as data
 fn substitute_block(node: Node, parameter: &str, argument: &Node) -> Node {
 	if runs_parameter(&node, parameter) {
-		return Node::List(vec![argument.clone()], Bracket::Round, Separator::None);
+		return parens(vec![argument.clone()]);
 	}
 	match node {
 		Node::Symbol(name) if name == parameter => Node::List(
@@ -499,7 +499,7 @@ fn type_error(name: &str, block: &Node) -> Node {
 }
 
 fn applied(function: &Node, argument: Node) -> Node {
-	Node::List(vec![function.clone(), argument], Bracket::Round, Separator::None)
+	parens(vec![function.clone(), argument])
 }
 
 impl Blocks {
@@ -662,11 +662,7 @@ impl Blocks {
 				None => match value_entry(entry) {
 					Some((field, value)) => {
 						let value = self.rewrite(value.clone());
-						key(
-							field.clone(),
-							Op::Colon,
-							Node::List(vec![value], Bracket::Round, Separator::None),
-						)
+						key(field.clone(), Op::Colon, parens(vec![value]))
 					}
 					None => self.rewrite(entry.clone()),
 				},
@@ -817,7 +813,7 @@ impl Blocks {
 			.map(|parameter| Node::Symbol(parameter.drop_meta().name()))
 			.collect();
 		let call = self.method_call_of(method, names.clone(), Bracket::Round, Separator::None)?;
-		Some(key(Node::List(names, Bracket::Round, Separator::None), Op::Arrow, call))
+		Some(key(parens(names), Op::Arrow, call))
 	}
 
 	/// A name given a new value: its blocks and object entries are gone
@@ -908,6 +904,10 @@ impl Blocks {
 		}
 		if let Some(prefixed) = prefixed_group(&node) {
 			return self.rewrite(prefixed);
+		}
+		// `data (j: 1⏎ k: n * 1)` is code as written: its `k:` binds no block (tree-patterns step 7)
+		if quoted_data(&node).is_some() {
+			return node;
 		}
 		// `o.s1!`: the parser marks the field it was reading (as for `x.upper!`)
 		if let Node::Key(object, Op::Dot, field) = node.drop_meta() {

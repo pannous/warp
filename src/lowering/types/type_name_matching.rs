@@ -5,7 +5,7 @@
 use super::nodes::{call, is_block, is_call_head, key, spaced_statement};
 use super::nodes::{is_return, typed};
 use crate::analyzer::type_word_kind;
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{ANY_TYPE, ERROR_WORD, IMPLICIT_PARAMETER};
 
@@ -194,11 +194,7 @@ fn as_type(value: Node, type_name: &Node) -> Node {
 		}
 		_ if is_statement_block(&value) => converted_last(value, type_name),
 		_ if type_name.symbol_name().is_some_and(is_checked_result) => checked_result(value, type_name),
-		Node::Key(_, op, _) if op.is_arithmetic() => key(
-			Node::List(vec![value], Bracket::Round, Separator::None),
-			Op::As,
-			type_name.clone(),
-		),
+		Node::Key(_, op, _) if op.is_arithmetic() => key(parens(vec![value]), Op::As, type_name.clone()),
 		_ => key(value, Op::As, type_name.clone()),
 	}
 }

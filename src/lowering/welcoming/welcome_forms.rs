@@ -8,7 +8,7 @@
 //! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
 use super::nodes::{call, children_rewritten, is_kinded_type_word, key};
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::GENERIC_MARK;
 use crate::words::{ON_WORD, WHENEVER_WORD};
@@ -114,11 +114,7 @@ fn lambda_calls(node: Node, lambda_names: &HashSet<String>) -> Node {
 				.expect("guarded")
 				.into_iter()
 				.map(|argument| lambda_calls(argument, lambda_names));
-			Node::List(
-				[*function].into_iter().chain(arguments).collect(),
-				Bracket::Round,
-				Separator::None,
-			)
+			parens([*function].into_iter().chain(arguments).collect())
 		}
 		other => other.map_children(|child| lambda_calls(child, lambda_names)),
 	}
@@ -153,7 +149,7 @@ fn forms(node: Node) -> Node {
 				&& matches!(items[1].drop_meta(), Node::Key(_, Op::Assign, _))
 			{
 				crate::normalize::set_position_of(&items[0]);
-				crate::diagnostic::note_alias(CPP_AUTO_WORD, VAR_WORD);
+				crate::errors::diagnostic::note_alias(CPP_AUTO_WORD, VAR_WORD);
 				return var_declaration(Node::single_or_list(items[1..].to_vec(), bracket, separator));
 			}
 			if let Some(variable) = let_mut(&items) {
@@ -214,7 +210,7 @@ fn let_mut(items: &[Node]) -> Option<Node> {
 	}
 	let name = name.serialize();
 	crate::normalize::set_position_of(keyword);
-	crate::diagnostic::educate_once(
+	crate::errors::diagnostic::educate_once(
 		&format!("alias-let {modifier}"),
 		&format!("let {modifier} {name}"),
 		&format!("var {name}"),
@@ -464,7 +460,7 @@ fn when_listener(items: &[Node]) -> Option<Vec<Node>> {
 /// The one warning of every `when`, its fix the word this shape means
 fn when_meant(word: &Node, meant: &str) {
 	crate::normalize::set_position_of(word);
-	crate::diagnostic::educate_once(WHEN_TOPIC, WHEN_KEYWORD, meant, WHEN_REASON);
+	crate::errors::diagnostic::educate_once(WHEN_TOPIC, WHEN_KEYWORD, meant, WHEN_REASON);
 }
 
 /// The patterns and value of a `when` arm: `5 -> 50`, `1, 2 -> 10`, `is Circle -> 3`, `else -> 0`
@@ -545,14 +541,10 @@ fn without_type_parameters(node: Node, names: &[String]) -> Node {
 			let Node::List(parts, _, _) = typed_body.drop_meta() else {
 				unreachable!("guarded")
 			};
-			Node::List(
-				vec![
-					without_type_parameters(*head, names),
-					without_type_parameters(parts[1].clone(), names),
-				],
-				Bracket::Round,
-				Separator::None,
-			)
+			parens(vec![
+				without_type_parameters(*head, names),
+				without_type_parameters(parts[1].clone(), names),
+			])
 		}
 		// `x: T`, `xs: Vec<T>`: the parameter x
 		Node::Key(name, Op::Colon, kind) if is_type_parameter(&kind) => without_type_parameters(*name, names),
@@ -743,11 +735,7 @@ pub(crate) fn module_calls(node: Node, modules: &[&str]) -> Node {
 			match (operator, call.drop_meta()) {
 				// `Math.sqrt(16)`: the parser reads `sqrt(16)` as the operator √
 				(Some(op), Node::List(items, _, _)) if items.len() == 2 => {
-					let argument = Node::List(
-						vec![module_calls(items[1].clone(), modules)],
-						Bracket::Round,
-						Separator::None,
-					);
+					let argument = parens(vec![module_calls(items[1].clone(), modules)]);
 					key(Node::Empty, op, argument)
 				}
 				_ => module_calls(*call, modules),
@@ -838,11 +826,7 @@ fn starred_lambda(name: &Node, value: &Node) -> Option<Node> {
 	if !matches!(name.drop_meta(), Node::Symbol(_)) || !parameters.iter().any(is_starred) {
 		return None;
 	}
-	let head = Node::List(
-		[vec![name.clone()], parameters].concat(),
-		Bracket::Round,
-		Separator::None,
-	);
+	let head = parens([vec![name.clone()], parameters].concat());
 	Some(Node::Key(Box::new(head), Op::Define, body.clone()))
 }
 

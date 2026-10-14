@@ -375,15 +375,70 @@ impl WasmGcEmitter {
 		)
 	}
 
+	/// The text chosen by the info bits `(shift, mask)` of the kind in `kind_local`: a chain of ifs over `choices`
+	fn emit_text_of_info(
+		&self,
+		f: &mut Function,
+		kind_local: u32,
+		(shift, mask): (i64, i64),
+		choices: &[(i64, (u32, u32))],
+		otherwise: (u32, u32),
+	) {
+		let new_text = |f: &mut Function, (pointer, length): (u32, u32)| {
+			Self::emit_list(f, &[I32Const(pointer as i32), I32Const(length as i32)]);
+			self.call(f, "new_text");
+		};
+		for (info, text) in choices {
+			Self::emit_list(
+				f,
+				&[
+					I::LocalGet(kind_local),
+					I::I64Const(shift),
+					I::I64ShrU,
+					I::I64Const(mask),
+					I::I64And,
+				],
+			);
+			Self::emit_list(
+				f,
+				&[
+					I::I64Const(*info),
+					I::I64Eq,
+					I::If(BlockType::Result(Ref(self.node_ref(false)))),
+				],
+			);
+			new_text(f, *text);
+			f.instruction(&I::Else);
+		}
+		new_text(f, otherwise);
+		for _ in choices {
+			f.instruction(&I::End);
+		}
+	}
+
 	pub(super) fn emit_joining(&mut self, name: &'static str, nested: bool) {
 		let float_box = self.type_manager.f64_box_type;
 		let exact_numbers = self.should_emit_function(crate::wasm_emitter::numbers::exact::EXACT_TEXT);
-		let texts = [
-			self.allocate_string("["),
-			self.allocate_string("]"),
-			self.allocate_string(" "),
-		];
-		let map_texts = [self.allocate_string("{"), self.allocate_string("}")];
+		// a nested list keeps its written brackets and separator (card print-shows): `(a; b)`, `[a, b]`, `{a; b}`
+		let bracket_texts = [Bracket::Curly, Bracket::Square, Bracket::Round, Bracket::Less].map(|bracket| {
+			let info = crate::wasm_emitter::bracket_info(&bracket);
+			let open = self.allocate_string(&bracket.opening().to_string());
+			(info, open, self.allocate_string(&bracket.closing().to_string()))
+		});
+		let no_bracket = self.allocate_string("");
+		let separator_texts = [
+			Separator::Colon,
+			Separator::Semicolon,
+			Separator::Newline,
+			Separator::Tab,
+		]
+		.map(|separator| {
+			(
+				crate::wasm_emitter::separator_code(&separator),
+				self.allocate_string(&separator.joint()),
+			)
+		});
+		let space = self.allocate_string(" ");
 		// only a program whose Keys hold operators beyond `:` carries their texts (web::test_bundle_budget)
 		let operator_texts =
 			(self.written_operator_bound > op_to_code(&Op::Colon)).then(|| self.allocate_operator_texts());
@@ -399,10 +454,12 @@ impl WasmGcEmitter {
 		let node_type = self.type_manager.node_type;
 		let mut locals = vec![nullable, nullable];
 		locals.extend([ValType::I32; 4]);
-		locals.extend([ValType::I64, nullable, ValType::I32]);
+		locals.extend([ValType::I64, nullable, ValType::I32, ValType::I64]);
+		let trap_detail = self.trap_detail_global(); // the item that cannot join, for its error to name
 		self.runtime_function(name, vec![nullable, node_ref], vec![node_ref], locals, |s, f| {
 			let (cell, element) = (2, 3);
-			let (bound, address, position, is_first, number, entry_value, operator_entry) = (4, 5, 6, 7, 8, 9, 10);
+			let (bound, address, position, is_first, number, entry_value, operator_entry, list_kind) =
+				(4, 5, 6, 7, 8, 9, 10, 11);
 			let is_kind = |f: &mut Function, kind: Kind| {
 				s.emit_field(f, element, 0);
 				Self::emit_list(f, &[I::I64Const(kind as i64), I::I64Eq]);
@@ -496,10 +553,8 @@ impl WasmGcEmitter {
 						I::End,
 					],
 				);
-				// list_text: a nested list as its literal, "[" + list_text(item, " ") + "]", a map in braces
+				// list_text: a nested list as its literal, its bracket + list_text(item, its separator) + its bracket
 				if nested {
-					let [open, close, space] = texts;
-					let [open_map, close_map] = map_texts;
 					let new_text = |f: &mut Function, (pointer, length): (u32, u32)| {
 						Self::emit_list(f, &[I32Const(pointer as i32), I32Const(length as i32)]);
 						s.call(f, "new_text");
@@ -585,38 +640,21 @@ impl WasmGcEmitter {
 						f.instruction(&I::End);
 					}
 					Self::emit_list(f, &[I::Call(own_index), I::LocalSet(element), I::End]);
-					// a curly list is a map: its bracket info, above the kind (other info may sit higher still)
-					let is_map = |f: &mut Function| {
-						s.emit_field(f, element, 0);
-						Self::emit_list(
-							f,
-							&[
-								I::I64Const(KIND_BITS),
-								I::I64ShrU,
-								I::I64Const(BRACKET_INFO_MASK),
-								I::I64And,
-								I::I64Const(CURLY_BRACKET_INFO),
-								I::I64Eq,
-							],
-						);
-					};
+					// the bracket info sits above the kind, the separator code higher still (card keep-list)
 					masked_kind_is(f, Kind::List);
 					f.instruction(&I::If(BlockType::Empty));
-					is_map(f);
-					f.instruction(&I::If(BlockType::Result(node_ref)));
-					new_text(f, open_map);
-					f.instruction(&I::Else);
-					new_text(f, open);
-					Self::emit_list(f, &[I::End, I::LocalGet(element)]);
-					new_text(f, space);
+					s.emit_field(f, element, 0);
+					f.instruction(&I::LocalSet(list_kind));
+					let opening = bracket_texts.map(|(info, open, _)| (info, open));
+					let closing = bracket_texts.map(|(info, _, close)| (info, close));
+					let bracket_bits = (KIND_BITS, BRACKET_INFO_MASK);
+					let separator_bits = (SEPARATOR_SHIFT, SEPARATOR_MASK >> SEPARATOR_SHIFT);
+					s.emit_text_of_info(f, list_kind, bracket_bits, &opening, no_bracket);
+					f.instruction(&I::LocalGet(element));
+					s.emit_text_of_info(f, list_kind, separator_bits, &separator_texts, space);
 					f.instruction(&I::Call(own_index));
 					s.call(f, super::super::super::text::text_builtins::TEXT_CONCAT);
-					is_map(f);
-					f.instruction(&I::If(BlockType::Result(node_ref)));
-					new_text(f, close_map);
-					f.instruction(&I::Else);
-					new_text(f, close);
-					f.instruction(&I::End);
+					s.emit_text_of_info(f, list_kind, bracket_bits, &closing, no_bracket);
 					s.call(f, super::super::super::text::text_builtins::TEXT_CONCAT);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
@@ -722,7 +760,8 @@ impl WasmGcEmitter {
 				f,
 				&[I::If(BlockType::Result(ValType::I32)), I32Const(MAX_INT_BYTES), I::Else],
 			);
-			s.call(f, "not_a_joinable_item");
+			Self::emit_list(f, &[I::LocalGet(element), I::GlobalSet(trap_detail)]);
+			s.call(f, super::super::super::lists::list_ops::NOT_JOINABLE);
 			Self::emit_list(f, &[I32Const(0), I::End, I::End, I::LocalGet(bound), I::I32Add]);
 			s.emit_text_field(f, 1, 1);
 			Self::emit_list(f, &[I::I32Add, I::LocalSet(bound)]);

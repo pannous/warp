@@ -1,6 +1,19 @@
 //! Loading modules: the Loader finds, fetches and parses the modules a program uses, and the sibling files of its folder, package or project (D15 `use folder|package|project`)
 use super::*;
 
+/// the directory of the file it is written in, as text: `read(module_directory + "/data/x")` finds a module's own files
+pub(crate) const MODULE_DIRECTORY: &str = "module_directory";
+/// Statements a module contributes; everything else in a module (expressions, calls) is its own business
+/// `use folder`, `use package`, `use project`: every definition of that scope is visible, looked up by name (D15)
+pub(crate) const SCOPE_WORDS: [(&str, Scope); 3] = [
+	("folder", Scope::Folder),
+	("package", Scope::Package),
+	("project", Scope::Project),
+];
+/// Folders a package or project scope never looks into, besides hidden ones and nested repositories
+pub(crate) const UNSCOPED_DIRECTORIES: [&str; 3] = [PACKAGES_DIRECTORY, "target", "node_modules"];
+pub(crate) const PROJECT_MARKER: &str = ".git";
+
 /// Another module file of the program's folder, parsed only when its text mentions a name the program needs
 pub(super) struct Sibling {
 	pub(super) path: PathBuf,
@@ -79,8 +92,7 @@ pub(super) fn is_scoped_directory(directory: &Path) -> bool {
 }
 
 pub(super) fn package_root(folder: &Path) -> Result<PathBuf, Node> {
-	let absolute = folder.canonicalize().unwrap_or_else(|_| folder.to_path_buf());
-	let holds_its_module = |directory: &&Path| {
+	let holds_its_module = |directory: &Path| {
 		let name = directory
 			.file_name()
 			.map(|name| name.to_string_lossy().to_string())
@@ -89,30 +101,28 @@ pub(super) fn package_root(folder: &Path) -> Result<PathBuf, Node> {
 			.iter()
 			.any(|extension| directory.join(format!("{name}.{extension}")).is_file())
 	};
-	absolute
-		.ancestors()
-		.find(holds_its_module)
-		.map(Path::to_path_buf)
-		.ok_or_else(|| {
-			error(&format!(
-				"use package: no package folder around {}: a package folder holds <folder name>.warp",
-				folder.display()
-			))
-		})
+	enclosing_root(
+		folder,
+		holds_its_module,
+		"use package: no package folder around {}: a package folder holds <folder name>.warp",
+	)
 }
 
 pub(super) fn project_root(folder: &Path) -> Result<PathBuf, Node> {
+	let holds_marker = |directory: &Path| directory.join(PROJECT_MARKER).exists();
+	enclosing_root(
+		folder,
+		holds_marker,
+		&format!("use project: no project root around {{}}: the project root holds {PROJECT_MARKER}"),
+	)
+}
+
+/// The nearest folder around `folder` (itself included) that `is_root`; `missing` reports none, its `{}` the folder
+fn enclosing_root(folder: &Path, is_root: impl Fn(&Path) -> bool, missing: &str) -> Result<PathBuf, Node> {
 	let absolute = folder.canonicalize().unwrap_or_else(|_| folder.to_path_buf());
-	absolute
-		.ancestors()
-		.find(|directory| directory.join(PROJECT_MARKER).exists())
-		.map(Path::to_path_buf)
-		.ok_or_else(|| {
-			error(&format!(
-				"use project: no project root around {}: the project root holds {PROJECT_MARKER}",
-				folder.display()
-			))
-		})
+	let root = absolute.ancestors().find(|directory| is_root(directory));
+	root.map(Path::to_path_buf)
+		.ok_or_else(|| error(&missing.replace("{}", &folder.display().to_string())))
 }
 
 impl Sibling {
@@ -122,11 +132,11 @@ impl Sibling {
 			let module = WarpParser::parse(&self.source);
 			let parsed = match module.first_error() {
 				Some(failure) => {
-					let warning = crate::diagnostic::Diagnostic::at(
+					let warning = crate::errors::diagnostic::Diagnostic::at(
 						&module,
 						format!("folder scope skips {}: {}", self.path.display(), failure.serialize()),
 					);
-					crate::diagnostic::report(&[warning])?;
+					crate::errors::diagnostic::report(&[warning])?;
 					vec![]
 				}
 				None => statements(with_module_directory(module, &folder_of(&self.path))),
@@ -325,15 +335,21 @@ impl<'a> Loader<'a> {
 				false => Err(self.not_found(name, import)),
 			};
 		};
+		use crate::errors::diagnostic::{report, Diagnostic};
+		let shadows = |shadowed: String| Diagnostic::at(statement, format!("{} shadows {shadowed}", path.display()));
+		if let Some(repository) = package_repository(name).filter(|_| import == Import::Use) {
+			report(&[shadows(format!(
+				"the package {name} ({repository}): rename the file to use the package"
+			))])?;
+		}
 		if let Some(requirement) = &used.requirement {
 			check_version(name, &path, requirement)?;
 		}
 		if std_module(name).is_some() && !edited_since_build(&path) {
-			let shadowing = format!(
-				"{} shadows the standard module {name}: its text differs from the one warp embeds",
-				path.display()
-			);
-			crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(statement, shadowing).weak()])?;
+			report(&[shadows(format!(
+				"the standard module {name}: its text differs from the one warp embeds"
+			))
+			.weak()])?;
 		}
 		self.load(import, name, path)
 	}
@@ -465,7 +481,7 @@ impl<'a> Loader<'a> {
 		let shown = shown_path(&path);
 		let module = crate::compiler::meta::parsing_file(&shown.to_string_lossy(), || WarpParser::parse(source));
 		if let Some(failure) = module.first_error() {
-			return Err(crate::diagnostic::located_in_file(failure, &shown));
+			return Err(crate::errors::diagnostic::located_in_file(failure, &shown));
 		}
 		// classes insert_module_classes put in front of the program already: left out before the module's passes lower them
 		let classes_early = import == Import::Use && {
@@ -688,4 +704,11 @@ impl<'a> Loader<'a> {
 			.collect();
 		error(&format!("include not found: {name}; searched {}", searched.join(", ")))
 	}
+}
+
+/// A module's path as failures name it: without `./` steps (`./././greeting.warp` is `greeting.warp`)
+pub(crate) fn shown_path(path: &Path) -> PathBuf {
+	path.components()
+		.filter(|component| !matches!(component, std::path::Component::CurDir))
+		.collect()
 }

@@ -18,6 +18,7 @@ const BOOLEAN_ATTRIBUTES_LIST: &str = "html_boolean_attributes";
 const HEAD: &str = "head";
 /// `data-warp-click` (element_events.rs) and any other data attribute
 const DATA_ATTRIBUTE_PREFIX: &str = "data-";
+const ARIA_ATTRIBUTE_PREFIX: &str = "aria-";
 /// `li{ key: todo.id … }` names a list item (card web-keyed)
 const KEY: &str = "key";
 /// The value in place of the name `rendered`, assigned first: as an argument `ul: {…}` would name a parameter
@@ -35,6 +36,11 @@ const TEXT_ELEMENTS: [&str; 5] = ["style", "script", "option", "select", "textar
 /// Does the word name an HTML element
 pub fn is_element_tag(word: &str) -> bool {
 	element_names().iter().any(|element| element == word)
+}
+
+/// `my-card`: a page's own element is named with a dash, as no attribute is (html_is_custom_element of lib/markup.warp)
+pub fn is_custom_element(word: &str) -> bool {
+	word.contains('-') && !names_attribute(word) && !word.starts_with(ARIA_ATTRIBUTE_PREFIX)
 }
 
 /// The HTML elements lib/markup.warp renders
@@ -333,7 +339,7 @@ pub fn to_html(node: &Node) -> String {
 		&crate::warp_parser::parse(RENDER_PROGRAM),
 		&HashMap::from([(RENDERED.to_string(), node.clone())]),
 	);
-	match crate::diagnostic::quietly(|| crate::pipeline::eval_parsed(program, RENDER_PROGRAM)).drop_meta() {
+	match crate::errors::diagnostic::quietly(|| crate::pipeline::eval_parsed(program, RENDER_PROGRAM)).drop_meta() {
 		Node::Text(html) => html.clone(),
 		failed => format!("<pre>{}</pre>", escaped(&failed.serialize())),
 	}

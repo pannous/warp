@@ -306,7 +306,7 @@ impl WarpParser {
 		} else if is_operator_word(&glyph) {
 			self.set_hint_pos();
 			let name: String = glyph.iter().collect();
-			crate::diagnostic::educate_once(
+			crate::errors::diagnostic::educate_once(
 				INFIX_WORD_TOPIC,
 				&format!("{word} {name}"),
 				&format!("{word} {OPERATOR_WORD} {name}"),

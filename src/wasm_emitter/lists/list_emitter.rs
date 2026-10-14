@@ -11,6 +11,20 @@ use Instruction as I;
 
 use super::super::{items_info, WasmGcEmitter, ROUNDING_FUNCTIONS};
 
+/// The kinds of a local that no call reaches: `n = 2; n(3)` is an error (reject_variable_applied); a function, block,
+/// pointer or node-typed local may hold something callable
+const PLAIN_VALUE_KINDS: [Kind; 9] = [
+	Kind::Int,
+	Kind::Int32,
+	Kind::Float,
+	Kind::Float32,
+	Kind::Text,
+	Kind::Codepoint,
+	Kind::List,
+	Kind::Uncertain,
+	Kind::Time,
+];
+
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
 /// Runtime functions called from lowered code with their node arguments, and how many those are
 const NODE_ARGUMENT_CALLS: [(&str, usize); 4] = [
@@ -167,6 +181,9 @@ impl WasmGcEmitter {
 		bracket: &Bracket,
 		separator: &Separator,
 	) -> bool {
+		if self.reject_variable_applied(func, items, bracket, separator) {
+			return true;
+		}
 		let Some(name) = call_name(items, bracket, separator) else {
 			return false;
 		};
@@ -243,7 +260,10 @@ impl WasmGcEmitter {
 					repeated.serialize(),
 					crate::analyzer::kind_with_article(kind)
 				);
-				self.emit_type_error(func, crate::diagnostic::Diagnostic::at(repeated, reason).to_string());
+				self.emit_type_error(
+					func,
+					crate::errors::diagnostic::Diagnostic::at(repeated, reason).to_string(),
+				);
 			}
 		}
 		true
@@ -372,10 +392,10 @@ impl WasmGcEmitter {
 		}
 
 		// Check for introspection and math functions; `[count, a]` lists two items; a global `count` does not hide the word
-		// (lib/markup.warp's count(items) under a program's `count = 0`), a local one is an error (emit_shadowed_counting)
+		// (lib/markup.warp's count(items) under a program's `count = 0`), a local one is an error (reject_variable_applied)
 		if items.len() == 2 && !(*bracket == Bracket::Square && *separator == Separator::Colon) {
 			if let Node::Symbol(fn_name) = items[0].drop_meta() {
-				if self.emit_shadowed_counting(func, fn_name, &items[1])
+				if self.reject_variable_applied(func, items, bracket, separator)
 					|| (self.scope.lookup(fn_name).is_none() && self.emit_introspection_fn(func, fn_name, &items[1]))
 				{
 					return;
@@ -691,7 +711,7 @@ impl WasmGcEmitter {
 		let kind_mask = crate::type_tests::runtime_kind_mask(spec).filter(|_| unknown && !declared_type);
 		// a loop `for T in xs` filters only when its test is left to run time
 		if map_test || kind_mask.is_some() || declared_type {
-			let announced = filter_loop.map_or(Ok(0), |filter| crate::diagnostic::ask(&filter.question));
+			let announced = filter_loop.map_or(Ok(0), |filter| crate::errors::diagnostic::ask(&filter.question));
 			if let Err(error) = announced {
 				let message = match error {
 					Node::Error(reason) => reason.drop_meta().name(),
@@ -755,30 +775,42 @@ impl WasmGcEmitter {
 		true
 	}
 
-	/// Emit introspection functions: type, count, length, size, ceil, floor, round
-	/// Returns true if the function was handled
-	/// `count = 0; count(users)`: a local variable named like a counting word, applied to a value, neither counts nor
-	/// lists quietly; the error names the variable (card count-shadowed). A global of that name leaves the word to the
-	/// functions, which call it (lib/markup.warp's count(items))
-	pub(in crate::wasm_emitter) fn emit_shadowed_counting(
+	/// `n = 2; n(3)`, `count = 0; count(users)`: a local holding a plain value, applied to values, neither calls a
+	/// function of that name nor lists quietly; the error names the variable (cards error-local, count-shadowed). A
+	/// global of that name leaves the word to the functions, which call it (lib/markup.warp's count(items)); a local
+	/// holding a function or a block is called
+	pub(in crate::wasm_emitter) fn reject_variable_applied(
 		&mut self,
 		func: &mut Function,
-		name: &str,
-		argument: &Node,
+		items: &[Node],
+		bracket: &Bracket,
+		separator: &Separator,
 	) -> bool {
-		let shadowed = self.scope.lookup(name).is_some()
-			&& !self.ctx.user_functions.contains_key(name)
-			&& crate::analyzer::counting_function(name, &self.ctx).is_some();
-		if shadowed {
-			let argument = crate::normalize::operand_text(argument);
-			self.emit_type_error(
-				func,
-				format!("`{name}` is a variable here, so {name}({argument}) cannot count: rename the variable"),
-			);
+		let Some(name) = call_name(items, bracket, separator).filter(|_| items.len() >= 2) else {
+			return false;
+		};
+		let holds_plain_value = self
+			.scope
+			.lookup(name)
+			.is_some_and(|local| PLAIN_VALUE_KINDS.contains(&local.kind))
+			&& !self.ctx.user_functions.contains_key(name);
+		if holds_plain_value {
+			let arguments: Vec<String> = items[1..].iter().map(crate::normalize::operand_text).collect();
+			let call = format!("{name}({})", arguments.join(", "));
+			// a counting word stays a word; any other name has no function, as ffi::undefined_function_message says
+			let message = match crate::analyzer::counting_function(name, &self.ctx) {
+				Some(_) => format!("`{name}` is a variable here, so {call} cannot count: rename the variable"),
+				None => format!(
+					"undefined function: {name} (`{name}` is a variable here, so {call} calls nothing: rename the variable)"
+				),
+			};
+			self.emit_type_error(func, message);
 		}
-		shadowed
+		holds_plain_value
 	}
 
+	/// Emit introspection functions: type, count, length, size, ceil, floor, round
+	/// Returns true if the function was handled
 	pub(in crate::wasm_emitter) fn emit_introspection_fn(
 		&mut self,
 		func: &mut Function,
@@ -1009,7 +1041,7 @@ impl WasmGcEmitter {
 				}
 				continue;
 			}
-			self.statement_position = crate::diagnostic::line_info(item);
+			self.statement_position = crate::errors::diagnostic::line_info(item);
 			self.emit_trap_position(func);
 			if Some(i) == last_statement {
 				emit(self, func, item);
@@ -1036,7 +1068,7 @@ impl WasmGcEmitter {
 		first: &'a Node,
 		second: &'a Node,
 	) -> Option<(&'a Node, &'a Node)> {
-		use crate::diagnostic::{ask, reading, Ask, Fallback};
+		use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
 		if call == crate::list_mutations::INSERT_AT_CALL {
 			return Some((first, second));
 		}
@@ -1122,21 +1154,22 @@ impl WasmGcEmitter {
 			return None;
 		}
 		let written = Node::List(items.to_vec(), bracket.clone(), separator.clone());
-		let text = crate::diagnostic::written_text(&written);
+		let text = crate::errors::diagnostic::written_text(&written);
 		let Some(name) = items
 			.iter()
 			.find_map(|item| self.unknown_word(item).filter(|name| self.is_undefined_word(name)))
 		else {
-			let assigned = crate::diagnostic::written_text(assigned?);
-			let dropped = crate::diagnostic::written_text(&Node::List(atoms.to_vec(), Bracket::None, Separator::Space));
+			let assigned = crate::errors::diagnostic::written_text(assigned?);
+			let dropped =
+				crate::errors::diagnostic::written_text(&Node::List(atoms.to_vec(), Bracket::None, Separator::Space));
 			let message = format!("`{dropped}` after `{assigned}` does nothing; join it to the value with an operator, or start a new statement");
-			return Some(crate::diagnostic::Diagnostic::at(&written, message).remembered());
+			return Some(crate::errors::diagnostic::Diagnostic::at(&written, message).remembered());
 		};
 		let diagnostic = match crate::modules::std_module_defining(&name) {
 			Some(_) => crate::ffi::undefined_function_diagnostic(&written, &name),
 			None => self
 				.offer_near_name(
-					crate::diagnostic::Diagnostic::at(
+					crate::errors::diagnostic::Diagnostic::at(
 						&written,
 						format!("undefined: {name} in `{text}`; define {name}, or write `data {text}` for data"),
 					),
@@ -1156,7 +1189,7 @@ impl WasmGcEmitter {
 
 	/// `pirnt`: a lone word that names nothing but is one or two letters away from a defined name; a got-it warning
 	pub(in crate::wasm_emitter) fn warn_near_miss(&self, word: &str) -> Result<(), Node> {
-		use crate::diagnostic::{ask, reading, Ask, Fallback};
+		use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
 		if word.chars().count() < 3 || self.is_known_word(word) {
 			return Ok(());
 		}
@@ -1195,9 +1228,9 @@ impl WasmGcEmitter {
 	/// The fix of a misspelled `word`, when it is near a name
 	pub(in crate::wasm_emitter) fn offer_near_name(
 		&self,
-		diagnostic: crate::diagnostic::Diagnostic,
+		diagnostic: crate::errors::diagnostic::Diagnostic,
 		word: &str,
-	) -> crate::diagnostic::Diagnostic {
+	) -> crate::errors::diagnostic::Diagnostic {
 		match self.near_name(word) {
 			Some(near) => diagnostic.offer(format!("the name {near}"), word, near),
 			None => diagnostic,

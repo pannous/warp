@@ -19,7 +19,7 @@ fn a_list_of_jobs_gives_their_results_when_used() {
 #[test]
 fn jobs_in_a_list_run_at_the_same_time() {
 	let jobs =
-		"f(ms) := { started = clock(); sleep(ms); started }; jobs = []; for i in 1 to 3 { jobs.add(go f(1000)) }; ";
+		"f(ms) := { started = clock(); sleep(ms / 1000); started }; jobs = []; for i in 1 to 3 { jobs.add(go f(1000)) }; ";
 	is!(
 		&format!("{jobs}starts = await all jobs; if abs(starts#3 - starts#1) < 1000 then 3000 else -1"),
 		3000
@@ -29,7 +29,7 @@ fn jobs_in_a_list_run_at_the_same_time() {
 #[test]
 fn counting_jobs_does_not_await_them() {
 	// the count is there at once: well before the one-second jobs end (clock() is in milliseconds)
-	let jobs = "f(ms) := { sleep(ms); ms }; jobs = []; for i in 1 to 3 { jobs.add(go f(1000)) }; ";
+	let jobs = "f(ms) := { sleep(ms / 1000); ms }; jobs = []; for i in 1 to 3 { jobs.add(go f(1000)) }; ";
 	is!(
 		&format!(
 			"{jobs}t0 = clock(); n = count(jobs) + #jobs + jobs.size; t1 = clock(); if t1 - t0 < 500 then n else -1"

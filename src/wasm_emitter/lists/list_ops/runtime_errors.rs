@@ -67,6 +67,9 @@ pub const RETURNED_ERROR: &str = "returned_error";
 /// `a % 0`, `a rem 0`: an integer divide by zero (big_int::emit_nonzero_divisor)
 pub const DIVIDE_BY_ZERO: &str = "divide_by_zero";
 
+/// `print [f]`, `join`: an item that is no text, number or other value with a text form; the item is the trap detail
+pub(in crate::wasm_emitter) const NOT_JOINABLE: &str = "not_a_joinable_item";
+
 /// `x.keys`, `x.values`, `x.entries` of a value that is no map (card keys-value)
 pub(super) const NOT_A_MAP: &str = "not_a_map";
 
@@ -84,7 +87,7 @@ pub const RUNTIME_ERRORS: [&str; 31] = [
 	"not_a_text",
 	"not_an_int",
 	"non_ascii_text",
-	"not_a_joinable_item",
+	NOT_JOINABLE,
 	"empty_separator",
 	"not_an_object",
 	"not_comparable",

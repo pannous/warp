@@ -11,7 +11,7 @@ i = 0
 while not stop {
 	if i == 1 { print \"ready\" }
 	i += 1
-	sleep(10)
+	sleep(10ms)
 }
 print \"done\"
 ";
@@ -32,7 +32,7 @@ fn on_interrupt_cuts_a_sleep_short() {
 	let started = std::time::Instant::now();
 	let (rest, status) = interrupted_run(
 		"on_interrupt_sleep.warp",
-		"on interrupt { print \"interrupted\" }\nprint \"ready\"\nsleep(20000)\nprint \"done\"\n",
+		"on interrupt { print \"interrupted\" }\nprint \"ready\"\nsleep(20000ms)\nprint \"done\"\n",
 	);
 	assert_eq!(rest, ["interrupted", "done"]);
 	assert!(status.success(), "{status}");

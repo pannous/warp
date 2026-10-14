@@ -8,9 +8,9 @@
 use super::nodes::{call, children_rewritten, key, Counter};
 use crate::analyzer::{call_name, counting_method};
 use crate::compiler::context::Context;
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::list_mutations::is_list_mutating_method;
-use crate::node::{symbol, text, Bracket, Node, Separator};
+use crate::node::{parens, symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{parse, ASSERT_MARKER, TRY_MARKER};
 use crate::wasm_emitter::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
@@ -393,10 +393,10 @@ fn call_results(node: &Node, context: &Context) -> HashSet<String> {
 fn raise_call(items: &[Node], shadowed: &HashSet<String>) -> Option<Node> {
 	let [word, raised] = items else { return None };
 	let is_raise_word = |raise: &&str| word.is_symbol(raise) && !shadowed.contains(*raise);
-	if !crate::pipeline::RAISE_WORDS.iter().any(is_raise_word) {
+	if !crate::errors::run_time::RAISE_WORDS.iter().any(is_raise_word) {
 		return None;
 	}
-	let message = crate::pipeline::returned_error_message(raised)
+	let message = crate::errors::run_time::returned_error_message(raised)
 		.unwrap_or(raised)
 		.clone();
 	// the message is a text, so `catch e` reads it whatever was raised (`raise 42`: "42"); a word (`raise oops`) is its name
@@ -681,13 +681,7 @@ impl Lowering {
 				return None;
 			}
 			if call_name(items, bracket, separator).is_some() {
-				let log_of = |argument: &Node| {
-					Node::List(
-						vec![items[0].clone(), argument.clone()],
-						Bracket::Round,
-						Separator::None,
-					)
-				};
+				let log_of = |argument: &Node| parens(vec![items[0].clone(), argument.clone()]);
 				return Some(key(log_of(value), Op::Div, log_of(base)));
 			}
 		}
@@ -803,18 +797,18 @@ impl Lowering {
 		let (left, right) = (call_text(left), call_text(right));
 		let whole = format!("{name}({left} {op} {right})");
 		let first = format!("{name}({left}) {op} {right}");
-		let question = crate::diagnostic::Ask::new(
+		let question = crate::errors::diagnostic::Ask::new(
 			BRACELESS_ARGUMENT_TOPIC,
 			format!("`{name} {left} {op} {right}` is {whole}, not {first}"),
 			vec![
-				crate::diagnostic::reading("the whole expression", &whole),
-				crate::diagnostic::reading("only the first operand", &first),
+				crate::errors::diagnostic::reading("the whole expression", &whole),
+				crate::errors::diagnostic::reading("only the first operand", &first),
 			],
-			crate::diagnostic::Fallback::Warning,
+			crate::errors::diagnostic::Fallback::Warning,
 		)
 		.written(&format!("{name} {left} {op} {right}"))
 		.at_node(argument);
-		crate::diagnostic::ask(&question).map(|_| ())
+		crate::errors::diagnostic::ask(&question).map(|_| ())
 	}
 
 	/// `x in xs`: yes/no whether a map has the key x or a list the element x (decision in-bool; its position is
@@ -1014,11 +1008,7 @@ impl Lowering {
 			} else {
 				format!("{fewest} to {wanted}")
 			};
-			let call = Node::List(
-				[vec![head.clone()], arguments.clone()].concat(),
-				Bracket::Round,
-				Separator::None,
-			);
+			let call = parens([vec![head.clone()], arguments.clone()].concat());
 			return Diagnostic::at(
 				&call,
 				format!("{word} takes {counts} argument{plural}, got {}", arguments.len()),
@@ -1039,7 +1029,7 @@ impl Lowering {
 					// the written spelling's position: `warn "x"` errs where warn is
 					symbol(word).with_meta_of(head)
 				};
-				Node::List([vec![name], arguments].concat(), Bracket::Round, Separator::None)
+				parens([vec![name], arguments].concat())
 			}
 		}
 	}

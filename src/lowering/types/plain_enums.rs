@@ -7,7 +7,7 @@
 use super::match_exhaustive::typed_subjects;
 use super::nodes::{key, matched};
 use super::sum_variants::sum_type;
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::RAISE_WORD;

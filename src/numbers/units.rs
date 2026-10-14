@@ -650,7 +650,13 @@ pub fn describe(data: &DataValue) -> Option<String> {
 	data.downcast_ref::<crate::time::Time>().map(|time| time.to_string())
 }
 
-/// `sleep(1000 ms)`, `sleep 1 s`, `sleep(2 seconds)`: a constant duration is its milliseconds, what the host word takes
+/// The unit of a bare number of sleep (decision sleep-seconds)
+const SECOND: &str = "s";
+/// what the host word sleep takes per second of a run-time number
+const MILLISECONDS_PER_SECOND: i64 = 1000;
+
+/// `sleep(1000 ms)`, `sleep 1 s`, `sleep(2 seconds)`, `sleep 2`: a constant duration is its milliseconds, what the host
+/// word takes; a run-time number counts seconds as a bare one does, so `sleep(t)` sleeps `t * 1000` milliseconds
 /// (async agent, 2026-10-06: quantities do not reach run time yet, notes/units_runtime.md)
 pub fn lower_sleep_durations(program: Node) -> Node {
 	// a duration whose unit word is one of the program's names (`s = 1; sleep 5 s`) stays as written; `m = 2` leaves
@@ -666,22 +672,37 @@ pub fn lower_sleep_durations(program: Node) -> Node {
 					[single] => single.clone(),
 					several => Node::List(several.to_vec(), Bracket::None, Separator::Space),
 				};
-				match milliseconds(&duration).filter(|_| !duration.mentions_where(|name| shadowed.contains(name))) {
-					Some(amount) => Node::List(
-						vec![items[0].clone(), Node::int(amount)],
-						Bracket::Round,
-						Separator::None,
-					),
-					None => {
-						if let Err(error) = warn_bare_duration(&duration) {
-							return error;
-						}
-						Node::List(
-							items.into_iter().map(|item| lower(item, shadowed)).collect(),
-							bracket,
-							separator,
-						)
+				let shadows = duration.mentions_where(|name| shadowed.contains(name));
+				let bare = matches!(duration.drop_meta(), Node::Number(_));
+				if bare {
+					if let Err(error) = warn_bare_duration(&duration) {
+						return error;
 					}
+				}
+				let duration = match bare {
+					true => Node::List(
+						vec![duration, Node::Symbol(SECOND.into())],
+						Bracket::None,
+						Separator::Space,
+					),
+					false => duration,
+				};
+				let sleeping = |milliseconds: Node| {
+					Node::List(vec![items[0].clone(), milliseconds], Bracket::Round, Separator::None)
+				};
+				match (milliseconds(&duration).filter(|_| !shadows), &items[1..]) {
+					(Some(amount), _) => sleeping(Node::int(amount)),
+					// a number at run time counts seconds too (decision sleep-seconds): `f(t) := sleep(t)`
+					(None, [seconds]) => sleeping(Node::Key(
+						Box::new(lower(seconds.clone(), shadowed)),
+						Op::Mul,
+						Box::new(Node::int(MILLISECONDS_PER_SECOND)),
+					)),
+					(None, _) => Node::List(
+						items.into_iter().map(|item| lower(item, shadowed)).collect(),
+						bracket,
+						separator,
+					),
 				}
 			}
 			other => other.map_children(|child| lower(child, shadowed)),
@@ -832,15 +853,15 @@ fn without_unread_constants(program: Node, constants: &Constants) -> Node {
 	Node::List(kept, bracket, separator)
 }
 
-/// User #17: `sleep(1)` reads as milliseconds but says nothing; a bare number gets the warning that names the units
+/// User #17: a bare number of `sleep(1)` gets the warning that names the units; it counts seconds (decision
+/// sleep-seconds), as in sh and Python; `use relaxed` and `use script` take it without the warning
 fn warn_bare_duration(duration: &Node) -> Result<(), Node> {
-	if !matches!(duration.drop_meta(), Node::Number(_)) {
+	if crate::compiler::compile_context::read(|context| context.hints_muted) {
 		return Ok(());
 	}
 	let amount = duration.serialize();
-	let message =
-		format!("sleep needs a unit: sleep {amount} second or sleep {amount} ms (a bare number is milliseconds)");
-	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(duration, message)])
+	let message = format!("sleep needs a unit: sleep {amount}s or sleep {amount}ms (a bare number is seconds)");
+	crate::errors::diagnostic::report(&[crate::errors::diagnostic::Diagnostic::at(duration, message)])
 }
 
 /// A constant duration in whole milliseconds: `1000 ms`, `2 s`, `1 min`, `2 seconds` (a duration of the time module)
@@ -852,7 +873,7 @@ pub(crate) fn milliseconds(node: &Node) -> Option<i64> {
 	}
 	match static_units::constant(&with_written_amount(node.clone())) {
 		Ok(Some((seconds, signature))) if signature == [(Dimension::Time, 1)] => {
-			whole(&static_units::exact_amount(&seconds)?.mul(&Rational::integer(1000)))
+			whole(&static_units::exact_amount(&seconds)?.mul(&Rational::integer(MILLISECONDS_PER_SECOND)))
 		}
 		_ => None,
 	}

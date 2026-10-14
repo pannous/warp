@@ -36,6 +36,6 @@ while elapsed < seconds {
 		rect(x, height - peaks[band] - 2, bar_width - gap, 2, white)
 	}
 	show()
-	sleep(frame_milliseconds)
+	sleep(frame_milliseconds / 1000)
 	elapsed = (clock() - started) / 1000.0
 }

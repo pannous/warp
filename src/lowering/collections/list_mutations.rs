@@ -3,7 +3,7 @@
 use crate::analyzer::*;
 use crate::declaration_forms::lower_declarations;
 use crate::lowering::nodes::is_place;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{AT_WORD, DELETE_WORD, POP_WORD};
 
@@ -96,7 +96,7 @@ pub(crate) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
 	let (value_word, rest_word) = match method {
 		name if is_removal_method(name) => {
 			if name == DELETE_WORD {
-				crate::diagnostic::note_alias(DELETE_WORD, REMOVE_METHOD);
+				crate::errors::diagnostic::note_alias(DELETE_WORD, REMOVE_METHOD);
 			}
 			(REMOVED_VALUE_CALL, crate::library_words::MAP_WITHOUT)
 		}
@@ -138,21 +138,13 @@ pub(crate) fn cleared_collection(collection: &Node, call: &Node) -> Option<Node>
 
 /// `list_become(place, fresh)`: the place takes the fresh list's items in place (LIST_BECOME)
 fn became(place: &Node, fresh: Node) -> Node {
-	Node::List(
-		vec![Node::Symbol(LIST_BECOME.to_string()), place.clone(), fresh],
-		Bracket::Round,
-		Separator::None,
-	)
+	parens(vec![Node::Symbol(LIST_BECOME.to_string()), place.clone(), fresh])
 }
 
 /// A call of a prelude word written after library_words, which names them `prelude·word`, has run
 fn prelude_call(word: &str, arguments: Vec<Node>) -> Node {
 	let word = crate::modules::prelude_name(word).unwrap_or(word.to_string());
-	Node::List(
-		[vec![Node::Symbol(word)], arguments].concat(),
-		Bracket::Round,
-		Separator::None,
-	)
+	parens([vec![Node::Symbol(word)], arguments].concat())
 }
 
 /// `xs.insert(a, b)` when xs is a variable. Warp writes `insert(value, position)`, Python `insert(position, value)`:
@@ -198,11 +190,7 @@ pub(crate) fn lowered_insert(list: Box<Node>, call: &Node) -> Node {
 		lower_declarations(first),
 		lower_declarations(second),
 	];
-	Node::Key(
-		list,
-		Op::Assign,
-		Box::new(Node::List(arguments, Bracket::Round, Separator::None)),
-	)
+	Node::Key(list, Op::Assign, Box::new(parens(arguments)))
 }
 
 /// `xs.add(v)` as `xs += [v]` and `xs.insert(i, v)` as its assignment, for a call that `updates_list`

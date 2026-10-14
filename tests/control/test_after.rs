@@ -5,7 +5,7 @@ use crate::is;
 #[test]
 fn after_waits_for_its_condition() {
 	is!(
-		"shared done = false; go { sleep(50); done = true }; last = after done return \"third\"; await last",
+		"shared done = false; go { sleep(50ms); done = true }; last = after done return \"third\"; await last",
 		"third"
 	);
 	is!(
@@ -20,7 +20,7 @@ fn a_cancelled_after_gives_the_fallback() {
 		"shared done = false; last = after done return \"third\"; cancel last; await last or \"no third\"",
 		"no third"
 	);
-	is!("job = go { sleep(10); 3 }; await job or 0", 3);
+	is!("job = go { sleep(10ms); 3 }; await job or 0", 3);
 }
 
 #[test]
