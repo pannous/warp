@@ -345,6 +345,12 @@ pattern(text) := pattern(text, bar_seconds(1))
 midi_send(status, data1, data2 = 0, port = "") := std_io("midi", "send", [port, if status < 192 or status >= 224 then [status, data1, data2] else [status, data1]])
 midi_on(pitch, velocity = 100, channel = 1) := midi_send(143 + channel, midi(pitch), velocity)
 midi_off(pitch, channel = 1) := midi_send(127 + channel, midi(pitch), 0)
+// a note of that length: on at the voice's place, off after it; the next sound or message follows (card midi-clock)
+midi_note(pitch, duration, velocity = 100, channel = 1) := {
+	midi_on(pitch, velocity, channel)
+	std_io("sound", "rest", [si_amount(duration)])
+	midi_off(pitch, channel)
+}
 midi_outputs() := std_io("midi", "outputs", [])
 // the next message [status, data1, data2] waiting at the input, ø when none (fails where there is no MIDI input)
 midi_receive() := std_io("midi", "receive", [])
