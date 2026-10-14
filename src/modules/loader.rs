@@ -602,7 +602,10 @@ impl<'a> Loader<'a> {
 						.iter()
 						.map(|(index, _)| siblings[*index].path.display().to_string())
 						.collect();
-					return Err(error(&format!("{name} is defined in more than one file of the scope: {}; rename one, or `use` the one you mean", files.join(" and "))));
+					return Err(error(&format!(
+						"{name} is defined in more than one file of the scope: {}; rename one, or `use` the one you mean",
+						files.join(" and ")
+					)));
 				}
 			};
 			if using_siblings.insert(index) {

@@ -65,7 +65,7 @@ pub(super) fn checked_cast(object: Node, class: &str) -> Node {
 pub(super) fn instance_from(object: Node, class: &str, fields: &ClassFields) -> Node {
 	let source = Node::Symbol(format!("{class}{FROM_SUFFIX}"));
 	let mut statements = vec![key(source.clone(), Op::Assign, object)];
-	statements.extend(statements_of(built_instance(&source, class, fields)));
+	statements.extend(built_instance(&source, class, fields).body_statements());
 	Node::List(statements, Bracket::Round, Separator::Semicolon)
 }
 
@@ -164,9 +164,7 @@ pub(crate) fn instance_classes(node: &Node, classes: &[String]) -> std::collecti
 				(Op::Assign | Op::Define, conversion) if crate::numbers::units::conversion(conversion).is_some() => {
 					crate::numbers::units::conversion(conversion).and_then(|(quantity, _)| class_of(quantity))
 				}
-				(Op::Assign | Op::Define, Node::Key(quantity, Op::Dot, call))
-					if is_call_of(call, CONVERSION_METHOD) =>
-				{
+				(Op::Assign | Op::Define, Node::Key(quantity, Op::Dot, call)) if call.is_call_of(CONVERSION_METHOD) => {
 					class_of(quantity)
 				}
 				// `s = sum([quantity("5 m"), …])`: the sum of instances is one (card quantity-sum)

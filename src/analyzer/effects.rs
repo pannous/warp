@@ -10,7 +10,7 @@
 use crate::analyzer::{extract_ffi_imports, function_definitions};
 use crate::compiler::context::Context;
 use crate::node::{Bracket, Node};
-use crate::operators::{is_function_keyword, Op};
+use crate::operators::Op;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fmt;
 
@@ -624,7 +624,8 @@ impl Resolver<'_> {
 	}
 
 	fn is_definition(&self, node: &Node) -> bool {
-		defined_name(node).is_some_and(|name| self.context.user_functions.contains_key(&name))
+		node.defined_name()
+			.is_some_and(|name| self.context.user_functions.contains_key(&name))
 	}
 }
 
@@ -735,7 +736,7 @@ impl EventUses {
 	}
 
 	fn collect(&mut self, node: &Node, functions: &BTreeSet<String>, verbs: &[String]) {
-		if defined_name(node).is_some_and(|name| functions.contains(&name)) {
+		if node.defined_name().is_some_and(|name| functions.contains(&name)) {
 			return; // a definition has its own events
 		}
 		if let Some((event, data)) = crate::event_signals::emitted(node, verbs) {
@@ -999,27 +1000,6 @@ fn assigns(node: &Node, parameter: &str) -> bool {
 	}
 }
 
-/// Name bound by `f(x) := …`, `f := …it…` or `def f(x){…}`
-fn defined_name(node: &Node) -> Option<String> {
-	match node.drop_meta() {
-		Node::Key(left, Op::Define | Op::Assign, _) => leading_symbol(left),
-		Node::List(items, _, _)
-			if items.len() >= 2 && matches!(items[0].drop_meta(), Node::Symbol(s) if is_function_keyword(s)) =>
-		{
-			leading_symbol(&items[1])
-		}
-		_ => None,
-	}
-}
-
-fn leading_symbol(node: &Node) -> Option<String> {
-	match node.drop_meta() {
-		Node::Symbol(name) => Some(name.clone()),
-		Node::List(items, _, _) => leading_symbol(items.first()?),
-		_ => None,
-	}
-}
-
 /// `import f from lib` / `use lib`
 fn is_import_statement(node: &Node) -> bool {
 	match node.drop_meta() {
@@ -1050,7 +1030,7 @@ fn split_constraint(node: &Node) -> Option<(&Node, (EffectSet, BTreeSet<String>)
 	let Node::Key(definition, Op::Not, declared) = node.drop_meta() else {
 		return None;
 	};
-	defined_name(definition)?;
+	definition.defined_name()?;
 	let names = constraint_names(declared)?;
 	let allowed = allowed_names(&names)?;
 	Some((definition, allowed))
@@ -1106,7 +1086,7 @@ fn collect_constraints(node: &Node, found: &mut Vec<(String, Constraint)>) {
 			.map(|info| (info.line_nr, info.column))
 			.unwrap_or_default();
 		found.push((
-			defined_name(definition).expect("checked by split_constraint"),
+			definition.defined_name().expect("checked by split_constraint"),
 			Constraint {
 				allowed,
 				events,

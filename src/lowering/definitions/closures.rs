@@ -13,7 +13,7 @@ use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
 use crate::words::IMPLICIT_PARAMETER;
-use crate::words::{FOR_WORD, GLOBAL_WORD, IN_WORD};
+use crate::words::{FOR_WORD, IN_WORD};
 use std::collections::{HashMap, HashSet};
 
 pub const CLOSURE_NEW: &str = "closure_new";
@@ -842,7 +842,7 @@ impl Lifting {
 
 	/// The variables of the enclosing scopes the body reads, in order of first use
 	fn captured(&self, body: &Node, params: &[String], bound: &HashSet<String>) -> Vec<String> {
-		let globals = declared_globals(body);
+		let globals: HashSet<String> = body.declared_globals();
 		let mut captured: Vec<String> = vec![];
 		body.visit(&mut |node| {
 			if let Node::Symbol(name) = node {
@@ -866,25 +866,20 @@ fn assigned_variables(body: &Node) -> HashSet<String> {
 	body.assigned_names(|op| *op == Op::Assign)
 }
 
-/// The names a body declares `global n`: the closure reads and changes the program's own n
-fn declared_globals(body: &Node) -> HashSet<String> {
-	let mut globals = HashSet::new();
-	body.visit(&mut |node| {
-		if let Node::Key(keyword, Op::Colon, name) = node {
-			if keyword.is_symbol(GLOBAL_WORD) {
-				globals.insert(name.drop_meta().name());
-			}
-		}
-	});
-	globals
-}
-
 /// A closure changing a captured variable would change its own copy (wiki/charged.md §3): a loud error naming `global`
 fn changed_capture(body: &Node, captured: &[String]) -> Option<Node> {
 	let changes = crate::analyzer::find_assignments(body, &|name| captured.contains(name));
 	let (assignment, name) = changes.into_iter().find(|(assignment, _)| matches!(assignment.drop_meta(), Node::Key(target, _, _) if matches!(target.drop_meta(), Node::Symbol(_))))?;
-	Some(Diagnostic::at(assignment, format!("the closure changes {name}, a variable it captures: declare it `global {name}` to change it from the closure"))
-		.fix(format!("global {name}")).into_error())
+	Some(
+		Diagnostic::at(
+			assignment,
+			format!(
+				"the closure changes {name}, a variable it captures: declare it `global {name}` to change it from the closure"
+			),
+		)
+		.fix(format!("global {name}"))
+		.into_error(),
+	)
 }
 
 /// The helpers `closure_call_n(f, a1…an)` the program calls, as user functions: a closure and n values of any kind (Data)

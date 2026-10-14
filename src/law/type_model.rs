@@ -74,7 +74,6 @@ const ON_KEYWORD: &str = "on";
 const IN_KEYWORD: &str = "in";
 const EMIT_KEYWORD: &str = "emit";
 /// `global n = 0` at main level, `global n` in a function: a main-level name functions may assign
-const GLOBAL_KEYWORD: &str = "global";
 /// What a global declared without a value holds until it is assigned: `global x; x + 1` is 1
 const UNSET_GLOBAL: i64 = 0;
 /// `break` is not in W0: block handlers, whose block it ended, were dropped (card cleanup-drop-scoped-handlers)

@@ -265,7 +265,7 @@ fn fold_constants(node: Node, constants: &HashMap<String, Node>) -> Node {
 		match evaluate(&node) {
 			// a quantity, `2 hours in minutes`: written as `120min` for the units' lowering
 			Ok(Value::Converted(quantity)) if !matches!(quantity, Node::Error(_)) => {
-				return crate::warp_parser::parse(&quantity.serialize())
+				return crate::warp_parser::parse(&quantity.serialize());
 			}
 			Ok(value) => return run_time_constant(value),
 			Err(message) if !message.starts_with(UNSUPPORTED) => return error(&message),
@@ -363,15 +363,11 @@ fn time_data(node: &Node) -> bool {
 	}
 }
 
-fn is_call_of(node: &Node, name: &str) -> bool {
-	matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|head| head.is_symbol(name)))
-}
-
 /// What only this compile-time evaluator knows so far: literals, durations, `date(…)`, `t in "Europe/Berlin"`;
 /// a program with none of them reads `now` at run time
 fn needs_folding(node: &Node) -> bool {
 	let mut found = false;
-	node.visit(&mut |part| found |= time_data(part) || is_call_of(part, "date") || places_in_zone(part));
+	node.visit(&mut |part| found |= time_data(part) || part.is_call_of("date") || places_in_zone(part));
 	found
 }
 
@@ -536,13 +532,13 @@ fn options(function: &str, options: &[Node]) -> Result<(Overflow, Disambiguation
 			}
 			(Node::Symbol(name), "reject") if name == "overflow" && function == "add" => overflow = Overflow::Reject,
 			(Node::Symbol(name), _) if name == "overflow" && function == "add" => {
-				return Err(format!("overflow is clamp or reject, got {mode}"))
+				return Err(format!("overflow is clamp or reject, got {mode}"));
 			}
 			(Node::Symbol(name), "earlier") if name == "disambiguation" => choice = Disambiguation::Earlier,
 			(Node::Symbol(name), "later") if name == "disambiguation" => choice = Disambiguation::Later,
 			(Node::Symbol(name), "reject") if name == "disambiguation" => choice = Disambiguation::Reject,
 			(Node::Symbol(name), _) if name == "disambiguation" => {
-				return Err(format!("disambiguation is earlier, later or reject, got {mode}"))
+				return Err(format!("disambiguation is earlier, later or reject, got {mode}"));
 			}
 			_ => return Err(format!("{function} has no option {name}")),
 		}

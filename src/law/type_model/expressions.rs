@@ -63,14 +63,21 @@ impl Exporter {
 		self.locals.pop();
 		self.argument_fields.clear();
 		self.cells.clear();
-		let body = cells.iter().zip(&first_values).rev().fold(body?, |body, (cell, first_value)| {
-			let path = lean_strings(&[cell_class(name, cell)]);
-			let new_cell = match first_value.as_str() {
-				UNIT_TYPE => format!(".new {path}"),
-				_ => format!(".letIn \"·new\" (.cls {path}) (.new {path}) (.seq (.set (.loc \"·new\") {} ({first_value})) (.loc \"·new\"))", quoted(CELL_FIELD)),
-			};
-			format!(".letIn {} (.cls {path}) ({new_cell}) ({body})", quoted(cell))
-		});
+		let body = cells
+			.iter()
+			.zip(&first_values)
+			.rev()
+			.fold(body?, |body, (cell, first_value)| {
+				let path = lean_strings(&[cell_class(name, cell)]);
+				let new_cell = match first_value.as_str() {
+					UNIT_TYPE => format!(".new {path}"),
+					_ => format!(
+						".letIn \"·new\" (.cls {path}) (.new {path}) (.seq (.set (.loc \"·new\") {} ({first_value})) (.loc \"·new\"))",
+						quoted(CELL_FIELD)
+					),
+				};
+				format!(".letIn {} (.cls {path}) ({new_cell}) ({body})", quoted(cell))
+			});
 		// a cell parameter among several is read from the arguments object once
 		let body = references
 			.iter()
@@ -486,7 +493,7 @@ impl Exporter {
 							value.as_ref()
 						}
 						Node::Key(name, Op::Assign, _) => {
-							return Err(format!("{} has no parameter {}", call.name(), name.name()))
+							return Err(format!("{} has no parameter {}", call.name(), name.name()));
 						}
 						_ => argument,
 					};

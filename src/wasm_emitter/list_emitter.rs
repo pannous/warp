@@ -290,12 +290,12 @@ impl WasmGcEmitter {
 				func.instruction(&I::I64ExtendI32S);
 			}
 			"puti" | "putl" => {
-				self.emit_wasi_puti(func, &items[1]);
+				self.emit_wasi_put_number(func, &items[1]);
 				self.emit_numeric_value(func, &items[1]);
 			}
 			"putf" => {
-				self.emit_wasi_putf(func, &items[1]);
-				func.instruction(&I::I64ExtendI32S);
+				self.emit_wasi_put_number(func, &items[1]);
+				func.instruction(&I::I64Const(0));
 			}
 			"fd_write" if items.len() >= 5 => self.emit_wasi_fd_write_call(func, &items[1..]),
 			_ => return false,

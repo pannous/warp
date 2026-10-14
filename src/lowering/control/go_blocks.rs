@@ -121,7 +121,8 @@ impl GoBlocks {
 	fn function_of(&self, block: Node, known: &[String]) -> Node {
 		let mut definitions = self.definitions.borrow_mut();
 		let name = Node::Symbol(format!("{BLOCK_FUNCTION_PREFIX}{}", definitions.len() + 1));
-		let inputs: Vec<String> = read_symbols(&block)
+		let inputs: Vec<String> = block
+			.symbols_read()
 			.into_iter()
 			.filter(|symbol| known.contains(symbol))
 			.collect();
@@ -239,7 +240,8 @@ fn after_parts(items: &[Node]) -> Option<(Node, Node)> {
 }
 
 fn after_task(condition: Node, value: Node, phrases: &Phrases) -> Node {
-	let copied: Vec<String> = read_symbols(&condition)
+	let copied: Vec<String> = condition
+		.symbols_read()
 		.into_iter()
 		.filter(|name| phrases.assigned.contains(name) && !phrases.shared.contains(name))
 		.collect();
@@ -287,17 +289,4 @@ fn defines_go(node: &Node) -> bool {
 
 fn assigned_variables(node: &Node) -> Vec<String> {
 	node.assigned_names(|op| matches!(op, Op::Assign | Op::Define))
-}
-
-/// The symbols of a block in their first order, each once
-fn read_symbols(node: &Node) -> Vec<String> {
-	let mut symbols: Vec<String> = vec![];
-	node.visit(&mut |part| {
-		if let Node::Symbol(name) = part {
-			if !symbols.contains(name) {
-				symbols.push(name.clone());
-			}
-		}
-	});
-	symbols
 }

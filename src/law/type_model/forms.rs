@@ -127,7 +127,7 @@ pub(super) fn global_declaration(node: &Node) -> Option<(&str, Option<(&Node, &N
 	let Node::Key(keyword, Op::Colon, declared) = node.drop_meta() else {
 		return None;
 	};
-	if !keyword.is_symbol(GLOBAL_KEYWORD) {
+	if !keyword.is_symbol(crate::words::GLOBAL_WORD) {
 		return None;
 	}
 	match declared.drop_meta() {
@@ -370,7 +370,9 @@ pub(super) fn late_binding(statements: &[&Node], globals: &[String]) -> Option<S
 				.iter()
 				.any(|call| call.mentions(name))
 			{
-				return Some(format!("not in W0: {name} reads {changed}, which changes after {name} is defined and before a call (warp asks for `global {changed}`, late binding)"));
+				return Some(format!(
+					"not in W0: {name} reads {changed}, which changes after {name} is defined and before a call (warp asks for `global {changed}`, late binding)"
+				));
 			}
 		}
 	}

@@ -479,7 +479,7 @@ fn kind_tested(node: &Node) -> Option<&str> {
 /// foreign code gives them (a warp function called back by JavaScript, card js-callbacks)
 fn given_to_foreign_code(node: &Node) -> impl Iterator<Item = &str> {
 	let given = match node {
-		Node::List(items, Bracket::Round, _) if call_of(node, crate::host::FOREIGN_CALL) => match items.as_slice() {
+		Node::List(items, Bracket::Round, _) if node.is_call_of(crate::host::FOREIGN_CALL) => match items.as_slice() {
 			[_, _, receiver, _, _, Node::List(arguments, _, _)] => std::iter::once(receiver).chain(arguments).collect(),
 			[_, _, receiver, ..] => vec![receiver],
 			_ => vec![],
@@ -500,12 +500,8 @@ fn joined_to_list(node: &Node) -> Option<&str> {
 	joined_to(node, |node| matches!(node, Node::List(_, Bracket::Square, _)))
 }
 
-fn call_of(node: &Node, word: &str) -> bool {
-	matches!(node, Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(call)) if call == word))
-}
-
 fn is_text(node: &Node) -> bool {
-	matches!(node, Node::Text(_) | Node::Char(_)) || call_of(node, crate::warp_parser::TEXT_TIMES)
+	matches!(node, Node::Text(_) | Node::Char(_)) || node.is_call_of(crate::warp_parser::TEXT_TIMES)
 }
 
 /// The name joined by `+` to a value that `is_joined` accepts
@@ -513,10 +509,12 @@ fn joined_to(node: &Node, is_joined: fn(&Node) -> bool) -> Option<&str> {
 	fn joined_name(node: &Node) -> Option<&str> {
 		match node {
 			Node::Symbol(name) => Some(name),
-			Node::List(items, _, _) if call_of(node, crate::words::SLICE) => match items.get(1).map(Node::drop_meta) {
-				Some(Node::Symbol(name)) => Some(name),
-				_ => None,
-			},
+			Node::List(items, _, _) if node.is_call_of(crate::words::SLICE) => {
+				match items.get(1).map(Node::drop_meta) {
+					Some(Node::Symbol(name)) => Some(name),
+					_ => None,
+				}
+			}
 			_ => None,
 		}
 	}

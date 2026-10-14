@@ -216,23 +216,13 @@ pub(super) fn paged_loop(element: &str, variable: &str, class: &str, body: Node)
 	// the body's statements follow the element's in one block: a nested block of expressions would read as a list
 	let element_read = generated(&format!("{element}: {class} = {STREAMED}({LOOP_POSITION})"), names());
 	let statements = Node::List(
-		[vec![element_read], body_statements(body)].concat(),
+		[vec![element_read], body.body_statements()].concat(),
 		Bracket::Curly,
 		Separator::Semicolon,
 	);
 	let code = format!("{LOOP_END} = {COUNTED}()\nfor {LOOP_POSITION} in 1 to {LOOP_END} {VALUE_PLACEHOLDER}");
 	let lowered = generated(&code, names().chain([(VALUE_PLACEHOLDER, statements)]));
 	Node::List(lowered.children(), Bracket::None, Separator::Semicolon)
-}
-
-/// A block's statements: `{print p.name}` is one statement, its words a call, not the statements `print` and `p.name`
-pub(super) fn body_statements(body: Node) -> Vec<Node> {
-	match body.drop_meta() {
-		Node::List(items, Bracket::Curly, Separator::Space) if items.len() > 1 => {
-			vec![Node::List(items.clone(), Bracket::None, Separator::Space)]
-		}
-		_ => body.children(),
-	}
 }
 
 /// The table of a generated element read, `people·at(i)` or `people·streamed(i)`: static units knows its class

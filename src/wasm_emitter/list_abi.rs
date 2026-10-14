@@ -73,15 +73,6 @@ pub(super) fn results(body: &Node) -> Vec<&Node> {
 	found
 }
 
-/// The statements of a function body: those of its block, `{a; b}` or `a; b`, or the body itself
-pub(super) fn body_statements(body: &Node) -> Vec<Node> {
-	match body.drop_meta() {
-		Node::List(items, Bracket::Curly, _) => items.clone(),
-		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) => items.clone(),
-		other => vec![other.clone()],
-	}
-}
-
 /// The last value of a block `(…; x)`
 pub(super) fn last_value(node: &Node) -> &Node {
 	match node.drop_meta() {
@@ -300,7 +291,7 @@ impl WasmGcEmitter {
 		body: &Node,
 		emit_last: impl FnOnce(&mut Self, &mut Function, &Node),
 	) {
-		let statements = body_statements(body);
+		let statements = body.body_statements();
 		let Some((last, before)) = statements.split_last() else {
 			emit_last(self, func, &Node::Empty);
 			return;

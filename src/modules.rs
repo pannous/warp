@@ -72,8 +72,12 @@ const SCOPE_WORDS: [(&str, Scope); 3] = [
 const UNSCOPED_DIRECTORIES: [&str; 3] = [PACKAGES_DIRECTORY, "target", "node_modules"];
 const PROJECT_MARKER: &str = ".git";
 /// `stored x = v` too: a used module's persisted signal is the program's (card web-stores)
-const GLOBAL_KEYWORD: &str = "global";
-const DECLARATION_KEYWORDS: [&str; 4] = ["let", "var", GLOBAL_KEYWORD, crate::stored_values::STORED_WORD];
+const DECLARATION_KEYWORDS: [&str; 4] = [
+	"let",
+	"var",
+	crate::words::GLOBAL_WORD,
+	crate::stored_values::STORED_WORD,
+];
 
 fn is_declaration_keyword(keyword: &str) -> bool {
 	DECLARATION_KEYWORDS.contains(&keyword)
@@ -513,7 +517,9 @@ fn program_variables(program: &Node) -> HashSet<String> {
 		.iter()
 		.filter_map(|statement| match statement.drop_meta() {
 			Node::Key(variable, Op::Assign, _) => variable.drop_meta().symbol_name().map(String::from),
-			Node::Key(keyword, Op::Colon, declared) if keyword.is_symbol(GLOBAL_KEYWORD) => leftmost_symbol(declared),
+			Node::Key(keyword, Op::Colon, declared) if keyword.is_symbol(crate::words::GLOBAL_WORD) => {
+				leftmost_symbol(declared)
+			}
 			_ => None,
 		})
 		.collect()
@@ -557,7 +563,7 @@ fn assigned_names(definition: &Node) -> HashSet<String> {
 
 /// `global x = …`
 fn is_global_declaration(statement: &Node) -> bool {
-	matches!(statement.drop_meta(), Node::Key(keyword, Op::Colon, _) if keyword.is_symbol(GLOBAL_KEYWORD))
+	matches!(statement.drop_meta(), Node::Key(keyword, Op::Colon, _) if keyword.is_symbol(crate::words::GLOBAL_WORD))
 }
 
 /// `names` renamed `lib·name` in the definitions: the definitions still call them, the program does not see them
@@ -996,12 +1002,7 @@ fn statements_of(module: &Node) -> &[Node] {
 }
 
 fn statements(module: Node) -> Vec<Node> {
-	match module {
-		Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) => items,
-		Node::Meta { node, .. } => statements(*node),
-		Node::Empty => vec![],
-		single => vec![single],
-	}
+	statements_of(&module).to_vec()
 }
 
 pub(crate) fn is_declaration(statement: &Node) -> bool {

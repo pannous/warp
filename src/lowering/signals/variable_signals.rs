@@ -16,7 +16,7 @@ use super::nodes::{block, call, children_rewritten, if_then, key, Counter};
 use crate::declarations::{handler_parts, word};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::words::{GLOBAL_WORD, ONCE_WORD, ON_WORD, WHENEVER_WORD};
+use crate::words::{ONCE_WORD, ON_WORD, WHENEVER_WORD};
 use std::collections::{HashMap, HashSet};
 
 const SET_WORD: &str = "set";
@@ -137,7 +137,7 @@ pub fn lower(node: Node) -> Node {
 		functions: defined_functions(&node),
 		function_reads: function_reads(&node),
 		derived: derived_values(&node),
-		declared_global: declared_globals(&node),
+		declared_global: node.declared_globals(),
 		main_variables: crate::event_signals::main_level_variables(&main_statements),
 		depth: 0,
 		remote: vec![],
@@ -270,7 +270,9 @@ impl Signals {
 				}
 				false => {
 					let derived = format!("{name} := {value_text}");
-					let message = format!("{never_fires}: {name} is a copy of {value_text} that nothing writes again; did you mean {derived}?");
+					let message = format!(
+						"{never_fires}: {name} is a copy of {value_text} that nothing writes again; did you mean {derived}?"
+					);
 					crate::diagnostic::Diagnostic::at(statement, message)
 						.fix(derived.clone())
 						.offer("a derived value", format!("{name} = {value_text}"), derived)
@@ -378,7 +380,7 @@ impl Signals {
 
 	/// Listeners for a function body: each calls a check function after a write of a variable the body declares global
 	fn proxies(&self, body: &Node) -> Vec<Listener> {
-		let globals = declared_globals(body);
+		let globals: HashSet<String> = body.declared_globals();
 		self.remote
 			.iter()
 			.enumerate()
@@ -688,18 +690,10 @@ fn function_definitions(node: &Node) -> HashMap<String, &Node> {
 /// The function a definition defines (`f(x) := …`, `def f(x) {…}`, `def f(x): …`), else empty
 pub(crate) fn defined_function_name(part: &Node) -> String {
 	match part {
-		Node::Key(head, Op::Define, _) => definition_name(head),
-		Node::List(items, _, _) if defines_function(items) => items.get(1).map(definition_name).unwrap_or_default(),
-		_ => String::new(),
-	}
-}
-
-/// `f`, `f(x)`, `f(x) {…}`, `f(x): …`: f
-fn definition_name(head: &Node) -> String {
-	match head.drop_meta() {
-		Node::Symbol(name) => name.clone(),
-		Node::List(items, _, _) => items.first().map(definition_name).unwrap_or_default(),
-		Node::Key(head, _, _) => definition_name(head),
+		Node::Key(head, Op::Define, _) => crate::node::leading_name(head),
+		Node::List(items, _, _) if defines_function(items) => {
+			items.get(1).map(crate::node::leading_name).unwrap_or_default()
+		}
 		_ => String::new(),
 	}
 }
@@ -720,19 +714,6 @@ pub(crate) fn symbols(node: &Node) -> Vec<String> {
 	node.visit(&mut |part| {
 		if let Node::Symbol(name) = part {
 			names.push(name.clone());
-		}
-	});
-	names
-}
-
-/// The names declared `global x` anywhere in the node
-fn declared_globals(node: &Node) -> HashSet<String> {
-	let mut names = HashSet::new();
-	node.visit(&mut |part| {
-		if let Node::Key(keyword, Op::Colon, name) = part {
-			if word(keyword) == GLOBAL_WORD {
-				names.extend(Some(word(name)).filter(|name| !name.is_empty()));
-			}
 		}
 	});
 	names

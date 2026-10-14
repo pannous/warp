@@ -575,7 +575,7 @@ fn with_path_parameters(path: &Node, body: Node) -> Node {
 	if !pattern.contains(PARAMETER_MARK) {
 		return body;
 	}
-	let items = crate::event_signals::statements_of(&body);
+	let items = body.body_statements();
 	let (page_path, request_path) = (
 		crate::warp_parser::parse(PAGE_PATH_CALL),
 		crate::warp_parser::parse(REQUEST_PATH),
@@ -604,10 +604,7 @@ fn global(name: &str) -> Node {
 /// The block with these statements first; a one-line block of words, `{ last 2 of users }`, is one statement
 fn prepended(first: Vec<Node>, body: Node) -> Node {
 	Node::List(
-		first
-			.into_iter()
-			.chain(crate::event_signals::statements_of(&body))
-			.collect(),
+		first.into_iter().chain(body.body_statements()).collect(),
 		Bracket::Curly,
 		Separator::Newline,
 	)

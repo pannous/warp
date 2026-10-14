@@ -313,8 +313,8 @@ impl WasmGcEmitter {
 		});
 	}
 
-	/// Emit WASI puti: write an integer to stdout, without a newline; a run-time value through put_value
-	pub(super) fn emit_wasi_puti(&mut self, func: &mut Function, arg: &Node) {
+	/// Emit WASI puti, putl and putf: write a number to stdout, without a newline; a run-time value through put_value
+	pub(super) fn emit_wasi_put_number(&mut self, func: &mut Function, arg: &Node) {
 		if let Node::Number(n) = arg.drop_meta() {
 			let (str_ptr, str_len) = self.allocate_string(&n.to_string());
 			if self.emit_stdout_write(func, str_ptr, str_len) {
@@ -328,19 +328,6 @@ impl WasmGcEmitter {
 	fn emit_put_value(&mut self, func: &mut Function, value: &Node) {
 		self.emit_written_value(func, value, PUT_VALUE, "puts");
 		func.instruction(&I::Drop);
-	}
-
-	/// Emit WASI putf: write float to stdout
-	pub(super) fn emit_wasi_putf(&mut self, func: &mut Function, arg: &Node) {
-		// For compile-time constants, pre-compute the string
-		if let Node::Number(n) = arg.drop_meta() {
-			let s = format!("{}", n); // Number implements Display
-			let (str_ptr, str_len) = self.allocate_string(&s);
-
-			self.emit_stdout_write(func, str_ptr, str_len);
-		} else {
-			self.emit_runtime_puts(func, arg);
-		}
 	}
 
 	/// Emit fd_write call - auto-detects string arguments and sets up iovec
