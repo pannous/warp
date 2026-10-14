@@ -1066,6 +1066,7 @@ PASSED:
   ✓ functions::test_alias_definition::a_partial_definition_names_its_hole
   ✓ functions::test_alias_definition::an_alias_of_an_alias_calls_the_function
   ✓ functions::test_alias_definition::an_assigned_bare_name_stays_the_error
+  ✓ functions::test_alias_definition::an_unused_partial_definition_names_its_hole
   ✓ functions::test_all_calls::a_function_applied_to_all_items
   ✓ functions::test_all_calls::a_list_built_by_appending_broadcasts
   ✓ functions::test_all_calls::a_singular_name_walks_its_plural_list
@@ -5387,4 +5388,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5382 passed, 0 failed, 5382 total tested
+13 ignored, 5383 passed, 0 failed, 5383 total tested
