@@ -62,6 +62,7 @@ self.addEventListener("message", event => {
 function addTaskWorker(loaded) {
 	const id = taskWorkersAsked++;
 	madeTaskWorkers.set(id, worker => {
+		worker.taskWorkerId = id; // the page's name for it (task-workers.js postToTaskWorker)
 		worker.terminate = () => self.postMessage({ endTaskWorker: id });
 		// loaded: it can take tasks; later a fetch it made is done (startFetch)
 		worker.onmessage = ({ data }) => {

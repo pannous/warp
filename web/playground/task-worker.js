@@ -10,6 +10,7 @@ reportUncaughtErrors("task Worker"); // host.js
 // the program's Worker, through the port the page gives with the first message (task-workers.js serveTaskWorkers)
 let program;
 self.onmessage = ({ data }) => {
+	if (data.paintCanvas) return paintCanvasArrived(data.paintCanvas); // host-gpu.js, from the page
 	program = data.port;
 	program.onmessage = ({ data }) => data.fetch ? fetchInto(data) : data.gpu ? gpuJobInto(data) : runTaskInto(data);
 	program.postMessage(TASK_WORKER_READY); // the pool takes this Worker only once it has loaded (host-tasks.js prepareTaskPool)

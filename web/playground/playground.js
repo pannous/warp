@@ -680,17 +680,16 @@ function showFrame(paintings) {
 }
 
 // the canvases paint of a shader draws into, by id (host-gpu.js gpuPainted): the page makes one and sends its
-// OffscreenCanvas through the port to the task Worker holding the GPU device
+// OffscreenCanvas straight to the task Worker holding the GPU device (task-workers.js). Not through a port the program's
+// Worker made: Firefox lost a canvas posted into a port still on its way to the task Worker (card shaders-firefox)
 const paintCanvases = new Map();
-function sendPaintCanvas({ id, width, height, port, replaces }) {
+function sendPaintCanvas({ id, width, height, taskWorker, replaces }) {
 	const canvas = paintingElement({ width, height });
 	canvas.gpu = true;
 	paintCanvases.delete(replaces);
 	paintCanvases.set(id, canvas);
-	console.warn("gpu trace page sendPaintCanvas", id);
 	const offscreen = canvas.transferControlToOffscreen();
-	port.postMessage({ canvas: offscreen }, [offscreen]);
-	console.warn("gpu trace page sent", id);
+	worker.postToTaskWorker(taskWorker, { paintCanvas: { id, canvas: offscreen } }, [offscreen]);
 }
 
 // ⛶ (card little-full): the last painting fills the screen at its own aspect ratio, Esc or ⛶ again leaves; a click
@@ -981,6 +980,4 @@ window.playground = { evaluate, applyFix, chooseExample, runCode, reportAddress,
 // an error nothing caught, said with where it came from: Firefox says only "uncaught exception: undefined" otherwise
 addEventListener("error", event => console.error(`the page: ${event.message} at ${event.filename}:${event.lineno}:${event.colno}`));
 addEventListener("unhandledrejection", event => console.error(`the page: unhandled rejection ${event.reason}`, event.reason?.stack));
-// PROBE (card shaders-firefox): the page asks WebGPU first, before a task Worker does
-navigator.gpu?.requestAdapter().then(adapter => console.warn("gpu trace page adapter", String(adapter)), failure => console.warn("gpu trace page adapter failed", String(failure)));
 (window.pageStarts ?? Promise.resolve()).then(initialize); // index.html: not before its reload for isolation
