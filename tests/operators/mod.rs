@@ -26,6 +26,7 @@ mod test_nand_spellings;
 mod test_natural_phrases;
 mod test_negated_call;
 mod test_operator_declarations;
+mod test_operator_default_infix; // card operator-infix
 mod test_operator_parsing;
 mod test_operator_precedence;
 mod test_operator_spellings; // card operator-spelling
