@@ -49,7 +49,7 @@ any all filter map fold reduce each first last reverse sort contains index_of sl
 strip split join replace starts_with ends_with chars ord chr is_digit is_alpha is_alphanumeric is_space codepoint`; map `keys
 values entries get has contains without`; conversion `int text float list type as`; time `clock now sleep`, durations;
 random `random random_below`; io `read`; net `fetch`; os `exit`; signals `every daily at whenever on emit send`.
-Sources: src/lowering/library_words.rs (SYNONYMS, RUNTIME_WORDS, EXPANDED_WORDS), src/wasm_emitter/library_ops.rs
+Sources: src/lowering/words/library_words.rs (SYNONYMS, RUNTIME_WORDS, EXPANDED_WORDS), src/wasm_emitter/library_ops.rs
 (LIBRARY_FUNCTIONS), text_builtins.rs (TEXT_BUILTINS), list_emitter.rs (BUILTIN_CALLS), src/real.rs (FUNCTIONS),
 src/host.rs (HOST_WORDS), notes/library_words.md.
 
@@ -241,7 +241,7 @@ every word lives today and what still moves.
 ### Inventory: where a word is defined
 | place | what | count |
 |---|---|---|
-| src/lowering/library_words.rs SYNONYMS | other names of built-in words (size → len …) | 25 |
+| src/lowering/words/library_words.rs SYNONYMS | other names of built-in words (size → len …) | 25 |
 | … RUNTIME_WORDS | words lowered to runtime calls | 17 |
 | … EXPANDED_WORDS | warp templates kept as Rust strings: list round_to first last sum replace is_digit is_alpha unwrap is_alphanumeric | 10 |
 | src/wasm_emitter/library_ops.rs LIBRARY_FUNCTIONS | runtime functions in wasm: keys values entries contains index_of get without ord chars field_with reverse sort upper lower split join slice | 17 |
