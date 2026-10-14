@@ -455,7 +455,8 @@ fn evaluate(node: &Node) -> Result<Value, String> {
 		}
 		Node::Number(Number::Int(n)) => Ok(Value::Int(*n)),
 		Node::Text(text) => Ok(Value::Text(text.clone())),
-		Node::Symbol(name) if is_time_word(name) => Ok(Value::Symbol(name.clone())),
+		// a unit word only where only_time_words lets one stand: `1 day as h`
+		Node::Symbol(name) if is_time_word(name) || crate::units::names_unit(name) => Ok(Value::Symbol(name.clone())),
 		Node::Key(left, op, right) => binary(left, *op, right),
 		Node::List(items, _, separator) => list(node, items, separator.clone()),
 		_ => Err(unsupported(node)),
@@ -646,6 +647,7 @@ fn joined_text(value: &Value) -> Option<String> {
 		Value::Time(time) => Some(time.to_string()),
 		Value::Duration(duration) => Some(duration.to_string()),
 		Value::Int(number) => Some(number.to_string()),
+		Value::Converted(quantity) => Some(quantity.serialize().trim().to_string()),
 		_ => None,
 	}
 }

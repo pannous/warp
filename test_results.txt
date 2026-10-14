@@ -5,6 +5,7 @@ PASSED:
   ✓ control::test_after::after_needs_a_shared_condition
   ✓ control::test_after::after_waits_for_its_condition
   ✓ control::test_all_with_condition::all_with_a_comparison_filters_the_items
+  ✓ control::test_async_ports::a_text_task_within_a_deadline_gives_the_fallback
   ✓ control::test_async_ports::await_all_of_started_tasks_gives_their_results
   ✓ control::test_async_ports::await_any_gives_the_first_to_finish
   ✓ control::test_async_ports::await_first_is_the_first_tasks_result
@@ -1330,6 +1331,9 @@ PASSED:
   ✓ functions::test_let_in::let_value_in
   ✓ functions::test_libm_pure::libm_calls_are_pure
   ✓ functions::test_libm_pure::libm_runs_untrusted_and_in_pure_functions
+  ✓ functions::test_library_word_aliases::containment_and_phrase_spellings
+  ✓ functions::test_library_word_aliases::print_spellings_print
+  ✓ functions::test_library_word_aliases::renaming_a_module_function_as_the_module_does
   ✓ functions::test_library_word_values::a_function_updating_a_main_list_asks_for_global
   ✓ functions::test_library_word_values::a_library_word_is_a_function_value_of_a_user_function
   ✓ functions::test_library_word_values::a_library_word_is_a_function_value_of_map_and_filter
@@ -2624,6 +2628,7 @@ PASSED:
   ✓ numbers::test_static_units_output::test_print_shows_the_unit
   ✓ numbers::test_static_units_output::test_return_gives_the_unit
   ✓ numbers::test_static_units_output::test_texts_join_quantities
+  ✓ numbers::test_static_units::each_quantity_shows_in_its_own_written_unit
   ✓ numbers::test_static_units::test_a_word_before_a_unit_name_is_no_amount
   ✓ numbers::test_static_units::test_compiling_a_quantity_result_is_refused_until_output_is_supported
   ✓ numbers::test_static_units::test_dimension_errors_are_compile_errors
@@ -2667,6 +2672,7 @@ PASSED:
   ✓ numbers::test_unit_composites::test_products_of_different_dimensions
   ✓ numbers::test_unit_composites::test_sums_need_the_same_dimensions
   ✓ numbers::test_unit_conversion::a_duration_converts_to_a_time_unit
+  ✓ numbers::test_unit_conversion::a_duration_converts_with_as_to_a_unit_word
   ✓ numbers::test_unit_conversion::a_duration_in_a_variable_converts_to_a_time_unit
   ✓ numbers::test_unit_conversion::a_quantity_converts_to_a_unit_of_its_dimension
   ✓ numbers::test_unit_conversion::an_inexact_conversion_is_a_ratio
@@ -5318,4 +5324,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5313 passed, 0 failed, 5313 total tested
+13 ignored, 5319 passed, 0 failed, 5319 total tested

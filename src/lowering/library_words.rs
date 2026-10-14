@@ -596,9 +596,7 @@ impl Lowering {
 				self.lower_assert(self.expand(items[1].clone()), self.expand(items[2].clone()))
 			}
 			// `def f(m) { m.a }`: the body sees the parameters, as `f(m) := m.a` does
-			Node::List(items, bracket, separator) if keyword_definition_parameters(&items).is_some() => {
-				let parameters = keyword_definition_parameters(&items).expect("guarded");
-				let name = keyword_definition_name(&items);
+			Node::List(items, bracket, separator) if let Some((name, parameters)) = keyword_definition(&items) => {
 				let items = self.within_function(name, parameters, || {
 					items.into_iter().map(|item| self.expand(item)).collect()
 				});
@@ -806,7 +804,7 @@ impl Lowering {
 
 	/// `word(x, args)` and `word x args`
 	fn word_call(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
-		if let Some(membership) = self.membership(items).or_else(|| self.containment(items)) {
+		if let Some(membership) = self.membership(items) {
 			return Some(membership);
 		}
 		if let Some(raised) = raise_call(items, &self.shadowed.borrow()) {
@@ -962,39 +960,28 @@ impl Lowering {
 	}
 
 	/// `x in xs`: yes/no whether a map has the key x or a list the element x (decision in-bool; its position is
-	/// `xs.index_of(x)`); `byte in t` and `"äb" in bytes` count text units
+	/// `xs.index_of(x)`); `byte in t` and `"äb" in bytes` count text units. `xs contains x`, `xs has x`,
+	/// `xs includes x`: the method `xs.contains(x)` written between its two values, unless the program defines the word
 	fn membership(&self, items: &[Node]) -> Option<Node> {
-		let [element, in_word, collection] = items else {
+		let [left, word, right] = items else {
 			return None;
 		};
 		let names_unit = |side: &Node| match side.drop_meta() {
 			Node::Key(_, Op::Hash, unit) => crate::analyzer::text_unit(&unit.name()).is_some(),
 			other => crate::analyzer::text_unit(&other.name()).is_some(),
 		};
-		if !in_word.is_symbol(IN_WORD) || names_unit(element) || names_unit(collection) {
-			return None;
-		}
+		let (collection, element) = match word.symbol_name()? {
+			IN_WORD if names_unit(left) || names_unit(right) => return None,
+			IN_WORD => (right, left),
+			name if self.library_word_for(name, 2) == Some(COLLECTION_CONTAINS) => (left, right),
+			_ => return None,
+		};
 		Some(self.call(
 			COLLECTION_CONTAINS,
-			in_word,
+			word,
 			vec![collection.clone(), element.clone()],
 			false,
 		))
-	}
-
-	/// `xs contains x`, `xs has x`, `xs includes x`: the method `xs.contains(x)` written between its two values, unless
-	/// the program defines the word
-	fn containment(&self, items: &[Node]) -> Option<Node> {
-		let [collection, word, element] = items else {
-			return None;
-		};
-		let Node::Symbol(name) = word.drop_meta() else {
-			return None;
-		};
-		let canonical = self
-			.library_word_for(name, 2)
-			.filter(|canonical| *canonical == COLLECTION_CONTAINS)?;
-		Some(self.call(canonical, word, vec![collection.clone(), element.clone()], false))
 	}
 
 	/// `x.word` and `x.word(args)`; an unknown word on a value is an error
@@ -1395,14 +1382,8 @@ fn call_text(node: &Node) -> String {
 	}
 }
 
-/// The untyped parameters of `def f(a, b) {…}` (any function keyword): the head `f (a, b)` holds them in a group
-/// The name of `def f(a, b) {…}`: f
-fn keyword_definition_name(items: &[Node]) -> Option<String> {
-	keyword_definition_head(items)?.first().map(Node::name)
-}
-
-/// The head items of `def f(a, b) {…}` (any function keyword): f and its parameters
-fn keyword_definition_head(items: &[Node]) -> Option<&[Node]> {
+/// The name and the untyped parameters of `def f(a, b) {…}` (any function keyword): the head `f (a, b)` holds them
+fn keyword_definition(items: &[Node]) -> Option<(Option<String>, Vec<String>)> {
 	let (keyword, head) = match items {
 		[keyword, head, _body] => (keyword, head),
 		// `def ((f (m)) {…})`: the head and the body as one group
@@ -1412,31 +1393,22 @@ fn keyword_definition_head(items: &[Node]) -> Option<&[Node]> {
 		},
 		_ => return None,
 	};
-	let Node::Symbol(keyword) = keyword.drop_meta() else {
-		return None;
-	};
-	if !crate::operators::is_function_keyword(keyword) {
-		return None;
-	}
 	let Node::List(head_items, Bracket::Round, _) = head.drop_meta() else {
 		return None;
 	};
-	Some(head_items)
-}
-
-fn keyword_definition_parameters(items: &[Node]) -> Option<Vec<String>> {
-	let head_items = keyword_definition_head(items)?;
+	if !super::nodes::is_function_keyword(keyword) {
+		return None;
+	}
 	let parameters = head_items.iter().skip(1).flat_map(|item| match item.drop_meta() {
 		Node::List(group, Bracket::Round, _) => group.clone(),
 		other => vec![other.clone()],
 	});
-	Some(
-		parameters
-			.filter_map(|parameter| match parameter.drop_meta() {
-				Node::Symbol(name) => Some(name.clone()),
-				Node::Key(name, Op::Assign, _) => Some(name.name()),
-				_ => None,
-			})
-			.collect(),
-	)
+	let parameters = parameters
+		.filter_map(|parameter| match parameter.drop_meta() {
+			Node::Symbol(name) => Some(name.clone()),
+			Node::Key(name, Op::Assign, _) => Some(name.name()),
+			_ => None,
+		})
+		.collect();
+	Some((head_items.first().map(Node::name), parameters))
 }

@@ -93,7 +93,7 @@ const LINQ_METHODS: [(&str, &str); 12] = [
 ];
 
 pub fn lower(node: Node) -> Node {
-	let defined = defined_names(&node);
+	let defined = crate::library_words::defined_names(&node);
 	let node = if names_vector_word(&node) {
 		node
 	} else {
@@ -1146,29 +1146,6 @@ fn linq_calls(node: Node, defined: &HashSet<String>) -> Node {
 		}
 		other => other.map_children(|child| linq_calls(child, defined)),
 	}
-}
-
-/// The names the program defines: `f(x) := …`, `def f`, `func f`, Go's method `func (p Point) Sum()`
-pub(crate) fn defined_names(node: &Node) -> HashSet<String> {
-	let mut names = HashSet::new();
-	node.visit(&mut |part| match part {
-		Node::Key(head, Op::Define, _) => {
-			names.insert(crate::node::leading_name(head));
-		}
-		Node::List(words, _, _)
-			if words.first().is_some_and(
-				|keyword| matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word)),
-			) =>
-		{
-			let name = match words.get(1).map(Node::drop_meta) {
-				Some(Node::List(_, Bracket::Round, _)) if words.len() > 2 => words.get(2),
-				_ => words.get(1),
-			};
-			names.extend(name.map(crate::node::leading_name));
-		}
-		_ => {}
-	});
-	names
 }
 
 fn linq_method(method: &Node) -> Option<(&'static str, &'static str, Vec<Node>)> {

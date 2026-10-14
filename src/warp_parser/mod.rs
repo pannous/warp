@@ -32,11 +32,16 @@ mod user_operators;
 mod xml;
 pub use lookahead::PREFIX_OPERATOR_WORDS;
 mod atoms;
+mod blocks;
+use blocks::*;
+mod commands;
+mod control;
+use control::*;
+mod definitions;
 mod expressions;
 mod lists;
 mod literals;
 pub use literals::shader_blocks;
-mod statements;
 mod suffixes;
 use unicode_normalization::UnicodeNormalization;
 
@@ -189,6 +194,8 @@ const AWAIT_ALL_WORD: &str = "all";
 /// `await x` binds its operand like unary minus
 const AWAIT_OPERAND_BP: u8 = Op::Neg.binding_power().1;
 const PRINT_WORD: &str = "print";
+/// Other languages' print words (wiki/Features.md); `log` stays the logarithm, `puts` the WASI text output
+const PRINT_SPELLINGS: [&str; 2] = ["println", "writeln"];
 /// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
 const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate them with `;` or a newline";
 const IN_KEYWORD: &str = "in";
@@ -955,7 +962,7 @@ fn operator_call(glyph: &[char], arguments: Vec<Node>) -> Node {
 	)
 }
 
-enum ElseParseMode {
+pub(crate) enum ElseParseMode {
 	Atom,
 	Expr,
 }

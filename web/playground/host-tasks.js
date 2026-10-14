@@ -319,14 +319,14 @@ function sayTasksInline(run, holder, hooks) {
 // busy the task is queued until one frees, as natively it waits for a free thread (src/tasks.rs); run inline here
 // instead, a task the program waits for (a channel's sender) could never answer it (card primer-channel-flake). Inline
 // only without Workers, or in a task (whose Worker has no pool) or a run holding none (no Worker would ever free)
-function startTask(holder, hooks, name, ints, values) {
+function startTask(holder, hooks, name, values) {
 	const run = holder.run;
 	const id = BigInt(run.tasks.size + 1);
 	const captured = capturedValues(holder.exports);
-	const inline = () => withTaskSounds(run, asVoice(() => runTask(run.module, hooks, holder.warnings, name, ints, values, run.shared, captured, null, run.channels)));
+	const inline = () => withTaskSounds(run, asVoice(() => runTask(run.module, hooks, holder.warnings, name, values, run.shared, captured, null, run.channels)));
 	const shared = takeAnswerBuffer();
 	const control = new Int32Array(new SharedArrayBuffer(2 * Int32Array.BYTES_PER_ELEMENT)); // a queued task's too: `pause job` holds before it starts
-	const message = { module: run.module, name, ints, values, shared, arrays: run.shared, captured, control, channels: run.channels, voice: { ...voice } };
+	const message = { module: run.module, name, values, shared, arrays: run.shared, captured, control, channels: run.channels, voice: { ...voice } };
 	const task = { name, shared, control, inline, message };
 	if (taskPool.length > 0) startOnWorker(task, run);
 	else if (!holder.inTask && holdsAWorker(run)) {
@@ -373,7 +373,7 @@ function taskName(name) {
 }
 
 // the task here: {value} (a number or a tree) or {failure}
-function runTask(module, hooks, warnings, name, ints, values, arrays, captured = [], control = null, channels = null) {
+function runTask(module, hooks, warnings, name, values, arrays, captured = [], control = null, channels = null) {
 	const taskHolder = { warnings, run: { module, tasks: new Map(), shared: arrays, channels }, control, inTask: true };
 	let instance;
 	try {
@@ -383,7 +383,7 @@ function runTask(module, hooks, warnings, name, ints, values, arrays, captured =
 		for (const [global, value] of captured) instance.exports[global].value = value.tree ? buildValue(instance.exports, value.tree)
 			: value.exact ? exactHandle(instance.exports, ...value.exact) : value.raw;
 		const callee = instance.exports[name];
-		const result = values ? callee(buildValue(instance.exports, values)) : callee(...ints.slice(0, callee.length));
+		const result = callee(buildValue(instance.exports, values));
 		const unread = joinTasks(taskHolder.run, hooks);
 		const { signals, unrenderedSounds: sounds } = taskHolder.run;
 		if (unread) return { failure: `task ${taskName(name)}: ${unread}`, signals, sounds };
@@ -411,7 +411,6 @@ function finishedTask(run, hooks, id) {
 	if (record.output) hooks.print(record.output, 1);
 	record.files?.forEach(([path, content]) => self.keepWritten?.(path, content.bytes ? Uint8Array.from(content.bytes) : content));
 	releaseWorker(task); // free for the next task
-	if (record.value?.kind === KIND_INT && record.ints && record.value.data.int !== undefined) record.value = BigInt(record.value.data.int);
 	// a Worker that could not even instantiate the task runs it here instead: a page holds ~124 Wasm memories in all its
 	// Workers, and only the isolate that dropped an instance collects it, so the dead instances of this one (the
 	// starting program's) block the Worker until this isolate collects them, which it does when its own allocation
@@ -605,7 +604,8 @@ function portableInt(exports, result) {
 	return isExactHandle(result) ? { kind: KIND_INT, data: { exact: exactParts(exports, result).map(String) }, chain: [] } : result;
 }
 
-// a task's result as a tree: a number of a function of numbers, else the tree already read
+// a task's result as a tree: the number a wrapper of a function of numbers gives (f·node gives f's i64 or f64), else
+// the tree already read
 function taskTree(value) {
 	if (typeof value === "bigint") return { kind: KIND_INT, data: { int: String(value) }, chain: [] };
 	if (typeof value === "number") return { kind: KIND_FLOAT, data: { float: value }, chain: [] };
@@ -834,21 +834,7 @@ addHostPart({
 		fetch_reply: id => buildValue(program(), treeOfPlain(fetchReply(holder, Number(id)))),
 		// tasks (src/tasks.rs): `go f(x)` runs f in a fresh instance of the program, values copied in and out; a page
 		// without cross-origin isolation has no shared memory to wait on, so the task runs at once where it starts
-		task_spawn: (name, a0, a1, a2, a3) => startTask(holder, hooks, decode(cString(name)), [a0, a1, a2, a3]),
-		task_spawn_values: (name, values) => startTask(holder, hooks, decode(cString(name)), null, readTaskValue(program(), values)),
-		task_await: id => {
-			const task = takenTask(holder.run, hooks, id);
-			if (task.failure) throw new Error(task.failure);
-			// a task whose function returns a Node (`go { n + 1 }` of a Node parameter n) still gives its number here
-			if (typeof task.value === "object" && task.value !== null) {
-				const exact = exactOfPayload(task.value.data ?? {});
-				if (exact) return exactHandle(program(), ...exact);
-				const number = task.value.data?.int;
-				if (number === undefined) throw new Error(`task ${taskName(task.name ?? "")}: its result is no whole number`);
-				return BigInt(number);
-			}
-			return task.value;
-		},
+		task_spawn_values: (name, values) => startTask(holder, hooks, decode(cString(name)), readTaskValue(program(), values)),
 		task_await_value: id => buildValue(program(), taskTree(takenTask(holder.run, hooks, id).value)),
 		// every await joins first: the raises the task forwarded run here, before its value is read
 		task_join: id => {

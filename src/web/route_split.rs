@@ -6,7 +6,7 @@
 //! ships one module, with a note.
 use crate::binaryen::BINARYEN_FEATURES;
 use crate::dead_functions::CallGraph;
-use crate::host::{TASK_SPAWN, TASK_SPAWN_VALUES, USER_FUNCTIONS_SECTION, USER_FUNCTIONS_SEPARATOR};
+use crate::host::{TASK_SPAWN_VALUES, USER_FUNCTIONS_SECTION, USER_FUNCTIONS_SEPARATOR};
 use std::collections::HashMap;
 use std::process::Command;
 use wasmparser::{Name, NameSectionReader, Parser, Payload};
@@ -20,8 +20,6 @@ const WASM_EXTENSION: &str = ".wasm";
 const PRIMARY_FILE: &str = "primary.wasm";
 const MODULE_FILE: &str = "app.wasm";
 const MANIFEST_FILE: &str = "routes.manifest";
-/// The host words starting a task, which calls a function by its export name (web/playground/host-tasks.js)
-const TASK_SPAWNS: [&str; 2] = [TASK_SPAWN, TASK_SPAWN_VALUES];
 /// wasm-split keeps the name section only when asked
 const KEEP_NAMES: &str = "--debuginfo";
 
@@ -100,7 +98,7 @@ fn manifest(module: &[u8]) -> Result<Vec<(String, Vec<String>)>, String> {
 fn movable_exports(module: &[u8]) -> Result<Vec<String>, String> {
 	let spawns_tasks = crate::host_parts::imports_of(module)?
 		.iter()
-		.any(|(_, name)| TASK_SPAWNS.contains(&name.as_str()));
+		.any(|(_, name)| name == TASK_SPAWN_VALUES);
 	match spawns_tasks {
 		true => Ok(vec![]),
 		false => crate::host_parts::section_names(module, USER_FUNCTIONS_SECTION, USER_FUNCTIONS_SEPARATOR),

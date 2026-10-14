@@ -73,3 +73,12 @@ fn await_first_is_the_first_tasks_result() {
 		10
 	);
 }
+
+// the timeout branch runs `stop job; "late"` as code: a text result once gave the list `(1 "late")`
+#[test]
+fn a_text_task_within_a_deadline_gives_the_fallback() {
+	is!(
+		"job = go { sleep(2000 ms); \"a\" }; await job within 100 ms or \"late\"",
+		"late"
+	);
+}
