@@ -34,7 +34,7 @@ const TEXT_CLASS_WORD: &str = "String";
 pub(crate) const LIST_WORD: &str = "list";
 const MAP_WORD: &str = crate::analyzer::MAP_TYPE;
 /// The collection types: `x is list`, `x is map`, and of their element type: `x is list of int`, `x is map of text`
-const COLLECTION_WORDS: [&str; 2] = [LIST_WORD, MAP_WORD];
+pub(crate) const COLLECTION_WORDS: [&str; 2] = [LIST_WORD, MAP_WORD];
 /// `x is pair`: a `key: value` pair
 const PAIR_WORD: &str = "pair";
 pub const TYPE_WORD: &str = "type";

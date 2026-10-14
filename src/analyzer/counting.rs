@@ -116,8 +116,6 @@ pub(super) fn property_of_name(items: &[Node], separator: &Separator, variables:
 	Some(Node::Key(Box::new(name.clone()), Op::Dot, Box::new(property.clone())))
 }
 
-/// `number of x`, `count of x`, `length of x`, `size of x` → `count x`;
-/// of a unit, `number of bytes in t` → `t.bytes` (as `#(byte in t)`, `#(t as bytes)`); `byte count of x` → `x.bytes`
 /// `print chars in "hello"`: a name no variable has, in a collection, prints each item as `for chars in "hello": print it`
 pub(crate) fn print_walk(items: &[Node], variables: &HashSet<String>) -> Option<Node> {
 	let [print, phrase] = items else { return None };
@@ -161,58 +159,50 @@ pub(crate) fn print_walk(items: &[Node], variables: &HashSet<String>) -> Option<
 	))
 }
 
+/// A count in a unit, read after of_lookups made `a of b` into `b.a`: `count bytes of t` (`count t.bytes`), `number of bytes in t` (`bytes.number in t`) and `size of t in bytes`
+/// (`t.size in bytes`) are all `t.bytes`
 pub(crate) fn counting_phrase(
 	items: &[Node],
 	bracket: &Bracket,
 	separator: &Separator,
 	variables: &HashSet<String>,
 ) -> Option<Node> {
-	if let [unit, count, of, _, ..] = items {
-		if unit.is_symbol("byte") && count.is_symbol("count") && of.is_symbol("of") {
-			let counted = rest_of(items, 3, bracket, separator);
-			return Some(Node::Key(
-				Box::new(counted),
-				Op::Dot,
-				Box::new(Node::Symbol("bytes".to_string())),
-			));
-		}
-	}
-	if let [count, unit, of, _, ..] = items {
-		if count.is_symbol("count") && of.is_symbol("of") {
-			if let Some(unit_property) = matches!(unit.drop_meta(), Node::Symbol(_))
-				.then(|| text_unit(&unit.name()))
-				.flatten()
-			{
-				return Some(Node::Key(
-					Box::new(rest_of(items, 3, bracket, separator)),
-					Op::Dot,
-					Box::new(Node::Symbol(unit_property.to_string())),
-				));
-			}
-		}
-	}
 	if let Some(property) = property_of_name(items, separator, variables) {
 		return Some(property);
 	}
-	let [word, of, _, ..] = items else { return None };
-	let Node::Symbol(word) = word.drop_meta() else {
+	let in_unit = |counted: Node, unit: &Node| {
+		let unit = text_unit(unit.symbol_name()?)?;
+		Some(Node::Key(
+			Box::new(counted),
+			Op::Dot,
+			Box::new(Node::Symbol(unit.to_string())),
+		))
+	};
+	match items {
+		[count, counted] if count.symbol_name().is_some_and(is_counting_property) => {
+			let (object, member) = dotted(counted)?;
+			in_unit(object.clone(), &Node::Symbol(member.to_string()))
+		}
+		[counted, keyword, rest @ ..] if keyword.is_symbol("in") && !rest.is_empty() => {
+			let (object, member) = dotted(counted)?;
+			if !is_counting_property(member) {
+				return None;
+			}
+			match rest {
+				[unit] if text_unit(&unit.name()).is_some() => in_unit(object.clone(), unit),
+				_ => in_unit(rest_of(items, 2, bracket, separator), object),
+			}
+		}
+		_ => None,
+	}
+}
+
+/// `object.member` with a word as member
+fn dotted(node: &Node) -> Option<(&Node, &str)> {
+	let Node::Key(object, Op::Dot, member) = node.drop_meta() else {
 		return None;
 	};
-	if !is_counting_property(word) {
-		return None;
-	}
-	let counter = "count";
-	if !of.is_symbol("of") {
-		return None;
-	}
-	let counted = rest_of(items, 2, bracket, separator);
-	Some(unit_count(&counted).unwrap_or_else(|| {
-		Node::List(
-			vec![Node::Symbol(counter.to_string()), counted],
-			bracket.clone(),
-			separator.clone(),
-		)
-	}))
+	Some((object, member.symbol_name()?))
 }
 
 /// The most numbers a range of literals is written out as at compile time; a longer one is collected at run time like
