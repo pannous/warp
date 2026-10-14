@@ -51,9 +51,7 @@ pub(crate) fn check_constants(node: &Node, constants: &mut HashMap<String, (Stri
 	match node.drop_meta() {
 		Node::List(items, _, _) => {
 			let statements = match items.as_slice() {
-				[keyword, declaration, rest @ ..]
-					if is_constant_keyword(keyword) || keyword.is_symbol(LET_WORD) =>
-				{
+				[keyword, declaration, rest @ ..] if is_constant_keyword(keyword) || keyword.is_symbol(LET_WORD) => {
 					if let Some(found) = declaration_problem(&keyword.name(), declaration, constants) {
 						return Some(found);
 					}
