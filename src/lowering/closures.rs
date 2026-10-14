@@ -412,6 +412,16 @@ impl FunctionValues {
 			Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.returning.contains(name) || self.variables.contains(name)) => {
 				true
 			}
+			// `half(f)(half(f))`: the call of the function value a call returns may give one in turn
+			Node::List(items, Bracket::None, Separator::Space)
+				if items.len() > 1
+					&& self.is_function_value(&items[0])
+					&& items[1..]
+						.iter()
+						.all(|group| matches!(group.drop_meta(), Node::List(_, Bracket::Round, _))) =>
+			{
+				true
+			}
 			// `g(y => y*2)` of `g = x => x`: the function value it was given
 			Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.passing_through.get(name).and_then(|index| items.get(index + 1)).is_some_and(|argument| self.is_function_value(argument))) => {
 				true
@@ -681,7 +691,9 @@ impl Lifting {
 				.map(|argument| self.function_value(argument.clone(), bound))
 				.collect();
 			if self.may_hold_function(name, bound) {
-				return closure_call(items[0].clone(), arguments);
+				let function = items[0].clone();
+				return super::variadic::run_time_spread(&arguments, |spread| closure_call(function.clone(), spread))
+					.unwrap_or_else(|| closure_call(function.clone(), arguments));
 			}
 			if self.functions.contains(name) {
 				return Node::List([vec![items[0].clone()], arguments].concat(), bracket, separator);

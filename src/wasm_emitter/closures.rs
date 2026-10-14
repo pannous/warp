@@ -58,6 +58,8 @@ pub(super) struct ClosureTypes {
 	apply: Option<u32>,
 	/// The written forms of the closure targets (function_equality::written_form), class n at n - 1
 	written_forms: Vec<String>,
+	/// Target function capturing nothing → the global holding its one closure, made on first use
+	constants: HashMap<String, u32>,
 }
 
 impl ClosureTypes {
@@ -742,22 +744,50 @@ impl WasmGcEmitter {
 			self.emit_type_error(func, format!("{target} is not a function value"));
 			return;
 		};
-		let closure = self.closure_type();
 		let captured = match captured.is_empty() {
 			true => self.nested_captures_now(func, target),
 			false => captured.to_vec(),
 		};
+		if !captured.is_empty() {
+			self.emit_new_closure(func, entry_function, target, &captured);
+			return;
+		}
+		// a closure capturing nothing is the same value every time: made once, so a loop passing a function allocates none
+		let constant = self.closure_constant(target);
+		Self::emit_list(func, &[I::GlobalGet(constant), I::RefIsNull, I::If(BlockType::Empty)]);
+		self.emit_new_closure(func, entry_function, target, &[]);
+		Self::emit_list(
+			func,
+			&[I::GlobalSet(constant), I::End, I::GlobalGet(constant), I::RefAsNonNull],
+		);
+	}
+
+	fn closure_constant(&mut self, target: &str) -> u32 {
+		if let Some(global) = self.closures.constants.get(target) {
+			return *global;
+		}
+		let node = HeapType::Concrete(self.type_manager.node_type);
+		let global = self.declare_named_global(
+			Ref(self.node_ref(true)),
+			ConstExpr::ref_null(node),
+			format!("closure·{target}"),
+		);
+		self.closures.constants.insert(target.to_string(), global);
+		global
+	}
+
+	fn emit_new_closure(&mut self, func: &mut Function, entry_function: u32, target: &str, captured: &[Node]) {
 		let kind = self.function_kind(target);
 		Self::emit_list(func, &[I::I64Const(kind), I::RefFunc(entry_function)]);
 		if captured.is_empty() {
 			self.emit_node_null(func);
 		} else {
-			self.emit_node_instructions(func, &Node::List(captured.clone(), Bracket::Square, Separator::Space));
+			self.emit_node_instructions(func, &Node::List(captured.to_vec(), Bracket::Square, Separator::Space));
 		}
 		self.ctx
 			.user_globals
 			.retain(|name, _| !name.starts_with(CAPTURE_VALUE_PREFIX));
-		func.instruction(&I::StructNew(closure));
+		func.instruction(&I::StructNew(self.closure_type()));
 		self.emit_string_call(func, target, "new_symbol");
 		func.instruction(&I::StructNew(self.type_manager.node_type));
 	}
