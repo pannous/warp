@@ -1,6 +1,6 @@
 use crate::compiler::context::{Context, Param, UserFunctionDef};
 use crate::compiler::local::Local;
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
@@ -80,6 +80,7 @@ pub(crate) fn is_statement_block(node: &Node) -> bool {
 	}
 }
 
+mod annotations;
 mod booleans;
 mod checks;
 mod counting;
@@ -91,6 +92,7 @@ mod variables;
 pub use upcast_fields::check_upcast_fields;
 pub mod effects;
 mod list_views;
+pub use annotations::*;
 pub use booleans::*;
 pub use checks::*;
 pub use counting::*;

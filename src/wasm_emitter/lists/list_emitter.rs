@@ -8,7 +8,7 @@ use crate::type_kinds::Kind;
 use wasm_encoder::*;
 use Instruction as I;
 
-use super::super::{WasmGcEmitter, ROUNDING_FUNCTIONS};
+use super::super::{items_info, WasmGcEmitter, ROUNDING_FUNCTIONS};
 
 /// Names the emitter resolves itself, besides user functions, imports, type words and counting functions
 /// Runtime functions called from lowered code with their node arguments, and how many those are
@@ -245,7 +245,10 @@ impl WasmGcEmitter {
 					repeated.serialize(),
 					crate::analyzer::kind_with_article(kind)
 				);
-				self.emit_type_error(func, crate::diagnostic::Diagnostic::at(repeated, reason).to_string());
+				self.emit_type_error(
+					func,
+					crate::errors::diagnostic::Diagnostic::at(repeated, reason).to_string(),
+				);
 			}
 		}
 		true
@@ -265,7 +268,7 @@ impl WasmGcEmitter {
 			return None;
 		}
 		let (count_text, repeated_text) = (count.serialize(), repeated.serialize());
-		crate::normalize::set_position_of(word);
+		crate::normalize::set_position_of(node);
 		crate::normalize::hint(
 			&format!("{count_text} times {repeated_text}"),
 			&format!("{count_text} * {repeated_text}"),
@@ -695,7 +698,7 @@ impl WasmGcEmitter {
 		let kind_mask = crate::type_tests::runtime_kind_mask(spec).filter(|_| unknown && !declared_type);
 		// a loop `for T in xs` filters only when its test is left to run time
 		if map_test || kind_mask.is_some() || declared_type {
-			let announced = filter_loop.map_or(Ok(0), |filter| crate::diagnostic::ask(&filter.question));
+			let announced = filter_loop.map_or(Ok(0), |filter| crate::errors::diagnostic::ask(&filter.question));
 			if let Err(error) = announced {
 				let message = match error {
 					Node::Error(reason) => reason.drop_meta().name(),
@@ -1003,13 +1006,9 @@ impl WasmGcEmitter {
 		emit: fn(&mut Self, &mut Function, &Node),
 	) {
 		let last_statement = items.iter().rposition(|item| !self.is_definition(item));
-		// `a;b;c` is data; among code (`x=1; foo; x`) a word that names nothing would be silently dropped
-		let is_code = items.iter().any(|item| {
-			!matches!(
-				item.drop_meta(),
-				Node::Symbol(_) | Node::Number(_) | Node::Text(_) | Node::Char(_)
-			)
-		});
+		// `a;b;c`, words alone, is data; among anything else (`x=1; foo; x`, `foo; 3`, `foo; yes`) a word that names
+		// nothing would be silently dropped
+		let is_code = items.iter().any(|item| !matches!(item.drop_meta(), Node::Symbol(_)));
 		for (i, item) in items.iter().enumerate() {
 			if self.is_definition(item) {
 				if let Some(name) = self.defined_function_name(item) {
@@ -1017,7 +1016,7 @@ impl WasmGcEmitter {
 				}
 				continue;
 			}
-			self.statement_position = crate::diagnostic::line_info(item);
+			self.statement_position = crate::errors::diagnostic::line_info(item);
 			self.emit_trap_position(func);
 			if Some(i) == last_statement {
 				emit(self, func, item);
@@ -1044,7 +1043,7 @@ impl WasmGcEmitter {
 		first: &'a Node,
 		second: &'a Node,
 	) -> Option<(&'a Node, &'a Node)> {
-		use crate::diagnostic::{ask, reading, Ask, Fallback};
+		use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
 		if call == crate::list_mutations::INSERT_AT_CALL {
 			return Some((first, second));
 		}
@@ -1130,21 +1129,22 @@ impl WasmGcEmitter {
 			return None;
 		}
 		let written = Node::List(items.to_vec(), bracket.clone(), separator.clone());
-		let text = crate::diagnostic::written_text(&written);
+		let text = crate::errors::diagnostic::written_text(&written);
 		let Some(name) = items
 			.iter()
 			.find_map(|item| self.unknown_word(item).filter(|name| self.is_undefined_word(name)))
 		else {
-			let assigned = crate::diagnostic::written_text(assigned?);
-			let dropped = crate::diagnostic::written_text(&Node::List(atoms.to_vec(), Bracket::None, Separator::Space));
+			let assigned = crate::errors::diagnostic::written_text(assigned?);
+			let dropped =
+				crate::errors::diagnostic::written_text(&Node::List(atoms.to_vec(), Bracket::None, Separator::Space));
 			let message = format!("`{dropped}` after `{assigned}` does nothing; join it to the value with an operator, or start a new statement");
-			return Some(crate::diagnostic::Diagnostic::at(&written, message).remembered());
+			return Some(crate::errors::diagnostic::Diagnostic::at(&written, message).remembered());
 		};
 		let diagnostic = match crate::modules::std_module_defining(&name) {
 			Some(_) => crate::ffi::undefined_function_diagnostic(&written, &name),
 			None => self
 				.offer_near_name(
-					crate::diagnostic::Diagnostic::at(
+					crate::errors::diagnostic::Diagnostic::at(
 						&written,
 						format!("undefined: {name} in `{text}`; define {name}, or write `data {text}` for data"),
 					),
@@ -1164,7 +1164,7 @@ impl WasmGcEmitter {
 
 	/// `pirnt`: a lone word that names nothing but is one or two letters away from a defined name; a got-it warning
 	pub(in crate::wasm_emitter) fn warn_near_miss(&self, word: &str) -> Result<(), Node> {
-		use crate::diagnostic::{ask, reading, Ask, Fallback};
+		use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
 		if word.chars().count() < 3 || self.is_known_word(word) {
 			return Ok(());
 		}
@@ -1203,9 +1203,9 @@ impl WasmGcEmitter {
 	/// The fix of a misspelled `word`, when it is near a name
 	pub(in crate::wasm_emitter) fn offer_near_name(
 		&self,
-		diagnostic: crate::diagnostic::Diagnostic,
+		diagnostic: crate::errors::diagnostic::Diagnostic,
 		word: &str,
-	) -> crate::diagnostic::Diagnostic {
+	) -> crate::errors::diagnostic::Diagnostic {
 		match self.near_name(word) {
 			Some(near) => diagnostic.offer(format!("the name {near}"), word, near),
 			None => diagnostic,
@@ -1484,6 +1484,70 @@ impl WasmGcEmitter {
 			_ => None,
 		};
 		name.filter(|name| self.ctx.user_functions.contains_key(name))
+	}
+
+	/// Emit a range as a list of integers
+	/// inclusive: true for .../ (0...3 = [0,1,2,3]), false for .. (0..3 = [0,1,2])
+	pub(crate) fn emit_range(&mut self, func: &mut Function, start: &Node, end: &Node, inclusive: bool) {
+		let (Node::Number(Number::Int(start_val)), Node::Number(Number::Int(end_val))) =
+			(start.drop_meta(), end.drop_meta())
+		else {
+			let bound = if matches!(start.drop_meta(), Node::Number(Number::Int(_))) {
+				end
+			} else {
+				start
+			};
+			self.emit_malformed(func, bound, "a constant integer as range bound");
+			return;
+		};
+		let (start_val, end_val) = (*start_val, *end_val);
+		let actual_end = if inclusive { end_val + 1 } else { end_val };
+		let items: Vec<Node> = (start_val..actual_end).map(|i| Node::Number(Number::Int(i))).collect();
+		if items.is_empty() {
+			self.emit_call(func, "new_empty");
+			return;
+		}
+		self.emit_list_structure(func, &items, &Bracket::Square, &Separator::None);
+	}
+
+	/// Emit a list as linked cons cells
+	pub(crate) fn emit_list_structure(
+		&mut self,
+		func: &mut Function,
+		items: &[Node],
+		bracket: &Bracket,
+		separator: &Separator,
+	) {
+		self.emit_list_structure_with(
+			func,
+			items,
+			&items_info(items, bracket, separator),
+			Self::emit_node_instructions,
+		);
+	}
+
+	pub(crate) fn emit_list_structure_with(
+		&mut self,
+		func: &mut Function,
+		items: &[Node],
+		info: &i64,
+		emit: fn(&mut Self, &mut Function, &Node),
+	) {
+		// cons cells: data = first item, value = the list of the rest (null after the last), never an item itself
+		emit(self, func, &items[0]);
+		if items.len() > 1 {
+			self.emit_list_structure_with(func, &items[1..], info, emit);
+		} else {
+			self.emit_node_null(func);
+		}
+
+		func.instruction(&I::I64Const(*info));
+		if self.ctx.func_registry.contains("new_list") {
+			self.emit_call(func, "new_list");
+		} else {
+			// new_list is always emitted; reaching this is a compiler bug, reported as an error value
+			self.emit_type_error(func, "internal error: new_list is not available".to_string());
+		}
 	}
 }
 

@@ -12,11 +12,13 @@ const MARKUP_MODULE: &str = "markup";
 /// and the attributes
 const ELEMENTS_LIST: &str = "html_elements";
 const ATTRIBUTES_LIST: &str = "html_attributes";
+const META_ATTRIBUTES_LIST: &str = "html_meta_attributes";
 const VOID_ELEMENTS_LIST: &str = "html_void_elements";
 const BOOLEAN_ATTRIBUTES_LIST: &str = "html_boolean_attributes";
 const HEAD: &str = "head";
 /// `data-warp-click` (element_events.rs) and any other data attribute
 const DATA_ATTRIBUTE_PREFIX: &str = "data-";
+const ARIA_ATTRIBUTE_PREFIX: &str = "aria-";
 /// `li{ key: todo.id … }` names a list item (card web-keyed)
 const KEY: &str = "key";
 /// The value in place of the name `rendered`, assigned first: as an argument `ul: {…}` would name a parameter
@@ -34,6 +36,11 @@ const TEXT_ELEMENTS: [&str; 5] = ["style", "script", "option", "select", "textar
 /// Does the word name an HTML element
 pub fn is_element_tag(word: &str) -> bool {
 	element_names().iter().any(|element| element == word)
+}
+
+/// `my-card`: a page's own element is named with a dash, as no attribute is (html_is_custom_element of lib/markup.warp)
+pub fn is_custom_element(word: &str) -> bool {
+	word.contains('-') && !names_attribute(word) && !word.starts_with(ARIA_ATTRIBUTE_PREFIX)
 }
 
 /// The HTML elements lib/markup.warp renders
@@ -55,6 +62,12 @@ fn is_attribute_name(word: &str) -> bool {
 pub fn attribute_names() -> &'static [String] {
 	static ATTRIBUTES: OnceLock<Vec<String>> = OnceLock::new();
 	ATTRIBUTES.get_or_init(|| crate::modules::std_module_list(MARKUP_MODULE, ATTRIBUTES_LIST))
+}
+
+/// A meta element's own attributes: `meta{ charset: "utf-8" }` is the element, `meta: { author: "Ann" }` names metas
+pub fn meta_attribute_names() -> &'static [String] {
+	static ATTRIBUTES: OnceLock<Vec<String>> = OnceLock::new();
+	ATTRIBUTES.get_or_init(|| crate::modules::std_module_list(MARKUP_MODULE, META_ATTRIBUTES_LIST))
 }
 
 /// An attribute present or absent (`checked: done`), set by yes or no
@@ -326,7 +339,7 @@ pub fn to_html(node: &Node) -> String {
 		&crate::warp_parser::parse(RENDER_PROGRAM),
 		&HashMap::from([(RENDERED.to_string(), node.clone())]),
 	);
-	match crate::diagnostic::quietly(|| crate::pipeline::eval_parsed(program, RENDER_PROGRAM)).drop_meta() {
+	match crate::errors::diagnostic::quietly(|| crate::pipeline::eval_parsed(program, RENDER_PROGRAM)).drop_meta() {
 		Node::Text(html) => html.clone(),
 		failed => format!("<pre>{}</pre>", escaped(&failed.serialize())),
 	}

@@ -70,6 +70,11 @@ impl Lists {
 			.collect();
 		let (mut fields, mut variables) = (HashMap::new(), HashSet::new());
 		program.visit(&mut |node| match node {
+			_ if let Some(stored) = crate::database_tables::stored_table(node) => {
+				if let Some(class_fields) = classes.get(&stored.class) {
+					fields.insert(stored.variable, class_fields.clone());
+				}
+			}
 			Node::Key(declared, Op::Colon, list_type) => {
 				if let (Node::Symbol(list), Node::List(element, Bracket::Square, _)) =
 					(declared.drop_meta(), list_type.drop_meta())
@@ -150,8 +155,10 @@ fn fields_of_it(condition: Node, fields: &[String], variables: &HashSet<String>)
 				"{name} is the variable {name} here, not the field of each element: write {} for the field",
 				field_of_it.serialize()
 			);
-			match crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(&Node::Symbol(name.clone()), warning)])
-			{
+			match crate::errors::diagnostic::report(&[crate::errors::diagnostic::Diagnostic::at(
+				&Node::Symbol(name.clone()),
+				warning,
+			)]) {
 				Ok(()) => Node::Symbol(name),
 				Err(error) => error,
 			}

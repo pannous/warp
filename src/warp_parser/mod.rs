@@ -1,5 +1,5 @@
 use crate::compiler::meta::LineInfo;
-use crate::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
+use crate::errors::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
 use crate::extensions::numbers::Number;
 use crate::extensions::reals::{Exact, Rational, Real};
 use crate::node::call;
@@ -44,7 +44,6 @@ pub(crate) use pipes::*;
 mod control;
 mod definitions;
 mod expressions;
-mod lists;
 mod literals;
 pub(crate) use expressions::*;
 pub use literals::shader_blocks;

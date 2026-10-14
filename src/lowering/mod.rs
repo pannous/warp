@@ -1,15 +1,10 @@
 //! The lowering passes: each rewrites the program into forms the later passes and the emitter know (the order is
 //! `SOURCE_PHASES` and `MEANING_PASSES` in src/pipeline.rs). The crate root re-exports them (`crate::mutation`).
 
-pub mod declarations;
 pub mod folding;
-pub mod music_words;
 pub(crate) mod nodes;
 pub use nodes::{function_head, DefinitionForm, FunctionHead};
-pub mod of_lookups;
 pub mod pipes;
-pub mod type_name_matching;
-pub mod welcome_forms;
 
 // concept folders (notes/restructuring.md): their passes stay reachable as crate::lowering::x
 mod signals;

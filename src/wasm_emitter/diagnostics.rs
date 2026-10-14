@@ -12,7 +12,7 @@ impl WasmGcEmitter {
 
 	/// A value used as a number that has none (ø, a list, a type…): an error value at its source position, not a panic
 	pub(super) fn emit_not_a_number(&mut self, func: &mut Function, located: &Node, value: &Node) {
-		let diagnostic = crate::diagnostic::Diagnostic::at(
+		let diagnostic = crate::errors::diagnostic::Diagnostic::at(
 			located,
 			format!("cannot extract a numeric value from {}", value.serialize()),
 		);
@@ -21,8 +21,10 @@ impl WasmGcEmitter {
 
 	/// A construct whose shape the emitter cannot handle: an error value at its source position, not a panic
 	pub(super) fn emit_malformed(&mut self, func: &mut Function, located: &Node, expected: &str) {
-		let diagnostic =
-			crate::diagnostic::Diagnostic::at(located, format!("expected {expected}, got {}", located.serialize()));
+		let diagnostic = crate::errors::diagnostic::Diagnostic::at(
+			located,
+			format!("expected {expected}, got {}", located.serialize()),
+		);
 		self.emit_type_error(func, diagnostic.to_string());
 	}
 
@@ -42,7 +44,7 @@ impl WasmGcEmitter {
 	/// An emitter error at the source position of the statement being emitted, unless it names one already
 	pub(super) fn located(&self, message: String) -> String {
 		match &self.source_position {
-			Some(position) => crate::diagnostic::located_at(message, position),
+			Some(position) => crate::errors::diagnostic::located_at(message, position),
 			None => message,
 		}
 	}
@@ -59,7 +61,7 @@ impl WasmGcEmitter {
 	/// A name that is no variable, global, function or `$n` parameter here
 	pub(super) fn is_unbound(&self, name: &str) -> bool {
 		!name.starts_with('$')
-			&& !crate::type_tests::is_type_word(name)
+			&& !crate::type_tests::is_builtin_type_word(name)
 			&& self.scope.lookup(name).is_none()
 			&& !self.ctx.user_globals.contains_key(name)
 			&& !self.ctx.user_functions.contains_key(name)
@@ -144,9 +146,9 @@ impl WasmGcEmitter {
 	}
 
 	/// A diagnostic at the source position of the statement being emitted
-	pub(super) fn diagnostic_here(&self, message: String) -> crate::diagnostic::Diagnostic {
+	pub(super) fn diagnostic_here(&self, message: String) -> crate::errors::diagnostic::Diagnostic {
 		let position = self.source_position.clone().unwrap_or_default();
-		crate::diagnostic::Diagnostic {
+		crate::errors::diagnostic::Diagnostic {
 			message,
 			line: position.line_nr,
 			column: position.column,

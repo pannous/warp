@@ -1,7 +1,7 @@
 //! card attribute-values: an attribute value of the wrong kind warns where it is written: a text for a boolean
 //! attribute (`checked: "no"` leaves it out, as `checked: "yes"` does), a word for a number attribute, a number for an
 //! address
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 use warp::wasm_emitter::eval;
 
 fn warnings_of(code: &str) -> Vec<String> {
@@ -55,4 +55,14 @@ fn values_of_the_right_kind_stay_quiet() {
 			.collect();
 		assert_eq!(mistakes, Vec::<String>::new(), "{code}");
 	}
+}
+
+// card warn-step-any: a number attribute's keyword (`step: "any"`) and dates (`min: "2024-01-01"`) are valid HTML
+#[test]
+fn a_number_attribute_takes_its_keyword_and_dates() {
+	let warned = warnings_of("input{ type: \"number\" aria-label: \"x\" step: \"any\" min: \"2024-01-01\" }");
+	assert!(
+		warned.iter().all(|warning| !warning.contains("takes a number")),
+		"{warned:?}"
+	);
 }

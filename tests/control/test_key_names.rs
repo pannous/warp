@@ -35,9 +35,9 @@ fn a_programs_own_key_variable_stays_its_own() {
 
 // a key handler comparing with a word that names nothing (`ESCAPEE`, a letter `q`) never matches: a warning says so
 fn key_warnings(program: &str) -> Vec<String> {
-	warp::diagnostic::take_warnings();
+	warp::errors::diagnostic::take_warnings();
 	warp::wasm_emitter::eval(program);
-	warp::diagnostic::take_warnings()
+	warp::errors::diagnostic::take_warnings()
 		.into_iter()
 		.map(|warning| warning.message)
 		.filter(|message| message.contains("names nothing"))

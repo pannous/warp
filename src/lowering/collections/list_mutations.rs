@@ -98,7 +98,7 @@ pub(crate) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
 	let (value_word, rest_word) = match method {
 		name if is_removal_method(name) => {
 			if name == DELETE_METHOD {
-				crate::diagnostic::note_alias(DELETE_METHOD, REMOVE_METHOD);
+				crate::errors::diagnostic::note_alias(DELETE_METHOD, REMOVE_METHOD);
 			}
 			(REMOVED_VALUE_CALL, crate::library_words::MAP_WITHOUT)
 		}
@@ -205,6 +205,18 @@ pub(crate) fn lowered_insert(list: Box<Node>, call: &Node) -> Node {
 		Op::Assign,
 		Box::new(Node::List(arguments, Bracket::Round, Separator::None)),
 	)
+}
+
+/// `xs.add(v)` as `xs += [v]` and `xs.insert(i, v)` as its assignment, for a call that `updates_list`
+pub(crate) fn list_update(list: Box<Node>, call: &Node) -> Node {
+	match appended_element(&list, call).cloned() {
+		Some(element) => Node::Key(
+			list,
+			Op::AddAssign,
+			Box::new(Node::List(vec![element], Bracket::Square, Separator::Space)),
+		),
+		None => lowered_insert(list, call),
+	}
 }
 
 /// `xs.add(v)`, `xs.insert(i, v)`: an update of the list variable that ø (the empty list) allows

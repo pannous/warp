@@ -4,7 +4,7 @@
 
 use super::nodes::{children_rewritten, key, Counter};
 use crate::analyzer::call_name;
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;

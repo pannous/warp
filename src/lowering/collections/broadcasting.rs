@@ -240,7 +240,7 @@ fn ambiguous_call(at: &Node, name: &str, argument: &str, op: &Op, right: &str) -
 	let written = format!("{name} {argument} {op} {right}");
 	let call_compared = format!("({name} {argument}) {op} {right}");
 	let comparison_argument = format!("{name}({argument} {op} {right})");
-	crate::diagnostic::Diagnostic::at(
+	crate::errors::diagnostic::Diagnostic::at(
 		at,
 		format!("{written} is ambiguous; write {call_compared} or {comparison_argument}"),
 	)

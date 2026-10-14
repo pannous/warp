@@ -138,7 +138,7 @@ fn lower_knowing_functions(node: Node) -> Node {
 		} else {
 			"int"
 		};
-		crate::diagnostic::educate_once(LINEAR_TOPIC, &format!("linear xs = {array}[n]"), &format!("xs = {array}[n]"),
+		crate::errors::diagnostic::educate_once(LINEAR_TOPIC, &format!("linear xs = {array}[n]"), &format!("xs = {array}[n]"),
 			"the compiler picks where a list of numbers lives by itself, linear memory included; `linear` only forces it");
 	}
 	let functions = definitions(&node);
@@ -664,7 +664,7 @@ impl Rewrite<'_> {
 					.skip(offset)
 					.find(|item| shared(item, &names).is_some_and(|kind| kind.storage == Storage::Linear));
 				if let (true, Some(array)) = (starts_task, linear_argument) {
-					return crate::diagnostic::Diagnostic::at(array, format!("a task cannot take the linear array {}: it lives in this task's memory; `shared {} = int[n]` shares one", array.name(), array.name())).into_error();
+					return crate::errors::diagnostic::Diagnostic::at(array, format!("a task cannot take the linear array {}: it lives in this task's memory; `shared {} = int[n]` shares one", array.name(), array.name())).into_error();
 				}
 				match items.as_slice() {
 					[word, array]

@@ -32,7 +32,7 @@ fn eval_source(code: &str) -> Node {
 	if let Some(outcome) = crate::web::page_tests::answer(code) {
 		return outcome;
 	}
-	crate::diagnostic::begin_program(); // only the guesses made for this program explain its errors
+	crate::errors::diagnostic::begin_program(); // only the guesses made for this program explain its errors
 	match lawful_program(code) {
 		Ok(program) => {
 			let exclusive_range = has_exclusive_range(&program);
@@ -54,7 +54,7 @@ fn has_exclusive_range(node: &Node) -> bool {
 
 /// A runtime error fails far from its cause: it names the range hint and the defaults unanswered Asks took
 fn explain_runtime_error(result: Node, exclusive_range: bool) -> Node {
-	let assumptions = crate::diagnostic::take_assumptions();
+	let assumptions = crate::errors::diagnostic::take_assumptions();
 	let Node::Error(reason) = &result else { return result };
 	let Node::Text(message) = reason.drop_meta() else {
 		return result;
@@ -85,7 +85,9 @@ fn explain_runtime_error(result: Node, exclusive_range: bool) -> Node {
 
 /// Parse the source and check its laws; `Err` is the violation.
 fn lawful_program(code: &str) -> Result<Node, Node> {
-	let lawful = crate::law::separate_laws(crate::diagnostic::in_source_mode(code, || WarpParser::parse(code)));
+	let lawful = crate::law::separate_laws(crate::errors::diagnostic::in_source_mode(code, || {
+		WarpParser::parse(code)
+	}));
 	match crate::law::assert_laws(&lawful, code) {
 		Some(violation) => Err(violation),
 		None => Ok(lawful.program),
@@ -95,7 +97,7 @@ fn lawful_program(code: &str) -> Result<Node, Node> {
 /// Evaluate foreign data with an empty capability set: a program that would call any host, WASI or FFI
 /// function is refused before it is compiled. To only read data, use `parse_data`, which evaluates nothing.
 pub fn eval_untrusted(code: &str) -> Node {
-	crate::diagnostic::begin_program();
+	crate::errors::diagnostic::begin_program();
 	let program = WarpParser::parse(code);
 	match crate::analyzer::effects::EffectReport::of(&program)
 		.denied(&crate::analyzer::effects::Capability::GRANTED_UNTRUSTED)
@@ -382,7 +384,7 @@ const DECLARATION_PASSES: &[Pass] = &[
 	crate::lowering::type_aliases::lower,
 	// `f(s:Shape)` of a trait takes any conforming instance: untyped before class_methods reads typed parameters
 	crate::lowering::traits::lower_trait_parameters,
-	// `people: [Person] = database.people`: the table's rows, inserts and field changes written through
+	// `stored people: [Person]`: the table's rows, inserts and field changes written through
 	// (database_tables.rs), before class_methods lowers the class (its row id) and stored_values reads `database.people`
 	crate::lowering::database_tables::lower,
 	// `p.fields`, `p.methods`, `dir(p)`: the class layout (reflection.rs), before class_methods lowers the class bodies
@@ -580,12 +582,12 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	if let Some(unfillable) = crate::lowering::class_methods::check_self_typed_fields(&node) {
 		return Err(unfillable.into_error());
 	}
-	crate::diagnostic::report(&crate::web::accessibility::warnings(&node))?;
-	crate::diagnostic::report(&crate::analyzer::source_warnings(&node))?;
+	crate::errors::diagnostic::report(&crate::web::accessibility::warnings(&node))?;
+	crate::errors::diagnostic::report(&crate::analyzer::source_warnings(&node))?;
 	// emits and handler blocks as written: the passes lower them to calls, the named effects are read from them
 	let as_written = node.clone();
 	let node = SOURCE_PHASES.iter().fold(node, |node, phase| run_passes(node, phase));
-	if let Some(error) = crate::diagnostic::first_located_error(&node) {
+	if let Some(error) = crate::errors::diagnostic::first_located_error(&node) {
 		return Err(error);
 	}
 	if let Some(kind_change) = crate::analyzer::check_kind_changes(&node) {
@@ -608,7 +610,7 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 		return Err(answer);
 	}
 	let node = run_passes(node, MEANING_PASSES);
-	if let Some(error) = crate::diagnostic::first_located_error(&node) {
+	if let Some(error) = crate::errors::diagnostic::first_located_error(&node) {
 		return Err(error);
 	}
 	let effects = EffectReport::of(&node).with_events_of(&as_written);
@@ -616,7 +618,7 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 		return Err(answer);
 	}
 	let node = effects.answer_queries(node);
-	if let Some(error) = crate::diagnostic::first_located_error(&node) {
+	if let Some(error) = crate::errors::diagnostic::first_located_error(&node) {
 		return Err(error);
 	}
 	if let Some((name, capability)) = effects.denied(compile_context::read(|context| context.granted)) {
@@ -635,7 +637,7 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	if let Some(error) = crate::analyzer::diagnose(&node) {
 		return Err(error);
 	}
-	crate::diagnostic::report(&crate::analyzer::lint(&node))?;
+	crate::errors::diagnostic::report(&crate::analyzer::lint(&node))?;
 	Ok(crate::lowering::declaration_forms::indexed_parameter_copies(
 		crate::lowering::inlining::lower(crate::lowering::declaration_forms::lower_declarations(
 			crate::lowering::kebab_names::resolve_data_scope(node),
@@ -646,8 +648,8 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 /// The program as the emitter sees it after every lowering pass (`warp lower <code>`); `Err` is its final value
 /// when it needs no module.
 pub fn lower(code: &str) -> Result<Node, Node> {
-	crate::diagnostic::begin_program();
-	crate::diagnostic::in_program_mode(lawful_program(code)?, lower_for_emission)
+	crate::errors::diagnostic::begin_program();
+	crate::errors::diagnostic::in_program_mode(lawful_program(code)?, lower_for_emission)
 }
 
 /// Compile source text to a wasm module without running it. `Err` carries the error, or the constant
@@ -667,8 +669,8 @@ pub fn compile_printing_result(code: &str) -> Result<CompiledModule, Node> {
 }
 
 fn compile_program(code: &str, rewrite: fn(Node) -> Node) -> Result<CompiledModule, Node> {
-	crate::diagnostic::begin_program();
-	crate::diagnostic::in_program_mode(rewrite(lawful_program(code)?), |program| {
+	crate::errors::diagnostic::begin_program();
+	crate::errors::diagnostic::in_program_mode(rewrite(lawful_program(code)?), |program| {
 		let source = program.clone();
 		let node = crate::lowering::folding::precompute(crate::lowering::folding::refuse_result_misfits(
 			lower_for_emission(program)?,
@@ -713,7 +715,7 @@ fn warn_about_run_time_blocks(node: &Node) -> Result<(), Node> {
 	if !crate::analyzer::effects::EffectReport::of(node).calls_external(crate::host::RUN_BLOCK) {
 		return Ok(());
 	}
-	crate::diagnostic::report(&[crate::diagnostic::Diagnostic::at(node, format!(
+	crate::errors::diagnostic::report(&[crate::errors::diagnostic::Diagnostic::at(node, format!(
 		"this module runs blocks known only at run time: its host must provide host.{} (the warp CLI, or web/playground/host.js, which loads warp.wasm on first use)",
 		crate::host::RUN_BLOCK)).weak()])
 }
@@ -740,7 +742,7 @@ fn choose_module(node: &Node) -> Result<CompiledModule, Node> {
 
 /// Compile and run an already parsed program; imports follow its resolved effects.
 pub fn eval_parsed(node: Node, _code: &str) -> Node {
-	crate::diagnostic::in_program_mode(node, eval_program)
+	crate::errors::diagnostic::in_program_mode(node, eval_program)
 }
 
 fn eval_program(node: Node) -> Node {
@@ -903,7 +905,7 @@ fn run_block_program(bound: Vec<(String, Node)>, program_of: impl Fn(Vec<Node>) 
 		.collect();
 	let program = program_of(bindings);
 	crate::host::with_block_values(numbers, || {
-		crate::diagnostic::in_program_mode(program, run_cached_block)
+		crate::errors::diagnostic::in_program_mode(program, run_cached_block)
 	})
 }
 

@@ -2,7 +2,7 @@
 // we should definitely give a strong warning"): warned, unless the program says `await`
 use crate::common::fails_with;
 use crate::is;
-use warp::diagnostic::{with_warning_mode, WarningMode};
+use warp::errors::diagnostic::{with_warning_mode, WarningMode};
 
 const SLOW: &str = "f(x) := { sleep(10 ms); x * 2 }; ";
 

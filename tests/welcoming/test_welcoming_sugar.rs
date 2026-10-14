@@ -138,7 +138,7 @@ fn a_glued_hash_name_statement_counts() {
 
 #[test]
 fn the_let_note_is_shown_until_acknowledged() {
-	use warp::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
+	use warp::errors::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
 	use warp::normalize::capture_hints;
 	warp::normalize::set_style(warp::normalize::Style::canonical()); // the default leaves let and := open (user #12)
 	let let_hints = || {
@@ -175,7 +175,7 @@ fn a_hash_glued_to_an_expression_counts_at_line_start() {
 
 #[test]
 fn a_spaced_double_slash_is_always_a_comment_and_says_so_once() {
-	use warp::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
+	use warp::errors::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
 	use warp::normalize::capture_hints;
 	// user decision 2026-10-08: `//` before a space is a comment, `x //= 3` and `a//b` divide
 	is!("items=[1 2 3 4 5]\nmid = len(items) // 2\nmid", 5);
@@ -238,4 +238,12 @@ fn a_word_comment_after_a_value_needs_no_note() {
 	assert_eq!(notes("x = 4 // peaks\nx"), 0);
 	assert_eq!(notes("x = 4.0 // a peak\nx"), 0);
 	assert_eq!(notes("n = 2\nx = 8 // n\nx"), 1);
+}
+
+#[test] // card undefined-bare: next to a value as next to code, a word that names nothing is loud; words alone stay data
+fn an_unknown_word_beside_a_value_is_loud_too() {
+	fails_with("foo; 3", "undefined variable: foo");
+	fails_with("foo; yes", "undefined variable: foo");
+	fails_with("foo\n\"a\"", "undefined variable: foo");
+	is!("a;b;c", "c");
 }

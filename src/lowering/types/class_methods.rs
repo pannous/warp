@@ -18,14 +18,20 @@ mod members;
 use members::*;
 
 mod inheritance;
+mod json;
 mod operators;
 mod other_languages;
+pub use json::*;
+mod method_aliases;
+use method_aliases::*;
+mod statics;
 use crate::node::{leading_name, symbol, text, Bracket, Node, Separator};
 use crate::operators::{operator_method, Op, OPERATOR_METHODS};
 use inheritance::*;
 pub(crate) use operators::is_library_method;
 use operators::*;
 use other_languages::*;
+use statics::*;
 
 /// The receiver parameter of a method
 const RECEIVER: &str = "self";
@@ -50,33 +56,6 @@ const RESULT_SUFFIX: &str = "·result";
 const CAST_VALUE: &str = "cast·value";
 const CAST_PLACEHOLDER: &str = "cast_placeholder";
 const GIVING_MUTATIONS: [&str; 2] = ["pop", "remove"];
-/// Other languages' method names (Python's deque, Java's Deque and Queue, JS's Array and Set) and the warp methods they
-/// mean, the first one the class defines taken, with a note; only on a class that does not define the name itself
-const METHOD_ALIASES: [(&str, &[&str]); 23] = [
-	("clone", &["copy"]), // clone always calls the class's copy (P207)
-	("append", &["push_back", "push", "enqueue", "add"]),
-	("addLast", &["push_back", "enqueue"]),
-	("offerLast", &["push_back", "enqueue"]),
-	("offer", &["enqueue", "push_back"]),
-	("push", &["push_back", "enqueue"]),
-	("appendleft", &["push_front"]),
-	("addFirst", &["push_front"]),
-	("offerFirst", &["push_front"]),
-	("unshift", &["push_front"]),
-	("popleft", &["pop_front", "dequeue"]),
-	("pollFirst", &["pop_front", "dequeue"]),
-	("removeFirst", &["pop_front", "dequeue"]),
-	("shift", &["pop_front", "dequeue"]),
-	("poll", &["dequeue", "pop_front"]),
-	("pollLast", &["pop_back", "pop"]),
-	("removeLast", &["pop_back", "pop"]),
-	("pop", &["pop_back"]),
-	("contains", &["has"]),
-	("includes", &["has"]),
-	("delete", &["remove"]),
-	("discard", &["remove"]),
-	("len", &["size"]),
-];
 /// Member modifiers that may mean something in warp, so they get no note that warp needs them not
 const SILENT_MODIFIERS: [&str; 1] = ["async"];
 /// The constructor names of other languages, aliases of `init` (P162): warp's old `value`, JavaScript, Python, Ruby,
@@ -189,161 +168,6 @@ pub fn lower(node: Node) -> Node {
 	}
 }
 
-/// `d.append(1)` of a deque, `s.contains(2)` of a set, `len(s)`: the class's own method when it does not define that
-/// name (METHOD_ALIASES, analyzer::COUNTING_WORDS), with a note
-fn method_aliases(node: Node) -> Node {
-	let mut methods: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
-	node.visit(&mut |part| {
-		if let Node::Type { name, body } = part {
-			methods.insert(
-				name.drop_meta().name(),
-				class_items(body)
-					.iter()
-					.filter_map(method_parts)
-					.map(|(method, _, _)| method)
-					.collect(),
-			);
-		}
-	});
-	if methods.is_empty() {
-		return node;
-	}
-	let classes: Vec<String> = methods.keys().cloned().collect();
-	let instances: std::collections::HashMap<String, Vec<String>> = instance_classes(&node, &classes)
-		.into_iter()
-		.map(|(variable, class)| (variable, methods[&class].clone()))
-		.collect();
-	with_method_aliases(node, &instances)
-}
-
-/// The method of the class for `written`: the name itself, or the alias's warp method, or for a size word the size
-/// method the class defines
-fn aliased_method(written: &str, defined: &[String]) -> Option<String> {
-	if defined.iter().any(|method| method == written) {
-		return None;
-	}
-	let candidates: Vec<&str> = match crate::analyzer::is_counting_word(written) {
-		true => crate::analyzer::COUNTING_WORDS.to_vec(),
-		false => METHOD_ALIASES
-			.iter()
-			.find(|(alias, _)| *alias == written)
-			.map(|(_, methods)| methods.to_vec())
-			.unwrap_or_default(),
-	};
-	let method = candidates
-		.into_iter()
-		.find(|candidate| defined.iter().any(|method| method == candidate))?;
-	crate::diagnostic::note_alias(written, method);
-	Some(method.to_string())
-}
-
-fn with_method_aliases(node: Node, instances: &std::collections::HashMap<String, Vec<String>>) -> Node {
-	let defined_by = |receiver: &Node| match receiver.drop_meta() {
-		Node::Symbol(variable) => instances.get(variable),
-		_ => None,
-	};
-	match node {
-		Node::Key(receiver, Op::Dot, member) if defined_by(&receiver).is_some() => {
-			let member = match member.drop_meta() {
-				Node::List(items, Bracket::Round, separator) if !items.is_empty() => {
-					match aliased_method(&items[0].drop_meta().name(), defined_by(&receiver).expect("guarded")) {
-						Some(method) => Node::List(
-							[
-								vec![Node::Symbol(method)],
-								items[1..]
-									.iter()
-									.cloned()
-									.map(|item| with_method_aliases(item, instances))
-									.collect(),
-							]
-							.concat(),
-							Bracket::Round,
-							separator.clone(),
-						),
-						None => with_method_aliases(*member, instances),
-					}
-				}
-				_ => *member,
-			};
-			Node::Key(receiver, Op::Dot, Box::new(member))
-		}
-		// `len(s)`: `s.size()`; `size(s)` of a class defining size(): `s.size()` too (card size-instance)
-		Node::List(items, Bracket::Round, separator) if matches!(items.as_slice(), [word, argument] if crate::analyzer::is_counting_word(&word.drop_meta().name()) && defined_by(argument).is_some()) =>
-		{
-			let written = items[0].drop_meta().name();
-			let defined = defined_by(&items[1]).expect("guarded");
-			let method = match defined.contains(&written) {
-				true => Some(written),
-				false => aliased_method(&written, defined),
-			};
-			match method {
-				Some(method) => key(items[1].clone(), Op::Dot, call(&method, vec![])),
-				None => Node::List(items, Bracket::Round, separator),
-			}
-		}
-		other => other.map_children(|child| with_method_aliases(child, instances)),
-	}
-}
-
-/// json's word for a program with classes (lib/json.warp): the classes' names go along, so an instance is its fields
-const TO_JSON_WORD: &str = "to_json";
-const TO_JSON_OF_CLASSES_WORD: &str = "to_json_of_classes";
-/// Other languages' calls giving an instance's json or its fields: Kotlin's `Json.encodeToString(p)` is to_json(p),
-/// Python's `dataclasses.asdict(p)` the instance itself (its fields read like a map's entries)
-const SERIALIZER_ALIASES: [(&str, &str, &str); 2] =
-	[("Json", "encodeToString", TO_JSON_WORD), ("dataclasses", "asdict", "")];
-
-/// `to_json(p)` in a program declaring classes: `to_json_of_classes(p, ["Point", …])`, after std_aliases made
-/// `JSON.stringify(p)` and `json.dumps(p)` to_json
-pub fn lower_json_classes(node: Node) -> Node {
-	let mut classes = vec![];
-	node.visit(&mut |part| {
-		if let Node::Type { name, .. } = part {
-			classes.push(Node::Text(name.drop_meta().name()));
-		}
-	});
-	if classes.is_empty() {
-		return node;
-	}
-	with_json_classes(node, &Node::List(classes, Bracket::Square, Separator::Space))
-}
-
-fn with_json_classes(node: Node, classes: &Node) -> Node {
-	let serializer = |module: &Node, member: &Node| {
-		SERIALIZER_ALIASES.iter().find(|(written_module, written_member, _)| {
-			module.drop_meta().name() == *written_module && leading_name(member) == *written_member
-		})
-	};
-	match node {
-		Node::Key(module, Op::Dot, member) if serializer(&module, &member).is_some() => {
-			let (written_module, written_member, word) = serializer(&module, &member).expect("guarded");
-			let Node::List(items, Bracket::Round, _) = member.drop_meta() else {
-				return Node::Key(module, Op::Dot, member);
-			};
-			let argument = items.get(1).cloned().unwrap_or(Node::Empty);
-			crate::diagnostic::note_alias(
-				&format!("{written_module}.{written_member}"),
-				if word.is_empty() { "the instance" } else { word },
-			);
-			match word.is_empty() {
-				true => with_json_classes(argument, classes),
-				false => with_json_classes(call(word, vec![argument]), classes),
-			}
-		}
-		Node::List(items, Bracket::Round, separator)
-			if items.len() == 2 && items[0].drop_meta().name() == TO_JSON_WORD =>
-		{
-			let value = with_json_classes(items[1].clone(), classes);
-			Node::List(
-				vec![symbol(TO_JSON_OF_CLASSES_WORD), value, classes.clone()],
-				Bracket::Round,
-				separator,
-			)
-		}
-		other => other.map_children(|child| with_json_classes(child, classes)),
-	}
-}
-
 /// A class component's method giving its markup (Lit, React classes); other frameworks' names for it, with a note:
 /// Backbone's and Mithril's `view`, Angular's `template`, Flutter's `build`
 const RENDER_WORD: &str = "render";
@@ -378,7 +202,7 @@ pub(crate) fn class_fields(node: &Node) -> ClassFields {
 
 /// `class Tree{left: Tree}`: a field of the class's own type without `?` could never be filled, every Tree needing a
 /// Tree first (card empty-field, user decision: strict, the fix `left: Tree?`)
-pub fn check_self_typed_fields(program: &Node) -> Option<crate::diagnostic::Diagnostic> {
+pub fn check_self_typed_fields(program: &Node) -> Option<crate::errors::diagnostic::Diagnostic> {
 	let mut unfillable = None;
 	program.visit(&mut |part| {
 		let Node::Type { name, body } = part else { return };
@@ -390,7 +214,7 @@ pub fn check_self_typed_fields(program: &Node) -> Option<crate::diagnostic::Diag
 		if let Some(field) = field.filter(|_| unfillable.is_none()) {
 			let field_name = declared_field_name(&field).unwrap_or_default();
 			unfillable = Some(
-				crate::diagnostic::Diagnostic::at(
+				crate::errors::diagnostic::Diagnostic::at(
 					&field,
 					format!("{field_name} can never be filled: every {class} needs a {class} first"),
 				)
@@ -768,63 +592,6 @@ fn shared_method_traits(node: &Node) -> Vec<Node> {
 	traits
 }
 
-/// A method of the instances of a class, its name and parameters: an instance method, or the getter `k` of a static
-/// field `static k = 3`; a static method is none
-fn instance_member(item: &Node) -> Option<(String, Vec<Node>)> {
-	match (is_static(item), method_parts(item)) {
-		(false, Some((name, parameters, _))) => Some((name, parameters)),
-		(true, None) => declared_field_name(item).map(|name| (name, vec![])),
-		_ => None,
-	}
-}
-
-/// `static k = 3` in a class body (P122)
-fn is_static(item: &Node) -> bool {
-	item.attribute(crate::warp_parser::STATIC_KEYWORD).is_some()
-}
-
-/// `circle·count`: the global or function a static member of a class is
-fn static_name(class: &str, member: &str) -> String {
-	format!("{class}·{member}")
-}
-
-/// The static members of every class, as (class, member)
-fn static_members(node: &Node) -> Vec<(String, String)> {
-	let mut statics = vec![];
-	node.visit(&mut |part| {
-		let Node::Type { name, body } = part else { return };
-		let class = name.drop_meta().name();
-		statics.extend(
-			class_items(body)
-				.iter()
-				.filter(|item| is_static(item))
-				.filter_map(item_name)
-				.map(|member| (class.clone(), member)),
-		);
-	});
-	statics
-}
-
-/// `circle.count` of a static member as the global `circle·count`
-fn static_reads(node: Node, statics: &[(String, String)]) -> Node {
-	let recurse = |child: Node| static_reads(child, statics);
-	let Node::Key(object, Op::Dot, member) = node else {
-		return node.map_children(recurse);
-	};
-	let Node::Symbol(class) = object.drop_meta() else {
-		return key(recurse(*object), Op::Dot, recurse(*member));
-	};
-	let is_member = |name: &str| {
-		statics
-			.iter()
-			.any(|(owner, static_member)| owner == class && static_member == name)
-	};
-	match member.drop_meta() {
-		Node::Symbol(name) if is_member(name) => Node::Symbol(static_name(class, name)),
-		_ => Node::Key(object, Op::Dot, Box::new(recurse(*member))),
-	}
-}
-
 /// The operation `area` an implicit trait `trait has·area{…}` declares
 fn trait_operation(declaration: &Node) -> Option<String> {
 	let Node::List(items, _, _) = declaration else {
@@ -1006,25 +773,6 @@ fn split_class(node: &Node, changing: &mut Changing) -> Option<(Node, Vec<Node>)
 		},
 		functions,
 	))
-}
-
-/// `static make(x) := body` as the function `class·make(x) := body`; `static k = 3` as the global `class·k = 3` and the
-/// getter `k(self:class) := class·k`, so an instance reads it too (`c.k`)
-fn static_definitions(members: &Members, member: &Node) -> Vec<Node> {
-	let class = members.class;
-	let Some(name) = declared_field_name(member) else {
-		return vec![];
-	};
-	let Node::Key(_, Op::Assign, value) = member.drop_meta() else {
-		return vec![];
-	};
-	let global = Node::Symbol(static_name(class, &name));
-	let receiver = key(symbol(RECEIVER), Op::Colon, symbol(class));
-	let getter_head = call(&name, vec![receiver]);
-	let declaration = Node::Key(Box::new(global.clone()), Op::Assign, value.clone());
-	// `global c·n = 0`: methods may change it (`n += 1`)
-	let declaration = key(symbol(GLOBAL_WORD), Op::Colon, declaration);
-	vec![declaration, key(getter_head, Op::Define, global)]
 }
 
 /// `greet(x) := body` or `area := body` in a class body: name, parameters and body

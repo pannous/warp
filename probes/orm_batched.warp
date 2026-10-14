@@ -2,8 +2,8 @@
 // `id IN (…)` per page, instead of loading the whole other table
 class Team{name: text}
 class Person{name: text; team: Team?}
-teams: [Team] = database.teams
-people: [Person] = database.people
+stored teams: [Team]
+stored people: [Person]
 if count(teams) == 0 {
 	for i in 1 to 300 { teams.add(Team("T" + i)) }
 	for i in 1 to 300 { people.add(Person("N" + i, teams#i)) }

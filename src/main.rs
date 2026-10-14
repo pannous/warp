@@ -7,8 +7,8 @@ use std::io::{self, IsTerminal, Read, Write};
 use warp::node;
 use warp::util::{dirs_home, extract_after, file_exists, load_file};
 use warp::{
-	diagnostic, extensions, law, modules::package_tools, run, run::wasm_reader, util, warp_parser, wasm_emitter,
-	web::markup,
+	errors::diagnostic, extensions, law, modules::package_tools, run, run::wasm_reader, util, warp_parser,
+	wasm_emitter, web::markup,
 };
 use warp_runtime::host_words::{FOREIGN_CALL, HOST_LIBRARY};
 use wasm_emitter::eval;
@@ -145,7 +145,7 @@ fn command_argument<'a>(arg_string: &'a str, command: &str) -> Option<&'a str> {
 #[cfg(not(test))]
 fn main() {
 	let mut args: Vec<String> = env::args().collect();
-	warp::crash_card::install();
+	warp::errors::crash_card::install();
 	end_quietly_on_closed_pipe(); // after the crash card hook, so a closed pipe files none
 	warp::graphics::paint::allow_windows();
 	warp_runtime::engine::give_main_stack_to_wasm();
@@ -524,10 +524,6 @@ fn run_command(args: &[String]) {
 		if !only_run && wants_executable() && !matches!(result, Node::Error(_)) {
 			leave_executable(path);
 		}
-		if let Some(code) = warp_runtime::system_signals::take_exit_code() {
-			let _ = io::stdout().flush();
-			std::process::exit(code); // `exit(code)` (P121)
-		}
 		print_and_exit(result);
 	} else if arg_string.ends_with(".wat") || arg_string.ends_with(".wast") {
 		// Compile WAT/WAST text format to WASM binary, then execute
@@ -632,6 +628,7 @@ fn fail(message: impl std::fmt::Display) -> ! {
 
 /// The program's value printed, its Int the exit status, an uncaught error status 1
 fn print_and_exit(result: Node) -> ! {
+	exit_if_program_exited();
 	show(&result, "");
 	ended_well(&result);
 	std::process::exit(node_to_i32(&result));
@@ -639,11 +636,20 @@ fn print_and_exit(result: Node) -> ! {
 
 /// The value of inline code printed; an uncaught error exits with status 1, so scripts and CI see it failed
 fn show_and_fail_on_error(result: &Node, mark: &str) {
+	exit_if_program_exited();
 	show(result, mark);
 	if matches!(result.drop_meta(), Node::Error(_)) {
 		std::process::exit(ERROR_STATUS);
 	}
 	ended_well(result);
+}
+
+/// The status of the program's `exit(code)` (P121), for a file run and inline code alike
+fn exit_if_program_exited() {
+	if let Some(code) = warp_runtime::system_signals::take_exit_code() {
+		let _ = io::stdout().flush();
+		std::process::exit(code);
+	}
 }
 
 /// A program that ended well keeps its painted window up until the user closes it; exit() or a failure closes it

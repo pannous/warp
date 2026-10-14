@@ -1,7 +1,7 @@
 //! Is our HTML type safe (card our-html): markup that would render wrong is warned about where it is written, with the
 //! near name as its fix: a key no attribute (shown as text), a handler of no event, an input type the browser does not
 //! know, content of an element that takes none, a block under a name no element
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 use warp::wasm_emitter::eval;
 
 fn warnings_of(code: &str) -> Vec<String> {
@@ -53,9 +53,9 @@ fn an_unknown_tag_among_markup_warns() {
 	warns("div{ divv{ \"hi\" } }", "divv is no element: it shows as text");
 	warns("ul{ lli{ \"x\" } }", "lli is no element: it shows as text");
 	// said once, as written: the run's markup holds it as the attribute divv: "hi"
-	warp::diagnostic::take_runtime_warnings();
+	warp::errors::diagnostic::take_runtime_warnings();
 	let warned = warnings_of("div{ divv{ \"hi\" } }");
-	let at_run_time = warp::diagnostic::take_runtime_warnings();
+	let at_run_time = warp::errors::diagnostic::take_runtime_warnings();
 	assert!(
 		!warned
 			.iter()
@@ -104,6 +104,23 @@ fn a_class_literal_field_named_like_an_element_is_no_markup() {
 	);
 }
 
+/// card html-meta-warnings (decision html-meta): the page facts of html, `description:` and `meta: {author: …}`, go into
+/// the head without a warning; a meta element's own attributes (`charset`) are still checked as attributes
+#[test]
+fn page_facts_are_no_attributes() {
+	let code = "html{ lang: \"en\" description: \"d\" meta: {author: \"Ann\"} }";
+	warp::errors::diagnostic::take_runtime_warnings();
+	assert_eq!(warnings_of(code), Vec::<String>::new(), "{code}");
+	let at_run_time = warp::errors::diagnostic::take_runtime_warnings();
+	assert!(at_run_time.is_empty(), "{at_run_time:?}");
+	let html = warp::web::markup::to_html(&eval(code));
+	assert!(html.contains("<meta name=\"author\" content=\"Ann\">"), "{html}");
+	warns(
+		"html{ head{ meta{ charset: \"utf-8\" contnt: \"x\" } } }",
+		"contnt is no attribute of meta: it shows as text",
+	);
+}
+
 /// cards data-map, body-key-markup: a data map's keys are no elements, even named like one (`body`, `title`), when it
 /// has a field named like no element; a field's value is still markup
 #[test]
@@ -123,4 +140,16 @@ fn a_data_map_key_named_like_an_element_is_no_markup() {
 fn a_nested_data_map_is_no_markup() {
 	let code = "response = {status: 200, body: {user: {age: 31}}}\nif response is {body: {user: {age}}} then age";
 	assert_eq!(warnings_of(code), Vec::<String>::new(), "{code}");
+}
+
+/// card dash-element (decision unknown-tag): a custom element is named with a dash and renders as one, without a warning
+#[test]
+fn a_custom_element_with_a_dash_renders() {
+	warp::errors::diagnostic::take_runtime_warnings();
+	let html = warp::web::markup::to_html(&eval("div{ my-thing{ \"x\" } }"));
+	assert_eq!(html, "<div><my-thing>x</my-thing></div>");
+	let at_run_time = warp::errors::diagnostic::take_runtime_warnings();
+	assert!(at_run_time.is_empty(), "{at_run_time:?}");
+	let attributes = warp::web::markup::to_html(&eval("div{ data-x: 1 aria-label: \"l\" \"hi\" }"));
+	assert_eq!(attributes, "<div data-x=\"1\" aria-label=\"l\">hi</div>");
 }

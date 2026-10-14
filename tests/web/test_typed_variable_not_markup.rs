@@ -1,6 +1,6 @@
 //! card annotation-html: the typed variable `a:V = …` is no HTML a element, so no accessibility warning; markup
 //! assigned to a variable is still checked
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 use warp::wasm_emitter::eval;
 
 fn warnings_of(code: &str) -> Vec<String> {

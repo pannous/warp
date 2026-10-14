@@ -4,11 +4,11 @@
 //! binds its names like the written one (`pattern Point = [x, y]; match p { Point => x + y }`). A plain assignment is
 //! always a value; one whose right side can only be a pattern (`Pair = [_, _]`) is the error whose fix is the keyword.
 
-use super::nodes::is_type_word;
+use super::nodes::is_kinded_type_word;
 use super::nodes::{children_rewritten, key};
 use super::switch::{is_list_pattern, is_map_pattern, is_switch_head, map_field, rest_pattern, split_switch, WILDCARD};
 use super::tree_walks::{FIND_WORD, REPLACE_WORD};
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use std::collections::HashMap;
@@ -178,7 +178,7 @@ fn schema_fields(pattern: &Node) -> Option<Vec<SchemaField>> {
 		.iter()
 		.map(|part| {
 			let (name, type_word) = map_field(part)?;
-			is_type_word(type_word).then(|| SchemaField {
+			is_kinded_type_word(type_word).then(|| SchemaField {
 				name,
 				type_word: type_word.name(),
 				optional: crate::type_kinds::optional_field(part).is_some(),

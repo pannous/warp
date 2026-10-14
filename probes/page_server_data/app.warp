@@ -1,7 +1,7 @@
 // card web-page-server-data: a main-level statement of the page that reads server data (the seed below) ran in the
 // browser too, which has no such table ("table.open: no such word in the browser")
 class User{name: text}
-users: [User] = database.users
+stored users: [User]
 if count(users) == 0 { users.add(User("Ann")); users.add(User("Bo")) }
 route "/" { div{ p{ "home" } a{ href:"/users/1" "first" } } }
 route "/users/:id:int" { div{ h1{ "User " + users#id.name } a{ href:"/" "home" } } }

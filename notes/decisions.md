@@ -17,6 +17,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - cleanup-only (2026-10-13): until the big Rust cleanup is done, new tasks come only from the cleanup roadmap; other
   workers finish what they hold; the Codex timer takes only cleanup cards; urgent Now cards still go out.
   Exception: use-cargo (crate components, downloads) keeps going, "important and doesn't touch the cleanup much".
+- weekly-cleanup (2026-10-14, user): a fresh cleanup roadmap every week (topic `cleanup-w<week>`, e.g. cleanup-w42);
+  new cleanup cards go into the current week's topic (`todo add "…" --topic cleanup-w42`). Older roadmaps stay as
+  they are, solved cards Done in them. Chores that should run regularly get `todo repeat <card> <days>`, and the
+  daily `todo recur` brings them back to Next; they are not copied into each new roadmap.
 - cleanup-means-fewer-lines (2026-10-13): the cleanup's metric is lines removed: simpler, more general, more elegant
   code. Splitting files or functions alone is not a goal ("not that impressed by splitting"). Each cleanup merge
   request states its net src/ line delta; baseline 161132 lines of src/*.rs at eaa40f98b.
@@ -36,6 +40,13 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   failed only, `if no x` and `x or 0` cover both; at a WIT export a function that can fail gives `result`, one that
   only gives ø an `option`, one doing both `result<option<T>>`; `effects of f` tells which. Where a caller can take it, the Error value propagates instead of
   being raised (card error-gaps, wiki/Error.md "Not yet").
+- use-script (2026-10-14): `use script` (alias `use script mode`) = `use relaxed` (no hints) plus the scripting words without further `use`:
+  the modules os, file and net (env, exec, write, exists, list_files, lines, post …), plus new words where missing:
+  `command("…")` (run a shell command, its output as text; the explicit opt-in to text-as-shell), `arguments` (the
+  program's arguments as a list), `cwd`, `glob("*.toml")`, `stdin`/`input`, `sleep`, `exit n`. `use relaxed` stays
+  the hint switch alone. P45's "script mode" is this pragma.
+- sleep-seconds (2026-10-14): a bare number in `sleep 0.3` means seconds everywhere (like sh and Python), with the
+  "needs a unit" warning suggesting `0.3s`; demo samples written with bare ms move to `300ms`. Run-time plain-number values count seconds too (`f(t) := sleep(t)`); no warning under `use script`.
 - restructuring (2026-10-14): new major roadmap after the diff review found few duplicates. Inventory every function
   by name, move functions to the file their concept belongs to (a general parser holds no keyword-specific syntax:
   `finish_if_prefix` goes to e.g. control/if.rs), and have agents check suspiciously similar names for true

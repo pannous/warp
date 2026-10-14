@@ -202,8 +202,8 @@ pub(crate) fn is_function_keyword(node: &Node) -> bool {
 	node.symbol_name().is_some_and(crate::operators::is_function_keyword)
 }
 
-/// `int`, `float`, `text`, …: a word naming a type
-pub(crate) fn is_type_word(node: &Node) -> bool {
+/// `int`, `float`, `text`, `u8`, `number` …: a word naming a type with a value kind (analyzer::type_word_kind)
+pub(crate) fn is_kinded_type_word(node: &Node) -> bool {
 	node.symbol_name()
 		.is_some_and(|word| crate::analyzer::type_word_kind(word).is_some())
 }
@@ -213,7 +213,7 @@ pub(crate) fn is_type_word(node: &Node) -> bool {
 pub(crate) fn may_be_whole_number(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Number(number) => matches!(number, Number::Int(_) | Number::BigInt(_)),
-		Node::Symbol(name) => !is_type_word(node) && !name.starts_with(char::is_uppercase),
+		Node::Symbol(name) => !is_kinded_type_word(node) && !name.starts_with(char::is_uppercase),
 		Node::Key(_, op, _) => !(op.is_comparison() || op.is_logical() || *op == Op::Not),
 		// a call `f(4)`, never `[1 2]` or the type-headed `text { … }`
 		Node::List(items, bracket, _) => *bracket != Bracket::Square && items.first().is_none_or(may_be_whole_number),

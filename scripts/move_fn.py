@@ -35,6 +35,9 @@ def statement_end(text, start):
 			position += 1
 			while text[position] != '"':
 				position += 2 if text[position] == "\\" else 1
+		elif char == "'":
+			literal = re.match(r"'(\\.[^']*|[^'\\])'", text[position:position + 12])
+			position += literal.end() - 1 if literal else 0
 		elif char in "([{":
 			depth += 1
 		elif char in ")]}":

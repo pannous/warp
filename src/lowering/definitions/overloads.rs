@@ -10,7 +10,7 @@ use super::nodes::{
 	with_parts_rewritten,
 };
 use crate::analyzer::{call_name, collect_all_types, type_word_kind};
-use crate::diagnostic::{ask, reading, Ask, Fallback};
+use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
 use crate::lowering::{function_head, DefinitionForm};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -645,7 +645,7 @@ impl VariantRenaming for ArityOverloads {
 				counts.dedup();
 				let counts = counts.iter().map(usize::to_string).collect::<Vec<_>>().join(" or ");
 				return Some(
-					crate::diagnostic::Diagnostic::at(
+					crate::errors::diagnostic::Diagnostic::at(
 						head,
 						format!("{name} takes {counts} arguments, got {}", arguments.len()),
 					)
@@ -654,7 +654,7 @@ impl VariantRenaming for ArityOverloads {
 			}
 			_ => {
 				return Some(
-					crate::diagnostic::Diagnostic::at(
+					crate::errors::diagnostic::Diagnostic::at(
 						head,
 						format!("`{written}` fits two definitions of {name}: pass every argument of the one you mean"),
 					)
@@ -814,7 +814,7 @@ impl ParameterOverloads {
 		match chosen.as_slice() {
 			[types] => Some(call(&Self::variant_name(&name, types), arguments)),
 			_ => Some(
-				crate::diagnostic::Diagnostic::at(
+				crate::errors::diagnostic::Diagnostic::at(
 					head,
 					format!(
 						"`{written}` fits no single variant of {listed}: give the arguments a type, e.g. `x as float`"

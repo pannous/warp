@@ -147,7 +147,7 @@ pub(in crate::analyzer) fn lint_into(node: &Node, warnings: &mut Vec<Diagnostic>
 			if let (Op::Or, Node::Key(condition, Op::And, then)) = (op, left.drop_meta()) {
 				warnings.extend(and_or_warning(node, condition, then, right));
 			}
-			if *op == Op::As && is_arithmetic(left) {
+			if *op == Op::As && is_ungrouped_arithmetic(left) {
 				let diagnostic = Diagnostic::at(node, conversion_of_arithmetic_warning(left, right));
 				let written = format!("{} as {}", left.serialize(), right.serialize());
 				let readings = conversion_readings(left, right);
@@ -257,19 +257,19 @@ pub(in crate::analyzer) fn kebab_fixes(
 	let mut reads = vec![];
 	bare_reads(program, name, &mut reads);
 	let quoted = format!("\"{name}\"");
-	let at_reads = |fix: crate::fixits::Fix, replacement: &str| {
+	let at_reads = |fix: crate::errors::fixits::Fix, replacement: &str| {
 		reads.iter().fold(fix, |fix, read| fix.and(name, replacement, *read))
 	};
 	let renamed = name.replace('-', "_");
 	let warning = match reads.is_empty() {
 		true => warning.offer(format!("the data key {name}"), name, quoted),
 		false => warning.offering(at_reads(
-			crate::fixits::fix(format!("the subtraction {subtraction}"), name, quoted),
+			crate::errors::fixits::fix(format!("the subtraction {subtraction}"), name, quoted),
 			subtraction,
 		)),
 	};
 	warning.offering(at_reads(
-		crate::fixits::fix(format!("the data key, renamed {renamed}"), name, &renamed),
+		crate::errors::fixits::fix(format!("the data key, renamed {renamed}"), name, &renamed),
 		&renamed,
 	))
 }
@@ -277,7 +277,9 @@ pub(in crate::analyzer) fn kebab_fixes(
 /// Where `name` is read bare: not as a data key (`a-b:2`) or a member (`x.a-b`), which already mean the key
 pub(in crate::analyzer) fn bare_reads(node: &Node, name: &str, reads: &mut Vec<(usize, usize)>) {
 	match node {
-		Node::Meta { node: inner, .. } if inner.is_symbol(name) => reads.extend(crate::diagnostic::position(node)),
+		Node::Meta { node: inner, .. } if inner.is_symbol(name) => {
+			reads.extend(crate::errors::diagnostic::position(node))
+		}
 		Node::Meta { node, .. } => bare_reads(node, name, reads),
 		Node::Key(_, Op::Colon, value) if data_binding(node).is_some() => bare_reads(value, name, reads),
 		Node::Key(left, Op::Dot, _) => bare_reads(left, name, reads),
@@ -291,8 +293,8 @@ pub(in crate::analyzer) fn bare_reads(node: &Node, name: &str, reads: &mut Vec<(
 }
 
 /// An ungrouped binary arithmetic expression: `2 * 1.5`, not `(2 * 1.5)`
-pub(in crate::analyzer) fn is_arithmetic(node: &Node) -> bool {
-	matches!(node, Node::Key(_, op, _) if matches!(op, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Rem | Op::Pow))
+pub(in crate::analyzer) fn is_ungrouped_arithmetic(node: &Node) -> bool {
+	matches!(node, Node::Key(_, op, _) if op.is_arithmetic())
 }
 
 pub(in crate::analyzer) fn conversion_of_arithmetic_warning(left: &Node, right: &Node) -> String {

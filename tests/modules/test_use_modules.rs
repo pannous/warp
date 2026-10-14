@@ -88,10 +88,10 @@ fn test_module_using_module_imports_transitively_and_survives_cycles() {
 /// (`items` of markup's html_element in a page)
 #[test]
 fn module_function_locals_are_not_the_programs_variables() {
-	warp::diagnostic::take_warnings();
+	warp::errors::diagnostic::take_warnings();
 	let compiled =
 		warp::pipeline::for_a_page(|| warp::pipeline::compile("use markup\nlet items = 3\nhtml{ p{ \"x\" } }"));
-	let warnings: Vec<String> = warp::diagnostic::take_warnings()
+	let warnings: Vec<String> = warp::errors::diagnostic::take_warnings()
 		.iter()
 		.map(|warning| warning.to_string())
 		.collect();

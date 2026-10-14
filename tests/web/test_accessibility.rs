@@ -1,6 +1,6 @@
 //! Accessible markup (card web-a11y, src/web/accessibility.rs): welcoming warnings for markup a screen reader or keyboard
 //! user cannot use, each at the element as written with a fix
-use warp::diagnostic::take_warnings;
+use warp::errors::diagnostic::take_warnings;
 use warp::wasm_emitter::eval;
 
 fn warnings_of(code: &str) -> Vec<String> {
@@ -101,9 +101,9 @@ fn style_sheet_rules_are_no_elements() {
 #[test]
 fn markup_built_at_run_time_is_checked() {
 	let runtime_warnings_of = |code: &str| {
-		warp::diagnostic::take_runtime_warnings();
+		warp::errors::diagnostic::take_runtime_warnings();
 		eval(code);
-		warp::diagnostic::take_runtime_warnings()
+		warp::errors::diagnostic::take_runtime_warnings()
 	};
 	assert_eq!(runtime_warnings_of("tag = \"img\"\ndiv{ (tag): { src: \"a.png\" } (tag): { src: \"b.png\" } }"),
 		vec!["markup built at run time: img without alt: a screen reader reads its file name; fix: alt: \"what it shows\", or alt: \"\" for a decoration"]);
@@ -134,4 +134,15 @@ fn fetched_content_is_announced() {
 		warp::web::markup::to_html(&eval(&own)).contains("aria-live=\"assertive\"")
 			&& !warp::web::markup::to_html(&eval(&own)).contains("polite")
 	);
+}
+
+// compared values and patterns are never rendered: `{a: 2} is {a: h}` holds no `a` element (card markup-lint)
+#[test]
+fn compared_values_are_no_elements() {
+	assert!(warnings_of("{a: 2} is {a: h}")
+		.iter()
+		.all(|warning| !warning.contains("a without href")));
+	assert!(warnings_of("x = {img: 1}\nx == {img: 1}")
+		.iter()
+		.all(|warning| !warning.contains("img without alt")));
 }

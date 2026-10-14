@@ -1,5 +1,5 @@
 // The `ack:` lines of the `.warp-answers` file earlier versions wrote are adopted by `.warp-acknowledged`, once
-use warp::diagnostic::adopt_acknowledgements;
+use warp::errors::diagnostic::adopt_acknowledgements;
 
 const DIRECTORY: &str = "scratch/test_adopted_acknowledgements";
 

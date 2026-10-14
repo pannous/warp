@@ -47,12 +47,12 @@ pub struct CapturedHint {
 	pub reason: String,
 	/// The "I meant" edit: `canonical` in place of `original` for a rewrite; for advice the edit its caller names
 	/// (`global x=1` at main's assignment), none when the advice replaces no text (`on … before the loop`)
-	pub fix: Option<crate::fixits::Fix>,
+	pub fix: Option<crate::errors::fixits::Fix>,
 }
 
 impl CapturedHint {
 	/// The preferred form as an applicable fix
-	pub fn fix(&self) -> Option<crate::fixits::Fix> {
+	pub fn fix(&self) -> Option<crate::errors::fixits::Fix> {
 		self.fix.clone()
 	}
 
@@ -64,8 +64,8 @@ impl CapturedHint {
 	}
 }
 
-impl From<crate::diagnostic::Diagnostic> for CapturedHint {
-	fn from(hint: crate::diagnostic::Diagnostic) -> Self {
+impl From<crate::errors::diagnostic::Diagnostic> for CapturedHint {
+	fn from(hint: crate::errors::diagnostic::Diagnostic) -> Self {
 		let position = match hint.line {
 			0 => String::new(),
 			line => crate::compiler::meta::place_text(hint.file.as_deref(), line, hint.column),
@@ -82,7 +82,7 @@ impl From<crate::diagnostic::Diagnostic> for CapturedHint {
 
 /// Run `action` and return the hints it emitted on this thread (hints are still printed)
 pub fn capture_hints<T>(action: impl FnOnce() -> T) -> (T, Vec<CapturedHint>) {
-	let (result, hints) = crate::diagnostic::capture_hints(action);
+	let (result, hints) = crate::errors::diagnostic::capture_hints(action);
 	(result, hints.into_iter().map(CapturedHint::from).collect())
 }
 
@@ -353,7 +353,7 @@ pub fn hint_mode() -> HintMode {
 	compile_context::read(|context| context.hint_mode)
 }
 
-pub use crate::diagnostic::clear_shown_hints;
+pub use crate::errors::diagnostic::clear_shown_hints;
 
 // ============================================================================
 // Core Hint Function
@@ -365,20 +365,20 @@ pub fn hint(original: &str, canonical: &str, reason: &str) {
 }
 
 /// The fix of a hint: its preferred form in place of the original
-pub(crate) fn rewrite(original: &str, canonical: &str, reason: &str) -> crate::fixits::Fix {
-	crate::fixits::fix(reason, original, canonical)
+pub(crate) fn rewrite(original: &str, canonical: &str, reason: &str) -> crate::errors::fixits::Fix {
+	crate::errors::fixits::fix(reason, original, canonical)
 }
 
 /// A hint whose preferred form is no plain rewrite of the original text: said elsewhere (`global x` at main's
 /// assignment) or meaning something else (`(a<b) |> f`); `fix` is its "I meant" edit, when the advice names one
-pub fn advise(original: &str, preferred: &str, reason: &str, fix: Option<crate::fixits::Fix>) {
+pub fn advise(original: &str, preferred: &str, reason: &str, fix: Option<crate::errors::fixits::Fix>) {
 	acknowledgeable_hint(original, preferred, reason, fix);
 }
 
 /// A hint the user can say "got it" to, for this expression or all hints of its reason (card hints-dismissed)
-fn acknowledgeable_hint(original: &str, canonical: &str, reason: &str, fix: Option<crate::fixits::Fix>) {
+fn acknowledgeable_hint(original: &str, canonical: &str, reason: &str, fix: Option<crate::errors::fixits::Fix>) {
 	let topic = format!("{HINT_TOPIC_PREFIX}{reason}");
-	if !crate::diagnostic::is_acknowledged(&topic, original) {
+	if !crate::errors::diagnostic::is_acknowledged(&topic, original) {
 		show_hint(original, canonical, reason, fix, &topic);
 	}
 }
@@ -389,26 +389,26 @@ pub(crate) fn show_hint(
 	original: &str,
 	canonical: &str,
 	reason: &str,
-	fix: Option<crate::fixits::Fix>,
+	fix: Option<crate::errors::fixits::Fix>,
 	topic: &str,
 ) -> bool {
 	if hint_mode() == HintMode::Off || compile_context::read(|context| context.hints_muted) {
 		return false;
 	}
 	let position = compile_context::read(|context| context.hint_position.clone());
-	let hint = crate::diagnostic::Diagnostic {
+	let hint = crate::errors::diagnostic::Diagnostic {
 		message: reason.to_string(),
 		line: position.line,
 		column: position.column,
 		file: position.file.filter(|_| position.line > 0),
 		fixes: fix.into_iter().collect(),
-		level: crate::diagnostic::Level::Hint,
+		level: crate::errors::diagnostic::Level::Hint,
 		written: Some(original.to_string()),
 		preferred: Some(canonical.to_string()),
 		..Default::default()
 	}
 	.about(topic, original);
-	crate::diagnostic::say(hint)
+	crate::errors::diagnostic::say(hint)
 }
 
 // ============================================================================
@@ -541,7 +541,7 @@ pub mod hints {
 		let s = style();
 		match (used_ternary, s.conditional) {
 			// shown until the user acknowledges it once (card hint-dismiss)
-			(true, ConditionalStyle::IfThenElse) => crate::diagnostic::educate_once(
+			(true, ConditionalStyle::IfThenElse) => crate::errors::diagnostic::educate_once(
 				CONDITIONAL_TOPIC,
 				"x ? y : z",
 				"if x then y else z",
@@ -587,7 +587,7 @@ pub mod hints {
 		};
 		match used_style {
 			// shown until the user acknowledges it once (diagnostic::educate_once)
-			VarStyle::Let => crate::diagnostic::educate_once(
+			VarStyle::Let => crate::errors::diagnostic::educate_once(
 				LET_TOPIC,
 				&spell(used_style),
 				&spell(preferred),
@@ -823,8 +823,9 @@ pub fn set_position_of(node: &Node) {
 		}
 		match node {
 			Node::Meta { node, .. } => start_of(node),
-			Node::Key(left, _, _) => start_of(left),
-			Node::List(items, _, _) => items.first().and_then(start_of),
+			// a word a pass made (`times` of `3 times 4`) has no position: the first part that has one
+			Node::Key(left, _, right) => start_of(left).or_else(|| start_of(right)),
+			Node::List(items, _, _) => items.iter().find_map(start_of),
 			_ => None,
 		}
 	}

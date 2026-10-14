@@ -7,7 +7,7 @@ use warp::wasm_emitter::eval;
 const SEED: &str = "people.add(Person(\"Ann\", 7))\npeople.add(Person(\"Bo\", 30))\npeople.add(Person(\"Cy\", 41))";
 
 fn program(table: &str, rest: &str) -> String {
-	format!("class Person{{name: text; age: int}}\npeople: [Person] = database.people_{table}\n{rest}")
+	format!("class Person{{name: text; age: int}}\nstored people: [Person] in \"people_{table}\"\n{rest}")
 }
 
 #[test]

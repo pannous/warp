@@ -16,7 +16,7 @@ use super::nodes::children_rewritten;
 use crate::analyzer::effects::EffectReport;
 use crate::analyzer::{captured_variables, collect_variables, declare_global, find_assignments, param_kind, Scope};
 use crate::compiler::context::{Context, UserFunctionDef};
-use crate::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
+use crate::errors::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
 use crate::list_mutations::is_list_mutating_method;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
@@ -437,9 +437,10 @@ fn note_charging(
 			main.is_global(word)
 		}
 	});
-	if !reads_variables {
+	// `risky() := 1/0` fails only when called (inside a try): as a value it would fail at once
+	if !reads_variables && !can_fail(&function.body) {
 		crate::normalize::set_position_of(statement);
-		crate::diagnostic::educate_once(
+		crate::errors::diagnostic::educate_once(
 			NEEDLESS_CHARGING_TOPIC,
 			&written,
 			&format!("{name} = {value}"),
@@ -447,6 +448,17 @@ fn note_charging(
 		);
 	}
 	Ok(())
+}
+
+/// A body that may raise: an error it raises, or a division by anything but a nonzero number (`1/0`, `n % k`)
+fn can_fail(body: &Node) -> bool {
+	let mut fails = false;
+	body.visit(&mut |part| {
+		fails |= crate::pipeline::returned_error_message(part).is_some()
+			|| matches!(part, Node::Key(_, Op::Div | Op::Mod | Op::Rem, divisor)
+				if !matches!(divisor.drop_meta(), Node::Number(number) if !number.zero()))
+	});
+	fails
 }
 
 /// `t := clock()`: the clock is read at every `t`, which may be meant, or `t = clock()` for one reading

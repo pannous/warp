@@ -5,7 +5,7 @@ use crate::operators::Op;
 use wasm_encoder::*;
 use Instruction as I;
 
-use super::super::WasmGcEmitter;
+use super::super::{Need, WasmGcEmitter};
 
 impl WasmGcEmitter {
 	/// Key(left, op, right) by its operator and operands
@@ -434,6 +434,14 @@ impl WasmGcEmitter {
 			self.get_type(side) == crate::type_kinds::Kind::Int && !crate::analyzer::is_boolean(side, &self.scope)
 		};
 		(op.is_bitwise() && !(combines_bits(left) && combines_bits(right))).then(|| op.logical_twin())
+	}
+
+	/// A Key of its two sides on the stack, joined by `op` (list_text writes the op as written, a need when it is new)
+	pub(in crate::wasm_emitter) fn emit_new_key(&mut self, func: &mut Function, op: &crate::operators::Op) {
+		let code = crate::operators::op_to_code(op);
+		self.discovered_needs.insert(Need::KeyOperator(code));
+		func.instruction(&I::I64Const(code));
+		self.emit_call(func, "new_key");
 	}
 }
 

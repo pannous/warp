@@ -6,7 +6,7 @@ use warp::wasm_emitter::eval;
 const PERSON: &str = "class Person{name: text; age: int}";
 
 fn program(table: &str, rest: &str) -> String {
-	format!("{PERSON}\npeople: [Person] = database.{table}\n{rest}")
+	format!("{PERSON}\nstored people: [Person] in \"{table}\"\n{rest}")
 }
 
 #[test]
@@ -27,14 +27,14 @@ fn a_row_knows_its_id() {
 
 #[test]
 fn a_field_added_to_the_class_adds_a_column() {
-	eval("class Pet{name: text}\npets: [Pet] = database.pets_grown\npets.add(Pet(\"Rex\"))");
+	eval("class Pet{name: text}\nstored pets: [Pet] in \"pets_grown\"\npets.add(Pet(\"Rex\"))");
 	is!(
-		"class Pet{name: text; legs: int = 4}\npets: [Pet] = database.pets_grown\ncount(pets)",
+		"class Pet{name: text; legs: int = 4}\nstored pets: [Pet] in \"pets_grown\"\ncount(pets)",
 		1
 	);
-	eval("class Pet{name: text; legs: int = 4}\npets: [Pet] = database.pets_grown\npets.add(Pet(\"Tweety\", 2))");
+	eval("class Pet{name: text; legs: int = 4}\nstored pets: [Pet] in \"pets_grown\"\npets.add(Pet(\"Tweety\", 2))");
 	is!(
-		"class Pet{name: text; legs: int = 4}\npets: [Pet] = database.pets_grown\npets#2.legs",
+		"class Pet{name: text; legs: int = 4}\nstored pets: [Pet] in \"pets_grown\"\npets#2.legs",
 		2
 	);
 }
@@ -42,36 +42,36 @@ fn a_field_added_to_the_class_adds_a_column() {
 // a removed field keeps its column (data is never dropped silently), loudly
 #[test]
 fn a_field_removed_from_the_class_keeps_its_column_with_a_warning() {
-	eval("class Car{make: text; color: text}\ncars: [Car] = database.cars_shrunk\ncars.add(Car(\"VW\", \"red\"))");
-	warp::diagnostic::take_runtime_warnings();
+	eval("class Car{make: text; color: text}\nstored cars: [Car] in \"cars_shrunk\"\ncars.add(Car(\"VW\", \"red\"))");
+	warp::errors::diagnostic::take_runtime_warnings();
 	is!(
-		"class Car{make: text}\ncars: [Car] = database.cars_shrunk\ncars#1.make",
+		"class Car{make: text}\nstored cars: [Car] in \"cars_shrunk\"\ncars#1.make",
 		"VW"
 	);
-	let warnings = warp::diagnostic::take_runtime_warnings();
+	let warnings = warp::errors::diagnostic::take_runtime_warnings();
 	assert!(warnings.iter().any(|warning| warning.contains("color")), "{warnings:?}");
 }
 
 // a lossless type change converts the column in place, a lossy one is a loud error (notes/orm.md Migrations)
 #[test]
 fn a_field_changed_without_loss_converts_its_column() {
-	eval("class Box{width: int}\nboxes: [Box] = database.boxes_widened\nboxes.add(Box(3))");
+	eval("class Box{width: int}\nstored boxes: [Box] in \"boxes_widened\"\nboxes.add(Box(3))");
 	is!(
-		"class Box{width: float}\nboxes: [Box] = database.boxes_widened\nboxes#1.width",
+		"class Box{width: float}\nstored boxes: [Box] in \"boxes_widened\"\nboxes#1.width",
 		3.0
 	);
-	eval("class Tag{code: int}\ntags: [Tag] = database.tags_spelled\ntags.add(Tag(7))");
+	eval("class Tag{code: int}\nstored tags: [Tag] in \"tags_spelled\"\ntags.add(Tag(7))");
 	is!(
-		"class Tag{code: text}\ntags: [Tag] = database.tags_spelled\ntags#1.code",
+		"class Tag{code: text}\nstored tags: [Tag] in \"tags_spelled\"\ntags#1.code",
 		"7"
 	);
 }
 
 #[test]
 fn a_field_changed_with_loss_is_an_error_naming_both_types() {
-	eval("class Bag{weight: float}\nbags: [Bag] = database.bags_narrowed\nbags.add(Bag(2.5))");
+	eval("class Bag{weight: float}\nstored bags: [Bag] in \"bags_narrowed\"\nbags.add(Bag(2.5))");
 	crate::common::fails_with(
-		"class Bag{weight: int}\nbags: [Bag] = database.bags_narrowed\nbags#1.weight",
+		"class Bag{weight: int}\nstored bags: [Bag] in \"bags_narrowed\"\nbags#1.weight",
 		"bags_narrowed.weight holds",
 	);
 }
@@ -82,8 +82,9 @@ fn a_field_changed_with_loss_is_an_error_naming_both_types() {
 #[cfg(feature = "native")]
 #[test]
 fn a_unit_field_is_stored_and_migrates_within_its_quantity() {
-	let runs =
-		|class: &str, table: &str, rest: &str| format!("class Run{{{class}}}\nruns: [Run] = database.{table}\n{rest}");
+	let runs = |class: &str, table: &str, rest: &str| {
+		format!("class Run{{{class}}}\nstored runs: [Run] in \"{table}\"\n{rest}")
+	};
 	eval(&runs(
 		"distance: km",
 		"runs_km",
@@ -110,14 +111,14 @@ fn a_unit_field_is_stored_and_migrates_within_its_quantity() {
 		"the unit would be lost",
 	);
 	eval(&runs("distance: int", "runs_plain", "runs.add(Run(3))"));
-	warp::diagnostic::take_runtime_warnings();
+	warp::errors::diagnostic::take_runtime_warnings();
 	assert_eq!(
 		eval(&runs("distance: km", "runs_plain", "runs#1.distance"))
 			.serialize()
 			.trim(),
 		"3km"
 	);
-	let warnings = warp::diagnostic::take_runtime_warnings();
+	let warnings = warp::errors::diagnostic::take_runtime_warnings();
 	assert!(
 		warnings.iter().any(|warning| warning.contains("read as km")),
 		"{warnings:?}"
@@ -235,13 +236,13 @@ fn an_instance_added_before_loading_is_the_loaded_row() {
 // `@was(old)` on a field renames its column, keeping the data; without it a rename reads as add + remove
 #[test]
 fn a_field_marked_was_renames_its_column() {
-	eval("class Dog{nick: text}\ndogs: [Dog] = database.dogs_renamed\ndogs.add(Dog(\"Rex\"))");
+	eval("class Dog{nick: text}\nstored dogs: [Dog] in \"dogs_renamed\"\ndogs.add(Dog(\"Rex\"))");
 	is!(
-		"class Dog{@was(nick) name: text}\ndogs: [Dog] = database.dogs_renamed\ndogs#1.name",
+		"class Dog{@was(nick) name: text}\nstored dogs: [Dog] in \"dogs_renamed\"\ndogs#1.name",
 		"Rex"
 	);
 	is!(
-		"class Dog{@was(nick) name: text}\ndogs: [Dog] = database.dogs_renamed\ndogs#1.name",
+		"class Dog{@was(nick) name: text}\nstored dogs: [Dog] in \"dogs_renamed\"\ndogs#1.name",
 		"Rex"
 	);
 }
@@ -339,10 +340,10 @@ fn remove_deletes_the_row() {
 // card stored-space: a class whose fields stand side by side, without `;`, is a table too
 #[test]
 fn a_class_of_fields_side_by_side_is_a_table() {
-	eval("class Hiker { name: text age: int = 5 }\nhikers: [Hiker] = database.hikers_spaced\nhikers.add(Hiker(\"Bo\", 30))\nhikers.add(Hiker(\"Cy\"))");
-	is!("class Hiker { name: text age: int = 5 }\nhikers: [Hiker] = database.hikers_spaced\n(hikers where age > 18)#1.name", "Bo");
+	eval("class Hiker { name: text age: int = 5 }\nstored hikers: [Hiker] in \"hikers_spaced\"\nhikers.add(Hiker(\"Bo\", 30))\nhikers.add(Hiker(\"Cy\"))");
+	is!("class Hiker { name: text age: int = 5 }\nstored hikers: [Hiker] in \"hikers_spaced\"\n(hikers where age > 18)#1.name", "Bo");
 	is!(
-		"class Hiker { name: text age: int = 5 }\nhikers: [Hiker] = database.hikers_spaced\nhikers#2.age",
+		"class Hiker { name: text age: int = 5 }\nstored hikers: [Hiker] in \"hikers_spaced\"\nhikers#2.age",
 		5
 	);
 }

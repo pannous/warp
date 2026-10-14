@@ -26,3 +26,9 @@ fn a_handled_emit_does_not_warn() {
 	assert!(!warns_unhandled("n = 0; on ping { n += 1 }; emit ping; n"));
 	assert!(!warns_unhandled("compute() := emit ask; on ask { 2 } in { compute() }"));
 }
+
+// card hint-emit-page: in a program that shows a page an emit nobody handles reaches the page (its script may listen)
+#[test]
+fn an_emit_in_a_page_program_does_not_warn() {
+	assert!(!warns_unhandled("div{ button{ on click { emit saved } \"Save\" } }"));
+}

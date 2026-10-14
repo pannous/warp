@@ -507,7 +507,7 @@ arguments 574, markup tags 398, type constructors 370.
   compile time) and give untyped (any) results, for about −140 lines: not worth it.
 - Benchmarks: probes/cleanup/lambdas/bench_*.warp
 ## `a of b` is `b.a` (card cleanup-of-is-dot, 2026-10-14)
-One SUGAR pass, lowering/of_lookups.rs, right after interpolation, rewrites every `a of b` to `b.a` (`first 3 of xs` →
+One SUGAR pass, lowering/collections/of_lookups.rs, right after interpolation, rewrites every `a of b` to `b.a` (`first 3 of xs` →
 `xs.first(3)`, `byte count of t` → `t.bytes`, `name of people with age > 20` → the field of the filtered list); every
 later pass reads only the dot form. Gone: the special `of` arms in library_words, objects, broadcasting, lazy_reads,
 reflection, comprehensions' call-argument block, and signal_values' token scanner. Not lookups: a collection type

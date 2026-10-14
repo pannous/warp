@@ -178,11 +178,11 @@ pub fn fails_with(code: &str, needle: &str) {
 
 /// The value of `code` and the compile-time warnings it reported
 pub fn warnings_of(code: &str) -> (Node, Vec<String>) {
-	warp::diagnostic::take_warnings();
+	warp::errors::diagnostic::take_warnings();
 	let value = eval(code);
 	(
 		value,
-		warp::diagnostic::take_warnings()
+		warp::errors::diagnostic::take_warnings()
 			.iter()
 			.map(|warning| warning.to_string())
 			.collect(),

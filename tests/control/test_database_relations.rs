@@ -9,7 +9,9 @@ const CLASSES: &str = "class Team{name: text; players: [Person]}\nclass Person{n
 const SEED: &str = "red = Team(\"Red\")\nteams.add(red)\nteams.add(Team(\"Blue\"))\npeople.add(Person(\"Bo\", red))\npeople.add(Person(\"Cy\", red))";
 
 fn program(tables: &str, rest: &str) -> String {
-	format!("{CLASSES}\nteams: [Team] = database.teams_{tables}\npeople: [Person] = database.people_{tables}\n{rest}")
+	format!(
+		"{CLASSES}\nstored teams: [Team] in \"teams_{tables}\"\nstored people: [Person] in \"people_{tables}\"\n{rest}"
+	)
 }
 
 #[test]
@@ -78,7 +80,7 @@ fn a_row_pointing_to_an_instance_without_a_row_is_an_error() {
 #[test]
 fn a_table_is_registered_after_the_tables_it_points_to() {
 	let swapped = format!(
-		"{CLASSES}\npeople: [Person] = database.people_swapped\nteams: [Team] = database.teams_swapped\ncount(people)"
+		"{CLASSES}\nstored people: [Person] in \"people_swapped\"\nstored teams: [Team] in \"teams_swapped\"\ncount(people)"
 	);
 	fails_with(&swapped, "register teams before people");
 }

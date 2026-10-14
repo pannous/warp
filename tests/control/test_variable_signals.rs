@@ -152,3 +152,13 @@ fn a_write_has_the_effects_of_its_listeners() {
 		warp::wasm_emitter::eval("x=0; whenever x>1 {print \"big\"}; def f(v){ global x; x=v }; f(2); effects of f");
 	assert_eq!(effects.serialize().trim(), "(State IO)");
 }
+
+// decision watched-cells: a global written in a function is a cell; its listener's body reads it and main's variables
+#[test]
+fn a_listener_on_a_global_a_function_writes_reads_it_and_main_variables() {
+	is!(
+		"x=0; hits=0; whenever x>1 {hits+=1; print x}; def f(v){ global x; x=v }; f(2); f(0); f(3); hits",
+		2
+	);
+	is!("x=0; whenever x>1 {print 5}; def f(v){ global x; x=v }; f(2); 3", 3);
+}

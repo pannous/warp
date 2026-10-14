@@ -1,6 +1,9 @@
 //! Texts: quoted strings, escapes, f-strings and their holes, dedented multiline texts
 use super::*;
 
+/// The most code points an emoji in code may have (a family ZWJ sequence has 7 to 11, a subdivision flag 7)
+pub(crate) const LONGEST_EMOJI: usize = 32;
+
 /// The length of `chars` before the `}` that closes an already open `{`, skipping `//` and `/* */` comments
 pub(crate) fn closing_brace(chars: &[char]) -> Option<usize> {
 	let (mut depth, mut at) = (1, 0);
@@ -87,7 +90,7 @@ impl WarpParser {
 			&& !self.options.wit_mode;
 		if quote == BACKTICK {
 			set_hint_position(quote_line, quote_column);
-			crate::diagnostic::educate_once(
+			crate::errors::diagnostic::educate_once(
 				BACKTICK_TOPIC,
 				"`…${x}…`",
 				"\"…\\(x)…\"",
@@ -104,7 +107,11 @@ impl WarpParser {
 				let message = format!(
 					"Unterminated string: the text opened at {quote_line}:{quote_column} has no closing `{closing}`"
 				);
-				return missing_closer(message, closing, crate::fixits::end_of_line(&self.input, quote_line));
+				return missing_closer(
+					message,
+					closing,
+					crate::errors::fixits::end_of_line(&self.input, quote_line),
+				);
 			}
 			if ch == closing {
 				self.advance(); // skip closing quote
@@ -223,7 +230,7 @@ impl WarpParser {
 	/// `\:xyzzy` names no entity: it stays as written and warns; in strict mode the warning is the error
 	pub(crate) fn warn_unknown_entity(&self, name: &str, column: usize) -> Result<(), Node> {
 		let message = crate::text::uniscript_entities::unknown_entity(name);
-		crate::diagnostic::report(&[Diagnostic {
+		crate::errors::diagnostic::report(&[Diagnostic {
 			message,
 			line: self.line_nr,
 			column,
@@ -237,7 +244,7 @@ impl WarpParser {
 			return None;
 		}
 		set_hint_position(self.line_nr, self.column);
-		crate::diagnostic::educate_once(
+		crate::errors::diagnostic::educate_once(
 			F_STRING_TOPIC,
 			"f\"…{x}…\"",
 			"\"…\\(x)…\"",
@@ -331,6 +338,17 @@ impl WarpParser {
 				_ => {}
 			}
 			self.advance();
+		}
+	}
+
+	pub(crate) fn parse_emoji(&mut self) -> Node {
+		let ahead: String = self.chars[self.pos..].iter().take(LONGEST_EMOJI).collect();
+		let emoji = crate::extensions::strings::grapheme_clusters(&ahead)[0].to_string();
+		self.advance_by(emoji.chars().count());
+		let mut code_points = emoji.chars();
+		match (code_points.next(), code_points.next()) {
+			(Some(single), None) => Node::Char(single),
+			_ => Node::Text(emoji),
 		}
 	}
 }

@@ -1,7 +1,7 @@
 // Ask: an ambiguity takes its default with a "got it" warning or is an error naming the explicit forms; it never asks
 // and never remembers a reading (user 2026-10-03: no context-sensitive execution)
 use crate::is;
-use warp::diagnostic::{
+use warp::errors::diagnostic::{
 	ask, reading, take_warnings, use_acknowledgements_file, with_acknowledger, with_warning_mode, Acknowledging, Ask,
 	Fallback, WarningMode,
 };
@@ -81,7 +81,7 @@ fn an_unanswered_error_ask_names_every_explicit_form() {
 
 #[test]
 fn an_educating_note_shows_until_acknowledged() {
-	use warp::diagnostic::educate_once;
+	use warp::errors::diagnostic::educate_once;
 	use warp::normalize::capture_hints;
 	let note = || {
 		capture_hints(|| educate_once("let", "let x", "x", "in warp let is immutable"))

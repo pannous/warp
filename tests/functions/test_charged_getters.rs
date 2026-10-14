@@ -54,11 +54,11 @@ fn a_getter_over_constants_gets_the_needless_charging_note() {
 
 #[test]
 fn an_effectful_getter_warns_at_the_definition() {
-	warp::diagnostic::take_warnings();
+	warp::errors::diagnostic::take_warnings();
 	is!("t := clock(); t > 0", true);
-	warp::diagnostic::take_warnings();
+	warp::errors::diagnostic::take_warnings();
 	warp::wasm_emitter::eval("t := clock(); t");
-	assert!(warp::diagnostic::take_warnings().iter().any(|warning| warning
+	assert!(warp::errors::diagnostic::take_warnings().iter().any(|warning| warning
 		.message
 		.contains("t runs clock() at every read; write t = clock() for one value")));
 }
@@ -72,4 +72,12 @@ fn a_function_factory_gets_no_hint_of_lowered_code() {
 		hints.iter().all(|(canonical, _)| !canonical.contains("closure")),
 		"{hints:?}"
 	);
+}
+
+// card hint-nullary-raise: `risky() := 1/0` fails only when called (inside a try); as a value it would fail at once
+#[test]
+fn a_getter_that_can_fail_gets_no_needless_charging_note() {
+	assert!(hints_of("risky() := 1/0; try { risky() } catch error { 2 }")
+		.iter()
+		.all(|(_, reason)| !reason.contains("never changes")));
 }

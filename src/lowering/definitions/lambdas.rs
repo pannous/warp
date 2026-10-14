@@ -5,10 +5,10 @@
 //! - `map [1 2 3] {it*it}`, `map(xs, x=>x+1)`, `xs.map(f)` over a literal block, a lambda or a defined function is a loop
 //! - a lambda anywhere else is a closure (closures.rs); `map` over a value that is no function is the error `map needs a function, got …`
 
-use super::nodes::{call, children_rewritten, is_type_word, key, named_assignment, Counter};
+use super::nodes::{call, children_rewritten, is_kinded_type_word, key, named_assignment, Counter};
 use crate::analyzer::call_name;
 use crate::compiler::context::Context;
-use crate::diagnostic::Diagnostic;
+use crate::errors::diagnostic::Diagnostic;
 use crate::library_words::substitute;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -382,10 +382,10 @@ fn arrow_parts(head: &Node, body: &Node) -> Option<Lambda> {
 fn c_style_parameters(head: &Node) -> Node {
 	// C#'s `int x`, Go's `x int`
 	let typed = |parameter: &Node| match parameter.drop_meta() {
-		Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [kind, name] if is_type_word(kind) && matches!(name.drop_meta(), Node::Symbol(_))) => {
+		Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [kind, name] if is_kinded_type_word(kind) && matches!(name.drop_meta(), Node::Symbol(_))) => {
 			key(words[1].clone(), Op::Colon, words[0].clone())
 		}
-		Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [name, kind] if is_type_word(kind) && matches!(name.drop_meta(), Node::Symbol(_)) && !is_type_word(name)) => {
+		Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [name, kind] if is_kinded_type_word(kind) && matches!(name.drop_meta(), Node::Symbol(_)) && !is_kinded_type_word(name)) => {
 			key(words[0].clone(), Op::Colon, words[1].clone())
 		}
 		_ => parameter.clone(),
@@ -405,7 +405,7 @@ fn c_style_parameters(head: &Node) -> Node {
 			)
 		}
 		Node::List(words, Bracket::Round | Bracket::None, Separator::Space)
-			if words.len() == 2 && words.iter().any(is_type_word) && typed(head) != *head =>
+			if words.len() == 2 && words.iter().any(is_kinded_type_word) && typed(head) != *head =>
 		{
 			Node::List(vec![typed(head)], Bracket::Round, Separator::Colon)
 		}

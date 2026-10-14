@@ -25,9 +25,9 @@ pub mod web_sockets;
 pub mod webview;
 
 use crate::compiler::meta::{DataType, DataValue};
-use crate::diagnostic::{self, Acknowledger};
+use crate::errors::diagnostic::{self, Acknowledger};
+use crate::errors::fixits::{self, Fix};
 use crate::extensions::numbers::Number;
-use crate::fixits::{self, Fix};
 use crate::node::{Bracket, Node, Separator};
 use crate::type_kinds::KIND_BITS;
 use crate::type_kinds::{Kind, KIND_MASK};
@@ -59,11 +59,11 @@ impl Acknowledger for PageAcknowledger {
 	}
 
 	/// The page answers later, with its "got it" buttons: this expression, or all of the kind
-	fn acknowledge(&self, topic: &str, written: &str) -> crate::diagnostic::GotIt {
+	fn acknowledge(&self, topic: &str, written: &str) -> crate::errors::diagnostic::GotIt {
 		self.notes
 			.borrow_mut()
 			.push((topic.to_string(), diagnostic::expression_key(topic, written)));
-		crate::diagnostic::GotIt::No
+		crate::errors::diagnostic::GotIt::No
 	}
 }
 

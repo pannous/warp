@@ -7,7 +7,7 @@
 //! - OCaml / F# `let f x = body in rest`: the definition `f(x) := body`, then rest
 //! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
-use super::nodes::{call, children_rewritten, is_type_word, key};
+use super::nodes::{call, children_rewritten, is_kinded_type_word, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::GENERIC_MARK;
@@ -153,7 +153,7 @@ fn forms(node: Node) -> Node {
 				&& matches!(items[1].drop_meta(), Node::Key(_, Op::Assign, _))
 			{
 				crate::normalize::set_position_of(&items[0]);
-				crate::diagnostic::note_alias(CPP_AUTO_WORD, VAR_WORD);
+				crate::errors::diagnostic::note_alias(CPP_AUTO_WORD, VAR_WORD);
 				return var_declaration(Node::single_or_list(items[1..].to_vec(), bracket, separator));
 			}
 			if let Some(variable) = let_mut(&items) {
@@ -214,7 +214,7 @@ fn let_mut(items: &[Node]) -> Option<Node> {
 	}
 	let name = name.serialize();
 	crate::normalize::set_position_of(keyword);
-	crate::diagnostic::educate_once(
+	crate::errors::diagnostic::educate_once(
 		&format!("alias-let {modifier}"),
 		&format!("let {modifier} {name}"),
 		&format!("var {name}"),
@@ -464,7 +464,7 @@ fn when_listener(items: &[Node]) -> Option<Vec<Node>> {
 /// The one warning of every `when`, its fix the word this shape means
 fn when_meant(word: &Node, meant: &str) {
 	crate::normalize::set_position_of(word);
-	crate::diagnostic::educate_once(WHEN_TOPIC, WHEN_KEYWORD, meant, WHEN_REASON);
+	crate::errors::diagnostic::educate_once(WHEN_TOPIC, WHEN_KEYWORD, meant, WHEN_REASON);
 }
 
 /// The patterns and value of a `when` arm: `5 -> 50`, `1, 2 -> 10`, `is Circle -> 3`, `else -> 0`
@@ -609,12 +609,12 @@ fn braceless_lambdas(items: Vec<Node>) -> Vec<Node> {
 	let mut merged: Vec<Node> = Vec::new();
 	for item in items {
 		// Go's function type `f func(int) int` is no lambda: its parameters and result are type words
-		let is_body = !matches!(item.drop_meta(), Node::List(_, Bracket::Curly, _)) && !is_type_word(&item);
+		let is_body = !matches!(item.drop_meta(), Node::List(_, Bracket::Curly, _)) && !is_kinded_type_word(&item);
 		let parameters = merged
 			.last()
 			.filter(|head| is_body && matches!(head.drop_meta(), Node::List(_, Bracket::Round, _)))
 			.and_then(function_parameters);
-		match parameters.filter(|parameters| !is_type_word(parameters)) {
+		match parameters.filter(|parameters| !is_kinded_type_word(parameters)) {
 			Some(parameters) => {
 				merged.pop();
 				merged.push(lambda(parameters, item));
@@ -761,7 +761,7 @@ pub(crate) fn module_calls(node: Node, modules: &[&str]) -> Node {
 fn without_result_type(rest: &[Node]) -> &[Node] {
 	match rest {
 		[result_type, body]
-			if is_type_word(result_type) && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+			if is_kinded_type_word(result_type) && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
 		{
 			&rest[1..]
 		}
@@ -945,8 +945,8 @@ fn function_parameters(head: &Node) -> Option<Node> {
 		// Go's `func(x int)`, `func(a, b int)`: the names, the types after them dropped
 		several => {
 			let names: Vec<Node> = several.iter().filter_map(|parameter| match parameter.drop_meta() {
-				Node::Symbol(_) if !is_type_word(parameter) => Some(parameter.clone()),
-				Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [name, kind] if is_type_word(kind) && !is_type_word(name)) => Some(words[0].clone()),
+				Node::Symbol(_) if !is_kinded_type_word(parameter) => Some(parameter.clone()),
+				Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [name, kind] if is_kinded_type_word(kind) && !is_kinded_type_word(name)) => Some(words[0].clone()),
 				_ => None,
 			}).collect();
 			match names.as_slice() {
