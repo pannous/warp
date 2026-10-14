@@ -26,6 +26,7 @@ fn a_program_keeps_its_own_names() {
 }
 
 #[test]
+#[ignore = "cleanup-edge: host-word: pins the old host words signal_at/signal_daily/signal_every; one_host_word_starts_every_timer checks signal_listen"]
 fn a_listener_on_a_system_value_polls_it() {
 	let code = lowered("whenever battery < 20% { print \"plug me in\" }");
 	assert!(
@@ -160,4 +161,10 @@ fn listening_to_a_system_value_gives_no_hint_about_generated_code() {
 		.map(|hint| format!("{} {}", hint.position, hint.original))
 		.collect();
 	assert!(shown.is_empty(), "{shown:?}");
+}
+
+// card cleanup-signal-listen: listening to the machine polls it with the one timer word
+#[test]
+fn a_system_value_listener_starts_a_timer() {
+	assert!(lowered("whenever battery < 20% { print \"plug me in\" }").contains("signal_listen"));
 }
