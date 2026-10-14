@@ -417,7 +417,6 @@ pub(super) fn widen_to_node(scope: &mut Scope, name: &str, value: &Node) {
 	}
 }
 
-/// Kind of a new variable bound to `value`: `x=ø` makes x an optional, held as a Node that is ø until assigned
 /// The kind of the `index`-th name of `x, y = …`: the tuple function's value kind, or that of the value in that position
 pub(super) fn destructured_kind(values: &[Node], index: usize, scope: &Scope) -> Kind {
 	match values {
@@ -434,6 +433,7 @@ pub(super) fn destructured_kind(values: &[Node], index: usize, scope: &Scope) ->
 	}
 }
 
+/// Kind of a new variable bound to `value`: `x=ø` makes x an optional, held as a Node that is ø until assigned
 pub(super) fn binding_kind(value: &Node, scope: &Scope) -> Kind {
 	held_kind(value, || infer_type(value, scope))
 }
