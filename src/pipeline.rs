@@ -130,6 +130,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::late_binding::split_global_assignments,
 	// a hosted program without routes: its value the page at /, each function a route (card make-deploy)
 	crate::lowering::serve::with_default_routes,
+	// a run without a server: each `get "/path" {…}` is also the page at its path (cards square-int, recognized-browser)
+	crate::lowering::serve::with_page_routes,
 	// `post "/todos/:id" { todos where it.id == id }`: the path's parameters bound before lower_where reads the variables
 	crate::lowering::serve::bind_path_parameters,
 	// `Pair = [_, _]` names a pattern, its uses are the pattern before lower_where reads `it is Pair` (card patterns-values)
@@ -351,9 +353,13 @@ const MEANING_PASSES: &[Pass] = &[
 /// A module's source after the passes the program ran before its `use` was resolved (MODULE_SOURCE_PHASES):
 /// its definitions join the program in the same forms (`[w for w in ws if …]` is lowered, not read as a list).
 /// Not the program's own passes: getters::lower (a getter `answer := 42` is lowered with the program, whose reads of it
-/// become calls) and serve::with_default_routes (a module's functions are no routes of a hosted program).
+/// become calls) serve::with_default_routes (a module's functions are no routes of a hosted program) and serve::with_page_routes.
 pub(crate) fn lower_module_source(module: Node) -> Node {
-	let program_only: [Pass; 2] = [crate::lowering::getters::lower, crate::lowering::serve::with_default_routes];
+	let program_only: [Pass; 3] = [
+		crate::lowering::getters::lower,
+		crate::lowering::serve::with_default_routes,
+		crate::lowering::serve::with_page_routes,
+	];
 	MODULE_SOURCE_PHASES
 		.iter()
 		.flat_map(|phase| phase.iter())

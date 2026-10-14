@@ -194,6 +194,54 @@ pub fn with_default_routes(program: Node) -> Node {
 	Node::List(statements, Bracket::None, separator)
 }
 
+/// A run without a server (the playground, `warp run`) has a page but answers no requests: each top-level `get "/path"
+/// {…}` is also the page at its path, `route "/path" {…}` (cards square-int, recognized-browser: `get "/" {"ok"}` shows
+/// "ok", the address bar's /square/9 shows `get "/square/:n:int" { n*n }`'s 81). A block reading the request has no
+/// page: there is no request; its `status`/`header` lines answer nothing there (host.js response_header)
+pub fn with_page_routes(program: Node) -> Node {
+	let mode = crate::pipeline::compile_mode();
+	let serving = crate::compiler::compile_context::read(|context| context.serving_port).is_some();
+	if serving || mode.for_a_page || mode.for_wagi || mode.for_hosting {
+		return program;
+	}
+	let (statements, separator) = match program.drop_meta() {
+		Node::List(statements, Bracket::None, separator @ (Separator::Newline | Separator::Semicolon)) => {
+			(statements.clone(), separator.clone())
+		}
+		single if !top_level_routes(single).is_empty() => (vec![program.clone()], Separator::Newline),
+		_ => return program,
+	};
+	let page_routes = |statement: &Node| -> Vec<Node> {
+		top_level_routes(statement)
+			.into_iter()
+			.filter(|(method, _, body)| method == "GET" && !reads_the_request(body))
+			.map(|(_, path, body)| {
+				Node::List(
+					vec![symbol(crate::routes::ROUTE_WORD), path, with_answer_headers(body)],
+					Bracket::None,
+					Separator::Space,
+				)
+			})
+			.collect()
+	};
+	if !statements.iter().any(|statement| !page_routes(statement).is_empty()) {
+		return program;
+	}
+	// each page after its `get`: a program going on after it keeps its last statement as its value
+	let statements = statements
+		.into_iter()
+		.flat_map(|statement| {
+			let pages = page_routes(&statement);
+			std::iter::once(statement).chain(pages)
+		})
+		.collect();
+	Node::List(statements, Bracket::None, separator)
+}
+
+fn reads_the_request(body: &Node) -> bool {
+	body.mentions_where(|name| name == REQUEST_WORD || name.starts_with(FIELD_MARK))
+}
+
 /// `square(n) := n*n` → ("/square/:n", "square(n)"); `twice := it * 2` → ("/twice/:value", "twice(value)")
 fn function_route(statement: &Node) -> Option<(String, String)> {
 	let (head, body, _) = super::memoization::definition_parts(statement)?;
