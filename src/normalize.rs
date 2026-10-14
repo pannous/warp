@@ -17,6 +17,8 @@ use crate::operators::{glyph_operator, Op};
 
 /// The "got it" topic of a plain hint is its reason: `a` (all of this kind) silences every hint giving that reason
 const HINT_TOPIC_PREFIX: &str = "hint:";
+const AND_SYMBOLS: [&str; 4] = ["&&", "&", "∧", "⋀"];
+const OR_SYMBOLS: [&str; 4] = ["||", "|", "∨", "⋁"];
 
 // ============================================================================
 // Position Tracking for Hints
@@ -482,8 +484,8 @@ pub mod hints {
 		if let (Some(glyph), None) = (characters.next(), characters.next()) {
 			if let Some(op) = glyph_operator(glyph) {
 				match op.as_str() {
-					"and" => and_operator(written),
-					"or" => or_operator(written),
+					"and" => logical_operator(written, "and", AND_SYMBOLS),
+					"or" => logical_operator(written, "or", OR_SYMBOLS),
 					"xor" => {}
 					canonical => hint(written, canonical, "standard spelling of the operator"),
 				}
@@ -492,8 +494,8 @@ pub mod hints {
 		}
 		match (written, is_prefix) {
 			("¬&", false) => hint(written, "nand", "standard spelling of the operator"),
-			("&&" | "&" | "and", false) => and_operator(written),
-			("||" | "|" | "or", false) => or_operator(written),
+			("&&" | "&" | "and", false) => logical_operator(written, "and", AND_SYMBOLS),
+			("||" | "|" | "or", false) => logical_operator(written, "or", OR_SYMBOLS),
 			("!" | "not", true) => not_operator(written),
 			("**" | "^", false) => power_operator(written),
 			("?", false) => conditional(true),
@@ -502,22 +504,14 @@ pub mod hints {
 		}
 	}
 
-	/// && operator
-	pub fn and_operator(used: &str) {
-		let s = style();
-		match (used, s.logical) {
-			("&&" | "&" | "∧" | "⋀", LogicalStyle::Words) => hint(used, "and", "word operators are more readable"),
-			("and" | "∧" | "⋀", LogicalStyle::Symbols) => hint(used, "&&", "symbol operators preferred"),
-			_ => {}
-		}
-	}
-
-	/// || operator
-	pub fn or_operator(used: &str) {
-		let s = style();
-		match (used, s.logical) {
-			("||" | "|" | "∨" | "⋁", LogicalStyle::Words) => hint(used, "or", "word operators are more readable"),
-			("or" | "∨" | "⋁", LogicalStyle::Symbols) => hint(used, "||", "symbol operators preferred"),
+	/// `and` / `&&`, `or` / `||`: the hint toward the style's spelling; `symbols` = the canonical symbol, its short
+	/// form, then the logic glyphs
+	fn logical_operator(used: &str, word: &str, symbols: [&str; 4]) {
+		match style().logical {
+			LogicalStyle::Words if symbols.contains(&used) => hint(used, word, "word operators are more readable"),
+			LogicalStyle::Symbols if used == word || symbols[2..].contains(&used) => {
+				hint(used, symbols[0], "symbol operators preferred")
+			}
 			_ => {}
 		}
 	}
