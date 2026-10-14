@@ -15,6 +15,7 @@ mod declared_values;
 pub mod functions;
 mod values;
 pub use functions::closures::{CAPTURE_EXPORT_PREFIX, CLOSURE_APPLY, CLOSURE_CAPTURED, CLOSURE_REBUILD};
+pub(crate) use host::wasi_emitter::{OUTPUT_CALLS, OUTPUT_WORDS};
 pub(crate) use lists::list_sharing::reads_collection;
 pub(crate) use text::text_builtins::{join_call, joined_text};
 mod constructors;
@@ -37,7 +38,6 @@ pub(crate) mod text;
 mod type_manager;
 pub use control::try_guard::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
 pub(crate) mod host;
-const WASI_START: &str = "_start";
 
 pub use numbers::big_int::{is_fixnum, EXACT_ARITHMETIC, EXACT_BUILDERS, INT_RUNTIME};
 
@@ -73,16 +73,6 @@ const MEMORY: MemoryType = MemoryType {
 	shared: false,
 	page_size_log2: None,
 };
-/// The WASI output words besides print: each gives an Int (analyzer)
-pub const OUTPUT_WORDS: [&str; 4] = ["puts", "puti", "putl", "putf"];
-
-pub(crate) const OUTPUT_CALLS: [&str; 5] = [
-	"print",
-	OUTPUT_WORDS[0],
-	OUTPUT_WORDS[1],
-	OUTPUT_WORDS[2],
-	OUTPUT_WORDS[3],
-];
 
 pub use config::EmitterConfig;
 pub use import_manager::ImportManager;
@@ -839,20 +829,6 @@ impl WasmGcEmitter {
 		if config::compile_mode().for_wagi {
 			self.emit_wagi_start();
 		}
-	}
-
-	/// `_start`: main without its value, the entry WASI commands and WAGI (`warp build --wagi`) call
-	fn emit_wagi_start(&mut self) {
-		let start_type = self.type_manager.function_type(vec![], vec![]);
-		self.functions.function(start_type);
-		let mut func = Function::new(vec![]);
-		Self::emit_list(
-			&mut func,
-			&[I::Call(self.main_index.expect("main before _start")), I::Drop, I::End],
-		);
-		self.code.function(&func);
-		self.exports.export(WASI_START, ExportKind::Func, self.next_func_idx);
-		self.next_func_idx += 1;
 	}
 
 	fn collect_and_allocate_strings(&mut self, node: &Node) {
