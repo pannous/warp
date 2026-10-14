@@ -29,7 +29,7 @@ const FIELD_FALLBACKS: [(&str, &str); 2] = [
 pub fn field_fallback(name: &str) -> Option<&'static str> {
 	FIELD_FALLBACKS
 		.into_iter()
-		.chain(crate::wasm_emitter::functions::closures::FUNCTION_WORDS)
+		.chain(crate::wasm_emitter::functions::closures::function_words())
 		.find(|(field, _)| *field == name)
 		.map(|(_, fallback)| fallback)
 }

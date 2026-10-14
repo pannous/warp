@@ -63,21 +63,25 @@ pub fn lower(node: Node) -> Node {
 			return error;
 		}
 	}
-	if !node.mentions_any(&[
-		EFFECTS_WORD,
-		LISTENERS_WORD,
-		SIGNATURE_WORD,
-		BODY_WORD,
-		DUMP_WORD,
-		DOC_WORD,
-		NAME_WORD,
-		RETURN_TYPE_WORD,
-		PARAMS_WORDS[0],
-		PARAMS_WORDS[1],
-		DIR_WORD,
-		HELP_WORD,
-		crate::type_tests::TYPE_WORD,
-	]) {
+	let run_time_words: Vec<&str> = crate::wasm_emitter::functions::function_words()
+		.map(|(word, _)| word)
+		.collect();
+	if !node.mentions_any(&run_time_words)
+		&& !node.mentions_any(&[
+			EFFECTS_WORD,
+			LISTENERS_WORD,
+			SIGNATURE_WORD,
+			BODY_WORD,
+			DUMP_WORD,
+			DOC_WORD,
+			NAME_WORD,
+			RETURN_TYPE_WORD,
+			PARAMS_WORDS[0],
+			PARAMS_WORDS[1],
+			DIR_WORD,
+			HELP_WORD,
+			crate::type_tests::TYPE_WORD,
+		]) {
 		return node;
 	}
 	let defined = crate::library_words::defined_names(&node);
@@ -207,6 +211,12 @@ fn as_reflection_words(node: Node, functions: &Functions, defined: &HashSet<Stri
 				(SIGNATURE_WORD, None) => library().map(|(_, signature)| Node::Text(signature)),
 				(NAME_WORD, None) => library().map(|_| Node::Text(name.to_string())),
 				(RETURN_TYPE_WORD, None) => library().map(|(_, signature)| Node::Text(return_type(&signature))),
+				// `use reflection`: what only the emitter knows (wasm index) is read off the function value at run time
+				(word, Some(_)) if is_run_time_word(word) => Some(key(
+					crate::closures::function_reference(name.to_string()),
+					Op::Dot,
+					symbol(word),
+				)),
 				_ => None,
 			};
 			if let Some(reflected) = reflected {
@@ -215,6 +225,12 @@ fn as_reflection_words(node: Node, functions: &Functions, defined: &HashSet<Stri
 		}
 	}
 	node.map_children(|child| as_reflection_words(child, functions, defined))
+}
+
+/// A word a function value answers at run time only: the reflection mode's (function_words)
+fn is_run_time_word(word: &str) -> bool {
+	crate::wasm_emitter::functions::function_words().any(|(answered, _)| answered == word)
+		&& ![NAME_WORD, DOC_WORD, SIGNATURE_WORD, RETURN_TYPE_WORD, DUMP_WORD].contains(&word)
 }
 
 /// `f`, `function f`, `(function f)`: the name of the function the reflection words look at

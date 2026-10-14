@@ -49,6 +49,51 @@ pub const FUNCTION_WORDS: [(&str, &str); 5] = [
 	("return_type", FUNCTION_RETURN_TYPE),
 	("dump", FUNCTION_DEFINITION),
 ];
+const FUNCTION_FILE: &str = "function_file";
+const FUNCTION_LINE: &str = "function_line";
+const FUNCTION_COLUMN: &str = "function_column";
+const FUNCTION_ORIGIN: &str = "function_origin";
+const FUNCTION_COMPILER: &str = "function_compiler";
+const FUNCTION_WASM_NAME: &str = "function_wasm_name";
+/// What a function value answers besides in reflection mode (`use reflection`, decision reflection): where it was
+/// written, the module it comes from, what compiled it, its function's name in the wasm module (no index: tree
+/// shaking renumbers the functions after the emitter, card use-reflection)
+const REFLECTION_MODE_WORDS: [(&str, &str); 6] = [
+	("file", FUNCTION_FILE),
+	("line", FUNCTION_LINE),
+	("column", FUNCTION_COLUMN),
+	("origin", FUNCTION_ORIGIN),
+	("compiler", FUNCTION_COMPILER),
+	("wasm_name", FUNCTION_WASM_NAME),
+];
+/// The origin of a function the program defines itself
+const PROGRAM_ORIGIN: &str = "program";
+
+/// The reflection words a function value answers in this compile: REFLECTION_MODE_WORDS too in reflection mode
+pub fn function_words() -> impl Iterator<Item = (&'static str, &'static str)> {
+	let reflection_mode = crate::compiler::compile_context::read(|context| context.reflection_mode);
+	FUNCTION_WORDS
+		.into_iter()
+		.chain(REFLECTION_MODE_WORDS.into_iter().filter(move |_| reflection_mode))
+}
+
+/// What compiles the program: warp of this version
+fn compiler() -> String {
+	format!("warp {}", env!("CARGO_PKG_VERSION"))
+}
+
+/// The file a function was written in: its module's, else the program's (none for inline code)
+fn written_in(at: Option<&crate::compiler::meta::LineInfo>) -> Option<String> {
+	at.and_then(|at| at.file.clone()).or_else(|| {
+		crate::compiler::compile_context::read(|context| context.program_file.clone())
+			.map(|file| file.display().to_string())
+	})
+}
+
+/// Where a function was written (doc_strings.rs, in reflection mode)
+fn written_at(function: &UserFunctionDef) -> Option<crate::compiler::meta::LineInfo> {
+	crate::lowering::doc_strings::written_at(&function.body)
+}
 
 /// What a function table gives a value it has no text for
 #[derive(Clone, Copy, PartialEq)]
@@ -925,12 +970,16 @@ impl WasmGcEmitter {
 
 	pub(in crate::wasm_emitter) fn emit_function_text(&mut self) {
 		if self.shows_functions() {
-			self.emit_function_table(FUNCTION_TEXT, Self::function_text_of, Miss::KindName);
+			let text =
+				|emitter: &Self, target: &str, captured: usize| Node::Text(emitter.function_text_of(target, captured));
+			self.emit_function_table(FUNCTION_TEXT, text, Miss::KindName);
 		}
 		if self.shows_functions() && self.should_emit_function(FUNCTION_DUMP) {
-			self.emit_function_table(FUNCTION_DUMP, Self::printed_function, Miss::KindName);
+			let printed =
+				|emitter: &Self, target: &str, captured: usize| Node::Text(emitter.printed_function(target, captured));
+			self.emit_function_table(FUNCTION_DUMP, printed, Miss::KindName);
 		}
-		for (_, table) in FUNCTION_WORDS {
+		for (_, table) in function_words() {
 			if self.should_emit_function(table) {
 				let word =
 					move |emitter: &Self, target: &str, captured: usize| emitter.function_word(table, target, captured);
@@ -939,44 +988,80 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// `print f`: the definition, the doc as a comment line above it (decision reflection); a lambda as written
+	/// `print f`: the definition, the doc as a comment line above it (decision reflection), in reflection mode a comment
+	/// line saying where and how it was made; a lambda as written
 	fn printed_function(&self, target: &str, captured: usize) -> String {
 		match self.ctx.user_functions.get(target) {
 			Some(function) if !crate::closures::is_lambda_function(target) => {
 				let definition = crate::lowering::reflection::definition(function);
-				match &function.doc {
-					Some(doc) => format!("# {}\n{definition}", doc.replace('\n', "\n# ")),
-					None => definition,
-				}
+				let doc = function
+					.doc
+					.iter()
+					.map(|doc| format!("# {}\n", doc.replace('\n', "\n# ")));
+				let made = function_words()
+					.any(|(_, table)| table == FUNCTION_WASM_NAME)
+					.then(|| format!("# {}\n", self.made_by(target, function)));
+				format!("{}{}{definition}", made.unwrap_or_default(), doc.collect::<String>())
 			}
 			_ => self.function_text_of(target, captured),
 		}
 	}
 
-	/// The text of the reflection word `table` answers of a function value at run time (FUNCTION_WORDS)
-	fn function_word(&self, table: &str, target: &str, captured: usize) -> String {
+	/// `program:2:1 · warp 1.2.6 · wasm twice`: where a function was written, what compiled it, its wasm function
+	fn made_by(&self, target: &str, function: &UserFunctionDef) -> String {
+		let at = written_at(function);
+		let place = written_in(at.as_ref()).unwrap_or_else(|| self.origin(target, None));
+		let position = at
+			.map(|at| format!(":{}:{}", at.line_nr, at.column))
+			.unwrap_or_default();
+		format!("{place}{position} · {} · wasm {target}", compiler())
+	}
+
+	/// The value of the reflection word `table` of a function value at run time (function_words)
+	fn function_word(&self, table: &str, target: &str, captured: usize) -> Node {
 		let function = self.ctx.user_functions.get(target);
+		let at = function.and_then(written_at);
+		let text = |text: String| Node::Text(text);
 		match (table, function) {
-			(FUNCTION_DOC, Some(function)) => function.doc.clone().unwrap_or_default(),
-			(FUNCTION_SIGNATURE, Some(function)) => crate::lowering::reflection::signature(function),
-			(FUNCTION_RETURN_TYPE, Some(function)) => function.return_kind.to_string(),
-			(FUNCTION_DEFINITION, Some(function)) => crate::lowering::reflection::definition(function),
-			_ => self.function_text_of(target, captured),
+			(FUNCTION_DOC, Some(function)) => text(function.doc.clone().unwrap_or_default()),
+			(FUNCTION_SIGNATURE, Some(function)) => text(crate::lowering::reflection::signature(function)),
+			(FUNCTION_RETURN_TYPE, Some(function)) => text(function.return_kind.to_string()),
+			(FUNCTION_DEFINITION, Some(function)) => text(crate::lowering::reflection::definition(function)),
+			(FUNCTION_FILE, _) => text(written_in(at.as_ref()).unwrap_or_default()),
+			(FUNCTION_LINE, _) => Node::int(at.as_ref().map_or(0, |at| at.line_nr) as i64),
+			(FUNCTION_COLUMN, _) => Node::int(at.as_ref().map_or(0, |at| at.column) as i64),
+			(FUNCTION_ORIGIN, _) => text(self.origin(target, at.and_then(|at| at.file))),
+			(FUNCTION_COMPILER, _) => text(compiler()),
+			(FUNCTION_WASM_NAME, _) => text(target.to_string()),
+			_ => text(self.function_text_of(target, captured)),
 		}
+	}
+
+	/// The module a function comes from: a standard module, a module file's name, else the program
+	fn origin(&self, target: &str, file: Option<String>) -> String {
+		let module_file = file.map(|file| {
+			std::path::Path::new(&file)
+				.file_stem()
+				.map_or(file.clone(), |stem| stem.to_string_lossy().into_owned())
+		});
+		crate::modules::std_module_defining(self.function_name(target))
+			.map(str::to_string)
+			.or(module_file)
+			.unwrap_or_else(|| PROGRAM_ORIGIN.to_string())
 	}
 
 	/// A run-time table over the program's closure targets: `name(f)` is the text `text_of` gives f's target, found by
 	/// the target's name in the string table (closure_new, closure_rebuild: one place each). A value that is no function
 	/// or a target of another module gives `miss`
-	fn emit_function_table(&mut self, name: &'static str, text_of: impl Fn(&Self, &str, usize) -> String, miss: Miss) {
+	fn emit_function_table(&mut self, name: &'static str, value_of: impl Fn(&Self, &str, usize) -> Node, miss: Miss) {
 		let (node, string) = (self.type_manager.node_type, self.type_manager.string_type);
 		let result = Ref(self.node_ref(miss == Miss::Null));
-		let texts: Vec<((u32, u32), String)> = self
+		let values: Vec<((u32, u32), Node)> = self
 			.ctx
 			.closure_targets
 			.clone()
 			.into_iter()
-			.map(|(target, captured)| (self.allocate_string(&target), text_of(self, &target, captured)))
+			.map(|(target, captured)| (self.allocate_string(&target), value_of(self, &target, captured)))
 			.collect();
 		let name_local = 1;
 		let locals = vec![Ref(RefType {
@@ -1018,7 +1103,7 @@ impl WasmGcEmitter {
 				f,
 				&[I::RefCastNonNull(HeapType::Concrete(string)), I::LocalSet(name_local)],
 			);
-			for ((pointer, length), text) in &texts {
+			for ((pointer, length), value) in &values {
 				Self::field(f, name_local, string, 0);
 				Self::emit_list(f, &[I::I32Const(*pointer as i32), I::I32Eq]);
 				Self::field(f, name_local, string, 1);
@@ -1031,7 +1116,10 @@ impl WasmGcEmitter {
 						I::If(BlockType::Empty),
 					],
 				);
-				s.emit_string_call(f, text, "new_text");
+				match value {
+					Node::Text(text) => s.emit_string_call(f, text, "new_text"),
+					value => s.emit_node_instructions(f, value),
+				}
 				Self::emit_list(f, &[I::Return, I::End]);
 			}
 			emit_miss(s, f);
