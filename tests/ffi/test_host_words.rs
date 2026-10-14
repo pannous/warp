@@ -15,7 +15,7 @@ fn test_random_stays_in_range() {
 #[test]
 fn test_clock_and_sleep() {
 	is!("clock() > 1700000000000", true);
-	is!("start = clock(); sleep(20); clock() - start >= 20", true);
+	is!("start = clock(); sleep(20ms); clock() - start >= 20", true);
 }
 
 #[test] // each runner used to link one import family: printing and reading failed with `unknown import: host::fetch`
