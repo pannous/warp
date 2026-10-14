@@ -214,11 +214,7 @@ fn as_reflection_words(node: Node, functions: &Functions, defined: &HashSet<Stri
 				(FULL_WORD, Some(function)) => Some(Node::Text(printed(function))),
 				(NAME_WORD, Some(function)) => Some(Node::Text(function.name.clone())),
 				(RETURN_TYPE_WORD, Some(function)) => Some(Node::Text(function.return_kind.to_string())),
-				(BODY_WORD, Some(function)) => Some(Node::List(
-					vec![symbol(crate::blocks::DATA_WORD), function.body.as_ref().clone()],
-					Bracket::None,
-					Separator::Space,
-				)),
+				(BODY_WORD, Some(function)) => Some(crate::blocks::quoted_code(function.body.as_ref().clone())),
 				(word, None) if PARAMS_WORDS.contains(&word) => library().map(|(params, _)| text_list(&params)),
 				(SIGNATURE_WORD, None) => library().map(|(_, signature)| Node::Text(signature)),
 				(NAME_WORD, None) => library().map(|_| Node::Text(name.to_string())),

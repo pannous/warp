@@ -57,7 +57,7 @@ use crate::type_kinds::Kind as K;
 /// (`t = int`, `type(π) == real`). `number` covers every number, `real` the exact numbers and π, `rational` the whole
 /// numbers too, `text` a one-character string (a codepoint); `list` and ø both hold the empty list, as `count` takes
 /// it; a ± value is a number. The fixed widths (`int8`, `uint16` …) are src/numbers/fixed_width.rs
-const BUILTIN_TYPES: [BuiltinType; 22] = [
+const BUILTIN_TYPES: [BuiltinType; 23] = [
 	builtin("int", &["integer", "long", "i64", "i32"], &[], Some(K::Int), &[K::Int as i64]),
 	builtin("rational", &[], &["int"], Some(K::Int), &[K::Int as i64, K::Float as i64]),
 	builtin(REAL_WORD, &["exact"], &["rational"], Some(K::Empty), &[K::Int as i64, K::Float as i64]),
@@ -76,6 +76,7 @@ const BUILTIN_TYPES: [BuiltinType; 22] = [
 	builtin(SYMBOL_WORD, &[], &[], None, &[K::Symbol as i64]),
 	builtin("key", &[PAIR_WORD], &[OPERATION_WORD], None, &[K::Key as i64, crate::type_kinds::OPERATION_MASK_BIT]),
 	builtin(OPERATION_WORD, &["expression"], &[], None, &[crate::type_kinds::OPERATION_MASK_BIT]),
+	builtin(crate::words::CODE_WORD, &[], &[], None, &[crate::type_kinds::CODE_MASK_BIT]),
 	builtin(EMPTY_TYPE, &["unit", "nil", "ø", "none", "null", "void"], &[], None, &[K::Empty as i64]),
 	builtin(ERROR_WORD, &[], &[], None, &[K::Error as i64]),
 	builtin(LIST_WORD, &[], &[], None, &[K::List as i64, K::Block as i64, K::Empty as i64]),

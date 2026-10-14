@@ -8,6 +8,22 @@ pub fn plural_element_type(word: &str) -> Option<&str> {
 	type_word_kind(singular).map(|_| singular)
 }
 
+/// Code, a quoted program part: `as_code(data e)` (`f.body`, `parse("1+1")`) or a variable bound to one
+pub fn is_code(node: &Node, scope: &Scope) -> bool {
+	match node.drop_meta() {
+		Node::List(items, _, _) => match items.as_slice() {
+			[head, _] => head.drop_meta().name() == crate::words::AS_CODE,
+			[only] => is_code(only, scope),
+			_ => false,
+		},
+		Node::Symbol(name) => scope
+			.lookup(name)
+			.and_then(|local| local.type_node.as_deref())
+			.is_some_and(|type_node| type_node.drop_meta().name() == crate::words::CODE_WORD),
+		_ => false,
+	}
+}
+
 /// The map type of a variable held as a Node: `m: map = {}`, or `m = {}` given entries (variables.rs type_map_by_first_entry)
 pub fn held_map_type(subject: &Node, scope: &Scope) -> Option<String> {
 	let local = scope.binding(subject.drop_meta().symbol_name()?)?;
