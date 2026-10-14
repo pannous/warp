@@ -9,7 +9,6 @@ const MODULE_PATH = /\.(wasm|wat)$/; // src/modules/wasm_modules.rs MODULE_EXTEN
 const SETTER_PREFIX = "set "; // src/modules/wasm_modules.rs SETTER_PREFIX: the import that sets a mutable global
 const C_CALLS_SECTION = "warp.c_calls"; // src/modules/wasm_modules.rs C_CALLS_SECTION
 const IMPORTED_MEMORY_PAGES = 1; // src/wasm_emitter/mod.rs MEMORY: one page at least
-const SETTER = /^set (.+)$/; // src/lowering/foreign/foreign_modules.rs SETTER_PREFIX: "set innerHTML" sets the member to the one argument
 // a promise is awaited only by an awaited run's main (host.js JSPI), not where the browser has no JSPI (Safari), nor in a
 // page event's handler, nor in a warp function JavaScript calls back (a JavaScript frame between: the engine refuses
 // to suspend it, SUSPENSION_FAILURE)
@@ -48,19 +47,32 @@ registerForeignRuntime("python", {
 registerForeignRuntime("js", {
 	call(moduleName, memberName, argumentValues) {
 		// a module's name, or a handle: an object of the page kept behind an id (src/modules/foreign.rs)
-		let owner = null, value = typeof moduleName === "object" ? unhandled(moduleName) : moduleName === "operator" ? FOREIGN_OPERATORS : globalThis[moduleName];
+		const value = typeof moduleName === "object" ? unhandled(moduleName) : moduleName === "operator" ? FOREIGN_OPERATORS : globalThis[moduleName];
+		if (value instanceof PageObject || (value === undefined && self.askPageCall)) return callOnPage(value ?? moduleName, memberName, argumentValues);
 		if (value === undefined) throw new Error(`js ${moduleName}.${memberName}: the page has no global ${moduleName} (modules need the native host)`);
-		// member "": the module constructed, `new URL(…)` (src/lowering/foreign/foreign_modules.rs CONSTRUCTOR_MEMBER)
-		if (memberName === "") return new value(...argumentValues.map(unhandled));
-		const set = memberName.match(SETTER);
-		if (set) return value[set[1]] = unhandled(argumentValues[0]);
-		for (const part of memberName.split(".")) {
-			if (value?.[part] === undefined) throw new Error(`js ${moduleName}.${memberName}: ReferenceError: ${moduleName} has no ${memberName}`);
-			[owner, value] = [value, value[part]];
-		}
-		return argumentValues === null ? value : value.apply(owner, argumentValues.map(unhandled));
+		return jsMember(value, moduleName, memberName, argumentValues?.map(unhandled) ?? null);
 	},
 });
+
+// a global only the page has (`use js document`, `$name.value`) in the program's Worker: the page calls it while the
+// Worker waits (host-tasks.js askPage; task-workers.js answerPageCall), and an object it gives stays on the page, here
+// a PageObject naming its id there (card browser-interaction)
+class PageObject {
+	constructor({ $page, type, text }) {
+		Object.assign(this, { $page, type, text });
+	}
+	toString() {
+		return this.text;
+	}
+}
+const toPage = value => value instanceof PageObject ? { $page: value.$page } : value;
+function callOnPage(receiver, memberName, argumentValues) {
+	const label = `js ${receiver.type ?? receiver}.${memberName}`;
+	const request = { receiver: toPage(receiver), member: memberName, arguments: argumentValues?.map(value => toPage(unhandled(value))) ?? null };
+	if (!self.askPage) throw new Error(`${label}: only the page has it, and this Worker carries no way to ask it (host-tasks.js)`);
+	const { value } = self.askPage(label, shared => self.askPageCall(shared, request));
+	return value?.$page ? new PageObject(value) : value;
+}
 
 // the NUL-terminated bytes at `address` of a linear memory
 function cText(memory, address) {

@@ -5,6 +5,7 @@
 //! `$0` (a closure's first parameter), `$a` naming an enclosing node of a data literal (references.rs); a shader's
 //! holes, a route's form fields and a code pattern's holes are taken before this pass or sealed.
 
+use crate::lowering::blocks::DATA_WORD;
 use crate::modules::needed_definitions::with_statements_first;
 use crate::node::Node;
 use crate::operators::Op;
@@ -15,8 +16,8 @@ const SIGIL: char = '$';
 const DOCUMENT: &str = "document";
 /// JavaScript's own globals, which WebIDL (the browser's) does not declare
 const LANGUAGE_GLOBALS: [&str; 14] = [
-	"Math", "JSON", "Date", "Intl", "Reflect", "Object", "Array", "Map", "Set", "Number", "String", "Promise", "RegExp",
-	"BigInt",
+	"Math", "JSON", "Date", "Intl", "Reflect", "Object", "Array", "Map", "Set", "Number", "String", "Promise",
+	"RegExp", "BigInt",
 ];
 
 pub fn lower(program: Node) -> Node {
@@ -29,8 +30,8 @@ pub fn lower(program: Node) -> Node {
 /// `enclosing`: the names of the data literal's nodes around the node (`a{ c{ parent=$a } }`)
 fn rewritten(node: Node, enclosing: &mut Vec<String>, globals: &mut BTreeSet<String>) -> Node {
 	match node {
-		// a code pattern's holes (`match c { data($x.warp) => x }`), not always sealed yet
-		quoted if crate::lowering::blocks::quoted_data(&quoted).is_some() => quoted,
+		// a code pattern's holes (`match c { data($x.warp) => x }`, grouped `(data $x.warp)` there), not always sealed yet
+		quoted if is_quoted(&quoted) => quoted,
 		Node::Key(receiver, Op::Dot, member) => {
 			let receiver = match receiver.drop_meta() {
 				Node::Symbol(name) => browser_name(name)
@@ -51,6 +52,11 @@ fn rewritten(node: Node, enclosing: &mut Vec<String>, globals: &mut BTreeSet<Str
 			other
 		}
 	}
+}
+
+/// `data …`, also grouped as a code pattern is (`(data $x.warp)`)
+fn is_quoted(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().is_symbol(DATA_WORD)))
 }
 
 /// The global of that name, else the element of that id, its `use js` noted

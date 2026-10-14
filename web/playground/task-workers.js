@@ -33,7 +33,26 @@ function serveTaskWorkers(programWorker) {
 // the clipboard only right after the user acted (Firefox; Chrome when the page has no focus) refuses a run's read: a
 // button then asks for it, and its click reads (card dir-clipboard)
 const pasteInto = shared => answerInto(shared, async () => ({ text: await withPermission(CLIPBOARD_ASK, () => navigator.clipboard.readText()) }));
-const CLIPBOARD_ASK = "📋 the program reads the clipboard: click to allow";
+// a Worker's call of a global only the page has (host-foreign.js callOnPage, card browser-interaction): its value when
+// plain, else the object kept here as {$page: id, type, text}, which the Worker's later calls name
+const pageObjects = [];
+const onPage = value => value?.$page ? pageObjects[value.$page - 1] : value;
+function forWorker(value) {
+	if (value === null || value === undefined || typeof value !== "object" && typeof value !== "function") return value ?? null;
+	if (Array.isArray(value)) return value.map(forWorker);
+	return { $page: pageObjects.push(value), type: value.constructor?.name ?? typeof value, text: String(value).slice(0, 200) };
+}
+// `$who` is document.getElementById("who") (src/lowering/foreign/dollar_names.rs): the playground shows the program's
+// markup in a shadow root, which it names as self.programElements, so its elements are found there
+const ownerOnPage = (receiver, member) => receiver === "document" && member === "getElementById" ? self.programElements?.() ?? document
+	: typeof receiver === "string" ? globalThis[receiver] : onPage(receiver);
+const answerPageCall = (shared, { receiver, member, arguments: values }) => answerInto(shared, async () => {
+	const owner = ownerOnPage(receiver, member);
+	if (owner === undefined) throw new Error(`the page has no global ${receiver}`);
+	return { value: forWorker(jsMember(owner, receiver.type ?? receiver, member, values && values.map(onPage))) }; // js-members.js
+});
+
+const CLIPBOARD_ASK ="📋 the program reads the clipboard: click to allow";
 const PERMISSION_WAIT_MS = 60000; // host-tasks.js PAGE_ANSWER_MS: the Worker waits no longer
 const ASKING_CLASS = "permission-ask";
 const ASKING_STYLE = "position:fixed;bottom:1em;left:50%;transform:translateX(-50%);z-index:9;padding:.6em 1em;font:inherit;cursor:pointer";

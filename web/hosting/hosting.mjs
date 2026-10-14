@@ -14,6 +14,7 @@ import filesScript from "../playground/host-files.js";
 import soundScript from "../playground/host-sound.js";
 import hashesScript from "../playground/host-hashes.js";
 import tasksScript from "../playground/host-tasks.js";
+import jsMembersScript from "../playground/js-members.js";
 import foreignScript from "../playground/host-foreign.js";
 import compilerScript from "../playground/host-compiler.js";
 import routesScript from "../playground/host-routes.js";
@@ -31,7 +32,7 @@ const HOST_SCRIPTS = {
 	"host-sound.js": soundScript,
 	"host-hashes.js": stdScript + hashesScript,
 	"host-tasks.js": importsScript + exactScript + tasksScript,
-	"host-foreign.js": exactScript + foreignScript,
+	"host-foreign.js": exactScript + jsMembersScript + foreignScript,
 	"host-compiler.js": exactScript + compilerScript,
 	"host-routes.js": importsScript + routesScript,
 	"host-gpu.js": gpuScript,

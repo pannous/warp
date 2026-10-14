@@ -220,6 +220,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "stored") return keepValue(data.name, data.value, data.file);
 			if (data.type === "clipboard") return copyText(data.text);
 			if (data.type === "clipboard read") return pasteInto(data.shared);
+			if (data.type === "page call") return answerPageCall(data.shared, data.request); // task-workers.js
 			if (data.type === "failed") return failed(new Error(data.message));
 			if (data.type === "bundle") return bundled(data.bundle); // deploy.js
 			if (data.type === "members") return answerMembers(data);
@@ -688,6 +689,8 @@ function showRendered(html) {
 	host.hidden = !html;
 	morphChildren(host.shadowRoot ?? renderedRoot(host), parsedHtml(html ?? ""));
 }
+
+self.programElements = () => $("rendered").shadowRoot ?? document; // task-workers.js ownerOnPage: `$who`
 
 // a form's submit stays inside the shadow root (it is not composed): listened to there
 function renderedRoot(host) {
