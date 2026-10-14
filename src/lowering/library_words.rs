@@ -806,7 +806,7 @@ impl Lowering {
 
 	/// `word(x, args)` and `word x args`
 	fn word_call(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
-		if let Some(membership) = self.membership(items).or_else(|| self.containment(items)) {
+		if let Some(membership) = self.membership(items) {
 			return Some(membership);
 		}
 		if let Some(raised) = raise_call(items, &self.shadowed.borrow()) {
@@ -962,39 +962,28 @@ impl Lowering {
 	}
 
 	/// `x in xs`: yes/no whether a map has the key x or a list the element x (decision in-bool; its position is
-	/// `xs.index_of(x)`); `byte in t` and `"äb" in bytes` count text units
+	/// `xs.index_of(x)`); `byte in t` and `"äb" in bytes` count text units. `xs contains x`, `xs has x`,
+	/// `xs includes x`: the method `xs.contains(x)` written between its two values, unless the program defines the word
 	fn membership(&self, items: &[Node]) -> Option<Node> {
-		let [element, in_word, collection] = items else {
+		let [left, word, right] = items else {
 			return None;
 		};
 		let names_unit = |side: &Node| match side.drop_meta() {
 			Node::Key(_, Op::Hash, unit) => crate::analyzer::text_unit(&unit.name()).is_some(),
 			other => crate::analyzer::text_unit(&other.name()).is_some(),
 		};
-		if !in_word.is_symbol(IN_WORD) || names_unit(element) || names_unit(collection) {
-			return None;
-		}
+		let (collection, element) = match word.symbol_name()? {
+			IN_WORD if names_unit(left) || names_unit(right) => return None,
+			IN_WORD => (right, left),
+			name if self.library_word_for(name, 2) == Some(COLLECTION_CONTAINS) => (left, right),
+			_ => return None,
+		};
 		Some(self.call(
 			COLLECTION_CONTAINS,
-			in_word,
+			word,
 			vec![collection.clone(), element.clone()],
 			false,
 		))
-	}
-
-	/// `xs contains x`, `xs has x`, `xs includes x`: the method `xs.contains(x)` written between its two values, unless
-	/// the program defines the word
-	fn containment(&self, items: &[Node]) -> Option<Node> {
-		let [collection, word, element] = items else {
-			return None;
-		};
-		let Node::Symbol(name) = word.drop_meta() else {
-			return None;
-		};
-		let canonical = self
-			.library_word_for(name, 2)
-			.filter(|canonical| *canonical == COLLECTION_CONTAINS)?;
-		Some(self.call(canonical, word, vec![collection.clone(), element.clone()], false))
 	}
 
 	/// `x.word` and `x.word(args)`; an unknown word on a value is an error
