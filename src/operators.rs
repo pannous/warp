@@ -177,7 +177,8 @@ pub fn glyph_operator(glyph: char) -> Option<Op> {
 
 /// A word that spells an operator, alone or as the first word of a phrase: `and`, `mod`, `is` (of `is less than`)
 pub fn is_operator_word(word: &str) -> bool {
-	all_spellings().any(|(spelling, _)| spelling.split([' ', '=']).next() == Some(word) && word.starts_with(char::is_alphabetic))
+	all_spellings()
+		.any(|(spelling, _)| spelling.split([' ', '=']).next() == Some(word) && word.starts_with(char::is_alphabetic))
 }
 
 /// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)
