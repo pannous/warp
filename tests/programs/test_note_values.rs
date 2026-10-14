@@ -10,7 +10,7 @@ fn a_note_value_prints_as_its_name() {
 	is!("use sound\nnote(C4)", "C4");
 	is!("use sound\nnote(C#4)", "C#4");
 	is!("use sound\nnote(\"Eb5\")", "D#5"); // a note-name text is the name
-	is!("use sound\nnote_value(E4)", "E4"); // the first word, an alias
+	is!("use sound; note_value(E4)", "E4"); // the first word, an alias
 	is!("use sound\nnote(445Hz)", "A4+20c");
 	is!("use sound\nnote(435Hz)", "A4-20c");
 	is!("use sound\nn = note(C4)\nn.key", 60);

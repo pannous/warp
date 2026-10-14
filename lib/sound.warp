@@ -58,8 +58,8 @@ class Note {
 	octave() := floor(key / 12) as int - 1
 	name() := note_names[key % 12]
 	text() := name() + string(octave()) + cents_text(cents)
-	plus(semitones) := Note(key + semitones, cents)
-	minus(semitones) := Note(key - semitones, cents)
+	plus(semitones) := Note(key + (semitones as int), cents)
+	minus(semitones) := Note(key - (semitones as int), cents)
 	equals(o) := o is Note and key == o.key and cents == o.cents
 }
 cents_text(cents) := if cents == 0 then "" else if cents > 0 then "+" + string(cents) + "c" else string(cents) + "c"
