@@ -389,6 +389,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - P48 custom operators: `prefix operator ⁻ := …`, `suffix`, `infix operator ⊕ := left+right`; word infix operators
   `infix operator divides(d, n) := …`. P54 only declared operators are ranked (`has precedence above +`). P166
   element-wise operators on plain numbers act plainly.
+- easy-add (2026-10-14): `x↑n` is power and `x↓b` is log only for numbers: they are typed infix operators
+  (`infix operator ↑(x: number, n: number) := x ^ n`), not a fixed lowering, so other types define their own.
 - D6 `|` is one operator dispatched on types: logical or, or pipe (`2|square|root`). operator-shall (2026-10-13): `&`
   and `|` of two whole numbers combine bits; `and`/`or`/`&&`/`||` stay logical; bits as a condition warn.
   amp-compose: `&` of two functions composes in reading order, `∘` alias. P158 `then` pipes only into a stage
