@@ -5,12 +5,12 @@
 use super::*;
 
 pub mod class_methods;
-pub mod traits;
-pub mod sum_variants;
-pub mod optional_casts;
+pub mod named_patterns;
 pub mod object_groups;
+pub mod optional_casts;
+pub mod sum_variants;
+pub mod traits;
+pub mod tuples;
 pub mod type_aliases;
 pub mod type_constructor;
 pub mod type_tests;
-pub mod tuples;
-pub mod named_patterns;

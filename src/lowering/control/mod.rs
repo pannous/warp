@@ -4,12 +4,12 @@
 #[allow(unused_imports)]
 use super::*;
 
-pub mod switch;
-pub mod match_exhaustive;
 pub mod for_loop;
 pub mod go_blocks;
+pub mod match_exhaustive;
 pub mod parallel;
-pub mod run_time_blocks;
-pub mod test_blocks;
-pub mod scoped_handlers;
 pub mod result_word;
+pub mod run_time_blocks;
+pub mod scoped_handlers;
+pub mod switch;
+pub mod test_blocks;

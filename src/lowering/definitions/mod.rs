@@ -4,22 +4,22 @@
 #[allow(unused_imports)]
 use super::*;
 
+pub mod closures;
 pub mod declaration_forms;
 pub mod definition_cases;
 pub mod file_declarations;
-pub mod overloads;
-pub mod lambdas;
-pub mod closures;
 pub mod function_values;
+pub mod getters;
+pub mod inlining;
+pub mod lambdas;
+pub mod late_binding;
+pub mod memoization;
+pub mod mutation;
 pub mod named_arguments;
+pub mod nonlocal_cells;
+pub mod overloads;
 pub mod parameter_patterns;
 pub mod parameter_shapes;
-pub mod variadic;
-pub mod inlining;
-pub mod memoization;
-pub mod late_binding;
-pub mod getters;
-pub mod nonlocal_cells;
-pub mod mutation;
 pub mod references;
 pub mod undo_history;
+pub mod variadic;
