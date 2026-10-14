@@ -61,6 +61,7 @@ pub mod nonlocal_cells;
 pub mod number_keys;
 pub mod number_words;
 pub mod object_groups;
+pub mod of_lookups;
 pub mod one_entry_maps;
 pub mod optional_casts;
 pub mod overloads;

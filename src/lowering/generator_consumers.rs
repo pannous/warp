@@ -11,7 +11,6 @@ use crate::generators::{is_statement_list, yielded_value, Generator, NAME_SEPARA
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::while_do;
-use crate::words::OF_WORD;
 use std::collections::{HashMap, HashSet};
 
 const TAKE_WORD: &str = "take";
@@ -81,20 +80,29 @@ fn lazily_read_variables(node: &Node, generators: &HashMap<String, Generator>) -
 	assigned.intersection(&read).cloned().collect()
 }
 
-/// `word(arguments)`, `take 3 of xs` as `take(xs, 3)`
+/// `word(arguments)`, `xs.take(3)` (`take 3 of xs`) as `take(xs, 3)`
 fn consumer_call(node: &Node) -> Option<(&str, Vec<Node>)> {
-	let Node::List(items, Bracket::Round | Bracket::None, _) = node.drop_meta() else {
-		return None;
-	};
-	let is_take = |word: &Node| word.symbol_name().is_some_and(|name| TAKE_WORDS.contains(&name));
-	if let [word, count, of, source] = items.as_slice() {
-		if is_take(word) && of.is_symbol(OF_WORD) {
-			return Some((TAKE_WORD, vec![source.clone(), count.clone()]));
+	let (name, arguments): (&Node, Vec<Node>) = match node.drop_meta() {
+		Node::List(items, Bracket::Round | Bracket::None, _) => {
+			let (name, arguments) = items.split_first()?;
+			(name, arguments.iter().flat_map(crate::ruby_blocks::arguments).collect())
 		}
-	}
-	let (name, arguments) = items.split_first()?;
-	let arguments: Vec<Node> = arguments.iter().flat_map(crate::ruby_blocks::arguments).collect();
-	let word = if is_take(name) && arguments.len() == 2 {
+		Node::Key(source, Op::Dot, member) => match member.drop_meta() {
+			Node::List(items, Bracket::Round, _) => {
+				let (name, arguments) = items.split_first()?;
+				(
+					name,
+					std::iter::once(source.as_ref().clone())
+						.chain(arguments.iter().cloned())
+						.collect(),
+				)
+			}
+			_ => return None,
+		},
+		_ => return None,
+	};
+	let is_take = name.symbol_name().is_some_and(|name| TAKE_WORDS.contains(&name));
+	let word = if is_take && arguments.len() == 2 {
 		TAKE_WORD
 	} else {
 		name.symbol_name()?

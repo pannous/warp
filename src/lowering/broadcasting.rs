@@ -14,7 +14,7 @@ use crate::operators::Op;
 use crate::traits::InstanceTypes;
 use crate::type_kinds::Kind;
 use crate::words::IMPLICIT_PARAMETER;
-use crate::words::{MAP_WORD, OF_WORD, SUM_WORD};
+use crate::words::{MAP_WORD, SUM_WORD};
 use std::collections::{HashMap, HashSet};
 
 const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Pow];
@@ -378,19 +378,6 @@ fn with_comma_arguments(node: Node, rest: &[Node], arities: &HashMap<String, Ari
 /// `f 1 2 3` → `f [1 2 3]` of the functions `single`
 fn gather_arguments(node: Node, single: &HashSet<String>, gathered: &mut bool) -> Node {
 	match node {
-		// `words of text`, `sq of 3`: the function called with what follows `of` (the library words: library_words.rs)
-		Node::List(items, Bracket::None, Separator::Space)
-			if items.len() == 3
-				&& items[1].is_symbol(OF_WORD)
-				&& items[0].symbol_name().is_some_and(|name| single.contains(name)) =>
-		{
-			let [function, _, object] = <[Node; 3]>::try_from(items).expect("three items");
-			Node::List(
-				vec![function, gather_arguments(object, single, gathered)],
-				Bracket::Round,
-				Separator::None,
-			)
-		}
 		Node::List(items, Bracket::None, Separator::Space)
 			if items.len() > 2 && matches!(items[0].drop_meta(), Node::Symbol(name) if single.contains(name)) =>
 		{
@@ -513,13 +500,13 @@ fn each_singular(node: Node, lists: &HashSet<String>, names: &HashSet<String>) -
 }
 
 /// The shapes of the program's variables as type_constructor (a later pass) will construct its instances, for a program
-/// that reads a field by name (`x.name`, `x's name`, `name of x`); None for any other
+/// that reads a field by name (`x.name`, `x's name`); None for any other
 fn element_shapes(program: &Node) -> Option<InstanceTypes> {
 	let mut reads_a_field = false;
-	program.visit(&mut |part| match part {
-		Node::Key(_, Op::Dot, field) => reads_a_field |= field.symbol_name().is_some(),
-		Node::List(items, _, _) => reads_a_field |= matches!(items.as_slice(), [_, of, _] if of.is_symbol(OF_WORD)),
-		_ => {}
+	program.visit(&mut |part| {
+		if let Node::Key(_, Op::Dot, field) = part {
+			reads_a_field |= field.symbol_name().is_some()
+		}
 	});
 	reads_a_field.then(|| InstanceTypes::of(&crate::type_constructor::lower(program.clone())))
 }
@@ -772,10 +759,6 @@ impl Broadcast {
 					.collect();
 				self.broadcast_call(&items, &bracket, &separator)
 					.or_else(|| self.broadcast_one_argument(&items, &bracket, &separator))
-					.or_else(|| match items.as_slice() {
-						[field, of, list] if of.is_symbol(OF_WORD) => self.element_fields(list, field),
-						_ => None,
-					})
 					.unwrap_or(Node::List(items, bracket, separator))
 			}
 			Node::Key(left, op, right) if matches!(left.drop_meta(), Node::Empty) && SCALAR_OPERATORS.contains(&op) => {
