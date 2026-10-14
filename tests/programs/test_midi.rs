@@ -72,6 +72,7 @@ fn headless_messages_are_named() {
 fn native_input_is_a_loud_error() {
 	let errors = failures_of("midi_receive()");
 	assert!(errors.contains("MIDI input is not available natively yet"), "{errors}");
+	assert!(!errors.contains("the playground reads it"), "promises a way that does not exist: {errors}");
 }
 
 #[test]
