@@ -66,6 +66,7 @@ mod test_event_handler_lists;
 mod test_event_signals;
 mod test_exit_in_handler; // card key-app
 mod test_exit_signal;
+mod test_expect; // card expect-make
 mod test_field_of_elements; // name of people with age > 20 (user 2026-10-10)
 mod test_filter_loop_over_variable;
 mod test_filter_loops;
