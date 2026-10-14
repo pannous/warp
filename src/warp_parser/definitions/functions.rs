@@ -376,7 +376,7 @@ impl WarpParser {
 	}
 
 	/// `to square a number: …` or `to square a number { … }`
-	fn at_to_header_end(&self) -> bool {
+	pub(crate) fn at_to_header_end(&self) -> bool {
 		(self.current_char() == ':' && self.peek_char(1) != '=') || self.current_char() == '{'
 	}
 

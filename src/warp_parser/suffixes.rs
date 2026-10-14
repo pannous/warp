@@ -75,6 +75,20 @@ impl WarpParser {
 		}
 	}
 
+	/// The word at the cursor is a loop header's last: the body follows it (`for i in 1 to count xs { … }`, `… do …`,
+	/// `…:` or an indented line), so it is the argument of the word before rather than that word's body; at the end of
+	/// the line it is the braceless body of `for i in 1 to n body`
+	fn word_ends_header(&mut self) -> bool {
+		let start = self.mark();
+		let ends = self.at_identifier_start() && self.parse_symbol().is_ok() && {
+			self.skip_spaces();
+			let indented_line_follows = self.current_char() == '\n' && matches!(self.peek_char(1), ' ' | '\t');
+			self.at_to_header_end() || self.matches_keyword(DO_WORD) || indented_line_follows
+		};
+		self.rewind(start);
+		ends
+	}
+
 	pub(super) fn try_parse_implicit_application(
 		&mut self,
 		lhs: &Node,
@@ -90,12 +104,16 @@ impl WarpParser {
 		let lhs_is_defined_function = matches!(lhs.drop_meta(), Node::Symbol(name) if self.functions.contains(name));
 		// application binds tighter than the logical, comparison and additive operators: `1 + count xs` is
 		// `1 + count(xs)` for any name (card count-xs); a `:` operand keeps `a: b c d` apart, and an argument takes no
-		// call of its own: `on change s` is one call with two arguments; a loop header's last word is no call of its body
-		// (`for i in 1 to n body`), and a word that begins the next item is no argument (word_begins_item)
+		// call of its own: `on change s` is one call with two arguments; in a loop header only its last word is an argument
+		// (`for i in 1 to count xs { … }`, never the body of `for i in 1 to n body`), elsewhere a word that begins the next
+		// item is no argument (word_begins_item)
 		let in_operand = OPERAND_APPLICATION_BPS.contains(&min_bp)
 			&& min_bp != argument_bp
-			&& !self.in_for_header
-			&& !self.word_begins_item();
+			&& if self.in_for_header {
+				self.word_ends_header()
+			} else {
+				!self.word_begins_item()
+			};
 		let ch = self.current_char();
 		let in_assignment_context = min_bp <= 60 || self.branch_bp == Some(min_bp); // Assignment r_bp is 59
 		let arg_is_non_identifier =
