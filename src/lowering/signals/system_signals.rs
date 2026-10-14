@@ -71,7 +71,7 @@ const WEEKEND_WORD: &str = "weekend";
 /// `9am`, `9pm`: the half of the day by its index
 const HALVES: [&str; 2] = ["am", "pm"];
 const FILE_WORD: &str = "file";
-const CHANGE_WORDS: [&str; 2] = ["change", "changes"];
+pub(crate) const CHANGE_WORDS: [&str; 2] = ["change", "changes"];
 const MESSAGE_WORD: &str = "message";
 const BROADCAST_WORD: &str = "broadcast";
 /// `chat/stop the machine`: the named event `stop the machine` on the channel `chat`, a channel of its own

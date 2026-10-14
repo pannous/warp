@@ -2,6 +2,7 @@
 //! the file type (conforming to source code, so any text editor is offered under Open With) and runs an opened file
 //! with this warp in Terminal
 
+use crate::modules::MODULE_EXTENSIONS;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -9,7 +10,6 @@ const APP_NAME: &str = "Warp Lang.app";
 const BUNDLE_ID: &str = "com.pannous.warp-lang";
 const TYPE_ID: &str = "com.pannous.warp.source";
 const TYPE_DESCRIPTION: &str = "Warp source";
-const EXTENSIONS: [&str; 2] = ["warp", "wasp"];
 const CONFORMS_TO: [&str; 2] = ["public.source-code", "public.plain-text"];
 const WARP_NAME: &str = "warp";
 const LSREGISTER: &str =
@@ -55,7 +55,7 @@ fn info_entries() -> [(&'static str, String); 3] {
 		|items: &[&str]| format!("[{}]", items.iter().map(|item| format!("{item:?}")).collect::<Vec<_>>().join(","));
 	let document_type = format!("[{{\"CFBundleTypeName\":{TYPE_DESCRIPTION:?},\"CFBundleTypeRole\":\"Viewer\",\"LSHandlerRank\":\"Owner\",\"LSItemContentTypes\":[{TYPE_ID:?}]}}]");
 	let exported_type = format!("[{{\"UTTypeIdentifier\":{TYPE_ID:?},\"UTTypeDescription\":{TYPE_DESCRIPTION:?},\"UTTypeConformsTo\":{},\"UTTypeTagSpecification\":{{\"public.filename-extension\":{}}}}}]",
-		texts(&CONFORMS_TO), texts(&EXTENSIONS));
+		texts(&CONFORMS_TO), texts(&MODULE_EXTENSIONS));
 	[
 		("CFBundleIdentifier", format!("{BUNDLE_ID:?}")),
 		("CFBundleDocumentTypes", document_type),

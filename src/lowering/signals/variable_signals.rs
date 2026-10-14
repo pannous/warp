@@ -13,6 +13,7 @@
 use super::listeners;
 use super::nodes::{block, children_rewritten, if_then, key, Counter};
 use crate::declarations::{handler_parts, word};
+use crate::lowering::signals::event_signals::FIRED_PREFIX;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{ONCE_WORD, ON_WORD, WHENEVER_WORD};
@@ -34,8 +35,6 @@ const OLD_REASON: &str = "`old` is the value before the write (P148)";
 const OLD_PREFIX: &str = "change_old_";
 /// `watched·0`: the `:=` value of the first expression an `on change` listener watches
 const WATCHED_PREFIX: &str = "watched·";
-/// `once_fired_0`: whether the first once listener ran
-const FIRED_PREFIX: &str = "once_fired_";
 /// `whenever_held_0`, `whenever_was_0`: whether the first whenever's condition holds now and held before the write
 /// (P156: whenever runs each time its condition becomes true)
 const HELD_PREFIX: &str = "whenever_held_";

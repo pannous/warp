@@ -178,7 +178,7 @@ const BODY_PLACEHOLDER: &str = "table_body";
 const ARGUMENTS: &str = "table_arguments";
 const FUNCTION: &str = "table·call";
 /// The SQL function a query calls a warp function through (database.rs)
-const WARP_CALL: &str = "warp_call";
+pub(crate) const WARP_CALL: &str = "warp_call";
 /// `Team?`: an optional field
 pub(crate) const OPTIONAL_MARK: char = '?';
 const NUMERIC_TYPES: [&str; 4] = ["int", "float", "number", "real"];

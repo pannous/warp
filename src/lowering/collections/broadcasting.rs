@@ -13,11 +13,11 @@ use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::traits::InstanceTypes;
 use crate::type_kinds::Kind;
+use crate::words::EXTREMUM_WORDS;
 use crate::words::{ALL_WORD, DOT_WORD, EACH_WORD, IMPLICIT_PARAMETER, MAP_WORD, SUM_WORD};
 use std::collections::{HashMap, HashSet};
 
 const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Pow];
-const EXTREMUM_WORDS: [&str; 2] = ["max", "min"];
 /// Parameter types a comparison's result fits
 const TRUTH_TYPES: [&str; 3] = ["bool", "boolean", "any"];
 const BROADCAST_ITEM: &str = "broadcast_item";

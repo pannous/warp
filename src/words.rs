@@ -99,3 +99,6 @@ pub const SPLIT_WORD: &str = "split";
 pub const LOG_WORD: &str = "log";
 /// `b = a.copy()`: values are never shared, so the copy is the value itself
 pub const COPY_WORD: &str = "copy";
+pub const STYLE_WORD: &str = "style";
+/// `min(a, b)` and `max(a, b)` of two values (lowering/collections/min_max.rs): a comparison, each argument computed once
+pub const EXTREMUM_WORDS: [&str; 2] = ["min", "max"];
