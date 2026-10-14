@@ -156,7 +156,9 @@ const RECORD_WORD: &str = "record";
 const UPTO: &str = "upto";
 const IS_IN_PHRASE: &str = "is in";
 /// `xs contains x` (and its synonyms, lowering/library_words.rs COLLECTION_CONTAINS): `x in xs` the other way round
-const CONTAINMENT_WORDS: [&str; 3] = ["contains", "has", "includes"];
+fn containment_words() -> &'static [&'static str] {
+	crate::library_words::synonyms(crate::library_words::COLLECTION_CONTAINS)
+}
 /// `for each item in basket` is `for item in basket`
 const EACH_WORD: &str = "each";
 /// `10 down to 1` is `reverse(1 to 10)`
@@ -196,6 +198,8 @@ const AWAIT_ALL_WORD: &str = "all";
 /// `await x` binds its operand like unary minus
 const AWAIT_OPERAND_BP: u8 = Op::Neg.binding_power().1;
 const PRINT_WORD: &str = "print";
+/// Other languages' print words (wiki/Features.md); `log` stays the logarithm, `puts` the WASI text output
+const PRINT_SPELLINGS: [&str; 2] = ["println", "writeln"];
 /// `print a  print b`: statements separated by spaces only (user decision 2026-10-03: a loud error)
 const TWO_STATEMENTS_ON_ONE_LINE: &str = "two statements on one line? separate them with `;` or a newline";
 const IN_KEYWORD: &str = "in";
@@ -471,7 +475,7 @@ const JOINING_WORDS: [&str; 4] = [IN_KEYWORD, "div", OF_WORD, "matches"];
 
 /// A word joining two operands, never a call of the word before it: `a and b`, `n mod 100`, `x in xs`, `p is int`
 pub(crate) fn joins_operands(word: &str) -> bool {
-	crate::operators::is_operator_word(word) || JOINING_WORDS.contains(&word) || CONTAINMENT_WORDS.contains(&word)
+	crate::operators::is_operator_word(word) || JOINING_WORDS.contains(&word) || containment_words().contains(&word)
 }
 pub const ASSERT_MARKER: &str = "assert·else";
 /// The words that start the fallback of `try X else Y`: `else`, classical `catch`, Python's `except` (P60)

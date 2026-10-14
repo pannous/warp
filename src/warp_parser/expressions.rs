@@ -331,8 +331,9 @@ impl WarpParser {
 			return Some((SpecialInfix::Membership(IN_KEYWORD), word.len(), Op::Eq.binding_power()));
 		}
 		// `xs contains x` binds like `x in xs`, in code only (data keeps the words as they are)
-		let containment = CONTAINMENT_WORDS
-			.into_iter()
+		let containment = containment_words()
+			.iter()
+			.copied()
 			.find(|word| !self.options.data_mode && self.matches_keyword(word) && self.operand_after(word.len()));
 		containment.map(|word| (SpecialInfix::Membership(word), word.len(), Op::Eq.binding_power()))
 	}
