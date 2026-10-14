@@ -58,6 +58,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   "needs a unit" warning suggesting `0.3s`; demo samples written with bare ms move to `300ms`. Run-time plain-number values count seconds too (`f(t) := sleep(t)`); no warning under `use script`.
 - help-prints (2026-10-14): a statement-level `help(x)` prints, as in Python; inside an expression it returns the text
   (`t = help(x)` silent, `print help(x)` prints once).
+- function-in-list (2026-10-14): inside a list or text a function prints as its name (`[gcd lcm clamp …]`); only a
+  function printed on its own shows doc + definition (reflection).
+- nearest-limit (2026-10-14): `nearest(x, rational)` limits the denominator to 1,000,000 like Python's
+  limit_denominator (sqrt 2 → 665857/470832); `limit = 0` gives the exact fraction of the float.
 - restructuring (2026-10-14): new major roadmap after the diff review found few duplicates. Inventory every function
   by name, move functions to the file their concept belongs to (a general parser holds no keyword-specific syntax:
   `finish_if_prefix` goes to e.g. control/if.rs), and have agents check suspiciously similar names for true
