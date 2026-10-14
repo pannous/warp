@@ -68,8 +68,6 @@ let canvasFailure;
 const LOSS_WAIT_MS = 100; // the program's side: why painting into the page's canvas failed, after which pixels are painted
 const paintCanvases = new Map(); // the task Worker's: canvas id → {context, format}
 let paintCanvasCount = 0; // the program's side: the canvases asked of the page, which names them by this count
-// TEMPORARY (card shaders-firefox): each step of a GPU job on the console, to find where Firefox stops
-const gpuTrace = (...steps) => console.warn("gpu trace", self.name || (self.document ? "page" : "worker"), ...steps.map(String));
 let gpuWorker; // the program's side: the task Worker that ran the last GPU job, and keeps its buffers
 
 // the task Worker's side: the floats the shader left from index `first` on (only those are read back)
@@ -275,12 +273,9 @@ function compiledOnce(cache, key, make) {
 const theGpuDevice = async () => gpuDevice ??= await gpuDeviceOrFailure();
 
 async function gpuDeviceOrFailure() {
-	gpuTrace("requestAdapter");
 	const adapter = await self.navigator.gpu?.requestAdapter();
-	gpuTrace("adapter", adapter);
 	if (!adapter) throw new Error("this browser offers no WebGPU adapter");
 	const device = await adapter.requestDevice();
-	gpuTrace("device", device);
 	// a lost device (the GPU process restarted) is asked for anew by the next job, with all made on it
 	device.lost.then(() => forgetDevice(device));
 	return device;
@@ -387,20 +382,16 @@ const GPU_JOBS = {
 // a task Worker's job (task-worker.js): the shader's answer, or why not, into the shared buffer the program waits on
 async function gpuJobInto({ gpu: { word, job }, shared }) {
 	let answer;
-	gpuTrace("job", word);
 	try {
 		answer = await GPU_JOBS[word](job);
-		gpuTrace("job done", word);
 	} catch (failure) {
 		// a browser's WebGPU may reject with no Error at all (Firefox: `undefined`), which still answers the waiting program
 		answer = { error: failure instanceof Error ? failure.message : `the browser's WebGPU failed with ${failure} (${word})` };
 		if (!(failure instanceof Error)) console.error(answer.error);
 		await forgetDeviceIfLost().catch(() => {});
 	}
-	gpuTrace("job answer", word, answer.error);
 	if (answer.words) writeSharedWords(shared, answer.words);
 	else writeShared(shared, answer);
-	gpuTrace("job answered", word);
 }
 
 // 32-bit words into the shared buffer as they are: a million floats as JSON took longer than the GPU
@@ -419,11 +410,9 @@ function gpuJob(word, job, transfer = [], Words = Float32Array, worker = hasTask
 	if (!hasTaskWorkers()) throw new Error(`${word} needs task Workers, which only a cross-origin isolated page has (the playground)`);
 	if (!worker) throw new Error(`${word}: every task Worker is busy`);
 	const shared = takeAnswerBuffer();
-	gpuTrace("program posts", word);
 	worker.postMessage({ gpu: { word, job }, shared }, transfer);
 	const header = new Int32Array(shared, 0, 2);
 	Atomics.wait(header, 0, 0);
-	gpuTrace("program got", word);
 	const { values, error } = header[0] === WORDS_STATE ? { values: new Words(shared, TASK_HEADER, header[1]).slice() } : readShared(shared);
 	taskPool.push(worker);
 	returnAnswerBuffer(shared);

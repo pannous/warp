@@ -65,7 +65,7 @@ const pending = new Map();
 const messages = [];
 const report = (level, text, url = "") => REPORTED_LEVELS.has(level) && messages.push({ level: level === "warn" ? "warning" : level, text, url });
 const events = {
-	"log.entryAdded": entry => /uncaught exception/.test(entry.text) && console.error(`firefox_driver.mjs: ${JSON.stringify(entry)}`) || report(entry.level, entry.text ?? entry.args?.map(arg => arg.value ?? arg.type).join(" "), entry.source?.realm ? whereLogged(entry.stackTrace) : ""),
+	"log.entryAdded": entry => /uncaught exception/.test(entry.text) && void send("script.getRealms", {}).then(({ result }) => console.error(`firefox_driver.mjs: ${entry.text} in ${JSON.stringify(result?.realms?.find(realm => realm.realm === entry.source?.realm))}`)) || report(entry.level, entry.text ?? entry.args?.map(arg => arg.value ?? arg.type).join(" "), entry.source?.realm ? whereLogged(entry.stackTrace) : ""),
 	"network.responseCompleted": ({ response }) => response.status >= FAILED_STATUS && report("error", `${response.status} ${response.statusText}`.trim(), response.url),
 	"network.beforeRequestSent": ({ isBlocked, request }) => isBlocked && send("network.continueRequest", {
 		request: request.request,

@@ -148,7 +148,8 @@ PAPER_FROM = 240  # a channel this light or lighter on all three: the sample's p
 # Chromium and Safari; their canvas still changes between two looks, the pointer moving over it
 FRAME_SHADERS = "(the on frame shader samples keep painting)"
 FRAME_SHADER_SAMPLES = ["shader_brush", "shader_trails"]
-FRAME_SHADER_LOOKS_MS = [1500, 5000]  # a software GPU takes long for a 1280×800 frame
+FRAME_SHADER_FIRST_MS = 15000  # the first frame's canvas: a software GPU takes long for a 1280×800 frame
+FRAME_SHADER_LOOK_AGAIN_MS = 3000
 # card shader-read: $previous(at) reads the frame the shader left before, as natively (tests/programs/
 # test_shader_builtins.rs a_shader_reads_its_previous_frame): three renders of a quarter red more give 192 red
 PREVIOUS_FRAME = "(a shader reads its previous frame)"
@@ -616,15 +617,15 @@ def frame_shaders_wrong():
 		shown = browser("eval", f"""(async () => {{
 			const page = () => `value ${{document.getElementById("value").textContent}} status ${{document.getElementById("status").textContent}} output ${{document.getElementById("output").textContent.slice(0, 300)}}`;
 			const looks = [];
-			let started = performance.now();
-			for (const at of {json.dumps(FRAME_SHADER_LOOKS_MS)}) {{
-				const canvas = [...document.querySelectorAll("#paintings canvas")].at(-1);
-				for (let moved = 0; performance.now() - started < at; moved++) {{
-					const bounds = canvas?.getBoundingClientRect();
-					if (bounds) canvas.dispatchEvent(new PointerEvent("pointermove", {{ clientX: bounds.left + bounds.width * (0.2 + 0.6 * (moved % 7) / 7), clientY: bounds.top + bounds.height / 2, bubbles: true }}));
+			const shown = () => [...document.querySelectorAll("#paintings canvas")].at(-1);
+			for (const started = performance.now(); !shown() && performance.now() - started < {FRAME_SHADER_FIRST_MS};) await new Promise(done => setTimeout(done, 100));
+			for (const wait of [0, {FRAME_SHADER_LOOK_AGAIN_MS}]) {{
+				for (let moved = 0, started = performance.now(); performance.now() - started < wait; moved++) {{
+					const bounds = shown()?.getBoundingClientRect();
+					if (bounds) shown().dispatchEvent(new PointerEvent("pointermove", {{ clientX: bounds.left + bounds.width * (0.2 + 0.6 * (moved % 7) / 7), clientY: bounds.top + bounds.height / 2, bubbles: true }}));
 					await new Promise(done => setTimeout(done, 100));
 				}}
-				const now = [...document.querySelectorAll("#paintings canvas")].at(-1);
+				const now = shown();
 				if (!now) {{ looks.push("no canvas"); continue; }}
 				const copy = new OffscreenCanvas(now.width, now.height).getContext("2d");
 				copy.drawImage(now, 0, 0);
@@ -638,7 +639,7 @@ def frame_shaders_wrong():
 		if NO_GPU in shown:
 			print(f"skip {FRAME_SHADERS} {sample}: this browser {NO_GPU}")
 		elif "painting" not in shown:
-			wrong.append(f"samples/{sample} stopped painting: {shown}")
+			wrong.append(f"samples/{sample} stopped painting: {shown or 'the check gave no answer'}")
 	return wrong
 
 
