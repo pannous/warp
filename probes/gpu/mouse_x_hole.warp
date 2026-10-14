@@ -1,0 +1,7 @@
+// card values-number: $mouse_x in a shader block is the pointer's x (the system value mouse_x), as $mouse.x is
+s = shader {
+	@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+		return vec4f(select(0.0, 1.0, $mouse_x == $mouse.x), 0.0, 0.0, 1.0);
+	}
+}
+gpu_render(s, 2, 2)#1 == 0xFFFF0000

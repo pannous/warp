@@ -197,6 +197,10 @@ fn with_values(
 	Node::List(items, bracket.clone(), separator.clone()).with_meta_of(&node)
 }
 
+/// `name: name`; a system value's in parentheses, so its word is read rather than kept as data (`$mouse_x` is the
+/// pointer, system_values.rs is_bare_word; card values-number)
 fn entry(name: &str) -> Node {
-	Node::key(name, Node::Symbol(name.to_string()))
+	let word = Node::Symbol(name.to_string());
+	let is_system_value = warp_runtime::host_words::SYSTEM_VALUES.iter().any(|(system, _)| *system == name);
+	Node::key(name, if is_system_value { Node::List(vec![word], Bracket::Round, Separator::None) } else { word })
 }
