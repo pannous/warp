@@ -1,5 +1,6 @@
 //! Class bodies as their members: fields as Java, C#, Go and Python write them, properties and accessors, constructors as `init`, methods with their result types
 use super::*;
+use crate::node::parens;
 
 /// The fields and methods of a class body; the groups a `;` makes (`{name age:int; greet() := …}`) flattened
 pub(super) fn class_items(body: &Node) -> Vec<Node> {
@@ -173,11 +174,7 @@ pub(super) fn setter_calls(node: Node, setters: &[String]) -> Node {
 					&& setters.contains(&property.drop_meta().name()) =>
 			{
 				let setter = Node::Symbol(format!("{}{SETTER_SUFFIX}", property.drop_meta().name()));
-				let call = Node::List(
-					vec![setter, receiver.as_ref().clone(), recurse(*value)],
-					Bracket::Round,
-					Separator::None,
-				);
+				let call = parens(vec![setter, receiver.as_ref().clone(), recurse(*value)]);
 				Node::Key(receiver.clone(), Op::Assign, Box::new(call))
 			}
 			_ => key(recurse(*target), Op::Assign, recurse(*value)),
@@ -376,11 +373,7 @@ pub(super) fn constructed_from_braces(node: Node, classes: &[String]) -> Node {
 				&format!("{class_name}({})", written.join(", ")),
 			);
 			let arguments = items.into_iter().map(|item| constructed_from_braces(item, classes));
-			Node::List(
-				[vec![*class]].into_iter().flatten().chain(arguments).collect(),
-				Bracket::Round,
-				Separator::None,
-			)
+			parens([vec![*class]].into_iter().flatten().chain(arguments).collect())
 		}
 		// a match arm's `Point{x, y} =>` is a pattern (destructurings), no construction
 		Node::Key(pattern, Op::Arrow, body) => {

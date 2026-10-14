@@ -3,7 +3,7 @@
 use crate::analyzer::{extract_user_functions_inner, is_type_call_word};
 use crate::compiler::context::{Context, UserFunctionDef};
 use crate::lowering::nodes::children_rewritten;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{parens, Node};
 use crate::operators::Op;
 use std::collections::HashSet;
 
@@ -60,7 +60,7 @@ fn negate_calls(
 				prefix,
 				Box::new(negate_calls(*argument, functions, bound, locals)),
 			);
-			Node::List(vec![*function, argument], Bracket::Round, Separator::None)
+			parens(vec![*function, argument])
 		}
 		other => children_rewritten(other, |child| negate_calls(child, functions, bound, locals)),
 	}

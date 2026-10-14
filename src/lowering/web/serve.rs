@@ -9,7 +9,7 @@
 use super::nodes::{call, key};
 use crate::database_tables::{stored_table, table_store};
 use crate::declarations::word;
-use crate::node::{symbol, text, Bracket, Node, Separator};
+use crate::node::{parens, symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::stored_values::DATABASE_WORD;
 use std::collections::HashSet;
@@ -798,13 +798,11 @@ impl ServerCalls {
 	/// The call of server function `index` and the statement giving its variable the value: the call itself when
 	/// prerendering, else its fetch, first the value the prerender got
 	fn asking(&self, index: usize) -> (Node, Node) {
-		let call = Node::List(
+		let call = parens(
 			call_items(&self.calls[index])
 				.into_iter()
 				.map(|item| self.read(item))
 				.collect(),
-			Bracket::Round,
-			Separator::None,
 		);
 		let value = if self.prerendering {
 			call.clone()
@@ -1082,11 +1080,7 @@ fn rpc_route(definition: &Node) -> Option<Route> {
 	let (name, parameters) = defined_function(definition)?;
 	let arguments = (1..=parameters).map(|index| crate::warp_parser::parse(&format!("{REQUEST_WORD}.body#{index}")));
 	// built, not parsed: a generated name's `·` would parse as a product
-	let call = Node::List(
-		std::iter::once(Node::Symbol(name.clone())).chain(arguments).collect(),
-		Bracket::Round,
-		Separator::None,
-	);
+	let call = parens(std::iter::once(Node::Symbol(name.clone())).chain(arguments).collect());
 	Some((
 		RPC_METHOD.to_string(),
 		Node::Text(format!("{RPC_PREFIX}{name}")),

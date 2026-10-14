@@ -9,7 +9,7 @@ use crate::closures::may_be_function_value;
 use crate::lambdas::lambda_definition;
 use crate::library_words::{arity, canonical_spelling, is_standard_function};
 use crate::modules::prelude_word_arity;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
 
@@ -554,13 +554,11 @@ fn round_calls(node: Node, function_params: &[String]) -> Node {
 			if items.len() > 1
 				&& matches!(items[0].drop_meta(), Node::Symbol(name) if function_params.contains(name)) =>
 		{
-			Node::List(
+			parens(
 				items
 					.into_iter()
 					.map(|item| round_calls(item, function_params))
 					.collect(),
-				Bracket::Round,
-				Separator::None,
 			)
 		}
 		other => other.map_children(|child| round_calls(child, function_params)),

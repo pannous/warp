@@ -6,7 +6,7 @@
 use super::nodes::{
 	block, call, children_rewritten, grouped_parameters, if_then, if_then_else, is_kinded_type_word, key, Counter,
 };
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
 use crate::words::{ON_WORD, RETURN_WORD};
 
@@ -289,11 +289,7 @@ fn sized_array(items: &[Node]) -> Option<Node> {
 	);
 	(matches!(name.drop_meta(), Node::Symbol(_)) && is_count && crate::analyzer::type_word_kind(type_name).is_some())
 		.then(|| {
-			let array = key(
-				Node::List(vec![count.as_ref().clone()], Bracket::Round, Separator::None),
-				Op::Mul,
-				element_type.clone(),
-			);
+			let array = key(parens(vec![count.as_ref().clone()]), Op::Mul, element_type.clone());
 			Node::Key(name.clone(), Op::Assign, Box::new(array))
 		})
 }
@@ -318,7 +314,7 @@ pub fn lower_spaced_definitions(node: Node) -> Node {
 		{
 			let (name, parameters, body) = spaced_definition(&items).expect("guarded");
 			let body = lower_spaced_definitions(body);
-			let head = Node::List([vec![name], parameters].concat(), Bracket::Round, Separator::None);
+			let head = parens([vec![name], parameters].concat());
 			let body = match one_parameter(&head) {
 				Some(parameter) => bind_it(body, &parameter, false),
 				None => body,
@@ -601,7 +597,7 @@ fn applied_to_last(body: Node, extra: &[Node]) -> Node {
 	match body {
 		Node::Key(left, op, right) => Node::Key(left, op, Box::new(applied_to_last(*right, extra))),
 		meta @ Node::Meta { .. } => meta.under_meta(|node| applied_to_last(node, extra)),
-		last => Node::List([vec![last], extra.to_vec()].concat(), Bracket::Round, Separator::None),
+		last => parens([vec![last], extra.to_vec()].concat()),
 	}
 }
 
@@ -687,11 +683,7 @@ fn partial_application(items: &[Node]) -> Option<Node> {
 		}
 		false => argument.clone(),
 	});
-	let call = Node::List(
-		std::iter::once(items[0].clone()).chain(arguments).collect(),
-		Bracket::Round,
-		Separator::None,
-	);
+	let call = parens(std::iter::once(items[0].clone()).chain(arguments).collect());
 	let head = match parameters.as_slice() {
 		[single] => single.clone(),
 		_ => Node::List(parameters, Bracket::Round, Separator::Colon),
@@ -713,14 +705,10 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 			};
 			(
 				keyword,
-				Node::List(
-					vec![
-						tuple_result(head).expect("guarded").clone(),
-						typed_returns(body.clone(), result_types),
-					],
-					Bracket::Round,
-					Separator::None,
-				),
+				parens(vec![
+					tuple_result(head).expect("guarded").clone(),
+					typed_returns(body.clone(), result_types),
+				]),
 				None,
 			)
 		}
@@ -739,25 +727,17 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 			);
 			(keyword, key(head.as_ref().clone(), Op::As, typed_body), None)
 		}
-		[keyword, head, body] => (
-			keyword,
-			Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None),
-			None,
-		),
+		[keyword, head, body] => (keyword, parens(vec![head.clone(), body.clone()]), None),
 		// Go's `func add1(x int) int {…}`: the result type between the head and the body
 		[keyword, head, result_type, body] if is_kinded_type_word(result_type) => (
 			keyword,
-			Node::List(vec![head.clone(), body.clone()], Bracket::Round, Separator::None),
+			parens(vec![head.clone(), body.clone()]),
 			Some(result_type.clone()),
 		),
 		// Go's `func divmod(a, b int) (int, int) {…}`: a tuple of result types, each returned value converted
 		[keyword, head, result_types, body] if is_type_tuple(result_types) => (
 			keyword,
-			Node::List(
-				vec![head.clone(), typed_returns(body.clone(), result_types)],
-				Bracket::Round,
-				Separator::None,
-			),
+			parens(vec![head.clone(), typed_returns(body.clone(), result_types)]),
 			None,
 		),
 		_ => return None,
@@ -782,11 +762,7 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 		Node::Key(name, op @ (Op::Colon | Op::Assign), body)
 			if matches!(name.drop_meta(), Node::Symbol(_)) && (op == Op::Colon || !crate::analyzer::uses_it(&body)) =>
 		{
-			(
-				Node::List(vec![*name], Bracket::Round, Separator::None),
-				Op::Define,
-				*body,
-			)
+			(parens(vec![*name]), Op::Define, *body)
 		}
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) => (*head, op, *body),
 		// Python's `def apply(f, x): return f(x)`, early, so the function value passes see a definition; without
@@ -844,11 +820,7 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 	}
 	// Kotlin/Scala `def square(x) = x*x` defines as `:=` does, so the passes reading definitions see it (P143)
 	let op = if parameters.is_empty() { op } else { Op::Define };
-	let head = Node::List(
-		std::iter::once(name.clone()).chain(parameters).collect(),
-		Bracket::Round,
-		Separator::None,
-	);
+	let head = parens(std::iter::once(name.clone()).chain(parameters).collect());
 	let target = match result_type {
 		Some(result_type) => key(head, Op::Colon, result_type),
 		None => head,
@@ -923,14 +895,10 @@ fn smart_scope(items: &[Node]) -> Option<Node> {
 		let Node::Key(name, _, body) = definition.drop_meta() else {
 			unreachable!("guarded")
 		};
-		let head = Node::List(
-			vec![
-				name.as_ref().clone(),
-				key(receiver.clone(), Op::Colon, receiver_type.clone()),
-			],
-			Bracket::Round,
-			Separator::None,
-		);
+		let head = parens(vec![
+			name.as_ref().clone(),
+			key(receiver.clone(), Op::Colon, receiver_type.clone()),
+		]);
 		key(head, Op::Define, renamed_it(body.as_ref().clone(), &receiver))
 	});
 	Some(Node::List(methods.collect(), Bracket::None, Separator::Semicolon))

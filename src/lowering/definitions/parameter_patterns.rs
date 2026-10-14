@@ -5,7 +5,7 @@
 //! `sum(point·1: Point) := match point·1 { Point{x, y}: x + y }`. A value of another shape is the match's "no case"
 //! error.
 
-use super::nodes::{is_call_head, key, matched};
+use super::nodes::{arguments_rewritten, is_call_head, key, matched};
 use super::switch::is_map_pattern;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
@@ -37,10 +37,9 @@ fn parameters_named(head: Node, patterns: &mut Vec<(String, Node)>) -> Node {
 	let Node::List(items, bracket, separator) = head.drop_meta().clone() else {
 		return head;
 	};
-	let mut items = items.into_iter();
-	let name = items.next().into_iter();
-	let parameters = items.map(|parameter| parameter_named(parameter, patterns));
-	Node::List(name.chain(parameters).collect(), bracket, separator)
+	arguments_rewritten(items, bracket, separator, |parameter| {
+		parameter_named(parameter, patterns)
+	})
 }
 
 fn parameter_named(parameter: Node, patterns: &mut Vec<(String, Node)>) -> Node {

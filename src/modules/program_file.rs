@@ -1,0 +1,57 @@
+//! The file being compiled and what lies beside it: relative paths, WebAssembly modules and the names `use` resolves
+use super::*;
+
+/// `path` as written in the program: a relative path is next to the program's file, or in the working directory for
+/// inline code
+pub fn beside_program(path: &str) -> String {
+	let folder = program_file().as_deref().map(folder_of);
+	match folder {
+		Some(folder) if Path::new(path).is_relative() => folder.join(path).to_string_lossy().into_owned(),
+		_ => path.to_string(),
+	}
+}
+
+/// The WebAssembly file `use name` finds when no warp module and no standard module has that name: `use rust_demo` →
+/// ./rust_demo.wasm
+pub fn wasm_module_file(name: &str) -> Option<PathBuf> {
+	if names_a_module(name) {
+		return None;
+	}
+	program_loader().find_with(name, &crate::modules::wasm_modules::MODULE_EXTENSIONS)
+}
+
+/// Does `use name` name anything: a module (warp, standard, WebAssembly), a scope, a package or a C library
+pub fn resolves(name: &str) -> bool {
+	names_a_module(name)
+		|| wasm_module_file(name).is_some()
+		|| scope_word(name).is_some()
+		|| package_repository(name).is_some()
+		|| is_builtin_library(name)
+		|| crate::ffi::is_ffi_library(name)
+}
+
+/// Is `name` a warp module beside the program or in the search directories, or a standard module
+pub fn names_a_module(name: &str) -> bool {
+	program_loader().find(name).is_some() || std_module(name).is_some()
+}
+
+pub(super) fn program_loader() -> Loader<'static> {
+	Loader::new(&SEARCH_DIRECTORIES, program_file().as_deref().map(folder_of))
+}
+
+/// The file being compiled, None for inline code
+pub fn program_file() -> Option<PathBuf> {
+	crate::compiler::compile_context::read(|context| context.program_file.clone())
+}
+
+/// Compile `body` as the program of `file`: `use folder`, `use package` and `use project` start from its folder
+pub fn with_program_file<R>(file: &Path, body: impl FnOnce() -> R) -> R {
+	crate::compiler::compile_context::scoped(|context| &mut context.program_file, Some(file.to_path_buf()), body)
+}
+
+pub(crate) fn folder_of(file: &Path) -> PathBuf {
+	match file.parent() {
+		Some(folder) if !folder.as_os_str().is_empty() => folder.to_path_buf(),
+		_ => PathBuf::from("."),
+	}
+}

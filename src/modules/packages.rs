@@ -1,6 +1,17 @@
 //! Packages of the registry: fetched once per pinned version as shallow clones, local checkouts winning, and module versions
 use super::*;
 
+/// name: "git url" for every package, compiled in so warp finds it from any directory
+pub(crate) const PACKAGE_REGISTRY: &str = include_str!("../../packages.warp");
+/// where packages are fetched to, below the working directory
+pub const PACKAGES_DIRECTORY: &str = "packages";
+/// where a tagged version of a package is fetched once per machine and linked from packages/: a tag never changes
+pub(crate) const PACKAGE_CACHE: &str = ".cache/warp/packages";
+/// where an unpinned clone in packages/ goes when a pin takes its place
+pub(crate) const REPLACED_DIRECTORY: &str = ".replaced";
+/// one fetch at a time within a process; parallel processes clone to their own staging directory and rename
+pub(crate) static FETCHING: Mutex<()> = Mutex::new(());
+
 /// A package of the registry: `name: "git url"` follows the default branch,
 /// `name: {repository: "git url", version: 1.2.3}` is pinned to the git tag of that version
 pub(super) struct Registered {

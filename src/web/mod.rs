@@ -283,13 +283,18 @@ pub fn eval_block_report(request: &Value) -> Value {
 			.text_value()
 			.ok_or_else(|| format!("{}: needs a text", crate::host::PARSE_CODE))
 			.and_then(|source| crate::lowering::parse_word::code_of(&source)),
-		None => crate::pipeline::eval_block(tree("block"), &tree("names"), &tree("values"), &tree("definitions")),
+		None => crate::compiler::run_time_blocks::eval_block(
+			tree("block"),
+			&tree("names"),
+			&tree("values"),
+			&tree("definitions"),
+		),
 	};
 	match outcome {
 		Err(message) => json!({ "error": message }),
 		Ok(result) => match tree_of(&result) {
 			Some(tree) => json!({ "result": tree }),
-			None => json!({ "error": crate::pipeline::cannot_hand_back(&result) }),
+			None => json!({ "error": crate::compiler::run_time_blocks::cannot_hand_back(&result) }),
 		},
 	}
 }
