@@ -87,10 +87,11 @@ const BUILTIN_TYPES: [BuiltinType; 22] = [
 	builtin(TIME_FORM_NAMES[2], &[], &[], None, &[]),
 	builtin(TIME_FORM_NAMES[3], &[], &[], None, &[]),
 	builtin(TIME_FORM_NAMES[4], &[], &[], None, &[]),
+	builtin(TIME_FORM_NAMES[5], &[], &[], None, &[]),
 ];
-const TIME_FORM_NAMES: [&str; 5] = {
+const TIME_FORM_NAMES: [&str; 6] = {
 	let forms = crate::time::TIME_FORMS;
-	[forms[0].name(), forms[1].name(), forms[2].name(), forms[3].name(), forms[4].name()]
+	[forms[0].name(), forms[1].name(), forms[2].name(), forms[3].name(), forms[4].name(), forms[5].name()]
 };
 
 fn builtin_type(word: &str) -> Option<&'static BuiltinType> {
