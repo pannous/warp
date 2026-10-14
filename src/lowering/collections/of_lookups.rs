@@ -3,7 +3,7 @@
 //! `of` binds tighter than any operator: `name of p + 1` is `p.name + 1`, `listeners of alarm -= h` is
 //! `alarm.listeners -= h`. Not lookups: a type phrase `list of int` (a type word before `of`) and a spaced definition
 //! `square of a number = …`. The object is one item with its qualifier: `name of people with age > 20` reads the field of
-//! the filtered list.
+//! the filtered list. `type of x` is the call `type(x)`, so both spellings answer alike (card type-of-consistency).
 
 use super::nodes::{call, children_rewritten, spaced_statement};
 use crate::analyzer::is_counting_property;
@@ -13,7 +13,9 @@ use crate::operators::Op;
 use crate::words::OF_WORD;
 
 pub fn lower(node: Node) -> Node {
-	if !node.mentions_any(&[OF_WORD]) {
+	let mut has_type_of = false;
+	node.visit(&mut |part| has_type_of |= type_of_body(part).is_some());
+	if !has_type_of && !node.mentions_any(&[OF_WORD]) {
 		return node;
 	}
 	rewrite(node)
@@ -27,12 +29,14 @@ fn rewrite(node: Node) -> Node {
 			bracket @ (Bracket::None | Bracket::Round | Bracket::Curly),
 			separator @ (Separator::Space | Separator::None),
 		) if spaced_statement(&items).is_none() => {
-			let items = looked_up(items);
+			let items = looked_up(type_of_called(items));
 			match (items.len(), &bracket) {
 				(1, Bracket::None) => items.into_iter().next().expect("one item"),
 				_ => Node::List(items, bracket, separator),
 			}
 		}
+		// `type of {a:1}`: the map is the declaration head's body
+		other if type_of_body(&other).is_some() => type_of_called(vec![other]).pop().expect("one item"),
 		other => other,
 	}
 }
@@ -81,6 +85,28 @@ fn looked_up(mut items: Vec<Node>) -> Vec<Node> {
 		items.insert(start, member_of(object, member));
 	}
 	items
+}
+
+/// `type of x` as `type(x)`, `print type of x` as `print type(x)`: the parser reads `type of` as a declaration head
+/// whose argument is its body (`type of {a:1}`) or the rest of the phrase
+fn type_of_called(mut items: Vec<Node>) -> Vec<Node> {
+	let Some(at) = items.iter().position(|item| type_of_body(item).is_some()) else { return items };
+	let body = type_of_body(&items[at]).expect("a type of head").clone();
+	let rest: Vec<Node> = items.drain(at + 1..).collect();
+	let argument = match (body.is_empty_node(), rest.is_empty()) {
+		(false, true) => body,
+		(true, false) => noun_phrase(rest),
+		_ => return items.into_iter().chain(rest).collect(),
+	};
+	items[at] = call(crate::type_tests::TYPE_WORD, vec![argument]);
+	items
+}
+
+fn type_of_body(node: &Node) -> Option<&Node> {
+	match node.drop_meta() {
+		Node::Type { name, body } if name.is_symbol(OF_WORD) => Some(body.as_ref()),
+		_ => None,
+	}
 }
 
 /// `object.member`, through the left operands of an operator: `p + 1` gives `p.name + 1`
