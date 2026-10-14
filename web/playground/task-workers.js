@@ -12,7 +12,7 @@ function serveTaskWorkers(programWorker) {
 		if (taskWorker === undefined && endTaskWorker === undefined) return;
 		event.stopImmediatePropagation();
 		if (endTaskWorker !== undefined) {
-			taskWorkers.get(endTaskWorker)?.terminate();
+			stopQuietly(taskWorkers.get(endTaskWorker));
 			return taskWorkers.delete(endTaskWorker);
 		}
 		const made = new Worker(taskWorker.url);
@@ -23,10 +23,20 @@ function serveTaskWorkers(programWorker) {
 	});
 	const terminate = programWorker.terminate.bind(programWorker);
 	programWorker.terminate = () => {
-		taskWorkers.forEach(made => made.terminate());
+		taskWorkers.forEach(stopQuietly);
+		silence(programWorker);
 		terminate();
 	};
 	return programWorker;
+}
+
+// a Worker stopped on purpose (Stop, a run's timeout): Firefox reports one stopped while it still loads its scripts as a
+// bare "uncaught exception: undefined" on the page, now and then (playground-turn's tour check), which is no failure
+const silence = worker => worker.addEventListener("error", event => event.preventDefault());
+function stopQuietly(worker) {
+	if (!worker) return;
+	silence(worker);
+	worker.terminate();
 }
 
 // `clipboard` in a Worker (host-tasks.js askPage): the page's text into the Worker's shared buffer. A browser that reads
