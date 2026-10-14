@@ -58,20 +58,19 @@ pub(crate) const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 	("wagi", |_| crate::pipeline::compile_mode().for_wagi),
 ];
 
+/// units: `quantity("5 km")` gives a Quantity whose methods read the module's own number words (bound_of), which work
+/// only compiled as program code; the classes of the other implicit modules go in front alone (insert_module_classes)
+pub(crate) const MODULES_COMPILED_AS_PROGRAM: [&str; 1] = [UNITS_MODULE];
+
 /// The program with the standard modules' definitions it calls, and those they call, in front: a word nobody calls
-/// is never compiled (its parameters would have no kinds)
-/// An implicit module with classes (units: `quantity("5 km")` gives a Quantity) in front of the program, the definitions
-/// it needs only, before class_methods: the instances its functions give then take their class's operators and methods.
-/// The program defining them now, implicit_std_modules loads it no more, nor its own `use units`. A class of fields
-/// only (sound's Sample) needs no such move: the module stays a used module, its words lowered as before (note names)
+/// is never compiled (its parameters would have no kinds). For MODULES_COMPILED_AS_PROGRAM, before class_methods: the
+/// instances their functions give then take their class's operators and methods. The program defining them now,
+/// implicit_std_modules loads such a module no more, nor its own `use units`
 pub(crate) fn with_implicit_class_modules(mut program: Node) -> Node {
 	for (module, needed) in IMPLICIT_MODULES {
-		if !needed(&program) {
-			continue;
-		}
-		let source = std_module(module).expect("an implicit module is embedded");
-		let definitions = statements(crate::normalize::without_hints(|| WarpParser::parse(source)));
-		if definitions.iter().any(crate::node::is_class_with_methods) {
+		if MODULES_COMPILED_AS_PROGRAM.contains(&module) && needed(&program) {
+			let source = std_module(module).expect("an implicit module is embedded");
+			let definitions = statements(crate::normalize::without_hints(|| WarpParser::parse(source)));
 			program = with_needed_definitions(without_use_of(program, module), definitions);
 		}
 	}

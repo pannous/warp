@@ -125,8 +125,18 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    == C5 to the hundredth) and multiplies any other frequency; `chord(root, kind)`, `scale(root, kind)` are lists of
    notes, kinds in lib chord_intervals / scale_intervals, written as a word the program doesn't define (only directly
    in the call: `f(major)` passes an undefined symbol) or as a text. Notes stay frequencies at run time; sound's
-   transpose/2 and matrix's transpose/1 coexist. Still to build: a `Note` value (pitch class, octave, cents) that
-   prints as its name, intervals as values, just intonation, velocity (card note-value).
+   transpose/2 and matrix's transpose/1 coexist.
+   Note values built (card note-value, tests/programs/test_note_values.rs): `note(pitch)` (alias note_value) is lib
+   `class Note {key, cents}` with text() (prints "C4", "A4+20c"), hertz(), octave(), name(), plus/minus semitones,
+   equals; `note("C#4")`: music_words lowers a note-name text in a call of note like the bare name; `interval(low,
+   high)` is semitones; play/melody take Notes (hertz_of). Bare names stay frequencies (user decision 2026-10-14: the
+   word note, `C4` stays 261.63; note(text) gave the frequency before, now note_hertz). Lib trap: test a pitch against
+   a class only after si_amount (a quantity `is Note` fails statically, card quantity-is-class), and typed overloads
+   can't see a module call's type (`note(midi_hertz(60))` fits no variant). How a std module's class with methods
+   works for a module that stays a used module: insert_module_classes puts the needed classes of used AND implicit
+   modules in front (units excepted: it still moves whole, MODULES_COMPILED_AS_PROGRAM, its methods need its number
+   words as program code), and records the module functions returning such a class (module_returned_classes) so
+   class_methods types `n = note(C4)` for `n + 7`. Still to build: just intonation, velocity, named intervals.
 3. Built (2026-10-10, samples/synth.warp, tests/programs/test_sound_synth.rs): the ADSR envelope of every note,
    module settings `attack`, `decay` (seconds), `sustain` (a share), `release` (seconds), defaults 5 ms / 0 / 1 / 5 ms
    = the old click-free fade; `wave_shape = "noise"`; gain in decibels, `loudness = -6 dB` (`-6dB`, `x = -6 dB`;

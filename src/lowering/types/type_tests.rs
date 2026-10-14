@@ -235,7 +235,10 @@ pub fn lower(node: Node) -> Node {
 /// The program's variables, functions and declared types
 pub(crate) fn program_names(node: &Node) -> Names {
 	let context = crate::analyzer::function_definitions(node);
-	let mut variables: HashSet<String> = context.user_functions.keys().cloned().collect();
+	// a function named like a type is a class's printing method (`text() := …`, card is-text-method): no shadow, a
+	// program's own `text(x) := …` is refused as "text is a type"
+	let mut variables: HashSet<String> =
+		context.user_functions.keys().filter(|name| !is_builtin_type_word(name)).cloned().collect();
 	collect_outer_assigned_names(node, &mut variables);
 	let mut registry = crate::type_kinds::TypeRegistry::new();
 	crate::analyzer::collect_all_types(&mut registry, node);

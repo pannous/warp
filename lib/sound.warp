@@ -1,5 +1,5 @@
 // The standard library module sound (card basic-sound): `play(440Hz, 0.5s)`, `play(C4)`, `play([C4 E4 G4])` (a chord, as
-// in Sonic Pi), `play note("C#4")`, `melody [C4 E4 G4]` (one note after another), `beep`, `tone(frequency, seconds, "square")`. Frequencies
+// in Sonic Pi), `play note("C#4")` (a Note), `melody [C4 E4 G4]` (one note after another), `beep`, `tone(frequency, seconds, "square")`. Frequencies
 // and durations are numbers or quantities (440Hz, 0.5s, 250ms), read by si_amount as plain numbers (src/numbers/units/static_units.rs). The samples are made here and played by the host word
 // sound_samples: natively a WAV file and the system's player (src/sound/mod.rs; silent under tests and WARP_NO_WINDOW),
 // in the browser WebAudio. Loaded when a program calls one of its words (src/modules.rs SOUND_WORDS)
@@ -42,12 +42,34 @@ note_name(pitch) := {
 	key = midi(pitch)
 	note_names[key % 12] + string(floor(key / 12) as int - 1)
 }
-// the frequency of a note name: note("A4") is 440, note("C#4") a semitone above C4, note("Eb5") one below E5
-note(name) := {
+// the frequency of a note name: note_hertz("A4") is 440, note_hertz("C#4") a semitone above C4, note_hertz("Eb5") one below E5
+note_hertz(name) := {
 	accidental = if count(name) == 3 then (if name#2 == "#" or name#2 == "♯" then 1 else -1) else 0
 	octave = number(name#(count(name)))
 	midi_hertz(12 * (octave + 1) + scale_letters.index_of(name#1) - 1 + accidental)
 }
+// a note as a value (card note-value, user decision: the word note): note(C4), note("C#4"), note(445Hz) is the nearest
+// key and its cents off it. It prints as its name (A4+20c), plays as its frequency, a whole number of semitones up or down stays a
+// Note (n + 4), and the interval between two notes is their semitones (interval(C4, G4) is 7)
+class Note {
+	key: int
+	cents: int
+	hertz() := midi_hertz(key) * 2^(cents / 1200.0)
+	octave() := floor(key / 12) as int - 1
+	name() := note_names[key % 12]
+	text() := name() + string(octave()) + cents_text(cents)
+	plus(semitones) := Note(key + semitones, cents)
+	minus(semitones) := Note(key - semitones, cents)
+	equals(o) := o is Note and key == o.key and cents == o.cents
+}
+cents_text(cents) := if cents == 0 then "" else if cents > 0 then "+" + string(cents) + "c" else string(cents) + "c"
+note(pitch) := nearest_note(hertz_of(pitch))
+nearest_note(frequency) := {
+	key = midi(frequency)
+	Note(key, round(1200 * log2(frequency / midi_hertz(key))) as int)
+}
+note_value(pitch) := note(pitch)
+interval(low, high) := midi(high) - midi(low)
 // a pitch (or list of them) semitones higher, lower when negative: a note stays that note (transpose(C4, 12) == C5),
 // any other frequency is multiplied (transpose(300Hz, 12) is 600)
 transpose(pitch, semitones) := if pitch is list then [transpose(p, semitones) for p in pitch] else transposed(si_amount(pitch), semitones)
@@ -223,7 +245,11 @@ tone(pitch, duration, shape) := sound(chord_samples([si_amount(pitch)], si_amoun
 tone(pitch, duration) := tone(pitch, duration, wave_shape)
 beep() := tone(880, 0.15, "square")
 // a frequency, or a list of them sounding together (a chord)
-pitches_of(x) := if x is list then [si_amount(pitch) for pitch in x] else [si_amount(x)]
+pitches_of(x) := if x is list then [hertz_of(pitch) for pitch in x] else [hertz_of(x)]
+// a frequency or a Note as its frequency; the units go first (si_amount): a quantity tested against a
+// class fails (card quantity-is-class)
+hertz_of(pitch) := plain_hertz(si_amount(pitch))
+plain_hertz(pitch) := if pitch is Note then pitch.hertz() else if pitch is number then pitch else 0.0
 play(x, duration) := sound(chord_samples(pitches_of(x), si_amount(duration), wave_shape))
 // a music file in the background (wav, mp3, ogg, flac, aiff, m4a): play "song.mp3"; stop_sound stops it
 play_file(path) := std_io("sound", "play_file", [path])
@@ -301,7 +327,7 @@ melody(notes) := melody(notes, note_seconds)
 // the voice goes on after; `swing` (0 to 1) delays every second step of a group, 1 to a triplet feel
 global swing = 0.0 as float
 // a pattern item is [0, items] (a group) or [1, frequencies] (a sound, no frequencies: a rest)
-pattern_note(word) := if word == "~" then [1, []] else [1, [note(upper(word[0]) + word[1..]) for word in split(word, ",")]]
+pattern_note(word) := if word == "~" then [1, []] else [1, [note_hertz(upper(word[0]) + word[1..]) for word in split(word, ",")]]
 // k notes over n steps as evenly as possible: step i sounds when (i * k) mod n < k
 pattern_euclid(item, k, n) := [0, [if (i * k) % n < k then item else [1, []] for i in 0..n]]
 pattern_end(text: text, from: int, stops: text) := {

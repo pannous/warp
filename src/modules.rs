@@ -80,6 +80,24 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	resolved.unwrap_or_else(|failure| failure)
 }
 
+/// The modules a program `use`s and the implicit ones it needs (`play` → sound): their classes go in front alike, the
+/// module itself stays a used module (its note names, its settings); units moves whole (with_implicit_class_modules)
+fn used_and_implicit_modules(program: &Node) -> Vec<String> {
+	let mut names: Vec<String> = statements_of(program)
+		.iter()
+		.filter_map(used_module)
+		.filter(|used| used.import == Import::Use)
+		.map(|used| used.name)
+		.collect();
+	for (module, needed) in IMPLICIT_MODULES {
+		if !names.iter().any(|name| name == module) && !MODULES_COMPILED_AS_PROGRAM.contains(&module) && needed(program)
+		{
+			names.push(module.to_string())
+		}
+	}
+	names
+}
+
 /// The classes of the modules the program uses, in front of it: those of a file (`use shapes`) all, those of a standard
 /// module the program names (`use collections; s = Stack()`). class_methods, which turns a class's methods into
 /// functions and its method calls into theirs, runs before `resolve` loads a module's other definitions; the loader
@@ -92,11 +110,11 @@ pub fn insert_module_classes(program: Node) -> Node {
 	let (mut std_definitions, mut file_classes, mut early, mut class_modules) =
 		(vec![], vec![], HashSet::new(), vec![]);
 	let mut defined: Vec<String> = vec![]; // every used module's words, a file's copy of a standard module's too
-	for used in statements(program.clone()).iter().filter_map(used_module).filter(|used| used.import == Import::Use) {
+	for name in used_and_implicit_modules(&program) {
 		if let Some(module) = loader
-			.find(&used.name)
+			.find(&name)
 			.is_none()
-			.then(|| loader.find_with(&used.name, &crate::modules::wasm_modules::MODULE_EXTENSIONS))
+			.then(|| loader.find_with(&name, &crate::modules::wasm_modules::MODULE_EXTENSIONS))
 			.flatten()
 		{
 			let module = module.to_string_lossy();
@@ -110,13 +128,13 @@ pub fn insert_module_classes(program: Node) -> Node {
 			file_classes.extend(classes);
 			continue;
 		}
-		let (path, source, is_std) = match loader.find(&used.name) {
+		let (path, source, is_std) = match loader.find(&name) {
 			Some(path) => match crate::web::read_text(&path.to_string_lossy()) {
 				Some(source) => (path, source, false),
 				None => continue,
 			},
-			None => match std_module(&used.name) {
-				Some(source) => (std_path(std_module_name(&used.name)), source.to_string(), true),
+			None => match std_module(&name) {
+				Some(source) => (std_path(std_module_name(&name)), source.to_string(), true),
 				None => continue,
 			},
 		};
@@ -130,7 +148,7 @@ pub fn insert_module_classes(program: Node) -> Node {
 		match is_std {
 			true => {
 				if definitions.iter().any(is_class) {
-					class_modules.push(used.name.clone());
+					class_modules.push(name.clone());
 				}
 				std_definitions.extend(definitions)
 			}
@@ -149,10 +167,14 @@ pub fn insert_module_classes(program: Node) -> Node {
 	let class_modules: Vec<&str> = class_modules.iter().map(String::as_str).collect();
 	let program = with_std_aliases(crate::welcome_forms::module_calls(program, &class_modules), &aliases);
 	// the classes the program's calls reach, also through the module's functions (sound's sample() makes a Sample)
-	let std_classes = needed_definitions(&program, &std_definitions)
+	let std_classes: Vec<Node> = needed_definitions(&program, &std_definitions)
 		.into_iter()
 		.filter(|definition| is_class(definition) && is_foreign(definition))
 		.collect();
+	let class_names: Vec<String> = std_classes.iter().filter_map(name_declared_by).collect();
+	let module_code = Node::List(std_definitions, Bracket::None, Separator::Newline);
+	let returned = crate::lowering::class_methods::returned_classes(&module_code, &class_names);
+	crate::compiler::compile_context::change(|context| context.module_returned_classes = returned);
 	let file_classes: Vec<Node> = file_classes.into_iter().filter(is_foreign).collect();
 	let program = with_implicit_class_modules(with_statements_in_front(program, std_classes));
 	match file_classes.is_empty() {
