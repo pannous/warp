@@ -52,48 +52,35 @@ impl Inference {
 			}
 		}
 		match items {
+			// `str(q)`, `print q`: the quantity as its text in the units it is written in, a whole list or object of them too
 			[head, value]
-				if call_or_words
-					&& TEXT_WORDS.iter().any(|text| word(head, text))
-					&& self.whole_text(value, AMOUNT_TEXT).is_some() =>
+				if call_or_words && (word(head, PRINT_WORD) || TEXT_WORDS.iter().any(|text| word(head, text))) =>
 			{
-				self.whole_text(value, AMOUNT_TEXT)
-					.map(|text| text.map(|text| (text, vec![])))
-			}
-			[head, value] if call_or_words && TEXT_WORDS.iter().any(|text| word(head, text)) => Some((|| {
-				let written = value.clone();
-				let (value, signature) = self.infer(value.clone())?;
-				if signature.is_empty() {
-					return Ok((
-						Node::List(vec![head.clone(), value], bracket.clone(), separator.clone()),
-						vec![],
-					));
-				}
-				let shown_units = self.shown_factors(&written, &signature);
-				Ok((self.as_text(value, &signature, Some(shown_units), AMOUNT_TEXT)?, vec![]))
-			})()),
-			[head, value]
-				if call_or_words && word(head, PRINT_WORD) && self.whole_text(value, PRINTED_AMOUNT_TEXT).is_some() =>
-			{
-				self.whole_text(value, PRINTED_AMOUNT_TEXT).map(|text| {
-					text.map(|text| {
-						(
+				let printed = word(head, PRINT_WORD);
+				let amount_text = if printed { PRINTED_AMOUNT_TEXT } else { AMOUNT_TEXT };
+				Some((|| {
+					let text = match self.whole_text(value, amount_text) {
+						Some(text) => text?,
+						None => {
+							let (written, conversion) = (value.clone(), conversion_target(value));
+							let (value, signature) = self.infer(value.clone())?;
+							if signature.is_empty() {
+								let call = Node::List(vec![head.clone(), value], bracket.clone(), separator.clone());
+								return Ok((call, vec![]));
+							}
+							let shown_units = conversion.unwrap_or_else(|| self.shown_factors(&written, &signature));
+							self.as_text(value, &signature, Some(shown_units), amount_text)?
+						}
+					};
+					match printed {
+						true => Ok((
 							Node::List(vec![head.clone(), text], bracket.clone(), separator.clone()),
 							vec![],
-						)
-					})
-				})
+						)),
+						false => Ok((text, vec![])),
+					}
+				})())
 			}
-			[head, value] if call_or_words && word(head, PRINT_WORD) => Some((|| {
-				let (written, conversion) = (value.clone(), conversion_target(value));
-				let (value, signature) = self.infer(value.clone())?;
-				let shown_units = conversion.unwrap_or_else(|| self.shown_factors(&written, &signature));
-				let text = self.as_text(value, &signature, Some(shown_units), PRINTED_AMOUNT_TEXT)?;
-				Ok((
-					Node::List(vec![head.clone(), text], bracket.clone(), separator.clone()),
-					vec![],
-				))
-			})()),
 			[head, value] if call_or_words && word(head, SI_AMOUNT_WORD) => {
 				Some(self.infer(value.clone()).map(|(value, _)| (value, vec![])))
 			}
@@ -112,18 +99,7 @@ impl Inference {
 					&& word(in_word, super::super::IN_WORD)
 					&& super::super::unit_expression(unit).is_some() =>
 			{
-				Some((|| {
-					let target = signature(&super::super::unit_expression(unit).expect("guarded"));
-					let (quantity, given) = self.infer(quantity.clone())?;
-					if given != target {
-						return Err(Stop::Error(format!(
-							"DimensionError: {} cannot be converted to {}",
-							shown(&given),
-							shown(&target)
-						)));
-					}
-					Ok((quantity, given))
-				})())
+				Some(self.converted(quantity.clone(), unit))
 			}
 			_ => None,
 		}

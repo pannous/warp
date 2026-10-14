@@ -32,11 +32,16 @@ mod user_operators;
 mod xml;
 pub use lookahead::PREFIX_OPERATOR_WORDS;
 mod atoms;
+mod blocks;
+use blocks::*;
+mod commands;
+mod control;
+use control::*;
+mod definitions;
 mod expressions;
 mod lists;
 mod literals;
 pub use literals::shader_blocks;
-mod statements;
 mod suffixes;
 use unicode_normalization::UnicodeNormalization;
 
@@ -957,7 +962,7 @@ fn operator_call(glyph: &[char], arguments: Vec<Node>) -> Node {
 	)
 }
 
-enum ElseParseMode {
+pub(crate) enum ElseParseMode {
 	Atom,
 	Expr,
 }
