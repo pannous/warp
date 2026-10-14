@@ -7,6 +7,8 @@ const COMMENT: &str = "//";
 const DEFINE: &str = ":=";
 const ASSIGN: char = '=';
 const CLASS: &str = "class ";
+/// `global tempo = 120`: a module's variable, documented as `tempo`
+const GLOBAL: &str = "global ";
 const BLOCK_START: char = '{';
 /// lib/*.warp wraps its comments by hand, near 120 columns: a comment line at least this long that ends no sentence goes
 /// on in the next one; the stacked comments that are not one (`// attributes that are present or absent`) are short
@@ -71,10 +73,19 @@ fn is_wrapped(line: &str) -> bool {
 }
 
 /// A definition at the start of a line: `zip(a, b) := …` → `zip(a, b)`, `class Stack { …` → `class Stack`,
-/// `html_attributes = […]` → `html_attributes`
+/// `html_attributes = […]` and `global html_attributes = […]` → `html_attributes`, `def comb(a) {` → `comb(a)`
 fn signature(line: &str) -> Option<String> {
 	if !line.starts_with(|first: char| first.is_alphabetic() || first == '_') {
 		return None;
+	}
+	let line = line.strip_prefix(GLOBAL).unwrap_or(line);
+	// `def hann_weighted(window) {`
+	let keyword_definition = crate::operators::FUNCTION_KEYWORDS
+		.iter()
+		.find_map(|keyword| line.strip_prefix(keyword)?.strip_prefix(' '));
+	if let Some(definition) = keyword_definition {
+		let head = definition.split(BLOCK_START).next().unwrap_or(definition);
+		return Some(head.split(DEFINE).next().unwrap_or(head).trim().to_string());
 	}
 	if line.starts_with(CLASS) {
 		return Some(line.split(BLOCK_START).next().unwrap_or(line).trim().to_string());
@@ -99,6 +110,40 @@ pub fn word_head(module: &str, word: &str) -> Option<String> {
 		.into_iter()
 		.map(|entry| entry.signature)
 		.find(|signature| word_of(signature) == word)
+}
+
+/// `help(midi)`: each head of a standard module word with the comment above it, one definition after the other
+pub fn word_help(module: &str, word: &str) -> Option<String> {
+	let entries: Vec<String> = module_index(module)
+		.1
+		.into_iter()
+		.filter(|entry| word_of(&entry.signature) == word)
+		.map(|entry| match entry.doc {
+			Some(doc) => format!("{}\n{doc}", entry.signature),
+			None => entry.signature,
+		})
+		.collect();
+	(!entries.is_empty()).then(|| entries.join("\n"))
+}
+
+/// `function(beep).dump` of a standard module word: its definitions as written, each with the indented lines of its
+/// body (`tone(pitch, duration) := …`, `global tempo = 120`)
+pub fn word_definition(module: &str, word: &str) -> Option<String> {
+	let source = crate::modules::std_module_source(module)?;
+	let mut definitions: Vec<String> = vec![];
+	let mut inside = false;
+	for line in source.lines() {
+		let continues = line.starts_with([' ', '\t', '}', ')', ']']);
+		if inside && continues {
+			definitions.last_mut()?.push_str(&format!("\n{line}"));
+			continue;
+		}
+		inside = signature(line).is_some_and(|signature| word_of(&signature) == word);
+		if inside {
+			definitions.push(line.to_string());
+		}
+	}
+	(!definitions.is_empty()).then(|| definitions.join("\n"))
 }
 
 /// `warp help <module>`: the module, how to use it, and its words with their comment lines

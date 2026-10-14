@@ -455,6 +455,7 @@ impl WasmGcEmitter {
 		let mut locals = vec![nullable, nullable];
 		locals.extend([ValType::I32; 4]);
 		locals.extend([ValType::I64, nullable, ValType::I32, ValType::I64]);
+		let trap_detail = self.trap_detail_global(); // the item that cannot join, for its error to name
 		self.runtime_function(name, vec![nullable, node_ref], vec![node_ref], locals, |s, f| {
 			let (cell, element) = (2, 3);
 			let (bound, address, position, is_first, number, entry_value, operator_entry, list_kind) =
@@ -759,7 +760,8 @@ impl WasmGcEmitter {
 				f,
 				&[I::If(BlockType::Result(ValType::I32)), I32Const(MAX_INT_BYTES), I::Else],
 			);
-			s.call(f, "not_a_joinable_item");
+			Self::emit_list(f, &[I::LocalGet(element), I::GlobalSet(trap_detail)]);
+			s.call(f, super::super::super::lists::list_ops::NOT_JOINABLE);
 			Self::emit_list(f, &[I32Const(0), I::End, I::End, I::LocalGet(bound), I::I32Add]);
 			s.emit_text_field(f, 1, 1);
 			Self::emit_list(f, &[I::I32Add, I::LocalSet(bound)]);

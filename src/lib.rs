@@ -35,7 +35,7 @@ pub use lowering::{
 	references, reflection, result_word, routes, run_time_blocks, scoped_handlers, select_options, serve,
 	shared_arrays, signal_values, soft_keywords, std_aliases, stored_values, style_rules, switch, system_signals,
 	system_values, traits, transitions, tuples, type_aliases, type_constructor, type_name_matching, type_tests,
-	undo_history, variable_signals, variadic, versions, welcome_forms, word_operators,
+	undo_history, variable_signals, variadic, versions, welcome_forms, word_help, word_operators,
 };
 pub mod errors;
 pub mod ffi;
