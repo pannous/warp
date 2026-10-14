@@ -336,7 +336,7 @@ fn aliases(
 	match node.drop_meta() {
 		Node::Key(target, op @ (Op::Assign | Op::Define), value) => {
 			if let Some(name) = aliased_name(target, op) {
-				*assigned.entry(name.to_string()).or_default() += 1;
+				let mut reassigned = true;
 				// `g = function add` / `g = &add` (P83: a bare `g = add` needs add's arguments), `h = g` of an alias
 				let function = match (crate::closures::referenced_function(value), bare_name(value, op)) {
 					(Some(function), _) => Some(function),
@@ -354,12 +354,17 @@ fn aliases(
 				};
 				if let Some(function) = function {
 					let named = found.get(&function).cloned().unwrap_or(function);
+					// math.warp's `arctan=&arc_tangent` and the program's `arctan := arc_tangent` name one function
+					reassigned = found.get(name) != Some(&named);
 					if functions.contains(&named) && named != name {
 						found.insert(name.to_string(), named);
 						if *op == Op::Assign {
 							values.insert(name.to_string());
 						}
 					}
+				}
+				if reassigned {
+					*assigned.entry(name.to_string()).or_default() += 1;
 				}
 			}
 			aliases(value, functions, assigned, found, values);

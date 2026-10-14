@@ -13,7 +13,7 @@ const PARSE_WORD: &str = "parse";
 pub fn lower(program: Node) -> Node {
 	let mut mentioned = false;
 	program.visit(&mut |part| mentioned |= part.is_symbol(PARSE_WORD));
-	if !mentioned || super::welcome_forms::defined_names(&program).contains(PARSE_WORD) {
+	if !mentioned || crate::library_words::defined_names(&program).contains(PARSE_WORD) {
 		return program;
 	}
 	parsed(program)

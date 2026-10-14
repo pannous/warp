@@ -38,9 +38,6 @@ const IS_WORD: &str = "is";
 const WHEN_ARM: &str = "if CONDITION then VALUE else OTHERWISE";
 const LAST_WHEN_ARM: &str = "if CONDITION then VALUE";
 const OCAML_FUNCTION_KEYWORD: &str = "fun";
-/// F#/OCaml (and Elixir's Enum) modules whose iteration functions are warp's words: `List.map f xs` is `map f xs`
-const ITERATION_MODULES: [&str; 4] = ["List", "Seq", "Array", "Enum"];
-const MODULE_ITERATIONS: [&str; 5] = ["map", "filter", "fold", "reduce", "sum"];
 /// C# LINQ methods and the warp words they are (the alias rule: they work, with a note naming warp's word)
 /// Iteration functions of other languages and the warp word they are (alias rule, with a note): R's `sapply(xs, f)` is
 /// `map(xs, f)`; PHP's `array_map(f, xs)` takes the function first (true), `array_filter(xs, f)` the list
@@ -52,8 +49,9 @@ const FOREIGN_ITERATIONS: [(&str, &str, bool, &str); 6] = [
 	("array_filter", "filter", false, "PHP's array function"),
 	("array_sum", "sum", false, "PHP's array function"),
 ];
-/// JavaScript's math namespace: `Math.sqrt(16)` is `sqrt(16)`
-const JS_MATH: &str = "Math";
+/// Modules of other languages whose words are warp's: JS's `Math.sqrt(16)` is `sqrt(16)`, F#'s `List.map f xs` is
+/// `map f xs` (also `Seq.`, `Array.`), Elixir's `Enum.map(xs, f)` is `map(xs, f)`
+const FOREIGN_MODULES: [&str; 5] = ["Math", "List", "Seq", "Array", "Enum"];
 /// Module words written only qualified, as the module's own name for them (P183: `file.append(path, text)`; a bare
 /// `append` stays the list method)
 const QUALIFIED_WORDS: [(&str, &str, &str); 1] = [("file", "append", "append_file")];
@@ -95,7 +93,7 @@ const LINQ_METHODS: [(&str, &str); 12] = [
 ];
 
 pub fn lower(node: Node) -> Node {
-	let defined = defined_names(&node);
+	let defined = crate::library_words::defined_names(&node);
 	let node = if names_vector_word(&node) {
 		node
 	} else {
@@ -157,9 +155,9 @@ fn forms(node: Node) -> Node {
 			forms(without_type_parameters(Node::List(items, bracket, separator), &names))
 		}
 		Node::List(items, bracket, separator) => {
-			let items: Vec<Node> = foreign_iteration(module_qualified_iteration(python_lambdas(braceless_lambdas(
+			let items: Vec<Node> = foreign_iteration(python_lambdas(braceless_lambdas(
 				items.into_iter().map(forms).collect(),
-			))));
+			)));
 			if let Some(lambda) = anonymous_function(&items)
 				.or_else(|| assigned_braceless_function(&items))
 				.or_else(|| ruby_lambda(&items))
@@ -222,16 +220,6 @@ fn forms(node: Node) -> Node {
 					Separator::Semicolon,
 				),
 			)
-		}
-		// Elixir's `Enum.map(xs, f)`: the call `map(xs, f)`, with a note naming warp's word
-		Node::Key(module, Op::Dot, call) if module_call(&module, &call).is_some() => {
-			let iteration = module_call(&module, &call).expect("guarded");
-			crate::normalize::hint(
-				&format!("{}.{iteration}(", module.serialize()),
-				&format!("{iteration}("),
-				"warp's word for the module function",
-			);
-			forms(*call)
 		}
 		// Ruby's `x.to_s`, `t.upcase`: warp's word called on x, `string(x)`, `upper(t)` (alias rule, with a note)
 		Node::Key(subject, Op::Dot, method) if ruby_method(&method).is_some() => {
@@ -892,7 +880,7 @@ fn is_vector_call(node: &Node) -> bool {
 fn qualified_module_calls(node: Node) -> Node {
 	let names = crate::soft_keywords::names_given(&node);
 	let modules: Vec<&str> = crate::modules::std_module_names()
-		.chain([JS_MATH])
+		.chain(FOREIGN_MODULES)
 		.filter(|module| !names.contains(*module))
 		.collect();
 	module_calls(node, &modules)
@@ -938,6 +926,20 @@ fn aliased_module(keyword: &Node, used: &Node) -> Option<(Node, String)> {
 
 pub(crate) fn module_calls(node: Node, modules: &[&str]) -> Node {
 	match node {
+		// F#'s `List.map f xs`: the word applied to the words after it
+		Node::List(mut items, Bracket::None, Separator::Space)
+			if items.len() > 1 && qualified_word(&items[0], modules).is_some() =>
+		{
+			let word = qualified_word(&items[0], modules).expect("guarded");
+			crate::normalize::set_position_of(&items[0]);
+			crate::normalize::hint(&items[0].serialize(), &word, "warp calls a module's word by its name");
+			items[0] = symbol(&word);
+			Node::List(
+				items.into_iter().map(|item| module_calls(item, modules)).collect(),
+				Bracket::None,
+				Separator::Space,
+			)
+		}
 		Node::Key(module, Op::Dot, call)
 			if modules.iter().any(|name| module.is_symbol(name))
 				&& matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|word| matches!(word.drop_meta(), Node::Symbol(_)))) =>
@@ -986,6 +988,15 @@ pub(crate) fn module_calls(node: Node, modules: &[&str]) -> Node {
 	}
 }
 
+/// `List.map`: the word a named module qualifies
+fn qualified_word(node: &Node, modules: &[&str]) -> Option<String> {
+	let Node::Key(module, Op::Dot, word) = node.drop_meta() else {
+		return None;
+	};
+	let is_module = modules.iter().any(|name| module.is_symbol(name));
+	word.symbol_name().filter(|_| is_module).map(str::to_string)
+}
+
 /// R's `c(1, 2, 3)`: the list `[1, 2, 3]`, with a note
 fn r_vectors(node: Node) -> Node {
 	match node {
@@ -1012,40 +1023,6 @@ fn r_vectors(node: Node) -> Node {
 		}
 		other => other.map_children(r_vectors),
 	}
-}
-
-/// `Enum.map(…)`: the iteration word of a module's call
-fn module_call(module: &Node, call: &Node) -> Option<&'static str> {
-	let Node::List(items, Bracket::Round, _) = call.drop_meta() else {
-		return None;
-	};
-	let word = items.first()?;
-	let is_module = ITERATION_MODULES.iter().any(|name| module.is_symbol(name));
-	(is_module && items.len() > 1)
-		.then(|| MODULE_ITERATIONS.iter().find(|name| word.is_symbol(name)).copied())
-		.flatten()
-}
-
-/// F#'s `List.map f xs` (also `Seq.`, `Array.`): `map f xs`, with a note naming warp's word (alias rule)
-fn module_qualified_iteration(mut items: Vec<Node>) -> Vec<Node> {
-	let Some(Node::Key(module, Op::Dot, word)) = items.first().map(Node::drop_meta) else {
-		return items;
-	};
-	let is_module = ITERATION_MODULES.iter().any(|name| module.is_symbol(name));
-	let Some(iteration) = MODULE_ITERATIONS.iter().find(|name| word.is_symbol(name)) else {
-		return items;
-	};
-	if !is_module || items.len() < 2 {
-		return items;
-	}
-	crate::normalize::set_position_of(&items[0]);
-	crate::normalize::hint(
-		&format!("{}.{iteration}", module.serialize()),
-		iteration,
-		"warp's word for the module function",
-	);
-	items[0] = symbol(iteration);
-	items
 }
 
 /// OCaml/F# `(fun x -> x * 2)` as the parser groups it, the keyword then the arrow: the lambda
@@ -1172,29 +1149,6 @@ fn linq_calls(node: Node, defined: &HashSet<String>) -> Node {
 		}
 		other => other.map_children(|child| linq_calls(child, defined)),
 	}
-}
-
-/// The names the program defines: `f(x) := …`, `def f`, `func f`, Go's method `func (p Point) Sum()`
-pub(crate) fn defined_names(node: &Node) -> HashSet<String> {
-	let mut names = HashSet::new();
-	node.visit(&mut |part| match part {
-		Node::Key(head, Op::Define, _) => {
-			names.insert(crate::node::leading_name(head));
-		}
-		Node::List(words, _, _)
-			if words.first().is_some_and(
-				|keyword| matches!(keyword.drop_meta(), Node::Symbol(word) if crate::operators::is_function_keyword(word)),
-			) =>
-		{
-			let name = match words.get(1).map(Node::drop_meta) {
-				Some(Node::List(_, Bracket::Round, _)) if words.len() > 2 => words.get(2),
-				_ => words.get(1),
-			};
-			names.extend(name.map(crate::node::leading_name));
-		}
-		_ => {}
-	});
-	names
 }
 
 fn linq_method(method: &Node) -> Option<(&'static str, &'static str, Vec<Node>)> {

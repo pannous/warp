@@ -14,8 +14,6 @@ const KEEP: (&str, &str) = ("keep", "only");
 const SORT: (&str, &str) = ("sort", "by");
 const TAKE: (&str, &str) = ("take", "first");
 const PHRASES: [(&str, &str); 3] = [KEEP, SORT, TAKE];
-/// Other spellings of a phrase's method: `todos sorted by priority`
-const METHOD_ALIASES: [(&str, &str); 1] = [("sorted", "sort")];
 /// The conditions `keep only` knows by name, on each element `it`
 const PROPERTIES: [(&str, &str); 4] = [
 	("positive", "it > 0"),
@@ -148,12 +146,9 @@ fn chain(items: &[Node], context: &Context) -> Option<Node> {
 	phrased.then_some(receiver)
 }
 
+/// Other spellings of a phrase's method are the library word's synonyms: `todos sorted by priority`
 fn canonical(method: &str) -> String {
-	METHOD_ALIASES
-		.iter()
-		.find(|(alias, _)| *alias == method)
-		.map_or(method, |(_, name)| name)
-		.to_string()
+	crate::library_words::canonical_spelling(method).to_string()
 }
 
 fn starts_phrase(method: &str, next: Option<&Node>) -> bool {

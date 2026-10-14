@@ -157,10 +157,11 @@ impl Inference {
 			return None;
 		};
 		let definition = self.definitions.get(&(name.clone(), arguments.len()))?.clone();
+		let defaults = definition.defaults[arguments.len()..].iter().flatten().cloned();
 		let mut lowered = vec![];
 		let mut signatures = vec![];
-		for argument in arguments {
-			match self.infer(argument.clone()) {
+		for argument in arguments.iter().cloned().chain(defaults) {
+			match self.infer(argument) {
 				Ok((argument, signature)) => {
 					lowered.push(argument);
 					signatures.push(signature);
@@ -168,7 +169,7 @@ impl Inference {
 				Err(stop) => return Some(Err(stop)),
 			}
 		}
-		if signatures.iter().all(Vec::is_empty) && !self.has_units(&definition.body) {
+		if signatures.iter().all(Vec::is_empty) && !self.has_units(&definition) {
 			return None;
 		}
 		Some(
@@ -258,8 +259,9 @@ impl Inference {
 		Ok((specialised, result))
 	}
 
-	/// A function body with unit literals or one reading a global that holds a quantity
-	pub(super) fn has_units(&self, body: &Node) -> bool {
+	/// A function with unit literals in its body or defaults, or reading a global that holds a quantity
+	pub(super) fn has_units(&self, definition: &Definition) -> bool {
+		let body = &definition.body;
 		let holds_quantity = |name: &String| {
 			self.globals
 				.get(name)
@@ -267,6 +269,7 @@ impl Inference {
 				.is_some_and(|signature| !signature.is_empty())
 		};
 		mentions_units(body)
+			|| definition.defaults.iter().flatten().any(mentions_units)
 			|| globals_declared_in(body).iter().any(holds_quantity)
 			|| self
 				.globals

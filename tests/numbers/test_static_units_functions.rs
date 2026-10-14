@@ -55,3 +55,12 @@ fn a_function_with_a_default_takes_a_quantity() {
 	assert_eq!(eval("f(x, t = 0.05) := si_amount(t); f(1, 2s)").serialize().trim(), "2");
 	assert_eq!(eval("f(t = 0.05) := t * 2; f(1s)").serialize().trim(), "2s");
 }
+
+// card quantity-default: a quantity default fills a call that leaves its parameter out
+#[test]
+fn a_quantity_default_fills_a_left_out_argument() {
+	assert_eq!(eval("f(t = 1s) := t * 2; f()").serialize().trim(), "2s");
+	assert_eq!(eval("f(t = 1s) := t * 2; f(3s)").serialize().trim(), "6s");
+	assert_eq!(eval("g(x, d = 5m) := x * d; g(2)").serialize().trim(), "10m");
+	assert_eq!(eval("g(x, d = 5m) := x * d; g(2, 3m)").serialize().trim(), "6m");
+}

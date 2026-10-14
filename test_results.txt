@@ -1330,6 +1330,9 @@ PASSED:
   ✓ functions::test_let_in::let_value_in
   ✓ functions::test_libm_pure::libm_calls_are_pure
   ✓ functions::test_libm_pure::libm_runs_untrusted_and_in_pure_functions
+  ✓ functions::test_library_word_aliases::containment_and_phrase_spellings
+  ✓ functions::test_library_word_aliases::print_spellings_print
+  ✓ functions::test_library_word_aliases::renaming_a_module_function_as_the_module_does
   ✓ functions::test_library_word_values::a_function_updating_a_main_list_asks_for_global
   ✓ functions::test_library_word_values::a_library_word_is_a_function_value_of_a_user_function
   ✓ functions::test_library_word_values::a_library_word_is_a_function_value_of_map_and_filter
@@ -2612,6 +2615,7 @@ PASSED:
   ✓ numbers::test_static_units_data::test_lists_grow_with_quantities_of_their_unit
   ✓ numbers::test_static_units_data::test_object_fields_hold_quantities
   ✓ numbers::test_static_units_functions::a_function_with_a_default_takes_a_quantity
+  ✓ numbers::test_static_units_functions::a_quantity_default_fills_a_left_out_argument
   ✓ numbers::test_static_units_functions::test_a_unit_word_called_as_a_function_is_no_unit
   ✓ numbers::test_static_units_functions::test_dimension_errors_inside_functions_are_compile_errors
   ✓ numbers::test_static_units_functions::test_functions_take_and_give_quantities
@@ -2623,6 +2627,7 @@ PASSED:
   ✓ numbers::test_static_units_output::test_print_shows_the_unit
   ✓ numbers::test_static_units_output::test_return_gives_the_unit
   ✓ numbers::test_static_units_output::test_texts_join_quantities
+  ✓ numbers::test_static_units::each_quantity_shows_in_its_own_written_unit
   ✓ numbers::test_static_units::test_a_word_before_a_unit_name_is_no_amount
   ✓ numbers::test_static_units::test_compiling_a_quantity_result_is_refused_until_output_is_supported
   ✓ numbers::test_static_units::test_dimension_errors_are_compile_errors
@@ -2666,6 +2671,7 @@ PASSED:
   ✓ numbers::test_unit_composites::test_products_of_different_dimensions
   ✓ numbers::test_unit_composites::test_sums_need_the_same_dimensions
   ✓ numbers::test_unit_conversion::a_duration_converts_to_a_time_unit
+  ✓ numbers::test_unit_conversion::a_duration_converts_with_as_to_a_unit_word
   ✓ numbers::test_unit_conversion::a_duration_in_a_variable_converts_to_a_time_unit
   ✓ numbers::test_unit_conversion::a_quantity_converts_to_a_unit_of_its_dimension
   ✓ numbers::test_unit_conversion::an_inexact_conversion_is_a_ratio
@@ -5317,4 +5323,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5312 passed, 0 failed, 5312 total tested
+13 ignored, 5318 passed, 0 failed, 5318 total tested
