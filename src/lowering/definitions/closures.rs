@@ -21,6 +21,7 @@ pub const CLOSURE_NEW: &str = "closure_new";
 const FUNCTION_REFERENCE_MARK: &str = "function_reference";
 /// The class whose method a closure_new target is (class_method_target)
 const METHOD_CLASS_MARK: &str = "method_of";
+const BUILTIN_PREFIX: &str = "builtin·";
 
 /// `&add`, `function add`: the name, marked as the function itself; passes that ignore marks see the name
 pub fn function_reference(name: String) -> Node {
@@ -186,7 +187,86 @@ pub fn may_be_function_value(node: &Node) -> bool {
 }
 
 pub fn lower(program: Node) -> Node {
-	hoist_captures(lift_closures(program))
+	hoist_captures(lift_closures(with_builtin_wrappers(program)))
+}
+
+/// `function floor`, a built-in the program does not define: the reference to `builtin·floor(x) := floor(x)`, a
+/// definition added to the program, so it is a function value like any other (decision dir-lists); its closures say
+/// builtin (is_builtin_function)
+fn with_builtin_wrappers(program: Node) -> Node {
+	// a nested `outer·floor` is written `floor`; the prelude's `prelude·replace` is the built-in itself
+	let prelude = format!("{}·", crate::modules::PRELUDE_MODULE);
+	let defined: HashSet<String> = crate::analyzer::function_context(&program)
+		.user_functions
+		.keys()
+		.filter(|name| !name.starts_with(&prelude))
+		.map(|name| name.rsplit('·').next().unwrap_or(name).to_string())
+		.collect();
+	let mut wrapped = vec![];
+	let program = wrap_builtin_references(program, &defined, &mut wrapped);
+	if wrapped.is_empty() {
+		return program;
+	}
+	let wrappers = wrapped.iter().filter_map(|word| builtin_wrapper(word));
+	match program {
+		Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
+			Node::List(wrappers.chain(statements).collect(), Bracket::None, separator)
+		}
+		program => Node::List(wrappers.chain([program]).collect(), Bracket::Round, Separator::Semicolon),
+	}
+}
+
+fn wrap_builtin_references(node: Node, defined: &HashSet<String>, wrapped: &mut Vec<String>) -> Node {
+	let builtin = referenced_function(&node).filter(|name| {
+		!defined.contains(name) && crate::lowering::library_signatures::library_signature(name).is_some()
+	});
+	match builtin {
+		Some(word) => {
+			let wrapper = builtin_function_name(&word);
+			if !wrapped.contains(&word) {
+				wrapped.push(word);
+			}
+			function_reference(wrapper)
+		}
+		None => node.map_children(|child| wrap_builtin_references(child, defined, wrapped)),
+	}
+}
+
+/// The function a closure of the built-in `word` calls
+fn builtin_function_name(word: &str) -> String {
+	format!("{BUILTIN_PREFIX}{word}")
+}
+
+/// A function made for a built-in word's function value (with_builtin_wrappers)
+pub fn is_builtin_function(name: &str) -> bool {
+	builtin_word(name).is_some()
+}
+
+/// `builtin·floor` → floor
+pub fn builtin_word(name: &str) -> Option<&str> {
+	name.strip_prefix(BUILTIN_PREFIX)
+}
+
+/// `builtin·floor(x) := floor(x)`, the parameters named by the word's signature
+fn builtin_wrapper(word: &str) -> Option<Node> {
+	let (params, _) = crate::lowering::library_signatures::library_signature(word)?;
+	let params: Vec<Node> = params.into_iter().map(Node::Symbol).collect();
+	let head = call(&builtin_function_name(word), params.clone());
+	// `abs`, `sqrt`: a prefix operator, `abs x`
+	let operator = crate::warp_parser::PREFIX_OPERATOR_WORDS.iter().find(|(spelled, _)| *spelled == word);
+	let body = match (operator, params.as_slice()) {
+		(Some((_, op)), [operand]) => key(Node::Empty, *op, operand.clone()),
+		// `xs.add(x)`, `xs.insert(x, at: at)`: a list-changing method is called on its list
+		(None, [list, rest @ ..]) if crate::list_mutations::is_list_mutating_method(word) => {
+			let labeled = |param: &Node| match param.symbol_name() {
+				Some(crate::words::AT_WORD) => key(param.clone(), Op::Colon, param.clone()),
+				_ => param.clone(),
+			};
+			key(list.clone(), Op::Dot, call(word, rest.iter().map(labeled).collect()))
+		}
+		_ => call(word, params),
+	};
+	Some(key(head, Op::Define, body))
 }
 
 /// The variables a lambda captures by value: those the program assigns and its loop variables (`for n in xs`, what

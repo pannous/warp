@@ -319,6 +319,20 @@ Prints show as they arrive, like paintings (card print-watch, 2026-10-09): `prin
 slow paint is read while it renders. Only an animation (after its first sleep) holds a text frame back until the next
 one begins (playground.js printedChunk). probes/print_watch.sh.
 
+### Frames: only what changed (card abysmally-slow, 2026-10-15)
+samples/finger_paint (1280×800, show() every loop pass) crawled in Safari on an iPad. probes/paint_speed.mjs runs the
+playground's worker scripts in node over probes/paint_speed.warp and times each step. Before: every show() turned the
+1M BigInt64 pixels into a Float64Array (147 ms in node's V8), cloned 8 MB to the page, which shaded each pixel from a
+double (87 ms), then putImageData'd the whole canvas; frames came every few ms, so the page fell further behind with
+each one. Now the program's Worker shades the pixels into RGBA words straight from the low and high 32 bits of each
+value (host-media.js paintFrame, ~3 ms in V8 for the whole frame, the compare included) and keeps the last frame: of a
+painting the size of the one before it posts (transfers) only the rectangle that changed, ~2.5 KB a stroke frame. The
+page (canvas.js wholePainting) writes that rectangle into the whole painting it keeps as an ImageData, and draws the
+rectangles of a screen frame joined, once per requestAnimationFrame (drawn); a new canvas is drawn whole at once.
+Without shared memory (no cross-origin isolation: GitHub Pages gets it from coi-serviceworker.js, which an app's
+in-app browser view may not run) reading mouse_x / mouse_y / mouse_down fails loudly, naming Safari as the way out: a
+running program never sees the pointer move there, so finger_paint painted nothing in that view.
+
 ### Wasm memory limit across Workers (card browser-test, 2026-10-06)
 Chrome holds ~124 live Wasm memories per page, all its Workers together (V8's sandbox: each 32-bit memory reserves
 ~8 GB of a 1 TB cage, whatever its size or declared maximum; Node without the sandbox ~16300). An isolate whose

@@ -38,7 +38,7 @@ async function startSiteWorker() {
 		if (data.clipboardRead) pasteInto(data.clipboardRead);
 		if (data.soundDecode) decodeSoundInto(data.soundDecode.shared, data.soundDecode.url, data.soundDecode.bytes);
 		if (data.pageCall) answerPageCall(data.pageCall.shared, data.pageCall.request, worker);
-		if (data.paint) showPainting(root, data.paint);
+		if (data.paint) showPainting(root, wholePainting(data.paint));
 		if (data.print) (data.print.stream === 2 ? console.error : console.log)(data.print.text.replace(/\n$/, ""));
 		if (data.failure) console.error("warp:", data.failure);
 	};

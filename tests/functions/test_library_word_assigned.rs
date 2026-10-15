@@ -14,6 +14,12 @@ fn a_library_word_referenced_is_a_function() {
 }
 
 #[test]
+fn a_bare_library_word_assigned_needs_its_arguments() {
+	// decision reflection: a bare name is never the function value implicitly (P82)
+	crate::common::fails_with("f = floor; f(2.5)", "floor needs 1 argument");
+}
+
+#[test]
 fn a_library_word_defined_is_its_alias() {
 	assert_eq!(printed("f := floor; f(2.5)"), "2");
 	assert_eq!(printed("f := upper; f(\"a\")"), "\"A\"");
