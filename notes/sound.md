@@ -306,9 +306,18 @@ samples/sound_pipes.warp, tests/programs/test_sound_pipes.rs): a signal is the l
 of it, so `osc(C4, 1s, "saw") |> lowpass(900) |> delay(0.25) |> reverb(0.3) |> gain(0.5) |> out`; nodes osc, lowpass /
 highpass / bandpass (frequency, q), delay (seconds, feedback, mix), reverb (mix), distort (drive), gain, out (plays it
 through `sound`, so the settings chain and pan still apply); `mix(a, b[, c, d])` sums signals to the longest, a bus as a
-value. The settings chain and the nodes share biquad / echoed / roomed / clipped. Still to build: buses shared between
-voices (tasks), compressor, EQ, effects on a running handle. Speed: a mix over a list of signals in a loop was quadratic
-(card list-call-copy), so mix takes two to four signals.
+value. The settings chain and the nodes share biquad / echoed / roomed / clipped. Speed: a mix over a list of signals in
+a loop was quadratic (card list-call-copy), so mix takes two to four signals.
+
+## Shared buses, stage 1 (card shared-buses, 2026-10-15, src/sound/effects.rs, tests/programs/test_sound_buses.rs)
+`room = bus() |> reverb(0.4) |> delay(0.25)`, then `out(signal, room)` or `signal |> out(room)` from the program or
+any task: the bus's sounds are mixed, then go through its chain together, once, as a stream, ringing on until -60 dB
+after the last (Chain::rung_out). Natively the Mixer runs each bus in its device callback (fill); render_sound mixes
+each bus apart and runs the same Chain (effects::processed). lib: class Bus {id, chain}, the effect nodes on a Bus append
+to its chain (host word sound.bus), `out(signal, b: Bus)` sends (sound.send, a thread's current bus around its sound).
+The DSP is the lib formulas in Rust, streaming. Plan (supervisor, user asked whether Rust or warp holds the one DSP):
+stage 2 the browser runs the same code (warp.wasm export for render_sound, an AudioWorklet live; until then the
+playground plays bus sounds dry and says so), stage 3 a bus's effects changed while it plays, stage 4 compressor, EQ.
 
 ## Native output built (card native-sound, 2026-10-12, src/sound/sound_engine.rs, tests/programs/test_sound_engine.rs)
 On macOS every sound now goes into one cpal output stream (CoreAudio) instead of one afplay process per WAV. A `Mixer`

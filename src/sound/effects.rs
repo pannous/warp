@@ -1,0 +1,232 @@
+//! A bus's effect chain (card shared-buses): the sounds sent to a bus mixed, then processed together as a stream, frame
+//! by frame, so a reverb or delay sounds once for all of them and rings on after the last. The same formulas as
+//! lib/sound.warp's effects on a finished signal (biquad, echoed, roomed, clipped), amplitudes full scale -1…1.
+
+/// The delays (seconds) and the feedback of the reverb's four parallel combs (Schroeder), as lib/sound.warp's
+const REVERB_DELAYS: [f32; 4] = [0.0297, 0.0371, 0.0411, 0.0437];
+const REVERB_FEEDBACK: f32 = 0.75;
+/// A bus whose output stays below this (-60 dB) for TAIL_SECONDS has rung out
+const SILENT: f32 = 1e-3;
+const TAIL_SECONDS: f32 = 0.05;
+
+/// One effect of a chain and its settings
+#[derive(Clone, Debug, PartialEq)]
+pub enum Effect {
+	Gain(f32),
+	/// lowpass, highpass or bandpass at the frequency (Hz) with the resonance q
+	Filter {
+		kind: FilterKind,
+		frequency: f32,
+		q: f32,
+	},
+	/// echoes every `seconds`, each at `feedback` of the one before, `mix` of them against the dry sound
+	Delay {
+		seconds: f32,
+		feedback: f32,
+		mix: f32,
+	},
+	/// a small room's tail, `mix` of it against the dry sound
+	Reverb {
+		mix: f32,
+	},
+	/// a soft clipper's drive (0: clean)
+	Distort {
+		drive: f32,
+	},
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum FilterKind {
+	Lowpass,
+	Highpass,
+	Bandpass,
+}
+
+impl Effect {
+	/// `["lowpass", 800, 0.7]`, `["delay", 0.25, 0.4, 0.5]`, `["reverb", 0.3]`, `["distort", 0.5]`, `["gain", 0.5]`: an
+	/// effect as lib/sound.warp names it, its settings in order
+	pub fn named(name: &str, settings: &[f64]) -> Result<Effect, String> {
+		let setting = |index: usize| {
+			settings
+				.get(index)
+				.map(|&value| value as f32)
+				.ok_or_else(|| format!("the effect {name} needs {} settings", index + 1))
+		};
+		let filter = |kind| Ok(Effect::Filter { kind, frequency: setting(0)?, q: setting(1)? });
+		match name {
+			"gain" => Ok(Effect::Gain(setting(0)?)),
+			"lowpass" => filter(FilterKind::Lowpass),
+			"highpass" => filter(FilterKind::Highpass),
+			"bandpass" => filter(FilterKind::Bandpass),
+			"delay" => Ok(Effect::Delay { seconds: setting(0)?, feedback: setting(1)?, mix: setting(2)? }),
+			"reverb" => Ok(Effect::Reverb { mix: setting(0)? }),
+			"distort" => Ok(Effect::Distort { drive: setting(0)? }),
+			_ => Err(format!("no effect named {name}: gain, lowpass, highpass, bandpass, delay, reverb or distort")),
+		}
+	}
+}
+
+/// The past samples a feedback comb reads back, per channel: y[i] = x[i] + feedback · y[i - gap]
+struct Comb {
+	echoes: Vec<f32>,
+	at: usize,
+	feedback: f32,
+}
+
+impl Comb {
+	fn new(seconds: f32, feedback: f32, rate: u32) -> Comb {
+		let gap = ((seconds * rate as f32).round() as usize).max(1);
+		Comb { echoes: vec![0.0; gap], at: 0, feedback }
+	}
+
+	fn next(&mut self, input: f32) -> f32 {
+		let output = input + self.feedback * self.echoes[self.at];
+		self.echoes[self.at] = output;
+		self.at = (self.at + 1) % self.echoes.len();
+		output
+	}
+}
+
+/// The biquad's coefficients (lib/sound.warp biquad, the RBJ cookbook) and its last two inputs and outputs
+struct Biquad {
+	b: [f32; 3],
+	a: [f32; 2],
+	inputs: [f32; 2],
+	outputs: [f32; 2],
+}
+
+impl Biquad {
+	fn new(kind: FilterKind, frequency: f32, q: f32, rate: u32) -> Biquad {
+		let w = std::f32::consts::TAU * frequency / rate as f32;
+		let (alpha, c) = (w.sin() / (2.0 * q.max(1e-3)), w.cos());
+		let (b0, b1) = match kind {
+			FilterKind::Lowpass => ((1.0 - c) / 2.0, 1.0 - c),
+			FilterKind::Highpass => ((1.0 + c) / 2.0, -(1.0 + c)),
+			FilterKind::Bandpass => (alpha, 0.0),
+		};
+		let b2 = if kind == FilterKind::Bandpass { -alpha } else { b0 };
+		let a0 = 1.0 + alpha;
+		Biquad {
+			b: [b0 / a0, b1 / a0, b2 / a0],
+			a: [2.0 * c / a0, -(1.0 - alpha) / a0],
+			inputs: [0.0; 2],
+			outputs: [0.0; 2],
+		}
+	}
+
+	fn next(&mut self, x: f32) -> f32 {
+		let y = self.b[0] * x
+			+ self.b[1] * self.inputs[0]
+			+ self.b[2] * self.inputs[1]
+			+ self.a[0] * self.outputs[0]
+			+ self.a[1] * self.outputs[1];
+		self.inputs = [x, self.inputs[0]];
+		self.outputs = [y, self.outputs[0]];
+		y
+	}
+}
+
+/// An effect with its running state, one per channel where it remembers samples
+enum Stage {
+	Gain(f32),
+	Filter(Vec<Biquad>),
+	Delay { combs: Vec<Comb>, mix: f32 },
+	Reverb { rooms: Vec<[Comb; 4]>, mix: f32 },
+	Distort(f32),
+}
+
+impl Stage {
+	fn new(effect: &Effect, rate: u32, channels: usize) -> Stage {
+		let each = |make: &dyn Fn() -> Comb| (0..channels).map(|_| make()).collect::<Vec<_>>();
+		match *effect {
+			Effect::Gain(gain) => Stage::Gain(gain),
+			Effect::Filter { kind, frequency, q } => {
+				Stage::Filter((0..channels).map(|_| Biquad::new(kind, frequency, q, rate)).collect())
+			}
+			Effect::Delay { seconds, feedback, mix } => {
+				Stage::Delay { combs: each(&|| Comb::new(seconds, feedback, rate)), mix }
+			}
+			Effect::Reverb { mix } => Stage::Reverb {
+				rooms: (0..channels)
+					.map(|_| REVERB_DELAYS.map(|delay| Comb::new(delay, REVERB_FEEDBACK, rate)))
+					.collect(),
+				mix,
+			},
+			Effect::Distort { drive } => Stage::Distort(drive),
+		}
+	}
+
+	/// The frames it reads back: its longest comb's gap
+	fn memory(&self) -> usize {
+		match self {
+			Stage::Delay { combs, .. } => combs.first().map_or(0, |comb| comb.echoes.len()),
+			Stage::Reverb { rooms, .. } => {
+				rooms.first().map_or(0, |room| room.iter().map(|comb| comb.echoes.len()).max().unwrap_or(0))
+			}
+			_ => 0,
+		}
+	}
+
+	fn next(&mut self, channel: usize, x: f32) -> f32 {
+		match self {
+			Stage::Gain(gain) => x * *gain,
+			Stage::Filter(filters) => filters[channel].next(x),
+			Stage::Delay { combs, mix } => x + *mix * (combs[channel].next(x) - x),
+			Stage::Reverb { rooms, mix } => {
+				let wet: f32 = rooms[channel].iter_mut().map(|comb| comb.next(x)).sum();
+				x + *mix * wet / REVERB_DELAYS.len() as f32
+			}
+			// lib/sound.warp clipped, its peak full scale here
+			Stage::Distort(drive) => (x * (1.0 + 10.0 * *drive)).tanh(),
+		}
+	}
+}
+
+/// The effects of a bus in order, running on interleaved frames of its channels
+pub struct Chain {
+	stages: Vec<Stage>,
+	channels: usize,
+	quiet_frames: usize,
+	tail_frames: usize,
+}
+
+impl Chain {
+	pub fn new(effects: &[Effect], rate: u32, channels: u16) -> Chain {
+		let channels = channels.max(1) as usize;
+		let stages: Vec<Stage> = effects.iter().map(|effect| Stage::new(effect, rate, channels)).collect();
+		// quiet between two echoes is no end yet: a whole gap of the longest comb has to stay quiet
+		let longest_gap = stages.iter().map(Stage::memory).max().unwrap_or(0);
+		let tail_frames = longest_gap + (TAIL_SECONDS * rate as f32) as usize;
+		Chain { stages, channels, quiet_frames: tail_frames, tail_frames }
+	}
+
+	/// The frames (interleaved) through every effect, in place
+	pub fn process(&mut self, frames: &mut [f32]) {
+		for frame in frames.chunks_mut(self.channels) {
+			for (channel, sample) in frame.iter_mut().enumerate() {
+				*sample = self.stages.iter_mut().fold(*sample, |x, stage| stage.next(channel, x));
+			}
+			let quiet = frame.iter().all(|sample| sample.abs() < SILENT);
+			self.quiet_frames = if quiet { self.quiet_frames + 1 } else { 0 };
+		}
+	}
+
+	/// Whether its echoes and tail have died away: nothing comes out without more input
+	pub fn rung_out(&self) -> bool {
+		self.quiet_frames >= self.tail_frames
+	}
+}
+
+/// The samples (interleaved) through the effects, followed by their tail until it has rung out
+pub fn processed(samples: &[f32], effects: &[Effect], rate: u32, channels: u16) -> Vec<f32> {
+	let mut chain = Chain::new(effects, rate, channels);
+	let mut output = samples.to_vec();
+	chain.process(&mut output);
+	let block = channels.max(1) as usize * rate as usize / 100;
+	while !chain.rung_out() {
+		let mut tail = vec![0.0; block];
+		chain.process(&mut tail);
+		output.extend(tail);
+	}
+	output
+}

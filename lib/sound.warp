@@ -256,8 +256,36 @@ gain(signal, share) := [share * x for x in signal]
 mix(a, b) := added(a, b)
 mix(a, b, c) := added(added(a, b), c)
 mix(a, b, c, d) := added(added(a, b), added(c, d))
+// a bus (card shared-buses): one effect chain that every sound sent to it goes through together, from the program and
+// its tasks, processed once on their mix as they play (src/sound/effects.rs), so a reverb rings on after the last:
+// room = bus() |> reverb(0.4) |> delay(0.25), then out(osc(C4, 1s), room) or osc(C4, 1s) |> out(room)
+class Bus {
+	id: int
+	chain: list
+}
+bus() := Bus(std_io("sound", "bus", [0, []]), [])
+// the bus with one more effect at the end of its chain, which the host takes over from now on
+with_effect(b: Bus, effect) := {
+	chain = b.chain + [effect]
+	std_io("sound", "bus", [b.id, chain])
+	Bus(b.id, chain)
+}
+lowpass(b: Bus, frequency, q = 0.707) := with_effect(b, ["lowpass", si_amount(frequency), q])
+highpass(b: Bus, frequency, q = 0.707) := with_effect(b, ["highpass", si_amount(frequency), q])
+bandpass(b: Bus, frequency, q = 0.707) := with_effect(b, ["bandpass", si_amount(frequency), q])
+delay(b: Bus, seconds, feedback = 0.4, mix = 0.5) := with_effect(b, ["delay", si_amount(seconds), feedback, mix])
+reverb(b: Bus, mix = 0.3) := with_effect(b, ["reverb", mix])
+distort(b: Bus, drive = 0.5) := with_effect(b, ["distort", drive])
+gain(b: Bus, share) := with_effect(b, ["gain", share])
+// the signal played through the bus; its handle
+out(signal, b: Bus) := {
+	std_io("sound", "send", [b.id])
+	handle = out(signal)
+	std_io("sound", "send", [0])
+	handle
+}
 // indexed in place: dry_at(a, i) + dry_at(b, i) of two lists was quadratic (card list-call-copy)
-added(a, b) := [(if i < count(a) then a[i] else 0.0) + (if i < count(b) then b[i] else 0.0) for i in 0..max(count(a), count(b))]
+added(a, b) :=[(if i < count(a) then a[i] else 0.0) + (if i < count(b) then b[i] else 0.0) for i in 0..max(count(a), count(b))]
 out(signal) := sound(clamped_samples(signal))
 // the sound's handle: its number in the run, for stop_sound(handle)
 // where the notes sound between the left (-1) and the right speaker (1), 0 in the middle (card stereo-pan)

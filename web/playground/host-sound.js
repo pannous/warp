@@ -8,6 +8,7 @@ const WAV_HEADER_BYTES = 44;
 // play of a signal (src/sound/mod.rs play_signal, lowering/words/music_words.rs BLOCK_SAMPLES): computed this many samples at a time
 const SIGNAL_BLOCK = 512;
 const FULL_SCALE = 32767;
+const DRY_BUSES = "bus(): its effects do not run in the browser yet, its sounds play dry (card shared-buses)";
 // played to someone (the page was clicked or typed in), a signal is computed at most this far ahead of the speaker,
 // checked every SIGNAL_POLL_MS (src/sound/mod.rs SIGNAL_AHEAD, SIGNAL_POLL)
 const SIGNAL_AHEAD_SECONDS = 0.1;
@@ -317,8 +318,15 @@ addHostPart({
 				self.fadeSound?.(handle, gain, seconds);
 				return null;
 			},
+			// a bus (card shared-buses, src/sound/effects.rs): numbered as natively; its effects do not run here yet, its
+			// sounds play dry, said once
+			bus(number) {
+				if (!this.holder.warnings.includes(DRY_BUSES)) this.holder.warnings.push(DRY_BUSES);
+				return Number(number) || (this.holder.run.buses = (this.holder.run.buses ?? 0) + 1);
+			},
+			send: () => null,
 			// the page's audio clock as the worker keeps it (worker.js); a worker cannot wait for the page's audio
-			queued: () => self.soundsQueued?.() ?? 0,
+			queued:() => self.soundsQueued?.() ?? 0,
 			at: seconds => { self.voiceAt?.(Number(seconds)); return null; },
 			rest: seconds => { self.voiceSounded?.(Number(seconds)); return null; }, // midi_note's length (card midi-clock)
 			at_end: () => { self.voiceAtEnd?.(); return null; },
