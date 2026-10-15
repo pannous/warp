@@ -63,3 +63,13 @@ fn a_fraction_in_json_warns_of_its_loss() {
 	let warnings = warp::errors::diagnostic::take_runtime_warnings();
 	assert!(warnings.iter().any(|warning| warning.contains("JSON has no exact 1/3")), "{warnings:?}");
 }
+
+/// reviewer (json-exact veto): JSON numbers are decimal, so a fraction with decimal digits is exact, under `use strict`
+/// too, and keeps all its digits
+#[test]
+fn decimal_fractions_are_exact_json() {
+	is!("use strict\n{price: 0.1}.json", "{\"price\":0.1}");
+	is!("use strict\n{price: 19.99}.json", "{\"price\":19.99}");
+	is!("use strict\np = {price: 2.5}\np.json", "{\"price\":2.5}");
+	is!("(-1/8).json", "-0.125");
+}

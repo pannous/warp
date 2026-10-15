@@ -246,6 +246,17 @@ impl Number {
 		}
 	}
 
+	/// The exact decimal digits of an integer or a terminating fraction: 2^70 → "1180591620717411303424", 1/8 →
+	/// "0.125", 1/3 → None
+	pub fn exact_decimal(&self) -> Option<String> {
+		match self {
+			Number::Int(_) | Number::BigInt(_) => Some(self.to_string()),
+			Number::Quotient(numerator, denominator) => Number::terminating_decimal(*numerator, *denominator),
+			Number::BigQuotient(q) => Number::terminating_decimal_big(q.numerator.clone(), q.denominator.clone()),
+			_ => None,
+		}
+	}
+
 	/// `n/d` as an exact decimal when it terminates (denominator 2^a·5^b): 1/8 → "0.125", 1/3 → None
 	fn terminating_decimal(numerator: i64, denominator: i64) -> Option<String> {
 		Number::terminating_decimal_big(BigInt::from(numerator), BigInt::from(denominator))

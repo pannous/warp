@@ -223,10 +223,14 @@ pub fn inexpressible_in_json(node: &Node) -> Option<Node> {
 	})
 }
 
-/// The first number JSON writes only approximately, as its float: a fraction such as 1/3, an exact real such as π/2
-/// (decision json-exactness)
+/// The first number JSON writes only approximately, as its float: a fraction without decimal digits, 1/3, an exact
+/// real such as π/2 (decision json-exactness); a JSON number is decimal, so 0.1 and 19.99 are written exactly
 pub fn inexact_in_json(node: &Node) -> Option<Node> {
-	first_number_part(node, |number| matches!(number, Number::Quotient(..) | Number::BigQuotient(_) | Number::Real(_)))
+	first_number_part(node, |number| match number {
+		Number::Quotient(..) | Number::BigQuotient(_) => number.exact_decimal().is_none(),
+		Number::Real(_) => true,
+		_ => false,
+	})
 }
 
 fn first_number_part(node: &Node, is_wanted: impl Fn(&Number) -> bool) -> Option<Node> {

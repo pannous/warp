@@ -100,8 +100,7 @@ fn json(member: &str, arguments: &[Node]) -> Result<Node, String> {
 				.first()
 				.map(|classes| classes.children().iter().filter_map(|class| text_of(class).ok()).collect())
 				.unwrap_or_default();
-			let json = crate::modules::foreign::json_of_with(value, &exact_json_number);
-			Ok(Node::Text(with_raw_digits(&without_class_tags(json, &classes).to_string())))
+			Ok(Node::Text(exact_json_text(value, &classes)))
 		}
 		_ => no_such_word(arguments),
 	}
@@ -109,9 +108,6 @@ fn json(member: &str, arguments: &[Node]) -> Result<Node, String> {
 
 /// json's word for `to_json` under `use strict`: a number JSON writes only approximately is an error
 const EXACT_JSON: &str = "exact_json";
-/// Marks the digits of a big integer in the JSON value, which serde_json holds as f64 only: with_raw_digits writes them
-/// as the number (U+E000 is a private-use character no text means)
-const RAW_DIGITS_MARK: &str = "\"\u{E000}";
 
 fn spelled(node: &Node) -> String {
 	node.serialize().trim().to_string()
@@ -124,22 +120,27 @@ fn crossing_number_of(node: &Node) -> String {
 	}
 }
 
-/// A big integer keeps all its digits (decision json-exactness): `(2^70).json` is 1180591620717411303424
-fn exact_json_number(number: &crate::extensions::numbers::Number) -> serde_json::Value {
-	match number {
-		crate::extensions::numbers::Number::BigInt(big) => serde_json::Value::String(format!("\u{E000}{big}")),
-		number => crate::modules::foreign::crossing_number(number),
-	}
-}
-
-/// The JSON text with each marked big integer as its digits: `"\u{E000}1180…"` is 1180…
-fn with_raw_digits(json: &str) -> String {
-	let mut parts = json.split(RAW_DIGITS_MARK);
-	let mut written = parts.next().unwrap_or_default().to_string();
+/// The JSON text of a value, each integer and terminating fraction in its exact decimal digits (decision
+/// json-exactness): `(2^70).json` is 1180591620717411303424, `0.1234567890123456789` keeps every digit. serde_json holds
+/// numbers as f64 only, so the digits are written as texts marked by a character no text of the value holds, then
+/// unquoted
+fn exact_json_text(value: &Node, classes: &[String]) -> String {
+	let written = spelled(value);
+	let mark = ('\u{E000}'..='\u{F8FF}').find(|mark| !written.contains(*mark)).unwrap_or('\u{F8FF}');
+	let marked = |number: &crate::extensions::numbers::Number| match number.exact_decimal() {
+		Some(digits) if !matches!(number, crate::extensions::numbers::Number::Int(_)) => {
+			serde_json::Value::String(format!("{mark}{digits}"))
+		}
+		_ => crate::modules::foreign::crossing_number(number),
+	};
+	let json = without_class_tags(crate::modules::foreign::json_of_with(value, &marked), classes).to_string();
+	let quoted_mark = format!("\"{mark}");
+	let mut parts = json.split(&quoted_mark);
+	let mut unquoted = parts.next().unwrap_or_default().to_string();
 	for part in parts {
-		written.push_str(&part.replacen('"', "", 1));
+		unquoted.push_str(&part.replacen('"', "", 1));
 	}
-	written
+	unquoted
 }
 
 fn file(member: &str, arguments: &[Node]) -> Result<Node, String> {

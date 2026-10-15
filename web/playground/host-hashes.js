@@ -72,10 +72,12 @@ const finiteForJson = (key, value) => {
 	if (typeof value === "number" && !Number.isFinite(value)) throw new Error(`JSON has no ${value}: it cannot be written as JSON`);
 	return typeof value === "bigint" ? JSON.rawJSON(String(value)) : value;
 };
-// the numerator and denominator of the first fraction among the arguments as read, ["1", "3"], which JSON writes only as
-// its float (as src/node/json_xml.rs inexact_in_json)
+// the numerator and denominator of the first fraction among the arguments as read without decimal digits, ["1", "3"],
+// which JSON writes only as its float; 0.1 and 19.99 are decimal, so exact (as src/node/json_xml.rs inexact_in_json)
+const hasDecimalDigits = denominator => [2n, 5n].reduce((rest, factor) => { while (rest % factor === 0n) rest /= factor; return rest; }, denominator < 0n ? -denominator : denominator) === 1n;
 const firstFraction = tree => {
-	if (tree?.data?.ratio) return tree.data.ratio.map(part => String(part.int ?? integerOfPayload(part)));
+	const ratio = tree?.data?.ratio?.map(part => BigInt(part.int ?? integerOfPayload(part)));
+	if (ratio && !hasDecimalDigits(ratio[1])) return ratio.map(String);
 	for (const part of [tree?.data?.node, ...(tree?.chain ?? [])]) {
 		const found = part && firstFraction(part);
 		if (found) return found;

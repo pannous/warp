@@ -6,6 +6,8 @@ const TO_JSON_WORD: &str = "to_json";
 const TO_JSON_OF_CLASSES_WORD: &str = "to_json_of_classes";
 /// json's word for to_json under `use strict` (decision json-exactness): a fraction is an error, not a float
 const EXACT_JSON_WORD: &str = "exact_json";
+const USE_WORD: &str = "use";
+const JSON_MODULE: &str = "json";
 /// Other languages' calls giving an instance's json or its fields: Kotlin's `Json.encodeToString(p)` is to_json(p),
 /// Python's `dataclasses.asdict(p)` the instance itself (its fields read like a map's entries)
 const SERIALIZER_ALIASES: [(&str, &str, &str); 2] =
@@ -20,7 +22,9 @@ pub fn lower_json_calls(node: Node) -> Node {
 			classes.push(Node::Text(name.drop_meta().name()));
 		}
 	});
-	let strict = crate::errors::diagnostic::warning_mode().fails(crate::errors::diagnostic::Level::Normal);
+	// a program without `use json` keeps to_json, so the error naming the missing module names the word written
+	let strict =
+		crate::errors::diagnostic::warning_mode().fails(crate::errors::diagnostic::Level::Normal) && uses_json(&node);
 	let word = match strict {
 		true => EXACT_JSON_WORD,
 		false if classes.is_empty() => return node,
@@ -59,4 +63,16 @@ fn with_json_classes(node: Node, classes: &Node, json_word: &str) -> Node {
 		}
 		other => other.map_children(|child| with_json_classes(child, classes, json_word)),
 	}
+}
+
+/// Whether the program says `use json` (std_aliases writes it for `x.json` and JSON.stringify)
+fn uses_json(program: &Node) -> bool {
+	let mut found = false;
+	program.visit(&mut |part| {
+		if let Node::List(items, ..) = part.drop_meta() {
+			found |= items.first().is_some_and(|word| word.drop_meta().name() == USE_WORD)
+				&& items.iter().any(|item| item.drop_meta().name() == JSON_MODULE);
+		}
+	});
+	found
 }
