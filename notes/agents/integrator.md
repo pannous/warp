@@ -31,9 +31,12 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   Verify every merged branch with `git merge-base --is-ancestor origin/<branch> HEAD`. Commit test_results.txt as a
   "test: baseline" commit when the count changes. Delete the merged remote branch (by literal name; the hook allows
   merged ones).
-- The playground deploy is part of done (user, 2026-10-08: it stayed broken from 11:59 to ~18:40 over five pushes).
-  After every push to main, `.claude/hooks/watch-playground-deploy.sh <sha>` (the PostToolUse hook does it on a push)
-  must end green; a red deploy comes before the next batch. The local gate cannot see the runner's environment:
+- Two stages (user, 2026-10-15): the gate (fmt, clippy, native suite, wasm check, samples) decides the push; the push
+  never waits for a deploy. The Playground workflow is stage 2: hourly at :17 on the latest main (skipped when nothing
+  the site is made of changed since its last green run), building, touring, deploying. Check each hourly run; a red one
+  is carded and fixed forward with priority, the last good site stays up meanwhile. An urgent fix (the user waiting to
+  try it) is deployed at once: `gh workflow run Playground -R pannous/warp` (main). The local gate cannot see the
+  runner's environment:
   GitHub's runner has no GPU and is slower (a "ready" status raced the first run; samples/webgpu logged Chrome's
   "No available adapters." — fixed by AGENT_BROWSER_ARGS SwiftShader in pages.yml). So a batch that adds or changes a
   sample, web/playground/** or pages.yml gets the runner's verdict before main: push the tested tip as a branch and

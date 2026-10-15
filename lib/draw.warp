@@ -96,7 +96,7 @@ def circle(x, y, radius, color) {
 def circle_pixels(x, y, radius, color) {
 	for row in cell(y - radius)..cell(y + radius) + 1 {
 		for col in cell(x - radius)..cell(x + radius) + 1 {
-			if (col + 0.5 - x)^2 + (row + 0.5 - y)^2 <= radius^2 { dot(col, row, color) }
+			if (col + 0.5 - x) ^ 2 + (row + 0.5 - y) ^ 2 <= radius ^ 2 { dot(col, row, color) }
 		}
 	}
 }
