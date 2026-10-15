@@ -3431,7 +3431,10 @@ PASSED:
   ✓ programs::test_sound_at::beats_place_a_block
   ✓ programs::test_sound_at::the_silence_before_stays_and_the_voice_goes_on
   ✓ programs::test_sound_at::the_words_it_lowers_to
+  ✓ programs::test_sound_buses::a_bus_takes_a_compressor_and_an_eq
   ✓ programs::test_sound_buses::a_changed_effect_applies_from_the_voices_moment
+  ✓ programs::test_sound_buses::a_compressor_turns_loud_sounds_down_and_leaves_quiet_ones
+  ✓ programs::test_sound_buses::a_peak_eq_boosts_its_frequency_only
   ✓ programs::test_sound_buses::a_reverb_bus_rings_after_its_last_sound
   ✓ programs::test_sound_buses::a_sound_outside_the_bus_stays_dry
   ✓ programs::test_sound_buses::a_sound_sent_to_a_delay_bus_echoes_where_it_was_silent
@@ -3439,6 +3442,7 @@ PASSED:
   ✓ programs::test_sound_buses::an_effect_set_again_keeps_its_echoes
   ✓ programs::test_sound_buses::an_effect_set_again_keeps_its_place_in_the_chain
   ✓ programs::test_sound_buses::out_restores_the_bus_before
+  ✓ programs::test_sound_buses::shelves_boost_below_or_above_their_frequency
   ✓ programs::test_sound_buses::the_mixer_changes_a_bus_at_its_frame
   ✓ programs::test_sound_buses::the_mixer_runs_a_bus_on_its_sounds
   ✓ programs::test_sound_clock::sounds_queue_on_the_audio_clock
@@ -3691,6 +3695,8 @@ PASSED:
   ✓ text::test_chr::chr_is_the_inverse_of_ord
   ✓ text::test_codepoint_bytes::a_one_letter_text_has_its_utf8_bytes
   ✓ text::test_codepoint_bytes::one_letter_list_items_have_their_utf8_bytes
+  ✓ text::test_codepoint_counts::a_one_letter_text_counts_one_codepoint
+  ✓ text::test_codepoint_counts::a_one_letter_text_counts_one_grapheme
   ✓ text::test_constant_expression_text::a_constant_expression_converts_by_its_value
   ✓ text::test_constant_expression_text::the_text_of_a_global_is_its_value
   ✓ text::test_count_in::count_occurrences
@@ -5539,4 +5545,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5534 passed, 0 failed, 5534 total tested
+13 ignored, 5540 passed, 0 failed, 5540 total tested
