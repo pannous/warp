@@ -598,7 +598,10 @@ fn module_to_run(node: Node, code: &str) -> Result<CompiledModule, Node> {
 	#[cfg(feature = "native")]
 	return crate::run::program_cache::keeping(code, compile);
 	#[cfg(not(feature = "native"))]
-	compile()
+	{
+		let _ = code; // the browser keeps no module between runs
+		compile()
+	}
 }
 
 /// A run's value; markup it built is checked for accessibility as it came out (card web-a11y-runtime)
