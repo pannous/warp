@@ -1,0 +1,6 @@
+// card compile-shaders: round in a shader takes a half to the even neighbour, as warp's round does on the CPU:
+// x / 2 + 0.5 of columns 0..7 rounds to 0 1 2 2 2 3 4 4, so the stripes match WARP_GPU=off
+width = 8
+height = 2
+steps(x, y) := round(x / 2 + 0.5) % 2
+paint(steps, width, height)

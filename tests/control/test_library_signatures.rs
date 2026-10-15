@@ -53,3 +53,12 @@ fn a_bool_result_shows_as_bool() {
 	is!("f(b) := b == 0; type(function f)", "function: (b) -> bool");
 	is!("f(b) := b + 1; (function f).signature", text("(b) -> int"));
 }
+
+/// A function returning another bool function's result, or its own, is a bool function too (card signature-int)
+#[test]
+fn a_bool_through_calls_shows_as_bool() {
+	is!("g(x) := x > 2; h(x) := g(x); (function h).signature", text("(x) -> bool"));
+	is!("f(n) := if n == 0 then true else f(n - 1); (function f).signature", text("(n) -> bool"));
+	is!("f(x) := x > 2; f.return_type", text("bool"));
+	is!("f(x) := x > 2; fs = [function f]; fs#1.return_type", text("bool"));
+}

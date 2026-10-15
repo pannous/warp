@@ -1,0 +1,13 @@
+// card compile-shaders: a painted function of vectors (lists of 2 or 3 numbers) and shader math becomes a fragment
+// shader; the CPU paints the same colors (WARP_GPU=off)
+use math
+width = 32
+height = 24
+hue(h) := 0.5 .+ 0.5 .* [cos(tau * h), cos(tau * (h + 0.33)), cos(tau * (h + 0.67))]
+turned(p, angle) := [cos(angle) * p#1 - sin(angle) * p#2, sin(angle) * p#1 + cos(angle) * p#2]
+glow(x, y) := {
+	p = turned([x / width - 0.5, y / height - 0.5], 0.5)
+	d = norm(p)
+	hue(fract(d * 3)) .* (1 - smoothstep(0.3, 0.5, d))
+}
+paint(glow, width, height)

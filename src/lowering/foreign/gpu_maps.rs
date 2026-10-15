@@ -49,6 +49,30 @@ const KERNEL_ITEM: &str = "item";
 const KERNEL_FUNCTIONS: [&str; 15] =
 	["sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "exp", "log", "sqrt", "abs", "floor", "ceil"];
 const KERNEL_FUNCTIONS_OF_TWO: [&str; 3] = ["min", "max", "atan2"];
+/// Shader math WGSL computes on numbers and vectors alike (card compile-shaders, lib/math.warp and the prelude's norm):
+/// the warp word, WGSL's, its number of arguments and the result's width (0: the arguments' width)
+/// round: a half to the even neighbour in both
+const VECTOR_FUNCTIONS: [(&str, &str, usize, usize); 16] = [
+	("fract", "fract", 1, 0),
+	("round", "round", 1, 0),
+	("sign", "sign", 1, 0),
+	("normalize", "normalize", 1, 0),
+	("norm", "length", 1, 1),
+	("magnitude", "length", 1, 1),
+	("dot", "dot", 2, 1),
+	("distance", "distance", 2, 1),
+	("cross", "cross", 2, 3),
+	("reflect", "reflect", 2, 0),
+	("step", "step", 2, 0),
+	("pow", "pow", 2, 0),
+	("mix", "mix", 3, 0),
+	("lerp", "mix", 3, 0),
+	("smoothstep", "smoothstep", 3, 0),
+	("clamp", "clamp", 3, 0),
+];
+/// A vector's components as `p#1` … `p#4` read them: p.x … p.w
+const COMPONENTS: [&str; 4] = ["x", "y", "z", "w"];
+const BREAK_WORD: &str = "break";
 /// The math words that cost the CPU tens of nanoseconds an item, so a lambda with one is worth the GPU
 const HEAVY_FUNCTIONS: [&str; 12] =
 	["sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh", "exp", "log", "atan2"];
@@ -63,6 +87,8 @@ const PARAMETER_PREFIX: &str = "a_";
 /// paint(f, width, height) of a warp function f(x, y) (step 4 of card gpu-functions): f's colors and numbers
 const PAINT_WORD: &str = "paint";
 const RGB_WORD: &str = "rgb";
+/// The prelude's pixel of a painted function on the CPU: a vector of 3 numbers is that color
+const PIXEL_COLOR: &str = "pixel_color";
 /// The WGSL function of a warp function giving a color, a vec4f: colors stay exact (no 0xAARRGGBB in an f32)
 const COLOR_SUFFIX: &str = "_color";
 /// The uniforms of a painted shader (src/graphics/gpu.rs), the program's numbers its function reads

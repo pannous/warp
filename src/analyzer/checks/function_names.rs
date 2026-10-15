@@ -1,6 +1,9 @@
 //! Function names: an operator word or a type word cannot name a function
 use super::*;
 
+/// `norm` is the prelude's word (the Euclidean length of a list, decision S3), named and refused as a function like abs
+const OPERATOR_LIKE_WORDS: [(&str, Op); 1] = [("norm", Op::Abs)];
+
 /// The error for a user function named like a type word; `{name}` is the word
 pub(crate) const TYPE_WORD_FUNCTION_CLASH: &str = "{name} is a type; rename your function";
 
@@ -32,6 +35,10 @@ pub fn check_operator_word_functions(program: &Node) -> Option<Diagnostic> {
 				(Some(def), Some(head)) if crate::operators::is_function_keyword(&crate::declarations::word(def)) => {
 					operator_word(head)
 				}
+				// `norm x := …` without parentheses: the word applied to the definition of its parameter
+				(Some(word), Some(Node::Key(_, Op::Define, _))) if items.len() == 2 => {
+					word.drop_meta().symbol_name().and_then(operator_named)
+				}
 				_ => None,
 			},
 			_ => None,
@@ -51,15 +58,20 @@ pub(crate) fn operator_word(head: &Node) -> Option<(String, Op)> {
 			.find(|(_, known)| known == op)
 			.map(|(word, op)| (word.to_string(), *op)),
 		Node::List(items, _, _) => match items.first().map(Node::drop_meta) {
-			Some(Node::Symbol(name)) => crate::warp_parser::PREFIX_OPERATOR_WORDS
-				.iter()
-				.find(|(word, _)| word == name)
-				.map(|(word, op)| (word.to_string(), *op)),
+			Some(Node::Symbol(name)) => operator_named(name),
 			Some(call @ Node::List(..)) => operator_word(call),
 			_ => None,
 		},
 		_ => None,
 	}
+}
+
+fn operator_named(name: &str) -> Option<(String, Op)> {
+	crate::warp_parser::PREFIX_OPERATOR_WORDS
+		.iter()
+		.chain(&OPERATOR_LIKE_WORDS)
+		.find(|(word, _)| *word == name)
+		.map(|(word, op)| (word.to_string(), *op))
 }
 
 /// `double := it*2` or `double(x) := …`: a type word names a type, never a function (user decision P20)

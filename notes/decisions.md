@@ -43,7 +43,12 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   (indentation, spacing, separators, brackets, blank lines) in one canonical form, never changing meaning; no word
   or alias rewrites, semantic rules stay compiler hints. The command is `warp format`, `warp lint` a synonym; warp
   avoids abbreviations, so no `fmt`. The linter carries that rule as a soft hint (report only, never fixed): an
-  abbreviated word or name (`fmt`, `str`, `cnt`) → "warp avoids abbreviations: format / text / count".
+  abbreviated word or name (`fmt`, `str`, `cnt`) → "warp avoids abbreviations: format / text / count", built-in
+  alias words included. Layout: tabs, `name: value`, binary operators spaced (glued only where spacing changes the
+  meaning; every edit is checked by comparing parse trees), list separators kept as written, `{` on its header's
+  line, one space after `,`, no spaces inside brackets, at most one blank line.
+  Later (card warp-format-strict, Soon): a second, opinionated mode rewriting code to best practices, with a preview
+  (show the diff, apply nothing) before anything is applied; its name and every rule go to the user first.
 - cleanup-means-fewer-lines (2026-10-13): the cleanup's metric is lines removed: simpler, more general, more elegant
   code. Splitting files or functions alone is not a goal ("not that impressed by splitting"). Each cleanup merge
   request states its net src/ line delta; baseline 161132 lines of src/*.rs at eaa40f98b.
@@ -217,6 +222,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   (2026-10-08, emphatic). A comment hiding a closing bracket is a parse error naming the `//`.
 - `#` glued to a non-space is the count expression (`#s`, `#f(x)`); `# text`, `#!`, `##` and the directives `#use`,
   `#include`, `#import` stay comments/directives.
+- hash-comments (2026-10-15, user): `# text` is the preferred comment; `//` clashes with floor division and reads
+  Java-esque. `warp format` has an opt-in option rewriting `// text` comments to `# text` (floor division and `/* */`
+  untouched), and the linter gives a soft hint on every `//` comment.
 - `print a    print b` on one line is an error "two statements on one line? separate them with `;`".
 - P227 (2026-10-08) a comma next to `==` without parentheses is an error asking for them ("insist on braces to avoid
   errors"): `(2.0, 4) == 2.0, 4`.
@@ -642,6 +650,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   (repro probes/firefox_jspi_terminate.html).
 - deploy-hook (2026-10-15, user): watch-playground-deploy.sh asks the finished run's conclusion and failed jobs,
   retrying ~30 min; no answer gives one stderr line, no wake (card posttooluse-playground).
+- browser-server (2026-10-15, user): browser checks get a dry run on pannous.com over SSH (headless Chrome and
+  Firefox on the server) before anyone starts the GitHub Playground workflow, so trial runs send no "Run failed"
+  mails; GitHub runs only the final check, plus Safari. Local browsers on the Mac stay banned (card browser-server).
 
 ## Sound and graphics
 - shader-untouched (2026-10-13, user: "I didn't mean to mess with the shader language"): WGSL in shader blocks stays
