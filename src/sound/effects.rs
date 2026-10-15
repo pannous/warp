@@ -33,13 +33,25 @@ pub enum Effect {
 	Distort {
 		drive: f32,
 	},
+	/// a level over `threshold` (dB full scale) comes out `ratio` times closer to it, its envelope following a rise in
+	/// `attack` seconds and a fall in `release` (stage 4)
+	Compress {
+		threshold: f32,
+		ratio: f32,
+		attack: f32,
+		release: f32,
+	},
 }
 
+/// A biquad's response; the EQ's peak and shelves (stage 4) raise or lower by their dB
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum FilterKind {
 	Lowpass,
 	Highpass,
 	Bandpass,
+	Peak(f32),
+	LowShelf(f32),
+	HighShelf(f32),
 }
 
 impl Effect {
@@ -53,15 +65,30 @@ impl Effect {
 				.ok_or_else(|| format!("the effect {name} needs {} settings", index + 1))
 		};
 		let filter = |kind| Ok(Effect::Filter { kind, frequency: setting(0)?, q: setting(1)? });
+		// `["peak", 1000, 6, 1]`: frequency, dB, q
+		let equalizer = |kind: fn(f32) -> FilterKind| {
+			Ok(Effect::Filter { kind: kind(setting(1)?), frequency: setting(0)?, q: setting(2)? })
+		};
 		match name {
 			"gain" => Ok(Effect::Gain(setting(0)?)),
 			"lowpass" => filter(FilterKind::Lowpass),
 			"highpass" => filter(FilterKind::Highpass),
 			"bandpass" => filter(FilterKind::Bandpass),
+			"peak" => equalizer(FilterKind::Peak),
+			"low_shelf" => equalizer(FilterKind::LowShelf),
+			"high_shelf" => equalizer(FilterKind::HighShelf),
 			"delay" => Ok(Effect::Delay { seconds: setting(0)?, feedback: setting(1)?, mix: setting(2)? }),
 			"reverb" => Ok(Effect::Reverb { mix: setting(0)? }),
 			"distort" => Ok(Effect::Distort { drive: setting(0)? }),
-			_ => Err(format!("no effect named {name}: gain, lowpass, highpass, bandpass, delay, reverb or distort")),
+			"compress" => Ok(Effect::Compress {
+				threshold: setting(0)?,
+				ratio: setting(1)?,
+				attack: setting(2)?,
+				release: setting(3)?,
+			}),
+			_ => Err(format!(
+				"no effect named {name}: gain, lowpass, highpass, bandpass, peak, low_shelf, high_shelf, delay, reverb, distort or compress"
+			)),
 		}
 	}
 }
@@ -107,19 +134,31 @@ impl Biquad {
 	fn new(kind: FilterKind, frequency: f32, q: f32, rate: u32) -> Biquad {
 		let w = std::f32::consts::TAU * frequency / rate as f32;
 		let (alpha, c) = (w.sin() / (2.0 * q.max(1e-3)), w.cos());
-		let (b0, b1) = match kind {
-			FilterKind::Lowpass => ((1.0 - c) / 2.0, 1.0 - c),
-			FilterKind::Highpass => ((1.0 + c) / 2.0, -(1.0 + c)),
-			FilterKind::Bandpass => (alpha, 0.0),
+		// the cookbook's b0 b1 b2 a0 a1 a2; A the amplitude of the EQ's dB, its square root for the shelves' slope
+		let amplitude = |db: f32| 10f32.powf(db / 40.0);
+		let shelf = |a: f32, sign: f32| {
+			let (plus, minus, slope) = (a + 1.0, a - 1.0, 2.0 * a.sqrt() * alpha);
+			[
+				a * (plus - sign * minus * c + slope),
+				sign * 2.0 * a * (minus - sign * plus * c),
+				a * (plus - sign * minus * c - slope),
+				plus + sign * minus * c + slope,
+				-sign * 2.0 * (minus + sign * plus * c),
+				plus + sign * minus * c - slope,
+			]
 		};
-		let b2 = if kind == FilterKind::Bandpass { -alpha } else { b0 };
-		let a0 = 1.0 + alpha;
-		Biquad {
-			b: [b0 / a0, b1 / a0, b2 / a0],
-			a: [2.0 * c / a0, -(1.0 - alpha) / a0],
-			inputs: [0.0; 2],
-			outputs: [0.0; 2],
-		}
+		let [b0, b1, b2, a0, a1, a2] = match kind {
+			FilterKind::Lowpass => [(1.0 - c) / 2.0, 1.0 - c, (1.0 - c) / 2.0, 1.0 + alpha, -2.0 * c, 1.0 - alpha],
+			FilterKind::Highpass => [(1.0 + c) / 2.0, -(1.0 + c), (1.0 + c) / 2.0, 1.0 + alpha, -2.0 * c, 1.0 - alpha],
+			FilterKind::Bandpass => [alpha, 0.0, -alpha, 1.0 + alpha, -2.0 * c, 1.0 - alpha],
+			FilterKind::Peak(db) => {
+				let a = amplitude(db);
+				[1.0 + alpha * a, -2.0 * c, 1.0 - alpha * a, 1.0 + alpha / a, -2.0 * c, 1.0 - alpha / a]
+			}
+			FilterKind::LowShelf(db) => shelf(amplitude(db), 1.0),
+			FilterKind::HighShelf(db) => shelf(amplitude(db), -1.0),
+		};
+		Biquad { b: [b0 / a0, b1 / a0, b2 / a0], a: [-a1 / a0, -a2 / a0], inputs: [0.0; 2], outputs: [0.0; 2] }
 	}
 
 	/// new coefficients, its past samples kept
@@ -147,6 +186,44 @@ enum Stage {
 	Delay { combs: Vec<Comb>, mix: f32 },
 	Reverb { rooms: Vec<[Comb; 4]>, mix: f32 },
 	Distort(f32),
+	Compress(Vec<Compressor>),
+}
+
+/// A compressor on one channel: its envelope, the level it follows, and its settings as factors a sample
+struct Compressor {
+	envelope: f32,
+	threshold: f32,
+	slope: f32,
+	attack: f32,
+	release: f32,
+}
+
+impl Compressor {
+	fn new(threshold: f32, ratio: f32, attack: f32, release: f32, rate: u32) -> Compressor {
+		let mut compressor = Compressor { envelope: 0.0, threshold: 0.0, slope: 0.0, attack: 0.0, release: 0.0 };
+		compressor.retune(threshold, ratio, attack, release, rate);
+		compressor
+	}
+
+	/// new settings, its envelope kept
+	fn retune(&mut self, threshold: f32, ratio: f32, attack: f32, release: f32, rate: u32) {
+		// the share of the envelope a sample keeps: it closes 1 - 1/e of the way to the level in the seconds
+		let kept = |seconds: f32| (-1.0 / (seconds.max(1e-5) * rate as f32)).exp();
+		(self.threshold, self.slope) = (threshold, 1.0 - 1.0 / ratio.max(1.0));
+		(self.attack, self.release) = (kept(attack), kept(release));
+	}
+
+	fn next(&mut self, x: f32) -> f32 {
+		let level = x.abs();
+		let kept = if level > self.envelope { self.attack } else { self.release };
+		self.envelope = level + kept * (self.envelope - level);
+		let over = 20.0 * self.envelope.max(1e-9).log10() - self.threshold;
+		if over > 0.0 {
+			x * 10f32.powf(-over * self.slope / 20.0)
+		} else {
+			x
+		}
+	}
 }
 
 impl Stage {
@@ -167,6 +244,9 @@ impl Stage {
 				mix,
 			},
 			Effect::Distort { drive } => Stage::Distort(drive),
+			Effect::Compress { threshold, ratio, attack, release } => Stage::Compress(
+				(0..channels).map(|_| Compressor::new(threshold, ratio, attack, release, rate)).collect(),
+			),
 		}
 	}
 
@@ -183,6 +263,9 @@ impl Stage {
 			}
 			(Stage::Reverb { mix, .. }, Effect::Reverb { mix: new }) => *mix = new,
 			(Stage::Distort(drive), Effect::Distort { drive: new }) => *drive = new,
+			(Stage::Compress(compressors), Effect::Compress { threshold, ratio, attack, release }) => {
+				compressors.iter_mut().for_each(|compressor| compressor.retune(threshold, ratio, attack, release, rate))
+			}
 			_ => return false,
 		}
 		true
@@ -210,6 +293,7 @@ impl Stage {
 			}
 			// lib/sound.warp clipped, its peak full scale here
 			Stage::Distort(drive) => (x * (1.0 + 10.0 * *drive)).tanh(),
+			Stage::Compress(compressors) => compressors[channel].next(x),
 		}
 	}
 }

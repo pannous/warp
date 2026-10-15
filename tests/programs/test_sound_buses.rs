@@ -116,3 +116,53 @@ fn the_mixer_changes_a_bus_at_its_frame() {
 	assert!((buffer[3] - 0.5).abs() < 0.01, "before the change: {}", buffer[3]);
 	assert!(buffer[7].abs() < 0.01, "after it: {}", buffer[7]);
 }
+
+// card shared-buses stage 4: a compressor and a peaking and shelving EQ as bus effects
+
+/// The loudest sample of the processed mono sine at the frequency (Hz), after its first tenth of a second
+fn processed_sine_peak(frequency: f32, effects: &[Effect]) -> f32 {
+	let rate = 22_050;
+	let sine: Vec<f32> =
+		(0..rate).map(|i| 0.1 * (std::f32::consts::TAU * frequency * i as f32 / rate as f32).sin()).collect();
+	let output = warp::sound::effects::processed(&sine, effects, &[], rate as u32, 1);
+	output[rate / 10..rate].iter().fold(0.0, |loudest, sample| sample.abs().max(loudest))
+}
+
+#[test]
+fn a_compressor_turns_loud_sounds_down_and_leaves_quiet_ones() {
+	let compressor = [Effect::named("compress", &[-20.0, 4.0, 0.001, 0.1]).unwrap()];
+	let rate = 1000;
+	let loud = warp::sound::effects::processed(&[0.9; 1000], &compressor, &[], rate, 1);
+	assert!((0.12..0.25).contains(&loud[900]), "0.9 (-1 dB) is 14 dB down: {}", loud[900]);
+	let quiet = warp::sound::effects::processed(&[0.05; 1000], &compressor, &[], rate, 1);
+	assert!((quiet[900] - 0.05).abs() < 0.001, "-26 dB stays under the threshold: {}", quiet[900]);
+}
+
+#[test]
+fn a_peak_eq_boosts_its_frequency_only() {
+	let peak = [Effect::named("peak", &[1000.0, 12.0, 1.0]).unwrap()];
+	assert!((0.35..0.45).contains(&processed_sine_peak(1000.0, &peak)), "12 dB up: ×4");
+	assert!((0.09..0.12).contains(&processed_sine_peak(50.0, &peak)), "far below it stays");
+}
+
+#[test]
+fn shelves_boost_below_or_above_their_frequency() {
+	let low = [Effect::named("low_shelf", &[200.0, 12.0, 0.707]).unwrap()];
+	assert!(
+		(0.35..0.45).contains(&processed_sine_peak(30.0, &low)),
+		"the lows up: {}",
+		processed_sine_peak(30.0, &low)
+	);
+	assert!((0.09..0.12).contains(&processed_sine_peak(5000.0, &low)), "the highs stay");
+	let high = [Effect::named("high_shelf", &[2000.0, -12.0, 0.707]).unwrap()];
+	assert!(processed_sine_peak(9000.0, &high) < 0.03, "the highs down: {}", processed_sine_peak(9000.0, &high));
+	assert!((0.09..0.12).contains(&processed_sine_peak(100.0, &high)), "the lows stay");
+}
+
+#[test]
+fn a_bus_takes_a_compressor_and_an_eq() {
+	crate::is!(
+		"use sound\nroom = bus() |> compress(-30, 8) |> low_shelf(200Hz, 6) |> peak(3kHz, -4, 2)\nroom.chain",
+		warp::warp_parser::parse("[[\"compress\" -30 8 0.01 0.1] [\"low_shelf\" 200 6 0.707] [\"peak\" 3000 -4 2]]")
+	);
+}
