@@ -431,9 +431,11 @@ fn is_global(name: &str) -> bool {
 	LANGUAGE_GLOBALS.contains(&name) || !matches!(crate::formats::web_idl::global_interface(name), Ok(None))
 }
 
-/// A word every program has: a library function or a type
+/// A word every program has: a library function, a type, a statement word or constant (print, return, true)
 fn is_word(name: &str) -> bool {
-	crate::library_words::is_standard_function(name) || crate::type_tests::is_builtin_type_word(name)
+	crate::library_words::is_standard_function(name)
+		|| crate::type_tests::is_builtin_type_word(name)
+		|| !crate::type_name_matching::names_a_function(name)
 }
 
 /// `document.getElementById("xyz")`
