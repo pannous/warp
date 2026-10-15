@@ -67,7 +67,7 @@ fn a_classes_methods_are_its_functions() {
 
 #[test]
 fn the_type_of_a_function_names_its_signature() {
-	is!("use math\ntype(gcd)", "function: (a:int, b:int) -> int");
+	is!("use math\ntype(gcd)", "function: (a: int, b: int) -> int");
 	is!("use math\n(function gcd) is function", true);
 	is!("type(sqrt)", "function: (x:number) -> number");
 }

@@ -6,6 +6,6 @@ use crate::is;
 fn a_used_module_function_reflects_like_the_program_own() {
 	is!("use math\ncount(dir(is_square))", 4);
 	is!("use math\nis_square.params#1", "n");
-	is!("use math\nstr(type(is_square))", "function: (n:int) -> bool");
+	is!("use math\nstr(type(is_square))", "function: (n: int) -> bool");
 	is!("use math\nis_square(16)", true);
 }
