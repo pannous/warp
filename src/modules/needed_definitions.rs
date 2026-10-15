@@ -28,9 +28,9 @@ fn class_names(program: &Node) -> HashSet<String> {
 #[derive(Default)]
 pub(crate) struct ProgramWords {
 	variables: HashSet<String>,
-	/// each function's numbers of arguments: it shadows a module's definition of those only, `clamp(x)` leaves math's
-	/// clamp(x, low, high) to the program too
-	functions: HashMap<String, Vec<usize>>,
+	/// each function's fewest and most arguments: it shadows a module's definitions taking any of those only,
+	/// `clamp(x)` leaves math's clamp(x, low, high) to the program too
+	functions: HashMap<String, Vec<(usize, usize)>>,
 }
 
 impl ProgramWords {
@@ -38,14 +38,11 @@ impl ProgramWords {
 		self.variables.contains(name) || self.functions.contains_key(name)
 	}
 
-	/// a module definition the program still sees under its own name: another arity than the program's same-named
-	/// functions
+	/// a module definition the program still sees under its own name: no number of arguments it takes is one a
+	/// same-named program function takes
 	fn leaves_to_program(&self, name: &str, (fewest, most): (usize, usize)) -> bool {
-		!self.variables.contains(name)
-			&& self
-				.functions
-				.get(name)
-				.is_some_and(|arities| !arities.iter().any(|arity| (fewest..=most).contains(arity)))
+		let overlaps = |&(program_fewest, program_most): &(usize, usize)| program_fewest <= most && fewest <= program_most;
+		!self.variables.contains(name) && self.functions.get(name).is_some_and(|ranges| !ranges.iter().any(overlaps))
 	}
 }
 
@@ -61,11 +58,11 @@ pub(crate) fn program_words(program: &Node) -> ProgramWords {
 		});
 		typed_by_class
 	};
-	let mut functions: HashMap<String, Vec<usize>> = HashMap::new();
+	let mut functions: HashMap<String, Vec<(usize, usize)>> = HashMap::new();
 	for statement in statements_of(program) {
 		let Some((head, _, _)) = crate::type_tests::function_definition(statement) else { continue };
 		if let (false, Some(name)) = (is_method(&head), leftmost_symbol(&head)) {
-			functions.entry(name).or_default().push(head_arities(&head).1);
+			functions.entry(name).or_default().push(head_arities(&head));
 		}
 	}
 	ProgramWords { variables: program_variables(program), functions }

@@ -62,3 +62,9 @@ fn a_program_function_of_another_arity_adds_to_the_module_word() {
 	is!("use math\nclamp(x) := 9\nclamp(5, 0, 3) + clamp(1)", 12);
 	is!("use sound\nmix(a, b) := 7\nmix(1, 2) + count(mix([0.1], [0.2], [0.3]))", 8);
 }
+
+/// a program function with a defaulted parameter shadows every number of arguments it takes (review of use-sound)
+#[test]
+fn a_defaulted_parameter_shadows_each_arity_it_takes() {
+	is!("use sound\nmix(a, b, c = 0) := 7\nmix(1, 2) + mix(1, 2, 3) + count(mix([0.1], [0.2], [0.3], [0.4]))", 15);
+}
