@@ -12,7 +12,7 @@ fn named(code: i64) -> String {
 #[test]
 fn held_key_names_the_key_held_now() {
 	let lowered = warp::pipeline::lower(r#"held_key == "a""#).expect("lowers").serialize();
-	assert!(lowered.contains("system_value"), "{lowered}");
+	assert!(lowered.contains("key_held"), "{lowered}");
 	is!(r#"held_key == """#, true);
 	assert_eq!(named(0), r#""""#);
 	assert_eq!(named('a' as i64), r#""a""#);
