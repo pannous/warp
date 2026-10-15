@@ -148,6 +148,7 @@ mod test_property_assign;
 mod test_property_words;
 mod test_python_higher_order;
 mod test_python_ruby_definitions;
+mod test_real_function_values; // card sin-cos
 mod test_recursive_list_functions;
 mod test_render_as;
 mod test_return_type_dispatch;

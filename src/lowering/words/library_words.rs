@@ -756,6 +756,20 @@ impl Lowering {
 				return Some(log_to_base(&items[0], value, base));
 			}
 		}
+		// `sin x`, `trunc x`: a library word of one typed value applies to the value after it, as `sin(x)` does, wherever
+		// it stands (card sin-cos); a prelude word (`norm v`) is the prelude's function, called by its own pass
+		if let ([function, argument], Bracket::None, Separator::Space) = (items, bracket, separator) {
+			let is_prelude_word = crate::modules::prelude_word_arity(head).is_some();
+			if crate::lowering::library_signatures::typed_first_arity(head) == Some(1)
+				&& !is_prelude_word
+				&& !self.shadows(head)
+			{
+				// a synonym calls its library word: `sorted xs` is sort(xs)
+				let word = canonical_spelling(head);
+				let function = if word == head { function.clone() } else { Node::Symbol(word.to_string()) };
+				return Some(word_call(&function, argument, vec![]));
+			}
+		}
 		// `number(t)` is `t as number`: a text known only at run time is the number it spells, decided at run time
 		if let (NUMBER_WORD, [_, value]) = (head.as_str(), items) {
 			if !self.shadows(NUMBER_WORD) && call_name(items, bracket, separator).is_some() {
