@@ -86,6 +86,8 @@ const VARIABLE_PREFIX: &str = "v_";
 const PARAMETER_PREFIX: &str = "a_";
 /// paint(f, width, height) of a warp function f(x, y) (step 4 of card gpu-functions): f's colors and numbers
 const PAINT_WORD: &str = "paint";
+/// `shader_of(f)`: the WGSL that `paint(f, width, height)` compiles f to (kernels.rs shader_of)
+const SHADER_OF_WORD: &str = "shader_of";
 const RGB_WORD: &str = "rgb";
 /// The prelude's pixel of a painted function on the CPU: a vector of 3 numbers is that color
 const PIXEL_COLOR: &str = "pixel_color";

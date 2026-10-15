@@ -9,7 +9,7 @@ const HTTP_NOT_FOUND = "HTTP status 404";
 const FILE_NOT_FOUND = "No such file or directory (os error 2)";
 const NO_PROCESSES = "not in the browser: a page runs no process or shell, natively only";
 
-// the files std's file module wrote (texts) and render_sound rendered (bytes, a Uint8Array): read and the file words see
+// the files std's file module wrote (texts) and save sound rendered (bytes, a Uint8Array): read and the file words see
 // them before the served ones. A page keeps them in IndexedDB (keepWrittenFile), so they are still there after a reload
 const writtenFiles = new Map();
 const filePath = path => path.replace(/^\.\//, "");

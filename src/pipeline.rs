@@ -337,6 +337,8 @@ const MEANING_PASSES: &[Pass] = &[
 	crate::lowering::overloads::lower_arity_overloads,
 	crate::lowering::broadcasting::lower,
 	crate::lowering::library_words::lower_count_in,
+	// `room(signal)` of an instance whose type defines `call`, before the closure passes read it as a function value's call
+	crate::lowering::traits::lower_instance_calls,
 	crate::lowering::lambdas::lower,
 	crate::lowering::function_values::lower,
 	crate::lowering::closures::lower,

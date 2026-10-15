@@ -6,7 +6,7 @@
 use crate::type_kinds::Kind;
 
 /// The words whose tables name neither their parameters nor (for an argument-dependent result) their result
-const NAMED_SIGNATURES: [(&str, &str); 18] = [
+const NAMED_SIGNATURES: [(&str, &str); 23] = [
 	("sqrt", "(x:number) -> number"),
 	("cbrt", "(x:number) -> number"),
 	("abs", "(x:number) -> number"),
@@ -14,6 +14,12 @@ const NAMED_SIGNATURES: [(&str, &str); 18] = [
 	("ceil", "(x:number) -> int"),
 	("round", "(x:number) -> int"),
 	("trunc", "(x:float) -> float"),
+	// the real functions, exact on exact values (numbers/real.rs), else the f64 ones (ln has no libm name)
+	("sin", "(x:float) -> float"),
+	("cos", "(x:float) -> float"),
+	("tan", "(x:float) -> float"),
+	("exp", "(x:float) -> float"),
+	("ln", "(x:float) -> float"),
 	("min", "(a, b) -> number"),
 	("max", "(a, b) -> number"),
 	("upper", "(t:text) -> text"),
@@ -81,6 +87,14 @@ pub fn typed_first_arity(word: &str) -> Option<usize> {
 	first.contains(':').then_some(params.len())
 }
 
+/// The library words of one typed value with a signature here or in libm: `floor`, `sin`, `upper`, `log10`
+pub fn one_value_words() -> impl Iterator<Item = &'static str> {
+	let named = NAMED_SIGNATURES.iter().map(|(name, _)| *name);
+	named
+		.chain(crate::ffi::LIBM_F64_FUNCTIONS.iter().map(|(name, _)| *name))
+		.filter(|name| typed_first_arity(name) == Some(1))
+}
+
 /// `replace(t, old, new) := …` → `(t, old, new)`
 fn prelude_signature(word: &str) -> Option<String> {
 	let head = crate::modules::std_docs::word_head(PRELUDE, word)?;
@@ -111,7 +125,7 @@ fn positional(arity: usize, parameter_type: Option<&str>, result: Kind) -> Strin
 	};
 	let parameters: Vec<String> = names
 		.iter()
-		.map(|name| parameter_type.map_or_else(|| name.to_string(), |kind| format!("{name}:{kind}")))
+		.map(|name| parameter_type.map_or_else(|| name.to_string(), |kind| format!("{name}: {kind}")))
 		.collect();
 	let result = match result {
 		Kind::Empty => String::new(),

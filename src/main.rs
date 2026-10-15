@@ -161,6 +161,8 @@ fn run_command(args: &[String]) {
 		show_in_webview(&args[if check { 3 } else { 2 }..].join(" "), check);
 	} else if is_html_file(&arg_string) {
 		show_in_webview(&arg_string, false);
+	} else if FORMAT_COMMANDS.contains(&args[1].as_str()) {
+		std::process::exit(format_command(&args[2..]));
 	} else if let Some(target) = command_argument(&arg_string, "verify") {
 		let code = source_of(target);
 		let reports = law::verify(&code);
@@ -387,6 +389,7 @@ fn usage() {
 	println!("  warp lower <code>    Show the program after the lowering passes");
 	println!("  warp parse <code>    Show the parsed AST");
 	println!("  warp verify <file>   Test and prove the laws of a file");
+	println!("  warp format [check] [hash-comments] <file|folder>…  The canonical layout of warp code, only where the meaning stays (warp lint: the same; check: list what would change, exit 1; hash-comments: // comments become #)");
 	println!("  warp types <file>    The program in W0, the proved model of warp's types, and both verdicts");
 	println!("  warp data <file>     Read untrusted data without evaluating it");
 	println!("  warp tool <package> [args]  Run a package's prebuilt <package>.wasm in its directory");

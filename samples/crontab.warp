@@ -19,39 +19,39 @@ weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 weekday(number) := if size(number) == 1 then weekdays#(int(number) + 1) else number
 // minute and hour: an `*/n` step, a list of values or `*`
 time_of_day(minute, hour) := if minute.starts_with("*/") and hour == "*" then repeated(minute[2..], "minutes")
-	else if minute == "*" and hour == "*" then "every minute"
-	else if hour == "*" then "hourly at " + listed([":" + padded(m) for m in split(minute, ",")])
-	else if hour.starts_with("*/") then repeated(hour[2..], "hours") + " at :" + padded(minute)
-	else "daily at " + listed([padded(h) + ":" + padded(minute) for h in split(hour, ",")])
+else if minute == "*" and hour == "*" then "every minute"
+else if hour == "*" then "hourly at " + listed([":" + padded(m) for m in split(minute, ",")])
+else if hour.starts_with("*/") then repeated(hour[2..], "hours") + " at :" + padded(minute)
+else "daily at " + listed([padded(h) + ":" + padded(minute) for h in split(hour, ",")])
 // day of month, month and weekday narrow the days; `*` is any
 narrowed(field, words) := if field == "*" then "" else words + field
 days(day, month, week) := (if week == "*" then "" else " on " + listed([weekday(w) for w in split(week, ",")])) + narrowed(day, " on day ") + narrowed(month, " in month ")
 when(job) := if job.starts_with("@reboot") then "at startup"
-	else if job.starts_with("@") then schedule(job)#1[1..]
-	else time_of_day(schedule(job)#1, schedule(job)#2) + days(schedule(job)#3, schedule(job)#4, schedule(job)#5)
+else if job.starts_with("@") then schedule(job)#1[1..]
+else time_of_day(schedule(job)#1, schedule(job)#2) + days(schedule(job)#3, schedule(job)#4, schedule(job)#5)
 
 jobs = [line for line in split(exec sh "crontab -l", "\n") if is_job(line)]
-html{ lang:"en"
-  style{
-    body { font-family: system-ui; margin: 2em; color-scheme: light dark }
-    table { border-collapse: collapse }
-    th { text-align: left; color: gray; font-weight: 500 }
-    td, th { padding: 6px 14px; border-bottom: 1px solid silver; vertical-align: top }
-    td.when { white-space: nowrap; font-weight: 500 }
-    td.log { white-space: nowrap; color: gray }
-    code { white-space: pre-wrap; word-break: break-all }
-  }
-  body{
-    h1{ "cron table" }
-    table{
-      tr{ th{ "when" } th{ "command" } th{ "log" } }
-      for job in jobs {
-        tr{
-          td{ class:"when" title:join(schedule(job), " ") when(job) }
-          td{ code{ command(job) } }
-          td{ class:"log" title:log(job) file_name(log(job)) }
-        }
-      }
-    }
-  }
+html{ lang: "en"
+	style{
+		body { font-family: system-ui; margin: 2em; color-scheme: light dark }
+		table { border-collapse: collapse }
+		th { text-align: left; color: gray; font-weight: 500 }
+		td, th { padding: 6px 14px; border-bottom: 1px solid silver; vertical-align: top }
+		td.when { white-space: nowrap; font-weight: 500 }
+		td.log { white-space: nowrap; color: gray }
+		code { white-space: pre-wrap; word-break: break-all }
+	}
+	body{
+		h1{ "cron table" }
+		table{
+			tr{ th{ "when" } th{ "command" } th{ "log" } }
+			for job in jobs {
+				tr{
+					td{ class: "when" title: join(schedule(job), " ") when(job) }
+					td{ code{ command(job) } }
+					td{ class: "log" title: log(job) file_name(log(job)) }
+				}
+			}
+		}
+	}
 }

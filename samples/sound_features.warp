@@ -4,7 +4,7 @@ use sound
 print "the sound module contains many useful functions and tweaks"
 help(sound)
 
-for trick in dir(sound): 
+for trick in dir(sound):
 	print "sound trick: " + trick
 	print help(trick)
 	print function(trick).dump

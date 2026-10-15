@@ -6,12 +6,12 @@ use sound
 
 wave_shape = "sawtooth"
 loudness = -9 dB
-melody([A2 C3 E3 A3], 1/2 beat)      // dry
+melody([A2 C3 E3 A3], 1 / 2 beat)      // dry
 
-delay_time = 3/8 beat                   // echoes, 3/8 of a beat apart
+delay_time = 3 / 8 beat                   // echoes, 3/8 of a beat apart
 delay_feedback = 0.5                    // each one half as loud as the one before
 delay_mix = 0.6
-melody([A3 E3 C3 A2], 1/2 beat)
+melody([A3 E3 C3 A2], 1 / 2 beat)
 
 delay_time = 0
 reverb_mix = 0.3                        // a small room's tail

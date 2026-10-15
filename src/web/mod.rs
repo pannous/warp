@@ -717,6 +717,50 @@ mod exports {
 		kept(serde_json::to_vec(&crate::members::member_names(text(code, code_length))).unwrap_or_default())
 	}
 
+	/// The little-endian f32s passed at pointer
+	fn floats(pointer: *const u8, length: usize) -> Vec<f32> {
+		let bytes = if length == 0 { &[][..] } else { unsafe { std::slice::from_raw_parts(pointer, length) } };
+		bytes.chunks_exact(4).map(|four| f32::from_le_bytes([four[0], four[1], four[2], four[3]])).collect()
+	}
+
+	/// A sound through effects (card shared-buses stage 2, worker.js busProcessed: a bus's sounds, lib's list effects):
+	/// the chain as JSON (effects::chain_of_json), the samples little-endian f32, interleaved; returns the byte length of
+	/// the processed samples, a delay's or reverb's tail added (effects::with_effects), the same encoding, read at
+	/// `web_report()`; 0 for a chain it cannot read
+	#[no_mangle]
+	pub extern "C" fn web_bus_processed(
+		chain: *const u8,
+		chain_length: usize,
+		samples: *const u8,
+		samples_length: usize,
+		rate: u32,
+		channels: u32,
+	) -> usize {
+		let Ok(effects) = crate::sound::effects::chain_of_json(text(chain, chain_length)) else {
+			return 0;
+		};
+		let samples = floats(samples, samples_length);
+		let processed = crate::sound::effects::with_effects(&samples, &effects, rate, channels as u16);
+		kept(processed.iter().flat_map(|sample| sample.to_le_bytes()).collect())
+	}
+
+	/// How loud each band sounds in a window (lib/sound.warp spectrum, host-sound.js): the window's amplitudes around 0
+	/// as little-endian f32; returns the byte length of the levels (spectrum::window_levels), little-endian f64, read at
+	/// `web_report()`
+	#[no_mangle]
+	pub extern "C" fn web_spectrum(
+		window: *const u8,
+		window_length: usize,
+		rate: f64,
+		bands: usize,
+		low: f64,
+		high: f64,
+	) -> usize {
+		let window: Vec<f64> = floats(window, window_length).into_iter().map(f64::from).collect();
+		let levels = crate::sound::spectrum::window_levels(&window, rate, bands, low, high);
+		kept(levels.iter().flat_map(|level| level.to_le_bytes()).collect())
+	}
+
 	#[no_mangle]
 	pub extern "C" fn web_bundle_module() -> *const u8 {
 		MODULE.with(|kept| kept.borrow().as_ptr())

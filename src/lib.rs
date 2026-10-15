@@ -40,6 +40,7 @@ pub use lowering::{
 pub mod errors;
 pub mod ffi;
 pub mod formats;
+pub mod formatting;
 pub mod graphics;
 pub mod host;
 pub mod law;
@@ -49,6 +50,13 @@ pub mod numbers;
 pub mod operators;
 #[cfg(feature = "native")]
 pub mod sound;
+/// The browser build's part of sound: the one effects and spectrum DSP, which the playground runs too (card shared-buses
+/// stage 2, visualizer-spectrum)
+#[cfg(not(feature = "native"))]
+pub mod sound {
+	pub mod effects;
+	pub mod spectrum;
+}
 pub mod text;
 pub mod time;
 pub mod warp_parser;

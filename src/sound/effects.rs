@@ -93,6 +93,41 @@ impl Effect {
 	}
 }
 
+/// A finished sound (interleaved) through the effects (card shared-buses stage 2): a delay's or reverb's tail added, a
+/// filter's not, so a filtered note keeps its length. lib/sound.warp's list effects (`osc(C4, 1s) |> delay(0.25)`) and
+/// the playground's bus sounds (src/web/mod.rs web_bus_processed) run through here
+pub fn with_effects(samples: &[f32], effects: &[Effect], rate: u32, channels: u16) -> Vec<f32> {
+	let mut output = samples.to_vec();
+	let mut chain = Chain::new(effects, rate, channels);
+	chain.process(&mut output);
+	if chain.echoes() {
+		chain.rung_on(&mut output);
+	}
+	output
+}
+
+/// A list signal of lib/sound.warp through one effect, mono: amplitudes of `full_scale`, as lib's sounds are amplitudes
+/// of their loudness (std_io "sound" "effect")
+pub fn on_signal(effect: Effect, signal: &[f64], rate: u32, full_scale: f64) -> Vec<f64> {
+	let scale = if full_scale > 0.0 { full_scale } else { 1.0 };
+	let samples: Vec<f32> = signal.iter().map(|amplitude| (amplitude / scale) as f32).collect();
+	with_effects(&samples, &[effect], rate, 1).into_iter().map(|sample| sample as f64 * scale).collect()
+}
+
+/// A chain as JSON, `[["reverb", 0.4], ["delay", 0.25, 0.4, 0.5]]`: how the playground hands a bus's chain over
+/// (host-sound.js, card shared-buses stage 2)
+pub fn chain_of_json(json: &str) -> Result<Vec<Effect>, String> {
+	let effects: Vec<Vec<serde_json::Value>> = serde_json::from_str(json).map_err(|error| error.to_string())?;
+	effects
+		.iter()
+		.map(|effect| {
+			let name = effect.first().and_then(serde_json::Value::as_str).unwrap_or_default();
+			let settings: Vec<f64> = effect[1..].iter().filter_map(serde_json::Value::as_f64).collect();
+			Effect::named(name, &settings)
+		})
+		.collect()
+}
+
 /// The past samples a feedback comb reads back, per channel: y[i] = x[i] + feedback · y[i - gap]
 struct Comb {
 	echoes: Vec<f32>,
@@ -356,6 +391,21 @@ impl Chain {
 	pub fn rung_out(&self) -> bool {
 		self.quiet_frames >= self.tail_frames
 	}
+
+	/// Whether it echoes (a delay or a reverb): its tail outlasts the input
+	fn echoes(&self) -> bool {
+		self.stages.iter().any(|stage| stage.memory() > 0)
+	}
+
+	/// Its tail after the output, a hundredth of a second at a time, until it has rung out
+	fn rung_on(&mut self, output: &mut Vec<f32>) {
+		let block = self.channels * self.rate as usize / 100;
+		while !self.rung_out() {
+			let mut tail = vec![0.0; block];
+			self.process(&mut tail);
+			output.extend(tail);
+		}
+	}
 }
 
 /// The samples (interleaved) through the effects, which change at the frames of `changes` (in order), followed by
@@ -380,11 +430,6 @@ pub fn processed(
 		done = until;
 	}
 	chain.process(&mut output[done..]);
-	let block = channels.max(1) as usize * rate as usize / 100;
-	while !chain.rung_out() {
-		let mut tail = vec![0.0; block];
-		chain.process(&mut tail);
-		output.extend(tail);
-	}
+	chain.rung_on(&mut output);
 	output
 }

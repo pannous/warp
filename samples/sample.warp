@@ -14,19 +14,19 @@ bool flag = true
 
 /* Functions */
 fun calculate(a: int, b: real) as float64 {
-    return a + b * 2.0
+	return a + b * 2.0
 }
 
 /* Control flow */
 if (x > 0) {
-    print("Positive")
+	print("Positive")
 } else {
-    print("Non-positive")
+	print("Non-positive")
 }
 
 /* Collections */
 for item in numbers {
-    print(item)
+	print(item)
 }
 
 /* Arithmetic */

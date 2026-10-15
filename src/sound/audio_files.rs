@@ -5,6 +5,8 @@
 
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::SystemTime;
 
 const RIFF_HEADER: usize = 12;
 const CHUNK_HEADER: usize = 8;
@@ -40,6 +42,33 @@ pub fn load(path: &str) -> Result<Vec<i64>, String> {
 	let (rate, channels, amplitudes) = decoded(&bytes).map_err(|problem| format!("{path}: {problem}"))?;
 	let offset = amplitudes.into_iter().map(|amplitude| amplitude as i64 + super::SAMPLE_OFFSET);
 	Ok([rate as i64, channels as i64].into_iter().chain(offset).collect())
+}
+
+/// A file's first channel, amplitudes around 0, and its rate
+pub struct Mono {
+	pub rate: f64,
+	pub amplitudes: Vec<f32>,
+}
+
+/// A decoded file: its path, its modification time then, its first channel
+type Decoded = (String, Option<SystemTime>, Arc<Mono>);
+/// The files decoded so far: a file written again is decoded again
+static DECODED: Mutex<Vec<Decoded>> = Mutex::new(Vec::new());
+
+/// The file's first channel, decoded once per version of it (lib/sound.warp spectrum of a file, sound_seconds)
+pub fn mono(path: &str) -> Result<Arc<Mono>, String> {
+	let modified = std::fs::metadata(path).and_then(|file| file.modified()).ok();
+	let mut known = DECODED.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+	if let Some((.., mono)) = known.iter().find(|(known_path, when, _)| known_path == path && *when == modified) {
+		return Ok(mono.clone());
+	}
+	let flat = load(path)?;
+	let (rate, channels) = (flat[0] as f64, flat[1].max(1) as usize);
+	let amplitudes = flat[2..].iter().step_by(channels).map(|value| (value - super::SAMPLE_OFFSET) as f32).collect();
+	let mono = Arc::new(Mono { rate, amplitudes });
+	known.retain(|(known_path, ..)| known_path != path);
+	known.push((path.to_string(), modified, mono.clone()));
+	Ok(mono)
 }
 
 /// The file as a 16-bit WAV by the first converter that knows its format

@@ -2,6 +2,7 @@
 //! `(picked·1 = fs#2; picked·1(3))`, the call of a function held by a variable, which closures.rs knows.
 
 use super::nodes::{key, Counter};
+use crate::analyzer::call_name;
 use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
 
@@ -35,15 +36,22 @@ impl Picking {
 	/// The group of arguments applied to the operand right before it: the indexed element itself, or the last operand
 	/// of an expression the parser closed first (`s += fs[i](3)` reads `(s += fs#(i+1)) (3)`)
 	fn called(&self, operand: &Node, arguments: &Node) -> Option<Node> {
-		let Node::List(arguments, Bracket::Round, _) = arguments.drop_meta() else {
-			return None;
+		let arguments = match arguments.drop_meta() {
+			// `osc(A4, 1s) |> rooms#1` applies rooms#1 to the one argument osc(A4, 1s), a call, not a group of three
+			Node::List(items, bracket, separator)
+				if items.len() > 1 && call_name(items, bracket, separator).is_some() =>
+			{
+				std::slice::from_ref(arguments)
+			}
+			Node::List(arguments, Bracket::Round, _) => arguments.as_slice(),
+			_ => return None,
 		};
 		match operand.drop_meta() {
 			Node::Key(_, Op::Hash, index) if !index.is_empty_node() => {
 				Some(self.picked_call(operand.clone(), arguments))
 			}
 			Node::Key(left, op, right) => self
-				.called(right, &parens(arguments.clone()))
+				.called(right, &parens(arguments.to_vec()))
 				.map(|right| key(self.rewrite(left.as_ref().clone()), *op, right)),
 			_ => None,
 		}

@@ -73,7 +73,11 @@ const GITHUB_TOKEN = "https://github.com/login/oauth/access_token";
 const GITHUB_USER = "https://api.github.com/user";
 const CLOUDFLARE_AUTHORIZE = "https://dash.cloudflare.com/oauth2/auth";
 const CLOUDFLARE_TOKEN = "https://dash.cloudflare.com/oauth2/token";
-const CLOUDFLARE_SCOPES = "workers-scripts.edit user-details.read account-settings.read";
+// workers-scripts.admin: only Admin creates Workers ("Workers Editor", workers-scripts.edit, updates existing ones and
+// answers a new program's upload "No access to the specified resource"); each must be among the OAuth client's scopes
+const CLOUDFLARE_SCOPES = "workers-scripts.admin user-details.read account-settings.read";
+const CLOUDFLARE_INVALID_TOKEN = 9109; // an expired or revoked token: logging in again helps, unlike a missing permission
+const CLOUDFLARE_WORKERS_DASHBOARD = "https://dash.cloudflare.com/?to=/:account/workers-and-pages";
 const SCRIPT_PREFIX = "warp-";
 const CALLBACK_PATH = "/callback";
 const NAME_PATTERN = /^[a-z0-9]([a-z0-9-]{0,38}[a-z0-9])?$/;
@@ -179,7 +183,7 @@ function deployingStatus({ login, program, error }, late) {
 	if (error) return `${who}Not deployed: ${escapedHtml(error)}`;
 	if (!program) return `${who}Deploying: the program's link shows here as soon as it is known.`;
 	const link = `<a href="${escapedHtml(program)}">${escapedHtml(program)}</a>`;
-	return `${who}Deployed at ${link}: ${late ? "it does not answer yet, the link works once it does." : "this window opens it as soon as it answers…"}`;
+	return `${who}Deploying at ${link}: ${late ? "it does not answer yet, the link works once it does." : "this window opens it as soon as it answers…"}`;
 }
 
 // GET /deploying?ticket=: the deploy window (card user-click): the program's link as soon as the ticket knows it, and
@@ -240,7 +244,7 @@ async function ticketRequest(request, env) {
 	const [program, error] = ["program", "error"].map(field => url.searchParams.get(field));
 	if (program) checkedProgram(program);
 	if (!program && !error) throw new Refusal(400, "POST /ticket?ticket=…&program=… or &error=…");
-	await storeTicket(env, ticket, program ? { program } : { error: error.slice(0, 500) });
+	await storeTicket(env, ticket, program ? { program } : { error: error.slice(0, 500), program: undefined });
 	return json({ stored: true });
 }
 
@@ -301,9 +305,11 @@ async function finishLogin(request, env, provider) {
 async function cloudflare(token, path, init = {}) {
 	const reply = await fetch(`${CLOUDFLARE_API}${path}`, { ...init, headers: { authorization: `Bearer ${token}`, ...init.headers } });
 	const answer = await reply.json().catch(() => ({ success: false, errors: [{ message: `HTTP ${reply.status}` }] }));
-	if (!answer.success) throw new Refusal(reply.status === 401 || reply.status === 403 ? 403 : 502,
-		`Cloudflare ${path.split("/").slice(3, 5).join("/")}: ${(answer.errors ?? []).map(error => error.message).join("; ")}`);
-	return answer.result;
+	if (answer.success) return answer.result;
+	const errors = answer.errors ?? [];
+	const expired = reply.status === 401 || errors.some(error => error.code === CLOUDFLARE_INVALID_TOKEN);
+	throw new Refusal(expired ? 401 : [403, 404].includes(reply.status) ? reply.status : 502,
+		`Cloudflare ${init.method ?? "GET"} ${path.split("/").slice(3).join("/")}: ${errors.map(error => error.message).join("; ")}`);
 }
 
 function checkedWasm(bytes) {
@@ -355,15 +361,18 @@ function scriptForm({ wasm, scripts, site }) {
 	return form;
 }
 
-// the program's address goes under the deploy's ticket (?ticket=) before the upload, so the deploy window links it at once
+const missing = refusal => { if (refusal.status === 404) return {}; throw refusal; };
+
+// the program's address goes under the deploy's ticket (?ticket=) once uploaded, so the deploy window never links a failed one
 async function upload(env, request, { token, account, script, program }) {
-	const { subdomain } = await cloudflare(token, `/accounts/${account}/workers/subdomain`);
-	const url = `https://${script}.${subdomain}.workers.dev`;
-	const ticket = new URL(request.url).searchParams.get("ticket");
-	if (ticket) await storeTicket(env, checkedTicket(ticket), { program: url });
+	const { subdomain } = await cloudflare(token, `/accounts/${account}/workers/subdomain`).catch(missing);
+	if (!subdomain) throw new Refusal(409, `the Cloudflare account has no workers.dev subdomain yet: choose one once at ${CLOUDFLARE_WORKERS_DASHBOARD}, then deploy again`);
 	await cloudflare(token, `/accounts/${account}/workers/scripts/${script}`, { method: "PUT", body: scriptForm(program) });
 	await cloudflare(token, `/accounts/${account}/workers/scripts/${script}/subdomain`, { method: "POST",
 		headers: { "content-type": "application/json" }, body: JSON.stringify({ enabled: true, previews_enabled: false }) });
+	const url = `https://${script}.${subdomain}.workers.dev`;
+	const ticket = new URL(request.url).searchParams.get("ticket");
+	if (ticket) await storeTicket(env, checkedTicket(ticket), { program: url });
 	return url;
 }
 

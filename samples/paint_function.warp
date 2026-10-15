@@ -9,9 +9,9 @@ def escape_time(cx, cy) {
 	x = 0.0 as float
 	y = 0.0 as float
 	iter = 0
-	while x*x + y*y <= 4 and iter < max_iter {
-		xtemp = x*x - y*y + cx
-		y = 2*x*y + cy
+	while x * x + y * y <= 4 and iter < max_iter {
+		xtemp = x * x - y * y + cx
+		y = 2 * x * y + cy
 		x = xtemp
 		iter = iter + 1
 	}

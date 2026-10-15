@@ -13,6 +13,7 @@ mod test_code_golf; // card code-golf
 mod test_data_structure_fixes;
 mod test_draw;
 mod test_draw_label; // card paint-text
+mod test_file_spectrum; // card gpu-visualizer-mp3
 mod test_gpu_draw; // card gpu-draw
 mod test_hints_toggle; // card hints-toggle
 mod test_json_parser_fixes;

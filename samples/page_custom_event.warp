@@ -7,7 +7,7 @@ div{
 	button{ on click {
 		saves += 1
 		emit saved{count: saves}
-	} "Save" }
+		} "Save" }
 	p{ "saved " + saves + " times" }
 	script{ "document.addEventListener('saved', event => { document.title = 'saved #' + event.detail.count; console.log('the page heard', event.detail) })" }
 }
