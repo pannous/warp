@@ -43,7 +43,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   (indentation, spacing, separators, brackets, blank lines) in one canonical form, never changing meaning; no word
   or alias rewrites, semantic rules stay compiler hints. The command is `warp format`, `warp lint` a synonym; warp
   avoids abbreviations, so no `fmt`. The linter carries that rule as a soft hint (report only, never fixed): an
-  abbreviated word or name (`fmt`, `str`, `cnt`) → "warp avoids abbreviations: format / text / count".
+  abbreviated word or name (`fmt`, `str`, `cnt`) → "warp avoids abbreviations: format / text / count", built-in
+  alias words included. Layout: tabs, `name: value`, binary operators spaced (glued only where spacing changes the
+  meaning; every edit is checked by comparing parse trees), list separators kept as written, `{` on its header's
+  line, one space after `,`, no spaces inside brackets, at most one blank line.
 - cleanup-means-fewer-lines (2026-10-13): the cleanup's metric is lines removed: simpler, more general, more elegant
   code. Splitting files or functions alone is not a goal ("not that impressed by splitting"). Each cleanup merge
   request states its net src/ line delta; baseline 161132 lines of src/*.rs at eaa40f98b.
