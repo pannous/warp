@@ -63,7 +63,7 @@ impl Node {
 				let mut map = Map::new();
 				for item in items {
 					match item {
-						Key(..) => insert_json_entry(&mut map, item),
+						Key(_, op, _) if is_entry_operator(op) => insert_json_entry(&mut map, item),
 						List(nested, Bracket::Curly, _) => {
 							nested.iter().for_each(|entry| insert_json_entry(&mut map, entry))
 						}
@@ -74,7 +74,14 @@ impl Node {
 				}
 				Value::Object(map)
 			}
+			// a group of one, `(b + 1)`, is its item
+			List(items, Bracket::Round, _) if items.len() == 1 => items[0].to_json_value(),
 			List(items, _, _) => Value::Array(items.iter().map(Node::to_json_value).collect()),
+			// code: `1+1` is `{"+": [1, 1]}` (the JsonLogic shape), a prefix operation without its empty left side
+			Key(left, op, right) if !is_entry_operator(op) => {
+				let operands = [left, right].into_iter().filter(|side| !side.is_nothing());
+				json_object([(op.as_str(), Value::Array(operands.map(|side| side.to_json_value()).collect()))])
+			}
 			Key(..) => {
 				let mut map = Map::new();
 				insert_json_entry(&mut map, self);
@@ -187,6 +194,11 @@ fn xml_attribute(item: &Node) -> Option<String> {
 }
 
 /// The entry `key: value` with a text or symbol key into the object; any other node adds nothing
+/// `a: 1`, `a = 1`, `a := 1` are entries of an object; other keys are operations (host.js ENTRY_OPERATORS)
+fn is_entry_operator(op: &Op) -> bool {
+	matches!(op, Op::None | Op::Colon | Op::Assign | Op::Define)
+}
+
 fn insert_json_entry(map: &mut Map<String, Value>, entry: &Node) {
 	if let Key(key, _, value) = entry {
 		if let Symbol(key) | Text(key) = key.drop_meta() {
