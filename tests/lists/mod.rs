@@ -104,6 +104,7 @@ mod test_tuples;
 mod test_type_word_items;
 mod test_typed_list_insert; // card w0-list-writes
 mod test_typed_lists;
+mod test_unit_word_text_in; // card in-text-word
 mod test_unpacking;
 mod test_unpacking_declared;
 mod test_unpacking_into_existing;
