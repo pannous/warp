@@ -65,7 +65,7 @@ class PageObject {
 		return this.text;
 	}
 }
-const toPage = value => value instanceof PageObject ? { $page: value.$page } : value;
+const toPage = value => value instanceof PageObject ? { $page: value.$page, type: value.type } : value;
 function callOnPage(receiver, memberName, argumentValues) {
 	const label = `js ${receiver.type ?? receiver}.${memberName}`;
 	const request = { receiver: toPage(receiver), member: memberName, arguments: argumentValues?.map(value => toPage(unhandled(value))) ?? null };
