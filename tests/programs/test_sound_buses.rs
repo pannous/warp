@@ -200,3 +200,11 @@ fn a_note_played_on_a_bus_echoes_and_the_next_stays_dry() {
 	assert!(loudest(&samples, 0.31, 0.39) > 500, "the note's echo 0.3 s later");
 	assert!(loudest(&samples, 0.42, 0.49) < QUIET, "the next note sounds dry: no echo of it");
 }
+
+/// lib's list effects are the bus DSP too (user 2026-10-15, one DSP in Rust): a delay rings until -60 dB as a bus does,
+/// a filter keeps the signal's length
+#[test]
+fn list_effects_run_the_bus_dsp() {
+	crate::is!("use sound\ncount(osc(440, 0.1s) |> delay(0.1, 0.5))", 23105);
+	crate::is!("use sound\ncount(osc(C4, 0.1s) |> lowpass(800))", 2205);
+}

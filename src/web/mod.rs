@@ -685,9 +685,10 @@ mod exports {
 		kept(serde_json::to_vec(&crate::members::member_names(text(code, code_length))).unwrap_or_default())
 	}
 
-	/// A sound through a bus's effects (card shared-buses stage 2, host-sound.js busProcessed): the chain as JSON
-	/// (effects::chain_of_json), the samples little-endian f32, interleaved; returns the byte length of the processed
-	/// samples with their tail, the same encoding, read at `web_report()`; 0 for a chain it cannot read
+	/// A sound through effects (card shared-buses stage 2, worker.js busProcessed: a bus's sounds, lib's list effects):
+	/// the chain as JSON (effects::chain_of_json), the samples little-endian f32, interleaved; returns the byte length of
+	/// the processed samples, a delay's or reverb's tail added (effects::with_effects), the same encoding, read at
+	/// `web_report()`; 0 for a chain it cannot read
 	#[no_mangle]
 	pub extern "C" fn web_bus_processed(
 		chain: *const u8,
@@ -704,7 +705,7 @@ mod exports {
 			if samples_length == 0 { &[][..] } else { unsafe { std::slice::from_raw_parts(samples, samples_length) } };
 		let samples: Vec<f32> =
 			bytes.chunks_exact(4).map(|four| f32::from_le_bytes([four[0], four[1], four[2], four[3]])).collect();
-		let processed = crate::sound::effects::processed(&samples, &effects, &[], rate, channels as u16);
+		let processed = crate::sound::effects::with_effects(&samples, &effects, rate, channels as u16);
 		kept(processed.iter().flat_map(|sample| sample.to_le_bytes()).collect())
 	}
 

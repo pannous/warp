@@ -140,33 +140,12 @@ phase(f, i) := {
 // the gain of the tremolo at sample i: 1 at the start, 1 - tremolo at its lowest
 tremolo_gain(i) := 1 - tremolo * (0.5 - 0.5 * cos(2 * pi * tremolo_rate * sample_time(i)))
 voices_of(pitches) := if unison <= 1 then pitches else [frequency * 2^(detune * (k / (unison - 1) - 0.5) / 12) for frequency in pitches for k in 0..unison]
+// the amplitudes through one effect, the bus DSP in Rust (src/sound/effects.rs on_signal, card shared-buses stage 2):
+// ["lowpass", 800, 0.7] (also highpass, bandpass: biquads of the Audio EQ Cookbook), ["delay", seconds, feedback, mix]
+// and ["reverb", mix] with their tail, ["distort", drive] a soft clipper keeping the loudness
+effected(amplitudes: list, effect: list) := std_io("sound", "effect", [effect, amplitudes, sample_rate, loudness * loudest_sample])
 // the amplitudes through the synth's filter setting
-filtered(amplitudes) := if filter == "none" then amplitudes else biquad(amplitudes, filter, cutoff, resonance)
-// the amplitudes through a "lowpass", "highpass" or "bandpass" filter at frequency Hz of resonance q: a biquad of the
-// Audio EQ Cookbook (R. Bristow-Johnson)
-def biquad(amplitudes, kind, frequency, q) {
-	w = 2 * pi * frequency / sample_rate
-	alpha = sin(w) / (2 * q)
-	c = cos(w)
-	b0 = if kind == "lowpass" then (1 - c) / 2 else if kind == "highpass" then (1 + c) / 2 else alpha
-	b1 = if kind == "lowpass" then 1 - c else if kind == "highpass" then -(1 + c) else 0.0
-	b2 = if kind == "bandpass" then -alpha else b0
-	a0 = 1 + alpha
-	x1 = 0.0
-	x2 = 0.0
-	y1 = 0.0
-	y2 = 0.0
-	shaped = []
-	for x in amplitudes {
-		y = (b0 * x + b1 * x1 + b2 * x2 + 2 * c * y1 - (1 - alpha) * y2) / a0
-		x2 = x1
-		x1 = x
-		y2 = y1
-		y1 = y
-		shaped.push(y)
-	}
-	shaped
-}
+filtered(amplitudes) := if filter == "none" then amplitudes else effected(amplitudes, [filter, cutoff, resonance])
 // the amplitudes of frequencies sounding together
 chord_amplitudes(pitches, duration, shape) := {
 	n = round(duration * sample_rate) as int
@@ -185,52 +164,10 @@ global delay_time = 0.0 as float
 global delay_feedback = 0.4 as float
 global delay_mix = 0.5 as float
 global reverb_mix = 0.0 as float
-// floats (1.0f): exact ratios can't cross into a `go` task in the browser yet
-// below this share of the level the echoes and the room's tail are cut off
-echo_floor = 0.01f
-max_echoes = 8
-reverb_seconds = 0.6f
-// the delays (seconds) and the feedback of the four parallel combs of the reverb (Schroeder)
-reverb_delays = [0.0297f, 0.0371f, 0.0411f, 0.0437f]
-reverb_feedback = 0.75f
 effects_on() := distortion > 0 or delay_time > 0 or reverb_mix > 0
-
-distorted(amplitudes) := if distortion <= 0 then amplitudes else clipped(amplitudes, distortion)
-// a soft clipper: tanh bends the peaks the harder the drive, the loudest sample stays at the sound's loudness
-def clipped(amplitudes, drive) {
-	peak = loudness * loudest_sample
-	[peak * tanh(x * (1 + 10 * drive) / peak) for x in amplitudes]
-}
-// the signal plus feedback combs: y[i] = x[i] + feedback · y[i - gap], after the signal's end for the tail
-def comb(amplitudes, gap, feedback, tail) {
-	combed = []
-	for i in 0..(count(amplitudes) + tail) {
-		combed.push(dry_at(amplitudes, i) + (if i >= gap then feedback * combed[i - gap] else 0.0))
-	}
-	combed
-}
-// the number of repeats until a feedback has died below echo_floor
-echoes_of(feedback) := if feedback <= 0 then 0 else min(max_echoes, ceil(log(echo_floor) / log(feedback)) as int)
-delayed(amplitudes) := if delay_time <= 0 then amplitudes else echoed(amplitudes, delay_time, delay_feedback, delay_mix)
-// the dry signal and its echoes every seconds at feedback of the level before, mix of them, to the length of the tail
-def echoed(amplitudes, seconds, feedback, mix) {
-	gap = round(seconds * sample_rate) as int
-	wet = comb(amplitudes, gap, feedback, gap * echoes_of(feedback))
-	[dry_at(amplitudes, i) + mix * (wet[i] - dry_at(amplitudes, i)) for i in 0..count(wet)]
-}
-dry_at(amplitudes, i) := if i >= 0 and i < count(amplitudes) then amplitudes[i] else 0.0
-reverbed(amplitudes) := if reverb_mix <= 0 then amplitudes else roomed(amplitudes, reverb_mix)
-// the dry signal and the average of four combs, mix of it, to reverb_seconds after its end; the combs are summed
-// one after the other: a list of the four, indexed per sample, walked each of them (quadratic on a long sound)
-def roomed(amplitudes, mix) {
-	tail = round(reverb_seconds * sample_rate) as int
-	wet = comb(amplitudes, round(reverb_delays[0] * sample_rate) as int, reverb_feedback, tail)
-	for k in 1..count(reverb_delays) {
-		room = comb(amplitudes, round(reverb_delays[k] * sample_rate) as int, reverb_feedback, tail)
-		wet = [wet[i] + room[i] for i in 0..count(wet)]
-	}
-	[dry_at(amplitudes, i) + mix * wet[i] / count(reverb_delays) for i in 0..count(wet)]
-}
+distorted(amplitudes) := if distortion <= 0 then amplitudes else effected(amplitudes, ["distort", distortion])
+delayed(amplitudes) := if delay_time <= 0 then amplitudes else effected(amplitudes, ["delay", delay_time, delay_feedback, delay_mix])
+reverbed(amplitudes) := if reverb_mix <= 0 then amplitudes else effected(amplitudes, ["reverb", reverb_mix])
 // the samples through the effect chain
 def through_effects(samples) {
 	if not effects_on() { return samples }
@@ -244,12 +181,12 @@ clamped_samples(amplitudes) := [sample_offset + (max(-loudest_sample, min(loudes
 osc(pitch, duration, shape) := chord_amplitudes(pitches_of(pitch), si_amount(duration), shape)
 osc(pitch, duration) := osc(pitch, duration, wave_shape)
 osc(pitch) := osc(pitch, note_seconds, wave_shape)
-lowpass(signal, frequency, q = 0.707) := biquad(signal, "lowpass", si_amount(frequency), q)
-highpass(signal, frequency, q = 0.707) := biquad(signal, "highpass", si_amount(frequency), q)
-bandpass(signal, frequency, q = 0.707) := biquad(signal, "bandpass", si_amount(frequency), q)
-delay(signal, seconds, feedback = 0.4, mix = 0.5) := echoed(signal, si_amount(seconds), feedback, mix)
-reverb(signal, mix = 0.3) := roomed(signal, mix)
-distort(signal, drive = 0.5) := clipped(signal, drive)
+lowpass(signal, frequency, q = 0.707) := effected(signal, ["lowpass", si_amount(frequency), q])
+highpass(signal, frequency, q = 0.707) := effected(signal, ["highpass", si_amount(frequency), q])
+bandpass(signal, frequency, q = 0.707) := effected(signal, ["bandpass", si_amount(frequency), q])
+delay(signal, seconds, feedback = 0.4, mix = 0.5) := effected(signal, ["delay", si_amount(seconds), feedback, mix])
+reverb(signal, mix = 0.3) := effected(signal, ["reverb", mix])
+distort(signal, drive = 0.5) := effected(signal, ["distort", drive])
 gain(signal, share) := [share * x for x in signal]
 // two to four signals summed sample by sample, to the longest (a list of signals walked in a loop was quadratic: card
 // list-call-copy)

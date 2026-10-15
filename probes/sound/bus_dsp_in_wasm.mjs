@@ -1,5 +1,5 @@
 // card shared-buses stage 2: the browser's bus effects are the native DSP (src/sound/effects.rs) through warp.wasm's
-// web_bus_processed, called as web/playground/worker.js busProcessed calls it. An impulse through a delay bus echoes
+// web_bus_processed, called as web/playground/host-compiler.js effectsProcessed calls it. An impulse through a delay bus echoes
 // 0.3 s later at half its level, the tail added; a chain it cannot read gives 0.
 // Run: node probes/sound/bus_dsp_in_wasm.mjs <warp.wasm> (a web-debug or release cdylib, web/playground/build.sh)
 import { readFileSync } from "node:fs";

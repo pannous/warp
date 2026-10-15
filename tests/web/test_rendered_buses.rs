@@ -10,3 +10,9 @@ fn a_delay_bus_rings_on_in_the_render_as_natively() {
 		29
 	);
 }
+
+/// lib's list effects run the same DSP: a delay's echoes ring as long as natively (tests/programs/test_sound_pipes.rs)
+#[test]
+fn a_list_signal_delays_as_natively() {
+	is!("use sound\ncount(osc(440, 0.1s) |> delay(0.1, 0.5))", 23105);
+}

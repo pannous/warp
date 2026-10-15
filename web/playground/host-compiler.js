@@ -41,22 +41,42 @@ function compilerFromUrl(hooks) {
 // a compiler entry point whose runs may wait for promises (warpHost `awaited`), as an async function where JSPI is
 const awaitedEntry = entry => JSPI ? WebAssembly.promising(entry) : entry;
 
-// the report of src/web/mod.rs eval_block_report: {result: tree} or {error: message}
-function evalBlock(hooks, request) {
-	const compiler = blockCompiler(hooks);
-	const bytes = utf8.encode(request);
+// the bytes in the compiler's memory: [pointer, length], for web_free
+function passedBytes(compiler, bytes) {
 	const pointer = compiler.web_alloc(bytes.length);
 	new Uint8Array(compiler.memory.buffer, pointer, bytes.length).set(bytes);
+	return [pointer, bytes.length];
+}
+
+// an entry point of the block compiler on the bytes passed; after a trap the next call gets a new instance
+function blockCompilerCall(hooks, entry, passed, ...rest) {
+	const compiler = blockCompiler(hooks);
+	const arguments_ = passed.map(bytes => passedBytes(compiler, bytes));
 	let length;
 	try {
-		length = compiler.web_eval_block(pointer, bytes.length);
+		length = compiler[entry](...arguments_.flat(), ...rest);
 	} catch (trap) {
 		forgetBlockCompiler();
 		throw trap;
 	}
-	const report = JSON.parse(readText(compiler, compiler.web_report(), length));
-	compiler.web_free(pointer, bytes.length);
-	return report;
+	arguments_.forEach(([pointer, size]) => compiler.web_free(pointer, size));
+	return { compiler, length };
+}
+
+// the report of src/web/mod.rs eval_block_report: {result: tree} or {error: message}
+function evalBlock(hooks, request) {
+	const { compiler, length } = blockCompilerCall(hooks, "web_eval_block", [utf8.encode(request)]);
+	return JSON.parse(readText(compiler, compiler.web_report(), length));
+}
+
+// a sound through effects (card shared-buses stage 2: a bus's sounds, lib's list effects): the one DSP, src/sound/effects.rs,
+// natively and here (src/web/mod.rs web_bus_processed); floats -1…1 interleaved in and out, a delay's or reverb's tail added
+function effectsProcessed(hooks, chain, floats, rate, channels) {
+	const samples = new Uint8Array(floats.buffer, floats.byteOffset, floats.byteLength);
+	const { compiler, length } = blockCompilerCall(hooks, "web_bus_processed", [utf8.encode(JSON.stringify(chain)), samples], rate, channels);
+	if (!length) throw new Error(`effects ${JSON.stringify(chain)}: not a chain of known effects`);
+	const at = compiler.web_report();
+	return new Float32Array(compiler.memory.buffer.slice(at, at + length));
 }
 
 // the `warp_host` imports of a compiler instance; `memory()` is its memory (known only after instantiation).

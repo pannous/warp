@@ -330,8 +330,15 @@ playground plays bus sounds dry and says so), stage 3 a bus's effects changed wh
 
 Stage 2, bus API A (user 2026-10-15): `osc(C4, 1s) |> room` (parsed `room(osc(…))`; music_words.rs with_bus_sends
 makes a call of a variable assigned `bus()` or effects on one `out(signal, room)`) and `play(C4, 1s, bus: room)` (a play
-overload around sent_to / sent_back). No `send room` setting. Still to build: the one DSP in Rust for the browser too
-(warp.wasm export), and lib's list-signal effects as calls of it.
+overload around sent_to / sent_back). No `send room` setting.
+One DSP (user 2026-10-15: Rust for now, a warp twin later): src/sound/effects.rs `with_effects` runs lib's list effects
+(lib effected → std_io sound.effect → on_signal, amplitudes of loudness · loudest_sample, so distort keeps the level) and,
+in the browser, the bus sounds: warp.wasm exports web_bus_processed, host-compiler.js effectsProcessed calls it on the
+block compiler (also in tests and task Workers), host-sound.js onBus runs each sound sent to a bus through the chain
+apart (exact for the linear effects; compress and distort act per sound there) and the list effects. A delay or reverb
+now rings until -60 dB (Chain::rung_on) instead of lib's 8 echoes / 0.6 s; a filter adds no tail, so notes keep their
+length. lib's comb, echoed, roomed, clipped, biquad and the reverb constants are gone. Probe:
+probes/sound/bus_dsp_in_wasm.mjs.
 
 Stage 3 built (2026-10-15): `room = room |> gain(0)` changes the bus from the defining voice's moment (where its queued
 sounds end). An effect of a name the chain has replaces it in place (with_effect), else it appends. Chain::retune keeps
