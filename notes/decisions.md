@@ -649,8 +649,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   while it plays applies from that moment. No `send room` setting.
 - sound-dsp (2026-10-15, user): the effects DSP is written once in Rust (src/sound/effects.rs, compiled into warp.wasm
   for the browser), lib/sound.warp calls it; a warp twin can follow with self-hosting.
-- save-sound (2026-10-15, user): `render_sound("x.wav")` writes the sounds since the last render to a WAV file (it
-  plays nothing); `save_sound` is its alias.
+- save-sound (2026-10-15, user, replaces the render_sound alias answer): writing audio to a file is the general
+  `save` with an explicit object, overloaded by its type: `save sound as "song.wav"` / `save(sound, "song.wav")`,
+  likewise `save buffer as "x.raw"` and other savable values. render_sound goes; its name gives an I-meant hint
+  naming save.
 
 ## Old id index (superseded or historic; git has the text)
 P35 → index-position. P42 → P227. P56(2-4) unknown entity → P56 revised. P63 → wiki/charged.md. P66 → footgun-divzero.
