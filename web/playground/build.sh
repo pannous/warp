@@ -96,9 +96,11 @@ fetch_release_asset() {
 
 fetch_package_libraries() {
 	local entry name repository version library file
-	grep -oE '^[a-z_]+: \{repository: "[^"]+", version: [0-9.]+, library: "[^"]+"' packages.warp | while read -r entry; do
+	# the registry's curly entries with a library; repository: "https://…", "github:owner/repo" or a bare owner/repo
+	grep -E '^[a-z_]+: \{.*library: "[^"]+"' packages.warp | while read -r entry; do
 		name=${entry%%:*}
-		repository=$(grep -oE 'https://github.com/[^"]+' <<< "$entry"); repository=${repository%.git}
+		repository=$(grep -oE 'repository: "?[^",}]+' <<< "$entry" | sed -E 's/^repository: "?//; s/^github://; s/\.git$//')
+		[[ $repository == *://* ]] || repository="https://github.com/$repository"
 		version=$(grep -oE 'version: [0-9.]+' <<< "$entry"); version=${version#version: }
 		library=$(grep -oE 'library: "[^"]+"' <<< "$entry" | cut -d'"' -f2)
 		mkdir -p "$page/packages/$name"
