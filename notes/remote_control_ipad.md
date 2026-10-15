@@ -65,3 +65,9 @@ confirms that `claude --remote-control` in detached tmux adds each session as it
   to a list file the user can open on the iPad.
 - If it keeps happening: file a fresh issue that references #78601 and #28402 (stale-closed). Include the CLI version,
   the session count, and whether the missing sessions had compacted.
+
+## Observed (user, 2026-10-15)
+- Closing and reopening the iPad app made warp-supervisor appear, but not the just-spawned warp-research (active and
+  generating at the time). Force-quit + reopen is worth a try, but it doesn't bring every session back.
+- Workaround in place: ~/dev/bin/claude-remote.sh appends every spawned session's URL to
+  iCloud Drive/claude-sessions.html (Files app on the iPad → tap the file → tap a link).
