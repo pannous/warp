@@ -13,8 +13,11 @@ use std::sync::OnceLock;
 const SOURCE: &str = include_str!("../../../lib/units.warp");
 const BLOCK_END: &str = "}";
 const DIMENSION_WORD: &str = "dimension ";
+const UNIT_WORD: &str = "unit ";
 const DEFINE: &str = ":=";
-const BASE: char = ':';
+/// `(it + 273.15) K`: a unit counting from another zero shifts its amount `it` first
+const SHIFT_START: &str = "(it +";
+const TIMES: &str = "*";
 const COMMENT: &str = "//";
 /// The names of the run-time tables lib/units.warp's Quantity reads, in place of the block (run_time_tables)
 pub(super) const BLOCK_NAME: &str = "unit_definitions";
@@ -129,28 +132,24 @@ fn read(source: &'static str) -> Result<Definitions, String> {
 		if line.is_empty() || line.starts_with(COMMENT) {
 			continue;
 		}
-		if let Some((name, expression)) = line.strip_prefix(DIMENSION_WORD).and_then(|rest| rest.split_once(DEFINE)) {
-			derived_dimensions.push((name.trim(), powers_of(expression, &dimensions)?));
-		} else if let Some(name) = line.strip_prefix(DIMENSION_WORD) {
-			let dimension = DIMENSION_WORDS
-				.iter()
-				.find(|(word, _)| *word == name.trim())
-				.ok_or(format!("unknown dimension {name}"))?;
-			dimensions.push((name.trim(), dimension.1));
-		} else if let Some((name, expression)) = line.split_once(DEFINE) {
-			let (name, expression) = (name.trim(), expression.trim());
+		let definition = |keyword: &str| {
+			let (name, expression) = line.strip_prefix(keyword)?.split_once(DEFINE)?;
+			Some((name.trim(), expression.trim()))
+		};
+		if let Some((name, anchor)) = definition(DIMENSION_WORD) {
+			match DIMENSION_WORDS.iter().find(|(word, _)| *word == name) {
+				Some((_, dimension)) => {
+					dimensions.push((name, *dimension));
+					base_units.push((*dimension, anchor));
+					units.push(Read { name: anchor, dimension: *dimension, scale: Rational::integer(1), zero: Rational::zero() });
+				}
+				None => derived_dimensions.push((name, powers_of(anchor, &units)?)),
+			}
+		} else if let Some((name, expression)) = definition(UNIT_WORD) {
 			match unit_of(expression, &units)? {
 				Some((dimension, scale, zero)) => units.push(Read { name, dimension, scale, zero }),
 				None => aliases.push((name, expression)),
 			}
-		} else if let Some((name, dimension_name)) = line.split_once(BASE) {
-			let dimension = dimensions
-				.iter()
-				.find(|(known, _)| *known == dimension_name.trim())
-				.ok_or(format!("{name}: undeclared dimension {dimension_name}"))?
-				.1;
-			base_units.push((dimension, name.trim()));
-			units.push(Read { name: name.trim(), dimension, scale: Rational::integer(1), zero: Rational::zero() });
 		} else {
 			return Err(format!("unreadable line {line}"));
 		}
@@ -158,18 +157,25 @@ fn read(source: &'static str) -> Result<Definitions, String> {
 	Ok(Definitions { dimensions, derived_dimensions, units: in_whole_steps(units)?, base_units, aliases })
 }
 
-/// `1000 m`, `m/100`, `5/9 K + 45967/180`: the dimension, scale and zero of a unit that is an amount of one unit plus an
-/// optional plain offset; None for an expression of several units or of none (an alias)
+/// `1000 m`, `m/100`, `(it + 459.67) * 5/9 K`: the dimension, scale and zero of a unit that is an amount of one unit,
+/// counting from another zero where `it` is shifted first; None for an expression of several units or of none (an alias)
 fn unit_of(expression: &str, units: &[Read]) -> Result<Option<(Dimension, Rational, Rational)>, String> {
-	let terms: Vec<_> = expression.split('+').map(|term| product(term, units)).collect::<Result<_, _>>()?;
-	let (amount, unit, offset) = match terms.as_slice() {
-		[Some((amount, Some(unit)))] => (amount, *unit, Rational::zero()),
-		[Some((amount, Some(unit))), Some((offset, None))] => (amount, *unit, offset.clone()),
-		_ => return Ok(None),
+	let (offset, amount) = match shifted(expression) {
+		Some((offset, rest)) => (decimal(offset).ok_or(format!("{expression}: the shift is no number"))?, rest),
+		None => (Rational::zero(), expression),
+	};
+	let Some((amount, Some(unit))) = product(amount, units)? else {
+		return Ok(None);
 	};
 	// the zero counts in the unit written, which may count from a zero of its own
-	let zero = offset.mul(&unit.scale).add(&unit.zero);
-	Ok(Some((unit.dimension, amount.mul(&unit.scale), zero)))
+	let scale = amount.mul(&unit.scale);
+	Ok(Some((unit.dimension, scale.clone(), offset.mul(&scale).add(&unit.zero))))
+}
+
+/// `(it + 273.15) K` → `273.15` and `K`; None for an amount of no shifted `it`
+fn shifted(expression: &str) -> Option<(&str, &str)> {
+	let (shift, rest) = expression.strip_prefix(SHIFT_START)?.split_once(')')?;
+	Some((shift.trim(), rest.trim()))
 }
 
 /// A product of numbers and at most one unit, not divided by (`5/9 K`, `m/100`); None for any other term
@@ -177,7 +183,7 @@ fn product<'a>(term: &str, units: &'a [Read]) -> Result<Option<(Rational, Option
 	let mut amount = Rational::integer(1);
 	let mut unit = None;
 	let mut divide = false;
-	for token in tokens(term) {
+	for token in tokens(term).into_iter().filter(|token| *token != TIMES) {
 		if token == "/" {
 			divide = true;
 			continue;
@@ -200,8 +206,8 @@ fn product<'a>(term: &str, units: &'a [Read]) -> Result<Option<(Rational, Option
 	Ok(Some((amount, unit)))
 }
 
-/// `length/duration`, `length²`, `1/duration`: the powers of the named dimensions
-fn powers_of(expression: &str, dimensions: &[(&str, Dimension)]) -> Result<Vec<(Dimension, i32)>, String> {
+/// `m/s`, `m²`, `1/s`: the powers of the dimensions of the units named
+fn powers_of(expression: &str, units: &[Read]) -> Result<Vec<(Dimension, i32)>, String> {
 	let mut powers: Vec<(Dimension, i32)> = vec![];
 	let mut sign = 1;
 	for token in tokens(expression) {
@@ -214,7 +220,7 @@ fn powers_of(expression: &str, dimensions: &[(&str, Dimension)]) -> Result<Vec<(
 					None => (word, 1),
 				};
 				let dimension =
-					dimensions.iter().find(|(known, _)| *known == name).ok_or(format!("unknown dimension {name}"))?.1;
+					units.iter().find(|unit| unit.name == name).ok_or(format!("unknown unit {name}"))?.dimension;
 				powers.push((dimension, sign * power));
 				sign = 1;
 			}
