@@ -572,7 +572,13 @@ pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &Hash
 			changed = true;
 			continue;
 		}
-		let kinds: Vec<Kind> = kinds.into_iter().filter(|kind| *kind != Kind::Int && *kind != Kind::Empty).collect();
+		let mut kinds: Vec<Kind> =
+			kinds.into_iter().filter(|kind| *kind != Kind::Int && *kind != Kind::Empty).collect();
+		// passed a number of run-time kind and a float (`turned(p.xy, p.z * 0.12 + time)` and `turned(q, time)`): a
+		// number decided at run time takes both; an Int parameter refused the float
+		if kinds.contains(&Kind::Data) && kinds.iter().all(|kind| matches!(kind, Kind::Data | Kind::Float)) {
+			kinds = vec![Kind::Data];
+		}
 		let [kind] = kinds.as_slice() else { continue };
 		// a parameter the body counts or indexes is guessed a list, until the calls pass it only texts
 		let guessed = matches!(param.used_as, None | Some(Kind::Int))
