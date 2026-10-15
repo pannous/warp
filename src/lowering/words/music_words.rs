@@ -487,7 +487,11 @@ impl LiveLoop {
 	/// a named loop's block, saying its name first each cycle: `{ live_cycle_started("drums")\n body }`
 	fn announced(&self, block: &Node) -> Node {
 		let Some(name) = self.name() else { return block.clone() };
-		let said = Node::List(vec![Node::Symbol(LIVE_CYCLE_STARTED.into()), Node::Text(name.into())], Bracket::Round, Separator::None);
+		let said = Node::List(
+			vec![Node::Symbol(LIVE_CYCLE_STARTED.into()), Node::Text(name.into())],
+			Bracket::Round,
+			Separator::None,
+		);
 		let statements = std::iter::once(said).chain(block.body_statements()).collect();
 		Node::List(statements, Bracket::Curly, Separator::Newline)
 	}

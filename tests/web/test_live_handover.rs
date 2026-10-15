@@ -32,7 +32,11 @@ fn node_output(program: &str) -> String {
 fn page_program(scenario: &str) -> String {
 	let constants = source_between(PLAYGROUND, "const LIVE_HANDED_OVER", "const LIVE_RETIRE_SECONDS = 4;\n");
 	let retired = source_between(PLAYGROUND, "const retiredWorkers", ";");
-	let handover = source_between(PLAYGROUND, "function liveCycled", "finish(run, stoppedReport(run, LIVE_HANDED_OVER, false));\n}\n");
+	let handover = source_between(
+		PLAYGROUND,
+		"function liveCycled",
+		"finish(run, stoppedReport(run, LIVE_HANDED_OVER, false));\n}\n",
+	);
 	format!("{PAGE}\n{constants}\n{retired}\n{handover}\n{scenario}")
 }
 

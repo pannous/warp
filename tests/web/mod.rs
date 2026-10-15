@@ -64,6 +64,8 @@ mod test_i18n;
 mod test_keyed_lists;
 #[cfg(feature = "native")] // runs python3
 mod test_keyword_registry; // card where-infix
+#[cfg(feature = "native")] // runs node
+mod test_live_handover; // card playground-live
 mod test_markup_holes;
 mod test_markup_lines; // card todo-app
 mod test_markup_mistakes; // card our-html
@@ -152,8 +154,6 @@ mod test_tag_lists;
 mod test_task_files; // card task-sound-play
 #[cfg(feature = "native")] // runs node
 mod test_task_midi; // card inside-go
-#[cfg(feature = "native")] // runs node
-mod test_live_handover; // card playground-live
 mod test_task_voices; // card playground-go
 mod test_text_holes; // card web-fine-text-nodes
 mod test_transitions;
