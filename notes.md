@@ -68,3 +68,6 @@
   names owned an `of`; parking phrase calls removes that exception and leaves one unconditional `a of b` to `b.a`
   rule. A push also printed `fatal: failed to store: -61` after successfully creating its remote branch; board card
   `git-credential-store` tracks the credential-helper problem.
+- 2026-10-15 if-yes: library-word lowering had a shared predicate for a braceless call used as the only statement of a
+  curly block, but its main prefix-call path duplicated a narrower bracket check and never used it. Reusing
+  `is_spaced_call` and `in_block_as_written` makes `if yes {sum ...}` follow the same general call rule.

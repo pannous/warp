@@ -5,7 +5,7 @@
 //!
 //! An unknown `.word` after a name, a text or a list is a loud error (`undefined function: word`), never silent data.
 
-use super::nodes::{call, children_rewritten, if_then_else, key, Counter};
+use super::nodes::{call, children_rewritten, if_then_else, in_block_as_written, is_spaced_call, key, Counter};
 use crate::analyzer::{call_name, counting_method};
 use crate::compiler::context::Context;
 use crate::errors::diagnostic::Diagnostic;
@@ -804,8 +804,9 @@ impl Lowering {
 		}
 		let is_call = call_name(items, bracket, separator).is_some();
 		// `(sort xs)` is `sort xs` in parentheses
-		let is_prefix =
-			matches!(bracket, Bracket::None | Bracket::Round) && *separator == Separator::Space && items.len() > 1;
+		let is_prefix = (is_spaced_call(bracket, separator)
+			|| *bracket == Bracket::Round && *separator == Separator::Space)
+			&& items.len() > 1;
 		// `[sum xs]`: a word with exactly its arguments in a list is its one computed element
 		// (a bare word that names no variable keeps the list data: `[first last]`)
 		let is_value = |argument: &Node| !matches!(argument.drop_meta(), Node::Symbol(name) if !self.shadows(name));
@@ -820,7 +821,7 @@ impl Lowering {
 		if !is_call && !is_prefix {
 			return None;
 		}
-		Some(self.call(word, &items[0], items[1..].to_vec(), is_prefix && !is_call))
+		Some(in_block_as_written(bracket, self.call(word, &items[0], items[1..].to_vec(), is_prefix && !is_call)))
 	}
 
 	/// `for k in m` walks the keys of a map, as in Python; `for k, v in m` and `for (k, v) in m` bind each value too:

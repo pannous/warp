@@ -123,3 +123,10 @@
 - Remove stale documentation of the parked forms and record the retained explicit equivalents.
 - Establish and rerun the focused phrase, list-phrase, and word-slice filters, then run formatting, clippy, and the
   wasm32 library check.
+
+# Single-statement curly calls
+
+## Done (2026-10-15)
+
+- Library words now use the shared spaced-call predicate for a one-statement curly block and preserve the block wrapper.
+- `if yes {sum [1 2]}` and `if yes {sum 1+1 2+2}` have focused regression coverage.
