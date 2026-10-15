@@ -60,9 +60,9 @@ pub const MAP_WORD_FUNCTIONS: [&str; 8] = [
 	MAP_WITHOUT,
 	crate::one_entry_maps::MAP_OF_ENTRY,
 ];
-/// The name `catch e` binds, in lower_try_binding's template
 /// The modules named after a type, whose words `x.word` calls on a value of it (lib/list.warp, text.warp)
 const TYPE_MODULES: [&str; 2] = ["list", "text"];
+/// The name `catch e` binds, in lower_try_binding's template
 const CAUGHT_BINDING_PLACEHOLDER: &str = "caught_binding";
 /// The got-it topic of `square 3 + square(4)` (ask_braceless_argument)
 const BRACELESS_ARGUMENT_TOPIC: &str = "braceless-call-operator";
