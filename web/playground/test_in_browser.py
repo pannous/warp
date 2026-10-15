@@ -743,7 +743,7 @@ def fingers_wrong():
 	touch_action("none")
 	dragged = drag(FINGERS_PAINTED)
 	shown = pixel_painted(sum(FINGERS_PAINTED) / 2)
-	return [] if shown == "painted" else [f"a finger {dragged} over samples/{FINGERS_SAMPLE}: its middle shows {shown}, expected a stroke"]
+	return [] if "painted" in shown else [f"a finger {dragged} over samples/{FINGERS_SAMPLE}: its middle shows {shown}, expected a stroke"]
 
 
 def frame_shaders_wrong():

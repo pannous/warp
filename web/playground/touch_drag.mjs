@@ -23,15 +23,20 @@ const LAST_CANVAS_BOUNDS = `JSON.stringify((() => {
 	return bounds && { left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height };
 })())`;
 
-async function drag() {
+// the browser's page that shows a painting (agent-browser keeps others, about:blank first), and the painting's bounds
+async function pageWithCanvas() {
 	const { targetInfos } = await send("Target.getTargets");
-	const page = targetInfos.find(target => target.type === "page");
-	if (!page) finish("no page to touch");
-	const { sessionId } = await send("Target.attachToTarget", { targetId: page.targetId, flatten: true });
+	for (const page of targetInfos.filter(target => target.type === "page")) {
+		const { sessionId } = await send("Target.attachToTarget", { targetId: page.targetId, flatten: true });
+		const { result } = await send("Runtime.evaluate", { expression: LAST_CANVAS_BOUNDS, returnByValue: true }, sessionId);
+		if (result.value) return { sessionId, bounds: JSON.parse(result.value) };
+	}
+	finish(`no canvas to touch in the pages ${targetInfos.filter(target => target.type === "page").map(target => target.url).join(", ")}`);
+}
+
+async function drag() {
+	const { sessionId, bounds } = await pageWithCanvas();
 	await send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 }, sessionId);
-	const { result } = await send("Runtime.evaluate", { expression: LAST_CANVAS_BOUNDS, returnByValue: true }, sessionId);
-	const bounds = result.value && JSON.parse(result.value);
-	if (!bounds) finish("no canvas to touch");
 	const at = share => ({ x: bounds.left + bounds.width * share, y: bounds.top + bounds.height * share, id: 0 });
 	const touch = (type, touchPoints) => send("Input.dispatchTouchEvent", { type, touchPoints }, sessionId);
 	await touch("touchStart", [at(FROM)]);
