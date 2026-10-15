@@ -159,7 +159,8 @@ fn a_kept_loop_with_a_long_period_is_not_faded() {
 /// LIVE_LOOPS_SECTION lists the program's live loops by name, which the playground's rerun reports (host-tasks.js)
 #[test]
 fn the_module_names_its_live_loops() {
-	let program = "use sound\nlive_loop drums 2 { play(C4, 0.1s) }\nlive_loop bass 2 { play(C2, 0.1s) }\nawait drums\nawait bass";
+	let program =
+		"use sound\nlive_loop drums 2 { play(C4, 0.1s) }\nlive_loop bass 2 { play(C2, 0.1s) }\nawait drums\nawait bass";
 	let module = warp::pipeline::compile(program).expect("compiles");
 	let names = wasmparser::Parser::new(0).parse_all(&module.bytes).find_map(|payload| match payload.unwrap() {
 		wasmparser::Payload::CustomSection(section) if section.name() == warp::host::LIVE_LOOPS_SECTION => {
