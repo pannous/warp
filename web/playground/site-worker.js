@@ -19,6 +19,7 @@ const post = message => self.postMessage(message);
 self.keepStored = (name, value, file) => post({ stored: { name, value, file } }); // host-files.js STD_ADAPTERS.store
 self.writeClipboard = text => post({ clipboard: text }); // host-files.js STD_ADAPTERS.clipboard: the page has the clipboard
 self.askPageClipboard = shared => post({ clipboardRead: shared }); // host.js clipboard_text
+self.askPageDecode = (shared, url, bytes) => post({ soundDecode: { shared, url, bytes } }); // host-sound.js pageDecoded
 self.askPageCall = (shared, request) => post({ pageCall: { shared, request } }); // host-foreign.js callOnPage
 const hooks = {
 	pagePath: () => pagePath,

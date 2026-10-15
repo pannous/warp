@@ -49,6 +49,11 @@ pub mod numbers;
 pub mod operators;
 #[cfg(feature = "native")]
 pub mod sound;
+/// The browser build's part of sound: the one spectrum DSP, which the playground runs too
+#[cfg(not(feature = "native"))]
+pub mod sound {
+	pub mod spectrum;
+}
 pub mod text;
 pub mod time;
 pub mod warp_parser;

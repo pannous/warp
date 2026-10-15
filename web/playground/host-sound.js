@@ -8,6 +8,9 @@ const WAV_HEADER_BYTES = 44;
 // play of a signal (src/sound/mod.rs play_signal, lowering/words/music_words.rs BLOCK_SAMPLES): computed this many samples at a time
 const SIGNAL_BLOCK = 512;
 const FULL_SCALE = 32767;
+// a published site ships only the host parts its words need (src/host/host_parts.rs), without the compiler that measures
+// a spectrum or the page that decodes a sound file
+const WITHOUT_PLAYGROUND = "measured in the playground and by the warp CLI, not on a published site yet";
 const DRY_BUSES = "bus(): its effects do not run in the browser yet, its sounds play dry (card shared-buses)";
 // played to someone (the page was clicked or typed in), a signal is computed at most this far ahead of the speaker,
 // checked every SIGNAL_POLL_MS (src/sound/mod.rs SIGNAL_AHEAD, SIGNAL_POLL)
@@ -252,8 +255,35 @@ function wavOf(samples, rate, channels = 1) {
 	return bytes;
 }
 
+// a sound file's first channel, amplitudes around 0, decoded once per run (lib/sound.warp spectrum of a file,
+// sound_seconds): a WAV here, any other format by the page, since a Worker has no decodeAudioData (task-workers.js
+// decodeSoundInto, while the Worker waits)
+function monoOf(holder, path) {
+	const name = besideProgram(contentText(path), programFileOf(holder.run)); // host-files.js
+	const decoded = holder.run.decodedSounds ??= {};
+	return decoded[name] ??= /\.wav$/i.test(name) ? wavMono(name) : pageDecoded(name);
+}
+
+function wavMono(name) {
+	const flat = wavFrames(readBytes(name), name), [rate, channels] = flat;
+	const amplitudes = Float32Array.from({ length: Math.floor((flat.length - 2) / channels) }, (_, at) => flat[2 + at * channels] - SAMPLE_OFFSET);
+	return { rate, amplitudes };
+}
+
+function pageDecoded(name) {
+	const written = writtenFiles.has(filePath(name));
+	const ask = self.askPageDecode && (shared => self.askPageDecode(shared, fileUrl(name), written ? readBytes(name) : undefined));
+	if (!self.askPage) throw new Error(`sound ${name}: ${WITHOUT_PLAYGROUND}`);
+	const { rate, amplitudes } = self.askPage(`sound ${name}`, ask); // host-tasks.js
+	return { rate, amplitudes: Float32Array.from(amplitudes) };
+}
+
 addHostPart({
 	words: (holder, hooks, { program }) => {
+		holder.spectrum = (window, rate, bands, low, high) => {
+			if (typeof spectrumLevels !== "function") throw new Error(`spectrum: ${WITHOUT_PLAYGROUND}`);
+			return spectrumLevels(hooks, window, rate, Number(bands), Number(low), Number(high)); // host-compiler.js
+		};
 		// samples (amplitude + SAMPLE_OFFSET, stereo interleaved) queued on the voice, for the page and render_sound; a
 		// signal's blocks keep its first one's handle. Heard, once the voice is within PLAY_AHEAD_SECONDS of the speaker
 		// (but in an `at`, which places its sounds itself). The handle
@@ -343,6 +373,21 @@ addHostPart({
 			// sample("kick.wav") (card sound-samples, src/sound/audio_files.rs): [rate, channels, offset frames …]; the playground
 			// decodes WAV only, a Worker has no decoder for the other formats
 			load: path => wavFrames(readBytes(contentText(path)), contentText(path)),
+			// spectrum(samples, seconds, bands): the bands of the window, the samples around sample_offset (src/sound/spectrum.rs in warp.wasm)
+			spectrum(window, rate, bands, low, high) {
+				return this.holder.spectrum(Array.from(window, sample => Number(sample) - SAMPLE_OFFSET), Number(rate), bands, low, high);
+			},
+			// spectrum("song.mp3", seconds, bands) of the file's window then, and how long a file sounds
+			file_spectrum(path, seconds, windowSeconds, bands, low, high) {
+				const { rate, amplitudes } = monoOf(this.holder, path);
+				const start = Math.min(amplitudes.length, Math.round(Math.max(0, Number(seconds)) * rate));
+				const window = amplitudes.subarray(start, Math.min(amplitudes.length, start + Math.round(Number(windowSeconds) * rate)));
+				return this.holder.spectrum(window, rate, bands, low, high);
+			},
+			file_seconds(path) {
+				const { rate, amplitudes } = monoOf(this.holder, path);
+				return amplitudes.length / rate;
+			},
 			// play(hum, 2s): hum(t) for each sample (left, then right of a pair [left, right]), t its time in seconds
 			signal(functions, seconds, rate) {
 				const signals = [functions].flat().map(signal => exportedOr(this.holder.exports, signal));

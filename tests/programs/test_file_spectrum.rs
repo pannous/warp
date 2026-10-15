@@ -47,3 +47,14 @@ fn the_compiled_shader_demo_compiles_to_one_fragment_shader() {
 	let lowered = warp::pipeline::lower(&demo.unwrap()).expect("a program").serialize();
 	assert!(lowered.contains("@fragment") && lowered.contains("fn warp_swirl_color("), "{lowered}");
 }
+
+#[test]
+fn a_file_written_again_is_measured_again() {
+	// render_sound writes the sounds since the last one: the file holds the A4 of 0.2 s, then only a C3 of 0.4 s
+	let again = "before = sound_seconds(file)\ntone(C3, 0.4)\nrender_sound(file)\nbars = spectrum(file, 0.05, 8)";
+	is!(
+		&of_a_rendered_tone(&format!("{again}\n[round(before * 10), round(sound_seconds(file) * 10)] == [2, 4]")),
+		true
+	);
+	is!(&of_a_rendered_tone(&format!("{again}\nbars[nearest_band(C3, 8)] == max(bars) and max(bars) > 0")), true);
+}

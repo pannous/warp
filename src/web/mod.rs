@@ -717,6 +717,29 @@ mod exports {
 		kept(serde_json::to_vec(&crate::members::member_names(text(code, code_length))).unwrap_or_default())
 	}
 
+	/// The little-endian f32s passed at pointer
+	fn floats(pointer: *const u8, length: usize) -> Vec<f32> {
+		let bytes = if length == 0 { &[][..] } else { unsafe { std::slice::from_raw_parts(pointer, length) } };
+		bytes.chunks_exact(4).map(|four| f32::from_le_bytes([four[0], four[1], four[2], four[3]])).collect()
+	}
+
+	/// How loud each band sounds in a window (lib/sound.warp spectrum, host-sound.js): the window's amplitudes around 0
+	/// as little-endian f32; returns the byte length of the levels (spectrum::window_levels), little-endian f64, read at
+	/// `web_report()`
+	#[no_mangle]
+	pub extern "C" fn web_spectrum(
+		window: *const u8,
+		window_length: usize,
+		rate: f64,
+		bands: usize,
+		low: f64,
+		high: f64,
+	) -> usize {
+		let window: Vec<f64> = floats(window, window_length).into_iter().map(f64::from).collect();
+		let levels = crate::sound::spectrum::window_levels(&window, rate, bands, low, high);
+		kept(levels.iter().flat_map(|level| level.to_le_bytes()).collect())
+	}
+
 	#[no_mangle]
 	pub extern "C" fn web_bundle_module() -> *const u8 {
 		MODULE.with(|kept| kept.borrow().as_ptr())
