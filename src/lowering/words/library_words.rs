@@ -1175,12 +1175,12 @@ fn dispatched_sum(expanded: Node) -> Node {
 }
 
 /// `a == b`, `a < b`, `a and b`: where a library word's argument stops
-fn is_comparison(node: &Node) -> bool {
+pub(crate) fn is_comparison(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Key(_, op, _) if op.is_comparison() || op.is_logical())
 }
 
 /// The leftmost operand of a comparison chain, replaced: `"a" == b and c` → `f("a") == b and c`
-fn with_first_comparand(node: Node, replace: &dyn Fn(Node) -> Node) -> Node {
+pub(crate) fn with_first_comparand(node: Node, replace: &dyn Fn(Node) -> Node) -> Node {
 	match node {
 		Node::Key(left, op, right) if op.is_comparison() || op.is_logical() => {
 			Node::Key(Box::new(with_first_comparand(*left, replace)), op, right)

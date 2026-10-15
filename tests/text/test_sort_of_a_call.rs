@@ -44,3 +44,10 @@ fn a_suffix_word_after_a_calling_word_calls_the_value_after_it() {
 	assert_eq!(printed("xs = [3 1 2]; min sorted xs"), "1");
 	assert_eq!(printed("xs = [3 1 2]; count sorted xs"), "3");
 }
+
+#[test]
+fn a_library_word_chain_takes_the_first_operand_of_a_logical_chain() {
+	assert_eq!(printed("xs = [3 1 2]; first sorted xs == 1 and yes"), "yes");
+	assert_eq!(printed("xs = [3 1 2]; first sorted xs == 1 or no"), "yes");
+	assert_eq!(printed("xs = [3 1 2]; f(a:list) := a; f sorted xs == [1 2 3]"), "yes");
+}

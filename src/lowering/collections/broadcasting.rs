@@ -366,30 +366,27 @@ fn nest_library_calls(node: Node, words: &LibraryCalls) -> Node {
 			bracket @ (Bracket::None | Bracket::Round),
 			separator @ (Separator::Space | Separator::None),
 		) if items.len() > 2 && words.is_caller(&items[0]) => {
+			// `first sorted xs == 1 and yes` compares (first sorted xs): the chain takes the comparison's first operand
+			if words.is_library_call(&items[items.len() - 2])
+				&& crate::library_words::is_comparison(&items[items.len() - 1])
+			{
+				let mut items = items;
+				let comparison = items.pop().expect("more than two items");
+				return crate::library_words::with_first_comparand(comparison, &|operand| {
+					let phrase =
+						Node::List([items.clone(), vec![operand]].concat(), bracket.clone(), separator.clone());
+					nest_library_calls(phrase, words)
+				});
+			}
 			let mut items: Vec<Node> = items.into_iter().map(|item| nest_library_calls(item, words)).collect();
 			let first_value = if crate::lowering::lambdas::takes_a_function_first(&items[0]) { 2 } else { 1 };
-			let mut compared = None;
 			while let Some(at) = (first_value..items.len() - 1).rev().find(|at| words.is_library_call(&items[*at])) {
-				let mut value = items.remove(at + 1);
-				// `first sorted xs == 1` compares (first sorted xs): the chain's library words take the comparison's left
-				match value.drop_meta().clone() {
-					Node::Key(left, op, right)
-						if op.is_comparison() && !matches!(left.drop_meta(), Node::Empty) && at + 1 == items.len() =>
-					{
-						value = *left;
-						compared = Some((op, *right));
-					}
-					_ => {}
-				}
+				let value = items.remove(at + 1);
 				let word = items.remove(at);
 				// written `reverse(xs)`: a later pass splices a phrase `reverse xs` back into its caller's arguments
 				items.insert(at, Node::List(vec![word, value], Bracket::Round, Separator::None));
 			}
-			let phrase = Node::List(items, bracket, separator);
-			match compared {
-				Some((op, right)) => key(phrase, op, right),
-				None => phrase,
-			}
+			Node::List(items, bracket, separator)
 		}
 		other => other.map_children(|child| nest_library_calls(child, words)),
 	}
