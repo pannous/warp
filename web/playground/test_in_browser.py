@@ -160,8 +160,9 @@ GPU_JOBS_NEVER = "Out of memory"
 # compiler's web_evaluate and the program's main run under promising (worker.js, host.js JSPI); the run stopped and
 # the button right. The clipboard check does the same on purpose: its run_code("1") replaces the worker of the run that
 # waits for the permission click (card tour-firefox-fails: two such lines on each Firefox run of the check alone)
-EXPECTED_CONSOLE = {SHADER_ERROR: ["Error while parsing WGSL", "errors while creating shader module", "parsing error"], GPU_JOBS: ["uncaught exception: undefined"],
-	STOP_BUTTON: ["uncaught exception: undefined"], CLIPBOARD_READ: ["uncaught exception: undefined"]}
+FIREFOX_TERMINATED_PROMISING = ["uncaught exception: undefined"]  # card firefox-logs
+EXPECTED_CONSOLE = {SHADER_ERROR: ["Error while parsing WGSL", "errors while creating shader module", "parsing error"],
+	GPU_JOBS: FIREFOX_TERMINATED_PROMISING, STOP_BUTTON: FIREFOX_TERMINATED_PROMISING, CLIPBOARD_READ: FIREFOX_TERMINATED_PROMISING}
 # card safari-shared-buffers: a task's answer buffer, like a GPU job's, is reused once read
 MANY_TASKS = "(many tasks in one run)"
 MANY_TASKS_CODE = """twice(x) := x * 2
