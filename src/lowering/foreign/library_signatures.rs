@@ -6,11 +6,10 @@
 use crate::type_kinds::Kind;
 
 /// The words whose tables name neither their parameters nor (for an argument-dependent result) their result
-const NAMED_SIGNATURES: [(&str, &str); 19] = [
+const NAMED_SIGNATURES: [(&str, &str); 18] = [
 	("sqrt", "(x:number) -> number"),
 	("cbrt", "(x:number) -> number"),
 	("abs", "(x:number) -> number"),
-	("norm", "(x:number) -> number"),
 	("floor", "(x:number) -> int"),
 	("ceil", "(x:number) -> int"),
 	("round", "(x:number) -> int"),
