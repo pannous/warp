@@ -18,6 +18,7 @@ mod test_down_and_letter_ranges;
 mod test_dynamic_range;
 mod test_element_wise_lists;
 mod test_element_wise_scalar;
+mod test_element_wise_vectors;
 mod test_empty_items;
 mod test_empty_list_argument;
 mod test_empty_list_concat; // card null-typed

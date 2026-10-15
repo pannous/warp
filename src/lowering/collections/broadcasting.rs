@@ -25,6 +25,9 @@ const BROADCAST_ITEM: &str = "broadcast_item";
 const SCALAR_LIBRARY_WORDS: [&str; 6] = ["upper", "lower", "trim", "floor", "ceil", "round"];
 /// Prefix operators of one number: `abs [-1 2]`, `sqrt xs`
 const SCALAR_OPERATORS: [Op; 3] = [Op::Abs, Op::Sqrt, Op::Cbrt];
+/// The prelude word deciding an element-wise operator at run time, and its lambda's parameters (no program writes them)
+pub const ELEMENT_WISE_ANY: &str = "element_wise_any";
+const ELEMENT_WISE_SIDES: [&str; 2] = ["element_left", "element_right"];
 /// The item `square all xs` applies square to
 const ALL_ITEM: &str = "all_item";
 /// Declared parameter kinds that take one element of a list (P50)
@@ -714,6 +717,9 @@ impl Broadcast {
 				if let Some(paired) = self.paired_lists(&key) {
 					return paired;
 				}
+				if let Some(dispatched) = self.element_wise_any(&key) {
+					return dispatched;
+				}
 				let Node::Key(left, op, right) = key else { unreachable!() };
 				if op == Op::Mul && self.is_list(&left) && self.is_list(&right) {
 					return self.inner_product(*left, *right);
@@ -817,6 +823,21 @@ impl Broadcast {
 		}))
 	}
 
+	/// `k .* v`, `2 .- v`: an element-wise operator whose left side is no list known here (a number, a parameter, a
+	/// call) decides at run time, by the prelude's element_wise_any: each item of the list side, or both numbers plainly
+	fn element_wise_any(&self, node: &Node) -> Option<Node> {
+		let (receiver, op, operand) = element_wise_parts(node)?;
+		if self.is_list_expression(&receiver) {
+			return None;
+		}
+		let [left, right] = ELEMENT_WISE_SIDES.map(|side| Node::Symbol(side.to_string()));
+		let parameters = parens(vec![left.clone(), right.clone()]);
+		let combined = key(parameters, Op::Arrow, key(left, op, right));
+		// the prelude's name for it: library_words, which names prelude words so, runs after this pass
+		let word = crate::modules::prelude_name(ELEMENT_WISE_ANY).unwrap_or(ELEMENT_WISE_ANY.to_string());
+		Some(call(&word, vec![receiver, operand, combined]))
+	}
+
 	/// `xs .op ys` with both sides lists: the items paired by index (lists of different lengths are an error)
 	fn paired_lists(&self, node: &Node) -> Option<Node> {
 		let (receiver, op, operand) = element_wise_parts(node)?;
@@ -916,6 +937,18 @@ impl Broadcast {
 	}
 }
 
+/// The prelude words this pass may call where the program writes none: element_wise_any, of any element-wise operator
+/// (the parser wrote it as a map whose lambda parameter no module scan counts)
+pub(crate) fn implied_words(statements: &[Node]) -> Vec<String> {
+	fn has_element_wise(node: &Node) -> bool {
+		element_wise_parts(node).is_some() || node.drop_meta().parts().into_iter().any(has_element_wise)
+	}
+	match statements.iter().any(has_element_wise) {
+		true => vec![ELEMENT_WISE_ANY.to_string()],
+		false => vec![],
+	}
+}
+
 /// P166 (user): an element-wise operator on a plain number is the plain operator, `6 ./ 2` is 3. The parser wrote
 /// `x .^ 2` as `x.map(each_element => each_element ^ 2)`; where x is a number literal, or a parameter of its function
 /// or lambda used only as an operand, it becomes `x ^ 2`, which that function's broadcasting maps over a list
@@ -926,9 +959,11 @@ pub fn lower_scalar_element_wise(program: Node) -> Node {
 
 fn scalar_element_wise(node: Node, parameters: &[String]) -> Node {
 	if let Some((receiver, op, operand)) = element_wise_parts(&node) {
-		let is_scalar = matches!(receiver.drop_meta(), Node::Number(_))
-			|| matches!(receiver.drop_meta(), Node::Symbol(symbol) if parameters.contains(symbol));
-		if is_scalar {
+		// a number and no list: `h .+ [0, 1]` of a parameter h keeps its dot, and so does `a .+ b` of two parameters,
+		// which pair two lists instead of the function broadcasting over each (card compile-shaders)
+		let numbers = [&receiver, &operand].map(|side| is_scalar_operand(side, &[]));
+		let scalars = [&receiver, &operand].map(|side| is_scalar_operand(side, parameters));
+		if scalars == [true, true] && numbers.contains(&true) {
 			return key(receiver, op, scalar_element_wise(operand, parameters));
 		}
 	}
@@ -940,6 +975,18 @@ fn scalar_element_wise(node: Node, parameters: &[String]) -> Node {
 			Node::Key(head, op, Box::new(scalar_element_wise(*body, &inner)))
 		}
 		other => other.map_children(|child| scalar_element_wise(child, parameters)),
+	}
+}
+
+/// A number, a parameter used only as an operand, or arithmetic of them: no list can be there
+fn is_scalar_operand(node: &Node, parameters: &[String]) -> bool {
+	match ungrouped(node) {
+		Node::Number(_) => true,
+		Node::Symbol(name) => parameters.contains(name),
+		Node::Key(left, op, right) if ARITHMETIC.contains(op) || *op == Op::Neg => {
+			(left.is_empty_node() || is_scalar_operand(left, parameters)) && is_scalar_operand(right, parameters)
+		}
+		_ => false,
 	}
 }
 
