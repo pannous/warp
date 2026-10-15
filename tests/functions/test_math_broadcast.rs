@@ -9,11 +9,11 @@ fn printed(code: &str) -> String {
 #[test]
 fn math_words_map_over_a_list() {
 	assert_eq!(printed("cos([0, 1])").split_whitespace().count(), 2);
-	assert_eq!(printed("round(cos [0 0])"), "[1 1]");
-	assert_eq!(printed("round(exp([0, 0, 0]))"), "[1 1 1]");
-	assert_eq!(printed("round(sin(xs)) where xs = [0 0]").split_whitespace().count(), 2);
-	assert_eq!(printed("xs = [0, 0]; round(cos(xs))"), "[1 1]");
-	assert_eq!(printed("round(log [1 1])"), "[0 0]");
+	assert_eq!(printed("cos [0 0]"), "[1 1]");
+	assert_eq!(printed("exp([0, 0, 0])"), "[1 1 1]");
+	assert_eq!(printed("sin(xs) where xs = [0 0]"), "[0 0]");
+	assert_eq!(printed("xs = [0, 0]; cos(xs)"), "[1 1]");
+	assert_eq!(printed("log [1 1]"), "[0 0]");
 }
 
 #[test]
@@ -24,6 +24,6 @@ fn prefix_operators_map_over_a_parenthesized_list() {
 
 #[test]
 fn one_number_stays_one() {
-	assert_eq!(printed("round(cos(0))"), "1");
+	assert_eq!(printed("cos(0)"), "1");
 	assert_eq!(printed("abs(-3)"), "3");
 }
