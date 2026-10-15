@@ -22,3 +22,11 @@ fn juxtaposed_paths_print_as_separate_values() {
 	assert_eq!(crate::common::printed("print /a /b").lines().next(), Some("/a /b"));
 	assert_eq!(crate::common::printed("print \"ab\" \"c\"").lines().next(), Some("abc"));
 }
+
+/// a name a definition binds as a parameter divides, also when a program function has that name (reviewer)
+#[test]
+fn a_parameter_shadowing_a_function_divides() {
+	is!("scale(x) := x * 2\ndef area(scale, h) { scale /h }\narea(6, 2)", 3);
+	is!("scale(x) := x * 2\narea(scale, h) := scale /h\narea(6, 2)", 3);
+	is!("xs = [1 2]\ntotal = sum(xs.map(x => x))\ntotal /2", 1.5);
+}

@@ -108,11 +108,19 @@ impl WarpParser {
 		}
 	}
 
-	/// `l = "en"` or `k:text` (a typed parameter or declaration) makes l, k text variables; any `x = …` a variable
+	/// `l = "en"` or `k:text` (a typed parameter or declaration) makes l, k text variables; any `x = …` a variable, but
+	/// `f = x => x` a function (` /name` after it is a path, card name-after)
 	pub(crate) fn note_variable(&mut self, lhs: &Node, op: Op, rhs: &Node) {
 		let Node::Symbol(name) = lhs.drop_meta() else { return };
-		if matches!(op, Op::Assign | Op::Define) {
-			self.variables.insert(name.clone());
+		let holds_function = matches!(rhs.drop_meta(), Node::Key(_, Op::FatArrow | Op::Arrow, _));
+		match (op, holds_function) {
+			(Op::Assign | Op::Define, true) => {
+				self.functions.insert(name.clone());
+			}
+			(Op::Assign | Op::Define, false) => {
+				self.variables.insert(name.clone());
+			}
+			_ => {}
 		}
 		let holds_text = match (op, rhs.drop_meta()) {
 			(Op::Assign | Op::Define, Node::Text(_)) => true,
