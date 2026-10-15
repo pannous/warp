@@ -21,6 +21,18 @@ fn run_time_quantities_know_the_units_of_the_definitions() {
 	is!("quantity(440, \"Hz\").in(\"kHz\") == 0.44", true);
 }
 
+// a program adds a unit as the block does (decision dimensions-units): converted to, bound, known at run time
+#[test]
+fn a_program_defines_its_own_units() {
+	is!("furlong := 201.168 m\n3 furlong == 603.504 m", true);
+	is!("furlong := 201.168 m\nx = 1 km\nx as furlong == 1000 m", true);
+	is!("furlong := 201.168 m\nstr(furlong)", "1furlong");
+	is!("fortnight := 14 * 24 h\n1 fortnight == 336 h", true);
+	is!("furlong := 201.168 m\nquantity(2, \"furlong\").in(\"m\")", 402.336);
+	// a definition of no unit stays a constant
+	is!("n := 5\nn * 2", 10);
+}
+
 #[test]
 fn dimension_names_come_from_the_definitions() {
 	is!("type(2 m²)", "area");

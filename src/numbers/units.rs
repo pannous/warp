@@ -9,6 +9,7 @@ use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashMap;
 mod definitions;
+pub(crate) use definitions::program_unit_lines;
 mod quantity_arithmetic;
 pub use quantity_arithmetic::*;
 
@@ -107,7 +108,7 @@ fn target_unit(node: &Node) -> Option<&'static Unit> {
 
 /// The unit words as the units passes read them: aliases expanded (`60 mph`), the whole unit after `as` (`q as km/h`)
 pub fn lower_unit_words(program: Node) -> Node {
-	let program = lower_unit_aliases(with_run_time_unit_tables(program));
+	let program = lower_unit_aliases(with_unit_definitions_read(program));
 	let program = match QUANTITY_CAST_WORDS.iter().any(|word| crate::soft_keywords::program_names(&program, word)) {
 		true => program,
 		false => with_quantity_casts(program),
@@ -115,20 +116,27 @@ pub fn lower_unit_words(program: Node) -> Node {
 	shadowing(&program.clone(), || with_whole_conversion_units(program))
 }
 
-/// lib/units.warp's `unit_definitions = data {…}` is read once by definitions.rs; at run time it stands for the tables
-/// its Quantity class reads (`unit_names = ["mm", …]`), so the block is their one source (card lib-units)
-pub(crate) fn with_run_time_unit_tables(program: Node) -> Node {
-	let is_block = |statement: &Node| matches!(statement.drop_meta(), Node::Key(name, Op::Assign, _) if name.drop_meta() == &Node::Symbol(definitions::BLOCK_NAME.to_string()));
-	let tables = || statements_of(crate::warp_parser::parse(&definitions::run_time_tables()));
+/// The statements that only define units, as the program runs them (definitions.rs reads them): lib/units.warp's
+/// `unit_definitions = data {…}` stands for the tables its Quantity class reads (`unit_names = ["mm", …]`, card
+/// lib-units), a program's own unit `furlong := 201.168 m` for nothing
+pub(crate) fn with_unit_definitions_read(program: Node) -> Node {
+	let names = |name: &Node, word: &dyn Fn(&str) -> bool| matches!(name.drop_meta(), Node::Symbol(name) if word(name));
+	let run_as = |statement: &Node| match statement.drop_meta() {
+		Node::Key(name, Op::Assign, _) if names(name, &|name| name == definitions::BLOCK_NAME) => {
+			Some(statements_of(crate::warp_parser::parse(&definitions::run_time_tables())))
+		}
+		Node::Key(name, Op::Define, _) if names(name, &definitions::is_program_unit) => Some(vec![]),
+		_ => None,
+	};
 	match program {
-		Node::List(items, Bracket::None, separator)
-			if separator.separates_statements() && items.iter().any(is_block) =>
-		{
-			let items = items.into_iter().flat_map(|item| if is_block(&item) { tables() } else { vec![item] });
+		Node::List(items, Bracket::None, separator) if separator.separates_statements() => {
+			let items = items.into_iter().flat_map(|item| run_as(&item).unwrap_or_else(|| vec![item]));
 			Node::List(items.collect(), Bracket::None, separator)
 		}
-		program if is_block(&program) => Node::List(tables(), Bracket::None, Separator::Newline),
-		program => program,
+		program => match run_as(&program) {
+			Some(statements) => Node::List(statements, Bracket::None, Separator::Newline),
+			None => program,
+		},
 	}
 }
 

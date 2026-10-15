@@ -8,7 +8,8 @@ use crate::extensions::reals::Rational;
 use num_bigint::BigInt;
 use num_integer::Integer;
 use num_traits::{One, ToPrimitive};
-use std::sync::OnceLock;
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 
 const SOURCE: &str = include_str!("../../../lib/units.warp");
 const BLOCK_END: &str = "}";
@@ -16,6 +17,7 @@ const DIMENSION_WORD: &str = "dimension ";
 const DEFINE: &str = ":=";
 const BASE: char = ':';
 const COMMENT: &str = "//";
+const MULTIPLY: [char; 2] = ['*', '·'];
 /// The names of the run-time tables lib/units.warp's Quantity reads, in place of the block (run_time_tables)
 pub(super) const BLOCK_NAME: &str = "unit_definitions";
 const RUN_TIME_NAMES: &str = "unit_names";
@@ -44,9 +46,61 @@ pub(super) struct Definitions {
 }
 
 pub(super) fn definitions() -> &'static Definitions {
-	static DEFINITIONS: OnceLock<Definitions> = OnceLock::new();
-	DEFINITIONS
-		.get_or_init(|| read(SOURCE).unwrap_or_else(|problem| panic!("lib/units.warp unit_definitions: {problem}")))
+	static LIB: OnceLock<Definitions> = OnceLock::new();
+	let lib = LIB
+		.get_or_init(|| read(lib_lines()).unwrap_or_else(|problem| panic!("lib/units.warp {BLOCK_NAME}: {problem}")));
+	crate::compiler::compile_context::read(|context| match context.program_unit_lines.is_empty() {
+		true => lib,
+		false => with_program_units(&context.program_unit_lines),
+	})
+}
+
+/// The definitions of lib/units.warp and a program's own units, read once per distinct program_unit_lines
+fn with_program_units(lines: &str) -> &'static Definitions {
+	static EXTENDED: OnceLock<Mutex<HashMap<String, &'static Definitions>>> = OnceLock::new();
+	let mut extended = EXTENDED.get_or_init(Default::default).lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+	extended.entry(lines.to_string()).or_insert_with(|| {
+		let lines: &'static str = Box::leak(lines.into());
+		let read = read(lib_lines().chain(lines.lines())).expect("program_unit_lines keeps readable units only");
+		Box::leak(Box::new(read))
+	})
+}
+
+/// A program's own units (decision dimensions-units, user 2026-10-15): each top-level `furlong := 201.168 m` that
+/// defines a new unit as the lines of the block do, one per line; the definitions of several units or of none
+/// (`g0 := 9.81 m/s²`, `n := 5`) stay the program's constants
+pub(crate) fn program_unit_lines(code: &str) -> String {
+	let mut reader = Reader::default();
+	lib_lines().for_each(|line| reader.line(line).expect("lib/units.warp is read already"));
+	let statements =
+		code.lines().filter(|line| !line.starts_with(char::is_whitespace)).flat_map(|line| line.split(';'));
+	let mut lines = vec![];
+	for statement in statements.map(|statement| statement.split(COMMENT).next().unwrap_or_default().trim()) {
+		if reader.defines_new_unit(statement) && reader.line(statement).is_ok() {
+			lines.push(statement);
+		}
+	}
+	lines.join("\n")
+}
+
+/// Is `name` a unit the program defines itself (program_unit_lines): its definition is no statement to run
+pub(super) fn is_program_unit(name: &str) -> bool {
+	crate::compiler::compile_context::read(|context| {
+		context
+			.program_unit_lines
+			.lines()
+			.any(|line| line.split_once(DEFINE).is_some_and(|(own, _)| own.trim() == name))
+	})
+}
+
+/// The lines of lib/units.warp's block that define something
+fn lib_lines() -> impl Iterator<Item = &'static str> {
+	let block = SOURCE.split_once(&format!("{BLOCK_NAME} = data {{")).map_or("", |(_, block)| block);
+	block
+		.lines()
+		.map(str::trim)
+		.take_while(|line| *line != BLOCK_END)
+		.filter(|line| !line.is_empty() && !line.starts_with(COMMENT))
 }
 
 /// The run-time tables of lib/units.warp's Quantity (`quantity(5, "km")`), in place of the block itself: each unit and
@@ -107,59 +161,79 @@ fn alias_measure(expression: &str) -> Option<(Rational, i64)> {
 }
 
 /// A unit as it is read: its amount and zero in its dimension's base unit, before they become whole steps
-struct Read {
-	name: &'static str,
+struct Read<'a> {
+	name: &'a str,
 	dimension: Dimension,
 	scale: Rational,
 	zero: Rational,
 }
 
-fn read(source: &'static str) -> Result<Definitions, String> {
-	let block = source.split_once(&format!("{BLOCK_NAME} = data {{")).ok_or("no block")?.1;
-	let mut dimensions = vec![];
-	let mut derived_dimensions = vec![];
-	let mut base_units = vec![];
-	let mut units: Vec<Read> = vec![];
-	let mut aliases = vec![];
-	for line in block.lines().map(str::trim) {
-		if line == BLOCK_END {
-			break;
-		}
-		if line.is_empty() || line.starts_with(COMMENT) {
-			continue;
-		}
+fn read(lines: impl Iterator<Item = &'static str>) -> Result<Definitions, String> {
+	let mut reader = Reader::default();
+	for line in lines {
+		reader.line(line)?;
+	}
+	let Reader { dimensions, derived_dimensions, base_units, units, aliases } = reader;
+	Ok(Definitions { dimensions, derived_dimensions, units: in_whole_steps(units)?, base_units, aliases })
+}
+
+/// The definitions read so far, one line at a time
+#[derive(Default)]
+struct Reader<'a> {
+	dimensions: Vec<(&'a str, Dimension)>,
+	derived_dimensions: Vec<(&'a str, Vec<(Dimension, i32)>)>,
+	base_units: Vec<(Dimension, &'a str)>,
+	units: Vec<Read<'a>>,
+	aliases: Vec<(&'a str, &'a str)>,
+}
+
+impl<'a> Reader<'a> {
+	fn line(&mut self, line: &'a str) -> Result<(), String> {
 		if let Some((name, expression)) = line.strip_prefix(DIMENSION_WORD).and_then(|rest| rest.split_once(DEFINE)) {
-			derived_dimensions.push((name.trim(), powers_of(expression, &dimensions)?));
+			self.derived_dimensions.push((name.trim(), powers_of(expression, &self.dimensions)?));
 		} else if let Some(name) = line.strip_prefix(DIMENSION_WORD) {
 			let dimension = DIMENSION_WORDS
 				.iter()
 				.find(|(word, _)| *word == name.trim())
 				.ok_or(format!("unknown dimension {name}"))?;
-			dimensions.push((name.trim(), dimension.1));
+			self.dimensions.push((name.trim(), dimension.1));
 		} else if let Some((name, expression)) = line.split_once(DEFINE) {
 			let (name, expression) = (name.trim(), expression.trim());
-			match unit_of(expression, &units)? {
-				Some((dimension, scale, zero)) => units.push(Read { name, dimension, scale, zero }),
-				None => aliases.push((name, expression)),
+			match unit_of(expression, &self.units)? {
+				Some((dimension, scale, zero)) => self.units.push(Read { name, dimension, scale, zero }),
+				None => self.aliases.push((name, expression)),
 			}
 		} else if let Some((name, dimension_name)) = line.split_once(BASE) {
-			let dimension = dimensions
+			let dimension = self
+				.dimensions
 				.iter()
 				.find(|(known, _)| *known == dimension_name.trim())
 				.ok_or(format!("{name}: undeclared dimension {dimension_name}"))?
 				.1;
-			base_units.push((dimension, name.trim()));
-			units.push(Read { name: name.trim(), dimension, scale: Rational::integer(1), zero: Rational::zero() });
+			self.base_units.push((dimension, name.trim()));
+			self.units.push(Read { name: name.trim(), dimension, scale: Rational::integer(1), zero: Rational::zero() });
 		} else {
 			return Err(format!("unreadable line {line}"));
 		}
+		Ok(())
 	}
-	Ok(Definitions { dimensions, derived_dimensions, units: in_whole_steps(units)?, base_units, aliases })
+
+	/// `furlong := 201.168 m`: a word not known yet defined as an amount of one known unit
+	fn defines_new_unit(&self, statement: &str) -> bool {
+		let Some((name, expression)) = statement.split_once(DEFINE) else {
+			return false;
+		};
+		let name = name.trim();
+		let known =
+			self.units.iter().any(|read| read.name == name) || self.aliases.iter().any(|(alias, _)| *alias == name);
+		let word = !name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_');
+		word && !known && matches!(unit_of(expression.trim(), &self.units), Ok(Some(_)))
+	}
 }
 
 /// `1000 m`, `m/100`, `5/9 K + 45967/180`: the dimension, scale and zero of a unit that is an amount of one unit plus an
 /// optional plain offset; None for an expression of several units or of none (an alias)
-fn unit_of(expression: &str, units: &[Read]) -> Result<Option<(Dimension, Rational, Rational)>, String> {
+fn unit_of(expression: &str, units: &[Read<'_>]) -> Result<Option<(Dimension, Rational, Rational)>, String> {
 	let terms: Vec<_> = expression.split('+').map(|term| product(term, units)).collect::<Result<_, _>>()?;
 	let (amount, unit, offset) = match terms.as_slice() {
 		[Some((amount, Some(unit)))] => (amount, *unit, Rational::zero()),
@@ -172,7 +246,7 @@ fn unit_of(expression: &str, units: &[Read]) -> Result<Option<(Dimension, Ration
 }
 
 /// A product of numbers and at most one unit, not divided by (`5/9 K`, `m/100`); None for any other term
-fn product<'a>(term: &str, units: &'a [Read]) -> Result<Option<(Rational, Option<&'a Read>)>, String> {
+fn product<'a, 'n>(term: &str, units: &'a [Read<'n>]) -> Result<Option<(Rational, Option<&'a Read<'n>>)>, String> {
 	let mut amount = Rational::integer(1);
 	let mut unit = None;
 	let mut divide = false;
@@ -225,7 +299,8 @@ fn powers_of(expression: &str, dimensions: &[(&str, Dimension)]) -> Result<Vec<(
 /// `5/9 K` → `5`, `/`, `9`, `K`
 fn tokens(term: &str) -> Vec<&str> {
 	let mut tokens = vec![];
-	for word in term.split_whitespace() {
+	// `14 * 24 h` is `14 24 h`: the factors of a product are its words
+	for word in term.split(|c: char| c.is_whitespace() || MULTIPLY.contains(&c)).filter(|word| !word.is_empty()) {
 		let mut rest = word;
 		while let Some(at) = rest.find('/') {
 			tokens.extend([&rest[..at], "/"].into_iter().filter(|token| !token.is_empty()));
@@ -250,7 +325,7 @@ fn decimal(token: &str) -> Option<Rational> {
 
 /// Units in whole steps of their dimension: each amount times the least common multiple of the dimension's
 /// denominators (only their ratios matter: 1 m is 50 steps of cm's 1, km 50000)
-fn in_whole_steps(units: Vec<Read>) -> Result<Vec<Unit>, String> {
+fn in_whole_steps(units: Vec<Read<'static>>) -> Result<Vec<Unit>, String> {
 	let step = |dimension: Dimension| {
 		units
 			.iter()

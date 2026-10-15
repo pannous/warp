@@ -536,7 +536,11 @@ pub fn without_strict_pragma(program: Node) -> (Node, bool) {
 /// Run `body` (the parser) with warnings as errors when a line of the source says `use strict`,
 /// so the warnings of parse-time Asks obey it too
 pub fn in_source_mode<R>(code: &str, body: impl FnOnce() -> R) -> R {
-	compile_context::change(|context| context.source = code.to_string());
+	let program_unit_lines = crate::numbers::units::program_unit_lines(code);
+	compile_context::change(|context| {
+		context.source = code.to_string();
+		context.program_unit_lines = program_unit_lines;
+	});
 	let says = |word: &str| code.lines().any(|line| says_pragma(line, word));
 	let relaxed = RELAXED_PRAGMAS.into_iter().chain([SCRIPT_PRAGMA]).any(says);
 	match says(STRICT_PRAGMA[1]) {

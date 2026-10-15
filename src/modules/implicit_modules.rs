@@ -78,7 +78,7 @@ pub(crate) fn with_implicit_class_modules(mut program: Node) -> Node {
 			let source = std_module(module).expect("an implicit module is embedded");
 			// lib/units.warp's unit_definitions block as the tables its functions read, before they are picked by name
 			let parsed = crate::normalize::without_hints(|| WarpParser::parse(source));
-			let definitions = statements(crate::numbers::units::with_run_time_unit_tables(parsed));
+			let definitions = statements(crate::numbers::units::with_unit_definitions_read(parsed));
 			program = with_needed_definitions(without_use_of(program, module), definitions);
 		}
 	}

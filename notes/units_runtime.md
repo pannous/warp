@@ -178,9 +178,13 @@ them (`dimension length`, `dimension speed := length/duration`, `m: length` base
 `mph := mi/h` alias), and src/numbers/units/definitions.rs reads it once with its own small reader (the parser asks
 `is_unit`, so it cannot parse its own definitions). Each unit becomes whole steps of its dimension (amount × lcm of the
 dimension's denominators); only ratios matter. Adding a unit or dimension name = one line there (a new base dimension
-also needs its `Dimension` variant). Test: tests/numbers/test_unit_definitions.rs. Next: units defined in a program
-(`furlong := 201.168 m`), then px as a device-pixel dimension (Q1). The block is also the run-time table (card
-lib-units): units.rs with_run_time_unit_tables replaces the statement by unit_names/unit_scales/unit_dimensions computed
+also needs its `Dimension` variant). Test: tests/numbers/test_unit_definitions.rs. A program's own units (`furlong := 201.168 m`, `fortnight := 14 * 24 h`): diagnostic in_source_mode
+sets context.program_unit_lines (definitions.rs program_unit_lines: unindented `name := …` statements the same reader
+reads as a unit of a new word) before parsing, so `3 furlong` binds; definitions() is then the lib's plus these, read once
+per distinct lines (leaked, cached); with_unit_definitions_read drops those statements, the run-time tables include
+them. `n := 5`, `g0 := 9.81 m/s²` stay constants. Sample: samples/units_of_your_own.warp. Next: px as a device-pixel
+dimension (Q1). The block is also the run-time table (card
+lib-units): units.rs with_unit_definitions_read replaces the statement by unit_names/unit_scales/unit_dimensions computed
 from the definitions (also where implicit_modules.rs picks the units module's needed definitions by name), so aliases of
 units (Hz, kHz) work at run time too. The hand reader stays: the parser asks is_unit to read `201.168 m`, so it cannot
 read the block that defines m (without units `q := 201.168 furlong` parses as `(:= q 201.168) furlong`).
