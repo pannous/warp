@@ -44,6 +44,8 @@ const ABBREVIATIONS: [(&str, &str); 35] = [
 pub struct Hint {
 	pub line: usize,
 	pub message: String,
+	/// `warp beautify` rewrites what the hint asks for (`//` comments); the other hints are never rewritten
+	pub beautify_fixes: bool,
 }
 
 /// The words of a name: `max_cnt` and `maxCnt` hold `max` and `cnt`
@@ -80,6 +82,7 @@ pub fn soft_hints(code: &str) -> Vec<Hint> {
 					hints.push(Hint {
 						line: index + 1,
 						message: format!("warp avoids abbreviations: {part} → {full} (in {word})"),
+						beautify_fixes: false,
 					});
 					seen.push(part);
 				}
@@ -93,9 +96,10 @@ pub fn soft_hints(code: &str) -> Vec<Hint> {
 		hints.push(Hint {
 			line: first + 1,
 			message: format!(
-				"prefer # comments: `//` also means floor division ({} // comments; warp format hash-comments rewrites them)",
+				"prefer # comments: `//` also means floor division ({} // comments)",
 				slash_comments.len()
 			),
+			beautify_fixes: true,
 		});
 	}
 	hints

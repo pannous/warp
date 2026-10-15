@@ -56,6 +56,14 @@ const APP_CHECK: &str = "--check";
 const DEPLOY_COMMAND: &str = "deploy";
 /// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
 const SERVE_COMMAND: &str = "serve";
+/// The first words the command line takes as commands, for unknown_command's suggestion
+const COMMAND_WORDS: [&str; 29] = [
+	"run", "test", "eval", "lower", "parse", "verify", "format", "lint", "beautify", "types", "data", "tool", "dev",
+	"serve", "deploy", "repl", "console", "register", "compile", "build", "link", "app", "help", "version", "docs",
+	"wiki", "home", "lsp", "start",
+];
+/// How far a mistyped command may be from the command it suggests (`formt` → format)
+const MISTYPED_LETTERS: usize = 2;
 const SERVE_PORT: u16 = 8080;
 const WARP_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The warnings, notes and hints the user said "got it" to, in the home folder: one `ack:<topic> = acknowledged` per
@@ -161,8 +169,8 @@ fn run_command(args: &[String]) {
 		show_in_webview(&args[if check { 3 } else { 2 }..].join(" "), check);
 	} else if is_html_file(&arg_string) {
 		show_in_webview(&arg_string, false);
-	} else if FORMAT_COMMANDS.contains(&args[1].as_str()) {
-		std::process::exit(format_command(&args[2..]));
+	} else if is_format_command(&args[1]) {
+		std::process::exit(format_command(&args[1], &args[2..]));
 	} else if let Some(target) = command_argument(&arg_string, "verify") {
 		let code = source_of(target);
 		let reports = law::verify(&code);
@@ -336,6 +344,8 @@ fn run_command(args: &[String]) {
 		}
 	} else if arg_string == "version" || arg_string == "--version" || arg_string == "-v" {
 		print_version();
+	} else if let Some(word) = unknown_command(args) {
+		fail(word);
 	} else {
 		// Default: eval and print; a page shows in a window
 		if shows_in_window(&arg_string) {
@@ -371,6 +381,25 @@ fn fail(message: impl std::fmt::Display) -> ! {
 	std::process::exit(1)
 }
 
+/// `warp beautify app.warp` before beautify existed ran as the expression `beautify / app.warp` ("type error: int /
+/// text", card beautify-cli): a first word warp knows neither as a command nor as a word of the language, followed by
+/// an existing file, is a mistyped command. The message names the closest command
+fn unknown_command(args: &[String]) -> Option<String> {
+	let word = args[1].as_str();
+	let plain_word = word.chars().all(|c| c.is_ascii_alphabetic() || c == '-');
+	let names_a_file = args[2..].iter().any(|argument| std::path::Path::new(argument).exists());
+	let known = COMMAND_WORDS.contains(&word) || warp::lowering::library_words::is_calling_word(word);
+	if !plain_word || !names_a_file || known {
+		return None;
+	}
+	let closest = COMMAND_WORDS.iter().min_by_key(|command| extensions::strings::edit_distance(word, command));
+	let suggestion = closest
+		.filter(|command| extensions::strings::edit_distance(word, command) <= MISTYPED_LETTERS)
+		.map(|command| format!(", did you mean {command}?"))
+		.unwrap_or_default();
+	Some(format!("warp: unknown command {word}{suggestion} (warp help lists the commands)"))
+}
+
 /// The text of the file `target` names, else `target` itself as code
 fn source_of(target: &str) -> String {
 	if file_exists(target) {
@@ -389,7 +418,7 @@ fn usage() {
 	println!("  warp lower <code>    Show the program after the lowering passes");
 	println!("  warp parse <code>    Show the parsed AST");
 	println!("  warp verify <file>   Test and prove the laws of a file");
-	println!("  warp format [check] [hash-comments] <file|folder>…  The canonical layout of warp code, only where the meaning stays (warp lint: the same; check: list what would change, exit 1; hash-comments: // comments become #)");
+	println!("  {FORMAT_USAGE}");
 	println!("  warp types <file>    The program in W0, the proved model of warp's types, and both verdicts");
 	println!("  warp data <file>     Read untrusted data without evaluating it");
 	println!("  warp tool <package> [args]  Run a package's prebuilt <package>.wasm in its directory");

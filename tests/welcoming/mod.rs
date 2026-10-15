@@ -5,6 +5,7 @@ mod test_and_or_got_it; // card done-done
 mod test_braceless_call_argument;
 mod test_c_style;
 mod test_cli_error_exit; // card cli-error-exit
+mod test_format_cli; // card beautify-cli
 #[cfg(all(feature = "native", unix))] // runs the warp binary
 mod test_closed_pipe;
 mod test_const_list_methods;
