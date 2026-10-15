@@ -79,6 +79,15 @@ function effectsProcessed(hooks, chain, floats, rate, channels) {
 	return new Float32Array(compiler.memory.buffer.slice(at, at + length));
 }
 
+// how loud each band sounds in a window of amplitudes around 0 (lib/sound.warp spectrum): the one DSP, src/sound/spectrum.rs,
+// natively and here (src/web/mod.rs web_spectrum)
+function spectrumLevels(hooks, window, rate, bands, low, high) {
+	const samples = new Uint8Array(Float32Array.from(window).buffer);
+	const { compiler, length } = blockCompilerCall(hooks, "web_spectrum", [samples], rate, bands, low, high);
+	const at = compiler.web_report();
+	return Array.from(new Float64Array(compiler.memory.buffer.slice(at, at + length)));
+}
+
 // the `warp_host` imports of a compiler instance; `memory()` is its memory (known only after instantiation).
 // `awaited`: the instance's entry points are called through WebAssembly.promising (host.js JSPI, awaitedEntry), so a run
 // may wait for its program's promises, the compiler suspended meanwhile

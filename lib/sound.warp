@@ -506,38 +506,22 @@ read_midi(path) := {
 	[[flat#(4 * i + 1) / 1000.0, midi_hertz(flat#(4 * i + 2)), flat#(4 * i + 3) / 1000.0, flat#(4 * i + 4)] for i in 0..((count(flat) / 4) as int)]
 }
 
-// how loud each frequency band sounds at a moment of the samples (card winamp-like, samples/visualizer.warp): the bands
-// spaced evenly in pitch from band_low to band_high Hz, each level from 0 to 1 (a full-scale sine is 1)
+// how loud each frequency band sounds at a moment of the samples (card winamp-like, samples/visualizer.warp), or of an
+// audio file, spectrum("song.mp3", seconds, bands), decoded once: the bands spaced evenly in pitch from band_low to
+// band_high Hz, each level from 0 to 1 (a full-scale sine is 1). The window Hann-weighted, each band measured by
+// Goertzel's recurrence, in Rust for both (src/sound/spectrum.rs, decision sound-dsp)
 global band_low = 60
 global band_high = 5000
 // the samples a spectrum looks at: 512 at 22050 Hz are 23 ms, bands 43 Hz apart are still told apart
 spectrum_window = 512
-// the middle frequency of band i of count
-band_frequency(i, count) := band_low * (band_high / band_low) ^ (i / (count - 1))
 // the band whose middle frequency is nearest in pitch
 nearest_band(frequency, count) := round(log(frequency / band_low) / log(band_high / band_low) * (count - 1)) as int
-// the window's samples around silence, Hann-weighted so a tone between two bands does not leak into the far ones
-def hann_weighted(window) {
-	n = count(window)
-	[((window[i] - sample_offset) * (0.5 - 0.5 * cos(2 * pi * i / (n - 1)))) as float for i in 0..n]
-}
-// how loud frequency f sounds in the weighted window: the size of one term of the discrete Fourier transform, by
-// Goertzel's recurrence (one multiply and add a sample, no sine or cosine in the loop)
-def band_level(weighted, f) {
-	coefficient = 2 * cos(2 * pi * f / sample_rate)
-	last = 0.0 as float
-	before = 0.0 as float
-	for x in weighted {
-		next = x + coefficient * last - before
-		before = last
-		last = next
-	}
-	4 * sqrt(max(0.0, last * last + before * before - coefficient * last * before)) / count(weighted) / loudest_sample
-}
+// how many seconds an audio file sounds: sound_seconds("song.mp3")
+sound_seconds(path: text) := std_io("sound", "file_seconds", [path])
+// one definition for both until a text and a list variant overload (card text-list)
 def spectrum(samples, seconds, bands) {
+	if samples is text { return std_io("sound", "file_spectrum", [samples, seconds, spectrum_window / sample_rate, bands, band_low, band_high]) }
 	start = min(round(seconds * sample_rate) as int, count(samples))
 	window = samples[start..min(start + spectrum_window, count(samples))]
-	if count(window) < 2 { return [0 for i in 0..bands] }
-	weighted = hann_weighted(window)
-	[band_level(weighted, band_frequency(i, bands)) for i in 0..bands]
+	std_io("sound", "spectrum", [window, sample_rate, bands, band_low, band_high])
 }

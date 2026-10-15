@@ -235,6 +235,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "stored") return keepValue(data.name, data.value, data.file);
 			if (data.type === "clipboard") return copyText(data.text);
 			if (data.type === "clipboard read") return pasteInto(data.shared);
+			if (data.type === "sound decode") return decodeSoundInto(data.shared, data.url, data.bytes); // task-workers.js
 			if (data.type === "page call") return answerPageCall(data.shared, data.request, starting); // task-workers.js
 			if (data.type === "failed") return failed(new Error(data.message));
 			if (data.type === "bundle") return bundled(data.bundle); // deploy.js
