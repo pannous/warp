@@ -17,3 +17,20 @@ fn dir_of_a_text_lists_its_builtin_methods() {
 	is!("(\"trim\" in dir(text)) > 0", true);
 	is!("dir(text)#1", "repeat");
 }
+
+#[test]
+fn methods_list_what_dir_lists() {
+	is!("xs = [1]\ncount(xs.methods) == count(dir(xs))", true);
+	is!("s = \"hi\"\ncount(s.methods) == count(dir(s))", true);
+	is!("fs = methods(\"hi\")\nfs#1.name", "repeat");
+	is!("(\"Cursor\" in dir(text)) > 0", false);
+}
+
+#[test]
+fn every_builtin_method_is_a_function_value() {
+	is!("f = function count; f(\"abc\")", 3);
+	is!("f = function filter; f([1 2 3], x => x > 1)", warp::ints(vec![2, 3]));
+	is!("f = function add; xs = [1]; f(xs, 2); xs", warp::ints(vec![1, 2]));
+	is!("f = function insert; f([1 2], 5, 1)", warp::ints(vec![1, 5, 2]));
+	is!("count([function upper, function min])", 2); // min is the function, no minute
+}

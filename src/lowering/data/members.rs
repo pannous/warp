@@ -106,11 +106,14 @@ pub fn builtin_members(module: &str) -> &'static [&'static str] {
 	}
 }
 
-/// What `dir` lists of a type module or a value of its type (card dir-lists): the module's words in their order, then
-/// the builtin methods it doesn't define itself
+/// What `dir` and `methods` list of a type module or a value of its type (card dir-lists): the module's words in their
+/// order without its classes, then the builtin methods it does not define itself. The module words come first because test_dir pins
+/// dir(text)#1 == "repeat"; member completion (type_names) puts the builtins first on purpose
 pub fn type_dir_names(module: &str, words: &[String]) -> Vec<String> {
+	let classes = crate::modules::std_module_classes(module);
+	let methods = words.iter().filter(|word| !classes.contains(word));
 	let builtins = builtin_members(module).iter().filter(|name| !words.iter().any(|word| word == *name));
-	words.iter().cloned().chain(builtins.map(|name| name.to_string())).collect()
+	methods.cloned().chain(builtins.map(|name| name.to_string())).collect()
 }
 
 /// The type of a value written in the program: a variable's is its last assigned value's (followed through other

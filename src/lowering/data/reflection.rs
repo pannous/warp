@@ -307,6 +307,10 @@ fn function_word(node: &Node, functions: &Functions, defined: &HashSet<String>) 
 	if word == crate::type_tests::TYPE_WORD && !referenced && is_parameterless(name, functions, defined) {
 		return Some(call(word, vec![call(name, vec![])]));
 	}
+	// `type(number)`, `dir(map)`: a type word is the type, `function map` the method
+	if crate::type_tests::is_builtin_type_word(name) && !referenced {
+		return None;
+	}
 	if !functions.contains_key(name) {
 		let (_, signature) = library_signature(name, functions, defined)?;
 		return match word {
@@ -803,8 +807,8 @@ impl Objects {
 	/// before the run: a parameter's `o.methods` or an imported class's `shapes.P.methods` stays as written
 	fn value_methods(&self, subject: &Node) -> Option<Node> {
 		let known = literal_type(subject).or_else(|| self.literal_types.get(subject.symbol_name()?).copied())?;
-		let (_, words) = crate::modules::type_modules().into_iter().find(|(module, _)| *module == known)?;
-		Some(function_list(words))
+		let (module, words) = crate::modules::type_modules().into_iter().find(|(module, _)| *module == known)?;
+		Some(function_list(&super::members::type_dir_names(module, words)))
 	}
 
 	fn map_keys(&self, subject: &Node) -> Node {
@@ -878,7 +882,6 @@ pub(crate) fn value_methods_modules(program: &Node) -> Vec<&'static str> {
 		};
 		modules.extend(literal_type(subject).or_else(|| variables.get(subject.symbol_name()?).copied()));
 	});
-	modules.retain(|module| *module == crate::words::LIST_WORD);
 	modules
 }
 

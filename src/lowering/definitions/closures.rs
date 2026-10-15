@@ -256,6 +256,14 @@ fn builtin_wrapper(word: &str) -> Option<Node> {
 	let operator = crate::warp_parser::PREFIX_OPERATOR_WORDS.iter().find(|(spelled, _)| *spelled == word);
 	let body = match (operator, params.as_slice()) {
 		(Some((_, op)), [operand]) => key(Node::Empty, *op, operand.clone()),
+		// `xs.add(x)`, `xs.insert(x, at: at)`: a list-changing method is called on its list
+		(None, [list, rest @ ..]) if crate::list_mutations::is_list_mutating_method(word) => {
+			let labeled = |param: &Node| match param.symbol_name() {
+				Some(crate::words::AT_WORD) => key(param.clone(), Op::Colon, param.clone()),
+				_ => param.clone(),
+			};
+			key(list.clone(), Op::Dot, call(word, rest.iter().map(labeled).collect()))
+		}
 		_ => call(word, params),
 	};
 	Some(key(head, Op::Define, body))

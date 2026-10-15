@@ -27,6 +27,29 @@ const NAMED_SIGNATURES: [(&str, &str); 19] = [
 	("ord", "(c:codepoint) -> int"),
 	("print", "(x)"),
 ];
+/// The builtin methods of lists, texts and maps no table above names (members.rs LIST_MEMBERS …), so each is a function
+/// value like the others (card dir-lists: methods(x) lists what dir(x) does)
+const MEMBER_SIGNATURES: [(&str, &str); 19] = [
+	("count", "(xs) -> int"),
+	("map", "(xs, f)"),
+	("filter", "(xs, f)"),
+	("reduce", "(xs, f)"),
+	("fold", "(xs, start, f)"),
+	("any", "(xs, f) -> bool"),
+	("all", "(xs, f) -> bool"),
+	("find", "(xs, f)"),
+	("each", "(xs, f)"),
+	("add", "(xs, x)"),
+	("insert", "(xs, x, at)"),
+	("remove", "(xs, x)"),
+	("pop", "(xs)"),
+	("clear", "(xs)"),
+	("number", "(x) -> number"),
+	("string", "(x) -> text"),
+	("keys", "(m) -> list"),
+	("values", "(m) -> list"),
+	("get", "(m, key)"),
+];
 const PRELUDE: &str = "prelude";
 const POSITIONAL_NAMES: [&str; 4] = ["a", "b", "c", "d"];
 const LIBM_PARAMETER_TYPE: &str = "float";
@@ -35,18 +58,20 @@ const LIBM_PARAMETER_TYPE: &str = "float";
 /// that is no library word
 pub fn library_signature(word: &str) -> Option<(Vec<String>, String)> {
 	let word = crate::library_words::canonical_spelling(word);
-	let signature = NAMED_SIGNATURES
-		.iter()
-		.find(|(name, _)| *name == word)
-		.map(|(_, signature)| signature.to_string())
+	let signature = named(&NAMED_SIGNATURES, word)
 		.or_else(|| prelude_signature(word))
 		.or_else(|| libm_signature(word))
 		.or_else(|| text_builtin_signature(word))
 		.or_else(|| {
 			crate::library_words::is_library_word(word)
 				.then(|| positional(crate::library_words::arity(word), None, Kind::Empty))
-		})?;
+		})
+		.or_else(|| named(&MEMBER_SIGNATURES, word))?;
 	Some((parameter_names(&signature), signature))
+}
+
+fn named(signatures: &[(&str, &str)], word: &str) -> Option<String> {
+	signatures.iter().find(|(name, _)| *name == word).map(|(_, signature)| signature.to_string())
 }
 
 /// The parameter count of a library word whose first parameter is typed (`floor(x:number)`, `upper(t:text)`): a function
