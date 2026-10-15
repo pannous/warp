@@ -51,8 +51,10 @@ const KERNEL_FUNCTIONS: [&str; 15] =
 const KERNEL_FUNCTIONS_OF_TWO: [&str; 3] = ["min", "max", "atan2"];
 /// Shader math WGSL computes on numbers and vectors alike (card compile-shaders, lib/math.warp and the prelude's norm):
 /// the warp word, WGSL's, its number of arguments and the result's width (0: the arguments' width)
-const VECTOR_FUNCTIONS: [(&str, &str, usize, usize); 15] = [
+/// round: a half to the even neighbour in both
+const VECTOR_FUNCTIONS: [(&str, &str, usize, usize); 16] = [
 	("fract", "fract", 1, 0),
+	("round", "round", 1, 0),
 	("sign", "sign", 1, 0),
 	("normalize", "normalize", 1, 0),
 	("norm", "length", 1, 1),

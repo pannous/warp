@@ -1,0 +1,7 @@
+// card compile-shaders: a painted function calling a program function of no parameters, center(), which parses as
+// (center), becomes a fragment shader calling it
+width = 8
+height = 8
+center() := [width / 2, height / 2]
+spot(x, y) := norm([x, y] .- center()) < 3
+paint(spot, width, height)

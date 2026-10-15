@@ -1,6 +1,6 @@
 //! WGSL from warp: a numeric lambda as a compute kernel (with its reductions), a painted function as a fragment shader
 use super::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// A lambda as a WGSL compute kernel: the item it computes in WGSL, the program's numbers it reads (`outer`, appended
 /// to `data` after the items, in this order) and whether it is worth the GPU (math words, powers: `heavy`)
@@ -155,15 +155,32 @@ pub(crate) fn with_program_functions<T>(program: &Node, run: impl FnOnce() -> T)
 		Node::List(items, _, _) => items.as_slice(),
 		single => std::slice::from_ref(single),
 	};
+	let classes = crate::analyzer::declared_classes(program);
 	let functions = statements
 		.iter()
 		.filter_map(crate::law::function_definition)
 		.map(|definition| {
 			let parameters = definition.parameters.into_iter().map(|(name, _)| name).collect();
-			(definition.name, ProgramFunction { parameters, body: definition.body })
+			let body = without_instance_dispatch(definition.body, &classes);
+			(definition.name, ProgramFunction { parameters, body })
 		})
 		.collect();
 	crate::compiler::compile_context::scoped(|context| &mut context.program_functions, functions, run)
+}
+
+/// `x + 1` of a program with a class defining plus (`use sound`: Note) reads `if x is Note then x.plus(1) else x + 1`
+/// (class_methods.rs): on the GPU no value is an instance, so only the built-in operator remains
+fn without_instance_dispatch(node: Node, classes: &HashSet<String>) -> Node {
+	let otherwise = crate::lowering::nodes::branches(&node).and_then(|(condition, then, otherwise)| {
+		let Node::Key(subject, Op::Eq, class) = condition.drop_meta() else { return None };
+		let Node::Key(receiver, Op::Dot, _) = then.drop_meta() else { return None };
+		let is_dispatch = class.symbol_name().is_some_and(|class| classes.contains(class)) && receiver == subject;
+		is_dispatch.then(|| otherwise.clone())
+	});
+	match otherwise {
+		Some(otherwise) => without_instance_dispatch(otherwise, classes),
+		None => node.map_children(|child| without_instance_dispatch(child, classes)),
+	}
 }
 
 fn program_function(name: &str) -> Option<ProgramFunction> {
@@ -186,6 +203,8 @@ struct Translation {
 	in_progress: Vec<String>,
 	/// The program's numbers are a fragment shader's `values` (paint), not cells of the kernel's `data`
 	uniforms: bool,
+	/// The program's lists the shader reads item by item, `levels#k`: its values hold one vec4f per item
+	item_lists: Vec<String>,
 	/// The function being translated gives a color, a vec4f
 	color_result: bool,
 	/// The widths of the function's vectors among its locals (card compile-shaders); a local not here is an f32
@@ -232,7 +251,11 @@ impl Translation {
 			Node::Key(left, op, right) => scalar(self.arithmetic(left, op, right)?),
 			Node::List(items, crate::node::Bracket::Square, _) => self.vector(items),
 			Node::List(items, _, _) => match items.as_slice() {
-				[single] => self.typed(single),
+				// `center()` parses as `(center)`: a call when it names a program function of no parameters
+				[single] => match single.symbol_name().and_then(|name| self.call_without_arguments(name)) {
+					Some(called) => Some(called),
+					None => self.typed(single),
+				},
 				[function, arguments @ ..] => self.function_call(&function.name(), arguments),
 				_ => None,
 			},
@@ -302,8 +325,18 @@ impl Translation {
 		Some((format!("({} {} {})", left.0, operator_symbol(op)?, right.0), width))
 	}
 
-	/// `p#1` … `p#4`: a vector's component; a computed index picks it at run time
+	/// `p#1` … `p#4`: a vector's component; a computed index picks it at run time. An item of a program's list,
+	/// `levels#band`, reads the shader's values, which hold one vec4f per item (whatever the list's length)
 	fn component(&mut self, vector: &Node, index: &Node) -> Option<Typed> {
+		let program_list =
+			vector.symbol_name().filter(|list| self.uniforms && !self.locals.iter().any(|local| local == list));
+		if let Some(list) = program_list {
+			let (array, at) = (self.program_number(list), self.expression(index)?);
+			if !self.item_lists.iter().any(|known| known == list) {
+				self.item_lists.push(list.to_string());
+			}
+			return Some((format!("{array}[i32({at}) - 1].x"), 1));
+		}
 		let (vector, width) = self.typed(vector)?;
 		if width == 1 {
 			return None;
@@ -343,6 +376,14 @@ impl Translation {
 		let width = common_width(&arguments.iter().map(|(_, width)| *width).collect::<Vec<_>>())?;
 		let codes: Vec<String> = arguments.into_iter().map(|argument| splat(argument, width)).collect();
 		Some((format!("{wgsl}({})", codes.join(", ")), if result == 0 { width } else { result }))
+	}
+
+	fn call_without_arguments(&mut self, name: &str) -> Option<Typed> {
+		if self.locals.iter().any(|local| local == name) {
+			return None;
+		}
+		let called = program_function(name).filter(|called| called.parameters.is_empty())?;
+		self.call(name, &called, &[], false)
 	}
 
 	/// `condition ? then : otherwise` in an expression
@@ -787,8 +828,7 @@ fn painted_function(node: &Node) -> Option<Node> {
 	let painted = program_function(&name).filter(|called| called.parameters.len() == 2)?;
 	let (width, height) = (width.serialize(), height.serialize());
 	let lowered = match fragment_shader(&name, &painted).filter(|_| !on_cpu) {
-		Some((shader, outer)) => {
-			let entries: Vec<String> = outer.iter().map(|name| format!("{name}: {name}")).collect();
+		Some((shader, entries)) => {
 			let values = match entries.is_empty() {
 				true => String::new(),
 				false => format!(", {{{}}}", entries.join(", ")),
@@ -808,8 +848,9 @@ fn painted_function(node: &Node) -> Option<Node> {
 	Some(crate::law::substitute(&lowered, &HashMap::from([(PIXEL_COLOR.to_string(), pixel_color)])))
 }
 
-/// The fragment shader painting each pixel the color of `function` at its column and row, and the program's numbers
-/// it reads; none where WGSL cannot compute the function
+/// The fragment shader painting each pixel the color of `function` at its column and row, and the entries of its values:
+/// the program's numbers it reads, a list it reads item by item as a list of one-number lists (one vec4f per item);
+/// none where WGSL cannot compute the function
 fn fragment_shader(name: &str, function: &ProgramFunction) -> Option<(String, Vec<String>)> {
 	let mut translation = Translation { uniforms: true, ..Translation::default() };
 	let pixel = vec![("floor(at.x)".to_string(), 1), ("floor(at.y)".to_string(), 1)];
@@ -818,7 +859,11 @@ fn fragment_shader(name: &str, function: &ProgramFunction) -> Option<(String, Ve
 	let shader = format!(
 		"{functions}@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {{\n\treturn {painted};\n}}"
 	);
-	Some((shader, translation.outer))
+	let entries = translation.outer.iter().map(|name| match translation.item_lists.contains(name) {
+		true => format!("{name}: [[item] for item in {name}]"),
+		false => format!("{name}: {name}"),
+	});
+	Some((shader, entries.collect()))
 }
 
 /// The WGSL comparison of a warp operator

@@ -124,12 +124,77 @@ fn a_painted_function_of_vectors_becomes_a_fragment_shader() {
 	if !has_gpu() {
 		return crate::common::announce_skip("a WebGPU adapter", module_path!());
 	}
-	let (gpu, cpu) = painted_both_ways(VECTORS, "glow", 32, "paint-vectors");
-	assert_eq!(gpu.len(), 32 * 24);
+	assert_same_colors_both_ways(VECTORS, "glow", (32, 24), "paint-vectors");
+}
+
+/// `function` painted on the GPU and on the CPU: the same colors, up to a channel's rounding
+fn assert_same_colors_both_ways(program: &str, function: &str, (width, height): (usize, usize), folder: &str) {
+	let (gpu, cpu) = painted_both_ways(program, function, width, folder);
+	assert_eq!(gpu.len(), width * height);
 	for (pixel, (a, b)) in gpu.iter().zip(&cpu).enumerate() {
 		assert!(
 			a.iter().zip(b).all(|(a, b)| a.abs_diff(*b) <= CHANNEL_TOLERANCE),
 			"pixel {pixel}: {a:?} on the GPU, {b:?} on the CPU"
 		);
 	}
+}
+
+/// An item of the program's list: the shader reads it from its values, which hold one vec4f per item
+const LEVELS: &str = "width = 16
+height = 4
+levels = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4]
+bars(x, y) := [levels#(x + 1), 0.5, 1 - levels#(x + 1)]
+";
+
+#[test]
+fn a_painted_function_reads_an_item_of_a_program_list() {
+	let shader = lowered(&format!("{LEVELS}paint(bars, width, height)"));
+	assert!(shader.contains("values.levels[i32(") && !shader.contains("{levels:levels}"), "{shader}");
+	if !has_gpu() {
+		return crate::common::announce_skip("a WebGPU adapter", module_path!());
+	}
+	assert_same_colors_both_ways(LEVELS, "bars", (16, 4), "paint-levels");
+}
+
+/// `center()` parses as `(center)`: in a shader it calls the program function of no parameters
+const SPOT: &str = "width = 8
+height = 8
+center() := [width / 2, height / 2]
+spot(x, y) := norm([x, y] .- center()) < 3
+";
+
+#[test]
+fn a_painted_function_calls_a_function_of_no_parameters() {
+	let shader = lowered(&format!("{SPOT}paint(spot, width, height)"));
+	assert!(shader.contains("fn warp_center() -> vec2f") && shader.contains("- warp_center()"), "{shader}");
+	if !has_gpu() {
+		return crate::common::announce_skip("a WebGPU adapter", module_path!());
+	}
+	assert_same_colors_both_ways(SPOT, "spot", (8, 8), "paint-spot");
+}
+
+/// round takes a half to the even neighbour on the CPU and in a shader alike: 0.5 → 0, 1.5 → 2, 2.5 → 2
+const STEPS: &str = "width = 8
+height = 2
+steps(x, y) := round(x / 2 + 0.5) % 2
+";
+
+#[test]
+fn a_painted_function_rounds_halves_to_even() {
+	assert!(lowered(&format!("{STEPS}paint(steps, width, height)")).contains("round(("));
+	if !has_gpu() {
+		return crate::common::announce_skip("a WebGPU adapter", module_path!());
+	}
+	assert_same_colors_both_ways(STEPS, "steps", (8, 2), "paint-steps");
+}
+
+/// Note (lib/sound.warp, loaded by melody_samples) defines plus: `x + 1` reads `if x is Note then x.plus(1) else x + 1`,
+/// of which the shader computes the built-in operator, no value on the GPU being a Note
+#[test]
+fn a_painted_function_of_a_program_with_notes_becomes_a_fragment_shader() {
+	let program = "use sound
+song = melody_samples([C4], 0.25)
+near(x, y) := x + 1 < 2
+paint(near, 4, 4)";
+	assert!(lowered(program).contains("@fragment"));
 }
