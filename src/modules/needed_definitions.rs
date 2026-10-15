@@ -3,6 +3,8 @@ use super::*;
 
 /// A module word a program variable shadows is renamed apart: `words` of lib/text is `lib·words` in its definitions
 pub(crate) const SHADOWED_WORD_PREFIX: &str = "lib·";
+/// the warning kind of a program function replacing a module's, which "got it" silences
+pub(crate) const REPLACED_MODULE_FUNCTION_TOPIC: &str = "replaced-module-function";
 
 /// The names the program declares, but not its methods: `take()` of a class Box, `take(b:Box)` add to list's take
 /// (notes/dispatch.md "Methods"), a plain `take(xs, n)` is the program's own take
@@ -31,6 +33,8 @@ pub(crate) struct ProgramWords {
 	/// each function's fewest and most arguments: it shadows a module's definitions taking any of those only,
 	/// `clamp(x)` leaves math's clamp(x, low, high) to the program too
 	functions: HashMap<String, Vec<(usize, usize)>>,
+	/// each function's first definition, where a warning about it points
+	definitions: HashMap<String, Node>,
 }
 
 impl ProgramWords {
@@ -44,6 +48,33 @@ impl ProgramWords {
 		let overlaps =
 			|&(program_fewest, program_most): &(usize, usize)| program_fewest <= most && fewest <= program_most;
 		!self.variables.contains(name) && self.functions.get(name).is_some_and(|ranges| !ranges.iter().any(overlaps))
+	}
+
+	/// The program's definition replacing a module definition of `name` taking these arguments, for the program's calls
+	fn replacing(&self, name: &str, arities: (usize, usize)) -> Option<&Node> {
+		let replaces = self.functions.contains_key(name) && !self.leaves_to_program(name, arities);
+		self.definitions.get(name).filter(|_| replaces && !self.variables.contains(name))
+	}
+}
+
+/// `use sound; def play(x) := …`: a program function taking a module function's arguments replaces it for the
+/// program's calls, which is never silent (card use-sound-def); the module's own code keeps its own (shadowed_apart)
+pub(crate) fn warn_replaced(definitions: &[Node], words: &ProgramWords, module: &str) {
+	let mut warned = HashSet::new();
+	for definition in definitions {
+		let Some((head, _, _)) = crate::type_tests::function_definition(definition) else { continue };
+		let Some(name) = leftmost_symbol(&head) else { continue };
+		let Some(replacing) = words.replacing(&name, head_arities(&head)) else { continue };
+		if warned.insert(name.clone()) {
+			let replaced = signature(&name, &head);
+			let message = format!(
+				"{name} replaces {module}'s {replaced} in this program ({module}'s own code keeps its {name}); rename yours to keep both"
+			);
+			crate::errors::diagnostic::say(
+				crate::errors::diagnostic::Diagnostic::at(replacing, message)
+					.about(REPLACED_MODULE_FUNCTION_TOPIC, &name),
+			);
+		}
 	}
 }
 
@@ -60,23 +91,45 @@ pub(crate) fn program_words(program: &Node) -> ProgramWords {
 		typed_by_class
 	};
 	let mut functions: HashMap<String, Vec<(usize, usize)>> = HashMap::new();
+	let mut definitions = HashMap::new();
 	for statement in statements_of(program) {
 		let Some((head, _, _)) = crate::type_tests::function_definition(statement) else { continue };
 		if let (false, Some(name)) = (is_method(&head), leftmost_symbol(&head)) {
-			functions.entry(name).or_default().push(head_arities(&head));
+			functions.entry(name.clone()).or_default().push(head_arities(&head));
+			definitions.entry(name).or_insert_with(|| statement.clone());
 		}
 	}
-	ProgramWords { variables: program_variables(program), functions }
+	ProgramWords { variables: program_variables(program), functions, definitions }
 }
 
 /// The arguments a definition head takes, fewest and most: `mix(a, b, c = [])` takes 2 or 3
 fn head_arities(head: &Node) -> (usize, usize) {
-	let parameters = match head.drop_meta() {
-		Node::List(items, _, _) => &items[1..],
-		_ => &[],
-	};
+	let parameters = parameters_of(head);
 	let defaulted = parameters.iter().filter(|parameter| matches!(parameter.drop_meta(), Node::Key(_, Op::Assign, _)));
 	(parameters.len() - defaulted.count(), parameters.len())
+}
+
+fn parameters_of(head: &Node) -> &[Node] {
+	match head.drop_meta() {
+		Node::List(items, _, _) => &items[1..],
+		_ => &[],
+	}
+}
+
+/// `play(tone)`, as a definition head reads in a message
+fn signature(name: &str, head: &Node) -> String {
+	let parameters: Vec<String> = parameters_of(head).iter().map(parameter_text).collect();
+	format!("{name}({})", parameters.join(", "))
+}
+
+/// `tone`, `bus: Bus`: a parameter as written, without the `any` type lowering gave an untyped one
+fn parameter_text(parameter: &Node) -> String {
+	match parameter.drop_meta() {
+		Node::Key(name, Op::Colon, kind) if kind.is_symbol(crate::words::ANY_TYPE) => {
+			name.serialize().trim().to_string()
+		}
+		other => other.serialize().trim().to_string(),
+	}
 }
 
 /// The program's declarations; in a function body only the nested functions, its variables are its own (a local
