@@ -32,4 +32,10 @@ printf 'use sub/words\nprint bump(1)' >program.warp
 before="$(programs)"
 expect "$(run)" 101 "subfolder module"
 expect "$(programs)" "$before" "subfolder module not kept"
+mkdir -p lib/include && printf 'use inner\nbump(x) := twice(x) + 1' >lib/outer.warp
+printf 'twice(x) := 2 * x' >lib/include/inner.warp
+printf 'use outer\nprint bump(1)' >program.warp
+before="$(programs)"
+expect "$(run)" 3 "module of lib using one of lib/include"
+expect "$(programs)" "$before" "lookup below a module's folder not kept"
 echo "program cache probe: ok"

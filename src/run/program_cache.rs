@@ -95,8 +95,20 @@ pub fn is_searched_folder(folder: &Path) -> bool {
 	let (Some(program), Ok(working)) = (crate::modules::program_file(), std::env::current_dir()) else {
 		return false;
 	};
-	let folder = folder.canonicalize().unwrap_or_else(|_| folder.to_path_buf());
-	searched_folders(&program, &working).iter().any(|searched| searched.canonicalize().ok().as_ref() == Some(&folder))
+	let folder = resolved(folder);
+	searched_folders(&program, &working).iter().any(|searched| resolved(searched) == folder)
+}
+
+/// The absolute path without links, also of a folder that does not exist (yet): a lookup there is keyed all the same
+fn resolved(path: &Path) -> PathBuf {
+	let absolute = std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf());
+	if let Ok(canonical) = absolute.canonicalize() {
+		return canonical;
+	}
+	match (absolute.parent(), absolute.file_name()) {
+		(Some(parent), Some(name)) => resolved(parent).join(name),
+		_ => absolute,
+	}
 }
 
 /// Where the program's `use`s look: each search directory below its folder and below the working directory
