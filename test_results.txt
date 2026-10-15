@@ -350,6 +350,7 @@ PASSED:
   ✓ control::test_library_signatures::an_operator_words_signature
   ✓ control::test_library_signatures::table_words_positional
   ✓ control::test_library_signatures::the_programs_own_definition_wins
+  ✓ control::test_library_signatures::whole_number_math_words_show_int_parameters
   ✓ control::test_list_without::without_a_condition_keeps_the_elements_failing_it
   ✓ control::test_list_without::without_a_field_keeps_the_elements_lacking_it
   ✓ control::test_listener_removal_in_functions::a_listener_is_removed_inside_a_block
@@ -1164,6 +1165,8 @@ PASSED:
   ✓ functions::test_body_statement::an_undefined_word_in_it_is_an_error
   ✓ functions::test_braced_it_warning::a_braced_it_body_is_the_parameter_and_warns
   ✓ functions::test_braced_it_warning::other_bodies_do_not_warn
+  ✓ functions::test_broadcast_of_list_variables::a_broadcast_of_a_list_variable_assigned_is_a_list_variable
+  ✓ functions::test_broadcast_of_list_variables::a_word_around_a_broadcast_of_a_list_variable_maps_too
   ✓ functions::test_broadcast_reassigned::a_broadcast_over_a_variable_alone_does_not_make_it_a_list
   ✓ functions::test_broadcast_reassigned::a_list_reassigned_from_its_own_broadcast_stays_a_list
   ✓ functions::test_broadcasting_declared::a_declared_list_variable_broadcasts
@@ -1479,6 +1482,9 @@ PASSED:
   ✓ functions::test_nested_it::test_named_lambda_parameter_leaves_the_outer_it
   ✓ functions::test_nested_it::test_trailing_block_of_a_lambda_body_method
   ✓ functions::test_nested_it::test_trailing_block_of_an_assigned_method_call
+  ✓ functions::test_nested_library_calls::a_broadcast_result_is_a_list_variable
+  ✓ functions::test_nested_library_calls::a_library_word_nests_inside_another
+  ✓ functions::test_nested_library_calls::round_with_places_stays_round_to
   ✓ functions::test_nested_prefix_calls::a_function_name_among_the_arguments_takes_the_ones_after_it
   ✓ functions::test_nested_prefix_calls::a_function_passed_as_a_value_stays_one
   ✓ functions::test_nested_two_deep::a_function_nested_two_deep_reads_the_outermost_variables
@@ -1912,6 +1918,9 @@ PASSED:
   ✓ lists::test_long_list_copies::a_long_list_of_nodes_grows_without_exhausting_the_stack
   ✓ lists::test_long_list_copies::copies_keep_the_order_and_share_nothing_they_change
   ✓ lists::test_long_list_result::a_long_list_result_reads_back
+  ✓ lists::test_map_field_named_like_word::a_loop_element_s_field_named_like_a_list_word_is_the_field
+  ✓ lists::test_map_field_named_like_word::a_parameter_holding_a_list_still_gets_the_word
+  ✓ lists::test_map_field_named_like_word::a_parameter_s_field_named_like_a_list_word_is_the_field
   ✓ lists::test_map_get_kind::get_gives_the_value_kind_of_the_map
   ✓ lists::test_map_index::a_map_parameter_fills_and_finds_in_linear_time
   ✓ lists::test_map_index::an_indexed_map_changed_in_place_finds_the_change
@@ -2030,6 +2039,7 @@ PASSED:
   ✓ lists::test_typed_lists::test_mixed_list_stays_cons_cells
   ✓ lists::test_typed_lists::test_sum_of_a_typed_list_is_one_operation
   ✓ lists::test_typed_lists::test_zero_filled_int_list_is_an_array
+  ✓ lists::test_unit_named_variable_in::a_variable_named_like_a_unit_is_the_variable
   ✓ lists::test_unit_word_text_in::a_text_naming_a_unit_is_looked_up_in_a_list
   ✓ lists::test_unit_word_text_in::a_unit_symbol_still_counts
   ✓ lists::test_unpacking_declared::unpacking_checks_declared_types
@@ -2567,6 +2577,10 @@ PASSED:
   ✓ numbers::test_libm_functions::trigonometry_and_logarithms_from_libm
   ✓ numbers::test_literal_type_words::every_number_type_word_types_a_literal
   ✓ numbers::test_log_base::log_takes_a_base
+  ✓ numbers::test_log_exact::a_list_variable_with_a_base_is_the_log_of_each_item
+  ✓ numbers::test_log_exact::a_list_with_a_base_is_the_log_of_each_item
+  ✓ numbers::test_log_exact::log_to_base_ten_and_two_is_exact
+  ✓ numbers::test_log_exact::log10_and_log2_broadcast_over_a_list_variable
   ✓ numbers::test_log_glyphs::the_lower_corner_after_a_number_is_its_log
   ✓ numbers::test_log_glyphs::the_lower_corner_before_a_number_is_its_log_to_that_base
   ✓ numbers::test_long_decimals::a_long_decimal_keeps_its_digits
@@ -3330,6 +3344,7 @@ PASSED:
   ✓ programs::test_kitchensink::test_kitchensink_complex_tree
   ✓ programs::test_kitchensink::test_kitchensink_wasmtime_execution
   ✓ programs::test_live_redefine::a_loop_defined_once_is_unchanged
+  ✓ programs::test_live_redefine::a_named_loop_announcing_its_cycles_still_runs
   ✓ programs::test_live_redefine::a_redefined_loop_plays_its_new_block_from_the_next_cycle
   ✓ programs::test_midi::a_broken_file_fails_loudly
   ✓ programs::test_midi::a_file_of_another_program_reads_with_running_status_and_tempo
@@ -4928,6 +4943,9 @@ PASSED:
   ✓ web::test_keyed_lists::a_key_on_its_own_line_names_the_element
   ✓ web::test_keyed_lists::a_list_inside_an_element_gives_its_children
   ✓ web::test_keyword_registry::keywords_of_passes_are_highlighted
+  ✓ web::test_live_handover::a_handed_over_loop_starts_on_the_old_runs_grid
+  ✓ web::test_live_handover::a_loop_the_new_run_drops_ends_at_a_cycle_after_a_while
+  ✓ web::test_live_handover::a_new_runs_loop_takes_over_at_the_old_loops_cycle
   ✓ web::test_markup_holes::a_page_binds_each_hole
   ✓ web::test_markup_holes::fixed_markup_or_a_computed_root_has_no_holes
   ✓ web::test_markup_holes::the_elements_holding_computed_parts_are_the_holes
@@ -5010,6 +5028,9 @@ PASSED:
   ✓ web::test_sandbox_refusals::a_sandboxed_pure_program_still_runs
   ✓ web::test_sandboxed_programs::a_sandboxed_program_calls_no_c_and_no_other_runtime
   ✓ web::test_sandboxed_programs::a_sandboxed_program_keeps_the_host_words
+  ✓ web::test_script_scopes::a_name_declared_twice_is_found
+  ✓ web::test_script_scopes::the_page_scripts_declare_no_name_twice
+  ✓ web::test_script_scopes::the_worker_scripts_declare_no_name_twice
   ✓ web::test_script_words::a_path_from_cwd_is_found
   ✓ web::test_script_words::glob_finds_the_written_files
   ✓ web::test_select_options::a_list_after_the_bound_variable_is_no_part_of_it
@@ -5557,4 +5578,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5552 passed, 0 failed, 5552 total tested
+13 ignored, 5573 passed, 0 failed, 5573 total tested
