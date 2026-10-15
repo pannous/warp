@@ -12,10 +12,14 @@ function serveTaskWorkers(programWorker) {
 		if (taskWorker === undefined && endTaskWorker === undefined) return;
 		event.stopImmediatePropagation();
 		if (endTaskWorker !== undefined) {
-			taskWorkers.get(endTaskWorker)?.terminate();
+			stopTaskWorker(taskWorkers.get(endTaskWorker));
 			return taskWorkers.delete(endTaskWorker);
 		}
 		const made = new Worker(taskWorker.url);
+		made.onmessage = () => {
+			made.loaded = true;
+			if (made.stopping) made.terminate();
+		};
 		const channel = new MessageChannel();
 		made.postMessage({ port: channel.port1 }, [channel.port1]);
 		programWorker.postMessage({ taskWorker: taskWorker.id, port: channel.port2 }, [channel.port2]);
@@ -27,10 +31,18 @@ function serveTaskWorkers(programWorker) {
 	reportBareErrors(programWorker, "the program's Worker");
 	const terminate = programWorker.terminate.bind(programWorker);
 	programWorker.terminate = () => {
-		taskWorkers.forEach(made => made.terminate());
+		taskWorkers.forEach(stopTaskWorker);
 		terminate();
 	};
 	return programWorker;
+}
+
+// a task Worker stopped while it still loads, its MessagePort on the way to it, makes Firefox throw a bare "uncaught
+// exception: undefined" on the page (the tour's Stop check, now and then; notes/gpu.md shaders-firefox): it is stopped
+// once it has loaded, which its first message to the page says
+function stopTaskWorker(made) {
+	if (made?.loaded) made.terminate();
+	else if (made) made.stopping = true;
 }
 
 // a failure without an Error (Firefox's bare "uncaught exception: undefined") at the page or one of its Workers is said
