@@ -461,6 +461,10 @@ pub(crate) fn signature(function: &crate::compiler::context::UserFunctionDef) ->
 		.collect();
 	let result = match function.return_kind {
 		crate::type_kinds::Kind::Empty => String::new(),
+		// a bool is held as an Int (card bool-type)
+		crate::type_kinds::Kind::Int if crate::analyzer::gives_bool(function) => {
+			format!(" -> {}", crate::analyzer::BOOL_TYPE)
+		}
 		kind => format!(" -> {kind}"),
 	};
 	format!("({}){result}", params.join(", "))
