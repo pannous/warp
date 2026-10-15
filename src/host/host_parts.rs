@@ -73,7 +73,7 @@ pub const HOST_PARTS: [HostPart; 11] = [
 		needs: &[],
 	},
 	HostPart {
-		script: ("host-foreign.js", script_text!("exact.js", "host-foreign.js")),
+		script: ("host-foreign.js", script_text!("exact.js", "js-members.js", "host-foreign.js")),
 		gives: |module, name| {
 			(module == HOST_LIBRARY && name == FOREIGN_CALL)
 				|| ![HOST_LIBRARY, WASI_LIBRARY, STD_MODULES_SECTION].contains(&module)

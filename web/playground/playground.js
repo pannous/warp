@@ -221,6 +221,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "stored") return keepValue(data.name, data.value, data.file);
 			if (data.type === "clipboard") return copyText(data.text);
 			if (data.type === "clipboard read") return pasteInto(data.shared);
+			if (data.type === "page call") return answerPageCall(data.shared, data.request); // task-workers.js
 			if (data.type === "failed") return failed(new Error(data.message));
 			if (data.type === "bundle") return bundled(data.bundle); // deploy.js
 			if (data.type === "members") return answerMembers(data);
@@ -310,6 +311,7 @@ const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkM
 darkMode.addEventListener("change", tellSystemValues);
 ["pointerdown", "keydown"].forEach(type => addEventListener(type, () => worker && tellSystemValues(), { once: true, capture: true }));
 new ResizeObserver(() => worker && tellSystemValues()).observe($("output"));
+document.addEventListener("fullscreenchange", () => worker && tellSystemValues());
 
 // view_width, view_height (use draw's default canvas, paint(shader) without a size): the room below the output pane's
 // text, in CSS pixels: the pane's width, down to the window's bottom; none while the pane is folded away, so host.js's
@@ -317,8 +319,10 @@ new ResizeObserver(() => worker && tellSystemValues()).observe($("output"));
 // view taller each frame, until Safari ran out of memory (card webgpu-safari). What follows the paintings down to the
 // page's end is left free: a view-sized painting that overflowed the window brought a scrollbar, which narrowed the
 // next view (card tour-firefox). Measured again as each run starts: the text above the paintings moves without
-// resizing the pane, which is all the ResizeObserver sees
+// resizing the pane, which is all the ResizeObserver sees. In full screen (⛶) the view is the screen, so a shader
+// painted at the view's size renders at the screen's (card full-screen)
 function viewSize() {
+	if (document.fullscreenElement === $("painted")) return { view_width: innerWidth, view_height: innerHeight };
 	const pane = $("output"), style = getComputedStyle(pane), painted = $("painted").getBoundingClientRect();
 	const width = Math.floor(pane.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - PAINTING_BORDERS);
 	const room = innerHeight - Math.max(painted.top, 0) - PAINTING_MARGIN - PAINTING_BORDERS - roomBelowPaintings(style);
@@ -690,6 +694,8 @@ function showRendered(html) {
 	host.hidden = !html;
 	morphChildren(host.shadowRoot ?? renderedRoot(host), parsedHtml(html ?? ""));
 }
+
+self.programElements = () => $("rendered").shadowRoot ?? document; // task-workers.js ownerOnPage: `$who`
 
 // a form's submit stays inside the shadow root (it is not composed): listened to there
 function renderedRoot(host) {

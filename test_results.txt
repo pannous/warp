@@ -264,6 +264,7 @@ PASSED:
   ✓ control::test_for_unit_words::a_unit_word_walks_the_text_by_that_unit
   ✓ control::test_for_unit_words::the_loop_variable_byte_walks_a_text_by_its_bytes
   ✓ control::test_frame_event::a_frame_handler_leaves_main_running
+  ✓ control::test_frame_event::a_frame_handler_reading_the_view_size_runs_once_without_a_window
   ✓ control::test_frame_event::a_frame_handler_runs_once_without_a_window
   ✓ control::test_frame_event::on_key_hears_the_paint_windows_keys
   ✓ control::test_fresh_names::a_program_lowers_alike_on_every_compile
@@ -375,6 +376,7 @@ PASSED:
   ✓ control::test_loops_in_functions::a_while_loop_in_a_function_keeps_its_parameter
   ✓ control::test_loops_in_functions::a_while_loop_in_a_function_keeps_its_variables
   ✓ control::test_many_tasks::hundreds_of_tasks_run_at_once
+  ✓ control::test_map_loop_words::the_words_after_a_map_are_the_body
   ✓ control::test_match_alternatives_hint::arm_alternatives_get_no_hint
   ✓ control::test_match_alternatives_hint::outside_an_arm_only_a_bar_of_truth_values_hints
   ✓ control::test_match_alternatives::a_name_bound_in_an_alternative_is_an_error
@@ -905,6 +907,8 @@ PASSED:
   ✓ ffi::header::tests::test_header_sig_to_ffi_sig
   ✓ ffi::header::tests::test_map_c_type_to_valtype
   ✓ ffi::header::tests::test_parse_header_file_math
+  ✓ ffi::test_browser_dollar_names::a_dollar_global_is_used_from_javascript
+  ✓ ffi::test_browser_dollar_names::a_dollar_name_is_the_element_of_that_id
   ✓ ffi::test_cargo_crates::test_cargo_crate_errors_are_loud
   ✓ ffi::test_cargo_crates::test_cargo_crate_free_functions
   ✓ ffi::test_cargo_crates::test_cargo_crate_prebuilt_download
@@ -2442,6 +2446,11 @@ PASSED:
   ✓ numbers::test_degrees::a_degree_is_pi_over_180
   ✓ numbers::test_degrees::a_temperature_keeps_its_degree_sign
   ✓ numbers::test_degrees::trigonometry_takes_degrees
+  ✓ numbers::test_dimension_types::a_declared_dimension_checks_any_unit_of_it
+  ✓ numbers::test_dimension_types::a_declared_height_is_the_programs
+  ✓ numbers::test_dimension_types::a_program_naming_a_dimension_keeps_its_own
+  ✓ numbers::test_dimension_types::a_quantity_is_its_dimension
+  ✓ numbers::test_dimension_types::a_quantity_of_seconds_is_a_duration_and_a_time
   ✓ numbers::test_div_assign::declared_int_keeps_dividing_whole
   ✓ numbers::test_div_assign::divide_assign_divides_exactly
   ✓ numbers::test_div_assign::floor_divide_assign_floors
@@ -5012,6 +5021,7 @@ PASSED:
   ✓ web::test_tag_lists::a_tag_of_one_value_stays_one_tag
   ✓ web::test_tag_lists::a_tag_over_a_list_literal
   ✓ web::test_tag_lists::a_tag_over_all_items_of_a_list
+  ✓ web::test_task_midi::a_task_relays_its_midi_messages_to_the_page
   ✓ web::test_task_voices::a_task_starts_where_its_starter_stands
   ✓ web::test_task_voices::the_starter_does_not_queue_behind_its_task
   ✓ web::test_text_holes::a_computed_text_between_children_is_a_text_hole
@@ -5126,6 +5136,8 @@ PASSED:
   ✓ welcoming::test_discarded_pure_warning::used_and_mutating_calls_do_not_warn
   ✓ welcoming::test_dot_without_parens::a_type_module_word_needs_no_parentheses
   ✓ welcoming::test_dot_without_parens::chars_are_the_characters_with_or_without_parentheses
+  ✓ welcoming::test_dot_word_same_path::a_computed_receiver_takes_the_word_without_parentheses
+  ✓ welcoming::test_dot_word_same_path::a_field_of_that_name_still_wins
   ✓ welcoming::test_end_and_def_blocks::a_def_takes_its_indented_lines
   ✓ welcoming::test_end_and_def_blocks::a_for_do_reads_its_lines_up_to_end
   ✓ welcoming::test_end_and_def_blocks::an_end_in_a_comment_closes_no_else
@@ -5495,4 +5507,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5490 passed, 0 failed, 5490 total tested
+13 ignored, 5502 passed, 0 failed, 5502 total tested
