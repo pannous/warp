@@ -37,17 +37,17 @@ found = item is in collection
 
 // Conditional statements
 if age is at least 18 {
-    print "Adult"
+	print "Adult"
 }
 
 // unless (negative if)
 unless logged_in {
-    redirect_to_login()
+	redirect_to_login()
 }
 
 // Iteration with natural phrasing
 for each item in basket {
-    total = total plus item.price
+	total = total plus item.price
 }
 
 // Functions use the same explicit call shape at their definitions and call sites
@@ -55,14 +55,14 @@ mail("Hello", "user@example.com")
 
 // General filtering, sorting and slicing compose without a phrase-specific lowering pass
 result = (numbers where it > 0)
-    .sort_by(it => abs(it))
-    .slice(0, 10)
+	.sort_by(it => abs(it))
+	.slice(0, 10)
 
 // Named arguments for clarity
 create_user(
-    name: "Alice"
-    email: "alice@example.com"
-    role: admin
+	name: "Alice"
+	email: "alice@example.com"
+	role: admin
 )
 
 // Ranges with words

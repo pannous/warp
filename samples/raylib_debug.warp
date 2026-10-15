@@ -25,8 +25,8 @@ InitWindow(800, 600, "Warp Raylib - Simple Circle")
 # DrawCircle(400, 300, 80.0, MAROON)
 # EndDrawing()
 
-# delay = 0                                                                                   
-# while(delay < 5000000000) {                                                                  
-#    delay++                                                                                 
-# }  
+# delay = 0
+# while(delay < 5000000000) {
+#    delay++
+# }
 # delay

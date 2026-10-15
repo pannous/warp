@@ -3,39 +3,39 @@
 // Classic divide-and-conquer sorting
 
 def quicksort(arr) {
-    if arr.length <= 1 : return arr 
+	if arr.length <= 1 : return arr
 
-    pivot = arr[arr.length//2]
-    left = arr.filter(x => x < pivot)
-    middle = arr.filter(x => x == pivot)
-    right = arr.filter(x => x > pivot)
+	pivot = arr[arr.length//2]
+	left = arr.filter(x => x < pivot)
+	middle = arr.filter(x => x == pivot)
+	right = arr.filter(x => x > pivot)
 
-    return quicksort(left) + middle + quicksort(right)
+	return quicksort(left) + middle + quicksort(right)
 }
 
 // Partitioning version (Lomuto): swap changes arr in place (lists are shared); it also returns the list
 def quicksort_partitioned(arr, lo, hi) {
-    if lo >= hi { return arr }
+	if lo >= hi { return arr }
 
-    pivot = arr[hi]
-    i = lo
-    for j in lo..hi {
-        if arr[j] < pivot {
-            arr = swap(arr, i, j)
-            i = i + 1
-        }
-    }
-    arr = swap(arr, i, hi)
+	pivot = arr[hi]
+	i = lo
+	for j in lo..hi {
+		if arr[j] < pivot {
+			arr = swap(arr, i, j)
+			i = i + 1
+		}
+	}
+	arr = swap(arr, i, hi)
 
-    arr = quicksort_partitioned(arr, lo, i - 1)
-    return quicksort_partitioned(arr, i + 1, hi)
+	arr = quicksort_partitioned(arr, lo, i - 1)
+	return quicksort_partitioned(arr, i + 1, hi)
 }
 
 def swap(arr, i, j) {
-    temp = arr[i]
-    arr[i] = arr[j]
-    arr[j] = temp
-    return arr
+	temp = arr[i]
+	arr[i] = arr[j]
+	arr[j] = temp
+	return arr
 }
 
 // Test
