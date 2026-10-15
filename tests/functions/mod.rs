@@ -103,6 +103,7 @@ mod test_multi_value;
 mod test_named_arguments;
 mod test_named_function_argument;
 mod test_nested_it;
+mod test_nested_library_calls; // card broadcast-library
 mod test_nested_prefix_calls;
 mod test_nested_two_deep; // card nested-two
 mod test_nonlocal_any_value;
