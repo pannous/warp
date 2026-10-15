@@ -3,7 +3,7 @@
 # builds, samples.js (samples/*.warp for the example menu), keywords.js (the editor's hard and soft keywords) and
 # version.js (the commit built, shown in the ⋯ menu). Serve the repository root and open the page:
 #   web/playground/build.sh && python3 -m http.server 8000   →   http://localhost:8000/web/playground/  (?debug: debug build)
-# Usage: build.sh [optimized|debug|components|libraries|served <site>|site <site>]   (all when omitted)
+# Usage: build.sh [optimized|debug|components|libraries|pinned|served <site>|site <site>]   (all when omitted)
 #   optimized → warp.wasm: release profile (opt-level z, fat LTO, one codegen unit, stripped), without the `validate`
 #               feature (wasmparser's validator, a quarter of the module: the browser validates anyway), then wasm-opt
 #   debug     → warp.debug.wasm: profile web-debug (opt-level 1, line tables, the name section kept), with `validate`, so
@@ -12,6 +12,8 @@
 #               components/names.txt: jco
 #               transpiles it (npm i -g @bytecodealliance/jco), the core modules go into the script as base64, the
 #               WIT signatures of its exports as JSON (wasm-tools component wit --json; cargo install wasm-tools)
+#   pinned    → packages/<name>: the pinned packages of packages.warp, cloned into ~/.cache/warp/packages (the browser
+#               suite reads them from the repository root, pages.yml, scripts/browser-dry-run.sh)
 #   site <site> → collects the built page into a fresh <site> folder, as deployed (pages.yml, scripts/browser-dry-run.sh)
 #   served <site> → <site>/served-files.js for a collected site; every build writes the repository's
 #   libraries → packages/<name>/<library>.wasm and .h: the release assets of each package packages.warp gives a `library`
@@ -134,6 +136,24 @@ write_repository_served_files() {
 	{ git ls-files --cached --others --exclude-standard; find web/playground/components web/playground/packages -type f 2>/dev/null || true; } | write_served_files "$page/served-files.js"
 }
 
+# the browser cannot run git: each pinned package of packages.warp is fetched as the native fetch_package does
+# (src/modules.rs): its version tag cloned once into the package cache, linked as packages/<name>
+fetch_pinned_packages() {
+	local pinned name url version tag cached
+	grep -oE '^[a-z_]+: \{repository: "[^"]+", version: [0-9.]+' packages.warp | while read -r pinned; do
+		name=${pinned%%:*}
+		url=$(grep -oE 'https://[^"]+' <<< "$pinned")
+		version=$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' <<< "$pinned")
+		cached=~/.cache/warp/packages/$name@$version
+		if [ ! -d "$cached" ]; then
+			tag=$(git ls-remote --tags --refs "$url" | grep -oE "refs/tags/v?$version\$" | sed 's|refs/tags/||' | head -1)
+			git clone -q --depth 1 --branch "$tag" "$url" "$cached"
+		fi
+		mkdir -p packages && ln -sfn "$cached" "packages/$name"
+	done
+	ls -l packages
+}
+
 write_site_served_files() {
 	(cd "$1" && find . -type f | sed 's|^\./||') | write_served_files "$1/served-files.js"
 }
@@ -167,8 +187,9 @@ case "${1:-all}" in
 	# test_in_browser.py builds only these, and the worker imports served-files.js (card browser-served)
 	components) build_components; fetch_package_libraries; write_repository_served_files; exit ;;
 	libraries) fetch_package_libraries; write_repository_served_files; exit ;;
+	pinned) fetch_pinned_packages; exit ;;
 	all) build_optimized; build_debug; build_components; fetch_package_libraries ;;
-	*) echo "usage: $0 [optimized|debug|components|libraries|served <site>|site <site>]" >&2; exit 2 ;;
+	*) echo "usage: $0 [optimized|debug|components|libraries|pinned|served <site>|site <site>]" >&2; exit 2 ;;
 esac
 
 write_repository_served_files

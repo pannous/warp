@@ -47,11 +47,12 @@ workflow_value() {
 
 # the test binary `cargo browser-test` would run: built for wasm32-wasip1 without the native feature
 build_suite() {
-	tests/queue.sh cargo --offline test --target wasm32-wasip1 --no-default-features --test tests --no-run \
-		--message-format=json-render-diagnostics |
+	# only built here, so no turn in tests/queue.sh: the test binary runs on the server
+	cargo --offline build --target wasm32-wasip1 --no-default-features --test tests --message-format=json-render-diagnostics |
 		python3 -c 'import json, sys
 print(next(message["executable"] for line in sys.stdin if (message := json.loads(line)).get("executable")))' > "$local_dir/tests_path"
 	web/playground/build.sh components
+	web/playground/build.sh pinned
 }
 
 build() {
@@ -76,8 +77,8 @@ copy_to_server() {
 	if wants_tour; then copy "$local_dir/_site/" "$SERVER:$run_dir/_site/"; fi
 	if wants suite; then
 		copy "$(cat "$local_dir/tests_path")" "$SERVER:$run_dir/tests.wasm"
-		# the pinned packages (the workflow clones them into packages/): their contents, not the links into ~/.cache
-		if [ -d packages ]; then copy --copy-links packages/ "$SERVER:$run_dir/packages/"; fi
+		# the pinned packages (build.sh pinned): their contents, not the links into ~/.cache
+		copy --copy-links --exclude .git packages/ "$SERVER:$run_dir/packages/"
 	fi
 }
 
