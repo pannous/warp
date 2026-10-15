@@ -360,6 +360,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   `A as B := body` definitions. The compile-time dimension check (static_units.rs, P64) stays Rust until types can
   be parameterized by a dimension. Not Julia's unit values (`3km = 3*km`): they would bring back clashes with
   variables named m or s.
+- unit-after-number (2026-10-16, user; card variable-named-like): after a number a unit symbol is always the unit,
+  even with a variable of that name in scope: `m = 5; 3m` is 3m (meters), with a hint "a variable m exists; write
+  3*m to multiply"; `m * 3` is 15. Supersedes the agent-pinned test_variable_shadows_the_unit (`3m` → 15).
 
 ## Text
 - letters (2026-10-15 evening, Interviewer's decision on the user's behalf, to present 2026-10-16; card of-in-chain,
