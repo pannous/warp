@@ -214,14 +214,17 @@ pub fn json_key(key: &Node) -> String {
 	}
 }
 
-/// The first part JSON cannot express (user 2026-10-15: never a silent loss): a number that is no finite float
+/// The first part JSON cannot express (user 2026-10-15: never a silent loss): ∞, NaN, a complex number
 pub fn inexpressible_in_json(node: &Node) -> Option<Node> {
 	let mut found = None;
 	node.visit(&mut |part| {
-		if let Node::Number(Number::Float(x)) = part.drop_meta() {
-			if !x.is_finite() && found.is_none() {
-				found = Some(part.clone());
-			}
+		let inexpressible = match part.drop_meta() {
+			Node::Number(Number::Float(x)) => !x.is_finite(),
+			Node::Number(Number::Nan | Number::Inf | Number::NegInf | Number::Complex(..)) => true,
+			_ => false,
+		};
+		if inexpressible && found.is_none() {
+			found = Some(part.clone());
 		}
 	});
 	found

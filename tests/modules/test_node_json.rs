@@ -42,4 +42,5 @@ fn json_loses_nothing_silently() {
 	is!("{1: \"a\"}.json", "{\"1\":\"a\"}");
 	is!("parse(\"f(x) := x*2\").json", "{\"(f x)\":{\"*\":[\"x\",2]}}");
 	assert!(warp::wasm_emitter::eval("(1/0.0).json").serialize().contains("JSON has no"));
+	assert!(warp::wasm_emitter::eval("[1 (0/0.0)].json").serialize().contains("JSON has no NaN"));
 }
