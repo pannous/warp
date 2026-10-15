@@ -156,5 +156,5 @@ while time < seconds {
 	treble = (levels#11 + levels#12 + levels#13 + levels#14) / 4
 	paint(tunnel, width, height)
 	sleep(max(0, frame_milliseconds - (clock() - frame_started)) / 1000)
-	time = (clock() - started) / 1000.0
+	time = float(clock() - started) / 1000
 }

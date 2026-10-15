@@ -637,6 +637,11 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - P114 `x.meta` / `x.@key` stay; comments fill them only when activated (`use comments`). Meta on objects: `@key` in
   a literal is never a field; field first, then meta when reading `point.source`; iteration skips `@` keys.
 - P230 `effects of f` gives symbols.
+- fail-effect (2026-10-16 night, Interviewer's decision on the user's behalf, to present; undoable; card fail-effect):
+  the `Fail` effect tracks explicit raises (raise/throw/fail/panic/error "…"), division by a value that may be 0
+  (`f(x) := 10/x` is Fail, `x/2` stays Pure) and library calls that answer with an Error. Index out of range,
+  missing fields and failed casts are program bugs, like Rust panics, not tracked; otherwise almost every function
+  would say Fail.
 - field-or-minus (2026-10-12, replaces P168): `p.phone-number` without that field is the error "p has no field
   phone-number" with the fix `p.phone - number`; no silent subtraction.
 - tag-assign (2026-10-10): every `=` in a tag body is a value entry like `:`.
@@ -663,6 +668,13 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   most a ~4 s fade); the sound matches the visible code, unlike Sonic Pi.
 
 ## Modules, library and foreign code
+- operator-alias (2026-10-16, user; card standalone-math-units): math spellings of operators are alias lines in
+  lib/math.warp, keeping the operator's precedence: `operator × := *`, `operator ≤ := <=`, `prefix operator √ :=
+  sqrt`; they replace the Rust table.
+- foreign-signature (2026-10-16, Interviewer's decision on the user's behalf, the user left it open; to present;
+  undoable): a libm function is declared in warp by a typed foreign line, `sin(x: float): float from 'm'`,
+  `atan2(y: float, x: float): float from 'm'`: the signature is visible and needs no C header. `import (…) from 'm'`
+  keeps working for headers.
 - P169 `use math` loads a new math module with beautiful names ("we need to educate people about beautiful names");
   raw C math is `use cmath`; math may forward to cmath meanwhile.
 - P182 Set, Stack, Queue, Deque, Counter only in `collections`. P183 std modules are backed only by warp, host words or

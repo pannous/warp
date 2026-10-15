@@ -11,8 +11,10 @@ fn template_errors_name_the_value_given() {
 }
 
 /// Every template a pass writes outside the parser goes through parse_generated or parse_template, so an error inside
-/// one never names the template's own column (reviewer, card template-positions)
+/// one never names the template's own column (reviewer, card template-positions); native only: the browser build has
+/// no source folder
 #[test]
+#[cfg(feature = "native")]
 fn generated_templates_parse_without_their_own_positions() {
 	fn plain_template_parses(dir: &std::path::Path, found: &mut Vec<String>) {
 		for entry in std::fs::read_dir(dir).expect("source dir").flatten() {
