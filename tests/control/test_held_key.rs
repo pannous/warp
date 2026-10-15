@@ -40,6 +40,7 @@ fn held_key_compares_with_the_key_words() {
 // card allow-diagonals: two keys held at once are both held, so a drawing loop steers diagonally with
 // `if held_key == LEFT {…}` and `if held_key == UP {…}`: each comparison asks key_held whether its key is among those
 // held. Checked on given keys: holding them here would make other tests' "none held" fail
+#[cfg(feature = "native")]
 #[test]
 fn held_key_compares_with_every_key_held() {
 	let lowered = warp::pipeline::lower("held_key == LEFT and UP == held_key").expect("lowers").serialize();
