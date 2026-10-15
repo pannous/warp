@@ -74,12 +74,17 @@ list_text(view:any) := {
 	bracket = view#2
 	separator = view#3
 	items = view[3:]
-	inside = if #items == 1 then item_text(items#1) else join([item_text(item) for item in items], joint(separator))
+	inside = if #items == 1 then item_text(items#1, bracket) else join([item_text(item, bracket) for item in items], joint(separator))
 	opening(bracket) + inside + closing(bracket)
 }
 
-// a list item: one character in single quotes, a one-character text too, as the runtime prints it (chars-codepoints)
-item_text(item:any) := if kind(bare(item)) == "text" and count(bare(item)#2) == 1 then quoted_by(bare(item)#2, "'") else serialize(item)
+// a list item: one character in single quotes, a one-character text too, as the runtime prints it (chars-codepoints);
+// in code without brackets in double quotes, as the hint `fail "?"` writes it
+item_text(item:any, bracket:any) := {
+	if bracket == "" and kind(bare(item)) == "char" { return quoted("" + bare(item)#2) }
+	if bracket != "" and kind(bare(item)) == "text" and count(bare(item)#2) == 1 { return quoted_by(bare(item)#2, "'") }
+	serialize(item)
+}
 // a text in quotes, a quote or \ in it escaped by a \ so it reads back, as the runtime prints it (P126)
 quoted(text:any) := quoted_by(text, quote)
 quoted_by(text:any, mark:any) := {
