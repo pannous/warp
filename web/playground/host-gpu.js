@@ -308,8 +308,16 @@ const gpuModule = (device, shader) => compiledOnce(compiledModules, shader, () =
 async function checkedModule(device, shader) {
 	const module = device.createShaderModule({ code: shader });
 	const problems = (await module.getCompilationInfo()).messages.filter(message => message.type === "error");
-	if (problems.length) throw new Error(problems.map(problem => `${problem.lineNum}:${problem.linePos}: ${problem.message}`).join("; "));
+	if (problems.length) throw new Error(problems.map(problem => `${problem.lineNum}:${problem.linePos}: ${essence(problem.message)}`).join("; "));
 	return module;
+}
+
+// a GPU's report in one line, as gpu.rs essence: Firefox's naga report `Shader parsing error: expected "{"` followed by
+// its excerpt of the shader gives what follows `error: `, a one-line report (Chrome, Safari) stays as it is
+function essence(report) {
+	const lines = report.split("\n").map(line => line.trim()).filter(Boolean);
+	const cause = lines.map(line => line.split("error: ")).find(parts => parts.length > 1);
+	return cause ? cause.slice(1).join("error: ") : lines.at(-1) ?? report;
 }
 
 // submit the encoded work (its validation scope pushed before the pipeline) and give the bytes it left in readback
