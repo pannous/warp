@@ -14,7 +14,7 @@ use crate::operators::Op;
 use crate::traits::InstanceTypes;
 use crate::type_kinds::Kind;
 use crate::words::EXTREMUM_WORDS;
-use crate::words::{ALL_WORD, DOT_WORD, EACH_WORD, IMPLICIT_PARAMETER, MAP_WORD, SUM_WORD};
+use crate::words::{ALL_WORD, DOT_WORD, EACH_WORD, IMPLICIT_PARAMETER, LOG_WORD, MAP_WORD, SUM_WORD};
 use std::collections::{HashMap, HashSet};
 
 const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Pow];
@@ -26,6 +26,8 @@ const SCALAR_LIBRARY_WORDS: [&str; 19] = [
 	"upper", "lower", "trim", "floor", "ceil", "round", "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh",
 	"tanh", "exp", "log", "log2", "log10",
 ];
+/// Library words of several arguments, which of them takes one value: `log(xs, 10)` maps over xs
+const LIBRARY_SCALAR_PARAMETERS: [(&str, &[bool]); 1] = [(LOG_WORD, &[true, false])];
 /// Prefix operators of one number: `abs [-1 2]`, `sqrt xs`
 const SCALAR_OPERATORS: [Op; 3] = [Op::Abs, Op::Sqrt, Op::Cbrt];
 /// The item `square all xs` applies square to
@@ -399,6 +401,10 @@ pub fn lower(program: Node) -> Node {
 	let list_variables: HashSet<String> =
 		assigned.into_iter().filter(|(_, only_lists)| *only_lists).map(|(name, _)| name).collect();
 	let program = each_singular(program, &list_variables, &names);
+	let library_scalar_parameters = LIBRARY_SCALAR_PARAMETERS
+		.iter()
+		.filter(|(word, _)| !defined.contains(&word.to_string()))
+		.map(|(word, scalars)| (word.to_string(), scalars.to_vec()));
 	let scalar_parameters = found
 		.iter()
 		.map(|definition| {
@@ -407,6 +413,7 @@ pub fn lower(program: Node) -> Node {
 				definition.params.iter().map(|param| takes_a_scalar(param, &definition.body)).collect(),
 			)
 		})
+		.chain(library_scalar_parameters)
 		.collect();
 	let [defines_dot, defines_sum] = [DOT_WORD, SUM_WORD].map(|word| defined.contains(&word.to_string()));
 	let instances = element_shapes(&program);
