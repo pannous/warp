@@ -26,9 +26,7 @@ fn failure(solution: &Path) -> Option<String> {
 	let name = solution.file_name()?.to_str()?;
 	let hole = name.split('.').next()?;
 	let expected = fs::read_to_string(Path::new(GOLF).join(format!("{hole}.txt")));
-	let arguments: Vec<String> = fs::read_to_string(Path::new(GOLF).join(format!("{hole}.args")))
-		.map(|lines| lines.lines().map(str::to_string).collect())
-		.unwrap_or_default();
+	let arguments = crate::common::arguments_beside(&Path::new(GOLF).join(hole));
 	let printed = printed_by(solution, &arguments);
 	let passes = match &expected {
 		Ok(expected) => trimmed(&printed) == trimmed(expected),

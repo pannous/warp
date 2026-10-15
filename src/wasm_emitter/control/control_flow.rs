@@ -81,6 +81,8 @@ impl WasmGcEmitter {
 			return;
 		};
 		let then_expr = self.live_then(condition, then_expr, else_expr);
+		let else_expr = &self.live_else(condition, else_expr);
+		let else_expr = else_expr.as_ref();
 		self.emit_raw_branches(func, condition, &then_expr, else_expr, value_type, emit);
 	}
 
@@ -130,6 +132,8 @@ impl WasmGcEmitter {
 			return;
 		};
 		let then_expr = &self.live_then(condition, then_expr, else_expr);
+		let else_expr = &self.live_else(condition, else_expr);
+		let else_expr = else_expr.as_ref();
 
 		// A branch yielding a text, character, list or error (`if x {x} else {"offline"}`): both branches are Node values
 		let branch_value = |branch: &Node| match branch.drop_meta() {
@@ -194,6 +198,38 @@ impl WasmGcEmitter {
 		match self.never_an_instance(condition) {
 			true => else_expr.cloned().unwrap_or(Node::int(0)),
 			false => then_expr.clone(),
+		}
+	}
+
+	/// The else branch of the run-time dispatch of instance_calls.rs, `if instance_of(d, "Doubler") then call(d, 1) else
+	/// d(1)`, or, for a d held as no function value (an item of a list of instances), the run-time error it is: the
+	/// emitter can apply only a function, so `d(1)` would refuse the whole program as calling nothing
+	fn live_else(&self, condition: &Node, else_expr: Option<&Node>) -> Option<Node> {
+		let tested = match last_statement(condition).drop_meta() {
+			Node::List(items, _, _) => match items.as_slice() {
+				[head, subject, _] if head.drop_meta().name() == crate::words::INSTANCE_OF => subject.symbol_name(),
+				_ => None,
+			},
+			_ => None,
+		};
+		let applies_tested = |branch: &Node| match branch.drop_meta() {
+			Node::List(items, Bracket::Round, _) => items.first().and_then(Node::symbol_name) == tested,
+			_ => false,
+		};
+		let holds_no_function = tested.is_some_and(|name| {
+			!self.ctx.user_functions.contains_key(name)
+				&& self.get_type(&Node::Symbol(name.to_string())) != Kind::Function
+		});
+		match (else_expr, tested) {
+			(Some(otherwise), Some(name)) if holds_no_function && applies_tested(otherwise) => {
+				let message = format!("{name} is not a function: {} calls nothing", otherwise.serialize().trim());
+				Some(Node::List(
+					vec![Node::Symbol(crate::words::RAISE_WORD.to_string()), Node::Text(message)],
+					Bracket::Round,
+					Separator::None,
+				))
+			}
+			_ => else_expr.cloned(),
 		}
 	}
 
