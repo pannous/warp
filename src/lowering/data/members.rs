@@ -50,7 +50,7 @@ pub fn member_names(code: &str) -> Vec<String> {
 	}
 	let mut names =
 		super::reflection::map_keys_of(&program, &variable).unwrap_or_else(|| module_names(&program, &receiver));
-	names.extend(type_names(type_of(&receiver, &program, 0, inferred_type)));
+	names.extend(type_names(type_of(&receiver, &program, 0)));
 	let mut seen = std::collections::HashSet::new();
 	names.retain(|name| !name.contains('·') && seen.insert(name.clone()));
 	names
@@ -96,15 +96,15 @@ fn type_names(value_type: Option<ValueType>) -> Vec<String> {
 }
 
 /// The type of a value written in the program: a variable's is its last assigned value's (followed through other
-/// variables), a method call's the method's result's, any other value's what `leaf_type` makes of it
-fn type_of(node: &Node, program: &Node, depth: usize, leaf_type: fn(&Node) -> Option<ValueType>) -> Option<ValueType> {
+/// variables), a method call's the method's result's
+fn type_of(node: &Node, program: &Node, depth: usize) -> Option<ValueType> {
 	if depth > MOST_ALIASES {
 		return None;
 	}
 	match node.drop_meta() {
-		Node::Symbol(name) => type_of(&assigned_value(program, name)?, program, depth + 1, leaf_type),
+		Node::Symbol(name) => type_of(&assigned_value(program, name)?, program, depth + 1),
 		Node::List(_, Bracket::Curly, _) => Some(ValueType::Map),
-		Node::List(items, Bracket::None, _) if items.len() == 1 => type_of(&items[0], program, depth, leaf_type),
+		Node::List(items, Bracket::None, _) if items.len() == 1 => type_of(&items[0], program, depth),
 		Node::Key(receiver, Op::Dot, call) => {
 			let method = match call.drop_meta() {
 				Node::List(items, _, _) => items.first()?.symbol_name()?.to_string(),
@@ -112,34 +112,11 @@ fn type_of(node: &Node, program: &Node, depth: usize, leaf_type: fn(&Node) -> Op
 			};
 			match crate::library_words::result_kind(&method) {
 				Some(kind) => kind_type(kind),
-				None if TYPE_KEEPING_METHODS.contains(&method.as_str()) => {
-					type_of(receiver, program, depth + 1, leaf_type)
-				}
+				None if TYPE_KEEPING_METHODS.contains(&method.as_str()) => type_of(receiver, program, depth + 1),
 				None => None,
 			}
 		}
-		value => leaf_type(value),
-	}
-}
-
-/// A list, text or number value, whose type's words `x.word` calls without parentheses: no field can be meant
-/// (`book.title` and `m.items` of a map may be fields)
-pub(crate) fn is_fieldless_value(node: &Node, program: &Node) -> bool {
-	type_of(node, program, 0, literal_type).is_some_and(|value_type| !matches!(value_type, ValueType::Map))
-}
-
-/// The type the analyzer infers for a value (`[1] + [2]` is a list)
-fn inferred_type(value: &Node) -> Option<ValueType> {
-	kind_type(crate::analyzer::infer_type(value, &crate::analyzer::Scope::new()))
-}
-
-/// The type of a value written as a literal of it: a date or an instance (`Stack([1 2])`) is none, it has fields
-fn literal_type(value: &Node) -> Option<ValueType> {
-	match value {
-		Node::Text(_) | Node::Char(_) => Some(ValueType::Text),
-		Node::Number(_) => Some(ValueType::Number),
-		Node::List(_, Bracket::Square, _) => Some(ValueType::List),
-		_ => None,
+		value => kind_type(crate::analyzer::infer_type(value, &crate::analyzer::Scope::new())),
 	}
 }
 
