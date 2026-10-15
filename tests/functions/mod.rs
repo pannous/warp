@@ -90,6 +90,7 @@ mod test_late_binding;
 mod test_let_in;
 mod test_libm_pure;
 mod test_library_word_aliases;
+mod test_library_word_assigned; // card floor-says
 mod test_library_word_values;
 mod test_list_conversion;
 mod test_list_fields; // card people-map
