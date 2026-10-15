@@ -14,7 +14,7 @@ const LOGIN_WINDOW = "width=520,height=720";
 const LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 const TICKET_POLL_MS = 1500; // hosting.mjs TICKET_POLL_MS
 const TICKET_BYTES = 24;
-const REFUSED_LOGIN = [401, 403];
+const REFUSED_LOGIN = [401]; // an expired login; 403 is a missing permission, which another login doesn't fix
 
 // the pasted-token field is optional: index.html may leave it out, then only the Cloudflare login deploys there
 const tokenInput = () => $("cloudflare-token");
