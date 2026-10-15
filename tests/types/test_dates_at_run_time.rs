@@ -75,3 +75,11 @@ fn test_instants_compare_at_run_time() {
 fn test_an_instant_has_the_local_wall_clock() {
 	is!("t = now; t.hour >= 0 and t.hour < 24 and t.year >= 2026", true);
 }
+
+/// A field of a grouped time expression reads the field, not `….hour` appended to the time (card field-grouped)
+#[test]
+fn test_field_of_a_grouped_time_expression() {
+	is!("((now + 1 hour).hour - now.hour + 24) % 24", 1);
+	is!("((now - 30 minutes).minute - now.minute + 60) % 60", 30);
+	is!("(now + 1 hour).year >= 2026", true);
+}

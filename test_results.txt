@@ -2240,11 +2240,14 @@ PASSED:
   ✓ modules::test_std_regex::a_match_prints_yes_or_no
   ✓ modules::test_std_regex::use_regex_matches_finds_and_replaces
   ✓ modules::test_std_regex::what_one_engine_lacks_is_an_error_in_both
+  ✓ modules::test_std_shadowed_names::a_defaulted_parameter_shadows_each_arity_it_takes
   ✓ modules::test_std_shadowed_names::a_local_in_one_function_leaves_the_word_to_the_others
   ✓ modules::test_std_shadowed_names::a_local_named_like_a_function_is_indexed_not_called
   ✓ modules::test_std_shadowed_names::a_local_named_like_a_module_word_is_the_local
   ✓ modules::test_std_shadowed_names::a_local_named_like_a_program_function_is_the_local
   ✓ modules::test_std_shadowed_names::a_parameter_named_like_a_module_word_needs_no_module
+  ✓ modules::test_std_shadowed_names::a_program_function_named_like_a_module_helper_leaves_the_module_its_own
+  ✓ modules::test_std_shadowed_names::a_program_function_of_another_arity_adds_to_the_module_word
   ✓ modules::test_std_time::date_arithmetic
   ✓ modules::test_std_time::dates_of_milliseconds
   ✓ modules::test_std_time::format_duration_in_the_largest_units
@@ -2427,6 +2430,9 @@ PASSED:
   ✓ numbers::test_bend_laws::a_violated_law_makes_the_gate_loud_and_red
   ✓ numbers::test_bend_laws::quantified_laws_still_reach_the_lean_prover
   ✓ numbers::test_bend_laws::the_project_laws_file_is_a_green_verification_gate
+  ✓ numbers::test_big_int_bits::bits_of_ints_beyond_i64
+  ✓ numbers::test_big_int_bits::bits_of_negative_ints_beyond_i64
+  ✓ numbers::test_big_int_bits::bits_of_small_ints_stay
   ✓ numbers::test_big_int_text::test_big_int_text
   ✓ numbers::test_big_ratio::test_big_ratio_readback_stays_exact
   ✓ numbers::test_big_ratio::test_big_ratio_terminating_decimal
@@ -4038,6 +4044,7 @@ PASSED:
   ✓ types::test_date_arithmetic_at_run_time::test_time_minus_time
   ✓ types::test_dates_at_run_time::test_an_instant_has_the_local_wall_clock
   ✓ types::test_dates_at_run_time::test_an_instant_shows_as_rfc_3339
+  ✓ types::test_dates_at_run_time::test_field_of_a_grouped_time_expression
   ✓ types::test_dates_at_run_time::test_instants_compare_at_run_time
   ✓ types::test_dates_at_run_time::test_now_reads_back_as_an_instant
   ✓ types::test_dates_at_run_time::test_now_reads_the_clock_when_the_program_runs
@@ -5507,4 +5514,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5502 passed, 0 failed, 5502 total tested
+13 ignored, 5509 passed, 0 failed, 5509 total tested

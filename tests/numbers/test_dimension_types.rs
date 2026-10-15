@@ -27,8 +27,9 @@ fn a_quantity_of_seconds_is_a_duration_and_a_time() {
 fn a_declared_dimension_checks_any_unit_of_it() {
 	is!("h: length = 3 cm; h + 1 cm", value("4 cm"));
 	is!("h: length = 2 inch; h as cm", value("5.08 cm"));
-	fails_with("h: length = 3 kg", "DimensionError: h is declared m, is given kg");
-	fails_with("w: mass = 3 m", "DimensionError: w is declared kg, is given m");
+	fails_with("h: length = 3 kg", "DimensionError: h is declared length (m), is given kg (mass)");
+	fails_with("w: mass = 3 m", "DimensionError: w is declared mass (kg), is given m (length)");
+	fails_with("speed: length/duration = 3 kg", "DimensionError: speed is declared m/s, is given kg (mass)");
 }
 
 /// The draft's own example: a declared `height` is the program's, not the canvas's (was "a plain number cannot be
