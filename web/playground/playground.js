@@ -24,8 +24,8 @@ const STOP_LABEL = "Stop ■";
 const STOPPED = "stopped";
 // card playground-live: a rerun while live loops play hands them over. The old run's Worker retires instead of stopping:
 // its loops sound on until the new run's loop of the same name starts its first cycle, which they give way to; a loop the
-// new run has none of, deleted from the source, fades out in LIVE_FADE_SECONDS to be silent LIVE_RETIRE_SECONDS after the
-// rerun (decision deleted-loop: the sound matches the visible code)
+// new run's names lack, deleted from the source, fades out in LIVE_FADE_SECONDS as soon as the new run starts (decision
+// deleted-loop: the sound matches the visible code). A new run that names none in LIVE_RETIRE_SECONDS fades them all
 const LIVE_HANDED_OVER = "its live loops play on into the next run";
 const LIVE_FADE_SECONDS = 1;
 const LIVE_RETIRE_SECONDS = 4;
@@ -242,6 +242,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "members") return answerMembers(data);
 			if (data.type === "sound") return playSound(data, starting);
 			if (data.type === "live cycle") return liveCycled(starting, data.name, data.at);
+			if (data.type === "live loops") return liveLoopsNamed(data.names);
 			if (data.type === "sound file") return playSoundFile(data.url, data.handle, data.bytes);
 			if (data.type === "file") return offerFile(data.path, data.bytes);
 			if (data.type === "midi") return sendMidi(data.port, data.message, data.at);
@@ -523,15 +524,31 @@ function endHandedOver(retired, name, at) {
 	if (retired.retired.waiting.size === 0) retire(retired);
 }
 
-// the loops the new run did not take over by now are deleted from the source: they fade out and the Worker goes
-function dropUnclaimed(retired) {
-	const unclaimed = source => source.from === retired && retired.retired.waiting.has(source.loop);
-	sounding.filter(unclaimed).forEach(source => fadeOut(source, audio.currentTime, LIVE_FADE_SECONDS));
-	retire(retired);
+// the new run's live loops, named as it starts (host-tasks.js liveLoopNames): a retired loop it lacks is deleted from the
+// source and fades out at once, the others give way at their cycle
+function liveLoopsNamed(names) {
+	retiredWorkers.forEach(retired => {
+		clearTimeout(retired.retired.unnamed);
+		fadeDeleted(retired, [...retired.retired.waiting].filter(name => !names.includes(name)));
+	});
+}
+
+// the retired Worker's loops of those names fade out, the Worker goes once none of its loops is left
+function fadeDeleted(retired, names) {
+	const deleted = source => source.from === retired && names.includes(source.loop);
+	sounding.filter(deleted).forEach(source => fadeOut(source, audio.currentTime, LIVE_FADE_SECONDS));
+	names.forEach(name => retired.retired.waiting.delete(name));
+	if (retired.retired.waiting.size === 0) retire(retired);
+}
+
+// the safety net: a new run that never named its loops (it failed before it started) leaves none of the old ones playing
+function unnamedLoopsFade(retired) {
+	console.warn(`the rerun named no live loops in ${LIVE_RETIRE_SECONDS} s: the loops of the run before fade out`);
+	fadeDeleted(retired, [...retired.retired.waiting]);
 }
 
 function retire(retired) {
-	clearTimeout(retired.retired?.dropping);
+	clearTimeout(retired.retired?.unnamed);
 	retired.terminate();
 	retiredWorkers.delete(retired);
 }
@@ -543,8 +560,8 @@ function handOver(run) {
 	const queuedEnd = name => Math.max(...sounding.filter(source => source.from === retiring && source.loop === name).map(source => source.endsAt - clockOffset));
 	liveHandover = Object.fromEntries([...retiring.liveLoops].map(([name, { start, period }]) =>
 		[name, period > 0 ? { start, period } : { start: queuedEnd(name), period: 0 }]));
-	const dropping = setTimeout(() => dropUnclaimed(retiring), (LIVE_RETIRE_SECONDS - LIVE_FADE_SECONDS) * 1000);
-	retiring.retired = { at: soundClock(), waiting: new Set(retiring.liveLoops.keys()), dropping };
+	const unnamed = setTimeout(() => unnamedLoopsFade(retiring), LIVE_RETIRE_SECONDS * 1000);
+	retiring.retired = { at: soundClock(), waiting: new Set(retiring.liveLoops.keys()), unnamed };
 	retiredWorkers.add(retiring);
 	sounding.filter(source => source.from === retiring && !source.loop).forEach(source => source.stop());
 	startWorker();
