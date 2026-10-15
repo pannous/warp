@@ -67,7 +67,8 @@ lambda's DNS moves to Cloudflare):
   account-settings.read user-details.read workers-scripts.edit workers-routes.write workers-ci.write containers.write
   workers-kv-storage.write workers-observability(-telemetry).write workers-r2(-bucket-item).write r2-catalog.write.
   Errors name the call (`Cloudflare PUT workers/scripts/x: …`); Cloudflare's 9109 "Invalid access token" is a 401
-  (the playground drops the login and asks for a click), any other 403 is a missing permission and stays a 403. An
+  (the playground drops the login and asks for a click), any other 403 is a missing permission and stays a 403; the
+  playground drops a Cloudflare login on either (a token from before a scope was added), a GitHub one on 401 only. An
   account without a workers.dev subdomain gets a 409 pointing to the dashboard.
 - `POST /deploy?name=<name>&scripts=<host scripts>` with the module as the body: the first GitHub user to deploy a
   name owns it (KV `NAMES`). worker.js = the named playground scripts + cloud-worker.js (warp-web's glue), uploaded
