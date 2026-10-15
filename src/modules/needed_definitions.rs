@@ -41,7 +41,8 @@ impl ProgramWords {
 	/// a module definition the program still sees under its own name: no number of arguments it takes is one a
 	/// same-named program function takes
 	fn leaves_to_program(&self, name: &str, (fewest, most): (usize, usize)) -> bool {
-		let overlaps = |&(program_fewest, program_most): &(usize, usize)| program_fewest <= most && fewest <= program_most;
+		let overlaps =
+			|&(program_fewest, program_most): &(usize, usize)| program_fewest <= most && fewest <= program_most;
 		!self.variables.contains(name) && self.functions.get(name).is_some_and(|ranges| !ranges.iter().any(overlaps))
 	}
 }
