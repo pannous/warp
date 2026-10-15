@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
 float sine(float x){
-	if(x<0) return - sine(-x)
+	if(x < 0) return - sine(-x)
 	# magical taylor constants
 	S1 = -1 / 6.
 	S2 = 1 / 120.

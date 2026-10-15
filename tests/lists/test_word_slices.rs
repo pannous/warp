@@ -45,5 +45,5 @@ fn a_bare_number_is_no_position() {
 #[test]
 fn other_from_and_to_stay() {
 	is!("count(1 to 3)", 3);
-	is!("to move x from a to b { print \"\\(x) \\(a)→\\(b)\" }; move 1 from 2 to 3; 7", 7);
+	is!("to move x from a to b { print \"\\(x) \\(a)→\\(b)\" }; move 1 from: 2 to: 3; 7", 7);
 }
