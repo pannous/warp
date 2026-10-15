@@ -1193,6 +1193,16 @@ PASSED:
   ✓ functions::test_body_statement::an_undefined_word_in_it_is_an_error
   ✓ functions::test_braced_it_warning::a_braced_it_body_is_the_parameter_and_warns
   ✓ functions::test_braced_it_warning::other_bodies_do_not_warn
+  ✓ functions::test_braceless_call_in_logic::a_braceless_call_takes_the_first_comparand_of_a_logical_chain
+  ✓ functions::test_braceless_call_in_logic::an_untyped_call_before_a_logical_chain_is_ambiguous
+  ✓ functions::test_braceless_calls::a_function_of_several_parameters_takes_the_arguments_after_a_comma_as_min_and_max_do
+  ✓ functions::test_braceless_calls::a_minus_before_a_call_negates_it
+  ✓ functions::test_braceless_calls::a_word_of_one_value_keeps_the_comma_a_list
+  ✓ functions::test_braceless_calls::min_and_max_take_any_number_of_values_like_any_variadic_word
+  ✓ functions::test_braceless_calls::min_and_max_take_their_arguments_without_parentheses
+  ✓ functions::test_braceless_calls::print_prints_the_braceless_call_of_the_joined_arguments
+  ✓ functions::test_braceless_calls::real_functions_nest_without_parentheses
+  ✓ functions::test_braceless_calls::the_arguments_after_a_comma_join_a_braceless_call_wherever_it_stands
   ✓ functions::test_broadcast_of_list_variables::a_broadcast_of_a_list_variable_assigned_is_a_list_variable
   ✓ functions::test_broadcast_of_list_variables::a_word_around_a_broadcast_of_a_list_variable_maps_too
   ✓ functions::test_broadcast_reassigned::a_broadcast_over_a_variable_alone_does_not_make_it_a_list
@@ -1491,6 +1501,8 @@ PASSED:
   ✓ functions::test_map_function_first::a_prefix_operator_word_as_function
   ✓ functions::test_map_function_first::a_prefix_operator_word_for_a_function_parameter
   ✓ functions::test_map_function_first::a_prefix_operator_word_in_every_order
+  ✓ functions::test_map_library_word_first::a_defined_word_of_the_same_name_wins
+  ✓ functions::test_map_library_word_first::a_library_word_before_the_list_is_the_function
   ✓ functions::test_map_phrase::test_map_a_function_first_without_on
   ✓ functions::test_map_phrase::test_map_a_function_on_a_list
   ✓ functions::test_map_phrase::test_map_a_function_reference_on_a_list
@@ -2994,6 +3006,10 @@ PASSED:
   ✓ operators::test_bit_operators_on_ints::ampersand_and_bar_of_typed_and_inferred_ints
   ✓ operators::test_bit_operators_on_ints::bits_as_a_condition_warn
   ✓ operators::test_bit_operators_on_ints::double_and_word_forms_stay_logical_on_numbers
+  ✓ operators::test_braceless_operator_words::glued_parentheses_are_the_whole_argument
+  ✓ operators::test_braceless_operator_words::operator_words_stop_where_calls_stop
+  ✓ operators::test_braceless_operator_words::operator_words_take_the_whole_argument
+  ✓ operators::test_braceless_operator_words::symbols_stay_tight
   ✓ operators::test_comma_next_to_comparison::a_comma_next_to_a_comparison_needs_parentheses
   ✓ operators::test_comma_next_to_comparison::a_parenthesized_comparison_beside_a_comma_is_fine
   ✓ operators::test_compound_assignment::a_list_variable_concatenates_with_plus_assign
@@ -4351,6 +4367,7 @@ PASSED:
   ✓ types::test_inline_unions::an_inline_union_parameter_takes_either_kind
   ✓ types::test_inline_unions::an_inline_union_refuses_a_value_fitting_no_part
   ✓ types::test_instance_arguments::a_call_with_an_instance_argument_gives_the_call_result
+  ✓ types::test_instance_final_bare::a_final_instance_shows_its_text_bare
   ✓ types::test_instance_final_text::a_final_instance_shows_its_text
   ✓ types::test_instance_final_text::a_final_instance_without_text_stays_a_record
   ✓ types::test_instance_size::the_free_size_of_an_instance_calls_its_size_method
@@ -5750,4 +5767,4 @@ FAILED:
   ✗ programs::test_file_spectrum::a_files_tone_fills_its_own_band
 
 SUMMARY:
-13 ignored, 5742 passed, 3 failed, 5745 total tested
+13 ignored, 5759 passed, 3 failed, 5762 total tested
