@@ -355,6 +355,11 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   mechanism for any types, `A as B := body`, e.g. `Person as text := it.name`, then `p as text`. A program's
   conversions are looked up before the built-in ones. Unit lines and dimension bridges are its unit cases. Today
   `P as text := it.name` is silently ignored (the card fixes that).
+- units-library (2026-10-16, user; card discuss-moving): partial move into warp. Units, dimensions, prefixes and
+  bridges are lines in lib/units.warp, run-time quantities its Quantity class; next, conversions become warp
+  `A as B := body` definitions. The compile-time dimension check (static_units.rs, P64) stays Rust until types can
+  be parameterized by a dimension. Not Julia's unit values (`3km = 3*km`): they would bring back clashes with
+  variables named m or s.
 
 ## Text
 - letters (2026-10-15 evening, Interviewer's decision on the user's behalf, to present 2026-10-16; card of-in-chain,
