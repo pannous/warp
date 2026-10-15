@@ -108,12 +108,15 @@ fn searched_folders(program: &Path, working: &Path) -> Vec<PathBuf> {
 		.collect()
 }
 
-/// A folder's files with their size and time, sorted; empty when there is no such folder
+/// A folder's files with their size and time, sorted; empty when there is no such folder. Subfolders are left out:
+/// their times change with whatever they hold (the cache itself may lie below), and a `use` naming a subfolder file is
+/// not kept (modules::reads_beyond_folders)
 fn listing(folder: &Path) -> Vec<(String, Option<(u64, std::time::SystemTime)>)> {
 	let mut files: Vec<_> = std::fs::read_dir(folder)
 		.into_iter()
 		.flatten()
 		.flatten()
+		.filter(|entry| !entry.path().is_dir())
 		.map(|entry| (entry.file_name().to_string_lossy().into_owned(), stamp(&entry.path())))
 		.collect();
 	files.sort();

@@ -46,11 +46,11 @@ fn a_program_runs_again_from_its_cached_module() {
 
 #[test]
 fn a_changed_file_of_the_folder_compiles_again() {
-	// D15: a program sees the definitions of the files of its folder
 	let folder = folder("program_cache_folder");
-	std::fs::write(folder.join("program.warp"), "print greeting()").unwrap();
-	std::fs::write(folder.join("words.warp"), "greeting() := \"hello\"").unwrap();
-	assert_eq!(printed(&folder), "hello");
-	std::fs::write(folder.join("words.warp"), "greeting() := \"good day\"").unwrap();
-	assert_eq!(printed(&folder), "good day");
+	std::fs::write(folder.join("program.warp"), "use words\nprint bump(1)").unwrap();
+	std::fs::write(folder.join("words.warp"), "bump(x) := x + 1").unwrap();
+	assert_eq!(printed(&folder), "2");
+	assert_eq!(cached_programs(&folder), 1);
+	std::fs::write(folder.join("words.warp"), "bump(x) := x + 10").unwrap();
+	assert_eq!(printed(&folder), "11");
 }

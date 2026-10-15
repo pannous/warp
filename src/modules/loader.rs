@@ -554,6 +554,9 @@ impl<'a> Loader<'a> {
 		if !is_plain_relative_path(name) {
 			return vec![];
 		}
+		if name.contains('/') {
+			crate::modules::reads_beyond_folders("a module of a subfolder");
+		}
 		if let Some(folder) = &self.including_directory {
 			crate::modules::looks_in(folder);
 		}
