@@ -145,6 +145,7 @@ function programImports(holder, hooks) {
 				// key_down: whether the page's held key (canvas.js trackKey) is any; "key code held" which (held_key names it)
 				const heldKey = self.pagePointer ? Atomics.load(self.pagePointer.values, self.pagePointer.names.indexOf("key")) : 0;
 				if (value === "key_down") return BigInt(heldKey !== 0);
+				if (value === GPU_PAINTS) return BigInt(gpuPaints(holder)); // host-gpu.js
 				if (value === "key code held") return BigInt(heldKey);
 				if (value in WINDOW_SIDES) return BigInt(windowSide(value));
 				if (value === "display_dpi" && holder.displayDpi) return BigInt(holder.displayDpi);

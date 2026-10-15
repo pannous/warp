@@ -404,7 +404,22 @@ const GPU_JOBS = {
 	gpu_render: async job => ({ words: await gpuRendered(job) }),
 	gpu_canvas: async job => ({ values: await gpuCanvas(job) }),
 	gpu_paint: async job => ({ values: (await gpuRendered(job), job.canvas) }),
+	gpu_paints: async () => ({ values: [await theGpuDevice().then(() => 1, failure => failureText(failure))] }),
 };
+
+// the system value "gpu paints" (crates/warp-runtime host_words.rs GPU_PAINTS): whether a shader can paint, asked of the
+// GPU's task Worker once; without, paint(f, …) of a warp function paints f on the CPU, as the run's warning says once
+const GPU_PAINTS = "gpu paints";
+const PAINTS_ON_CPU = "paint: a function paints on the CPU"; // src/graphics/paint.rs
+let gpuPaintsHere;
+function gpuPaints(holder) {
+	if (gpuPaintsHere === undefined) {
+		const [answer] = hasTaskWorkers() ? gpuJob("gpu_paints", {}) : ["only a cross-origin isolated page has task Workers"];
+		gpuPaintsHere = answer === 1 || String(answer);
+	}
+	if (gpuPaintsHere !== true && !holder.warnings.some(warning => warning.startsWith(PAINTS_ON_CPU))) holder.warnings.push(`${PAINTS_ON_CPU}: ${gpuPaintsHere}`);
+	return gpuPaintsHere === true;
+}
 
 const failureText = failure => failure === undefined || failure === null ? SILENT_FAILURE : String(failure.message ?? failure);
 

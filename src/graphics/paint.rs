@@ -10,6 +10,8 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 pub use super::pixels::{COLOR_FROM, INK, PAPER};
 const FILE_STEM: &str = "paint";
 const FOLDER: &str = "warp-paint";
+/// The runtime warning of a warp function painted on the CPU for want of a GPU (paints_shaders), its reason after it
+const PAINTS_ON_CPU: &str = "paint: a function paints on the CPU";
 /// Set when tests or a headless machine must not see windows (tests/common warp_command, tests/queue.sh)
 pub const NO_WINDOW_VARIABLE: &str = "WARP_NO_WINDOW";
 const CI_VARIABLE: &str = "CI";
@@ -97,6 +99,21 @@ pub fn paint_rgba(rgba: &[u8], width: usize, height: usize) -> Result<Option<Pat
 fn rgba_png_file(rgba: &[u8], width: usize, height: usize) -> Result<PathBuf, String> {
 	let pixels: Vec<u64> = crate::graphics::gpu::opaque_colors(rgba).map(u64::from).collect();
 	png_file(&pixels, width, height)
+}
+
+/// Whether a shader can paint (system value GPU_PAINTS): in a window the window's process renders it, else this process's
+/// GPU does; without one a warp function paints on the CPU, said once
+pub fn paints_shaders() -> bool {
+	if WINDOWS.load(Ordering::Relaxed) {
+		return true;
+	}
+	match crate::graphics::gpu::available() {
+		Ok(()) => true,
+		Err(problem) => {
+			crate::errors::diagnostic::report_runtime_warning_once(PAINTS_ON_CPU, &problem);
+			false
+		}
+	}
 }
 
 /// paint of a shader: in a window the window's process renders it (card paint-keeps), only the shader and its values
