@@ -122,6 +122,10 @@ tunnel(x, y) := {
 	(vignetted ./ (1 .+ vignetted)) .^ 0.85
 }
 
+on key {
+	if key == ESC { exit() }
+}
+
 // the whole song, or as many seconds as the command line gives: `warp gpu_visualizer_warp.warp 3`; measuring it decodes
 // the song before it plays, so the first frame keeps up with the music
 seconds = if count(args) > 0 then min(args#1 as number, sound_seconds(song)) else sound_seconds(song)
