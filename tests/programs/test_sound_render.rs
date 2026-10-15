@@ -92,7 +92,7 @@ fn programs_running_at_once_save_their_own_sounds() {
 			std::thread::spawn(move || {
 				let path = wav_path(&format!("at-once-{tenths}"));
 				let program = format!(
-					"use sound\ntone(A4, {})\nseconds = save sound as \"{}\"\nround(seconds * 10)",
+					"use sound\ntone(A4, {})\nseconds = save sound as: \"{}\"\nround(seconds * 10)",
 					tenths as f64 / 10.0,
 					path.display()
 				);
