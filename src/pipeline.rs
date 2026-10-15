@@ -241,6 +241,8 @@ const DECLARATION_PASSES: &[Pass] = &[
 
 /// The used modules join the program (modules::resolve), then the passes that read their words again
 const MODULE_PASSES: &[Pass] = &[
+	// `random(1, 6)`, `random int`: the prelude words they call, which resolve then loads, and only those
+	crate::host::lower_random_forms,
 	crate::modules::resolve,
 	// `fourty_two.exports`, `dir(fourty_two)` of an imported core module, once resolve found its file (reflection.rs)
 	crate::lowering::reflection::lower_module_words,

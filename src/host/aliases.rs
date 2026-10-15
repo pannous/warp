@@ -31,8 +31,15 @@ pub fn lower_aliases(node: Node) -> Node {
 	if aliases.is_empty() {
 		return node;
 	}
-	let node = if defined.contains(RANDOM_WORD) { node } else { random_forms(node) };
 	renamed_heads(node, &aliases)
+}
+
+/// The random forms as the prelude words they call, before modules::resolve: a program loads only the words it uses
+pub fn lower_random_forms(node: Node) -> Node {
+	if !node.mentions_any(&[RANDOM_WORD]) || crate::library_words::defined_names(&node).contains(RANDOM_WORD) {
+		return node;
+	}
+	random_forms(node)
 }
 
 /// `random int`, `random(bool)`: the call of the prelude word giving a random value of that type, a type without one an
@@ -44,6 +51,32 @@ fn random_forms(node: Node) -> Node {
 		return fraction;
 	}
 	let node = children_rewritten(node, random_forms);
+	match comprehension_head(node) {
+		Ok((head, rest, bracket, separator)) => Node::List([vec![random_call(head)], rest].concat(), bracket, separator),
+		Err(node) => random_call(node),
+	}
+}
+
+/// `[random 1..4 for i in 1 to 9]` as parsed, its words flat and the `for` clause a list: the call `random 1..4`, the
+/// rest from `for` on
+fn comprehension_head(node: Node) -> Result<(Node, Vec<Node>, Bracket, Separator), Node> {
+	let Node::List(items, bracket @ (Bracket::Square | Bracket::None), separator) = node else { return Err(node) };
+	let starts_for = |item: &Node| match item.drop_meta() {
+		Node::List(clause, _, _) => clause.first().is_some_and(|word| word.is_symbol(crate::words::FOR_WORD)),
+		word => word.is_symbol(crate::words::FOR_WORD),
+	};
+	let for_at = items.iter().position(starts_for);
+	match for_at {
+		Some(at) if at > 1 && items[0].is_symbol(RANDOM_WORD) => {
+			let mut head = items;
+			let rest = head.split_off(at);
+			Ok((Node::List(head, Bracket::None, Separator::Space), rest, bracket, separator))
+		}
+		_ => Err(Node::List(items, bracket, separator)),
+	}
+}
+
+fn random_call(node: Node) -> Node {
 	let Some(arguments) = random_arguments(&node) else { return node };
 	if let Some((low, high, ends)) = random_ends(arguments) {
 		let word = if ends == Op::Range { RANDOM_UNTIL } else { RANDOM_BETWEEN };

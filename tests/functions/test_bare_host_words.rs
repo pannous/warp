@@ -49,6 +49,7 @@ fn random_of_a_type() {
 fn random_of_a_range() {
 	is!("all([random 1..4 for i in 1 to 50], x => x >= 1 and x < 4)", true);
 	is!("any([random 1...4 for i in 1 to 80], x => x == 4)", true);
+	is!("type [random int for i in 1 to 2]", "list of int");
 	is!("random 1..2", 1);
 	is!("random 3...3", 3);
 	is!("random 4 to 4", 4);

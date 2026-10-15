@@ -222,11 +222,8 @@ const ARITY_VARIANTS: [(&str, usize, &str); 3] =
 /// Methods a later pass lowers to prelude words: `x.pop(k)` (and `delete x[k]`, mutation::lower_deletes) to popped_item
 /// and popped_rest, `x.clear()` to cleared (list_mutations removed_key, cleared_collection)
 const POPPED_WORDS: &[&str] = &["popped_item", "popped_rest"];
-/// `random(1, 6)`, `random int` …: the prelude words host::aliases lowers them to (decision random-forms)
-const RANDOM_PRELUDE_WORDS: &[&str] =
-	&["random_between", "random_until", "random_fraction", "random_int", "random_bool", "random_codepoint"];
-const LOWERED_TO_PRELUDE: [(&str, &[&str]); 4] =
-	[("pop", POPPED_WORDS), ("delete", POPPED_WORDS), ("clear", &["cleared"]), ("random", RANDOM_PRELUDE_WORDS)];
+const LOWERED_TO_PRELUDE: [(&str, &[&str]); 3] =
+	[("pop", POPPED_WORDS), ("delete", POPPED_WORDS), ("clear", &["cleared"])];
 const IS_ALPHA: &str = "is_alpha";
 const LEFT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_left";
 const RIGHT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_right";
