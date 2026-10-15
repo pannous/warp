@@ -84,7 +84,8 @@ const SYNONYMS: [(&str, &[&str]); 33] = [
 	(MAP_GET_OR, &["get"]),
 	// P35 default: `xs.index_of(x)` is the 1-based position (0 when absent)
 	(COLLECTION_POSITION, &["index_of"]),
-	("chars", &[]),
+	// card of-in-chain: `t.characters`, `characters in t`
+	("chars", &["characters"]),
 	("upper", &["uppercase"]),
 	("lower", &["lowercase"]),
 	// the text builtin trim (text_builtins.rs), Python's strip
