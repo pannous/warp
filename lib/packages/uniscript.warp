@@ -3,7 +3,7 @@
 import uniscript_c
 
 // uniscript → Unicode; each character or combination without a Unicode counterpart warns (`use strict`: the error)
-uniscript(source:text) := {
+uniscript(source: text) := {
 	failure = uniscript_error(source)
 	if failure != ø { return error(failure) }
 	for problem in split(uniscript_warnings(source), "\n") {
@@ -16,7 +16,7 @@ uniscript(source:text) := {
 }
 
 // Unicode → uniscript; uniscript() gives the text back
-unicode_to_uniscript(text:text) := uniscript_to_uniscript(text)
+unicode_to_uniscript(text: text) := uniscript_to_uniscript(text)
 
 // the source with its opener-like inline tags in explicit form (<:alpha> → \:alpha), which converts without warnings
-explicit(source:text) := uniscript_explicit(source)
+explicit(source: text) := uniscript_explicit(source)

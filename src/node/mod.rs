@@ -40,6 +40,9 @@ pub fn meta_entry(entry: &Node) -> Option<(&str, &Node)> {
 /// Meta key holding the source text of a literal (see `with_source_literal`)
 const SOURCE_LITERAL: &str = "literal";
 
+/// The key of the Meta layer holding a comment (with_comment)
+pub const COMMENT_KEY: &str = "comment";
+
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Node {
 	// Id(i64), // unique INTERNAL(?) node id for graph structures (put in metadata?)
@@ -396,7 +399,7 @@ impl Node {
 	}
 
 	pub fn with_comment(self, comment: String) -> Self {
-		let comment = Node::key("comment", Node::text(&comment));
+		let comment = Node::key(COMMENT_KEY, Node::text(&comment));
 		Meta { node: Box::new(self), data: Box::new(comment) }
 	}
 

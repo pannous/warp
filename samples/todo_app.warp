@@ -23,7 +23,7 @@ route "/" {
 	div{
 		h1{ "Todos" }
 		form post "/todos" {                    // the route it sends to, as the route is written
-			input{ name:"title" aria-label:"new todo" placeholder:"what next?" }
+			input{ name: "title" aria-label: "new todo" placeholder: "what next?" }
 			button{ "add" }
 		}
 		ul{ for todo in todos {

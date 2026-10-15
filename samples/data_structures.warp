@@ -9,24 +9,24 @@ mixed = data [1 "two" three 4.0] // a word among values is data only after `data
 
 // Key-value pairs (maps/objects)
 person: {
-    name: "Alice"
-    age: 30
-    email: "alice@example.com"
+	name: "Alice"
+	age: 30
+	email: "alice@example.com"
 }
 
 // Nested structures
 company: {
-    name: "Acme Corp"
-    employees: [
-        {name: "Bob" role: "Engineer"}
-        {name: "Carol" role: "Designer"}
-        {name: "Dave" role: "Manager"}
-    ]
-    address: {
-        street: "123 Main St"
-        city: "Springfield"
-        zip: 12345
-    }
+	name: "Acme Corp"
+	employees: [
+		{name: "Bob" role: "Engineer"}
+		{name: "Carol" role: "Designer"}
+		{name: "Dave" role: "Manager"}
+	]
+	address: {
+		street: "123 Main St"
+		city: "Springfield"
+		zip: 12345
+	}
 }
 
 // Access nested values
