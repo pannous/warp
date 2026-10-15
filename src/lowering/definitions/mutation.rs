@@ -1,7 +1,7 @@
 //! `fn!` mutates in place (user decision D2 2026-10-03, "by position", wiki/mutable.md): a `!` after a function or method
 //! assigns its result back to the variable it was called on. `x.upper!`, `x.upper()!` and `upper(x)!` become
 //! `x = x.upper` in the parser; in `upper x!` the parser only sees `x!`, so it marks x and `lower` turns the call into
-//! `x = upper x`. A lone `x!`, `f!` or `{…}!` keeps evaluating.
+//! `x = upper x`. A lone `x!`, `f!` or `{…}!` keeps evaluating, as does `x!` after an output word (`print friends!`).
 
 use super::nodes::{call, children_rewritten, int, key, written_entry};
 use crate::errors::diagnostic::Diagnostic;
@@ -184,6 +184,7 @@ pub fn lower(node: Node) -> Node {
 				Node::List(items, _, separator)
 					if items.len() == 2
 						&& is_name(&items[0])
+						&& !gives_nothing(&items[0])
 						&& is_marked(&items[1])
 						&& is_name(&unmarked(items[1].clone()))
 						&& !matches!(separator, Separator::Semicolon | Separator::Newline) =>
@@ -274,6 +275,12 @@ fn unmarked(node: Node) -> Node {
 		meta @ Node::Meta { .. } => meta.under_meta(unmarked),
 		other => other,
 	}
+}
+
+/// An output word: its result is nothing, so `print friends!` prints the forced friends and leaves them (decision
+/// print-bang); assigning its ø back would empty the variable
+fn gives_nothing(word: &Node) -> bool {
+	matches!(word.drop_meta(), Node::Symbol(name) if crate::wasm_emitter::OUTPUT_CALLS.contains(&name.as_str()))
 }
 
 fn is_name(node: &Node) -> bool {

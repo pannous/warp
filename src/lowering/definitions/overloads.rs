@@ -116,7 +116,11 @@ fn bracket_of(node: &Node) -> Bracket {
 
 fn parameter_type(parameter: &Node) -> Option<String> {
 	match parameter.drop_meta() {
-		Node::Key(_, Op::Colon, type_node) => Some(type_node.drop_meta().name()),
+		// `b: [int]` is a `list of int`
+		Node::Key(_, Op::Colon, type_node) => {
+			let list_type = crate::lowering::declaration_forms::bracketed_list_type(type_node);
+			Some(list_type.as_ref().unwrap_or(type_node.drop_meta()).name())
+		}
 		_ => None,
 	}
 }
@@ -386,8 +390,7 @@ fn lower_parameter_overloads(node: Node) -> Node {
 			let typed = variants.iter().flatten().any(|type_name| type_name != ANY_TYPE);
 			let distinct = variants.iter().enumerate().all(|(index, types)| !variants[..index].contains(types));
 			// parameters of declared types dispatch through traits (traits.rs)
-			let builtin =
-				variants.iter().flatten().all(|type_name| type_name == ANY_TYPE || type_word_kind(type_name).is_some());
+			let builtin = variants.iter().flatten().all(|type_name| is_overload_type(type_name));
 			(distinct && builtin && typed).then_some((name, variants))
 		})
 		.collect();
@@ -591,8 +594,24 @@ fn argument_kind(argument: &Node, variables: &HashMap<String, Option<Kind>>) -> 
 			}
 		}
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => argument_kind(&items[0], variables),
+		Node::List(_, Bracket::Square, _) => Some(Kind::List),
 		_ => None,
 	}
+}
+
+/// The kind a parameter type selects a variant by at compile time: a built-in type word, or a list type (`list`,
+/// `ints`, `list of int`, `[int]`), held as no one kind elsewhere as it holds the empty list too
+fn overload_kind(type_name: &str) -> Option<Kind> {
+	match crate::analyzer::names_list_type(type_name) {
+		true => Some(Kind::List),
+		false => type_word_kind(type_name),
+	}
+}
+
+/// A parameter type that takes part in an overload: `any`, a built-in type, a list type or a map, which no argument
+/// kind known at compile time fits, so a map variant is picked at run time
+fn is_overload_type(type_name: &str) -> bool {
+	type_name == ANY_TYPE || overload_kind(type_name).is_some() || crate::analyzer::is_map_type(type_name)
 }
 
 /// How well an argument of `kind` fits a parameter of `type_name`: 0 exactly, 1 by widening an Int to a Float or any
@@ -604,12 +623,17 @@ fn fit(kind: Kind, type_name: &str) -> Option<u32> {
 	if type_name == "number" {
 		return matches!(kind, Kind::Int | Kind::Float).then_some(1);
 	}
-	match (kind, type_word_kind(type_name)?) {
+	match (kind, overload_kind(type_name)?) {
 		(given, wanted) if given == wanted => Some(0),
 		(Kind::Int, Kind::Float) => Some(1),
 		(Kind::Codepoint, Kind::Text) => Some(1),
 		_ => None,
 	}
+}
+
+/// `float` and `number` take any number, as fit() widens an Int: at run time an exact `1.5` is an Int node too
+fn takes_widened(type_name: &str) -> bool {
+	type_name == crate::words::FLOAT_WORD || type_name == crate::words::NUMBER_WORD
 }
 
 struct ParameterOverloads {
@@ -635,7 +659,8 @@ impl VariantRenaming for ParameterOverloads {
 
 impl ParameterOverloads {
 	fn variant_name(name: &str, types: &[String]) -> String {
-		types.iter().fold(name.to_string(), |variant, type_name| witness_name(&variant, type_name))
+		// `f·list_of_int`: one word
+		types.iter().fold(name.to_string(), |variant, type_name| witness_name(&variant, &type_name.replace(' ', "_")))
 	}
 
 	/// `combine(1.1, 2.2)`: the call of the variant the arguments fit best
@@ -653,24 +678,34 @@ impl ParameterOverloads {
 		let name = head.drop_meta().name();
 		let kinds: Vec<Option<Kind>> =
 			arguments.iter().map(|argument| argument_kind(argument, &self.variables)).collect();
+		// an argument of a kind unknown at compile time fits every type for now: the run time tests it
 		let scores: Vec<(u32, &Vec<String>)> = variants
 			.iter()
 			.filter(|types| types.len() == arguments.len())
 			.filter_map(|types| {
-				let fits: Option<Vec<u32>> =
-					kinds.iter().zip(types.iter()).map(|(kind, type_name)| fit((*kind)?, type_name)).collect();
+				let fits: Option<Vec<u32>> = kinds
+					.iter()
+					.zip(types.iter())
+					.map(|(kind, type_name)| kind.map_or(Some(0), |kind| fit(kind, type_name)))
+					.collect();
 				Some((fits?.iter().sum(), types))
 			})
 			.collect();
-		let best = scores.iter().map(|(score, _)| *score).min();
-		let chosen: Vec<&Vec<String>> =
-			scores.iter().filter(|(score, _)| Some(*score) == best).map(|(_, types)| *types).collect();
 		let written = node.serialize().trim().to_string();
 		let listed =
 			variants.iter().map(|types| format!("{name}({})", types.join(", "))).collect::<Vec<_>>().join(", ");
+		let no_variant = format!("`{written}` fits no single variant of {listed}");
 		let arguments: Vec<Node> = arguments.iter().map(|argument| self.rewrite(argument.clone())).collect();
+		if kinds.iter().any(Option::is_none) && scores.len() > 1 {
+			let candidates: Vec<&Vec<String>> = scores.iter().map(|(_, types)| *types).collect();
+			return Some(Self::dispatched(&name, &candidates, &kinds, arguments, &no_variant));
+		}
+		let best = scores.iter().map(|(score, _)| *score).min();
+		let chosen: Vec<&Vec<String>> =
+			scores.iter().filter(|(score, _)| Some(*score) == best).map(|(_, types)| *types).collect();
 		match chosen.as_slice() {
 			[types] => Some(call(&Self::variant_name(&name, types), arguments)),
+			[] => Some(crate::errors::diagnostic::Diagnostic::at(head, no_variant).into_error()),
 			_ => Some(
 				crate::errors::diagnostic::Diagnostic::at(
 					head,
@@ -680,6 +715,61 @@ impl ParameterOverloads {
 				)
 				.into_error(),
 			),
+		}
+	}
+
+	/// `f(g(), 1)` of an argument whose kind only the run time knows: `(overload·1 = g(); if is_type(overload·1,
+	/// "text") then f·text·any(overload·1, 1) else if … else raise "… fits no single variant …")`, the variants testing more
+	/// arguments first, else in declaration order; each argument is evaluated once
+	fn dispatched(
+		name: &str,
+		candidates: &[&Vec<String>],
+		kinds: &[Option<Kind>],
+		arguments: Vec<Node>,
+		no_variant: &str,
+	) -> Node {
+		let mut bindings = vec![];
+		let arguments: Vec<Node> = arguments
+			.into_iter()
+			.zip(kinds)
+			.map(|(argument, kind)| match (kind, argument.drop_meta()) {
+				(None, Node::List(..) | Node::Key(..)) => {
+					let temporary = Node::Symbol(format!("overload·{}", super::nodes::fresh_number()));
+					bindings.push(key(temporary.clone(), Op::Assign, argument));
+					temporary
+				}
+				_ => argument,
+			})
+			.collect();
+		let tested_types = |types: &[String]| -> Vec<(Node, String)> {
+			arguments
+				.iter()
+				.zip(kinds)
+				.zip(types)
+				.filter(|((_, kind), type_name)| kind.is_none() && *type_name != ANY_TYPE)
+				.map(|((argument, _), type_name)| (argument.clone(), type_name.clone()))
+				.collect()
+		};
+		// a variant testing more arguments first, an exact one before one taking its arguments by widening
+		let widened =
+			|types: &[String]| tested_types(types).iter().filter(|(_, type_name)| takes_widened(type_name)).count();
+		let mut ordered = candidates.to_vec();
+		ordered.sort_by_key(|types| (std::cmp::Reverse(tested_types(types).len()), widened(types)));
+		let refusal = call(crate::words::RAISE_WORD, vec![Node::Text(no_variant.to_string())]);
+		let chain = ordered.iter().rev().fold(refusal, |otherwise, types| {
+			let variant = call(&Self::variant_name(name, types), arguments.clone());
+			let tests = tested_types(types).into_iter().filter_map(|(argument, type_name)| {
+				let tested = if takes_widened(&type_name) { crate::words::NUMBER_WORD } else { &type_name };
+				crate::lowering::type_tests::declared_type_test(argument, tested)
+			});
+			match tests.reduce(|all, test| key(all, Op::And, test)) {
+				Some(test) => super::nodes::if_then_else(test, variant, otherwise),
+				None => variant,
+			}
+		});
+		match bindings.is_empty() {
+			true => chain,
+			false => Node::List([bindings, vec![chain]].concat(), Bracket::Round, Separator::Semicolon),
 		}
 	}
 }

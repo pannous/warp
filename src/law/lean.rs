@@ -299,10 +299,7 @@ pub fn export_using(functions: &[FunctionDefinition], law: &Law, lemmas: &[Law],
 }
 
 fn expand_home(path: &str) -> PathBuf {
-	match (path.strip_prefix("~/"), std::env::var("HOME")) {
-		(Some(rest), Ok(home)) => Path::new(&home).join(rest),
-		_ => PathBuf::from(path),
-	}
+	PathBuf::from(crate::util::home_expanded(path))
 }
 
 pub(crate) fn lean_executable(name: &str) -> PathBuf {

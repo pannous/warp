@@ -8,6 +8,13 @@ the wiki).
 ## Pending
 (none)
 
+## To present (Interviewer's decisions, 2026-10-15 evening; user: "you make the decisions tonight and tomorrow
+morning you present the decisions and we can still undo everything")
+Present each in the morning popup batch (keep / change), then move it to decisions.md as the user's or undo it.
+- unit-definitions: see decisions.md dimensions-units.
+- dimension-bridges (px ↔ length through display.dpi): see decisions.md dimensions-units.
+- letters: see decisions.md (Text).
+
 ## Parked (user: "later")
 - body-statements (2026-10-14): a function body looped like a list of statements, each statement with its kind
   (operation, call, assignment…); `.kind` was dropped from body-code until then.

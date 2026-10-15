@@ -47,5 +47,6 @@ mod test_libc_results;
 mod test_libm_header_functions;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_libm_linking;
+mod test_page_ids; // card page-ids
 mod test_wasi;
 mod test_web_idl;
