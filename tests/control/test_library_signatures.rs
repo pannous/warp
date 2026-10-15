@@ -34,3 +34,13 @@ fn table_words_positional() {
 fn the_programs_own_definition_wins() {
 	is!("def sort(a){a}; sort.params", texts(vec!["a"]));
 }
+
+/// The whole-number words of the math module declare int parameters, so their signatures show them; a word that
+/// takes any number keeps parameters of the passed kind, shown bare (card signature-signature)
+#[test]
+fn whole_number_math_words_show_int_parameters() {
+	is!("use math; gcd.signature", text("(a:int, b:int) -> int"));
+	is!("use math; factorial.signature", text("(n:int) -> int"));
+	is!("use math; gcd(2^70, 2^65) == 2^65", true);
+	is!("use math; lerp.params", texts(vec!["a", "b", "t"]));
+}

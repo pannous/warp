@@ -15,7 +15,7 @@ fn test_type_of_a_user_function() {
 
 #[test]
 fn test_type_of_a_library_function() {
-	is!("use math; type of gcd", "function: (a, b) -> int");
+	is!("use math; type of gcd", "function: (a:int, b:int) -> int");
 }
 
 #[test]
