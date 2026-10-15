@@ -15,7 +15,8 @@ pub(crate) const YEARS_PER_ERA: i64 = 400;
 pub(crate) const EPOCH_SHIFT: i64 = 719_468;
 const DAY: i128 = DAY_SECONDS as i128 * SECOND;
 const HOUR_NANOS: i128 = HOUR as i128 * SECOND;
-pub(crate) const LENGTHS_VARY: &str = "a day is 23 to 25 hours across daylight saving, a month 28 to 31 days: compare the times they lead to";
+pub(crate) const LENGTHS_VARY: &str =
+	"a day is 23 to 25 hours across daylight saving, a month 28 to 31 days: compare the times they lead to";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Date {
@@ -610,9 +611,8 @@ impl Duration {
 	}
 
 	pub fn order(self, other: Duration) -> Result<Ordering, String> {
-		self.compare(other).ok_or_else(|| {
-			format!("{self} and {other} compare differently on different dates ({LENGTHS_VARY})")
-		})
+		self.compare(other)
+			.ok_or_else(|| format!("{self} and {other} compare differently on different dates ({LENGTHS_VARY})"))
 	}
 
 	/// The shortest and longest it can be: a month is 28 to 31 days, and daylight saving shifts any span by at most an hour

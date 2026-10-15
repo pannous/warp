@@ -224,13 +224,18 @@ impl WasmGcEmitter {
 	fn emit_duration_order(&mut self) {
 		let (kind_a, position_a, kind_b, position_b) = (0, 1, 2, 3);
 		let (months, days, nanos, fewest_days, most_days) = (4, 5, 6, 7, 8);
-		self.runtime_function(DURATION_ORDER, vec![ValType::I64; 4], vec![ValType::I32], vec![ValType::I64; 5], |s, f| {
-			for (part, local) in [(Part::Months, months), (Part::Days, days), (Part::Nanos, nanos)] {
-				Self::emit_list(f, &part_of(kind_a, position_a, part));
-				Self::emit_list(f, &part_of(kind_b, position_b, part));
-				Self::emit_list(f, &[I::I64Sub, I::LocalSet(local)]);
-			}
-			#[rustfmt::skip]
+		self.runtime_function(
+			DURATION_ORDER,
+			vec![ValType::I64; 4],
+			vec![ValType::I32],
+			vec![ValType::I64; 5],
+			|s, f| {
+				for (part, local) in [(Part::Months, months), (Part::Days, days), (Part::Nanos, nanos)] {
+					Self::emit_list(f, &part_of(kind_a, position_a, part));
+					Self::emit_list(f, &part_of(kind_b, position_b, part));
+					Self::emit_list(f, &[I::I64Sub, I::LocalSet(local)]);
+				}
+				#[rustfmt::skip]
 			Self::emit_list(f, &[
 				// an exact difference: the sign of its nanoseconds
 				I::LocalGet(months), I::LocalGet(days), I::I64Or, I::I64Eqz, I::If(BlockType::Empty),
@@ -254,8 +259,12 @@ impl WasmGcEmitter {
 					I::I32Const(-1), I::Return,
 				I::End,
 			]);
-			s.emit_time_failure(f, &format!("cannot order durations that compare differently on different dates ({LENGTHS_VARY})"));
-		});
+				s.emit_time_failure(
+					f,
+					&format!("cannot order durations that compare differently on different dates ({LENGTHS_VARY})"),
+				);
+			},
+		);
 	}
 
 	/// Required, not merely emitted: emit_all_functions builds node_add without times, whose refusals would mark the text

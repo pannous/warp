@@ -278,3 +278,4 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 ||||||| c704955e8
 - 2026-10-15 fun-x-loud: OCaml `fun x -> …` / `fun a b -> …` (dropped, decision foreign-spellings) is an error naming `x -> …` (ocaml_fun in welcoming/welcome_forms.rs; tests/functions/test_ocaml_fun.rs)
 - 2026-10-15 key-print: `for key in m print key` runs: for_over_map shares for_in's iterable_and_body, so words after a map are the body (tests/control/test_map_loop_words.rs)
+- 2026-10-15 day-day, day-hours: `1 day > 2 hours` is yes, `1 day == 1 day` prints yes (not 1); durations order when it holds on every date (a day 23-25 h, a month 28-31 days), else an error; run time via duration_order (Duration::compare in time/calendar.rs, wasm_emitter/time/time_arithmetic.rs; tests/types/test_duration_comparison.rs)
