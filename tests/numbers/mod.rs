@@ -93,6 +93,7 @@ mod test_static_units_output;
 mod test_sum_of_decimals;
 mod test_superscript_variables;
 mod test_temperature; // card temperature
+mod test_text_float_exact; // card text-float
 mod test_text_then_conversion; // card print-km
 mod test_time_of_day;
 mod test_trailing_symbol; // card trailing-symbol
