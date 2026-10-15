@@ -40,6 +40,7 @@ pub use lowering::{
 pub mod errors;
 pub mod ffi;
 pub mod formats;
+pub mod formatting;
 pub mod graphics;
 pub mod host;
 pub mod law;
