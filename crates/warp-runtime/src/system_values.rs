@@ -157,10 +157,14 @@ pub fn tell_keys_held(codes: &[i64]) {
 
 /// Whether the key of that code is held now, among others (KEY_HELD); code 0: whether none is
 pub fn key_held(code: i64) -> bool {
-	let held = KEYS_HELD.lock().unwrap();
+	held_among(code, window_input()[KEY_INPUT] as i64, &KEYS_HELD.lock().unwrap())
+}
+
+/// Whether the key of that code is the key held or among the keys held; code 0: whether none is
+pub fn held_among(code: i64, key: i64, held: &[i64]) -> bool {
 	match code {
-		0 => window_input()[KEY_INPUT] == 0.0 && held.is_empty(),
-		_ => window_input()[KEY_INPUT] as i64 == code || held.contains(&code),
+		0 => key == 0 && held.is_empty(),
+		_ => key == code || held.contains(&code),
 	}
 }
 
