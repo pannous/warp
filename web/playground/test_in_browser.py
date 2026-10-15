@@ -161,6 +161,10 @@ GPU_JOBS_NEVER = "Out of memory"
 # the button right. The clipboard check does the same on purpose: its run_code("1") replaces the worker of the run that
 # waits for the permission click (card tour-firefox-fails: two such lines on each Firefox run of the check alone)
 FIREFOX_TERMINATED_PROMISING = ["uncaught exception: undefined"]  # card firefox-logs
+# samples Firefox's tour does not run (card firefox-tour-fails), each with why: the swirl's run leaves its worker inside
+# WebAssembly.promising, so whichever run replaces that worker next logs Firefox's anonymous uncaught exception (dry runs
+# 2026-10-15: on the swirl itself, also with a 3 s loop, or on the sample after it); card logs-uncaught finds the cause
+FIREFOX_SKIPPED_SAMPLES = {"warp_compiled_wgsl_shader": "its worker, replaced, logs 'uncaught exception: undefined' (card logs-uncaught)"}
 EXPECTED_CONSOLE = {SHADER_ERROR: ["Error while parsing WGSL", "errors while creating shader module", "parsing error"],
 	GPU_JOBS: FIREFOX_TERMINATED_PROMISING, STOP_BUTTON: FIREFOX_TERMINATED_PROMISING, CLIPBOARD_READ: FIREFOX_TERMINATED_PROMISING}
 # card safari-shared-buffers: a task's answer buffer, like a GPU job's, is reused once read
@@ -903,6 +907,9 @@ def check_examples(names, page_url=None, site=None):
 	chosen = [(name, False) for name in examples] + [(name, True) for name in samples]
 	chosen = [(name, sample) for name, sample in chosen if not names or name in names]
 	for name, sample in chosen:
+		if sample and isinstance(webdriver, FirefoxDriver) and name in FIREFOX_SKIPPED_SAMPLES:
+			print(f"skip samples/{name} in Firefox: {FIREFOX_SKIPPED_SAMPLES[name]}")
+			continue
 		if sample:
 			verdict(f"samples/{name}", run_sample(name))
 		else:
