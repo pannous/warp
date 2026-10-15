@@ -183,17 +183,9 @@ impl WasmGcEmitter {
 				);
 			};
 			s.emit_text_bounds(f, pointer, end);
-			// one character: as many bytes as its first byte's UTF-8 sequence, 1 + (b ≥ C0) + (b ≥ E0) + (b ≥ F0)
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I32Const(CHARACTER_QUOTE_BYTE), I32Const(QUOTE_BYTE),
-				I::LocalGet(end), I::LocalGet(pointer), I::I32Sub,
-				I32Const(1),
-				I::LocalGet(pointer), I::I32Load8U(BYTE), I::LocalTee(byte), I32Const(0xC0), I::I32GeU, I::I32Add,
-				I::LocalGet(byte), I32Const(0xE0), I::I32GeU, I::I32Add,
-				I::LocalGet(byte), I32Const(0xF0), I::I32GeU, I::I32Add,
-				I::I32Eq, I::Select, I::LocalSet(quote),
-			]);
+			Self::emit_list(f, &[I32Const(CHARACTER_QUOTE_BYTE), I32Const(QUOTE_BYTE)]);
+			Self::emit_is_one_character(f, pointer, end, byte);
+			Self::emit_list(f, &[I::Select, I::LocalSet(quote)]);
 			// at worst every byte is escaped, plus the two quotes
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
