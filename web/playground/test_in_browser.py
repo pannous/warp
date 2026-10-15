@@ -144,7 +144,11 @@ GPU_JOBS_NEVER = "Out of memory"
 # Firefox's WebGPU: one anonymous uncaught exception of the page during the 400 jobs, all values right (card
 # firefox-gpu-jobs-uncaught)
 # and Firefox its own two lines of the broken shader
-EXPECTED_CONSOLE = {SHADER_ERROR: ["Error while parsing WGSL", "errors while creating shader module", "parsing error"], GPU_JOBS: ["uncaught exception: undefined"]}
+# Firefox now and then: two anonymous uncaught exceptions of the page right as Stop ends the busy program's Worker (the
+# BiDi events before them: the new Worker's realm made, the old one's gone; no event reaches the page's listeners),
+# the run stopped and the button right (card firefox-logs)
+EXPECTED_CONSOLE = {SHADER_ERROR: ["Error while parsing WGSL", "errors while creating shader module", "parsing error"], GPU_JOBS: ["uncaught exception: undefined"],
+	STOP_BUTTON: ["uncaught exception: undefined"]}
 # card safari-shared-buffers: a task's answer buffer, like a GPU job's, is reused once read
 MANY_TASKS = "(many tasks in one run)"
 MANY_TASKS_CODE = """twice(x) := x * 2
@@ -814,8 +818,10 @@ def check_examples(names, page_url=None, site=None):
 	failures = []
 	def verdict(name, wrong):
 		expected = EXPECTED_CONSOLE.get(name, [])
-		wrong += [f"console {message}" for message in console.take() if not any(line in message for line in expected)]
-		print(f"{'FAIL' if wrong else 'ok  '} {name}" + "".join(f"\n     {line}" for line in wrong))
+		logged = console.take()
+		wrong += [f"console {message}" for message in logged if not any(line in message for line in expected)]
+		known = [message for message in logged if any(line in message for line in expected)]
+		print(f"{'FAIL' if wrong else 'ok  '} {name}" + "".join(f"\n     {line}" for line in wrong) + "".join(f"\n     known, expected: {line[:200]}" for line in known))
 		if wrong:
 			failures.append(name)
 	verdict(PAGE_LOAD, [])
