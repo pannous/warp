@@ -20,7 +20,7 @@ fn an_imported_warp_module_reflects_its_functions() {
 	is!(&format!("{adder}add(2, 3)"), 5);
 	is!(&format!("{adder}adder.exports"), warp::texts(vec!["add", "twice"]));
 	is!(&format!("{adder}adder.add.params"), warp::texts(vec!["left", "right"]));
-	is!(&format!("{adder}adder.twice.signature"), "(value:i32) -> int");
+	is!(&format!("{adder}adder.twice.signature"), "(value: i32) -> int");
 }
 
 #[test]
@@ -30,7 +30,7 @@ fn the_meta_section_names_functions_and_classes() {
 	)
 	.expect("a module");
 	let functions = warp::formats::meta_section::entry(&module.bytes, "functions").expect("a functions entry");
-	assert_eq!(functions["f"]["signature"].serialize(), "\"(a:int) -> int\"");
+	assert_eq!(functions["f"]["signature"].serialize(), "\"(a: int) -> int\"");
 	let classes = warp::formats::meta_section::entry(&module.bytes, "classes").expect("a classes entry");
 	assert_eq!(classes["P"]["fields"].serialize(), "[\"width\" \"height\"]");
 	assert_eq!(classes["P"]["methods"].serialize(), "[\"area\"]");

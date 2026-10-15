@@ -30,7 +30,7 @@ fn words_use_the_comment_line_directly_above_their_definition() {
 #[test]
 fn a_wrapped_comment_is_the_whole_doc_of_its_word() {
 	let page = standard_library_markdown();
-	let exec = markdown_entry(&page, "exec(command:any)");
+	let exec = markdown_entry(&page, "exec(command: any)");
 	assert!(exec.contains("`exec sh \"crontab -l\"`"), "{exec}");
 	assert!(exec.ends_with("natively only, the browser runs no processes"), "{exec}");
 	let queued = markdown_entry(&page, SOUND_QUEUED);
@@ -45,9 +45,9 @@ fn a_wrapped_comment_is_the_whole_doc_of_its_word() {
 #[test]
 fn a_hand_wrapped_comment_is_the_whole_doc_of_its_word() {
 	let page = standard_library_markdown();
-	let render = markdown_entry(&page, "html_render(value:any, scope:any, chosen:any)");
+	let render = markdown_entry(&page, "html_render(value: any, scope: any, chosen: any)");
 	assert!(render.contains("`scope`: the component") && render.ends_with("card web-bind-select)"), "{render}");
-	let mark = markdown_entry(&page, "route_part_mark(part:any)");
+	let mark = markdown_entry(&page, "route_part_mark(part: any)");
 	assert!(mark.contains("\"?\" at most once") && mark.ends_with("\"\" exactly once"), "{mark}");
 	let units = markdown_entry(&page, "unit_names");
 	assert!(units.contains("The units by name") && units.contains("65536·time"), "{units}");

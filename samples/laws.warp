@@ -1,9 +1,9 @@
 #!/usr/bin/env warp
-square(x) := x*x
+square(x) := x * x
 law square(-x) == square(x)
-add(a,b) := a+b
-law add(a,b) == add(b,a)
-law add(a,add(b,c)) == add(add(a,b),c)
-twice(x) := x+x
-law twice(x) == 2*x
+add(a, b) := a + b
+law add(a, b) == add(b, a)
+law add(a, add(b, c)) == add(add(a, b), c)
+twice(x) := x + x
+law twice(x) == 2 * x
 square(3)

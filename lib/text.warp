@@ -52,7 +52,7 @@ is_blank(t) := trim(t) == ""
 is_upper(t) := upper(t) == t and lower(t) != t
 is_lower(t) := lower(t) == t and upper(t) != t
 remove_prefix(t, prefix) := if starts_with(t, prefix) then t[count(prefix):] else t
-remove_suffix(t, suffix) := if ends_with(t, suffix) then t[0:count(t) - count(suffix)] else t
+remove_suffix(t, suffix) := if ends_with(t, suffix) then t[0: count(t) - count(suffix)] else t
 // how often part occurs, not overlapping: count_of("banana", "an") is 2
 count_of(t, part) := count(split(t, part)) - 1
 is_palindrome(t) := { s = lower(join([c for c in t if is_alphanumeric(c)], "")); s == reverse(s) }
@@ -67,18 +67,18 @@ indent(t, n) := join([n times " " + line for line in lines(t)], "\n")
 // a whole or decimal number, optionally signed: "12.5", "-3"
 is_numeric(t) := { parts = split(remove_prefix(trim(t), "-"), "."); if count(parts) > 2 { return false }; for p in parts { if p == "" { return false }; for c in p { if not is_digit(c) { return false } } }; true }
 // the text between the first opening and the next closing after it, "" when either is missing
-between(t, opening, closing) := { from = index_of(t, opening); if from == 0 { return "" }; rest = t[from - 1 + count(opening):]; to = index_of(rest, closing); if to == 0 then "" else rest[0:to - 1] }
+between(t, opening, closing) := { from = index_of(t, opening); if from == 0 { return "" }; rest = t[from - 1 + count(opening):]; to = index_of(rest, closing); if to == 0 then "" else rest[0: to - 1] }
 // the words in lines of at most width characters
 wrap(t, width) := { out = []; line = ""; for w in words(t) { if line == "" { line = w } else if count(line) + 1 + count(w) <= width { line = line + " " + w } else { out = out + [line]; line = w } }; if line != "" { out = out + [line] }; join(out, "\n") }
 // a reading position in a text, for scanners and parsers: `c = Cursor("ab12"); c.take_while(is_letter)` is "ab",
 // then `c.peek()` is '1'; `at` counts the characters read (an index)
 class Cursor { source: text; at = 0
-  at_end() := at >= count(source)
-  peek() := source[at]
-  advance() := { taken = source[at]; at += 1; taken }
-  looking_at(part) := source[at : min(at + count(part), count(source))] == part
-  skip(part) := { if looking_at(part) { at += count(part); return true }; false }
-  take_while(ok) := { start = at; while at < count(source) and ok(source[at]) { at += 1 }; source[start : at] }
-  skip_while(ok) := count(take_while(ok))
-  rest() := source[at : count(source)]
+	at_end() := at >= count(source)
+	peek() := source[at]
+	advance() := { taken = source[at]; at += 1; taken }
+	looking_at(part) := source[at : min(at + count(part), count(source))] == part
+	skip(part) := { if looking_at(part) { at += count(part); return true }; false }
+	take_while(ok) := { start = at; while at < count(source) and ok(source[at]) { at += 1 }; source[start : at] }
+	skip_while(ok) := count(take_while(ok))
+	rest() := source[at : count(source)]
 }
