@@ -131,7 +131,8 @@ fn bindings(name: &str, url: &Node, default: Option<Node>, id: usize) -> HashMap
 		("DEFAULT".to_string(), default.clone().unwrap_or(Node::Empty)),
 	]);
 	let arrived = crate::law::substitute(
-		crate::warp_parser::parse(if default.is_some() { ARRIVED_OR_DEFAULT } else { ARRIVED_VALUE }).drop_meta(),
+		crate::warp_parser::parse_generated(if default.is_some() { ARRIVED_OR_DEFAULT } else { ARRIVED_VALUE })
+			.drop_meta(),
 		&reply,
 	);
 	HashMap::from([
@@ -148,7 +149,7 @@ fn bindings(name: &str, url: &Node, default: Option<Node>, id: usize) -> HashMap
 
 /// The statements of a template with its placeholders bound
 fn instantiated(template: &str, bindings: &HashMap<String, Node>) -> Vec<Node> {
-	let (statements, _, _) = crate::variable_signals::main_statements(&crate::warp_parser::parse(template));
+	let (statements, _, _) = crate::variable_signals::main_statements(&crate::warp_parser::parse_generated(template));
 	statements.iter().map(|statement| crate::law::substitute(statement.drop_meta(), bindings)).collect()
 }
 

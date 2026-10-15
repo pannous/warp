@@ -159,7 +159,7 @@ fn with_live_loops(statements: Vec<Node>, defined: &HashSet<String>) -> Vec<Node
 		let since = Node::Symbol(format!("{name}_since"));
 		let filled = |template: &str, version: usize| {
 			substituted(
-				crate::warp_parser::parse(template),
+				crate::warp_parser::parse_template(template, &Node::Empty),
 				&[(LIVE_SINCE, since.clone()), (LIVE_VERSION, Node::int(version as i64))],
 			)
 		};
@@ -168,7 +168,7 @@ fn with_live_loops(statements: Vec<Node>, defined: &HashSet<String>) -> Vec<Node
 			(_, 1) => lowered.push(live_loop.voice(&blocks)),
 			(1, count) => {
 				lowered.push(substituted(
-					crate::warp_parser::parse(LIVE_SINCE_DECLARATION),
+					crate::warp_parser::parse_generated(LIVE_SINCE_DECLARATION),
 					&[(LIVE_SINCE, since.clone()), (LIVE_COUNT, Node::int(count as i64))],
 				));
 				lowered.extend((2..=count).map(|later| filled(LIVE_SINCE_UNSET, later)));
@@ -257,7 +257,7 @@ fn block_template(template: &str, fill: &str, seconds: Node) -> Node {
 		("block_samples", crate::node::int(BLOCK_SAMPLES as i64)),
 		("block_seconds", seconds),
 	];
-	names.into_iter().fold(crate::warp_parser::parse(template), |node, (placeholder, value)| {
+	names.into_iter().fold(crate::warp_parser::parse_template(template, &Node::Empty), |node, (placeholder, value)| {
 		crate::library_words::substitute(node, placeholder, &value)
 	})
 }
@@ -499,7 +499,7 @@ impl LiveLoop {
 	fn voice(&self, blocks: &[Node]) -> Node {
 		let template = if self.cycles.is_some() { LIVE_LOOP_TEMPLATE } else { ENDLESS_LIVE_LOOP_TEMPLATE };
 		let made = substituted(
-			crate::warp_parser::parse(template),
+			crate::warp_parser::parse_template(template, &Node::Empty),
 			&[
 				(LIVE_VOICE, self.voice.clone()),
 				(LIVE_CYCLES, self.cycles.clone().unwrap_or(Node::Empty)),
@@ -517,7 +517,7 @@ impl LiveLoop {
 	fn voice_choosing(&self, blocks: &[Node], since: &Node) -> Node {
 		let choice = blocks.iter().enumerate().skip(1).fold(blocks[0].clone(), |earlier, (index, block)| {
 			substituted(
-				crate::warp_parser::parse(LIVE_VERSION_TEMPLATE),
+				crate::warp_parser::parse_generated(LIVE_VERSION_TEMPLATE),
 				&[
 					(LIVE_SINCE, since.clone()),
 					(LIVE_VERSION, Node::int(index as i64 + 1)),
@@ -526,7 +526,7 @@ impl LiveLoop {
 				],
 			)
 		});
-		let body = substituted(crate::warp_parser::parse(LIVE_CHOICE), &[(LIVE_CHOICE_WORD, choice)]);
+		let body = substituted(crate::warp_parser::parse_generated(LIVE_CHOICE), &[(LIVE_CHOICE_WORD, choice)]);
 		self.voice(&[Node::List(body.sequence_statements().to_vec(), Bracket::Curly, Separator::Newline)])
 	}
 

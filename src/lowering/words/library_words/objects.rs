@@ -273,7 +273,7 @@ impl Lowering {
 			return Diagnostic::at(&word, "?. needs a field name after it").into_error();
 		};
 		let number = self.next_temporary();
-		let program = named_apart(parse(&format!("({SAFE_PREFIX}value={RECEIVER_PLACEHOLDER}; if {SAFE_PREFIX}value == ø then ø else {LOOKUP_PLACEHOLDER})")), SAFE_PREFIX, SAFE_BASE, number);
+		let program = named_apart(parse_template(&format!("({SAFE_PREFIX}value={RECEIVER_PLACEHOLDER}; if {SAFE_PREFIX}value == ø then ø else {LOOKUP_PLACEHOLDER})"), &receiver), SAFE_PREFIX, SAFE_BASE, number);
 		let lookup =
 			field_lookup(&Node::Symbol(temporary_name(&[SAFE_BASE, "value", &number.to_string()])), name, &word);
 		substitute(substitute(program, RECEIVER_PLACEHOLDER, &receiver), LOOKUP_PLACEHOLDER, &lookup)

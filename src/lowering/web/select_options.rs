@@ -64,7 +64,7 @@ fn option(listed: &Node) -> Node {
 
 /// `for listed_option in fruits { option{ listed_option } }`, as written in a select
 fn options_of_variable(name: &str) -> Vec<Node> {
-	let written = crate::warp_parser::parse(&format!(
+	let written = crate::warp_parser::parse_generated(&format!(
 		"{SELECT}{{ for {OPTION_ITEM} in {name} {{ {OPTION}{{ {OPTION_ITEM} }} }} }}"
 	));
 	let mut items = vec![];

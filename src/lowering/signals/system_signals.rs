@@ -144,7 +144,7 @@ pub fn key_named(code: Node) -> Node {
 
 #[cfg(feature = "native")]
 fn clicks_reader() -> Node {
-	crate::warp_parser::parse(CLICKS_TEMPLATE)
+	crate::warp_parser::parse_generated(CLICKS_TEMPLATE)
 }
 
 /// The browser compiler's programs are for a page, which raises key and click itself

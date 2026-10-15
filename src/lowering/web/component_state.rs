@@ -18,7 +18,6 @@ use crate::law::substitute;
 use crate::lowering::function_head;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::warp_parser::parse;
 use crate::words::ON_WORD;
 use std::collections::{HashMap, HashSet};
 
@@ -453,7 +452,7 @@ impl Component {
 			return head;
 		};
 		if self.keys.is_some() && !parts.iter().skip(1).any(|part| part.drop_meta().name() == KEY_WORD) {
-			parts.push(parse(KEY_PARAMETER).drop_meta().clone());
+			parts.push(crate::warp_parser::parse_generated(KEY_PARAMETER).drop_meta().clone());
 		}
 		Node::List(parts, bracket, separator)
 	}

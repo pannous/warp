@@ -28,10 +28,16 @@ fn where_with_an_assignment_binds() {
 
 #[test]
 fn a_where_condition_of_a_bare_word_suggests_the_field() {
-	// samples/netbase.warp: `results where country is germany`
+	// samples/netbase.warp: `results where country is germany`, of a list whose fields are known only at run time
 	crate::common::fails_with(
-		"results = [{country: germany}]; results where country is germany",
+		"rows() := [{country: germany}]; results = rows(); results where country is germany",
 		"or results where it.country==germany for a field country",
+	);
+	// a list of map literals names its fields (card field-list)
+	assert_eq!(
+		warp::wasm_emitter::eval("results = [{country: germany}, {country: france}]; results where country is germany")
+			.serialize(),
+		"[country:germany]"
 	);
 }
 

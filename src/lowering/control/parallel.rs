@@ -218,8 +218,12 @@ pub(crate) fn let_in_tasks(names: Vec<Node>, values: Vec<Node>, number: usize) -
 /// The template with its temporaries named apart, then the placeholders filled (the program's own `parallel_…` names
 /// stay as they are)
 fn filled(program: &str, number: usize, fills: &[(&str, Node)]) -> Node {
-	let template =
-		crate::library_words::named_apart(crate::warp_parser::parse(program), TEMPORARY_PREFIX, TEMPORARY_BASE, number);
+	let template = crate::library_words::named_apart(
+		crate::warp_parser::parse_generated(program),
+		TEMPORARY_PREFIX,
+		TEMPORARY_BASE,
+		number,
+	);
 	fills.iter().fold(template, |node, (placeholder, value)| crate::library_words::substitute(node, placeholder, value))
 }
 

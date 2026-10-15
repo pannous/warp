@@ -1,5 +1,6 @@
 //! Fields and keys: `x.name`, `m[key]` with a key known only at runtime, the map words
 use super::*;
+use crate::node::Bracket;
 use crate::words::MAP_KEYS;
 
 /// The runtime error of a missing constant field is a function `no_field_<name>`; eval reports it as `no field <name>`
@@ -13,6 +14,15 @@ pub(in crate::wasm_emitter) const STRUCT_BODY: &str = "struct_body";
 pub(in crate::wasm_emitter) const INSTANCE_FIELD: &str = "instance_field";
 /// tagged_field(node, name): the field of the tagged object `tag:{…}` the node is, null for any other node
 pub(in crate::wasm_emitter) const TAGGED_FIELD: &str = "tagged_field";
+/// elements_field(xs, key): the field of every element of a list that is no map, as a `[…]` list; null for any other
+/// node, an empty list, or an element without the field (cards field-list-passed, field-list-read)
+pub(in crate::wasm_emitter) const ELEMENTS_FIELD: &str = "elements_field";
+/// The locals of a list built cell by cell: the cell just made, the first and the last
+struct CellAppend {
+	made: u32,
+	head: u32,
+	last: u32,
+}
 /// error_message(node): the message of an Error as a text, null for any other node: `e.message` (card catch-message)
 pub const ERROR_MESSAGE: &str = "error_message";
 /// The field every Error has
@@ -67,6 +77,14 @@ impl WasmGcEmitter {
 	pub(in crate::wasm_emitter) fn map_key(&self, index: &Node) -> Option<Node> {
 		let key = crate::warp_parser::subscript_key(index)?;
 		self.is_name_key(key).then(|| key.clone())
+	}
+
+	/// A map or list the compiler knows as one: `{age:2}`, a variable holding it; a map of one entry is held as its pair
+	/// at run time (card single-entry), yet has no pair parts of its own (card age-name)
+	fn is_known_collection(&self, target: &Node) -> bool {
+		matches!(target.drop_meta(), Node::List(_, Bracket::Curly | Bracket::Square, _))
+			|| crate::analyzer::held_map_type(target, &self.scope).is_some()
+			|| self.get_type(target) == Kind::List
 	}
 
 	/// A key that names an entry: a symbol, a text or a character ("x" is a codepoint)
@@ -138,8 +156,11 @@ impl WasmGcEmitter {
 					}
 					self.emit_uncertain_field_lookup(func, held, &name);
 					self.emit_time_field_lookup(func, held, &name);
-					// a key's key, value, op and name, a list's bracket (node_api.rs)
-					if let Some(part) = super::super::super::reflection::node_api::node_part(&name) {
+					// a key's key, value, op and name, a list's bracket (node_api.rs); a map held as its one pair has none
+					if let Some(part) = super::super::super::reflection::node_api::node_part(&name).filter(|part| {
+						!(super::super::super::reflection::node_api::is_pair_part(*part)
+							&& self.is_known_collection(target))
+					}) {
 						Self::emit_list(func, &[I::LocalGet(held), I32Const(part)]);
 						self.emit_call(func, super::super::super::reflection::node_api::NODE_PART);
 						func.instruction(&I::BrOnNonNull(0));
@@ -154,6 +175,19 @@ impl WasmGcEmitter {
 						let picks = I::I64Const(swizzle_picks(&components));
 						Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull, picks]);
 						self.emit_call(func, SWIZZLED);
+						func.instruction(&I::BrOnNonNull(0));
+					}
+					// a list of no shape the compiler knows: the field of each element, `names` also as `name`
+					for field in
+						std::iter::once(name.clone()).chain(crate::extensions::strings::english_singular(&name))
+					{
+						let (pointer, length) = self.allocate_string(&field);
+						Self::emit_list(
+							func,
+							&[I::LocalGet(held), I::RefAsNonNull, I32Const(pointer as i32), I32Const(length as i32)],
+						);
+						self.emit_call(func, "new_symbol");
+						self.emit_call(func, ELEMENTS_FIELD);
 						func.instruction(&I::BrOnNonNull(0));
 					}
 					Self::emit_list(
@@ -529,6 +563,10 @@ impl WasmGcEmitter {
 			s.call(f, "key_not_found");
 			Self::emit_list(f, &[I::Unreachable, I::End]);
 		});
+		// after the struct_body it calls
+		if self.should_emit_function(ELEMENTS_FIELD) {
+			self.emit_elements_field();
+		}
 		self.emit_field_with();
 		self.emit_instance_copy();
 		self.emit_map_words();
@@ -598,6 +636,80 @@ impl WasmGcEmitter {
 		func.instruction(&I::BrOnNonNull(0));
 		self.call(func, "new_empty");
 		func.instruction(&I::End);
+	}
+
+	/// With the kind and the value of a new cell pushed: the cell made, appended after the cell in `last`, or `head` when
+	/// it is the first; a list built in a loop, not a call per element (map_column_cells)
+	fn emit_appended_cell(&self, func: &mut Function, cells: CellAppend) {
+		let node = self.type_manager.node_type;
+		let CellAppend { made, head, last } = cells;
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::RefNull(HeapType::Concrete(node)), I::StructNew(node), I::LocalSet(made),
+			I::LocalGet(last), I::RefIsNull, I::If(BlockType::Empty),
+				I::LocalGet(made), I::LocalSet(head),
+			I::Else,
+				I::LocalGet(last), I::LocalGet(made),
+				I::StructSet { struct_type_index: node, field_index: 2 },
+			I::End,
+			I::LocalGet(made), I::LocalSet(last),
+		]);
+	}
+
+	/// elements_field(xs, key) (ELEMENTS_FIELD): each element read as a field read of a value of unknown shape does, an
+	/// instance by its fields, a map by its entries, a tagged object `P{name:…}` by its body
+	fn emit_elements_field(&mut self) {
+		let node = self.type_manager.node_type;
+		let node_ref = Ref(self.node_ref(false));
+		let nullable = Ref(self.node_ref(true));
+		let has_struct_body = !self.ctx.type_registry.types().is_empty();
+		let locals = vec![nullable, nullable, nullable, nullable, nullable, nullable];
+		self.runtime_function(ELEMENTS_FIELD, vec![node_ref, node_ref], vec![nullable], locals, |s, f| {
+			let (cell, element, value, head, last, made) = (2, 3, 4, 5, 6, 7);
+			let null = I::RefNull(HeapType::Concrete(node));
+			// only a list has elements, a `{…}` map has entries; an empty list has no field to show
+			s.emit_field(f, 0, 0);
+			Self::emit_list(f, &[I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::List as i64), I::I64Ne]);
+			s.emit_field(f, 0, 0);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I64Const(crate::type_kinds::UNMARKED_KIND), I::I64And, I::I64Const(CURLY_LIST_KIND), I::I64Eq,
+				I::I32Or,
+			]);
+			s.emit_field(f, 0, 1);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::RefIsNull, I::I32Or, I::If(BlockType::Empty),
+					null.clone(), I::Return,
+				I::End,
+				I::LocalGet(0), I::LocalSet(cell),
+			]);
+			s.emit_cell_walk(f, cell, |f| {
+				s.emit_field(f, cell, 1);
+				Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node))]);
+				if has_struct_body {
+					s.call(f, STRUCT_BODY);
+				}
+				Self::emit_list(f, &[I::LocalTee(element), I::RefAsNonNull, I::LocalGet(1)]);
+				s.call(f, "map_find");
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalTee(value), I::RefIsNull, I::If(BlockType::Empty),
+						I::LocalGet(element), I::RefAsNonNull, I::LocalGet(1),
+				]);
+				s.call(f, TAGGED_FIELD);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+						I::LocalTee(value), I::RefIsNull, I::If(BlockType::Empty),
+							null.clone(), I::Return,
+						I::End,
+					I::End,
+					I::I64Const(SQUARE_LIST_KIND), I::LocalGet(value),
+				]);
+				s.emit_appended_cell(f, CellAppend { made, head, last });
+			});
+			f.instruction(&I::LocalGet(head));
+		});
 	}
 
 	/// The words of maps: `keys`, `values`, the entries a `for (k, v) in m` walks, `x in xs` and `m.get(k, default)`.
@@ -690,18 +802,8 @@ impl WasmGcEmitter {
 					s.emit_field(f, cell, 1);
 					Self::emit_list(f, &[I::RefCastNonNull(HeapType::Concrete(node)), I::LocalGet(part)]);
 					s.call(f, MAP_PART);
-					#[rustfmt::skip]
-					Self::emit_list(f, &[
-						I::RefNull(HeapType::Concrete(node)), I::StructNew(node), I::LocalSet(made),
-						I::LocalGet(last), I::RefIsNull, I::If(BlockType::Empty),
-							I::LocalGet(made), I::LocalSet(head),
-						I::Else,
-							I::LocalGet(last), I::LocalGet(made),
-							I::StructSet { struct_type_index: node, field_index: 2 },
-						I::End,
-						I::LocalGet(made), I::LocalSet(last),
-						I::End,
-					]);
+					s.emit_appended_cell(f, CellAppend { made, head, last });
+					f.instruction(&I::End);
 				});
 				f.instruction(&I::LocalGet(head));
 			},

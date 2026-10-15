@@ -1326,9 +1326,9 @@ impl Inference {
 		amounts: &[(String, &Signature)],
 		amount_text: &str,
 	) -> Result<Node, Stop> {
-		let mut text = crate::warp_parser::parse(template);
+		let mut text = crate::warp_parser::parse_generated(template);
 		for (index, (amount, signature)) in amounts.iter().enumerate() {
-			let shown = self.as_text(crate::warp_parser::parse(amount), signature, None, amount_text)?;
+			let shown = self.as_text(crate::warp_parser::parse_generated(amount), signature, None, amount_text)?;
 			text = crate::lowering::library_words::substitute(text, &format!("{QUANTITY_SHOWN}{index}"), &shown);
 		}
 		Ok(text)

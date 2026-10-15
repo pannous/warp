@@ -4,8 +4,9 @@ use super::*;
 
 /// Characters that end a statement: a body cannot start with them
 pub(crate) const BODY_ENDS: [char; 7] = ['\0', ';', ',', '\n', '}', ')', ']'];
-/// A braceless argument takes arithmetic, stops at ranges and comparisons: f 3-1 > 5, sqrt 4 + 5 > 2
-const ARGUMENT_BP: u8 = Op::Add.binding_power().0;
+/// A braceless argument takes arithmetic and ranges, stops at comparisons: f 3-1 > 5, sqrt 4 + 5 > 2, y = sum 1..4
+/// (card braceless-argument: every callable as at statement level, `sum 1..4`)
+const ARGUMENT_BP: u8 = Op::Range.binding_power().0;
 
 impl WarpParser {
 	/// Pratt parser: parse expression with given minimum binding power
