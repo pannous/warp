@@ -7,15 +7,76 @@ pub(crate) const SHADOWED_WORD_PREFIX: &str = "lib·";
 /// The names the program declares, but not its methods: `take()` of a class Box, `take(b:Box)` add to list's take
 /// (notes/dispatch.md "Methods"), a plain `take(xs, n)` is the program's own take
 pub(crate) fn own_functions(program: &Node) -> HashSet<String> {
+	let classes = class_names(program);
+	let mut own = classes.clone();
+	collect_own_functions(program, &classes, &mut own);
+	own
+}
+
+fn class_names(program: &Node) -> HashSet<String> {
 	let mut classes = HashSet::new();
 	program.visit(&mut |node| {
 		if let Node::Type { name, .. } = node {
 			classes.extend(leftmost_symbol(name));
 		}
 	});
-	let mut own = classes.clone();
-	collect_own_functions(program, &classes, &mut own);
-	own
+	classes
+}
+
+/// The program's variables and its own functions, which a module's words of the same name are renamed apart from
+/// (shadowed_apart): a program's `added(x, y) := 7` leaves sound's mix its own added (card use-sound)
+#[derive(Default)]
+pub(crate) struct ProgramWords {
+	variables: HashSet<String>,
+	/// each function's fewest and most arguments: it shadows a module's definitions taking any of those only,
+	/// `clamp(x)` leaves math's clamp(x, low, high) to the program too
+	functions: HashMap<String, Vec<(usize, usize)>>,
+}
+
+impl ProgramWords {
+	fn contains(&self, name: &str) -> bool {
+		self.variables.contains(name) || self.functions.contains_key(name)
+	}
+
+	/// a module definition the program still sees under its own name: no number of arguments it takes is one a
+	/// same-named program function takes
+	fn leaves_to_program(&self, name: &str, (fewest, most): (usize, usize)) -> bool {
+		let overlaps =
+			|&(program_fewest, program_most): &(usize, usize)| program_fewest <= most && fewest <= program_most;
+		!self.variables.contains(name) && self.functions.get(name).is_some_and(|ranges| !ranges.iter().any(overlaps))
+	}
+}
+
+/// Methods (`play(s: Song)` of a class Song) stay out: they add to the module's word
+pub(crate) fn program_words(program: &Node) -> ProgramWords {
+	let classes = class_names(program);
+	let is_method = |head: &Node| {
+		let mut typed_by_class = false;
+		head.visit(&mut |node| {
+			if let Node::Key(_, Op::Colon, class) = node {
+				typed_by_class |= class.symbol_name().is_some_and(|class| classes.contains(class));
+			}
+		});
+		typed_by_class
+	};
+	let mut functions: HashMap<String, Vec<(usize, usize)>> = HashMap::new();
+	for statement in statements_of(program) {
+		let Some((head, _, _)) = crate::type_tests::function_definition(statement) else { continue };
+		if let (false, Some(name)) = (is_method(&head), leftmost_symbol(&head)) {
+			functions.entry(name).or_default().push(head_arities(&head));
+		}
+	}
+	ProgramWords { variables: program_variables(program), functions }
+}
+
+/// The arguments a definition head takes, fewest and most: `mix(a, b, c = [])` takes 2 or 3
+fn head_arities(head: &Node) -> (usize, usize) {
+	let parameters = match head.drop_meta() {
+		Node::List(items, _, _) => &items[1..],
+		_ => &[],
+	};
+	let defaulted = parameters.iter().filter(|parameter| matches!(parameter.drop_meta(), Node::Key(_, Op::Assign, _)));
+	(parameters.len() - defaulted.count(), parameters.len())
 }
 
 /// The program's declarations; in a function body only the nested functions, its variables are its own (a local
@@ -208,8 +269,9 @@ pub(crate) fn program_variables(program: &Node) -> HashSet<String> {
 /// Module words a program variable shadows, renamed in the module's definitions (`words` → `lib·words`): the module's
 /// own code calls its own words (lexical scope), the program's `words` is its variable. Likewise a local of a module
 /// function named like a program variable: a program's `global hue` is not draw's `hue` in hsv (card program-global).
-/// A module's `global` is a setting, which the program's `tempo = 90` sets (lib/sound.warp's tempo, note_seconds)
-pub(crate) fn shadowed_apart(definitions: Vec<Node>, variables: &HashSet<String>) -> Vec<Node> {
+/// A module's `global` is a setting, which the program's `tempo = 90` sets (lib/sound.warp's tempo, note_seconds).
+/// A program function shadows only its own arities: the module's other definitions of the word stay the program's too
+pub(crate) fn shadowed_apart(definitions: Vec<Node>, words: &ProgramWords) -> Vec<Node> {
 	let declared: Vec<String> = definitions.iter().filter_map(name_declared_by).collect();
 	let settings: Vec<String> = definitions
 		.iter()
@@ -217,17 +279,38 @@ pub(crate) fn shadowed_apart(definitions: Vec<Node>, variables: &HashSet<String>
 		.filter_map(name_declared_by)
 		.collect();
 	let shadowed: Vec<String> =
-		declared.iter().filter(|name| variables.contains(*name) && !settings.contains(name)).cloned().collect();
+		declared.iter().filter(|name| words.contains(name) && !settings.contains(name)).cloned().collect();
+	let left_to_program: Vec<Option<String>> = definitions
+		.iter()
+		.map(|definition| {
+			let (head, _, _) = crate::type_tests::function_definition(definition)?;
+			let name = leftmost_symbol(&head)?;
+			words.leaves_to_program(&name, head_arities(&head)).then_some(name)
+		})
+		.collect();
 	renamed_apart(definitions, &shadowed)
 		.into_iter()
 		.map(|definition| {
 			let locals: Vec<String> = assigned_names(&definition)
 				.into_iter()
-				.filter(|name| variables.contains(name) && !declared.contains(name))
+				.filter(|name| words.contains(name) && !declared.contains(name))
 				.collect();
 			renamed_apart(vec![definition], &locals).remove(0)
 		})
+		.zip(left_to_program)
+		.flat_map(|(definition, left)| {
+			let under_own_name = left.and_then(|name| named_again(&definition, &name));
+			std::iter::once(definition).chain(under_own_name)
+		})
 		.collect()
+}
+
+/// `lib·mix(a, b) := …` as `mix(a, b) := …` again, its body still calling the module's own words
+fn named_again(definition: &Node, name: &str) -> Option<Node> {
+	let (head, body, rebuild) = crate::type_tests::function_definition(definition)?;
+	let Node::List(mut items, bracket, separator) = head.drop_meta().clone() else { return None };
+	items[0] = Node::Symbol(name.to_string());
+	Some(rebuild(Node::List(items, bracket, separator), body))
 }
 
 /// The names a function definition's body assigns: `hue = …` in `def hsv(h, s, v) {…}`; none for other declarations

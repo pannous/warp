@@ -155,8 +155,9 @@ pub(super) struct Loader<'a> {
 	pub(super) wasm_modules: Vec<String>,
 	/// the definitions of the standard modules used: the program gets those it calls (with_needed_definitions)
 	pub(super) std_definitions: Vec<Node>,
-	/// the program's top-level variables: a module word of the same name is renamed apart in the module (shadowed_apart)
-	pub(super) program_variables: HashSet<String>,
+	/// the program's top-level variables and own functions: a module word of the same name is renamed apart in the module
+	/// (shadowed_apart)
+	pub(super) program_words: ProgramWords,
 	/// whether a standard module's source is being loaded: its `use`s are its own, not the program's
 	pub(super) inside_std_module: bool,
 	/// the standard modules the program (or a file module) uses, and those only standard modules use (hidden_apart)
@@ -175,7 +176,7 @@ impl<'a> Loader<'a> {
 			scope: None,
 			wasm_modules: vec![],
 			std_definitions: vec![],
-			program_variables: HashSet::new(),
+			program_words: ProgramWords::default(),
 			inside_std_module: false,
 			program_std_modules: HashSet::new(),
 			std_modules_of_std_modules: HashSet::new(),
@@ -489,7 +490,7 @@ impl<'a> Loader<'a> {
 		Ok(match import {
 			Import::Use => {
 				let declarations =
-					shadowed_apart(statements.into_iter().filter(is_declaration).collect(), &self.program_variables);
+					shadowed_apart(statements.into_iter().filter(is_declaration).collect(), &self.program_words);
 				crate::compiler::compile_context::change(|context| {
 					context.module_definitions.extend(declarations.iter().filter_map(name_declared_by))
 				});
