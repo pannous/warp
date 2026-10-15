@@ -216,13 +216,10 @@ impl WasmGcEmitter {
 						#[rustfmt::skip]
 						Self::emit_list(f, &[
 							I::I32And, I::If(BlockType::Empty),
-								I::Block(BlockType::Result(node_ref)),
-									I::LocalGet(0), I::LocalGet(1),
+								I::LocalGet(0), I::LocalGet(1),
 						]);
 						s.call(f, "list_concat");
-						Self::emit_list(f, &[I::BrOnNonNull(0)]);
-						s.call(f, "new_empty");
-						Self::emit_list(f, &[I::End, I::Return, I::End]);
+						Self::emit_list(f, &[I::Return, I::End]);
 						// two texts (or characters): their concatenation, `await a + await b` of two text tasks
 						let is_text = |f: &mut Function, operand: u32| {
 							s.emit_field(f, operand, 0);
@@ -520,7 +517,6 @@ impl WasmGcEmitter {
 				self.emit_node_instructions(func, left);
 				self.emit_node_instructions(func, right);
 				self.emit_call(func, "list_concat");
-				func.instruction(&I::RefAsNonNull);
 				true
 			}
 			kind => self.emit_arithmetic_type_error(func, left, op, right, kind),

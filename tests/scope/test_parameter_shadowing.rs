@@ -28,7 +28,7 @@ chord(left, right, t) := for i in 1 to #left {
 	right#i = 0.4 * sin(2 * pi * 392 * t)
 }
 play(chord, 0.1s)
-save sound as \"SONG\"",
+save sound as: \"SONG\"",
 	);
 	assert_eq!(seconds, "0.2");
 	assert!(samples.iter().any(|&sample| sample != 0), "the signals sound");

@@ -233,18 +233,39 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// `is_type(x, "Circle")` of a declared class, x statically a number, text or symbol
+	/// A type test x can never pass by its static kind, alone or as a part of `a and b`: `is_type(x, "Circle")` of a
+	/// declared class, x a number, text or symbol; `is_type(x, "text")` of a list x, as overloads.rs dispatches
+	/// `f(g(), 1)` to `if is_type(t, "text") then f·text(t, 1) else …`, whose dead call of a list t would be refused
 	fn never_an_instance(&self, condition: &Node) -> bool {
-		let Node::List(items, _, _) = last_statement(condition).drop_meta() else {
-			return false;
+		let items = match last_statement(condition).drop_meta() {
+			Node::Key(left, Op::And, right) => return self.never_an_instance(left) || self.never_an_instance(right),
+			Node::List(items, _, _) => items,
+			_ => return false,
 		};
 		let [head, subject, spec] = items.as_slice() else {
 			return false;
 		};
-		let is_class_test = head.drop_meta().name() == crate::words::IS_TYPE
-			&& matches!(spec.drop_meta(), Node::Text(class) if self.ctx.type_registry.get_by_name(class).is_some());
-		is_class_test
-			&& matches!(self.get_type(subject), Kind::Int | Kind::Float | Kind::Text | Kind::Symbol | Kind::Codepoint)
+		let Node::Text(spec) = spec.drop_meta() else {
+			return false;
+		};
+		if head.drop_meta().name() != crate::words::IS_TYPE {
+			return false;
+		}
+		let kind = self.get_type(subject);
+		let plain = matches!(kind, Kind::Int | Kind::Float | Kind::Text | Kind::Symbol | Kind::Codepoint);
+		let class_or_map = self.ctx.type_registry.get_by_name(spec).is_some()
+			|| crate::type_tests::canonical_spec_word(spec) == crate::words::MAP_WORD;
+		if class_or_map {
+			return plain;
+		}
+		// a number may be a bool or a ratio at run time: only a test of no number kind is dead for it
+		let possible = match kind {
+			Kind::Int | Kind::Float => [Kind::Int as i64, Kind::Float as i64, crate::type_kinds::BOOL_MASK_BIT],
+			Kind::Text | Kind::Codepoint => [Kind::Text as i64, Kind::Codepoint as i64, Kind::Text as i64],
+			Kind::List => [Kind::List as i64; 3],
+			_ => return false,
+		};
+		crate::type_tests::runtime_kind_mask(spec).is_some_and(|mask| possible.iter().all(|bit| mask & 1 << bit == 0))
 	}
 
 	/// Emit while loop: (while condition) do body

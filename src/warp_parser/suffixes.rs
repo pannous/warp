@@ -137,14 +137,34 @@ impl WarpParser {
 		// `while i < count t {…}`: a block after an operand's argument is the body, as after a loop header's
 		let outer_header = self.in_for_header;
 		self.in_for_header = outer_header || !applies_otherwise;
-		let arg = self.parse_expr(argument_bp);
+		let arg = self.labelled_argument(argument_bp).unwrap_or_else(|| self.parse_expr(argument_bp));
 		self.in_for_header = outer_header;
 		if arg == Empty && self.pos == start {
 			return None; // an ø or [] written there is the argument: `x = sum []`
 		}
 		let arg = self.cast_argument(lhs, arg, argument_bp);
+		// `s + f 2 each: 3`: the labelled arguments after it are the call's too, as at statement level
+		let mut call = vec![lhs.clone(), arg];
+		while let Some(labelled) = self.labelled_argument(argument_bp) {
+			call.push(labelled);
+		}
+		Some(Node::List(call, Bracket::None, Separator::Space))
+	}
 
-		Some(Node::List(vec![lhs.clone(), arg], Bracket::None, Separator::Space))
+	/// `r = move 1 from: 10 to: 3`: a preposition with a colon and a blank after it labels the next argument, also where
+	/// the call is an operand (decision labels-calls), as `move 1 from: 10` labels it as a statement
+	fn labelled_argument(&mut self, argument_bp: u8) -> Option<Node> {
+		let blanks = (0..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let word = self.word_at(blanks);
+		let width = blanks + word.chars().count();
+		let labels = self.peek_char(width) == ':' && matches!(self.peek_char(width + 1), ' ' | '\t');
+		if !labels || !crate::type_name_matching::is_label_word(&Node::Symbol(word.clone())) {
+			return None;
+		}
+		self.advance_by(width + 1);
+		self.skip_spaces();
+		let value = self.parse_expr(argument_bp);
+		Some(Node::Key(Box::new(Node::Symbol(word)), Op::Colon, Box::new(value)))
 	}
 
 	/// `o = f 2.2 as int`: the cast belongs to the argument, f(2.2 as int), as in the statement `f 2.2 as int` and as

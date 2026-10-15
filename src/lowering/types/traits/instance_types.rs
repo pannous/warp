@@ -204,12 +204,15 @@ impl InstanceTypes {
 		self.registry.types().iter().any(|type_def| type_def.fields.iter().any(|field| field.name == name))
 	}
 
-	/// Does `list` hold instances of a declared type with the field `name`: `people.name` then reads it of each
-	pub fn is_element_field(&self, list: &Node, name: &str) -> bool {
+	/// The field `name` names when `list` holds instances of a declared type with it, also in the plural: `people.name`
+	/// and `people.names` then read name of each
+	pub fn element_field(&self, list: &Node, name: &str) -> Option<String> {
 		let Some(Shape::ListOf(type_name)) = self.shape(list) else {
-			return false;
+			return None;
 		};
-		self.has_field(&type_name, name)
+		let type_def = self.registry.get_by_name(&type_name)?;
+		let fields: Vec<&str> = type_def.fields.iter().map(|field| field.name.as_str()).collect();
+		crate::extensions::strings::named_or_plural(&fields, name).map(String::from)
 	}
 
 	/// Is `node` known to be an instance of a declared type with the field `name`
