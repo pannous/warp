@@ -1,0 +1,6 @@
+// times held in variables (card variable-time)
+x = 2 hours
+print x*3 == 6 hours
+print x < 3 hours
+start = now
+print (start + 1 hour).hour

@@ -3031,6 +3031,7 @@ PASSED:
   ✓ operators::test_truthiness_of_objects::empty_values_are_falsy
   ✓ operators::test_tuple_comparison_warning::a_parenthesized_tuple_comparison_does_not_warn
   ✓ operators::test_tuple_comparison_warning::a_tuple_compared_with_a_bare_comma_list_warns
+  ✓ operators::test_xor_negated_group::xor_of_a_negated_group_combines_bits
   ✓ parser::test_as_prefixed_name::as_still_casts
   ✓ parser::test_as_prefixed_name::def_of_an_as_prefixed_name
   ✓ parser::test_attributes::assigning_an_at_key_annotates_any_node_in_insertion_order
@@ -3661,6 +3662,8 @@ PASSED:
   ✓ text::test_cast_to_string::a_list_literal_as_string_is_its_text
   ✓ text::test_cast_to_string::a_variable_holding_an_int_list_as_string_is_its_text
   ✓ text::test_cast_to_string::an_object_literal_as_string_is_its_text
+  ✓ text::test_char_parameter_type::test_a_parameter_holding_more_or_fewer_characters_is_a_text
+  ✓ text::test_char_parameter_type::test_a_parameter_holding_one_character_is_a_codepoint
   ✓ text::test_character_arithmetic::a_character_is_no_number_in_arithmetic
   ✓ text::test_character_arithmetic::ord_and_comparisons_keep_code_points
   ✓ text::test_character_comparison::test_character_element_of_text_compares
@@ -4380,6 +4383,10 @@ PASSED:
   ✓ types::test_time_values_at_run_time::test_times_compare_at_run_time
   ✓ types::test_time_values_at_run_time::test_zoned_fields_at_run_time
   ✓ types::test_time_values_at_run_time::test_zoned_times_and_durations_compare_at_run_time
+  ✓ types::test_time_variables::a_duration_variable_compares_by_value
+  ✓ types::test_time_variables::a_field_of_a_grouped_time_variable
+  ✓ types::test_time_variables::a_parameter_named_like_a_time_variable_is_no_time
+  ✓ types::test_time_variables::durations_with_the_same_days_order_by_their_exact_part
   ✓ types::test_time_zones_at_run_time::test_a_calendar_day_keeps_the_wall_time_across_a_transition
   ✓ types::test_time_zones_at_run_time::test_a_day_landing_on_a_skipped_wall_time_is_rejected
   ✓ types::test_time_zones_at_run_time::test_a_local_time_in_a_zone_resolves
@@ -5514,4 +5521,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5509 passed, 0 failed, 5509 total tested
+13 ignored, 5516 passed, 0 failed, 5516 total tested

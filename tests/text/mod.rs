@@ -4,6 +4,7 @@ mod test_backtick_templates;
 mod test_brace_hole; // card brace-hole
 mod test_case_table;
 mod test_cast_to_string;
+mod test_char_parameter_type; // chars-codepoints follow-up
 mod test_character_arithmetic;
 mod test_character_comparison;
 mod test_chars_codepoints; // card chars-codepoints
