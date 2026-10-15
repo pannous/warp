@@ -319,6 +319,11 @@ pub(crate) fn called_names(statements: &[Node]) -> HashSet<String> {
 /// The names with the library words they spell (`isdigit` → is_digit, `round` → round_to) and the prelude names of
 /// those (`prelude·is_digit`): library_words, which writes them so, runs after the modules are resolved
 pub(crate) fn with_library_words(names: HashSet<String>) -> HashSet<String> {
+	// `prelude·random_between` of a pass that wrote the call qualified already (host::lower_random_forms)
+	let prelude_qualifier = format!("{PRELUDE_MODULE}{QUALIFIER}");
+	let unqualified: Vec<String> =
+		names.iter().filter_map(|name| name.strip_prefix(&prelude_qualifier)).map(String::from).collect();
+	let names: HashSet<String> = names.into_iter().chain(unqualified).collect();
 	let spelled: Vec<&str> = names.iter().flat_map(|name| crate::library_words::words_spelled_by(name)).collect();
 	let qualified: Vec<String> =
 		names.iter().map(String::as_str).chain(spelled.iter().copied()).filter_map(prelude_name).collect();

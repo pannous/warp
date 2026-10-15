@@ -24,6 +24,7 @@ mod test_fixits;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_footguns;
 mod test_format_cli; // card beautify-cli
+mod test_format_files_only; // cards fix-rewrote, fix-laid
 #[cfg(feature = "native")]
 // wasmtime's fuel: the browser runs without it, stopped by a timer (playground.js RUN_TIMEOUT_MS)
 mod test_fuel_default; // card fuel-default

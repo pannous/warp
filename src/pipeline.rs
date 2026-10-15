@@ -205,6 +205,8 @@ const DECLARATION_PASSES: &[Pass] = &[
 	crate::modules::insert_module_classes,
 	// `type Name = string` resolved in `name: Name` before class_methods reads the fields
 	crate::lowering::type_aliases::lower,
+	// `f(t: type)` takes the type value itself (type_parameters.rs), before class_methods reads typed parameters
+	crate::lowering::type_parameters::lower,
 	// `f(s:Shape)` of a trait takes any conforming instance: untyped before class_methods reads typed parameters
 	crate::lowering::traits::lower_trait_parameters,
 	// `stored people: [Person]`: the table's rows, inserts and field changes written through
@@ -246,6 +248,8 @@ const DECLARATION_PASSES: &[Pass] = &[
 
 /// The used modules join the program (modules::resolve), then the passes that read their words again
 const MODULE_PASSES: &[Pass] = &[
+	// `random(1, 6)`, `random int`: the prelude words they call, which resolve then loads, and only those
+	crate::host::lower_random_forms,
 	crate::modules::resolve,
 	// `fourty_two.exports`, `dir(fourty_two)` of an imported core module, once resolve found its file (reflection.rs)
 	crate::lowering::reflection::lower_module_words,
