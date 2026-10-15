@@ -65,3 +65,14 @@ fn random_into_a_declared_type() {
 	is!("float z = random 1..10; type z", "float");
 	is!("z: float = random(1, 10); type z", "float");
 }
+
+/// The prelude words the random forms lower to, called by themselves
+#[test]
+fn the_random_prelude_words() {
+	is!("use prelude; random_until(1, 2)", 1);
+	is!("use prelude; random_between(3, 3)", 3);
+	is!("use prelude; x = random_fraction(1, 2); x >= 1 and x < 2", true);
+	is!("use prelude; type random_int()", "int");
+	is!("use prelude; type random_bool()", "bool");
+	is!("use prelude; type random_codepoint()", "codepoint");
+}
