@@ -71,3 +71,5 @@ confirms that `claude --remote-control` in detached tmux adds each session as it
   generating at the time). Force-quit + reopen is worth a try, but it doesn't bring every session back.
 - Workaround in place: ~/dev/bin/claude-remote.sh appends every spawned session's URL to
   iCloud Drive/claude-sessions.html (Files app on the iPad → tap the file → tap a link).
+- Later the research session did show up after the restart (maybe just a delay). Another place to look: tap
+  "All chats" in the app; sessions missing from the Code list can show up there.
