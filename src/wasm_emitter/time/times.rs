@@ -5,6 +5,7 @@
 
 use super::super::layout::BYTE;
 use super::super::lists::list_ops::RETURNED_ERROR;
+use super::super::time::time_arithmetic::DURATION_ORDER;
 use super::super::WasmGcEmitter;
 use crate::node::Node;
 use crate::time::calendar::{
@@ -606,15 +607,14 @@ impl WasmGcEmitter {
 		self.emit_trap_detail(func, &Node::Text(MISMATCHED_TIMES.to_string()));
 		self.emit_runtime_error(func, RETURNED_ERROR);
 		func.instruction(&I::End);
-		// durations order by their exact part only when their days and months, kept in the kind word, are the same
 		self.emit_time_form(func, first);
-		Self::emit_list(func, &[I::I64Const(TimeForm::Duration as i64), I::I64Eq]);
-		self.emit_field(func, first, 0);
-		self.emit_field(func, second, 0);
-		Self::emit_list(func, &[I::I64Ne, I::I32And, I::If(BlockType::Empty)]);
-		self.emit_trap_detail(func, &Node::Text(crate::time::calendar::UNORDERED_DURATIONS.to_string()));
-		self.emit_runtime_error(func, RETURNED_ERROR);
-		func.instruction(&I::End);
+		Self::emit_list(func, &[I::I64Const(TimeForm::Duration as i64), I::I64Eq, I::If(BlockType::Empty)]);
+		for duration in [first, second] {
+			self.emit_field(func, duration, 0);
+			self.emit_time_position(func, duration);
+		}
+		self.call(func, DURATION_ORDER);
+		Self::emit_list(func, &[I::Return, I::End]);
 		for comparison in [I::I64GtS, I::I64LtS] {
 			self.emit_time_position(func, first);
 			self.emit_time_position(func, second);

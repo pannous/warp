@@ -5,7 +5,8 @@
 web/playground/tests.html with agent-browser and prints the results like libtest (exit code 101 on a failure).
 `test_in_browser.py --examples [name…]` runs the tour (examples.js) in the playground page itself, built by build.sh:
 each example's value and printed output must be the ones it names (a broken example fails CI, .github/workflows/pages.yml).
-`test_in_browser.py --examples --url https://warp.pannous.com/ [name…]` checks the tour of a deployed playground instead.
+`test_in_browser.py --examples --url https://warp.pannous.com/ [--site _site] [name…]` checks the tour of a deployed
+playground instead, with --site once it serves those built files.
 `test_in_browser.py --examples --firefox [--url …|--site …] [name…]` runs the same check in headless Firefox
 (firefox_driver.mjs, WebDriver BiDi) instead of agent-browser's Chrome; `--safari` in Safari (safaridriver, classic
 WebDriver: macOS CI runners, after `sudo safaridriver --enable`; its console is not watched).
@@ -28,6 +29,10 @@ PER_WORKER = os.environ.get("WARP_BROWSER_TEST_PER_WORKER")  # tests before a wo
 SESSION = f"warp-browser-tests-{os.getpid()}"
 LAUNCH_ATTEMPTS = 3
 LAUNCH_SECONDS = 90  # a page that is not loaded by then did not start: relaunch, loudly
+# `--url … --site _site`: the deployed site is checked once it serves the built files, every one of them (card
+# playground-verify: right after a deploy the CDN served a mix of old and new files, 58 examples failing)
+DEPLOYED_WAIT_SECONDS = 600
+DEPLOYED_POLL_SECONDS = 10
 POLL_SECONDS = 3
 BINARY_PATH = "/__tests__.wasm"
 INCLUDE_PREFIX = "/__include__/"
@@ -887,6 +892,29 @@ def chrome_allowed():
 	return bool(os.environ.get("CI")) or sys.argv[1:2] == ["--serve"] or any(name in sys.argv[2:] for name in WEBDRIVERS)
 
 
+def live_differences(url, site):
+	"""the built files at the top of `site` that `url` serves otherwise, or not at all"""
+	def served(name):
+		try:
+			with urllib.request.urlopen(urllib.parse.urljoin(url, name), timeout=30) as reply:
+				return reply.read()
+		except OSError as failure:
+			return failure
+	built = sorted(name for name in os.listdir(site) if os.path.isfile(os.path.join(site, name)))
+	return [name for name in built if served(name) != open(os.path.join(site, name), "rb").read()]
+
+
+def wait_until_deployed(url, site):
+	"""waits until `url` serves the files built into `site`; fails naming those still old after DEPLOYED_WAIT_SECONDS"""
+	deadline = time.time() + DEPLOYED_WAIT_SECONDS
+	while differing := live_differences(url, site):
+		if time.time() > deadline:
+			sys.exit(f"{url} still serves other files than the build after {DEPLOYED_WAIT_SECONDS} s: {', '.join(differing)}")
+		print(f"     waiting for the deploy: {url} serves {len(differing)} files otherwise ({', '.join(differing[:5])})")
+		time.sleep(DEPLOYED_POLL_SECONDS)
+	print(f"     {url} serves the built files")
+
+
 def main():
 	# each verdict shows in a CI log as it comes, so a stuck run shows where it stuck (card deploy-firefox-hang)
 	sys.stdout.reconfigure(line_buffering=True)
@@ -898,8 +926,12 @@ def main():
 		names = [name for name in sys.argv[2:] if name not in WEBDRIVERS]
 		chosen = [WEBDRIVERS[name] for name in sys.argv[2:] if name in WEBDRIVERS]
 		webdriver = chosen[0]() if chosen else None
-		place = {names[0]: names[1]} if names[:1] in (["--url"], ["--site"]) else {}
-		check_examples(names[2:] if place else names, place.get("--url"), place.get("--site"))
+		place = {}
+		while names[:1] in (["--url"], ["--site"]):
+			place[names[0]], names = names[1], names[2:]
+		if "--url" in place and "--site" in place:
+			wait_until_deployed(place["--url"], place.pop("--site"))
+		check_examples(names, place.get("--url"), place.get("--site"))
 	if sys.argv[1:2] == ["--serve"]:
 		binary = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else None
 		serve(binary)

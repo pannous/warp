@@ -2,6 +2,7 @@
 // (notes/orm.md): loading 10k rows with a required key, and filtering 10k loaded rows, take linear time
 use crate::is;
 use crate::lists::test_int_map::{timed, ENTRIES};
+use warp::node::Node;
 use warp::wasm_emitter::eval;
 
 const CLASSES: &str = "class Team{name: text}\nclass Person{name: text; age: int; team: Team}";
@@ -12,11 +13,13 @@ fn program(tables: &str, rest: &str) -> String {
 	)
 }
 
+/// the tables filled; a seed that failed says why (card flaky-browser: once 0 rows in the browser suite, cause unknown)
 fn seeded(tables: &str) {
-	eval(&program(
+	let seed = eval(&program(
 		tables,
 		&format!("for i in 1 to {ENTRIES} {{ t = Team(\"t\"); teams.add(t); people.add(Person(\"p\", i, t)) }}"),
 	));
+	assert!(!matches!(seed.drop_meta(), Node::Error(_)), "seeding {tables} failed: {}", seed.serialize());
 }
 
 #[test]

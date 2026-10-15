@@ -3431,6 +3431,16 @@ PASSED:
   ✓ programs::test_sound_at::beats_place_a_block
   ✓ programs::test_sound_at::the_silence_before_stays_and_the_voice_goes_on
   ✓ programs::test_sound_at::the_words_it_lowers_to
+  ✓ programs::test_sound_buses::a_changed_effect_applies_from_the_voices_moment
+  ✓ programs::test_sound_buses::a_reverb_bus_rings_after_its_last_sound
+  ✓ programs::test_sound_buses::a_sound_outside_the_bus_stays_dry
+  ✓ programs::test_sound_buses::a_sound_sent_to_a_delay_bus_echoes_where_it_was_silent
+  ✓ programs::test_sound_buses::a_task_and_the_program_share_a_bus
+  ✓ programs::test_sound_buses::an_effect_set_again_keeps_its_echoes
+  ✓ programs::test_sound_buses::an_effect_set_again_keeps_its_place_in_the_chain
+  ✓ programs::test_sound_buses::out_restores_the_bus_before
+  ✓ programs::test_sound_buses::the_mixer_changes_a_bus_at_its_frame
+  ✓ programs::test_sound_buses::the_mixer_runs_a_bus_on_its_sounds
   ✓ programs::test_sound_clock::sounds_queue_on_the_audio_clock
   ✓ programs::test_sound_clock::stop_sound_empties_the_queue
   ✓ programs::test_sound_clock::waiting_headless_takes_no_time
@@ -4080,6 +4090,11 @@ PASSED:
   ✓ types::test_dispatch::the_method_closest_at_every_position_wins
   ✓ types::test_dispatch::the_most_specific_method_wins
   ✓ types::test_dispatch::two_equally_specific_methods_are_an_ambiguity_error
+  ✓ types::test_duration_comparison::test_a_duration_comparison_prints_a_truth
+  ✓ types::test_duration_comparison::test_an_order_that_depends_on_the_date_is_an_error
+  ✓ types::test_duration_comparison::test_bounds_that_hold_on_every_date
+  ✓ types::test_duration_comparison::test_durations_order
+  ✓ types::test_duration_comparison::test_durations_order_at_run_time
   ✓ types::test_element_field_writes::a_character_stored_into_a_list_of_unknown_type_stays_a_character
   ✓ types::test_element_field_writes::a_field_of_a_list_element_changes
   ✓ types::test_element_field_writes::a_list_field_of_an_element_checks_its_items
@@ -5524,4 +5539,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5519 passed, 0 failed, 5519 total tested
+13 ignored, 5534 passed, 0 failed, 5534 total tested
