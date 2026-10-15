@@ -858,9 +858,13 @@ impl Lowering {
 			.filter(|_| is_called || counting_method(name, &self.context).is_none())
 		{
 			let word_call = self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false);
-			// `m.first` of a parameter or loop element given `{first: 9}` (card map-field)
+			// `m.first` of a parameter or loop element given `{first: 9}` (card map-field). Not a map's own word
+			// (`m.keys`), nor a word whose list or text result the code after it types (`it.chars.map(…)`): a field
+			// read there would hide that type
 			let is_element = matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _));
-			if !is_called && !has_arguments && (is_element || self.may_hold_object(receiver)) {
+			let keeps_word = crate::members::MAP_MEMBERS.contains(&name.as_str())
+				|| result_kind(word).or_else(|| result_kind(name)).is_some();
+			if !is_called && !has_arguments && !keeps_word && (is_element || self.may_hold_object(receiver)) {
 				return Some(self.map_field_or(receiver, name, word_node, word_call));
 			}
 			return Some(word_call);
