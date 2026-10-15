@@ -34,7 +34,7 @@ struct InstanceCalls {
 	functions: Vec<String>,
 	/// The types defining `call`
 	callable: Vec<String>,
-	/// The untyped parameters of the definitions being rewritten, innermost last
+	/// The untyped parameters of the definitions and lambdas being rewritten, innermost last
 	untyped: RefCell<Vec<Vec<String>>>,
 }
 
@@ -47,6 +47,13 @@ impl InstanceCalls {
 				let body = self.types.in_definition(&head, || self.rewrite(*body));
 				self.untyped.borrow_mut().pop();
 				Node::Key(head, op, Box::new(body))
+			}
+			// `d => d(5)`, `(a, d) => a + d(1)`: a lambda's parameters are as untyped as a definition's
+			Node::Key(parameters, Op::Arrow, body) => {
+				self.untyped.borrow_mut().push(lambda_parameters(&parameters));
+				let body = self.rewrite(*body);
+				self.untyped.borrow_mut().pop();
+				Node::Key(parameters, Op::Arrow, Box::new(body))
 			}
 			// `m.room(signal)`: the field room applied, not a method of m
 			Node::Key(receiver, Op::Dot, member) => {
@@ -82,7 +89,7 @@ impl InstanceCalls {
 				// a call, `room(signal)`, `signal |> room`: not a list `[a, b]`, a tuple `(a, b)` or the words of a
 				// phrase, `room in rooms`
 				let is_call = bracket == Bracket::Round && matches!(separator, Separator::None | Separator::Space);
-				match is_call.then(|| self.called(&items)).flatten() {
+				match is_call.then(|| self.called(&items)).flatten().or_else(|| self.result_called(&items, &bracket)) {
 					Some(called) => called,
 					None => Node::List(items, bracket, separator),
 				}
@@ -110,7 +117,28 @@ impl InstanceCalls {
 		}
 	}
 
-	/// A head of a type known only at run time: an untyped parameter, a field or item of a value of unknown type
+	/// `mk()(2)`, the call's result applied (parsed as the call and its arguments juxtaposed): `call(mk(), 2)` of an
+	/// instance, the dispatch on the result where its shape is unknown
+	fn result_called(&self, items: &[Node], bracket: &Bracket) -> Option<Node> {
+		let [head, Node::List(arguments, Bracket::Round, _)] = items else {
+			return None;
+		};
+		let is_call = matches!(head.drop_meta(), Node::List(called, Bracket::Round, Separator::None)
+			if matches!(called.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.functions.contains(name)));
+		if *bracket == Bracket::Square || !is_call || arguments.is_empty() {
+			return None;
+		}
+		match self.types.shape(head) {
+			Some(Shape::Instance(type_name)) => {
+				self.callable.contains(&type_name).then(|| self.call_of(head, arguments))
+			}
+			Some(Shape::ListOf(_)) => None,
+			None => Some(self.dispatched(head, arguments)),
+		}
+	}
+
+	/// A head of a type known only at run time: an untyped parameter of a definition or lambda, a field or item of a
+	/// value of unknown type
 	fn is_unknown(&self, head: &Node) -> bool {
 		match head.drop_meta() {
 			Node::Symbol(name) => self.untyped.borrow().iter().flatten().any(|parameter| parameter == name),
@@ -124,7 +152,14 @@ impl InstanceCalls {
 	}
 
 	/// `if instance_of(b, "Bus") then call(b, signal) else b(signal)`, a case per type defining `call`
+	/// The head is evaluated once: `mk()(2)` binds `callee·1 = mk()` first
 	fn dispatched(&self, head: &Node, arguments: &[Node]) -> Node {
+		if !matches!(head.drop_meta(), Node::Symbol(_)) {
+			let callee = Node::Symbol(format!("callee·{}", crate::lowering::nodes::fresh_number()));
+			let binding = key(callee.clone(), Op::Assign, head.clone());
+			let dispatch = self.dispatched(&callee, arguments);
+			return Node::List(vec![binding, dispatch], Bracket::Round, Separator::Semicolon);
+		}
 		let as_function = parens([vec![head.clone()], arguments.to_vec()].concat());
 		// `f(x, i)` of a library's untyped f is no `call(b: Bus, signal)`: only a call taking these arguments is tried
 		let takes_these =
@@ -149,6 +184,15 @@ impl InstanceCalls {
 }
 
 /// `through(b, gain = 1)`: b and gain, not the typed `s: Bus` or `n: int`
+/// `d => …`, `(a, d) => …`: a and d
+fn lambda_parameters(parameters: &Node) -> Vec<String> {
+	match parameters.drop_meta() {
+		Node::Symbol(name) => vec![name.clone()],
+		Node::List(items, _, _) => items.iter().flat_map(lambda_parameters).collect(),
+		_ => vec![],
+	}
+}
+
 fn untyped_parameters(head: &Node) -> Vec<String> {
 	let parameters = definition_head(head).map(|items| items[1..].to_vec()).unwrap_or_default();
 	parameters

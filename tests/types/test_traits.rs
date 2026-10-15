@@ -160,4 +160,10 @@ fn test_an_instance_of_a_callable_type_is_called_wherever_it_comes_from() {
 	is!(&with(DOUBLER, "through(d) := 5 |> d; through(Doubler(3))"), 15);
 	is!(&with(DOUBLER, "through(d) := d(5); through(x => x + 1)"), 6);
 	is!(&with(DOUBLER, "ds = [Doubler(2), Doubler(3)]; count(ds)"), 2);
+	// any head of unknown shape dispatches at run time: a lambda's parameter, a call's result (reviewer round 3)
+	is!(&with(DOUBLER, "f = d => d(5); f(Doubler(3))"), 15);
+	is!(&with(DOUBLER, "ds = [Doubler(2), Doubler(3)]; ds.fold(0, (a, d) => a + d(1))"), 5);
+	is!(&with(DOUBLER, "ds = [Doubler(2), Doubler(3)]; ds.reduce((a, d) => d(1))"), 3);
+	is!(&with(DOUBLER, "mk() := Doubler(6); mk()(2)"), 12);
+	is!(&with(DOUBLER, "add(n) := x => x + n; add(1)(2)"), 3);
 }
