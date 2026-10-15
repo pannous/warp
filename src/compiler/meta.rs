@@ -13,6 +13,10 @@ pub struct LineInfo {
 	/// The module file the position is in, None for the program itself (card module-error-file)
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub file: Option<String>,
+	/// A unit word the parser joined to the number before it (`3m`, `3 m`, not `3 * m`): where the program names a
+	/// variable so, the unit wins there (card variable-named-like)
+	#[serde(default, skip_serializing_if = "std::ops::Not::not")]
+	pub after_number: bool,
 }
 
 /// How much of its source line a position keeps in debug builds
@@ -30,6 +34,7 @@ impl LineInfo {
 			#[cfg(debug_assertions)]
 			line: line.chars().take(DEBUG_LINE_LENGTH).collect(),
 			file: crate::compiler::compile_context::read(|context| context.parsed_file.clone()),
+			after_number: false,
 		}
 	}
 

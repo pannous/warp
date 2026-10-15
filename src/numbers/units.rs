@@ -180,9 +180,8 @@ fn is_quantity(node: &Node) -> bool {
 fn is_juxtaposed(node: &Node) -> bool {
 	let mut layer = node;
 	while let Node::Meta { node: inner, .. } = layer {
-		if let Some(info) = layer.get_lineinfo() {
-			let at = (info.line_nr, info.column);
-			return crate::compiler::compile_context::read(|context| context.juxtaposed_units.contains(&at));
+		if let Some(position) = layer.get_lineinfo() {
+			return position.after_number;
 		}
 		layer = inner;
 	}
