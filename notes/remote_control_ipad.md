@@ -61,7 +61,7 @@ confirms that `claude --remote-control` in detached tmux adds each session as it
 - No documented cap on the number of sessions listed, and no documented sync delay.
 
 ## Possible follow-ups for us
-- claude-remote.sh could pass `--name <role>` (if it doesn't already) and append each printed URL to a list file
-  the user can open on the iPad.
+- claude-remote.sh already passes `--name`/`--remote-control <tmux name>`. It could also append each printed URL
+  to a list file the user can open on the iPad.
 - If it keeps happening: file a fresh issue that references #78601 and #28402 (stale-closed). Include the CLI version,
   the session count, and whether the missing sessions had compacted.
