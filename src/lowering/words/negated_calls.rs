@@ -3,7 +3,7 @@
 use crate::analyzer::{extract_user_functions_inner, is_type_call_word};
 use crate::compiler::context::{Context, UserFunctionDef};
 use crate::lowering::nodes::children_rewritten;
-use crate::node::{parens, Node};
+use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
 
@@ -43,10 +43,7 @@ fn negate_calls(
 		Node::Symbol(name) if functions.contains_key(name) => {
 			functions.get(name).is_some_and(|function| !function.params.is_empty())
 		}
-		Node::Symbol(name) if op == Op::Hash => {
-			(crate::numbers::real::FUNCTIONS.contains(&name.as_str()) || PRINT_WORDS.contains(&name.as_str()))
-				&& !bound.contains(name)
-		}
+		Node::Symbol(name) if op == Op::Hash => takes_one_value(name) && !bound.contains(name),
 		Node::Symbol(name) => is_builtin_callable(name) && !bound.contains(name),
 		_ => false,
 	};
@@ -59,17 +56,42 @@ fn negate_calls(
 				Node::Key(Box::new(Node::Empty), prefix, Box::new(negate_calls(*argument, functions, bound, locals)));
 			parens(vec![*function, argument])
 		}
+		// `-sin 0` negates the call `sin 0`, not the word sin (card braceless-calls)
+		Node::List(items, bracket @ Bracket::None, separator @ Separator::Space)
+			if items.len() > 1 && negated_word(&items[0]).is_some_and(|function| is_function(function, Op::Sub)) =>
+		{
+			let mut items = items;
+			items[0] = negated_word(&items[0]).expect("guarded").clone();
+			let call = negate_calls(Node::List(items, bracket, separator), functions, bound, locals);
+			Node::Key(Box::new(Node::Empty), Op::Neg, Box::new(call))
+		}
 		other => children_rewritten(other, |child| negate_calls(child, functions, bound, locals)),
 	}
 }
 
-/// A built-in word that applies to the value after it: a real function, print, a rounding word, a type, a library word of one value
-fn is_builtin_callable(name: &str) -> bool {
-	crate::numbers::real::FUNCTIONS.contains(&name)
-		|| PRINT_WORDS.contains(&name)
+/// The word `w` of `-w`
+fn negated_word(node: &Node) -> Option<&Node> {
+	match node.drop_meta() {
+		Node::Key(nothing, Op::Neg, word) if nothing.is_empty_node() && matches!(word.drop_meta(), Node::Symbol(_)) => {
+			Some(word)
+		}
+		_ => None,
+	}
+}
+
+/// A built-in word that applies to the value after it: print, a rounding word, a type, a library word of one value
+/// (`sin`, `floor`, `reverse`)
+pub(crate) fn is_builtin_callable(name: &str) -> bool {
+	takes_one_value(name)
 		|| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name)
 		|| is_type_call_word(name)
 		|| crate::library_words::is_operand_word(name)
+}
+
+/// print or a library word of one value: it also counts `#xs` after it (`print #xs`, `sin#2`); a type does not
+/// (`int#101` is the subscript of a typed array)
+fn takes_one_value(name: &str) -> bool {
+	crate::lowering::library_signatures::typed_first_arity(name) == Some(1) || PRINT_WORDS.contains(&name)
 }
 
 /// The name before a minus written apart (warp_parser::SpacedMinus)

@@ -13,6 +13,7 @@ mod test_code_golf; // card code-golf
 mod test_data_structure_fixes;
 mod test_draw;
 mod test_draw_label; // card paint-text
+mod test_file_spectrum; // card gpu-visualizer-mp3
 mod test_gpu_draw; // card gpu-draw
 mod test_hints_toggle; // card hints-toggle
 mod test_json_parser_fixes;
@@ -29,6 +30,7 @@ mod test_paint_shader; // P234
 mod test_paint_window_ends; // card exit-key
 mod test_plain_hints_when_piped;
 mod test_playground_samples;
+mod test_program_cache; // card cache-compiled-shader
 mod test_samples;
 mod test_samples_run_cleanly;
 mod test_shader_blocks; // card g_oFJc

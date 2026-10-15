@@ -633,6 +633,8 @@ fn dimension_error(op: Op, left: &Signature, right: &Signature) -> Stop {
 #[derive(Clone)]
 struct Definition {
 	parameters: Vec<String>,
+	/// `b: Bus`: each parameter as its specialisation declares it, typed unless by a unit (its body's units are resolved)
+	declared: Vec<Node>,
 	/// `t = 1s`: what a call leaving the parameter out gives
 	defaults: Vec<Option<Node>>,
 	body: Node,
@@ -648,18 +650,23 @@ impl Definition {
 fn function_definition(node: &Node) -> Option<(String, Definition)> {
 	let definition =
 		function_head(node).filter(|definition| definition.is_glued_head() && definition.plain_operator().is_some())?;
-	let (parameters, defaults) = definition
+	let (parameters, (declared, defaults)) = definition
 		.written_parameters
 		.iter()
 		.map(|parameter| match parameter.drop_meta() {
-			Node::Symbol(name) => Some((name.clone(), None)),
-			Node::Key(name, Op::Colon, _) => Some((name.name(), None)),
+			Node::Symbol(name) => Some((name.clone(), (Node::Symbol(name.clone()), None))),
+			Node::Key(name, Op::Colon, type_node) if !mentions_units(type_node) => {
+				Some((name.name(), (parameter.drop_meta().clone(), None)))
+			}
+			Node::Key(name, Op::Colon, _) => Some((name.name(), (Node::Symbol(name.name()), None))),
 			// `t = 1s`: a call leaving t out gives the default
-			Node::Key(name, Op::Assign, default) => Some((name.name(), Some(default.as_ref().clone()))),
+			Node::Key(name, Op::Assign, default) => {
+				Some((name.name(), (Node::Symbol(name.name()), Some(default.as_ref().clone()))))
+			}
 			_ => None,
 		})
-		.collect::<Option<(Vec<_>, Vec<_>)>>()?;
-	Some((definition.name.to_string(), Definition { parameters, defaults, body: definition.body.clone() }))
+		.collect::<Option<(Vec<_>, (Vec<_>, Vec<_>))>>()?;
+	Some((definition.name.to_string(), Definition { parameters, declared, defaults, body: definition.body.clone() }))
 }
 
 /// Does the code use a unit word: not as a field name (`q.s` of a field s)

@@ -47,7 +47,7 @@ const TERMINAL_CODE = /\x1b\[[0-9;?]*[A-Za-z]/g;
 const EXAMPLE_PARAMETERS = ["example", "sample"]; // ?example=fizzbuzz (or #fizzbuzz) picks a tour example or sample; the address shows the chosen one as #fizzbuzz
 const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and lines in traces and the debugger
 const DEBUG_COMPILER = "warp.debug.wasm";
-const WAV_TYPE = "audio/wav"; // render_sound's files (host-files.js wavOf)
+const WAV_TYPE = "audio/wav"; // save sound's files (host-files.js wavOf)
 const SLOW_START_PARAMETER = "slow_start"; // ?slow_start=<ms>: the worker reports ready that much later (a slow machine)
 // a starting worker silent this long is stuck (card firefox-hello-hang, three of six deploys): started again once, loudly
 const STALLED_START_MS = 60_000;
@@ -236,6 +236,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "stored") return keepValue(data.name, data.value, data.file);
 			if (data.type === "clipboard") return copyText(data.text);
 			if (data.type === "clipboard read") return pasteInto(data.shared);
+			if (data.type === "sound decode") return decodeSoundInto(data.shared, data.url, data.bytes); // task-workers.js
 			if (data.type === "page call") return answerPageCall(data.shared, data.request, starting); // task-workers.js
 			if (data.type === "failed") return failed(new Error(data.message));
 			if (data.type === "bundle") return bundled(data.bundle); // deploy.js
@@ -790,7 +791,7 @@ function showRendered(html) {
 	morphChildren(host.shadowRoot ?? renderedRoot(host), parsedHtml(html ?? ""));
 }
 
-self.programElements = () => $("rendered").shadowRoot ?? document; // task-workers.js ownerOnPage: `$who`
+self.programElements = () => $("rendered").shadowRoot ?? document; // task-workers.js ownerOnPage: `who`, `$who`
 
 // a form's submit stays inside the shadow root (it is not composed): listened to there
 function renderedRoot(host) {
@@ -1005,7 +1006,7 @@ function showVersion() {
 		title: `committed ${date}`, hidden: false });
 }
 
-// a file the program rendered (render_sound's WAV): a download link beside the wasm's, one per path, the latest bytes
+// a file the program rendered (save sound's WAV): a download link beside the wasm's, one per path, the latest bytes
 const offeredFiles = new Map();
 function offerFile(path, bytes) {
 	if (offeredFiles.has(path)) URL.revokeObjectURL(offeredFiles.get(path).href);

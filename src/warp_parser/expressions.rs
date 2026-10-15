@@ -4,6 +4,8 @@ use super::*;
 
 /// Characters that end a statement: a body cannot start with them
 pub(crate) const BODY_ENDS: [char; 7] = ['\0', ';', ',', '\n', '}', ')', ']'];
+/// A braceless argument takes arithmetic, stops at ranges and comparisons: f 3-1 > 5, sqrt 4 + 5 > 2
+const ARGUMENT_BP: u8 = Op::Add.binding_power().0;
 
 impl WarpParser {
 	/// Pratt parser: parse expression with given minimum binding power
@@ -43,19 +45,25 @@ impl WarpParser {
 			// `sort by abs.take first 1`: a glued method applies to the word, it is no operand
 			let method_follows = self.peek_char(chars) == '.' && self.peek_char(chars + 1).is_alphabetic();
 			let bare = operator_word && (self.expression_ends_after(chars) || method_follows);
-			// `sqrt(2).round(2)`: the glued parentheses are the whole operand, the method applies to the result
-			let call_with_method = operator_word
-				&& self.parenthesis_length(chars).is_some_and(|length| {
-					self.peek_char(chars + length) == '.' && self.peek_char(chars + length + 1).is_alphabetic()
-				});
+			// `sqrt(16) + 1`, `sqrt(2).round(2)`: glued parentheses are the whole operand, like a call's
+			let glued_call = operator_word && self.parenthesis_length(chars).is_some();
 			self.hint_operator(chars, true);
 			self.advance_by(chars);
 			self.skip_spaces();
 			if bare {
 				Node::Key(Box::new(Empty), op, Box::new(Empty))
-			} else if call_with_method {
+			} else if glued_call {
 				let operand = self.parse_atom();
 				self.finish_prefix(op, operand)
+			} else if operator_word {
+				// `sqrt 4 + 5` is sqrt(9): an operator word takes its braceless argument like a call (f 3-1 is f(2));
+				// `map sqrt xs`, `apply abs -3`: lowering may read the word as the function instead
+				let operand = self.parse_expr(ARGUMENT_BP);
+				let applied = self.finish_prefix(op, operand);
+				Node::Meta {
+					node: Box::new(applied),
+					data: Box::new(Node::key(crate::words::OPERATOR_WORD_MARK, Node::True)),
+				}
 			} else if chars == 1 && op == Op::Abs {
 				self.parse_norm_bars()
 			} else {
@@ -91,7 +99,6 @@ impl WarpParser {
 
 	/// The infix and suffix operators after an already parsed left operand, binding tighter than `min_bp`
 	pub(super) fn continue_expr(&mut self, mut lhs: Node, min_bp: u8) -> Node {
-		const ARGUMENT_BP: u8 = Op::Add.binding_power().0; // a braceless argument takes arithmetic, stops at ranges and comparisons: f 3-1 > 5
 		const MAX_BP_FOR_APPLICATION: u8 = Op::Mul.binding_power().1; // operand of + - * / takes a braceless call: 1 + f 3
 		const SUBSCRIPT_BP: u8 = Op::Hash.binding_power().0;
 		// Right operand of the last comparison, to chain a<b<c into a<b and b<c

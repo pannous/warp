@@ -54,9 +54,15 @@ fn needs_arguments(at: &Node, word: &str) -> Node {
 fn library_word_values(node: Node, words: &SuffixWords) -> Node {
 	let node = node.map_children(|child| library_word_values(child, words));
 	match node {
-		Node::List(mut items, bracket, separator) => {
-			let is_iteration = items.first().is_some_and(|head| matches!(head.drop_meta(), Node::Symbol(name) if crate::function_values::ITERATION_WORDS.contains(&name.as_str())));
-			if let Some(function) = items.last_mut().filter(|last| is_iteration && words.is_function_word(last)) {
+		Node::List(items, bracket, separator) => {
+			// a `map` the program defines is its own function, no iteration word (`def map(list, fn)`)
+			let is_iteration = items.first().is_some_and(|head| matches!(head.drop_meta(), Node::Symbol(name) if crate::function_values::ITERATION_WORDS.contains(&name.as_str()) && !words.functions.contains(name)));
+			// `map sqrt xs`, `map sqrt on: xs`: the parser applied sqrt, the iteration word takes it as its function
+			let mut items = if is_iteration { crate::closures::with_operator_word_unfolded(items, 1) } else { items };
+			let position = function_position(&items, words);
+			if let Some(function) =
+				items.get_mut(position).filter(|item| is_iteration && words.is_iterated_function(item))
+			{
 				*function = word_function(function);
 			}
 			Node::List(items, bracket, separator)
@@ -77,9 +83,17 @@ fn library_word_values(node: Node, words: &SuffixWords) -> Node {
 /// `value => word value`
 fn word_function(word: &Node) -> Node {
 	// `xs.map(function floor)`: the call of floor, no reference to it
-	let word = crate::closures::referenced_function(word).map_or_else(|| word.clone(), Node::Symbol);
-	let call = Node::List(vec![word, *operand()], Bracket::None, Separator::Space);
-	Node::Key(operand(), Op::Arrow, Box::new(call))
+	let word = crate::closures::referenced_function(word).unwrap_or_else(|| word.drop_meta().name());
+	Node::Key(operand(), Op::Arrow, Box::new(crate::closures::word_applied(&word, vec![*operand()])))
+}
+
+/// Where the function stands among an iteration call's items: first in `map floor on xs`, `map(function floor, xs)`,
+/// else last as in `map(xs, floor)`
+fn function_position(items: &[Node], words: &SuffixWords) -> usize {
+	match items {
+		[_, function, _, ..] if words.is_iterated_function(function) => 1,
+		_ => items.len().saturating_sub(1),
+	}
 }
 
 /// The suffix words of the program's functions with the function each applies, `squared` → `square`; a name the
@@ -88,8 +102,13 @@ fn suffix_words(node: &Node) -> SuffixWords {
 	let mut variables = HashSet::new();
 	crate::library_words::collect_assigned_names(node, &mut variables);
 	let functions = crate::analyzer::applicable_function_names(node);
+	// the library's words of one value apply too (`x sined`, `x floored`), unless the program names them
+	let library_words = crate::lowering::library_signatures::one_value_words()
+		.filter(|word| !variables.contains(*word) && !functions.contains(*word))
+		.map(String::from);
+	let applicable: Vec<String> = functions.iter().cloned().chain(library_words).collect();
 	let words =
-		functions.iter().flat_map(|function| past_forms(function).into_iter().map(|word| (word, function.clone())));
+		applicable.iter().flat_map(|function| past_forms(function).into_iter().map(|word| (word, function.clone())));
 	let mut words: HashMap<String, String> =
 		words.filter(|(word, _)| word.ends_with("ed") && !variables.contains(word)).collect();
 	// the library's own: `xs sorted`, `xs reversed`, `x squared` (x²), `x cubed` (x³), unless the program names them
@@ -149,10 +168,31 @@ impl SuffixWords {
 		self.unnamed(node).is_some_and(crate::library_words::is_library_word)
 	}
 
-	/// A library word of one value the program does not name itself, also libm's (`floor`, `sin`): a function value
+	/// A word calling the values after it, the program's own function or a standard word it does not name: `max sorted
+	/// xs` is max(sort(xs)) and `f sorted xs` f(sort(xs)), no suffix `sorted` of max or f; `map sorted xs` maps sort
+	fn is_calling_word(&self, node: &Node) -> bool {
+		matches!(node.drop_meta(), Node::Symbol(name) if self.functions.contains(name))
+			|| self.unnamed(node).is_some_and(crate::library_words::is_calling_word)
+			|| (self.unnamed(node).is_some() && crate::lowering::lambdas::takes_a_function_first(node))
+	}
+
+	/// A library word of one value the program does not name itself, also libm's (`floor`, `sin`), the host's
+	/// (`print`) and a counting word (`len`), but no type word (`type Name = string`): a function value
 	fn is_function_word(&self, node: &Node) -> bool {
-		let is_libm_word = |name: &str| crate::lowering::library_signatures::typed_first_arity(name) == Some(1);
-		self.is_library_word(node) || self.unnamed(node).is_some_and(is_libm_word)
+		let takes_one_value = |name: &str| {
+			crate::analyzer::type_word_kind(name).is_none()
+				&& (crate::analyzer::is_counting_word(name)
+					|| crate::lowering::library_signatures::library_signature(name)
+						.is_some_and(|(params, _)| params.len() == 1))
+		};
+		self.is_library_word(node) || self.unnamed(node).is_some_and(takes_one_value)
+	}
+
+	/// What an iteration word takes as its function: a function word, or a conversion (`xs.map(str)`), which elsewhere
+	/// is the type it names (`type Age = int`)
+	fn is_iterated_function(&self, node: &Node) -> bool {
+		self.is_function_word(node)
+			|| self.unnamed(node).is_some_and(|name| crate::library_words::CONVERSION_METHODS.contains(&name))
 	}
 
 	/// The word `node` is, unless the program names it as a variable or function of its own
@@ -393,7 +433,7 @@ fn apply_suffix_words(items: Vec<Node>, functions: &SuffixWords, bracket: Bracke
 		// `map xs abs` passes abs to map: an operator word applies only to a whole first operand (`-7 abs`, `x = -7 abs`)
 		let suffix = suffix.filter(|(_, suffix)| matches!(suffix, Suffix::Function(_)) || applied.len() == 1);
 		let (Some(operand), Some((word, function))) =
-			(applied.last().filter(|operand| !functions.is_library_word(operand)), suffix)
+			(applied.last().filter(|operand| !functions.is_calling_word(operand)), suffix)
 		else {
 			applied.push(item);
 			continue;

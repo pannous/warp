@@ -13,7 +13,7 @@ pub(crate) fn own_functions(program: &Node) -> HashSet<String> {
 	own
 }
 
-fn class_names(program: &Node) -> HashSet<String> {
+pub(crate) fn class_names(program: &Node) -> HashSet<String> {
 	let mut classes = HashSet::new();
 	program.visit(&mut |node| {
 		if let Node::Type { name, .. } = node {
@@ -205,7 +205,10 @@ pub(crate) fn needed_definitions(program: &Node, definitions: &[Node]) -> Vec<No
 	loop {
 		let now_needed: Vec<Node> = definitions
 			.iter()
-			.filter(|definition| name_declared_by(definition).is_some_and(|name| is_needed(&name, &mentioned)))
+			.filter(|definition| {
+				name_declared_by(definition).is_some_and(|name| is_needed(&name, &mentioned))
+					|| is_implicit_operation_of(definition, &mentioned)
+			})
 			.cloned()
 			.collect();
 		if now_needed.len() == needed.len() {
@@ -214,6 +217,22 @@ pub(crate) fn needed_definitions(program: &Node, definitions: &[Node]) -> Vec<No
 		mentioned.extend(called_names(&now_needed));
 		needed = now_needed;
 	}
+}
+
+/// `call(b: Bus, signal)` of a type the statements mention: an operation the program uses without naming it
+/// (`room(signal)`, traits IMPLICIT_OPERATIONS)
+fn is_implicit_operation_of(definition: &Node, mentioned: &HashSet<String>) -> bool {
+	let Some(head) = crate::lowering::function_head(definition) else {
+		return false;
+	};
+	let Node::List(items, _, _) = head.head.drop_meta() else {
+		return false;
+	};
+	let [name, first, ..] = items.as_slice() else {
+		return false;
+	};
+	crate::lowering::traits::IMPLICIT_OPERATIONS.contains(&name.name().as_str())
+		&& matches!(first.drop_meta(), Node::Key(_, Op::Colon, type_node) if mentioned.contains(&type_node.drop_meta().name()))
 }
 
 /// The program with the statements before its own

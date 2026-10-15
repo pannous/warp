@@ -84,7 +84,8 @@ const SYNONYMS: [(&str, &[&str]); 33] = [
 	(MAP_GET_OR, &["get"]),
 	// P35 default: `xs.index_of(x)` is the 1-based position (0 when absent)
 	(COLLECTION_POSITION, &["index_of"]),
-	("chars", &[]),
+	// card of-in-chain: `t.characters`, `characters in t`
+	("chars", &["characters"]),
 	("upper", &["uppercase"]),
 	("lower", &["lowercase"]),
 	// the text builtin trim (text_builtins.rs), Python's strip
@@ -211,7 +212,7 @@ const DICT_WORD: &str = "dict";
 /// lib/prelude.warp's fromkeys(ks, value), also called on the class as Python's `dict.fromkeys(ks, value)`
 const FROMKEYS: &str = "fromkeys";
 /// Conversions a method may name, `x.string` being `string(x)`
-const CONVERSION_METHODS: [&str; 4] = ["string", "str", "int", "float"];
+pub(crate) const CONVERSION_METHODS: [&str; 4] = ["string", "str", "int", "float"];
 const LIST_CONSTRUCTORS: [&str; 4] = ["listOf", "mutableListOf", "arrayOf", "arrayListOf"];
 /// Words that mean another word with that many arguments (receiver included): `round(x, 3)`, `x.round(3)` is x rounded
 /// to 3 digits after the point (`round(x)` stays the builtin); `xs.first(3)`, `first 3 of xs` the first 3 items,
@@ -290,11 +291,39 @@ pub fn is_standard_function(name: &str) -> bool {
 		|| crate::wasm_emitter::text::text_builtins::is_text_builtin(name)
 }
 
+/// A standard word that calls the values after it: a standard function, a counting word or an output word
+/// (`count sorted xs`, `max sorted xs`, `print sorted xs`)
+pub fn is_calling_word(name: &str) -> bool {
+	is_standard_function(name)
+		|| crate::analyzer::COUNTING_WORDS.contains(&name)
+		|| crate::wasm_emitter::OUTPUT_WORDS.contains(&name)
+}
+
 /// A library word of one argument takes the name after it as that argument inside an operand, as a defined function
 /// does: `word == reverse word` compares with `reverse(word)`, `1 == first xs` with `first(xs)`. A type word stays a
 /// type: `x: list int`
 pub fn is_operand_word(name: &str) -> bool {
 	canonical_word(name).is_some_and(|word| arity(word) == 1 && !crate::type_tests::is_builtin_type_word(word))
+}
+
+/// A library word that needs one value, its further parameters optional: `reverse xs`, `split text` (its separator
+/// optional), no type word
+pub fn needs_one_value(name: &str) -> bool {
+	canonical_word(name)
+		.is_some_and(|word| fewest_arguments(word) == 1 && !crate::type_tests::is_builtin_type_word(word))
+}
+
+/// A library word that is a function of one value, standing as a function value (`map floor xs`, `map reverse xs`):
+/// one needing one value, one of one typed value (`floor`, `sin`) or a counting word (`map count xs`)
+pub fn is_one_value_function(name: &str) -> bool {
+	needs_one_value(name)
+		|| crate::lowering::library_signatures::typed_first_arity(name) == Some(1)
+		|| crate::analyzer::COUNTING_WORDS.contains(&name)
+}
+
+fn fewest_arguments(word: &str) -> usize {
+	let optional = OPTIONAL_ARGUMENTS.iter().find(|(name, _)| *name == word).map_or(0, |(_, optional)| *optional);
+	arity(word) - optional
 }
 
 /// The spelling word lists name a library word by (`sorted` → sort); any other name as it is
@@ -558,7 +587,11 @@ impl Lowering {
 				if let Some(chained) = self.chained_field_assignment(&left, &right) {
 					return chained;
 				}
-				let left = self.expand(*left);
+				let written = *left;
+				let left = self.expand(written.clone());
+				if let Some(set) = self.functional_setter(&written, &left, &right) {
+					return set;
+				}
 				let right = self.in_definition(&left, *right);
 				self.field_assignment(&left, &right).unwrap_or(key(left, Op::Assign, right))
 			}
@@ -734,6 +767,20 @@ impl Lowering {
 			}
 			if call_name(items, bracket, separator).is_some() {
 				return Some(log_to_base(&items[0], value, base));
+			}
+		}
+		// `sin x`, `trunc x`: a library word of one typed value applies to the value after it, as `sin(x)` does, wherever
+		// it stands (card sin-cos); a prelude word (`norm v`) is the prelude's function, called by its own pass
+		if let ([function, argument], Bracket::None, Separator::Space) = (items, bracket, separator) {
+			let is_prelude_word = crate::modules::prelude_word_arity(head).is_some();
+			if crate::lowering::library_signatures::typed_first_arity(head) == Some(1)
+				&& !is_prelude_word
+				&& !self.shadows(head)
+			{
+				// a synonym calls its library word: `sorted xs` is sort(xs)
+				let word = canonical_spelling(head);
+				let function = if word == head { function.clone() } else { Node::Symbol(word.to_string()) };
+				return Some(word_call(&function, argument, vec![]));
 			}
 		}
 		// `number(t)` is `t as number`: a text known only at run time is the number it spells, decided at run time
@@ -948,18 +995,24 @@ impl Lowering {
 			return Some(word_call(word_node, receiver, vec![]));
 		}
 		let is_known = self.is_known_method(receiver, name);
-		let is_object = literal.is_some() || self.is_object(receiver, name) || self.may_hold_object(receiver);
-		if is_object && !is_known && !has_arguments {
-			return Some(field_lookup(receiver, name, word_node));
-		}
 		// `x.round`, `x.sqrt`: the number word applied to x, as `x.round()` and `sqrt x` are (x.word is word(x))
-		if !has_arguments {
-			if let Some(operation) = prefix_operator_method(receiver, name) {
-				return Some(operation);
-			}
-			if crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name.as_str()) {
-				return Some(word_call(word_node, receiver, vec![]));
-			}
+		let number_word = || {
+			prefix_operator_method(receiver, name).or_else(|| {
+				crate::wasm_emitter::ROUNDING_FUNCTIONS
+					.contains(&name.as_str())
+					.then(|| word_call(word_node, receiver, vec![]))
+			})
+		};
+		let may_be_object = self.is_object(receiver, name) || self.may_hold_object(receiver);
+		if (literal.is_some() || may_be_object) && !is_known && !has_arguments {
+			// a parameter's `x.floor` (`xs.map(.floor)`, card dot-lambda): its field if it is an object, else the word
+			return Some(match number_word().filter(|_| literal.is_none()) {
+				Some(operation) => self.map_field_or(receiver, name, word_node, operation),
+				None => field_lookup(receiver, name, word_node),
+			});
+		}
+		if let Some(operation) = number_word().filter(|_| !has_arguments) {
+			return Some(operation);
 		}
 		// `x.type`, `x.type()`: `type(x)`, once no field of that name can be meant
 		if name == crate::type_tests::TYPE_WORD && !has_arguments {
@@ -1066,8 +1119,7 @@ impl Lowering {
 	fn call(&self, word: &'static str, head: &Node, arguments: Vec<Node>, is_prefix: bool) -> Node {
 		let mut arguments = if is_prefix { self.merged_prefix_arguments(word, arguments) } else { arguments };
 		let wanted = arity(word);
-		let optional = OPTIONAL_ARGUMENTS.iter().find(|(name, _)| *name == word).map_or(0, |(_, optional)| *optional);
-		if arguments.len() < wanted && arguments.len() + optional >= wanted {
+		if arguments.len() < wanted && arguments.len() >= fewest_arguments(word) {
 			arguments.resize(wanted, left_out_argument(word));
 		}
 		// objects are references (P200): `x.copy()` is a new deep copy, `x.copy(shallow: true)` a shallow one (P205)
@@ -1156,12 +1208,12 @@ fn dispatched_sum(expanded: Node) -> Node {
 }
 
 /// `a == b`, `a < b`, `a and b`: where a library word's argument stops
-fn is_comparison(node: &Node) -> bool {
+pub(crate) fn is_comparison(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Key(_, op, _) if op.is_comparison() || op.is_logical())
 }
 
 /// The leftmost operand of a comparison chain, replaced: `"a" == b and c` → `f("a") == b and c`
-fn with_first_comparand(node: Node, replace: &dyn Fn(Node) -> Node) -> Node {
+pub(crate) fn with_first_comparand(node: Node, replace: &dyn Fn(Node) -> Node) -> Node {
 	match node {
 		Node::Key(left, op, right) if op.is_comparison() || op.is_logical() => {
 			Node::Key(Box::new(with_first_comparand(*left, replace)), op, right)

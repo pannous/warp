@@ -44,8 +44,9 @@ const WARM_UP_CODE = 'p{ "" }';
 self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host-files.js STD_ADAPTERS.store
 self.writeClipboard = text => post({ type: "clipboard", text }); // host-files.js STD_ADAPTERS.clipboard
 self.askPageClipboard = shared => self.postMessage({ type: "clipboard read", shared }); // host.js clipboard_text
+self.askPageDecode = (shared, url, bytes) => self.postMessage({ type: "sound decode", shared, url, bytes }); // host-sound.js pageDecoded
 self.askPageCall = (shared, request) => self.postMessage({ type: "page call", shared, request }); // host-foreign.js callOnPage
-self.keepFile = (path, bytes) => post({ type: "file", path, bytes }); // render_sound's WAV, for the page's download link
+self.keepFile = (path, bytes) => post({ type: "file", path, bytes }); // save sound's WAV, for the page's download link
 addPageSoundWords(post); // host-tasks.js
 const hooks = {
 	renders: true, // each outcome carries its HTML by the program's own renderer (host.js renderedHtml)

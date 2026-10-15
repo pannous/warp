@@ -6,7 +6,7 @@
 use crate::type_kinds::Kind;
 
 /// The words whose tables name neither their parameters nor (for an argument-dependent result) their result
-const NAMED_SIGNATURES: [(&str, &str); 18] = [
+const NAMED_SIGNATURES: [(&str, &str); 23] = [
 	("sqrt", "(x:number) -> number"),
 	("cbrt", "(x:number) -> number"),
 	("abs", "(x:number) -> number"),
@@ -14,8 +14,14 @@ const NAMED_SIGNATURES: [(&str, &str); 18] = [
 	("ceil", "(x:number) -> int"),
 	("round", "(x:number) -> int"),
 	("trunc", "(x:float) -> float"),
-	("min", "(a, b) -> number"),
-	("max", "(a, b) -> number"),
+	// the real functions, exact on exact values (numbers/real.rs), else the f64 ones (ln has no libm name)
+	("sin", "(x:float) -> float"),
+	("cos", "(x:float) -> float"),
+	("tan", "(x:float) -> float"),
+	("exp", "(x:float) -> float"),
+	("ln", "(x:float) -> float"),
+	("min", "(a:number, b:number, more...) -> number"),
+	("max", "(a:number, b:number, more...) -> number"),
 	("upper", "(t:text) -> text"),
 	("lower", "(t:text) -> text"),
 	("reverse", "(xs)"),
@@ -52,6 +58,8 @@ const MEMBER_SIGNATURES: [(&str, &str); 19] = [
 const PRELUDE: &str = "prelude";
 const POSITIONAL_NAMES: [&str; 4] = ["a", "b", "c", "d"];
 const LIBM_PARAMETER_TYPE: &str = "float";
+/// `more...`: a rest parameter, any number of values (variadic.rs)
+const REST_MARK: &str = "...";
 
 /// A library word's parameter names and its signature `(t:text, separator:text) -> list of text`; None for a word
 /// that is no library word
@@ -76,9 +84,26 @@ fn named(signatures: &[(&str, &str)], word: &str) -> Option<String> {
 /// The parameter count of a library word whose first parameter is typed (`floor(x:number)`, `upper(t:text)`): a function
 /// is never its argument, so `round(floor x)` nests as `round(floor(x))`
 pub fn typed_first_arity(word: &str) -> Option<usize> {
+	typed_first_parameters(word).filter(|(fewest, most)| fewest == most).map(|(fewest, _)| fewest)
+}
+
+/// The fewest and most values a library word with a typed first parameter takes: `floor` (1, 1), `max` (2, unbounded)
+pub fn typed_first_parameters(word: &str) -> Option<(usize, usize)> {
 	let (params, signature) = library_signature(word)?;
 	let first = signature.trim_start_matches('(').split([',', ')']).next()?;
-	first.contains(':').then_some(params.len())
+	if !first.contains(':') {
+		return None;
+	}
+	let is_variadic = params.last().is_some_and(|last| last.ends_with(REST_MARK));
+	Some(if is_variadic { (params.len() - 1, usize::MAX) } else { (params.len(), params.len()) })
+}
+
+/// The library words of one typed value with a signature here or in libm: `floor`, `sin`, `upper`, `log10`
+pub fn one_value_words() -> impl Iterator<Item = &'static str> {
+	let named = NAMED_SIGNATURES.iter().map(|(name, _)| *name);
+	named
+		.chain(crate::ffi::LIBM_F64_FUNCTIONS.iter().map(|(name, _)| *name))
+		.filter(|name| typed_first_arity(name) == Some(1))
 }
 
 /// `replace(t, old, new) := …` → `(t, old, new)`

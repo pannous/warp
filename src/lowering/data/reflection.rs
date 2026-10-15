@@ -19,8 +19,11 @@ const LISTENERS_WORD: &str = "listeners";
 const LISTENING_WORDS: [&str; 2] = ["on", "once"];
 const VARIABLE_EVENTS: [&str; 2] = ["set", "change"];
 const CLASS_WORDS: [&str; 2] = ["class", crate::type_tests::TYPE_WORD];
-const FIELDS_WORDS: [&str; 3] = ["fields", "attributes", "members"];
+/// `fields(p)`, `attributes of p`, `p.properties`: the field names, one word in several spellings (card reflection-synonyms)
+const FIELDS_WORDS: [&str; 4] = ["fields", "attributes", "members", "properties"];
 const METHODS_WORD: &str = "methods";
+/// `methods(p)`, `functions of p`: the functions taking p first (typed first parameter only, card one-method-form)
+const METHODS_WORDS: [&str; 2] = [METHODS_WORD, "functions"];
 /// A class's definition as written, in its warp.meta entry: a program importing the module declares the class too
 pub const DEFINITION_WORD: &str = "definition";
 /// `help(x)`: a class's, an instance's or a function's description as text (card help-help)
@@ -272,12 +275,12 @@ fn function_named(subject: &Node) -> Option<&str> {
 }
 
 /// `type(gcd)`: `function: (a, b) -> int`, the kind and the signature (user decision on card module-methods)
-fn function_type(signature: &str) -> Node {
+pub(crate) fn function_type(signature: &str) -> Node {
 	Node::Text(format!("{}: {signature}", crate::type_kinds::Kind::Function))
 }
 
 /// `type(function floor)`: `builtin: (x:number) -> int` (decision dir-lists)
-fn builtin_type(signature: &str) -> Node {
+pub(crate) fn builtin_type(signature: &str) -> Node {
 	Node::Text(format!("{}: {signature}", crate::type_tests::BUILTIN_TYPE))
 }
 
@@ -339,7 +342,9 @@ pub fn meta_entries(source: &Node, lowered: &Node, code: &str) -> Vec<(&'static 
 	let objects = Objects { layouts: crate::class_methods::class_layouts(source), ..Objects::default() };
 	let mut classes: Vec<&String> = objects.layouts.keys().collect();
 	classes.sort();
-	let is_method = |name: &String| objects.layouts.values().any(|layout| layout.methods.contains(name));
+	// a class-body method travels in its class's definition; one defined outside (`width(p:P)`) stays a function
+	let declared = crate::class_methods::declared_layouts(source);
+	let is_method = |name: &String| declared.values().any(|layout| layout.methods.contains(name));
 	// the program's own functions, not the library's its lowering brought in (html_render, prelude·replace)
 	let own = user_functions(source);
 	let functions: Vec<(String, Node)> = user_functions(lowered)
@@ -519,7 +524,7 @@ struct Objects {
 
 pub fn lower_objects(node: Node) -> Node {
 	let words: Vec<&str> =
-		CLASS_WORDS.iter().chain(&FIELDS_WORDS).chain(&[METHODS_WORD, DIR_WORD, HELP_WORD]).copied().collect();
+		CLASS_WORDS.iter().chain(&FIELDS_WORDS).chain(&METHODS_WORDS).chain(&[DIR_WORD, HELP_WORD]).copied().collect();
 	if !node.mentions_any(&words) {
 		return node;
 	}
@@ -543,7 +548,8 @@ pub fn lower_module_words(node: Node) -> Node {
 	let words: Vec<&str> = PARAMS_WORDS
 		.iter()
 		.chain(&FIELDS_WORDS)
-		.chain(&[EXPORTS_WORD, DIR_WORD, SIGNATURE_WORD, METHODS_WORD])
+		.chain(&METHODS_WORDS)
+		.chain(&[EXPORTS_WORD, DIR_WORD, SIGNATURE_WORD])
 		.copied()
 		.collect();
 	if !node.mentions_any(&words) {
@@ -705,7 +711,7 @@ impl Objects {
 		if self.defined.contains(word) {
 			return None;
 		}
-		let value_methods = || (word == METHODS_WORD).then(|| self.value_methods(subject)).flatten();
+		let value_methods = || METHODS_WORDS.contains(&word).then(|| self.value_methods(subject)).flatten();
 		let written = || value_methods().unwrap_or_else(|| key(subject.clone(), Op::Dot, symbol(word)));
 		if let Some(reflected) = self.module_member_word(subject, word) {
 			return Some(reflected);
@@ -717,6 +723,9 @@ impl Objects {
 			// `P(3).methods`: a construction's class is known, no type test needed
 			let constructed = self.known_class(subject).or_else(|| self.constructed_class(subject));
 			if let Some(class) = constructed.filter(|_| !CLASS_WORDS.contains(&word)) {
+				if self.has_member(&class, word) {
+					return None;
+				}
 				return self.listed(&class, word).map(|names| word_list(word, &class, &names));
 			}
 			return self.dispatched(subject, word, written()).or_else(value_methods);
@@ -954,11 +963,9 @@ fn with_object_words(node: Node, objects: &Objects) -> Node {
 		{
 			objects.help(&items[1])
 		}
-		// `methods(P)` is `P.methods`
-		Node::List(items, Bracket::Round | Bracket::None, _)
-			if items.len() == 2 && items[0].symbol_name() == Some(METHODS_WORD) =>
-		{
-			objects.dot_word(&items[1], METHODS_WORD)
+		// `methods(P)` is `P.methods`, `fields(p)` is `p.fields`
+		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() == 2 && is_listing_word(&items[0]) => {
+			objects.dot_word(&items[1], &items[0].name())
 		}
 		_ => None,
 	};
@@ -976,11 +983,16 @@ fn is_field_place(place: &Node, op: &Op, rest: &Node) -> bool {
 	mutates && matches!(place.drop_meta(), Node::Key(_, Op::Dot, _))
 }
 
+/// `fields`, `methods` and their other spellings
+fn is_listing_word(word: &Node) -> bool {
+	word.symbol_name().is_some_and(|word| FIELDS_WORDS.contains(&word) || METHODS_WORDS.contains(&word))
+}
+
 /// What a reflection word lists of a class: its methods themselves, `function sq` for each (decision reflection,
 /// card module-methods), its fields and dir's names as texts
 fn word_list(word: &str, class: &str, names: &[String]) -> Node {
 	match word {
-		METHODS_WORD => Node::List(
+		_ if METHODS_WORDS.contains(&word) => Node::List(
 			names.iter().map(|name| crate::closures::method_reference(name.clone(), class)).collect(),
 			Bracket::Square,
 			Separator::Space,
@@ -1002,7 +1014,7 @@ pub(crate) fn function_list(names: &[String]) -> Node {
 fn listed_names(fields: Vec<String>, methods: Vec<String>, word: &str) -> Option<Vec<String>> {
 	match word {
 		DIR_WORD => Some([fields, methods].concat()),
-		METHODS_WORD => Some(methods),
+		_ if METHODS_WORDS.contains(&word) => Some(methods),
 		_ if FIELDS_WORDS.contains(&word) => Some(fields),
 		_ => None,
 	}

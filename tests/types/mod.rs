@@ -8,6 +8,7 @@ mod test_any_into_annotated;
 mod test_any_into_annotated_types;
 mod test_any_place; // card yes-stores
 mod test_as_number_variable; // card number-variable
+mod test_bare_function_type_test; // card bare-fn-type
 mod test_be_definitions;
 mod test_binary_int; // card binary-int
 mod test_block_data_paths;
@@ -79,6 +80,7 @@ mod test_hex_int; // card hex-printing
 mod test_hex_word; // hex x is hex(x), literals are 0x…
 mod test_index_position; // card index-position
 mod test_instance_arguments;
+mod test_instance_final_bare; // card program-last
 mod test_instance_final_text; // card instance-final
 mod test_instance_size; // card size-instance
 mod test_int_accepts; // card int-accepts

@@ -185,14 +185,17 @@ impl<'a> Loader<'a> {
 
 	/// The standard definitions with the words of a module only other standard modules use renamed apart
 	/// (`take` → `lib·take` when lib/text.warp's `use list` brought it): the program sees a module's words only with
-	/// its own `use`, a bare `take` is the error naming the module
+	/// its own `use`, a bare `take` is the error naming the module. A word a used module defines too stays one word:
+	/// shell's `unique(file:Path)` and list's `unique(xs)` are one generic function (card cross-module-overload)
 	pub(super) fn hidden_apart(&self) -> Vec<Node> {
-		let hidden: Vec<&String> = self
-			.std_modules_of_std_modules
-			.iter()
-			.filter(|module| !self.program_std_modules.contains(*module))
-			.flat_map(|module| std_module_definitions(module).unwrap_or_default())
-			.collect();
+		let definitions_of = |modules: &HashSet<String>| -> HashSet<&String> {
+			modules.iter().flat_map(|module| std_module_definitions(module).unwrap_or_default()).collect()
+		};
+		let visible = definitions_of(&self.program_std_modules);
+		let only_used_by_modules: HashSet<String> =
+			self.std_modules_of_std_modules.difference(&self.program_std_modules).cloned().collect();
+		let hidden: Vec<&String> =
+			definitions_of(&only_used_by_modules).into_iter().filter(|word| !visible.contains(word)).collect();
 		crate::compiler::compile_context::change(|context| {
 			let names = &mut context.module_definitions;
 			hidden.iter().for_each(|word| {
@@ -272,6 +275,9 @@ impl<'a> Loader<'a> {
 	pub(super) fn import(&mut self, used: &Used, statement: &Node) -> Result<Vec<Node>, Node> {
 		let (import, name) = (used.import, used.name.as_str());
 		if let Some(scope) = scope_word(name).filter(|_| import == Import::Use && used.requirement.is_none()) {
+			if scope != Scope::Folder {
+				crate::modules::reads_beyond_folders("use package or use project");
+			}
 			self.scope = self.scope.max(Some(scope));
 			return Ok(vec![]);
 		}
@@ -296,10 +302,14 @@ impl<'a> Loader<'a> {
 				return Ok(self.use_wasm_module(&module, statement, import));
 			}
 			if import == Import::Use && package_repository(name).is_some() {
+				crate::modules::reads_beyond_folders("a package");
 				return self.use_package(name, used.requirement.as_ref());
 			}
 			return match import == Import::Use && crate::ffi::is_ffi_library(name) {
-				true => Ok(vec![as_use(statement)]),
+				true => {
+					crate::modules::reads_beyond_folders("a C library");
+					Ok(vec![as_use(statement)])
+				}
 				false => Err(self.not_found(name, import)),
 			};
 		};
@@ -540,17 +550,22 @@ impl<'a> Loader<'a> {
 		};
 		// `use "./helper.warp"`, `use "/srv/helper.warp"`: that file, `./` from the including file's folder
 		if is_explicit_path(name) {
+			crate::modules::reads_beyond_folders("a module by its path");
 			let base = self.including_directory.clone().unwrap_or_default();
 			return file_names.iter().map(|file_name| base.join(file_name)).collect();
 		}
 		if !is_plain_relative_path(name) {
 			return vec![];
 		}
+		if name.contains('/') {
+			crate::modules::reads_beyond_folders("a module of a subfolder");
+		}
 		let bases: Vec<PathBuf> =
 			self.including_directory.iter().cloned().chain(std::iter::once(PathBuf::new())).collect();
 		let mut candidates = Vec::new();
 		for base in &bases {
 			for directory in self.directories {
+				crate::modules::looks_in(&base.join(directory));
 				candidates.extend(file_names.iter().map(|file_name| base.join(directory).join(file_name)));
 			}
 		}

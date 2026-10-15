@@ -10,14 +10,14 @@ render_sound, sound_queued, play_file, the midi words) needs `use sound`; called
 ```warp
 use sound
 beep
-play 440Hz for 0.5s
+play 440Hz for: 0.5s
 play C4                         // note_seconds (0.5 s)
-play [C4 E4 G4] for 1s          // a chord
+play [C4 E4 G4] for: 1s          // a chord
 melody [C4 D4 E4]               // one after another
-melody [G4 E4 C4] each 200ms    // or melody([G4 E4 C4], 200ms)
+melody [G4 E4 C4] each: 200ms    // or melody([G4 E4 C4], 200ms)
 tone(220Hz, 300ms, "square")    // sine, square, triangle, sawtooth
-tone 330Hz for 0.1s
-play note("F#4") for 250ms      // note(name) needs `use sound` when called alone
+tone(330Hz, 0.1s)
+play note("F#4") for: 250ms      // note(name) needs `use sound` when called alone
 ```
 
 - The samples are made in warp (22050 Hz, 16-bit mono, 5 ms fade at both ends) and cross to the host word
@@ -98,7 +98,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    Offline render built (step 2, 2026-10-10, from layer 5): `render_sound("song.wav")` writes the sounds since the
    last render (or the start) one after another into one WAV and gives its seconds; headless too, so tests check audio
    without speakers (tests/programs/test_sound_render.rs). Since card save-sound (user 2026-10-15) it is written
-   `save sound as "song.wav"` / `save(sound, "song.wav")`: save overloaded by type, the word sound as save's argument a
+   `save sound as: "song.wav"` / `save(sound, "song.wav")`: save overloaded by type, the word sound as save's argument a
    lib/sound.warp Recording (music_words.rs with_recording); render_sound stays as the old name with a note. The samples are kept in memory (44 KB a second at 22050 Hz),
    not read back from $TMPDIR/warp-sound: that folder is shared by all warp processes. The playground refuses it (its
    files are texts).
@@ -177,7 +177,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    nodes and buses as values, effects (delay, reverb, compressor, distortion, EQ), a mixer.
 5. Samples and files. Load WAV/MP3/OGG/FLAC, play at a pitch or rate, slice, loop points (card sound-samples); render offline to a file
    (`render 8 bars to "song.wav"`), which is also how tests check audio without speakers.
-   Samples built (card sound-samples, samples/sound_samples.warp, tests/programs/test_sound_samples.rs): lib/sound.warp
+   Samples built (card sound-samples, samples/sound_kick_samples.warp, tests/programs/test_sound_samples.rs): lib/sound.warp
    `class Sample {rate, channels, frames}`; `sample(path)` reads a file through the host word sound.load
    (src/sound/audio_files.rs: WAV decoded in Rust, other formats converted by afconvert or ffmpeg first), then
    sample_seconds, sample_slice(clip, from, to), sample_slices(clip, n), sample_looped(clip, seconds, from, to),
@@ -216,7 +216,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    Stereo built (undoable default): `play_signal([left, right], 2s)` calls left(t) then right(t) for each sample;
    `play_blocks(fill, 2s)` with fill of three parameters `(left, right, t)` gets two blocks (fill·block, fill·right).
    The host takes one value or a pair (native.rs channels_of) and interleaves the frames (sound.rs play_blocks).
-   `play hum for 2s` (user, 2026-10-12: no snake case; `signal` is a reactive keyword, so no synonym word): play of
+   `play hum for: 2s` (user, 2026-10-12: no snake case; `signal` is a reactive keyword, so no synonym word): play of
    one of the program's functions is play_signal of it (one parameter, or a pair [left, right] of such), play_blocks
    (two or three parameters); music_words.rs with_played_functions. play_signal and play_blocks stay the explicit forms.
    Browser first step built (tests/web/test_signal_sound.rs): host-files.js STD_ADAPTERS.sound.signal / blocks compute
@@ -283,7 +283,7 @@ last stage that moves samples to the speaker.
   (gain, frequency, detune, Q) keeps warp code readable to anyone who knows the web.
 - **But not its API shape.** Web Audio is verbose (`ctx.createOscillator()`, `.connect()`, `.start(t)`) and has no
   music values. warp keeps its own words: units (`440Hz`, `200ms`, `-6dB`, `1/4 beat`), notes and chords as values,
-  `play … for …` phrases and `|>` pipes. Those lower to the graph; a program never sees a context object.
+  `play … for: …` phrases and `|>` pipes. Those lower to the graph; a program never sees a context object.
 - **Natively, the same graph runs in our own engine, written in warp/wasm** (layer 8): it renders blocks of f32
   samples, so the browser and the Mac produce the same samples and offline rendering (tests!) is the same code path.
   Only the output differs:
@@ -327,6 +327,19 @@ to its chain (host word sound.bus), `out(signal, b: Bus)` sends (sound.send, a t
 The DSP is the lib formulas in Rust, streaming. Plan (supervisor, user asked whether Rust or warp holds the one DSP):
 stage 2 the browser runs the same code (warp.wasm export for render_sound, an AudioWorklet live; until then the
 playground plays bus sounds dry and says so), stage 3 a bus's effects changed while it plays, stage 4 compressor, EQ.
+
+Stage 2, bus API A (user 2026-10-15): `osc(C4, 1s) |> room` (parsed `room(osc(…))`; a Bus applied to a signal
+is lib's `call(b: Bus, signal) := out(signal, b)`, by the trait Callable in traits/dispatch.rs instance_called, so a bus
+from a parameter, a function's result or an expression sends too) and `play(C4, 1s, bus: room)` (a play
+overload around sent_to / sent_back). No `send room` setting.
+One DSP (user 2026-10-15: Rust for now, a warp twin later): src/sound/effects.rs `with_effects` runs lib's list effects
+(lib effected → std_io sound.effect → on_signal, amplitudes of loudness · loudest_sample, so distort keeps the level) and,
+in the browser, the bus sounds: warp.wasm exports web_bus_processed, host-compiler.js effectsProcessed calls it on the
+block compiler (also in tests and task Workers), host-sound.js onBus runs each sound sent to a bus through the chain
+apart (exact for the linear effects; compress and distort act per sound there) and the list effects. A delay or reverb
+now rings until -60 dB (Chain::rung_on) instead of lib's 8 echoes / 0.6 s; a filter adds no tail, so notes keep their
+length. lib's comb, echoed, roomed, clipped, biquad and the reverb constants are gone. Probe:
+probes/sound/bus_dsp_in_wasm.mjs.
 
 Stage 3 built (2026-10-15): `room = room |> gain(0)` changes the bus from the defining voice's moment (where its queued
 sounds end). An effect of a name the chain has replaces it in place (with_effect), else it appends. Chain::retune keeps

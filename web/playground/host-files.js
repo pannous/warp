@@ -9,7 +9,7 @@ const HTTP_NOT_FOUND = "HTTP status 404";
 const FILE_NOT_FOUND = "No such file or directory (os error 2)";
 const NO_PROCESSES = "not in the browser: a page runs no process or shell, natively only";
 
-// the files std's file module wrote (texts) and render_sound rendered (bytes, a Uint8Array): read and the file words see
+// the files std's file module wrote (texts) and save sound rendered (bytes, a Uint8Array): read and the file words see
 // them before the served ones. A page keeps them in IndexedDB (keepWrittenFile), so they are still there after a reload
 const writtenFiles = new Map();
 const filePath = path => path.replace(/^\.\//, "");
@@ -163,11 +163,38 @@ const databaseValues = {};
 // the wildcards * and ? in its last part, a hidden file only for a name starting with `.`
 function glob(pattern) {
 	const folder = pattern.slice(0, pattern.lastIndexOf("/") + 1), name = pattern.slice(folder.length);
+	const names = pageFiles().filter(path => path.startsWith(filePath(folder))).map(path => path.slice(filePath(folder).length));
+	const shown = nameMatcher(name);
+	return [...new Set(names.filter(entry => !entry.includes("/") && shown(entry)))].sort().map(entry => folder + entry);
+}
+
+const pageFiles = () => [...writtenFiles.keys(), ...(typeof SERVED_FILES === "undefined" ? [] : SERVED_FILES)];
+
+// does a file's name match `name` with the wildcards * and ?; a hidden one only for a name starting with `.`
+function nameMatcher(name) {
 	const wildcards = new RegExp(`^${name.replace(/[.+^${}()|[\]\\]/g, "\\$&").replaceAll("*", "[^/]*").replaceAll("?", "[^/]")}$`);
-	const served = typeof SERVED_FILES === "undefined" ? [] : [...SERVED_FILES];
-	const names = [...writtenFiles.keys(), ...served].filter(path => path.startsWith(filePath(folder))).map(path => path.slice(filePath(folder).length));
-	const shown = entry => !entry.includes("/") && wildcards.test(entry) && (name.startsWith(".") || !entry.startsWith("."));
-	return [...new Set(names.filter(shown))].sort().map(entry => folder + entry);
+	return entry => wildcards.test(entry) && (name.startsWith(".") || !entry.startsWith("."));
+}
+
+// `find_files(folder, "*.warp")` as natively (src/modules/shell_adapters.rs found_below): the paths below the folder
+// whose name matches, outside hidden folders
+function findFiles(folder, pattern) {
+	const prefix = filePath(folder) === "." ? "" : filePath(folder).replace(/\/?$/, "/"), shown = nameMatcher(pattern);
+	const below = pageFiles().filter(path => path.startsWith(prefix)).map(path => path.slice(prefix.length));
+	const outsideHidden = path => !path.split("/").slice(0, -1).some(part => part.startsWith("."));
+	return [...new Set(below.filter(path => outsideHidden(path) && shown(path.slice(path.lastIndexOf("/") + 1))))].sort().map(path => prefix + path);
+}
+
+// the shell's words on the page's files (lib/shell.warp, src/modules/std_adapters.rs): folders exist by the files in them
+const isWrittenFolder = folder => [...writtenFiles.keys()].some(path => path.startsWith(filePath(folder).replace(/\/?$/, "/")));
+const intoFolder = (from, to) => isWrittenFolder(to) ? `${filePath(to).replace(/\/?$/, "/")}${from.slice(from.lastIndexOf("/") + 1)}` : to;
+const writtenOrRead = path => writtenFiles.get(filePath(path)) ?? readBytes(path);
+const sizeOf = path => { const content = writtenOrRead(path); return typeof content === "string" ? utf8.encode(content).length : content.length; };
+
+function forgetWritten(path) {
+	if (!writtenFiles.delete(filePath(path))) throw new Error(`${path}: no such file among the page's written files`);
+	if (self.keepStored) databaseObjects("readwrite", DATABASE.files).then(objects => requested(objects.delete(filePath(path))));
+	return null;
 }
 
 const isDatabase = file => file.endsWith(DATABASE_STORE);
@@ -440,6 +467,9 @@ addHostPart({
 			stdin: () => "",
 			input: () => null,
 			command: () => { throw new Error(NO_PROCESSES); },
+			cd: () => { throw new Error("not in the browser: a page has one folder, natively only"); },
+			which: () => null,
+			open: () => { throw new Error(NO_PROCESSES); },
 			exec: () => { throw new Error(NO_PROCESSES); },
 		},
 		// `stored theme = "dark"`, `local[k]`, `session[k]` (src/lowering/data/stored_values.rs, std_io): the page's values
@@ -468,6 +498,15 @@ addHostPart({
 				return [...writtenFiles.keys()].filter(path => path.startsWith(prefix) && !path.slice(prefix.length).includes("/")).map(path => path.slice(prefix.length)).sort();
 			},
 			glob,
+			mkdir: () => null,
+			copy: (from, to) => { keepWritten(intoFolder(from, to), writtenOrRead(from)); return null; },
+			move: (from, to) => { keepWritten(intoFolder(from, to), writtenOrRead(from)); return forgetWritten(from); },
+			touch: path => { if (!writtenFiles.has(filePath(path))) keepWritten(path, ""); return null; },
+			// a page has no Trash: rm forgets the written file
+			remove: forgetWritten,
+			find: findFiles,
+			size: sizeOf,
+			info: path => ({ size: sizeOf(path), modified: null, kind: "file" }),
 		},
 		// a filter compiled natively is an SQL query (a page compiled by the browser keeps filters as comprehensions)
 		table: { open: openTable, migrate: migrateTable, rows: tableRows, page: tablePage, count: (table, schema, file) => storedTable(file, table).rows.length, insert: insertRow, delete: deleteRow, update: updateRow, begin: beginTransaction, commit: file => { delete tablesBefore[file]; return null; }, rollback: rollBack, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },

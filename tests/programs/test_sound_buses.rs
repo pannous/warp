@@ -11,7 +11,7 @@ const QUIET: i16 = 50;
 /// The rendered mono samples of the program, which ends in render_sound to the path
 fn rendered_samples(program: &str, name: &str) -> Vec<i16> {
 	let path = std::env::temp_dir().join(format!("warp-buses-{name}-{}.wav", std::process::id()));
-	let program = format!("use sound\n{program}\nsave sound as \"{}\"", path.display());
+	let program = format!("use sound\n{program}\nsave sound as: \"{}\"", path.display());
 	let run = crate::common::warp_command().args(["--no-ask", "eval", &program]).output().unwrap();
 	assert!(run.status.success(), "{} {}", String::from_utf8_lossy(&run.stdout), String::from_utf8_lossy(&run.stderr));
 	let bytes = std::fs::read(&path).unwrap();
@@ -184,4 +184,67 @@ fn a_compressor_ducks_both_channels_together() {
 	let output = warp::sound::effects::processed(&frames, &compressor, &[], 1000, 2);
 	let (left, right) = (output[1800], output[1801]);
 	assert!((right / left - 0.05 / 0.9).abs() < 0.001, "the same gain on both: {left} {right}");
+}
+
+// card shared-buses stage 2, bus API A (user 2026-10-15): a signal piped into a bus, a note naming its bus
+#[test]
+fn a_signal_piped_into_a_bus_echoes() {
+	let samples = rendered_samples("room = bus() |> delay(0.3, 0.5, 1)\nosc(A4, 0.1s) |> room", "piped");
+	assert!(loudest(&samples, 0.31, 0.39) > 500, "its echo 0.3 s later");
+}
+
+#[test]
+fn a_note_played_on_a_bus_echoes_and_the_next_stays_dry() {
+	let program = "room = bus() |> delay(0.3, 0.5, 1)\nplay(A4, 0.1s, bus: room)\nplay(A4, 0.1s)";
+	let samples = rendered_samples(program, "note-bus");
+	assert!(loudest(&samples, 0.31, 0.39) > 500, "the note's echo 0.3 s later");
+	assert!(loudest(&samples, 0.42, 0.49) < QUIET, "the next note sounds dry: no echo of it");
+}
+
+/// lib's list effects are the bus DSP too (user 2026-10-15, one DSP in Rust): a delay rings until -60 dB as a bus does,
+/// a filter keeps the signal's length
+#[test]
+fn list_effects_run_the_bus_dsp() {
+	crate::is!("use sound\ncount(osc(440, 0.1s) |> delay(0.1, 0.5))", 23105);
+	crate::is!("use sound\ncount(osc(C4, 0.1s) |> lowpass(800))", 2205);
+}
+
+/// a Bus value applied to a signal sends it, wherever the bus comes from (trait Callable: lib's call(b: Bus, signal)),
+/// not only a variable assigned bus() (reviewer, card shared-buses)
+#[test]
+fn a_bus_from_a_parameter_a_result_or_an_expression_takes_the_signal() {
+	let programs = [
+		("parameter", "through(b: Bus) := osc(A4, 0.1s) |> b\nthrough(bus() |> delay(0.3, 0.5, 1))"),
+		("result", "make() := bus() |> delay(0.3, 0.5, 1)\nroom = make()\nosc(A4, 0.1s) |> room"),
+		("expression", "osc(A4, 0.1s) |> (bus() |> delay(0.3, 0.5, 1))"),
+	];
+	for (name, program) in programs {
+		let samples = rendered_samples(program, name);
+		assert!(loudest(&samples, 0.31, 0.39) > 500, "{name}: its echo 0.3 s later");
+	}
+}
+
+/// a Bus held by a field, an item of a list or an untyped parameter takes the signal too: inferred through the field's
+/// declared type and the list's items, dispatched on the value at run time for the parameter (reviewer: the field case
+/// played nothing, silently)
+#[test]
+fn a_bus_from_a_field_an_item_or_an_untyped_parameter_takes_the_signal() {
+	let programs = [
+		("field", "class Mix { room: Bus }\nm = Mix(bus() |> delay(0.3, 0.5, 1))\nosc(A4, 0.1s) |> m.room"),
+		("item", "rooms = [bus() |> delay(0.3, 0.5, 1)]\nosc(A4, 0.1s) |> rooms#1"),
+		("untyped", "through(b) := osc(A4, 0.1s) |> b\nthrough(bus() |> delay(0.3, 0.5, 1))"),
+	];
+	for (name, program) in programs {
+		let samples = rendered_samples(program, name);
+		assert!(loudest(&samples, 0.31, 0.39) > 500, "{name}: its echo 0.3 s later");
+	}
+}
+
+/// decision shared-buses: `room.reverb = 0.6` sets the bus's effect while it plays, as `room = room |> reverb(0.6)`
+#[test]
+fn an_effect_assigned_as_a_member_changes_the_bus() {
+	crate::is!(
+		"use sound\nroom = bus() |> reverb(0.4) |> delay(0.25)\nroom.reverb = 0.6\nroom.chain",
+		warp::warp_parser::parse("[[\"reverb\" 0.6] [\"delay\" 0.25 0.4 0.5]]")
+	);
 }

@@ -29,10 +29,12 @@ fn silence_and_the_end_are_empty() {
 	is!(&format!("{SOUND}max(spectrum(chord_samples([A4], 0.1, \"sine\"), 5, 4)) == 0"), true);
 }
 
-/// A visualizer sample's run: it plays its song and paints frame after frame; None without a WebGPU adapter
+/// A visualizer sample's run, with the arguments of its <name>.args: it plays its song and paints frame after frame;
+/// None without a WebGPU adapter
 #[cfg(feature = "native")]
 fn animates_while_it_plays(sample: &str) -> Option<()> {
-	let run = crate::common::warp_command().args(["--no-ask", "run", sample]).output().unwrap();
+	let arguments = crate::common::arguments_beside(&std::path::Path::new(sample).with_extension(""));
+	let run = crate::common::warp_command().args(["--no-ask", "run", sample]).args(arguments).output().unwrap();
 	let errors = String::from_utf8_lossy(&run.stderr);
 	if errors.contains("no WebGPU adapter") {
 		return None;
@@ -70,7 +72,8 @@ fn the_gpu_visualizer_raymarches_while_it_plays() {
 	}
 }
 
-// the same tunnel written in warp functions: paint(tunnel, …) compiles them to one fragment shader (card compile-shaders)
+// the same tunnel written in warp functions: paint(tunnel, …) compiles them to one fragment shader (card compile-shaders),
+// lit by mozart.mp3's spectrum; its first 4 seconds (gpu_visualizer_warp.args), as long as gpu_visualizer.warp's song, not the whole song
 #[cfg(feature = "native")]
 #[test]
 fn the_gpu_visualizer_written_in_warp_raymarches_while_it_plays() {

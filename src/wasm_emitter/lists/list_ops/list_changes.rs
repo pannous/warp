@@ -9,8 +9,9 @@ impl WasmGcEmitter {
 			return;
 		}
 		let node_ref_nullable = Ref(self.node_ref(true));
+		let node_ref = Ref(self.node_ref(false));
 		let params = vec![node_ref_nullable, node_ref_nullable];
-		self.runtime_function("list_concat", params, vec![node_ref_nullable], self.copy_cells_locals(), |s, f| {
+		self.runtime_function("list_concat", params, vec![node_ref], self.copy_cells_locals(), |s, f| {
 			let (first, second) = (0, 1);
 			let copy = CopyCells::at(2);
 			for list in [second, first] {
@@ -18,7 +19,10 @@ impl WasmGcEmitter {
 				s.emit_collect_cells(f, list, None, &copy);
 				s.emit_rebuild_cells(f, &copy);
 			}
-			f.instruction(&I::LocalGet(copy.result));
+			// two empty lists: ø, never null (`[1][0..0] + []` trapped at its caller's ref.as_non_null, card traps-wasm)
+			Self::emit_list(f, &[I::Block(BlockType::Result(node_ref)), I::LocalGet(copy.result), I::BrOnNonNull(0)]);
+			s.call(f, "new_empty");
+			f.instruction(&I::End);
 		});
 	}
 
@@ -106,7 +110,7 @@ impl WasmGcEmitter {
 						I::LocalGet(list), I::LocalGet(items),
 				]);
 				s.call(f, "list_concat");
-				Self::emit_list(f, &[I::RefAsNonNull, I::Return, I::End]);
+				Self::emit_list(f, &[I::Return, I::End]);
 				// the last cell takes the copies as its rest, whose last cell is the list's last then
 				let walk_to_last = |s: &Self, f: &mut Function| {
 					Self::emit_list(

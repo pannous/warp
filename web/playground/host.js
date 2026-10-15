@@ -267,6 +267,10 @@ function buildValue(module, tree) {
 	}
 }
 
+// src/operators/codes.rs OP_CODES as written (Op::as_str), by the code a key carries above the kind bits
+const OPERATOR_SPELLINGS = ["", ":", "=", ":=", ".", "?.", "::", "->", "+", "-", "*", "/", "%", "rem", "^", "<<", ">>", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^^=", "<", ">", "<=", ">=", "==", "!=", "≈", "and", "or", "xor", "not", "-", "√", "∛", "‖", "++", "--", "²", "³", "?", "if", "then", "else", "while", "do", "#", "..", "to", "as", "±", "??", "===", "!==", "~", "⌞", "⌟", "&", "|", "↑", "↓"];
+// the keys that are entries of an object; the others are operations
+const ENTRY_OPERATORS = ["", ":", "=", ":="];
 // a value of the program (a reader.js tree) as a plain JavaScript value, for foreign_call: lists arrays, `{a:1}` objects
 const KIND_KEY = 6n;
 function plainOfTree(tree) {
@@ -284,10 +288,14 @@ function plainOfTree(tree) {
 		case 2: return Number(payload.float);
 		case 3: case 5: return payload.text;
 		case 4: return String.fromCodePoint(payload.i31);
-		// the value's own cells follow it in the key's flat chain (reader.js): `{a:[1, 2]}` keeps its 2
+		// the value's own cells follow it in the key's flat chain (reader.js): `{a:[1, 2]}` keeps its 2; code, `1+1`, is
+		// `{"+": [1, 1]}` (the JsonLogic shape of src/node/json_xml.rs), a prefix operation without its empty left side
 		case 6: {
 			const [value, ...rest] = tree.chain ?? [];
-			return { [plainOfTree(payload.node)]: value ? plainOfTree({ ...value, chain: rest }) : null };
+			const [left, right] = [plainOfTree(payload.node), value ? plainOfTree({ ...value, chain: rest }) : null];
+			const operator = OPERATOR_SPELLINGS[Number(kind >> 8n)] ?? ":";
+			if (ENTRY_OPERATORS.includes(operator)) return { [left]: right };
+			return { [operator]: [left, right].filter(side => side !== null) };
 		}
 		case 7: case 8: {
 			const values = items();

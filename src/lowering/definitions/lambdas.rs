@@ -7,13 +7,14 @@
 
 use super::nodes::{call, children_rewritten, is_kinded_type_word, key, named_assignment, Counter};
 use crate::analyzer::call_name;
-use crate::compiler::context::Context;
+use crate::compiler::context::{Context, UserFunctionDef};
 use crate::errors::diagnostic::Diagnostic;
 use crate::library_words::substitute;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
 use crate::words::{EACH_WORD, IMPLICIT_PARAMETER, ON_WORD, SORT_WORD};
+use std::collections::HashSet;
 
 const PARTIAL_LIST: &str = "partial_list";
 const LIST_PLACEHOLDER: &str = "loop_list";
@@ -49,6 +50,8 @@ const ITERATION_SPELLINGS: [(&str, &[&str]); 2] = [
 ];
 /// The label of the sorting function: Swift `sorted(by: >)`, Python `sorted(xs, key=…)`
 const SORT_LABELS: [&str; 2] = ["by", "key"];
+/// The label of the list an iteration word goes over: `map f on: xs` (card labels-calls)
+const LIST_LABELS: [&str; 1] = [ON_WORD];
 const COMPARISONS: [Op; 4] = [Op::Lt, Op::Gt, Op::Le, Op::Ge];
 
 const ITERATIONS: [Iteration; 9] = [
@@ -112,8 +115,10 @@ pub fn lower_strict(node: Node) -> Node {
 
 fn lowering(node: Node, strict: bool) -> Node {
 	let context = crate::analyzer::function_context(&node);
+	let classes = crate::modules::needed_definitions::class_names(&node);
 	let first_fresh = first_fresh_number(&node);
-	Lowering { context, counter: Counter::starting_at(first_fresh), strict }.expand(node)
+	let path_variables = crate::warp_parser::path_variables(&node);
+	Lowering { context, classes, path_variables, counter: Counter::starting_at(first_fresh), strict }.expand(node)
 }
 
 /// `loop_item_1`, the variable of a loop inlined from a function: an `it` in its body is no loop item but the `it` of
@@ -186,7 +191,53 @@ fn literal_function(node: &Node) -> Option<Lambda> {
 		.or_else(|| arrow_lambda(&it_function(node)?))
 }
 
+/// `xs.map(.floor)`, `people.sort(by: .age)`, `f = .name`: a leading-dot word in a code position, an argument in a call's
+/// parentheses or the value of `=` / `:=`, is the lambda `it => it.age` on its member, as Swift's `.member` (card
+/// dot-lambda), written out before any pass reads it so it goes the way of a written lambda. Element attributes and data
+/// entries are no code: `div{ class: .card }` keeps its symbol. `&floor` stays the reference to the function itself
+pub fn lower_member_lambdas(node: Node) -> Node {
+	match node {
+		Node::List(items, Bracket::Round, separator) => {
+			Node::List(items.into_iter().map(argument_lambda).collect(), Bracket::Round, separator)
+		}
+		Node::Key(target, op @ (Op::Assign | Op::Define), value) if member_of(&value).is_some() => {
+			Node::Key(target, op, Box::new(member_lambda(&value)))
+		}
+		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_member_lambdas(*node)), data },
+		other => other.map_children(lower_member_lambdas),
+	}
+}
+
+/// An argument `.age` or `by: .age` as its lambda
+fn argument_lambda(argument: Node) -> Node {
+	match argument.drop_meta() {
+		_ if member_of(&argument).is_some() => member_lambda(&argument),
+		Node::Key(label, Op::Colon, value) if member_of(value).is_some() => {
+			Node::Key(label.clone(), Op::Colon, Box::new(member_lambda(value)))
+		}
+		_ => lower_member_lambdas(argument),
+	}
+}
+
+/// `it => it.age` of `.age`
+fn member_lambda(dot_word: &Node) -> Node {
+	let member = member_of(dot_word).expect("a dot word");
+	let it = || symbol(IMPLICIT_PARAMETER);
+	key(it(), Op::Arrow, key(it(), Op::Dot, symbol(member)))
+}
+
+/// `age` of `.age`
+fn member_of(node: &Node) -> Option<&str> {
+	let Node::Symbol(name) = node.drop_meta() else { return None };
+	name.strip_prefix('.').filter(|member| member.starts_with(|letter: char| letter.is_alphabetic()))
+}
+
 /// `map`, `filter`, `sorted` … as a word, whether or not the program defines a function of that name
+/// `find`, `map`, `filter`, … under any spelling: a class's method of that name keeps them for other values
+pub(crate) fn is_iteration_word(name: &str) -> bool {
+	iteration_word(&Node::Symbol(name.to_string())).is_some()
+}
+
 fn iteration_word(word: &Node) -> Option<&'static Iteration> {
 	let Node::Symbol(name) = word.drop_meta() else {
 		return None;
@@ -196,6 +247,14 @@ fn iteration_word(word: &Node) -> Option<&'static Iteration> {
 		.find(|(_, spellings)| spellings.contains(&name.as_str()))
 		.map_or(name.as_str(), |(word, _)| word);
 	ITERATIONS.iter().find(|iteration| iteration.word == canonical)
+}
+
+/// `map square xs`, `filter even xs`: an iteration word whose first argument may be its function; sort, any and all take
+/// the list first, their function being optional
+pub(crate) fn takes_a_function_first(word: &Node) -> bool {
+	iteration_word(word).is_some_and(|iteration| {
+		iteration.extra_arguments == 0 && iteration.word != SORT_WORD && !TRUTH_WORDS.contains(&iteration.word)
+	})
 }
 
 /// `xs.map(it * 2)` in a function of one parameter: the `it` of the argument is the argument function's own
@@ -219,6 +278,23 @@ fn is_boolean_body(body: &Node) -> bool {
 		Node::Key(_, op, _) if COMPARISONS.contains(op) => true,
 		Node::List(items, _, _) if items.len() == 1 => is_boolean_body(&items[0]),
 		_ => crate::analyzer::is_boolean(body, &crate::analyzer::Scope::new()),
+	}
+}
+
+/// `map f on: xs`: the list its label names comes first, the other arguments keep their order after it
+fn labeled_list_first(mut arguments: Vec<Node>) -> Vec<Node> {
+	let labeled_list = |node: &Node| match node.drop_meta() {
+		Node::Key(label, Op::Colon, list) if label.symbol_name().is_some_and(|name| LIST_LABELS.contains(&name)) => {
+			Some(list.as_ref().clone())
+		}
+		_ => None,
+	};
+	match arguments.iter().position(|argument| labeled_list(argument).is_some()) {
+		Some(at) => {
+			let list = labeled_list(&arguments.remove(at)).expect("found");
+			[vec![list], arguments].concat()
+		}
+		None => arguments,
 	}
 }
 
@@ -587,8 +663,16 @@ fn named_function_arguments(items: Vec<Node>, bracket: &Bracket) -> Vec<Node> {
 		.collect()
 }
 
+/// `Path` of `find(folder:Path, pattern:text)`
+fn first_parameter_type(defined: &UserFunctionDef) -> Option<String> {
+	defined.params.first()?.annotation.as_ref().map(|annotation| annotation.drop_meta().name())
+}
+
 struct Lowering {
 	context: Context,
+	/// the program's classes: a function whose first parameter is one is a method, the iteration word stays for other values
+	classes: HashSet<String>,
+	path_variables: HashSet<String>,
 	counter: Counter,
 	strict: bool,
 }
@@ -616,6 +700,10 @@ impl Lowering {
 				let Node::Symbol(name) = target.drop_meta() else { unreachable!("guarded") };
 				let body = self.partial_application(&value).expect("guarded");
 				definition(name, Lambda::new(vec![PARTIAL_LIST.to_string()], self.expand(body)))
+			}
+			// a function head `find(folder:Path, pattern:text) := …` is no call: a class's method may share an iteration's word
+			Node::Key(head, Op::Define, body) if !matches!(head.drop_meta(), Node::Symbol(_)) => {
+				key(*head, Op::Define, self.expand(*body))
 			}
 			Node::Key(receiver, Op::Dot, method) if self.iteration_method(&method).is_some() => {
 				let (iteration, mut arguments) = self.iteration_method(&method).expect("guarded");
@@ -655,9 +743,25 @@ impl Lowering {
 		}
 	}
 
-	/// The iteration a word names, unless the program defines a function of that name
+	/// The iteration a word names, unless the program defines a function of that name other than a class's method:
+	/// `find(file:Path)` leaves `find(xs, f)` the iteration (card cross-module-overload)
 	fn iteration_of(&self, word: &Node) -> Option<&'static Iteration> {
-		iteration_word(word).filter(|_| !self.context.user_functions.contains_key(&word.drop_meta().name()))
+		iteration_word(word).filter(|_| match self.context.user_functions.get(&word.drop_meta().name()) {
+			Some(defined) => self.is_method(defined),
+			None => true,
+		})
+	}
+
+	/// `find(./notes, "*.txt")`: a path written without quotes where a class's method of the word takes a Path calls
+	/// that method, as generics.rs as_path makes it one; other first arguments iterate
+	fn calls_method(&self, word: &Node, first_argument: &Node) -> bool {
+		let takes_path = |defined| first_parameter_type(defined).is_some_and(|class| class == crate::words::PATH_CLASS);
+		self.context.user_functions.get(&word.drop_meta().name()).is_some_and(takes_path)
+			&& crate::warp_parser::is_written_path(first_argument, &self.path_variables)
+	}
+
+	fn is_method(&self, defined: &UserFunctionDef) -> bool {
+		first_parameter_type(defined).is_some_and(|class| self.classes.contains(&class))
 	}
 
 	/// `word(extras, function)` after a dot: the iteration and its arguments, the function last
@@ -735,6 +839,7 @@ impl Lowering {
 			let rest = spliced_applications(rest.to_vec());
 			// `map square on xs`, `map &square xs`: the function may come first
 			let rest: Vec<Node> = rest.iter().filter(|item| !item.is_symbol(ON_WORD)).cloned().collect();
+			let rest = labeled_list_first(rest);
 			let rest = match rest.as_slice() {
 				[first, second]
 					if iteration.extra_arguments == 0
@@ -754,7 +859,7 @@ impl Lowering {
 				return None;
 			};
 			let iteration = with_start(iteration, extras.len());
-			if extras.len() != iteration.extra_arguments {
+			if extras.len() != iteration.extra_arguments || self.calls_method(head, list) {
 				return None;
 			}
 			self.iterate(iteration, list.clone(), extras.to_vec(), function.clone())
@@ -801,12 +906,14 @@ impl Lowering {
 		})
 	}
 
-	/// A function given as a value: a lambda or block, an operator, or the name of a defined function
+	/// A function given as a value: a lambda or block, an operator, the name of a defined function or of a library word
+	/// of one value (`map floor xs`)
 	fn is_function_value(&self, node: &Node) -> bool {
 		arrow_lambda(node).is_some()
 			|| block_lambda(node).is_some()
 			|| operator_lambda(node).is_some()
-			|| matches!(node.drop_meta(), Node::Symbol(name) if self.context.user_functions.contains_key(name))
+			|| matches!(node.drop_meta(), Node::Symbol(name)
+				if self.context.user_functions.contains_key(name) || crate::library_words::is_one_value_function(name))
 	}
 
 	/// The function applied to the symbols `arguments`: the body of a literal function with its parameters replaced, or the call of a
@@ -836,6 +943,10 @@ impl Lowering {
 			None => match function.drop_meta() {
 				Node::Symbol(name) if self.context.user_functions.contains_key(name) => {
 					Ok(call(name, arguments.to_vec()))
+				}
+				// `map floor xs`: a library word of one value applies to each item as a defined function does
+				Node::Symbol(name) if arguments.len() == 1 && crate::library_words::is_one_value_function(name) => {
+					Ok(call(crate::library_words::canonical_spelling(name), arguments.to_vec()))
 				}
 				Node::Symbol(_) if !self.strict => Err(None),
 				// a function value known only at run time: a variable or parameter holding a closure, or a call returning one

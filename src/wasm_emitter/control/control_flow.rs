@@ -81,6 +81,8 @@ impl WasmGcEmitter {
 			return;
 		};
 		let then_expr = self.live_then(condition, then_expr, else_expr);
+		let else_expr = &self.live_else(condition, else_expr);
+		let else_expr = else_expr.as_ref();
 		self.emit_raw_branches(func, condition, &then_expr, else_expr, value_type, emit);
 	}
 
@@ -130,6 +132,8 @@ impl WasmGcEmitter {
 			return;
 		};
 		let then_expr = &self.live_then(condition, then_expr, else_expr);
+		let else_expr = &self.live_else(condition, else_expr);
+		let else_expr = else_expr.as_ref();
 
 		// A branch yielding a text, character, list or error (`if x {x} else {"offline"}`): both branches are Node values
 		let branch_value = |branch: &Node| match branch.drop_meta() {
@@ -197,18 +201,71 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// `is_type(x, "Circle")` of a declared class, x statically a number, text or symbol
+	/// The else branch of the run-time dispatch of instance_calls.rs, `if instance_of(d, "Doubler") then call(d, 1) else
+	/// d(1)`, or, for a d held as no function value (an item of a list of instances), the run-time error it is: the
+	/// emitter can apply only a function, so `d(1)` would refuse the whole program as calling nothing
+	fn live_else(&self, condition: &Node, else_expr: Option<&Node>) -> Option<Node> {
+		let tested = match last_statement(condition).drop_meta() {
+			Node::List(items, _, _) => match items.as_slice() {
+				[head, subject, _] if head.drop_meta().name() == crate::words::INSTANCE_OF => subject.symbol_name(),
+				_ => None,
+			},
+			_ => None,
+		};
+		let applies_tested = |branch: &Node| match branch.drop_meta() {
+			Node::List(items, Bracket::Round, _) => items.first().and_then(Node::symbol_name) == tested,
+			_ => false,
+		};
+		let holds_no_function = tested.is_some_and(|name| {
+			!self.ctx.user_functions.contains_key(name)
+				&& self.get_type(&Node::Symbol(name.to_string())) != Kind::Function
+		});
+		match (else_expr, tested) {
+			(Some(otherwise), Some(name)) if holds_no_function && applies_tested(otherwise) => {
+				let message = format!("{name} is not a function: {} calls nothing", otherwise.serialize().trim());
+				Some(Node::List(
+					vec![Node::Symbol(crate::words::RAISE_WORD.to_string()), Node::Text(message)],
+					Bracket::Round,
+					Separator::None,
+				))
+			}
+			_ => else_expr.cloned(),
+		}
+	}
+
+	/// A type test x can never pass by its static kind, alone or as a part of `a and b`: `is_type(x, "Circle")` of a
+	/// declared class, x a number, text or symbol; `is_type(x, "text")` of a list x, as overloads.rs dispatches
+	/// `f(g(), 1)` to `if is_type(t, "text") then f·text(t, 1) else …`, whose dead call of a list t would be refused
 	fn never_an_instance(&self, condition: &Node) -> bool {
-		let Node::List(items, _, _) = last_statement(condition).drop_meta() else {
-			return false;
+		let items = match last_statement(condition).drop_meta() {
+			Node::Key(left, Op::And, right) => return self.never_an_instance(left) || self.never_an_instance(right),
+			Node::List(items, _, _) => items,
+			_ => return false,
 		};
 		let [head, subject, spec] = items.as_slice() else {
 			return false;
 		};
-		let is_class_test = head.drop_meta().name() == crate::words::IS_TYPE
-			&& matches!(spec.drop_meta(), Node::Text(class) if self.ctx.type_registry.get_by_name(class).is_some());
-		is_class_test
-			&& matches!(self.get_type(subject), Kind::Int | Kind::Float | Kind::Text | Kind::Symbol | Kind::Codepoint)
+		let Node::Text(spec) = spec.drop_meta() else {
+			return false;
+		};
+		if head.drop_meta().name() != crate::words::IS_TYPE {
+			return false;
+		}
+		let kind = self.get_type(subject);
+		let plain = matches!(kind, Kind::Int | Kind::Float | Kind::Text | Kind::Symbol | Kind::Codepoint);
+		let class_or_map = self.ctx.type_registry.get_by_name(spec).is_some()
+			|| crate::type_tests::canonical_spec_word(spec) == crate::words::MAP_WORD;
+		if class_or_map {
+			return plain;
+		}
+		// a number may be a bool or a ratio at run time: only a test of no number kind is dead for it
+		let possible = match kind {
+			Kind::Int | Kind::Float => [Kind::Int as i64, Kind::Float as i64, crate::type_kinds::BOOL_MASK_BIT],
+			Kind::Text | Kind::Codepoint => [Kind::Text as i64, Kind::Codepoint as i64, Kind::Text as i64],
+			Kind::List => [Kind::List as i64; 3],
+			_ => return false,
+		};
+		crate::type_tests::runtime_kind_mask(spec).is_some_and(|mask| possible.iter().all(|bit| mask & 1 << bit == 0))
 	}
 
 	/// Emit while loop: (while condition) do body

@@ -55,9 +55,19 @@ const reportBareErrors = (target, label) => target.addEventListener("error", eve
 // the clipboard only right after the user acted (Firefox; Chrome when the page has no focus) refuses a run's read: a
 // button then asks for it, and its click reads (card dir-clipboard)
 const pasteInto = shared => answerInto(shared, async () => ({ text: await withPermission(CLIPBOARD_ASK, () => navigator.clipboard.readText()) }));
+// a sound file decoded for a waiting Worker, which has no decodeAudioData (host-sound.js pageDecoded, spectrum of a
+// file): its first channel at DECODED_RATE, whole amplitudes; `bytes` a file the run wrote, else fetched from `url`
+const DECODED_RATE = 22050; // band_high (5000 Hz) is well below its half
+const decodeSoundInto = (shared, url, bytes) => answerInto(shared, async () => {
+	const response = bytes ? undefined : await fetch(url);
+	if (response && !response.ok) throw new Error(`HTTP status ${response.status} for ${url}`);
+	const encoded = bytes ? bytes.slice().buffer : await response.arrayBuffer();
+	const audio = await new OfflineAudioContext(1, 1, DECODED_RATE).decodeAudioData(encoded);
+	return { rate: audio.sampleRate, amplitudes: Array.from(audio.getChannelData(0), amplitude => Math.round(amplitude * 32767)) };
+});
 // a Worker's call of a global only the page has (host-foreign.js callOnPage, card browser-interaction): its value when
 // plain, else the object kept here as {$page: id, type, text}, which the Worker's later calls name; the same object keeps
-// its id, so reading `$who.value` again and again keeps one entry. Each Worker holding it counts how often it got the
+// its id, so reading `$who` again and again keeps one entry. Each Worker holding it counts how often it got the
 // id; the object goes when every holder released it (its PageObjects collected, {releasePageObject: {id, received}})
 // or was terminated (card page-pageobjects)
 const pageObjects = new Map(); // id → {object, holders: Map(Worker → times given)}
@@ -96,7 +106,7 @@ function forWorker(value, holder) {
 	if (Array.isArray(value)) return value.map(item => forWorker(item, holder));
 	return { $page: pageObjectId(value, holder), type: value.constructor?.name ?? typeof value, text: String(value).slice(0, 200) };
 }
-// `$who` is document.getElementById("who") (src/lowering/foreign/dollar_names.rs): the playground shows the program's
+// `who` is document.getElementById("who") (src/lowering/foreign/page_names.rs): the playground shows the program's
 // markup in a shadow root, which it names as self.programElements, so its elements are found there
 const ownerOnPage = (receiver, member) => receiver === "document" && member === "getElementById" ? self.programElements?.() ?? document
 	: typeof receiver === "string" ? globalThis[receiver] : onPage(receiver);

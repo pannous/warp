@@ -14,6 +14,8 @@ mod test_bare_function_name;
 mod test_block_function;
 mod test_body_statement;
 mod test_braced_it_warning;
+mod test_braceless_call_in_logic; // card braceless-call
+mod test_braceless_calls; // card braceless-calls
 mod test_broadcast_of_list_variables; // card round-floor-xs
 mod test_broadcast_reassigned;
 mod test_broadcasting;
@@ -49,6 +51,7 @@ mod test_definition_value;
 mod test_destructuring_in_a_body;
 mod test_deterministic_inference;
 mod test_dollar_body;
+mod test_dot_lambda; // card dot-lambda
 mod test_each_spellings;
 mod test_effect_block_operand;
 mod test_effects;
@@ -70,6 +73,7 @@ mod test_function_head; // card cleanup-definition-view
 mod test_function_keyword;
 mod test_function_ref_compare; // card function-ref-compare
 mod test_function_references;
+mod test_function_type_at_run_time; // card type-function
 mod test_function_values;
 mod test_functions;
 mod test_gap_feeding; // card gap-feeding
@@ -95,6 +99,8 @@ mod test_library_word_assigned; // card floor-says
 mod test_library_word_values;
 mod test_list_conversion;
 mod test_list_fields; // card people-map
+mod test_map_function_first; // card map-function
+mod test_map_library_word_first; // cards map-library-first, map-library-word
 mod test_map_phrase;
 mod test_math_broadcast; // card cos-instead
 mod test_member_phrases; // card xs-insert
@@ -142,11 +148,13 @@ mod test_ported_calls;
 mod test_precomputed;
 mod test_preposition_calls; // card prepositions-call
 mod test_print_closure; // card print-closure
+mod test_print_function_value; // card print-function
 mod test_property_access;
 mod test_property_assign;
 mod test_property_words;
 mod test_python_higher_order;
 mod test_python_ruby_definitions;
+mod test_real_function_values; // card sin-cos
 mod test_recursive_list_functions;
 mod test_render_as;
 mod test_return_type_dispatch;
