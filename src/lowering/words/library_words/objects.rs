@@ -207,6 +207,26 @@ impl Lowering {
 		self.stored(target, value.clone())
 	}
 
+	/// `p.f = v` where `p.f` expanded to the call `f(p)`: nodes::set_by_call
+	pub(super) fn functional_setter(&self, written: &Node, expanded: &Node, value: &Node) -> Option<Node> {
+		let Node::Key(receiver, Op::Dot, word) = written.drop_meta() else {
+			return None;
+		};
+		if !matches!((receiver.drop_meta(), word.drop_meta()), (Node::Symbol(_), Node::Symbol(_))) {
+			return None;
+		}
+		let Node::List(items, Bracket::Round | Bracket::None, _) = expanded.drop_meta() else {
+			return None;
+		};
+		let [head, argument] = items.as_slice() else {
+			return None;
+		};
+		if !matches!(head.drop_meta(), Node::Symbol(_)) || argument.drop_meta() != receiver.drop_meta() {
+			return None;
+		}
+		Some(crate::lowering::nodes::set_by_call(receiver, head.clone(), self.expand(value.clone())))
+	}
+
 	/// `a = p.x = 5` is `p.x = 5; a = p.x`: the value of a field assignment is the field's new value, not the object
 	/// field_with gives (card chain-field)
 	pub(super) fn chained_field_assignment(&self, outer: &Node, value: &Node) -> Option<Node> {
