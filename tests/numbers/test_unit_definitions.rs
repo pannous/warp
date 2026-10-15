@@ -49,6 +49,10 @@ fn a_program_adds_units_by_unit_lines() {
 	is!("unit furlong := 201.168 m\nquantity(1, \"furlong\").in(\"m\")", 201.168);
 	is!("distance := 42 km\nstr(distance)", "42km");
 	is!("unit furlong := 201.168m; str(1km as furlong)", "(62500/12573)furlong");
+	// a unit line inside a text or a comment defines nothing (reviewer)
+	let program_unit_lines = warp::numbers::units::program_unit_lines;
+	assert_eq!(program_unit_lines("note = \"\nunit zz := 7m\n\"\n// unit yy := 7m\n2"), "");
+	assert_eq!(program_unit_lines("unit zz := 7m\n2zz"), "unit zz := 7m");
 }
 
 // decision unit-target: `as` names the unit the right side counts in, `it` the amount in the new unit

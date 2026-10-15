@@ -115,7 +115,8 @@ fn with_program_units(lines: String) -> &'static Definitions {
 pub fn program_unit_lines(source: &str) -> String {
 	let mut reader = lib_reader();
 	// `unit furlong := 201.168m; print(…)`: a unit line ends at its line's `;`
-	let lines = source.lines().map(|line| line.split(STATEMENT_END).next().unwrap_or_default().trim_end());
+	let code = crate::warp_parser::code_only(source);
+	let lines = code.lines().map(|line| line.split(STATEMENT_END).next().unwrap_or_default().trim_end());
 	let lines = lines.filter(|line| line.starts_with(UNIT_WORD) && line.contains(DEFINE));
 	lines.filter(|line| reader.knows_words_of(line) && reader.line(line).is_ok()).collect::<Vec<_>>().join("\n")
 }
