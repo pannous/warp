@@ -14,9 +14,9 @@
 //! The clipboard is watched by its change count, which reads no content: macOS asks the user before a program reads
 //! what another one copied, so the text is read only when the program asks for it (`clipboard`, clipboard_text).
 use crate::host_words::{
-	BATTERY, CHARGING, CLICK_PRESSED, CLICK_X, CLICK_Y, CLIPBOARD_COUNT, DARK_MODE, DISPLAY_DPI, DISPLAY_HEIGHT, DISPLAY_WIDTH,
-	GPU_DRAWING, KEY_CODE_HELD, KEY_DOWN, KEY_PRESSED, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE, SYSTEM_VALUES,
-	TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH, WINDOW_HEIGHT, WINDOW_OPEN, WINDOW_WIDTH,
+	BATTERY, CHARGING, CLICK_PRESSED, CLICK_X, CLICK_Y, CLIPBOARD_COUNT, DARK_MODE, DISPLAY_DPI, DISPLAY_HEIGHT,
+	DISPLAY_WIDTH, GPU_DRAWING, KEY_CODE_HELD, KEY_DOWN, KEY_PRESSED, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE,
+	SYSTEM_VALUES, TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH, WINDOW_HEIGHT, WINDOW_OPEN, WINDOW_WIDTH,
 };
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
@@ -295,7 +295,8 @@ fn display_dpi() -> Result<i64, String> {
 	let report = output("xrandr", &["--current"])?;
 	let screen = report.lines().find(|line| line.contains(" connected") && line.contains("mm x ")).unwrap_or_default();
 	let words: Vec<&str> = screen.split_whitespace().collect();
-	let pixels = words.iter().find_map(|word| word.split_once('x').filter(|(_, rest)| rest.contains('+'))?.0.parse().ok());
+	let pixels =
+		words.iter().find_map(|word| word.split_once('x').filter(|(_, rest)| rest.contains('+'))?.0.parse().ok());
 	let millimetres = words.iter().find_map(|word| word.strip_suffix("mm")?.parse().ok());
 	dots_per_inch(pixels.unwrap_or(0.0), millimetres.unwrap_or(0.0))
 }

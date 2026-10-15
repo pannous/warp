@@ -15,9 +15,9 @@
 //! Unit fields: `class Run{distance: km}` (unit_fields.rs), an instance's fields have signatures like an object's.
 
 use super::{exponent_of, finest_units, unit_named, units_text, Dimension, Factor, Quantity, Unit};
-use warp_runtime::host_words::{DISPLAY_DPI, SYSTEM_VALUE};
 use crate::lowering::function_head;
 use crate::words::{MAP_WORD, PRINT_WORD, RETURN_WORD, STR_WORD};
+use warp_runtime::host_words::{DISPLAY_DPI, SYSTEM_VALUE};
 
 mod function_units;
 mod list_units;
@@ -552,7 +552,8 @@ fn written_power(op: Op, exponent: &Node) -> Option<i32> {
 /// run time; the factor the SI amount takes when `given` turns into `target` by trading pixels for lengths, None when
 /// they differ in more
 fn pixels_as_lengths(given: &Signature, target: &Signature) -> Option<Node> {
-	let pixels = |powers: &Powers| powers.iter().find(|(dimension, _)| *dimension == Dimension::Pixel).map_or(0, |p| p.1);
+	let pixels =
+		|powers: &Powers| powers.iter().find(|(dimension, _)| *dimension == Dimension::Pixel).map_or(0, |p| p.1);
 	let traded = pixels(&given.powers) - pixels(&target.powers);
 	let as_lengths = super::added(&super::added(&given.powers, Dimension::Pixel, -traded), Dimension::Length, traded);
 	if traded == 0 || as_lengths != target.powers {

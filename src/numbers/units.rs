@@ -541,7 +541,6 @@ fn added(powers: &[(Dimension, i32)], dimension: Dimension, power: i32) -> Vec<(
 	added
 }
 
-
 /// The text of a unit result held in a `Node::Data`, None for any other data
 pub fn describe(data: &DataValue) -> Option<String> {
 	if let Some(quantity) = data.downcast_ref::<Quantity>() {
