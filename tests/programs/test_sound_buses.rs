@@ -223,3 +223,19 @@ fn a_bus_from_a_parameter_a_result_or_an_expression_takes_the_signal() {
 		assert!(loudest(&samples, 0.31, 0.39) > 500, "{name}: its echo 0.3 s later");
 	}
 }
+
+/// a Bus held by a field, an item of a list or an untyped parameter takes the signal too: inferred through the field's
+/// declared type and the list's items, dispatched on the value at run time for the parameter (reviewer: the field case
+/// played nothing, silently)
+#[test]
+fn a_bus_from_a_field_an_item_or_an_untyped_parameter_takes_the_signal() {
+	let programs = [
+		("field", "class Mix { room: Bus }\nm = Mix(bus() |> delay(0.3, 0.5, 1))\nosc(A4, 0.1s) |> m.room"),
+		("item", "rooms = [bus() |> delay(0.3, 0.5, 1)]\nosc(A4, 0.1s) |> rooms#1"),
+		("untyped", "through(b) := osc(A4, 0.1s) |> b\nthrough(bus() |> delay(0.3, 0.5, 1))"),
+	];
+	for (name, program) in programs {
+		let samples = rendered_samples(program, name);
+		assert!(loudest(&samples, 0.31, 0.39) > 500, "{name}: its echo 0.3 s later");
+	}
+}

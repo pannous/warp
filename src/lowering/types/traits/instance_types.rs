@@ -21,8 +21,10 @@ pub struct InstanceTypes {
 	parameters: RefCell<Vec<HashMap<String, Option<Shape>>>>,
 }
 
-/// Fixpoint rounds over the assignments, at most: a variable can be assigned from another one defined later in the
-/// text, a result from a chain of calls (`room = make()` of `make() := bus() |> delay(…)`, four deep)
+/// Fixpoint rounds over the assignments, at most: each round learns one more link of a chain, a variable assigned from
+/// another one defined later in the text, a result from a chain of calls (`room = make()` of `make() := bus() |>
+/// delay(…)` is four links). Written programs stay well below 8 links; a chain still growing then is warned about and
+/// what it left unknown dispatches at run time (instance_calls.rs)
 pub(super) const INFERENCE_ROUNDS: usize = 8;
 
 impl InstanceTypes {
@@ -39,10 +41,9 @@ impl InstanceTypes {
 		if types.registry.types().is_empty() {
 			return types;
 		}
-		for _ in 1..INFERENCE_ROUNDS {
-			if !types.inferred_round(node) {
-				break;
-			}
+		if (1..INFERENCE_ROUNDS).all(|_| types.inferred_round(node)) {
+			let warning = format!("the instance types still changed after {INFERENCE_ROUNDS} rounds of inference: the values they left unknown dispatch at run time");
+			crate::errors::diagnostic::say(Diagnostic::at(node, warning));
 		}
 		types.final_round = true;
 		types.inferred_round(node);
@@ -112,11 +113,21 @@ impl InstanceTypes {
 				}
 				self.collect(value, variables, results);
 			}
-			Node::Key(left, _, right) => {
+			Node::Key(left, op, right) => {
+				// `ds.map(d => d(5))`: d is an item of ds
+				if *op == Op::Dot {
+					if let Node::List(arguments, _, _) = right.drop_meta() {
+						self.bind_item_lambdas(left, &arguments[1..], variables);
+					}
+				}
 				self.collect(left, variables, results);
 				self.collect(right, variables, results);
 			}
 			Node::List(items, _, _) => {
+				// `map(ds, d => d(5))`
+				if let [_, list, arguments @ ..] = items.as_slice() {
+					self.bind_item_lambdas(list, arguments, variables);
+				}
 				// `for x in xs`: x is an item of xs; of other items too it is shapeless (filters share one element name)
 				if let [keyword, variable, in_word, list, ..] = items.as_slice() {
 					if keyword.name() == FOR_WORD && in_word.name() == IN_WORD {
@@ -133,6 +144,21 @@ impl InstanceTypes {
 				items.iter().for_each(|item| self.collect(item, variables, results))
 			}
 			_ => {}
+		}
+	}
+
+	/// The parameter of a lambda given with a list of instances, `d => …` of `ds.map(d => …)`, is an item of it, like the
+	/// variable of `for d in ds`
+	fn bind_item_lambdas(&self, list: &Node, arguments: &[Node], variables: &mut HashMap<String, Option<Shape>>) {
+		let Some(Shape::ListOf(type_name)) = self.shape(list) else {
+			return;
+		};
+		for argument in arguments {
+			if let Node::Key(parameter, Op::Arrow, _) = argument.drop_meta() {
+				if let Node::Symbol(name) = parameter.drop_meta() {
+					Self::bind(variables, name, Some(Shape::Instance(type_name.clone())), false)
+				}
+			}
 		}
 	}
 
@@ -191,6 +217,15 @@ impl InstanceTypes {
 		matches!(self.shape(node), Some(Shape::Instance(type_name)) if self.has_field(&type_name, name))
 	}
 
+	/// The declared type of the field `field` (a word) of the instance `receiver` holds, when that is a declared type too
+	fn field_type(&self, receiver: &Node, field: &Node) -> Option<String> {
+		let (Some(Shape::Instance(type_name)), Node::Symbol(name)) = (self.shape(receiver), field.drop_meta()) else {
+			return None;
+		};
+		let declared = self.registry.get_by_name(&type_name)?.fields.iter().find(|field| field.name == *name)?;
+		self.registry.get_by_name(&declared.type_name).is_some().then(|| declared.type_name.clone())
+	}
+
 	fn has_field(&self, type_name: &str, name: &str) -> bool {
 		self.registry
 			.get_by_name(type_name)
@@ -228,6 +263,10 @@ impl InstanceTypes {
 			// `xs.sort`
 			Node::Key(list, Op::Dot, word) if word.name() == SORT_WORD => {
 				self.shape(list).filter(|shape| matches!(shape, Shape::ListOf(_)))
+			}
+			// `m.room` of an instance whose type declares the field `room: Bus`
+			Node::Key(receiver, Op::Dot, field) if self.field_type(receiver, field).is_some() => {
+				self.field_type(receiver, field).map(Shape::Instance)
 			}
 			// `q.to("km")` of an instance: what the method returns (card instance-result)
 			Node::Key(receiver, Op::Dot, call) if matches!(self.shape(receiver), Some(Shape::Instance(_))) => {
