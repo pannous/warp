@@ -441,6 +441,17 @@ fn field_or_word(receiver: &Node, word_node: &Node, name: &str, module: &str) ->
 	if_then_else(is_of_type, word_call(word_node, receiver, vec![]), field)
 }
 
+/// A variable or an element of one (`xs#i`, as a loop reads its element): read twice, it is the same value
+fn is_pure_read(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(_) => true,
+		Node::Key(list, Op::Hash, index) => {
+			list.symbol_name().is_some() && matches!(index.drop_meta(), Node::Symbol(_) | Node::Number(_))
+		}
+		_ => false,
+	}
+}
+
 /// The call `word(receiver, arguments…)`
 fn word_call(word_node: &Node, receiver: &Node, arguments: Vec<Node>) -> Node {
 	Node::List([vec![word_node.clone(), receiver.clone()], arguments].concat(), Bracket::Round, Separator::None)
@@ -846,7 +857,13 @@ impl Lowering {
 			.library_word_for(name, arguments.len() + 1)
 			.filter(|_| is_called || counting_method(name, &self.context).is_none())
 		{
-			return Some(self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false));
+			let word_call = self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false);
+			// `m.first` of a parameter or loop element given `{first: 9}` (card map-field)
+			let is_element = matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _));
+			if !is_called && !has_arguments && (is_element || self.may_hold_object(receiver)) {
+				return Some(self.map_field_or(receiver, name, word_node, word_call));
+			}
+			return Some(word_call);
 		}
 		if !is_called && self.reads_declared_field(receiver, name) {
 			return Some(field_lookup(receiver, name, word_node));
@@ -940,6 +957,19 @@ impl Lowering {
 			|| self.is_parameter(receiver)
 			|| is_call_result
 			|| self.instances.is_declared_field(name)
+	}
+
+	/// `x.word` of an x that may be a map holding the key `word`: `if x is a map holding the key then x["word"] else
+	/// word(x)`, so a map's own words (`m.count`) still answer on maps without such a key. A one-entry map in a list
+	/// (`[{first: 2}]`) is held as a key, which has that key too
+	fn map_field_or(&self, receiver: &Node, name: &str, word_node: &Node, word_call: Node) -> Node {
+		if !is_pure_read(receiver) {
+			return word_call;
+		}
+		let is_type = |type_word: &str| parens(vec![symbol(crate::words::IS_TYPE), receiver.clone(), text(type_word)]);
+		let is_map = key(is_type(crate::words::MAP_WORD), Op::Or, is_type(&crate::Kind::Key.to_string()));
+		let has_key = self.call(COLLECTION_CONTAINS, word_node, vec![receiver.clone(), text(name)], false);
+		if_then_else(key(parens(vec![is_map]), Op::And, has_key), field_lookup(receiver, name, word_node), word_call)
 	}
 
 	fn may_hold_object(&self, receiver: &Node) -> bool {
