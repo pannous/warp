@@ -46,6 +46,13 @@ fn a_function_taking_the_list_whole_is_not_hinted() {
 	assert_eq!(broadcast_hints("g(xs) := xs#1; map([[1] [2 3]], g)"), vec![]);
 }
 
+/// `p xs` prints the list once, the map prints each item: only where `f xs` broadcasts does the hint exist
+#[test]
+fn a_function_that_does_not_broadcast_is_not_hinted() {
+	assert_eq!(broadcast_hints("p(x) := print x; xs = [1 2]; xs.map(p)"), vec![]);
+	assert_eq!(broadcast_hints("h(x) := count(x); map([[1] [2 3]], h)"), vec![]);
+}
+
 #[test]
 fn a_lambda_or_a_program_s_own_map_is_not_hinted() {
 	assert_eq!(broadcast_hints("map([1 2], x => x+1)"), vec![]);

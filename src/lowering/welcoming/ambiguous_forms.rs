@@ -25,17 +25,10 @@ const BROADCAST_REASON: &str = "a function of one value maps over a list by itse
 /// `xs.map(square)`, `map square on: xs`: a named function of one value maps over a list by itself (broadcasting.rs),
 /// `square xs` (wiki/Broadcasting.md, card hint-map); not a word taking the list whole (`reverse`, `count`)
 fn hint_broadcast_maps(program: &Node, words: &SuffixWords) {
-	let functions = crate::analyzer::function_context(program).user_functions;
-	let broadcasts = |name: &str| match functions.get(name) {
-		Some(defined) => matches!(defined.params.as_slice(), [param] if !takes_list(param)),
-		None => {
-			!words.variables.contains(name)
-				&& crate::lowering::library_signatures::library_signature(name).is_some_and(|(params, signature)| {
-					params.len() == 1
-						&& first_parameter_type(&signature).is_some_and(|type_name| !is_list_type(type_name))
-				})
-		}
-	};
+	let broadcasting = crate::broadcasting::broadcasting_functions(program);
+	// a variable of a library word's name shadows it; a program's own function broadcasting.rs decided already
+	let broadcasts =
+		|name: &str| broadcasting.contains(name) && (words.functions.contains(name) || !words.variables.contains(name));
 	program.visit(&mut |part| {
 		if let Some((function, list)) = mapped_function(part, words, &broadcasts) {
 			crate::normalize::set_position_of(part);
@@ -121,25 +114,6 @@ fn unlabeled(argument: &Node) -> Vec<Node> {
 		Some((list, words)) => [words, vec![list]].concat(),
 		None => vec![argument.clone()],
 	}
-}
-
-/// A parameter declared or used as a list (`xs: list`, `xs#2`): the function takes the list whole
-fn takes_list(param: &crate::compiler::context::Param) -> bool {
-	param.used_as == Some(crate::type_kinds::Kind::List)
-		|| param.annotation.as_ref().is_some_and(|annotation| is_list_type(annotation.serialize().trim()))
-}
-
-/// `(x:number) -> int` → number
-fn first_parameter_type(signature: &str) -> Option<&str> {
-	let first = signature.trim_start_matches('(').split([',', ')']).next()?;
-	first.split_once(':').map(|(_, type_name)| type_name.trim())
-}
-
-/// `list`, `[int]`, `ints`, `list of int`
-fn is_list_type(type_name: &str) -> bool {
-	type_name.starts_with('[')
-		|| type_name.starts_with(crate::words::LIST_WORD)
-		|| crate::analyzer::plural_element_type(type_name).is_some()
 }
 
 /// The parameter of the function an operator word stands for
