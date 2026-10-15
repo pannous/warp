@@ -1465,6 +1465,9 @@ PASSED:
   ✓ functions::test_global_with_closures::global_in_a_program_with_a_lambda
   ✓ functions::test_go_functions::a_go_short_declaration_that_is_assigned_stays_an_error
   ✓ functions::test_go_functions::several_results
+  ✓ functions::test_ignored_parameters::a_placeholder_in_a_call_stays_a_partial_application
+  ✓ functions::test_ignored_parameters::an_ignored_parameter_without_a_keyword
+  ✓ functions::test_ignored_parameters::ignored_parameters_still_consume_arguments
   ✓ functions::test_inlining::a_helper_with_free_variables_or_recursion_is_called
   ✓ functions::test_inlining::an_inlined_helper_leaves_its_argument_unchanged
   ✓ functions::test_inlining::an_inlined_helper_updates_the_list_handed_back
@@ -2819,6 +2822,8 @@ PASSED:
   ✓ numbers::test_number::test_number
   ✓ numbers::test_number::test_number_floats
   ✓ numbers::test_number::test_number_mix
+  ✓ numbers::test_pixel_unit::pixels_are_their_own_dimension
+  ✓ numbers::test_pixel_unit::pixels_turn_into_lengths_through_the_displays_dpi
   ✓ numbers::test_plus_minus_gaussian::a_gaussian_reads_back_as_it_is_written
   ✓ numbers::test_plus_minus_gaussian::a_math_word_scales_the_deviation_by_its_slope
   ✓ numbers::test_plus_minus_gaussian::a_number_scales_the_deviation
@@ -2979,9 +2984,13 @@ PASSED:
   ✓ numbers::test_unit_conversion::an_inexact_conversion_is_a_ratio
   ✓ numbers::test_unit_conversion::another_dimension_is_the_dimension_error
   ✓ numbers::test_unit_conversion::long_unit_names_name_the_target
+  ✓ numbers::test_unit_definitions::a_program_adds_units_by_unit_lines
+  ✓ numbers::test_unit_definitions::a_program_name_wins_over_a_unit_word
+  ✓ numbers::test_unit_definitions::a_unit_line_names_its_target_by_as
   ✓ numbers::test_unit_definitions::dimension_names_come_from_the_definitions
   ✓ numbers::test_unit_definitions::each_unit_is_the_amount_its_definition_says
   ✓ numbers::test_unit_definitions::run_time_quantities_know_the_units_of_the_definitions
+  ✓ numbers::test_unit_definitions::units_come_from_unit_lines
   ✓ numbers::test_unit_field_display::a_field_read_shows_the_declared_unit
   ✓ numbers::test_unit_field_display::a_list_mapped_from_a_unit_field_keeps_the_unit
   ✓ numbers::test_unit_field_display::a_one_line_loop_body_prints_the_unit
@@ -4563,6 +4572,11 @@ PASSED:
   ✓ types::test_plain_enum::other_languages_enums_are_plain_enums_too
   ✓ types::test_printable::as_text_str_and_text_call_the_printable_operation
   ✓ types::test_printable::print_and_interpolation_call_the_printable_operation
+  ✓ types::test_program_conversions::a_program_converts_into_its_class
+  ✓ types::test_program_conversions::a_program_converts_its_class_to_text
+  ✓ types::test_program_conversions::a_type_has_no_conversion_to_itself
+  ✓ types::test_program_conversions::an_alias_is_no_conversion
+  ✓ types::test_program_conversions::other_values_convert_the_built_in_way
   ✓ types::test_real_references::a_function_changes_the_instance_it_is_given
   ✓ types::test_real_references::a_list_item_is_the_instance_itself
   ✓ types::test_real_references::a_map_built_by_its_entries_shares
@@ -5877,4 +5891,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5872 passed, 0 failed, 5872 total tested
+13 ignored, 5886 passed, 0 failed, 5886 total tested
