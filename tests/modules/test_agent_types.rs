@@ -11,7 +11,7 @@ fn lowered(code: &str) -> String {
 fn a_typed_declaration_asks_the_agent_for_its_type() {
 	assert!(lowered("x:int = agent \"33/3\"\nx").contains("agent_as"), "{}", lowered("x:int = agent \"33/3\"\nx"));
 	assert!(lowered("float y = agent \"pi\"\ny").contains("agent_as"));
-	assert!(lowered("agent \"is 7 prime\" as bool").contains("agent_as"));
+	assert!(lowered("(agent \"is 7 prime\") as bool").contains("agent_as"));
 }
 
 #[test]

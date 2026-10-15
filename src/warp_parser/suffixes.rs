@@ -142,7 +142,53 @@ impl WarpParser {
 		if arg == Empty && self.pos == start {
 			return None; // an ø or [] written there is the argument: `x = sum []`
 		}
+		let arg = self.cast_argument(lhs, arg, argument_bp);
 
 		Some(Node::List(vec![lhs.clone(), arg], Bracket::None, Separator::Space))
+	}
+
+	/// `o = f 2.2 as int`: the cast belongs to the argument, f(2.2 as int), as in the statement `f 2.2 as int` and as
+	/// `o = f 2 + 1` is f(2 + 1) (card parameter-named-number, user decision B); arithmetic after it stays in the argument
+	fn cast_argument(&mut self, function: &Node, argument: Node, argument_bp: u8) -> Node {
+		self.skip_spaces_and_inline_comments();
+		let Some((Op::As, width)) = self.peek_operator() else {
+			return argument;
+		};
+		let (line, column) = self.get_position();
+		self.advance_by(width);
+		self.skip_whitespace();
+		let target = self.parse_expr(Op::As.binding_power().1);
+		let cast = Node::Key(Box::new(argument), Op::As, Box::new(target));
+		match self.argument_cast_reading(function, &cast, line, column) {
+			Ok(()) => self.continue_expr(cast, argument_bp),
+			Err(unanswered) => unanswered,
+		}
+	}
+
+	/// `f x as T` of a function of the program, whose variants may differ by parameter or by result type: a warning
+	/// naming both explicit forms, f(x as T) taken
+	pub(super) fn argument_cast_reading(
+		&self,
+		function: &Node,
+		cast: &Node,
+		line: usize,
+		column: usize,
+	) -> Result<(), Node> {
+		let (Node::Symbol(name), Node::Key(argument, Op::As, target)) = (function.drop_meta(), cast.drop_meta()) else {
+			return Ok(());
+		};
+		if !self.functions.contains(name) {
+			return Ok(());
+		}
+		let (argument, target) = (crate::normalize::operand_text(argument), crate::normalize::operand_text(target));
+		let written = format!("{name} {argument} as {target}");
+		let question =
+			format!("does `as {target}` cast the argument or the result of {name}? (warp casts the argument)");
+		let readings = vec![
+			reading("the argument", &format!("{name}({argument} as {target})")),
+			reading("the result", &format!("({name} {argument}) as {target}")),
+		];
+		ask(&Ask::new(ARGUMENT_CAST, question, readings, Fallback::Warning).written(&written).at(line, column))
+			.map(|_| ())
 	}
 }

@@ -11,7 +11,7 @@
 // A fresh profile per run, so the user's own Firefox is never touched.
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
@@ -55,14 +55,21 @@ async function startFirefox(profile) {
 	throw new Error(`Firefox (${FIREFOX}) did not listen for WebDriver BiDi in ${START_SECONDS} s`);
 }
 
+// FIREFOX_PREFS: a JSON5 map of preferences for the fresh profile (its user.js), e.g. WebGPU on a runner without it
+const preferences = Object.entries(process.env.FIREFOX_PREFS ? new Function(`"use strict"; return (${process.env.FIREFOX_PREFS});`)() : {});
 const profile = mkdtempSync(join(tmpdir(), "warp-firefox-"));
+writeFileSync(join(profile, "user.js"), preferences.map(([name, value]) => `user_pref(${JSON.stringify(name)}, ${JSON.stringify(value)});\n`).join(""));
 const { socket, exited } = await startFirefox(profile);
 let nextId = 1;
 const pending = new Map();
 const messages = [];
+const realms = new Map();
 const report = (level, text, url = "") => REPORTED_LEVELS.has(level) && messages.push({ level: level === "warn" ? "warning" : level, text, url });
 const events = {
-	"log.entryAdded": entry => report(entry.level, entry.text ?? entry.args?.map(arg => arg.value ?? arg.type).join(" "), entry.source?.realm ? entry.stackTrace?.callFrames?.[0]?.url : ""),
+	// an error without a stack (Firefox's bare "uncaught exception: undefined") still says the realm it came from: the
+	// page ("window") or which kind of Worker
+	"log.entryAdded": entry => report(entry.level, entry.text ?? entry.args?.map(arg => arg.value ?? arg.type).join(" "), entry.stackTrace?.callFrames?.[0]?.url ?? realms.get(entry.source?.realm) ?? ""),
+	"script.realmCreated": ({ realm, type, origin }) => realms.set(realm, `${type} realm of ${origin}`),
 	"network.responseCompleted": ({ response }) => response.status >= FAILED_STATUS && report("error", `${response.status} ${response.statusText}`.trim(), response.url),
 	"network.beforeRequestSent": ({ isBlocked, request }) => isBlocked && send("network.continueRequest", {
 		request: request.request,

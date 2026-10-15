@@ -42,16 +42,16 @@ fn a_melody_is_its_notes_one_after_another() {
 
 #[test]
 fn notes_are_frequencies() {
-	is!("use sound\nround(note(\"A4\"))", 440);
-	is!("use sound\nround(note(\"C#4\") * 100)", 27718);
-	is!("use sound\nround(note(\"Eb5\"))", 622);
+	is!("use sound\nround(note(\"A4\").hertz())", 440);
+	is!("use sound\nround(note(\"C#4\").hertz() * 100)", 27718);
+	is!("use sound\nround(note(\"Eb5\").hertz())", 622);
 	is!("use sound\nC4", 261.63);
 }
 
 /// card module-text: note() reads the module's plain text constant scale_letters, also in a program with units
 #[test]
 fn notes_are_named_in_a_program_with_units() {
-	is!("use sound\nx = 300ms\nround(note(\"D4\"))", 294);
+	is!("use sound\nx = 300ms\nround(note(\"D4\").hertz())", 294);
 	is!("play([C4 E4 G4], 3ms)\nplay(note(\"C#4\"), 0.003)\n7", 7);
 }
 
@@ -68,7 +68,7 @@ fn the_note_table_matches_note() {
 	];
 	for octave in OCTAVES {
 		let differences: Vec<String> =
-			octave.split(' ').map(|name| format!("abs({name} - note(\"{name}\"))")).collect();
+			octave.split(' ').map(|name| format!("abs({name} - note(\"{name}\").hertz())")).collect();
 		is!(&format!("use sound\nmax([{}]) < 0.01", differences.join(", ")), true);
 	}
 }

@@ -392,16 +392,20 @@ impl<'a> Loader<'a> {
 		let source = std_module(PRELUDE_MODULE).expect("lib/prelude.warp is embedded");
 		let definitions =
 			crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(PRELUDE_MODULE), source))?;
+		// an operator (`infix operator ↑(x: number, n: number)`) keeps its name: a program's own `infix operator ↑(v: V,
+		// n: int)` overloads it by parameter type (card easy-add)
+		let qualified_words: Vec<&String> =
+			prelude.iter().filter(|word| !word.starts_with(crate::operators::OPERATOR_FUNCTION_PREFIX)).collect();
 		let qualified = |definition: Node| {
-			prelude
+			qualified_words
 				.iter()
 				.fold(definition, |node, word| renamed_word(node, word, &prelude_name(word).unwrap_or_default()))
 		};
 		self.std_definitions.extend(definitions.into_iter().map(qualified));
 		crate::compiler::compile_context::change(|context| {
 			let names = &mut context.module_definitions;
-			prelude.iter().for_each(|word| {
-				names.remove(word);
+			qualified_words.iter().for_each(|word| {
+				names.remove(*word);
 				names.extend(prelude_name(word));
 			});
 		});

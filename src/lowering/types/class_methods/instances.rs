@@ -209,8 +209,8 @@ impl InstanceFinder<'_> {
 }
 
 /// The functions whose value is an instance of one of `classes`, with its class: `make(n) := V(n)`, a body ending in
-/// a construction, or in a call of another such function
-pub(super) fn returned_classes(node: &Node, classes: &[String]) -> std::collections::HashMap<String, String> {
+/// a construction, or in a call of another such function; a used module's such functions too (module_returned_classes)
+pub(crate) fn returned_classes(node: &Node, classes: &[String]) -> std::collections::HashMap<String, String> {
 	let mut definitions = vec![];
 	node.visit(&mut |part| {
 		if let Node::Key(head, Op::Define, body) = part {
@@ -219,7 +219,11 @@ pub(super) fn returned_classes(node: &Node, classes: &[String]) -> std::collecti
 			}
 		}
 	});
-	let mut returned = std::collections::HashMap::new();
+	let mut returned: std::collections::HashMap<String, String> =
+		crate::compiler::compile_context::read(|context| context.module_returned_classes.clone())
+			.into_iter()
+			.filter(|(function, class)| classes.contains(class) && !definitions.iter().any(|(own, _)| own == function))
+			.collect();
 	// a function returning another's result: until no function is added
 	loop {
 		let known = returned.len();

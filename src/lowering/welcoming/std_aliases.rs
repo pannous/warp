@@ -188,7 +188,7 @@ fn member_read<'a>(node: &'a Node, kept: &[&str]) -> Option<(&'static StdAlias, 
 }
 
 /// The program with `use module` first for each module an alias brought
-fn with_uses(program: Node, used: HashSet<&'static str>) -> Node {
+pub(crate) fn with_uses(program: Node, used: HashSet<&'static str>) -> Node {
 	if used.is_empty() {
 		return program;
 	}

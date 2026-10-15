@@ -5,6 +5,7 @@ use sound
 
 tempo = 110
 live_loop bass 4 { pattern "c3 ~ [c3 c3] <~ c3?>" }   // the bass: a bar, four times; the last step alternates
+at 2 bars live_loop bass { pattern "c3 c3 [c3 c3] g2" }  // bass again: from its third bar it plays this block
 live_loop 4 { pattern "c2 _ _ e2" }                  // c2 holds three steps
 live_loop 4 { pattern("~ g4 ~ g4*2", 1 bar) }       // the offbeat chords' root
 live_loop 2 { pattern("c5(3,8) e5(2,8)", 2 bars) }   // Euclidean rhythms, 3 and 2 of 8

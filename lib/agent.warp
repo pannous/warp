@@ -1,5 +1,5 @@
 // The standard library module agent (card g_X_F0): `agent "summarize this text"` sends the prompt as given to Claude
-// (the Anthropic Messages API) and gives its answer as text; `agent(prompt, "claude-opus-5-5")` names another model; with an expected type (`x:int = agent "33/3"`, `agent "…" as bool`) it answers a value of that type (agent_as).
+// (the Anthropic Messages API) and gives its answer as text; `agent(prompt, "claude-opus-5-5")` names another model; with an expected type (`x:int = agent "33/3"`, `(agent "…") as bool`) it answers a value of that type (agent_as).
 // The key is ANTHROPIC_API_KEY: natively the environment's (a terminal's `export ANTHROPIC_API_KEY=sk-ant-…`, in
 // ~/.zshrc to keep it), in the browser the API key field of the playground's ⋯ menu (kept in that browser only). Loaded when a program calls agent, like units
 use net

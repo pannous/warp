@@ -28,6 +28,8 @@ pub const CLOCK_WEEKDAYS: i64 = 10_000;
 pub const SIGNAL_WATCH: &str = "signal_watch";
 /// `system_value(name)`: the machine's `battery` percent, `charging`, `online`, `dark mode` (system_values.rs)
 pub const SYSTEM_VALUE: &str = "system_value";
+/// `set_system_value(name, value)`: writes one, `window.width = 800` resizes the paint window (system_values.rs write)
+pub const SET_SYSTEM_VALUE: &str = "set_system_value";
 pub const BATTERY: &str = "battery";
 pub const CHARGING: &str = "charging";
 pub const ONLINE: &str = "online";
@@ -55,6 +57,12 @@ pub const VIEW_WIDTH: &str = "view_width";
 pub const VIEW_HEIGHT: &str = "view_height";
 /// Whether `use draw` draws on the GPU (src/graphics/gpu_canvas.rs): natively in a window, or as WARP_DRAW says; never on a page
 pub const GPU_DRAWING: &str = "gpu_drawing";
+/// window.width/height (card make-width): the paint window's inner size in points (the playground: the paintings' frame
+/// in CSS pixels), writable; display.width/height the screen's, read only (lowering/words/module_properties.rs)
+pub const WINDOW_WIDTH: &str = "window_width";
+pub const WINDOW_HEIGHT: &str = "window_height";
+pub const DISPLAY_WIDTH: &str = "display_width";
+pub const DISPLAY_HEIGHT: &str = "display_height";
 /// The next key pressed over the paint window, its code (0: none left), each press read once: natively `on key {…}`
 /// (lowering/signals/system_signals.rs); not a value a program names
 pub const KEY_PRESSED: &str = "key_pressed";
@@ -63,7 +71,7 @@ pub const KEY_PRESSED: &str = "key_pressed";
 pub const CLICK_PRESSED: &str = "click_pressed";
 pub const CLICK_X: &str = "click_x";
 pub const CLICK_Y: &str = "click_y";
-pub const SYSTEM_VALUES: [(&str, bool); 13] = [
+pub const SYSTEM_VALUES: [(&str, bool); 17] = [
 	(BATTERY, false),
 	(CHARGING, true),
 	(ONLINE, true),
@@ -77,6 +85,10 @@ pub const SYSTEM_VALUES: [(&str, bool); 13] = [
 	(VIEW_WIDTH, false),
 	(VIEW_HEIGHT, false),
 	(GPU_DRAWING, true),
+	(WINDOW_WIDTH, false),
+	(WINDOW_HEIGHT, false),
+	(DISPLAY_WIDTH, false),
+	(DISPLAY_HEIGHT, false),
 ];
 /// `clipboard`: the clipboard's text, read only when the program reads it (host.rs clipboard_text)
 pub const CLIPBOARD: &str = "clipboard";
@@ -121,7 +133,7 @@ pub const FETCH_HANDLER_PREFIX: &str = "on·fetch·";
 /// The checks of the listeners on shared values (P106), polled at every check point (lowering/signals/signal_values.rs)
 pub const SHARED_HANDLER: &str = "on·shared";
 /// The words link_host_words provides
-pub const BASIC_HOST_WORDS: [&str; 11] = [
+pub const BASIC_HOST_WORDS: [&str; 12] = [
 	SLEEP,
 	RANDOM,
 	RANDOM_BELOW,
@@ -132,6 +144,7 @@ pub const BASIC_HOST_WORDS: [&str; 11] = [
 	SIGNAL_LISTEN,
 	SIGNAL_WATCH,
 	SYSTEM_VALUE,
+	SET_SYSTEM_VALUE,
 	EXIT,
 ];
 
@@ -186,6 +199,14 @@ mod linking {
 			let name = c_string(&mut caller, name)?;
 			crate::system_values::read(&name).map_err(wasmtime::Error::msg)
 		})?;
+		linker.func_wrap(
+			HOST_LIBRARY,
+			SET_SYSTEM_VALUE,
+			|mut caller: Caller<'_, T>, name: i32, value: i64| -> Result<()> {
+				let name = c_string(&mut caller, name)?;
+				crate::system_values::write(&name, value).map_err(wasmtime::Error::msg)
+			},
+		)?;
 		linker.func_wrap(HOST_LIBRARY, EXIT, |code: i64| -> Result<()> {
 			Err(wasmtime::Error::new(system_signals::ExitRequest(code as i32)))
 		})?;

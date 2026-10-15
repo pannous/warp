@@ -51,6 +51,7 @@ pub fn allow_windows() {
 	warp_runtime::system_values::tell_gpu_drawing(on_gpu);
 	if !headless {
 		warp_runtime::system_values::tell_window_opener(open_blank_window);
+		warp_runtime::system_values::tell_window_resizer(crate::graphics::paint_window::resize);
 	}
 }
 

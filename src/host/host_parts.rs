@@ -3,6 +3,7 @@
 //! (src/web/deploy.rs) ship their texts; the playground's Deploy (src/web/mod.rs web_worker_bundle) only names them for
 //! warp-hosting, so the wasm32 compiler carries the names without the texts.
 
+use crate::host::page_parts::{page_layout, PageLayout};
 use crate::host::{
 	ANY_STD_MODULE, CLIPBOARD_TEXT, DRAW_SHAPE, DRAW_SHOW, FETCH_REPLY, FETCH_START, FOREIGN_CALL, GPU_COMPUTE,
 	GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER, HOST_LIBRARY, PAGE_PATH, PAINT, PARSE_CODE,
@@ -29,6 +30,7 @@ macro_rules! script_text {
 		""
 	};
 }
+pub(crate) use script_text;
 
 /// The scripts every page loads before the parts of the host
 pub const HOST_SCRIPTS: [Script; 2] = [("reader.js", script_text!("reader.js")), ("host.js", script_text!("host.js"))];
@@ -177,39 +179,67 @@ pub fn exports(module: &[u8], name: &str) -> bool {
 	})
 }
 
-/// The module of `code`'s Worker and the host scripts it needs (reader.js, host.js, its parts), which come before
-/// cloud-worker.js in worker.js; warp-hosting (web/hosting) takes the module and the scripts' names
-pub fn worker_parts(code: &str) -> Result<(Vec<u8>, Vec<Script>), String> {
-	// the reflection getters the JavaScript host reads values with
-	let module = crate::pipeline::for_hosting(|| crate::pipeline::for_any_host(|| crate::pipeline::compile(code)))
-		.map_err(|failure| compile_failure(code, &failure))?;
-	if let Some(feature) = browser_only_feature(&module.bytes)? {
-		return Err(format!(
-			"{feature} runs in a browser page, and Deploy runs the program on a server, which answers requests: \
-			 deploying browser programs as a site is still to come (card deploy-browser-site); run it in the playground meanwhile"
-		));
-	}
-	if !exports(&module.bytes, crate::lowering::serve::PAGE_SUBMITTED) {
-		return Err("the program answers no request: give it a route, `get \"/\" { \"hello\" }`".into());
-	}
-	let scripts = host_scripts_of(&module.bytes)?;
-	Ok((module.bytes, scripts))
+/// What Deploy makes of a program (notes/hosting.md "Browser programs")
+pub enum Deployable {
+	/// A Worker answering the program's routes: its module and the host scripts that come before cloud-worker.js
+	Server { module: Vec<u8>, scripts: Vec<Script> },
+	/// A program using the browser (paint, the GPU, sound, page events; card deploy-browser-site): a Worker serving
+	/// its site (cloud-site.js), whose page runs the program in the visitor's browser
+	Site { module: Vec<u8>, layout: PageLayout },
 }
 
-/// The first feature of the module that needs a browser page (a canvas, the GPU, sound, frames, the clipboard), which
-/// a Worker answering requests does not have, as the program says it
-fn browser_only_feature(module: &[u8]) -> Result<Option<&'static str>, String> {
-	let feature_of = |name: &str| match name {
-		PAINT => Some("paint"),
-		DRAW_SHAPE | DRAW_SHOW => Some("drawing (use draw)"),
-		SOUND => Some("sound"),
-		TEXT_COVERAGE => Some("text on a canvas"),
-		CLIPBOARD_TEXT => Some("the clipboard"),
-		SIGNAL_LISTEN => Some("`on frame` and other page events"),
-		name if GPU_WORDS.contains(&name) => Some("the GPU"),
-		_ => None,
+impl Deployable {
+	pub fn module(&self) -> &[u8] {
+		match self {
+			Deployable::Server { module, .. } | Deployable::Site { module, .. } => module,
+		}
+	}
+
+	/// The scripts warp-hosting composes the Worker of, by name, as /deploy's query: `scripts=` before cloud-worker.js,
+	/// or a site's `site=` page scripts, `worker=` scripts of the program's Worker and `files=` every file shipped
+	pub fn hosting_query(&self) -> String {
+		let names = |scripts: &[Script]| scripts.iter().map(|(name, _)| *name).collect::<Vec<_>>().join(",");
+		match self {
+			Deployable::Server { scripts, .. } => format!("scripts={}", names(scripts)),
+			Deployable::Site { layout, .. } => format!(
+				"site={}&worker={}&files={}",
+				names(&layout.scripts),
+				names(&layout.worker_scripts),
+				names(&layout.shipped())
+			),
+		}
+	}
+}
+
+/// What Deploy makes of `code`: its site when it uses the browser, else the Worker answering its routes
+pub fn deployable(code: &str) -> Result<Deployable, String> {
+	let compiled = |build: &dyn Fn() -> Result<crate::pipeline::CompiledModule, Node>| {
+		build().map(|module| module.bytes).map_err(|failure| compile_failure(code, &failure))
 	};
-	Ok(imports_of(module)?.iter().filter(|(library, _)| library == HOST_LIBRARY).find_map(|(_, name)| feature_of(name)))
+	// the reflection getters the JavaScript host reads values with
+	let module = compiled(&|| {
+		crate::pipeline::for_hosting(|| crate::pipeline::for_any_host(|| crate::pipeline::compile(code)))
+	})?;
+	if uses_the_browser(&module)? {
+		let module = compiled(&|| crate::pipeline::for_a_page(|| crate::pipeline::compile(code)))?;
+		let layout = page_layout(&module, false)?;
+		return Ok(Deployable::Site { module, layout });
+	}
+	if !exports(&module, crate::lowering::serve::PAGE_SUBMITTED) {
+		return Err("the program answers no request: give it a route, `get \"/\" { \"hello\" }`".into());
+	}
+	let scripts = host_scripts_of(&module)?;
+	Ok(Deployable::Server { module, scripts })
+}
+
+/// Does the module need a browser page (a canvas, the GPU, sound, page events like `on frame`, the clipboard), which a
+/// Worker answering requests does not have
+fn uses_the_browser(module: &[u8]) -> Result<bool, String> {
+	let browser_word = |name: &str| {
+		[PAINT, DRAW_SHAPE, DRAW_SHOW, SOUND, TEXT_COVERAGE, CLIPBOARD_TEXT, SIGNAL_LISTEN].contains(&name)
+			|| GPU_WORDS.contains(&name)
+	};
+	Ok(imports_of(module)?.iter().any(|(library, name)| library == HOST_LIBRARY && browser_word(name)))
 }
 
 /// The text of an error, else the value written out

@@ -6,7 +6,7 @@
 //! A field read on a list of instances reads it of each: `people's name`, `people.name`, `name of people` are
 //! `people.map(p => p.name)` (card people-map).
 
-use super::nodes::{call, children_rewritten, is_colon_pair, key, Counter};
+use super::nodes::{call, children_rewritten, is_colon_pair, key, parameter_name, Counter};
 use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -231,6 +231,11 @@ fn ambiguous_call(at: &Node, name: &str, argument: &str, op: &Op, right: &str) -
 }
 
 fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
+	if let Some((head, body, rebuild)) = crate::lowering::type_tests::function_definition(&node) {
+		if let Some(inner) = without_parameters(&head, arities) {
+			return rebuild(head, nest_prefix_calls(body, &inner));
+		}
+	}
 	let arity = |node: &Node| arity_of(node, arities);
 	match node {
 		Node::List(
@@ -293,6 +298,16 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 		}
 		other => other.map_children(|child| nest_prefix_calls(child, arities)),
 	}
+}
+
+/// In a function's body its parameters are values, no functions of the same name: `f(name) := contains(name, "-")`
+/// beside a class's name() method
+fn without_parameters(head: &Node, arities: &HashMap<String, Arity>) -> Option<HashMap<String, Arity>> {
+	let Node::List(items, _, _) = head.drop_meta() else { return None };
+	let shadowed: Vec<String> =
+		items.iter().skip(1).filter_map(parameter_name).filter(|name| arities.contains_key(name)).collect();
+	let unshadowed = arities.iter().filter(|(name, _)| !shadowed.contains(name));
+	(!shadowed.is_empty()).then(|| unshadowed.map(|(name, arity)| (name.clone(), *arity)).collect())
 }
 
 /// `add 1` (also as the value of `x = add 1`) given the items after its comma, when it is short of arguments and they fit

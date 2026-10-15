@@ -287,6 +287,7 @@ addHostPart({
 				return null;
 			},
 			outputs: () => { throw new Error("midi.outputs: the playground's page owns the MIDI devices and a program cannot wait for their list; midi_on and midi_send use the first output"); },
+			inputs: () => { throw new Error("midi.inputs: the playground's page owns the MIDI devices and a program cannot wait for their list"); },
 			receive: () => { throw new Error("midi.receive: MIDI input does not reach a playground program yet (Web MIDI answers on the page, not in the program's Worker)"); },
 		},
 		// `play "song.mp3"`, `stop_sound` (lib/sound.warp, card sound-library): the page plays it with an <audio>
@@ -321,6 +322,8 @@ addHostPart({
 			at: seconds => { self.voiceAt?.(Number(seconds)); return null; },
 			rest: seconds => { self.voiceSounded?.(Number(seconds)); return null; }, // midi_note's length (card midi-clock)
 			at_end: () => { self.voiceAtEnd?.(); return null; },
+			// the voice's moment on the clock every Worker shares (src/sound/mod.rs moment_seconds, card live-redefine)
+			moment: () => self.voiceMoment?.() ?? 0,
 			wait: () => null,
 			// sample("kick.wav") (card sound-samples, src/sound/audio_files.rs): [rate, channels, offset frames …]; the playground
 			// decodes WAV only, a Worker has no decoder for the other formats

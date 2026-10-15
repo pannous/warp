@@ -14,6 +14,12 @@ A time is a `$Node` of `Kind::Time` (18): `data` = `$i64box` of its position, `v
 - Zoned = 4: nanoseconds since 1970 UTC; the index in `calendar::ZONES` (8 bits) above the form, the offset in minutes
   above it (`OFFSET_SHIFT`). Read back with the current rules; a prediction (after the builtin rules' publication)
   prints `[_tzdata=warp-2026a]`
+- Clock = 5: a time of day (`calendar::Time::Clock`, type `time of day`), nanoseconds since midnight. Made by the
+  parts `t.time` (whole seconds, prints `22:27:46`) and `t.date` (a Date) of any time with a clock or date
+  (`Time::part`; at run time `time_field` indices 10 and 11 wrapped into a time node). `time.now` lowers to `now.time`
+  (time/partial_comparisons.rs, user decision time-word). `+`/`-` an exact duration goes round the clock
+  (23:00 + 2 hours = 01:00); months or days are refused. Not yet: a time of day compared with a duration (`now.time <
+  17h`) and a clock literal (`22:27`).
 
 `time::time_info` gives the info bits and position of a constant. The analyzer types a time `Kind::Data`. Readers
 (`wasm_reader::struct_node`, `web.rs cell_node`) pass all info bits (`kind >> 8`) to `time::time_node(info, position)`.

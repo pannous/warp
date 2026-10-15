@@ -109,9 +109,9 @@ const TARGETS = {
 
 async function workerUpload(name, ticket) {
 	setStatus("building the Worker…");
-	const { module, scripts, error } = await bundleOf(editor.getValue());
+	const { module, query, error } = await bundleOf(editor.getValue());
 	if (error) throw new Error(error);
-	return [`${HOSTING}/deploy?name=${name}&scripts=${scripts.join(",")}&ticket=${ticket}`, module];
+	return [`${HOSTING}/deploy?name=${name}&${query}&ticket=${ticket}`, module];
 }
 
 async function deploy(target) {

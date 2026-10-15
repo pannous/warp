@@ -23,6 +23,17 @@ import timersScript from "../playground/host-timers.js";
 import randomScript from "../playground/host-random.js";
 import mediaScript from "../playground/host-media.js";
 import cloudWorkerScript from "../playground/cloud-worker.js";
+import cloudSiteScript from "../playground/cloud-site.js";
+import markupScript from "../playground/markup.js";
+import markupTransitionsScript from "../playground/markup-transitions.js";
+import markupFormsScript from "../playground/markup-forms.js";
+import siteScript from "../playground/site.js";
+import canvasScript from "../playground/canvas.js";
+import siteThreadScript from "../playground/site-thread.js";
+import taskWorkersScript from "../playground/task-workers.js";
+import siteWorkerScript from "../playground/site-worker.js";
+import taskWorkerScript from "../playground/task-worker.js";
+import coiServiceWorkerScript from "../playground/coi-serviceworker.js";
 
 // the host scripts by the names src/web/site.rs host_scripts_of gives them (HOST_SCRIPTS, HOST_PARTS)
 const HOST_SCRIPTS = {
@@ -41,6 +52,20 @@ const HOST_SCRIPTS = {
 	"host-media.js": mediaScript,
 };
 const ALWAYS_SCRIPTS = ["reader.js", "host.js"];
+// the files a browser program's site ships besides the host scripts, by the names src/host/page_parts.rs gives them
+const SITE_FILES = {
+	...HOST_SCRIPTS,
+	"markup.js": markupScript,
+	"markup-transitions.js": markupTransitionsScript,
+	"markup-forms.js": markupFormsScript,
+	"site.js": siteScript,
+	"canvas.js": canvasScript,
+	"site-thread.js": siteThreadScript,
+	"task-workers.js": jsMembersScript + taskWorkersScript,
+	"site-worker.js": siteWorkerScript,
+	"task-worker.js": taskWorkerScript,
+	"coi-serviceworker.js": coiServiceWorkerScript,
+};
 
 const CLOUDFLARE_API = "https://api.cloudflare.com/client/v4";
 const GITHUB_AUTHORIZE = "https://github.com/login/oauth/authorize";
@@ -288,9 +313,21 @@ function checkedWasm(bytes) {
 	return bytes;
 }
 
-// POST /deploy?name=…&scripts=…, the module as the body
-async function programOf(request) {
-	return { wasm: checkedWasm(await request.arrayBuffer()), scripts: checkedScripts(new URL(request.url).searchParams.get("scripts")) };
+// POST /deploy?name=…&scripts=…, the module as the body; a browser program's site (card deploy-browser-site) names
+// its page's scripts, those of the program's Worker and every file shipped instead: ?site=…&worker=…&files=…
+async function programOf(request, name) {
+	const asked = new URL(request.url).searchParams;
+	const wasm = checkedWasm(await request.arrayBuffer());
+	if (!asked.has("site")) return { wasm, scripts: checkedScripts(asked.get("scripts")) };
+	const [scripts, workerScripts, files] = ["site", "worker", "files"].map(key => checkedSiteFiles(asked.get(key)));
+	return { wasm, site: { title: name, scripts, workerScripts, files: Object.fromEntries(files.map(file => [file, SITE_FILES[file]])) } };
+}
+
+function checkedSiteFiles(names) {
+	const asked = (names ?? "").split(",").filter(Boolean);
+	const unknown = asked.filter(name => !SITE_FILES[name]);
+	if (unknown.length) throw new Refusal(400, `warp-hosting has no site file ${unknown.join(", ")}: it needs a redeploy with this warp's web/playground`);
+	return asked;
 }
 
 function checkedName(name) {
@@ -306,13 +343,14 @@ function checkedScripts(names) {
 	return [...ALWAYS_SCRIPTS, ...asked];
 }
 
-// the program's Worker as src/web/deploy.rs worker_files makes it: worker.js, app.wasm compiled, app.bin as bytes
-function scriptForm({ wasm, scripts }) {
-	const worker = [...scripts.map(name => HOST_SCRIPTS[name]), cloudWorkerScript].join("");
+// the program's Worker as src/web/deploy.rs worker_files makes it: worker.js, app.wasm compiled, app.bin as bytes; a
+// site's worker.js serves the site (cloud-site.js) and needs only app.bin
+function scriptForm({ wasm, scripts, site }) {
+	const worker = site ? `const SITE = ${JSON.stringify(site)};\n${cloudSiteScript}` : [...scripts.map(name => HOST_SCRIPTS[name]), cloudWorkerScript].join("");
 	const form = new FormData();
 	form.append("metadata", JSON.stringify({ main_module: "worker.js", compatibility_date: COMPATIBILITY_DATE }));
 	form.append("worker.js", new File([worker], "worker.js", { type: "application/javascript+module" }));
-	form.append("app.wasm", new File([wasm], "app.wasm", { type: "application/wasm" }));
+	if (!site) form.append("app.wasm", new File([wasm], "app.wasm", { type: "application/wasm" }));
 	form.append("app.bin", new File([wasm], "app.bin", { type: "application/octet-stream" }));
 	return form;
 }
@@ -354,7 +392,7 @@ async function claim(env, name, owner) {
 async function deployHere(request, env, name) {
 	const owner = await user(request, env);
 	if (!env.CLOUDFLARE_API_TOKEN) throw new Refusal(501, "warp-hosting has no CLOUDFLARE_API_TOKEN yet (notes/hosting.md)");
-	const program = await programOf(request);
+	const program = await programOf(request, name);
 	await claim(env, name, owner);
 	const url = await upload(env, request, { token: env.CLOUDFLARE_API_TOKEN, account: env.ACCOUNT_ID, script: SCRIPT_PREFIX + name, program });
 	return json({ url, owner: owner.login });
@@ -368,7 +406,7 @@ async function deployToOwnAccount(request, env, name) {
 		if (accounts.length !== 1) throw new Refusal(400, `the token reaches ${accounts.length} accounts: say which (X-Cloudflare-Account)`);
 		account = accounts[0].id;
 	}
-	const program = await programOf(request);
+	const program = await programOf(request, name);
 	return json({ url: await upload(env, request, { token, account, script: name, program }) });
 }
 

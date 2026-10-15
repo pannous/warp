@@ -207,6 +207,7 @@ function startWorker(restarts = 0) {
 		worker.onerror = event => failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
 		worker.onmessage = ({ data }) => {
 			if (data.type === "notify") data = notification(data.text);
+			if (data.type === "window") return resizeWindow(data, $("paintings")); // canvas.js
 			if (data.type === "dispatch") return dispatchToPage(data.event); // markup.js, card page-custom-event
 			if (!data) return;
 			if (stalled) watchStart();
@@ -240,7 +241,7 @@ function startWorker(restarts = 0) {
 				slept(pending, data.milliseconds);
 			}
 			if (data.type === "tasks inline") pending.tasksInline = data.reason;
-			if (data.type === "paint") painted(pending, data.canvas ? { ...data, canvas: paintCanvases.get(data.canvas) } : data);
+			if (data.type === "paint") painted(pending, paintingOf(data));
 			if (data.type === "module") lastModule = data.bytes;
 			if (data.type === "report" && data.id === pending.id) finish(pending, { ...data.report, printed: pending.printed, paintings: pending.paintings, listening: pending.listening ?? [], address: pending.address, milliseconds: data.milliseconds });
 		};
@@ -306,7 +307,7 @@ function notification(text) {
 // canvas shows the pictures to someone once the page was clicked or typed in; before (the CI tour, as for sounds) a
 // `while window_open` drawing loop ends at once instead of waiting for input forever
 const darkMode = matchMedia(DARK_MODE_QUERY);
-const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(!beforeUserActivation()), ...viewSize() } });
+const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(!beforeUserActivation()), display_width: screen.width, display_height: screen.height, ...viewSize() } });
 darkMode.addEventListener("change", tellSystemValues);
 ["pointerdown", "keydown"].forEach(type => addEventListener(type, () => worker && tellSystemValues(), { once: true, capture: true }));
 new ResizeObserver(() => worker && tellSystemValues()).observe($("output"));
@@ -540,6 +541,7 @@ async function runInWorker(code) {
 		run.stopTimer = setTimeout(() => pending === run && showStop(true), STOP_GRACE_MS);
 		pending = run;
 		silence();
+		paintingWindow = undefined; // canvas.js: each run's paintings at their own size until it sets window.width
 		tellSystemValues();
 		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements() });
 	});
@@ -735,15 +737,18 @@ function showFrame(paintings) {
 }
 
 // the canvases paint of a shader draws into, by id (host-gpu.js gpuPainted): the page makes one and sends its
-// OffscreenCanvas through the port to the task Worker holding the GPU device
+// OffscreenCanvas straight to the task Worker holding the GPU device (task-workers.js). Not through a port the program's
+// Worker made: Firefox lost a canvas posted into a port still on its way to the task Worker (card shaders-firefox)
 const paintCanvases = new Map();
-function sendPaintCanvas({ id, width, height, port, replaces }) {
+// a paint message as shown: a GPU-drawn one names its canvas by id
+const paintingOf = data => data.canvas ? { ...data, canvas: paintCanvases.get(data.canvas) } : data;
+function sendPaintCanvas({ id, width, height, taskWorkerId, replaces }) {
 	const canvas = paintingElement({ width, height });
 	canvas.gpu = true;
 	paintCanvases.delete(replaces);
 	paintCanvases.set(id, canvas);
 	const offscreen = canvas.transferControlToOffscreen();
-	port.postMessage({ canvas: offscreen }, [offscreen]);
+	worker.postToTaskWorker(taskWorkerId, { paintCanvas: { id, canvas: offscreen } }, [offscreen]);
 }
 
 // ⛶ (card little-full): the last painting fills the screen at its own aspect ratio, Esc or ⛶ again leaves; a click
@@ -825,7 +830,9 @@ function showEventOutput(data) {
 		$("printed").textContent = terminalText($("printed").textContent + data.text);
 		$("printed").hidden = false;
 	}
-	if (data.type === "paint") showPaintings([data]);
+	// a frame of `on frame` (cards https-pannous, very-fast: its GPU canvas showed as its id, and a pixel frame made a
+	// new canvas each time)
+	if (data.type === "paint") showFrame([paintingOf(data)]);
 	if (data.type === "address") showAddress(data.path);
 	if (data.type !== "handled") return;
 	if (data.value !== undefined) showValue(data.value, data.error, data.html);
@@ -1033,5 +1040,16 @@ function initialize() {
 window.playground = { evaluate, applyFix, chooseExample, runCode, reportAddress, code: () => editor.getValue(), setCode: source => editor.setValue(source), lastModule: () => lastModule, acknowledge: topic => saveAcknowledged([...acknowledged, topic]), forgetAll: () => saveAcknowledged([]),
 	// what a run waits for, for the Firefox driver's timeout report (card firefox-hello-again)
 	state: () => ({ worker: workerStage, ready: workerSettled, pending: pending?.id, queued: queued !== undefined, showing }) };
+
+// a failure without a reason (Firefox's bare "uncaught exception: undefined") is said with where it happened
+addEventListener("error", event => {
+	if (event.error !== undefined) return;
+	console.error(`warp page: an error without a reason at ${event.filename}:${event.lineno}:${event.colno}: ${event.message}`);
+});
+addEventListener("unhandledrejection", event => {
+	if (event.reason !== undefined) return;
+	event.preventDefault();
+	console.error("warp page: a promise failed without a reason", event.promise, new Error("seen here").stack);
+});
 
 (window.pageStarts ?? Promise.resolve()).then(initialize); // index.html: not before its reload for isolation

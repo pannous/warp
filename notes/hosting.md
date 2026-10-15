@@ -89,6 +89,19 @@ lambda's DNS moves to Cloudflare):
 - Tests: tests/web/test_deploy.rs (the bundle); `node web/hosting/test_hosting.mjs` against the real API (wrangler
   dev of the control Worker, `warp deploy --hosted`, the live routes, DELETE; needs ~/.keys CLOUDFLARE_API_TOKEN and gh).
 
+## Browser programs (card deploy-browser-site)
+A program that uses the browser (paint, use draw, the GPU, sound, text on a canvas, the clipboard, `on frame` and
+other page events: host_parts.rs uses_the_browser) has nothing to answer on a server: the Worker would fail at its
+first request ("host.signal_listen is not available"). Deploy makes it a site instead (host_parts.rs `deployable` →
+`Deployable::Site`): the module compiled for a page, the page's scripts, those of the program's Worker and the files
+shipped (src/host/page_parts.rs, the layout `warp build --site` uses, which builds on wasm32 too, so the playground's
+Deploy computes it). The Worker is `const SITE = {title, scripts, workerScripts, files}` + web/playground/cloud-site.js:
+it serves the page (empty markup, the program shows itself once it runs; no native prerender), the scripts and
+app.wasm (app.bin's bytes), all with COOP/COEP so the page and the program's Worker share memory. warp-hosting gets
+`?site=…&worker=…&files=…` instead of `?scripts=…` and composes the same Worker from its own copies (SITE_FILES).
+A program with both routes and browser features deploys as a site for now (its page routes work in the page;
+server routes would need a server module without the browser words).
+
 ## Built: warp-lambda, native on pannous.com (card ferron-hosting)
 - Playground ⋯ menu "☁ Deploy to pannous.com" (same GitHub login as ☁ Deploy) sends the program's source to
   https://lambda.pannous.com/native/deploy?name=x; it answers at https://x.lambda.pannous.com. Demo:

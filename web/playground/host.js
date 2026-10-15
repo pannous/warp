@@ -17,6 +17,11 @@ const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 // (crates/warp-runtime/src/system_values.rs NATIVE_VIEW)
 // window_open: no page told it shows the pictures (playground.js tellSystemValues), so `while window_open` never starts
 const VIEW_DEFAULTS = { view_width: 640, view_height: 480, window_open: 0, gpu_drawing: 0 };
+// window.width, window.height (card make-width): the frame the paintings show in, in CSS pixels; the view's size until the
+// run sets it (set_system_value), which the page then gives its paintings (hooks.resizeWindow, canvas.js)
+const WINDOW_SIDES = { window_width: "view_width", window_height: "view_height" };
+const DISPLAY_READ_ONLY = "a program cannot resize the display: set window.width or canvas.width instead";
+const toldValue = name => self.pageSystemValues?.[name] ?? VIEW_DEFAULTS[name];
 // the standard library's adapters (src/modules/std_adapters.rs, notes/stdlib.md section 7): module → member → function of
 // plain values (plainOfTree / treeOfPlain, as for foreign_call); the parts add them (host-hashes.js, host-files.js)
 const STD_ADAPTERS = {};
@@ -92,6 +97,7 @@ function programImports(holder, hooks) {
 		return bytes.slice(pointer, end);
 	};
 	const access = { program, text, cString };
+	const windowSide = side => holder.windowSize?.[side] ?? toldValue(WINDOW_SIDES[side]);
 	const checkPoint = () => eachHostPart("poll", holder);
 	const known = {
 		host: {
@@ -134,12 +140,21 @@ function programImports(holder, hooks) {
 				const heldKey = self.pagePointer ? Atomics.load(self.pagePointer.values, self.pagePointer.names.indexOf("key")) : 0;
 				if (value === "key_down") return BigInt(heldKey !== 0);
 				if (value === "key code held") return BigInt(heldKey);
+				if (value in WINDOW_SIDES) return BigInt(windowSide(value));
 				const pointerIndex = self.pagePointer?.names.indexOf(value) ?? -1; // canvas.js trackPointer
 				if (pointerIndex >= 0) return BigInt(Atomics.load(self.pagePointer.values, pointerIndex));
 				// a Worker has no matchMedia: the page tells it (playground.js tellSystemValues)
-				const known = value === "dark mode" && globalThis.matchMedia ? matchMedia(DARK_MODE_QUERY).matches : self.pageSystemValues?.[value] ?? VIEW_DEFAULTS[value];
+				const known = value === "dark mode" && globalThis.matchMedia ? matchMedia(DARK_MODE_QUERY).matches : toldValue(value);
 				if (known !== undefined) return BigInt(known);
 				throw new Error(`${value}: the playground cannot read it yet`);
+			},
+			// window.width = 800: the paintings' frame (crates/warp-runtime/src/system_values.rs write); the display reads only
+			set_system_value: (name, value) => {
+				const side = decode(cString(name));
+				if (!(side in WINDOW_SIDES)) throw new Error(side.startsWith("display") ? DISPLAY_READ_ONLY : `${side} cannot be set`);
+				if (value <= 0n) throw new Error(`a window side of ${value} cannot show: its sides must be positive`);
+				holder.windowSize = { window_width: windowSide("window_width"), window_height: windowSide("window_height"), [side]: Number(value) };
+				hooks.resizeWindow?.(holder.windowSize.window_width, holder.windowSize.window_height);
 			},
 			// `notify "text"` (src/host.rs notify): the page shows it (playground.js notification)
 			notify: text => {

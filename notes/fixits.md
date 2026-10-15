@@ -66,7 +66,7 @@ something wrong use a `Diagnostic` (error) or a warning (`diagnostic::ask`). Tes
 | `a=1 2 3` (bare-list, error) | ambiguous_forms | none | `a=[1 2 3]`, `a=1; 2; 3` |
 | `1+2 squared` (suffix-precedence, error) | ambiguous_forms | none | `1+(2 squared)`, `(1+2) squared` |
 | `x : a+b` (uncharged-block) | blocks.rs | a block | `x = a+b` (its value) |
-| `render "hi"` with variants (overloads) | overloads.rs | first declared | `render "hi" as pdf`, `… as docx` |
+| `render "hi"` with variants (overloads) | overloads.rs | first declared | `(render "hi") as pdf`, `… as docx` |
 | `pirnt` names nothing (near-miss) | list_emitter `warn_near_miss` | the symbol | `data pirnt`, `print` |
 | `square 3 + square 4` (error) | analyzer `check_ambiguous_calls` | none | `square(3) + square(4)`, `square(3 + square(4))` |
 | `1==1==1` (error) | warp_parser `chained_equality` | none | `1==1 and 1 == 1`, `(1==1) == 1` |

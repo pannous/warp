@@ -62,6 +62,7 @@ self.addEventListener("message", event => {
 function addTaskWorker(loaded) {
 	const id = taskWorkersAsked++;
 	madeTaskWorkers.set(id, worker => {
+		worker.taskWorkerId = id; // the page's name for it (task-workers.js postToTaskWorker)
 		worker.terminate = () => self.postMessage({ endTaskWorker: id });
 		// loaded: it can take tasks; later a fetch it made is done (startFetch)
 		worker.onmessage = ({ data }) => {
@@ -99,6 +100,8 @@ self.voiceAt = seconds => {
 	voice = { end: origin + seconds, seconds, origin };
 };
 self.insideAt = () => voicesBeforeAt.length > 0;
+// where this voice's next sound would start: its queued sounds' end, never before now (sound_moment)
+self.voiceMoment = () => Math.max(voice.end ?? 0, soundClock());
 self.voiceAtEnd = () => {
 	if (voicesBeforeAt.length) voice = { ...voicesBeforeAt.pop(), origin: voice.origin };
 };

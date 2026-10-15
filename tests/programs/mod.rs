@@ -17,8 +17,10 @@ mod test_gpu_draw; // card gpu-draw
 mod test_hints_toggle; // card hints-toggle
 mod test_json_parser_fixes;
 mod test_kitchensink;
+mod test_live_redefine; // card live-redefine
 mod test_midi;
 mod test_music_values; // card music-values
+mod test_note_values; // card note-value
 mod test_paint;
 mod test_paint_function; // card gpu-functions
 mod test_paint_in_window; // card paint-keeps
@@ -61,3 +63,4 @@ pub(crate) mod test_sound_voices; // card sound-pro; its rendered helper serves 
 mod test_sound_wavs; // card sound-wavs
 mod test_task_sound; // card task-sound
 mod test_warp_command; // card midi-out // card values-number
+mod test_window_size; // card make-width

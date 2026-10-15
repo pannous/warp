@@ -165,13 +165,42 @@ fn a_deployed_route_answers_its_status() {
 }
 
 /// A program painting, drawing or listening for frames runs in a browser page, not in a Worker (card
-/// deploy-browser-site): Deploy names the feature before anything is sent, instead of failing at the first request
+/// deploy-browser-site): the playground's Deploy bundles it as a site, which warp-hosting serves
 #[test]
 fn deploy_names_a_browser_only_feature() {
-	let refused = |code: &str| warp::web::worker_bundle(code).0["error"].as_str().unwrap_or_default().to_string();
-	let painting = refused(include_str!("../../samples/filled_circle.warp"));
-	assert!(painting.contains("paint") && painting.contains("browser"), "{painting}");
-	let framing = refused(include_str!("../../samples/shader_trails.warp"));
-	assert!(framing.contains("browser"), "{framing}");
-	assert_eq!(refused(include_str!("../../samples/hosting.warp")), "", "a route program still deploys");
+	let report = |code: &str| warp::web::worker_bundle(code).0;
+	let painting = report(include_str!("../../samples/filled_circle.warp"));
+	assert_eq!(painting["site"], true, "{painting}");
+	let query = painting["query"].as_str().unwrap_or_default();
+	assert!(
+		query.starts_with("site=") && query.contains("canvas.js") && query.contains("&worker=reader.js"),
+		"{query}"
+	);
+	let framing = report(include_str!("../../samples/shader_trails.warp"));
+	assert_eq!(framing["site"], true, "{framing}");
+	let routes = report(include_str!("../../samples/hosting.warp"));
+	assert_eq!((&routes["site"], &routes["query"]), (&false.into(), &"scripts=reader.js,host.js".into()), "{routes}");
+}
+
+/// A program using the browser deploys as its site (card deploy-browser-site): the Worker serves the page, its scripts
+/// and app.wasm, cross-origin isolated, and the visitor's browser runs the program (painting checked in CI)
+#[test]
+fn a_painting_program_deploys_as_its_site() {
+	let (_running, base, directory) = running_worker(include_str!("../../samples/filled_circle.warp"), "painting");
+	let (status, content_type, page) = answer(&base, "/");
+	assert_eq!((status, content_type.as_str()), (200, "text/html; charset=utf-8"), "{page}");
+	assert!(
+		page.contains("<script src=\"canvas.js\">") && page.contains("data-warp-worker=\"reader.js,host.js"),
+		"{page}"
+	);
+	let (status, content_type, _) = answer(&base, "/canvas.js");
+	assert_eq!((status, content_type.as_str()), (200, "text/javascript; charset=utf-8"));
+	let module = ureq::get(&format!("{base}/app.wasm")).call().expect("the module");
+	assert_eq!(
+		module.headers().get("cross-origin-embedder-policy").map(|value| value.to_str().unwrap()),
+		Some("require-corp")
+	);
+	assert_eq!(&module.into_body().read_to_vec().expect("bytes")[..4], b"\0asm");
+	assert_eq!(answer(&base, "/nope.js").0, 404);
+	std::fs::remove_dir_all(directory).ok();
 }
