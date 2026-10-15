@@ -88,7 +88,7 @@ function runner(queue, total) {
 			worker.onmessage = ({ data }) => {
 				if (data.type === "stage") stage = data.stage;
 				if (data.type === "result") record(data);
-				if (data.type === "page call") answerPageCall(data.shared, data.request); // task-workers.js
+				if (data.type === "page call") answerPageCall(data.shared, data.request, worker); // task-workers.js
 			};
 			// a crash (out of memory, a failed import) would otherwise look like a hang until the timeout
 			worker.onerror = event => {
