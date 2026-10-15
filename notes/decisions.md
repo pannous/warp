@@ -36,8 +36,13 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - dir-lists (2026-10-15, user): built-ins become function values first, type `builtin`, a subtype of function
   (`type(function upper)` is builtin, `function upper is function` → yes); methods(x) lists them, so dir(x) and
   methods(x) keep the same names (card builtin-functions, then dir-lists).
-- style-linter (2026-10-15, user): of the proposed rules only doc-moved is enforced (a /// doc that moved onto
-  another item, --fix moves it back); use-at-top, card-comment and blank-line-between-items are not.
+- rust-style-lint (2026-10-15, user; card parked in Later): of the proposed Rust rules only doc-moved is enforced (a
+  /// doc that moved onto another item, --fix moves it back); use-at-top, card-comment and blank-line-between-items
+  are not.
+- warp-format (2026-10-15, user; card warp-lint): the linter is for warp code and unopinionated: only clear layout
+  (indentation, spacing, separators, brackets, blank lines) in one canonical form, never changing meaning; no word
+  or alias rewrites, semantic rules stay compiler hints. The command is `warp format`, `warp lint` a synonym; warp
+  avoids abbreviations, so no `fmt`.
 - cleanup-means-fewer-lines (2026-10-13): the cleanup's metric is lines removed: simpler, more general, more elegant
   code. Splitting files or functions alone is not a goal ("not that impressed by splitting"). Each cleanup merge
   request states its net src/ line delta; baseline 161132 lines of src/*.rs at eaa40f98b.
