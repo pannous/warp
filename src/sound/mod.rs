@@ -7,7 +7,7 @@
 //! A sound is queued on the audio clock behind those before it in its voice and `play` returns at once (card sound-pro):
 //! each sound waits for its start on a thread of its own and plays, stop_sound drops the waiting ones, the process's
 //! end waits for them and for the music files playing. A voice is the program's thread or a task (`go { … }`), which
-//! starts where its starter stands: voices sound together. render_sound mixes the sounds since the last render as
+//! starts where its starter stands: voices sound together. save sound mixes the sounds since the last render as
 //! they sound, by the voices' places on the clock (counted in samples, not in real time): offline, headless too.
 
 // DONE turn this into a module, albeit built-in one: the sound module is lib/sound.warp (its words), this folder (the
@@ -88,7 +88,7 @@ type Player = Arc<Mutex<std::process::Child>>;
 /// The sounds and music files playing by their handles, stopped by stop_sound
 static PLAYING: Mutex<Vec<(usize, Player)>> = Mutex::new(Vec::new());
 /// Where a voice stands on the audio clock: when its queued sounds end in real time, and how many seconds of sound
-/// it has made in all (its place for render_sound, free of the time computing them took); its origin is the real time
+/// it has made in all (its place for save sound, free of the time computing them took); its origin is the real time
 /// of place 0, where `at 2 beats` counts from
 #[derive(Clone, Copy, Default)]
 pub struct Voice {
@@ -106,7 +106,7 @@ thread_local! {
 	static SENT_TO: Cell<usize> = const { Cell::new(0) };
 }
 /// The buses' effects by their numbers, from 1 (card shared-buses): every thread's sounds may go through each. Each
-/// definition since the last render_sound at its place on the defining voice, so a render changes the effects there
+/// definition since the last save sound at its place on the defining voice, so a render changes the effects there
 /// (stage 3); the last one before the render stays, its place -∞
 static BUSES: Mutex<Vec<BusHistory>> = Mutex::new(Vec::new());
 /// A bus's definitions: each at its place, its effects
@@ -115,9 +115,9 @@ type BusHistory = Vec<(f64, Vec<Effect>)>;
 static STOPS: AtomicUsize = AtomicUsize::new(0);
 /// The sounds queued for the player thread and not played to their end yet
 static PENDING: AtomicUsize = AtomicUsize::new(0);
-/// The place on the voices where the last render_sound ended
+/// The place on the voices where the last save sound ended
 static RENDERED_UNTIL: Mutex<f64> = Mutex::new(0.0);
-/// A sound since the last render_sound: its place in its voice (seconds), sample rate, channels and 16-bit samples
+/// A sound since the last save sound: its place in its voice (seconds), sample rate, channels and 16-bit samples
 struct Unrendered {
 	handle: usize,
 	bus: usize,
@@ -126,10 +126,10 @@ struct Unrendered {
 	channels: u16,
 	samples: Vec<i16>,
 }
-/// The sounds since the last render_sound, in memory (44 KB a second at 22050 Hz mono: the WAV files are shared by all
+/// The sounds since the last save sound, in memory (44 KB a second at 22050 Hz mono: the WAV files are shared by all
 /// warp processes, another run may overwrite them)
 static UNRENDERED: Mutex<Vec<Unrendered>> = Mutex::new(Vec::new());
-/// fade_sound(handle, gain, seconds) as render_sound applies it: from its place, where the speaker stood on the caller's
+/// fade_sound(handle, gain, seconds) as save sound applies it: from its place, where the speaker stood on the caller's
 /// voice, the handle's gain (0: every sound's) ramps linearly to `gain` over the seconds
 #[derive(Clone, Copy)]
 struct Fade {
@@ -138,7 +138,7 @@ struct Fade {
 	gain: f64,
 	seconds: f64,
 }
-/// The fades since the last render_sound
+/// The fades since the last save sound
 static FADES: Mutex<Vec<Fade>> = Mutex::new(Vec::new());
 /// A queued sound: its WAV, when it starts, the stop count it was queued at and its handle
 struct Queued {
@@ -703,7 +703,7 @@ fn wav_file(wav: &[u8], handle: usize) -> Result<PathBuf, String> {
 	Ok(path)
 }
 
-/// render_sound(path): the sounds since the last render (or the start) in one WAV file, each at its place in its
+/// save sound as path: the sounds since the last render (or the start) in one WAV file, each at its place in its
 /// voice, the voices mixed (in stereo when one of them is: a mono sound on both speakers alike); its seconds
 pub fn render(path: &str) -> Result<f64, String> {
 	crate::host::sandbox::check_write(path)?;

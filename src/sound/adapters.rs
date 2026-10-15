@@ -23,6 +23,17 @@ pub(super) fn sound(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			return crate::sound::define_bus(number_of(bus)?.max(0.0) as usize, effects)
 				.map(|bus| Node::int(bus as i64));
 		}
+		// effect([name, settings…], signal, rate, full scale): a list signal through the bus DSP (card shared-buses stage 2)
+		("effect", [effect, signal, rate, full_scale]) => {
+			let signal = signal.as_items().iter().map(number_of).collect::<Result<Vec<_>, String>>()?;
+			let processed = crate::sound::effects::on_signal(
+				effect_of(effect)?,
+				&signal,
+				number_of(rate)?.max(1.0) as u32,
+				number_of(full_scale)?,
+			);
+			return Ok(Node::list(processed.into_iter().map(Node::float).collect()));
+		}
 		("send", [bus]) => return Ok(Node::int(crate::sound::send_to(number_of(bus)?.max(0.0) as usize) as i64)),
 		("at_end", []) => crate::sound::at_end(),
 		("rest", [seconds]) => crate::sound::rest(number_of(seconds)?),

@@ -8,7 +8,6 @@ const WAV_HEADER_BYTES = 44;
 // play of a signal (src/sound/mod.rs play_signal, lowering/words/music_words.rs BLOCK_SAMPLES): computed this many samples at a time
 const SIGNAL_BLOCK = 512;
 const FULL_SCALE = 32767;
-const DRY_BUSES = "bus(): its effects do not run in the browser yet, its sounds play dry (card shared-buses)";
 // played to someone (the page was clicked or typed in), a signal is computed at most this far ahead of the speaker,
 // checked every SIGNAL_POLL_MS (src/sound/mod.rs SIGNAL_AHEAD, SIGNAL_POLL)
 const SIGNAL_AHEAD_SECONDS = 0.1;
@@ -252,15 +251,30 @@ function wavOf(samples, rate, channels = 1) {
 	return bytes;
 }
 
+// ["delay", 0.25, 0.4, 0.5] with plain numbers, as JSON takes them
+const plainEffect = effect => Array.from(effect, setting => typeof setting === "bigint" ? Number(setting) : setting);
+
+// the samples through the effects of the bus the run sends to (card shared-buses stage 2), a delay's or reverb's tail
+// added; each sound apart, which is the bus's sound for its linear effects (filters, delay, reverb, gain), while compress
+// and distort act on each sound alone
+function onBus(holder, samples, rate, channels) {
+	const chain = holder.run.busChains?.[holder.run.sentBus ?? 0];
+	if (!chain?.length) return samples;
+	const floats = Float32Array.from(samples, sample => (Number(sample) - SAMPLE_OFFSET) / SAMPLE_OFFSET);
+	const processed = holder.effected(chain, floats, rate, channels);
+	return Array.from(processed, sample => Math.round(Math.max(-1, Math.min(1, sample)) * (SAMPLE_OFFSET - 1)) + SAMPLE_OFFSET);
+}
+
 addHostPart({
 	words: (holder, hooks, { program }) => {
-		// samples (amplitude + SAMPLE_OFFSET, stereo interleaved) queued on the voice, for the page and render_sound; a
+		holder.effected = (chain, floats, rate, channels) => effectsProcessed(hooks, chain, floats, rate, channels); // host-compiler.js
+		// samples (amplitude + SAMPLE_OFFSET, stereo interleaved) queued on the voice, for the page and save sound; a
 		// signal's blocks keep its first one's handle. Heard, once the voice is within PLAY_AHEAD_SECONDS of the speaker
 		// (but in an `at`, which places its sounds itself). The handle
 		holder.sounded = (samples, rate, channels, handle) => {
 			while (self.pageSystemValues?.window_open && !self.insideAt?.() && (self.soundsQueued?.() ?? 0) > PLAY_AHEAD_SECONDS) holder.sleep(SIGNAL_POLL_MS);
-			const sound = { samples, rate, channels };
 			const { place, at } = self.voiceSounded?.(samples.length / channels / rate) ?? {};
+			const sound = { samples: onBus(holder, samples, rate, channels), rate, channels };
 			hooks.sound?.({ ...sound, at, handle, loop: self.currentVoice?.().loop }); // a live loop's (card playground-live)
 			const own = handle ?? self.lastSoundHandle?.() ?? 0;
 			(holder.run.unrenderedSounds ??= []).push({ ...sound, place, handle: own });
@@ -269,14 +283,14 @@ addHostPart({
 		return {
 			// sound_samples(samples, count, rate, channels) (src/host.rs, lib/sound.warp; stereo interleaved left, right):
 			// the page plays them with WebAudio (playground.js playSound); a run without a page (tests, node) has no
-			// speakers and stays silent, as natively render_sound writes them, played or not, into a WAV (STD_ADAPTERS.sound.render)
+			// speakers and stays silent, as natively save sound writes them, played or not, into a WAV (STD_ADAPTERS.sound.render)
 			sound_samples: (samples, count, rate, channels) => {
 				holder.sounded(intsOfList(program(), samples, Number(count)) ?? plainOfTree(readNode(program(), samples)), Number(rate), Number(channels));
 			},
 		};
 	},
 	adapters: {
-		// MIDI (card midi-out, lib/sound.warp): files are bytes as render_sound's; a message goes to the page, which holds
+		// MIDI (card midi-out, lib/sound.warp): files are bytes as save sound's; a message goes to the page, which holds
 		// the Web MIDI access (playground.js sendMidi), timed on the voice's clock. A Worker cannot wait for the page's device list or its input
 		midi: {
 			write_file: (path, notes) => { keepWritten(contentText(path), midiFileOf(wholeNumbers(notes))); return null; },
@@ -306,7 +320,7 @@ addHostPart({
 			// stop_sound(handle) the sound play gave that handle (card sound-pro), handle 0 all of them
 			stop: handle => { Number(handle) ? self.stopSound?.(Number(handle)) : self.stopSoundFiles?.(); return null; },
 			last: () => self.lastSoundHandle?.() ?? 0,
-			// fade_sound(handle, gain, seconds) (src/sound/mod.rs fade): the page ramps the playing sound, render_sound from where
+			// fade_sound(handle, gain, seconds) (src/sound/mod.rs fade): the page ramps the playing sound, save sound from where
 			// the speaker stood on this voice
 			fade(handle, gain, seconds) {
 				[handle, gain, seconds] = [handle, gain, seconds].map(Number);
@@ -318,11 +332,19 @@ addHostPart({
 				self.fadeSound?.(handle, gain, seconds);
 				return null;
 			},
-			// a bus (card shared-buses, src/sound/effects.rs): numbered as natively; its effects do not run here yet, its
-			// sounds play dry, said once
-			bus(number) {
-				if (!this.holder.warnings.includes(DRY_BUSES)) this.holder.warnings.push(DRY_BUSES);
-				return Number(number) || (this.holder.run.buses = (this.holder.run.buses ?? 0) + 1);
+			// a bus (card shared-buses, src/sound/effects.rs): numbered as natively, its chain ([["reverb", 0.4], …]) kept
+			// for the sounds sent to it (onBus)
+			bus(number, chain) {
+				const id = Number(number) || (this.holder.run.buses = (this.holder.run.buses ?? 0) + 1);
+				(this.holder.run.busChains ??= {})[id] = Array.from(chain ?? [], plainEffect);
+				return id;
+			},
+			// a list signal through one effect (lib/sound.warp effected): the DSP in warp.wasm as natively, on amplitudes of
+			// the full scale
+			effect(effect, signal, rate, fullScale) {
+				const scale = Number(fullScale) || 1;
+				const floats = Float32Array.from(signal, amplitude => Number(amplitude) / scale);
+				return Array.from(this.holder.effected([plainEffect(effect)], floats, Number(rate), 1), sample => sample * scale);
 			},
 			// the bus before, as natively, so out(signal, bus) restores it
 			send(number) {
