@@ -21,6 +21,7 @@ use crate::words::FOR_WORD;
 use crate::words::IN_WORD;
 use crate::words::LIST_WORD;
 use crate::words::LOG_WORD;
+use crate::words::NUMBER_WORD;
 use crate::words::ORD_WORD;
 use crate::words::SPLIT_WORD;
 use crate::words::{CODEPOINT, MAP_KEYS, RAISE_WORD, SLICE, SUM_WORD};
@@ -730,6 +731,12 @@ impl Lowering {
 			}
 			if call_name(items, bracket, separator).is_some() {
 				return Some(log_to_base(&items[0], value, base));
+			}
+		}
+		// `number(t)` is `t as number`: a text known only at run time is the number it spells, decided at run time
+		if let (NUMBER_WORD, [_, value]) = (head.as_str(), items) {
+			if !self.shadows(NUMBER_WORD) && call_name(items, bracket, separator).is_some() {
+				return Some(key(value.clone(), Op::As, symbol(NUMBER_WORD)));
 			}
 		}
 		// `first sorted xs` has one argument: a library word after it is its argument's prefix

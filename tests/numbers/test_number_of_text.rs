@@ -12,3 +12,9 @@ fn number_of_a_run_time_text_is_the_number_it_spells() {
 	assert_eq!(printed("f(t) := number(t); f(\"0.3\")"), "0.3");
 	assert_eq!(printed("f(t) := number(t); f(\"42\") + 1"), "43");
 }
+
+#[test]
+fn number_of_a_run_time_text_compares_with_a_number() {
+	assert_eq!(printed("x = \"12\"; number(x) == 12"), "yes");
+	assert_eq!(printed("x = \"12\"; number(x) != 3"), "yes");
+}
