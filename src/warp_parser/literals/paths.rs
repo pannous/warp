@@ -20,7 +20,7 @@ pub fn is_path_literal(node: &Node) -> bool {
 impl WarpParser {
 	/// `&name`: a reference to the function `name`, an `&` glued to the word after it and not to a word before it (`a &b`, `f(&g)`)
 	/// A file path without quotes starts here, glued to what follows and not to an operand before it (card unix-words):
-	/// `./mozart.mp3`, `../songs/a.wav` (`xs ./ 2` and `xs./2` divide each element); `~/notes.txt`, and `~` alone (`cd ~`;
+	/// `./mozart.mp3`, `../songs/a.wav`, `./` alone (`ls ./`; `xs ./ 2` and `xs./2` divide each element); `~/notes.txt`, and `~` alone (`cd ~`;
 	/// `a ~ b` stays the comparison); `/etc/hosts` where no operand stands before it (`x = /tmp`, `[/a, /b]`) or after
 	/// a word taking it (`ls /tmp`, `cp /a /b`); after a variable it divides (`width /height`)
 	pub(crate) fn starts_path_literal(&self) -> bool {
@@ -29,7 +29,8 @@ impl WarpParser {
 			&& match self.current_char() {
 				'.' => {
 					let dots = if self.peek_char(1) == '.' { 2 } else { 1 };
-					self.peek_char(dots) == '/' && !ends_path(self.peek_char(dots + 1))
+					let folder_alone = ends_path(self.peek_char(dots + 1)) && !self.operand_follows(dots + 1);
+					self.peek_char(dots) == '/' && (!ends_path(self.peek_char(dots + 1)) || folder_alone)
 				}
 				'~' => self.peek_char(1) == '/' || !self.operand_follows(1),
 				'/' => {
