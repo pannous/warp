@@ -50,3 +50,9 @@ fn every_library_word_of_one_value_counts_the_value_after_it() {
 	assert_eq!(printed("floor#2"), printed("floor(#2)"));
 	assert_eq!(printed("sin#2"), printed("sin(#2)"));
 }
+
+#[test]
+fn a_synonym_of_a_library_word_calls_it_braceless() {
+	assert_eq!(printed("sorted [3 1 2]"), "[1 2 3]");
+	assert_eq!(printed("sorted \"b a\".split(\" \")"), "[\"a\" \"b\"]");
+}
