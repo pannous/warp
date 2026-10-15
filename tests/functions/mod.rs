@@ -94,6 +94,7 @@ mod test_list_conversion;
 mod test_list_fields; // card people-map
 mod test_map_phrase;
 mod test_member_phrases; // card xs-insert
+mod test_math_broadcast; // card cos-instead
 mod test_memoization;
 mod test_method_syntax_calls;
 mod test_method_words;
