@@ -13,12 +13,12 @@ pub(crate) use definitions::*;
 pub fn function_body_scope(
 	params: &[Param],
 	body: &Node,
-	function_kinds: &HashMap<String, Kind>,
+	function_kinds: &FunctionKinds,
 	globals: &HashMap<String, Local>,
-	closure_variable_targets: &HashMap<String, HashSet<String>>,
+	closure_variable_targets: &ClosureTargets,
 ) -> Scope {
-	let mut scope =
-		Scope::with_function_kinds(function_kinds.clone()).with_closure_targets(closure_variable_targets.clone());
+	let mut scope = Scope::with_function_kinds(function_kinds.clone()) // shared: a cheap copy
+		.with_closure_targets(closure_variable_targets.clone());
 	scope.globals = globals.clone(); // `d = o; return d` of a declared global keeps the global's kind
 	for param in params {
 		scope.define_param(param, param_kind(param));
@@ -33,8 +33,8 @@ pub fn function_body_scope(
 pub fn widen_globals_by_functions<'a>(
 	globals: &mut HashMap<String, Local>,
 	functions: impl Iterator<Item = &'a UserFunctionDef>,
-	function_kinds: &HashMap<String, Kind>,
-	closure_variable_targets: &HashMap<String, HashSet<String>>,
+	function_kinds: &FunctionKinds,
+	closure_variable_targets: &ClosureTargets,
 ) -> bool {
 	let mut widened_any = false;
 	for function in functions {
@@ -65,9 +65,9 @@ fn widen_globals(globals: &mut HashMap<String, Local>, seen: &HashMap<String, Lo
 pub(super) fn infer_tuple_kinds(
 	params: &[Param],
 	body: &Node,
-	function_kinds: &HashMap<String, Kind>,
+	function_kinds: &FunctionKinds,
 	globals: &HashMap<String, Local>,
-	closure_variable_targets: &HashMap<String, HashSet<String>>,
+	closure_variable_targets: &ClosureTargets,
 ) -> Vec<Kind> {
 	let Some(arity) = crate::tuples::tuple_arity(body) else {
 		return vec![];
@@ -97,9 +97,9 @@ pub(super) fn infer_tuple_kinds(
 pub(super) fn infer_function_return_kind(
 	params: &[Param],
 	body: &Node,
-	function_kinds: &HashMap<String, Kind>,
+	function_kinds: &FunctionKinds,
 	globals: &HashMap<String, Local>,
-	closure_variable_targets: &HashMap<String, HashSet<String>>,
+	closure_variable_targets: &ClosureTargets,
 ) -> Kind {
 	if crate::tuples::tuple_arity(body).is_some() {
 		return Kind::List; // used whole, a tuple function's values are packed into a list
@@ -200,7 +200,7 @@ pub fn param_kind(param: &Param) -> Kind {
 /// Every definition form (`f(x) := …`, `fn`, `def`, `function`) infers its parameter and return kinds alike
 pub(super) fn user_function(name: &str, params: Vec<Param>, body: Node) -> UserFunctionDef {
 	let params = with_usage_kinds(params, &body);
-	let return_kind = infer_function_return_kind(&params, &body, &HashMap::new(), &HashMap::new(), &HashMap::new());
+	let return_kind = infer_function_return_kind(&params, &body, &Default::default(), &HashMap::new(), &Default::default());
 	UserFunctionDef {
 		name: name.to_string(),
 		params,
@@ -487,8 +487,8 @@ pub(super) fn analyse_user_functions(ctx: &mut Context, node: &Node) {
 	ctx.field_kinds = program_field_kinds(node);
 	let mut globals = with_closure_captures(ctx, node, globals);
 	refine_return_kinds(ctx, &globals);
-	let return_kinds: HashMap<String, Kind> =
-		ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect();
+	let return_kinds: FunctionKinds =
+		FunctionKinds::new(ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect());
 	// `global g = 0.3; g = f(-9)` with an f that returns a Node: only the return kinds tell that main's g holds one
 	let widened_by_main =
 		widen_globals(&mut globals, &declared_globals_in(Scope::with_function_kinds(return_kinds.clone()), node));
@@ -535,6 +535,7 @@ fn known_function_kinds(ctx: &Context) -> HashMap<String, Kind> {
 pub(super) fn widen_parameters(ctx: &mut Context, program: &Node, globals: &HashMap<String, Local>) -> bool {
 	let mut function_kinds = known_function_kinds(ctx);
 	function_kinds.extend(ctx.field_kinds.clone());
+	let function_kinds = FunctionKinds::new(function_kinds);
 	let mut passed: HashMap<(String, usize), HashSet<Kind>> = HashMap::new();
 	let mut main =
 		Scope::with_function_kinds(function_kinds.clone()).with_closure_targets(ctx.closure_variable_targets.clone());
@@ -753,8 +754,8 @@ fn closure_parameter_kinds(
 /// The kinds of each scope's parameters and variables, the program's and each function's: `m = float(2.5)` captured
 /// by a closure is a float
 fn scope_kinds<'a>(ctx: &'a Context, program: &'a Node) -> Vec<(&'a Node, HashMap<String, Kind>)> {
-	let function_kinds: HashMap<String, Kind> =
-		ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect();
+	let function_kinds: FunctionKinds =
+		FunctionKinds::new(ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect());
 	let kinds_of = |params: &[Param], body: &Node| -> HashMap<String, Kind> {
 		let scope = function_body_scope(params, body, &function_kinds, &HashMap::new(), &ctx.closure_variable_targets);
 		scope.locals.into_iter().map(|(name, local)| (name, local.kind)).collect()
@@ -1095,12 +1096,13 @@ pub(super) fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, L
 	function_kinds.extend(ctx.field_kinds.clone());
 	let mut stale: Vec<&UserFunctionDef> = ctx.user_functions.values().collect();
 	for _ in 0..=ctx.user_functions.len() {
+		let known = FunctionKinds::new(function_kinds.clone());
 		let inferred: Vec<(String, Kind)> = stale
 			.iter()
-			.map(|function| (function.name.clone(), settled_return_kind(function, ctx, &function_kinds, globals)))
+			.map(|function| (function.name.clone(), settled_return_kind(function, ctx, &known, globals)))
 			.collect();
 		let tuples: Vec<(String, String, Kind)> =
-			stale.iter().flat_map(|function| element_kinds(function, ctx, &function_kinds, globals)).collect();
+			stale.iter().flat_map(|function| element_kinds(function, ctx, &known, globals)).collect();
 		let changed: HashSet<String> = inferred
 			.iter()
 			.map(|(name, kind)| (name, name, kind))
@@ -1111,7 +1113,7 @@ pub(super) fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, L
 		if changed.is_empty() {
 			break;
 		}
-		stale = naming_changed(ctx, &function_kinds, &changed);
+		stale = naming_changed(ctx, &known, &changed);
 		function_kinds.extend(inferred);
 		function_kinds.extend(tuples.into_iter().map(|(_, key, kind)| (key, kind)));
 	}
@@ -1127,10 +1129,10 @@ pub(super) fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, L
 fn settled_return_kind(
 	function: &UserFunctionDef,
 	ctx: &Context,
-	function_kinds: &HashMap<String, Kind>,
+	function_kinds: &FunctionKinds,
 	globals: &HashMap<String, Local>,
 ) -> Kind {
-	let returned = |kinds: &HashMap<String, Kind>| {
+	let returned = |kinds: &FunctionKinds| {
 		infer_function_return_kind(&function.params, &function.body, kinds, globals, &ctx.closure_variable_targets)
 	};
 	let kind = crate::closures::closure_call_kind(&function.name, ctx, function_kinds)
@@ -1138,9 +1140,9 @@ fn settled_return_kind(
 	// `if t == ø { return [] }; return f(t.left) + [x]`: assumed to return an Int, the recursion makes an error of the
 	// last value; assumed to return a Node of unknown kind, it settles
 	if kind == Kind::Error && function_kinds.get(&function.name) == Some(&Kind::Int) {
-		let mut unknown_recursion = function_kinds.clone();
+		let mut unknown_recursion = HashMap::clone(function_kinds);
 		unknown_recursion.insert(function.name.clone(), Kind::Empty);
-		returned(&unknown_recursion)
+		returned(&FunctionKinds::new(unknown_recursion))
 	} else {
 		kind
 	}
@@ -1150,7 +1152,7 @@ fn settled_return_kind(
 fn element_kinds(
 	function: &UserFunctionDef,
 	ctx: &Context,
-	function_kinds: &HashMap<String, Kind>,
+	function_kinds: &FunctionKinds,
 	globals: &HashMap<String, Local>,
 ) -> Vec<(String, String, Kind)> {
 	let kinds =
@@ -1165,7 +1167,7 @@ fn element_kinds(
 /// The functions to infer again: those naming a function whose kinds changed, and the closure calls
 fn naming_changed<'a>(
 	ctx: &'a Context,
-	function_kinds: &HashMap<String, Kind>,
+	function_kinds: &FunctionKinds,
 	changed: &HashSet<String>,
 ) -> Vec<&'a UserFunctionDef> {
 	let changed: Vec<&str> = changed.iter().map(String::as_str).collect();

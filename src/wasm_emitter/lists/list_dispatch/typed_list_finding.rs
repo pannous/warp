@@ -634,7 +634,7 @@ impl WasmGcEmitter {
 		let mut found: HashMap<String, TypedList> =
 			self.find_typed_lists(&main_code).into_iter().filter(|(name, _)| main.globals.contains_key(name)).collect();
 		self.scope = saved;
-		let function_kinds = self.user_function_kinds();
+		let function_kinds = crate::analyzer::FunctionKinds::new(self.user_function_kinds());
 		let functions: Vec<_> =
 			self.ctx.user_functions.values().map(|function| (function.params.clone(), function.body.clone())).collect();
 		for (params, body) in functions {

@@ -479,13 +479,18 @@ pub fn captured_variables(function: &UserFunctionDef, outer: &Scope) -> Vec<(Str
 	captured
 }
 
+/// The return kinds of user functions, shared by every scope built from them (a Scope is cloned often)
+pub type FunctionKinds = std::rc::Rc<HashMap<String, Kind>>;
+/// Variables that hold a closure → `closure_new` targets they may contain, shared like FunctionKinds
+pub type ClosureTargets = std::rc::Rc<HashMap<String, HashSet<String>>>;
+
 /// Scope for tracking variable bindings
 #[derive(Clone, Debug, Default)]
 pub struct Scope {
 	pub locals: HashMap<String, Local>,
-	pub function_kinds: HashMap<String, Kind>, // Return kinds of user functions, which shadow FFI names like `pow`
+	pub function_kinds: FunctionKinds, // Return kinds of user functions, which shadow FFI names like `pow`
 	/// Variables that hold a closure → `closure_new` targets they may contain (per-site closure_call kinds)
-	pub closure_variable_targets: HashMap<String, HashSet<String>>,
+	pub closure_variable_targets: ClosureTargets,
 	pub globals: HashMap<String, Local>, // Declared `global` (kind and type, no slot): assigning them later must not create a shadowing local
 	/// Locals a later write widened (an int to a float, a list's element type): their kind and type from the start
 	/// (collect_variables)
@@ -498,12 +503,12 @@ impl Scope {
 		Scope::default()
 	}
 
-	pub fn with_function_kinds(function_kinds: HashMap<String, Kind>) -> Self {
-		Scope { function_kinds, ..Scope::default() }
+	pub fn with_function_kinds(function_kinds: impl Into<FunctionKinds>) -> Self {
+		Scope { function_kinds: function_kinds.into(), ..Scope::default() }
 	}
 
-	pub fn with_closure_targets(mut self, closure_variable_targets: HashMap<String, HashSet<String>>) -> Self {
-		self.closure_variable_targets = closure_variable_targets;
+	pub fn with_closure_targets(mut self, closure_variable_targets: impl Into<ClosureTargets>) -> Self {
+		self.closure_variable_targets = closure_variable_targets.into();
 		self
 	}
 

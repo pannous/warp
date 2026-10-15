@@ -150,7 +150,8 @@ pub(crate) fn with_type_module_uses(program: Node) -> Node {
 
 /// Whether the program plays sound: it calls a sound word or says `use sound` (lowering/words/music_words.rs reads its note names)
 pub fn uses_sound(program: &Node) -> bool {
-	first_called_undefined(program, SOUND_WORDS).is_some() || says_use(program, SOUND_MODULE)
+	// `use sound` first: it reads the statements, the calls walk the whole program
+	says_use(program, SOUND_MODULE) || first_called_undefined(program, SOUND_WORDS).is_some()
 }
 
 /// Whether the program says `use <module>`
