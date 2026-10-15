@@ -15,6 +15,7 @@ Present each in the morning popup batch (keep / change), then move it to decisio
 - dimension-bridges (px ↔ length through display.dpi): see decisions.md dimensions-units.
 - letters: see decisions.md (Text).
 - json-exactness (big ints exact digits, fractions float + warning): see decisions.md (Text).
+- beautify-preview (diff + "apply? y/n" in a terminal, `beautify yes` for scripts): see decisions.md warp-format.
 - random-forms (`random T` any type, `random(1, 6)` and `random 1...6` die roll inclusive, `random 1..6` excludes 6 like the range, Type parameters take bare type words): see decisions.md (Functions and calls).
 
 ## Parked (user: "later")
