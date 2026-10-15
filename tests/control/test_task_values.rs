@@ -49,7 +49,7 @@ fn a_task_pauses_and_resumes() {
 #[test]
 fn a_failed_run_gives_its_task_workers_back() {
 	for _ in 0..4 {
-		crate::common::fails_with("f() := 1; job = go f(); sleep(300ms); [1,2,3]#5", "index out of range");
+		crate::common::fails_with("f(x) := x; job = go f(1); sleep(300ms); [1,2,3]#5", "index out of range");
 	}
 	two_tasks_overlap();
 }
