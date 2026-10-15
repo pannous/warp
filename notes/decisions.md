@@ -321,12 +321,16 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   area, volume, frequency.
 - unit-definitions (2026-10-15 evening, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable):
   every dimension has an SI anchor unit, every other unit is a marked conversion to a known unit. Built on the user's
-  sketch: `dimension length meter` declares a dimension and its anchor (two words; `m` the symbol alias);
-  `unit cm := meter / 100`, `unit furlong := 201.168 m`: the right side is an amount in a known unit, which fixes the
-  dimension and the factor; `unit °F := (it + 459.67) * 5/9 K` for offsets, with an optional reverse line
-  (`unit K as °F := …`) only where the way back can't be derived (decibels). lib/units.warp uses the same lines.
-  Rejected: `length cm := …` (a type word before a name already declares a variable's type, two meanings) and
-  `unit meter := 100 cm` (the anchor would depend on a smaller unit).
+  sketch: `dimension length meter` declares a base dimension and its anchor; `unit m := 1 meter` (aliases use the
+  same rule); `unit cm := meter / 100`, `unit furlong := 201.168 m`: the right side is an amount in a known unit,
+  which fixes the dimension and the factor. Derived dimensions follow from the expression, no second path:
+  `unit N := kg*m/s²`, `unit L := dm³`. Offsets: `unit °F := (it + 459.67) * 5/9 K`, `it` the amount in °F, the
+  result in K; an optional reverse line only where the way back can't be derived (decibels). SI prefixes (km, mN)
+  come automatically for SI-anchored and SI-derived units only, not for furlong. Unit symbols bind only after a
+  number (`3 m`), never as bare names, so `m := 5` or a parameter `s` don't collide; a variable gets a unit by
+  `x * 1 m` (no `x m`). lib/units.warp uses the same lines. Rejected: `length cm := …` (a type word before a name
+  already declares a variable's type) and `unit meter := 100 cm` (the anchor would hang on a smaller unit).
+  Second opinion: the supervisor (refinements above are its).
 
 ## Text
 - letters (2026-10-15 evening, Interviewer's decision on the user's behalf, to present 2026-10-16; card of-in-chain,
