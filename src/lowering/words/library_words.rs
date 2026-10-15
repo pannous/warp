@@ -982,18 +982,24 @@ impl Lowering {
 			return Some(word_call(word_node, receiver, vec![]));
 		}
 		let is_known = self.is_known_method(receiver, name);
-		let is_object = literal.is_some() || self.is_object(receiver, name) || self.may_hold_object(receiver);
-		if is_object && !is_known && !has_arguments {
-			return Some(field_lookup(receiver, name, word_node));
-		}
 		// `x.round`, `x.sqrt`: the number word applied to x, as `x.round()` and `sqrt x` are (x.word is word(x))
-		if !has_arguments {
-			if let Some(operation) = prefix_operator_method(receiver, name) {
-				return Some(operation);
-			}
-			if crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name.as_str()) {
-				return Some(word_call(word_node, receiver, vec![]));
-			}
+		let number_word = || {
+			prefix_operator_method(receiver, name).or_else(|| {
+				crate::wasm_emitter::ROUNDING_FUNCTIONS
+					.contains(&name.as_str())
+					.then(|| word_call(word_node, receiver, vec![]))
+			})
+		};
+		let may_be_object = self.is_object(receiver, name) || self.may_hold_object(receiver);
+		if (literal.is_some() || may_be_object) && !is_known && !has_arguments {
+			// a parameter's `x.floor` (`xs.map(.floor)`, card dot-lambda): its field if it is an object, else the word
+			return Some(match number_word().filter(|_| literal.is_none()) {
+				Some(operation) => self.map_field_or(receiver, name, word_node, operation),
+				None => field_lookup(receiver, name, word_node),
+			});
+		}
+		if let Some(operation) = number_word().filter(|_| !has_arguments) {
+			return Some(operation);
 		}
 		// `x.type`, `x.type()`: `type(x)`, once no field of that name can be meant
 		if name == crate::type_tests::TYPE_WORD && !has_arguments {

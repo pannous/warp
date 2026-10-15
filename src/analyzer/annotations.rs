@@ -38,7 +38,7 @@ pub(super) fn names_empty_type(type_node: &Node) -> bool {
 		|| crate::type_tests::canonical_spec_word(&type_node.name()) == crate::type_tests::EMPTY_TYPE
 }
 
-pub(super) fn names_list_type(type_name: &str) -> bool {
+pub(crate) fn names_list_type(type_name: &str) -> bool {
 	type_name == "list" || super::list_element_type(type_name).is_some()
 }
 

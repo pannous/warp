@@ -169,6 +169,7 @@ fn word_call_required(ctx: &mut Context, fn_name: &str, items: &[Node]) {
 	}
 	if fn_name == crate::type_tests::TYPE_WORD {
 		ctx.required_functions.insert(crate::type_tests::NODE_TYPE_NAME);
+		ctx.required_functions.insert(crate::wasm_emitter::functions::FUNCTION_TYPE);
 		// node_type_name names an instance by comparing its data with each declared type's name
 		if !ctx.type_registry.types().is_empty() {
 			ctx.required_functions.insert(crate::wasm_emitter::VALUES_EQUAL);

@@ -110,7 +110,7 @@ impl WarpParser {
 				Some(word) => self.colon_body(word),
 				None if self.current_char() == '{' => self.parse_atom(), // `for (1…5).filter(odd) {print it}`
 				None => match starts_statement.then(|| self.indented_lines_below()).flatten() {
-					// `play 440Hz for 0.05s` owns no lines below
+					// `play 440Hz for: 0.05s` owns no lines below
 					Some(block) => block, // `for 0 to 2` and the lines indented below it
 					None => {
 						self.rewind(before_header);

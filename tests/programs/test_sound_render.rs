@@ -42,7 +42,7 @@ fn sounds_render_into_one_wav_file() {
 fn a_render_takes_the_sounds_after_the_last_one() {
 	let (first, second) = (wav_path("first"), wav_path("second"));
 	run(&format!(
-		"use sound\nplay(C4, 0.2s)\nsave sound as \"{}\"\nplay(E4, 0.1s)\nsave sound as \"{}\"",
+		"use sound\nplay(C4, 0.2s)\nsave sound as: \"{}\"\nplay(E4, 0.1s)\nsave sound as: \"{}\"",
 		first.display(),
 		second.display()
 	));
@@ -56,7 +56,7 @@ fn a_render_takes_the_sounds_after_the_last_one() {
 fn save_sound_as_a_file_writes_the_sounds() {
 	let (spaced, called) = (wav_path("saved"), wav_path("save-called"));
 	let printed = run(&format!(
-		"use sound\nplay(C4, 0.2s)\nsave sound as \"{}\"\nplay(E4, 0.1s)\nseconds = save(sound, \"{}\")\nround(seconds * 10)",
+		"use sound\nplay(C4, 0.2s)\nsave sound as: \"{}\"\nplay(E4, 0.1s)\nseconds = save(sound, \"{}\")\nround(seconds * 10)",
 		spaced.display(),
 		called.display()
 	));
@@ -68,7 +68,7 @@ fn save_sound_as_a_file_writes_the_sounds() {
 #[test]
 fn save_text_as_a_file_writes_it() {
 	let path = std::env::temp_dir().join(format!("warp-save-text-{}.txt", std::process::id()));
-	run(&format!("use file\nsave \"hi\" as \"{}\"", path.display()));
+	run(&format!("use file\nsave \"hi\" as: \"{}\"", path.display()));
 	assert_eq!(std::fs::read_to_string(&path).unwrap(), "hi");
 }
 
@@ -79,6 +79,6 @@ fn render_sound_is_save_with_a_note() {
 		.args(["--no-ask", "eval", &format!("use sound\nplay(C4, 0.1s)\nrender_sound(\"{}\")", path.display())])
 		.output()
 		.unwrap();
-	assert!(String::from_utf8_lossy(&run.stderr).contains("save sound as file"));
+	assert!(String::from_utf8_lossy(&run.stderr).contains("save sound as: file"));
 	assert!((rendered(&path).1 - 0.1).abs() < 0.001);
 }
