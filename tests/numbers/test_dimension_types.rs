@@ -57,19 +57,37 @@ fn speed_area_volume_and_frequency_are_named_dimensions() {
 /// quantities goes wherever a whole list does: assigned, shown, summed, nested
 #[test]
 fn a_unit_after_a_list_applies_to_each_element() {
+	let three_and_four_cm = value("[3 cm, 4 cm]");
+	assert_eq!(three_and_four_cm.serialize(), "[3cm 4cm]", "a list of quantities, not its text");
+	is!("[3 4] cm", three_and_four_cm.clone());
+	is!("xs = [3, 4]; ys = xs cm; ys", three_and_four_cm.clone());
+	is!("f(v) := v; f([3, 4] cm)", three_and_four_cm.clone());
+	is!("n = 3; [n, 4] cm", three_and_four_cm.clone());
+	is!("x = 3 cm; [x, 4 cm]", three_and_four_cm);
+	is!("if yes { [1 2] m }", value("[1 m, 2 m]"));
+	is!("x = [3, 4] cm; x in m", value("[0.03 m, 0.04 m]"));
+	is!("y = [3, 4] km/h; y", value("[3 km/h, 4 km/h]"));
+	is!("[[1, 2], [3, 4]] m", value("[[1 m, 2 m], [3 m, 4 m]]"));
+	is!("x = [3, 4] cm; str(x)", "[3cm 4cm]");
+	fails_with("[1 m, 2 kg]", "DimensionError: a list of m and kg");
+}
+
+/// A list of quantities gives its elements: by index, in a loop, mapped, summed (dimensions-units Q3, reviewer)
+#[test]
+fn a_list_of_quantities_gives_quantities() {
+	is!("([3, 4] cm)#2", value("4 cm"));
 	is!("x = [3, 4] cm; x[1] + 1 cm", value("5 cm"));
 	is!("x = [3 4] cm; x[0] as mm", value("30 mm"));
-	is!("x = [3, 4] cm; count x", 2);
-	is!("x = [3, 4] cm; type(x)", "list");
-	is!("[3 4] cm", "[3cm 4cm]");
-	is!("[3, 4] km/h", "[3km/h 4km/h]");
+	is!("x = [3, 4] cm; x#1 + 1 cm", value("4 cm"));
+	is!("total = 0 cm; for d in [3, 4] cm { total += d }; total", value("7 cm"));
+	is!("x = [3, 4] cm; x.map(d => d * 2)", value("[6 cm, 8 cm]"));
+	is!("x = [3, 4] m; x / 2 s", value("[1.5 m/s, 2 m/s]"));
 	is!("sum([3, 4] cm)", value("7 cm"));
-	is!("xs = [3, 4]; xs cm", "[3cm 4cm]");
-	is!("xs = [3, 4]; sum(xs cm)", value("7 cm"));
-	is!("n = 3; [n, 4] cm", "[3cm 4cm]");
-	is!("x = 3 cm; [x, 4 cm]", "[3cm 4cm]");
-	is!("[[1, 2], [3, 4]] m", "[[1m 2m] [3m 4m]]");
-	fails_with("[1 m, 2 kg]", "DimensionError: a list of m and kg");
+	is!("x = [3, 4] cm; max(x) > 3.5 cm", true);
+	is!("x = [3, 4] cm; count x", 2);
+	is!("x = [3, 4] cm; type(x)", "list of length");
+	is!("x = [3, 4] cm; x + [5 cm]", value("[3 cm, 4 cm, 5 cm]"));
+	fails_with("x = [3, 4] cm; x + 1 cm", "append [the quantity] or map the list");
 }
 
 /// A declaration written as a unit shows as written (reviewer, dimensions-units)

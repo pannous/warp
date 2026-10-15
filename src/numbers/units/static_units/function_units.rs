@@ -34,18 +34,17 @@ impl Inference {
 		// `for x in xs` of a list of quantities: x has the element signature
 		if let [for_word, variable, in_word, list, body] = items {
 			if word(for_word, crate::words::FOR_WORD) && word(in_word, super::super::IN_WORD) {
-				if let (Node::Symbol(name), Node::Symbol(list_name)) = (variable.drop_meta(), list.drop_meta()) {
-					if let Some(element) = self.lists.get(list_name).cloned() {
-						self.variables.insert(name.clone(), element);
-						return Some(self.infer(body.clone()).map(|(body, _)| {
-							(
-								Node::List(
-									vec![for_word.clone(), variable.clone(), in_word.clone(), list.clone(), body],
-									bracket.clone(),
-									separator.clone(),
-								),
-								vec![],
-							)
+				if let Node::Symbol(name) = variable.drop_meta() {
+					let looped = match self.infer(list.clone()) {
+						Ok((list, signature)) => signature.is_list().then_some(Ok((list, signature))),
+						Err(stop) => Some(Err(stop)),
+					};
+					if let Some(looped) = looped {
+						return Some(looped.and_then(|(list, signature)| {
+							self.variables.insert(name.clone(), signature.element());
+							let (body, _) = self.infer(body.clone())?;
+							let looped = vec![for_word.clone(), variable.clone(), in_word.clone(), list, body];
+							Ok((Node::List(looped, bracket.clone(), separator.clone()), Signature::plain()))
 						}));
 					}
 				}
@@ -59,27 +58,38 @@ impl Inference {
 				let printed = word(head, PRINT_WORD);
 				let amount_text = if printed { PRINTED_AMOUNT_TEXT } else { AMOUNT_TEXT };
 				Some((|| {
-					let text = match self.whole_text(value, amount_text) {
+					let text = match self.object_shown(value, amount_text) {
 						Some(text) => text?,
 						None => {
 							let (written, conversion) = (value.clone(), conversion_target(value));
 							let (value, signature) = self.infer(value.clone())?;
 							if signature.is_empty() {
 								let call = Node::List(vec![head.clone(), value], bracket.clone(), separator.clone());
-								return Ok((call, vec![]));
+								return Ok((call, Signature::plain()));
 							}
 							let shown_units = conversion.unwrap_or_else(|| self.shown_factors(&written, &signature));
 							self.as_text(value, &signature, Some(shown_units), amount_text)?
 						}
 					};
 					match printed {
-						true => Ok((Node::List(vec![head.clone(), text], bracket.clone(), separator.clone()), vec![])),
-						false => Ok((text, vec![])),
+						true => Ok((
+							Node::List(vec![head.clone(), text], bracket.clone(), separator.clone()),
+							Signature::plain(),
+						)),
+						false => Ok((text, Signature::plain())),
 					}
 				})())
 			}
+			// `type(3 cm)` is its dimension, known when compiled: `length`, `list of speed`, `kg/m`
+			[head, value] if call_or_words && word(head, TYPE_WORD) => Some((|| {
+				let (value, signature) = self.infer(value.clone())?;
+				match signature.is_empty() {
+					true => Ok((Node::List(vec![head.clone(), value], bracket.clone(), separator.clone()), signature)),
+					false => Ok((Node::Text(type_name(&signature)), Signature::plain())),
+				}
+			})()),
 			[head, value] if call_or_words && word(head, SI_AMOUNT_WORD) => {
-				Some(self.infer(value.clone()).map(|(value, _)| (value, vec![])))
+				Some(self.infer(value.clone()).map(|(value, _)| (value, Signature::plain())))
 			}
 			[head, value] if *bracket == Bracket::None && word(head, RETURN_WORD) => Some((|| {
 				let (value, signature) = self.infer(value.clone())?;
@@ -116,7 +126,10 @@ impl Inference {
 			Err(stop) => return Some(Err(stop)),
 		};
 		self.started.insert(declarations::word(&call[0]), declarations::word(&started[0]));
-		Some(Ok((Node::List([vec![head.clone()], started].concat(), bracket.clone(), separator.clone()), vec![])))
+		Some(Ok((
+			Node::List([vec![head.clone()], started].concat(), bracket.clone(), separator.clone()),
+			Signature::plain(),
+		)))
 	}
 
 	/// The reads and controls of a task (`await job`: `task·value(job, f)`) name the specialisation it started
@@ -152,7 +165,7 @@ impl Inference {
 				Err(stop) => return Some(Err(stop)),
 			}
 		}
-		if signatures.iter().all(Vec::is_empty) && !self.has_units(&definition) {
+		if signatures.iter().all(|signature| signature.is_empty()) && !self.has_units(&definition) {
 			return None;
 		}
 		Some(self.specialise(name, &definition, signatures).map(|(specialised, result)| {
@@ -252,7 +265,7 @@ impl Inference {
 		}
 		scope.extend(definition.parameters.iter().cloned().zip(signatures.iter().cloned()));
 		let outer = std::mem::replace(&mut self.variables, scope);
-		self.returns.push(vec![]);
+		self.returns.push(Vec::new());
 		let inferred = self.infer(definition.body.clone());
 		let returns = self.returns.pop().unwrap_or_default();
 		self.variables = outer;
@@ -295,7 +308,7 @@ impl Inference {
 			if self.at_top {
 				self.result_fields = Some(fields.into_iter().filter(|(_, signature)| !signature.is_empty()).collect());
 			}
-			return Ok((object, vec![]));
+			return Ok((object, Signature::plain()));
 		}
 		if bracket == Bracket::Round {
 			if let Some(call) = self.constructed(&items) {
@@ -307,7 +320,9 @@ impl Inference {
 				return call;
 			}
 		}
-		let statements = matches!(separator, Separator::Semicolon | Separator::Newline) || bracket == Bracket::Curly;
+		let is_list_literal = bracket == Bracket::Square;
+		let statements = !is_list_literal
+			&& (matches!(separator, Separator::Semicolon | Separator::Newline) || bracket == Bracket::Curly);
 		let is_loop = matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if LOOP_WORDS.contains(&word.as_str()));
 		if is_loop {
 			self.loop_instance(&items);
@@ -320,9 +335,6 @@ impl Inference {
 			_ => true,
 		};
 		if let ([amount, unit], Bracket::None, Separator::Space) = (items.as_slice(), &bracket, &separator) {
-			if self.is_unit_after_value(unit) && self.is_list(amount) {
-				return Err(Stop::Unsupported);
-			}
 			if let Some(unit) = self.unit_word(unit).filter(|_| is_amount(amount)) {
 				let outer = std::mem::replace(&mut self.at_top, false);
 				let inferred = self.amount_in(amount.clone(), unit);
@@ -341,7 +353,7 @@ impl Inference {
 		let mut signatures = vec![];
 		let count = items.len();
 		for (index, item) in items.into_iter().enumerate() {
-			// the program's last statement may show a whole list of quantities
+			// the program's last statement may be an object of quantities
 			if statements && index + 1 == count && self.at_top {
 				// a final object: its fields' units go into the `units` entry
 				let fields = self.objects.get(&item.name()).cloned().or_else(|| self.list_instance_fields(&item));
@@ -349,12 +361,7 @@ impl Inference {
 					self.result_fields =
 						Some(fields.iter().filter(|(_, signature)| !signature.is_empty()).cloned().collect());
 					lowered.push(item);
-					signatures.push(vec![]);
-					continue;
-				}
-				if let Some(text) = self.final_list(&item, AMOUNT_TEXT) {
-					lowered.push(text?);
-					signatures.push(vec![]);
+					signatures.push(Signature::plain());
 					continue;
 				}
 			}
@@ -368,8 +375,10 @@ impl Inference {
 		let in_host_call = std::mem::replace(&mut self.in_host_call, outer_host_call);
 		let signature = if statements || grouping {
 			signatures.last().cloned().unwrap_or_default()
-		} else if is_loop || in_host_call || signatures.iter().all(Vec::is_empty) {
-			vec![]
+		} else if is_list_literal && !in_host_call {
+			one_signature(&signatures)?.list_of()
+		} else if is_loop || in_host_call || signatures.iter().all(|signature| signature.is_empty()) {
+			Signature::plain()
 		} else {
 			return Err(Stop::Unsupported); // a call, print, a list literal or interpolation of a quantity
 		};
