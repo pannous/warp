@@ -102,3 +102,34 @@ fn a_function_wgsl_cannot_compute_paints_on_the_cpu() {
 		[0, 29, 29, 29, 250, 250, 250, 0, 29, 29, 29, 250, 250, 250]
 	);
 }
+
+/// card compile-shaders: vectors are lists of 2 to 4 numbers, `.+ .*` their element-wise math (decision S2), `p#1` a
+/// component, a returned 3-vector of 0…1 the pixel's color
+const VECTORS: &str = "use math
+width = 32
+height = 24
+hue(h) := 0.5 .+ 0.5 .* [cos(tau * h), cos(tau * (h + 0.33)), cos(tau * (h + 0.67))]
+turned(p, angle) := [cos(angle) * p#1 - sin(angle) * p#2, sin(angle) * p#1 + cos(angle) * p#2]
+glow(x, y) := {
+	p = turned([x / width - 0.5, y / height - 0.5], 0.5)
+	d = norm(p)
+	hue(fract(d * 3)) .* (1 - smoothstep(0.3, 0.5, d))
+}
+";
+
+#[test]
+fn a_painted_function_of_vectors_becomes_a_fragment_shader() {
+	let shader = lowered(&format!("{VECTORS}paint(glow, width, height)"));
+	assert!(shader.contains("@fragment") && shader.contains("fn warp_turned_21(a_p: vec2f"), "{shader}");
+	if !has_gpu() {
+		return crate::common::announce_skip("a WebGPU adapter", module_path!());
+	}
+	let (gpu, cpu) = painted_both_ways(VECTORS, "glow", 32, "paint-vectors");
+	assert_eq!(gpu.len(), 32 * 24);
+	for (pixel, (a, b)) in gpu.iter().zip(&cpu).enumerate() {
+		assert!(
+			a.iter().zip(b).all(|(a, b)| a.abs_diff(*b) <= CHANNEL_TOLERANCE),
+			"pixel {pixel}: {a:?} on the GPU, {b:?} on the CPU"
+		);
+	}
+}

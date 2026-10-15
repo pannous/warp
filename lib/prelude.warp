@@ -63,5 +63,9 @@ cleared(x) := if x is map then {} else []
 element_wise_any(left: any, right: any, combined) := if left is list and right is list then { if count(left) != count(right) { raise "element-wise operator: the lists differ in length" }; [combined(left#i, right#i) for i in 1 to count(left)] } else if left is list then [combined(item, right) for item in left] else if right is list then [combined(left, item) for item in right] else combined(left, right)
 // `norm x`, `‖x‖`: a number's absolute value, a list's Euclidean length (decision S3: `count`/`length` stay the number
 // of items); magnitude is its other name (card compile-shaders)
-norm(x: any) := if x is list then sqrt(sum(x .* x)) else abs(x)
+norm(x: any) := if x is list then { var total = 0; for i in 1 to count(x) { total = total + x#i * x#i }; sqrt(total) } else abs(x)
 magnitude(x: any) := norm(x)
+// a pixel of paint(f, width, height) on the CPU (gpu_maps painted_functions): a vector of 3 numbers from 0 to 1 is
+// that color as 0xAARRGGBB, as the shader paints it; a number stays itself
+pixel_color(v: any) := if v is list then 0xFF000000 + pixel_channel(v#1) * 65536 + pixel_channel(v#2) * 256 + pixel_channel(v#3) else v
+pixel_channel(c) := round(255 * min(max(c, 0), 1)) as int
