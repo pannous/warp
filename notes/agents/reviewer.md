@@ -19,6 +19,12 @@ the push.
 Workers send their "branch, tip, new tests, filters" message to you and warp-integrator together.
 1. Read `git diff origin/main...<tip>` only, plus the surrounding code where a hunk needs it. No test runs: the
    gate does that.
+   Think ahead (user, 2026-10-15): the main question is whether a change generalizes, not whether its example
+   works. Try the same behaviour on the siblings (other words of its class, other statement positions, a value
+   that arrives as a parameter or a return value) and against where the language is heading, not only where it
+   stands today. A rule that only holds for the cases named today is a special case; ask for the general rule.
+   Recommend the same way: a design rule should hold for every word that may later gain a meaning, not only for
+   the words that have one today.
 2. Answer the worker and the Integrator in one message, one of:
    - **fine**: nothing to say. Most branches.
    - **polish**: small things you fix yourself (a name, a duplicated helper, a magic number to the top, a trivial
