@@ -6,8 +6,7 @@ use draw
 width = 1280
 height = 800
 brush = 8
-// a brush dab every this many pixels along a stroke: dabs overlap into a smooth line
-spacing = 3
+spacing = 3 // a brush dab every this many pixels along a stroke: dabs overlap into a smooth line
 degrees_per_dab = 0.5
 
 canvas(width, height)
@@ -18,7 +17,6 @@ last_x = 0.0
 last_y = 0.0
 was_down = false
 
-// dabs of the brush from x1, y1 to x2, y2
 def stroke(x1, y1, x2, y2) {
 	dabs = max(cell(max(abs(x2 - x1), abs(y2 - y1)) / spacing), 1)
 	for i in 1 to dabs {
@@ -27,16 +25,17 @@ def stroke(x1, y1, x2, y2) {
 	}
 }
 
-// any key wipes the canvas white (natively the window's keys, in the playground the page's)
 on key {
 	if key == ESC: exit()
-	clear(white)
+	if key == SPACE: clear(white)
 	show()
 }
 
 // each frame of the window, until it closes (the playground's canvas always shows; headless: one frame)
 on frame {
-	if mouse_down {
+	down = mouse_down // read once: the pointer changes while the frame draws
+	// a stroke goes on to where the button came up, so a fast stroke keeps its last move
+	if down or was_down {
 		// a new stroke starts where the button went down, not where the last one ended
 		if not was_down { last_x = mouse_x; last_y = mouse_y }
 		stroke(last_x, last_y, mouse_x, mouse_y)
@@ -44,5 +43,5 @@ on frame {
 		last_y = mouse_y
 		show()
 	}
-	was_down = mouse_down
+	was_down = down
 }

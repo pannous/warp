@@ -73,6 +73,8 @@ instead of bending the code.
   cannot run in the browser goes in web/playground/excluded_samples.txt. Name the sample in the Integrator message.
 - Before a merge request: `cargo fmt` and `cargo clippy --lib --bins -- -D warnings` on your branch. The gate checks
   both (user, 2026-10-12, card cargo-fmt: the whole repo is formatted once, then enforced).
+  .warp files you wrote or changed (samples/, lib/, probes/): `scratch/warp format <files>` (your own build,
+  scripts/own-warp.sh), the canonical layout that keeps the meaning (notes/warp_format.md); the gate reports the rest.
   A branch from before the whole-repo format (78607d62e) crosses it in three steps, which never drops main's changes:
   `git merge 78607d62e^` (resolve real conflicts as usual); `cargo fmt` and commit; `git merge -X ours 78607d62e`
   (the format commit alone; your formatted side wins, and it is the same formatting); then `git merge origin/main`.

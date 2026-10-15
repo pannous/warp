@@ -33,7 +33,7 @@ global tuning = 440.0 as float
 
 // the frequency of MIDI note n (C4 is 60) at the tuning, equal-tempered, to a hundredth of a Hz as tables write it
 // (C4 = 261.63): a note name lowers to it (src/lowering/music_words.rs)
-midi_hertz(n) := round(tuning * 2^((n - 69) / 12) * 100) / 100
+midi_hertz(n) := round(tuning * 2 ^ ((n - 69) / 12) * 100) / 100
 // the MIDI note nearest a frequency: midi(C4) is 60, midi(440Hz) 69
 midi(pitch) := plain_midi(si_amount(pitch))
 // the units go first: a quantity tested against a class fails (card quantity-is-class)
@@ -48,7 +48,7 @@ note_name(pitch) := {
 is_note_name(name) := count(name) >= 2 and count(name) <= 3 and contains("CDEFGAB", name#1) and contains("0123456789", name#(count(name))) and (count(name) == 2 or contains("#♯b♭", name#2))
 // the frequency of a note name: note_hertz("A4") is 440, note_hertz("C#4") a semitone above C4, note_hertz("Eb5") one below E5
 note_hertz(name) := {
-	accidental = if count(name) == 3 then (if name#2 == "#" or name#2 == "♯" then 1 else -1) else 0
+	accidental = if count(name) == 3 then (if name#2 == "#" or name#2 == "♯" then 1 else - 1) else 0
 	octave = number(name#(count(name)))
 	midi_hertz(12 * (octave + 1) + scale_letters.index_of(name#1) - 1 + accidental)
 }
@@ -58,12 +58,12 @@ note_hertz(name) := {
 class Note {
 	key: int
 	cents: int
-	hertz() := midi_hertz(key) * 2^(cents / 1200.0)
+	hertz() := midi_hertz(key) * 2 ^ (cents / 1200.0)
 	octave() := floor(key / 12) as int - 1
 	name() := note_names[key % 12]
 	text() := name() + string(octave()) + cents_text(cents)
 	// a part of a semitone moves the cents: note(C4) + 2.25 is D4+25c
-	plus(semitones) := if semitones is int then Note(key + semitones, cents) else nearest_note(hertz() * 2^(semitones / 12.0))
+	plus(semitones) := if semitones is int then Note(key + semitones, cents) else nearest_note(hertz() * 2 ^ (semitones / 12.0))
 	minus(semitones) := plus(-semitones)
 	equals(o) := o is Note and key == o.key and cents == o.cents
 }
@@ -80,7 +80,7 @@ interval(low, high) := midi(high) - midi(low)
 transpose(pitch, semitones) := if pitch is list then [transpose(p, semitones) for p in pitch] else transposed(si_amount(pitch), semitones)
 transposed(frequency, semitones) := {
 	key = midi(frequency)
-	if midi_hertz(key) == frequency and semitones is int then midi_hertz(key + semitones) else frequency * 2^(semitones / 12)
+	if midi_hertz(key) == frequency and semitones is int then midi_hertz(key + semitones) else frequency * 2 ^ (semitones / 12)
 }
 // the semitones of a chord's notes above its root, and of a scale's up to its octave: chord(C4, major7), scale(D4, dorian)
 // (a kind word the program doesn't define is its text, src/lowering/music_words.rs)
@@ -90,22 +90,22 @@ chord(root, kind) := transpose_each(root, chord_intervals[kind])
 scale(root, kind) := transpose_each(root, scale_intervals[kind])
 transpose_each(root, intervals) := [transpose(root, i) for i in intervals]
 // the gain factor of decibels: loudness = -6 dB is about half (src/lowering/music_words.rs reads `-6 dB`)
-decibels(level) := 10^(level / 20.0)
+decibels(level) := 10 ^ (level / 20.0)
 // note names (C4, F#4, Bb3, any octave 0–9) are their frequencies in a program that uses sound: the compiler parses them
 // (src/lowering/music_words.rs), as note(name) does at run time
 
 // one wave at phase p (0 to 1) of its period, from -1 to 1, a sample advancing the phase by dt; the jumps of square
 // and sawtooth are band-limited (card reason-beep), sharp without dt
-wave(shape, p, dt = 0.0) := if shape == "square" then (if p < 0.5 then 1.0 else -1.0) + step_smoothing(p, dt) - step_smoothing((p + 0.5) % 1, dt)
-	else if shape == "triangle" then 1 - 4 * abs(p - 0.5)
-	else if shape == "sawtooth" then 2 * p - 1 - step_smoothing(p, dt)
-	else if shape == "noise" then 2 * random() - 1
-	else sin(2 * pi * p)
+wave(shape, p, dt = 0.0) := if shape == "square" then (if p < 0.5 then 1.0 else - 1.0) + step_smoothing(p, dt) - step_smoothing((p + 0.5) % 1, dt)
+else if shape == "triangle" then 1 - 4 * abs(p - 0.5)
+else if shape == "sawtooth" then 2 * p - 1 - step_smoothing(p, dt)
+else if shape == "noise" then 2 * random() - 1
+else sin(2 * pi * p)
 // the correction of a wave's upward jump of 2 at phase 0 within a sample of it (PolyBLEP): a sharp jump has harmonics
 // above half the sample rate, which fold back as an inharmonic buzz (880 Hz beep at 22050 samples a second)
 step_smoothing(p, dt) := if p < dt then (p / dt) * (2 - p / dt) - 1
-	else if p > 1 - dt then ((p - 1) / dt) * ((p - 1) / dt + 2) + 1
-	else 0.0
+else if p > 1 - dt then ((p - 1) / dt) * ((p - 1) / dt + 2) + 1
+else 0.0
 // the seconds at sample i: a float source (decision exact-decimals), so the samples' math runs in f64, not in ratios
 sample_time(i) := i / (sample_rate as float)
 // how far a ramp of seconds has come after steps samples: 0 to 1
@@ -134,39 +134,18 @@ global detune = 0.1 as float
 // the cycles a wave of frequency f has run at sample i, its vibrato included: the integral of f · (1 + c·sin(2π r t))
 phase(f, i) := {
 	t = sample_time(i)
-	depth = 2^(vibrato / 12) - 1
+	depth = 2 ^ (vibrato / 12) - 1
 	f * t + (if vibrato == 0 then 0.0 else f * depth * (1 - cos(2 * pi * vibrato_rate * t)) / (2 * pi * vibrato_rate))
 }
 // the gain of the tremolo at sample i: 1 at the start, 1 - tremolo at its lowest
 tremolo_gain(i) := 1 - tremolo * (0.5 - 0.5 * cos(2 * pi * tremolo_rate * sample_time(i)))
 voices_of(pitches) := if unison <= 1 then pitches else [frequency * 2^(detune * (k / (unison - 1) - 0.5) / 12) for frequency in pitches for k in 0..unison]
+// the amplitudes through one effect, the bus DSP in Rust (src/sound/effects.rs on_signal, card shared-buses stage 2):
+// ["lowpass", 800, 0.7] (also highpass, bandpass: biquads of the Audio EQ Cookbook), ["delay", seconds, feedback, mix]
+// and ["reverb", mix] with their tail, ["distort", drive] a soft clipper keeping the loudness
+effected(amplitudes: list, effect: list) := std_io("sound", "effect", [effect, amplitudes, sample_rate, loudness * loudest_sample])
 // the amplitudes through the synth's filter setting
-filtered(amplitudes) := if filter == "none" then amplitudes else biquad(amplitudes, filter, cutoff, resonance)
-// the amplitudes through a "lowpass", "highpass" or "bandpass" filter at frequency Hz of resonance q: a biquad of the
-// Audio EQ Cookbook (R. Bristow-Johnson)
-def biquad(amplitudes, kind, frequency, q) {
-	w = 2 * pi * frequency / sample_rate
-	alpha = sin(w) / (2 * q)
-	c = cos(w)
-	b0 = if kind == "lowpass" then (1 - c) / 2 else if kind == "highpass" then (1 + c) / 2 else alpha
-	b1 = if kind == "lowpass" then 1 - c else if kind == "highpass" then -(1 + c) else 0.0
-	b2 = if kind == "bandpass" then -alpha else b0
-	a0 = 1 + alpha
-	x1 = 0.0
-	x2 = 0.0
-	y1 = 0.0
-	y2 = 0.0
-	shaped = []
-	for x in amplitudes {
-		y = (b0 * x + b1 * x1 + b2 * x2 + 2 * c * y1 - (1 - alpha) * y2) / a0
-		x2 = x1
-		x1 = x
-		y2 = y1
-		y1 = y
-		shaped.push(y)
-	}
-	shaped
-}
+filtered(amplitudes) := if filter == "none" then amplitudes else effected(amplitudes, [filter, cutoff, resonance])
 // the amplitudes of frequencies sounding together
 chord_amplitudes(pitches, duration, shape) := {
 	n = round(duration * sample_rate) as int
@@ -185,52 +164,10 @@ global delay_time = 0.0 as float
 global delay_feedback = 0.4 as float
 global delay_mix = 0.5 as float
 global reverb_mix = 0.0 as float
-// floats (1.0f): exact ratios can't cross into a `go` task in the browser yet
-// below this share of the level the echoes and the room's tail are cut off
-echo_floor = 0.01f
-max_echoes = 8
-reverb_seconds = 0.6f
-// the delays (seconds) and the feedback of the four parallel combs of the reverb (Schroeder)
-reverb_delays = [0.0297f, 0.0371f, 0.0411f, 0.0437f]
-reverb_feedback = 0.75f
 effects_on() := distortion > 0 or delay_time > 0 or reverb_mix > 0
-
-distorted(amplitudes) := if distortion <= 0 then amplitudes else clipped(amplitudes, distortion)
-// a soft clipper: tanh bends the peaks the harder the drive, the loudest sample stays at the sound's loudness
-def clipped(amplitudes, drive) {
-	peak = loudness * loudest_sample
-	[peak * tanh(x * (1 + 10 * drive) / peak) for x in amplitudes]
-}
-// the signal plus feedback combs: y[i] = x[i] + feedback · y[i - gap], after the signal's end for the tail
-def comb(amplitudes, gap, feedback, tail) {
-	combed = []
-	for i in 0..(count(amplitudes) + tail) {
-		combed.push(dry_at(amplitudes, i) + (if i >= gap then feedback * combed[i - gap] else 0.0))
-	}
-	combed
-}
-// the number of repeats until a feedback has died below echo_floor
-echoes_of(feedback) := if feedback <= 0 then 0 else min(max_echoes, ceil(log(echo_floor) / log(feedback)) as int)
-delayed(amplitudes) := if delay_time <= 0 then amplitudes else echoed(amplitudes, delay_time, delay_feedback, delay_mix)
-// the dry signal and its echoes every seconds at feedback of the level before, mix of them, to the length of the tail
-def echoed(amplitudes, seconds, feedback, mix) {
-	gap = round(seconds * sample_rate) as int
-	wet = comb(amplitudes, gap, feedback, gap * echoes_of(feedback))
-	[dry_at(amplitudes, i) + mix * (wet[i] - dry_at(amplitudes, i)) for i in 0..count(wet)]
-}
-dry_at(amplitudes, i) := if i >= 0 and i < count(amplitudes) then amplitudes[i] else 0.0
-reverbed(amplitudes) := if reverb_mix <= 0 then amplitudes else roomed(amplitudes, reverb_mix)
-// the dry signal and the average of four combs, mix of it, to reverb_seconds after its end; the combs are summed
-// one after the other: a list of the four, indexed per sample, walked each of them (quadratic on a long sound)
-def roomed(amplitudes, mix) {
-	tail = round(reverb_seconds * sample_rate) as int
-	wet = comb(amplitudes, round(reverb_delays[0] * sample_rate) as int, reverb_feedback, tail)
-	for k in 1..count(reverb_delays) {
-		room = comb(amplitudes, round(reverb_delays[k] * sample_rate) as int, reverb_feedback, tail)
-		wet = [wet[i] + room[i] for i in 0..count(wet)]
-	}
-	[dry_at(amplitudes, i) + mix * wet[i] / count(reverb_delays) for i in 0..count(wet)]
-}
+distorted(amplitudes) := if distortion <= 0 then amplitudes else effected(amplitudes, ["distort", distortion])
+delayed(amplitudes) := if delay_time <= 0 then amplitudes else effected(amplitudes, ["delay", delay_time, delay_feedback, delay_mix])
+reverbed(amplitudes) := if reverb_mix <= 0 then amplitudes else effected(amplitudes, ["reverb", reverb_mix])
 // the samples through the effect chain
 def through_effects(samples) {
 	if not effects_on() { return samples }
@@ -244,12 +181,12 @@ clamped_samples(amplitudes) := [sample_offset + (max(-loudest_sample, min(loudes
 osc(pitch, duration, shape) := chord_amplitudes(pitches_of(pitch), si_amount(duration), shape)
 osc(pitch, duration) := osc(pitch, duration, wave_shape)
 osc(pitch) := osc(pitch, note_seconds, wave_shape)
-lowpass(signal, frequency, q = 0.707) := biquad(signal, "lowpass", si_amount(frequency), q)
-highpass(signal, frequency, q = 0.707) := biquad(signal, "highpass", si_amount(frequency), q)
-bandpass(signal, frequency, q = 0.707) := biquad(signal, "bandpass", si_amount(frequency), q)
-delay(signal, seconds, feedback = 0.4, mix = 0.5) := echoed(signal, si_amount(seconds), feedback, mix)
-reverb(signal, mix = 0.3) := roomed(signal, mix)
-distort(signal, drive = 0.5) := clipped(signal, drive)
+lowpass(signal, frequency, q = 0.707) := effected(signal, ["lowpass", si_amount(frequency), q])
+highpass(signal, frequency, q = 0.707) := effected(signal, ["highpass", si_amount(frequency), q])
+bandpass(signal, frequency, q = 0.707) := effected(signal, ["bandpass", si_amount(frequency), q])
+delay(signal, seconds, feedback = 0.4, mix = 0.5) := effected(signal, ["delay", si_amount(seconds), feedback, mix])
+reverb(signal, mix = 0.3) := effected(signal, ["reverb", mix])
+distort(signal, drive = 0.5) := effected(signal, ["distort", drive])
 gain(signal, share) := [share * x for x in signal]
 // two to four signals summed sample by sample, to the longest (a list of signals walked in a loop was quadratic: card
 // list-call-copy)
@@ -258,7 +195,8 @@ mix(a, b, c) := added(added(a, b), c)
 mix(a, b, c, d) := added(added(a, b), added(c, d))
 // a bus (card shared-buses): one effect chain that every sound sent to it goes through together, from the program and
 // its tasks, processed once on their mix as they play (src/sound/effects.rs), so a reverb rings on after the last:
-// room = bus() |> reverb(0.4) |> delay(0.25), then out(osc(C4, 1s), room) or osc(C4, 1s) |> out(room)
+// room = bus() |> reverb(0.4) |> delay(0.25), then osc(C4, 1s) |> room (call(b: Bus, signal): out(osc(C4, 1s), room)) or
+// play(C4, 1s, bus: room)
 class Bus {
 	id: int
 	chain: list
@@ -300,13 +238,17 @@ high_shelf(b: Bus, frequency, db, q = 0.707) := with_effect(b, ["high_shelf", si
 // a compressor: a level over the threshold (dB, 0 is full scale) comes out ratio times closer to it, following a rise
 // in attack seconds and a fall in release
 compress(b: Bus, threshold = -18, ratio = 4, attack = 0.01, release = 0.1) := with_effect(b, ["compress", threshold, ratio, si_amount(attack), si_amount(release)])
-// the signal played through the bus; its handle. The thread's sounds go where they went before afterwards
-out(signal, b: Bus) := {
-	before = std_io("sound", "send", [b.id])
-	handle = out(signal)
+// the thread's sounds go to the bus; gives where they went before, for sent_back
+sent_to(b: Bus) := std_io("sound", "send", [b.id])
+// the thread's sounds go where they went before again; gives the handle of the sound sent
+sent_back(before, handle) := {
 	std_io("sound", "send", [before])
 	handle
 }
+// the signal played through the bus; its handle
+out(signal, b: Bus) := sent_back(sent_to(b), out(signal))
+// a bus applied to a signal plays it through the bus: `osc(C4, 1s) |> room`, `room(signal)` (trait Callable)
+call(b: Bus, signal) := out(signal, b)
 // indexed in place: dry_at(a, i) + dry_at(b, i) of two lists was quadratic (card list-call-copy)
 added(a, b) := [(if i < count(a) then a[i] else 0.0) + (if i < count(b) then b[i] else 0.0) for i in 0..max(count(a), count(b))]
 out(signal) := sound(clamped_samples(signal))
@@ -337,12 +279,14 @@ plain_hertz(pitch) := {
 	raise "not a pitch: " + str(pitch)
 }
 play(tone, for duration) := sound(chord_samples(pitches_of(tone), si_amount(duration), wave_shape))
+// the note played through a bus (card shared-buses stage 2): play(C4, 1s, bus: room)
+play(tone, for duration, bus: Bus) := sent_back(sent_to(bus), play(tone, duration))
 // a music file in the background (wav, mp3, ogg, flac, aiff, m4a): play "song.mp3"; stop_sound stops it
 play_file(path) := std_io("sound", "play_file", [path])
 // play gives the sound's handle: h = play(C4, 2s); stop_sound(h) stops that one alone, stop_sound (handle 0) all
 stop_sound(handle = 0) := std_io("sound", "stop", [handle])
 // a playing sound's gain ramps to gain (1 as played, 0 silent) over the seconds, sample by sample: h = play(C4, 4s);
-// fade_sound(h, 0, 2) fades it out over 2 seconds; handle 0 fades all. render_sound writes the fade too
+// fade_sound(h, 0, 2) fades it out over 2 seconds; handle 0 fades all. save sound writes the fade too
 fade_sound(handle, gain, seconds = 0.05) := std_io("sound", "fade", [handle, gain, si_amount(seconds)])
 // a signal computed while it plays (card real-time): hum(t) := 0.3 * sin(2 * pi * 220 * t); play(hum, 2s) (or
 // play_signal(hum, 2s); play([left, right], 2s) in stereo) calls hum for every sample, t its time in seconds, a block
@@ -363,7 +307,7 @@ save(made: Recording, as file) := std_io("sound", "render", [file])
 // the old name, with a note naming save (std_aliases.rs)
 render_sound(path) := save(Recording(), path)
 // `at 2 beats play C4`, `at 1 bar { … }` (card sample-accurate): the statement's sounds start that many seconds after
-// the voice's first sound, exactly so in render_sound; the voice goes on where it stood (src/lowering/music_words.rs)
+// the voice's first sound, exactly so in save sound; the voice goes on where it stood (src/lowering/music_words.rs)
 sound_at(seconds) := std_io("sound", "at", [si_amount(seconds)])
 sound_at_end() := std_io("sound", "at_end", [])
 // this voice's moment in seconds on the clock every task shares: where its next sound would start (card live-redefine,
@@ -499,7 +443,7 @@ def pattern_events(items, seconds, cycle, place, chance) {
 	events = []
 	for k in 0..count(items) {
 		item = items[k]
-		length = item[2] * step + (if k % 2 == 1 then -shift else if k + 1 < count(items) then shift else 0)
+		length = item[2] * step + (if k % 2 == 1 then - shift else if k + 1 < count(items) then shift else 0)
 		turn = cycle
 		while item[0] == 2 {
 			chosen = item[1][turn % count(item[1])]
@@ -562,38 +506,22 @@ read_midi(path) := {
 	[[flat#(4 * i + 1) / 1000.0, midi_hertz(flat#(4 * i + 2)), flat#(4 * i + 3) / 1000.0, flat#(4 * i + 4)] for i in 0..((count(flat) / 4) as int)]
 }
 
-// how loud each frequency band sounds at a moment of the samples (card winamp-like, samples/visualizer.warp): the bands
-// spaced evenly in pitch from band_low to band_high Hz, each level from 0 to 1 (a full-scale sine is 1)
+// how loud each frequency band sounds at a moment of the samples (card winamp-like, samples/visualizer.warp), or of an
+// audio file, spectrum("song.mp3", seconds, bands), decoded once: the bands spaced evenly in pitch from band_low to
+// band_high Hz, each level from 0 to 1 (a full-scale sine is 1). The window Hann-weighted, each band measured by
+// Goertzel's recurrence, in Rust for both (src/sound/spectrum.rs, decision sound-dsp)
 global band_low = 60
 global band_high = 5000
 // the samples a spectrum looks at: 512 at 22050 Hz are 23 ms, bands 43 Hz apart are still told apart
 spectrum_window = 512
-// the middle frequency of band i of count
-band_frequency(i, count) := band_low * (band_high / band_low)^(i / (count - 1))
 // the band whose middle frequency is nearest in pitch
 nearest_band(frequency, count) := round(log(frequency / band_low) / log(band_high / band_low) * (count - 1)) as int
-// the window's samples around silence, Hann-weighted so a tone between two bands does not leak into the far ones
-def hann_weighted(window) {
-	n = count(window)
-	[((window[i] - sample_offset) * (0.5 - 0.5 * cos(2 * pi * i / (n - 1)))) as float for i in 0..n]
-}
-// how loud frequency f sounds in the weighted window: the size of one term of the discrete Fourier transform, by
-// Goertzel's recurrence (one multiply and add a sample, no sine or cosine in the loop)
-def band_level(weighted, f) {
-	coefficient = 2 * cos(2 * pi * f / sample_rate)
-	last = 0.0 as float
-	before = 0.0 as float
-	for x in weighted {
-		next = x + coefficient * last - before
-		before = last
-		last = next
-	}
-	4 * sqrt(max(0.0, last * last + before * before - coefficient * last * before)) / count(weighted) / loudest_sample
-}
+// how many seconds an audio file sounds: sound_seconds("song.mp3")
+sound_seconds(path: text) := std_io("sound", "file_seconds", [path])
+// one definition for both until a text and a list variant overload (card text-list)
 def spectrum(samples, seconds, bands) {
+	if samples is text { return std_io("sound", "file_spectrum", [samples, seconds, spectrum_window / sample_rate, bands, band_low, band_high]) }
 	start = min(round(seconds * sample_rate) as int, count(samples))
 	window = samples[start..min(start + spectrum_window, count(samples))]
-	if count(window) < 2 { return [0 for i in 0..bands] }
-	weighted = hann_weighted(window)
-	[band_level(weighted, band_frequency(i, bands)) for i in 0..bands]
+	std_io("sound", "spectrum", [window, sample_rate, bands, band_low, band_high])
 }

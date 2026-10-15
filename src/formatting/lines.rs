@@ -1,0 +1,146 @@
+//! What each line of warp source holds for the layout: its code (outside texts and comments), its trailing comment,
+//! and the brackets open before it
+
+/// The brackets that open and close the nesting the indentation follows
+const OPENERS: [char; 3] = ['(', '[', '{'];
+const CLOSERS: [char; 3] = [')', ']', '}'];
+
+#[derive(Clone, Debug, Default)]
+pub(super) struct LineScan {
+	/// the line starts inside a text or a block comment: its start belongs to them, not to the layout
+	pub starts_in_text: bool,
+	/// the line ends inside a text or a block comment (its trailing spaces may be the text's)
+	pub ends_in_text: bool,
+	/// byte ranges of code: outside texts and comments
+	pub code: Vec<(usize, usize)>,
+	/// where a comment to the end of the line starts
+	pub comment: Option<usize>,
+	/// for each bracket open at the line's start, the line that opened it
+	pub open_before: Vec<usize>,
+}
+
+impl LineScan {
+	pub fn is_code(&self, at: usize) -> bool {
+		self.code.iter().any(|&(start, end)| at >= start && at < end)
+	}
+}
+
+enum Inside {
+	Code,
+	Text(char),
+	BlockComment(&'static str),
+}
+
+/// `#use lib`, `#include x`: a directive at the line start is a comment too (warp_parser/comments.rs)
+const DIRECTIVES: [&str; 3] = ["use", "include", "import"];
+
+/// `//` or `#` starting a comment at `at`, after a space or at the line start: `//` before a space, `/`, `!` or the
+/// end; `#` before a space, `!`, `#` or the end (`# note`, `#!`, `##`), or a directive. A glued `7//2` or `xs#1`, and
+/// `#xs` (a count), are code
+fn starts_line_comment(line: &str, at: usize) -> bool {
+	let before_is_space = at == 0 || line[..at].ends_with([' ', '\t']);
+	let after = &line[at..];
+	let next = |prefix: &str| after[prefix.len()..].chars().next();
+	if after.starts_with("//") {
+		return before_is_space && next("//").is_none_or(|c| matches!(c, ' ' | '/' | '!'));
+	}
+	if after.starts_with('#') && before_is_space {
+		let directive = line[..at].trim().is_empty() && DIRECTIVES.iter().any(|word| after[1..].starts_with(word));
+		return directive || next("#").is_none_or(|c| matches!(c, ' ' | '!' | '#'));
+	}
+	false
+}
+
+/// The scan of every line, carrying texts, block comments and open brackets from line to line
+pub(super) fn scan(lines: &[String]) -> Vec<LineScan> {
+	let mut inside = Inside::Code;
+	let mut open: Vec<usize> = Vec::new();
+	let mut scans = Vec::with_capacity(lines.len());
+	for (index, line) in lines.iter().enumerate() {
+		let mut scan = LineScan {
+			starts_in_text: !matches!(inside, Inside::Code),
+			open_before: open.clone(),
+			..Default::default()
+		};
+		let mut code_start = matches!(inside, Inside::Code).then_some(0);
+		let mut chars = line.char_indices().peekable();
+		while let Some((at, c)) = chars.next() {
+			match inside {
+				Inside::Text(quote) => {
+					if c == '\\' {
+						chars.next();
+					} else if c == quote {
+						inside = Inside::Code;
+						code_start = Some(at + c.len_utf8());
+					}
+				}
+				Inside::BlockComment(closing) => {
+					if line[at..].starts_with(closing) {
+						chars.nth(closing.len() - 2);
+						inside = Inside::Code;
+						code_start = Some(at + closing.len());
+					}
+				}
+				Inside::Code => {
+					let rest = &line[at..];
+					let opens_block = ["/*", "/#"].into_iter().find(|opening| rest.starts_with(opening));
+					if c == '"' || c == '\'' || c == '`' || opens_block.is_some() {
+						if let Some(start) = code_start.take() {
+							scan.code.push((start, at));
+						}
+						inside = match opens_block {
+							Some("/*") => Inside::BlockComment("*/"),
+							Some(_) => Inside::BlockComment("#/"),
+							None => Inside::Text(c),
+						};
+						if opens_block.is_some() {
+							chars.next();
+						}
+					} else if starts_line_comment(line, at) {
+						if let Some(start) = code_start.take() {
+							scan.code.push((start, at));
+						}
+						scan.comment = Some(at);
+						break;
+					} else if OPENERS.contains(&c) {
+						open.push(index);
+					} else if CLOSERS.contains(&c) {
+						open.pop();
+					}
+				}
+			}
+		}
+		if let (Some(start), None) = (code_start, scan.comment) {
+			scan.code.push((start, line.len()));
+		}
+		scan.ends_in_text = !matches!(inside, Inside::Code);
+		scans.push(scan);
+	}
+	scans
+}
+
+/// The brackets the code of the line closes before anything else: `})` closes two
+pub(super) fn leading_closers(line: &str, scan: &LineScan) -> usize {
+	let Some(&(start, end)) = scan.code.first() else { return 0 };
+	if !line[..start].trim().is_empty() {
+		return 0;
+	}
+	line[start..end]
+		.trim_start()
+		.chars()
+		.take_while(|c| CLOSERS.contains(c) || *c == ' ')
+		.filter(|c| CLOSERS.contains(c))
+		.count()
+}
+
+/// The code of the line without its trailing comment, trimmed (texts blanked to `""`)
+pub(super) fn code_text(line: &str, scan: &LineScan) -> String {
+	let mut text = String::new();
+	for (index, &(start, end)) in scan.code.iter().enumerate() {
+		if index > 0 {
+			text.push_str("\"\"");
+		}
+		text.push_str(&line[start..end]);
+	}
+	text.trim().to_string()
+}

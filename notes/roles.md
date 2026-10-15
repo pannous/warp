@@ -92,8 +92,10 @@ The only session that runs the full suite and the only one that pushes code to m
 
 ## Reviewer
 User 2026-10-14 invented it: "makes sure that everything is sound and beautiful according to standards", so the
-Integrator has less to do. It reads each merge request's diff in parallel with the gate: fine, polish (it commits
-small fixes itself as a follow-up tip) or veto (unsound: the Integrator leaves the branch out of the push).
+Integrator has less to do. It reads each merge request's diff in parallel with the gate: two signals for the
+worker (user 2026-10-15), the gate's "it works" and the Reviewer's "here it can generalize or read better", which the
+worker makes its next commit. The Reviewer approves nothing and sends the Integrator nothing but a rare veto
+(unsound: the Integrator leaves the branch out of the push).
 Structural findings become cards for the Refactorer. Prompt: notes/agents/reviewer.md; a default service.
 
 ## Refactorer

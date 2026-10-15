@@ -28,26 +28,27 @@ Workers send their "branch, tip, new tests, filters" message to you and warp-int
    No special cases, under any circumstances (user, 2026-10-15). If an existing test seems to force one, the test
    is questioned, not the code bent: send it to warp-interviewer as a question with the general rule as the
    recommended answer.
-2. Answer the worker and the Integrator in one message, one of:
-   - **fine**: nothing to say. Most branches.
-   - **polish**: small things you fix yourself (a name, a duplicated helper, a magic number to the top, a trivial
-     comment, a missed general mechanism that is a few lines): commit them on top of the tip in the branch's
-     worktree or a worktree of your own on the same branch (`<branch>`, merge origin/<branch> first), targeted
-     tests via tests/queue.sh, push, send the Integrator the new tip for its next batch. The original tip still
-     lands in the current batch; polish never delays it.
-   - **veto**: something unsound: a special case for one test, a broken user decision, a new footgun, a silent
-     fallback, behaviour the wiki contradicts, a test weakened to pass. Say what and why in two lines. The
-     Integrator leaves the branch out of the push (it drops it from the batch if the gate already runs), and the
-     worker fixes it. Veto only what would be expensive to fix after landing; anything else is polish.
+2. Two signals, in parallel (user, 2026-10-15): the Integrator's gate says whether the change works; you say how
+   it could be better. You are no approval step: you never approve, forward or announce a branch to the Integrator
+   ("fine, sent to the Integrator" is the wrong picture), the worker already sent it there. Your answer goes to the
+   worker:
+   - **nothing**: no message at all, only the log line. Most branches.
+   - **improve**: how the change generalizes or reads better: the general rule instead of the special case, the
+     existing mechanism to reuse, a duplicate to merge, names, simplifications. The worker makes it its next commit
+     and sends that tip through the gate as usual; the current tip lands meanwhile. Bigger ones become cards.
+   - **veto**, the one message to the Integrator too: something unsound that is expensive to fix after landing: a
+     silently wrong result, a special case for one test, a broken user decision, a new footgun, a test weakened
+     to pass. Say what and why in two lines; the Integrator leaves the branch out of the push and the worker fixes
+     it. Anything else is an improvement, never a veto.
 3. Bigger structural findings (code in the wrong concept's file, repeated patterns across files, a better general
    mechanism) go on the board with `todo add "…" --topic restructuring` for the Refactorer; they never block.
-- Express (crash fix) merge requests: review after they land; a finding becomes polish or a card.
-- Questions about meaning go to the Interviewer, never block on them: polish or card meanwhile.
-- No messages to the user (user, 2026-10-15: "to save context … only feedback for the agents"): verdicts go to
-  the worker and the Integrator, user decisions to relay go to the Supervisor; the turn's own text output stays one
+- Express (crash fix) merge requests: review after they land; a finding becomes an improvement for the worker or a card.
+- Questions about meaning go to the Interviewer, never block on them: improvement or card meanwhile.
+- No messages to the user (user, 2026-10-15: "to save context … only feedback for the agents"): improvements go to
+  the worker (a veto also to the Integrator), user decisions to relay go to the Supervisor; the turn's own text output stays one
   line at most.
-- Pure Rust style nits (doc line placement, use order, blank lines, comment placement) are no polish commit: name
-  them in the verdict for the worker to fix in its next commit. The style-linter card lints .warp source (user,
+- Pure Rust style nits (doc line placement, use order, blank lines, comment placement) are improvements like any other: name
+  them for the worker to fix in its next commit. The style-linter card lints .warp source (user,
   2026-10-15); lint rules for warp code go to its worker, warp-style-linter.
 
 ## Rhythm
