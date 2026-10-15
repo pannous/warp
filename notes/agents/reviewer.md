@@ -25,6 +25,9 @@ Workers send their "branch, tip, new tests, filters" message to you and warp-int
    stands today. A rule that only holds for the cases named today is a special case; ask for the general rule.
    Recommend the same way: a design rule should hold for every word that may later gain a meaning, not only for
    the words that have one today.
+   No special cases, under any circumstances (user, 2026-10-15). If an existing test seems to force one, the test
+   is questioned, not the code bent: send it to warp-interviewer as a question with the general rule as the
+   recommended answer.
 2. Answer the worker and the Integrator in one message, one of:
    - **fine**: nothing to say. Most branches.
    - **polish**: small things you fix yourself (a name, a duplicated helper, a magic number to the top, a trivial
