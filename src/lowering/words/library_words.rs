@@ -736,9 +736,10 @@ impl Lowering {
 				return Some(log_to_base(&items[0], value, base));
 			}
 		}
-		// `sin x`: a real function applies to the value after it, as `sin(x)` does (card sin-cos)
+		// `sin x`, `trunc x`: a library word of one typed value applies to the value after it, as `sin(x)` does, wherever
+		// it stands (card sin-cos)
 		if let ([function, argument], Bracket::None, Separator::Space) = (items, bracket, separator) {
-			if crate::numbers::real::FUNCTIONS.contains(&head.as_str()) && !self.shadows(head) {
+			if crate::lowering::library_signatures::typed_first_arity(head) == Some(1) && !self.shadows(head) {
 				return Some(word_call(function, argument, vec![]));
 			}
 		}
