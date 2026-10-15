@@ -170,6 +170,7 @@ mod test_type_name_definition_forms;
 mod test_type_name_matching;
 mod test_type_of;
 mod test_type_of_consistency; // card type-of-consistency
+mod test_type_of_lambda_variable; // card type-says-symbol
 mod test_type_of_node_values;
 mod test_type_of_real_variable;
 mod test_type_static;

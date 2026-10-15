@@ -24,6 +24,7 @@ SHARD = os.environ.get("WARP_BROWSER_TEST_SHARD")  # i/n: every n-th test from t
 # the tour's page starts its worker this late (playground.js ?slow_start): a fast machine then meets the races a slow
 # CI runner meets, e.g. "ready" hiding the first example's "running…" (empty value, the failed deploys of 2026-10-08)
 SLOW_START_MS = 2000
+COMPONENTS_BUILT = os.environ.get("WARP_COMPONENTS_BUILT") == "1"
 PER_WORKER = os.environ.get("WARP_BROWSER_TEST_PER_WORKER")  # tests before a worker is replaced (tests.js TESTS_PER_WORKER)
 # one browser per run: runs at the same time (the suite, a tour check) must never drive or close each other's page
 SESSION = f"warp-browser-tests-{os.getpid()}"
@@ -157,9 +158,11 @@ GPU_JOBS_NEVER = "Out of memory"
 # Firefox's bug: terminating a Worker busy inside a WebAssembly.promising call logs an anonymous uncaught exception on
 # the page, which no listener sees (probes/firefox_jspi_terminate.html, card firefox-logs). Stop does that: the
 # compiler's web_evaluate and the program's main run under promising (worker.js, host.js JSPI); the run stopped and
-# the button right
-EXPECTED_CONSOLE = {SHADER_ERROR: ["Error while parsing WGSL", "errors while creating shader module", "parsing error"], GPU_JOBS: ["uncaught exception: undefined"],
-	STOP_BUTTON: ["uncaught exception: undefined"]}
+# the button right. The clipboard check does the same on purpose: its run_code("1") replaces the worker of the run that
+# waits for the permission click (card tour-firefox-fails: two such lines on each Firefox run of the check alone)
+FIREFOX_TERMINATED_PROMISING = ["uncaught exception: undefined"]  # card firefox-logs
+EXPECTED_CONSOLE = {SHADER_ERROR: ["Error while parsing WGSL", "errors while creating shader module", "parsing error"],
+	GPU_JOBS: FIREFOX_TERMINATED_PROMISING, STOP_BUTTON: FIREFOX_TERMINATED_PROMISING, CLIPBOARD_READ: FIREFOX_TERMINATED_PROMISING}
 # card safari-shared-buffers: a task's answer buffer, like a GPU job's, is reused once read
 MANY_TASKS = "(many tasks in one run)"
 MANY_TASKS_CODE = """twice(x) := x * 2
@@ -367,7 +370,13 @@ RUN_EXAMPLE = """await playground.chooseExample(%s);
 
 
 def run_sample(name):
-	browser("eval", f"(async () => {{ {RUN_EXAMPLE % json.dumps(name)} }})()")
+	"""what is wrong with the sample's run: its failed status (`cannot open mozart.mp3`, card open-mozart), as the console
+	shows no error for it"""
+	answer = browser("eval", f"""(async () => {{ {RUN_EXAMPLE % json.dumps(name)}
+		const status = document.getElementById("status");
+		return JSON.stringify(status.classList.contains("failed") ? status.textContent : ""); }})()""")
+	failed = json.loads(json.loads(answer)) if answer.startswith('"') else f"(page gave no answer: {answer or browser_complaint})"
+	return [f"status: {failed}"] if failed else []
 
 
 def reported(message):
@@ -895,8 +904,7 @@ def check_examples(names, page_url=None, site=None):
 	chosen = [(name, sample) for name, sample in chosen if not names or name in names]
 	for name, sample in chosen:
 		if sample:
-			run_sample(name)
-			verdict(f"samples/{name}", [])
+			verdict(f"samples/{name}", run_sample(name))
 		else:
 			expected, shown = examples[name], show_example(name)
 			if NO_GPU in str(shown.get("value")):
@@ -919,7 +927,10 @@ def check_examples(names, page_url=None, site=None):
 
 def build_components():
 	"""the components `use wasm` tests call, transpiled for the page (components.js); a failure only warns: those tests
-	then fail naming build.sh"""
+	then fail naming build.sh. COMPONENTS_BUILT: built elsewhere already (scripts/browser-dry-run.sh builds them on the
+	Mac, the server has no cargo)"""
+	if COMPONENTS_BUILT:
+		return
 	built = subprocess.run([os.path.join(REPOSITORY, "web", "playground", "build.sh"), "components"], capture_output=True, text=True)
 	if built.returncode:
 		print(f"warning: build.sh components failed, `use wasm` tests will fail:\n{built.stderr.strip()}", file=sys.stderr)

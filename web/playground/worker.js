@@ -37,7 +37,7 @@ const VALUE_DELAY_MILLISECONDS = 50;
 let panicMessage; // the compiler's last panic message
 
 let warming = false; // the warm-up's run says nothing to the page
-const post = message => warming || self.postMessage(message);
+const post = (message, transfer) => warming || self.postMessage(message, transfer);
 // the first markup program compiles the markup renderer (lib/markup.warp's to_html) once: ~0.5 s in Chrome, seconds in
 // Safari. The page asks for it while idle after its first run (card guide-warmup), so a guide's first ▶ is quick too
 const WARM_UP_CODE = 'p{ "" }';
@@ -51,7 +51,8 @@ const hooks = {
 	renders: true, // each outcome carries its HTML by the program's own renderer (host.js renderedHtml)
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
-	paint: (pixels, width, height, canvas, shaded) => post({ type: "paint", pixels, width, height, canvas, shaded }),
+	// host-media.js paintFrame: its words move to the page, not copied
+	paint: (frame, width, height, canvas, shaded) => post({ type: "paint", frame, width, height, canvas, shaded }, frame && [frame.words.buffer]),
 	gpuCanvas: canvas => post({ type: "gpu canvas", ...canvas }), // host-gpu.js gpuPainted
 	sound: sound => self.playSamples(sound),
 	sleeping: milliseconds => post({ type: "sleep", milliseconds }),
