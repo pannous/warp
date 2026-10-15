@@ -53,3 +53,12 @@ fn a_program_function_named_like_a_module_helper_leaves_the_module_its_own() {
 	is!("use sound\nbiquad(a, k, f, q) := [9]\ncount(osc(C4, 0.01s) |> lowpass(500))", 220);
 	is!("use sound\nwave(shape, p) := 0.0\nmax(chord_amplitudes([440], 0.01, \"sine\")) > 0 and wave(1, 2) == 0", true);
 }
+
+/// a program function shadows the module word's definitions of its own number of arguments only: the others stay the
+/// program's too (review of use-sound)
+#[test]
+fn a_program_function_of_another_arity_adds_to_the_module_word() {
+	is!("use sound\nmix(a, b, c, d, e) := 5\nmix([0.1], [0.2])#1 ~ 0.3 and mix(1, 2, 3, 4, 5) == 5", true);
+	is!("use math\nclamp(x) := 9\nclamp(5, 0, 3) + clamp(1)", 12);
+	is!("use sound\nmix(a, b) := 7\nmix(1, 2) + count(mix([0.1], [0.2], [0.3]))", 8);
+}

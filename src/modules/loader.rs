@@ -157,7 +157,7 @@ pub(super) struct Loader<'a> {
 	pub(super) std_definitions: Vec<Node>,
 	/// the program's top-level variables and own functions: a module word of the same name is renamed apart in the module
 	/// (shadowed_apart)
-	pub(super) program_words: HashSet<String>,
+	pub(super) program_words: ProgramWords,
 	/// whether a standard module's source is being loaded: its `use`s are its own, not the program's
 	pub(super) inside_std_module: bool,
 	/// the standard modules the program (or a file module) uses, and those only standard modules use (hidden_apart)
@@ -176,7 +176,7 @@ impl<'a> Loader<'a> {
 			scope: None,
 			wasm_modules: vec![],
 			std_definitions: vec![],
-			program_words: HashSet::new(),
+			program_words: ProgramWords::default(),
 			inside_std_module: false,
 			program_std_modules: HashSet::new(),
 			std_modules_of_std_modules: HashSet::new(),
