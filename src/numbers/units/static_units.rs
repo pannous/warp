@@ -88,12 +88,44 @@ fn without_si_amounts(node: Node) -> Node {
 	}
 }
 
+/// `[3, 4] cm` is `[3 cm, 4 cm]`: a unit after a list is each element's, nested lists (matrices) alike (user 2026-10-15,
+/// dimensions-units Q3)
+fn each_element_in_unit(node: Node, distributed: &mut bool) -> Node {
+	match node {
+		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [list, unit] if is_list_literal(list) && is_unit_word(unit)) =>
+		{
+			*distributed = true;
+			each_in_unit(&items[0], &items[1])
+		}
+		other => crate::node::children_rewritten(other, |child| each_element_in_unit(child, distributed)),
+	}
+}
+
+fn is_list_literal(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(_, Bracket::Square, _))
+}
+
+fn is_unit_word(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(name) if unit_named(name).is_some())
+}
+
+fn each_in_unit(amount: &Node, unit: &Node) -> Node {
+	match amount.drop_meta() {
+		Node::List(items, Bracket::Square, separator) => {
+			Node::List(items.iter().map(|item| each_in_unit(item, unit)).collect(), Bracket::Square, separator.clone())
+		}
+		_ => Node::Key(Box::new(amount.clone()), Op::Mul, Box::new(unit.clone())),
+	}
+}
+
 /// The program with unit literals as SI amounts and the units of its final value; None when it uses no units or uses
 /// quantities beyond stage 1; Err for a dimension error
-pub fn lower(program: &Node) -> Option<Result<Node, Node>> {
+pub fn lower(written: &Node) -> Option<Result<Node, Node>> {
+	let mut distributed = false;
+	let program = &super::shadowing(written, || each_element_in_unit(written.clone(), &mut distributed));
 	match super::shadowing(program, || lower_shadowed(program)) {
 		Some(lowered) => Some(lowered.map(without_si_amounts)),
-		None => program.mentions(SI_AMOUNT_WORD).then(|| Ok(without_si_amounts(program.clone()))),
+		None => (program.mentions(SI_AMOUNT_WORD) || distributed).then(|| Ok(without_si_amounts(program.clone()))),
 	}
 }
 
