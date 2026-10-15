@@ -9,7 +9,7 @@ use super::nodes::{key, parameter_word};
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::type_name_matching::{is_preposition, PREPOSITIONS};
+use crate::type_name_matching::{is_label_word, is_preposition, AS_LABEL, PREPOSITIONS};
 use std::collections::{HashMap, HashSet};
 
 /// A function's parameters by name, and which name each preposition passes, over all its overloads
@@ -26,7 +26,7 @@ struct Functions {
 }
 
 pub fn lower(node: Node) -> Node {
-	if !node.mentions_any(&PREPOSITIONS) && !has_spaced_named_call(&node) {
+	if !node.mentions_any(&PREPOSITIONS) && !node.mentions(AS_LABEL) && !has_spaced_named_call(&node) {
 		return node;
 	}
 	let labels = functions(&node);
@@ -40,7 +40,7 @@ pub fn lower(node: Node) -> Node {
 /// `for duration` among a definition's parameters: the preposition and the parameter
 fn labelled(parameter: &Node) -> Option<(String, &Node)> {
 	match parameter.drop_meta() {
-		Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && is_preposition(&words[0]) => {
+		Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && is_label_word(&words[0]) => {
 			Some((words[0].name(), &words[1]))
 		}
 		_ => None,
@@ -258,6 +258,8 @@ fn split_operator(item: Node, labels: &Labels) -> Vec<Node> {
 	let word = match item.drop_meta() {
 		Node::Key(_, Op::To, _) => "to",
 		Node::Key(_, Op::In, _) => "in",
+		// `save sound as "x.wav"` of `save(made, as file)`: an argument, not a conversion
+		Node::Key(_, Op::As, _) => AS_LABEL,
 		// `f 3 in 4` holds the words `3 in 4` as a group of their own
 		Node::List(inner, Bracket::None, Separator::Space)
 			if spread(inner).iter().any(|word| is_label_of(word, labels)) =>

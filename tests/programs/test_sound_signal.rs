@@ -26,7 +26,7 @@ fn played(definition: &str, name: &str) -> Vec<i16> {
 fn rendered(program: &str, name: &str, last: &str, expected: &str) -> Vec<i16> {
 	std::fs::create_dir_all(FOLDER).expect("data folder");
 	let path = format!("{FOLDER}/{name}.wav");
-	let program = format!("use sound\n{program}\nrendered = round(render_sound(\"{path}\") * 100)\n{last}");
+	let program = format!("use sound\n{program}\nrendered = round(save(sound, \"{path}\") * 100)\n{last}");
 	let run = crate::common::warp_command().args(["--no-ask", "eval", &program]).output().expect("warp runs");
 	let printed = String::from_utf8_lossy(&run.stdout);
 	assert_eq!(printed.trim().trim_start_matches('»').trim(), expected, "{}", String::from_utf8_lossy(&run.stderr));
