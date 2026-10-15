@@ -201,6 +201,17 @@ pub(crate) fn mentioned_names(statements: &[Node]) -> Vec<String> {
 				collect(left, names);
 				collect(right, names);
 			}
+			// `play tone:440Hz for:0.5s`: a named argument's name mentions no word (preposition_calls.rs)
+			Node::List(items, bracket, separator)
+				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))
+					&& (*bracket == Bracket::Round || *separator == Separator::Space) =>
+			{
+				collect(&items[0], names);
+				items[1..].iter().for_each(|item| match crate::lowering::named_arguments::named_argument(item) {
+					Some((_, value)) => collect(value, names),
+					None => collect(item, names),
+				})
+			}
 			Node::List(items, _, _) => items.iter().for_each(|item| collect(item, names)),
 			// an interpolation is lowered after the modules are resolved: `"\(zip(a, b))"` calls zip
 			Node::Meta { node: inner, .. } => crate::text::interpolation::holes(node)

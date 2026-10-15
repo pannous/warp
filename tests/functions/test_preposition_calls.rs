@@ -61,6 +61,15 @@ fn a_preposition_the_function_does_not_take_is_an_error() {
 	fails_with("for = 3", "for is a keyword");
 }
 
+/// play needs no `use sound`, and a label is no mention of the sound word tone (reviewer)
+#[test]
+fn play_names_its_arguments_without_use_sound() {
+	is!("play tone:440Hz for:0.1s\n1", 1);
+	is!("play tone=440Hz for=0.1s\n1", 1);
+	is!("play(tone: C4, for: 0.1s)\n1", 1);
+	fails_with("tone(440Hz, 0.1s)", "tone is in the standard module sound");
+}
+
 #[test]
 fn a_variable_named_like_a_preposition_stays_a_variable() {
 	is!("by = 2\nf(x, with y) := x - y\nf 5 by", 3);

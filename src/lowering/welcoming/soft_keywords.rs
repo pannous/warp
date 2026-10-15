@@ -141,9 +141,7 @@ fn first_refused(node: &Node, top_level: bool) -> Option<Node> {
 	}
 }
 
-fn is_preposition(name: &Node) -> bool {
-	matches!(name.drop_meta(), Node::Symbol(word) if crate::type_name_matching::PREPOSITIONS.contains(&word.as_str()))
-}
+use crate::type_name_matching::is_preposition;
 
 /// A call `f a for=b` or `f(a, for=b)`: a function's name, then an argument named by a preposition
 fn preposition_arguments(items: &[Node]) -> bool {

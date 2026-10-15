@@ -9,7 +9,7 @@ use super::nodes::{key, parameter_word};
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::type_name_matching::PREPOSITIONS;
+use crate::type_name_matching::{is_preposition, PREPOSITIONS};
 use std::collections::{HashMap, HashSet};
 
 /// A function's parameters by name, and which name each preposition passes, over all its overloads
@@ -37,17 +37,12 @@ pub fn lower(node: Node) -> Node {
 	rewrite(node, &Functions { labels, variables })
 }
 
-fn is_preposition(word: &str) -> bool {
-	PREPOSITIONS.contains(&word)
-}
-
 /// `for duration` among a definition's parameters: the preposition and the parameter
 fn labelled(parameter: &Node) -> Option<(String, &Node)> {
 	match parameter.drop_meta() {
-		Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 => match words[0].drop_meta() {
-			Node::Symbol(word) if is_preposition(word) => Some((word.clone(), &words[1])),
-			_ => None,
-		},
+		Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && is_preposition(&words[0]) => {
+			Some((words[0].name(), &words[1]))
+		}
 		_ => None,
 	}
 }
@@ -284,7 +279,9 @@ fn split_operator(item: Node, labels: &Labels) -> Vec<Node> {
 /// `f 5 by 2` of `f(x, with y)`: a preposition the function does not take
 fn is_foreign_preposition(item: &Node, labels: &Labels, variables: &HashSet<String>) -> bool {
 	!labels.by_preposition.is_empty()
-		&& matches!(item.drop_meta(), Node::Symbol(word) if is_preposition(word) && !labels.by_preposition.contains_key(word) && !variables.contains(word))
+		&& is_preposition(item)
+		&& !labels.by_preposition.contains_key(&item.name())
+		&& !variables.contains(&item.name())
 }
 
 fn unknown_preposition(function: &Node, preposition: &Node, labels: &Labels) -> Node {

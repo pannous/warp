@@ -25,8 +25,8 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
 - Prepositions as argument labels (card prepositions-call, user 2026-10-14; Swift's labels): a parameter written
   after a preposition, `play(tone, for duration)`, `move(x, from a, to b)`, is passed by that word: `play 440Hz for
   0.5s`, `play(440Hz, for: 0.5s)`, `play tone:440Hz for:0.5s`, `move 1 from 10 to 3` (any order). A call without
-  brackets also names arguments: `f b=1 a=5` (before, the `=` assigned). Words: for to in with by each from into at
-  on over until (preposition_calls.rs PREPOSITIONS, a FUNCTION pass before named_arguments, which picks the overload
+  brackets also names arguments: `f b=1 a=5` (before, the `=` assigned). Words: to of from with in into at by for
+  on each (type_name_matching.rs PREPOSITIONS; preposition_calls.rs is a FUNCTION pass before named_arguments, which picks the overload
   the names fit). Only in a call of a function declaring the word: elsewhere `for` loops, `1 to 5` a range, `x in xs`
   a membership; explicit brackets keep it, `f(9 to 4)` passes the range. A variable named `by` stays a variable; a
   preposition the function does not take is an error naming those it takes. `s + f 9 to 4` reads `(s + f 9) to 4`:
