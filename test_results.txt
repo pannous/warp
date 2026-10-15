@@ -2699,6 +2699,7 @@ PASSED:
   ✓ numbers::test_float_parameters::test_float_local_inside_float_function
   ✓ numbers::test_float_parameters::test_float_parameter_keeps_all_digits
   ✓ numbers::test_float_parameters::test_float_parameter_keeps_fraction
+  ✓ numbers::test_float_parameters::test_parameter_passed_a_float_and_a_run_time_number
   ✓ numbers::test_float_parameters::test_parameter_passed_a_float_returning_call
   ✓ numbers::test_float_parameters::test_unknown_parameter_type_is_reported
   ✓ numbers::test_float_parameters::test_user_function_shadows_ffi_name
@@ -3434,6 +3435,7 @@ PASSED:
   ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
   ✓ parser::test_self_lexer::numbers_match_their_rust_twin
   ✓ parser::test_self_lexer::texts_match_their_rust_twin
+  ✓ parser::test_self_parser::the_listed_sources_parse_as_in_rust
   ✓ parser::test_self_serializer::a_view_is_json
   ✓ parser::test_self_serializer::serialize_matches_its_rust_twin
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
@@ -4767,6 +4769,7 @@ PASSED:
   ✓ types::test_type_calls::a_type_called_braceless_converts_like_braced
   ✓ types::test_type_calls::a_type_called_converts_as_the_cast
   ✓ types::test_type_colon_block::a_type_colon_block_declares_its_fields
+  ✓ types::test_type_compared_in_block::type_compared_in_block
   ✓ types::test_type_compared_with_text::text_naming_no_type_gives_no_hint
   ✓ types::test_type_compared_with_text::type_compared_with_text_hints_the_type_word
   ✓ types::test_type_compared_with_text::type_compared_with_text_stays_no
@@ -5686,6 +5689,7 @@ PASSED:
   ✓ welcoming::test_format_cli::format_leaving_its_hint_names_the_command_and_says_no_formatted
   ✓ welcoming::test_format_cli::lint_of_inline_code_prints_hints_and_the_formatted_code
   ✓ welcoming::test_format_files_only::a_glob_of_a_folder_formats_only_its_warp_files_outside_golf
+  ✓ welcoming::test_format_files_only::wasp_files_and_warp_scripts_are_formatted_too
   ✓ welcoming::test_fuel_default::runaway_names_the_fuel_variable
   ✓ welcoming::test_fuel_default::ten_million_float_fills_fit_the_default_fuel
   ✓ welcoming::test_function_bindings::a_const_in_one_function_leaves_another_alone
@@ -5900,7 +5904,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ parser::test_self_parser::the_listed_sources_parse_as_in_rust
 
 SUMMARY:
-13 ignored, 5897 passed, 1 failed, 5898 total tested
+13 ignored, 5901 passed, 0 failed, 5901 total tested
