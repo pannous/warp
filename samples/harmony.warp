@@ -5,7 +5,7 @@ use sound
 
 tuning = 442                                  // A4 in Hz, as many orchestras tune (440 unless set)
 tempo = 110
-melody(scale(D4, dorian), 1/4 beat)        // D E F G A B C D
+melody(scale(D4, dorian), 1 / 4 beat)        // D E F G A B C D
 for kind in [major7, minor7, seventh] {       // a kind is a word, or a text: chord(C4, "major7")
 	play(chord(C4, kind), 1 beat)
 }

@@ -87,7 +87,21 @@ fn a_list_of_quantities_gives_quantities() {
 	is!("x = [3, 4] cm; count x", 2);
 	is!("x = [3, 4] cm; type(x)", "list of length");
 	is!("x = [3, 4] cm; x + [5 cm]", value("[3 cm, 4 cm, 5 cm]"));
-	fails_with("x = [3, 4] cm; x + 1 cm", "append [the quantity] or map the list");
+	fails_with("x = [3, 4] cm; x + 1 cm", "list of length + length: append [the quantity] or map the list");
+}
+
+/// Wherever a list goes, its quantities go: comprehensions, a call's list, a typed list, a matrix, a list grown from
+/// empty (reviewer, dimensions-units Q3)
+#[test]
+fn every_list_value_carries_its_units() {
+	is!("xs = [3, 4] cm; [x * 2 for x in xs]", value("[6 cm, 8 cm]"));
+	is!("xs = [3, 4] cm; [x + 1 cm for x in xs]", value("[4 cm, 5 cm]"));
+	is!("xs = [3, 4] cm; [x for x in xs]", value("[3 cm, 4 cm]"));
+	is!("g() := [1, 2]; g() cm", value("[1 cm, 2 cm]"));
+	is!("v: length[2] = [1, 2] m; v", value("[1 m, 2 m]"));
+	fails_with("v: length[2] = [1, 2] kg", "DimensionError: v is declared list of length (m), is given list of mass");
+	is!("xs = [[1, 2], [3, 4]] m; xs#2", value("[3 m, 4 m]"));
+	is!("xs = []; xs += [3 cm]; xs", value("[3 cm]"));
 }
 
 /// A declaration written as a unit shows as written (reviewer, dimensions-units)

@@ -14,7 +14,6 @@ abs(-42)  // Expected: 42
 // abs(0)    // Expected: 0
 // abs(100)  // Expected: 100
 
-
 // ==============================================================================
 // Test 2: Float64 -> Float64 (cbrt from libm)
 // ==============================================================================
@@ -25,7 +24,6 @@ abs(-42)  // Expected: 42
 import cbrt from "m"
 cbrt(27.0)  // Expected: 3.0
 // cbrt(-8.0)  // Expected: -2.0
-
 
 // ==============================================================================
 // Test 3: String -> Integer (strlen from libc)
@@ -39,7 +37,6 @@ strlen("hello")  // Expected: 5
 // strlen("") // Expected: 0
 // strlen("Warp Language")  // Expected: 13
 
-
 // ==============================================================================
 // Test 4: String -> Float64 (atof from libc)
 // ==============================================================================
@@ -51,7 +48,6 @@ import atof from "c"
 atof("3.14159")  // Expected: 3.14159
 // atof("2.71828")  // Expected: 2.71828
 // atof("42")       // Expected: 42.0
-
 
 // ==============================================================================
 // Test 5: Float64, Float64 -> Float64 (fmin from libm)
@@ -65,7 +61,6 @@ fmin(3.5, 2.1)  // Expected: 2.1
 // fmin(100.0, 50.0)  // Expected: 50.0
 // fmin(-5.0, -10.0)  // Expected: -10.0
 
-
 // ==============================================================================
 // Combined Tests: Using multiple FFI functions together
 // ==============================================================================
@@ -78,7 +73,6 @@ floor(fmin(3.7, 2.9))  // Expected: 2 (fmin(3.7, 2.9) = 2.9, floor(2.9) = 2)
 // Get length of a number converted to string, then use that in sqrt
 // strlen("test") => 4, sqrt(4) => 2.0
 // This would require: sqrt(strlen("test"))
-
 
 // ==============================================================================
 // Signature Pattern Examples

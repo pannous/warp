@@ -8,6 +8,8 @@ const ITEM: &str = "quantity_item";
 /// Where the list goes in a mapped list and in the text of a whole list, and the body in a mapped one
 const LIST_PLACEHOLDER: &str = "quantity_list";
 const BODY_PLACEHOLDER: &str = "quantity_body";
+/// How many calls deep a plain list is followed into function bodies (`g() := h()`, `h() := [1, 2]`)
+const CALLS_FOLLOWED: usize = 4;
 /// One level of a mapped list and of a list's text
 const MAPPED: &str = "map(quantity_list, quantity_item => quantity_body)";
 const SHOWN: &str = r#"("[" + join(map(quantity_list, quantity_item => quantity_body), " ") + "]")"#;
@@ -15,14 +17,28 @@ const SHOWN: &str = r#"("[" + join(map(quantity_list, quantity_item => quantity_
 impl Inference {
 	/// How deep a list of plain values nests: `[3, 4]` and a variable holding one 1, a matrix 2; 0 for any other value
 	pub(super) fn plain_list_depth(&self, value: &Node) -> usize {
+		self.plain_list_depth_within(value, CALLS_FOLLOWED)
+	}
+
+	/// `g()` of `g() := [1, 2]` is a list too: the calls followed into function bodies are at most `calls_left` deep
+	fn plain_list_depth_within(&self, value: &Node, calls_left: usize) -> usize {
+		let depth_of = |node: &Node| self.plain_list_depth_within(node, calls_left);
 		match value.drop_meta() {
 			Node::Symbol(name) => self.plain_lists.get(name).copied().unwrap_or(0),
-			Node::List(items, Bracket::Square, _) => {
-				1 + items.iter().map(|item| self.plain_list_depth(item)).max().unwrap_or(0)
+			Node::List(items, Bracket::Square, _) => 1 + items.iter().map(depth_of).max().unwrap_or(0),
+			Node::List(items, Bracket::Round, _) if calls_left > 0 && self.called_definition(items).is_some() => {
+				let body = &self.called_definition(items).expect("guarded").body;
+				last_statement(body).map_or(0, |last| self.plain_list_depth_within(last, calls_left - 1))
 			}
-			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.plain_list_depth(&items[0]),
+			Node::List(items, Bracket::Round, _) if items.len() == 1 => depth_of(&items[0]),
 			_ => 0,
 		}
+	}
+
+	/// The user function a call `(f a b)` calls
+	fn called_definition(&self, call: &[Node]) -> Option<&Definition> {
+		let (head, arguments) = call.split_first()?;
+		self.definitions.get(&(head.drop_meta().symbol_name()?.to_string(), arguments.len()))
 	}
 
 	/// `cm`, `km/h`: a unit or an expression of units, as written after a value

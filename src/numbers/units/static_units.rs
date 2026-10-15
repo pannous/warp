@@ -30,7 +30,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 pub(crate) use unit_fields::unit_type;
 pub(crate) use unit_fields::{lower_field_tolerances, si_quantity};
 
@@ -244,6 +244,7 @@ impl Inference {
 			variables: HashMap::new(),
 			globals: HashMap::new(),
 			plain_lists: HashMap::new(),
+			empty_lists: HashSet::new(),
 			objects: HashMap::new(),
 			classes,
 			instances: HashMap::new(),
@@ -444,6 +445,14 @@ struct Declaration {
 }
 
 fn declaration(declared: &Node, own_names: &HashMap<String, Signature>) -> Option<Declaration> {
+	// `v: length[3]`, `w: cm[2]`: a list of quantities (the parser reads `[3]` as the index `#4`)
+	if let Node::Key(element, Op::Hash, _) = declared.drop_meta() {
+		let element = declaration(element, own_names)?;
+		return Some(Declaration {
+			signature: element.signature.list_of(),
+			shown: format!("list of {}", element.shown),
+		});
+	}
 	if let Some(units) = super::unit_expression(declared) {
 		return Some(Declaration { signature: signature(&units), shown: declared.serialize().trim().to_string() });
 	}
@@ -566,10 +575,11 @@ fn is_number_type(declared: &Node) -> bool {
 fn shown(signature: &Signature) -> String {
 	let factors: Vec<Factor> =
 		signature.iter().map(|(dimension, power)| Factor { unit: base_unit(*dimension), power: *power }).collect();
-	if factors.is_empty() {
-		return "a plain number".to_string();
+	match (factors.is_empty(), signature.is_list()) {
+		(true, _) => "a plain number".to_string(),
+		(false, true) => type_name(signature),
+		(false, false) => units_text(&factors),
 	}
-	"a list of ".repeat(signature.depth) + &units_text(&factors)
 }
 
 /// A type word with a value kind (analyzer::type_word_kind) or one a run-time test checks (type_tests::runtime_kind_mask)
@@ -658,6 +668,8 @@ struct Inference {
 	/// Variables holding a list of plain values and how deep it nests (`xs cm` makes it a list of quantities); a list of
 	/// quantities is known by its variable's signature
 	plain_lists: HashMap<String, usize>,
+	/// Variables holding an empty list (`ø`, `[]`): the first list appended or assigned gives its signature
+	empty_lists: HashSet<String>,
 	/// Variables holding an object with quantity fields: each field (in written order) and its signature, none for a plain one
 	objects: HashMap<String, Fields>,
 	/// The classes with unit fields, the variables holding an instance of one and the lists of one (unit_fields.rs)
@@ -830,6 +842,11 @@ impl Inference {
 				self.remember_written(&target, &value);
 				let (target, held) = self.infer(*target)?;
 				let (value, given) = self.infer(*value)?;
+				// `xs = ø; xs += [3 cm]`: an empty list takes the units of what is appended first
+				if op.base_op() == Op::Add && given.is_list() && self.empty_lists.remove(&target.name()) {
+					self.variables.insert(target.name(), given.clone());
+					return Ok((Node::Key(Box::new(target), op, Box::new(value)), given));
+				}
 				let result = self.arithmetic(op.base_op(), &held, &given)?;
 				if result != held {
 					return Err(dimension_error(op, &held, &given));
@@ -961,6 +978,11 @@ impl Inference {
 				right,
 			) => self.unchecked_key(*left, op, *right),
 			// `xs#2`, `xs[1]`: an element of a list of quantities
+			// `#xs`: the count of a list
+			Node::Key(nothing, Op::Hash, list) if nothing.is_empty_node() => {
+				let (list, _) = self.infer(*list)?;
+				Ok((Node::Key(nothing, Op::Hash, Box::new(list)), Signature::plain()))
+			}
 			Node::Key(list, Op::Hash, index) => {
 				let (list, signature) = self.infer(*list)?;
 				let (index, index_signature) = self.infer(*index)?;
@@ -1112,6 +1134,8 @@ impl Inference {
 		// an object literal and a plain value show in the units written in them; a list of class instances (above) in its
 		// fields' declared units
 		self.remember_written(&target, &value);
+		let is_empty_list = value.is_empty_node()
+			|| matches!(value.drop_meta(), Node::List(items, Bracket::Square, _) if items.is_empty());
 		if let Some(object) = self.object_literal(&value) {
 			let (object, fields) = object?;
 			self.objects.insert(name, fields);
@@ -1126,7 +1150,13 @@ impl Inference {
 			};
 			return Err(Stop::Error(format!("DimensionError: {name} is declared {declared}, is given {given}")));
 		}
-		if let Some(earlier) = self.variables.get(&name).filter(|earlier| **earlier != signature) {
+		// an empty list fits any list, and the list given next fits it
+		let was_empty = self.empty_lists.remove(&name);
+		if is_empty_list {
+			self.empty_lists.insert(name.clone());
+		}
+		let fits = is_empty_list || was_empty;
+		if let Some(earlier) = self.variables.get(&name).filter(|earlier| **earlier != signature && !fits) {
 			return Err(Stop::Error(super::reassigned_dimension(
 				&name,
 				&shown(earlier),
@@ -1248,8 +1278,8 @@ impl Inference {
 			Op::Eq | Op::Ne if left.is_list() && right.is_list() => Ok(Signature::plain()),
 			_ if left.is_list() != right.is_list() && !matches!(op, Op::Mul | Op::Div) => Err(Stop::Error(format!(
 				"{} {op} {}: append [the quantity] or map the list to {op} each element",
-				shown(left),
-				shown(right)
+				type_name(left),
+				type_name(right)
 			))),
 			_ if left.is_list() || right.is_list() => Err(Stop::Unsupported),
 			Op::Mul => Ok(combined(left, right, 1)),
