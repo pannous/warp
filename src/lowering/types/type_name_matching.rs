@@ -17,6 +17,7 @@ pub(crate) const PREPOSITIONS: [&str; 11] = ["to", "of", "from", "with", "in", "
 pub(crate) fn is_preposition(word: &Node) -> bool {
 	matches!(word.drop_meta(), Node::Symbol(name) if PREPOSITIONS.contains(&name.as_str()))
 }
+
 /// `as` labels a parameter too, though it separates no phrase slot: `save(made, as file)` is called
 /// `save sound as "song.wav"` (card save-sound)
 pub(crate) const AS_LABEL: &str = "as";
@@ -25,6 +26,7 @@ pub(crate) const AS_LABEL: &str = "as";
 pub(crate) fn is_label_word(word: &Node) -> bool {
 	is_preposition(word) || word.drop_meta().is_symbol(AS_LABEL)
 }
+
 /// Statement words before a typed declaration that never name a function: `global number = 3`, `let int x = 1`
 const STATEMENT_WORDS: [&str; 17] = [
 	"global", "let", "var", "export", "mutable", "mut", "return", "yield", "print", "println", "puts", "not", "if",
