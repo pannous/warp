@@ -626,8 +626,6 @@ impl WasmGcEmitter {
 		func.instruction(&I::End);
 	}
 
-	/// The words of maps: `keys`, `values`, the entries a `for (k, v) in m` walks, `x in xs` and `m.get(k, default)`.
-	/// A map is a `{…}` list of `key:value` entries, or the one entry itself (`{a:1}`); its keys are read as texts.
 	/// With the kind and the value of a new cell pushed: the cell made, appended after the cell in `last`, or `head` when
 	/// it is the first; a list built in a loop, not a call per element (map_column_cells)
 	fn emit_appended_cell(&self, func: &mut Function, cells: CellAppend) {
@@ -702,6 +700,8 @@ impl WasmGcEmitter {
 		});
 	}
 
+	/// The words of maps: `keys`, `values`, the entries a `for (k, v) in m` walks, `x in xs` and `m.get(k, default)`.
+	/// A map is a `{…}` list of `key:value` entries, or the one entry itself (`{a:1}`); its keys are read as texts.
 	pub(super) fn emit_map_words(&mut self) {
 		if !MAP_WORD_FUNCTIONS.iter().any(|name| self.should_emit_function(name)) {
 			return;
