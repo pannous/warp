@@ -440,7 +440,8 @@ pub fn lower(program: Node) -> Node {
 fn each_singular(node: Node, lists: &HashSet<String>, names: &HashSet<String>) -> Node {
 	let walked_list = |word: &Node| {
 		let name = word.symbol_name()?;
-		let plurals = [name.to_string(), crate::extensions::strings::english_plural(name)];
+		// the English plural and the programmer's: `x` walks `xs` though English writes boxes
+		let plurals = [name.to_string(), crate::extensions::strings::english_plural(name), format!("{name}s")];
 		let is_plural_of = |plural: &String| *plural == name || !names.contains(name);
 		plurals.into_iter().find(|plural| lists.contains(plural) && is_plural_of(plural))
 	};
