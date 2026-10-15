@@ -59,3 +59,10 @@ fn a_minus_before_a_call_negates_it() {
 	assert_eq!(printed("-floor 2.5"), "-2");
 	assert_eq!(printed("a = 5; b = 2; a -b"), "3");
 }
+
+#[test]
+fn min_and_max_take_any_number_of_values_like_any_variadic_word() {
+	assert_eq!(printed("max.signature"), "\"(a:number, b:number, more...) -> number\"");
+	assert_eq!(printed("xs = [1 5]; max xs == 5"), "yes");
+	assert_eq!(printed("square(x) := x*x; max square [1 2]"), "4");
+}
