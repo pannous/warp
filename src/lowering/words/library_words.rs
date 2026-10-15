@@ -211,7 +211,7 @@ const DICT_WORD: &str = "dict";
 /// lib/prelude.warp's fromkeys(ks, value), also called on the class as Python's `dict.fromkeys(ks, value)`
 const FROMKEYS: &str = "fromkeys";
 /// Conversions a method may name, `x.string` being `string(x)`
-const CONVERSION_METHODS: [&str; 4] = ["string", "str", "int", "float"];
+pub(crate) const CONVERSION_METHODS: [&str; 4] = ["string", "str", "int", "float"];
 const LIST_CONSTRUCTORS: [&str; 4] = ["listOf", "mutableListOf", "arrayOf", "arrayListOf"];
 /// Words that mean another word with that many arguments (receiver included): `round(x, 3)`, `x.round(3)` is x rounded
 /// to 3 digits after the point (`round(x)` stays the builtin); `xs.first(3)`, `first 3 of xs` the first 3 items,
