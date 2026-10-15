@@ -3144,6 +3144,13 @@ PASSED:
   ✓ parser::test_entity_table::the_entity_table_is_the_pinned_uniscript_index
   ✓ parser::test_escaped_quote_slashes::entities_after_an_escaped_quote_stay_text
   ✓ parser::test_escaped_quote_slashes::slashes_after_an_escaped_quote_are_text
+  ✓ parser::test_format_layout::test_canonical_layout
+  ✓ parser::test_format_layout::test_hash_comments_only_when_asked
+  ✓ parser::test_format_layout::test_layout_that_would_change_the_meaning_stays
+  ✓ parser::test_format_layout::test_offside_block_indented_by_tabs
+  ✓ parser::test_format_layout::test_parameter_types_spaced
+  ✓ parser::test_format_layout::test_soft_hints_never_rewrite
+  ✓ parser::test_format_layout::test_unparsed_code_is_not_formatted
   ✓ parser::test_glued_method_block::a_glued_block_after_a_dot_is_a_call
   ✓ parser::test_glued_method_block::a_glued_block_starting_an_item_stays_data
   ✓ parser::test_glued_pair_value::a_glued_pair_ends_at_its_word
@@ -3455,7 +3462,6 @@ PASSED:
   ✓ programs::test_plain_hints_when_piped::a_hint_on_piped_stderr_has_no_escape_codes
   ✓ programs::test_playground_samples::every_excluded_sample_exists
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error
-  ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_2
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_3
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_4
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
@@ -5646,6 +5652,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_2
 
 SUMMARY:
-13 ignored, 5643 passed, 0 failed, 5643 total tested
+13 ignored, 5649 passed, 1 failed, 5650 total tested
