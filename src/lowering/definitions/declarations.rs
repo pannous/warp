@@ -947,13 +947,10 @@ fn extension_block(items: &[Node]) -> Option<Node> {
 }
 
 fn lower_lists(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> + Copy) -> Node {
-	if crate::lowering::nodes::function_head(&node).is_some() {
-		return match node {
-			Node::List(items, bracket, separator) => lowering(&items)
-				.map(|definition| lower_definition(definition, lowering))
-				.unwrap_or(Node::List(items, bracket, separator)),
-			definition => lower_definition(definition, lowering),
-		};
+	// `f(_) := …`: the definition lowered in place, its head as a head; a keyword form `func f() -> T {…}` is a list,
+	// lowered from its items as any list (Swift's extension block reads its methods so)
+	if !matches!(node.drop_meta(), Node::List(..)) && crate::lowering::nodes::function_head(&node).is_some() {
+		return lower_definition(node, lowering);
 	}
 	match node {
 		Node::List(items, bracket, separator) => {
