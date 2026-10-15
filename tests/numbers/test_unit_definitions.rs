@@ -27,3 +27,25 @@ fn dimension_names_come_from_the_definitions() {
 	is!("type(5 Hz)", "frequency");
 	is!("type(2 AD)", "era");
 }
+
+// decision unit-definitions: lib/units.warp's lines, `dimension length meter` an anchor and `unit m := 1 meter` its
+// symbol, derived units of their expression, SI prefixes by themselves
+#[test]
+fn units_come_from_unit_lines() {
+	is!("str(3 meter)", "3m");
+	is!("1 µs == 1000 ns", true);
+	is!("1 Mg == 1000 kg", true);
+	is!("2 L == 2000 cm³", true);
+	is!("1 N == 1 kg*m/s²", true);
+}
+
+// a program adds a unit by a unit line, an amount of a known unit; a plain `:=` stays a constant (decision
+// unit-definitions)
+#[test]
+fn a_program_adds_units_by_unit_lines() {
+	is!("unit furlong := 201.168 m\nx = 1 km\nstr(x as furlong)", "(62500/12573)furlong");
+	is!("unit furlong := 201.168 m\n3 furlong == 603.504 m", true);
+	is!("unit fortnight := 14 * 24 h\nstr(336 h as fortnight)", "1fortnight");
+	is!("unit furlong := 201.168 m\nquantity(1, \"furlong\").in(\"m\")", 201.168);
+	is!("distance := 42 km\nstr(distance)", "42km");
+}

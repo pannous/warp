@@ -9,6 +9,7 @@ use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashMap;
 mod definitions;
+pub use definitions::program_unit_lines;
 mod quantity_arithmetic;
 pub use quantity_arithmetic::*;
 
@@ -139,6 +140,35 @@ fn statements_of(node: Node) -> Vec<Node> {
 		Node::List(items, Bracket::None, separator) if separator.separates_statements() => items,
 		node => vec![node],
 	}
+}
+
+/// The word starting a unit line, `unit furlong := 201.168 m`
+const UNIT_LINE_WORD: &str = "unit";
+
+/// The program without its unit lines, which definitions.rs read before it was parsed (program_unit_lines); Err for a
+/// line that defines no unit (`unit x := 3 foo`: foo is no unit)
+pub fn without_unit_lines(program: Node) -> Result<Node, Node> {
+	let unit_line = |statement: &Node| match statement.drop_meta() {
+		Node::List(items, Bracket::None, Separator::Space) => match items.as_slice() {
+			[word, definition, ..] if word.drop_meta() == &Node::Symbol(UNIT_LINE_WORD.to_string()) => {
+				match definition.drop_meta() {
+					Node::Key(name, Op::Define, _) => Some(name.drop_meta().serialize()),
+					_ => None,
+				}
+			}
+			_ => None,
+		},
+		_ => None,
+	};
+	let statements = statements_of(program.clone());
+	if !statements.iter().any(|statement| unit_line(statement).is_some()) {
+		return Ok(program);
+	}
+	if let Some(unknown) = statements.iter().filter_map(unit_line).find(|name| !names_unit(name)) {
+		return Err(error(&format!("unit {unknown}: the right side is no amount of a known unit (`unit furlong := 201.168 m`)")));
+	}
+	let kept: Vec<Node> = statements.into_iter().filter(|statement| unit_line(statement).is_none()).collect();
+	Ok(Node::List(kept, Bracket::None, Separator::Newline))
 }
 
 /// `x as quantity`, and `x as unit` with a got-it note: the run-time quantity(x) (card unit-possible)
