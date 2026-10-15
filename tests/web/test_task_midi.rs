@@ -13,7 +13,7 @@ self.postMessage = message => arrived.push(message);
 self.voiceStopped = () => {};
 "#;
 
-fn source_between(file: &'static str, start: &str, end: &str) -> &'static str {
+pub(super) fn source_between(file: &'static str, start: &str, end: &str) -> &'static str {
 	let from = file.find(start).expect("the file has the code");
 	let to = from + file[from..].find(end).expect("its end") + end.len();
 	&file[from..to]

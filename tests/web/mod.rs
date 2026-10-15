@@ -152,6 +152,8 @@ mod test_tag_lists;
 mod test_task_files; // card task-sound-play
 #[cfg(feature = "native")] // runs node
 mod test_task_midi; // card inside-go
+#[cfg(feature = "native")] // runs node
+mod test_live_handover; // card playground-live
 mod test_task_voices; // card playground-go
 mod test_text_holes; // card web-fine-text-nodes
 mod test_transitions;

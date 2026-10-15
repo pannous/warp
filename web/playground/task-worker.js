@@ -32,7 +32,7 @@ self.taskWrote = (path, content) => taskFiles.set(path, typeof content === "stri
 
 
 // the starting program waits for the shared buffer, so every task writes it, a failure of this Worker's own too
-function runTaskInto({ module, name, values, shared, arrays, captured, control, channels, files, voice, soundHandles }) {
+function runTaskInto({ module, name, values, shared, arrays, captured, control, channels, files, voice, soundHandles, liveHandover }) {
 	Atomics.store(control, TASK_TAKEN_SLOT, 1);
 	Atomics.notify(control, TASK_TAKEN_SLOT);
 	let output = "";
@@ -40,6 +40,7 @@ function runTaskInto({ module, name, values, shared, arrays, captured, control, 
 	taskFiles = new Map();
 	self.joinVoice?.(voice);
 	self.joinSoundHandles(soundHandles); // host-tasks.js: the run's counter
+	self.liveHandover = liveHandover ?? {};
 	try {
 		const hooks = { print: text => { output += text; }, panicked: text => { output += text; }, sound: sound => self.playSamples(sound) };
 		const record = runTask(module, hooks, [], name, values, arrays, captured, control, channels);

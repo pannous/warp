@@ -46,6 +46,9 @@ const LIVE_LOOP_TEMPLATE: &str = "live_voice = go { for live_cycle in 0..live_cy
 const ENDLESS_LIVE_LOOP_TEMPLATE: &str =
 	"live_voice = go { live_cycle = 0\nwhile true { live_body\nlive_cycle = live_cycle + 1 } }";
 const LIVE_VOICE: &str = "live_voice";
+/// what a named loop's cycle says first (lib/sound.warp): the playground hands the loop to the next run at its next
+/// cycle (card playground-live), natively nothing
+const LIVE_CYCLE_STARTED: &str = "live_cycle_started";
 const LIVE_CYCLES: &str = "live_cycles";
 const LIVE_BODY: &str = "live_body";
 /// A loop defined again by its name (card live-redefine): each definition's moment on the voices' clock (lib
@@ -454,7 +457,7 @@ impl LiveLoop {
 			&[
 				(LIVE_VOICE, self.voice.clone()),
 				(LIVE_CYCLES, self.cycles.clone().unwrap_or(Node::Empty)),
-				(LIVE_BODY, blocks[0].clone()),
+				(LIVE_BODY, self.announced(&blocks[0])),
 			],
 		);
 		let voice = match made {
@@ -479,6 +482,14 @@ impl LiveLoop {
 		});
 		let body = substituted(crate::warp_parser::parse(LIVE_CHOICE), &[(LIVE_CHOICE_WORD, choice)]);
 		self.voice(&[Node::List(body.sequence_statements().to_vec(), Bracket::Curly, Separator::Newline)])
+	}
+
+	/// a named loop's block, saying its name first each cycle: `{ live_cycle_started("drums")\n body }`
+	fn announced(&self, block: &Node) -> Node {
+		let Some(name) = self.name() else { return block.clone() };
+		let said = Node::List(vec![Node::Symbol(LIVE_CYCLE_STARTED.into()), Node::Text(name.into())], Bracket::Round, Separator::None);
+		let statements = std::iter::once(said).chain(block.body_statements()).collect();
+		Node::List(statements, Bracket::Curly, Separator::Newline)
 	}
 
 	/// the statement after the loop's `at 2 beats`, if any
