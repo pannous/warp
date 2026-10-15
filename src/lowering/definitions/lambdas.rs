@@ -198,6 +198,14 @@ fn iteration_word(word: &Node) -> Option<&'static Iteration> {
 	ITERATIONS.iter().find(|iteration| iteration.word == canonical)
 }
 
+/// `map square xs`, `filter even xs`: an iteration word whose first argument may be its function; sort, any and all take
+/// the list first, their function being optional
+pub(crate) fn takes_a_function_first(word: &Node) -> bool {
+	iteration_word(word).is_some_and(|iteration| {
+		iteration.extra_arguments == 0 && iteration.word != SORT_WORD && !TRUTH_WORDS.contains(&iteration.word)
+	})
+}
+
 /// `xs.map(it * 2)` in a function of one parameter: the `it` of the argument is the argument function's own
 pub(crate) fn has_own_it(head: &Node, argument: &Node) -> bool {
 	iteration_word(head).is_some() && it_function(argument).is_some()

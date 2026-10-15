@@ -290,11 +290,31 @@ pub fn is_standard_function(name: &str) -> bool {
 		|| crate::wasm_emitter::text::text_builtins::is_text_builtin(name)
 }
 
+/// A standard word that calls the values after it: a standard function, a counting word or an output word
+/// (`count sorted xs`, `max sorted xs`, `print sorted xs`)
+pub fn is_calling_word(name: &str) -> bool {
+	is_standard_function(name)
+		|| crate::analyzer::COUNTING_WORDS.contains(&name)
+		|| crate::wasm_emitter::OUTPUT_WORDS.contains(&name)
+}
+
 /// A library word of one argument takes the name after it as that argument inside an operand, as a defined function
 /// does: `word == reverse word` compares with `reverse(word)`, `1 == first xs` with `first(xs)`. A type word stays a
 /// type: `x: list int`
 pub fn is_operand_word(name: &str) -> bool {
 	canonical_word(name).is_some_and(|word| arity(word) == 1 && !crate::type_tests::is_builtin_type_word(word))
+}
+
+/// A library word that needs one value, its further parameters optional: `reverse xs`, `split text` (its separator
+/// optional), no type word
+pub fn needs_one_value(name: &str) -> bool {
+	canonical_word(name)
+		.is_some_and(|word| fewest_arguments(word) == 1 && !crate::type_tests::is_builtin_type_word(word))
+}
+
+fn fewest_arguments(word: &str) -> usize {
+	let optional = OPTIONAL_ARGUMENTS.iter().find(|(name, _)| *name == word).map_or(0, |(_, optional)| *optional);
+	arity(word) - optional
 }
 
 /// The spelling word lists name a library word by (`sorted` → sort); any other name as it is
@@ -1066,8 +1086,7 @@ impl Lowering {
 	fn call(&self, word: &'static str, head: &Node, arguments: Vec<Node>, is_prefix: bool) -> Node {
 		let mut arguments = if is_prefix { self.merged_prefix_arguments(word, arguments) } else { arguments };
 		let wanted = arity(word);
-		let optional = OPTIONAL_ARGUMENTS.iter().find(|(name, _)| *name == word).map_or(0, |(_, optional)| *optional);
-		if arguments.len() < wanted && arguments.len() + optional >= wanted {
+		if arguments.len() < wanted && arguments.len() >= fewest_arguments(word) {
 			arguments.resize(wanted, left_out_argument(word));
 		}
 		// objects are references (P200): `x.copy()` is a new deep copy, `x.copy(shallow: true)` a shallow one (P205)
@@ -1156,12 +1175,12 @@ fn dispatched_sum(expanded: Node) -> Node {
 }
 
 /// `a == b`, `a < b`, `a and b`: where a library word's argument stops
-fn is_comparison(node: &Node) -> bool {
+pub(crate) fn is_comparison(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Key(_, op, _) if op.is_comparison() || op.is_logical())
 }
 
 /// The leftmost operand of a comparison chain, replaced: `"a" == b and c` → `f("a") == b and c`
-fn with_first_comparand(node: Node, replace: &dyn Fn(Node) -> Node) -> Node {
+pub(crate) fn with_first_comparand(node: Node, replace: &dyn Fn(Node) -> Node) -> Node {
 	match node {
 		Node::Key(left, op, right) if op.is_comparison() || op.is_logical() => {
 			Node::Key(Box::new(with_first_comparand(*left, replace)), op, right)
