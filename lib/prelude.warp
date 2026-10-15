@@ -69,3 +69,11 @@ magnitude(x: any) := norm(x)
 // that color as 0xAARRGGBB, as the shader paints it; a number stays itself
 pixel_color(v: any) := if v is list then 0xFF000000 + pixel_channel(v#1) * 65536 + pixel_channel(v#2) * 256 + pixel_channel(v#3) else v
 pixel_channel(c) := round(255 * min(max(c, 0), 1)) as int
+// random(a, b) (decision random-forms): of whole numbers a whole number from a to b, both included (random(1, 6) rolls
+// a die), else a float in [a, b)
+random_between(a, b) := if a is int and b is int then a + random_below(b - a + 1) else a + random() * (b - a)
+// random int, random bool, random codepoint: a random value of the type; random int spans the whole 64-bit range
+random_int() := (random_below(4294967296) - 2147483648) * 4294967296 + random_below(4294967296)
+random_bool() := random_below(2) == 1
+// a Unicode scalar value: the surrogates 0xD800…0xDFFF are no characters
+random_codepoint() := { n = random_below(1112064); if n >= 55296 then n = n + 2048; n as codepoint }

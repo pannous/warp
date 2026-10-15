@@ -21,3 +21,24 @@ fn random_alone_or_printed_is_a_number() {
 	is!("type random", "float");
 	is!("x = random as text; count(x) > 2", true);
 }
+
+/// decision random-forms (Interviewer, 2026-10-15): `random(a, b)` of whole numbers is a whole number from a to b,
+/// both included; of a float a float in [a, b); `random(n)` stays 0…n-1
+#[test]
+fn random_between_two_numbers() {
+	is!("all([random(1, 6) for i in 1 to 50], x => x >= 1 and x <= 6)", true);
+	is!("type random(1, 6)", "int");
+	is!("x = random(0.5, 2); x >= 0.5 and x < 2", true);
+	is!("type random(0.5, 2)", "float");
+	is!("random(3, 3)", 3);
+}
+
+/// decision random-forms: `random T` is a random value of the type T
+#[test]
+fn random_of_a_type() {
+	is!("x = random int; type x", "int");
+	is!("x = random bool; type x", "bool");
+	is!("x = random codepoint; type x", "codepoint");
+	is!("x = random float; type x", "float");
+	crate::common::fails_with("random text", "random int");
+}
