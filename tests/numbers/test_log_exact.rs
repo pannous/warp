@@ -19,3 +19,9 @@ fn a_list_with_a_base_is_the_log_of_each_item() {
 	assert_eq!(printed("log([1 100], 10)"), "[0 2]");
 	assert_eq!(printed("log([1, 8], 2)"), "[0 3]");
 }
+
+#[test]
+fn log10_and_log2_broadcast_over_a_list_variable() {
+	assert_eq!(printed("xs = [1 100]; log10(xs)"), "[0 2]");
+	assert_eq!(printed("xs = [1 8]; log2 xs"), "[0 3]");
+}

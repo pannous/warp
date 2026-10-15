@@ -22,9 +22,9 @@ const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Po
 const TRUTH_TYPES: [&str; 3] = ["bool", "boolean", "any"];
 const BROADCAST_ITEM: &str = "broadcast_item";
 /// Library words of one text or number that broadcast over a list like a user function of a scalar
-const SCALAR_LIBRARY_WORDS: [&str; 17] = [
+const SCALAR_LIBRARY_WORDS: [&str; 19] = [
 	"upper", "lower", "trim", "floor", "ceil", "round", "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh",
-	"tanh", "exp", "log",
+	"tanh", "exp", "log", "log2", "log10",
 ];
 /// Prefix operators of one number: `abs [-1 2]`, `sqrt xs`
 const SCALAR_OPERATORS: [Op; 3] = [Op::Abs, Op::Sqrt, Op::Cbrt];

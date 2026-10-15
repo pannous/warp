@@ -148,6 +148,26 @@ fn left_out_argument(word: &str) -> Node {
 	}
 }
 
+/// The bases with an exact libm logarithm: `log(1000, 10)` is log10(1000) = 3, where ln(1000)/ln(10) is 2.9999999999999996
+const EXACT_LOG_BASES: [(i64, &str); 2] = [(10, "log10"), (2, "log2")];
+
+/// `log(value, base)`: libm's log takes one argument, so ln(value)/ln(base), exact for the EXACT_LOG_BASES;
+/// a list literal is the log of each item
+fn log_to_base(log_word: &Node, value: &Node, base: &Node) -> Node {
+	if let Node::List(values, Bracket::Square, separator) = value.drop_meta() {
+		let logs = values.iter().map(|item| log_to_base(log_word, item, base)).collect();
+		return Node::List(logs, Bracket::Square, separator.clone());
+	}
+	let exact_log = EXACT_LOG_BASES.iter().find(|(exact_base, _)| {
+		matches!(base.drop_meta(), Node::Number(crate::extensions::numbers::Number::Int(number)) if number == exact_base)
+	});
+	if let Some((_, exact_word)) = exact_log {
+		return parens(vec![symbol(exact_word), value.clone()]);
+	}
+	let log_of = |argument: &Node| parens(vec![log_word.clone(), argument.clone()]);
+	key(log_of(value), Op::Div, log_of(base))
+}
+
 /// `field_with(object, "name", value)`: a copy of the object with the field set; what `object.name = value` lowers to
 pub const FIELD_WITH: &str = "field_with";
 /// instance_copy(x): a new instance with x's field values (`p.copy()`, Kotlin's `p.copy(y = 5)`); any other value is x
@@ -698,8 +718,7 @@ impl Lowering {
 				return None;
 			}
 			if call_name(items, bracket, separator).is_some() {
-				let log_of = |argument: &Node| parens(vec![items[0].clone(), argument.clone()]);
-				return Some(key(log_of(value), Op::Div, log_of(base)));
+				return Some(log_to_base(&items[0], value, base));
 			}
 		}
 		// `first sorted xs` has one argument: a library word after it is its argument's prefix
