@@ -5,9 +5,9 @@ use warp::wasm_emitter::eval;
 
 #[test]
 fn a_quote_or_backslash_in_a_serialized_text_is_escaped() {
-	assert_eq!(eval("quote = \"\\\"\"; [quote + \"ab\" + quote, \"b\"]").serialize(), "[\"\\\"ab\\\"\" \"b\"]");
+	assert_eq!(eval("quote = \"\\\"\"; [quote + \"ab\" + quote, \"b\"]").serialize(), "[\"\\\"ab\\\"\" 'b']");
 	assert_eq!(parse("[\"a\\\\b\"]").serialize(), "[\"a\\\\b\"]");
-	assert_eq!(parse("['\\\\']").serialize(), "[\"\\\\\"]");
+	assert_eq!(parse("['\\\\']").serialize(), "['\\\\']");
 	assert_eq!(parse("\"say \\\"hi\\\"\"").serialize(), "\"say \\\"hi\\\"\"");
 	for written in ["[\"say \\\"hi\\\"\" \"a\\\\b\"]", "\"\\\\\"", "['\\\\' 'b']"] {
 		let node = parse(written);

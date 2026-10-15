@@ -1493,6 +1493,8 @@ PASSED:
   ✓ functions::test_object_arguments::a_parameter_reads_a_field_of_a_map_argument
   ✓ functions::test_object_arguments::an_instance_of_another_class_is_a_type_error
   ✓ functions::test_object_arguments::the_to_phrase_types_its_parameter_by_the_class
+  ✓ functions::test_ocaml_fun::ocaml_fun_is_an_error_naming_the_arrow_lambda
+  ✓ functions::test_ocaml_fun::warps_lambda_and_kotlins_fun_still_work
   ✓ functions::test_operator_arguments::a_word_operator_alone_stays_a_name
   ✓ functions::test_operator_arguments::an_operator_argument_is_the_operator
   ✓ functions::test_operator_word_methods::a_function_keyword_definition_of_an_operator_word_is_refused
@@ -2108,6 +2110,13 @@ PASSED:
   ✓ modules::test_netbase_package::without_a_server_the_failure_names_it
   ✓ modules::test_node_json::a_field_named_json_wins
   ✓ modules::test_node_json::json_of_a_value_is_its_json_text
+  ✓ modules::test_package_forms::a_bare_name_is_a_repository_of_pannous
+  ✓ modules::test_package_forms::a_full_url_stays_as_written
+  ✓ modules::test_package_forms::an_owner_and_repository_are_on_github
+  ✓ modules::test_package_forms::an_unreadable_version_is_an_error
+  ✓ modules::test_package_forms::every_registry_entry_resolves
+  ✓ modules::test_package_forms::unquoted_repository_names_with_dashes_and_dots_resolve
+  ✓ modules::test_package_forms::version_latest_follows_the_default_branch
   ✓ modules::test_package_hints::a_package_s_style_gets_no_hints_the_program_s_does
   ✓ modules::test_package_pin::a_changed_clone_stands_in_for_the_pin
   ✓ modules::test_package_pin::a_clean_unpinned_clone_makes_way_for_the_pin
@@ -2270,6 +2279,7 @@ PASSED:
   ✓ modules::test_versions::versions_compare_part_by_part
   ✓ modules::test_wasm_modules::a_c_module_takes_and_gives_texts_by_its_header
   ✓ modules::test_wasm_modules::a_c_modules_out_pointer_gives_the_result
+  ✓ modules::test_wasm_modules::a_function_wrapping_a_c_call_gives_its_text
   ✓ modules::test_wasm_modules::a_module_is_found_by_name_or_path
   ✓ modules::test_wasm_modules::a_module_keeps_its_state_for_the_run
   ✓ modules::test_wasm_modules::a_qualified_global_is_assigned_in_its_module
@@ -3298,6 +3308,7 @@ PASSED:
   ✓ programs::test_midi::a_file_of_another_program_reads_with_running_status_and_tempo
   ✓ programs::test_midi::a_message_waits_for_the_sounds_before_it
   ✓ programs::test_midi::a_missing_input_is_a_loud_error
+  ✓ programs::test_midi::a_port_name_shared_by_several_devices_is_ambiguous
   ✓ programs::test_midi::a_program_receives_a_device_message
   ✓ programs::test_midi::at_places_a_message
   ✓ programs::test_midi::headless_messages_are_named
@@ -3644,6 +3655,9 @@ PASSED:
   ✓ text::test_character_comparison::test_non_digit_character_as_int_is_no_number
   ✓ text::test_character_comparison::test_one_character_text_as_int
   ✓ text::test_character_comparison::test_ord_is_the_code_point
+  ✓ text::test_chars_codepoints::test_a_character_equals_its_one_character_text
+  ✓ text::test_chars_codepoints::test_a_list_of_characters_prints_them_in_single_quotes
+  ✓ text::test_chars_codepoints::test_chars_is_a_list_of_characters
   ✓ text::test_chr::chr_is_the_inverse_of_ord
   ✓ text::test_codepoint_bytes::a_one_letter_text_has_its_utf8_bytes
   ✓ text::test_codepoint_bytes::one_letter_list_items_have_their_utf8_bytes
@@ -4972,6 +4986,7 @@ PASSED:
   ✓ web::test_site_animation::an_endless_sleeping_loop_builds
   ✓ web::test_site_failure::a_site_that_does_not_compile_says_why
   ✓ web::test_site_holes::a_built_site_patches_only_its_holes
+  ✓ web::test_site_modules::a_site_ships_the_modules_its_program_imports
   ✓ web::test_site_tasks::a_site_renders_what_its_tasks_computed
   ✓ web::test_site::a_painting_site_runs_in_a_worker_with_its_canvas
   ✓ web::test_site::a_program_failing_at_build_time_builds_no_site
@@ -5480,4 +5495,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5475 passed, 0 failed, 5475 total tested
+13 ignored, 5490 passed, 0 failed, 5490 total tested

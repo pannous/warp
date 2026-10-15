@@ -18,6 +18,8 @@ pub mod route_split;
 #[cfg(feature = "native")]
 pub mod site;
 #[cfg(feature = "native")]
+pub mod site_modules;
+#[cfg(feature = "native")]
 pub mod web_server;
 #[cfg(feature = "native")]
 pub mod web_sockets;
