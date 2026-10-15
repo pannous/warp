@@ -152,7 +152,11 @@ pub fn without_unit_lines(program: Node) -> Result<Node, Node> {
 		Node::List(items, Bracket::None, Separator::Space) => match items.as_slice() {
 			[word, definition, ..] if word.drop_meta() == &Node::Symbol(UNIT_LINE_WORD.to_string()) => {
 				match definition.drop_meta() {
-					Node::Key(name, Op::Define, _) => Some(name.drop_meta().serialize()),
+					// `unit °C as K := …` names °C
+					Node::Key(name, Op::Define, _) => match name.drop_meta() {
+						Node::Key(name, Op::As, _) => Some(name.drop_meta().serialize()),
+						name => Some(name.serialize()),
+					},
 					_ => None,
 				}
 			}

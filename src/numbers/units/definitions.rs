@@ -23,6 +23,9 @@ const ONE: &str = "1 ";
 const SHIFT_START: &str = "(it +";
 /// `unit °R := it * 5/9 K`: a unit of the same zero, its amount `it` scaled
 const IT_TIMES: &str = "it *";
+/// `it`, the amount in the unit a unit line defines; `unit °C as K := it + 273.15` shifts it
+const IT: &str = "it";
+const IT_PLUS: &str = "it +";
 /// `length as pixels := it * display.dpi`: a bridge between two dimensions
 const BRIDGE_WORD: &str = " as ";
 /// `display.dpi := 96 dpi`: a setting, a property of a platform object
@@ -253,14 +256,13 @@ impl<'a> Reader<'a> {
 	/// `unit furlong := 201.168 m`: each word of the right side a number or a unit read so far (lib/units.warp may also
 	/// name words of no unit, `unit ° := π/180`)
 	fn knows_words_of(&self, line: &str) -> bool {
-		let expression = line.split_once(DEFINE).map_or("", |(_, expression)| expression).trim();
-		let expression = shifted(expression).map_or(expression, |(_, rest)| rest);
-		let known = |name: &str| {
-			self.units.iter().any(|unit| unit.name == name) || self.aliases.iter().any(|(alias, _)| *alias == name)
-		};
+		let (name, expression) = line.split_once(DEFINE).unwrap_or_default();
+		let target = name.split_once(BRIDGE_WORD).map(|(_, target)| target.trim());
+		let expression = targeted(expression.trim(), target);
+		let expression = shifted(&expression).map_or(expression.as_str(), |(_, rest)| rest);
 		tokens(expression)
 			.into_iter()
-			.all(|token| token == DIVIDE || decimal(token).is_some() || known(powered(token).0))
+			.all(|token| [DIVIDE, IT].contains(&token) || decimal(token).is_some() || self.knows(powered(token).0))
 	}
 
 	fn line(&mut self, line: &'a str) -> Result<(), String> {
@@ -280,6 +282,9 @@ impl<'a> Reader<'a> {
 			}
 			return Ok(());
 		}
+		if let Some((name, expression)) = definition(UNIT_WORD, DEFINE) {
+			return self.unit_line(name, expression);
+		}
 		if let Some((name, expression)) = definition("", DEFINE).filter(|(name, _)| name.contains(SETTING_DOT)) {
 			let (amount, unit) = expression.split_once(' ').ok_or(format!("{line}: an amount and its unit"))?;
 			decimal(amount).ok_or(format!("{line}: {amount} is no number"))?;
@@ -296,25 +301,55 @@ impl<'a> Reader<'a> {
 			self.bridges.push(Bridge { from: dimension(from)?, to: dimension(to)?, factor: factor.trim() });
 			return Ok(());
 		}
-		let (name, expression) = definition(UNIT_WORD, DEFINE).ok_or(format!("unreadable line {line}"))?;
-		if self.units.iter().any(|unit| unit.name == name) || self.aliases.iter().any(|(alias, _)| *alias == name) {
+		Err(format!("unreadable line {line}"))
+	}
+
+	/// `unit cm := m/100`, `unit °C as K := it + 273.15` (the unit `as` names is the right side's, decision unit-target)
+	fn unit_line(&mut self, name: &'a str, expression: &'a str) -> Result<(), String> {
+		let (name, target) = match name.split_once(BRIDGE_WORD) {
+			Some((name, target)) => (name.trim(), Some(self.symbol_of(target.trim()))),
+			None => (name, None),
+		};
+		if self.knows(name) {
 			return Err(format!("{name} is a unit already"));
 		}
 		let anchors = &self.base_units;
-		if let Some(anchor) =
-			expression.strip_prefix(ONE).filter(|anchor| anchors.iter().any(|(_, base)| base == anchor))
-		{
+		let one_anchor = expression.strip_prefix(ONE).filter(|anchor| anchors.iter().any(|(_, base)| base == anchor));
+		if let Some(anchor) = one_anchor.filter(|_| target.is_none()) {
 			// `unit m := 1 meter`: the symbol shows in place of its anchor, the anchor's name stays a word for it
 			self.units.iter_mut().filter(|unit| unit.name == anchor).for_each(|unit| unit.name = name);
 			self.base_units.iter_mut().filter(|(_, base)| *base == anchor).for_each(|(_, base)| *base = name);
 			self.aliases.push((anchor, name));
 			return Ok(());
 		}
-		match unit_of(expression, &self.units)? {
-			Some((dimension, scale, zero)) => self.units.push(Read { name, dimension, scale, zero }),
-			None => self.aliases.push((name, expression)),
+		match (unit_of(&targeted(expression, target), &self.units)?, target) {
+			(Some((dimension, scale, zero)), _) => self.units.push(Read { name, dimension, scale, zero }),
+			(None, None) => self.aliases.push((name, expression)),
+			(None, Some(target)) => return Err(format!("{name}: {expression} is no amount of {target}")),
 		}
 		Ok(())
+	}
+
+	fn knows(&self, name: &str) -> bool {
+		self.units.iter().any(|unit| unit.name == name) || self.aliases.iter().any(|(alias, _)| *alias == name)
+	}
+
+	/// `kelvin` → `K`: a unit by its symbol, where an alias names one unit
+	fn symbol_of(&self, name: &'a str) -> &'a str {
+		let alias = self.aliases.iter().find(|(alias, _)| *alias == name);
+		alias
+			.map(|(_, symbol)| *symbol)
+			.filter(|symbol| self.units.iter().any(|unit| unit.name == *symbol))
+			.unwrap_or(name)
+	}
+}
+
+/// The right side of a unit line in the unit `as` names: `it + 273.15` as K → `(it + 273.15) K`, `it * 5/9` → `it * 5/9 K`
+fn targeted(expression: &str, target: Option<&str>) -> String {
+	match (target, expression.strip_prefix(IT_PLUS)) {
+		(None, _) => expression.to_string(),
+		(Some(target), Some(shift)) => format!("(it + {}) {target}", shift.trim()),
+		(Some(target), None) => format!("{expression} {target}"),
 	}
 }
 
@@ -375,10 +410,12 @@ fn unit_of(expression: &str, units: &[Read<'_>]) -> Result<Option<(Dimension, Ra
 	Ok(Some((unit.dimension, scale.clone(), offset.mul(&scale).add(&unit.zero))))
 }
 
-/// `(it + 273.15) K` → `273.15` and `K`, `it * 5/9 K` → `0` and `5/9 K`; None for an amount of no `it`
+/// `(it + 273.15) K` → `273.15` and `K`, `it * 5/9 K` → `0` and `5/9 K`, `it / 100 m` → `0` and `/ 100 m`; None for an
+/// amount of no `it`
 fn shifted(expression: &str) -> Option<(&str, &str)> {
-	if let Some(rest) = expression.strip_prefix(IT_TIMES) {
-		return Some(("0", rest.trim()));
+	let scaled = expression.strip_prefix(IT).map(str::trim_start).filter(|rest| rest.starts_with([TIMES, '/']));
+	if let Some(rest) = scaled {
+		return Some(("0", rest.trim_start_matches(TIMES).trim()));
 	}
 	let (shift, rest) = expression.strip_prefix(SHIFT_START)?.split_once(')')?;
 	Some((shift.trim(), rest.trim()))
@@ -389,7 +426,8 @@ fn product<'a, 'n>(term: &str, units: &'a [Read<'n>]) -> Result<Option<(Rational
 	let mut amount = Rational::integer(1);
 	let mut unit = None;
 	let mut divide = false;
-	for token in tokens(term) {
+	// `4 * it inch`: the amount `it` anywhere in the product
+	for token in tokens(term).into_iter().filter(|token| *token != IT) {
 		if token == DIVIDE {
 			divide = true;
 			continue;

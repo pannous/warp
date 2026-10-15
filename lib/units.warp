@@ -6,11 +6,11 @@
 // The dimensions and units warp knows (card dimensions-units Q2, decision unit-definitions, read by
 // src/numbers/units/definitions.rs): `dimension length meter` declares a dimension and its SI anchor unit, `dimension
 // speed m/s` names the dimension of an expression of units; every other unit is an amount of a known one, `unit cm :=
-// meter/100`, which fixes its dimension and factor, `unit m := 1 meter` one of the same amount, `unit °C := (it +
-// 273.15) K` one counting from another zero (`it` the amount in °C); a unit of several units or of none (`unit mph :=
-// mi/h`, `unit ° := π/180`) is a word for that expression; `length as pixels := it * display.dpi` bridges two
-// dimensions by a value read at each conversion, `display.dpi := 96 dpi` a setting (decision dimension-bridges, default
-// 96, the screen's where it tells); a unit added here is known everywhere, also in conversions
+// meter/100`, which fixes its dimension and factor, `unit m := 1 meter` one of the same amount, `unit °C as K := it +
+// 273.15` one in K computed from `it`, the amount in °C (decision unit-target); a unit of several units or none
+// (`unit mph := mi/h`, `unit ° := π/180`) is a word for that expression; `length as pixels := it * display.dpi`
+// bridges two dimensions by a value read at each conversion, `display.dpi := 96 dpi` a setting, the screen's where it
+// tells (decision dimension-bridges); a unit added here is known everywhere, also in conversions
 unit_definitions = data {
 	dimension length meter
 	dimension mass kilogram
@@ -39,8 +39,8 @@ unit_definitions = data {
 	unit ms := s/1000
 	unit min := 60 s
 	unit h := 60 min
-	unit °C := (it + 273.15) K
-	unit °F := (it + 459.67) * 5/9 K
+	unit °C as K := it + 273.15
+	unit °F as K := (it + 459.67) * 5/9
 	unit mph := mi/h
 	unit N := kg*m/s²
 	unit L := dm³
