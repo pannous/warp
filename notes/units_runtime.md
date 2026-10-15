@@ -162,6 +162,9 @@ Dimension names are types of quantities, decided at compile time by static_units
 accepts any unit of the dimension and keeps the written one, `w: mass = 3 m` is a DimensionError. Products, quotients
 and powers name derived dimensions through the same `factor_expression` that reads unit expressions (`km/h`). A program
 naming `length` itself keeps its variable. The time dimension is `duration`, a subtype of `time` (anchor-time): `3 s is
-duration` and `3 s is time` hold; a value without units keeps the time module's test (`now is time`). Open with the Interviewer: Q1 pixel (CSS 1/96 inch vs device pixel), Q2 a lib/units.warp of definitions,
-Q3 `[3, 4] cm` as a vector of lengths, Q4 derived names (speed, area, volume, frequency).
+duration` and `3 s is time` hold; a value without units keeps the time module's test (`now is time`). Derived names speed, area, volume, frequency
+(`DERIVED_DIMENSION_NAMES`, Q4). A unit after a list is each element's (Q3, static_units/list_units.rs): a list value
+(literal, list variable, `[3, 4] cm`, `xs km/h`, nested) has one element signature and a depth, goes wherever a whole
+list goes (assigned, printed, the program's value, `sum`/`max`/`count`) and shows as text built at run time. Still open
+(decided): Q1 px the device pixel through display.dpi, Q2 unit definitions in lib/units.warp.
 Test: tests/numbers/test_dimension_types.rs.

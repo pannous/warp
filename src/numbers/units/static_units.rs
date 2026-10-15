@@ -19,6 +19,8 @@ use crate::lowering::function_head;
 use crate::words::{MAP_WORD, PRINT_WORD, RETURN_WORD, STR_WORD};
 
 mod function_units;
+mod list_units;
+use list_units::ListValue;
 
 mod unit_fields;
 use crate::declarations;
@@ -28,7 +30,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 pub(crate) use unit_fields::unit_type;
 pub(crate) use unit_fields::{lower_field_tolerances, si_quantity};
 
@@ -49,6 +51,8 @@ const AMOUNT_TEXT: &str = r#"(if str(the_amount).contains("/") then "(" + str(th
 const PRINTED_AMOUNT_TEXT: &str =
 	r#"(if str(the_amount).contains("/") then str(round(the_amount * 100) / 100.0) else str(the_amount))"#;
 const AMOUNT_PLACEHOLDER: &str = "the_amount";
+/// Where a quantity's run-time text goes in the text of a whole object or list: `quantity_shown_0`
+const QUANTITY_SHOWN: &str = "quantity_shown_";
 /// `std_io("table", "insert", [r.distance, …])`: a host call takes SI amounts as they are (stored rows hold SI amounts)
 const HOST_CALL: &str = "std_io";
 /// `si_amount(q)`: the plain SI number of a quantity, so a library takes `0.5s` and `0.5` alike (lib/sound.warp)
@@ -88,44 +92,12 @@ fn without_si_amounts(node: Node) -> Node {
 	}
 }
 
-/// `[3, 4] cm` is `[3 cm, 4 cm]`: a unit after a list is each element's, nested lists (matrices) alike (user 2026-10-15,
-/// dimensions-units Q3)
-fn each_element_in_unit(node: Node, distributed: &mut bool) -> Node {
-	match node {
-		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [list, unit] if is_list_literal(list) && is_unit_word(unit)) =>
-		{
-			*distributed = true;
-			each_in_unit(&items[0], &items[1])
-		}
-		other => crate::node::children_rewritten(other, |child| each_element_in_unit(child, distributed)),
-	}
-}
-
-fn is_list_literal(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::List(_, Bracket::Square, _))
-}
-
-fn is_unit_word(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(name) if unit_named(name).is_some())
-}
-
-fn each_in_unit(amount: &Node, unit: &Node) -> Node {
-	match amount.drop_meta() {
-		Node::List(items, Bracket::Square, separator) => {
-			Node::List(items.iter().map(|item| each_in_unit(item, unit)).collect(), Bracket::Square, separator.clone())
-		}
-		_ => Node::Key(Box::new(amount.clone()), Op::Mul, Box::new(unit.clone())),
-	}
-}
-
 /// The program with unit literals as SI amounts and the units of its final value; None when it uses no units or uses
 /// quantities beyond stage 1; Err for a dimension error
-pub fn lower(written: &Node) -> Option<Result<Node, Node>> {
-	let mut distributed = false;
-	let program = &super::shadowing(written, || each_element_in_unit(written.clone(), &mut distributed));
+pub fn lower(program: &Node) -> Option<Result<Node, Node>> {
 	match super::shadowing(program, || lower_shadowed(program)) {
 		Some(lowered) => Some(lowered.map(without_si_amounts)),
-		None => (program.mentions(SI_AMOUNT_WORD) || distributed).then(|| Ok(without_si_amounts(program.clone()))),
+		None => program.mentions(SI_AMOUNT_WORD).then(|| Ok(without_si_amounts(program.clone()))),
 	}
 }
 
@@ -136,7 +108,12 @@ fn lower_shadowed(program: &Node) -> Option<Result<Node, Node>> {
 	}
 	let mut inference = Inference::of(program, classes);
 	let display = inference.display.clone();
-	match inference.infer(program.clone()) {
+	// a program of one whole list of quantities shows as its text: `[3, 4] cm`
+	let inferred = match inference.final_list(program, AMOUNT_TEXT) {
+		Some(text) => text.map(|text| (text, vec![])),
+		None => inference.infer(program.clone()),
+	};
+	match inferred {
 		Ok((node, result)) => {
 			// a final `q as km` shows km
 			let shown_units = last_statement(program)
@@ -222,6 +199,8 @@ impl Inference {
 			variables: HashMap::new(),
 			globals: HashMap::new(),
 			lists: HashMap::new(),
+			plain_lists: HashSet::new(),
+			list_depths: HashMap::new(),
 			objects: HashMap::new(),
 			classes,
 			instances: HashMap::new(),
@@ -631,6 +610,9 @@ struct Inference {
 	globals: HashMap<String, Signature>,
 	/// Variables holding a list of quantities: the signature of its elements
 	lists: HashMap<String, Signature>,
+	/// Variables holding a list of plain values (`xs cm` makes it a list of quantities) and lists of lists by depth
+	plain_lists: HashSet<String>,
+	list_depths: HashMap<String, usize>,
 	/// Variables holding an object with quantity fields: each field (in written order) and its signature, none for a plain one
 	objects: HashMap<String, Fields>,
 	/// The classes with unit fields, the variables holding an instance of one and the lists of one (unit_fields.rs)
@@ -849,6 +831,10 @@ impl Inference {
 					))),
 				}
 			}
+			// `[3, 4] cm` in an expression: a list of quantities only where a whole list goes (assigned, shown, summed)
+			Node::Key(amount, Op::Mul, unit) if self.is_unit_after_value(&unit) && self.is_list(&amount) => {
+				Err(Stop::Unsupported)
+			}
 			Node::Key(amount, Op::Mul, unit) if self.unit_word(&unit).is_some() => {
 				self.amount_in(*amount, self.unit_word(&unit).expect("guarded"))
 			}
@@ -1046,31 +1032,24 @@ impl Inference {
 		if let Some(instance) = self.assigned_instance(&name, &target, op, &value) {
 			return instance;
 		}
-		if let Some(mapped) = self.mapped_list(&value) {
-			let (mapped, element) = mapped?;
-			if !element.is_empty() {
-				self.lists.insert(name, element);
+		self.plain_lists.remove(&name);
+		// `xs = [1 m, 2 m]`, `xs = [3, 4] cm`, `ys = xs`: a list of quantities is known by its element signature
+		if let Some(list) = self.list_value(&value) {
+			let list = list?;
+			if list.depth > 1 {
+				self.list_depths.insert(name.clone(), list.depth);
 			}
-			return Ok((Node::Key(Box::new(target), op, Box::new(mapped)), vec![]));
-		}
-		if let Node::List(items, Bracket::Square, separator) = value.drop_meta() {
-			let (items, element) = self.list_elements(items.clone())?;
-			if !element.is_empty() {
-				self.lists.insert(name, element);
-				return Ok((
-					Node::Key(Box::new(target), op, Box::new(Node::List(items, Bracket::Square, separator.clone()))),
-					vec![],
-				));
+			if list.element.is_empty() {
+				self.plain_lists.insert(name.clone());
+			} else {
+				self.lists.insert(name, list.element);
+				return Ok((Node::Key(Box::new(target), op, Box::new(list.node)), vec![]));
 			}
 		}
-		// `q = p`, `ys = xs`: an alias has the signatures of what it names
+		// `q = p`: an alias has the signatures of what it names
 		if let Node::Symbol(other) = value.drop_meta() {
 			if let Some(fields) = self.objects.get(other).cloned() {
 				self.objects.insert(name, fields);
-				return Ok((Node::Key(Box::new(target), op, Box::new(value)), vec![]));
-			}
-			if let Some(element) = self.lists.get(other).cloned() {
-				self.lists.insert(name, element);
 				return Ok((Node::Key(Box::new(target), op, Box::new(value)), vec![]));
 			}
 		}
@@ -1210,10 +1189,20 @@ impl Inference {
 		}
 	}
 
-	/// The source of a quantity's text at run time, `amount` an SI amount: `str(amount / (1/100)) + " cm"`
-	fn quantity_source(&self, amount: &str, signature: &Signature, amount_text: &str) -> Result<String, Stop> {
-		let text = self.as_text(crate::warp_parser::parse(amount), signature, None, amount_text)?;
-		Ok(format!("({})", text.serialize()))
+	/// `template` with each `quantity_shown_<i>` the run-time text of the quantity at the source `amounts[i]` (SI amounts):
+	/// `str(amount / (1/100)) + " cm"`. Substituted as nodes: a scale like 5/18 has no source form of its own
+	fn with_quantity_texts(
+		&self,
+		template: &str,
+		amounts: &[(String, &Signature)],
+		amount_text: &str,
+	) -> Result<Node, Stop> {
+		let mut text = crate::warp_parser::parse(template);
+		for (index, (amount, signature)) in amounts.iter().enumerate() {
+			let shown = self.as_text(crate::warp_parser::parse(amount), signature, None, amount_text)?;
+			text = crate::lowering::library_words::substitute(text, &format!("{QUANTITY_SHOWN}{index}"), &shown);
+		}
+		Ok(text)
 	}
 
 	/// `km` in `5 km` and `5km`: a unit word no variable shadows
@@ -1255,53 +1244,46 @@ impl Inference {
 		Ok(folded(computed, undo, number_node(&zero).ok_or(Stop::Unsupported)?))
 	}
 
-	/// A whole list of quantities as text, built at run time: `"[" + join(map(xs, x => str(x / 1/100) + " cm"), " ") + "]"`
-	fn list_text(&self, name: &str, amount_text: &str) -> Result<Node, Stop> {
-		let element = self.lists.get(name).ok_or(Stop::Unsupported)?;
-		let source = format!(
-			"\"[\" + join(map({name}, item => {}), \" \") + \"]\"",
-			self.quantity_source("item", element, amount_text)?
-		);
-		Ok(crate::warp_parser::parse(&source))
-	}
-
 	/// A whole object with quantity fields as text, built at run time: `{dist:500 m name:"run"}`. The quantity fields come
 	/// first, the plain ones follow as an object of them shows them
 	fn object_text(&self, name: &str, amount_text: &str) -> Result<Node, Stop> {
 		let fields = self.objects.get(name).ok_or(Stop::Unsupported)?;
 		let mut quantities = vec![];
+		let mut amounts = vec![];
 		let mut plain = vec![];
 		for (field, signature) in fields {
 			match signature.is_empty() {
 				true => plain.push(format!("{field}: {name}.{field}")),
-				false => quantities.push(format!(
-					"\"{field}:\" + {}",
-					self.quantity_source(&format!("{name}.{field}"), signature, amount_text)?
-				)),
+				false => {
+					quantities.push(format!("\"{field}:\" + {QUANTITY_SHOWN}{}", amounts.len()));
+					amounts.push((format!("{name}.{field}"), signature));
+				}
 			}
 		}
 		let rest = match plain.is_empty() {
 			true => "\"}\"".to_string(),
 			false => format!("\" \" + text_form({{{}}})[1..]", plain.join(", ")),
 		};
-		Ok(crate::warp_parser::parse(&format!("\"{{\" + {} + {rest}", quantities.join(" + \" \" + "))))
+		self.with_quantity_texts(
+			&format!("\"{{\" + {} + {rest}", quantities.join(" + \" \" + ")),
+			&amounts,
+			amount_text,
+		)
 	}
 
 	/// The text of a whole list or object with quantities (`print xs`, `"${p}"`); None for any other value
-	fn whole_text(&self, value: &Node, amount_text: &str) -> Option<Result<Node, Stop>> {
-		match value.drop_meta() {
-			Node::Symbol(name) if self.lists.contains_key(name) => Some(self.list_text(name, amount_text)),
-			Node::Symbol(name) if self.objects.contains_key(name) => Some(self.object_text(name, amount_text)),
-			_ => None,
+	fn whole_text(&mut self, value: &Node, amount_text: &str) -> Option<Result<Node, Stop>> {
+		if let Node::Symbol(name) = value.drop_meta() {
+			if self.objects.contains_key(name) {
+				return Some(self.object_text(name, amount_text));
+			}
 		}
+		self.final_list(value, amount_text)
 	}
 
-	/// The last statement of the program when it is a whole list of quantities: its text
-	fn final_list(&self, statement: &Node) -> Option<Result<Node, Stop>> {
-		match statement.drop_meta() {
-			Node::Symbol(name) if self.lists.contains_key(name) => Some(self.list_text(name, AMOUNT_TEXT)),
-			_ => None,
-		}
+	/// A whole list of quantities as its text: the program's last statement, `print xs`
+	fn final_list(&mut self, value: &Node, amount_text: &str) -> Option<Result<Node, Stop>> {
+		Some(self.quantity_list(value)?.and_then(|list| self.list_text(list, amount_text)))
 	}
 
 	/// A value as it joins a text: a quantity as its text in `units` (else in the finest written units), anything else as it is
@@ -1319,32 +1301,13 @@ impl Inference {
 		quantity_text(value, &units, amount_text).ok_or(Stop::Unsupported)
 	}
 
-	/// The items of a list literal and their one signature: items of different units are a DimensionError
-	fn list_elements(&mut self, items: Vec<Node>) -> Result<(Vec<Node>, Signature), Stop> {
-		let mut lowered = vec![];
-		let mut element: Option<Signature> = None;
-		for item in items {
-			let (item, signature) = self.infer(item)?;
-			match &element {
-				Some(earlier) if *earlier != signature => {
-					return Err(Stop::Error(format!(
-						"DimensionError: a list of {} and {}",
-						shown(earlier),
-						shown(&signature)
-					)));
-				}
-				_ => element = Some(signature),
-			}
-			lowered.push(item);
-		}
-		Ok((lowered, element.unwrap_or_default()))
-	}
-
 	/// The items of a list literal of quantities and their signature; None for a list of plain values
 	fn quantity_items(&mut self, items: Vec<Node>) -> Option<Result<(Vec<Node>, Signature), Stop>> {
-		match self.list_elements(items) {
-			Ok((_, element)) if element.is_empty() => None,
-			found => Some(found),
+		match self.list_literal(items, Separator::Colon) {
+			Ok(list) if list.element.is_empty() => None,
+			Ok(ListValue { node: Node::List(items, _, _), element, .. }) => Some(Ok((items, element))),
+			Ok(_) => Some(Err(Stop::Unsupported)),
+			Err(stop) => Some(Err(stop)),
 		}
 	}
 
@@ -1354,13 +1317,11 @@ impl Inference {
 			return None;
 		}
 		let found = match arguments {
-			[list] => match list.drop_meta() {
-				Node::Symbol(name) => Ok((arguments.to_vec(), self.lists.get(name).cloned()?)),
-				Node::List(items, Bracket::Square, separator) => self
-					.quantity_items(items.clone())?
-					.map(|(items, element)| (vec![Node::List(items, Bracket::Square, separator.clone())], element)),
-				_ => self.mapped_list(list)?.map(|(mapped, element)| (vec![mapped], element)),
-			},
+			[list] => self.quantity_list(list)?.map(|list| (vec![list.node], list.element)),
+			// `sum([3, 4] cm)`
+			[list, unit] if self.is_list(list) && self.is_unit_after_value(unit) => {
+				self.list_in_unit(list, unit)?.map(|list| (vec![list.node], list.element))
+			}
 			_ if ELEMENT_WORDS.contains(&word) => self.quantity_items(arguments.to_vec())?,
 			_ => return None,
 		};

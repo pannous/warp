@@ -53,12 +53,23 @@ fn speed_area_volume_and_frequency_are_named_dimensions() {
 	fails_with("a: area = 3 m", "DimensionError: a is declared area (m²), is given m (length)");
 }
 
-/// A unit after a list is each element's (user 2026-10-15, Q3 of dimensions-units); was "repeat or multiply?"
+/// A unit after a list is each element's (user 2026-10-15, Q3 of dimensions-units); was "repeat or multiply?". A list of
+/// quantities goes wherever a whole list does: assigned, shown, summed, nested
 #[test]
 fn a_unit_after_a_list_applies_to_each_element() {
 	is!("x = [3, 4] cm; x[1] + 1 cm", value("5 cm"));
 	is!("x = [3 4] cm; x[0] as mm", value("30 mm"));
 	is!("x = [3, 4] cm; count x", 2);
+	is!("x = [3, 4] cm; type(x)", "list");
+	is!("[3 4] cm", "[3cm 4cm]");
+	is!("[3, 4] km/h", "[3km/h 4km/h]");
+	is!("sum([3, 4] cm)", value("7 cm"));
+	is!("xs = [3, 4]; xs cm", "[3cm 4cm]");
+	is!("xs = [3, 4]; sum(xs cm)", value("7 cm"));
+	is!("n = 3; [n, 4] cm", "[3cm 4cm]");
+	is!("x = 3 cm; [x, 4 cm]", "[3cm 4cm]");
+	is!("[[1, 2], [3, 4]] m", "[[1m 2m] [3m 4m]]");
+	fails_with("[1 m, 2 kg]", "DimensionError: a list of m and kg");
 }
 
 /// A declaration written as a unit shows as written (reviewer, dimensions-units)

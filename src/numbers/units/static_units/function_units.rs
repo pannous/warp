@@ -320,6 +320,9 @@ impl Inference {
 			_ => true,
 		};
 		if let ([amount, unit], Bracket::None, Separator::Space) = (items.as_slice(), &bracket, &separator) {
+			if self.is_unit_after_value(unit) && self.is_list(amount) {
+				return Err(Stop::Unsupported);
+			}
 			if let Some(unit) = self.unit_word(unit).filter(|_| is_amount(amount)) {
 				let outer = std::mem::replace(&mut self.at_top, false);
 				let inferred = self.amount_in(amount.clone(), unit);
@@ -349,7 +352,7 @@ impl Inference {
 					signatures.push(vec![]);
 					continue;
 				}
-				if let Some(text) = self.final_list(&item) {
+				if let Some(text) = self.final_list(&item, AMOUNT_TEXT) {
 					lowered.push(text?);
 					signatures.push(vec![]);
 					continue;
