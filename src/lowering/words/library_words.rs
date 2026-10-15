@@ -735,8 +735,9 @@ impl Lowering {
 				return Some(log_to_base(&items[0], value, base));
 			}
 		}
-		// `first sorted xs` has one argument: a library word after it is its argument's prefix
-		let prefixes_its_argument = *bracket == Bracket::None
+		// `first sorted xs`, `first(reverse xs)` have one argument: a library word after it is its argument's prefix
+		let prefixes_its_argument = matches!(bracket, Bracket::None | Bracket::Round)
+			&& items.len() > 2
 			&& items.get(1).is_some_and(|next| self.library_word(&next.drop_meta().name()).is_some());
 		let argument_count = if prefixes_its_argument { 1 } else { items.len() - 1 };
 		let word = self.library_word_for(head, argument_count)?;
@@ -766,7 +767,7 @@ impl Lowering {
 		if !is_call && !is_prefix {
 			return None;
 		}
-		Some(self.call(word, &items[0], items[1..].to_vec(), is_prefix && !is_call))
+		Some(self.call(word, &items[0], items[1..].to_vec(), (is_prefix && !is_call) || prefixes_its_argument))
 	}
 
 	/// `for k in m` walks the keys of a map, as in Python; `for k, v in m` and `for (k, v) in m` bind each value too:

@@ -731,6 +731,17 @@ impl Lowering {
 		}
 		let (head, rest) = items.split_first()?;
 		if let Some(iteration) = self.iteration_of(head) {
+			// `sort(split x)`, `sort reverse xs`: sort needs no function, so a library word after it is its list's prefix,
+			// `sort(split(x))`, left to the library words (card count-sorted)
+			let library_call_after = match rest {
+				[call] => matches!(call.drop_meta(), Node::List(words, Bracket::None, Separator::Space)
+					if words.len() > 1 && self.is_library_word_call(&words[0])),
+				[word, _, ..] => self.is_library_word_call(word),
+				_ => false,
+			};
+			if iteration.word == SORT_WORD && library_call_after {
+				return None;
+			}
 			// `map square on xs` of a known `square`: the parser applied it, `map (square (on xs))`
 			let rest = spliced_applications(rest.to_vec());
 			// `map square on xs`, `map &square xs`: the function may come first
@@ -799,6 +810,12 @@ impl Lowering {
 			(_, Some(identity)) => call(iteration.word, vec![list, identity, function]),
 			(_, None) => call("reduce", vec![list, function]),
 		})
+	}
+
+	/// A library word the program does not define, which calls the values after it
+	fn is_library_word_call(&self, node: &Node) -> bool {
+		matches!(node.drop_meta(), Node::Symbol(name)
+			if crate::library_words::is_library_word(name) && !self.context.user_functions.contains_key(name))
 	}
 
 	/// A function given as a value: a lambda or block, an operator, or the name of a defined function

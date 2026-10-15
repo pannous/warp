@@ -13,7 +13,8 @@ pub fn lower_count_in(node: Node) -> Node {
 pub(super) fn lower_counts(node: Node, library_count: bool) -> Node {
 	let counted = |node: &Node| match node {
 		Node::List(items, bracket, _) => {
-			count_in(items).or_else(|| library_count.then(|| count_call(items, bracket)).flatten())
+			let library_calls = || count_of_call(items, bracket).or_else(|| count_call(items, bracket));
+			count_in(items).or_else(|| library_count.then(library_calls).flatten())
 		}
 		Node::Key(receiver, Op::Dot, call) if library_count => count_method(receiver, call),
 		_ => None,
@@ -22,6 +23,19 @@ pub(super) fn lower_counts(node: Node, library_count: bool) -> Node {
 		return lower_counts(occurrences, library_count);
 	}
 	children_rewritten(node, |child| lower_counts(child, library_count))
+}
+
+/// `count(reverse xs)`, `count sorted xs`: the count of the library word's call, `count(reverse(xs))`
+fn count_of_call(items: &[Node], bracket: &Bracket) -> Option<Node> {
+	let [count, word, arguments @ ..] = items else { return None };
+	if !count.is_symbol(COUNT_WORD)
+		|| !matches!(word.drop_meta(), Node::Symbol(name) if is_library_word(name))
+		|| arguments.is_empty()
+	{
+		return None;
+	}
+	let counted = Node::List(items[1..].to_vec(), Bracket::None, Separator::Space);
+	Some(Node::List(vec![count.clone(), counted], bracket.clone(), Separator::None))
 }
 
 /// `count(y, x)` is `count x in y`
