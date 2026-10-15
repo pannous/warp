@@ -279,6 +279,9 @@ impl<'a> Loader<'a> {
 	pub(super) fn import(&mut self, used: &Used, statement: &Node) -> Result<Vec<Node>, Node> {
 		let (import, name) = (used.import, used.name.as_str());
 		if let Some(scope) = scope_word(name).filter(|_| import == Import::Use && used.requirement.is_none()) {
+			if scope != Scope::Folder {
+				crate::modules::reads_beyond_folders("use package or use project");
+			}
 			self.scope = self.scope.max(Some(scope));
 			return Ok(vec![]);
 		}
@@ -303,10 +306,14 @@ impl<'a> Loader<'a> {
 				return Ok(self.use_wasm_module(&module, statement, import));
 			}
 			if import == Import::Use && package_repository(name).is_some() {
+				crate::modules::reads_beyond_folders("a package");
 				return self.use_package(name, used.requirement.as_ref());
 			}
 			return match import == Import::Use && crate::ffi::is_ffi_library(name) {
-				true => Ok(vec![as_use(statement)]),
+				true => {
+					crate::modules::reads_beyond_folders("a C library");
+					Ok(vec![as_use(statement)])
+				}
 				false => Err(self.not_found(name, import)),
 			};
 		};
@@ -552,17 +559,22 @@ impl<'a> Loader<'a> {
 		};
 		// `use "./helper.warp"`, `use "/srv/helper.warp"`: that file, `./` from the including file's folder
 		if is_explicit_path(name) {
+			crate::modules::reads_beyond_folders("a module by its path");
 			let base = self.including_directory.clone().unwrap_or_default();
 			return file_names.iter().map(|file_name| base.join(file_name)).collect();
 		}
 		if !is_plain_relative_path(name) {
 			return vec![];
 		}
+		if name.contains('/') {
+			crate::modules::reads_beyond_folders("a module of a subfolder");
+		}
 		let bases: Vec<PathBuf> =
 			self.including_directory.iter().cloned().chain(std::iter::once(PathBuf::new())).collect();
 		let mut candidates = Vec::new();
 		for base in &bases {
 			for directory in self.directories {
+				crate::modules::looks_in(&base.join(directory));
 				candidates.extend(file_names.iter().map(|file_name| base.join(directory).join(file_name)));
 			}
 		}

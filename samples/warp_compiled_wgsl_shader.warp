@@ -21,7 +21,9 @@ swirl(x, y) := {
 	hue(d * 0.5 + 0.1 * wave + time * 0.1) .* (0.6 + 0.4 * wave) .* (1 - smoothstep(0.8, 1.0, d))
 }
 
-print shader_of(swirl)
+print shader_of(swirl) // print the WGSL shader code just for debugging
+# so you can copy it into a website or other shader tool
+
 // five seconds by the clock, however long a frame takes (headless, every frame is also written to a file)
 started = clock()
 time = 0

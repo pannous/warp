@@ -2,7 +2,7 @@
 
 use crate::analyzer::call_name;
 use crate::extensions::numbers::Number;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{EACH_WORD, FOR_WORD, IN_WORD, MATCH_WORD};
 use std::cell::Cell;
@@ -11,6 +11,12 @@ pub(crate) use crate::node::{call, children_rewritten, int, symbol};
 
 pub(crate) fn key(left: Node, op: Op, right: Node) -> Node {
 	Node::Key(Box::new(left), op, Box::new(right))
+}
+
+/// `room.reverb = 0.6` of a function reverb(room) read as `room.reverb`: `room = reverb(room, 0.6)`, the call's value
+/// with the new setting stored back (decision shared-buses), never a definition of `reverb(room)`
+pub(crate) fn set_by_call(receiver: &Node, function: Node, value: Node) -> Node {
+	key(receiver.clone(), Op::Assign, parens(vec![function, receiver.clone(), value]))
 }
 
 /// `match subject { arms }`

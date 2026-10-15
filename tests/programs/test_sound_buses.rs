@@ -239,3 +239,12 @@ fn a_bus_from_a_field_an_item_or_an_untyped_parameter_takes_the_signal() {
 		assert!(loudest(&samples, 0.31, 0.39) > 500, "{name}: its echo 0.3 s later");
 	}
 }
+
+/// decision shared-buses: `room.reverb = 0.6` sets the bus's effect while it plays, as `room = room |> reverb(0.6)`
+#[test]
+fn an_effect_assigned_as_a_member_changes_the_bus() {
+	crate::is!(
+		"use sound\nroom = bus() |> reverb(0.4) |> delay(0.25)\nroom.reverb = 0.6\nroom.chain",
+		warp::warp_parser::parse("[[\"reverb\" 0.6] [\"delay\" 0.25 0.4 0.5]]")
+	);
+}

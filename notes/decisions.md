@@ -314,12 +314,54 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 
 - dimensions-units (2026-10-15, user): dimension names are types (`3 cm is length`, `h: length = 3 s` error); the
   time dimension is `duration` (a subtype of time). Units and their connections live in lib/units.warp
-  (`dimension length`, `m: length`, `cm := m/100`, `inch := 2.54 cm`, users add `furlong := 201.168 m`). `px` is the
+  (`dimension length`, `m: length`, `cm := m/100`, `inch := 2.54 cm`). A plain `:=` stays a constant
+  (`distance := 42 km` → 42km). `px` is the
   device pixel, its own dimension, converting to lengths through display.dpi at run time. A unit after a list applies
   to each element (`[3, 4] cm` = `[3 cm, 4 cm]`, `v: length[3]`, matrices alike). Predefined derived names: speed,
   area, volume, frequency.
+- unit-definitions (2026-10-15 evening, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable):
+  every dimension has an SI anchor unit, every other unit is a marked conversion to a known unit. Built on the user's
+  sketch: `dimension length meter` declares a base dimension and its anchor; `unit m := 1 meter` (aliases use the
+  same rule); `unit cm := meter / 100`, `unit furlong := 201.168 m`: the right side is an amount in a known unit,
+  which fixes the dimension and the factor. Derived dimensions follow from the expression, no second path:
+  `unit N := kg*m/s²`, `unit L := dm³`. Offsets: `unit °F := (it + 459.67) * 5/9 K`, `it` the amount in °F, the
+  result in K; an optional reverse line only where the way back can't be derived (decibels). SI prefixes (km, mN)
+  come automatically for SI-anchored and SI-derived units only, not for furlong. Unit symbols bind only after a
+  number (`3 m`), never as bare names, so `m := 5` or a parameter `s` don't collide; a variable gets a unit by
+  `x * 1 m` (no `x m`). lib/units.warp uses the same lines. Rejected: `length cm := …` (a type word before a name
+  already declares a variable's type) and `unit meter := 100 cm` (the anchor would hang on a smaller unit).
+  Second opinion: the supervisor (refinements above are its).
+- dimension-bridges (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable):
+  two dimensions are connected by a conversion line `A as B := expression`, the shape of the reverse line above
+  (and of the user's own `meter as cm := it * 100`). Pixels stay their own dimension, as decided: in lib/units.warp,
+  `dimension pixels px`, `unit dpi := px / inch` (a derived unit, pixels per inch), `display.dpi := 96 dpi`, and
+  `length as pixels := it * display.dpi`. The way back (divide) is derived. The right side is read at each
+  conversion, not once, so `3 cm as px` uses the current density, and `display.dpi = 300 dpi` before printing changes
+  every later conversion. `display.dpi` is the density of the px warp draws with: 96 in the browser (one CSS
+  inch), the screen's real value in a native window. Plain arithmetic works without the line: `3 cm * display.dpi` is
+  px, `300 px / display.dpi` is a length. Without a conversion, `3 cm + 2 px` is a compile error naming
+  `as px`, never a silent mix. No SI prefixes on px. The same line serves other run-time rates
+  (`EUR as USD := it * rates.usd`).
+- unit-target (2026-10-15 night, user, told to use-reflection): a unit line may name its target the way a function
+  names its return type: `unit °C as K := it + 273.15`, `unit °F as K := (it + 459.67) * 5/9`; the right side is
+  then a plain amount, `it` the amount in the new unit. `(it + 273.15) K` stays accepted.
+- general-conversions (2026-10-15 night, user, told to use-reflection; card general-conversions): one conversion
+  mechanism for any types, `A as B := body`, e.g. `Person as text := it.name`, then `p as text`. A program's
+  conversions are looked up before the built-in ones. Unit lines and dimension bridges are its unit cases. Today
+  `P as text := it.name` is silently ignored (the card fixes that).
 
 ## Text
+- letters (2026-10-15 evening, Interviewer's decision on the user's behalf, to present 2026-10-16; card of-in-chain,
+  low priority): `letters of "a1 b!"` → ['a' 'b'], alphabetic only, the common meaning (Unicode letter, like
+  Python's isalpha and Java's isLetter); `characters` is an alias of `chars`.
+- parse-json (2026-10-15, user): quoted code's `.json` is the readable operator-as-key shape
+  (`parse("a * (b + 1)").json` → {"*":["a",{"+":["b",1]}]}); what it can't express is a warning or error, never `{}`.
+- json-exactness (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable):
+  following the user's "a warning, or even an error": big ints are written with all their digits as a JSON number
+  (`(2^70).json` → 1180591620717411303424; JSON numbers have no size limit, only some readers do); a fraction is
+  written as JSON's float with a warning naming the loss (`(1/3).json` → 0.3333333333333333, "JSON has no exact
+  1/3"), an error under `use strict`; functions, ∞, NaN and complex are errors. Not text-encoded numbers ("1/3"):
+  a reader would get a string where it expects a number.
 - Text + anything concatenates in its str() form (2026-10-02, extended 2026-10-10); a function stays an error. A
   text spelling a number plus a number (`"3"+3`) warns and keeps "33" (error under `use strict`). An instance of a
   Printable type joins as its own text.
@@ -432,6 +474,12 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - Ranges (2026-10-09): `r: 1..n` is the range itself, same as `r = 1..n`. `upto` excludes the end with a hint.
 
 ## Functions and calls
+- random-forms (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable; card
+  random-should): bare `random` is its call where a value is used (a float in [0,1)). `random T` for a type is a
+  random value of T, one general rule instead of special cases: `random bool` a coin flip, `random int` the full
+  integer range (ids, hashes), `random codepoint`, `random float` = `random`. `random(n)` stays 0…n-1;
+  `random(a, b)` with whole numbers is a whole number from a to b inclusive, the die roll `random(1, 6)`; with a
+  float argument, a float in [a, b).
 - function-references (2026-10-15, user): a bare name of a function that needs arguments, compared with a type
   (`floor is function`) or in `type(floor)`, means the function itself (card bare-fn-type). `.floor` in argument
   position is a lambda on it, like Swift's .member: `xs.map(.floor)`, `people.sort(.age)` (card dot-lambda).

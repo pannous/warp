@@ -280,6 +280,7 @@ fn run_command(args: &[String]) {
 			return;
 		}
 		diagnostic::show_lines_of(&source_of(path));
+		warp::run::program_cache::enable(); // its next run starts without compiling (card cache-compiled-shader)
 		let result = eval(path); // a file: its folder is in scope (D15)
 		if !only_run && wants_executable() && !matches!(result, Node::Error(_)) {
 			leave_executable(path);
