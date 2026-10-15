@@ -1,0 +1,6 @@
+// card program-server: server routes and a browser word in one program
+server def greeting(name) { "hello " + name }
+get "/api" { "from the server" }
+surface = 4 int
+paint(surface, 2, 2)
+greeting("page")
