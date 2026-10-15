@@ -216,7 +216,7 @@ fn as_reflection_words(node: Node, functions: &Functions, defined: &HashSet<Stri
 				(DOC_WORD, Some(function)) => Some(Node::Text(function.doc.clone().unwrap_or_default())),
 				(FULL_WORD, Some(function)) => Some(Node::Text(printed(function))),
 				(NAME_WORD, Some(function)) => Some(Node::Text(function.name.clone())),
-				(RETURN_TYPE_WORD, Some(function)) => Some(Node::Text(function.return_kind.to_string())),
+				(RETURN_TYPE_WORD, Some(function)) => Some(Node::Text(result_type(function))),
 				(BODY_WORD, Some(function)) => Some(crate::blocks::quoted_code(function.body.as_ref().clone())),
 				(word, None) if PARAMS_WORDS.contains(&word) => library().map(|(params, _)| text_list(&params)),
 				(SIGNATURE_WORD, None) => library().map(|(_, signature)| Node::Text(signature)),
@@ -459,13 +459,19 @@ pub(crate) fn signature(function: &crate::compiler::context::UserFunctionDef) ->
 		.collect();
 	let result = match function.return_kind {
 		crate::type_kinds::Kind::Empty => String::new(),
-		// a bool is held as an Int (card bool-type)
-		crate::type_kinds::Kind::Int if crate::analyzer::is_bool_function(&function.name) => {
-			format!(" -> {}", crate::analyzer::BOOL_TYPE)
-		}
-		kind => format!(" -> {kind}"),
+		_ => format!(" -> {}", result_type(function)),
 	};
 	format!("({}){result}", params.join(", "))
+}
+
+/// `f.return_type`: bool for a bool function, held as an Int (card bool-type), else the kind it returns
+pub(crate) fn result_type(function: &crate::compiler::context::UserFunctionDef) -> String {
+	match function.return_kind {
+		crate::type_kinds::Kind::Int if crate::analyzer::is_bool_function(&function.name) => {
+			crate::analyzer::BOOL_TYPE.to_string()
+		}
+		kind => kind.to_string(),
+	}
 }
 
 /// What the compile-time object words know: each class's layout, the classes of instance variables, the keys of map
