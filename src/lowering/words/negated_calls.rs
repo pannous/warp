@@ -62,7 +62,7 @@ fn negate_calls(
 
 /// A built-in word that applies to the value after it: print, a rounding word, a type, a library word of one value
 /// (`sin`, `floor`, `reverse`)
-fn is_builtin_callable(name: &str) -> bool {
+pub(crate) fn is_builtin_callable(name: &str) -> bool {
 	takes_one_value(name)
 		|| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name)
 		|| is_type_call_word(name)
