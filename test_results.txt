@@ -3434,6 +3434,7 @@ PASSED:
   ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
   ✓ parser::test_self_lexer::numbers_match_their_rust_twin
   ✓ parser::test_self_lexer::texts_match_their_rust_twin
+  ✓ parser::test_self_parser::the_listed_sources_parse_as_in_rust
   ✓ parser::test_self_serializer::a_view_is_json
   ✓ parser::test_self_serializer::serialize_matches_its_rust_twin
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
@@ -5686,6 +5687,7 @@ PASSED:
   ✓ welcoming::test_format_cli::format_leaving_its_hint_names_the_command_and_says_no_formatted
   ✓ welcoming::test_format_cli::lint_of_inline_code_prints_hints_and_the_formatted_code
   ✓ welcoming::test_format_files_only::a_glob_of_a_folder_formats_only_its_warp_files_outside_golf
+  ✓ welcoming::test_format_files_only::wasp_files_and_warp_scripts_are_formatted_too
   ✓ welcoming::test_fuel_default::runaway_names_the_fuel_variable
   ✓ welcoming::test_fuel_default::ten_million_float_fills_fit_the_default_fuel
   ✓ welcoming::test_function_bindings::a_const_in_one_function_leaves_another_alone
@@ -5900,7 +5902,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ parser::test_self_parser::the_listed_sources_parse_as_in_rust
 
 SUMMARY:
-13 ignored, 5897 passed, 1 failed, 5898 total tested
+13 ignored, 5899 passed, 0 failed, 5899 total tested

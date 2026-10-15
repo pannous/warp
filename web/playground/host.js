@@ -12,6 +12,9 @@ const PAGE_ROUTES_EXPORT = "page·routes";
 const PAGE_SUBMITTED_EXPORT = "page·submitted"; // lowering/web/serve.rs PAGE_SUBMITTED
 const PAGE_BITS = 16;
 const STDERR = 2;
+// display.dpi where the page told none (a Worker without its page, the browser tests): CSS fixes 96 px to the inch, as
+// warp-runtime system_values.rs DEFAULT_DPI does where the screen tells none
+const DEFAULT_DPI = 96;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 // view_width, view_height on a page that tells no output pane (playground.js tellSystemValues), as natively
 // (crates/warp-runtime/src/system_values.rs NATIVE_VIEW)
@@ -149,7 +152,7 @@ function programImports(holder, hooks) {
 				if (partValue !== undefined) return BigInt(partValue);
 				if (value === "key code held") return BigInt(heldKey);
 				if (value in WINDOW_SIDES) return BigInt(windowSide(value));
-				if (value === "display_dpi" && holder.displayDpi) return BigInt(holder.displayDpi);
+				if (value === "display_dpi") return BigInt(holder.displayDpi ?? toldValue(value) ?? Math.round((globalThis.devicePixelRatio ?? 1) * DEFAULT_DPI));
 				const pointerIndex = self.pagePointer?.names.indexOf(value) ?? -1; // canvas.js trackPointer
 				if (pointerIndex >= 0) return BigInt(Atomics.load(self.pagePointer.values, pointerIndex));
 				// a Worker has no matchMedia: the page tells it (playground.js tellSystemValues)
@@ -303,9 +306,10 @@ function plainOfTree(tree) {
 		// `{"+": [1, 1]}` (the JsonLogic shape of src/node/json_xml.rs), a prefix operation without its empty left side
 		case 6: {
 			const [value, ...rest] = tree.chain ?? [];
-			const [left, right] = [plainOfTree(payload.node), value ? plainOfTree({ ...value, chain: rest }) : null];
+			const right = value ? plainOfTree({ ...value, chain: rest }) : null;
 			const operator = OPERATOR_SPELLINGS[Number((kind >> 8n) & KIND_MASK)] ?? ":"; // the operator code is the byte above the kind (src/run/wasm_reader.rs)
-			if (ENTRY_OPERATORS.includes(operator)) return { [left]: right };
+			if (ENTRY_OPERATORS.includes(operator)) return { [keyOfTree(payload.node)]: right };
+			const left = plainOfTree(payload.node);
 			return { [operator]: [left, right].filter(side => side !== null) };
 		}
 		case 7: case 8: {
@@ -320,6 +324,18 @@ function plainOfTree(tree) {
 		case Number(KIND_FUNCTION): return tree.warpFunction ? Object.assign(callableOf(tree.warpFunction), { warpName: tree.chain?.[0]?.data?.text }) : null;
 		default: return null;
 	}
+}
+
+// the key of an entry: a name or text as itself, any other key as written, the head of `f(x) := …` "(f x)" (as
+// src/node/json_xml.rs json_key)
+const BRACKET_PAIRS = ["{}", "[]", "()"];
+function keyOfTree(tree) {
+	const kind = Number(BigInt(tree.kind) & KIND_MASK);
+	if (kind !== 7 && kind !== 8) return String(plainOfTree(tree));
+	const payload = tree.data ?? {};
+	const items = payload.node === undefined ? [] : [payload.node, ...(tree.chain ?? []).map(cell => cell.data?.node)].filter(Boolean);
+	const [open = "", close = ""] = BRACKET_PAIRS[Number((BigInt(tree.kind) >> 8n) & KIND_MASK)] ?? "";
+	return open + items.map(keyOfTree).join(" ") + close;
 }
 
 // a warp function given to foreign code: a JavaScript function calling it back through the module's closure_apply

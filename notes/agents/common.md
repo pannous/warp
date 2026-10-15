@@ -167,3 +167,5 @@ instead of bending the code.
 - Deleting old stuff needs no confirmation (user, 2026-10-03): merged branches, stale copies, leftover stashes.
 - Wiki (`wiki/`, its own repo pannous/warp.wiki): GitHub wikis can only serve `master` (notes/wiki_branch.md), so wiki
   edits go to master (`git push origin HEAD:master`); there is no `main` branch in the wiki.
+- Rare edge cases go to Later (user, 2026-10-16): a corner real programs rarely hit (exotic literals like ∞/NaN, wording
+  nits on code nobody writes, odd pairs of rarely combined features) is filed with `todo add Later "…"`, never Next/Soon.
