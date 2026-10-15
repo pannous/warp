@@ -103,8 +103,8 @@ MEMBER_CODE = "xs = [1 2]; xs"
 MEMBERS_LISTED = ["count", "sum", "map", "unique"]
 MEMBERS_WAIT_MS = 10000
 ASSISTANT_PAUSE_MS = 1500  # assistant.js PAUSE_BEFORE_COMPLETION_MS and a margin
-PAGE_ELEMENTS = "(a handler reads the page's element of an id: $who.value)"  # card browser-interaction: host-foreign.js callOnPage
-PAGE_ELEMENTS_CODE = 'greeting = "-"\ndiv{ input{ id: "who" } button{ on click { greeting = "Hello " + $who.value } "Greet" } p{ greeting } }'
+PAGE_ELEMENTS = "(a handler reads the value of the page's element of an id: $who)"  # card page-ids: host-foreign.js callOnPage
+PAGE_ELEMENTS_CODE = 'greeting = "-"\ndiv{ input{ id: "who" } button{ on click { greeting = "Hello " + $who } "Greet" } p{ greeting } }'
 PAGE_ELEMENTS_NAME = "Ada"
 PAGE_ELEMENTS_SHOWN = "Hello Ada"
 CLIPBOARD_READ = "(a program reads the clipboard)"  # card web-apis-rest: host.js clipboard_text asks the page
@@ -586,7 +586,7 @@ def member_completion_wrong():
 
 
 def page_elements_wrong():
-	"""a click's handler reads what was typed into the input of id who as `$who.value`: its Worker asks the page"""
+	"""a click's handler reads what was typed into the input of id who as `$who`: its Worker asks the page"""
 	run_code(PAGE_ELEMENTS_CODE)
 	shown = browser("eval", f"""(async () => {{
 		const root = document.getElementById("rendered").shadowRoot;
