@@ -172,15 +172,33 @@ compile error (append or map), `type(xs)` is `list of length`. The program's val
 (decided): Q1 px the device pixel through display.dpi, Q2 unit definitions in lib/units.warp.
 Test: tests/numbers/test_dimension_types.rs.
 
-## Unit definitions in lib/units.warp (card dimensions-units Q2, 2026-10-15)
-The dimensions and units are no Rust tables any more: lib/units.warp's `unit_definitions = data { … }` block names
-them (`dimension length`, `dimension speed := length/duration`, `m: length` base unit, `cm := m/100`, `°C := K + 273.15`,
-`mph := mi/h` alias), and src/numbers/units/definitions.rs reads it once with its own small reader (the parser asks
-`is_unit`, so it cannot parse its own definitions). Each unit becomes whole steps of its dimension (amount × lcm of the
-dimension's denominators); only ratios matter. Adding a unit or dimension name = one line there (a new base dimension
-also needs its `Dimension` variant). Test: tests/numbers/test_unit_definitions.rs. Next: units defined in a program
-(`furlong := 201.168 m`), then px as a device-pixel dimension (Q1). The block is also the run-time table (card
-lib-units): units.rs with_run_time_unit_tables replaces the statement by unit_names/unit_scales/unit_dimensions computed
-from the definitions (also where implicit_modules.rs picks the units module's needed definitions by name), so aliases of
-units (Hz, kHz) work at run time too. The hand reader stays: the parser asks is_unit to read `201.168 m`, so it cannot
-read the block that defines m (without units `q := 201.168 furlong` parses as `(:= q 201.168) furlong`).
+## Unit definitions in lib/units.warp (card dimensions-units Q2; decisions unit-definitions, dimension-bridges)
+The dimensions and units are no Rust tables: lib/units.warp's `unit_definitions = data { … }` block names them in unit
+lines, and src/numbers/units/definitions.rs reads it once with its own small line reader (the parser asks `is_unit` to
+read `201.168 m`, so it cannot parse the block that defines m):
+- `dimension length meter`: a base dimension and its SI anchor (a new base dimension also needs its `Dimension`
+  variant); `unit m := 1 meter` its symbol, which takes the anchor's place (shown as m), `meter` an alias of it.
+- `dimension speed m/s`: the name of the dimension of an expression of units (`type(5 m/s)` is speed).
+- `unit cm := m/100`, `unit furlong := 201.168 m`: an amount of one known unit, which fixes dimension and factor;
+  `unit °C := (it + 273.15) K` / `unit °R := it * 5/9 K` count from another zero, `it` the amount in the new unit.
+- `unit mph := mi/h`, `unit N := kg*m/s²`, `unit L := dm³`, `unit ° := π/180`: several units or none, an alias (a
+  word for its expression, expanded by units.rs lower_unit_aliases).
+- SI prefixes (G M k h da d c m µ n) come by themselves on units of the SI dimensions (length, mass, duration,
+  temperature) that are powers of ten of their anchor and carry no prefix (m, g, s, K, not kg/cm/furlong/px).
+  Giga..nano keeps every unit whole steps of its dimension in i64 (GK at 9e18 steps is the tightest).
+- `length as pixels := it * display.dpi`: a bridge; static_units.rs bridged() turns `q as px` into `q * (dpi · SI
+  amount of 1 dpi)` with the dpi read at run time (system_value "display_dpi"), the way back divides; a mixed `3cm + 2px`
+  names `as px`. `display.dpi := 96 dpi` is a setting: module_properties.rs reads it as `display_dpi * 1dpi`, writes it
+  by `set_system_value("display_dpi", it / 1dpi)`; warp-runtime system_values.rs keeps the set value, else the screen's
+  (CoreGraphics, xrandr), else DEFAULT_DPI 96; the playground host.js keeps holder.displayDpi, else 96·devicePixelRatio.
+Each unit becomes whole steps of its dimension (amount × lcm of the dimension's denominators); only ratios matter. The
+block is also the run-time table (card lib-units): with_run_time_unit_tables replaces the statement by
+unit_names/unit_scales/unit_dimensions (aliases of packable units too), so `quantity(1, "furlong")` works.
+
+A program's own units are unit lines too: `unit furlong := 201.168 m` at the start of a line. pipeline.rs
+lawful_program reads them before parsing (definitions::program_unit_lines, the lib reader extended, kept in
+context.program_unit_lines until the next program, so the result reads back), so `3 furlong` binds like `3 m`;
+units::without_unit_lines then drops them from the program, an unreadable one (`unit x := 3 foo`) is an error. A plain
+`furlong := 201.168 m` stays a constant. definitions() is the lib's plus these lines, read once per distinct lines.
+Tests: tests/numbers/test_unit_definitions.rs, test_pixel_unit.rs. Open: a spaced `9 °R` (degree units bind glued only,
+main too); units bind after a variable (`x m`) although the decision says only after a number.
