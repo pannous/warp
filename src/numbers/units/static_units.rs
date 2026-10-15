@@ -14,7 +14,7 @@
 //! text; `xs.add(q)` checks the element signature.
 //! Unit fields: `class Run{distance: km}` (unit_fields.rs), an instance's fields have signatures like an object's.
 
-use super::{exponent_of, finest_units, unit_named, units_text, Dimension, Factor, Quantity, Unit, UNITS};
+use super::{exponent_of, finest_units, unit_named, units_text, Dimension, Factor, Quantity, Unit};
 use crate::lowering::function_head;
 use crate::words::{MAP_WORD, PRINT_WORD, RETURN_WORD, STR_WORD};
 
@@ -34,14 +34,6 @@ use std::collections::HashMap;
 pub(crate) use unit_fields::unit_type;
 pub(crate) use unit_fields::{lower_field_tolerances, si_quantity};
 
-/// The SI base unit of each dimension, the unit amounts count in at run time
-const BASE_UNITS: [(Dimension, &str); 5] = [
-	(Dimension::Length, "m"),
-	(Dimension::Mass, "kg"),
-	(Dimension::Time, "s"),
-	(Dimension::Era, "AD"),
-	(Dimension::Temperature, "K"),
-];
 const LOOP_WORDS: [&str; 2] = ["for", "while"];
 /// `speed·u0`: a function specialised for one unit signature of its arguments
 const SPECIALISATION_SEPARATOR: &str = "·u";
@@ -415,37 +407,26 @@ pub(super) fn exact_amount(value: &Node) -> Option<Rational> {
 	}
 }
 
-/// Dimension names as types of quantities (card dimensions-units): `h: length`, `q is length²`, `speed: length/duration`.
-/// The time dimension is `duration`, a subtype of `time` (decision anchor-time), so `3 s is time` holds too
-const DIMENSION_NAMES: [(&str, Dimension); 4] = [
-	("length", Dimension::Length),
-	("mass", Dimension::Mass),
-	("temperature", Dimension::Temperature),
-	("duration", Dimension::Time),
-];
-
-/// The predefined names of derived dimensions (user 2026-10-15, dimensions-units Q4): `a: area = 3 m²`
-const DERIVED_DIMENSION_NAMES: [(&str, &[(Dimension, i32)]); 4] = [
-	("speed", &[(Dimension::Length, 1), (Dimension::Time, -1)]),
-	("area", &[(Dimension::Length, 2)]),
-	("volume", &[(Dimension::Length, 3)]),
-	("frequency", &[(Dimension::Time, -1)]),
-];
+/// Dimension names as types of quantities (card dimensions-units), from lib/units.warp: `h: length`, `q is length²`,
+/// `speed: length/duration`, and the derived names (`a: area = 3 m²`, Q4). The time dimension is `duration`, a subtype
+/// of `time` (decision anchor-time), so `3 s is time` holds too
+fn dimension_names() -> impl Iterator<Item = (&'static str, Vec<(Dimension, i32)>)> {
+	let definitions = super::definitions::definitions();
+	let named = definitions.dimensions.iter().map(|(name, dimension)| (*name, vec![(*dimension, 1)]));
+	named.chain(definitions.derived_dimensions.iter().map(|(name, powers)| (*name, powers.clone())))
+}
 
 /// The base units a dimension name stands for: `length` → m, `speed` → m/s
 fn named_dimension(name: &str) -> Option<Vec<Factor>> {
-	if let Some((_, dimension)) = DIMENSION_NAMES.iter().find(|(known, _)| *known == name) {
-		return Some(vec![Factor { unit: base_unit(*dimension), power: 1 }]);
-	}
-	let (_, powers) = DERIVED_DIMENSION_NAMES.iter().find(|(known, _)| *known == name)?;
+	let (_, powers) = dimension_names().find(|(known, _)| *known == name)?;
 	Some(powers.iter().map(|(dimension, power)| Factor { unit: base_unit(*dimension), power: *power }).collect())
 }
 
 /// The name of a signature: `length` of m, `speed` of m/s, none of kg/m
 fn dimension_name(signature: &Signature) -> Option<&'static str> {
-	let names =
-		DIMENSION_NAMES.iter().map(|(name, _)| *name).chain(DERIVED_DIMENSION_NAMES.iter().map(|(name, _)| *name));
-	names.into_iter().find(|name| named_dimension(name).is_some_and(|factors| self::signature(&factors) == *signature))
+	dimension_names().map(|(name, _)| name).find(|name| {
+		named_dimension(name).is_some_and(|factors| self::signature(&factors) == *signature)
+	})
 }
 
 /// The type of a quantity: its dimension's name, else its base units, in lists as deep as it is (`list of length`)
@@ -492,13 +473,11 @@ fn dimension_signature(node: &Node, own_names: &HashMap<String, Signature>) -> O
 	Some(signature(&factors))
 }
 
+/// The base unit of a dimension (`m: length` in lib/units.warp), the unit amounts count in at run time
 fn base_unit(dimension: Dimension) -> &'static Unit {
-	let name = BASE_UNITS
-		.iter()
-		.find(|(known, _)| *known == dimension)
-		.map(|(_, name)| *name)
-		.expect("a base unit per dimension");
-	UNITS.iter().find(|unit| unit.name == name).expect("the base unit is a unit")
+	let definitions = super::definitions::definitions();
+	let (_, name) = definitions.base_units.iter().find(|(known, _)| *known == dimension).expect("a base unit per dimension");
+	definitions.units.iter().find(|unit| unit.name == *name).expect("the base unit is a unit")
 }
 
 fn display_unit(display: &[&'static Unit], dimension: Dimension) -> &'static Unit {

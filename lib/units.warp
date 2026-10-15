@@ -3,6 +3,46 @@
 // unit as data: the amount in SI base units (exact where the text is), its dimension and the unit it shows in.
 // Units written in the program stay static (src/units): checked at compile time, plain numbers at run time.
 
+// The dimensions and units warp knows (card dimensions-units Q2, read by src/numbers/units/definitions.rs): a dimension is
+// named or a product of named ones (`speed := length/duration`), `m: length` is
+// the base unit of its dimension, `cm := m/100` a unit of an amount of another, `°C := K + 273.15` one counting from
+// another zero; a definition of several units or of none (`mph := mi/h`, `° := π/180`) is a word for that expression
+unit_definitions = data {
+	dimension length
+	dimension mass
+	dimension duration
+	dimension era
+	dimension temperature
+	dimension speed := length/duration
+	dimension area := length²
+	dimension volume := length³
+	dimension frequency := 1/duration
+	m: length
+	mm := m/1000
+	cm := m/100
+	km := 1000 m
+	inch := 2.54 cm
+	ft := 12 inch
+	yd := 3 ft
+	mi := 1760 yd
+	kg: mass
+	g := kg/1000
+	mg := g/1000
+	lb := 0.45359237 kg
+	s: duration
+	ms := s/1000
+	min := 60 s
+	h := 60 min
+	AD: era
+	K: temperature
+	°C := K + 273.15
+	°F := 5/9 K + 45967/180
+	mph := mi/h
+	Hz := 1/s
+	kHz := 1/ms
+	° := π/180
+}
+
 // The units by name, their SI amount and dimension: the dimension packs the powers of length, mass and time as
 // length + 256·mass + 65536·time, so multiplying quantities adds dimensions
 unit_names = ["mm", "cm", "m", "km", "inch", "ft", "yd", "mi", "mg", "g", "kg", "lb", "ms", "s", "min", "h", "mph"]
