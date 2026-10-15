@@ -312,6 +312,14 @@ pub fn needs_one_value(name: &str) -> bool {
 		.is_some_and(|word| fewest_arguments(word) == 1 && !crate::type_tests::is_builtin_type_word(word))
 }
 
+/// A library word that is a function of one value, standing as a function value (`map floor xs`, `map reverse xs`):
+/// one needing one value, one of one typed value (`floor`, `sin`) or a counting word (`map count xs`)
+pub fn is_one_value_function(name: &str) -> bool {
+	needs_one_value(name)
+		|| crate::lowering::library_signatures::typed_first_arity(name) == Some(1)
+		|| crate::analyzer::COUNTING_WORDS.contains(&name)
+}
+
 fn fewest_arguments(word: &str) -> usize {
 	let optional = OPTIONAL_ARGUMENTS.iter().find(|(name, _)| *name == word).map_or(0, |(_, optional)| *optional);
 	arity(word) - optional
