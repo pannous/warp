@@ -33,6 +33,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   wasm index and effects. A bare name never becomes the function value implicitly (the `print now` case: a
   parameterless function must stay a call, so in a mixed list some names would print and others would be called): `function f` stays explicit, and a bare parameterless
   function inside print/help/dump/type gets a warning that it was called, hint `function now`.
+- dir-lists (2026-10-15, user): built-ins become function values first, type `builtin`, a subtype of function
+  (`type(function upper)` is builtin, `function upper is function` → yes); methods(x) lists them, so dir(x) and
+  methods(x) keep the same names (card builtin-functions, then dir-lists).
 - cleanup-means-fewer-lines (2026-10-13): the cleanup's metric is lines removed: simpler, more general, more elegant
   code. Splitting files or functions alone is not a goal ("not that impressed by splitting"). Each cleanup merge
   request states its net src/ line delta; baseline 161132 lines of src/*.rs at eaa40f98b.
