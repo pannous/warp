@@ -185,3 +185,18 @@ fn a_compressor_ducks_both_channels_together() {
 	let (left, right) = (output[1800], output[1801]);
 	assert!((right / left - 0.05 / 0.9).abs() < 0.001, "the same gain on both: {left} {right}");
 }
+
+// card shared-buses stage 2, bus API A (user 2026-10-15): a signal piped into a bus, a note naming its bus
+#[test]
+fn a_signal_piped_into_a_bus_echoes() {
+	let samples = rendered_samples("room = bus() |> delay(0.3, 0.5, 1)\nosc(A4, 0.1s) |> room", "piped");
+	assert!(loudest(&samples, 0.31, 0.39) > 500, "its echo 0.3 s later");
+}
+
+#[test]
+fn a_note_played_on_a_bus_echoes_and_the_next_stays_dry() {
+	let program = "room = bus() |> delay(0.3, 0.5, 1)\nplay(A4, 0.1s, bus: room)\nplay(A4, 0.1s)";
+	let samples = rendered_samples(program, "note-bus");
+	assert!(loudest(&samples, 0.31, 0.39) > 500, "the note's echo 0.3 s later");
+	assert!(loudest(&samples, 0.42, 0.49) < QUIET, "the next note sounds dry: no echo of it");
+}
