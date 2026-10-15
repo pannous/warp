@@ -36,6 +36,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - dir-lists (2026-10-15, user): built-ins become function values first, type `builtin`, a subtype of function
   (`type(function upper)` is builtin, `function upper is function` → yes); methods(x) lists them, so dir(x) and
   methods(x) keep the same names (card builtin-functions, then dir-lists).
+- style-linter (2026-10-15, user): of the proposed rules only doc-moved is enforced (a /// doc that moved onto
+  another item, --fix moves it back); use-at-top, card-comment and blank-line-between-items are not.
 - cleanup-means-fewer-lines (2026-10-13): the cleanup's metric is lines removed: simpler, more general, more elegant
   code. Splitting files or functions alone is not a goal ("not that impressed by splitting"). Each cleanup merge
   request states its net src/ line delta; baseline 161132 lines of src/*.rs at eaa40f98b.
@@ -547,6 +549,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   job runs on its own; only a use of its value waits; `await all jobs`. P153 `await any [...]` races. P154 `await job
   within 100 ms or 0`, a compile-time note says the job stops on timeout.
 - go-voice: a `go {}` task is a voice sounding along from where its starter stands.
+- deleted-loop (2026-10-15, user): a live_loop deleted from the source stops when the source is re-evaluated (at
+  most a ~4 s fade); the sound matches the visible code, unlike Sonic Pi.
 
 ## Modules, library and foreign code
 - P169 `use math` loads a new math module with beautiful names ("we need to educate people about beautiful names");

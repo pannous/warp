@@ -34,6 +34,11 @@ Workers send their "branch, tip, new tests, filters" message to you and warp-int
    mechanism) go on the board with `todo add "…" --topic restructuring` for the Refactorer; they never block.
 - Express (crash fix) merge requests: review after they land; a finding becomes polish or a card.
 - Questions about meaning go to the Interviewer, never block on them: polish or card meanwhile.
+- No messages to the user (user, 2026-10-15: "to save context … only feedback for the agents"): verdicts go to
+  the worker and the Integrator, user decisions to relay go to the Supervisor; the turn's own text output stays one
+  line at most.
+- Pure style nits (doc line placement, use order, blank lines, comment placement) are no polish: the linter of card
+  style-linter handles them (user, 2026-10-15); a rule it lacks goes to its worker, warp-style-linter.
 
 ## Rhythm
 Be fast: a review normally ends before the gate does (minutes). Keep a short log in data/reviews/<date>.md (branch,
