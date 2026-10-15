@@ -47,6 +47,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   alias words included. Layout: tabs, `name: value`, binary operators spaced (glued only where spacing changes the
   meaning; every edit is checked by comparing parse trees), list separators kept as written, `{` on its header's
   line, one space after `,`, no spaces inside brackets, at most one blank line.
+  Later (card warp-format-strict, Soon): a second, opinionated mode rewriting code to best practices, with a preview
+  (show the diff, apply nothing) before anything is applied; its name and every rule go to the user first.
 - cleanup-means-fewer-lines (2026-10-13): the cleanup's metric is lines removed: simpler, more general, more elegant
   code. Splitting files or functions alone is not a goal ("not that impressed by splitting"). Each cleanup merge
   request states its net src/ line delta; baseline 161132 lines of src/*.rs at eaa40f98b.
