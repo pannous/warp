@@ -25,12 +25,13 @@ const RUN_TIME_DIMENSIONS: &str = "unit_dimensions";
 const RUN_TIME_DIMENSION_WEIGHTS: [(Dimension, i64); 3] =
 	[(Dimension::Length, 1), (Dimension::Mass, 256), (Dimension::Time, 65536)];
 /// The dimension each name of lib/units.warp stands for: time's is `duration` (decision anchor-time)
-const DIMENSION_WORDS: [(&str, Dimension); 5] = [
+const DIMENSION_WORDS: [(&str, Dimension); 6] = [
 	("length", Dimension::Length),
 	("mass", Dimension::Mass),
 	("duration", Dimension::Time),
 	("era", Dimension::Era),
 	("temperature", Dimension::Temperature),
+	("pixel", Dimension::Pixel),
 ];
 
 pub(super) struct Definitions {

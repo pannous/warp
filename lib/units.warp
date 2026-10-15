@@ -14,6 +14,7 @@ unit_definitions = data {
 	dimension duration
 	dimension era
 	dimension temperature
+	dimension pixel
 	dimension speed := length/duration
 	dimension area := length²
 	dimension volume := length³
@@ -38,6 +39,7 @@ unit_definitions = data {
 	K: temperature
 	°C := K + 273.15
 	°F := 5/9 K + 45967/180
+	px: pixel
 	mph := mi/h
 	Hz := 1/s
 	kHz := 1/ms

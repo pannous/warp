@@ -26,6 +26,8 @@ enum Dimension {
 	Era,
 	Time,
 	Temperature,
+	/// the device pixel (`px`), its own dimension (decision dimensions-units)
+	Pixel,
 }
 
 #[derive(Debug, PartialEq)]
