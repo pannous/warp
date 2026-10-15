@@ -47,6 +47,9 @@ impl Lowering<'_> {
 	fn expand(&mut self, node: Node) -> Node {
 		match node {
 			Node::List(items, bracket, separator) => {
+				if let Some(call) = self.comma_arguments(&items, &bracket, &separator) {
+					return self.expand(call);
+				}
 				let items: Vec<Node> = items.into_iter().map(|item| self.expand(item)).collect();
 				self.extremum(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
 			}
@@ -54,9 +57,24 @@ impl Lowering<'_> {
 		}
 	}
 
+	/// `max 3, 4` is `max 3 4`: the arguments after the comma join the braceless call before it (card braceless-calls)
+	fn comma_arguments(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+		let (Bracket::None, Separator::Colon, [first, rest @ ..]) = (bracket, separator, items) else {
+			return None;
+		};
+		let Node::List(call, Bracket::None, Separator::Space) = first.drop_meta() else {
+			return None;
+		};
+		let is_builtin = |head: &Node| self.builtins.iter().any(|(builtin, _)| head.is_symbol(builtin));
+		if call.len() < 2 || !is_builtin(&call[0]) || rest.is_empty() {
+			return None;
+		}
+		Some(Node::List([call.clone(), rest.to_vec()].concat(), Bracket::None, Separator::Space))
+	}
+
 	fn extremum(&mut self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
-		// `max xs`, `max [1 5 2]`: one argument without parentheses is a call too
-		let prefix = matches!((bracket, separator, items), (Bracket::None, Separator::Space, [head, _]) if matches!(head.drop_meta(), Node::Symbol(_)));
+		// `max xs`, `max [1 5 2]`, `max 3 4`: arguments without parentheses are a call too
+		let prefix = matches!((bracket, separator, items), (Bracket::None, Separator::Space, [head, _, ..]) if matches!(head.drop_meta(), Node::Symbol(_)));
 		let head = items.first()?.drop_meta().name();
 		let name = call_name(items, bracket, separator).map(str::to_string).or_else(|| prefix.then_some(head))?;
 		let name = name.as_str();
