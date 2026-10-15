@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-// Levenshtein edit distance via dynamic programming (two-row variant), 1-based `#` indexing
+# Levenshtein edit distance via dynamic programming (two-row variant), 1-based `#` indexing
 def levenshtein(a, b) {
 	s = a
 	t = b
@@ -21,9 +21,9 @@ def levenshtein(a, b) {
 }
 
 total = 0
-total = total + levenshtein("kitten", "sitting")   // 3
-total = total + levenshtein("flaw", "lawn")        // 2
-total = total + levenshtein("", "abc")             // 3
-total = total + levenshtein("abc", "abc")          // 0
-total = total + levenshtein("saturday", "sunday")  // 3
+total = total + levenshtein("kitten", "sitting")   # 3
+total = total + levenshtein("flaw", "lawn")        # 2
+total = total + levenshtein("", "abc")             # 3
+total = total + levenshtein("abc", "abc")          # 0
+total = total + levenshtein("saturday", "sunday")  # 3
 total

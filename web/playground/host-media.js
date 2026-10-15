@@ -137,5 +137,15 @@ addHostPart({
 			}
 			hooks.paint(paintFrame(holder, halves ?? halvesOf(painted), width, height), width, height);
 		},
+		// save_picture(pixels, width, height, file) (src/host.rs, card save-painting): use draw's canvas, shaded as paint
+		// shows it, which the page makes a PNG of and downloads (playground.js savePicture)
+		save_picture: (pixels, width, height, file) => {
+			if (!hooks.savePicture) throw new Error("save: no page here to download the picture to");
+			[width, height] = [Number(width), Number(height)];
+			const halves = intHalvesOfList(program(), pixels, width * height) ?? halvesOf(plainOfTree(readNode(program(), pixels)));
+			const words = new Int32Array(width * height);
+			for (let at = 0; at < words.length; at++) words[at] = shadeWord(halves[2 * at], halves[2 * at + 1]);
+			hooks.savePicture(String(plainOfTree(readNode(program(), file))), words, width, height);
+		},
 	}),
 });

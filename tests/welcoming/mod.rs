@@ -3,6 +3,7 @@ mod test_advice_fixes; // card advise-fix
 mod test_aligned_comment; // card hint-comment-floordiv
 mod test_and_or_got_it; // card done-done
 mod test_braceless_call_argument;
+mod test_braceless_word_argument;
 mod test_c_style;
 mod test_cli_error_exit; // card cli-error-exit
 #[cfg(all(feature = "native", unix))] // runs the warp binary
@@ -22,6 +23,8 @@ mod test_error_positions;
 mod test_fixits;
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_footguns;
+mod test_format_cli; // card beautify-cli
+mod test_format_files_only; // cards fix-rewrote, fix-laid
 #[cfg(feature = "native")]
 // wasmtime's fuel: the browser runs without it, stopped by a timer (playground.js RUN_TIMEOUT_MS)
 mod test_fuel_default; // card fuel-default
@@ -41,6 +44,7 @@ mod test_let_const_changes;
 mod test_list_phrases;
 mod test_lone_words;
 mod test_lowered_error_text;
+mod test_map_broadcast_hint; // card hint-map
 mod test_open_range_slices; // card golf-open
 mod test_own_definition_hint; // card hint-own-definition
 mod test_parser_runtime_positions; // card runtime-parser

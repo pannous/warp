@@ -201,10 +201,33 @@ fn is_entry_operator(op: &Op) -> bool {
 
 fn insert_json_entry(map: &mut Map<String, Value>, entry: &Node) {
 	if let Key(key, _, value) = entry {
-		if let Symbol(key) | Text(key) = key.drop_meta() {
-			map.insert(key.clone(), value.to_json_value());
-		}
+		map.insert(json_key(key), value.to_json_value());
 	}
+}
+
+/// The JSON key of an entry: a name or text as itself, any other key as written (`{1: "a"}` is `{"1": "a"}`, the head
+/// of `f(x) := …` is "(f x)"), so no entry is lost
+pub fn json_key(key: &Node) -> String {
+	match key.drop_meta() {
+		Symbol(name) | Text(name) => name.clone(),
+		other => other.serialize().trim().to_string(),
+	}
+}
+
+/// The first part JSON cannot express (user 2026-10-15: never a silent loss): ∞, NaN, a complex number
+pub fn inexpressible_in_json(node: &Node) -> Option<Node> {
+	let mut found = None;
+	node.visit(&mut |part| {
+		let inexpressible = match part.drop_meta() {
+			Node::Number(Number::Float(x)) => !x.is_finite(),
+			Node::Number(Number::Nan | Number::Inf | Number::NegInf | Number::Complex(..)) => true,
+			_ => false,
+		};
+		if inexpressible && found.is_none() {
+			found = Some(part.clone());
+		}
+	});
+	found
 }
 
 fn json_object<const N: usize>(entries: [(&str, Value); N]) -> Value {

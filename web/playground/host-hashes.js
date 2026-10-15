@@ -66,6 +66,11 @@ const jsonPart = part => part[0] === '"' ? part
 const jsonOfJson5 = text => text.replace(JSON5_PARTS, jsonPart);
 // strict JSON by the built-in parser, the JSON5 rewrite only when that fails
 const jsonOrJson5 = text => { try { return JSON.parse(text); } catch { return JSON.parse(jsonOfJson5(text)); } };
+// a value JSON cannot express is an error, never a silent null (as src/modules/std_adapters.rs inexpressible_in_json)
+const finiteForJson = (key, value) => {
+	if (typeof value === "number" && !Number.isFinite(value)) throw new Error(`JSON has no ${value}: it cannot be written as JSON`);
+	return value;
+};
 
 addHostPart({
 	words: (holder, hooks, { program }) => ({
@@ -73,7 +78,7 @@ addHostPart({
 	}),
 	adapters: {
 		hash: { sha256: subject => sha256Hex(utf8.encode(contentText(subject))), crc32: subject => crc32Of(utf8.encode(contentText(subject))) },
-		json: { parse: jsonOrJson5, to_json: (value, classes) => JSON.stringify(classes ? withoutClassTags(value, new Set(classes)) : value) },
+		json: { parse: jsonOrJson5, to_json: (value, classes) => JSON.stringify(classes ? withoutClassTags(value, new Set(classes)) : value, finiteForJson) },
 		regex: {
 			matches: (subject, pattern) => regexOf(pattern).test(subject),
 			first: (subject, pattern) => subject.match(regexOf(pattern))?.[0] ?? null,

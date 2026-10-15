@@ -1,6 +1,7 @@
 mod test_as_prefixed_name;
 mod test_attributes;
 mod test_bare_operator_block;
+mod test_beautify_synonyms; // card warp-format-strict
 mod test_big_literals; // card big-literals
 mod test_braceless_range_argument; // card braceless-argument
 mod test_comment_hides_bracket;
@@ -28,6 +29,7 @@ mod test_newline_precedence;
 mod test_number_glyphs;
 mod test_one_line_statements;
 mod test_operator_word_keys; // card abs-fails
+mod test_parameter_scope; // card path-parameter-scope
 mod test_parse_long_sources;
 mod test_parser;
 mod test_parser_sugar;

@@ -123,3 +123,10 @@
 - Remove stale documentation of the parked forms and record the retained explicit equivalents.
 - Establish and rerun the focused phrase, list-phrase, and word-slice filters, then run formatting, clippy, and the
   wasm32 library check.
+
+# Ignored-parameter function cleanup
+
+- Reproduce a `def` function whose sole `_` parameter is discarded before changing production code.
+- Keep `_` as an argument-consuming wildcard without treating it as a named local.
+- Reuse the normal function-definition path so the rule also covers multiple ignored parameters and other bodies.
+- Run the focused definition-form test before and after, then formatting, clippy, and the wasm32 check.

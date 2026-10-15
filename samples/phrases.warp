@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
-// Phrases: a `to` definition reads like English, a class may be named by several words,
-// and `as` picks the definition by its result type
+# Phrases: a `to` definition reads like English, a class may be named by several words,
+# and `as` picks the definition by its result type
 
 class full name { given: text; family: text }
 
@@ -8,8 +8,8 @@ to greet a full name:
 	"hello " + full name.given + " " + full name.family
 
 ann = full name{given: "Ann", family: "Lee"}
-print type of ann          // full-name
-print greet ann            // hello Ann Lee
+print type of ann          # full-name
+print greet ann            # hello Ann Lee
 
 class pdf { body: text }
 class docx { body: text }
@@ -20,6 +20,6 @@ to render text as pdf:
 to render text as docx:
 	return docx("<w:t>" + text + "</w:t>")
 
-print ((render "hello") as pdf).body   // %PDF hello
+print ((render "hello") as pdf).body   # %PDF hello
 docx letter = render "hello MS"
-print letter.body                      // <w:t>hello MS</w:t>
+print letter.body                      # <w:t>hello MS</w:t>

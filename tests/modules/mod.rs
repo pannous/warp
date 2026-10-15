@@ -31,6 +31,7 @@ mod test_package_shadow; // card sample-local
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_package_tools;
 mod test_packages;
+mod test_replaced_module_function; // card use-sound-def
 mod test_std_aliases;
 mod test_std_args; // card std-args
 mod test_std_collections;

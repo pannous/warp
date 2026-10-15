@@ -7,7 +7,8 @@ use crate::host::page_parts::{page_layout, PageLayout};
 use crate::host::{
 	ANY_STD_MODULE, CLIPBOARD_TEXT, DRAW_SHAPE, DRAW_SHOW, FETCH_REPLY, FETCH_START, FOREIGN_CALL, GPU_COMPUTE,
 	GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER, HOST_LIBRARY, PAGE_PATH, PAINT, PARSE_CODE,
-	RUN_BLOCK, SIGNAL_SEND, SOUND, STD_IO, STD_MODULES_SECTION, STD_MODULES_SEPARATOR, STD_PURE, TEXT_COVERAGE,
+	RUN_BLOCK, SAVE_PICTURE, SIGNAL_SEND, SOUND, STD_IO, STD_MODULES_SECTION, STD_MODULES_SEPARATOR, STD_PURE,
+	TEXT_COVERAGE,
 };
 use crate::node::Node;
 use warp_runtime::host_words::{RANDOM, RANDOM_BELOW, RANDOM_SEED, SIGNAL_LISTEN};
@@ -117,7 +118,7 @@ pub const HOST_PARTS: [HostPart; 11] = [
 	// sound_samples is a word of host-sound.js, which reads its samples with host-media.js intsOfList
 	HostPart {
 		script: ("host-media.js", script_text!("host-media.js")),
-		gives: |module, name| module == HOST_LIBRARY && [PAINT, TEXT_COVERAGE, SOUND].contains(&name),
+		gives: |module, name| module == HOST_LIBRARY && [PAINT, SAVE_PICTURE, TEXT_COVERAGE, SOUND].contains(&name),
 		needs: &[],
 	},
 ];
@@ -244,7 +245,8 @@ pub fn deployable(code: &str) -> Result<Deployable, String> {
 /// Worker answering requests does not have
 fn uses_the_browser(module: &[u8]) -> Result<bool, String> {
 	let browser_word = |name: &str| {
-		[PAINT, DRAW_SHAPE, DRAW_SHOW, SOUND, TEXT_COVERAGE, CLIPBOARD_TEXT, SIGNAL_LISTEN].contains(&name)
+		[PAINT, SAVE_PICTURE, DRAW_SHAPE, DRAW_SHOW, SOUND, TEXT_COVERAGE, CLIPBOARD_TEXT, SIGNAL_LISTEN]
+			.contains(&name)
 			|| GPU_WORDS.contains(&name)
 	};
 	Ok(imports_of(module)?.iter().any(|(library, name)| library == HOST_LIBRARY && browser_word(name)))

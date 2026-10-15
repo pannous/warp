@@ -1,7 +1,7 @@
 #!/usr/bin/env warp
-// The cron table, read only (card read-chron): `warp samples/crontab.warp` shows it in a window (its value is an html page).
-// A job is its schedule (five fields, or one like @reboot) and the command after it; comments and settings (PATH=…) are no jobs.
-// The schedule reads as words (every 10 minutes, daily at 06:35), the log file the output goes to gets a column of its own.
+# The cron table, read only (card read-chron): `warp samples/crontab.warp` shows it in a window (its value is an html page).
+# A job is its schedule (five fields, or one like @reboot) and the command after it; comments and settings (PATH=…) are no jobs.
+# The schedule reads as words (every 10 minutes, daily at 06:35), the log file the output goes to gets a column of its own.
 fields(line) := split(line, " ")
 is_job(line) := line != "" and not line.starts_with("#") and not fields(line)#1.contains("=")
 schedule_size(job) := if job.starts_with("@") then 1 else 5
@@ -17,13 +17,13 @@ repeated(step, unit) := "every " + step + " " + unit
 listed(values) := join(values, ", ")
 weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 weekday(number) := if size(number) == 1 then weekdays#(int(number) + 1) else number
-// minute and hour: an `*/n` step, a list of values or `*`
+# minute and hour: an `*/n` step, a list of values or `*`
 time_of_day(minute, hour) := if minute.starts_with("*/") and hour == "*" then repeated(minute[2..], "minutes")
 else if minute == "*" and hour == "*" then "every minute"
 else if hour == "*" then "hourly at " + listed([":" + padded(m) for m in split(minute, ",")])
 else if hour.starts_with("*/") then repeated(hour[2..], "hours") + " at :" + padded(minute)
 else "daily at " + listed([padded(h) + ":" + padded(minute) for h in split(hour, ",")])
-// day of month, month and weekday narrow the days; `*` is any
+# day of month, month and weekday narrow the days; `*` is any
 narrowed(field, words) := if field == "*" then "" else words + field
 days(day, month, week) := (if week == "*" then "" else " on " + listed([weekday(w) for w in split(week, ",")])) + narrowed(day, " on day ") + narrowed(month, " in month ")
 when(job) := if job.starts_with("@reboot") then "at startup"

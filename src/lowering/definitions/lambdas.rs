@@ -281,20 +281,32 @@ fn is_boolean_body(body: &Node) -> bool {
 	}
 }
 
-/// `map f on: xs`: the list its label names comes first, the other arguments keep their order after it
+/// `map f on: xs`: the list its label names comes first, the other arguments keep their order after it; a function the
+/// program defines was applied to the label, `(square on): xs`, its words stay arguments
 fn labeled_list_first(mut arguments: Vec<Node>) -> Vec<Node> {
-	let labeled_list = |node: &Node| match node.drop_meta() {
-		Node::Key(label, Op::Colon, list) if label.symbol_name().is_some_and(|name| LIST_LABELS.contains(&name)) => {
-			Some(list.as_ref().clone())
-		}
-		_ => None,
-	};
 	match arguments.iter().position(|argument| labeled_list(argument).is_some()) {
 		Some(at) => {
-			let list = labeled_list(&arguments.remove(at)).expect("found");
+			let (list, words) = labeled_list(&arguments.remove(at)).expect("found");
+			arguments.splice(at..at, words);
 			[vec![list], arguments].concat()
 		}
 		None => arguments,
+	}
+}
+
+/// The list of the labeled argument `on: xs`, with the words a program's function took before the label,
+/// `(square on): xs` → xs, [square]
+pub(crate) fn labeled_list(argument: &Node) -> Option<(Node, Vec<Node>)> {
+	let is_label = |word: &Node| word.symbol_name().is_some_and(|name| LIST_LABELS.contains(&name));
+	let Node::Key(label, Op::Colon, list) = argument.drop_meta() else {
+		return None;
+	};
+	match label.drop_meta() {
+		Node::List(words, _, _) if words.last().is_some_and(is_label) => {
+			Some((list.as_ref().clone(), words[..words.len() - 1].to_vec()))
+		}
+		_ if is_label(label) => Some((list.as_ref().clone(), vec![])),
+		_ => None,
 	}
 }
 

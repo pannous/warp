@@ -1,7 +1,7 @@
 #!/usr/bin/env warp
-// A 3D model from a Wavefront .obj text, spun and shaded on the GPU. warp reads the model (`v x y z` corners, `f a b c …`
-// faces, a face of more corners split into triangles), the shader casts a ray through every pixel against the
-// triangles, the nearest one hit is lit by its normal. `$mesh` is the list of triangle corners, one vec4f each
+# A 3D model from a Wavefront .obj text, spun and shaded on the GPU. warp reads the model (`v x y z` corners, `f a b c …`
+# faces, a face of more corners split into triangles), the shader casts a ray through every pixel against the
+# triangles, the nearest one hit is lit by its normal. `$mesh` is the list of triangle corners, one vec4f each
 use graphics
 house = "# a house: walls, a gable roof, a chimney
 v -1 -1 -1
@@ -37,8 +37,8 @@ f 12 13 17 16
 f 14 11 15 18
 f 15 16 17 18"
 
-// the corners of every triangle, three by three: `v` lines are the points, `f` lines index them from 1 (`3/1/2`: the
-// point before the slash)
+# the corners of every triangle, three by three: `v` lines are the points, `f` lines index them from 1 (`3/1/2`: the
+# point before the slash)
 	def triangles(obj) {
 	points = []
 	corners = []

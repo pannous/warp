@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
-// gpu_compute over named arrays: each array of the map is bound where the shader declares the storage array of that
-// name, f32 or i32 as declared, and the map of the arrays it left comes back
+# gpu_compute over named arrays: each array of the map is bound where the shader declares the storage array of that
+# name, f32 or i32 as declared, and the map of the arrays it left comes back
 shader = "@group(0) @binding(0) var<storage, read_write> prices: array<f32>;
 @group(0) @binding(1) var<storage, read_write> counts: array<i32>;
 @group(0) @binding(2) var<storage, read_write> totals: array<f32>;

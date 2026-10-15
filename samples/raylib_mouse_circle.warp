@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
-// Raylib FFI Example - Draw persistent trace with mouse
-// Demonstrates using raylib graphics library via FFI with mouse drawing
+# Raylib FFI Example - Draw persistent trace with mouse
+# Demonstrates using raylib graphics library via FFI with mouse drawing
 
 import raylib
 

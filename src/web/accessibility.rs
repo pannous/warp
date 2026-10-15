@@ -9,7 +9,7 @@
 //! that the markup as written did not show are runtime warnings, each once a run.
 
 use crate::errors::diagnostic::Diagnostic;
-use crate::node::{Bracket, Node};
+use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::STYLE_WORD;
 use std::collections::HashSet;
@@ -491,6 +491,12 @@ fn collect<'a>(
 		items.into_iter().for_each(|item| collect(item, classes, inside_label, Some(tag), found));
 		return handler_bodies.into_iter().for_each(|body| collect(body, classes, inside_label, None, found));
 	}
+	if let Some(arguments) = function_call_arguments(node) {
+		return arguments
+			.iter()
+			.map(argument_value)
+			.for_each(|value| collect(value, classes, inside_label, parent, found));
+	}
 	match node.drop_meta() {
 		Node::List(items, _, _) => items.iter().for_each(|item| collect(item, classes, inside_label, parent, found)),
 		// the head of `add(a: i32) := …` holds parameters, the target of `a:V = …` a typed variable: not markup
@@ -510,6 +516,22 @@ fn collect<'a>(
 			collect(right, classes, inside_label, parent, found);
 		}
 		_ => {}
+	}
+}
+
+/// The arguments of `f(a: x, 2)`, a call of a function, no element: its labels are parameters (card labelled-a-argument)
+fn function_call_arguments(node: &Node) -> Option<&[Node]> {
+	let Node::List(_, _, separator) = node.drop_meta() else { return None };
+	let (head, arguments) = node.call_parts()?;
+	let is_statements = matches!(separator, Separator::Semicolon | Separator::Newline);
+	(!is_statements && !arguments.is_empty() && !crate::web::markup::is_element_tag(head)).then_some(arguments)
+}
+
+/// `a: x` passes x; `a{"home"}` (parsed alike, its content a block) stays the element passed
+fn argument_value(argument: &Node) -> &Node {
+	match argument.drop_meta() {
+		Node::Key(_, Op::Colon, value) if !matches!(value.drop_meta(), Node::List(_, Bracket::Curly, _)) => value,
+		_ => argument,
 	}
 }
 

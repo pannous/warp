@@ -79,6 +79,7 @@ impl WarpParser {
 		} else if let Some(operator) = self.try_parse_operator_value() {
 			operator
 		} else if let Some(parameters) = self.pipe_parameters() {
+			self.bind_parameters(&parameters, true);
 			let body = self.parse_expr(Op::FatArrow.binding_power().1);
 			Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body))
 		} else {
@@ -268,6 +269,7 @@ impl WarpParser {
 			let colon_defines = op == Op::Colon && heads_definition && !glued_pair && !self.result_type_follows();
 			if colon_defines {
 				self.register_defined_function(&lhs);
+				self.bind_parameters(&lhs, false);
 			}
 			let block_body = match op {
 				Op::Colon | Op::Define if self.only_blanks_before_newline() => {
@@ -290,6 +292,10 @@ impl WarpParser {
 			}
 			if op == Op::Define {
 				self.register_defined_function(&lhs);
+				self.bind_parameters(&lhs, false);
+			}
+			if matches!(op, Op::FatArrow | Op::Arrow) {
+				self.bind_parameters(&lhs, true);
 			}
 
 			// Parse right-hand side with appropriate binding power

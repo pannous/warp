@@ -47,6 +47,8 @@ PASSED:
   ✓ control::test_broadcast::a_broadcast_reaches_another_program
   ✓ control::test_broadcast::a_program_hears_its_own_broadcast
   ✓ control::test_broadcast::nobody_listening_is_no_error
+  ✓ control::test_call_result_reflection::a_field_of_a_call_reads_its_result
+  ✓ control::test_call_result_reflection::the_function_itself_keeps_its_name
   ✓ control::test_catch_binding::a_caught_error_reads_as_its_message_in_text
   ✓ control::test_catch_binding::a_raised_value_is_caught_as_its_text
   ✓ control::test_catch_binding::an_interpolation_reads_the_caught_error
@@ -314,6 +316,7 @@ PASSED:
   ✓ control::test_grouped_receivers::a_grouped_text_without_the_field_names_it
   ✓ control::test_handler_globals::a_handler_writes_an_annotated_global
   ✓ control::test_handler_globals::an_int_given_empty_fails_when_it_happens
+  ✓ control::test_held_key::held_key_compares_with_every_key_held
   ✓ control::test_held_key::held_key_compares_with_the_key_words
   ✓ control::test_held_key::held_key_names_the_key_held_now
   ✓ control::test_help_word::a_programs_own_help_wins
@@ -348,6 +351,9 @@ PASSED:
   ✓ control::test_job_lists::jobs_in_a_list_run_at_the_same_time
   ✓ control::test_job_lists::the_extremes_of_job_results_are_numbers
   ✓ control::test_key_down::key_down_is_a_system_value_and_no_without_a_key_held
+  ✓ control::test_key_name_case::a_single_character_keeps_its_case
+  ✓ control::test_key_name_case::key_words_and_texts_name_keys_in_any_case
+  ✓ control::test_key_name_case::other_comparisons_in_a_handler_stay_as_written
   ✓ control::test_key_names::a_bare_key_in_a_key_handler_is_the_pressed_key
   ✓ control::test_key_names::a_key_handler_comparing_with_an_unbound_word_warns
   ✓ control::test_key_names::a_programs_own_key_variable_stays_its_own
@@ -384,6 +390,11 @@ PASSED:
   ✓ control::test_loops_in_functions::a_multi_line_function_with_a_loop
   ✓ control::test_loops_in_functions::a_while_loop_in_a_function_keeps_its_parameter
   ✓ control::test_loops_in_functions::a_while_loop_in_a_function_keeps_its_variables
+  ✓ control::test_lowercase_key_names::a_bound_or_unrelated_lowercase_word_is_no_key
+  ✓ control::test_lowercase_key_names::a_key_word_bound_elsewhere_says_to_write_it_in_capitals
+  ✓ control::test_lowercase_key_names::a_lowercase_key_word_elsewhere_keeps_its_meaning
+  ✓ control::test_lowercase_key_names::held_key_compares_with_lowercase_key_words
+  ✓ control::test_lowercase_key_names::lowercase_key_words_name_keys
   ✓ control::test_many_tasks::hundreds_of_tasks_run_at_once
   ✓ control::test_map_loop_words::the_words_after_a_map_are_the_body
   ✓ control::test_match_alternatives_hint::arm_alternatives_get_no_hint
@@ -1187,6 +1198,8 @@ PASSED:
   ✓ functions::test_argument_labels::a_label_names_the_argument_and_the_name_is_read_inside
   ✓ functions::test_argument_labels::a_labeled_parameter_of_a_function_type
   ✓ functions::test_argument_labels::an_underscore_label_takes_the_argument_without_a_name
+  ✓ functions::test_arity_and_type_overloads::a_method_added_to_a_module_word_of_several_arities_keeps_them_all
+  ✓ functions::test_arity_and_type_overloads::a_type_overload_beside_several_arities_keeps_them_all
   ✓ functions::test_arity_overloads::a_call_takes_the_definition_of_its_argument_count
   ✓ functions::test_arity_overloads::a_count_no_definition_fits_or_two_fit_is_an_error
   ✓ functions::test_arity_overloads::an_overload_may_call_another_one
@@ -1202,6 +1215,14 @@ PASSED:
   ✓ functions::test_bare_function_name::test_bare_name_of_function_with_parameter_is_an_error
   ✓ functions::test_bare_function_name::test_bare_name_of_function_without_parameters_calls_it
   ✓ functions::test_bare_function_name::test_bare_name_of_typed_function_is_an_error
+  ✓ functions::test_bare_host_words::a_program_naming_random_keeps_its_own
+  ✓ functions::test_bare_host_words::random_alone_or_printed_is_a_number
+  ✓ functions::test_bare_host_words::random_between_two_numbers
+  ✓ functions::test_bare_host_words::random_into_a_declared_type
+  ✓ functions::test_bare_host_words::random_is_called_where_its_value_is_used
+  ✓ functions::test_bare_host_words::random_of_a_range
+  ✓ functions::test_bare_host_words::random_of_a_type
+  ✓ functions::test_bare_host_words::the_random_prelude_words
   ✓ functions::test_block_function::a_block_using_it_is_a_function
   ✓ functions::test_block_function::data_blocks_stay_data
   ✓ functions::test_body_statement::a_one_call_body_block_runs_the_call
@@ -1452,6 +1473,9 @@ PASSED:
   ✓ functions::test_global_with_closures::global_in_a_program_with_a_lambda
   ✓ functions::test_go_functions::a_go_short_declaration_that_is_assigned_stays_an_error
   ✓ functions::test_go_functions::several_results
+  ✓ functions::test_ignored_parameters::a_placeholder_in_a_call_stays_a_partial_application
+  ✓ functions::test_ignored_parameters::an_ignored_parameter_without_a_keyword
+  ✓ functions::test_ignored_parameters::ignored_parameters_still_consume_arguments
   ✓ functions::test_inlining::a_helper_with_free_variables_or_recursion_is_called
   ✓ functions::test_inlining::an_inlined_helper_leaves_its_argument_unchanged
   ✓ functions::test_inlining::an_inlined_helper_updates_the_list_handed_back
@@ -2274,6 +2298,7 @@ PASSED:
   ✓ modules::test_netbase_package::a_query_is_a_url_path
   ✓ modules::test_netbase_package::without_a_server_the_failure_names_it
   ✓ modules::test_node_json::a_field_named_json_wins
+  ✓ modules::test_node_json::json_loses_nothing_silently
   ✓ modules::test_node_json::json_of_a_value_is_its_json_text
   ✓ modules::test_node_json::json_of_code_keeps_its_operations
   ✓ modules::test_node_json::the_browser_spells_each_operator_code_alike
@@ -2298,6 +2323,8 @@ PASSED:
   ✓ modules::test_packages::module_directory_is_where_the_module_lives
   ✓ modules::test_packages::the_registry_names_repositories
   ✓ modules::test_packages::use_loads_the_module_of_a_package
+  ✓ modules::test_replaced_module_function::a_function_adding_to_a_module_word_or_a_variable_does_not_warn
+  ✓ modules::test_replaced_module_function::a_program_function_replacing_a_module_function_warns
   ✓ modules::test_std_aliases::a_foreign_name_says_the_warp_word
   ✓ modules::test_std_aliases::a_program_naming_the_module_keeps_it
   ✓ modules::test_std_aliases::foreign_standard_names_are_warp_words
@@ -2803,6 +2830,8 @@ PASSED:
   ✓ numbers::test_number::test_number
   ✓ numbers::test_number::test_number_floats
   ✓ numbers::test_number::test_number_mix
+  ✓ numbers::test_pixel_unit::pixels_are_their_own_dimension
+  ✓ numbers::test_pixel_unit::pixels_turn_into_lengths_through_the_displays_dpi
   ✓ numbers::test_plus_minus_gaussian::a_gaussian_reads_back_as_it_is_written
   ✓ numbers::test_plus_minus_gaussian::a_math_word_scales_the_deviation_by_its_slope
   ✓ numbers::test_plus_minus_gaussian::a_number_scales_the_deviation
@@ -2963,9 +2992,13 @@ PASSED:
   ✓ numbers::test_unit_conversion::an_inexact_conversion_is_a_ratio
   ✓ numbers::test_unit_conversion::another_dimension_is_the_dimension_error
   ✓ numbers::test_unit_conversion::long_unit_names_name_the_target
+  ✓ numbers::test_unit_definitions::a_program_adds_units_by_unit_lines
+  ✓ numbers::test_unit_definitions::a_program_name_wins_over_a_unit_word
+  ✓ numbers::test_unit_definitions::a_unit_line_names_its_target_by_as
   ✓ numbers::test_unit_definitions::dimension_names_come_from_the_definitions
   ✓ numbers::test_unit_definitions::each_unit_is_the_amount_its_definition_says
   ✓ numbers::test_unit_definitions::run_time_quantities_know_the_units_of_the_definitions
+  ✓ numbers::test_unit_definitions::units_come_from_unit_lines
   ✓ numbers::test_unit_field_display::a_field_read_shows_the_declared_unit
   ✓ numbers::test_unit_field_display::a_list_mapped_from_a_unit_field_keeps_the_unit
   ✓ numbers::test_unit_field_display::a_one_line_loop_body_prints_the_unit
@@ -3226,6 +3259,8 @@ PASSED:
   ✓ parser::test_attributes::attributes_serialize_in_front_and_valueless_ones_stay_bare
   ✓ parser::test_bare_operator_block::a_bare_operator_block_names_the_fix
   ✓ parser::test_bare_operator_block::operators_with_operands_in_blocks_still_work
+  ✓ parser::test_beautify_synonyms::test_foreign_words_become_the_warp_words
+  ✓ parser::test_beautify_synonyms::test_format_keeps_the_words
   ✓ parser::test_big_literals::a_100_kb_literal_compiles_in_linear_time
   ✓ parser::test_braceless_range_argument::a_braceless_argument_takes_a_range
   ✓ parser::test_braceless_range_argument::a_comparison_still_ends_the_argument
@@ -3340,6 +3375,8 @@ PASSED:
   ✓ parser::test_one_line_statements::two_prints_on_one_line_need_a_separator
   ✓ parser::test_operator_word_keys::a_prefix_operator_word_names_a_key
   ✓ parser::test_operator_word_keys::the_prefix_operator_word_stays_an_operator
+  ✓ parser::test_parameter_scope::a_definitions_parameter_scope_ends_with_it
+  ✓ parser::test_parameter_scope::a_parameter_divides_only_inside_its_definition
   ✓ parser::test_parse_long_sources::a_long_source_parses_in_linear_time
   ✓ parser::test_parser_sugar::backslash_at_line_end_continues_the_statement
   ✓ parser::test_parser_sugar::block_comment_with_hash_is_ignored
@@ -3625,6 +3662,8 @@ PASSED:
   ✓ programs::test_samples::test_sudoku
   ✓ programs::test_samples::test_sum
   ✓ programs::test_samples::test_y_combinator
+  ✓ programs::test_save_painting::save_writes_the_canvas_as_a_png
+  ✓ programs::test_save_painting::save_writes_the_gpu_canvas_as_a_png
   ✓ programs::test_shader_blocks::a_shader_block_is_its_wgsl_text
   ✓ programs::test_shader_blocks::a_shader_block_over_lines_loses_its_indentation
   ✓ programs::test_shader_blocks::paint_takes_a_shader_block
@@ -3789,6 +3828,9 @@ PASSED:
   ✓ programs::test_warp_command::debug_build_names_its_commit
   ✓ programs::test_warp_command::version_names_the_branch
   ✓ programs::test_warp_command::warp_command_runs_this_checkouts_binary
+  ✓ programs::test_window_closed_by_user::a_program_naming_escape_keeps_it
+  ✓ programs::test_window_closed_by_user::a_viewer_ending_without_it_leaves_the_run_alone
+  ✓ programs::test_window_closed_by_user::the_closed_line_ends_the_run
   ✓ programs::test_window_size::a_bare_width_is_the_canvas_width
   ✓ programs::test_window_size::a_width_of_the_program_keeps_its_meaning
   ✓ programs::test_window_size::canvas_size_is_a_property
@@ -4015,6 +4057,7 @@ PASSED:
   ✓ text::test_selector_prepositions::a_selector_in_a_value
   ✓ text::test_selector_prepositions::characters_is_the_word_chars
   ✓ text::test_selector_prepositions::in_stays_membership_elsewhere
+  ✓ text::test_selector_prepositions::letters_are_the_alphabetic_characters
   ✓ text::test_selector_prepositions::printing_a_selection_prints_each_part
   ✓ text::test_selector_prepositions::selectors_chain_to_the_right
   ✓ text::test_sort_of_a_call::a_library_word_chain_binds_tighter_than_a_comparison
@@ -4537,6 +4580,11 @@ PASSED:
   ✓ types::test_plain_enum::other_languages_enums_are_plain_enums_too
   ✓ types::test_printable::as_text_str_and_text_call_the_printable_operation
   ✓ types::test_printable::print_and_interpolation_call_the_printable_operation
+  ✓ types::test_program_conversions::a_program_converts_into_its_class
+  ✓ types::test_program_conversions::a_program_converts_its_class_to_text
+  ✓ types::test_program_conversions::a_type_has_no_conversion_to_itself
+  ✓ types::test_program_conversions::an_alias_is_no_conversion
+  ✓ types::test_program_conversions::other_values_convert_the_built_in_way
   ✓ types::test_real_references::a_function_changes_the_instance_it_is_given
   ✓ types::test_real_references::a_list_item_is_the_instance_itself
   ✓ types::test_real_references::a_map_built_by_its_entries_shares
@@ -4751,6 +4799,9 @@ PASSED:
   ✓ types::test_type_of::test_type_symbol
   ✓ types::test_type_of::test_type_typed_variable
   ✓ types::test_type_of::test_type_without_parentheses
+  ✓ types::test_type_parameters::a_type_parameter_takes_a_bare_type_word
+  ✓ types::test_type_parameters::a_type_parameter_takes_a_class
+  ✓ types::test_type_parameters::a_value_for_a_type_parameter_is_an_error
   ✓ types::test_type_static::the_type_of_a_variable_is_its_value_type
   ✓ types::test_type_test_is_only::equals_with_a_type_word_does_not_type_test
   ✓ types::test_type_test_is_only::equals_with_a_type_word_educates_toward_is
@@ -5177,6 +5228,8 @@ PASSED:
   ✓ web::test_keyed_lists::a_key_on_its_own_line_names_the_element
   ✓ web::test_keyed_lists::a_list_inside_an_element_gives_its_children
   ✓ web::test_keyword_registry::keywords_of_passes_are_highlighted
+  ✓ web::test_labelled_argument_markup::a_labelled_argument_named_like_a_tag_is_no_element
+  ✓ web::test_labelled_argument_markup::markup_passed_as_an_argument_is_still_checked
   ✓ web::test_live_handover::a_deleted_loop_fades_out_as_soon_as_the_rerun_names_its_loops
   ✓ web::test_live_handover::a_handed_over_loop_starts_on_the_old_runs_grid
   ✓ web::test_live_handover::a_kept_loop_with_a_long_period_is_not_faded
@@ -5420,6 +5473,10 @@ PASSED:
   ✓ welcoming::test_and_or_got_it::the_and_or_warning_stays_away_once_acknowledged
   ✓ welcoming::test_braceless_call_argument::a_plain_braceless_argument_does_not_warn
   ✓ welcoming::test_braceless_call_argument::an_operator_in_a_braceless_argument_warns_with_both_readings
+  ✓ welcoming::test_braceless_word_argument::a_call_without_a_value_does_not_warn
+  ✓ welcoming::test_braceless_word_argument::every_braceless_call_taking_arithmetic_warns
+  ✓ welcoming::test_braceless_word_argument::the_reading_stays_the_whole_expression
+  ✓ welcoming::test_braceless_word_argument::unambiguous_forms_do_not_warn
   ✓ welcoming::test_c_style::test_c_style_definition
   ✓ welcoming::test_c_style::test_if_assigning_a_float
   ✓ welcoming::test_c_style::test_if_parenthesized_condition_then_statement
@@ -5622,6 +5679,15 @@ PASSED:
   ✓ welcoming::test_footguns::test_while_loop_may_diverge
   ✓ welcoming::test_footguns::test_zero_string_is_truthy
   ✓ welcoming::test_footguns::test_zoned_time_records_its_rules_version
+  ✓ welcoming::test_format_cli::an_unknown_command_before_a_file_is_no_expression
+  ✓ welcoming::test_format_cli::beautify_formats_and_rewrites_slash_comments
+  ✓ welcoming::test_format_cli::beautify_without_yes_shows_the_diff_and_applies_nothing_when_scripted
+  ✓ welcoming::test_format_cli::fix_is_beautify
+  ✓ welcoming::test_format_cli::format_help_prints_its_usage
+  ✓ welcoming::test_format_cli::format_leaving_its_hint_names_the_command_and_says_no_formatted
+  ✓ welcoming::test_format_cli::lint_of_inline_code_prints_hints_and_the_formatted_code
+  ✓ welcoming::test_format_files_only::a_glob_of_a_folder_formats_only_its_warp_files_outside_golf
+  ✓ welcoming::test_format_files_only::wasp_files_and_warp_scripts_are_formatted_too
   ✓ welcoming::test_fuel_default::runaway_names_the_fuel_variable
   ✓ welcoming::test_fuel_default::ten_million_float_fills_fit_the_default_fuel
   ✓ welcoming::test_function_bindings::a_const_in_one_function_leaves_another_alone
@@ -5673,6 +5739,13 @@ PASSED:
   ✓ welcoming::test_lone_words::test_a_word_close_to_a_name_warns
   ✓ welcoming::test_lone_words::test_data_is_the_data_prefix
   ✓ welcoming::test_lowered_error_text::an_unknown_word_error_quotes_the_words_as_written
+  ✓ welcoming::test_map_broadcast_hint::a_function_taking_the_list_whole_is_not_hinted
+  ✓ welcoming::test_map_broadcast_hint::a_function_that_does_not_broadcast_is_not_hinted
+  ✓ welcoming::test_map_broadcast_hint::a_lambda_or_a_program_s_own_map_is_not_hinted
+  ✓ welcoming::test_map_broadcast_hint::a_mapped_function_still_maps
+  ✓ welcoming::test_map_broadcast_hint::the_call_form_is_hinted
+  ✓ welcoming::test_map_broadcast_hint::the_method_form_is_hinted
+  ✓ welcoming::test_map_broadcast_hint::the_phrase_forms_are_hinted
   ✓ welcoming::test_open_range_slices::a_slice_from_the_start
   ✓ welcoming::test_open_range_slices::a_slice_to_the_end
   ✓ welcoming::test_own_definition_hint::the_program_s_own_parse_json_gets_no_note
@@ -5831,4 +5904,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5826 passed, 0 failed, 5826 total tested
+13 ignored, 5899 passed, 0 failed, 5899 total tested

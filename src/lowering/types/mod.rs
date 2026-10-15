@@ -5,6 +5,7 @@
 use super::*;
 
 pub mod class_methods;
+pub mod conversions;
 pub mod inline_unions;
 pub mod named_patterns;
 pub mod object_groups;
@@ -16,4 +17,5 @@ pub mod tuples;
 pub mod type_aliases;
 pub mod type_constructor;
 pub mod type_name_matching;
+pub mod type_parameters;
 pub mod type_tests;

@@ -67,55 +67,46 @@ pub(super) fn scan_declared_types(source: &str) -> std::collections::HashSet<Str
 }
 
 /// The functions a source defines, wherever: `f(x) := …`, `f x := …`, `def f(x) {…}`, a variable holding one
-/// (`f = x => x`, `f = function …`); and the parameter names of those definitions. ` /name` after such a function is a
-/// path, also before its definition; after a name some definition binds as a parameter it divides (card name-after)
-pub(super) fn scan_functions_and_parameters(
-	source: &str,
-) -> (std::collections::HashSet<String>, std::collections::HashSet<String>) {
-	let definitions: Vec<(String, Vec<String>)> =
-		code_only(source).split(['\n', ';']).filter_map(definition_in).collect();
-	let parameters = definitions.iter().flat_map(|(_, parameters)| parameters.iter().cloned()).collect();
-	(definitions.into_iter().map(|(name, _)| name).collect(), parameters)
+/// (`f = x => x`, `f = function …`). ` /name` after such a function is a path, also before its definition (card
+/// name-after); inside a definition taking a parameter of that name it divides (WarpParser::parameters_in_scope)
+pub(super) fn scan_function_names(source: &str) -> std::collections::HashSet<String> {
+	code_only(source).split(['\n', ';']).filter_map(definition_in).collect()
 }
 
 fn leading_name(text: &str) -> String {
 	text.trim_start().chars().take_while(|ch| is_identifier_char(*ch)).collect()
 }
 
-/// The names a parameter list binds: `(a, b:int)`, `a b`, `x`
-fn parameter_names(list: &str) -> Vec<String> {
+/// The names a parameter list binds: `a, b: int`, `a b`, `x`
+pub(super) fn parameter_names(list: &str) -> Vec<String> {
 	list.split([',', '(', ')', ' ', '\t']).map(leading_name).filter(|name| is_plain_name(name)).collect()
 }
 
-/// A function's name and parameters, when `statement` defines one
-fn definition_in(statement: &str) -> Option<(String, Vec<String>)> {
+/// The name of the function `statement` defines: `def f(x)`, `f(x) := …`, `f = x => …`
+fn definition_in(statement: &str) -> Option<String> {
 	let statement = statement.trim();
 	let first = statement.split_whitespace().next()?;
-	let (name, parameters) = if crate::operators::is_function_keyword(first) {
-		let rest = statement[first.len()..].trim_start();
-		let name = leading_name(rest);
-		let head = rest[name.len()..].split(['{', '=']).next().unwrap_or_default();
-		(name, parameter_names(head.split(':').next().unwrap_or_default()))
+	let name = if crate::operators::is_function_keyword(first) {
+		leading_name(&statement[first.len()..])
 	} else if let Some((head, _)) = statement.split_once(":=") {
-		let name = leading_name(head);
-		(name.clone(), parameter_names(&head.trim_start()[name.len()..]))
+		leading_name(head)
 	} else {
 		let (head, value) = statement.split_once('=')?;
-		let name = head.trim().to_string();
-		(name, lambda_parameters(value.trim_start())?)
+		starts_as_function(value.trim_start()).then(|| head.trim().to_string())?
 	};
-	is_plain_name(&name).then_some((name, parameters))
+	is_plain_name(&name).then_some(name)
 }
 
-/// The parameters of a value that starts as a function: `x => …`, `(a, b) -> …`, `function (a) {…}`
-fn lambda_parameters(value: &str) -> Option<Vec<String>> {
-	let first = value.split_whitespace().next()?;
+/// A value that starts as a function: `x => …`, `(a, b) -> …`, `function (a) {…}`
+fn starts_as_function(value: &str) -> bool {
+	let Some(first) = value.split_whitespace().next() else { return false };
 	if crate::operators::is_function_keyword(first) {
-		return Some(parameter_names(value[first.len()..].split(['{', '=']).next().unwrap_or_default()));
+		return true;
 	}
-	let head_end = if value.starts_with('(') { value.find(')')? + 1 } else { leading_name(value).len() };
+	let head_end =
+		if value.starts_with('(') { value.find(')').map_or(0, |end| end + 1) } else { leading_name(value).len() };
 	let arrow = value[head_end..].trim_start();
-	(head_end > 0 && (arrow.starts_with("=>") || arrow.starts_with("->"))).then(|| parameter_names(&value[..head_end]))
+	head_end > 0 && (arrow.starts_with("=>") || arrow.starts_with("->"))
 }
 
 /// Words that stand between a type's name and its body, never part of the name: `class Dog extends Animal {`

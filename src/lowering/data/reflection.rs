@@ -40,7 +40,7 @@ const BODY_WORD: &str = "body";
 /// `f.dump`: the whole definition as warp text, to copy and paste (card reflection-area)
 const DUMP_WORD: &str = "dump";
 /// The words whose bare argument naming a function without parameters is its call: `print now`, `type now`
-const CALLING_WORDS: [&str; 2] = ["print", crate::type_tests::TYPE_WORD];
+pub(crate) const CALLING_WORDS: [&str; 2] = ["print", crate::type_tests::TYPE_WORD];
 /// `f.name`, `f.return_type`: a function object's name and the kind of its result (card module-methods)
 const NAME_WORD: &str = "name";
 const RETURN_TYPE_WORD: &str = "return_type";
@@ -265,7 +265,13 @@ fn function_named(subject: &Node) -> Option<&str> {
 		return Some(name);
 	}
 	match subject.drop_meta() {
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => function_named(&items[0]),
+		// `(function f)`; `(f)` is the call `f()`, whose result answers (card name-function)
+		Node::List(items, Bracket::Round, _)
+			if items.len() == 1
+				&& (items[0].symbol_name().is_none() || crate::closures::referenced_function(&items[0]).is_some()) =>
+		{
+			function_named(&items[0])
+		}
 		Node::List(items, Bracket::Round | Bracket::None, _) => match items.as_slice() {
 			[word, name] if word.symbol_name() == Some(FUNCTION_WORD) => name.symbol_name(),
 			_ => None,

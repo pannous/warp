@@ -104,6 +104,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::broadcasting::lower_element_wise_operators,
 	// a shader's `$name` holes (shader_holes.rs) as `name: name` in the values map of each paint of it
 	crate::graphics::shader_holes::lower,
+	// `Person as text := it.name` and `p as text` (conversions.rs) before any pass reads `as` as a cast
+	crate::lowering::conversions::lower,
 	crate::lowering::inline_unions::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::lowering::scoped_handlers::lower,
@@ -203,6 +205,8 @@ const DECLARATION_PASSES: &[Pass] = &[
 	crate::modules::insert_module_classes,
 	// `type Name = string` resolved in `name: Name` before class_methods reads the fields
 	crate::lowering::type_aliases::lower,
+	// `f(t: type)` takes the type value itself (type_parameters.rs), before class_methods reads typed parameters
+	crate::lowering::type_parameters::lower,
 	// `f(s:Shape)` of a trait takes any conforming instance: untyped before class_methods reads typed parameters
 	crate::lowering::traits::lower_trait_parameters,
 	// `stored people: [Person]`: the table's rows, inserts and field changes written through
@@ -235,6 +239,8 @@ const DECLARATION_PASSES: &[Pass] = &[
 	crate::lowering::one_entry_maps::lower,
 	// the used modules join the program before the signal passes: a listener of the program sees the writes of their functions
 	// note names (`play F#4`) while the program is its own, before the sound module joins it
+	// `save sound as "song.wav"`, `save canvas as "painting.png"`: what the word names, before music_words reads the sound
+	crate::lowering::saved_words::lower,
 	crate::lowering::music_words::lower,
 	crate::lowering::routes::lower,
 	crate::lowering::page_html::use_markup,
@@ -242,6 +248,8 @@ const DECLARATION_PASSES: &[Pass] = &[
 
 /// The used modules join the program (modules::resolve), then the passes that read their words again
 const MODULE_PASSES: &[Pass] = &[
+	// `random(1, 6)`, `random int`: the prelude words they call, which resolve then loads, and only those
+	crate::host::lower_random_forms,
 	crate::modules::resolve,
 	// `fourty_two.exports`, `dir(fourty_two)` of an imported core module, once resolve found its file (reflection.rs)
 	crate::lowering::reflection::lower_module_words,

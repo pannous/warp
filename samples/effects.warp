@@ -1,17 +1,17 @@
 #!/usr/bin/env warp
-// Effect handlers: a function asks with `emit`, the program answers with `on …` (notes/effect_handlers.md)
+# Effect handlers: a function asks with `emit`, the program answers with `on …` (notes/effect_handlers.md)
 
-// price asks for the tax rate instead of knowing it
+# price asks for the tax rate instead of knowing it
 price(net) := net * (1 + emit tax_rate)
 
-// `on tax_rate { 0.2 }` answers every `emit tax_rate` with 0.2: the handler's value is what emit gives, price goes on
+# `on tax_rate { 0.2 }` answers every `emit tax_rate` with 0.2: the handler's value is what emit gives, price goes on
 on tax_rate { 0.2 }
 print "price: \(price(100))"
 
-// the answer reaches through nested calls
+# the answer reaches through nested calls
 basket(a, b) := price(a) + price(b)
 print "basket: \(basket(10, 20))"
 
-// the compiler knows what a function asks for
+# the compiler knows what a function asks for
 total(net) := net * 2 ! Pure
 print "price asks for \(price.effects), total for \(effects of total)"

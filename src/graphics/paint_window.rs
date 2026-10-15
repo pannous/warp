@@ -52,11 +52,16 @@ struct Corner { @builtin(position) at: vec4f, @location(0) uv: vec2f }
 }";
 const TRIANGLE_CORNERS: u32 = 3;
 /// The line the viewer writes to its stdout on the pointer and the keys, and with its first frame (the pointer in its
-/// middle then): `input x y down key`, the pointer in the frame's pixels, down 1 while a button is, key as
-/// shader_holes.rs BUILTIN_HOLES says
+/// middle then): `input x y down key held…`, the pointer in the frame's pixels, down 1 while a button is, key as
+/// shader_holes.rs BUILTIN_HOLES says, then the code of every key held, in the order they went down (card allow-diagonals)
 const INPUT_LINE: &str = "input";
 /// The line the viewer writes as its window opens or resizes: `size width height`, in points
 const SIZE_LINE: &str = "size";
+/// The line the viewer writes as the user ends it (closing the window, Cmd-Q): the run ends with it (card
+/// escape-window), its sounds stopped; so does Escape, unless the program names that key (system_values escape_kept)
+const CLOSED_LINE: &str = "closed";
+/// Escape's code, as key_code gives it
+const ESCAPE_CODE: f32 = 27.0;
 /// The arrows' codes, as a Mac's function keys: up, down, left, right
 const ARROW_CODES: [u32; 4] = [0xF700, 0xF701, 0xF702, 0xF703];
 /// NSTrackingArea's options: mouse moves, whether the window is key or not, over the whole view as it resizes
@@ -65,20 +70,38 @@ const TRACKING_MOUSE_MOVED: usize = 0x02;
 pub const TRACKING_ACTIVE_ALWAYS: usize = 0x80;
 const TRACKING_IN_VISIBLE_RECT: usize = 0x200;
 
-/// The viewer's input lines, read until it ends
-fn follow_input(lines: impl BufRead) {
+/// The viewer's input lines, read until it ends; whether the user ended it
+pub fn follow_input(lines: impl BufRead) -> bool {
 	for line in lines.lines().map_while(Result::ok) {
 		let mut words = line.split_whitespace();
 		let kind = words.next();
 		let numbers: Vec<f32> = words.map_while(|word| word.parse().ok()).collect();
 		match (kind, numbers.as_slice()) {
-			(Some(INPUT_LINE), &[x, y, down, key]) => warp_runtime::system_values::tell_window_input([x, y, down, key]),
+			(Some(INPUT_LINE), &[_, _, _, key, ..])
+				if key == ESCAPE_CODE && !warp_runtime::system_values::escape_kept() =>
+			{
+				return true
+			}
+			(Some(INPUT_LINE), &[x, y, down, key, ref held @ ..]) => {
+				let held: Vec<i64> = held.iter().map(|code| *code as i64).collect();
+				warp_runtime::system_values::tell_keys_held(&held);
+				warp_runtime::system_values::tell_window_input([x, y, down, key]);
+			}
 			(Some(SIZE_LINE), &[width, height]) => {
 				warp_runtime::system_values::tell_window_size(width as i64, height as i64)
 			}
+			(Some(CLOSED_LINE), []) => return true,
 			_ => {}
 		}
 	}
+	false
+}
+
+/// The user ended the window: so ends the run, its sounds stopped, else the process's end would wait for them
+fn end_the_run() -> ! {
+	crate::sound::stop();
+	let _ = std::io::stdout().flush();
+	std::process::exit(0)
 }
 
 /// The code of a pressed key: its character's, an arrow's ARROW_CODES, Enter, Escape, Backspace and Tab their control
@@ -281,7 +304,9 @@ pub fn show(frame: &[u8]) -> Result<(), String> {
 		let mut child = command.spawn().map_err(|failure| format!("paint: cannot start the viewer: {failure}"))?;
 		if let Some(output) = child.stdout.take() {
 			std::thread::spawn(move || {
-				follow_input(std::io::BufReader::new(output));
+				if follow_input(std::io::BufReader::new(output)) {
+					end_the_run();
+				}
 				warp_runtime::system_values::tell_window_open(false); // its output ends as it closes
 			});
 		}
@@ -367,7 +392,8 @@ struct Screen {
 	frame_size: (u32, u32),
 	pointer: (f64, f64),
 	button_down: bool,
-	key: u32,
+	/// the keys held, in the order they went down: the last is the key held (`held_key`)
+	held: Vec<u32>,
 	/// The size in points the program set (window.width = …): frames of another size no longer resize the window
 	asked: Option<(u32, u32)>,
 }
@@ -393,6 +419,14 @@ impl Viewer {
 }
 
 impl ApplicationHandler<Message> for Viewer {
+	/// The user ended the window (closing it, Cmd-Q): its program ends too. A program that ends first ends the
+	/// viewer through its stdin (run), a check ends by itself, and a failure is told as one
+	fn exiting(&mut self, _: &ActiveEventLoop) {
+		if !self.check && self.failure.is_none() {
+			let _ = writeln!(std::io::stdout(), "{CLOSED_LINE}"); // a program gone meanwhile reads nothing
+		}
+	}
+
 	fn resumed(&mut self, event_loop: &ActiveEventLoop) {
 		self.resumed = true;
 		self.open_for_waiting(event_loop);
@@ -433,9 +467,17 @@ impl ApplicationHandler<Message> for Viewer {
 			}
 			WindowEvent::KeyboardInput { event, .. } => {
 				if let Some(code) = key_code(&event.logical_key) {
-					screen.key = if event.state.is_pressed() { code } else { 0 };
+					screen.held.retain(|held| *held != code);
+					if event.state.is_pressed() {
+						screen.held.push(code);
+					}
 					screen.tell_input();
 				}
+			}
+			// a key let go in another window never tells its release here
+			WindowEvent::Focused(false) if !screen.held.is_empty() => {
+				screen.held.clear();
+				screen.tell_input();
 			}
 			WindowEvent::RedrawRequested => {
 				if let Some(shader) = screen.newest_shader.take() {
@@ -578,7 +620,7 @@ impl Screen {
 			frame_size: (0, 0),
 			pointer: (0.0, 0.0),
 			button_down: false,
-			key: 0,
+			held: vec![],
 			asked,
 		};
 		screen.tell_size();
@@ -672,17 +714,23 @@ impl Screen {
 			writeln!(output, "{SIZE_LINE} {} {}", size.width.round(), size.height.round()).and_then(|_| output.flush());
 	}
 
+	/// The key held now: the last to go down of those held, 0 for none
+	fn key(&self) -> u32 {
+		self.held.last().copied().unwrap_or(0)
+	}
+
 	/// The input as the program's side takes it (follow_input)
 	fn tell_input(&self) {
 		// the window outlives the program by design: once that exits, its end of the pipe is closed and nobody listens
 		let mut output = std::io::stdout().lock();
+		let held: String = self.held.iter().map(|code| format!(" {code}")).collect();
 		let _ = writeln!(
 			output,
-			"{INPUT_LINE} {} {} {} {}",
+			"{INPUT_LINE} {} {} {} {}{held}",
 			self.pointer.0,
 			self.pointer.1,
 			u8::from(self.button_down),
-			self.key
+			self.key()
 		)
 		.and_then(|_| output.flush());
 	}

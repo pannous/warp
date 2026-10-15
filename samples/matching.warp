@@ -1,7 +1,7 @@
 #!/usr/bin/env warp
-// Matching: a case key describes the value it takes, from plain values to the shape of the data
+# Matching: a case key describes the value it takes, from plain values to the shape of the data
 
-// Values, alternatives and ranges
+# Values, alternatives and ranges
 age_group(age) := match age {
 	0 to 12 => "child"
 	13 to 19 => "teen"
@@ -13,33 +13,33 @@ print age_group(15)
 weekend(day) := match day { Saturday | Sunday => yes; other => no }
 print weekend(Sunday)
 
-// Types: a type word tests, name: type also names
+# Types: a type word tests, name: type also names
 describe(v) := match v { i: int => i + 1; t: text => t + "!"; _ => "something else" }
 print describe(41)
 print describe("hi")
 
-// Lists and tuples by shape, the rest with ...
+# Lists and tuples by shape, the rest with ...
 total(xs) := match xs { [] => 0; [first, ...rest] => first + total(rest) }
 print total([1, 2, 3])
 print match (1, 2) { (1, t) => t; _ => 0 }
 
-// Maps: name only the fields you need, at any depth
+# Maps: name only the fields you need, at any depth
 response = {status: 200, data: {user: {name: "Ann"}}}
 print match response { {status: 200, data: {user: {name}}} => name; {status: 404} => "missing"; _ => "?" }
-// a field takes what a whole arm takes: a comparison, a range, a type, alternatives
+# a field takes what a whole arm takes: a comparison, a range, a type, alternatives
 status(r) := match r { {status: 301 | 302} => "moved"; {status: >= 500} => "server error"; _ => "ok" }
 print status({status: 503})
 
-// Enums: every case named, or the compiler names the missing one
+# Enums: every case named, or the compiler names the missing one
 enum Coin { Penny, Nickel, Dime, Quarter }
 cents(coin: Coin) := match coin { Penny: 1; Nickel: 5; Dime: 10; Quarter: 25 }
 print cents(Dime)
 
-// Tagged unions: a case may carry data, the arm binds it
+# Tagged unions: a case may carry data, the arm binds it
 enum Shape { Circle(r: float), Square(side: float), Dot }
 area(s) := match s { Circle(r): 3 * r * r; Square(a): a * a; Dot: 0.0 }
 print area(Circle(2.0)) + area(Square(3.0)) + area(Dot)
 
-// is tests one pattern and binds its names
+# is tests one pattern and binds its names
 pair = [3, 4]
 print if pair is [a, b] then a * b else 0

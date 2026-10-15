@@ -31,9 +31,11 @@ pub(crate) fn show_and_fail_on_error(result: &Node, mark: &str) {
 	ended_well(result);
 }
 
-/// The status of the program's `exit(code)` (P121), for a file run and inline code alike
+/// The status of the program's `exit(code)` (P121), for a file run and inline code alike: it ends the run now, its
+/// sounds stopped (card escape-window), where a program ending by itself lets them finish
 fn exit_if_program_exited() {
 	if let Some(code) = warp_runtime::system_signals::take_exit_code() {
+		warp::sound::stop();
 		let _ = io::stdout().flush();
 		std::process::exit(code);
 	}

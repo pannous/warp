@@ -121,6 +121,7 @@ mod test_passed_list_identity; // card xs-xs
 mod test_person_struct;
 mod test_plain_enum; // card plain-enum
 mod test_printable;
+mod test_program_conversions;
 mod test_real_references;
 mod test_real_text;
 mod test_records;
@@ -175,6 +176,7 @@ mod test_type_of_consistency; // card type-of-consistency
 mod test_type_of_lambda_variable; // card type-says-symbol
 mod test_type_of_node_values;
 mod test_type_of_real_variable;
+mod test_type_parameters; // card random-should
 mod test_type_static;
 mod test_type_test_is_only;
 mod test_type_tests;
@@ -196,4 +198,4 @@ mod test_user_counting_word; // card user-defined-size
 mod test_value_constructor;
 mod test_variant_equality; // card variant-left
 mod test_variant_payloads;
-mod test_widened_list_views; // card p215-user // generic functions: methods by the first argument's class // card lossy-return: a fraction reaching an int result is an error
+mod test_widened_list_views; // card p215-user // generic functions: methods by the first argument's class // card lossy-return: a fraction reaching an int result is an error // card general-conversions: `A as B := body`

@@ -15,8 +15,8 @@
 //! what another one copied, so the text is read only when the program asks for it (`clipboard`, clipboard_text).
 use crate::host_words::{
 	BATTERY, CHARGING, CLICK_PRESSED, CLICK_X, CLICK_Y, CLIPBOARD_COUNT, DARK_MODE, DISPLAY_DPI, DISPLAY_HEIGHT,
-	DISPLAY_WIDTH, GPU_DRAWING, KEY_CODE_HELD, KEY_DOWN, KEY_PRESSED, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE,
-	SYSTEM_VALUES, TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH, WINDOW_HEIGHT, WINDOW_OPEN, WINDOW_WIDTH,
+	DISPLAY_WIDTH, ESCAPE_KEPT, GPU_DRAWING, KEY_CODE_HELD, KEY_DOWN, KEY_PRESSED, MOUSE_DOWN, MOUSE_X, MOUSE_Y,
+	ONLINE, SYSTEM_VALUES, TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH, WINDOW_HEIGHT, WINDOW_OPEN, WINDOW_WIDTH,
 };
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
@@ -129,6 +129,12 @@ pub fn write(name: &str, value: i64) -> Result<(), String> {
 /// The keys pressed over the paint window not read yet (KEY_PRESSED), oldest first; a program that never reads them
 /// keeps the last KEYS_KEPT
 static KEY_PRESSES: Mutex<VecDeque<i64>> = Mutex::new(VecDeque::new());
+/// The program names the Escape key (ESCAPE_KEPT): Escape over the paint window is its key, not the run's end
+static ESCAPE_KEPT_BY_PROGRAM: AtomicBool = AtomicBool::new(false);
+
+pub fn escape_kept() -> bool {
+	ESCAPE_KEPT_BY_PROGRAM.load(Ordering::Relaxed)
+}
 const KEYS_KEPT: usize = 64;
 const KEY_INPUT: usize = 3;
 const BUTTON_INPUT: usize = 2;
@@ -165,6 +171,26 @@ fn kept_push<T>(presses: &mut VecDeque<T>, press: T) {
 		presses.pop_front();
 	}
 	presses.push_back(press);
+}
+
+/// Every key held over the paint window, in the order they went down (card allow-diagonals): the last is KEY_INPUT
+static KEYS_HELD: Mutex<Vec<i64>> = Mutex::new(Vec::new());
+
+pub fn tell_keys_held(codes: &[i64]) {
+	*KEYS_HELD.lock().unwrap() = codes.to_vec();
+}
+
+/// Whether the key of that code is held now, among others (KEY_HELD); code 0: whether none is
+pub fn key_held(code: i64) -> bool {
+	held_among(code, window_input()[KEY_INPUT] as i64, &KEYS_HELD.lock().unwrap())
+}
+
+/// Whether the key of that code is the key held or among the keys held; code 0: whether none is
+pub fn held_among(code: i64, key: i64, held: &[i64]) -> bool {
+	match code {
+		0 => key == 0 && held.is_empty(),
+		_ => key == code || held.contains(&code),
+	}
 }
 
 /// The key held over the paint window alone, the pointer left as it is
@@ -205,6 +231,10 @@ pub fn read(name: &str) -> Result<i64, String> {
 	if name == CLICK_X || name == CLICK_Y {
 		let (x, y) = *CLICK_READ.lock().unwrap();
 		return Ok(if name == CLICK_X { x } else { y } as i64);
+	}
+	if name == ESCAPE_KEPT {
+		ESCAPE_KEPT_BY_PROGRAM.store(true, Ordering::Relaxed);
+		return Ok(1);
 	}
 	if name == KEY_PRESSED {
 		return Ok(KEY_PRESSES.lock().unwrap().pop_front().unwrap_or(0));

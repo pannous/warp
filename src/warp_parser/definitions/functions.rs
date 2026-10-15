@@ -136,6 +136,69 @@ impl WarpParser {
 		}
 	}
 
+	/// The parameters of a definition head (`f(a, b: int)`, `def f(a)`) or of a lambda (`x`, `(a, b)`) are in scope until
+	/// the statement holding it ends: ` /name` after one divides there, a path elsewhere (card path-parameter-scope)
+	pub(crate) fn bind_parameters(&mut self, head: &Node, is_lambda: bool) {
+		let parameters = match head.drop_meta() {
+			Node::List(items, Bracket::Round, _) if is_lambda => items.as_slice(),
+			Node::List(items, Bracket::Round, _)
+				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
+			{
+				&items[1..]
+			}
+			// `area(w, h)` after `def`: the name, then its parameter group
+			Node::List(items, Bracket::None, _)
+				if items.len() == 2 && matches!(items[1].drop_meta(), Node::List(_, Bracket::Round, _)) =>
+			{
+				return self.bind_parameters(&items[1], true);
+			}
+			// `def f(a)`: the head after the keyword
+			Node::List(items, _, _) if !is_lambda => {
+				if let Some(last) = items.last() {
+					self.bind_parameters(last, false);
+				}
+				return;
+			}
+			_ if is_lambda => std::slice::from_ref(head),
+			_ => return,
+		};
+		let names = parameters.iter().filter_map(|parameter| match parameter.drop_meta() {
+			Node::Symbol(name) => Some(name.clone()),
+			Node::Key(name, _, _) => name.symbol_name().map(str::to_string),
+			_ => None,
+		});
+		self.parameters_in_scope.extend(names);
+	}
+
+	/// `def area(w, h) {`: the parameters of the definition head before the block opening at `open`
+	pub(crate) fn parameters_before_block(&self, open: usize) -> Vec<String> {
+		let before = |at: usize| (0..at).rev().find(|at| !self.chars[*at].is_whitespace());
+		let Some(close) = before(open).filter(|close| self.chars[*close] == ')') else {
+			return vec![];
+		};
+		let mut depth = 0;
+		let Some(opening) = (0..=close).rev().find(|at| {
+			match self.chars[*at] {
+				')' => depth += 1,
+				'(' => depth -= 1,
+				_ => {}
+			}
+			depth == 0
+		}) else {
+			return vec![];
+		};
+		let name_start = (0..opening).rev().take_while(|at| is_identifier_char(self.chars[*at])).last();
+		let keyword_end = name_start.and_then(before);
+		let keyword: String = keyword_end.map_or_else(String::new, |end| {
+			let start = (0..=end).rev().take_while(|at| self.chars[*at].is_alphanumeric()).last().unwrap_or(end);
+			self.chars[start..=end].iter().collect()
+		});
+		if !crate::operators::is_function_keyword(&keyword) {
+			return vec![];
+		}
+		parameter_names(&self.chars[opening + 1..close].iter().collect::<String>())
+	}
+
 	/// The lines of a definition `def f(n)` indented below it by spaces, as `def f(n):` (by tabs the indentation rule of
 	/// parse_list_with_separators takes them); Ruby's `def f(n) … end` is read by its end
 	pub(crate) fn with_definition_block(&mut self, definition: Node) -> Node {
@@ -314,6 +377,7 @@ impl WarpParser {
 			self.advance();
 			self.skip_spaces();
 		}
+		self.parameters_in_scope.extend(parameters.iter().cloned());
 		let body = self.parse_definition_body();
 		self.functions.insert(name.clone());
 		let words: Vec<&str> = parameters.iter().map(String::as_str).collect();
