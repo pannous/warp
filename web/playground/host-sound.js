@@ -261,7 +261,7 @@ addHostPart({
 			while (self.pageSystemValues?.window_open && !self.insideAt?.() && (self.soundsQueued?.() ?? 0) > PLAY_AHEAD_SECONDS) holder.sleep(SIGNAL_POLL_MS);
 			const sound = { samples, rate, channels };
 			const { place, at } = self.voiceSounded?.(samples.length / channels / rate) ?? {};
-			hooks.sound?.({ ...sound, at, handle });
+			hooks.sound?.({ ...sound, at, handle, loop: self.currentVoice?.().loop }); // a live loop's (card playground-live)
 			const own = handle ?? self.lastSoundHandle?.() ?? 0;
 			(holder.run.unrenderedSounds ??= []).push({ ...sound, place, handle: own });
 			return own;
@@ -337,6 +337,8 @@ addHostPart({
 			at_end: () => { self.voiceAtEnd?.(); return null; },
 			// the voice's moment on the clock every Worker shares (src/sound/mod.rs moment_seconds, card live-redefine)
 			moment: () => self.voiceMoment?.() ?? 0,
+			// a named live loop's cycle starts (lib live_cycle_started, host-tasks.js liveCycleStarted)
+			live_cycle: name => { self.liveCycleStarted?.(contentText(name)); return null; },
 			wait: () => null,
 			// sample("kick.wav") (card sound-samples, src/sound/audio_files.rs): [rate, channels, offset frames …]; the playground
 			// decodes WAV only, a Worker has no decoder for the other formats

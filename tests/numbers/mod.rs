@@ -43,6 +43,7 @@ mod test_law;
 mod test_libm_functions;
 mod test_literal_type_words; // card cleanup-closed-lists
 mod test_log_base;
+mod test_log_exact;
 mod test_log_glyphs; // P226
 mod test_long_decimals;
 mod test_math;
@@ -93,6 +94,7 @@ mod test_static_units_output;
 mod test_sum_of_decimals;
 mod test_superscript_variables;
 mod test_temperature; // card temperature
+mod test_text_float_exact; // card text-float
 mod test_text_then_conversion; // card print-km
 mod test_time_of_day;
 mod test_trailing_symbol; // card trailing-symbol

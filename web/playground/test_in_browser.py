@@ -150,7 +150,8 @@ GPU_JOBS_CODE = """shader = "@group(0) @binding(0) var<storage, read_write> xs: 
 gpu_compute(shader, [1], 1)"""
 GPU_JOBS_NEVER = "Out of memory"
 # the console lines a check makes on purpose: Chrome logs the broken shader's WGSL error itself
-# Firefox's WebGPU: one anonymous uncaught exception of the page during the 400 jobs, all values right (card
+# Firefox on lavapipe: the 400 jobs outlast RUN_TIMEOUT_MS, so the run is stopped and the stop's terminate logs the
+# anonymous uncaught exception below; 50 jobs finish in time and log nothing (probes/firefox_webgpu/gpu_jobs.sh, card
 # firefox-gpu-jobs-uncaught)
 # and Firefox its own two lines of the broken shader
 # Firefox's bug: terminating a Worker busy inside a WebAssembly.promising call logs an anonymous uncaught exception on

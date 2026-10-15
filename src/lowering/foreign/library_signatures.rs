@@ -48,6 +48,14 @@ pub fn library_signature(word: &str) -> Option<(Vec<String>, String)> {
 	Some((parameter_names(&signature), signature))
 }
 
+/// The parameter count of a library word whose first parameter is typed (`floor(x:number)`, `upper(t:text)`): a function
+/// is never its argument, so `round(floor x)` nests as `round(floor(x))`
+pub fn typed_first_arity(word: &str) -> Option<usize> {
+	let (params, signature) = library_signature(word)?;
+	let first = signature.trim_start_matches('(').split([',', ')']).next()?;
+	first.contains(':').then_some(params.len())
+}
+
 /// `replace(t, old, new) := …` → `(t, old, new)`
 fn prelude_signature(word: &str) -> Option<String> {
 	let head = crate::modules::std_docs::word_head(PRELUDE, word)?;

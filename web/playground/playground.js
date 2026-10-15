@@ -22,6 +22,13 @@ const STOP_GRACE_MS = 500;
 const RUN_LABEL = "Run ▶";
 const STOP_LABEL = "Stop ■";
 const STOPPED = "stopped";
+// card playground-live: a rerun while live loops play hands them over. The old run's Worker retires instead of stopping:
+// its loops sound on until the new run's loop of the same name starts its first cycle, which they give way to; a loop the
+// new run has none of plays on this long, then ends where its next cycle would start
+const LIVE_HANDED_OVER = "its live loops play on into the next run";
+const LIVE_RETIRE_SECONDS = 4;
+// what a retired Worker still says: its loops' sounds and cycles, and the report of its run's end, which ends it
+const RETIRED_MESSAGES = new Set(["sound", "live cycle", "midi", "report"]);
 const LOADING_STALL_MS = 30000; // the compiler's download shows a note when it made no progress this long
 // the origin a link of the shown program resolves against: "/about" is a page of the program, "https://…" is not
 const PROGRAM_ORIGIN = "http://program.invalid";
@@ -86,6 +93,8 @@ let workerSettled = "starting"; // workerReady's outcome
 let workerWarmed; // the worker was asked to compile the markup renderer ahead of the first markup run (worker.js warmUp)
 let nextRunId = 0;
 let pending; // {id, resolve, printed, timer} of the run in the worker
+let liveHandover = {}; // the next run's live loops of the run before it: name → {start, period} (host-tasks.js liveCycleStarted)
+const retiredWorkers = new Set(); // the Workers whose live loops sound on into the next run (handOver)
 let runs = Promise.resolve(); // the evaluations, one after another
 let showing = false; // the page is evaluating its editor's code
 let queued; // the editor's code to show once the current run is shown
@@ -187,6 +196,7 @@ function startWorker(restarts = 0) {
 	const slowStart = new URLSearchParams(location.search).get(SLOW_START_PARAMETER);
 	if (slowStart) options.set(SLOW_START_PARAMETER, slowStart);
 	worker = serveTaskWorkers(new Worker(options.size ? `worker.js?${options}` : "worker.js")); // task-workers.js
+	worker.liveLoops = new Map(); // its run's live loops: name → {start, period} of their last cycle (liveCycled)
 	showLoading("starting the compiler's worker", false);
 	workerReady = new Promise((resolve, reject) => {
 		const starting = worker;
@@ -206,6 +216,8 @@ function startWorker(restarts = 0) {
 		// worker.js or a script it imports failed to load: without this the first run waits for "ready" forever (card firefox-hello-hang)
 		worker.onerror = event => failed(new Error(`the compiler's worker failed to start: ${event.message || "worker.js did not load"}`));
 		worker.onmessage = ({ data }) => {
+			if (starting.retired && !RETIRED_MESSAGES.has(data?.type)) return;
+			if (starting.retired && data.type === "report") return retire(starting);
 			if (data.type === "notify") data = notification(data.text);
 			if (data.type === "window") return resizeWindow(data, $("paintings")); // canvas.js
 			if (data.type === "dispatch") return dispatchToPage(data.event); // markup.js, card page-custom-event
@@ -225,7 +237,8 @@ function startWorker(restarts = 0) {
 			if (data.type === "failed") return failed(new Error(data.message));
 			if (data.type === "bundle") return bundled(data.bundle); // deploy.js
 			if (data.type === "members") return answerMembers(data);
-			if (data.type === "sound") return playSound(data);
+			if (data.type === "sound") return playSound(data, starting);
+			if (data.type === "live cycle") return liveCycled(starting, data.name, data.at);
 			if (data.type === "sound file") return playSoundFile(data.url, data.handle, data.bytes);
 			if (data.type === "file") return offerFile(data.path, data.bytes);
 			if (data.type === "midi") return sendMidi(data.port, data.message, data.at);
@@ -362,7 +375,7 @@ let sounding = []; // the playing and queued sounds, silenced when the next run 
 // before the page's first click or key press (the run on load, the CI tour) a sound stays silent: an AudioContext made
 // then cannot start and the browser warns
 const beforeUserActivation = () => navigator.userActivation && !navigator.userActivation.hasBeenActive;
-function playSound({ samples, rate, channels, at, handle }) {
+function playSound({ samples, rate, channels, at, handle, loop }, from) {
 	if (beforeUserActivation()) return;
 	audio ??= new AudioContext();
 	audio.resume();
@@ -379,7 +392,7 @@ function playSound({ samples, rate, channels, at, handle }) {
 	source.endsAt = source.startsAt + buffer.duration;
 	stealFor(source.startsAt);
 	source.start(source.startsAt);
-	source.handle = handle;
+	Object.assign(source, { handle, loop, from });
 	source.onended = () => sounding = sounding.filter(other => other !== source);
 	sounding.push(source);
 }
@@ -460,10 +473,53 @@ function faded(handle, gain, seconds) {
 	}
 }
 
-function silence() {
-	sounding.forEach(source => source.stop());
-	sounding = [];
+// the sounds stopped and the music files, but those of live loops handed over to the next run (stopPressed: all)
+function silence(all = true) {
+	const handedOver = source => !all && source.from?.retired?.waiting.has(source.loop);
+	sounding.filter(source => !handedOver(source)).forEach(source => source.stop());
+	sounding = sounding.filter(handedOver);
 	stopSoundFiles();
+}
+
+// ---- live loops handed over (card playground-live) -------------------------------------------------------------
+
+// a named loop's cycle starts at `at` (shared clock) in that Worker's run: the run's own loop gives the retired run's loop
+// of its name way there; a retired loop past its time ends at a cycle's start
+function liveCycled(from, name, at) {
+	const known = from.liveLoops.get(name);
+	from.liveLoops.set(name, { start: at, period: known ? at - known.start : undefined });
+	if (from.retired) {
+		if (soundClock() - from.retired.at > LIVE_RETIRE_SECONDS) endHandedOver(from, name, at);
+	} else if (!known) retiredWorkers.forEach(retired => endHandedOver(retired, name, at));
+}
+
+const playsLive = run => run && worker.liveLoops?.size > 0 && worker.runId === run.id;
+
+// the retired Worker's loop of that name sounds until `at`, the Worker goes once none of its loops is left
+function endHandedOver(retired, name, at) {
+	if (!retired.retired.waiting.delete(name)) return;
+	const end = at + clockOffset;
+	sounding.filter(source => source.from === retired && source.loop === name && source.endsAt > end).forEach(source => source.stop(Math.max(end, audio.currentTime)));
+	if (retired.retired.waiting.size === 0) retire(retired);
+}
+
+function retire(retired) {
+	retired.terminate();
+	retiredWorkers.delete(retired);
+}
+
+// the run's loops go on while the next run starts in a fresh Worker: their last cycle's start and period (a loop of one
+// cycle so far: the end of its queued sounds) for the next run, whose loops of their names start on that grid
+function handOver(run) {
+	const retiring = worker;
+	const queuedEnd = name => Math.max(...sounding.filter(source => source.from === retiring && source.loop === name).map(source => source.endsAt - clockOffset));
+	liveHandover = Object.fromEntries([...retiring.liveLoops].map(([name, { start, period }]) =>
+		[name, period > 0 ? { start, period } : { start: queuedEnd(name), period: 0 }]));
+	retiring.retired = { at: soundClock(), waiting: new Set(retiring.liveLoops.keys()) };
+	retiredWorkers.add(retiring);
+	sounding.filter(source => source.from === retiring && !source.loop).forEach(source => source.stop());
+	startWorker();
+	finish(run, stoppedReport(run, LIVE_HANDED_OVER, false));
 }
 
 // each painting shows at once, while the program still runs: one the size of the last replaces it, as a frame (card
@@ -499,9 +555,11 @@ const slept = (run, milliseconds) => stopAfterTimeout(run, run.deadline - Date.n
 function stopRun(run, message, failed = !run.animating) {
 	worker.terminate();
 	startWorker();
-	finish(run, { value: message, error: failed, printed: run.printed, paintings: run.paintings,
-		warnings: [], runtime_warnings: [], hints: [], notes: [] });
+	finish(run, stoppedReport(run, message, failed));
 }
+
+const stoppedReport = (run, message, failed) => ({ value: message, error: failed, printed: run.printed, paintings: run.paintings,
+	warnings: [], runtime_warnings: [], hints: [], notes: [] });
 
 // the Run button while a program runs: Stop (card playground-turn)
 function showStop(stoppable) {
@@ -513,6 +571,8 @@ const showsStop = () => $("run").classList.contains("stop");
 
 // Stop pressed: a run going on ends as stopped; a program left listening to its timers stops listening
 function stopPressed() {
+	retiredWorkers.forEach(retire);
+	silence();
 	if (pending) return stopRun(pending, STOPPED, false);
 	worker.terminate();
 	startWorker();
@@ -543,10 +603,12 @@ async function runInWorker(code) {
 		stopAfterTimeout(run);
 		run.stopTimer = setTimeout(() => pending === run && showStop(true), STOP_GRACE_MS);
 		pending = run;
-		silence();
+		silence(false);
+		Object.assign(worker, { runId: run.id, liveLoops: new Map() });
 		paintingWindow = undefined; // canvas.js: each run's paintings at their own size until it sets window.width
 		tellSystemValues();
-		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file: programFile() });
+		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file: programFile(), liveHandover });
+		liveHandover = {};
 	});
 }
 
@@ -847,6 +909,7 @@ async function show(code) {
 	if (showing) {
 		queued = code; // only the newest code is worth running next
 		if (pending?.animating) stopRun(pending, "animation stopped");
+		else if (playsLive(pending)) handOver(pending);
 		return;
 	}
 	showing = true;
@@ -944,8 +1007,9 @@ function runChanged() {
 
 // Run pressed (the button, Ctrl/Cmd-Enter): the old value gives way to "…" at once, and the old errors, warnings,
 // underlines and printed text go, so none is taken for the new run's (card g_oc54)
-function runPressed() {
-	if (showsStop()) return stopPressed();
+// Ctrl/Cmd-Enter while live loops play runs the code again, handing them over (card playground-live); the button stops
+function runPressed(fromKeys = false) {
+	if (showsStop() && !(fromKeys && playsLive(pending))) return stopPressed();
 	showValue(PENDING_VALUE);
 	$("value").classList.remove("located");
 	$("value").onclick = null;

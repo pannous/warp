@@ -33,6 +33,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   wasm index and effects. A bare name never becomes the function value implicitly (the `print now` case: a
   parameterless function must stay a call, so in a mixed list some names would print and others would be called): `function f` stays explicit, and a bare parameterless
   function inside print/help/dump/type gets a warning that it was called, hint `function now`.
+- dir-lists (2026-10-15, user): built-ins become function values first, type `builtin`, a subtype of function
+  (`type(function upper)` is builtin, `function upper is function` → yes); methods(x) lists them, so dir(x) and
+  methods(x) keep the same names (card builtin-functions, then dir-lists).
 - cleanup-means-fewer-lines (2026-10-13): the cleanup's metric is lines removed: simpler, more general, more elegant
   code. Splitting files or functions alone is not a goal ("not that impressed by splitting"). Each cleanup merge
   request states its net src/ line delta; baseline 161132 lines of src/*.rs at eaa40f98b.
@@ -74,6 +77,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   `now > 17h` / `now >= October` / `now ≈ 2026-10-14` compare the matching part; `==` stays exact (`now == 2026-10-14` no).
   `now.time` is the local time of day, printing 22:27:46 (`now.date` the date); the old `time > 18h` special case
   goes: an error with the fix `now > 18h`.
+- now-live (2026-10-15, user): `now` stays a live clock (each read is the current instant, `now - start` measures
+  time); tests pin what always holds, `now <= now` → yes, not `now == now` (card flaky-browser-suite).
 - canvas-size (2026-10-14): `window.width/height`, `display.width/height`, `canvas.width/height` are writable properties,
   natively and in the playground; a bare top-level `width` works too, with a did-you-mean naming the three.
 - dollar-element (2026-10-14): in a page program `$xyz` is the element with id xyz (`$xyz.value`, `$xyz.focus()`);
@@ -170,7 +175,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   with a known footgun.
 - Asks become got-it warnings (2026-10-03): "the Ask mechanism is not what I expected … turn all the Ask into a
   warning with the got it feature", plus a later intent-based code change. Error-fallback cases (`[x]*n`, insert
-  order, `[1 2 3]+4`, bare `a=1 2 3`, `1+2 squared`) stay loud errors naming the explicit forms (D3, D9/P5, D12).
+  order, `[1 2 3]+4`, `1+2 squared`) stay loud errors naming the explicit forms (D3, D9/P5); bare `a=1 2 3` is a
+  list since reconsider-spaced (2026-10-15).
 - Got-it scope: `[y = this one, a = all of this kind, n]`; an expression is remembered by its text; a `// got it`
   comment silences the line.
 - warning-levels (2026-10-13): levels hint < weak < normal < severe (no "strong"); errors stay separate.
@@ -270,6 +276,13 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   dimension, exact or a ratio; long unit names work. Unit sums use the finer unit. Quantities print without a space
   (`500m`); P231 print rounds quantities to a decimal, str() keeps the exact value. #31 `min` stays the function,
   `d` free.
+
+- dimensions-units (2026-10-15, user): dimension names are types (`3 cm is length`, `h: length = 3 s` error); the
+  time dimension is `duration` (a subtype of time). Units and their connections live in lib/units.warp
+  (`dimension length`, `m: length`, `cm := m/100`, `inch := 2.54 cm`, users add `furlong := 201.168 m`). `px` is the
+  device pixel, its own dimension, converting to lengths through display.dpi at run time. A unit after a list applies
+  to each element (`[3, 4] cm` = `[3 cm, 4 cm]`, `v: length[3]`, matrices alike). Predefined derived names: speed,
+  area, volume, frequency.
 
 ## Text
 - Text + anything concatenates in its str() form (2026-10-02, extended 2026-10-10); a function stays an error. A
@@ -427,6 +440,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - D4 constructors: `T{…}` of a known type constructs/validates, `k:{…}` is plain data; missing fields are errors
   unless `?` or defaulted, undeclared fields errors ("Strict"). #41 spaced `V { x: 1 }` constructs a declared V.
 
+- print-bang (2026-10-15, user): a function that gives nothing (print, show, log …) never takes D2's in-place bang:
+  `print friends!` prints the forced friends and friends stays; `sort xs!` still sorts in place.
+
 ## Lists, maps and indexing
 - #4/P40 `size` = count; bytes via `byte_size` / `number of bytes`. `len(x)` counts with a hint `#x`.
 - P43 lists do not grow past the end: setting past it is a catchable `index out of range`.
@@ -455,6 +471,14 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   is visible, else a run-time check per write.
 - P176 repeated `key: value` in a named tag block are children; a plain `{…}` keeps the duplicate-key error.
 - `pixels size` works like `size of pixels`.
+
+- reconsider-spaced (2026-10-15, user; replaces D12's error): spaced values are lists again: `xs = 1 2 3` is
+  [1 2 3], `2⁻¹ 2⁰ 2¹ 2²` → 0.5 1 2 4, `print 1+1 2+2` → 2 4 (numbers, texts and number expressions, after `=` and
+  as a line of their own). Only a glued sign after a space (`x = 5 -2`) still asks; list-sign stays. Calls (`f 1 2 3`),
+  units (`3 cm`) and `3x` are unchanged.
+- swizzles (2026-10-15, user; card compile-shaders): `.x .y .z .w` and their combinations (`.xy`, `.xyy`, `.zyx`)
+  read a list of 2–4 numbers, everywhere, CPU and GPU alike. Vector math uses the dot operators (D3), the Euclidean
+  length is `norm(v)` (alias `magnitude`), `length` stays the count.
 
 ## Control flow, matching and errors
 - match-whole-value (2026-10-13): no binding syntax; inside an arm the subject's name and the word `value` are the
@@ -547,6 +571,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - bizarre-global (2026-10-11): play, beep, stop_sound, wait_sound are global; other sound words need `use sound`.
 - #14e `download <url>` is an alias of `fetch`.
 
+- package-forms (2026-10-15 default): packages.warp entries take short forms: a bare `uniscript` =
+  github.com/pannous/uniscript, `name: owner/repo`, `name: "github:owner/repo"`; `version: latest` or none follows the
+  default branch; a pin is `{repository: pannous/uniscript, version: 1.0.7}`.
+
 ## CLI, building and tests
 - P102 `warp build hello.warp` makes the native executable (`hello`, hello.exe on Windows); `--exe` accepted.
   build-should (2026-10-13 default): it writes x.wasm beside it too; `--wasm` only the module.
@@ -598,6 +626,13 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - P235 WGSL is a `shader { … }` block (alias `wgsl`); P235b no capture of warp variables, but `$name` is an explicit
   hole (user's own edit). P234 `paint` takes a shader text and renders on the GPU; `use graphics` = `use draw`.
 
+- uniscript-browser-wasm (2026-10-15, user): the uniscript repo commits uniscript_c.wasm/.h at each release, so
+  browsers read it like other package files; warp's builds don't download release assets.
+- firefox-bug (2026-10-15, user): yes, file the Firefox JSPI Worker-terminate bug at Mozilla Bugzilla
+  (repro probes/firefox_jspi_terminate.html).
+- deploy-hook (2026-10-15, user): watch-playground-deploy.sh asks the finished run's conclusion and failed jobs,
+  retrying ~30 min; no answer gives one stderr line, no wake (card posttooluse-playground).
+
 ## Sound and graphics
 - shader-untouched (2026-10-13, user: "I didn't mean to mess with the shader language"): WGSL in shader blocks stays
   as written, the `$name` holes are the only change; the colon result-type rewrite (87d15829e) goes. A WGSL error
@@ -608,6 +643,16 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - signal-samples: samples/signal*.warp were renamed siren_sound/stereo_sound; the wiki "Signals" examples stay.
 - note-value (2026-10-14): note names stay frequencies (`C4 * 2` = 523.25); `note(C4)` (alias note_value) is a Note
   that prints "C4", `note(445Hz)` "A4+20c", `n + 7` G4; `note("C#4")` now gives a Note, not 277.18.
+
+- shared-buses (2026-10-15, user): a bus is a named effect chain, `room = bus() |> reverb(0.4) |> delay(0.25)`;
+  a signal pipes into it (`osc(C4, 1s) |> room`), a note names it (`play(C4, 1s, bus: room)`); `room.reverb = 0.6`
+  while it plays applies from that moment. No `send room` setting.
+- sound-dsp (2026-10-15, user): the effects DSP is written once in Rust (src/sound/effects.rs, compiled into warp.wasm
+  for the browser), lib/sound.warp calls it; a warp twin can follow with self-hosting.
+- save-sound (2026-10-15, user, replaces the render_sound alias answer): writing audio to a file is the general
+  `save` with an explicit object, overloaded by its type: `save sound as "song.wav"` / `save(sound, "song.wav")`,
+  likewise `save buffer as "x.raw"` and other savable values. render_sound goes; its name gives an I-meant hint
+  naming save.
 
 ## Old id index (superseded or historic; git has the text)
 P35 → index-position. P42 → P227. P56(2-4) unknown entity → P56 revised. P63 → wiki/charged.md. P66 → footgun-divzero.
