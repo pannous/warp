@@ -735,6 +735,12 @@ impl Lowering {
 				return Some(log_to_base(&items[0], value, base));
 			}
 		}
+		// `sin x`: a real function applies to the value after it, as `sin(x)` does (card sin-cos)
+		if let ([function, argument], Bracket::None, Separator::Space) = (items, bracket, separator) {
+			if crate::numbers::real::FUNCTIONS.contains(&head.as_str()) && !self.shadows(head) {
+				return Some(word_call(function, argument, vec![]));
+			}
+		}
 		// `first sorted xs` has one argument: a library word after it is its argument's prefix
 		let prefixes_its_argument = *bracket == Bracket::None
 			&& items.get(1).is_some_and(|next| self.library_word(&next.drop_meta().name()).is_some());
