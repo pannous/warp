@@ -482,7 +482,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   float argument, a float in [a, b). Refined with the user's suggestion via the supervisor: random's parameter is
   declared of type Type, so `random int`, `random(int)` and `random float` take the type itself, not its
   constructor; general rule: any parameter of type Type accepts bare type words. An overload takes a range,
-  `random 1..10` (inclusive, as `..` is), the same die as `random(1, 10)`. The result type follows the argument
+  and picks one of its elements: `random 1..10` → 1…9 (`..` excludes the end), `random 1...10` and
+  `random 1 to 10` → 1…10, the same die as `random(1, 10)` (corrected by warp-types: `1..3` is [1 2]). The result type follows the argument
   (`int z = random 1..10`).
 - function-references (2026-10-15, user): a bare name of a function that needs arguments, compared with a type
   (`floor is function`) or in `type(floor)`, means the function itself (card bare-fn-type). `.floor` in argument
