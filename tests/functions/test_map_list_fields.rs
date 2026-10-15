@@ -20,3 +20,9 @@ fn a_condition_names_the_fields_of_each_map() {
 fn one_element_keeps_its_field() {
 	is!(&format!("{NAMES}; m#1.name"), "a");
 }
+
+#[test]
+fn a_plural_field_of_a_list_of_maps() {
+	is!(&format!("{NAMES}; names of m"), texts(vec!["a", "b"]));
+	is!(&format!("{NAMES}; m.names"), texts(vec!["a", "b"]));
+}
