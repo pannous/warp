@@ -170,7 +170,8 @@ fn comma_spacing(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
 	})
 }
 
-/// `name:value` → `name: value`; `::`, `:=`, `://` and a colon before a closer or the end stay
+/// `name:value` → `name: value`, a parameter's type too (`f(x: int)`, user 2026-10-15); `::`, `:=`, `://` and a colon
+/// before a closer or the end stay
 fn colon_spacing(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
 	rewrite_code(lines, scans, |characters, at, written, _| {
 		let c = characters[at].0;

@@ -427,7 +427,7 @@ pub(crate) fn definition(function: &crate::compiler::context::UserFunctionDef) -
 			let typed = param
 				.annotation
 				.as_ref()
-				.map_or_else(|| param.name.clone(), |annotation| format!("{}:{}", param.name, annotation.serialize()));
+				.map_or_else(|| param.name.clone(), |annotation| format!("{}: {}", param.name, annotation.serialize()));
 			param.default.as_ref().map_or(typed.clone(), |default| format!("{typed} = {}", default.serialize()))
 		})
 		.collect();
@@ -443,7 +443,8 @@ pub(crate) fn help_text(function: &crate::compiler::context::UserFunctionDef) ->
 	}
 }
 
-/// `(a:int, b:int) -> int`: each parameter with its declared or demanded type, the result's kind when known
+/// `(a: int, b: int) -> int`: each parameter with its declared or demanded type (spaced as warp format writes it), the
+/// result's kind when known
 pub(crate) fn signature(function: &crate::compiler::context::UserFunctionDef) -> String {
 	let params: Vec<String> = function
 		.params
@@ -454,7 +455,7 @@ pub(crate) fn signature(function: &crate::compiler::context::UserFunctionDef) ->
 				.as_ref()
 				.map(|annotation| annotation.drop_meta().name())
 				.or_else(|| param.used_as.map(|kind| kind.to_string()));
-			type_name.map_or_else(|| param.name.clone(), |type_name| format!("{}:{type_name}", param.name))
+			type_name.map_or_else(|| param.name.clone(), |type_name| format!("{}: {type_name}", param.name))
 		})
 		.collect();
 	let result = match function.return_kind {

@@ -51,3 +51,8 @@ fn test_soft_hints_never_rewrite() {
 fn test_unparsed_code_is_not_formatted() {
 	assert!(format("print (1 2", Options::default()).is_err());
 }
+
+#[test]
+fn test_parameter_types_spaced() {
+	assert_eq!(formatted("exec(command:any) := command\nm = {a:1}\n"), "exec(command: any) := command\nm = {a: 1}\n");
+}

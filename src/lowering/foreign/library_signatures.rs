@@ -86,7 +86,7 @@ fn positional(arity: usize, parameter_type: Option<&str>, result: Kind) -> Strin
 	};
 	let parameters: Vec<String> = names
 		.iter()
-		.map(|name| parameter_type.map_or_else(|| name.to_string(), |kind| format!("{name}:{kind}")))
+		.map(|name| parameter_type.map_or_else(|| name.to_string(), |kind| format!("{name}: {kind}")))
 		.collect();
 	let result = match result {
 		Kind::Empty => String::new(),
