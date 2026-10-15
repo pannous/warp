@@ -814,9 +814,14 @@ impl Lowering {
 		let [left, word, right] = items else {
 			return None;
 		};
-		let names_unit = |side: &Node| match side.drop_meta() {
-			Node::Key(_, Op::Hash, unit) => crate::analyzer::text_unit(&unit.name()).is_some(),
-			other => crate::analyzer::text_unit(&other.name()).is_some(),
+		// `#bytes in t`, `number of chars in t` (chars.number) count by a unit, a symbol; the text "chars" and a list
+		// ["bytes"] are looked up like any value
+		let names_unit = |side: &Node| {
+			let unit = match side.drop_meta() {
+				Node::Key(_, Op::Hash, unit) | Node::Key(unit, Op::Dot, _) => unit.drop_meta(),
+				other => other,
+			};
+			unit.symbol_name().and_then(crate::analyzer::text_unit).is_some()
 		};
 		let (collection, element) = match word.symbol_name()? {
 			IN_WORD if names_unit(left) || names_unit(right) => return None,

@@ -224,7 +224,8 @@ fn store(member: &str, arguments: &[Node]) -> Result<Node, String> {
 fn sound(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	match (member, arguments) {
 		("play_file", [path]) => {
-			return crate::sound::play_file(&text_of(path)?).map(|handle| Node::int(handle as i64))
+			return crate::sound::play_file(&crate::modules::beside_program_if_there(&text_of(path)?))
+				.map(|handle| Node::int(handle as i64))
 		}
 		// stop(handle), play's handle; handle 0: all of them
 		("stop", [handle]) if number_of(handle)? == 0.0 => crate::sound::stop(),

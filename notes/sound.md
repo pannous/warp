@@ -336,8 +336,9 @@ sent to before (sound.send returns it, natively and in host-sound.js).
 
 Stage 4 built (2026-10-15): bus words `peak(b, frequency, db, q = 1)`, `low_shelf`/`high_shelf(b, frequency, db,
 q = 0.707)` (RBJ cookbook biquads, FilterKind::Peak/LowShelf/HighShelf carry the dB) and `compress(b, threshold = -18,
-ratio = 4, attack = 0.01, release = 0.1)`: a peak envelope per channel (not linked across stereo), the dB over the
-threshold scaled by 1 - 1/ratio, no knee, no makeup gain (add `gain`). Bus-only for now: no list-signal versions in
+ratio = 4, attack = 0.01, release = 0.1)`: one peak envelope over the loudest channel (linked, the stereo image stays), the
+dB over the threshold scaled by 1 - 1/ratio, no knee, no makeup gain (add `gain`). EQ bands are several of a name
+(card bus-peak): `peak(200Hz, 3) |> peak(3kHz, -2)` keeps both, one at a band's frequency replaces it. Bus-only for now: no list-signal versions in
 lib (they wait for the one-DSP answer, Rust or warp).
 
 ## Native output built (card native-sound, 2026-10-12, src/sound/sound_engine.rs, tests/programs/test_sound_engine.rs)

@@ -607,7 +607,7 @@ async function runInWorker(code) {
 		Object.assign(worker, { runId: run.id, liveLoops: new Map() });
 		paintingWindow = undefined; // canvas.js: each run's paintings at their own size until it sets window.width
 		tellSystemValues();
-		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), liveHandover });
+		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file: programFile(), liveHandover });
 		liveHandover = {};
 	});
 }
@@ -1020,6 +1020,11 @@ function runPressed(fromKeys = false) {
 }
 
 const exampleSource = name => EXAMPLES[name]?.code ?? SAMPLES[name];
+// the file of the chosen sample, whose neighbours its runs name relatively (host-files.js besideProgram)
+function programFile() {
+	const name = $("examples").value;
+	return EXAMPLES[name] === undefined && SAMPLES[name] !== undefined ? `samples/${name}.warp` : undefined;
+}
 
 // puts the code in the editor and runs it once; resolves once its report is shown
 function runCode(source) {

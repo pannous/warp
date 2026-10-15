@@ -863,6 +863,7 @@ PASSED:
   ✓ control::test_unwrap::test_mutating_and_evaluating_bangs_keep_their_meaning
   ✓ control::test_unwrap::test_unwrap_gives_the_value
   ✓ control::test_unwrap::test_unwrap_of_nothing_or_an_error_is_loud
+  ✓ control::test_value_methods_are_functions::a_list_value_s_methods_are_functions
   ✓ control::test_variable_signals::a_condition_calling_a_function_watches_what_it_reads
   ✓ control::test_variable_signals::a_condition_ending_in_a_variable_keeps_its_block
   ✓ control::test_variable_signals::a_global_write_before_the_listener_is_not_seen
@@ -2025,6 +2026,8 @@ PASSED:
   ✓ lists::test_typed_lists::test_mixed_list_stays_cons_cells
   ✓ lists::test_typed_lists::test_sum_of_a_typed_list_is_one_operation
   ✓ lists::test_typed_lists::test_zero_filled_int_list_is_an_array
+  ✓ lists::test_unit_word_text_in::a_text_naming_a_unit_is_looked_up_in_a_list
+  ✓ lists::test_unit_word_text_in::a_unit_symbol_still_counts
   ✓ lists::test_unpacking_declared::unpacking_checks_declared_types
   ✓ lists::test_unpacking_into_existing::unpacking_assigns_names_that_hold_numbers
   ✓ lists::test_unpacking::for_loop_unpacking
@@ -3139,6 +3142,8 @@ PASSED:
   ✓ parser::test_number_glyphs::test_vulgar_fractions_are_exact
   ✓ parser::test_one_line_statements::separated_prints_still_run
   ✓ parser::test_one_line_statements::two_prints_on_one_line_need_a_separator
+  ✓ parser::test_operator_word_keys::a_prefix_operator_word_names_a_key
+  ✓ parser::test_operator_word_keys::the_prefix_operator_word_stays_an_operator
   ✓ parser::test_parse_long_sources::a_long_source_parses_in_linear_time
   ✓ parser::test_parser_sugar::backslash_at_line_end_continues_the_statement
   ✓ parser::test_parser_sugar::block_comment_with_hash_is_ignored
@@ -3433,6 +3438,7 @@ PASSED:
   ✓ programs::test_sound_at::the_words_it_lowers_to
   ✓ programs::test_sound_buses::a_bus_takes_a_compressor_and_an_eq
   ✓ programs::test_sound_buses::a_changed_effect_applies_from_the_voices_moment
+  ✓ programs::test_sound_buses::a_compressor_ducks_both_channels_together
   ✓ programs::test_sound_buses::a_compressor_turns_loud_sounds_down_and_leaves_quiet_ones
   ✓ programs::test_sound_buses::a_peak_eq_boosts_its_frequency_only
   ✓ programs::test_sound_buses::a_reverb_bus_rings_after_its_last_sound
@@ -3441,6 +3447,7 @@ PASSED:
   ✓ programs::test_sound_buses::a_task_and_the_program_share_a_bus
   ✓ programs::test_sound_buses::an_effect_set_again_keeps_its_echoes
   ✓ programs::test_sound_buses::an_effect_set_again_keeps_its_place_in_the_chain
+  ✓ programs::test_sound_buses::eq_bands_at_other_frequencies_add_up
   ✓ programs::test_sound_buses::out_restores_the_bus_before
   ✓ programs::test_sound_buses::shelves_boost_below_or_above_their_frequency
   ✓ programs::test_sound_buses::the_mixer_changes_a_bus_at_its_frame
@@ -3466,6 +3473,7 @@ PASSED:
   ✓ programs::test_sound_fades::fade_sound_ramps_a_sound_down_in_the_render
   ✓ programs::test_sound_files::a_broken_music_file_fails
   ✓ programs::test_sound_files::a_music_file_plays_in_the_background
+  ✓ programs::test_sound_files::a_program_plays_the_file_beside_it
   ✓ programs::test_sound_files::only_a_music_file_plays
   ✓ programs::test_sound_filters::a_lowpass_filter_quiets_high_notes
   ✓ programs::test_sound_filters::a_program_variable_named_out_survives_the_filter
@@ -5545,4 +5553,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5540 passed, 0 failed, 5540 total tested
+13 ignored, 5548 passed, 0 failed, 5548 total tested
