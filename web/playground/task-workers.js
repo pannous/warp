@@ -19,10 +19,17 @@ function serveTaskWorkers(programWorker) {
 		const channel = new MessageChannel();
 		made.postMessage({ port: channel.port1 }, [channel.port1]);
 		programWorker.postMessage({ taskWorker: taskWorker.id, port: channel.port2 }, [channel.port2]);
+		reportBareErrors(made, `task Worker ${taskWorker.id}`);
 		taskWorkers.set(taskWorker.id, made);
 	});
 	// a message of the page's own to one of them (playground.js sendPaintCanvas)
-	programWorker.postToTaskWorker = (id, message, transfer) => taskWorkers.get(id)?.postMessage(message, transfer);
+	// an unknown id throws: a dropped canvas would leave its program waiting for it forever (host-gpu.js arrivingCanvas)
+	programWorker.postToTaskWorker = (id, message, transfer) => {
+		const taskWorker = taskWorkers.get(id);
+		if (!taskWorker) throw new Error(`no task worker ${id} to post ${Object.keys(message)} to`);
+		taskWorker.postMessage(message, transfer);
+	};
+	reportBareErrors(programWorker, "the program's Worker");
 	const terminate = programWorker.terminate.bind(programWorker);
 	programWorker.terminate = () => {
 		taskWorkers.forEach(made => made.terminate());
@@ -30,6 +37,14 @@ function serveTaskWorkers(programWorker) {
 	};
 	return programWorker;
 }
+
+// a failure without an Error (Firefox's bare "uncaught exception: undefined") at the page or one of its Workers is said
+// with where it happened; a Worker's error event never carries the Error (errors do not cross threads), only its message
+const reportBareErrors = (target, label) => target.addEventListener("error", event => {
+	if (event.error instanceof Error) return;
+	const what = target instanceof Worker ? "a Worker error" : `an error without an Error (${event.error})`;
+	console.error(`warp ${label}: ${what} at ${event.filename}:${event.lineno}:${event.colno}: ${event.message}`);
+});
 
 // `clipboard` in a Worker (host-tasks.js askPage): the page's text into the Worker's shared buffer. A browser that reads
 // the clipboard only right after the user acted (Firefox; Chrome when the page has no focus) refuses a run's read: a

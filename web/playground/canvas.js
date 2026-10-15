@@ -39,7 +39,8 @@ function paintingElement(painting) {
 	const canvas = document.createElement("canvas");
 	Object.assign(canvas, { width: painting.width, height: painting.height, className: "painting" });
 	canvas.style.width = `${painting.width * Math.max(1, Math.floor(PAINT_SHOWN_SIDE / Math.max(painting.width, painting.height, 1)))}px`;
-	canvas.style.imageRendering = "pixelated";
+	// pixels painted one by one stay sharp squares; a shader's render scales smoothly (card make-shader)
+	canvas.style.imageRendering = painting.shaded ? "auto" : "pixelated";
 	canvas.style.setProperty("--aspect", painting.width / Math.max(painting.height, 1));
 	framed(canvas);
 	return canvas;

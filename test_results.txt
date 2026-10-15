@@ -848,6 +848,10 @@ PASSED:
   ✓ control::test_undo_history::any_value_and_any_writer_has_a_history
   ✓ control::test_undo_history::redo_takes_back_an_undo_until_a_new_change
   ✓ control::test_undo_history::undo_steps_back_through_the_changes
+  ✓ control::test_unhandled_emit_operand::a_handled_emit_as_an_operand_gives_its_value
+  ✓ control::test_unhandled_emit_operand::an_unhandled_emit_as_a_statement_still_only_notes
+  ✓ control::test_unhandled_emit_operand::an_unhandled_emit_as_an_operand_names_its_handler
+  ✓ control::test_unhandled_emit_operand::an_unhandled_emit_used_as_a_value_names_its_handler
   ✓ control::test_unhandled_emits::an_emit_in_a_page_program_does_not_warn
   ✓ control::test_unhandled_emits::an_emit_nobody_handles_warns
   ✓ control::test_unit_tasks::a_go_block_with_units_runs
@@ -2864,6 +2868,7 @@ PASSED:
   ✓ operators::test_less_than_compare::test_generics_still_start_after_a_type_name
   ✓ operators::test_library_infix_words::a_glued_call_of_an_infix_word_is_a_call
   ✓ operators::test_library_infix_words::a_parenthesis_in_a_text_keeps_the_call
+  ✓ operators::test_library_infix_words::a_text_ending_in_a_backslash_keeps_the_call
   ✓ operators::test_library_infix_words::a_used_module_declares_an_infix_word
   ✓ operators::test_library_infix_words::the_word_stays_a_word_without_the_module
   ✓ operators::test_like_known_type_mismatch::a_known_other_type_lacking_a_field_teaches_like
@@ -3446,6 +3451,12 @@ PASSED:
   ✓ programs::test_sound_patterns::nested_alternation_turns_on_its_own_visits
   ✓ programs::test_sound_patterns::pattern_samples_ends_each_event_at_its_cumulated_seconds
   ✓ programs::test_sound_patterns::swing_holds_the_first_note_longer
+  ✓ programs::test_sound_pipes::a_delay_node_adds_echoes
+  ✓ programs::test_sound_pipes::a_lowpass_node_takes_the_highs
+  ✓ programs::test_sound_pipes::a_mix_sums_signals_to_the_longest
+  ✓ programs::test_sound_pipes::an_oscillator_is_a_signal_value
+  ✓ programs::test_sound_pipes::nodes_chain
+  ✓ programs::test_sound_pipes::out_plays_a_signal
   ✓ programs::test_sound_render::a_render_takes_the_sounds_after_the_last_one
   ✓ programs::test_sound_render::sounds_render_into_one_wav_file
   ✓ programs::test_sound_samples::a_rate_changes_speed_and_pitch
@@ -5469,4 +5480,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5464 passed, 0 failed, 5464 total tested
+13 ignored, 5475 passed, 0 failed, 5475 total tested

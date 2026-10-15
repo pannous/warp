@@ -743,7 +743,7 @@ const paintCanvases = new Map();
 // a paint message as shown: a GPU-drawn one names its canvas by id
 const paintingOf = data => data.canvas ? { ...data, canvas: paintCanvases.get(data.canvas) } : data;
 function sendPaintCanvas({ id, width, height, taskWorkerId, replaces }) {
-	const canvas = paintingElement({ width, height });
+	const canvas = paintingElement({ width, height, shaded: true });
 	canvas.gpu = true;
 	paintCanvases.delete(replaces);
 	paintCanvases.set(id, canvas);
@@ -1041,11 +1041,7 @@ window.playground = { evaluate, applyFix, chooseExample, runCode, reportAddress,
 	// what a run waits for, for the Firefox driver's timeout report (card firefox-hello-again)
 	state: () => ({ worker: workerStage, ready: workerSettled, pending: pending?.id, queued: queued !== undefined, showing }) };
 
-// a failure without a reason (Firefox's bare "uncaught exception: undefined") is said with where it happened
-addEventListener("error", event => {
-	if (event.error !== undefined) return;
-	console.error(`warp page: an error without a reason at ${event.filename}:${event.lineno}:${event.colno}: ${event.message}`);
-});
+reportBareErrors(self, "page"); // task-workers.js
 addEventListener("unhandledrejection", event => {
 	if (event.reason !== undefined) return;
 	event.preventDefault();

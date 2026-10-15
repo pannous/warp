@@ -1,0 +1,10 @@
+#!/usr/bin/env warp
+// Sounds as values: an oscillator's signal piped through nodes to the output.
+// A signal is the list of its amplitudes, so mix adds several the way a bus does.
+
+use sound
+
+osc(C4, 1s, "saw") |> lowpass(900) |> delay(0.25) |> out
+bass = osc(C2, 2s, "square") |> lowpass(300)
+pad = osc([E4, G4, B4], 2s) |> reverb(0.4) |> gain(0.5)
+mix(bass, pad) |> out
