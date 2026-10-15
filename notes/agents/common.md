@@ -73,6 +73,8 @@ instead of bending the code.
   cannot run in the browser goes in web/playground/excluded_samples.txt. Name the sample in the Integrator message.
 - Before a merge request: `cargo fmt` and `cargo clippy --lib --bins -- -D warnings` on your branch. The gate checks
   both (user, 2026-10-12, card cargo-fmt: the whole repo is formatted once, then enforced).
+  .warp files you wrote or changed (samples/, lib/, probes/): `scratch/warp format <files>` (your own build,
+  scripts/own-warp.sh), the canonical layout that keeps the meaning (notes/warp_format.md); the gate reports the rest.
   A branch from before the whole-repo format (78607d62e) crosses it in three steps, which never drops main's changes:
   `git merge 78607d62e^` (resolve real conflicts as usual); `cargo fmt` and commit; `git merge -X ours 78607d62e`
   (the format commit alone; your formatted side wins, and it is the same formatting); then `git merge origin/main`.
@@ -130,8 +132,10 @@ instead of bending the code.
 - Picking a card: `todo take <card> <your session name>` (user, 2026-10-06): assigns the user on GitHub, names you in
   the board field Agent, moves the card to Now. Order: first every unassigned card in Now; then the user's own
   cards, the drafts marked "(user)" that `todo list Next` puts on top (user, 2026-10-14: "the ones manually created
-  by me"); then other Next cards. Within that, prefer fresh, easy cards (user, 2026-10-06) related to your current
-  task (user, 2026-10-12).
+  by me"); then the cards of topics in Next; then loose Next cards; then Soon. Within that, prefer fresh, easy cards
+  (user, 2026-10-06) related to your current task (user, 2026-10-12), and pick a topic's cards together (user,
+  2026-10-15): `todo list Next --by-topic` groups them, `todo take --topic <topic> [-n 3]` takes its waiting cards
+  at once (same rename rules as one card; the session is named for the topic).
   A session is named for its task (user, 2026-10-12: "whenever an agent picks a new ticket, that this will also
   trigger its rename"; "the agent can keep its name if the new ticket is related to the old task"): `todo take <card>`
   run in your own tmux session (the agent defaults to it) renames you warp-<card key> when the card is unrelated: no
@@ -149,6 +153,11 @@ instead of bending the code.
   sub-issues. `todo add "…" --topic <card>` adds a sub-card, `todo sub <topic> <card>...` moves cards into a topic,
   `todo unsub <card>...` takes them out; `todo list` shows "(in <topic>)" after a sub-card and "(topic 2/5 done)"
   after a topic. Only issues have sub-issues, so these cards become issues of pannous/warp (others stay drafts).
+  Every new card gets a topic (user, 2026-10-15): `todo add` puts it into the open topic Haiku finds fitting, else
+  into a new topic Haiku names (both printed; `--topic <card>` picks one, `--no-topic` none). Priority lives at the
+  topic level: a topic card sits in the column of its priority (new topics: Soon), a new sub-card lands in its
+  topic's column unless you name one, and `todo move <topic> <column> --all` moves the topic's waiting cards along.
+  Roadmaps holds the topics nobody prioritized yet. A misfiled card: `todo sub <right topic> <card>`.
 - Crash cards (user, 2026-10-12: "on a crash a new agent is spawned. I will paste him the trace log"): a panic of a
   warp built from a checkout files a card in Now (src/diagnostics/crash_card.rs) naming its fingerprint and the branch it was
   built from. Cron (urgent-card-watch) folds a repeated crash into its open card as a note, gives the crash of a

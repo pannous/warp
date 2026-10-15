@@ -1,58 +1,49 @@
 #!/usr/bin/env warp
-// gpu_visualizer.warp's music visualizer with its shader written in warp: paint(tunnel, width, height) turns tunnel
-// and the functions it calls into one WGSL fragment shader, which raymarches 16 glowing frequency bars around a
-// pulsing gem on the GPU frame after frame. Vectors are lists of 2 to 4 numbers, .+ .- .* ./ .^ their element-wise
-// math, p#1 a component; the functions read the program's levels, bass, treble, kick, tone and time
+// warp functions compiled to a GPU shader: paint(tunnel, width, height) turns tunnel and the functions it calls into one
+// WGSL fragment shader, which raymarches 16 glowing frequency bars around a pulsing gem frame after frame while
+// mozart.mp3 plays. Vectors are lists of 2 to 4 numbers, .+ .- .* ./ .^ their element-wise math, p.x p.zy their
+// components; the functions read the program's levels, bass, treble and time
 use sound
 use math
+use os
 width = 1920
 height = 1080
 bands = 16
-// each band is measured against its own recent peak, which fades this much per frame: quiet bands still reach the top
-peak_fade = 0.995
-// below this a band is silence, not a quiet sound turned up
-quietest = 0.02
-// how much of last frame's level stays when the sound gets quieter
-fall = 0.8
-// how much of the kick stays per frame, and how much rise across all bands is a full kick
-kick_fade = 0.85
-full_kick = 3.0
+// any wav, mp3, ogg, flac, aiff or m4a file plays and lights the bars the same
+song = "mozart.mp3"
+// how much the quiet spectrum is turned up before it lights the bars
+loudness = 15
 // the shortest frame: a frame that took less waits for the rest
 frame_milliseconds = 16
 // how fast the eye flies down the tunnel, and the most steps of a ray
 speed = 3.0
 most_steps = 110
 
-tune = [C4 E4 G4 [C4 E4 G4] A4 G4 E4 [C3 G3 C4] D4 F4 A4 [D4 F4 A4] G4 B4 D5 [G3 B3 D4 G4] C5 G4 E4 [C3 E4 G4 C5]]
-song = melody_samples(tune, 0.25)
-seconds = count(song) / sample_rate
 // what the shader reads, set each frame
 global levels = [0.0 as float for band in 0..bands]
-global kick = 0.0
-global tone = 0.0
 global bass = 0.0
 global treble = 0.0
 global time = 0.0
 
 // the level of band b (0 … 15, any whole number wraps around)
 band_level(b) := levels#((b - bands * floor(b / bands)) as int + 1)
-turned(p, angle) := [cos(angle) * p#1 - sin(angle) * p#2, sin(angle) * p#1 + cos(angle) * p#2]
+turned(p, angle) := [cos(angle) * p.x - sin(angle) * p.y, sin(angle) * p.x + cos(angle) * p.y]
 hue(h) := 0.5 .+ 0.5 .* [cos(tau * h), cos(tau * (h + 0.33)), cos(tau * (h + 0.67))]
-gem_center() := [0.6 * sin(time * 0.7), 0.4 * cos(time * 0.9), time * speed + 5 - 1.2 * kick]
+gem_center() := [0.6 * sin(time * 0.7), 0.4 * cos(time * 0.9), time * speed + 5 - 1.2 * bass]
 
 // a point seen from the twisting bars: across its bar, from the axis, along its ring, its band
 // beside: 0 for the point's own bar, -1 and 1 for its neighbors
 bar_space(p, beside) := {
-	q = turned([p#1, p#2], p#3 * 0.12 + time * 0.4)
-	sector = (atan2(q#2, q#1) / tau + 0.5) * bands
+	q = turned(p.xy, p.z * 0.12 + time * 0.4)
+	sector = (atan2(q.y, q.x) / tau + 0.5) * bands
 	across = (fract(sector) - 0.5 - beside) * tau / bands * norm(q)
-	[across, norm(q), p#3 - 1.5 * round(p#3 / 1.5), floor(sector) + beside]
+	[across, norm(q), p.z - 1.5 * round(p.z / 1.5), floor(sector) + beside]
 }
 
 bar_distance(p, beside) := {
 	bars = bar_space(p, beside)
-	box = [abs(bars#1) - 0.42, 2.9 - band_level(bars#4) * 1.9 - bars#2, abs(bars#3) - 0.55]
-	norm([max(box#1, 0), max(box#2, 0), max(box#3, 0)]) + min(max(box#1, max(box#2, box#3)), 0) - 0.04
+	box = [abs(bars.x) - 0.42, 2.9 - band_level(bars.w) * 1.9 - bars.y, abs(bars.z) - 0.55]
+	norm([max(box.x, 0), max(box.y, 0), max(box.z, 0)]) + min(max(box.x, max(box.y, box.z)), 0) - 0.04
 }
 
 // the distance to the nearest surface and its band, -1 for the gem
@@ -60,11 +51,11 @@ scene(p) := {
 	own = bar_space(p, 0)
 	bar = min(bar_distance(p, 0), min(bar_distance(p, -1), bar_distance(p, 1)))
 	local = p .- gem_center()
-	flat = turned([local#1, local#3], time * 1.3)
-	spin = [flat#1, flat#2, local#2]
-	ripple = sin(7 * spin#1 + time * 4) * sin(7 * spin#2) * sin(7 * spin#3) * (0.06 + 0.25 * treble)
-	gem = norm(local) - (0.55 + 0.5 * bass + 0.35 * kick) + ripple
-	gem < bar ? [gem * 0.7, -1] : [bar * 0.8, own#4]
+	flat = turned(local.xz, time * 1.3)
+	spin = [flat.x, flat.y, local.y]
+	ripple = sin(7 * spin.x + time * 4) * sin(7 * spin.y) * sin(7 * spin.z) * (0.06 + 0.25 * treble)
+	gem = norm(local) - (0.55 + 0.8 * bass) + ripple
+	gem < bar ? [gem * 0.7, -1] : [bar * 0.8, own.w]
 }
 
 distance_at(p) := {
@@ -82,7 +73,7 @@ normal_at(p) := {
 
 gem_surface(n, ray, rim, tint) := {
 	reflected = reflect(ray, n)
-	mirrored = hue(atan2(reflected#2, reflected#1) / tau + 0.5 + time * 0.2)
+	mirrored = hue(atan2(reflected.y, reflected.x) / tau + 0.5 + time * 0.2)
 	sparkle = max(dot(reflected, normalize([0.5, 0.8, 0.3])), 0) ^ 24
 	mirrored .* mirrored .* (0.2 + rim * 1.8) .+ sparkle .+ tint .* (rim * 0.6)
 }
@@ -90,8 +81,8 @@ gem_surface(n, ray, rim, tint) := {
 bar_surface(p, band_hit, diffuse, rim, tint) := {
 	lit = band_level(band_hit)
 	bars = bar_space(p, 0)
-	edge = 1 - smoothstep(0, 0.05, min(0.46 - abs(bars#1), 0.59 - abs(bars#3)))
-	pulse = (0.5 + 0.5 * sin(p#3 * 0.7 - time * 9)) ^ 12 * (0.3 + 2 * bass + 4 * kick)
+	edge = 1 - smoothstep(0, 0.05, min(0.46 - abs(bars.x), 0.59 - abs(bars.z)))
+	pulse = (0.5 + 0.5 * sin(p.z * 0.7 - time * 9)) ^ 12 * (0.3 + 5 * bass)
 	shade = 0.04 + diffuse * (0.1 + 0.6 * lit) + 1.4 * lit * lit
 	tint .* tint .* shade .+ tint .* (rim * (0.1 + lit)) .+ (tint .+ 0.3) .* (edge * (0.15 + 2.5 * lit)) .+ tint .* pulse
 }
@@ -105,18 +96,18 @@ surface(p, ray, hit, tint) := {
 }
 
 tunnel(x, y) := {
-	uv = [(x - width / 2) / height, (height / 2 - y) / height] .* (1 - 0.25 * kick)
+	uv = [(x - width / 2) / height, (height / 2 - y) / height] .* (1 - 0.15 * bass)
 	eye = [0.4 * sin(time * 0.5), 0.3 * cos(time * 0.6), time * speed]
 	ahead = normalize(gem_center() .- eye)
 	side = normalize(cross([0, 1, 0], ahead))
-	ray = normalize(ahead .+ uv#1 .* side .+ uv#2 .* cross(ahead, side))
+	ray = normalize(ahead .+ uv.x .* side .+ uv.y .* cross(ahead, side))
 	travelled = 0.0
 	glow = [0, 0, 0]
 	seen = [0, 0, 0]
 	for marched in 1 to most_steps {
 		p = eye .+ ray .* travelled
 		hit = scene(p)
-		tint = hit#2 < 0 ? hue(time * 0.3 + tone) : hue(hit#2 / bands + tone)
+		tint = hit#2 < 0 ? hue(time * 0.3) : hue(hit#2 / bands + time * 0.05)
 		shine = hit#2 < 0 ? 0.1 + 1.5 * bass : 0.05 + 3 * band_level(hit#2)
 		glow = glow .+ tint .* tint .* (shine * 0.004 / (0.03 + abs(hit#1) * 10))
 		if hit#1 < 0.001 {
@@ -126,28 +117,20 @@ tunnel(x, y) := {
 		travelled = travelled + hit#1
 		if travelled > 40 { break }
 	}
-	lit = seen .* exp(-0.06 * travelled) .+ glow .* (0.6 + 0.6 * bass + 1.5 * kick) .+ hue(tone) .* (kick * 0.25)
+	lit = seen .* exp(-0.06 * travelled) .+ glow .* (0.6 + 1.5 * bass)
 	vignetted = lit .* (1 - 0.35 * dot(uv, uv))
 	(vignetted ./ (1 .+ vignetted)) .^ 0.85
 }
 
-sound(song)
-peaks = [quietest as float for band in 0..bands]
+// the song decodes before it plays, so the first frame keeps up with the music
+spectrum(song, 0, bands)
+play song
 started = clock()
+// the whole song, or as many seconds as the command line gives: `warp gpu_visualizer_warp.warp 3`
+seconds = count(args) > 0 ? min(args#1 as number, sound_seconds(song)) : sound_seconds(song)
 while time < seconds {
 	frame_started = clock()
-	heard = spectrum(song, time, bands)
-	rise = 0.0
-	loudest = 0
-	for band in 0..bands {
-		peaks[band] = max(quietest, max(heard[band], peaks[band] * peak_fade))
-		level = heard[band] / peaks[band]
-		rise += max(0.0, level - levels[band])
-		levels[band] = max(level, levels[band] * fall)
-		if levels[band] > levels[loudest] { loudest = band }
-	}
-	kick = max(kick * kick_fade, min(1.0, rise / full_kick))
-	tone += (loudest / bands - tone) * 0.1
+	levels = [min(1.0, sqrt(level * loudness)) for level in spectrum(song, time, bands)]
 	bass = (levels#1 + levels#2 + levels#3 + levels#4) / 4
 	treble = (levels#11 + levels#12 + levels#13 + levels#14) / 4
 	paint(tunnel, width, height)

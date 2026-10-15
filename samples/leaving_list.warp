@@ -2,7 +2,7 @@
 // Transitions are CSS (card web-transitions): a removed item fades out towards its starting style, then the items after
 // it glide up into its space instead of jumping (card web-leave-space); keyed items that change places glide too.
 // Run it in the playground and click rotate or remove.
-todos = [{id:1 text:"milk"} {id:2 text:"eggs"} {id:3 text:"tea"}]
+todos = [{id: 1 text: "milk"} {id: 2 text: "eggs"} {id: 3 text: "tea"}]
 div{
 	button{ on click { todos = todos[1..] + [todos#1] } "rotate" }
 	button{ on click { todos = todos[1..] } "remove" }

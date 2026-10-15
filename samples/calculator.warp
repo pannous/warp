@@ -18,83 +18,83 @@ def is_letter_text(c) := c != "" and c >= "a" and c <= "z"
 // factor = number | '(' expr ')' | '-' factor | func '(' expr ')' | constant
 
 def parse_expr() {
-    left = parse_term()
-    while true {
-        skip_spaces()
-        op = peek()
-        if op == "+" { advance(); left = left + parse_term() }
-        else if op == "-" { advance(); left = left - parse_term() }
-        else { return left }
-    }
+	left = parse_term()
+	while true {
+		skip_spaces()
+		op = peek()
+		if op == "+" { advance(); left = left + parse_term() }
+		else if op == "-" { advance(); left = left - parse_term() }
+		else { return left }
+	}
 }
 
 def parse_term() {
-    left = parse_factor()
-    while true {
-        skip_spaces()
-        op = peek()
-        if op == "*" { advance(); left = left * parse_factor() }
-        else if op == "/" { advance(); left = left / parse_factor() }
-        else if op == "%" { advance(); left = left % parse_factor() }
-        else if op == "^" { advance(); left = left ^ parse_factor() }
-        else { return left }
-    }
+	left = parse_factor()
+	while true {
+		skip_spaces()
+		op = peek()
+		if op == "*" { advance(); left = left * parse_factor() }
+		else if op == "/" { advance(); left = left / parse_factor() }
+		else if op == "%" { advance(); left = left % parse_factor() }
+		else if op == "^" { advance(); left = left ^ parse_factor() }
+		else { return left }
+	}
 }
 
 def apply(name, arg) {
-    if name == "sin" { return sin(arg) }
-    if name == "cos" { return cos(arg) }
-    if name == "tan" { return tan(arg) }
-    if name == "sqrt" { return sqrt(arg) }
-    if name == "abs" { return abs(arg) }
-    if name == "log" { return log(arg) }
-    if name == "exp" { return exp(arg) }
-    return error "Unknown function: " + name
+	if name == "sin" { return sin(arg) }
+	if name == "cos" { return cos(arg) }
+	if name == "tan" { return tan(arg) }
+	if name == "sqrt" { return sqrt(arg) }
+	if name == "abs" { return abs(arg) }
+	if name == "log" { return log(arg) }
+	if name == "exp" { return exp(arg) }
+	return error "Unknown function: " + name
 }
 
 def parse_factor() {
-    skip_spaces()
-    c = peek()
-    if c == "(" {
-        advance()
-        result = parse_expr()
-        skip_spaces()
-        advance()  // skip ')'
-        return result
-    }
-    if c == "-" {
-        advance()
-        return 0 - parse_factor()
-    }
-    if is_letter_text(c) {
-        name = ""
-        while is_letter_text(peek()) { name = name + advance() }
-        skip_spaces()
-        if peek() == "(" {
-            advance()
-            arg = parse_expr()
-            skip_spaces()
-            advance()  // skip ')'
-            return apply(name, arg)
-        }
-        if name == "pi" { return 3.14159265359 as float }
-        if name == "e" { return 2.71828182846 as float }
-        return error "Unknown constant: " + name
-    }
-    return parse_number()
+	skip_spaces()
+	c = peek()
+	if c == "(" {
+		advance()
+		result = parse_expr()
+		skip_spaces()
+		advance()  // skip ')'
+		return result
+	}
+	if c == "-" {
+		advance()
+		return 0 - parse_factor()
+	}
+	if is_letter_text(c) {
+		name = ""
+		while is_letter_text(peek()) { name = name + advance() }
+		skip_spaces()
+		if peek() == "(" {
+			advance()
+			arg = parse_expr()
+			skip_spaces()
+			advance()  // skip ')'
+			return apply(name, arg)
+		}
+		if name == "pi" { return 3.14159265359 as float }
+		if name == "e" { return 2.71828182846 as float }
+		return error "Unknown constant: " + name
+	}
+	return parse_number()
 }
 
 def parse_number() {
-    skip_spaces()
-    start = pos
-    while is_digit_text(peek()) or peek() == "." { advance() }
-    return byte_slice(input, start, pos) as float
+	skip_spaces()
+	start = pos
+	while is_digit_text(peek()) or peek() == "." { advance() }
+	return byte_slice(input, start, pos) as float
 }
 
 def calc(text) {
-    input = text
-    pos = 0
-    return parse_expr()
+	input = text
+	pos = 0
+	return parse_expr()
 }
 
 // Tests

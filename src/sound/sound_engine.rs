@@ -1,6 +1,6 @@
 //! warp's own sound output (card native-sound, notes/sound.md "Our own API"): the sounds of all voices mixed into one
 //! output stream (cpal: CoreAudio on macOS), each starting at its frame, so a sound queued behind another follows it
-//! to the sample and `at 2 beats` lands to the sample live too, not only in render_sound. Before, each sound was a WAV
+//! to the sample and `at 2 beats` lands to the sample live too, not only in save sound. Before, each sound was a WAV
 //! for afplay, started by a sleeping thread: exact to the millisecond, with the OS mixing the players.
 //! The Mixer is the clockwork, free of any device (tests drive it); the engine feeds it to the device's callback.
 //! A sound's start is an Instant (sound.rs scheduled) turned into a frame by one fixed anchor, the stream's start:

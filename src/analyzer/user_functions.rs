@@ -696,13 +696,11 @@ fn declared_globals_in(mut scope: Scope, program: &Node) -> HashMap<String, Loca
 	scope.globals
 }
 
-/// The functions a word can apply: the program's functions that take arguments and the built-in real functions
+/// The program's own functions that take arguments
 pub fn applicable_function_names(node: &Node) -> HashSet<String> {
 	let mut ctx = Context::new();
 	extract_user_functions_inner(&mut ctx, node);
-	let user_functions =
-		ctx.user_functions.into_iter().filter(|(_, function)| !function.params.is_empty()).map(|(name, _)| name);
-	user_functions.chain(crate::numbers::real::FUNCTIONS.iter().map(|name| name.to_string())).collect()
+	ctx.user_functions.into_iter().filter(|(_, function)| !function.params.is_empty()).map(|(name, _)| name).collect()
 }
 
 /// A lifted lambda is never called by name (closures.rs): its captured values take the kinds of the variables captured (a

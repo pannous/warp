@@ -183,7 +183,7 @@ function deployingStatus({ login, program, error }, late) {
 	if (error) return `${who}Not deployed: ${escapedHtml(error)}`;
 	if (!program) return `${who}Deploying: the program's link shows here as soon as it is known.`;
 	const link = `<a href="${escapedHtml(program)}">${escapedHtml(program)}</a>`;
-	return `${who}Deployed at ${link}: ${late ? "it does not answer yet, the link works once it does." : "this window opens it as soon as it answers…"}`;
+	return `${who}Deploying at ${link}: ${late ? "it does not answer yet, the link works once it does." : "this window opens it as soon as it answers…"}`;
 }
 
 // GET /deploying?ticket=: the deploy window (card user-click): the program's link as soon as the ticket knows it, and

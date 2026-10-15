@@ -22,8 +22,8 @@ route "/" {
 	div{
 		h1{ "Users: " + user_count() }
 		ul{
-			li{ a{ href:"/users/1" "the first" } }
-			li{ a{ href:"/users/2" "the second" } }
+			li{ a{ href: "/users/1" "the first" } }
+			li{ a{ href: "/users/2" "the second" } }
 		}
 	}
 }
@@ -33,7 +33,7 @@ route "/" {
 route "/users/:id:int" {
 	div{
 		h1{ "User " + users#id.name }
-		a{ href:"/" "all users" }
+		a{ href: "/" "all users" }
 	}
 }
 
