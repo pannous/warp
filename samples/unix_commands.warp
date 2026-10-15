@@ -1,0 +1,14 @@
+#!/usr/bin/env warp
+// use script: the basic Unix commands as warp words, their results lists and maps (card unix-words, wiki/script.md)
+use script
+
+print "home folder entries:", count(ls ~/)
+print "a program:", which "sh"
+print "samples:", count(find_files(./samples, "*.warp"))
+// write, cp, mv, touch, mkdir and rm (to the Trash) change files; this sample only reads
+profile = ~/.profile
+if exists(profile) {
+	print wc profile
+	print head(profile, 3)
+	print grep("^export", profile)
+}
