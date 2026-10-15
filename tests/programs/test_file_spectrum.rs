@@ -4,11 +4,13 @@
 #![cfg(feature = "native")]
 use crate::is;
 
-/// A program that renders an A4 of 0.2 s to a WAV, then runs `then` on it, the file's path as `file`
+/// A program that renders an A4 of 0.2 s to a WAV, then runs `then` on it, the file's path as `file`; a file of its own,
+/// as tests running in parallel would read each other's half-written file
 fn of_a_rendered_tone(then: &str) -> String {
+	static RENDERED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 	let folder = crate::common::scratch_directory("file_spectrum");
 	std::fs::create_dir_all(&folder).unwrap();
-	let file = folder.join("a4.wav");
+	let file = folder.join(format!("a4_{}.wav", RENDERED.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
 	format!("use sound\nfile = \"{}\"\ntone(A4, 0.2)\nsave sound as file\n{then}", file.display())
 }
 
