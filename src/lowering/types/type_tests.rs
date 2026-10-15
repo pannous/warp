@@ -477,6 +477,13 @@ pub(crate) fn begins_type_test(right: &Node) -> bool {
 		})
 }
 
+/// `is_type(value, spec)` of a declared parameter type (`text`, `ints`, `list of int`, `map`); None for no type word
+pub(crate) fn declared_type_test(subject: Node, type_name: &str) -> Option<Node> {
+	let words: Vec<&str> = type_name.split(' ').collect();
+	let names = Names::default();
+	type_spec(&words, &names).map(|spec| is_type_call(subject, spec, &names))
+}
+
 /// `x is int`; `type(x) is int` tests x, as the type of x is what it names (card type-int)
 fn is_type_call(subject: Node, spec: String, names: &Names) -> Node {
 	let tested = typed_argument(&subject).unwrap_or(subject);
