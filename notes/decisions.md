@@ -102,6 +102,11 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - dollar-element (2026-10-14): in a page program `$xyz` is the element with id xyz (`$xyz.value`, `$xyz.focus()`);
   `$window`, `$document` are those globals; misspelled members are compile-time errors. A route's `$title` stays the
   submitted field's value.
+  dollar-value (2026-10-15, user; card dollar-value): `$who` used as a value is the element's value: an input,
+  textarea or select gives its text, a number input a number, a checkbox yes/no, any other element its text content.
+  `$who = "Ann"` writes it; members reach the element (`$who.focus()`, `$who.placeholder`); `$who.value` stays valid.
+  Principle: two variable scopes never mix: page elements live only in the `$` scope, program variables in their own,
+  so a plain `who` never names an element (unlike JavaScript, where a local silently hides the element of that id).
 - call-as-grouping (2026-10-15): `f x as T` is `f(x as T)` everywhere, like `f 2 + 1` = `f(2 + 1)`, with a warning
   naming `f(x as T)` and `(f x) as T`; dispatch on the result goes via `pdf p = render "x"` or `(render "x") as pdf`.
 - uniscript-binary-import (2026-10-15, user: "definitely yes"): ~/dev/uniscript gets wasm-only c/ffi additions
@@ -418,6 +423,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - Ranges (2026-10-09): `r: 1..n` is the range itself, same as `r = 1..n`. `upto` excludes the end with a hint.
 
 ## Functions and calls
+- function-references (2026-10-15, user): a bare name of a function that needs arguments, compared with a type
+  (`floor is function`) or in `type(floor)`, means the function itself (card bare-fn-type). `.floor` in argument
+  position is a lambda on it, like Swift's .member: `xs.map(.floor)`, `people.sort(.age)` (card dot-lambda).
+  `&floor` and `function floor` stay the explicit references; `:floor` is not used.
 - type-library-words (2026-10-12): list/map/text library words are always available as `x.f()` and `f(x)`;
   `use list` only for qualified `list.zip`. P171 other modules' words need their `use` (error naming the module);
   `write` and `exists` are global; a file URL loads the file module.
