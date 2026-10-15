@@ -1,11 +1,6 @@
 // The canvas of paint (src/host.rs paint, lib/draw.warp) and the pointer over it, for the playground (playground.js)
 // and for a built site that paints (card site-frames, src/web/site.rs, site-thread.js)
 
-// the gray levels of paint: a nonzero pixel, a zero pixel; from PAINT_COLOR_FROM on a value is a color 0xAARRGGBB
-// (src/graphics/paint.rs shade, lib/draw.warp)
-const PAINT_INK = 29;
-const PAINT_PAPER = 250;
-const PAINT_COLOR_FROM = 2 ** 24;
 const PAINT_SHOWN_SIDE = 288; // a small painting is shown this wide (or high), scaled by a whole factor so pixels stay square
 // mouse_x, mouse_y, mouse_down (host.js system_value): the pointer over a canvas in shared memory, which a running
 // animation reads at once (its worker takes no message while it runs); the worker gets the buffer and these names
@@ -18,22 +13,22 @@ const TYPING_TARGETS = ".CodeMirror, input, textarea, [contenteditable]";
 let paintingWindow;
 const pointer = globalThis.SharedArrayBuffer ? new Int32Array(new SharedArrayBuffer(POINTER_NAMES.length * Int32Array.BYTES_PER_ELEMENT)) : undefined;
 
-// paint(pixels, width, height): one canvas per call, a pixel dark where its value is nonzero (true), light where 0
-// what a pixel value shows, as src/graphics/paint.rs shade: paper for 0, its color for a value with an alpha byte, else ink
-// as one opaque pixel of ImageData's bytes R, G, B, A read as a little-endian 32-bit word
-const OPAQUE_WORD = 0xFF000000;
-const grayWord = level => (OPAQUE_WORD | level << 16 | level << 8 | level) >>> 0;
-const PAPER_WORD = grayWord(PAINT_PAPER);
-const INK_WORD = grayWord(PAINT_INK);
-function paintShade(value) {
-	if (!value) return PAPER_WORD;
-	const number = Number(value);
-	if (number < PAINT_COLOR_FROM) return INK_WORD;
-	return (OPAQUE_WORD | (number % 256) << 16 | (Math.floor(number / 256) % 256) << 8 | Math.floor(number / 65536) % 256) >>> 0;
+// paint(pixels, width, height): one canvas per call, its pixels shaded by the program's Worker (host-media.js
+// paintFrame), which sends of a painting the size of the one before only the rectangle that changed. The painting it
+// changes is the last one the page got: the whole of each painting is kept here, as an ImageData over its words
+let lastPainting;
+function wholePainting(painting) {
+	const { frame, width, height } = painting;
+	if (!frame) return painting; // a canvas the GPU draws into
+	const whole = frame.columns === width && frame.rows === height;
+	const words = whole ? frame.words : lastPainting.words;
+	for (let row = 0; !whole && row < frame.rows; row++) words.set(frame.words.subarray(row * frame.columns, (row + 1) * frame.columns), (frame.y + row) * width + frame.x);
+	const image = whole ? new ImageData(new Uint8ClampedArray(words.buffer), width, height) : lastPainting.image;
+	return lastPainting = { ...painting, words, image };
 }
 
 // a canvas of the painting's size, shown scaled up by a whole factor; the GPU's own canvas of a painted shader as it is
-const paintingCanvas = painting => painting.canvas ?? drawn(paintingElement(painting), painting);
+const paintingCanvas = painting => painting.canvas ?? drawnWhole(paintingElement(painting), painting);
 
 function paintingElement(painting) {
 	const canvas = document.createElement("canvas");
@@ -64,12 +59,36 @@ function resizeWindow({ width, height }, paintings) {
 
 const sameSize = (one, other) => one.width === other.width && one.height === other.height;
 
-function drawn(canvas, { pixels, width, height }) {
-	const image = canvas.getContext("2d").createImageData(width, height);
-	// a word per pixel, no array per pixel: a 1280×800 frame of samples/finger_paint took Safari far too long (card abysmally-slow)
-	const words = new Uint32Array(image.data.buffer);
-	for (let index = 0; index < width * height; index++) words[index] = paintShade(pixels[index]);
-	canvas.getContext("2d").putImageData(image, 0, 0);
+// a painting drawn into a canvas that shows the one before: what changed, at the screen's pace. An animation's frames may
+// come quicker than the screen shows them; their rectangles are joined and drawn once per screen frame
+function drawn(canvas, painting) {
+	if (!painting.image) return canvas;
+	canvas.waiting = joined(canvas.waiting, painting.frame);
+	canvas.waitingImage = painting.image;
+	if (!canvas.drawScheduled) requestAnimationFrame(() => drawWaiting(canvas));
+	canvas.drawScheduled = true;
+	return canvas;
+}
+
+function drawWaiting(canvas) {
+	const { x, y, columns, rows } = canvas.waiting;
+	canvas.drawScheduled = false;
+	canvas.waiting = undefined;
+	if (columns && rows) canvas.getContext("2d").putImageData(canvas.waitingImage, 0, 0, x, y, columns, rows);
+}
+
+// the rectangle around two (an empty one has no columns or rows)
+function joined(one, other) {
+	if (!one?.columns || !one.rows) return other;
+	if (!other.columns || !other.rows) return one;
+	const [x, y] = [Math.min(one.x, other.x), Math.min(one.y, other.y)];
+	const right = Math.max(one.x + one.columns, other.x + other.columns), bottom = Math.max(one.y + one.rows, other.y + other.rows);
+	return { x, y, columns: right - x, rows: bottom - y };
+}
+
+// a new canvas, drawn whole at once
+function drawnWhole(canvas, painting) {
+	canvas.getContext("2d").putImageData(painting.image, 0, 0);
 	return canvas;
 }
 

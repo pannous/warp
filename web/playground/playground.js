@@ -805,8 +805,8 @@ function showFrame(paintings) {
 // OffscreenCanvas straight to the task Worker holding the GPU device (task-workers.js). Not through a port the program's
 // Worker made: Firefox lost a canvas posted into a port still on its way to the task Worker (card shaders-firefox)
 const paintCanvases = new Map();
-// a paint message as shown: a GPU-drawn one names its canvas by id
-const paintingOf = data => data.canvas ? { ...data, canvas: paintCanvases.get(data.canvas) } : data;
+// a paint message as shown: a GPU-drawn one names its canvas by id, the others change the painting before (canvas.js)
+const paintingOf = data => data.canvas ? { ...data, canvas: paintCanvases.get(data.canvas) } : wholePainting(data);
 function sendPaintCanvas({ id, width, height, taskWorkerId, replaces }) {
 	const canvas = paintingElement({ width, height, shaded: true });
 	canvas.gpu = true;
