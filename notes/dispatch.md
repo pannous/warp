@@ -94,6 +94,8 @@ generic function too; the list/map/text library as methods where that simplifies
   `b.size()` and `size(b)` call the method, and the definition warns (field_method_warnings).
 - Follow-up cards: dispatch-positional (done), warn-field (done), library-words (step d, done: every standard function is a
   fallback, one builtin method rule in lower_function_methods).
+- Across modules (card cross-module-overload): a std module's method like shell's `sort(file:Path)` joins the list
+  word's generic function too; a path literal becomes a Path instance at a Path position (notes/shell_words.md).
 
 ## Every positional argument (card dispatch-positional, 2026-10-12)
 A method's signature is the class of each positional parameter, None where it takes any value (traits.rs Signature);

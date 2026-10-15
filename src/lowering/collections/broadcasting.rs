@@ -469,8 +469,13 @@ pub fn lower(program: Node) -> Node {
 	let mut found = Vec::new();
 	definitions(&program, &mut found);
 	implicit_definitions(&program, &mut found);
+	// `f(c: text)` beside `f(b: list)`: an overload takes the list itself (overloads.rs), no definition broadcasts
+	let every_overload_needs_a_scalar = |definition: &&Definition| {
+		found.iter().filter(|other| other.name == definition.name && other.params.len() == 1).all(needs_a_scalar)
+	};
 	let mut broadcasting: HashSet<String> = found
 		.iter()
+		.filter(every_overload_needs_a_scalar)
 		.filter(|definition| needs_a_scalar(definition))
 		.map(|definition| definition.name.clone())
 		.collect();
@@ -481,16 +486,19 @@ pub fn lower(program: Node) -> Node {
 		.iter()
 		.filter(|(word, _)| !defined.contains(&word.to_string()))
 		.map(|(word, scalars)| (word.to_string(), scalars.to_vec()));
-	let scalar_parameters: HashMap<String, Vec<bool>> = found
-		.iter()
-		.map(|definition| {
-			(
-				definition.name.clone(),
-				definition.params.iter().map(|param| takes_a_scalar(param, &definition.body)).collect(),
-			)
-		})
-		.chain(library_scalar_parameters)
-		.collect();
+	// a parameter takes a scalar when every overload of as many parameters takes one there
+	let mut scalar_parameters: HashMap<String, Vec<bool>> = library_scalar_parameters.collect();
+	for definition in &found {
+		let scalars: Vec<bool> =
+			definition.params.iter().map(|param| takes_a_scalar(param, &definition.body)).collect();
+		scalar_parameters
+			.entry(definition.name.clone())
+			.and_modify(|known| match known.len() == scalars.len() {
+				true => known.iter_mut().zip(&scalars).for_each(|(known, scalar)| *known &= scalar),
+				false => *known = scalars.clone(),
+			})
+			.or_insert(scalars);
+	}
 	let mut assigned = HashMap::new();
 	collect_list_variables(&program, &broadcasting, &scalar_parameters, &mut assigned);
 	let names: HashSet<String> = assigned.keys().cloned().collect();
@@ -519,12 +527,8 @@ pub fn lower(program: Node) -> Node {
 fn each_singular(node: Node, lists: &HashSet<String>, names: &HashSet<String>) -> Node {
 	let walked_list = |word: &Node| {
 		let name = word.symbol_name()?;
-		let plurals = [
-			name.to_string(),
-			format!("{name}s"),
-			format!("{name}es"),
-			format!("{}ies", name.strip_suffix('y').unwrap_or(name)),
-		];
+		// the English plural and the programmer's: `x` walks `xs` though English writes boxes
+		let plurals = [name.to_string(), crate::extensions::strings::english_plural(name), format!("{name}s")];
 		let is_plural_of = |plural: &String| *plural == name || !names.contains(name);
 		plurals.into_iter().find(|plural| lists.contains(plural) && is_plural_of(plural))
 	};
@@ -958,11 +962,11 @@ impl Broadcast {
 		let shadowed = list
 			.symbol_name()
 			.is_some_and(|variable| self.shadowed.borrow().iter().any(|parameter| parameter == variable));
-		let is_list_word = crate::library_words::is_library_word(name);
-		(!shadowed
-			&& !is_list_word
-			&& self.instances.as_ref().is_some_and(|instances| instances.is_element_field(list, name)))
-		.then(|| each_item(list.clone(), |item| key(item, Op::Dot, field.clone())))
+		if shadowed || crate::library_words::is_library_word(name) {
+			return None;
+		}
+		let field = symbol(&self.instances.as_ref()?.element_field(list, name)?);
+		Some(each_item(list.clone(), |item| key(item, Op::Dot, field.clone())))
 	}
 
 	/// A list variable, a range or a broadcast: `sqrt xs`, `sqrt (1 to 4)`, `round(floor(xs))` map over its items
