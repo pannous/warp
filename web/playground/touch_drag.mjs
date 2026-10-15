@@ -19,8 +19,10 @@ const pause = milliseconds => new Promise(done => setTimeout(done, milliseconds)
 const finish = text => { console.log(text); process.exit(0); };
 
 const LAST_CANVAS_BOUNDS = `JSON.stringify((() => {
-	const bounds = [...document.querySelectorAll("#paintings canvas")].at(-1)?.getBoundingClientRect();
-	return bounds && { left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height };
+	const canvas = [...document.querySelectorAll("#paintings canvas")].at(-1);
+	canvas?.scrollIntoView({ block: "center" });
+	const bounds = canvas?.getBoundingClientRect();
+	return bounds && { left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height, viewport: [innerWidth, innerHeight] };
 })())`;
 
 // the browser's page that shows a painting (agent-browser keeps others, about:blank first), and the painting's bounds
@@ -47,7 +49,7 @@ async function drag() {
 	await pause(STEP_MS);
 	await touch("touchEnd", []);
 	const [start, end] = [at(FROM), at(TO)].map(({ x, y }) => `${Math.round(x)},${Math.round(y)}`);
-	finish(`dragged ${start} → ${end}`);
+	finish(`dragged ${start} → ${end} in a ${bounds.viewport.join("×")} view`);
 }
 
 socket.onopen = () => drag().catch(error => finish(`touch failed: ${error.message ?? error}`));

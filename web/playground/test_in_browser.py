@@ -732,7 +732,7 @@ def fingers_wrong():
 			if (middle && Math.min(...middle.slice(0, 3)) < {PAPER_FROM}) return "painted";
 			await new Promise(done => setTimeout(done, 100));
 		}}
-		return shown() ? "paper" : "no canvas";
+		return `${{shown() ? "paper" : "no canvas"}}, value ${{document.getElementById("value").textContent}} status ${{document.getElementById("status").textContent}} at ${{location.hash}}`;
 	}})()""")
 	drag = lambda share: subprocess.run(["node", FINGER_DRAG, browser("get", "cdp-url"), *map(str, share)], capture_output=True, text=True, timeout=60).stdout.strip()
 	touch_action = lambda value: browser("eval", f'[...document.querySelectorAll("#paintings canvas")].at(-1).style.touchAction = "{value}"')
