@@ -66,8 +66,13 @@ fn suffix_words(node: &Node) -> SuffixWords {
 	let mut variables = HashSet::new();
 	crate::library_words::collect_assigned_names(node, &mut variables);
 	let functions = crate::analyzer::applicable_function_names(node);
+	// the library's words of one value apply too (`x sined`, `x floored`), unless the program names them
+	let library_words = crate::lowering::library_signatures::one_value_words()
+		.filter(|word| !variables.contains(*word) && !functions.contains(*word))
+		.map(String::from);
+	let applicable: Vec<String> = functions.iter().cloned().chain(library_words).collect();
 	let words =
-		functions.iter().flat_map(|function| past_forms(function).into_iter().map(|word| (word, function.clone())));
+		applicable.iter().flat_map(|function| past_forms(function).into_iter().map(|word| (word, function.clone())));
 	let mut words: HashMap<String, String> =
 		words.filter(|(word, _)| word.ends_with("ed") && !variables.contains(word)).collect();
 	// the library's own: `xs sorted`, `xs reversed`, `x squared` (x²), `x cubed` (x³), unless the program names them

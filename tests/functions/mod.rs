@@ -14,6 +14,7 @@ mod test_bare_function_name;
 mod test_block_function;
 mod test_body_statement;
 mod test_braced_it_warning;
+mod test_braceless_calls; // card braceless-calls
 mod test_broadcast_of_list_variables; // card round-floor-xs
 mod test_broadcast_reassigned;
 mod test_broadcasting;
@@ -145,6 +146,7 @@ mod test_property_assign;
 mod test_property_words;
 mod test_python_higher_order;
 mod test_python_ruby_definitions;
+mod test_real_function_values; // card sin-cos
 mod test_recursive_list_functions;
 mod test_render_as;
 mod test_return_type_dispatch;

@@ -1,6 +1,6 @@
 // pictures in the page (a part of host.js, which says how parts work): the host words paint and text_coverage
 // (src/host.rs), with the int lists they cross in one call each; host-gpu.js builds its pixels with listOfInts and
-// host-files.js reads sound_samples with intsOfList
+// host-sound.js reads sound_samples with intsOfList
 
 // free memory for `byteCount` bytes above the program's text heap, which its next text may take again (src/host.rs
 // scratch, src/wasm_emitter/lists/int_lists.rs); undefined without a text heap
@@ -42,13 +42,75 @@ function listOfInts(program, ints) {
 	return program.ints_to_list(address, ints.length);
 }
 
-// the first `room` items of a list of Ints, read in one call of the program's list_to_ints (paint's pixels, their
-// magnitudes); undefined for any other value or without it, which the caller reads node by node
-function intsOfList(program, list, room, Numbers = Array) {
+// the first `room` items of a list of Ints, read in one call of the program's list_to_ints (paint's pixels, sound's
+// samples), their magnitudes as the low and high 32 bits of each (Int32Array): a view of the program's memory, valid
+// until it runs on. Undefined for any other value or without list_to_ints, which the caller reads node by node
+function intHalvesOfList(program, list, room) {
 	const address = program.list_to_ints && scratch(program, room * BigInt64Array.BYTES_PER_ELEMENT);
 	if (address === undefined) return undefined;
 	const count = program.list_to_ints(list, address, room);
-	return count < 0 ? undefined : Numbers.from(new BigInt64Array(program.memory.buffer, address, count), Number);
+	return count < 0 ? undefined : new Int32Array(program.memory.buffer, address, 2 * count);
+}
+const intsOfList = (program, list, room) => {
+	const halves = intHalvesOfList(program, list, room);
+	return halves && Array.from(new BigInt64Array(halves.buffer, halves.byteOffset, halves.length / 2), Number);
+};
+
+// the halves of plain pixel values (yes/no, numbers, a shader's u32 colors), as intHalvesOfList gives them
+function halvesOf(values) {
+	const halves = new Int32Array(2 * values.length);
+	for (let index = 0; index < values.length; index++) {
+		const value = Number(values[index]);
+		halves[2 * index] = value % 2 ** 32;
+		halves[2 * index + 1] = Math.floor(value / 2 ** 32);
+	}
+	return halves;
+}
+
+// the gray levels of paint: a nonzero pixel, a zero pixel; from PAINT_COLOR_FROM on a value is a color 0xAARRGGBB
+// (src/graphics/paint.rs shade, lib/draw.warp). A pixel shown is one opaque word of ImageData's R, G, B, A bytes
+// read little-endian, a signed 32-bit int like the Int32Array it is kept in
+const PAINT_INK = 29;
+const PAINT_PAPER = 250;
+const PAINT_COLOR_FROM = 2 ** 24;
+const OPAQUE_WORD = 0xFF000000;
+const grayWord = level => OPAQUE_WORD | level << 16 | level << 8 | level;
+const PAPER_WORD = grayWord(PAINT_PAPER);
+const INK_WORD = grayWord(PAINT_INK);
+function shadeWord(low, high) {
+	if (high === 0 && low >>> 0 < PAINT_COLOR_FROM) return low === 0 ? PAPER_WORD : INK_WORD;
+	return OPAQUE_WORD | (low & 0xFF) << 16 | low & 0xFF00 | low >>> 16 & 0xFF;
+}
+
+// a paint call as the page draws it (canvas.js wholePainting): its pixels shown as words, and when the painting before
+// had the same size only the rectangle that changed since, often empty. A stroke of samples/finger_paint changes a few
+// hundred of 1280×800 pixels: the whole frame shaded as Numbers, cloned to the page and shaded there again took
+// hundreds of milliseconds each in Safari (card abysmally-slow). {x, y, columns, rows, words}, words row by row
+function paintFrame(holder, halves, width, height) {
+	const last = holder.paintedFrame;
+	const same = last?.width === width && last.height === height;
+	const words = same ? last.words : new Int32Array(width * height);
+	holder.paintedFrame = { width, height, words };
+	if (!same) {
+		for (let at = 0; at < width * height; at++) words[at] = shadeWord(halves[2 * at], halves[2 * at + 1]);
+		return { x: 0, y: 0, columns: width, rows: height, words: words.slice() };
+	}
+	let [left, right, top, bottom] = [width, -1, height, -1];
+	for (let row = 0, at = 0; row < height; row++) {
+		for (let column = 0; column < width; column++, at++) {
+			const word = shadeWord(halves[2 * at], halves[2 * at + 1]);
+			if (word === words[at]) continue;
+			words[at] = word;
+			left = Math.min(left, column);
+			right = Math.max(right, column);
+			top = Math.min(top, row);
+			bottom = row;
+		}
+	}
+	const [columns, rows] = [Math.max(right - left + 1, 0), Math.max(bottom - top + 1, 0)];
+	const changed = new Int32Array(columns * rows);
+	for (let row = 0; row < rows; row++) changed.set(words.subarray((top + row) * width + left, (top + row) * width + left + columns), row * columns);
+	return { x: Math.min(left, width), y: Math.min(top, height), columns, rows, words: changed };
 }
 
 addHostPart({
@@ -63,16 +125,17 @@ addHostPart({
 		// playground straight into the page's canvas (host-gpu.js gpuPainted), which the hook gets by its id
 		paint: (pixels, width, height, values) => {
 			if (!hooks.paint) throw new Error("paint: no canvas here; it draws in the playground page");
-			const room = Number(width) * Number(height);
-			// typed arrays, which reach the page as one copy: a million numbers of an Array were cloned one by one (card abysmally-slow)
-			const painted = intsOfList(program(), pixels, room, Float64Array) ?? plainOfTree(readNode(program(), pixels));
+			[width, height] = [Number(width), Number(height)];
+			const halves = intHalvesOfList(program(), pixels, width * height);
+			const painted = halves ?? plainOfTree(readNode(program(), pixels));
 			if (typeof painted === "string") {
 				if (!holder.gpuRendered) throw new Error("paint: a shader needs WebGPU (host-gpu.js), which this page has not");
 				const rendered = (holder.gpuPainted ?? holder.gpuRendered)(painted, width, height, values); // pixels, or the id of a canvas drawn into
-				if (typeof rendered === "number") return hooks.paint(undefined, Number(width), Number(height), rendered);
-				return hooks.paint(rendered, Number(width), Number(height), undefined, true);
+				holder.paintedFrame = undefined;
+				if (typeof rendered === "number") return hooks.paint(undefined, width, height, rendered);
+				return hooks.paint(paintFrame(holder, halvesOf(rendered), width, height), width, height, undefined, true);
 			}
-			hooks.paint(painted, Number(width), Number(height));
+			hooks.paint(paintFrame(holder, halves ?? halvesOf(painted), width, height), width, height);
 		},
 	}),
 });
