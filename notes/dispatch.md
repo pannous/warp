@@ -94,6 +94,8 @@ generic function too; the list/map/text library as methods where that simplifies
   `b.size()` and `size(b)` call the method, and the definition warns (field_method_warnings).
 - Follow-up cards: dispatch-positional (done), warn-field (done), library-words (step d, done: every standard function is a
   fallback, one builtin method rule in lower_function_methods).
+- Across modules (card cross-module-overload): a std module's method like shell's `sort(file:Path)` joins the list
+  word's generic function too; a path literal becomes a Path instance at a Path position (notes/shell_words.md).
 
 ## Every positional argument (card dispatch-positional, 2026-10-12)
 A method's signature is the class of each positional parameter, None where it takes any value (traits.rs Signature);
@@ -103,3 +105,18 @@ method keeps its old name `sort·Deck`. Generic::method_for: per position the li
 ambiguous ("meet(Dog, Dog) is ambiguous: meet(Dog, Animal) and meet(Animal, Dog) fit equally well", fix: define the
 exact one). At run time the dispatcher tests `instance_of` at every typed position, per combination of the classes
 that fit there (or no instance), the combinations testing more classes first.
+
+## One method form (card one-method-form, user 2026-10-15)
+`class P{def x(k):=…}` and `def x(p:P, k):=…` are one method: `p.x(k)`, `x(p, k)`, `x p`, `&x`, methods(P), dir(p)
+behave alike. A class-body method lowers to `x(self:P, k)`; an outside one keeps its place (generic functions, traits
+and dispatch see one form) and gets the class-body rules where they differed:
+- bare fields: in `def x(p:P) := n + 1` a field n of P (inherited ones too) reads p.n, unless a parameter is named n
+  (class_methods/outside_methods.rs, receiver_reads with the receiver p);
+- a type word as the name: `def double(p:P)` is renamed `method·double` like a class-body `double()`, and
+  `double(P(3))`, `double(p)` of an instance call the method in both forms (renamed_type_word_methods);
+- reflection: methods(P) ≡ functions(P) lists every function outside class bodies whose first parameter is declared P
+  or an ancestor (class_layouts); dir(p) = fields + methods(P), no untyped generic words. A module's warp.meta keeps
+  outside methods among its functions (only class-body methods travel inside the class definition).
+A first try moved outside definitions into the class body; that changed dispatch errors, traits, a units helper and
+compiled modules' exports, so the outside form stays where it is.
+Open: a trait's functions (`f(s:Shape)` is untyped before reflection reads it), `.declared_in` metadata.

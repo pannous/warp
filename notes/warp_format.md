@@ -11,7 +11,9 @@ Options are words, never `--flags` (user, 2026-10-15; the older flags move with 
   with `|>`, `.`, `then`) one more
 - `name: value`, a parameter's type too: `f(x: int)` (user: "spaced everywhere", so help and the standard-library
   docs print signatures that way); one space after a comma, none before; none just inside `(…)` and `[…]`
-- every binary operator spaced: `x = a + b * 2` (ranges `..`, `//`, `<`, `>`, `.` stay as written)
+- every binary operator spaced: `x = a + b * 2`, `1 < 2`, `3 ≤ 4` (card format-spaces: every symbol spelling of the
+  operator table, src/operators/spellings.rs; GLUED_SPELLINGS in rules.rs keep `.`, ranges `..`, prefix/postfix and
+  the unit `·` as written; the tree check keeps `list<int>` and `7//2` glued)
 - list separators stay as written (commas or spaces)
 - no trailing whitespace, at most one blank line in a row, one final newline; the spaces before a trailing comment and
   comment text stay

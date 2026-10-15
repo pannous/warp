@@ -109,6 +109,13 @@ pub fn names_given(program: &Node) -> std::collections::HashSet<String> {
 	names
 }
 
+/// Each name the program gives with how: "variable", "function", "parameter" or "field"
+pub fn names_given_with_kinds(program: &Node) -> Vec<(String, &'static str)> {
+	let mut names = vec![];
+	walk_names(program, &mut |name, kind| names.push((name.to_string(), kind)));
+	names
+}
+
 /// A hard keyword assigned anywhere, a soft one defined at the top level: the loud error
 fn first_refused(node: &Node, top_level: bool) -> Option<Node> {
 	if let Some(name) = node.defined_name() {
@@ -166,7 +173,7 @@ fn note_local_names(program: &Node) {
 }
 
 /// Every name the program gives: parameters, variables, fields and functions, with their role
-fn walk_names(node: &Node, found: &mut dyn FnMut(&str, &str)) {
+fn walk_names(node: &Node, found: &mut dyn FnMut(&str, &'static str)) {
 	match node.drop_meta() {
 		Node::Key(target, Op::Define | Op::Assign, body) => {
 			match target.drop_meta() {

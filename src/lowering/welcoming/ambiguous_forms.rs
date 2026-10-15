@@ -157,7 +157,8 @@ fn library_word_values(node: Node, words: &SuffixWords) -> Node {
 			// `map sqrt xs`, `map sqrt on: xs`: the parser applied sqrt, the iteration word takes it as its function
 			let mut items = if is_iteration { crate::closures::with_operator_word_unfolded(items, 1) } else { items };
 			let position = function_position(&items, words);
-			if let Some(function) = items.get_mut(position).filter(|item| is_iteration && words.is_function_word(item))
+			if let Some(function) =
+				items.get_mut(position).filter(|item| is_iteration && words.is_iterated_function(item))
 			{
 				*function = word_function(function);
 			}
@@ -187,7 +188,7 @@ fn word_function(word: &Node) -> Node {
 /// else last as in `map(xs, floor)`
 fn function_position(items: &[Node], words: &SuffixWords) -> usize {
 	match items {
-		[_, function, _, ..] if words.is_function_word(function) => 1,
+		[_, function, _, ..] if words.is_iterated_function(function) => 1,
 		_ => items.len().saturating_sub(1),
 	}
 }
@@ -265,16 +266,30 @@ impl SuffixWords {
 	}
 
 	/// A word calling the values after it, the program's own function or a standard word it does not name: `max sorted
-	/// xs` is max(sort(xs)) and `f sorted xs` f(sort(xs)), no suffix `sorted` of max or f
+	/// xs` is max(sort(xs)) and `f sorted xs` f(sort(xs)), no suffix `sorted` of max or f; `map sorted xs` maps sort
 	fn is_calling_word(&self, node: &Node) -> bool {
 		matches!(node.drop_meta(), Node::Symbol(name) if self.functions.contains(name))
 			|| self.unnamed(node).is_some_and(crate::library_words::is_calling_word)
+			|| (self.unnamed(node).is_some() && crate::lowering::lambdas::takes_a_function_first(node))
 	}
 
-	/// A library word of one value the program does not name itself, also libm's (`floor`, `sin`): a function value
+	/// A library word of one value the program does not name itself, also libm's (`floor`, `sin`), the host's
+	/// (`print`) and a counting word (`len`), but no type word (`type Name = string`): a function value
 	fn is_function_word(&self, node: &Node) -> bool {
-		let is_libm_word = |name: &str| crate::lowering::library_signatures::typed_first_arity(name) == Some(1);
-		self.is_library_word(node) || self.unnamed(node).is_some_and(is_libm_word)
+		let takes_one_value = |name: &str| {
+			crate::analyzer::type_word_kind(name).is_none()
+				&& (crate::analyzer::is_counting_word(name)
+					|| crate::lowering::library_signatures::library_signature(name)
+						.is_some_and(|(params, _)| params.len() == 1))
+		};
+		self.is_library_word(node) || self.unnamed(node).is_some_and(takes_one_value)
+	}
+
+	/// What an iteration word takes as its function: a function word, or a conversion (`xs.map(str)`), which elsewhere
+	/// is the type it names (`type Age = int`)
+	fn is_iterated_function(&self, node: &Node) -> bool {
+		self.is_function_word(node)
+			|| self.unnamed(node).is_some_and(|name| crate::library_words::CONVERSION_METHODS.contains(&name))
 	}
 
 	/// The word `node` is, unless the program names it as a variable or function of its own

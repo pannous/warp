@@ -44,6 +44,19 @@ impl WarpParser {
 		})
 	}
 
+	/// `[3, 4] cm`: a unit after a list is each element's, the list times the unit (user 2026-10-15, dimensions-units Q3)
+	pub(crate) fn with_unit_after_list(&mut self, list: Node) -> Node {
+		let is_unit =
+			self.spaced_word().is_some_and(|word| word != crate::numbers::uncertain::SIGMA) && self.at_spaced_unit();
+		if self.options.data_mode || !is_unit {
+			return list;
+		}
+		self.skip_spaces();
+		let unit = self.parse_atom();
+		let unit = self.try_parse_superscript_power(&unit, 0).unwrap_or(unit);
+		Node::Key(Box::new(list), Op::Mul, Box::new(unit))
+	}
+
 	/// `3 km` reads as `3km`, the form units are written in (user 2026-10-09: a soft hint)
 	fn hint_glued_unit(&self, number: &Node) {
 		let Some(unit) = self.spaced_word().filter(|word| word != crate::numbers::uncertain::SIGMA) else {

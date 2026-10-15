@@ -1,12 +1,15 @@
 //! Words for operators (word-choice rule: the canonical word plus aliases that work with a note): `root 4`,
 //! `root(4)` and the pipe stage `2|square|root` (wiki/pipe.md) are sqrt; a variable or function the program names
 //! root wins (P142). The other way round, the log glyphs are the log words (P226): `b⌞x` is `log(x, b)`, `x⌟` is
-//! `ln(x)` and `x⌟b` is `log(x, b)`. `x↑n` and `x↓b` call their declarations, `operator_↑(x, n)` (card easy-add)
+//! `ln(x)` and `x⌟b` is `log(x, b)`. `x↑n` and `x↓b` call their declarations, `operator_↑(x, n)` (card easy-add).
+//! A declared word operator is also its call form: `divides(3, 12)` calls `operator_divides` unless the program defines
+//! a function divides (card declared-word)
 
-use super::nodes::{call, key};
+use super::nodes::{call, called_name, key};
 use crate::node::Node;
 use crate::operators::Op;
 use crate::words::LOG_WORD;
+use std::collections::HashSet;
 
 const OPERATOR_ALIASES: [(&str, &str, Op); 1] = [("root", "sqrt", Op::Sqrt)];
 const NATURAL_LOG: &str = "ln";
@@ -23,6 +26,35 @@ pub fn lower(node: Node) -> Node {
 		return node;
 	}
 	operators(node, &aliases)
+}
+
+/// `divides(3, 12)` after `infix operator divides(d, n) := …` is `operator_divides(3, 12)`; a function the program
+/// names divides wins. Runs once the used modules joined, so their operators have call forms too
+pub fn lower_call_forms(node: Node) -> Node {
+	let defined = crate::library_words::defined_names(&node);
+	let call_forms: HashSet<String> = defined
+		.iter()
+		.filter_map(|name| name.strip_prefix(crate::operators::OPERATOR_FUNCTION_PREFIX))
+		.filter(|word| word.starts_with(char::is_alphabetic) && !defined.contains(*word))
+		.map(str::to_string)
+		.collect();
+	if call_forms.is_empty() {
+		return node;
+	}
+	operator_calls(node, &call_forms)
+}
+
+fn operator_calls(node: Node, call_forms: &HashSet<String>) -> Node {
+	match node {
+		Node::List(mut items, bracket, separator)
+			if called_name(&items, &bracket, &separator).is_some_and(|name| call_forms.contains(name)) =>
+		{
+			let name = called_name(&items, &bracket, &separator).expect("guarded").to_string();
+			items[0] = Node::Symbol(format!("{}{name}", crate::operators::OPERATOR_FUNCTION_PREFIX));
+			Node::List(items, bracket, separator).map_children(|child| operator_calls(child, call_forms))
+		}
+		other => other.map_children(|child| operator_calls(child, call_forms)),
+	}
 }
 
 fn operators(node: Node, aliases: &[(&str, &str, Op)]) -> Node {

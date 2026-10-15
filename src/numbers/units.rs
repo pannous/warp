@@ -8,6 +8,7 @@ use crate::extensions::numbers::Number;
 use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashMap;
+mod definitions;
 mod quantity_arithmetic;
 pub use quantity_arithmetic::*;
 
@@ -28,9 +29,9 @@ enum Dimension {
 }
 
 #[derive(Debug, PartialEq)]
-/// `factor` counts the smallest step of the dimension, so every unit is a whole number of it: time in ms, length in
-/// 0.1 mm (1 ft = 3048, 1 km = 10_000_000), mass in 10 µg (1 lb = 45_359_237), temperature in 1/900 K (1 °F = 500).
-/// `zero` is where the unit's 0 lies, in steps above the dimension's zero: 0 °C is 273.15 K, 245_835 steps
+/// `factor` counts the smallest step of the dimension, so every unit is a whole number of it (definitions.rs: the least
+/// common multiple of the dimension's denominators; length in 0.2 mm, 1 ft = 1524, temperature in 1/180 K, 1 °F = 100).
+/// `zero` is where the unit's 0 lies, in steps above the dimension's zero: 0 °C is 273.15 K, 49_167 steps
 struct Unit {
 	name: &'static str,
 	dimension: Dimension,
@@ -38,36 +39,19 @@ struct Unit {
 	zero: i64,
 }
 
-const UNITS: [Unit; 20] = [
-	Unit { name: "ms", dimension: Dimension::Time, factor: 1, zero: 0 },
-	Unit { name: "s", dimension: Dimension::Time, factor: 1_000, zero: 0 },
-	Unit { name: "min", dimension: Dimension::Time, factor: 60_000, zero: 0 },
-	Unit { name: "h", dimension: Dimension::Time, factor: 3_600_000, zero: 0 },
-	Unit { name: "mm", dimension: Dimension::Length, factor: 10, zero: 0 },
-	Unit { name: "cm", dimension: Dimension::Length, factor: 100, zero: 0 },
-	Unit { name: "m", dimension: Dimension::Length, factor: 10_000, zero: 0 },
-	Unit { name: "km", dimension: Dimension::Length, factor: 10_000_000, zero: 0 },
-	// `inch`, not `in`: `x in xs` and `100 cm in m` keep the word
-	Unit { name: "inch", dimension: Dimension::Length, factor: 254, zero: 0 },
-	Unit { name: "ft", dimension: Dimension::Length, factor: 3_048, zero: 0 },
-	Unit { name: "yd", dimension: Dimension::Length, factor: 9_144, zero: 0 },
-	Unit { name: "mi", dimension: Dimension::Length, factor: 16_093_440, zero: 0 },
-	Unit { name: "mg", dimension: Dimension::Mass, factor: 100, zero: 0 },
-	Unit { name: "g", dimension: Dimension::Mass, factor: 100_000, zero: 0 },
-	Unit { name: "kg", dimension: Dimension::Mass, factor: 100_000_000, zero: 0 },
-	Unit { name: "lb", dimension: Dimension::Mass, factor: 45_359_237, zero: 0 },
-	Unit { name: "AD", dimension: Dimension::Era, factor: 1, zero: 0 },
-	Unit { name: "K", dimension: Dimension::Temperature, factor: 900, zero: 0 },
-	Unit { name: "°C", dimension: Dimension::Temperature, factor: 900, zero: 245_835 },
-	Unit { name: "°F", dimension: Dimension::Temperature, factor: 500, zero: 229_835 },
-];
+/// The units of lib/units.warp (definitions.rs)
+fn units() -> &'static [Unit] {
+	&definitions::definitions().units
+}
 
 /// The sign before a temperature unit's letter: °C, °F
 pub const DEGREE: char = '°';
 
-/// Unit words standing for a unit expression: `60 mph` is `60 mi/h`, `440Hz` is `440/s` (lib/sound.warp), an angle `30°`
-/// is the exact `30π/180` (card angles-degrees)
-const UNIT_ALIASES: [(&str, &str); 4] = [("mph", "mi/h"), ("Hz", "1/s"), ("kHz", "1/ms"), ("°", "π/180")];
+/// Unit words standing for a unit expression (lib/units.warp): `60 mph` is `60 mi/h`, `440Hz` is `440/s` (lib/sound.warp),
+/// an angle `30°` is the exact `30π/180` (card angles-degrees)
+fn unit_aliases() -> &'static [(&'static str, &'static str)] {
+	&definitions::definitions().aliases
+}
 
 /// The long names a conversion target may use, singular or plural: `2 h in minutes` (P36). Quantities keep the short
 /// names, `2 minutes` stays a duration of the time module.
@@ -102,7 +86,7 @@ fn unit_named(name: &str) -> Option<&'static Unit> {
 	if crate::compiler::compile_context::read(|context| context.shadowed_units.contains(name)) {
 		return None;
 	}
-	UNITS.iter().find(|unit| unit.name == name)
+	units().iter().find(|unit| unit.name == name)
 }
 
 /// `run` with the unit words `program` defines as its names, not units: `g(x) := x + 1 m` keeps m a unit
@@ -123,12 +107,36 @@ fn target_unit(node: &Node) -> Option<&'static Unit> {
 
 /// The unit words as the units passes read them: aliases expanded (`60 mph`), the whole unit after `as` (`q as km/h`)
 pub fn lower_unit_words(program: Node) -> Node {
-	let program = lower_unit_aliases(program);
+	let program = lower_unit_aliases(with_run_time_unit_tables(program));
 	let program = match QUANTITY_CAST_WORDS.iter().any(|word| crate::soft_keywords::program_names(&program, word)) {
 		true => program,
 		false => with_quantity_casts(program),
 	};
 	shadowing(&program.clone(), || with_whole_conversion_units(program))
+}
+
+/// lib/units.warp's `unit_definitions = data {…}` is read once by definitions.rs; at run time it stands for the tables
+/// its Quantity class reads (`unit_names = ["mm", …]`), so the block is their one source (card lib-units)
+pub(crate) fn with_run_time_unit_tables(program: Node) -> Node {
+	let is_block = |statement: &Node| matches!(statement.drop_meta(), Node::Key(name, Op::Assign, _) if name.drop_meta() == &Node::Symbol(definitions::BLOCK_NAME.to_string()));
+	let tables = || statements_of(crate::warp_parser::parse(&definitions::run_time_tables()));
+	match program {
+		Node::List(items, Bracket::None, separator)
+			if separator.separates_statements() && items.iter().any(is_block) =>
+		{
+			let items = items.into_iter().flat_map(|item| if is_block(&item) { tables() } else { vec![item] });
+			Node::List(items.collect(), Bracket::None, separator)
+		}
+		program if is_block(&program) => Node::List(tables(), Bracket::None, Separator::Newline),
+		program => program,
+	}
+}
+
+fn statements_of(node: Node) -> Vec<Node> {
+	match node {
+		Node::List(items, Bracket::None, separator) if separator.separates_statements() => items,
+		node => vec![node],
+	}
 }
 
 /// `x as quantity`, and `x as unit` with a got-it note: the run-time quantity(x) (card unit-possible)
@@ -229,7 +237,7 @@ pub(crate) fn joins_text(node: &Node) -> bool {
 /// `r.mph`, `{mph: 3}`)
 fn lower_unit_aliases(program: Node) -> Node {
 	let aliases: Vec<(&str, &str)> =
-		UNIT_ALIASES.into_iter().filter(|(alias, _)| mentions_word(&program, alias)).collect();
+		unit_aliases().iter().copied().filter(|(alias, _)| mentions_word(&program, alias)).collect();
 	if aliases.is_empty() {
 		return program;
 	}
@@ -302,7 +310,7 @@ pub fn is_unit(name: &str) -> bool {
 
 /// A unit or a unit alias: the parser binds it to the amount before it, `60 mph` is `60*mph`
 pub fn names_unit(name: &str) -> bool {
-	is_unit(name) || UNIT_ALIASES.iter().any(|(alias, _)| *alias == name)
+	is_unit(name) || unit_aliases().iter().any(|(alias, _)| *alias == name)
 }
 
 /// lib/units.warp's class of quantities whose unit is known only at run time, and the word making one
@@ -799,7 +807,7 @@ fn defined_unit_names(node: &Node) -> std::collections::HashSet<String> {
 fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet<String>) {
 	let mut add_unit = |node: &Node| {
 		if let Node::Symbol(name) = node.drop_meta() {
-			if UNITS.iter().any(|unit| unit.name == name) || UNIT_ALIASES.iter().any(|(alias, _)| alias == name) {
+			if units().iter().any(|unit| unit.name == name) || unit_aliases().iter().any(|(alias, _)| alias == name) {
 				names.insert(name.clone());
 			}
 		}

@@ -55,7 +55,7 @@ impl WarpParser {
 			// `://warp.pannous.com/lib/libc.h`: a URL taking the page's protocol (card pannous-com, with_default_scheme)
 			':' if self.url_follows() => self.parse_url(String::new()),
 			':' if self.at_pseudo_class_selector() => self.symbol_after(1, |name| Node::Symbol(format!(":{name}"))),
-			'.' if self.starts_path_literal() => self.parse_path_literal(),
+			'.' | '~' | '/' if self.starts_path_literal() => self.parse_path_literal(),
 			// `a, *rest = xs`: the starred name takes the items the other names leave (src/lowering/types/tuples.rs); `...rest`
 			// (JS) is the starred `*rest` too: a rest parameter or a spread argument (src/lowering/definitions/variadic.rs)
 			'.' if self.peek_char(1) == '.' && self.peek_char(2) == '.' && self.is_identifier_start(3) => {
@@ -70,7 +70,11 @@ impl WarpParser {
 			// `.card { … }`: a leading-dot name, a class selector in a style block (style_rules.rs)
 			'.' if self.is_identifier_start(1) => self.symbol_after(1, |name| Node::Symbol(format!(".{name}"))),
 			'-' if self.peek_char(1) == '>' && !self.options.data_mode => self.parse_stabby_lambda(),
-			'(' | '[' | '{' => self.parse_bracketed(self.current_char()),
+			'[' => {
+				let list = self.parse_bracketed('[');
+				self.with_unit_after_list(list)
+			}
+			'(' | '{' => self.parse_bracketed(self.current_char()),
 			'<' if self.options.xml_mode => self.parse_xml_tag(),
 			'<' => self.parse_bracketed('<'),
 			';' | '>' | '}' | ')' | ']' => Empty, // Closing brackets/terminators handled by caller
@@ -103,6 +107,12 @@ impl WarpParser {
 				Node::Symbol(format!("{ATTRIBUTE_MARK}{}", self.take_while_char(|ch| ch.is_ascii_digit())))
 			}
 			'$' if self.peek_char(1).is_alphabetic() || self.peek_char(1) == '_' => self.parse_dollar_name(),
+			// jQuery's `$('#who')`: the call of `$`, which page_names.rs answers with a hint naming `$who` and `who`
+			'$' if self.peek_char(1) == '(' => {
+				self.advance(); // skip '$'
+				let selector = self.parse_bracketed('(');
+				function_call("$".to_string(), selector)
+			}
 			// `$0`, the first parameter
 			'$' if self.peek_char(1).is_numeric() => {
 				self.advance(); // skip '$'

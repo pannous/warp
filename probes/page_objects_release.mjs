@@ -10,7 +10,7 @@ const between = (file, from, to) => {
 	const source = readFileSync(new URL(`../web/playground/${file}`, import.meta.url), "utf8");
 	return source.slice(source.indexOf(from), source.indexOf(to, source.indexOf(from)));
 };
-const pageSide = new Function(`${between("task-workers.js", "const pageObjects = new Map()", "// `$who` is")}
+const pageSide = new Function(`${between("task-workers.js", "const pageObjects = new Map()", "// `who` is")}
 	return { pageObjects, forWorker, onPage, releaseFrom, forgetHolder };`)();
 
 // a Worker: its own copy of host-foreign.js's side, its messages to the page answered at once

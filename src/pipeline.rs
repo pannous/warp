@@ -155,6 +155,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	// `.card { padding: 8px }` in a style block: the selector and the length as texts (style_rules.rs), before markup_tags
 	// reads `p.note{…}` as a tag
 	crate::lowering::style_rules::lower,
+	// `xs.map(.floor)`: a leading-dot word is the lambda on its member (lambdas.rs), once no selector is left
+	crate::lowering::lambdas::lower_member_lambdas,
 	// `label{ for: name "Name" }`: the value ends before the content after it (glued_attributes.rs), before the options
 	// of a select are read
 	crate::lowering::glued_attributes::lower,
@@ -213,8 +215,8 @@ const DECLARATION_PASSES: &[Pass] = &[
 	crate::lowering::class_methods::lower,
 	// `calc.exports` of a component (reflection.rs) before foreign_modules makes it a call into the component
 	crate::lowering::reflection::lower_component_words,
-	// `$xyz` is document.getElementById("xyz") and `$document` document, with their `use js`, which foreign_modules lowers
-	crate::lowering::dollar_names::lower,
+	// page ids as names: `who` is document.getElementById("who"), `$who` its value, with `use js document`, which foreign_modules lowers
+	crate::lowering::page_names::lower,
 	// first: `math.sqrt(2)` of `use python math` is no method call of the built-in word
 	crate::lowering::foreign_modules::lower,
 	// `x as text?` keeps ø, after foreign_modules types a nullable WebIDL result so
@@ -248,6 +250,8 @@ const MODULE_PASSES: &[Pass] = &[
 
 /// Stored values, system values, signals and events, pages
 const SIGNAL_PASSES: &[Pass] = &[
+	// `divides(3, 12)`: the call form of a declared word operator, its own or a used module's
+	crate::lowering::word_operators::lower_call_forms,
 	crate::numbers::units::lower_sleep_durations,
 	// `now > 17h`, `now >= October`, `now ≈ 2026-10-14`: that part of now (partial_comparisons.rs), before units fold `time > 17h`
 	crate::time::partial_comparisons::lower,
@@ -279,7 +283,7 @@ const SIGNAL_PASSES: &[Pass] = &[
 
 /// Functions and their calls: declarations, parameters, blocks, mutation, getters
 const FUNCTION_PASSES: &[Pass] = &[
-	// `play 440Hz for 0.5s` of `play(tone, for duration)`: `play(440Hz, duration: 0.5s)` (preposition_calls.rs), before any
+	// `play 440Hz for: 0.5s` of `play(tone, for duration)`: `play(440Hz, duration: 0.5s)` (preposition_calls.rs), before any
 	// pass reads the head's `for duration` or the call's words
 	crate::lowering::preposition_calls::lower,
 	crate::lowering::declarations::lower_c_functions,
@@ -558,31 +562,45 @@ fn choose_module(node: &Node) -> Result<CompiledModule, Node> {
 }
 
 /// Compile and run an already parsed program; imports follow its resolved effects.
-pub fn eval_parsed(node: Node, _code: &str) -> Node {
-	crate::errors::diagnostic::in_program_mode(node, eval_program)
+pub fn eval_parsed(node: Node, code: &str) -> Node {
+	crate::errors::diagnostic::in_program_mode(node, |node| eval_program(node, code))
 }
 
-fn eval_program(node: Node) -> Node {
-	let node = match lower_for_emission(node) {
-		Ok(node) => node,
-		Err(final_value) => return final_value,
-	};
-
+fn eval_program(node: Node, code: &str) -> Node {
 	#[cfg(feature = "native")]
-	if let Some(wasm_bytes) = raw_struct_module(&node) {
-		match run_raw_struct(&wasm_bytes) {
-			Ok(result) => return result,
-			Err(e) => warn!("raw struct eval failed: {}", e),
-		}
+	if let Some(module) = crate::run::program_cache::kept(code) {
+		return checked_markup(run_module(module));
 	}
+	match module_to_run(node, code) {
+		Ok(module) => checked_markup(run_module(module)),
+		Err(value) => value,
+	}
+}
 
-	// Fallback to standard Node encoding; a final quantity's unit travels in the module (`warp.meta`) and is read back
-	match emit_module(&node) {
-		Ok(module) => checked_markup(run_module(CompiledModule {
+/// The module the program compiles to (kept for its next run, src/run/program_cache.rs), or its value when it needs
+/// none: a constant answer, a raw struct's, a type error
+fn module_to_run(node: Node, code: &str) -> Result<CompiledModule, Node> {
+	let compile = || {
+		let node = lower_for_emission(node)?;
+		#[cfg(feature = "native")]
+		if let Some(wasm_bytes) = raw_struct_module(&node) {
+			match run_raw_struct(&wasm_bytes) {
+				Ok(result) => return Err(result),
+				Err(e) => warn!("raw struct eval failed: {}", e),
+			}
+		}
+		// Fallback to standard Node encoding; a final quantity's unit travels in the module (`warp.meta`) and is read back
+		emit_module(&node).map(|module| CompiledModule {
 			bytes: crate::numbers::units::static_units::with_result_units(module.bytes),
 			..module
-		})),
-		Err(type_error) => type_error,
+		})
+	};
+	#[cfg(feature = "native")]
+	return crate::run::program_cache::keeping(code, compile);
+	#[cfg(not(feature = "native"))]
+	{
+		let _ = code; // the browser keeps no module between runs
+		compile()
 	}
 }
 

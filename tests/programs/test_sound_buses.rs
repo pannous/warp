@@ -11,7 +11,7 @@ const QUIET: i16 = 50;
 /// The rendered mono samples of the program, which ends in render_sound to the path
 fn rendered_samples(program: &str, name: &str) -> Vec<i16> {
 	let path = std::env::temp_dir().join(format!("warp-buses-{name}-{}.wav", std::process::id()));
-	let program = format!("use sound\n{program}\nsave sound as \"{}\"", path.display());
+	let program = format!("use sound\n{program}\nsave sound as: \"{}\"", path.display());
 	let run = crate::common::warp_command().args(["--no-ask", "eval", &program]).output().unwrap();
 	assert!(run.status.success(), "{} {}", String::from_utf8_lossy(&run.stdout), String::from_utf8_lossy(&run.stderr));
 	let bytes = std::fs::read(&path).unwrap();
@@ -238,4 +238,13 @@ fn a_bus_from_a_field_an_item_or_an_untyped_parameter_takes_the_signal() {
 		let samples = rendered_samples(program, name);
 		assert!(loudest(&samples, 0.31, 0.39) > 500, "{name}: its echo 0.3 s later");
 	}
+}
+
+/// decision shared-buses: `room.reverb = 0.6` sets the bus's effect while it plays, as `room = room |> reverb(0.6)`
+#[test]
+fn an_effect_assigned_as_a_member_changes_the_bus() {
+	crate::is!(
+		"use sound\nroom = bus() |> reverb(0.4) |> delay(0.25)\nroom.reverb = 0.6\nroom.chain",
+		warp::warp_parser::parse("[[\"reverb\" 0.6] [\"delay\" 0.25 0.4 0.5]]")
+	);
 }
