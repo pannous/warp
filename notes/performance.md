@@ -117,6 +117,12 @@ paint). Compiling takes 1.23 s of CPU in release against 0.63 s for samples/gpu_
 5.4 s against 3.8 s (the ~5 s the user saw through a debug try line). 43 % of the samples are in
 analyse_user_functions (function_body_scope → collect_variables, refine_return_kinds → settled_return_kind): 13
 vector functions calling each other.
+Then 0.87 → 0.77 s CPU in quick-release (card compiling-samples, 2026-10-16): every function_body_scope and every
+collect_variables round copied the maps of all functions' kinds and closure targets into its Scope; they are shared
+now (analyzer FunctionKinds, ClosureTargets: Rc). uses_sound reads `use sound` before walking all calls. Left, each
+~20–50 ms: register_user_function copies each body (and every pass asking function_definitions registers again),
+each implicit module's test walks the program for its called names (router, units, agent), naming_changed walks
+every body per round, loading std modules (~220 ms with parsing them).
 Program cache (card cache-compiled-shader, src/run/program_cache.rs): `warp <file>` keeps the compiled module next to
 the machine-code cache, so a second run skips the compile: gpu_visualizer_warp with `3`, debug build, 10.2 s → 5.9 s
 wall (9.5 → 5.2 s CPU; the rest is the 5 s of music). A compile that prints anything (a hint!) is not kept, so the

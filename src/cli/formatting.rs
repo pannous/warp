@@ -23,7 +23,9 @@ const OPTION_WORDS: [&str; 3] = [CHECK_WORD, HASH_COMMENTS_WORD, YES_WORD];
 const HELP_WORDS: [&str; 3] = ["help", "--help", "-h"];
 pub(crate) const FORMAT_USAGE: &str = "warp format [check] [hash-comments] <file|folder|code>…  The canonical layout of warp code, only where the meaning stays (warp lint: the same; check: list what would change, exit 1; hash-comments: // comments become #)
   warp beautify [check|yes] <file|folder|code>…  The layout plus the best-practice rewrites (// comments become #, other languages' words the warp words), shown as a diff and applied after \"apply? y/n\" (yes: without asking; warp fix: the same)";
-const WARP_EXTENSION: &str = "warp";
+const WARP_EXTENSIONS: [&str; 2] = ["warp", "wasp"];
+/// An extension-less script is warp code when its first line runs warp: `#!/usr/bin/env warp`
+const SHEBANG: &str = "#!";
 /// What hints on code given inline name instead of a file
 const CODE_LABEL: &str = "code";
 /// code.golf solutions count their bytes: a folder of them keeps its layout, also when named (`warp fix *` names it);
@@ -37,14 +39,27 @@ pub(crate) fn is_format_command(word: &str) -> bool {
 	FORMAT_COMMANDS.contains(&word) || BEAUTIFY_COMMANDS.contains(&word)
 }
 
+/// `x.warp`, `x.wasp`: a name that means a warp program
+pub(crate) fn has_warp_extension(path: &str) -> bool {
+	Path::new(path).extension().is_some_and(|extension| WARP_EXTENSIONS.iter().any(|warp| extension == *warp))
+}
+
+/// Warp code by its extension, or an extension-less script whose `#!` line names warp
+fn is_warp_file(path: &Path) -> bool {
+	if path.extension().is_some() {
+		return has_warp_extension(&path.to_string_lossy());
+	}
+	let first_line = fs::read_to_string(path).ok().and_then(|code| code.lines().next().map(str::to_owned));
+	first_line.is_some_and(|line| line.starts_with(SHEBANG) && line.contains(WARP_EXTENSIONS[0]))
+}
+
 /// Why a named path or a folder's entry is not formatted: no warp file, or a golf folder
 fn skip_reason(path: &Path) -> Option<&'static str> {
 	if path.is_dir() {
 		let golf = path.file_name().is_some_and(|name| SKIPPED_FOLDERS.iter().any(|skip| name == *skip));
 		golf.then_some(SKIPPED_FOLDER_REASON)
 	} else {
-		let is_warp = path.extension().is_some_and(|extension| extension == WARP_EXTENSION);
-		(!is_warp).then_some(NOT_WARP_REASON)
+		(!is_warp_file(path)).then_some(NOT_WARP_REASON)
 	}
 }
 
@@ -129,9 +144,7 @@ fn confirmed(shown: &str, old: &str, new: &str) -> bool {
 
 /// A name that means a file, never code: `x.warp`, `samples/hello`
 fn looks_like_path(argument: &str) -> bool {
-	argument.ends_with(&format!(".{WARP_EXTENSION}"))
-		|| argument.ends_with(".wasp")
-		|| (argument.contains('/') && !argument.contains(char::is_whitespace))
+	has_warp_extension(argument) || (argument.contains('/') && !argument.contains(char::is_whitespace))
 }
 
 /// `warp lint "cnt=1 // one"` (card lint-use): code given instead of files: its hints, then its formatted text (in

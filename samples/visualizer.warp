@@ -37,5 +37,6 @@ while elapsed < seconds {
 	}
 	show()
 	sleep(frame_milliseconds / 1000)
-	elapsed = (clock() - started) / 1000.0
+	# a float, as measurements are: an exact 4 at the end would be the run's exit status
+	elapsed = float(clock() - started) / 1000
 }
