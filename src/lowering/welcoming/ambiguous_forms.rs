@@ -162,11 +162,14 @@ impl SuffixWords {
 		self.unnamed(node).is_some_and(crate::library_words::is_library_word)
 	}
 
-	/// A library word of one value the program does not name itself, also libm's (`floor`, `sin`) and the host's
-	/// (`print`): a function value
+	/// A library word of one value the program does not name itself, also libm's (`floor`, `sin`), the host's
+	/// (`print`), a counting word (`len`) and a conversion (`str`, `int`): a function value
 	fn is_function_word(&self, node: &Node) -> bool {
 		let takes_one_value = |name: &str| {
-			crate::lowering::library_signatures::library_signature(name).is_some_and(|(params, _)| params.len() == 1)
+			crate::analyzer::is_counting_word(name)
+				|| crate::library_words::CONVERSION_METHODS.contains(&name)
+				|| crate::lowering::library_signatures::library_signature(name)
+					.is_some_and(|(params, _)| params.len() == 1)
 		};
 		self.is_library_word(node) || self.unnamed(node).is_some_and(takes_one_value)
 	}
