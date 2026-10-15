@@ -106,6 +106,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::graphics::shader_holes::lower,
 	// `Person as text := it.name` and `p as text` (conversions.rs) before any pass reads `as` as a cast
 	crate::lowering::conversions::lower,
+	// `cbrt(x: float): float from 'm'` (foreign_lines.rs) as the import it declares, before any pass reads it as a call
+	crate::lowering::foreign_lines::lower,
 	crate::lowering::inline_unions::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::lowering::scoped_handlers::lower,

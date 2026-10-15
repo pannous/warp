@@ -102,7 +102,7 @@ pub fn typed_first_parameters(word: &str) -> Option<(usize, usize)> {
 pub fn one_value_words() -> impl Iterator<Item = &'static str> {
 	let named = NAMED_SIGNATURES.iter().map(|(name, _)| *name);
 	named
-		.chain(crate::ffi::LIBM_F64_FUNCTIONS.iter().map(|(name, _)| *name))
+		.chain(crate::ffi::libm_f64_functions().iter().map(|(name, _)| *name))
 		.filter(|name| typed_first_arity(name) == Some(1))
 }
 
@@ -113,7 +113,7 @@ fn prelude_signature(word: &str) -> Option<String> {
 }
 
 fn libm_signature(word: &str) -> Option<String> {
-	crate::ffi::LIBM_F64_FUNCTIONS
+	crate::ffi::libm_f64_functions()
 		.iter()
 		.find(|(name, _)| *name == word)
 		.map(|(_, arity)| positional(*arity, Some(LIBM_PARAMETER_TYPE), Kind::Float))

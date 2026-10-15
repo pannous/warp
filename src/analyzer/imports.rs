@@ -195,7 +195,7 @@ pub fn makes_floats(ctx: &Context, node: &Node) -> bool {
 		builtin_type_kind(name).is_some_and(|kind| kind.is_float())
 			|| [NUMBER_WORD, REAL_WORD].contains(&name)
 			|| REAL_CONSTANTS.contains(&name)
-			|| crate::ffi::LIBM_F64_FUNCTIONS.iter().any(|(libm, _)| *libm == name)
+			|| crate::ffi::libm_f64_functions().iter().any(|(libm, _)| *libm == name)
 	};
 	let gives_float = |signature: &crate::ffi::FfiSignature| match signature.results.first() {
 		Some(wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32) => true,
@@ -350,7 +350,7 @@ pub(super) fn uses_library(node: &Node, library: &str) -> bool {
 /// imports nor defines links it from libm, as `import f from 'm'` would; without that it compiled to its argument
 pub(super) fn add_implicit_libm_imports(ctx: &mut Context, node: &Node) {
 	let mut implicit: Vec<&str> =
-		crate::ffi::LIBM_F64_FUNCTIONS.iter().map(|(name, _)| *name).filter(|name| !is_wasm_builtin(name)).collect();
+		crate::ffi::libm_f64_functions().iter().map(|(name, _)| *name).filter(|name| !is_wasm_builtin(name)).collect();
 	implicit.push(LIBM_LN); // ffi.rs signs it as libm's log
 	add_called_library_imports(ctx, node, "m", &|name| {
 		implicit.contains(&name) || (!is_wasm_builtin(name) && is_f64_header_function(name))
@@ -600,7 +600,7 @@ pub(super) fn add_ffi_import(ctx: &mut Context, name: &str, library: &str) {
 pub(super) fn add_ffi_lib(ctx: &mut Context, lib: &str) {
 	let lib_alias = crate::ffi::resolve_library_alias(lib);
 	if lib_alias == "m" {
-		for (name, _) in crate::ffi::LIBM_F64_FUNCTIONS {
+		for (name, _) in crate::ffi::libm_f64_functions() {
 			add_ffi_import(ctx, name, "m");
 		}
 	} else if lib_alias == "c" {

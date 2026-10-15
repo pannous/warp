@@ -42,7 +42,7 @@ fn is_kebab_name(word: &str) -> bool {
 	word.contains('-') && word.split('-').all(is_plain_name)
 }
 
-pub(super) fn is_plain_name(word: &str) -> bool {
+pub(crate) fn is_plain_name(word: &str) -> bool {
 	!word.is_empty() && word.chars().all(|c| c.is_alphanumeric() || c == '_')
 }
 

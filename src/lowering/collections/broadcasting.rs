@@ -692,7 +692,7 @@ fn takes_a_scalar(param: &Node, body: &Node) -> bool {
 
 /// SCALAR_LIBRARY_WORDS and libm's words of one number
 fn scalar_library_words() -> impl Iterator<Item = &'static str> {
-	let libm_words = crate::ffi::LIBM_F64_FUNCTIONS.iter().filter(|(_, arity)| *arity == 1).map(|(word, _)| *word);
+	let libm_words = crate::ffi::libm_f64_functions().iter().filter(|(_, arity)| *arity == 1).map(|(word, _)| *word);
 	SCALAR_LIBRARY_WORDS.into_iter().chain(libm_words)
 }
 
