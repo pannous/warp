@@ -28,10 +28,14 @@ as warp functions, `paint(tunnel, width, height)` compiling them; the same funct
 1. DONE (branch compile-shaders): math words on lists and numbers (CPU): `.+ .- .* ./` decide at run time where a side
    may be a list (prelude element_wise_any), `norm`/`magnitude` the Euclidean length (S3), libm's one-number words map
    over lists, `use math` has fract step smoothstep mix(=lerp, lists too) distance normalize cross reflect.
-2. Kernel: vector values (list literals, element-wise ops, swizzles once S1 is decided), the math words, `break`,
-   global lists as arrays, a 3-list as the color.
-3. samples/gpu_visualizer.warp's tunnel in warp; the WGSL version stays as samples/gpu_visualizer_wgsl.warp (or goes,
-   per the user).
+2. DONE: kernel vector values (list literals vecNf, element-wise ops, `p#k` components), the math words, `break`,
+   functions specialized by argument widths, a 3-list as the color; a program list read item by item (`levels#k`)
+   reaches the shader as one vec4f per item (`[[item] for item in levels]` in the values map, any length), `center()`
+   calls a function of no parameters, `round` takes halves away from zero (WGSL's goes to even), a class's operator
+   dispatch (`if x is Note then x.plus(1) else x + 1`) keeps only the built-in operator.
+3. DRAFT probes/gpu_visualizer_warp.warp: every function translates to one shader, but the CPU type check fails on
+   Note's dispatch of `.-` with lists (card note-dispatch-element-wise). Once fixed: move it to samples/ (chmod +x,
+   runs in the playground too), keep the WGSL samples/gpu_visualizer.warp.
 
 ## Questions (warp-interviewer)
 - S1 swizzles: `p.x p.y p.z p.w` and `p.xy`, `e.xyy` on a list of 2–4 numbers (GLSL/WGSL), or only `p#1`?
