@@ -164,7 +164,7 @@ fn read_into_memory(caller: &mut Caller<'_, HostState>, path_ptr: i32, path_len:
 		return (0, 0);
 	};
 	let (bytes, failed) = match read_string_from_memory(&memory, &*caller, path_ptr as u32, path_len as u32) {
-		Ok(path) => match std::fs::read(&path) {
+		Ok(path) => match std::fs::read(crate::util::home_expanded(&path)) {
 			Ok(bytes) => (bytes, false),
 			Err(reason) => (format!("read {path} failed: {reason}").into_bytes(), true),
 		},

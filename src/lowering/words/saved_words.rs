@@ -1,13 +1,12 @@
 //! `save` is one word for every value a file can hold, overloaded by its type (decision save-sound): a word naming
 //! what a module makes, as save's argument, is the value of that module's class whose save overload writes it.
-//! `save sound as "song.wav"`, `save(sound, "song.wav")` (card save-sound): the sounds made since the last save, lib/sound.warp's
-//! Recording, a WAV file; `save canvas as "painting.png"` (card save-painting): the canvas of lib/draw.warp as drawn so
+//! `save sound as: "song.wav"`, `save(sound, "song.wav")` (card save-sound): the sounds made since the last save, lib/sound.warp's
+//! Recording, a WAV file; `save canvas as: "painting.png"` (card save-painting): the canvas of lib/draw.warp as drawn so
 //! far, its Picture, a PNG. Unless the program names something so itself.
 
-use super::nodes::{call, key};
+use super::nodes::call;
 use crate::modules::{says_use, uses_sound, SOUND_MODULE};
 use crate::node::Node;
-use crate::operators::Op;
 
 const SAVE_WORD: &str = "save";
 /// The word, the class it names as save's argument, the module that makes it
@@ -40,14 +39,10 @@ fn saved(node: Node, words: &[(&str, &str)]) -> Node {
 	}
 }
 
-/// `sound` and `sound as "x.wav"`: Recording() and `Recording() as "x.wav"`
+/// `sound`: Recording()
 fn made(item: Node, words: &[(&str, &str)]) -> Node {
-	let class = |word: &Node| words.iter().find(|(name, _)| word.is_symbol(name)).map(|(_, class)| call(class, vec![]));
-	match item.drop_meta() {
-		Node::Key(made, Op::As, file) => match class(made) {
-			Some(value) => key(value, Op::As, file.as_ref().clone()),
-			None => item,
-		},
-		word => class(word).map(|value| value.with_meta_of(&item)).unwrap_or(item),
+	match words.iter().find(|(name, _)| item.drop_meta().is_symbol(name)) {
+		Some((_, class)) => call(class, vec![]).with_meta_of(&item),
+		None => item,
 	}
 }

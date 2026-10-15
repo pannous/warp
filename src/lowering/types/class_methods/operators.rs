@@ -566,4 +566,5 @@ pub(crate) fn is_library_method(name: &str) -> bool {
 	crate::list_mutations::is_list_mutating_method(name)
 		|| crate::library_words::is_standard_function(name)
 		|| crate::analyzer::is_counting_property(name)
+		|| crate::lambdas::is_iteration_word(name)
 }

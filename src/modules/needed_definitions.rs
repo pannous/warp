@@ -13,7 +13,7 @@ pub(crate) fn own_functions(program: &Node) -> HashSet<String> {
 	own
 }
 
-fn class_names(program: &Node) -> HashSet<String> {
+pub(crate) fn class_names(program: &Node) -> HashSet<String> {
 	let mut classes = HashSet::new();
 	program.visit(&mut |node| {
 		if let Node::Type { name, .. } = node {

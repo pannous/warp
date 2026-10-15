@@ -1,4 +1,4 @@
-// card save-painting: `save "painting.png"`, `save canvas as "painting.png"` and `save(canvas, "painting.png")` of
+// card save-painting: `save "painting.png"`, `save canvas as: "painting.png"` and `save(canvas, "painting.png")` of
 // use draw write the canvas as drawn so far as a PNG (decision save-sound: save is one word, overloaded by what it
 // saves), drawn here on the CPU and, with WARP_DRAW=gpu, on the GPU, whose canvas the host draws again to save it
 #![cfg(feature = "native")]
@@ -29,7 +29,7 @@ fn assert_red_png(path: &std::path::Path) {
 #[test]
 fn save_writes_the_canvas_as_a_png() {
 	for (name, form) in
-		[("plain", "save \"PATH\""), ("as", "save canvas as \"PATH\""), ("call", "save(canvas, \"PATH\")")]
+		[("plain", "save \"PATH\""), ("as", "save canvas as: \"PATH\""), ("call", "save(canvas, \"PATH\")")]
 	{
 		let path = saved_path(name);
 		warp::wasm_emitter::eval(&program_saving(&form.replace("PATH", &path.display().to_string())));
@@ -43,7 +43,7 @@ fn save_writes_the_gpu_canvas_as_a_png() {
 		return crate::common::announce_skip("a GPU", module_path!());
 	}
 	let path = saved_path("gpu");
-	let program = program_saving(&format!("save canvas as \"{}\"", path.display()));
+	let program = program_saving(&format!("save canvas as: \"{}\"", path.display()));
 	let run =
 		crate::common::warp_command().env("WARP_DRAW", "gpu").args(["--no-ask", "eval", &program]).output().unwrap();
 	assert!(run.status.success(), "{}", String::from_utf8_lossy(&run.stderr));

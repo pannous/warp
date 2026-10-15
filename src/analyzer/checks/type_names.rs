@@ -4,7 +4,9 @@ use crate::words::{FLOAT_WORD, LIST_WORD, MAP_WORD, NUMBER_WORD, REAL_WORD};
 
 /// A plural type word denotes a list of that type: `ints`, `numbers` → `int`, `number`
 pub fn plural_element_type(word: &str) -> Option<&str> {
-	let singular = word.strip_suffix('s')?;
+	let singular = crate::extensions::strings::english_singular(word)?;
+	// a type word's plural adds to it (`ints`, `matches`), so the singular is the start of the word
+	let singular = word.get(..singular.len()).filter(|start| *start == singular)?;
 	type_word_kind(singular).map(|_| singular)
 }
 

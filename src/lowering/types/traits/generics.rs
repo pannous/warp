@@ -1,6 +1,7 @@
 //! Generic functions: methods told apart by the classes of their arguments (`collide(a:Ship, b:Rock)`), each call resolved or dispatched
 use super::*;
 use crate::words::ANY_TYPE;
+use std::collections::HashSet;
 
 /// The class each positional parameter of a method takes, None where it takes any value: `collide(a:Ship, b:Rock)`
 pub(super) type Signature = Vec<Option<String>>;
@@ -211,7 +212,9 @@ pub(super) fn generic_calls(node: Node, functions: HashMap<String, Generic>) -> 
 	collect_declared(&node, &mut likenesses);
 	let plain = crate::analyzer::literal_variable_kinds(&node, &crate::analyzer::function_context(&node));
 	let classes = types.registry.types().iter().map(|type_def| type_def.name.clone()).collect();
+	let path_variables = crate::warp_parser::path_variables(&node);
 	let calls = GenericCalls {
+		path_variables,
 		functions,
 		types,
 		likenesses,
@@ -243,6 +246,8 @@ pub(super) struct GenericCalls {
 	/// The variables only ever holding literals, which are no instances
 	plain: HashMap<String, crate::type_kinds::Kind>,
 	classes: Vec<String>,
+	/// The variables only ever holding paths written without quotes (`notes = ~/notes.txt`)
+	path_variables: HashSet<String>,
 	failed: RefCell<Option<Node>>,
 	/// (function, number of arguments) → its dispatcher's cases
 	dispatched: RefCell<std::collections::BTreeMap<(String, usize), DispatchCases>>,
@@ -302,7 +307,11 @@ impl GenericCalls {
 		let [head, _, ..] = items else { return None };
 		let name = called_name(items, bracket, separator)?;
 		let generic = self.functions.get(name)?;
-		let arguments = items[1..].to_vec();
+		let arguments: Vec<Node> = items[1..]
+			.iter()
+			.enumerate()
+			.map(|(position, argument)| self.as_path(generic, position, argument))
+			.collect();
 		let fallback = generic.falls_back(arguments.len());
 		let known: Vec<Known> = arguments.iter().map(|argument| self.known(argument)).collect();
 		let positions = generic.typed_positions();
@@ -331,6 +340,22 @@ impl GenericCalls {
 				self.dispatched.borrow_mut().insert((name.to_string(), arguments.len()), (cases, fallback));
 				Some(witness_call(name, DISPATCH, arguments))
 			}
+		}
+	}
+
+	/// `sort ./names.txt` with a method sort(file:Path) (lib/shell.warp): a path written without quotes, or a variable
+	/// only holding such paths, becomes a Path where a method takes one; elsewhere it stays the text
+	fn as_path(&self, generic: &Generic, position: usize, argument: &Node) -> Node {
+		let written_as_path = crate::warp_parser::is_written_path(argument, &self.path_variables);
+		let takes_path = generic.methods.iter().any(|(signature, _)| {
+			signature.get(position).is_some_and(|class| class.as_deref() == Some(crate::words::PATH_CLASS))
+		});
+		match written_as_path && takes_path {
+			true => {
+				let name = key(symbol(crate::words::PATH_FIELD), Op::Colon, without_path_mark(argument));
+				crate::type_constructor::instance_node(crate::words::PATH_CLASS, vec![name])
+			}
+			false => argument.clone(),
 		}
 	}
 
@@ -429,4 +454,11 @@ pub(super) fn ambiguous_method(
 	Diagnostic::at(located, message)
 		.fix(format!("define {name}({}) := … to pick one", parameters.join(", ")))
 		.into_error()
+}
+
+fn without_path_mark(argument: &Node) -> Node {
+	match argument {
+		Node::Meta { node, .. } if crate::warp_parser::is_path_literal(argument) => without_path_mark(node),
+		other => other.clone(),
+	}
 }

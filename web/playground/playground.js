@@ -792,7 +792,7 @@ function showRendered(html) {
 	morphChildren(host.shadowRoot ?? renderedRoot(host), parsedHtml(html ?? ""));
 }
 
-self.programElements = () => $("rendered").shadowRoot ?? document; // task-workers.js ownerOnPage: `$who`
+self.programElements = () => $("rendered").shadowRoot ?? document; // task-workers.js ownerOnPage: `who`, `$who`
 
 // a form's submit stays inside the shadow root (it is not composed): listened to there
 function renderedRoot(host) {

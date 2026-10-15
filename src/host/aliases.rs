@@ -2,9 +2,9 @@
 use super::*;
 
 /// Other spellings of the host words, for any number of arguments or only for the given one (user decision #14e:
-/// `download <url>` is `fetch <url>`; `random(n)` is `random_below(n)`)
-pub(crate) const HOST_ALIASES: [(&str, Option<usize>, &str); 2] =
-	[("download", None, "fetch"), ("random", Some(1), RANDOM_BELOW)];
+/// `download <url>`, `curl <url>` and `wget <url>` are `fetch <url>` (card unix-words); `random(n)` is `random_below(n)`)
+pub(crate) const HOST_ALIASES: [(&str, Option<usize>, &str); 4] =
+	[("download", None, "fetch"), ("curl", None, "fetch"), ("wget", None, "fetch"), ("random", Some(1), RANDOM_BELOW)];
 
 /// `download url` → `fetch url`: an alias at the head of an application or call, unless the program defines the alias itself
 pub fn lower_aliases(node: Node) -> Node {

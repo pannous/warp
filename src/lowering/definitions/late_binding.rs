@@ -365,7 +365,11 @@ fn note_charging(
 	let statement = &statements[definition.index];
 	let is_def = matches!(statement.drop_meta(), Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if is_function_keyword(word)));
 	let nested = function.name.contains(NESTED_DEF_SEPARATOR); // `outer·inner` may read outer's variables, `o·s` is an entry
-	if nested || !(is_def || definition.getter) || !function.params.is_empty() {
+															// the standard modules' getters read at every read on purpose (`cwd := …` after `cd`): they warn no program using them
+	let in_std_module = crate::errors::diagnostic::line_info(statement)
+		.and_then(|info| info.file)
+		.is_some_and(|file| crate::modules::is_std_source(&file));
+	if nested || in_std_module || !(is_def || definition.getter) || !function.params.is_empty() {
 		return Ok(());
 	}
 	// a body the compiler already rewrote (a returned lambda is `closure_new(closure_lambda_1)`) is no text the user
