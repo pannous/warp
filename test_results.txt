@@ -1215,6 +1215,14 @@ PASSED:
   ✓ functions::test_bare_function_name::test_bare_name_of_function_with_parameter_is_an_error
   ✓ functions::test_bare_function_name::test_bare_name_of_function_without_parameters_calls_it
   ✓ functions::test_bare_function_name::test_bare_name_of_typed_function_is_an_error
+  ✓ functions::test_bare_host_words::a_program_naming_random_keeps_its_own
+  ✓ functions::test_bare_host_words::random_alone_or_printed_is_a_number
+  ✓ functions::test_bare_host_words::random_between_two_numbers
+  ✓ functions::test_bare_host_words::random_into_a_declared_type
+  ✓ functions::test_bare_host_words::random_is_called_where_its_value_is_used
+  ✓ functions::test_bare_host_words::random_of_a_range
+  ✓ functions::test_bare_host_words::random_of_a_type
+  ✓ functions::test_bare_host_words::the_random_prelude_words
   ✓ functions::test_block_function::a_block_using_it_is_a_function
   ✓ functions::test_block_function::data_blocks_stay_data
   ✓ functions::test_body_statement::a_one_call_body_block_runs_the_call
@@ -3426,7 +3434,6 @@ PASSED:
   ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
   ✓ parser::test_self_lexer::numbers_match_their_rust_twin
   ✓ parser::test_self_lexer::texts_match_their_rust_twin
-  ✓ parser::test_self_parser::the_listed_sources_parse_as_in_rust
   ✓ parser::test_self_serializer::a_view_is_json
   ✓ parser::test_self_serializer::serialize_matches_its_rust_twin
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
@@ -4791,6 +4798,9 @@ PASSED:
   ✓ types::test_type_of::test_type_symbol
   ✓ types::test_type_of::test_type_typed_variable
   ✓ types::test_type_of::test_type_without_parentheses
+  ✓ types::test_type_parameters::a_type_parameter_takes_a_bare_type_word
+  ✓ types::test_type_parameters::a_type_parameter_takes_a_class
+  ✓ types::test_type_parameters::a_value_for_a_type_parameter_is_an_error
   ✓ types::test_type_static::the_type_of_a_variable_is_its_value_type
   ✓ types::test_type_test_is_only::equals_with_a_type_word_does_not_type_test
   ✓ types::test_type_test_is_only::equals_with_a_type_word_educates_toward_is
@@ -5675,6 +5685,7 @@ PASSED:
   ✓ welcoming::test_format_cli::format_help_prints_its_usage
   ✓ welcoming::test_format_cli::format_leaving_its_hint_names_the_command_and_says_no_formatted
   ✓ welcoming::test_format_cli::lint_of_inline_code_prints_hints_and_the_formatted_code
+  ✓ welcoming::test_format_files_only::a_glob_of_a_folder_formats_only_its_warp_files_outside_golf
   ✓ welcoming::test_fuel_default::runaway_names_the_fuel_variable
   ✓ welcoming::test_fuel_default::ten_million_float_fills_fit_the_default_fuel
   ✓ welcoming::test_function_bindings::a_const_in_one_function_leaves_another_alone
@@ -5889,6 +5900,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ parser::test_self_parser::the_listed_sources_parse_as_in_rust
 
 SUMMARY:
-13 ignored, 5886 passed, 0 failed, 5886 total tested
+13 ignored, 5897 passed, 1 failed, 5898 total tested

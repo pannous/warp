@@ -17,4 +17,5 @@ pub mod tuples;
 pub mod type_aliases;
 pub mod type_constructor;
 pub mod type_name_matching;
+pub mod type_parameters;
 pub mod type_tests;
