@@ -12,6 +12,9 @@ const PAGE_ROUTES_EXPORT = "page·routes";
 const PAGE_SUBMITTED_EXPORT = "page·submitted"; // lowering/web/serve.rs PAGE_SUBMITTED
 const PAGE_BITS = 16;
 const STDERR = 2;
+// display.dpi where the page told none (a Worker without its page, the browser tests): CSS fixes 96 px to the inch, as
+// warp-runtime system_values.rs DEFAULT_DPI does where the screen tells none
+const DEFAULT_DPI = 96;
 const DARK_MODE_QUERY = "(prefers-color-scheme: dark)";
 // view_width, view_height on a page that tells no output pane (playground.js tellSystemValues), as natively
 // (crates/warp-runtime/src/system_values.rs NATIVE_VIEW)
@@ -147,7 +150,7 @@ function programImports(holder, hooks) {
 				if (value === "key_down") return BigInt(heldKey !== 0);
 				if (value === "key code held") return BigInt(heldKey);
 				if (value in WINDOW_SIDES) return BigInt(windowSide(value));
-				if (value === "display_dpi" && holder.displayDpi) return BigInt(holder.displayDpi);
+				if (value === "display_dpi") return BigInt(holder.displayDpi ?? toldValue(value) ?? Math.round((globalThis.devicePixelRatio ?? 1) * DEFAULT_DPI));
 				const pointerIndex = self.pagePointer?.names.indexOf(value) ?? -1; // canvas.js trackPointer
 				if (pointerIndex >= 0) return BigInt(Atomics.load(self.pagePointer.values, pointerIndex));
 				// a Worker has no matchMedia: the page tells it (playground.js tellSystemValues)
