@@ -35,3 +35,12 @@ fn a_real_function_applies_to_the_value_after_it() {
 	assert_eq!(printed("sin cos 0"), "0.8414709848078965");
 	assert_eq!(printed("f(x) := exp x; f(1)"), "2.718281828459045");
 }
+
+#[test]
+fn every_library_word_of_one_value_applies_braceless_and_as_suffix() {
+	assert_eq!(printed("f(x) := trunc x; f(2.5)"), "2");
+	assert_eq!(printed("f(x) := log10 x; f(100)"), "2");
+	assert_eq!(printed("map([2.5], trunc)"), "[2]");
+	assert_eq!(printed("x = 1; x sined"), "0.8414709848078965");
+	assert_eq!(printed("x = 2.5; x floored"), "2");
+}
