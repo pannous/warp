@@ -12,3 +12,9 @@ fn a_text_read_as_a_float_at_run_time_is_its_literal() {
 	assert_eq!(printed("f(t) := float(t); f(\"-12.5e3\")"), "-12500");
 	assert_eq!(printed("f(t) := float(t); f(\"1.7e-5\")"), "0.000017");
 }
+
+#[test]
+fn a_text_of_a_tiny_float_is_no_zero() {
+	assert_eq!(printed("f(t) := float(t); f(\"1e-310\")"), "1e-310");
+	assert_eq!(printed("f(t) := float(t); f(\"2.5e-320\")"), "2.5e-320");
+}

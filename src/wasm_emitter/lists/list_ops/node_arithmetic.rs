@@ -19,6 +19,8 @@ pub const NODE_ARITHMETIC: [(&str, Op, &str); 7] = [
 
 /// text_as_float(node): the f64 of a text like "-12.5e3" (a number node converts as it is); anything else is invalid_number
 pub const TEXT_AS_FLOAT: &str = "text_as_float";
+/// 10^22 is the largest power of ten an f64 holds exactly
+const EXACT_POWERS_OF_TEN: i32 = 22;
 /// The educate-once topic of `"ab"*2`, whose explicit form is `2 times "ab"`
 pub(super) const TEXT_REPEAT_TOPIC: &str = "text-repeat";
 
@@ -442,13 +444,31 @@ impl WasmGcEmitter {
 			Self::emit_list(f, &[I::I32Eqz]);
 			s.emit_fail_if(f, "invalid_number");
 			// the power of ten: the written exponent less the digits after the point. One exact power (10^22 at most is
-			// exact in f64) multiplies or divides the digits once, so "3.5e-2" is 35 / 1000 = 0.035 like the literal;
-			// a power of ten applied ten by ten rounds at each step (0.034999999999999996)
+			// exact in f64) multiplies or divides the digits once, so "3.5e-2" is 35 / 1000 = 0.035 like the literal
+			// (ten by ten rounds at each step: 0.034999999999999996); beyond 10^±22 the digits go ten by ten up to it,
+			// as a power of 10^310 would be ∞ ("1e-310" is no 0)
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
 				I32Const(0), I::LocalGet(exponent), I::I32Sub, I::LocalGet(exponent), I::LocalGet(exponent_negative),
-				I::Select, I::LocalGet(scale_digits), I::I32Sub, I::LocalTee(exponent),
-				I32Const(0), I::I32LtS, I::LocalSet(exponent_negative),
+				I::Select, I::LocalGet(scale_digits), I::I32Sub, I::LocalSet(exponent),
+			]);
+			let ten_by_ten = [
+				(EXACT_POWERS_OF_TEN, I::I32GtS, I::F64Mul, I::I32Sub),
+				(-EXACT_POWERS_OF_TEN, I::I32LtS, I::F64Div, I::I32Add),
+			];
+			for (limit, beyond, step, towards_limit) in ten_by_ten {
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::Block(BlockType::Empty), I::Loop(BlockType::Empty),
+					I::LocalGet(exponent), I32Const(limit), beyond, I::I32Eqz, I::BrIf(1),
+					I::LocalGet(value), I::F64Const(10.0.into()), step, I::LocalSet(value),
+					I::LocalGet(exponent), I32Const(1), towards_limit, I::LocalSet(exponent),
+					I::Br(0), I::End, I::End,
+				]);
+			}
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::LocalGet(exponent), I32Const(0), I::I32LtS, I::LocalSet(exponent_negative),
 				I::F64Const(1.0.into()), I::LocalSet(power),
 			]);
 			for (more, towards_zero) in [(I::I32GtS, I::I32Sub), (I::I32LtS, I::I32Add)] {
