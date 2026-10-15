@@ -56,9 +56,14 @@ impl WarpParser {
 				let operand = self.parse_atom();
 				self.finish_prefix(op, operand)
 			} else if operator_word {
-				// `sqrt 4 + 5` is sqrt(9): an operator word takes its braceless argument like a call (f 3-1 is f(2))
+				// `sqrt 4 + 5` is sqrt(9): an operator word takes its braceless argument like a call (f 3-1 is f(2));
+				// `map sqrt xs`, `apply abs -3`: lowering may read the word as the function instead
 				let operand = self.parse_expr(ARGUMENT_BP);
-				self.finish_prefix(op, operand)
+				let applied = self.finish_prefix(op, operand);
+				Node::Meta {
+					node: Box::new(applied),
+					data: Box::new(Node::key(crate::words::OPERATOR_WORD_MARK, Node::True)),
+				}
 			} else if chars == 1 && op == Op::Abs {
 				self.parse_norm_bars()
 			} else {
@@ -68,15 +73,7 @@ impl WarpParser {
 					norm::length_operator(&crate::normalize::operand_text(&rhs), false);
 				}
 				let rhs = if fourth_root { self.finish_prefix(op, rhs) } else { rhs };
-				let applied = self.finish_prefix(op, rhs);
-				// `map sqrt xs`, `apply abs -3`: lowering may read the word as the function instead
-				match operator_word {
-					true => Node::Meta {
-						node: Box::new(applied),
-						data: Box::new(Node::key(crate::words::OPERATOR_WORD_MARK, Node::True)),
-					},
-					false => applied,
-				}
+				self.finish_prefix(op, rhs)
 			}
 		} else if let Some(operator) = self.try_parse_operator_value() {
 			operator
