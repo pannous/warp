@@ -72,8 +72,8 @@ copy_to_server() {
 	# the repository's files as they are, new ones too: the suite serves them (tests.html, samples, fixtures), the tours
 	# read the runner's scripts
 	git ls-files -z --cached --others --exclude-standard | copy --from0 --files-from=- --ignore-missing-args . "$SERVER:$run_dir/"
-	# what the builds made for the page, which git ignores (packages: the libraries, if any)
-	copy --ignore-missing-args web/playground/{components,packages,served-files.js} "$SERVER:$run_dir/web/playground/"
+	# what the builds made for the page, which git ignores
+	copy web/playground/{components,served-files.js} "$SERVER:$run_dir/web/playground/"
 	if wants_tour; then copy "$local_dir/_site/" "$SERVER:$run_dir/_site/"; fi
 	if wants suite; then
 		copy "$(cat "$local_dir/tests_path")" "$SERVER:$run_dir/tests.wasm"

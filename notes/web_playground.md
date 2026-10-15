@@ -355,6 +355,12 @@ fails. Next time a warning shows, its stage says where to look.
   inputs as shader holes (src/graphics/shader_holes.rs): `$mouse` (a list [mouse_x, mouse_y] → vec2f), `$mouse_down` (0/1)
   and `$seconds` (from clock()), read at each paint. The ⛶ box (.painted) is as wide as its paintings, so ⛶ sits on
   the painting's corner.
+- Fingers (card register-fingers, 2026-10-15): a touch is the pointer. Every painting canvas has `touch-action: none`
+  (canvas.js paintingElement), else iPad Safari takes a finger for scrolling and sends pointercancel right after
+  pointerdown; pointercancel releases mouse_down like pointerup; of several fingers only the first one down steers
+  mouse_x/mouse_y. Check: the Chrome tour drags a real touch over samples/finger_paint (touch_drag.mjs over the
+  DevTools protocol, test_in_browser.py fingers_wrong); with the browser's own touch handling the same drag paints
+  nothing, so the check can fail. A diagonal swipe there went back in the page's history (another example).
 
 ## The default canvas is the output pane (card draw-default, user 2026-10-10: defaults, no errors)
 System values `view_width`, `view_height`: playground.js viewSize tells the room below the output pane's text (CSS

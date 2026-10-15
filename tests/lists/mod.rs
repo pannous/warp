@@ -101,6 +101,7 @@ mod test_size_count;
 mod test_size_property_word;
 mod test_sort_long;
 mod test_sorted_by_phrase; // card sorted-by-phrase
+mod test_swizzles; // card compile-shaders, decision S1
 mod test_tuple_items_of_lists;
 mod test_tuples;
 mod test_type_word_items;

@@ -22,7 +22,7 @@ No browser on the Mac, headless included (user 2026-10-09).
   `--suite [libtest filter…]`; `--again` before them reruns on the server without building or copying.
 - Builds here as pages.yml does: `build.sh` then `build.sh site <dir>` (the one site collection, shared with the
   workflow); the suite's tests.wasm by `cargo build --test tests` for wasm32-wasip1 (only built here, so no turn in tests/queue.sh) plus `build.sh components`.
-- rsyncs the checkout's files (tracked and new, as they are), the site, the built components/packages and tests.wasm to
+- rsyncs the checkout's files (tracked and new, as they are), the site, the built components, the pinned packages and tests.wasm to
   `/srv/browser-checks/runs/<branch>` (runs older than 2 days are removed), then runs the workflow's commands
   (`test_in_browser.py --examples [--firefox] --site _site`, `test_in_browser.py tests.wasm`) with the workflow's
   AGENT_BROWSER_ARGS and FIREFOX_PREFS (read from pages.yml), CI=1 and the local `gh auth token` as GITHUB_TOKEN (sent

@@ -97,7 +97,9 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    build's process group); now both stop warp and the player together (probes/music_outlives_file.py, silent).
    Offline render built (step 2, 2026-10-10, from layer 5): `render_sound("song.wav")` writes the sounds since the
    last render (or the start) one after another into one WAV and gives its seconds; headless too, so tests check audio
-   without speakers (tests/programs/test_sound_render.rs). The samples are kept in memory (44 KB a second at 22050 Hz),
+   without speakers (tests/programs/test_sound_render.rs). Since card save-sound (user 2026-10-15) it is written
+   `save sound as "song.wav"` / `save(sound, "song.wav")`: save overloaded by type, the word sound as save's argument a
+   lib/sound.warp Recording (music_words.rs with_recording); render_sound stays as the old name with a note. The samples are kept in memory (44 KB a second at 22050 Hz),
    not read back from $TMPDIR/warp-sound: that folder is shared by all warp processes. The playground refuses it (its
    files are texts).
    Handles built (step 3, 2026-10-10): `play`, `melody`, `tone` and `play "song.mp3"` give the sound's handle, its

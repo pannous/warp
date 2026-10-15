@@ -245,8 +245,10 @@ fn converted_kind(node: &Node, value: &Node, target: &Node, scope: &Scope) -> Op
 	if let Some(number) = spelled_number(node) {
 		return Some(infer_type(&number, scope));
 	}
-	// `t as number` of a text known only at run time: an Int, a ratio or a Float, as the text says (card runtime-text-ratio)
-	if is_number_word(target) && matches!(infer_type(value, scope), Kind::Text | Kind::Codepoint) {
+	// `t as number` of a text known only at run time: an Int, a ratio or a Float, as the text says (card runtime-text-ratio);
+	// of a value known only at run time (`number(t)` of a parameter, whatever kind a call guessed for it) likewise: a
+	// number stays as it is (card number-text)
+	if is_number_word(target) && !infer_type(value, scope).is_float() {
 		return Some(Kind::Data);
 	}
 	// `v as float` is an f64; `as int`, `as exact` stay exact Ints
@@ -272,6 +274,11 @@ fn subscript_kind(indexed: &Node, index: &Node, scope: &Scope) -> Kind {
 	if let Some(Node::Text(name)) = key.map(Node::drop_meta) {
 		if let Some(kind) = scope.function_kind(&field_kind_key(name)).filter(|_| !declared_any(indexed, scope)) {
 			return kind;
+		}
+		// `p.xy` of a list: the list of its components (decision S1)
+		let is_swizzle = crate::words::swizzle_components(name).is_some_and(|components| components.len() > 1);
+		if is_swizzle && infer_type(indexed, scope) == Kind::List {
+			return Kind::List;
 		}
 	}
 	element_kind(indexed, scope).unwrap_or_else(|| {

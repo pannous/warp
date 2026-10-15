@@ -329,7 +329,7 @@ pub(in crate::analyzer) fn conversion_readings(left: &Node, right: &Node) -> Vec
 }
 
 /// A negative literal or a negation: `-7`, `-x`, `(-7)`
-pub(in crate::analyzer) fn is_negative(node: &Node) -> bool {
+pub(crate) fn is_negative(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Number(Number::Int(n)) => *n < 0,
 		Node::Number(Number::Float(f)) => *f < 0.0,
