@@ -340,7 +340,8 @@ fn renamed_type_word_methods(node: Node) -> Node {
 		if let Node::Type { name, body } = part {
 			declares_classes = true;
 			let class = name.drop_meta().name();
-			let methods: Vec<String> = class_items(body).iter().filter_map(method_parts).map(|(name, _, _)| name).collect();
+			let methods: Vec<String> =
+				class_items(body).iter().filter_map(method_parts).map(|(name, _, _)| name).collect();
 			defined_by.extend(methods.into_iter().filter(clashes).map(|method| (method, class.clone())));
 		}
 	});
