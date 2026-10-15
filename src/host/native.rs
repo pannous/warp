@@ -573,8 +573,12 @@ fn foreign_call(
 		given_node(&mut caller, result[0].unwrap_anyref().copied()).map_err(|problem| problem.to_string())
 	};
 	let answer =
-		crate::modules::foreign::call(&runtime.name(), &module, &member.name(), call == 1, &arguments, &mut callback)
-			.map_err(task_failure)?;
+		crate::modules::foreign::call(&runtime.name(), &module, &member.name(), call == 1, &arguments, &mut callback);
+	let answer = match answer {
+		Ok(answer) => answer,
+		// raised in the program (emit_ffi_result), as a failed std word's: `try` catches a crate's Err too
+		Err(problem) => return error_in_program(&mut caller, &problem),
+	};
 	let value = TaskValue::of(&answer).map_err(|problem| task_failure(problem.to_string()))?;
 	let built =
 		builders.build(&value, &mut caller.as_context_mut()).map_err(|problem| task_failure(problem.to_string()))?;

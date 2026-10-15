@@ -61,7 +61,14 @@ fn component_call(module: &Node, member: &str, arguments: &Value) -> Result<Node
 		Node::Text(path) | Node::Symbol(path) => crate::modules::components::call(path, member, arguments),
 		handle => crate::modules::components::call_method(&json_of(handle), member, arguments),
 	};
-	result.map(|value| node_of(&value)).map_err(|failure| format!("wasm {receiver}: {failure}"))
+	result.map(|value| node_of(&value)).map_err(|failure| format!("{}: {failure}", component_name(&receiver)))
+}
+
+/// `semver` of the cached component ~/.cache/warp/crates/…/semver@1.0.28.wasm: what the program calls it
+fn component_name(receiver: &str) -> &str {
+	let file = receiver.rsplit('/').next().unwrap_or(receiver);
+	let stem = file.strip_suffix(".wasm").unwrap_or(file);
+	stem.split('@').next().unwrap_or(stem)
 }
 
 pub(crate) fn json_of(node: &Node) -> Value {
