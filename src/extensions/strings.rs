@@ -235,6 +235,19 @@ pub fn near_miss(word: &str, names: impl IntoIterator<Item = String>) -> Option<
 	names.into_iter().filter(|name| name != word).find(|name| edit_distance(word, name) <= allowed)
 }
 
+/// The regular English plural: `name` → names, `city` → cities, `address` → addresses, `day` → days
+pub fn english_plural(word: &str) -> String {
+	const SIBILANT_ENDINGS: [&str; 5] = ["s", "x", "z", "ch", "sh"];
+	const VOWELS: [char; 5] = ['a', 'e', 'i', 'o', 'u'];
+	if SIBILANT_ENDINGS.iter().any(|ending| word.ends_with(ending)) {
+		return format!("{word}es");
+	}
+	match word.strip_suffix('y') {
+		Some(stem) if stem.chars().last().is_some_and(|letter| !VOWELS.contains(&letter)) => format!("{stem}ies"),
+		_ => format!("{word}s"),
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
