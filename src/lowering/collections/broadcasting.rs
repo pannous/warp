@@ -21,7 +21,8 @@ const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Po
 /// Parameter types a comparison's result fits
 const TRUTH_TYPES: [&str; 3] = ["bool", "boolean", "any"];
 const BROADCAST_ITEM: &str = "broadcast_item";
-/// Library words of one text or number that broadcast over a list like a user function of a scalar
+/// Library words of one text or number that broadcast over a list like a user function of a scalar, as do libm's words
+/// of one number (`sin xs`, card cos-instead)
 const SCALAR_LIBRARY_WORDS: [&str; 6] = ["upper", "lower", "trim", "floor", "ceil", "round"];
 /// Prefix operators of one number: `abs [-1 2]`, `sqrt xs`
 const SCALAR_OPERATORS: [Op; 3] = [Op::Abs, Op::Sqrt, Op::Cbrt];
@@ -372,14 +373,14 @@ pub fn lower(program: Node) -> Node {
 		.collect();
 	// the library words of one scalar: `upper ["ab" "cd"]`, unless the program defines the name itself
 	let defined: HashSet<&String> = found.iter().map(|definition| &definition.name).collect();
-	broadcasting
-		.extend(SCALAR_LIBRARY_WORDS.iter().map(|word| word.to_string()).filter(|word| !defined.contains(word)));
+	broadcasting.extend(scalar_library_words().map(String::from).filter(|word| !defined.contains(word)));
 	let mut assigned = HashMap::new();
 	collect_list_variables(&program, &broadcasting, &mut assigned);
 	let names: HashSet<String> = assigned.keys().cloned().collect();
 	let list_variables: HashSet<String> =
 		assigned.into_iter().filter(|(_, only_lists)| *only_lists).map(|(name, _)| name).collect();
 	let program = each_singular(program, &list_variables, &names);
+	let other_variables = names.difference(&list_variables).cloned().collect();
 	let scalar_parameters = found
 		.iter()
 		.map(|definition| {
@@ -394,6 +395,7 @@ pub fn lower(program: Node) -> Node {
 	Broadcast {
 		functions: broadcasting,
 		list_variables,
+		other_variables,
 		scalar_parameters,
 		defines_dot,
 		defines_sum,
@@ -494,15 +496,35 @@ fn needs_a_scalar(definition: &Definition) -> bool {
 	takes_a_scalar(param, &definition.body)
 }
 
-/// A parameter declared with a scalar type, or undeclared and an arithmetic operand of the body
+/// A parameter declared with a scalar type, or undeclared and an arithmetic operand of the body or the argument of a
+/// scalar library word (`cosine(x) := cos(x)`)
 fn takes_a_scalar(param: &Node, body: &Node) -> bool {
 	match param.drop_meta() {
 		Node::Key(_, Op::Colon, type_node) => {
 			annotated_kind(type_node).is_some_and(|kind| SCALAR_KINDS.contains(&kind))
 		}
-		Node::Symbol(name) => is_arithmetic_operand(body, name) && !tests_kind_of(body, name),
+		Node::Symbol(name) => {
+			(is_arithmetic_operand(body, name) || is_scalar_word_argument(body, name)) && !tests_kind_of(body, name)
+		}
 		_ => false,
 	}
+}
+
+/// SCALAR_LIBRARY_WORDS and libm's words of one number
+fn scalar_library_words() -> impl Iterator<Item = &'static str> {
+	let libm_words = crate::ffi::LIBM_F64_FUNCTIONS.iter().filter(|(_, arity)| *arity == 1).map(|(word, _)| *word);
+	SCALAR_LIBRARY_WORDS.into_iter().chain(libm_words)
+}
+
+/// `cos(x)`, `floor x`: name is the one argument of a scalar library word in body
+fn is_scalar_word_argument(body: &Node, name: &str) -> bool {
+	let mut found = false;
+	body.visit(&mut |node| {
+		if let Node::List(items, _, _) = node.drop_meta() {
+			found |= matches!(items.as_slice(), [word, argument] if argument.is_symbol(name) && scalar_library_words().any(|scalar| word.is_symbol(scalar)));
+		}
+	});
+	found
 }
 
 /// `x is number` (`is_type x "number"`): a function testing its parameter's kind takes every kind itself
@@ -660,6 +682,8 @@ fn is_broadcast_over(value: &Node, variable: &str, functions: &HashSet<String>) 
 struct Broadcast {
 	functions: HashSet<String>,
 	list_variables: HashSet<String>,
+	/// The variables assigned anything but a list: `xs .* k` maps over xs at once
+	other_variables: Vec<String>,
 	/// Per function of several parameters: which parameters take one value (`add(a, b) := a + b`: both)
 	scalar_parameters: HashMap<String, Vec<bool>>,
 	defines_dot: bool,
@@ -832,11 +856,12 @@ impl Broadcast {
 		}))
 	}
 
-	/// `k .* v`, `2 .- v`: an element-wise operator whose left side is no list known here (a number, a parameter, a
-	/// call) decides at run time, by the prelude's element_wise_any: each item of the list side, or both numbers plainly
+	/// `k .* v`, `2 .- v`, `xs .- floor(xs)`: an element-wise operator of a side that may be a list or a number (a
+	/// parameter, a call) decides at run time, by the prelude's element_wise_any: each item of the list side, two lists
+	/// paired, or both numbers plainly; `xs .* 2`, `xs .* k` of a number variable k map over xs at once
 	fn element_wise_any(&self, node: &Node) -> Option<Node> {
 		let (receiver, op, operand) = element_wise_parts(node)?;
-		if self.is_list_expression(&receiver) {
+		if self.is_list_expression(&receiver) && is_scalar_operand(&operand, &self.other_variables) {
 			return None;
 		}
 		let [left, right] = ELEMENT_WISE_SIDES.map(|side| Node::Symbol(side.to_string()));
@@ -917,10 +942,11 @@ impl Broadcast {
 		is_list_literal(node) || self.is_list_value(node)
 	}
 
-	/// `abs [-1 2]`, `sqrt xs`: a scalar prefix operator over a list literal or a list variable
+	/// `abs [-1 2]`, `sqrt([4, 9])`, `sqrt xs`: a scalar prefix operator over a list literal or a list variable
 	fn broadcast_operator(&self, op: Op, argument: &Node) -> Option<Node> {
 		let applied = |element: Node| key(Node::Empty, op, element);
-		match argument.drop_meta() {
+		let argument = ungrouped(argument);
+		match argument {
 			Node::List(elements, Bracket::Square, separator)
 				if !elements.is_empty() && !elements.iter().any(is_colon_pair) =>
 			{
@@ -947,10 +973,12 @@ impl Broadcast {
 }
 
 /// The prelude words this pass may call where the program writes none: element_wise_any, of any element-wise operator
-/// (the parser wrote it as a map whose lambda parameter no module scan counts)
+/// (the parser wrote it as a map whose lambda parameter no module scan counts) or `dot` (`sum(a .* b)`)
 pub(crate) fn implied_words(statements: &[Node]) -> Vec<String> {
 	fn has_element_wise(node: &Node) -> bool {
-		element_wise_parts(node).is_some() || node.drop_meta().parts().into_iter().any(has_element_wise)
+		element_wise_parts(node).is_some()
+			|| node.is_symbol(DOT_WORD)
+			|| node.drop_meta().parts().into_iter().any(has_element_wise)
 	}
 	match statements.iter().any(has_element_wise) {
 		true => vec![ELEMENT_WISE_ANY.to_string()],
