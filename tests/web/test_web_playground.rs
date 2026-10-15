@@ -16,7 +16,7 @@ fn evaluate_reports_the_value_the_cli_prints() {
 	let report = evaluate("3+3", HashSet::new());
 	assert_eq!(report["value"], "6");
 	assert_eq!(report["error"], false);
-	assert_eq!(evaluate("[1 2.5 'x' (a:3)]", HashSet::new())["value"], "[1 2.5 \"x\" a:3]");
+	assert_eq!(evaluate("[1 2.5 'x' (a:3)]", HashSet::new())["value"], "[1 2.5 'x' a:3]");
 	assert_eq!(evaluate("xs=[1 2]; xs#5", HashSet::new())["error"], true);
 }
 
@@ -48,7 +48,7 @@ fn a_tree_from_the_page_reads_like_from_gc_object() {
 	let list = json!({"kind": square_list, "data": {"node": int(1)}, "chain": [
 		{"kind": square_list, "data": {"node": {"kind": "3", "data": {"text": "x"}}}},
 	]});
-	assert_eq!(node_from_tree(&list).serialize(), r#"[1 "x"]"#);
+	assert_eq!(node_from_tree(&list).serialize(), r#"[1 'x']"#);
 	let big = json!({"kind": "1", "data": {"big": {"negative": true, "limbs": [0, 1]}}});
 	assert_eq!(node_from_tree(&big).serialize(), "-4294967296");
 	let ratio = json!({"kind": "1", "data": {"ratio": [{"int": "1"}, {"int": "3"}]}});

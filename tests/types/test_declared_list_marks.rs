@@ -30,7 +30,7 @@ fn a_fitting_write_through_a_hidden_alias_is_fine() {
 #[test]
 fn a_marked_list_is_the_same_list() {
 	is!("names: texts = [\"hi\"]; ys = names; names == [\"hi\"]", true);
-	is!("names: texts = [\"hi\"]; ys = names; ys.add(\"a\"); string(names)", r#"["hi" "a"]"#);
+	is!("names: texts = [\"hi\"]; ys = names; ys.add(\"a\"); string(names)", r#"["hi" 'a']"#);
 	is!("names: texts = [\"hi\"]; ys = names; ys.add(\"a\"); type(names)", "list of text");
 }
 
@@ -42,7 +42,7 @@ fn an_empty_declared_list_checks_its_items() {
 	fails_with("names: texts = []; ys = names; ys.add(\"a\"); ys.add(2); names", CANNOT_HOLD);
 	fails_with("names: texts = []; ys = names; ys.insert(5, at: 0); names", CANNOT_HOLD);
 	fails_with("names: texts = [\"a\"]; ys = names; ys.pop(); ys.add(3); names", CANNOT_HOLD);
-	is!("names: texts = []; ys = names; ys.add(\"a\"); string(names)", r#"["a"]"#);
+	is!("names: texts = []; ys = names; ys.add(\"a\"); string(names)", r#"['a']"#);
 	is!("names: texts = []; ys = names; count names", 0);
 	is!("names: texts = []; ys = names; names == []", true);
 	is!("names: texts = []; ys = names; if names { 1 } else { 2 }", 2);
