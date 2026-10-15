@@ -42,6 +42,9 @@ function paintingElement(painting) {
 	// pixels painted one by one stay sharp squares; a shader's render scales smoothly (card make-shader)
 	canvas.style.imageRendering = painting.shaded ? "auto" : "pixelated";
 	canvas.style.setProperty("--aspect", painting.width / Math.max(painting.height, 1));
+	// a finger on it paints instead of scrolling, zooming or selecting the page: else Safari takes the touch over and
+	// cancels its pointer events after the first (card register-fingers)
+	Object.assign(canvas.style, { touchAction: "none", webkitUserSelect: "none", userSelect: "none" });
 	framed(canvas);
 	return canvas;
 }
@@ -73,15 +76,19 @@ function drawn(canvas, { pixels, width, height }) {
 // the pointer message for the program's worker (worker.js, site-worker.js: self.pagePointer)
 const pointerMessage = () => pointer && { pointer: { buffer: pointer.buffer, names: POINTER_NAMES } };
 
-// pointer events over a canvas store where the pointer is, in the canvas's pixels, and whether it is down
+const laterFinger = event => event.pointerType === "touch" && !event.isPrimary;
+
+// pointer events over a canvas store where the pointer is, in the canvas's pixels, and whether it is down; of several
+// fingers the first one down, so a second finger doesn't make the stroke jump between them
 function trackPointer(event) {
 	const canvas = event.target.closest?.("canvas");
-	if (!pointer || !canvas) return;
+	if (!pointer || !canvas || laterFinger(event)) return;
 	const { x, y } = pointOn(canvas, event);
 	[x, y, event.buttons & 1].forEach((value, index) => Atomics.store(pointer, index, value));
 }
 
-const releasePointer = () => pointer && Atomics.store(pointer, POINTER_NAMES.indexOf("mouse_down"), 0);
+// the button or first finger lifted, or the touch taken over by the browser (pointercancel)
+const releasePointer = event => pointer && !laterFinger(event) && Atomics.store(pointer, POINTER_NAMES.indexOf("mouse_down"), 0);
 
 // a key held outside the editor and the fields, its code while down
 function trackKey(event) {
@@ -100,6 +107,6 @@ function pointOn(target, event) {
 // the pointer tracked over the canvases inside `element`, released anywhere
 function followPointer(element) {
 	for (const event of ["pointermove", "pointerdown", "pointerup"]) element.addEventListener(event, trackPointer);
-	document.addEventListener("pointerup", releasePointer);
+	for (const event of ["pointerup", "pointercancel"]) document.addEventListener(event, releasePointer);
 	for (const event of ["keydown", "keyup"]) document.addEventListener(event, trackKey);
 }
