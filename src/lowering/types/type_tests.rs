@@ -30,6 +30,8 @@ const TEXT_CLASS_WORD: &str = "String";
 /// The collection types: `x is list`, `x is map`, and of their element type: `x is list of int`, `x is map of text`
 pub(crate) const COLLECTION_WORDS: [&str; 2] = [LIST_WORD, MAP_WORD];
 pub const TYPE_WORD: &str = "type";
+/// The type of a built-in word's function value, a function the language provides (decision dir-lists)
+pub const BUILTIN_TYPE: &str = "builtin";
 /// A built-in type: its name, the other words naming it, the types it covers (`is` tests the subtype, `==` the type
 /// itself), the kind a declared value of it is held as (`x: real = 1.5` an exact Int, `x: number` a Float; none for a
 /// type no declaration converts to) and the bits of its run-time kinds (node_kind_in, none for a type only the static
@@ -57,7 +59,7 @@ use crate::type_kinds::Kind as K;
 /// (`t = int`, `type(π) == real`). `number` covers every number, `real` the exact numbers and π, `rational` the whole
 /// numbers too, `text` a one-character string (a codepoint); `list` and ø both hold the empty list, as `count` takes
 /// it; a ± value is a number. The fixed widths (`int8`, `uint16` …) are src/numbers/fixed_width.rs
-const BUILTIN_TYPES: [BuiltinType; 24] = [
+const BUILTIN_TYPES: [BuiltinType; 25] = [
 	builtin("int", &["integer", "long", "i64", "i32"], &[], Some(K::Int), &[K::Int as i64]),
 	builtin("rational", &[], &["int"], Some(K::Int), &[K::Int as i64, K::Float as i64]),
 	builtin(REAL_WORD, &["exact"], &["rational"], Some(K::Empty), &[K::Int as i64, K::Float as i64]),
@@ -72,7 +74,8 @@ const BUILTIN_TYPES: [BuiltinType; 24] = [
 	builtin(TEXT_WORD, &["str", "string"], &["codepoint"], Some(K::Text), &[K::Text as i64, K::Codepoint as i64]),
 	builtin("codepoint", &["char", "character"], &[], Some(K::Codepoint), &[K::Codepoint as i64]),
 	builtin(crate::analyzer::BOOL_TYPE, &["boolean"], &[], Some(K::Int), &[crate::type_kinds::BOOL_MASK_BIT]),
-	builtin("function", &["closure"], &[], Some(K::Function), &[]),
+	builtin("function", &["closure"], &[BUILTIN_TYPE], Some(K::Function), &[]),
+	builtin(BUILTIN_TYPE, &[], &[], Some(K::Function), &[]),
 	builtin(SYMBOL_WORD, &[], &[], None, &[K::Symbol as i64]),
 	builtin("key", &[PAIR_WORD], &[OPERATION_WORD], None, &[K::Key as i64, crate::type_kinds::OPERATION_MASK_BIT]),
 	builtin(OPERATION_WORD, &["expression"], &[], None, &[crate::type_kinds::OPERATION_MASK_BIT]),

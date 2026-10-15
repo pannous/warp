@@ -22,6 +22,16 @@ fn spaced_values_are_a_list() {
 	fails_with("x = 5 -2; x", "one list or separate statements");
 }
 
+/// The arguments of a call stay arguments: `print 1+1 2+2` prints `2 4`, not `[2 4]` (reconsider-spaced)
+#[test]
+#[cfg(feature = "native")]
+fn spaced_values_after_print_print_each() {
+	assert_eq!(crate::common::printed("print 1+1 2+2").trim(), "2 4");
+	assert_eq!(crate::common::printed("print 1 2").trim(), "1 2");
+	assert_eq!(crate::common::printed("print 2⁻¹ 2⁰").trim(), "0.5 1");
+	assert_eq!(crate::common::printed("if yes {print 1+1 2+2}").trim(), "2 4");
+}
+
 #[test]
 fn each_reading_has_its_explicit_form() {
 	is!("a=[1,2,3]; a", ints(vec![1, 2, 3]));
