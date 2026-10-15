@@ -21,15 +21,14 @@ fn run_time_quantities_know_the_units_of_the_definitions() {
 	is!("quantity(440, \"Hz\").in(\"kHz\") == 0.44", true);
 }
 
-// a program adds a unit as the block does (decision dimensions-units): converted to, bound, known at run time
+// a program's `furlong := 201.168 m` stays its constant and is also a unit to convert to (decision dimensions-units,
+// rule C after the reviewer's veto: `distance := 42 km` keeps printing 42km)
 #[test]
 fn a_program_defines_its_own_units() {
-	is!("furlong := 201.168 m\n3 furlong == 603.504 m", true);
-	is!("furlong := 201.168 m\nx = 1 km\nx as furlong == 1000 m", true);
-	is!("furlong := 201.168 m\nstr(furlong)", "1furlong");
-	is!("fortnight := 14 * 24 h\n1 fortnight == 336 h", true);
-	is!("furlong := 201.168 m\nquantity(2, \"furlong\").in(\"m\")", 402.336);
-	// a definition of no unit stays a constant
+	is!("furlong := 201.168 m\nx = 1 km\nstr(x as furlong)", "(62500/12573)furlong");
+	is!("furlong := 201.168 m\n3furlong == 603.504 m", true);
+	is!("fortnight := 14 * 24 h\nx = 336 h\nstr(x as fortnight)", "1fortnight");
+	is!("distance := 42 km\nstr(distance)", "42km");
 	is!("n := 5\nn * 2", 10);
 }
 

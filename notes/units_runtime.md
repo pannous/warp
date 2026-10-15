@@ -178,11 +178,14 @@ them (`dimension length`, `dimension speed := length/duration`, `m: length` base
 `mph := mi/h` alias), and src/numbers/units/definitions.rs reads it once with its own small reader (the parser asks
 `is_unit`, so it cannot parse its own definitions). Each unit becomes whole steps of its dimension (amount × lcm of the
 dimension's denominators); only ratios matter. Adding a unit or dimension name = one line there (a new base dimension
-also needs its `Dimension` variant). Test: tests/numbers/test_unit_definitions.rs. A program's own units (`furlong := 201.168 m`, `fortnight := 14 * 24 h`): diagnostic in_source_mode
-sets context.program_unit_lines (definitions.rs program_unit_lines: unindented `name := …` statements the same reader
-reads as a unit of a new word) before parsing, so `3 furlong` binds; definitions() is then the lib's plus these, read once
-per distinct lines (leaked, cached); with_unit_definitions_read drops those statements, the run-time tables include
-them. `n := 5`, `g0 := 9.81 m/s²` stay constants. Sample: samples/units_of_your_own.warp. Next: px as a device-pixel
+also needs its `Dimension` variant). Test: tests/numbers/test_unit_definitions.rs. A program's own units (`furlong := 201.168 m`, `fortnight := 14 * 24 h`), rule C (reviewer veto of "every
+definition is a unit": `distance := 42 km` printed 1distance): each stays the program's constant and is also a unit to
+convert to. units.rs shadowing scopes context.program_unit_lines (definitions.rs program_unit_lines: the top-level `:=`
+definitions the block's reader reads as a new unit) with the shadowed names, so expressions see the constant and
+target_unit (program_unit_named) the unit; definitions() is the lib's plus these lines, read once per distinct lines
+(leaked, cached). static_units::lower keeps them as context.result_unit_lines so the result's warp.units entry
+(`furlong:1`) reads back. Not yet: a spaced `3 furlong` (not bound, like `3 x`), run-time quantity(2, "furlong").
+Sample: samples/units_of_your_own.warp. Next: px as a device-pixel
 dimension (Q1). The block is also the run-time table (card
 lib-units): units.rs with_unit_definitions_read replaces the statement by unit_names/unit_scales/unit_dimensions computed
 from the definitions (also where implicit_modules.rs picks the units module's needed definitions by name), so aliases of

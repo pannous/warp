@@ -56,6 +56,8 @@ pub struct CompileContext {
 	pub shadowed_units: HashSet<String>,
 	/// the program's own unit definitions, one per line (`furlong := 201.168 m`, units/definitions.rs)
 	pub program_unit_lines: String,
+	/// the units the last lowered program defined itself: its result's `warp.units` entry may name them
+	pub result_unit_lines: String,
 	/// the units of the last lowered program's final value, to convert its run-time amount back
 	pub(crate) result_units: Option<ResultUnits>,
 	/// the program's declared types: `pic{width:5}` constructs and `s:shape` declares, neither names an argument
@@ -99,6 +101,7 @@ impl Default for CompileContext {
 			module_returned_classes: HashMap::new(),
 			shadowed_units: HashSet::new(),
 			program_unit_lines: String::new(),
+			result_unit_lines: String::new(),
 			result_units: None,
 			declared_types: HashSet::new(),
 			bool_functions: HashSet::new(),

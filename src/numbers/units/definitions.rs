@@ -66,24 +66,22 @@ fn with_program_units(lines: &str) -> &'static Definitions {
 	})
 }
 
-/// A program's own units (decision dimensions-units, user 2026-10-15): each top-level `furlong := 201.168 m` that
-/// defines a new unit as the lines of the block do, one per line; the definitions of several units or of none
-/// (`g0 := 9.81 m/s²`, `n := 5`) stay the program's constants
-pub(crate) fn program_unit_lines(code: &str) -> String {
+/// A program's own units (decision dimensions-units, user 2026-10-15): of its top-level definitions (`furlong :=
+/// 201.168*m`), those that define a new unit as the lines of the block do, one per line. They stay the program's
+/// constants and are also units to convert to (`x as furlong`)
+pub(super) fn program_unit_lines(definitions: &[String]) -> String {
 	let mut reader = Reader::default();
 	lib_lines().for_each(|line| reader.line(line).expect("lib/units.warp is read already"));
-	let statements =
-		code.lines().filter(|line| !line.starts_with(char::is_whitespace)).flat_map(|line| line.split(';'));
 	let mut lines = vec![];
-	for statement in statements.map(|statement| statement.split(COMMENT).next().unwrap_or_default().trim()) {
-		if reader.defines_new_unit(statement) && reader.line(statement).is_ok() {
-			lines.push(statement);
+	for definition in definitions {
+		if reader.defines_new_unit(definition) && reader.line(definition).is_ok() {
+			lines.push(definition.as_str());
 		}
 	}
 	lines.join("\n")
 }
 
-/// Is `name` a unit the program defines itself (program_unit_lines): its definition is no statement to run
+/// Is `name` a unit the program defines itself (program_unit_lines), a constant of the program too
 pub(super) fn is_program_unit(name: &str) -> bool {
 	crate::compiler::compile_context::read(|context| {
 		context

@@ -15,6 +15,7 @@
 //! Unit fields: `class Run{distance: km}` (unit_fields.rs), an instance's fields have signatures like an object's.
 
 use super::{exponent_of, finest_units, unit_named, units_text, Dimension, Factor, Quantity, Unit};
+use crate::compiler::compile_context;
 use crate::lowering::function_head;
 use crate::words::{MAP_WORD, PRINT_WORD, RETURN_WORD, STR_WORD};
 
@@ -145,7 +146,11 @@ fn without_si_amounts(node: Node) -> Node {
 /// The program with unit literals as SI amounts and the units of its final value; None when it uses no units or uses
 /// quantities beyond stage 1; Err for a dimension error
 pub fn lower(program: &Node) -> Option<Result<Node, Node>> {
-	match super::shadowing(program, || lower_shadowed(program)) {
+	let lowered = super::shadowing(program, || {
+		compile_context::change(|context| context.result_unit_lines = context.program_unit_lines.clone());
+		lower_shadowed(program)
+	});
+	match lowered {
 		Some(lowered) => Some(lowered.map(without_si_amounts)),
 		None => program.mentions(SI_AMOUNT_WORD).then(|| Ok(without_si_amounts(program.clone()))),
 	}
@@ -338,8 +343,13 @@ fn module_units(bytes: &[u8]) -> Option<ResultUnits> {
 	let Node::Text(text) = crate::formats::meta_section::entry(bytes, UNITS_ENTRY)? else {
 		return None;
 	};
+	let own_units = compile_context::read(|context| context.result_unit_lines.clone());
+	compile_context::scoped(|context| &mut context.program_unit_lines, own_units, || units_named_in(&text))
+}
+
+fn units_named_in(text: &str) -> Option<ResultUnits> {
 	if !text.contains(FIELD_MARK) {
-		return factors_of(&text).map(ResultUnits::Whole);
+		return factors_of(text).map(ResultUnits::Whole);
 	}
 	text.split(FIELD_SEPARATOR)
 		.map(|entry| {

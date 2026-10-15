@@ -9,7 +9,6 @@ use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashMap;
 mod definitions;
-pub(crate) use definitions::program_unit_lines;
 mod quantity_arithmetic;
 pub use quantity_arithmetic::*;
 
@@ -90,9 +89,39 @@ fn unit_named(name: &str) -> Option<&'static Unit> {
 	units().iter().find(|unit| unit.name == name)
 }
 
-/// `run` with the unit words `program` defines as its names, not units: `g(x) := x + 1 m` keeps m a unit
+/// `run` with the unit words `program` defines as its names, not units: `g(x) := x + 1 m` keeps m a unit; and with
+/// the units it defines itself (`furlong := 201.168 m`), its constants that are units to convert to as well
 fn shadowing<T>(program: &Node, run: impl FnOnce() -> T) -> T {
-	crate::compiler::compile_context::scoped(|context| &mut context.shadowed_units, defined_unit_names(program), run)
+	use crate::compiler::compile_context::scoped;
+	let own_units = definitions::program_unit_lines(&top_level_definitions(program));
+	scoped(
+		|context| &mut context.program_unit_lines,
+		own_units,
+		|| scoped(|context| &mut context.shadowed_units, defined_unit_names(program), run),
+	)
+}
+
+/// `furlong := 201.168*m`: the program's top-level definitions of a word, as written; the passes before the units
+/// write the word as a head without parameters, `(furlong) := …`
+fn top_level_definitions(program: &Node) -> Vec<String> {
+	let word = |name: &Node| match name.drop_meta() {
+		Node::Symbol(name) => Some(name.clone()),
+		Node::List(head, Bracket::Round, _) if head.len() == 1 => match head[0].drop_meta() {
+			Node::Symbol(name) => Some(name.clone()),
+			_ => None,
+		},
+		_ => None,
+	};
+	let definition = |statement: &Node| match statement.drop_meta() {
+		Node::Key(name, Op::Define, value) => Some(format!("{} := {}", word(name)?, value.serialize())),
+		_ => None,
+	};
+	crate::modules::statements_of(program).iter().filter_map(definition).collect()
+}
+
+/// A unit the program defines itself: its constant in expressions, past the shadowing a unit to convert to
+fn program_unit_named(name: &str) -> Option<&'static Unit> {
+	definitions::is_program_unit(name).then(|| units().iter().find(|unit| unit.name == name)).flatten()
 }
 
 /// A conversion target: a unit by its short name or its long name, `minute` or `minutes`
@@ -101,7 +130,7 @@ fn target_unit(node: &Node) -> Option<&'static Unit> {
 		return None;
 	};
 	let singular = name.strip_suffix('s').unwrap_or(name);
-	unit_named(name).or_else(|| {
+	unit_named(name).or_else(|| program_unit_named(name)).or_else(|| {
 		LONG_NAMES.iter().find(|(long, _)| *long == singular || *long == name).and_then(|(_, short)| unit_named(short))
 	})
 }
@@ -116,16 +145,14 @@ pub fn lower_unit_words(program: Node) -> Node {
 	shadowing(&program.clone(), || with_whole_conversion_units(program))
 }
 
-/// The statements that only define units, as the program runs them (definitions.rs reads them): lib/units.warp's
+/// The statement that only defines units, as the program runs it (definitions.rs reads it): lib/units.warp's
 /// `unit_definitions = data {…}` stands for the tables its Quantity class reads (`unit_names = ["mm", …]`, card
-/// lib-units), a program's own unit `furlong := 201.168 m` for nothing
+/// lib-units)
 pub(crate) fn with_unit_definitions_read(program: Node) -> Node {
-	let names = |name: &Node, word: &dyn Fn(&str) -> bool| matches!(name.drop_meta(), Node::Symbol(name) if word(name));
 	let run_as = |statement: &Node| match statement.drop_meta() {
-		Node::Key(name, Op::Assign, _) if names(name, &|name| name == definitions::BLOCK_NAME) => {
+		Node::Key(name, Op::Assign, _) if name.drop_meta() == &Node::Symbol(definitions::BLOCK_NAME.to_string()) => {
 			Some(statements_of(crate::warp_parser::parse(&definitions::run_time_tables())))
 		}
-		Node::Key(name, Op::Define, _) if names(name, &definitions::is_program_unit) => Some(vec![]),
 		_ => None,
 	};
 	match program {

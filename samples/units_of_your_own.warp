@@ -1,9 +1,10 @@
 #!/usr/bin/env warp
-// A program adds units as lib/units.warp defines them (card dimensions-units): an amount of a known unit. Then they
-// convert, bind to a number and count at run time like km or h
+// A program adds units as lib/units.warp defines them (card dimensions-units): an amount of a known unit. Each stays
+// the program's constant (`8furlong` is 8 times it) and is a unit to convert to (`as furlong`)
 furlong := 201.168 m
 fortnight := 14 * 24 h
 
-race = 8 furlong
+race = 8furlong
 print race as km
-print 1 furlong / 1 fortnight as cm / h
+print 1 km as furlong
+print 1furlong / 1fortnight as furlong / fortnight
