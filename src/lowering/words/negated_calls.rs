@@ -43,10 +43,7 @@ fn negate_calls(
 		Node::Symbol(name) if functions.contains_key(name) => {
 			functions.get(name).is_some_and(|function| !function.params.is_empty())
 		}
-		Node::Symbol(name) if op == Op::Hash => {
-			(crate::numbers::real::FUNCTIONS.contains(&name.as_str()) || PRINT_WORDS.contains(&name.as_str()))
-				&& !bound.contains(name)
-		}
+		Node::Symbol(name) if op == Op::Hash => takes_one_value(name) && !bound.contains(name),
 		Node::Symbol(name) => is_builtin_callable(name) && !bound.contains(name),
 		_ => false,
 	};
@@ -66,11 +63,16 @@ fn negate_calls(
 /// A built-in word that applies to the value after it: print, a rounding word, a type, a library word of one value
 /// (`sin`, `floor`, `reverse`)
 fn is_builtin_callable(name: &str) -> bool {
-	crate::lowering::library_signatures::typed_first_arity(name) == Some(1)
-		|| PRINT_WORDS.contains(&name)
+	takes_one_value(name)
 		|| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name)
 		|| is_type_call_word(name)
 		|| crate::library_words::is_operand_word(name)
+}
+
+/// print or a library word of one value: it also counts `#xs` after it (`print #xs`, `sin#2`); a type does not
+/// (`int#101` is the subscript of a typed array)
+fn takes_one_value(name: &str) -> bool {
+	crate::lowering::library_signatures::typed_first_arity(name) == Some(1) || PRINT_WORDS.contains(&name)
 }
 
 /// The name before a minus written apart (warp_parser::SpacedMinus)

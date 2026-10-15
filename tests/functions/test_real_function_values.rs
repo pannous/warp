@@ -44,3 +44,9 @@ fn every_library_word_of_one_value_applies_braceless_and_as_suffix() {
 	assert_eq!(printed("x = 1; x sined"), "0.8414709848078965");
 	assert_eq!(printed("x = 2.5; x floored"), "2");
 }
+
+#[test]
+fn every_library_word_of_one_value_counts_the_value_after_it() {
+	assert_eq!(printed("floor#2"), printed("floor(#2)"));
+	assert_eq!(printed("sin#2"), printed("sin(#2)"));
+}
