@@ -21,7 +21,7 @@ const SIGIL: char = '$';
 /// The global the elements are found in, and how
 const DOCUMENT: &str = "document";
 const FIND_BY_ID: &str = "getElementById";
-/// The browser's globals a program names without `use js`
+/// The browser's globals a program reads members of without `use js`
 const PLAIN_GLOBALS: [&str; 2] = [DOCUMENT, "window"];
 /// `element("user-name")`: the element of a computed id or one the program does not create
 const ELEMENT_WORD: &str = "element";
@@ -216,7 +216,10 @@ impl PageNames {
 					Some(found) => found,
 					None => match self.old_receiver(&receiver, &member, enclosing) {
 						Some(element) => element,
-						None => self.rewritten(*receiver, enclosing),
+						None => {
+							self.note_plain_global(&receiver);
+							self.rewritten(*receiver, enclosing)
+						}
 					},
 				};
 				Node::Key(Box::new(receiver), Op::Dot, Box::new(self.member_rewritten(*member, enclosing)))
@@ -333,9 +336,6 @@ impl PageNames {
 			self.globals.insert(DOCUMENT.to_string());
 			return element_of_id(&name);
 		}
-		if PLAIN_GLOBALS.contains(&name.as_str()) && !self.defined.contains(&name) {
-			self.globals.insert(name.clone());
-		}
 		Node::Symbol(name)
 	}
 
@@ -352,6 +352,16 @@ impl PageNames {
 		let reason =
 			format!("${id} reads the field's value: {tag}{{ {BIND_ATTRIBUTE}: {id} }} keeps a variable {id} in sync");
 		crate::normalize::advise(&format!("${id}"), &format!("{tag}{{ {BIND_ATTRIBUTE}: {id} }}"), &reason, None);
+	}
+
+	/// `document.title`, `window.innerWidth`: the page's globals as a member's receiver, unless the program defines
+	/// the name; a call stays the word's (`window(xs, 3)` of `use list`)
+	fn note_plain_global(&mut self, receiver: &Node) {
+		if let Some(name) = receiver.drop_meta().symbol_name() {
+			if PLAIN_GLOBALS.contains(&name) && !self.defined.contains(name) {
+				self.globals.insert(name.to_string());
+			}
+		}
 	}
 
 	/// `$who` of an id of the markup: the id and the member of its value

@@ -85,6 +85,8 @@ fn document_and_window_are_plain_names() {
 	compiles("t = document.title");
 	compiles("w = window.innerWidth");
 	fails_with("document.titel", "did you mean title");
+	crate::is!("use list; window([1, 2, 3], 2)", warp::warp_parser::parse("[[1 2] [2 3]]"));
+	// the word, no global
 }
 
 #[test]

@@ -17,7 +17,8 @@ every element `tag{…}`.
 - Ids: `id: "who"` (or `id: who` of a name the program doesn't define) of any element tag in the program. A defined
   name computes the id: `element(name)`.
 - Plain `who` in code → `document.getElementById("who")`. Not: attribute and data key names (left of `:`), member
-  names (`x.who`), method names. `document`, `window` → themselves with an implied `use js`.
+  names (`x.who`), method names. `document.x`, `window.x` → an implied `use js` (as a receiver only: `window(xs, 3)`
+  of `use list` stays the word).
 - `$who` → the value: `.checked` of a checkbox/radio input, `.valueAsNumber` of a number/range input, `.value` of
   input/textarea/select, `.textContent` otherwise. `$who = v` (and compound) writes that member.
 - `element(x)` → `document.getElementById(x)` unless the program defines `element`.
