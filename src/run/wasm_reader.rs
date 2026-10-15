@@ -418,7 +418,10 @@ fn struct_node<T>(
 		t if t == Kind::Data as u8 => data_node(text_of(store, &data, memory)),
 		// a closure reads as the name of its function
 		t if t == Kind::Function as u8 => match child.unwrap_anyref() {
-			Some(_) => node(&child),
+			Some(_) => match node(&child) {
+				Node::Symbol(name) => Node::Symbol(crate::closures::builtin_word(&name).unwrap_or(&name).to_string()),
+				other => other,
+			},
 			None => Node::Symbol("function".to_string()),
 		},
 		t if t == Kind::TypeDef as u8 => Node::Type { name: Box::new(node(&data)), body: Box::new(node(&child)) },

@@ -28,15 +28,29 @@ fn operand() -> Box<Node> {
 
 /// `f = abs`, `xs.map(sqrt)`: an operator word left without an operand is the function `value => abs value`
 fn operator_values(node: Node) -> Node {
+	if let Node::Key(_, Op::Assign, value) = node.drop_meta() {
+		let word_of = |op| crate::warp_parser::PREFIX_OPERATOR_WORDS.iter().find(|(_, of)| *of == op);
+		if let Some((word, _)) = operator_reference(value).and_then(word_of) {
+			return needs_arguments(value, word);
+		}
+	}
 	match operator_reference(&node) {
 		Some(op) => Node::Key(operand(), Op::Arrow, Box::new(Node::Key(Box::new(Node::Empty), op, operand()))),
 		None => node.map_children(operator_values),
 	}
 }
 
+/// P82, as for a program's own function: `f = floor` is no function value, `function floor` is
+fn needs_arguments(at: &Node, word: &str) -> Node {
+	let count = crate::lowering::library_signatures::library_signature(word).map_or(1, |(params, _)| params.len());
+	let plural = if count == 1 { "" } else { "s" };
+	crate::errors::diagnostic::Diagnostic::at(at, format!("{word} needs {count} argument{plural}"))
+		.fix(format!("function {word}"))
+		.into_error()
+}
+
 /// `xs.map(upper)`, `map(xs, floor)`, `f := floor`: a library word passed to an iteration word or defined as a name is
-/// the function `value => upper value`. Assigned (`f = function floor`, which parses as `f = floor`) too, until
-/// builtin-functions marks the reference and gives the bare `f = floor` P82's error
+/// the function `value => upper value`
 fn library_word_values(node: Node, words: &SuffixWords) -> Node {
 	let node = node.map_children(|child| library_word_values(child, words));
 	match node {
@@ -47,8 +61,14 @@ fn library_word_values(node: Node, words: &SuffixWords) -> Node {
 			}
 			Node::List(items, bracket, separator)
 		}
-		Node::Key(target, op @ (Op::Assign | Op::Define), value) if words.is_function_word(&value) => {
-			Node::Key(target, op, Box::new(word_function(&value)))
+		// P82: `f = floor` needs floor's arguments; `f = function floor` is the function (closures.rs)
+		Node::Key(_, Op::Assign, value)
+			if words.is_function_word(&value) && crate::closures::referenced_function(&value).is_none() =>
+		{
+			needs_arguments(&value, &value.drop_meta().name())
+		}
+		Node::Key(target, Op::Define, value) if words.is_function_word(&value) => {
+			Node::Key(target, Op::Define, Box::new(word_function(&value)))
 		}
 		other => other,
 	}
@@ -56,7 +76,9 @@ fn library_word_values(node: Node, words: &SuffixWords) -> Node {
 
 /// `value => word value`
 fn word_function(word: &Node) -> Node {
-	let call = Node::List(vec![word.clone(), *operand()], Bracket::None, Separator::Space);
+	// `xs.map(function floor)`: the call of floor, no reference to it
+	let word = crate::closures::referenced_function(word).map_or_else(|| word.clone(), Node::Symbol);
+	let call = Node::List(vec![word, *operand()], Bracket::None, Separator::Space);
 	Node::Key(operand(), Op::Arrow, Box::new(call))
 }
 

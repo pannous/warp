@@ -276,6 +276,11 @@ fn function_type(signature: &str) -> Node {
 	Node::Text(format!("{}: {signature}", crate::type_kinds::Kind::Function))
 }
 
+/// `type(function floor)`: `builtin: (x:number) -> int` (decision dir-lists)
+fn builtin_type(signature: &str) -> Node {
+	Node::Text(format!("{}: {signature}", crate::type_tests::BUILTIN_TYPE))
+}
+
 /// `(a, b) -> int` → `int`
 fn return_type(signature: &str) -> String {
 	signature.rsplit_once(" -> ").map_or("", |(_, result)| result).to_string()
@@ -305,12 +310,16 @@ fn function_word(node: &Node, functions: &Functions, defined: &HashSet<String>) 
 	if word == crate::type_tests::TYPE_WORD && !referenced && is_parameterless(name, functions, defined) {
 		return Some(call(word, vec![call(name, vec![])]));
 	}
+	// `type(number)`, `dir(map)`: a type word is the type, `function map` the method
+	if crate::type_tests::is_builtin_type_word(name) && !referenced {
+		return None;
+	}
 	if !functions.contains_key(name) {
 		let (_, signature) = library_signature(name, functions, defined)?;
 		return match word {
 			DIR_WORD => Some(text_list(&LIBRARY_FUNCTION_WORDS.map(String::from))),
 			HELP_WORD => Some(Node::Text(format!("{name}{signature}"))),
-			crate::type_tests::TYPE_WORD => Some(function_type(&signature)),
+			crate::type_tests::TYPE_WORD => Some(builtin_type(&signature)),
 			_ => None,
 		};
 	}
@@ -807,8 +816,8 @@ impl Objects {
 	/// before the run: a parameter's `o.methods` or an imported class's `shapes.P.methods` stays as written
 	fn value_methods(&self, subject: &Node) -> Option<Node> {
 		let known = literal_type(subject).or_else(|| self.literal_types.get(subject.symbol_name()?).copied())?;
-		let (_, words) = crate::modules::type_modules().into_iter().find(|(module, _)| *module == known)?;
-		Some(function_list(words))
+		let (module, words) = crate::modules::type_modules().into_iter().find(|(module, _)| *module == known)?;
+		Some(function_list(&super::members::type_dir_names(module, words)))
 	}
 
 	fn map_keys(&self, subject: &Node) -> Node {
@@ -852,11 +861,12 @@ fn type_dispatch(subject: &Node, class: &str, names: Node, otherwise: Node) -> N
 /// What `dir` lists of a value that is no instance of the program's classes: a map's keys, else its type's methods
 /// as Python's dir([1, 2]) does, the words of the module named after the type (`dir([1 2])` == `dir(list)`), else none
 fn dir_otherwise(subject: &Node) -> Node {
-	let methods = crate::modules::type_modules()
-		.into_iter()
-		.rev()
-		.filter(|(module, _)| *module != MAP_WORD)
-		.fold(text_list(&[]), |otherwise, (module, words)| type_dispatch(subject, module, text_list(words), otherwise));
+	let methods = crate::modules::type_modules().into_iter().rev().filter(|(module, _)| *module != MAP_WORD).fold(
+		text_list(&[]),
+		|otherwise, (module, words)| {
+			type_dispatch(subject, module, text_list(&super::members::type_dir_names(module, words)), otherwise)
+		},
+	);
 	super::nodes::filled(DIR_OTHERWISE_TEMPLATE, [("RECEIVER", subject.clone()), ("OTHERWISE", methods)])
 }
 
@@ -881,7 +891,6 @@ pub(crate) fn value_methods_modules(program: &Node) -> Vec<&'static str> {
 		};
 		modules.extend(literal_type(subject).or_else(|| variables.get(subject.symbol_name()?).copied()));
 	});
-	modules.retain(|module| *module == crate::words::LIST_WORD);
 	modules
 }
 

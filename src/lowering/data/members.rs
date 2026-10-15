@@ -85,15 +85,36 @@ const TYPE_KEEPING_METHODS: [&str; 14] = [
 
 /// The methods of the value's type: the builtins, then the words of the module named after the type
 fn type_names(value_type: Option<ValueType>) -> Vec<String> {
-	let (builtins, module): (&[&str], &str) = match value_type {
-		Some(ValueType::List) => (&LIST_MEMBERS, LIST_WORD),
-		Some(ValueType::Text) => (&TEXT_MEMBERS, TEXT_WORD),
-		Some(ValueType::Map) => (&MAP_MEMBERS, MAP_WORD),
-		Some(ValueType::Number) => (&NUMBER_MEMBERS, ""),
+	let module = match value_type {
+		Some(ValueType::List) => LIST_WORD,
+		Some(ValueType::Text) => TEXT_WORD,
+		Some(ValueType::Map) => MAP_WORD,
+		Some(ValueType::Number) => "",
 		None => return vec![],
 	};
+	let builtins = if module.is_empty() { &NUMBER_MEMBERS[..] } else { builtin_members(module) };
 	let module_words = crate::modules::std_module_definitions(module).unwrap_or_default();
 	builtins.iter().map(|name| name.to_string()).chain(module_words.iter().cloned()).collect()
+}
+
+/// The builtin methods of the type a standard module is named after (list, text, map); none for any other module
+pub fn builtin_members(module: &str) -> &'static [&'static str] {
+	match module {
+		LIST_WORD => &LIST_MEMBERS,
+		TEXT_WORD => &TEXT_MEMBERS,
+		MAP_WORD => &MAP_MEMBERS,
+		_ => &[],
+	}
+}
+
+/// What `dir` and `methods` list of a type module or a value of its type (card dir-lists): the module's words in their
+/// order without its classes, then the builtin methods it does not define itself. The module words come first because test_dir pins
+/// dir(text)#1 == "repeat"; member completion (type_names) puts the builtins first on purpose
+pub fn type_dir_names(module: &str, words: &[String]) -> Vec<String> {
+	let classes = crate::modules::std_module_classes(module);
+	let methods = words.iter().filter(|word| !classes.contains(word));
+	let builtins = builtin_members(module).iter().filter(|name| !words.iter().any(|word| word == *name));
+	methods.cloned().chain(builtins.map(|name| name.to_string())).collect()
 }
 
 /// The type of a value written in the program: a variable's is its last assigned value's (followed through other
