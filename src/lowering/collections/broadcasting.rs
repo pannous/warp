@@ -109,7 +109,7 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 	for (name, count) in library_calls_used(&program) {
 		arities.entry(name).or_insert(Arity { fewest: count, most: count, typed_first: true, converts: false });
 	}
-	if arities.is_empty() {
+	if arities.is_empty() && !uses_extremum(&program) {
 		return program;
 	}
 	// `puts add 1 2`: the output words take one value
@@ -264,6 +264,12 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 			return rebuild(head, nest_prefix_calls(body, &inner));
 		}
 	}
+	// `print g 3, 4`, `f(max 3, 4)`: the call's arguments, a comma list, of which one is a braceless call
+	if let Node::List(items, Bracket::Round, Separator::None) = &node {
+		if let Some(joined) = comma_joined(items, arities) {
+			return nest_prefix_calls(Node::List(joined, Bracket::Round, Separator::None), arities);
+		}
+	}
 	let arity = |node: &Node| arity_of(node, arities);
 	match node {
 		Node::List(
@@ -316,12 +322,11 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 			ambiguous_call(&left, &items[0].drop_meta().name(), &items[1].serialize(), &op, &right.serialize())
 		}
 		Node::List(items, Bracket::None, Separator::Colon) if items.len() > 1 => {
-			let mut items: Vec<Node> = items.into_iter().map(|item| nest_prefix_calls(item, arities)).collect();
-			let rest = items.split_off(1);
-			let first = items.pop().expect("split after the first");
-			match with_comma_arguments(first, &rest, arities) {
-				Ok(call) => call,
-				Err(first) => Node::List([vec![first], rest].concat(), Bracket::None, Separator::Colon),
+			let items: Vec<Node> = items.into_iter().map(|item| nest_prefix_calls(item, arities)).collect();
+			match comma_joined(&items, arities) {
+				Some(mut joined) if joined.len() == 1 => joined.pop().expect("one item"),
+				Some(joined) => Node::List(joined, Bracket::None, Separator::Colon),
+				None => Node::List(items, Bracket::None, Separator::Colon),
 			}
 		}
 		other => other.map_children(|child| nest_prefix_calls(child, arities)),
@@ -338,6 +343,32 @@ fn without_parameters(head: &Node, arities: &HashMap<String, Arity>) -> Option<H
 	(!shadowed.is_empty()).then(|| unshadowed.map(|(name, arity)| (name.clone(), *arity)).collect())
 }
 
+/// `1, add 2, 3` → `1, add 2 3`: the first braceless call short of arguments takes the items after its comma, wherever
+/// it stands (card braceless-calls)
+fn comma_joined(items: &[Node], arities: &HashMap<String, Arity>) -> Option<Vec<Node>> {
+	(0..items.len().saturating_sub(1)).find_map(|at| {
+		let call = with_comma_arguments(items[at].clone(), &items[at + 1..], arities).ok()?;
+		Some([items[..at].to_vec(), vec![call]].concat())
+	})
+}
+
+/// The parameters a comma may fill: a function's, or min's and max's, which take two values or more (`max 3, 4`)
+fn comma_arity(node: &Node, arities: &HashMap<String, Arity>) -> Option<Arity> {
+	let extremum = || {
+		let is_extremum = matches!(node.drop_meta(), Node::Symbol(name) if EXTREMUM_WORDS.contains(&name.as_str()));
+		is_extremum.then_some(Arity { fewest: 2, most: usize::MAX, typed_first: true, converts: false })
+	};
+	arity_of(node, arities).or_else(extremum)
+}
+
+fn uses_extremum(program: &Node) -> bool {
+	let mut used = false;
+	program.visit(&mut |node| {
+		used |= matches!(node, Node::Symbol(name) if EXTREMUM_WORDS.contains(&name.as_str()));
+	});
+	used
+}
+
 /// `add 1` (also as the value of `x = add 1`) given the items after its comma, when it is short of arguments and they fit
 fn with_comma_arguments(node: Node, rest: &[Node], arities: &HashMap<String, Arity>) -> Result<Node, Node> {
 	match node {
@@ -351,7 +382,7 @@ fn with_comma_arguments(node: Node, rest: &[Node], arities: &HashMap<String, Ari
 		},
 		Node::List(mut items, Bracket::None, Separator::Space) => {
 			let given = items.len() - 1;
-			let fits = arity_of(&items[0], arities)
+			let fits = comma_arity(&items[0], arities)
 				.is_some_and(|takes| given < takes.fewest && given + rest.len() <= takes.most);
 			if fits {
 				return Ok(Node::List([items, rest.to_vec()].concat(), Bracket::None, Separator::Space));
