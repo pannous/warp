@@ -40,9 +40,6 @@ pub fn meta_entry(entry: &Node) -> Option<(&str, &Node)> {
 /// Meta key holding the source text of a literal (see `with_source_literal`)
 const SOURCE_LITERAL: &str = "literal";
 
-/// Meta key marking a file path written without quotes (`ls /tmp`, see `as_path_literal`)
-const PATH_LITERAL: &str = "path";
-
 /// The key of the Meta layer holding a comment (with_comment)
 pub const COMMENT_KEY: &str = "comment";
 
@@ -398,18 +395,6 @@ impl Node {
 				_ => node.source_literal(),
 			},
 			_ => None,
-		}
-	}
-
-	/// A text written as a path without quotes: juxtaposed paths stay separate values (`print /a /b`, card name-after)
-	pub fn as_path_literal(self) -> Self {
-		Meta { node: Box::new(self), data: Box::new(Node::key(PATH_LITERAL, True)) }
-	}
-
-	pub fn is_path_literal(&self) -> bool {
-		match self {
-			Meta { node, data } => matches!(data[PATH_LITERAL], True) || node.is_path_literal(),
-			_ => false,
 		}
 	}
 

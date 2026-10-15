@@ -7,13 +7,14 @@
 
 use super::nodes::{call, children_rewritten, is_kinded_type_word, key, named_assignment, Counter};
 use crate::analyzer::call_name;
-use crate::compiler::context::Context;
+use crate::compiler::context::{Context, UserFunctionDef};
 use crate::errors::diagnostic::Diagnostic;
 use crate::library_words::substitute;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
 use crate::words::{EACH_WORD, IMPLICIT_PARAMETER, ON_WORD, SORT_WORD};
+use std::collections::HashSet;
 
 const PARTIAL_LIST: &str = "partial_list";
 const LIST_PLACEHOLDER: &str = "loop_list";
@@ -114,8 +115,10 @@ pub fn lower_strict(node: Node) -> Node {
 
 fn lowering(node: Node, strict: bool) -> Node {
 	let context = crate::analyzer::function_context(&node);
+	let classes = crate::modules::needed_definitions::class_names(&node);
 	let first_fresh = first_fresh_number(&node);
-	Lowering { context, counter: Counter::starting_at(first_fresh), strict }.expand(node)
+	let path_variables = crate::warp_parser::path_variables(&node);
+	Lowering { context, classes, path_variables, counter: Counter::starting_at(first_fresh), strict }.expand(node)
 }
 
 /// `loop_item_1`, the variable of a loop inlined from a function: an `it` in its body is no loop item but the `it` of
@@ -189,6 +192,11 @@ fn literal_function(node: &Node) -> Option<Lambda> {
 }
 
 /// `map`, `filter`, `sorted` … as a word, whether or not the program defines a function of that name
+/// `find`, `map`, `filter`, … under any spelling: a class's method of that name keeps them for other values
+pub(crate) fn is_iteration_word(name: &str) -> bool {
+	iteration_word(&Node::Symbol(name.to_string())).is_some()
+}
+
 fn iteration_word(word: &Node) -> Option<&'static Iteration> {
 	let Node::Symbol(name) = word.drop_meta() else {
 		return None;
@@ -614,8 +622,16 @@ fn named_function_arguments(items: Vec<Node>, bracket: &Bracket) -> Vec<Node> {
 		.collect()
 }
 
+/// `Path` of `find(folder:Path, pattern:text)`
+fn first_parameter_type(defined: &UserFunctionDef) -> Option<String> {
+	defined.params.first()?.annotation.as_ref().map(|annotation| annotation.drop_meta().name())
+}
+
 struct Lowering {
 	context: Context,
+	/// the program's classes: a function whose first parameter is one is a method, the iteration word stays for other values
+	classes: HashSet<String>,
+	path_variables: HashSet<String>,
 	counter: Counter,
 	strict: bool,
 }
@@ -643,6 +659,10 @@ impl Lowering {
 				let Node::Symbol(name) = target.drop_meta() else { unreachable!("guarded") };
 				let body = self.partial_application(&value).expect("guarded");
 				definition(name, Lambda::new(vec![PARTIAL_LIST.to_string()], self.expand(body)))
+			}
+			// a function head `find(folder:Path, pattern:text) := …` is no call: a class's method may share an iteration's word
+			Node::Key(head, Op::Define, body) if !matches!(head.drop_meta(), Node::Symbol(_)) => {
+				key(*head, Op::Define, self.expand(*body))
 			}
 			Node::Key(receiver, Op::Dot, method) if self.iteration_method(&method).is_some() => {
 				let (iteration, mut arguments) = self.iteration_method(&method).expect("guarded");
@@ -682,9 +702,25 @@ impl Lowering {
 		}
 	}
 
-	/// The iteration a word names, unless the program defines a function of that name
+	/// The iteration a word names, unless the program defines a function of that name other than a class's method:
+	/// `find(file:Path)` leaves `find(xs, f)` the iteration (card cross-module-overload)
 	fn iteration_of(&self, word: &Node) -> Option<&'static Iteration> {
-		iteration_word(word).filter(|_| !self.context.user_functions.contains_key(&word.drop_meta().name()))
+		iteration_word(word).filter(|_| match self.context.user_functions.get(&word.drop_meta().name()) {
+			Some(defined) => self.is_method(defined),
+			None => true,
+		})
+	}
+
+	/// `find(./notes, "*.txt")`: a path written without quotes where a class's method of the word takes a Path calls
+	/// that method, as generics.rs as_path makes it one; other first arguments iterate
+	fn calls_method(&self, word: &Node, first_argument: &Node) -> bool {
+		let takes_path = |defined| first_parameter_type(defined).is_some_and(|class| class == crate::words::PATH_CLASS);
+		self.context.user_functions.get(&word.drop_meta().name()).is_some_and(takes_path)
+			&& crate::warp_parser::is_written_path(first_argument, &self.path_variables)
+	}
+
+	fn is_method(&self, defined: &UserFunctionDef) -> bool {
+		first_parameter_type(defined).is_some_and(|class| self.classes.contains(&class))
 	}
 
 	/// `word(extras, function)` after a dot: the iteration and its arguments, the function last
@@ -782,7 +818,7 @@ impl Lowering {
 				return None;
 			};
 			let iteration = with_start(iteration, extras.len());
-			if extras.len() != iteration.extra_arguments {
+			if extras.len() != iteration.extra_arguments || self.calls_method(head, list) {
 				return None;
 			}
 			self.iterate(iteration, list.clone(), extras.to_vec(), function.clone())

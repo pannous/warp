@@ -107,7 +107,7 @@ fn juxtaposed_text(argument: &Node) -> Option<Node> {
 		Node::List(parts, Bracket::None, Separator::Space)
 			if parts
 				.first()
-				.is_some_and(|first| matches!(first.drop_meta(), Node::Text(_)) && !first.is_path_literal()) =>
+				.is_some_and(|first| matches!(first.drop_meta(), Node::Text(_)) && !crate::warp_parser::is_path_literal(first)) =>
 		{
 			Some(super::super::joined_text(parts, ""))
 		}

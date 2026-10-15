@@ -1,7 +1,7 @@
 //! Static dispatch: `p < q` of known instances calls their witness, else a dispatcher per operation; values admitted to places of a declared type
 use super::*;
 use crate::node::parens;
-use crate::words::INSTANCE_OF;
+use crate::words::{ANY_TYPE, INSTANCE_OF};
 use crate::Kind;
 
 /// `p < q` of known instances calls their `compare` witness, `p == q` their `equals` override, `area(s)` the `area` of
@@ -92,11 +92,13 @@ pub(super) fn dispatcher_of_cases(operation: &str, arity: usize, cases: &[Dispat
 		Some(test) => if_then_else(test, method(variant), otherwise),
 		None => method(variant),
 	});
-	// a tested parameter is an instance of some type: held as a Node, like a parameter `s:square`
+	// a tested parameter is an instance of some type: held as a Node, like a parameter `s:square`; with a fallback any
+	// value, a text too (`sort "cba"` beside a class's sort method)
 	let tested: Vec<usize> = cases.iter().flat_map(|(tests, _)| tests.iter().map(|(position, _)| *position)).collect();
-	let instance = |position: usize, parameter: &Node| match tested.contains(&position) || position == 0 {
-		true => key(parameter.clone(), Op::Colon, Node::meta(symbol(DISPATCH), Node::data(Instance))),
-		false => parameter.clone(),
+	let instance = |position: usize, parameter: &Node| match (tested.contains(&position) || position == 0, fallback) {
+		(true, true) => key(parameter.clone(), Op::Colon, symbol(ANY_TYPE)),
+		(true, false) => key(parameter.clone(), Op::Colon, Node::meta(symbol(DISPATCH), Node::data(Instance))),
+		(false, _) => parameter.clone(),
 	};
 	let head_parameters = parameters.iter().enumerate().map(|(position, parameter)| instance(position, parameter));
 	let head =
