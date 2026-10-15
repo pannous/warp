@@ -663,6 +663,13 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   most a ~4 s fade); the sound matches the visible code, unlike Sonic Pi.
 
 ## Modules, library and foreign code
+- operator-alias (2026-10-16, user; card standalone-math-units): math spellings of operators are alias lines in
+  lib/math.warp, keeping the operator's precedence: `operator × := *`, `operator ≤ := <=`, `prefix operator √ :=
+  sqrt`; they replace the Rust table.
+- foreign-signature (2026-10-16, Interviewer's decision on the user's behalf, the user left it open; to present;
+  undoable): a libm function is declared in warp by a typed foreign line, `sin(x: float): float from 'm'`,
+  `atan2(y: float, x: float): float from 'm'`: the signature is visible and needs no C header. `import (…) from 'm'`
+  keeps working for headers.
 - P169 `use math` loads a new math module with beautiful names ("we need to educate people about beautiful names");
   raw C math is `use cmath`; math may forward to cmath meanwhile.
 - P182 Set, Stack, Queue, Deque, Counter only in `collections`. P183 std modules are backed only by warp, host words or
