@@ -361,9 +361,12 @@ impl<'a> Loader<'a> {
 		})?;
 		#[cfg(feature = "native")]
 		let directory = crate::modules::package_tools::library_directory(name, library);
-		// browsers cannot fetch release assets: the page serves them (web/playground/build.sh libraries)
+		// browsers cannot fetch release assets (no CORS): the package commits its library, read from the tag's raw files
 		#[cfg(not(feature = "native"))]
-		let directory: Result<PathBuf, String> = Ok(PathBuf::from(format!("{}packages/{name}", crate::web::PAGE_PREFIX)));
+		let directory = package_directory(name).map(|directory| {
+			let module = directory.join(library);
+			module.parent().map_or(directory.clone(), Path::to_path_buf)
+		});
 		let directory = directory.map_err(|failure| error(&failure))?;
 		self.load_source(Import::Use, directory.join(format!("{name}.warp")), binding)
 	}
