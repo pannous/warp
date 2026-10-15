@@ -281,7 +281,7 @@ const SIGNAL_PASSES: &[Pass] = &[
 
 /// Functions and their calls: declarations, parameters, blocks, mutation, getters
 const FUNCTION_PASSES: &[Pass] = &[
-	// `play 440Hz for 0.5s` of `play(tone, for duration)`: `play(440Hz, duration: 0.5s)` (preposition_calls.rs), before any
+	// `play 440Hz for: 0.5s` of `play(tone, for duration)`: `play(440Hz, duration: 0.5s)` (preposition_calls.rs), before any
 	// pass reads the head's `for duration` or the call's words
 	crate::lowering::preposition_calls::lower,
 	crate::lowering::declarations::lower_c_functions,
