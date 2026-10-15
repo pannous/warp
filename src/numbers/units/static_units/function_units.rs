@@ -321,6 +321,11 @@ impl Inference {
 			}
 		}
 		let is_list_literal = bracket == Bracket::Square;
+		// `xs is [_, h]`, `[[n, s]...] => s`: a lone unit word in a list is a pattern's name (switch.rs), or a unit
+		// without an amount; a list of quantities writes its amounts (`[1 h, 2 h]`)
+		if is_list_literal && items.iter().any(|item| self.unit_word(item).is_some()) {
+			return Err(Stop::Unsupported);
+		}
 		let statements = !is_list_literal
 			&& (matches!(separator, Separator::Semicolon | Separator::Newline) || bracket == Bracket::Curly);
 		let is_loop = matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if LOOP_WORDS.contains(&word.as_str()));
