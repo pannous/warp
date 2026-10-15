@@ -272,12 +272,44 @@ pub(crate) fn class_layouts(node: &Node) -> std::collections::HashMap<String, Cl
 			layouts.insert(class, ClassLayout { parent, fields, methods });
 		}
 	});
-	for (class, method) in crate::declarations::extension_methods(node) {
+	let outside = crate::declarations::extension_methods(node).into_iter().chain(first_parameter_methods(node));
+	for (class, method) in outside.collect::<Vec<_>>() {
 		if let Some(layout) = layouts.get_mut(&class).filter(|layout| !layout.methods.contains(&method)) {
 			layout.methods.push(method);
 		}
 	}
 	layouts
+}
+
+/// The (class, function) pairs of the definitions outside class bodies whose first parameter is declared a class:
+/// `def x(p:P)` is P's method as much as a class-body `def x()` (card one-method-form)
+fn first_parameter_methods(node: &Node) -> Vec<(String, String)> {
+	fn collect(node: &Node, methods: &mut Vec<(String, String)>) {
+		match node.drop_meta() {
+			Node::Type { .. } => {}
+			Node::Key(head, Op::Assign | Op::Define, body) => {
+				methods.extend(first_parameter_class(head));
+				collect(body, methods);
+			}
+			Node::Key(left, _, right) => {
+				collect(left, methods);
+				collect(right, methods);
+			}
+			Node::List(items, _, _) => items.iter().for_each(|item| collect(item, methods)),
+			_ => {}
+		}
+	}
+	let mut methods = vec![];
+	collect(&crate::declarations::lower_c_functions(node.clone()), &mut methods);
+	methods
+}
+
+/// `(P, x)` of the head `x(p:P)`
+fn first_parameter_class(head: &Node) -> Option<(String, String)> {
+	let Node::List(items, _, _) = head.drop_meta() else { return None };
+	let [name, first, ..] = items.as_slice() else { return None };
+	let Node::Key(_, Op::Colon, class) = first.drop_meta() else { return None };
+	Some((class.drop_meta().symbol_name()?.to_string(), name.drop_meta().symbol_name()?.to_string()))
 }
 
 /// The variable holding what is taken apart: `{x, y} = p` is `(parts·from = p; x = parts·from.x; y = parts·from.y)`
