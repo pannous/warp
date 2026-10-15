@@ -128,13 +128,13 @@ fn end_quietly_on_closed_pipe() {}
 fn program_file(args: &[String]) -> Option<(bool, &str, &[String])> {
 	let only_run = args.get(1).is_some_and(|word| RUN_PREFIX.trim_end() == word);
 	let file = if only_run { 2 } else { 1 };
-	let path = args.get(file).filter(|path| path.ends_with(".wasp") || path.ends_with(".warp"))?;
+	let path = args.get(file).filter(|path| has_warp_extension(path))?;
 	Some((only_run, path.as_str(), &args[file + 1..]))
 }
 
 /// `warp test file.warp`: the program file whose tests run
 fn test_file(args: &[String]) -> Option<&str> {
-	let path = args.get(2).filter(|path| path.ends_with(".wasp") || path.ends_with(".warp"))?;
+	let path = args.get(2).filter(|path| has_warp_extension(path))?;
 	args.get(1).is_some_and(|word| TEST_WORD == word).then_some(path.as_str())
 }
 
