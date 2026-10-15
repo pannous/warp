@@ -42,3 +42,14 @@ fn a_task_pauses_and_resumes() {
 		"task stopped",
 	);
 }
+
+/// A run that fails gives its tasks' Workers back: four failed runs (the playground's pool holds 4), each leaving a
+/// finished task nobody read, and two tasks still overlap (card flaky-browser-suite-2: leaked Workers made the second
+/// task of two_tasks_overlap wait for the first)
+#[test]
+fn a_failed_run_gives_its_task_workers_back() {
+	for _ in 0..4 {
+		crate::common::fails_with("f() := 1; job = go f(); sleep(300ms); [1,2,3]#5", "index out of range");
+	}
+	two_tasks_overlap();
+}
