@@ -214,8 +214,8 @@ fn spread(items: &[Node]) -> Vec<Node> {
 /// labels or named arguments, which stay as written for the passes reading calls without brackets
 fn spaced_call(words: Vec<Node>, labels: &Labels, variables: &HashSet<String>) -> Option<Node> {
 	let words = with_unambiguous_colons(words, labels, variables);
-	if let Some((item, word)) = words[1..].iter().find_map(|item| bare_label(item, labels, variables)) {
-		return Some(label_without_colon(&words[0], item, word));
+	if let Some(error) = label_without_colon(&words, labels, variables) {
+		return Some(error);
 	}
 	if let Some(error) = words[1..].iter().find_map(|item| label_error(&words[0], item, labels)) {
 		return Some(error);
@@ -264,16 +264,23 @@ fn with_unambiguous_colons(words: Vec<Node>, labels: &Labels, variables: &HashSe
 
 /// The warning on `play C4 for 1s`, offering `for: 1s`
 pub(crate) fn warn_missing_colon(function: &Node, label: &Node, value: &Node) {
-	let label_word = label.drop_meta().name();
-	let message = format!("{label_word} labels an argument of {} with a colon: `{label_word}: …`", function.name());
-	let written = format!("{label_word} {}", value.serialize().trim());
-	let colon = format!("{label_word}: {}", value.serialize().trim());
-	crate::errors::diagnostic::say(Diagnostic::at(label, message).offer("the label's colon", written, colon));
+	let word = label.drop_meta().name();
+	crate::errors::diagnostic::say(missing_colon(function, label, &word, Some(value)));
+}
+
+/// `move 1 from 2 to: 3`: the label `from` without its colon, offering `from: 2` when its value follows
+fn missing_colon(function: &Node, label: &Node, word: &str, value: Option<&Node>) -> Diagnostic {
+	let message = format!("{word} labels an argument of {} with a colon: `{word}: …`", function.name());
+	let diagnostic = Diagnostic::at(label, message);
+	match value.map(|value| value.serialize().trim().to_string()) {
+		Some(value) => diagnostic.offer("the label's colon", format!("{word} {value}"), format!("{word}: {value}")),
+		None => diagnostic,
+	}
 }
 
 /// `play C4 for 1s`, `save sound as "x.wav"`, `move x to 5` of functions taking those labels: a label without its
 /// colon (a variable of that name is an argument)
-fn bare_label<'a>(item: &'a Node, labels: &Labels, variables: &HashSet<String>) -> Option<(&'a Node, &'a str)> {
+fn bare_label<'a>(item: &'a Node, labels: &Labels, variables: &HashSet<String>) -> Option<&'a str> {
 	let word = match item.drop_meta() {
 		Node::Symbol(word) if !variables.contains(word) => word.as_str(),
 		Node::Key(_, Op::To, _) => "to",
@@ -281,12 +288,18 @@ fn bare_label<'a>(item: &'a Node, labels: &Labels, variables: &HashSet<String>) 
 		Node::Key(_, Op::As, _) => AS_LABEL,
 		_ => return None,
 	};
-	labels.by_preposition.contains_key(word).then_some((item, word))
+	labels.by_preposition.contains_key(word).then_some(word)
 }
 
-fn label_without_colon(function: &Node, item: &Node, word: &str) -> Node {
-	let message = format!("{word} labels an argument of {} with a colon: `{word}: …`", function.name());
-	Diagnostic::at(item, message).into_error()
+/// The error on the first bare label of a call's words: `from 2` after a symbol, `to 3` of the key `2 to 3`
+fn label_without_colon(words: &[Node], labels: &Labels, variables: &HashSet<String>) -> Option<Node> {
+	let (index, word) =
+		(1..words.len()).find_map(|index| Some((index, bare_label(&words[index], labels, variables)?)))?;
+	let value = match words[index].drop_meta() {
+		Node::Key(_, _, right) => Some(right.as_ref()),
+		_ => words.get(index + 1),
+	};
+	Some(missing_colon(&words[0], &words[index], word, value).into_error())
 }
 
 /// `f 5 by: 2` of `f(x, with y)`, `f 5 for:`: a label the function does not take, a label without its value
