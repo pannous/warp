@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-// Dijkstra shortest path on a small weighted graph
+# Dijkstra shortest path on a small weighted graph
 graph = {
 	"A": [["B", 4], ["C", 2]],
 	"B": [["D", 5]],
@@ -18,7 +18,7 @@ fun dijkstra(graph, start) {
 	dist[start] = 0
 	visited = []
 	while visited.length < graph.keys().length {
-		// pick the unvisited node with the smallest distance
+		# pick the unvisited node with the smallest distance
 		current = ""
 		best = 999999
 		for node in graph.keys() {

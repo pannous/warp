@@ -1,13 +1,13 @@
 #!/usr/bin/env warp
-// finger painting: hold the mouse button over the window (in the playground, the canvas) and draw strokes whose color
-// turns as you go; S saves the painting (in the playground, a download), space clears it. mouse_x, mouse_y and
-// mouse_down are the pointer over the painted picture, in its pixels
+# finger painting: hold the mouse button over the window (in the playground, the canvas) and draw strokes whose color
+# turns as you go; S saves the painting (in the playground, a download), space clears it. mouse_x, mouse_y and
+# mouse_down are the pointer over the painted picture, in its pixels
 use draw
-// 1024 pixels across or more show pixel for pixel: crisp on a Retina screen (640×400 points there)
+# 1024 pixels across or more show pixel for pixel: crisp on a Retina screen (640×400 points there)
 width = 1280
 height = 800
 brush = 8
-spacing = 3 // a brush dab every this many pixels along a stroke: dabs overlap into a smooth line
+spacing = 3 # a brush dab every this many pixels along a stroke: dabs overlap into a smooth line
 degrees_per_dab = 0.5
 
 canvas(width, height)
@@ -33,12 +33,12 @@ on key {
 	show()
 }
 
-// each frame of the window, until it closes (the playground's canvas always shows; headless: one frame)
+# each frame of the window, until it closes (the playground's canvas always shows; headless: one frame)
 on frame {
-	down = mouse_down // read once: the pointer changes while the frame draws
-	// a stroke goes on to where the button came up, so a fast stroke keeps its last move
+	down = mouse_down # read once: the pointer changes while the frame draws
+	# a stroke goes on to where the button came up, so a fast stroke keeps its last move
 	if down or was_down {
-		// a new stroke starts where the button went down, not where the last one ended
+		# a new stroke starts where the button went down, not where the last one ended
 		if not was_down { last_x = mouse_x; last_y = mouse_y }
 		stroke(last_x, last_y, mouse_x, mouse_y)
 		last_x = mouse_x

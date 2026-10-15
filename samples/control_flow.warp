@@ -1,16 +1,16 @@
 #!/usr/bin/env warp
-// Control flow in warp
-// Expressions over statements
+# Control flow in warp
+# Expressions over statements
 a = 3
 b = 7
 x = -2
 
-// Conditional expression
+# Conditional expression
 max = if a > b then a else b
 sign = if x < 0 then "negative" else if x > 0 then "positive" else "zero"
 print "max \(max), x is \(sign)"
 
-// If as expression
+# If as expression
 compute_something = "something"
 compute_other = "other"
 condition = max > 5
@@ -21,7 +21,7 @@ result = if condition {
 }
 print "computed \(result)"
 
-// Pattern matching, with guards
+# Pattern matching, with guards
 value = -42
 describe = match value {
 	0 => "zero"
@@ -32,7 +32,7 @@ describe = match value {
 }
 print "\(value) is \(describe)"
 
-// Loops
+# Loops
 for i in 1..4 {
 	print i
 }
@@ -43,13 +43,13 @@ for item in collection {
 	process(item)
 }
 
-// While loop
+# While loop
 countdown = 3
 while countdown > 0 {
 	countdown = countdown - 1
 }
 
-// Loop with break/continue
+# Loop with break/continue
 items = [4, -1, 5, 9, 2]
 target = 9
 for x in items {
@@ -58,7 +58,7 @@ for x in items {
 	process(x)
 }
 
-// Infinite loop with break
+# Infinite loop with break
 events = ["click", "key", "quit", "never seen"]
 handled = 0
 loop {
@@ -68,7 +68,7 @@ loop {
 }
 print "handled \(handled) events"
 
-// Exception handling
+# Exception handling
 risky_operation() := 1 / 0
 try {
 	risky_operation()
@@ -78,6 +78,6 @@ try {
 	print "cleanup"
 }
 
-// Errors are values: try … else gives a fallback value
+# Errors are values: try … else gives a fallback value
 parsed = try risky_operation() else 0
 print "parsed \(parsed)"

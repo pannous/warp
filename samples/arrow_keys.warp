@@ -1,10 +1,10 @@
 #!/usr/bin/env warp
-// Hold the arrow keys to move the dot, two at once diagonally; Escape ends (in the playground: click the canvas first)
+# Hold the arrow keys to move the dot, two at once diagonally; Escape ends (in the playground: click the canvas first)
 use draw
 canvas(320, 240)
 x = 160
 y = 120
-// each frame of the window, until it closes (headless: one frame)
+# each frame of the window, until it closes (headless: one frame)
 on frame {
 	if held_key == ESC: exit()
 	if held_key == LEFT { x -= 4 }
