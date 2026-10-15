@@ -1,16 +1,22 @@
 //! Prepositions name arguments (card prepositions-call, user 2026-10-14): a parameter written after a preposition,
-//! `play(tone, for duration)`, is passed by that word as Swift passes its argument labels: `play 440Hz for 0.5s`,
-//! `play(440Hz, for: 0.5s)` and `play tone:440Hz for:0.5s` are all `play(440Hz, duration: 0.5s)`, which
-//! named_arguments.rs orders. A call without brackets also takes named arguments, `f b=1 a=5` is `f(b=1, a=5)`.
-//! The word is a preposition only in a call of a function declaring it: `for x in xs` stays a loop, `1 to 5` a range
-//! (P52), unless a call of a function with a `to` parameter holds it, `move x from 1 to 5`.
+//! `play(tone, for duration)`, is passed by that word as Swift passes its argument labels, always with a colon (decision
+//! labels-calls): `play 440Hz for: 0.5s`, `play(440Hz, for: 0.5s)` and `play tone:440Hz for:0.5s` are all
+//! `play(440Hz, duration: 0.5s)`, which named_arguments.rs orders. A call without brackets also takes named arguments,
+//! `f b=1 a=5` is `f(b=1, a=5)`. Without its colon the word keeps its own meaning, `for x in xs` a loop, `1 to 5` a
+//! range (P52); in a call of a function it labels, the bare word is an error naming the colon form, a warning where it
+//! cannot mean anything else (UNAMBIGUOUS_LABELS).
 
 use super::nodes::{key, parameter_word};
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::type_name_matching::{is_label_word, is_preposition, AS_LABEL, PREPOSITIONS};
+use crate::type_name_matching::{is_label_word, AS_LABEL, PREPOSITIONS};
 use std::collections::{HashMap, HashSet};
+
+/// The labels whose bare form after a call's argument means nothing else: `play C4 for 1s` is read as `for: 1s` with a
+/// warning naming the colon (user 2026-10-15). `to` is a range, `in` a membership, `as` a cast, `of` a field, and
+/// with/from/into/by get a meaning of their own soon (decision labels-calls): those stay errors
+const UNAMBIGUOUS_LABELS: [&str; 2] = ["for", "each"];
 
 /// A function's parameters by name, and which name each preposition passes, over all its overloads
 #[derive(Default)]
@@ -102,14 +108,19 @@ fn rewrite(node: Node, functions: &Functions) -> Node {
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) if head_parameters(&head).is_some() => {
 			key(unlabelled_head(*head), op, rewrite(*body, functions))
 		}
-		// `(f 9 to 4)` as an argument: the words of a call without brackets
-		Node::List(items, bracket @ (Bracket::None | Bracket::Round), Separator::Space) => {
-			let items: Vec<Node> = items.into_iter().map(|item| rewrite(item, functions)).collect();
+		// `(f 9 to: 4)` as an argument: the words of a call without brackets; `r = move 1 to: 3 from: 10` groups
+		// `[[move 1 to: 3] from: 10]`, spread before any is a call; `{melody [C3 G2] each: 1 beat}` stays a block
+		Node::List(items, bracket, separator) if crate::lowering::nodes::is_words_call(&bracket, &separator) => {
 			let words = spread(&items);
-			match called(&words, functions) {
-				Some(labels) => spaced_call(words, labels, &functions.variables)
-					.unwrap_or_else(|| Node::List(items, bracket, Separator::Space)),
-				None => Node::List(items, bracket, Separator::Space),
+			let call = called(&words, functions).and_then(|labels| {
+				let words = words.iter().map(|word| rewrite(word.clone(), functions)).collect();
+				spaced_call(words, labels, &functions.variables)
+			});
+			match call {
+				Some(call) => crate::lowering::nodes::in_block_as_written(&bracket, call),
+				None => {
+					Node::List(items.into_iter().map(|item| rewrite(item, functions)).collect(), bracket, separator)
+				}
 			}
 		}
 		Node::List(items, Bracket::Round, separator) => {
@@ -117,6 +128,9 @@ fn rewrite(node: Node, functions: &Functions) -> Node {
 			let items = inner_call(items, functions);
 			match called(&items, functions) {
 				Some(labels) => {
+					if let Some(error) = items[1..].iter().find_map(|item| label_error(&items[0], item, labels)) {
+						return error;
+					}
 					let items = items.into_iter().enumerate().map(|(index, item)| match index {
 						0 => item,
 						_ => renamed(item, labels),
@@ -126,50 +140,29 @@ fn rewrite(node: Node, functions: &Functions) -> Node {
 				None => Node::List(items, Bracket::Round, separator),
 			}
 		}
-		// `r = move 1 from 10 to 3` reads `(move 1 from 10) to 3`: the words of the call, when move takes `to`
-		Node::Key(left, op @ (Op::To | Op::In), right) => {
-			let key = Node::Key(left, op, right);
-			let words =
-				first_word(&key).and_then(|word| called(std::slice::from_ref(word), functions)).and_then(|labels| {
-					let words = spread(&split_operator(key.clone(), labels));
-					spaced_call(
-						words.into_iter().map(|word| rewrite(word, functions)).collect(),
-						labels,
-						&functions.variables,
-					)
-				});
-			words.unwrap_or_else(|| key.map_children(|child| rewrite(child, functions)))
-		}
 		meta @ Node::Meta { .. } => meta.under_meta(|inner| rewrite(inner, functions)),
 		other => other.map_children(|child| rewrite(child, functions)),
 	}
 }
 
-/// `g(f 9 to 4)` holds the words `f 9 to 4` after g: the call of f in it
+/// `g(f 9 to: 4)` holds the words `f 9 to: 4` after g: the call of f in it
 fn inner_call(mut items: Vec<Node>, functions: &Functions) -> Vec<Node> {
 	for start in 1..items.len() {
 		if !matches!(items[start].drop_meta(), Node::Symbol(name) if functions.labels.contains_key(name)) {
 			continue;
 		}
 		let words = spread(&items[start..]);
-		if let Some(call) =
-			called(&words, functions).and_then(|labels| spaced_call(words, labels, &functions.variables))
-		{
+		// `play(hum, for: 0.3s)`: a label hum does not take is the outer call's
+		let takes_the_labels =
+			|labels: &&Labels| words[1..].iter().all(|word| label_error(&words[0], word, labels).is_none());
+		let labels = called(&words, functions).filter(takes_the_labels);
+		if let Some(call) = labels.and_then(|labels| spaced_call(words, labels, &functions.variables)) {
 			items.truncate(start);
 			items.push(call);
 			break;
 		}
 	}
 	items
-}
-
-/// The first word of `(move 1 from 10) to 3`: move
-fn first_word(node: &Node) -> Option<&Node> {
-	match node.drop_meta() {
-		Node::Key(left, Op::To | Op::In, _) => first_word(left),
-		Node::List(items, Bracket::None, Separator::Space) => first_word(items.first()?),
-		_ => Some(node),
-	}
 }
 
 fn called<'a>(items: &[Node], functions: &'a Functions) -> Option<&'a Labels> {
@@ -206,7 +199,7 @@ fn renamed(argument: Node, labels: &Labels) -> Node {
 	}
 }
 
-/// `r = f 9 from 4` groups `[f 9] [from 4]`: the words, groups without brackets spread
+/// `r = f 9 from: 4` groups `[f 9] [from: 4]`: the words, groups without brackets spread
 fn spread(items: &[Node]) -> Vec<Node> {
 	items
 		.iter()
@@ -217,85 +210,101 @@ fn spread(items: &[Node]) -> Vec<Node> {
 		.collect()
 }
 
-/// `play 440Hz for 0.5s`, `f b=1 a=5`: the call `play(440Hz, duration: 0.5s)`, `f(b=1, a=5)`; None for words without
-/// prepositions or named arguments, which stay as written for the passes reading calls without brackets
-fn spaced_call(items: Vec<Node>, labels: &Labels, variables: &HashSet<String>) -> Option<Node> {
-	let words: Vec<Node> = items.into_iter().flat_map(|item| split_operator(item, labels)).collect();
-	if let Some(foreign) = words[1..].iter().find(|item| is_foreign_preposition(item, labels, variables)) {
-		return Some(unknown_preposition(&words[0], foreign, labels));
+/// `play 440Hz for: 0.5s`, `f b=1 a=5`: the call `play(440Hz, duration: 0.5s)`, `f(b=1, a=5)`; None for words without
+/// labels or named arguments, which stay as written for the passes reading calls without brackets
+fn spaced_call(words: Vec<Node>, labels: &Labels, variables: &HashSet<String>) -> Option<Node> {
+	let words = with_unambiguous_colons(words, labels, variables);
+	if let Some((item, word)) = words[1..].iter().find_map(|item| bare_label(item, labels, variables)) {
+		return Some(label_without_colon(&words[0], item, word));
 	}
-	let is_label = |item: &Node| is_label_of(item, labels);
+	if let Some(error) = words[1..].iter().find_map(|item| label_error(&words[0], item, labels)) {
+		return Some(error);
+	}
 	let names_argument = |item: &Node| {
 		super::named_arguments::named_argument(item)
 			.is_some_and(|(name, _)| labels.parameters.contains(&name) || labels.by_preposition.contains_key(&name))
 	};
-	if !words[1..].iter().any(|item| is_label(item) || names_argument(item)) {
+	if !words[1..].iter().any(names_argument) {
 		return None;
 	}
-	let mut arguments = vec![words[0].clone()];
-	let mut rest = words.into_iter().skip(1);
-	while let Some(item) = rest.next() {
-		if is_label(&item) {
-			match rest.next() {
-				Some(value) => {
-					arguments.push(key(Node::Symbol(labels.by_preposition[&item.name()].clone()), Op::Colon, value))
-				}
-				None => return Some(missing_value(&item)),
+	let arguments = words.into_iter().enumerate().map(|(index, item)| match index {
+		0 => item,
+		_ => renamed(item, labels),
+	});
+	Some(parens(arguments.collect()))
+}
+
+/// `play C4 for 1s`: `play C4 for: 1s`, said as a warning offering the colon (UNAMBIGUOUS_LABELS)
+fn with_unambiguous_colons(words: Vec<Node>, labels: &Labels, variables: &HashSet<String>) -> Vec<Node> {
+	let mut supplied: Vec<Node> = vec![];
+	let mut words = words.into_iter();
+	while let Some(word) = words.next() {
+		let label = match word.drop_meta() {
+			Node::Symbol(label) if UNAMBIGUOUS_LABELS.contains(&label.as_str()) && !supplied.is_empty() => {
+				label.clone()
 			}
-		} else {
-			arguments.push(renamed(item, labels));
+			_ => {
+				supplied.push(word);
+				continue;
+			}
+		};
+		if variables.contains(&label) || !labels.by_preposition.contains_key(&label) {
+			supplied.push(word);
+			continue;
 		}
+		let Some(value) = words.next() else {
+			supplied.push(word);
+			continue;
+		};
+		warn_missing_colon(&supplied[0], &word, &value);
+		supplied.push(key(Node::Symbol(label), Op::Colon, value));
 	}
-	Some(parens(arguments))
+	supplied
 }
 
-fn is_label_of(item: &Node, labels: &Labels) -> bool {
-	matches!(item.drop_meta(), Node::Symbol(word) if labels.by_preposition.contains_key(word))
+/// The warning on `play C4 for 1s`, offering `for: 1s`
+pub(crate) fn warn_missing_colon(function: &Node, label: &Node, value: &Node) {
+	let label_word = label.drop_meta().name();
+	let message = format!("{label_word} labels an argument of {} with a colon: `{label_word}: …`", function.name());
+	let written = format!("{label_word} {}", value.serialize().trim());
+	let colon = format!("{label_word}: {}", value.serialize().trim());
+	crate::errors::diagnostic::say(Diagnostic::at(label, message).offer("the label's colon", written, colon));
 }
 
-/// `move 1 from 10 to 3` parses `10 to 3` as a range: in a call of a function passing `to`, the words as written
-fn split_operator(item: Node, labels: &Labels) -> Vec<Node> {
+/// `play C4 for 1s`, `save sound as "x.wav"`, `move x to 5` of functions taking those labels: a label without its
+/// colon (a variable of that name is an argument)
+fn bare_label<'a>(item: &'a Node, labels: &Labels, variables: &HashSet<String>) -> Option<(&'a Node, &'a str)> {
 	let word = match item.drop_meta() {
+		Node::Symbol(word) if !variables.contains(word) => word.as_str(),
 		Node::Key(_, Op::To, _) => "to",
 		Node::Key(_, Op::In, _) => "in",
-		// `save sound as "x.wav"` of `save(made, as file)`: an argument, not a conversion
 		Node::Key(_, Op::As, _) => AS_LABEL,
-		// `f 3 in 4` holds the words `3 in 4` as a group of their own
-		Node::List(inner, Bracket::None, Separator::Space)
-			if spread(inner).iter().any(|word| is_label_of(word, labels)) =>
-		{
-			return spread(inner).into_iter().flat_map(|word| split_operator(word, labels)).collect()
-		}
-		_ => return vec![item],
+		_ => return None,
 	};
-	if !labels.by_preposition.contains_key(word) {
-		return vec![item];
+	labels.by_preposition.contains_key(word).then_some((item, word))
+}
+
+fn label_without_colon(function: &Node, item: &Node, word: &str) -> Node {
+	let message = format!("{word} labels an argument of {} with a colon: `{word}: …`", function.name());
+	Diagnostic::at(item, message).into_error()
+}
+
+/// `f 5 by: 2` of `f(x, with y)`, `f 5 for:`: a label the function does not take, a label without its value
+fn label_error(function: &Node, item: &Node, labels: &Labels) -> Option<Node> {
+	let (name, value) = super::named_arguments::named_argument(item)?;
+	if !is_label_word(&Node::Symbol(name.clone())) || labels.parameters.contains(&name) {
+		return None;
 	}
-	let Node::Key(left, _, right) = item.drop_meta().clone() else { unreachable!("a key") };
-	let mut words = split_operator(*left, labels);
-	words.push(Node::Symbol(word.into()));
-	words.extend(split_operator(*right, labels));
-	words
-}
-
-/// `f 5 by 2` of `f(x, with y)`: a preposition the function does not take
-fn is_foreign_preposition(item: &Node, labels: &Labels, variables: &HashSet<String>) -> bool {
-	!labels.by_preposition.is_empty()
-		&& is_preposition(item)
-		&& !labels.by_preposition.contains_key(&item.name())
-		&& !variables.contains(&item.name())
-}
-
-fn unknown_preposition(function: &Node, preposition: &Node, labels: &Labels) -> Node {
-	let mut taken: Vec<&String> = labels.by_preposition.keys().collect();
-	taken.sort();
-	let taken = taken.iter().map(|word| word.as_str()).collect::<Vec<_>>().join(", ");
-	let message =
-		format!("{} takes no argument after {}; it takes one after {taken}", function.name(), preposition.name());
-	Diagnostic::at(preposition, message).into_error()
-}
-
-fn missing_value(preposition: &Node) -> Node {
-	let word = preposition.name();
-	Diagnostic::at(preposition, format!("{word} needs a value after it: `{word} 1s`")).into_error()
+	if !labels.by_preposition.contains_key(&name) {
+		let mut taken: Vec<String> = labels.by_preposition.keys().map(|word| format!("{word}:")).collect();
+		taken.sort();
+		let message = match taken.is_empty() {
+			true => format!("{} takes no labelled argument, not {name}:", function.name()),
+			false => format!("{} takes no argument labelled {name}:; it takes {}", function.name(), taken.join(", ")),
+		};
+		return Some(Diagnostic::at(item, message).into_error());
+	}
+	value
+		.is_empty_node()
+		.then(|| Diagnostic::at(item, format!("{name}: needs a value after it: `{name}: 1s`")).into_error())
 }
