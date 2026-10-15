@@ -87,8 +87,9 @@ fn mapped_function(part: &Node, words: &SuffixWords, broadcasts: &dyn Fn(&str) -
 			let arguments = crate::closures::with_operator_word_unfolded(items[1..].to_vec(), 0);
 			let arguments: Vec<Node> = arguments
 				.iter()
+				.flat_map(phrase_words)
 				.filter(|argument| !argument.is_symbol(crate::words::ON_WORD))
-				.flat_map(unlabeled)
+				.flat_map(|argument| unlabeled(&argument))
 				.collect();
 			match arguments.as_slice() {
 				[first, second] => named(first)
@@ -106,6 +107,14 @@ fn function_name(node: &Node) -> Option<String> {
 	crate::closures::referenced_function(node)
 		.or_else(|| operator_reference(node).map(|_| written_word(node).name()))
 		.or_else(|| node.drop_meta().symbol_name().map(String::from))
+}
+
+/// `square on xs` grouped as braceless phrases after `map`, `(square (on xs))`: their words
+fn phrase_words(argument: &Node) -> Vec<Node> {
+	match argument.drop_meta() {
+		Node::List(words, Bracket::None, _) => words.iter().flat_map(phrase_words).collect(),
+		_ => vec![argument.clone()],
+	}
 }
 
 /// The labeled argument `on: xs` as `xs` after the words before its label (lambdas::labeled_list)
