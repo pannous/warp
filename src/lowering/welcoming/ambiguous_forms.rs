@@ -76,7 +76,9 @@ fn library_word_values(node: Node, words: &SuffixWords) -> Node {
 
 /// `value => word value`
 fn word_function(word: &Node) -> Node {
-	let call = Node::List(vec![word.clone(), *operand()], Bracket::None, Separator::Space);
+	// `xs.map(function floor)`: the call of floor, no reference to it
+	let word = crate::closures::referenced_function(word).map_or_else(|| word.clone(), Node::Symbol);
+	let call = Node::List(vec![word, *operand()], Bracket::None, Separator::Space);
 	Node::Key(operand(), Op::Arrow, Box::new(call))
 }
 
