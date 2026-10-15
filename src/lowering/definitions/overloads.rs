@@ -387,7 +387,7 @@ fn lower_parameter_overloads(node: Node) -> Node {
 			let distinct = variants.iter().enumerate().all(|(index, types)| !variants[..index].contains(types));
 			// parameters of declared types dispatch through traits (traits.rs)
 			let builtin =
-				variants.iter().flatten().all(|type_name| type_name == ANY_TYPE || type_word_kind(type_name).is_some());
+				variants.iter().flatten().all(|type_name| type_name == ANY_TYPE || overload_kind(type_name).is_some());
 			(distinct && builtin && typed).then_some((name, variants))
 		})
 		.collect();
@@ -591,7 +591,17 @@ fn argument_kind(argument: &Node, variables: &HashMap<String, Option<Kind>>) -> 
 			}
 		}
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => argument_kind(&items[0], variables),
+		Node::List(_, Bracket::Square, _) => Some(Kind::List),
 		_ => None,
+	}
+}
+
+/// The kind a parameter type selects a variant by: a built-in type word, or `list` (held as no one kind elsewhere, as
+/// it holds the empty list too)
+fn overload_kind(type_name: &str) -> Option<Kind> {
+	match type_name {
+		crate::words::LIST_WORD => Some(Kind::List),
+		_ => type_word_kind(type_name),
 	}
 }
 
@@ -604,7 +614,7 @@ fn fit(kind: Kind, type_name: &str) -> Option<u32> {
 	if type_name == "number" {
 		return matches!(kind, Kind::Int | Kind::Float).then_some(1);
 	}
-	match (kind, type_word_kind(type_name)?) {
+	match (kind, overload_kind(type_name)?) {
 		(given, wanted) if given == wanted => Some(0),
 		(Kind::Int, Kind::Float) => Some(1),
 		(Kind::Codepoint, Kind::Text) => Some(1),

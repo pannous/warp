@@ -58,3 +58,12 @@ fn of_any_is_the_fallback_variant() {
 	is!("foo of int = it+it; foo of text = it.length; foo of any = 1; foo(\"abc\") + foo(2) + foo(2.5)", 8);
 	is!("foo of any = 1; foo(3)", 1);
 }
+
+// card text-list: a list parameter overloads a text one instead of the last definition silently winning
+#[test]
+fn a_list_parameter_overloads_a_text_parameter() {
+	let variants = "f(c: text, x) := c.length + x; f(b: list, x) := b.count * x; ";
+	is!(&format!("{variants}f(\"abc\", 1)"), 4);
+	is!(&format!("{variants}f([1, 2], 10)"), 20);
+	is!(&format!("{variants}xs = [1, 2, 3]; f(xs, 2) + f(\"ab\", 0)"), 8);
+}
