@@ -11,6 +11,17 @@ pub fn beside_program(path: &str) -> String {
 	}
 }
 
+/// beside_program when that file is there, else `path` as given: a file the program wrote into the working directory
+/// (`play "song.mp3"`, card play-beside-program; host-files.js besideProgram in the browser)
+pub fn beside_program_if_there(path: &str) -> String {
+	let beside = beside_program(path);
+	if Path::new(&beside).exists() {
+		beside
+	} else {
+		path.to_string()
+	}
+}
+
 /// The WebAssembly file `use name` finds when no warp module and no standard module has that name: `use rust_demo` →
 /// ./rust_demo.wasm
 pub fn wasm_module_file(name: &str) -> Option<PathBuf> {
