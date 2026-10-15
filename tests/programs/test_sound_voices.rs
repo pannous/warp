@@ -25,7 +25,7 @@ pub(crate) fn rendered(name: &str, program: &str) -> (String, Vec<i16>) {
 fn a_task_is_a_voice_that_sounds_along() {
 	let (seconds, samples) = rendered(
 		"along",
-		"use sound\njob = go { melody([C4 E4], 0.1s) }\nmelody([G4 C5], 0.1s)\nawait job\nrender_sound(\"SONG\")",
+		"use sound\njob = go { melody([C4 E4], 0.1s) }\nmelody([G4 C5], 0.1s)\nawait job\nsave sound as \"SONG\"",
 	);
 	assert_eq!(seconds, "0.2");
 	assert_eq!(samples.len(), 4410);
@@ -34,7 +34,7 @@ fn a_task_is_a_voice_that_sounds_along() {
 #[test]
 fn a_voice_starts_where_its_starter_stands() {
 	let program =
-		"use sound\nplay(C4, 0.1s)\njob = go { play(E4, 0.1s) }\nplay(G4, 0.1s)\nawait job\nrender_sound(\"SONG\")";
+		"use sound\nplay(C4, 0.1s)\njob = go { play(E4, 0.1s) }\nplay(G4, 0.1s)\nawait job\nsave sound as \"SONG\"";
 	let (seconds, samples) = rendered("starts", program);
 	assert_eq!(seconds, "0.2");
 	assert!(samples[..2205].iter().any(|&sample| sample > 3000), "the first note sounds first");
@@ -42,10 +42,10 @@ fn a_voice_starts_where_its_starter_stands() {
 
 #[test]
 fn voices_add_up() {
-	let (_, alone) = rendered("alone", "use sound\nplay(440Hz, 0.1s)\nrender_sound(\"SONG\")");
+	let (_, alone) = rendered("alone", "use sound\nplay(440Hz, 0.1s)\nsave sound as \"SONG\"");
 	let (_, both) = rendered(
 		"both",
-		"use sound\njob = go { play(440Hz, 0.1s) }\nplay(440Hz, 0.1s)\nawait job\nrender_sound(\"SONG\")",
+		"use sound\njob = go { play(440Hz, 0.1s) }\nplay(440Hz, 0.1s)\nawait job\nsave sound as \"SONG\"",
 	);
 	assert_eq!(alone.len(), both.len());
 	let loudest = |samples: &[i16]| samples.iter().map(|sample| u32::from(sample.unsigned_abs())).max().unwrap();

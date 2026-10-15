@@ -228,7 +228,7 @@ fn parameter_head(parameter: &Node) -> &Node {
 	match parameter.drop_meta() {
 		Node::Key(name, _, _) => parameter_head(name),
 		Node::List(words, Bracket::None, Separator::Space)
-			if words.len() == 2 && crate::type_name_matching::is_preposition(&words[0]) =>
+			if words.len() == 2 && crate::type_name_matching::is_label_word(&words[0]) =>
 		{
 			parameter_head(&words[1])
 		}

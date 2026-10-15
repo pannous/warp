@@ -355,9 +355,13 @@ play_signal(signal, seconds) := std_io("sound", "signal", [signal, si_amount(sec
 // wait_sound waits for them (a program's end does too)
 sound_queued() := std_io("sound", "queued", [])
 wait_sound() := std_io("sound", "wait", [])
-// the sounds since the last render (or the start) one after another in one WAV file, offline (also without speakers):
-// render_sound("song.wav") gives its seconds
-render_sound(path) := std_io("sound", "render", [path])
+// the sounds since the last save (or the start), which `save sound as "song.wav"` (or `save(sound, "song.wav")`)
+// writes one after another in one WAV file, offline (also without speakers), giving its seconds: the word sound as
+// save's argument is a Recording (card save-sound, music_words.rs)
+class Recording {}
+save(made: Recording, as file) := std_io("sound", "render", [file])
+// the old name, with a note naming save (std_aliases.rs)
+render_sound(path) := save(Recording(), path)
 // `at 2 beats play C4`, `at 1 bar { … }` (card sample-accurate): the statement's sounds start that many seconds after
 // the voice's first sound, exactly so in render_sound; the voice goes on where it stood (src/lowering/music_words.rs)
 sound_at(seconds) := std_io("sound", "at", [si_amount(seconds)])

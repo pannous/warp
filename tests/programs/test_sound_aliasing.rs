@@ -38,7 +38,7 @@ fn off_harmonic_share(samples: &[i16]) -> f64 {
 #[test]
 fn square_and_sawtooth_do_not_alias() {
 	for (name, sounding) in [("beep", "beep()"), ("sawtooth", "tone(880, 0.15, \"sawtooth\")")] {
-		let (_, samples) = rendered(name, &format!("use sound\n{sounding}\nrender_sound(\"SONG\")"));
+		let (_, samples) = rendered(name, &format!("use sound\n{sounding}\nsave sound as \"SONG\""));
 		let share = off_harmonic_share(&samples);
 		assert!(share < MOST_OFF_HARMONIC_SHARE, "{name}: {:.1} % off the harmonics", share * 100.0);
 	}

@@ -158,6 +158,9 @@ fn lower_node(node: Node, functions: &SuffixWords) -> Node {
 			if let Some(asked) = bare_list_assignment(&items, &bracket, &separator) {
 				return asked.map_or_else(|error| error, |chosen| lower_node(chosen, functions));
 			}
+			if let Some(list) = spaced_values(&items, &bracket, &separator) {
+				return lower_node(list, functions);
+			}
 			let items: Vec<Node> = items.into_iter().map(|item| lower_node(item, functions)).collect();
 			apply_suffix_words(items, functions, bracket, separator)
 		}
@@ -173,7 +176,27 @@ fn is_number_or_text(node: &Node) -> bool {
 	}
 }
 
-/// `a=1,2,3` / `a=1 2 3` without brackets: a list or separate statements? Unanswered an error (D12)
+/// `2⁻¹`, `2²`, `3+1`: arithmetic of numbers
+fn is_arithmetic_of_values(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Key(left, op, right) if ARITHMETIC.contains(op) || matches!(op, Op::Square | Op::Cube) => {
+			(left.is_empty_node() || is_number_or_text(left) || is_arithmetic_of_values(left))
+				&& (right.is_empty_node() || is_number_or_text(right) || is_arithmetic_of_values(right))
+		}
+		other => is_number_or_text(other),
+	}
+}
+
+/// `2⁻¹ 2⁰ 2¹`, `1+1 2+2` on a line of their own: spaced values are a list (reconsider-spaced, user 2026-10-15)
+fn spaced_values(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
+	let is_spaced = *bracket == Bracket::None && *separator == Separator::Space && items.len() > 1;
+	let is_list =
+		is_spaced && items.iter().all(is_arithmetic_of_values) && !items[1..].iter().any(crate::analyzer::is_negative);
+	is_list.then(|| Node::List(items.to_vec(), Bracket::Square, Separator::Space))
+}
+
+/// `a=1,2,3` without brackets: a list or separate statements? Unanswered an error (D12). Spaced, `a=1 2 3` is the list
+/// (reconsider-spaced, user 2026-10-15) unless a later value has a glued sign: `x = 5 -2` still asks
 fn bare_list_assignment(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Result<Node, Node>> {
 	if *bracket != Bracket::None || !matches!(separator, Separator::Space | Separator::Colon) {
 		return None;
@@ -182,11 +205,16 @@ fn bare_list_assignment(items: &[Node], bracket: &Bracket, separator: &Separator
 	let Node::Key(name, Op::Assign, value) = first.drop_meta() else {
 		return None;
 	};
-	if rest.is_empty() || !is_number_or_text(value) || !rest.iter().all(is_number_or_text) {
+	let spaced = *separator == Separator::Space;
+	let is_value = |node: &Node| is_number_or_text(node) || (spaced && is_arithmetic_of_values(node));
+	if rest.is_empty() || !is_value(value) || !rest.iter().all(is_value) {
 		return None;
 	}
 	let values = std::iter::once(value.as_ref().clone()).chain(rest.iter().cloned()).collect();
 	let list = Node::Key(name.clone(), Op::Assign, Box::new(Node::List(values, Bracket::Square, separator.clone())));
+	if spaced && !rest.iter().any(crate::analyzer::is_negative) {
+		return Some(Ok(list));
+	}
 	let statements = Node::List(items.to_vec(), Bracket::None, Separator::Semicolon);
 	let written = Node::List(items.to_vec(), Bracket::None, separator.clone()).serialize();
 	let readings =

@@ -48,7 +48,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   meaning; every edit is checked by comparing parse trees), list separators kept as written, `{` on its header's
   line, one space after `,`, no spaces inside brackets, at most one blank line.
   Later (card warp-format-strict, Soon): a second, opinionated mode rewriting code to best practices, with a preview
-  (show the diff, apply nothing) before anything is applied; its name and every rule go to the user first.
+  (show the diff, apply nothing) before anything is applied; every rule goes to the user first. It is a verb of its
+  own, `warp beautify` (synonyms canonical, idiomatic); hash-comments is its first rule.
 - cleanup-means-fewer-lines (2026-10-13): the cleanup's metric is lines removed: simpler, more general, more elegant
   code. Splitting files or functions alone is not a goal ("not that impressed by splitting"). Each cleanup merge
   request states its net src/ line delta; baseline 161132 lines of src/*.rs at eaa40f98b.
@@ -594,6 +595,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   default branch; a pin is `{repository: pannous/uniscript, version: 1.0.7}`.
 
 ## CLI, building and tests
+- cli-words (2026-10-15, user): warp's own command options are words, never `--flags` ("we don't like this minus
+  minus style, ever"), e.g. `warp format check …`, `warp format hash-comments …`; the style guide says so. Card
+  cli-words migrates the existing --fuel/--exe/--strict/… (older `--x` mentions below are superseded by it).
 - P102 `warp build hello.warp` makes the native executable (`hello`, hello.exe on Windows); `--exe` accepted.
   build-should (2026-10-13 default): it writes x.wasm beside it too; `--wasm` only the module.
 - no-executable-by-default (2026-10-12): a plain `warp file.warp` writes no executable; WARP_EXECUTABLE=1 turns it on.
