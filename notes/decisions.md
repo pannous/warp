@@ -40,6 +40,11 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - dir-lists (2026-10-15, user): built-ins become function values first, type `builtin`, a subtype of function
   (`type(function upper)` is builtin, `function upper is function` → yes); methods(x) lists them, so dir(x) and
   methods(x) keep the same names (card builtin-functions, then dir-lists).
+- one-method-form (2026-10-15, user; card one-method-form): methods are just functions: a class-body `def x()` is
+  `def x(_:P)`, and `p.x() == x(p)` everywhere. `methods(P)` ("functions of p" a synonym) = every function whose first
+  parameter is declared P, an ancestor or a trait P implements, wherever declared. `dir(p)` = fields + methods(P);
+  untyped generic words (print, str) aren't listed, though `p.print()` still works via x.f() ≡ f(x). Where a
+  function is declared is only metadata (`.declared_in`), never behaviour.
 - rust-style-lint (2026-10-15, user; card parked in Later): of the proposed Rust rules only doc-moved is enforced (a
   /// doc that moved onto another item, --fix moves it back); use-at-top, card-comment and blank-line-between-items
   are not.
@@ -99,9 +104,16 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   time); tests pin what always holds, `now <= now` → yes, not `now == now` (card flaky-browser-suite).
 - canvas-size (2026-10-14): `window.width/height`, `display.width/height`, `canvas.width/height` are writable properties,
   natively and in the playground; a bare top-level `width` works too, with a did-you-mean naming the three.
-- dollar-element (2026-10-14): in a page program `$xyz` is the element with id xyz (`$xyz.value`, `$xyz.focus()`);
-  `$window`, `$document` are those globals; misspelled members are compile-time errors. A route's `$title` stays the
-  submitted field's value.
+- page-ids (2026-10-15, user; card page-ids; replaces dollar-element of 2026-10-14): an id in the program's own
+  markup is a name in the program's scope: plain `who` is the element (`who.focus()`), as in JavaScript but checked;
+  an id clashing with a variable or function is a compile-time error naming both, with a library word only where
+  the program uses that plain name (`id: "map"` with `xs.map(f)` compiles; `id: "print"` with bare `print` errs); kebab ids like `user-name`
+  resolve too. `window`/`document` are plain names. `$who` is always the element's value (text, number, yes/no for a checkbox, text content otherwise) and
+  `$who = "Ann"` writes it, like a route's `$title`. Dynamic or external ids go through `element("user-name")`, not
+  `${…}` (string interpolation). `$` means something only in warp code: markup text, single-quoted strings, `\${`
+  and files read at run time stay text. Misspelled members are compile-time errors. Principle: one meaning per
+  spelling, never two things under one name silently. Later card: backtick strings with `$x` interpolation (clashes
+  with `$who`, noted there).
 - call-as-grouping (2026-10-15): `f x as T` is `f(x as T)` everywhere, like `f 2 + 1` = `f(2 + 1)`, with a warning
   naming `f(x as T)` and `(f x) as T`; dispatch on the result goes via `pdf p = render "x"` or `(render "x") as pdf`.
 - uniscript-binary-import (2026-10-15, user: "definitely yes"): ~/dev/uniscript gets wasm-only c/ffi additions
