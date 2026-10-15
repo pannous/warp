@@ -274,5 +274,7 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - 2026-10-15 body-should: f.body and parse("…") are code (type code, `is code`, their form still tests), as_code marks them (tests/types/test_code_type.rs)
 - 2026-10-14 xs-insert: `xs.insert 4` is `xs.insert(4)`: a phrase headed by a member is its call, a lone trailing block excepted (member_phrases.rs; tests/functions/test_member_phrases.rs)
 - 2026-10-15 emit-operand-unhandled: an unhandled emit as an operand of an arithmetic or comparison operator is a compile error naming `on <event> {…}` (unhandled_operand in lowering/signals/event_signals.rs; tests/control/test_unhandled_emit_operand.rs)
+- 2026-10-15 big-int: & | xor of Ints beyond i64 combine 32-bit chunks with floor shifts until both are fixnums, instead of wrapping mod 2^64 (emit_bitwise_functions in numbers/exact.rs; tests/numbers/test_big_int_bits.rs)
+||||||| c704955e8
 - 2026-10-15 fun-x-loud: OCaml `fun x -> …` / `fun a b -> …` (dropped, decision foreign-spellings) is an error naming `x -> …` (ocaml_fun in welcoming/welcome_forms.rs; tests/functions/test_ocaml_fun.rs)
 - 2026-10-15 key-print: `for key in m print key` runs: for_over_map shares for_in's iterable_and_body, so words after a map are the body (tests/control/test_map_loop_words.rs)
