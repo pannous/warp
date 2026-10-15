@@ -356,6 +356,12 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   Python's isalpha and Java's isLetter); `characters` is an alias of `chars`.
 - parse-json (2026-10-15, user): quoted code's `.json` is the readable operator-as-key shape
   (`parse("a * (b + 1)").json` → {"*":["a",{"+":["b",1]}]}); what it can't express is a warning or error, never `{}`.
+- json-exactness (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable):
+  following the user's "a warning, or even an error": big ints are written with all their digits as a JSON number
+  (`(2^70).json` → 1180591620717411303424; JSON numbers have no size limit, only some readers do); a fraction is
+  written as JSON's float with a warning naming the loss (`(1/3).json` → 0.3333333333333333, "JSON has no exact
+  1/3"), an error under `use strict`; functions, ∞, NaN and complex are errors. Not text-encoded numbers ("1/3"):
+  a reader would get a string where it expects a number.
 - Text + anything concatenates in its str() form (2026-10-02, extended 2026-10-10); a function stays an error. A
   text spelling a number plus a number (`"3"+3`) warns and keeps "33" (error under `use strict`). An instance of a
   Printable type joins as its own text.
