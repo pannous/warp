@@ -180,7 +180,7 @@ fn cached_code<Code: CompiledCode>(engine: &Engine, path: &Path) -> Option<Code>
 	});
 	match loaded {
 		Ok(module) => {
-			let _ = fs::File::options().write(true).open(path).and_then(|file| file.set_modified(SystemTime::now()));
+			touch(path);
 			Some(module)
 		}
 		Err(failure) => {
@@ -190,14 +190,39 @@ fn cached_code<Code: CompiledCode>(engine: &Engine, path: &Path) -> Option<Code>
 	}
 }
 
-/// Write the compiled module to a private file and rename it into place, so parallel runs never read half a file
 fn store_code(directory: &Path, path: &Path, module: &impl CompiledCode) -> Result<()> {
+	Ok(store_file(directory, path, &module.serialize()?)?)
+}
+
+/// Mark the cached file as just used, for pruning
+fn touch(path: &Path) {
+	let _ = fs::File::options().write(true).open(path).and_then(|file| file.set_modified(SystemTime::now()));
+}
+
+/// Write the bytes to a private file and rename it into place, so parallel runs never read half a file
+fn store_file(directory: &Path, path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 	fs::create_dir_all(directory)?;
 	PRUNE_ONCE.call_once(|| prune(directory));
 	let staging = path.with_extension(format!("{}-{:?}.tmp", std::process::id(), std::thread::current().id()));
-	fs::write(&staging, module.serialize()?)?;
-	fs::rename(&staging, path)?;
-	Ok(())
+	fs::write(&staging, bytes)?;
+	fs::rename(&staging, path)
+}
+
+/// The bytes kept under `key` with `extension` (src/run/program_cache.rs), a hit counting as a use for pruning; none
+/// without them or with the cache off
+pub fn kept_bytes(key: &str, extension: &str) -> Option<Vec<u8>> {
+	let path = cache_directory()?.join(format!("{key}.{extension}"));
+	let bytes = fs::read(&path).ok()?;
+	touch(&path);
+	Some(bytes)
+}
+
+/// Keep the bytes under `key` with `extension` in the cache, unless it is off
+pub fn keep_bytes(key: &str, extension: &str, bytes: &[u8]) {
+	let Some(directory) = cache_directory() else { return };
+	if let Err(failure) = store_file(&directory, &directory.join(format!("{key}.{extension}")), bytes) {
+		eprintln!("warning: module cache {}: {failure}", directory.display());
+	}
 }
 
 /// Drop the least recently used modules of a cache grown past MAX_CACHE_BYTES until it is half that size

@@ -66,3 +66,22 @@ pub(crate) fn folder_of(file: &Path) -> PathBuf {
 		_ => PathBuf::from("."),
 	}
 }
+
+/// The compile reads `what`, beyond the folders a kept program's key lists (src/run/program_cache.rs): its module is
+/// not kept
+pub fn reads_beyond_folders(what: &'static str) {
+	#[cfg(feature = "native")]
+	crate::run::program_cache::not_kept(what);
+	#[cfg(not(feature = "native"))]
+	let _ = what;
+}
+
+/// The compile looks for modules in `folder`: one the key of a kept program does not list means it is not kept
+pub fn looks_in(folder: &Path) {
+	#[cfg(feature = "native")]
+	if !crate::run::program_cache::is_searched_folder(folder) {
+		crate::run::program_cache::not_kept("a module of a folder beside the program's");
+	}
+	#[cfg(not(feature = "native"))]
+	let _ = folder;
+}

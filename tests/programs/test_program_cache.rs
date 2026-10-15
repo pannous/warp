@@ -1,0 +1,56 @@
+// card cache-compiled-shader: `warp <file>` keeps the module a program compiles to (src/run/program_cache.rs), so its
+// next run starts without compiling; a change to the program, to a file of its folder or to warp itself compiles again
+#![cfg(feature = "native")]
+use std::path::{Path, PathBuf};
+
+/// A folder for one test's program and its own cache
+fn folder(name: &str) -> PathBuf {
+	let folder = crate::common::scratch_directory(name);
+	std::fs::create_dir_all(folder.join("cache")).unwrap();
+	folder
+}
+
+/// What `warp run program.warp` in the folder prints, with the folder's cache
+fn printed(folder: &Path) -> String {
+	let run = crate::common::warp_command()
+		.args(["--no-ask", "run", "program.warp"])
+		.current_dir(folder)
+		.env(warp::run::module_cache::CACHE_VARIABLE, folder.join("cache"))
+		.output()
+		.unwrap();
+	assert!(run.status.success(), "{}", String::from_utf8_lossy(&run.stderr));
+	String::from_utf8_lossy(&run.stdout).trim().to_string()
+}
+
+/// The programs the folder's cache holds
+fn cached_programs(folder: &Path) -> usize {
+	let extension = Some(std::ffi::OsStr::new(warp::run::program_cache::PROGRAM_EXTENSION));
+	std::fs::read_dir(folder.join("cache"))
+		.unwrap()
+		.filter(|entry| entry.as_ref().unwrap().path().extension() == extension)
+		.count()
+}
+
+#[test]
+fn a_program_runs_again_from_its_cached_module() {
+	let folder = folder("program_cache_again");
+	std::fs::write(folder.join("program.warp"), "square(x) := x * x\nprint square(7)").unwrap();
+	assert_eq!(printed(&folder), "49");
+	assert_eq!(cached_programs(&folder), 1);
+	assert_eq!(printed(&folder), "49");
+	assert_eq!(cached_programs(&folder), 1);
+	std::fs::write(folder.join("program.warp"), "square(x) := x * x\nprint square(8)").unwrap();
+	assert_eq!(printed(&folder), "64");
+	assert_eq!(cached_programs(&folder), 2);
+}
+
+#[test]
+fn a_changed_file_of_the_folder_compiles_again() {
+	// D15: a program sees the definitions of the files of its folder
+	let folder = folder("program_cache_folder");
+	std::fs::write(folder.join("program.warp"), "print greeting()").unwrap();
+	std::fs::write(folder.join("words.warp"), "greeting() := \"hello\"").unwrap();
+	assert_eq!(printed(&folder), "hello");
+	std::fs::write(folder.join("words.warp"), "greeting() := \"good day\"").unwrap();
+	assert_eq!(printed(&folder), "good day");
+}
