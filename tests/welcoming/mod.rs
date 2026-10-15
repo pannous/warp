@@ -3,6 +3,7 @@ mod test_advice_fixes; // card advise-fix
 mod test_aligned_comment; // card hint-comment-floordiv
 mod test_and_or_got_it; // card done-done
 mod test_braceless_call_argument;
+mod test_braceless_word_argument;
 mod test_c_style;
 mod test_cli_error_exit; // card cli-error-exit
 #[cfg(all(feature = "native", unix))] // runs the warp binary

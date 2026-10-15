@@ -8,7 +8,7 @@ use crate::operators::Op;
 use std::collections::HashSet;
 
 /// The printing words, which `print #xs` and `print -1` call like a function of the program (card print-people)
-const PRINT_WORDS: [&str; 2] = ["print", "puts"];
+pub(crate) const PRINT_WORDS: [&str; 2] = ["print", "puts"];
 
 /// `f -x` with a callable `f` is the call `f(-x)`, and `print #xs` is `print(#xs)` (card print-people): a user function,
 /// a real function, print, a rounding word (`floor -2.5`), a type (`int -3`, `hex -1`) or a library word of one value, as the math words
@@ -47,6 +47,9 @@ fn negate_calls(
 		Node::Symbol(name) => is_builtin_callable(name) && !bound.contains(name),
 		_ => false,
 	};
+	if let Err(error) = super::braceless_arguments::ask_braceless_argument(&node, |word| is_function(word, Op::Sub)) {
+		return error;
+	}
 	match node {
 		Node::Key(function, op @ (Op::Sub | Op::Hash), argument)
 			if is_function(&function, op) && !(op == Op::Sub && is_spaced_minus(&function)) =>
