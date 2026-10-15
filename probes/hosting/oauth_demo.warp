@@ -1,0 +1,6 @@
+#!/usr/bin/env warp
+// Demo for the public "warp hosting" Cloudflare OAuth client: deploy with `warp deploy --hosted` or the playground's
+// deploy button ("my own Cloudflare account"), then open /, /square/12 and /hello/Ann
+get "/" { "warp on the edge: try /square/12 or /hello/Ann" }
+get "/square/:n:int" { n * n }
+get "/hello/:name" { "Hello " + name + " from a warp Worker" }

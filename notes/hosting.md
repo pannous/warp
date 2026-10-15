@@ -56,8 +56,8 @@ lambda's DNS moves to Cloudflare):
   HMAC `SESSION_SECRET`, 30 days). Opened directly, the page says "Logged in as <login>". The CLI and the test send
   `Authorization: Bearer <GitHub token>` instead (`gh auth token`), checked against api.github.com/user.
 - `GET /auth/cloudflare?origin=…` → Cloudflare OAuth client "warp hosting" (PKCE, callback …/callback/cloudflare) →
-  `{warpHosting: {cloudflareToken}}`. The client is private (our account's members) until the publisher TXT record
-  (in the main checkout's .env) goes on warp.pannous.com; until then others paste an API token (Workers Scripts: Edit).
+  `{warpHosting: {cloudflareToken}}`. The client is public and verified since 2026-10-15 (12 scopes; it was private until the publisher TXT record
+  on lambda.pannous.com); the API-token paste (Workers Scripts: Edit) stays as fallback.
 - `POST /deploy?name=<name>&scripts=<host scripts>` with the module as the body: the first GitHub user to deploy a
   name owns it (KV `NAMES`). worker.js = the named playground scripts + cloud-worker.js (warp-web's glue), uploaded
   as `warp-<name>` with app.wasm and app.bin, workers.dev route on: `{url: "https://warp-<name>.pannous.workers.dev"}`.
