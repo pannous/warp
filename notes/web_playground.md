@@ -304,6 +304,10 @@ the_strict_flag_turns_warnings_into_errors before).
   in a site/cloud worker run (instantiateProgram without `awaited`), in a page event's handler (after main), and in a
   warp function JavaScript calls back (V8 refuses to suspend over a JavaScript frame: outcomeOf maps that trap to
   "cannot wait for"). worker.js handles messages one at a time (`inTurn`) since a waiting run holds the compiler.
+  Firefox bug (card firefox-logs): terminating a Worker busy inside a promising call, as Stop does, logs a bare
+  "uncaught exception: undefined" on the page that no listener sees; plain wasm, plain JavaScript and entangled
+  MessagePorts do not (probes/firefox_jspi_terminate.html). Avoiding it would mean no promising for runs that cannot
+  await, which the worker only learns after compiling; test_in_browser.py expects the line for STOP_BUTTON meanwhile.
 
 ## paint: a canvas in the page (2026-10-06, issue #15)
 `paint(pixels, width, height)` is a host word (src/host.rs PAINT): host.js reads the pixel list and hands it to the

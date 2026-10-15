@@ -148,9 +148,10 @@ GPU_JOBS_NEVER = "Out of memory"
 # Firefox's WebGPU: one anonymous uncaught exception of the page during the 400 jobs, all values right (card
 # firefox-gpu-jobs-uncaught)
 # and Firefox its own two lines of the broken shader
-# Firefox now and then: two anonymous uncaught exceptions of the page right as Stop ends the busy program's Worker (the
-# BiDi events before them: the new Worker's realm made, the old one's gone; no event reaches the page's listeners),
-# the run stopped and the button right (card firefox-logs)
+# Firefox's bug: terminating a Worker busy inside a WebAssembly.promising call logs an anonymous uncaught exception on
+# the page, which no listener sees (probes/firefox_jspi_terminate.html, card firefox-logs). Stop does that: the
+# compiler's web_evaluate and the program's main run under promising (worker.js, host.js JSPI); the run stopped and
+# the button right
 EXPECTED_CONSOLE = {SHADER_ERROR: ["Error while parsing WGSL", "errors while creating shader module", "parsing error"], GPU_JOBS: ["uncaught exception: undefined"],
 	STOP_BUTTON: ["uncaught exception: undefined"]}
 # card safari-shared-buffers: a task's answer buffer, like a GPU job's, is reused once read
