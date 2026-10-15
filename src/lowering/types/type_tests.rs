@@ -590,6 +590,9 @@ fn spaced_type_test(items: &[Node], shadowed: &Names) -> Option<Node> {
 	let Node::Key(subject, Op::Eq, right) = first.drop_meta() else {
 		return None;
 	};
+	if is_equality_operand(right) {
+		return None;
+	}
 	let Node::Symbol(word) = right.drop_meta() else {
 		return None;
 	};
