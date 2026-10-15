@@ -740,7 +740,10 @@ impl Lowering {
 		// it stands (card sin-cos)
 		if let ([function, argument], Bracket::None, Separator::Space) = (items, bracket, separator) {
 			if crate::lowering::library_signatures::typed_first_arity(head) == Some(1) && !self.shadows(head) {
-				return Some(word_call(function, argument, vec![]));
+				// a synonym calls its library word: `sorted xs` is sort(xs)
+				let word = canonical_spelling(head);
+				let function = if word == head { function.clone() } else { Node::Symbol(word.to_string()) };
+				return Some(word_call(&function, argument, vec![]));
 			}
 		}
 		// `number(t)` is `t as number`: a text known only at run time is the number it spells, decided at run time
