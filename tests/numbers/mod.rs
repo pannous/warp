@@ -116,6 +116,7 @@ mod test_unit_named_variable; // card loop-variable
 mod test_unit_polish;
 mod test_unit_products;
 mod test_unit_word_keys;
+mod test_units_after_numbers; // card variable-named-like
 mod test_units_arithmetic;
 mod test_units_at_run_time;
 mod test_units_compare;
