@@ -145,6 +145,7 @@ mod test_parallel_let; // card lower-parallel
 mod test_parallel_map;
 mod test_parsed_code_patterns; // card tree-patterns step 7
 mod test_pattern_unit_name; // card pattern-unit-name
+mod test_plural_field_of_elements; // card plural-of
 mod test_print_empty; // card print-error
 mod test_print_empty_map;
 mod test_quoted_data_untouched; // card data-quote-lowered
@@ -152,6 +153,7 @@ mod test_raise;
 mod test_reactive_ports;
 mod test_reflect_inferred; // card reflect-inferred
 mod test_reflection_mode; // card use-reflection
+mod test_reflection_synonyms; // card reflection-synonyms
 mod test_reflection_words; // card reflection
 mod test_relational_arms;
 mod test_rest_patterns;

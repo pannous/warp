@@ -16,7 +16,7 @@ fn value_of(program: &str) -> String {
 /// A WAV of half a second of 440 Hz, written by warp's own render_sound
 fn tone_file(name: &str) -> PathBuf {
 	let path = std::env::temp_dir().join(format!("warp-sample-{name}-{}.wav", std::process::id()));
-	assert_eq!(value_of(&format!("use sound\ntone(440Hz, 0.5s)\nsave sound as \"{}\"", path.display())), "0.5");
+	assert_eq!(value_of(&format!("use sound\ntone(440Hz, 0.5s)\nsave sound as: \"{}\"", path.display())), "0.5");
 	path
 }
 
@@ -27,8 +27,8 @@ fn of_sample(path: &Path, program: &str) -> String {
 #[test]
 fn a_wav_plays_back_as_recorded() {
 	let path = tone_file("recorded");
-	let (_, original) = rendered("original", "use sound\ntone(440Hz, 0.5s)\nsave sound as \"SONG\"");
-	let (seconds, played) = rendered("played", &of_sample(&path, "play(kick)\nsave sound as \"SONG\""));
+	let (_, original) = rendered("original", "use sound\ntone(440Hz, 0.5s)\nsave sound as: \"SONG\"");
+	let (seconds, played) = rendered("played", &of_sample(&path, "play(kick)\nsave sound as: \"SONG\""));
 	assert_eq!(seconds, "0.5");
 	assert_eq!(played, original);
 	assert_eq!(value_of(&of_sample(&path, "[kick.rate, kick.channels, sample_seconds(kick)]")), "[22050 1 0.5]");
@@ -37,7 +37,7 @@ fn a_wav_plays_back_as_recorded() {
 #[test]
 fn a_rate_changes_speed_and_pitch() {
 	let path = tone_file("rate");
-	let (seconds, samples) = rendered("rated", &of_sample(&path, "play_sample(kick, 2)\nsave sound as \"SONG\""));
+	let (seconds, samples) = rendered("rated", &of_sample(&path, "play_sample(kick, 2)\nsave sound as: \"SONG\""));
 	assert_eq!(seconds, "0.25");
 	assert_eq!(samples.len(), RATE * 2 / 4, "rendered at the sound's own rate, the highest");
 }
@@ -51,7 +51,7 @@ fn a_render_mixes_rates() {
 			&path,
 			"play_sample(kick, 2)
 tone(440Hz, 0.5s)
-save sound as \"SONG\"",
+save sound as: \"SONG\"",
 		),
 	);
 	assert_eq!(seconds, "0.75");
