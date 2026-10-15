@@ -348,6 +348,21 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::I32Add, I::LocalSet(end)]);
 	}
 
+	/// i32 1 when the text from local `pointer` to local `end` is one character: as many bytes as its first byte's UTF-8
+	/// sequence, 1 + (b ≥ C0) + (b ≥ E0) + (b ≥ F0); local `byte` is scratch
+	pub(in crate::wasm_emitter) fn emit_is_one_character(func: &mut Function, pointer: u32, end: u32, byte: u32) {
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::LocalGet(end), I::LocalGet(pointer), I::I32Sub,
+			I::I32Const(1),
+			I::LocalGet(pointer), I::I32Load8U(BYTE), I::LocalTee(byte), I::I32Const(utf8::TWO_BYTE_LEAD), I::I32GeU,
+			I::I32Add,
+			I::LocalGet(byte), I::I32Const(utf8::THREE_BYTE_LEAD), I::I32GeU, I::I32Add,
+			I::LocalGet(byte), I::I32Const(utf8::FOUR_BYTE_LEAD), I::I32GeU, I::I32Add,
+			I::I32Eq,
+		]);
+	}
+
 	/// The code point at local `pointer` into local `code_point`, and `pointer` past it (never past `end`)
 	pub(in crate::wasm_emitter) fn emit_next_code_point(
 		&self,

@@ -81,6 +81,7 @@ impl WasmGcEmitter {
 			matches!(self.get_type(node), Kind::Text | Kind::Symbol | Kind::Empty | Kind::Function)
 				|| crate::time::is_time_expression(node)
 				|| self.is_held_cell_value(node)
+				|| self.is_node_arithmetic(node)
 		};
 		matches!(op, Op::Eq | Op::Ne)
 			&& (self.is_structural_operand(left)
@@ -157,6 +158,20 @@ impl WasmGcEmitter {
 				&format!("{written} is {type_word}"),
 				"only `is` tests a type; a value never equals a type",
 			);
+		}
+	}
+
+	/// Arithmetic the run decides on a value held as a Node, `x*3` of `x = 2 hours`: its result is a Node too, compared
+	/// as one like the variable itself (card variable-time)
+	fn is_node_arithmetic(&self, node: &Node) -> bool {
+		match node.drop_meta() {
+			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_node_arithmetic(&items[0]),
+			Node::Key(left, op, right)
+				if op.is_arithmetic() && crate::analyzer::is_run_time_kind(&self.get_type(node)) =>
+			{
+				[left, right].iter().any(|side| self.is_structural_operand(side) || self.is_node_arithmetic(side))
+			}
+			_ => false,
 		}
 	}
 

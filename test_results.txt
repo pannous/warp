@@ -1395,6 +1395,8 @@ PASSED:
   ✓ functions::test_lambda_spellings::other_lambda_keywords
   ✓ functions::test_lambda_spellings::pipe_parameters
   ✓ functions::test_lambda_spellings::ruby_block_parameters
+  ✓ functions::test_lambda_tuple_arguments::a_juxtaposed_lambda_still_applies
+  ✓ functions::test_lambda_tuple_arguments::a_lambda_argument_of_an_immediately_called_lambda
   ✓ functions::test_lambdas::test_a_lambda_that_cannot_be_inlined_is_a_closure_value
   ✓ functions::test_lambdas::test_assigned_lambda_is_a_function
   ✓ functions::test_lambdas::test_block_called_with_bindings
@@ -2240,11 +2242,14 @@ PASSED:
   ✓ modules::test_std_regex::a_match_prints_yes_or_no
   ✓ modules::test_std_regex::use_regex_matches_finds_and_replaces
   ✓ modules::test_std_regex::what_one_engine_lacks_is_an_error_in_both
+  ✓ modules::test_std_shadowed_names::a_defaulted_parameter_shadows_each_arity_it_takes
   ✓ modules::test_std_shadowed_names::a_local_in_one_function_leaves_the_word_to_the_others
   ✓ modules::test_std_shadowed_names::a_local_named_like_a_function_is_indexed_not_called
   ✓ modules::test_std_shadowed_names::a_local_named_like_a_module_word_is_the_local
   ✓ modules::test_std_shadowed_names::a_local_named_like_a_program_function_is_the_local
   ✓ modules::test_std_shadowed_names::a_parameter_named_like_a_module_word_needs_no_module
+  ✓ modules::test_std_shadowed_names::a_program_function_named_like_a_module_helper_leaves_the_module_its_own
+  ✓ modules::test_std_shadowed_names::a_program_function_of_another_arity_adds_to_the_module_word
   ✓ modules::test_std_time::date_arithmetic
   ✓ modules::test_std_time::dates_of_milliseconds
   ✓ modules::test_std_time::format_duration_in_the_largest_units
@@ -2427,6 +2432,9 @@ PASSED:
   ✓ numbers::test_bend_laws::a_violated_law_makes_the_gate_loud_and_red
   ✓ numbers::test_bend_laws::quantified_laws_still_reach_the_lean_prover
   ✓ numbers::test_bend_laws::the_project_laws_file_is_a_green_verification_gate
+  ✓ numbers::test_big_int_bits::bits_of_ints_beyond_i64
+  ✓ numbers::test_big_int_bits::bits_of_negative_ints_beyond_i64
+  ✓ numbers::test_big_int_bits::bits_of_small_ints_stay
   ✓ numbers::test_big_int_text::test_big_int_text
   ✓ numbers::test_big_ratio::test_big_ratio_readback_stays_exact
   ✓ numbers::test_big_ratio::test_big_ratio_terminating_decimal
@@ -3025,6 +3033,7 @@ PASSED:
   ✓ operators::test_truthiness_of_objects::empty_values_are_falsy
   ✓ operators::test_tuple_comparison_warning::a_parenthesized_tuple_comparison_does_not_warn
   ✓ operators::test_tuple_comparison_warning::a_tuple_compared_with_a_bare_comma_list_warns
+  ✓ operators::test_xor_negated_group::xor_of_a_negated_group_combines_bits
   ✓ parser::test_as_prefixed_name::as_still_casts
   ✓ parser::test_as_prefixed_name::def_of_an_as_prefixed_name
   ✓ parser::test_attributes::assigning_an_at_key_annotates_any_node_in_insertion_order
@@ -3655,6 +3664,8 @@ PASSED:
   ✓ text::test_cast_to_string::a_list_literal_as_string_is_its_text
   ✓ text::test_cast_to_string::a_variable_holding_an_int_list_as_string_is_its_text
   ✓ text::test_cast_to_string::an_object_literal_as_string_is_its_text
+  ✓ text::test_char_parameter_type::test_a_parameter_holding_more_or_fewer_characters_is_a_text
+  ✓ text::test_char_parameter_type::test_a_parameter_holding_one_character_is_a_codepoint
   ✓ text::test_character_arithmetic::a_character_is_no_number_in_arithmetic
   ✓ text::test_character_arithmetic::ord_and_comparisons_keep_code_points
   ✓ text::test_character_comparison::test_character_element_of_text_compares
@@ -4038,6 +4049,7 @@ PASSED:
   ✓ types::test_date_arithmetic_at_run_time::test_time_minus_time
   ✓ types::test_dates_at_run_time::test_an_instant_has_the_local_wall_clock
   ✓ types::test_dates_at_run_time::test_an_instant_shows_as_rfc_3339
+  ✓ types::test_dates_at_run_time::test_field_of_a_grouped_time_expression
   ✓ types::test_dates_at_run_time::test_instants_compare_at_run_time
   ✓ types::test_dates_at_run_time::test_now_reads_back_as_an_instant
   ✓ types::test_dates_at_run_time::test_now_reads_the_clock_when_the_program_runs
@@ -4373,6 +4385,10 @@ PASSED:
   ✓ types::test_time_values_at_run_time::test_times_compare_at_run_time
   ✓ types::test_time_values_at_run_time::test_zoned_fields_at_run_time
   ✓ types::test_time_values_at_run_time::test_zoned_times_and_durations_compare_at_run_time
+  ✓ types::test_time_variables::a_duration_variable_compares_by_value
+  ✓ types::test_time_variables::a_field_of_a_grouped_time_variable
+  ✓ types::test_time_variables::a_parameter_named_like_a_time_variable_is_no_time
+  ✓ types::test_time_variables::durations_with_the_same_days_order_by_their_exact_part
   ✓ types::test_time_zones_at_run_time::test_a_calendar_day_keeps_the_wall_time_across_a_transition
   ✓ types::test_time_zones_at_run_time::test_a_day_landing_on_a_skipped_wall_time_is_rejected
   ✓ types::test_time_zones_at_run_time::test_a_local_time_in_a_zone_resolves
@@ -4789,6 +4805,7 @@ PASSED:
   ✓ web::test_deploy::a_program_without_routes_is_no_worker
   ✓ web::test_deploy::a_single_route_and_a_served_route_deploy
   ✓ web::test_deploy::deploy_names_a_browser_only_feature
+  ✓ web::test_deploy::deploy_refuses_server_parts_of_a_browser_program
   ✓ web::test_deploy::page_routes_deploy_as_rendered_pages
   ✓ web::test_deploy::the_playground_bundles_a_program_for_warp_hosting
   ✓ web::test_dev_marks::a_failure_without_an_excerpt_is_its_text
@@ -5507,4 +5524,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5502 passed, 0 failed, 5502 total tested
+13 ignored, 5519 passed, 0 failed, 5519 total tested

@@ -24,6 +24,8 @@ pub struct Date {
 
 /// What `type(now.time)` says, the kind every error names
 pub const CLOCK_KIND: &str = "time of day";
+/// Durations with different days or months have no order of their own
+pub const UNORDERED_DURATIONS: &str = "cannot order durations: a day is 23 to 25 hours across daylight saving, a month 28 to 31 days: compare the times they lead to";
 /// `now.time`: a time's time of day
 pub const TIME_OF_DAY_FIELD: &str = "time";
 /// `now.date`: a time's date
@@ -593,6 +595,15 @@ impl Duration {
 				"{self} and {other} are equal on some dates and not on others (a day is 23 to 25 hours across daylight saving, a month 28 to 31 days): compare the times they lead to"
 			)),
 		}
+	}
+
+	/// `2 hours < 3 hours`: durations with the same days and months order by their exact part; others by the times
+	/// they lead to only
+	pub fn compare(self, other: Duration) -> Result<Ordering, String> {
+		if (self.months, self.days) != (other.months, other.days) {
+			return Err(UNORDERED_DURATIONS.to_string());
+		}
+		Ok(self.nanos.cmp(&other.nanos))
 	}
 
 	pub fn is_exact(self) -> bool {

@@ -151,6 +151,7 @@ mod test_time_now; // cards print-time, time-now
 mod test_time_programs_run; // card run-time-dates, stage B4
 mod test_time_type_names;
 mod test_time_values_at_run_time; // card run-time-dates
+mod test_time_variables; // card variable-time
 mod test_time_zones_at_run_time; // card run-time-dates, stage B3
 mod test_trait_constraints;
 mod test_trait_default_methods;

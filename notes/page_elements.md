@@ -34,9 +34,13 @@ Programs there run in a Worker, which has no document. The wasm32 compiler used 
   (`self.programElements`, playground.js).
 - localStorage/sessionStorage stay refused with their warp alternative (`local[k]`, `session[k]`).
 
-Limits: a callback (a warp function given to the page, `addEventListener`) cannot cross; page objects are never freed
-during a page's life: the same object keeps its one entry (`pageObjectIds`), but each new one (a fresh NodeList of
-every `querySelectorAll`) adds one (card page-pageobjects).
+Freeing (card page-pageobjects): the Worker keeps one `PageObject` per id (a WeakRef) and counts how often it got the
+id; a FinalizationRegistry posts `{releasePageObject: {id, received}}` once it is collected, which serveTaskWorkers
+takes. The page counts per Worker how often it gave each id and drops the object when every holder released it or
+was terminated (Stop, a new run's Worker). A released id asked again says so ("no longer keeps"). Check:
+`node --expose-gc probes/page_objects_release.mjs` (both sides cut from the real files).
+
+Limits: a callback (a warp function given to the page, `addEventListener`) cannot cross.
 
 Checks: tests/ffi/test_browser_dollar_names.rs, tests/ffi/test_web_idl.rs (browser suite: window and document from the
 Worker), the tour check "(a handler reads the page's element of an id: $who.value)", samples/page_elements.warp.
