@@ -191,6 +191,8 @@ pub struct WasmGcEmitter {
 	/// The std modules the program calls through std_pure / std_io (STD_MODULES_SECTION), ANY_STD_MODULE for a module
 	/// named at run time
 	std_modules: std::collections::BTreeSet<String>,
+	/// The program's named live loops (LIVE_LOOPS_SECTION)
+	live_loops: std::collections::BTreeSet<String>,
 	/// The latest source position among the nodes being emitted (note_position)
 	source_position: Option<crate::compiler::meta::LineInfo>,
 	/// The position of the statement being emitted, which `trap_position` holds while it runs (emit_trap_position)
@@ -277,6 +279,7 @@ impl WasmGcEmitter {
 			parses_code: false,
 			type_errors: Vec::new(),
 			std_modules: Default::default(),
+			live_loops: Default::default(),
 			source_position: None,
 			statement_position: None,
 			loop_labels: Vec::new(),
@@ -738,6 +741,7 @@ impl WasmGcEmitter {
 	/// Emit main function that constructs the node
 	pub fn emit_node_main(&mut self, node: &Node) {
 		self.result_print = if config::compile_mode().prints_result { last_statement_items(node) } else { 0 };
+		self.live_loops = crate::lowering::music_words::live_loop_names(node);
 		// Pre-pass: collect variables first so scope is populated
 		let temp_locals = collect_variables(node, &mut self.scope);
 		self.typed_lists = self.main_typed_lists.take().unwrap_or_else(|| self.find_typed_lists(node));

@@ -128,6 +128,7 @@ mod test_parameter_map_patterns; // cards param-map-pattern, param-pattern-local
 mod test_parameter_overloads;
 mod test_parameter_patterns; // card parameter-patterns
 mod test_parameter_retype;
+mod test_parameter_shadows_function; // card stack-overflow
 mod test_parameter_shapes;
 mod test_parens_getter_warning;
 mod test_partial_application;

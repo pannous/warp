@@ -19,10 +19,14 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   are in and the Rust code is cleaned up (topic cleanup); the existing twins stay.
 - cleanup-only (2026-10-13): until the big Rust cleanup is done, new tasks come only from the cleanup roadmap; other
   workers finish what they hold; the Codex timer takes only cleanup cards; urgent Now cards still go out.
-  Exception: use-cargo (crate components, downloads) keeps going, "important and doesn't touch the cleanup much".- weekly-cleanup (2026-10-14, user): a fresh cleanup roadmap every week (topic `cleanup-w<week>`, e.g. cleanup-w42);
+  Exception: use-cargo (crate components, downloads) keeps going, "important and doesn't touch the cleanup much".
+- weekly-cleanup (2026-10-14, user): a fresh cleanup roadmap every week (topic `cleanup-w<week>`, e.g. cleanup-w42);
   new cleanup cards go into the current week's topic (`todo add "…" --topic cleanup-w42`). Older roadmaps stay as
   they are, solved cards Done in them. Chores that should run regularly get `todo repeat <card> <days>`, and the
   daily `todo recur` brings them back to Next; they are not copied into each new roadmap.
+- topic-priority (2026-10-15, user; card todo-topics): the column is the priority, for topic cards too: a topic sits
+  in Now/Next/Soon/Later beside its cards (new topics Soon); Roadmaps holds only unprioritized topics. A Priority
+  field may exist only if it always matches the column. `todo move sound Next --all` raises a topic with its cards.
 - long-functions (2026-10-14, user): splitting an overly long function is a cleanup card of its own, also when it
   adds a few lines; the "only if it removes lines" rule is for deduplication, not for splits. Split by concept (one
   named helper per case group or per embedded warp template), not into numbered parts.
@@ -36,6 +40,11 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - dir-lists (2026-10-15, user): built-ins become function values first, type `builtin`, a subtype of function
   (`type(function upper)` is builtin, `function upper is function` → yes); methods(x) lists them, so dir(x) and
   methods(x) keep the same names (card builtin-functions, then dir-lists).
+- one-method-form (2026-10-15, user; card one-method-form): methods are just functions: a class-body `def x()` is
+  `def x(_:P)`, and `p.x() == x(p)` everywhere. `methods(P)` ("functions of p" a synonym) = every function whose first
+  parameter is declared P, an ancestor or a trait P implements, wherever declared. `dir(p)` = fields + methods(P);
+  untyped generic words (print, str) aren't listed, though `p.print()` still works via x.f() ≡ f(x). Where a
+  function is declared is only metadata (`.declared_in`), never behaviour.
 - rust-style-lint (2026-10-15, user; card parked in Later): of the proposed Rust rules only doc-moved is enforced (a
   /// doc that moved onto another item, --fix moves it back); use-at-top, card-comment and blank-line-between-items
   are not.
@@ -95,9 +104,16 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   time); tests pin what always holds, `now <= now` → yes, not `now == now` (card flaky-browser-suite).
 - canvas-size (2026-10-14): `window.width/height`, `display.width/height`, `canvas.width/height` are writable properties,
   natively and in the playground; a bare top-level `width` works too, with a did-you-mean naming the three.
-- dollar-element (2026-10-14): in a page program `$xyz` is the element with id xyz (`$xyz.value`, `$xyz.focus()`);
-  `$window`, `$document` are those globals; misspelled members are compile-time errors. A route's `$title` stays the
-  submitted field's value.
+- page-ids (2026-10-15, user; card page-ids; replaces dollar-element of 2026-10-14): an id in the program's own
+  markup is a name in the program's scope: plain `who` is the element (`who.focus()`), as in JavaScript but checked;
+  an id clashing with a variable or function is a compile-time error naming both, with a library word only where
+  the program uses that plain name (`id: "map"` with `xs.map(f)` compiles; `id: "print"` with bare `print` errs); kebab ids like `user-name`
+  resolve too. `window`/`document` are plain names. `$who` is always the element's value (text, number, yes/no for a checkbox, text content otherwise) and
+  `$who = "Ann"` writes it, like a route's `$title`. Dynamic or external ids go through `element("user-name")`, not
+  `${…}` (string interpolation). `$` means something only in warp code: markup text, single-quoted strings, `\${`
+  and files read at run time stay text. Misspelled members are compile-time errors. Principle: one meaning per
+  spelling, never two things under one name silently. Later card: backtick strings with `$x` interpolation (clashes
+  with `$who`, noted there).
 - call-as-grouping (2026-10-15): `f x as T` is `f(x as T)` everywhere, like `f 2 + 1` = `f(2 + 1)`, with a warning
   naming `f(x as T)` and `(f x) as T`; dispatch on the result goes via `pdf p = render "x"` or `(render "x") as pdf`.
 - uniscript-binary-import (2026-10-15, user: "definitely yes"): ~/dev/uniscript gets wasm-only c/ffi additions
@@ -414,6 +430,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - Ranges (2026-10-09): `r: 1..n` is the range itself, same as `r = 1..n`. `upto` excludes the end with a hint.
 
 ## Functions and calls
+- function-references (2026-10-15, user): a bare name of a function that needs arguments, compared with a type
+  (`floor is function`) or in `type(floor)`, means the function itself (card bare-fn-type). `.floor` in argument
+  position is a lambda on it, like Swift's .member: `xs.map(.floor)`, `people.sort(.age)` (card dot-lambda).
+  `&floor` and `function floor` stay the explicit references; `:floor` is not used.
 - type-library-words (2026-10-12): list/map/text library words are always available as `x.f()` and `f(x)`;
   `use list` only for qualified `list.zip`. P171 other modules' words need their `use` (error naming the module);
   `write` and `exists` are global; a file URL loads the file module.
@@ -606,11 +626,15 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   cli-words migrates the existing --fuel/--exe/--strict/… (older `--x` mentions below are superseded by it).
 - unix-words (2026-10-15, user): `use script` has shell words with warp results: ls pwd cd cat echo mkdir cp mv touch
   head tail wc grep which rm, plus find, size/info (du/stat), sort/uniq, open (native), curl/wget as aliases of
-  fetch/download. `export a=b` only if the WebAssembly-export soft keyword can be reused. Not now: basename/dirname,
+  fetch/download. `export a=b` clashes with the WebAssembly export, so it's left out. Not now: basename/dirname,
   chmod, ln, diff, kill/ps, tar/zip. rm: one file or an empty folder, no patterns, never / ~ or the working dir and
   above, sandbox permission, and it moves to the Trash (undoable); no recursive form. `wc` → {lines, words, bytes};
   ls hides dotfiles (list_files shows all); grep is regex over lines; unquoted paths `~/x ./x /etc`, `~` expanded on
   use. Card unix-words.
+- cross-module-overload (2026-10-15, user): overloading works across modules: a module's definition doesn't shadow a
+  same-named word elsewhere, the call dispatches on the argument type. `use script; sort ./names.txt` sorts the
+  file's lines while `sort [3 1 2]` still sorts the list (same for unique, find, size). sort_lines/find_files/
+  file_size are only interim names.
 - P102 `warp build hello.warp` makes the native executable (`hello`, hello.exe on Windows); `--exe` accepted.
   build-should (2026-10-13 default): it writes x.wasm beside it too; `--wasm` only the module.
 - no-executable-by-default (2026-10-12): a plain `warp file.warp` writes no executable; WARP_EXECUTABLE=1 turns it on.
