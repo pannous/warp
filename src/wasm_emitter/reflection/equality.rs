@@ -75,10 +75,11 @@ impl WasmGcEmitter {
 
 	/// `==`/`!=` by value: structured values, any text (`peek() == " "` of a function returning text) or symbol
 	/// (`type(2) == type(3)`, card type-equal), and a value held as a Node whose kind shows only at run time (a cell's,
-	/// `cell_get(c) == 5`; a call giving a Node that holds a float), and a function value (`make(1) == make(2)`)
+	/// `cell_get(c) == 5`; a call giving a Node that holds a float; `x as number == 1.5` of a run-time text, card
+	/// number-number), and a function value (`make(1) == make(2)`)
 	pub(crate) fn compares_structurally(&self, op: &Op, left: &Node, right: &Node) -> bool {
 		let by_value = |node: &Node| {
-			matches!(self.get_type(node), Kind::Text | Kind::Symbol | Kind::Empty | Kind::Function)
+			matches!(self.get_type(node), Kind::Text | Kind::Symbol | Kind::Empty | Kind::Function | Kind::Data)
 				|| crate::time::is_time_expression(node)
 				|| self.is_held_cell_value(node)
 				|| self.is_node_arithmetic(node)
