@@ -70,7 +70,11 @@ impl WarpParser {
 			// `.card { … }`: a leading-dot name, a class selector in a style block (style_rules.rs)
 			'.' if self.is_identifier_start(1) => self.symbol_after(1, |name| Node::Symbol(format!(".{name}"))),
 			'-' if self.peek_char(1) == '>' && !self.options.data_mode => self.parse_stabby_lambda(),
-			'(' | '[' | '{' => self.parse_bracketed(self.current_char()),
+			'[' => {
+				let list = self.parse_bracketed('[');
+				self.with_unit_after_list(list)
+			}
+			'(' | '{' => self.parse_bracketed(self.current_char()),
 			'<' if self.options.xml_mode => self.parse_xml_tag(),
 			'<' => self.parse_bracketed('<'),
 			';' | '>' | '}' | ')' | ']' => Empty, // Closing brackets/terminators handled by caller

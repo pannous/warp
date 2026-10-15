@@ -156,7 +156,7 @@ pub(super) fn stored_argument_units(
 
 /// The signature of a field type that is a unit
 fn field_unit(type_name: &str) -> Option<Signature> {
-	field_units(type_name).map(|units| crate::numbers::units::signature(&units))
+	field_units(type_name).map(|units| super::signature(&units))
 }
 
 /// A field type that is a unit (`km`): the quantity it measures (`m` of km, `m/s` of km/h) and its SI amount per unit
@@ -164,13 +164,13 @@ fn field_unit(type_name: &str) -> Option<Signature> {
 pub(crate) fn unit_type(type_name: &str) -> Option<(String, f64)> {
 	let units = field_units(type_name)?;
 	let per_unit = crate::numbers::units::scale(&units, |factor| super::base_unit(factor.unit.dimension));
-	Some((shown(&crate::numbers::units::signature(&units)), per_unit.to_f64()))
+	Some((shown(&super::signature(&units)), per_unit.to_f64()))
 }
 
 /// A constant quantity's SI amount and the quantity it measures, as unit_type gives a column's: `5 km` is (5000, "m")
 pub(crate) fn si_quantity(node: &Node) -> Option<(f64, String)> {
 	let (amount, signature) = super::constant(node).ok()??;
-	(!signature.is_empty()).then(|| Some((super::exact_amount(&amount)?.to_f64(), shown(&signature))))?
+	(!signature.is_empty()).then(|| Some((super::exact_amount(&amount)?.to_f64(), shown(&signature.into()))))?
 }
 
 /// The construction `P{…}` with `body` in place of its fields, its marks kept
@@ -269,13 +269,13 @@ impl Inference {
 		if let Some(class) = self.instances_class(value) {
 			return Some(self.infer(value.clone()).map(|(value, _)| {
 				self.class_lists.insert(name.to_string(), class);
-				(Node::Key(Box::new(target.clone()), op, Box::new(value)), vec![])
+				(Node::Key(Box::new(target.clone()), op, Box::new(value)), Signature::plain())
 			}));
 		}
 		let class = self.instance_class(value)?;
 		Some(self.infer(value.clone()).map(|(value, _)| {
 			self.declare_instance(name.to_string(), class);
-			(Node::Key(Box::new(target.clone()), op, Box::new(value)), vec![])
+			(Node::Key(Box::new(target.clone()), op, Box::new(value)), Signature::plain())
 		}))
 	}
 
@@ -332,7 +332,7 @@ impl Inference {
 			}
 			lowered.push(argument);
 		}
-		Some(Ok((Node::List(lowered, Bracket::Round, crate::node::Separator::None), vec![])))
+		Some(Ok((Node::List(lowered, Bracket::Round, crate::node::Separator::None), Signature::plain())))
 	}
 
 	/// `Run` and the fields of a construction with named fields `Run{distance: 5 km}` of a class with unit fields; the
@@ -383,13 +383,16 @@ impl Inference {
 			}
 			lowered.push(Node::Key(field.clone(), *op, Box::new(value)));
 		}
-		Some(Ok((with_instance_body(node, Node::List(lowered, bracket.clone(), separator.clone())), vec![])))
+		Some(Ok((
+			with_instance_body(node, Node::List(lowered, bracket.clone(), separator.clone())),
+			Signature::plain(),
+		)))
 	}
 
 	/// The class declaration with its unit fields declared numbers; a default value (`distance: km = 0 km`) has the unit
 	pub(super) fn class_declaration(&mut self, name: Box<Node>, body: Box<Node>) -> Result<(Node, Signature), Stop> {
 		let Some(fields) = self.classes.get(&name.drop_meta().name()).cloned() else {
-			return Ok((Node::Type { name, body }, vec![]));
+			return Ok((Node::Type { name, body }, Signature::plain()));
 		};
 		let mut failure = None;
 		let body = body.map_children(|item| match self.numeric_field(item.clone(), &fields) {
@@ -401,7 +404,7 @@ impl Inference {
 		});
 		match failure {
 			Some(stop) => Err(stop),
-			None => Ok((Node::Type { name, body: Box::new(body) }, vec![])),
+			None => Ok((Node::Type { name, body: Box::new(body) }, Signature::plain())),
 		}
 	}
 
