@@ -60,3 +60,37 @@ fn shader_math_words_take_numbers_and_vectors() {
 	is!("use math; cross([1, 0, 0], [0, 1, 0])", parse("[0 0 1]"));
 	is!("use math; reflect([1, -1], [0, 1])", parse("[1 1]"));
 }
+
+/// Card note-dispatch-element-wise: Note (use sound) defines plus and minus, so `a + b` may dispatch to them; the
+/// element-wise operators still pair items, and transpose each note of a list
+#[test]
+fn element_wise_operators_pair_items_beside_a_class_defining_them() {
+	let notes = "use sound\nn = note(C4)\n";
+	is!(&format!("{notes}added(p) := p .+ [1, 2]; added([3, 4])"), parse("[4 6]"));
+	is!(&format!("{notes}taken(p) := p .- [1, 2]; taken([3, 4])"), parse("[2 2]"));
+	is!(&format!("{notes}c() := [1, 2]; taken(p) := p .- c(); taken([3, 4])"), parse("[2 2]"));
+	is!(&format!("{notes}0.5 .+ [1, 2]"), parse("[1.5 2.5]"));
+	is!(&format!("{notes}up(ns) := ns .+ 2; up([n, note(E4)]).map(x => x.key)"), parse("[62 66]"));
+	// melody_samples passes lists to closures of two parameters, which the analyzer reads as passed to every such closure
+	let song = "use sound\nsong = melody_samples([C4], 0.25)\n";
+	is!(&format!("{song}c() := [1, 2]; taken(p) := p .- c(); 1"), 1);
+}
+
+/// The prelude's element_wise_any, which `a .op b` calls where a side may be a list: each item of the list side, two
+/// lists paired, two numbers plainly
+#[test]
+fn element_wise_any_pairs_lists_and_broadcasts_numbers() {
+	is!("use prelude\nelement_wise_any(2, [1, 2], (a, b) => a * b)", parse("[2 4]"));
+	is!("use prelude\nelement_wise_any([1, 2], [3, 4], (a, b) => a + b)", parse("[4 6]"));
+	is!("use prelude\nelement_wise_any([1, 2], 10, (a, b) => a - b)", parse("[-9 -8]"));
+	is!("use prelude\nelement_wise_any(3, 4, (a, b) => a * b)", 12);
+}
+
+/// A painted function's 3-vector of 0…1 is its pixel's color on the CPU as on the GPU: pixel_color packs it as
+/// 0xAARRGGBB, each pixel_channel clamped and rounded; a number stays itself
+#[test]
+fn a_color_vector_packs_into_a_pixel() {
+	is!("use prelude\npixel_color([1, 0, 0])", 0xFFFF0000_i64);
+	is!("use prelude\npixel_color(7)", 7);
+	is!("use prelude\n[pixel_channel(0.5), pixel_channel(2), pixel_channel(-1)]", parse("[128 255 0]"));
+}
