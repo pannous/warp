@@ -694,7 +694,7 @@ impl ParameterOverloads {
 		let written = node.serialize().trim().to_string();
 		let listed =
 			variants.iter().map(|types| format!("{name}({})", types.join(", "))).collect::<Vec<_>>().join(", ");
-		let no_variant = format!("`{written}` fits no variant of {listed}");
+		let no_variant = format!("`{written}` fits no single variant of {listed}");
 		let arguments: Vec<Node> = arguments.iter().map(|argument| self.rewrite(argument.clone())).collect();
 		if kinds.iter().any(Option::is_none) && scores.len() > 1 {
 			let candidates: Vec<&Vec<String>> = scores.iter().map(|(_, types)| *types).collect();
@@ -719,7 +719,7 @@ impl ParameterOverloads {
 	}
 
 	/// `f(g(), 1)` of an argument whose kind only the run time knows: `(overload·1 = g(); if is_type(overload·1,
-	/// "text") then f·text·any(overload·1, 1) else if … else raise "… fits no variant …")`, the variants testing more
+	/// "text") then f·text·any(overload·1, 1) else if … else raise "… fits no single variant …")`, the variants testing more
 	/// arguments first, else in declaration order; each argument is evaluated once
 	fn dispatched(
 		name: &str,
