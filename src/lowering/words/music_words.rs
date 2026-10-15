@@ -16,7 +16,7 @@
 //! program does not define, the text that lib/sound.warp chord_intervals and scale_intervals know it by.
 
 use super::memoization::definition_parts;
-use super::nodes::{call, key, symbol};
+use super::nodes::{call, key};
 use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{AT_WORD, FLOAT_WORD, FOR_WORD};
@@ -42,10 +42,6 @@ const DEF_WORD: &str = "def";
 const SAVE_WORD: &str = "save";
 const SOUND_WORD: &str = "sound";
 const RECORDING_CLASS: &str = "Recording";
-/// `osc(C4, 1s) |> room` (parsed `room(osc(C4, 1s))`) of a bus `room = bus() |> reverb(0.4)`: `out(osc(C4, 1s), room)`,
-/// the signal played through the bus (card shared-buses stage 2)
-const BUS_WORD: &str = "bus";
-const OUT_WORD: &str = "out";
 const AT_CALL: &str = "sound_at";
 const AT_END_CALL: &str = "sound_at_end";
 const LIVE_LOOP_WORD: &str = "live_loop";
@@ -177,8 +173,6 @@ pub fn lower(program: Node) -> Node {
 	let defined = defined_names(&program);
 	let counts = parameter_counts(&program);
 	let program = with_block_signals(with_float_signals(with_played_functions(program, &counts)), &counts);
-	let buses = bus_names(&program);
-	let program = with_bus_sends(program, &buses);
 	match with_music_words(program, &defined) {
 		Node::List(statements, bracket, separator) if separator.separates_statements() => {
 			Node::List(with_scheduled(statements, &defined), bracket, separator)
@@ -269,44 +263,6 @@ fn with_played_functions(node: Node, counts: &HashMap<String, usize>) -> Node {
 		{
 			call(word, vec![played.clone(), seconds.clone()])
 		}
-		_ => node,
-	}
-}
-
-/// The variables holding a bus: assigned `bus()` or another bus, through effects piped onto it
-/// (`room = bus() |> reverb(0.4)` is `room = reverb(bus(), 0.4)`)
-fn bus_names(program: &Node) -> HashSet<String> {
-	let mut buses = HashSet::new();
-	program.visit(&mut |node| {
-		if let Node::Key(name, Op::Assign, value) = node.drop_meta() {
-			if let Some(name) = name.symbol_name().filter(|_| is_bus(value, &buses)) {
-				buses.insert(name.to_string());
-			}
-		}
-	});
-	buses
-}
-
-/// `bus()`, a bus variable, or an effect's call on either as its first argument
-fn is_bus(value: &Node, buses: &HashSet<String>) -> bool {
-	match value.drop_meta() {
-		Node::Symbol(name) => buses.contains(name),
-		_ => match value.call_parts() {
-			Some((BUS_WORD, [])) => true,
-			Some((_, [first, ..])) => is_bus(first, buses),
-			_ => false,
-		},
-	}
-}
-
-/// `room(signal)` of a bus room: `out(signal, room)`
-fn with_bus_sends(node: Node, buses: &HashSet<String>) -> Node {
-	if buses.is_empty() {
-		return node;
-	}
-	let node = node.map_children(|child| with_bus_sends(child, buses));
-	match node.call_parts() {
-		Some((name, [signal])) if buses.contains(name) => call(OUT_WORD, vec![signal.clone(), symbol(name)]),
 		_ => node,
 	}
 }

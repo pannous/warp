@@ -21,8 +21,9 @@ pub struct InstanceTypes {
 	parameters: RefCell<Vec<HashMap<String, Option<Shape>>>>,
 }
 
-/// Fixpoint rounds over the assignments: a variable can be assigned from another one defined later in the text
-pub(super) const INFERENCE_ROUNDS: usize = 3;
+/// Fixpoint rounds over the assignments, at most: a variable can be assigned from another one defined later in the
+/// text, a result from a chain of calls (`room = make()` of `make() := bus() |> delay(…)`, four deep)
+pub(super) const INFERENCE_ROUNDS: usize = 8;
 
 impl InstanceTypes {
 	pub fn of(node: &Node) -> Self {
@@ -38,13 +39,23 @@ impl InstanceTypes {
 		if types.registry.types().is_empty() {
 			return types;
 		}
-		for round in 1..=INFERENCE_ROUNDS {
-			let (mut variables, mut results) = (HashMap::new(), HashMap::new());
-			types.final_round = round == INFERENCE_ROUNDS;
-			types.collect(node, &mut variables, &mut results);
-			(types.variables, types.results) = (variables, results);
+		for _ in 1..INFERENCE_ROUNDS {
+			if !types.inferred_round(node) {
+				break;
+			}
 		}
+		types.final_round = true;
+		types.inferred_round(node);
 		types
+	}
+
+	/// One round over the program from the shapes of the round before: whether it learned anything
+	fn inferred_round(&mut self, node: &Node) -> bool {
+		let (mut variables, mut results) = (HashMap::new(), HashMap::new());
+		self.collect(node, &mut variables, &mut results);
+		let changed = variables != self.variables || results != self.results;
+		(self.variables, self.results) = (variables, results);
+		changed
 	}
 
 	/// A value of an unknown shape adds nothing (it may be an instance the next round recognizes) until the final round,
@@ -93,6 +104,10 @@ impl InstanceTypes {
 						Self::bind(variables, &name.name(), Some(Shape::Instance(type_node.drop_meta().name())), false)
 					}
 					(_, Some(head)) => Self::bind(results, &head[0].name(), self.shape(value), is_plain),
+					// `bus() := Bus{…}`: a function without parameters returns an instance too
+					(head, None) if is_parameterless_head(target) => {
+						Self::bind(results, &crate::node::leading_name(head), self.shape(value), is_plain)
+					}
 					_ => {}
 				}
 				self.collect(value, variables, results);
@@ -232,6 +247,10 @@ impl InstanceTypes {
 				// `P·init(P{…}, 3)`: a construction passed through its class's constructor (class_methods::constructor_name)
 				[function, instance, ..] if matches!(function.drop_meta(), Node::Symbol(name) if crate::class_methods::constructor_name(&instance_parts(instance).map(|(class, _)| class.name()).unwrap_or_default()) == *name) => {
 					self.shape(instance)
+				}
+				// `Bus(id, chain)`: a class called constructs its instance (before type_constructor writes it `Bus{…}`)
+				[function, _, ..] if matches!(function.drop_meta(), Node::Symbol(name) if self.registry.get_by_name(name).is_some()) => {
+					Some(Shape::Instance(function.name()))
 				}
 				// `make(t)`: what the user function returns
 				[function, ..] if matches!(function.drop_meta(), Node::Symbol(name) if self.results.contains_key(name)) => {

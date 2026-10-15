@@ -195,7 +195,7 @@ mix(a, b, c) := added(added(a, b), c)
 mix(a, b, c, d) := added(added(a, b), added(c, d))
 // a bus (card shared-buses): one effect chain that every sound sent to it goes through together, from the program and
 // its tasks, processed once on their mix as they play (src/sound/effects.rs), so a reverb rings on after the last:
-// room = bus() |> reverb(0.4) |> delay(0.25), then osc(C4, 1s) |> room (music_words.rs: out(osc(C4, 1s), room)) or
+// room = bus() |> reverb(0.4) |> delay(0.25), then osc(C4, 1s) |> room (call(b: Bus, signal): out(osc(C4, 1s), room)) or
 // play(C4, 1s, bus: room)
 class Bus {
 	id: int
@@ -247,6 +247,8 @@ sent_back(before, handle) := {
 }
 // the signal played through the bus; its handle
 out(signal, b: Bus) := sent_back(sent_to(b), out(signal))
+// a bus applied to a signal plays it through the bus: `osc(C4, 1s) |> room`, `room(signal)` (trait Callable)
+call(b: Bus, signal) := out(signal, b)
 // indexed in place: dry_at(a, i) + dry_at(b, i) of two lists was quadratic (card list-call-copy)
 added(a, b) := [(if i < count(a) then a[i] else 0.0) + (if i < count(b) then b[i] else 0.0) for i in 0..max(count(a), count(b))]
 out(signal) := sound(clamped_samples(signal))

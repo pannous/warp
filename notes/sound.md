@@ -328,8 +328,9 @@ The DSP is the lib formulas in Rust, streaming. Plan (supervisor, user asked whe
 stage 2 the browser runs the same code (warp.wasm export for render_sound, an AudioWorklet live; until then the
 playground plays bus sounds dry and says so), stage 3 a bus's effects changed while it plays, stage 4 compressor, EQ.
 
-Stage 2, bus API A (user 2026-10-15): `osc(C4, 1s) |> room` (parsed `room(osc(…))`; music_words.rs with_bus_sends
-makes a call of a variable assigned `bus()` or effects on one `out(signal, room)`) and `play(C4, 1s, bus: room)` (a play
+Stage 2, bus API A (user 2026-10-15): `osc(C4, 1s) |> room` (parsed `room(osc(…))`; a Bus applied to a signal
+is lib's `call(b: Bus, signal) := out(signal, b)`, by the trait Callable in traits/dispatch.rs instance_called, so a bus
+from a parameter, a function's result or an expression sends too) and `play(C4, 1s, bus: room)` (a play
 overload around sent_to / sent_back). No `send room` setting.
 One DSP (user 2026-10-15: Rust for now, a warp twin later): src/sound/effects.rs `with_effects` runs lib's list effects
 (lib effected → std_io sound.effect → on_signal, amplitudes of loudness · loudest_sample, so distort keeps the level) and,

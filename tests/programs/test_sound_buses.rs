@@ -208,3 +208,18 @@ fn list_effects_run_the_bus_dsp() {
 	crate::is!("use sound\ncount(osc(440, 0.1s) |> delay(0.1, 0.5))", 23105);
 	crate::is!("use sound\ncount(osc(C4, 0.1s) |> lowpass(800))", 2205);
 }
+
+/// a Bus value applied to a signal sends it, wherever the bus comes from (trait Callable: lib's call(b: Bus, signal)),
+/// not only a variable assigned bus() (reviewer, card shared-buses)
+#[test]
+fn a_bus_from_a_parameter_a_result_or_an_expression_takes_the_signal() {
+	let programs = [
+		("parameter", "through(b: Bus) := osc(A4, 0.1s) |> b\nthrough(bus() |> delay(0.3, 0.5, 1))"),
+		("result", "make() := bus() |> delay(0.3, 0.5, 1)\nroom = make()\nosc(A4, 0.1s) |> room"),
+		("expression", "osc(A4, 0.1s) |> (bus() |> delay(0.3, 0.5, 1))"),
+	];
+	for (name, program) in programs {
+		let samples = rendered_samples(program, name);
+		assert!(loudest(&samples, 0.31, 0.39) > 500, "{name}: its echo 0.3 s later");
+	}
+}
