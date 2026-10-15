@@ -5,6 +5,8 @@ use warp::wasm_emitter::eval;
 
 /// The (written, preferred) pairs of the broadcast hints of `code`
 fn broadcast_hints(code: &str) -> Vec<(String, String)> {
+	// a hint is said once per thread: another test compiling the same code first would silence it
+	warp::normalize::clear_shown_hints();
 	let (_, hints) = capture_hints(|| eval(code));
 	hints
 		.into_iter()
