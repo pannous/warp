@@ -450,14 +450,18 @@ impl FunctionArguments {
 		let Node::Symbol(word) = argument.drop_meta() else {
 			return None;
 		};
-		let known = is_standard_function(word) || prelude_word_arity(word).is_some();
+		// `sqrt`, `abs`: an operator word known by its signature
+		let operator_arity = crate::lowering::library_signatures::library_signature(word)
+			.filter(|_| crate::warp_parser::PREFIX_OPERATOR_WORDS.iter().any(|(spelled, _)| spelled == word))
+			.map(|(params, _)| params.len());
+		let known = is_standard_function(word) || prelude_word_arity(word).is_some() || operator_arity.is_some();
 		if !known || self.variables.contains(word) {
 			return None;
 		}
-		let parameters: Vec<Node> = (1..=arity(canonical_spelling(word)))
+		let parameters: Vec<Node> = (1..=operator_arity.unwrap_or_else(|| arity(canonical_spelling(word))))
 			.map(|index| Node::Symbol(format!("{LIBRARY_WORD_PARAMETER}{index}")))
 			.collect();
-		Some(key(call(name, parameters.clone()), Op::Define, call(word, parameters)))
+		Some(key(call(name, parameters.clone()), Op::Define, crate::closures::word_applied(word, parameters)))
 	}
 
 	fn rewrite(&mut self, node: Node, params: &HashMap<String, Vec<String>>) -> Node {
@@ -495,6 +499,8 @@ impl FunctionArguments {
 		}
 		let mut arguments = arguments.to_vec();
 		for index in indexes {
+			// `apply sqrt 9`: the parser applied sqrt, apply takes it as its function
+			arguments = crate::closures::with_operator_word_unfolded(arguments, index);
 			let Some(argument) = arguments.get(index) else { continue };
 			let param = params[name].get(index).cloned().unwrap_or_default();
 			match self.function_value(name, &param, argument) {
