@@ -42,7 +42,6 @@ fn a_bare_number_is_no_position() {
 }
 
 /// other uses of from and to keep their meaning
-#[ignore = "cleanup-edge: cleanup-park-phrases: phrase forms parked until card prepositions-call"]
 #[test]
 fn other_from_and_to_stay() {
 	is!("count(1 to 3)", 3);
