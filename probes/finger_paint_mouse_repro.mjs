@@ -2,7 +2,7 @@
 // web/playground/canvas.js as deployed or as given (card register-fingers: desktop finger paint said broken after it).
 // Runs on pannous.com (decision browser-server): `node finger_paint_mouse_repro.mjs [canvas.js to serve instead]`;
 // FRESH=1 drags right after the page loaded the sample from its address, without a click first, as the user does;
-// REAL=1 leaves the page as a visitor gets it (its coi-serviceworker.js, no headers added, canvas.js as deployed).
+// DPR=2 a Retina screen; DARK=1 dark mode; NOT_ISOLATED=1 a page without shared memory, as after a hard reload; REAL=1 leaves the page as a visitor gets it (its coi-serviceworker.js, no headers added, canvas.js as deployed).
 // The page is made cross-origin isolated by the headers added here, service workers blocked (coi-serviceworker.js
 // would reload it outside Playwright's routing).
 import { chromium, firefox } from "playwright";
@@ -15,10 +15,13 @@ const STEPS = 25;
 const replacementCanvas = process.argv[2] && readFileSync(process.argv[2], "utf8");
 const fresh = Boolean(process.env.FRESH);
 const real = Boolean(process.env.REAL);
+const notIsolated = Boolean(process.env.NOT_ISOLATED);
 
 async function check(browserType) {
-	const browser = await browserType.launch();
-	const context = await browser.newContext({ serviceWorkers: real ? "allow" : "block", viewport: { width: 1280, height: 900 } });
+	const browser = await browserType.launch({ headless: !process.env.HEADED }); // HEADED=1 under xvfb-run: a real window
+	const context = await browser.newContext({ serviceWorkers: real ? "allow" : "block", viewport: { width: 1280, height: 900 }, deviceScaleFactor: Number(process.env.DPR ?? 1), colorScheme: process.env.DARK ? "dark" : "light" });
+	// the first pointerdown tells the program window_open from the user activation (playground.js tellSystemValues)
+	await context.addInitScript(() => addEventListener("pointerdown", () => self.activeAtFirstPointerdown ??= navigator.userActivation?.hasBeenActive, { capture: true }));
 	const page = await context.newPage();
 	const messages = [];
 	page.on("console", message => ["error", "warning"].includes(message.type()) && messages.push(`${message.type()}: ${message.text()}`));
@@ -26,11 +29,12 @@ async function check(browserType) {
 	if (!real) await page.route("**/*", async route => {
 		const isCanvas = replacementCanvas && new URL(route.request().url()).pathname.endsWith("/canvas.js");
 		const response = await route.fetch();
-		const headers = { ...response.headers(), "cross-origin-opener-policy": "same-origin", "cross-origin-embedder-policy": "require-corp", "cross-origin-resource-policy": "cross-origin" };
+		const isolation = { "cross-origin-opener-policy": "same-origin", "cross-origin-embedder-policy": "require-corp", "cross-origin-resource-policy": "cross-origin" };
+		const headers = { ...response.headers(), ...(notIsolated ? {} : isolation) };
 		await route.fulfill(isCanvas ? { response, headers, body: replacementCanvas } : { response, headers });
 	});
 	await page.goto(`${PAGE}#${SAMPLE}`);
-	await page.waitForFunction(() => self.crossOriginIsolated && window.playground, null, { timeout: 60000 });
+	await page.waitForFunction(isolated => (isolated || self.crossOriginIsolated) && window.playground, notIsolated, { timeout: 60000 });
 	if (!fresh) {
 		await page.click("#output");
 		await page.evaluate(name => void playground.chooseExample(name), SAMPLE);
@@ -55,9 +59,10 @@ async function check(browserType) {
 		const style = getComputedStyle(canvas);
 		return { painted: Math.min(...middle) < paper, middle, canvases: document.querySelectorAll("#paintings canvas").length,
 			value: document.getElementById("value").textContent, status: document.getElementById("status").textContent,
-			touchAction: style.touchAction, size: `${canvas.width}×${canvas.height} shown ${Math.round(canvas.getBoundingClientRect().width)}` };
+			touchAction: style.touchAction, note: document.querySelector(".pointer-unreachable")?.textContent, size: `${canvas.width}×${canvas.height} shown ${Math.round(canvas.getBoundingClientRect().width)}` };
 	}, PAPER_FROM);
 	shown.statusBefore = statusBefore;
+	shown.activeAtFirstPointerdown = await page.evaluate(() => self.activeAtFirstPointerdown);
 	shown.isolated = await page.evaluate(() => self.crossOriginIsolated);
 	console.log(browserType.name(), real ? "as served" : "headers added", fresh ? "fresh" : "clicked first", replacementCanvas ? "canvas.js given" : "canvas.js deployed", JSON.stringify(shown), messages.slice(0, 8));
 	await browser.close();
