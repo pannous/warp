@@ -101,6 +101,7 @@ CLIPBOARD_READ = "(a program reads the clipboard)"  # card web-apis-rest: host.j
 CLIPBOARD_TEXT = "copied by the page"
 # card web-apis-rest: gpu_compute over named arrays, and paint of a shader drawn straight into the page's canvas
 GPU_PAGE = "(named GPU arrays, a shader painted into the page's canvas)"
+SHADER_SCALED = "scaled auto"  # card make-shader: not the pixelated squares of pixels painted one by one
 NAMED_ARRAYS = """shader = "@group(0) @binding(0) var<storage, read_write> xs: array<f32>;
 @group(0) @binding(1) var<storage, read_write> ns: array<i32>;
 @compute @workgroup_size(64) fn main(@builtin(global_invocation_id) id: vec3<u32>) {
@@ -582,7 +583,7 @@ def red_shader_shown():
 		const copy = new OffscreenCanvas(canvas.width, canvas.height).getContext("2d");
 		copy.drawImage(canvas, 0, 0);
 		const failed = [...document.querySelectorAll("#diagnostics li")].map(item => item.textContent).find(text => text.includes({json.dumps(CANVAS_FAILED)}));
-		return `gpu ${{canvas.gpu === true}} red ${{copy.getImageData(4, 4, 1, 1).data[0]}} ${{failed ?? ""}}`;
+		return `gpu ${{canvas.gpu === true}} red ${{copy.getImageData(4, 4, 1, 1).data[0]}} scaled ${{canvas.style.imageRendering}} ${{failed ?? ""}}`;
 	}})()""")
 
 
@@ -598,6 +599,7 @@ def gpu_page_wrong():
 	if CANVAS_FAILED in shown:
 		print(f"skip {GPU_PAGE} (its page canvas): {shown}")
 	expected = "red 255" if CANVAS_FAILED in shown else "gpu true red 255"
+	wrong += [] if SHADER_SCALED in shown else [f"painted shader: {shown!r}, expected {SHADER_SCALED!r}: a shader's render scales smoothly"]
 	return wrong + ([] if expected in shown else [f"painted shader ({painted!r}): {shown!r}, expected {expected!r}"])
 
 
