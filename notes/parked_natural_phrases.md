@@ -19,3 +19,8 @@ middle = xs#(2…4)
 
 The parked tests remain ignored with the shared reason that preposition parameters may later provide the feature
 without three whole-program lowering passes.
+
+Preposition parameters are built (card prepositions-call, notes/function_calls.md): `to move piece from a to b: …`
+is `move(piece, from a, to b)` and is called `move 1 from 2 to 3`, as any `f(x, for y)` is called `f 1 for 2`.
+The list phrases (`sorted by abs`, `take first 2`, `keep only positive`) and type-word heads stay parked: they are
+method and library-word phrases, not prepositions of a function the program declares.

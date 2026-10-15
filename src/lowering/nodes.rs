@@ -223,10 +223,15 @@ pub(crate) fn parameter_word(parameter: &Node) -> String {
 	parameter_head(parameter).name()
 }
 
-/// `x` of `x`, `x:int`, `x:int=1`: the innermost left side
+/// `x` of `x`, `x:int`, `x:int=1`, `for x` (preposition_calls.rs): the innermost left side
 fn parameter_head(parameter: &Node) -> &Node {
 	match parameter.drop_meta() {
 		Node::Key(name, _, _) => parameter_head(name),
+		Node::List(words, Bracket::None, Separator::Space)
+			if words.len() == 2 && crate::type_name_matching::is_preposition(&words[0]) =>
+		{
+			parameter_head(&words[1])
+		}
 		other => other,
 	}
 }
