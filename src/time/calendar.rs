@@ -611,8 +611,9 @@ impl Duration {
 	}
 
 	pub fn order(self, other: Duration) -> Result<Ordering, String> {
-		self.compare(other)
-			.ok_or_else(|| format!("{self} and {other} compare differently on different dates ({LENGTHS_VARY})"))
+		self.compare(other).ok_or_else(|| {
+			format!("cannot order durations {self} and {other}: they compare differently on different dates ({LENGTHS_VARY})")
+		})
 	}
 
 	/// The shortest and longest it can be: a month is 28 to 31 days, and daylight saving shifts any span by at most an hour
