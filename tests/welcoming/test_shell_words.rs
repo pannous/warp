@@ -23,7 +23,7 @@ fn files_are_made_copied_moved_and_listed() {
 #[test]
 fn a_file_is_read_by_lines() {
 	let code = "write(\"t.txt\", \"one\\ntwo fn\\nthree\\n\")\nprint head(./t.txt, 2)\nprint tail ./t.txt\nprint wc ./t.txt\nprint sort_lines ./t.txt\nprint unique_lines ./t.txt\nprint grep(\"f.\", ./t.txt)\nprint cat ./t.txt";
-	let expected = "[\"one\" \"two fn\"]\n[\"one\" \"two fn\" \"three\"]\n{\"lines\":3 \"words\":4 \"bytes\":18}\n[\"one\" \"three\" \"two fn\"]\n[\"one\" \"two fn\" \"three\"]\n[\"two fn\"]\none\ntwo fn\nthree\n\n";
+	let expected = "[\"one\" \"two fn\"]\n[\"one\" \"two fn\" \"three\"]\n{\"lines\":3 \"words\":4 \"bytes\":17}\n[\"one\" \"three\" \"two fn\"]\n[\"one\" \"two fn\" \"three\"]\n[\"two fn\"]\none\ntwo fn\nthree\n\n";
 	assert_eq!(script_in("lines", code), expected);
 }
 
@@ -46,7 +46,7 @@ fn which_finds_a_program() {
 
 #[test]
 fn files_are_found_and_measured() {
-	let code = "mkdir ./a/b\nwrite(\"a/b/x.warp\", \"12345\")\nwrite(\"a/y.warp\", \"1\")\nwrite(\"a/z.txt\", \"\")\nprint find_files(./a, \"*.warp\")\nprint file_size ./a\ni = info ./a/b/x.warp\nprint i.size, i.kind, i.modified > 0";
+	let code = "mkdir ./a/b\nwrite(\"a/b/x.warp\", \"12345\")\nwrite(\"a/y.warp\", \"1\")\nwrite(\"a/z.txt\", \"\")\nprint find_files(./a, \"*.warp\")\nprint file_size ./a\ni = info ./a/b/x.warp\nprint i[\"size\"], i.kind, i.modified > 0";
 	assert_eq!(script_in("find", code), "[\"./a/b/x.warp\" \"./a/y.warp\"]\n6\n5 file yes\n");
 }
 
