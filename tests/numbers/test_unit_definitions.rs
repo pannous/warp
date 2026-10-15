@@ -14,6 +14,13 @@ fn each_unit_is_the_amount_its_definition_says() {
 	is!("1 kHz == 1000 Hz", true);
 }
 
+// card lib-units: the block is also the table of run-time quantities, aliases of units (Hz) included
+#[test]
+fn run_time_quantities_know_the_units_of_the_definitions() {
+	is!("quantity(1, \"mi\").in(\"m\") == 1609.344", true);
+	is!("quantity(440, \"Hz\").in(\"kHz\") == 0.44", true);
+}
+
 #[test]
 fn dimension_names_come_from_the_definitions() {
 	is!("type(2 m²)", "area");

@@ -11,12 +11,19 @@ use num_traits::{One, ToPrimitive};
 use std::sync::OnceLock;
 
 const SOURCE: &str = include_str!("../../../lib/units.warp");
-const BLOCK_START: &str = "unit_definitions = data {";
 const BLOCK_END: &str = "}";
 const DIMENSION_WORD: &str = "dimension ";
 const DEFINE: &str = ":=";
 const BASE: char = ':';
 const COMMENT: &str = "//";
+/// The names of the run-time tables lib/units.warp's Quantity reads, in place of the block (run_time_tables)
+pub(super) const BLOCK_NAME: &str = "unit_definitions";
+const RUN_TIME_NAMES: &str = "unit_names";
+const RUN_TIME_SCALES: &str = "unit_scales";
+const RUN_TIME_DIMENSIONS: &str = "unit_dimensions";
+/// The dimensions a run-time quantity knows, packed into one int: length + 256·mass + 65536·time
+const RUN_TIME_DIMENSION_WEIGHTS: [(Dimension, i64); 3] =
+	[(Dimension::Length, 1), (Dimension::Mass, 256), (Dimension::Time, 65536)];
 /// The dimension each name of lib/units.warp stands for: time's is `duration` (decision anchor-time)
 const DIMENSION_WORDS: [(&str, Dimension); 5] = [
 	("length", Dimension::Length),
@@ -42,6 +49,63 @@ pub(super) fn definitions() -> &'static Definitions {
 		.get_or_init(|| read(SOURCE).unwrap_or_else(|problem| panic!("lib/units.warp unit_definitions: {problem}")))
 }
 
+/// The run-time tables of lib/units.warp's Quantity (`quantity(5, "km")`), in place of the block itself: each unit and
+/// each alias of units (`mph`, `Hz`) with its SI amount and its dimension packed as length + 256·mass + 65536·time
+pub(super) fn run_time_tables() -> String {
+	let rows: Vec<(&str, Rational, i64)> = definitions()
+		.units
+		.iter()
+		.filter_map(|unit| Some((unit.name, si_amount(unit), packed(unit.dimension)?)))
+		.chain(definitions().aliases.iter().filter_map(|(name, expression)| {
+			let (amount, dimension) = alias_measure(expression)?;
+			Some((*name, amount, dimension))
+		}))
+		.collect();
+	let column = |cell: &dyn Fn(&(&str, Rational, i64)) -> String| rows.iter().map(cell).collect::<Vec<_>>().join(", ");
+	format!(
+		"{RUN_TIME_NAMES} = [{}]\n{RUN_TIME_SCALES} = [{}]\n{RUN_TIME_DIMENSIONS} = [{}]",
+		column(&|(name, _, _)| format!("\"{name}\"")),
+		column(&|(_, amount, _)| amount.to_string()),
+		column(&|(_, _, dimension)| dimension.to_string()),
+	)
+}
+
+/// A unit's amount in its dimension's base unit, the SI unit
+fn si_amount(unit: &Unit) -> Rational {
+	let base =
+		definitions().base_units.iter().find(|(dimension, _)| *dimension == unit.dimension).map(|(_, name)| *name);
+	let steps = definitions().units.iter().find(|known| Some(known.name) == base).map_or(1, |known| known.factor);
+	Rational::new(BigInt::from(unit.factor), BigInt::from(steps))
+}
+
+fn packed(dimension: Dimension) -> Option<i64> {
+	RUN_TIME_DIMENSION_WEIGHTS.iter().find(|(known, _)| *known == dimension).map(|(_, weight)| *weight)
+}
+
+/// `mi/h`, `1/s`: the SI amount and packed dimension of an alias made of units; None for one of other words (`π/180`)
+fn alias_measure(expression: &str) -> Option<(Rational, i64)> {
+	let (mut amount, mut dimension, mut divide) = (Rational::integer(1), 0, false);
+	for token in tokens(expression) {
+		if token == "/" {
+			divide = true;
+			continue;
+		}
+		let (factor, weight) = match decimal(token) {
+			Some(number) => (number, 0),
+			None => {
+				let unit = definitions().units.iter().find(|unit| unit.name == token)?;
+				(si_amount(unit), packed(unit.dimension)?)
+			}
+		};
+		(amount, dimension) = match divide {
+			true => (amount.mul(&factor.inverse()?), dimension - weight),
+			false => (amount.mul(&factor), dimension + weight),
+		};
+		divide = false;
+	}
+	Some((amount, dimension))
+}
+
 /// A unit as it is read: its amount and zero in its dimension's base unit, before they become whole steps
 struct Read {
 	name: &'static str,
@@ -51,7 +115,7 @@ struct Read {
 }
 
 fn read(source: &'static str) -> Result<Definitions, String> {
-	let block = source.split_once(BLOCK_START).ok_or("no block")?.1;
+	let block = source.split_once(&format!("{BLOCK_NAME} = data {{")).ok_or("no block")?.1;
 	let mut dimensions = vec![];
 	let mut derived_dimensions = vec![];
 	let mut base_units = vec![];

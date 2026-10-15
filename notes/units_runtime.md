@@ -179,5 +179,8 @@ them (`dimension length`, `dimension speed := length/duration`, `m: length` base
 `is_unit`, so it cannot parse its own definitions). Each unit becomes whole steps of its dimension (amount × lcm of the
 dimension's denominators); only ratios matter. Adding a unit or dimension name = one line there (a new base dimension
 also needs its `Dimension` variant). Test: tests/numbers/test_unit_definitions.rs. Next: units defined in a program
-(`furlong := 201.168 m`), then px as a device-pixel dimension (Q1). The runtime tables below the block
-(unit_names/unit_scales/unit_dimensions) still repeat it: a follow-up could generate them from the block.
+(`furlong := 201.168 m`), then px as a device-pixel dimension (Q1). The block is also the run-time table (card
+lib-units): units.rs with_run_time_unit_tables replaces the statement by unit_names/unit_scales/unit_dimensions computed
+from the definitions (also where implicit_modules.rs picks the units module's needed definitions by name), so aliases of
+units (Hz, kHz) work at run time too. The hand reader stays: the parser asks is_unit to read `201.168 m`, so it cannot
+read the block that defines m (without units `q := 201.168 furlong` parses as `(:= q 201.168) furlong`).

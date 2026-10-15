@@ -29,9 +29,9 @@ enum Dimension {
 }
 
 #[derive(Debug, PartialEq)]
-/// `factor` counts the smallest step of the dimension, so every unit is a whole number of it: time in ms, length in
-/// 0.1 mm (1 ft = 3048, 1 km = 10_000_000), mass in 10 µg (1 lb = 45_359_237), temperature in 1/900 K (1 °F = 500).
-/// `zero` is where the unit's 0 lies, in steps above the dimension's zero: 0 °C is 273.15 K, 245_835 steps
+/// `factor` counts the smallest step of the dimension, so every unit is a whole number of it (definitions.rs: the least
+/// common multiple of the dimension's denominators; length in 0.2 mm, 1 ft = 1524, temperature in 1/180 K, 1 °F = 100).
+/// `zero` is where the unit's 0 lies, in steps above the dimension's zero: 0 °C is 273.15 K, 49_167 steps
 struct Unit {
 	name: &'static str,
 	dimension: Dimension,
@@ -107,12 +107,36 @@ fn target_unit(node: &Node) -> Option<&'static Unit> {
 
 /// The unit words as the units passes read them: aliases expanded (`60 mph`), the whole unit after `as` (`q as km/h`)
 pub fn lower_unit_words(program: Node) -> Node {
-	let program = lower_unit_aliases(program);
+	let program = lower_unit_aliases(with_run_time_unit_tables(program));
 	let program = match QUANTITY_CAST_WORDS.iter().any(|word| crate::soft_keywords::program_names(&program, word)) {
 		true => program,
 		false => with_quantity_casts(program),
 	};
 	shadowing(&program.clone(), || with_whole_conversion_units(program))
+}
+
+/// lib/units.warp's `unit_definitions = data {…}` is read once by definitions.rs; at run time it stands for the tables
+/// its Quantity class reads (`unit_names = ["mm", …]`), so the block is their one source (card lib-units)
+pub(crate) fn with_run_time_unit_tables(program: Node) -> Node {
+	let is_block = |statement: &Node| matches!(statement.drop_meta(), Node::Key(name, Op::Assign, _) if name.drop_meta() == &Node::Symbol(definitions::BLOCK_NAME.to_string()));
+	let tables = || statements_of(crate::warp_parser::parse(&definitions::run_time_tables()));
+	match program {
+		Node::List(items, Bracket::None, separator)
+			if separator.separates_statements() && items.iter().any(is_block) =>
+		{
+			let items = items.into_iter().flat_map(|item| if is_block(&item) { tables() } else { vec![item] });
+			Node::List(items.collect(), Bracket::None, separator)
+		}
+		program if is_block(&program) => Node::List(tables(), Bracket::None, Separator::Newline),
+		program => program,
+	}
+}
+
+fn statements_of(node: Node) -> Vec<Node> {
+	match node {
+		Node::List(items, Bracket::None, separator) if separator.separates_statements() => items,
+		node => vec![node],
+	}
 }
 
 /// `x as quantity`, and `x as unit` with a got-it note: the run-time quantity(x) (card unit-possible)
