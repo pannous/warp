@@ -25,7 +25,9 @@ as warp functions, `paint(tunnel, width, height)` compiling them; the same funct
 | `return vec4f(color, 1.0)` | `rgb(r, g, b)` or a packed color | returning a 3-list of 0…1 is the color (build) |
 
 ## Order
-1. Math words on lists and numbers (CPU), `2 .* xs` broadcasting.
+1. DONE (branch compile-shaders): math words on lists and numbers (CPU): `.+ .- .* ./` decide at run time where a side
+   may be a list (prelude element_wise_any), `norm`/`magnitude` the Euclidean length (S3), libm's one-number words map
+   over lists, `use math` has fract step smoothstep mix(=lerp, lists too) distance normalize cross reflect.
 2. Kernel: vector values (list literals, element-wise ops, swizzles once S1 is decided), the math words, `break`,
    global lists as arrays, a 3-list as the color.
 3. samples/gpu_visualizer.warp's tunnel in warp; the WGSL version stays as samples/gpu_visualizer_wgsl.warp (or goes,
