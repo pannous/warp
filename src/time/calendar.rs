@@ -14,6 +14,8 @@ pub(crate) const DAYS_PER_ERA: i64 = 146_097;
 pub(crate) const YEARS_PER_ERA: i64 = 400;
 pub(crate) const EPOCH_SHIFT: i64 = 719_468;
 const DAY: i128 = DAY_SECONDS as i128 * SECOND;
+const HOUR_NANOS: i128 = HOUR as i128 * SECOND;
+pub(crate) const LENGTHS_VARY: &str = "a day is 23 to 25 hours across daylight saving, a month 28 to 31 days: compare the times they lead to";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Date {
@@ -585,14 +587,41 @@ impl Duration {
 
 	/// `1 day == 24 hours` depends on the day: equal fields are equal, one differing field is unequal, more is an error
 	pub fn equals(self, other: Duration) -> Result<bool, String> {
-		let differing = [self.months != other.months, self.days != other.days, self.nanos != other.nanos];
-		match differing.iter().filter(|differs| **differs).count() {
-			0 => Ok(true),
-			1 => Ok(false),
-			_ => Err(format!(
-				"{self} and {other} are equal on some dates and not on others (a day is 23 to 25 hours across daylight saving, a month 28 to 31 days): compare the times they lead to"
-			)),
+		match self.compare(other) {
+			Some(order) => Ok(order == Ordering::Equal),
+			None => Err(format!("{self} and {other} are equal on some dates and not on others ({LENGTHS_VARY})")),
 		}
+	}
+
+	/// `1 day > 2 hours` on every date; `1 day < 24 hours` depends on it (None)
+	pub fn compare(self, other: Duration) -> Option<Ordering> {
+		let difference = self.plus(other.times(-1));
+		if difference.is_exact() {
+			return Some(difference.nanos.cmp(&0));
+		}
+		let (shortest, longest) = difference.nanos_range();
+		if shortest > 0 {
+			Some(Ordering::Greater)
+		} else if longest < 0 {
+			Some(Ordering::Less)
+		} else {
+			None
+		}
+	}
+
+	pub fn order(self, other: Duration) -> Result<Ordering, String> {
+		self.compare(other).ok_or_else(|| {
+			format!("{self} and {other} compare differently on different dates ({LENGTHS_VARY})")
+		})
+	}
+
+	/// The shortest and longest it can be: a month is 28 to 31 days, and daylight saving shifts any span by at most an hour
+	fn nanos_range(self) -> (i128, i128) {
+		let (fewest_days, most_days) = {
+			let (a, b) = (self.days + 28 * self.months, self.days + 31 * self.months);
+			(a.min(b) as i128, a.max(b) as i128)
+		};
+		(self.nanos + fewest_days * DAY - HOUR_NANOS, self.nanos + most_days * DAY + HOUR_NANOS)
 	}
 
 	pub fn is_exact(self) -> bool {

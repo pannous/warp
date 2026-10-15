@@ -18,6 +18,16 @@ fn test_durations_order() {
 }
 
 #[test]
+fn test_durations_order_at_run_time() {
+	is!("d = 1 day; d > 2 hours", true);
+	is!("d = 3 hours; e = 2 hours; d >= e", true);
+	is!("d = 1 month; d > 27 days", true);
+	is!("d = 13 months; d > 12 months", true);
+	is!("d = 2 days; d <= 1 day", false);
+	fails_with("d = 1 day; d < 24 hours", "compare differently on different dates");
+}
+
+#[test]
 fn test_an_order_that_depends_on_the_date_is_an_error() {
 	fails_with("1 day < 24 hours", "compare differently on different dates");
 	fails_with("1 day > 1470 minutes", "compare differently on different dates");

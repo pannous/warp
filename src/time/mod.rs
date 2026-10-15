@@ -630,6 +630,7 @@ fn apply(left: Value, op: Op, right: Value) -> Result<Value, String> {
 		}
 		(Value::Duration(a), Op::Eq, Value::Duration(b)) => a.equals(b).map(Value::Bool),
 		(Value::Duration(a), Op::Ne, Value::Duration(b)) => a.equals(b).map(|equal| Value::Bool(!equal)),
+		(Value::Duration(a), op, Value::Duration(b)) if op.is_comparison() => Ok(Value::Bool(op.holds(a.order(b)?))),
 		(Value::Duration(duration), Op::As, Value::Symbol(unit)) => converted(&duration, &Node::Symbol(unit)),
 		// `"on " + 2024-02-29`: a text joins the other's text, as list_join does at run time
 		(left, Op::Add, right) if matches!(left, Value::Text(_)) || matches!(right, Value::Text(_)) => {
@@ -691,7 +692,8 @@ impl Value {
 			Value::Time(time) => Node::data(time),
 			Value::Duration(duration) => Node::data(duration),
 			Value::Int(n) => Node::Number(Number::Int(n)),
-			Value::Bool(truth) => Node::Number(Number::Int(truth as i64)), // eval encodes booleans as Int 1/0
+			Value::Bool(true) => Node::True,
+			Value::Bool(false) => Node::False,
 			Value::Text(text) => Node::Text(text),
 			Value::Symbol(name) => Node::Symbol(name),
 			Value::Converted(node) => node,

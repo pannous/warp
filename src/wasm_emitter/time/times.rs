@@ -5,6 +5,7 @@
 
 use super::super::layout::BYTE;
 use super::super::lists::list_ops::RETURNED_ERROR;
+use super::super::time::time_arithmetic::DURATION_ORDER;
 use super::super::WasmGcEmitter;
 use crate::node::Node;
 use crate::time::calendar::{
@@ -62,7 +63,6 @@ const ZERO_DIGIT: i64 = b'0' as i64;
 const MISMATCHED_TIMES: &str = "cannot compare a date, a local time, an instant and a zoned time with each other: no implicit conversion between kinds of time";
 /// The address and length of a constant in linear memory
 type Allocated = (u32, u32);
-const UNORDERED_DURATIONS: &str = "cannot order durations: a day is 23 to 25 hours across daylight saving, a month 28 to 31 days: compare the times they lead to";
 
 impl WasmGcEmitter {
 	/// After new_int; before list_join, whose time_text calls them
@@ -609,9 +609,12 @@ impl WasmGcEmitter {
 		func.instruction(&I::End);
 		self.emit_time_form(func, first);
 		Self::emit_list(func, &[I::I64Const(TimeForm::Duration as i64), I::I64Eq, I::If(BlockType::Empty)]);
-		self.emit_trap_detail(func, &Node::Text(UNORDERED_DURATIONS.to_string()));
-		self.emit_runtime_error(func, RETURNED_ERROR);
-		func.instruction(&I::End);
+		for duration in [first, second] {
+			self.emit_field(func, duration, 0);
+			self.emit_time_position(func, duration);
+		}
+		self.call(func, DURATION_ORDER);
+		Self::emit_list(func, &[I::Return, I::End]);
 		for comparison in [I::I64GtS, I::I64LtS] {
 			self.emit_time_position(func, first);
 			self.emit_time_position(func, second);

@@ -8,7 +8,7 @@ use super::super::time::times::{CIVIL_FROM_DAYS, DAYS_FROM_CIVIL, DAY_NANOS, TIM
 use super::super::WasmGcEmitter;
 use crate::node::Node;
 use crate::operators::Op;
-use crate::time::calendar::{MINUTE, SECOND};
+use crate::time::calendar::{HOUR, LENGTHS_VARY, MINUTE, SECOND};
 use crate::time::{TimeForm, MONTHS_SHIFT, OFFSET_SHIFT, TIME_FORM_BITS, TIME_FORM_MASK, ZONE_INDEX_MASK};
 use crate::type_kinds::{Kind, KIND_BITS, KIND_MASK};
 use wasm_encoder::*;
@@ -16,6 +16,12 @@ use Instruction as I;
 
 /// time_arithmetic(a, b, operator) -> node; the operator is the index in TIME_OPERATORS
 pub const TIME_ARITHMETIC: &str = "time_arithmetic";
+/// duration_order(kind a, position a, kind b, position b) -> i32
+pub(in crate::wasm_emitter) const DURATION_ORDER: &str = "duration_order";
+const SHORTEST_MONTH_DAYS: i64 = 28;
+const LONGEST_MONTH_DAYS: i64 = 31;
+/// Daylight saving shifts a span by at most an hour
+const HOUR_NANOS: i64 = HOUR * SECOND as i64;
 /// The operators a time takes at run time
 pub const TIME_OPERATORS: [Op; 3] = [Op::Add, Op::Sub, Op::Mul];
 
@@ -210,6 +216,46 @@ impl WasmGcEmitter {
 				s.emit_time_failure(f, NOT_ARITHMETIC);
 			},
 		);
+		self.emit_duration_order();
+	}
+
+	/// duration_order(kind a, position a, kind b, position b) -> -1, 0 or 1, as Duration::compare: the difference is
+	/// longer or shorter on every date, or the order depends on the date (an error)
+	fn emit_duration_order(&mut self) {
+		let (kind_a, position_a, kind_b, position_b) = (0, 1, 2, 3);
+		let (months, days, nanos, fewest_days, most_days) = (4, 5, 6, 7, 8);
+		self.runtime_function(DURATION_ORDER, vec![ValType::I64; 4], vec![ValType::I32], vec![ValType::I64; 5], |s, f| {
+			for (part, local) in [(Part::Months, months), (Part::Days, days), (Part::Nanos, nanos)] {
+				Self::emit_list(f, &part_of(kind_a, position_a, part));
+				Self::emit_list(f, &part_of(kind_b, position_b, part));
+				Self::emit_list(f, &[I::I64Sub, I::LocalSet(local)]);
+			}
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				// an exact difference: the sign of its nanoseconds
+				I::LocalGet(months), I::LocalGet(days), I::I64Or, I::I64Eqz, I::If(BlockType::Empty),
+					I::LocalGet(nanos), I::I64Const(0), I::I64GtS, I::LocalGet(nanos), I::I64Const(0), I::I64LtS,
+					I::I32Sub, I::Return,
+				I::End,
+				I::LocalGet(days), I::LocalGet(months), I::I64Const(SHORTEST_MONTH_DAYS), I::I64Mul, I::I64Add,
+				I::LocalSet(fewest_days),
+				I::LocalGet(days), I::LocalGet(months), I::I64Const(LONGEST_MONTH_DAYS), I::I64Mul, I::I64Add,
+				I::LocalSet(most_days),
+				// negative months take more days off the longer they are
+				I::LocalGet(months), I::I64Const(0), I::I64LtS, I::If(BlockType::Empty),
+					I::LocalGet(fewest_days), I::LocalGet(most_days), I::LocalSet(fewest_days), I::LocalSet(most_days),
+				I::End,
+				I::LocalGet(fewest_days), I::I64Const(DAY_NANOS), I::I64Mul, I::LocalGet(nanos), I::I64Add,
+				I::I64Const(HOUR_NANOS), I::I64Sub, I::I64Const(0), I::I64GtS, I::If(BlockType::Empty),
+					I::I32Const(1), I::Return,
+				I::End,
+				I::LocalGet(most_days), I::I64Const(DAY_NANOS), I::I64Mul, I::LocalGet(nanos), I::I64Add,
+				I::I64Const(HOUR_NANOS), I::I64Add, I::I64Const(0), I::I64LtS, I::If(BlockType::Empty),
+					I::I32Const(-1), I::Return,
+				I::End,
+			]);
+			s.emit_time_failure(f, &format!("cannot order durations that compare differently on different dates ({LENGTHS_VARY})"));
+		});
 	}
 
 	/// Required, not merely emitted: emit_all_functions builds node_add without times, whose refusals would mark the text
