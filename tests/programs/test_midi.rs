@@ -129,3 +129,16 @@ fn a_program_receives_a_device_message() {
 	assert!(output.contains("yes"), "the input is listed: {output}");
 	assert!(output.contains("[144 60 100]"), "{output}");
 }
+
+// card port-name: a name part shared by several devices is a loud error naming them; an exact name or a part only one
+// device has picks that device
+#[test]
+fn a_port_name_shared_by_several_devices_is_ambiguous() {
+	use warp::sound::midi::chosen_port;
+	let names = ["IAC Driver Bus 1", "IAC Driver Bus 2", "Keystation"].map(String::from);
+	let error = chosen_port("IAC", &names, "output").unwrap_err();
+	assert!(error.contains("IAC Driver Bus 1") && error.contains("IAC Driver Bus 2"), "{error}");
+	assert_eq!(chosen_port("Bus 2", &names, "output").unwrap(), "IAC Driver Bus 2");
+	assert_eq!(chosen_port("IAC Driver Bus 1", &names, "output").unwrap(), "IAC Driver Bus 1");
+	assert_eq!(chosen_port("", &names, "output").unwrap(), "IAC Driver Bus 1");
+}
