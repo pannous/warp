@@ -1065,7 +1065,11 @@ fn value_children(node: &Node) -> Vec<&Node> {
 		Node::List(items, Bracket::Square, _) => items.iter().collect(),
 		Node::List(items, bracket, _) => match items.split_first() {
 			Some((first, rest)) if word(first) == RETURN_WORD => rest.iter().collect(),
-			Some((Node::Symbol(_), arguments)) if *bracket == Bracket::Round => arguments.iter().collect(),
+			Some((callee, arguments))
+				if *bracket == Bracket::Round && matches!(callee.drop_meta(), Node::Symbol(_)) =>
+			{
+				arguments.iter().collect()
+			}
 			_ => vec![],
 		},
 		_ => vec![],
