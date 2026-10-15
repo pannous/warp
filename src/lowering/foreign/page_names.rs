@@ -45,6 +45,11 @@ const BIND_ATTRIBUTE: &str = "bind";
 /// jQuery's `$('#who')`
 const JQUERY_WORD: &str = "$";
 const ID_SELECTOR: char = '#';
+/// How names_given_with_kinds and bindings say what the program binds a name as
+const VARIABLE_KIND: &str = "variable";
+const FIELD_KIND: &str = "field";
+const PARAMETER_KIND: &str = "parameter";
+const LOOP_VARIABLE_KIND: &str = "loop variable";
 const OLD_FORM_REASON: &str = "page ids are names: `who` is the element, `$who` its value (card page-ids)";
 
 /// An element of the program's markup that has an id
@@ -141,17 +146,38 @@ fn attribute_value(item: &Node, name: &str, defined: &HashSet<String>) -> Option
 	}
 }
 
-/// An id that is also a variable or function of the program: the error naming both; a variable of a field's id
-/// is what `bind:` is for (`input{ id: "name" }` + `name = $name`, the most common clash)
+/// An id the program also binds, as a variable, function, parameter or loop variable: the error naming both; a
+/// variable of a field's id is what `bind:` is for (`input{ id: "name" }` + `name = $name`, the most common clash)
 fn clash_with_definition(program: &Node, elements: &BTreeMap<String, PageElement>) -> Option<Node> {
-	let functions = crate::analyzer::function_definitions(program).user_functions;
-	let assigned: HashSet<String> = program.assigned_names(|op| matches!(op, Op::Assign | Op::Define));
-	let (id, element) = elements.iter().find(|(id, _)| functions.contains_key(*id) || assigned.contains(*id))?;
-	let error = match functions.contains_key(id) {
-		true => clash_error(program, id, element, &format!("the function {id}"), false),
-		false => clash_error(&assignment_of(program, id), id, element, &format!("the variable {id}"), true),
-	};
+	let bound = bindings(program);
+	let (id, element) = elements.iter().find(|(id, _)| bound.contains_key(*id))?;
+	let kind = bound[id];
+	let error = clash_error(&first_use(program, id), id, element, &format!("the {kind} {id}"), kind == VARIABLE_KIND);
 	Some(error.into_error())
+}
+
+/// Every name the program binds and how: variables, functions, parameters (`f(x) := …`, `def f(x) {…}`, `x => …`)
+/// and loop variables; a data key or attribute (a field) binds none
+fn bindings(program: &Node) -> BTreeMap<String, &'static str> {
+	let mut bound = BTreeMap::new();
+	for (name, kind) in crate::soft_keywords::names_given_with_kinds(program) {
+		if kind != FIELD_KIND {
+			bound.entry(name).or_insert(kind);
+		}
+	}
+	program.visit(&mut |node| {
+		if let Some(head) = crate::lowering::nodes::function_head(node) {
+			for parameter in head.parameters().into_iter().filter_map(crate::lowering::nodes::parameter_name) {
+				bound.entry(parameter).or_insert(PARAMETER_KIND);
+			}
+		}
+		if let Node::List(items, _, _) = node {
+			if let Some(variable) = crate::lowering::nodes::for_in_variable(items) {
+				bound.entry(variable).or_insert(LOOP_VARIABLE_KIND);
+			}
+		}
+	});
+	bound
 }
 
 /// "name is two things here: the page element of id name (`input{ id: "name" }`) and the variable name", with the
@@ -170,16 +196,18 @@ fn clash_error(at: &Node, id: &str, element: &PageElement, other: &str, is_varia
 	)
 }
 
-/// The first `id = …` of the program, with its position
-fn assignment_of(program: &Node, id: &str) -> Node {
-	let mut found = None;
+/// The innermost expression of the program that names `id`, where it is bound or used first
+fn first_use(program: &Node, id: &str) -> Node {
+	let mut innermost: Option<(usize, &Node)> = None;
 	program.visit(&mut |node| {
-		let is_assignment = matches!(node.drop_meta(), Node::Key(target, Op::Assign | Op::Define, _) if target.drop_meta().is_symbol(id));
-		if found.is_none() && is_assignment {
-			found = Some(node.clone());
+		if matches!(node, Node::Key(..) | Node::List(..)) && node.mentions(id) {
+			let size = node.serialize().len();
+			if innermost.is_none_or(|(smallest, _)| size < smallest) {
+				innermost = Some((size, node));
+			}
 		}
 	});
-	found.unwrap_or_else(|| program.clone())
+	innermost.map_or_else(|| program.clone(), |(_, node)| node.clone())
 }
 
 impl PageNames {

@@ -60,6 +60,13 @@ fn an_id_clashing_with_a_variable_is_an_error_naming_both() {
 }
 
 #[test]
+fn an_id_clashing_with_a_parameter_or_loop_variable_is_an_error() {
+	fails_with(&format!("{INPUT}for who in [1, 2] {{ print who }}"), "the loop variable who");
+	fails_with(&format!("{INPUT}f(who) := who + 1"), "the parameter who");
+	fails_with(&format!("{INPUT}xs = [1, 2].map(who => who * 2)"), "the parameter who");
+}
+
+#[test]
 fn an_id_clashing_with_a_function_or_word_is_an_error() {
 	fails_with("input{ id: \"greet\" }\ngreet(x) := x", "the function greet");
 	fails_with("p{ id: \"print\" }\nprint", "the word print");
