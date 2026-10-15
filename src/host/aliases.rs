@@ -52,7 +52,9 @@ fn random_forms(node: Node) -> Node {
 	}
 	let node = children_rewritten(node, random_forms);
 	match comprehension_head(node) {
-		Ok((head, rest, bracket, separator)) => Node::List([vec![random_call(head)], rest].concat(), bracket, separator),
+		Ok((head, rest, bracket, separator)) => {
+			Node::List([vec![random_call(head)], rest].concat(), bracket, separator)
+		}
 		Err(node) => random_call(node),
 	}
 }
