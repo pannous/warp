@@ -102,6 +102,10 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 		let typed = !TRUTH_TYPES.contains(&name.to_lowercase().as_str());
 		arities.entry(name).or_insert(Arity { fewest: 1, most: 1, typed_first: typed, converts: true });
 	}
+	// `round(floor x)`, `upper(lower t)`: a library word of a typed value nests like a function of its parameters
+	for (name, count) in library_calls_used(&program) {
+		arities.entry(name).or_insert(Arity { fewest: count, most: count, typed_first: true, converts: false });
+	}
 	if arities.is_empty() {
 		return program;
 	}
@@ -193,6 +197,21 @@ fn type_calls_used(program: &Node) -> HashSet<String> {
 	});
 	let names = crate::soft_keywords::names_given(program);
 	used.retain(|name| !names.contains(name));
+	used
+}
+
+/// The library words the program calls and does not name itself whose first parameter is typed, with their arity
+fn library_calls_used(program: &Node) -> HashMap<String, usize> {
+	let mut used = HashMap::new();
+	program.visit(&mut |node| {
+		if let Node::Symbol(name) = node {
+			if let Some(count) = crate::lowering::library_signatures::typed_first_arity(name) {
+				used.insert(name.clone(), count);
+			}
+		}
+	});
+	let names = crate::soft_keywords::names_given(program);
+	used.retain(|name, _| !names.contains(name));
 	used
 }
 
@@ -593,6 +612,11 @@ fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &m
 						_ if element_wise_parts(value).is_some() => true,
 						_ if crate::filled_lists::typed_array_value(value, &variables).is_some() => true,
 						Node::Empty => appended.contains(name),
+						// `x = floor [1.5 2.5]`: a broadcast over a list literal
+						Node::List(items, bracket, separator) => {
+							broadcasting_call(items, bracket, separator, functions)
+								.is_some_and(|(_, argument)| is_list_literal(argument))
+						}
 						// `xs = xs + [i]`
 						Node::Key(left, Op::Add, right) => {
 							matches!(left.drop_meta(), Node::Symbol(same) if same == name)
