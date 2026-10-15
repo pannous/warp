@@ -50,8 +50,8 @@ EndDrawing()
 // Busy wait delay to keep window visible
 delay = 0
 while(delay < 500000000) {
-    delay++
-}
+	delay++
+	}
 
 // Clean up
 CloseWindow()

@@ -4,12 +4,13 @@ name: Playground
 # The browser playground (web/playground, notes/web_playground.md) on GitHub Pages, custom domain warp.pannous.com:
 # the warp compiler built for wasm32-unknown-unknown without the native feature (warp.wasm optimized, warp.debug.wasm
 # with names and line tables: ?debug), the page, samples/*.warp and the jco-transpiled components (components.js).
-# Deploys on a push to main that changes the compiler, the page or the samples, and by hand
-# (`gh workflow run Playground -R pannous/warp`).
+# Stage 2 of 2 (user 2026-10-15): the Integrator pushes main after the native gate (stage 1) and never waits for this.
+# Hourly, the latest main is built, checked in the browsers and deployed, if it changed the compiler, the page or the
+# samples since the last green run; by hand at once (`gh workflow run Playground -R pannous/warp`) for an urgent fix or
+# a branch check. A failure keeps the last good site up and is fixed forward.
 on:
-  push:
-    branches: [ main ]
-    paths: [ "src/**", "crates/**", "web/playground/**", "samples/**", "Cargo.toml", "Cargo.lock", ".github/workflows/pages.yml" ]
+  schedule:
+    - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
       runner:
@@ -19,6 +20,8 @@ on:
 
 permissions:
   contents: read
+  # the hourly run reads the last green run's commit (job changed)
+  actions: read
   pages: write
   id-token: write
 
@@ -36,7 +39,29 @@ env:
   AGENT_BROWSER_ARGS: --enable-unsafe-webgpu,--enable-unsafe-swiftshader,--use-webgpu-adapter=swiftshader,--enable-features=Vulkan
 
 jobs:
+  # the hourly run builds only when main changed what the site is made of since the last green run; a dispatch always
+  changed:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.since.outputs.run }}
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+    - id: since
+      env:
+        GH_TOKEN: ${{ github.token }}
+        SITE_PATHS: src crates web/playground samples Cargo.toml Cargo.lock .github/workflows/pages.yml
+      run: |
+        if [ "${{ github.event_name }}" != schedule ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+        green=$(gh run list -R "$GITHUB_REPOSITORY" -w Playground -b main -s success -L 1 --json headSha -q '.[0].headSha')
+        echo "last green run: ${green:-none}, now: $GITHUB_SHA"
+        if [ -n "$green" ] && git cat-file -e "$green" 2>/dev/null && git diff --quiet "$green" HEAD -- $SITE_PATHS; then
+          echo "run=false"; else echo "run=true"; fi >> "$GITHUB_OUTPUT"
+
   build:
+    needs: changed
+    if: needs.changed.outputs.run == 'true'
     runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
     - uses: actions/checkout@v7
@@ -76,6 +101,8 @@ jobs:
   # a branch check runs the browser suite only when the branch changes code or tests (docs-only branches skip it);
   # main always runs it
   scope:
+    needs: changed
+    if: needs.changed.outputs.run == 'true'
     runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     outputs:
       suite: ${{ steps.changes.outputs.suite }}

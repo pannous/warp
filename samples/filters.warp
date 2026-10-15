@@ -8,7 +8,7 @@ loudness = -9 dB
 filter = "lowpass"              // or "highpass", "bandpass"
 cutoff = 900                    // in Hz
 resonance = 4.0                 // Q, peaks at the cutoff (0.707: flat)
-melody([A2 C3 E3 A3], 1/2 beat)
+melody([A2 C3 E3 A3], 1 / 2 beat)
 
 unison = 3                      // three voices per note
 detune = 0.15                   // spread over 0.15 semitones: a fuller sound

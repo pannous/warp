@@ -43,6 +43,15 @@ as warp functions, `paint(tunnel, width, height)` compiling them; the same funct
    `[x:1, y:2]`), an instance's field and a tagged object's field all answer first. Not a vector (5 items, bools, a
    component beyond it): `no field x`. Names: words::swizzle_components; probe probes/swizzles.warp.
 
+5. DONE (branch visualizer-mp3, user via warp-interviewer 2026-10-15): samples/gpu_visualizer_warp.warp lost its music
+   bookkeeping (synthesized tune, peaks, kick, loudest band) and plays mozart.mp3: `spectrum(song, time, bands)` of a
+   file name is measured by the host (src/sound/spectrum.rs: decoded once and kept, Goertzel as lib's spectrum; a wav
+   gives the same levels), the levels turned up by `sqrt(level * loudness)`, `sound_seconds(song)` ends the loop. Native
+   only (excluded_samples.txt; card spectrum-song for the browser host). `shader_of(f)` is the WGSL paint(f, …) compiles
+   f to, statements indented by their braces (kernels.rs indented); samples/warp_compiled_wgsl_shader.warp is the short
+   demo: three functions painted as one shader, its WGSL printed. Its start is the compile (card compiling-samples,
+   shader-cache: cache-compiled-shader).
+
 ## Questions (warp-interviewer)
 - S1 DECIDED (user, 2026-10-15): `.x .y .z .w` and swizzles (`.xy`, `.xyy`, `.zyx`) on lists of 2–4 numbers,
   everywhere, the CPU too. Built in step 4.

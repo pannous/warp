@@ -5,7 +5,7 @@
 //   translate(messages, "de", "cart", { count: 3 }) → "3 Artikel"
 // A language the messages lack, or a message one language lacks, comes from the first language (de-AT reads de first).
 
-translate(messages:any, language:text, key:text, values:any) := {
+translate(messages: any, language: text, key: text, values: any) := {
 	let message = i18n_message(messages, language, key)
 	var chosen = message
 	if not (message is text) { chosen = i18n_plural_form(message, plural_category(language, values["count"])) }
@@ -13,7 +13,7 @@ translate(messages:any, language:text, key:text, values:any) := {
 }
 
 // The message of a key: in the language, its base language (de for de-AT), else the first language
-i18n_message(messages:any, language:text, key:text) := {
+i18n_message(messages: any, language: text, key: text) := {
 	let base = split(language, "-")[0]
 	for candidate in [language, base, keys(messages)#1] {
 		if contains(keys(messages), candidate) {
@@ -25,20 +25,20 @@ i18n_message(messages:any, language:text, key:text) := {
 }
 
 // A plural message's form for the category, else its form other
-i18n_plural_form(forms:any, category:text) := {
+i18n_plural_form(forms: any, category: text) := {
 	if contains(keys(forms), category) { return forms[category] }
 	forms["other"]
 }
 
 // The text with each {name} replaced by the value named name
-i18n_filled(message:text, values:any) := {
+i18n_filled(message: text, values: any) := {
 	var out = message
 	for name in keys(values) { out = replace(out, "{" + name + "}", "" + values[name]) }
 	out
 }
 
 // The CLDR plural category of a whole number in a language: "one", "few", "other", …
-plural_category(language:text, n:int) := {
+plural_category(language: text, n: int) := {
 	let base = split(language, "-")[0]
 	let last = n % 10
 	let last_two = n % 100

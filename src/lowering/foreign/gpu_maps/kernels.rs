@@ -573,9 +573,10 @@ impl Translation {
 			.map(|(parameter, width)| format!("{PARAMETER_PREFIX}{parameter}: {}", wgsl_type(width)))
 			.collect();
 		let function = format!(
-			"fn {translated_name}({}) -> {} {{\n{declared}{body}}}",
+			"fn {translated_name}({}) -> {} {{\n{declared}{}}}",
 			parameters.join(", "),
-			wgsl_type(returned_width)
+			wgsl_type(returned_width),
+			indented(&body)
 		);
 		Some((function, returned_width))
 	}
@@ -736,6 +737,18 @@ fn spread_arguments(arguments: &[Node], count: usize) -> Option<&[Node]> {
 	(arguments.len() == count).then_some(arguments)
 }
 
+/// A function body's statements, one tab in and one more inside each `{ … }` (shader_of shows them)
+fn indented(body: &str) -> String {
+	let mut depth = 1;
+	let mut out = String::new();
+	for line in body.lines() {
+		depth -= line.starts_with('}') as usize;
+		out += &format!("{}{line}\n", "\t".repeat(depth));
+		depth += line.ends_with('{') as usize;
+	}
+	out
+}
+
 /// A gray of the paper or ink shade as a WGSL color
 fn gray(shade: u8) -> String {
 	let level = float_literal(shade as f64 / 255.0);
@@ -827,6 +840,9 @@ fn painted_function(node: &Node) -> Option<Node> {
 	};
 	let on_cpu =
 		switched_off() || crate::parallel::is_annotated(node, CPU_ATTRIBUTE) || node.attribute(CPU_ATTRIBUTE).is_some();
+	if paint.is_symbol(SHADER_OF_WORD) {
+		return shader_of(arguments);
+	}
 	if !paint.is_symbol(PAINT_WORD) {
 		return None;
 	}
@@ -855,6 +871,24 @@ fn painted_function(node: &Node) -> Option<Node> {
 	// the prelude's name of pixel_color, which no parse gives (library_words names prelude words after this pass)
 	let pixel_color = crate::modules::prelude_name(PIXEL_COLOR).map(Node::Symbol)?;
 	Some(crate::law::substitute(&lowered, &HashMap::from([(PIXEL_COLOR.to_string(), pixel_color)])))
+}
+
+/// `shader_of(f)`: the WGSL fragment shader paint(f, width, height) compiles f(x, y) to, as a text; an error where WGSL
+/// cannot compute f (then paint computes it on the CPU)
+fn shader_of(arguments: &[Node]) -> Option<Node> {
+	let [function] = spread_arguments(arguments, 1)? else {
+		return None;
+	};
+	let name = function.drop_meta().symbol_name()?.to_string();
+	let painted = program_function(&name).filter(|called| called.parameters.len() == 2)?;
+	Some(match fragment_shader(&name, &painted) {
+		Some((shader, _)) => Node::Text(shader),
+		None => crate::warp_parser::parse(&format!(
+			"raise {}",
+			Node::Text(format!("{SHADER_OF_WORD}: WGSL cannot compute {name}, paint computes it on the CPU"))
+				.serialize()
+		)),
+	})
 }
 
 /// The fragment shader painting each pixel the color of `function` at its column and row, and the entries of its values:

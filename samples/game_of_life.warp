@@ -13,66 +13,66 @@ def cell(x, y) { return grid#(y * width + x + 1) }
 
 // Initialize with glider
 def spawn_glider(x, y) {
-    for (dx, dy) in [(1, 0), (2, 1), (0, 2), (1, 2), (2, 2)] {
-        grid#((y + dy) * width + x + dx + 1) = true
-    }
+	for (dx, dy) in [(1, 0), (2, 1), (0, 2), (1, 2), (2, 2)] {
+		grid#((y + dy) * width + x + dx + 1) = true
+	}
 }
 
 spawn_glider(2, 2)
 
 def count_neighbors(x, y) {
-    neighbors = 0
-    for dy in -1 to 1 {
-        for dx in -1 to 1 {
-            if dx != 0 or dy != 0 {
-                nx = (x + dx + width) % width
-                ny = (y + dy + height) % height
-                if cell(nx, ny) { neighbors = neighbors + 1 }
-            }
-        }
-    }
-    return neighbors
+	neighbors = 0
+	for dy in - 1 to 1 {
+		for dx in - 1 to 1 {
+			if dx != 0 or dy != 0 {
+				nx = (x + dx + width) % width
+				ny = (y + dy + height) % height
+				if cell(nx, ny) { neighbors = neighbors + 1 }
+			}
+		}
+	}
+	return neighbors
 }
 
 def step() {
-    next = []
-    for y in 0..height {
-        for x in 0..width {
-            n = count_neighbors(x, y)
-            // Rules: B3/S23
-            next.push(n == 3 or (cell(x, y) and n == 2))
-        }
-    }
-    grid = next
+	next = []
+	for y in 0..height {
+		for x in 0..width {
+			n = count_neighbors(x, y)
+			// Rules: B3/S23
+			next.push(n == 3 or (cell(x, y) and n == 2))
+		}
+	}
+	grid = next
 }
 
 def render() {
-    for y in 0..height {
-        line = ""
-        for x in 0..width {
-            line = line + (if cell(x, y) then "█" else " ")
-        }
-        print line
-    }
+	for y in 0..height {
+		line = ""
+		for x in 0..width {
+			line = line + (if cell(x, y) then "█" else " ")
+		}
+		print line
+	}
 }
 
 // Main loop: a few generations instead of forever; each one is drawn over the last:
 // "\e[2J" clears the terminal, "\e[H" puts the cursor back at its top left (the playground shows frames alike)
 print "\e[2J"
 for generation in 0 to generations {
-    print "\e[H" + "generation ${generation}"
-    render()
-    if generation < generations {
-        step()
-        sleep 150ms
-    }
+	print "\e[H" + "generation ${generation}"
+	render()
+	if generation < generations {
+		step()
+		sleep 150ms
+	}
 }
 
 // the glider moved two cells right and down: sum of y*100+x over live cells
 checksum = 0
 for y in 0..height {
-    for x in 0..width {
-        if cell(x, y) { checksum = checksum + y * 100 + x }
-    }
+	for x in 0..width {
+		if cell(x, y) { checksum = checksum + y * 100 + x }
+	}
 }
 checksum

@@ -3,6 +3,8 @@
 
 use sound
 
+# def play(Sample):=print "Don't overwrite existing module functions without warning"
+
 // a kick made and saved here, so the sample has a file to read; any recording plays the same way
 release = 0.08
 melody([C2 G1], 60ms)
@@ -10,6 +12,7 @@ save sound as "kick.wav"
 release = 0.005
 
 kick = sample("kick.wav")
+print type of kick
 play(kick)                                  // as recorded
 play_sample(kick, 2)                        // twice as fast, an octave up
 play_sample(kick, 0.5)                      // half as fast, an octave down

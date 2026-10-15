@@ -27,6 +27,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - topic-priority (2026-10-15, user; card todo-topics): the column is the priority, for topic cards too: a topic sits
   in Now/Next/Soon/Later beside its cards (new topics Soon); Roadmaps holds only unprioritized topics. A Priority
   field may exist only if it always matches the column. `todo move sound Next --all` raises a topic with its cards.
+  The user's own cards stay where the user put them: drafts, and since 2026-10-15 every issue without the line
+  "Added by <session> with `todo add`." (older ones: ~/dev/bin/probes/card_creators.py matches data/github-quota/calls.tsv).
 - long-functions (2026-10-14, user): splitting an overly long function is a cleanup card of its own, also when it
   adds a few lines; the "only if it removes lines" rule is for deduplication, not for splits. Split by concept (one
   named helper per case group or per embedded warp template), not into numbered parts.

@@ -252,9 +252,47 @@ fn builtin_wrapper(word: &str) -> Option<Node> {
 	let (params, _) = crate::lowering::library_signatures::library_signature(word)?;
 	let params: Vec<Node> = params.into_iter().map(Node::Symbol).collect();
 	let head = call(&builtin_function_name(word), params.clone());
-	// `abs`, `sqrt`: a prefix operator, `abs x`
+	Some(key(head, Op::Define, word_applied(word, params)))
+}
+
+/// `sqrt 9` where a function is expected: the word `sqrt` and the next argument `9`; also before a label,
+/// `sqrt on: xs` → `sqrt`, `on: xs`
+pub(crate) fn unfolded_operator_word(argument: &Node) -> Option<[Node; 2]> {
+	if let Node::Key(applied, Op::Colon, value) = argument.drop_meta() {
+		let [word, label] = unfolded_operator_word(applied)?;
+		return Some([word, key(label, Op::Colon, value.as_ref().clone())]);
+	}
+	if !is_operator_word(argument) {
+		return None;
+	}
+	let Node::Key(_, op, operand) = argument.drop_meta() else {
+		return None;
+	};
+	let (word, _) = crate::warp_parser::PREFIX_OPERATOR_WORDS.into_iter().find(|(_, known)| known == op)?;
+	Some([symbol(word), operand.as_ref().clone()])
+}
+
+/// The parser's mark on an operator spelled as a word and applied (words::OPERATOR_WORD_MARK)
+fn is_operator_word(node: &Node) -> bool {
+	let Node::Meta { node: inner, data } = node else {
+		return false;
+	};
+	matches!(data.as_ref(), Node::Key(mark, _, _) if mark.name() == crate::words::OPERATOR_WORD_MARK)
+		|| is_operator_word(inner)
+}
+
+/// The arguments with the one at `index` unfolded where it is an applied operator word (unfolded_operator_word)
+pub(crate) fn with_operator_word_unfolded(mut arguments: Vec<Node>, index: usize) -> Vec<Node> {
+	if let Some(unfolded) = arguments.get(index).and_then(unfolded_operator_word) {
+		arguments.splice(index..=index, unfolded);
+	}
+	arguments
+}
+
+/// The library word applied to `arguments`; `abs`, `sqrt` are prefix operators, `abs x`
+pub(crate) fn word_applied(word: &str, arguments: Vec<Node>) -> Node {
 	let operator = crate::warp_parser::PREFIX_OPERATOR_WORDS.iter().find(|(spelled, _)| *spelled == word);
-	let body = match (operator, params.as_slice()) {
+	match (operator, arguments.as_slice()) {
 		(Some((_, op)), [operand]) => key(Node::Empty, *op, operand.clone()),
 		// `xs.add(x)`, `xs.insert(x, at: at)`: a list-changing method is called on its list
 		(None, [list, rest @ ..]) if crate::list_mutations::is_list_mutating_method(word) => {
@@ -264,9 +302,8 @@ fn builtin_wrapper(word: &str) -> Option<Node> {
 			};
 			key(list.clone(), Op::Dot, call(word, rest.iter().map(labeled).collect()))
 		}
-		_ => call(word, params),
-	};
-	Some(key(head, Op::Define, body))
+		_ => call(word, arguments),
+	}
 }
 
 /// The variables a lambda captures by value: those the program assigns and its loop variables (`for n in xs`, what
