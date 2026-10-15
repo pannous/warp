@@ -17,7 +17,7 @@ use crate::words::{FOR_WORD, FROM_WORD, IN_WORD, OF_WORD, PRINT_WORD};
 use std::collections::HashSet;
 
 /// The words naming a selection of a value's parts, which `in` and `from` select like `of`: `words in t`
-const SELECTOR_WORDS: [&str; 6] = ["chars", "characters", "words", "lines", "keys", "values"];
+const SELECTOR_WORDS: [&str; 7] = ["chars", "characters", "letters", "words", "lines", "keys", "values"];
 const SELECTING_PREPOSITIONS: [&str; 2] = [IN_WORD, FROM_WORD];
 /// `print all words in t`: the walk's optional word before the selection
 const ALL_WORD: &str = "all";

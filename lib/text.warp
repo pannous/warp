@@ -15,6 +15,9 @@ format(template, values) := {
 // the words between runs of spaces
 words(t) := [w for w in split(t, " ") if w != ""]
 lines(t) := split(t, "\n")
+// the letters of a text, no digits, spaces or punctuation: letters of "a1 b!" is ['a' 'b'] (decision 2026-10-15);
+// a letter with a case beyond ASCII too (é, Ω), not yet the caseless scripts (card unicode-letters)
+letters(t) := [c for c in chars(t) if is_alpha(c) or upper(c) != lower(c)]
 capitalize(t) := if t == "" then t else upper(t[0]) + t[1..]
 center(t, width) := pad_right(pad_left(t, (width + count(t))//2), width)
 title(t) := join([capitalize(w) for w in words(t)], " ")
