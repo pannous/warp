@@ -174,9 +174,9 @@ BRUSH_WAIT_MS = 8000  # the sample paints a frame every 16 ms; a software GPU ta
 BRUSH_POLL_MS = 250
 PAPER_FROM = 240  # a channel this light or lighter on all three: the sample's paper (0.98), no brush
 # card register-fingers: a finger dragged over samples/finger_paint's canvas paints a stroke (the iPad's Safari took the
-# touch over for scrolling). First a drag over the canvas set back to the browser's touch handling, which only tells
-# whether this browser takes a touch over at all (else the check can't fail); then the real one, on a part of the
-# canvas the first stroke can't reach
+# touch over for scrolling). Then, only told, a drag over the canvas set back to the browser's touch handling, on a
+# part the first stroke didn't reach: whether this browser takes a touch over at all (else the check can't fail); it
+# goes last, as Chrome's swipe went back in the page's history, to another example
 FINGERS = "(a finger paints in samples/finger_paint)"
 FINGERS_SAMPLE = "finger_paint"
 FINGER_DRAG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "touch_drag.mjs")
@@ -737,12 +737,10 @@ def fingers_wrong():
 	drag = lambda share: subprocess.run(["node", FINGER_DRAG, browser("get", "cdp-url"), *map(str, share)], capture_output=True, text=True, timeout=60).stdout.strip()
 	touch_action = lambda value: browser("eval", f'[...document.querySelectorAll("#paintings canvas")].at(-1).style.touchAction = "{value}"')
 	pixel_painted(0)  # the canvas is shown
-	touch_action("auto")
-	dragged = drag(FINGERS_BROWSER_TOUCH)
-	print(f"{FINGERS}: with the browser's own touch handling, {dragged}: {pixel_painted(sum(FINGERS_BROWSER_TOUCH) / 2)}")
-	touch_action("none")
 	dragged = drag(FINGERS_PAINTED)
 	shown = pixel_painted(sum(FINGERS_PAINTED) / 2)
+	touch_action("auto")
+	print(f"{FINGERS}: with the browser's own touch handling, {drag(FINGERS_BROWSER_TOUCH)}: {pixel_painted(sum(FINGERS_BROWSER_TOUCH) / 2)}")
 	return [] if "painted" in shown else [f"a finger {dragged} over samples/{FINGERS_SAMPLE}: its middle shows {shown}, expected a stroke"]
 
 
