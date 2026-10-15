@@ -143,7 +143,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - cleanup-cuts-2 (2026-10-14): tests whose setup uses a cut spelling get only that line rewritten (`stored people:
   [Person]`, `play(440Hz, 10ms)`), assertions untouched. All phrase calls are parked, `play hum for 2s`, `melody …
   each 20ms`, `add 1 to 2` and gap feeding included, until prepositions become call keywords in the general call
-  mechanism (`move x from a to b`, card prepositions-call); sound uses calls until then. Version literals stay but
+  mechanism (`move x from: a to: b` per labels-calls, card prepositions-call); sound uses calls until then. Version literals stay but
   get rebuilt small ("why do we need 200 lines for this simple pattern?"), without the semver crate. The defined-twice
   diagnostic is cut. `nonlocal` only loses its error and checks: the cells behind P124 sharing stay, a nested def
   also shares `n += 1` without it, a plain `y = 5` there stays local unless `nonlocal y` (P124). rustfmt `use_small_heuristics = "Max"` comes
@@ -431,8 +431,12 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   becomes `any`.
 - P37 named arguments set parameters and free variables; no implicit capture, a missing argument is an error. P216
   named arguments run left to right as written.
-- P52 a phrase-defined function is called with its own prepositions (`add 1 to 2`); elsewhere `to` is a range, `of`
-  a field lookup. `f - x` with a user function is `f(-x)`.
+- P52 a phrase-defined function is called with its own prepositions (`add 1 to: 2`, see labels-calls); elsewhere `to`
+  is a range, `of` a field lookup. `f - x` with a user function is `f(-x)`.
+- labels-calls (2026-10-15, user; revises P52 and prepositions-call): a preposition labelling an argument in a call
+  always takes a colon: `save file in: folder`, `play C4 for: 1s`, `move x from: 1 to: 5`, `save sound as: "x.wav"`.
+  Universal for every preposition and `as`, with/from/into/by included (they get a special meaning soon). Definitions
+  keep the bare form, `play(tone, for duration)`; bare preposition labels in calls are dropped. Card labels-calls.
 - P24 suffix forms (`4 doubled`) call user functions. P164 a type word after a parameter name is its type
   (`phone number`); `phone-number:text` is one hyphenated name in declarations.
 - P132 `{f: x => x * 2}` holds a lambda; a type word after the colon makes a typed lambda. P133 `|x| x*2` is a lambda.
@@ -675,8 +679,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - sound-dsp (2026-10-15, user): the effects DSP is written once in Rust (src/sound/effects.rs, compiled into warp.wasm
   for the browser), lib/sound.warp calls it; a warp twin can follow with self-hosting.
 - save-sound (2026-10-15, user, replaces the render_sound alias answer): writing audio to a file is the general
-  `save` with an explicit object, overloaded by its type: `save sound as "song.wav"` / `save(sound, "song.wav")`,
-  likewise `save buffer as "x.raw"` and other savable values. render_sound goes; its name gives an I-meant hint
+  `save` with an explicit object, overloaded by its type: `save sound as: "song.wav"` / `save(sound, "song.wav")`,
+  likewise `save buffer as: "x.raw"` (colon per labels-calls) and other savable values. render_sound goes; its name gives an I-meant hint
   naming save.
 
 ## Old id index (superseded or historic; git has the text)
