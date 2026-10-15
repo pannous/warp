@@ -40,3 +40,15 @@ fn unambiguous_forms_do_not_warn() {
 		);
 	}
 }
+
+// reviewer: a call without a value has one reading, whatever its word: print, a program function returning nothing
+#[test]
+fn a_call_without_a_value_does_not_warn() {
+	for code in ["print 1 + 2", "say(x) := print x; say 1 + 2", "sleep 0 + 0"] {
+		let (_, warnings) = warnings_of(code);
+		assert!(
+			warnings.iter().all(|warning| !warning.contains("taking the whole expression")),
+			"{code}: {warnings:?}"
+		);
+	}
+}

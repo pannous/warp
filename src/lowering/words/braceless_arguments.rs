@@ -4,20 +4,17 @@
 //! which knows which words are functions there, before the reals and constant passes fold such calls.
 
 use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
-use crate::lowering::negated_calls::PRINT_WORDS;
 use crate::node::{Bracket, Node, Separator};
 
 /// The got-it topic of `square 3 + square(4)`
 const BRACELESS_ARGUMENT_TOPIC: &str = "braceless-call-operator";
 
-/// `f 3 + 4` with a function `f`, or `sqrt 4 + 5`: the warning, or the error the got-it settings make of it
-pub(crate) fn ask_braceless_argument(node: &Node, is_function: impl Fn(&Node) -> bool) -> Result<(), Node> {
+/// `f 3 + 4` with a function `f` whose call has a value, or `sqrt 4 + 5`: the warning, or the error the got-it settings
+/// make of it. A call without a value has one reading (`print 1 + 2`, a program function returning nothing)
+pub(crate) fn ask_braceless_argument(node: &Node, gives_value: impl Fn(&Node) -> bool) -> Result<(), Node> {
 	match node {
 		Node::List(items, Bracket::None, Separator::Space) => match items.as_slice() {
-			// `print 1 + 2` has one reading: nothing goes on with print's value
-			[function, argument] if is_function(function) && !PRINT_WORDS.contains(&function.name().as_str()) => {
-				ask_whole_argument(&function.name(), argument)
-			}
+			[function, argument] if gives_value(function) => ask_whole_argument(&function.name(), argument),
 			_ => Ok(()),
 		},
 		// the innermost Meta holds the operator word's mark: asked once, not again under each position around it
