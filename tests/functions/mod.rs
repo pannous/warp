@@ -49,6 +49,7 @@ mod test_definition_value;
 mod test_destructuring_in_a_body;
 mod test_deterministic_inference;
 mod test_dollar_body;
+mod test_dot_lambda; // card dot-lambda
 mod test_each_spellings;
 mod test_effect_block_operand;
 mod test_effects;

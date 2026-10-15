@@ -188,6 +188,47 @@ fn literal_function(node: &Node) -> Option<Lambda> {
 		.or_else(|| arrow_lambda(&it_function(node)?))
 }
 
+/// `xs.map(.floor)`, `people.sort(by: .age)`, `f = .name`: a leading-dot word in a code position, an argument in a call's
+/// parentheses or the value of `=` / `:=`, is the lambda `it => it.age` on its member, as Swift's `.member` (card
+/// dot-lambda), written out before any pass reads it so it goes the way of a written lambda. Element attributes and data
+/// entries are no code: `div{ class: .card }` keeps its symbol. `&floor` stays the reference to the function itself
+pub fn lower_member_lambdas(node: Node) -> Node {
+	match node {
+		Node::List(items, Bracket::Round, separator) => {
+			Node::List(items.into_iter().map(argument_lambda).collect(), Bracket::Round, separator)
+		}
+		Node::Key(target, op @ (Op::Assign | Op::Define), value) if member_of(&value).is_some() => {
+			Node::Key(target, op, Box::new(member_lambda(&value)))
+		}
+		Node::Meta { node, data } => Node::Meta { node: Box::new(lower_member_lambdas(*node)), data },
+		other => other.map_children(lower_member_lambdas),
+	}
+}
+
+/// An argument `.age` or `by: .age` as its lambda
+fn argument_lambda(argument: Node) -> Node {
+	match argument.drop_meta() {
+		_ if member_of(&argument).is_some() => member_lambda(&argument),
+		Node::Key(label, Op::Colon, value) if member_of(value).is_some() => {
+			Node::Key(label.clone(), Op::Colon, Box::new(member_lambda(value)))
+		}
+		_ => lower_member_lambdas(argument),
+	}
+}
+
+/// `it => it.age` of `.age`
+fn member_lambda(dot_word: &Node) -> Node {
+	let member = member_of(dot_word).expect("a dot word");
+	let it = || symbol(IMPLICIT_PARAMETER);
+	key(it(), Op::Arrow, key(it(), Op::Dot, symbol(member)))
+}
+
+/// `age` of `.age`
+fn member_of(node: &Node) -> Option<&str> {
+	let Node::Symbol(name) = node.drop_meta() else { return None };
+	name.strip_prefix('.').filter(|member| member.starts_with(|letter: char| letter.is_alphabetic()))
+}
+
 /// `map`, `filter`, `sorted` … as a word, whether or not the program defines a function of that name
 fn iteration_word(word: &Node) -> Option<&'static Iteration> {
 	let Node::Symbol(name) = word.drop_meta() else {
