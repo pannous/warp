@@ -32,10 +32,33 @@ pub fn is_time_call(node: &Node) -> bool {
 }
 /// A time call or arithmetic on one: `now`, `time_of(…) * n`, `d + 1 day` as the run builds it
 pub fn is_time_expression(node: &Node) -> bool {
+	holds_time(node, &HashSet::new())
+}
+
+/// A time expression, or arithmetic on a variable of `times` (time_variables): `x + 1 hour` of `x = now`
+pub fn holds_time(node: &Node, times: &HashSet<String>) -> bool {
 	match node.drop_meta() {
-		Node::Key(left, op, right) if op.is_arithmetic() => is_time_expression(left) || is_time_expression(right),
+		Node::Key(left, op, right) if op.is_arithmetic() => holds_time(left, times) || holds_time(right, times),
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => holds_time(&items[0], times),
+		Node::Symbol(name) => times.contains(name),
 		_ => is_time_call(node),
 	}
+}
+
+/// The variables every assignment gives a time: `x = now`, `later = x + 1 hour` (card variable-time)
+pub fn time_variables(program: &Node) -> HashSet<String> {
+	let mut times = HashSet::new();
+	let mut others = HashSet::new();
+	program.visit(&mut |part| {
+		if let Node::Key(target, Op::Assign | Op::Define, value) = part {
+			if let Node::Symbol(name) = target.drop_meta() {
+				let assigned = if holds_time(value, &times) { &mut times } else { &mut others };
+				assigned.insert(name.clone());
+			}
+		}
+	});
+	times.retain(|name| !others.contains(name));
+	times
 }
 /// The one field of an instant that needs no time zone
 pub const EPOCH_SECONDS: &str = "epoch_seconds";
@@ -629,6 +652,9 @@ fn apply(left: Value, op: Op, right: Value) -> Result<Value, String> {
 			Ok(Value::Duration(duration.times(n)))
 		}
 		(Value::Duration(a), Op::Eq, Value::Duration(b)) => a.equals(b).map(Value::Bool),
+		(Value::Duration(a), op, Value::Duration(b)) if op.is_comparison() && op != Op::Ne => {
+			Ok(Value::Bool(op.holds(a.compare(b)?)))
+		}
 		(Value::Duration(a), Op::Ne, Value::Duration(b)) => a.equals(b).map(|equal| Value::Bool(!equal)),
 		(Value::Duration(duration), Op::As, Value::Symbol(unit)) => converted(&duration, &Node::Symbol(unit)),
 		// `"on " + 2024-02-29`: a text joins the other's text, as list_join does at run time

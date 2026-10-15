@@ -325,6 +325,7 @@ pub fn lower(node: Node) -> Node {
 	let objects = assigned.objects.into_iter().filter_map(|(name, literal)| Some((name, literal?))).collect();
 	let instances = crate::traits::InstanceTypes::of(&node);
 	let call_results = call_results(&node, &context);
+	let times = crate::time::time_variables(&node);
 	Lowering {
 		context,
 		shadowed: RefCell::new(shadowed),
@@ -334,6 +335,7 @@ pub fn lower(node: Node) -> Node {
 		parameters: RefCell::new(vec![]),
 		defining: RefCell::new(vec![]),
 		call_results,
+		times,
 		temporaries: Counter::default(),
 	}
 	.expand(node)
@@ -462,6 +464,8 @@ struct Lowering {
 	defining: RefCell<Vec<(String, Vec<String>)>>,
 	/// Variables assigned the result of a user function call (call_results)
 	call_results: HashSet<String>,
+	/// Variables holding a time (time::time_variables): `(x + 1 hour).hour` reads the field
+	times: HashSet<String>,
 	temporaries: Counter,
 }
 
@@ -606,6 +610,12 @@ impl Lowering {
 			}
 			other => other,
 		}
+	}
+
+	/// The time variables not hidden by a parameter of the definition being lowered: `f(x) := (x - 5).abs` of `x = now`
+	fn times_here(&self) -> HashSet<String> {
+		let parameters = self.parameters.borrow();
+		self.times.iter().filter(|name| !parameters.contains(name)).cloned().collect()
 	}
 
 	fn is_parameter(&self, node: &Node) -> bool {
@@ -971,8 +981,9 @@ impl Lowering {
 			// a parenthesized object `({a:1}).a`, or quoted code `(data n*1).op` (node_api.rs)
 			Node::List(_, Bracket::Curly, _) => true,
 			_ if crate::blocks::quoted_data(variable).is_some() => true,
-			// a time the run computes: `(now + 1 hour).hour` (card field-grouped)
-			_ if crate::time::is_time_expression(inner) => true,
+			// a time the run computes: `(now + 1 hour).hour`, `(x + 1 hour).hour` of `x = now` (cards field-grouped,
+			// variable-time)
+			_ if crate::time::holds_time(inner, &self.times_here()) => true,
 			// an element of a computed list: `users.filter(…)#1.name`
 			_ => matches!(inner, Node::Key(_, Op::Hash, _)) && !is_plain_literal(variable),
 		}
