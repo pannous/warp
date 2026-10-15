@@ -356,6 +356,14 @@ const DIMENSION_NAMES: [(&str, Dimension); 4] = [
 	("duration", Dimension::Time),
 ];
 
+/// The name of a signature of one dimension: `length` of m, none of m/s
+fn dimension_name(signature: &Signature) -> Option<&'static str> {
+	match signature.as_slice() {
+		[(dimension, 1)] => DIMENSION_NAMES.iter().find(|(_, known)| known == dimension).map(|(name, _)| *name),
+		_ => None,
+	}
+}
+
 /// `time` and `duration`, types of the time module too: a quantity of seconds is both, any other value's test stays
 /// the time module's (`now is time`, `2 hours is duration`)
 fn is_time_type(node: &Node, own_names: &HashMap<String, Signature>) -> bool {
@@ -1012,11 +1020,15 @@ impl Inference {
 		}
 		let (value, signature) = self.infer(value)?;
 		if let Some(declared) = declared.filter(|declared| *declared != signature) {
-			return Err(Stop::Error(format!(
-				"DimensionError: {name} is declared {}, is given {}",
-				shown(&declared),
-				shown(&signature)
-			)));
+			let declared = match dimension_name(&declared) {
+				Some(dimension) => format!("{dimension} ({})", shown(&declared)),
+				None => shown(&declared),
+			};
+			let given = match dimension_name(&signature) {
+				Some(dimension) => format!("{} ({dimension})", shown(&signature)),
+				None => shown(&signature),
+			};
+			return Err(Stop::Error(format!("DimensionError: {name} is declared {declared}, is given {given}")));
 		}
 		if let Some(earlier) = self.variables.get(&name).filter(|earlier| **earlier != signature) {
 			return Err(Stop::Error(super::reassigned_dimension(

@@ -971,6 +971,8 @@ impl Lowering {
 			// a parenthesized object `({a:1}).a`, or quoted code `(data n*1).op` (node_api.rs)
 			Node::List(_, Bracket::Curly, _) => true,
 			_ if crate::blocks::quoted_data(variable).is_some() => true,
+			// a time the run computes: `(now + 1 hour).hour` (card field-grouped)
+			_ if crate::time::is_time_expression(inner) => true,
 			// an element of a computed list: `users.filter(…)#1.name`
 			_ => matches!(inner, Node::Key(_, Op::Hash, _)) && !is_plain_literal(variable),
 		}
