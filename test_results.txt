@@ -863,6 +863,7 @@ PASSED:
   ✓ control::test_unwrap::test_mutating_and_evaluating_bangs_keep_their_meaning
   ✓ control::test_unwrap::test_unwrap_gives_the_value
   ✓ control::test_unwrap::test_unwrap_of_nothing_or_an_error_is_loud
+  ✓ control::test_value_methods_are_functions::a_list_value_s_methods_are_functions
   ✓ control::test_variable_signals::a_condition_calling_a_function_watches_what_it_reads
   ✓ control::test_variable_signals::a_condition_ending_in_a_variable_keeps_its_block
   ✓ control::test_variable_signals::a_global_write_before_the_listener_is_not_seen
@@ -1395,6 +1396,8 @@ PASSED:
   ✓ functions::test_lambda_spellings::other_lambda_keywords
   ✓ functions::test_lambda_spellings::pipe_parameters
   ✓ functions::test_lambda_spellings::ruby_block_parameters
+  ✓ functions::test_lambda_tuple_arguments::a_juxtaposed_lambda_still_applies
+  ✓ functions::test_lambda_tuple_arguments::a_lambda_argument_of_an_immediately_called_lambda
   ✓ functions::test_lambdas::test_a_lambda_that_cannot_be_inlined_is_a_closure_value
   ✓ functions::test_lambdas::test_assigned_lambda_is_a_function
   ✓ functions::test_lambdas::test_block_called_with_bindings
@@ -2023,6 +2026,8 @@ PASSED:
   ✓ lists::test_typed_lists::test_mixed_list_stays_cons_cells
   ✓ lists::test_typed_lists::test_sum_of_a_typed_list_is_one_operation
   ✓ lists::test_typed_lists::test_zero_filled_int_list_is_an_array
+  ✓ lists::test_unit_word_text_in::a_text_naming_a_unit_is_looked_up_in_a_list
+  ✓ lists::test_unit_word_text_in::a_unit_symbol_still_counts
   ✓ lists::test_unpacking_declared::unpacking_checks_declared_types
   ✓ lists::test_unpacking_into_existing::unpacking_assigns_names_that_hold_numbers
   ✓ lists::test_unpacking::for_loop_unpacking
@@ -3137,6 +3142,8 @@ PASSED:
   ✓ parser::test_number_glyphs::test_vulgar_fractions_are_exact
   ✓ parser::test_one_line_statements::separated_prints_still_run
   ✓ parser::test_one_line_statements::two_prints_on_one_line_need_a_separator
+  ✓ parser::test_operator_word_keys::a_prefix_operator_word_names_a_key
+  ✓ parser::test_operator_word_keys::the_prefix_operator_word_stays_an_operator
   ✓ parser::test_parse_long_sources::a_long_source_parses_in_linear_time
   ✓ parser::test_parser_sugar::backslash_at_line_end_continues_the_statement
   ✓ parser::test_parser_sugar::block_comment_with_hash_is_ignored
@@ -3429,6 +3436,22 @@ PASSED:
   ✓ programs::test_sound_at::beats_place_a_block
   ✓ programs::test_sound_at::the_silence_before_stays_and_the_voice_goes_on
   ✓ programs::test_sound_at::the_words_it_lowers_to
+  ✓ programs::test_sound_buses::a_bus_takes_a_compressor_and_an_eq
+  ✓ programs::test_sound_buses::a_changed_effect_applies_from_the_voices_moment
+  ✓ programs::test_sound_buses::a_compressor_ducks_both_channels_together
+  ✓ programs::test_sound_buses::a_compressor_turns_loud_sounds_down_and_leaves_quiet_ones
+  ✓ programs::test_sound_buses::a_peak_eq_boosts_its_frequency_only
+  ✓ programs::test_sound_buses::a_reverb_bus_rings_after_its_last_sound
+  ✓ programs::test_sound_buses::a_sound_outside_the_bus_stays_dry
+  ✓ programs::test_sound_buses::a_sound_sent_to_a_delay_bus_echoes_where_it_was_silent
+  ✓ programs::test_sound_buses::a_task_and_the_program_share_a_bus
+  ✓ programs::test_sound_buses::an_effect_set_again_keeps_its_echoes
+  ✓ programs::test_sound_buses::an_effect_set_again_keeps_its_place_in_the_chain
+  ✓ programs::test_sound_buses::eq_bands_at_other_frequencies_add_up
+  ✓ programs::test_sound_buses::out_restores_the_bus_before
+  ✓ programs::test_sound_buses::shelves_boost_below_or_above_their_frequency
+  ✓ programs::test_sound_buses::the_mixer_changes_a_bus_at_its_frame
+  ✓ programs::test_sound_buses::the_mixer_runs_a_bus_on_its_sounds
   ✓ programs::test_sound_clock::sounds_queue_on_the_audio_clock
   ✓ programs::test_sound_clock::stop_sound_empties_the_queue
   ✓ programs::test_sound_clock::waiting_headless_takes_no_time
@@ -3450,6 +3473,7 @@ PASSED:
   ✓ programs::test_sound_fades::fade_sound_ramps_a_sound_down_in_the_render
   ✓ programs::test_sound_files::a_broken_music_file_fails
   ✓ programs::test_sound_files::a_music_file_plays_in_the_background
+  ✓ programs::test_sound_files::a_program_plays_the_file_beside_it
   ✓ programs::test_sound_files::only_a_music_file_plays
   ✓ programs::test_sound_filters::a_lowpass_filter_quiets_high_notes
   ✓ programs::test_sound_filters::a_program_variable_named_out_survives_the_filter
@@ -3679,6 +3703,8 @@ PASSED:
   ✓ text::test_chr::chr_is_the_inverse_of_ord
   ✓ text::test_codepoint_bytes::a_one_letter_text_has_its_utf8_bytes
   ✓ text::test_codepoint_bytes::one_letter_list_items_have_their_utf8_bytes
+  ✓ text::test_codepoint_counts::a_one_letter_text_counts_one_codepoint
+  ✓ text::test_codepoint_counts::a_one_letter_text_counts_one_grapheme
   ✓ text::test_constant_expression_text::a_constant_expression_converts_by_its_value
   ✓ text::test_constant_expression_text::the_text_of_a_global_is_its_value
   ✓ text::test_count_in::count_occurrences
@@ -4078,6 +4104,11 @@ PASSED:
   ✓ types::test_dispatch::the_method_closest_at_every_position_wins
   ✓ types::test_dispatch::the_most_specific_method_wins
   ✓ types::test_dispatch::two_equally_specific_methods_are_an_ambiguity_error
+  ✓ types::test_duration_comparison::test_a_duration_comparison_prints_a_truth
+  ✓ types::test_duration_comparison::test_an_order_that_depends_on_the_date_is_an_error
+  ✓ types::test_duration_comparison::test_bounds_that_hold_on_every_date
+  ✓ types::test_duration_comparison::test_durations_order
+  ✓ types::test_duration_comparison::test_durations_order_at_run_time
   ✓ types::test_element_field_writes::a_character_stored_into_a_list_of_unknown_type_stays_a_character
   ✓ types::test_element_field_writes::a_field_of_a_list_element_changes
   ✓ types::test_element_field_writes::a_list_field_of_an_element_checks_its_items
@@ -4803,6 +4834,7 @@ PASSED:
   ✓ web::test_deploy::a_program_without_routes_is_no_worker
   ✓ web::test_deploy::a_single_route_and_a_served_route_deploy
   ✓ web::test_deploy::deploy_names_a_browser_only_feature
+  ✓ web::test_deploy::deploy_refuses_server_parts_of_a_browser_program
   ✓ web::test_deploy::page_routes_deploy_as_rendered_pages
   ✓ web::test_deploy::the_playground_bundles_a_program_for_warp_hosting
   ✓ web::test_dev_marks::a_failure_without_an_excerpt_is_its_text
@@ -5521,4 +5553,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5516 passed, 0 failed, 5516 total tested
+13 ignored, 5548 passed, 0 failed, 5548 total tested

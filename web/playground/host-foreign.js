@@ -65,13 +65,36 @@ class PageObject {
 		return this.text;
 	}
 }
+// one PageObject per id while one lives, counting how often the page gave the id; once it is collected the page hears how
+// often, and lets the object go when no Worker holds it (task-workers.js releaseFrom, card page-pageobjects)
+const pageObjectsHere = new Map(); // id → {ref: WeakRef(PageObject), received}
+const releasedOnPage = new FinalizationRegistry(({ id, entry }) => {
+	if (pageObjectsHere.get(id) !== entry) return; // a newer PageObject of the id took over the count
+	pageObjectsHere.delete(id);
+	self.postMessage({ releasePageObject: { id, received: entry.received } });
+});
+function pageObjectOf(value) {
+	const entry = pageObjectsHere.get(value.$page);
+	const living = entry?.ref.deref();
+	if (living) {
+		entry.received++;
+		return Object.assign(living, { type: value.type, text: value.text });
+	}
+	const made = new PageObject(value);
+	// a collected one not yet finalized: its count goes on in the new entry
+	const fresh = { ref: new WeakRef(made), received: (entry?.received ?? 0) + 1 };
+	pageObjectsHere.set(value.$page, fresh);
+	releasedOnPage.register(made, { id: value.$page, entry: fresh });
+	return made;
+}
+const fromPage = value => Array.isArray(value) ? value.map(fromPage) : value?.$page ? pageObjectOf(value) : value;
 const toPage = value => value instanceof PageObject ? { $page: value.$page, type: value.type } : value;
 function callOnPage(receiver, memberName, argumentValues) {
 	const label = `js ${receiver.type ?? receiver}.${memberName}`;
 	const request = { receiver: toPage(receiver), member: memberName, arguments: argumentValues?.map(value => toPage(unhandled(value))) ?? null };
 	if (!self.askPage) throw new Error(`${label}: only the page has it, and this Worker carries no way to ask it (host-tasks.js)`);
 	const { value } = self.askPage(label, shared => self.askPageCall(shared, request));
-	return value?.$page ? new PageObject(value) : value;
+	return fromPage(value);
 }
 
 // the NUL-terminated bytes at `address` of a linear memory

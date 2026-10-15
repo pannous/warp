@@ -644,7 +644,9 @@ impl Lowering {
 				};
 				let items: Vec<Node> = items.into_iter().map(|item| self.expand(item)).collect();
 				// in a list literal `[(x => x + 1) (x => x + 2)]` the functions are elements, never one applied to the next
-				let immediate = if bracket == Bracket::Square { None } else { self.immediate_call(&items) };
+				// nor in a comma list `(y -> y + 3, 7)`, the arguments of a call (card errors-needs)
+				let is_sequence = bracket == Bracket::Square || separator == Separator::Colon;
+				let immediate = if is_sequence { None } else { self.immediate_call(&items) };
 				immediate
 					.or_else(|| self.iteration_call(&items, &bracket, &separator))
 					.unwrap_or(Node::List(items, bracket, separator))

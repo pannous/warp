@@ -10,6 +10,7 @@ mod test_character_comparison;
 mod test_chars_codepoints; // card chars-codepoints
 mod test_chr;
 mod test_codepoint_bytes;
+mod test_codepoint_counts; // card codepoints-traps
 mod test_constant_expression_text;
 mod test_count_in;
 mod test_count_method;

@@ -8,3 +8,12 @@ osc(C4, 1s, "saw") |> lowpass(900) |> delay(0.25) |> out
 bass = osc(C2, 2s, "square") |> lowpass(300)
 pad = osc([E4, G4, B4], 2s) |> reverb(0.4) |> gain(0.5)
 mix(bass, pad) |> out
+
+// a bus: one reverb that several sounds go through together, ringing on after the last
+hall = bus() |> reverb(0.5)
+osc(C4, 0.5s) |> out(hall)
+osc(G4, 0.5s) |> out(hall)
+
+// a mastering bus: the lows warmer, the highs softer, the peaks evened out
+master = bus() |> low_shelf(150Hz, 4) |> high_shelf(6kHz, -3) |> compress(-20, 4)
+osc(C3, 1s, "saw") |> out(master)

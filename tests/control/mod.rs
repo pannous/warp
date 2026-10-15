@@ -240,6 +240,7 @@ mod test_unhandled_emits;
 mod test_unit_tasks; // card units-tasks
 mod test_unwrap;
 mod test_unwrap_message;
+mod test_value_methods_are_functions; // card methods-last-n
 mod test_variable_signals;
 #[cfg(feature = "native")] // a WebSocket server on a local port
 mod test_web_sockets;

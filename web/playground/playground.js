@@ -221,7 +221,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "stored") return keepValue(data.name, data.value, data.file);
 			if (data.type === "clipboard") return copyText(data.text);
 			if (data.type === "clipboard read") return pasteInto(data.shared);
-			if (data.type === "page call") return answerPageCall(data.shared, data.request); // task-workers.js
+			if (data.type === "page call") return answerPageCall(data.shared, data.request, starting); // task-workers.js
 			if (data.type === "failed") return failed(new Error(data.message));
 			if (data.type === "bundle") return bundled(data.bundle); // deploy.js
 			if (data.type === "members") return answerMembers(data);
@@ -546,7 +546,7 @@ async function runInWorker(code) {
 		silence();
 		paintingWindow = undefined; // canvas.js: each run's paintings at their own size until it sets window.width
 		tellSystemValues();
-		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements() });
+		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file: programFile() });
 	});
 }
 
@@ -956,6 +956,11 @@ function runPressed() {
 }
 
 const exampleSource = name => EXAMPLES[name]?.code ?? SAMPLES[name];
+// the file of the chosen sample, whose neighbours its runs name relatively (host-files.js besideProgram)
+function programFile() {
+	const name = $("examples").value;
+	return EXAMPLES[name] === undefined && SAMPLES[name] !== undefined ? `samples/${name}.warp` : undefined;
+}
 
 // puts the code in the editor and runs it once; resolves once its report is shown
 function runCode(source) {

@@ -134,6 +134,7 @@ pub(crate) fn with_type_module_uses(program: Node) -> Node {
 		.iter()
 		.filter(|method| !defined.contains(*method) && !crate::library_words::is_library_word(method))
 		.filter_map(only_provider)
+		.chain(crate::reflection::value_methods_modules(&program))
 		.filter(|module| !used.contains(*module))
 		.collect();
 	modules.sort();
