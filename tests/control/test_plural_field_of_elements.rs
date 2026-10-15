@@ -24,3 +24,20 @@ fn english_plurals_of_fields() {
 fn a_plural_field_of_a_filtered_list() {
 	is!(&program("str(names of people with age > 20)"), "[\"Al\"]");
 }
+
+/// wherever `name of xs` resolves the field, `names of xs` does: an alias, an untyped list of instances
+#[test]
+fn a_plural_field_wherever_the_singular_resolves() {
+	is!(&program("ps = people; str(names of ps)"), "[\"Al\" \"Bo\"]");
+	is!(&program("ps = people; str(ps.names)"), "[\"Al\" \"Bo\"]");
+	is!("class Q{name: text}\nqs = [Q(\"Al\"), Q(\"Bo\")]; str(names of qs)", "[\"Al\" \"Bo\"]");
+	is!("class Q{name: text}\nqs = [Q(\"Al\"), Q(\"Bo\")]; str(qs.names)", "[\"Al\" \"Bo\"]");
+}
+
+/// one plural rule for the language: `each city` walks cities as `cities of people` names city
+#[test]
+fn each_walks_the_english_plural() {
+	is!("cities = [\"ab\" \"cd\"]; str(upper each city)", "[\"AB\" \"CD\"]");
+	is!("addresses = [\"ab\" \"cd\"]; str(upper each address)", "[\"AB\" \"CD\"]");
+	is!("xs: ints = [1 2]; xs#2", 2);
+}

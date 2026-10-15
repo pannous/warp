@@ -248,6 +248,26 @@ pub fn english_plural(word: &str) -> String {
 	}
 }
 
+/// The singular whose regular plural is `word`: `cities` → city, `addresses` → address, `names` → name
+pub fn english_singular(word: &str) -> Option<String> {
+	let stems = [
+		word.strip_suffix("ies").map(|stem| format!("{stem}y")),
+		word.strip_suffix("es").map(String::from),
+		word.strip_suffix('s').map(String::from),
+	];
+	stems.into_iter().flatten().find(|stem| english_plural(stem) == word)
+}
+
+/// The name among `names` that `word` is: itself, else the one it is the plural of (`names` → name)
+pub fn named_or_plural<'a>(names: &[&'a str], word: &str) -> Option<&'a str> {
+	let singular = english_singular(word);
+	names
+		.iter()
+		.find(|name| **name == word)
+		.or_else(|| names.iter().find(|name| singular.as_deref() == Some(**name)))
+		.copied()
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

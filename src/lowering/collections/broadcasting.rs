@@ -440,12 +440,7 @@ pub fn lower(program: Node) -> Node {
 fn each_singular(node: Node, lists: &HashSet<String>, names: &HashSet<String>) -> Node {
 	let walked_list = |word: &Node| {
 		let name = word.symbol_name()?;
-		let plurals = [
-			name.to_string(),
-			format!("{name}s"),
-			format!("{name}es"),
-			format!("{}ies", name.strip_suffix('y').unwrap_or(name)),
-		];
+		let plurals = [name.to_string(), crate::extensions::strings::english_plural(name)];
 		let is_plural_of = |plural: &String| *plural == name || !names.contains(name);
 		plurals.into_iter().find(|plural| lists.contains(plural) && is_plural_of(plural))
 	};
@@ -879,11 +874,11 @@ impl Broadcast {
 		let shadowed = list
 			.symbol_name()
 			.is_some_and(|variable| self.shadowed.borrow().iter().any(|parameter| parameter == variable));
-		let is_list_word = crate::library_words::is_library_word(name);
-		(!shadowed
-			&& !is_list_word
-			&& self.instances.as_ref().is_some_and(|instances| instances.is_element_field(list, name)))
-		.then(|| each_item(list.clone(), |item| key(item, Op::Dot, field.clone())))
+		if shadowed || crate::library_words::is_library_word(name) {
+			return None;
+		}
+		let field = symbol(&self.instances.as_ref()?.element_field(list, name)?);
+		Some(each_item(list.clone(), |item| key(item, Op::Dot, field.clone())))
 	}
 
 	/// A list variable, a range or a broadcast: `sqrt xs`, `sqrt (1 to 4)`, `round(floor(xs))` map over its items

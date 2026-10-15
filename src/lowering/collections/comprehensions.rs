@@ -180,12 +180,9 @@ fn field_of_elements(node: &Node, lists: &Lists) -> Option<Node> {
 		return None;
 	};
 	let (name, list) = (field.symbol_name()?, first_word(subject)?);
-	let fields = lists.fields.get(list)?;
+	let fields: Vec<&str> = lists.fields.get(list)?.iter().map(String::as_str).collect();
 	// `names of people`: the plural names the field of each element, as `name of people` does
-	let field = match fields.iter().any(|field| field == name) {
-		true => field.as_ref().clone(),
-		false => symbol(fields.iter().find(|field| crate::extensions::strings::english_plural(field) == name)?),
-	};
+	let field = symbol(crate::extensions::strings::named_or_plural(&fields, name)?);
 	let element = symbol(OF_ELEMENT);
 	let clause = Node::List(
 		vec![symbol(FOR_WORD), element.clone(), symbol(IN_WORD), subject.as_ref().clone()],
