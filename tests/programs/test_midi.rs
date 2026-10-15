@@ -63,17 +63,17 @@ fn headless_messages_are_named() {
 }
 
 #[test]
-fn native_input_is_a_loud_error() {
-	let errors = failures_of("midi_receive()");
-	assert!(errors.contains("MIDI input is not available natively yet"), "{errors}");
-	assert!(!errors.contains("the playground reads it"), "promises a way that does not exist: {errors}");
+fn a_missing_input_is_a_loud_error() {
+	let errors = failures_of("midi_receive(\"no such device\", 0.1)");
+	assert!(errors.contains("no MIDI input"), "{errors}");
 }
 
 #[test]
 fn listing_outputs_needs_a_backend_or_names_the_missing_one() {
 	let output = failures_of("midi_outputs()");
-	assert!(output.starts_with('»') || output.contains("sendmidi") || output.contains("Error"), "{output}");
-	assert!(output.contains('[') || output.contains("sendmidi"), "{output}");
+	// midir is the backend everywhere natively: the names, nothing printed when there is no device
+	assert!(!output.contains("Error"), "{output}");
+	assert!(output.contains('[') || output.trim().is_empty(), "{output}");
 }
 
 // card midi-clock: a message goes out at its voice's place, after the sounds queued before it or at an `at`'s time;
@@ -105,4 +105,27 @@ fn midi_notes_follow_one_another() {
 		],
 		"{printed}"
 	);
+}
+
+// card midi-receive: a device's message reaches the program; here a CoreMIDI virtual source the test plays into
+#[cfg(target_os = "macos")]
+#[test]
+fn a_program_receives_a_device_message() {
+	use midir::os::unix::VirtualOutput;
+	let device = format!("warp test {}", std::process::id());
+	let mut source = midir::MidiOutput::new("warp test").unwrap().create_virtual(&device).unwrap();
+	let program = format!("use sound\nprint contains(midi_inputs(), \"{device}\")\nmidi_receive(\"{device}\", 10)");
+	let mut run = crate::common::warp_command()
+		.args(["--no-ask", "eval", &program])
+		.stdout(std::process::Stdio::piped())
+		.spawn()
+		.unwrap();
+	// the program opens the input once it runs: play until it has the message
+	while run.try_wait().unwrap().is_none() {
+		source.send(&[0x90, 60, 100]).unwrap();
+		std::thread::sleep(std::time::Duration::from_millis(50));
+	}
+	let output = std::io::read_to_string(run.stdout.take().unwrap()).unwrap();
+	assert!(output.contains("yes"), "the input is listed: {output}");
+	assert!(output.contains("[144 60 100]"), "{output}");
 }

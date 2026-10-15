@@ -29,7 +29,7 @@ ${scripts.map(name => `<script src="${name}"></script>\n`).join("")}</body>
 function file(name) {
 	if (name === PAGE_FILE) return sitePage(SITE);
 	if (name === MODULE_FILE) return programBytes;
-	return SITE.files[name];
+	return Object.hasOwn(SITE.files, name) ? SITE.files[name] : undefined; // not /__proto__'s inherited object
 }
 
 export default {

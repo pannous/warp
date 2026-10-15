@@ -170,16 +170,34 @@ impl WarpParser {
 
 	/// The length of the balanced `(…)` at `offset`, None when none starts there or it never closes
 	pub(crate) fn parenthesis_length(&self, offset: usize) -> Option<usize> {
+		self.scan_parentheses(offset).map(|(length, _)| length)
+	}
+
+	/// Whether the `(…)` at `offset` separates items with a comma of its own (not one in a nested group or a text)
+	fn holds_top_level_comma(&self, offset: usize) -> bool {
+		self.scan_parentheses(offset).is_some_and(|(_, comma)| comma)
+	}
+
+	/// The balanced `(…)` at `offset`: its length and whether a comma of its own separates items; brackets and commas
+	/// inside a text or a nested group are none of its own
+	fn scan_parentheses(&self, offset: usize) -> Option<(usize, bool)> {
 		if self.peek_char(offset) != '(' {
 			return None;
 		}
-		let mut depth = 0;
-		for length in 0.. {
-			match self.peek_char(offset + length) {
-				'(' => depth += 1,
-				')' if depth == 1 => return Some(length + 1),
-				')' => depth -= 1,
-				'\0' => return None,
+		let (mut depth, mut quote, mut comma, mut escaped) = (0, None, false, false);
+		for index in offset.. {
+			match (self.peek_char(index), quote) {
+				('\0', _) => return None,
+				// `"a\\"` ends at its quote: a backslash escapes the one character after it
+				(_, Some(_)) if escaped => escaped = false,
+				('\\', Some(_)) => escaped = true,
+				(c, Some(open)) if c == open => quote = None,
+				(_, Some(_)) => {}
+				(c @ ('"' | '\''), None) => quote = Some(c),
+				('(' | '[' | '{', None) => depth += 1,
+				(')' | ']' | '}', None) if depth == 1 => return Some((index - offset + 1, comma)),
+				(')' | ']' | '}', None) => depth -= 1,
+				(',', None) if depth == 1 => comma = true,
 				_ => {}
 			}
 		}
@@ -233,7 +251,10 @@ impl WarpParser {
 	pub(crate) fn try_parse_user_infix(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
 		let operator = self.user_operator_at(&[UserOperatorKind::Infix])?;
 		let (left_bp, right_bp) = (operator.level, operator.level + 1);
-		if left_bp < min_bp {
+		// `print matches("abd", "a.c$")`: a word glued to `(both, operands)` is its call, as `f(x, y)` is; a right operand
+		// never holds a comma, so `"abc" matches("a.c")` stays infix (card use-regex)
+		let is_glued_call = is_operator_word(&operator.glyph) && self.holds_top_level_comma(operator.glyph.len());
+		if left_bp < min_bp || is_glued_call {
 			return None;
 		}
 		self.advance_by(operator.glyph.len());

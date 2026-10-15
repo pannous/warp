@@ -326,7 +326,12 @@ impl WasmGcEmitter {
 							I::LocalGet(kind), I::I64Const(KIND_MASK), I::I64And,
 						I::End,
 						I::End,
-						I::I64ShrU, I::I64Const(1), I::I64And,
+						I::I64ShrU,
+						// code tests as code and as its form
+						I::LocalGet(1), I::I64Const(crate::type_kinds::CODE_MASK_BIT), I::I64ShrU,
+						I::LocalGet(kind), I::I64Const(crate::type_kinds::CODE_MARK), I::I64And, I::I64Const(0), I::I64Ne,
+						I::I64ExtendI32U, I::I64And, I::I64Or,
+						I::I64Const(1), I::I64And,
 					]);
 				},
 			);
@@ -392,9 +397,16 @@ impl WasmGcEmitter {
 			vec![ValType::I64],
 			|s, f| {
 				s.emit_field(f, 0, 0);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalTee(kind), I::I64Const(crate::type_kinds::CODE_MARK), I::I64And, I::I64Const(0), I::I64Ne,
+					I::If(BlockType::Empty),
+				]);
+				s.emit_string_call(f, crate::words::CODE_WORD, "new_symbol");
+				Self::emit_list(f, &[I::Return, I::End]);
 				Self::emit_list(
 					f,
-					&[I::LocalTee(kind), I::I64Const(crate::type_kinds::BOOL_KIND), I::I64Eq, I::If(BlockType::Empty)],
+					&[I::LocalGet(kind), I::I64Const(crate::type_kinds::BOOL_KIND), I::I64Eq, I::If(BlockType::Empty)],
 				);
 				s.emit_string_call(f, crate::analyzer::BOOL_TYPE, "new_symbol");
 				Self::emit_list(f, &[I::Return, I::End]);

@@ -35,13 +35,17 @@ global tuning = 440.0 as float
 // (C4 = 261.63): a note name lowers to it (src/lowering/music_words.rs)
 midi_hertz(n) := round(tuning * 2^((n - 69) / 12) * 100) / 100
 // the MIDI note nearest a frequency: midi(C4) is 60, midi(440Hz) 69
-midi(pitch) := round(69 + 12 * log2(si_amount(pitch) / tuning)) as int
+midi(pitch) := plain_midi(si_amount(pitch))
+// the units go first: a quantity tested against a class fails (card quantity-is-class)
+plain_midi(pitch) := if pitch is Note then pitch.key else round(69 + 12 * log2(pitch / tuning)) as int
 // the name of the note nearest a frequency, with sharps: note_name(Eb4) is "D#4"
 note_names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 note_name(pitch) := {
 	key = midi(pitch)
 	note_names[key % 12] + string(floor(key / 12) as int - 1)
 }
+// a letter, maybe a sharp or flat, and an octave: "C4", "F#3", "Eb5"
+is_note_name(name) := count(name) >= 2 and count(name) <= 3 and contains("CDEFGAB", name#1) and contains("0123456789", name#(count(name))) and (count(name) == 2 or contains("#♯b♭", name#2))
 // the frequency of a note name: note_hertz("A4") is 440, note_hertz("C#4") a semitone above C4, note_hertz("Eb5") one below E5
 note_hertz(name) := {
 	accidental = if count(name) == 3 then (if name#2 == "#" or name#2 == "♯" then 1 else -1) else 0
@@ -58,8 +62,9 @@ class Note {
 	octave() := floor(key / 12) as int - 1
 	name() := note_names[key % 12]
 	text() := name() + string(octave()) + cents_text(cents)
-	plus(semitones) := Note(key + (semitones as int), cents)
-	minus(semitones) := Note(key - (semitones as int), cents)
+	// a part of a semitone moves the cents: note(C4) + 2.25 is D4+25c
+	plus(semitones) := if semitones is int then Note(key + semitones, cents) else nearest_note(hertz() * 2^(semitones / 12.0))
+	minus(semitones) := plus(-semitones)
 	equals(o) := o is Note and key == o.key and cents == o.cents
 }
 cents_text(cents) := if cents == 0 then "" else if cents > 0 then "+" + string(cents) + "c" else string(cents) + "c"
@@ -246,10 +251,15 @@ tone(pitch, duration) := tone(pitch, duration, wave_shape)
 beep() := tone(880, 0.15, "square")
 // a frequency, or a list of them sounding together (a chord)
 pitches_of(x) := if x is list then [hertz_of(pitch) for pitch in x] else [hertz_of(x)]
-// a frequency or a Note as its frequency; the units go first (si_amount): a quantity tested against a
-// class fails (card quantity-is-class)
+// a frequency, a Note or a note name ("C#4") as its frequency; the units go first (si_amount): a quantity tested
+// against a class fails (card quantity-is-class)
 hertz_of(pitch) := plain_hertz(si_amount(pitch))
-plain_hertz(pitch) := if pitch is Note then pitch.hertz() else if pitch is number then pitch else 0.0
+plain_hertz(pitch) := {
+	if pitch is Note { return pitch.hertz() }
+	if pitch is number { return pitch as float }
+	if pitch is text and is_note_name(pitch) { return note_hertz(pitch) }
+	raise "not a pitch: " + str(pitch)
+}
 play(x, duration) := sound(chord_samples(pitches_of(x), si_amount(duration), wave_shape))
 // a music file in the background (wav, mp3, ogg, flac, aiff, m4a): play "song.mp3"; stop_sound stops it
 play_file(path) := std_io("sound", "play_file", [path])
@@ -276,6 +286,9 @@ render_sound(path) := std_io("sound", "render", [path])
 // the voice's first sound, exactly so in render_sound; the voice goes on where it stood (src/lowering/music_words.rs)
 sound_at(seconds) := std_io("sound", "at", [si_amount(seconds)])
 sound_at_end() := std_io("sound", "at_end", [])
+// this voice's moment in seconds on the clock every task shares: where its next sound would start (card live-redefine,
+// a live loop defined again plays its new block from the first cycle starting there)
+sound_moment() := std_io("sound", "moment", [])
 // an audio file's samples to play (card sound-samples): kick = sample("kick.wav") (wav, mp3, ogg, flac, aiff, m4a; the
 // playground reads wav), play(kick); play_sample(kick, 2) twice as fast and an octave up, as a sampler plays it;
 // sample_slice(kick, 0.1s, 0.3s) the part between, sample_slices(kick, 4) four equal parts, sample_looped(kick, 4s, 0.5s,
@@ -454,8 +467,10 @@ midi_note(pitch, duration, velocity = 100, channel = 1) := {
 	midi_off(pitch, channel)
 }
 midi_outputs() := std_io("midi", "outputs", [])
-// the next message [status, data1, data2] waiting at the input, ø when none (fails where there is no MIDI input)
-midi_receive() := std_io("midi", "receive", [])
+midi_inputs() := std_io("midi", "inputs", [])
+// the next message [status, data1, data2] from the input port ("" the first, else by name), waiting for it; seconds > 0
+// waits that long at most, then ø (card midi-receive); the input stays open, so no message between two calls is lost
+midi_receive(port = "", seconds = 0) := std_io("midi", "receive", [port, seconds])
 // a Standard MIDI File of notes [start, pitch, length, velocity] (seconds, frequency or note, seconds, 1 to 127) at
 // 120 beats a minute, and the notes of such a file the same way: write_midi("tune.mid", [[0, C4, 0.5, 100]])
 write_midi(path, notes) := std_io("midi", "write_file", [path, [v for entry in notes for v in [round(entry#1 * 1000) as int, midi(entry#2), round(si_amount(entry#3) * 1000) as int, entry#4]]])

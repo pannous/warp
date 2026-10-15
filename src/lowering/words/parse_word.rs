@@ -3,10 +3,10 @@
 //! the host word parse_code (card parse-runtime). A program's own `parse` stays its own, and so does a method
 //! `x.parse(…)`. `eval(text)` runs that code where it is written: `interpret(parse(text))` (card eval).
 
-use super::blocks::DATA_WORD;
 use crate::host::PARSE_CODE;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::words::AS_CODE;
 
 const PARSE_WORD: &str = "parse";
 const EVAL_WORD: &str = "eval";
@@ -60,12 +60,8 @@ fn parsed(node: Node) -> Node {
 	};
 	// a text that fails to parse fails at run time, where `try` catches it
 	match argument.text_value().and_then(|source| code_of(&source).ok()) {
-		// grouped: a bare `data e` left of an operator is no value yet (`(data e) == x` is)
-		Some(code) => {
-			let data = Node::List(vec![symbol(DATA_WORD), code], Bracket::None, Separator::Space);
-			parens(vec![data])
-		}
-		None => parens(vec![symbol(PARSE_CODE), parsed(argument)]),
+		Some(code) => super::blocks::quoted_code(code),
+		None => crate::node::call(AS_CODE, vec![parens(vec![symbol(PARSE_CODE), parsed(argument)])]),
 	}
 }
 

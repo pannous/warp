@@ -17,6 +17,7 @@ mod test_gpu_draw; // card gpu-draw
 mod test_hints_toggle; // card hints-toggle
 mod test_json_parser_fixes;
 mod test_kitchensink;
+mod test_live_redefine; // card live-redefine
 mod test_midi;
 mod test_music_values; // card music-values
 mod test_note_values; // card note-value

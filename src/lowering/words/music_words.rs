@@ -23,8 +23,6 @@ use crate::words::{AT_WORD, FLOAT_WORD};
 use std::collections::{HashMap, HashSet};
 
 const MIDI_HERTZ_CALL: &str = "midi_hertz";
-/// `note("C#4")`: lib/sound.warp's Note of a frequency, its note-name text read here like the bare name C#4 (card note-value)
-const NOTE_CALL: &str = "note";
 /// A note letter's semitone above C is its place here, from 0 (as lib/sound.warp's note(name))
 const SCALE_LETTERS: &str = "C.D.EF.G.A.B";
 const SHARPS: [&str; 2] = ["#", "♯"];
@@ -44,9 +42,27 @@ const AT_END_CALL: &str = "sound_at_end";
 const LIVE_LOOP_WORD: &str = "live_loop";
 /// what `live_loop 4 { … }` is: a voice of its own that plays the block that many cycles, one after another
 const LIVE_LOOP_TEMPLATE: &str = "live_voice = go { for live_cycle in 0..live_cycles { live_body } }";
+/// `live_loop drums { … }` without a count plays until the program is stopped
+const ENDLESS_LIVE_LOOP_TEMPLATE: &str =
+	"live_voice = go { live_cycle = 0\nwhile true { live_body\nlive_cycle = live_cycle + 1 } }";
 const LIVE_VOICE: &str = "live_voice";
 const LIVE_CYCLES: &str = "live_cycles";
 const LIVE_BODY: &str = "live_body";
+/// A loop defined again by its name (card live-redefine): each definition's moment on the voices' clock (lib
+/// sound_moment) in a shared array, -1 until it runs; each cycle plays the latest block whose moment it has reached
+const LIVE_SINCE_DECLARATION: &str = "shared live_since = float[live_count]";
+const LIVE_SINCE_UNSET: &str = "live_since#live_version = -1";
+const LIVE_SINCE_SET: &str = "live_since#live_version = sound_moment()";
+const LIVE_CHOICE: &str = "live_moment = sound_moment()\nlive_choice";
+/// a redefinition counts for a cycle starting this many seconds before its moment: the voices' clocks start a few
+/// microseconds apart, and `at 2 beats` is meant to hit the cycle starting then
+const LIVE_VERSION_TEMPLATE: &str = "if live_since#live_version >= 0 and live_moment + 0.05 >= live_since#live_version { live_then } else { live_else }";
+const LIVE_SINCE: &str = "live_since";
+const LIVE_COUNT: &str = "live_count";
+const LIVE_VERSION: &str = "live_version";
+const LIVE_CHOICE_WORD: &str = "live_choice";
+const LIVE_MOMENT_THEN: &str = "live_then";
+const LIVE_MOMENT_ELSE: &str = "live_else";
 /// the words whose second argument is a kind: chord(root, kind), scale(root, kind)
 const KIND_TAKERS: [&str; 2] = ["chord", "scale"];
 const SIGNAL_WORD: &str = "play_signal";
@@ -77,10 +93,69 @@ pub fn lower_live_loops(program: Node) -> Node {
 }
 
 fn expand_live_loops(node: Node, defined: &HashSet<String>) -> Node {
-	if let Some(voice) = live_loop_statement(&node, defined) {
-		return voice;
+	let inside = |node: Node| node.map_children(|child| expand_live_loops(child, defined));
+	match node {
+		meta @ Node::Meta { .. } => meta.under_meta(|plain| expand_live_loops(plain, defined)),
+		Node::List(statements, bracket, separator) if separator.separates_statements() => {
+			let statements = statements.into_iter().map(inside).collect();
+			Node::List(with_live_loops(statements, defined), bracket, separator)
+		}
+		node => {
+			let node = inside(node);
+			match live_loop_of(&node, defined) {
+				Some(live_loop) => live_loop.voice(std::slice::from_ref(&live_loop.block)),
+				None => node,
+			}
+		}
 	}
-	node.map_children(|child| expand_live_loops(child, defined))
+}
+
+/// A block's statements with their live loops as voices; a named loop defined again there sets the moment its
+/// redefinition starts (LIVE_SINCE_SET), its first definition a voice choosing among all the blocks
+fn with_live_loops(statements: Vec<Node>, defined: &HashSet<String>) -> Vec<Node> {
+	let loops: Vec<Option<LiveLoop>> = statements.iter().map(|statement| live_loop_of(statement, defined)).collect();
+	let blocks_of = |name: &str| -> Vec<Node> {
+		loops
+			.iter()
+			.flatten()
+			.filter(|live_loop| live_loop.name() == Some(name))
+			.map(|live_loop| live_loop.block.clone())
+			.collect()
+	};
+	let mut versions: HashMap<String, usize> = HashMap::new();
+	let mut lowered = vec![];
+	for (statement, live_loop) in statements.into_iter().zip(&loops) {
+		let Some(live_loop) = live_loop else {
+			lowered.push(statement);
+			continue;
+		};
+		let Some(name) = live_loop.name() else {
+			lowered.push(live_loop.voice(std::slice::from_ref(&live_loop.block)));
+			continue;
+		};
+		let version = versions.entry(name.to_string()).and_modify(|count| *count += 1).or_insert(1);
+		let since = Node::Symbol(format!("{name}_since"));
+		let filled = |template: &str, version: usize| {
+			substituted(
+				crate::warp_parser::parse(template),
+				&[(LIVE_SINCE, since.clone()), (LIVE_VERSION, Node::int(version as i64))],
+			)
+		};
+		let blocks = blocks_of(name);
+		match (*version, blocks.len()) {
+			(_, 1) => lowered.push(live_loop.voice(&blocks)),
+			(1, count) => {
+				lowered.push(substituted(
+					crate::warp_parser::parse(LIVE_SINCE_DECLARATION),
+					&[(LIVE_SINCE, since.clone()), (LIVE_COUNT, Node::int(count as i64))],
+				));
+				lowered.extend((2..=count).map(|later| filled(LIVE_SINCE_UNSET, later)));
+				lowered.push(live_loop.voice_choosing(&blocks, &since));
+			}
+			(version, _) => lowered.push(live_loop.with_prefix(filled(LIVE_SINCE_SET, version))),
+		}
+	}
+	lowered
 }
 
 pub fn lower(program: Node) -> Node {
@@ -251,9 +326,6 @@ fn with_music_words(node: Node, defined: &HashSet<String>) -> Node {
 	if let Some(midi) = note_midi(&node, defined) {
 		return call(MIDI_HERTZ_CALL, vec![Node::Number(crate::Number::Int(midi))]).with_meta_of(&node);
 	}
-	if let Some(named) = with_note_name_text(&node, defined) {
-		return named;
-	}
 	if let Some((word, amount)) = glued_unit(&node, defined) {
 		return call(word, vec![with_music_words(amount, defined)]);
 	}
@@ -326,32 +398,96 @@ fn scheduled(statement: &Node, defined: &HashSet<String>) -> Option<Vec<Node>> {
 	Some([call(AT_CALL, vec![time.clone()])].into_iter().chain(actions).chain([call(AT_END_CALL, vec![])]).collect())
 }
 
-/// `live_loop 4 { body }` → `live_voice = go { for live_cycle in 0..4 { body } }`, `live_loop drums 4 { body }` → `drums = go { … }`
-fn live_loop_statement(statement: &Node, defined: &HashSet<String>) -> Option<Node> {
+/// `[at 2 beats] live_loop [name] [cycles] { body }`: its statements before the word (an `at`), its voice, count and block
+struct LiveLoop {
+	prefix: Vec<Node>,
+	voice: Node,
+	cycles: Option<Node>,
+	block: Node,
+	separator: Separator,
+}
+
+/// `live_loop 4 { body }`, `live_loop drums 4 { body }`, `live_loop drums { body }` (endless), after an `at` too; a
+/// symbol before the block is the count when the program defines it (`live_loop n { … }`), else the voice's name
+fn live_loop_of(statement: &Node, defined: &HashSet<String>) -> Option<LiveLoop> {
 	let Node::List(items, _, separator) = statement.drop_meta() else {
 		return None;
 	};
-	let (word, voice, cycles, block) = match items.as_slice() {
-		[word, cycles, block] => (word, Node::Symbol(LIVE_VOICE.into()), cycles, block),
-		[word, name, cycles, block] if matches!(name.drop_meta(), Node::Symbol(_)) => {
-			(word, name.clone(), cycles, block)
-		}
-		_ => return None,
-	};
-	let Node::List(_, crate::node::Bracket::Curly, _) = block.drop_meta() else {
-		return None;
-	};
-	if separator.separates_statements() || defined.contains(LIVE_LOOP_WORD) || !word.is_symbol(LIVE_LOOP_WORD) {
+	if separator.separates_statements() || defined.contains(LIVE_LOOP_WORD) {
 		return None;
 	}
-	let made = substituted(
-		crate::warp_parser::parse(LIVE_LOOP_TEMPLATE),
-		&[(LIVE_VOICE, voice), (LIVE_CYCLES, cycles.clone()), (LIVE_BODY, block.clone())],
-	);
-	Some(match made {
-		Node::List(mut statements, _, _) if statements.len() == 1 => statements.remove(0),
-		made => made,
+	let start = items.iter().position(|item| item.is_symbol(LIVE_LOOP_WORD))?;
+	let is_name = |node: &Node| matches!(node.drop_meta(), Node::Symbol(name) if !defined.contains(name));
+	let unnamed = || Node::Symbol(LIVE_VOICE.into());
+	let (voice, cycles, block) = match &items[start + 1..] {
+		[name, block] if is_name(name) => (name.clone(), None, block),
+		[cycles, block] => (unnamed(), Some(cycles.clone()), block),
+		[name, cycles, block] if is_name(name) => (name.clone(), Some(cycles.clone()), block),
+		_ => return None,
+	};
+	let Node::List(_, Bracket::Curly, _) = block.drop_meta() else {
+		return None;
+	};
+	Some(LiveLoop {
+		prefix: items[..start].to_vec(),
+		voice,
+		cycles,
+		block: block.clone(),
+		separator: separator.clone(),
 	})
+}
+
+impl LiveLoop {
+	/// the voice's name, none for `live_loop 4 { … }`
+	fn name(&self) -> Option<&str> {
+		match self.voice.drop_meta() {
+			Node::Symbol(name) if name != LIVE_VOICE => Some(name),
+			_ => None,
+		}
+	}
+
+	/// `drums = go { for live_cycle in 0..4 { body } }`
+	fn voice(&self, blocks: &[Node]) -> Node {
+		let template = if self.cycles.is_some() { LIVE_LOOP_TEMPLATE } else { ENDLESS_LIVE_LOOP_TEMPLATE };
+		let made = substituted(
+			crate::warp_parser::parse(template),
+			&[
+				(LIVE_VOICE, self.voice.clone()),
+				(LIVE_CYCLES, self.cycles.clone().unwrap_or(Node::Empty)),
+				(LIVE_BODY, blocks[0].clone()),
+			],
+		);
+		let voice = match made {
+			Node::List(mut statements, _, _) if statements.len() == 1 => statements.remove(0),
+			made => made,
+		};
+		self.with_prefix(voice)
+	}
+
+	/// the voice whose cycles each play the latest of `blocks` they reached: `if drums_since#2 … { second } else { first }`
+	fn voice_choosing(&self, blocks: &[Node], since: &Node) -> Node {
+		let choice = blocks.iter().enumerate().skip(1).fold(blocks[0].clone(), |earlier, (index, block)| {
+			substituted(
+				crate::warp_parser::parse(LIVE_VERSION_TEMPLATE),
+				&[
+					(LIVE_SINCE, since.clone()),
+					(LIVE_VERSION, Node::int(index as i64 + 1)),
+					(LIVE_MOMENT_THEN, block.clone()),
+					(LIVE_MOMENT_ELSE, earlier),
+				],
+			)
+		});
+		let body = substituted(crate::warp_parser::parse(LIVE_CHOICE), &[(LIVE_CHOICE_WORD, choice)]);
+		self.voice(&[Node::List(body.sequence_statements().to_vec(), Bracket::Curly, Separator::Newline)])
+	}
+
+	/// the statement after the loop's `at 2 beats`, if any
+	fn with_prefix(&self, statement: Node) -> Node {
+		match self.prefix.is_empty() {
+			true => statement,
+			false => Node::List([self.prefix.clone(), vec![statement]].concat(), Bracket::None, self.separator.clone()),
+		}
+	}
 }
 
 /// The node with each named symbol replaced; a block holding only such a symbol is replaced whole (a block, not a block in a block)
@@ -413,27 +549,6 @@ fn unit_amount_word(node: &Node, defined: &HashSet<String>) -> Option<&'static s
 		}
 		_ => None,
 	}
-}
-
-/// `note("C#4")` → `note(midi_hertz(61))`: a note name written as a text, in a call of note the program does not define
-fn with_note_name_text(node: &Node, defined: &HashSet<String>) -> Option<Node> {
-	let Node::List(items, bracket, separator) = node.drop_meta() else { return None };
-	let [head, argument] = items.as_slice() else { return None };
-	if !matches!(head.drop_meta(), Node::Symbol(name) if name == NOTE_CALL) || defined.contains(NOTE_CALL) {
-		return None;
-	}
-	let hertz = |text: &Node| match text.drop_meta() {
-		Node::Text(name) => midi_of(name)
-			.map(|midi| call(MIDI_HERTZ_CALL, vec![Node::Number(crate::Number::Int(midi))]).with_meta_of(text)),
-		_ => None,
-	};
-	let argument = match argument.drop_meta() {
-		Node::List(inner, inner_bracket, inner_separator) if inner.len() == 1 => {
-			Node::List(vec![hertz(&inner[0])?], inner_bracket.clone(), inner_separator.clone()).with_meta_of(argument)
-		}
-		text => hertz(text)?.with_meta_of(argument),
-	};
-	Some(Node::List(vec![head.clone(), argument], bracket.clone(), separator.clone()).with_meta_of(node))
 }
 
 /// The MIDI note of a note name the program does not define: `Eb4` (a symbol), `F#4` (read as `F # 4`)
