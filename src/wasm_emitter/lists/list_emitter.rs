@@ -100,11 +100,14 @@ fn spaced_values_text(argument: &Node) -> Option<Node> {
 	}
 }
 
-/// `print "x changed to " value` (wiki/signal.md): a text followed by values prints them joined, without separator
+/// `print "x changed to " value` (wiki/signal.md): a text followed by values prints them joined, without separator; a
+/// path written without quotes is a value of its own (`print /a /b`)
 fn juxtaposed_text(argument: &Node) -> Option<Node> {
 	match argument.drop_meta() {
 		Node::List(parts, Bracket::None, Separator::Space)
-			if matches!(parts.first().map(Node::drop_meta), Some(Node::Text(_))) =>
+			if parts
+				.first()
+				.is_some_and(|first| matches!(first.drop_meta(), Node::Text(_)) && !first.is_path_literal()) =>
 		{
 			Some(super::super::joined_text(parts, ""))
 		}

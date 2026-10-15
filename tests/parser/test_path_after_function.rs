@@ -1,0 +1,24 @@
+//! card name-after: ` /name` after a word is a path wherever the program defines that word as a function, before or
+//! after the call, with := or def, and after a variable holding a function; juxtaposed paths stay separate values
+use crate::is;
+
+#[test]
+fn a_path_after_a_function_defined_later() {
+	is!("show /tmp\nshow(p) := p", "/tmp");
+	is!("show /tmp\ndef show(p){p}", "/tmp");
+	is!("def show(p){p}\nshow /tmp", "/tmp");
+	is!("area(w, h) := w /h\narea(6, 2)", 3);
+}
+
+#[test]
+fn a_path_after_a_variable_holding_a_function() {
+	is!("f = x => x; f /tmp", "/tmp");
+	is!("width = 6\nheight = 2\nwidth /height", 3);
+}
+
+#[cfg(feature = "native")]
+#[test]
+fn juxtaposed_paths_print_as_separate_values() {
+	assert_eq!(crate::common::printed("print /a /b").lines().next(), Some("/a /b"));
+	assert_eq!(crate::common::printed("print \"ab\" \"c\"").lines().next(), Some("abc"));
+}

@@ -66,6 +66,37 @@ pub(super) fn scan_declared_types(source: &str) -> std::collections::HashSet<Str
 		.collect()
 }
 
+/// The functions a source defines, wherever: `f(x) := …`, `f x := …`, `def f(x) {…}`, and variables holding one
+/// (`f = x => x`, `f = function …`): ` /name` after one is a path, also before its definition (card name-after)
+pub(super) fn scan_function_names(source: &str) -> std::collections::HashSet<String> {
+	code_only(source).split(['\n', ';']).filter_map(defined_function_name_in).collect()
+}
+
+fn defined_function_name_in(statement: &str) -> Option<String> {
+	let statement = statement.trim();
+	let mut words = statement.split_whitespace();
+	let first = words.next()?;
+	let leading_name = |text: &str| -> String { text.chars().take_while(|ch| is_identifier_char(*ch)).collect() };
+	let name = if crate::operators::is_function_keyword(first) {
+		leading_name(words.next()?)
+	} else if let Some((head, _)) = statement.split_once(":=") {
+		leading_name(head.trim())
+	} else {
+		let (head, value) = statement.split_once('=')?;
+		let value = value.trim_start();
+		let holds_function = !value.starts_with(['=', '>'])
+			&& (value.contains("=>")
+				|| value.contains("->")
+				|| value.split_whitespace().next().is_some_and(crate::operators::is_function_keyword));
+		if !holds_function {
+			return None;
+		}
+		let head = head.trim();
+		(is_plain_name(head)).then(|| head.to_string())?
+	};
+	is_plain_name(&name).then_some(name)
+}
+
 /// Words that stand between a type's name and its body, never part of the name: `class Dog extends Animal {`
 const WORDS_BEFORE_TYPE_BODY: [&str; 6] =
 	[EXTENDS_KEYWORD, WITH_KEYWORD, IMPLEMENTS_WORD, GO_INTERFACE_WORD, GC_WORD, GO_STRUCT_WORD];

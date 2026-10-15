@@ -36,11 +36,13 @@ impl WarpParser {
 	}
 
 	/// A word before ` /name` takes a path: the operand before is a path (`cp /a /b`), or the word is no variable but a
-	/// function (the program's, a standard module's like ls, a built-in like print); `width /height` divides
+	/// function (the program's wherever it is defined, a variable holding one, a standard module's like ls, a built-in like
+	/// print); `width /height` divides
 	fn takes_path(&self, word: &str) -> bool {
 		let after_path =
 			self.path_end.is_some_and(|end| self.chars[end..self.pos].iter().all(|c| matches!(c, ' ' | '\t')));
 		after_path
+			|| self.program_functions.contains(word)
 			|| (!self.variables.contains(word)
 				&& (self.functions.contains(word)
 					|| crate::lowering::negated_calls::is_builtin_callable(word)
@@ -71,7 +73,7 @@ impl WarpParser {
 			(0..).map(|offset| self.peek_char(offset)).take_while(|&c| !super::lookahead::ends_path(c)).collect();
 		self.advance_by(path.chars().count());
 		self.path_end = Some(self.pos);
-		Node::Text(path)
+		Node::Text(path).as_path_literal()
 	}
 
 	/// Parse symbol with optional suffix: name{...}, name<...>, name(...)
