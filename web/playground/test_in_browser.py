@@ -148,9 +148,10 @@ GPU_JOBS_NEVER = "Out of memory"
 # Firefox's WebGPU: one anonymous uncaught exception of the page during the 400 jobs, all values right (card
 # firefox-gpu-jobs-uncaught)
 # and Firefox its own two lines of the broken shader
-# Firefox now and then: two anonymous uncaught exceptions of the page right as Stop ends the busy program's Worker (the
-# BiDi events before them: the new Worker's realm made, the old one's gone; no event reaches the page's listeners),
-# the run stopped and the button right (card firefox-logs)
+# Firefox's bug: terminating a Worker busy inside a WebAssembly.promising call logs an anonymous uncaught exception on
+# the page, which no listener sees (probes/firefox_jspi_terminate.html, card firefox-logs). Stop does that: the
+# compiler's web_evaluate and the program's main run under promising (worker.js, host.js JSPI); the run stopped and
+# the button right
 EXPECTED_CONSOLE = {SHADER_ERROR: ["Error while parsing WGSL", "errors while creating shader module", "parsing error"], GPU_JOBS: ["uncaught exception: undefined"],
 	STOP_BUTTON: ["uncaught exception: undefined"]}
 # card safari-shared-buffers: a task's answer buffer, like a GPU job's, is reused once read
@@ -522,49 +523,6 @@ def file_kept_wrong(page_url):
 	return [] if FILE_KEPT_TEXT in read else [f"read after a reload: {read!r}, expected {FILE_KEPT_TEXT!r}"]
 
 
-# TEMPORARY (card firefox-logs, branch only): which kind of terminated busy Worker makes Firefox log a bare uncaught
-# exception on the page; each variant a check of its own, so its console lines are its own
-TERMINATE_VARIANTS = ["js", "wasm", "promising", "ports"]
-TERMINATE_REPEATS = 6
-SPIN_WASM = [0, 97, 115, 109, 1, 0, 0, 0, 1, 4, 1, 96, 0, 0, 3, 2, 1, 0, 7, 8, 1, 4, 115, 112, 105, 110, 0, 0, 10, 9, 1, 7, 0, 3, 64, 12, 0, 11, 11]
-TERMINATE_WORKER = """
-const bytes = new Uint8Array(%s);
-onmessage = async ({ data }) => {
-	if (data === "js") { postMessage("busy"); for (;;) {} }
-	const { instance } = await WebAssembly.instantiate(bytes);
-	const spin = data === "promising" && WebAssembly.promising ? WebAssembly.promising(instance.exports.spin) : instance.exports.spin;
-	postMessage("busy");
-	spin();
-};""" % SPIN_WASM
-
-
-def terminate_variant_wrong(variant):
-	shown = browser("eval", f"""(async () => {{
-		const pause = milliseconds => new Promise(done => setTimeout(done, milliseconds));
-		const url = URL.createObjectURL(new Blob([{json.dumps(TERMINATE_WORKER)}], {{ type: "text/javascript" }}));
-		for (let time = 0; time < {TERMINATE_REPEATS}; time++) {{
-			const busy = new Worker(url);
-			let partner;
-			if ("{variant}" === "ports") {{
-				partner = new Worker(url);
-				const channel = new MessageChannel();
-				partner.postMessage({{ port: channel.port1 }}, [channel.port1]);
-				busy.postMessage({{ port: channel.port2 }}, [channel.port2]);
-			}}
-			const started = new Promise(done => busy.onmessage = done);
-			busy.postMessage("{variant}" === "ports" ? "wasm" : "{variant}");
-			await started;
-			await pause(200);
-			partner?.terminate();
-			busy.terminate();
-			await pause(300);
-		}}
-		return "done";
-	}})()""")
-	print(f"     diagnostic {variant}: {shown}")
-	return []
-
-
 def stop_button_wrong():
 	"""the Run button of a program still running after STOP_GRACE_MS says Stop; pressing it stops the run, and it says Run again"""
 	shown = browser("eval", f"""(async () => {{
@@ -898,7 +856,7 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
-	extra_checks = [(f"(diagnostic: terminate a busy {variant} Worker)", lambda variant=variant: terminate_variant_wrong(variant)) for variant in TERMINATE_VARIANTS] + [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FRAME_SHADERS, frame_shaders_wrong), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FRAME_SHADERS, frame_shaders_wrong), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
