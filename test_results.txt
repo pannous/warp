@@ -485,6 +485,16 @@ PASSED:
   ✓ control::test_on_error_of_function::every_definition_and_handler_form
   ✓ control::test_on_set_value::a_write_in_an_expression_runs_the_handler_and_gives_the_value
   ✓ control::test_on_set_value::the_wiki_handler_runs_for_every_write_of_the_loop
+  ✓ control::test_one_method_form::a_parameter_typed_in_another_class_body_is_no_method_of_that_type
+  ✓ control::test_one_method_form::a_type_word_names_a_method_in_both_forms
+  ✓ control::test_one_method_form::an_ancestors_outside_method_is_listed
+  ✓ control::test_one_method_form::an_outside_method_calls_itself_on_another_instance
+  ✓ control::test_one_method_form::an_outside_method_changing_its_object
+  ✓ control::test_one_method_form::an_outside_method_reads_fields_bare
+  ✓ control::test_one_method_form::both_forms_are_listed_alike
+  ✓ control::test_one_method_form::both_forms_call_alike
+  ✓ control::test_one_method_form::both_forms_give_a_function_value
+  ✓ control::test_one_method_form::one_name_over_several_classes
   ✓ control::test_page_events::a_choice_that_only_reads_is_the_output_binding
   ✓ control::test_page_events::a_handler_without_event_runs_through_its_wrapper
   ✓ control::test_page_events::a_page_event_handler_in_a_program_with_tasks_has_one_wrapper
@@ -1655,6 +1665,10 @@ PASSED:
   ✓ functions::test_print_closure::print_shows_a_closure_as_written
   ✓ functions::test_print_closure::print_shows_a_function_reference
   ✓ functions::test_print_closure::print_shows_a_list_of_functions
+  ✓ functions::test_print_function_value::a_bare_print_assigned_needs_its_argument
+  ✓ functions::test_print_function_value::a_print_reference_is_called_later
+  ✓ functions::test_print_function_value::counting_words_and_conversions_are_function_values
+  ✓ functions::test_print_function_value::print_passed_to_each_prints_every_item
   ✓ functions::test_property_access::test_bracket_lookup_by_text_never_traps
   ✓ functions::test_property_access::test_dot_on_a_variable_and_nested
   ✓ functions::test_property_access::test_dot_on_an_object_literal
@@ -2248,6 +2262,8 @@ PASSED:
   ✓ modules::test_netbase_package::without_a_server_the_failure_names_it
   ✓ modules::test_node_json::a_field_named_json_wins
   ✓ modules::test_node_json::json_of_a_value_is_its_json_text
+  ✓ modules::test_node_json::json_of_code_keeps_its_operations
+  ✓ modules::test_node_json::the_browser_spells_each_operator_code_alike
   ✓ modules::test_package_forms::a_bare_name_is_a_repository_of_pannous
   ✓ modules::test_package_forms::a_full_url_stays_as_written
   ✓ modules::test_package_forms::an_owner_and_repository_are_on_github
@@ -2589,9 +2605,12 @@ PASSED:
   ✓ numbers::test_dimension_types::a_declared_dimension_checks_any_unit_of_it
   ✓ numbers::test_dimension_types::a_declared_height_is_the_programs
   ✓ numbers::test_dimension_types::a_declared_unit_shows_as_written
+  ✓ numbers::test_dimension_types::a_list_of_quantities_gives_quantities
   ✓ numbers::test_dimension_types::a_program_naming_a_dimension_keeps_its_own
   ✓ numbers::test_dimension_types::a_quantity_is_its_dimension
   ✓ numbers::test_dimension_types::a_quantity_of_seconds_is_a_duration_and_a_time
+  ✓ numbers::test_dimension_types::a_unit_after_a_list_applies_to_each_element
+  ✓ numbers::test_dimension_types::every_list_value_carries_its_units
   ✓ numbers::test_dimension_types::speed_area_volume_and_frequency_are_named_dimensions
   ✓ numbers::test_div_assign::declared_int_keeps_dividing_whole
   ✓ numbers::test_div_assign::divide_assign_divides_exactly
@@ -2931,6 +2950,9 @@ PASSED:
   ✓ numbers::test_unit_conversion::an_inexact_conversion_is_a_ratio
   ✓ numbers::test_unit_conversion::another_dimension_is_the_dimension_error
   ✓ numbers::test_unit_conversion::long_unit_names_name_the_target
+  ✓ numbers::test_unit_definitions::dimension_names_come_from_the_definitions
+  ✓ numbers::test_unit_definitions::each_unit_is_the_amount_its_definition_says
+  ✓ numbers::test_unit_definitions::run_time_quantities_know_the_units_of_the_definitions
   ✓ numbers::test_unit_field_display::a_field_read_shows_the_declared_unit
   ✓ numbers::test_unit_field_display::a_list_mapped_from_a_unit_field_keeps_the_unit
   ✓ numbers::test_unit_field_display::a_one_line_loop_body_prints_the_unit
@@ -3032,6 +3054,7 @@ PASSED:
   ✓ operators::test_increment_places::an_element_increments
   ✓ operators::test_increment_places::an_element_of_a_field_and_a_nested_element_change
   ✓ operators::test_infix_operand_names::test_infix_operands_named_left_and_right
+  ✓ operators::test_infix_word_operators::a_declared_word_operator_has_a_call_form
   ✓ operators::test_infix_word_operators::a_word_infix_operator_with_parameters
   ✓ operators::test_infix_word_operators::a_word_infix_operator_without_parameters
   ✓ operators::test_infix_word_operators::a_word_operator_is_still_a_word_elsewhere
@@ -3470,6 +3493,9 @@ PASSED:
   ✓ programs::test_draw::colors_are_numbers_with_an_alpha_byte
   ✓ programs::test_draw::shapes_set_the_pixels_they_cover
   ✓ programs::test_draw::with_alpha_is_a_method_of_a_color
+  ✓ programs::test_file_spectrum::a_file_says_how_long_it_sounds
+  ✓ programs::test_file_spectrum::a_file_written_again_is_measured_again
+  ✓ programs::test_file_spectrum::a_files_tone_fills_its_own_band
   ✓ programs::test_file_spectrum::shader_of_is_the_wgsl_a_function_paints_with
   ✓ programs::test_file_spectrum::the_compiled_shader_demo_compiles_to_one_fragment_shader
   ✓ programs::test_gpu_draw::an_unknown_draw_choice_warns
@@ -3547,6 +3573,9 @@ PASSED:
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_2
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_3
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_4
+  ✓ programs::test_program_cache::a_changed_file_of_the_folder_compiles_again
+  ✓ programs::test_program_cache::a_module_looking_beyond_the_keyed_folders_is_not_kept
+  ✓ programs::test_program_cache::a_program_runs_again_from_its_cached_module
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error_slice_2
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error_slice_3
@@ -3616,6 +3645,7 @@ PASSED:
   ✓ programs::test_sound_buses::a_sound_outside_the_bus_stays_dry
   ✓ programs::test_sound_buses::a_sound_sent_to_a_delay_bus_echoes_where_it_was_silent
   ✓ programs::test_sound_buses::a_task_and_the_program_share_a_bus
+  ✓ programs::test_sound_buses::an_effect_assigned_as_a_member_changes_the_bus
   ✓ programs::test_sound_buses::an_effect_set_again_keeps_its_echoes
   ✓ programs::test_sound_buses::an_effect_set_again_keeps_its_place_in_the_chain
   ✓ programs::test_sound_buses::eq_bands_at_other_frequencies_add_up
@@ -3681,6 +3711,7 @@ PASSED:
   ✓ programs::test_sound_pipes::nodes_chain
   ✓ programs::test_sound_pipes::out_plays_a_signal
   ✓ programs::test_sound_render::a_render_takes_the_sounds_after_the_last_one
+  ✓ programs::test_sound_render::programs_running_at_once_save_their_own_sounds
   ✓ programs::test_sound_render::render_sound_is_save_with_a_note
   ✓ programs::test_sound_render::save_sound_as_a_file_writes_the_sounds
   ✓ programs::test_sound_render::save_text_as_a_file_writes_it
@@ -3958,6 +3989,11 @@ PASSED:
   ✓ text::test_runtime_text_as_int::a_text_without_a_number_is_a_runtime_error
   ✓ text::test_scan_by_index::a_char_by_char_scan_takes_linear_time
   ✓ text::test_scan_by_index::indexes_in_any_order_find_their_grapheme
+  ✓ text::test_selector_prepositions::a_selector_in_a_value
+  ✓ text::test_selector_prepositions::characters_is_the_word_chars
+  ✓ text::test_selector_prepositions::in_stays_membership_elsewhere
+  ✓ text::test_selector_prepositions::printing_a_selection_prints_each_part
+  ✓ text::test_selector_prepositions::selectors_chain_to_the_right
   ✓ text::test_sort_of_a_call::a_library_word_chain_binds_tighter_than_a_comparison
   ✓ text::test_sort_of_a_call::a_library_word_chain_takes_the_first_operand_of_a_logical_chain
   ✓ text::test_sort_of_a_call::a_library_word_where_a_value_is_expected_calls_the_value_after_it
@@ -4061,6 +4097,11 @@ PASSED:
   ✓ types::test_array_types::test_typed_array_as_a_value
   ✓ types::test_as_number_variable::a_text_known_at_run_time_casts_to_its_number
   ✓ types::test_as_number_variable::a_variable_holds_the_cast_number
+  ✓ types::test_bare_function_type_test::a_function_compared_with_a_type_by_equality_is_no
+  ✓ types::test_bare_function_type_test::a_lambda_parameter_of_the_name_is_the_value
+  ✓ types::test_bare_function_type_test::a_library_word_is_a_function
+  ✓ types::test_bare_function_type_test::a_programs_function_is_a_function
+  ✓ types::test_bare_function_type_test::a_variable_of_the_name_is_the_value
   ✓ types::test_be_definitions::test_be_defines_with_a_type
   ✓ types::test_binary_int::binary_acts_as_its_int
   ✓ types::test_binary_int::binary_literals_read_as_ints
@@ -4193,6 +4234,7 @@ PASSED:
   ✓ types::test_class_operators::a_value_either_an_instance_or_a_number_keeps_what_it_is
   ✓ types::test_class_operators::an_operator_on_a_value_of_unknown_class_dispatches_at_run_time
   ✓ types::test_class_operators::operators_as_python_and_kotlin_write_them
+  ✓ types::test_class_properties::a_function_member_assigned_stores_its_call_back
   ✓ types::test_class_properties::a_getter_reads_like_a_field
   ✓ types::test_class_properties::a_setter_runs_when_the_property_is_assigned
   ✓ types::test_class_unions::a_union_of_a_class_and_a_builtin_type
@@ -5762,9 +5804,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ programs::test_file_spectrum::a_file_says_how_long_it_sounds
-  ✗ programs::test_file_spectrum::a_file_written_again_is_measured_again
-  ✗ programs::test_file_spectrum::a_files_tone_fills_its_own_band
 
 SUMMARY:
-13 ignored, 5759 passed, 3 failed, 5762 total tested
+13 ignored, 5801 passed, 0 failed, 5801 total tested
