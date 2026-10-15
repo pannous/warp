@@ -117,3 +117,8 @@ paint). Compiling takes 1.23 s of CPU in release against 0.63 s for samples/gpu_
 5.4 s against 3.8 s (the ~5 s the user saw through a debug try line). 43 % of the samples are in
 analyse_user_functions (function_body_scope → collect_variables, refine_return_kinds → settled_return_kind): 13
 vector functions calling each other.
+Program cache (card cache-compiled-shader, src/run/program_cache.rs): `warp <file>` keeps the compiled module next to
+the machine-code cache, so a second run skips the compile: gpu_visualizer_warp with `3`, debug build, 10.2 s → 5.9 s
+wall (9.5 → 5.2 s CPU; the rest is the 5 s of music). A compile that prints anything (a hint!) is not kept, so the
+sample was made hint-free (cosine/sine/exponential, if-then-else). Probes: probes/program_cache/cli_cache.sh (hits,
+misses on changed program / used file, subfolder `use` not kept), probes/program_cache/samples_twice.sh.
