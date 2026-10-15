@@ -66,8 +66,11 @@ fn suffix_words(node: &Node) -> SuffixWords {
 	let mut variables = HashSet::new();
 	crate::library_words::collect_assigned_names(node, &mut variables);
 	let functions = crate::analyzer::applicable_function_names(node);
+	// the built-in real functions apply too (`x sined`), yet stay library words a program may pass on (card sin-cos)
+	let real_functions = crate::numbers::real::FUNCTIONS.iter().map(|name| name.to_string());
+	let applicable: Vec<String> = functions.iter().cloned().chain(real_functions).collect();
 	let words =
-		functions.iter().flat_map(|function| past_forms(function).into_iter().map(|word| (word, function.clone())));
+		applicable.iter().flat_map(|function| past_forms(function).into_iter().map(|word| (word, function.clone())));
 	let mut words: HashMap<String, String> =
 		words.filter(|(word, _)| word.ends_with("ed") && !variables.contains(word)).collect();
 	// the library's own: `xs sorted`, `xs reversed`, `x squared` (x²), `x cubed` (x³), unless the program names them
@@ -129,7 +132,10 @@ impl SuffixWords {
 
 	/// A library word of one value the program does not name itself, also libm's (`floor`, `sin`): a function value
 	fn is_function_word(&self, node: &Node) -> bool {
-		let is_libm_word = |name: &str| crate::lowering::library_signatures::typed_first_arity(name) == Some(1);
+		let is_libm_word = |name: &str| {
+			crate::lowering::library_signatures::typed_first_arity(name) == Some(1)
+				|| crate::numbers::real::FUNCTIONS.contains(&name)
+		};
 		self.is_library_word(node) || self.unnamed(node).is_some_and(is_libm_word)
 	}
 

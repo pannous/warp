@@ -736,6 +736,12 @@ impl Lowering {
 				return Some(log_to_base(&items[0], value, base));
 			}
 		}
+		// `sin x`: a real function applies to the value after it, as `sin(x)` does (card sin-cos)
+		if let ([function, argument], Bracket::None, Separator::Space) = (items, bracket, separator) {
+			if crate::numbers::real::FUNCTIONS.contains(&head.as_str()) && !self.shadows(head) {
+				return Some(word_call(function, argument, vec![]));
+			}
+		}
 		// `number(t)` is `t as number`: a text known only at run time is the number it spells, decided at run time
 		if let (NUMBER_WORD, [_, value]) = (head.as_str(), items) {
 			if !self.shadows(NUMBER_WORD) && call_name(items, bracket, separator).is_some() {
