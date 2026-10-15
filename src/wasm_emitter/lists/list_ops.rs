@@ -392,13 +392,23 @@ impl WasmGcEmitter {
 			return;
 		}
 		let node_ref = self.node_ref(false);
-		let (kind, pointer, end, byte) = (1, 2, 3, 4);
+		let (kind, pointer, end, byte, function_type) = (1, 2, 3, 4, 5);
 		self.runtime_function(
 			crate::type_tests::NODE_TYPE_NAME,
 			vec![Ref(node_ref)],
 			vec![Ref(node_ref)],
-			vec![ValType::I64, ValType::I32, ValType::I32, ValType::I32],
+			vec![ValType::I64, ValType::I32, ValType::I32, ValType::I32, Ref(self.node_ref(true))],
 			|s, f| {
+				// a function value: its kind and signature (function_type is ø for any other value)
+				if s.types_functions() {
+					f.instruction(&I::LocalGet(0));
+					s.emit_call(f, crate::wasm_emitter::functions::FUNCTION_TYPE);
+					#[rustfmt::skip]
+					Self::emit_list(f, &[
+						I::LocalTee(function_type), I::RefIsNull, I::I32Eqz, I::If(BlockType::Empty),
+						I::LocalGet(function_type), I::RefAsNonNull, I::Return, I::End,
+					]);
+				}
 				s.emit_field(f, 0, 0);
 				#[rustfmt::skip]
 				Self::emit_list(f, &[

@@ -92,12 +92,14 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 			most: count,
 			typed_first: typed,
 			converts: false,
+			library: false,
 		});
 		*arity = Arity {
 			fewest: arity.fewest.min(count),
 			most: arity.most.max(count),
 			typed_first: arity.typed_first && typed,
 			converts: false,
+			library: false,
 		};
 	}
 	// `text hex 255`, `text(byte 65)`: a built-in type converts one value, nesting like a function of one parameter.
@@ -105,18 +107,24 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 	// `(int 3) == 3` like `f(x: int)`; a truth type (`bool 3 == 3`) takes anything and is ambiguous like `same(x) := x`
 	for name in type_calls_used(&program) {
 		let typed = !TRUTH_TYPES.contains(&name.to_lowercase().as_str());
-		arities.entry(name).or_insert(Arity { fewest: 1, most: 1, typed_first: typed, converts: true });
+		arities.entry(name).or_insert(Arity { fewest: 1, most: 1, typed_first: typed, converts: true, library: true });
 	}
 	// `round(floor x)`, `upper(lower t)`: a library word of a typed value nests like a function of its parameters
-	for (name, count) in library_calls_used(&program) {
-		arities.entry(name).or_insert(Arity { fewest: count, most: count, typed_first: true, converts: false });
+	for (name, (fewest, most)) in library_calls_used(&program) {
+		arities.entry(name).or_insert(Arity { fewest, most, typed_first: true, converts: false, library: true });
 	}
 	if arities.is_empty() {
 		return program;
 	}
 	// `puts add 1 2`: the output words take one value
 	for word in crate::wasm_emitter::OUTPUT_WORDS {
-		arities.entry(word.to_string()).or_insert(Arity { fewest: 1, most: 1, typed_first: false, converts: false });
+		arities.entry(word.to_string()).or_insert(Arity {
+			fewest: 1,
+			most: 1,
+			typed_first: false,
+			converts: false,
+			library: true,
+		});
 	}
 	nest_prefix_calls(program, &arities)
 }
@@ -188,6 +196,8 @@ struct Arity {
 	typed_first: bool,
 	/// A built-in type converting its value (`int 3.7`, `hex 255`): nests like a function, compares like one
 	converts: bool,
+	/// A word of the language, not the program's own function
+	library: bool,
 }
 
 /// The built-in type words the program calls and does not name itself: `int`, `text`, `hex`, `byte` … (analyzer::applied_word)
@@ -206,12 +216,12 @@ fn type_calls_used(program: &Node) -> HashSet<String> {
 }
 
 /// The library words the program calls and does not name itself whose first parameter is typed, with their arity
-fn library_calls_used(program: &Node) -> HashMap<String, usize> {
+fn library_calls_used(program: &Node) -> HashMap<String, (usize, usize)> {
 	let mut used = HashMap::new();
 	program.visit(&mut |node| {
 		if let Node::Symbol(name) = node {
-			if let Some(count) = crate::lowering::library_signatures::typed_first_arity(name) {
-				used.insert(name.clone(), count);
+			if let Some(parameters) = crate::lowering::library_signatures::typed_first_parameters(name) {
+				used.insert(name.clone(), parameters);
 			}
 		}
 	});
@@ -236,7 +246,7 @@ fn is_one_value_word(node: &Node, arities: &HashMap<String, Arity>) -> bool {
 	let is_word = |name: &str| {
 		crate::library_words::is_library_word(name) || EXTREMUM_WORDS.contains(&name) || name == COUNT_WORD
 	};
-	matches!(node.drop_meta(), Node::Symbol(name) if !arities.contains_key(name) && is_word(name))
+	matches!(node.drop_meta(), Node::Symbol(name) if arities.get(name).is_none_or(|takes| takes.library) && is_word(name))
 }
 
 fn arity_of(node: &Node, arities: &HashMap<String, Arity>) -> Option<Arity> {
@@ -246,11 +256,12 @@ fn arity_of(node: &Node, arities: &HashMap<String, Arity>) -> Option<Arity> {
 	}
 }
 
-/// `say 3 == 3` of a function that takes anything reads both ways (P143): a loud error offering each reading
-fn ambiguous_call(at: &Node, name: &str, argument: &str, op: &Op, right: &str) -> Node {
-	let written = format!("{name} {argument} {op} {right}");
-	let call_compared = format!("({name} {argument}) {op} {right}");
-	let comparison_argument = format!("{name}({argument} {op} {right})");
+/// `say 3 == 3` of a function that takes anything reads both ways (P143): a loud error offering each reading; in a
+/// logical chain the call takes the first comparand, `(say 3) == 3 and yes`
+fn ambiguous_call(at: &Node, name: &str, argument: &Node) -> Node {
+	let written = format!("{name} {}", spaced(argument, &|first| first.serialize()));
+	let call_compared = spaced(argument, &|first| format!("({name} {})", first.serialize()));
+	let comparison_argument = format!("{name}({})", spaced(argument, &|first| first.serialize()));
 	crate::errors::diagnostic::Diagnostic::at(
 		at,
 		format!("{written} is ambiguous; write {call_compared} or {comparison_argument}"),
@@ -260,10 +271,26 @@ fn ambiguous_call(at: &Node, name: &str, argument: &str, op: &Op, right: &str) -
 	.into_error()
 }
 
+/// A comparison chain as written, its first comparand as `first` renders it: `3 == 3 and yes`
+fn spaced(node: &Node, first: &dyn Fn(&Node) -> String) -> String {
+	match node.drop_meta() {
+		Node::Key(left, op, right) if crate::library_words::is_comparison(node) => {
+			format!("{} {op} {}", spaced(left, first), right.serialize())
+		}
+		_ => first(node),
+	}
+}
+
 fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 	if let Some((head, body, rebuild)) = crate::lowering::type_tests::function_definition(&node) {
 		if let Some(inner) = without_parameters(&head, arities) {
 			return rebuild(head, nest_prefix_calls(body, &inner));
+		}
+	}
+	// `print g 3, 4`, `f(max 3, 4)`: the call's arguments, a comma list, of which one is a braceless call
+	if let Node::List(items, Bracket::Round, Separator::None) = &node {
+		if let Some(joined) = comma_joined(items, arities) {
+			return nest_prefix_calls(Node::List(joined, Bracket::Round, Separator::None), arities);
 		}
 	}
 	let arity = |node: &Node| arity_of(node, arities);
@@ -298,15 +325,14 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 		}
 		// `square 3 == 9` parses as `square (3 == 9)`. P143 (user): a parameter typed as no truth value takes the call,
 		// `(square 3) == 9` (wiki/all.md `square [1 2 3] == [1 4 9]`); untyped, both readings work: a loud error
-		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, argument] if arity(head).is_some() && matches!(argument.drop_meta(), Node::Key(_, op, _) if op.is_comparison())) =>
+		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, argument] if arity(head).is_some() && crate::library_words::is_comparison(argument)) =>
 		{
 			let [head, argument]: [Node; 2] = items.try_into().expect("guarded");
-			let Node::Key(left, op, right) = argument.drop_meta().clone() else { unreachable!("guarded") };
 			if !arity(&head).expect("guarded").typed_first {
-				return ambiguous_call(&argument, &head.drop_meta().name(), &left.serialize(), &op, &right.serialize());
+				return ambiguous_call(&argument, &head.drop_meta().name(), &argument);
 			}
-			let call = Node::List(vec![head, *left], Bracket::None, Separator::Space);
-			key(nest_prefix_calls(call, arities), op, nest_prefix_calls(*right, arities))
+			let call = |operand| Node::List(vec![head.clone(), operand], Bracket::None, Separator::Space);
+			nest_prefix_calls(crate::library_words::with_first_comparand(argument, &call), arities)
 		}
 		// the same phrase the parser grouped the other way, `(f 3) == 9`, when it did not know f takes a value: as
 		// ambiguous when the body accepts anything (`f := print it`)
@@ -315,15 +341,15 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 				&& matches!(left.drop_meta(), Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, _] if arity(head).is_some_and(|takes| !takes.typed_first))) =>
 		{
 			let Node::List(items, _, _) = left.drop_meta() else { unreachable!("guarded") };
-			ambiguous_call(&left, &items[0].drop_meta().name(), &items[1].serialize(), &op, &right.serialize())
+			let argument = key(items[1].clone(), op, *right);
+			ambiguous_call(&left, &items[0].drop_meta().name(), &argument)
 		}
 		Node::List(items, Bracket::None, Separator::Colon) if items.len() > 1 => {
-			let mut items: Vec<Node> = items.into_iter().map(|item| nest_prefix_calls(item, arities)).collect();
-			let rest = items.split_off(1);
-			let first = items.pop().expect("split after the first");
-			match with_comma_arguments(first, &rest, arities) {
-				Ok(call) => call,
-				Err(first) => Node::List([vec![first], rest].concat(), Bracket::None, Separator::Colon),
+			let items: Vec<Node> = items.into_iter().map(|item| nest_prefix_calls(item, arities)).collect();
+			match comma_joined(&items, arities) {
+				Some(mut joined) if joined.len() == 1 => joined.pop().expect("one item"),
+				Some(joined) => Node::List(joined, Bracket::None, Separator::Colon),
+				None => Node::List(items, Bracket::None, Separator::Colon),
 			}
 		}
 		other => other.map_children(|child| nest_prefix_calls(child, arities)),
@@ -417,6 +443,15 @@ fn without_parameters(head: &Node, arities: &HashMap<String, Arity>) -> Option<H
 	(!shadowed.is_empty()).then(|| unshadowed.map(|(name, arity)| (name.clone(), *arity)).collect())
 }
 
+/// `1, add 2, 3` → `1, add 2 3`: the first braceless call short of arguments takes the items after its comma, wherever
+/// it stands (card braceless-calls)
+fn comma_joined(items: &[Node], arities: &HashMap<String, Arity>) -> Option<Vec<Node>> {
+	(0..items.len().saturating_sub(1)).find_map(|at| {
+		let call = with_comma_arguments(items[at].clone(), &items[at + 1..], arities).ok()?;
+		Some([items[..at].to_vec(), vec![call]].concat())
+	})
+}
+
 /// `add 1` (also as the value of `x = add 1`) given the items after its comma, when it is short of arguments and they fit
 fn with_comma_arguments(node: Node, rest: &[Node], arities: &HashMap<String, Arity>) -> Result<Node, Node> {
 	match node {
@@ -469,8 +504,13 @@ pub fn lower(program: Node) -> Node {
 	let mut found = Vec::new();
 	definitions(&program, &mut found);
 	implicit_definitions(&program, &mut found);
+	// `f(c: text)` beside `f(b: list)`: an overload takes the list itself (overloads.rs), no definition broadcasts
+	let every_overload_needs_a_scalar = |definition: &&Definition| {
+		found.iter().filter(|other| other.name == definition.name && other.params.len() == 1).all(needs_a_scalar)
+	};
 	let mut broadcasting: HashSet<String> = found
 		.iter()
+		.filter(every_overload_needs_a_scalar)
 		.filter(|definition| needs_a_scalar(definition))
 		.map(|definition| definition.name.clone())
 		.collect();
@@ -481,16 +521,19 @@ pub fn lower(program: Node) -> Node {
 		.iter()
 		.filter(|(word, _)| !defined.contains(&word.to_string()))
 		.map(|(word, scalars)| (word.to_string(), scalars.to_vec()));
-	let scalar_parameters: HashMap<String, Vec<bool>> = found
-		.iter()
-		.map(|definition| {
-			(
-				definition.name.clone(),
-				definition.params.iter().map(|param| takes_a_scalar(param, &definition.body)).collect(),
-			)
-		})
-		.chain(library_scalar_parameters)
-		.collect();
+	// a parameter takes a scalar when every overload of as many parameters takes one there
+	let mut scalar_parameters: HashMap<String, Vec<bool>> = library_scalar_parameters.collect();
+	for definition in &found {
+		let scalars: Vec<bool> =
+			definition.params.iter().map(|param| takes_a_scalar(param, &definition.body)).collect();
+		scalar_parameters
+			.entry(definition.name.clone())
+			.and_modify(|known| match known.len() == scalars.len() {
+				true => known.iter_mut().zip(&scalars).for_each(|(known, scalar)| *known &= scalar),
+				false => *known = scalars.clone(),
+			})
+			.or_insert(scalars);
+	}
 	let mut assigned = HashMap::new();
 	collect_list_variables(&program, &broadcasting, &scalar_parameters, &mut assigned);
 	let names: HashSet<String> = assigned.keys().cloned().collect();
@@ -519,12 +562,8 @@ pub fn lower(program: Node) -> Node {
 fn each_singular(node: Node, lists: &HashSet<String>, names: &HashSet<String>) -> Node {
 	let walked_list = |word: &Node| {
 		let name = word.symbol_name()?;
-		let plurals = [
-			name.to_string(),
-			format!("{name}s"),
-			format!("{name}es"),
-			format!("{}ies", name.strip_suffix('y').unwrap_or(name)),
-		];
+		// the English plural and the programmer's: `x` walks `xs` though English writes boxes
+		let plurals = [name.to_string(), crate::extensions::strings::english_plural(name), format!("{name}s")];
 		let is_plural_of = |plural: &String| *plural == name || !names.contains(name);
 		plurals.into_iter().find(|plural| lists.contains(plural) && is_plural_of(plural))
 	};
@@ -958,11 +997,11 @@ impl Broadcast {
 		let shadowed = list
 			.symbol_name()
 			.is_some_and(|variable| self.shadowed.borrow().iter().any(|parameter| parameter == variable));
-		let is_list_word = crate::library_words::is_library_word(name);
-		(!shadowed
-			&& !is_list_word
-			&& self.instances.as_ref().is_some_and(|instances| instances.is_element_field(list, name)))
-		.then(|| each_item(list.clone(), |item| key(item, Op::Dot, field.clone())))
+		if shadowed || crate::library_words::is_library_word(name) {
+			return None;
+		}
+		let field = symbol(&self.instances.as_ref()?.element_field(list, name)?);
+		Some(each_item(list.clone(), |item| key(item, Op::Dot, field.clone())))
 	}
 
 	/// A list variable, a range or a broadcast: `sqrt xs`, `sqrt (1 to 4)`, `round(floor(xs))` map over its items

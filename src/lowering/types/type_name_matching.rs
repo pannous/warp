@@ -10,7 +10,7 @@ use crate::operators::Op;
 use crate::words::{ANY_TYPE, ERROR_WORD, IMPLICIT_PARAMETER};
 
 const ARTICLES: [&str; 3] = ["a", "an", "the"];
-/// The words that separate a phrase's slots and name the slot after them (preposition_calls.rs); `each` too: `to hum notes each d: …` is called `hum [C4 E4] each 50ms`
+/// The words that separate a phrase's slots and name the slot after them (preposition_calls.rs); `each` too: `to hum notes each d: …` is called `hum [C4 E4] each: 50ms`
 pub(crate) const PREPOSITIONS: [&str; 11] = ["to", "of", "from", "with", "in", "into", "at", "by", "for", "on", "each"];
 
 /// `for`, `to`, …: a symbol that is a preposition
@@ -19,7 +19,7 @@ pub(crate) fn is_preposition(word: &Node) -> bool {
 }
 
 /// `as` labels a parameter too, though it separates no phrase slot: `save(made, as file)` is called
-/// `save sound as "song.wav"` (card save-sound)
+/// `save sound as: "song.wav"` (card save-sound)
 pub(crate) const AS_LABEL: &str = "as";
 
 /// A word naming the parameter after it: a preposition or `as`

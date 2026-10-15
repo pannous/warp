@@ -27,6 +27,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - topic-priority (2026-10-15, user; card todo-topics): the column is the priority, for topic cards too: a topic sits
   in Now/Next/Soon/Later beside its cards (new topics Soon); Roadmaps holds only unprioritized topics. A Priority
   field may exist only if it always matches the column. `todo move sound Next --all` raises a topic with its cards.
+  The user's own cards stay where the user put them: drafts, and since 2026-10-15 every issue without the line
+  "Added by <session> with `todo add`." (older ones: ~/dev/bin/probes/card_creators.py matches data/github-quota/calls.tsv).
 - long-functions (2026-10-14, user): splitting an overly long function is a cleanup card of its own, also when it
   adds a few lines; the "only if it removes lines" rule is for deduplication, not for splits. Split by concept (one
   named helper per case group or per embedded warp template), not into numbered parts.
@@ -457,6 +459,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   always takes a colon: `save file in: folder`, `play C4 for: 1s`, `move x from: 1 to: 5`, `save sound as: "x.wav"`.
   Universal for every preposition and `as`, with/from/into/by included (they get a special meaning soon). Definitions
   keep the bare form, `play(tone, for duration)`; bare preposition labels in calls are dropped. Card labels-calls.
+  Revised (user, same day): where the bare word cannot mean anything else, `play C4 for 1s`, `melody xs each 1 beat`,
+  it is read as the label with a warning offering the colon (preposition_calls.rs UNAMBIGUOUS_LABELS: for, each).
 - P24 suffix forms (`4 doubled`) call user functions. P164 a type word after a parameter name is its type
   (`phone number`); `phone-number:text` is one hyphenated name in declarations.
 - P132 `{f: x => x * 2}` holds a lambda; a type word after the colon makes a typed lambda. P133 `|x| x*2` is a lambda.

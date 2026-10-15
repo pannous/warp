@@ -270,3 +270,10 @@ fn int_for_enum_parameter_fix() {
 	// card coin-errors, decision enum-case B: an int becomes a case explicitly, so f(1) for f(c: Coin) offers f(1 as Coin)
 	assert_fix("enum Coin { Penny, Nickel, Dime }; f(c: Coin) := c; f(1)", "the Coin case at index 1", "Nickel");
 }
+
+/// decision labels-calls: a bare label in a call is an error offering its colon, like the warning on `play C4 for 1s`
+#[test]
+fn a_bare_label_fixes_to_its_colon() {
+	assert_fix("move(x, from a, to b) := x + a - b\nmove 1 from 10 to: 3", "colon", "8");
+	assert_fix("f(x, to y) := x - y\nf 9 to 4", "colon", "5");
+}

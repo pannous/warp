@@ -79,6 +79,7 @@ mod test_hex_int; // card hex-printing
 mod test_hex_word; // hex x is hex(x), literals are 0x…
 mod test_index_position; // card index-position
 mod test_instance_arguments;
+mod test_instance_final_bare; // card program-last
 mod test_instance_final_text; // card instance-final
 mod test_instance_size; // card size-instance
 mod test_int_accepts; // card int-accepts

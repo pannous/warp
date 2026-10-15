@@ -23,15 +23,18 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   arguments than its function takes (broadcasting.rs `lower_prefix_calls`, before the function value passes).
 - Ruby keyword parameters `def f(a, b: 2)`: a literal after the colon is the default (named_arguments.rs).
 - Prepositions as argument labels (card prepositions-call, user 2026-10-14; Swift's labels): a parameter written
-  after a preposition, `play(tone, for duration)`, `move(x, from a, to b)`, is passed by that word: `play 440Hz for
-  0.5s`, `play(440Hz, for: 0.5s)`, `play tone:440Hz for:0.5s`, `move 1 from 10 to 3` (any order). A call without
+  after a preposition, `play(tone, for duration)`, `move(x, from a, to b)`, is passed by that word, which in a call
+  always takes a colon (decision labels-calls, 2026-10-15): `play 440Hz for: 0.5s`, `play(440Hz, for: 0.5s)`,
+  `play tone:440Hz for:0.5s`, `move 1 from: 10 to: 3` (any order), `r = move 1 to: 3 from: 10`, `s + f 9 to: 4`
+  (the parser reads `word: ` after a call's argument as its label, suffixes.rs labelled_argument). A call without
   brackets also names arguments: `f b=1 a=5` (before, the `=` assigned). Words: to of from with in into at by for
-  on each (type_name_matching.rs PREPOSITIONS; preposition_calls.rs is a FUNCTION pass before named_arguments, which picks the overload
-  the names fit). Only in a call of a function declaring the word: elsewhere `for` loops, `1 to 5` a range, `x in xs`
-  a membership; explicit brackets keep it, `f(9 to 4)` passes the range. A variable named `by` stays a variable; a
-  preposition the function does not take is an error naming those it takes. `s + f 9 to 4` reads `(s + f 9) to 4`:
-  write `s + (f 9 to 4)`. `as` labels a parameter too (card save-sound): `save(made, as file)` is called
-  `save sound as "x.wav"`, its `as` then an argument, not a conversion (type_name_matching.rs AS_LABEL).
+  on each (type_name_matching.rs PREPOSITIONS; preposition_calls.rs is a FUNCTION pass before named_arguments, which
+  picks the overload the names fit). Without the colon a word keeps its meaning, `for` loops, `1 to 5` a range, `x in
+  xs` a membership; in a call of a function taking it, the bare word (`move x to 5`) is an error naming the colon
+  form, or a warning where it cannot mean anything else (`play C4 for 1s`, `melody xs each 1 beat`: for and each,
+  preposition_calls.rs UNAMBIGUOUS_LABELS). A variable named `by` stays a variable; a label the function does not take is an error naming those it takes.
+  `as` labels a parameter too (card save-sound): `save(made, as file)` is called `save sound as: "x.wav"`
+  (type_name_matching.rs AS_LABEL).
 - Result types before a block body: `-> int { … }`, `: number { … }`, `-> int: body` (declarations.rs `typed_result`).
 - A function body block of one braceless call `def f(x){square x}` is that call (library_words.rs `body_statement`).
 - Partial application stays `add(1, _)`; `add(1)` is a missing-argument error.

@@ -2,6 +2,7 @@ mod test_add_to;
 mod test_approximately; // cards approximately, approximately-all
 mod test_bar_pipe;
 mod test_bit_operators_on_ints;
+mod test_braceless_operator_words; // card braceless-prefix
 mod test_comma_next_to_comparison; // P227
 mod test_compound_assignment;
 mod test_contains_infix;
@@ -34,6 +35,7 @@ mod test_operators;
 mod test_pipe_stages;
 mod test_pipeline;
 mod test_postfix_words;
+mod test_print_bang; // card wiki-partial, decision print-bang
 mod test_root_word;
 mod test_rough_similarity; // card g_YHSM
 mod test_structural_equality;

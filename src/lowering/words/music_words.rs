@@ -37,7 +37,7 @@ const UNIT_WORDS: [(&str, &str); 5] = [
 	("dB", "decibels"),
 ];
 const DEF_WORD: &str = "def";
-/// `save sound as "song.wav"`, `save(sound, "song.wav")` (card save-sound): the word sound, as save's argument, is the
+/// `save sound as: "song.wav"`, `save(sound, "song.wav")` (card save-sound): the word sound, as save's argument, is the
 /// sounds made since the last save, lib/sound.warp's Recording, whose save overload writes them as a WAV file
 const SAVE_WORD: &str = "save";
 const SOUND_WORD: &str = "sound";
@@ -267,14 +267,20 @@ fn block_template(template: &str, fill: &str, seconds: Node) -> Node {
 fn with_played_functions(node: Node, counts: &HashMap<String, usize>) -> Node {
 	let node = node.map_children(|child| with_played_functions(child, counts));
 	match node.call_parts() {
+		// `play hum for: 2s` too (lib play's `for duration`, preposition_calls.rs reads it for the other plays)
 		Some((PLAY_WORD, [played, seconds])) if let Some(word) = signal_word(played, counts) => {
+			let seconds = match super::named_arguments::named_argument(seconds) {
+				Some((label, value)) if label == FOR_WORD => value,
+				_ => seconds,
+			};
 			call(word, vec![played.clone(), seconds.clone()])
 		}
-		// `play hum for 2s` (lib play's `for duration`, preposition_calls.rs reads it for the other plays)
+		// `play hum for 2s`: read as `for: 2s` with a warning (preposition_calls.rs UNAMBIGUOUS_LABELS)
 		Some((PLAY_WORD, [played, preposition, seconds]))
 			if preposition.is_symbol(FOR_WORD)
 				&& let Some(word) = signal_word(played, counts) =>
 		{
+			super::preposition_calls::warn_missing_colon(&Node::Symbol(PLAY_WORD.to_string()), preposition, seconds);
 			call(word, vec![played.clone(), seconds.clone()])
 		}
 		_ => node,
@@ -381,17 +387,13 @@ fn with_music_words(node: Node, defined: &HashSet<String>) -> Node {
 	}
 }
 
-/// `save sound as "x.wav"` (`save` with `sound as "x.wav"`) and `save(sound, …)`: the sound a Recording(), unless the
-/// program names something sound
+/// `save sound as: "x.wav"` and `save(sound, …)`: the sound a Recording(), unless the program names something sound
 fn with_recording(items: Vec<Node>, defined: &HashSet<String>) -> Vec<Node> {
 	if !items.first().is_some_and(|word| word.is_symbol(SAVE_WORD)) || defined.contains(SOUND_WORD) {
 		return items;
 	}
 	let recording = |item: Node| match item.drop_meta() {
 		Node::Symbol(word) if word == SOUND_WORD => call(RECORDING_CLASS, vec![]).with_meta_of(&item),
-		Node::Key(made, Op::As, file) if made.is_symbol(SOUND_WORD) => {
-			key(call(RECORDING_CLASS, vec![]), Op::As, file.as_ref().clone())
-		}
 		_ => item,
 	};
 	items.into_iter().map(recording).collect()
@@ -583,15 +585,15 @@ fn with_kind_text(mut items: Vec<Node>, defined: &HashSet<String>) -> Vec<Node> 
 	items
 }
 
-/// `[for, 1/4, beat]` → `[for, beat_seconds(1/4)]`; `[x = 2, bars]` → `[x = bar_seconds(2)]`
+/// `[1/4, beat]` → `[beat_seconds(1/4)]`; `[x = 2, bars]` → `[x = bar_seconds(2)]`, `[for: 2, beats]` → `[for:
+/// beat_seconds(2)]`
 fn with_unit_words(items: Vec<Node>, defined: &HashSet<String>) -> Vec<Node> {
 	let mut written: Vec<Node> = vec![];
 	for item in items {
 		match (unit_amount_word(&item, defined), written.pop()) {
 			(Some(word), Some(amount)) => written.push(match amount.drop_meta() {
-				Node::Key(target, Op::Assign, value) => {
-					Node::Key(target.clone(), Op::Assign, Box::new(call(word, vec![*value.clone()])))
-						.with_meta_of(&amount)
+				Node::Key(target, op @ (Op::Assign | Op::Colon), value) => {
+					Node::Key(target.clone(), *op, Box::new(call(word, vec![*value.clone()]))).with_meta_of(&amount)
 				}
 				_ => call(word, vec![amount]),
 			}),

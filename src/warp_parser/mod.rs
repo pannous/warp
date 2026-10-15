@@ -431,6 +431,8 @@ pub struct WarpParser {
 	text_variables: std::collections::HashSet<String>,
 	/// Names assigned so far (`data = […]`): such a name is read as the variable, not as a prefix word
 	variables: std::collections::HashSet<String>,
+	/// Where the last path literal ended: a ` /name` after it is the next path (`cp /a /b`)
+	path_end: Option<usize>,
 	/// The binding power of a glued pair's value (`for:email`): that value is one atom, no call of what follows
 	glued_pair_bp: Option<u8>,
 	/// Where the innermost bracketed group opened (line, column): an unclosed one names it
@@ -545,6 +547,7 @@ impl WarpParser {
 			key_variables: vec![],
 			text_variables: Default::default(),
 			variables: Default::default(),
+			path_end: None,
 			glued_pair_bp: None,
 			group_start: (0, 0),
 			stops_at_else: false,
