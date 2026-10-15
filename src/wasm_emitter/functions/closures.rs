@@ -857,7 +857,7 @@ impl WasmGcEmitter {
 		match (table, function) {
 			(FUNCTION_DOC, Some(function)) => text(function.doc.clone().unwrap_or_default()),
 			(FUNCTION_SIGNATURE, Some(function)) => text(crate::lowering::reflection::signature(function)),
-			(FUNCTION_RETURN_TYPE, Some(function)) => text(function.return_kind.to_string()),
+			(FUNCTION_RETURN_TYPE, Some(function)) => text(crate::lowering::reflection::result_type(function)),
 			(FUNCTION_DEFINITION, Some(function)) => text(crate::lowering::reflection::definition(function)),
 			(FUNCTION_FULL, _) => text(self.printed_function(target, captured)),
 			(FUNCTION_FILE, _) => text(written_in(at.as_ref()).unwrap_or_default()),

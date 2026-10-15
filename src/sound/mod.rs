@@ -10,7 +10,9 @@
 //! starts where its starter stands: voices sound together. render_sound mixes the sounds since the last render as
 //! they sound, by the voices' places on the clock (counted in samples, not in real time): offline, headless too.
 
-// TODO turn this into a module, albeit built-in one
+// DONE turn this into a module, albeit built-in one: the sound module is lib/sound.warp (its words), this folder (the
+// engine, effects, MIDI, audio files), adapters.rs (its std_io words, a child of modules/std_adapters.rs) and
+// host_words.rs (its native host words, a child of host/native.rs); both children by path, kept here (card turn-src)
 
 pub mod audio_files;
 pub mod effects;

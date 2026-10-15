@@ -347,6 +347,7 @@ PASSED:
   ✓ control::test_key_names::a_programs_own_key_variable_stays_its_own
   ✓ control::test_key_names::key_words_name_keys
   ✓ control::test_library_signatures::a_bool_result_shows_as_bool
+  ✓ control::test_library_signatures::a_bool_through_calls_shows_as_bool
   ✓ control::test_library_signatures::a_prelude_words_signature_as_its_head
   ✓ control::test_library_signatures::an_operator_words_signature
   ✓ control::test_library_signatures::table_words_positional
@@ -1428,7 +1429,8 @@ PASSED:
   ✓ functions::test_library_word_aliases::print_spellings_print
   ✓ functions::test_library_word_aliases::renaming_a_module_function_as_the_module_does
   ✓ functions::test_library_word_assigned::a_libm_word_maps_over_a_list
-  ✓ functions::test_library_word_assigned::a_library_word_assigned_is_a_function
+  ✓ functions::test_library_word_assigned::a_library_word_defined_is_its_alias
+  ✓ functions::test_library_word_assigned::a_library_word_referenced_is_a_function
   ✓ functions::test_library_word_assigned::a_variable_named_like_a_library_word_stays_a_value
   ✓ functions::test_library_word_values::a_function_updating_a_main_list_asks_for_global
   ✓ functions::test_library_word_values::a_library_word_is_a_function_value_of_a_user_function
@@ -1518,6 +1520,7 @@ PASSED:
   ✓ functions::test_ocaml_fun::warps_lambda_and_kotlins_fun_still_work
   ✓ functions::test_operator_arguments::a_word_operator_alone_stays_a_name
   ✓ functions::test_operator_arguments::an_operator_argument_is_the_operator
+  ✓ functions::test_operator_word_methods::a_definition_of_an_operator_word_without_parentheses_is_refused
   ✓ functions::test_operator_word_methods::a_function_keyword_definition_of_an_operator_word_is_refused
   ✓ functions::test_operator_word_methods::a_method_named_like_an_operator_word_is_called
   ✓ functions::test_operator_word_methods::the_operator_word_stays_an_operator_elsewhere
@@ -1573,6 +1576,16 @@ PASSED:
   ✓ functions::test_precomputed::a_function_reading_a_global_is_not_pure
   ✓ functions::test_precomputed::a_pure_call_with_constant_arguments_is_folded_in_a_compiled_module
   ✓ functions::test_precomputed::effects_shared_state_and_failures_are_never_folded
+  ✓ functions::test_preposition_calls::a_call_with_prepositions_inside_another_call
+  ✓ functions::test_preposition_calls::a_call_without_brackets_names_arguments
+  ✓ functions::test_preposition_calls::a_phrase_definition_takes_its_prepositions
+  ✓ functions::test_preposition_calls::a_preposition_names_its_argument
+  ✓ functions::test_preposition_calls::a_preposition_the_function_does_not_take_is_an_error
+  ✓ functions::test_preposition_calls::a_variable_named_like_a_preposition_stays_a_variable
+  ✓ functions::test_preposition_calls::play_and_melody_take_their_durations_after_for_and_each
+  ✓ functions::test_preposition_calls::play_names_its_arguments_without_use_sound
+  ✓ functions::test_preposition_calls::several_prepositions_in_any_order
+  ✓ functions::test_preposition_calls::the_words_keep_their_meaning_outside_such_calls
   ✓ functions::test_print_closure::print_shows_a_closure_as_written
   ✓ functions::test_print_closure::print_shows_a_function_reference
   ✓ functions::test_print_closure::print_shows_a_list_of_functions
@@ -1746,6 +1759,7 @@ PASSED:
   ✓ lists::test_bare_list_assignment::a_bracketed_list_never_asks
   ✓ lists::test_bare_list_assignment::an_unbracketed_list_assignment_asks_list_or_statements
   ✓ lists::test_bare_list_assignment::each_reading_has_its_explicit_form
+  ✓ lists::test_bare_list_assignment::spaced_values_are_a_list
   ✓ lists::test_byte_size::byte_size_counts_bytes_and_size_counts_elements
   ✓ lists::test_captured_call_lists::a_captured_list_of_float_calls_holds_floats
   ✓ lists::test_comprehension_beside_own_push::a_comprehension_beside_an_own_push_function
@@ -1787,6 +1801,16 @@ PASSED:
   ✓ lists::test_element_wise_lists::zero_filled_lists_pair_too
   ✓ lists::test_element_wise_scalar::element_wise_on_a_list_still_maps
   ✓ lists::test_element_wise_scalar::element_wise_on_a_number_is_the_plain_operator
+  ✓ lists::test_element_wise_vectors::a_color_vector_packs_into_a_pixel
+  ✓ lists::test_element_wise_vectors::a_number_on_the_left_broadcasts
+  ✓ lists::test_element_wise_vectors::a_number_variable_broadcasts_on_either_side
+  ✓ lists::test_element_wise_vectors::a_shader_function_mixes_numbers_and_vectors
+  ✓ lists::test_element_wise_vectors::an_element_wise_operator_of_a_call_decides_at_run_time
+  ✓ lists::test_element_wise_vectors::element_wise_any_pairs_lists_and_broadcasts_numbers
+  ✓ lists::test_element_wise_vectors::element_wise_operators_pair_items_beside_a_class_defining_them
+  ✓ lists::test_element_wise_vectors::libm_words_of_one_number_map_over_a_list
+  ✓ lists::test_element_wise_vectors::norm_is_the_euclidean_length_of_a_list
+  ✓ lists::test_element_wise_vectors::shader_math_words_take_numbers_and_vectors
   ✓ lists::test_empty_items::a_list_keeps_its_empty_items
   ✓ lists::test_empty_items::an_empty_item_reads_as_empty_in_the_text_of_a_list
   ✓ lists::test_empty_list_argument::a_call_without_arguments_has_none
@@ -2023,6 +2047,10 @@ PASSED:
   ✓ lists::test_sort_long::a_long_list_sorts_in_n_log_n
   ✓ lists::test_sort_long::equal_keys_keep_their_order
   ✓ lists::test_sort_long::ordered_input_sorts_in_linear_time
+  ✓ lists::test_swizzles::a_component_beyond_the_vector_is_no_field
+  ✓ lists::test_swizzles::a_letter_is_a_component_of_a_list_of_numbers
+  ✓ lists::test_swizzles::a_map_entry_of_the_name_wins
+  ✓ lists::test_swizzles::letters_pick_a_list_of_components
   ✓ lists::test_tuple_items_of_lists::a_tuple_from_a_list_keeps_its_items
   ✓ lists::test_tuples::test_loop_over_list_with_global_tuple
   ✓ lists::test_tuples::test_tuple_of_computed_items
@@ -2074,6 +2102,7 @@ PASSED:
   ✓ lists::test_where_filter::an_assigned_filter_may_start_with_not
   ✓ lists::test_where_filter::where_filters_by_it
   ✓ lists::test_where_filter::where_with_an_assignment_binds
+  ✓ lists::test_word_slices::other_from_and_to_stay
   ✓ modules::foreign::tests::json_conversion_keeps_nested_values_and_node_layout
   ✓ modules::test_agent_types::a_companion_takes_the_expected_type_of_any_function
   ✓ modules::test_agent_types::a_typed_declaration_asks_the_agent_for_its_type
@@ -2647,6 +2676,8 @@ PASSED:
   ✓ numbers::test_number_methods::test_a_field_named_like_a_number_method_stays_a_field
   ✓ numbers::test_number_methods::test_prefix_operator_words_as_methods
   ✓ numbers::test_number_methods::test_rounding_methods_without_parentheses
+  ✓ numbers::test_number_of_text::number_of_a_run_time_text_compares_with_a_number
+  ✓ numbers::test_number_of_text::number_of_a_run_time_text_is_the_number_it_spells
   ✓ numbers::test_number_words::a_number_word_hints_its_digits
   ✓ numbers::test_number_words::a_variable_of_that_name_wins
   ✓ numbers::test_number_words::keys_and_texts_stay_words
@@ -3378,7 +3409,13 @@ PASSED:
   ✓ programs::test_note_values::something_else_is_no_pitch
   ✓ programs::test_paint_function::a_function_wgsl_cannot_compute_paints_on_the_cpu
   ✓ programs::test_paint_function::a_painted_function_becomes_a_fragment_shader
+  ✓ programs::test_paint_function::a_painted_function_calls_a_function_of_no_parameters
+  ✓ programs::test_paint_function::a_painted_function_of_a_program_with_notes_becomes_a_fragment_shader
+  ✓ programs::test_paint_function::a_painted_function_of_vectors_becomes_a_fragment_shader
   ✓ programs::test_paint_function::a_painted_function_paints_on_the_gpu_what_the_cpu_paints
+  ✓ programs::test_paint_function::a_painted_function_reads_an_item_of_a_program_list
+  ✓ programs::test_paint_function::a_painted_function_rounds_halves_to_even
+  ✓ programs::test_paint_function::swizzles_become_the_shaders_swizzles
   ✓ programs::test_paint_in_window::a_shader_frame_crosses_to_the_paint_window_whole_and_small
   ✓ programs::test_paint_in_window::a_shader_that_does_not_compile_fails_before_it_reaches_the_window
   ✓ programs::test_paint_in_window::the_paint_window_renders_what_paint_renders
@@ -3534,6 +3571,9 @@ PASSED:
   ✓ programs::test_sound_pipes::nodes_chain
   ✓ programs::test_sound_pipes::out_plays_a_signal
   ✓ programs::test_sound_render::a_render_takes_the_sounds_after_the_last_one
+  ✓ programs::test_sound_render::render_sound_is_save_with_a_note
+  ✓ programs::test_sound_render::save_sound_as_a_file_writes_the_sounds
+  ✓ programs::test_sound_render::save_text_as_a_file_writes_it
   ✓ programs::test_sound_render::sounds_render_into_one_wav_file
   ✓ programs::test_sound_samples::a_rate_changes_speed_and_pitch
   ✓ programs::test_sound_samples::a_render_mixes_rates
@@ -3554,6 +3594,7 @@ PASSED:
   ✓ programs::test_sound_spectrum::a_tone_fills_its_own_band
   ✓ programs::test_sound_spectrum::silence_and_the_end_are_empty
   ✓ programs::test_sound_spectrum::the_gpu_visualizer_raymarches_while_it_plays
+  ✓ programs::test_sound_spectrum::the_gpu_visualizer_written_in_warp_raymarches_while_it_plays
   ✓ programs::test_sound_spectrum::the_visualizer_paints_while_it_plays
   ✓ programs::test_sound_synth::gain_in_decibels
   ✓ programs::test_sound_synth::noise_is_a_wave
@@ -5586,4 +5627,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5581 passed, 0 failed, 5581 total tested
+13 ignored, 5622 passed, 0 failed, 5622 total tested

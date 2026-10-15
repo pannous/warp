@@ -108,3 +108,14 @@ pub const COPY_WORD: &str = "copy";
 pub const STYLE_WORD: &str = "style";
 /// `min(a, b)` and `max(a, b)` of two values (lowering/collections/min_max.rs): a comparison, each argument computed once
 pub const EXTREMUM_WORDS: [&str; 2] = ["min", "max"];
+
+/// A vector's components by letter (decision S1, notes/compile_shaders.md): `p.x` is p#1, `p.xy` is [p#1 p#2], `e.xyy`
+pub const SWIZZLE_LETTERS: [char; 4] = ['x', 'y', 'z', 'w'];
+
+/// The 0-based components a swizzle name picks, 1 to 4 of the letters xyzw (`zyx`: 2 1 0), None for any other name
+pub fn swizzle_components(name: &str) -> Option<Vec<usize>> {
+	if !(1..=SWIZZLE_LETTERS.len()).contains(&name.chars().count()) {
+		return None;
+	}
+	name.chars().map(|letter| SWIZZLE_LETTERS.iter().position(|known| *known == letter)).collect()
+}

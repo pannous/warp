@@ -59,6 +59,8 @@ const BARE_FORMS: [StdAlias; 1] = [alias("", "json", "json", "parse_json", &[0])
 /// Standard words read as a member of any value, `value.member`: `x.json` is to_json(x) (card node-json)
 const MEMBER_FORMS: [StdAlias; 1] = [alias("", "json", "json", "to_json", &[0])];
 const USE_WORD: &str = "use";
+/// Old names of standard words, still working, and how warp writes them now: called by hand, a got-it note names it
+const OLD_NAMES: [(&str, &str); 1] = [("render_sound", "save sound as file")];
 
 pub fn lower(program: Node) -> Node {
 	let names = crate::soft_keywords::names_given(&program);
@@ -83,10 +85,12 @@ fn warp_form(word: &str) -> String {
 /// `parse_json(t)` written by hand, where the program defines no parse_json of its own: a got-it note naming
 /// `json.parse`; a library's own calls are no business of the program
 fn note_internal_words(program: &Node, names: &HashSet<String>) {
-	for form in WARP_FORMS.iter().filter(|form| !names.contains(form.word)) {
-		if let Some(call) = first_call_of(program, form.word) {
+	let internal = WARP_FORMS.iter().map(|form| (form.word, warp_form(form.word)));
+	let old = OLD_NAMES.iter().map(|(word, now)| (*word, now.to_string()));
+	for (word, written) in internal.chain(old).filter(|(word, _)| !names.contains(*word)) {
+		if let Some(call) = first_call_of(program, word) {
 			crate::normalize::set_position_of(call);
-			crate::errors::diagnostic::note_alias(form.word, &warp_form(form.word));
+			crate::errors::diagnostic::note_alias(word, &written);
 		}
 	}
 }

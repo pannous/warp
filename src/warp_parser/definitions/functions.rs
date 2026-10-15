@@ -323,7 +323,7 @@ impl WarpParser {
 				|| crate::analyzer::plural_element_type(word).is_some()
 				|| declared_types.contains(word)
 		};
-		let (parameters, body) = match crate::type_name_matching::parameter_slots(&words, &body, &is_known_type) {
+		let (parameters, body) = match crate::type_name_matching::parameter_slots(&words, &body, &is_known_type, true) {
 			Ok(slots) => slots,
 			Err(message) => return Some(error(&message)),
 		};

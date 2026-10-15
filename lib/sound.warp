@@ -336,7 +336,7 @@ plain_hertz(pitch) := {
 	if pitch is text and is_note_name(pitch) { return note_hertz(pitch) }
 	raise "not a pitch: " + str(pitch)
 }
-play(x, duration) := sound(chord_samples(pitches_of(x), si_amount(duration), wave_shape))
+play(tone, for duration) := sound(chord_samples(pitches_of(tone), si_amount(duration), wave_shape))
 // a music file in the background (wav, mp3, ogg, flac, aiff, m4a): play "song.mp3"; stop_sound stops it
 play_file(path) := std_io("sound", "play_file", [path])
 // play gives the sound's handle: h = play(C4, 2s); stop_sound(h) stops that one alone, stop_sound (handle 0) all
@@ -355,9 +355,13 @@ play_signal(signal, seconds) := std_io("sound", "signal", [signal, si_amount(sec
 // wait_sound waits for them (a program's end does too)
 sound_queued() := std_io("sound", "queued", [])
 wait_sound() := std_io("sound", "wait", [])
-// the sounds since the last render (or the start) one after another in one WAV file, offline (also without speakers):
-// render_sound("song.wav") gives its seconds
-render_sound(path) := std_io("sound", "render", [path])
+// the sounds since the last save (or the start), which `save sound as "song.wav"` (or `save(sound, "song.wav")`)
+// writes one after another in one WAV file, offline (also without speakers), giving its seconds: the word sound as
+// save's argument is a Recording (card save-sound, music_words.rs)
+class Recording {}
+save(made: Recording, as file) := std_io("sound", "render", [file])
+// the old name, with a note naming save (std_aliases.rs)
+render_sound(path) := save(Recording(), path)
 // `at 2 beats play C4`, `at 1 bar { … }` (card sample-accurate): the statement's sounds start that many seconds after
 // the voice's first sound, exactly so in render_sound; the voice goes on where it stood (src/lowering/music_words.rs)
 sound_at(seconds) := std_io("sound", "at", [si_amount(seconds)])
@@ -402,7 +406,7 @@ play_sample(clip: Sample, rate) := {
 	sound_samples(clip.frames, count(clip.frames), round(clip.rate * rate) as int, clip.channels)
 	std_io("sound", "last", [])
 }
-play(x) := if x is text then play_file(x) else if x is Sample then play_sample(x, 1) else sound(chord_samples(pitches_of(x), note_seconds, wave_shape))
+play(tone) := if tone is text then play_file(tone) else if tone is Sample then play_sample(tone, 1) else sound(chord_samples(pitches_of(tone), note_seconds, wave_shape))
 // one note (or chord) after another: melody([C4 E4 G4]), melody([C4 E4 G4], 250ms)
 // plain seconds: the unit check reads a quantity parameter in a loop as unsupported (notes/units_runtime.md)
 melody_samples(notes, seconds) := {
@@ -410,7 +414,7 @@ melody_samples(notes, seconds) := {
 	for pitch in notes { samples = samples + chord_samples(pitches_of(pitch), seconds, wave_shape) }
 	samples
 }
-melody(notes, duration) := sound(melody_samples(notes, si_amount(duration)))
+melody(notes, each duration) := sound(melody_samples(notes, si_amount(duration)))
 melody(notes) := melody(notes, note_seconds)
 
 // patterns in Tidal's mini-notation (card patterns-live): a cycle of steps that share the cycle's seconds evenly.

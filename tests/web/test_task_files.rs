@@ -6,7 +6,7 @@ use crate::is;
 
 #[test]
 fn a_task_plays_a_wav_rendered_before_it() {
-	is!("use sound\nplay(C4, 0.1s)\nrender_sound(\"before.wav\")\njob = go { play_file(\"before.wav\"); exists(\"before.wav\") }\nawait job", true);
+	is!("use sound\nplay(C4, 0.1s)\nsave sound as \"before.wav\"\njob = go { play_file(\"before.wav\"); exists(\"before.wav\") }\nawait job", true);
 }
 
 #[test]

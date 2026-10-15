@@ -4,10 +4,10 @@ use super::*;
 
 /// `∜x`, read as `√√x`
 pub(super) const FOURTH_ROOT: char = '∜';
-/// The prefix operators written as words: `sqrt x`, `cbrt x`, `abs x`, `norm x` (card g-1pvQ: norm is a synonym of abs),
-/// `not x`
-pub const PREFIX_OPERATOR_WORDS: [(&str, Op); 5] =
-	[("sqrt", Op::Sqrt), ("cbrt", Op::Cbrt), ("abs", Op::Abs), ("norm", Op::Abs), ("not", Op::Not)];
+/// The prefix operators written as words: `sqrt x`, `cbrt x`, `abs x`, `not x` (`norm x` is the prelude's word: the
+/// absolute value of a number, the Euclidean length of a list, decision S3)
+pub const PREFIX_OPERATOR_WORDS: [(&str, Op); 4] =
+	[("sqrt", Op::Sqrt), ("cbrt", Op::Cbrt), ("abs", Op::Abs), ("not", Op::Not)];
 /// operators::OPERATOR_SPELLINGS, the longest first: `<=` before `<`, `is less than` before `is`
 static LONGEST_SPELLINGS_FIRST: std::sync::LazyLock<Vec<(&str, Op)>> = std::sync::LazyLock::new(|| {
 	let mut spellings: Vec<_> = crate::operators::all_spellings().collect();

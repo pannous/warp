@@ -140,8 +140,9 @@ fn download_release_asset(name: &str, version: &Version, file: &str, artifact: &
 		return Err(format!("{repository} is not on GitHub, no release assets"));
 	}
 	let mut failures = vec![];
+	let asset = Path::new(file).file_name().map_or(file.into(), |asset| asset.to_string_lossy()); // c/ffi/x.h → x.h
 	for tag in [format!("v{version}"), version.to_string()] {
-		let url = format!("{repository}/releases/download/{tag}/{file}");
+		let url = format!("{repository}/releases/download/{tag}/{asset}");
 		match download_bytes(&url) {
 			Ok(bytes) if !file.ends_with(WASM_EXTENSION) || bytes.starts_with(WASM_MAGIC) => {
 				return write_atomically(artifact, &bytes)

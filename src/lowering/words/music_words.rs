@@ -19,7 +19,7 @@ use super::memoization::definition_parts;
 use super::nodes::{call, key};
 use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::words::{AT_WORD, FLOAT_WORD};
+use crate::words::{AT_WORD, FLOAT_WORD, FOR_WORD};
 use std::collections::{HashMap, HashSet};
 
 const MIDI_HERTZ_CALL: &str = "midi_hertz";
@@ -37,6 +37,11 @@ const UNIT_WORDS: [(&str, &str); 5] = [
 	("dB", "decibels"),
 ];
 const DEF_WORD: &str = "def";
+/// `save sound as "song.wav"`, `save(sound, "song.wav")` (card save-sound): the word sound, as save's argument, is the
+/// sounds made since the last save, lib/sound.warp's Recording, whose save overload writes them as a WAV file
+const SAVE_WORD: &str = "save";
+const SOUND_WORD: &str = "sound";
+const RECORDING_CLASS: &str = "Recording";
 const AT_CALL: &str = "sound_at";
 const AT_END_CALL: &str = "sound_at_end";
 const LIVE_LOOP_WORD: &str = "live_loop";
@@ -251,6 +256,13 @@ fn with_played_functions(node: Node, counts: &HashMap<String, usize>) -> Node {
 		Some((PLAY_WORD, [played, seconds])) if let Some(word) = signal_word(played, counts) => {
 			call(word, vec![played.clone(), seconds.clone()])
 		}
+		// `play hum for 2s` (lib play's `for duration`, preposition_calls.rs reads it for the other plays)
+		Some((PLAY_WORD, [played, preposition, seconds]))
+			if preposition.is_symbol(FOR_WORD)
+				&& let Some(word) = signal_word(played, counts) =>
+		{
+			call(word, vec![played.clone(), seconds.clone()])
+		}
 		_ => node,
 	}
 }
@@ -343,14 +355,32 @@ fn with_music_words(node: Node, defined: &HashSet<String>) -> Node {
 		{
 			Node::List(statements, Bracket::Curly, Separator::Newline)
 		}
-		Node::List(items, bracket, separator) if !separator.separates_statements() => {
-			Node::List(with_kind_text(with_unit_words(items, defined), defined), bracket, separator)
-		}
+		Node::List(items, bracket, separator) if !separator.separates_statements() => Node::List(
+			with_recording(with_kind_text(with_unit_words(items, defined), defined), defined),
+			bracket,
+			separator,
+		),
 		Node::List(statements, bracket, separator) => {
 			Node::List(with_scheduled(statements, defined), bracket, separator)
 		}
 		other => other,
 	}
+}
+
+/// `save sound as "x.wav"` (`save` with `sound as "x.wav"`) and `save(sound, …)`: the sound a Recording(), unless the
+/// program names something sound
+fn with_recording(items: Vec<Node>, defined: &HashSet<String>) -> Vec<Node> {
+	if !items.first().is_some_and(|word| word.is_symbol(SAVE_WORD)) || defined.contains(SOUND_WORD) {
+		return items;
+	}
+	let recording = |item: Node| match item.drop_meta() {
+		Node::Symbol(word) if word == SOUND_WORD => call(RECORDING_CLASS, vec![]).with_meta_of(&item),
+		Node::Key(made, Op::As, file) if made.is_symbol(SOUND_WORD) => {
+			key(call(RECORDING_CLASS, vec![]), Op::As, file.as_ref().clone())
+		}
+		_ => item,
+	};
+	items.into_iter().map(recording).collect()
 }
 
 /// A unit word glued to its number: `2beats` (read as `2 * beats`) and `-6dB` (read as `-(6 * dB)`, whose minus

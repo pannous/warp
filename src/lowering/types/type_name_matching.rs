@@ -10,8 +10,21 @@ use crate::operators::Op;
 use crate::words::{ANY_TYPE, ERROR_WORD, IMPLICIT_PARAMETER};
 
 const ARTICLES: [&str; 3] = ["a", "an", "the"];
-/// The words that separate a phrase's slots; `each` too: `to hum notes each d: …` is called `hum [C4 E4] each 50ms`
+/// The words that separate a phrase's slots and name the slot after them (preposition_calls.rs); `each` too: `to hum notes each d: …` is called `hum [C4 E4] each 50ms`
 pub(crate) const PREPOSITIONS: [&str; 11] = ["to", "of", "from", "with", "in", "into", "at", "by", "for", "on", "each"];
+
+/// `for`, `to`, …: a symbol that is a preposition
+pub(crate) fn is_preposition(word: &Node) -> bool {
+	matches!(word.drop_meta(), Node::Symbol(name) if PREPOSITIONS.contains(&name.as_str()))
+}
+/// `as` labels a parameter too, though it separates no phrase slot: `save(made, as file)` is called
+/// `save sound as "song.wav"` (card save-sound)
+pub(crate) const AS_LABEL: &str = "as";
+
+/// A word naming the parameter after it: a preposition or `as`
+pub(crate) fn is_label_word(word: &Node) -> bool {
+	is_preposition(word) || word.drop_meta().is_symbol(AS_LABEL)
+}
 /// Statement words before a typed declaration that never name a function: `global number = 3`, `let int x = 1`
 const STATEMENT_WORDS: [&str; 17] = [
 	"global", "let", "var", "export", "mutable", "mut", "return", "yield", "print", "println", "puts", "not", "if",
@@ -51,9 +64,16 @@ pub fn parameter_slots(
 	words: &[&str],
 	body: &Node,
 	is_known_type: &dyn Fn(&str) -> bool,
+	labelled: bool,
 ) -> Result<(Vec<Node>, Node), String> {
 	let in_phrase = prepositions_among(words);
 	let mut parameters = vec![];
+	// `from a`: the preposition before the slot, which names it in calls when `labelled` (`move 1 from 2`)
+	let mut preposition = None;
+	let mut push = |parameter: Node, preposition: &mut Option<&str>| match preposition.take().filter(|_| labelled) {
+		Some(word) => parameters.push(Node::List(vec![symbol(word), parameter], Bracket::None, Separator::Space)),
+		None => parameters.push(parameter),
+	};
 	// `number a to …`: an article right before a preposition or the end is a name
 	let ends_slot = |index: usize| in_phrase.get(index).is_none_or(|phrase_word| *phrase_word);
 	let mut index = 0;
@@ -61,6 +81,7 @@ pub fn parameter_slots(
 		let word = words[index];
 		let next = (!ends_slot(index + 1)).then(|| words[index + 1]);
 		if in_phrase[index] {
+			preposition = Some(word);
 			index += 1;
 		} else if ARTICLES.contains(&word) && next.is_some_and(|next| is_known_type(next) || !body.mentions(word)) {
 			let noun: Vec<&str> = (index + 1..words.len())
@@ -68,15 +89,15 @@ pub fn parameter_slots(
 				.map(|later| words[later])
 				.collect();
 			let head = noun[noun.len() - 1];
-			parameters.push(if is_known_type(head) { typed(head, head) } else { symbol(head) });
+			push(if is_known_type(head) { typed(head, head) } else { symbol(head) }, &mut preposition);
 			index += 1 + noun.len();
 		} else {
-			parameters.push(if is_known_type(word) { typed(word, word) } else { symbol(word) });
+			push(if is_known_type(word) { typed(word, word) } else { symbol(word) }, &mut preposition);
 			index += 1;
 		}
 	}
 	let body = body.clone();
-	let names: Vec<String> = parameters.iter().map(Node::name).collect();
+	let names: Vec<String> = parameters.iter().map(crate::lowering::nodes::parameter_word).collect();
 	if let Some(shared) =
 		names.iter().enumerate().find(|(index, name)| names[..*index].contains(name)).map(|(_, name)| name)
 	{
@@ -96,7 +117,10 @@ pub fn parameter_slots(
 /// The parameters of a spaced definition head `name words… = body` (also `:=`): its slots when a word is a known type
 /// word; None for `f x = …` without one, which keeps its old meaning (each word a parameter)
 pub fn spaced_parameters(words: &[&str], body: &Node) -> Option<Result<(Vec<Node>, Node), String>> {
-	words.iter().any(|word| is_kinded_type_or_any(word)).then(|| parameter_slots(words, body, &is_kinded_type_or_any))
+	words
+		.iter()
+		.any(|word| is_kinded_type_or_any(word))
+		.then(|| parameter_slots(words, body, &is_kinded_type_or_any, false))
 }
 
 /// The statement `name words… last = body` (parsed as the items `name`, `words…`, `last=body`) as `name(params) := body`

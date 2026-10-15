@@ -1,0 +1,7 @@
+// card compile-shaders: a painted function reading an item of the program's list, levels#k, becomes a fragment shader
+// indexing its values, which hold the list as one vec4f per item (any length; WARP_GPU=off paints the same)
+width = 16
+height = 4
+levels = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4]
+bars(x, y) := [levels#(x + 1), 0.5, 1 - levels#(x + 1)]
+paint(bars, width, height)

@@ -69,3 +69,12 @@ fn the_gpu_visualizer_raymarches_while_it_plays() {
 		crate::common::announce_skip("a WebGPU adapter", module_path!());
 	}
 }
+
+// the same tunnel written in warp functions: paint(tunnel, …) compiles them to one fragment shader (card compile-shaders)
+#[cfg(feature = "native")]
+#[test]
+fn the_gpu_visualizer_written_in_warp_raymarches_while_it_plays() {
+	if animates_while_it_plays(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/gpu_visualizer_warp.warp")).is_none() {
+		crate::common::announce_skip("a WebGPU adapter", module_path!());
+	}
+}
