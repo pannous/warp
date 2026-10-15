@@ -11,6 +11,7 @@ fn a_type_overload_beside_several_arities_keeps_them_all() {
 #[test]
 fn a_method_added_to_a_module_word_of_several_arities_keeps_them_all() {
 	is!("use sound\nclass Box{v}\nplay(b: Box) := 7\nplay(Box(1))", 7);
-	is!("use sound\nclass Box{v}\nplay(b: Box) := 7\nplay(C4, 0.01) > 0", true);
-	is!("use sound\nplay(x, d, b: Bus) := 7\nplay(C4, 0.01) > 0", true);
+	// the library's play gives a handle, a number (0 in the browser's test page), never the method's text
+	is!("use sound\nclass Box{v}\nplay(b: Box) := \"box\"\nplay(C4, 0.01) is int", true);
+	is!("use sound\nplay(x, d, b: Bus) := \"bus\"\nplay(C4, 0.01) is int", true);
 }
