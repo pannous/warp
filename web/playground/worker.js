@@ -6,7 +6,7 @@
 const stage = name => self.postMessage({ type: "stage", stage: name });
 
 stage("loading its scripts");
-importScripts("reader.js", "imports.js", "exact.js", "std.js", "host.js");
+importScripts("reader.js", "imports.js", "exact.js", "js-members.js", "std.js", "host.js");
 importScripts(...HOST_PART_FILES, "components.js", "served-files.js");
 stage("starting the task workers");
 prepareTaskPool(); // task Workers start while this worker is idle (host.js)
@@ -44,6 +44,7 @@ const WARM_UP_CODE = 'p{ "" }';
 self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host-files.js STD_ADAPTERS.store
 self.writeClipboard = text => post({ type: "clipboard", text }); // host-files.js STD_ADAPTERS.clipboard
 self.askPageClipboard = shared => self.postMessage({ type: "clipboard read", shared }); // host.js clipboard_text
+self.askPageCall = (shared, request) => self.postMessage({ type: "page call", shared, request }); // host-foreign.js callOnPage
 // play's handles (lib/sound.warp, card sound-pro): the sounds and music files of a run counted from 1, as natively
 let soundHandles = 0;
 const nextSoundHandle = () => ++soundHandles;
@@ -322,6 +323,7 @@ async function handleMessage(data) {
 	await taskPoolReady(); // host.js: tasks run on loaded Workers, not inline
 	stage(`evaluating run ${data.id}`);
 	soundHandles = 0;
+	self.programFile = data.file; // host-files.js besideProgram
 	const started = performance.now();
 	const report = await evaluate(data.code, data.acknowledged ?? {});
 	post({ type: "report", id: data.id, report, milliseconds: performance.now() - started });

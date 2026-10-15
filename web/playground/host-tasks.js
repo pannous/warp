@@ -117,9 +117,9 @@ function withTaskSounds(run, record) {
 	return record;
 }
 
-// a sound a task plays, for the page, which only the program's Worker talks to (task-worker.js relay); it reaches the
-// page once that Worker is back in its event loop, not while it waits for the task
-const RELAYED = ["playSamples", "playSoundFile", "stopSound", "stopSoundFiles", "fadeSound"];
+// a sound or MIDI message a task sends, for the page, which only the program's Worker talks to (task-worker.js relay);
+// it reaches the page once that Worker is back in its event loop, not while it waits for the task
+const RELAYED = ["playSamples", "playSoundFile", "stopSound", "stopSoundFiles", "fadeSound", "sendMidi"];
 function relayed([method, ...values]) {
 	if (!RELAYED.includes(method)) throw new Error(`a task Worker relayed ${method}, which is no word of the page`);
 	self[method]?.(...values);
@@ -513,12 +513,25 @@ function controlTask(run, id, operation) {
 		return 1n;
 	}
 	if (isQueued(task)) run.queued--;
-	if (isRunningOnWorker(task)) {
-		task.worker.terminate();
-		addTaskWorker(); // the pool's replacement, loaded once this run returns to its event loop
-	}
+	if (isRunningOnWorker(task)) replaceTaskWorker(task);
 	run.tasks.set(id, { failure: `task ${task.name}: ${TASK_STOPPED}` });
 	return 1n;
+}
+
+function replaceTaskWorker(task) {
+	task.worker.terminate();
+	task.released = true;
+	addTaskWorker(); // the pool's replacement, loaded once this run returns to its event loop
+}
+
+// a failed run's tasks give their Workers back, as natively its threads end with it: a finished one's goes back to
+// the pool, a running one's ends (card flaky-browser-suite-2: leaked Workers made later runs' tasks take turns)
+function freeTaskWorkers(run) {
+	for (const task of run.tasks?.values() ?? []) {
+		if (!isRunningOnWorker(task) || task.released) continue;
+		if (isDone(task)) releaseWorker(task);
+		else replaceTaskWorker(task);
+	}
 }
 
 // the message a raised error left in trap_detail before trapping (src/run/wasm_reader.rs with_trap_detail), if any
@@ -911,7 +924,10 @@ addHostPart({
 		checkShared(holder); // and the listeners on shared values see what the tasks left
 		return unread;
 	},
-	ended: holder => endChannels(holder.run),
+	ended: holder => {
+		endChannels(holder.run);
+		freeTaskWorkers(holder.run);
+	},
 	navigated: dropPendingFetches,
 	stopped: holder => {
 		holder.channels?.forEach(({ channel }) => channel.close());

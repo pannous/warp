@@ -297,6 +297,12 @@ fn with_route_body(route: Node, body: Node) -> Node {
 	Node::List(items, bracket, separator)
 }
 
+/// Whether part of the program answers on the server only: `serve PORT {…}`, a top-level `get "/api" {…}` or a server
+/// function (page routes are the page's)
+pub fn has_server_parts(code: &str) -> bool {
+	top_level_statements(code).iter().any(|statement| is_serving(statement) || server_definition(statement).is_some())
+}
+
 /// Whether the program has its own `serve PORT {…}`
 pub fn serves_itself(code: &str) -> bool {
 	top_level_statements(code).iter().any(|statement| served(statement).is_some())

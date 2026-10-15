@@ -256,6 +256,57 @@ gain(signal, share) := [share * x for x in signal]
 mix(a, b) := added(a, b)
 mix(a, b, c) := added(added(a, b), c)
 mix(a, b, c, d) := added(added(a, b), added(c, d))
+// a bus (card shared-buses): one effect chain that every sound sent to it goes through together, from the program and
+// its tasks, processed once on their mix as they play (src/sound/effects.rs), so a reverb rings on after the last:
+// room = bus() |> reverb(0.4) |> delay(0.25), then out(osc(C4, 1s), room) or osc(C4, 1s) |> out(room)
+class Bus {
+	id: int
+	chain: list
+}
+bus() := Bus(std_io("sound", "bus", [0, []]), [])
+// the bus with the effect at the end of its chain, or in place of its effect of that name (its new settings, what
+// rings in it kept), which the host takes over from this voice's moment on (card shared-buses stage 3). EQ bands are
+// several of a name: one replaces the band at its frequency (card bus-peak)
+with_effect(b: Bus, effect) := {
+	chain = []
+	replaced = false
+	banded = effect[0] in ["peak", "low_shelf", "high_shelf"]
+	for e in b.chain {
+		if e[0] == effect[0] and (not banded or e[1] == effect[1]) {
+			chain.push(effect)
+			replaced = true
+		} else {
+			chain.push(e)
+		}
+	}
+	if not replaced {
+		chain.push(effect)
+	}
+	std_io("sound", "bus", [b.id, chain])
+	Bus(b.id, chain)
+}
+lowpass(b: Bus, frequency, q = 0.707) := with_effect(b, ["lowpass", si_amount(frequency), q])
+highpass(b: Bus, frequency, q = 0.707) := with_effect(b, ["highpass", si_amount(frequency), q])
+bandpass(b: Bus, frequency, q = 0.707) := with_effect(b, ["bandpass", si_amount(frequency), q])
+delay(b: Bus, seconds, feedback = 0.4, mix = 0.5) := with_effect(b, ["delay", si_amount(seconds), feedback, mix])
+reverb(b: Bus, mix = 0.3) := with_effect(b, ["reverb", mix])
+distort(b: Bus, drive = 0.5) := with_effect(b, ["distort", drive])
+gain(b: Bus, share) := with_effect(b, ["gain", share])
+// an EQ band (card shared-buses stage 4): the frequencies around `frequency` (peak) or below or above it (the shelves)
+// raised or lowered by the dB
+peak(b: Bus, frequency, db, q = 1) := with_effect(b, ["peak", si_amount(frequency), db, q])
+low_shelf(b: Bus, frequency, db, q = 0.707) := with_effect(b, ["low_shelf", si_amount(frequency), db, q])
+high_shelf(b: Bus, frequency, db, q = 0.707) := with_effect(b, ["high_shelf", si_amount(frequency), db, q])
+// a compressor: a level over the threshold (dB, 0 is full scale) comes out ratio times closer to it, following a rise
+// in attack seconds and a fall in release
+compress(b: Bus, threshold = -18, ratio = 4, attack = 0.01, release = 0.1) := with_effect(b, ["compress", threshold, ratio, si_amount(attack), si_amount(release)])
+// the signal played through the bus; its handle. The thread's sounds go where they went before afterwards
+out(signal, b: Bus) := {
+	before = std_io("sound", "send", [b.id])
+	handle = out(signal)
+	std_io("sound", "send", [before])
+	handle
+}
 // indexed in place: dry_at(a, i) + dry_at(b, i) of two lists was quadratic (card list-call-copy)
 added(a, b) := [(if i < count(a) then a[i] else 0.0) + (if i < count(b) then b[i] else 0.0) for i in 0..max(count(a), count(b))]
 out(signal) := sound(clamped_samples(signal))

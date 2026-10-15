@@ -158,6 +158,7 @@ impl WasmGcEmitter {
 	}
 
 	/// text_quoted(text): the text in double quotes, a `"` or `\` in it escaped by a `\` (P126: `["say \"hi\""]`);
+	/// one character in single quotes (chars-codepoints: `['a' "bc"]`, a one-character text is a character);
 	/// byte-wise, as neither byte occurs inside a multi-byte UTF-8 character
 	pub(super) fn emit_text_quoted(&mut self) {
 		if !self.should_emit_function(TEXT_QUOTED) {
@@ -165,8 +166,8 @@ impl WasmGcEmitter {
 		}
 		self.emit_text_heap_global();
 		let node_ref = Ref(self.node_ref(false));
-		self.runtime_function(TEXT_QUOTED, vec![node_ref], vec![node_ref], vec![ValType::I32; 6], |s, f| {
-			let (pointer, end, capacity, destination, out, byte) = (1, 2, 3, 4, 5, 6);
+		self.runtime_function(TEXT_QUOTED, vec![node_ref], vec![node_ref], vec![ValType::I32; 7], |s, f| {
+			let (pointer, end, capacity, destination, out, byte, quote) = (1, 2, 3, 4, 5, 6, 7);
 			let write = |f: &mut Function, value: I<'static>| {
 				Self::emit_list(
 					f,
@@ -182,6 +183,9 @@ impl WasmGcEmitter {
 				);
 			};
 			s.emit_text_bounds(f, pointer, end);
+			Self::emit_list(f, &[I32Const(CHARACTER_QUOTE_BYTE), I32Const(QUOTE_BYTE)]);
+			Self::emit_is_one_character(f, pointer, end, byte);
+			Self::emit_list(f, &[I::Select, I::LocalSet(quote)]);
 			// at worst every byte is escaped, plus the two quotes
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
@@ -190,13 +194,13 @@ impl WasmGcEmitter {
 			]);
 			s.emit_text_allocation(f, capacity, destination);
 			Self::emit_list(f, &[I::LocalGet(destination), I::LocalSet(out)]);
-			write(f, I32Const(QUOTE_BYTE));
+			write(f, I::LocalGet(quote));
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
 				I::Block(BlockType::Empty),
 					I::Loop(BlockType::Empty),
 						I::LocalGet(pointer), I::LocalGet(end), I::I32GeU, I::BrIf(1),
-						I::LocalGet(pointer), I::I32Load8U(BYTE), I::LocalTee(byte), I32Const(QUOTE_BYTE), I::I32Eq,
+						I::LocalGet(pointer), I::I32Load8U(BYTE), I::LocalTee(byte), I::LocalGet(quote), I::I32Eq,
 						I::LocalGet(byte), I32Const(BACKSLASH_BYTE), I::I32Eq, I::I32Or, I::If(BlockType::Empty),
 			]);
 			write(f, I32Const(BACKSLASH_BYTE));
@@ -206,7 +210,7 @@ impl WasmGcEmitter {
 				f,
 				&[I::LocalGet(pointer), I32Const(1), I::I32Add, I::LocalSet(pointer), I::Br(0), I::End, I::End],
 			);
-			write(f, I32Const(QUOTE_BYTE));
+			write(f, I::LocalGet(quote));
 			s.emit_new_text_to(f, destination, out);
 		});
 	}
@@ -312,7 +316,7 @@ impl WasmGcEmitter {
 					s.emit_structure_as_literal(f, element, &[Kind::Key], empty);
 				}
 				if nested {
-					// a text or a character in a container is quoted (P126): `["a" "bc"]`
+					// a text or a character in a container is quoted (P126, chars-codepoints): `['a' "bc"]`
 					s.emit_field(f, element, 0);
 					Self::emit_kind_test(f, Kind::Text as i64, I::I64Eq);
 					Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(element), I::RefAsNonNull]);

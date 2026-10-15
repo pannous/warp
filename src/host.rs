@@ -107,6 +107,11 @@ pub const STD_IO: &str = "std_io";
 pub const STD_MODULES_SECTION: &str = "warp.std_modules";
 pub const STD_MODULES_SEPARATOR: &str = ",";
 pub const ANY_STD_MODULE: &str = "*";
+/// The custom section holding the program's file as given, when relative, for a program playing files (std sound): the
+/// browser host finds `play "song.mp3"` beside it (host-files.js besideProgram, card play-beside-program)
+pub const PROGRAM_FILE_SECTION: &str = "warp.program_file";
+/// The std module whose words name files relative to the program (lib/sound.warp play)
+pub const FILE_NAMING_STD_MODULE: &str = "sound";
 /// The custom section naming the program's own functions (`def`, lib/*.warp), joined by the separator: exported for tasks
 /// and other modules; a built site without tasks moves those one route calls into its route's module (route_split.rs)
 pub const USER_FUNCTIONS_SECTION: &str = "warp.user_functions";

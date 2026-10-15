@@ -1,0 +1,17 @@
+//! card type-module follow-up (reviewer, user 2026-10-14 "always exactly the same"): `x.word` of a type module's word
+//! is `x.word()` whatever x is written as, a computed value, a function's result or a parameter; a field still wins
+use crate::is;
+
+#[test]
+fn a_computed_receiver_takes_the_word_without_parentheses() {
+	is!("s = \"ab\" + \"c\"; s.capitalize", "Abc");
+	is!("xs = 1..4; xs.product", 6);
+	is!("f() := [1 2 3]; xs = f(); xs.product", 6);
+	is!("f(xs) := xs.product; f([1 2 3])", 6);
+}
+
+#[test]
+fn a_field_of_that_name_still_wins() {
+	is!("class Box{product:int}; f(b) := b.product; f(Box(7))", 7);
+	is!("f(m) := m.product; f({product: 5})", 5);
+}

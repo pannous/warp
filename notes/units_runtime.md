@@ -155,3 +155,13 @@ a base case `1` is "the branches give a plain number and m"). `fact(n, x) := if 
 → 3m. Recursion that changes the arguments' units (`f(x * x)`, polymorphic recursion) stays left to the evaluator.
 Test: tests/numbers/test_recursive_units.rs.
 
+
+## Dimensions as types (card dimensions-units)
+Dimension names are types of quantities, decided at compile time by static_units (`DIMENSION_NAMES`,
+`dimension_signature`): `3 cm is length` → yes, `4 m² is length²`, `20°C is temperature`; a declared `h: length = 2 inch`
+accepts any unit of the dimension and keeps the written one, `w: mass = 3 m` is a DimensionError. Products, quotients
+and powers name derived dimensions through the same `factor_expression` that reads unit expressions (`km/h`). A program
+naming `length` itself keeps its variable. The time dimension is `duration`, a subtype of `time` (anchor-time): `3 s is
+duration` and `3 s is time` hold; a value without units keeps the time module's test (`now is time`). Open with the Interviewer: Q1 pixel (CSS 1/96 inch vs device pixel), Q2 a lib/units.warp of definitions,
+Q3 `[3, 4] cm` as a vector of lengths, Q4 derived names (speed, area, volume, frequency).
+Test: tests/numbers/test_dimension_types.rs.

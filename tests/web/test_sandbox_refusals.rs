@@ -80,6 +80,29 @@ fn a_sandboxed_program_writes_nothing_outside_its_state_folder() {
 	assert!(!escaped.exists(), "{path} was written");
 }
 
+/// The whole request, its body too: answering after the headers alone closed the socket while a POST still sent its
+/// body, which then failed with "Invalid argument (os error 22)" (card sandbox-post-flaky)
+fn read_request(stream: &mut std::net::TcpStream) {
+	let mut request = Vec::new();
+	let mut chunk = [0; 4096];
+	let complete = |request: &[u8]| {
+		let text = String::from_utf8_lossy(request);
+		let Some(end) = text.find("\r\n\r\n") else { return false };
+		let length = (text[..end].lines())
+			.find_map(|line| {
+				line.to_ascii_lowercase().strip_prefix("content-length:").map(|n| n.trim().parse().unwrap_or(0))
+			})
+			.unwrap_or(0);
+		request.len() >= end + 4 + length
+	};
+	while !complete(&request) {
+		match stream.read(&mut chunk) {
+			Ok(0) | Err(_) => return,
+			Ok(read) => request.extend_from_slice(&chunk[..read]),
+		}
+	}
+}
+
 #[test]
 fn a_sandboxed_program_reaches_the_network() {
 	let (state, _) = folders("network");
@@ -87,7 +110,7 @@ fn a_sandboxed_program_reaches_the_network() {
 	let address = listener.local_addr().expect("its address");
 	std::thread::spawn(move || {
 		for mut stream in listener.incoming().flatten() {
-			let _ = stream.read(&mut [0; 4096]);
+			read_request(&mut stream);
 			let _ = stream.write_all(REPLY.as_bytes());
 		}
 	});

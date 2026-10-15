@@ -306,9 +306,33 @@ samples/sound_pipes.warp, tests/programs/test_sound_pipes.rs): a signal is the l
 of it, so `osc(C4, 1s, "saw") |> lowpass(900) |> delay(0.25) |> reverb(0.3) |> gain(0.5) |> out`; nodes osc, lowpass /
 highpass / bandpass (frequency, q), delay (seconds, feedback, mix), reverb (mix), distort (drive), gain, out (plays it
 through `sound`, so the settings chain and pan still apply); `mix(a, b[, c, d])` sums signals to the longest, a bus as a
-value. The settings chain and the nodes share biquad / echoed / roomed / clipped. Still to build: buses shared between
-voices (tasks), compressor, EQ, effects on a running handle. Speed: a mix over a list of signals in a loop was quadratic
-(card list-call-copy), so mix takes two to four signals.
+value. The settings chain and the nodes share biquad / echoed / roomed / clipped. Speed: a mix over a list of signals in
+a loop was quadratic (card list-call-copy), so mix takes two to four signals.
+
+## Shared buses, stage 1 (card shared-buses, 2026-10-15, src/sound/effects.rs, tests/programs/test_sound_buses.rs)
+`room = bus() |> reverb(0.4) |> delay(0.25)`, then `out(signal, room)` or `signal |> out(room)` from the program or
+any task: the bus's sounds are mixed, then go through its chain together, once, as a stream, ringing on until -60 dB
+after the last (Chain::rung_out). Natively the Mixer runs each bus in its device callback (fill); render_sound mixes
+each bus apart and runs the same Chain (effects::processed). lib: class Bus {id, chain}, the effect nodes on a Bus append
+to its chain (host word sound.bus), `out(signal, b: Bus)` sends (sound.send, a thread's current bus around its sound).
+The DSP is the lib formulas in Rust, streaming. Plan (supervisor, user asked whether Rust or warp holds the one DSP):
+stage 2 the browser runs the same code (warp.wasm export for render_sound, an AudioWorklet live; until then the
+playground plays bus sounds dry and says so), stage 3 a bus's effects changed while it plays, stage 4 compressor, EQ.
+
+Stage 3 built (2026-10-15): `room = room |> gain(0)` changes the bus from the defining voice's moment (where its queued
+sounds end). An effect of a name the chain has replaces it in place (with_effect), else it appends. Chain::retune keeps
+each stage of the same kind with its state (comb echoes, biquad history), so a delay set again rings on; another kind
+starts afresh. Live: Mixer::change_bus(bus, frame, effects) stores pending changes per Bus, fill splits the bus's buffer
+at their frames. render_sound: BUSES keeps every definition at its place since the last render, effects::processed
+retunes at their frames, the last definition stays for the next render. `out(signal, bus)` restores the bus the thread
+sent to before (sound.send returns it, natively and in host-sound.js).
+
+Stage 4 built (2026-10-15): bus words `peak(b, frequency, db, q = 1)`, `low_shelf`/`high_shelf(b, frequency, db,
+q = 0.707)` (RBJ cookbook biquads, FilterKind::Peak/LowShelf/HighShelf carry the dB) and `compress(b, threshold = -18,
+ratio = 4, attack = 0.01, release = 0.1)`: one peak envelope over the loudest channel (linked, the stereo image stays), the
+dB over the threshold scaled by 1 - 1/ratio, no knee, no makeup gain (add `gain`). EQ bands are several of a name
+(card bus-peak): `peak(200Hz, 3) |> peak(3kHz, -2)` keeps both, one at a band's frequency replaces it. Bus-only for now: no list-signal versions in
+lib (they wait for the one-DSP answer, Rust or warp).
 
 ## Native output built (card native-sound, 2026-10-12, src/sound/sound_engine.rs, tests/programs/test_sound_engine.rs)
 On macOS every sound now goes into one cpal output stream (CoreAudio) instead of one afplay process per WAV. A `Mixer`

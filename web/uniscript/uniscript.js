@@ -1,8 +1,12 @@
-// Runs uniscript.wasp (the uniscript package) compiled to WASM GC by warp (build.sh): the conversion happens in uniscript.wasm, this file is only
-// the host: the "host" imports (src/host.rs), texts into and out of wasm memory, and the page.
+// Runs uniscript.warp (`use uniscript`) compiled to WASM GC by warp (build.sh): the conversion happens in the uniscript
+// package's C library uniscript_c.wasm, which uniscript.wasm imports by path. This file is only the host: the "host"
+// imports (src/host.rs), the C calls into the imported modules, texts into and out of wasm memory, and the page.
 
 const MODULE_URL = "uniscript.wasm";
-const PRELOADED_FILES = ["packages/uniscript/data/entities.idx"]; // read by the module's init, fetched before it runs
+// the modules the program imports by path, shipped by build.sh as modules/<file>, as a site ships them (src/web/site_modules.rs)
+const MODULES_DIRECTORY = "modules/";
+const C_CALLS_SECTION = "warp.c_calls"; // src/modules/wasm_modules/c_calls.rs: "module\tname\tparameters\tresult" per C call
+const C_LETTERS = ["t", "n"]; // a text (char *) and a number: what uniscript_c.h needs (web/playground/host-foreign.js callC has all)
 const TEXT_HEAP_EXPORT = "text_heap";
 const PAGE_BITS = 16;
 const KIND_MASK = 0xffn;
@@ -12,7 +16,6 @@ const INPUT_DELAY_MS = 60;
 
 const utf8 = new TextEncoder();
 const decoder = new TextDecoder("utf-8", { fatal: false });
-const preloaded = new Map();
 let wasm; // the instance's exports
 let heapMark = 0; // text_heap after the module's init: every conversion's texts are dropped by resetting to it
 let warningList; // where host.warn reports: the list under the output being converted
@@ -44,6 +47,13 @@ function writeBytes(bytes) {
 }
 
 const readString = (pointer, length) => decoder.decode(new Uint8Array(wasm.memory.buffer, pointer, length));
+
+// the bytes of a NUL-terminated C text in a memory
+function cText(memory, address) {
+	const bytes = new Uint8Array(memory.buffer, address);
+	const end = bytes.indexOf(0);
+	return bytes.slice(0, end < 0 ? bytes.length : end);
+}
 
 const newText = text => wasm.new_text(...writeBytes(utf8.encode(text)));
 
@@ -80,7 +90,7 @@ function hostResult(action, what) {
 
 function readFile(pointer, length) {
 	const path = readString(pointer, length);
-	return hostResult(() => preloaded.get(path) ?? getSync(path), `read ${path}`);
+	return hostResult(() => getSync(path), `read ${path}`);
 }
 
 function fetchUrl(pointer, length) {
@@ -99,12 +109,57 @@ const hostFunctions = {
 	warn: (pointer, length) => warn(readString(pointer, length)),
 };
 
-// every import the module declares (imports.js importDescriptors): the host functions above, anything else a stub that warns when called
-function importsOf(bytes) {
+// ---- C calls into the imported modules ----------------------------------------------------------------------
+
+// the program's C calls by "module\tname": their parameter letters and result letter (C_CALLS_SECTION)
+function cCallsOf(module) {
+	const lines = WebAssembly.Module.customSections(module, C_CALLS_SECTION).flatMap(section => decoder.decode(section).split("\n"));
+	return new Map(lines.filter(Boolean).map(line => line.split("\t")).map(([space, name, parameters, result]) =>
+		[`${space}\t${name}`, { parameters: [...parameters], result }]));
+}
+
+// a C function of a module: each text, NUL-terminated in the program's memory, copied into a block of the module's
+// malloc and freed after the call; a char * result read back as a text node of the program (NULL is ø) and freed
+function cCall(library, name, { parameters, result }) {
+	const unsupported = [...parameters, result].find(letter => !C_LETTERS.includes(letter));
+	if (unsupported) throw new Error(`${name}: C value kind ${unsupported} is not supported by this page`);
+	const copyIn = bytes => {
+		const block = library.malloc(bytes.length + 1);
+		new Uint8Array(library.memory.buffer).set([...bytes, 0], block);
+		return block;
+	};
+	return (...values) => {
+		const blocks = values.map((value, index) => parameters[index] === "t" ? copyIn(cText(wasm.memory, value)) : null);
+		const returned = library[name](...values.map((value, index) => blocks[index] ?? value));
+		blocks.forEach(block => block !== null && library.free(block));
+		if (result !== "t") return returned;
+		if (returned === 0) return wasm.new_empty();
+		const text = wasm.new_text(...writeBytes(cText(library.memory, returned)));
+		(library.uniscript_free ?? library.free)(returned);
+		return text;
+	};
+}
+
+// a module the program imports by path, by its file name in MODULES_DIRECTORY; it imports nothing itself
+async function importedModule(path) {
+	const url = MODULES_DIRECTORY + path.split("/").pop();
+	const response = await fetch(url);
+	if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+	const { instance } = await WebAssembly.instantiate(await response.arrayBuffer());
+	return instance.exports;
+}
+
+// every import the module declares (imports.js importDescriptors): the host functions above, the C calls into the
+// modules it imports by path, anything else a stub that warns when called
+async function importsOf(module, bytes) {
+	const calls = cCallsOf(module);
+	const libraries = new Map();
 	const imports = {};
 	for (const { module: space, name, kind } of importDescriptors(bytes)) {
 		if (kind !== "function") throw new Error(`unsupported import ${space}.${name} (${kind})`);
-		const known = space === "host" && hostFunctions[name];
+		const call = calls.get(`${space}\t${name}`);
+		if (call && !libraries.has(space)) libraries.set(space, importedModule(space));
+		const known = space === "host" ? hostFunctions[name] : call && cCall(await libraries.get(space), name, call);
 		(imports[space] ??= {})[name] = known || ((...args) => {
 			warn(`${space}.${name} is not available in the browser`);
 			return 0;
@@ -113,20 +168,13 @@ function importsOf(bytes) {
 	return imports;
 }
 
-async function preload(path) {
-	const response = await fetch(path);
-	if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
-	preloaded.set(path, new Uint8Array(await response.arrayBuffer()));
-}
-
 async function load() {
-	const [bytes] = await Promise.all([fetch(MODULE_URL).then(response => response.arrayBuffer()), ...PRELOADED_FILES.map(preload)]);
-	const { instance } = await WebAssembly.instantiate(bytes, importsOf(bytes));
-	wasm = instance.exports;
+	const bytes = await fetch(MODULE_URL).then(response => response.arrayBuffer());
+	const module = await WebAssembly.compile(bytes);
+	wasm = (await WebAssembly.instantiate(module, await importsOf(module, bytes))).exports;
 	const init = nodeResult(wasm.main());
 	if (init.kind === KIND_ERROR) throw new Error(init.text);
 	heapMark = wasm[TEXT_HEAP_EXPORT].value;
-	preloaded.clear();
 }
 
 // ---- conversion ----------------------------------------------------------------------------------------------

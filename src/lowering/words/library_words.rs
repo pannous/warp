@@ -5,7 +5,7 @@
 //!
 //! An unknown `.word` after a name, a text or a list is a loud error (`undefined function: word`), never silent data.
 
-use super::nodes::{call, children_rewritten, key, Counter};
+use super::nodes::{call, children_rewritten, if_then_else, key, Counter};
 use crate::analyzer::{call_name, counting_method};
 use crate::compiler::context::Context;
 use crate::errors::diagnostic::Diagnostic;
@@ -60,6 +60,8 @@ pub const MAP_WORD_FUNCTIONS: [&str; 8] = [
 	MAP_WITHOUT,
 	crate::one_entry_maps::MAP_OF_ENTRY,
 ];
+/// The modules named after a type, whose words `x.word` calls on a value of it (lib/list.warp, text.warp)
+const TYPE_MODULES: [&str; 2] = ["list", "text"];
 /// The name `catch e` binds, in lower_try_binding's template
 const CAUGHT_BINDING_PLACEHOLDER: &str = "caught_binding";
 /// The got-it topic of `square 3 + square(4)` (ask_braceless_argument)
@@ -326,6 +328,7 @@ pub fn lower(node: Node) -> Node {
 	let objects = assigned.objects.into_iter().filter_map(|(name, literal)| Some((name, literal?))).collect();
 	let instances = crate::traits::InstanceTypes::of(&node);
 	let call_results = call_results(&node, &context);
+	let times = crate::time::time_variables(&node);
 	Lowering {
 		context,
 		shadowed: RefCell::new(shadowed),
@@ -335,6 +338,7 @@ pub fn lower(node: Node) -> Node {
 		parameters: RefCell::new(vec![]),
 		defining: RefCell::new(vec![]),
 		call_results,
+		times,
 		temporaries: Counter::default(),
 	}
 	.expand(node)
@@ -418,6 +422,30 @@ fn prefix_operator_method(receiver: &Node, name: &str) -> Option<Node> {
 	Some(key(Node::Empty, operator, receiver.clone()))
 }
 
+/// The module named after a type (lib/list.warp, text.warp) that defines the word
+pub fn type_module_defining(word: &str) -> Option<&'static str> {
+	let defines = |module: &&str| {
+		crate::modules::std_module_definitions(module).is_some_and(|words| words.iter().any(|known| known == word))
+	};
+	TYPE_MODULES.into_iter().find(defines)
+}
+
+/// A standard module's word the program loaded and does not define itself
+fn is_loaded_module_word(name: &str) -> bool {
+	crate::compiler::compile_context::read(|context| context.module_definitions.contains(name))
+}
+
+/// `x.word` of an x that may be an object: `if x is <module type> then word(x) else x["word"]`; a receiver that is no
+/// variable reads the field, as it is evaluated once
+fn field_or_word(receiver: &Node, word_node: &Node, name: &str, module: &str) -> Node {
+	let field = field_lookup(receiver, name, word_node);
+	if receiver.symbol_name().is_none() {
+		return field;
+	}
+	let is_of_type = parens(vec![symbol(crate::words::IS_TYPE), receiver.clone(), text(module)]);
+	if_then_else(is_of_type, word_call(word_node, receiver, vec![]), field)
+}
+
 /// The call `word(receiver, arguments…)`
 fn word_call(word_node: &Node, receiver: &Node, arguments: Vec<Node>) -> Node {
 	Node::List([vec![word_node.clone(), receiver.clone()], arguments].concat(), Bracket::Round, Separator::None)
@@ -439,6 +467,8 @@ struct Lowering {
 	defining: RefCell<Vec<(String, Vec<String>)>>,
 	/// Variables assigned the result of a user function call (call_results)
 	call_results: HashSet<String>,
+	/// Variables holding a time (time::time_variables): `(x + 1 hour).hour` reads the field
+	times: HashSet<String>,
 	temporaries: Counter,
 }
 
@@ -585,6 +615,12 @@ impl Lowering {
 		}
 	}
 
+	/// The time variables not hidden by a parameter of the definition being lowered: `f(x) := (x - 5).abs` of `x = now`
+	fn times_here(&self) -> HashSet<String> {
+		let parameters = self.parameters.borrow();
+		self.times.iter().filter(|name| !parameters.contains(name)).cloned().collect()
+	}
+
 	fn is_parameter(&self, node: &Node) -> bool {
 		matches!(node.drop_meta(), Node::Symbol(name) if self.parameters.borrow().contains(name))
 	}
@@ -712,14 +748,7 @@ impl Lowering {
 		if !keyword.is_symbol(FOR_WORD) || !in_word.is_symbol(IN_WORD) {
 			return None;
 		}
-		let (map, body) = match rest {
-			[map, body] => (map.clone(), body.clone()),
-			[colon] => match colon.drop_meta() {
-				Node::Key(map, Op::Colon, body) => (map.as_ref().clone(), body.as_ref().clone()),
-				_ => return None,
-			},
-			_ => return None,
-		};
+		let (map, body) = crate::lowering::control::for_loop::iterable_and_body(rest)?;
 		self.object_literal(&map)?;
 		let (key, value) = match names.drop_meta() {
 			Node::Symbol(_) => (names.clone(), None),
@@ -788,9 +817,14 @@ impl Lowering {
 		let [left, word, right] = items else {
 			return None;
 		};
-		let names_unit = |side: &Node| match side.drop_meta() {
-			Node::Key(_, Op::Hash, unit) => crate::analyzer::text_unit(&unit.name()).is_some(),
-			other => crate::analyzer::text_unit(&other.name()).is_some(),
+		// `#bytes in t`, `number of chars in t` (chars.number) count by a unit, a symbol; the text "chars" and a list
+		// ["bytes"] are looked up like any value
+		let names_unit = |side: &Node| {
+			let unit = match side.drop_meta() {
+				Node::Key(_, Op::Hash, unit) | Node::Key(unit, Op::Dot, _) => unit.drop_meta(),
+				other => other,
+			};
+			unit.symbol_name().and_then(crate::analyzer::text_unit).is_some()
 		};
 		let (collection, element) = match word.symbol_name()? {
 			IN_WORD if names_unit(left) || names_unit(right) => return None,
@@ -835,7 +869,25 @@ impl Lowering {
 		if !is_called && self.reads_declared_field(receiver, name) {
 			return Some(field_lookup(receiver, name, word_node));
 		}
-		if self.context.user_functions.get(name).is_some_and(|function| !function.params.is_empty()) {
+		// `b.product` of a value that may be an object: its field if it is no value of the word's type, else the type
+		// module's word, as `b.product()` calls it (x.word is x.word(), user 2026-10-14)
+		// `p.center`, `s.items` of another module's word or one of more parameters: no call, as before the word was loaded
+		let is_loaded_word = !is_called && is_loaded_module_word(name);
+		let type_module = self.type_module_of(name).filter(|_| is_loaded_word);
+		let may_be_object = || self.is_object(receiver, name) || self.may_hold_object(receiver);
+		if is_loaded_word && may_be_object() {
+			// a parameter's or a user function result's type shows at run time; a loop's element or a foreign
+			// result (`r.stats_of(t).words`) reads the field, as a branch of the word would type the value
+			let is_generic = self.is_parameter(receiver)
+				|| receiver.symbol_name().is_some_and(|variable| self.call_results.contains(variable));
+			return Some(match type_module.filter(|_| is_generic) {
+				Some(module) => field_or_word(receiver, word_node, name, module),
+				None => field_lookup(receiver, name, word_node),
+			});
+		}
+		if !(is_loaded_word && type_module.is_none())
+			&& self.context.user_functions.get(name).is_some_and(|function| !function.params.is_empty())
+		{
 			return Some(word_call(word_node, receiver, arguments));
 		}
 		// `x.string`, `t.int`, `x.float()`, `2.double()`: the conversion `string(x)`, as written in call form; uncalled
@@ -879,6 +931,12 @@ impl Lowering {
 		(self.instances.is_declared_field(name)
 			&& (self.is_parameter(receiver) || self.instances.shape(receiver).is_some()))
 			|| self.reads_own_parameter_field(receiver, name)
+	}
+
+	/// The type module (lib/list.warp, text.warp) of a loaded word of one parameter, which `x.word` calls
+	fn type_module_of(&self, name: &str) -> Option<&'static str> {
+		let takes_one = self.context.user_functions.get(name).is_some_and(|function| function.params.len() == 1);
+		type_module_defining(name).filter(|_| takes_one)
 	}
 
 	/// A word a value answers other than by a field: a count, a list change, a user function, or `f.effects` of a
@@ -931,6 +989,9 @@ impl Lowering {
 			// a parenthesized object `({a:1}).a`, or quoted code `(data n*1).op` (node_api.rs)
 			Node::List(_, Bracket::Curly, _) => true,
 			_ if crate::blocks::quoted_data(variable).is_some() => true,
+			// a time the run computes: `(now + 1 hour).hour`, `(x + 1 hour).hour` of `x = now` (cards field-grouped,
+			// variable-time)
+			_ if crate::time::holds_time(inner, &self.times_here()) => true,
 			// an element of a computed list: `users.filter(…)#1.name`
 			_ => matches!(inner, Node::Key(_, Op::Hash, _)) && !is_plain_literal(variable),
 		}

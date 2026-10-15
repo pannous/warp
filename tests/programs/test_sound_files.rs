@@ -33,6 +33,18 @@ fn a_music_file_plays_in_the_background() {
 	);
 }
 
+/// card play-beside-program: a program file plays a file named relative to it, wherever warp runs from (samples/play_mp3
+/// plays samples/mozart.mp3 run from the repository root)
+#[test]
+fn a_program_plays_the_file_beside_it() {
+	let wav = sound_file("sound-beside", "beep.wav", &warp::sound::wav(&[32768, 40000, 32768], 22050));
+	let program = wav.with_file_name("beside.warp");
+	std::fs::write(&program, "play \"beep.wav\"\n7").unwrap();
+	let run = crate::common::warp_command().args(["--no-ask", "run"]).arg(&program).output().unwrap();
+	let errors = String::from_utf8_lossy(&run.stderr);
+	assert!(errors.contains(&format!("sound file wav: {}", wav.display())), "{errors}");
+}
+
 /// card sound-file-failure: a file only its first bytes call music is decoded first (ffprobe, afinfo), so a broken one
 /// fails play instead of its player failing unseen; without a decoder on the machine only the format is checked
 #[test]

@@ -37,7 +37,12 @@ pub fn build(code: &str, title: &str, directory: &Path) -> Result<BuiltSite, Str
 pub fn write_files(files: &[SiteFile], directory: &Path) -> Result<BuiltSite, String> {
 	std::fs::create_dir_all(directory).map_err(|failure| format!("cannot make {}: {failure}", directory.display()))?;
 	for (name, bytes) in files {
-		std::fs::write(directory.join(name), bytes).map_err(|failure| format!("cannot write {name}: {failure}"))?;
+		let path = directory.join(name);
+		// modules/<file> (site_modules.rs)
+		path.parent()
+			.map_or(Ok(()), std::fs::create_dir_all)
+			.and_then(|()| std::fs::write(&path, bytes))
+			.map_err(|failure| format!("cannot write {name}: {failure}"))?;
 	}
 	Ok(BuiltSite { directory: directory.to_path_buf(), files: files.iter().map(|(name, _)| name.clone()).collect() })
 }
@@ -184,6 +189,8 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, 
 		rendering
 	};
 	let html = page_html_text(&rendered)?;
+	let (renamed, shipped_modules) = crate::web::site_modules::with_shipped_modules(&module.bytes)?;
+	let module = crate::pipeline::CompiledModule { bytes: renamed, ..module };
 	let layout = page_layout(&module.bytes, dev)?;
 	let page_file = |root: &str| layout.page(title, html, "", root).into_bytes();
 	let routed = exports(&module.bytes, crate::routes::PAGE_ROUTES);
@@ -198,6 +205,7 @@ fn site_files(code: &str, title: &str, dev: bool) -> Result<Option<ServedSite>, 
 		files.push((ROUTED_PAGE_FILE.to_string(), page_file(SITE_ROOT)));
 	}
 	files.extend(route_modules);
+	files.extend(shipped_modules);
 	files.extend(layout.shipped().into_iter().map(|(name, text)| (name.to_string(), compacted(text).into_bytes())));
 	let renderer =
 		asks_the_server.then(|| Renderer { bytes: rendering_bytes, imports, title: title.to_string(), layout });

@@ -5,7 +5,8 @@
 web/playground/tests.html with agent-browser and prints the results like libtest (exit code 101 on a failure).
 `test_in_browser.py --examples [name…]` runs the tour (examples.js) in the playground page itself, built by build.sh:
 each example's value and printed output must be the ones it names (a broken example fails CI, .github/workflows/pages.yml).
-`test_in_browser.py --examples --url https://warp.pannous.com/ [name…]` checks the tour of a deployed playground instead.
+`test_in_browser.py --examples --url https://warp.pannous.com/ [--site _site] [name…]` checks the tour of a deployed
+playground instead, with --site once it serves those built files.
 `test_in_browser.py --examples --firefox [--url …|--site …] [name…]` runs the same check in headless Firefox
 (firefox_driver.mjs, WebDriver BiDi) instead of agent-browser's Chrome; `--safari` in Safari (safaridriver, classic
 WebDriver: macOS CI runners, after `sudo safaridriver --enable`; its console is not watched).
@@ -28,6 +29,10 @@ PER_WORKER = os.environ.get("WARP_BROWSER_TEST_PER_WORKER")  # tests before a wo
 SESSION = f"warp-browser-tests-{os.getpid()}"
 LAUNCH_ATTEMPTS = 3
 LAUNCH_SECONDS = 90  # a page that is not loaded by then did not start: relaunch, loudly
+# `--url … --site _site`: the deployed site is checked once it serves the built files, every one of them (card
+# playground-verify: right after a deploy the CDN served a mix of old and new files, 58 examples failing)
+DEPLOYED_WAIT_SECONDS = 600
+DEPLOYED_POLL_SECONDS = 10
 POLL_SECONDS = 3
 BINARY_PATH = "/__tests__.wasm"
 INCLUDE_PREFIX = "/__include__/"
@@ -97,6 +102,10 @@ MEMBER_CODE = "xs = [1 2]; xs"
 MEMBERS_LISTED = ["count", "sum", "map", "unique"]
 MEMBERS_WAIT_MS = 10000
 ASSISTANT_PAUSE_MS = 1500  # assistant.js PAUSE_BEFORE_COMPLETION_MS and a margin
+PAGE_ELEMENTS = "(a handler reads the page's element of an id: $who.value)"  # card browser-interaction: host-foreign.js callOnPage
+PAGE_ELEMENTS_CODE = 'greeting = "-"\ndiv{ input{ id: "who" } button{ on click { greeting = "Hello " + $who.value } "Greet" } p{ greeting } }'
+PAGE_ELEMENTS_NAME = "Ada"
+PAGE_ELEMENTS_SHOWN = "Hello Ada"
 CLIPBOARD_READ = "(a program reads the clipboard)"  # card web-apis-rest: host.js clipboard_text asks the page
 CLIPBOARD_TEXT = "copied by the page"
 # card web-apis-rest: gpu_compute over named arrays, and paint of a shader drawn straight into the page's canvas
@@ -144,9 +153,10 @@ GPU_JOBS_NEVER = "Out of memory"
 # Firefox's WebGPU: one anonymous uncaught exception of the page during the 400 jobs, all values right (card
 # firefox-gpu-jobs-uncaught)
 # and Firefox its own two lines of the broken shader
-# Firefox now and then: two anonymous uncaught exceptions of the page right as Stop ends the busy program's Worker (the
-# BiDi events before them: the new Worker's realm made, the old one's gone; no event reaches the page's listeners),
-# the run stopped and the button right (card firefox-logs)
+# Firefox's bug: terminating a Worker busy inside a WebAssembly.promising call logs an anonymous uncaught exception on
+# the page, which no listener sees (probes/firefox_jspi_terminate.html, card firefox-logs). Stop does that: the
+# compiler's web_evaluate and the program's main run under promising (worker.js, host.js JSPI); the run stopped and
+# the button right
 EXPECTED_CONSOLE = {SHADER_ERROR: ["Error while parsing WGSL", "errors while creating shader module", "parsing error"], GPU_JOBS: ["uncaught exception: undefined"],
 	STOP_BUTTON: ["uncaught exception: undefined"]}
 # card safari-shared-buffers: a task's answer buffer, like a GPU job's, is reused once read
@@ -555,6 +565,20 @@ def member_completion_wrong():
 	return [f"{MEMBER_CODE}. then Tab listed {listed!r}, missing {missing}"] if missing else []
 
 
+def page_elements_wrong():
+	"""a click's handler reads what was typed into the input of id who as `$who.value`: its Worker asks the page"""
+	run_code(PAGE_ELEMENTS_CODE)
+	shown = browser("eval", f"""(async () => {{
+		const root = document.getElementById("rendered").shadowRoot;
+		root.getElementById("who").value = {json.dumps(PAGE_ELEMENTS_NAME)};
+		root.querySelector("button").click();
+		await new Promise(done => setTimeout(done, {CLICK_MILLISECONDS}));
+		return root.querySelector("p").textContent;
+	}})()""")
+	shown = json.loads(shown) if shown.startswith('"') else f"(page gave no answer: {shown or browser_complaint})"
+	return [] if shown == PAGE_ELEMENTS_SHOWN else [f"typed {PAGE_ELEMENTS_NAME!r} and clicked: shown {shown!r}, expected {PAGE_ELEMENTS_SHOWN!r}"]
+
+
 def clipboard_read_wrong():
 	"""a program reads what the page copied; skipped loudly when the browser refuses the page its own clipboard"""
 	refused = browser("eval", f"""(async () => {{
@@ -837,7 +861,7 @@ def check_examples(names, page_url=None, site=None):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FRAME_SHADERS, frame_shaders_wrong), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FRAME_SHADERS, frame_shaders_wrong), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
@@ -868,6 +892,29 @@ def chrome_allowed():
 	return bool(os.environ.get("CI")) or sys.argv[1:2] == ["--serve"] or any(name in sys.argv[2:] for name in WEBDRIVERS)
 
 
+def live_differences(url, site):
+	"""the built files at the top of `site` that `url` serves otherwise, or not at all"""
+	def served(name):
+		try:
+			with urllib.request.urlopen(urllib.parse.urljoin(url, name), timeout=30) as reply:
+				return reply.read()
+		except OSError as failure:
+			return failure
+	built = sorted(name for name in os.listdir(site) if os.path.isfile(os.path.join(site, name)))
+	return [name for name in built if served(name) != open(os.path.join(site, name), "rb").read()]
+
+
+def wait_until_deployed(url, site):
+	"""waits until `url` serves the files built into `site`; fails naming those still old after DEPLOYED_WAIT_SECONDS"""
+	deadline = time.time() + DEPLOYED_WAIT_SECONDS
+	while differing := live_differences(url, site):
+		if time.time() > deadline:
+			sys.exit(f"{url} still serves other files than the build after {DEPLOYED_WAIT_SECONDS} s: {', '.join(differing)}")
+		print(f"     waiting for the deploy: {url} serves {len(differing)} files otherwise ({', '.join(differing[:5])})")
+		time.sleep(DEPLOYED_POLL_SECONDS)
+	print(f"     {url} serves the built files")
+
+
 def main():
 	# each verdict shows in a CI log as it comes, so a stuck run shows where it stuck (card deploy-firefox-hang)
 	sys.stdout.reconfigure(line_buffering=True)
@@ -879,8 +926,12 @@ def main():
 		names = [name for name in sys.argv[2:] if name not in WEBDRIVERS]
 		chosen = [WEBDRIVERS[name] for name in sys.argv[2:] if name in WEBDRIVERS]
 		webdriver = chosen[0]() if chosen else None
-		place = {names[0]: names[1]} if names[:1] in (["--url"], ["--site"]) else {}
-		check_examples(names[2:] if place else names, place.get("--url"), place.get("--site"))
+		place = {}
+		while names[:1] in (["--url"], ["--site"]):
+			place[names[0]], names = names[1], names[2:]
+		if "--url" in place and "--site" in place:
+			wait_until_deployed(place["--url"], place.pop("--site"))
+		check_examples(names, place.get("--url"), place.get("--site"))
 	if sys.argv[1:2] == ["--serve"]:
 		binary = os.path.abspath(sys.argv[2]) if len(sys.argv) > 2 else None
 		serve(binary)

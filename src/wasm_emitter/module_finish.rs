@@ -28,6 +28,16 @@ impl WasmGcEmitter {
 		self.try_finish().unwrap_or_else(|message| panic!("{message}"))
 	}
 
+	/// The program's file as given, for a program playing files; none for an absolute path, which would carry this
+	/// machine's folders into the module
+	fn program_file_for_the_host(&self) -> Option<String> {
+		let plays_files = [crate::host::FILE_NAMING_STD_MODULE, crate::host::ANY_STD_MODULE]
+			.iter()
+			.any(|module| self.std_modules.contains(*module));
+		let file = crate::modules::program_file().filter(|file| plays_files && file.is_relative())?;
+		Some(file.to_string_lossy().into_owned())
+	}
+
 	/// The module's own memory, at least as many pages as its texts take
 	fn memory_section(&self) -> MemorySection {
 		let mut section = MemorySection::new();
@@ -76,6 +86,12 @@ impl WasmGcEmitter {
 			self.module.section(&CustomSection {
 				name: crate::host::STD_MODULES_SECTION.into(),
 				data: modules.as_bytes().into(),
+			});
+		}
+		if let Some(file) = self.program_file_for_the_host() {
+			self.module.section(&CustomSection {
+				name: crate::host::PROGRAM_FILE_SECTION.into(),
+				data: file.as_bytes().into(),
 			});
 		}
 		let user_functions: Vec<&str> = (self.ctx.user_functions.iter())

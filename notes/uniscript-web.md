@@ -1,12 +1,16 @@
 # Uniscript web page
 
-https://pannous.com/uniscript/ — `web/uniscript/`: a textarea whose uniscript is converted live by the uniscript.wasp of the uniscript package (github.com/pannous/uniscript)
-compiled to WASM GC by warp (no JS reimplementation), and a reverse box (`unicode_to_uniscript`).
+https://pannous.com/uniscript/ — `web/uniscript/`: a textarea whose uniscript is converted live by `use uniscript`
+(uniscript.warp) compiled to WASM GC by warp (no JS reimplementation), and a reverse box (`unicode_to_uniscript`). Since
+uniscript 1.0.8 (card takes-three) the program imports the package's C library uniscript_c.wasm by path and the page
+links it itself (card web-uniscript): 14 KB program + 10 MB library (brotli on the server) instead of 76 KB + the 3.4 MB index.
 
 ## Build and deploy
 
 ```
-web/uniscript/build.sh           # warp compile → uniscript.wasm, copies packages/uniscript/data/entities.idx, fonts → slices
+web/uniscript/build.sh           # warp compile → uniscript.wasm, its path imports → modules/ (uniscript_c.wasm), fonts → slices
+node probes/web_uniscript/page_in_node.mjs   # the page's own uniscript.js in node (stub DOM): three conversions
+probes/web_uniscript/page_in_safari_engine.sh  # the same in Safari's JavaScriptCore shell
 web/uniscript/build.sh deploy    # … and rsync to pannous.com:/var/www/pannous/uniscript/
 cd web/uniscript && python3 -m http.server 8765   # local
 ```
@@ -15,16 +19,20 @@ https://pannous.com/uniscript/rust/ is the uniscript repository's second page (i
 to WebAssembly, deployed by its `docs/make_demo.sh deploy`). The two pages link to each other, and that page loads its fonts
 from this page's `fonts/`. No deploy script into /var/www/pannous uses `rsync --delete`: one wiped the other's files.
 
-Committed: `index.html`, `uniscript.js`, `uniscript.wasm`, `build.sh`. Not committed (`.gitignore`): `data/` (a copy of the
-3.4 MB index) and `fonts/` (slice_fonts.py: UniscriptSans whole, UniscriptCJK and NewGardinerOmni2d4 sliced, all OFL; from
+Committed: `index.html`, `uniscript.js`, `uniscript.wasm`, `build.sh`. Not committed (`.gitignore`): `modules/` (the
+imported uniscript_c.wasm) and `fonts/` (slice_fonts.py: UniscriptSans whole, UniscriptCJK and NewGardinerOmni2d4 sliced, all OFL; from
 the uniscript repository's `fonts/dist` (`UNISCRIPT_FONTS`) or `~/Library/Fonts`). The Monaco/Menlo mirror fonts are Apple fonts and are never copied.
 
 ## How the JS host works (`uniscript.js`)
 
-- The module's `main` is its init: it calls `host.read("packages/uniscript/data/entities.idx")` synchronously. Host calls are
-  synchronous, so the page fetches the index before instantiating; any other path falls back to a synchronous XHR
-  (charset `x-user-defined` keeps the bytes).
-- Imports come from `WebAssembly.Module.imports()`: `host.read`, `host.fetch`, `host.fetch_within`, `host.warn` are real
+- The program imports uniscript_c.wasm by its absolute build path (`(import "/…/uniscript_c.wasm" "uniscript_to_unicode")`):
+  the page fetches `modules/<file name>` and instantiates it (it imports nothing). The custom section warp.c_calls gives
+  each call's letters: `t` parameters are copied NUL-terminated from the program's memory into the library's malloc and
+  freed, a `t` result is read into a new_text and freed with uniscript_free (a reduced web/playground/host-foreign.js
+  callC; other letters are a loud error). Sites do the same with their imports renamed to `page:modules/<file>`
+  (src/web/site_modules.rs); a hand-made page like this one keeps the absolute path and matches by file name.
+- `host.read` is a synchronous XHR (charset `x-user-defined` keeps the bytes); the program no longer reads any file.
+- Imports come from imports.js `importDescriptors`: `host.read`, `host.fetch`, `host.fetch_within`, `host.warn` are real
   (`warning(message)` in warp lists under the output of the conversion that raised it, cleared on the next one),
   `host.run` and anything unknown warn in the page and return 0 / -1.
 - Bytes go into memory by the rule of `src/host.rs write_bytes_to_caller` (the exported `text_heap` bump pointer, fresh

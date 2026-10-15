@@ -34,7 +34,7 @@ mod declarations;
 pub(crate) use declarations::*;
 mod implicit_modules;
 pub use implicit_modules::*;
-mod needed_definitions;
+pub(crate) mod needed_definitions;
 use needed_definitions::*;
 mod program_file;
 pub use program_file::*;
@@ -57,7 +57,7 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	let own_names: Vec<String> = statements_of(&program).iter().filter_map(name_declared_by).collect();
 	let file = program_file();
 	let mut loader = Loader::new(directories, file.as_deref().map(folder_of));
-	loader.program_variables = program_variables(&program);
+	loader.program_words = program_words(&program);
 	let folder = loader.including_directory.clone();
 	let program = with_module_directory(program, folder.as_deref().unwrap_or(Path::new(".")));
 	let resolved = loader

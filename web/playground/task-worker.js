@@ -4,7 +4,7 @@
 
 // a built site's task Worker gets the site's scripts as ?scripts=… (host-tasks.js addTaskWorker)
 const SITE_SCRIPTS = new URL(self.location.href).searchParams.get("scripts")?.split(",");
-importScripts(...(SITE_SCRIPTS ?? ["reader.js", "imports.js", "exact.js", "std.js", "host.js"]));
+importScripts(...(SITE_SCRIPTS ?? ["reader.js", "imports.js", "exact.js", "js-members.js", "std.js", "host.js"]));
 if (!SITE_SCRIPTS) importScripts(...HOST_PART_FILES, "components.js", "served-files.js");
 // the program's Worker, through the port the page gives with the first message (task-workers.js serveTaskWorkers)
 let program;
@@ -25,7 +25,7 @@ self.addEventListener("unhandledrejection", event => {
 
 // what a task does for the page goes through the program's Worker (host-tasks.js relayed)
 const relay = (method, ...values) => program.postMessage({ relay: [method, ...values] });
-for (const method of ["playSoundFile", "stopSound", "stopSoundFiles", "fadeSound"]) self[method] = (...values) => relay(method, ...values);
+for (const method of RELAYED) self[method] = (...values) => relay(method, ...values);
 // the files a task writes go back with its result (host-tasks.js finishedTask), bytes as their numbers in its JSON
 let taskFiles = new Map();
 self.taskWrote = (path, content) => taskFiles.set(path, typeof content === "string" ? content : { bytes: Array.from(content) });

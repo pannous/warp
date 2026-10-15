@@ -1,6 +1,7 @@
 //! Calendar arithmetic without host dependencies: proleptic Gregorian dates, UTC instants and an embedded zone table.
 //! Four distinct kinds of time never convert implicitly (Footguns.md → Dates and time zones).
 
+use crate::operators::Op;
 use std::cmp::Ordering;
 use std::fmt;
 
@@ -14,6 +15,9 @@ pub(crate) const DAYS_PER_ERA: i64 = 146_097;
 pub(crate) const YEARS_PER_ERA: i64 = 400;
 pub(crate) const EPOCH_SHIFT: i64 = 719_468;
 const DAY: i128 = DAY_SECONDS as i128 * SECOND;
+const HOUR_NANOS: i128 = HOUR as i128 * SECOND;
+pub(crate) const LENGTHS_VARY: &str =
+	"a day is 23 to 25 hours across daylight saving, a month 28 to 31 days: compare the times they lead to";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Date {
@@ -583,16 +587,37 @@ impl Duration {
 		Duration { months: self.months + other.months, days: self.days + other.days, nanos: self.nanos + other.nanos }
 	}
 
-	/// `1 day == 24 hours` depends on the day: equal fields are equal, one differing field is unequal, more is an error
-	pub fn equals(self, other: Duration) -> Result<bool, String> {
-		let differing = [self.months != other.months, self.days != other.days, self.nanos != other.nanos];
-		match differing.iter().filter(|differs| **differs).count() {
-			0 => Ok(true),
-			1 => Ok(false),
-			_ => Err(format!(
-				"{self} and {other} are equal on some dates and not on others (a day is 23 to 25 hours across daylight saving, a month 28 to 31 days): compare the times they lead to"
-			)),
+	/// `1 day > 2 hours` and `1 month <= 31 days` hold on every date, `1 month > 31 days` on none; `1 day == 24 hours`
+	/// and `1 day < 24 hours` depend on the date: an error
+	pub fn compares(self, comparison: Op, other: Duration) -> Result<bool, String> {
+		let (shortest, longest) = self.plus(other.times(-1)).nanos_range();
+		let possible = [
+			(Ordering::Less, shortest < 0),
+			(Ordering::Equal, shortest <= 0 && longest >= 0),
+			(Ordering::Greater, longest > 0),
+		];
+		let answers: Vec<bool> =
+			possible.iter().filter(|(_, can_be)| *can_be).map(|(order, _)| comparison.holds(*order)).collect();
+		if answers.iter().all(|holds| *holds) {
+			Ok(true)
+		} else if answers.iter().all(|holds| !*holds) {
+			Ok(false)
+		} else if !comparison.is_ordering() {
+			Err(format!("{self} and {other} are equal on some dates and not on others ({LENGTHS_VARY})"))
+		} else {
+			Err(format!("cannot order durations {self} and {other}: they compare differently on different dates ({LENGTHS_VARY})"))
 		}
+	}
+
+	/// The shortest and longest it can be: a month is 28 to 31 days; daylight saving shifts an exact part by at most an
+	/// hour against the calendar part, which moves the date and keeps the hour
+	fn nanos_range(self) -> (i128, i128) {
+		let (fewest_days, most_days) = {
+			let (a, b) = (self.days + 28 * self.months, self.days + 31 * self.months);
+			(a.min(b) as i128, a.max(b) as i128)
+		};
+		let shift = if self.is_exact() || self.nanos == 0 { 0 } else { HOUR_NANOS };
+		(self.nanos + fewest_days * DAY - shift, self.nanos + most_days * DAY + shift)
 	}
 
 	pub fn is_exact(self) -> bool {

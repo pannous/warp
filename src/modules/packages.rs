@@ -2,7 +2,7 @@
 use super::*;
 
 /// name: "git url" for every package, compiled in so warp finds it from any directory
-pub(crate) const PACKAGE_REGISTRY: &str = include_str!("../../packages.warp");
+pub const PACKAGE_REGISTRY: &str = include_str!("../../packages.warp");
 /// where packages are fetched to, below the working directory
 pub const PACKAGES_DIRECTORY: &str = "packages";
 /// where a tagged version of a package is fetched once per machine and linked from packages/: a tag never changes
@@ -12,39 +12,119 @@ pub(crate) const REPLACED_DIRECTORY: &str = ".replaced";
 /// one fetch at a time within a process; parallel processes clone to their own staging directory and rename
 pub(crate) static FETCHING: Mutex<()> = Mutex::new(());
 
+/// The owner of a package written as a bare name (card packages, user: `uniscript` just works)
+pub(crate) const DEFAULT_PACKAGE_OWNER: &str = "pannous";
+const GITHUB_PREFIX: &str = "github:";
+/// `version: latest` follows the default branch, as no version does
+const LATEST_VERSION: &str = "latest";
+
 /// A package of the registry: `name: "git url"` follows the default branch,
-/// `name: {repository: "git url", version: 1.2.3}` is pinned to the git tag of that version
-pub(super) struct Registered {
-	pub(super) url: String,
-	pub(super) pinned: Option<Version>,
+/// `name: {repository: "git url", version: 1.2.3}` is pinned to the git tag of that version.
+/// Short forms (card packages): `name`, `name: owner/repo`, `name: "github:owner/repo"`, `version: latest`.
+/// `library: "x"` there: warp calls the package's prebuilt core module x.wasm (its release asset, header x.h beside it)
+/// through warp's binding lib/packages/<name>.warp instead of compiling the package's module
+pub struct Registered {
+	pub url: String,
+	pub pinned: Option<Version>,
+	pub library: Option<String>,
 }
 
-pub(super) fn registered(name: &str) -> Option<Registered> {
-	statements(WarpParser::parse(PACKAGE_REGISTRY)).iter().find_map(|entry| {
-		let Node::Key(key, _, value) = entry.drop_meta() else {
-			return None;
-		};
-		if !matches!(key.drop_meta(), Node::Symbol(key) if key == name) {
-			return None;
-		}
-		match value.drop_meta() {
-			Node::Text(url) => Some(Registered { url: url.clone(), pinned: None }),
-			pinned => match pinned["repository"].drop_meta() {
-				Node::Text(url) => Some(Registered { url: url.clone(), pinned: Some(version_of(&pinned["version"])?) }),
+pub(super) fn registered(name: &str) -> Option<Result<Registered, String>> {
+	package_in(PACKAGE_REGISTRY, name)
+}
+
+/// The package `name` of a registry text written like packages.warp; an error for an entry that names no repository
+/// or no version warp can read
+pub fn package_in(registry: &str, name: &str) -> Option<Result<Registered, String>> {
+	registry_entries(registry).into_iter().find(|(key, _)| key == name).map(|(_, package)| package)
+}
+
+/// Every entry of a registry text, by name
+pub fn registry_entries(registry: &str) -> Vec<(String, Result<Registered, String>)> {
+	statements(WarpParser::parse(registry))
+		.iter()
+		.filter_map(|entry| match entry.drop_meta() {
+			Node::Symbol(name) => {
+				Some((name.clone(), Ok(Registered { url: repository_url(name), pinned: None, library: None })))
+			}
+			Node::Key(key, _, value) => match key.drop_meta() {
+				Node::Symbol(name) => Some((name.clone(), registry_entry(name, value))),
 				_ => None,
 			},
-		}
-	})
+			_ => None,
+		})
+		.collect()
+}
+
+fn registry_entry(name: &str, value: &Node) -> Result<Registered, String> {
+	let (repository, version) = match value.drop_meta() {
+		Node::List(_, Bracket::Curly, _) => (&value["repository"], &value["version"]),
+		_ => (value, &Node::Empty),
+	};
+	let url = repository_url(&spelled(repository).ok_or(format!(
+		"package {name}: no repository in {}: quote it, \"owner/repository\"",
+		repository.serialize().trim()
+	))?);
+	let pinned = match version.drop_meta() {
+		Node::Empty => None,
+		Node::Symbol(word) if word == LATEST_VERSION => None,
+		written => Some(version_of(written).ok_or(format!(
+			"package {name}: version {} is no version: write 1.2.3 or {LATEST_VERSION}",
+			written.serialize().trim()
+		))?),
+	};
+	let library = match value.drop_meta() {
+		Node::List(_, Bracket::Curly, _) => match value["library"].drop_meta() {
+			Node::Text(library) => Some(library.clone()),
+			_ => None,
+		},
+		_ => None,
+	};
+	Ok(Registered { url, pinned, library })
+}
+
+/// A repository as written: a text, a word, or `owner/repo` and `owner/repo.js` without quotes
+fn spelled(node: &Node) -> Option<String> {
+	match node.drop_meta() {
+		Node::Text(text) | Node::Symbol(text) => Some(text.clone()),
+		Node::Key(owner, Op::Div, repository) => Some(format!("{}/{}", spelled(owner)?, spelled(repository)?)),
+		Node::Key(name, Op::Dot, suffix) => Some(format!("{}.{}", spelled(name)?, spelled(suffix)?)),
+		_ => None,
+	}
+}
+
+/// The git url of a written repository: a url, ssh address or path stays; `github:owner/repo`, `owner/repo` and a
+/// bare `repo` (of DEFAULT_PACKAGE_OWNER) are GitHub repositories
+fn repository_url(written: &str) -> String {
+	let is_url = written.contains("://") || written.starts_with("git@") || written.starts_with(['/', '.', '~']);
+	if is_url {
+		return written.to_string();
+	}
+	let path = written.strip_prefix(GITHUB_PREFIX).unwrap_or(written).trim_start_matches('/').trim_end_matches(".git");
+	let path = if path.contains('/') { path.to_string() } else { format!("{DEFAULT_PACKAGE_OWNER}/{path}") };
+	format!("https://github.com/{path}.git")
 }
 
 /// The git url of a package in the registry
 pub fn package_repository(name: &str) -> Option<String> {
-	registered(name).map(|package| package.url)
+	registered(name)?.ok().map(|package| package.url)
 }
 
 /// The version a package is pinned to in the registry, None for one that follows its default branch
 pub fn pinned_version(name: &str) -> Option<Version> {
-	registered(name).and_then(|package| package.pinned)
+	registered(name)?.ok().and_then(|package| package.pinned)
+}
+
+/// warp's side of a package's library: lib/packages/<name>.warp, which imports it
+const LIBRARY_BINDINGS: [(&str, &str); 1] = [("uniscript", include_str!("../../lib/packages/uniscript.warp"))];
+
+pub(super) fn library_binding(name: &str) -> Option<&'static str> {
+	LIBRARY_BINDINGS.iter().find(|(package, _)| *package == name).map(|(_, source)| *source)
+}
+
+/// The prebuilt core module a package is called through, packages.warp's `library`
+pub fn package_library(name: &str) -> Option<String> {
+	registered(name)?.ok().and_then(|package| package.library)
 }
 
 /// Where the pinned version of a package is cloned once per machine: ~/.cache/warp/packages/<name>@<version>
@@ -190,7 +270,7 @@ pub(super) fn warn_overridden(name: &str, version: &Version, directory: &Path) {
 }
 
 pub(super) fn registered_package(name: &str) -> Result<Registered, String> {
-	registered(name).ok_or(format!("unknown package: {name}"))
+	registered(name).ok_or(format!("unknown package: {name}"))?
 }
 
 pub(super) fn package_version_tags(name: &str, url: &str) -> Result<Vec<(String, Version)>, String> {

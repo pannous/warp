@@ -132,11 +132,15 @@ pub(super) fn loop_variable(words: &[Node]) -> Option<String> {
 	}
 }
 
-/// A number, text or character literal, or a list literal of them
+/// A number, text or character literal, a list literal of them, arithmetic or a range of them
 pub(super) fn is_plain_literal(value: &Node) -> bool {
 	match value.drop_meta() {
 		Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::True | Node::False => true,
 		Node::List(items, Bracket::Square, _) => !items.is_empty() && items.iter().all(is_plain_literal),
+		// `"ab" + "c"`, `2 * 3`, the range `1..4`: arithmetic of plain values, or a range of them, is no object either
+		Node::Key(left, op, right) if op.is_arithmetic() || matches!(op, Op::Range | Op::To) => {
+			is_plain_literal(left) && is_plain_literal(right)
+		}
 		_ => false,
 	}
 }
