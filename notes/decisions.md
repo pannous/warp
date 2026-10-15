@@ -61,6 +61,12 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   Later (card warp-format-strict, Soon): a second, opinionated mode rewriting code to best practices, with a preview
   (show the diff, apply nothing) before anything is applied; every rule goes to the user first. It is a verb of its
   own, `warp beautify` (synonyms canonical, idiomatic); hash-comments is its first rule.
+  beautify-preview (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable):
+  `warp beautify app.warp` prints the diff; in a terminal it asks "apply? y/n", piped or scripted it applies
+  nothing. `warp beautify yes app.warp` applies without asking (scripts), `warp beautify check app.warp` only
+  previews. Never a silent rewrite: unlike format, beautify changes words. Second rule (worker default, fits the
+  user's "synonyms canonical"): alias words the compiler already notes are rewritten to the warp word via their
+  I-meant fixes (`__add__` → plus).
 - cleanup-means-fewer-lines (2026-10-13): the cleanup's metric is lines removed: simpler, more general, more elegant
   code. Splitting files or functions alone is not a goal ("not that impressed by splitting"). Each cleanup merge
   request states its net src/ line delta; baseline 161132 lines of src/*.rs at eaa40f98b.
@@ -479,7 +485,12 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   random value of T, one general rule instead of special cases: `random bool` a coin flip, `random int` the full
   integer range (ids, hashes), `random codepoint`, `random float` = `random`. `random(n)` stays 0…n-1;
   `random(a, b)` with whole numbers is a whole number from a to b inclusive, the die roll `random(1, 6)`; with a
-  float argument, a float in [a, b).
+  float argument, a float in [a, b). Refined with the user's suggestion via the supervisor: random's parameter is
+  declared of type Type, so `random int`, `random(int)` and `random float` take the type itself, not its
+  constructor; general rule: any parameter of type Type accepts bare type words. An overload takes a range,
+  and picks one of its elements: `random 1..10` → 1…9 (`..` excludes the end), `random 1...10` and
+  `random 1 to 10` → 1…10, the same die as `random(1, 10)` (corrected by warp-types: `1..3` is [1 2]). The result type follows the argument
+  (`int z = random 1..10`).
 - function-references (2026-10-15, user): a bare name of a function that needs arguments, compared with a type
   (`floor is function`) or in `type(floor)`, means the function itself (card bare-fn-type). `.floor` in argument
   position is a lambda on it, like Swift's .member: `xs.map(.floor)`, `people.sort(.age)` (card dot-lambda).

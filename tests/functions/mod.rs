@@ -101,6 +101,7 @@ mod test_list_conversion;
 mod test_list_fields; // card people-map
 mod test_map_function_first; // card map-function
 mod test_map_library_word_first; // cards map-library-first, map-library-word
+mod test_map_list_fields; // card field-list
 mod test_map_phrase;
 mod test_math_broadcast; // card cos-instead
 mod test_member_phrases; // card xs-insert

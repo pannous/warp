@@ -49,6 +49,7 @@ fn a_program_adds_units_by_unit_lines() {
 	is!("unit furlong := 201.168 m\nquantity(1, \"furlong\").in(\"m\")", 201.168);
 	is!("distance := 42 km\nstr(distance)", "42km");
 	is!("unit furlong := 201.168m; str(1km as furlong)", "(62500/12573)furlong");
+	is!("unit hand := 4inch; x = 2 hand\nstr(x as cm)", "20.32cm");
 	// a unit line inside a text or a comment defines nothing (reviewer)
 	let program_unit_lines = warp::numbers::units::program_unit_lines;
 	assert_eq!(program_unit_lines("note = \"\nunit zz := 7m\n\"\n// unit yy := 7m\n2"), "");
@@ -61,4 +62,13 @@ fn a_unit_line_names_its_target_by_as() {
 	is!("212°F == 100°C", true);
 	is!("unit rankine as kelvin := it * 5/9\n9 rankine == 5 K", true);
 	is!("unit hand as inch := 4 * it\nstr(1 hand as cm)", "10.16cm");
+}
+
+// a program's class, function or method named like a unit word is the program's (integrator: N, second, meter)
+#[test]
+fn a_program_name_wins_over_a_unit_word() {
+	is!("class N{name: text}\na = N(\"a\")\na.name", "a");
+	is!("class Club{ name: text; second() := 2 }\nClub(\"x\").second()", 2);
+	is!("meter(x) := x + 1\nmeter(2)", 3);
+	is!("str(2 meter)", "2m");
 }

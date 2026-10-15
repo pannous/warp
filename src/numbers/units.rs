@@ -135,9 +135,12 @@ pub(crate) fn with_run_time_unit_tables(program: Node) -> Node {
 	}
 }
 
+/// The program's statements, a line's `;` statements among them (`unit hand := 4inch; x = 2 hand⏎x`)
 fn statements_of(node: Node) -> Vec<Node> {
 	match node {
-		Node::List(items, Bracket::None, separator) if separator.separates_statements() => items,
+		Node::List(items, Bracket::None, separator) if separator.separates_statements() => {
+			items.into_iter().flat_map(statements_of).collect()
+		}
 		node => vec![node],
 	}
 }
@@ -860,10 +863,20 @@ fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet
 		}),
 		other => add_unit(other),
 	};
+	// a function, method or class of the program named like a unit is that one (`class N{…}`, `second() := …`)
 	if let Some(definition) = crate::lowering::function_head(node) {
+		add_parameters(&Node::Symbol(definition.name.to_string()));
 		definition.written_parameters.iter().for_each(&mut add_parameters);
 	}
 	match node.drop_meta() {
+		// a field named like a unit stays the field's name only (`r.mph`), a method's name is the method
+		Node::Type { name, body } => {
+			add_parameters(name);
+			let members = std::iter::once(body.as_ref()).chain(body.drop_meta().parts());
+			members
+				.filter_map(crate::lowering::function_head)
+				.for_each(|method| add_parameters(&Node::Symbol(method.name.to_string())));
+		}
 		Node::Key(head, Op::Assign | Op::Define, _) if matches!(head.drop_meta(), Node::List(..)) => {
 			add_parameters(head)
 		}
