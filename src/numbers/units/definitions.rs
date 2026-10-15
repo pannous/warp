@@ -23,6 +23,10 @@ const ONE: &str = "1 ";
 const SHIFT_START: &str = "(it +";
 /// `unit °R := it * 5/9 K`: a unit of the same zero, its amount `it` scaled
 const IT_TIMES: &str = "it *";
+/// `length as pixels := it * display.dpi`: a bridge between two dimensions
+const BRIDGE_WORD: &str = " as ";
+/// `display.dpi := 96 dpi`: a setting, a property of a platform object
+const SETTING_DOT: char = '.';
 const TIMES: char = '*';
 const DIVIDE: &str = "/";
 const COMMENT: &str = "//";
@@ -41,7 +45,7 @@ const DIMENSION_WORDS: [(&str, Dimension); 6] = [
 	("duration", Dimension::Time),
 	("era", Dimension::Era),
 	("temperature", Dimension::Temperature),
-	("pixel", Dimension::Pixel),
+	("pixels", Dimension::Pixel),
 ];
 
 /// The dimensions whose units take SI prefixes (decision unit-definitions: not pixels, not eras, not furlongs)
@@ -59,6 +63,25 @@ pub(super) struct Definitions {
 	/// The base unit of each dimension, by name: the unit a quantity's amount counts in at run time
 	pub(super) base_units: Vec<(Dimension, &'static str)>,
 	pub(super) aliases: Vec<(&'static str, &'static str)>,
+	pub(super) bridges: Vec<Bridge<'static>>,
+	pub(super) settings: Vec<Setting<'static>>,
+}
+
+/// `length as pixels := it * display.dpi`: an amount of `from` is `factor` times as much of `to`, the factor read at
+/// each conversion (decision dimension-bridges); the way back divides by it
+#[derive(Clone)]
+pub(super) struct Bridge<'a> {
+	pub(super) from: Dimension,
+	pub(super) to: Dimension,
+	pub(super) factor: &'a str,
+}
+
+/// `display.dpi := 96 dpi`: a value of the platform a program may set and the unit it counts in; the default is the
+/// host's (warp-runtime system_values.rs DEFAULT_DPI, where the screen tells none)
+#[derive(Clone)]
+pub(super) struct Setting<'a> {
+	pub(super) name: &'a str,
+	pub(super) unit: &'a str,
 }
 
 /// lib/units.warp's definitions, and the program's own unit lines while it is compiled (context.program_unit_lines)
@@ -66,7 +89,8 @@ pub(super) fn definitions() -> &'static Definitions {
 	static LIB: OnceLock<Definitions> = OnceLock::new();
 	let lines = crate::compiler::compile_context::read(|context| context.program_unit_lines.clone());
 	if lines.is_empty() {
-		return LIB.get_or_init(|| read(std::iter::empty()).unwrap_or_else(|problem| panic!("lib/units.warp: {problem}")));
+		return LIB
+			.get_or_init(|| read(std::iter::empty()).unwrap_or_else(|problem| panic!("lib/units.warp: {problem}")));
 	}
 	with_program_units(lines)
 }
@@ -88,6 +112,16 @@ pub fn program_unit_lines(source: &str) -> String {
 	let mut reader = lib_reader();
 	let lines = source.lines().map(str::trim_end).filter(|line| line.starts_with(UNIT_WORD) && line.contains(DEFINE));
 	lines.filter(|line| reader.knows_words_of(line) && reader.line(line).is_ok()).collect::<Vec<_>>().join("\n")
+}
+
+/// The bridges between dimensions (`length as pixels := it * display.dpi`): each with the host's system value its factor
+/// reads (`display_dpi`) and the SI amount of one of the setting's unit (1 dpi is 5000/127 px/m)
+pub(super) fn bridges() -> Vec<(Dimension, Dimension, String, Rational)> {
+	let factor = |bridge: &Bridge| {
+		let setting = definitions().settings.iter().find(|setting| setting.name == bridge.factor)?;
+		Some((bridge.from, bridge.to, setting.name.replace(SETTING_DOT, "_"), measure(setting.unit)?.0))
+	};
+	definitions().bridges.iter().filter_map(factor).collect()
 }
 
 /// The run-time tables of lib/units.warp's Quantity (`quantity(5, "km")`), in place of the block itself: each unit and
@@ -126,24 +160,36 @@ fn packed(dimension: Dimension) -> Option<i64> {
 /// `mi/h`, `1/s`, `kg*m/s²`: the SI amount and packed dimension of an alias made of units; None for one of other words
 /// (`π/180`)
 fn alias_measure(expression: &str) -> Option<(Rational, i64)> {
-	let (mut amount, mut dimension, mut divide) = (Rational::integer(1), 0, false);
+	let (amount, dimension) = measure(expression)?;
+	Some((amount, dimension?))
+}
+
+/// The SI amount of a product of numbers and units, and its packed dimension where run-time quantities know it (not
+/// of `px/inch`)
+fn measure(expression: &str) -> Option<(Rational, Option<i64>)> {
+	let (mut amount, mut dimension, mut divide) = (Rational::integer(1), Some(0), false);
 	for token in tokens(expression) {
 		if token == DIVIDE {
 			divide = true;
 			continue;
 		}
 		let (factor, weight) = match decimal(token) {
-			Some(number) => (number, 0),
+			Some(number) => (number, Some(0)),
 			None => {
 				let (name, power) = powered(token);
-				let unit = definitions().units.iter().find(|unit| unit.name == name)?;
-				let amount = si_amount(unit);
-				((1..power).fold(amount.clone(), |total, _| total.mul(&amount)), packed(unit.dimension)? * power as i64)
+				let (amount, weight) = match definitions().units.iter().find(|unit| unit.name == name) {
+					Some(unit) => (si_amount(unit), packed(unit.dimension)),
+					// `dpi`: a word for units, `px/inch`
+					None => measure(definitions().aliases.iter().find(|(alias, _)| *alias == name)?.1)?,
+				};
+				let weight = weight.map(|weight| weight * power as i64);
+				((1..power).fold(amount.clone(), |total, _| total.mul(&amount)), weight)
 			}
 		};
+		let weight = |dimension: Option<i64>| Some(dimension? + weight? * if divide { -1 } else { 1 });
 		(amount, dimension) = match divide {
-			true => (amount.mul(&factor.inverse()?), dimension - weight),
-			false => (amount.mul(&factor), dimension + weight),
+			true => (amount.mul(&factor.inverse()?), weight(dimension)),
+			false => (amount.mul(&factor), weight(dimension)),
 		};
 		divide = false;
 	}
@@ -186,8 +232,9 @@ fn lib_reader() -> Reader<'static> {
 fn read(program_lines: impl Iterator<Item = &'static str>) -> Result<Definitions, String> {
 	let mut reader = lib_reader();
 	program_lines.into_iter().try_for_each(|line| reader.line(line))?;
-	let Reader { dimensions, derived_dimensions, base_units, units, aliases } = reader;
-	Ok(Definitions { dimensions, derived_dimensions, units: in_whole_steps(units)?, base_units, aliases })
+	let Reader { dimensions, derived_dimensions, base_units, units, aliases, bridges, settings } = reader;
+	let units = in_whole_steps(units)?;
+	Ok(Definitions { dimensions, derived_dimensions, units, base_units, aliases, bridges, settings })
 }
 
 /// The definitions read so far, one line at a time
@@ -198,6 +245,8 @@ struct Reader<'a> {
 	base_units: Vec<(Dimension, &'a str)>,
 	units: Vec<Read<'a>>,
 	aliases: Vec<(&'a str, &'a str)>,
+	bridges: Vec<Bridge<'a>>,
+	settings: Vec<Setting<'a>>,
 }
 
 impl<'a> Reader<'a> {
@@ -206,8 +255,12 @@ impl<'a> Reader<'a> {
 	fn knows_words_of(&self, line: &str) -> bool {
 		let expression = line.split_once(DEFINE).map_or("", |(_, expression)| expression).trim();
 		let expression = shifted(expression).map_or(expression, |(_, rest)| rest);
-		let known = |name: &str| self.units.iter().any(|unit| unit.name == name) || self.aliases.iter().any(|(alias, _)| *alias == name);
-		tokens(expression).into_iter().all(|token| token == DIVIDE || decimal(token).is_some() || known(powered(token).0))
+		let known = |name: &str| {
+			self.units.iter().any(|unit| unit.name == name) || self.aliases.iter().any(|(alias, _)| *alias == name)
+		};
+		tokens(expression)
+			.into_iter()
+			.all(|token| token == DIVIDE || decimal(token).is_some() || known(powered(token).0))
 	}
 
 	fn line(&mut self, line: &'a str) -> Result<(), String> {
@@ -227,12 +280,30 @@ impl<'a> Reader<'a> {
 			}
 			return Ok(());
 		}
+		if let Some((name, expression)) = definition("", DEFINE).filter(|(name, _)| name.contains(SETTING_DOT)) {
+			let (amount, unit) = expression.split_once(' ').ok_or(format!("{line}: an amount and its unit"))?;
+			decimal(amount).ok_or(format!("{line}: {amount} is no number"))?;
+			self.settings.push(Setting { name, unit: unit.trim() });
+			return Ok(());
+		}
+		if let Some((dimensions, expression)) = definition("", DEFINE).filter(|(name, _)| name.contains(BRIDGE_WORD)) {
+			let (from, to) = dimensions.split_once(BRIDGE_WORD).ok_or(format!("unreadable line {line}"))?;
+			let dimension = |name: &str| {
+				let known = self.dimensions.iter().find(|(known, _)| *known == name.trim());
+				known.map(|(_, dimension)| *dimension).ok_or(format!("{line}: {name} is no dimension"))
+			};
+			let factor = expression.strip_prefix(IT_TIMES).ok_or(format!("{line}: the right side is it * a value"))?;
+			self.bridges.push(Bridge { from: dimension(from)?, to: dimension(to)?, factor: factor.trim() });
+			return Ok(());
+		}
 		let (name, expression) = definition(UNIT_WORD, DEFINE).ok_or(format!("unreadable line {line}"))?;
 		if self.units.iter().any(|unit| unit.name == name) || self.aliases.iter().any(|(alias, _)| *alias == name) {
 			return Err(format!("{name} is a unit already"));
 		}
 		let anchors = &self.base_units;
-		if let Some(anchor) = expression.strip_prefix(ONE).filter(|anchor| anchors.iter().any(|(_, base)| base == anchor)) {
+		if let Some(anchor) =
+			expression.strip_prefix(ONE).filter(|anchor| anchors.iter().any(|(_, base)| base == anchor))
+		{
 			// `unit m := 1 meter`: the symbol shows in place of its anchor, the anchor's name stays a word for it
 			self.units.iter_mut().filter(|unit| unit.name == anchor).for_each(|unit| unit.name = name);
 			self.base_units.iter_mut().filter(|(_, base)| *base == anchor).for_each(|(_, base)| *base = name);
@@ -250,10 +321,14 @@ impl<'a> Reader<'a> {
 /// `km`, `µg`, `ns`: each SI prefix on each unit of an SI dimension that is a power of ten of its anchor and carries no
 /// prefix itself (`g` takes them, `kg` and `cm` do not); a unit written in lib/units.warp keeps its own definition
 fn with_si_prefixes<'a>(units: &[Read<'a>], aliases: &[(&'a str, &'a str)]) -> Vec<Read<'a>> {
-	let known = |name: &str| units.iter().any(|unit| unit.name == name) || aliases.iter().any(|(alias, _)| *alias == name);
+	let known =
+		|name: &str| units.iter().any(|unit| unit.name == name) || aliases.iter().any(|(alias, _)| *alias == name);
 	let prefixed = |name: &str| SI_PREFIXES.iter().any(|(prefix, _)| name.strip_prefix(prefix).is_some_and(known));
 	let takes_prefixes = |unit: &&Read<'a>| {
-		SI_DIMENSIONS.contains(&unit.dimension) && unit.zero.is_zero() && power_of_ten(&unit.scale) && !prefixed(unit.name)
+		SI_DIMENSIONS.contains(&unit.dimension)
+			&& unit.zero.is_zero()
+			&& power_of_ten(&unit.scale)
+			&& !prefixed(unit.name)
 	};
 	units
 		.iter()
@@ -263,7 +338,12 @@ fn with_si_prefixes<'a>(units: &[Read<'a>], aliases: &[(&'a str, &'a str)]) -> V
 			let name: &'static str = Box::leak(format!("{prefix}{}", unit.name).into_boxed_str());
 			let ten = Rational::integer(BigInt::from(10).pow(power.unsigned_abs()));
 			let factor = if *power > 0 { ten } else { ten.inverse()? };
-			(!known(name)).then(|| Read { name, dimension: unit.dimension, scale: unit.scale.mul(&factor), zero: Rational::zero() })
+			(!known(name)).then(|| Read {
+				name,
+				dimension: unit.dimension,
+				scale: unit.scale.mul(&factor),
+				zero: Rational::zero(),
+			})
 		})
 		.collect()
 }

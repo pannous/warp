@@ -8,14 +8,16 @@
 // speed m/s` names the dimension of an expression of units; every other unit is an amount of a known one, `unit cm :=
 // meter/100`, which fixes its dimension and factor, `unit m := 1 meter` one of the same amount, `unit °C := (it +
 // 273.15) K` one counting from another zero (`it` the amount in °C); a unit of several units or of none (`unit mph :=
-// mi/h`, `unit ° := π/180`) is a word for that expression; a unit added here is known everywhere, also in conversions
+// mi/h`, `unit ° := π/180`) is a word for that expression; `length as pixels := it * display.dpi` bridges two
+// dimensions by a value read at each conversion, `display.dpi := 96 dpi` a setting (decision dimension-bridges, default
+// 96, the screen's where it tells); a unit added here is known everywhere, also in conversions
 unit_definitions = data {
 	dimension length meter
 	dimension mass kilogram
 	dimension duration second
 	dimension era AD
 	dimension temperature kelvin
-	dimension pixel px
+	dimension pixels px
 	unit m := 1 meter
 	unit kg := 1 kilogram
 	unit s := 1 second
@@ -45,6 +47,9 @@ unit_definitions = data {
 	unit Hz := 1/s
 	unit kHz := 1/ms
 	unit ° := π/180
+	unit dpi := px/inch
+	display.dpi := 96 dpi
+	length as pixels := it * display.dpi
 }
 
 // At run time the block above stands for the tables the Quantity class reads (src/numbers/units.rs): unit_names,

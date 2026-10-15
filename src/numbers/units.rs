@@ -165,7 +165,9 @@ pub fn without_unit_lines(program: Node) -> Result<Node, Node> {
 		return Ok(program);
 	}
 	if let Some(unknown) = statements.iter().filter_map(unit_line).find(|name| !names_unit(name)) {
-		return Err(error(&format!("unit {unknown}: the right side is no amount of a known unit (`unit furlong := 201.168 m`)")));
+		return Err(error(&format!(
+			"unit {unknown}: the right side is no amount of a known unit (`unit furlong := 201.168 m`)"
+		)));
 	}
 	let kept: Vec<Node> = statements.into_iter().filter(|statement| unit_line(statement).is_none()).collect();
 	Ok(Node::List(kept, Bracket::None, Separator::Newline))

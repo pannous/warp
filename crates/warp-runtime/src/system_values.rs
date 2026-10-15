@@ -90,13 +90,31 @@ fn window_size() -> (i64, i64) {
 	WINDOW_SIZE.lock().unwrap().unwrap_or(NATIVE_VIEW)
 }
 
-/// `set_system_value(name, value)`: window.width = 800 resizes the window; the others are read only
+/// lib/units.warp's `display.dpi := 96 dpi`: the dots per inch where the screen tells none (decision dimension-bridges)
+const DEFAULT_DPI: i64 = 96;
+/// `display.dpi = 300 dpi`: the dpi the program set, in place of the screen's
+static DPI_SET: Mutex<Option<i64>> = Mutex::new(None);
+
+fn set_display_dpi(dpi: i64) -> Result<(), String> {
+	if dpi <= 0 {
+		return Err(format!("display.dpi = {dpi} dpi: a display has a positive number of dots per inch"));
+	}
+	*DPI_SET.lock().unwrap() = Some(dpi);
+	READINGS.with(|readings| readings.borrow_mut().remove(DISPLAY_DPI));
+	Ok(())
+}
+
+/// `set_system_value(name, value)`: window.width = 800 resizes the window, display.dpi = 300 dpi sets the dots per inch
+/// px count in; the others are read only
 pub fn write(name: &str, value: i64) -> Result<(), String> {
 	let (width, height) = match name {
 		WINDOW_WIDTH => (value, window_size().1),
 		WINDOW_HEIGHT => (window_size().0, value),
-		DISPLAY_WIDTH | DISPLAY_HEIGHT | DISPLAY_DPI => return Err(DISPLAY_READ_ONLY.to_string()),
-		other => return Err(format!("{other} cannot be set; settable: {WINDOW_WIDTH}, {WINDOW_HEIGHT}")),
+		DISPLAY_DPI => return set_display_dpi(value),
+		DISPLAY_WIDTH | DISPLAY_HEIGHT => return Err(DISPLAY_READ_ONLY.to_string()),
+		other => {
+			return Err(format!("{other} cannot be set; settable: {WINDOW_WIDTH}, {WINDOW_HEIGHT}, {DISPLAY_DPI}"))
+		}
 	};
 	if width <= 0 || height <= 0 {
 		return Err(format!("a window of {width}×{height} points cannot show: its sides must be positive"));
@@ -223,7 +241,7 @@ fn read_now(name: &str) -> Result<i64, String> {
 		VIEW_HEIGHT => Ok(NATIVE_VIEW.1),
 		DISPLAY_WIDTH => display_size().map(|(width, _)| width),
 		DISPLAY_HEIGHT => display_size().map(|(_, height)| height),
-		DISPLAY_DPI => display_dpi(),
+		DISPLAY_DPI => Ok(DPI_SET.lock().unwrap().unwrap_or_else(|| display_dpi().unwrap_or(DEFAULT_DPI))),
 		other => Err(format!("{other} is no system value; known: {}", SYSTEM_VALUES.map(|(name, _)| name).join(", "))),
 	}
 }

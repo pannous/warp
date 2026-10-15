@@ -147,6 +147,7 @@ function programImports(holder, hooks) {
 				if (value === "key_down") return BigInt(heldKey !== 0);
 				if (value === "key code held") return BigInt(heldKey);
 				if (value in WINDOW_SIDES) return BigInt(windowSide(value));
+				if (value === "display_dpi" && holder.displayDpi) return BigInt(holder.displayDpi);
 				const pointerIndex = self.pagePointer?.names.indexOf(value) ?? -1; // canvas.js trackPointer
 				if (pointerIndex >= 0) return BigInt(Atomics.load(self.pagePointer.values, pointerIndex));
 				// a Worker has no matchMedia: the page tells it (playground.js tellSystemValues)
@@ -154,9 +155,15 @@ function programImports(holder, hooks) {
 				if (known !== undefined) return BigInt(known);
 				throw new Error(`${value}: the playground cannot read it yet`);
 			},
-			// window.width = 800: the paintings' frame (crates/warp-runtime/src/system_values.rs write); the display reads only
+			// window.width = 800: the paintings' frame (crates/warp-runtime/src/system_values.rs write); display.dpi = 300 dpi
+			// the dots per inch px count in; the display's sides read only
 			set_system_value: (name, value) => {
 				const side = decode(cString(name));
+				if (side === "display_dpi") {
+					if (value <= 0n) throw new Error(`display.dpi = ${value} dpi: a display has a positive number of dots per inch`);
+					holder.displayDpi = Number(value);
+					return;
+				}
 				if (!(side in WINDOW_SIDES)) throw new Error(side.startsWith("display") ? DISPLAY_READ_ONLY : `${side} cannot be set`);
 				if (value <= 0n) throw new Error(`a window side of ${value} cannot show: its sides must be positive`);
 				holder.windowSize = { window_width: windowSide("window_width"), window_height: windowSide("window_height"), [side]: Number(value) };
