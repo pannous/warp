@@ -350,6 +350,8 @@ def operator_at(p) {
 		return []
 	}
 	if starts_at(p.code, "?:", p.at) or starts_at(p.code, "//", p.at) { return [] }
+	// `x = 1  # one` is a comment, `xs # 1` the index operator (card parser-parses)
+	if c == '#' and skipped_end(p.code, p.at, p.n) > p.at { return [] }
 	for op in SYMBOL_OPERATORS {
 		if op#1[0] == c and starts_at(p.code, op#1, p.at) { return op }
 	}
