@@ -15,6 +15,7 @@ Present each in the morning popup batch (keep / change), then move it to decisio
 - dimension-bridges (px ↔ length through display.dpi): see decisions.md dimensions-units.
 - letters: see decisions.md (Text).
 - json-exactness (big ints exact digits, fractions float + warning): see decisions.md (Text).
+- random-forms (`random T` any type, `random(1, 6)` die roll inclusive): see decisions.md (Functions and calls).
 
 ## Parked (user: "later")
 - body-statements (2026-10-14): a function body looped like a list of statements, each statement with its kind
