@@ -44,3 +44,22 @@ fn json_loses_nothing_silently() {
 	assert!(warp::wasm_emitter::eval("(1/0.0).json").serialize().contains("JSON has no"));
 	assert!(warp::wasm_emitter::eval("[1 (0/0.0)].json").serialize().contains("JSON has no NaN"));
 }
+
+/// decision json-exactness: a big integer keeps all its digits; a fraction is JSON's float with a warning naming the
+/// loss, under `use strict` an error
+#[test]
+fn json_writes_numbers_exactly_or_says_so() {
+	is!("(2^70).json", "1180591620717411303424");
+	is!("[-(2^70) 1].json", "[-1180591620717411303424,1]");
+	is!("(1/3).json", "0.3333333333333333");
+	assert!(warp::wasm_emitter::eval("use strict\n(1/3).json").serialize().contains("JSON has no exact 1/3"));
+}
+
+#[cfg(feature = "native")]
+#[test]
+fn a_fraction_in_json_warns_of_its_loss() {
+	warp::errors::diagnostic::take_runtime_warnings();
+	is!("{third: 1/3}.json", "{\"third\":0.3333333333333333}");
+	let warnings = warp::errors::diagnostic::take_runtime_warnings();
+	assert!(warnings.iter().any(|warning| warning.contains("JSON has no exact 1/3")), "{warnings:?}");
+}

@@ -81,19 +81,65 @@ fn json(member: &str, arguments: &[Node]) -> Result<Node, String> {
 				.map_err(|problem| format!("{text:?} is no json: {problem}"))?;
 			Ok(crate::modules::foreign::node_of(&parsed))
 		}
-		("to_json", [value, ..]) if let Some(part) = crate::node::inexpressible_in_json(value) => Err(format!(
-			"JSON has no {}: {} cannot be written as JSON",
-			part.serialize().trim(),
-			value.serialize().trim()
-		)),
-		("to_json", [value]) => Ok(Node::Text(crate::modules::foreign::json_of(value).to_string())),
-		// an instance of one of the program's classes is its fields: `{"Point": {"x": 1}}` is `{"x": 1}` (as host.js)
-		("to_json", [value, classes]) => {
-			let classes: Vec<String> = classes.children().iter().filter_map(|class| text_of(class).ok()).collect();
-			Ok(Node::Text(without_class_tags(crate::modules::foreign::json_of(value), &classes).to_string()))
+		("to_json" | EXACT_JSON, [value, ..]) if let Some(part) = crate::node::inexpressible_in_json(value) => {
+			Err(format!("JSON has no {}: {} cannot be written as JSON", spelled(&part), spelled(value)))
+		}
+		// under `use strict` (class_methods lower_json_calls) a fraction is an error, otherwise a warning
+		(EXACT_JSON, [value, ..]) if let Some(part) = crate::node::inexact_in_json(value) => {
+			Err(format!("JSON has no exact {}: it cannot be written as JSON exactly", spelled(&part)))
+		}
+		("to_json" | EXACT_JSON, [value, classes @ ..]) => {
+			if let Some(part) = crate::node::inexact_in_json(value) {
+				crate::errors::diagnostic::report_runtime_warning(&format!(
+					"JSON has no exact {}: it is written as the float {}",
+					spelled(&part),
+					crossing_number_of(&part)
+				));
+			}
+			let classes: Vec<String> = classes
+				.first()
+				.map(|classes| classes.children().iter().filter_map(|class| text_of(class).ok()).collect())
+				.unwrap_or_default();
+			let json = crate::modules::foreign::json_of_with(value, &exact_json_number);
+			Ok(Node::Text(with_raw_digits(&without_class_tags(json, &classes).to_string())))
 		}
 		_ => no_such_word(arguments),
 	}
+}
+
+/// json's word for `to_json` under `use strict`: a number JSON writes only approximately is an error
+const EXACT_JSON: &str = "exact_json";
+/// Marks the digits of a big integer in the JSON value, which serde_json holds as f64 only: with_raw_digits writes them
+/// as the number (U+E000 is a private-use character no text means)
+const RAW_DIGITS_MARK: &str = "\"\u{E000}";
+
+fn spelled(node: &Node) -> String {
+	node.serialize().trim().to_string()
+}
+
+fn crossing_number_of(node: &Node) -> String {
+	match node.drop_meta() {
+		Node::Number(number) => f64::from(*number).to_string(),
+		other => spelled(other),
+	}
+}
+
+/// A big integer keeps all its digits (decision json-exactness): `(2^70).json` is 1180591620717411303424
+fn exact_json_number(number: &crate::extensions::numbers::Number) -> serde_json::Value {
+	match number {
+		crate::extensions::numbers::Number::BigInt(big) => serde_json::Value::String(format!("\u{E000}{big}")),
+		number => crate::modules::foreign::crossing_number(number),
+	}
+}
+
+/// The JSON text with each marked big integer as its digits: `"\u{E000}1180…"` is 1180…
+fn with_raw_digits(json: &str) -> String {
+	let mut parts = json.split(RAW_DIGITS_MARK);
+	let mut written = parts.next().unwrap_or_default().to_string();
+	for part in parts {
+		written.push_str(&part.replacen('"', "", 1));
+	}
+	written
 }
 
 fn file(member: &str, arguments: &[Node]) -> Result<Node, String> {

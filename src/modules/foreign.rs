@@ -65,6 +65,20 @@ fn component_call(module: &Node, member: &str, arguments: &Value) -> Result<Node
 }
 
 pub(crate) fn json_of(node: &Node) -> Value {
+	json_of_with(node, &crossing_number)
+}
+
+/// An exact rational (`2.5` is 5/2) crosses as a float, an integer as itself
+pub(crate) fn crossing_number(number: &Number) -> Value {
+	match number {
+		Number::Int(integer) => Value::from(*integer),
+		number => Value::from(f64::from(*number)),
+	}
+}
+
+/// A node as JSON, its numbers as `number_json` writes them
+pub(crate) fn json_of_with(node: &Node, number_json: &dyn Fn(&Number) -> Value) -> Value {
+	let json_of = |node: &Node| json_of_with(node, number_json);
 	match node.drop_meta() {
 		Node::List(items, Bracket::Square | Bracket::Round | Bracket::None, _) => {
 			Value::Array(items.iter().map(json_of).collect())
@@ -84,9 +98,7 @@ pub(crate) fn json_of(node: &Node) -> Value {
 					.collect(),
 			)
 		}
-		// an exact rational (`2.5` is 5/2) crosses as a float, an integer as itself
-		Node::Number(Number::Int(integer)) => Value::from(*integer),
-		Node::Number(number) => Value::from(f64::from(*number)),
+		Node::Number(number) => number_json(number),
 		other => serde_json::from_str(&other.to_json_compact().unwrap_or_default()).unwrap_or(Value::Null),
 	}
 }
