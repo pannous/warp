@@ -1,0 +1,8 @@
+// card reconsider-spaced: what a pure spaced list would mean (branch reconsider-spaced, experiment only)
+print 2⁻¹ 2⁰ 2¹ 2²
+xs = 1 2 3
+print count xs
+print 1+1 2+2
+x = 2
+print x x+1
+print sum 1 2 3+1

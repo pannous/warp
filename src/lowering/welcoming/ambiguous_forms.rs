@@ -141,6 +141,17 @@ fn is_number_or_text(node: &Node) -> bool {
 	}
 }
 
+/// `2⁻¹`, `3+1`: arithmetic of numbers
+fn is_arithmetic_of_values(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Key(left, op, right) if ARITHMETIC.contains(op) => {
+			(left.is_empty_node() || is_number_or_text(left) || is_arithmetic_of_values(left))
+				&& (right.is_empty_node() || is_number_or_text(right) || is_arithmetic_of_values(right))
+		}
+		other => is_number_or_text(other),
+	}
+}
+
 /// `a=1,2,3` / `a=1 2 3` without brackets: a list or separate statements? Unanswered an error (D12)
 fn bare_list_assignment(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Result<Node, Node>> {
 	if *bracket != Bracket::None || !matches!(separator, Separator::Space | Separator::Colon) {
@@ -150,11 +161,17 @@ fn bare_list_assignment(items: &[Node], bracket: &Bracket, separator: &Separator
 	let Node::Key(name, Op::Assign, value) = first.drop_meta() else {
 		return None;
 	};
-	if rest.is_empty() || !is_number_or_text(value) || !rest.iter().all(is_number_or_text) {
+	let spaced = *separator == Separator::Space;
+	let is_value = |node: &Node| is_number_or_text(node) || (spaced && is_arithmetic_of_values(node));
+	if rest.is_empty() || !is_value(value) || !rest.iter().all(is_value) {
 		return None;
 	}
 	let values = std::iter::once(value.as_ref().clone()).chain(rest.iter().cloned()).collect();
 	let list = Node::Key(name.clone(), Op::Assign, Box::new(Node::List(values, Bracket::Square, separator.clone())));
+	// EXPERIMENT reconsider-spaced: `xs = 1 2 3` is the list
+	if spaced {
+		return Some(Ok(list));
+	}
 	let statements = Node::List(items.to_vec(), Bracket::None, Separator::Semicolon);
 	let written = Node::List(items.to_vec(), Bracket::None, separator.clone()).serialize();
 	let readings =

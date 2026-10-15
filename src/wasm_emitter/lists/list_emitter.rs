@@ -547,8 +547,11 @@ impl WasmGcEmitter {
 			// a block with a field (`p{ class: "x" "c" + n }`) is a structure whose items stay items
 			let has_field =
 				items.len() > 1 && items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _)));
+			// EXPERIMENT reconsider-spaced: a bare spaced line of values is a list (`2⁻¹ 2⁰ 2¹`)
+			let is_spaced_values = *bracket == Bracket::None && *separator == Separator::Space;
 			let has_arithmetic = *bracket != Bracket::Square
 				&& !is_tuple && !has_field
+				&& !is_spaced_values
 				&& items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, op, _) if op.is_arithmetic()));
 			if has_arithmetic {
 				let node = Node::List(items.to_vec(), bracket.clone(), Separator::None);
