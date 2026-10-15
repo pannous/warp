@@ -158,11 +158,14 @@ pub fn std_function_names() -> &'static std::collections::HashSet<String> {
 	})
 }
 
-/// The standard module that defines `word` (`zip` → list), for the error of a word used without its `use`
+/// The standard module that defines `word` (`zip` → list), for the error of a word used without its `use`; the module
+/// named after a type first: `unique` is list's, shell only adds a method for paths (card cross-module-overload)
 pub fn std_module_defining(word: &str) -> Option<&'static str> {
-	(0..STD_MODULES.len())
-		.find(|index| std_module_words(*index).iter().any(|name| name == word))
+	let defining: Vec<&'static str> = (0..STD_MODULES.len())
+		.filter(|index| std_module_words(*index).iter().any(|name| name == word))
 		.map(|index| STD_MODULES[index].0)
+		.collect();
+	defining.iter().find(|module| crate::type_tests::is_builtin_type_word(module)).or(defining.first()).copied()
 }
 
 /// The classes a standard module declares (text's Cursor): no methods of the type the module is named after
