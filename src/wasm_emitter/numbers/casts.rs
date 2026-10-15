@@ -419,8 +419,8 @@ impl WasmGcEmitter {
 			Node::Text(s) => self.emit_text_cast(func, s, target_type),
 			Node::Char(c) => self.emit_character_cast(func, *c, target_type),
 			Node::Number(Number::Int(n)) => self.emit_float_node(func, *n as f64),
-			// a text, or a value known only at run time, parses its digits
-			_ if matches!(self.get_type(value), Kind::Text | Kind::Empty) => {
+			// a text, or a value known only at run time (`number(t)`), parses its digits or converts its number
+			_ if matches!(self.get_type(value), Kind::Text | Kind::Empty | Kind::Data) => {
 				self.emit_node_instructions(func, value);
 				self.emit_call(func, lists::list_ops::TEXT_AS_FLOAT);
 				self.emit_call(func, "new_float");

@@ -375,10 +375,18 @@ pub(super) fn infer_list_type(
 		}
 	}
 	// Type constructor: int("5"), float("1.5"), str(3), double 2
-	if let Some(kind) =
-		type_cast_of(items, bracket, separator, &|name| scope.lookup(name).is_some()).and_then(type_word_kind)
-	{
-		return kind;
+	if let Some(name) = type_cast_of(items, bracket, separator, &|name| scope.lookup(name).is_some()) {
+		// `number(t)` of a text known only at run time: an Int, a ratio or a Float, as the text says (like `t as number`)
+		let value = &items[1];
+		if is_number_word(&items[0])
+			&& !value.is_text_literal()
+			&& matches!(infer_type(value, scope), Kind::Text | Kind::Codepoint)
+		{
+			return Kind::Data;
+		}
+		if let Some(kind) = type_word_kind(name) {
+			return kind;
+		}
 	}
 	// Function call with parentheses: a library word has its own result, any other call is assumed Int. A comma list
 	// `(y, 4)` is a tuple, never the call y(4) (`f(a, b)` parses as `(f a b)`)
