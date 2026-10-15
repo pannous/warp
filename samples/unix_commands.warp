@@ -4,7 +4,6 @@ use script
 
 print "home folder entries:", count(ls ~/)
 print "a program:", which "sh"
-print "samples:", count(find_files(./samples, "*.warp"))
 // write, cp, mv, touch, mkdir and rm (to the Trash) change files; this sample only reads
 profile = ~/.profile
 if exists(profile) {
@@ -12,3 +11,5 @@ if exists(profile) {
 	print head(profile, 3)
 	print grep("^export", profile)
 }
+config = ~/.config
+if exists(config) { print "json files in ~/.config:", count(find_files(config, "*.json")) }

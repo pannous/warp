@@ -9,9 +9,12 @@ ls hides dotfiles; grep is a regex; paths expanded at use, not at parse.
 A path literal is a Text, glued to what follows and not to an operand before it:
 - `./x`, `../x` (older, card play-mozart)
 - `~/x`, and `~` alone when no operand follows (`cd ~`; `a ~ b` stays Op::Rough)
-- `/x` where no operand stands before it (`x = /tmp`, `print(/etc)`), or after a word of words::PATH_COMMANDS
-  (`ls /tmp`); `width /height` divides. PATH_COMMANDS is a const, not read from lib/shell.warp: the parser would
-  parse the module while parsing it (std_module_words' OnceLock).
+- `/x` where no operand stands before it (`x = /tmp`, `print(/etc)`, `[/a, /b]`), after another path (`cp /a /b`,
+  parser field path_end) or after a word that is no variable assigned so far but a function: the program's (parser
+  field functions), a built-in (negated_calls::is_builtin_callable) or a standard module's (std_function_names, read
+  from the modules' text: the parser may be parsing one of them). `width /height` and a parameter `w /h` divide.
+  (warp-reviewer asked for the SpacedMinus way, deciding in the lowering; the path text and the division's precedence
+  can't both be kept until then, so the parser decides with what it knows.)
 
 `~` is expanded where a path is used (util::home_expanded: std_adapters `path_of`, the host's read), so a quoted
 "~/x" works too and compiled programs expand on the machine they run on.
@@ -27,5 +30,6 @@ cwd became a getter (`cwd := …`) so it follows `cd`; std modules' getters no l
 
 A map key named like a module word inside a module function is renamed (`{lines: …}` → `lib·lines`,
 modules/needed_definitions.rs renamed_word); wc quotes its keys meanwhile (card queued).
+A pipe after a braceless call (`print cat "/etc/hosts" | count`) traps: card pipes-after.
 A sample named like a standard module (samples/shell.warp) shadows it when warp runs in the repo root: the sample is
 samples/unix_commands.warp.

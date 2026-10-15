@@ -38,6 +38,23 @@ fn cd_changes_the_working_directory() {
 }
 
 #[test]
+fn a_shell_word_takes_an_absolute_path() {
+	assert_eq!(printed("use script\nprint file_size /etc/hosts > 0"), "yes\n");
+	assert_eq!(printed("use script\ni = info /etc/hosts\nprint i.kind"), "file\n");
+	let folder = format!("{FOLDER}/copied");
+	let _ = std::fs::create_dir_all(&folder);
+	let target = std::fs::canonicalize(&folder).unwrap();
+	let code = format!("use script\ncp /etc/hosts {}\nprint exists {}/hosts", target.display(), target.display());
+	assert_eq!(printed(&code), "yes\n");
+}
+
+#[test]
+#[ignore = "card pipes-after: a pipe after a braceless call (print cat \"/etc/hosts\" | count traps)"]
+fn a_shell_word_pipes() {
+	assert_eq!(printed("use script\nprint cat /etc/hosts | count > 0"), "yes\n");
+}
+
+#[test]
 fn which_finds_a_program() {
 	assert_eq!(printed("use script\nprint which \"sh\""), "/bin/sh\n");
 	assert_eq!(printed("use script\nprint which \"no-such-program-here\""), "ø\n");

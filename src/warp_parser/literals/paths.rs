@@ -5,8 +5,8 @@ impl WarpParser {
 	/// `&name`: a reference to the function `name`, an `&` glued to the word after it and not to a word before it (`a &b`, `f(&g)`)
 	/// A file path without quotes starts here, glued to what follows and not to an operand before it (card unix-words):
 	/// `./mozart.mp3`, `../songs/a.wav` (`xs ./ 2` and `xs./2` divide each element); `~/notes.txt`, and `~` alone (`cd ~`;
-	/// `a ~ b` stays the comparison); `/etc/hosts` where no operand comes before it (`x = /tmp`, `print(/tmp)`) or after
-	/// a shell word (`ls /tmp`, words::PATH_COMMANDS; `width /height` divides)
+	/// `a ~ b` stays the comparison); `/etc/hosts` where no operand stands before it (`x = /tmp`, `[/a, /b]`) or after
+	/// a word taking it (`ls /tmp`, `cp /a /b`); after a variable it divides (`width /height`)
 	pub(crate) fn starts_path_literal(&self) -> bool {
 		let glued_to_operand = is_operand_end(self.prev_char());
 		!glued_to_operand
@@ -16,7 +16,10 @@ impl WarpParser {
 					self.peek_char(dots) == '/' && !ends_path(self.peek_char(dots + 1))
 				}
 				'~' => self.peek_char(1) == '/' || !self.operand_follows(1),
-				'/' => starts_path_name(self.peek_char(1)) && self.operand_before().is_none_or(is_path_command),
+				'/' => {
+					starts_path_name(self.peek_char(1))
+						&& self.operand_before().is_none_or(|word| self.takes_path(&word))
+				}
 				_ => false,
 			}
 	}
@@ -30,6 +33,18 @@ impl WarpParser {
 		}
 		let start = self.chars[..=end].iter().rposition(|c| !is_identifier_char(*c)).map_or(0, |at| at + 1);
 		Some(self.chars[start..=end].iter().collect())
+	}
+
+	/// A word before ` /name` takes a path: the operand before is a path (`cp /a /b`), or the word is no variable but a
+	/// function (the program's, a standard module's like ls, a built-in like print); `width /height` divides
+	fn takes_path(&self, word: &str) -> bool {
+		let after_path =
+			self.path_end.is_some_and(|end| self.chars[end..self.pos].iter().all(|c| matches!(c, ' ' | '\t')));
+		after_path
+			|| (!self.variables.contains(word)
+				&& (self.functions.contains(word)
+					|| crate::lowering::negated_calls::is_builtin_callable(word)
+					|| crate::modules::std_function_names().contains(word)))
 	}
 
 	/// Check if character terminates a URL
@@ -55,6 +70,7 @@ impl WarpParser {
 		let path: String =
 			(0..).map(|offset| self.peek_char(offset)).take_while(|&c| !super::lookahead::ends_path(c)).collect();
 		self.advance_by(path.chars().count());
+		self.path_end = Some(self.pos);
 		Node::Text(path)
 	}
 
@@ -98,9 +114,4 @@ fn is_operand_end(c: char) -> bool {
 /// What may follow the `/` of an absolute path: a name, a hidden name or a parent `..`; not `//` or `/*` (comments)
 fn starts_path_name(c: char) -> bool {
 	c.is_alphabetic() || matches!(c, '_' | '.')
-}
-
-/// A shell word takes a path after it: `ls /tmp`, `cat /etc/hosts`
-fn is_path_command(word: String) -> bool {
-	crate::words::PATH_COMMANDS.contains(&word.as_str())
 }

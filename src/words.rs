@@ -1,11 +1,6 @@
 //! The keywords and marks the parser and several lowering passes look for, a leaf module: it depends on nothing
 
 pub const COUNT_WORD: &str = "count";
-/// The words of lib/shell.warp (and print) that take a path: after them `/tmp` is a path, no division (card unix-words)
-pub const PATH_COMMANDS: [&str; 18] = [
-	"ls", "cd", "cat", "rm", "echo", "print", "mkdir", "cp", "mv", "touch", "head", "tail", "wc", "grep", "exists",
-	"read", "write", "glob",
-];
 pub const EACH_WORD: &str = "each";
 pub const FOR_WORD: &str = "for";
 pub const FROM_WORD: &str = "from";

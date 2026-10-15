@@ -145,6 +145,19 @@ pub(super) fn std_module_words(index: usize) -> &'static [String] {
 	})
 }
 
+/// The names the standard modules define with parameters (`ls(folder:any = ".") := …`), read from their text: the
+/// parser asks while it may be parsing one of them, so std_module_words, which parses them, can't answer
+pub fn std_function_names() -> &'static std::collections::HashSet<String> {
+	static NAMES: std::sync::OnceLock<std::collections::HashSet<String>> = std::sync::OnceLock::new();
+	NAMES.get_or_init(|| {
+		let defined = |line: &str| {
+			let name: String = line.chars().take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+			(!name.is_empty() && line[name.len()..].starts_with('(') && line.contains(":=")).then_some(name)
+		};
+		STD_MODULES.iter().flat_map(|(_, source)| source.lines().filter_map(defined)).collect()
+	})
+}
+
 /// The standard module that defines `word` (`zip` → list), for the error of a word used without its `use`
 pub fn std_module_defining(word: &str) -> Option<&'static str> {
 	(0..STD_MODULES.len())
