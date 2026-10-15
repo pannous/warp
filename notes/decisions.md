@@ -650,6 +650,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   (repro probes/firefox_jspi_terminate.html).
 - deploy-hook (2026-10-15, user): watch-playground-deploy.sh asks the finished run's conclusion and failed jobs,
   retrying ~30 min; no answer gives one stderr line, no wake (card posttooluse-playground).
+- browser-server (2026-10-15, user): browser checks get a dry run on pannous.com over SSH (headless Chrome and
+  Firefox on the server) before anyone starts the GitHub Playground workflow, so trial runs send no "Run failed"
+  mails; GitHub runs only the final check, plus Safari. Local browsers on the Mac stay banned (card browser-server).
 
 ## Sound and graphics
 - shader-untouched (2026-10-13, user: "I didn't mean to mess with the shader language"): WGSL in shader blocks stays
