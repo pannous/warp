@@ -220,6 +220,7 @@ function startWorker(restarts = 0) {
 			if (starting.retired && data.type === "report") return retire(starting);
 			if (data.type === "notify") data = notification(data.text);
 			if (data.type === "window") return resizeWindow(data, $("paintings")); // canvas.js
+			if (data.type === "window unseen") return void (ranUnseen = true);
 			if (data.type === "dispatch") return dispatchToPage(data.event); // markup.js, card page-custom-event
 			if (!data) return;
 			if (stalled) watchStart();
@@ -322,7 +323,20 @@ function notification(text) {
 const darkMode = matchMedia(DARK_MODE_QUERY);
 const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(!beforeUserActivation()), display_width: screen.width, display_height: screen.height, ...viewSize() } });
 darkMode.addEventListener("change", tellSystemValues);
-["pointerdown", "keydown"].forEach(type => addEventListener(type, () => worker && tellSystemValues(), { once: true, capture: true }));
+
+// the run on load (#finger_paint) reads window_open before the first click, so its `while window_open` loop ends at
+// once; the first click or key press tells the worker the window is open and runs such a run's code again (card
+// register-fingers: the user's strokes never showed). A touch activates the page only at pointerup, so each of these
+// events asks until the page is active
+let ranUnseen = false; // the shown run read window_open as 0
+const ACTIVATING_EVENTS = ["pointerdown", "pointerup", "keydown"];
+function rerunForViewer() {
+	if (!worker || beforeUserActivation()) return;
+	ACTIVATING_EVENTS.forEach(type => removeEventListener(type, rerunForViewer, { capture: true }));
+	tellSystemValues();
+	if (ranUnseen) runChanged();
+}
+ACTIVATING_EVENTS.forEach(type => addEventListener(type, rerunForViewer, { capture: true }));
 new ResizeObserver(() => worker && tellSystemValues()).observe($("output"));
 document.addEventListener("fullscreenchange", () => worker && tellSystemValues());
 
@@ -913,6 +927,7 @@ async function show(code) {
 		return;
 	}
 	showing = true;
+	ranUnseen = false;
 	setStatus("running…");
 	try {
 		showReport(await evaluate(code));
