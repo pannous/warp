@@ -114,7 +114,8 @@ pub fn type_modules() -> Vec<(&'static str, &'static [String])> {
 }
 
 pub(crate) fn with_type_module_uses(program: Node) -> Node {
-	let defined = own_functions(&program);
+	let mut defined = own_functions(&program);
+	defined.extend(imported_module_exports(&program));
 	// `from list import zip` brings only zip: the module's other words stay out (test_from_import)
 	let imported =
 		|statement: &Node| used_module(statement).or_else(|| imported_words(statement).map(|(used, _, _)| used));

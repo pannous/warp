@@ -98,25 +98,44 @@ fn used_and_implicit_modules(program: &Node) -> Vec<String> {
 	names
 }
 
+/// The loader of the modules the program uses: the search folders, then the program file's own folder
+fn program_loader() -> Loader<'static> {
+	Loader::new(&SEARCH_DIRECTORIES, program_file().as_deref().map(folder_of))
+}
+
+/// The WebAssembly module a used name finds, when no warp source of that name exists
+fn wasm_module_path(loader: &Loader, name: &str) -> Option<std::path::PathBuf> {
+	loader
+		.find(name)
+		.is_none()
+		.then(|| loader.find_with(name, &crate::modules::wasm_modules::MODULE_EXTENSIONS))
+		.flatten()
+}
+
+/// The functions the WebAssembly modules the program uses export: they are the program's own words, so a standard
+/// module's word of the same name stays out (`import shout; letters(t)` calls the module's letters)
+pub(crate) fn imported_module_exports(program: &Node) -> HashSet<String> {
+	let loader = program_loader();
+	used_and_implicit_modules(program)
+		.iter()
+		.filter_map(|name| wasm_module_path(&loader, name))
+		.flat_map(|path| crate::modules::wasm_modules::exports(&path.to_string_lossy()).keys().cloned())
+		.collect()
+}
+
 /// The classes of the modules the program uses, in front of it: those of a file (`use shapes`) all, those of a standard
 /// module the program names (`use collections; s = Stack()`). class_methods, which turns a class's methods into
 /// functions and its method calls into theirs, runs before `resolve` loads a module's other definitions; the loader
 /// then leaves these modules' classes out (early_class_modules). A class the program declares itself wins.
 pub fn insert_module_classes(program: Node) -> Node {
 	let mut program = with_type_module_uses(program);
-	let file = program_file();
-	let loader = Loader::new(&SEARCH_DIRECTORIES, file.as_deref().map(folder_of));
+	let loader = program_loader();
 	let own_names: HashSet<String> = statements_of(&program).iter().filter_map(name_declared_by).collect();
 	let (mut std_definitions, mut file_classes, mut early, mut class_modules) =
 		(vec![], vec![], HashSet::new(), vec![]);
 	let mut defined: Vec<String> = vec![]; // every used module's words, a file's copy of a standard module's too
 	for name in used_and_implicit_modules(&program) {
-		if let Some(module) = loader
-			.find(&name)
-			.is_none()
-			.then(|| loader.find_with(&name, &crate::modules::wasm_modules::MODULE_EXTENSIONS))
-			.flatten()
-		{
+		if let Some(module) = wasm_module_path(&loader, &name) {
 			let module = module.to_string_lossy();
 			let classes = crate::modules::wasm_modules::classes(&module);
 			let names: Vec<String> = classes.iter().filter_map(name_declared_by).collect();
