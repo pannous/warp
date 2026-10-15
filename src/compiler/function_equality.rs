@@ -268,7 +268,7 @@ fn comparison_law(f: &Function, g: &Function) -> Law {
 	}
 	let arguments = names.join(", ");
 	let statement =
-		crate::warp_parser::WarpParser::parse(&format!("{}({arguments}) == {}({arguments})", f.name(), g.name()));
+		crate::warp_parser::parse_generated(&format!("{}({arguments}) == {}({arguments})", f.name(), g.name()));
 	let variables = names.into_iter().zip(f.definition.parameters.iter().map(|(_, kind)| *kind)).collect();
 	Law { name: None, function: f.name().to_string(), statement, variables }
 }

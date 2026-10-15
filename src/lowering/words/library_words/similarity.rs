@@ -25,7 +25,7 @@ impl Lowering {
 		let (_, function, variable, default) =
 			SIMILARITY_LEVELS.iter().find(|(level, ..)| *level == op).expect("a similarity operator");
 		let tolerance = if self.shadows(variable) { variable } else { default };
-		let call = vec![symbol(function), left, right, crate::warp_parser::parse(tolerance)];
+		let call = vec![symbol(function), left, right, crate::warp_parser::parse_generated(tolerance)];
 		parens(call)
 	}
 }

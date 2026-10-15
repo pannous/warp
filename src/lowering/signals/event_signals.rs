@@ -17,7 +17,6 @@ use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::signal_values::listeners_subject;
 use crate::variable_signals::{assign, symbols};
-use crate::warp_parser::parse;
 use crate::words::{COUNT_WORD, FROM_WORD, ONCE_WORD, ON_WORD};
 use crate::words::{EMIT_ALIASES, EMIT_WORDS};
 use crate::words::{ERROR_WORD, RETURN_WORD};
@@ -423,8 +422,10 @@ fn subscribed_in_blocks(statements: Vec<Node>, raised: &HashSet<String>) -> Vec<
 		let list = subscribers_name(event);
 		let listener = format!("{}{SUBSCRIBER_SUFFIX}", event.replace(' ', "_"));
 		[
-			parse(&format!("{list} = []")),
-			parse(&format!("on {event} {{ for {listener} in {list} {{ {listener}(event) }} }}")),
+			crate::warp_parser::parse_generated(&format!("{list} = []")),
+			crate::warp_parser::parse_generated(&format!(
+				"on {event} {{ for {listener} in {list} {{ {listener}(event) }} }}"
+			)),
 		]
 	});
 	started.chain(statements).collect()
@@ -574,8 +575,8 @@ impl Listeners {
 			.map(|(index, flag)| format!("(if {flag} then [{}] else [])", index + 1))
 			.collect();
 		match entries.is_empty() {
-			true => parse("[]"),
-			false => parse(&entries.join(" + ")),
+			true => crate::warp_parser::parse_generated("[]"),
+			false => crate::warp_parser::parse_generated(&entries.join(" + ")),
 		}
 	}
 }
@@ -630,7 +631,11 @@ fn reflected(statement: Node, listeners: &Listeners) -> Node {
 		}
 		([COUNT_WORD, ..], [_, target, rest @ ..]) if let Some(event) = event(target, rest) => {
 			let listening = listeners.flags(&event).into_iter().map(|flag| format!(" + (if {flag} then 1 else 0)"));
-			parse(&format!("{}{}", listeners.counts[&event], listening.collect::<String>()))
+			crate::warp_parser::parse_generated(&format!(
+				"{}{}",
+				listeners.counts[&event],
+				listening.collect::<String>()
+			))
 		}
 		_ => statement.map_children(|child| reflected(child, listeners)),
 	}
@@ -852,7 +857,7 @@ pub(crate) fn function_with_globals(
 	let statements: Vec<Node> =
 		global_declarations(bodies, main_variables, &[EVENT_WORD]).into_iter().chain(bodies.iter().cloned()).collect();
 	let template = if takes_event { FUNCTION_TEMPLATE } else { PARAMETERLESS_TEMPLATE };
-	let Node::Key(head, op, _) = parse(template).drop_meta().clone() else {
+	let Node::Key(head, op, _) = crate::warp_parser::parse_generated(template).drop_meta().clone() else {
 		unreachable!("the template is a definition")
 	};
 	let name = symbol(name);

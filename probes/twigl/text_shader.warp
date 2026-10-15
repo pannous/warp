@@ -1,0 +1,4 @@
+// probe for card create-little: paint takes a WGSL text built at run time, its values.size / values.time filled
+use graphics
+wgsl = "@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(at.x / values.size.x, sin(values.time), 0, 1); }"
+paint(wgsl)

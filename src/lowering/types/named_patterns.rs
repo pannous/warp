@@ -207,7 +207,7 @@ fn cast_to_schema(subject: Node, schema: &str, fields: &[SchemaField]) -> Node {
 		.collect();
 	let copied = key(Node::Symbol(copy.clone()), Op::Assign, crate::lowering::nodes::call("copy", vec![subject]));
 	let mut statements = vec![copied];
-	statements.extend(crate::warp_parser::parse(&format!("{converted}{copy}")).as_items());
+	statements.extend(crate::warp_parser::parse_generated(&format!("{converted}{copy}")).as_items());
 	Node::List(statements, Bracket::Round, crate::node::Separator::Semicolon)
 }
 

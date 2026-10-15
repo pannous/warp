@@ -12,7 +12,7 @@ use crate::errors::diagnostic::Diagnostic;
 use crate::library_words::substitute;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::warp_parser::parse;
+use crate::warp_parser::parse_template;
 use crate::words::{EACH_WORD, IMPLICIT_PARAMETER, ON_WORD, SORT_WORD};
 use std::collections::HashSet;
 
@@ -1030,7 +1030,11 @@ impl Lowering {
 		for (name, fresh) in &names {
 			template = replace_word(&template, name, fresh);
 		}
-		let mut program = substitute(substitute(parse(&template), LIST_PLACEHOLDER, &list), CALL_PLACEHOLDER, &applied);
+		let mut program = substitute(
+			substitute(parse_template(&template, &list), LIST_PLACEHOLDER, &list),
+			CALL_PLACEHOLDER,
+			&applied,
+		);
 		if let Some(start) = extras.first() {
 			program = substitute(program, START_PLACEHOLDER, start);
 		}
