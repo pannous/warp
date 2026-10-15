@@ -418,6 +418,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - Ranges (2026-10-09): `r: 1..n` is the range itself, same as `r = 1..n`. `upto` excludes the end with a hint.
 
 ## Functions and calls
+- function-references (2026-10-15, user): a bare name of a function that needs arguments, compared with a type
+  (`floor is function`) or in `type(floor)`, means the function itself (card bare-fn-type). `.floor` in argument
+  position is a lambda on it, like Swift's .member: `xs.map(.floor)`, `people.sort(.age)` (card dot-lambda).
+  `&floor` and `function floor` stay the explicit references; `:floor` is not used.
 - type-library-words (2026-10-12): list/map/text library words are always available as `x.f()` and `f(x)`;
   `use list` only for qualified `list.zip`. P171 other modules' words need their `use` (error naming the module);
   `write` and `exists` are global; a file URL loads the file module.
