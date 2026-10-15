@@ -1102,7 +1102,7 @@ impl Lowering {
 		let (kept, rest) = arguments.split_at(wanted - 1);
 		let heads_with_word = matches!(rest[0].drop_meta(), Node::Symbol(name) if self.library_word(name).is_some());
 		let phrase = heads_with_word.then(|| self.word_call(rest, &Bracket::None, &Separator::Space)).flatten();
-		let phrase = phrase.unwrap_or_else(|| Node::List(rest.to_vec(), Bracket::None, Separator::Space));
+		let phrase = phrase.unwrap_or_else(|| crate::lowering::ambiguous_forms::spaced_phrase(rest.to_vec()));
 		[kept.to_vec(), vec![phrase]].concat()
 	}
 

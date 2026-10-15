@@ -194,10 +194,27 @@ fn is_arithmetic_of_values(node: &Node) -> bool {
 	}
 }
 
-/// `2⁻¹ 2⁰ 2¹`, `1+1 2+2` on a line of their own: spaced values are a list (reconsider-spaced, user 2026-10-15)
+/// `2⁻¹ 2⁰ 2¹`, `1+1 2+2` on a line of their own, in a block too: spaced values are a list (reconsider-spaced, user
+/// 2026-10-15)
 fn spaced_values(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
-	let is_spaced = *bracket == Bracket::None && *separator == Separator::Space;
-	(is_spaced && are_spaced_values(items)).then(|| Node::List(items.to_vec(), Bracket::Square, Separator::Space))
+	if *separator != Separator::Space || !are_spaced_values(items) {
+		return None;
+	}
+	let list = Node::List(items.to_vec(), Bracket::Square, Separator::Space);
+	match bracket {
+		Bracket::None => Some(list),
+		// `{1+1 2+2}`: the block of the one line; `{1 2}` stays the data block of its values
+		Bracket::Curly if !items.iter().all(is_number_or_text) => {
+			Some(Node::List(vec![list], Bracket::Curly, Separator::Newline))
+		}
+		_ => None,
+	}
+}
+
+/// The arguments gathered for a word of one value: spaced values are one list, `sum 1+1 2+2` is `sum [2 4]`
+pub(crate) fn spaced_phrase(items: Vec<Node>) -> Node {
+	let bracket = if are_spaced_values(&items) { Bracket::Square } else { Bracket::None };
+	Node::List(items, bracket, Separator::Space)
 }
 
 /// Several values or number expressions, none after the first with a glued sign: `1+1 2+2`, not `5 -2`
@@ -206,22 +223,25 @@ pub(crate) fn are_spaced_values(items: &[Node]) -> bool {
 }
 
 /// `a=1,2,3` without brackets: a list or separate statements? Unanswered an error (D12). Spaced, `a=1 2 3` is the list
-/// (reconsider-spaced, user 2026-10-15) unless a later value has a glued sign: `x = 5 -2` still asks
+/// (reconsider-spaced, user 2026-10-15) unless a later value has a glued sign: `x = 5 -2` still asks. A function body
+/// alike: `f() := 1+1 2+2` gives [2 4]
 fn bare_list_assignment(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Result<Node, Node>> {
 	if *bracket != Bracket::None || !matches!(separator, Separator::Space | Separator::Colon) {
 		return None;
 	}
 	let (first, rest) = items.split_first()?;
-	let Node::Key(name, Op::Assign, value) = first.drop_meta() else {
-		return None;
-	};
 	let spaced = *separator == Separator::Space;
+	let (name, op, value) = match first.drop_meta() {
+		Node::Key(name, Op::Assign, value) => (name, Op::Assign, value),
+		Node::Key(name, Op::Define, value) if spaced => (name, Op::Define, value),
+		_ => return None,
+	};
 	let is_value = |node: &Node| is_number_or_text(node) || (spaced && is_arithmetic_of_values(node));
 	if rest.is_empty() || !is_value(value) || !rest.iter().all(is_value) {
 		return None;
 	}
 	let values = std::iter::once(value.as_ref().clone()).chain(rest.iter().cloned()).collect();
-	let list = Node::Key(name.clone(), Op::Assign, Box::new(Node::List(values, Bracket::Square, separator.clone())));
+	let list = Node::Key(name.clone(), op, Box::new(Node::List(values, Bracket::Square, separator.clone())));
 	if spaced && !rest.iter().any(crate::analyzer::is_negative) {
 		return Some(Ok(list));
 	}
