@@ -14,6 +14,12 @@ cd "$repository"
 
 warp="$(scripts/own-warp.sh)"
 "$warp" compile --wasm web/uniscript/uniscript.warp  # → uniscript.wasm (compile alone builds an executable), fetches packages/uniscript
+# since uniscript 1.0.8 `use uniscript` imports the module uniscript_c.wasm by path, which uniscript.js does not link
+if wasm-tools print web/uniscript/uniscript.wasm | grep -q '(import "/'; then
+	git checkout web/uniscript/uniscript.wasm
+	echo "uniscript.wasm now imports uniscript_c.wasm, which uniscript.js cannot link: the page must call it itself (card web-uniscript)" >&2
+	exit 1
+fi
 
 cp web/playground/imports.js "$page/"  # importDescriptors, shared with the playground
 mkdir -p "$page/packages/uniscript/data" "$page/fonts"

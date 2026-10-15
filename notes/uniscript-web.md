@@ -2,6 +2,7 @@
 
 https://pannous.com/uniscript/ — `web/uniscript/`: a textarea whose uniscript is converted live by the uniscript.wasp of the uniscript package (github.com/pannous/uniscript)
 compiled to WASM GC by warp (no JS reimplementation), and a reverse box (`unicode_to_uniscript`).
+Since uniscript 1.0.8 `use uniscript` imports uniscript_c.wasm instead (card takes-three), which uniscript.js cannot link: build.sh refuses until the page calls uniscript_c.wasm itself (card web-uniscript); the committed uniscript.wasm keeps working.
 
 ## Build and deploy
 

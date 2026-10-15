@@ -6,6 +6,7 @@ mod test_case_table;
 mod test_cast_to_string;
 mod test_character_arithmetic;
 mod test_character_comparison;
+mod test_chars_codepoints; // card chars-codepoints
 mod test_chr;
 mod test_codepoint_bytes;
 mod test_constant_expression_text;

@@ -64,6 +64,7 @@ const FIELDS_GROW: &str = "fields_grow";
 /// text_quoted(text) -> text: how a text inside a container prints (P126)
 pub const TEXT_QUOTED: &str = "text_quoted";
 const QUOTE_BYTE: i32 = b'"' as i32;
+const CHARACTER_QUOTE_BYTE: i32 = b'\'' as i32;
 const BACKSLASH_BYTE: i32 = b'\\' as i32;
 pub const LIST_JOIN: &str = "list_join";
 /// list_text(list, separator): list_join that also takes nested lists, for the text of a list (`str(xs)`)
