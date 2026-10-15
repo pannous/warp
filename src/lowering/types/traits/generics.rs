@@ -158,7 +158,8 @@ pub(super) fn generic_functions(node: &Node, registry: &TypeRegistry, traits: &T
 			let Node::Symbol(name) = items[0].drop_meta() else {
 				return;
 			};
-			if name.contains(WITNESS_SEPARATOR) || traits.operation(name).is_some() {
+			let witness = name.contains(WITNESS_SEPARATOR) && !crate::lowering::overloads::is_arity_variant(name);
+			if witness || traits.operation(name).is_some() {
 				return;
 			}
 			let signature = signature_of(&items[1..], registry);
