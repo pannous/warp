@@ -526,17 +526,21 @@ impl Quantity {
 
 /// Dimension → power, the same for `km/h` and `m/s`; two quantities add or compare only with equal signatures
 fn signature(factors: &[Factor]) -> Vec<(Dimension, i32)> {
-	let mut powers: Vec<(Dimension, i32)> = vec![];
-	for factor in factors {
-		match powers.iter_mut().find(|(dimension, _)| *dimension == factor.unit.dimension) {
-			Some((_, power)) => *power += factor.power,
-			None => powers.push((factor.unit.dimension, factor.power)),
-		}
-	}
-	powers.retain(|(_, power)| *power != 0);
-	powers.sort_by_key(|(dimension, _)| *dimension as u8);
-	powers
+	factors.iter().fold(vec![], |powers, factor| added(&powers, factor.unit.dimension, factor.power))
 }
+
+/// `powers` with `power` more of `dimension`, in the order signatures keep
+fn added(powers: &[(Dimension, i32)], dimension: Dimension, power: i32) -> Vec<(Dimension, i32)> {
+	let mut added = powers.to_vec();
+	match added.iter_mut().find(|(known, _)| *known == dimension) {
+		Some((_, sum)) => *sum += power,
+		None => added.push((dimension, power)),
+	}
+	added.retain(|(_, power)| *power != 0);
+	added.sort_by_key(|(dimension, _)| *dimension as u8);
+	added
+}
+
 
 /// The text of a unit result held in a `Node::Data`, None for any other data
 pub fn describe(data: &DataValue) -> Option<String> {

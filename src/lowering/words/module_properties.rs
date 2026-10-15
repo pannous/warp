@@ -42,7 +42,7 @@ const fn system_side(
 	Property { object, property, getter, setter, module: None }
 }
 
-const PROPERTIES: [Property; 6] = [
+const PROPERTIES: [Property; 7] = [
 	canvas_side("width", "canvas_width", "canvas(it, canvas_height)"),
 	canvas_side("height", "canvas_height", "canvas(canvas_width, it)"),
 	// system values (warp-runtime system_values.rs), so `whenever window.width > 800 {…}` listens
@@ -50,6 +50,8 @@ const PROPERTIES: [Property; 6] = [
 	system_side("window", "height", "window_height", Some("set_system_value(\"window_height\", it)")),
 	system_side("display", "width", "display_width", None),
 	system_side("display", "height", "display_height", None),
+	// the device pixels per inch, which turn px into lengths (decision dimensions-units)
+	system_side("display", "dpi", "display_dpi", None),
 ];
 
 pub fn lower(program: Node) -> Node {

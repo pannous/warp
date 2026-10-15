@@ -15,6 +15,7 @@
 //! Unit fields: `class Run{distance: km}` (unit_fields.rs), an instance's fields have signatures like an object's.
 
 use super::{exponent_of, finest_units, unit_named, units_text, Dimension, Factor, Quantity, Unit};
+use warp_runtime::host_words::{DISPLAY_DPI, SYSTEM_VALUE};
 use crate::lowering::function_head;
 use crate::words::{MAP_WORD, PRINT_WORD, RETURN_WORD, STR_WORD};
 
@@ -35,6 +36,8 @@ pub(crate) use unit_fields::unit_type;
 pub(crate) use unit_fields::{lower_field_tolerances, si_quantity};
 
 const LOOP_WORDS: [&str; 2] = ["for", "while"];
+/// An inch in metres, 127/5000: a pixel is an inch over display.dpi
+const INCH_IN_METRES: (i64, i64) = (127, 5000);
 /// `speed·u0`: a function specialised for one unit signature of its arguments
 const SPECIALISATION_SEPARATOR: &str = "·u";
 /// A run-time amount as text that reads back: `1.5`, or a fraction `str` shows as `10/3` in parentheses, `(10/3)km/h`
@@ -545,6 +548,26 @@ fn written_power(op: Op, exponent: &Node) -> Option<i32> {
 	}
 }
 
+/// `q as mm` of pixels, `l as px` of a length (decision dimensions-units): a pixel is an inch over display.dpi, read at
+/// run time; the factor the SI amount takes when `given` turns into `target` by trading pixels for lengths, None when
+/// they differ in more
+fn pixels_as_lengths(given: &Signature, target: &Signature) -> Option<Node> {
+	let pixels = |powers: &Powers| powers.iter().find(|(dimension, _)| *dimension == Dimension::Pixel).map_or(0, |p| p.1);
+	let traded = pixels(&given.powers) - pixels(&target.powers);
+	let as_lengths = super::added(&super::added(&given.powers, Dimension::Pixel, -traded), Dimension::Length, traded);
+	if traded == 0 || as_lengths != target.powers {
+		return None;
+	}
+	let inch = number_node(&Rational::new(INCH_IN_METRES.0.into(), INCH_IN_METRES.1.into()))?;
+	let dpi = crate::lowering::nodes::call(SYSTEM_VALUE, vec![Node::Text(DISPLAY_DPI.to_string())]);
+	let (above, below) = match traded > 0 {
+		true => (inch, dpi),
+		false => (dpi, inch),
+	};
+	let one = Node::Key(Box::new(above), Op::Div, Box::new(below));
+	Some((1..traded.abs()).fold(one.clone(), |product, _| Node::Key(Box::new(product), Op::Mul, Box::new(one.clone()))))
+}
+
 fn number_node(amount: &Rational) -> Option<Node> {
 	let numerator = amount.numerator.to_i64()?;
 	Some(match amount.denominator.to_i64()? {
@@ -1037,6 +1060,9 @@ impl Inference {
 	fn converted(&mut self, quantity: Node, unit: &Node) -> Result<(Node, Signature), Stop> {
 		let target = signature(&super::unit_expression(unit).ok_or(Stop::Unsupported)?);
 		let (quantity, given) = self.infer(quantity)?;
+		if let Some(per_pixel) = (given.depth == 0).then(|| pixels_as_lengths(&given, &target)).flatten() {
+			return Ok((Node::Key(Box::new(quantity), Op::Mul, Box::new(per_pixel)), target));
+		}
 		// a list converts each element: `[3, 4] cm in m`
 		if *given != *target {
 			return Err(Stop::Error(format!(
