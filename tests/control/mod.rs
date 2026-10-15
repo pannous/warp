@@ -113,6 +113,7 @@ mod test_loop_value;
 mod test_loop_value_at_run_time;
 mod test_loops_in_functions;
 mod test_many_tasks;
+mod test_map_loop_words; // card key-print
 mod test_match_alternatives;
 mod test_match_alternatives_hint;
 mod test_match_binding_arm;

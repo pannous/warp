@@ -117,9 +117,9 @@ function withTaskSounds(run, record) {
 	return record;
 }
 
-// a sound a task plays, for the page, which only the program's Worker talks to (task-worker.js relay); it reaches the
-// page once that Worker is back in its event loop, not while it waits for the task
-const RELAYED = ["playSamples", "playSoundFile", "stopSound", "stopSoundFiles", "fadeSound"];
+// a sound or MIDI message a task sends, for the page, which only the program's Worker talks to (task-worker.js relay);
+// it reaches the page once that Worker is back in its event loop, not while it waits for the task
+const RELAYED = ["playSamples", "playSoundFile", "stopSound", "stopSoundFiles", "fadeSound", "sendMidi"];
 function relayed([method, ...values]) {
 	if (!RELAYED.includes(method)) throw new Error(`a task Worker relayed ${method}, which is no word of the page`);
 	self[method]?.(...values);

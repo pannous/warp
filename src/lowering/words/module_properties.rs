@@ -71,13 +71,21 @@ fn bound_names(program: &Node) -> HashSet<String> {
 		}
 		match node {
 			Node::Key(target, op, _) if op.is_write() || *op == Op::Define => {
-				bound.extend(target.drop_meta().symbol_name().map(String::from))
+				bound.extend(target_name(target).map(String::from))
 			}
 			Node::List(items, _, _) => bound.extend(for_in_variable(items)),
 			_ => {}
 		}
 	});
 	bound
+}
+
+/// `height` of a write's target `height` or a declared `height: length`
+fn target_name(target: &Node) -> Option<&str> {
+	match target.drop_meta() {
+		Node::Key(name, Op::Colon, _) => name.drop_meta().symbol_name(),
+		other => other.symbol_name(),
+	}
 }
 
 struct Rewrite {
