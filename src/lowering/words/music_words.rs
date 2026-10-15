@@ -91,6 +91,20 @@ const PLAY_WORD: &str = "play";
 /// The samples a signal computes at once (sound.rs play_signal, play_blocks): 23 ms at 22050 Hz
 pub const BLOCK_SAMPLES: usize = 512;
 
+/// The names of the program's named live loops, from the `live_cycle_started("drums")` each cycle says (host.rs
+/// LIVE_LOOPS_SECTION)
+pub fn live_loop_names(program: &Node) -> std::collections::BTreeSet<String> {
+	let mut names = std::collections::BTreeSet::new();
+	program.visit(&mut |node| {
+		if let Some((LIVE_CYCLE_STARTED, [name])) = node.call_parts() {
+			if let Node::Text(name) = name.drop_meta() {
+				names.insert(name.clone());
+			}
+		}
+	});
+	names
+}
+
 /// Before the go blocks are lowered (pipeline.rs): `live_loop 4 { … }` becomes the `go { … }` it stands for
 pub fn lower_live_loops(program: Node) -> Node {
 	if !crate::modules::uses_sound(&program) {
