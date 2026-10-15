@@ -328,6 +328,11 @@ The DSP is the lib formulas in Rust, streaming. Plan (supervisor, user asked whe
 stage 2 the browser runs the same code (warp.wasm export for render_sound, an AudioWorklet live; until then the
 playground plays bus sounds dry and says so), stage 3 a bus's effects changed while it plays, stage 4 compressor, EQ.
 
+Stage 2, bus API A (user 2026-10-15): `osc(C4, 1s) |> room` (parsed `room(osc(…))`; music_words.rs with_bus_sends
+makes a call of a variable assigned `bus()` or effects on one `out(signal, room)`) and `play(C4, 1s, bus: room)` (a play
+overload around sent_to / sent_back). No `send room` setting. Still to build: the one DSP in Rust for the browser too
+(warp.wasm export), and lib's list-signal effects as calls of it.
+
 Stage 3 built (2026-10-15): `room = room |> gain(0)` changes the bus from the defining voice's moment (where its queued
 sounds end). An effect of a name the chain has replaces it in place (with_effect), else it appends. Chain::retune keeps
 each stage of the same kind with its state (comb echoes, biquad history), so a delay set again rings on; another kind
