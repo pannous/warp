@@ -300,7 +300,7 @@ pub fn collect_all_types(registry: &mut crate::type_kinds::TypeRegistry, node: &
 }
 
 /// The kind of an FFI call's result: a C string is a text (ffi.rs text_node), a host word's Node is known at run time
-/// only (task_await_value), a void or integer result an Int
+/// only (task_await_value), a host word that only acts gives nothing, another void or integer result an Int
 pub(super) fn ffi_call_kind(name: &str) -> Kind {
 	crate::ffi::get_ffi_signature(name).map_or(Kind::Int, |signature| signature_kind(&signature))
 }
@@ -318,6 +318,8 @@ pub(crate) fn signature_kind(signature: &crate::ffi::FfiSignature) -> Kind {
 		Some(wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32) => Kind::Float,
 		Some(wasm_encoder::ValType::Ref(_)) if signature.library != crate::host::HOST_LIBRARY => Kind::Text,
 		Some(wasm_encoder::ValType::Ref(_)) => Kind::Empty,
+		// a host word that only acts (paint, sleep) gives nothing, as print does: `if c { paint(…) }` shows no » 0
+		None if signature.library == crate::host::HOST_LIBRARY => Kind::Empty,
 		_ => Kind::Int,
 	}
 }
