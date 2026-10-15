@@ -327,6 +327,12 @@ at their frames. render_sound: BUSES keeps every definition at its place since t
 retunes at their frames, the last definition stays for the next render. `out(signal, bus)` restores the bus the thread
 sent to before (sound.send returns it, natively and in host-sound.js).
 
+Stage 4 built (2026-10-15): bus words `peak(b, frequency, db, q = 1)`, `low_shelf`/`high_shelf(b, frequency, db,
+q = 0.707)` (RBJ cookbook biquads, FilterKind::Peak/LowShelf/HighShelf carry the dB) and `compress(b, threshold = -18,
+ratio = 4, attack = 0.01, release = 0.1)`: a peak envelope per channel (not linked across stereo), the dB over the
+threshold scaled by 1 - 1/ratio, no knee, no makeup gain (add `gain`). Bus-only for now: no list-signal versions in
+lib (they wait for the one-DSP answer, Rust or warp).
+
 ## Native output built (card native-sound, 2026-10-12, src/sound/sound_engine.rs, tests/programs/test_sound_engine.rs)
 On macOS every sound now goes into one cpal output stream (CoreAudio) instead of one afplay process per WAV. A `Mixer`
 holds the sounds, each converted to the device's rate (linear interpolation) and channels, starting at its frame;
