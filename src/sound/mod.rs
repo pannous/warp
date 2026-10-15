@@ -300,7 +300,6 @@ pub fn join_voice(voice: Voice) {
 }
 
 /// `bus()` and a bus's effects changed (card shared-buses): the bus numbered `bus` (0: a new one) gets the effects, from
-/// now on; its number
 /// now on, live from this voice's moment, where the sounds queued before it end; its number
 pub fn define_bus(bus: usize, effects: Vec<Effect>) -> Result<usize, String> {
 	let (start, place) = moment();
@@ -334,7 +333,12 @@ fn bus_effects(bus: usize) -> Vec<Effect> {
 /// The bus's effects at the render's first place, and their changes after it at their frames from there; the
 /// definitions before the render's end forgotten but the last
 fn bus_changes(bus: usize, first_place: f64, rate: u32) -> (Vec<Effect>, Vec<(usize, Vec<Effect>)>) {
-	let Some(history) = BUSES.lock().ok().and_then(|mut buses| buses.get_mut(bus.checked_sub(1)?).map(std::mem::take))
+	// taken and replaced by its last definition under one lock: a voice's definition meanwhile is not lost
+	let forgotten = |history: &mut BusHistory| {
+		let last = history.last().map(|(_, effects)| vec![(f64::NEG_INFINITY, effects.clone())]).unwrap_or_default();
+		std::mem::replace(history, last)
+	};
+	let Some(history) = BUSES.lock().ok().and_then(|mut buses| buses.get_mut(bus.checked_sub(1)?).map(forgotten))
 	else {
 		return (Vec::new(), Vec::new());
 	};
@@ -342,9 +346,6 @@ fn bus_changes(bus: usize, first_place: f64, rate: u32) -> (Vec<Effect>, Vec<(us
 	let effects = before.last().or(after.first()).map(|(_, effects)| effects.clone()).unwrap_or_default();
 	let frame = |place: f64| ((place - first_place) * rate as f64).round() as usize;
 	let changes = after.iter().map(|(place, effects)| (frame(*place), effects.clone())).collect();
-	if let (Ok(mut buses), Some((_, last))) = (BUSES.lock(), history.last()) {
-		buses[bus - 1] = vec![(f64::NEG_INFINITY, last.clone())];
-	}
 	(effects, changes)
 }
 

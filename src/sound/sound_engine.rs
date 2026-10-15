@@ -113,7 +113,6 @@ impl Mixer {
 		self.add_to_bus(handle, 0, start, samples, rate, channels)
 	}
 
-	/// The bus's effects from now on (card shared-buses); its sounds go through them together
 	/// The bus's effects from now on (card shared-buses); its sounds go through them together. A bus set again keeps
 	/// what still rings in its effects
 	pub fn set_bus(&mut self, bus: usize, effects: Vec<Effect>) {
