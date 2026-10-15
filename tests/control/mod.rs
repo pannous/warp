@@ -103,6 +103,7 @@ mod test_is_pattern;
 mod test_iteration_words;
 mod test_job_lists;
 mod test_key_down; // card keyboard-state
+mod test_key_name_case; // key names in any case
 mod test_key_names; // card key-if
 mod test_library_signatures; // card reflect-library-signatures
 mod test_list_without; // people without team (card people-where)

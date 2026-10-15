@@ -57,6 +57,11 @@ const TRIANGLE_CORNERS: u32 = 3;
 const INPUT_LINE: &str = "input";
 /// The line the viewer writes as its window opens or resizes: `size width height`, in points
 const SIZE_LINE: &str = "size";
+/// The line the viewer writes as the user ends it (closing the window, Cmd-Q): the run ends with it (card
+/// escape-window), its sounds stopped; so does Escape, unless the program names that key (system_values escape_kept)
+const CLOSED_LINE: &str = "closed";
+/// Escape's code, as key_code gives it
+const ESCAPE_CODE: f32 = 27.0;
 /// The arrows' codes, as a Mac's function keys: up, down, left, right
 const ARROW_CODES: [u32; 4] = [0xF700, 0xF701, 0xF702, 0xF703];
 /// NSTrackingArea's options: mouse moves, whether the window is key or not, over the whole view as it resizes
@@ -65,20 +70,34 @@ const TRACKING_MOUSE_MOVED: usize = 0x02;
 pub const TRACKING_ACTIVE_ALWAYS: usize = 0x80;
 const TRACKING_IN_VISIBLE_RECT: usize = 0x200;
 
-/// The viewer's input lines, read until it ends
-fn follow_input(lines: impl BufRead) {
+/// The viewer's input lines, read until it ends; whether the user ended it
+pub fn follow_input(lines: impl BufRead) -> bool {
 	for line in lines.lines().map_while(Result::ok) {
 		let mut words = line.split_whitespace();
 		let kind = words.next();
 		let numbers: Vec<f32> = words.map_while(|word| word.parse().ok()).collect();
 		match (kind, numbers.as_slice()) {
+			(Some(INPUT_LINE), &[_, _, _, key])
+				if key == ESCAPE_CODE && !warp_runtime::system_values::escape_kept() =>
+			{
+				return true
+			}
 			(Some(INPUT_LINE), &[x, y, down, key]) => warp_runtime::system_values::tell_window_input([x, y, down, key]),
 			(Some(SIZE_LINE), &[width, height]) => {
 				warp_runtime::system_values::tell_window_size(width as i64, height as i64)
 			}
+			(Some(CLOSED_LINE), []) => return true,
 			_ => {}
 		}
 	}
+	false
+}
+
+/// The user ended the window: so ends the run, its sounds stopped, else the process's end would wait for them
+fn end_the_run() -> ! {
+	crate::sound::stop();
+	let _ = std::io::stdout().flush();
+	std::process::exit(0)
 }
 
 /// The code of a pressed key: its character's, an arrow's ARROW_CODES, Enter, Escape, Backspace and Tab their control
@@ -281,7 +300,9 @@ pub fn show(frame: &[u8]) -> Result<(), String> {
 		let mut child = command.spawn().map_err(|failure| format!("paint: cannot start the viewer: {failure}"))?;
 		if let Some(output) = child.stdout.take() {
 			std::thread::spawn(move || {
-				follow_input(std::io::BufReader::new(output));
+				if follow_input(std::io::BufReader::new(output)) {
+					end_the_run();
+				}
 				warp_runtime::system_values::tell_window_open(false); // its output ends as it closes
 			});
 		}
@@ -393,6 +414,14 @@ impl Viewer {
 }
 
 impl ApplicationHandler<Message> for Viewer {
+	/// The user ended the window (closing it, Cmd-Q): its program ends too. A program that ends first ends the
+	/// viewer through its stdin (run), a check ends by itself, and a failure is told as one
+	fn exiting(&mut self, _: &ActiveEventLoop) {
+		if !self.check && self.failure.is_none() {
+			let _ = writeln!(std::io::stdout(), "{CLOSED_LINE}"); // a program gone meanwhile reads nothing
+		}
+	}
+
 	fn resumed(&mut self, event_loop: &ActiveEventLoop) {
 		self.resumed = true;
 		self.open_for_waiting(event_loop);

@@ -44,6 +44,9 @@ const KEYS_TEMPLATE: &str = "on frame {
 		CODE = system_value(\"key_pressed\")
 	}
 }";
+/// A program naming the Escape key keeps it (card escape-window): else Escape over the paint window ends the run
+#[cfg(feature = "native")]
+const ESCAPE_KEPT_TEMPLATE: &str = "system_value(\"escape kept\")";
 /// Each click over the paint window, where the button went down
 #[cfg(feature = "native")]
 const CLICK_EVENT: &str = "click";
@@ -111,6 +114,23 @@ fn with_window_events(program: Node) -> Node {
 		return program;
 	}
 	Node::List(statements, bracket, separator)
+}
+
+/// A program comparing a key with Escape (lowering/collections/key_names.rs) keeps that key: natively it tells the
+/// runtime as it starts (ESCAPE_KEPT_TEMPLATE); a page has its keys anyway
+#[cfg(feature = "native")]
+pub fn keeping_escape(program: Node) -> Node {
+	let (mut statements, bracket, separator) = crate::variable_signals::main_statements(&program);
+	if crate::pipeline::compile_mode().for_a_page || crate::event_signals::serves_its_page(&statements) {
+		return program;
+	}
+	statements.insert(0, crate::warp_parser::parse_generated(ESCAPE_KEPT_TEMPLATE));
+	Node::List(statements, bracket, separator)
+}
+
+#[cfg(not(feature = "native"))]
+pub fn keeping_escape(program: Node) -> Node {
+	program
 }
 
 #[cfg(feature = "native")]

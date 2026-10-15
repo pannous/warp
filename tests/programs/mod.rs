@@ -68,4 +68,5 @@ mod test_sound_wavs; // card sound-wavs
 mod test_task_sound; // card task-sound
 mod test_twigl; // card create-little
 mod test_warp_command; // card midi-out // card values-number
+mod test_window_closed_by_user; // card escape-window
 mod test_window_size; // card make-width

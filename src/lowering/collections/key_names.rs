@@ -4,7 +4,8 @@
 //! comparison with a word that names nothing (`key == ESCAPEE`, `key == q`) never holds, which a warning says.
 //! The key words compare with `held_key` anywhere too (card held-key): `held_key == LEFT` is `held_key == "ArrowLeft"`.
 //! Compared with `key` or `held_key` itself, a key word may be lowercase (card if-key): `if key == space`,
-//! `held_key == left`; never a name the program binds anywhere (a variable, loop variable, parameter, field).
+//! `held_key == left`; never a name the program binds anywhere (a variable, loop variable, parameter, field). So does a
+//! compared text in any case: `key == "escape"` is `key == "Escape"`; one character keeps its case ("a" is not "A").
 
 use super::nodes::key;
 use crate::errors::diagnostic::Diagnostic;
@@ -12,6 +13,7 @@ use crate::event_signals::{main_level_variables, EVENT_WORD};
 use crate::lowering::module_properties::bound_names;
 use crate::node::{symbol, Node};
 use crate::operators::Op;
+use std::cell::Cell;
 use std::collections::HashSet;
 use warp_runtime::host_words::HELD_KEY;
 
@@ -42,35 +44,55 @@ const KEY_WORDS: [(&str, &str); 22] = [
 	("Delete", "Delete"),
 	("DELETE", "Delete"),
 ];
+/// The key a program keeps once it compares with it (card escape-window)
+const ESCAPE_NAME: &str = "Escape";
 const FUNCTION_KEYS: std::ops::RangeInclusive<u8> = 1..=12;
 
 pub fn lower(program: Node) -> Node {
 	let (statements, _, _) = crate::variable_signals::main_statements(&program);
 	let mut warnings = vec![];
-	let keys = KeyScope { own: main_level_variables(&statements), bound: bound_names(&program) };
+	let keys = KeyScope::of(&program, &statements);
 	let named = with_key_names(program, &keys, &mut warnings);
-	match crate::errors::diagnostic::report(&warnings) {
-		Ok(()) => named,
-		Err(error) => error,
-	}
+	keys.reported(named, &warnings)
 }
 
 /// `held_key == LEFT`, `ESC != held_key`: before system_values reads `held_key`
 pub fn lower_held_comparisons(program: Node) -> Node {
 	let (statements, _, _) = crate::variable_signals::main_statements(&program);
 	let mut warnings = vec![];
-	let keys = KeyScope { own: main_level_variables(&statements), bound: bound_names(&program) };
+	let keys = KeyScope::of(&program, &statements);
 	let named = held_comparisons(program, &keys, &mut warnings);
-	match crate::errors::diagnostic::report(&warnings) {
-		Ok(()) => named,
-		Err(error) => error,
-	}
+	keys.reported(named, &warnings)
 }
 
 /// The program's main-level variables, which stay its own, and every name it binds, never a lowercase key word
 struct KeyScope {
 	own: HashSet<String>,
 	bound: HashSet<String>,
+	/// A comparison named Escape: the program keeps that key (card escape-window)
+	escape: Cell<bool>,
+}
+
+impl KeyScope {
+	fn of(program: &Node, statements: &[Node]) -> Self {
+		KeyScope { own: main_level_variables(statements), bound: bound_names(program), escape: Cell::new(false) }
+	}
+
+	/// The key a comparison names, Escape noted
+	fn noted(&self, name: Option<String>) -> Option<String> {
+		self.escape.set(self.escape.get() || name.as_deref() == Some(ESCAPE_NAME));
+		name
+	}
+
+	/// The program with its key names, or the warnings' error; one comparing a key with Escape keeps that key (else
+	/// Escape over the paint window ends the run)
+	fn reported(&self, named: Node, warnings: &[Diagnostic]) -> Node {
+		match crate::errors::diagnostic::report(warnings) {
+			Ok(()) if self.escape.get() => crate::lowering::system_signals::keeping_escape(named),
+			Ok(()) => named,
+			Err(error) => error,
+		}
+	}
 }
 
 fn held_comparisons(node: Node, keys: &KeyScope, warnings: &mut Vec<Diagnostic>) -> Node {
@@ -88,7 +110,7 @@ fn held_comparisons(node: Node, keys: &KeyScope, warnings: &mut Vec<Diagnostic>)
 fn held_compared(side: &Node, keys: &KeyScope, warnings: &mut Vec<Diagnostic>) -> Node {
 	match side.symbol_name() {
 		Some(word) if word == HELD_KEY || keys.own.contains(word) => side.clone(),
-		Some(word) => match key_name(word).or_else(|| lowercase_key_name(word, &keys.bound)) {
+		Some(word) => match keys.noted(key_name(word).or_else(|| lowercase_key_name(word, &keys.bound))) {
 			Some(name) => Node::Text(name),
 			None => {
 				if word.chars().all(|letter| !letter.is_lowercase()) {
@@ -97,7 +119,7 @@ fn held_compared(side: &Node, keys: &KeyScope, warnings: &mut Vec<Diagnostic>) -
 				side.clone()
 			}
 		},
-		None => side.clone(),
+		None => keys.noted(text_key_name(side)).map(Node::Text).unwrap_or_else(|| side.clone()),
 	}
 }
 
@@ -174,12 +196,14 @@ fn named(body: Node, keys: &KeyScope) -> Node {
 	match body.drop_meta() {
 		Node::Symbol(word) if own.contains(word) => body,
 		Node::Symbol(word) if word == KEY_EVENT => key(symbol(EVENT_WORD), Op::Dot, symbol(KEY_EVENT)),
-		Node::Symbol(word) => key_name(word).map(Node::Text).unwrap_or(body),
-		// `key == space`, `up != key`: the word compared with the pressed key itself names a key in lowercase too
+		Node::Symbol(word) => keys.noted(key_name(word)).map(Node::Text).unwrap_or(body),
+		// `key == space`, `up != key`, `key == "escape"`: the word or text compared with the pressed key itself names a
+		// key in lowercase too
 		Node::Key(left, op @ (Op::Eq | Op::Ne), right) if is_pressed_key(left, own) || is_pressed_key(right, own) => {
 			let [left, right] = [left, right].map(|side| {
 				let lowercase = side.symbol_name().and_then(|word| lowercase_key_name(word, &keys.bound));
-				lowercase.map(Node::Text).unwrap_or_else(|| named(side.as_ref().clone(), keys))
+				let compared = keys.noted(lowercase.or_else(|| text_key_name(side)));
+				compared.map(Node::Text).unwrap_or_else(|| named(side.as_ref().clone(), keys))
 			});
 			key(left, *op, right)
 		}
@@ -198,6 +222,14 @@ fn is_pressed_key(side: &Node, own: &HashSet<String>) -> bool {
 fn lowercase_key_name(word: &str, bound: &HashSet<String>) -> Option<String> {
 	let lowercase = word.chars().all(|letter| !letter.is_uppercase());
 	(lowercase && !bound.contains(word)).then(|| key_name(&word.to_uppercase())).flatten()
+}
+
+/// `"escape"`, `"ESCAPE"`, `"arrowup"`: a text compared with the pressed key names that key in any case; one character
+/// stays itself, "a" and "A" being different presses
+fn text_key_name(side: &Node) -> Option<String> {
+	let Node::Text(text) = side.drop_meta() else { return None };
+	let named = KEY_WORDS.iter().find(|(word, _)| word.eq_ignore_ascii_case(text)).map(|(_, key)| key.to_string());
+	named.or_else(|| key_name(&text.to_uppercase())).filter(|_| text.chars().count() > 1)
 }
 
 fn key_name(word: &str) -> Option<String> {
