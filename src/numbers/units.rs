@@ -111,7 +111,7 @@ fn with_units_after_numbers(program: Node) -> Node {
 fn marked_after_numbers(node: Node, shadowed: &std::collections::HashSet<String>) -> Node {
 	match node {
 		Node::Key(left, op @ (Op::Mul | Op::Div), right)
-			if (op == Op::Mul && is_amount(&left)) || is_quantity(&left) =>
+			if (op == Op::Mul && is_amount(&left) && is_juxtaposed(&right)) || is_quantity(&left) =>
 		{
 			if op == Op::Mul {
 				hint_multiplying_variable(&left, &right, shadowed);
@@ -170,9 +170,23 @@ fn is_amount(node: &Node) -> bool {
 /// `3 km`, `3 km/h`: an amount times unit words
 fn is_quantity(node: &Node) -> bool {
 	match node.drop_meta() {
-		Node::Key(left, Op::Mul | Op::Div, right) => (is_amount(left) || is_quantity(left)) && is_unit_term(right),
+		Node::Key(left, Op::Mul, right) if is_amount(left) => is_juxtaposed(right) && is_unit_term(right),
+		Node::Key(left, Op::Mul | Op::Div, right) => is_quantity(left) && is_unit_term(right),
 		_ => false,
 	}
+}
+
+/// A unit word the parser joined to its number (`3m`, `3 m`), not the right side of a written `*` (`3 * m`)
+fn is_juxtaposed(node: &Node) -> bool {
+	let mut layer = node;
+	while let Node::Meta { node: inner, .. } = layer {
+		if let Some(info) = layer.get_lineinfo() {
+			let at = (info.line_nr, info.column);
+			return crate::compiler::compile_context::read(|context| context.juxtaposed_units.contains(&at));
+		}
+		layer = inner;
+	}
+	false
 }
 
 /// `km`, `m²`, `s^2`

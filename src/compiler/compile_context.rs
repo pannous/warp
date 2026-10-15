@@ -54,6 +54,9 @@ pub struct CompileContext {
 	pub module_returned_classes: HashMap<String, String>,
 	/// the unit words the program being lowered defines itself (`m = 2`): no units while it is lowered
 	pub shadowed_units: HashSet<String>,
+	/// where the parser joined a unit word to the number before it (`3m`, `3 km`), line and column of the word: a unit
+	/// there wins over a variable of its name, `3 * m` multiplies (card variable-named-like)
+	pub juxtaposed_units: HashSet<(usize, usize)>,
 	/// the program's own unit lines (`unit furlong := 201.168 m`, units/definitions.rs), set before it is parsed and kept
 	/// until the next program, so its result reads back in them
 	pub program_unit_lines: String,
@@ -99,6 +102,7 @@ impl Default for CompileContext {
 			early_class_modules: HashSet::new(),
 			module_returned_classes: HashMap::new(),
 			shadowed_units: HashSet::new(),
+			juxtaposed_units: HashSet::new(),
 			program_unit_lines: String::new(),
 			result_units: None,
 			declared_types: HashSet::new(),
