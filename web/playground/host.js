@@ -304,9 +304,10 @@ function plainOfTree(tree) {
 		// `{"+": [1, 1]}` (the JsonLogic shape of src/node/json_xml.rs), a prefix operation without its empty left side
 		case 6: {
 			const [value, ...rest] = tree.chain ?? [];
-			const [left, right] = [plainOfTree(payload.node), value ? plainOfTree({ ...value, chain: rest }) : null];
+			const right = value ? plainOfTree({ ...value, chain: rest }) : null;
 			const operator = OPERATOR_SPELLINGS[Number((kind >> 8n) & KIND_MASK)] ?? ":"; // the operator code is the byte above the kind (src/run/wasm_reader.rs)
-			if (ENTRY_OPERATORS.includes(operator)) return { [left]: right };
+			if (ENTRY_OPERATORS.includes(operator)) return { [keyOfTree(payload.node)]: right };
+			const left = plainOfTree(payload.node);
 			return { [operator]: [left, right].filter(side => side !== null) };
 		}
 		case 7: case 8: {
@@ -321,6 +322,18 @@ function plainOfTree(tree) {
 		case Number(KIND_FUNCTION): return tree.warpFunction ? Object.assign(callableOf(tree.warpFunction), { warpName: tree.chain?.[0]?.data?.text }) : null;
 		default: return null;
 	}
+}
+
+// the key of an entry: a name or text as itself, any other key as written, the head of `f(x) := …` "(f x)" (as
+// src/node/json_xml.rs json_key)
+const BRACKET_PAIRS = ["{}", "[]", "()"];
+function keyOfTree(tree) {
+	const kind = Number(BigInt(tree.kind) & KIND_MASK);
+	if (kind !== 7 && kind !== 8) return String(plainOfTree(tree));
+	const payload = tree.data ?? {};
+	const items = payload.node === undefined ? [] : [payload.node, ...(tree.chain ?? []).map(cell => cell.data?.node)].filter(Boolean);
+	const [open = "", close = ""] = BRACKET_PAIRS[Number((BigInt(tree.kind) >> 8n) & KIND_MASK)] ?? "";
+	return open + items.map(keyOfTree).join(" ") + close;
 }
 
 // a warp function given to foreign code: a JavaScript function calling it back through the module's closure_apply
