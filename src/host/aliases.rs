@@ -126,7 +126,7 @@ fn random_compared(node: &Node) -> Option<Node> {
 		return None;
 	}
 	let called = Node::List(vec![random.clone(), left.as_ref().clone()], Bracket::None, separator.clone());
-	Some(crate::lowering::nodes::key(random_call(called), op.clone(), right.as_ref().clone()))
+	Some(crate::lowering::nodes::key(random_call(called), *op, right.as_ref().clone()))
 }
 
 fn prelude_call(word: &str, arguments: Vec<Node>) -> Node {
