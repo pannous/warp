@@ -5,6 +5,7 @@
 // components; the functions read the program's levels, bass, treble and time
 use sound
 use math
+use os
 width = 1920
 height = 1080
 bands = 16
@@ -123,7 +124,8 @@ tunnel(x, y) := {
 
 play song
 started = clock()
-seconds = sound_seconds(song)
+// the whole song, or as many seconds as the command line gives: `warp gpu_visualizer_warp.warp 3`
+seconds = count(args) > 0 ? min(args#1 as number, sound_seconds(song)) : sound_seconds(song)
 while time < seconds {
 	frame_started = clock()
 	levels = [min(1.0, sqrt(level * loudness)) for level in spectrum(song, time, bands)]

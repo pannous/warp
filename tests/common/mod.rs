@@ -351,6 +351,13 @@ pub fn output_within(command: &mut std::process::Command, limit: std::time::Dura
 	run.wait_with_output().expect("the command's output")
 }
 
+/// The command line arguments a program runs with in the tests: the lines of `<path>.args` beside it (path without its
+/// extension: samples/golf/rot13 reads samples/golf/rot13.args), none without that file
+pub fn arguments_beside(path: &std::path::Path) -> Vec<String> {
+	let file = path.with_file_name(format!("{}.args", path.file_name().unwrap_or_default().to_string_lossy()));
+	std::fs::read_to_string(file).map(|lines| lines.lines().map(str::to_string).collect()).unwrap_or_default()
+}
+
 /// A command running this checkout's warp binary. Every checkout builds the one shared target/debug/warp, so another
 /// worktree's build can replace it at any moment while these tests run, and versions overlap (`0.1.1` is a prefix of
 /// every branch's `0.1.1-<branch>`). So the binary is this checkout's own build in target/debug/deps (checkout_build:

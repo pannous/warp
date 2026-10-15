@@ -95,7 +95,12 @@ fn sample_outcome(name: &str) -> Result<Option<String>, ()> {
 	{
 		let (finished, outcome_of_run) = std::sync::mpsc::channel();
 		let path = sample_path(name);
-		std::thread::spawn(move || finished.send(outcome(&path)));
+		// a sample's <name>.args, as `use os; args` gives them (a song visualizer plays its first seconds only)
+		let arguments = crate::common::arguments_beside(&std::path::Path::new(SAMPLES).join(name));
+		std::thread::spawn(move || {
+			warp::modules::std_adapters::set_program_arguments(arguments);
+			finished.send(outcome(&path))
+		});
 		outcome_of_run.recv_timeout(SAMPLE_TIME_LIMIT).unwrap_or_else(|_| {
 			Ok(Some(format!(
 				"still running after {SAMPLE_TIME_LIMIT:?}, a loop that never ends headless (loop `while window_open`)"
