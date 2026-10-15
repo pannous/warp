@@ -24,7 +24,7 @@ fn a_prelude_words_signature_as_its_head() {
 
 #[test]
 fn table_words_positional() {
-	is!("atan2.signature", text("(a:float, b:float) -> float"));
+	is!("atan2.signature", text("(a: float, b: float) -> float"));
 	is!("trim.signature", text("(x) -> text"));
 	is!("split.parameters", texts(vec!["t", "separator"]));
 	is!("sorted.signature", text("(xs:list) -> list"));
@@ -39,8 +39,8 @@ fn the_programs_own_definition_wins() {
 /// takes any number keeps parameters of the passed kind, shown bare (card signature-signature)
 #[test]
 fn whole_number_math_words_show_int_parameters() {
-	is!("use math; gcd.signature", text("(a:int, b:int) -> int"));
-	is!("use math; factorial.signature", text("(n:int) -> int"));
+	is!("use math; gcd.signature", text("(a: int, b: int) -> int"));
+	is!("use math; factorial.signature", text("(n: int) -> int"));
 	is!("use math; gcd(2^70, 2^65) == 2^65", true);
 	is!("use math; lerp.params", texts(vec!["a", "b", "t"]));
 }
@@ -49,7 +49,7 @@ fn whole_number_math_words_show_int_parameters() {
 #[test]
 fn a_bool_result_shows_as_bool() {
 	is!("f(b) := b == 0; (function f).signature", text("(b) -> bool"));
-	is!("use math; is_prime.signature", text("(n:int) -> bool"));
+	is!("use math; is_prime.signature", text("(n: int) -> bool"));
 	is!("f(b) := b == 0; type(function f)", "function: (b) -> bool");
 	is!("f(b) := b + 1; (function f).signature", text("(b) -> int"));
 }
