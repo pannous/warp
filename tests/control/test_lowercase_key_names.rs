@@ -19,6 +19,29 @@ fn a_lowercase_key_word_elsewhere_keeps_its_meaning() {
 	is!("seen = \"\"\non key { up = 3; seen = up }\nemit key{key:\"q\"}\nseen", 3);
 }
 
+// reviewer veto on if-key: a lowercase word names a key only compared with key itself, and never a name bound anywhere
+#[test]
+fn a_bound_or_unrelated_lowercase_word_is_no_key() {
+	is!(
+		"seen = \"\"\non key { left = 3\n if 3 == left { seen = \"same\" } else { seen = \"differs\" } }\nemit key{key:\"q\"}\nseen",
+		"same"
+	);
+	is!(
+		"seen = \"\"\non key { for left in [\"q\"] { if key == left { seen = \"loop\" } } }\nemit key{key:\"q\"}\nseen",
+		"loop"
+	);
+	is!(
+		"same(up) := up == \"q\"\nseen = \"\"\non key { if same(key) { seen = \"parameter\" } }\nemit key{key:\"q\"}\nseen",
+		"parameter"
+	);
+	warp::errors::diagnostic::take_warnings();
+	warp::wasm_emitter::eval("mode = \"x\"\non key { if mode == up { mode = \"y\" } }\nmode");
+	let warned = warp::errors::diagnostic::take_warnings()
+		.into_iter()
+		.any(|warning| warning.message.contains("up names nothing"));
+	assert!(warned, "mode == up compares no key: up names nothing");
+}
+
 #[test]
 fn held_key_compares_with_lowercase_key_words() {
 	let lowered = warp::pipeline::lower("held_key == left or space == held_key").expect("lowers").serialize();
