@@ -3451,6 +3451,12 @@ PASSED:
   ✓ programs::test_sound_patterns::nested_alternation_turns_on_its_own_visits
   ✓ programs::test_sound_patterns::pattern_samples_ends_each_event_at_its_cumulated_seconds
   ✓ programs::test_sound_patterns::swing_holds_the_first_note_longer
+  ✓ programs::test_sound_pipes::a_delay_node_adds_echoes
+  ✓ programs::test_sound_pipes::a_lowpass_node_takes_the_highs
+  ✓ programs::test_sound_pipes::a_mix_sums_signals_to_the_longest
+  ✓ programs::test_sound_pipes::an_oscillator_is_a_signal_value
+  ✓ programs::test_sound_pipes::nodes_chain
+  ✓ programs::test_sound_pipes::out_plays_a_signal
   ✓ programs::test_sound_render::a_render_takes_the_sounds_after_the_last_one
   ✓ programs::test_sound_render::sounds_render_into_one_wav_file
   ✓ programs::test_sound_samples::a_rate_changes_speed_and_pitch
@@ -5474,4 +5480,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5469 passed, 0 failed, 5469 total tested
+13 ignored, 5475 passed, 0 failed, 5475 total tested
