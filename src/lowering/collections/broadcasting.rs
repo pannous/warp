@@ -22,7 +22,10 @@ const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Po
 const TRUTH_TYPES: [&str; 3] = ["bool", "boolean", "any"];
 const BROADCAST_ITEM: &str = "broadcast_item";
 /// Library words of one text or number that broadcast over a list like a user function of a scalar
-const SCALAR_LIBRARY_WORDS: [&str; 6] = ["upper", "lower", "trim", "floor", "ceil", "round"];
+const SCALAR_LIBRARY_WORDS: [&str; 17] = [
+	"upper", "lower", "trim", "floor", "ceil", "round", "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh",
+	"tanh", "exp", "log",
+];
 /// Prefix operators of one number: `abs [-1 2]`, `sqrt xs`
 const SCALAR_OPERATORS: [Op; 3] = [Op::Abs, Op::Sqrt, Op::Cbrt];
 /// The item `square all xs` applies square to
@@ -891,6 +894,8 @@ impl Broadcast {
 	fn broadcast_operator(&self, op: Op, argument: &Node) -> Option<Node> {
 		let applied = |element: Node| key(Node::Empty, op, element);
 		match argument.drop_meta() {
+			// `abs([-1, 2])`: the list in its parentheses
+			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.broadcast_operator(op, &items[0]),
 			Node::List(elements, Bracket::Square, separator)
 				if !elements.is_empty() && !elements.iter().any(is_colon_pair) =>
 			{
