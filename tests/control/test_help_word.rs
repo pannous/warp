@@ -17,7 +17,7 @@ fn help_of_a_subclass_names_its_parent() {
 
 #[test]
 fn help_of_a_function_is_its_signature() {
-	is!("area(width: int, height: int) := width * height\nhelp(area)", "area(width:int, height:int) -> int");
+	is!("area(width: int, height: int) := width * height\nhelp(area)", "area(width: int, height: int) -> int");
 }
 
 #[test]

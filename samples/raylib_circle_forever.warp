@@ -28,12 +28,12 @@ SetTargetFPS(60)
 // Simple approach: draw a few frames with small delays between them
 # while(1>0){
 while not WindowShouldClose() {
-    BeginDrawing()
-    ClearBackground(0xFFF5F5F5)  // RAYWHITE
-    DrawText("Warp Raylib FFI Demo", 250, 20, 30, 0xFF505050)  // DARKGRAY
-    DrawCircle(400, 300, 80.0, 0xFF2E1990)  // MAROON
-    EndDrawing()
-    sleep(500ms)
+	BeginDrawing()
+	ClearBackground(0xFFF5F5F5)  // RAYWHITE
+	DrawText("Warp Raylib FFI Demo", 250, 20, 30, 0xFF505050)  // DARKGRAY
+	DrawCircle(400, 300, 80.0, 0xFF2E1990)  // MAROON
+	EndDrawing()
+	sleep(500ms)
 }
 
 // Clean up

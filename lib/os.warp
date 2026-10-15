@@ -1,20 +1,20 @@
 // The standard library module os (notes/stdlib.md section 7): `use os`, through the adapter std_io; the browser has no
 // environment (env gives ø) and no command line (args gives [])
-env(name:any) := std_io("os", "env", [name])
+env(name: any) := std_io("os", "env", [name])
 // the command line arguments after the program file: `warp run prog.warp a b` gives ["a" "b"]
 args = std_io("os", "args", [])
 // `exec sh "crontab -l"`: the command (a sh template, its argument vector) run without a shell, what it printed; natively
 // only, the browser runs no processes
-exec(command:any) := std_io("os", "exec", [command])
+exec(command: any) := std_io("os", "exec", [command])
 // The scripting words (decision use-script, all of them in `use script`):
 // the command line arguments, as args gives them
 arguments = args
 // the folder the program runs in, now: after `cd` the new one
 cwd := std_io("os", "cwd", [])
 // `command("ls | wc -l")`: a shell command line run by sh, what it printed; the explicit opt-in to text as shell
-command(line:any) := std_io("os", "command", [line])
+command(line: any) := std_io("os", "command", [line])
 // a line typed on standard input (without its line end), ø at the input's end; input("name? ") shows the prompt first
 input() := std_io("os", "input", [])
-input(prompt:any) := std_io("os", "input", [prompt])
+input(prompt: any) := std_io("os", "input", [prompt])
 // all of standard input as one text: `cat notes.txt | warp count.warp`
 stdin() := std_io("os", "stdin", [])
