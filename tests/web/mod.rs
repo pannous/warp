@@ -64,6 +64,8 @@ mod test_i18n;
 mod test_keyed_lists;
 #[cfg(feature = "native")] // runs python3
 mod test_keyword_registry; // card where-infix
+#[cfg(feature = "native")] // runs node
+mod test_live_handover; // card playground-live
 mod test_markup_holes;
 mod test_markup_lines; // card todo-app
 mod test_markup_mistakes; // card our-html

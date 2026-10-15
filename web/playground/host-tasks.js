@@ -67,7 +67,6 @@ function addTaskWorker(loaded) {
 		// loaded: it can take tasks; later a fetch it made is done (startFetch)
 		worker.onmessage = ({ data }) => {
 			if (data === FETCH_DONE) return worker.fetched?.();
-			if (data.relay) return relayed(data.relay);
 			taskPool.push(worker);
 			loaded?.();
 		};
@@ -82,6 +81,8 @@ function addTaskWorker(loaded) {
 let voice = {};
 let voicesBeforeAt = []; // the voices `at` statements left (sound_at), taken up again by sound_at_end
 const soundClock = () => (performance.timeOrigin + performance.now()) / 1000;
+// a moment this little (in periods) after a cycle's start still takes that start: float rounding of the clock
+const LIVE_GRID_SLACK = 1e-6;
 self.soundsQueued = () => Math.max(0, (voice.end ?? 0) - soundClock()); // sound_queued()
 self.voiceStopped = () => { voice = { ...voice, end: undefined }; };
 self.joinVoice = starters => { voice = { ...starters }; }; // a task Worker's: its starter's; none: a run's fresh one
@@ -90,18 +91,32 @@ self.currentVoice = () => voice;
 self.voiceSounded = seconds => {
 	const at = Math.max(voice.end ?? 0, soundClock());
 	const place = voice.seconds ?? 0;
-	voice = { end: at + seconds, seconds: place + seconds, origin: voice.origin ?? at - place };
+	voice = { ...voice, end: at + seconds, seconds: place + seconds, origin: voice.origin ?? at - place };
 	return { place, at };
 };
 // `at time …`: the voice placed that many seconds after its place 0; its end puts it back, keeping that origin
 self.voiceAt = seconds => {
 	voicesBeforeAt.push(voice);
 	const origin = voice.origin ?? soundClock();
-	voice = { end: origin + seconds, seconds, origin };
+	voice = { loop: voice.loop, end: origin + seconds, seconds, origin };
 };
 self.insideAt = () => voicesBeforeAt.length > 0;
 // where this voice's next sound would start: its queued sounds' end, never before now (sound_moment)
 self.voiceMoment = () => Math.max(voice.end ?? 0, soundClock());
+// card playground-live: a named live loop's cycle starts (lib live_cycle_started). The voice is that loop's from now on,
+// its sounds tagged with its name for the page; a loop the page handed over from the run before (liveHandover: name →
+// that run's {start, period} of its cycles) starts its first cycle on that run's grid, where the old loop's next cycle
+// would have, and the page stops the old one's sounds from there
+self.liveHandover = {};
+self.liveCycleStarted = name => {
+	const handedOver = self.liveHandover[name];
+	if (handedOver && voice.loop !== name) voice = { ...voice, end: liveStart(handedOver, self.voiceMoment()) };
+	voice = { ...voice, loop: name };
+	self.liveCycled(name, self.voiceMoment());
+};
+// the first start on the grid of the old run's cycles at or after the moment (a cycle of an unknown period: its start)
+const liveStart = ({ start, period }, moment) =>
+	period > 0 ? start + Math.max(0, Math.ceil((moment - start) / period - LIVE_GRID_SLACK)) * period : Math.max(start, moment);
 self.voiceAtEnd = () => {
 	if (voicesBeforeAt.length) voice = { ...voicesBeforeAt.pop(), origin: voice.origin };
 };
@@ -117,12 +132,27 @@ function withTaskSounds(run, record) {
 	return record;
 }
 
-// a sound or MIDI message a task sends, for the page, which only the program's Worker talks to (task-worker.js relay);
-// it reaches the page once that Worker is back in its event loop, not while it waits for the task
-const RELAYED = ["playSamples", "playSoundFile", "stopSound", "stopSoundFiles", "fadeSound", "sendMidi"];
-function relayed([method, ...values]) {
-	if (!RELAYED.includes(method)) throw new Error(`a task Worker relayed ${method}, which is no word of the page`);
-	self[method]?.(...values);
+// play's handles (lib/sound.warp, card sound-pro): the sounds and music files of a run counted from 1, as natively, in
+// one counter the run's task Workers share
+let soundHandles = new Int32Array(1);
+self.newSoundHandles = () => soundHandles = new Int32Array(new (self.crossOriginIsolated ? SharedArrayBuffer : ArrayBuffer)(4));
+const nextSoundHandle = () => Atomics.add(soundHandles, 0, 1) + 1;
+self.lastSoundHandle = () => Atomics.load(soundHandles, 0);
+self.joinSoundHandles = counter => { soundHandles = counter ?? soundHandles; }; // a task Worker's: its run's
+
+// the words a program's sounds and MIDI reach the page by (playground.js), posted by the program's Worker and by a task's
+// alike: a task posts to the page itself (task-workers.js, card playground-live), as the program's Worker waiting for it
+// in Atomics.wait could pass nothing on in time and a live loop's sounds came bunched once it was done
+function addPageSoundWords(post) {
+	self.playSoundFile = (url, bytes) => post({ type: "sound file", url, bytes, handle: nextSoundHandle() }); // host-files.js STD_ADAPTERS.sound: a worker has no <audio>
+	self.stopSoundFiles = () => { self.voiceStopped(); post({ type: "stop sound files" }); };
+	self.sendMidi = (port, message, at) => post({ type: "midi", port, message, at }); // host-files.js STD_ADAPTERS.midi
+	self.stopSound = handle => post({ type: "stop sound", handle }); // stop_sound(handle)
+	self.fadeSound = (handle, gain, seconds) => post({ type: "fade sound", handle, gain, seconds }); // fade_sound
+	// a worker has no AudioContext: the page plays it at its start on the shared clock (voiceSounded); a signal's blocks
+	// share one handle
+	self.playSamples = sound => post({ type: "sound", ...sound, handle: sound.handle || nextSoundHandle() });
+	self.liveCycled = (name, at) => post({ type: "live cycle", name, at }); // liveCycleStarted
 }
 
 // the pool of task Workers of the workers that run programs (worker.js, test-worker.js), asked for when they start, one
@@ -329,7 +359,7 @@ function startTask(holder, hooks, name, values) {
 	const inline = () => withTaskSounds(run, asVoice(() => runTask(run.module, hooks, holder.warnings, name, values, run.shared, captured, null, run.channels)));
 	const shared = takeAnswerBuffer();
 	const control = new Int32Array(new SharedArrayBuffer(2 * Int32Array.BYTES_PER_ELEMENT)); // a queued task's too: `pause job` holds before it starts
-	const message = { module: run.module, name, values, shared, arrays: run.shared, captured, control, channels: run.channels, voice: { ...voice } };
+	const message = { module: run.module, name, values, shared, arrays: run.shared, captured, control, channels: run.channels, voice: { ...voice }, soundHandles, liveHandover: self.liveHandover };
 	const task = { name, shared, control, inline, message };
 	if (taskPool.length > 0) startOnWorker(task, run);
 	else if (!holder.inTask && holdsAWorker(run)) {
