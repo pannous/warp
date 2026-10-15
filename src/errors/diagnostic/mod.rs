@@ -246,9 +246,9 @@ const PRAGMA_WORD: &str = "use";
 const PRAGMA_SUFFIX: &str = "mode";
 /// `use relaxed`, the mirror of `use strict`: the program shows no hints, as `--no-hints` does on the command line
 const RELAXED_PRAGMAS: [&str; 3] = ["relaxed", "lenient", "loose"];
-/// `use script` (decision use-script): `use relaxed` with the scripting modules' words, as `use os file net` gives them
+/// `use script` (decision use-script): `use relaxed` with the scripting modules' words, as `use os file net shell` gives them
 const SCRIPT_PRAGMA: &str = "script";
-const SCRIPT_MODULES: [&str; 3] = ["os", "file", "net"];
+const SCRIPT_MODULES: [&str; 4] = ["os", "file", "net", "shell"];
 /// `use comments`: a comment before a binding becomes its meta information (P114, lowering/data/meta_entries.rs)
 const COMMENTS_PRAGMA: &str = "comments";
 /// `use reflection` (or `use reflection mode`): function values answer where and how they were made
@@ -521,7 +521,7 @@ fn replaced_pragma(program: Node, word: &str, replacement: Option<&Node>) -> (No
 	}
 }
 
-/// The program with its `use script` as `use os file net`, and whether it had one
+/// The program with its `use script` as `use os file net shell`, and whether it had one
 fn with_script_modules(program: Node) -> (Node, bool) {
 	let modules = [PRAGMA_WORD].into_iter().chain(SCRIPT_MODULES).map(|word| Node::Symbol(word.into()));
 	let uses = Node::List(modules.collect(), crate::node::Bracket::None, crate::node::Separator::Space);

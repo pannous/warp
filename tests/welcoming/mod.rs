@@ -47,6 +47,7 @@ mod test_plain_hint_got_it; // card hints-dismissed
 mod test_quiet_hints;
 mod test_relaxed_pragma;
 mod test_script_pragma;
+mod test_shell_words; // card unix-words
 mod test_slash_comment_after_value;
 mod test_slash_comment_needs_space;
 mod test_slash_comment_prose_operators; // card comment-after
