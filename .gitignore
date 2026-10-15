@@ -69,3 +69,4 @@ samples/*.stored.json
 **/.wrangler
 
 notes/OLD/
+**/.DS_Store
