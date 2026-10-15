@@ -14,6 +14,7 @@ mod test_bare_function_name;
 mod test_block_function;
 mod test_body_statement;
 mod test_braced_it_warning;
+mod test_broadcast_of_list_variables; // card round-floor-xs
 mod test_broadcast_reassigned;
 mod test_broadcasting;
 mod test_broadcasting_declared;

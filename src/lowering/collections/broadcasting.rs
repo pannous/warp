@@ -6,7 +6,7 @@
 //! A field read on a list of instances reads it of each: `people's name`, `people.name`, `name of people` are
 //! `people.map(p => p.name)` (card people-map).
 
-use super::nodes::{call, children_rewritten, is_colon_pair, key, parameter_name, Counter};
+use super::nodes::{call, called_name, children_rewritten, is_colon_pair, key, parameter_name, Counter};
 use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -395,17 +395,11 @@ pub fn lower(program: Node) -> Node {
 	let defined: HashSet<&String> = found.iter().map(|definition| &definition.name).collect();
 	broadcasting
 		.extend(SCALAR_LIBRARY_WORDS.iter().map(|word| word.to_string()).filter(|word| !defined.contains(word)));
-	let mut assigned = HashMap::new();
-	collect_list_variables(&program, &broadcasting, &mut assigned);
-	let names: HashSet<String> = assigned.keys().cloned().collect();
-	let list_variables: HashSet<String> =
-		assigned.into_iter().filter(|(_, only_lists)| *only_lists).map(|(name, _)| name).collect();
-	let program = each_singular(program, &list_variables, &names);
 	let library_scalar_parameters = LIBRARY_SCALAR_PARAMETERS
 		.iter()
 		.filter(|(word, _)| !defined.contains(&word.to_string()))
 		.map(|(word, scalars)| (word.to_string(), scalars.to_vec()));
-	let scalar_parameters = found
+	let scalar_parameters: HashMap<String, Vec<bool>> = found
 		.iter()
 		.map(|definition| {
 			(
@@ -415,6 +409,12 @@ pub fn lower(program: Node) -> Node {
 		})
 		.chain(library_scalar_parameters)
 		.collect();
+	let mut assigned = HashMap::new();
+	collect_list_variables(&program, &broadcasting, &scalar_parameters, &mut assigned);
+	let names: HashSet<String> = assigned.keys().cloned().collect();
+	let list_variables: HashSet<String> =
+		assigned.into_iter().filter(|(_, only_lists)| *only_lists).map(|(name, _)| name).collect();
+	let program = each_singular(program, &list_variables, &names);
 	let [defines_dot, defines_sum] = [DOT_WORD, SUM_WORD].map(|word| defined.contains(&word.to_string()));
 	let instances = element_shapes(&program);
 	Broadcast {
@@ -493,6 +493,17 @@ fn each_item(list: Node, applied: impl Fn(Node) -> Node) -> Node {
 	let item = symbol(BROADCAST_ITEM);
 	let each = key(item.clone(), Op::Arrow, applied(item));
 	call(MAP_WORD, vec![list, each])
+}
+
+/// A list each_item built: `map(xs, broadcast_item => …)`
+fn is_broadcast(node: &Node) -> bool {
+	let Node::List(items, _, _) = node.drop_meta() else { return false };
+	match items.as_slice() {
+		[head, _, each] if head.is_symbol(MAP_WORD) => {
+			matches!(each.drop_meta(), Node::Key(item, Op::Arrow, _) if item.is_symbol(BROADCAST_ITEM))
+		}
+		_ => false,
+	}
 }
 
 /// `square := it*it`: a function of the implicit parameter `it`
@@ -576,7 +587,12 @@ fn broadcasting_call<'a>(
 
 /// Variable → whether every value assigned to it is a list literal that is no object; a broadcast over the variable itself
 /// (`ps = moved ps`) keeps what it is, so it needs a list assigned elsewhere (`up(x) := { x = upper x }` maps no text)
-fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &mut HashMap<String, bool>) {
+fn collect_list_variables(
+	node: &Node,
+	functions: &HashSet<String>,
+	scalar_parameters: &HashMap<String, Vec<bool>>,
+	assigned: &mut HashMap<String, bool>,
+) {
 	// `xs = []` (which parses as ø) is a list once the program appends to xs: `xs.add(i)`, `xs = xs + [i]`
 	let mut appended: HashSet<String> = HashSet::new();
 	// `float[n]` is the subscript `float#(n+1)` still: a zero-filled list unless float names a variable
@@ -619,10 +635,13 @@ fn collect_list_variables(node: &Node, functions: &HashSet<String>, assigned: &m
 						_ if element_wise_parts(value).is_some() => true,
 						_ if crate::filled_lists::typed_array_value(value, &variables).is_some() => true,
 						Node::Empty => appended.contains(name),
-						// `x = floor [1.5 2.5]`: a broadcast over a list literal
+						// `x = floor [1.5 2.5]`, `ys = log(xs, 3)`: a broadcast over a list literal or a list variable
 						Node::List(items, bracket, separator) => {
-							broadcasting_call(items, bracket, separator, functions)
-								.is_some_and(|(_, argument)| is_list_literal(argument))
+							let is_list_argument = |argument: &Node| {
+								is_list_literal(argument)
+									|| matches!(argument.drop_meta(), Node::Symbol(list) if assigned.get(list) == Some(&true))
+							};
+							broadcasts_a_list(items, bracket, separator, functions, scalar_parameters, is_list_argument)
 						}
 						// `xs = xs + [i]`
 						Node::Key(left, Op::Add, right) => {
@@ -671,6 +690,26 @@ fn is_range(node: &Node) -> bool {
 }
 
 /// `moved ps`, `moved(ps)` of a broadcasting function
+/// `f(list)` of a broadcasting f, or `g(list, n)` of a list for g's parameter of one value
+fn broadcasts_a_list(
+	items: &[Node],
+	bracket: &Bracket,
+	separator: &Separator,
+	functions: &HashSet<String>,
+	scalar_parameters: &HashMap<String, Vec<bool>>,
+	is_list_argument: impl Fn(&Node) -> bool,
+) -> bool {
+	if let Some((_, argument)) = broadcasting_call(items, bracket, separator, functions) {
+		return is_list_argument(argument);
+	}
+	let Some(scalars) = called_name(items, bracket, separator).and_then(|name| scalar_parameters.get(name)) else {
+		return false;
+	};
+	let arguments = &items[1..];
+	let lists = arguments.iter().zip(scalars).filter(|(argument, scalar)| **scalar && is_list_argument(argument));
+	arguments.len() == scalars.len() && lists.count() == 1
+}
+
 fn is_broadcast_over(value: &Node, variable: &str, functions: &HashSet<String>) -> bool {
 	let Node::List(items, bracket, separator) = value.drop_meta() else {
 		return false;
@@ -808,9 +847,10 @@ impl Broadcast {
 		.then(|| each_item(list.clone(), |item| key(item, Op::Dot, field.clone())))
 	}
 
-	/// A list variable or a range: `sqrt xs`, `sqrt (1 to 4)` map over its items
+	/// A list variable, a range or a broadcast: `sqrt xs`, `sqrt (1 to 4)`, `round(floor(xs))` map over its items
 	fn is_list_value(&self, node: &Node) -> bool {
 		is_range(node)
+			|| is_broadcast(node)
 			|| matches!(node.drop_meta(), Node::Symbol(variable) if self.list_variables.contains(variable) && !self.shadowed.borrow().contains(variable))
 	}
 
