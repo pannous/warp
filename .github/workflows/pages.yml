@@ -34,7 +34,6 @@ env:
   # the runner has no GPU: headless Chrome gets SwiftShader's software WebGPU adapter, else samples/webgpu logs
   # "No available adapters." and the tour refuses the deploy
   AGENT_BROWSER_ARGS: --enable-unsafe-webgpu,--enable-unsafe-swiftshader,--use-webgpu-adapter=swiftshader,--enable-features=Vulkan
-  SITE_FILES: index.html playground.css playground.js deploy.js assistant.js completion.js shortcuts.js entities.tsv guide.js guide.md guide-expert.md primer.md markup.js markup-transitions.js markup-forms.js canvas.js worker.js task-worker.js task-workers.js js-members.js coi-serviceworker.js host.js host-*.js components.js components foreign_python.py reader.js imports.js exact.js std.js examples.js codemirror-warp-mode.js codemirror lib warp.wasm warp.debug.wasm samples.js keywords.js keywords.txt assistant.json version.js
 
 jobs:
   build:
@@ -61,21 +60,9 @@ jobs:
         tool: wasm-tools
     - name: Build the compiler, samples.js and the components
       run: web/playground/build.sh
+    # the same collection as scripts/browser-dry-run.sh's (build.sh collect_site)
     - name: Collect the site
-      run: |
-        mkdir _site
-        (cd web/playground && cp -r $SITE_FILES ../../_site/)
-        # the language primer for agents at the conventional path (llmstxt.org)
-        cp web/playground/primer.md _site/llms.txt
-        # every host part the worker imports (host.js HOST_PART_FILES) is shipped, else no deploy
-        for part in $(grep -o '"host-[a-z]*\.js"' web/playground/host.js | tr -d '"'); do test -f _site/$part || { echo "::error::$part missing from the site"; exit 1; }; done
-        # the C module the tour imports (examples.js "C libraries"), at its repository path: the page's file root is the site
-        mkdir -p _site/tests/fixtures/wasm && cp tests/fixtures/wasm/zlib.wasm tests/fixtures/wasm/zlib.h _site/tests/fixtures/wasm/
-        # the warp-compiled module samples/import_compiled.warp imports by its bare name (samples/shapes.wasm links it)
-        mkdir -p _site/samples && cp tests/fixtures/compiled/shapes.wasm _site/samples/
-        echo "warp.pannous.com" > _site/CNAME
-        # the files the site serves, so the compiler asks only for those (host-files.js): no 404 in the console
-        web/playground/build.sh served _site
+      run: web/playground/build.sh site _site
     - uses: actions/upload-pages-artifact@v5
       with:
         path: _site
@@ -140,20 +127,9 @@ jobs:
         tool: wasm-tools
     - name: Install agent-browser (headless Chrome)
       run: npm install -g agent-browser && agent-browser install --with-deps
-    # the browser cannot run git: each pinned package of packages.warp is fetched as the native fetch_package does
-    # (src/modules.rs): its version tag cloned once into the package cache, linked as packages/<name>
+    # the browser cannot run git: the pinned packages of packages.warp, cloned and linked as packages/<name>
     - name: Fetch the pinned packages
-      run: |
-        grep -oE '^[a-z_]+: \{repository: "[^"]+", version: [0-9.]+' packages.warp | while read -r pinned; do
-          name=${pinned%%:*}
-          url=$(grep -oE 'https://[^"]+' <<< "$pinned")
-          version=$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' <<< "$pinned")
-          tag=$(git ls-remote --tags --refs "$url" | grep -oE "refs/tags/v?$version\$" | sed 's|refs/tags/||' | head -1)
-          cached=~/.cache/warp/packages/$name@$version
-          git clone -q --depth 1 --branch "$tag" "$url" "$cached"
-          mkdir -p packages && ln -s "$cached" "packages/$name"
-        done
-        ls -l packages
+      run: web/playground/build.sh pinned
     - name: The test suite in headless Chrome
       run: cargo browser-test
 
