@@ -962,6 +962,10 @@ impl Lowering {
 			receiver.drop_meta(),
 			Node::Symbol(_) | Node::Text(_) | Node::Char(_) | Node::Number(_) | Node::List(_, Bracket::Square, _)
 		);
+		// `p.x`, `p.zy` of a list: its components when it holds 2 to 4 numbers, read as a field (decision S1)
+		if is_value && !is_known && !has_arguments && crate::words::swizzle_components(name).is_some() {
+			return Some(field_lookup(receiver, name, word_node));
+		}
 		let call = key(receiver.clone(), Op::Dot, method.clone());
 		(!is_known && is_value).then(|| self.context.undefined_function_diagnostic(&call, name).into_error())
 	}

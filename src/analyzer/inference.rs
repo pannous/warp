@@ -273,6 +273,11 @@ fn subscript_kind(indexed: &Node, index: &Node, scope: &Scope) -> Kind {
 		if let Some(kind) = scope.function_kind(&field_kind_key(name)).filter(|_| !declared_any(indexed, scope)) {
 			return kind;
 		}
+		// `p.xy` of a list: the list of its components (decision S1)
+		let is_swizzle = crate::words::swizzle_components(name).is_some_and(|components| components.len() > 1);
+		if is_swizzle && infer_type(indexed, scope) == Kind::List {
+			return Kind::List;
+		}
 	}
 	element_kind(indexed, scope).unwrap_or_else(|| {
 		// a value looked up by a name in a map of unknown values (`graph[node]` of a parameter) is held as a Node
