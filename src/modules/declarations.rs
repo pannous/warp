@@ -169,20 +169,24 @@ pub(crate) fn template_holes(statements: &[Node]) -> Vec<Node> {
 }
 
 pub(crate) fn mentioned_names(statements: &[Node]) -> Vec<String> {
-	// a function's parameters are its own: `f(x, melody) := x + melody` mentions no module word melody
+	// a function's parameters and variables are its own: `f(x, melody) := x + melody` mentions no module word melody,
+	// prelude's `dict(pairs) := { out = {}; … }` no sound word out
 	fn collect(node: &Node, names: &mut Vec<String>) {
-		let parameters: Vec<String> = crate::lowering::nodes::function_head(node)
+		let mut locals: HashSet<String> = crate::lowering::nodes::function_head(node)
 			.map(|function| function.parameters())
 			.unwrap_or_default()
 			.into_iter()
 			.filter_map(crate::lowering::nodes::parameter_name)
 			.collect();
-		if parameters.is_empty() {
+		if let Some((_, body, _)) = crate::type_tests::function_definition(node) {
+			crate::library_words::collect_assigned_names(&body, &mut locals);
+		}
+		if locals.is_empty() {
 			return collect_parts(node, names);
 		}
 		let mut mentioned = vec![];
 		collect_parts(node, &mut mentioned);
-		names.extend(mentioned.into_iter().filter(|name| !parameters.contains(name)));
+		names.extend(mentioned.into_iter().filter(|name| !locals.contains(name)));
 	}
 	fn collect_parts(node: &Node, names: &mut Vec<String>) {
 		match node {

@@ -8,3 +8,8 @@ osc(C4, 1s, "saw") |> lowpass(900) |> delay(0.25) |> out
 bass = osc(C2, 2s, "square") |> lowpass(300)
 pad = osc([E4, G4, B4], 2s) |> reverb(0.4) |> gain(0.5)
 mix(bass, pad) |> out
+
+// a bus: one reverb that several sounds go through together, ringing on after the last
+hall = bus() |> reverb(0.5)
+osc(C4, 0.5s) |> out(hall)
+osc(G4, 0.5s) |> out(hall)
