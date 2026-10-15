@@ -13,6 +13,7 @@ mod test_empty_argument;
 mod test_end_word;
 mod test_entity_table;
 mod test_escaped_quote_slashes; // card self-serializer
+mod test_explicit_symbols;
 mod test_format_layout; // card warp-format
 mod test_glued_method_block;
 mod test_glued_pair_value;
