@@ -159,7 +159,7 @@ fn with_live_loops(statements: Vec<Node>, defined: &HashSet<String>) -> Vec<Node
 		let since = Node::Symbol(format!("{name}_since"));
 		let filled = |template: &str, version: usize| {
 			substituted(
-				crate::warp_parser::parse(template),
+				crate::warp_parser::parse_template(template, &Node::Empty),
 				&[(LIVE_SINCE, since.clone()), (LIVE_VERSION, Node::int(version as i64))],
 			)
 		};
@@ -257,7 +257,7 @@ fn block_template(template: &str, fill: &str, seconds: Node) -> Node {
 		("block_samples", crate::node::int(BLOCK_SAMPLES as i64)),
 		("block_seconds", seconds),
 	];
-	names.into_iter().fold(crate::warp_parser::parse(template), |node, (placeholder, value)| {
+	names.into_iter().fold(crate::warp_parser::parse_template(template, &Node::Empty), |node, (placeholder, value)| {
 		crate::library_words::substitute(node, placeholder, &value)
 	})
 }
@@ -497,7 +497,7 @@ impl LiveLoop {
 	fn voice(&self, blocks: &[Node]) -> Node {
 		let template = if self.cycles.is_some() { LIVE_LOOP_TEMPLATE } else { ENDLESS_LIVE_LOOP_TEMPLATE };
 		let made = substituted(
-			crate::warp_parser::parse(template),
+			crate::warp_parser::parse_template(template, &Node::Empty),
 			&[
 				(LIVE_VOICE, self.voice.clone()),
 				(LIVE_CYCLES, self.cycles.clone().unwrap_or(Node::Empty)),
