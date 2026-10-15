@@ -31,10 +31,21 @@ fn slash_commented_file(name: &str) -> String {
 #[test]
 fn beautify_formats_and_rewrites_slash_comments() {
 	let file = slash_commented_file("beautify");
-	let run = warp(&["beautify", &file]);
+	let run = warp(&["beautify", "yes", &file]);
 	assert_eq!(run.status, Some(0), "{}{}", run.stdout, run.stderr);
 	assert_eq!(std::fs::read_to_string(&file).unwrap(), "# a note\nx = 1 + 2\nx\n");
 	assert!(!run.stdout.contains("prefer # comments"), "a rewritten comment leaves no hint: {}", run.stdout);
+}
+
+// decision beautify-preview (card warp-format-strict): beautify shows its diff first; scripted, it applies nothing
+#[test]
+fn beautify_without_yes_shows_the_diff_and_applies_nothing_when_scripted() {
+	let file = slash_commented_file("beautify_preview");
+	let run = warp(&["beautify", &file]);
+	assert_eq!(run.status, Some(0), "{}{}", run.stdout, run.stderr);
+	assert!(run.stdout.contains("-// a note\n") && run.stdout.contains("+# a note\n"), "{}", run.stdout);
+	assert!(run.stdout.contains(&format!("warp beautify yes {file}")), "{}", run.stdout);
+	assert_eq!(std::fs::read_to_string(&file).unwrap(), SLASH_COMMENTED);
 }
 
 #[test]
