@@ -860,13 +860,23 @@ impl Broadcast {
 	/// parameter, a call) decides at run time, by the prelude's element_wise_any: each item of the list side, two lists
 	/// paired, or both numbers plainly; `xs .* 2`, `xs .* k` of a number variable k map over xs at once
 	fn element_wise_any(&self, node: &Node) -> Option<Node> {
-		let (receiver, op, operand) = element_wise_parts(node)?;
+		let (receiver, _, operand) = element_wise_parts(node)?;
 		if self.is_list_expression(&receiver) && is_scalar_operand(&operand, &self.other_variables) {
 			return None;
 		}
+		// `notes .+ 2`: a class's dispatch of a number maps over the items as written, keeping their class
+		if is_dispatched(node) && is_scalar_operand(&operand, &[]) {
+			return None;
+		}
 		let [left, right] = ELEMENT_WISE_SIDES.map(|side| Node::Symbol(side.to_string()));
-		let parameters = parens(vec![left.clone(), right.clone()]);
-		let combined = key(parameters, Op::Arrow, key(left, op, right));
+		let item = element_wise_item(node, left.clone(), right.clone())?;
+		// a dispatch's right side is an item, never the list the analyzer sees passed (`p .- c()`): of any kind, so the
+		// class's method is not compiled for a list
+		let right = match is_dispatched(node) {
+			true => key(right, Op::Colon, symbol(crate::words::ANY_TYPE)),
+			false => right,
+		};
+		let combined = key(parens(vec![left, right]), Op::Arrow, item);
 		// the prelude's name for it: library_words, which names prelude words so, runs after this pass
 		let word = crate::modules::prelude_name(ELEMENT_WISE_ANY).unwrap_or(ELEMENT_WISE_ANY.to_string());
 		Some(call(&word, vec![receiver, operand, combined]))
@@ -995,7 +1005,9 @@ pub fn lower_scalar_element_wise(program: Node) -> Node {
 }
 
 fn scalar_element_wise(node: Node, parameters: &[String]) -> Node {
-	if let Some((receiver, op, operand)) = element_wise_parts(&node) {
+	// a class's dispatch of the operator (`notes .+ 2` of Notes) stays element-wise: its kind test would keep the
+	// function from broadcasting
+	if let Some((receiver, op, operand)) = element_wise_parts(&node).filter(|_| !is_dispatched(&node)) {
 		// a number and no list: `h .+ [0, 1]` of a parameter h keeps its dot, and so does `a .+ b` of two parameters,
 		// which pair two lists instead of the function broadcasting over each (card compile-shaders)
 		let numbers = [&receiver, &operand].map(|side| is_scalar_operand(side, &[]));
@@ -1089,6 +1101,15 @@ pub fn lower_element_wise_operators(node: Node) -> Node {
 }
 
 pub(crate) fn element_wise_parts(node: &Node) -> Option<(Node, Op, Node)> {
+	let (receiver, item) = element_wise_map(node)?;
+	let Node::Key(left, op, operand) = instance_dispatch(item).unwrap_or(item).drop_meta() else {
+		return None;
+	};
+	is_each_element(left).then(|| (receiver.clone(), *op, operand.as_ref().clone()))
+}
+
+/// `xs.map(each_element -> item)`: xs and the item
+fn element_wise_map(node: &Node) -> Option<(&Node, &Node)> {
 	let Node::Key(receiver, Op::Dot, call) = node.drop_meta() else {
 		return None;
 	};
@@ -1096,15 +1117,57 @@ pub(crate) fn element_wise_parts(node: &Node) -> Option<(Node, Op, Node)> {
 		return None;
 	};
 	let [word, lambda] = items.as_slice() else { return None };
-	let Node::Key(element, Op::Arrow, body) = lambda.drop_meta() else {
+	let Node::Key(element, Op::Arrow, item) = lambda.drop_meta() else {
 		return None;
 	};
-	let Node::Key(left, op, operand) = body.drop_meta() else {
-		return None;
-	};
-	let is_element = |node: &Node| matches!(node.drop_meta(), Node::Symbol(name) if name == EACH_ELEMENT);
-	(word.name() == MAP_WORD && is_element(element) && is_element(left))
-		.then(|| (receiver.as_ref().clone(), *op, operand.as_ref().clone()))
+	(word.name() == MAP_WORD && is_each_element(element)).then_some((receiver.as_ref(), item.as_ref()))
+}
+
+fn is_each_element(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(name) if name == EACH_ELEMENT)
+}
+
+/// An element-wise item of a program whose class defines the operator (`use sound`: Note.plus) as class_methods
+/// dispatches it, `if each_element is Note then each_element.plus(operand) else each_element + operand`: the built-in
+/// operator's item
+fn instance_dispatch(item: &Node) -> Option<&Node> {
+	let (condition, then, otherwise) = super::nodes::branches(item)?;
+	(first_operand(condition).is_some_and(is_each_element) && first_operand(then).is_some_and(is_each_element))
+		.then_some(otherwise)
+}
+
+/// `x is Note` and `x.plus(o)` as written, `is_type(x, "Note")` and `plus(x, o)` once type tests and methods are
+/// lowered: x
+fn first_operand(node: &Node) -> Option<&Node> {
+	match node.drop_meta() {
+		Node::Key(subject, Op::Eq | Op::Dot, _) => Some(subject),
+		Node::List(items, Bracket::Round | Bracket::None, _) if items.len() > 1 => items.get(1),
+		_ => None,
+	}
+}
+
+fn is_dispatched(node: &Node) -> bool {
+	element_wise_map(node).is_some_and(|(_, item)| instance_dispatch(item).is_some())
+}
+
+/// The item an element-wise operator computes of `left` and `right`: `left op right`, or the dispatch of a class
+/// defining the operator (instance_dispatch), so `notes .+ 2` still transposes each note
+fn element_wise_item(node: &Node, left: Node, right: Node) -> Option<Node> {
+	let (_, op, operand) = element_wise_parts(node)?;
+	let (_, item) = element_wise_map(node)?;
+	if !is_dispatched(node) {
+		return Some(key(left, op, right));
+	}
+	let each = HashMap::from([(EACH_ELEMENT.to_string(), left)]);
+	Some(crate::law::substitute(&replaced(item.clone(), &operand, &right), &each))
+}
+
+/// `node` with every `from` in it `to`
+fn replaced(node: Node, from: &Node, to: &Node) -> Node {
+	match node.drop_meta() == from.drop_meta() {
+		true => to.clone(),
+		false => node.map_children(|child| replaced(child, from, to)),
+	}
 }
 
 fn is_function_head(head: &Node, op: Op) -> bool {
