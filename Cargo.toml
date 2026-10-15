@@ -6,7 +6,7 @@
 
 # crates/warp-runtime: running compiled programs without the compiler; its binary is the stub of `warp build --exe`
 [workspace]
-members = ["crates/warp-runtime"]
+members = ["crates/warp-runtime", "crates/warp-glsl"]
 resolver = "2"
 
 [package]
@@ -46,7 +46,7 @@ deprecated = "warn"
 [features]
 # native: running programs (wasmtime), the network, FFI and the console; off for the compiler-in-the-browser build (web/playground)
 default = ["native", "validate"]
-native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2", "dep:flate2", "dep:crc32fast", "warp-runtime/compiler", "warp-runtime/webview", "dep:ureq", "dep:rustyline", "dep:libloading", "dep:wat", "dep:regex", "dep:tiny_http", "dep:tungstenite", "dep:wit-component", "dep:wit-parser", "dep:wgpu", "dep:pollster", "dep:winit", "dep:ab_glyph", "dep:objc2", "dep:cpal", "dep:midir"]
+native = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2", "dep:flate2", "dep:crc32fast", "warp-runtime/compiler", "warp-runtime/webview", "dep:ureq", "dep:rustyline", "dep:libloading", "dep:wat", "dep:regex", "dep:tiny_http", "dep:tungstenite", "dep:wit-component", "dep:wit-parser", "dep:wgpu", "dep:warp-glsl", "dep:pollster", "dep:winit", "dep:ab_glyph", "dep:objc2", "dep:cpal", "dep:midir"]
 # validate: check every emitted module with wasmparser's validator (a compiler bug becomes an internal error); a quarter
 # of the browser build, whose engine validates anyway: web/playground/build.sh leaves it out of the optimized warp.wasm
 validate = []
@@ -75,6 +75,7 @@ ureq = { version = "3.1.4", optional = true }
 tungstenite = { version = "0.30", optional = true, features = ["rustls-tls-webpki-roots"] }
 # gpu_compute natively (src/graphics/gpu.rs): WGSL compute shaders on Metal, Vulkan or DX12, as WebGPU runs them in the browser
 wgpu = { version = "30", optional = true, default-features = false, features = ["std", "parking_lot", "wgsl", "metal", "vulkan", "dx12"] }
+warp-glsl = { path = "crates/warp-glsl", version = "0.1.0", optional = true } # glsl_shader natively (lib/draw.warp)
 pollster = { version = "0.4", optional = true } # wgpu answers with futures: block on them
 ab_glyph = { version = "0.2", optional = true } # label of use draw natively: text set in a system font (src/graphics/text_raster.rs)
 # paint() in a terminal shows its frames in a window (src/graphics/paint_window.rs), drawn through a wgpu surface (Metal on macOS)

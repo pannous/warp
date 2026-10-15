@@ -11,7 +11,6 @@ use crate::node::{symbol, Bracket, Node, Separator};
 use crate::numbers::units::static_units::si_quantity;
 use crate::operators::Op;
 use crate::stored_values::DATABASE_WORD;
-use crate::warp_parser::parse;
 use crate::words::ADD_WORD;
 use crate::words::{FOR_WORD, GLOBAL_WORD, IN_WORD};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -488,7 +487,7 @@ fn with_id(body: Node) -> Node {
 	if has_id(&body) {
 		return body;
 	}
-	let id = parse(&format!("{ID_FIELD}: int = 0"));
+	let id = crate::warp_parser::parse_generated(&format!("{ID_FIELD}: int = 0"));
 	match body {
 		Node::List(mut items, Bracket::Curly, separator @ (Separator::Semicolon | Separator::Newline)) => {
 			items.push(id);
@@ -615,7 +614,7 @@ fn opened(statement: &Node, tables: &BTreeMap<String, Table>, file: &str, open: 
 		let reset = called(lazy_name(&variable, "reset"), None);
 		return Some(vec![key(target.drop_meta().clone(), Op::Assign, reset)]);
 	}
-	let empty = parse("[]");
+	let empty = crate::warp_parser::parse_generated("[]");
 	Some(
 		[
 			vec![key(target.drop_meta().clone(), Op::Assign, empty)],

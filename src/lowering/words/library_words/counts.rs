@@ -72,5 +72,5 @@ pub(super) fn count_in(items: &[Node]) -> Option<Node> {
 	let substring = matches!(needle.drop_meta(), Node::Text(text) if text.chars().count() > 1)
 		&& !matches!(haystack.drop_meta(), Node::List(_, Bracket::Square, _));
 	let template = if substring { COUNT_SUBSTRING_TEMPLATE } else { COUNT_ITEM_TEMPLATE };
-	Some(substitute(substitute(parse(template), COUNT_HAYSTACK, &haystack), COUNT_NEEDLE, needle))
+	Some(substitute(substitute(parse_template(template, &haystack), COUNT_HAYSTACK, &haystack), COUNT_NEEDLE, needle))
 }

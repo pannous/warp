@@ -74,13 +74,17 @@ impl WarpParser {
 	}
 
 	/// A word before ` /name` takes a path: the operand before is a path (`cp /a /b`), or the word is no variable but a
-	/// function (the program's, a standard module's like ls, a built-in like print); `width /height` divides
+	/// function (the program's wherever it is defined, a variable holding one, a standard module's like ls, a built-in like
+	/// print); after a variable or a name a definition binds as a parameter it divides: `width /height`, `area(scale, h)
+	/// := scale /h`
 	fn takes_path(&self, word: &str) -> bool {
 		let after_path =
 			self.path_end.is_some_and(|end| self.chars[end..self.pos].iter().all(|c| matches!(c, ' ' | '\t')));
 		after_path
 			|| (!self.variables.contains(word)
+				&& !self.parameter_names.contains(word)
 				&& (self.functions.contains(word)
+					|| self.program_functions.contains(word)
 					|| crate::lowering::negated_calls::is_builtin_callable(word)
 					|| crate::modules::std_function_names().contains(word)))
 	}
