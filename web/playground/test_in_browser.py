@@ -728,7 +728,10 @@ def fingers_wrong():
 		const shown = () => [...document.querySelectorAll("#paintings canvas")].at(-1);
 		for (let waited = 0; waited < {FINGERS_WAIT_MS}; waited += 100) {{
 			const canvas = shown();
-			const middle = canvas && canvas.getContext("2d").getImageData(Math.floor(canvas.width * {share}), Math.floor(canvas.height * {share}), 1, 1).data;
+			// read from a copy: reading the shown canvas again and again makes Chrome warn on the console
+			const copy = canvas && new OffscreenCanvas(canvas.width, canvas.height).getContext("2d");
+			copy?.drawImage(canvas, 0, 0);
+			const middle = copy?.getImageData(Math.floor(canvas.width * {share}), Math.floor(canvas.height * {share}), 1, 1).data;
 			if (middle && Math.min(...middle.slice(0, 3)) < {PAPER_FROM}) return "painted";
 			await new Promise(done => setTimeout(done, 100));
 		}}
