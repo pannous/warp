@@ -153,6 +153,15 @@ function addPageSoundWords(post) {
 	// share one handle
 	self.playSamples = sound => post({ type: "sound", ...sound, handle: sound.handle || nextSoundHandle() });
 	self.liveCycled = (name, at) => post({ type: "live cycle", name, at }); // liveCycleStarted
+	self.liveLoopsNamed = names => post({ type: "live loops", names }); // each run's, as it starts (liveLoopNames)
+}
+
+const LIVE_LOOPS_SECTION = "warp.live_loops"; // src/host.rs
+// the names of the run's live loops, from its module's section (none: no section), which the page compares with the
+// loops of the run before (playground.js liveLoopsNamed, decision deleted-loop)
+function liveLoopNames(module) {
+	const [section] = WebAssembly.Module.customSections(module, LIVE_LOOPS_SECTION);
+	return section ? decode(new Uint8Array(section)).split("\n") : [];
 }
 
 // the pool of task Workers of the workers that run programs (worker.js, test-worker.js), asked for when they start, one
@@ -852,6 +861,7 @@ function broadcastListener(name) {
 }
 
 addHostPart({
+	started: run => self.liveLoopsNamed?.(liveLoopNames(run.module)),
 	words: (holder, hooks, { program, cString }) => ({
 		// `clipboard`: the page reads it (asynchronously) while the Worker waits (askPage; shipped with this part only,
 		// host_parts.rs, so a page that reads no clipboard carries none of it)

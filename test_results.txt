@@ -1561,6 +1561,7 @@ PASSED:
   ✓ functions::test_parameter_patterns::a_list_parameter_names_its_items
   ✓ functions::test_parameter_patterns::a_value_of_another_shape_is_an_error
   ✓ functions::test_parameter_retype::a_parameter_given_another_kind_in_its_body_holds_it
+  ✓ functions::test_parameter_shadows_function::a_parameter_compared_with_a_bare_function_asks_for_its_argument
   ✓ functions::test_parameter_shapes::test_constructed_argument_is_checked
   ✓ functions::test_parameter_shapes::test_field_type_is_checked
   ✓ functions::test_parameter_shapes::test_hyphenated_field_with_a_type
@@ -1767,6 +1768,7 @@ PASSED:
   ✓ lists::test_bare_list_assignment::each_reading_has_its_explicit_form
   ✓ lists::test_bare_list_assignment::spaced_values_after_print_print_each
   ✓ lists::test_bare_list_assignment::spaced_values_are_a_list
+  ✓ lists::test_bare_list_assignment::spaced_values_in_every_statement_position_are_a_list
   ✓ lists::test_byte_size::byte_size_counts_bytes_and_size_counts_elements
   ✓ lists::test_captured_call_lists::a_captured_list_of_float_calls_holds_floats
   ✓ lists::test_comprehension_beside_own_push::a_comprehension_beside_an_own_push_function
@@ -2517,9 +2519,11 @@ PASSED:
   ✓ numbers::test_degrees::trigonometry_takes_degrees
   ✓ numbers::test_dimension_types::a_declared_dimension_checks_any_unit_of_it
   ✓ numbers::test_dimension_types::a_declared_height_is_the_programs
+  ✓ numbers::test_dimension_types::a_declared_unit_shows_as_written
   ✓ numbers::test_dimension_types::a_program_naming_a_dimension_keeps_its_own
   ✓ numbers::test_dimension_types::a_quantity_is_its_dimension
   ✓ numbers::test_dimension_types::a_quantity_of_seconds_is_a_duration_and_a_time
+  ✓ numbers::test_dimension_types::speed_area_volume_and_frequency_are_named_dimensions
   ✓ numbers::test_div_assign::declared_int_keeps_dividing_whole
   ✓ numbers::test_div_assign::divide_assign_divides_exactly
   ✓ numbers::test_div_assign::floor_divide_assign_floors
@@ -2687,6 +2691,7 @@ PASSED:
   ✓ numbers::test_number_methods::test_a_field_named_like_a_number_method_stays_a_field
   ✓ numbers::test_number_methods::test_prefix_operator_words_as_methods
   ✓ numbers::test_number_methods::test_rounding_methods_without_parentheses
+  ✓ numbers::test_number_of_text_equals::the_number_a_text_spells_equals_a_literal
   ✓ numbers::test_number_of_text::number_of_a_run_time_text_compares_with_a_number
   ✓ numbers::test_number_of_text::number_of_a_run_time_text_is_the_number_it_spells
   ✓ numbers::test_number_words::a_number_word_hints_its_digits
@@ -3110,6 +3115,7 @@ PASSED:
   ✓ parser::test_attributes::attributes_serialize_in_front_and_valueless_ones_stay_bare
   ✓ parser::test_bare_operator_block::a_bare_operator_block_names_the_fix
   ✓ parser::test_bare_operator_block::operators_with_operands_in_blocks_still_work
+  ✓ parser::test_big_literals::a_100_kb_literal_compiles_in_linear_time
   ✓ parser::test_comment_hides_bracket::a_comment_after_an_open_bracket_without_its_closer_is_a_comment
   ✓ parser::test_comment_hides_bracket::a_comment_that_hides_a_closing_bracket_is_an_error
   ✓ parser::test_comments::test_block_comments
@@ -3449,6 +3455,7 @@ PASSED:
   ✓ programs::test_plain_hints_when_piped::a_hint_on_piped_stderr_has_no_escape_codes
   ✓ programs::test_playground_samples::every_excluded_sample_exists
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error
+  ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_2
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_3
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_4
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
@@ -5003,9 +5010,12 @@ PASSED:
   ✓ web::test_keyed_lists::a_key_on_its_own_line_names_the_element
   ✓ web::test_keyed_lists::a_list_inside_an_element_gives_its_children
   ✓ web::test_keyword_registry::keywords_of_passes_are_highlighted
+  ✓ web::test_live_handover::a_deleted_loop_fades_out_as_soon_as_the_rerun_names_its_loops
   ✓ web::test_live_handover::a_handed_over_loop_starts_on_the_old_runs_grid
+  ✓ web::test_live_handover::a_kept_loop_with_a_long_period_is_not_faded
   ✓ web::test_live_handover::a_loop_the_new_run_drops_ends_at_a_cycle_after_a_while
   ✓ web::test_live_handover::a_new_runs_loop_takes_over_at_the_old_loops_cycle
+  ✓ web::test_live_handover::the_module_names_its_live_loops
   ✓ web::test_markup_holes::a_page_binds_each_hole
   ✓ web::test_markup_holes::fixed_markup_or_a_computed_root_has_no_holes
   ✓ web::test_markup_holes::the_elements_holding_computed_parts_are_the_holes
@@ -5636,8 +5646,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ parser::test_big_literals::a_100_kb_literal_compiles_in_linear_time
-  ✗ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_2
 
 SUMMARY:
-13 ignored, 5633 passed, 2 failed, 5635 total tested
+13 ignored, 5643 passed, 0 failed, 5643 total tested

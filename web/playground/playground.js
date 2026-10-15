@@ -24,8 +24,10 @@ const STOP_LABEL = "Stop ■";
 const STOPPED = "stopped";
 // card playground-live: a rerun while live loops play hands them over. The old run's Worker retires instead of stopping:
 // its loops sound on until the new run's loop of the same name starts its first cycle, which they give way to; a loop the
-// new run has none of plays on this long, then ends where its next cycle would start
+// new run's names lack, deleted from the source, fades out in LIVE_FADE_SECONDS as soon as the new run starts (decision
+// deleted-loop: the sound matches the visible code). A new run that names none in LIVE_RETIRE_SECONDS fades them all
 const LIVE_HANDED_OVER = "its live loops play on into the next run";
+const LIVE_FADE_SECONDS = 1;
 const LIVE_RETIRE_SECONDS = 4;
 // what a retired Worker still says: its loops' sounds and cycles, and the report of its run's end, which ends it
 const RETIRED_MESSAGES = new Set(["sound", "live cycle", "midi", "report"]);
@@ -220,7 +222,6 @@ function startWorker(restarts = 0) {
 			if (starting.retired && data.type === "report") return retire(starting);
 			if (data.type === "notify") data = notification(data.text);
 			if (data.type === "window") return resizeWindow(data, $("paintings")); // canvas.js
-			if (data.type === "window unseen") return void (ranUnseen = true);
 			if (data.type === "dispatch") return dispatchToPage(data.event); // markup.js, card page-custom-event
 			if (!data) return;
 			if (stalled) watchStart();
@@ -240,6 +241,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "members") return answerMembers(data);
 			if (data.type === "sound") return playSound(data, starting);
 			if (data.type === "live cycle") return liveCycled(starting, data.name, data.at);
+			if (data.type === "live loops") return liveLoopsNamed(data.names);
 			if (data.type === "sound file") return playSoundFile(data.url, data.handle, data.bytes);
 			if (data.type === "file") return offerFile(data.path, data.bytes);
 			if (data.type === "midi") return sendMidi(data.port, data.message, data.at);
@@ -323,20 +325,7 @@ function notification(text) {
 const darkMode = matchMedia(DARK_MODE_QUERY);
 const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(!beforeUserActivation()), display_width: screen.width, display_height: screen.height, ...viewSize() } });
 darkMode.addEventListener("change", tellSystemValues);
-
-// the run on load (#finger_paint) reads window_open before the first click, so its `while window_open` loop ends at
-// once; the first click or key press tells the worker the window is open and runs such a run's code again (card
-// register-fingers: the user's strokes never showed). A touch activates the page only at pointerup, so each of these
-// events asks until the page is active
-let ranUnseen = false; // the shown run read window_open as 0
-const ACTIVATING_EVENTS = ["pointerdown", "pointerup", "keydown"];
-function rerunForViewer() {
-	if (!worker || beforeUserActivation()) return;
-	ACTIVATING_EVENTS.forEach(type => removeEventListener(type, rerunForViewer, { capture: true }));
-	tellSystemValues();
-	if (ranUnseen) runChanged();
-}
-ACTIVATING_EVENTS.forEach(type => addEventListener(type, rerunForViewer, { capture: true }));
+["pointerdown", "keydown"].forEach(type => addEventListener(type, () => worker && tellSystemValues(), { once: true, capture: true }));
 new ResizeObserver(() => worker && tellSystemValues()).observe($("output"));
 document.addEventListener("fullscreenchange", () => worker && tellSystemValues());
 
@@ -470,11 +459,15 @@ function stealFor(time) {
 	if (playing.length < MAX_VOICES) return;
 	const oldest = playing.reduce((first, source) => source.startsAt < first.startsAt ? source : first);
 	oldest.stolen = true;
-	const level = oldest.gainNode.gain;
-	const from = Math.max(audio.currentTime, time);
+	fadeOut(oldest, Math.max(audio.currentTime, time), STEAL_SECONDS);
+}
+
+// the sound ramps down to silence from `from` (audio clock) and stops there
+function fadeOut(source, from, seconds) {
+	const level = source.gainNode.gain;
 	level.setValueAtTime(level.value, from);
-	level.linearRampToValueAtTime(0, from + STEAL_SECONDS);
-	oldest.stop(from + STEAL_SECONDS);
+	level.linearRampToValueAtTime(0, from + seconds);
+	source.stop(from + seconds);
 }
 
 // fade_sound(handle, gain, seconds): the sounds of that handle (0 all) ramp from their gain now to `gain`
@@ -517,7 +510,31 @@ function endHandedOver(retired, name, at) {
 	if (retired.retired.waiting.size === 0) retire(retired);
 }
 
+// the new run's live loops, named as it starts (host-tasks.js liveLoopNames): a retired loop it lacks is deleted from the
+// source and fades out at once, the others give way at their cycle
+function liveLoopsNamed(names) {
+	retiredWorkers.forEach(retired => {
+		clearTimeout(retired.retired.unnamed);
+		fadeDeleted(retired, [...retired.retired.waiting].filter(name => !names.includes(name)));
+	});
+}
+
+// the retired Worker's loops of those names fade out, the Worker goes once none of its loops is left
+function fadeDeleted(retired, names) {
+	const deleted = source => source.from === retired && names.includes(source.loop);
+	sounding.filter(deleted).forEach(source => fadeOut(source, audio.currentTime, LIVE_FADE_SECONDS));
+	names.forEach(name => retired.retired.waiting.delete(name));
+	if (retired.retired.waiting.size === 0) retire(retired);
+}
+
+// the safety net: a new run that never named its loops (it failed before it started) leaves none of the old ones playing
+function unnamedLoopsFade(retired) {
+	console.warn(`the rerun named no live loops in ${LIVE_RETIRE_SECONDS} s: the loops of the run before fade out`);
+	fadeDeleted(retired, [...retired.retired.waiting]);
+}
+
 function retire(retired) {
+	clearTimeout(retired.retired?.unnamed);
 	retired.terminate();
 	retiredWorkers.delete(retired);
 }
@@ -529,7 +546,8 @@ function handOver(run) {
 	const queuedEnd = name => Math.max(...sounding.filter(source => source.from === retiring && source.loop === name).map(source => source.endsAt - clockOffset));
 	liveHandover = Object.fromEntries([...retiring.liveLoops].map(([name, { start, period }]) =>
 		[name, period > 0 ? { start, period } : { start: queuedEnd(name), period: 0 }]));
-	retiring.retired = { at: soundClock(), waiting: new Set(retiring.liveLoops.keys()) };
+	const unnamed = setTimeout(() => unnamedLoopsFade(retiring), LIVE_RETIRE_SECONDS * 1000);
+	retiring.retired = { at: soundClock(), waiting: new Set(retiring.liveLoops.keys()), unnamed };
 	retiredWorkers.add(retiring);
 	sounding.filter(source => source.from === retiring && !source.loop).forEach(source => source.stop());
 	startWorker();
@@ -927,7 +945,6 @@ async function show(code) {
 		return;
 	}
 	showing = true;
-	ranUnseen = false;
 	setStatus("running…");
 	try {
 		showReport(await evaluate(code));
