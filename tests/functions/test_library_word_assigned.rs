@@ -7,8 +7,10 @@ fn printed(code: &str) -> String {
 
 #[test]
 fn a_library_word_assigned_is_a_function() {
-	assert_eq!(printed("f = floor; f(2.5)"), "2");
-	assert_eq!(printed("f = upper; f(\"a\")"), "\"A\"");
+	assert_eq!(printed("f = function floor; f(2.5)"), "2");
+	assert_eq!(printed("f = function upper; f(\"a\")"), "\"A\"");
+	// decision reflection: a bare name is never the function value implicitly (P82)
+	crate::common::fails_with("f = floor; f(2.5)", "floor needs 1 argument");
 }
 
 #[test]
