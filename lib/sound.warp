@@ -265,12 +265,14 @@ class Bus {
 }
 bus() := Bus(std_io("sound", "bus", [0, []]), [])
 // the bus with the effect at the end of its chain, or in place of its effect of that name (its new settings, what
-// rings in it kept), which the host takes over from this voice's moment on (card shared-buses stage 3)
+// rings in it kept), which the host takes over from this voice's moment on (card shared-buses stage 3). EQ bands are
+// several of a name: one replaces the band at its frequency (card bus-peak)
 with_effect(b: Bus, effect) := {
 	chain = []
 	replaced = false
+	banded = effect[0] in ["peak", "low_shelf", "high_shelf"]
 	for e in b.chain {
-		if e[0] == effect[0] {
+		if e[0] == effect[0] and (not banded or e[1] == effect[1]) {
 			chain.push(effect)
 			replaced = true
 		} else {

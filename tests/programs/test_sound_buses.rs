@@ -166,3 +166,22 @@ fn a_bus_takes_a_compressor_and_an_eq() {
 		warp::warp_parser::parse("[[\"compress\" -30 8 0.01 0.1] [\"low_shelf\" 200 6 0.707] [\"peak\" 3000 -4 2]]")
 	);
 }
+
+/// EQ bands of one kind at different frequencies are several bands; one at the same frequency is set again (card bus-peak)
+#[test]
+fn eq_bands_at_other_frequencies_add_up() {
+	crate::is!(
+		"use sound\nroom = bus() |> peak(200Hz, 3) |> peak(3kHz, -2)\nroom = room |> peak(200Hz, 5)\nroom.chain",
+		warp::warp_parser::parse("[[\"peak\" 200 5 1] [\"peak\" 3000 -2 1]]")
+	);
+}
+
+/// a compressor follows the louder channel on both, so a loud left side keeps the stereo image (review of stage 4)
+#[test]
+fn a_compressor_ducks_both_channels_together() {
+	let compressor = [Effect::named("compress", &[-20.0, 4.0, 0.001, 0.1]).unwrap()];
+	let frames: Vec<f32> = (0..1000).flat_map(|_| [0.9, 0.05]).collect();
+	let output = warp::sound::effects::processed(&frames, &compressor, &[], 1000, 2);
+	let (left, right) = (output[1800], output[1801]);
+	assert!((right / left - 0.05 / 0.9).abs() < 0.001, "the same gain on both: {left} {right}");
+}
