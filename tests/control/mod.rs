@@ -17,6 +17,7 @@ mod test_braceless_call_in_branch;
 mod test_braceless_output_calls;
 mod test_branch_assigned_variables;
 mod test_broadcast;
+mod test_call_result_reflection; // card name-function
 mod test_catch_binding;
 mod test_cell_truth;
 mod test_channels;
@@ -103,6 +104,7 @@ mod test_is_pattern;
 mod test_iteration_words;
 mod test_job_lists;
 mod test_key_down; // card keyboard-state
+mod test_key_name_case; // key names in any case
 mod test_key_names; // card key-if
 mod test_library_signatures; // card reflect-library-signatures
 mod test_list_without; // people without team (card people-where)
@@ -113,6 +115,7 @@ mod test_loop_if_value;
 mod test_loop_value;
 mod test_loop_value_at_run_time;
 mod test_loops_in_functions;
+mod test_lowercase_key_names; // card if-key
 mod test_many_tasks;
 mod test_map_loop_words; // card key-print
 mod test_match_alternatives;

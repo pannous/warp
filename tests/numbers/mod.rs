@@ -62,6 +62,7 @@ mod test_number_methods; // card number-methods
 mod test_number_of_text; // card number-text
 mod test_number_of_text_equals; // card number-number
 mod test_number_words;
+mod test_pixel_unit; // decision dimensions-units Q1
 mod test_plus_minus;
 mod test_plus_minus_gaussian; // card plus-minus-gaussian
 mod test_plus_minus_math;

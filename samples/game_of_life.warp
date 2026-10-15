@@ -1,7 +1,7 @@
 #!/usr/bin/env warp
-// Conway's Game of Life
-// Cellular automaton simulation on a torus (the edges wrap), animated in the terminal
-// the grid is a flat list of cells, row by row; the grid is global, shared by the functions
+# Conway's Game of Life
+# Cellular automaton simulation on a torus (the edges wrap), animated in the terminal
+# the grid is a flat list of cells, row by row; the grid is global, shared by the functions
 
 width = 16
 height = 16
@@ -11,7 +11,7 @@ for i in 0 to width * height - 1 { grid.push(false) }
 
 def cell(x, y) { return grid#(y * width + x + 1) }
 
-// Initialize with glider
+# Initialize with glider
 def spawn_glider(x, y) {
 	for (dx, dy) in [(1, 0), (2, 1), (0, 2), (1, 2), (2, 2)] {
 		grid#((y + dy) * width + x + dx + 1) = true
@@ -39,7 +39,7 @@ def step() {
 	for y in 0..height {
 		for x in 0..width {
 			n = count_neighbors(x, y)
-			// Rules: B3/S23
+			# Rules: B3/S23
 			next.push(n == 3 or (cell(x, y) and n == 2))
 		}
 	}
@@ -56,8 +56,8 @@ def render() {
 	}
 }
 
-// Main loop: a few generations instead of forever; each one is drawn over the last:
-// "\e[2J" clears the terminal, "\e[H" puts the cursor back at its top left (the playground shows frames alike)
+# Main loop: a few generations instead of forever; each one is drawn over the last:
+# "\e[2J" clears the terminal, "\e[H" puts the cursor back at its top left (the playground shows frames alike)
 print "\e[2J"
 for generation in 0 to generations {
 	print "\e[H" + "generation ${generation}"
@@ -68,7 +68,7 @@ for generation in 0 to generations {
 	}
 }
 
-// the glider moved two cells right and down: sum of y*100+x over live cells
+# the glider moved two cells right and down: sum of y*100+x over live cells
 checksum = 0
 for y in 0..height {
 	for x in 0..width {

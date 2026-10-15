@@ -64,3 +64,9 @@ samples/*.database.sqlite
 # the values samples/store.warp keeps (a run writes them beside it)
 samples/*.stored.json
 /tune.mid
+
+.wrangler
+**/.wrangler
+
+notes/OLD/
+**/.DS_Store

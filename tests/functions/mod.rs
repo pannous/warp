@@ -7,6 +7,7 @@ mod test_any_result; // card def
 mod test_argument_cast;
 mod test_argument_kinds;
 mod test_argument_labels;
+mod test_arity_and_type_overloads; // card use-sound-play
 mod test_arity_overloads;
 mod test_arrow_defaults_and_types;
 mod test_bare_calls; // card assigning-bare
@@ -82,6 +83,7 @@ mod test_generators; // card generators-function
 mod test_getter_warning_text;
 mod test_global_with_closures;
 mod test_go_functions;
+mod test_ignored_parameters;
 mod test_inlining;
 mod test_it_arguments; // card map-it
 mod test_kebab_members;

@@ -1,16 +1,16 @@
 #!/usr/bin/env warp
-// Kitchen sink: every feature of the language in one program that compiles and runs, natively and in the playground
-// (tests/programs/test_samples.rs test_kitchensink, tour example "kitchen sink"). Each part tests its own results:
-// `warp test samples/kitchensink.warp` (and the playground) runs them and says whether all of them pass
+# Kitchen sink: every feature of the language in one program that compiles and runs, natively and in the playground
+# (tests/programs/test_samples.rs test_kitchensink, tour example "kitchen sink"). Each part tests its own results:
+# `warp test samples/kitchensink.warp` (and the playground) runs them and says whether all of them pass
 
-// ---- data notation: JSON5-like, comments, optional quotes, commas and semicolons
+# ---- data notation: JSON5-like, comments, optional quotes, commas and semicolons
 person = {
 	f: /*inline comments*/ "inline comments",
 	"a": "classical json",
 	d: "semicolons optional";
 	b: "quotes optional",
 	c: "commas optional"
-	e: "trailing comments" // trailing comments
+	e: "trailing comments" # trailing comments
 	name: "Alice"
 	age: 30
 	hobbies: ["reading" "hiking" "coding"]
@@ -20,21 +20,21 @@ test person.age == 30
 test person.hobbies#2 == "hiking"
 test person.address.district == "Metro"
 
-// ---- numbers: unbounded integers, exact rationals and roots, decimals that add up
+# ---- numbers: unbounded integers, exact rationals and roots, decimals that add up
 test 2 ^ 100 % 1000 == 376
 test 1 / 3 + 1 / 6 == 1 / 2
 test √2 * √2 == 2
 test ∛27 + ∜16 == 5
 test 0.1 + 0.2 ≈ 0.3
 
-// ---- text: interpolation, graphemes, codepoints
+# ---- text: interpolation, graphemes, codepoints
 n = 7
 test "n is \(n)" == "n is 7"
 test (#"héllo") == 5
 test codepoint('A') == 65
 test "Hello".upper == "HELLO"
 
-// ---- lists, ranges, comprehensions, pipes
+# ---- lists, ranges, comprehensions, pipes
 squares = [x * x for x in 1 to 5]
 test squares == [1 4 9 16 25]
 test sum(1 to 10) == 55
@@ -45,7 +45,7 @@ products = 0
 for (a, b) in [(1, 2), (3, 4)] { products += a * b }
 test products == 14
 
-// ---- functions: definitions, implicit it, lambdas, closures, recursion
+# ---- functions: definitions, implicit it, lambdas, closures, recursion
 square := it * it
 test square(9) == 81
 def fib(n) { if n < 2 { return n }; fib(n - 1) + fib(n - 2) }
@@ -57,7 +57,7 @@ plus_two = adder(2)
 test plus_two(5) == 7
 test adder(2)(5) == 7
 
-// ---- control flow: if, while, for, switch, try
+# ---- control flow: if, while, for, switch, try
 total = 0
 i = 0
 while i < 4 { i += 1; total += i }
@@ -67,7 +67,7 @@ test (try { [1]#5 } else { "caught" }) == "caught"
 test switch 3 {1: "one" 3: "three" default: "many"} == "three"
 test 5 is int
 
-// ---- classes and inheritance
+# ---- classes and inheritance
 # class Animal {}
 class Animal { name: "?"}
 # class Animal { name: "?"; speak := "..." }
@@ -76,14 +76,14 @@ class Dog extends Animal { speak := name + " barks" }
 rex = Dog{name: "Rex"}
 test rex.speak == "Rex barks"
 
-// ---- events: emit and on (P163), handlers get the event
+# ---- events: emit and on (P163), handlers get the event
 alarms = 0
 on alarm { alarms += event.level }
 emit alarm{level: 2}
 emit alarm{level: 3}
 test alarms == 5
 
-// ---- signals: whenever runs each time its condition becomes true (P156), on change, derived values
+# ---- signals: whenever runs each time its condition becomes true (P156), on change, derived values
 temperature = 20
 heat_waves = 0
 whenever temperature > 30 { heat_waves += 1 }
@@ -99,7 +99,7 @@ on change b + c { changes += 1 }
 b = 5
 test changes == 1
 
-// ---- tasks: go, await, shared values, channels (P155)
+# ---- tasks: go, await, shared values, channels (P155)
 job = go { 6 * 7 }
 test (await job) == 42
 shared counter = 0

@@ -426,8 +426,13 @@ impl Arity {
 /// functions `f·1`, `f·2`; every call names the one its argument count fits, so dispatch stays static
 pub fn lower_arity_overloads(node: Node) -> Node {
 	let mut arities: HashMap<String, Vec<Arity>> = HashMap::new();
+	// definitions of one arity (`f(x)`, `f(b: Box)`) are one variant, which dispatches on the type later
 	each_definition(&node, &mut |definition| {
-		arities.entry(definition.head[0].name()).or_default().push(Arity::of(&definition.head[1..]))
+		let variants = arities.entry(definition.head[0].name()).or_default();
+		let arity = Arity::of(&definition.head[1..]);
+		if !variants.contains(&arity) {
+			variants.push(arity);
+		}
 	});
 	arities.retain(|_, variants| {
 		variants.len() > 1
@@ -464,6 +469,12 @@ struct ArityOverloads {
 
 fn arity_variant(name: &str, arity: Arity) -> String {
 	witness_name(name, &arity.total.to_string())
+}
+
+/// `f·2`: the variant of f for two arguments that lower_arity_overloads made, which may still overload by type
+pub(crate) fn is_arity_variant(name: &str) -> bool {
+	name.split_once(crate::traits::WITNESS_SEPARATOR)
+		.is_some_and(|(_, count)| !count.is_empty() && count.chars().all(|ch| ch.is_ascii_digit()))
 }
 
 /// A pass that renames the definitions of overloaded names to their variants and every call to the variant it fits

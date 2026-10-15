@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
-// The page's elements by id (card page-ids): an id of the program's markup is a name, `who` the element and `$who`
-// its value, what was typed into it; `document` and `window` are the page's own. Run it in the playground.
+# The page's elements by id (card page-ids): an id of the program's markup is a name, `who` the element and `$who`
+# its value, what was typed into it; `document` and `window` are the page's own. Run it in the playground.
 greeting = "Type a name"
 div{
 	input{ id: "who" placeholder: "name" aria-label: "name" }

@@ -1,7 +1,7 @@
 #!/usr/bin/env warp
-// Snake Game
-// Classic arcade game, playing itself: the snake steers toward the food (there is no keyboard input yet)
-// positions are (x, y) pairs, read with #1 and #2; the game state is global
+# Snake Game
+# Classic arcade game, playing itself: the snake steers toward the food (there is no keyboard input yet)
+# positions are (x, y) pairs, read with #1 and #2; the game state is global
 
 width = 20
 height = 15
@@ -12,7 +12,7 @@ global score = 0
 global game_over = false
 global foods_eaten = 0
 
-// the next food: a fixed walk over the board, so every game is the same
+# the next food: a fixed walk over the board, so every game is the same
 def spawn_food() {
 	for attempt in 1 to width * height {
 		x = (foods_eaten * 7 + attempt * 3) % width
@@ -28,7 +28,7 @@ def is_free(position) {
 	return x >= 0 and x < width and y >= 0 and y < height and not (position in snake)
 }
 
-// turn toward the food, never into a wall or itself when another way is free
+# turn toward the food, never into a wall or itself when another way is free
 def steer() {
 	head = snake#1
 	wanted = direction
@@ -78,7 +78,7 @@ def render() {
 	print "Score: " + str(score)
 }
 
-// each turn a frame: in the playground what a frame prints replaces the last one after the sleep
+# each turn a frame: in the playground what a frame prints replaces the last one after the sleep
 for turn in 1 to 60 {
 	if not game_over {
 		steer()

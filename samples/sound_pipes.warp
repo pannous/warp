@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
-// Sounds as values: an oscillator's signal piped through nodes to the output.
-// A signal is the list of its amplitudes, so mix adds several the way a bus does.
+# Sounds as values: an oscillator's signal piped through nodes to the output.
+# A signal is the list of its amplitudes, so mix adds several the way a bus does.
 
 use sound
 
@@ -9,11 +9,11 @@ bass = osc(C2, 2s, "square") |> lowpass(300)
 pad = osc([E4, G4, B4], 2s) |> reverb(0.4) |> gain(0.5)
 mix(bass, pad) |> out
 
-// a bus: one reverb that several sounds go through together, ringing on after the last
+# a bus: one reverb that several sounds go through together, ringing on after the last
 hall = bus() |> reverb(0.5)
 osc(C4, 0.5s) |> hall
 play(G4, 0.5s, bus: hall)
 
-// a mastering bus: the lows warmer, the highs softer, the peaks evened out
+# a mastering bus: the lows warmer, the highs softer, the peaks evened out
 master = bus() |> low_shelf(150Hz, 4) |> high_shelf(6kHz, -3) |> compress(-20, 4)
 osc(C3, 1s, "saw") |> master

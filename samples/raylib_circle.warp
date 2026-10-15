@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
-// Raylib FFI Example - Draw a circle in a window
-// Demonstrates using raylib graphics library via FFI
+# Raylib FFI Example - Draw a circle in a window
+# Demonstrates using raylib graphics library via FFI
 
 import raylib
 InitWindow(800, 600, "Warp Raylib - Circle Demo")

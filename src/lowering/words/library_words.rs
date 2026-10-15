@@ -65,8 +65,6 @@ pub const MAP_WORD_FUNCTIONS: [&str; 8] = [
 const TYPE_MODULES: [&str; 2] = ["list", "text"];
 /// The name `catch e` binds, in lower_try_binding's template
 const CAUGHT_BINDING_PLACEHOLDER: &str = "caught_binding";
-/// The got-it topic of `square 3 + square(4)` (ask_braceless_argument)
-const BRACELESS_ARGUMENT_TOPIC: &str = "braceless-call-operator";
 const COUNT_HAYSTACK: &str = "counted_haystack";
 const COUNT_NEEDLE: &str = "counted_needle";
 const COUNT_ITEM_TEMPLATE: &str = "count(filter(counted_haystack, counted_item => counted_item == counted_needle))";
@@ -753,9 +751,6 @@ impl Lowering {
 		if let Some(raised) = raise_call(items, &self.shadowed.borrow()) {
 			return Some(raised);
 		}
-		if let Err(error) = self.ask_braceless_argument(items, bracket, separator) {
-			return Some(error);
-		}
 		let head = match items.first()?.drop_meta() {
 			Node::Symbol(name) => name,
 			_ => return None,
@@ -858,41 +853,6 @@ impl Lowering {
 		};
 		let keys = self.call(MAP_KEYS, keyword, vec![map], false);
 		Some(Node::List(vec![keyword.clone(), key, in_word.clone(), keys, body], Bracket::None, Separator::Space))
-	}
-
-	/// `square 3 + square(4)`, a braceless call of a user function whose argument holds an operator, reads as
-	/// square(3 + square(4)); P68 (user): the reading stays, with a got-it warning naming both readings
-	fn ask_braceless_argument(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Result<(), Node> {
-		let [function, argument] = items else { return Ok(()) };
-		let Node::Symbol(name) = function.drop_meta() else {
-			return Ok(());
-		};
-		let Node::Key(left, op, right) = argument.drop_meta() else {
-			return Ok(());
-		};
-		if *bracket != Bracket::None
-			|| *separator != Separator::Space
-			|| !self.context.user_functions.contains_key(name)
-			|| !op.is_arithmetic()
-			|| matches!(left.drop_meta(), Node::Empty)
-		{
-			return Ok(());
-		}
-		let (left, right) = (call_text(left), call_text(right));
-		let whole = format!("{name}({left} {op} {right})");
-		let first = format!("{name}({left}) {op} {right}");
-		let question = crate::errors::diagnostic::Ask::new(
-			BRACELESS_ARGUMENT_TOPIC,
-			format!("`{name} {left} {op} {right}` is {whole}, not {first}"),
-			vec![
-				crate::errors::diagnostic::reading("the whole expression", &whole),
-				crate::errors::diagnostic::reading("only the first operand", &first),
-			],
-			crate::errors::diagnostic::Fallback::Warning,
-		)
-		.written(&format!("{name} {left} {op} {right}"))
-		.at_node(argument);
-		crate::errors::diagnostic::ask(&question).map(|_| ())
 	}
 
 	/// `x in xs`: yes/no whether a map has the key x or a list the element x (decision in-bool; its position is
@@ -1232,22 +1192,6 @@ pub(crate) fn with_first_comparand(node: Node, replace: &dyn Fn(Node) -> Node) -
 /// A zero written with a decimal point, `0.0`
 fn is_float_zero(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Number(crate::extensions::numbers::Number::Float(value)) if *value == 0.0)
-}
-
-/// An operand as written in a warning: a call `f 4` / `f(4)` as f(4), anything else as normalize writes it
-fn call_text(node: &Node) -> String {
-	match node.drop_meta() {
-		Node::List(items, Bracket::None | Bracket::Round, _)
-			if items.len() > 1 && matches!(items[0].drop_meta(), Node::Symbol(_)) =>
-		{
-			format!(
-				"{}({})",
-				items[0].drop_meta().name(),
-				items[1..].iter().map(call_text).collect::<Vec<_>>().join(", ")
-			)
-		}
-		_ => crate::normalize::operand_text(node),
-	}
 }
 
 /// The name and the untyped parameters of `def f(a, b) {…}` (any function keyword): the head `f (a, b)` holds them

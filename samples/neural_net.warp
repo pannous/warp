@@ -1,12 +1,12 @@
 #!/usr/bin/env warp
-// Simple Neural Network
-// XOR problem solver
+# Simple Neural Network
+# XOR problem solver
 use matrix
 
 def sigmoid(x) := 1.0 / (1.0 + exp(-x))
 def sigmoid_derivative(x) := x * (1.0 - x)
 
-// 2 inputs, 4 hidden, 1 output
+# 2 inputs, 4 hidden, 1 output
 def weight() { random() * 2 - 1 }
 hidden_weights = matrix(2, 4, weight)
 output_weights = matrix(4, 1, weight)
@@ -52,7 +52,7 @@ def train(input, target, learning_rate) {
 	}
 }
 
-// XOR training data
+# XOR training data
 examples = [
 	([0, 0], 0)
 	([0, 1], 1)
@@ -60,13 +60,13 @@ examples = [
 	([1, 1], 0)
 ]
 
-// Train
+# Train
 for epoch in 0..10000 {
 	for (input, target) in examples :
 		train(input, target, 0.5)
 }
 
-// Test
+# Test
 print "XOR Neural Network Results:"
 for (input, expected) in examples {
 	(_, output) = forward(input)

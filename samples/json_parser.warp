@@ -1,7 +1,7 @@
 #!/usr/bin/env warp
-// JSON Parser
-// Recursive descent parser for JSON
-// the parser state is global: functions change it (closures would capture copies)
+# JSON Parser
+# Recursive descent parser for JSON
+# the parser state is global: functions change it (closures would capture copies)
 
 global input = ""
 global pos = 0
@@ -27,7 +27,7 @@ def parse_value() {
 }
 
 def parse_string() {
-	advance()  // skip opening quote
+	advance()  # skip opening quote
 	result = ""
 	while peek() != "\"" {
 		c = advance()
@@ -40,7 +40,7 @@ def parse_string() {
 		}
 		result = result + c
 	}
-	advance()  // skip closing quote
+	advance()  # skip closing quote
 	return result
 }
 
@@ -52,24 +52,24 @@ def parse_number() {
 }
 
 def parse_object() {
-	advance()  // skip {
+	advance()  # skip {
 	obj = {}
 	skip_whitespace()
 	while peek() != "}" {
 		skip_whitespace()
 		key = parse_string()
 		skip_whitespace()
-		advance()  // skip :
+		advance()  # skip :
 		obj[key] = parse_value()
 		skip_whitespace()
 		if peek() == "," { advance() }
 	}
-	advance()  // skip }
+	advance()  # skip }
 	return obj
 }
 
 def parse_array() {
-	advance()  // skip [
+	advance()  # skip [
 	arr = []
 	skip_whitespace()
 	while peek() != "]" {
@@ -77,7 +77,7 @@ def parse_array() {
 		skip_whitespace()
 		if peek() == "," { advance() }
 	}
-	advance()  // skip ]
+	advance()  # skip ]
 	return arr
 }
 
@@ -87,9 +87,9 @@ def parse_json(text) {
 	return parse_value()
 }
 
-// Test
+# Test
 json = "{\"name\": \"Alice\", \"age\": 30, \"scores\": [95, 87, 92], \"active\": true}"
 parsed = parse_json(json)
-print parsed.name           // Alice
-print str(parsed.scores)    // [95 87 92]
-(parsed.age as float) + (parsed.scores#1 as float) // values of unknown kind: arithmetic assumes Ints unless converted
+print parsed.name           # Alice
+print str(parsed.scores)    # [95 87 92]
+(parsed.age as float) + (parsed.scores#1 as float) # values of unknown kind: arithmetic assumes Ints unless converted

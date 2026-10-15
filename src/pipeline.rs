@@ -42,7 +42,10 @@ fn eval_source(code: &str) -> Node {
 
 /// Parse the source and check its laws; `Err` is the violation.
 fn lawful_program(code: &str) -> Result<Node, Node> {
-	let lawful = crate::law::separate_laws(crate::errors::diagnostic::in_source_mode(code, || WarpParser::parse(code)));
+	let unit_lines = crate::numbers::units::program_unit_lines(code);
+	crate::compiler::compile_context::change(|context| context.program_unit_lines = unit_lines);
+	let parsed = crate::errors::diagnostic::in_source_mode(code, || WarpParser::parse(code));
+	let lawful = crate::law::separate_laws(crate::numbers::units::without_unit_lines(parsed)?);
 	match crate::law::assert_laws(&lawful, code) {
 		Some(violation) => Err(violation),
 		None => Ok(lawful.program),
@@ -101,6 +104,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::broadcasting::lower_element_wise_operators,
 	// a shader's `$name` holes (shader_holes.rs) as `name: name` in the values map of each paint of it
 	crate::graphics::shader_holes::lower,
+	// `Person as text := it.name` and `p as text` (conversions.rs) before any pass reads `as` as a cast
+	crate::lowering::conversions::lower,
 	crate::lowering::inline_unions::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::lowering::scoped_handlers::lower,
@@ -232,6 +237,8 @@ const DECLARATION_PASSES: &[Pass] = &[
 	crate::lowering::one_entry_maps::lower,
 	// the used modules join the program before the signal passes: a listener of the program sees the writes of their functions
 	// note names (`play F#4`) while the program is its own, before the sound module joins it
+	// `save sound as "song.wav"`, `save canvas as "painting.png"`: what the word names, before music_words reads the sound
+	crate::lowering::saved_words::lower,
 	crate::lowering::music_words::lower,
 	crate::lowering::routes::lower,
 	crate::lowering::page_html::use_markup,

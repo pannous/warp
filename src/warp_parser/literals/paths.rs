@@ -82,7 +82,7 @@ impl WarpParser {
 			self.path_end.is_some_and(|end| self.chars[end..self.pos].iter().all(|c| matches!(c, ' ' | '\t')));
 		after_path
 			|| (!self.variables.contains(word)
-				&& !self.parameter_names.contains(word)
+				&& !self.parameters_in_scope.iter().any(|parameter| parameter == word)
 				&& (self.functions.contains(word)
 					|| self.program_functions.contains(word)
 					|| crate::lowering::negated_calls::is_builtin_callable(word)

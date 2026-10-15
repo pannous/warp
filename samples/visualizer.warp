@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
-// a Winamp-style visualizer (card winamp-like): a tune plays while bars show how loud each frequency band sounds at
-// that moment, painted frame after frame with falling peaks (natively a window, in the playground the canvas)
+# a Winamp-style visualizer (card winamp-like): a tune plays while bars show how loud each frequency band sounds at
+# that moment, painted frame after frame with falling peaks (natively a window, in the playground the canvas)
 use sound
 use draw
 width = 320
@@ -8,9 +8,9 @@ height = 160
 bands = 16
 bar_width = width / bands
 gap = 2
-// a note's band shows about 0.15 (loudness 0.3, chords share it): this many times taller fills the window
+# a note's band shows about 0.15 (loudness 0.3, chords share it): this many times taller fills the window
 gain = 5
-// how much of last frame's bar and peak height stays when the sound gets quieter
+# how much of last frame's bar and peak height stays when the sound gets quieter
 bar_fall = 0.75
 peak_fall = 2
 frame_milliseconds = 40

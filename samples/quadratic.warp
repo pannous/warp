@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-// Quadratic formula - solve x^2 - 5x + 6 = 0
+# Quadratic formula - solve x^2 - 5x + 6 = 0
 a = 1
 b = -5
 c = 6

@@ -248,6 +248,23 @@ pub fn begin_program() {
 	load_acknowledgements();
 }
 
+/// Run `body` hearing every hint it gives, also those "got it" was said to, printing and asking nothing: `warp
+/// beautify` applies their fixes (src/formatting/synonyms.rs)
+pub fn every_hint_of<T>(body: impl FnOnce() -> T) -> (T, Vec<Diagnostic>) {
+	let shown_from = SHOWN_FROM.swap(u8::MAX, std::sync::atomic::Ordering::Relaxed);
+	let heard = crate::util::scoped(&ACKNOWLEDGER, None, || {
+		crate::util::scoped(&ACKNOWLEDGEMENTS_FILE, None, || {
+			compile_context::scoped(
+				|context| &mut context.hint_mode,
+				crate::normalize::HintMode::Always,
+				|| capture_hints(body),
+			)
+		})
+	});
+	SHOWN_FROM.store(shown_from, std::sync::atomic::Ordering::Relaxed);
+	heard
+}
+
 /// Acknowledged for the whole topic, or for this written expression
 pub(crate) fn is_acknowledged(topic: &str, written: &str) -> bool {
 	let acknowledger = ACKNOWLEDGER.with(|current| current.borrow().clone());
@@ -302,6 +319,9 @@ pub fn advise_once(topic: &str, written: &str, preferred: &str, reason: &str, fi
 	}
 }
 
+/// The topic of note_alias's notes: `alias-<word>`
+pub const ALIAS_TOPIC_PREFIX: &str = "alias-";
+
 /// Another language's word for a warp word (`__add__` for `plus`, user 2026-10-06): it works, with a got-it note
 /// naming the warp word and its "I meant: <warp word>" fix; a word warp needs not at all (`data class`, `val x`) is
 /// written with the word it stands before
@@ -310,7 +330,7 @@ pub fn note_alias(written: &str, warp_word: &str) {
 		Some(dropped) if !dropped.is_empty() => (dropped, format!("{dropped} is superfluous: write {warp_word}")),
 		_ => (written, format!("warp says {warp_word}")),
 	};
-	educate_once(&format!("alias-{foreign_word}"), written, warp_word, &reason);
+	educate_once(&format!("{ALIAS_TOPIC_PREFIX}{foreign_word}"), written, warp_word, &reason);
 }
 
 /// The reading the program gets: an error-fallback ambiguity is an error naming every explicit form; otherwise the

@@ -87,6 +87,12 @@ impl WarpParser {
 		};
 		let start = self.get_position();
 		let outer_start = std::mem::replace(&mut self.group_start, start);
+		// `def area(w, h) { w /h }`: the head's parameters are in scope inside its block (card path-parameter-scope)
+		let outer_scope = self.parameters_in_scope.len();
+		if bracket_type == Bracket::Curly {
+			let parameters = self.parameters_before_block(self.pos);
+			self.parameters_in_scope.extend(parameters);
+		}
 		self.advance(); // skip opening bracket
 		let compares = self.equals_compares && bracket_type != Bracket::Curly; // a block is not the condition
 																		 // `for i in (0 until n)` and `(0..n-1)` are still the header; a block or a list inside it is not
@@ -96,6 +102,7 @@ impl WarpParser {
 		let outer_spaced_list = std::mem::replace(&mut self.in_spaced_list, spaced_list);
 		let list =
 			self.with_equals_comparing(compares, |parser| parser.parse_list_with_separators(Some(close), bracket_type));
+		self.parameters_in_scope.truncate(outer_scope);
 		self.in_spaced_list = outer_spaced_list;
 		self.in_for_header = outer_header;
 		self.group_start = outer_start;
@@ -106,8 +113,13 @@ impl WarpParser {
 		let tag_block = std::mem::take(&mut self.tag_block);
 		// Collect all items with their following separators
 		let mut items_with_seps: Vec<(Node, Separator)> = Vec::new();
+		let scope_at_entry = self.parameters_in_scope.len();
 
 		loop {
+			// a definition's parameters are in scope until its statement ends (card path-parameter-scope)
+			if items_with_seps.last().is_none_or(|(_, separator)| *separator != Separator::Space) {
+				self.parameters_in_scope.truncate(scope_at_entry);
+			}
 			// Skip whitespace but track indent for dedent detection
 			let (had_newline, line_indent) = self.skip_whitespace();
 
@@ -180,6 +192,9 @@ impl WarpParser {
 			let defines = items_with_seps
 				.get(statement_start)
 				.is_some_and(|(first, _)| matches!(first.drop_meta(), Symbol(word) if is_function_keyword(word)));
+			if defines {
+				self.bind_parameters(&item, false);
+			}
 			let item = if defines { self.with_definition_block(item) } else { item };
 			let (line, column) = item_position;
 			let item = match is_argument
@@ -245,6 +260,7 @@ impl WarpParser {
 			}
 		}
 
+		self.parameters_in_scope.truncate(scope_at_entry);
 		self.pending_comment = None; // a comment closing a list documents nothing after it
 		let list = self.group_by_separators(items_with_seps, bracket);
 		match list.duplicate_key().filter(|_| !tag_block) {

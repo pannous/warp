@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
-// Simple ray tracer
-// Renders spheres with lighting
+# Simple ray tracer
+# Renders spheres with lighting
 
 type Vec3 { x: float, y: float, z: float }
 
@@ -25,7 +25,7 @@ def intersect(ray, sphere) {
 	return (-b - sqrt(disc)) / (2.0 * a)
 }
 
-// Scene setup
+# Scene setup
 global spheres = [
 	Sphere { center: vec(0, 0, 5), radius: 1.0, color: vec(1, 0, 0) }
 	Sphere { center: vec(2, 0, 6), radius: 1.0, color: vec(0, 1, 0) }
@@ -35,7 +35,7 @@ global spheres = [
 global light = normalize(vec(1, 1, -1))
 
 def trace(ray) {
-	closest = 1e10 as float // 1e10 alone is an exact number, which cannot later hold a float
+	closest = 1e10 as float # 1e10 alone is an exact number, which cannot later hold a float
 	hit_sphere = None
 	for sphere in spheres {
 		t = intersect(ray, sphere)
@@ -44,7 +44,7 @@ def trace(ray) {
 			hit_sphere = sphere
 		}
 	}
-	if hit_sphere == None { return vec(0.2, 0.3, 0.5) }  // sky
+	if hit_sphere == None { return vec(0.2, 0.3, 0.5) }  # sky
 
 	hit_point = add(ray.origin, mul(ray.direction, closest))
 	normal = normalize(sub(hit_point, hit_sphere.center))
@@ -52,10 +52,10 @@ def trace(ray) {
 	return mul(hit_sphere.color, 0.2 + 0.8 * intensity)
 }
 
-// Render
+# Render
 width = 80
 height = 40
-shades = 0 // the sum of all shade levels: a checksum of the picture
+shades = 0 # the sum of all shade levels: a checksum of the picture
 for y in 0..height {
 	line = ""
 	for x in 0..width {

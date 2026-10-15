@@ -1,7 +1,7 @@
 #!/usr/bin/env warp
-// The Y combinator: recursion without a function calling itself by name.
-// Paul Graham named his startup accelerator Y Combinator after it, for reasons only he would understand.
-// Z is the Y combinator for languages that evaluate arguments first: the inner v => … waits until called.
+# The Y combinator: recursion without a function calling itself by name.
+# Paul Graham named his startup accelerator Y Combinator after it, for reasons only he would understand.
+# Z is the Y combinator for languages that evaluate arguments first: the inner v => … waits until called.
 def half(f) = x => f(v => x(x)(v))
 def Z(f) = half(f)(half(f))
 

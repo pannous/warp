@@ -1,22 +1,22 @@
 #!/usr/bin/env warp
-// Functions in warp
-// Multiple styles for different use cases
+# Functions in warp
+# Multiple styles for different use cases
 
-// Pure function with := (single expression)
+# Pure function with := (single expression)
 def square := it * it
 def twice := it * 2
 def add := a + b
 
-// Named parameters
+# Named parameters
 def greet(name) := "Hello, " + name + "!"
 
-// Multi-line function with block
+# Multi-line function with block
 def factorial(n) {
 	if n <= 1 { return 1 }
 	return n * factorial(n - 1)
 }
 
-// Higher-order functions (no map needed: a function of one item applies to a whole list, see below)
+# Higher-order functions (no map needed: a function of one item applies to a whole list, see below)
 def filter(list, predicate) {
 	var result = []
 	for item in list {
@@ -35,24 +35,24 @@ def reduce(list, fn, initial) {
 	return acc
 }
 
-// Composition and piping
+# Composition and piping
 numbers = [1, 2, 3, 4, 5]
 
-// Method chaining style: square applies to all numbers (broadcasting, no map needed)
+# Method chaining style: square applies to all numbers (broadcasting, no map needed)
 result = (square all numbers)
 	.filter(x => x > 5)
 	.reduce((a, b) => a + b, 0)
 
-// Pipeline operator style
+# Pipeline operator style
 result = (square numbers)
 	|> filter(x => x > 5)
 	|> sum
 
-// Partial application
+# Partial application
 def add(a, b) := a + b
-increment = add(1, _)  // partial: increment(x) = add(1, x)
+increment = add(1, _)  # partial: increment(x) = add(1, x)
 
-// Closures
+# Closures
 def counter(start) {
 	count = start
 	return () => {

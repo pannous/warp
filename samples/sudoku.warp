@@ -1,12 +1,12 @@
 #!/usr/bin/env warp
-// Sudoku Solver
-// Backtracking algorithm
-// the grid is a flat list of 81 cells, row by row; lists are shared, so each try fills a copy and solve returns the
-// solved grid (or [] if none)
+# Sudoku Solver
+# Backtracking algorithm
+# the grid is a flat list of 81 cells, row by row; lists are shared, so each try fills a copy and solve returns the
+# solved grid (or [] if none)
 
 def parse_grid(s) {
 	cells = []
-	// a char as int is its code point ('5' as int is 53), its text as int is the digit
+	# a char as int is its code point ('5' as int is 53), its text as int is the digit
 	for c in s.replace(".", "0") { cells.push(c as text as int) }
 	return cells
 }
@@ -57,7 +57,7 @@ def print_grid(grid) {
 	}
 }
 
-// Example puzzle (. = empty)
+# Example puzzle (. = empty)
 puzzle = "53..7....6..195....98....6.8...6...34..8.3..17...2...6.6....28....419..5....8..79"
 
 grid = parse_grid(puzzle)

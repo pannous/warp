@@ -12,7 +12,7 @@ fn named(code: i64) -> String {
 #[test]
 fn held_key_names_the_key_held_now() {
 	let lowered = warp::pipeline::lower(r#"held_key == "a""#).expect("lowers").serialize();
-	assert!(lowered.contains("system_value"), "{lowered}");
+	assert!(lowered.contains("key_held"), "{lowered}");
 	is!(r#"held_key == """#, true);
 	assert_eq!(named(0), r#""""#);
 	assert_eq!(named('a' as i64), r#""a""#);
@@ -35,4 +35,21 @@ fn held_key_compares_with_the_key_words() {
 		.filter(|warning| warning.message.contains("LEFTT names nothing"))
 		.count();
 	assert_eq!(warned, 1);
+}
+
+// card allow-diagonals: two keys held at once are both held, so a drawing loop steers diagonally with
+// `if held_key == LEFT {…}` and `if held_key == UP {…}`: each comparison asks key_held whether its key is among those
+// held. Checked on given keys: holding them here would make other tests' "none held" fail
+#[cfg(feature = "native")]
+#[test]
+fn held_key_compares_with_every_key_held() {
+	let lowered = warp::pipeline::lower("held_key == LEFT and UP == held_key").expect("lowers").serialize();
+	assert_eq!(lowered.matches("key_held").count(), 2, "{lowered}");
+	let (left, up, right) = (0xF702, 0xF700, 0xF703);
+	use warp_runtime::system_values::held_among;
+	assert!(
+		held_among(left, up, &[left, up]) && held_among(up, up, &[left, up]) && !held_among(right, up, &[left, up])
+	);
+	assert!(!held_among(0, up, &[left, up]) && held_among(0, 0, &[]));
+	is!(r#"arrow = "ArrowUp"; held_key != arrow"#, true);
 }

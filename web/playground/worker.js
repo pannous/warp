@@ -55,6 +55,7 @@ const hooks = {
 	// host-media.js paintFrame: its words move to the page, not copied
 	paint: (frame, width, height, canvas, shaded) => post({ type: "paint", frame, width, height, canvas, shaded }, frame && [frame.words.buffer]),
 	gpuCanvas: canvas => post({ type: "gpu canvas", ...canvas }), // host-gpu.js gpuPainted
+	savePicture: (path, words, width, height) => post({ type: "picture", path, words, width, height }, [words.buffer]), // host-media.js save_picture
 	sound: sound => self.playSamples(sound),
 	sleeping: milliseconds => post({ type: "sleep", milliseconds }),
 	tasksInline: reason => post({ type: "tasks inline", reason }),

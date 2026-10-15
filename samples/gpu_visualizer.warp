@@ -1,22 +1,22 @@
 #!/usr/bin/env warp
-// a WebGPU music visualizer: a tune plays while a WGSL fragment shader raymarches a tunnel of 16 glowing frequency
-// bars around a pulsing gem, every pixel on the GPU, frame after frame (natively a window, in the playground the
-// canvas). The shader reads warp's variables through `$name`: $levels (16 bands, the spectrum at this moment),
-// $bass, $treble, $kick (a beat: a band got louder), $tone (the loudest band's hue), $time; $size is built in
+# a WebGPU music visualizer: a tune plays while a WGSL fragment shader raymarches a tunnel of 16 glowing frequency
+# bars around a pulsing gem, every pixel on the GPU, frame after frame (natively a window, in the playground the
+# canvas). The shader reads warp's variables through `$name`: $levels (16 bands, the spectrum at this moment),
+# $bass, $treble, $kick (a beat: a band got louder), $tone (the loudest band's hue), $time; $size is built in
 use sound
 width = 1920
 height = 1080
 bands = 16
-// each band is measured against its own recent peak, which fades this much per frame: quiet bands still reach the top
+# each band is measured against its own recent peak, which fades this much per frame: quiet bands still reach the top
 peak_fade = 0.995
-// below this a band is silence, not a quiet sound turned up
+# below this a band is silence, not a quiet sound turned up
 quietest = 0.02
-// how much of last frame's level stays when the sound gets quieter
+# how much of last frame's level stays when the sound gets quieter
 fall = 0.8
-// how much of the kick stays per frame, and how much rise across all bands is a full kick
+# how much of the kick stays per frame, and how much rise across all bands is a full kick
 kick_fade = 0.85
 full_kick = 3.0
-// the shortest frame: a frame that took less waits for the rest
+# the shortest frame: a frame that took less waits for the rest
 frame_milliseconds = 16
 
 tune = [C4 E4 G4 [C4 E4 G4] A4 G4 E4 [C3 G3 C4] D4 F4 A4 [D4 F4 A4] G4 B4 D5 [G3 B3 D4 G4] C5 G4 E4 [C3 E4 G4 C5]]

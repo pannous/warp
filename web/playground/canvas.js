@@ -4,7 +4,9 @@
 const PAINT_SHOWN_SIDE = 288; // a small painting is shown this wide (or high), scaled by a whole factor so pixels stay square
 // mouse_x, mouse_y, mouse_down (host.js system_value): the pointer over a canvas in shared memory, which a running
 // animation reads at once (its worker takes no message while it runs); the worker gets the buffer and these names
-const POINTER_NAMES = ["mouse_x", "mouse_y", "mouse_down", "key"];
+// then "held 0" … the codes of the keys held, in the order they went down (host.js key_held, card allow-diagonals)
+const KEYS_HELD_KEPT = 8;
+const POINTER_NAMES = ["mouse_x", "mouse_y", "mouse_down", "key", ...Array.from({ length: KEYS_HELD_KEPT }, (_, at) => `held ${at}`)];
 // a shader's $key (host-gpu.js builtinValues): the held key's code point, the arrows as a Mac's function keys
 // the held key's code for key_down and held_key, as the native window gives it (src/graphics/paint_window.rs key_code)
 const KEY_CODES = { ArrowUp: 0xF700, ArrowDown: 0xF701, ArrowLeft: 0xF702, ArrowRight: 0xF703, Enter: 13, Escape: 27, Backspace: 8, Tab: 9 };
@@ -111,12 +113,24 @@ function trackPointer(event) {
 // the button or first finger lifted, or the touch taken over by the browser (pointercancel)
 const releasePointer = event => pointer && !laterFinger(event) && Atomics.store(pointer, POINTER_NAMES.indexOf("mouse_down"), 0);
 
-// a key held outside the editor and the fields, its code while down
+// the keys held outside the editor and the fields, each code while down; "key" the last to go down
+const keysHeld = [];
 function trackKey(event) {
 	const code = KEY_CODES[event.key] ?? ([...event.key].length === 1 ? event.key.codePointAt(0) : undefined);
 	if (!pointer || code === undefined || event.target.closest?.(TYPING_TARGETS)) return;
-	Atomics.store(pointer, POINTER_NAMES.indexOf("key"), event.type === "keydown" ? code : 0);
+	if (keysHeld.includes(code)) keysHeld.splice(keysHeld.indexOf(code), 1);
+	if (event.type === "keydown") keysHeld.push(code);
+	keysHeld.splice(0, keysHeld.length - KEYS_HELD_KEPT);
+	tellKeysHeld();
 }
+
+function tellKeysHeld() {
+	Atomics.store(pointer, POINTER_NAMES.indexOf("key"), keysHeld.at(-1) ?? 0);
+	for (let at = 0; at < KEYS_HELD_KEPT; at++) Atomics.store(pointer, POINTER_NAMES.indexOf(`held ${at}`), keysHeld[at] ?? 0);
+}
+
+// a key let go outside the page never tells its release here
+const releaseKeys = () => pointer && keysHeld.length && (keysHeld.length = 0, tellKeysHeld());
 
 // where the event is on the element, in a canvas's own pixels
 function pointOn(target, event) {
@@ -130,4 +144,5 @@ function followPointer(element) {
 	for (const event of ["pointermove", "pointerdown", "pointerup"]) element.addEventListener(event, trackPointer);
 	for (const event of ["pointerup", "pointercancel"]) document.addEventListener(event, releasePointer);
 	for (const event of ["keydown", "keyup"]) document.addEventListener(event, trackKey);
+	globalThis.addEventListener("blur", releaseKeys);
 }

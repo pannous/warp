@@ -27,3 +27,48 @@ fn dimension_names_come_from_the_definitions() {
 	is!("type(5 Hz)", "frequency");
 	is!("type(2 AD)", "era");
 }
+
+// decision unit-definitions: lib/units.warp's lines, `dimension length meter` an anchor and `unit m := 1 meter` its
+// symbol, derived units of their expression, SI prefixes by themselves
+#[test]
+fn units_come_from_unit_lines() {
+	is!("str(3 meter)", "3m");
+	is!("1 µs == 1000 ns", true);
+	is!("1 Mg == 1000 kg", true);
+	is!("2 L == 2000 cm³", true);
+	is!("1 N == 1 kg*m/s²", true);
+}
+
+// a program adds a unit by a unit line, an amount of a known unit; a plain `:=` stays a constant (decision
+// unit-definitions)
+#[test]
+fn a_program_adds_units_by_unit_lines() {
+	is!("unit furlong := 201.168 m\nx = 1 km\nstr(x as furlong)", "(62500/12573)furlong");
+	is!("unit furlong := 201.168 m\n3 furlong == 603.504 m", true);
+	is!("unit fortnight := 14 * 24 h\nstr(336 h as fortnight)", "1fortnight");
+	is!("unit furlong := 201.168 m\nquantity(1, \"furlong\").in(\"m\")", 201.168);
+	is!("distance := 42 km\nstr(distance)", "42km");
+	is!("unit furlong := 201.168m; str(1km as furlong)", "(62500/12573)furlong");
+	is!("unit hand := 4inch; x = 2 hand\nstr(x as cm)", "20.32cm");
+	// a unit line inside a text or a comment defines nothing (reviewer)
+	let program_unit_lines = warp::numbers::units::program_unit_lines;
+	assert_eq!(program_unit_lines("note = \"\nunit zz := 7m\n\"\n// unit yy := 7m\n2"), "");
+	assert_eq!(program_unit_lines("unit zz := 7m\n2zz"), "unit zz := 7m");
+}
+
+// decision unit-target: `as` names the unit the right side counts in, `it` the amount in the new unit
+#[test]
+fn a_unit_line_names_its_target_by_as() {
+	is!("212°F == 100°C", true);
+	is!("unit rankine as kelvin := it * 5/9\n9 rankine == 5 K", true);
+	is!("unit hand as inch := 4 * it\nstr(1 hand as cm)", "10.16cm");
+}
+
+// a program's class, function or method named like a unit word is the program's (integrator: N, second, meter)
+#[test]
+fn a_program_name_wins_over_a_unit_word() {
+	is!("class N{name: text}\na = N(\"a\")\na.name", "a");
+	is!("class Club{ name: text; second() := 2 }\nClub(\"x\").second()", 2);
+	is!("meter(x) := x + 1\nmeter(2)", 3);
+	is!("str(2 meter)", "2m");
+}

@@ -2,7 +2,13 @@
 
 `warp format [check] [hash-comments] <file|folder>…` writes the one canonical layout of warp code
 (src/formatting/, src/cli/formatting.rs; decision warp-format, card warp-format). `warp lint` is the same command.
-Options are words, never `--flags` (user, 2026-10-15; the older flags move with card cli-words).
+Options are words, never `--flags` (user, 2026-10-15; the older flags move with card cli-words); `help`, `--help`
+and `-h` anywhere print the usage. `warp beautify [check|yes] <file|folder>…` is the opinionated verb (card
+warp-format-strict): the layout plus the best-practice rewrites (hash-comments, synonyms canonical), shown as a diff
+first (decision beautify-preview): in a terminal "apply? y/n", scripted nothing is applied, `yes` applies without
+asking, `check` only lists.
+Code given instead of files (`warp lint 'use script; ls'`, card lint-use: no argument exists or looks like a path)
+prints its hints as `code:<line>: hint: …` and then its formatted text; `check` lists the layout changes.
 
 ## Layout (user, 2026-10-15)
 
@@ -18,7 +24,10 @@ Options are words, never `--flags` (user, 2026-10-15; the older flags move with 
 - no trailing whitespace, at most one blank line in a row, one final newline; the spaces before a trailing comment and
   comment text stay
 - `hash-comments`: `// text` → `# text`, `/// doc` → `## doc` (user: `//` also means floor division); belongs to
-  the coming opinionated verb (card warp-format-strict: `warp beautify`, synonyms canonical, idiomatic)
+  `warp beautify`
+- synonyms canonical (beautify only, src/formatting/synonyms.rs): the compiler's alias notes (note_alias, topic
+  `alias-…`: `auto` → var, `__add__` → plus) heard by diagnostic::every_hint_of (got-its ignored, nothing printed),
+  their "I meant" fixes applied last-first, each kept only when `lower` of the program stays the same
 - folders named `golf/` are skipped (code.golf counts bytes); a file named explicitly is formatted
 
 ## Never changing the meaning
@@ -36,7 +45,16 @@ with the original (109 files, 0 differences on 2026-10-15), then checks a second
 
 - abbreviations (user: every word, built-ins too): `cnt` → count, `str` → text, … (ABBREVIATIONS in soft_hints.rs),
   each word once per file at its first line, also inside names (`max_cnt`, `maxCnt`)
-- `//` comments: one hint per file with the count, pointing to `hash-comments`
+- `//` comments: one hint per file with the count, naming the command that rewrites them: `warp beautify <file>`;
+  a run that rewrites them (beautify, hash-comments) shows no such hint
+- a file whose layout was fixed while hints stay reads `<file>: layout of n lines fixed, m hints left`, never
+  "formatted" (card beautify-cli: the user read "formatted" as done while the `//` hint repeated)
+
+## Unknown commands
+
+`warp <word> <existing path>` with a word that is neither a command (COMMAND_WORDS in src/main.rs) nor a calling word
+of the language (`sort ./names.txt` stays code) fails with `warp: unknown command <word>, did you mean <closest>?`
+instead of evaluating `beautify / Users / …` ("type error: int / text").
 
 ## Gate
 

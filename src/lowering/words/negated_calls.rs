@@ -47,6 +47,17 @@ fn negate_calls(
 		Node::Symbol(name) => is_builtin_callable(name) && !bound.contains(name),
 		_ => false,
 	};
+	// a function whose call has a value: the program's returning one, a built-in other than print
+	let gives_value = |word: &Node| {
+		let name = word.name();
+		is_function(word, Op::Sub)
+			&& functions.get(&name).map_or(!PRINT_WORDS.contains(&name.as_str()), |function| {
+				function.return_kind != crate::type_kinds::Kind::Empty
+			})
+	};
+	if let Err(error) = super::braceless_arguments::ask_braceless_argument(&node, gives_value) {
+		return error;
+	}
 	match node {
 		Node::Key(function, op @ (Op::Sub | Op::Hash), argument)
 			if is_function(&function, op) && !(op == Op::Sub && is_spaced_minus(&function)) =>

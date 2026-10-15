@@ -1,8 +1,8 @@
 #!/usr/bin/env warp
-// Binary Search Tree
-// Classic data structure with insert, search, traverse
+# Binary Search Tree
+# Classic data structure with insert, search, traverse
 
-// trees are values: insert returns the tree with the value added; an empty tree is ø
+# trees are values: insert returns the tree with the value added; an empty tree is ø
 type Tree {
 	value: int
 	left?
@@ -51,7 +51,7 @@ def print_tree(tree, prefix, is_left) {
 	print_tree(tree.right, new_prefix, false)
 }
 
-// Build tree
+# Build tree
 values = [50, 30, 70, 20, 40, 60, 80, 15, 25]
 tree = ø
 for v in values {

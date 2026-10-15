@@ -1,7 +1,7 @@
 #!/usr/bin/env warp
-// Rust crates from crates.io: `use cargo <crate>` builds the crate once as a WebAssembly component
-// (~/.cache/warp/crates) and calls its public functions; a struct it constructs is a handle with its methods.
-// Native only: the first run needs cargo and `rustup target add wasm32-wasip2`.
+# Rust crates from crates.io: `use cargo <crate>` builds the crate once as a WebAssembly component
+# (~/.cache/warp/crates) and calls its public functions; a struct it constructs is a handle with its methods.
+# Native only: the first run needs cargo and `rustup target add wasm32-wasip2`.
 
 use cargo strsim
 print strsim.levenshtein("kitten", "sitting")

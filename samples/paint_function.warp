@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
-// paint(f, width, height) of a function: f(column, row) inks each pixel; on the GPU as a fragment shader where there
-// is one (WARP_GPU=off paints on the CPU). mandelbrot_canvas.warp loops over the pixels itself
+# paint(f, width, height) of a function: f(column, row) inks each pixel; on the GPU as a fragment shader where there
+# is one (WARP_GPU=off paints on the CPU). mandelbrot_canvas.warp loops over the pixels itself
 width = 960
 height = 540
 max_iter = 60

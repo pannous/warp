@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
-// sizes are properties: canvas.width is the picture's pixels, window.width the window showing it (in the playground the
-// frame of its paintings), display.width the screen's, read only. Writing one resizes it; a bare width is canvas.width
+# sizes are properties: canvas.width is the picture's pixels, window.width the window showing it (in the playground the
+# frame of its paintings), display.width the screen's, read only. Writing one resizes it; a bare width is canvas.width
 use draw
 canvas.width = 160
 canvas.height = 90

@@ -1,38 +1,38 @@
 #!/usr/bin/env warp
-// warp functions compiled to a GPU shader: paint(tunnel, width, height) turns tunnel and the functions it calls into one
-// WGSL fragment shader, which raymarches 16 glowing frequency bars around a pulsing gem frame after frame while
-// mozart.mp3 plays. Vectors are lists of 2 to 4 numbers, .+ .- .* ./ .^ their element-wise math, p.x p.zy their
-// components; the functions read the program's levels, bass, treble and time
+# warp functions compiled to a GPU shader: paint(tunnel, width, height) turns tunnel and the functions it calls into one
+# WGSL fragment shader, which raymarches 16 glowing frequency bars around a pulsing gem frame after frame while
+# mozart.mp3 plays. Vectors are lists of 2 to 4 numbers, .+ .- .* ./ .^ their element-wise math, p.x p.zy their
+# components; the functions read the program's levels, bass, treble and time
 use sound
 use math
 use os
 width = 1920
 height = 1080
 bands = 16
-// any wav, mp3, ogg, flac, aiff or m4a file plays and lights the bars the same
+# any wav, mp3, ogg, flac, aiff or m4a file plays and lights the bars the same
 song = "mozart.mp3"
-// how much the quiet spectrum is turned up before it lights the bars
+# how much the quiet spectrum is turned up before it lights the bars
 loudness = 15
-// the shortest frame: a frame that took less waits for the rest
+# the shortest frame: a frame that took less waits for the rest
 frame_milliseconds = 16
-// how fast the eye flies down the tunnel, and the most steps of a ray
+# how fast the eye flies down the tunnel, and the most steps of a ray
 speed = 3.0
 most_steps = 110
 
-// what the shader reads, set each frame
+# what the shader reads, set each frame
 global levels = [0.0 as float for band in 0..bands]
 global bass = 0.0
 global treble = 0.0
 global time = 0.0
 
-// the level of band b (0 … 15, any whole number wraps around)
+# the level of band b (0 … 15, any whole number wraps around)
 band_level(b) := levels#((b - bands * floor(b / bands)) as int + 1)
 turned(p, angle) := [cosine(angle) * p.x - sine(angle) * p.y, sine(angle) * p.x + cosine(angle) * p.y]
 hue(h) := 0.5 .+ 0.5 .* [cosine(tau * h), cosine(tau * (h + 0.33)), cosine(tau * (h + 0.67))]
 gem_center() := [0.6 * sine(time * 0.7), 0.4 * cosine(time * 0.9), time * speed + 5 - 1.2 * bass]
 
-// a point seen from the twisting bars: across its bar, from the axis, along its ring, its band
-// beside: 0 for the point's own bar, -1 and 1 for its neighbors
+# a point seen from the twisting bars: across its bar, from the axis, along its ring, its band
+# beside: 0 for the point's own bar, -1 and 1 for its neighbors
 bar_space(p, beside) := {
 	q = turned(p.xy, p.z * 0.12 + time * 0.4)
 	sector = (atan2(q.y, q.x) / tau + 0.5) * bands
@@ -46,7 +46,7 @@ bar_distance(p, beside) := {
 	norm([max(box.x, 0), max(box.y, 0), max(box.z, 0)]) + min(max(box.x, max(box.y, box.z)), 0) - 0.04
 }
 
-// the distance to the nearest surface and its band, -1 for the gem
+# the distance to the nearest surface and its band, -1 for the gem
 scene(p) := {
 	own = bar_space(p, 0)
 	bar = min(bar_distance(p, 0), min(bar_distance(p, -1), bar_distance(p, 1)))
@@ -87,7 +87,7 @@ bar_surface(p, band_hit, diffuse, rim, tint) := {
 	tint .* tint .* shade .+ tint .* (rim * (0.1 + lit)) .+ (tint .+ 0.3) .* (edge * (0.15 + 2.5 * lit)) .+ tint .* pulse
 }
 
-// the color where the ray meets a surface at p
+# the color where the ray meets a surface at p
 surface(p, ray, hit, tint) := {
 	n = normal_at(p)
 	diffuse = max(dot(n, normalize(gem_center() .- p)), 0)
@@ -126,8 +126,8 @@ on key {
 	if key == ESC { exit() }
 }
 
-// the whole song, or as many seconds as the command line gives: `warp gpu_visualizer_warp.warp 3`; measuring it decodes
-// the song before it plays, so the first frame keeps up with the music
+# the whole song, or as many seconds as the command line gives: `warp gpu_visualizer_warp.warp 3`; measuring it decodes
+# the song before it plays, so the first frame keeps up with the music
 seconds = if count(args) > 0 then min(args#1 as number, sound_seconds(song)) else sound_seconds(song)
 play song
 started = clock()

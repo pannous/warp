@@ -10,7 +10,7 @@ repeats 3{
 	print "Hello"
 }
 
-// ^^ That was just a demonstration. It was already built in:
+# ^^ That was just a demonstration. It was already built in:
 3 times{
 	print "Hi"
 }
