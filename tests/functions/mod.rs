@@ -19,6 +19,7 @@ mod test_broadcast_reassigned;
 mod test_broadcasting;
 mod test_broadcasting_declared;
 mod test_builtin_clash;
+mod test_builtin_function_values; // card builtin-functions
 mod test_c_style_definitions;
 mod test_call_arity;
 mod test_call_efficiency;

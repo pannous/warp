@@ -706,6 +706,10 @@ impl Inference {
 		if let Some(construction) = self.named_construction(&node) {
 			return construction;
 		}
+		// `function min` is the function, no minute
+		if crate::closures::referenced_function(&node).is_some() {
+			return Ok((node, vec![]));
+		}
 		match node {
 			Node::Meta { node, data } => {
 				let (node, signature) = self.infer(*node)?;

@@ -33,6 +33,11 @@ const sessionValues = {};
 const contentText = content => typeof content === "string" ? content : JSON.stringify(content);
 const utf8 = new TextEncoder();
 
+// the system values of the pointer the page shares; without shared memory a running program cannot see it move (the
+// run blocks its Worker's messages), so it would wait for a finger forever (card abysmally-slow: the in-app browser
+// view of an iPad app painted nothing). A key held reads none there, as in the test suite's page
+const POINTER_VALUES = ["mouse_x", "mouse_y", "mouse_down"];
+const NO_SHARED_POINTER = "this page has no shared memory (it is not cross-origin isolated, as in an app's built-in browser view), so a running program cannot follow the pointer: open the page in Safari, Chrome or Firefox";
 // the pointer the page shares (canvas.js pointerMessage) as the worker keeps it: self.pagePointer, read by system_value
 const sharedPointer = ({ buffer, names }) => ({ values: new Int32Array(buffer), names });
 
@@ -136,6 +141,7 @@ function programImports(holder, hooks) {
 				const value = decode(cString(name));
 				if (value === "online") return BigInt(navigator.onLine);
 				if (value === "time of day") { const now = new Date(); return BigInt(now - new Date(now).setHours(0, 0, 0, 0)); }
+				if (POINTER_VALUES.includes(value) && !self.pagePointer) throw new Error(`${value}: ${NO_SHARED_POINTER}`);
 				// key_down: whether the page's held key (canvas.js trackKey) is any; "key code held" which (held_key names it)
 				const heldKey = self.pagePointer ? Atomics.load(self.pagePointer.values, self.pagePointer.names.indexOf("key")) : 0;
 				if (value === "key_down") return BigInt(heldKey !== 0);
@@ -145,6 +151,7 @@ function programImports(holder, hooks) {
 				if (pointerIndex >= 0) return BigInt(Atomics.load(self.pagePointer.values, pointerIndex));
 				// a Worker has no matchMedia: the page tells it (playground.js tellSystemValues)
 				const known = value === "dark mode" && globalThis.matchMedia ? matchMedia(DARK_MODE_QUERY).matches : toldValue(value);
+				if (value === "window_open" && !known) hooks.windowUnseen?.(); // playground.js rerunForViewer
 				if (known !== undefined) return BigInt(known);
 				throw new Error(`${value}: the playground cannot read it yet`);
 			},

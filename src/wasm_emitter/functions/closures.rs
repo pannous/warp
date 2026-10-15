@@ -179,7 +179,9 @@ impl WasmGcEmitter {
 				0
 			}
 		});
-		((class as i64) << FUNCTION_CLASS_SHIFT) | Kind::Function as i64
+		let builtin =
+			if crate::closures::is_builtin_function(target) { crate::type_kinds::BUILTIN_FUNCTION_MARK } else { 0 };
+		builtin | ((class as i64) << FUNCTION_CLASS_SHIFT) | Kind::Function as i64
 	}
 
 	fn closure_type(&mut self) -> u32 {
@@ -830,6 +832,10 @@ impl WasmGcEmitter {
 	/// `print f`: the definition, the doc as a comment line above it (decision reflection), in reflection mode a comment
 	/// line saying where and how it was made; a lambda as written
 	fn printed_function(&self, target: &str, captured: usize) -> String {
+		// a built-in's: its word and signature, `upper(t:text) -> text`
+		if let Some((word, signature)) = builtin_signature(target) {
+			return format!("{word}{signature}");
+		}
 		match self.ctx.user_functions.get(target) {
 			Some(function) if !crate::closures::is_lambda_function(target) => {
 				let made = function_words()
@@ -854,18 +860,19 @@ impl WasmGcEmitter {
 		let function = self.ctx.user_functions.get(target);
 		let at = function.and_then(written_at);
 		let text = |text: String| Node::Text(text);
-		match (table, function) {
-			(FUNCTION_DOC, Some(function)) => text(function.doc.clone().unwrap_or_default()),
-			(FUNCTION_SIGNATURE, Some(function)) => text(crate::lowering::reflection::signature(function)),
-			(FUNCTION_RETURN_TYPE, Some(function)) => text(crate::lowering::reflection::result_type(function)),
-			(FUNCTION_DEFINITION, Some(function)) => text(crate::lowering::reflection::definition(function)),
-			(FUNCTION_FULL, _) => text(self.printed_function(target, captured)),
-			(FUNCTION_FILE, _) => text(written_in(at.as_ref()).unwrap_or_default()),
-			(FUNCTION_LINE, _) => Node::int(at.as_ref().map_or(0, |at| at.line_nr) as i64),
-			(FUNCTION_COLUMN, _) => Node::int(at.as_ref().map_or(0, |at| at.column) as i64),
-			(FUNCTION_ORIGIN, _) => text(self.origin(target, at.and_then(|at| at.file))),
-			(FUNCTION_COMPILER, _) => text(compiler()),
-			(FUNCTION_WASM_NAME, _) => text(target.to_string()),
+		match (table, function, builtin_signature(target)) {
+			(FUNCTION_SIGNATURE, _, Some((_, signature))) => text(signature),
+			(FUNCTION_DOC, Some(function), _) => text(function.doc.clone().unwrap_or_default()),
+			(FUNCTION_SIGNATURE, Some(function), _) => text(crate::lowering::reflection::signature(function)),
+			(FUNCTION_RETURN_TYPE, Some(function), _) => text(crate::lowering::reflection::result_type(function)),
+			(FUNCTION_DEFINITION, Some(function), _) => text(crate::lowering::reflection::definition(function)),
+			(FUNCTION_FULL, ..) => text(self.printed_function(target, captured)),
+			(FUNCTION_FILE, ..) => text(written_in(at.as_ref()).unwrap_or_default()),
+			(FUNCTION_LINE, ..) => Node::int(at.as_ref().map_or(0, |at| at.line_nr) as i64),
+			(FUNCTION_COLUMN, ..) => Node::int(at.as_ref().map_or(0, |at| at.column) as i64),
+			(FUNCTION_ORIGIN, ..) => text(self.origin(target, at.and_then(|at| at.file))),
+			(FUNCTION_COMPILER, ..) => text(compiler()),
+			(FUNCTION_WASM_NAME, ..) => text(target.to_string()),
 			_ => text(self.function_text_of(target, captured)),
 		}
 	}
@@ -939,4 +946,10 @@ impl WasmGcEmitter {
 			emit_miss(s, f);
 		});
 	}
+}
+
+/// The word and signature of a closure target made for a built-in (closures::builtin_word)
+fn builtin_signature(target: &str) -> Option<(&str, String)> {
+	let word = crate::closures::builtin_word(target)?;
+	Some((word, crate::lowering::library_signatures::library_signature(word)?.1))
 }

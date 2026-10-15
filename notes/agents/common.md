@@ -11,6 +11,10 @@ rules in wiki/Footguns.md. A missing setting takes a sensible default; an error 
 guess (user 2026-10-10: show() without a canvas gets a default size, not an error). Decisions reach you from the Interviewer or Supervisor;
 once built, the code, tests and wiki are the truth. notes/decisions.md is the history: look something up there only
 when a message or comment cites a number (P71, D5) and you need its wording; never read it front to back.
+No special cases, under any circumstances (user, 2026-10-15): a fix is the general rule, holding for the siblings of
+the example (other words of its kind, other statement positions, values passed in or returned) and for where the
+language is heading. If an existing test seems to force a special case, question the test through warp-interviewer
+instead of bending the code.
 
 - Only the Codex cron runs are announced to the user's Codex thread "Warp Boss" (start and end, codex_worker.sh).
   Claude spawns never notify it (user, 2026-10-12: a Claude spawn notice landing in Codex is "not at all what we want").
@@ -55,8 +59,11 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   never pkill by pattern.
 - No Chrome or Chromium on the Mac (user, 2026-10-09): browser runs happen only in CI. The browser test suite, the
   playground tour (test_in_browser.py), web::test_dom_pages and the agent-browser probes refuse to start a browser
-  unless CI is set and print "browser tests run in CI only". To check the playground, dispatch the Playground
-  workflow on your branch (`gh workflow run pages.yml --ref <branch>`); never call agent-browser yourself.
+  unless CI is set and print "browser tests run in CI only"; never call agent-browser yourself. To check the
+  playground (user, 2026-10-15: trial runs mailed "Run failed"): first the dry run on pannous.com,
+  `scripts/browser-dry-run.sh` in your worktree (`--tours [example…]`, `--chrome`, `--firefox`, `--suite [filter…]`,
+  `--again` reruns without building; notes/ci.md "Browser dry run"), until it is green; only then dispatch the
+  Playground workflow on your branch once (`gh workflow run pages.yml --ref <branch>`), the final check plus Safari.
 - The warp CLI binary is shared too: `<target-dir>/debug/warp` is whichever worktree built last. To probe your own code,
   run `scripts/own-warp.sh` (builds offline and atomically copies into `scratch/warp`) and run that path; a copy taken
   later can be another session's build.
