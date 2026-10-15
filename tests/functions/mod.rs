@@ -14,6 +14,8 @@ mod test_bare_function_name;
 mod test_block_function;
 mod test_body_statement;
 mod test_braced_it_warning;
+mod test_braceless_call_in_logic; // card braceless-call
+mod test_braceless_calls; // card braceless-calls
 mod test_broadcast_of_list_variables; // card round-floor-xs
 mod test_broadcast_reassigned;
 mod test_broadcasting;
@@ -98,6 +100,7 @@ mod test_library_word_values;
 mod test_list_conversion;
 mod test_list_fields; // card people-map
 mod test_map_function_first; // card map-function
+mod test_map_library_word_first; // cards map-library-first, map-library-word
 mod test_map_phrase;
 mod test_math_broadcast; // card cos-instead
 mod test_member_phrases; // card xs-insert

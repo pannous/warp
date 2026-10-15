@@ -9,7 +9,7 @@ use crate::lowering::function_head;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::traits::{witness_name, InstanceTypes, Shape};
-use crate::words::{FOR_WORD, IN_WORD, PRINT_WORD, TEXT_WORD};
+use crate::words::{FOR_WORD, IN_WORD, PRINT_WORD, SYMBOL_WORD, TEXT_WORD};
 use std::collections::HashSet;
 
 const ITERATE_OPERATION: &str = "iterate";
@@ -33,7 +33,7 @@ struct Operations {
 
 impl Operations {
 	/// The program's last statement, when it is an instance of a printable type, is its text (card instance-final):
-	/// a program shows the value `str()` would
+	/// a program shows the value `str()` would, bare
 	fn rewrite_program(&self, node: Node) -> Node {
 		match node {
 			Node::Meta { node, data } if is_statements(&node) => {
@@ -44,7 +44,11 @@ impl Operations {
 				let statements = statements.into_iter().map(|statement| self.rewrite(statement)).chain(last).collect();
 				Node::List(statements, Bracket::None, separator)
 			}
-			value => self.call(TEXT_WORD, &self.printable, &value).unwrap_or_else(|| self.rewrite(value)),
+			// shown bare, as print shows it: a symbol of the text (card program-last)
+			value => match self.call(TEXT_WORD, &self.printable, &value) {
+				Some(text) => call(SYMBOL_WORD, vec![text]),
+				None => self.rewrite(value),
+			},
 		}
 	}
 

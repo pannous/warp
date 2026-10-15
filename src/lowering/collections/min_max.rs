@@ -55,8 +55,8 @@ impl Lowering<'_> {
 	}
 
 	fn extremum(&mut self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
-		// `max xs`, `max [1 5 2]`: one argument without parentheses is a call too
-		let prefix = matches!((bracket, separator, items), (Bracket::None, Separator::Space, [head, _]) if matches!(head.drop_meta(), Node::Symbol(_)));
+		// `max xs`, `max [1 5 2]`, `max 3 4`: arguments without parentheses are a call too
+		let prefix = matches!((bracket, separator, items), (Bracket::None, Separator::Space, [head, _, ..]) if matches!(head.drop_meta(), Node::Symbol(_)));
 		let head = items.first()?.drop_meta().name();
 		let name = call_name(items, bracket, separator).map(str::to_string).or_else(|| prefix.then_some(head))?;
 		let name = name.as_str();
