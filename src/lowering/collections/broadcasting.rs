@@ -689,7 +689,6 @@ fn is_range(node: &Node) -> bool {
 	}
 }
 
-/// `moved ps`, `moved(ps)` of a broadcasting function
 /// `f(list)` of a broadcasting f, or `g(list, n)` of a list for g's parameter of one value
 fn broadcasts_a_list(
 	items: &[Node],
@@ -710,6 +709,7 @@ fn broadcasts_a_list(
 	arguments.len() == scalars.len() && lists.count() == 1
 }
 
+/// `moved ps`, `moved(ps)` of a broadcasting function
 fn is_broadcast_over(value: &Node, variable: &str, functions: &HashSet<String>) -> bool {
 	let Node::List(items, bracket, separator) = value.drop_meta() else {
 		return false;
