@@ -33,6 +33,15 @@
   `cargo run` would have built the package into warp's own target instead. Never run cargo inside a package directory.
   uniscript's v1.0.0 release ships uniscript.wasm (4.2 MB): the first run downloads it once per machine, no build.
   A package publishes its tool with `cargo build --release --target wasm32-wasip1 --bin <name>` as release asset <name>.wasm.
+- Libraries (card takes-three, 2026-10-15): `library: "uniscript_c"` in a pinned entry of packages.warp makes `use <name>`
+  load warp's binding lib/packages/<name>.warp (LIBRARY_BINDINGS, packages.rs) as if it lay beside the library, so its
+  `import uniscript_c` calls the core module uniscript_c.wasm with the header uniscript_c.h (texts through its malloc,
+  notes/wasm_modules.md). Both come from the package itself or the pinned tag's release assets, downloaded once into the
+  build directory (package_tools.rs library_directory), never built. A `use` requiring another version than the pin loads
+  that tag's module source instead. Browsers cannot fetch release assets (no CORS): web/playground/build.sh `libraries`
+  puts them in web/playground/packages/<name>/, which the browser loader reads as page:packages/<name>; a built site ships
+  every imported module as modules/<file> (web/site_modules.rs). Updating: raise the version in packages.warp; the
+  package's release needs the assets (uniscript: notes/publishing.md there, `make -C c/ffi wasm`).
 - A local checkout stands in for a fetch: `ln -s ~/dev/uniscript packages/uniscript`. Update: `git -C packages/uniscript pull`.
   For a pinned package, a clean clone of its repository in packages/<name> (what an unpinned fetch left) moves to
   packages/.replaced/ and the pin takes its place; a link outside the cache or a clone with changes wins, with a warning.

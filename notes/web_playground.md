@@ -258,7 +258,7 @@ WARP_INCLUDE (2026-10-06, card use-import; before, the page had no headers: `str
 copies the tour's C module to _site/tests/fixtures/wasm/ (pages.yml), tour example "C libraries". A registered package (packages.warp) is read from its
 GitHub raw files at the pinned tag (`raw.githubusercontent.com/<owner>/<repo>/v<version>/…`, served to any page), so
 `use uniscript` works; a program's `read(path)` of a URL (the package's data/entities.idx) fetches its bytes as they
-are (host.js `readBytes`, no newline added, like the native read). Browser suite: 1452 passed, 15 failed (inherent);
+are (host.js `readBytes`, no newline added, like the native read). Since uniscript 1.0.8 `use uniscript` calls the release asset uniscript_c.wasm, which build.sh `libraries` serves from web/playground/packages/ (notes/packages.md "Libraries"). Browser suite: 1452 passed, 15 failed (inherent);
 night 2026-10-04 end: 1497 passed, the same 15 failed (downloads, module files, package pins, lean, threads, strict flag).
 
 ## Feature parity (2026-10-05, fixer)

@@ -139,6 +139,8 @@ mod test_site_failure; // the dev overlay's message
 #[cfg(all(feature = "native", target_os = "macos"))] // the system web view
 mod test_site_holes;
 #[cfg(feature = "native")] // builds a site natively
+mod test_site_modules; // card takes-three
+#[cfg(feature = "native")] // builds a site natively
 mod test_site_tasks; // card site-tasks
 #[cfg(feature = "native")] // runs node
 mod test_sleep_run_limit; // card sleep-run-limit

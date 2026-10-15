@@ -7,6 +7,10 @@
 //!    Never into a shared cargo target directory: a fetched crate built there overwrote the binary of a checkout of
 //!    the same crate (uniscript 1.0.0, 2026-10-02).
 //!
+//! A package's library (packages.warp `library: "x"`) is a core module x.wasm with its header x.h, shipped in the package
+//! or release assets of the pinned tag, never built here (library_directory); `use <package>` calls it through warp's
+//! binding lib/packages/<package>.warp.
+//!
 //! The build directory is `~/.cache/warp/packages/<name>@<version>.build` for a pinned package (outside its clone)
 //! and `packages/.build/<name>` for any other (an unpinned clone, a local checkout linked as packages/<name>).
 use crate::modules::{cached_package, fetch_package, package_repository, pinned_version, PACKAGES_DIRECTORY};
@@ -23,6 +27,7 @@ const WASI_TARGET: &str = "wasm32-wasip1";
 /// rustc's note when the standard library of a target is missing ("… the `wasm32-wasip1` target may not be installed")
 pub(crate) const MISSING_TARGET_SIGN: &str = "target may not be installed";
 const WASM_EXTENSION: &str = "wasm";
+const HEADER_EXTENSION: &str = "h";
 const WASM_MAGIC: &[u8] = b"\0asm";
 /// `<name>@<version>` + this, next to the pinned clone in the package cache
 const BUILD_SUFFIX: &str = ".build";
@@ -60,39 +65,65 @@ pub fn run_package_tool(name: &str, arguments: &[&str]) -> Result<ToolRun, Strin
 
 /// The path of a package's prebuilt tool `<name>.wasm`, fetched or (last resort) built once
 pub fn package_tool(name: &str) -> Result<PathBuf, String> {
+	let _providing = PROVIDING.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+	let file = wasm_file(name);
+	prebuilt_file(name, &file).or_else(|reason| {
+		eprintln!("warning: package {name}: no prebuilt {file}: {reason}");
+		let directory = fetch_package(name)?;
+		let build = build_directory(name, &directory);
+		let artifact = build.join(&file);
+		build_from_source(name, &directory, &build, &artifact)?;
+		Ok(artifact)
+	})
+}
+
+/// The directory of a package's library (packages.warp `library`): its core module `<library>.wasm` with the header
+/// `<library>.h` beside it, both shipped in the package or both release assets; never built on the user's machine
+pub fn library_directory(name: &str, library: &str) -> Result<PathBuf, String> {
+	let _providing = PROVIDING.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+	let module = prebuilt_file(name, &wasm_file(library)).map_err(|reason| format!("package {name}: {reason}"))?;
+	let header = prebuilt_file(name, &format!("{library}.{HEADER_EXTENSION}"))
+		.map_err(|reason| format!("package {name}: {reason}"))?;
+	match (module.parent(), header.parent()) {
+		(Some(directory), Some(beside)) if directory == beside => Ok(directory.to_path_buf()),
+		_ => Err(format!("package {name}: {} and {} are not in one directory", module.display(), header.display())),
+	}
+}
+
+/// A prebuilt file of a package: shipped in the package itself, else the release asset of its pinned version's tag,
+/// downloaded once into the build directory (a tag never changes, nor what was fetched of it). Callers hold PROVIDING.
+fn prebuilt_file(name: &str, file: &str) -> Result<PathBuf, String> {
 	let directory = fetch_package(name)?;
-	let shipped = directory.join(tool_file(name));
-	if is_wasm(&shipped) {
+	let shipped = directory.join(file);
+	if is_prebuilt(&shipped) {
 		return Ok(shipped);
 	}
-	let _providing = PROVIDING.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-	let pinned = pinned_version(name).filter(|version| is_pinned_clone(&directory, name, version));
-	let build = match &pinned {
-		Some(version) => PathBuf::from(format!("{}{BUILD_SUFFIX}", cached_package(name, version).display())),
-		None => Path::new(PACKAGES_DIRECTORY).join(LOCAL_BUILDS).join(name),
+	let Some(version) = pinned_version(name).filter(|version| is_pinned_clone(&directory, name, version)) else {
+		return Err(format!("{} ships no {file}, and only a pinned version has release assets", directory.display()));
 	};
-	let artifact = build.join(tool_file(name));
-	if let Some(version) = &pinned {
-		if is_wasm(&artifact) {
-			return Ok(artifact); // a tag never changes, nor what was fetched or built of it
-		}
-		match download_release_asset(name, version, &artifact) {
-			Ok(()) => return Ok(artifact),
-			Err(reason) => {
-				eprintln!("warning: package {name}: no prebuilt {} for {version}: {reason}", tool_file(name))
-			}
-		}
+	let artifact = build_directory(name, &directory).join(file);
+	if !is_prebuilt(&artifact) {
+		download_release_asset(name, &version, file, &artifact)?;
 	}
-	build_from_source(name, &directory, &build, &artifact)?;
 	Ok(artifact)
 }
 
-fn tool_file(name: &str) -> String {
+/// Where a package's built and downloaded files go: beside the pinned clone in the package cache, else below packages/
+fn build_directory(name: &str, directory: &Path) -> PathBuf {
+	match pinned_version(name).filter(|version| is_pinned_clone(directory, name, version)) {
+		Some(version) => PathBuf::from(format!("{}{BUILD_SUFFIX}", cached_package(name, &version).display())),
+		None => Path::new(PACKAGES_DIRECTORY).join(LOCAL_BUILDS).join(name),
+	}
+}
+
+fn wasm_file(name: &str) -> String {
 	format!("{name}.{WASM_EXTENSION}")
 }
 
-fn is_wasm(path: &Path) -> bool {
-	std::fs::read(path).is_ok_and(|bytes| bytes.starts_with(WASM_MAGIC))
+/// A WebAssembly binary, or any other file with content
+fn is_prebuilt(path: &Path) -> bool {
+	let is_wasm = path.extension().is_some_and(|extension| extension == WASM_EXTENSION);
+	std::fs::read(path).is_ok_and(|bytes| if is_wasm { bytes.starts_with(WASM_MAGIC) } else { !bytes.is_empty() })
 }
 
 /// packages/<name> is the pinned version's clone itself, not a local checkout or a changed clone standing in for it
@@ -101,8 +132,8 @@ fn is_pinned_clone(directory: &Path, name: &str, version: &Version) -> bool {
 	canonical(directory).is_some_and(|directory| Some(directory) == canonical(&cached_package(name, version)))
 }
 
-/// `<name>.wasm` of the GitHub release of the version's tag (`v1.2.3` or `1.2.3`)
-fn download_release_asset(name: &str, version: &Version, artifact: &Path) -> Result<(), String> {
+/// `file` of the GitHub release of the version's tag (`v1.2.3` or `1.2.3`)
+fn download_release_asset(name: &str, version: &Version, file: &str, artifact: &Path) -> Result<(), String> {
 	let repository = package_repository(name).unwrap_or_default();
 	let repository = repository.trim_end_matches(".git");
 	if !repository.starts_with(GITHUB) {
@@ -110,9 +141,11 @@ fn download_release_asset(name: &str, version: &Version, artifact: &Path) -> Res
 	}
 	let mut failures = vec![];
 	for tag in [format!("v{version}"), version.to_string()] {
-		let url = format!("{repository}/releases/download/{tag}/{}", tool_file(name));
+		let url = format!("{repository}/releases/download/{tag}/{file}");
 		match download_bytes(&url) {
-			Ok(bytes) if bytes.starts_with(WASM_MAGIC) => return write_atomically(artifact, &bytes),
+			Ok(bytes) if !file.ends_with(WASM_EXTENSION) || bytes.starts_with(WASM_MAGIC) => {
+				return write_atomically(artifact, &bytes)
+			}
 			Ok(_) => failures.push(format!("{url}: not WebAssembly")),
 			Err(reason) => failures.push(format!("{url}: {reason}")),
 		}
@@ -144,11 +177,11 @@ fn build_from_source(name: &str, directory: &Path, build: &Path, artifact: &Path
 	if !manifest.is_file() {
 		return Err(format!(
 			"package {name} ships no {}, has no release asset of it and no Rust sources to build it from",
-			tool_file(name)
+			wasm_file(name)
 		));
 	}
 	let target = build.join("target");
-	eprintln!("warning: package {name}: building {} from its sources into {}", tool_file(name), target.display());
+	eprintln!("warning: package {name}: building {} from its sources into {}", wasm_file(name), target.display());
 	let output = Command::new("cargo")
 		.args(["build", "--quiet", "--release", "--target", WASI_TARGET, "--bin", name, "--manifest-path"])
 		.arg(&manifest)
@@ -162,9 +195,9 @@ fn build_from_source(name: &str, directory: &Path, build: &Path, artifact: &Path
 				"package {name}: missing rust target {WASI_TARGET}; fix: rustup target add {WASI_TARGET}"
 			));
 		}
-		return Err(format!("package {name}: building {} failed: {}", tool_file(name), errors.trim()));
+		return Err(format!("package {name}: building {} failed: {}", wasm_file(name), errors.trim()));
 	}
-	let built = target.join(WASI_TARGET).join("release").join(tool_file(name));
+	let built = target.join(WASI_TARGET).join("release").join(wasm_file(name));
 	let bytes = std::fs::read(&built).map_err(|failure| format!("package {name}: {}: {failure}", built.display()))?;
 	write_atomically(artifact, &bytes)
 }
