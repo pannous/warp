@@ -4,10 +4,10 @@
 // Units written in the program stay static (src/units): checked at compile time, plain numbers at run time.
 
 // The dimensions and units warp knows (card dimensions-units Q2, read by src/numbers/units/definitions.rs): a dimension is
-// named or a product of named ones (`speed := length/duration`), `m: length` is
-// the base unit of its dimension, `cm := m/100` a unit of an amount of another, `°C := K + 273.15` one counting from
-// another zero; a definition of several units or of none (`mph := mi/h`, `° := π/180`) is a word for that expression.
-// A unit added here is known everywhere: in the program, at run time, in conversions
+// named or a product of named ones (`speed := length/duration`), `m: length` is the base unit of its dimension,
+// `cm := m/100` a unit of an amount of another, `°C := K + 273.15` one counting from another zero; a definition of
+// several units or of none (`mph := mi/h`, `° := π/180`) is a word for that expression; a unit added here is known
+// everywhere: in the program, at run time, in conversions
 unit_definitions = data {
 	dimension length
 	dimension mass
