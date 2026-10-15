@@ -15,7 +15,9 @@ const pointer = globalThis.SharedArrayBuffer ? new Int32Array(new SharedArrayBuf
 
 // paint(pixels, width, height): one canvas per call, its pixels shaded by the program's Worker (host-media.js
 // paintFrame), which sends of a painting the size of the one before only the rectangle that changed. The painting it
-// changes is the last one the page got: the whole of each painting is kept here, as an ImageData over its words
+// changes is the last one the page got: the whole of each painting is kept here, as an ImageData over its words.
+// One base for the page: this holds while one Worker's paint messages reach it (the playground drops a retired
+// Worker's, a site has one); a second stream of paintings would need a base per Worker
 let lastPainting;
 function wholePainting(painting) {
 	const { frame, width, height } = painting;
