@@ -15,6 +15,19 @@ fn a_frame_handler_runs_once_without_a_window() {
 	assert_eq!(said.lines().collect::<Vec<_>>(), ["ready", "1"], "{}", String::from_utf8_lossy(&run.stderr));
 }
 
+// card full-screen: shader_brush paints at the view's size, read in the frame handler's body; a system value read there
+// is no listener on it, so the headless run still ends after its one frame instead of polling the value forever
+#[test]
+fn a_frame_handler_reading_the_view_size_runs_once_without_a_window() {
+	let file = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("on_frame_view.warp");
+	std::fs::write(&file, "on frame { print view_width }\nprint \"ready\"\n").expect("write the program");
+	let mut command = warp_command();
+	command.args(["run", file.to_str().unwrap()]).env("WARP_NO_WINDOW", "1");
+	let run = crate::common::output_within(&mut command, std::time::Duration::from_secs(20));
+	let said = String::from_utf8_lossy(&run.stdout);
+	assert_eq!(said.lines().collect::<Vec<_>>(), ["ready", "640"], "{}", String::from_utf8_lossy(&run.stderr));
+}
+
 #[test]
 fn a_frame_handler_leaves_main_running() {
 	crate::is!("n = 1; on frame { n = 2 }; n", 1);
