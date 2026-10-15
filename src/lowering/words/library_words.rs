@@ -5,7 +5,7 @@
 //!
 //! An unknown `.word` after a name, a text or a list is a loud error (`undefined function: word`), never silent data.
 
-use super::nodes::{call, children_rewritten, key, Counter};
+use super::nodes::{call, children_rewritten, if_then_else, key, Counter};
 use crate::analyzer::{call_name, counting_method};
 use crate::compiler::context::Context;
 use crate::errors::diagnostic::Diagnostic;
@@ -61,6 +61,8 @@ pub const MAP_WORD_FUNCTIONS: [&str; 8] = [
 	crate::one_entry_maps::MAP_OF_ENTRY,
 ];
 /// The name `catch e` binds, in lower_try_binding's template
+/// The modules named after a type, whose words `x.word` calls on a value of it (lib/list.warp, text.warp)
+const TYPE_MODULES: [&str; 2] = ["list", "text"];
 const CAUGHT_BINDING_PLACEHOLDER: &str = "caught_binding";
 /// The got-it topic of `square 3 + square(4)` (ask_braceless_argument)
 const BRACELESS_ARGUMENT_TOPIC: &str = "braceless-call-operator";
@@ -413,6 +415,30 @@ fn method_parts(method: &Node) -> Option<(&Node, &String, Vec<Node>)> {
 fn prefix_operator_method(receiver: &Node, name: &str) -> Option<Node> {
 	let (_, operator) = crate::warp_parser::PREFIX_OPERATOR_WORDS.into_iter().find(|(word, _)| *word == name)?;
 	Some(key(Node::Empty, operator, receiver.clone()))
+}
+
+/// The module named after a type (lib/list.warp, text.warp) that defines the word
+pub fn type_module_defining(word: &str) -> Option<&'static str> {
+	let defines = |module: &&str| {
+		crate::modules::std_module_definitions(module).is_some_and(|words| words.iter().any(|known| known == word))
+	};
+	TYPE_MODULES.into_iter().find(defines)
+}
+
+/// A standard module's word the program loaded and does not define itself
+fn is_loaded_module_word(name: &str) -> bool {
+	crate::compiler::compile_context::read(|context| context.module_definitions.contains(name))
+}
+
+/// `x.word` of an x that may be an object: `if x is <module type> then word(x) else x["word"]`; a receiver that is no
+/// variable reads the field, as it is evaluated once
+fn field_or_word(receiver: &Node, word_node: &Node, name: &str, module: &str) -> Node {
+	let field = field_lookup(receiver, name, word_node);
+	if receiver.symbol_name().is_none() {
+		return field;
+	}
+	let is_of_type = parens(vec![symbol(crate::words::IS_TYPE), receiver.clone(), text(module)]);
+	if_then_else(is_of_type, word_call(word_node, receiver, vec![]), field)
 }
 
 /// The call `word(receiver, arguments…)`
@@ -832,7 +858,25 @@ impl Lowering {
 		if !is_called && self.reads_declared_field(receiver, name) {
 			return Some(field_lookup(receiver, name, word_node));
 		}
-		if self.context.user_functions.get(name).is_some_and(|function| !function.params.is_empty()) {
+		// `b.product` of a value that may be an object: its field if it is no value of the word's type, else the type
+		// module's word, as `b.product()` calls it (x.word is x.word(), user 2026-10-14)
+		// `p.center`, `s.items` of another module's word or one of more parameters: no call, as before the word was loaded
+		let is_loaded_word = !is_called && is_loaded_module_word(name);
+		let type_module = self.type_module_of(name).filter(|_| is_loaded_word);
+		let may_be_object = || self.is_object(receiver, name) || self.may_hold_object(receiver);
+		if is_loaded_word && may_be_object() {
+			// a parameter's or a user function result's type shows at run time; a loop's element or a foreign
+			// result (`r.stats_of(t).words`) reads the field, as a branch of the word would type the value
+			let is_generic = self.is_parameter(receiver)
+				|| receiver.symbol_name().is_some_and(|variable| self.call_results.contains(variable));
+			return Some(match type_module.filter(|_| is_generic) {
+				Some(module) => field_or_word(receiver, word_node, name, module),
+				None => field_lookup(receiver, name, word_node),
+			});
+		}
+		if !(is_loaded_word && type_module.is_none())
+			&& self.context.user_functions.get(name).is_some_and(|function| !function.params.is_empty())
+		{
 			return Some(word_call(word_node, receiver, arguments));
 		}
 		// `x.string`, `t.int`, `x.float()`, `2.double()`: the conversion `string(x)`, as written in call form; uncalled
@@ -876,6 +920,12 @@ impl Lowering {
 		(self.instances.is_declared_field(name)
 			&& (self.is_parameter(receiver) || self.instances.shape(receiver).is_some()))
 			|| self.reads_own_parameter_field(receiver, name)
+	}
+
+	/// The type module (lib/list.warp, text.warp) of a loaded word of one parameter, which `x.word` calls
+	fn type_module_of(&self, name: &str) -> Option<&'static str> {
+		let takes_one = self.context.user_functions.get(name).is_some_and(|function| function.params.len() == 1);
+		type_module_defining(name).filter(|_| takes_one)
 	}
 
 	/// A word a value answers other than by a field: a count, a list change, a user function, or `f.effects` of a
