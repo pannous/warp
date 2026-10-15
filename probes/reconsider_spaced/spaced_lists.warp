@@ -1,8 +1,7 @@
-// card reconsider-spaced: what a pure spaced list would mean (branch reconsider-spaced, experiment only)
-print 2⁻¹ 2⁰ 2¹ 2²
+// spaced values are a list (card reconsider-spaced, user 2026-10-15)
 xs = 1 2 3
-print count xs
-print 1+1 2+2
-x = 2
-print x x+1
-print sum 1 2 3+1
+print xs
+print 2⁰ 2¹ 2²
+ys = 1+1 2+2
+print ys
+// a glued sign still asks: x = 5 -2
