@@ -18,9 +18,9 @@ use crate::operators::Op;
 use crate::signal_values::listeners_subject;
 use crate::variable_signals::{assign, symbols};
 use crate::warp_parser::parse;
-use crate::words::ERROR_WORD;
 use crate::words::{COUNT_WORD, FROM_WORD, ONCE_WORD, ON_WORD};
 use crate::words::{EMIT_ALIASES, EMIT_WORDS};
+use crate::words::{ERROR_WORD, RETURN_WORD};
 use std::collections::{HashMap, HashSet};
 
 /// `once alarm {…}`: the handler runs at the first raise only (Node's emitter.once, DOM `{once: true}`)
@@ -985,7 +985,7 @@ fn unconditional_emits(body: &Node, verbs: &[String]) -> Vec<String> {
 /// Each `emit name{data}` with handlers is the call `on·name(data)`, `on·name()` when no handler reads `event`; one
 /// nobody handles is ø, nothing, with a note unless the program shows a page, whose script may listen
 fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[String], shows_page: bool) -> Node {
-	if let Some(error) = unhandled_operand(&node, handled, verbs, shows_page) {
+	if let Some(error) = unhandled_value(&node, handled, verbs, shows_page) {
 		return error;
 	}
 	if let Some((name, data)) = emitted(&node, verbs) {
@@ -1033,29 +1033,43 @@ fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[Str
 }
 
 /// card emit-operand-unhandled: `1 + emit tax_rate` with no `on tax_rate` computes with a value that never comes, a
-/// compile error naming the handler (a statement emit only gets the P202 note; a page dispatches it instead)
-fn unhandled_operand(
+/// compile error naming the handler, wherever the emit is used as a value (an operand, an assigned value, a list item,
+/// an argument, a returned value). A statement emit only gets the P202 note; a page dispatches it instead.
+fn unhandled_value(
 	node: &Node,
 	handled: &HashMap<String, Vec<Node>>,
 	verbs: &[String],
 	shows_page: bool,
 ) -> Option<Node> {
-	let Node::Key(left, op, right) = node.drop_meta() else {
-		return None;
-	};
-	if !(op.is_arithmetic() || op.is_comparison()) || shows_page || crate::pipeline::compile_mode().renders_itself() {
+	if shows_page || crate::pipeline::compile_mode().renders_itself() {
 		return None;
 	}
-	[left, right].into_iter().find_map(|side| {
-		let operand = match side.drop_meta() {
+	value_children(node).into_iter().find_map(|child| {
+		let value = match child.drop_meta() {
 			Node::List(items, Bracket::Round, _) if items.len() == 1 => &items[0],
-			_ => side.as_ref(),
+			_ => child,
 		};
-		let (name, _) = emitted(operand, verbs).filter(|(name, _)| !handled.contains_key(name))?;
+		let (name, _) = emitted(value, verbs).filter(|(name, _)| !handled.contains_key(name))?;
 		let message =
 			format!("no handler for event {name}: `emit {name}` gives no value to compute with; add on {name} {{…}}");
-		Some(Diagnostic::at(operand, message).into_error())
+		Some(Diagnostic::at(value, message).into_error())
 	})
+}
+
+/// The children of a node that are used as values: operands, an assigned value, list items, call arguments, the
+/// value after `return`
+fn value_children(node: &Node) -> Vec<&Node> {
+	match node.drop_meta() {
+		Node::Key(left, op, right) if op.is_arithmetic() || op.is_comparison() => vec![left, right],
+		Node::Key(_, op, right) if *op == Op::Assign || op.is_compound_assign() => vec![right],
+		Node::List(items, Bracket::Square, _) => items.iter().collect(),
+		Node::List(items, bracket, _) => match items.split_first() {
+			Some((first, rest)) if word(first) == RETURN_WORD => rest.iter().collect(),
+			Some((Node::Symbol(_), arguments)) if *bracket == Bracket::Round => arguments.iter().collect(),
+			_ => vec![],
+		},
+		_ => vec![],
+	}
 }
 
 /// The variables the main level assigns (`n = 0`, `n += 1`, `n: int = 0`)

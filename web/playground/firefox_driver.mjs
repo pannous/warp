@@ -64,14 +64,27 @@ let nextId = 1;
 const pending = new Map();
 const messages = [];
 const realms = new Map();
+// what happened last (Workers started and ended, requests), told with an error that has no stack, which says no more
+const RECENT_EVENTS = 15;
+const recent = [];
+const remember = what => recent.splice(0, recent.push(`${(performance.now() / 1000).toFixed(2)} s ${what}`) - RECENT_EVENTS);
+const withRecent = entry => entry.stackTrace?.callFrames?.length ? "" : ` [before it: ${recent.join("; ")}]`;
 const report = (level, text, url = "") => REPORTED_LEVELS.has(level) && messages.push({ level: level === "warn" ? "warning" : level, text, url });
 const events = {
 	// an error without a stack (Firefox's bare "uncaught exception: undefined") still says the realm it came from: the
 	// page ("window") or which kind of Worker
-	"log.entryAdded": entry => report(entry.level, entry.text ?? entry.args?.map(arg => arg.value ?? arg.type).join(" "), entry.stackTrace?.callFrames?.[0]?.url ?? realms.get(entry.source?.realm) ?? ""),
-	"script.realmCreated": ({ realm, type, origin }) => realms.set(realm, `${type} realm of ${origin}`),
+	"log.entryAdded": entry => {
+		const text = entry.text ?? entry.args?.map(arg => arg.value ?? arg.type).join(" ");
+		report(entry.level, entry.level === "error" ? text + withRecent(entry) : text, entry.stackTrace?.callFrames?.[0]?.url ?? realms.get(entry.source?.realm) ?? "");
+		remember(`${entry.level}: ${text?.slice(0, 80)}`);
+	},
+	"script.realmCreated": ({ realm, type, origin }) => {
+		realms.set(realm, `${type} realm of ${origin}`);
+		remember(`+ ${type}`);
+	},
+	"script.realmDestroyed": ({ realm }) => remember(`- ${realms.get(realm)?.split(" ")[0] ?? "realm"}`),
 	"network.responseCompleted": ({ response }) => response.status >= FAILED_STATUS && report("error", `${response.status} ${response.statusText}`.trim(), response.url),
-	"network.beforeRequestSent": ({ isBlocked, request }) => isBlocked && send("network.continueRequest", {
+	"network.beforeRequestSent": ({ isBlocked, request }) => (remember(`request ${request.url.replace(/^https?:\/\/[^/]+/, "")}`), isBlocked) && send("network.continueRequest", {
 		request: request.request,
 		headers: [...request.headers.filter(({ name }) => name.toLowerCase() !== "authorization"), { name: "Authorization", value: { type: "string", value: `Bearer ${GITHUB_TOKEN}` } }],
 	}),
