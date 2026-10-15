@@ -426,8 +426,13 @@ impl Arity {
 /// functions `f·1`, `f·2`; every call names the one its argument count fits, so dispatch stays static
 pub fn lower_arity_overloads(node: Node) -> Node {
 	let mut arities: HashMap<String, Vec<Arity>> = HashMap::new();
+	// definitions of one arity (`f(x)`, `f(b: Box)`) are one variant, which dispatches on the type later
 	each_definition(&node, &mut |definition| {
-		arities.entry(definition.head[0].name()).or_default().push(Arity::of(&definition.head[1..]))
+		let variants = arities.entry(definition.head[0].name()).or_default();
+		let arity = Arity::of(&definition.head[1..]);
+		if !variants.contains(&arity) {
+			variants.push(arity);
+		}
 	});
 	arities.retain(|_, variants| {
 		variants.len() > 1
