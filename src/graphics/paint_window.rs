@@ -57,9 +57,11 @@ const TRIANGLE_CORNERS: u32 = 3;
 const INPUT_LINE: &str = "input";
 /// The line the viewer writes as its window opens or resizes: `size width height`, in points
 const SIZE_LINE: &str = "size";
-/// The line the viewer writes as the user ends it (Escape, closing the window, Cmd-Q): the run ends with it (card
-/// escape-window), its sounds stopped
+/// The line the viewer writes as the user ends it (closing the window, Cmd-Q): the run ends with it (card
+/// escape-window), its sounds stopped; so does Escape, unless the program names that key (system_values escape_kept)
 const CLOSED_LINE: &str = "closed";
+/// Escape's code, as key_code gives it
+const ESCAPE_CODE: f32 = 27.0;
 /// The arrows' codes, as a Mac's function keys: up, down, left, right
 const ARROW_CODES: [u32; 4] = [0xF700, 0xF701, 0xF702, 0xF703];
 /// NSTrackingArea's options: mouse moves, whether the window is key or not, over the whole view as it resizes
@@ -75,6 +77,11 @@ pub fn follow_input(lines: impl BufRead) -> bool {
 		let kind = words.next();
 		let numbers: Vec<f32> = words.map_while(|word| word.parse().ok()).collect();
 		match (kind, numbers.as_slice()) {
+			(Some(INPUT_LINE), &[_, _, _, key])
+				if key == ESCAPE_CODE && !warp_runtime::system_values::escape_kept() =>
+			{
+				return true
+			}
 			(Some(INPUT_LINE), &[x, y, down, key]) => warp_runtime::system_values::tell_window_input([x, y, down, key]),
 			(Some(SIZE_LINE), &[width, height]) => {
 				warp_runtime::system_values::tell_window_size(width as i64, height as i64)
@@ -110,10 +117,6 @@ fn key_code(key: &winit::keyboard::Key) -> Option<u32> {
 		Key::Named(NamedKey::Tab) => Some(u32::from('\t')),
 		_ => None,
 	}
-}
-
-fn is_escape(event: &winit::event::KeyEvent) -> bool {
-	event.state.is_pressed() && event.logical_key == winit::keyboard::Key::Named(winit::keyboard::NamedKey::Escape)
 }
 
 /// A painted image as the viewer takes it
@@ -411,7 +414,7 @@ impl Viewer {
 }
 
 impl ApplicationHandler<Message> for Viewer {
-	/// The user ended the window (Escape, closing it, Cmd-Q): its program ends too. A program that ends first ends the
+	/// The user ended the window (closing it, Cmd-Q): its program ends too. A program that ends first ends the
 	/// viewer through its stdin (run), a check ends by itself, and a failure is told as one
 	fn exiting(&mut self, _: &ActiveEventLoop) {
 		if !self.check && self.failure.is_none() {
@@ -445,7 +448,6 @@ impl ApplicationHandler<Message> for Viewer {
 		let Some(screen) = self.screen.as_mut() else { return };
 		match event {
 			WindowEvent::CloseRequested => event_loop.exit(),
-			WindowEvent::KeyboardInput { event, .. } if is_escape(&event) => event_loop.exit(),
 			WindowEvent::Resized(size) => {
 				screen.resize(size.width, size.height);
 				screen.tell_size();

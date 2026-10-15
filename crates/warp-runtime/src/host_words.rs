@@ -66,6 +66,9 @@ pub const DISPLAY_HEIGHT: &str = "display_height";
 /// The next key pressed over the paint window, its code (0: none left), each press read once: natively `on key {…}`
 /// (lowering/signals/system_signals.rs); not a value a program names
 pub const KEY_PRESSED: &str = "key_pressed";
+/// Read once as a program naming the Escape key starts (`key == ESC`): Escape over the paint window is then its key,
+/// else it ends the run (card escape-window, src/graphics/paint_window.rs); not a value a program names
+pub const ESCAPE_KEPT: &str = "escape kept";
 /// Whether a click over the paint window is left to read (1, then it is the click read) or none (0), each click read
 /// once, and that click's place: natively `on click {…}` (lowering/signals/system_signals.rs); not values a program names
 pub const CLICK_PRESSED: &str = "click_pressed";
