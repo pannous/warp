@@ -9,6 +9,12 @@ the wiki).
 (none)
 
 ## Parked (user: "later")
+- unit-definitions (2026-10-15 evening, parked: "let's park everything this evening"; discuss with the Interviewer
+  first, don't relay half-answers): how a program defines a unit and ties it to its dimension. Agreed so far: a plain
+  `:=` stays a constant; every dimension gets an SI anchor; units connect by conversions. The user's latest sketch:
+  `dimension length meter` (dimension + anchor unit), `unit cm := meter / 100` or `length cm := meter / 100`.
+- letters (card of-in-chain): `letters of "a1 b!"` → only alphabetic ['a' 'b'] (the common meaning) or an alias of
+  chars; parked ("who wants that feature anyways?"), `letters` stays undefined, error points at chars.
 - body-statements (2026-10-14): a function body looped like a list of statements, each statement with its kind
   (operation, call, assignment…); `.kind` was dropped from body-code until then.
 - unit-edges (warp-operator-shall, cards cleanup-units-answer and cleanup-units-interpreter): eight ignored

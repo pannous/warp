@@ -314,7 +314,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 
 - dimensions-units (2026-10-15, user): dimension names are types (`3 cm is length`, `h: length = 3 s` error); the
   time dimension is `duration` (a subtype of time). Units and their connections live in lib/units.warp
-  (`dimension length`, `m: length`, `cm := m/100`, `inch := 2.54 cm`, users add `furlong := 201.168 m`). `px` is the
+  (`dimension length`, `m: length`, `cm := m/100`, `inch := 2.54 cm`). A plain `:=` stays a constant
+  (`distance := 42 km` → 42km); how a program adds its own unit is parked (open_decisions unit-definitions). `px` is the
   device pixel, its own dimension, converting to lengths through display.dpi at run time. A unit after a list applies
   to each element (`[3, 4] cm` = `[3 cm, 4 cm]`, `v: length[3]`, matrices alike). Predefined derived names: speed,
   area, volume, frequency.
