@@ -328,6 +328,19 @@ The DSP is the lib formulas in Rust, streaming. Plan (supervisor, user asked whe
 stage 2 the browser runs the same code (warp.wasm export for render_sound, an AudioWorklet live; until then the
 playground plays bus sounds dry and says so), stage 3 a bus's effects changed while it plays, stage 4 compressor, EQ.
 
+Stage 2, bus API A (user 2026-10-15): `osc(C4, 1s) |> room` (parsed `room(osc(…))`; a Bus applied to a signal
+is lib's `call(b: Bus, signal) := out(signal, b)`, by the trait Callable in traits/dispatch.rs instance_called, so a bus
+from a parameter, a function's result or an expression sends too) and `play(C4, 1s, bus: room)` (a play
+overload around sent_to / sent_back). No `send room` setting.
+One DSP (user 2026-10-15: Rust for now, a warp twin later): src/sound/effects.rs `with_effects` runs lib's list effects
+(lib effected → std_io sound.effect → on_signal, amplitudes of loudness · loudest_sample, so distort keeps the level) and,
+in the browser, the bus sounds: warp.wasm exports web_bus_processed, host-compiler.js effectsProcessed calls it on the
+block compiler (also in tests and task Workers), host-sound.js onBus runs each sound sent to a bus through the chain
+apart (exact for the linear effects; compress and distort act per sound there) and the list effects. A delay or reverb
+now rings until -60 dB (Chain::rung_on) instead of lib's 8 echoes / 0.6 s; a filter adds no tail, so notes keep their
+length. lib's comb, echoed, roomed, clipped, biquad and the reverb constants are gone. Probe:
+probes/sound/bus_dsp_in_wasm.mjs.
+
 Stage 3 built (2026-10-15): `room = room |> gain(0)` changes the bus from the defining voice's moment (where its queued
 sounds end). An effect of a name the chain has replaces it in place (with_effect), else it appends. Chain::retune keeps
 each stage of the same kind with its state (comb echoes, biquad history), so a delay set again rings on; another kind

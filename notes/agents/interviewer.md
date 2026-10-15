@@ -25,6 +25,9 @@ archive you write answers to; workers get decisions as your messages, not by rea
   and the Supervisor whether the assumption stands or must be undone (and which worker should do it).
   The user dictates by speech recognition: fix misheard words, never paste raw answers (no "oof", no "metal data"
   for metadata); quote only a short cleaned phrase when the exact wording carries the meaning (user 2026-10-06).
+- Session swaps ("Swap: X was replaced by me …"): never mention them to the user (user 2026-10-15: "don't inform me
+  about this event"). Check the handover silently for your relays, re-send what's missing, and end the turn without
+  a user-facing line.
 - Notes-only commits go straight to main from a temporary worktree (`cowtree add --detach <path> origin/main`,
   commit, pull --rebase, push HEAD:main, remove).
 Start: tidy the queue, then tell the Supervisor "interviewer ready, <n> pending".

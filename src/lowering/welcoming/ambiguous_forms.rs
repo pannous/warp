@@ -101,8 +101,13 @@ fn suffix_words(node: &Node) -> SuffixWords {
 	let mut variables = HashSet::new();
 	crate::library_words::collect_assigned_names(node, &mut variables);
 	let functions = crate::analyzer::applicable_function_names(node);
+	// the library's words of one value apply too (`x sined`, `x floored`), unless the program names them
+	let library_words = crate::lowering::library_signatures::one_value_words()
+		.filter(|word| !variables.contains(*word) && !functions.contains(*word))
+		.map(String::from);
+	let applicable: Vec<String> = functions.iter().cloned().chain(library_words).collect();
 	let words =
-		functions.iter().flat_map(|function| past_forms(function).into_iter().map(|word| (word, function.clone())));
+		applicable.iter().flat_map(|function| past_forms(function).into_iter().map(|word| (word, function.clone())));
 	let mut words: HashMap<String, String> =
 		words.filter(|(word, _)| word.ends_with("ed") && !variables.contains(word)).collect();
 	// the library's own: `xs sorted`, `xs reversed`, `x squared` (x²), `x cubed` (x³), unless the program names them
@@ -160,6 +165,13 @@ impl SuffixWords {
 	/// A library word the program does not name itself: `first sorted xs` is `first(sort(xs))`, `xs.map(upper)` maps it
 	fn is_library_word(&self, node: &Node) -> bool {
 		self.unnamed(node).is_some_and(crate::library_words::is_library_word)
+	}
+
+	/// A word calling the values after it, the program's own function or a standard word it does not name: `max sorted
+	/// xs` is max(sort(xs)) and `f sorted xs` f(sort(xs)), no suffix `sorted` of max or f
+	fn is_calling_word(&self, node: &Node) -> bool {
+		matches!(node.drop_meta(), Node::Symbol(name) if self.functions.contains(name))
+			|| self.unnamed(node).is_some_and(crate::library_words::is_calling_word)
 	}
 
 	/// A library word of one value the program does not name itself, also libm's (`floor`, `sin`), the host's
@@ -419,7 +431,7 @@ fn apply_suffix_words(items: Vec<Node>, functions: &SuffixWords, bracket: Bracke
 		// `map xs abs` passes abs to map: an operator word applies only to a whole first operand (`-7 abs`, `x = -7 abs`)
 		let suffix = suffix.filter(|(_, suffix)| matches!(suffix, Suffix::Function(_)) || applied.len() == 1);
 		let (Some(operand), Some((word, function))) =
-			(applied.last().filter(|operand| !functions.is_library_word(operand)), suffix)
+			(applied.last().filter(|operand| !functions.is_calling_word(operand)), suffix)
 		else {
 			applied.push(item);
 			continue;

@@ -88,6 +88,7 @@ mod test_playground_get_routes; // cards square-int, recognized-browser
 mod test_playground_paint; // card canvas-zero
 mod test_primer; // card language-primer: the assistant's system prompt, /llms.txt
 mod test_rendered_at; // card sample-accurate
+mod test_rendered_buses; // card shared-buses
 mod test_rendered_fades; // card sound-gain-ramps
 mod test_rendered_pan; // card stereo-pan
 mod test_rendered_samples; // card sound-samples

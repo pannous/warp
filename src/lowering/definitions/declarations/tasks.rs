@@ -339,7 +339,7 @@ impl Tasks<'_> {
 	pub(super) fn is_task(&self, node: &Node) -> bool {
 		match node.drop_meta() {
 			Node::Symbol(name) => self.tasks.contains(name),
-			Node::List(items, _, _) if word(&items[0]) == TASK_VALUE => self.is_task(&items[1]),
+			Node::List(items, _, _) => read_job(items).is_some_and(|job| self.is_task(job)),
 			_ => false,
 		}
 	}
@@ -880,7 +880,7 @@ pub(crate) fn with_node_wrappers(node: Node, wrapped: &std::collections::BTreeMa
 	node.visit(&mut |part| {
 		if let Node::Key(head, Op::Define, _) = part {
 			if let Node::List(items, Bracket::Round, _) = head.drop_meta() {
-				defined.insert(word(&items[0]));
+				defined.extend(items.first().map(word));
 			}
 		}
 	});
@@ -948,7 +948,7 @@ pub(super) fn forwarded_raises(
 		wrapped: &std::cell::RefCell<std::collections::BTreeMap<String, usize>>,
 	) -> Node {
 		match node {
-			Node::Key(head, Op::Define, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if handlers.contains(&word(&items[0]))) =>
+			Node::Key(head, Op::Define, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|function| handlers.contains(&word(function)))) =>
 			{
 				let Node::List(items, _, _) = head.drop_meta() else { unreachable!("guarded") };
 				let function = word(&items[0]);
@@ -1186,9 +1186,18 @@ pub(crate) fn is_task_marker(head: &str) -> bool {
 
 /// `job` of `job` or of its read `task·value(job, f)`
 fn task_variable(node: &Node) -> Node {
-	match node.drop_meta() {
-		Node::List(items, _, _) if word(&items[0]) == TASK_VALUE => items[1].clone(),
+	let node = node.drop_meta();
+	match node {
+		Node::List(items, _, _) => read_job(items).unwrap_or(node).clone(),
 		other => other.clone(),
+	}
+}
+
+/// `job` of the items of its read `task·value(job, f)`; any other list, the empty one too, is none
+fn read_job(items: &[Node]) -> Option<&Node> {
+	match items {
+		[head, job, ..] if word(head) == TASK_VALUE => Some(job),
+		_ => None,
 	}
 }
 

@@ -78,6 +78,8 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 	let mut found = Vec::new();
 	definitions(&program, &mut found);
 	implicit_definitions(&program, &mut found); // `square := it*it` and `f = x => …` take arguments too (P143)
+	let library_calls = LibraryCalls::of(&program, &found);
+	let program = nest_library_calls(program, &library_calls);
 	let mut arities: HashMap<String, Arity> = HashMap::new();
 	for definition in &found {
 		let count = definition.params.len();
@@ -325,6 +327,83 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 			}
 		}
 		other => other.map_children(|child| nest_prefix_calls(child, arities)),
+	}
+}
+
+/// The words of `nest_library_calls`: the calls whose arguments a library word may head, and the names the program gives
+struct LibraryCalls {
+	functions: HashSet<String>,
+	named: HashSet<String>,
+	/// the indexes of the parameters each program function calls: `twice(g, x) := g(g(x))` → [0]
+	function_parameters: HashMap<String, Vec<usize>>,
+}
+
+impl LibraryCalls {
+	fn of(program: &Node, found: &[Definition]) -> LibraryCalls {
+		let functions = found.iter().map(|definition| definition.name.clone()).collect();
+		let function_parameters = crate::function_values::higher_order_parameters(found);
+		LibraryCalls { functions, named: crate::soft_keywords::names_given(program), function_parameters }
+	}
+
+	/// The library word at item `at` of a call calls the value after it: the caller takes no function there
+	/// (`map reverse xs`, `twice(upper, "hi")` pass the word on)
+	fn is_value_call(&self, items: &[Node], at: usize) -> bool {
+		let takes_function = match items[0].drop_meta() {
+			Node::Symbol(name) => match self.function_parameters.get(name) {
+				Some(indexes) => indexes.contains(&(at - 1)),
+				None => at == 1 && crate::lowering::lambdas::takes_a_function_first(&items[0]),
+			},
+			_ => false,
+		};
+		self.is_library_call(&items[at]) && !takes_function
+	}
+
+	/// A call taking values: the program's function, or a standard function or output word it does not name itself
+	fn is_caller(&self, node: &Node) -> bool {
+		let Node::Symbol(name) = node.drop_meta() else { return false };
+		self.functions.contains(name) || (crate::library_words::is_calling_word(name) && !self.named.contains(name))
+	}
+
+	/// A library word of one value the program does not name itself: `reverse`, `sorted`, `first`, `split`
+	fn is_library_call(&self, node: &Node) -> bool {
+		matches!(node.drop_meta(), Node::Symbol(name)
+			if crate::library_words::needs_one_value(name) && !self.named.contains(name))
+	}
+}
+
+/// A library word of one value standing where its call expects a value, before a value, is that value's call:
+/// `count(reverse xs)` is `count(reverse(xs))`, `max sorted xs` `max(sorted(xs))`, `first sorted reverse xs`
+/// `first(sorted(reverse(xs)))`. After a word that may take its function first (`map reverse xs`) the word is the
+/// function (card count-sorted)
+fn nest_library_calls(node: Node, words: &LibraryCalls) -> Node {
+	match node {
+		Node::List(
+			items,
+			bracket @ (Bracket::None | Bracket::Round),
+			separator @ (Separator::Space | Separator::None),
+		) if items.len() > 2 && words.is_caller(&items[0]) => {
+			// `first sorted xs == 1 and yes` compares (first sorted xs): the chain takes the comparison's first operand
+			if words.is_value_call(&items, items.len() - 2)
+				&& crate::library_words::is_comparison(&items[items.len() - 1])
+			{
+				let mut items = items;
+				let comparison = items.pop().expect("more than two items");
+				return crate::library_words::with_first_comparand(comparison, &|operand| {
+					let phrase =
+						Node::List([items.clone(), vec![operand]].concat(), bracket.clone(), separator.clone());
+					nest_library_calls(phrase, words)
+				});
+			}
+			let mut items: Vec<Node> = items.into_iter().map(|item| nest_library_calls(item, words)).collect();
+			while let Some(at) = (1..items.len() - 1).rev().find(|at| words.is_value_call(&items, *at)) {
+				let value = items.remove(at + 1);
+				let word = items.remove(at);
+				// written `reverse(xs)`: a later pass splices a phrase `reverse xs` back into its caller's arguments
+				items.insert(at, Node::List(vec![word, value], Bracket::Round, Separator::None));
+			}
+			Node::List(items, bracket, separator)
+		}
+		other => other.map_children(|child| nest_library_calls(child, words)),
 	}
 }
 
