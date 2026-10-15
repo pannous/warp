@@ -93,6 +93,20 @@ impl Effect {
 	}
 }
 
+/// A chain as JSON, `[["reverb", 0.4], ["delay", 0.25, 0.4, 0.5]]`: how the playground hands a bus's chain over
+/// (host-sound.js, card shared-buses stage 2)
+pub fn chain_of_json(json: &str) -> Result<Vec<Effect>, String> {
+	let effects: Vec<Vec<serde_json::Value>> = serde_json::from_str(json).map_err(|error| error.to_string())?;
+	effects
+		.iter()
+		.map(|effect| {
+			let name = effect.first().and_then(serde_json::Value::as_str).unwrap_or_default();
+			let settings: Vec<f64> = effect[1..].iter().filter_map(serde_json::Value::as_f64).collect();
+			Effect::named(name, &settings)
+		})
+		.collect()
+}
+
 /// The past samples a feedback comb reads back, per channel: y[i] = x[i] + feedback · y[i - gap]
 struct Comb {
 	echoes: Vec<f32>,

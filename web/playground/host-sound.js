@@ -8,7 +8,7 @@ const WAV_HEADER_BYTES = 44;
 // play of a signal (src/sound/mod.rs play_signal, lowering/words/music_words.rs BLOCK_SAMPLES): computed this many samples at a time
 const SIGNAL_BLOCK = 512;
 const FULL_SCALE = 32767;
-const DRY_BUSES = "bus(): its effects do not run in the browser yet, its sounds play dry (card shared-buses)";
+const DRY_BUSES = "bus(): a task's sounds sent to a bus play dry in the browser yet; the program's go through its effects (card shared-buses)";
 // played to someone (the page was clicked or typed in), a signal is computed at most this far ahead of the speaker,
 // checked every SIGNAL_POLL_MS (src/sound/mod.rs SIGNAL_AHEAD, SIGNAL_POLL)
 const SIGNAL_AHEAD_SECONDS = 0.1;
@@ -252,6 +252,21 @@ function wavOf(samples, rate, channels = 1) {
 	return bytes;
 }
 
+// the samples through the effects of the bus the run sends to (card shared-buses stage 2), their tail added; each sound
+// apart, which is the bus's sound for its linear effects (filters, delay, reverb, gain), compress and distort act on each
+// sound alone. A task's Worker has no compiler: its bus sounds stay dry, said once
+function onBus(holder, samples, rate, channels) {
+	const chain = holder.run.busChains?.[holder.run.sentBus ?? 0];
+	if (!chain?.length) return samples;
+	const floats = Float32Array.from(samples, sample => (Number(sample) - SAMPLE_OFFSET) / SAMPLE_OFFSET);
+	const processed = self.busProcessed?.(chain, floats, rate, channels);
+	if (!processed) {
+		if (!holder.warnings.includes(DRY_BUSES)) holder.warnings.push(DRY_BUSES);
+		return samples;
+	}
+	return Array.from(processed, sample => Math.round(Math.max(-1, Math.min(1, sample)) * (SAMPLE_OFFSET - 1)) + SAMPLE_OFFSET);
+}
+
 addHostPart({
 	words: (holder, hooks, { program }) => {
 		// samples (amplitude + SAMPLE_OFFSET, stereo interleaved) queued on the voice, for the page and render_sound; a
@@ -259,8 +274,8 @@ addHostPart({
 		// (but in an `at`, which places its sounds itself). The handle
 		holder.sounded = (samples, rate, channels, handle) => {
 			while (self.pageSystemValues?.window_open && !self.insideAt?.() && (self.soundsQueued?.() ?? 0) > PLAY_AHEAD_SECONDS) holder.sleep(SIGNAL_POLL_MS);
-			const sound = { samples, rate, channels };
 			const { place, at } = self.voiceSounded?.(samples.length / channels / rate) ?? {};
+			const sound = { samples: onBus(holder, samples, rate, channels), rate, channels };
 			hooks.sound?.({ ...sound, at, handle, loop: self.currentVoice?.().loop }); // a live loop's (card playground-live)
 			const own = handle ?? self.lastSoundHandle?.() ?? 0;
 			(holder.run.unrenderedSounds ??= []).push({ ...sound, place, handle: own });
@@ -318,11 +333,12 @@ addHostPart({
 				self.fadeSound?.(handle, gain, seconds);
 				return null;
 			},
-			// a bus (card shared-buses, src/sound/effects.rs): numbered as natively; its effects do not run here yet, its
-			// sounds play dry, said once
-			bus(number) {
-				if (!this.holder.warnings.includes(DRY_BUSES)) this.holder.warnings.push(DRY_BUSES);
-				return Number(number) || (this.holder.run.buses = (this.holder.run.buses ?? 0) + 1);
+			// a bus (card shared-buses, src/sound/effects.rs): numbered as natively, its chain ([["reverb", 0.4], …]) kept
+			// for the sounds sent to it (onBus)
+			bus(number, chain) {
+				const id = Number(number) || (this.holder.run.buses = (this.holder.run.buses ?? 0) + 1);
+				(this.holder.run.busChains ??= {})[id] = Array.from(chain ?? [], effect => Array.from(effect, setting => typeof setting === "bigint" ? Number(setting) : setting));
+				return id;
 			},
 			// the bus before, as natively, so out(signal, bus) restores it
 			send(number) {

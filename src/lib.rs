@@ -49,6 +49,11 @@ pub mod numbers;
 pub mod operators;
 #[cfg(feature = "native")]
 pub mod sound;
+/// The browser build's part of sound: the one effects DSP, which the playground runs too (card shared-buses stage 2)
+#[cfg(not(feature = "native"))]
+pub mod sound {
+	pub mod effects;
+}
 pub mod text;
 pub mod time;
 pub mod warp_parser;

@@ -108,11 +108,27 @@ async function loadCompiler() {
 }
 
 function passText(text) {
-	const bytes = utf8.encode(text);
+	return passBytes(utf8.encode(text));
+}
+
+function passBytes(bytes) {
 	const pointer = compiler.web_alloc(bytes.length);
 	new Uint8Array(compiler.memory.buffer, pointer, bytes.length).set(bytes);
 	return [pointer, bytes.length];
 }
+
+// a sound through a bus's effects (card shared-buses stage 2): the one DSP, src/sound/effects.rs, natively and here
+// (src/web/mod.rs web_bus_processed); floats -1…1 interleaved in and out, the tail added; undefined without a compiler
+self.busProcessed = (chain, floats, rate, channels) => {
+	if (!compiler?.web_bus_processed) return undefined;
+	const chainText = passText(JSON.stringify(chain));
+	const samples = passBytes(new Uint8Array(floats.buffer, floats.byteOffset, floats.byteLength));
+	const length = compiler.web_bus_processed(...chainText, ...samples, rate, channels);
+	compiler.web_free(...chainText);
+	compiler.web_free(...samples);
+	const at = compiler.web_report();
+	return length ? new Float32Array(compiler.memory.buffer.slice(at, at + length)) : undefined;
+};
 
 // a program's main may wait for a promise (host.js JSPI): the compiler waits with it
 async function evaluate(code, acknowledged) {
