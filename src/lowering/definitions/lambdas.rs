@@ -733,13 +733,13 @@ impl Lowering {
 		if let Some(iteration) = self.iteration_of(head) {
 			// `map square on xs` of a known `square`: the parser applied it, `map (square (on xs))`
 			let rest = spliced_applications(rest.to_vec());
-			// `map square on xs`, `map &square xs`: the function may come first
+			// `map square on xs`, `map &square xs`: the function may come first; before `on` it always does (`map f on xs`)
+			let function_first = matches!(rest.as_slice(), [_, on, _] if on.is_symbol(ON_WORD));
 			let rest: Vec<Node> = rest.iter().filter(|item| !item.is_symbol(ON_WORD)).cloned().collect();
 			let rest = match rest.as_slice() {
 				[first, second]
 					if iteration.extra_arguments == 0
-						&& self.is_function_value(first)
-						&& !self.is_function_value(second) =>
+						&& (function_first || self.is_function_value(first) && !self.is_function_value(second)) =>
 				{
 					vec![second.clone(), first.clone()]
 				}

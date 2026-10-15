@@ -252,13 +252,16 @@ fn builtin_wrapper(word: &str) -> Option<Node> {
 	let (params, _) = crate::lowering::library_signatures::library_signature(word)?;
 	let params: Vec<Node> = params.into_iter().map(Node::Symbol).collect();
 	let head = call(&builtin_function_name(word), params.clone());
-	// `abs`, `sqrt`: a prefix operator, `abs x`
+	Some(key(head, Op::Define, word_applied(word, params)))
+}
+
+/// The library word applied to `arguments`; `abs`, `sqrt` are prefix operators, `abs x`
+pub(crate) fn word_applied(word: &str, arguments: Vec<Node>) -> Node {
 	let operator = crate::warp_parser::PREFIX_OPERATOR_WORDS.iter().find(|(spelled, _)| *spelled == word);
-	let body = match (operator, params.as_slice()) {
+	match (operator, arguments.as_slice()) {
 		(Some((_, op)), [operand]) => key(Node::Empty, *op, operand.clone()),
-		_ => call(word, params),
-	};
-	Some(key(head, Op::Define, body))
+		_ => call(word, arguments),
+	}
 }
 
 /// The variables a lambda captures by value: those the program assigns and its loop variables (`for n in xs`, what

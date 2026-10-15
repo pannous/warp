@@ -56,7 +56,9 @@ fn library_word_values(node: Node, words: &SuffixWords) -> Node {
 	match node {
 		Node::List(mut items, bracket, separator) => {
 			let is_iteration = items.first().is_some_and(|head| matches!(head.drop_meta(), Node::Symbol(name) if crate::function_values::ITERATION_WORDS.contains(&name.as_str())));
-			if let Some(function) = items.last_mut().filter(|last| is_iteration && words.is_function_word(last)) {
+			let position = function_position(&items, words);
+			if let Some(function) = items.get_mut(position).filter(|item| is_iteration && words.is_function_word(item))
+			{
 				*function = word_function(function);
 			}
 			Node::List(items, bracket, separator)
@@ -77,9 +79,17 @@ fn library_word_values(node: Node, words: &SuffixWords) -> Node {
 /// `value => word value`
 fn word_function(word: &Node) -> Node {
 	// `xs.map(function floor)`: the call of floor, no reference to it
-	let word = crate::closures::referenced_function(word).map_or_else(|| word.clone(), Node::Symbol);
-	let call = Node::List(vec![word, *operand()], Bracket::None, Separator::Space);
-	Node::Key(operand(), Op::Arrow, Box::new(call))
+	let word = crate::closures::referenced_function(word).unwrap_or_else(|| word.drop_meta().name());
+	Node::Key(operand(), Op::Arrow, Box::new(crate::closures::word_applied(&word, vec![*operand()])))
+}
+
+/// Where the function stands among an iteration call's items: first in `map floor on xs`, `map(function floor, xs)`,
+/// else last as in `map(xs, floor)`
+fn function_position(items: &[Node], words: &SuffixWords) -> usize {
+	match items {
+		[_, function, _, ..] if words.is_function_word(function) => 1,
+		_ => items.len().saturating_sub(1),
+	}
 }
 
 /// The suffix words of the program's functions with the function each applies, `squared` → `square`; a name the
