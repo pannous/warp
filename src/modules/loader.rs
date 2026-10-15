@@ -368,6 +368,10 @@ impl<'a> Loader<'a> {
 			module.parent().map_or(directory.clone(), Path::to_path_buf)
 		});
 		let directory = directory.map_err(|failure| error(&failure))?;
+		// the binding's `import <library>` asks for only the library's module and header there
+		let file = Path::new(library).file_name().map_or(library.into(), |file| file.to_string_lossy());
+		let files = ["wasm", "h"].map(|extension| format!("{file}.{extension}"));
+		crate::web::list_directory(&directory.to_string_lossy(), &files);
 		self.load_source(Import::Use, directory.join(format!("{name}.warp")), binding)
 	}
 

@@ -526,6 +526,33 @@ pub fn read_bytes(path: &str) -> Option<Vec<u8>> {
 	std::fs::read(path).ok()
 }
 
+/// Outside the page every file is looked at directly: nothing to list
+#[cfg(not(all(target_arch = "wasm32", not(feature = "native"))))]
+pub fn list_directory(_directory: &str, _files: &[String]) {}
+
+#[cfg(all(target_arch = "wasm32", not(feature = "native")))]
+thread_local! {
+	static LISTED_DIRECTORIES: RefCell<Vec<(String, Vec<String>)>> = const { RefCell::new(Vec::new()) };
+}
+
+/// The page knows every file of `directory` (a package's library: its module and header, card uniscript-commit-wasm):
+/// the compiler's searches there ask for no other file, since every 404 is an error in the console (card console-errors)
+#[cfg(all(target_arch = "wasm32", not(feature = "native")))]
+pub fn list_directory(directory: &str, files: &[String]) {
+	LISTED_DIRECTORIES.with(|listed| listed.borrow_mut().push((directory.to_string(), files.to_vec())));
+}
+
+/// A path below a listed directory that its list lacks
+#[cfg(all(target_arch = "wasm32", not(feature = "native")))]
+fn is_unlisted(address: &str) -> bool {
+	LISTED_DIRECTORIES.with(|listed| {
+		listed.borrow().iter().any(|(directory, files)| {
+			let file = address.strip_prefix(directory.as_str()).and_then(|rest| rest.strip_prefix('/'));
+			file.is_some_and(|file| !files.iter().any(|listed| listed == file))
+		})
+	})
+}
+
 /// A file the page fetches for the compiler, remembered per address: a path of the served repository, a file of the page
 /// itself (PAGE_PREFIX `page:lib/libc.h`, resolved by web/playground/host.js against the page) or a URL
 #[cfg(all(target_arch = "wasm32", not(feature = "native")))]
@@ -537,6 +564,9 @@ pub fn read_bytes(address: &str) -> Option<Vec<u8>> {
 		if let Ok(bytes) = std::fs::read(address) {
 			return Some(bytes);
 		}
+	}
+	if is_unlisted(address) {
+		return None;
 	}
 	thread_local! {
 		static FETCHED: RefCell<std::collections::HashMap<String, Option<Vec<u8>>>> = RefCell::new(std::collections::HashMap::new());
