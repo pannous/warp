@@ -155,6 +155,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	// `.card { padding: 8px }` in a style block: the selector and the length as texts (style_rules.rs), before markup_tags
 	// reads `p.note{…}` as a tag
 	crate::lowering::style_rules::lower,
+	// `xs.map(.floor)`: a leading-dot word is the lambda on its member (lambdas.rs), once no selector is left
+	crate::lowering::lambdas::lower_member_lambdas,
 	// `label{ for: name "Name" }`: the value ends before the content after it (glued_attributes.rs), before the options
 	// of a select are read
 	crate::lowering::glued_attributes::lower,

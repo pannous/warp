@@ -32,3 +32,10 @@ fn a_parameter_s_number_word_method_is_the_word() {
 fn a_leading_dot_number_stays_a_number() {
 	assert_eq!(printed("xs = [.5 1]; xs"), "[0.5 1]");
 }
+
+/// `.m` is `x => x.m` through every pass: a library word read as a member, a dot word assigned as a value
+#[test]
+fn a_dot_word_is_the_written_lambda() {
+	assert_eq!(printed("[[1 2] [3]].map(.first)"), "[1 3]");
+	assert_eq!(printed("f = .name; f({name: 1})"), "1");
+}

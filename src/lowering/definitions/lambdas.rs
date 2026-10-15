@@ -184,16 +184,25 @@ fn literal_function(node: &Node) -> Option<Lambda> {
 		.or_else(|| block_lambda(node))
 		.or_else(|| operator_lambda(node))
 		.or_else(|| arrow_lambda(&it_function(node)?))
-		.or_else(|| member_lambda(node))
 }
 
-/// `xs.map(.floor)`, `people.sort(.age)`: a leading-dot word where a function is expected is the lambda `it => it.age`
-/// on its member, as Swift's `.member` (card dot-lambda); `&floor` stays the reference to the function itself
-fn member_lambda(node: &Node) -> Option<Lambda> {
+/// `xs.map(.floor)`, `people.sort(.age)`, `f = .name`: a leading-dot word is the lambda `it => it.age` on its member,
+/// as Swift's `.member` (card dot-lambda), written out before any pass reads it so it goes the way of a written lambda;
+/// after style_rules, which takes `.card {…}` as a selector. `&floor` stays the reference to the function itself
+pub fn lower_member_lambdas(node: Node) -> Node {
+	match member_of(&node) {
+		Some(member) => {
+			let it = || symbol(IMPLICIT_PARAMETER);
+			key(it(), Op::Arrow, key(it(), Op::Dot, symbol(member)))
+		}
+		None => node.map_children(lower_member_lambdas),
+	}
+}
+
+/// `age` of `.age`
+fn member_of(node: &Node) -> Option<&str> {
 	let Node::Symbol(name) = node.drop_meta() else { return None };
-	let member = name.strip_prefix('.').filter(|member| member.starts_with(|letter: char| letter.is_alphabetic()))?;
-	let it = symbol(IMPLICIT_PARAMETER);
-	Some(Lambda::new(vec![IMPLICIT_PARAMETER.to_string()], key(it, Op::Dot, symbol(member))))
+	name.strip_prefix('.').filter(|member| member.starts_with(|letter: char| letter.is_alphabetic()))
 }
 
 /// `map`, `filter`, `sorted` … as a word, whether or not the program defines a function of that name
