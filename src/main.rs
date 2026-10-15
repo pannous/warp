@@ -57,10 +57,10 @@ const DEPLOY_COMMAND: &str = "deploy";
 /// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
 const SERVE_COMMAND: &str = "serve";
 /// The first words the command line takes as commands, for unknown_command's suggestion
-const COMMAND_WORDS: [&str; 29] = [
-	"run", "test", "eval", "lower", "parse", "verify", "format", "lint", "beautify", "types", "data", "tool", "dev",
-	"serve", "deploy", "repl", "console", "register", "compile", "build", "link", "app", "help", "version", "docs",
-	"wiki", "home", "lsp", "start",
+const COMMAND_WORDS: [&str; 30] = [
+	"run", "test", "eval", "lower", "parse", "verify", "format", "lint", "beautify", "fix", "types", "data", "tool",
+	"dev", "serve", "deploy", "repl", "console", "register", "compile", "build", "link", "app", "help", "version",
+	"docs", "wiki", "home", "lsp", "start",
 ];
 /// How far a mistyped command may be from the command it suggests (`formt` → format)
 const MISTYPED_LETTERS: usize = 2;

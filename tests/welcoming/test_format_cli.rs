@@ -89,3 +89,12 @@ fn lint_of_inline_code_prints_hints_and_the_formatted_code() {
 	let beautified = warp(&["beautify", "use script; ls // the folder"]);
 	assert!(beautified.stdout.contains("use script; ls # the folder"), "{}", beautified.stdout);
 }
+
+// user 2026-10-15: `warp fix <file>` is beautify for now (the agent fixing the rest: card warp-fix)
+#[test]
+fn fix_is_beautify() {
+	let file = slash_commented_file("fix");
+	let run = warp(&["fix", "yes", &file]);
+	assert_eq!(run.status, Some(0), "{}{}", run.stdout, run.stderr);
+	assert_eq!(std::fs::read_to_string(&file).unwrap(), "# a note\nx = 1 + 2\nx\n");
+}

@@ -13,6 +13,8 @@ use warp::formatting::{format, soft_hints, Formatted, Options};
 
 pub(crate) const FORMAT_COMMANDS: [&str; 2] = ["format", "lint"];
 pub(crate) const BEAUTIFY_COMMAND: &str = "beautify";
+/// `warp fix <file>` = beautify for now (user 2026-10-15; the agent fixing the rest: card warp-fix)
+pub(crate) const BEAUTIFY_COMMANDS: [&str; 2] = [BEAUTIFY_COMMAND, "fix"];
 const CHECK_WORD: &str = "check";
 const HASH_COMMENTS_WORD: &str = "hash-comments";
 /// `warp beautify yes <file>`: applied without the preview's question
@@ -20,7 +22,7 @@ const YES_WORD: &str = "yes";
 const OPTION_WORDS: [&str; 3] = [CHECK_WORD, HASH_COMMENTS_WORD, YES_WORD];
 const HELP_WORDS: [&str; 3] = ["help", "--help", "-h"];
 pub(crate) const FORMAT_USAGE: &str = "warp format [check] [hash-comments] <file|folder|code>…  The canonical layout of warp code, only where the meaning stays (warp lint: the same; check: list what would change, exit 1; hash-comments: // comments become #)
-  warp beautify [check|yes] <file|folder|code>…  The layout plus the best-practice rewrites (// comments become #, other languages' words the warp words), shown as a diff and applied after \"apply? y/n\" (yes: without asking)";
+  warp beautify [check|yes] <file|folder|code>…  The layout plus the best-practice rewrites (// comments become #, other languages' words the warp words), shown as a diff and applied after \"apply? y/n\" (yes: without asking; warp fix: the same)";
 const WARP_EXTENSION: &str = "warp";
 /// What hints on code given inline name instead of a file
 const CODE_LABEL: &str = "code";
@@ -28,7 +30,7 @@ const CODE_LABEL: &str = "code";
 const SKIPPED_FOLDERS: [&str; 1] = ["golf"];
 
 pub(crate) fn is_format_command(word: &str) -> bool {
-	FORMAT_COMMANDS.contains(&word) || word == BEAUTIFY_COMMAND
+	FORMAT_COMMANDS.contains(&word) || BEAUTIFY_COMMANDS.contains(&word)
 }
 
 fn warp_files(path: &Path, files: &mut Vec<PathBuf>) {
@@ -147,7 +149,7 @@ pub(crate) fn format_command(command: &str, arguments: &[String]) -> i32 {
 	let words = arguments.iter().take_while(|argument| OPTION_WORDS.contains(&argument.as_str())).count();
 	let (option_words, paths) = arguments.split_at(words);
 	let check = option_words.iter().any(|word| word == CHECK_WORD);
-	let beautify = command == BEAUTIFY_COMMAND;
+	let beautify = BEAUTIFY_COMMANDS.contains(&command);
 	let yes = option_words.iter().any(|word| word == YES_WORD);
 	let options = Options { hash_comments: beautify || option_words.iter().any(|word| word == HASH_COMMENTS_WORD) };
 	let rewritten = |code: &str| if beautify { warp::formatting::beautify(code) } else { format(code, options) };
