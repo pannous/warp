@@ -42,3 +42,17 @@ fn test_a_duration_comparison_prints_a_truth() {
 	assert_eq!(printed("print(1 day > 2 hours)").trim(), "yes");
 	assert_eq!(printed("print(1 day != 1 day)").trim(), "no");
 }
+
+/// card month-days: `<=` and `>=` hold when the difference can reach 0 but never cross it; calendar parts alone move
+/// the date, not the hour, so daylight saving plays no part in `1 month <= 31 days`
+#[test]
+fn test_bounds_that_hold_on_every_date() {
+	is!("1 month <= 31 days", true);
+	is!("1 month >= 28 days", true);
+	is!("1 month > 31 days", false);
+	is!("1 month < 28 days", false);
+	is!("1 month != 32 days", true);
+	is!("1 day 1 hour >= 1 day", true);
+	fails_with("1 month < 31 days", "cannot order durations");
+	fails_with("1 day <= 24 hours", "cannot order durations");
+}
