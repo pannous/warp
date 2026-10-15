@@ -245,8 +245,10 @@ fn converted_kind(node: &Node, value: &Node, target: &Node, scope: &Scope) -> Op
 	if let Some(number) = spelled_number(node) {
 		return Some(infer_type(&number, scope));
 	}
-	// `t as number` of a text known only at run time: an Int, a ratio or a Float, as the text says (card runtime-text-ratio)
-	if is_number_word(target) && matches!(infer_type(value, scope), Kind::Text | Kind::Codepoint) {
+	// `t as number` of a text known only at run time: an Int, a ratio or a Float, as the text says (card runtime-text-ratio);
+	// of a value known only at run time (`number(t)` of a parameter, whatever kind a call guessed for it) likewise: a
+	// number stays as it is (card number-text)
+	if is_number_word(target) && !infer_type(value, scope).is_float() {
 		return Some(Kind::Data);
 	}
 	// `v as float` is an f64; `as int`, `as exact` stay exact Ints

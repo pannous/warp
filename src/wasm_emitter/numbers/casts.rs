@@ -548,7 +548,7 @@ impl WasmGcEmitter {
 			},
 			Node::Char(c) => self.emit_int_node(func, c.to_digit(10).map_or(*c as i64, |digit| digit as i64)),
 			// a value known only at run time (a field of an any) too: a number stays as it is
-			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty) => {
+			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty | Kind::Data) => {
 				self.emit_runtime_text_as_number(func, value)
 			}
 			_ => self.emit_node_instructions(func, value),
