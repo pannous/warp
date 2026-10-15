@@ -6,8 +6,12 @@
 //! Compared with `key` or `held_key` itself, a key word may be lowercase (card if-key): `if key == space`,
 //! `held_key == left`; never a name the program binds anywhere (a variable, loop variable, parameter, field). So does a
 //! compared text in any case: `key == "escape"` is `key == "Escape"`; one character keeps its case ("a" is not "A").
+//!
+//! A comparison with `held_key` asks whether that key is held, among others (card allow-diagonals): with LEFT and UP
+//! held, `held_key == LEFT` and `held_key == UP` both hold, so a program steers diagonally; `held_key` alone names the
+//! last to go down. `held_key == ""`: none is held.
 
-use super::nodes::key;
+use super::nodes::{call, key};
 use crate::errors::diagnostic::Diagnostic;
 use crate::event_signals::{main_level_variables, EVENT_WORD};
 use crate::lowering::module_properties::bound_names;
@@ -15,7 +19,7 @@ use crate::node::{symbol, Node};
 use crate::operators::Op;
 use std::cell::Cell;
 use std::collections::HashSet;
-use warp_runtime::host_words::HELD_KEY;
+use warp_runtime::host_words::{HELD_KEY, KEY_HELD};
 
 const HANDLER_WORDS: [&str; 2] = ["on", "once"];
 const KEY_EVENT: &str = "key";
@@ -99,7 +103,12 @@ fn held_comparisons(node: Node, keys: &KeyScope, warnings: &mut Vec<Diagnostic>)
 	match node.drop_meta() {
 		Node::Key(left, op @ (Op::Eq | Op::Ne), right) if left.is_symbol(HELD_KEY) || right.is_symbol(HELD_KEY) => {
 			let [left, right] = [left, right].map(|side| held_compared(side, keys, warnings));
-			key(left, *op, right)
+			let compared = if left.is_symbol(HELD_KEY) { &right } else { &left };
+			if compared.is_symbol(HELD_KEY) {
+				return key(left, *op, right);
+			}
+			let held = call(KEY_HELD, vec![crate::system_signals::key_code(compared.clone())]);
+			key(held, if *op == Op::Eq { Op::Ne } else { Op::Eq }, Node::int(0))
 		}
 		_ => node.map_children(|child| held_comparisons(child, keys, warnings)),
 	}

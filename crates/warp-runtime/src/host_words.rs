@@ -47,6 +47,9 @@ pub const KEY_DOWN: &str = "key_down";
 /// a program reads, made from KEY_CODE_HELD, the held key's code (0: none), which it does not name
 pub const HELD_KEY: &str = "held_key";
 pub const KEY_CODE_HELD: &str = "key code held";
+/// `key_held(code)`: whether that key is held now, among others (card allow-diagonals: `held_key == LEFT` while UP is
+/// held too); code 0 whether none is
+pub const KEY_HELD: &str = "key_held";
 /// Whether a window shows the pictures: natively the paint window until it closes (no before the first paint and
 /// headless), on a page its canvas, always; `while window_open { … }` is a drawing loop that ends with its window
 pub const WINDOW_OPEN: &str = "window_open";
@@ -136,7 +139,7 @@ pub const FETCH_HANDLER_PREFIX: &str = "on·fetch·";
 /// The checks of the listeners on shared values (P106), polled at every check point (lowering/signals/signal_values.rs)
 pub const SHARED_HANDLER: &str = "on·shared";
 /// The words link_host_words provides
-pub const BASIC_HOST_WORDS: [&str; 12] = [
+pub const BASIC_HOST_WORDS: [&str; 13] = [
 	SLEEP,
 	RANDOM,
 	RANDOM_BELOW,
@@ -148,6 +151,7 @@ pub const BASIC_HOST_WORDS: [&str; 12] = [
 	SIGNAL_WATCH,
 	SYSTEM_VALUE,
 	SET_SYSTEM_VALUE,
+	KEY_HELD,
 	EXIT,
 ];
 
@@ -210,6 +214,7 @@ mod linking {
 				crate::system_values::write(&name, value).map_err(wasmtime::Error::msg)
 			},
 		)?;
+		linker.func_wrap(HOST_LIBRARY, KEY_HELD, |code: i64| crate::system_values::key_held(code) as i64)?;
 		linker.func_wrap(HOST_LIBRARY, EXIT, |code: i64| -> Result<()> {
 			Err(wasmtime::Error::new(system_signals::ExitRequest(code as i32)))
 		})?;

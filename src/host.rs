@@ -13,9 +13,9 @@ pub const TEXT_HEAP_EXPORT: &str = "text_heap";
 /// sleep, random, random_below and clock need no compiler and live in warp-runtime (runtime/src/host_words.rs)
 pub use warp_runtime::host_words::{
 	CLIPBOARD_TEXT, CLOCK, EXIT, FETCH_HANDLER_PREFIX, FILE_HANDLER_PREFIX, GPU_COMPUTE, GPU_COMPUTE_LINEAR,
-	GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER, HOST_LIBRARY, INTERRUPT_HANDLER, LOCAL_OFFSET, NOTIFY, PAGE_PATH,
-	RANDOM, RANDOM_BELOW, RANDOM_SEED, SET_SYSTEM_VALUE, SHARED_HANDLER, SIGNAL_LISTEN, SIGNAL_POLL, SIGNAL_WATCH,
-	SLEEP, SYSTEM_VALUE, TEXT_COVERAGE, TIMER_HANDLER_PREFIX,
+	GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER, HOST_LIBRARY, INTERRUPT_HANDLER, KEY_HELD, LOCAL_OFFSET, NOTIFY,
+	PAGE_PATH, RANDOM, RANDOM_BELOW, RANDOM_SEED, SET_SYSTEM_VALUE, SHARED_HANDLER, SIGNAL_LISTEN, SIGNAL_POLL,
+	SIGNAL_WATCH, SLEEP, SYSTEM_VALUE, TEXT_COVERAGE, TIMER_HANDLER_PREFIX,
 };
 pub const TASK_CONTROL: &str = "task_control";
 /// `go f(x)` on a thread (tasks.rs) of a function of numbers, texts, characters or lists: task_spawn_values(name, [arguments]) → task id,
@@ -84,11 +84,14 @@ pub const PAINT: &str = "paint";
 /// draw_show(width, height) shows the canvas with the shapes added since the last show
 pub const DRAW_SHAPE: &str = "draw_shape";
 pub const DRAW_SHOW: &str = "draw_show";
+/// save_picture(pixels, width, height, file): `save canvas as "painting.png"` of `use draw` (card save-painting), its
+/// pixels as paint takes them, or 0 when drawn on the GPU; natively a PNG file, in the playground a download
+pub const SAVE_PICTURE: &str = "save_picture";
 /// sound_samples(samples, count, rate): 16-bit mono samples offset by 32768 (lib/sound.warp) played by the browser playground
 /// (host.js, WebAudio); natively a WAV file the system's player plays (src/sound/mod.rs)
 pub const SOUND: &str = "sound_samples";
 /// The host words whose first argument is a list of ints, read in one call of the module's list_to_ints
-pub const INT_LIST_WORDS: [&str; 2] = [PAINT, SOUND];
+pub const INT_LIST_WORDS: [&str; 3] = [PAINT, SOUND, SAVE_PICTURE];
 /// Channels between programs (src/host/channels.rs): channel_listen(id, channel), channel_pending(id) → count,
 /// channel_next(id) → the oldest message, channel_send(channel, value)
 pub const CHANNEL_LISTEN: &str = "channel_listen";
@@ -179,7 +182,7 @@ pub const VALUE_GIVING_WORDS: [&str; 15] = [
 use wasm_encoder::ValType::{F64, I32, I64};
 const NODE: wasm_encoder::ValType = wasm_encoder::ValType::Ref(wasm_encoder::RefType::ANYREF);
 /// name, parameters, results of each host word
-pub const HOST_WORD_SIGNATURES: [(&str, &[wasm_encoder::ValType], &[wasm_encoder::ValType]); 66] = [
+pub const HOST_WORD_SIGNATURES: [(&str, &[wasm_encoder::ValType], &[wasm_encoder::ValType]); 68] = [
 	(DRAW_SHAPE, &[I64, F64, F64, F64, F64, I64], &[]),
 	(DRAW_SHOW, &[I64, I64], &[]),
 	(GPU_COMPUTE, &[NODE, NODE, I64], &[NODE]),
@@ -204,6 +207,7 @@ pub const HOST_WORD_SIGNATURES: [(&str, &[wasm_encoder::ValType], &[wasm_encoder
 	(DISPATCH_EVENT, &[NODE, NODE], &[]),
 	(GUARDED_CALL, &[I32, NODE], &[NODE]),
 	(PAINT, &[NODE, I64, I64, NODE], &[]),
+	(SAVE_PICTURE, &[NODE, I64, I64, NODE], &[]),
 	(SOUND, &[NODE, I64, I64, I64], &[]),
 	(RUN_BLOCK, &[NODE, NODE, NODE, NODE], &[NODE]),
 	(PARSE_CODE, &[NODE], &[NODE]),
@@ -220,6 +224,7 @@ pub const HOST_WORD_SIGNATURES: [(&str, &[wasm_encoder::ValType], &[wasm_encoder
 	(SIGNAL_WATCH, &[I64, I32], &[]),
 	(SYSTEM_VALUE, &[I32], &[I64]),
 	(SET_SYSTEM_VALUE, &[I32, I64], &[]),
+	(KEY_HELD, &[I64], &[I64]),
 	(EXIT, &[I64], &[]),
 	(TASK_CONTROL, &[I64, I64], &[I64]),
 	(TASK_SPAWN_VALUES, &[I32, NODE], &[I64]),

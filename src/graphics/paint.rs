@@ -146,6 +146,20 @@ fn png_file(pixels: &[u64], width: usize, height: usize) -> Result<PathBuf, Stri
 	Ok(path)
 }
 
+/// `save canvas as "painting.png"` (card save-painting, lib/draw.warp): the pixels as a PNG at that path
+pub fn save_png(pixels: &[u64], width: usize, height: usize, path: &str) -> Result<(), String> {
+	if pixels.len() < width * height {
+		return Err(format!("save: a {width}×{height} picture needs {} pixels, got {}", width * height, pixels.len()));
+	}
+	std::fs::write(path, png(pixels, width, height)).map_err(|failure| format!("save: cannot write {path}: {failure}"))
+}
+
+/// A picture the GPU drew (gpu_canvas::snapshot) as a PNG at that path
+pub fn save_rgba_png(rgba: &[u8], width: usize, height: usize, path: &str) -> Result<(), String> {
+	let pixels: Vec<u64> = crate::graphics::gpu::opaque_colors(rgba).map(u64::from).collect();
+	save_png(&pixels, width, height, path)
+}
+
 /// paint.png for the first call of a run, paint-2.png for the second …
 fn file_name(call: usize) -> String {
 	if call == 1 {

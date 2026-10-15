@@ -232,6 +232,8 @@ const DECLARATION_PASSES: &[Pass] = &[
 	crate::lowering::one_entry_maps::lower,
 	// the used modules join the program before the signal passes: a listener of the program sees the writes of their functions
 	// note names (`play F#4`) while the program is its own, before the sound module joins it
+	// `save sound as "song.wav"`, `save canvas as "painting.png"`: what the word names, before music_words reads the sound
+	crate::lowering::saved_words::lower,
 	crate::lowering::music_words::lower,
 	crate::lowering::routes::lower,
 	crate::lowering::page_html::use_markup,

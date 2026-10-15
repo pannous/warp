@@ -47,6 +47,7 @@ const EXAMPLE_PARAMETERS = ["example", "sample"]; // ?example=fizzbuzz (or #fizz
 const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and lines in traces and the debugger
 const DEBUG_COMPILER = "warp.debug.wasm";
 const WAV_TYPE = "audio/wav"; // save sound's files (host-files.js wavOf)
+const PNG_TYPE = "image/png"; // save canvas's pictures (savePicture)
 const SLOW_START_PARAMETER = "slow_start"; // ?slow_start=<ms>: the worker reports ready that much later (a slow machine)
 // a starting worker silent this long is stuck (card firefox-hello-hang, three of six deploys): started again once, loudly
 const STALLED_START_MS = 60_000;
@@ -245,6 +246,7 @@ function startWorker(restarts = 0) {
 			if (data.type === "live loops") return liveLoopsNamed(data.names);
 			if (data.type === "sound file") return playSoundFile(data.url, data.handle, data.bytes);
 			if (data.type === "file") return offerFile(data.path, data.bytes);
+			if (data.type === "picture") return savePicture(data);
 			if (data.type === "midi") return sendMidi(data.port, data.message, data.at);
 			if (data.type === "stop sound files") return silence(); // stop_sound: the queued sounds and the music files
 			if (data.type === "stop sound") return silenced(data.handle); // stop_sound(handle): that one alone
@@ -1007,14 +1009,23 @@ function showVersion() {
 
 // a file the program rendered (save sound's WAV): a download link beside the wasm's, one per path, the latest bytes
 const offeredFiles = new Map();
-function offerFile(path, bytes) {
+function offerFile(path, bytes, type = WAV_TYPE) {
 	if (offeredFiles.has(path)) URL.revokeObjectURL(offeredFiles.get(path).href);
 	const name = path.split("/").pop();
-	const link = element("a", { href: URL.createObjectURL(new Blob([bytes], { type: WAV_TYPE })), download: name, textContent: `⤓ ${name}` });
+	const link = element("a", { href: URL.createObjectURL(new Blob([bytes], { type })), download: name, textContent: `⤓ ${name}` });
 	const offered = offeredFiles.get(path);
 	if (offered) offered.replaceWith(link); else $("written-files").append(link, " ");
 	offeredFiles.set(path, link);
 	$("written-files").hidden = false;
+	return link;
+}
+
+// `save canvas as "painting.png"` (host-media.js save_picture, card save-painting): the picture's words as a PNG,
+// downloaded at once and offered beside the wasm's link
+function savePicture({ path, words, width, height }) {
+	const canvas = Object.assign(document.createElement("canvas"), { width, height });
+	canvas.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(words.buffer), width, height), 0, 0);
+	canvas.toBlob(async png => png && offerFile(path, new Uint8Array(await png.arrayBuffer()), PNG_TYPE).click(), PNG_TYPE);
 }
 
 function downloadModule() {

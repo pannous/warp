@@ -150,8 +150,12 @@ pub(crate) fn with_type_module_uses(program: Node) -> Node {
 
 /// Whether the program plays sound: it calls a sound word or says `use sound` (lowering/words/music_words.rs reads its note names)
 pub fn uses_sound(program: &Node) -> bool {
-	first_called_undefined(program, SOUND_WORDS).is_some()
-		|| statements_of(program).iter().filter_map(used_module).any(|used| used.name == SOUND_MODULE)
+	first_called_undefined(program, SOUND_WORDS).is_some() || says_use(program, SOUND_MODULE)
+}
+
+/// Whether the program says `use <module>`
+pub(crate) fn says_use(program: &Node, module: &str) -> bool {
+	statements_of(program).iter().filter_map(used_module).any(|used| used.name == module)
 }
 
 /// A rare sound word the program calls: without `use sound` its error names the `use` (card bizarre-global)

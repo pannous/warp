@@ -111,6 +111,13 @@ def show() {
 	else { paint(canvas_pixels, canvas_width, canvas_height) }
 }
 
+// save canvas as: "painting.png", save(canvas, "painting.png") or save "painting.png" (card save-painting): the canvas
+// as drawn so far as a PNG, natively that file, in the playground a download; the word canvas as save's argument is a
+// Picture (src/lowering/words/saved_words.rs). On the GPU the pixels are there, not here: the host draws them again
+class Picture {}
+save(made: Picture, as file) := save_picture(canvas_pixels, canvas_width, canvas_height, file)
+save(file: text) := save(Picture(), file)
+
 // label(x, y, words, color, size): words set in a sans-serif font `size` pixels high from their top left corner, smooth
 // edges mixed with what is below (card paint-text): the host sets them, the playground with the browser's canvas,
 // natively a system font (src/graphics/text_raster.rs), so they look as text does on that system
