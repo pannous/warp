@@ -220,6 +220,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   (2026-10-08, emphatic). A comment hiding a closing bracket is a parse error naming the `//`.
 - `#` glued to a non-space is the count expression (`#s`, `#f(x)`); `# text`, `#!`, `##` and the directives `#use`,
   `#include`, `#import` stay comments/directives.
+- hash-comments (2026-10-15, user): `# text` is the preferred comment; `//` clashes with floor division and reads
+  Java-esque. `warp format` has an opt-in option rewriting `// text` comments to `# text` (floor division and `/* */`
+  untouched), and the linter gives a soft hint on every `//` comment.
 - `print a    print b` on one line is an error "two statements on one line? separate them with `;`".
 - P227 (2026-10-08) a comma next to `==` without parentheses is an error asking for them ("insist on braces to avoid
   errors"): `(2.0, 4) == 2.0, 4`.
