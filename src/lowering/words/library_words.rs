@@ -297,6 +297,18 @@ pub fn is_operand_word(name: &str) -> bool {
 	canonical_word(name).is_some_and(|word| arity(word) == 1 && !crate::type_tests::is_builtin_type_word(word))
 }
 
+/// A library word that needs one value, its further parameters optional: `reverse xs`, `split text` (its separator
+/// optional), no type word
+pub fn needs_one_value(name: &str) -> bool {
+	canonical_word(name)
+		.is_some_and(|word| fewest_arguments(word) == 1 && !crate::type_tests::is_builtin_type_word(word))
+}
+
+fn fewest_arguments(word: &str) -> usize {
+	let optional = OPTIONAL_ARGUMENTS.iter().find(|(name, _)| *name == word).map_or(0, |(_, optional)| *optional);
+	arity(word) - optional
+}
+
 /// The spelling word lists name a library word by (`sorted` → sort); any other name as it is
 pub fn canonical_spelling(name: &str) -> &str {
 	canonical_word(name).unwrap_or(name)
@@ -742,9 +754,8 @@ impl Lowering {
 				return Some(key(value.clone(), Op::As, symbol(NUMBER_WORD)));
 			}
 		}
-		// `first sorted xs`, `first(reverse xs)` have one argument: a library word after it is its argument's prefix
-		let prefixes_its_argument = matches!(bracket, Bracket::None | Bracket::Round)
-			&& items.len() > 2
+		// `first sorted xs` has one argument: a library word after it is its argument's prefix
+		let prefixes_its_argument = *bracket == Bracket::None
 			&& items.get(1).is_some_and(|next| self.library_word(&next.drop_meta().name()).is_some());
 		let argument_count = if prefixes_its_argument { 1 } else { items.len() - 1 };
 		let word = self.library_word_for(head, argument_count)?;
@@ -774,7 +785,7 @@ impl Lowering {
 		if !is_call && !is_prefix {
 			return None;
 		}
-		Some(self.call(word, &items[0], items[1..].to_vec(), (is_prefix && !is_call) || prefixes_its_argument))
+		Some(self.call(word, &items[0], items[1..].to_vec(), is_prefix && !is_call))
 	}
 
 	/// `for k in m` walks the keys of a map, as in Python; `for k, v in m` and `for (k, v) in m` bind each value too:
@@ -1067,8 +1078,7 @@ impl Lowering {
 	fn call(&self, word: &'static str, head: &Node, arguments: Vec<Node>, is_prefix: bool) -> Node {
 		let mut arguments = if is_prefix { self.merged_prefix_arguments(word, arguments) } else { arguments };
 		let wanted = arity(word);
-		let optional = OPTIONAL_ARGUMENTS.iter().find(|(name, _)| *name == word).map_or(0, |(_, optional)| *optional);
-		if arguments.len() < wanted && arguments.len() + optional >= wanted {
+		if arguments.len() < wanted && arguments.len() >= fewest_arguments(word) {
 			arguments.resize(wanted, left_out_argument(word));
 		}
 		// objects are references (P200): `x.copy()` is a new deep copy, `x.copy(shallow: true)` a shallow one (P205)
