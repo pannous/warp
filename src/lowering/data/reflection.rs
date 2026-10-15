@@ -847,6 +847,31 @@ fn dir_otherwise(subject: &Node) -> Node {
 	super::nodes::filled(DIR_OTHERWISE_TEMPLATE, [("RECEIVER", subject.clone()), ("OTHERWISE", methods)])
 }
 
+/// The type modules whose words `methods([1 2])` or `xs.methods` of a list value lists as functions: the program uses
+/// them, so the functions are there, as for `methods(list)` (card methods-last-n). Not yet the text module: all of
+/// its functions together don't compile (card methods-text), so `methods("hi")` still lists their names
+pub(crate) fn value_methods_modules(program: &Node) -> Vec<&'static str> {
+	if !program.mentions_any(&[METHODS_WORD]) {
+		return vec![];
+	}
+	let variables = literal_types(program);
+	let mut modules = vec![];
+	program.visit(&mut |part| {
+		let subject = match part.drop_meta() {
+			Node::List(items, Bracket::Round | Bracket::None, _)
+				if items.len() == 2 && items[0].symbol_name() == Some(METHODS_WORD) =>
+			{
+				&items[1]
+			}
+			Node::Key(subject, Op::Dot, word) if word.symbol_name() == Some(METHODS_WORD) => subject.as_ref(),
+			_ => return,
+		};
+		modules.extend(literal_type(subject).or_else(|| variables.get(subject.symbol_name()?).copied()));
+	});
+	modules.retain(|module| *module == crate::words::LIST_WORD);
+	modules
+}
+
 /// The type module of a text or list literal
 fn literal_type(value: &Node) -> Option<&'static str> {
 	match value.drop_meta() {
