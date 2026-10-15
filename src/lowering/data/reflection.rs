@@ -40,7 +40,7 @@ const BODY_WORD: &str = "body";
 /// `f.dump`: the whole definition as warp text, to copy and paste (card reflection-area)
 const DUMP_WORD: &str = "dump";
 /// The words whose bare argument naming a function without parameters is its call: `print now`, `type now`
-const CALLING_WORDS: [&str; 2] = ["print", crate::type_tests::TYPE_WORD];
+pub(crate) const CALLING_WORDS: [&str; 2] = ["print", crate::type_tests::TYPE_WORD];
 /// `f.name`, `f.return_type`: a function object's name and the kind of its result (card module-methods)
 const NAME_WORD: &str = "name";
 const RETURN_TYPE_WORD: &str = "return_type";

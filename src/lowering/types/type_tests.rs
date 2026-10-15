@@ -102,6 +102,11 @@ fn builtin_type(word: &str) -> Option<&'static BuiltinType> {
 	BUILTIN_TYPES.iter().find(|builtin| builtin.name == word || builtin.aliases.contains(&word))
 }
 
+/// The name of the built-in type a word or an alias names: `integer` → int
+pub fn builtin_type_name(word: &str) -> Option<&'static str> {
+	builtin_type(word).map(|builtin| builtin.name)
+}
+
 /// A word naming a built-in type or an alias of one (BUILTIN_TYPES): where it stands bare, it is that type as a
 /// value, never an undefined variable
 pub fn is_builtin_type_word(word: &str) -> bool {
