@@ -3,6 +3,8 @@
 //! `on key { if key == ESC { exit } }` reads as written. A program's own variable (`key`, `UP`) stays its own. A
 //! comparison with a word that names nothing (`key == ESCAPEE`, `key == q`) never holds, which a warning says.
 //! The key words compare with `held_key` anywhere too (card held-key): `held_key == LEFT` is `held_key == "ArrowLeft"`.
+//! Beside `key` or `held_key` a key word may be written in lowercase (card if-key): `if key == space`, `held_key == left`;
+//! elsewhere a lowercase word keeps its meaning (`return`, a local `up`).
 
 use super::nodes::key;
 use crate::errors::diagnostic::Diagnostic;
@@ -77,7 +79,7 @@ fn held_comparisons(node: Node, own: &HashSet<String>, warnings: &mut Vec<Diagno
 fn held_compared(side: &Node, own: &HashSet<String>, warnings: &mut Vec<Diagnostic>) -> Node {
 	match side.symbol_name() {
 		Some(word) if word == HELD_KEY || own.contains(word) => side.clone(),
-		Some(word) => match key_name(word) {
+		Some(word) => match compared_key_name(word) {
 			Some(name) => Node::Text(name),
 			None => {
 				if word.chars().all(|letter| !letter.is_lowercase()) {
@@ -127,7 +129,7 @@ fn unbound_comparisons(body: &Node, known: &HashSet<String>, warnings: &mut Vec<
 }
 
 fn names_nothing(word: &str, known: &HashSet<String>) -> bool {
-	word != KEY_EVENT && word != EVENT_WORD && !known.contains(word) && key_name(word).is_none()
+	word != KEY_EVENT && word != EVENT_WORD && !known.contains(word) && compared_key_name(word).is_none()
 }
 
 /// `on key {body}`, `once key {body}`, `on key: body`: the index of the item holding the body
@@ -149,10 +151,30 @@ fn named(body: Node, own: &HashSet<String>) -> Node {
 		Node::Symbol(word) if own.contains(word) => body,
 		Node::Symbol(word) if word == KEY_EVENT => key(symbol(EVENT_WORD), Op::Dot, symbol(KEY_EVENT)),
 		Node::Symbol(word) => key_name(word).map(Node::Text).unwrap_or(body),
+		// `key == space`: a side of a comparison also names a key in lowercase
+		Node::Key(left, op @ (Op::Eq | Op::Ne), right) => {
+			let [left, right] = [left, right].map(|side| named_compared(side.as_ref().clone(), own));
+			key(left, *op, right)
+		}
 		// `event.key`: the field stays a field
 		Node::Key(target, Op::Dot, field) => key(named(target.as_ref().clone(), own), Op::Dot, field.as_ref().clone()),
 		_ => body.map_children(|child| named(child, own)),
 	}
+}
+
+fn named_compared(side: Node, own: &HashSet<String>) -> Node {
+	match side.symbol_name() {
+		Some(word) if !own.contains(word) && word != KEY_EVENT => {
+			compared_key_name(word).map(Node::Text).unwrap_or_else(|| named(side, own))
+		}
+		_ => named(side, own),
+	}
+}
+
+/// A key word as written, or in lowercase (`space`, `esc`, `f1`): the lowercase form only where it is compared
+fn compared_key_name(word: &str) -> Option<String> {
+	let lowercase = word.chars().all(|letter| !letter.is_uppercase());
+	key_name(word).or_else(|| lowercase.then(|| key_name(&word.to_uppercase())).flatten())
 }
 
 fn key_name(word: &str) -> Option<String> {

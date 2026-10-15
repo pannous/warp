@@ -112,6 +112,7 @@ mod test_loop_if_value;
 mod test_loop_value;
 mod test_loop_value_at_run_time;
 mod test_loops_in_functions;
+mod test_lowercase_key_names; // card if-key
 mod test_many_tasks;
 mod test_map_loop_words; // card key-print
 mod test_match_alternatives;
