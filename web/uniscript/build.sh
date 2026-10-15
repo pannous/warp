@@ -1,5 +1,6 @@
 #!/bin/bash
-# Builds web/uniscript: uniscript.wasp (use uniscript: the uniscript package) compiled to uniscript.wasm by warp, the entity index of the uniscript package, and the OFL fonts in unicode-range slices.
+# Builds web/uniscript: uniscript.warp (use uniscript: the uniscript package) compiled to uniscript.wasm by warp, the C library it imports
+# (the package's uniscript_c.wasm) in modules/, and the OFL fonts in unicode-range slices.
 # Usage: web/uniscript/build.sh [deploy]   (deploy: copy the page to the server afterwards)
 set -euo pipefail
 
@@ -13,17 +14,15 @@ repository="$(cd "$page/../.." && pwd)"
 cd "$repository"
 
 warp="$(scripts/own-warp.sh)"
-"$warp" compile --wasm web/uniscript/uniscript.warp  # → uniscript.wasm (compile alone builds an executable), fetches packages/uniscript
-# since uniscript 1.0.8 `use uniscript` imports the module uniscript_c.wasm by path, which uniscript.js does not link
-if wasm-tools print web/uniscript/uniscript.wasm | grep -q '(import "/'; then
-	git checkout web/uniscript/uniscript.wasm
-	echo "uniscript.wasm now imports uniscript_c.wasm, which uniscript.js cannot link: the page must call it itself (card web-uniscript)" >&2
-	exit 1
-fi
-
+"$warp" compile --wasm web/uniscript/uniscript.warp  # → uniscript.wasm (compile alone builds an executable), fetches the package's library
+# the modules it imports by path (`use uniscript`: the package's C library uniscript_c.wasm) beside the page as
+# modules/<file>, where uniscript.js looks for them
+mkdir -p "$page/modules" "$page/fonts"
+wasm-tools print web/uniscript/uniscript.wasm | grep -oE '\(import "/[^"]+\.wasm"' | cut -d'"' -f2 | sort -u | while read -r module; do
+	cp "$module" "$page/modules/"
+	echo "shipped $module as modules/$(basename "$module")"
+done
 cp web/playground/imports.js "$page/"  # importDescriptors, shared with the playground
-mkdir -p "$page/packages/uniscript/data" "$page/fonts"
-cp packages/uniscript/data/entities.idx "$page/packages/uniscript/data/"  # fetched by the compile
 
 # fonts/: fonts.css with unicode-range slices of the fonts, fonts.json for sequence_fonts.js (needs fonttools, wordfreq)
 python3 "$page/slice_fonts.py" "${FONT_DIRS// /:}" "$page/fonts"
@@ -31,5 +30,5 @@ python3 "$page/slice_fonts.py" "${FONT_DIRS// /:}" "$page/fonts"
 if [ "${1:-}" = "deploy" ]; then
 	ssh "$SERVER" "mkdir -p $SERVER_DIR"
 	# no --delete: the directory also holds rust/, the uniscript repository's demo (its docs/make_demo.sh deploy)
-	rsync -av --exclude build.sh --exclude .gitignore --exclude slice_fonts.py --exclude __pycache__ "$page/" "$SERVER:$SERVER_DIR/"
+	rsync -av --exclude build.sh --exclude .gitignore --exclude slice_fonts.py --exclude __pycache__ --exclude packages "$page/" "$SERVER:$SERVER_DIR/"
 fi
