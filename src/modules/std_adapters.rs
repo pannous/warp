@@ -237,6 +237,7 @@ fn sound(member: &str, arguments: &[Node]) -> Result<Node, String> {
 		("rest", [seconds]) => crate::sound::rest(number_of(seconds)?),
 		("wait", []) => crate::sound::wait(),
 		("last", []) => return Ok(Node::int(crate::sound::last_handle() as i64)),
+		("moment", []) => return Ok(Node::float(crate::sound::moment_seconds())),
 		("queued", []) => return Ok(Node::float(crate::sound::queued_seconds())),
 		("render", [path]) => return crate::sound::render(&text_of(path)?).map(Node::float),
 		("load", [path]) => {
@@ -268,7 +269,12 @@ fn midi(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			crate::sound::midi::send(&text_of(port)?, &bytes).map(|_| Node::Empty)
 		}
 		("outputs", []) => crate::sound::midi::outputs().map(texts),
-		("receive", []) => crate::sound::midi::receive().map(|_| Node::Empty),
+		("inputs", []) => crate::sound::midi::inputs().map(texts),
+		("receive", [port, seconds]) => {
+			crate::sound::midi::receive(&text_of(port)?, number_of(seconds)?).map(|message| {
+				message.map_or(Node::Empty, |bytes| list_of(bytes.into_iter().map(|byte| Node::int(byte as i64))))
+			})
+		}
 		_ => no_such_word(arguments),
 	}
 }

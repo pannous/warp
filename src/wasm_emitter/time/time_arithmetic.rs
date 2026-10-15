@@ -28,6 +28,7 @@ const MONTHS_PER_YEAR: i64 = 12;
 const DURATION_KIND: i64 = ((TimeForm::Duration as i64) << KIND_BITS) | Kind::Time as i64;
 const NO_TIME_OF_DAY: &str = "a date has no time of day: add that duration to a local time";
 const NO_CALENDAR: &str = "an instant has no calendar: place it in a zone before adding months or days";
+const CLOCK_WITHOUT_CALENDAR: &str = "a time of day has no calendar: add months or days to a local time";
 const NO_DAY: &str = "the day does not exist in that month: use add(…, overflow: clamp) for the last day of the month";
 const NO_ZONES: &str = "a zoned time at run time needs the time zone functions";
 const MISMATCHED: &str = "cannot subtract a date, a local time, an instant and a zoned time from each other: no implicit conversion between kinds of time";
@@ -247,13 +248,20 @@ impl WasmGcEmitter {
 		} else {
 			Self::emit_if(f, &is_form(TimeForm::Zoned), |f| self.emit_time_failure(f, NO_ZONES));
 		}
+		#[rustfmt::skip]
+		let has_calendar_parts = || vec![
+			I::LocalGet(MONTHS), I::I64Const(0), I::I64Ne, I::LocalGet(DAYS), I::I64Const(0), I::I64Ne, I::I32Or,
+		];
 		Self::emit_if(f, &is_form(TimeForm::Instant), |f| {
-			#[rustfmt::skip]
-			let has_calendar_parts = vec![
-				I::LocalGet(MONTHS), I::I64Const(0), I::I64Ne, I::LocalGet(DAYS), I::I64Const(0), I::I64Ne, I::I32Or,
-			];
-			Self::emit_if(f, &has_calendar_parts, |f| self.emit_time_failure(f, NO_CALENDAR));
+			Self::emit_if(f, &has_calendar_parts(), |f| self.emit_time_failure(f, NO_CALENDAR));
 			Self::emit_list(f, &[I::LocalGet(POSITION_A), I::LocalGet(NANOS), I::I64Add, I::LocalSet(POSITION_A)]);
+			self.emit_return_time(f, KIND_A, POSITION_A);
+		});
+		// a time of day goes round the clock: 23:00 + 2 hours is 01:00
+		Self::emit_if(f, &is_form(TimeForm::Clock), |f| {
+			Self::emit_if(f, &has_calendar_parts(), |f| self.emit_time_failure(f, CLOCK_WITHOUT_CALENDAR));
+			Self::emit_list(f, &[I::LocalGet(POSITION_A), I::LocalGet(NANOS), I::I64Add, I::LocalSet(POSITION_A)]);
+			Self::emit_floor_split(f, POSITION_A, DAY_NANOS, SPARE, POSITION_A);
 			self.emit_return_time(f, KIND_A, POSITION_A);
 		});
 		Self::emit_if(

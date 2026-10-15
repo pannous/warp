@@ -136,11 +136,23 @@ function builtinValues(shader, width, height) {
 	return Object.fromEntries(BUILTIN_HOLES.filter(name => new RegExp(`\\b${VALUES_NAME}\\.${name}\\b`).test(shader)).map(name => [name, value[name]]));
 }
 
-// the task Worker's side of a page canvas: the OffscreenCanvas the page sends through `port`, drawn on through WebGPU
-async function gpuCanvas({ id, port, replaces }) {
+// the task Worker's page canvases on their way, by id: the page posts each straight here (task-worker.js), maybe before
+// or after the program's gpu_canvas job for it
+const arrivingCanvases = new Map();
+const arrivingCanvas = id => {
+	if (!arrivingCanvases.has(id)) {
+		let arrived;
+		arrivingCanvases.set(id, { canvas: new Promise(resolve => arrived = resolve), arrived });
+	}
+	return arrivingCanvases.get(id);
+};
+const paintCanvasArrived = ({ id, canvas }) => arrivingCanvas(id).arrived(canvas);
+
+// the task Worker's side of a page canvas: the OffscreenCanvas the page sent, drawn on through WebGPU
+async function gpuCanvas({ id, replaces }) {
 	const device = await theGpuDevice(); // without an adapter that error, as gpu_render's
-	const canvas = await new Promise(resolve => port.onmessage = ({ data }) => resolve(data.canvas));
-	port.close();
+	const canvas = await arrivingCanvas(id).canvas;
+	arrivingCanvases.delete(id);
 	paintCanvases.delete(replaces);
 	const context = canvas.getContext("webgpu");
 	if (!context) throw new Error(NO_CANVAS_CONTEXT); // the program paints through pixels then (gpuPainted)
@@ -296,8 +308,16 @@ const gpuModule = (device, shader) => compiledOnce(compiledModules, shader, () =
 async function checkedModule(device, shader) {
 	const module = device.createShaderModule({ code: shader });
 	const problems = (await module.getCompilationInfo()).messages.filter(message => message.type === "error");
-	if (problems.length) throw new Error(problems.map(problem => `${problem.lineNum}:${problem.linePos}: ${problem.message}`).join("; "));
+	if (problems.length) throw new Error(problems.map(problem => `${problem.lineNum}:${problem.linePos}: ${essence(problem.message)}`).join("; "));
 	return module;
+}
+
+// a GPU's report in one line, as gpu.rs essence: Firefox's naga report `Shader parsing error: expected "{"` followed by
+// its excerpt of the shader gives what follows `error: `, a one-line report (Chrome, Safari) stays as it is
+function essence(report) {
+	const lines = report.split("\n").map(line => line.trim()).filter(Boolean);
+	const cause = lines.map(line => line.split("error: ")).find(parts => parts.length > 1);
+	return cause ? cause.slice(1).join("error: ") : lines.at(-1) ?? report;
 }
 
 // submit the encoded work (its validation scope pushed before the pipeline) and give the bytes it left in readback
@@ -398,11 +418,10 @@ function writeSharedWords(shared, words) {
 	Atomics.notify(header, 0);
 }
 
-// the program's side: hand the job to a task Worker and wait for the values it gives, raw words as `Words` (a copy:
-// the shared buffer takes the next answer)
-function gpuJob(word, job, transfer = [], Words = Float32Array) {
+// the program's side: hand the job to a task Worker (by default the GPU's, gpuTaskWorker) and wait for the values it
+// gives, raw words as `Words` (a copy: the shared buffer takes the next answer)
+function gpuJob(word, job, transfer = [], Words = Float32Array, worker = hasTaskWorkers() && gpuTaskWorker()) {
 	if (!hasTaskWorkers()) throw new Error(`${word} needs task Workers, which only a cross-origin isolated page has (the playground)`);
-	const worker = gpuTaskWorker();
 	if (!worker) throw new Error(`${word}: every task Worker is busy`);
 	const shared = takeAnswerBuffer();
 	worker.postMessage({ gpu: { word, job }, shared }, transfer);
@@ -517,11 +536,12 @@ addHostPart({
 				}
 			}
 		};
-		// the page makes the canvas and sends it through a channel to the task Worker, which configures it
+		// the page makes the canvas and sends it to the GPU's task Worker, named by the page's id for it, which configures it
 		const newPaintCanvas = (width, height, replaces) => {
-			const id = ++paintCanvasCount, { port1, port2 } = new MessageChannel();
-			hooks.gpuCanvas({ id, width, height, port: port2, replaces });
-			gpuJob("gpu_canvas", { id, port: port1, replaces }, [port1]);
+			const id = ++paintCanvasCount, worker = gpuTaskWorker();
+			if (!worker) throw new Error("gpu_canvas: every task Worker is busy");
+			hooks.gpuCanvas({ id, width, height, taskWorkerId: worker.taskWorkerId, replaces });
+			gpuJob("gpu_canvas", { id, replaces }, [], Float32Array, worker);
 			return { id, width, height };
 		};
 		return {

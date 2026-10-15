@@ -234,6 +234,7 @@ mod test_type_field_fallback; // card type-non
 mod test_type_word_filter_loops;
 mod test_uncharged_blocks;
 mod test_undo_history;
+mod test_unhandled_emit_operand;
 mod test_unhandled_emits;
 mod test_unit_tasks; // card units-tasks
 mod test_unwrap;

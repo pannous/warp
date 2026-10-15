@@ -250,10 +250,10 @@ x = 5
 if x > 9 : "big" else if x > 3 : "medium" else "small"
 ```
 
-`time` is the time of day, so the answer depends on when you run it.
+`now` compared with a duration is the time of day, so the answer depends on when you run it.
 
 ```warp
-if time < 12h : "morning" else "later"
+if now < 12h : "morning" else "later"
 ```
 
 Braces hold several lines.

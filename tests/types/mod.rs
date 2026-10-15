@@ -36,6 +36,7 @@ mod test_class_mixins;
 mod test_class_operators;
 mod test_class_properties;
 mod test_class_witnesses;
+mod test_code_type;
 mod test_codepoint_digit; // card codepoint-digit
 mod test_collection_declarations;
 mod test_conformance_claims;
@@ -111,6 +112,7 @@ mod test_optional_list_items;
 mod test_optional_number_fields;
 mod test_param_named_like_global; // card param-named-like-global
 mod test_parameter_text; // card param-text
+mod test_partial_time_comparisons; // cards now-make, now-allow
 mod test_passed_list_identity; // card xs-xs
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_person_struct;
@@ -145,6 +147,7 @@ mod test_text_as_bool; // card yes-print
 mod test_text_as_number; // card units-dynamic
 mod test_text_of_text; // text(text(5)) is "5"
 mod test_time_kinds_are_types; // card anchor-time
+mod test_time_now; // cards print-time, time-now
 mod test_time_programs_run; // card run-time-dates, stage B4
 mod test_time_type_names;
 mod test_time_values_at_run_time; // card run-time-dates
