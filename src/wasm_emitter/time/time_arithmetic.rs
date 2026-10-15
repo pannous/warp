@@ -223,12 +223,12 @@ impl WasmGcEmitter {
 	/// longer or shorter on every date, or the order depends on the date (an error)
 	fn emit_duration_order(&mut self) {
 		let (kind_a, position_a, kind_b, position_b) = (0, 1, 2, 3);
-		let (months, days, nanos, fewest_days, most_days) = (4, 5, 6, 7, 8);
+		let (months, days, nanos, fewest_days, most_days, shift) = (4, 5, 6, 7, 8, 9);
 		self.runtime_function(
 			DURATION_ORDER,
 			vec![ValType::I64; 4],
 			vec![ValType::I32],
-			vec![ValType::I64; 5],
+			vec![ValType::I64; 6],
 			|s, f| {
 				for (part, local) in [(Part::Months, months), (Part::Days, days), (Part::Nanos, nanos)] {
 					Self::emit_list(f, &part_of(kind_a, position_a, part));
@@ -246,16 +246,18 @@ impl WasmGcEmitter {
 				I::LocalSet(fewest_days),
 				I::LocalGet(days), I::LocalGet(months), I::I64Const(LONGEST_MONTH_DAYS), I::I64Mul, I::I64Add,
 				I::LocalSet(most_days),
+				// daylight saving moves an exact part against the calendar part by at most an hour; calendar parts alone keep the hour
+				I::LocalGet(nanos), I::I64Const(0), I::I64Ne, I::I64ExtendI32U, I::I64Const(HOUR_NANOS), I::I64Mul, I::LocalSet(shift),
 				// negative months take more days off the longer they are
 				I::LocalGet(months), I::I64Const(0), I::I64LtS, I::If(BlockType::Empty),
 					I::LocalGet(fewest_days), I::LocalGet(most_days), I::LocalSet(fewest_days), I::LocalSet(most_days),
 				I::End,
 				I::LocalGet(fewest_days), I::I64Const(DAY_NANOS), I::I64Mul, I::LocalGet(nanos), I::I64Add,
-				I::I64Const(HOUR_NANOS), I::I64Sub, I::I64Const(0), I::I64GtS, I::If(BlockType::Empty),
+				I::LocalGet(shift), I::I64Sub, I::I64Const(0), I::I64GtS, I::If(BlockType::Empty),
 					I::I32Const(1), I::Return,
 				I::End,
 				I::LocalGet(most_days), I::I64Const(DAY_NANOS), I::I64Mul, I::LocalGet(nanos), I::I64Add,
-				I::I64Const(HOUR_NANOS), I::I64Add, I::I64Const(0), I::I64LtS, I::If(BlockType::Empty),
+				I::LocalGet(shift), I::I64Add, I::I64Const(0), I::I64LtS, I::If(BlockType::Empty),
 					I::I32Const(-1), I::Return,
 				I::End,
 			]);

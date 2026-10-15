@@ -651,9 +651,7 @@ fn apply(left: Value, op: Op, right: Value) -> Result<Value, String> {
 		(Value::Duration(duration), Op::Mul, Value::Int(n)) | (Value::Int(n), Op::Mul, Value::Duration(duration)) => {
 			Ok(Value::Duration(duration.times(n)))
 		}
-		(Value::Duration(a), Op::Eq, Value::Duration(b)) => a.equals(b).map(Value::Bool),
-		(Value::Duration(a), Op::Ne, Value::Duration(b)) => a.equals(b).map(|equal| Value::Bool(!equal)),
-		(Value::Duration(a), op, Value::Duration(b)) if op.is_comparison() => Ok(Value::Bool(op.holds(a.order(b)?))),
+		(Value::Duration(a), op, Value::Duration(b)) if op.is_comparison() => a.compares(op, b).map(Value::Bool),
 		(Value::Duration(duration), Op::As, Value::Symbol(unit)) => converted(&duration, &Node::Symbol(unit)),
 		// `"on " + 2024-02-29`: a text joins the other's text, as list_join does at run time
 		(left, Op::Add, right) if matches!(left, Value::Text(_)) || matches!(right, Value::Text(_)) => {
