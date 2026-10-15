@@ -560,32 +560,43 @@ fn choose_module(node: &Node) -> Result<CompiledModule, Node> {
 }
 
 /// Compile and run an already parsed program; imports follow its resolved effects.
-pub fn eval_parsed(node: Node, _code: &str) -> Node {
-	crate::errors::diagnostic::in_program_mode(node, eval_program)
+pub fn eval_parsed(node: Node, code: &str) -> Node {
+	crate::errors::diagnostic::in_program_mode(node, |node| eval_program(node, code))
 }
 
-fn eval_program(node: Node) -> Node {
-	let node = match lower_for_emission(node) {
-		Ok(node) => node,
-		Err(final_value) => return final_value,
-	};
-
+fn eval_program(node: Node, code: &str) -> Node {
 	#[cfg(feature = "native")]
-	if let Some(wasm_bytes) = raw_struct_module(&node) {
-		match run_raw_struct(&wasm_bytes) {
-			Ok(result) => return result,
-			Err(e) => warn!("raw struct eval failed: {}", e),
-		}
+	if let Some(module) = crate::run::program_cache::kept(code) {
+		return checked_markup(run_module(module));
 	}
+	match module_to_run(node, code) {
+		Ok(module) => checked_markup(run_module(module)),
+		Err(value) => value,
+	}
+}
 
-	// Fallback to standard Node encoding; a final quantity's unit travels in the module (`warp.meta`) and is read back
-	match emit_module(&node) {
-		Ok(module) => checked_markup(run_module(CompiledModule {
+/// The module the program compiles to (kept for its next run, src/run/program_cache.rs), or its value when it needs
+/// none: a constant answer, a raw struct's, a type error
+fn module_to_run(node: Node, code: &str) -> Result<CompiledModule, Node> {
+	let compile = || {
+		let node = lower_for_emission(node)?;
+		#[cfg(feature = "native")]
+		if let Some(wasm_bytes) = raw_struct_module(&node) {
+			match run_raw_struct(&wasm_bytes) {
+				Ok(result) => return Err(result),
+				Err(e) => warn!("raw struct eval failed: {}", e),
+			}
+		}
+		// Fallback to standard Node encoding; a final quantity's unit travels in the module (`warp.meta`) and is read back
+		emit_module(&node).map(|module| CompiledModule {
 			bytes: crate::numbers::units::static_units::with_result_units(module.bytes),
 			..module
-		})),
-		Err(type_error) => type_error,
-	}
+		})
+	};
+	#[cfg(feature = "native")]
+	return crate::run::program_cache::keeping(code, compile);
+	#[cfg(not(feature = "native"))]
+	compile()
 }
 
 /// A run's value; markup it built is checked for accessibility as it came out (card web-a11y-runtime)
