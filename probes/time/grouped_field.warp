@@ -1,0 +1,3 @@
+// a field of a grouped time expression (card field-grouped)
+print (now + 1 hour).hour
+print (now - 30 minutes).minute
