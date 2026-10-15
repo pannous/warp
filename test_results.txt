@@ -1192,6 +1192,11 @@ PASSED:
   ✓ functions::test_builtin_clash::a_function_keyword_names_an_infix_word
   ✓ functions::test_builtin_clash::an_operator_word_cannot_name_a_function
   ✓ functions::test_builtin_clash::library_words_stay_redefinable
+  ✓ functions::test_builtin_function_values::a_bare_builtin_assigned_needs_its_arguments
+  ✓ functions::test_builtin_function_values::a_bare_builtin_passed_to_map_stays_the_function
+  ✓ functions::test_builtin_function_values::a_builtin_function_value_is_called
+  ✓ functions::test_builtin_function_values::a_builtin_is_a_function
+  ✓ functions::test_builtin_function_values::a_builtin_reference_has_type_builtin
   ✓ functions::test_c_style_definitions::a_result_type_before_the_name_defines_a_function
   ✓ functions::test_c_style_definitions::void_defines_a_function_without_a_result
   ✓ functions::test_call_arity::a_default_reads_the_parameters_before_it
@@ -1428,6 +1433,7 @@ PASSED:
   ✓ functions::test_library_word_aliases::parser_alias_notes_point_at_the_word
   ✓ functions::test_library_word_aliases::print_spellings_print
   ✓ functions::test_library_word_aliases::renaming_a_module_function_as_the_module_does
+  ✓ functions::test_library_word_assigned::a_bare_library_word_assigned_needs_its_arguments
   ✓ functions::test_library_word_assigned::a_libm_word_maps_over_a_list
   ✓ functions::test_library_word_assigned::a_library_word_defined_is_its_alias
   ✓ functions::test_library_word_assigned::a_library_word_referenced_is_a_function
@@ -1759,6 +1765,7 @@ PASSED:
   ✓ lists::test_bare_list_assignment::a_bracketed_list_never_asks
   ✓ lists::test_bare_list_assignment::an_unbracketed_list_assignment_asks_list_or_statements
   ✓ lists::test_bare_list_assignment::each_reading_has_its_explicit_form
+  ✓ lists::test_bare_list_assignment::spaced_values_after_print_print_each
   ✓ lists::test_bare_list_assignment::spaced_values_are_a_list
   ✓ lists::test_byte_size::byte_size_counts_bytes_and_size_counts_elements
   ✓ lists::test_captured_call_lists::a_captured_list_of_float_calls_holds_floats
@@ -2116,6 +2123,10 @@ PASSED:
   ✓ modules::test_checkout_std_lib::another_checkout_lib_is_the_standard_module
   ✓ modules::test_dir_any_value::dir_of_a_map_lists_its_keys
   ✓ modules::test_dir_any_value::dir_of_a_plain_value_lists_nothing
+  ✓ modules::test_dir_builtin_members::dir_of_a_list_lists_its_builtin_methods
+  ✓ modules::test_dir_builtin_members::dir_of_a_text_lists_its_builtin_methods
+  ✓ modules::test_dir_builtin_members::every_builtin_method_is_a_function_value
+  ✓ modules::test_dir_builtin_members::methods_list_what_dir_lists
   ✓ modules::test_dir_value_methods::dir_of_a_value_lists_its_types_methods
   ✓ modules::test_dir::a_program_s_own_dir_wins
   ✓ modules::test_dir::dir_lists_the_names_of_a_standard_module
@@ -3099,7 +3110,6 @@ PASSED:
   ✓ parser::test_attributes::attributes_serialize_in_front_and_valueless_ones_stay_bare
   ✓ parser::test_bare_operator_block::a_bare_operator_block_names_the_fix
   ✓ parser::test_bare_operator_block::operators_with_operands_in_blocks_still_work
-  ✓ parser::test_big_literals::a_100_kb_literal_compiles_in_linear_time
   ✓ parser::test_comment_hides_bracket::a_comment_after_an_open_bracket_without_its_closer_is_a_comment
   ✓ parser::test_comment_hides_bracket::a_comment_that_hides_a_closing_bracket_is_an_error
   ✓ parser::test_comments::test_block_comments
@@ -3439,7 +3449,6 @@ PASSED:
   ✓ programs::test_plain_hints_when_piped::a_hint_on_piped_stderr_has_no_escape_codes
   ✓ programs::test_playground_samples::every_excluded_sample_exists
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error
-  ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_2
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_3
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_4
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
@@ -4556,6 +4565,8 @@ PASSED:
   ✓ types::test_type_of_consistency::test_type_of_a_type_word
   ✓ types::test_type_of_consistency::test_type_of_a_user_function
   ✓ types::test_type_of_consistency::test_type_of_values_and_unknown_names_unchanged
+  ✓ types::test_type_of_lambda_variable::a_variable_holding_a_lambda_answers_the_reflection_words
+  ✓ types::test_type_of_lambda_variable::the_type_of_a_variable_holding_a_lambda_is_a_function
   ✓ types::test_type_of_node_values::the_type_of_a_node_held_value_is_read_at_run_time
   ✓ types::test_type_of_real_variable::a_variable_holding_a_root_is_real_as_the_root_is
   ✓ types::test_type_of_real_variable::a_variable_holding_pi_is_real
@@ -5625,6 +5636,8 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ parser::test_big_literals::a_100_kb_literal_compiles_in_linear_time
+  ✗ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_2
 
 SUMMARY:
-13 ignored, 5622 passed, 0 failed, 5622 total tested
+13 ignored, 5633 passed, 2 failed, 5635 total tested
