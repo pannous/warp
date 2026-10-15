@@ -166,6 +166,7 @@ mod test_tuple_values;
 mod test_type_alias_fields;
 mod test_type_calls; // card types-constructor
 mod test_type_colon_block;
+mod test_type_compared_in_block; // card fun-int
 mod test_type_compared_with_text; // card type-text-compare
 #[cfg(feature = "native")] // runs lean and lake
 mod test_type_model;
