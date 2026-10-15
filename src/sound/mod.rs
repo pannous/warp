@@ -97,6 +97,9 @@ pub struct Voice {
 	seconds: f64,
 	origin: Option<Instant>,
 	stops: usize,
+	/// the run the voice belongs to (start_run): save sound mixes the sounds of its own run only, as the tests run many
+	/// programs at once in one process
+	run: usize,
 }
 thread_local! {
 	/// The voice of this thread: the program's, or a task's from its start (tasks.rs spawn)
@@ -116,10 +119,13 @@ type BusHistory = Vec<(f64, Vec<Effect>)>;
 static STOPS: AtomicUsize = AtomicUsize::new(0);
 /// The sounds queued for the player thread and not played to their end yet
 static PENDING: AtomicUsize = AtomicUsize::new(0);
-/// The place on the voices where the last save sound ended
-static RENDERED_UNTIL: Mutex<f64> = Mutex::new(0.0);
+/// The runs started in this process (start_run)
+static RUNS: AtomicUsize = AtomicUsize::new(0);
+/// The place on the voices where the last save sound of each run ended, by run
+static RENDERED_UNTIL: Mutex<BTreeMap<usize, f64>> = Mutex::new(BTreeMap::new());
 /// A sound since the last save sound: its place in its voice (seconds), sample rate, channels and 16-bit samples
 struct Unrendered {
+	run: usize,
 	handle: usize,
 	bus: usize,
 	place: f64,
@@ -134,6 +140,7 @@ static UNRENDERED: Mutex<Vec<Unrendered>> = Mutex::new(Vec::new());
 /// voice, the handle's gain (0: every sound's) ramps linearly to `gain` over the seconds
 #[derive(Clone, Copy)]
 struct Fade {
+	run: usize,
 	handle: usize,
 	place: f64,
 	gain: f64,
@@ -255,7 +262,7 @@ pub fn fade(handle: usize, gain: f64, seconds: f64) -> Result<(), String> {
 	// headless nothing is heard: the render places the fade at the start, not wherever the program's slowness put it
 	let place = if crate::graphics::paint::shows_windows() { voice().seconds - queued_seconds() } else { 0.0 };
 	if let Ok(mut fades) = FADES.lock() {
-		fades.push(Fade { handle, place, gain, seconds });
+		fades.push(Fade { run: voice().run, handle, place, gain, seconds });
 	}
 	let faded = crate::sound::sound_engine::fade(handle, gain as f32, seconds);
 	if !faded && crate::graphics::paint::shows_windows() && last_handle() > 0 {
@@ -364,6 +371,7 @@ pub fn at(seconds: f64) {
 		seconds: seconds.max(0.0),
 		origin: Some(origin),
 		stops,
+		run: voice.run,
 	});
 }
 
@@ -430,6 +438,7 @@ fn scheduled(seconds: f64) -> (Instant, f64) {
 		seconds: place + seconds,
 		origin: Some(origin),
 		stops,
+		run: voice.run,
 	};
 	join_voice(voice);
 	(start, place)
@@ -685,7 +694,7 @@ fn sounded(handle: usize, samples: Vec<i16>, rate: u32, channels: u16) -> Result
 		}
 	}
 	if let Ok(mut unrendered) = UNRENDERED.lock() {
-		unrendered.push(Unrendered { handle, bus, place, rate, channels, samples });
+		unrendered.push(Unrendered { run: voice().run, handle, bus, place, rate, channels, samples });
 	}
 	Ok(())
 }
@@ -708,14 +717,15 @@ fn wav_file(wav: &[u8], handle: usize) -> Result<PathBuf, String> {
 /// voice, the voices mixed (in stereo when one of them is: a mono sound on both speakers alike); its seconds
 pub fn render(path: &str) -> Result<f64, String> {
 	crate::host::sandbox::check_write(path)?;
-	let sounds = std::mem::take(&mut *UNRENDERED.lock().map_err(|_| "the rendered sounds are poisoned".to_string())?);
+	let run = voice().run;
+	let sounds = of_run(&UNRENDERED, run, |sound| sound.run)?;
 	// the highest rate of the sounds, the others converted to it (a 44.1 kHz sample beside 22.05 kHz synthesis)
 	let rate = sounds.iter().map(|sound| sound.rate).max().unwrap_or(DEFAULT_RATE);
 	let channels = sounds.iter().map(|sound| sound.channels).max().unwrap_or(MONO);
 	// from where the last render ended, so `at 1s beep()` keeps its second of silence; an `at` before it starts earlier
-	let mut rendered_until = RENDERED_UNTIL.lock().map_err(|_| "the rendered sounds are poisoned".to_string())?;
-	let first_place = sounds.iter().map(|sound| sound.place).fold(*rendered_until, f64::min);
-	let fades = std::mem::take(&mut *FADES.lock().map_err(|_| "the rendered sounds are poisoned".to_string())?);
+	let mut rendered_until = RENDERED_UNTIL.lock().map_err(|_| POISONED.to_string())?;
+	let first_place = sounds.iter().map(|sound| sound.place).fold(*rendered_until.entry(run).or_default(), f64::min);
+	let fades = of_run(&FADES, run, |fade| fade.run)?;
 	// each bus's sounds mixed apart, then through its effects together (card shared-buses); bus 0 is the output
 	let mut buses: BTreeMap<usize, Vec<i32>> = BTreeMap::new();
 	for sound in sounds {
@@ -755,11 +765,26 @@ pub fn render(path: &str) -> Result<f64, String> {
 		mixed.iter_mut().zip(processed).for_each(|(out, sample)| *out += (sample * i16::MAX as f32).round() as i32);
 	}
 	let seconds = mixed.len() as f64 / channels as f64 / rate as f64;
-	*rendered_until = first_place + seconds;
+	rendered_until.insert(run, first_place + seconds);
 	let samples: Vec<i16> = mixed.iter().map(|&sum| sum.clamp(i16::MIN as i32, i16::MAX as i32) as i16).collect();
 	std::fs::write(path, wav_of(&samples, rate, channels))
 		.map_err(|failure| format!("cannot write {path}: {failure}"))?;
 	Ok(seconds)
+}
+
+const POISONED: &str = "the rendered sounds are poisoned";
+
+/// The items of the run taken out of the shared list, the other runs' left in it
+fn of_run<T>(shared: &Mutex<Vec<T>>, run: usize, run_of: impl Fn(&T) -> usize) -> Result<Vec<T>, String> {
+	let mut items = shared.lock().map_err(|_| POISONED.to_string())?;
+	Ok(items.extract_if(.., |item| run_of(item) == run).collect())
+}
+
+/// A program starts running on this thread: a voice of a run of its own, at place 0, sending to no bus; its tasks take
+/// the voice over (join_voice)
+pub fn start_run() {
+	join_voice(Voice { run: RUNS.fetch_add(1, Ordering::Relaxed) + 1, ..Voice::default() });
+	SENT_TO.with(|bus| bus.set(0));
 }
 
 /// The gain at the place after the fades, in the order they were called: each ramps linearly from the gain it finds
@@ -769,7 +794,7 @@ fn faded_gain(fades: &[Fade], place: f64) -> f64 {
 		let share = if fade.seconds > 0.0 { ((place - fade.place) / fade.seconds).clamp(0.0, 1.0) } else { 1.0 };
 		from + (fade.gain - from) * share
 	};
-	let mut ramp = (&Fade { handle: 0, place: 0.0, gain: 1.0, seconds: 0.0 }, 1.0);
+	let mut ramp = (&Fade { run: 0, handle: 0, place: 0.0, gain: 1.0, seconds: 0.0 }, 1.0);
 	for fade in fades.iter().filter(|fade| fade.place <= place) {
 		ramp = (fade, ramped(ramp.0, ramp.1, fade.place));
 	}

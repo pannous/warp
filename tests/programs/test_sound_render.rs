@@ -82,3 +82,26 @@ fn render_sound_is_save_with_a_note() {
 	assert!(String::from_utf8_lossy(&run.stderr).contains("save sound as file"));
 	assert!((rendered(&path).1 - 0.1).abs() < 0.001);
 }
+
+/// card spectrum-test: save sound mixes the sounds of its own run only, as the test threads run many programs at once
+/// in one process (a 0.2 s tone saved 0.3 s long, the sound of another test in it)
+#[test]
+fn programs_running_at_once_save_their_own_sounds() {
+	let runs: Vec<_> = (1..=6)
+		.map(|tenths| {
+			std::thread::spawn(move || {
+				let path = wav_path(&format!("at-once-{tenths}"));
+				let program = format!(
+					"use sound\ntone(A4, {})\nseconds = save sound as \"{}\"\nround(seconds * 10)",
+					tenths as f64 / 10.0,
+					path.display()
+				);
+				(tenths, warp::wasm_emitter::eval(&program).serialize())
+			})
+		})
+		.collect();
+	for run in runs {
+		let (tenths, saved) = run.join().unwrap();
+		assert_eq!(saved.trim(), tenths.to_string(), "the run of a {tenths}/10 s tone");
+	}
+}
