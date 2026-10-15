@@ -24,8 +24,10 @@ const STOP_LABEL = "Stop ■";
 const STOPPED = "stopped";
 // card playground-live: a rerun while live loops play hands them over. The old run's Worker retires instead of stopping:
 // its loops sound on until the new run's loop of the same name starts its first cycle, which they give way to; a loop the
-// new run has none of plays on this long, then ends where its next cycle would start
+// new run has none of, deleted from the source, fades out in LIVE_FADE_SECONDS to be silent LIVE_RETIRE_SECONDS after the
+// rerun (decision deleted-loop: the sound matches the visible code)
 const LIVE_HANDED_OVER = "its live loops play on into the next run";
+const LIVE_FADE_SECONDS = 1;
 const LIVE_RETIRE_SECONDS = 4;
 // what a retired Worker still says: its loops' sounds and cycles, and the report of its run's end, which ends it
 const RETIRED_MESSAGES = new Set(["sound", "live cycle", "midi", "report"]);
@@ -456,11 +458,15 @@ function stealFor(time) {
 	if (playing.length < MAX_VOICES) return;
 	const oldest = playing.reduce((first, source) => source.startsAt < first.startsAt ? source : first);
 	oldest.stolen = true;
-	const level = oldest.gainNode.gain;
-	const from = Math.max(audio.currentTime, time);
+	fadeOut(oldest, Math.max(audio.currentTime, time), STEAL_SECONDS);
+}
+
+// the sound ramps down to silence from `from` (audio clock) and stops there
+function fadeOut(source, from, seconds) {
+	const level = source.gainNode.gain;
 	level.setValueAtTime(level.value, from);
-	level.linearRampToValueAtTime(0, from + STEAL_SECONDS);
-	oldest.stop(from + STEAL_SECONDS);
+	level.linearRampToValueAtTime(0, from + seconds);
+	source.stop(from + seconds);
 }
 
 // fade_sound(handle, gain, seconds): the sounds of that handle (0 all) ramp from their gain now to `gain`
@@ -503,7 +509,15 @@ function endHandedOver(retired, name, at) {
 	if (retired.retired.waiting.size === 0) retire(retired);
 }
 
+// the loops the new run did not take over by now are deleted from the source: they fade out and the Worker goes
+function dropUnclaimed(retired) {
+	const unclaimed = source => source.from === retired && retired.retired.waiting.has(source.loop);
+	sounding.filter(unclaimed).forEach(source => fadeOut(source, audio.currentTime, LIVE_FADE_SECONDS));
+	retire(retired);
+}
+
 function retire(retired) {
+	clearTimeout(retired.retired?.dropping);
 	retired.terminate();
 	retiredWorkers.delete(retired);
 }
@@ -515,7 +529,8 @@ function handOver(run) {
 	const queuedEnd = name => Math.max(...sounding.filter(source => source.from === retiring && source.loop === name).map(source => source.endsAt - clockOffset));
 	liveHandover = Object.fromEntries([...retiring.liveLoops].map(([name, { start, period }]) =>
 		[name, period > 0 ? { start, period } : { start: queuedEnd(name), period: 0 }]));
-	retiring.retired = { at: soundClock(), waiting: new Set(retiring.liveLoops.keys()) };
+	const dropping = setTimeout(() => dropUnclaimed(retiring), (LIVE_RETIRE_SECONDS - LIVE_FADE_SECONDS) * 1000);
+	retiring.retired = { at: soundClock(), waiting: new Set(retiring.liveLoops.keys()), dropping };
 	retiredWorkers.add(retiring);
 	sounding.filter(source => source.from === retiring && !source.loop).forEach(source => source.stop());
 	startWorker();

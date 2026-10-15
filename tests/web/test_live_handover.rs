@@ -97,3 +97,33 @@ fn a_handed_over_loop_starts_on_the_old_runs_grid() {
 	let program = format!("globalThis.self = globalThis;\n{voices}\n{scenario}");
 	assert_eq!(node_output(&program), r#"{"said":[["drums",0.5],["drums",2.5],["bass",0]],"loop":"drums"}"#);
 }
+
+/// decision deleted-loop: a loop the rerun's source no longer has fades out in LIVE_FADE_SECONDS to be silent
+/// LIVE_RETIRE_SECONDS after the rerun, a loop it kept gives way at its cycle as before
+#[test]
+fn a_deleted_loop_fades_out_within_the_retire_time() {
+	let fade_out = source_between(PLAYGROUND, "function fadeOut", "\n}\n");
+	let scenario = r#"
+		const timers = [];
+		globalThis.setTimeout = (run, ms) => timers.push({ run, ms });
+		globalThis.clearTimeout = () => {};
+		const ramped = source => Object.assign(source, { gainNode: { gain: { value: 1, ramps: [],
+			setValueAtTime(value, at) { this.ramps.push(["set", value, at]); },
+			linearRampToValueAtTime(value, at) { this.ramps.push(["ramp", value, at]); } } } });
+		liveCycled(worker, "drums", 10);
+		liveCycled(worker, "bass", 10);
+		const old = worker;
+		sounding = [sound(old, "drums", 13, 15), sound(old, "bass", 13, 15), sound(old, "bass", 17, 19)].map(ramped);
+		fakeNow = audio.currentTime = 12;
+		handOver({ id: 1 });
+		liveCycled(worker, "drums", 14);
+		audio.currentTime = 15;
+		timers.forEach(timer => timer.run());
+		console.log(JSON.stringify({ after: timers.map(timer => timer.ms), stopped: sounding.map(s => s.stopped),
+			bass: sounding[1].gainNode.gain.ramps, terminated, retired: retiredWorkers.size }));
+	"#;
+	assert_eq!(
+		node_output(&page_program(&format!("{fade_out}\n{scenario}"))),
+		r#"{"after":[3000],"stopped":[14,16,16],"bass":[["set",1,15],["ramp",0,16]],"terminated":["old"],"retired":0}"#
+	);
+}
