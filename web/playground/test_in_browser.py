@@ -24,6 +24,7 @@ SHARD = os.environ.get("WARP_BROWSER_TEST_SHARD")  # i/n: every n-th test from t
 # the tour's page starts its worker this late (playground.js ?slow_start): a fast machine then meets the races a slow
 # CI runner meets, e.g. "ready" hiding the first example's "running…" (empty value, the failed deploys of 2026-10-08)
 SLOW_START_MS = 2000
+COMPONENTS_BUILT = os.environ.get("WARP_COMPONENTS_BUILT") == "1"
 PER_WORKER = os.environ.get("WARP_BROWSER_TEST_PER_WORKER")  # tests before a worker is replaced (tests.js TESTS_PER_WORKER)
 # one browser per run: runs at the same time (the suite, a tour check) must never drive or close each other's page
 SESSION = f"warp-browser-tests-{os.getpid()}"
@@ -157,9 +158,11 @@ GPU_JOBS_NEVER = "Out of memory"
 # Firefox's bug: terminating a Worker busy inside a WebAssembly.promising call logs an anonymous uncaught exception on
 # the page, which no listener sees (probes/firefox_jspi_terminate.html, card firefox-logs). Stop does that: the
 # compiler's web_evaluate and the program's main run under promising (worker.js, host.js JSPI); the run stopped and
-# the button right
-EXPECTED_CONSOLE = {SHADER_ERROR: ["Error while parsing WGSL", "errors while creating shader module", "parsing error"], GPU_JOBS: ["uncaught exception: undefined"],
-	STOP_BUTTON: ["uncaught exception: undefined"]}
+# the button right. The clipboard check does the same on purpose: its run_code("1") replaces the worker of the run that
+# waits for the permission click (card tour-firefox-fails: two such lines on each Firefox run of the check alone)
+FIREFOX_TERMINATED_PROMISING = ["uncaught exception: undefined"]  # card firefox-logs
+EXPECTED_CONSOLE = {SHADER_ERROR: ["Error while parsing WGSL", "errors while creating shader module", "parsing error"],
+	GPU_JOBS: FIREFOX_TERMINATED_PROMISING, STOP_BUTTON: FIREFOX_TERMINATED_PROMISING, CLIPBOARD_READ: FIREFOX_TERMINATED_PROMISING}
 # card safari-shared-buffers: a task's answer buffer, like a GPU job's, is reused once read
 MANY_TASKS = "(many tasks in one run)"
 MANY_TASKS_CODE = """twice(x) := x * 2
@@ -173,6 +176,16 @@ BRUSH_SAMPLE = "shader_brush"
 BRUSH_WAIT_MS = 8000  # the sample paints a frame every 16 ms; a software GPU takes far longer for its 1280×800
 BRUSH_POLL_MS = 250
 PAPER_FROM = 240  # a channel this light or lighter on all three: the sample's paper (0.98), no brush
+# card register-fingers: a finger dragged over samples/finger_paint's canvas paints a stroke (the iPad's Safari took the
+# touch over for scrolling). Then, only told, a drag over the canvas set back to the browser's touch handling, on a
+# part the first stroke didn't reach: whether this browser takes a touch over at all (else the check can't fail); it
+# goes last, as Chrome's swipe went back in the page's history, to another example
+FINGERS = "(a finger paints in samples/finger_paint)"
+FINGERS_SAMPLE = "finger_paint"
+FINGER_DRAG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "touch_drag.mjs")
+FINGERS_BROWSER_TOUCH = (0.1, 0.4)
+FINGERS_PAINTED = (0.6, 0.9)
+FINGERS_WAIT_MS = 5000
 # cards https-pannous, very-fast: the `on frame` shader samples keep painting, as the user saw them stop at once in
 # Chromium and Safari; their canvas still changes between two looks, the pointer moving over it
 FRAME_SHADERS = "(the on frame shader samples keep painting)"
@@ -357,7 +370,13 @@ RUN_EXAMPLE = """await playground.chooseExample(%s);
 
 
 def run_sample(name):
-	browser("eval", f"(async () => {{ {RUN_EXAMPLE % json.dumps(name)} }})()")
+	"""what is wrong with the sample's run: its failed status (`cannot open mozart.mp3`, card open-mozart), as the console
+	shows no error for it"""
+	answer = browser("eval", f"""(async () => {{ {RUN_EXAMPLE % json.dumps(name)}
+		const status = document.getElementById("status");
+		return JSON.stringify(status.classList.contains("failed") ? status.textContent : ""); }})()""")
+	failed = json.loads(json.loads(answer)) if answer.startswith('"') else f"(page gave no answer: {answer or browser_complaint})"
+	return [f"status: {failed}"] if failed else []
 
 
 def reported(message):
@@ -706,6 +725,37 @@ def brush_wrong():
 	return [] if "colored" in shown else [f"the middle of the canvas under the pointer: {shown!r}, expected a color, not paper"]
 
 
+def fingers_wrong():
+	"""a touch drag over finger paint's canvas leaves color at its middle; skipped loudly where the browser has no
+	DevTools protocol to send touches through (Firefox, Safari)"""
+	if webdriver:
+		print(f"skip {FINGERS}: touches go through Chrome's DevTools protocol only")
+		return []
+	browser("click", "#output")
+	browser("eval", f"void playground.chooseExample({json.dumps(FINGERS_SAMPLE)})")
+	pixel_painted = lambda share: browser("eval", f"""(async () => {{
+		const shown = () => [...document.querySelectorAll("#paintings canvas")].at(-1);
+		for (let waited = 0; waited < {FINGERS_WAIT_MS}; waited += 100) {{
+			const canvas = shown();
+			// read from a copy: reading the shown canvas again and again makes Chrome warn on the console
+			const copy = canvas && new OffscreenCanvas(canvas.width, canvas.height).getContext("2d");
+			copy?.drawImage(canvas, 0, 0);
+			const middle = copy?.getImageData(Math.floor(canvas.width * {share}), Math.floor(canvas.height * {share}), 1, 1).data;
+			if (middle && Math.min(...middle.slice(0, 3)) < {PAPER_FROM}) return "painted";
+			await new Promise(done => setTimeout(done, 100));
+		}}
+		return `${{shown() ? "paper" : "no canvas"}}, value ${{document.getElementById("value").textContent}} status ${{document.getElementById("status").textContent}} at ${{location.hash}}`;
+	}})()""")
+	drag = lambda share: subprocess.run(["node", FINGER_DRAG, browser("get", "cdp-url"), *map(str, share)], capture_output=True, text=True, timeout=60).stdout.strip()
+	touch_action = lambda value: browser("eval", f'[...document.querySelectorAll("#paintings canvas")].at(-1).style.touchAction = "{value}"')
+	pixel_painted(0)  # the canvas is shown
+	dragged = drag(FINGERS_PAINTED)
+	shown = pixel_painted(sum(FINGERS_PAINTED) / 2)
+	touch_action("auto")
+	print(f"{FINGERS}: with the browser's own touch handling, {drag(FINGERS_BROWSER_TOUCH)}: {pixel_painted(sum(FINGERS_BROWSER_TOUCH) / 2)}")
+	return [] if "painted" in shown else [f"a finger {dragged} over samples/{FINGERS_SAMPLE}: its middle shows {shown}, expected a stroke"]
+
+
 def frame_shaders_wrong():
 	"""each `on frame` shader sample still paints a few seconds in: its canvas changes between two looks; skipped loudly
 	where shaders don't paint into the page's canvas (the bug was there), whose 1280×800 pixel frames keep the page
@@ -854,15 +904,14 @@ def check_examples(names, page_url=None, site=None):
 	chosen = [(name, sample) for name, sample in chosen if not names or name in names]
 	for name, sample in chosen:
 		if sample:
-			run_sample(name)
-			verdict(f"samples/{name}", [])
+			verdict(f"samples/{name}", run_sample(name))
 		else:
 			expected, shown = examples[name], show_example(name)
 			if NO_GPU in str(shown.get("value")):
 				print(f"skip {name}: this browser {NO_GPU}")
 				shown = {**shown, "value": expected.get("value"), "canvases": expected.get("canvases")}
 			verdict(name, [f"{part}: {shown.get(part)!r}, expected {expected[part]!r}" for part in ("value", "printed", "canvases", "clicked", "clickedPrinted", "kept", "keyed", "animated", "address") if part in expected and shown.get(part) != expected[part]] + [f"status: {shown.get('failed')}"] * bool(shown.get("failed")))
-	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FRAME_SHADERS, frame_shaders_wrong), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
+	extra_checks = [(check, wrong) for check, wrong in ((COMPLETION_KEYS, completion_keys_wrong), (STOP_BUTTON, stop_button_wrong), (MEMBER_COMPLETION, member_completion_wrong), (CLIPBOARD_READ, clipboard_read_wrong), (PAGE_ELEMENTS, page_elements_wrong), (GPU_PAGE, gpu_page_wrong), (VIEW_STEADY, view_steady_wrong), (GPU_JOBS, gpu_jobs_wrong), (SHADER_ERROR, shader_error_wrong), (MANY_TASKS, many_tasks_wrong), (PREVIOUS_FRAME, previous_frame_wrong), (TEXT_HOLE, text_hole_wrong), (COMPONENT_HOLE, lambda: text_hole_wrong(COMPONENT_HOLE_CODE, "div", COMPONENT_HOLE_SHOWN)), (FILE_KEPT, lambda: file_kept_wrong(page_url)), (BRUSH, brush_wrong), (FINGERS, fingers_wrong), (FRAME_SHADERS, frame_shaders_wrong), (REPORT, lambda: report_wrong(page_url))) if not names or check in names]
 	for check, wrong in extra_checks:
 		verdict(check, wrong())
 	console.stop()
@@ -878,7 +927,10 @@ def check_examples(names, page_url=None, site=None):
 
 def build_components():
 	"""the components `use wasm` tests call, transpiled for the page (components.js); a failure only warns: those tests
-	then fail naming build.sh"""
+	then fail naming build.sh. COMPONENTS_BUILT: built elsewhere already (scripts/browser-dry-run.sh builds them on the
+	Mac, the server has no cargo)"""
+	if COMPONENTS_BUILT:
+		return
 	built = subprocess.run([os.path.join(REPOSITORY, "web", "playground", "build.sh"), "components"], capture_output=True, text=True)
 	if built.returncode:
 		print(f"warning: build.sh components failed, `use wasm` tests will fail:\n{built.stderr.strip()}", file=sys.stderr)

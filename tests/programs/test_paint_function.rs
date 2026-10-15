@@ -198,3 +198,26 @@ near(x, y) := x + 1 < 2
 paint(near, 4, 4)";
 	assert!(lowered(program).contains("@fragment"));
 }
+
+/// card compile-shaders step 4, decision S1: `p.x`, `c.zxy` are WGSL's swizzles of the vector, the same colors as the
+/// CPU's components
+const SWIZZLES: &str = "use math
+width = 32
+height = 24
+turned(p, angle) := [cos(angle) * p.x - sin(angle) * p.y, sin(angle) * p.x + cos(angle) * p.y]
+glow(x, y) := {
+	p = turned([x / width - 0.5, y / height - 0.5], 0.5)
+	c = [0.5 + 0.5 * sin(p.x * 6), 0.5 + 0.5 * cos(p.y * 6), 0.5]
+	c.zxy .* (1 - smoothstep(0.3, 0.5, norm(p.yx)))
+}
+";
+
+#[test]
+fn swizzles_become_the_shaders_swizzles() {
+	let shader = lowered(&format!("{SWIZZLES}paint(glow, width, height)"));
+	assert!(shader.contains("@fragment") && shader.contains(".zxy") && shader.contains("v_p.x"), "{shader}");
+	if !has_gpu() {
+		return crate::common::announce_skip("a WebGPU adapter", module_path!());
+	}
+	assert_same_colors_both_ways(SWIZZLES, "glow", (32, 24), "paint-swizzles");
+}

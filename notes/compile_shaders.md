@@ -10,7 +10,7 @@ as warp functions, `paint(tunnel, width, height)` compiling them; the same funct
 | WGSL in the tunnel | warp today | proposal |
 |---|---|---|
 | `vec2f/vec3f/vec4f(…)` | lists (P241: no vector type) | a list of 2–4 numbers is the vector: `[c * p.x - s * p.y, s * p.x + c * p.y]` |
-| `p.x`, `p.xy`, `e.xyy` swizzles | `p#1` (1-based), `.x` is undefined | **question S1** |
+| `p.x`, `p.xy`, `e.xyy` swizzles | the same (S1): components of a list of 2–4 numbers | WGSL's swizzle (step 4) |
 | `a + b`, `2.0 * v`, `v * w` on vectors | `+` concatenates, `.+ .*` are element-wise (D3); `xs .* 2` works, `2 .* xs` errors | `.+ .- .* ./` with a number on either side broadcasts (build); plain `+` on vectors: **question S2** |
 | `length dot` | exist on lists | WGSL mapping in the kernel |
 | `normalize cross reflect distance fract mix smoothstep step` | missing (`lerp clamp sign` in math) | add to `use math` for lists and numbers, `mix` an alias of `lerp`; WGSL mapping (build) |
@@ -36,8 +36,14 @@ as warp functions, `paint(tunnel, width, height)` compiling them; the same funct
 3. DONE: samples/gpu_visualizer_warp.warp, the tunnel as warp functions painted with paint(tunnel, width, height),
    beside the WGSL samples/gpu_visualizer.warp. It needed card note-dispatch-element-wise: Note's plus/minus dispatch
    had hidden `.+ .-` from broadcasting (p .+ [1, 2] gave [3 4]).
+4. DONE (branch swizzles): `.x .y .z .w`, `.xy .zyx .xyy` (S1). Kernels: `Key(p, Dot, xy)` → `{p}.xy` of its width
+   (kernels.rs swizzle). CPU: library_words reads `p.xy` of a list as a field (it was "undefined function: x"), the
+   analyzer types a multi-letter swizzle of a list as a list, and the field chain (emit_generic_indexed_node) asks the
+   runtime function swizzled (list_ops/swizzles.rs) right before the `no field` error, so a map's entry `x` (`{x:1}`,
+   `[x:1, y:2]`), an instance's field and a tagged object's field all answer first. Not a vector (5 items, bools, a
+   component beyond it): `no field x`. Names: words::swizzle_components; probe probes/swizzles.warp.
 
 ## Questions (warp-interviewer)
 - S1 DECIDED (user, 2026-10-15): `.x .y .z .w` and swizzles (`.xy`, `.xyy`, `.zyx`) on lists of 2–4 numbers,
-  everywhere, the CPU too. Next step 4.
+  everywhere, the CPU too. Built in step 4.
 - S2 vector math with plain `+ - * /` inside functions compiled to shaders, or always the element-wise `.+ .*` (D3)?

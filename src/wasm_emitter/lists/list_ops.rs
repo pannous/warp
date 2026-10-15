@@ -22,7 +22,9 @@ pub use node_arithmetic::*;
 mod list_changes;
 pub use list_changes::*;
 mod fields_and_keys;
+mod swizzles;
 pub use fields_and_keys::*;
+pub use swizzles::*;
 
 const UTF8_LENGTH_STEPS: [i64; 3] = [0x80, 0x800, 0x10000];
 /// The kinds a value of unknown static type may have at run time, named by node_type_name as Kind's Display does
@@ -139,6 +141,7 @@ impl WasmGcEmitter {
 		self.emit_element_children();
 		self.emit_element_body();
 		self.emit_list_insert_at();
+		self.emit_swizzled();
 	}
 
 	/// The cursor of list_at, list_node_at and node_count: the list, cell and index found last, so a walk on from it (a
@@ -409,6 +412,13 @@ impl WasmGcEmitter {
 					&[I::LocalGet(kind), I::I64Const(crate::type_kinds::BOOL_KIND), I::I64Eq, I::If(BlockType::Empty)],
 				);
 				s.emit_string_call(f, crate::analyzer::BOOL_TYPE, "new_symbol");
+				Self::emit_list(f, &[I::Return, I::End]);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(kind), I::I64Const(crate::type_kinds::BUILTIN_FUNCTION_MARK), I::I64And, I::I64Const(0), I::I64Ne,
+					I::If(BlockType::Empty),
+				]);
+				s.emit_string_call(f, crate::type_tests::BUILTIN_TYPE, "new_symbol");
 				Self::emit_list(f, &[I::Return, I::End]);
 				if s.int_runtime() {
 					// an exact number that is no integer holds a $Ratio (exact.rs)

@@ -11,6 +11,10 @@ rules in wiki/Footguns.md. A missing setting takes a sensible default; an error 
 guess (user 2026-10-10: show() without a canvas gets a default size, not an error). Decisions reach you from the Interviewer or Supervisor;
 once built, the code, tests and wiki are the truth. notes/decisions.md is the history: look something up there only
 when a message or comment cites a number (P71, D5) and you need its wording; never read it front to back.
+No special cases, under any circumstances (user, 2026-10-15): a fix is the general rule, holding for the siblings of
+the example (other words of its kind, other statement positions, values passed in or returned) and for where the
+language is heading. If an existing test seems to force a special case, question the test through warp-interviewer
+instead of bending the code.
 
 - Only the Codex cron runs are announced to the user's Codex thread "Warp Boss" (start and end, codex_worker.sh).
   Claude spawns never notify it (user, 2026-10-12: a Claude spawn notice landing in Codex is "not at all what we want").
@@ -55,8 +59,11 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   never pkill by pattern.
 - No Chrome or Chromium on the Mac (user, 2026-10-09): browser runs happen only in CI. The browser test suite, the
   playground tour (test_in_browser.py), web::test_dom_pages and the agent-browser probes refuse to start a browser
-  unless CI is set and print "browser tests run in CI only". To check the playground, dispatch the Playground
-  workflow on your branch (`gh workflow run pages.yml --ref <branch>`); never call agent-browser yourself.
+  unless CI is set and print "browser tests run in CI only"; never call agent-browser yourself. To check the
+  playground (user, 2026-10-15: trial runs mailed "Run failed"): first the dry run on pannous.com,
+  `scripts/browser-dry-run.sh` in your worktree (`--tours [example…]`, `--chrome`, `--firefox`, `--suite [filter…]`,
+  `--again` reruns without building; notes/ci.md "Browser dry run"), until it is green; only then dispatch the
+  Playground workflow on your branch once (`gh workflow run pages.yml --ref <branch>`), the final check plus Safari.
 - The warp CLI binary is shared too: `<target-dir>/debug/warp` is whichever worktree built last. To probe your own code,
   run `scripts/own-warp.sh` (builds offline and atomically copies into `scratch/warp`) and run that path; a copy taken
   later can be another session's build.
@@ -123,8 +130,10 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
 - Picking a card: `todo take <card> <your session name>` (user, 2026-10-06): assigns the user on GitHub, names you in
   the board field Agent, moves the card to Now. Order: first every unassigned card in Now; then the user's own
   cards, the drafts marked "(user)" that `todo list Next` puts on top (user, 2026-10-14: "the ones manually created
-  by me"); then other Next cards. Within that, prefer fresh, easy cards (user, 2026-10-06) related to your current
-  task (user, 2026-10-12).
+  by me"); then the cards of topics in Next; then loose Next cards; then Soon. Within that, prefer fresh, easy cards
+  (user, 2026-10-06) related to your current task (user, 2026-10-12), and pick a topic's cards together (user,
+  2026-10-15): `todo list Next --by-topic` groups them, `todo take --topic <topic> [-n 3]` takes its waiting cards
+  at once (same rename rules as one card; the session is named for the topic).
   A session is named for its task (user, 2026-10-12: "whenever an agent picks a new ticket, that this will also
   trigger its rename"; "the agent can keep its name if the new ticket is related to the old task"): `todo take <card>`
   run in your own tmux session (the agent defaults to it) renames you warp-<card key> when the card is unrelated: no
@@ -142,6 +151,11 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   sub-issues. `todo add "…" --topic <card>` adds a sub-card, `todo sub <topic> <card>...` moves cards into a topic,
   `todo unsub <card>...` takes them out; `todo list` shows "(in <topic>)" after a sub-card and "(topic 2/5 done)"
   after a topic. Only issues have sub-issues, so these cards become issues of pannous/warp (others stay drafts).
+  Every new card gets a topic (user, 2026-10-15): `todo add` puts it into the open topic Haiku finds fitting, else
+  into a new topic Haiku names (both printed; `--topic <card>` picks one, `--no-topic` none). Priority lives at the
+  topic level: a topic card sits in the column of its priority (new topics: Soon), a new sub-card lands in its
+  topic's column unless you name one, and `todo move <topic> <column> --all` moves the topic's waiting cards along.
+  Roadmaps holds the topics nobody prioritized yet. A misfiled card: `todo sub <right topic> <card>`.
 - Crash cards (user, 2026-10-12: "on a crash a new agent is spawned. I will paste him the trace log"): a panic of a
   warp built from a checkout files a card in Now (src/diagnostics/crash_card.rs) naming its fingerprint and the branch it was
   built from. Cron (urgent-card-watch) folds a repeated crash into its open card as a note, gives the crash of a

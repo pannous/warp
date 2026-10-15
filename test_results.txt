@@ -1192,6 +1192,11 @@ PASSED:
   ✓ functions::test_builtin_clash::a_function_keyword_names_an_infix_word
   ✓ functions::test_builtin_clash::an_operator_word_cannot_name_a_function
   ✓ functions::test_builtin_clash::library_words_stay_redefinable
+  ✓ functions::test_builtin_function_values::a_bare_builtin_assigned_needs_its_arguments
+  ✓ functions::test_builtin_function_values::a_bare_builtin_passed_to_map_stays_the_function
+  ✓ functions::test_builtin_function_values::a_builtin_function_value_is_called
+  ✓ functions::test_builtin_function_values::a_builtin_is_a_function
+  ✓ functions::test_builtin_function_values::a_builtin_reference_has_type_builtin
   ✓ functions::test_c_style_definitions::a_result_type_before_the_name_defines_a_function
   ✓ functions::test_c_style_definitions::void_defines_a_function_without_a_result
   ✓ functions::test_call_arity::a_default_reads_the_parameters_before_it
@@ -1428,6 +1433,7 @@ PASSED:
   ✓ functions::test_library_word_aliases::parser_alias_notes_point_at_the_word
   ✓ functions::test_library_word_aliases::print_spellings_print
   ✓ functions::test_library_word_aliases::renaming_a_module_function_as_the_module_does
+  ✓ functions::test_library_word_assigned::a_bare_library_word_assigned_needs_its_arguments
   ✓ functions::test_library_word_assigned::a_libm_word_maps_over_a_list
   ✓ functions::test_library_word_assigned::a_library_word_defined_is_its_alias
   ✓ functions::test_library_word_assigned::a_library_word_referenced_is_a_function
@@ -1555,6 +1561,7 @@ PASSED:
   ✓ functions::test_parameter_patterns::a_list_parameter_names_its_items
   ✓ functions::test_parameter_patterns::a_value_of_another_shape_is_an_error
   ✓ functions::test_parameter_retype::a_parameter_given_another_kind_in_its_body_holds_it
+  ✓ functions::test_parameter_shadows_function::a_parameter_compared_with_a_bare_function_asks_for_its_argument
   ✓ functions::test_parameter_shapes::test_constructed_argument_is_checked
   ✓ functions::test_parameter_shapes::test_field_type_is_checked
   ✓ functions::test_parameter_shapes::test_hyphenated_field_with_a_type
@@ -1759,6 +1766,9 @@ PASSED:
   ✓ lists::test_bare_list_assignment::a_bracketed_list_never_asks
   ✓ lists::test_bare_list_assignment::an_unbracketed_list_assignment_asks_list_or_statements
   ✓ lists::test_bare_list_assignment::each_reading_has_its_explicit_form
+  ✓ lists::test_bare_list_assignment::spaced_values_after_print_print_each
+  ✓ lists::test_bare_list_assignment::spaced_values_are_a_list
+  ✓ lists::test_bare_list_assignment::spaced_values_in_every_statement_position_are_a_list
   ✓ lists::test_byte_size::byte_size_counts_bytes_and_size_counts_elements
   ✓ lists::test_captured_call_lists::a_captured_list_of_float_calls_holds_floats
   ✓ lists::test_comprehension_beside_own_push::a_comprehension_beside_an_own_push_function
@@ -2046,6 +2056,10 @@ PASSED:
   ✓ lists::test_sort_long::a_long_list_sorts_in_n_log_n
   ✓ lists::test_sort_long::equal_keys_keep_their_order
   ✓ lists::test_sort_long::ordered_input_sorts_in_linear_time
+  ✓ lists::test_swizzles::a_component_beyond_the_vector_is_no_field
+  ✓ lists::test_swizzles::a_letter_is_a_component_of_a_list_of_numbers
+  ✓ lists::test_swizzles::a_map_entry_of_the_name_wins
+  ✓ lists::test_swizzles::letters_pick_a_list_of_components
   ✓ lists::test_tuple_items_of_lists::a_tuple_from_a_list_keeps_its_items
   ✓ lists::test_tuples::test_loop_over_list_with_global_tuple
   ✓ lists::test_tuples::test_tuple_of_computed_items
@@ -2111,6 +2125,10 @@ PASSED:
   ✓ modules::test_checkout_std_lib::another_checkout_lib_is_the_standard_module
   ✓ modules::test_dir_any_value::dir_of_a_map_lists_its_keys
   ✓ modules::test_dir_any_value::dir_of_a_plain_value_lists_nothing
+  ✓ modules::test_dir_builtin_members::dir_of_a_list_lists_its_builtin_methods
+  ✓ modules::test_dir_builtin_members::dir_of_a_text_lists_its_builtin_methods
+  ✓ modules::test_dir_builtin_members::every_builtin_method_is_a_function_value
+  ✓ modules::test_dir_builtin_members::methods_list_what_dir_lists
   ✓ modules::test_dir_value_methods::dir_of_a_value_lists_its_types_methods
   ✓ modules::test_dir::a_program_s_own_dir_wins
   ✓ modules::test_dir::dir_lists_the_names_of_a_standard_module
@@ -2501,9 +2519,11 @@ PASSED:
   ✓ numbers::test_degrees::trigonometry_takes_degrees
   ✓ numbers::test_dimension_types::a_declared_dimension_checks_any_unit_of_it
   ✓ numbers::test_dimension_types::a_declared_height_is_the_programs
+  ✓ numbers::test_dimension_types::a_declared_unit_shows_as_written
   ✓ numbers::test_dimension_types::a_program_naming_a_dimension_keeps_its_own
   ✓ numbers::test_dimension_types::a_quantity_is_its_dimension
   ✓ numbers::test_dimension_types::a_quantity_of_seconds_is_a_duration_and_a_time
+  ✓ numbers::test_dimension_types::speed_area_volume_and_frequency_are_named_dimensions
   ✓ numbers::test_div_assign::declared_int_keeps_dividing_whole
   ✓ numbers::test_div_assign::divide_assign_divides_exactly
   ✓ numbers::test_div_assign::floor_divide_assign_floors
@@ -2671,6 +2691,9 @@ PASSED:
   ✓ numbers::test_number_methods::test_a_field_named_like_a_number_method_stays_a_field
   ✓ numbers::test_number_methods::test_prefix_operator_words_as_methods
   ✓ numbers::test_number_methods::test_rounding_methods_without_parentheses
+  ✓ numbers::test_number_of_text_equals::the_number_a_text_spells_equals_a_literal
+  ✓ numbers::test_number_of_text::number_of_a_run_time_text_compares_with_a_number
+  ✓ numbers::test_number_of_text::number_of_a_run_time_text_is_the_number_it_spells
   ✓ numbers::test_number_words::a_number_word_hints_its_digits
   ✓ numbers::test_number_words::a_variable_of_that_name_wins
   ✓ numbers::test_number_words::keys_and_texts_stay_words
@@ -3408,6 +3431,7 @@ PASSED:
   ✓ programs::test_paint_function::a_painted_function_paints_on_the_gpu_what_the_cpu_paints
   ✓ programs::test_paint_function::a_painted_function_reads_an_item_of_a_program_list
   ✓ programs::test_paint_function::a_painted_function_rounds_halves_to_even
+  ✓ programs::test_paint_function::swizzles_become_the_shaders_swizzles
   ✓ programs::test_paint_in_window::a_shader_frame_crosses_to_the_paint_window_whole_and_small
   ✓ programs::test_paint_in_window::a_shader_that_does_not_compile_fails_before_it_reaches_the_window
   ✓ programs::test_paint_in_window::the_paint_window_renders_what_paint_renders
@@ -3563,6 +3587,9 @@ PASSED:
   ✓ programs::test_sound_pipes::nodes_chain
   ✓ programs::test_sound_pipes::out_plays_a_signal
   ✓ programs::test_sound_render::a_render_takes_the_sounds_after_the_last_one
+  ✓ programs::test_sound_render::render_sound_is_save_with_a_note
+  ✓ programs::test_sound_render::save_sound_as_a_file_writes_the_sounds
+  ✓ programs::test_sound_render::save_text_as_a_file_writes_it
   ✓ programs::test_sound_render::sounds_render_into_one_wav_file
   ✓ programs::test_sound_samples::a_rate_changes_speed_and_pitch
   ✓ programs::test_sound_samples::a_render_mixes_rates
@@ -4545,6 +4572,8 @@ PASSED:
   ✓ types::test_type_of_consistency::test_type_of_a_type_word
   ✓ types::test_type_of_consistency::test_type_of_a_user_function
   ✓ types::test_type_of_consistency::test_type_of_values_and_unknown_names_unchanged
+  ✓ types::test_type_of_lambda_variable::a_variable_holding_a_lambda_answers_the_reflection_words
+  ✓ types::test_type_of_lambda_variable::the_type_of_a_variable_holding_a_lambda_is_a_function
   ✓ types::test_type_of_node_values::the_type_of_a_node_held_value_is_read_at_run_time
   ✓ types::test_type_of_real_variable::a_variable_holding_a_root_is_real_as_the_root_is
   ✓ types::test_type_of_real_variable::a_variable_holding_pi_is_real
@@ -4981,9 +5010,12 @@ PASSED:
   ✓ web::test_keyed_lists::a_key_on_its_own_line_names_the_element
   ✓ web::test_keyed_lists::a_list_inside_an_element_gives_its_children
   ✓ web::test_keyword_registry::keywords_of_passes_are_highlighted
+  ✓ web::test_live_handover::a_deleted_loop_fades_out_as_soon_as_the_rerun_names_its_loops
   ✓ web::test_live_handover::a_handed_over_loop_starts_on_the_old_runs_grid
+  ✓ web::test_live_handover::a_kept_loop_with_a_long_period_is_not_faded
   ✓ web::test_live_handover::a_loop_the_new_run_drops_ends_at_a_cycle_after_a_while
   ✓ web::test_live_handover::a_new_runs_loop_takes_over_at_the_old_loops_cycle
+  ✓ web::test_live_handover::the_module_names_its_live_loops
   ✓ web::test_markup_holes::a_page_binds_each_hole
   ✓ web::test_markup_holes::fixed_markup_or_a_computed_root_has_no_holes
   ✓ web::test_markup_holes::the_elements_holding_computed_parts_are_the_holes
@@ -5616,4 +5648,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5611 passed, 0 failed, 5611 total tested
+13 ignored, 5643 passed, 0 failed, 5643 total tested

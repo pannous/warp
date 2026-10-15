@@ -1,0 +1,7 @@
+// card play-tone / prepositions-call: prepositions name arguments, Swift-style labels
+use sound
+play 440Hz for 0.5s
+play tone: 523Hz for: 0.5s
+melody [G4 E4 C4] each 200ms
+to move piece from a to b: piece + a - b
+print(move 1 from 10 to 3)

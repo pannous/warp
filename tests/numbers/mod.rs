@@ -59,6 +59,8 @@ mod test_nearest_quiet; // card nearest-default-limit
 mod test_norm;
 mod test_number;
 mod test_number_methods; // card number-methods
+mod test_number_of_text; // card number-text
+mod test_number_of_text_equals; // card number-number
 mod test_number_words;
 mod test_plus_minus;
 mod test_plus_minus_gaussian; // card plus-minus-gaussian

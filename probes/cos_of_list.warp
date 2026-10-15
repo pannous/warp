@@ -1,0 +1,4 @@
+// card cos-instead: libm's one-number words map over a list, want [1 0.5403…] and [0 0.8414…]
+print cos([0, 1])
+xs = [0, 1]
+print sin xs

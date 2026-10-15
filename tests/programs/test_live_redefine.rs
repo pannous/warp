@@ -12,7 +12,7 @@ fn silent(samples: &[i16]) -> bool {
 
 #[test]
 fn a_redefined_loop_plays_its_new_block_from_the_next_cycle() {
-	let program = "use sound\ntempo = 120\nlive_loop drums 4 { pattern(\"~\", 1 beat) }\nat 2 beats live_loop drums { pattern(\"c4\", 1 beat) }\nawait drums\nrender_sound(\"SONG\")";
+	let program = "use sound\ntempo = 120\nlive_loop drums 4 { pattern(\"~\", 1 beat) }\nat 2 beats live_loop drums { pattern(\"c4\", 1 beat) }\nawait drums\nsave sound as \"SONG\"";
 	let (seconds, samples) = rendered("redefined", program);
 	assert_eq!(seconds, "2");
 	assert!(silent(&samples[..RATE]), "the first two cycles keep the old, silent block");
@@ -22,7 +22,7 @@ fn a_redefined_loop_plays_its_new_block_from_the_next_cycle() {
 #[test]
 fn a_loop_defined_once_is_unchanged() {
 	let program =
-		"use sound\ntempo = 120\nlive_loop drums 2 { pattern(\"c4\", 1 beat) }\nawait drums\nrender_sound(\"SONG\")";
+		"use sound\ntempo = 120\nlive_loop drums 2 { pattern(\"c4\", 1 beat) }\nawait drums\nsave sound as \"SONG\"";
 	let (seconds, samples) = rendered("once", program);
 	assert_eq!(seconds, "1");
 	assert!(!silent(&samples));
