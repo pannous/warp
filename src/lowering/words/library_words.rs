@@ -735,14 +735,7 @@ impl Lowering {
 		if !keyword.is_symbol(FOR_WORD) || !in_word.is_symbol(IN_WORD) {
 			return None;
 		}
-		let (map, body) = match rest {
-			[map, body] => (map.clone(), body.clone()),
-			[colon] => match colon.drop_meta() {
-				Node::Key(map, Op::Colon, body) => (map.as_ref().clone(), body.as_ref().clone()),
-				_ => return None,
-			},
-			_ => return None,
-		};
+		let (map, body) = crate::lowering::control::for_loop::iterable_and_body(rest)?;
 		self.object_literal(&map)?;
 		let (key, value) = match names.drop_meta() {
 			Node::Symbol(_) => (names.clone(), None),
