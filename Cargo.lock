@@ -3734,6 +3734,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "warp-glsl"
+version = "0.1.0"
+dependencies = [
+ "naga",
+]
+
+[[package]]
 name = "warp-lang"
 version = "1.2.6"
 dependencies = [
@@ -3745,7 +3752,6 @@ dependencies = [
  "libloading 0.9.0",
  "log",
  "midir",
- "naga",
  "num-bigint",
  "num-integer",
  "num-traits",
@@ -3761,6 +3767,7 @@ dependencies = [
  "tungstenite",
  "unicode-normalization",
  "ureq",
+ "warp-glsl",
  "warp-runtime",
  "wasm-encoder 0.259.0",
  "wasmparser 0.259.0",

@@ -1,5 +1,5 @@
 // card create-little (user): twigl(code) runs a shader written in the shorthand of twigl.app's geekest mode: GLSL
-// drawing the color o of the pixel FC (y up) from r, t, m and f, turned into WGSL by naga (src/graphics/glsl.rs) and
+// drawing the color o of the pixel FC (y up) from r, t, m and f, turned into WGSL by naga (crates/warp-glsl) and
 // wrapped in a WGSL main (lib/draw.warp), so paint and gpu_render take it as any shader
 #![cfg(feature = "native")]
 
@@ -33,4 +33,16 @@ fn the_tunnel_demo_compiles_to_wgsl() {
 fn a_glsl_mistake_shows_the_line() {
 	let said = said("twigl(\"o = nonsense;\")");
 	assert!(said.contains("Unknown variable: nonsense") && said.contains("o = nonsense;"), "{said}");
+}
+
+// the reviewer's sibling: shadertoy(code) takes mainImage(out vec4 fragColor, in vec2 fragCoord) with iResolution, iTime,
+// iMouse and iFrame through the same GLSL wrapper (lib/draw.warp glsl_shader)
+#[test]
+fn a_shadertoy_shader_paints_through_the_same_wrapper() {
+	let program = "s = shadertoy(\"void mainImage(out vec4 fragColor, in vec2 fragCoord) { fragColor = vec4(fragCoord.x < 1. ? 1. : 0., iResolution.x == 2. ? 1. : 0., fragCoord.y < 1. ? 1. : 0., 1.); }\")\npixels = gpu_render(s, 2, 2)\n[pixels#3 == 0xFFFFFFFF, pixels#2 == 0xFF00FF00]";
+	let said = said(program);
+	if said.contains("no WebGPU adapter") {
+		return crate::common::announce_skip("a WebGPU adapter", module_path!());
+	}
+	assert!(said.contains("[yes yes]"), "{said}");
 }

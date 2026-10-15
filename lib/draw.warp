@@ -123,11 +123,27 @@ def label(x, y, words, color, size = 12) {
 	}
 }
 
-// twigl(code): a shader in the shorthand of twigl.app's geekest mode (card create-little): the code draws the color o
-// of the pixel FC (y up, as in GLSL) from r, the size in pixels, t, the seconds, m, the pointer from 0 to 1, and f, the
-// frame, with twigl's hsv, rotate2D and rotate3D. GLSL, which naga turns into WGSL (src/graphics/glsl.rs), wrapped in a
-// WGSL main reading the shader's built-in values: paint(twigl(code)) draws it, frame after frame in a loop
-twigl_glsl_helpers = "
+// glsl_shader(glsl, color): a WGSL shader for paint from GLSL 450 functions (card create-little): naga turns them into
+// WGSL (crates/warp-glsl), and the shader's main gives each pixel the WGSL expression `color`, which calls them
+// with `flipped`, the pixel as GLSL counts it (rows from the bottom), `size`, `pointer` (in pixels, y up) and the
+// shader's built-in values (values.time, values.frame …). twigl and shadertoy are the dialects written so far
+glsl_shader(glsl: text, color: text) := {
+	wgsl = std_pure("draw", "glsl_wgsl", ["#version 450\n" + glsl + "\nvoid main() {}\n"])
+	wgsl + "
+@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+	let size = values.size;
+	let flipped = vec4f(at.x, size.y - at.y, at.z, at.w);
+	let pointer = vec2f(values.mouse.x, size.y - values.mouse.y);
+	return vec4f((" + color + ").rgb, 1.0);
+}
+"
+}
+
+// twigl(code): a shader in the shorthand of twigl.app's geekest mode: the code draws the color o of the pixel FC from
+// r, the size in pixels, t, the seconds, m, the pointer from 0 to 1, and f, the frame, with twigl's hsv, rotate2D and
+// rotate3D. paint(twigl(code)) draws it, frame after frame in a loop
+twigl(code: text) := {
+	helpers = "
 vec3 hsv(float h, float s, float v) {
 	vec4 t = vec4(1., 2. / 3., 1. / 3., 3.);
 	vec3 p = abs(fract(vec3(h) + t.xyz) * 6. - vec3(t.w));
@@ -143,15 +159,24 @@ mat3 rotate3D(float angle, vec3 axis) {
 		a.y * a.y * r + c, a.z * a.y * r + a.x * s, a.x * a.z * r + a.y * s, a.y * a.z * r - a.x * s, a.z * a.z * r + c);
 }
 "
-twigl_wgsl_main = "
-@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
-	let size = values.size;
-	let pointer = vec2f(values.mouse.x, size.y - values.mouse.y) / size;
-	let color = warp_twigl(vec4f(at.x, size.y - at.y, at.z, at.w), size, values.time, pointer, values.frame);
-	return vec4f(color.rgb, 1.0);
+	drawing = "vec4 warp_twigl(vec4 FC, vec2 r, float t, vec2 m, float f) {\nvec4 o = vec4(0.);\n" + code + "\nreturn o;\n}"
+	glsl_shader(helpers + drawing, "warp_twigl(flipped, size, values.time, pointer / size, values.frame)")
+}
+
+// shadertoy(code): a shader as shadertoy.com writes them: mainImage(out vec4 fragColor, in vec2 fragCoord) with
+// iResolution, iTime, iMouse (the pointer in pixels, also as the click) and iFrame; no iChannel textures
+shadertoy(code: text) := {
+	inputs = "vec3 iResolution;\nfloat iTime;\nvec4 iMouse;\nint iFrame;\n"
+	drawing = "
+vec4 warp_shadertoy(vec2 at, vec2 size, float time, vec2 pointer, float frame) {
+	iResolution = vec3(size, 1.);
+	iTime = time;
+	iMouse = vec4(pointer, pointer);
+	iFrame = int(frame);
+	vec4 color = vec4(0.);
+	mainImage(color, at);
+	return color;
 }
 "
-twigl(code: text) := {
-	glsl = "#version 450\n" + twigl_glsl_helpers + "vec4 warp_twigl(vec4 FC, vec2 r, float t, vec2 m, float f) {\nvec4 o = vec4(0.);\n" + code + "\nreturn o;\n}\nvoid main() {}\n"
-	std_pure("draw", "glsl_wgsl", [glsl]) + twigl_wgsl_main
+	glsl_shader(inputs + code + drawing, "warp_shadertoy(flipped.xy, size, values.time, pointer, values.frame)")
 }

@@ -761,17 +761,6 @@ mod exports {
 		kept(levels.iter().flat_map(|level| level.to_le_bytes()).collect())
 	}
 
-	/// GLSL functions as WGSL ones (lib/draw.warp twigl, host-gpu.js): returns the byte length of the JSON
-	/// {"wgsl": …} or {"error": …} (graphics::glsl::wgsl_functions), read at `web_report()`
-	#[no_mangle]
-	pub extern "C" fn web_glsl_wgsl(glsl: *const u8, glsl_length: usize) -> usize {
-		let report = match crate::graphics::glsl::wgsl_functions(text(glsl, glsl_length)) {
-			Ok(wgsl) => serde_json::json!({ "wgsl": wgsl }),
-			Err(error) => serde_json::json!({ "error": error }),
-		};
-		kept(report.to_string().into_bytes())
-	}
-
 	#[no_mangle]
 	pub extern "C" fn web_bundle_module() -> *const u8 {
 		MODULE.with(|kept| kept.borrow().as_ptr())

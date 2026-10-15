@@ -1,0 +1,14 @@
+# GLSL as WGSL (card create-little): lib/draw.warp glsl_shader (twigl, shadertoy) natively through warp's std_pure
+# adapter, and in the browser as glsl.wasm of its own (web/playground/build.sh), which the playground loads only when a
+# program translates GLSL: naga's GLSL front end and WGSL writer are 705 KB (254 KB gzipped), warp.wasm stays without
+[package]
+name = "warp-glsl"
+version = "0.1.0"
+edition = "2021"
+description = "GLSL fragment shader functions as WGSL ones, for Warp's twigl and shadertoy words"
+repository = "https://github.com/pannous/warp"
+homepage = "https://warp.pannous.com/"
+
+[dependencies]
+# naga 30, as wgpu 30 has it; its GLSL front end does not compile without wgsl-in (its interpolation defaults)
+naga = { version = "30", default-features = false, features = ["glsl-in", "wgsl-in", "wgsl-out"] }

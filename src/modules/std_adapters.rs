@@ -21,9 +21,10 @@ pub fn call(module: &str, member: &str, arguments: &Node) -> Result<Node, String
 		"net" => net(member, &arguments),
 		"os" => os(member, &arguments),
 		"store" => store(member, &arguments),
-		// lib/draw.warp twigl: GLSL functions as WGSL ones (src/graphics/glsl.rs)
+		// lib/draw.warp glsl_shader: GLSL functions as WGSL ones (crates/warp-glsl)
+		#[cfg(feature = "native")]
 		"draw" => match (member, arguments.as_slice()) {
-			("glsl_wgsl", [glsl]) => crate::graphics::glsl::wgsl_functions(&text_of(glsl)?).map(Node::Text),
+			("glsl_wgsl", [glsl]) => warp_glsl::wgsl_functions(&text_of(glsl)?).map(Node::Text),
 			_ => no_such_word(&arguments),
 		},
 		// `clipboard.write(text)` (lowering/signals/system_values.rs)
