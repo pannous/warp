@@ -49,6 +49,8 @@ const ITERATION_SPELLINGS: [(&str, &[&str]); 2] = [
 ];
 /// The label of the sorting function: Swift `sorted(by: >)`, Python `sorted(xs, key=…)`
 const SORT_LABELS: [&str; 2] = ["by", "key"];
+/// The label of the list an iteration word goes over: `map f on: xs` (card labels-calls)
+const LIST_LABELS: [&str; 1] = [ON_WORD];
 const COMPARISONS: [Op; 4] = [Op::Lt, Op::Gt, Op::Le, Op::Ge];
 
 const ITERATIONS: [Iteration; 9] = [
@@ -198,6 +200,14 @@ fn iteration_word(word: &Node) -> Option<&'static Iteration> {
 	ITERATIONS.iter().find(|iteration| iteration.word == canonical)
 }
 
+/// `map square xs`, `filter even xs`: an iteration word whose first argument may be its function; sort, any and all take
+/// the list first, their function being optional
+pub(crate) fn takes_a_function_first(word: &Node) -> bool {
+	iteration_word(word).is_some_and(|iteration| {
+		iteration.extra_arguments == 0 && iteration.word != SORT_WORD && !TRUTH_WORDS.contains(&iteration.word)
+	})
+}
+
 /// `xs.map(it * 2)` in a function of one parameter: the `it` of the argument is the argument function's own
 pub(crate) fn has_own_it(head: &Node, argument: &Node) -> bool {
 	iteration_word(head).is_some() && it_function(argument).is_some()
@@ -219,6 +229,23 @@ fn is_boolean_body(body: &Node) -> bool {
 		Node::Key(_, op, _) if COMPARISONS.contains(op) => true,
 		Node::List(items, _, _) if items.len() == 1 => is_boolean_body(&items[0]),
 		_ => crate::analyzer::is_boolean(body, &crate::analyzer::Scope::new()),
+	}
+}
+
+/// `map f on: xs`: the list its label names comes first, the other arguments keep their order after it
+fn labeled_list_first(mut arguments: Vec<Node>) -> Vec<Node> {
+	let labeled_list = |node: &Node| match node.drop_meta() {
+		Node::Key(label, Op::Colon, list) if label.symbol_name().is_some_and(|name| LIST_LABELS.contains(&name)) => {
+			Some(list.as_ref().clone())
+		}
+		_ => None,
+	};
+	match arguments.iter().position(|argument| labeled_list(argument).is_some()) {
+		Some(at) => {
+			let list = labeled_list(&arguments.remove(at)).expect("found");
+			[vec![list], arguments].concat()
+		}
+		None => arguments,
 	}
 }
 
@@ -735,6 +762,7 @@ impl Lowering {
 			let rest = spliced_applications(rest.to_vec());
 			// `map square on xs`, `map &square xs`: the function may come first
 			let rest: Vec<Node> = rest.iter().filter(|item| !item.is_symbol(ON_WORD)).cloned().collect();
+			let rest = labeled_list_first(rest);
 			let rest = match rest.as_slice() {
 				[first, second]
 					if iteration.extra_arguments == 0

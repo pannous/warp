@@ -78,8 +78,8 @@ fn a_functions_params() {
 
 #[test]
 fn a_functions_signature() {
-	is!("f(a:int, b:int) := a+b\nf.signature", "(a:int, b:int) -> int");
-	is!("def greet(name:text){\"hi \" + name}\ngreet.signature", "(name:text) -> text");
+	is!("f(a:int, b:int) := a+b\nf.signature", "(a: int, b: int) -> int");
+	is!("def greet(name:text){\"hi \" + name}\ngreet.signature", "(name: text) -> text");
 }
 
 // step 4: x.doc is x.@comment (under `use comments`), also of a function
@@ -116,7 +116,7 @@ fn fields_of_an_instance_known_at_run_time() {
 fn a_typed_results_functions_params_and_signature() {
 	is!("def add(left:int) -> int { left }\nadd.params", warp::texts(vec!["left"]));
 	is!("def add(left:int) -> int: left\nadd.params", warp::texts(vec!["left"]));
-	is!("def add(left:int) -> int { left }\nadd.signature", "(left:int) -> int");
+	is!("def add(left:int) -> int { left }\nadd.signature", "(left: int) -> int");
 }
 
 // card reflection-classes: a module compiled from warp (probes/reflection_classes/shapes.warp) keeps its classes and
@@ -140,11 +140,11 @@ fn a_warp_modules_classes() {
 // card reflection-area: `f.dump` is the whole definition as written, to copy and paste (samples/reflection.warp)
 #[test]
 fn a_functions_dump() {
-	is!("area(width: int, height: int) := width * height\narea.dump", "area(width:int, height:int) := width*height");
+	is!("area(width: int, height: int) := width * height\narea.dump", "area(width: int, height: int) := width*height");
 	is!("twice(x) := x * 2\ntwice.dump", "twice(x) := x*2");
 	is!(
 		"greet(name:text, greeting:text = \"hi\") := greeting + \" \" + name\ngreet.dump",
-		"greet(name:text, greeting:text = \"hi\") := greeting+' '+name"
+		"greet(name: text, greeting: text = \"hi\") := greeting+' '+name"
 	);
 	// pasted back, the dump is the same function
 	is!("fib(n) := {if n<2 then { return n }; (fib n-1)+(fib n-2)}\nfib(10)", 55);

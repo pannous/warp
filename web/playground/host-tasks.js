@@ -76,7 +76,7 @@ function addTaskWorker(loaded) {
 }
 
 // a voice (card playground-go, natively src/sound/mod.rs Voice): when this Worker's queued sounds end on the clock the
-// page and every Worker share, the seconds of sound it made in all (its sounds' places for render_sound) and the
+// page and every Worker share, the seconds of sound it made in all (its sounds' places for save sound) and the
 // clock's time of place 0 (where `at 2 beats` counts from). A task's voice starts where its starter's stands
 let voice = {};
 let voicesBeforeAt = []; // the voices `at` statements left (sound_at), taken up again by sound_at_end
@@ -125,7 +125,7 @@ function asVoice(run) {
 	const starters = voice;
 	try { return run(); } finally { voice = starters; }
 }
-// the sounds a task made go to its starter's run, for its render_sound (card playground-drops)
+// the sounds a task made go to its starter's run, for its save sound (card playground-drops)
 function withTaskSounds(run, record) {
 	(run.unrenderedSounds ??= []).push(...(record.sounds ?? []));
 	delete record.sounds;

@@ -68,7 +68,15 @@ impl WarpParser {
 					norm::length_operator(&crate::normalize::operand_text(&rhs), false);
 				}
 				let rhs = if fourth_root { self.finish_prefix(op, rhs) } else { rhs };
-				self.finish_prefix(op, rhs)
+				let applied = self.finish_prefix(op, rhs);
+				// `map sqrt xs`, `apply abs -3`: lowering may read the word as the function instead
+				match operator_word {
+					true => Node::Meta {
+						node: Box::new(applied),
+						data: Box::new(Node::key(crate::words::OPERATOR_WORD_MARK, Node::True)),
+					},
+					false => applied,
+				}
 			}
 		} else if let Some(operator) = self.try_parse_operator_value() {
 			operator
