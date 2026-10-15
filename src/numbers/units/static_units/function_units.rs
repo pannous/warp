@@ -210,9 +210,8 @@ impl Inference {
 		}
 		self.in_progress.pop();
 		let (body, result) = inferred?;
-		let parameters = definition.parameters.iter().map(|parameter| Node::Symbol(parameter.clone()));
 		let head = Node::List(
-			std::iter::once(Node::Symbol(specialised.clone())).chain(parameters).collect(),
+			std::iter::once(Node::Symbol(specialised.clone())).chain(definition.declared.iter().cloned()).collect(),
 			Bracket::Round,
 			Separator::None,
 		);

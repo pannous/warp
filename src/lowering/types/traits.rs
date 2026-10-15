@@ -25,6 +25,8 @@ mod instance_types;
 pub use instance_types::*;
 mod dispatch;
 pub use dispatch::*;
+mod instance_calls;
+pub use instance_calls::*;
 
 /// The words that declare a trait: `trait`, the canonical one (user, 2026-10-03: "short"), then the names other languages
 /// use, each accepted with a hint toward `trait`
@@ -57,6 +59,11 @@ pub const COMPARE: &str = "compare";
 /// T4: every value is Equatable by value; `equals` overrides it for a type
 pub const EQUATABLE: &str = "Equatable";
 pub const EQUALS: &str = "equals";
+/// Callable (wiki trait.md): an instance applied to arguments, `room(signal)`, is `call(room, signal)` of its type
+pub const CALL: &str = "call";
+/// The operations a program uses without naming them (`room(signal)`, `p < q`, `p == q`): a module's definitions of
+/// them for a type the program mentions come along (needed_definitions)
+pub const IMPLICIT_OPERATIONS: [&str; 3] = [CALL, COMPARE, EQUALS];
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Trait {
