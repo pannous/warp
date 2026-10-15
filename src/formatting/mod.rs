@@ -5,6 +5,7 @@
 mod lines;
 mod rules;
 mod soft_hints;
+mod synonyms;
 
 use crate::compiler::meta::LineInfo;
 use crate::node::{Node, COMMENT_KEY};
@@ -116,6 +117,17 @@ fn keeping_the_tree(lines: &[Line], kept: Vec<Edit>, candidates: &[Edit], tree: 
 
 /// The canonical layout of the code; Err when the code does not parse (there is no meaning to keep)
 pub fn format(code: &str, options: Options) -> Result<Formatted, String> {
+	formatted_after(code, Vec::new(), options)
+}
+
+/// `warp beautify`: another language's words become the warp words (synonyms.rs), then the layout with hash-comments
+pub fn beautify(code: &str) -> Result<Formatted, String> {
+	let (code, changes) = synonyms::canonical_synonyms(code);
+	formatted_after(&code, changes, Options { hash_comments: true })
+}
+
+/// The layout of `code`, after the `changes` made to it already
+fn formatted_after(code: &str, mut changes: Vec<Change>, options: Options) -> Result<Formatted, String> {
 	crate::errors::diagnostic::quietly(|| {
 		let original = parsed(code);
 		if has_error(&original) {
@@ -124,7 +136,6 @@ pub fn format(code: &str, options: Options) -> Result<Formatted, String> {
 		let tree = shape(&original);
 		let mut lines: Vec<Line> =
 			code.lines().enumerate().map(|(index, text)| Line { number: index + 1, text: text.to_string() }).collect();
-		let mut changes = Vec::new();
 		for rule in RULES.iter().filter(|rule| options.hash_comments || !rule.hash_comments_only) {
 			let texts: Vec<String> = lines.iter().map(|line| line.text.clone()).collect();
 			let candidates = (rule.edits)(&texts, &lines::scan(&texts));

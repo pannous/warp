@@ -240,7 +240,7 @@ fn let_mut(items: &[Node]) -> Option<Node> {
 	let name = name.serialize();
 	crate::normalize::set_position_of(keyword);
 	crate::errors::diagnostic::educate_once(
-		&format!("alias-let {modifier}"),
+		&format!("{}let {modifier}", crate::errors::diagnostic::ALIAS_TOPIC_PREFIX),
 		&format!("let {modifier} {name}"),
 		&format!("var {name}"),
 		&format!("write var {name}, not let {modifier} {name}"),
