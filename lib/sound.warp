@@ -336,7 +336,7 @@ plain_hertz(pitch) := {
 	if pitch is text and is_note_name(pitch) { return note_hertz(pitch) }
 	raise "not a pitch: " + str(pitch)
 }
-play(x, duration) := sound(chord_samples(pitches_of(x), si_amount(duration), wave_shape))
+play(tone, for duration) := sound(chord_samples(pitches_of(tone), si_amount(duration), wave_shape))
 // a music file in the background (wav, mp3, ogg, flac, aiff, m4a): play "song.mp3"; stop_sound stops it
 play_file(path) := std_io("sound", "play_file", [path])
 // play gives the sound's handle: h = play(C4, 2s); stop_sound(h) stops that one alone, stop_sound (handle 0) all
@@ -399,7 +399,7 @@ play_sample(clip: Sample, rate) := {
 	sound_samples(clip.frames, count(clip.frames), round(clip.rate * rate) as int, clip.channels)
 	std_io("sound", "last", [])
 }
-play(x) := if x is text then play_file(x) else if x is Sample then play_sample(x, 1) else sound(chord_samples(pitches_of(x), note_seconds, wave_shape))
+play(tone) := if tone is text then play_file(tone) else if tone is Sample then play_sample(tone, 1) else sound(chord_samples(pitches_of(tone), note_seconds, wave_shape))
 // one note (or chord) after another: melody([C4 E4 G4]), melody([C4 E4 G4], 250ms)
 // plain seconds: the unit check reads a quantity parameter in a loop as unsupported (notes/units_runtime.md)
 melody_samples(notes, seconds) := {
@@ -407,7 +407,7 @@ melody_samples(notes, seconds) := {
 	for pitch in notes { samples = samples + chord_samples(pitches_of(pitch), seconds, wave_shape) }
 	samples
 }
-melody(notes, duration) := sound(melody_samples(notes, si_amount(duration)))
+melody(notes, each duration) := sound(melody_samples(notes, si_amount(duration)))
 melody(notes) := melody(notes, note_seconds)
 
 // patterns in Tidal's mini-notation (card patterns-live): a cycle of steps that share the cycle's seconds evenly.

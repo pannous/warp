@@ -123,6 +123,13 @@ fn first_refused(node: &Node, top_level: bool) -> Option<Node> {
 		}
 	}
 	match node.drop_meta() {
+		// `play 440Hz for=0.5s`: the argument named by its preposition (preposition_calls.rs), only its value is checked
+		Node::List(items, _, _) if preposition_arguments(items) => {
+			items.iter().find_map(|item| match item.drop_meta() {
+				Node::Key(name, Op::Assign, value) if is_preposition(name) => first_refused(value, false),
+				_ => first_refused(item, false),
+			})
+		}
 		// the statements of the program, or of a block at its top level, stay at the top level
 		Node::List(items, Bracket::None | Bracket::Curly, _) if top_level => {
 			items.iter().find_map(|item| first_refused(item, true))
@@ -132,6 +139,18 @@ fn first_refused(node: &Node, top_level: bool) -> Option<Node> {
 		Node::List(items, _, _) => items.iter().find_map(|item| first_refused(item, false)),
 		_ => None,
 	}
+}
+
+fn is_preposition(name: &Node) -> bool {
+	matches!(name.drop_meta(), Node::Symbol(word) if crate::type_name_matching::PREPOSITIONS.contains(&word.as_str()))
+}
+
+/// A call `f a for=b` or `f(a, for=b)`: a function's name, then an argument named by a preposition
+fn preposition_arguments(items: &[Node]) -> bool {
+	matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))
+		&& items[1..]
+			.iter()
+			.any(|item| matches!(item.drop_meta(), Node::Key(name, Op::Assign, _) if is_preposition(name)))
 }
 
 /// The got-it note for each soft keyword the program uses as a local name
