@@ -31,6 +31,14 @@ fn a_declared_dimension_checks_any_unit_of_it() {
 	fails_with("w: mass = 3 m", "DimensionError: w is declared kg, is given m");
 }
 
+/// The draft's own example: a declared `height` is the program's, not the canvas's (was "a plain number cannot be
+/// converted to m")
+#[test]
+fn a_declared_height_is_the_programs() {
+	is!("height: length = 2 inch; height as cm", value("5.08 cm"));
+	is!("width: cm = 3 cm; width + 1 cm", value("4 cm"));
+}
+
 #[test]
 fn a_program_naming_a_dimension_keeps_its_own() {
 	is!("length = 3; length + 1", 4);
