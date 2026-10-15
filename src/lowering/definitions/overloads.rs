@@ -471,6 +471,12 @@ fn arity_variant(name: &str, arity: Arity) -> String {
 	witness_name(name, &arity.total.to_string())
 }
 
+/// `f·2`: the variant of f for two arguments that lower_arity_overloads made, which may still overload by type
+pub(crate) fn is_arity_variant(name: &str) -> bool {
+	name.split_once(crate::traits::WITNESS_SEPARATOR)
+		.is_some_and(|(_, count)| !count.is_empty() && count.chars().all(|ch| ch.is_ascii_digit()))
+}
+
 /// A pass that renames the definitions of overloaded names to their variants and every call to the variant it fits
 trait VariantRenaming {
 	/// The variant name of this definition of `name`, None when the name is not overloaded
