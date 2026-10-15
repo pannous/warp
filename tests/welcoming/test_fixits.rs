@@ -72,8 +72,8 @@ fn list_operator_fixes() {
 
 #[test]
 fn bare_list_fixes() {
-	assert_fix("a=1 2 3; a", "a list", "[1 2 3]");
-	assert_fix("a=1 2 3; a", "separate statements", "1");
+	assert_fix("a=1,2,3; a", "a list", "[1 2 3]");
+	assert_fix("a=1,2,3; a", "separate statements", "1");
 }
 
 #[test]

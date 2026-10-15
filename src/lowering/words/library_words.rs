@@ -21,6 +21,7 @@ use crate::words::FOR_WORD;
 use crate::words::IN_WORD;
 use crate::words::LIST_WORD;
 use crate::words::LOG_WORD;
+use crate::words::NUMBER_WORD;
 use crate::words::ORD_WORD;
 use crate::words::SPLIT_WORD;
 use crate::words::{CODEPOINT, MAP_KEYS, RAISE_WORD, SLICE, SUM_WORD};
@@ -735,6 +736,12 @@ impl Lowering {
 				return Some(log_to_base(&items[0], value, base));
 			}
 		}
+		// `number(t)` is `t as number`: a text known only at run time is the number it spells, decided at run time
+		if let (NUMBER_WORD, [_, value]) = (head.as_str(), items) {
+			if !self.shadows(NUMBER_WORD) && call_name(items, bracket, separator).is_some() {
+				return Some(key(value.clone(), Op::As, symbol(NUMBER_WORD)));
+			}
+		}
 		// `first sorted xs`, `first(reverse xs)` have one argument: a library word after it is its argument's prefix
 		let prefixes_its_argument = matches!(bracket, Bracket::None | Bracket::Round)
 			&& items.len() > 2
@@ -963,6 +970,10 @@ impl Lowering {
 			receiver.drop_meta(),
 			Node::Symbol(_) | Node::Text(_) | Node::Char(_) | Node::Number(_) | Node::List(_, Bracket::Square, _)
 		);
+		// `p.x`, `p.zy` of a list: its components when it holds 2 to 4 numbers, read as a field (decision S1)
+		if is_value && !is_known && !has_arguments && crate::words::swizzle_components(name).is_some() {
+			return Some(field_lookup(receiver, name, word_node));
+		}
 		let call = key(receiver.clone(), Op::Dot, method.clone());
 		(!is_known && is_value).then(|| self.context.undefined_function_diagnostic(&call, name).into_error())
 	}

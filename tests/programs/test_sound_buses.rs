@@ -11,7 +11,7 @@ const QUIET: i16 = 50;
 /// The rendered mono samples of the program, which ends in render_sound to the path
 fn rendered_samples(program: &str, name: &str) -> Vec<i16> {
 	let path = std::env::temp_dir().join(format!("warp-buses-{name}-{}.wav", std::process::id()));
-	let program = format!("use sound\n{program}\nrender_sound \"{}\"", path.display());
+	let program = format!("use sound\n{program}\nsave sound as \"{}\"", path.display());
 	let run = crate::common::warp_command().args(["--no-ask", "eval", &program]).output().unwrap();
 	assert!(run.status.success(), "{} {}", String::from_utf8_lossy(&run.stdout), String::from_utf8_lossy(&run.stderr));
 	let bytes = std::fs::read(&path).unwrap();
