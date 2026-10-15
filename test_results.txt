@@ -849,7 +849,9 @@ PASSED:
   ✓ control::test_undo_history::redo_takes_back_an_undo_until_a_new_change
   ✓ control::test_undo_history::undo_steps_back_through_the_changes
   ✓ control::test_unhandled_emit_operand::a_handled_emit_as_an_operand_gives_its_value
+  ✓ control::test_unhandled_emit_operand::an_unhandled_emit_as_a_statement_still_only_notes
   ✓ control::test_unhandled_emit_operand::an_unhandled_emit_as_an_operand_names_its_handler
+  ✓ control::test_unhandled_emit_operand::an_unhandled_emit_used_as_a_value_names_its_handler
   ✓ control::test_unhandled_emits::an_emit_in_a_page_program_does_not_warn
   ✓ control::test_unhandled_emits::an_emit_nobody_handles_warns
   ✓ control::test_unit_tasks::a_go_block_with_units_runs
@@ -5472,4 +5474,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5467 passed, 0 failed, 5467 total tested
+13 ignored, 5469 passed, 0 failed, 5469 total tested
