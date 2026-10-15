@@ -998,6 +998,8 @@ impl WasmGcEmitter {
 		let node = node.drop_meta();
 		match node {
 			Node::Number(_) | Node::True | Node::False => true,
+			// `-(4)`: a negated number is one (card xor-xor: `-(4) xor 1` read as a truthy or)
+			Node::Key(sign, Op::Neg | Op::Sub | Op::Add, operand) if sign.is_empty_node() => self.is_numeric(operand),
 			// `"a"*n` repeats and `"a"+"b"` joins texts: arithmetic that is no number
 			Node::Key(_left, op, _right) if op.is_arithmetic() => {
 				!matches!(self.get_type(node), Kind::Text | Kind::Codepoint | Kind::List)

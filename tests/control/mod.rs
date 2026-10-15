@@ -113,6 +113,7 @@ mod test_loop_value;
 mod test_loop_value_at_run_time;
 mod test_loops_in_functions;
 mod test_many_tasks;
+mod test_map_loop_words; // card key-print
 mod test_match_alternatives;
 mod test_match_alternatives_hint;
 mod test_match_binding_arm;
@@ -234,10 +235,12 @@ mod test_type_field_fallback; // card type-non
 mod test_type_word_filter_loops;
 mod test_uncharged_blocks;
 mod test_undo_history;
+mod test_unhandled_emit_operand;
 mod test_unhandled_emits;
 mod test_unit_tasks; // card units-tasks
 mod test_unwrap;
 mod test_unwrap_message;
+mod test_value_methods_are_functions; // card methods-last-n
 mod test_variable_signals;
 #[cfg(feature = "native")] // a WebSocket server on a local port
 mod test_web_sockets;

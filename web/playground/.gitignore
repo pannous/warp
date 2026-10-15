@@ -5,5 +5,6 @@ entities.tsv
 warp.wasm
 warp.debug.wasm
 components/
+packages/
 served-files.js
 version.js

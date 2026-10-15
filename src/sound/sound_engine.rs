@@ -6,6 +6,8 @@
 //! A sound's start is an Instant (sound.rs scheduled) turned into a frame by one fixed anchor, the stream's start:
 //! sounds back to back in Instants stay back to back in frames. LEAD keeps every start ahead of the callback.
 
+use crate::sound::effects::{Chain, Effect};
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 /// How far ahead of the device a sound queued for now is scheduled: more than a callback's buffer, so no start is
@@ -24,6 +26,8 @@ const STEAL_SECONDS: f64 = 0.005;
 /// rate over the device's), the frame it starts at, its gain and the gain it ramps to by `step` a frame (fade_sound)
 struct Mixed {
 	handle: usize,
+	/// the bus it goes through (card shared-buses), 0: straight to the output
+	bus: usize,
 	start: u64,
 	samples: Vec<f32>,
 	channels: usize,
@@ -59,26 +63,88 @@ impl Mixed {
 	}
 }
 
-/// The sounds playing and to play, and the frame the device plays next
+/// The sounds playing and to play, the buses they go through and the frame the device plays next
 pub struct Mixer {
 	rate: u32,
 	channels: u16,
 	frame: u64,
 	sounds: Vec<Mixed>,
+	buses: HashMap<usize, Bus>,
+}
+
+/// A bus's effect chain, the mix of its sounds in the buffer being filled, whether a sound fed it there, and its
+/// effects' changes still to come at their frames (in order)
+struct Bus {
+	chain: Chain,
+	mix: Vec<f32>,
+	fed: bool,
+	changes: Vec<(u64, Vec<Effect>)>,
+}
+
+impl Bus {
+	/// The mix of the frames from `from` on through the chain, its effects changing at their frames on the way
+	fn process(&mut self, from: u64, channels: usize) {
+		let frames = (self.mix.len() / channels) as u64;
+		let due = self.changes.iter().take_while(|(frame, _)| *frame < from + frames).count();
+		let ringing = self.fed || !self.chain.rung_out();
+		let mut done = 0;
+		for (frame, effects) in self.changes.drain(..due) {
+			let until = (frame.saturating_sub(from) as usize * channels).max(done);
+			if ringing {
+				self.chain.process(&mut self.mix[done..until]);
+			}
+			self.chain.retune(&effects);
+			done = until;
+		}
+		if ringing {
+			self.chain.process(&mut self.mix[done..]);
+		}
+	}
 }
 
 impl Mixer {
 	pub fn new(rate: u32, channels: u16) -> Mixer {
-		Mixer { rate, channels, frame: 0, sounds: Vec::new() }
+		Mixer { rate, channels, frame: 0, sounds: Vec::new(), buses: HashMap::new() }
 	}
 
 	/// The 16-bit samples (`channels` interleaved, at `rate`) starting at the frame, played at the device's rate and
 	/// channels; continuing the handle's sound that ends there (SEAM_FRAMES), they join it without a seam
 	pub fn add(&mut self, handle: usize, start: u64, samples: &[i16], rate: u32, channels: u16) {
+		self.add_to_bus(handle, 0, start, samples, rate, channels)
+	}
+
+	/// The bus's effects from now on (card shared-buses); its sounds go through them together. A bus set again keeps
+	/// what still rings in its effects
+	pub fn set_bus(&mut self, bus: usize, effects: Vec<Effect>) {
+		let frame = self.frame;
+		self.change_bus(bus, frame, effects)
+	}
+
+	/// The bus's effects from the frame on (card shared-buses stage 3), a new bus's at once
+	pub fn change_bus(&mut self, bus: usize, frame: u64, effects: Vec<Effect>) {
+		match self.buses.get_mut(&bus) {
+			Some(known) => {
+				let at = known.changes.partition_point(|(earlier, _)| *earlier <= frame);
+				known.changes.insert(at, (frame, effects));
+			}
+			None => {
+				let chain = Chain::new(&effects, self.rate, self.channels);
+				self.buses.insert(bus, Bus { chain, mix: Vec::new(), fed: false, changes: Vec::new() });
+			}
+		}
+	}
+
+	pub fn has_bus(&self, bus: usize) -> bool {
+		bus == 0 || self.buses.contains_key(&bus)
+	}
+
+	/// add's sound through the bus (0: none, and none for a bus never set)
+	pub fn add_to_bus(&mut self, handle: usize, bus: usize, start: u64, samples: &[i16], rate: u32, channels: u16) {
 		let (channels, ratio) = (channels.max(1) as usize, rate as f64 / self.rate as f64);
 		let samples = samples.iter().map(|&sample| sample as f32 / AMPLITUDE);
 		let continued = self.sounds.iter_mut().find(|sound| {
 			sound.handle == handle
+				&& sound.bus == bus
 				&& sound.channels == channels
 				&& sound.ratio == ratio
 				&& (sound.start + sound.frames()).abs_diff(start) <= SEAM_FRAMES
@@ -89,6 +155,7 @@ impl Mixer {
 				self.steal_for(start);
 				self.sounds.push(Mixed {
 					handle,
+					bus,
 					start,
 					samples: samples.collect(),
 					channels,
@@ -134,9 +201,9 @@ impl Mixer {
 		}
 	}
 
-	/// Whether a sound is still to play or playing
+	/// Whether a sound is still to play or playing, or a bus still rings
 	pub fn busy(&self) -> bool {
-		!self.sounds.is_empty()
+		!self.sounds.is_empty() || self.buses.values().any(|bus| !bus.chain.rung_out())
 	}
 
 	/// The next frames of the mix into the device's buffer (interleaved, its channels), the finished sounds dropped
@@ -144,16 +211,24 @@ impl Mixer {
 		let channels = self.channels as usize;
 		buffer.fill(0.0);
 		let frames = (buffer.len() / channels) as u64;
+		for bus in self.buses.values_mut() {
+			bus.mix.clear();
+			bus.mix.resize(buffer.len(), 0.0);
+			bus.fed = false;
+		}
 		for sound in &mut self.sounds {
-			let first = sound.start.max(self.frame);
-			let last = (sound.start + sound.frames()).min(self.frame + frames);
-			for frame in first..last {
-				let into = ((frame - self.frame) as usize) * channels;
-				let gain = sound.next_gain();
-				for (channel, out) in buffer[into..into + channels].iter_mut().enumerate() {
-					*out += sound.sample(frame - sound.start, channel) * gain;
+			let into = match self.buses.get_mut(&sound.bus) {
+				Some(bus) => {
+					bus.fed = true;
+					&mut bus.mix
 				}
-			}
+				None => &mut *buffer,
+			};
+			mixed_into(sound, into, self.frame, channels);
+		}
+		for bus in self.buses.values_mut() {
+			bus.process(self.frame, channels);
+			buffer.iter_mut().zip(&bus.mix).for_each(|(out, sample)| *out += sample);
 		}
 		self.frame += frames;
 		let frame = self.frame;
@@ -167,9 +242,23 @@ impl Mixer {
 	}
 }
 
+/// The sound's frames that fall into the buffer starting at the frame, added to it at its gain
+fn mixed_into(sound: &mut Mixed, buffer: &mut [f32], from: u64, channels: usize) {
+	let frames = (buffer.len() / channels) as u64;
+	let first = sound.start.max(from);
+	let last = (sound.start + sound.frames()).min(from + frames);
+	for frame in first..last {
+		let into = ((frame - from) as usize) * channels;
+		let gain = sound.next_gain();
+		for (channel, out) in buffer[into..into + channels].iter_mut().enumerate() {
+			*out += sound.sample(frame - sound.start, channel) * gain;
+		}
+	}
+}
+
 #[cfg(target_os = "macos")]
 mod output {
-	use super::Mixer;
+	use super::{Effect, Mixer};
 	use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 	use std::sync::{Arc, Mutex, OnceLock};
 	use std::time::Instant;
@@ -237,14 +326,39 @@ mod output {
 	}
 
 	/// The sound queued on the device at its start, false without an output stream
-	pub fn play(handle: usize, start: Instant, samples: &[i16], rate: u32, channels: u16) -> bool {
+	/// The sound through the bus (0: none), whose effects the mixer learns with its first sound
+	pub fn play(
+		handle: usize,
+		bus: (usize, &[Effect]),
+		start: Instant,
+		samples: &[i16],
+		rate: u32,
+		channels: u16,
+	) -> bool {
 		let Some(engine) = engine() else { return false };
 		let Ok(mut mixer) = engine.mixer.lock() else {
 			return false;
 		};
 		let frame = mixer.frame_at(start, engine.anchor);
-		mixer.add(handle, frame, samples, rate, channels);
+		if !mixer.has_bus(bus.0) {
+			mixer.set_bus(bus.0, bus.1.to_vec());
+		}
+		mixer.add_to_bus(handle, bus.0, frame, samples, rate, channels);
 		true
+	}
+
+	/// The bus's effects changed, from now on
+	pub fn set_bus(bus: usize, effects: &[Effect]) {
+		with_mixer(|mixer| mixer.set_bus(bus, effects.to_vec()));
+	}
+
+	/// The bus's effects changed from the instant on, which a voice ahead of the device names
+	pub fn change_bus(bus: usize, start: Instant, effects: &[Effect]) {
+		let Some(engine) = ENGINE.get().and_then(Option::as_ref) else { return };
+		with_mixer(|mixer| {
+			let frame = mixer.frame_at(start, engine.anchor);
+			mixer.change_bus(bus, frame, effects.to_vec())
+		});
 	}
 
 	/// The running engine's mixer changed or read; None before the first sound or without an output stream
@@ -268,7 +382,7 @@ mod output {
 }
 
 #[cfg(target_os = "macos")]
-pub use output::{available, busy, fade, play, stop};
+pub use output::{available, busy, change_bus, fade, play, set_bus, stop};
 
 /// Without our own output here: the players play every sound
 #[cfg(not(target_os = "macos"))]
@@ -277,9 +391,15 @@ pub fn available() -> bool {
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn play(_: usize, _: Instant, _: &[i16], _: u32, _: u16) -> bool {
+pub fn play(_: usize, _: (usize, &[Effect]), _: Instant, _: &[i16], _: u32, _: u16) -> bool {
 	false
 }
+
+#[cfg(not(target_os = "macos"))]
+pub fn set_bus(_: usize, _: &[Effect]) {}
+
+#[cfg(not(target_os = "macos"))]
+pub fn change_bus(_: usize, _: Instant, _: &[Effect]) {}
 
 #[cfg(not(target_os = "macos"))]
 pub fn stop(_: usize) {}

@@ -44,3 +44,27 @@ fn a_parameter_named_like_a_module_word_needs_no_module() {
 	let error = warp::wasm_emitter::eval("f(x) := melody(x); f(1)").serialize();
 	assert!(error.contains("use sound"), "{error}");
 }
+
+/// card use-sound: a program function named like a module's helper is the program's; the module's own code still calls
+/// its own (lexical scope, as for a program variable): mix sums with sound's added, lowpass filters with its biquad
+#[test]
+fn a_program_function_named_like_a_module_helper_leaves_the_module_its_own() {
+	is!("use sound\nadded(x, y) := 7\nmix([0.1], [0.2])#1 ~ 0.3 and added(1, 2) == 7", true);
+	is!("use sound\nbiquad(a, k, f, q) := [9]\ncount(osc(C4, 0.01s) |> lowpass(500))", 220);
+	is!("use sound\nwave(shape, p) := 0.0\nmax(chord_amplitudes([440], 0.01, \"sine\")) > 0 and wave(1, 2) == 0", true);
+}
+
+/// a program function shadows the module word's definitions of its own number of arguments only: the others stay the
+/// program's too (review of use-sound)
+#[test]
+fn a_program_function_of_another_arity_adds_to_the_module_word() {
+	is!("use sound\nmix(a, b, c, d, e) := 5\nmix([0.1], [0.2])#1 ~ 0.3 and mix(1, 2, 3, 4, 5) == 5", true);
+	is!("use math\nclamp(x) := 9\nclamp(5, 0, 3) + clamp(1)", 12);
+	is!("use sound\nmix(a, b) := 7\nmix(1, 2) + count(mix([0.1], [0.2], [0.3]))", 8);
+}
+
+/// a program function with a defaulted parameter shadows every number of arguments it takes (review of use-sound)
+#[test]
+fn a_defaulted_parameter_shadows_each_arity_it_takes() {
+	is!("use sound\nmix(a, b, c = 0) := 7\nmix(1, 2) + mix(1, 2, 3) + count(mix([0.1], [0.2], [0.3], [0.4]))", 15);
+}

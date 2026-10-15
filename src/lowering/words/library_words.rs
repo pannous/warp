@@ -5,7 +5,7 @@
 //!
 //! An unknown `.word` after a name, a text or a list is a loud error (`undefined function: word`), never silent data.
 
-use super::nodes::{call, children_rewritten, key, Counter};
+use super::nodes::{call, children_rewritten, if_then_else, key, Counter};
 use crate::analyzer::{call_name, counting_method};
 use crate::compiler::context::Context;
 use crate::errors::diagnostic::Diagnostic;
@@ -60,6 +60,8 @@ pub const MAP_WORD_FUNCTIONS: [&str; 8] = [
 	MAP_WITHOUT,
 	crate::one_entry_maps::MAP_OF_ENTRY,
 ];
+/// The modules named after a type, whose words `x.word` calls on a value of it (lib/list.warp, text.warp)
+const TYPE_MODULES: [&str; 2] = ["list", "text"];
 /// The name `catch e` binds, in lower_try_binding's template
 const CAUGHT_BINDING_PLACEHOLDER: &str = "caught_binding";
 /// The got-it topic of `square 3 + square(4)` (ask_braceless_argument)
@@ -144,6 +146,26 @@ fn left_out_argument(word: &str) -> Node {
 		SPLIT_WORD => text(SPLIT_SEPARATOR),
 		_ => Node::Empty,
 	}
+}
+
+/// The bases with an exact libm logarithm: `log(1000, 10)` is log10(1000) = 3, where ln(1000)/ln(10) is 2.9999999999999996
+const EXACT_LOG_BASES: [(i64, &str); 2] = [(10, "log10"), (2, "log2")];
+
+/// `log(value, base)`: libm's log takes one argument, so ln(value)/ln(base), exact for the EXACT_LOG_BASES;
+/// a list literal is the log of each item
+fn log_to_base(log_word: &Node, value: &Node, base: &Node) -> Node {
+	if let Node::List(values, Bracket::Square, separator) = value.drop_meta() {
+		let logs = values.iter().map(|item| log_to_base(log_word, item, base)).collect();
+		return Node::List(logs, Bracket::Square, separator.clone());
+	}
+	let exact_log = EXACT_LOG_BASES.iter().find(|(exact_base, _)| {
+		matches!(base.drop_meta(), Node::Number(crate::extensions::numbers::Number::Int(number)) if number == exact_base)
+	});
+	if let Some((_, exact_word)) = exact_log {
+		return parens(vec![symbol(exact_word), value.clone()]);
+	}
+	let log_of = |argument: &Node| parens(vec![log_word.clone(), argument.clone()]);
+	key(log_of(value), Op::Div, log_of(base))
 }
 
 /// `field_with(object, "name", value)`: a copy of the object with the field set; what `object.name = value` lowers to
@@ -323,6 +345,7 @@ pub fn lower(node: Node) -> Node {
 	let objects = assigned.objects.into_iter().filter_map(|(name, literal)| Some((name, literal?))).collect();
 	let instances = crate::traits::InstanceTypes::of(&node);
 	let call_results = call_results(&node, &context);
+	let times = crate::time::time_variables(&node);
 	Lowering {
 		context,
 		shadowed: RefCell::new(shadowed),
@@ -332,6 +355,7 @@ pub fn lower(node: Node) -> Node {
 		parameters: RefCell::new(vec![]),
 		defining: RefCell::new(vec![]),
 		call_results,
+		times,
 		temporaries: Counter::default(),
 	}
 	.expand(node)
@@ -415,6 +439,41 @@ fn prefix_operator_method(receiver: &Node, name: &str) -> Option<Node> {
 	Some(key(Node::Empty, operator, receiver.clone()))
 }
 
+/// The module named after a type (lib/list.warp, text.warp) that defines the word
+pub fn type_module_defining(word: &str) -> Option<&'static str> {
+	let defines = |module: &&str| {
+		crate::modules::std_module_definitions(module).is_some_and(|words| words.iter().any(|known| known == word))
+	};
+	TYPE_MODULES.into_iter().find(defines)
+}
+
+/// A standard module's word the program loaded and does not define itself
+fn is_loaded_module_word(name: &str) -> bool {
+	crate::compiler::compile_context::read(|context| context.module_definitions.contains(name))
+}
+
+/// `x.word` of an x that may be an object: `if x is <module type> then word(x) else x["word"]`; a receiver that is no
+/// variable reads the field, as it is evaluated once
+fn field_or_word(receiver: &Node, word_node: &Node, name: &str, module: &str) -> Node {
+	let field = field_lookup(receiver, name, word_node);
+	if receiver.symbol_name().is_none() {
+		return field;
+	}
+	let is_of_type = parens(vec![symbol(crate::words::IS_TYPE), receiver.clone(), text(module)]);
+	if_then_else(is_of_type, word_call(word_node, receiver, vec![]), field)
+}
+
+/// A variable or an element of one (`xs#i`, as a loop reads its element): read twice, it is the same value
+fn is_pure_read(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(_) => true,
+		Node::Key(list, Op::Hash, index) => {
+			list.symbol_name().is_some() && matches!(index.drop_meta(), Node::Symbol(_) | Node::Number(_))
+		}
+		_ => false,
+	}
+}
+
 /// The call `word(receiver, arguments…)`
 fn word_call(word_node: &Node, receiver: &Node, arguments: Vec<Node>) -> Node {
 	Node::List([vec![word_node.clone(), receiver.clone()], arguments].concat(), Bracket::Round, Separator::None)
@@ -436,6 +495,8 @@ struct Lowering {
 	defining: RefCell<Vec<(String, Vec<String>)>>,
 	/// Variables assigned the result of a user function call (call_results)
 	call_results: HashSet<String>,
+	/// Variables holding a time (time::time_variables): `(x + 1 hour).hour` reads the field
+	times: HashSet<String>,
 	temporaries: Counter,
 }
 
@@ -582,6 +643,12 @@ impl Lowering {
 		}
 	}
 
+	/// The time variables not hidden by a parameter of the definition being lowered: `f(x) := (x - 5).abs` of `x = now`
+	fn times_here(&self) -> HashSet<String> {
+		let parameters = self.parameters.borrow();
+		self.times.iter().filter(|name| !parameters.contains(name)).cloned().collect()
+	}
+
 	fn is_parameter(&self, node: &Node) -> bool {
 		matches!(node.drop_meta(), Node::Symbol(name) if self.parameters.borrow().contains(name))
 	}
@@ -662,8 +729,7 @@ impl Lowering {
 				return None;
 			}
 			if call_name(items, bracket, separator).is_some() {
-				let log_of = |argument: &Node| parens(vec![items[0].clone(), argument.clone()]);
-				return Some(key(log_of(value), Op::Div, log_of(base)));
+				return Some(log_to_base(&items[0], value, base));
 			}
 		}
 		// `first sorted xs` has one argument: a library word after it is its argument's prefix
@@ -709,14 +775,7 @@ impl Lowering {
 		if !keyword.is_symbol(FOR_WORD) || !in_word.is_symbol(IN_WORD) {
 			return None;
 		}
-		let (map, body) = match rest {
-			[map, body] => (map.clone(), body.clone()),
-			[colon] => match colon.drop_meta() {
-				Node::Key(map, Op::Colon, body) => (map.as_ref().clone(), body.as_ref().clone()),
-				_ => return None,
-			},
-			_ => return None,
-		};
+		let (map, body) = crate::lowering::control::for_loop::iterable_and_body(rest)?;
 		self.object_literal(&map)?;
 		let (key, value) = match names.drop_meta() {
 			Node::Symbol(_) => (names.clone(), None),
@@ -785,9 +844,15 @@ impl Lowering {
 		let [left, word, right] = items else {
 			return None;
 		};
-		let names_unit = |side: &Node| match side.drop_meta() {
-			Node::Key(_, Op::Hash, unit) => crate::analyzer::text_unit(&unit.name()).is_some(),
-			other => crate::analyzer::text_unit(&other.name()).is_some(),
+		// `#bytes in t`, `number of chars in t` (chars.number) count by a unit, a symbol; the text "chars" and a list
+		// ["bytes"] are looked up like any value
+		let names_unit = |side: &Node| {
+			let unit = match side.drop_meta() {
+				Node::Key(_, Op::Hash, unit) | Node::Key(unit, Op::Dot, _) => unit.drop_meta(),
+				other => other,
+			};
+			// a variable named so (`chars = ["a"]; "a" in chars`) is that variable
+			unit.symbol_name().filter(|name| !self.shadows(name)).and_then(crate::analyzer::text_unit).is_some()
 		};
 		let (collection, element) = match word.symbol_name()? {
 			IN_WORD if names_unit(left) || names_unit(right) => return None,
@@ -827,12 +892,40 @@ impl Lowering {
 			.library_word_for(name, arguments.len() + 1)
 			.filter(|_| is_called || counting_method(name, &self.context).is_none())
 		{
-			return Some(self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false));
+			let word_call = self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false);
+			// `m.first` of a parameter or loop element given `{first: 9}` (card map-field). Not a map's own word
+			// (`m.keys`), nor a word whose list or text result the code after it types (`it.chars.map(…)`): a field
+			// read there would hide that type
+			let is_element = matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _));
+			let keeps_word = crate::members::MAP_MEMBERS.contains(&name.as_str())
+				|| result_kind(word).or_else(|| result_kind(name)).is_some();
+			if !is_called && !has_arguments && !keeps_word && (is_element || self.may_hold_object(receiver)) {
+				return Some(self.map_field_or(receiver, name, word_node, word_call));
+			}
+			return Some(word_call);
 		}
 		if !is_called && self.reads_declared_field(receiver, name) {
 			return Some(field_lookup(receiver, name, word_node));
 		}
-		if self.context.user_functions.get(name).is_some_and(|function| !function.params.is_empty()) {
+		// `b.product` of a value that may be an object: its field if it is no value of the word's type, else the type
+		// module's word, as `b.product()` calls it (x.word is x.word(), user 2026-10-14)
+		// `p.center`, `s.items` of another module's word or one of more parameters: no call, as before the word was loaded
+		let is_loaded_word = !is_called && is_loaded_module_word(name);
+		let type_module = self.type_module_of(name).filter(|_| is_loaded_word);
+		let may_be_object = || self.is_object(receiver, name) || self.may_hold_object(receiver);
+		if is_loaded_word && may_be_object() {
+			// a parameter's or a user function result's type shows at run time; a loop's element or a foreign
+			// result (`r.stats_of(t).words`) reads the field, as a branch of the word would type the value
+			let is_generic = self.is_parameter(receiver)
+				|| receiver.symbol_name().is_some_and(|variable| self.call_results.contains(variable));
+			return Some(match type_module.filter(|_| is_generic) {
+				Some(module) => field_or_word(receiver, word_node, name, module),
+				None => field_lookup(receiver, name, word_node),
+			});
+		}
+		if !(is_loaded_word && type_module.is_none())
+			&& self.context.user_functions.get(name).is_some_and(|function| !function.params.is_empty())
+		{
 			return Some(word_call(word_node, receiver, arguments));
 		}
 		// `x.string`, `t.int`, `x.float()`, `2.double()`: the conversion `string(x)`, as written in call form; uncalled
@@ -878,6 +971,12 @@ impl Lowering {
 			|| self.reads_own_parameter_field(receiver, name)
 	}
 
+	/// The type module (lib/list.warp, text.warp) of a loaded word of one parameter, which `x.word` calls
+	fn type_module_of(&self, name: &str) -> Option<&'static str> {
+		let takes_one = self.context.user_functions.get(name).is_some_and(|function| function.params.len() == 1);
+		type_module_defining(name).filter(|_| takes_one)
+	}
+
 	/// A word a value answers other than by a field: a count, a list change, a user function, or `f.effects` of a
 	/// function (not of a variable), the query effects.rs answers
 	fn is_known_method(&self, receiver: &Node, name: &str) -> bool {
@@ -897,6 +996,19 @@ impl Lowering {
 			|| self.is_parameter(receiver)
 			|| is_call_result
 			|| self.instances.is_declared_field(name)
+	}
+
+	/// `x.word` of an x that may be a map holding the key `word`: `if x is a map holding the key then x["word"] else
+	/// word(x)`, so a map's own words (`m.count`) still answer on maps without such a key. A one-entry map in a list
+	/// (`[{first: 2}]`) is held as a key, which has that key too
+	fn map_field_or(&self, receiver: &Node, name: &str, word_node: &Node, word_call: Node) -> Node {
+		if !is_pure_read(receiver) {
+			return word_call;
+		}
+		let is_type = |type_word: &str| parens(vec![symbol(crate::words::IS_TYPE), receiver.clone(), text(type_word)]);
+		let is_map = key(is_type(crate::words::MAP_WORD), Op::Or, is_type(&crate::Kind::Key.to_string()));
+		let has_key = self.call(COLLECTION_CONTAINS, word_node, vec![receiver.clone(), text(name)], false);
+		if_then_else(key(parens(vec![is_map]), Op::And, has_key), field_lookup(receiver, name, word_node), word_call)
 	}
 
 	fn may_hold_object(&self, receiver: &Node) -> bool {
@@ -928,6 +1040,9 @@ impl Lowering {
 			// a parenthesized object `({a:1}).a`, or quoted code `(data n*1).op` (node_api.rs)
 			Node::List(_, Bracket::Curly, _) => true,
 			_ if crate::blocks::quoted_data(variable).is_some() => true,
+			// a time the run computes: `(now + 1 hour).hour`, `(x + 1 hour).hour` of `x = now` (cards field-grouped,
+			// variable-time)
+			_ if crate::time::holds_time(inner, &self.times_here()) => true,
 			// an element of a computed list: `users.filter(…)#1.name`
 			_ => matches!(inner, Node::Key(_, Op::Hash, _)) && !is_plain_literal(variable),
 		}

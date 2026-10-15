@@ -24,6 +24,7 @@ mod test_meta_attributes;
 mod test_newline_precedence;
 mod test_number_glyphs;
 mod test_one_line_statements;
+mod test_operator_word_keys; // card abs-fails
 mod test_parse_long_sources;
 mod test_parser;
 mod test_parser_sugar;

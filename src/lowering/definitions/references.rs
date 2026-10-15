@@ -23,7 +23,7 @@ pub fn lower(node: Node) -> Node {
 }
 
 /// `name{…}`: the node's name and body items
-fn named_body(node: &Node) -> Option<(String, &[Node])> {
+pub(crate) fn named_body(node: &Node) -> Option<(String, &[Node])> {
 	match node.drop_meta() {
 		Node::Key(name, Op::Colon, body) if matches!(name.drop_meta(), Node::Symbol(_)) => match body.drop_meta() {
 			Node::List(items, Bracket::Curly, _) => Some((name.name(), items)),

@@ -224,7 +224,8 @@ fn store(member: &str, arguments: &[Node]) -> Result<Node, String> {
 fn sound(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	match (member, arguments) {
 		("play_file", [path]) => {
-			return crate::sound::play_file(&text_of(path)?).map(|handle| Node::int(handle as i64))
+			return crate::sound::play_file(&crate::modules::beside_program_if_there(&text_of(path)?))
+				.map(|handle| Node::int(handle as i64))
 		}
 		// stop(handle), play's handle; handle 0: all of them
 		("stop", [handle]) if number_of(handle)? == 0.0 => crate::sound::stop(),
@@ -233,11 +234,20 @@ fn sound(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			crate::sound::fade(number_of(handle)?.max(0.0) as usize, number_of(gain)?, number_of(seconds)?)?
 		}
 		("at", [seconds]) => crate::sound::at(number_of(seconds)?),
+		// card shared-buses: bus(number, [[name, settings…] …]) its effects (number 0: a new bus), send(bus) the next sounds, returning the bus before
+		("bus", [bus, effects]) => {
+			let effects = effects.as_items().iter().map(effect_of).collect::<Result<Vec<_>, String>>()?;
+			return crate::sound::define_bus(number_of(bus)?.max(0.0) as usize, effects)
+				.map(|bus| Node::int(bus as i64));
+		}
+		("send", [bus]) => return Ok(Node::int(crate::sound::send_to(number_of(bus)?.max(0.0) as usize) as i64)),
 		("at_end", []) => crate::sound::at_end(),
 		("rest", [seconds]) => crate::sound::rest(number_of(seconds)?),
 		("wait", []) => crate::sound::wait(),
 		("last", []) => return Ok(Node::int(crate::sound::last_handle() as i64)),
 		("moment", []) => return Ok(Node::float(crate::sound::moment_seconds())),
+		// a live loop's cycle starts (lib live_cycle_started): only the playground hands loops over between runs
+		("live_cycle", [_]) => {}
 		("queued", []) => return Ok(Node::float(crate::sound::queued_seconds())),
 		("render", [path]) => return crate::sound::render(&text_of(path)?).map(Node::float),
 		("load", [path]) => {
@@ -247,6 +257,15 @@ fn sound(member: &str, arguments: &[Node]) -> Result<Node, String> {
 		_ => return no_such_word(arguments),
 	}
 	Ok(Node::Empty)
+}
+
+/// `["delay", 0.25, 0.4, 0.5]`: an effect by its name and settings (src/sound/effects.rs Effect::named)
+#[cfg(feature = "native")]
+fn effect_of(effect: &Node) -> Result<crate::sound::effects::Effect, String> {
+	let items = effect.as_items();
+	let (name, settings) = items.split_first().ok_or("an effect is [name, settings…]")?;
+	let settings = settings.iter().map(number_of).collect::<Result<Vec<_>, String>>()?;
+	crate::sound::effects::Effect::named(&text_of(name)?, &settings)
 }
 
 /// MIDI (card midi-out, src/sound/midi.rs): notes cross as flat whole numbers [start ms, key, length ms, velocity …]

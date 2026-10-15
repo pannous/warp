@@ -100,18 +100,7 @@ fn for_in(items: &[Node]) -> Option<Node> {
 		return None;
 	}
 	let names = loop_names(variable)?;
-	let (iterable, body) = match rest {
-		[iterable, body] => (iterable.clone(), body.clone()),
-		// `for i in 1 to 5\n  puti i`: the words after the iterable are the body
-		[iterable, words @ ..] if words.len() > 1 => {
-			(iterable.clone(), Node::List(words.to_vec(), Bracket::None, Separator::Space))
-		}
-		[colon] => match colon.drop_meta() {
-			Node::Key(iterable, Op::Colon, body) => (iterable.as_ref().clone(), body.as_ref().clone()),
-			_ => return None,
-		},
-		_ => return None,
-	};
+	let (iterable, body) = iterable_and_body(rest)?;
 	let mut body = body.body_statements();
 	// `for word in text: print it`: it is the loop variable too
 	if matches!(names.as_slice(), [name] if name != IMPLICIT_PARAMETER && !crate::lambdas::is_inlined_loop_variable(&name.name()))
@@ -129,6 +118,22 @@ fn for_in(items: &[Node]) -> Option<Node> {
 		},
 		_ => walking_loop(variable, iterable, body),
 	})
+}
+
+/// What follows `for x in`: `iterable {body}`, `iterable: body`, or `iterable words…` whose words are the body
+/// (`for i in 1 to 5 print i`, `for key in m print key`)
+pub(crate) fn iterable_and_body(rest: &[Node]) -> Option<(Node, Node)> {
+	match rest {
+		[iterable, body] => Some((iterable.clone(), body.clone())),
+		[iterable, words @ ..] if words.len() > 1 => {
+			Some((iterable.clone(), Node::List(words.to_vec(), Bracket::None, Separator::Space)))
+		}
+		[colon] => match colon.drop_meta() {
+			Node::Key(iterable, Op::Colon, body) => Some((iterable.as_ref().clone(), body.as_ref().clone())),
+			_ => None,
+		},
+		_ => None,
+	}
 }
 
 /// `it` replaced by the loop variable, except inside a block or a lambda of the body, whose own parameter it is (an

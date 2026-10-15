@@ -71,7 +71,9 @@ sounds queued before it, at an `at`'s time, in a task on its own voice; natively
 and the process's end wait for it, stop_sound drops it), headless the line names the place (`midi out : 90 40 64 at 0.500 s`),
 in the browser Web MIDI's own timestamp (host-sound.js voiceSounded(0).at → playground.js output.send(message, time)).
 `midi_note(pitch, duration, velocity, channel)` is on, the voice resting the duration (std_io sound.rest: the voice goes on
-without a sound), off. Messages from task Workers in the browser still go nowhere (not relayed to the page).
+without a sound), off. A task Worker in the browser posts its sounds and MIDI to the page itself (host-tasks.js
+addPageSoundWords, card playground-live): relayed through the program's Worker, which waits for the task in
+Atomics.wait, they arrived bunched once main returned; handles come from one counter the run's Workers share.
 A loop variable named `note` inside lib/sound.warp breaks: `note` is the module's own word ("not a list").
 
 ## Probes and quirks (from the warp-sound handover, 2026-10-10)
@@ -256,10 +258,15 @@ choosing each cycle among all the blocks, the later ones set `bass_since#k = sou
 playground voiceMoment on the Workers' shared clock) is where the voice's next sound would start; a cycle plays the
 latest block whose moment it reached, 50 ms early counting (voices start microseconds apart). The first definition's
 count stays; `live_loop name { … }` without one is endless (heard voices pace 0.5 s ahead, silent runs don't).
-Still open: playground live reload (Run again while playing keeps the clock and redefines loops by name), a
-redefined block's variables must exist when the voice starts.
-Still open: an endless loop (card live-redefine) whose block is redefined while it plays (needs the playground's live
-reload and voice stealing).
+Built (card playground-live, tests/web/test_live_handover.rs): playground live reload. A named loop's block starts
+with `live_cycle_started("drums")` (music_words LiveLoop::announced; natively a no-op). While named loops play,
+Ctrl/Cmd-Enter or editing reruns (the Run/Stop button still stops): playground.js handOver retires the old Worker
+(it keeps sounding) and starts the new run with liveHandover; the new run's loop of the same name moves its first
+cycle onto the old loop's grid ({start, period}, host-tasks.js liveCycleStarted), and endHandedOver clips the old
+loop's sounds at that cycle. Once all its loops are taken the old Worker is terminated; a loop the new code drops
+ends at its first cycle after LIVE_RETIRE_SECONDS (4) (Sonic Pi keeps it playing). Unnamed loops are not handed
+over; Stop terminates every retired Worker too. Still open: a redefined block's variables must exist when the voice
+starts.
 
 ## Our own API or the platform's? (card our-sound)
 
@@ -301,8 +308,38 @@ The simple form of layer 4: every sound passes a fixed effect chain distortion �
 output (lib/sound.warp `through_effects`, run in `sound()` over the whole phrase, so a melody has one tail). Module settings
 `distortion` (soft-clipper drive), `delay_time` / `delay_feedback` / `delay_mix`, `reverb_mix` (four Schroeder combs, 0.6 s
 tail); all off by default (no cost). The settings at the time of `play` are that sound's sends, so each voice (task) sets its
-own. Pure warp, so the playground runs the same. Still to build: the `osc |> lowpass |> delay |> out` pipe form with nodes
-and buses as values, shared buses between voices, compressor, EQ, effects on a running handle (card sound-pipe-graph).
+own. Pure warp, so the playground runs the same. The pipe form is built (card sound-pipe-graph,
+samples/sound_pipes.warp, tests/programs/test_sound_pipes.rs): a signal is the list of its amplitudes, a node a function
+of it, so `osc(C4, 1s, "saw") |> lowpass(900) |> delay(0.25) |> reverb(0.3) |> gain(0.5) |> out`; nodes osc, lowpass /
+highpass / bandpass (frequency, q), delay (seconds, feedback, mix), reverb (mix), distort (drive), gain, out (plays it
+through `sound`, so the settings chain and pan still apply); `mix(a, b[, c, d])` sums signals to the longest, a bus as a
+value. The settings chain and the nodes share biquad / echoed / roomed / clipped. Speed: a mix over a list of signals in
+a loop was quadratic (card list-call-copy), so mix takes two to four signals.
+
+## Shared buses, stage 1 (card shared-buses, 2026-10-15, src/sound/effects.rs, tests/programs/test_sound_buses.rs)
+`room = bus() |> reverb(0.4) |> delay(0.25)`, then `out(signal, room)` or `signal |> out(room)` from the program or
+any task: the bus's sounds are mixed, then go through its chain together, once, as a stream, ringing on until -60 dB
+after the last (Chain::rung_out). Natively the Mixer runs each bus in its device callback (fill); render_sound mixes
+each bus apart and runs the same Chain (effects::processed). lib: class Bus {id, chain}, the effect nodes on a Bus append
+to its chain (host word sound.bus), `out(signal, b: Bus)` sends (sound.send, a thread's current bus around its sound).
+The DSP is the lib formulas in Rust, streaming. Plan (supervisor, user asked whether Rust or warp holds the one DSP):
+stage 2 the browser runs the same code (warp.wasm export for render_sound, an AudioWorklet live; until then the
+playground plays bus sounds dry and says so), stage 3 a bus's effects changed while it plays, stage 4 compressor, EQ.
+
+Stage 3 built (2026-10-15): `room = room |> gain(0)` changes the bus from the defining voice's moment (where its queued
+sounds end). An effect of a name the chain has replaces it in place (with_effect), else it appends. Chain::retune keeps
+each stage of the same kind with its state (comb echoes, biquad history), so a delay set again rings on; another kind
+starts afresh. Live: Mixer::change_bus(bus, frame, effects) stores pending changes per Bus, fill splits the bus's buffer
+at their frames. render_sound: BUSES keeps every definition at its place since the last render, effects::processed
+retunes at their frames, the last definition stays for the next render. `out(signal, bus)` restores the bus the thread
+sent to before (sound.send returns it, natively and in host-sound.js).
+
+Stage 4 built (2026-10-15): bus words `peak(b, frequency, db, q = 1)`, `low_shelf`/`high_shelf(b, frequency, db,
+q = 0.707)` (RBJ cookbook biquads, FilterKind::Peak/LowShelf/HighShelf carry the dB) and `compress(b, threshold = -18,
+ratio = 4, attack = 0.01, release = 0.1)`: one peak envelope over the loudest channel (linked, the stereo image stays), the
+dB over the threshold scaled by 1 - 1/ratio, no knee, no makeup gain (add `gain`). EQ bands are several of a name
+(card bus-peak): `peak(200Hz, 3) |> peak(3kHz, -2)` keeps both, one at a band's frequency replaces it. Bus-only for now: no list-signal versions in
+lib (they wait for the one-DSP answer, Rust or warp).
 
 ## Native output built (card native-sound, 2026-10-12, src/sound/sound_engine.rs, tests/programs/test_sound_engine.rs)
 On macOS every sound now goes into one cpal output stream (CoreAudio) instead of one afplay process per WAV. A `Mixer`

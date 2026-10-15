@@ -89,8 +89,12 @@ fn warns(uniscript: &str, unicode: &str, warning: &str) {
 fn unsupported_characters_and_combinations_warn() {
 	warns("<:greek q>", "q", "uniscript: no greek form of q at byte 0"); // c types ς since uniscript 1.0.6
 	warns("x <:fracture 7>", "x 7", "uniscript: no fracture form of 7 at byte 2");
-	warns("<:red 𓀀>", "𓀀", "uniscript: red does not apply to 𓀀 at byte 0");
-	warns("<:mirror red 狗>", "狗\u{E004D}", "uniscript: red does not apply to 狗 at byte 0");
+	// a color that does not apply stays as color meta, a TAG sequence (uniscript 1.0.8; user decision
+	// uniscript-binary-import: uniscript's own implementation is the truth)
+	const RED_META: &str =
+		"\u{E003A}\u{E0063}\u{E006F}\u{E006C}\u{E006F}\u{E0072}\u{E0020}\u{E0072}\u{E0065}\u{E0064}\u{E007F}";
+	warns("<:red 𓀀>", &format!("𓀀{RED_META}"), "uniscript: red on 𓀀 kept as color meta at byte 0");
+	warns("<:mirror red 狗>", &format!("狗\u{E004D}{RED_META}"), "uniscript: red on 狗 kept as color meta at byte 0");
 	warns("<:beside a b>", "ab", "uniscript: no beside group of a at byte 0");
 }
 
@@ -145,10 +149,15 @@ fn the_header_declares_uniscript_and_its_version() {
 		(&format!("{header} <:alpha>"), " α"),
 		("<:uniscript><:alpha>", "α"),
 	]);
+	// any https://uniscript.org/vN reads without warning, only another URL warns (uniscript's AGENTS.md "stay backwards
+	// compatible"; uniscript 1.0.8, user decision uniscript-binary-import)
+	take_runtime_warnings();
+	converts(&[("<:uniscript version=\\\"https://uniscript.org/v9\\\">A", "A")]);
+	assert_eq!(take_runtime_warnings(), Vec::<String>::new());
 	warns(
-		"<:uniscript version=\\\"https://uniscript.org/v9\\\">A",
+		"<:uniscript version=\\\"https://example.com/v2\\\">A",
 		"A",
-		"uniscript: unsupported uniscript version https://uniscript.org/v9 at byte 0",
+		"uniscript: unsupported uniscript version https://example.com/v2 at byte 0",
 	);
 	is!(
 		&format!("use uniscript; uniscript(\"x {header}\")"),

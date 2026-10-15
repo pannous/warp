@@ -14,6 +14,7 @@ mod test_bare_function_name;
 mod test_block_function;
 mod test_body_statement;
 mod test_braced_it_warning;
+mod test_broadcast_of_list_variables; // card round-floor-xs
 mod test_broadcast_reassigned;
 mod test_broadcasting;
 mod test_broadcasting_declared;
@@ -83,15 +84,18 @@ mod test_kind_tested_parameter; // card function-whose
 mod test_lambda_global;
 mod test_lambda_spaced_body;
 mod test_lambda_spellings;
+mod test_lambda_tuple_arguments; // card errors-needs
 mod test_lambdas;
 mod test_late_binding;
 mod test_let_in;
 mod test_libm_pure;
 mod test_library_word_aliases;
+mod test_library_word_assigned; // card floor-says
 mod test_library_word_values;
 mod test_list_conversion;
 mod test_list_fields; // card people-map
 mod test_map_phrase;
+mod test_math_broadcast; // card cos-instead
 mod test_member_phrases; // card xs-insert
 mod test_memoization;
 mod test_method_syntax_calls;
@@ -101,6 +105,7 @@ mod test_multi_value;
 mod test_named_arguments;
 mod test_named_function_argument;
 mod test_nested_it;
+mod test_nested_library_calls; // card broadcast-library
 mod test_nested_prefix_calls;
 mod test_nested_two_deep; // card nested-two
 mod test_nonlocal_any_value;
@@ -109,6 +114,7 @@ mod test_nonlocal_kind_change; // card nonlocal-assign
 mod test_nonlocal_lambdas;
 mod test_nonlocal_passed_around;
 mod test_object_arguments;
+mod test_ocaml_fun; // card fun-x-loud
 mod test_operator_arguments;
 mod test_operator_word_methods;
 mod test_optional_parameters;

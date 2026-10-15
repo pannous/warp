@@ -1,0 +1,7 @@
+// a shader with a syntax error: the error should say where (card shader-errors)
+broken = shader {
+	@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f :
+		return vec4f(1.0, 0.0, 0.0, 1.0);
+	}
+}
+paint(broken, 8, 8, {})

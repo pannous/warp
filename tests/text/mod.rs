@@ -4,13 +4,17 @@ mod test_backtick_templates;
 mod test_brace_hole; // card brace-hole
 mod test_case_table;
 mod test_cast_to_string;
+mod test_char_parameter_type; // chars-codepoints follow-up
 mod test_character_arithmetic;
 mod test_character_comparison;
+mod test_chars_codepoints; // card chars-codepoints
 mod test_chr;
 mod test_codepoint_bytes;
+mod test_codepoint_counts; // card codepoints-traps
 mod test_constant_expression_text;
 mod test_count_in;
 mod test_count_method;
+mod test_count_of_split; // card count-split
 mod test_declared_text_one_character;
 mod test_error_as_text;
 mod test_for_each_char;

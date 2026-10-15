@@ -25,8 +25,8 @@ const MONTH_NAMES: [&str; 12] = [
 	"November",
 	"December",
 ];
-/// now's local date as one number, ordered as dates are: 2026-10-14 is 20261014
-const NOW_DATE_NUMBER: &str = "now.year * 10000 + now.month * 100 + now.day";
+/// now's local date (calendar::Time::part)
+const NOW_DATE: &str = "now.date";
 const NOW_MONTH: &str = "now.month";
 /// `time.now`, the current time of day (user decision time-now)
 const NOW_TIME_OF_DAY: &str = "now.time";
@@ -68,8 +68,10 @@ fn part_compared(op: Op, part: &Node, bound: &HashSet<String>) -> Option<Node> {
 	if let Some(month) = month_number(part, bound) {
 		return compare(crate::warp_parser::parse(NOW_MONTH), Node::int(month));
 	}
-	let date = date_number(part)?;
-	compare(crate::warp_parser::parse(NOW_DATE_NUMBER), Node::int(date))
+	if !is_date(part) {
+		return None;
+	}
+	compare(crate::warp_parser::parse(NOW_DATE), part.clone())
 }
 
 fn month_number(node: &Node, bound: &HashSet<String>) -> Option<i64> {
@@ -77,10 +79,9 @@ fn month_number(node: &Node, bound: &HashSet<String>) -> Option<i64> {
 	MONTH_NAMES.iter().position(|month| *month == name).map(|index| index as i64 + 1)
 }
 
-fn date_number(node: &Node) -> Option<i64> {
-	let Node::Data(data) = node.drop_meta() else { return None };
-	let Ok(Time::Date(date)) = parse_literal(&data.downcast_ref::<TimeLiteral>()?.0) else { return None };
-	Some(date.year * 10000 + date.month * 100 + date.day)
+fn is_date(node: &Node) -> bool {
+	let Node::Data(data) = node.drop_meta() else { return false };
+	data.downcast_ref::<TimeLiteral>().is_some_and(|literal| matches!(parse_literal(&literal.0), Ok(Time::Date(_))))
 }
 
 /// The comparison with its sides swapped: `17h < now` is `now > 17h`

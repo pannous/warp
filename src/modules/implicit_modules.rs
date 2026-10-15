@@ -11,7 +11,7 @@ pub(crate) const ROUTE_PARTS: [&str; 3] = ["route_segment", "route_parameter", "
 pub(crate) const AGENT_MODULE: &str = "agent";
 /// lib/sound.warp: `play(440Hz, 0.5s)`, `beep` (card basic-sound), loaded when a program calls one of its words
 pub(crate) const SOUND_MODULE: &str = "sound";
-pub(crate) const SOUND_WORDS: [&str; 20] = [
+pub(crate) const SOUND_WORDS: [&str; 21] = [
 	"pattern",
 	"live_loop",
 	"play",
@@ -24,6 +24,7 @@ pub(crate) const SOUND_WORDS: [&str; 20] = [
 	"sound_queued",
 	"wait_sound",
 	"render_sound",
+	"osc",
 	"midi_send",
 	"midi_outputs",
 	"midi_inputs",
@@ -133,6 +134,7 @@ pub(crate) fn with_type_module_uses(program: Node) -> Node {
 		.iter()
 		.filter(|method| !defined.contains(*method) && !crate::library_words::is_library_word(method))
 		.filter_map(only_provider)
+		.chain(crate::reflection::value_methods_modules(&program))
 		.filter(|module| !used.contains(*module))
 		.collect();
 	modules.sort();

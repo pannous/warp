@@ -41,6 +41,7 @@ mod test_sound;
 mod test_sound_aliasing; // card reason-beep
 mod test_sound_at; // card sample-accurate
 mod test_sound_at_in_blocks; // card inside-loop
+mod test_sound_buses; // card shared-buses
 mod test_sound_clock; // card sound-pro
 mod test_sound_effects; // card signal-graph
 mod test_sound_engine; // card native-sound
@@ -51,6 +52,7 @@ mod test_sound_handles; // card sound-pro
 mod test_sound_notes; // card sound-pro
 mod test_sound_pan; // card stereo-pan
 mod test_sound_patterns; // card patterns-live
+mod test_sound_pipes; // card sound-pipe-graph
 mod test_sound_render; // card sound-pro
 mod test_sound_samples; // card sound-samples
 mod test_sound_signal; // card real-time

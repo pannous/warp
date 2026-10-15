@@ -6,7 +6,7 @@
 const stage = name => self.postMessage({ type: "stage", stage: name });
 
 stage("loading its scripts");
-importScripts("reader.js", "imports.js", "exact.js", "std.js", "host.js");
+importScripts("reader.js", "imports.js", "exact.js", "js-members.js", "std.js", "host.js");
 importScripts(...HOST_PART_FILES, "components.js", "served-files.js");
 stage("starting the task workers");
 prepareTaskPool(); // task Workers start while this worker is idle (host.js)
@@ -44,24 +44,14 @@ const WARM_UP_CODE = 'p{ "" }';
 self.keepStored = (name, value, file) => post({ type: "stored", name, value, file }); // host-files.js STD_ADAPTERS.store
 self.writeClipboard = text => post({ type: "clipboard", text }); // host-files.js STD_ADAPTERS.clipboard
 self.askPageClipboard = shared => self.postMessage({ type: "clipboard read", shared }); // host.js clipboard_text
-// play's handles (lib/sound.warp, card sound-pro): the sounds and music files of a run counted from 1, as natively
-let soundHandles = 0;
-const nextSoundHandle = () => ++soundHandles;
-self.lastSoundHandle = () => soundHandles;
-self.playSoundFile = (url, bytes) => post({ type: "sound file", url, bytes, handle: nextSoundHandle() }); // host-files.js STD_ADAPTERS.sound: a worker has no <audio>
+self.askPageCall = (shared, request) => self.postMessage({ type: "page call", shared, request }); // host-foreign.js callOnPage
 self.keepFile = (path, bytes) => post({ type: "file", path, bytes }); // render_sound's WAV, for the page's download link
-self.stopSoundFiles = () => { self.voiceStopped(); post({ type: "stop sound files" }); };
-self.sendMidi = (port, message, at) => post({ type: "midi", port, message, at }); // host-files.js STD_ADAPTERS.midi
-self.stopSound = handle => post({ type: "stop sound", handle }); // stop_sound(handle)
-self.fadeSound = (handle, gain, seconds) => post({ type: "fade sound", handle, gain, seconds }); // fade_sound
-// a worker has no AudioContext: the page plays it at its start on the shared clock (host-tasks.js voiceSounded); a
-// task's sound comes relayed with its own voice's start
-self.playSamples = sound => post({ type: "sound", ...sound, handle: sound.handle || nextSoundHandle() }); // a signal's blocks share one
+addPageSoundWords(post); // host-tasks.js
 const hooks = {
 	renders: true, // each outcome carries its HTML by the program's own renderer (host.js renderedHtml)
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
-	paint: (pixels, width, height, canvas) => post({ type: "paint", pixels, width, height, canvas }),
+	paint: (pixels, width, height, canvas, shaded) => post({ type: "paint", pixels, width, height, canvas, shaded }),
 	gpuCanvas: canvas => post({ type: "gpu canvas", ...canvas }), // host-gpu.js gpuPainted
 	sound: sound => self.playSamples(sound),
 	sleeping: milliseconds => post({ type: "sleep", milliseconds }),
@@ -321,7 +311,9 @@ async function handleMessage(data) {
 	stage("waiting for the task workers");
 	await taskPoolReady(); // host.js: tasks run on loaded Workers, not inline
 	stage(`evaluating run ${data.id}`);
-	soundHandles = 0;
+	self.newSoundHandles(); // host-tasks.js
+	self.liveHandover = data.liveHandover ?? {}; // the page's live loops of the run before (host-tasks.js liveCycleStarted)
+	self.programFile = data.file; // host-files.js besideProgram
 	const started = performance.now();
 	const report = await evaluate(data.code, data.acknowledged ?? {});
 	post({ type: "report", id: data.id, report, milliseconds: performance.now() - started });

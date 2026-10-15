@@ -8,6 +8,7 @@ const WAV_HEADER_BYTES = 44;
 // play of a signal (src/sound/mod.rs play_signal, lowering/words/music_words.rs BLOCK_SAMPLES): computed this many samples at a time
 const SIGNAL_BLOCK = 512;
 const FULL_SCALE = 32767;
+const DRY_BUSES = "bus(): its effects do not run in the browser yet, its sounds play dry (card shared-buses)";
 // played to someone (the page was clicked or typed in), a signal is computed at most this far ahead of the speaker,
 // checked every SIGNAL_POLL_MS (src/sound/mod.rs SIGNAL_AHEAD, SIGNAL_POLL)
 const SIGNAL_AHEAD_SECONDS = 0.1;
@@ -260,7 +261,7 @@ addHostPart({
 			while (self.pageSystemValues?.window_open && !self.insideAt?.() && (self.soundsQueued?.() ?? 0) > PLAY_AHEAD_SECONDS) holder.sleep(SIGNAL_POLL_MS);
 			const sound = { samples, rate, channels };
 			const { place, at } = self.voiceSounded?.(samples.length / channels / rate) ?? {};
-			hooks.sound?.({ ...sound, at, handle });
+			hooks.sound?.({ ...sound, at, handle, loop: self.currentVoice?.().loop }); // a live loop's (card playground-live)
 			const own = handle ?? self.lastSoundHandle?.() ?? 0;
 			(holder.run.unrenderedSounds ??= []).push({ ...sound, place, handle: own });
 			return own;
@@ -295,8 +296,8 @@ addHostPart({
 		sound: {
 			// a written file (a rendered WAV) goes to the page as its bytes, a served or remote one by its URL; a local file
 			// that is not there fails as natively (card browser-play)
-			play_file: path => {
-				const name = contentText(path);
+			play_file(path) {
+				const name = besideProgram(contentText(path), programFileOf(this.holder.run)); // host-files.js
 				const written = writtenFiles.has(filePath(name));
 				if (!written && !/^https?:/.test(name) && !servedFileExists(name)) throw new Error(`cannot open ${name}: ${FILE_NOT_FOUND}`);
 				self.playSoundFile?.(fileUrl(name), written ? readBytes(name) : undefined);
@@ -317,6 +318,18 @@ addHostPart({
 				self.fadeSound?.(handle, gain, seconds);
 				return null;
 			},
+			// a bus (card shared-buses, src/sound/effects.rs): numbered as natively; its effects do not run here yet, its
+			// sounds play dry, said once
+			bus(number) {
+				if (!this.holder.warnings.includes(DRY_BUSES)) this.holder.warnings.push(DRY_BUSES);
+				return Number(number) || (this.holder.run.buses = (this.holder.run.buses ?? 0) + 1);
+			},
+			// the bus before, as natively, so out(signal, bus) restores it
+			send(number) {
+				const before = this.holder.run.sentBus ?? 0;
+				this.holder.run.sentBus = Number(number);
+				return before;
+			},
 			// the page's audio clock as the worker keeps it (worker.js); a worker cannot wait for the page's audio
 			queued: () => self.soundsQueued?.() ?? 0,
 			at: seconds => { self.voiceAt?.(Number(seconds)); return null; },
@@ -324,6 +337,8 @@ addHostPart({
 			at_end: () => { self.voiceAtEnd?.(); return null; },
 			// the voice's moment on the clock every Worker shares (src/sound/mod.rs moment_seconds, card live-redefine)
 			moment: () => self.voiceMoment?.() ?? 0,
+			// a named live loop's cycle starts (lib live_cycle_started, host-tasks.js liveCycleStarted)
+			live_cycle: name => { self.liveCycleStarted?.(contentText(name)); return null; },
 			wait: () => null,
 			// sample("kick.wav") (card sound-samples, src/sound/audio_files.rs): [rate, channels, offset frames …]; the playground
 			// decodes WAV only, a Worker has no decoder for the other formats

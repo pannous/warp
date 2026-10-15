@@ -759,9 +759,9 @@ Examples: shader; samples: gpu_map, gpu_arrays, manual_3d_object_viewer, gpu_vis
 ## Sound and music
 
 `use sound` plays notes by name, chords, rhythms and whole songs. A function can also compute the sound itself.
-`play "mozart.mp3"` plays a music file (samples/play_mp3.warp; in the native warp for now, card play-beside-program).
+`play "mozart.mp3"` plays a music file; a relative name is the program file's neighbour.
 
-Examples: melody; samples: music, rhythm, harmony, synth, filters, voices, arrangement, sound_patterns, signal_graph, siren_sound, stereo_sound, midi, visualizer
+Examples: melody; samples: play_mp3, music, rhythm, harmony, synth, filters, voices, arrangement, sound_patterns, signal_graph, siren_sound, stereo_sound, midi, visualizer
 
 ## WebAssembly
 

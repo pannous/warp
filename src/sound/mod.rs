@@ -13,10 +13,13 @@
 // TODO turn this into a module, albeit built-in one
 
 pub mod audio_files;
+pub mod effects;
 pub mod midi;
 pub mod sound_engine;
 
+use effects::Effect;
 use std::cell::{Cell, RefCell};
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, Once};
@@ -97,7 +100,15 @@ thread_local! {
 	static VOICE: Cell<Voice> = Cell::new(Voice::default());
 	/// The voices an `at` statement left, taken up again at its end
 	static BEFORE_AT: RefCell<Vec<Voice>> = const { RefCell::new(Vec::new()) };
+	/// The bus this thread's next sounds go through (card shared-buses), 0: none
+	static SENT_TO: Cell<usize> = const { Cell::new(0) };
 }
+/// The buses' effects by their numbers, from 1 (card shared-buses): every thread's sounds may go through each. Each
+/// definition since the last render_sound at its place on the defining voice, so a render changes the effects there
+/// (stage 3); the last one before the render stays, its place -∞
+static BUSES: Mutex<Vec<BusHistory>> = Mutex::new(Vec::new());
+/// A bus's definitions: each at its place, its effects
+type BusHistory = Vec<(f64, Vec<Effect>)>;
 /// Counted up by stop_sound: a queued sound of an earlier count is dropped, and its player's end is no failure
 static STOPS: AtomicUsize = AtomicUsize::new(0);
 /// The sounds queued for the player thread and not played to their end yet
@@ -107,6 +118,7 @@ static RENDERED_UNTIL: Mutex<f64> = Mutex::new(0.0);
 /// A sound since the last render_sound: its place in its voice (seconds), sample rate, channels and 16-bit samples
 struct Unrendered {
 	handle: usize,
+	bus: usize,
 	place: f64,
 	rate: u32,
 	channels: u16,
@@ -285,6 +297,56 @@ pub fn voice() -> Voice {
 /// The voice of a task's thread, taken over from the thread that started it
 pub fn join_voice(voice: Voice) {
 	VOICE.with(|own| own.set(voice));
+}
+
+/// `bus()` and a bus's effects changed (card shared-buses): the bus numbered `bus` (0: a new one) gets the effects, from
+/// now on, live from this voice's moment, where the sounds queued before it end; its number
+pub fn define_bus(bus: usize, effects: Vec<Effect>) -> Result<usize, String> {
+	let (start, place) = moment();
+	let mut buses = BUSES.lock().map_err(|_| "the sound buses are poisoned")?;
+	match bus {
+		0 => {
+			buses.push(vec![(place, effects.clone())]);
+			crate::sound::sound_engine::set_bus(buses.len(), &effects);
+			Ok(buses.len())
+		}
+		_ => {
+			buses.get_mut(bus - 1).ok_or_else(|| format!("no sound bus {bus}"))?.push((place, effects.clone()));
+			crate::sound::sound_engine::change_bus(bus, start, &effects);
+			Ok(bus)
+		}
+	}
+}
+
+/// The bus this thread's next sounds go through, 0: none; the bus they went through before
+pub fn send_to(bus: usize) -> usize {
+	SENT_TO.with(|sent| sent.replace(bus))
+}
+
+/// The bus's latest effects
+fn bus_effects(bus: usize) -> Vec<Effect> {
+	let buses = BUSES.lock();
+	let latest = |buses: &Vec<BusHistory>| buses.get(bus.checked_sub(1)?)?.last().map(|(_, effects)| effects.clone());
+	buses.ok().and_then(|buses| latest(&buses)).unwrap_or_default()
+}
+
+/// The bus's effects at the render's first place, and their changes after it at their frames from there; the
+/// definitions before the render's end forgotten but the last
+fn bus_changes(bus: usize, first_place: f64, rate: u32) -> (Vec<Effect>, Vec<(usize, Vec<Effect>)>) {
+	// taken and replaced by its last definition under one lock: a voice's definition meanwhile is not lost
+	let forgotten = |history: &mut BusHistory| {
+		let last = history.last().map(|(_, effects)| vec![(f64::NEG_INFINITY, effects.clone())]).unwrap_or_default();
+		std::mem::replace(history, last)
+	};
+	let Some(history) = BUSES.lock().ok().and_then(|mut buses| buses.get_mut(bus.checked_sub(1)?).map(forgotten))
+	else {
+		return (Vec::new(), Vec::new());
+	};
+	let (before, after): (Vec<_>, Vec<_>) = history.iter().partition(|(place, _)| *place <= first_place);
+	let effects = before.last().or(after.first()).map(|(_, effects)| effects.clone()).unwrap_or_default();
+	let frame = |place: f64| ((place - first_place) * rate as f64).round() as usize;
+	let changes = after.iter().map(|(place, effects)| (frame(*place), effects.clone())).collect();
+	(effects, changes)
 }
 
 /// `at seconds …` (card sample-accurate): the statement's sounds start that many seconds after the voice's first
@@ -607,7 +669,9 @@ fn sounded(handle: usize, samples: Vec<i16>, rate: u32, channels: u16) -> Result
 	}
 	let seconds = samples.len() as f64 / channels as f64 / rate.max(1) as f64;
 	let (start, place) = scheduled(seconds);
-	if audible && crate::sound::sound_engine::play(handle, start, &samples, rate, channels) {
+	let bus = SENT_TO.with(Cell::get);
+	let effects = bus_effects(bus);
+	if audible && crate::sound::sound_engine::play(handle, (bus, &effects), start, &samples, rate, channels) {
 		wait_at_exit();
 	} else {
 		let path = wav_file(&wav_of(&samples, rate, channels), handle)?;
@@ -618,7 +682,7 @@ fn sounded(handle: usize, samples: Vec<i16>, rate: u32, channels: u16) -> Result
 		}
 	}
 	if let Ok(mut unrendered) = UNRENDERED.lock() {
-		unrendered.push(Unrendered { handle, place, rate, channels, samples });
+		unrendered.push(Unrendered { handle, bus, place, rate, channels, samples });
 	}
 	Ok(())
 }
@@ -649,8 +713,10 @@ pub fn render(path: &str) -> Result<f64, String> {
 	let mut rendered_until = RENDERED_UNTIL.lock().map_err(|_| "the rendered sounds are poisoned".to_string())?;
 	let first_place = sounds.iter().map(|sound| sound.place).fold(*rendered_until, f64::min);
 	let fades = std::mem::take(&mut *FADES.lock().map_err(|_| "the rendered sounds are poisoned".to_string())?);
-	let mut mixed: Vec<i32> = vec![];
+	// each bus's sounds mixed apart, then through its effects together (card shared-buses); bus 0 is the output
+	let mut buses: BTreeMap<usize, Vec<i32>> = BTreeMap::new();
 	for sound in sounds {
+		let mixed = buses.entry(sound.bus).or_default();
 		let start = ((sound.place - first_place) * rate as f64).round() as usize * channels as usize;
 		let own: Vec<Fade> =
 			fades.iter().filter(|fade| fade.handle == 0 || fade.handle == sound.handle).copied().collect();
@@ -674,6 +740,16 @@ pub fn render(path: &str) -> Result<f64, String> {
 			mixed.resize(start + samples.len(), 0);
 		}
 		mixed[start..].iter_mut().zip(samples).for_each(|(sum, sample)| *sum += sample as i32);
+	}
+	let mut mixed = buses.remove(&0).unwrap_or_default();
+	for (bus, sum) in buses {
+		let amplitudes: Vec<f32> = sum.iter().map(|&sample| sample as f32 / i16::MAX as f32).collect();
+		let (effects, changes) = bus_changes(bus, first_place, rate);
+		let processed = effects::processed(&amplitudes, &effects, &changes, rate, channels);
+		if mixed.len() < processed.len() {
+			mixed.resize(processed.len(), 0);
+		}
+		mixed.iter_mut().zip(processed).for_each(|(out, sample)| *out += (sample * i16::MAX as f32).round() as i32);
 	}
 	let seconds = mixed.len() as f64 / channels as f64 / rate as f64;
 	*rendered_until = first_place + seconds;

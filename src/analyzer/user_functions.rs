@@ -1086,8 +1086,14 @@ fn assigned_literal_kinds(body: &Node, name: &str) -> Vec<Kind> {
 /// until the kinds settle: a call of a float-returning function is itself Float. After the first round only the
 /// functions naming one whose kinds changed are inferred again (a closure call's kind joins its targets', unnamed)
 pub(super) fn refine_return_kinds(ctx: &mut Context, globals: &HashMap<String, Local>) {
-	let mut function_kinds: HashMap<String, Kind> =
-		ctx.user_functions.keys().map(|name| (name.clone(), Kind::Int)).collect();
+	// a wasm module's export gives what its header says (`f(t) := shout(t)` gives shout's char *, a text)
+	let mut function_kinds: HashMap<String, Kind> = ctx
+		.ffi_imports
+		.iter()
+		.filter(|(_, import)| crate::modules::wasm_modules::is_module_path(import.library))
+		.map(|(name, import)| (name.clone(), crate::analyzer::signature_kind(import)))
+		.collect();
+	function_kinds.extend(ctx.user_functions.keys().map(|name| (name.clone(), Kind::Int)));
 	function_kinds.extend(ctx.field_kinds.clone());
 	let mut stale: Vec<&UserFunctionDef> = ctx.user_functions.values().collect();
 	for _ in 0..=ctx.user_functions.len() {

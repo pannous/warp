@@ -76,9 +76,9 @@ pub fn list_type_name(list: &Node, scope: &Scope) -> String {
 		Node::List(items, Bracket::Round, Separator::None)
 			if let Some(word) = items.first().and_then(Node::symbol_name) =>
 		{
-			// `split(t, sep)`, `chars(t)`: texts
-			if TEXT_LIST_WORDS.contains(&word) {
-				format!("{LIST_OF_PREFIX}text")
+			// `split(t, sep)`: texts; `chars(t)`: characters (chars-codepoints)
+			if let Some((_, item_type)) = ITEM_TYPED_LIST_WORDS.iter().find(|(list_word, _)| *list_word == word) {
+				format!("{LIST_OF_PREFIX}{item_type}")
 			} else {
 				// the result of a call `f(x)` (no list literal of `f` and `x`): its elements are held as Nodes, of any type
 				NODE_LIST_TYPE.to_string()
@@ -208,8 +208,8 @@ pub(super) fn nested_type_word(item: &Node, scope: &Scope) -> String {
 
 /// Library words whose list result has the elements of their list argument
 pub(in crate::analyzer) const ORDER_WORDS: [&str; 2] = ["sort", "reverse"];
-/// Library words whose result is a list of texts
-pub(super) const TEXT_LIST_WORDS: [&str; 2] = ["split", "chars"];
+/// Library words whose result is a list, with the type of its items
+pub(super) const ITEM_TYPED_LIST_WORDS: [(&str, &str); 2] = [("split", "text"), ("chars", "codepoint")];
 pub(in crate::analyzer) const MAP_TYPE_PREFIX: &str = "map of ";
 /// A list whose elements are known only at runtime (the result of a call): each element is held as a Node
 pub(in crate::analyzer) const NODE_LIST_TYPE: &str = "list of node";

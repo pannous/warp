@@ -99,8 +99,11 @@ Deploy computes it). The Worker is `const SITE = {title, scripts, workerScripts,
 it serves the page (empty markup, the program shows itself once it runs; no native prerender), the scripts and
 app.wasm (app.bin's bytes), all with COOP/COEP so the page and the program's Worker share memory. warp-hosting gets
 `?site=…&worker=…&files=…` instead of `?scripts=…` and composes the same Worker from its own copies (SITE_FILES).
-A program with both routes and browser features deploys as a site for now (its page routes work in the page;
-server routes would need a server module without the browser words).
+Page routes (`route "/x" {…}`) work in the page. Server parts (a top-level `get "/api" {…}`, `serve PORT {…}`, a
+`server def`; serve.rs has_server_parts) have no server in a site: Deploy refuses such a program, naming card
+program-server (CLI and playground alike), rather than dropping them silently. Serving both from one Worker is open:
+`warp serve` runs main on the server too (paint writes a png there), while a Worker's host has no browser words, so
+the server's module would need main without them, or the Worker host a decided meaning for them.
 
 ## Built: warp-lambda, native on pannous.com (card ferron-hosting)
 - Playground ⋯ menu "☁ Deploy to pannous.com" (same GitHub login as ☁ Deploy) sends the program's source to

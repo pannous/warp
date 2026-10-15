@@ -28,6 +28,9 @@ pub const EXACT_TEXT: &str = "exact_text";
 pub const DECIMAL_TEXT: &str = "decimal_text";
 pub const DECIMAL_WORD: &str = "decimal";
 const MAX_PERIOD: i32 = 1000;
+/// The bits int_and, int_or and int_xor combine per step of an Int beyond the fixnums
+const BIT_CHUNK: i64 = 32;
+const BIT_CHUNK_MASK: i64 = (1 << BIT_CHUNK) - 1;
 /// U+0305 COMBINING OVERLINE in UTF-8, after each repeating digit
 const OVERLINE_BYTES: [u8; 2] = [0xCC, 0x85];
 const INT_TEXT: &str = "int_text";
@@ -736,6 +739,45 @@ impl WasmGcEmitter {
 			s.emit_power_of_two_shifted(f);
 			s.call(f, "exact_div_assign");
 		});
+		self.emit_bitwise_functions();
+	}
+
+	/// int_xor(a, b), int_and(a, b), int_or(a, b) on the whole two's complement Ints (card big-int): until both are
+	/// fixnums, combine their low BIT_CHUNK bits and shift both right (floor, so a negative Int keeps its sign bits);
+	/// the result is the sum of the combined chunks, each shifted back into place. Locals: result, shift
+	fn emit_bitwise_functions(&mut self) {
+		let i64t = ValType::I64;
+		let (a, b, result, shift) = (0, 1, 2, 3);
+		for (name, combine) in [("int_xor", I::I64Xor), ("int_and", I::I64And), ("int_or", I::I64Or)] {
+			self.runtime_function(name, vec![i64t, i64t], vec![i64t], vec![i64t, i64t], |s, f| {
+				let add_shifted = |s: &Self, f: &mut Function| {
+					Self::emit_list(f, &[I::LocalGet(shift)]);
+					s.call(f, "int_shift_left");
+					f.instruction(&I::LocalGet(result));
+					s.call(f, "exact_add");
+					f.instruction(&I::LocalSet(result));
+				};
+				Self::emit_list(f, &[I::Block(BlockType::Empty), I::Loop(BlockType::Empty)]);
+				s.emit_fixnum_test(f, &[a, b]);
+				Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(a), I::LocalGet(b), combine.clone()]);
+				s.call(f, "int_from_i64");
+				add_shifted(s, f);
+				Self::emit_list(f, &[I::Br(2), I::End]);
+				for local in [a, b] {
+					f.instruction(&I::LocalGet(local));
+					s.call(f, "int_to_i64_wrap");
+				}
+				Self::emit_list(f, &[combine.clone(), I::I64Const(BIT_CHUNK_MASK), I::I64And]);
+				add_shifted(s, f);
+				for local in [a, b] {
+					Self::emit_list(f, &[I::LocalGet(local), I::I64Const(BIT_CHUNK)]);
+					s.call(f, "int_shift_right");
+					f.instruction(&I::LocalSet(local));
+				}
+				#[rustfmt::skip]
+				Self::emit_list(f, &[I::LocalGet(shift), I::I64Const(BIT_CHUNK), I::I64Add, I::LocalSet(shift), I::Br(0), I::End, I::End, I::LocalGet(result)]);
+			});
+		}
 	}
 
 	/// Trap unless local 0 is an integer and local 1 a shift count in 0..=MAX_SHIFT_COUNT; each check runs only if the ones before it passed

@@ -34,18 +34,29 @@ fn operator_values(node: Node) -> Node {
 	}
 }
 
-/// `xs.map(upper)`, `map(xs, upper)`: a library word passed to an iteration word is the function `value => upper value`
+/// `xs.map(upper)`, `map(xs, floor)`, `f = floor`: a library word passed to an iteration word or assigned is the
+/// function `value => upper value`
 fn library_word_values(node: Node, words: &SuffixWords) -> Node {
 	let node = node.map_children(|child| library_word_values(child, words));
-	let Node::List(mut items, bracket, separator) = node else {
-		return node;
-	};
-	let is_iteration = items.first().is_some_and(|head| matches!(head.drop_meta(), Node::Symbol(name) if crate::function_values::ITERATION_WORDS.contains(&name.as_str())));
-	if let Some(function) = items.last_mut().filter(|last| is_iteration && words.is_library_word(last)) {
-		let call = Node::List(vec![function.clone(), *operand()], Bracket::None, Separator::Space);
-		*function = Node::Key(operand(), Op::Arrow, Box::new(call));
+	match node {
+		Node::List(mut items, bracket, separator) => {
+			let is_iteration = items.first().is_some_and(|head| matches!(head.drop_meta(), Node::Symbol(name) if crate::function_values::ITERATION_WORDS.contains(&name.as_str())));
+			if let Some(function) = items.last_mut().filter(|last| is_iteration && words.is_function_word(last)) {
+				*function = word_function(function);
+			}
+			Node::List(items, bracket, separator)
+		}
+		Node::Key(target, Op::Assign, value) if words.is_function_word(&value) => {
+			Node::Key(target, Op::Assign, Box::new(word_function(&value)))
+		}
+		other => other,
 	}
-	Node::List(items, bracket, separator)
+}
+
+/// `value => word value`
+fn word_function(word: &Node) -> Node {
+	let call = Node::List(vec![word.clone(), *operand()], Bracket::None, Separator::Space);
+	Node::Key(operand(), Op::Arrow, Box::new(call))
 }
 
 /// The suffix words of the program's functions with the function each applies, `squared` → `square`; a name the
@@ -113,6 +124,13 @@ impl SuffixWords {
 	/// A library word the program does not name itself: `first sorted xs` is `first(sort(xs))`, `xs.map(upper)` maps it
 	fn is_library_word(&self, node: &Node) -> bool {
 		matches!(node.drop_meta(), Node::Symbol(name) if crate::library_words::is_library_word(name) && !self.variables.contains(name) && !self.functions.contains(name))
+	}
+
+	/// A library word of one value the program does not name itself, also libm's (`floor`, `sin`): a function value
+	fn is_function_word(&self, node: &Node) -> bool {
+		let is_libm_word = |name: &str| crate::lowering::library_signatures::typed_first_arity(name) == Some(1);
+		self.is_library_word(node)
+			|| matches!(node.drop_meta(), Node::Symbol(name) if is_libm_word(name) && !self.variables.contains(name) && !self.functions.contains(name))
 	}
 }
 

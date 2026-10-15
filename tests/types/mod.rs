@@ -56,6 +56,7 @@ mod test_declaration_zero_value;
 mod test_declared_int_of_float_expression;
 mod test_declared_list_marks;
 mod test_dispatch;
+mod test_duration_comparison; // cards day-day, day-hours
 mod test_element_field_writes;
 mod test_empty_literal_kind;
 mod test_empty_named_key; // card object-empty-field
@@ -151,6 +152,7 @@ mod test_time_now; // cards print-time, time-now
 mod test_time_programs_run; // card run-time-dates, stage B4
 mod test_time_type_names;
 mod test_time_values_at_run_time; // card run-time-dates
+mod test_time_variables; // card variable-time
 mod test_time_zones_at_run_time; // card run-time-dates, stage B3
 mod test_trait_constraints;
 mod test_trait_default_methods;

@@ -150,3 +150,11 @@ fn xxhash_compiled_to_wasm() {
 	is!(&format!("{XXHASH}XXH64(\"hello\", 0)"), 2794345569481354659i64);
 	is!(&format!("{XXHASH}state = XXH32_createState(); XXH32_reset(state, 0); XXH32_update(state, \"hel\"); XXH32_update(state, \"lo\"); XXH32_digest(state)"), 4211111929i64);
 }
+
+// card takes-three: a function wrapping a C call gives what the header says, a text (`use uniscript`'s binding)
+#[test]
+fn a_function_wrapping_a_c_call_gives_its_text() {
+	const SHOUT: &str = "import tests/fixtures/wasm/shout; ";
+	is!(&format!("{SHOUT}loud(t:text) := shout(t); loud(\"ab\")"), "AB!");
+	is!(&format!("{SHOUT}loud(t) := shout(t); loud(\"a\") + loud(\"b\")"), "A!B!");
+}

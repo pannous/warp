@@ -20,7 +20,7 @@ const PAINT_SCRIPT: Script = ("canvas.js", script_text!("canvas.js"));
 const THREAD_SCRIPT: Script = ("site-thread.js", script_text!("site-thread.js"));
 /// The page makes the task Workers of the program's Worker, which asks for them (Firefox, card tour-firefox-stall), when
 /// the Worker has the task pool (TASK_PART: not a site that only paints)
-const TASK_WORKERS_SCRIPT: Script = ("task-workers.js", script_text!("task-workers.js"));
+const TASK_WORKERS_SCRIPT: Script = ("task-workers.js", script_text!("js-members.js", "task-workers.js"));
 const TASK_PART: &str = "host-tasks.js";
 /// What such a site ships besides: the program's Worker, the task Workers it starts, and the service worker that gives a
 /// static host's page the cross-origin isolation shared memory needs

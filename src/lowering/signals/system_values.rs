@@ -15,6 +15,7 @@
 use super::nodes::{arguments_rewritten, call, key};
 use crate::declarations::word;
 use crate::lowering::signals::system_signals::CHANGE_WORDS;
+use crate::lowering::web::listeners;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::time::NOW_WORD;
@@ -56,8 +57,12 @@ pub fn name(program: Node) -> Node {
 		return marked;
 	}
 	let (statements, bracket, separator) = crate::variable_signals::main_statements(&marked);
+	// a listener on a system value: one in its trigger (`whenever battery < 20%`); a read in the body of `on frame`
+	// listens to nothing, so a headless run still ends after its frame (card full-screen)
 	let listens = |statement: &Node| {
-		LISTENER_WORDS.contains(&first_word(statement).as_str()) && !marked_names(statement).is_empty()
+		let trigger = listeners::read(statement, &LISTENER_WORDS).map(|listener| listener.trigger);
+		LISTENER_WORDS.contains(&first_word(statement).as_str())
+			&& !marked_names(trigger.as_ref().unwrap_or(statement)).is_empty()
 	};
 	let Some(first_listener) = statements.iter().position(listens) else {
 		return marked;

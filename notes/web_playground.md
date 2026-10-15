@@ -258,7 +258,7 @@ WARP_INCLUDE (2026-10-06, card use-import; before, the page had no headers: `str
 copies the tour's C module to _site/tests/fixtures/wasm/ (pages.yml), tour example "C libraries". A registered package (packages.warp) is read from its
 GitHub raw files at the pinned tag (`raw.githubusercontent.com/<owner>/<repo>/v<version>/…`, served to any page), so
 `use uniscript` works; a program's `read(path)` of a URL (the package's data/entities.idx) fetches its bytes as they
-are (host.js `readBytes`, no newline added, like the native read). Browser suite: 1452 passed, 15 failed (inherent);
+are (host.js `readBytes`, no newline added, like the native read). Since uniscript 1.0.8 `use uniscript` calls the release asset uniscript_c.wasm, which build.sh `libraries` serves from web/playground/packages/ (notes/packages.md "Libraries"). Browser suite: 1452 passed, 15 failed (inherent);
 night 2026-10-04 end: 1497 passed, the same 15 failed (downloads, module files, package pins, lean, threads, strict flag).
 
 ## Feature parity (2026-10-05, fixer)
@@ -304,6 +304,10 @@ the_strict_flag_turns_warnings_into_errors before).
   in a site/cloud worker run (instantiateProgram without `awaited`), in a page event's handler (after main), and in a
   warp function JavaScript calls back (V8 refuses to suspend over a JavaScript frame: outcomeOf maps that trap to
   "cannot wait for"). worker.js handles messages one at a time (`inTurn`) since a waiting run holds the compiler.
+  Firefox bug (card firefox-logs): terminating a Worker busy inside a promising call, as Stop does, logs a bare
+  "uncaught exception: undefined" on the page that no listener sees; plain wasm, plain JavaScript and entangled
+  MessagePorts do not (probes/firefox_jspi_terminate.html). Avoiding it would mean no promising for runs that cannot
+  await, which the worker only learns after compiling; test_in_browser.py expects the line for STOP_BUTTON meanwhile.
 
 ## paint: a canvas in the page (2026-10-06, issue #15)
 `paint(pixels, width, height)` is a host word (src/host.rs PAINT): host.js reads the pixel list and hands it to the
