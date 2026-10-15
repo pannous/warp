@@ -83,6 +83,7 @@ mod test_kind_tested_parameter; // card function-whose
 mod test_lambda_global;
 mod test_lambda_spaced_body;
 mod test_lambda_spellings;
+mod test_lambda_tuple_arguments; // card errors-needs
 mod test_lambdas;
 mod test_late_binding;
 mod test_let_in;
