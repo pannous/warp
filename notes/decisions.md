@@ -608,11 +608,15 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   cli-words migrates the existing --fuel/--exe/--strict/… (older `--x` mentions below are superseded by it).
 - unix-words (2026-10-15, user): `use script` has shell words with warp results: ls pwd cd cat echo mkdir cp mv touch
   head tail wc grep which rm, plus find, size/info (du/stat), sort/uniq, open (native), curl/wget as aliases of
-  fetch/download. `export a=b` only if the WebAssembly-export soft keyword can be reused. Not now: basename/dirname,
+  fetch/download. `export a=b` clashes with the WebAssembly export, so it's left out. Not now: basename/dirname,
   chmod, ln, diff, kill/ps, tar/zip. rm: one file or an empty folder, no patterns, never / ~ or the working dir and
   above, sandbox permission, and it moves to the Trash (undoable); no recursive form. `wc` → {lines, words, bytes};
   ls hides dotfiles (list_files shows all); grep is regex over lines; unquoted paths `~/x ./x /etc`, `~` expanded on
   use. Card unix-words.
+- cross-module-overload (2026-10-15, user): overloading works across modules: a module's definition doesn't shadow a
+  same-named word elsewhere, the call dispatches on the argument type. `use script; sort ./names.txt` sorts the
+  file's lines while `sort [3 1 2]` still sorts the list (same for unique, find, size). sort_lines/find_files/
+  file_size are only interim names.
 - P102 `warp build hello.warp` makes the native executable (`hello`, hello.exe on Windows); `--exe` accepted.
   build-should (2026-10-13 default): it writes x.wasm beside it too; `--wasm` only the module.
 - no-executable-by-default (2026-10-12): a plain `warp file.warp` writes no executable; WARP_EXECUTABLE=1 turns it on.
