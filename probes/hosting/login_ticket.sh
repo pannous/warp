@@ -11,7 +11,7 @@ HOSTING_SCRATCH="$REPO/scratch/hosting"
 mkdir -p "$HOSTING_SCRATCH"
 cd "$(dirname "$0")/../../web/hosting" || exit 1
 CLOUDFLARE_API_TOKEN=$(source ~/.keys 2>/dev/null; echo "$CLOUDFLARE_API_TOKEN")
-wrangler dev --port $PORT --ip 127.0.0.1 --var SESSION_SECRET:probe --var GITHUB_CLIENT_ID:probe-client \
+wrangler dev --port $PORT --ip 127.0.0.1 --var SESSION_SECRET:probe --var GITHUB_CLIENT_ID:probe-client --var CLOUDFLARE_OAUTH_CLIENT_ID:probe-client \
 	--var CLOUDFLARE_API_TOKEN:"$CLOUDFLARE_API_TOKEN" >/dev/null 2>&1 &
 WRANGLER=$!
 trap 'kill $WRANGLER' EXIT
@@ -51,4 +51,15 @@ check "foreign address not probed" 'no deployed program' "$(curl -s "$HOSTING/up
 not_wasm() { printf '\0asm\1\0\0\0garbage'; }
 check "own Worker's name refused" 'taken' "$(not_wasm | curl -s -X POST --data-binary @- -H "authorization: Bearer $(gh auth token)" "$HOSTING/deploy?name=hosting")"
 check "a free name passes the guard" 'CompileError' "$(not_wasm | curl -s -X POST --data-binary @- -H "authorization: Bearer $(gh auth token)" "$HOSTING/deploy?name=probe-free-$(date +%s)")"
+# deploy to one's own account (card cf-deploy-access): a failure after the link replaces it, the window keeps the reason
+FAILED=${TICKET}f
+curl -s -X POST "$HOSTING/ticket?ticket=$FAILED&program=https://warp-demo.pannous.workers.dev" >/dev/null
+curl -s -X POST "$HOSTING/ticket?ticket=$FAILED&error=no+access" >/dev/null
+check "a failure drops the link" '{"error":"no access"}' "$(curl -s "$HOSTING/ticket?ticket=$FAILED")"
+wasm_module() { printf '\0asm\1\0\0\0'; }
+expired=$(wasm_module | curl -s -w ' %{http_code}' -X POST --data-binary @- -H "x-cloudflare-token: cfat_expired0123456789abcdefghijklmnopqrstuv" -H "x-cloudflare-account: 3c4ff005785f4576ab288e320f715c87" "$HOSTING/deploy?name=probe-own")
+check "an expired Cloudflare token asks for a login (401)" '401' "$expired"
+check "the refusal names the call" 'GET workers/subdomain' "$expired"
+scopes=$(curl -s -o /dev/null -w '%{redirect_url}' "$HOSTING/auth/cloudflare?origin=http://localhost:8080")
+check "Cloudflare login asks for Workers Admin (creating Workers)" 'scope=workers-scripts.admin' "$scopes"
 exit $failures
