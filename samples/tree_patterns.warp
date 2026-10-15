@@ -1,24 +1,24 @@
 #!/usr/bin/env warp
-// Tree patterns: find and rewrite shapes at any depth of nested data, name patterns, check data against a schema
+# Tree patterns: find and rewrite shapes at any depth of nested data, name patterns, check data against a schema
 
 page = {top: {logo: {type: "image", src: "logo.png"}}, body: [{type: "text"}, {type: "image", src: "cat.jpg", alt: "a cat"}]}
 
-// find collects every match, wherever it sits
-print page find {type: "image", src}             // ["logo.png" "cat.jpg"]
-print count(page find {type: "text"})            // 1
+# find collects every match, wherever it sits
+print page find {type: "image", src}             # ["logo.png" "cat.jpg"]
+print count(page find {type: "text"})            # 1
 
-// replace rewrites every match, children first
+# replace rewrites every match, children first
 print page replace {type: "image", src} with {type: "link", href: src}
-print [[1, 2], [3, [1, 5]]] replace [1, x] with x  // [2 [3 5]]
+print [[1, 2], [3, [1, 5]]] replace [1, x] with x  # [2 [3 5]]
 
-// a named pattern is a reusable shape
+# a named pattern is a reusable shape
 pattern Pair = [_, _]
 pattern Tagged = ["tag", label, ..]
-print [1, 2] is Pair                              // yes
+print [1, 2] is Pair                              # yes
 print match ["tag", "red", 1] { Tagged => label; _ => "none" }
 
-// a schema is a pattern of types; `debug?:` may be missing, `as` converts field by field
+# a schema is a pattern of types; `debug?:` may be missing, `as` converts field by field
 pattern Config = {port: int, host: text, debug?: bool}
 loaded = json('{"port": 8080, "host": "localhost"}')
 print loaded is Config                            // yes
-print {port: "80", host: "x"} as Config           // {port:80 host:"x"}
+print {port: "80", host: "x"} as Config           # {port:80 host:"x"}

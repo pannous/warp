@@ -1,7 +1,7 @@
 #!/usr/bin/env warp
-// WebGPU: a WGSL fragment shader colors every pixel on the GPU; paint renders it and shows each frame.
-// `$frame` in the shader is warp's frame, read at each paint: it changes without compiling the shader anew.
-//  `$size` is the vec2 [$width, $height]
+# WebGPU: a WGSL fragment shader colors every pixel on the GPU; paint renders it and shows each frame.
+# `$frame` in the shader is warp's frame, read at each paint: it changes without compiling the shader anew.
+#  `$size` is the vec2 [$width, $height]
 use graphics
 demo = shader {
 @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {

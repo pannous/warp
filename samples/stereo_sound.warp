@@ -1,7 +1,7 @@
 #!/usr/bin/env warp
-// A signal computed a block at a time (sound layer 8): warp hands chord a block of 512 samples per speaker to fill,
-// t the time of the first one, once every 23 ms: one call a block instead of one a sample. Three parameters make it
-// stereo (left, right, t); chord(block, t) would be mono
+# A signal computed a block at a time (sound layer 8): warp hands chord a block of 512 samples per speaker to fill,
+# t the time of the first one, once every 23 ms: one call a block instead of one a sample. Three parameters make it
+# stereo (left, right, t); chord(block, t) would be mono
 use sound
 chord(left, right, t) := for i in 1 to #left {
 	time = t + (i - 1) / sample_rate

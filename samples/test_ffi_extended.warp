@@ -1,99 +1,99 @@
 #!/usr/bin/env warp
-// Extended FFI Examples - Demonstrating Dynamic Wrapper System
-// All these functions work automatically with the generic dynamic wrapper
+# Extended FFI Examples - Demonstrating Dynamic Wrapper System
+# All these functions work automatically with the generic dynamic wrapper
 
-// ==============================================================================
-// String Comparison Functions (char*, char* -> int32)
-// ==============================================================================
+# ==============================================================================
+# String Comparison Functions (char*, char* -> int32)
+# ==============================================================================
 
 import strcmp from "c"
 
-// Compare equal strings
+# Compare equal strings
 test strcmp("hello", "hello") ≈ 0
 
-// Compare different strings
+# Compare different strings
 x = strcmp("abc", "xyz")
 if x < 0 then "abc comes before xyz" else "xyz comes before abc"
 
-// Use in conditional
+# Use in conditional
 if strcmp("test", "test") == 0 then
 "Strings are equal"
 else
 "Strings are different"
 
-// ==============================================================================
-// Trigonometric Functions (float64 -> float64)
-// ==============================================================================
+# ==============================================================================
+# Trigonometric Functions (float64 -> float64)
+# ==============================================================================
 
 import sin from "m"
 import cos from "m"
 import tan from "m"
 
-// Basic trig operations
+# Basic trig operations
 test 0 == sin(0.0)
 test 1 == cos(0.0)
 test 0 == tan(0.0)
 
-// Pythagorean identity: sin²(x) + cos²(x) = 1
+# Pythagorean identity: sin²(x) + cos²(x) = 1
 x = 0.5
 sin_x = sin(x)
 cos_x = cos(x)
 test 1 == sin_x * sin_x + cos_x * cos_x ≈ 1.0
 
-// ==============================================================================
-// Additional Math Functions
-// ==============================================================================
+# ==============================================================================
+# Additional Math Functions
+# ==============================================================================
 
 import fabs from "m"
 import fmax from "m"
 import fmin from "m"
 import fmod from "m"
 
-// Absolute value for floats
+# Absolute value for floats
 test 3.14 ≈ fabs(-3.14) ≈ 3.14
 
-// Maximum/minimum of two values
+# Maximum/minimum of two values
 test 3.5 ≈ fmax(3.5, 2.1) ≈ 3.5
 test 2.1 ≈ fmin(3.5, 2.1) ≈ 2.1
 
-// Floating-point modulo
+# Floating-point modulo
 test fmod(5.5, 2.0) ≈ 1.5
 
-// ==============================================================================
-// String Conversion Functions (char* -> int32/float64)
-// ==============================================================================
+# ==============================================================================
+# String Conversion Functions (char* -> int32/float64)
+# ==============================================================================
 
 import atoi from "c"
 import atof from "c"
 
-// String to integer
+# String to integer
 test atoi("42") ≈ 42
 test atoi("-123") ≈ -123
 
-// String to float
+# String to float
 test atof("3.14159") ≈ 3.14159
 test atof("2.71828") ≈ 2.71828
 
-// Combined: parse and calculate
+# Combined: parse and calculate
 x = atoi("10")
 y = atoi("20")
 test 30 == x + y ≈ 30
 
-// ==============================================================================
-// Zero-Parameter Functions (void -> int32/float64)
-// ==============================================================================
+# ==============================================================================
+# Zero-Parameter Functions (void -> int32/float64)
+# ==============================================================================
 
 import rand from "c"
 
-// Get random number
+# Get random number
 r = rand()
-// Returns non-deterministic value, typically 0 to RAND_MAX
+# Returns non-deterministic value, typically 0 to RAND_MAX
 
-// ==============================================================================
-// Complex Combined Examples
-// ==============================================================================
+# ==============================================================================
+# Complex Combined Examples
+# ==============================================================================
 
-// Example 1: String comparison with math
+# Example 1: String comparison with math
 import strlen from "c"
 
 s1 = "hello"
@@ -107,78 +107,78 @@ if cmp < 0 then
 else
 "Second string comes first"
 
-// Example 2: Trig calculations
+# Example 2: Trig calculations
 
-// Calculate distance using Pythagorean theorem with trig
-angle = 0.785398  // π/4 radians (45 degrees)
+# Calculate distance using Pythagorean theorem with trig
+angle = 0.785398  # π/4 radians (45 degrees)
 distance = 10.0
 x_component = cos(angle) * distance
 y_component = sin(angle) * distance
 actual_distance = sqrt(x_component * x_component + y_component * y_component)
-floor(actual_distance)  // Should be close to 10
+floor(actual_distance)  # Should be close to 10
 
-// Example 3: Parse numbers from strings and compute
+# Example 3: Parse numbers from strings and compute
 price_str = "19.99"
 quantity_str = "3"
 
 price = atof(price_str)
 quantity = atoi(quantity_str)
 total = price * quantity
-test ceil(total) ≈ 60 // rounds up from 59.97
+test ceil(total) ≈ 60 # rounds up from 59.97
 
-// Example 4: Mathematical pipeline
+# Example 4: Mathematical pipeline
 import abs from "c"
 
-// Chain multiple functions together
+# Chain multiple functions together
 value = "-3.7"
-num = atof(value)       // -3.7
-abs_num = fabs(num)     // 3.7
-ceiled = ceil(abs_num)  // 4
+num = atof(value)       # -3.7
+abs_num = fabs(num)     # 3.7
+ceiled = ceil(abs_num)  # 4
 ceiled
 
-// Example 5: String comparison for sorting logic
+# Example 5: String comparison for sorting logic
 names = ["charlie", "alice", "bob"]
 
-// Compare first two names
-comparison = strcmp(names#1, names#2)  // "charlie" vs "alice"
+# Compare first two names
+comparison = strcmp(names#1, names#2)  # "charlie" vs "alice"
 
 if comparison > 0 then
 "charlie comes after alice"
 else
 "charlie comes before alice"
 
-// ==============================================================================
-// Signature Pattern Examples
-// ==============================================================================
+# ==============================================================================
+# Signature Pattern Examples
+# ==============================================================================
 
-// The dynamic wrapper automatically handles these signatures:
+# The dynamic wrapper automatically handles these signatures:
 
-// Pattern: float64 -> float64
-// Examples: cbrt, sin, cos, tan, fabs, etc. (sqrt, floor, ceil and round are wasm instructions, never linked)
+# Pattern: float64 -> float64
+# Examples: cbrt, sin, cos, tan, fabs, etc. (sqrt, floor, ceil and round are wasm instructions, never linked)
 
-// Pattern: float64, float64 -> float64
-// Examples: pow, fmin, fmax, fmod, etc.
+# Pattern: float64, float64 -> float64
+# Examples: pow, fmin, fmax, fmod, etc.
 
-// Pattern: char* -> int32
-// Examples: strlen, atoi, etc.
+# Pattern: char* -> int32
+# Examples: strlen, atoi, etc.
 
-// Pattern: char* -> float64
-// Examples: atof, strtod, etc.
+# Pattern: char* -> float64
+# Examples: atof, strtod, etc.
 
-// Pattern: char*, char* -> int32
-// Examples: strcmp, strcoll, etc.
+# Pattern: char*, char* -> int32
+# Examples: strcmp, strcoll, etc.
 
-// Pattern: int32 -> int32
-// Examples: abs, etc.
+# Pattern: int32 -> int32
+# Examples: abs, etc.
 
-// Pattern: void -> int32
-// Examples: rand, getpid, etc.
+# Pattern: void -> int32
+# Examples: rand, getpid, etc.
 
-// ==============================================================================
-// Real-World Use Case: Simple Calculator
-// ==============================================================================
+# ==============================================================================
+# Real-World Use Case: Simple Calculator
+# ==============================================================================
 
-// Parse calculator input from strings
+# Parse calculator input from strings
 operator = "+"
 left_operand = "15.5"
 right_operand = "4.3"
@@ -203,17 +203,17 @@ else
 
 test result ≈ 19.8
 
-// ==============================================================================
-// Performance Note
-// ==============================================================================
+# ==============================================================================
+# Performance Note
+# ==============================================================================
 
-// All these functions use the SAME dynamic wrapper!
-// No hardcoded wrapper needed for each signature pattern.
-// The wrapper automatically:
-// 1. Reads the function signature at runtime
-// 2. Marshals parameters based on signature.param_types
-// 3. Calls the native C function
-// 4. Marshals the return value based on signature.return_type
+# All these functions use the SAME dynamic wrapper!
+# No hardcoded wrapper needed for each signature pattern.
+# The wrapper automatically:
+# 1. Reads the function signature at runtime
+# 2. Marshals parameters based on signature.param_types
+# 3. Calls the native C function
+# 4. Marshals the return value based on signature.return_type
 
-// Overhead: ~2-3 extra branches per call (<5% performance impact)
-// Native function execution time dominates (>95%)
+# Overhead: ~2-3 extra branches per call (<5% performance impact)
+# Native function execution time dominates (>95%)

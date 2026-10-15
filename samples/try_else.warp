@@ -1,4 +1,4 @@
 #!/usr/bin/env warp
-// try … else gives a fallback value
+# try … else gives a fallback value
 x = try 1 / 0 else 0
 x
