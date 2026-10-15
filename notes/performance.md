@@ -121,4 +121,6 @@ Program cache (card cache-compiled-shader, src/run/program_cache.rs): `warp <fil
 the machine-code cache, so a second run skips the compile: gpu_visualizer_warp with `3`, debug build, 10.2 s → 5.9 s
 wall (9.5 → 5.2 s CPU; the rest is the 5 s of music). A compile that prints anything (a hint!) is not kept, so the
 sample was made hint-free (cosine/sine/exponential, if-then-else). Probes: probes/program_cache/cli_cache.sh (hits,
-misses on changed program / used file, subfolder `use` not kept), probes/program_cache/samples_twice.sh.
+misses on changed program / used file, subfolder `use` not kept), probes/program_cache/samples_twice.sh (2026-10-15:
+154 of 169 samples kept; the 14 whose two runs differ differ without the cache too: timings, random weights, stored
+rows, GPU frame counts, and the async go-block race of card samples-async).
