@@ -62,7 +62,12 @@ pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
 	let program = with_module_directory(program, folder.as_deref().unwrap_or(Path::new(".")));
 	let resolved = loader
 		.resolve(program)
-		.and_then(|program| loader.implicit_std_modules(&program).map(|_| program))
+		.and_then(|program| {
+			loader.loading_implicitly = true;
+			let loaded = loader.implicit_std_modules(&program);
+			loader.loading_implicitly = false;
+			loaded.map(|_| program)
+		})
 		.and_then(|program| match loader.scope {
 			Some(scope) => loader.with_scope(program, scope, file.as_deref()),
 			None => Ok(program),

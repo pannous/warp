@@ -158,8 +158,11 @@ pub(super) struct Loader<'a> {
 	/// the program's top-level variables and own functions: a module word of the same name is renamed apart in the module
 	/// (shadowed_apart)
 	pub(super) program_words: ProgramWords,
-	/// whether a standard module's source is being loaded: its `use`s are its own, not the program's
-	pub(super) inside_std_module: bool,
+	/// how many standard modules' sources are being loaded, one inside the other: from the second on, their `use`s
+	/// are their own, not the program's
+	pub(super) std_module_depth: usize,
+	/// whether the modules being loaded are those the program needs without naming them (implicit_std_modules)
+	pub(super) loading_implicitly: bool,
 	/// the standard modules the program (or a file module) uses, and those only standard modules use (hidden_apart)
 	pub(super) program_std_modules: HashSet<String>,
 	pub(super) std_modules_of_std_modules: HashSet<String>,
@@ -177,7 +180,8 @@ impl<'a> Loader<'a> {
 			wasm_modules: vec![],
 			std_definitions: vec![],
 			program_words: ProgramWords::default(),
-			inside_std_module: false,
+			std_module_depth: 0,
+			loading_implicitly: false,
 			program_std_modules: HashSet::new(),
 			std_modules_of_std_modules: HashSet::new(),
 		}
@@ -454,13 +458,13 @@ impl<'a> Loader<'a> {
 	/// no style hints
 	pub(super) fn use_std_module(&mut self, name: &str, source: &str) -> Result<Vec<Node>, Node> {
 		let name = std_module_name(name);
-		match self.inside_std_module {
-			true => self.std_modules_of_std_modules.insert(name.to_string()),
-			false => self.program_std_modules.insert(name.to_string()),
+		match self.std_module_depth {
+			0 => self.program_std_modules.insert(name.to_string()),
+			_ => self.std_modules_of_std_modules.insert(name.to_string()),
 		};
-		let outer = std::mem::replace(&mut self.inside_std_module, true);
+		self.std_module_depth += 1;
 		let definitions = crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(name), source));
-		self.inside_std_module = outer;
+		self.std_module_depth -= 1;
 		self.std_definitions.extend(definitions?);
 		Ok(vec![])
 	}
@@ -506,8 +510,13 @@ impl<'a> Loader<'a> {
 		let statements = statements(module?);
 		Ok(match import {
 			Import::Use => {
-				let declarations =
-					shadowed_apart(statements.into_iter().filter(is_declaration).collect(), &self.program_words);
+				let declarations: Vec<Node> = statements.into_iter().filter(is_declaration).collect();
+				// a module the program named: its words were the program's before its own definition took them
+				if self.std_module_depth <= 1 && !self.loading_implicitly {
+					let module = path.file_stem().unwrap_or_default().to_string_lossy();
+					warn_replaced(&declarations, &self.program_words, &module);
+				}
+				let declarations = shadowed_apart(declarations, &self.program_words);
 				crate::compiler::compile_context::change(|context| {
 					context.module_definitions.extend(declarations.iter().filter_map(name_declared_by))
 				});
