@@ -171,3 +171,13 @@ compile error (append or map), `type(xs)` is `list of length`. The program's val
 (`quantity_of` maps lists); `print`/`str` show `[3cm 4cm]`. Open: `sum(xs cm)` reads as two arguments (card parser-glues). Still open
 (decided): Q1 px the device pixel through display.dpi, Q2 unit definitions in lib/units.warp.
 Test: tests/numbers/test_dimension_types.rs.
+
+## Unit definitions in lib/units.warp (card dimensions-units Q2, 2026-10-15)
+The dimensions and units are no Rust tables any more: lib/units.warp's `unit_definitions = data { … }` block names
+them (`dimension length`, `dimension speed := length/duration`, `m: length` base unit, `cm := m/100`, `°C := K + 273.15`,
+`mph := mi/h` alias), and src/numbers/units/definitions.rs reads it once with its own small reader (the parser asks
+`is_unit`, so it cannot parse its own definitions). Each unit becomes whole steps of its dimension (amount × lcm of the
+dimension's denominators); only ratios matter. Adding a unit or dimension name = one line there (a new base dimension
+also needs its `Dimension` variant). Test: tests/numbers/test_unit_definitions.rs. Next: units defined in a program
+(`furlong := 201.168 m`), then px as a device-pixel dimension (Q1). The runtime tables below the block
+(unit_names/unit_scales/unit_dimensions) still repeat it: a follow-up could generate them from the block.

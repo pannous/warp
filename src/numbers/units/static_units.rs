@@ -425,9 +425,9 @@ fn named_dimension(name: &str) -> Option<Vec<Factor>> {
 
 /// The name of a signature: `length` of m, `speed` of m/s, none of kg/m
 fn dimension_name(signature: &Signature) -> Option<&'static str> {
-	dimension_names().map(|(name, _)| name).find(|name| {
-		named_dimension(name).is_some_and(|factors| self::signature(&factors) == *signature)
-	})
+	dimension_names()
+		.map(|(name, _)| name)
+		.find(|name| named_dimension(name).is_some_and(|factors| self::signature(&factors) == *signature))
 }
 
 /// The type of a quantity: its dimension's name, else its base units, in lists as deep as it is (`list of length`)
@@ -485,7 +485,8 @@ fn dimension_signature(node: &Node, own_names: &HashMap<String, Signature>) -> O
 /// The base unit of a dimension (`m: length` in lib/units.warp), the unit amounts count in at run time
 fn base_unit(dimension: Dimension) -> &'static Unit {
 	let definitions = super::definitions::definitions();
-	let (_, name) = definitions.base_units.iter().find(|(known, _)| *known == dimension).expect("a base unit per dimension");
+	let (_, name) =
+		definitions.base_units.iter().find(|(known, _)| *known == dimension).expect("a base unit per dimension");
 	definitions.units.iter().find(|unit| unit.name == *name).expect("the base unit is a unit")
 }
 

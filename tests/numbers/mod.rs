@@ -104,6 +104,7 @@ mod test_unbounded_int;
 mod test_unit_columns; // card units-stress
 mod test_unit_composites;
 mod test_unit_conversion;
+mod test_unit_definitions; // card dimensions-units Q2
 mod test_unit_field_display; // card unit-value
 mod test_unit_fields; // card unit-fields
 mod test_unit_glue_hint; // card unit-glue

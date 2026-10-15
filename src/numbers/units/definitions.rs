@@ -38,7 +38,8 @@ pub(super) struct Definitions {
 
 pub(super) fn definitions() -> &'static Definitions {
 	static DEFINITIONS: OnceLock<Definitions> = OnceLock::new();
-	DEFINITIONS.get_or_init(|| read(SOURCE).unwrap_or_else(|problem| panic!("lib/units.warp unit_definitions: {problem}")))
+	DEFINITIONS
+		.get_or_init(|| read(SOURCE).unwrap_or_else(|problem| panic!("lib/units.warp unit_definitions: {problem}")))
 }
 
 /// A unit as it is read: its amount and zero in its dimension's base unit, before they become whole steps
@@ -66,7 +67,10 @@ fn read(source: &'static str) -> Result<Definitions, String> {
 		if let Some((name, expression)) = line.strip_prefix(DIMENSION_WORD).and_then(|rest| rest.split_once(DEFINE)) {
 			derived_dimensions.push((name.trim(), powers_of(expression, &dimensions)?));
 		} else if let Some(name) = line.strip_prefix(DIMENSION_WORD) {
-			let dimension = DIMENSION_WORDS.iter().find(|(word, _)| *word == name.trim()).ok_or(format!("unknown dimension {name}"))?;
+			let dimension = DIMENSION_WORDS
+				.iter()
+				.find(|(word, _)| *word == name.trim())
+				.ok_or(format!("unknown dimension {name}"))?;
 			dimensions.push((name.trim(), dimension.1));
 		} else if let Some((name, expression)) = line.split_once(DEFINE) {
 			let (name, expression) = (name.trim(), expression.trim());
@@ -144,7 +148,8 @@ fn powers_of(expression: &str, dimensions: &[(&str, Dimension)]) -> Result<Vec<(
 					Some(name) => (name, if word.ends_with('²') { 2 } else { 3 }),
 					None => (word, 1),
 				};
-				let dimension = dimensions.iter().find(|(known, _)| *known == name).ok_or(format!("unknown dimension {name}"))?.1;
+				let dimension =
+					dimensions.iter().find(|(known, _)| *known == name).ok_or(format!("unknown dimension {name}"))?.1;
 				powers.push((dimension, sign * power));
 				sign = 1;
 			}
