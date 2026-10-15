@@ -815,7 +815,7 @@ impl Inference {
 		}
 		// `function min` is the function, no minute
 		if crate::closures::referenced_function(&node).is_some() {
-			return Ok((node, vec![]));
+			return Ok((node, Signature::plain()));
 		}
 		match node {
 			Node::Meta { node, data } => {
