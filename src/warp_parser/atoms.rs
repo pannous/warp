@@ -55,7 +55,7 @@ impl WarpParser {
 			// `://warp.pannous.com/lib/libc.h`: a URL taking the page's protocol (card pannous-com, with_default_scheme)
 			':' if self.url_follows() => self.parse_url(String::new()),
 			':' if self.at_pseudo_class_selector() => self.symbol_after(1, |name| Node::Symbol(format!(":{name}"))),
-			'.' if self.starts_path_literal() => self.parse_path_literal(),
+			'.' | '~' | '/' if self.starts_path_literal() => self.parse_path_literal(),
 			// `a, *rest = xs`: the starred name takes the items the other names leave (src/lowering/types/tuples.rs); `...rest`
 			// (JS) is the starred `*rest` too: a rest parameter or a spread argument (src/lowering/definitions/variadic.rs)
 			'.' if self.peek_char(1) == '.' && self.peek_char(2) == '.' && self.is_identifier_start(3) => {
