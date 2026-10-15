@@ -103,6 +103,12 @@ impl WarpParser {
 				Node::Symbol(format!("{ATTRIBUTE_MARK}{}", self.take_while_char(|ch| ch.is_ascii_digit())))
 			}
 			'$' if self.peek_char(1).is_alphabetic() || self.peek_char(1) == '_' => self.parse_dollar_name(),
+			// jQuery's `$('#who')`: the call of `$`, which page_names.rs answers with a hint naming `$who` and `who`
+			'$' if self.peek_char(1) == '(' => {
+				self.advance(); // skip '$'
+				let selector = self.parse_bracketed('(');
+				function_call("$".to_string(), selector)
+			}
 			// `$0`, the first parameter
 			'$' if self.peek_char(1).is_numeric() => {
 				self.advance(); // skip '$'

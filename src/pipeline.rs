@@ -213,8 +213,8 @@ const DECLARATION_PASSES: &[Pass] = &[
 	crate::lowering::class_methods::lower,
 	// `calc.exports` of a component (reflection.rs) before foreign_modules makes it a call into the component
 	crate::lowering::reflection::lower_component_words,
-	// `$xyz` is document.getElementById("xyz") and `$document` document, with their `use js`, which foreign_modules lowers
-	crate::lowering::dollar_names::lower,
+	// page ids as names: `who` is document.getElementById("who"), `$who` its value, with `use js document`, which foreign_modules lowers
+	crate::lowering::page_names::lower,
 	// first: `math.sqrt(2)` of `use python math` is no method call of the built-in word
 	crate::lowering::foreign_modules::lower,
 	// `x as text?` keeps ø, after foreign_modules types a nullable WebIDL result so

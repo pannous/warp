@@ -701,7 +701,18 @@ ul{ li all fruits }
 
 `on click { … }` inside a button makes it do something. `local["key"]` remembers a value in the browser.
 
-Examples: markup, "element events", "fine updates", components, cleanup, "keyed list", "form binding", styles, routes, transitions; samples: html, html_dsl, hello_div, component_binding, component_totals, keyed_counters, computed_tags, live_region, form_submit, typed_form, select_binding, page_custom_event, keyframes, leaving_list
+An id makes an element a name: `who` is the element, `$who` what was typed into it.
+
+```warp
+greeting = "Type a name"
+div{
+	input{ id: "who" }
+	button{ on click { greeting = "Hello " + $who } "Greet" }
+	p{ greeting }
+}
+```
+
+Examples: markup, "element events", "fine updates", components, cleanup, "keyed list", "form binding", styles, routes, transitions; samples: html, html_dsl, hello_div, component_binding, component_totals, keyed_counters, computed_tags, live_region, form_submit, typed_form, select_binding, page_elements, page_custom_event, keyframes, leaving_list
 
 ## Servers
 

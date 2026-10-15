@@ -54,7 +54,7 @@ registerForeignRuntime("js", {
 	},
 });
 
-// a global only the page has (`use js document`, `$name.value`) in the program's Worker: the page calls it while the
+// a global only the page has (`use js document`, `document`, `$who`) in the program's Worker: the page calls it while the
 // Worker waits (host-tasks.js askPage; task-workers.js answerPageCall), and an object it gives stays on the page, here
 // a PageObject naming its id there (card browser-interaction)
 class PageObject {
