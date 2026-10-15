@@ -268,8 +268,7 @@ fn function_named(subject: &Node) -> Option<&str> {
 		// `(function f)`; `(f)` is the call `f()`, whose result answers (card name-function)
 		Node::List(items, Bracket::Round, _)
 			if items.len() == 1
-				&& (items[0].symbol_name().is_none()
-					|| crate::closures::referenced_function(&items[0]).is_some()) =>
+				&& (items[0].symbol_name().is_none() || crate::closures::referenced_function(&items[0]).is_some()) =>
 		{
 			function_named(&items[0])
 		}
