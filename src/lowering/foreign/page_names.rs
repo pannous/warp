@@ -152,7 +152,8 @@ fn clash_with_definition(program: &Node, elements: &BTreeMap<String, PageElement
 	let bound = bindings(program);
 	let (id, element) = elements.iter().find(|(id, _)| bound.contains_key(*id))?;
 	let kind = bound[id];
-	let error = clash_error(&first_use(program, id), id, element, &format!("the {kind} {id}"), kind == VARIABLE_KIND);
+	let error =
+		clash_error(&innermost_use(program, id), id, element, &format!("the {kind} {id}"), kind == VARIABLE_KIND);
 	Some(error.into_error())
 }
 
@@ -196,8 +197,8 @@ fn clash_error(at: &Node, id: &str, element: &PageElement, other: &str, is_varia
 	)
 }
 
-/// The innermost expression of the program that names `id`, where it is bound or used first
-fn first_use(program: &Node, id: &str) -> Node {
+/// The innermost (smallest) expression of the program that names `id`: its binding or one of its uses
+fn innermost_use(program: &Node, id: &str) -> Node {
 	let mut innermost: Option<(usize, &Node)> = None;
 	program.visit(&mut |node| {
 		if matches!(node, Node::Key(..) | Node::List(..)) && node.mentions(id) {
