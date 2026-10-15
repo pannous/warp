@@ -1,16 +1,16 @@
 // The standard library module file (notes/stdlib.md section 7): `use file`, or a file URL in the program (P183). read,
 // write, exists, write_bytes and read_bytes are prelude words (P171), the rest needs the module; append is written file.append(path, text).
 // They call the adapter std_io: the file system natively, the page's in-memory files in the browser
-write(path:any, text:any) := std_io("file", "write", [path, text])
+write(path: any, text: any) := std_io("file", "write", [path, text])
 // a file's bytes as a list of ints 0 to 255 (a .wasm a warp-written emitter writes)
-write_bytes(path:any, bytes:any) := std_io("file", "write_bytes", [path, bytes])
-read_bytes(path:any) := std_io("file", "read_bytes", [path])
+write_bytes(path: any, bytes: any) := std_io("file", "write_bytes", [path, bytes])
+read_bytes(path: any) := std_io("file", "read_bytes", [path])
 // a value written to a file, by its type (card save-sound): save "hi" as: "note.txt"; `use sound` adds
 // save sound as: "song.wav"
 save(content: text, as file) := write(file, content)
-append_file(path:any, text:any) := std_io("file", "append", [path, text])
-exists(path:any) := std_io("file", "exists", [path])
-list_files(folder:any) := std_io("file", "list", [folder])
+append_file(path: any, text: any) := std_io("file", "append", [path, text])
+exists(path: any) := std_io("file", "exists", [path])
+list_files(folder: any) := std_io("file", "list", [folder])
 // `glob("src/*.rs")`: the paths matching the pattern, sorted; its wildcards * and ? are in its last part
-glob(pattern:any) := std_io("file", "glob", [pattern])
+glob(pattern: any) := std_io("file", "glob", [pattern])
 lines(path) := split(read(path), "\n")

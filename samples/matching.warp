@@ -37,7 +37,7 @@ print cents(Dime)
 
 // Tagged unions: a case may carry data, the arm binds it
 enum Shape { Circle(r: float), Square(side: float), Dot }
-area(s) := match s { Circle(r): 3*r*r; Square(a): a*a; Dot: 0.0 }
+area(s) := match s { Circle(r): 3 * r * r; Square(a): a * a; Dot: 0.0 }
 print area(Circle(2.0)) + area(Square(3.0)) + area(Dot)
 
 // is tests one pattern and binds its names
