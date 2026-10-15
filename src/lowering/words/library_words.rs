@@ -586,6 +586,12 @@ impl Lowering {
 		}
 	}
 
+	/// The time variables not hidden by a parameter of the definition being lowered: `f(x) := (x - 5).abs` of `x = now`
+	fn times_here(&self) -> HashSet<String> {
+		let parameters = self.parameters.borrow();
+		self.times.iter().filter(|name| !parameters.contains(name)).cloned().collect()
+	}
+
 	fn is_parameter(&self, node: &Node) -> bool {
 		matches!(node.drop_meta(), Node::Symbol(name) if self.parameters.borrow().contains(name))
 	}
@@ -934,7 +940,7 @@ impl Lowering {
 			_ if crate::blocks::quoted_data(variable).is_some() => true,
 			// a time the run computes: `(now + 1 hour).hour`, `(x + 1 hour).hour` of `x = now` (cards field-grouped,
 			// variable-time)
-			_ if crate::time::holds_time(inner, &self.times) => true,
+			_ if crate::time::holds_time(inner, &self.times_here()) => true,
 			// an element of a computed list: `users.filter(…)#1.name`
 			_ => matches!(inner, Node::Key(_, Op::Hash, _)) && !is_plain_literal(variable),
 		}

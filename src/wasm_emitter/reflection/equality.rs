@@ -161,7 +161,6 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// `cell_get(c)`: a cell's value, a Node of any kind
 	/// Arithmetic the run decides on a value held as a Node, `x*3` of `x = 2 hours`: its result is a Node too, compared
 	/// as one like the variable itself (card variable-time)
 	fn is_node_arithmetic(&self, node: &Node) -> bool {
@@ -176,6 +175,7 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// `cell_get(c)`: a cell's value, a Node of any kind
 	fn is_held_cell_value(&self, node: &Node) -> bool {
 		matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(|word| word.drop_meta().name() == super::super::functions::cells::CELL_GET))
 	}

@@ -23,3 +23,9 @@ fn a_duration_variable_compares_by_value() {
 fn a_field_of_a_grouped_time_variable() {
 	is!("x = now; ((x + 1 hour).hour - x.hour + 24) % 24", 1);
 }
+
+/// A parameter named like a time variable is the function's own: `(x + 1).abs` stays the number's abs (review)
+#[test]
+fn a_parameter_named_like_a_time_variable_is_no_time() {
+	is!("x = now; f(x) := (x - 5).abs; f(2)", 3);
+}
