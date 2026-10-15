@@ -375,6 +375,11 @@ fails. Next time a warning shows, its stage says where to look.
   mouse_x/mouse_y. Check: the Chrome tour drags a real touch over samples/finger_paint (touch_drag.mjs over the
   DevTools protocol, test_in_browser.py fingers_wrong); with the browser's own touch handling the same drag paints
   nothing, so the check can fail. A diagonal swipe there went back in the page's history (another example).
+- The run on load and window_open (card register-fingers, 2026-10-15): #finger_paint opened by its address runs before
+  the first click, reads window_open 0 and its `while window_open` loop ends (status "620 ms", no strokes). The worker
+  says so ("window unseen"); the first click or key press (pointerup for a touch, which activates only then) tells the
+  worker the window is open and runs that code again (playground.js rerunForViewer). Playwright's pages count as
+  activated from the start, so headless checks never saw it: probes/finger_paint_mouse_repro.mjs UNACTIVATED=1.
 
 ## The default canvas is the output pane (card draw-default, user 2026-10-10: defaults, no errors)
 System values `view_width`, `view_height`: playground.js viewSize tells the room below the output pane's text (CSS

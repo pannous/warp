@@ -151,6 +151,7 @@ function programImports(holder, hooks) {
 				if (pointerIndex >= 0) return BigInt(Atomics.load(self.pagePointer.values, pointerIndex));
 				// a Worker has no matchMedia: the page tells it (playground.js tellSystemValues)
 				const known = value === "dark mode" && globalThis.matchMedia ? matchMedia(DARK_MODE_QUERY).matches : toldValue(value);
+				if (value === "window_open" && !known) hooks.windowUnseen?.(); // playground.js rerunForViewer
 				if (known !== undefined) return BigInt(known);
 				throw new Error(`${value}: the playground cannot read it yet`);
 			},

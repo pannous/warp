@@ -59,6 +59,7 @@ const hooks = {
 	tasksInline: reason => post({ type: "tasks inline", reason }),
 	notify: text => post({ type: "notify", text }),
 	resizeWindow: (width, height) => post({ type: "window", width, height }), // window.width = 800 (canvas.js)
+	windowUnseen: () => post({ type: "window unseen" }), // the run read window_open before anyone looked (playground.js rerunForViewer)
 	dispatch: event => post({ type: "dispatch", event }), // playground.js dispatchToPage
 	listen: (holder, events) => {
 		live = holder;
