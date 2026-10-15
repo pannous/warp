@@ -315,12 +315,25 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - dimensions-units (2026-10-15, user): dimension names are types (`3 cm is length`, `h: length = 3 s` error); the
   time dimension is `duration` (a subtype of time). Units and their connections live in lib/units.warp
   (`dimension length`, `m: length`, `cm := m/100`, `inch := 2.54 cm`). A plain `:=` stays a constant
-  (`distance := 42 km` → 42km); how a program adds its own unit is parked (open_decisions unit-definitions). `px` is the
+  (`distance := 42 km` → 42km). `px` is the
   device pixel, its own dimension, converting to lengths through display.dpi at run time. A unit after a list applies
   to each element (`[3, 4] cm` = `[3 cm, 4 cm]`, `v: length[3]`, matrices alike). Predefined derived names: speed,
   area, volume, frequency.
+- unit-definitions (2026-10-15 evening, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable):
+  every dimension has an SI anchor unit, every other unit is a marked conversion to a known unit. Built on the user's
+  sketch: `dimension length meter` declares a dimension and its anchor (two words; `m` the symbol alias);
+  `unit cm := meter / 100`, `unit furlong := 201.168 m`: the right side is an amount in a known unit, which fixes the
+  dimension and the factor; `unit °F := (it + 459.67) * 5/9 K` for offsets, with an optional reverse line
+  (`unit K as °F := …`) only where the way back can't be derived (decibels). lib/units.warp uses the same lines.
+  Rejected: `length cm := …` (a type word before a name already declares a variable's type, two meanings) and
+  `unit meter := 100 cm` (the anchor would depend on a smaller unit).
 
 ## Text
+- letters (2026-10-15 evening, Interviewer's decision on the user's behalf, to present 2026-10-16; card of-in-chain,
+  low priority): `letters of "a1 b!"` → ['a' 'b'], alphabetic only, the common meaning (Unicode letter, like
+  Python's isalpha and Java's isLetter); `characters` is an alias of `chars`.
+- parse-json (2026-10-15, user): quoted code's `.json` is the readable operator-as-key shape
+  (`parse("a * (b + 1)").json` → {"*":["a",{"+":["b",1]}]}); what it can't express is a warning or error, never `{}`.
 - Text + anything concatenates in its str() form (2026-10-02, extended 2026-10-10); a function stays an error. A
   text spelling a number plus a number (`"3"+3`) warns and keeps "33" (error under `use strict`). An instance of a
   Printable type joins as its own text.
