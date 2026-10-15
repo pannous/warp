@@ -1,4 +1,6 @@
-//! card floor-says: a library word assigned to a variable, or passed to map, is a function value
+//! card floor-says: a library word passed to map is a function value, `f = function floor` holds it and `f := floor`
+//! names it (card floor-error). The bare `f = floor` gets P82's "needs 1 argument" from card builtin-functions
+//! (decision reflection, relayed by warp-interviewer 2026-10-15)
 use warp::wasm_emitter::eval;
 
 fn printed(code: &str) -> String {
@@ -6,9 +8,15 @@ fn printed(code: &str) -> String {
 }
 
 #[test]
-fn a_library_word_assigned_is_a_function() {
-	assert_eq!(printed("f = floor; f(2.5)"), "2");
-	assert_eq!(printed("f = upper; f(\"a\")"), "\"A\"");
+fn a_library_word_referenced_is_a_function() {
+	assert_eq!(printed("f = function floor; f(2.5)"), "2");
+	assert_eq!(printed("f = function upper; f(\"a\")"), "\"A\"");
+}
+
+#[test]
+fn a_library_word_defined_is_its_alias() {
+	assert_eq!(printed("f := floor; f(2.5)"), "2");
+	assert_eq!(printed("f := upper; f(\"a\")"), "\"A\"");
 }
 
 #[test]
