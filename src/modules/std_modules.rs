@@ -152,6 +152,13 @@ pub fn std_module_defining(word: &str) -> Option<&'static str> {
 		.map(|index| STD_MODULES[index].0)
 }
 
+/// The classes a standard module declares (text's Cursor): no methods of the type the module is named after
+pub fn std_module_classes(module: &str) -> Vec<String> {
+	let Some(source) = std_module(module) else { return vec![] };
+	let statements = statements(crate::normalize::without_hints(|| WarpParser::parse(source)));
+	statements.iter().filter(|statement| is_class(statement)).filter_map(name_declared_by).collect()
+}
+
 /// The names a standard module defines, in their order (`dir(time)`); None for no standard module
 pub fn std_module_definitions(module: &str) -> Option<&'static [String]> {
 	STD_MODULES.iter().position(|(name, _)| *name == module).map(std_module_words)

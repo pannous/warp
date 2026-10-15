@@ -83,8 +83,20 @@ pub(in crate::wasm_emitter) fn called_word<'a>(
 
 fn printed_value(call: &[Node], bracket: &Bracket) -> Node {
 	match crate::warp_parser::print_arguments_of(call, bracket).as_slice() {
-		[single] => juxtaposed_text(single).unwrap_or_else(|| single.clone()),
+		[single] => juxtaposed_text(single).or_else(|| spaced_values_text(single)).unwrap_or_else(|| single.clone()),
 		several => super::super::joined_text(several, PRINT_ARGUMENT_SEPARATOR),
+	}
+}
+
+/// `print 1+1 2+2` prints each value, `2 4` (reconsider-spaced)
+fn spaced_values_text(argument: &Node) -> Option<Node> {
+	match argument.drop_meta() {
+		Node::List(values, Bracket::None, Separator::Space)
+			if crate::lowering::ambiguous_forms::are_spaced_values(values) =>
+		{
+			Some(super::super::joined_text(values, PRINT_ARGUMENT_SEPARATOR))
+		}
+		_ => None,
 	}
 }
 
@@ -621,6 +633,8 @@ impl WasmGcEmitter {
 			crate::Kind::List => self.may_be_map(subject),
 			// a text value may be a character (`"abc".chars#1`, chars-codepoints): one-character texts are held as such
 			crate::Kind::Text => !matches!(subject.drop_meta(), Node::Text(_)),
+			// a function value may be a built-in's (BUILTIN_FUNCTION_MARK)
+			crate::Kind::Function => true,
 			_ => false,
 		}
 	}
@@ -696,6 +710,7 @@ impl WasmGcEmitter {
 		let unknown =
 			spec == ERROR_WORD || item_of_text || operation_of_key || code || self.has_unknown_static_type(subject);
 		let declared_type = self.ctx.type_registry.get_by_name(spec).is_some();
+		let builtin_test = self.get_type(subject) == Kind::Function && spec == crate::type_tests::BUILTIN_TYPE;
 		let map_spec = crate::type_tests::canonical_spec_word(spec) == MAP_WORD;
 		let known_map = crate::analyzer::held_map_type(subject, &self.scope).is_some();
 		// code in braces `{x; x+1}` is no map
@@ -753,8 +768,9 @@ impl WasmGcEmitter {
 				);
 				self.emit_numeric_value(func, &instance_test);
 			}
-			// `now is instant`: a built-in type sharing its run-time kind with others (the forms of a time) by `type(x)`'s name
-			None if unknown && crate::type_tests::is_builtin_type_word(spec) => {
+			// `now is instant`: a built-in type sharing its run-time kind with others (the forms of a time) by `type(x)`'s
+			// name, as `f is builtin` of a function value
+			None if (unknown || builtin_test) && crate::type_tests::is_builtin_type_word(spec) => {
 				let type_value = Node::List(
 					vec![Node::Symbol(crate::type_tests::TYPE_WORD.to_string()), subject.clone()],
 					Bracket::Round,

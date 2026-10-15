@@ -40,6 +40,26 @@ fn a_declared_height_is_the_programs() {
 	is!("width: cm = 3 cm; width + 1 cm", value("4 cm"));
 }
 
+/// Derived dimensions with a name of their own (user 2026-10-15, Q4 of dimensions-units)
+#[test]
+fn speed_area_volume_and_frequency_are_named_dimensions() {
+	is!("4 m² is area", true);
+	is!("4 m is area", false);
+	is!("2 m³ is volume", true);
+	is!("2 km/h is speed", true);
+	is!("2 Hz is frequency", true);
+	is!("a: area = 3 m²; a + 1 m²", value("4 m²"));
+	is!("s: speed = 3 km/h; s", value("3 km/h"));
+	fails_with("a: area = 3 m", "DimensionError: a is declared area (m²), is given m (length)");
+}
+
+/// A declaration written as a unit shows as written (reviewer, dimensions-units)
+#[test]
+fn a_declared_unit_shows_as_written() {
+	fails_with("h: cm = 3 kg", "DimensionError: h is declared cm, is given kg (mass)");
+	fails_with("v: km/h = 3 kg", "DimensionError: v is declared km/h, is given kg (mass)");
+}
+
 #[test]
 fn a_program_naming_a_dimension_keeps_its_own() {
 	is!("length = 3; length + 1", 4);

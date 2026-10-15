@@ -19,10 +19,14 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   are in and the Rust code is cleaned up (topic cleanup); the existing twins stay.
 - cleanup-only (2026-10-13): until the big Rust cleanup is done, new tasks come only from the cleanup roadmap; other
   workers finish what they hold; the Codex timer takes only cleanup cards; urgent Now cards still go out.
-  Exception: use-cargo (crate components, downloads) keeps going, "important and doesn't touch the cleanup much".- weekly-cleanup (2026-10-14, user): a fresh cleanup roadmap every week (topic `cleanup-w<week>`, e.g. cleanup-w42);
+  Exception: use-cargo (crate components, downloads) keeps going, "important and doesn't touch the cleanup much".
+- weekly-cleanup (2026-10-14, user): a fresh cleanup roadmap every week (topic `cleanup-w<week>`, e.g. cleanup-w42);
   new cleanup cards go into the current week's topic (`todo add "…" --topic cleanup-w42`). Older roadmaps stay as
   they are, solved cards Done in them. Chores that should run regularly get `todo repeat <card> <days>`, and the
   daily `todo recur` brings them back to Next; they are not copied into each new roadmap.
+- topic-priority (2026-10-15, user; card todo-topics): the column is the priority, for topic cards too: a topic sits
+  in Now/Next/Soon/Later beside its cards (new topics Soon); Roadmaps holds only unprioritized topics. A Priority
+  field may exist only if it always matches the column. `todo move sound Next --all` raises a topic with its cards.
 - long-functions (2026-10-14, user): splitting an overly long function is a cleanup card of its own, also when it
   adds a few lines; the "only if it removes lines" rule is for deduplication, not for splits. Split by concept (one
   named helper per case group or per embedded warp template), not into numbered parts.
@@ -143,7 +147,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - cleanup-cuts-2 (2026-10-14): tests whose setup uses a cut spelling get only that line rewritten (`stored people:
   [Person]`, `play(440Hz, 10ms)`), assertions untouched. All phrase calls are parked, `play hum for 2s`, `melody …
   each 20ms`, `add 1 to 2` and gap feeding included, until prepositions become call keywords in the general call
-  mechanism (`move x from a to b`, card prepositions-call); sound uses calls until then. Version literals stay but
+  mechanism (`move x from: a to: b` per labels-calls, card prepositions-call); sound uses calls until then. Version literals stay but
   get rebuilt small ("why do we need 200 lines for this simple pattern?"), without the semver crate. The defined-twice
   diagnostic is cut. `nonlocal` only loses its error and checks: the cells behind P124 sharing stay, a nested def
   also shares `n += 1` without it, a plain `y = 5` there stays local unless `nonlocal y` (P124). rustfmt `use_small_heuristics = "Max"` comes
@@ -414,6 +418,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - Ranges (2026-10-09): `r: 1..n` is the range itself, same as `r = 1..n`. `upto` excludes the end with a hint.
 
 ## Functions and calls
+- function-references (2026-10-15, user): a bare name of a function that needs arguments, compared with a type
+  (`floor is function`) or in `type(floor)`, means the function itself (card bare-fn-type). `.floor` in argument
+  position is a lambda on it, like Swift's .member: `xs.map(.floor)`, `people.sort(.age)` (card dot-lambda).
+  `&floor` and `function floor` stay the explicit references; `:floor` is not used.
 - type-library-words (2026-10-12): list/map/text library words are always available as `x.f()` and `f(x)`;
   `use list` only for qualified `list.zip`. P171 other modules' words need their `use` (error naming the module);
   `write` and `exists` are global; a file URL loads the file module.
@@ -431,8 +439,12 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   becomes `any`.
 - P37 named arguments set parameters and free variables; no implicit capture, a missing argument is an error. P216
   named arguments run left to right as written.
-- P52 a phrase-defined function is called with its own prepositions (`add 1 to 2`); elsewhere `to` is a range, `of`
-  a field lookup. `f - x` with a user function is `f(-x)`.
+- P52 a phrase-defined function is called with its own prepositions (`add 1 to: 2`, see labels-calls); elsewhere `to`
+  is a range, `of` a field lookup. `f - x` with a user function is `f(-x)`.
+- labels-calls (2026-10-15, user; revises P52 and prepositions-call): a preposition labelling an argument in a call
+  always takes a colon: `save file in: folder`, `play C4 for: 1s`, `move x from: 1 to: 5`, `save sound as: "x.wav"`.
+  Universal for every preposition and `as`, with/from/into/by included (they get a special meaning soon). Definitions
+  keep the bare form, `play(tone, for duration)`; bare preposition labels in calls are dropped. Card labels-calls.
 - P24 suffix forms (`4 doubled`) call user functions. P164 a type word after a parameter name is its type
   (`phone number`); `phone-number:text` is one hyphenated name in declarations.
 - P132 `{f: x => x * 2}` holds a lambda; a type word after the colon makes a typed lambda. P133 `|x| x*2` is a lambda.
@@ -598,6 +610,17 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - cli-words (2026-10-15, user): warp's own command options are words, never `--flags` ("we don't like this minus
   minus style, ever"), e.g. `warp format check …`, `warp format hash-comments …`; the style guide says so. Card
   cli-words migrates the existing --fuel/--exe/--strict/… (older `--x` mentions below are superseded by it).
+- unix-words (2026-10-15, user): `use script` has shell words with warp results: ls pwd cd cat echo mkdir cp mv touch
+  head tail wc grep which rm, plus find, size/info (du/stat), sort/uniq, open (native), curl/wget as aliases of
+  fetch/download. `export a=b` clashes with the WebAssembly export, so it's left out. Not now: basename/dirname,
+  chmod, ln, diff, kill/ps, tar/zip. rm: one file or an empty folder, no patterns, never / ~ or the working dir and
+  above, sandbox permission, and it moves to the Trash (undoable); no recursive form. `wc` → {lines, words, bytes};
+  ls hides dotfiles (list_files shows all); grep is regex over lines; unquoted paths `~/x ./x /etc`, `~` expanded on
+  use. Card unix-words.
+- cross-module-overload (2026-10-15, user): overloading works across modules: a module's definition doesn't shadow a
+  same-named word elsewhere, the call dispatches on the argument type. `use script; sort ./names.txt` sorts the
+  file's lines while `sort [3 1 2]` still sorts the list (same for unique, find, size). sort_lines/find_files/
+  file_size are only interim names.
 - P102 `warp build hello.warp` makes the native executable (`hello`, hello.exe on Windows); `--exe` accepted.
   build-should (2026-10-13 default): it writes x.wasm beside it too; `--wasm` only the module.
 - no-executable-by-default (2026-10-12): a plain `warp file.warp` writes no executable; WARP_EXECUTABLE=1 turns it on.
@@ -675,8 +698,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - sound-dsp (2026-10-15, user): the effects DSP is written once in Rust (src/sound/effects.rs, compiled into warp.wasm
   for the browser), lib/sound.warp calls it; a warp twin can follow with self-hosting.
 - save-sound (2026-10-15, user, replaces the render_sound alias answer): writing audio to a file is the general
-  `save` with an explicit object, overloaded by its type: `save sound as "song.wav"` / `save(sound, "song.wav")`,
-  likewise `save buffer as "x.raw"` and other savable values. render_sound goes; its name gives an I-meant hint
+  `save` with an explicit object, overloaded by its type: `save sound as: "song.wav"` / `save(sound, "song.wav")`,
+  likewise `save buffer as: "x.raw"` (colon per labels-calls) and other savable values. render_sound goes; its name gives an I-meant hint
   naming save.
 
 ## Old id index (superseded or historic; git has the text)
