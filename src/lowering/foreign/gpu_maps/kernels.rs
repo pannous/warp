@@ -245,6 +245,7 @@ impl Translation {
 			Node::Key(empty, op, operand) if empty.is_empty_node() => self.prefixed(op, operand),
 			Node::Key(base, Op::Pow, exponent) => scalar(self.power(base, exponent)?),
 			Node::Key(vector, Op::Hash, index) => self.component(vector, index),
+			Node::Key(vector, Op::Dot, field) => self.swizzle(vector, field.symbol_name()?),
 			Node::Key(_, op, _) if comparison(*op).is_some() || matches!(op, Op::And | Op::Or) => {
 				scalar(format!("select(0.0, 1.0, {})", self.condition(body)?))
 			}
@@ -349,6 +350,14 @@ impl Translation {
 			_ => format!("{vector}[i32({}) - 1]", self.expression(index)?),
 		};
 		Some((code, 1))
+	}
+
+	/// `p.y`, `p.zyx`: WGSL's swizzle of the vector's components, as many wide as it names (decision S1)
+	fn swizzle(&mut self, vector: &Node, name: &str) -> Option<Typed> {
+		let components = crate::words::swizzle_components(name)?;
+		let (vector, width) = self.typed(vector)?;
+		let picks_within = width > 1 && components.iter().all(|component| *component < width);
+		picks_within.then(|| (format!("{vector}.{name}"), components.len()))
 	}
 
 	/// `[a, b, c]` of numbers (and vectors): a vecNf of 2 to 4 components

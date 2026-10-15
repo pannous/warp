@@ -5,5 +5,5 @@ use crate::is;
 
 #[test]
 fn a_render_keeps_the_silence_before_an_at() {
-	is!("use sound\nat 1s beep()\nplay(C4, 0.1s)\nround(render_sound(\"at.wav\") * 100)", 115);
+	is!("use sound\nat 1s beep()\nplay(C4, 0.1s)\nround(save(sound, \"at.wav\") * 100)", 115);
 }

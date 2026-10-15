@@ -149,6 +149,13 @@ impl WasmGcEmitter {
 						self.emit_call(func, fallback);
 						func.instruction(&I::BrOnNonNull(0));
 					}
+					// `p.xy` of a list of 2 to 4 numbers: its components (decision S1)
+					if let Some(components) = crate::words::swizzle_components(&name) {
+						let picks = I::I64Const(swizzle_picks(&components));
+						Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull, picks]);
+						self.emit_call(func, SWIZZLED);
+						func.instruction(&I::BrOnNonNull(0));
+					}
 					Self::emit_list(
 						func,
 						&[I::Call(self.func_index(&format!("{NO_FIELD_PREFIX}{name}"))), I::Unreachable, I::End],

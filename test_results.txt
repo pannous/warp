@@ -1759,6 +1759,7 @@ PASSED:
   ✓ lists::test_bare_list_assignment::a_bracketed_list_never_asks
   ✓ lists::test_bare_list_assignment::an_unbracketed_list_assignment_asks_list_or_statements
   ✓ lists::test_bare_list_assignment::each_reading_has_its_explicit_form
+  ✓ lists::test_bare_list_assignment::spaced_values_are_a_list
   ✓ lists::test_byte_size::byte_size_counts_bytes_and_size_counts_elements
   ✓ lists::test_captured_call_lists::a_captured_list_of_float_calls_holds_floats
   ✓ lists::test_comprehension_beside_own_push::a_comprehension_beside_an_own_push_function
@@ -2046,6 +2047,10 @@ PASSED:
   ✓ lists::test_sort_long::a_long_list_sorts_in_n_log_n
   ✓ lists::test_sort_long::equal_keys_keep_their_order
   ✓ lists::test_sort_long::ordered_input_sorts_in_linear_time
+  ✓ lists::test_swizzles::a_component_beyond_the_vector_is_no_field
+  ✓ lists::test_swizzles::a_letter_is_a_component_of_a_list_of_numbers
+  ✓ lists::test_swizzles::a_map_entry_of_the_name_wins
+  ✓ lists::test_swizzles::letters_pick_a_list_of_components
   ✓ lists::test_tuple_items_of_lists::a_tuple_from_a_list_keeps_its_items
   ✓ lists::test_tuples::test_loop_over_list_with_global_tuple
   ✓ lists::test_tuples::test_tuple_of_computed_items
@@ -2671,6 +2676,8 @@ PASSED:
   ✓ numbers::test_number_methods::test_a_field_named_like_a_number_method_stays_a_field
   ✓ numbers::test_number_methods::test_prefix_operator_words_as_methods
   ✓ numbers::test_number_methods::test_rounding_methods_without_parentheses
+  ✓ numbers::test_number_of_text::number_of_a_run_time_text_compares_with_a_number
+  ✓ numbers::test_number_of_text::number_of_a_run_time_text_is_the_number_it_spells
   ✓ numbers::test_number_words::a_number_word_hints_its_digits
   ✓ numbers::test_number_words::a_variable_of_that_name_wins
   ✓ numbers::test_number_words::keys_and_texts_stay_words
@@ -3408,6 +3415,7 @@ PASSED:
   ✓ programs::test_paint_function::a_painted_function_paints_on_the_gpu_what_the_cpu_paints
   ✓ programs::test_paint_function::a_painted_function_reads_an_item_of_a_program_list
   ✓ programs::test_paint_function::a_painted_function_rounds_halves_to_even
+  ✓ programs::test_paint_function::swizzles_become_the_shaders_swizzles
   ✓ programs::test_paint_in_window::a_shader_frame_crosses_to_the_paint_window_whole_and_small
   ✓ programs::test_paint_in_window::a_shader_that_does_not_compile_fails_before_it_reaches_the_window
   ✓ programs::test_paint_in_window::the_paint_window_renders_what_paint_renders
@@ -3563,6 +3571,9 @@ PASSED:
   ✓ programs::test_sound_pipes::nodes_chain
   ✓ programs::test_sound_pipes::out_plays_a_signal
   ✓ programs::test_sound_render::a_render_takes_the_sounds_after_the_last_one
+  ✓ programs::test_sound_render::render_sound_is_save_with_a_note
+  ✓ programs::test_sound_render::save_sound_as_a_file_writes_the_sounds
+  ✓ programs::test_sound_render::save_text_as_a_file_writes_it
   ✓ programs::test_sound_render::sounds_render_into_one_wav_file
   ✓ programs::test_sound_samples::a_rate_changes_speed_and_pitch
   ✓ programs::test_sound_samples::a_render_mixes_rates
@@ -5616,4 +5627,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5611 passed, 0 failed, 5611 total tested
+13 ignored, 5622 passed, 0 failed, 5622 total tested
