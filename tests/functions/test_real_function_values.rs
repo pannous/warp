@@ -29,3 +29,9 @@ fn a_real_function_referenced_is_a_function() {
 fn a_program_defining_sin_keeps_its_own() {
 	assert_eq!(printed("sin(x) := x + 1; f := sin; f(1)"), "2");
 }
+
+#[test]
+fn a_real_function_applies_to_the_value_after_it() {
+	assert_eq!(printed("sin cos 0"), "0.8414709848078965");
+	assert_eq!(printed("f(x) := exp x; f(1)"), "2.718281828459045");
+}
