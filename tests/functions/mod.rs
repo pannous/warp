@@ -83,6 +83,7 @@ mod test_generators; // card generators-function
 mod test_getter_warning_text;
 mod test_global_with_closures;
 mod test_go_functions;
+mod test_ignored_parameters;
 mod test_inlining;
 mod test_it_arguments; // card map-it
 mod test_kebab_members;
