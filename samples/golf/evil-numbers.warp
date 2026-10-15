@@ -1,4 +1,4 @@
-# code.golf evil-numbers: 0 to 50 with an even number of ones in binary
+// code.golf evil-numbers: 0 to 50 with an even number of ones in binary
 use math
 use text
 for n in 0 to 50:

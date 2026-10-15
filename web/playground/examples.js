@@ -1,12 +1,12 @@
-# The tour, in the order of the guide (guide.md), from the basics to the web: each example's first line says what it shows; `value` is what the page shows for it,
-# `printed` what it prints (test_in_browser.py --examples checks both in the page, so a broken example fails CI;
-# `wait`: milliseconds of timers and listeners before checking; `clicks`: the shown buttons, by text, clicked after
-# that, `clicked` the value then and `kept` that every element shown stays: only its text and attributes change;
-# `keyed` that every element with a key keeps it: a list item's element moves with its item; `typed`: the text typed
-# into the first input before the clicks; `animated` that the clicks started an animation; `clickedPrinted`: all
-# printed text after the clicks; `address` the address bar's path after
-# them).
-# samples.js (made by build.sh) adds samples/*.warp.
+// The tour, in the order of the guide (guide.md), from the basics to the web: each example's first line says what it shows; `value` is what the page shows for it,
+// `printed` what it prints (test_in_browser.py --examples checks both in the page, so a broken example fails CI;
+// `wait`: milliseconds of timers and listeners before checking; `clicks`: the shown buttons, by text, clicked after
+// that, `clicked` the value then and `kept` that every element shown stays: only its text and attributes change;
+// `keyed` that every element with a key keeps it: a list item's element moves with its item; `typed`: the text typed
+// into the first input before the clicks; `animated` that the clicks started an animation; `clickedPrinted`: all
+// printed text after the clicks; `address` the address bar's path after
+// them).
+// samples.js (made by build.sh) adds samples/*.warp.
 const EXAMPLES = {
 	hello: { value: '"Hello, world"', code: `// your first program: the value of the last line shows below
 "Hello, world"` },

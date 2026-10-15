@@ -1,4 +1,4 @@
-# code.golf sierpiński-triangle: order 4, each order two copies of the last one under a centered copy
+// code.golf sierpiński-triangle: order 4, each order two copies of the last one under a centered copy
 rows = ["▲"]
 for 1 to 4:
 	pad = " " * rows.count

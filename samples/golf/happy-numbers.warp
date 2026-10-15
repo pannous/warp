@@ -1,4 +1,4 @@
-# code.golf happy-numbers: 1 to 200 whose repeated sum of squared digits reaches 1
+// code.golf happy-numbers: 1 to 200 whose repeated sum of squared digits reaches 1
 use math
 def happy(n):
 	while n != 1 and n != 4:
