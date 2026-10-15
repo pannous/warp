@@ -56,3 +56,15 @@ fn test_unparsed_code_is_not_formatted() {
 fn test_parameter_types_spaced() {
 	assert_eq!(formatted("exec(command:any) := command\nm = {a:1}\n"), "exec(command: any) := command\nm = {a: 1}\n");
 }
+
+// card format-spaces: every binary operator of the operator table is spaced, Unicode spellings too; a generic type
+// `list<int>` stays glued (the spacing would change the tree)
+#[test]
+fn test_every_binary_operator_spaced() {
+	assert_eq!(
+		formatted("a = 1<2\nb = a<3 and 4>a\nc = 3≤4\nd = a≠1\ne = 2×3\n"),
+		"a = 1 < 2\nb = a < 3 and 4 > a\nc = 3 ≤ 4\nd = a ≠ 1\ne = 2 × 3\n"
+	);
+	let generic = "xs = list<int>\n";
+	assert_eq!(formatted(generic), generic);
+}
