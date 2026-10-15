@@ -10,14 +10,14 @@ render_sound, sound_queued, play_file, the midi words) needs `use sound`; called
 ```warp
 use sound
 beep
-play 440Hz for 0.5s
+play 440Hz for: 0.5s
 play C4                         // note_seconds (0.5 s)
-play [C4 E4 G4] for 1s          // a chord
+play [C4 E4 G4] for: 1s          // a chord
 melody [C4 D4 E4]               // one after another
-melody [G4 E4 C4] each 200ms    // or melody([G4 E4 C4], 200ms)
+melody [G4 E4 C4] each: 200ms    // or melody([G4 E4 C4], 200ms)
 tone(220Hz, 300ms, "square")    // sine, square, triangle, sawtooth
 tone 330Hz for 0.1s
-play note("F#4") for 250ms      // note(name) needs `use sound` when called alone
+play note("F#4") for: 250ms      // note(name) needs `use sound` when called alone
 ```
 
 - The samples are made in warp (22050 Hz, 16-bit mono, 5 ms fade at both ends) and cross to the host word
@@ -98,7 +98,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    Offline render built (step 2, 2026-10-10, from layer 5): `render_sound("song.wav")` writes the sounds since the
    last render (or the start) one after another into one WAV and gives its seconds; headless too, so tests check audio
    without speakers (tests/programs/test_sound_render.rs). Since card save-sound (user 2026-10-15) it is written
-   `save sound as "song.wav"` / `save(sound, "song.wav")`: save overloaded by type, the word sound as save's argument a
+   `save sound as: "song.wav"` / `save(sound, "song.wav")`: save overloaded by type, the word sound as save's argument a
    lib/sound.warp Recording (music_words.rs with_recording); render_sound stays as the old name with a note. The samples are kept in memory (44 KB a second at 22050 Hz),
    not read back from $TMPDIR/warp-sound: that folder is shared by all warp processes. The playground refuses it (its
    files are texts).
@@ -216,7 +216,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    Stereo built (undoable default): `play_signal([left, right], 2s)` calls left(t) then right(t) for each sample;
    `play_blocks(fill, 2s)` with fill of three parameters `(left, right, t)` gets two blocks (fill·block, fill·right).
    The host takes one value or a pair (native.rs channels_of) and interleaves the frames (sound.rs play_blocks).
-   `play hum for 2s` (user, 2026-10-12: no snake case; `signal` is a reactive keyword, so no synonym word): play of
+   `play hum for: 2s` (user, 2026-10-12: no snake case; `signal` is a reactive keyword, so no synonym word): play of
    one of the program's functions is play_signal of it (one parameter, or a pair [left, right] of such), play_blocks
    (two or three parameters); music_words.rs with_played_functions. play_signal and play_blocks stay the explicit forms.
    Browser first step built (tests/web/test_signal_sound.rs): host-files.js STD_ADAPTERS.sound.signal / blocks compute
@@ -283,7 +283,7 @@ last stage that moves samples to the speaker.
   (gain, frequency, detune, Q) keeps warp code readable to anyone who knows the web.
 - **But not its API shape.** Web Audio is verbose (`ctx.createOscillator()`, `.connect()`, `.start(t)`) and has no
   music values. warp keeps its own words: units (`440Hz`, `200ms`, `-6dB`, `1/4 beat`), notes and chords as values,
-  `play … for …` phrases and `|>` pipes. Those lower to the graph; a program never sees a context object.
+  `play … for: …` phrases and `|>` pipes. Those lower to the graph; a program never sees a context object.
 - **Natively, the same graph runs in our own engine, written in warp/wasm** (layer 8): it renders blocks of f32
   samples, so the browser and the Mac produce the same samples and offline rendering (tests!) is the same code path.
   Only the output differs:
