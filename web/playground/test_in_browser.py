@@ -24,6 +24,7 @@ SHARD = os.environ.get("WARP_BROWSER_TEST_SHARD")  # i/n: every n-th test from t
 # the tour's page starts its worker this late (playground.js ?slow_start): a fast machine then meets the races a slow
 # CI runner meets, e.g. "ready" hiding the first example's "running…" (empty value, the failed deploys of 2026-10-08)
 SLOW_START_MS = 2000
+COMPONENTS_BUILT = os.environ.get("WARP_COMPONENTS_BUILT") == "1"
 PER_WORKER = os.environ.get("WARP_BROWSER_TEST_PER_WORKER")  # tests before a worker is replaced (tests.js TESTS_PER_WORKER)
 # one browser per run: runs at the same time (the suite, a tour check) must never drive or close each other's page
 SESSION = f"warp-browser-tests-{os.getpid()}"
@@ -924,7 +925,10 @@ def check_examples(names, page_url=None, site=None):
 
 def build_components():
 	"""the components `use wasm` tests call, transpiled for the page (components.js); a failure only warns: those tests
-	then fail naming build.sh"""
+	then fail naming build.sh. COMPONENTS_BUILT: built elsewhere already (scripts/browser-dry-run.sh builds them on the
+	Mac, the server has no cargo)"""
+	if COMPONENTS_BUILT:
+		return
 	built = subprocess.run([os.path.join(REPOSITORY, "web", "playground", "build.sh"), "components"], capture_output=True, text=True)
 	if built.returncode:
 		print(f"warning: build.sh components failed, `use wasm` tests will fail:\n{built.stderr.strip()}", file=sys.stderr)
