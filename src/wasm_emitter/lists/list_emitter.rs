@@ -621,6 +621,8 @@ impl WasmGcEmitter {
 			crate::Kind::List => self.may_be_map(subject),
 			// a text value may be a character (`"abc".chars#1`, chars-codepoints): one-character texts are held as such
 			crate::Kind::Text => !matches!(subject.drop_meta(), Node::Text(_)),
+			// a function value may be a built-in's (BUILTIN_FUNCTION_MARK)
+			crate::Kind::Function => true,
 			_ => false,
 		}
 	}
@@ -696,6 +698,7 @@ impl WasmGcEmitter {
 		let unknown =
 			spec == ERROR_WORD || item_of_text || operation_of_key || code || self.has_unknown_static_type(subject);
 		let declared_type = self.ctx.type_registry.get_by_name(spec).is_some();
+		let builtin_test = self.get_type(subject) == Kind::Function && spec == crate::type_tests::BUILTIN_TYPE;
 		let map_spec = crate::type_tests::canonical_spec_word(spec) == MAP_WORD;
 		let known_map = crate::analyzer::held_map_type(subject, &self.scope).is_some();
 		// code in braces `{x; x+1}` is no map
@@ -753,8 +756,9 @@ impl WasmGcEmitter {
 				);
 				self.emit_numeric_value(func, &instance_test);
 			}
-			// `now is instant`: a built-in type sharing its run-time kind with others (the forms of a time) by `type(x)`'s name
-			None if unknown && crate::type_tests::is_builtin_type_word(spec) => {
+			// `now is instant`: a built-in type sharing its run-time kind with others (the forms of a time) by `type(x)`'s
+			// name, as `f is builtin` of a function value
+			None if (unknown || builtin_test) && crate::type_tests::is_builtin_type_word(spec) => {
 				let type_value = Node::List(
 					vec![Node::Symbol(crate::type_tests::TYPE_WORD.to_string()), subject.clone()],
 					Bracket::Round,

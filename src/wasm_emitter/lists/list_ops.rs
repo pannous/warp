@@ -410,6 +410,13 @@ impl WasmGcEmitter {
 				);
 				s.emit_string_call(f, crate::analyzer::BOOL_TYPE, "new_symbol");
 				Self::emit_list(f, &[I::Return, I::End]);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(kind), I::I64Const(crate::type_kinds::BUILTIN_FUNCTION_MARK), I::I64And, I::I64Const(0), I::I64Ne,
+					I::If(BlockType::Empty),
+				]);
+				s.emit_string_call(f, crate::type_tests::BUILTIN_TYPE, "new_symbol");
+				Self::emit_list(f, &[I::Return, I::End]);
 				if s.int_runtime() {
 					// an exact number that is no integer holds a $Ratio (exact.rs)
 					Self::emit_list(

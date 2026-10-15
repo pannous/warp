@@ -273,6 +273,11 @@ fn function_type(signature: &str) -> Node {
 	Node::Text(format!("{}: {signature}", crate::type_kinds::Kind::Function))
 }
 
+/// `type(function floor)`: `builtin: (x:number) -> int` (decision dir-lists)
+fn builtin_type(signature: &str) -> Node {
+	Node::Text(format!("{}: {signature}", crate::type_tests::BUILTIN_TYPE))
+}
+
 /// `(a, b) -> int` → `int`
 fn return_type(signature: &str) -> String {
 	signature.rsplit_once(" -> ").map_or("", |(_, result)| result).to_string()
@@ -307,7 +312,7 @@ fn function_word(node: &Node, functions: &Functions, defined: &HashSet<String>) 
 		return match word {
 			DIR_WORD => Some(text_list(&LIBRARY_FUNCTION_WORDS.map(String::from))),
 			HELP_WORD => Some(Node::Text(format!("{name}{signature}"))),
-			crate::type_tests::TYPE_WORD => Some(function_type(&signature)),
+			crate::type_tests::TYPE_WORD => Some(builtin_type(&signature)),
 			_ => None,
 		};
 	}
