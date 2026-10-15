@@ -68,3 +68,51 @@ fn the_mixer_runs_a_bus_on_its_sounds() {
 	assert!(near(105, 0.25), "the echo 0.1 s later: {}", buffer[105]);
 	assert!(near(205, 0.125), "and the next: {}", buffer[205]);
 }
+
+// card shared-buses stage 3: a bus's effect applied again takes its new settings at the voice's moment, keeping its
+// place in the chain and what still rings in it
+
+#[test]
+fn a_changed_effect_applies_from_the_voices_moment() {
+	let program = "room = bus() |> gain(1)\nout(osc(A4, 0.2s), room)\nroom = room |> gain(0)\nout(osc(A4, 0.2s), room)";
+	let samples = rendered_samples(program, "change");
+	assert!(loudest(&samples, 0.05, 0.15) > 1000, "the first sound at gain 1");
+	assert!(loudest(&samples, 0.25, 0.4) < QUIET, "the second at gain 0: {}", loudest(&samples, 0.25, 0.4));
+}
+
+#[test]
+fn an_effect_set_again_keeps_its_echoes() {
+	let program = "room = bus() |> delay(0.3, 0.5, 1)\nout(osc(A4, 0.1s), room)\nroom = room |> delay(0.3, 0.5, 1)";
+	let samples = rendered_samples(program, "kept");
+	assert!(loudest(&samples, 0.31, 0.39) > 500, "the echo rings on through the change");
+}
+
+#[test]
+fn an_effect_set_again_keeps_its_place_in_the_chain() {
+	crate::is!(
+		"use sound\nroom = bus() |> gain(1) |> reverb(0.3)\nroom = room |> gain(0.5)\nroom.chain",
+		warp::warp_parser::parse("[[\"gain\" 0.5] [\"reverb\" 0.3]]")
+	);
+}
+
+/// out restores the bus its thread sent to before, so out(…, room) inside another bus's sound leaves that bus on
+#[test]
+fn out_restores_the_bus_before() {
+	crate::is!(
+		"use sound\nroom = bus()\nstd_io(\"sound\", \"send\", [7])\nout([0.0], room)\nstd_io(\"sound\", \"send\", [0])",
+		7
+	);
+}
+
+#[test]
+fn the_mixer_changes_a_bus_at_its_frame() {
+	let rate = 1000;
+	let mut mixer = Mixer::new(rate, 1);
+	mixer.set_bus(1, vec![Effect::Gain(1.0)]);
+	mixer.add_to_bus(7, 1, 0, &[16_384; 10], rate, 1);
+	mixer.change_bus(1, 5, vec![Effect::Gain(0.0)]);
+	let mut buffer = vec![0.0; 20];
+	mixer.fill(&mut buffer);
+	assert!((buffer[3] - 0.5).abs() < 0.01, "before the change: {}", buffer[3]);
+	assert!(buffer[7].abs() < 0.01, "after it: {}", buffer[7]);
+}

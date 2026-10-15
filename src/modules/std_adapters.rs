@@ -233,13 +233,13 @@ fn sound(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			crate::sound::fade(number_of(handle)?.max(0.0) as usize, number_of(gain)?, number_of(seconds)?)?
 		}
 		("at", [seconds]) => crate::sound::at(number_of(seconds)?),
-		// card shared-buses: bus(number, [[name, settings…] …]) its effects (number 0: a new bus), send(bus) the next sounds
+		// card shared-buses: bus(number, [[name, settings…] …]) its effects (number 0: a new bus), send(bus) the next sounds, returning the bus before
 		("bus", [bus, effects]) => {
 			let effects = effects.as_items().iter().map(effect_of).collect::<Result<Vec<_>, String>>()?;
 			return crate::sound::define_bus(number_of(bus)?.max(0.0) as usize, effects)
 				.map(|bus| Node::int(bus as i64));
 		}
-		("send", [bus]) => crate::sound::send_to(number_of(bus)?.max(0.0) as usize),
+		("send", [bus]) => return Ok(Node::int(crate::sound::send_to(number_of(bus)?.max(0.0) as usize) as i64)),
 		("at_end", []) => crate::sound::at_end(),
 		("rest", [seconds]) => crate::sound::rest(number_of(seconds)?),
 		("wait", []) => crate::sound::wait(),

@@ -319,6 +319,14 @@ The DSP is the lib formulas in Rust, streaming. Plan (supervisor, user asked whe
 stage 2 the browser runs the same code (warp.wasm export for render_sound, an AudioWorklet live; until then the
 playground plays bus sounds dry and says so), stage 3 a bus's effects changed while it plays, stage 4 compressor, EQ.
 
+Stage 3 built (2026-10-15): `room = room |> gain(0)` changes the bus from the defining voice's moment (where its queued
+sounds end). An effect of a name the chain has replaces it in place (with_effect), else it appends. Chain::retune keeps
+each stage of the same kind with its state (comb echoes, biquad history), so a delay set again rings on; another kind
+starts afresh. Live: Mixer::change_bus(bus, frame, effects) stores pending changes per Bus, fill splits the bus's buffer
+at their frames. render_sound: BUSES keeps every definition at its place since the last render, effects::processed
+retunes at their frames, the last definition stays for the next render. `out(signal, bus)` restores the bus the thread
+sent to before (sound.send returns it, natively and in host-sound.js).
+
 ## Native output built (card native-sound, 2026-10-12, src/sound/sound_engine.rs, tests/programs/test_sound_engine.rs)
 On macOS every sound now goes into one cpal output stream (CoreAudio) instead of one afplay process per WAV. A `Mixer`
 holds the sounds, each converted to the device's rate (linear interpolation) and channels, starting at its frame;

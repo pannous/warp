@@ -264,9 +264,22 @@ class Bus {
 	chain: list
 }
 bus() := Bus(std_io("sound", "bus", [0, []]), [])
-// the bus with one more effect at the end of its chain, which the host takes over from now on
+// the bus with the effect at the end of its chain, or in place of its effect of that name (its new settings, what
+// rings in it kept), which the host takes over from this voice's moment on (card shared-buses stage 3)
 with_effect(b: Bus, effect) := {
-	chain = b.chain + [effect]
+	chain = []
+	replaced = false
+	for e in b.chain {
+		if e[0] == effect[0] {
+			chain.push(effect)
+			replaced = true
+		} else {
+			chain.push(e)
+		}
+	}
+	if not replaced {
+		chain.push(effect)
+	}
 	std_io("sound", "bus", [b.id, chain])
 	Bus(b.id, chain)
 }
@@ -277,15 +290,15 @@ delay(b: Bus, seconds, feedback = 0.4, mix = 0.5) := with_effect(b, ["delay", si
 reverb(b: Bus, mix = 0.3) := with_effect(b, ["reverb", mix])
 distort(b: Bus, drive = 0.5) := with_effect(b, ["distort", drive])
 gain(b: Bus, share) := with_effect(b, ["gain", share])
-// the signal played through the bus; its handle
+// the signal played through the bus; its handle. The thread's sounds go where they went before afterwards
 out(signal, b: Bus) := {
-	std_io("sound", "send", [b.id])
+	before = std_io("sound", "send", [b.id])
 	handle = out(signal)
-	std_io("sound", "send", [0])
+	std_io("sound", "send", [before])
 	handle
 }
 // indexed in place: dry_at(a, i) + dry_at(b, i) of two lists was quadratic (card list-call-copy)
-added(a, b) :=[(if i < count(a) then a[i] else 0.0) + (if i < count(b) then b[i] else 0.0) for i in 0..max(count(a), count(b))]
+added(a, b) := [(if i < count(a) then a[i] else 0.0) + (if i < count(b) then b[i] else 0.0) for i in 0..max(count(a), count(b))]
 out(signal) := sound(clamped_samples(signal))
 // the sound's handle: its number in the run, for stop_sound(handle)
 // where the notes sound between the left (-1) and the right speaker (1), 0 in the middle (card stereo-pan)

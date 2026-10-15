@@ -72,10 +72,34 @@ pub struct Mixer {
 	buses: HashMap<usize, Bus>,
 }
 
-/// A bus's effect chain and the mix of its sounds in the buffer being filled
+/// A bus's effect chain, the mix of its sounds in the buffer being filled, whether a sound fed it there, and its
+/// effects' changes still to come at their frames (in order)
 struct Bus {
 	chain: Chain,
 	mix: Vec<f32>,
+	fed: bool,
+	changes: Vec<(u64, Vec<Effect>)>,
+}
+
+impl Bus {
+	/// The mix of the frames from `from` on through the chain, its effects changing at their frames on the way
+	fn process(&mut self, from: u64, channels: usize) {
+		let frames = (self.mix.len() / channels) as u64;
+		let due = self.changes.iter().take_while(|(frame, _)| *frame < from + frames).count();
+		let ringing = self.fed || !self.chain.rung_out();
+		let mut done = 0;
+		for (frame, effects) in self.changes.drain(..due) {
+			let until = (frame.saturating_sub(from) as usize * channels).max(done);
+			if ringing {
+				self.chain.process(&mut self.mix[done..until]);
+			}
+			self.chain.retune(&effects);
+			done = until;
+		}
+		if ringing {
+			self.chain.process(&mut self.mix[done..]);
+		}
+	}
 }
 
 impl Mixer {
@@ -90,9 +114,25 @@ impl Mixer {
 	}
 
 	/// The bus's effects from now on (card shared-buses); its sounds go through them together
+	/// The bus's effects from now on (card shared-buses); its sounds go through them together. A bus set again keeps
+	/// what still rings in its effects
 	pub fn set_bus(&mut self, bus: usize, effects: Vec<Effect>) {
-		let chain = Chain::new(&effects, self.rate, self.channels);
-		self.buses.insert(bus, Bus { chain, mix: Vec::new() });
+		let frame = self.frame;
+		self.change_bus(bus, frame, effects)
+	}
+
+	/// The bus's effects from the frame on (card shared-buses stage 3), a new bus's at once
+	pub fn change_bus(&mut self, bus: usize, frame: u64, effects: Vec<Effect>) {
+		match self.buses.get_mut(&bus) {
+			Some(known) => {
+				let at = known.changes.partition_point(|(earlier, _)| *earlier <= frame);
+				known.changes.insert(at, (frame, effects));
+			}
+			None => {
+				let chain = Chain::new(&effects, self.rate, self.channels);
+				self.buses.insert(bus, Bus { chain, mix: Vec::new(), fed: false, changes: Vec::new() });
+			}
+		}
 	}
 
 	pub fn has_bus(&self, bus: usize) -> bool {
@@ -172,26 +212,24 @@ impl Mixer {
 		let channels = self.channels as usize;
 		buffer.fill(0.0);
 		let frames = (buffer.len() / channels) as u64;
-		let mut sent = vec![];
 		for bus in self.buses.values_mut() {
 			bus.mix.clear();
 			bus.mix.resize(buffer.len(), 0.0);
+			bus.fed = false;
 		}
 		for sound in &mut self.sounds {
 			let into = match self.buses.get_mut(&sound.bus) {
 				Some(bus) => {
-					sent.push(sound.bus);
+					bus.fed = true;
 					&mut bus.mix
 				}
 				None => &mut *buffer,
 			};
 			mixed_into(sound, into, self.frame, channels);
 		}
-		for (id, bus) in &mut self.buses {
-			if sent.contains(id) || !bus.chain.rung_out() {
-				bus.chain.process(&mut bus.mix);
-				buffer.iter_mut().zip(&bus.mix).for_each(|(out, sample)| *out += sample);
-			}
+		for bus in self.buses.values_mut() {
+			bus.process(self.frame, channels);
+			buffer.iter_mut().zip(&bus.mix).for_each(|(out, sample)| *out += sample);
 		}
 		self.frame += frames;
 		let frame = self.frame;
@@ -315,6 +353,15 @@ mod output {
 		with_mixer(|mixer| mixer.set_bus(bus, effects.to_vec()));
 	}
 
+	/// The bus's effects changed from the instant on, which a voice ahead of the device names
+	pub fn change_bus(bus: usize, start: Instant, effects: &[Effect]) {
+		let Some(engine) = ENGINE.get().and_then(Option::as_ref) else { return };
+		with_mixer(|mixer| {
+			let frame = mixer.frame_at(start, engine.anchor);
+			mixer.change_bus(bus, frame, effects.to_vec())
+		});
+	}
+
 	/// The running engine's mixer changed or read; None before the first sound or without an output stream
 	fn with_mixer<T>(action: impl FnOnce(&mut Mixer) -> T) -> Option<T> {
 		let engine = ENGINE.get()?.as_ref()?;
@@ -336,7 +383,7 @@ mod output {
 }
 
 #[cfg(target_os = "macos")]
-pub use output::{available, busy, fade, play, set_bus, stop};
+pub use output::{available, busy, change_bus, fade, play, set_bus, stop};
 
 /// Without our own output here: the players play every sound
 #[cfg(not(target_os = "macos"))]
@@ -351,6 +398,9 @@ pub fn play(_: usize, _: (usize, &[Effect]), _: Instant, _: &[i16], _: u32, _: u
 
 #[cfg(not(target_os = "macos"))]
 pub fn set_bus(_: usize, _: &[Effect]) {}
+
+#[cfg(not(target_os = "macos"))]
+pub fn change_bus(_: usize, _: Instant, _: &[Effect]) {}
 
 #[cfg(not(target_os = "macos"))]
 pub fn stop(_: usize) {}

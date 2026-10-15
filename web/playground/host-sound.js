@@ -324,9 +324,14 @@ addHostPart({
 				if (!this.holder.warnings.includes(DRY_BUSES)) this.holder.warnings.push(DRY_BUSES);
 				return Number(number) || (this.holder.run.buses = (this.holder.run.buses ?? 0) + 1);
 			},
-			send: () => null,
+			// the bus before, as natively, so out(signal, bus) restores it
+			send(number) {
+				const before = this.holder.run.sentBus ?? 0;
+				this.holder.run.sentBus = Number(number);
+				return before;
+			},
 			// the page's audio clock as the worker keeps it (worker.js); a worker cannot wait for the page's audio
-			queued:() => self.soundsQueued?.() ?? 0,
+			queued: () => self.soundsQueued?.() ?? 0,
 			at: seconds => { self.voiceAt?.(Number(seconds)); return null; },
 			rest: seconds => { self.voiceSounded?.(Number(seconds)); return null; }, // midi_note's length (card midi-clock)
 			at_end: () => { self.voiceAtEnd?.(); return null; },

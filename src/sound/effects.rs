@@ -10,7 +10,7 @@ const SILENT: f32 = 1e-3;
 const TAIL_SECONDS: f32 = 0.05;
 
 /// One effect of a chain and its settings
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Effect {
 	Gain(f32),
 	/// lowpass, highpass or bandpass at the frequency (Hz) with the resonance q
@@ -79,6 +79,14 @@ impl Comb {
 		Comb { echoes: vec![0.0; gap], at: 0, feedback }
 	}
 
+	/// new settings, its echoes kept (a longer gap reads silence where it grew)
+	fn retune(&mut self, seconds: f32, feedback: f32, rate: u32) {
+		let gap = ((seconds * rate as f32).round() as usize).max(1);
+		self.echoes.resize(gap, 0.0);
+		self.at %= gap;
+		self.feedback = feedback;
+	}
+
 	fn next(&mut self, input: f32) -> f32 {
 		let output = input + self.feedback * self.echoes[self.at];
 		self.echoes[self.at] = output;
@@ -112,6 +120,12 @@ impl Biquad {
 			inputs: [0.0; 2],
 			outputs: [0.0; 2],
 		}
+	}
+
+	/// new coefficients, its past samples kept
+	fn retune(&mut self, kind: FilterKind, frequency: f32, q: f32, rate: u32) {
+		let fresh = Biquad::new(kind, frequency, q, rate);
+		(self.b, self.a) = (fresh.b, fresh.a);
 	}
 
 	fn next(&mut self, x: f32) -> f32 {
@@ -156,6 +170,24 @@ impl Stage {
 		}
 	}
 
+	/// The effect's new settings when it is of the stage's kind, what rings in it kept; false for another kind
+	fn retune(&mut self, effect: &Effect, rate: u32) -> bool {
+		match (self, *effect) {
+			(Stage::Gain(gain), Effect::Gain(new)) => *gain = new,
+			(Stage::Filter(filters), Effect::Filter { kind, frequency, q }) => {
+				filters.iter_mut().for_each(|filter| filter.retune(kind, frequency, q, rate))
+			}
+			(Stage::Delay { combs, mix }, Effect::Delay { seconds, feedback, mix: new }) => {
+				combs.iter_mut().for_each(|comb| comb.retune(seconds, feedback, rate));
+				*mix = new;
+			}
+			(Stage::Reverb { mix, .. }, Effect::Reverb { mix: new }) => *mix = new,
+			(Stage::Distort(drive), Effect::Distort { drive: new }) => *drive = new,
+			_ => return false,
+		}
+		true
+	}
+
 	/// The frames it reads back: its longest comb's gap
 	fn memory(&self) -> usize {
 		match self {
@@ -185,6 +217,7 @@ impl Stage {
 /// The effects of a bus in order, running on interleaved frames of its channels
 pub struct Chain {
 	stages: Vec<Stage>,
+	rate: u32,
 	channels: usize,
 	quiet_frames: usize,
 	tail_frames: usize,
@@ -193,11 +226,28 @@ pub struct Chain {
 impl Chain {
 	pub fn new(effects: &[Effect], rate: u32, channels: u16) -> Chain {
 		let channels = channels.max(1) as usize;
-		let stages: Vec<Stage> = effects.iter().map(|effect| Stage::new(effect, rate, channels)).collect();
+		let mut chain = Chain { stages: Vec::new(), rate, channels, quiet_frames: 0, tail_frames: 0 };
+		chain.retune(effects);
+		chain.quiet_frames = chain.tail_frames;
+		chain
+	}
+
+	/// The effects' new settings from the next frame on (card shared-buses stage 3): an effect of the kind its stage
+	/// has keeps what rings in it, another kind starts afresh
+	pub fn retune(&mut self, effects: &[Effect]) {
+		let mut old = std::mem::take(&mut self.stages).into_iter();
+		let (rate, channels) = (self.rate, self.channels);
+		self.stages = effects
+			.iter()
+			.map(|effect| {
+				old.next()
+					.and_then(|mut stage| stage.retune(effect, rate).then_some(stage))
+					.unwrap_or_else(|| Stage::new(effect, rate, channels))
+			})
+			.collect();
 		// quiet between two echoes is no end yet: a whole gap of the longest comb has to stay quiet
-		let longest_gap = stages.iter().map(Stage::memory).max().unwrap_or(0);
-		let tail_frames = longest_gap + (TAIL_SECONDS * rate as f32) as usize;
-		Chain { stages, channels, quiet_frames: tail_frames, tail_frames }
+		let longest_gap = self.stages.iter().map(Stage::memory).max().unwrap_or(0);
+		self.tail_frames = longest_gap + (TAIL_SECONDS * rate as f32) as usize;
 	}
 
 	/// The frames (interleaved) through every effect, in place
@@ -217,11 +267,28 @@ impl Chain {
 	}
 }
 
-/// The samples (interleaved) through the effects, followed by their tail until it has rung out
-pub fn processed(samples: &[f32], effects: &[Effect], rate: u32, channels: u16) -> Vec<f32> {
+/// The samples (interleaved) through the effects, which change at the frames of `changes` (in order), followed by
+/// their tail until it has rung out
+pub fn processed(
+	samples: &[f32],
+	effects: &[Effect],
+	changes: &[(usize, Vec<Effect>)],
+	rate: u32,
+	channels: u16,
+) -> Vec<f32> {
 	let mut chain = Chain::new(effects, rate, channels);
 	let mut output = samples.to_vec();
-	chain.process(&mut output);
+	let mut done = 0;
+	for (frame, effects) in changes {
+		let until = (frame * channels.max(1) as usize).max(done);
+		if output.len() < until {
+			output.resize(until, 0.0);
+		}
+		chain.process(&mut output[done..until]);
+		chain.retune(effects);
+		done = until;
+	}
+	chain.process(&mut output[done..]);
 	let block = channels.max(1) as usize * rate as usize / 100;
 	while !chain.rung_out() {
 		let mut tail = vec![0.0; block];
