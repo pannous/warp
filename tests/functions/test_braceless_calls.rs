@@ -31,8 +31,25 @@ fn the_arguments_after_a_comma_join_a_braceless_call_wherever_it_stands() {
 #[cfg(feature = "native")]
 #[test]
 fn print_prints_the_braceless_call_of_the_joined_arguments() {
-	let output = crate::common::warp_command().args(["--no-ask", "print max 3, 4"]).output().unwrap();
-	assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "4");
+	for (code, shown) in [("print max 3, 4", "4"), ("g(a, b) := a*b; print g 3, 4", "12"), ("print 1, max 2, 3", "1 3")]
+	{
+		let output = crate::common::warp_command().args(["--no-ask", code]).output().unwrap();
+		assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), shown, "{code}");
+	}
+}
+
+#[test]
+fn a_function_of_several_parameters_takes_the_arguments_after_a_comma_as_min_and_max_do() {
+	assert_eq!(printed("g(a, b) := a*b; g 3, 4"), "12");
+	assert_eq!(printed("g(a, b) := a*b; x = g 3, 4; x"), "12");
+	assert_eq!(printed("g(a, b) := a*b; f(x) := x + 1; f(g 3, 4)"), "13");
+}
+
+#[test]
+fn a_word_of_one_value_keeps_the_comma_a_list() {
+	// sum takes one list: `sum 1, 2` is the list of sum 1 and 2, and sum 1 is the error (its column: card
+	// template-positions)
+	assert!(printed("sum 1, 2").contains("not a list"));
 }
 
 #[test]
