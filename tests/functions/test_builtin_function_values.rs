@@ -9,7 +9,7 @@ fn printed(code: &str) -> String {
 #[test]
 fn a_builtin_reference_has_type_builtin() {
 	assert_eq!(printed("type(function floor)"), "\"builtin: (x:number) -> int\"");
-	assert_eq!(printed("f = function upper; type(f)"), "builtin");
+	assert_eq!(printed("f = function upper; type(f)"), "\"builtin: (t:text) -> text\"");
 }
 
 #[test]

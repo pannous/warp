@@ -60,7 +60,7 @@ const BARE_FORMS: [StdAlias; 1] = [alias("", "json", "json", "parse_json", &[0])
 const MEMBER_FORMS: [StdAlias; 1] = [alias("", "json", "json", "to_json", &[0])];
 const USE_WORD: &str = "use";
 /// Old names of standard words, still working, and how warp writes them now: called by hand, a got-it note names it
-const OLD_NAMES: [(&str, &str); 1] = [("render_sound", "save sound as file")];
+const OLD_NAMES: [(&str, &str); 1] = [("render_sound", "save sound as: file")];
 
 pub fn lower(program: Node) -> Node {
 	let names = crate::soft_keywords::names_given(&program);

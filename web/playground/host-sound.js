@@ -395,9 +395,10 @@ addHostPart({
 			// sample("kick.wav") (card sound-samples, src/sound/audio_files.rs): [rate, channels, offset frames …]; the playground
 			// decodes WAV only, a Worker has no decoder for the other formats
 			load: path => wavFrames(readBytes(contentText(path)), contentText(path)),
-			// spectrum(samples, seconds, bands): the bands of the window, the samples around sample_offset (src/sound/spectrum.rs in warp.wasm)
+			// spectrum(samples, seconds, bands): the bands of the window, the samples around sample_offset (src/sound/spectrum.rs in warp.wasm);
+			// a window past the end is the empty list, ø: null here
 			spectrum(window, rate, bands, low, high) {
-				return this.holder.spectrum(Array.from(window, sample => Number(sample) - SAMPLE_OFFSET), Number(rate), bands, low, high);
+				return this.holder.spectrum(Array.from(window ?? [], sample => Number(sample) - SAMPLE_OFFSET), Number(rate), bands, low, high);
 			},
 			// spectrum("song.mp3", seconds, bands) of the file's window then, and how long a file sounds
 			file_spectrum(path, seconds, windowSeconds, bands, low, high) {

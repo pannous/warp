@@ -185,14 +185,17 @@ impl<'a> Loader<'a> {
 
 	/// The standard definitions with the words of a module only other standard modules use renamed apart
 	/// (`take` → `lib·take` when lib/text.warp's `use list` brought it): the program sees a module's words only with
-	/// its own `use`, a bare `take` is the error naming the module
+	/// its own `use`, a bare `take` is the error naming the module. A word a used module defines too stays one word:
+	/// shell's `unique(file:Path)` and list's `unique(xs)` are one generic function (card cross-module-overload)
 	pub(super) fn hidden_apart(&self) -> Vec<Node> {
-		let hidden: Vec<&String> = self
-			.std_modules_of_std_modules
-			.iter()
-			.filter(|module| !self.program_std_modules.contains(*module))
-			.flat_map(|module| std_module_definitions(module).unwrap_or_default())
-			.collect();
+		let definitions_of = |modules: &HashSet<String>| -> HashSet<&String> {
+			modules.iter().flat_map(|module| std_module_definitions(module).unwrap_or_default()).collect()
+		};
+		let visible = definitions_of(&self.program_std_modules);
+		let only_used_by_modules: HashSet<String> =
+			self.std_modules_of_std_modules.difference(&self.program_std_modules).cloned().collect();
+		let hidden: Vec<&String> =
+			definitions_of(&only_used_by_modules).into_iter().filter(|word| !visible.contains(word)).collect();
 		crate::compiler::compile_context::change(|context| {
 			let names = &mut context.module_definitions;
 			hidden.iter().for_each(|word| {

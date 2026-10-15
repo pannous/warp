@@ -10,6 +10,7 @@ mod test_closed_pipe;
 mod test_const_list_methods;
 mod test_constant_shadowing;
 mod test_count_shadowed; // card count-shadowed
+mod test_cross_module_overload; // card cross-module-overload
 mod test_discarded_error_warning; // card error-if
 mod test_discarded_pure_warning;
 mod test_dot_without_parens; // cards type-module, abc-chars
@@ -47,6 +48,7 @@ mod test_plain_hint_got_it; // card hints-dismissed
 mod test_quiet_hints;
 mod test_relaxed_pragma;
 mod test_script_pragma;
+mod test_shell_words; // card unix-words
 mod test_slash_comment_after_value;
 mod test_slash_comment_needs_space;
 mod test_slash_comment_prose_operators; // card comment-after
