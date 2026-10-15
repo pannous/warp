@@ -8,7 +8,7 @@ use super::{Dimension, Unit};
 use crate::extensions::reals::Rational;
 use num_bigint::BigInt;
 use num_integer::Integer;
-use num_traits::{One, ToPrimitive};
+use num_traits::{One, ToPrimitive, Zero};
 use std::sync::OnceLock;
 
 const SOURCE: &str = include_str!("../../../lib/units.warp");
@@ -40,6 +40,13 @@ const DIMENSION_WORDS: [(&str, Dimension); 6] = [
 	("temperature", Dimension::Temperature),
 	("pixel", Dimension::Pixel),
 ];
+
+/// The dimensions whose units take SI prefixes (decision unit-definitions: not pixels, not eras, not furlongs)
+const SI_DIMENSIONS: [Dimension; 4] = [Dimension::Length, Dimension::Mass, Dimension::Time, Dimension::Temperature];
+/// The SI prefixes a unit of an SI dimension takes by itself (`km`, `µs`, `GK`), each a power of ten; giga down to nano
+/// keep every unit a whole number of its dimension's finest step within 64 bits
+const SI_PREFIXES: [(&str, i32); 10] =
+	[("G", 9), ("M", 6), ("k", 3), ("h", 2), ("da", 1), ("d", -1), ("c", -2), ("m", -3), ("µ", -6), ("n", -9)];
 
 pub(super) struct Definitions {
 	/// The dimensions by name, in written order, and the names of products of them (`speed := length/duration`)
@@ -169,7 +176,42 @@ fn read(source: &'static str) -> Result<Definitions, String> {
 			return Err(format!("unreadable line {line}"));
 		}
 	}
+	let prefixed = with_si_prefixes(&units, &aliases);
+	units.extend(prefixed);
 	Ok(Definitions { dimensions, derived_dimensions, units: in_whole_steps(units)?, base_units, aliases })
+}
+
+/// `km`, `µg`, `ns`: each SI prefix on each unit of an SI dimension that is a power of ten of its anchor and carries no
+/// prefix itself (`g` takes them, `kg` and `cm` do not); a unit written in lib/units.warp keeps its own definition
+fn with_si_prefixes(units: &[Read], aliases: &[(&'static str, &'static str)]) -> Vec<Read> {
+	let known = |name: &str| units.iter().any(|unit| unit.name == name) || aliases.iter().any(|(alias, _)| *alias == name);
+	let prefixed = |name: &str| SI_PREFIXES.iter().any(|(prefix, _)| name.strip_prefix(prefix).is_some_and(known));
+	let takes_prefixes = |unit: &&Read| {
+		SI_DIMENSIONS.contains(&unit.dimension) && unit.zero.is_zero() && power_of_ten(&unit.scale) && !prefixed(unit.name)
+	};
+	units
+		.iter()
+		.filter(takes_prefixes)
+		.flat_map(|unit| SI_PREFIXES.iter().map(move |(prefix, power)| (unit, prefix, power)))
+		.filter_map(|(unit, prefix, power)| {
+			let name: &'static str = Box::leak(format!("{prefix}{}", unit.name).into_boxed_str());
+			let ten = Rational::integer(BigInt::from(10).pow(power.unsigned_abs()));
+			let factor = if *power > 0 { ten } else { ten.inverse()? };
+			(!known(name)).then(|| Read { name, dimension: unit.dimension, scale: unit.scale.mul(&factor), zero: Rational::zero() })
+		})
+		.collect()
+}
+
+/// 1000, 1/100, 1: a whole power of ten, up or down
+fn power_of_ten(amount: &Rational) -> bool {
+	let is_power = |number: &BigInt| {
+		let mut number = number.clone();
+		while (&number % 10u32).is_zero() && !number.is_zero() {
+			number /= 10u32;
+		}
+		number.is_one()
+	};
+	is_power(&amount.numerator) && is_power(&amount.denominator)
 }
 
 /// `1000 m`, `m/100`, `(it + 459.67) * 5/9 K`: the dimension, scale and zero of a unit that is an amount of one unit,
