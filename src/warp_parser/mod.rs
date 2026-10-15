@@ -407,6 +407,10 @@ pub struct WarpParser {
 	variables: std::collections::HashSet<String>,
 	/// Where the last path literal ended: a ` /name` after it is the next path (`cp /a /b`)
 	path_end: Option<usize>,
+	/// The functions the source defines anywhere, found by a pre-scan: ` /name` after one is a path (card name-after)
+	program_functions: std::collections::HashSet<String>,
+	/// The parameter names of those definitions: ` /name` after one divides, as after a variable
+	parameter_names: std::collections::HashSet<String>,
 	/// The binding power of a glued pair's value (`for:email`): that value is one atom, no call of what follows
 	glued_pair_bp: Option<u8>,
 	/// Where the innermost bracketed group opened (line, column): an unclosed one names it
@@ -495,11 +499,12 @@ impl WarpParser {
 		let current_line = lines.first().cloned().unwrap_or_default();
 		let chars: Vec<char> = input.chars().collect();
 		let user_operators = if options == ParserOptions::default() { scan_user_operators(&input) } else { Vec::new() };
-		let (declared_types, multi_word_types) = if options == ParserOptions::default() {
-			(scan_declared_types(&input), scan_multi_word_types(&input))
-		} else {
-			Default::default()
-		};
+		let (declared_types, multi_word_types, (program_functions, parameter_names)) =
+			if options == ParserOptions::default() {
+				(scan_declared_types(&input), scan_multi_word_types(&input), scan_functions_and_parameters(&input))
+			} else {
+				Default::default()
+			};
 		WarpParser {
 			user_operators,
 			declared_types,
@@ -522,6 +527,8 @@ impl WarpParser {
 			text_variables: Default::default(),
 			variables: Default::default(),
 			path_end: None,
+			program_functions,
+			parameter_names,
 			glued_pair_bp: None,
 			group_start: (0, 0),
 			stops_at_else: false,

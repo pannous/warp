@@ -30,6 +30,7 @@ mod test_operator_word_keys; // card abs-fails
 mod test_parse_long_sources;
 mod test_parser;
 mod test_parser_sugar;
+mod test_path_after_function; // card name-after
 mod test_path_literal; // card play-mozart
 mod test_references;
 mod test_scheme_relative_url;
