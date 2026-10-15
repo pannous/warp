@@ -31,6 +31,7 @@ const BRIDGE_WORD: &str = " as ";
 /// `display.dpi := 96 dpi`: a setting, a property of a platform object
 const SETTING_DOT: char = '.';
 const TIMES: char = '*';
+const STATEMENT_END: char = ';';
 const DIVIDE: &str = "/";
 const COMMENT: &str = "//";
 /// The names of the run-time tables lib/units.warp's Quantity reads, in place of the block (run_time_tables)
@@ -113,7 +114,9 @@ fn with_program_units(lines: String) -> &'static Definitions {
 /// program, where the units lowering reports it
 pub fn program_unit_lines(source: &str) -> String {
 	let mut reader = lib_reader();
-	let lines = source.lines().map(str::trim_end).filter(|line| line.starts_with(UNIT_WORD) && line.contains(DEFINE));
+	// `unit furlong := 201.168m; print(…)`: a unit line ends at its line's `;`
+	let lines = source.lines().map(|line| line.split(STATEMENT_END).next().unwrap_or_default().trim_end());
+	let lines = lines.filter(|line| line.starts_with(UNIT_WORD) && line.contains(DEFINE));
 	lines.filter(|line| reader.knows_words_of(line) && reader.line(line).is_ok()).collect::<Vec<_>>().join("\n")
 }
 
@@ -479,9 +482,9 @@ fn tokens(term: &str) -> Vec<&str> {
 			tokens.extend([&rest[..at], DIVIDE].into_iter().filter(|token| !token.is_empty()));
 			rest = &rest[at + 1..];
 		}
-		if !rest.is_empty() {
-			tokens.push(rest);
-		}
+		// `201.168m`: a number glued to its unit
+		let number = rest.find(|c: char| !c.is_ascii_digit() && c != '.').filter(|at| *at > 0).unwrap_or(rest.len());
+		tokens.extend([&rest[..number], &rest[number..]].into_iter().filter(|token| !token.is_empty()));
 	}
 	tokens
 }

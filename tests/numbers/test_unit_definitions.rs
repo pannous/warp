@@ -48,6 +48,7 @@ fn a_program_adds_units_by_unit_lines() {
 	is!("unit fortnight := 14 * 24 h\nstr(336 h as fortnight)", "1fortnight");
 	is!("unit furlong := 201.168 m\nquantity(1, \"furlong\").in(\"m\")", 201.168);
 	is!("distance := 42 km\nstr(distance)", "42km");
+	is!("unit furlong := 201.168m; str(1km as furlong)", "(62500/12573)furlong");
 }
 
 // decision unit-target: `as` names the unit the right side counts in, `it` the amount in the new unit
