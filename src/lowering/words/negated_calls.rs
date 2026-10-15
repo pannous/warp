@@ -82,9 +82,10 @@ fn negated_word(node: &Node) -> Option<&Node> {
 	}
 }
 
-/// A built-in word that applies to the value after it: a real function, print, a rounding word, a type, a library word of one value
+/// A built-in word that applies to the value after it: print, a rounding word, a type, a library word of one value
+/// (`sin`, `floor`, `reverse`)
 fn is_builtin_callable(name: &str) -> bool {
-	crate::numbers::real::FUNCTIONS.contains(&name)
+	crate::lowering::library_signatures::typed_first_arity(name) == Some(1)
 		|| PRINT_WORDS.contains(&name)
 		|| crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name)
 		|| is_type_call_word(name)

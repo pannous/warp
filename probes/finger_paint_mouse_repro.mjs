@@ -18,6 +18,8 @@ const overridden = name => overrides && name && existsSync(`${overrides}/${name}
 // UNACTIVATED=1: the page counts as not yet clicked until its first click or key, as for a visitor; Playwright's pages
 // count as activated from the start, so the run on load saw window_open 1 there and never the user's bug
 const unactivated = Boolean(process.env.UNACTIVATED);
+// CODE=<file>: that program runs instead of the deployed sample, before any click (a branch's samples/finger_paint.warp)
+const code = process.env.CODE && readFileSync(process.env.CODE, "utf8");
 const fresh = Boolean(process.env.FRESH);
 const real = Boolean(process.env.REAL);
 const notIsolated = Boolean(process.env.NOT_ISOLATED);
@@ -46,7 +48,8 @@ async function check(browserType) {
 	});
 	await page.goto(`${PAGE}#${SAMPLE}`);
 	await page.waitForFunction(isolated => (isolated || self.crossOriginIsolated) && window.playground, notIsolated, { timeout: 60000 });
-	if (!fresh) {
+	if (code) await page.evaluate(source => void playground.runCode(source), code);
+	else if (!fresh) {
 		await page.click("#output");
 		await page.evaluate(name => void playground.chooseExample(name), SAMPLE);
 	}
@@ -81,7 +84,7 @@ async function check(browserType) {
 	shown.activeBefore = activeBefore;
 	shown.activeAtFirstPointerdown = await page.evaluate(() => self.activeAtFirstPointerdown);
 	shown.isolated = await page.evaluate(() => self.crossOriginIsolated);
-	console.log(browserType.name(), real ? "as served" : "headers added", fresh ? "fresh" : "clicked first", overrides ? `files of ${overrides}` : "as deployed", unactivated ? "unactivated" : "", JSON.stringify(shown), messages.slice(0, 8));
+	console.log(browserType.name(), real ? "as served" : "headers added", fresh ? "fresh" : "clicked first", overrides ? `files of ${overrides}` : "as deployed", process.env.CODE ?? "", unactivated ? "unactivated" : "", JSON.stringify(shown), messages.slice(0, 8));
 	await browser.close();
 }
 
