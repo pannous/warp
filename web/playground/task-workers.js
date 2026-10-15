@@ -67,7 +67,7 @@ const decodeSoundInto = (shared, url, bytes) => answerInto(shared, async () => {
 });
 // a Worker's call of a global only the page has (host-foreign.js callOnPage, card browser-interaction): its value when
 // plain, else the object kept here as {$page: id, type, text}, which the Worker's later calls name; the same object keeps
-// its id, so reading `$who.value` again and again keeps one entry. Each Worker holding it counts how often it got the
+// its id, so reading `$who` again and again keeps one entry. Each Worker holding it counts how often it got the
 // id; the object goes when every holder released it (its PageObjects collected, {releasePageObject: {id, received}})
 // or was terminated (card page-pageobjects)
 const pageObjects = new Map(); // id → {object, holders: Map(Worker → times given)}
@@ -106,7 +106,7 @@ function forWorker(value, holder) {
 	if (Array.isArray(value)) return value.map(item => forWorker(item, holder));
 	return { $page: pageObjectId(value, holder), type: value.constructor?.name ?? typeof value, text: String(value).slice(0, 200) };
 }
-// `$who` is document.getElementById("who") (src/lowering/foreign/dollar_names.rs): the playground shows the program's
+// `who` is document.getElementById("who") (src/lowering/foreign/page_names.rs): the playground shows the program's
 // markup in a shadow root, which it names as self.programElements, so its elements are found there
 const ownerOnPage = (receiver, member) => receiver === "document" && member === "getElementById" ? self.programElements?.() ?? document
 	: typeof receiver === "string" ? globalThis[receiver] : onPage(receiver);

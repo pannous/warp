@@ -191,23 +191,23 @@ fn map_keys(value: &Node) -> Option<Vec<String>> {
 	(!keys.is_empty()).then_some(keys)
 }
 
-/// `name of people` (`people.name`), `name of people where age > 20`: the field of each element, `[of·element.name for
+/// `name of people` (`people.name`), `names of people`, `name of people where age > 20`: the field of each element, `[of·element.name for
 /// of·element in people]`, when people is a list of instances of a class with that field
 fn field_of_elements(node: &Node, lists: &Lists) -> Option<Node> {
 	let Node::Key(subject, Op::Dot, field) = node.drop_meta() else {
 		return None;
 	};
 	let (name, list) = (field.symbol_name()?, first_word(subject)?);
-	if !lists.fields.get(list).is_some_and(|fields| fields.iter().any(|field| field == name)) {
-		return None;
-	}
+	let fields: Vec<&str> = lists.fields.get(list)?.iter().map(String::as_str).collect();
+	// `names of people`: the plural names the field of each element, as `name of people` does
+	let field = symbol(crate::extensions::strings::named_or_plural(&fields, name)?);
 	let element = symbol(OF_ELEMENT);
 	let clause = Node::List(
 		vec![symbol(FOR_WORD), element.clone(), symbol(IN_WORD), subject.as_ref().clone()],
 		Bracket::None,
 		Separator::Space,
 	);
-	Some(Node::List(vec![key(element, Op::Dot, field.as_ref().clone()), clause], Bracket::Square, Separator::Space))
+	Some(Node::List(vec![key(element, Op::Dot, field), clause], Bracket::Square, Separator::Space))
 }
 
 /// The word a phrase starts with: `people` of `(people where age > 20)`

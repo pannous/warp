@@ -9,8 +9,8 @@ exec(command: any) := std_io("os", "exec", [command])
 // The scripting words (decision use-script, all of them in `use script`):
 // the command line arguments, as args gives them
 arguments = args
-// the folder the program runs in
-cwd = std_io("os", "cwd", [])
+// the folder the program runs in, now: after `cd` the new one
+cwd := std_io("os", "cwd", [])
 // `command("ls | wc -l")`: a shell command line run by sh, what it printed; the explicit opt-in to text as shell
 command(line: any) := std_io("os", "command", [line])
 // a line typed on standard input (without its line end), ø at the input's end; input("name? ") shows the prompt first
