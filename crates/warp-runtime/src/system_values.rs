@@ -9,12 +9,13 @@
 //! `window_open` whether that window shows; read before any paint, it opens the window (blank) where one can show.
 //! `window_width`, `window_height` (window.width, card make-width): the paint window's inner size in points as it reports
 //! it, else as last written, else the view's; writing one resizes the window through the warp binary's resizer.
-//! `display_width`, `display_height`: the main screen's size in points, read only.
+//! `display_width`, `display_height`: the main screen's size in points, read only; `display_dpi` its device pixels
+//! per inch (CoreGraphics' physical size, xrandr's millimetres), read only.
 //! The clipboard is watched by its change count, which reads no content: macOS asks the user before a program reads
 //! what another one copied, so the text is read only when the program asks for it (`clipboard`, clipboard_text).
 use crate::host_words::{
-	BATTERY, CHARGING, CLICK_PRESSED, CLICK_X, CLICK_Y, CLIPBOARD_COUNT, DARK_MODE, DISPLAY_HEIGHT, DISPLAY_WIDTH,
-	ESCAPE_KEPT, GPU_DRAWING, KEY_CODE_HELD, KEY_DOWN, KEY_PRESSED, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE,
+	BATTERY, CHARGING, CLICK_PRESSED, CLICK_X, CLICK_Y, CLIPBOARD_COUNT, DARK_MODE, DISPLAY_DPI, DISPLAY_HEIGHT,
+	DISPLAY_WIDTH, ESCAPE_KEPT, GPU_DRAWING, KEY_CODE_HELD, KEY_DOWN, KEY_PRESSED, MOUSE_DOWN, MOUSE_X, MOUSE_Y, ONLINE,
 	SYSTEM_VALUES, TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH, WINDOW_HEIGHT, WINDOW_OPEN, WINDOW_WIDTH,
 };
 use std::cell::RefCell;
@@ -89,13 +90,31 @@ fn window_size() -> (i64, i64) {
 	WINDOW_SIZE.lock().unwrap().unwrap_or(NATIVE_VIEW)
 }
 
-/// `set_system_value(name, value)`: window.width = 800 resizes the window; the others are read only
+/// lib/units.warp's `display.dpi := 96 dpi`: the dots per inch where the screen tells none (decision dimension-bridges)
+const DEFAULT_DPI: i64 = 96;
+/// `display.dpi = 300 dpi`: the dpi the program set, in place of the screen's
+static DPI_SET: Mutex<Option<i64>> = Mutex::new(None);
+
+fn set_display_dpi(dpi: i64) -> Result<(), String> {
+	if dpi <= 0 {
+		return Err(format!("display.dpi = {dpi} dpi: a display has a positive number of dots per inch"));
+	}
+	*DPI_SET.lock().unwrap() = Some(dpi);
+	READINGS.with(|readings| readings.borrow_mut().remove(DISPLAY_DPI));
+	Ok(())
+}
+
+/// `set_system_value(name, value)`: window.width = 800 resizes the window, display.dpi = 300 dpi sets the dots per inch
+/// px count in; the others are read only
 pub fn write(name: &str, value: i64) -> Result<(), String> {
 	let (width, height) = match name {
 		WINDOW_WIDTH => (value, window_size().1),
 		WINDOW_HEIGHT => (window_size().0, value),
+		DISPLAY_DPI => return set_display_dpi(value),
 		DISPLAY_WIDTH | DISPLAY_HEIGHT => return Err(DISPLAY_READ_ONLY.to_string()),
-		other => return Err(format!("{other} cannot be set; settable: {WINDOW_WIDTH}, {WINDOW_HEIGHT}")),
+		other => {
+			return Err(format!("{other} cannot be set; settable: {WINDOW_WIDTH}, {WINDOW_HEIGHT}, {DISPLAY_DPI}"))
+		}
 	};
 	if width <= 0 || height <= 0 {
 		return Err(format!("a window of {width}×{height} points cannot show: its sides must be positive"));
@@ -252,6 +271,7 @@ fn read_now(name: &str) -> Result<i64, String> {
 		VIEW_HEIGHT => Ok(NATIVE_VIEW.1),
 		DISPLAY_WIDTH => display_size().map(|(width, _)| width),
 		DISPLAY_HEIGHT => display_size().map(|(_, height)| height),
+		DISPLAY_DPI => Ok(DPI_SET.lock().unwrap().unwrap_or_else(|| display_dpi().unwrap_or(DEFAULT_DPI))),
 		other => Err(format!("{other} is no system value; known: {}", SYSTEM_VALUES.map(|(name, _)| name).join(", "))),
 	}
 }
@@ -285,6 +305,56 @@ fn display_size() -> Result<(i64, i64), String> {
 	match (sides.next(), sides.next()) {
 		(Some(Ok(width)), Some(Ok(height))) => Ok((width, height)),
 		_ => Err(format!("display.width: xrandr's screen is unreadable: {current}")),
+	}
+}
+
+/// The main screen's device pixels per inch: its mode's pixel width over its physical width (CoreGraphics, in mm)
+#[cfg(target_os = "macos")]
+fn display_dpi() -> Result<i64, String> {
+	#[repr(C)]
+	struct Size {
+		width: f64,
+		height: f64,
+	}
+	#[link(name = "CoreGraphics", kind = "framework")]
+	unsafe extern "C" {
+		fn CGMainDisplayID() -> u32;
+		fn CGDisplayScreenSize(display: u32) -> Size;
+		fn CGDisplayCopyDisplayMode(display: u32) -> *mut std::ffi::c_void;
+		fn CGDisplayModeGetPixelWidth(mode: *mut std::ffi::c_void) -> usize;
+		fn CGDisplayModeRelease(mode: *mut std::ffi::c_void);
+	}
+	// SAFETY: plain queries of the main display; the mode copied is released once read
+	let (pixels, millimetres) = unsafe {
+		let display = CGMainDisplayID();
+		let mode = CGDisplayCopyDisplayMode(display);
+		let pixels = if mode.is_null() { 0 } else { CGDisplayModeGetPixelWidth(mode) };
+		if !mode.is_null() {
+			CGDisplayModeRelease(mode);
+		}
+		(pixels as f64, CGDisplayScreenSize(display).width)
+	};
+	dots_per_inch(pixels, millimetres)
+}
+
+/// The connected screen's device pixels per inch as `xrandr` tells it: "eDP-1 connected 1920x1080+0+0 … 344mm x 194mm"
+#[cfg(not(target_os = "macos"))]
+fn display_dpi() -> Result<i64, String> {
+	let report = output("xrandr", &["--current"])?;
+	let screen = report.lines().find(|line| line.contains(" connected") && line.contains("mm x ")).unwrap_or_default();
+	let words: Vec<&str> = screen.split_whitespace().collect();
+	let pixels =
+		words.iter().find_map(|word| word.split_once('x').filter(|(_, rest)| rest.contains('+'))?.0.parse().ok());
+	let millimetres = words.iter().find_map(|word| word.strip_suffix("mm")?.parse().ok());
+	dots_per_inch(pixels.unwrap_or(0.0), millimetres.unwrap_or(0.0))
+}
+
+const MILLIMETRES_PER_INCH: f64 = 25.4;
+
+fn dots_per_inch(pixels: f64, millimetres: f64) -> Result<i64, String> {
+	match pixels > 0.0 && millimetres > 0.0 {
+		true => Ok((pixels * MILLIMETRES_PER_INCH / millimetres).round() as i64),
+		false => Err("display.dpi: the screen tells no physical size".to_string()),
 	}
 }
 

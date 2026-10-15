@@ -66,6 +66,8 @@ pub const WINDOW_WIDTH: &str = "window_width";
 pub const WINDOW_HEIGHT: &str = "window_height";
 pub const DISPLAY_WIDTH: &str = "display_width";
 pub const DISPLAY_HEIGHT: &str = "display_height";
+/// display.dpi: the screen's device pixels per inch, which turn `px` into lengths (decision dimensions-units)
+pub const DISPLAY_DPI: &str = "display_dpi";
 /// The next key pressed over the paint window, its code (0: none left), each press read once: natively `on key {…}`
 /// (lowering/signals/system_signals.rs); not a value a program names
 pub const KEY_PRESSED: &str = "key_pressed";
@@ -77,7 +79,7 @@ pub const ESCAPE_KEPT: &str = "escape kept";
 pub const CLICK_PRESSED: &str = "click_pressed";
 pub const CLICK_X: &str = "click_x";
 pub const CLICK_Y: &str = "click_y";
-pub const SYSTEM_VALUES: [(&str, bool); 17] = [
+pub const SYSTEM_VALUES: [(&str, bool); 18] = [
 	(BATTERY, false),
 	(CHARGING, true),
 	(ONLINE, true),
@@ -95,6 +97,7 @@ pub const SYSTEM_VALUES: [(&str, bool); 17] = [
 	(WINDOW_HEIGHT, false),
 	(DISPLAY_WIDTH, false),
 	(DISPLAY_HEIGHT, false),
+	(DISPLAY_DPI, false),
 ];
 /// `clipboard`: the clipboard's text, read only when the program reads it (host.rs clipboard_text)
 pub const CLIPBOARD: &str = "clipboard";

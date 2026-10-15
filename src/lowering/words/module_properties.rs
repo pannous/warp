@@ -9,7 +9,7 @@
 
 use super::nodes::{filled, for_in_variable, function_head, key, parameter_name};
 use crate::errors::diagnostic::Diagnostic;
-use crate::node::{symbol, Node};
+use crate::node::Node;
 use crate::operators::Op;
 use std::collections::HashSet;
 
@@ -42,7 +42,7 @@ const fn system_side(
 	Property { object, property, getter, setter, module: None }
 }
 
-const PROPERTIES: [Property; 6] = [
+const PROPERTIES: [Property; 7] = [
 	canvas_side("width", "canvas_width", "canvas(it, canvas_height)"),
 	canvas_side("height", "canvas_height", "canvas(canvas_width, it)"),
 	// system values (warp-runtime system_values.rs), so `whenever window.width > 800 {…}` listens
@@ -50,6 +50,9 @@ const PROPERTIES: [Property; 6] = [
 	system_side("window", "height", "window_height", Some("set_system_value(\"window_height\", it)")),
 	system_side("display", "width", "display_width", None),
 	system_side("display", "height", "display_height", None),
+	// the device pixels per inch, a quantity in dpi that turns lengths into px (lib/units.warp `length as pixels := it *
+	// display.dpi`, decision dimension-bridges); a program sets it in dpi, `display.dpi = 300 dpi`
+	system_side("display", "dpi", "display_dpi * 1dpi", Some("set_system_value(\"display_dpi\", it / 1dpi)")),
 ];
 
 pub fn lower(program: Node) -> Node {
@@ -111,7 +114,7 @@ impl Rewrite {
 	/// The property's getter, its module brought along
 	fn read(&mut self, property: &Property) -> Node {
 		self.used.extend(property.module);
-		symbol(property.getter)
+		filled(property.getter, [])
 	}
 
 	fn rewritten(&mut self, node: Node) -> Node {

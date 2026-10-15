@@ -156,7 +156,7 @@ fn multi_word_types_in_line(line: &str) -> Vec<Vec<String>> {
 }
 
 /// The source with its comments (`// …`, `/* … */`) and texts (`"…"`, `'…'`) blanked out
-pub(super) fn code_only(source: &str) -> String {
+pub(crate) fn code_only(source: &str) -> String {
 	let chars: Vec<char> = source.chars().collect();
 	let mut code = String::with_capacity(source.len());
 	let mut at = 0;

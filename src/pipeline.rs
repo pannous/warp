@@ -42,7 +42,10 @@ fn eval_source(code: &str) -> Node {
 
 /// Parse the source and check its laws; `Err` is the violation.
 fn lawful_program(code: &str) -> Result<Node, Node> {
-	let lawful = crate::law::separate_laws(crate::errors::diagnostic::in_source_mode(code, || WarpParser::parse(code)));
+	let unit_lines = crate::numbers::units::program_unit_lines(code);
+	crate::compiler::compile_context::change(|context| context.program_unit_lines = unit_lines);
+	let parsed = crate::errors::diagnostic::in_source_mode(code, || WarpParser::parse(code));
+	let lawful = crate::law::separate_laws(crate::numbers::units::without_unit_lines(parsed)?);
 	match crate::law::assert_laws(&lawful, code) {
 		Some(violation) => Err(violation),
 		None => Ok(lawful.program),

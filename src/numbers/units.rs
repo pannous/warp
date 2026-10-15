@@ -9,6 +9,7 @@ use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashMap;
 mod definitions;
+pub use definitions::program_unit_lines;
 mod quantity_arithmetic;
 pub use quantity_arithmetic::*;
 
@@ -26,6 +27,8 @@ enum Dimension {
 	Era,
 	Time,
 	Temperature,
+	/// the device pixel (`px`), its own dimension (decision dimensions-units)
+	Pixel,
 }
 
 #[derive(Debug, PartialEq)]
@@ -132,11 +135,49 @@ pub(crate) fn with_run_time_unit_tables(program: Node) -> Node {
 	}
 }
 
+/// The program's statements, a line's `;` statements among them (`unit hand := 4inch; x = 2 hand⏎x`)
 fn statements_of(node: Node) -> Vec<Node> {
 	match node {
-		Node::List(items, Bracket::None, separator) if separator.separates_statements() => items,
+		Node::List(items, Bracket::None, separator) if separator.separates_statements() => {
+			items.into_iter().flat_map(statements_of).collect()
+		}
 		node => vec![node],
 	}
+}
+
+/// The word starting a unit line, `unit furlong := 201.168 m`
+const UNIT_LINE_WORD: &str = "unit";
+
+/// The program without its unit lines, which definitions.rs read before it was parsed (program_unit_lines); Err for a
+/// line that defines no unit (`unit x := 3 foo`: foo is no unit)
+pub fn without_unit_lines(program: Node) -> Result<Node, Node> {
+	let unit_line = |statement: &Node| match statement.drop_meta() {
+		Node::List(items, Bracket::None, Separator::Space) => match items.as_slice() {
+			[word, definition, ..] if word.drop_meta() == &Node::Symbol(UNIT_LINE_WORD.to_string()) => {
+				match definition.drop_meta() {
+					// `unit °C as K := …` names °C
+					Node::Key(name, Op::Define, _) => match name.drop_meta() {
+						Node::Key(name, Op::As, _) => Some(name.drop_meta().serialize()),
+						name => Some(name.serialize()),
+					},
+					_ => None,
+				}
+			}
+			_ => None,
+		},
+		_ => None,
+	};
+	let statements = statements_of(program.clone());
+	if !statements.iter().any(|statement| unit_line(statement).is_some()) {
+		return Ok(program);
+	}
+	if let Some(unknown) = statements.iter().filter_map(unit_line).find(|name| !names_unit(name)) {
+		return Err(error(&format!(
+			"unit {unknown}: the right side is no amount of a known unit (`unit furlong := 201.168 m`)"
+		)));
+	}
+	let kept: Vec<Node> = statements.into_iter().filter(|statement| unit_line(statement).is_none()).collect();
+	Ok(Node::List(kept, Bracket::None, Separator::Newline))
 }
 
 /// `x as quantity`, and `x as unit` with a got-it note: the run-time quantity(x) (card unit-possible)
@@ -524,16 +565,19 @@ impl Quantity {
 
 /// Dimension → power, the same for `km/h` and `m/s`; two quantities add or compare only with equal signatures
 fn signature(factors: &[Factor]) -> Vec<(Dimension, i32)> {
-	let mut powers: Vec<(Dimension, i32)> = vec![];
-	for factor in factors {
-		match powers.iter_mut().find(|(dimension, _)| *dimension == factor.unit.dimension) {
-			Some((_, power)) => *power += factor.power,
-			None => powers.push((factor.unit.dimension, factor.power)),
-		}
+	factors.iter().fold(vec![], |powers, factor| added(&powers, factor.unit.dimension, factor.power))
+}
+
+/// `powers` with `power` more of `dimension`, in the order signatures keep
+fn added(powers: &[(Dimension, i32)], dimension: Dimension, power: i32) -> Vec<(Dimension, i32)> {
+	let mut added = powers.to_vec();
+	match added.iter_mut().find(|(known, _)| *known == dimension) {
+		Some((_, sum)) => *sum += power,
+		None => added.push((dimension, power)),
 	}
-	powers.retain(|(_, power)| *power != 0);
-	powers.sort_by_key(|(dimension, _)| *dimension as u8);
-	powers
+	added.retain(|(_, power)| *power != 0);
+	added.sort_by_key(|(dimension, _)| *dimension as u8);
+	added
 }
 
 /// The text of a unit result held in a `Node::Data`, None for any other data
@@ -819,10 +863,20 @@ fn collect_defined_unit_names(node: &Node, names: &mut std::collections::HashSet
 		}),
 		other => add_unit(other),
 	};
+	// a function, method or class of the program named like a unit is that one (`class N{…}`, `second() := …`)
 	if let Some(definition) = crate::lowering::function_head(node) {
+		add_parameters(&Node::Symbol(definition.name.to_string()));
 		definition.written_parameters.iter().for_each(&mut add_parameters);
 	}
 	match node.drop_meta() {
+		// a field named like a unit stays the field's name only (`r.mph`), a method's name is the method
+		Node::Type { name, body } => {
+			add_parameters(name);
+			let members = std::iter::once(body.as_ref()).chain(body.drop_meta().parts());
+			members
+				.filter_map(crate::lowering::function_head)
+				.for_each(|method| add_parameters(&Node::Symbol(method.name.to_string())));
+		}
 		Node::Key(head, Op::Assign | Op::Define, _) if matches!(head.drop_meta(), Node::List(..)) => {
 			add_parameters(head)
 		}
