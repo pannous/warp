@@ -33,10 +33,11 @@ as warp functions, `paint(tunnel, width, height)` compiling them; the same funct
    reaches the shader as one vec4f per item (`[[item] for item in levels]` in the values map, any length), `center()`
    calls a function of no parameters, `round` takes halves away from zero (WGSL's goes to even), a class's operator
    dispatch (`if x is Note then x.plus(1) else x + 1`) keeps only the built-in operator.
-3. DRAFT probes/gpu_visualizer_warp.warp: every function translates to one shader, but the CPU type check fails on
-   Note's dispatch of `.-` with lists (card note-dispatch-element-wise). Once fixed: move it to samples/ (chmod +x,
-   runs in the playground too), keep the WGSL samples/gpu_visualizer.warp.
+3. DONE: samples/gpu_visualizer_warp.warp, the tunnel as warp functions painted with paint(tunnel, width, height),
+   beside the WGSL samples/gpu_visualizer.warp. It needed card note-dispatch-element-wise: Note's plus/minus dispatch
+   had hidden `.+ .-` from broadcasting (p .+ [1, 2] gave [3 4]).
 
 ## Questions (warp-interviewer)
-- S1 swizzles: `p.x p.y p.z p.w` and `p.xy`, `e.xyy` on a list of 2–4 numbers (GLSL/WGSL), or only `p#1`?
+- S1 DECIDED (user, 2026-10-15): `.x .y .z .w` and swizzles (`.xy`, `.xyy`, `.zyx`) on lists of 2–4 numbers,
+  everywhere, the CPU too. Next step 4.
 - S2 vector math with plain `+ - * /` inside functions compiled to shaders, or always the element-wise `.+ .*` (D3)?
