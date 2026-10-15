@@ -72,7 +72,7 @@ const COUNT_ITEM_TEMPLATE: &str = "count(filter(counted_haystack, counted_item =
 const COUNT_SUBSTRING_TEMPLATE: &str = "count(split(counted_haystack, counted_needle)) - 1";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 31] = [
+const SYNONYMS: [(&str, &[&str]); 33] = [
 	(crate::wasm_emitter::text::text_builtins::WARNING, &["warn"]),
 	// Python's tuple(xs) (card python-stdlib)
 	(LIST_WORD, &["tuple"]),
@@ -104,6 +104,9 @@ const SYNONYMS: [(&str, &[&str]); 31] = [
 	("is_alphanumeric", &["is_alnum", "isalnum"]),
 	("is_space", &["is_whitespace", "isspace"]),
 	("nearest", &[]),
+	// lib/prelude.warp's Euclidean length of a list, a number's absolute value (decision S3)
+	("norm", &[]),
+	("magnitude", &[]),
 	// lib/prelude.warp's map of [key value] pairs, Python's dict(pairs)
 	(DICT_WORD, &[]),
 	(FROMKEYS, &[]),

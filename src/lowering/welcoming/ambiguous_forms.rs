@@ -49,8 +49,8 @@ fn needs_arguments(at: &Node, word: &str) -> Node {
 		.into_error()
 }
 
-/// `xs.map(upper)`, `map(xs, floor)`, `f = floor`: a library word passed to an iteration word or assigned is the
-/// function `value => upper value`
+/// `xs.map(upper)`, `map(xs, floor)`, `f := floor`: a library word passed to an iteration word or defined as a name is
+/// the function `value => upper value`
 fn library_word_values(node: Node, words: &SuffixWords) -> Node {
 	let node = node.map_children(|child| library_word_values(child, words));
 	match node {
@@ -66,6 +66,9 @@ fn library_word_values(node: Node, words: &SuffixWords) -> Node {
 			if words.is_function_word(&value) && crate::closures::referenced_function(&value).is_none() =>
 		{
 			needs_arguments(&value, &value.drop_meta().name())
+		}
+		Node::Key(target, Op::Define, value) if words.is_function_word(&value) => {
+			Node::Key(target, Op::Define, Box::new(word_function(&value)))
 		}
 		other => other,
 	}
@@ -141,14 +144,21 @@ struct SuffixWords {
 impl SuffixWords {
 	/// A library word the program does not name itself: `first sorted xs` is `first(sort(xs))`, `xs.map(upper)` maps it
 	fn is_library_word(&self, node: &Node) -> bool {
-		matches!(node.drop_meta(), Node::Symbol(name) if crate::library_words::is_library_word(name) && !self.variables.contains(name) && !self.functions.contains(name))
+		self.unnamed(node).is_some_and(crate::library_words::is_library_word)
 	}
 
 	/// A library word of one value the program does not name itself, also libm's (`floor`, `sin`): a function value
 	fn is_function_word(&self, node: &Node) -> bool {
 		let is_libm_word = |name: &str| crate::lowering::library_signatures::typed_first_arity(name) == Some(1);
-		self.is_library_word(node)
-			|| matches!(node.drop_meta(), Node::Symbol(name) if is_libm_word(name) && !self.variables.contains(name) && !self.functions.contains(name))
+		self.is_library_word(node) || self.unnamed(node).is_some_and(is_libm_word)
+	}
+
+	/// The word `node` is, unless the program names it as a variable or function of its own
+	fn unnamed<'a>(&self, node: &'a Node) -> Option<&'a str> {
+		match node.drop_meta() {
+			Node::Symbol(name) if !self.variables.contains(name) && !self.functions.contains(name) => Some(name),
+			_ => None,
+		}
 	}
 }
 

@@ -19,7 +19,7 @@ use super::memoization::definition_parts;
 use super::nodes::{call, key};
 use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::words::{AT_WORD, FLOAT_WORD};
+use crate::words::{AT_WORD, FLOAT_WORD, FOR_WORD};
 use std::collections::{HashMap, HashSet};
 
 const MIDI_HERTZ_CALL: &str = "midi_hertz";
@@ -249,6 +249,13 @@ fn with_played_functions(node: Node, counts: &HashMap<String, usize>) -> Node {
 	let node = node.map_children(|child| with_played_functions(child, counts));
 	match node.call_parts() {
 		Some((PLAY_WORD, [played, seconds])) if let Some(word) = signal_word(played, counts) => {
+			call(word, vec![played.clone(), seconds.clone()])
+		}
+		// `play hum for 2s` (lib play's `for duration`, preposition_calls.rs reads it for the other plays)
+		Some((PLAY_WORD, [played, preposition, seconds]))
+			if preposition.is_symbol(FOR_WORD)
+				&& let Some(word) = signal_word(played, counts) =>
+		{
 			call(word, vec![played.clone(), seconds.clone()])
 		}
 		_ => node,
