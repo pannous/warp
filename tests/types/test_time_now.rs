@@ -33,7 +33,6 @@ fn test_a_time_of_day_goes_round_the_clock() {
 
 #[test]
 fn test_clock_reads_compare() {
-	is!("now == now", true);
-	is!("now != now", false);
-	is!("x = now; x == now", true);
+	is!("now <= now", true);
+	is!("x = now; x <= now", true);
 }

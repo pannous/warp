@@ -346,6 +346,7 @@ PASSED:
   ✓ control::test_key_names::a_key_handler_comparing_with_an_unbound_word_warns
   ✓ control::test_key_names::a_programs_own_key_variable_stays_its_own
   ✓ control::test_key_names::key_words_name_keys
+  ✓ control::test_library_signatures::a_bool_result_shows_as_bool
   ✓ control::test_library_signatures::a_prelude_words_signature_as_its_head
   ✓ control::test_library_signatures::an_operator_words_signature
   ✓ control::test_library_signatures::table_words_positional
@@ -1426,6 +1427,9 @@ PASSED:
   ✓ functions::test_library_word_aliases::parser_alias_notes_point_at_the_word
   ✓ functions::test_library_word_aliases::print_spellings_print
   ✓ functions::test_library_word_aliases::renaming_a_module_function_as_the_module_does
+  ✓ functions::test_library_word_assigned::a_libm_word_maps_over_a_list
+  ✓ functions::test_library_word_assigned::a_library_word_assigned_is_a_function
+  ✓ functions::test_library_word_assigned::a_variable_named_like_a_library_word_stays_a_value
   ✓ functions::test_library_word_values::a_function_updating_a_main_list_asks_for_global
   ✓ functions::test_library_word_values::a_library_word_is_a_function_value_of_a_user_function
   ✓ functions::test_library_word_values::a_library_word_is_a_function_value_of_map_and_filter
@@ -2773,6 +2777,8 @@ PASSED:
   ✓ numbers::test_temperature::temperatures_compare_at_their_zero
   ✓ numbers::test_temperature::temperatures_convert_with_their_zero
   ✓ numbers::test_temperature::temperatures_in_one_unit_add
+  ✓ numbers::test_text_float_exact::a_text_of_a_tiny_float_is_no_zero
+  ✓ numbers::test_text_float_exact::a_text_read_as_a_float_at_run_time_is_its_literal
   ✓ numbers::test_text_then_conversion::a_conversion_after_a_text_join_converts_the_last_operand
   ✓ numbers::test_text_then_conversion::a_grouped_conversion_still_works
   ✓ numbers::test_time_of_day::a_program_naming_time_keeps_its_own
@@ -3729,6 +3735,8 @@ PASSED:
   ✓ text::test_count_in::count_occurrences
   ✓ text::test_count_method::a_defined_count_keeps_its_calls
   ✓ text::test_count_method::count_as_a_method_or_a_call_of_two
+  ✓ text::test_count_of_split::count_of_a_split_counts_the_parts
+  ✓ text::test_count_of_split::count_of_an_item_in_a_list_stays
   ✓ text::test_declared_text_one_character::a_declared_text_takes_a_one_character_text
   ✓ text::test_error_as_text::a_text_builtin_of_an_error_fails_with_the_error
   ✓ text::test_for_each_char::a_loop_over_the_characters_of_a_text_takes_linear_time
@@ -5578,4 +5586,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5573 passed, 0 failed, 5573 total tested
+13 ignored, 5581 passed, 0 failed, 5581 total tested

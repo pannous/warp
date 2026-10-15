@@ -14,7 +14,7 @@ use crate::operators::Op;
 use crate::traits::InstanceTypes;
 use crate::type_kinds::Kind;
 use crate::words::EXTREMUM_WORDS;
-use crate::words::{ALL_WORD, DOT_WORD, EACH_WORD, IMPLICIT_PARAMETER, LOG_WORD, MAP_WORD, SUM_WORD};
+use crate::words::{ALL_WORD, COUNT_WORD, DOT_WORD, EACH_WORD, IMPLICIT_PARAMETER, LOG_WORD, MAP_WORD, SUM_WORD};
 use std::collections::{HashMap, HashSet};
 
 const ARITHMETIC: [Op; 6] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Pow];
@@ -228,9 +228,12 @@ fn rules_out_a_truth_value(parameter: &Node) -> bool {
 	}
 }
 
-/// `sum`, `max`, `upper` …: a library word of one value, not redefined by the program
+/// `sum`, `max`, `upper`, `count` …: a library word of one value, not redefined by the program
 fn is_one_value_word(node: &Node, arities: &HashMap<String, Arity>) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(name) if !arities.contains_key(name) && (crate::library_words::is_library_word(name) || EXTREMUM_WORDS.contains(&name.as_str())))
+	let is_word = |name: &str| {
+		crate::library_words::is_library_word(name) || EXTREMUM_WORDS.contains(&name) || name == COUNT_WORD
+	};
+	matches!(node.drop_meta(), Node::Symbol(name) if !arities.contains_key(name) && is_word(name))
 }
 
 fn arity_of(node: &Node, arities: &HashMap<String, Arity>) -> Option<Arity> {

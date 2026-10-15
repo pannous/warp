@@ -14,6 +14,7 @@ mod test_codepoint_counts; // card codepoints-traps
 mod test_constant_expression_text;
 mod test_count_in;
 mod test_count_method;
+mod test_count_of_split; // card count-split
 mod test_declared_text_one_character;
 mod test_error_as_text;
 mod test_for_each_char;
