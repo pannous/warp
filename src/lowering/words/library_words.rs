@@ -578,7 +578,11 @@ impl Lowering {
 				if let Some(chained) = self.chained_field_assignment(&left, &right) {
 					return chained;
 				}
-				let left = self.expand(*left);
+				let written = *left;
+				let left = self.expand(written.clone());
+				if let Some(set) = self.functional_setter(&written, &left, &right) {
+					return set;
+				}
 				let right = self.in_definition(&left, *right);
 				self.field_assignment(&left, &right).unwrap_or(key(left, Op::Assign, right))
 			}
