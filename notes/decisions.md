@@ -19,10 +19,14 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   are in and the Rust code is cleaned up (topic cleanup); the existing twins stay.
 - cleanup-only (2026-10-13): until the big Rust cleanup is done, new tasks come only from the cleanup roadmap; other
   workers finish what they hold; the Codex timer takes only cleanup cards; urgent Now cards still go out.
-  Exception: use-cargo (crate components, downloads) keeps going, "important and doesn't touch the cleanup much".- weekly-cleanup (2026-10-14, user): a fresh cleanup roadmap every week (topic `cleanup-w<week>`, e.g. cleanup-w42);
+  Exception: use-cargo (crate components, downloads) keeps going, "important and doesn't touch the cleanup much".
+- weekly-cleanup (2026-10-14, user): a fresh cleanup roadmap every week (topic `cleanup-w<week>`, e.g. cleanup-w42);
   new cleanup cards go into the current week's topic (`todo add "…" --topic cleanup-w42`). Older roadmaps stay as
   they are, solved cards Done in them. Chores that should run regularly get `todo repeat <card> <days>`, and the
   daily `todo recur` brings them back to Next; they are not copied into each new roadmap.
+- topic-priority (2026-10-15, user; card todo-topics): the column is the priority, for topic cards too: a topic sits
+  in Now/Next/Soon/Later beside its cards (new topics Soon); Roadmaps holds only unprioritized topics. A Priority
+  field may exist only if it always matches the column. `todo move sound Next --all` raises a topic with its cards.
 - long-functions (2026-10-14, user): splitting an overly long function is a cleanup card of its own, also when it
   adds a few lines; the "only if it removes lines" rule is for deduplication, not for splits. Split by concept (one
   named helper per case group or per embedded warp template), not into numbered parts.
