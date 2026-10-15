@@ -29,6 +29,7 @@ fn spaced_values_after_print_print_each() {
 	assert_eq!(crate::common::printed("print 1+1 2+2").trim(), "2 4");
 	assert_eq!(crate::common::printed("print 1 2").trim(), "1 2");
 	assert_eq!(crate::common::printed("print 2⁻¹ 2⁰").trim(), "0.5 1");
+	assert_eq!(crate::common::printed("if yes {print 1+1 2+2}").trim(), "2 4");
 }
 
 #[test]

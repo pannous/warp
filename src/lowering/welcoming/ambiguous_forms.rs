@@ -161,7 +161,10 @@ fn lower_list(
 			return lower_node(list, functions);
 		}
 	}
-	let is_spaced_call = bracket == Bracket::None && separator == Separator::Space;
+	// `print 1+1 2+2`, `{print 1+1 2+2}`: a word with spaced arguments
+	let is_spaced_call = bracket != Bracket::Square
+		&& separator == Separator::Space
+		&& items.first().is_some_and(|head| head.drop_meta().symbol_name().is_some());
 	let lower_item = |item: Node| match item {
 		Node::List(arguments, Bracket::None, Separator::Space) if is_spaced_call => {
 			lower_list(arguments, Bracket::None, Separator::Space, functions, false)
