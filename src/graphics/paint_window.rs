@@ -57,6 +57,9 @@ const TRIANGLE_CORNERS: u32 = 3;
 const INPUT_LINE: &str = "input";
 /// The line the viewer writes as its window opens or resizes: `size width height`, in points
 const SIZE_LINE: &str = "size";
+/// The line the viewer writes as the user ends it (Escape, closing the window, Cmd-Q): the run ends with it (card
+/// escape-window), its sounds stopped
+const CLOSED_LINE: &str = "closed";
 /// The arrows' codes, as a Mac's function keys: up, down, left, right
 const ARROW_CODES: [u32; 4] = [0xF700, 0xF701, 0xF702, 0xF703];
 /// NSTrackingArea's options: mouse moves, whether the window is key or not, over the whole view as it resizes
@@ -65,8 +68,8 @@ const TRACKING_MOUSE_MOVED: usize = 0x02;
 pub const TRACKING_ACTIVE_ALWAYS: usize = 0x80;
 const TRACKING_IN_VISIBLE_RECT: usize = 0x200;
 
-/// The viewer's input lines, read until it ends
-fn follow_input(lines: impl BufRead) {
+/// The viewer's input lines, read until it ends; whether the user ended it
+pub fn follow_input(lines: impl BufRead) -> bool {
 	for line in lines.lines().map_while(Result::ok) {
 		let mut words = line.split_whitespace();
 		let kind = words.next();
@@ -76,9 +79,18 @@ fn follow_input(lines: impl BufRead) {
 			(Some(SIZE_LINE), &[width, height]) => {
 				warp_runtime::system_values::tell_window_size(width as i64, height as i64)
 			}
+			(Some(CLOSED_LINE), []) => return true,
 			_ => {}
 		}
 	}
+	false
+}
+
+/// The user ended the window: so ends the run, its sounds stopped, else the process's end would wait for them
+fn end_the_run() -> ! {
+	crate::sound::stop();
+	let _ = std::io::stdout().flush();
+	std::process::exit(0)
 }
 
 /// The code of a pressed key: its character's, an arrow's ARROW_CODES, Enter, Escape, Backspace and Tab their control
@@ -98,6 +110,10 @@ fn key_code(key: &winit::keyboard::Key) -> Option<u32> {
 		Key::Named(NamedKey::Tab) => Some(u32::from('\t')),
 		_ => None,
 	}
+}
+
+fn is_escape(event: &winit::event::KeyEvent) -> bool {
+	event.state.is_pressed() && event.logical_key == winit::keyboard::Key::Named(winit::keyboard::NamedKey::Escape)
 }
 
 /// A painted image as the viewer takes it
@@ -281,7 +297,9 @@ pub fn show(frame: &[u8]) -> Result<(), String> {
 		let mut child = command.spawn().map_err(|failure| format!("paint: cannot start the viewer: {failure}"))?;
 		if let Some(output) = child.stdout.take() {
 			std::thread::spawn(move || {
-				follow_input(std::io::BufReader::new(output));
+				if follow_input(std::io::BufReader::new(output)) {
+					end_the_run();
+				}
 				warp_runtime::system_values::tell_window_open(false); // its output ends as it closes
 			});
 		}
@@ -393,6 +411,14 @@ impl Viewer {
 }
 
 impl ApplicationHandler<Message> for Viewer {
+	/// The user ended the window (Escape, closing it, Cmd-Q): its program ends too. A program that ends first ends the
+	/// viewer through its stdin (run), a check ends by itself, and a failure is told as one
+	fn exiting(&mut self, _: &ActiveEventLoop) {
+		if !self.check && self.failure.is_none() {
+			let _ = writeln!(std::io::stdout(), "{CLOSED_LINE}"); // a program gone meanwhile reads nothing
+		}
+	}
+
 	fn resumed(&mut self, event_loop: &ActiveEventLoop) {
 		self.resumed = true;
 		self.open_for_waiting(event_loop);
@@ -419,6 +445,7 @@ impl ApplicationHandler<Message> for Viewer {
 		let Some(screen) = self.screen.as_mut() else { return };
 		match event {
 			WindowEvent::CloseRequested => event_loop.exit(),
+			WindowEvent::KeyboardInput { event, .. } if is_escape(&event) => event_loop.exit(),
 			WindowEvent::Resized(size) => {
 				screen.resize(size.width, size.height);
 				screen.tell_size();
