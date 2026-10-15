@@ -594,6 +594,15 @@ fn operation_calls(node: Node, registry: &TypeRegistry, traits: &Traits, generic
 				.map(|argument| operation_calls(argument, registry, traits, generics));
 			parens(std::iter::once(name).chain(arguments).collect())
 		}
+		// `room.reverb = 0.6`: `room = reverb(room, 0.6)` (library_words::functional_setter)
+		Node::Key(ref target, Op::Assign, ref value)
+			if let Node::Key(receiver, Op::Dot, member) = target.drop_meta()
+				&& matches!((receiver.drop_meta(), member.drop_meta()), (Node::Symbol(_), Node::Symbol(_)))
+				&& is_operation(member) =>
+		{
+			let value = operation_calls(value.as_ref().clone(), registry, traits, generics);
+			crate::lowering::nodes::set_by_call(receiver, member.as_ref().clone(), value)
+		}
 		other => other.map_children(|child| operation_calls(child, registry, traits, generics)),
 	}
 }

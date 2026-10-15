@@ -80,6 +80,7 @@ fn run_main<S: 'static>(
 	state: S,
 	link: impl FnOnce(&mut Linker<S>, &wasmtime::Engine, &Module) -> Result<()>,
 ) -> Result<(Val, Store<S>, Instance)> {
+	crate::sound::start_run();
 	let (engine, starts_tasks) = engine_for(bytes);
 	let mut store = crate::util::fueled_store(&engine, state);
 	if starts_tasks {

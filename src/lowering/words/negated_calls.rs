@@ -3,7 +3,7 @@
 use crate::analyzer::{extract_user_functions_inner, is_type_call_word};
 use crate::compiler::context::{Context, UserFunctionDef};
 use crate::lowering::nodes::children_rewritten;
-use crate::node::{parens, Node};
+use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::HashSet;
 
@@ -56,7 +56,26 @@ fn negate_calls(
 				Node::Key(Box::new(Node::Empty), prefix, Box::new(negate_calls(*argument, functions, bound, locals)));
 			parens(vec![*function, argument])
 		}
+		// `-sin 0` negates the call `sin 0`, not the word sin (card braceless-calls)
+		Node::List(items, bracket @ Bracket::None, separator @ Separator::Space)
+			if items.len() > 1 && negated_word(&items[0]).is_some_and(|function| is_function(function, Op::Sub)) =>
+		{
+			let mut items = items;
+			items[0] = negated_word(&items[0]).expect("guarded").clone();
+			let call = negate_calls(Node::List(items, bracket, separator), functions, bound, locals);
+			Node::Key(Box::new(Node::Empty), Op::Neg, Box::new(call))
+		}
 		other => children_rewritten(other, |child| negate_calls(child, functions, bound, locals)),
+	}
+}
+
+/// The word `w` of `-w`
+fn negated_word(node: &Node) -> Option<&Node> {
+	match node.drop_meta() {
+		Node::Key(nothing, Op::Neg, word) if nothing.is_empty_node() && matches!(word.drop_meta(), Node::Symbol(_)) => {
+			Some(word)
+		}
+		_ => None,
 	}
 }
 

@@ -16,7 +16,7 @@ play [C4 E4 G4] for: 1s          // a chord
 melody [C4 D4 E4]               // one after another
 melody [G4 E4 C4] each: 200ms    // or melody([G4 E4 C4], 200ms)
 tone(220Hz, 300ms, "square")    // sine, square, triangle, sawtooth
-tone 330Hz for 0.1s
+tone(330Hz, 0.1s)
 play note("F#4") for: 250ms      // note(name) needs `use sound` when called alone
 ```
 
@@ -177,7 +177,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    nodes and buses as values, effects (delay, reverb, compressor, distortion, EQ), a mixer.
 5. Samples and files. Load WAV/MP3/OGG/FLAC, play at a pitch or rate, slice, loop points (card sound-samples); render offline to a file
    (`render 8 bars to "song.wav"`), which is also how tests check audio without speakers.
-   Samples built (card sound-samples, samples/sound_samples.warp, tests/programs/test_sound_samples.rs): lib/sound.warp
+   Samples built (card sound-samples, samples/sound_kick_samples.warp, tests/programs/test_sound_samples.rs): lib/sound.warp
    `class Sample {rate, channels, frames}`; `sample(path)` reads a file through the host word sound.load
    (src/sound/audio_files.rs: WAV decoded in Rust, other formats converted by afconvert or ffmpeg first), then
    sample_seconds, sample_slice(clip, from, to), sample_slices(clip, n), sample_looped(clip, seconds, from, to),
