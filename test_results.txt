@@ -346,6 +346,7 @@ PASSED:
   ✓ control::test_key_names::a_key_handler_comparing_with_an_unbound_word_warns
   ✓ control::test_key_names::a_programs_own_key_variable_stays_its_own
   ✓ control::test_key_names::key_words_name_keys
+  ✓ control::test_library_signatures::a_bool_result_shows_as_bool
   ✓ control::test_library_signatures::a_prelude_words_signature_as_its_head
   ✓ control::test_library_signatures::an_operator_words_signature
   ✓ control::test_library_signatures::table_words_positional
@@ -2776,6 +2777,8 @@ PASSED:
   ✓ numbers::test_temperature::temperatures_compare_at_their_zero
   ✓ numbers::test_temperature::temperatures_convert_with_their_zero
   ✓ numbers::test_temperature::temperatures_in_one_unit_add
+  ✓ numbers::test_text_float_exact::a_text_of_a_tiny_float_is_no_zero
+  ✓ numbers::test_text_float_exact::a_text_read_as_a_float_at_run_time_is_its_literal
   ✓ numbers::test_text_then_conversion::a_conversion_after_a_text_join_converts_the_last_operand
   ✓ numbers::test_text_then_conversion::a_grouped_conversion_still_works
   ✓ numbers::test_time_of_day::a_program_naming_time_keeps_its_own
@@ -5583,4 +5586,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5578 passed, 0 failed, 5578 total tested
+13 ignored, 5581 passed, 0 failed, 5581 total tested

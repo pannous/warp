@@ -12,6 +12,7 @@ POLL_SECONDS=10
 # gh run watch polls every 3 s by default (two REST requests each): one watch per push to main used up the shared
 # 5000 requests/h on 2026-10-10. A deploy takes minutes, so a minute's delay in noticing a failure costs nothing.
 WATCH_INTERVAL_SECONDS=60
+OUTCOME_TRIES=30      # GitHub API outages (502s) of up to ~half an hour
 FAILED_LINES=25
 WOKEN=2               # asyncRewake: this exit code wakes the session and shows it stderr
 
@@ -35,13 +36,28 @@ if [[ -z $run_id ]]; then
   [[ -n $by_hand ]] && echo "no playground deploy for ${commit:0:9} (the push touched no path pages.yml watches?)"
   exit 0
 fi
-if gh run watch $run_id -R $REPO --interval $WATCH_INTERVAL_SECONDS --exit-status >/dev/null 2>&1; then
+# gh run watch also gives up when the GitHub API fails (a 502) while the run goes on: only the finished run's own
+# conclusion and its count of failed jobs count, asked for until GitHub answers (card posttooluse-playground)
+outcome=""
+for (( tries = 0; tries < OUTCOME_TRIES; tries++ )); do
+  gh run watch $run_id -R $REPO --interval $WATCH_INTERVAL_SECONDS >/dev/null 2>&1
+  outcome=$(gh run view $run_id -R $REPO --json status,conclusion,jobs \
+    -q 'select(.status == "completed") | "\(.conclusion) \([.jobs[] | select(.conclusion == "failure")] | length)"' 2>/dev/null)
+  [[ -n $outcome ]] && break
+  sleep $WATCH_INTERVAL_SECONDS
+done
+conclusion=${outcome% *}
+failed_jobs=${outcome#* }
+if [[ -z $outcome ]]; then
+  echo "playground run $run_id for ${commit:0:9}: GitHub gave no outcome in $OUTCOME_TRIES tries, check it by hand" >&2
+  exit 0
+fi
+if [[ $conclusion == success ]]; then
   [[ -n $by_hand ]] && echo "playground deployed: ${commit:0:9} (run $run_id)"
   exit 0
 fi
 # a newer push to main cancels this run's remaining jobs (usually verify, after the deploy): no job failed, so nothing
 # is broken, and the newer push's own watch reports its deploy
-failed_jobs=$(gh run view $run_id -R $REPO --json jobs -q '[.jobs[] | select(.conclusion == "failure")] | length' 2>/dev/null)
 if [[ $failed_jobs == 0 ]]; then
   [[ -n $by_hand ]] && echo "playground run $run_id for ${commit:0:9} was cancelled by a newer push, no job failed"
   exit 0
