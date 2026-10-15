@@ -600,7 +600,7 @@ fn aliases_replaced(program: Node, found: &[Definition]) -> Node {
 }
 
 /// The indexes of the parameters each function calls, until passing a function on to another one adds no more
-fn higher_order_parameters(found: &[Definition]) -> HashMap<String, Vec<usize>> {
+pub(crate) fn higher_order_parameters(found: &[Definition]) -> HashMap<String, Vec<usize>> {
 	let mut higher_order: HashMap<String, Vec<usize>> = HashMap::new();
 	loop {
 		let mut changed = false;

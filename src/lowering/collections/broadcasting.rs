@@ -334,12 +334,28 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 struct LibraryCalls {
 	functions: HashSet<String>,
 	named: HashSet<String>,
+	/// the indexes of the parameters each program function calls: `twice(g, x) := g(g(x))` → [0]
+	function_parameters: HashMap<String, Vec<usize>>,
 }
 
 impl LibraryCalls {
 	fn of(program: &Node, found: &[Definition]) -> LibraryCalls {
 		let functions = found.iter().map(|definition| definition.name.clone()).collect();
-		LibraryCalls { functions, named: crate::soft_keywords::names_given(program) }
+		let function_parameters = crate::function_values::higher_order_parameters(found);
+		LibraryCalls { functions, named: crate::soft_keywords::names_given(program), function_parameters }
+	}
+
+	/// The library word at item `at` of a call calls the value after it: the caller takes no function there
+	/// (`map reverse xs`, `twice(upper, "hi")` pass the word on)
+	fn is_value_call(&self, items: &[Node], at: usize) -> bool {
+		let takes_function = match items[0].drop_meta() {
+			Node::Symbol(name) => match self.function_parameters.get(name) {
+				Some(indexes) => indexes.contains(&(at - 1)),
+				None => at == 1 && crate::lowering::lambdas::takes_a_function_first(&items[0]),
+			},
+			_ => false,
+		};
+		self.is_library_call(&items[at]) && !takes_function
 	}
 
 	/// A call taking values: the program's function, or a standard function or output word it does not name itself
@@ -367,7 +383,7 @@ fn nest_library_calls(node: Node, words: &LibraryCalls) -> Node {
 			separator @ (Separator::Space | Separator::None),
 		) if items.len() > 2 && words.is_caller(&items[0]) => {
 			// `first sorted xs == 1 and yes` compares (first sorted xs): the chain takes the comparison's first operand
-			if words.is_library_call(&items[items.len() - 2])
+			if words.is_value_call(&items, items.len() - 2)
 				&& crate::library_words::is_comparison(&items[items.len() - 1])
 			{
 				let mut items = items;
@@ -379,8 +395,7 @@ fn nest_library_calls(node: Node, words: &LibraryCalls) -> Node {
 				});
 			}
 			let mut items: Vec<Node> = items.into_iter().map(|item| nest_library_calls(item, words)).collect();
-			let first_value = if crate::lowering::lambdas::takes_a_function_first(&items[0]) { 2 } else { 1 };
-			while let Some(at) = (first_value..items.len() - 1).rev().find(|at| words.is_library_call(&items[*at])) {
+			while let Some(at) = (1..items.len() - 1).rev().find(|at| words.is_value_call(&items, *at)) {
 				let value = items.remove(at + 1);
 				let word = items.remove(at);
 				// written `reverse(xs)`: a later pass splices a phrase `reverse xs` back into its caller's arguments
