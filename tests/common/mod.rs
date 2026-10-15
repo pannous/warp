@@ -353,6 +353,7 @@ pub fn output_within(command: &mut std::process::Command, limit: std::time::Dura
 
 /// The command line arguments a program runs with in the tests: the lines of `<path>.args` beside it (path without its
 /// extension: samples/golf/rot13 reads samples/golf/rot13.args), none without that file
+#[cfg(feature = "native")]
 pub fn arguments_beside(path: &std::path::Path) -> Vec<String> {
 	let file = path.with_file_name(format!("{}.args", path.file_name().unwrap_or_default().to_string_lossy()));
 	std::fs::read_to_string(file).map(|lines| lines.lines().map(str::to_string).collect()).unwrap_or_default()

@@ -9,7 +9,7 @@ fn of_a_rendered_tone(then: &str) -> String {
 	let folder = crate::common::scratch_directory("file_spectrum");
 	std::fs::create_dir_all(&folder).unwrap();
 	let file = folder.join("a4.wav");
-	format!("use sound\nfile = \"{}\"\ntone(A4, 0.2)\nrender_sound(file)\n{then}", file.display())
+	format!("use sound\nfile = \"{}\"\ntone(A4, 0.2)\nsave sound as file\n{then}", file.display())
 }
 
 #[test]
@@ -50,8 +50,8 @@ fn the_compiled_shader_demo_compiles_to_one_fragment_shader() {
 
 #[test]
 fn a_file_written_again_is_measured_again() {
-	// render_sound writes the sounds since the last one: the file holds the A4 of 0.2 s, then only a C3 of 0.4 s
-	let again = "before = sound_seconds(file)\ntone(C3, 0.4)\nrender_sound(file)\nbars = spectrum(file, 0.05, 8)";
+	// save sound writes the sounds since the last one: the file holds the A4 of 0.2 s, then only a C3 of 0.4 s
+	let again = "before = sound_seconds(file)\ntone(C3, 0.4)\nsave sound as file\nbars = spectrum(file, 0.05, 8)";
 	is!(
 		&of_a_rendered_tone(&format!("{again}\n[round(before * 10), round(sound_seconds(file) * 10)] == [2, 4]")),
 		true

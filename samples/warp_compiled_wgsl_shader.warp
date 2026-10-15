@@ -22,8 +22,11 @@ swirl(x, y) := {
 }
 
 print shader_of(swirl)
-for frame in 1 to 300 {
-	time = frame / 60
+// five seconds by the clock, however long a frame takes (headless, every frame is also written to a file)
+started = clock()
+time = 0
+while time < 5 {
 	paint(swirl, width, height)
 	sleep(1 / 60)
+	time = (clock() - started) / 1000
 }

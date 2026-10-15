@@ -73,7 +73,7 @@ fn the_gpu_visualizer_raymarches_while_it_plays() {
 }
 
 // the same tunnel written in warp functions: paint(tunnel, …) compiles them to one fragment shader (card compile-shaders),
-// lit by mozart.mp3's spectrum; its first 3 seconds (gpu_visualizer_warp.args), not the whole song
+// lit by mozart.mp3's spectrum; its first 4 seconds (gpu_visualizer_warp.args), as long as gpu_visualizer.warp's song, not the whole song
 #[cfg(feature = "native")]
 #[test]
 fn the_gpu_visualizer_written_in_warp_raymarches_while_it_plays() {

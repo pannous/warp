@@ -122,6 +122,8 @@ tunnel(x, y) := {
 	(vignetted ./ (1 .+ vignetted)) .^ 0.85
 }
 
+// the song decodes before it plays, so the first frame keeps up with the music
+spectrum(song, 0, bands)
 play song
 started = clock()
 // the whole song, or as many seconds as the command line gives: `warp gpu_visualizer_warp.warp 3`
