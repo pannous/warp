@@ -200,11 +200,6 @@ fn iteration_word(word: &Node) -> Option<&'static Iteration> {
 	ITERATIONS.iter().find(|iteration| iteration.word == canonical)
 }
 
-/// `map`, `forEach`, `sorted`: a word whose argument is a function
-pub(crate) fn is_iteration_word(word: &str) -> bool {
-	iteration_word(&symbol(word)).is_some()
-}
-
 /// `xs.map(it * 2)` in a function of one parameter: the `it` of the argument is the argument function's own
 pub(crate) fn has_own_it(head: &Node, argument: &Node) -> bool {
 	iteration_word(head).is_some() && it_function(argument).is_some()

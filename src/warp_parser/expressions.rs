@@ -42,9 +42,7 @@ impl WarpParser {
 			let fourth_root = self.current_char() == super::lookahead::FOURTH_ROOT;
 			// `sort by abs.take first 1`: a glued method applies to the word, it is no operand
 			let method_follows = self.peek_char(chars) == '.' && self.peek_char(chars + 1).is_alphabetic();
-			// `map abs xs`, `map sqrt on: xs`: where an iteration word expects its function, the word is that function
-			let function_argument = crate::lambdas::is_iteration_word(&self.word_ending_before(self.pos));
-			let bare = operator_word && (self.expression_ends_after(chars) || method_follows || function_argument);
+			let bare = operator_word && (self.expression_ends_after(chars) || method_follows);
 			// `sqrt(2).round(2)`: the glued parentheses are the whole operand, the method applies to the result
 			let call_with_method = operator_word
 				&& self.parenthesis_length(chars).is_some_and(|length| {
@@ -67,7 +65,15 @@ impl WarpParser {
 					norm::length_operator(&crate::normalize::operand_text(&rhs), false);
 				}
 				let rhs = if fourth_root { self.finish_prefix(op, rhs) } else { rhs };
-				self.finish_prefix(op, rhs)
+				let applied = self.finish_prefix(op, rhs);
+				// `map sqrt xs`, `apply abs -3`: lowering may read the word as the function instead
+				match operator_word {
+					true => Node::Meta {
+						node: Box::new(applied),
+						data: Box::new(Node::key(crate::words::OPERATOR_WORD_MARK, Node::True)),
+					},
+					false => applied,
+				}
 			}
 		} else if let Some(operator) = self.try_parse_operator_value() {
 			operator

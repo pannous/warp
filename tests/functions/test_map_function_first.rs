@@ -43,3 +43,18 @@ fn a_prefix_operator_word_in_every_order() {
 	assert_eq!(printed("map sqrt on: [4 9]"), "[2 3]");
 	assert_eq!(printed("-7 abs"), "7");
 }
+
+/// one rule: wherever a parameter expects a function, an operator word is that function, as a library word is
+#[test]
+fn a_prefix_operator_word_for_a_function_parameter() {
+	assert_eq!(printed("apply(f, x) := f(x); apply floor 2.5"), "2");
+	assert_eq!(printed("apply(f, x) := f(x); apply sqrt 9"), "3");
+	assert_eq!(printed("apply(f, x) := f(x); apply abs -3"), "3");
+}
+
+/// card map-library-word
+#[test]
+fn a_library_word_before_the_list() {
+	assert_eq!(printed("map floor [1.5 2.5]"), "[1 2]");
+	assert_eq!(printed("map reverse [[1 2] [3 4]]"), "[[2 1] [4 3]]");
+}

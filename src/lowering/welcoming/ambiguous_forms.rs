@@ -54,8 +54,11 @@ fn needs_arguments(at: &Node, word: &str) -> Node {
 fn library_word_values(node: Node, words: &SuffixWords) -> Node {
 	let node = node.map_children(|child| library_word_values(child, words));
 	match node {
-		Node::List(mut items, bracket, separator) => {
-			let is_iteration = items.first().is_some_and(|head| matches!(head.drop_meta(), Node::Symbol(name) if crate::function_values::ITERATION_WORDS.contains(&name.as_str())));
+		Node::List(items, bracket, separator) => {
+			// a `map` the program defines is its own function, no iteration word (`def map(list, fn)`)
+			let is_iteration = items.first().is_some_and(|head| matches!(head.drop_meta(), Node::Symbol(name) if crate::function_values::ITERATION_WORDS.contains(&name.as_str()) && !words.functions.contains(name)));
+			// `map sqrt xs`, `map sqrt on: xs`: the parser applied sqrt, the iteration word takes it as its function
+			let mut items = if is_iteration { crate::closures::with_operator_word_unfolded(items, 1) } else { items };
 			let position = function_position(&items, words);
 			if let Some(function) = items.get_mut(position).filter(|item| is_iteration && words.is_function_word(item))
 			{
@@ -402,12 +405,8 @@ fn apply_suffix_words(items: Vec<Node>, functions: &SuffixWords, bracket: Bracke
 		let suffix = heading_suffix_word(&item, functions);
 		// `map xs abs` passes abs to map: an operator word applies only to a whole first operand (`-7 abs`, `x = -7 abs`)
 		let suffix = suffix.filter(|(_, suffix)| matches!(suffix, Suffix::Function(_)) || applied.len() == 1);
-		// `map abs xs`: an iteration word takes the operator word as its function, never is its operand
-		let takes_functions = |operand: &Node| {
-			functions.is_library_word(operand) || crate::lambdas::is_iteration_word(&operand.drop_meta().name())
-		};
 		let (Some(operand), Some((word, function))) =
-			(applied.last().filter(|operand| !takes_functions(operand)), suffix)
+			(applied.last().filter(|operand| !functions.is_library_word(operand)), suffix)
 		else {
 			applied.push(item);
 			continue;
