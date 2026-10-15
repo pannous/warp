@@ -23,3 +23,10 @@ fn a_function_keyword_definition_of_an_operator_word_is_refused() {
 	fails_with("def norm(x): 777\nnorm(4)", "norm is an operator");
 	fails_with("fun sqrt(x) { 777 }; sqrt(4)", "sqrt is an operator");
 }
+
+/// `norm x := …` without parentheses parses as norm applied to `x := …`: refused as `norm(x) := …` is
+#[test]
+fn a_definition_of_an_operator_word_without_parentheses_is_refused() {
+	fails_with("norm x := x * 10; norm -3", "norm is an operator");
+	is!("x := 3; norm x", 3);
+}

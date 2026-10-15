@@ -423,7 +423,7 @@ def word_prefixed(p, word) {
 
 // The prefix operators written as words, each with its canonical name
 // Rust twin: lookahead.rs PREFIX_OPERATOR_WORDS
-PREFIX_WORDS = [["sqrt", "√"], ["cbrt", "∛"], ["abs", "‖"], ["norm", "‖"]]
+PREFIX_WORDS = [["sqrt", "√"], ["cbrt", "∛"], ["abs", "‖"]]
 PREFIX_POWER = 162
 
 // No operand follows the parser's position: the end of a line or group, or an infix operator set apart by blanks
