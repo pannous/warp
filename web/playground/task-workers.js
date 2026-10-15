@@ -39,10 +39,11 @@ function serveTaskWorkers(programWorker) {
 }
 
 // a failure without an Error (Firefox's bare "uncaught exception: undefined") at the page or one of its Workers is said
-// with where it happened
+// with where it happened; a Worker's error event never carries the Error (errors do not cross threads), only its message
 const reportBareErrors = (target, label) => target.addEventListener("error", event => {
 	if (event.error instanceof Error) return;
-	console.error(`warp ${label}: an error without an Error (${event.error}) at ${event.filename}:${event.lineno}:${event.colno}: ${event.message}`);
+	const what = target instanceof Worker ? "a Worker error" : `an error without an Error (${event.error})`;
+	console.error(`warp ${label}: ${what} at ${event.filename}:${event.lineno}:${event.colno}: ${event.message}`);
 });
 
 // `clipboard` in a Worker (host-tasks.js askPage): the page's text into the Worker's shared buffer. A browser that reads
