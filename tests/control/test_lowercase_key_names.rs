@@ -47,3 +47,14 @@ fn held_key_compares_with_lowercase_key_words() {
 	let lowered = warp::pipeline::lower("held_key == left or space == held_key").expect("lowers").serialize();
 	assert!(lowered.contains(r#""ArrowLeft""#) && lowered.contains(r#"" ""#), "{lowered}");
 }
+
+// reviewer: a lowercase key word the program binds elsewhere names no key, and the warning says why and what to write
+#[test]
+fn a_key_word_bound_elsewhere_says_to_write_it_in_capitals() {
+	warp::errors::diagnostic::take_warnings();
+	warp::wasm_emitter::eval("f(left) := left\nn = 0\non key { if key == left { n += 1 } }\nn");
+	let warned = warp::errors::diagnostic::take_warnings().into_iter().any(|warning| {
+		warning.message.contains("left is also a name the program binds") && warning.message.contains("write LEFT")
+	});
+	assert!(warned);
+}

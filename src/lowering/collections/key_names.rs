@@ -128,9 +128,22 @@ fn unbound_comparisons(body: &Node, known: &HashSet<String>, bound: &HashSet<Str
 	if let Node::Key(left, Op::Eq | Op::Ne, right) = body {
 		for (side, other) in [(left, right), (right, left)] {
 			let names_key = |word: &str| other.is_symbol(KEY_EVENT) && lowercase_key_name(word, bound).is_some();
-			if let Some(word) = side.symbol_name().filter(|word| names_nothing(word, known) && !names_key(word)) {
-				warnings.push(names_nothing_warning(side, "on key", word));
-			}
+			let Some(word) = side.symbol_name().filter(|word| names_nothing(word, known) && !names_key(word)) else {
+				continue;
+			};
+			let shadowed_key = other.is_symbol(KEY_EVENT).then(|| key_name(&word.to_uppercase())).flatten();
+			warnings.push(match shadowed_key {
+				// `f(left) := left` elsewhere: until scopes are tracked (card path-parameter-scope), the bound name wins
+				Some(_) => Diagnostic::at(
+					side,
+					format!(
+						"on key: {word} is also a name the program binds, so it names no key here; write {}",
+						word.to_uppercase()
+					),
+				)
+				.severe(),
+				None => names_nothing_warning(side, "on key", word),
+			});
 		}
 	}
 	for part in body.parts() {
