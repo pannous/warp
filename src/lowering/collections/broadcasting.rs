@@ -520,7 +520,7 @@ fn is_arithmetic_operand(body: &Node, name: &str) -> bool {
 	let is_param = |node: &Node| matches!(node.drop_meta(), Node::Symbol(symbol) if symbol == name);
 	let is_list_literal = |node: &Node| matches!(node.drop_meta(), Node::List(_, Bracket::Square, _));
 	let mut found = false;
-	body.visit(&mut |node| {
+	without_element_wise(body.clone()).visit(&mut |node| {
 		if let Node::Key(left, op, right) = node {
 			// `ys + [x]` concatenates: ys is a list
 			let concatenates = *op == Op::Add && (is_list_literal(left) || is_list_literal(right));
@@ -528,6 +528,15 @@ fn is_arithmetic_operand(body: &Node, name: &str) -> bool {
 		}
 	});
 	found
+}
+
+/// `a .+ b` as the group (a b): an element-wise operator takes a list or a number on either side at run time
+/// (element_wise_any), so its sides are no arithmetic operands making a function broadcast (card compile-shaders)
+fn without_element_wise(node: Node) -> Node {
+	match element_wise_parts(&node) {
+		Some((receiver, _, operand)) => parens(vec![without_element_wise(receiver), without_element_wise(operand)]),
+		None => node.map_children(without_element_wise),
+	}
 }
 
 /// The function and argument of `f x` or `f(x)` when f broadcasts

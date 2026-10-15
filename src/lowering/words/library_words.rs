@@ -193,15 +193,10 @@ const LIST_CONSTRUCTORS: [&str; 4] = ["listOf", "mutableListOf", "arrayOf", "arr
 const ARITY_VARIANTS: [(&str, usize, &str); 3] =
 	[("round", 2, "round_to"), ("first", 2, "first_items"), ("last", 2, "last_items")];
 /// Methods a later pass lowers to prelude words: `x.pop(k)` (and `delete x[k]`, mutation::lower_deletes) to popped_item
-/// and popped_rest, `x.clear()` to cleared (list_mutations removed_key, cleared_collection); an element-wise operator
-/// (`k .* v`, the parser's each_element) to element_wise_any where no side is known a list (broadcasting.rs)
+/// and popped_rest, `x.clear()` to cleared (list_mutations removed_key, cleared_collection)
 const POPPED_WORDS: &[&str] = &["popped_item", "popped_rest"];
-const LOWERED_TO_PRELUDE: [(&str, &[&str]); 4] = [
-	("pop", POPPED_WORDS),
-	("delete", POPPED_WORDS),
-	("clear", &["cleared"]),
-	(crate::lowering::broadcasting::EACH_ELEMENT, &[crate::lowering::broadcasting::ELEMENT_WISE_ANY]),
-];
+const LOWERED_TO_PRELUDE: [(&str, &[&str]); 3] =
+	[("pop", POPPED_WORDS), ("delete", POPPED_WORDS), ("clear", &["cleared"])];
 const IS_ALPHA: &str = "is_alpha";
 const LEFT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_left";
 const RIGHT_OPERAND_PLACEHOLDER: &str = "operand_placeholder_right";
