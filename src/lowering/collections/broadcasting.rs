@@ -90,12 +90,14 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 			most: count,
 			typed_first: typed,
 			converts: false,
+			library: false,
 		});
 		*arity = Arity {
 			fewest: arity.fewest.min(count),
 			most: arity.most.max(count),
 			typed_first: arity.typed_first && typed,
 			converts: false,
+			library: false,
 		};
 	}
 	// `text hex 255`, `text(byte 65)`: a built-in type converts one value, nesting like a function of one parameter.
@@ -103,18 +105,24 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 	// `(int 3) == 3` like `f(x: int)`; a truth type (`bool 3 == 3`) takes anything and is ambiguous like `same(x) := x`
 	for name in type_calls_used(&program) {
 		let typed = !TRUTH_TYPES.contains(&name.to_lowercase().as_str());
-		arities.entry(name).or_insert(Arity { fewest: 1, most: 1, typed_first: typed, converts: true });
+		arities.entry(name).or_insert(Arity { fewest: 1, most: 1, typed_first: typed, converts: true, library: true });
 	}
 	// `round(floor x)`, `upper(lower t)`: a library word of a typed value nests like a function of its parameters
-	for (name, count) in library_calls_used(&program) {
-		arities.entry(name).or_insert(Arity { fewest: count, most: count, typed_first: true, converts: false });
+	for (name, (fewest, most)) in library_calls_used(&program) {
+		arities.entry(name).or_insert(Arity { fewest, most, typed_first: true, converts: false, library: true });
 	}
-	if arities.is_empty() && !uses_extremum(&program) {
+	if arities.is_empty() {
 		return program;
 	}
 	// `puts add 1 2`: the output words take one value
 	for word in crate::wasm_emitter::OUTPUT_WORDS {
-		arities.entry(word.to_string()).or_insert(Arity { fewest: 1, most: 1, typed_first: false, converts: false });
+		arities.entry(word.to_string()).or_insert(Arity {
+			fewest: 1,
+			most: 1,
+			typed_first: false,
+			converts: false,
+			library: true,
+		});
 	}
 	nest_prefix_calls(program, &arities)
 }
@@ -186,6 +194,8 @@ struct Arity {
 	typed_first: bool,
 	/// A built-in type converting its value (`int 3.7`, `hex 255`): nests like a function, compares like one
 	converts: bool,
+	/// A word of the language, not the program's own function
+	library: bool,
 }
 
 /// The built-in type words the program calls and does not name itself: `int`, `text`, `hex`, `byte` … (analyzer::applied_word)
@@ -204,12 +214,12 @@ fn type_calls_used(program: &Node) -> HashSet<String> {
 }
 
 /// The library words the program calls and does not name itself whose first parameter is typed, with their arity
-fn library_calls_used(program: &Node) -> HashMap<String, usize> {
+fn library_calls_used(program: &Node) -> HashMap<String, (usize, usize)> {
 	let mut used = HashMap::new();
 	program.visit(&mut |node| {
 		if let Node::Symbol(name) = node {
-			if let Some(count) = crate::lowering::library_signatures::typed_first_arity(name) {
-				used.insert(name.clone(), count);
+			if let Some(parameters) = crate::lowering::library_signatures::typed_first_parameters(name) {
+				used.insert(name.clone(), parameters);
 			}
 		}
 	});
@@ -234,7 +244,7 @@ fn is_one_value_word(node: &Node, arities: &HashMap<String, Arity>) -> bool {
 	let is_word = |name: &str| {
 		crate::library_words::is_library_word(name) || EXTREMUM_WORDS.contains(&name) || name == COUNT_WORD
 	};
-	matches!(node.drop_meta(), Node::Symbol(name) if !arities.contains_key(name) && is_word(name))
+	matches!(node.drop_meta(), Node::Symbol(name) if arities.get(name).is_none_or(|takes| takes.library) && is_word(name))
 }
 
 fn arity_of(node: &Node, arities: &HashMap<String, Arity>) -> Option<Arity> {
@@ -352,23 +362,6 @@ fn comma_joined(items: &[Node], arities: &HashMap<String, Arity>) -> Option<Vec<
 	})
 }
 
-/// The parameters a comma may fill: a function's, or min's and max's, which take two values or more (`max 3, 4`)
-fn comma_arity(node: &Node, arities: &HashMap<String, Arity>) -> Option<Arity> {
-	let extremum = || {
-		let is_extremum = matches!(node.drop_meta(), Node::Symbol(name) if EXTREMUM_WORDS.contains(&name.as_str()));
-		is_extremum.then_some(Arity { fewest: 2, most: usize::MAX, typed_first: true, converts: false })
-	};
-	arity_of(node, arities).or_else(extremum)
-}
-
-fn uses_extremum(program: &Node) -> bool {
-	let mut used = false;
-	program.visit(&mut |node| {
-		used |= matches!(node, Node::Symbol(name) if EXTREMUM_WORDS.contains(&name.as_str()));
-	});
-	used
-}
-
 /// `add 1` (also as the value of `x = add 1`) given the items after its comma, when it is short of arguments and they fit
 fn with_comma_arguments(node: Node, rest: &[Node], arities: &HashMap<String, Arity>) -> Result<Node, Node> {
 	match node {
@@ -382,7 +375,7 @@ fn with_comma_arguments(node: Node, rest: &[Node], arities: &HashMap<String, Ari
 		},
 		Node::List(mut items, Bracket::None, Separator::Space) => {
 			let given = items.len() - 1;
-			let fits = comma_arity(&items[0], arities)
+			let fits = arity_of(&items[0], arities)
 				.is_some_and(|takes| given < takes.fewest && given + rest.len() <= takes.most);
 			if fits {
 				return Ok(Node::List([items, rest.to_vec()].concat(), Bracket::None, Separator::Space));

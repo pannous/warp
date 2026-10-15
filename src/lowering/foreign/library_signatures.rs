@@ -20,8 +20,8 @@ const NAMED_SIGNATURES: [(&str, &str); 23] = [
 	("tan", "(x:float) -> float"),
 	("exp", "(x:float) -> float"),
 	("ln", "(x:float) -> float"),
-	("min", "(a, b) -> number"),
-	("max", "(a, b) -> number"),
+	("min", "(a:number, b:number, more...) -> number"),
+	("max", "(a:number, b:number, more...) -> number"),
 	("upper", "(t:text) -> text"),
 	("lower", "(t:text) -> text"),
 	("reverse", "(xs)"),
@@ -35,6 +35,8 @@ const NAMED_SIGNATURES: [(&str, &str); 23] = [
 const PRELUDE: &str = "prelude";
 const POSITIONAL_NAMES: [&str; 4] = ["a", "b", "c", "d"];
 const LIBM_PARAMETER_TYPE: &str = "float";
+/// `more...`: a rest parameter, any number of values (variadic.rs)
+const REST_MARK: &str = "...";
 
 /// A library word's parameter names and its signature `(t:text, separator:text) -> list of text`; None for a word
 /// that is no library word
@@ -57,9 +59,18 @@ pub fn library_signature(word: &str) -> Option<(Vec<String>, String)> {
 /// The parameter count of a library word whose first parameter is typed (`floor(x:number)`, `upper(t:text)`): a function
 /// is never its argument, so `round(floor x)` nests as `round(floor(x))`
 pub fn typed_first_arity(word: &str) -> Option<usize> {
+	typed_first_parameters(word).filter(|(fewest, most)| fewest == most).map(|(fewest, _)| fewest)
+}
+
+/// The fewest and most values a library word with a typed first parameter takes: `floor` (1, 1), `max` (2, unbounded)
+pub fn typed_first_parameters(word: &str) -> Option<(usize, usize)> {
 	let (params, signature) = library_signature(word)?;
 	let first = signature.trim_start_matches('(').split([',', ')']).next()?;
-	first.contains(':').then_some(params.len())
+	if !first.contains(':') {
+		return None;
+	}
+	let is_variadic = params.last().is_some_and(|last| last.ends_with(REST_MARK));
+	Some(if is_variadic { (params.len() - 1, usize::MAX) } else { (params.len(), params.len()) })
 }
 
 /// The library words of one typed value with a signature here or in libm: `floor`, `sin`, `upper`, `log10`
