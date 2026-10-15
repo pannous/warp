@@ -44,7 +44,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   or alias rewrites, semantic rules stay compiler hints. The command is `warp format`, `warp lint` a synonym; warp
   avoids abbreviations, so no `fmt`. The linter carries that rule as a soft hint (report only, never fixed): an
   abbreviated word or name (`fmt`, `str`, `cnt`) → "warp avoids abbreviations: format / text / count", built-in
-  alias words included. Layout: tabs, `name: value`, binary operators spaced (glued only where spacing changes the
+  alias words included. Layout: tabs, `name: value` (parameter types too: `area(width: int)`, also in help/serialize/docs), binary operators spaced (glued only where spacing changes the
   meaning; every edit is checked by comparing parse trees), list separators kept as written, `{` on its header's
   line, one space after `,`, no spaces inside brackets, at most one blank line.
   Later (card warp-format-strict, Soon): a second, opinionated mode rewriting code to best practices, with a preview
