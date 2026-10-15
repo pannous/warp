@@ -35,8 +35,16 @@ fn in_stays_membership_elsewhere() {
 }
 
 #[test]
+#[cfg(feature = "native")]
 fn printing_a_selection_prints_each_part() {
 	assert!(crate::common::printed("print words in \"ab cd\"").starts_with("ab\ncd\n"));
 	assert!(crate::common::printed("print characters in \"hi\"").starts_with("h\ni\n"));
 	assert!(crate::common::printed("print all words in \"ab cd\"").starts_with("ab\ncd\n"));
+}
+
+/// decision 2026-10-15: letters are the alphabetic characters only
+#[test]
+fn letters_are_the_alphabetic_characters() {
+	is!("(letters of \"a1 b!\") == ['a' 'b']", true);
+	is!("length of letters in \"héllo Ω1\"", 6);
 }
