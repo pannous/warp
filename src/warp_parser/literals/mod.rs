@@ -11,6 +11,7 @@ mod text;
 mod units;
 pub(crate) use constants::*;
 pub(crate) use numbers::*;
+pub use paths::is_path_literal;
 pub use shaders::*;
 pub(crate) use text::*;
 

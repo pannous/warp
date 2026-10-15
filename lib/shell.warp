@@ -36,7 +36,7 @@ wc(path:any) := {
 	all = file_lines(path)
 	{"lines": count(all), "words": sum([count(words(line)) for line in all]), "bytes": file_size(path)}
 }
-// a file's lines sorted, without repeats; sort and unique themselves are of lists
+// a file's lines sorted, without repeats
 sort_lines(path:any) := sort(file_lines(path))
 unique_lines(path:any) := unique(file_lines(path))
 // `grep "fn " "main.rs"`: the lines of a file the regular expression matches
@@ -52,3 +52,10 @@ info(path:any) := std_io("file", "info", [path])
 open(path:any) := std_io("os", "open", [path])
 // the path of the program a command runs, ø when no folder of the PATH has it
 which(name:any) := std_io("os", "which", [name])
+// A path written without quotes is a Path where a word has a method for one (card cross-module-overload): `sort
+// ./names.txt` sorts the file's lines, `sort [3 1 2]` stays the list's sort; the same for unique, find and size
+class Path { name: text }
+sort(file:Path) := sort_lines(file.name)
+unique(file:Path) := unique_lines(file.name)
+find(folder:Path, pattern:text) := find_files(folder.name, pattern)
+size(file:Path) := file_size(file.name)

@@ -1,6 +1,22 @@
 //! Paths and URLs: where a path literal starts and a URL ends
 use super::*;
 
+/// A text written as a path without quotes (`~/notes.txt`, `./a.wav`, `/tmp`): a call of a word with a method for the
+/// class Path passes it as a Path (lib/shell.warp, `sort ./names.txt`; traits generics.rs path_arguments)
+#[derive(Clone, Debug, PartialEq)]
+pub struct PathLiteral;
+
+/// The node is a path written without quotes
+pub fn is_path_literal(node: &Node) -> bool {
+	match node {
+		Node::Meta { node, data } => {
+			matches!(data.as_ref(), Node::Data(dada) if dada.downcast_ref::<PathLiteral>().is_some())
+				|| is_path_literal(node)
+		}
+		_ => false,
+	}
+}
+
 impl WarpParser {
 	/// `&name`: a reference to the function `name`, an `&` glued to the word after it and not to a word before it (`a &b`, `f(&g)`)
 	/// A file path without quotes starts here, glued to what follows and not to an operand before it (card unix-words):
@@ -71,7 +87,7 @@ impl WarpParser {
 			(0..).map(|offset| self.peek_char(offset)).take_while(|&c| !super::lookahead::ends_path(c)).collect();
 		self.advance_by(path.chars().count());
 		self.path_end = Some(self.pos);
-		Node::Text(path)
+		Node::Text(path).with_meta_data(PathLiteral)
 	}
 
 	/// Parse symbol with optional suffix: name{...}, name<...>, name(...)

@@ -1,6 +1,9 @@
 //! The keywords and marks the parser and several lowering passes look for, a leaf module: it depends on nothing
 
 pub const COUNT_WORD: &str = "count";
+/// The class of a path written without quotes where a word has a method for it (lib/shell.warp, `sort ./names.txt`)
+pub const PATH_CLASS: &str = "Path";
+pub const PATH_FIELD: &str = "name";
 pub const EACH_WORD: &str = "each";
 pub const FOR_WORD: &str = "for";
 pub const FROM_WORD: &str = "from";

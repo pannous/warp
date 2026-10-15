@@ -187,6 +187,11 @@ fn literal_function(node: &Node) -> Option<Lambda> {
 }
 
 /// `map`, `filter`, `sorted` … as a word, whether or not the program defines a function of that name
+/// `find`, `map`, `filter`, … under any spelling: a class's method of that name keeps them for other values
+pub(crate) fn is_iteration_word(name: &str) -> bool {
+	iteration_word(&Node::Symbol(name.to_string())).is_some()
+}
+
 fn iteration_word(word: &Node) -> Option<&'static Iteration> {
 	let Node::Symbol(name) = word.drop_meta() else {
 		return None;
