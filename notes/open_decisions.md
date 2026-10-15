@@ -6,7 +6,9 @@ notes/decisions.md, work goes on the board (`todo add`), rules go where they are
 the wiki).
 
 ## Pending
-(none)
+- dollar-value (card dollar-value; with the user and the supervisor): should `$who` used as a value be the element's
+  value (input text, number input → number, checkbox → yes/no, else text content; `$who = "Ann"` writes it), or is
+  that too much magic? Default: unchanged, `$who` is the element and `$who.value` its value.
 
 ## Parked (user: "later")
 - body-statements (2026-10-14): a function body looped like a list of statements, each statement with its kind

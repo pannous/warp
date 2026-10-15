@@ -102,6 +102,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - dollar-element (2026-10-14): in a page program `$xyz` is the element with id xyz (`$xyz.value`, `$xyz.focus()`);
   `$window`, `$document` are those globals; misspelled members are compile-time errors. A route's `$title` stays the
   submitted field's value.
+  separate-scopes (2026-10-15, user): two variable scopes never mix: page elements live only in the `$` scope, program variables in their own,
+  so a plain `who` never names an element (unlike JavaScript, where a local silently hides the element of that id).
 - call-as-grouping (2026-10-15): `f x as T` is `f(x as T)` everywhere, like `f 2 + 1` = `f(2 + 1)`, with a warning
   naming `f(x as T)` and `(f x) as T`; dispatch on the result goes via `pdf p = render "x"` or `(render "x") as pdf`.
 - uniscript-binary-import (2026-10-15, user: "definitely yes"): ~/dev/uniscript gets wasm-only c/ffi additions
@@ -418,6 +420,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - Ranges (2026-10-09): `r: 1..n` is the range itself, same as `r = 1..n`. `upto` excludes the end with a hint.
 
 ## Functions and calls
+- function-references (2026-10-15, user): a bare name of a function that needs arguments, compared with a type
+  (`floor is function`) or in `type(floor)`, means the function itself (card bare-fn-type). `.floor` in argument
+  position is a lambda on it, like Swift's .member: `xs.map(.floor)`, `people.sort(.age)` (card dot-lambda).
+  `&floor` and `function floor` stay the explicit references; `:floor` is not used.
 - type-library-words (2026-10-12): list/map/text library words are always available as `x.f()` and `f(x)`;
   `use list` only for qualified `list.zip`. P171 other modules' words need their `use` (error naming the module);
   `write` and `exists` are global; a file URL loads the file module.
@@ -608,11 +614,15 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   cli-words migrates the existing --fuel/--exe/--strict/… (older `--x` mentions below are superseded by it).
 - unix-words (2026-10-15, user): `use script` has shell words with warp results: ls pwd cd cat echo mkdir cp mv touch
   head tail wc grep which rm, plus find, size/info (du/stat), sort/uniq, open (native), curl/wget as aliases of
-  fetch/download. `export a=b` only if the WebAssembly-export soft keyword can be reused. Not now: basename/dirname,
+  fetch/download. `export a=b` clashes with the WebAssembly export, so it's left out. Not now: basename/dirname,
   chmod, ln, diff, kill/ps, tar/zip. rm: one file or an empty folder, no patterns, never / ~ or the working dir and
   above, sandbox permission, and it moves to the Trash (undoable); no recursive form. `wc` → {lines, words, bytes};
   ls hides dotfiles (list_files shows all); grep is regex over lines; unquoted paths `~/x ./x /etc`, `~` expanded on
   use. Card unix-words.
+- cross-module-overload (2026-10-15, user): overloading works across modules: a module's definition doesn't shadow a
+  same-named word elsewhere, the call dispatches on the argument type. `use script; sort ./names.txt` sorts the
+  file's lines while `sort [3 1 2]` still sorts the list (same for unique, find, size). sort_lines/find_files/
+  file_size are only interim names.
 - P102 `warp build hello.warp` makes the native executable (`hello`, hello.exe on Windows); `--exe` accepted.
   build-should (2026-10-13 default): it writes x.wasm beside it too; `--wasm` only the module.
 - no-executable-by-default (2026-10-12): a plain `warp file.warp` writes no executable; WARP_EXECUTABLE=1 turns it on.
