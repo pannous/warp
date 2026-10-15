@@ -62,6 +62,7 @@ mod test_float_values_of_tuples;
 mod test_folding_in_bodies;
 mod test_foreign_modifiers;
 mod test_foreign_spellings;
+mod test_ocaml_fun; // card fun-x-loud
 mod test_free_var_if_arms;
 mod test_function_aliases;
 mod test_function_head; // card cleanup-definition-view
