@@ -8,6 +8,7 @@ mod test_any_into_annotated;
 mod test_any_into_annotated_types;
 mod test_any_place; // card yes-stores
 mod test_as_number_variable; // card number-variable
+mod test_bare_function_type_test; // card bare-fn-type
 mod test_be_definitions;
 mod test_binary_int; // card binary-int
 mod test_block_data_paths;
