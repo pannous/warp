@@ -66,6 +66,8 @@ when a message or comment cites a number (P71, D5) and you need its wording; nev
   cannot run in the browser goes in web/playground/excluded_samples.txt. Name the sample in the Integrator message.
 - Before a merge request: `cargo fmt` and `cargo clippy --lib --bins -- -D warnings` on your branch. The gate checks
   both (user, 2026-10-12, card cargo-fmt: the whole repo is formatted once, then enforced).
+  Then `scripts/style_lint.py --fix` (the style rules rustfmt and clippy lack, notes/style_lint.md) and commit what it
+  moved; the gate runs it too. Style nits are the linter's, not hand polish (user, 2026-10-15).
   A branch from before the whole-repo format (78607d62e) crosses it in three steps, which never drops main's changes:
   `git merge 78607d62e^` (resolve real conflicts as usual); `cargo fmt` and commit; `git merge -X ours 78607d62e`
   (the format commit alone; your formatted side wins, and it is the same formatting); then `git merge origin/main`.
