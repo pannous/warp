@@ -23,6 +23,8 @@ const LOOP_KEYWORD: &str = "loop";
 /// Lua's, Ruby's and Julia's word closing a function body
 const END_WORD: &str = "end";
 const LAMBDA_WORD: &str = "lambda";
+/// OCaml's and F#'s lambda keyword, dropped (decision foreign-spellings); Kotlin's `fun f(x) = …` stays
+const OCAML_FUN: &str = "fun";
 const VAR_WORD: &str = "var";
 const DESTRUCTURED_OBJECT: &str = "object·";
 const RUBY_LAMBDA_WORDS: [&str; 2] = ["lambda", "proc"];
@@ -119,6 +121,9 @@ fn lambda_calls(node: Node, lambda_names: &HashSet<String>) -> Node {
 }
 
 fn forms(node: Node) -> Node {
+	if let Some(error) = ocaml_fun(&node) {
+		return error;
+	}
 	match node {
 		Node::List(items, bracket, separator) if generic_names(&items).is_some() => {
 			let (function, names) = generic_names(&items).expect("guarded");
@@ -183,6 +188,41 @@ fn forms(node: Node) -> Node {
 		}
 		other => children_rewritten(other, forms),
 	}
+}
+
+/// Card fun-x-loud: OCaml's `fun x -> …` (`fun (x -> …)` as parsed) and `fun a b -> …` were dropped (decision
+/// foreign-spellings), so they are an error naming warp's lambda instead of running as something else
+fn ocaml_fun(node: &Node) -> Option<Node> {
+	let names = match node.drop_meta() {
+		Node::Key(head, Op::Arrow, _) => {
+			let mut words = vec![];
+			crate::lambdas::flatten_phrase(head, &mut words);
+			match words.split_first() {
+				Some((keyword, names)) if keyword.is_symbol(OCAML_FUN) => names.to_vec(),
+				_ => return None,
+			}
+		}
+		Node::List(items, _, _) => {
+			let arrow = items.windows(2).find(|pair| pair[0].is_symbol(OCAML_FUN))?.get(1)?;
+			let Node::Key(head, Op::Arrow, _) = arrow.drop_meta() else {
+				return None;
+			};
+			let mut words = vec![];
+			crate::lambdas::flatten_phrase(head, &mut words);
+			words
+		}
+		_ => return None,
+	};
+	if names.is_empty() || !names.iter().all(|name| matches!(name.drop_meta(), Node::Symbol(_))) {
+		return None;
+	}
+	let names: Vec<String> = names.iter().map(Node::name).collect();
+	let parameters = match names.as_slice() {
+		[single] => single.clone(),
+		many => format!("({})", many.join(", ")),
+	};
+	let message = format!("OCaml's `{OCAML_FUN} {} -> …` is not warp: write `{parameters} -> …`", names.join(" "));
+	Some(crate::errors::diagnostic::Diagnostic::at(node, message).fix(format!("{parameters} -> …")).into_error())
 }
 
 /// Rust's `let mut x = 1`: `var x = 1`, with a note naming var

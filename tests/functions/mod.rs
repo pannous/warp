@@ -62,7 +62,6 @@ mod test_float_values_of_tuples;
 mod test_folding_in_bodies;
 mod test_foreign_modifiers;
 mod test_foreign_spellings;
-mod test_ocaml_fun; // card fun-x-loud
 mod test_free_var_if_arms;
 mod test_function_aliases;
 mod test_function_head; // card cleanup-definition-view
@@ -110,6 +109,7 @@ mod test_nonlocal_kind_change; // card nonlocal-assign
 mod test_nonlocal_lambdas;
 mod test_nonlocal_passed_around;
 mod test_object_arguments;
+mod test_ocaml_fun; // card fun-x-loud
 mod test_operator_arguments;
 mod test_operator_word_methods;
 mod test_optional_parameters;
