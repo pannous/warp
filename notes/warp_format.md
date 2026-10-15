@@ -5,6 +5,8 @@
 Options are words, never `--flags` (user, 2026-10-15; the older flags move with card cli-words); `help`, `--help`
 and `-h` anywhere print the usage. `warp beautify [check] <file|folder>…` is the opinionated verb (card
 warp-format-strict): the layout plus the best-practice rewrites, so far hash-comments (card beautify-cli).
+Code given instead of files (`warp lint 'use script; ls'`, card lint-use: no argument exists or looks like a path)
+prints its hints as `code:<line>: hint: …` and then its formatted text; `check` lists the layout changes.
 
 ## Layout (user, 2026-10-15)
 

@@ -14,9 +14,11 @@ const CHECK_WORD: &str = "check";
 const HASH_COMMENTS_WORD: &str = "hash-comments";
 const OPTION_WORDS: [&str; 2] = [CHECK_WORD, HASH_COMMENTS_WORD];
 const HELP_WORDS: [&str; 3] = ["help", "--help", "-h"];
-pub(crate) const FORMAT_USAGE: &str = "warp format [check] [hash-comments] <file|folder>…  The canonical layout of warp code, only where the meaning stays (warp lint: the same; check: list what would change, exit 1; hash-comments: // comments become #)
-  warp beautify [check] <file|folder>…  The layout plus the best-practice rewrites: // comments become #";
+pub(crate) const FORMAT_USAGE: &str = "warp format [check] [hash-comments] <file|folder|code>…  The canonical layout of warp code, only where the meaning stays (warp lint: the same; check: list what would change, exit 1; hash-comments: // comments become #)
+  warp beautify [check] <file|folder|code>…  The layout plus the best-practice rewrites: // comments become #";
 const WARP_EXTENSION: &str = "warp";
+/// What hints on code given inline name instead of a file
+const CODE_LABEL: &str = "code";
 /// code.golf solutions count their bytes: a folder of them keeps its layout (a file named explicitly is formatted)
 const SKIPPED_FOLDERS: [&str; 1] = ["golf"];
 
@@ -41,8 +43,50 @@ fn warp_files(path: &Path, files: &mut Vec<PathBuf>) {
 	}
 }
 
+/// The soft hints of `code` that the options leave, printed as `<shown>:<line>: hint: …`; a hint beautify resolves
+/// names `warp beautify <target>`
+fn printed_hints(shown: &str, target: &str, code: &str, options: Options) -> usize {
+	let hints: Vec<_> =
+		soft_hints(code).into_iter().filter(|hint| !(options.hash_comments && hint.beautify_fixes)).collect();
+	for hint in &hints {
+		let fix = if hint.beautify_fixes {
+			format!(": `warp {BEAUTIFY_COMMAND} {target}` rewrites them")
+		} else {
+			String::new()
+		};
+		println!("{shown}:{}: hint: {}{fix}", hint.line, hint.message);
+	}
+	hints.len()
+}
+
+/// A name that means a file, never code: `x.warp`, `samples/hello`
+fn looks_like_path(argument: &str) -> bool {
+	argument.ends_with(&format!(".{WARP_EXTENSION}"))
+		|| argument.ends_with(".wasp")
+		|| (argument.contains('/') && !argument.contains(char::is_whitespace))
+}
+
+/// `warp lint "cnt=1 // one"` (card lint-use): code given instead of files: its hints, then its formatted text (in
+/// `check`: the layout changes, exit 1 when there are some); nothing is written
+fn format_code(code: &str, check: bool, options: Options) -> i32 {
+	printed_hints(CODE_LABEL, &format!("'{code}'"), code, options);
+	let formatted = match format(code, options) {
+		Ok(formatted) => formatted,
+		Err(reason) => {
+			println!("{CODE_LABEL}: not formatted: {reason}");
+			return 1;
+		}
+	};
+	if check {
+		formatted.changes.iter().for_each(|change| println!("{CODE_LABEL}:{}: layout: {}", change.line, change.rule));
+		return !formatted.changes.is_empty() as i32;
+	}
+	print!("{}", formatted.text);
+	0
+}
+
 /// The exit code: 1 when a file does not parse or, with `check`, would change. The option words come first; a file
-/// named like one is written `./check`
+/// named like one is written `./check`. Arguments naming no file, that read as code, are formatted as code
 pub(crate) fn format_command(command: &str, arguments: &[String]) -> i32 {
 	if arguments.iter().any(|argument| HELP_WORDS.contains(&argument.as_str())) {
 		println!("  {FORMAT_USAGE}");
@@ -53,33 +97,28 @@ pub(crate) fn format_command(command: &str, arguments: &[String]) -> i32 {
 	let check = option_words.iter().any(|word| word == CHECK_WORD);
 	let beautify = command == BEAUTIFY_COMMAND;
 	let options = Options { hash_comments: beautify || option_words.iter().any(|word| word == HASH_COMMENTS_WORD) };
+	let names_code = !paths.is_empty() && paths.iter().all(|path| !Path::new(path).exists() && !looks_like_path(path));
+	if names_code {
+		return format_code(&paths.join(" "), check, options);
+	}
 	let mut files = Vec::new();
 	for path in paths {
 		warp_files(Path::new(path), &mut files);
 	}
 	if files.is_empty() {
-		eprintln!("warp {command}: name the warp files or folders to format\n  {FORMAT_USAGE}");
+		eprintln!("warp {command}: name the warp files or folders to format, or give code\n  {FORMAT_USAGE}");
 		return 2;
 	}
 	let (mut to_change, mut failed, mut hints_left) = (0, 0, 0);
 	for file in &files {
-		let shown = file.display();
+		let shown = file.display().to_string();
 		let Ok(code) = fs::read_to_string(file) else {
 			println!("{shown}: not formatted: it cannot be read");
 			failed += 1;
 			continue;
 		};
-		let hints: Vec<_> =
-			soft_hints(&code).into_iter().filter(|hint| !(options.hash_comments && hint.beautify_fixes)).collect();
-		for hint in &hints {
-			let fix = if hint.beautify_fixes {
-				format!(": `warp {BEAUTIFY_COMMAND} {shown}` rewrites them")
-			} else {
-				String::new()
-			};
-			println!("{shown}:{}: hint: {}{fix}", hint.line, hint.message);
-		}
-		hints_left += hints.len();
+		let hints = printed_hints(&shown, &shown, &code, options);
+		hints_left += hints;
 		let formatted = match format(&code, options) {
 			Ok(formatted) => formatted,
 			Err(reason) => {
@@ -98,11 +137,11 @@ pub(crate) fn format_command(command: &str, arguments: &[String]) -> i32 {
 		} else if let Err(error) = fs::write(file, &formatted.text) {
 			println!("{shown}: not formatted: {error}");
 			failed += 1;
-		} else if hints.is_empty() {
+		} else if hints == 0 {
 			println!("formatted {shown}: {lines} lines");
 		} else {
 			// "formatted" would read as done while the hints above still ask for something
-			println!("{shown}: layout of {lines} lines fixed, {} hints left", hints.len());
+			println!("{shown}: layout of {lines} lines fixed, {hints} hints left");
 		}
 	}
 	let verb = if check { "to format" } else { "changed" };

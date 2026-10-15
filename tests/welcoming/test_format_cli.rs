@@ -66,3 +66,15 @@ fn format_help_prints_its_usage() {
 		assert!(!run.stdout.contains("cannot be read"), "{}", run.stdout);
 	}
 }
+
+// card lint-use: code given instead of a file is linted too: its hints and its formatted text, nothing written
+#[test]
+fn lint_of_inline_code_prints_hints_and_the_formatted_code() {
+	let run = warp(&["lint", "cnt=1+2 // three"]);
+	assert_eq!(run.status, Some(0), "{}{}", run.stdout, run.stderr);
+	assert!(run.stdout.contains("cnt → count") && run.stdout.contains("prefer # comments"), "{}", run.stdout);
+	assert!(run.stdout.contains("cnt = 1 + 2 // three"), "{}", run.stdout);
+	assert!(!run.stdout.contains("cannot be read"), "{}", run.stdout);
+	let beautified = warp(&["beautify", "use script; ls // the folder"]);
+	assert!(beautified.stdout.contains("use script; ls # the folder"), "{}", beautified.stdout);
+}
