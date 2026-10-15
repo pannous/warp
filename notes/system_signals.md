@@ -199,7 +199,7 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
 - Several keys held (card allow-diagonals): a comparison with `held_key` asks whether that key is among those held,
   so LEFT and UP held together make both `held_key == LEFT` and `held_key == UP` true (samples/arrow_keys.warp steers
   diagonally); `held_key` alone names the last to go down, `held_key == ""` none held. The comparison lowers to the
-  host word `key_held(code) != 0` (system_signals.rs key_code, a given name's code at compile time). Natively the
+  host word `key_held(code) != 0` (system_signals.rs key_code). Natively the
   viewer's input line carries every held code after the key (paint_window.rs, cleared when the window loses focus);
   in the playground canvas.js keeps them in the shared slots "held 0" … "held 7" (host.js key_held).
 - A body after a colon (`on every 5 seconds: print n`, `at 9pm: print n`) is the rest of the line: it arrives as

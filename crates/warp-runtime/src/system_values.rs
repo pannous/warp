@@ -157,7 +157,11 @@ pub fn tell_keys_held(codes: &[i64]) {
 
 /// Whether the key of that code is held now, among others (KEY_HELD); code 0: whether none is
 pub fn key_held(code: i64) -> bool {
-	window_input()[KEY_INPUT] as i64 == code || KEYS_HELD.lock().unwrap().contains(&code)
+	let held = KEYS_HELD.lock().unwrap();
+	match code {
+		0 => window_input()[KEY_INPUT] == 0.0 && held.is_empty(),
+		_ => window_input()[KEY_INPUT] as i64 == code || held.contains(&code),
+	}
 }
 
 /// The key held over the paint window alone, the pointer left as it is
