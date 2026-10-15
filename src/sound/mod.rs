@@ -18,6 +18,7 @@ pub mod audio_files;
 pub mod effects;
 pub mod midi;
 pub mod sound_engine;
+pub mod spectrum;
 
 use effects::Effect;
 use std::cell::{Cell, RefCell};

@@ -562,8 +562,9 @@ read_midi(path) := {
 	[[flat#(4 * i + 1) / 1000.0, midi_hertz(flat#(4 * i + 2)), flat#(4 * i + 3) / 1000.0, flat#(4 * i + 4)] for i in 0..((count(flat) / 4) as int)]
 }
 
-// how loud each frequency band sounds at a moment of the samples (card winamp-like, samples/visualizer.warp): the bands
-// spaced evenly in pitch from band_low to band_high Hz, each level from 0 to 1 (a full-scale sine is 1)
+// how loud each frequency band sounds at a moment of the samples (card winamp-like, samples/visualizer.warp), or of an
+// audio file, spectrum("song.mp3", seconds, bands), decoded once and measured by the host: the bands spaced evenly in
+// pitch from band_low to band_high Hz, each level from 0 to 1 (a full-scale sine is 1)
 global band_low = 60
 global band_high = 5000
 // the samples a spectrum looks at: 512 at 22050 Hz are 23 ms, bands 43 Hz apart are still told apart
@@ -590,7 +591,10 @@ def band_level(weighted, f) {
 	}
 	4 * sqrt(max(0.0, last * last + before * before - coefficient * last * before)) / count(weighted) / loudest_sample
 }
+// how many seconds an audio file sounds: sound_seconds("song.mp3")
+sound_seconds(path: text) := std_io("sound", "file_seconds", [path])
 def spectrum(samples, seconds, bands) {
+	if samples is text { return std_io("sound", "file_spectrum", [samples, seconds, bands, band_low, band_high]) }
 	start = min(round(seconds * sample_rate) as int, count(samples))
 	window = samples[start..min(start + spectrum_window, count(samples))]
 	if count(window) < 2 { return [0 for i in 0..bands] }

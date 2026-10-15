@@ -37,6 +37,18 @@ pub(super) fn sound(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			return crate::sound::audio_files::load(&text_of(path)?)
 				.map(|flat| Node::list(flat.into_iter().map(Node::int).collect()))
 		}
+		// spectrum("song.mp3", seconds, bands): the levels of the file's bands at that moment (src/sound/spectrum.rs)
+		("file_spectrum", [path, seconds, bands, low, high]) => {
+			let bands = number_of(bands)?.max(0.0) as usize;
+			let (low, high) = (number_of(low)?, number_of(high)?);
+			let path = crate::modules::beside_program_if_there(&text_of(path)?);
+			return crate::sound::spectrum::file_spectrum(&path, number_of(seconds)?, bands, low, high)
+				.map(|levels| Node::list(levels.into_iter().map(Node::float).collect()));
+		}
+		("file_seconds", [path]) => {
+			let path = crate::modules::beside_program_if_there(&text_of(path)?);
+			return crate::sound::spectrum::file_seconds(&path).map(Node::float);
+		}
 		_ => return no_such_word(arguments),
 	}
 	Ok(Node::Empty)
