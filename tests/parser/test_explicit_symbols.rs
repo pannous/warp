@@ -21,3 +21,12 @@ fn a_colon_without_space_before_stays_a_key() {
 	is!("{a: 1}.a", 1);
 	is!("x = {name : 2}; x.name", 2);
 }
+
+/// reviewer (explicit-symbol veto): after any other operand ` :name` keeps its meaning
+#[test]
+fn a_blank_colon_after_an_operand_keeps_its_meaning() {
+	is!("y = 5\n1 < 0 ? 2 :y", 5);
+	is!("x = 1 > 0 ? 2 :y; x", 2);
+	is!("class P{ n :int }\nP(3).n", 3);
+	is!("p = {name :ann}; p.name", "ann");
+}
