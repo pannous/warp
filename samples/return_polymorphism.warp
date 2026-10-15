@@ -9,6 +9,6 @@ to render text as pdf:
 to render text as docx:
 	return docx("<w:t>" + text + "</w:t>")
 
-print ((render "hello") as pdf).body   // %PDF hello
+print ((render "hello") as pdf).body   # %PDF hello
 docx letter = render "hello MS"
-print letter.body                      // <w:t>hello MS</w:t>
+print letter.body                      # <w:t>hello MS</w:t>

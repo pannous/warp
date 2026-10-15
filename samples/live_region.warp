@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
-// Content that arrives later is announced (card web-a11y-live): the outermost element showing a fetched value becomes
-// a live region, aria-live="polite", so a screen reader reads the list once it is in. Run it in the playground.
+# Content that arrives later is announced (card web-a11y-live): the outermost element showing a fetched value becomes
+# a live region, aria-live="polite", so a screen reader reads the list once it is in. Run it in the playground.
 people := fetch "https://api.github.com/repos/pannous/warp/contributors"
 main{
 	h1{ "Contributors" }

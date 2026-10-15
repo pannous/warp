@@ -1,4 +1,4 @@
-// code.golf look-and-say: 20 terms from 1, each saying the runs of digits of the one before: 1211 → 111221
+# code.golf look-and-say: 20 terms from 1, each saying the runs of digits of the one before: 1211 → 111221
 def say(term)
 	said = ""
 	start = 0

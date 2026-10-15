@@ -1,8 +1,8 @@
 #!/usr/bin/env warp
-// Mandelbrot set visualization
-// Classic fractal computation
+# Mandelbrot set visualization
+# Classic fractal computation
 
-// decimal literals are exact in warp: the iteration runs in floats, or its fractions would grow without end
+# decimal literals are exact in warp: the iteration runs in floats, or its fractions would grow without end
 def mandelbrot(cx, cy, max_iter) {
 	x = 0.0 as float
 	y = 0.0 as float
@@ -16,7 +16,7 @@ def mandelbrot(cx, cy, max_iter) {
 	return iter
 }
 
-// ASCII art rendering
+# ASCII art rendering
 def render(width, height, max_iter) {
 	chars = " .:-=+*#%@"
 	for row in 0..height {
@@ -25,7 +25,7 @@ def render(width, height, max_iter) {
 		for col in 0..width {
 			cx = (col - width / 2) * 4.0 / width
 			iter = mandelbrot(cx, cy, max_iter)
-			idx = iter * (chars.length - 1)//max_iter  // floor division: / is exact
+			idx = iter * (chars.length - 1)//max_iter  # floor division: / is exact
 			line = line + chars[idx]
 		}
 		print line
@@ -34,7 +34,7 @@ def render(width, height, max_iter) {
 
 render(80, 40, 100)
 
-// The color version drew to a canvas (canvas, pixel, hsv), which warp has no words for yet; its iteration counts:
+# The color version drew to a canvas (canvas, pixel, hsv), which warp has no words for yet; its iteration counts:
 total = 0
 for y in 0..30 {
 	for x in 0..40 {

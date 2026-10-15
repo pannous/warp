@@ -1,8 +1,8 @@
 #!/usr/bin/env warp
-// Natural language style
-// warp allows English-like syntax
+# Natural language style
+# warp allows English-like syntax
 
-// The things the phrases below talk about
+# The things the phrases below talk about
 age = 20
 has_id = yes
 is_admin = no
@@ -20,56 +20,56 @@ numbers = [3, -1, 2]
 create_user(name, email, role) := print name
 mail(message, address) := print "\(message) → \(address)"
 
-// Arithmetic with words
-result = one plus two // got it
-total = three times four // got it
-half = ten divided by two // got it
-rest = ten modulo three // got it
+# Arithmetic with words
+result = one plus two # got it
+total = three times four # got it
+half = ten divided by two # got it
+rest = ten modulo three # got it
 
-// Boolean logic
+# Boolean logic
 valid = age >= 18 and has_id
 allowed = is_admin or is_owner
 
-// Comparisons
+# Comparisons
 bigger = a is greater than b
 equal = x equals y
 found = item is in collection
 
-// Conditional statements
+# Conditional statements
 if age is at least 18 {
 	print "Adult"
 }
 
-// unless (negative if)
+# unless (negative if)
 unless logged_in {
 	redirect_to_login()
 }
 
-// Iteration with natural phrasing
+# Iteration with natural phrasing
 for each item in basket {
 	total = total plus item.price
 }
 
-// Functions use the same explicit call shape at their definitions and call sites
+# Functions use the same explicit call shape at their definitions and call sites
 mail("Hello", "user@example.com")
 
-// General filtering, sorting and slicing compose without a phrase-specific lowering pass
+# General filtering, sorting and slicing compose without a phrase-specific lowering pass
 result = (numbers where it > 0)
 	.sort_by(it => abs(it))
 	.slice(0, 10)
 
-// Named arguments for clarity
+# Named arguments for clarity
 create_user(
 	name: "Alice"
 	email: "alice@example.com"
 	role: admin
 )
 
-// Ranges with words
+# Ranges with words
 countdown = 10 down to 1
 letters = 'a' through 'z'
 
-// Hash slices are 1-based like hash indexing; `…` includes the end
+# Hash slices are 1-based like hash indexing; `…` includes the end
 middle = countdown#(2…4)
 opening = countdown#(1…3)
 tail = countdown#(9…10)

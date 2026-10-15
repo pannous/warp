@@ -1,4 +1,4 @@
-// code.golf quine: the program prints its own source, its template filled with the template itself
+# code.golf quine: the program prints its own source, its template filled with the template itself
 use text
 quote = chr(34)
 newline = chr(10)

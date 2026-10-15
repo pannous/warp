@@ -1,4 +1,4 @@
-// code.golf rot13: each argument with every letter 13 places further in the alphabet, wrapping around
+# code.golf rot13: each argument with every letter 13 places further in the alphabet, wrapping around
 use os
 def rotated(c)
 	for first in ['a', 'A']:

@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-// Conway's Game of Life: a glider on an 8x8 grid, 4 generations
+# Conway's Game of Life: a glider on an 8x8 grid, 4 generations
 size = 8
 
 fun neighbors(grid, r, c) {
@@ -20,7 +20,7 @@ fun neighbors(grid, r, c) {
 
 fun step(grid) {
 	next = []
-	// warp: `..` excludes the end, so `0..size-1` stops at size-2 ("index out of range" later); write `0..size` or `0...size-1`
+	# warp: `..` excludes the end, so `0..size-1` stops at size-2 ("index out of range" later); write `0..size` or `0...size-1`
 	for r in 0..size-1 {
 		for c in 0..size-1 {
 			n = neighbors(grid, r, c)
@@ -47,7 +47,7 @@ for gen in 1..4 {
 	grid = step(grid)
 }
 
-// checksum: sum of r*10+c over live cells; the glider moved by (1,1)
+# checksum: sum of r*10+c over live cells; the glider moved by (1,1)
 checksum = 0
 for r in 0..size-1 {
 	for c in 0..size-1 {
@@ -56,4 +56,4 @@ for r in 0..size-1 {
 }
 checksum
 
-// Kotlin habit kept on purpose: `0..size-1` meant inclusive; warp excludes the end and explains it (tests/welcoming/test_welcoming_ask.rs)
+# Kotlin habit kept on purpose: `0..size-1` meant inclusive; warp excludes the end and explains it (tests/welcoming/test_welcoming_ask.rs)

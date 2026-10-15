@@ -1,1 +1,1 @@
-use math;for 1…100:print divisors(it).join(" ")
+use math;for 1…100: print divisors(it).join(" ")

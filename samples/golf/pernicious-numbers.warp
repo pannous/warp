@@ -1,4 +1,4 @@
-// code.golf pernicious-numbers: 0 to 50 whose number of ones in binary is prime
+# code.golf pernicious-numbers: 0 to 50 whose number of ones in binary is prime
 use math
 use text
 for n in 0 to 50:
