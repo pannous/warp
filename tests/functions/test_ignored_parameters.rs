@@ -3,13 +3,13 @@ use crate::is;
 
 #[test]
 fn ignored_parameters_still_consume_arguments() {
-	is!("def constant(_):=\"hi\"; constant(1)", "hi");
+	is!("def greeting(_):=\"hi\"; greeting(1)", "hi");
 	is!("def middle(_, value, _):=value; middle(1, 2, 3)", 2);
 }
 
 #[test]
 fn an_ignored_parameter_without_a_keyword() {
-	is!("constant(_):=\"hi\"; constant(1)", "hi");
+	is!("greeting(_):=\"hi\"; greeting(1)", "hi");
 	is!("fun seven(_){ 7 }; seven(0)", 7);
 }
 
