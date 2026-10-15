@@ -127,6 +127,12 @@ impl SuffixWords {
 		self.unnamed(node).is_some_and(crate::library_words::is_library_word)
 	}
 
+	/// A standard word calling the values after it, the program not naming it: `max sorted xs` is max(sort(xs)), no
+	/// suffix `sorted` of max
+	fn is_calling_word(&self, node: &Node) -> bool {
+		self.unnamed(node).is_some_and(crate::library_words::is_calling_word)
+	}
+
 	/// A library word of one value the program does not name itself, also libm's (`floor`, `sin`): a function value
 	fn is_function_word(&self, node: &Node) -> bool {
 		let is_libm_word = |name: &str| crate::lowering::library_signatures::typed_first_arity(name) == Some(1);
@@ -327,7 +333,7 @@ fn apply_suffix_words(items: Vec<Node>, functions: &SuffixWords, bracket: Bracke
 		// `map xs abs` passes abs to map: an operator word applies only to a whole first operand (`-7 abs`, `x = -7 abs`)
 		let suffix = suffix.filter(|(_, suffix)| matches!(suffix, Suffix::Function(_)) || applied.len() == 1);
 		let (Some(operand), Some((word, function))) =
-			(applied.last().filter(|operand| !functions.is_library_word(operand)), suffix)
+			(applied.last().filter(|operand| !functions.is_calling_word(operand)), suffix)
 		else {
 			applied.push(item);
 			continue;

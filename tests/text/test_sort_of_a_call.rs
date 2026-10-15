@@ -31,3 +31,16 @@ fn a_library_word_where_a_value_is_expected_calls_the_value_after_it() {
 	assert_eq!(printed("xs = [3 1 2]; first sorted reverse xs"), "1");
 	assert_eq!(printed("xs = [[1 2] [3 4]]; map(xs, reverse)"), "[[2 1] [4 3]]");
 }
+
+#[test]
+fn a_library_word_chain_binds_tighter_than_a_comparison() {
+	assert_eq!(printed("xs = [3 1 2]; first sorted xs == 1"), "yes");
+	assert_eq!(printed("xs = [3 1 2]; last sorted xs > 2"), "yes");
+}
+
+#[test]
+fn a_suffix_word_after_a_calling_word_calls_the_value_after_it() {
+	assert_eq!(printed("xs = [3 1 2]; max sorted xs"), "3");
+	assert_eq!(printed("xs = [3 1 2]; min sorted xs"), "1");
+	assert_eq!(printed("xs = [3 1 2]; count sorted xs"), "3");
+}

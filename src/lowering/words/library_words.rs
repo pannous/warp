@@ -290,6 +290,14 @@ pub fn is_standard_function(name: &str) -> bool {
 		|| crate::wasm_emitter::text::text_builtins::is_text_builtin(name)
 }
 
+/// A standard word that calls the values after it: a standard function, a counting word or an output word
+/// (`count sorted xs`, `max sorted xs`, `print sorted xs`)
+pub fn is_calling_word(name: &str) -> bool {
+	is_standard_function(name)
+		|| crate::analyzer::COUNTING_WORDS.contains(&name)
+		|| crate::wasm_emitter::OUTPUT_WORDS.contains(&name)
+}
+
 /// A library word of one argument takes the name after it as that argument inside an operand, as a defined function
 /// does: `word == reverse word` compares with `reverse(word)`, `1 == first xs` with `first(xs)`. A type word stays a
 /// type: `x: list int`

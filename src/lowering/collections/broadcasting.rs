@@ -345,10 +345,7 @@ impl LibraryCalls {
 	/// A call taking values: the program's function, or a standard function or output word it does not name itself
 	fn is_caller(&self, node: &Node) -> bool {
 		let Node::Symbol(name) = node.drop_meta() else { return false };
-		let is_standard = crate::library_words::is_standard_function(name)
-			|| crate::analyzer::COUNTING_WORDS.contains(&name.as_str())
-			|| crate::wasm_emitter::OUTPUT_WORDS.contains(&name.as_str());
-		self.functions.contains(name) || (is_standard && !self.named.contains(name))
+		self.functions.contains(name) || (crate::library_words::is_calling_word(name) && !self.named.contains(name))
 	}
 
 	/// A library word of one value the program does not name itself: `reverse`, `sorted`, `first`, `split`
@@ -371,13 +368,28 @@ fn nest_library_calls(node: Node, words: &LibraryCalls) -> Node {
 		) if items.len() > 2 && words.is_caller(&items[0]) => {
 			let mut items: Vec<Node> = items.into_iter().map(|item| nest_library_calls(item, words)).collect();
 			let first_value = if crate::lowering::lambdas::takes_a_function_first(&items[0]) { 2 } else { 1 };
+			let mut compared = None;
 			while let Some(at) = (first_value..items.len() - 1).rev().find(|at| words.is_library_call(&items[*at])) {
-				let value = items.remove(at + 1);
+				let mut value = items.remove(at + 1);
+				// `first sorted xs == 1` compares (first sorted xs): the chain's library words take the comparison's left
+				match value.drop_meta().clone() {
+					Node::Key(left, op, right)
+						if op.is_comparison() && !matches!(left.drop_meta(), Node::Empty) && at + 1 == items.len() =>
+					{
+						value = *left;
+						compared = Some((op, *right));
+					}
+					_ => {}
+				}
 				let word = items.remove(at);
 				// written `reverse(xs)`: a later pass splices a phrase `reverse xs` back into its caller's arguments
 				items.insert(at, Node::List(vec![word, value], Bracket::Round, Separator::None));
 			}
-			Node::List(items, bracket, separator)
+			let phrase = Node::List(items, bracket, separator);
+			match compared {
+				Some((op, right)) => key(phrase, op, right),
+				None => phrase,
+			}
 		}
 		other => other.map_children(|child| nest_library_calls(child, words)),
 	}
