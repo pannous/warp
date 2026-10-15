@@ -4,9 +4,11 @@
 //! for the foreign runtimes (foreign.rs json_of / node_of, host.js plainOfTree / treeOfPlain): null ø, booleans yes/no.
 
 use crate::node::Node;
+#[path = "shell_adapters.rs"]
+mod shell_adapters;
 #[cfg(feature = "native")]
 #[path = "../sound/adapters.rs"]
-mod sound_adapters; // the sound module's words, kept in src/sound (a child here for this file's helpers)
+mod sound_adapters; // the sound module's words, kept in src/sound (a child here for this file's helpers) // lib/shell.warp's words of the modules file and os
 #[cfg(feature = "native")]
 use sound_adapters::{midi, sound};
 
@@ -85,23 +87,28 @@ fn json(member: &str, arguments: &[Node]) -> Result<Node, String> {
 
 fn file(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	match (member, arguments) {
-		("write", [path, text]) => write_file(&text_of(path)?, content_of(text)),
-		("write_bytes", [path, bytes]) => write_file(&text_of(path)?, bytes_of(bytes)?),
-		("read_bytes", [path]) => std::fs::read(text_of(path)?)
+		("write", [path, text]) => write_file(&path_of(path)?, content_of(text)),
+		("write_bytes", [path, bytes]) => write_file(&path_of(path)?, bytes_of(bytes)?),
+		("read_bytes", [path]) => std::fs::read(path_of(path)?)
 			.map(|bytes| list_of(bytes.into_iter().map(|byte| Node::int(byte.into()))))
 			.map_err(said),
 		("append", [path, text]) => {
 			use std::io::Write;
-			let path = text_of(path)?;
+			let path = path_of(path)?;
 			crate::host::sandbox::check_write(&path)?;
 			let mut file = std::fs::OpenOptions::new().append(true).create(true).open(path).map_err(said)?;
 			file.write_all(content_of(text).as_bytes()).map(|_| Node::Empty).map_err(said)
 		}
-		("exists", [path]) => Ok(Node::from(std::path::Path::new(&text_of(path)?).exists())),
-		("list", [folder]) => names_in(&text_of(folder)?).map(texts),
-		("glob", [pattern]) => globbed(&text_of(pattern)?).map(texts),
-		_ => no_such_word(arguments),
+		("exists", [path]) => Ok(Node::from(std::path::Path::new(&path_of(path)?).exists())),
+		("list", [folder]) => names_in(&path_of(folder)?).map(texts),
+		("glob", [pattern]) => globbed(&path_of(pattern)?).map(texts),
+		_ => shell_adapters::file(member, arguments),
 	}
+}
+
+/// A path as the program wrote it, `~` the home folder: `~/notes.txt`, `"~/notes.txt"`
+fn path_of(node: &Node) -> Result<String, String> {
+	text_of(node).map(|path| crate::util::home_expanded(&path))
 }
 
 /// The names of a folder's entries, sorted
@@ -122,10 +129,17 @@ fn globbed(pattern: &str) -> Result<Vec<String>, String> {
 		Some((folder, name)) => (folder, name, format!("{folder}/")),
 		None => (".", pattern, String::new()),
 	};
+	let shown = name_matcher(name)?;
+	Ok(names_in(folder)?.into_iter().filter(|entry| shown(entry)).map(|entry| format!("{prefix}{entry}")).collect())
+}
+
+/// Does a file's name match the pattern `name` with the wildcards `*` and `?`; a hidden name only when `name` starts
+/// with `.`, as in the shell
+fn name_matcher(name: &str) -> Result<impl Fn(&str) -> bool, String> {
 	let wildcards = regex::escape(name).replace(r"\*", "[^/]*").replace(r"\?", "[^/]");
 	let matching = regex_of(&format!("^{wildcards}$"))?;
-	let shown = |entry: &String| matching.is_match(entry) && (name.starts_with('.') || !entry.starts_with('.'));
-	Ok(names_in(folder)?.into_iter().filter(shown).map(|entry| format!("{prefix}{entry}")).collect())
+	let hidden_too = name.starts_with('.');
+	Ok(move |entry: &str| matching.is_match(entry) && (hidden_too || !entry.starts_with('.')))
 }
 
 fn hash(member: &str, arguments: &[Node]) -> Result<Node, String> {
@@ -172,9 +186,7 @@ fn os(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	match (member, arguments) {
 		("env", [name]) => Ok(std::env::var(text_of(name)?).map_or(Node::Empty, Node::Text)),
 		("args", []) => Ok(texts(PROGRAM_ARGUMENTS.with(|arguments| arguments.borrow().clone()))),
-		("cwd", []) => {
-			std::env::current_dir().map(|folder| Node::Text(folder.to_string_lossy().into_owned())).map_err(said)
-		}
+		("cwd", []) => working_folder(),
 		("input", prompt) => typed_line(prompt),
 		("stdin", []) => std::io::read_to_string(std::io::stdin()).map(Node::Text).map_err(said),
 		// `command("ls | wc -l")`: the line run by sh, the explicit opt-in to text as shell (decision use-script)
@@ -185,7 +197,7 @@ fn os(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			let command: Vec<String> = command.as_items().iter().map(content_of).collect();
 			executed(&command).map(Node::Text)
 		}
-		_ => no_such_word(arguments),
+		_ => shell_adapters::os(member, arguments),
 	}
 }
 
@@ -314,6 +326,10 @@ fn executed(command: &[String]) -> Result<String, String> {
 		));
 	}
 	Ok(String::from_utf8_lossy(&output.stdout).trim_end_matches('\n').to_string())
+}
+
+fn working_folder() -> Result<Node, String> {
+	std::env::current_dir().map(|folder| Node::Text(folder.to_string_lossy().into_owned())).map_err(said)
 }
 
 /// A line typed on standard input without its line end, ø at the input's end; a prompt is shown first

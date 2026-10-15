@@ -18,3 +18,4 @@ rust_crates	use cargo strsim builds the crate with cargo: only the native warp c
 errors	`}` is missing: the group opened at 4:9 runs to the end of the input (deliberately malformed: input for the forgiving parser, never meant to run)
 life_kotlin_ranges	index out of range (does the loop bound `..size-1` include the end? at 23:13) (fails on purpose: tests/welcoming/test_welcoming_ask.rs checks the explanation)
 netbase	undefined: query in `query "all cities with population > 100000"` (needs a netbase package: card netbase-package); `results where country is germany` reads country as a field: card natural-phrases
+unix_commands	cd, which and rm on folders run natively only (card unix-words)

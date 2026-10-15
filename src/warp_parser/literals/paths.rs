@@ -3,16 +3,48 @@ use super::*;
 
 impl WarpParser {
 	/// `&name`: a reference to the function `name`, an `&` glued to the word after it and not to a word before it (`a &b`, `f(&g)`)
-	/// `./mozart.mp3`, `../songs/a.wav`: `./` or `../` glued to what follows and not to an operand before it starts a
-	/// file path without quotes; `xs ./ 2` and `xs./2` divide each element
+	/// A file path without quotes starts here, glued to what follows and not to an operand before it (card unix-words):
+	/// `./mozart.mp3`, `../songs/a.wav` (`xs ./ 2` and `xs./2` divide each element); `~/notes.txt`, and `~` alone (`cd ~`;
+	/// `a ~ b` stays the comparison); `/etc/hosts` where no operand stands before it (`x = /tmp`, `[/a, /b]`) or after
+	/// a word taking it (`ls /tmp`, `cp /a /b`); after a variable it divides (`width /height`)
 	pub(crate) fn starts_path_literal(&self) -> bool {
-		let dots = if self.peek_char(1) == '.' { 2 } else { 1 };
-		let glued_to_operand =
-			is_identifier_char(self.prev_char()) || matches!(self.prev_char(), ')' | ']' | '}' | '"' | '\'');
-		self.current_char() == '.'
-			&& self.peek_char(dots) == '/'
-			&& !ends_path(self.peek_char(dots + 1))
-			&& !glued_to_operand
+		let glued_to_operand = is_operand_end(self.prev_char());
+		!glued_to_operand
+			&& match self.current_char() {
+				'.' => {
+					let dots = if self.peek_char(1) == '.' { 2 } else { 1 };
+					self.peek_char(dots) == '/' && !ends_path(self.peek_char(dots + 1))
+				}
+				'~' => self.peek_char(1) == '/' || !self.operand_follows(1),
+				'/' => {
+					starts_path_name(self.peek_char(1))
+						&& self.operand_before().is_none_or(|word| self.takes_path(&word))
+				}
+				_ => false,
+			}
+	}
+
+	/// The word before the blanks here when an operand ends there: Some("ls") in `ls /tmp`, Some("") after `)`, None
+	/// after an operator, a separator or an opening bracket
+	fn operand_before(&self) -> Option<String> {
+		let end = self.chars[..self.pos].iter().rposition(|c| !matches!(c, ' ' | '\t'))?;
+		if !is_operand_end(self.chars[end]) {
+			return None;
+		}
+		let start = self.chars[..=end].iter().rposition(|c| !is_identifier_char(*c)).map_or(0, |at| at + 1);
+		Some(self.chars[start..=end].iter().collect())
+	}
+
+	/// A word before ` /name` takes a path: the operand before is a path (`cp /a /b`), or the word is no variable but a
+	/// function (the program's, a standard module's like ls, a built-in like print); `width /height` divides
+	fn takes_path(&self, word: &str) -> bool {
+		let after_path =
+			self.path_end.is_some_and(|end| self.chars[end..self.pos].iter().all(|c| matches!(c, ' ' | '\t')));
+		after_path
+			|| (!self.variables.contains(word)
+				&& (self.functions.contains(word)
+					|| crate::lowering::negated_calls::is_builtin_callable(word)
+					|| crate::modules::std_function_names().contains(word)))
 	}
 
 	/// Check if character terminates a URL
@@ -38,6 +70,7 @@ impl WarpParser {
 		let path: String =
 			(0..).map(|offset| self.peek_char(offset)).take_while(|&c| !super::lookahead::ends_path(c)).collect();
 		self.advance_by(path.chars().count());
+		self.path_end = Some(self.pos);
 		Node::Text(path)
 	}
 
@@ -71,4 +104,14 @@ impl WarpParser {
 		}
 		Node::Text(url)
 	}
+}
+
+/// An operand ends with this character: a name, a number, a closing bracket or a quote
+fn is_operand_end(c: char) -> bool {
+	is_identifier_char(c) || matches!(c, ')' | ']' | '}' | '"' | '\'')
+}
+
+/// What may follow the `/` of an absolute path: a name, a hidden name or a parent `..`; not `//` or `/*` (comments)
+fn starts_path_name(c: char) -> bool {
+	c.is_alphabetic() || matches!(c, '_' | '.')
 }
