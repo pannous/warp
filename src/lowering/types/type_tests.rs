@@ -236,11 +236,15 @@ impl Names {
 
 	/// In the body of a function: also its parameters and the names it assigns, which no other function sees
 	fn within(&self, head: &Node, body: &Node) -> Names {
-		let mut inner = self.clone();
+		let mut bound = HashSet::new();
 		if let Node::List(items, _, _) = head.drop_meta() {
-			inner.variables.extend(items.iter().skip(1).filter_map(parameter_name));
+			bound.extend(items.iter().skip(1).filter_map(parameter_name));
 		}
-		collect_assigned_names(body, &mut inner.variables);
+		collect_assigned_names(body, &mut bound);
+		let mut inner = self.clone();
+		inner.variables.extend(bound.iter().cloned());
+		// a parameter or local named like a function, `f(name) := name is text` of a method name(), is the value
+		inner.bound_otherwise.extend(bound);
 		inner
 	}
 }
