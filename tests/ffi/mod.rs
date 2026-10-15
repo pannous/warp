@@ -1,8 +1,6 @@
 mod test_browser_dollar_names; // card browser-interaction
 #[cfg(feature = "native")] // cargo builds the crate: native only
 mod test_cargo_crates; // card use-cargo
-#[cfg(feature = "native")] // cargo builds the crate: native only
-mod test_crate_errors; // card try-crate-errors
 #[cfg(feature = "native")] // wasmtime components: not in the browser build
 mod test_component_drop;
 mod test_component_exports_anywhere; // card reflect-page-meta
@@ -13,6 +11,8 @@ mod test_component_short_use;
 #[cfg(feature = "native")] // wasmtime components: not in the browser build
 mod test_components;
 mod test_components_anywhere;
+#[cfg(feature = "native")] // cargo builds the crate: native only
+mod test_crate_errors; // card try-crate-errors
 mod test_download;
 mod test_fetch_computed_url;
 mod test_ffi;
