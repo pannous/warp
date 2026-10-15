@@ -1,8 +1,9 @@
 //! The dimensions and units warp knows, read once from lib/units.warp's `unit_definitions` block (card dimensions-units
-//! Q2, user 2026-10-15): `dimension length` names a dimension, `m: length` is its base unit, `cm := m/100` a unit that is
-//! an amount of another, `°C := K + 273.15` one counting from another zero. A definition of several units or of none
-//! (`mph := mi/h`, `° := π/180`) is an alias, a word for its expression. Read by its own small reader, not the parser:
-//! the parser asks these definitions whether a word is a unit.
+//! Q2, decision unit-definitions): `dimension length meter` names a dimension and its anchor unit, `dimension speed m/s`
+//! the dimension of an expression of units; `unit cm := m/100` is a unit that is an amount of another, `unit °C := (it +
+//! 273.15) K` one counting from another zero. A unit of several units or of none (`unit mph := mi/h`, `unit ° := π/180`)
+//! is an alias, a word for its expression. Read by its own small reader, not the parser: the parser asks these
+//! definitions whether a word is a unit.
 use super::{Dimension, Unit};
 use crate::extensions::reals::Rational;
 use num_bigint::BigInt;
@@ -15,9 +16,12 @@ const BLOCK_END: &str = "}";
 const DIMENSION_WORD: &str = "dimension ";
 const UNIT_WORD: &str = "unit ";
 const DEFINE: &str = ":=";
+/// `unit m := 1 meter`: a unit of the same amount as an anchor
+const ONE: &str = "1 ";
 /// `(it + 273.15) K`: a unit counting from another zero shifts its amount `it` first
 const SHIFT_START: &str = "(it +";
-const TIMES: &str = "*";
+const TIMES: char = '*';
+const DIVIDE: &str = "/";
 const COMMENT: &str = "//";
 /// The names of the run-time tables lib/units.warp's Quantity reads, in place of the block (run_time_tables)
 pub(super) const BLOCK_NAME: &str = "unit_definitions";
@@ -86,19 +90,22 @@ fn packed(dimension: Dimension) -> Option<i64> {
 	RUN_TIME_DIMENSION_WEIGHTS.iter().find(|(known, _)| *known == dimension).map(|(_, weight)| *weight)
 }
 
-/// `mi/h`, `1/s`: the SI amount and packed dimension of an alias made of units; None for one of other words (`π/180`)
+/// `mi/h`, `1/s`, `kg*m/s²`: the SI amount and packed dimension of an alias made of units; None for one of other words
+/// (`π/180`)
 fn alias_measure(expression: &str) -> Option<(Rational, i64)> {
 	let (mut amount, mut dimension, mut divide) = (Rational::integer(1), 0, false);
 	for token in tokens(expression) {
-		if token == "/" {
+		if token == DIVIDE {
 			divide = true;
 			continue;
 		}
 		let (factor, weight) = match decimal(token) {
 			Some(number) => (number, 0),
 			None => {
-				let unit = definitions().units.iter().find(|unit| unit.name == token)?;
-				(si_amount(unit), packed(unit.dimension)?)
+				let (name, power) = powered(token);
+				let unit = definitions().units.iter().find(|unit| unit.name == name)?;
+				let amount = si_amount(unit);
+				((1..power).fold(amount.clone(), |total, _| total.mul(&amount)), packed(unit.dimension)? * power as i64)
 			}
 		};
 		(amount, dimension) = match divide {
@@ -132,11 +139,11 @@ fn read(source: &'static str) -> Result<Definitions, String> {
 		if line.is_empty() || line.starts_with(COMMENT) {
 			continue;
 		}
-		let definition = |keyword: &str| {
-			let (name, expression) = line.strip_prefix(keyword)?.split_once(DEFINE)?;
+		let definition = |keyword: &str, separator: &str| {
+			let (name, expression) = line.strip_prefix(keyword)?.split_once(separator)?;
 			Some((name.trim(), expression.trim()))
 		};
-		if let Some((name, anchor)) = definition(DIMENSION_WORD) {
+		if let Some((name, anchor)) = definition(DIMENSION_WORD, " ") {
 			match DIMENSION_WORDS.iter().find(|(word, _)| *word == name) {
 				Some((_, dimension)) => {
 					dimensions.push((name, *dimension));
@@ -145,7 +152,15 @@ fn read(source: &'static str) -> Result<Definitions, String> {
 				}
 				None => derived_dimensions.push((name, powers_of(anchor, &units)?)),
 			}
-		} else if let Some((name, expression)) = definition(UNIT_WORD) {
+		} else if let Some((name, expression)) = definition(UNIT_WORD, DEFINE) {
+			let one_anchor = expression.strip_prefix(ONE).filter(|anchor| base_units.iter().any(|(_, base)| base == anchor));
+			if let Some(anchor) = one_anchor {
+				// `unit m := 1 meter`: the symbol shows in place of its anchor, the anchor's name stays a word for it
+				units.iter_mut().filter(|unit| unit.name == anchor).for_each(|unit| unit.name = name);
+				base_units.iter_mut().filter(|(_, base)| *base == anchor).for_each(|(_, base)| *base = name);
+				aliases.push((anchor, name));
+				continue;
+			}
 			match unit_of(expression, &units)? {
 				Some((dimension, scale, zero)) => units.push(Read { name, dimension, scale, zero }),
 				None => aliases.push((name, expression)),
@@ -183,8 +198,8 @@ fn product<'a>(term: &str, units: &'a [Read]) -> Result<Option<(Rational, Option
 	let mut amount = Rational::integer(1);
 	let mut unit = None;
 	let mut divide = false;
-	for token in tokens(term).into_iter().filter(|token| *token != TIMES) {
-		if token == "/" {
+	for token in tokens(term) {
+		if token == DIVIDE {
 			divide = true;
 			continue;
 		}
@@ -212,13 +227,10 @@ fn powers_of(expression: &str, units: &[Read]) -> Result<Vec<(Dimension, i32)>, 
 	let mut sign = 1;
 	for token in tokens(expression) {
 		match token {
-			"/" => sign = -1,
+			DIVIDE => sign = -1,
 			"1" => {}
 			word => {
-				let (name, power) = match word.strip_suffix('²').or(word.strip_suffix('³')) {
-					Some(name) => (name, if word.ends_with('²') { 2 } else { 3 }),
-					None => (word, 1),
-				};
+				let (name, power) = powered(word);
 				let dimension =
 					units.iter().find(|unit| unit.name == name).ok_or(format!("unknown unit {name}"))?.dimension;
 				powers.push((dimension, sign * power));
@@ -229,13 +241,13 @@ fn powers_of(expression: &str, units: &[Read]) -> Result<Vec<(Dimension, i32)>, 
 	Ok(powers)
 }
 
-/// `5/9 K` → `5`, `/`, `9`, `K`
+/// `5/9 K` → `5`, `/`, `9`, `K`; `kg*m` → `kg`, `m`
 fn tokens(term: &str) -> Vec<&str> {
 	let mut tokens = vec![];
-	for word in term.split_whitespace() {
+	for word in term.split(|c: char| c.is_whitespace() || c == TIMES) {
 		let mut rest = word;
-		while let Some(at) = rest.find('/') {
-			tokens.extend([&rest[..at], "/"].into_iter().filter(|token| !token.is_empty()));
+		while let Some(at) = rest.find(DIVIDE) {
+			tokens.extend([&rest[..at], DIVIDE].into_iter().filter(|token| !token.is_empty()));
 			rest = &rest[at + 1..];
 		}
 		if !rest.is_empty() {
@@ -243,6 +255,14 @@ fn tokens(term: &str) -> Vec<&str> {
 		}
 	}
 	tokens
+}
+
+/// `s²` → `s` and 2, `m` → `m` and 1
+fn powered(word: &str) -> (&str, i32) {
+	match word.strip_suffix('²').or(word.strip_suffix('³')) {
+		Some(name) => (name, if word.ends_with('²') { 2 } else { 3 }),
+		None => (word, 1),
+	}
 }
 
 /// `2.54` as the exact 127/50, `1000` as 1000; None for a word

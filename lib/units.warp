@@ -3,22 +3,27 @@
 // unit as data: the amount in SI base units (exact where the text is), its dimension and the unit it shows in.
 // Units written in the program stay static (src/units): checked at compile time, plain numbers at run time.
 
-// The dimensions and units warp knows (card dimensions-units Q2, read by src/numbers/units/definitions.rs): each
-// dimension has an SI anchor unit, `dimension length := m`, or is a product of anchors, `dimension speed := m/s`; a
-// unit is an amount of a known one, `unit cm := m/100`, which fixes its dimension and factor, or counts from another
-// zero, `unit °C := (it + 273.15) K`; a unit of several units or of none (`unit mph := mi/h`, `unit ° := π/180`) is a
-// word for that expression; a unit added here is known everywhere: in the program, at run time, in conversions
+// The dimensions and units warp knows (card dimensions-units Q2, decision unit-definitions, read by
+// src/numbers/units/definitions.rs): `dimension length meter` declares a dimension and its SI anchor unit, `dimension
+// speed m/s` names the dimension of an expression of units; every other unit is an amount of a known one, `unit cm :=
+// meter/100`, which fixes its dimension and factor, `unit m := 1 meter` one of the same amount, `unit °C := (it +
+// 273.15) K` one counting from another zero (`it` the amount in °C); a unit of several units or of none (`unit mph :=
+// mi/h`, `unit ° := π/180`) is a word for that expression; a unit added here is known everywhere, also in conversions
 unit_definitions = data {
-	dimension length := m
-	dimension mass := kg
-	dimension duration := s
-	dimension era := AD
-	dimension temperature := K
-	dimension pixel := px
-	dimension speed := m/s
-	dimension area := m²
-	dimension volume := m³
-	dimension frequency := 1/s
+	dimension length meter
+	dimension mass kilogram
+	dimension duration second
+	dimension era AD
+	dimension temperature kelvin
+	dimension pixel px
+	unit m := 1 meter
+	unit kg := 1 kilogram
+	unit s := 1 second
+	unit K := 1 kelvin
+	dimension speed m/s
+	dimension area m²
+	dimension volume m³
+	dimension frequency 1/s
 	unit mm := m/1000
 	unit cm := m/100
 	unit km := 1000 m
