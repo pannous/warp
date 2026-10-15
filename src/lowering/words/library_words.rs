@@ -12,7 +12,7 @@ use crate::errors::diagnostic::Diagnostic;
 use crate::list_mutations::is_list_mutating_method;
 use crate::node::{parens, symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::warp_parser::{parse, ASSERT_MARKER, TRY_MARKER};
+use crate::warp_parser::{parse_template, ASSERT_MARKER, TRY_MARKER};
 use crate::wasm_emitter::{CAUGHT_ERROR, RAN_WITHOUT_ERROR};
 use crate::words::COPY_WORD;
 use crate::words::COUNT_WORD;
@@ -1178,7 +1178,10 @@ impl Lowering {
 	/// The template of an expanded word with the receiver (held once in a temporary) and the further arguments in place
 	fn expanded(&self, template: &str, arguments: Vec<Node>) -> Node {
 		let program = named_apart(
-			parse(&format!("({TEMPORARY}={RECEIVER_PLACEHOLDER}; {template})")),
+			parse_template(
+				&format!("({TEMPORARY}={RECEIVER_PLACEHOLDER}; {template})"),
+				arguments.first().unwrap_or(&Node::Empty),
+			),
 			HIDDEN_PREFIX,
 			WORD_BASE,
 			self.next_temporary(),

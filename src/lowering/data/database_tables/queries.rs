@@ -27,8 +27,11 @@ pub fn queried(
 		return Some(Err(error));
 	}
 	tables.functions.extend(functions);
-	let parameters =
-		if parameters.is_empty() { parse("[]") } else { Node::List(parameters, Bracket::Square, Separator::Space) };
+	let parameters = if parameters.is_empty() {
+		crate::warp_parser::parse_generated("[]")
+	} else {
+		Node::List(parameters, Bracket::Square, Separator::Space)
+	};
 	let query = Node::List(vec![symbol(FOUND_WORD), Node::Text(sql), parameters], Bracket::None, Separator::Space);
 	Some(Ok(key(subject.drop_meta().clone(), Op::Dot, query)))
 }
