@@ -23,6 +23,29 @@ struct Function {
 	defaults: Vec<Option<Node>>,
 	/// free variables of the body some call names, appended as parameters in their order of first use in the body
 	extras: Vec<String>,
+	/// the other definitions of the name with other parameters (`play(tone)`, `play(tone, duration)`): a call naming
+	/// arguments takes the one they fit
+	overloads: Vec<Function>,
+}
+
+impl Function {
+	fn new(parameters: Vec<String>, defaults: Vec<Option<Node>>) -> Self {
+		Function { parameters, defaults, extras: vec![], overloads: vec![] }
+	}
+
+	fn has_parameter(&self, name: &String) -> bool {
+		self.parameters.contains(name) || self.overloads.iter().any(|overload| overload.parameters.contains(name))
+	}
+
+	/// Whether `f(arguments)` fills these parameters: every name is one, the positional arguments fill the rest
+	fn fits(&self, arguments: &[Node]) -> bool {
+		let named: Vec<String> = arguments.iter().filter_map(named_argument).map(|(name, _)| name).collect();
+		let positional = arguments.len() - named.len();
+		let unnamed = self.parameters.iter().zip(&self.defaults).filter(|(parameter, _)| !named.contains(parameter));
+		let (needed, open) =
+			unnamed.fold((0, 0), |(needed, open), (_, default)| (needed + default.is_none() as usize, open + 1));
+		named.iter().all(|name| self.parameters.contains(name)) && needed <= positional && positional <= open
+	}
 }
 
 pub fn lower(node: Node) -> Node {
@@ -191,7 +214,7 @@ fn flag_arguments(node: Node, functions: &HashMap<String, Function>, bound: &Has
 
 /// `f(a, b) := body` and the block value `fun = {body}`, by name: their parameters
 fn definitions(node: &Node) -> HashMap<String, Function> {
-	let mut functions = HashMap::new();
+	let mut functions: HashMap<String, Function> = HashMap::new();
 	node.visit(&mut |part| {
 		if let Node::Key(head, Op::Define | Op::Assign, _) = part {
 			match untyped_head(head).drop_meta() {
@@ -200,7 +223,12 @@ fn definitions(node: &Node) -> HashMap<String, Function> {
 				{
 					let parameters = items[1..].iter().map(parameter_word).collect();
 					let defaults = items[1..].iter().map(parameter_default).collect();
-					functions.insert(items[0].name(), Function { parameters, defaults, extras: vec![] });
+					let function = Function::new(parameters, defaults);
+					match functions.get_mut(&items[0].name()) {
+						Some(first) if first.parameters != function.parameters => first.overloads.push(function),
+						Some(_) => {}
+						None => drop(functions.insert(items[0].name(), function)),
+					}
 				}
 				_ => {}
 			}
@@ -209,11 +237,7 @@ fn definitions(node: &Node) -> HashMap<String, Function> {
 	node.visit(&mut |part| {
 		if let Node::Key(target, Op::Assign, value) = part {
 			if let (Node::Symbol(name), Node::List(_, Bracket::Curly, _)) = (target.drop_meta(), value.drop_meta()) {
-				functions.entry(name.clone()).or_insert(Function {
-					parameters: vec![],
-					defaults: vec![],
-					extras: vec![],
-				});
+				functions.entry(name.clone()).or_insert(Function::new(vec![], vec![]));
 			}
 		}
 	});
@@ -346,7 +370,7 @@ fn collect_extras(node: &Node, functions: &mut HashMap<String, Function>, unknow
 	});
 	for (name, argument, call) in named {
 		let function = functions.get_mut(&name).expect("a call of a known function");
-		if function.parameters.contains(&argument) || function.extras.contains(&argument) {
+		if function.has_parameter(&argument) || function.extras.contains(&argument) {
 			continue;
 		}
 		let used = bodies.get(&name).map(symbols_in_order).unwrap_or_default();
@@ -456,7 +480,11 @@ impl Rewrite {
 	/// variable of their name. They run as written (P216): when the order changes, an argument that may have effects is
 	/// computed first into a temporary, `f(b=h(), a=g())` is `(t1 = h(); t2 = g(); f(t2, t1))`
 	fn call(&self, call: &Node, name: &str, arguments: &[Node]) -> Result<Node, Node> {
-		let function = &self.functions[name];
+		let first = &self.functions[name];
+		let function = match first.fits(arguments) {
+			true => first,
+			false => first.overloads.iter().find(|overload| overload.fits(arguments)).unwrap_or(first),
+		};
 		if function.extras.is_empty() && !arguments.iter().any(|argument| named_argument(argument).is_some()) {
 			return Ok(call.clone());
 		}

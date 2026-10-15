@@ -40,7 +40,7 @@ pub fn note_bool_functions<'a>(functions: impl Iterator<Item = &'a crate::compil
 }
 
 /// The body ends in a bool and every `return` in it returns one
-pub fn gives_bool(function: &crate::compiler::context::UserFunctionDef) -> bool {
+fn gives_bool(function: &crate::compiler::context::UserFunctionDef) -> bool {
 	let mut scope = parameter_scope(function);
 	define_bool_locals(function, &mut scope);
 	let mut returns_bool = true;

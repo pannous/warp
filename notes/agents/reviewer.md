@@ -37,8 +37,9 @@ Workers send their "branch, tip, new tests, filters" message to you and warp-int
 - No messages to the user (user, 2026-10-15: "to save context … only feedback for the agents"): verdicts go to
   the worker and the Integrator, user decisions to relay go to the Supervisor; the turn's own text output stays one
   line at most.
-- Pure style nits (doc line placement, use order, blank lines, comment placement) are no polish: the linter of card
-  style-linter handles them (user, 2026-10-15); a rule it lacks goes to its worker, warp-style-linter.
+- Pure Rust style nits (doc line placement, use order, blank lines, comment placement) are no polish commit: name
+  them in the verdict for the worker to fix in its next commit. The style-linter card lints .warp source (user,
+  2026-10-15); lint rules for warp code go to its worker, warp-style-linter.
 
 ## Rhythm
 Be fast: a review normally ends before the gate does (minutes). Keep a short log in data/reviews/<date>.md (branch,

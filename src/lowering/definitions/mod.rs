@@ -21,6 +21,7 @@ pub mod nonlocal_cells;
 pub mod overloads;
 pub mod parameter_patterns;
 pub mod parameter_shapes;
+pub mod preposition_calls;
 pub mod references;
 pub mod undo_history;
 pub mod variadic;

@@ -864,7 +864,7 @@ impl WasmGcEmitter {
 			(FUNCTION_SIGNATURE, _, Some((_, signature))) => text(signature),
 			(FUNCTION_DOC, Some(function), _) => text(function.doc.clone().unwrap_or_default()),
 			(FUNCTION_SIGNATURE, Some(function), _) => text(crate::lowering::reflection::signature(function)),
-			(FUNCTION_RETURN_TYPE, Some(function), _) => text(function.return_kind.to_string()),
+			(FUNCTION_RETURN_TYPE, Some(function), _) => text(crate::lowering::reflection::result_type(function)),
 			(FUNCTION_DEFINITION, Some(function), _) => text(crate::lowering::reflection::definition(function)),
 			(FUNCTION_FULL, ..) => text(self.printed_function(target, captured)),
 			(FUNCTION_FILE, ..) => text(written_in(at.as_ref()).unwrap_or_default()),
