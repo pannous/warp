@@ -518,9 +518,8 @@ spectrum_window = 512
 nearest_band(frequency, count) := round(log(frequency / band_low) / log(band_high / band_low) * (count - 1)) as int
 // how many seconds an audio file sounds: sound_seconds("song.mp3")
 sound_seconds(path: text) := std_io("sound", "file_seconds", [path])
-// one definition for both until a text and a list variant overload (card text-list)
+spectrum(file: text, seconds, bands) := std_io("sound", "file_spectrum", [file, seconds, spectrum_window / sample_rate, bands, band_low, band_high])
 def spectrum(samples, seconds, bands) {
-	if samples is text { return std_io("sound", "file_spectrum", [samples, seconds, spectrum_window / sample_rate, bands, band_low, band_high]) }
 	start = min(round(seconds * sample_rate) as int, count(samples))
 	window = samples[start..min(start + spectrum_window, count(samples))]
 	std_io("sound", "spectrum", [window, sample_rate, bands, band_low, band_high])
