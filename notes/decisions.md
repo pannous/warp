@@ -342,6 +342,13 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   px, `300 px / display.dpi` is a length. Without a conversion, `3 cm + 2 px` is a compile error naming
   `as px`, never a silent mix. No SI prefixes on px. The same line serves other run-time rates
   (`EUR as USD := it * rates.usd`).
+- unit-target (2026-10-15 night, user, told to use-reflection): a unit line may name its target the way a function
+  names its return type: `unit °C as K := it + 273.15`, `unit °F as K := (it + 459.67) * 5/9`; the right side is
+  then a plain amount, `it` the amount in the new unit. `(it + 273.15) K` stays accepted.
+- general-conversions (2026-10-15 night, user, told to use-reflection; card general-conversions): one conversion
+  mechanism for any types, `A as B := body`, e.g. `Person as text := it.name`, then `p as text`. A program's
+  conversions are looked up before the built-in ones. Unit lines and dimension bridges are its unit cases. Today
+  `P as text := it.name` is silently ignored (the card fixes that).
 
 ## Text
 - letters (2026-10-15 evening, Interviewer's decision on the user's behalf, to present 2026-10-16; card of-in-chain,
