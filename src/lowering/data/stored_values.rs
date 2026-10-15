@@ -12,7 +12,6 @@
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::warp_parser::parse;
 use crate::words::DELETE_WORD;
 use std::collections::HashSet;
 
@@ -139,7 +138,9 @@ fn kept(name: &str, default: &Node, file: &str) -> Vec<Node> {
 		&format!("{name} = std_io(\"store\", \"declare\", [\"{name}\", {DEFAULT_PLACEHOLDER}, {file:?}])"),
 		[(DEFAULT_PLACEHOLDER, default.clone())],
 	);
-	let save = parse(&format!("on change {name} {{ std_io(\"store\", \"save\", [\"{name}\", value, {file:?}]) }}"));
+	let save = crate::warp_parser::parse_generated(&format!(
+		"on change {name} {{ std_io(\"store\", \"save\", [\"{name}\", value, {file:?}]) }}"
+	));
 	vec![load, save]
 }
 
@@ -248,7 +249,8 @@ fn store_call(member: &str, key: Option<Node>, value: Option<Node>, file: &str) 
 		.map(|(name, _)| name.to_string())
 		.chain([format!("{file:?}")])
 		.collect();
-	let call = parse(&format!("std_io(\"store\", \"{member}\", [{}])", arguments.join(", ")));
+	let call =
+		crate::warp_parser::parse_generated(&format!("std_io(\"store\", \"{member}\", [{}])", arguments.join(", ")));
 	let values = given.into_iter().filter_map(|(name, node)| Some((name.to_string(), node?))).collect();
 	crate::law::substitute(&call, &values)
 }

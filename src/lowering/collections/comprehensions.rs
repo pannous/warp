@@ -6,7 +6,6 @@ use super::nodes::{children_rewritten, key, phrase_words, Counter};
 use crate::library_words::substitute;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::warp_parser::parse;
 use crate::words::{FOR_WORD, IN_WORD};
 use std::collections::{HashMap, HashSet};
 
@@ -506,7 +505,8 @@ impl Comprehension {
 					Qualifier::If(_) => format!("if {} {{ {inner} }}", placeholder(CONDITION, index)),
 				},
 			);
-		let mut program = substitute(parse(&template.replace(LOOPS, &body)), ELEMENT, &self.element);
+		let mut program =
+			substitute(crate::warp_parser::parse_generated(&template.replace(LOOPS, &body)), ELEMENT, &self.element);
 		for (index, qualifier) in self.qualifiers.iter().enumerate() {
 			program = match qualifier {
 				Qualifier::Each(variable, sequence) => {

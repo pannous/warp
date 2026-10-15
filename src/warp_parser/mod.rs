@@ -372,6 +372,32 @@ pub fn parse(input: &str) -> Node {
 	WarpParser::parse(input)
 }
 
+/// Code a lowering pass writes, placed where `at` was written: an error inside it names that position, not the
+/// template's own column (card template-positions: `sum 1` said 'not a list at 1:78', now 'at 1:5', the 1 it walks)
+pub fn parse_template(template: &str, at: &Node) -> Node {
+	placed(parse(template), crate::errors::diagnostic::line_info(at).as_ref())
+}
+
+/// Code a lowering pass writes, without positions: an error inside it names the nearest written position around it
+pub fn parse_generated(code: &str) -> Node {
+	placed(parse(code), None)
+}
+
+/// Every position in `node` replaced by `position`, or dropped without one
+fn placed(node: Node, position: Option<&LineInfo>) -> Node {
+	match node {
+		Node::Meta { node, data } if matches!(data.as_ref(), Node::Data(dada) if dada.downcast_ref::<LineInfo>().is_some()) =>
+		{
+			let inner = placed(*node, position);
+			match position {
+				Some(position) => inner.with_meta_data(position.clone()),
+				None => inner,
+			}
+		}
+		other => crate::node::children_rewritten(other, |child| placed(child, position)),
+	}
+}
+
 /// Parse-only path for untrusted data: nothing is evaluated, no word is guessed to be a boolean
 pub fn parse_data(input: &str) -> Node {
 	WarpParser::parse_with_options(input, ParserOptions::data())

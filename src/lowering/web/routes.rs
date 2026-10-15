@@ -274,9 +274,9 @@ fn matching(routes: &[Route]) -> Vec<Node> {
 			[("pattern", text(pattern)), ("index", Node::int(index as i64)), ("groups_fit", groups_fit(pattern))],
 		)
 	});
-	std::iter::once(crate::warp_parser::parse(PATH_TEMPLATE))
+	std::iter::once(crate::warp_parser::parse_generated(PATH_TEMPLATE))
 		.chain(matches)
-		.chain([crate::warp_parser::parse(NO_ROUTE)])
+		.chain([crate::warp_parser::parse_generated(NO_ROUTE)])
 		.collect()
 }
 
@@ -300,7 +300,7 @@ fn groups_fit(pattern: &str) -> Node {
 		return Node::True;
 	}
 	let all = (0..fits.len()).map(|index| format!("fit_{index}")).collect::<Vec<_>>().join(" and ");
-	crate::law::substitute(&crate::warp_parser::parse(&all), &fits)
+	crate::law::substitute(&crate::warp_parser::parse_generated(&all), &fits)
 }
 
 /// The value of the route page·route_index picks, else the not-found text
@@ -312,5 +312,5 @@ fn choice(routes: &[Route]) -> Vec<Node> {
 			[("index", Node::int(index as i64)), ("chosen", Node::Symbol(format!("{ROUTE_PREFIX}{index}")))],
 		)
 	});
-	std::iter::once(index).chain(choices).chain([crate::warp_parser::parse(NOT_FOUND_TEMPLATE)]).collect()
+	std::iter::once(index).chain(choices).chain([crate::warp_parser::parse_generated(NOT_FOUND_TEMPLATE)]).collect()
 }

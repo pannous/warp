@@ -5,7 +5,6 @@
 
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::warp_parser::parse;
 
 const UNDO_WORD: &str = "undo";
 const REDO_WORD: &str = "redo";
@@ -82,5 +81,5 @@ fn assigned_name(statement: &Node) -> Option<String> {
 }
 
 fn from_template(template: &str, name: &str) -> Node {
-	parse(&template.replace(NAME_PLACEHOLDER, name))
+	crate::warp_parser::parse_generated(&template.replace(NAME_PLACEHOLDER, name))
 }
