@@ -301,8 +301,14 @@ The simple form of layer 4: every sound passes a fixed effect chain distortion â
 output (lib/sound.warp `through_effects`, run in `sound()` over the whole phrase, so a melody has one tail). Module settings
 `distortion` (soft-clipper drive), `delay_time` / `delay_feedback` / `delay_mix`, `reverb_mix` (four Schroeder combs, 0.6 s
 tail); all off by default (no cost). The settings at the time of `play` are that sound's sends, so each voice (task) sets its
-own. Pure warp, so the playground runs the same. Still to build: the `osc |> lowpass |> delay |> out` pipe form with nodes
-and buses as values, shared buses between voices, compressor, EQ, effects on a running handle (card sound-pipe-graph).
+own. Pure warp, so the playground runs the same. The pipe form is built (card sound-pipe-graph,
+samples/sound_pipes.warp, tests/programs/test_sound_pipes.rs): a signal is the list of its amplitudes, a node a function
+of it, so `osc(C4, 1s, "saw") |> lowpass(900) |> delay(0.25) |> reverb(0.3) |> gain(0.5) |> out`; nodes osc, lowpass /
+highpass / bandpass (frequency, q), delay (seconds, feedback, mix), reverb (mix), distort (drive), gain, out (plays it
+through `sound`, so the settings chain and pan still apply); `mix(a, b[, c, d])` sums signals to the longest, a bus as a
+value. The settings chain and the nodes share biquad / echoed / roomed / clipped. Still to build: buses shared between
+voices (tasks), compressor, EQ, effects on a running handle. Speed: a mix over a list of signals in a loop was quadratic
+(card list-call-copy), so mix takes two to four signals.
 
 ## Native output built (card native-sound, 2026-10-12, src/sound/sound_engine.rs, tests/programs/test_sound_engine.rs)
 On macOS every sound now goes into one cpal output stream (CoreAudio) instead of one afplay process per WAV. A `Mixer`
