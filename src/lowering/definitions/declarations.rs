@@ -947,12 +947,43 @@ fn extension_block(items: &[Node]) -> Option<Node> {
 }
 
 fn lower_lists(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> + Copy) -> Node {
+	if crate::lowering::nodes::function_head(&node).is_some() {
+		return match node {
+			Node::List(items, bracket, separator) => lowering(&items)
+				.map(|definition| lower_definition(definition, lowering))
+				.unwrap_or(Node::List(items, bracket, separator)),
+			definition => lower_definition(definition, lowering),
+		};
+	}
 	match node {
 		Node::List(items, bracket, separator) => {
 			let items: Vec<Node> = items.into_iter().map(|item| lower_lists(item, lowering)).collect();
 			lowering(&items).unwrap_or(Node::List(items, bracket, separator))
 		}
 		other => children_rewritten(other, |child| lower_lists(child, lowering)),
+	}
+}
+
+fn lower_definition(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> + Copy) -> Node {
+	match node {
+		Node::Key(head, op, body) => {
+			Node::Key(Box::new(lower_definition_head(*head, lowering)), op, Box::new(lower_lists(*body, lowering)))
+		}
+		meta @ Node::Meta { .. } => meta.under_meta(|node| lower_definition(node, lowering)),
+		other => other,
+	}
+}
+
+fn lower_definition_head(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> + Copy) -> Node {
+	match node {
+		Node::List(items, bracket, separator) => {
+			Node::List(items.into_iter().map(|item| lower_lists(item, lowering)).collect(), bracket, separator)
+		}
+		Node::Key(head, op, result) => {
+			Node::Key(Box::new(lower_definition_head(*head, lowering)), op, Box::new(lower_lists(*result, lowering)))
+		}
+		meta @ Node::Meta { .. } => meta.under_meta(|node| lower_definition_head(node, lowering)),
+		other => other,
 	}
 }
 
