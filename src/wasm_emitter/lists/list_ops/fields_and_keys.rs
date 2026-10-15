@@ -1,5 +1,6 @@
 //! Fields and keys: `x.name`, `m[key]` with a key known only at runtime, the map words
 use super::*;
+use crate::node::Bracket;
 use crate::words::MAP_KEYS;
 
 /// The runtime error of a missing constant field is a function `no_field_<name>`; eval reports it as `no field <name>`
@@ -67,6 +68,14 @@ impl WasmGcEmitter {
 	pub(in crate::wasm_emitter) fn map_key(&self, index: &Node) -> Option<Node> {
 		let key = crate::warp_parser::subscript_key(index)?;
 		self.is_name_key(key).then(|| key.clone())
+	}
+
+	/// A map or list the compiler knows as one: `{age:2}`, a variable holding it; a map of one entry is held as its pair
+	/// at run time (card single-entry), yet has no pair parts of its own (card age-name)
+	fn is_known_collection(&self, target: &Node) -> bool {
+		matches!(target.drop_meta(), Node::List(_, Bracket::Curly | Bracket::Square, _))
+			|| crate::analyzer::held_map_type(target, &self.scope).is_some()
+			|| self.get_type(target) == Kind::List
 	}
 
 	/// A key that names an entry: a symbol, a text or a character ("x" is a codepoint)
@@ -138,8 +147,11 @@ impl WasmGcEmitter {
 					}
 					self.emit_uncertain_field_lookup(func, held, &name);
 					self.emit_time_field_lookup(func, held, &name);
-					// a key's key, value, op and name, a list's bracket (node_api.rs)
-					if let Some(part) = super::super::super::reflection::node_api::node_part(&name) {
+					// a key's key, value, op and name, a list's bracket (node_api.rs); a map held as its one pair has none
+					if let Some(part) = super::super::super::reflection::node_api::node_part(&name).filter(|part| {
+						!(super::super::super::reflection::node_api::is_pair_part(*part)
+							&& self.is_known_collection(target))
+					}) {
 						Self::emit_list(func, &[I::LocalGet(held), I32Const(part)]);
 						self.emit_call(func, super::super::super::reflection::node_api::NODE_PART);
 						func.instruction(&I::BrOnNonNull(0));
