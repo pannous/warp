@@ -29,3 +29,14 @@ fn other_values_convert_the_built_in_way() {
 fn a_program_converts_into_its_class() {
 	is!(&with_person("text as Person := Person{name: it}\nq = \"Bob\" as Person\nq.name"), "Bob");
 }
+
+#[test]
+fn an_alias_is_no_conversion() {
+	is!(&with_person("Person as text := it.name\nuse math as text\nPerson{name:\"A\"} as text"), "A");
+}
+
+#[test]
+fn a_type_has_no_conversion_to_itself() {
+	let refused = warp::wasm_emitter::eval(&with_person("Person as Person := it")).serialize();
+	assert!(refused.contains("already of its own type"), "{refused}");
+}

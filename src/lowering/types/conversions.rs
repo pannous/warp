@@ -42,6 +42,11 @@ pub fn lower(node: Node) -> Node {
 fn defined(node: Node, is_type: &dyn Fn(&Node) -> bool, targets: &mut BTreeSet<String>) -> Node {
 	match node {
 		Node::Key(head, Op::Define, body) if let Some((source, target)) = conversion_head(&head, is_type) => {
+			if source.symbol_name() == Some(target.as_str()) {
+				return crate::node::error(&format!(
+					"{target} as {target}: a value is already of its own type, no conversion to define"
+				));
+			}
 			targets.insert(target.clone());
 			let parameter = Node::Key(Box::new(Node::Symbol(CONVERTED.into())), Op::Colon, Box::new(source));
 			Node::Key(Box::new(call(&conversion_name(&target), vec![parameter])), Op::Define, body)
@@ -59,9 +64,21 @@ fn conversion_head(head: &Node, is_type: &dyn Fn(&Node) -> bool) -> Option<(Node
 	(is_type(source) && is_type(target)).then(|| (source.drop_meta().clone(), target_name))
 }
 
-/// Each `x as B` of a defined target B as the call `converted_to_B(x)`; written declarations (`x as text = …`) stay
+/// The words whose `as` names an alias, `use math as m`, not a conversion
+const ALIASING_WORDS: [&str; 3] = ["use", "import", "include"];
+
+/// Each `x as B` of a defined target B as the call `converted_to_B(x)`; written declarations (`x as text = …`) and
+/// aliases (`use math as text`) stay
 fn converted(node: Node, targets: &BTreeSet<String>) -> Node {
 	match node {
+		Node::List(ref items, ..)
+			if items
+				.first()
+				.and_then(|word| word.drop_meta().symbol_name())
+				.is_some_and(|word| ALIASING_WORDS.contains(&word)) =>
+		{
+			node
+		}
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) => {
 			Node::Key(head, op, Box::new(converted(*body, targets)))
 		}
