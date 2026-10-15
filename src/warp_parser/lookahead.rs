@@ -174,6 +174,10 @@ impl WarpParser {
 
 	/// Peek for prefix operators (unary operators that bind to right operand)
 	pub(super) fn peek_prefix_operator(&self) -> Option<(Op, usize)> {
+		// `{abs:5}`: the word names a key, as an infix operator word does
+		if self.word_names_key() {
+			return None;
+		}
 		if self.matches_keyword("while") {
 			return Some((Op::While, 5));
 		}
