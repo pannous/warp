@@ -1,0 +1,9 @@
+// cards builtin-functions, dir-lists, type-says-symbol: built-ins and lambdas as function values
+print type(function floor)          // builtin: (x:number) -> int
+f = function upper
+print f is function                 // yes
+print [1.5 2.5].map(function floor)  // [1 2]
+print "add" in dir([1 2])           // yes: the builtin list methods too, not only lib/list.warp's words
+twice = x => x * 2
+print type(twice)                   // function: (x) -> int
+print twice.params                  // [x]

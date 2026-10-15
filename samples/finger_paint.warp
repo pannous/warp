@@ -34,8 +34,8 @@ on key {
 	show()
 }
 
-// until the window closes; headless (no window) the loop never starts
-while window_open {
+// each frame of the window, until it closes (the playground's canvas always shows; headless: one frame)
+on frame {
 	if mouse_down {
 		// a new stroke starts where the button went down, not where the last one ended
 		if not was_down { last_x = mouse_x; last_y = mouse_y }
@@ -45,5 +45,4 @@ while window_open {
 		show()
 	}
 	was_down = mouse_down
-	sleep 2ms
 }

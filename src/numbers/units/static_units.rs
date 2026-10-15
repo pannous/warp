@@ -356,12 +356,47 @@ const DIMENSION_NAMES: [(&str, Dimension); 4] = [
 	("duration", Dimension::Time),
 ];
 
-/// The name of a signature of one dimension: `length` of m, none of m/s
-fn dimension_name(signature: &Signature) -> Option<&'static str> {
-	match signature.as_slice() {
-		[(dimension, 1)] => DIMENSION_NAMES.iter().find(|(_, known)| known == dimension).map(|(name, _)| *name),
-		_ => None,
+/// The predefined names of derived dimensions (user 2026-10-15, dimensions-units Q4): `a: area = 3 m²`
+const DERIVED_DIMENSION_NAMES: [(&str, &[(Dimension, i32)]); 4] = [
+	("speed", &[(Dimension::Length, 1), (Dimension::Time, -1)]),
+	("area", &[(Dimension::Length, 2)]),
+	("volume", &[(Dimension::Length, 3)]),
+	("frequency", &[(Dimension::Time, -1)]),
+];
+
+/// The base units a dimension name stands for: `length` → m, `speed` → m/s
+fn named_dimension(name: &str) -> Option<Vec<Factor>> {
+	if let Some((_, dimension)) = DIMENSION_NAMES.iter().find(|(known, _)| *known == name) {
+		return Some(vec![Factor { unit: base_unit(*dimension), power: 1 }]);
 	}
+	let (_, powers) = DERIVED_DIMENSION_NAMES.iter().find(|(known, _)| *known == name)?;
+	Some(powers.iter().map(|(dimension, power)| Factor { unit: base_unit(*dimension), power: *power }).collect())
+}
+
+/// The name of a signature: `length` of m, `speed` of m/s, none of kg/m
+fn dimension_name(signature: &Signature) -> Option<&'static str> {
+	let names =
+		DIMENSION_NAMES.iter().map(|(name, _)| *name).chain(DERIVED_DIMENSION_NAMES.iter().map(|(name, _)| *name));
+	names.into_iter().find(|name| named_dimension(name).is_some_and(|factors| self::signature(&factors) == *signature))
+}
+
+/// A declared unit or dimension and how a DimensionError shows it: as written (`cm`), a dimension name with its base
+/// units (`length (m)`, `area (m²)`), an expression of dimensions in base units (`m/s`)
+struct Declaration {
+	signature: Signature,
+	shown: String,
+}
+
+fn declaration(declared: &Node, own_names: &HashMap<String, Signature>) -> Option<Declaration> {
+	if let Some(units) = super::unit_expression(declared) {
+		return Some(Declaration { signature: signature(&units), shown: declared.serialize().trim().to_string() });
+	}
+	let signature = dimension_signature(declared, own_names)?;
+	let shown = match declared.drop_meta().symbol_name() {
+		Some(dimension) => format!("{dimension} ({})", shown(&signature)),
+		None => shown(&signature),
+	};
+	Some(Declaration { signature, shown })
 }
 
 /// `time` and `duration`, types of the time module too: a quantity of seconds is both, any other value's test stays
@@ -377,8 +412,7 @@ fn is_time_type(node: &Node, own_names: &HashMap<String, Signature>) -> bool {
 fn dimension_signature(node: &Node, own_names: &HashMap<String, Signature>) -> Option<Signature> {
 	let factors = super::factor_expression(node, &|leaf| {
 		let name = leaf.drop_meta().symbol_name().filter(|name| !own_names.contains_key(*name))?;
-		let (_, dimension) = DIMENSION_NAMES.iter().find(|(known, _)| *known == name)?;
-		Some(vec![Factor { unit: base_unit(*dimension), power: 1 }])
+		named_dimension(name)
 	})?;
 	Some(signature(&factors))
 }
@@ -699,6 +733,10 @@ impl Inference {
 		if let Some(construction) = self.named_construction(&node) {
 			return construction;
 		}
+		// `function min` is the function, no minute
+		if crate::closures::referenced_function(&node).is_some() {
+			return Ok((node, vec![]));
+		}
 		match node {
 			Node::Meta { node, data } => {
 				let (node, signature) = self.infer(*node)?;
@@ -931,17 +969,15 @@ impl Inference {
 		match target.drop_meta() {
 			Node::Symbol(name) => self.assign_variable(name.clone(), target, op, value, None),
 			Node::Key(name, Op::Colon, declared) if matches!(name.drop_meta(), Node::Symbol(_)) => {
-				let declared_signature = super::unit_expression(declared)
-					.map(|units| signature(&units))
-					.or_else(|| dimension_signature(declared, &self.variables));
-				match declared_signature {
+				match declaration(declared, &self.variables) {
 					// a unit or dimension is no type the emitter knows: the variable is a plain number with this signature
-					Some(declared_signature) => {
-						self.assign_variable(name.name(), name.as_ref().clone(), op, value, Some(declared_signature))
+					Some(declaration) => {
+						self.assign_variable(name.name(), name.as_ref().clone(), op, value, Some(declaration))
 					}
 					// `x: int = 1 m`: a number type holds plain numbers only (card units-annotation)
 					None if is_number_type(declared) => {
-						self.assign_variable(name.name(), target.clone(), op, value, Some(vec![]))
+						let plain = Declaration { signature: vec![], shown: shown(&vec![]) };
+						self.assign_variable(name.name(), target.clone(), op, value, Some(plain))
 					}
 					None => {
 						self.declared_instance(&name.name(), declared);
@@ -977,7 +1013,7 @@ impl Inference {
 		target: Node,
 		op: Op,
 		value: Node,
-		declared: Option<Signature>,
+		declared: Option<Declaration>,
 	) -> Result<(Node, Signature), Stop> {
 		if let Some(instance) = self.assigned_instance(&name, &target, op, &value) {
 			return instance;
@@ -1019,11 +1055,8 @@ impl Inference {
 			return Ok((Node::Key(Box::new(target), op, Box::new(object)), vec![]));
 		}
 		let (value, signature) = self.infer(value)?;
-		if let Some(declared) = declared.filter(|declared| *declared != signature) {
-			let declared = match dimension_name(&declared) {
-				Some(dimension) => format!("{dimension} ({})", shown(&declared)),
-				None => shown(&declared),
-			};
+		if let Some(declared) = declared.filter(|declared| declared.signature != signature) {
+			let declared = declared.shown;
 			let given = match dimension_name(&signature) {
 				Some(dimension) => format!("{} ({dimension})", shown(&signature)),
 				None => shown(&signature),
