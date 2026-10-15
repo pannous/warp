@@ -205,6 +205,9 @@ pub(crate) struct Names {
 	loop_variables: HashSet<String>,
 	/// The program's functions that need arguments, a bare name of one is the function in a type test (`f is function`)
 	functions_taking_arguments: HashSet<String>,
+	/// Every name the program binds other than as a function: variables, parameters (of lambdas too), loop variables,
+	/// fields; such a name anywhere is never taken for a function of that name in a type test
+	bound_otherwise: HashSet<String>,
 }
 
 impl Names {
@@ -226,20 +229,18 @@ impl Names {
 				&& !is_builtin_type_word(name)
 				&& super::library_signatures::library_signature(name).is_some_and(|(params, _)| !params.is_empty())
 		};
-		!self.loop_variables.contains(name)
+		!self.bound_otherwise.contains(name)
+			&& !self.loop_variables.contains(name)
 			&& (self.functions_taking_arguments.contains(name) || library_word_taking_arguments())
 	}
 
 	/// In the body of a function: also its parameters and the names it assigns, which no other function sees
 	fn within(&self, head: &Node, body: &Node) -> Names {
-		let mut bound = HashSet::new();
-		if let Node::List(items, _, _) = head.drop_meta() {
-			bound.extend(items.iter().skip(1).filter_map(parameter_name));
-		}
-		collect_assigned_names(body, &mut bound);
 		let mut inner = self.clone();
-		inner.functions_taking_arguments.retain(|name| !bound.contains(name));
-		inner.variables.extend(bound);
+		if let Node::List(items, _, _) = head.drop_meta() {
+			inner.variables.extend(items.iter().skip(1).filter_map(parameter_name));
+		}
+		collect_assigned_names(body, &mut inner.variables);
 		inner
 	}
 }
@@ -274,20 +275,20 @@ pub(crate) fn program_names(node: &Node) -> Names {
 	// program's own `text(x) := …` is refused as "text is a type"
 	let mut variables: HashSet<String> =
 		context.user_functions.keys().filter(|name| !is_builtin_type_word(name)).cloned().collect();
-	let mut assigned = HashSet::new();
-	collect_outer_assigned_names(node, &mut assigned);
+	collect_outer_assigned_names(node, &mut variables);
+	let mut bound_otherwise = super::module_properties::bound_names(node);
+	bound_otherwise.retain(|name| !context.user_functions.contains_key(name));
 	let functions_taking_arguments = context
 		.user_functions
 		.values()
-		.filter(|function| !function.params.is_empty() && !assigned.contains(&function.name))
+		.filter(|function| !function.params.is_empty())
 		.map(|function| function.name.clone())
 		.collect();
-	variables.extend(assigned);
 	let mut registry = crate::type_kinds::TypeRegistry::new();
 	crate::analyzer::collect_all_types(&mut registry, node);
 	let types = registry.types().iter().map(|definition| definition.name.clone()).collect();
 	let loop_variables = super::for_loop::loop_variables(node).into_iter().collect();
-	Names { variables, types, loop_variables, functions_taking_arguments }
+	Names { variables, types, loop_variables, functions_taking_arguments, bound_otherwise }
 }
 
 /// `is_type(subject, spec)` when the word names a type (`int`, `ints`, `Circle`) and no variable
@@ -398,6 +399,9 @@ fn marked(operand: Node) -> Node {
 fn comparison(left: Node, op: Op, right: Node, shadowed: &Names) -> Node {
 	hint_type_compared_with_text(&left, &op, &right);
 	hint_type_compared_with_text(&right, &op, &left);
+	if let Some(answer) = function_compared_with_type(&left, &op, &right, shadowed) {
+		return answer;
+	}
 	key(canonical_operand(expand(left, shadowed), shadowed), op, canonical_operand(expand(right, shadowed), shadowed))
 }
 
@@ -473,17 +477,47 @@ pub(crate) fn begins_type_test(right: &Node) -> bool {
 		})
 }
 
-/// `x is int`; `type(x) is int` tests x, as the type of x is what it names (card type-int); `floor is function` tests
-/// the function floor, a bare name of a function that needs arguments (card bare-fn-type)
+/// `x is int`; `type(x) is int` tests x, as the type of x is what it names (card type-int)
 fn is_type_call(subject: Node, spec: String, names: &Names) -> Node {
 	let tested = typed_argument(&subject).unwrap_or(subject);
-	let tested = match tested.drop_meta() {
+	call(IS_TYPE, vec![function_itself(tested, names), Node::Text(spec)])
+}
+
+/// `floor` of `floor is function`: a bare name of a function that needs arguments, tested against a type, is the
+/// function itself (card bare-fn-type)
+fn function_itself(operand: Node, names: &Names) -> Node {
+	match operand.drop_meta() {
 		Node::Symbol(name) if names.is_function_needing_arguments(name) => {
 			crate::closures::function_reference(name.clone())
 		}
-		_ => tested,
+		_ => operand,
+	}
+}
+
+/// `floor == function`: a function never equals a type (user decision #30), so no (`!=`: yes), hinting `floor is
+/// function`
+fn function_compared_with_type(left: &Node, op: &Op, right: &Node, names: &Names) -> Option<Node> {
+	let (function, type_word) = match (is_type_operand(left, names), is_type_operand(right, names)) {
+		(false, true) => (left, right),
+		(true, false) => (right, left),
+		_ => return None,
 	};
-	call(IS_TYPE, vec![tested, Node::Text(spec)])
+	let name = function.drop_meta().symbol_name().filter(|name| names.is_function_needing_arguments(name))?;
+	let type_word = type_word.drop_meta().name();
+	let test = if *op == Op::Ne { "is not" } else { "is" };
+	crate::normalize::set_position_of(function);
+	crate::normalize::hint(
+		&format!("{name} {op} {type_word}"),
+		&format!("{name} {test} {type_word}"),
+		"only `is` tests a type; a function never equals a type",
+	);
+	Some(if *op == Op::Ne { Node::True } else { Node::False })
+}
+
+/// A type word on a side of == (`int`, `function`)
+fn is_type_operand(operand: &Node, names: &Names) -> bool {
+	is_equality_operand(operand)
+		&& matches!(operand.drop_meta(), Node::Symbol(word) if type_spec(&[word.as_str()], names).is_some())
 }
 
 /// x of `type(x)`

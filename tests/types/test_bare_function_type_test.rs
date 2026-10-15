@@ -26,3 +26,16 @@ fn a_variable_of_the_name_is_the_value() {
 	assert_eq!(printed("f(floor):=floor is int; f 2"), "yes");
 	assert_eq!(printed("x = 2.5; floor(x) is int"), "yes");
 }
+
+#[test]
+fn a_lambda_parameter_of_the_name_is_the_value() {
+	assert_eq!(printed("g = (floor => floor is int); g(3)"), "yes");
+}
+
+/// a function never equals a type (decision #30): no, hinting the `is` test
+#[test]
+fn a_function_compared_with_a_type_by_equality_is_no() {
+	assert_eq!(printed("floor == function"), "no");
+	assert_eq!(printed("floor != int"), "yes");
+	assert_eq!(printed("f(x):=x; function == f"), "no");
+}
