@@ -84,10 +84,11 @@ impl Lists {
 			}
 			Node::Key(target, Op::Assign | Op::Define, value) => {
 				variables.extend(comprehension_variables(target));
-				if let (Node::Symbol(list), Some(class_fields)) =
-					(target.drop_meta(), instances_class(value).and_then(|class| classes.get(class)))
+				let element_fields = instances_class(value).and_then(|class| classes.get(class)).cloned();
+				if let (Node::Symbol(list), Some(element_fields)) =
+					(target.drop_meta(), element_fields.or_else(|| map_keys(value)))
 				{
-					fields.insert(list.clone(), class_fields.clone());
+					fields.insert(list.clone(), element_fields);
 				}
 			}
 			Node::List(words, _, _) if words.first().is_some_and(|word| word.is_symbol(FOR_WORD)) => {
@@ -171,6 +172,23 @@ fn with_as_where(node: Node, lists: &Lists) -> Node {
 		}
 	}
 	Node::List(items, bracket, separator)
+}
+
+/// The keys of a list of map literals, `[{name:"a"}, {name:"b", age:3}]`: its elements' fields (card field-list)
+fn map_keys(value: &Node) -> Option<Vec<String>> {
+	let Node::List(elements, Bracket::Square, _) = value.drop_meta() else { return None };
+	let mut keys: Vec<String> = vec![];
+	for element in elements {
+		let Node::List(entries, Bracket::Curly, _) = element.drop_meta() else { return None };
+		for entry in entries {
+			let Node::Key(key, Op::Colon, _) = entry.drop_meta() else { return None };
+			let key = key.drop_meta().symbol_name()?.to_string();
+			if !keys.contains(&key) {
+				keys.push(key);
+			}
+		}
+	}
+	(!keys.is_empty()).then_some(keys)
 }
 
 /// `name of people` (`people.name`), `name of people where age > 20`: the field of each element, `[of·element.name for
