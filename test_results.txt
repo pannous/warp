@@ -509,6 +509,11 @@ PASSED:
   ✓ control::test_pattern_unit_name::a_list_item_named_like_a_unit_binds
   ✓ control::test_pattern_unit_name::a_program_variable_named_like_a_unit_is_no_unit
   ✓ control::test_pattern_unit_name::a_unit_word_as_a_field_pattern_warns
+  ✓ control::test_plural_field_of_elements::a_plural_field_of_a_filtered_list
+  ✓ control::test_plural_field_of_elements::a_plural_field_of_a_list_is_the_field_of_each_element
+  ✓ control::test_plural_field_of_elements::a_plural_field_wherever_the_singular_resolves
+  ✓ control::test_plural_field_of_elements::each_walks_the_english_plural
+  ✓ control::test_plural_field_of_elements::english_plurals_of_fields
   ✓ control::test_print_empty_map::an_empty_map_joins_as_empty
   ✓ control::test_print_empty_map::print_of_an_empty_map_prints_empty
   ✓ control::test_print_empty::print_empty_gives_nothing
@@ -535,6 +540,11 @@ PASSED:
   ✓ control::test_reflection_mode::a_function_knows_where_it_was_written
   ✓ control::test_reflection_mode::a_printed_function_says_where_it_was_made
   ✓ control::test_reflection_mode::without_reflection_mode_a_function_has_no_line
+  ✓ control::test_reflection_synonyms::a_real_field_named_like_a_synonym_wins
+  ✓ control::test_reflection_synonyms::a_user_function_named_like_a_synonym_wins
+  ✓ control::test_reflection_synonyms::functions_lists_the_methods
+  ✓ control::test_reflection_synonyms::properties_lists_the_fields
+  ✓ control::test_reflection_synonyms::reflection_words_as_calls
   ✓ control::test_reflection_words::a_bindings_doc
   ✓ control::test_reflection_words::a_classes_methods
   ✓ control::test_reflection_words::a_functions_dump
@@ -1073,6 +1083,21 @@ PASSED:
   ✓ ffi::test_libm_header_functions::the_table_serves_every_listed_libm_function
   ✓ ffi::test_libm_linking::libm_comes_from_the_headers_when_they_declare_it
   ✓ ffi::test_libm_linking::the_table_serves_libm_when_the_headers_declare_nothing
+  ✓ ffi::test_page_ids::a_dollar_id_is_the_elements_value
+  ✓ ffi::test_page_ids::a_dollar_outside_warp_code_stays_text
+  ✓ ffi::test_page_ids::a_kebab_id_is_a_name_too
+  ✓ ffi::test_page_ids::a_markup_id_is_the_element
+  ✓ ffi::test_page_ids::an_attribute_naming_an_id_stays_its_name
+  ✓ ffi::test_page_ids::an_id_clashing_with_a_function_or_word_is_an_error
+  ✓ ffi::test_page_ids::an_id_clashing_with_a_parameter_or_loop_variable_is_an_error
+  ✓ ffi::test_page_ids::an_id_clashing_with_a_variable_is_an_error_naming_both
+  ✓ ffi::test_page_ids::an_unquoted_id_is_one_too
+  ✓ ffi::test_page_ids::assigning_a_dollar_id_writes_the_value
+  ✓ ffi::test_page_ids::document_and_window_are_plain_names
+  ✓ ffi::test_page_ids::element_finds_any_id
+  ✓ ffi::test_page_ids::jquery_gives_a_hint_naming_the_warp_forms
+  ✓ ffi::test_page_ids::the_first_dollar_field_hints_at_bind
+  ✓ ffi::test_page_ids::the_old_dollar_forms_work_with_a_hint
   ✓ ffi::test_wasi::test_fd_write
   ✓ ffi::test_wasi::test_fd_write_raw
   ✓ ffi::test_wasi::test_wasi_putf
@@ -1297,6 +1322,12 @@ PASSED:
   ✓ functions::test_destructuring_in_a_body::a_body_with_destructuring_gives_its_last_value
   ✓ functions::test_deterministic_inference::a_program_compiles_the_same_every_time
   ✓ functions::test_dollar_body::dollar_parameters_in_a_body_block
+  ✓ functions::test_dot_lambda::a_dot_word_applies_a_number_word
+  ✓ functions::test_dot_lambda::a_dot_word_in_data_stays_a_symbol
+  ✓ functions::test_dot_lambda::a_dot_word_is_the_written_lambda
+  ✓ functions::test_dot_lambda::a_dot_word_reads_the_member_of_each_item
+  ✓ functions::test_dot_lambda::a_leading_dot_number_stays_a_number
+  ✓ functions::test_dot_lambda::a_parameter_s_number_word_method_is_the_word
   ✓ functions::test_each_spellings::for_each_spellings_are_each
   ✓ functions::test_effects_symbols::a_trailing_effects_of_runs_the_program
   ✓ functions::test_effects_symbols::effects_of_gives_symbols_as_a_value
@@ -1356,6 +1387,10 @@ PASSED:
   ✓ functions::test_function_references::test_a_bare_name_needing_arguments_is_an_error_with_the_fix
   ✓ functions::test_function_references::test_a_body_returns_a_function_reference
   ✓ functions::test_function_references::test_a_function_reference_as_a_value_and_an_argument
+  ✓ functions::test_function_type_at_run_time::a_builtin_passed_on_has_its_builtin_type
+  ✓ functions::test_function_type_at_run_time::a_function_value_has_its_params_at_run_time
+  ✓ functions::test_function_type_at_run_time::every_spelling_of_a_function_has_its_signature_as_type
+  ✓ functions::test_function_type_at_run_time::other_values_keep_their_type
   ✓ functions::test_function_values::test_a_function_argument_of_a_specialised_function_is_passed_on
   ✓ functions::test_function_values::test_a_lambda_that_captures_is_passed_as_a_closure
   ✓ functions::test_function_values::test_a_lambda_that_captures_nothing_is_a_value
@@ -1561,8 +1596,10 @@ PASSED:
   ✓ functions::test_parameter_map_patterns::a_map_without_the_field_is_an_error
   ✓ functions::test_parameter_map_patterns::pattern_names_are_no_main_level_variables
   ✓ functions::test_parameter_overloads::a_call_takes_the_variant_its_arguments_fit
+  ✓ functions::test_parameter_overloads::a_list_parameter_overloads_a_text_parameter
   ✓ functions::test_parameter_overloads::an_argument_of_unknown_type_is_an_error
   ✓ functions::test_parameter_overloads::an_int_widens_to_a_float_variant
+  ✓ functions::test_parameter_overloads::an_overload_is_picked_at_run_time_when_only_the_value_tells
   ✓ functions::test_parameter_overloads::an_untyped_variant_is_the_fallback
   ✓ functions::test_parameter_overloads::of_any_is_the_fallback_variant
   ✓ functions::test_parameter_patterns::a_class_parameter_names_its_fields
@@ -1593,10 +1630,12 @@ PASSED:
   ✓ functions::test_precomputed::effects_shared_state_and_failures_are_never_folded
   ✓ functions::test_preposition_calls::a_call_with_prepositions_inside_another_call
   ✓ functions::test_preposition_calls::a_call_without_brackets_names_arguments
+  ✓ functions::test_preposition_calls::a_label_without_its_colon_is_an_error
   ✓ functions::test_preposition_calls::a_phrase_definition_takes_its_prepositions
   ✓ functions::test_preposition_calls::a_preposition_names_its_argument
   ✓ functions::test_preposition_calls::a_preposition_the_function_does_not_take_is_an_error
   ✓ functions::test_preposition_calls::a_variable_named_like_a_preposition_stays_a_variable
+  ✓ functions::test_preposition_calls::an_unambiguous_label_without_its_colon_is_a_warning
   ✓ functions::test_preposition_calls::play_and_melody_take_their_durations_after_for_and_each
   ✓ functions::test_preposition_calls::play_names_its_arguments_without_use_sound
   ✓ functions::test_preposition_calls::several_prepositions_in_any_order
@@ -1842,7 +1881,9 @@ PASSED:
   ✓ lists::test_empty_list_argument::a_function_receives_the_empty_list
   ✓ lists::test_empty_list_argument::an_empty_list_inside_a_list_is_an_item
   ✓ lists::test_empty_list_argument::an_empty_list_literal_is_a_call_argument
+  ✓ lists::test_empty_list_concat::a_melody_too_fast_for_any_sample_plays_nothing
   ✓ lists::test_empty_list_concat::an_empty_list_variable_concatenates
+  ✓ lists::test_empty_list_concat::two_empty_lists_concatenate_to_the_empty_list
   ✓ lists::test_empty_list_count::a_counting_property_is_a_number_in_arithmetic
   ✓ lists::test_empty_list_count::a_loop_over_an_empty_list_does_not_run
   ✓ lists::test_empty_list_count::a_one_element_list_still_counts_one
@@ -3091,6 +3132,8 @@ PASSED:
   ✓ operators::test_postfix_words::a_trailing_percent_is_a_hundredth
   ✓ operators::test_postfix_words::an_operator_word_after_its_value_applies_to_it
   ✓ operators::test_postfix_words::an_operator_word_without_operand_is_a_function
+  ✓ operators::test_print_bang::print_of_a_forced_value_keeps_the_variable
+  ✓ operators::test_print_bang::print_of_a_forced_value_prints_it
   ✓ operators::test_root_word::a_defined_root_wins
   ✓ operators::test_root_word::root_is_sqrt
   ✓ operators::test_rough_similarity::a_class_method_serves_both_operators_when_only_one_is_defined
@@ -3161,6 +3204,7 @@ PASSED:
   ✓ parser::test_escaped_quote_slashes::entities_after_an_escaped_quote_stay_text
   ✓ parser::test_escaped_quote_slashes::slashes_after_an_escaped_quote_are_text
   ✓ parser::test_format_layout::test_canonical_layout
+  ✓ parser::test_format_layout::test_every_binary_operator_spaced
   ✓ parser::test_format_layout::test_hash_comments_only_when_asked
   ✓ parser::test_format_layout::test_layout_that_would_change_the_meaning_stays
   ✓ parser::test_format_layout::test_offside_block_indented_by_tabs
@@ -3176,6 +3220,10 @@ PASSED:
   ✓ parser::test_glyph_aliases::logic_glyphs_are_and_or
   ✓ parser::test_glyph_aliases::truth_glyphs_are_true_and_false
   ✓ parser::test_guard_comment::a_comment_after_a_guard_ends_its_line
+  ✓ parser::test_home_paths::a_path_follows_a_path_or_a_function
+  ✓ parser::test_home_paths::a_slash_starts_an_absolute_path_where_no_operand_divides
+  ✓ parser::test_home_paths::a_tilde_starts_a_home_path
+  ✓ parser::test_home_paths::division_and_comparison_stay
   ✓ parser::test_if_condition_words::a_while_condition_takes_a_call_of_a_variable
   ✓ parser::test_if_condition_words::an_if_condition_takes_a_call_of_a_variable
   ✓ parser::test_if_condition_words::an_if_condition_takes_a_word_after_a_variable
@@ -3406,8 +3454,6 @@ PASSED:
   ✓ programs::test_draw::colors_are_numbers_with_an_alpha_byte
   ✓ programs::test_draw::shapes_set_the_pixels_they_cover
   ✓ programs::test_draw::with_alpha_is_a_method_of_a_color
-  ✓ programs::test_file_spectrum::a_file_written_again_is_measured_again
-  ✓ programs::test_file_spectrum::a_files_tone_fills_its_own_band
   ✓ programs::test_file_spectrum::shader_of_is_the_wgsl_a_function_paints_with
   ✓ programs::test_file_spectrum::the_compiled_shader_demo_compiles_to_one_fragment_shader
   ✓ programs::test_gpu_draw::an_unknown_draw_choice_warns
@@ -5308,6 +5354,12 @@ PASSED:
   ✓ welcoming::test_count_shadowed::a_global_count_does_not_hide_the_word_in_functions
   ✓ welcoming::test_count_shadowed::a_variable_named_count_applied_to_a_value_is_an_error
   ✓ welcoming::test_count_shadowed::count_stays_a_word_and_a_variable_name
+  ✓ welcoming::test_cross_module_overload::a_path_takes_the_file_word_a_list_the_list_word
+  ✓ welcoming::test_cross_module_overload::a_text_of_unknown_origin_takes_the_list_word
+  ✓ welcoming::test_cross_module_overload::a_variable_holding_a_path_is_a_path
+  ✓ welcoming::test_cross_module_overload::find_searches_a_folder_or_a_list
+  ✓ welcoming::test_cross_module_overload::the_current_folder_alone_is_a_path
+  ✓ welcoming::test_cross_module_overload::the_first_argument_picks_find
   ✓ welcoming::test_discarded_error_warning::a_discarded_error_warns
   ✓ welcoming::test_discarded_error_warning::a_used_error_does_not_warn
   ✓ welcoming::test_discarded_pure_warning::a_discarded_pure_call_warns
@@ -5333,6 +5385,7 @@ PASSED:
   ✓ welcoming::test_error_positions::an_unclosed_group_names_where_it_opened
   ✓ welcoming::test_error_positions::an_unknown_method_names_its_line
   ✓ welcoming::test_error_positions::an_unterminated_text_names_where_it_opened
+  ✓ welcoming::test_fixits::a_bare_label_fixes_to_its_colon
   ✓ welcoming::test_fixits::a_hint_offers_its_preferred_form
   ✓ welcoming::test_fixits::ambiguous_call_comparison_fixes
   ✓ welcoming::test_fixits::bare_list_fixes
@@ -5553,6 +5606,13 @@ PASSED:
   ✓ welcoming::test_script_pragma::a_script_reads_its_input
   ✓ welcoming::test_script_pragma::a_script_shows_no_hints
   ✓ welcoming::test_script_pragma::inline_code_exits_with_its_exit_status
+  ✓ welcoming::test_shell_words::a_file_is_read_by_lines
+  ✓ welcoming::test_shell_words::a_shell_word_takes_an_absolute_path
+  ✓ welcoming::test_shell_words::cd_changes_the_working_directory
+  ✓ welcoming::test_shell_words::files_are_found_and_measured
+  ✓ welcoming::test_shell_words::files_are_made_copied_moved_and_listed
+  ✓ welcoming::test_shell_words::rm_removes_a_file_with_guard_rails
+  ✓ welcoming::test_shell_words::which_finds_a_program
   ✓ welcoming::test_slash_comment_after_value::a_comment_after_a_text_gets_no_division_note
   ✓ welcoming::test_slash_comment_needs_space::slash_slash_with_space_is_a_comment
   ✓ welcoming::test_slash_comment_needs_space::slash_slash_without_space_divides
@@ -5686,6 +5746,8 @@ PASSED:
 
 FAILED:
   ✗ programs::test_file_spectrum::a_file_says_how_long_it_sounds
+  ✗ programs::test_file_spectrum::a_file_written_again_is_measured_again
+  ✗ programs::test_file_spectrum::a_files_tone_fills_its_own_band
 
 SUMMARY:
-13 ignored, 5682 passed, 1 failed, 5683 total tested
+13 ignored, 5742 passed, 3 failed, 5745 total tested
