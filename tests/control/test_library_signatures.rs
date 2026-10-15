@@ -44,3 +44,12 @@ fn whole_number_math_words_show_int_parameters() {
 	is!("use math; gcd(2^70, 2^65) == 2^65", true);
 	is!("use math; lerp.params", texts(vec!["a", "b", "t"]));
 }
+
+/// A function whose result is a bool says so: `-> bool`, not the Int a bool is held as (card function-returning)
+#[test]
+fn a_bool_result_shows_as_bool() {
+	is!("f(b) := b == 0; (function f).signature", text("(b) -> bool"));
+	is!("use math; is_prime.signature", text("(n:int) -> bool"));
+	is!("f(b) := b == 0; type(function f)", "function: (b) -> bool");
+	is!("f(b) := b + 1; (function f).signature", text("(b) -> int"));
+}
