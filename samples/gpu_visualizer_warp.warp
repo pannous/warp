@@ -1,7 +1,4 @@
 #!/usr/bin/env warp
-// DRAFT (card compile-shaders step 4), blocked by card note-dispatch-element-wise: on the GPU every function
-// translates (warp lower shows one @fragment shader), but the CPU type check fails: with the Note class loaded
-// (melody_samples), `p .- gem_center()` dispatches to Note.minus with a list. Move to samples/ once that is fixed.
 // gpu_visualizer.warp's music visualizer with its shader written in warp: paint(tunnel, width, height) turns tunnel
 // and the functions it calls into one WGSL fragment shader, which raymarches 16 glowing frequency bars around a
 // pulsing gem on the GPU frame after frame. Vectors are lists of 2 to 4 numbers, .+ .- .* ./ .^ their element-wise
