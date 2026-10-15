@@ -105,9 +105,9 @@ fn spaced_values_text(argument: &Node) -> Option<Node> {
 fn juxtaposed_text(argument: &Node) -> Option<Node> {
 	match argument.drop_meta() {
 		Node::List(parts, Bracket::None, Separator::Space)
-			if parts
-				.first()
-				.is_some_and(|first| matches!(first.drop_meta(), Node::Text(_)) && !crate::warp_parser::is_path_literal(first)) =>
+			if parts.first().is_some_and(|first| {
+				matches!(first.drop_meta(), Node::Text(_)) && !crate::warp_parser::is_path_literal(first)
+			}) =>
 		{
 			Some(super::super::joined_text(parts, ""))
 		}
