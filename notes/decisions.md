@@ -99,9 +99,15 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   time); tests pin what always holds, `now <= now` → yes, not `now == now` (card flaky-browser-suite).
 - canvas-size (2026-10-14): `window.width/height`, `display.width/height`, `canvas.width/height` are writable properties,
   natively and in the playground; a bare top-level `width` works too, with a did-you-mean naming the three.
-- dollar-element (2026-10-14): in a page program `$xyz` is the element with id xyz (`$xyz.value`, `$xyz.focus()`);
-  `$window`, `$document` are those globals; misspelled members are compile-time errors. A route's `$title` stays the
-  submitted field's value.
+- page-ids (2026-10-15, user; card page-ids; replaces dollar-element of 2026-10-14): an id in the program's own
+  markup is a name in the program's scope: plain `who` is the element (`who.focus()`), as in JavaScript but checked;
+  an id clashing with a variable, function or word is a compile-time error naming both; kebab ids like `user-name`
+  resolve too. `window`/`document` are plain names. `$who` is always the element's value (text, number, yes/no for a checkbox, text content otherwise) and
+  `$who = "Ann"` writes it, like a route's `$title`. Dynamic or external ids go through `element("user-name")`, not
+  `${…}` (string interpolation). `$` means something only in warp code: markup text, single-quoted strings, `\${`
+  and files read at run time stay text. Misspelled members are compile-time errors. Principle: one meaning per
+  spelling, never two things under one name silently. Later card: backtick strings with `$x` interpolation (clashes
+  with `$who`, noted there).
 - call-as-grouping (2026-10-15): `f x as T` is `f(x as T)` everywhere, like `f 2 + 1` = `f(2 + 1)`, with a warning
   naming `f(x as T)` and `(f x) as T`; dispatch on the result goes via `pdf p = render "x"` or `(render "x") as pdf`.
 - uniscript-binary-import (2026-10-15, user: "definitely yes"): ~/dev/uniscript gets wasm-only c/ffi additions
@@ -418,6 +424,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - Ranges (2026-10-09): `r: 1..n` is the range itself, same as `r = 1..n`. `upto` excludes the end with a hint.
 
 ## Functions and calls
+- function-references (2026-10-15, user): a bare name of a function that needs arguments, compared with a type
+  (`floor is function`) or in `type(floor)`, means the function itself (card bare-fn-type). `.floor` in argument
+  position is a lambda on it, like Swift's .member: `xs.map(.floor)`, `people.sort(.age)` (card dot-lambda).
+  `&floor` and `function floor` stay the explicit references; `:floor` is not used.
 - type-library-words (2026-10-12): list/map/text library words are always available as `x.f()` and `f(x)`;
   `use list` only for qualified `list.zip`. P171 other modules' words need their `use` (error naming the module);
   `write` and `exists` are global; a file URL loads the file module.

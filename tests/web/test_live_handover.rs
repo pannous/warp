@@ -97,3 +97,76 @@ fn a_handed_over_loop_starts_on_the_old_runs_grid() {
 	let program = format!("globalThis.self = globalThis;\n{voices}\n{scenario}");
 	assert_eq!(node_output(&program), r#"{"said":[["drums",0.5],["drums",2.5],["bass",0]],"loop":"drums"}"#);
 }
+
+/// decision deleted-loop: the rerun names its live loops as it starts (its module's LIVE_LOOPS_SECTION); the old run's
+/// loops of the rest fade out, page timers set by hand and sounds whose gain notes its ramps
+fn deleted_loop_program(scenario: &str) -> String {
+	let fade_out = source_between(PLAYGROUND, "function fadeOut", "\n}\n");
+	let timers = r#"
+		const timers = [], cleared = [];
+		globalThis.setTimeout = (run, ms) => timers.push({ run, ms });
+		globalThis.clearTimeout = id => id && cleared.push(id);
+		const ramped = source => Object.assign(source, { gainNode: { gain: { value: 1, ramps: [],
+			setValueAtTime(value, at) { this.ramps.push(["set", value, at]); },
+			linearRampToValueAtTime(value, at) { this.ramps.push(["ramp", value, at]); } } } });
+	"#;
+	page_program(&format!("{fade_out}\n{timers}\n{scenario}"))
+}
+
+#[test]
+fn a_deleted_loop_fades_out_as_soon_as_the_rerun_names_its_loops() {
+	let scenario = r#"
+		liveCycled(worker, "drums", 10);
+		liveCycled(worker, "bass", 10);
+		const old = worker;
+		sounding = [sound(old, "drums", 13, 15), sound(old, "bass", 13, 15), sound(old, "bass", 17, 19)].map(ramped);
+		fakeNow = audio.currentTime = 12;
+		handOver({ id: 1 });
+		audio.currentTime = 12.5;
+		liveLoopsNamed(["drums"]);
+		const fading = { terminated: [...terminated], drums: sounding[0].gainNode.gain.ramps.length };
+		liveCycled(worker, "drums", 14);
+		console.log(JSON.stringify({ fading, bass: sounding[1].gainNode.gain.ramps, stopped: sounding.map(s => s.stopped),
+			terminated, cleared, retired: retiredWorkers.size }));
+	"#;
+	assert_eq!(
+		node_output(&deleted_loop_program(scenario)),
+		r#"{"fading":{"terminated":[],"drums":0},"bass":[["set",1,12.5],["ramp",0,13.5]],"stopped":[14,13.5,13.5],"terminated":["old"],"cleared":[1,1],"retired":0}"#
+	);
+}
+
+#[test]
+fn a_kept_loop_with_a_long_period_is_not_faded() {
+	let scenario = r#"
+		liveCycled(worker, "drums", 4);
+		liveCycled(worker, "drums", 10);
+		const old = worker;
+		sounding = [sound(old, "drums", 10, 16), sound(old, "drums", 16, 22)].map(ramped);
+		fakeNow = audio.currentTime = 12;
+		handOver({ id: 1 });
+		liveLoopsNamed(["drums"]);
+		fakeNow = audio.currentTime = 15.5;
+		const waiting = { terminated: [...terminated], ramps: sounding.map(s => s.gainNode.gain.ramps.length) };
+		liveCycled(worker, "drums", 16);
+		console.log(JSON.stringify({ waiting, stopped: sounding.map(s => s.stopped), terminated, cleared }));
+	"#;
+	assert_eq!(
+		node_output(&deleted_loop_program(scenario)),
+		r#"{"waiting":{"terminated":[],"ramps":[0,0]},"stopped":[null,16],"terminated":["old"],"cleared":[1,1]}"#
+	);
+}
+
+/// LIVE_LOOPS_SECTION lists the program's live loops by name, which the playground's rerun reports (host-tasks.js)
+#[test]
+fn the_module_names_its_live_loops() {
+	let program =
+		"use sound\nlive_loop drums 2 { play(C4, 0.1s) }\nlive_loop bass 2 { play(C2, 0.1s) }\nawait drums\nawait bass";
+	let module = warp::pipeline::compile(program).expect("compiles");
+	let names = wasmparser::Parser::new(0).parse_all(&module.bytes).find_map(|payload| match payload.unwrap() {
+		wasmparser::Payload::CustomSection(section) if section.name() == warp::host::LIVE_LOOPS_SECTION => {
+			Some(String::from_utf8(section.data().to_vec()).unwrap())
+		}
+		_ => None,
+	});
+	assert_eq!(names.as_deref(), Some("bass\ndrums"));
+}
