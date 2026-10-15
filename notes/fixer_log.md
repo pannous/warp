@@ -266,6 +266,8 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - 2026-10-14 component-cache: `use lib.wasm` components go through the .cwasm module cache (module_cache CompiledCode for Module and Component); takes-three itself is the package source lowering, reported (tests/wasm/test_compiled_module_cache.rs)
 - 2026-10-14 out-fuel: int_text divides by 10^18 per step (18 digits each), so print(10^10000) no longer runs out of fuel (tests/numbers/test_big_int_text.rs)
 - 2026-10-15 operator-infix: `operator ⊕ := …` without a kind declares an infix operator (declared_kind in definitions/operators.rs; tests/operators/test_operator_default_infix.rs)
+- 2026-10-15 packages: registry entries take short forms: bare `name` (pannous/name), `owner/repo`, `"github:owner/repo"`, `version: latest` or none follows the default branch (package_in/repository_url in modules/packages.rs; tests/modules/test_package_forms.rs)
+||||||| 353324f9a
 - 2026-10-15 use-regex: a word operator glued to `(a, b)` is its call, so `print matches("abd", "a.c$")` prints no (tests/operators/test_library_infix_words.rs)
 - 2026-10-15 counts-parens: one scanner for a glued (…) skips texts, so `print matches("(", "x")` stays a call (tests/operators/test_library_infix_words.rs)
 - 2026-10-15 parameter-named-number: `o = f 2.2 as int` casts the argument like the statement form, with an argument-cast warning (tests/functions/test_argument_cast.rs)
