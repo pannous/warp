@@ -103,7 +103,7 @@ pub fn lower(node: Node) -> Node {
 			"nothing listens to {name}: `listeners of {name}` needs an `on {name} {{…}}` handler or a variable {name}"
 		));
 	}
-	let functions = user_functions(&node);
+	let functions = functions_and_lambdas(&node);
 	// `h(x) := g(x)` of a bool function g: the signatures need the bool functions known (card signature-int)
 	crate::analyzer::note_bool_functions(functions.values());
 	as_reflection_words(node.clone(), &functions, &defined)
@@ -412,6 +412,21 @@ pub(super) fn user_functions(program: &Node) -> Functions {
 	let mut context = crate::compiler::context::Context::new();
 	crate::analyzer::extract_user_functions(&mut context, program);
 	context.user_functions
+}
+
+/// The program's functions, those `f = x => x*2` defines too (lambdas.rs makes it `f(x) := x*2` after this pass)
+fn functions_and_lambdas(program: &Node) -> Functions {
+	let mut lambdas = vec![];
+	program.visit(&mut |part| {
+		if let Node::Key(target, Op::Assign | Op::Define, value) = part {
+			if let Some(name) = target.symbol_name() {
+				lambdas.extend(crate::lambdas::lambda_definition(name, value));
+			}
+		}
+	});
+	let mut functions = user_functions(&Node::List(lambdas, Bracket::None, Separator::Semicolon));
+	functions.extend(user_functions(program));
+	functions
 }
 
 /// `{key: value …}`
