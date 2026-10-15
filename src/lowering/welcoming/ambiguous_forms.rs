@@ -330,8 +330,12 @@ fn apply_suffix_words(items: Vec<Node>, functions: &SuffixWords, bracket: Bracke
 		let suffix = heading_suffix_word(&item, functions);
 		// `map xs abs` passes abs to map: an operator word applies only to a whole first operand (`-7 abs`, `x = -7 abs`)
 		let suffix = suffix.filter(|(_, suffix)| matches!(suffix, Suffix::Function(_)) || applied.len() == 1);
+		// `map abs xs`: an iteration word takes the operator word as its function, never is its operand
+		let takes_functions = |operand: &Node| {
+			functions.is_library_word(operand) || crate::lambdas::is_iteration_word(&operand.drop_meta().name())
+		};
 		let (Some(operand), Some((word, function))) =
-			(applied.last().filter(|operand| !functions.is_library_word(operand)), suffix)
+			(applied.last().filter(|operand| !takes_functions(operand)), suffix)
 		else {
 			applied.push(item);
 			continue;

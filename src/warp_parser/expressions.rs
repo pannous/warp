@@ -42,7 +42,9 @@ impl WarpParser {
 			let fourth_root = self.current_char() == super::lookahead::FOURTH_ROOT;
 			// `sort by abs.take first 1`: a glued method applies to the word, it is no operand
 			let method_follows = self.peek_char(chars) == '.' && self.peek_char(chars + 1).is_alphabetic();
-			let bare = operator_word && (self.expression_ends_after(chars) || method_follows);
+			// `map abs xs`, `map sqrt on: xs`: where an iteration word expects its function, the word is that function
+			let function_argument = crate::lambdas::is_iteration_word(&self.word_ending_before(self.pos));
+			let bare = operator_word && (self.expression_ends_after(chars) || method_follows || function_argument);
 			// `sqrt(2).round(2)`: the glued parentheses are the whole operand, the method applies to the result
 			let call_with_method = operator_word
 				&& self.parenthesis_length(chars).is_some_and(|length| {
