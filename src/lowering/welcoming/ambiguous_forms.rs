@@ -60,7 +60,7 @@ fn library_word_values(node: Node, words: &SuffixWords) -> Node {
 			// `map sqrt xs`, `map sqrt on: xs`: the parser applied sqrt, the iteration word takes it as its function
 			let mut items = if is_iteration { crate::closures::with_operator_word_unfolded(items, 1) } else { items };
 			let position = function_position(&items, words);
-			if let Some(function) = items.get_mut(position).filter(|item| is_iteration && words.is_function_word(item))
+			if let Some(function) = items.get_mut(position).filter(|item| is_iteration && words.is_iterated_function(item))
 			{
 				*function = word_function(function);
 			}
@@ -90,7 +90,7 @@ fn word_function(word: &Node) -> Node {
 /// else last as in `map(xs, floor)`
 fn function_position(items: &[Node], words: &SuffixWords) -> usize {
 	match items {
-		[_, function, _, ..] if words.is_function_word(function) => 1,
+		[_, function, _, ..] if words.is_iterated_function(function) => 1,
 		_ => items.len().saturating_sub(1),
 	}
 }
@@ -163,15 +163,22 @@ impl SuffixWords {
 	}
 
 	/// A library word of one value the program does not name itself, also libm's (`floor`, `sin`), the host's
-	/// (`print`), a counting word (`len`) and a conversion (`str`, `int`): a function value
+	/// (`print`) and a counting word (`len`), but no type word (`type Name = string`): a function value
 	fn is_function_word(&self, node: &Node) -> bool {
 		let takes_one_value = |name: &str| {
-			crate::analyzer::is_counting_word(name)
-				|| crate::library_words::CONVERSION_METHODS.contains(&name)
-				|| crate::lowering::library_signatures::library_signature(name)
-					.is_some_and(|(params, _)| params.len() == 1)
+			crate::analyzer::type_word_kind(name).is_none()
+				&& (crate::analyzer::is_counting_word(name)
+					|| crate::lowering::library_signatures::library_signature(name)
+						.is_some_and(|(params, _)| params.len() == 1))
 		};
 		self.is_library_word(node) || self.unnamed(node).is_some_and(takes_one_value)
+	}
+
+	/// What an iteration word takes as its function: a function word, or a conversion (`xs.map(str)`), which elsewhere
+	/// is the type it names (`type Age = int`)
+	fn is_iterated_function(&self, node: &Node) -> bool {
+		self.is_function_word(node)
+			|| self.unnamed(node).is_some_and(|name| crate::library_words::CONVERSION_METHODS.contains(&name))
 	}
 
 	/// The word `node` is, unless the program names it as a variable or function of its own
