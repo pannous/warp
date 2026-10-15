@@ -493,7 +493,7 @@ function liveCycled(from, name, at) {
 	} else if (!known) retiredWorkers.forEach(retired => endHandedOver(retired, name, at));
 }
 
-const isLive = run => run && worker.liveLoops?.size > 0 && worker.runId === run.id;
+const playsLive = run => run && worker.liveLoops?.size > 0 && worker.runId === run.id;
 
 // the retired Worker's loop of that name sounds until `at`, the Worker goes once none of its loops is left
 function endHandedOver(retired, name, at) {
@@ -909,7 +909,7 @@ async function show(code) {
 	if (showing) {
 		queued = code; // only the newest code is worth running next
 		if (pending?.animating) stopRun(pending, "animation stopped");
-		else if (isLive(pending)) handOver(pending);
+		else if (playsLive(pending)) handOver(pending);
 		return;
 	}
 	showing = true;
@@ -1009,7 +1009,7 @@ function runChanged() {
 // underlines and printed text go, so none is taken for the new run's (card g_oc54)
 // Ctrl/Cmd-Enter while live loops play runs the code again, handing them over (card playground-live); the button stops
 function runPressed(fromKeys = false) {
-	if (showsStop() && !(fromKeys && isLive(pending))) return stopPressed();
+	if (showsStop() && !(fromKeys && playsLive(pending))) return stopPressed();
 	showValue(PENDING_VALUE);
 	$("value").classList.remove("located");
 	$("value").onclick = null;

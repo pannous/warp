@@ -48,7 +48,7 @@ fn a_new_runs_loop_takes_over_at_the_old_loops_cycle() {
 		const old = worker;
 		sounding = [sound(old, "drums", 12, 14), sound(old, "drums", 14, 16), sound(old, undefined, 13, 20)];
 		fakeNow = 13;
-		const live = isLive({ id: 1 });
+		const live = playsLive({ id: 1 });
 		handOver({ id: 1 });
 		const handedOver = JSON.parse(JSON.stringify(liveHandover));
 		liveCycled(worker, "drums", 14);
