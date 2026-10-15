@@ -104,6 +104,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::broadcasting::lower_element_wise_operators,
 	// a shader's `$name` holes (shader_holes.rs) as `name: name` in the values map of each paint of it
 	crate::graphics::shader_holes::lower,
+	// `Person as text := it.name` and `p as text` (conversions.rs) before any pass reads `as` as a cast
+	crate::lowering::conversions::lower,
 	crate::lowering::inline_unions::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::lowering::scoped_handlers::lower,
