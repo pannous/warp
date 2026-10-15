@@ -103,7 +103,10 @@ pub fn lower(node: Node) -> Node {
 			"nothing listens to {name}: `listeners of {name}` needs an `on {name} {{…}}` handler or a variable {name}"
 		));
 	}
-	as_reflection_words(node.clone(), &user_functions(&node), &defined)
+	let functions = user_functions(&node);
+	// `h(x) := g(x)` of a bool function g: the signatures need the bool functions known (card signature-int)
+	crate::analyzer::note_bool_functions(functions.values());
+	as_reflection_words(node.clone(), &functions, &defined)
 }
 
 /// `print hi` of a function hi without parameters calls it (decision reflection: a bare name never becomes the
@@ -457,7 +460,7 @@ pub(crate) fn signature(function: &crate::compiler::context::UserFunctionDef) ->
 	let result = match function.return_kind {
 		crate::type_kinds::Kind::Empty => String::new(),
 		// a bool is held as an Int (card bool-type)
-		crate::type_kinds::Kind::Int if crate::analyzer::gives_bool(function) => {
+		crate::type_kinds::Kind::Int if crate::analyzer::is_bool_function(&function.name) => {
 			format!(" -> {}", crate::analyzer::BOOL_TYPE)
 		}
 		kind => format!(" -> {kind}"),
