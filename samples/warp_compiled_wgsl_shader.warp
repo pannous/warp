@@ -8,20 +8,22 @@ height = 540
 global time = 0.0
 
 // a color of the rainbow, once around as h goes from 0 to 1
-hue(h) := 0.5 .+ 0.5 .* [cos(tau * h), cos(tau * (h + 0.33)), cos(tau * (h + 0.67))]
+hue(h) := 0.5 .+ 0.5 .* [cosine(tau * h), cosine(tau * (h + 0.33)), cosine(tau * (h + 0.67))]
 // the pixel as a point around the middle of the picture, 1 its half height away
 centered(x, y) := [x - width / 2, height / 2 - y] ./ (height / 2)
 // p turned around the middle
-turned(p, angle) := [cos(angle) * p.x - sin(angle) * p.y, sin(angle) * p.x + cos(angle) * p.y]
+turned(p, angle) := [cosine(angle) * p.x - sine(angle) * p.y, sine(angle) * p.x + cosine(angle) * p.y]
 
 swirl(x, y) := {
 	p = turned(centered(x, y), time * 0.5)
 	d = norm(p)
-	wave = sin(12 * d - 3 * atan2(p.y, p.x) - time * 4)
+	wave = sine(12 * d - 3 * atan2(p.y, p.x) - time * 4)
 	hue(d * 0.5 + 0.1 * wave + time * 0.1) .* (0.6 + 0.4 * wave) .* (1 - smoothstep(0.8, 1.0, d))
 }
 
-print shader_of(swirl)
+print shader_of(swirl) // print the WGSL shader code just for debugging
+# so you can copy it into a website or other shader tool
+
 // five seconds by the clock, however long a frame takes (headless, every frame is also written to a file)
 started = clock()
 time = 0

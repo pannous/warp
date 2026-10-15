@@ -166,7 +166,7 @@ fn bound(variable: Node, property: &str, declared: &HashMap<String, Option<Strin
 	let assign = key(variable.clone(), Op::Assign, read);
 	let assign = match declared.get(&variable.drop_meta().name()) {
 		Some(Some(kind)) if crate::analyzer::is_whole_type(kind) => {
-			let check = crate::warp_parser::parse(&format!(
+			let check = crate::warp_parser::parse_generated(&format!(
 				"{} is {kind}",
 				crate::event_signals::EVENT_WORD.to_string() + "." + property
 			));

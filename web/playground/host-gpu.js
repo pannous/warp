@@ -69,6 +69,10 @@ let canvasFailure;
 // left the program waiting and the console saying "uncaught exception: undefined"; it is said as this instead
 const SILENT_FAILURE = "the browser's WebGPU failed without saying why";
 const NO_CANVAS_CONTEXT = "this browser gives a Worker's canvas no WebGPU context";
+// the task Worker's side: Firefox's WebGPU at times never answers for its adapter or device (card logs-uncaught: the
+// tour's shader example then waited until the run's time was up, and the Worker's replacement logged a bare "uncaught
+// exception: undefined"): a failure that says which, well within the run's time
+const GPU_DEVICE_WAIT_MS = 5000;
 const GPU_JOB_WAIT_MS = 30000; // the program's side: a task Worker that gives no answer in this time is said to
 const LOSS_WAIT_MS = 100; // the program's side: why painting into the page's canvas failed, after which pixels are painted
 const paintCanvases = new Map(); // the task Worker's: canvas id → {context, format}
@@ -279,12 +283,21 @@ function compiledOnce(cache, key, make) {
 const theGpuDevice = async () => gpuDevice ??= await gpuDeviceOrFailure();
 
 async function gpuDeviceOrFailure() {
-	const adapter = await self.navigator.gpu?.requestAdapter();
+	const adapter = await answeredWithin(self.navigator.gpu?.requestAdapter(), "adapter");
 	if (!adapter) throw new Error("this browser offers no WebGPU adapter");
-	const device = await adapter.requestDevice();
+	const device = await answeredWithin(adapter.requestDevice(), "device");
 	// a lost device (the GPU process restarted) is asked for anew by the next job, with all made on it
 	device.lost.then(() => forgetDevice(device));
 	return device;
+}
+
+// the browser's answer for `what`, or a failure once it has kept silent for GPU_DEVICE_WAIT_MS
+function answeredWithin(promise, what) {
+	let timer;
+	const silence = new Promise((_, fail) => {
+		timer = setTimeout(() => fail(new Error(`the browser's WebGPU gave no ${what} in ${GPU_DEVICE_WAIT_MS / 1000} s`)), GPU_DEVICE_WAIT_MS);
+	});
+	return Promise.race([promise, silence]).finally(() => clearTimeout(timer));
 }
 
 function forgetDevice(device) {
@@ -449,6 +462,21 @@ function linearCells(memory, block) {
 	return new Float64Array(memory.buffer, Number(block) + Float64Array.BYTES_PER_ELEMENT, count);
 }
 
+// GLSL functions as WGSL ones (lib/draw.warp glsl_shader): naga as natively (crates/warp-glsl), in glsl.wasm of its own,
+// loaded at the first translation so warp.wasm stays without it (web/playground/build.sh); the answer is the WGSL, or
+// the error after a leading NUL
+const GLSL_URL = new URL("glsl.wasm", self.location.href).href;
+let glslExports;
+function glslWgsl(glsl) {
+	glslExports ??= new WebAssembly.Instance(new WebAssembly.Module(getSync(GLSL_URL, 0, true))).exports;
+	const bytes = utf8.encode(glsl);
+	new Uint8Array(glslExports.memory.buffer, glslExports.glsl_buffer(bytes.length), bytes.length).set(bytes);
+	const length = glslExports.glsl_wgsl(bytes.length);
+	const answer = new TextDecoder().decode(new Uint8Array(glslExports.memory.buffer, glslExports.glsl_buffer(0), length));
+	if (answer.startsWith("\0")) throw new Error(answer.slice(1));
+	return answer;
+}
+
 addHostPart({
 	words: (holder, hooks, { program }) => {
 		const plain = node => plainOfTree(readNode(program(), node));
@@ -579,4 +607,6 @@ addHostPart({
 			draw_show: () => { throw new Error(NO_GPU_DRAWING); },
 		};
 	},
+	// lib/draw.warp glsl_shader (twigl, shadertoy): GLSL functions as WGSL ones
+	adapters: { draw: { glsl_wgsl: glslWgsl } },
 });

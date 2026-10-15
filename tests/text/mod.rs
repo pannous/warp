@@ -43,6 +43,7 @@ mod test_repeat_typed; // card repeat-int
 mod test_runtime_kind_texts;
 mod test_runtime_text_as_int;
 mod test_scan_by_index; // card self-text-index
+mod test_selector_prepositions; // card of-in-chain
 mod test_sort_of_a_call; // card count-sorted
 mod test_split_default; // card split-without
 mod test_split_element_kind;

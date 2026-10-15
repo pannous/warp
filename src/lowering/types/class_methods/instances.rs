@@ -40,7 +40,8 @@ pub(super) fn with_objects_as_instances(node: Node, fields: &ClassFields) -> Nod
 pub(super) fn checked_cast(object: Node, class: &str) -> Node {
 	let held = symbol(CAST_VALUE);
 	let message = format!("{} is no {class}", object.serialize());
-	let check = crate::warp_parser::parse(&format!("if not ({CAST_PLACEHOLDER} is {class}) {{ raise {message:?} }}"));
+	let check =
+		crate::warp_parser::parse_generated(&format!("if not ({CAST_PLACEHOLDER} is {class}) {{ raise {message:?} }}"));
 	let statements = vec![
 		key(held.clone(), Op::Assign, object),
 		crate::library_words::substitute(check, CAST_PLACEHOLDER, &held),

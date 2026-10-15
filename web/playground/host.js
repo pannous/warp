@@ -260,6 +260,11 @@ function buildValue(module, tree) {
 	}
 }
 
+// src/operators/codes.rs OP_CODES as written (Op::as_str), by the code a key carries above the kind bits
+const OPERATOR_SPELLINGS = ["", ":", "=", ":=", ".", "?.", "::", "->", "+", "-", "*", "/", "%", "rem", "^", "<<", ">>", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^^=", "<", ">", "<=", ">=", "==", "!=", "≈", "and", "or", "xor", "not", "-", "√", "∛", "‖", "++", "--", "²", "³", "?", "if", "then", "else", "while", "do", "#", "..", "to", "as", "±", "??", "===", "!==", "~", "⌞", "⌟", "&", "|", "↑", "↓"];
+// the keys that are entries of an object; the others are operations
+const ENTRY_OPERATORS = ["", ":", "=", ":="];
+const ROUND_BRACKET = 2n; // src/wasm_emitter bracket info: Curly 0, Square 1, Round 2
 // a value of the program (a reader.js tree) as a plain JavaScript value, for foreign_call: lists arrays, `{a:1}` objects
 const KIND_KEY = 6n;
 function plainOfTree(tree) {
@@ -277,14 +282,21 @@ function plainOfTree(tree) {
 		case 2: return Number(payload.float);
 		case 3: case 5: return payload.text;
 		case 4: return String.fromCodePoint(payload.i31);
-		// the value's own cells follow it in the key's flat chain (reader.js): `{a:[1, 2]}` keeps its 2
+		// the value's own cells follow it in the key's flat chain (reader.js): `{a:[1, 2]}` keeps its 2; code, `1+1`, is
+		// `{"+": [1, 1]}` (the JsonLogic shape of src/node/json_xml.rs), a prefix operation without its empty left side
 		case 6: {
 			const [value, ...rest] = tree.chain ?? [];
-			return { [plainOfTree(payload.node)]: value ? plainOfTree({ ...value, chain: rest }) : null };
+			const [left, right] = [plainOfTree(payload.node), value ? plainOfTree({ ...value, chain: rest }) : null];
+			const operator = OPERATOR_SPELLINGS[Number((kind >> 8n) & KIND_MASK)] ?? ":"; // the operator code is the byte above the kind (src/run/wasm_reader.rs)
+			if (ENTRY_OPERATORS.includes(operator)) return { [left]: right };
+			return { [operator]: [left, right].filter(side => side !== null) };
 		}
 		case 7: case 8: {
 			const values = items();
-			const isObject = ((kind >> 8n) & KIND_MASK) === 0n && values.length > 0 && values.every(item => item !== null && (BigInt(item.kind) & KIND_MASK) === KIND_KEY);
+			const bracket = (kind >> 8n) & KIND_MASK;
+			// a group of one, `(b + 1)`, is its item (src/node/json_xml.rs)
+			if (bracket === ROUND_BRACKET && values.length === 1) return plainOfItem(values[0]);
+			const isObject = bracket === 0n && values.length > 0 && values.every(item => item !== null && (BigInt(item.kind) & KIND_MASK) === KIND_KEY);
 			return isObject ? Object.assign({}, ...values.map(plainOfTree)) : values.map(plainOfItem);
 		}
 		// its value the function's name (src/wasm_emitter/functions/closures.rs), kept for a host word calling the export itself

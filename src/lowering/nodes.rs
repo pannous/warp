@@ -2,7 +2,7 @@
 
 use crate::analyzer::call_name;
 use crate::extensions::numbers::Number;
-use crate::node::{Bracket, Node, Separator};
+use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{EACH_WORD, FOR_WORD, IN_WORD, MATCH_WORD};
 use std::cell::Cell;
@@ -11,6 +11,12 @@ pub(crate) use crate::node::{call, children_rewritten, int, symbol};
 
 pub(crate) fn key(left: Node, op: Op, right: Node) -> Node {
 	Node::Key(Box::new(left), op, Box::new(right))
+}
+
+/// `room.reverb = 0.6` of a function reverb(room) read as `room.reverb`: `room = reverb(room, 0.6)`, the call's value
+/// with the new setting stored back (decision shared-buses), never a definition of `reverb(room)`
+pub(crate) fn set_by_call(receiver: &Node, function: Node, value: Node) -> Node {
+	key(receiver.clone(), Op::Assign, parens(vec![function, receiver.clone(), value]))
 }
 
 /// `match subject { arms }`
@@ -25,7 +31,7 @@ pub(crate) fn matched(subject: Node, arms: Vec<Node>) -> Node {
 /// The code with each placeholder word as its node: `filled("f(X)", [("X", x)])`
 pub(crate) fn filled<'a>(code: &str, bindings: impl IntoIterator<Item = (&'a str, Node)>) -> Node {
 	let bindings = bindings.into_iter().map(|(placeholder, node)| (placeholder.to_string(), node)).collect();
-	crate::law::substitute(crate::warp_parser::parse(code).drop_meta(), &bindings)
+	crate::law::substitute(crate::warp_parser::parse_generated(code).drop_meta(), &bindings)
 }
 
 /// The words of a phrase, the groups the parser makes of it undone: `cheapest = items sorted by price` reads as
@@ -459,7 +465,7 @@ pub(crate) fn called_name<'a>(items: &'a [Node], bracket: &Bracket, separator: &
 
 /// The statements of a template with its placeholders filled in, its match arms in the form the passes read
 pub(crate) fn template(text: &str, bindings: &[(&str, &Node)]) -> Vec<Node> {
-	let parsed = crate::welcome_forms::lower_match_arms(crate::warp_parser::parse(text));
+	let parsed = crate::welcome_forms::lower_match_arms(crate::warp_parser::parse_generated(text));
 	let filled = bindings
 		.iter()
 		.fold(parsed, |node, (placeholder, value)| crate::library_words::substitute(node, placeholder, value));
