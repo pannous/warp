@@ -734,6 +734,7 @@ PASSED:
   ✓ control::test_task_signals::a_raise_in_a_task_runs_the_programs_handler
   ✓ control::test_task_signals::a_raise_nobody_awaits_is_handled_before_the_run_ends
   ✓ control::test_task_signals::a_raise_without_handler_fails_the_task
+  ✓ control::test_task_values::a_failed_run_gives_its_task_workers_back
   ✓ control::test_task_values::a_function_value_crosses_to_a_task
   ✓ control::test_task_values::a_task_gives_the_result_of_its_function
   ✓ control::test_task_values::a_task_pauses_and_resumes
@@ -1435,6 +1436,9 @@ PASSED:
   ✓ functions::test_map_phrase::test_map_a_function_first_without_on
   ✓ functions::test_map_phrase::test_map_a_function_on_a_list
   ✓ functions::test_map_phrase::test_map_a_function_reference_on_a_list
+  ✓ functions::test_math_broadcast::math_words_map_over_a_list
+  ✓ functions::test_math_broadcast::one_number_stays_one
+  ✓ functions::test_math_broadcast::prefix_operators_map_over_a_parenthesized_list
   ✓ functions::test_member_phrases::a_member_with_arguments_is_its_call
   ✓ functions::test_member_phrases::an_operator_word_ends_the_phrase
   ✓ functions::test_member_phrases::the_parenthesized_call_stays_the_same
@@ -5553,4 +5557,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5548 passed, 0 failed, 5548 total tested
+13 ignored, 5552 passed, 0 failed, 5552 total tested
