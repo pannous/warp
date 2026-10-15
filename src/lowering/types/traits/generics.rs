@@ -212,7 +212,7 @@ pub(super) fn generic_calls(node: Node, functions: HashMap<String, Generic>) -> 
 	collect_declared(&node, &mut likenesses);
 	let plain = crate::analyzer::literal_variable_kinds(&node, &crate::analyzer::function_context(&node));
 	let classes = types.registry.types().iter().map(|type_def| type_def.name.clone()).collect();
-	let path_variables = path_variables(&node);
+	let path_variables = crate::warp_parser::path_variables(&node);
 	let calls = GenericCalls {
 		path_variables,
 		functions,
@@ -346,8 +346,7 @@ impl GenericCalls {
 	/// `sort ./names.txt` with a method sort(file:Path) (lib/shell.warp): a path written without quotes, or a variable
 	/// only holding such paths, becomes a Path where a method takes one; elsewhere it stays the text
 	fn as_path(&self, generic: &Generic, position: usize, argument: &Node) -> Node {
-		let written_as_path = crate::warp_parser::is_path_literal(argument)
-			|| matches!(argument.drop_meta(), Node::Symbol(name) if self.path_variables.contains(name));
+		let written_as_path = crate::warp_parser::is_written_path(argument, &self.path_variables);
 		let takes_path = generic.methods.iter().any(|(signature, _)| {
 			signature.get(position).is_some_and(|class| class.as_deref() == Some(crate::words::PATH_CLASS))
 		});
@@ -455,22 +454,6 @@ pub(super) fn ambiguous_method(
 	Diagnostic::at(located, message)
 		.fix(format!("define {name}({}) := … to pick one", parameters.join(", ")))
 		.into_error()
-}
-
-/// The variables every assignment of which is a path written without quotes: `notes = ~/notes.txt`
-fn path_variables(node: &Node) -> HashSet<String> {
-	let (mut paths, mut others) = (HashSet::new(), HashSet::new());
-	node.visit(&mut |part| {
-		if let Node::Key(name, Op::Assign | Op::Define, value) = part.drop_meta() {
-			if let Node::Symbol(name) = name.drop_meta() {
-				match crate::warp_parser::is_path_literal(value) {
-					true => paths.insert(name.clone()),
-					false => others.insert(name.clone()),
-				};
-			}
-		}
-	});
-	paths.difference(&others).cloned().collect()
 }
 
 fn without_path_mark(argument: &Node) -> Node {

@@ -30,3 +30,16 @@ fn the_current_folder_alone_is_a_path() {
 	let code = "touch ./a.txt\nprint ls ./\nxs = [2 4]\nprint xs ./ 2";
 	assert_eq!(script_in("overload_dot_slash", code), "[\"a.txt\"]\n[1 2]\n");
 }
+
+#[test]
+fn a_text_of_unknown_origin_takes_the_list_word() {
+	let code = "f(p) := sort p\nprint f(\"cba\")\ng() := \"cba\"\nprint sort g()";
+	assert_eq!(script_in("overload_unknown_text", code), "abc\nabc\n");
+}
+
+#[test]
+fn the_first_argument_picks_find() {
+	let code = "mkdir ./d\ntouch ./d/a.txt\npattern = \"*.txt\"\nprint find(./d, pattern)";
+	assert_eq!(script_in("overload_find_variable", code), "[\"./d/a.txt\"]\n");
+	assert!(script_in("overload_find_list", "print find([1 2 3], 2)").contains("find needs a function"));
+}

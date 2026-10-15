@@ -17,6 +17,27 @@ pub fn is_path_literal(node: &Node) -> bool {
 	}
 }
 
+/// The variables every assignment of which is a path written without quotes: `notes = ~/notes.txt`
+pub fn path_variables(node: &Node) -> std::collections::HashSet<String> {
+	let (mut paths, mut others) = (std::collections::HashSet::new(), std::collections::HashSet::new());
+	node.visit(&mut |part| {
+		if let Node::Key(name, Op::Assign | Op::Define, value) = part.drop_meta() {
+			if let Node::Symbol(name) = name.drop_meta() {
+				match is_path_literal(value) {
+					true => paths.insert(name.clone()),
+					false => others.insert(name.clone()),
+				};
+			}
+		}
+	});
+	paths.difference(&others).cloned().collect()
+}
+
+/// A path written without quotes, or one of the `path_variables`: a Path where a method takes one
+pub fn is_written_path(argument: &Node, path_variables: &std::collections::HashSet<String>) -> bool {
+	is_path_literal(argument) || matches!(argument.drop_meta(), Node::Symbol(name) if path_variables.contains(name))
+}
+
 impl WarpParser {
 	/// `&name`: a reference to the function `name`, an `&` glued to the word after it and not to a word before it (`a &b`, `f(&g)`)
 	/// A file path without quotes starts here, glued to what follows and not to an operand before it (card unix-words):

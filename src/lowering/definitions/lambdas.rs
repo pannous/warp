@@ -7,7 +7,7 @@
 
 use super::nodes::{call, children_rewritten, is_kinded_type_word, key, named_assignment, Counter};
 use crate::analyzer::call_name;
-use crate::compiler::context::Context;
+use crate::compiler::context::{Context, UserFunctionDef};
 use crate::errors::diagnostic::Diagnostic;
 use crate::library_words::substitute;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -115,7 +115,8 @@ fn lowering(node: Node, strict: bool) -> Node {
 	let context = crate::analyzer::function_context(&node);
 	let classes = crate::modules::needed_definitions::class_names(&node);
 	let first_fresh = first_fresh_number(&node);
-	Lowering { context, classes, counter: Counter::starting_at(first_fresh), strict }.expand(node)
+	let path_variables = crate::warp_parser::path_variables(&node);
+	Lowering { context, classes, path_variables, counter: Counter::starting_at(first_fresh), strict }.expand(node)
 }
 
 /// `loop_item_1`, the variable of a loop inlined from a function: an `it` in its body is no loop item but the `it` of
@@ -594,10 +595,16 @@ fn named_function_arguments(items: Vec<Node>, bracket: &Bracket) -> Vec<Node> {
 		.collect()
 }
 
+/// `Path` of `find(folder:Path, pattern:text)`
+fn first_parameter_type(defined: &UserFunctionDef) -> Option<String> {
+	defined.params.first()?.annotation.as_ref().map(|annotation| annotation.drop_meta().name())
+}
+
 struct Lowering {
 	context: Context,
 	/// the program's classes: a function whose first parameter is one is a method, the iteration word stays for other values
 	classes: HashSet<String>,
+	path_variables: HashSet<String>,
 	counter: Counter,
 	strict: bool,
 }
@@ -677,16 +684,16 @@ impl Lowering {
 		})
 	}
 
-	/// `find(./notes, "*.txt")`: a text or number where the function goes calls the class's method of that word
-	fn calls_method(&self, word: &Node, last_argument: &Node) -> bool {
-		let is_method =
-			self.context.user_functions.get(&word.drop_meta().name()).is_some_and(|defined| self.is_method(defined));
-		is_method && matches!(last_argument.drop_meta(), Node::Text(_) | Node::Number(_))
+	/// `find(./notes, "*.txt")`: a path written without quotes where a class's method of the word takes a Path calls
+	/// that method, as generics.rs as_path makes it one; other first arguments iterate
+	fn calls_method(&self, word: &Node, first_argument: &Node) -> bool {
+		let takes_path = |defined| first_parameter_type(defined).is_some_and(|class| class == crate::words::PATH_CLASS);
+		self.context.user_functions.get(&word.drop_meta().name()).is_some_and(takes_path)
+			&& crate::warp_parser::is_written_path(first_argument, &self.path_variables)
 	}
 
-	fn is_method(&self, defined: &crate::compiler::context::UserFunctionDef) -> bool {
-		let first_type = defined.params.first().and_then(|param| param.annotation.as_ref());
-		first_type.is_some_and(|annotation| self.classes.contains(&annotation.drop_meta().name()))
+	fn is_method(&self, defined: &UserFunctionDef) -> bool {
+		first_parameter_type(defined).is_some_and(|class| self.classes.contains(&class))
 	}
 
 	/// `word(extras, function)` after a dot: the iteration and its arguments, the function last
@@ -783,7 +790,7 @@ impl Lowering {
 				return None;
 			};
 			let iteration = with_start(iteration, extras.len());
-			if extras.len() != iteration.extra_arguments || self.calls_method(head, function) {
+			if extras.len() != iteration.extra_arguments || self.calls_method(head, list) {
 				return None;
 			}
 			self.iterate(iteration, list.clone(), extras.to_vec(), function.clone())
