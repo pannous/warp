@@ -30,3 +30,10 @@ fn a_parenthesis_in_a_text_keeps_the_call() {
 	is!("use regex; ok = matches(\"(\", \"x\"); ok", false);
 	is!("sqrt(\")\".count + 3).round(1)", 2);
 }
+
+/// A text ending in an escaped backslash ends at its quote: the comma after it is the call's own
+#[test]
+fn a_text_ending_in_a_backslash_keeps_the_call() {
+	is!("use regex; ok = matches(\"a\\\\\", \"x\"); ok", false);
+	is!("use regex; print matches(\"a\\\\\", \"x\"); 7", 7);
+}

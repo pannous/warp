@@ -101,6 +101,7 @@ CLIPBOARD_READ = "(a program reads the clipboard)"  # card web-apis-rest: host.j
 CLIPBOARD_TEXT = "copied by the page"
 # card web-apis-rest: gpu_compute over named arrays, and paint of a shader drawn straight into the page's canvas
 GPU_PAGE = "(named GPU arrays, a shader painted into the page's canvas)"
+SHADER_SCALED = "scaled auto"  # card make-shader: not the pixelated squares of pixels painted one by one
 NAMED_ARRAYS = """shader = "@group(0) @binding(0) var<storage, read_write> xs: array<f32>;
 @group(0) @binding(1) var<storage, read_write> ns: array<i32>;
 @compute @workgroup_size(64) fn main(@builtin(global_invocation_id) id: vec3<u32>) {
@@ -121,6 +122,7 @@ SHADER_ERROR_CODE = """broken = shader {
 }
 paint(broken, 8, 8)"""
 SHADER_ERROR_PLACE = "at 5:22"
+SHADER_EXCERPT = "┌─"  # naga's excerpt of the shader (Firefox): the error says why in one line instead (card shader-errors)
 CANVAS_FAILED = "the page's canvas failed"  # host-gpu.js CANVAS_FAILED: the shader painted through pixels instead
 CANVAS_SETTLE_MS = 300  # the task Worker's frame reaches the page's canvas after its task
 # card webgpu-safari: a paint of the view's size makes the output pane taller; the view's size must not grow with it
@@ -144,7 +146,7 @@ GPU_JOBS_NEVER = "Out of memory"
 # and Firefox its own two lines of the broken shader
 # Firefox now and then: two anonymous uncaught exceptions of the page right as Stop ends the busy program's Worker (the
 # BiDi events before them: the new Worker's realm made, the old one's gone; no event reaches the page's listeners),
-# the run stopped and the button right (card firefox-stop-uncaught)
+# the run stopped and the button right (card firefox-logs)
 EXPECTED_CONSOLE = {SHADER_ERROR: ["Error while parsing WGSL", "errors while creating shader module", "parsing error"], GPU_JOBS: ["uncaught exception: undefined"],
 	STOP_BUTTON: ["uncaught exception: undefined"]}
 # card safari-shared-buffers: a task's answer buffer, like a GPU job's, is reused once read
@@ -585,7 +587,7 @@ def red_shader_shown():
 		const copy = new OffscreenCanvas(canvas.width, canvas.height).getContext("2d");
 		copy.drawImage(canvas, 0, 0);
 		const failed = [...document.querySelectorAll("#diagnostics li")].map(item => item.textContent).find(text => text.includes({json.dumps(CANVAS_FAILED)}));
-		return `gpu ${{canvas.gpu === true}} red ${{copy.getImageData(4, 4, 1, 1).data[0]}} ${{failed ?? ""}}`;
+		return `gpu ${{canvas.gpu === true}} red ${{copy.getImageData(4, 4, 1, 1).data[0]}} scaled ${{canvas.style.imageRendering}} ${{failed ?? ""}}`;
 	}})()""")
 
 
@@ -601,6 +603,7 @@ def gpu_page_wrong():
 	if CANVAS_FAILED in shown:
 		print(f"skip {GPU_PAGE} (its page canvas): {shown}")
 	expected = "red 255" if CANVAS_FAILED in shown else "gpu true red 255"
+	wrong += [] if SHADER_SCALED in shown else [f"painted shader: {shown!r}, expected {SHADER_SCALED!r}: a shader's render scales smoothly"]
 	return wrong + ([] if expected in shown else [f"painted shader ({painted!r}): {shown!r}, expected {expected!r}"])
 
 
@@ -613,6 +616,7 @@ def shader_error_wrong():
 		return []
 	marked = browser("eval", '[...document.querySelectorAll(".marked-error")].map(mark => mark.textContent).join(" ")')
 	wrong = [] if SHADER_ERROR_PLACE in shown else [f"shader error: {shown!r}, expected {SHADER_ERROR_PLACE!r} in it"]
+	wrong += [f"shader error: {shown!r}, expected one line without the GPU's excerpt"] if SHADER_EXCERPT in shown else []
 	return wrong + ([] if ":" in marked else [f"shader error marks {marked!r}, expected the colon"])
 
 
