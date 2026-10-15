@@ -141,7 +141,7 @@ pub(crate) fn with_type_module_uses(program: Node) -> Node {
 	modules.dedup();
 	with_statements_first(
 		program,
-		modules.into_iter().map(|module| WarpParser::parse(&format!("use {module}"))).collect(),
+		modules.into_iter().map(|module| crate::warp_parser::parse_generated(&format!("use {module}"))).collect(),
 	)
 }
 

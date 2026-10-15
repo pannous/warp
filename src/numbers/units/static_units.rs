@@ -1263,7 +1263,7 @@ impl Inference {
 			true => "\"}\"".to_string(),
 			false => format!("\" \" + text_form({{{}}})[1..]", plain.join(", ")),
 		};
-		Ok(crate::warp_parser::parse(&format!("\"{{\" + {} + {rest}", quantities.join(" + \" \" + "))))
+		Ok(crate::warp_parser::parse_generated(&format!("\"{{\" + {} + {rest}", quantities.join(" + \" \" + "))))
 	}
 
 	/// The text of a whole list or object with quantities (`print xs`, `"${p}"`); None for any other value
