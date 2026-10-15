@@ -266,7 +266,11 @@ fn function_named(subject: &Node) -> Option<&str> {
 	}
 	match subject.drop_meta() {
 		// `(function f)`; `(f)` is the call `f()`, whose result answers (card name-function)
-		Node::List(items, Bracket::Round, _) if items.len() == 1 && items[0].symbol_name().is_none() => {
+		Node::List(items, Bracket::Round, _)
+			if items.len() == 1
+				&& (items[0].symbol_name().is_none()
+					|| crate::closures::referenced_function(&items[0]).is_some()) =>
+		{
 			function_named(&items[0])
 		}
 		Node::List(items, Bracket::Round | Bracket::None, _) => match items.as_slice() {
