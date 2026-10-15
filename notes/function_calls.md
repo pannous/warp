@@ -30,7 +30,8 @@ passes goes into tests/functions/test_ported_calls.rs (one table), so no ported 
   the names fit). Only in a call of a function declaring the word: elsewhere `for` loops, `1 to 5` a range, `x in xs`
   a membership; explicit brackets keep it, `f(9 to 4)` passes the range. A variable named `by` stays a variable; a
   preposition the function does not take is an error naming those it takes. `s + f 9 to 4` reads `(s + f 9) to 4`:
-  write `s + (f 9 to 4)`.
+  write `s + (f 9 to 4)`. `as` labels a parameter too (card save-sound): `save(made, as file)` is called
+  `save sound as "x.wav"`, its `as` then an argument, not a conversion (type_name_matching.rs AS_LABEL).
 - Result types before a block body: `-> int { … }`, `: number { … }`, `-> int: body` (declarations.rs `typed_result`).
 - A function body block of one braceless call `def f(x){square x}` is that call (library_words.rs `body_statement`).
 - Partial application stays `add(1, _)`; `add(1)` is a missing-argument error.
