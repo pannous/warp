@@ -17,6 +17,7 @@ mod test_glued_method_block;
 mod test_glued_pair_value;
 mod test_glyph_aliases;
 mod test_guard_comment; // card else-comment-swallows
+mod test_home_paths; // card unix-words
 mod test_if_condition_words; // card parser-if-stops
 mod test_inline_comments;
 mod test_json;

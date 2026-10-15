@@ -107,6 +107,14 @@ pub fn dirs_home() -> std::path::PathBuf {
 	env::var("HOME").map(std::path::PathBuf::from).unwrap_or_else(|_| std::path::PathBuf::from("."))
 }
 
+/// `~` and `~/…` with the home folder in place of `~`, as the shell expands them; other paths as they are
+pub fn home_expanded(path: &str) -> String {
+	match path.strip_prefix('~') {
+		Some(rest) if rest.is_empty() || rest.starts_with('/') => format!("{}{rest}", dirs_home().display()),
+		_ => path.to_string(),
+	}
+}
+
 pub fn load_file(path: &str) -> String {
 	fs::read_to_string(path).unwrap_or_else(|_| {
 		eprintln!("Error: Could not read file '{}'", path);

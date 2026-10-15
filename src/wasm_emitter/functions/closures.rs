@@ -38,13 +38,18 @@ pub const FUNCTION_DUMP: &str = "function_dump";
 const FUNCTION_NAME: &str = "function_name";
 const FUNCTION_DOC: &str = "function_doc";
 const FUNCTION_SIGNATURE: &str = "function_signature";
+const FUNCTION_PARAMS: &str = "function_params";
 const FUNCTION_RETURN_TYPE: &str = "function_return_type";
 const FUNCTION_DEFINITION: &str = "function_definition";
 const FUNCTION_FULL: &str = "function_full";
+/// function_type(f): `type(f)` of a function value known only at run time, its kind and signature as the type of a
+/// named function says it (`function: (x) -> int`, `builtin: (x:number) -> int`; card type-function); ø for no function
+pub const FUNCTION_TYPE: &str = "function_type";
 /// The reflection words a function value answers at run time (`fs#1.doc`, `methods(math) map .doc`; card
 /// module-methods), each a field read's fallback (fields_and_keys.rs FIELD_FALLBACKS): word → its table
-pub const FUNCTION_WORDS: [(&str, &str); 6] = [
+pub const FUNCTION_WORDS: [(&str, &str); 7] = [
 	("name", FUNCTION_NAME),
+	(crate::lowering::reflection::PARAMS_WORDS[0], FUNCTION_PARAMS),
 	("doc", FUNCTION_DOC),
 	("signature", FUNCTION_SIGNATURE),
 	("return_type", FUNCTION_RETURN_TYPE),
@@ -820,12 +825,31 @@ impl WasmGcEmitter {
 				|emitter: &Self, target: &str, captured: usize| Node::Text(emitter.printed_function(target, captured));
 			self.emit_function_table(FUNCTION_DUMP, printed, Miss::KindName);
 		}
+		if self.types_functions() {
+			let typed = |emitter: &Self, target: &str, _: usize| emitter.function_type(target);
+			self.emit_function_table(FUNCTION_TYPE, typed, Miss::Null);
+		}
 		for (_, table) in function_words() {
 			if self.should_emit_function(table) {
 				let word =
 					move |emitter: &Self, target: &str, captured: usize| emitter.function_word(table, target, captured);
 				self.emit_function_table(table, word, Miss::Null);
 			}
+		}
+	}
+
+	/// Whether function_type is emitted: a program that asks type() and has function values
+	pub(in crate::wasm_emitter) fn types_functions(&self) -> bool {
+		!self.ctx.closure_targets.is_empty() && self.should_emit_function(FUNCTION_TYPE)
+	}
+
+	/// `function: (x) -> int` of a closure target, `builtin: (t:text) -> text` of a built-in's
+	fn function_type(&self, target: &str) -> Node {
+		use crate::lowering::reflection::{builtin_type, function_type, signature};
+		match (builtin_signature(target), self.ctx.user_functions.get(target)) {
+			(Some((_, signature)), _) => builtin_type(&signature),
+			(None, Some(function)) => function_type(&signature(function)),
+			(None, None) => Node::Text(Kind::Function.to_string()),
 		}
 	}
 
@@ -862,6 +886,13 @@ impl WasmGcEmitter {
 		let text = |text: String| Node::Text(text);
 		match (table, function, builtin_signature(target)) {
 			(FUNCTION_SIGNATURE, _, Some((_, signature))) => text(signature),
+			(FUNCTION_PARAMS, _, Some((word, _))) => {
+				let params = crate::lowering::library_signatures::library_signature(word).map(|(params, _)| params);
+				crate::lowering::reflection::text_list(&params.unwrap_or_default())
+			}
+			(FUNCTION_PARAMS, Some(function), _) => crate::lowering::reflection::text_list(
+				&function.params.iter().map(|param| param.name.clone()).collect::<Vec<_>>(),
+			),
 			(FUNCTION_DOC, Some(function), _) => text(function.doc.clone().unwrap_or_default()),
 			(FUNCTION_SIGNATURE, Some(function), _) => text(crate::lowering::reflection::signature(function)),
 			(FUNCTION_RETURN_TYPE, Some(function), _) => text(crate::lowering::reflection::result_type(function)),

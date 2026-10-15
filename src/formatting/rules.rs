@@ -2,14 +2,34 @@
 //! tree stays the same
 
 use super::lines::{code_text, leading_closers, LineScan};
+use crate::operators::all_spellings;
+use std::sync::LazyLock;
 
-/// The binary operators written with a space on each side, longest first (`..` ranges, `//`, `<`, `>` and `.` stay glued)
-const SPACED_OPERATORS: [&str; 22] = [
-	":=", "==", "!=", "<=", ">=", "+=", "-=", "*=", "/=", "=>", "->", "|>", "&&", "||", "**", "=", "+", "-", "*", "/",
-	"%", "^",
-];
+/// Operator spellings that stay as written: `:` has its own rule, `.` `::` `?.` reach into a value, ranges stay glued
+/// (`1..3`), the rest are prefix or postfix (`!x`, `x++`, `#xs`) or glue a unit (`m·kg`). Every other spelling of the
+/// operator table is spaced; mod.rs drops a spacing that changes the tree (a tag `<div>`, `7//2`)
+const GLUED_SPELLINGS: [&str; 19] =
+	[":", ".", "::", "?.", "..", "..<", "...", "…", "!", "¬", "++", "--", "#", "?", "~", "·", "⋅", "⌞", "⌟"];
+
+/// The binary operators written with a space on each side, longest first: the symbol spellings of the operator table
+/// (src/operators/spellings.rs), Unicode ones too (`≤`, `≠`, `×`)
+static SPACED_OPERATORS: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
+	let mut spaced: Vec<&str> = all_spellings()
+		.map(|(spelling, _)| spelling)
+		.filter(|spelling| !spelling.chars().any(|c| c.is_alphanumeric() || c.is_whitespace()))
+		.filter(|spelling| !GLUED_SPELLINGS.contains(spelling))
+		.collect();
+	spaced.sort_by_key(|spelling| (std::cmp::Reverse(spelling.chars().count()), *spelling));
+	spaced.dedup();
+	spaced
+});
 /// Characters of operators: an operator glued to one of these is part of another (`===`, `//`, `..`), left alone
-const OPERATOR_CHARACTERS: &str = "=+-*/%^<>!&|.:?~";
+static OPERATOR_CHARACTERS: LazyLock<String> = LazyLock::new(|| {
+	all_spellings()
+		.flat_map(|(spelling, _)| spelling.chars())
+		.filter(|c| !c.is_alphanumeric() && !c.is_whitespace())
+		.collect()
+});
 /// What ends an operand (before a binary operator) and what starts one (after it)
 const OPERAND_ENDS: &str = "_)]}\"'`ø";
 const OPERAND_STARTS: &str = "_([{\"'`#.$ø-!√";
@@ -196,8 +216,9 @@ fn is_operand_start(c: char) -> bool {
 
 /// The spaced operator starting at `at`, glued to no other operator character, between two operands
 fn binary_operator(characters: &[(char, bool)], at: usize) -> Option<&'static str> {
-	let rest: String = characters[at..].iter().take(3).map(|(c, _)| c).collect();
-	let operator = SPACED_OPERATORS.into_iter().find(|operator| rest.starts_with(operator))?;
+	let longest = SPACED_OPERATORS.first().map_or(0, |operator| operator.chars().count());
+	let rest: String = characters[at..].iter().take(longest).map(|(c, _)| c).collect();
+	let operator = *SPACED_OPERATORS.iter().find(|operator| rest.starts_with(**operator))?;
 	let after = at + operator.chars().count();
 	let glued_to_operator = |index: Option<usize>| {
 		index.and_then(|index| characters.get(index)).is_some_and(|(c, _)| OPERATOR_CHARACTERS.contains(*c))

@@ -7,7 +7,7 @@ use warp::warp_parser::parse;
 #[test]
 fn a_written_wav_is_a_sample_rendered_beside_a_tone() {
 	is!(
-		"use sound\ntone(440Hz, 0.5s)\nsave sound as \"a.wav\"\nkick = sample(\"a.wav\")\nplay_sample(kick, 2)\ntone(440Hz, 0.5s)\n[kick.rate, kick.channels, round(save(sound, \"b.wav\") * 100)]",
+		"use sound\ntone(440Hz, 0.5s)\nsave sound as: \"a.wav\"\nkick = sample(\"a.wav\")\nplay_sample(kick, 2)\ntone(440Hz, 0.5s)\n[kick.rate, kick.channels, round(save(sound, \"b.wav\") * 100)]",
 		parse("[22050 1 75]")
 	);
 }

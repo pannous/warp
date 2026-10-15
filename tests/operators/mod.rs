@@ -35,6 +35,7 @@ mod test_operators;
 mod test_pipe_stages;
 mod test_pipeline;
 mod test_postfix_words;
+mod test_print_bang; // card wiki-partial, decision print-bang
 mod test_root_word;
 mod test_rough_similarity; // card g_YHSM
 mod test_structural_equality;
