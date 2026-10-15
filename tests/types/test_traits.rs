@@ -142,3 +142,28 @@ fn test_trait_synonyms_declare_a_trait() {
 fn test_a_builtin_trait_cannot_be_redeclared() {
 	fails_with("trait Comparable{compare}; 1", "Comparable is a built-in trait");
 }
+
+/// Callable (wiki trait.md): an instance of a type defining `call` is applied through it wherever it comes from; where
+/// the type is known only at run time (an untyped parameter) the call dispatches on the value (reviewer, card
+/// shared-buses)
+#[test]
+fn test_an_instance_of_a_callable_type_is_called_wherever_it_comes_from() {
+	const DOUBLER: &str = "class Doubler{k:int}; call(d:Doubler, x) := d.k * x; ";
+	is!(&with(DOUBLER, "d = Doubler(3); d(5)"), 15);
+	// `5 |> Doubler(3)` passes 5 as Doubler's last argument, as `5 |> f(3)` is f(3, 5)
+	is!(&with(DOUBLER, "d = Doubler(3); 5 |> d"), 15);
+	is!(&with(DOUBLER, "5 |> (Doubler(3))"), 15);
+	is!(&with(DOUBLER, "class Holder{d:Doubler}; h = Holder(Doubler(3)); h.d(5)"), 15);
+	is!(&with(DOUBLER, "class Holder{d:Doubler}; h = Holder(Doubler(3)); 5 |> h.d"), 15);
+	is!(&with(DOUBLER, "ds = [Doubler(2), Doubler(3)]; 5 |> ds#2"), 15);
+	is!(&with(DOUBLER, "ds = [Doubler(2), Doubler(3)]; ds.map(d => d(5))#2"), 15);
+	is!(&with(DOUBLER, "through(d) := 5 |> d; through(Doubler(3))"), 15);
+	is!(&with(DOUBLER, "through(d) := d(5); through(x => x + 1)"), 6);
+	is!(&with(DOUBLER, "ds = [Doubler(2), Doubler(3)]; count(ds)"), 2);
+	// any head of unknown shape dispatches at run time: a lambda's parameter, a call's result (reviewer round 3)
+	is!(&with(DOUBLER, "f = d => d(5); f(Doubler(3))"), 15);
+	is!(&with(DOUBLER, "ds = [Doubler(2), Doubler(3)]; ds.fold(0, (a, d) => a + d(1))"), 5);
+	is!(&with(DOUBLER, "ds = [Doubler(2), Doubler(3)]; ds.reduce((a, d) => d(1))"), 3);
+	is!(&with(DOUBLER, "mk() := Doubler(6); mk()(2)"), 12);
+	is!(&with(DOUBLER, "add(n) := x => x + n; add(1)(2)"), 3);
+}

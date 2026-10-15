@@ -7,8 +7,7 @@ use super::*;
 pub(super) fn sound(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	match (member, arguments) {
 		("play_file", [path]) => {
-			return crate::sound::play_file(&crate::modules::beside_program_if_there(&text_of(path)?))
-				.map(|handle| Node::int(handle as i64))
+			return crate::sound::play_file(&beside_program(path)?).map(|handle| Node::int(handle as i64))
 		}
 		// stop(handle), play's handle; handle 0: all of them
 		("stop", [handle]) if number_of(handle)? == 0.0 => crate::sound::stop(),
@@ -22,6 +21,17 @@ pub(super) fn sound(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			let effects = effects.as_items().iter().map(effect_of).collect::<Result<Vec<_>, String>>()?;
 			return crate::sound::define_bus(number_of(bus)?.max(0.0) as usize, effects)
 				.map(|bus| Node::int(bus as i64));
+		}
+		// effect([name, settings…], signal, rate, full scale): a list signal through the bus DSP (card shared-buses stage 2)
+		("effect", [effect, signal, rate, full_scale]) => {
+			let signal = signal.as_items().iter().map(number_of).collect::<Result<Vec<_>, String>>()?;
+			let processed = crate::sound::effects::on_signal(
+				effect_of(effect)?,
+				&signal,
+				number_of(rate)?.max(1.0) as u32,
+				number_of(full_scale)?,
+			);
+			return Ok(Node::list(processed.into_iter().map(Node::float).collect()));
 		}
 		("send", [bus]) => return Ok(Node::int(crate::sound::send_to(number_of(bus)?.max(0.0) as usize) as i64)),
 		("at_end", []) => crate::sound::at_end(),
@@ -37,9 +47,45 @@ pub(super) fn sound(member: &str, arguments: &[Node]) -> Result<Node, String> {
 			return crate::sound::audio_files::load(&text_of(path)?)
 				.map(|flat| Node::list(flat.into_iter().map(Node::int).collect()))
 		}
+		// spectrum(samples, seconds, bands): the levels of the bands in the window of samples (src/sound/spectrum.rs)
+		("spectrum", [window, rate, bands, low, high]) => {
+			let window = window
+				.as_items()
+				.iter()
+				.map(|sample| Ok(number_of(sample)? - crate::sound::SAMPLE_OFFSET as f64))
+				.collect::<Result<Vec<_>, String>>()?;
+			return band_levels(&window, number_of(rate)?, bands, low, high);
+		}
+		// spectrum("song.mp3", seconds, bands): the same of the file's window at that moment, the file decoded once
+		("file_spectrum", [path, seconds, window_seconds, bands, low, high]) => {
+			let mono = crate::sound::audio_files::mono(&beside_program(path)?)?;
+			let window = crate::sound::spectrum::window_at(
+				&mono.amplitudes,
+				mono.rate,
+				number_of(seconds)?,
+				number_of(window_seconds)?,
+			);
+			return band_levels(&window, mono.rate, bands, low, high);
+		}
+		("file_seconds", [path]) => {
+			let mono = crate::sound::audio_files::mono(&beside_program(path)?)?;
+			return Ok(Node::float(mono.amplitudes.len() as f64 / mono.rate));
+		}
 		_ => return no_such_word(arguments),
 	}
 	Ok(Node::Empty)
+}
+
+/// The levels of `bands` bands from low to high Hz in the window (src/sound/spectrum.rs), as a list
+fn band_levels(window: &[f64], rate: f64, bands: &Node, low: &Node, high: &Node) -> Result<Node, String> {
+	let bands = number_of(bands)?.max(0.0) as usize;
+	let levels = crate::sound::spectrum::window_levels(window, rate, bands, number_of(low)?, number_of(high)?);
+	Ok(Node::list(levels.into_iter().map(Node::float).collect()))
+}
+
+/// A file's path, beside the program when it is there
+fn beside_program(path: &Node) -> Result<String, String> {
+	Ok(crate::modules::beside_program_if_there(&text_of(path)?))
 }
 
 /// `["delay", 0.25, 0.4, 0.5]`: an effect by its name and settings (src/sound/effects.rs Effect::named)

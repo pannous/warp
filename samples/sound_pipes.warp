@@ -11,9 +11,9 @@ mix(bass, pad) |> out
 
 // a bus: one reverb that several sounds go through together, ringing on after the last
 hall = bus() |> reverb(0.5)
-osc(C4, 0.5s) |> out(hall)
-osc(G4, 0.5s) |> out(hall)
+osc(C4, 0.5s) |> hall
+play(G4, 0.5s, bus: hall)
 
 // a mastering bus: the lows warmer, the highs softer, the peaks evened out
 master = bus() |> low_shelf(150Hz, 4) |> high_shelf(6kHz, -3) |> compress(-20, 4)
-osc(C3, 1s, "saw") |> out(master)
+osc(C3, 1s, "saw") |> master
