@@ -174,7 +174,7 @@ fn with_as_where(node: Node, lists: &Lists) -> Node {
 	Node::List(items, bracket, separator)
 }
 
-/// The keys of a list of map literals, `[{name:"a"}, {name:"b", age:3}]`: its elements' fields (card field-list)
+/// The keys of a list of map literals, `[{name:"a"}, {"name":"b", age:3}]`: its elements' fields (card field-list)
 fn map_keys(value: &Node) -> Option<Vec<String>> {
 	let Node::List(elements, Bracket::Square, _) = value.drop_meta() else { return None };
 	let mut keys: Vec<String> = vec![];
@@ -182,7 +182,10 @@ fn map_keys(value: &Node) -> Option<Vec<String>> {
 		let Node::List(entries, Bracket::Curly, _) = element.drop_meta() else { return None };
 		for entry in entries {
 			let Node::Key(key, Op::Colon, _) = entry.drop_meta() else { return None };
-			let key = key.drop_meta().symbol_name()?.to_string();
+			let key = match key.drop_meta() {
+				Node::Symbol(name) | Node::Text(name) => name.clone(),
+				_ => return None,
+			};
 			if !keys.contains(&key) {
 				keys.push(key);
 			}

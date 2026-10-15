@@ -26,3 +26,9 @@ fn a_plural_field_of_a_list_of_maps() {
 	is!(&format!("{NAMES}; names of m"), texts(vec!["a", "b"]));
 	is!(&format!("{NAMES}; m.names"), texts(vec!["a", "b"]));
 }
+
+/// the JSON spelling with quoted keys (warp-reviewer)
+#[test]
+fn quoted_keys_name_the_fields_too() {
+	is!("m = [{\"name\": \"a\"}, {\"name\": \"b\"}]; m.name", texts(vec!["a", "b"]));
+}
