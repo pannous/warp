@@ -496,6 +496,7 @@ function glslWgsl(glsl) {
 }
 
 addHostPart({
+	systemValue: (value, holder) => value === GPU_PAINTS ? gpuPaints(holder) : undefined,
 	words: (holder, hooks, { program }) => {
 		const plain = node => plainOfTree(readNode(program(), node));
 		const list = (values, item) => buildValue(program(), { kind: SQUARE_LIST, items: values.map(item) });
