@@ -200,6 +200,8 @@ const DECLARATION_PASSES: &[Pass] = &[
 	crate::modules::insert_module_classes,
 	// `type Name = string` resolved in `name: Name` before class_methods reads the fields
 	crate::lowering::type_aliases::lower,
+	// `f(t: type)` takes the type value itself (type_parameters.rs), before class_methods reads typed parameters
+	crate::lowering::type_parameters::lower,
 	// `f(s:Shape)` of a trait takes any conforming instance: untyped before class_methods reads typed parameters
 	crate::lowering::traits::lower_trait_parameters,
 	// `stored people: [Person]`: the table's rows, inserts and field changes written through

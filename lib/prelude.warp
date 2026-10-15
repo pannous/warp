@@ -70,8 +70,10 @@ magnitude(x: any) := norm(x)
 pixel_color(v: any) := if v is list then 0xFF000000 + pixel_channel(v#1) * 65536 + pixel_channel(v#2) * 256 + pixel_channel(v#3) else v
 pixel_channel(c) := round(255 * min(max(c, 0), 1)) as int
 // random(a, b) (decision random-forms): of whole numbers a whole number from a to b, both included (random(1, 6) rolls
-// a die), else a float in [a, b)
-random_between(a, b) := if a is int and b is int then a + random_below(b - a + 1) else a + random() * (b - a)
+// a die), else a float in [a, b); random a..b one of the range's elements, a to b-1
+random_fraction(a, b) := a + random() * (b - a)
+random_until(a, b) := if a is int and b is int then a + random_below(b - a) else random_fraction(a, b)
+random_between(a, b) := if a is int and b is int then random_until(a, b + 1) else random_fraction(a, b)
 // random int, random bool, random codepoint: a random value of the type; random int spans the whole 64-bit range
 random_int() := (random_below(4294967296) - 2147483648) * 4294967296 + random_below(4294967296)
 random_bool() := random_below(2) == 1
