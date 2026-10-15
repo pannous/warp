@@ -67,7 +67,6 @@ function addTaskWorker(loaded) {
 		// loaded: it can take tasks; later a fetch it made is done (startFetch)
 		worker.onmessage = ({ data }) => {
 			if (data === FETCH_DONE) return worker.fetched?.();
-			if (data.relay) return relayed(data.relay);
 			taskPool.push(worker);
 			loaded?.();
 		};
@@ -117,12 +116,26 @@ function withTaskSounds(run, record) {
 	return record;
 }
 
-// a sound or MIDI message a task sends, for the page, which only the program's Worker talks to (task-worker.js relay);
-// it reaches the page once that Worker is back in its event loop, not while it waits for the task
-const RELAYED = ["playSamples", "playSoundFile", "stopSound", "stopSoundFiles", "fadeSound", "sendMidi"];
-function relayed([method, ...values]) {
-	if (!RELAYED.includes(method)) throw new Error(`a task Worker relayed ${method}, which is no word of the page`);
-	self[method]?.(...values);
+// play's handles (lib/sound.warp, card sound-pro): the sounds and music files of a run counted from 1, as natively, in
+// one counter the run's task Workers share
+let soundHandles = new Int32Array(1);
+self.newSoundHandles = () => soundHandles = new Int32Array(new (self.crossOriginIsolated ? SharedArrayBuffer : ArrayBuffer)(4));
+const nextSoundHandle = () => Atomics.add(soundHandles, 0, 1) + 1;
+self.lastSoundHandle = () => Atomics.load(soundHandles, 0);
+self.joinSoundHandles = counter => { soundHandles = counter ?? soundHandles; }; // a task Worker's: its run's
+
+// the words a program's sounds and MIDI reach the page by (playground.js), posted by the program's Worker and by a task's
+// alike: a task posts to the page itself (task-workers.js, card playground-live), as the program's Worker waiting for it
+// in Atomics.wait could pass nothing on in time and a live loop's sounds came bunched once it was done
+function addPageSoundWords(post) {
+	self.playSoundFile = (url, bytes) => post({ type: "sound file", url, bytes, handle: nextSoundHandle() }); // host-files.js STD_ADAPTERS.sound: a worker has no <audio>
+	self.stopSoundFiles = () => { self.voiceStopped(); post({ type: "stop sound files" }); };
+	self.sendMidi = (port, message, at) => post({ type: "midi", port, message, at }); // host-files.js STD_ADAPTERS.midi
+	self.stopSound = handle => post({ type: "stop sound", handle }); // stop_sound(handle)
+	self.fadeSound = (handle, gain, seconds) => post({ type: "fade sound", handle, gain, seconds }); // fade_sound
+	// a worker has no AudioContext: the page plays it at its start on the shared clock (voiceSounded); a signal's blocks
+	// share one handle
+	self.playSamples = sound => post({ type: "sound", ...sound, handle: sound.handle || nextSoundHandle() });
 }
 
 // the pool of task Workers of the workers that run programs (worker.js, test-worker.js), asked for when they start, one
@@ -329,7 +342,7 @@ function startTask(holder, hooks, name, values) {
 	const inline = () => withTaskSounds(run, asVoice(() => runTask(run.module, hooks, holder.warnings, name, values, run.shared, captured, null, run.channels)));
 	const shared = takeAnswerBuffer();
 	const control = new Int32Array(new SharedArrayBuffer(2 * Int32Array.BYTES_PER_ELEMENT)); // a queued task's too: `pause job` holds before it starts
-	const message = { module: run.module, name, values, shared, arrays: run.shared, captured, control, channels: run.channels, voice: { ...voice } };
+	const message = { module: run.module, name, values, shared, arrays: run.shared, captured, control, channels: run.channels, voice: { ...voice }, soundHandles };
 	const task = { name, shared, control, inline, message };
 	if (taskPool.length > 0) startOnWorker(task, run);
 	else if (!holder.inTask && holdsAWorker(run)) {

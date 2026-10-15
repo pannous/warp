@@ -71,7 +71,9 @@ sounds queued before it, at an `at`'s time, in a task on its own voice; natively
 and the process's end wait for it, stop_sound drops it), headless the line names the place (`midi out : 90 40 64 at 0.500 s`),
 in the browser Web MIDI's own timestamp (host-sound.js voiceSounded(0).at → playground.js output.send(message, time)).
 `midi_note(pitch, duration, velocity, channel)` is on, the voice resting the duration (std_io sound.rest: the voice goes on
-without a sound), off. Messages from task Workers in the browser still go nowhere (not relayed to the page).
+without a sound), off. A task Worker in the browser posts its sounds and MIDI to the page itself (host-tasks.js
+addPageSoundWords, card playground-live): relayed through the program's Worker, which waits for the task in
+Atomics.wait, they arrived bunched once main returned; handles come from one counter the run's Workers share.
 A loop variable named `note` inside lib/sound.warp breaks: `note` is the module's own word ("not a list").
 
 ## Probes and quirks (from the warp-sound handover, 2026-10-10)
