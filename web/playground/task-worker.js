@@ -13,7 +13,6 @@ self.onmessage = ({ data }) => {
 	program = data.port;
 	program.onmessage = ({ data }) => data.fetch ? fetchInto(data) : data.gpu ? gpuJobInto(data) : runTaskInto(data);
 	program.postMessage(TASK_WORKER_READY); // the pool takes this Worker only once it has loaded (host-tasks.js prepareTaskPool)
-	self.postMessage(TASK_WORKER_READY); // and the page stops it only then (task-workers.js stopTaskWorker)
 };
 
 // a promise failing without a reason (Firefox's WebGPU, card uncaught-exception-undefined) is said with where it failed,
