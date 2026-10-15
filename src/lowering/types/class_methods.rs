@@ -23,7 +23,9 @@ mod inheritance;
 mod json;
 mod operators;
 mod other_languages;
+mod outside_methods;
 pub use json::*;
+use outside_methods::*;
 mod method_aliases;
 use method_aliases::*;
 mod statics;
@@ -121,6 +123,7 @@ pub fn lower(node: Node) -> Node {
 		Ok(inherited) => inherited,
 		Err(error) => return error,
 	};
+	let node = outside_receiver_reads(node);
 	let traits = [shared_method_traits(&node), likenesses].concat();
 	let shared: Vec<String> = traits.iter().filter_map(trait_operation).collect();
 	let mut changing = Changing::default();
@@ -254,6 +257,18 @@ pub(crate) struct ClassLayout {
 }
 
 pub(crate) fn class_layouts(node: &Node) -> std::collections::HashMap<String, ClassLayout> {
+	let mut layouts = declared_layouts(node);
+	let outside = crate::declarations::extension_methods(node).into_iter().chain(first_parameter_methods(node));
+	for (class, method) in outside.collect::<Vec<_>>() {
+		if let Some(layout) = layouts.get_mut(&class).filter(|layout| !layout.methods.contains(&method)) {
+			layout.methods.push(method);
+		}
+	}
+	layouts
+}
+
+/// The layouts of the classes as declared, without the methods defined outside their bodies
+pub(crate) fn declared_layouts(node: &Node) -> std::collections::HashMap<String, ClassLayout> {
 	let mut layouts = std::collections::HashMap::new();
 	node.visit(&mut |part| {
 		if let Node::Type { name, body } = part {
@@ -272,12 +287,36 @@ pub(crate) fn class_layouts(node: &Node) -> std::collections::HashMap<String, Cl
 			layouts.insert(class, ClassLayout { parent, fields, methods });
 		}
 	});
-	for (class, method) in crate::declarations::extension_methods(node) {
-		if let Some(layout) = layouts.get_mut(&class).filter(|layout| !layout.methods.contains(&method)) {
-			layout.methods.push(method);
+	layouts
+}
+
+/// The (class, function) pairs of the definitions outside class bodies whose first parameter is declared a class:
+/// `def x(p:P)` is P's method as much as a class-body `def x()` (card one-method-form)
+fn first_parameter_methods(node: &Node) -> Vec<(String, String)> {
+	fn collect(node: &Node, methods: &mut Vec<(String, String)>) {
+		match node.drop_meta() {
+			Node::Type { .. } => {}
+			Node::Key(head, Op::Assign | Op::Define, body) => {
+				methods.extend(first_parameter_class(head));
+				collect(body, methods);
+			}
+			Node::Key(left, _, right) => {
+				collect(left, methods);
+				collect(right, methods);
+			}
+			Node::List(items, _, _) => items.iter().for_each(|item| collect(item, methods)),
+			_ => {}
 		}
 	}
-	layouts
+	let mut methods = vec![];
+	collect(&crate::declarations::lower_c_functions(node.clone()), &mut methods);
+	methods
+}
+
+/// `(P, x)` of the head `x(p:P)`
+fn first_parameter_class(head: &Node) -> Option<(String, String)> {
+	let (_, class) = first_parameter(head)?;
+	Some((class, leading_name(head)))
 }
 
 /// The variable holding what is taken apart: `{x, y} = p` is `(parts·from = p; x = parts·from.x; y = parts·from.y)`
@@ -289,30 +328,34 @@ const PARTS_WORD: &str = "parts·from";
 /// on what holds an instance of a class defining it (a variable assigned one, `p:Stack`, self) and called bare in a
 /// class body, so `s.items.pop()` and `xs.pop()` of lists stay list mutations
 fn renamed_type_word_methods(node: Node) -> Node {
-	let (mut names, mut classes, mut defined_by) = (vec![], vec![], vec![]);
+	let is_type_word = |name: &String| !is_witness_method(name) && crate::analyzer::type_word_kind(name).is_some();
+	let clashes = |name: &String| {
+		is_type_word(name)
+			|| !is_witness_method(name)
+				&& (crate::list_mutations::is_list_mutating_method(name)
+					|| crate::numbers::uncertain::INTERVAL_FIELDS.contains(&name.as_str()))
+	};
+	let (mut defined_by, mut declares_classes): (Vec<(String, String)>, bool) = (vec![], false);
 	node.visit(&mut |part| {
 		if let Node::Type { name, body } = part {
-			let clashing: Vec<String> = class_items(body)
-				.iter()
-				.filter_map(method_parts)
-				.map(|(name, _, _)| name)
-				.filter(|name| {
-					!is_witness_method(name)
-						&& (crate::analyzer::type_word_kind(name).is_some()
-							|| crate::list_mutations::is_list_mutating_method(name)
-							|| crate::numbers::uncertain::INTERVAL_FIELDS.contains(&name.as_str()))
-				})
-				.collect();
-			if !clashing.is_empty() {
-				classes.push(name.drop_meta().name());
-			}
-			defined_by.extend(clashing.iter().map(|method| (method.clone(), name.drop_meta().name())));
-			names.extend(clashing);
+			declares_classes = true;
+			let class = name.drop_meta().name();
+			let methods: Vec<String> =
+				class_items(body).iter().filter_map(method_parts).map(|(name, _, _)| name).collect();
+			defined_by.extend(methods.into_iter().filter(clashes).map(|method| (method, class.clone())));
 		}
 	});
-	if names.is_empty() {
+	// `def double(p:P)` outside the class is P's method too (card one-method-form)
+	if declares_classes {
+		let outside = first_parameter_methods(&node).into_iter().filter(|(_, name)| is_type_word(name));
+		defined_by.extend(outside.map(|(class, method)| (method, class)));
+	}
+	if defined_by.is_empty() {
 		return node;
 	}
+	let names: Vec<String> = defined_by.iter().map(|(method, _)| method.clone()).collect();
+	let mut classes: Vec<String> = defined_by.iter().map(|(_, class)| class.clone()).collect();
+	classes.dedup();
 	let mut instances: Vec<String> = instance_classes(&node, &classes).into_keys().collect();
 	instances.extend([SELF_WORD.to_string(), RECEIVER_ALIASES[0].to_string()]);
 	with_method_names(node, &MethodNames { names, instances, classes, defined_by }, false)
@@ -367,6 +410,15 @@ fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node 
 			.map(|name| Node::List([vec![name], items[1..].to_vec()].concat(), Bracket::Round, separator.clone())),
 		_ => None,
 	};
+	let is_instance = |receiver: &Node| match receiver.drop_meta() {
+		Node::Symbol(variable) => methods.instances.contains(variable),
+		// `Stack([]).count()`, a construction
+		Node::List(items, Bracket::Round, _) => {
+			items.first().is_some_and(|class| methods.classes.contains(&class.drop_meta().name()))
+		}
+		Node::Key(class, Op::None | Op::Colon, _) => methods.classes.contains(&class.drop_meta().name()),
+		_ => false,
+	};
 	// a type word is a method on anything but a literal value (`3.double()`, `"42".int()` stay the conversion), a list
 	// word on an instance
 	let calls_method = |receiver: &Node, member: &Node| {
@@ -377,15 +429,7 @@ fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node 
 			other => other.name(),
 		};
 		match is_library_method(&name) || crate::numbers::uncertain::INTERVAL_FIELDS.contains(&name.as_str()) {
-			true => match receiver.drop_meta() {
-				Node::Symbol(variable) => methods.instances.contains(variable),
-				// `Stack([]).count()`, a construction
-				Node::List(items, Bracket::Round, _) => {
-					items.first().is_some_and(|class| methods.classes.contains(&class.drop_meta().name()))
-				}
-				Node::Key(class, Op::None | Op::Colon, _) => methods.classes.contains(&class.drop_meta().name()),
-				_ => false,
-			},
+			true => is_instance(receiver),
 			false => !matches!(
 				receiver.drop_meta(),
 				Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square, _)
@@ -411,6 +455,15 @@ fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node 
 		}
 		// `items.pop()` of a list: the member keeps its name, its arguments may call methods
 		Node::Key(receiver, Op::Dot, member) => key(recurse(*receiver), Op::Dot, with_arguments(*member, recurse)),
+		// `double(p)` of an instance is `p.double()` (card one-method-form: x.f() ≡ f(x))
+		Node::List(items, Bracket::Round, separator)
+			if !in_class && items.len() > 1 && renamed(&items[0]).is_some() && is_instance(&items[1]) =>
+		{
+			let mut items: Vec<Node> = items.into_iter().map(recurse).collect();
+			let receiver = items.remove(1);
+			items[0] = renamed(&items[0]).expect("guarded");
+			key(receiver, Op::Dot, Node::List(items, Bracket::Round, separator))
+		}
 		Node::List(..) if in_class && renamed_call(&node).is_some() => {
 			let Node::List(items, bracket, separator) = renamed_call(&node).expect("guarded") else {
 				unreachable!("a call")
@@ -423,6 +476,14 @@ fn with_method_names(node: Node, methods: &MethodNames, in_class: bool) -> Node 
 		{
 			let head = renamed(&head).or_else(|| renamed_call(&head)).expect("guarded");
 			key(head, Op::Define, recurse(*body))
+		}
+		// `double(p:P) := …` outside the class
+		Node::Key(head, op @ (Op::Define | Op::Assign), body)
+			if !in_class
+				&& renamed_call(&head).is_some()
+				&& first_parameter(&head).is_some_and(|(_, class)| methods.classes.contains(&class)) =>
+		{
+			key(renamed_call(&head).expect("guarded"), op, recurse(*body))
 		}
 		other => other.map_children(recurse),
 	}
@@ -714,7 +775,7 @@ fn function(members: &Members, method: &str, parameters: Vec<Node>, body: Node) 
 		.filter(|name| unshadowed(name))
 		.collect();
 	let statics: Vec<&String> = members.statics.iter().filter(|name| unshadowed(name)).collect();
-	let readable = Readable { class, fields: [fields, getters].concat(), methods, statics };
+	let readable = Readable { receiver: SELF_WORD, class, fields: [fields, getters].concat(), methods, statics };
 	// the holes of `"#\(n)"` as code first, so a field in one is read from self too
 	let body = crate::text::interpolation::lower_program(body);
 	let body = receiver_reads(body, &readable);
@@ -795,7 +856,10 @@ fn gives_value(body: &Node) -> bool {
 }
 
 /// The names a method body reads from its receiver: fields and getters (`area`), and methods it calls (`area()`)
+#[derive(Default)]
 struct Readable<'a> {
+	/// `self` in a class body, the first parameter of an outside method
+	receiver: &'a str,
 	class: &'a str,
 	fields: Vec<&'a String>,
 	methods: Vec<&'a String>,
@@ -805,12 +869,12 @@ struct Readable<'a> {
 /// The body with each field name and getter read from self, each call of a method of the class a call on self (as in
 /// Java), `this` as self; the member name right of a dot stays as it is
 fn receiver_reads(node: Node, readable: &Readable) -> Node {
-	let on_receiver = |member: Node| key(symbol(SELF_WORD), Op::Dot, member);
+	let on_receiver = |member: Node| key(symbol(readable.receiver), Op::Dot, member);
 	let is_call_of = |items: &[Node], names: &[&String]| matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if names.contains(&name));
 	match node {
 		Node::Symbol(name) if readable.statics.contains(&&name) => Node::Symbol(static_name(readable.class, &name)),
 		Node::Symbol(name) if readable.fields.contains(&&name) => on_receiver(Node::Symbol(name)),
-		Node::Symbol(name) if RECEIVER_ALIASES.contains(&name.as_str()) => symbol(SELF_WORD),
+		Node::Symbol(name) if RECEIVER_ALIASES.contains(&name.as_str()) => symbol(readable.receiver),
 		Node::List(items, Bracket::Round, separator) if is_call_of(&items, &readable.methods) => {
 			on_receiver(arguments_rewritten(items, Bracket::Round, separator, |argument| {
 				receiver_reads(argument, readable)

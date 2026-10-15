@@ -19,5 +19,5 @@ fn test_eval_reads_the_same_section() {
 
 #[test]
 fn test_a_whole_list_of_quantities_shows_its_units() {
-	assert_eq!(eval("xs = [1 m, 250 cm]; xs").serialize(), "\"[100cm 250cm]\"");
+	assert_eq!(eval("xs = [1 m, 250 cm]; xs").serialize(), "[100cm 250cm]");
 }
