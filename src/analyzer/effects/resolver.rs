@@ -17,9 +17,10 @@ const TRUSTED_EXTERNALS: &[(&str, Capability, &[Effect])] = &[
 	("wasi_environment", Wasi, &[IO]),
 	("execute", Sql, &[IO]),
 	("exec", Process, &[IO]),
-	// the standard library's adapters (src/modules/std_adapters.rs): std_pure's words are pure like libm's, std_io's do IO
-	("std_pure", Libm, &[]),
-	("std_io", Host, &[IO]),
+	// the standard library's adapters (src/modules/std_adapters.rs): std_pure's words are pure like libm's, std_io's do IO;
+	// a failed adapter gives back its Error, raised in the program (Fail)
+	("std_pure", Libm, &[Fail]),
+	("std_io", Host, &[IO, Fail]),
 ];
 
 /// The operators that fail for a divisor of 0
@@ -45,7 +46,8 @@ impl Resolver<'_> {
 			return Some(External { capability: Host, effects: EffectSet::PURE });
 		}
 		if name == crate::host::FOREIGN_CALL {
-			return Some(External { capability: Foreign, effects: EffectSet::of(&[IO, FFI]) });
+			// a crate's or component's Err is raised in the program
+			return Some(External { capability: Foreign, effects: EffectSet::of(&[IO, FFI, Fail]) });
 		}
 		if let Some(import) = self.context.ffi_imports.get(name) {
 			// libm is pure (P26): untrusted code and `! Pure` functions may call it; so are the module's own linear arrays
@@ -165,11 +167,14 @@ impl FunctionEffects {
 	}
 }
 
-/// `raise "no"`, `throw e`, `fail`, `panic`, `error "neg"`
+/// `raise "no"`, `throw e`, `fail`, `panic`, `error "neg"`, and the floor division `x // y` of a divisor that may be 0
 fn raises(items: &[Node]) -> bool {
-	items.len() == 2
-		&& matches!(items[0].drop_meta(), Node::Symbol(word)
-			if crate::errors::run_time::RAISE_WORDS.contains(&word.as_str()) || word == crate::words::ERROR_WORD)
+	match items {
+		[word, _] => matches!(word.drop_meta(), Node::Symbol(word)
+			if crate::errors::run_time::RAISE_WORDS.contains(&word.as_str()) || word == crate::words::ERROR_WORD),
+		[word, _, divisor] => word.is_symbol(crate::warp_parser::FLOOR_QUOTIENT) && !is_nonzero_number(divisor),
+		_ => false,
+	}
 }
 
 fn is_nonzero_number(node: &Node) -> bool {

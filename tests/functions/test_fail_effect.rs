@@ -1,5 +1,8 @@
-//! The Fail effect (card fail-effect, wiki/Error.md): a function that can raise an error says so in `effects of f`;
-//! `try` handles it, `! Pure` refuses it, and a failing function still folds like a pure one
+//! The Fail effect (card fail-effect, wiki/effects.md): a function that can raise an error says so in `effects of f`;
+//! `try` handles it, `! Pure` refuses it, and a failing function still folds like a pure one. The rule: it raises
+//! (raise, throw, fail, panic, error "…"), divides by what may be 0 (/ // div % rem), or calls a library word or crate
+//! that answers with an Error. Not tracked yet, though `try` catches them: an index out of range, a missing field, a
+//! failed cast (card fail-effect-indexing)
 use crate::common::fails_with;
 use crate::is;
 use warp::analyzer::effects::{effects_of, Effect::*, EffectSet};
@@ -12,6 +15,8 @@ fn fails(code: &str, function: &str) -> bool {
 fn raising_and_dividing_by_a_variable_fail() {
 	assert!(fails("f(x) := 10/x", "f"));
 	assert!(fails("f(x) := x % x", "f"));
+	assert!(fails("f(x, y) := x div y", "f"));
+	assert!(!fails("f(x) := x div 2", "f"));
 	assert!(fails("g(x) := raise \"no\"", "g"));
 	assert!(fails("g(x) := throw \"no\"", "g"));
 	assert!(fails("h(x) := if x < 0 then error \"neg\" else x", "h"));
