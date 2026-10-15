@@ -6,7 +6,8 @@ use std::collections::HashMap;
 use std::path::Path;
 
 const PLAYGROUND: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/web/playground");
-const PAGE: &str = "index.html";
+/// the playground's pages, each with a script it surely loads
+const PAGES: [(&str, &str); 2] = [("index.html", "playground.js"), ("tests.html", "tests.js")];
 const WORKERS: [&str; 3] = ["worker.js", "test-worker.js", "task-worker.js"];
 const THIRD_PARTY: &str = "codemirror/";
 const DECLARATION_WORDS: [&str; 5] = ["function", "const", "let", "var", "class"];
@@ -24,8 +25,8 @@ fn quoted_scripts(text: &str, quote: char) -> Vec<String> {
 	text.split(quote).skip(1).step_by(2).filter(|word| word.ends_with(".js")).map(String::from).collect()
 }
 
-fn page_scripts() -> Vec<String> {
-	let page = source(PAGE).expect(PAGE);
+fn page_scripts(page: &str) -> Vec<String> {
+	let page = source(page).expect(page);
 	page.lines()
 		.filter_map(|line| line.split("<script src=\"").nth(1))
 		.filter_map(|rest| rest.split('"').next())
@@ -103,12 +104,11 @@ fn twice_declared(scripts: &[String]) -> Vec<String> {
 
 #[test]
 fn the_page_scripts_declare_no_name_twice() {
-	let scripts = page_scripts();
-	assert!(
-		scripts.contains(&"markup.js".to_string()) && scripts.contains(&"playground.js".to_string()),
-		"{scripts:?}"
-	);
-	assert_eq!(twice_declared(&scripts), Vec::<String>::new());
+	for (page, own_script) in PAGES {
+		let scripts = page_scripts(page);
+		assert!(scripts.contains(&own_script.to_string()), "{page}: {scripts:?}");
+		assert_eq!(twice_declared(&scripts), Vec::<String>::new(), "{page}");
+	}
 }
 
 #[test]
