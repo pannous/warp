@@ -26,5 +26,8 @@ fn a_program_naming_escape_keeps_it() {
 	assert!(keeps_escape("on key { if key == ESC { exit } }"));
 	assert!(keeps_escape("while held_key != ESCAPE { sleep(0.1) }"));
 	assert!(!keeps_escape("on key { if key == UP { print 1 } }"));
+	assert!(keeps_escape("on key { if key == \"Escape\" { exit } }"));
 	assert!(!keeps_escape("print 1"));
+	assert!(!keeps_escape("print \"Escape\""));
+	assert!(!keeps_escape("while held_key != LEFT { sleep(0.1) }"));
 }

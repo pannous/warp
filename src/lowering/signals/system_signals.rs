@@ -47,9 +47,6 @@ const KEYS_TEMPLATE: &str = "on frame {
 /// A program naming the Escape key keeps it (card escape-window): else Escape over the paint window ends the run
 #[cfg(feature = "native")]
 const ESCAPE_KEPT_TEMPLATE: &str = "system_value(\"escape kept\")";
-/// The name the key words ESC and ESCAPE become (lowering/collections/key_names.rs)
-#[cfg(feature = "native")]
-const ESCAPE_NAME: &str = "Escape";
 /// Each click over the paint window, where the button went down
 #[cfg(feature = "native")]
 const CLICK_EVENT: &str = "click";
@@ -104,10 +101,7 @@ fn with_window_events(program: Node) -> Node {
 	if crate::pipeline::compile_mode().for_a_page || crate::event_signals::serves_its_page(&statements) {
 		return program;
 	}
-	if names_escape(&program) {
-		statements.insert(0, crate::warp_parser::parse(ESCAPE_KEPT_TEMPLATE));
-	}
-	let mut listened = names_escape(&program);
+	let mut listened = false;
 	for (event, reader) in [(KEY_EVENT, keys_reader as fn() -> Node), (CLICK_EVENT, clicks_reader)] {
 		let listener = statements.iter().position(|statement| event_listener(statement, event).is_some());
 		if let Some(listener) = listener {
@@ -122,12 +116,21 @@ fn with_window_events(program: Node) -> Node {
 	Node::List(statements, bracket, separator)
 }
 
-/// `key == ESC`, `held_key != ESCAPE`, `event.key == "Escape"`: the key words are names by now
+/// A program comparing a key with Escape (lowering/collections/key_names.rs) keeps that key: natively it tells the
+/// runtime as it starts (ESCAPE_KEPT_TEMPLATE); a page has its keys anyway
 #[cfg(feature = "native")]
-fn names_escape(program: &Node) -> bool {
-	let mut found = false;
-	program.visit(&mut |node| found |= matches!(node, Node::Text(text) if text == ESCAPE_NAME));
-	found
+pub fn keeping_escape(program: Node) -> Node {
+	let (mut statements, bracket, separator) = crate::variable_signals::main_statements(&program);
+	if crate::pipeline::compile_mode().for_a_page || crate::event_signals::serves_its_page(&statements) {
+		return program;
+	}
+	statements.insert(0, crate::warp_parser::parse_generated(ESCAPE_KEPT_TEMPLATE));
+	Node::List(statements, bracket, separator)
+}
+
+#[cfg(not(feature = "native"))]
+pub fn keeping_escape(program: Node) -> Node {
+	program
 }
 
 #[cfg(feature = "native")]
