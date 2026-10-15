@@ -94,6 +94,13 @@ impl WasmGcEmitter {
 				data: file.as_bytes().into(),
 			});
 		}
+		if !self.live_loops.is_empty() {
+			let names = self.live_loops.iter().cloned().collect::<Vec<_>>().join(crate::host::USER_FUNCTIONS_SEPARATOR);
+			self.module.section(&CustomSection {
+				name: crate::host::LIVE_LOOPS_SECTION.into(),
+				data: names.as_bytes().into(),
+			});
+		}
 		let user_functions: Vec<&str> = (self.ctx.user_functions.iter())
 			.filter(|(_, definition)| definition.func_index.is_some())
 			.map(|(name, _)| name.as_str())
