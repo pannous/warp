@@ -62,5 +62,6 @@ cleared(x) := if x is map then {} else []
 // sides are `any`: inferred from the body, one call with a number made it a list
 element_wise_any(left: any, right: any, combined) := if left is list and right is list then { if count(left) != count(right) { raise "element-wise operator: the lists differ in length" }; [combined(left#i, right#i) for i in 1 to count(left)] } else if left is list then [combined(item, right) for item in left] else if right is list then [combined(left, item) for item in right] else combined(left, right)
 // `norm x`, `‖x‖`: a number's absolute value, a list's Euclidean length (decision S3: `count`/`length` stay the number
-// of items); magnitude is its other name (library_words SYNONYMS, card compile-shaders)
-norm(x: any) := if x is list then sqrt(sum([item * item for item in x])) else abs(x)
+// of items); magnitude is its other name (card compile-shaders)
+norm(x: any) := if x is list then sqrt(sum(x .* x)) else abs(x)
+magnitude(x: any) := norm(x)
