@@ -98,5 +98,6 @@ fn test_zoned_fields_at_run_time() {
 #[test]
 fn test_zoned_times_and_durations_compare_at_run_time() {
 	is!("a = 2024-01-31T10:00[Europe/Berlin]; b = 2024-01-31T10:00[Europe/London]; print a; a < b", true);
-	fails_with("a = 1 day; b = 2 days; print a; a < b", "cannot order durations");
+	is!("a = 1 day; b = 2 days; print a; a < b", true);
+	fails_with("a = 1 day; b = 24 hours; print a; a < b", "cannot order durations");
 }
