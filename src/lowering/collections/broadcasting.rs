@@ -500,10 +500,25 @@ fn gather_arguments(node: Node, single: &HashSet<String>, gathered: &mut bool) -
 	}
 }
 
-pub fn lower(program: Node) -> Node {
+/// The functions of one value that map over a list argument by themselves (`square xs`): the program's, whose every
+/// overload takes a scalar, the library's of one scalar the program does not define and the scalar operator words
+/// (`abs xs`): ambiguous_forms' map hint
+pub(crate) fn broadcasting_functions(program: &Node) -> HashSet<String> {
+	let scalar_operator_words = crate::warp_parser::PREFIX_OPERATOR_WORDS
+		.iter()
+		.filter(|(_, op)| SCALAR_OPERATORS.contains(op))
+		.map(|(word, _)| word.to_string());
+	broadcasting(&program_definitions(program)).into_iter().chain(scalar_operator_words).collect()
+}
+
+fn program_definitions(program: &Node) -> Vec<Definition> {
 	let mut found = Vec::new();
-	definitions(&program, &mut found);
-	implicit_definitions(&program, &mut found);
+	definitions(program, &mut found);
+	implicit_definitions(program, &mut found);
+	found
+}
+
+fn broadcasting(found: &[Definition]) -> HashSet<String> {
 	// `f(c: text)` beside `f(b: list)`: an overload takes the list itself (overloads.rs), no definition broadcasts
 	let every_overload_needs_a_scalar = |definition: &&Definition| {
 		found.iter().filter(|other| other.name == definition.name && other.params.len() == 1).all(needs_a_scalar)
@@ -517,6 +532,13 @@ pub fn lower(program: Node) -> Node {
 	// the library words of one scalar: `upper ["ab" "cd"]`, unless the program defines the name itself
 	let defined: HashSet<&String> = found.iter().map(|definition| &definition.name).collect();
 	broadcasting.extend(scalar_library_words().map(String::from).filter(|word| !defined.contains(word)));
+	broadcasting
+}
+
+pub fn lower(program: Node) -> Node {
+	let found = program_definitions(&program);
+	let broadcasting = broadcasting(&found);
+	let defined: HashSet<&String> = found.iter().map(|definition| &definition.name).collect();
 	let library_scalar_parameters = LIBRARY_SCALAR_PARAMETERS
 		.iter()
 		.filter(|(word, _)| !defined.contains(&word.to_string()))

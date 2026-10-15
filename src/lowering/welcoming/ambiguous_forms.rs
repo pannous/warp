@@ -16,7 +16,113 @@ const ARITHMETIC: [Op; 7] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Mod, Op::Re
 
 pub fn lower(node: Node) -> Node {
 	let words = suffix_words(&node);
+	hint_broadcast_maps(&node, &words);
 	operator_values(library_word_values(lower_node(node, &words), &words))
+}
+
+const BROADCAST_REASON: &str = "a function of one value maps over a list by itself";
+
+/// `xs.map(square)`, `map square on: xs`: a named function of one value maps over a list by itself (broadcasting.rs),
+/// `square xs` (wiki/Broadcasting.md, card hint-map); not a word taking the list whole (`reverse`, `count`)
+fn hint_broadcast_maps(program: &Node, words: &SuffixWords) {
+	let broadcasting = crate::broadcasting::broadcasting_functions(program);
+	// a variable of a library word's name shadows it; a program's own function broadcasting.rs decided already
+	let broadcasts =
+		|name: &str| broadcasting.contains(name) && (words.functions.contains(name) || !words.variables.contains(name));
+	program.visit(&mut |part| {
+		if let Some((function, list)) = mapped_function(part, words, &broadcasts) {
+			crate::normalize::set_position_of(part);
+			let mapped = format!("{function} {}", crate::normalize::operand_text(&list));
+			let written = written_map(part).unwrap_or_else(|| crate::normalize::operand_text(part));
+			crate::normalize::hint(&written, &mapped, BROADCAST_REASON);
+		}
+	});
+}
+
+/// The source of a `map` as written, to the parenthesis closing `map(` (`map(xs, f)`, `xs.map(f)`), else to the end of
+/// the statement (`map abs xs`)
+fn written_map(part: &Node) -> Option<String> {
+	let map = crate::words::MAP_WORD;
+	let text = crate::errors::diagnostic::written_statement(part)?;
+	// `map(xs, f)`: the call's position is its first argument, the statement ends at its closing parenthesis
+	if matches!(part.drop_meta(), Node::List(_, Bracket::Round, _)) && !text.starts_with(map) {
+		return Some(format!("{map}({text})"));
+	}
+	match text.find(&format!("{map}(")) {
+		Some(call) => closing_parenthesis(&text, call + map.len() + 1).map(|end| text[..end].to_string()),
+		None => text.contains(map).then_some(text),
+	}
+}
+
+/// The end of the parenthesis closing a group opened before `from`
+fn closing_parenthesis(text: &str, from: usize) -> Option<usize> {
+	let mut depth = 0;
+	for (at, letter) in text.char_indices().skip_while(|(at, _)| *at < from) {
+		match letter {
+			'(' | '[' | '{' => depth += 1,
+			')' if depth == 0 => return Some(at + 1),
+			')' | ']' | '}' => depth -= 1,
+			_ => {}
+		}
+	}
+	None
+}
+
+/// The named function and the list of a `map`: `xs.map(f)`, `map(xs, f)`, `map f xs`, `map f on: xs`
+fn mapped_function(part: &Node, words: &SuffixWords, broadcasts: &dyn Fn(&str) -> bool) -> Option<(String, Node)> {
+	let is_map = |head: &Node| {
+		head.drop_meta().symbol_name() == Some(crate::words::MAP_WORD)
+			&& !words.functions.contains(crate::words::MAP_WORD)
+	};
+	let named = |node: &Node| function_name(node).filter(|name| broadcasts(name));
+	match part.drop_meta() {
+		Node::Key(list, Op::Dot, method) => match method.drop_meta() {
+			Node::List(items, _, _) => match items.as_slice() {
+				[head, function] if is_map(head) => Some((named(function)?, list.as_ref().clone())),
+				_ => None,
+			},
+			_ => None,
+		},
+		Node::List(items, _, _) if items.first().is_some_and(is_map) => {
+			let arguments = crate::closures::with_operator_word_unfolded(items[1..].to_vec(), 0);
+			let arguments: Vec<Node> = arguments
+				.iter()
+				.flat_map(phrase_words)
+				.filter(|argument| !argument.is_symbol(crate::words::ON_WORD))
+				.flat_map(|argument| unlabeled(&argument))
+				.collect();
+			match arguments.as_slice() {
+				[first, second] => named(first)
+					.map(|function| (function, second.clone()))
+					.or_else(|| named(second).map(|function| (function, first.clone()))),
+				_ => None,
+			}
+		}
+		_ => None,
+	}
+}
+
+/// The name a function is written with: `square`, `function floor`, `abs` without its operand
+fn function_name(node: &Node) -> Option<String> {
+	crate::closures::referenced_function(node)
+		.or_else(|| operator_reference(node).map(|_| written_word(node).name()))
+		.or_else(|| node.drop_meta().symbol_name().map(String::from))
+}
+
+/// `square on xs` grouped as braceless phrases after `map`, `(square (on xs))`: their words
+fn phrase_words(argument: &Node) -> Vec<Node> {
+	match argument.drop_meta() {
+		Node::List(words, Bracket::None, _) => words.iter().flat_map(phrase_words).collect(),
+		_ => vec![argument.clone()],
+	}
+}
+
+/// The labeled argument `on: xs` as `xs` after the words before its label (lambdas::labeled_list)
+fn unlabeled(argument: &Node) -> Vec<Node> {
+	match crate::lambdas::labeled_list(argument) {
+		Some((list, words)) => [words, vec![list]].concat(),
+		None => vec![argument.clone()],
+	}
 }
 
 /// The parameter of the function an operator word stands for

@@ -41,6 +41,7 @@ mod test_let_const_changes;
 mod test_list_phrases;
 mod test_lone_words;
 mod test_lowered_error_text;
+mod test_map_broadcast_hint; // card hint-map
 mod test_open_range_slices; // card golf-open
 mod test_own_definition_hint; // card hint-own-definition
 mod test_parser_runtime_positions; // card runtime-parser
