@@ -186,10 +186,11 @@ enum Stage {
 	Delay { combs: Vec<Comb>, mix: f32 },
 	Reverb { rooms: Vec<[Comb; 4]>, mix: f32 },
 	Distort(f32),
-	Compress(Vec<Compressor>),
+	Compress(Compressor),
 }
 
-/// A compressor on one channel: its envelope, the level it follows, and its settings as factors a sample
+/// A compressor: its envelope of the louder channel (linked, so the stereo image stays), and its settings as factors
+/// a frame
 struct Compressor {
 	envelope: f32,
 	threshold: f32,
@@ -213,15 +214,15 @@ impl Compressor {
 		(self.attack, self.release) = (kept(attack), kept(release));
 	}
 
-	fn next(&mut self, x: f32) -> f32 {
-		let level = x.abs();
+	/// The frame's channels turned down together by the envelope over its loudest
+	fn process(&mut self, frame: &mut [f32]) {
+		let level = frame.iter().fold(0.0, |loudest: f32, sample| sample.abs().max(loudest));
 		let kept = if level > self.envelope { self.attack } else { self.release };
 		self.envelope = level + kept * (self.envelope - level);
 		let over = 20.0 * self.envelope.max(1e-9).log10() - self.threshold;
 		if over > 0.0 {
-			x * 10f32.powf(-over * self.slope / 20.0)
-		} else {
-			x
+			let gain = 10f32.powf(-over * self.slope / 20.0);
+			frame.iter_mut().for_each(|sample| *sample *= gain);
 		}
 	}
 }
@@ -244,9 +245,9 @@ impl Stage {
 				mix,
 			},
 			Effect::Distort { drive } => Stage::Distort(drive),
-			Effect::Compress { threshold, ratio, attack, release } => Stage::Compress(
-				(0..channels).map(|_| Compressor::new(threshold, ratio, attack, release, rate)).collect(),
-			),
+			Effect::Compress { threshold, ratio, attack, release } => {
+				Stage::Compress(Compressor::new(threshold, ratio, attack, release, rate))
+			}
 		}
 	}
 
@@ -263,8 +264,8 @@ impl Stage {
 			}
 			(Stage::Reverb { mix, .. }, Effect::Reverb { mix: new }) => *mix = new,
 			(Stage::Distort(drive), Effect::Distort { drive: new }) => *drive = new,
-			(Stage::Compress(compressors), Effect::Compress { threshold, ratio, attack, release }) => {
-				compressors.iter_mut().for_each(|compressor| compressor.retune(threshold, ratio, attack, release, rate))
+			(Stage::Compress(compressor), Effect::Compress { threshold, ratio, attack, release }) => {
+				compressor.retune(threshold, ratio, attack, release, rate)
 			}
 			_ => return false,
 		}
@@ -282,6 +283,14 @@ impl Stage {
 		}
 	}
 
+	/// The frame (its channels) through the stage, in place
+	fn process(&mut self, frame: &mut [f32]) {
+		match self {
+			Stage::Compress(compressor) => compressor.process(frame),
+			_ => frame.iter_mut().enumerate().for_each(|(channel, sample)| *sample = self.next(channel, *sample)),
+		}
+	}
+
 	fn next(&mut self, channel: usize, x: f32) -> f32 {
 		match self {
 			Stage::Gain(gain) => x * *gain,
@@ -293,7 +302,7 @@ impl Stage {
 			}
 			// lib/sound.warp clipped, its peak full scale here
 			Stage::Distort(drive) => (x * (1.0 + 10.0 * *drive)).tanh(),
-			Stage::Compress(compressors) => compressors[channel].next(x),
+			Stage::Compress(_) => unreachable!("a compressor runs on whole frames (process)"),
 		}
 	}
 }
@@ -337,9 +346,7 @@ impl Chain {
 	/// The frames (interleaved) through every effect, in place
 	pub fn process(&mut self, frames: &mut [f32]) {
 		for frame in frames.chunks_mut(self.channels) {
-			for (channel, sample) in frame.iter_mut().enumerate() {
-				*sample = self.stages.iter_mut().fold(*sample, |x, stage| stage.next(channel, x));
-			}
+			self.stages.iter_mut().for_each(|stage| stage.process(frame));
 			let quiet = frame.iter().all(|sample| sample.abs() < SILENT);
 			self.quiet_frames = if quiet { self.quiet_frames + 1 } else { 0 };
 		}
