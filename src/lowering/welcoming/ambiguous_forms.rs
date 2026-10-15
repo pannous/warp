@@ -60,7 +60,8 @@ fn library_word_values(node: Node, words: &SuffixWords) -> Node {
 			// `map sqrt xs`, `map sqrt on: xs`: the parser applied sqrt, the iteration word takes it as its function
 			let mut items = if is_iteration { crate::closures::with_operator_word_unfolded(items, 1) } else { items };
 			let position = function_position(&items, words);
-			if let Some(function) = items.get_mut(position).filter(|item| is_iteration && words.is_iterated_function(item))
+			if let Some(function) =
+				items.get_mut(position).filter(|item| is_iteration && words.is_iterated_function(item))
 			{
 				*function = word_function(function);
 			}
