@@ -247,6 +247,15 @@ pub const HOST_WORD_SIGNATURES: [(&str, &[wasm_encoder::ValType], &[wasm_encoder
 	(CHANNEL_WORDS[3], &[I64], &[I64]),
 	(CHANNEL_WORDS[4], &[I64], &[]),
 ];
+/// The host words taking nothing and giving a value (`random`): a bare one is its call, as a program's function without
+/// parameters is (bare_calls.rs)
+pub fn parameterless_host_words() -> impl Iterator<Item = &'static str> {
+	HOST_WORD_SIGNATURES
+		.iter()
+		.filter(|(_, parameters, results)| parameters.is_empty() && !results.is_empty())
+		.map(|(name, _, _)| *name)
+}
+
 /// The host words: the names of HOST_WORD_SIGNATURES
 pub const HOST_WORDS: [&str; HOST_WORD_SIGNATURES.len()] = {
 	let mut words = [""; HOST_WORD_SIGNATURES.len()];

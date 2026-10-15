@@ -11,6 +11,7 @@ mod test_arity_overloads;
 mod test_arrow_defaults_and_types;
 mod test_bare_calls; // card assigning-bare
 mod test_bare_function_name;
+mod test_bare_host_words; // card random-should
 mod test_block_function;
 mod test_body_statement;
 mod test_braced_it_warning;
