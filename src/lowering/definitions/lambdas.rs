@@ -809,12 +809,14 @@ impl Lowering {
 		})
 	}
 
-	/// A function given as a value: a lambda or block, an operator, or the name of a defined function
+	/// A function given as a value: a lambda or block, an operator, the name of a defined function or of a library word
+	/// of one value (`map floor xs`)
 	fn is_function_value(&self, node: &Node) -> bool {
 		arrow_lambda(node).is_some()
 			|| block_lambda(node).is_some()
 			|| operator_lambda(node).is_some()
-			|| matches!(node.drop_meta(), Node::Symbol(name) if self.context.user_functions.contains_key(name))
+			|| matches!(node.drop_meta(), Node::Symbol(name)
+				if self.context.user_functions.contains_key(name) || crate::library_words::is_one_value_function(name))
 	}
 
 	/// The function applied to the symbols `arguments`: the body of a literal function with its parameters replaced, or the call of a
@@ -844,6 +846,10 @@ impl Lowering {
 			None => match function.drop_meta() {
 				Node::Symbol(name) if self.context.user_functions.contains_key(name) => {
 					Ok(call(name, arguments.to_vec()))
+				}
+				// `map floor xs`: a library word of one value applies to each item as a defined function does
+				Node::Symbol(name) if arguments.len() == 1 && crate::library_words::is_one_value_function(name) => {
+					Ok(call(crate::library_words::canonical_spelling(name), arguments.to_vec()))
 				}
 				Node::Symbol(_) if !self.strict => Err(None),
 				// a function value known only at run time: a variable or parameter holding a closure, or a call returning one

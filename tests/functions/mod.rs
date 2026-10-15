@@ -97,6 +97,7 @@ mod test_library_word_assigned; // card floor-says
 mod test_library_word_values;
 mod test_list_conversion;
 mod test_list_fields; // card people-map
+mod test_map_library_word_first; // cards map-library-first, map-library-word
 mod test_map_phrase;
 mod test_math_broadcast; // card cos-instead
 mod test_member_phrases; // card xs-insert

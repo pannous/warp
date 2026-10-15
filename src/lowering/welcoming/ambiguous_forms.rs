@@ -155,10 +155,11 @@ impl SuffixWords {
 	}
 
 	/// A word calling the values after it, the program's own function or a standard word it does not name: `max sorted
-	/// xs` is max(sort(xs)) and `f sorted xs` f(sort(xs)), no suffix `sorted` of max or f
+	/// xs` is max(sort(xs)) and `f sorted xs` f(sort(xs)), no suffix `sorted` of max or f; `map sorted xs` maps sort
 	fn is_calling_word(&self, node: &Node) -> bool {
 		matches!(node.drop_meta(), Node::Symbol(name) if self.functions.contains(name))
 			|| self.unnamed(node).is_some_and(crate::library_words::is_calling_word)
+			|| (self.unnamed(node).is_some() && crate::lowering::lambdas::takes_a_function_first(node))
 	}
 
 	/// A library word of one value the program does not name itself, also libm's (`floor`, `sin`): a function value
