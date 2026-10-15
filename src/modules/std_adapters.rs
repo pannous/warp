@@ -73,6 +73,11 @@ fn json(member: &str, arguments: &[Node]) -> Result<Node, String> {
 				.map_err(|problem| format!("{text:?} is no json: {problem}"))?;
 			Ok(crate::modules::foreign::node_of(&parsed))
 		}
+		("to_json", [value, ..]) if let Some(part) = crate::node::inexpressible_in_json(value) => Err(format!(
+			"JSON has no {}: {} cannot be written as JSON",
+			part.serialize().trim(),
+			value.serialize().trim()
+		)),
 		("to_json", [value]) => Ok(Node::Text(crate::modules::foreign::json_of(value).to_string())),
 		// an instance of one of the program's classes is its fields: `{"Point": {"x": 1}}` is `{"x": 1}` (as host.js)
 		("to_json", [value, classes]) => {

@@ -69,7 +69,7 @@ pub(crate) fn json_of(node: &Node) -> Value {
 		Node::List(items, Bracket::Square | Bracket::Round | Bracket::None, _) => {
 			Value::Array(items.iter().map(json_of).collect())
 		}
-		Node::Key(key, Op::Colon, value) => serde_json::json!({ key.name(): json_of(value) }),
+		Node::Key(key, Op::Colon, value) => serde_json::json!({ crate::node::json_key(key): json_of(value) }),
 		// an object, a handle among them: `{$handle: 7, …}`
 		Node::List(items, Bracket::Curly, _)
 			if items.iter().all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _))) =>
@@ -78,7 +78,7 @@ pub(crate) fn json_of(node: &Node) -> Value {
 				items
 					.iter()
 					.filter_map(|item| match item.drop_meta() {
-						Node::Key(key, _, value) => Some((key.name(), json_of(value))),
+						Node::Key(key, _, value) => Some((crate::node::json_key(key), json_of(value))),
 						_ => None,
 					})
 					.collect(),

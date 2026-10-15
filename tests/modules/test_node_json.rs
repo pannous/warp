@@ -34,3 +34,12 @@ fn the_browser_spells_each_operator_code_alike() {
 	let native: Vec<&str> = warp::operators::OP_CODES.iter().map(|op| op.as_str()).collect();
 	assert_eq!(spellings, native);
 }
+
+/// user 2026-10-15 (card parse-json): what JSON cannot express is never lost silently: any key is written as its text,
+/// a number JSON has no form for is an error
+#[test]
+fn json_loses_nothing_silently() {
+	is!("{1: \"a\"}.json", "{\"1\":\"a\"}");
+	is!("parse(\"f(x) := x*2\").json", "{\"(f x)\":{\"*\":[\"x\",2]}}");
+	assert!(warp::wasm_emitter::eval("(1/0.0).json").serialize().contains("JSON has no"));
+}
