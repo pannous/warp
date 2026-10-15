@@ -28,14 +28,23 @@ pub(super) fn powered(factors: Vec<Factor>, exponent: i32) -> Vec<Factor> {
 
 /// A conversion target written as units: `m`, `minutes`, `cm²`, `km/h`, `kg*m/s²`
 pub(super) fn unit_expression(node: &Node) -> Option<Vec<Factor>> {
+	factor_expression(node, &|leaf| target_unit(leaf).map(|unit| vec![Factor { unit, power: 1 }]))
+}
+
+/// Products, quotients and powers of what `leaf` reads: units (`km/h`) or dimensions (`length/duration`)
+pub(super) fn factor_expression(node: &Node, leaf: &dyn Fn(&Node) -> Option<Vec<Factor>>) -> Option<Vec<Factor>> {
 	match node.drop_meta() {
 		Node::Key(base, op @ (Op::Square | Op::Cube), nothing) if nothing.is_empty_node() => {
-			Some(powered(unit_expression(base)?, exponent_of(*op)))
+			Some(powered(factor_expression(base, leaf)?, exponent_of(*op)))
 		}
-		Node::Key(left, Op::Mul, right) => Some([unit_expression(left)?, unit_expression(right)?].concat()),
-		Node::Key(left, Op::Div, right) => Some([unit_expression(left)?, inverse(&unit_expression(right)?)].concat()),
-		Node::List(items, Bracket::Round, _) if items.len() == 1 => unit_expression(&items[0]),
-		other => target_unit(other).map(|unit| vec![Factor { unit, power: 1 }]),
+		Node::Key(left, Op::Mul, right) => {
+			Some([factor_expression(left, leaf)?, factor_expression(right, leaf)?].concat())
+		}
+		Node::Key(left, Op::Div, right) => {
+			Some([factor_expression(left, leaf)?, inverse(&factor_expression(right, leaf)?)].concat())
+		}
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => factor_expression(&items[0], leaf),
+		other => leaf(other),
 	}
 }
 

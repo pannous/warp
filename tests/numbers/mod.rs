@@ -11,6 +11,7 @@ mod test_data_number_words; // card hint-data-word
 mod test_decimal_units;
 mod test_declared_float_exact_reals;
 mod test_degrees; // card angles-degrees
+mod test_dimension_types; // card dimensions-units
 mod test_div_assign;
 mod test_division_by_zero;
 mod test_duration_text;
