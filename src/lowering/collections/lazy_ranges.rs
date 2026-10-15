@@ -13,7 +13,6 @@ use crate::library_words::substitute;
 use crate::memoization::definition_parts;
 use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::warp_parser::parse;
 use crate::words::{COUNT_WORD, SUM_WORD};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -132,7 +131,7 @@ impl Lowering {
 	}
 
 	fn bounds(&self, template: &str, range: &Range) -> Node {
-		substitute(substitute(parse(template), START, &range.start), END, &range.end)
+		substitute(substitute(crate::warp_parser::parse_generated(template), START, &range.start), END, &range.end)
 	}
 
 	fn length(&self, range: &Range) -> Node {

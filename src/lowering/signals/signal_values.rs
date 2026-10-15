@@ -149,7 +149,7 @@ impl SharedPolls {
 		let body = with_value(body, subject);
 		self.checks.push(super::nodes::filled(&each_write, [("BODY", body)]));
 		self.lowered.push(
-			crate::warp_parser::parse(&format!("{writes} = {}({name})", crate::host::SHARED_WRITES))
+			crate::warp_parser::parse_generated(&format!("{writes} = {}({name})", crate::host::SHARED_WRITES))
 				.drop_meta()
 				.clone(),
 		);

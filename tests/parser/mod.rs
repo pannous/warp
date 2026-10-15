@@ -2,6 +2,7 @@ mod test_as_prefixed_name;
 mod test_attributes;
 mod test_bare_operator_block;
 mod test_big_literals; // card big-literals
+mod test_braceless_range_argument; // card braceless-argument
 mod test_comment_hides_bracket;
 mod test_comments;
 mod test_dollar_names;
@@ -30,6 +31,7 @@ mod test_operator_word_keys; // card abs-fails
 mod test_parse_long_sources;
 mod test_parser;
 mod test_parser_sugar;
+mod test_path_after_function; // card name-after
 mod test_path_literal; // card play-mozart
 mod test_references;
 mod test_scheme_relative_url;

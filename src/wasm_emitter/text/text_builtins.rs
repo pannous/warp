@@ -145,6 +145,10 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains(super::super::lists::list_ops::ELEMENT_BODY) {
 		required.insert(super::super::lists::list_ops::ELEMENT_CHILDREN);
 	}
+	if required.contains(super::super::lists::list_ops::ELEMENTS_FIELD) {
+		use super::super::lists::list_ops::{STRUCT_BODY, TAGGED_FIELD};
+		required.extend(["map_find", TAGGED_FIELD, STRUCT_BODY]);
+	}
 	if required.contains(super::super::lists::list_ops::NODE_AT_KEY) {
 		required.extend(["node_index_at", "map_get"]);
 	}

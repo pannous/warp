@@ -864,7 +864,7 @@ fn painted_function(node: &Node) -> Option<Node> {
 			"{PAINT_WORD}([{PIXEL_COLOR}({name}(i % ({width}), i//({width}))) for i in 0..(({width}) * ({height}))], {width}, {height})"
 		),
 	};
-	let lowered = match crate::warp_parser::parse(&lowered).drop_meta() {
+	let lowered = match crate::warp_parser::parse_generated(&lowered).drop_meta() {
 		Node::List(statements, crate::node::Bracket::None, _) if statements.len() == 1 => statements[0].clone(),
 		single => single.clone(),
 	};
@@ -883,7 +883,7 @@ fn shader_of(arguments: &[Node]) -> Option<Node> {
 	let painted = program_function(&name).filter(|called| called.parameters.len() == 2)?;
 	Some(match fragment_shader(&name, &painted) {
 		Some((shader, _)) => Node::Text(shader),
-		None => crate::warp_parser::parse(&format!(
+		None => crate::warp_parser::parse_generated(&format!(
 			"raise {}",
 			Node::Text(format!("{SHADER_OF_WORD}: WGSL cannot compute {name}, paint computes it on the CPU"))
 				.serialize()

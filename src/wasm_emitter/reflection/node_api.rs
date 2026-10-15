@@ -60,6 +60,11 @@ pub fn node_part(field: &str) -> Option<i32> {
 	NODE_PARTS.iter().position(|part| *part == field).map(|part| part as i32)
 }
 
+/// A part only a key (or a word) has: its key, value, op and name, none of a list's or a map's
+pub fn is_pair_part(part: i32) -> bool {
+	part <= NAME_PART
+}
+
 /// Runtime functions the node words call
 pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 	if required.contains(NODE_PART) {

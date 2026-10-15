@@ -261,6 +261,23 @@ block has that place, says `<word>: why at line:column` in the program, which th
 Columns count `$name` as written, not as `values.name`. Two blocks that both have the place: the message stays as the
 GPU said it (no guess). Not relocated: shaders from imported modules, shaders given as quoted text.
 
+## GLSL from twigl.app (card create-little, user 2026-10-15)
+`paint(twigl(code))` runs twigl's geekest-mode shorthand as it is (samples/twigl.warp), `paint(shadertoy(code))` a
+Shadertoy mainImage (iResolution, iTime, iMouse, iFrame as GLSL private globals set by a wrapper function). Both are thin
+calls of lib/draw.warp glsl_shader(glsl, color): GLSL functions plus the WGSL expression giving a pixel's color. twigl
+writes the GLSL around the code: `vec4 warp_twigl(vec4 FC, vec2 r, float t, vec2 m, float f) { vec4 o = vec4(0.); …; return o; }` plus
+twigl's hsv, rotate2D, rotate3D and an empty `main`; naga (glsl-in, wgsl-out; crates/warp-glsl) turns it into WGSL
+functions, dropping the entry point and renaming GLSL's main to warp_glsl_main; the lib appends a WGSL `@fragment fn
+main` calling warp_twigl with values.size/time/mouse/frame, FC and m with y flipped (GLSL counts rows from the bottom).
+- naga 30's glsl-in does not compile without wgsl-in (front/interpolator.rs is gated on spv-in/wgsl-in).
+- A module without an entry point is refused by the GLSL front end ("Missing entry point"): hence the empty main.
+- Size (reviewer, probes/twigl/wasm_size.sh, 2026-10-15): naga inside warp.wasm made it 5 909 527 instead of 5 204 210
+  bytes after wasm-opt (+705 KB, +254 KB gzipped). So the translation is crates/warp-glsl: natively a dependency of the
+  native feature (std_adapters.rs draw glsl_wgsl), in the browser glsl.wasm of its own (build.sh build_glsl), which
+  host-gpu.js glslWgsl loads at a program's first translation; warp.wasm stays as it was.
+- Not yet: twigl's backbuffer b (would be $previous), noise functions (snoise2D…), sound s, other twigl modes
+  (classic, geeker: full `void main` sources, gl_FragColor), Shadertoy's iChannel textures.
+
 ## Paint window, default canvas, probes (from the warp-sound handover, 2026-10-10)
 - src/graphics/paint_window.rs is a separate `warp paint-window` process fed RGBA frames on stdin; it writes
   `input x y down key` lines on stdout, which warp-runtime system_values.rs window_input keeps (system values and

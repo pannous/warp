@@ -101,7 +101,8 @@ pub fn lower(program: Node) -> Node {
 	if let Some(error) = names.error {
 		return error;
 	}
-	let uses = names.globals.iter().map(|global| crate::warp_parser::parse(&format!("use js {global}"))).collect();
+	let uses =
+		names.globals.iter().map(|global| crate::warp_parser::parse_generated(&format!("use js {global}"))).collect();
 	with_statements_first(program, uses)
 }
 
@@ -484,7 +485,7 @@ fn element_of_id(id: &str) -> Node {
 
 /// `document.getElementById(id)`, shaped as the parser reads it
 fn element_of(id: Node) -> Node {
-	let template = crate::warp_parser::parse(&format!("{DOCUMENT}.{FIND_BY_ID}(0)"));
+	let template = crate::warp_parser::parse_generated(&format!("{DOCUMENT}.{FIND_BY_ID}(0)"));
 	let Node::Key(document, Op::Dot, find) = template.drop_meta() else {
 		unreachable!("a member call parses as a member");
 	};

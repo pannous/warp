@@ -318,8 +318,8 @@ def argument(p, block_ends) {
 // The operands a braceless call binds in: the right sides of `or` to `+`
 OPERAND_POWERS = [91, 141]
 
-// A braceless argument takes arithmetic and stops at ranges and comparisons: `f 3-1 > 5`
-ARGUMENT_POWER = 140
+// A braceless argument takes arithmetic and ranges, stops at comparisons: `f 3-1 > 5`, `y = sum 1..4`
+ARGUMENT_POWER = 130
 
 // `xs[i]` is `xs#(i+1)`: a written number counts on, any other index gets 1 added
 // Rust twin: warp_parser subscript
