@@ -337,9 +337,6 @@ const SUPERSCRIPT_LETTERS: [(char, char); 25] = [
 /// (a == b*(a//b) + a%b): floor(a/b) for a positive divisor, ceil(a/b) for a negative one. Each operand is evaluated
 /// once, and an exact quotient rounds exactly (wasm_emitter exact_euclid_div)
 pub const FLOOR_QUOTIENT: &str = "floor_quotient";
-/// The spellings of floor division in the operator table: `7//2`, `7 div 2` and the compound `x//=2`
-const FLOOR_DIVISION_SPELLINGS: [&str; 2] = ["//", "div"];
-const FLOOR_DIVISION_ASSIGNMENT: &str = "//=";
 
 /// `a | b`: the logical or, or `b(a)` when b names a function (pipes.rs)
 const PIPE_GLYPH: &str = "|";
