@@ -192,11 +192,17 @@ pub fn with_default_routes(program: Node) -> Node {
 		statements.pop();
 	}
 	statements.extend(
-		functions.iter().map(|(path, answer)| crate::warp_parser::parse(&format!("get {path:?} {{ {answer} }}"))),
+		functions
+			.iter()
+			.map(|(path, answer)| crate::warp_parser::parse_generated(&format!("get {path:?} {{ {answer} }}"))),
 	);
 	statements.push(match value {
-		Some(value) => with_route_body(crate::warp_parser::parse(&format!("get {:?} {{ ø }}", PAGE_ROUTE)), value),
-		None => crate::warp_parser::parse(&format!("get {PAGE_ROUTE:?} {{ [{}] }}", index.unwrap_or_default())),
+		Some(value) => {
+			with_route_body(crate::warp_parser::parse_generated(&format!("get {:?} {{ ø }}", PAGE_ROUTE)), value)
+		}
+		None => {
+			crate::warp_parser::parse_generated(&format!("get {PAGE_ROUTE:?} {{ [{}] }}", index.unwrap_or_default()))
+		}
 	});
 	Node::List(statements, Bracket::None, separator)
 }
@@ -258,7 +264,7 @@ fn answered_page(statement: &Node) -> Option<Node> {
 		return None;
 	}
 	let shown = body.pop()?;
-	body.push(crate::warp_parser::parse(&format!("{HEADER_WORD} {CONTENT_TYPE_HEADER:?} {HTML_TYPE:?}")));
+	body.push(crate::warp_parser::parse_generated(&format!("{HEADER_WORD} {CONTENT_TYPE_HEADER:?} {HTML_TYPE:?}")));
 	body.push(call(super::page_html::TO_HTML, vec![shown]));
 	let block = Node::List(body, Bracket::Curly, Separator::Newline);
 	Some(Node::List(vec![symbol(QUERY_METHOD), text(&pattern), block], Bracket::None, Separator::Space))
@@ -572,7 +578,7 @@ fn with_request_fields(body: Node, part: &str) -> Node {
 	match body {
 		Node::Symbol(ref name) => match name.strip_prefix(FIELD_MARK) {
 			Some(field) if field.starts_with(|first: char| first.is_alphabetic() || first == '_') => {
-				crate::warp_parser::parse(&format!("{REQUEST_WORD}.{part}.{field}"))
+				crate::warp_parser::parse_generated(&format!("{REQUEST_WORD}.{part}.{field}"))
 			}
 			_ => body,
 		},
@@ -590,7 +596,7 @@ fn with_path_parameters(path: &Node, body: Node) -> Node {
 	}
 	let items = body.body_statements();
 	let (page_path, request_path) =
-		(crate::warp_parser::parse(PAGE_PATH_CALL), crate::warp_parser::parse(REQUEST_PATH));
+		(crate::warp_parser::parse_generated(PAGE_PATH_CALL), crate::warp_parser::parse_generated(REQUEST_PATH));
 	let bound =
 		crate::routes::route_body(&pattern, &items).into_iter().map(|item| replaced(item, &page_path, &request_path));
 	Node::List(bound.collect(), Bracket::Curly, Separator::Newline)
@@ -608,7 +614,7 @@ fn reading_tables(body: Node, tables: &[(String, Node)]) -> Node {
 
 /// `global name`
 fn global(name: &str) -> Node {
-	crate::warp_parser::parse(&format!("{} {name}", GLOBAL_WORD))
+	crate::warp_parser::parse_generated(&format!("{} {name}", GLOBAL_WORD))
 }
 
 /// The block with these statements first; a one-line block of words, `{ last 2 of users }`, is one statement
@@ -627,11 +633,12 @@ fn data_read(node: Node, pattern: &str, reads_server_data: &dyn Fn(&Node) -> boo
 	}
 	let name = format!("{ROUTE_DATA_PREFIX}{}", functions.len());
 	let path = symbol(PATH_PARAMETER);
-	let page_path = crate::warp_parser::parse(PAGE_PATH_CALL);
+	let page_path = crate::warp_parser::parse_generated(PAGE_PATH_CALL);
 	let body: Vec<Node> =
 		crate::routes::route_body(pattern, &[node]).into_iter().map(|item| replaced(item, &page_path, &path)).collect();
-	let guard =
-		crate::warp_parser::parse(&format!("if not route_matches({pattern:?}, {PATH_PARAMETER}) {{ return ø }}"));
+	let guard = crate::warp_parser::parse_generated(&format!(
+		"if not route_matches({pattern:?}, {PATH_PARAMETER}) {{ return ø }}"
+	));
 	let head = call(&name.clone(), vec![key(path, Op::Colon, symbol("text"))]);
 	let definition =
 		key(head, Op::Define, Node::List([vec![guard], body].concat(), Bracket::Curly, Separator::Newline));
@@ -664,7 +671,7 @@ fn replaced(node: Node, old: &Node, new: &Node) -> Node {
 
 /// The code with its generated names (`page·path`, written so it parses as a name)
 fn parse_named(code: &str) -> Node {
-	with_generated_names(crate::warp_parser::parse(&code.replace('·', NAME_DOT)))
+	with_generated_names(crate::warp_parser::parse_generated(&code.replace('·', NAME_DOT)))
 }
 
 fn with_generated_names(node: Node) -> Node {
@@ -1061,7 +1068,8 @@ fn with_any_parameters(definition: Node) -> Node {
 /// POST /rpc/f of a function marked `server`: f called with the items of the request's JSON array
 fn rpc_route(definition: &Node) -> Option<Route> {
 	let (name, parameters) = defined_function(definition)?;
-	let arguments = (1..=parameters).map(|index| crate::warp_parser::parse(&format!("{REQUEST_WORD}.body#{index}")));
+	let arguments =
+		(1..=parameters).map(|index| crate::warp_parser::parse_generated(&format!("{REQUEST_WORD}.body#{index}")));
 	// built, not parsed: a generated name's `·` would parse as a product
 	let call = parens(std::iter::once(Node::Symbol(name.clone())).chain(arguments).collect());
 	Some((

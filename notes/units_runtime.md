@@ -162,6 +162,25 @@ Dimension names are types of quantities, decided at compile time by static_units
 accepts any unit of the dimension and keeps the written one, `w: mass = 3 m` is a DimensionError. Products, quotients
 and powers name derived dimensions through the same `factor_expression` that reads unit expressions (`km/h`). A program
 naming `length` itself keeps its variable. The time dimension is `duration`, a subtype of `time` (anchor-time): `3 s is
-duration` and `3 s is time` hold; a value without units keeps the time module's test (`now is time`). Open with the Interviewer: Q1 pixel (CSS 1/96 inch vs device pixel), Q2 a lib/units.warp of definitions,
-Q3 `[3, 4] cm` as a vector of lengths, Q4 derived names (speed, area, volume, frequency).
+duration` and `3 s is time` hold; a value without units keeps the time module's test (`now is time`). Derived names speed, area, volume, frequency
+(`DERIVED_DIMENSION_NAMES`, Q4). A unit after a list is each element's (Q3, static_units/list_units.rs): a list's `Signature`
+is its elements' powers with a depth (a matrix 2, a plain list stays plain), so any list-valued expression carries it:
+`[3, 4] cm`, `xs cm` (`map` at run time), `xs * 2`, `f([3, 4] cm)`, `if yes { [1 2] m }`. Index, `for`, `.map`, `sum`/
+`max`/`first` peel one level, `count` is plain, `x in m` converts each element, `xs + [5 cm]` appends, `xs + 1 cm` is a
+compile error (append or map), `type(xs)` is `list of length`. The program's value reads back as a list of quantities
+(`quantity_of` maps lists); `print`/`str` show `[3cm 4cm]`. Open: `sum(xs cm)` reads as two arguments (card parser-glues). Still open
+(decided): Q1 px the device pixel through display.dpi, Q2 unit definitions in lib/units.warp.
 Test: tests/numbers/test_dimension_types.rs.
+
+## Unit definitions in lib/units.warp (card dimensions-units Q2, 2026-10-15)
+The dimensions and units are no Rust tables any more: lib/units.warp's `unit_definitions = data { … }` block names
+them (`dimension length`, `dimension speed := length/duration`, `m: length` base unit, `cm := m/100`, `°C := K + 273.15`,
+`mph := mi/h` alias), and src/numbers/units/definitions.rs reads it once with its own small reader (the parser asks
+`is_unit`, so it cannot parse its own definitions). Each unit becomes whole steps of its dimension (amount × lcm of the
+dimension's denominators); only ratios matter. Adding a unit or dimension name = one line there (a new base dimension
+also needs its `Dimension` variant). Test: tests/numbers/test_unit_definitions.rs. Next: units defined in a program
+(`furlong := 201.168 m`), then px as a device-pixel dimension (Q1). The block is also the run-time table (card
+lib-units): units.rs with_run_time_unit_tables replaces the statement by unit_names/unit_scales/unit_dimensions computed
+from the definitions (also where implicit_modules.rs picks the units module's needed definitions by name), so aliases of
+units (Hz, kHz) work at run time too. The hand reader stays: the parser asks is_unit to read `201.168 m`, so it cannot
+read the block that defines m (without units `q := 201.168 furlong` parses as `(:= q 201.168) furlong`).

@@ -57,6 +57,7 @@ mod test_sleep_unit_shadow;
 mod test_sleep_unit_warning;
 mod test_strict_warning_statement; // card under-use
 mod test_style_dont_care;
+mod test_template_positions; // card template-positions
 mod test_ternary_hint_got_it; // card hint-dismiss
 mod test_undefined_in_text_sum; // card compile-path
 mod test_unknown_prefix_word;

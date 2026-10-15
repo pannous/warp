@@ -31,7 +31,12 @@ pub(crate) fn substitute(node: Node, placeholder: &str, replacement: &Node) -> N
 impl Lowering {
 	/// A source template with `hidden` variables made unique, its placeholders replaced by the given nodes
 	pub(super) fn instantiate_template(&self, template: &str, replacements: &[(&str, &Node)]) -> Node {
-		let mut program = named_apart(parse(template), TRY_TEMPORARY, TRY_BASE, self.next_temporary());
+		let mut program = named_apart(
+			parse_template(template, replacements.first().map_or(&Node::Empty, |(_, at)| *at)),
+			TRY_TEMPORARY,
+			TRY_BASE,
+			self.next_temporary(),
+		);
 		for (placeholder, replacement) in replacements {
 			program = substitute(program, placeholder, replacement);
 		}

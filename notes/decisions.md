@@ -61,6 +61,12 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   Later (card warp-format-strict, Soon): a second, opinionated mode rewriting code to best practices, with a preview
   (show the diff, apply nothing) before anything is applied; every rule goes to the user first. It is a verb of its
   own, `warp beautify` (synonyms canonical, idiomatic); hash-comments is its first rule.
+  beautify-preview (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable):
+  `warp beautify app.warp` prints the diff; in a terminal it asks "apply? y/n", piped or scripted it applies
+  nothing. `warp beautify yes app.warp` applies without asking (scripts), `warp beautify check app.warp` only
+  previews. Never a silent rewrite: unlike format, beautify changes words. Second rule (worker default, fits the
+  user's "synonyms canonical"): alias words the compiler already notes are rewritten to the warp word via their
+  I-meant fixes (`__add__` → plus).
 - cleanup-means-fewer-lines (2026-10-13): the cleanup's metric is lines removed: simpler, more general, more elegant
   code. Splitting files or functions alone is not a goal ("not that impressed by splitting"). Each cleanup merge
   request states its net src/ line delta; baseline 161132 lines of src/*.rs at eaa40f98b.
@@ -342,6 +348,13 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   px, `300 px / display.dpi` is a length. Without a conversion, `3 cm + 2 px` is a compile error naming
   `as px`, never a silent mix. No SI prefixes on px. The same line serves other run-time rates
   (`EUR as USD := it * rates.usd`).
+- unit-target (2026-10-15 night, user, told to use-reflection): a unit line may name its target the way a function
+  names its return type: `unit °C as K := it + 273.15`, `unit °F as K := (it + 459.67) * 5/9`; the right side is
+  then a plain amount, `it` the amount in the new unit. `(it + 273.15) K` stays accepted.
+- general-conversions (2026-10-15 night, user, told to use-reflection; card general-conversions): one conversion
+  mechanism for any types, `A as B := body`, e.g. `Person as text := it.name`, then `p as text`. A program's
+  conversions are looked up before the built-in ones. Unit lines and dimension bridges are its unit cases. Today
+  `P as text := it.name` is silently ignored (the card fixes that).
 
 ## Text
 - letters (2026-10-15 evening, Interviewer's decision on the user's behalf, to present 2026-10-16; card of-in-chain,
@@ -349,6 +362,12 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   Python's isalpha and Java's isLetter); `characters` is an alias of `chars`.
 - parse-json (2026-10-15, user): quoted code's `.json` is the readable operator-as-key shape
   (`parse("a * (b + 1)").json` → {"*":["a",{"+":["b",1]}]}); what it can't express is a warning or error, never `{}`.
+- json-exactness (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable):
+  following the user's "a warning, or even an error": big ints are written with all their digits as a JSON number
+  (`(2^70).json` → 1180591620717411303424; JSON numbers have no size limit, only some readers do); a fraction is
+  written as JSON's float with a warning naming the loss (`(1/3).json` → 0.3333333333333333, "JSON has no exact
+  1/3"), an error under `use strict`; functions, ∞, NaN and complex are errors. Not text-encoded numbers ("1/3"):
+  a reader would get a string where it expects a number.
 - Text + anything concatenates in its str() form (2026-10-02, extended 2026-10-10); a function stays an error. A
   text spelling a number plus a number (`"3"+3`) warns and keeps "33" (error under `use strict`). An instance of a
   Printable type joins as its own text.
@@ -461,6 +480,17 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - Ranges (2026-10-09): `r: 1..n` is the range itself, same as `r = 1..n`. `upto` excludes the end with a hint.
 
 ## Functions and calls
+- random-forms (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable; card
+  random-should): bare `random` is its call where a value is used (a float in [0,1)). `random T` for a type is a
+  random value of T, one general rule instead of special cases: `random bool` a coin flip, `random int` the full
+  integer range (ids, hashes), `random codepoint`, `random float` = `random`. `random(n)` stays 0…n-1;
+  `random(a, b)` with whole numbers is a whole number from a to b inclusive, the die roll `random(1, 6)`; with a
+  float argument, a float in [a, b). Refined with the user's suggestion via the supervisor: random's parameter is
+  declared of type Type, so `random int`, `random(int)` and `random float` take the type itself, not its
+  constructor; general rule: any parameter of type Type accepts bare type words. An overload takes a range,
+  and picks one of its elements: `random 1..10` → 1…9 (`..` excludes the end), `random 1...10` and
+  `random 1 to 10` → 1…10, the same die as `random(1, 10)` (corrected by warp-types: `1..3` is [1 2]). The result type follows the argument
+  (`int z = random 1..10`).
 - function-references (2026-10-15, user): a bare name of a function that needs arguments, compared with a type
   (`floor is function`) or in `type(floor)`, means the function itself (card bare-fn-type). `.floor` in argument
   position is a lambda on it, like Swift's .member: `xs.map(.floor)`, `people.sort(.age)` (card dot-lambda).

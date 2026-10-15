@@ -38,3 +38,12 @@ fn an_assigned_filter_by_an_operator() {
 	is!(&format!("{DIVIDES}xs = [4 6 8]; ys = xs where 4 divides it; ys"), warp::warp_parser::parse("[4 8]"));
 	is!("xs = [4 6 8]; ys = xs where 4 + it > 9; ys", warp::warp_parser::parse("[6 8]"));
 }
+
+/// card declared-word: the declared word is also its call form, unless the program defines a function of that name
+#[test]
+fn a_declared_word_operator_has_a_call_form() {
+	is!(&format!("{DIVIDES}divides(3, 12)"), true);
+	is!(&format!("{DIVIDES}divides(5, 12)"), false);
+	is!("infix operator times := left * right\ntimes(6, 7)", 42);
+	is!("divides(a, b) := 7\ninfix operator divides(d, n) := n % d == 0\ndivides(3, 12) + 0", 7);
+}

@@ -865,7 +865,7 @@ fn gpu_reduced(
 	let [get, _, _] = LINEAR_FLOAT_WORDS;
 	let (size, fewest) = (crate::gpu_maps::WORKGROUP_SIZE, crate::gpu_maps::fewest_items(keeping));
 	let combined = reduction.combined("reduce_value", &format!("{get}(reduce_partials, reduce_index)"));
-	let template = crate::warp_parser::parse(&format!("reduce_partials = {LINEAR_NEW}(({LINEAR_COUNT}(reduce_source) + {size} - 1)//{size}); \
+	let template = crate::warp_parser::parse_generated(&format!("reduce_partials = {LINEAR_NEW}(({LINEAR_COUNT}(reduce_source) + {size} - 1)//{size}); \
 		reduce_target = if {LINEAR_COUNT}(reduce_source) < {fewest} or {}(gpu_shader, reduce_source, gpu_values, reduce_partials, {LINEAR_COUNT}(reduce_partials), {keeping}) == 0 then reduce_on_cpu \
 		else (reduce_value = {get}(reduce_partials, 1); for reduce_index in 2 to {LINEAR_COUNT}(reduce_partials) {{ reduce_value = {combined} }}; reduce_value)", crate::host::GPU_REDUCE_LINEAR));
 	let (copy, source) = if is_linear_floats(array, names) {
@@ -899,7 +899,7 @@ fn gpu_reduced(
 fn copied_into_block(target: &Node, array: &Node) -> (Node, Node) {
 	use crate::wasm_emitter::lists::linear_arrays::{LINEAR_FLOAT_WORDS, LINEAR_NEW};
 	let [_, set, _] = LINEAR_FLOAT_WORDS;
-	let copy = crate::warp_parser::parse(&format!("copy_list = copy_items; copy_block = {LINEAR_NEW}(count(copy_list)); copy_index = 0; for copy_item in copy_list {{ copy_index = copy_index + 1; {set}(copy_block, copy_index, {}(copy_item)) }}", FLOAT_WORDS[0]));
+	let copy = crate::warp_parser::parse_generated(&format!("copy_list = copy_items; copy_block = {LINEAR_NEW}(count(copy_list)); copy_index = 0; for copy_item in copy_list {{ copy_index = copy_index + 1; {set}(copy_block, copy_index, {}(copy_item)) }}", FLOAT_WORDS[0]));
 	let separator = crate::analyzer::TEMPORARY_SEPARATOR;
 	let temporary = |part: &str| Node::Symbol(format!("{}{separator}copy{separator}{part}", target.name()));
 	let block = temporary("block");
@@ -935,7 +935,7 @@ fn gpu_mapped(target: &Node, array: &Node, lambda: &Node, kernel: crate::gpu_map
 /// (task_split_mapf), else, or where it gives 0, the kernel here
 fn split_mapped(target: &Node, array: &Node, kernel: &str, mapped: Node) -> Node {
 	use crate::wasm_emitter::lists::linear_arrays::LINEAR_COUNT;
-	let template = crate::warp_parser::parse(&format!(
+	let template = crate::warp_parser::parse_generated(&format!(
 		"map_target = (map_split = (if {LINEAR_COUNT}(map_source) >= {SPLIT_FEWEST} then {}(map_kernel, map_source) else 0); if map_split == 0 then map_kernel_call else map_split)",
 		crate::host::TASK_SPLIT_MAPF
 	));
@@ -963,7 +963,7 @@ fn block_mapped(target: &Node, array: &Node, lambda: &Node, mapped: &str, fills:
 		"for map_index in 1 to {LINEAR_COUNT}(map_source) {{ {set}(map_target, map_index, {}(map_item)) }}",
 		FLOAT_WORDS[0]
 	);
-	let template = crate::warp_parser::parse(&format!(
+	let template = crate::warp_parser::parse_generated(&format!(
 		"map_target = {LINEAR_NEW}({LINEAR_COUNT}(map_source)); {}",
 		mapped.replace("map_loop", &each_cell)
 	));
@@ -1022,7 +1022,7 @@ fn collected(array: &Node, kind: Shared) -> Node {
 	let count = kind.storage.new_and_count().1;
 	let element = if kind.element == Element::Float { FLOAT_WORDS[0] } else { "int" };
 	use crate::library_words::substitute;
-	let template = crate::warp_parser::parse(&format!(
+	let template = crate::warp_parser::parse_generated(&format!(
 		"(linear_list = {element}[{count}(linear_array)]; for linear_index in 1 to {count}(linear_array) {{ linear_list#linear_index = {get}(linear_array, linear_index) }}; linear_list)"
 	));
 	let named = |suffix: &str| Node::Symbol(format!("{name}{separator}{suffix}"));

@@ -68,6 +68,7 @@ mod test_exit_in_handler; // card key-app
 mod test_exit_signal;
 mod test_expect; // card expect-make
 mod test_field_of_elements; // name of people with age > 20 (user 2026-10-10)
+mod test_field_of_passed_list; // card field-list-passed
 mod test_filter_loop_over_variable;
 mod test_filter_loops;
 mod test_for_forms; // cards print-comma, forms-space, chain-block
@@ -140,6 +141,7 @@ mod test_object_blocks;
 mod test_object_functions;
 mod test_on_error_of_function;
 mod test_on_set_value; // card on-set-value
+mod test_one_method_form; // card one-method-form
 mod test_page_events;
 mod test_parallel_let; // card lower-parallel
 mod test_parallel_map;

@@ -958,7 +958,7 @@ pub(super) fn forwarded_raises(
 					crate::host::SIGNAL_SEND,
 					vec![Node::Text(format!("{function}{NODE_WRAPPER_SUFFIX}")), arguments],
 				);
-				let template = crate::warp_parser::parse(&format!(
+				let template = crate::warp_parser::parse_generated(&format!(
 					"if {}() {{ {FORWARD_PLACEHOLDER} }} else {{ {BODY_PLACEHOLDER} }}",
 					crate::host::TASK_INSIDE
 				));
@@ -1055,8 +1055,9 @@ pub(super) fn guarded_calls(
 
 /// Every result of a job list: `jobs.map(awaited_job => <checked await of awaited_job>)`
 pub(super) fn awaited_jobs(list: &Node, crossing: Crossing) -> Node {
-	let template =
-		crate::warp_parser::parse(&format!("{TASK_LIST_PLACEHOLDER}.map({AWAITED_JOB} => {AWAITED_PLACEHOLDER})"));
+	let template = crate::warp_parser::parse_generated(&format!(
+		"{TASK_LIST_PLACEHOLDER}.map({AWAITED_JOB} => {AWAITED_PLACEHOLDER})"
+	));
 	let awaited = checked_await(&symbol(AWAITED_JOB), crossing);
 	let template = crate::library_words::substitute(template, TASK_LIST_PLACEHOLDER, list);
 	crate::library_words::substitute(template, AWAITED_PLACEHOLDER, &awaited)
