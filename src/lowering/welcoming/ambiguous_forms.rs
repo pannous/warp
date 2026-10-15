@@ -140,18 +140,36 @@ fn lower_node(node: Node, functions: &SuffixWords) -> Node {
 		Node::Key(left, Op::Mod, right) if right.is_empty_node() => {
 			key(lower_node(*left, functions), Op::Div, Node::int(PERCENT))
 		}
-		Node::List(items, bracket, separator) => {
-			if let Some(asked) = bare_list_assignment(&items, &bracket, &separator) {
-				return asked.map_or_else(|error| error, |chosen| lower_node(chosen, functions));
-			}
-			if let Some(list) = spaced_values(&items, &bracket, &separator) {
-				return lower_node(list, functions);
-			}
-			let items: Vec<Node> = items.into_iter().map(|item| lower_node(item, functions)).collect();
-			apply_suffix_words(items, functions, bracket, separator)
-		}
+		Node::List(items, bracket, separator) => lower_list(items, bracket, separator, functions, true),
 		other => children_rewritten(other, |child| lower_node(child, functions)),
 	}
+}
+
+/// `values_may_be_list`: false for the arguments of a spaced call, `print 1+1 2+2` prints `2 4`, not `[2 4]`
+fn lower_list(
+	items: Vec<Node>,
+	bracket: Bracket,
+	separator: Separator,
+	functions: &SuffixWords,
+	values_may_be_list: bool,
+) -> Node {
+	if let Some(asked) = bare_list_assignment(&items, &bracket, &separator) {
+		return asked.map_or_else(|error| error, |chosen| lower_node(chosen, functions));
+	}
+	if values_may_be_list {
+		if let Some(list) = spaced_values(&items, &bracket, &separator) {
+			return lower_node(list, functions);
+		}
+	}
+	let is_spaced_call = bracket == Bracket::None && separator == Separator::Space;
+	let lower_item = |item: Node| match item {
+		Node::List(arguments, Bracket::None, Separator::Space) if is_spaced_call => {
+			lower_list(arguments, Bracket::None, Separator::Space, functions, false)
+		}
+		other => lower_node(other, functions),
+	};
+	let items: Vec<Node> = items.into_iter().map(lower_item).collect();
+	apply_suffix_words(items, functions, bracket, separator)
 }
 
 /// `1`, `-1`, `"a"`, `'a'`
@@ -175,10 +193,13 @@ fn is_arithmetic_of_values(node: &Node) -> bool {
 
 /// `2⁻¹ 2⁰ 2¹`, `1+1 2+2` on a line of their own: spaced values are a list (reconsider-spaced, user 2026-10-15)
 fn spaced_values(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
-	let is_spaced = *bracket == Bracket::None && *separator == Separator::Space && items.len() > 1;
-	let is_list =
-		is_spaced && items.iter().all(is_arithmetic_of_values) && !items[1..].iter().any(crate::analyzer::is_negative);
-	is_list.then(|| Node::List(items.to_vec(), Bracket::Square, Separator::Space))
+	let is_spaced = *bracket == Bracket::None && *separator == Separator::Space;
+	(is_spaced && are_spaced_values(items)).then(|| Node::List(items.to_vec(), Bracket::Square, Separator::Space))
+}
+
+/// Several values or number expressions, none after the first with a glued sign: `1+1 2+2`, not `5 -2`
+pub(crate) fn are_spaced_values(items: &[Node]) -> bool {
+	items.len() > 1 && items.iter().all(is_arithmetic_of_values) && !items[1..].iter().any(crate::analyzer::is_negative)
 }
 
 /// `a=1,2,3` without brackets: a list or separate statements? Unanswered an error (D12). Spaced, `a=1 2 3` is the list
