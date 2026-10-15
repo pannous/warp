@@ -21,8 +21,11 @@ A path literal is a Text, glued to what follows and not to an operand before it:
 
 ## Words (lib/shell.warp, adapters src/modules/shell_adapters.rs, browser web/playground/host-files.js)
 
-`sort`, `unique`, `find`, `size` are list words a module definition would shadow for the whole program (no overloading
-by parameter type across modules), hence sort_lines, unique_lines, find_files, file_size.
+`sort`, `unique`, `find`, `size` take paths through class dispatch (card cross-module-overload): lib/shell.warp has
+`class Path { name: text }` and `sort(file:Path)` etc.; the list words stay the fallback. traits/generics.rs `as_path`
+wraps a path literal (parser marks it with Meta `PathLiteral`) or a variable only ever assigned one into a Path where a
+method takes Path there. find is an iteration word: lambdas.rs leaves it to the method only when its last argument is
+a text or number (`calls_method`). The interim names sort_lines, unique_lines, find_files, file_size stay.
 `export a=b` is not added: `export` already declares a WebAssembly export.
 cwd became a getter (`cwd := …`) so it follows `cd`; std modules' getters no longer get the "runs at every read" warning.
 

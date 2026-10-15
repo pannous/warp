@@ -13,8 +13,8 @@ use crate::library_words::substitute;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse;
-use std::collections::HashSet;
 use crate::words::{EACH_WORD, IMPLICIT_PARAMETER, ON_WORD, SORT_WORD};
+use std::collections::HashSet;
 
 const PARTIAL_LIST: &str = "partial_list";
 const LIST_PLACEHOLDER: &str = "loop_list";
@@ -679,7 +679,8 @@ impl Lowering {
 
 	/// `find(./notes, "*.txt")`: a text or number where the function goes calls the class's method of that word
 	fn calls_method(&self, word: &Node, last_argument: &Node) -> bool {
-		let is_method = self.context.user_functions.get(&word.drop_meta().name()).is_some_and(|defined| self.is_method(defined));
+		let is_method =
+			self.context.user_functions.get(&word.drop_meta().name()).is_some_and(|defined| self.is_method(defined));
 		is_method && matches!(last_argument.drop_meta(), Node::Text(_) | Node::Number(_))
 	}
 

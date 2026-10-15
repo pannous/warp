@@ -7,7 +7,7 @@ use crate::common::{fails_with, printed, warp_command};
 const FOLDER: &str = "scratch/test_shell_words";
 
 /// The program under `use script`, run in a fresh folder of its own (`cd` in it changes only that run's process)
-fn script_in(folder: &str, code: &str) -> String {
+pub(crate) fn script_in(folder: &str, code: &str) -> String {
 	let folder = format!("{FOLDER}/{folder}");
 	let _ = std::fs::remove_dir_all(&folder);
 	std::fs::create_dir_all(&folder).unwrap();
