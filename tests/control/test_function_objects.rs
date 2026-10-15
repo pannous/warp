@@ -66,6 +66,12 @@ fn a_classes_methods_are_its_functions() {
 }
 
 #[test]
+fn methods_of_a_class_with_an_outside_method_read_without_a_crash() {
+	// card crash: methods(P) after `def x(_:P)` panicked in tasks.rs on an empty list
+	is!("class P{}; def x(_:P):=\"hi\"; print methods(P); print methods(P).count; 1", 1);
+}
+
+#[test]
 fn the_type_of_a_function_names_its_signature() {
 	is!("use math\ntype(gcd)", "function: (a: int, b: int) -> int");
 	is!("use math\n(function gcd) is function", true);
