@@ -102,10 +102,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - dollar-element (2026-10-14): in a page program `$xyz` is the element with id xyz (`$xyz.value`, `$xyz.focus()`);
   `$window`, `$document` are those globals; misspelled members are compile-time errors. A route's `$title` stays the
   submitted field's value.
-  dollar-value (2026-10-15, user; card dollar-value): `$who` used as a value is the element's value: an input,
-  textarea or select gives its text, a number input a number, a checkbox yes/no, any other element its text content.
-  `$who = "Ann"` writes it; members reach the element (`$who.focus()`, `$who.placeholder`); `$who.value` stays valid.
-  Principle: two variable scopes never mix: page elements live only in the `$` scope, program variables in their own,
+  separate-scopes (2026-10-15, user): two variable scopes never mix: page elements live only in the `$` scope, program variables in their own,
   so a plain `who` never names an element (unlike JavaScript, where a local silently hides the element of that id).
 - call-as-grouping (2026-10-15): `f x as T` is `f(x as T)` everywhere, like `f 2 + 1` = `f(2 + 1)`, with a warning
   naming `f(x as T)` and `(f x) as T`; dispatch on the result goes via `pdf p = render "x"` or `(render "x") as pdf`.
