@@ -44,7 +44,7 @@ const TERMINAL_CODE = /\x1b\[[0-9;?]*[A-Za-z]/g;
 const EXAMPLE_PARAMETERS = ["example", "sample"]; // ?example=fizzbuzz (or #fizzbuzz) picks a tour example or sample; the address shows the chosen one as #fizzbuzz
 const DEBUG_PARAMETER = "debug"; // ?debug runs warp.debug.wasm: Rust names and lines in traces and the debugger
 const DEBUG_COMPILER = "warp.debug.wasm";
-const WAV_TYPE = "audio/wav"; // render_sound's files (host-files.js wavOf)
+const WAV_TYPE = "audio/wav"; // save sound's files (host-files.js wavOf)
 const SLOW_START_PARAMETER = "slow_start"; // ?slow_start=<ms>: the worker reports ready that much later (a slow machine)
 // a starting worker silent this long is stuck (card firefox-hello-hang, three of six deploys): started again once, loudly
 const STALLED_START_MS = 60_000;
@@ -972,7 +972,7 @@ function showVersion() {
 		title: `committed ${date}`, hidden: false });
 }
 
-// a file the program rendered (render_sound's WAV): a download link beside the wasm's, one per path, the latest bytes
+// a file the program rendered (save sound's WAV): a download link beside the wasm's, one per path, the latest bytes
 const offeredFiles = new Map();
 function offerFile(path, bytes) {
 	if (offeredFiles.has(path)) URL.revokeObjectURL(offeredFiles.get(path).href);

@@ -268,7 +268,7 @@ function onBus(holder, samples, rate, channels) {
 addHostPart({
 	words: (holder, hooks, { program }) => {
 		holder.effected = (chain, floats, rate, channels) => effectsProcessed(hooks, chain, floats, rate, channels); // host-compiler.js
-		// samples (amplitude + SAMPLE_OFFSET, stereo interleaved) queued on the voice, for the page and render_sound; a
+		// samples (amplitude + SAMPLE_OFFSET, stereo interleaved) queued on the voice, for the page and save sound; a
 		// signal's blocks keep its first one's handle. Heard, once the voice is within PLAY_AHEAD_SECONDS of the speaker
 		// (but in an `at`, which places its sounds itself). The handle
 		holder.sounded = (samples, rate, channels, handle) => {
@@ -283,14 +283,14 @@ addHostPart({
 		return {
 			// sound_samples(samples, count, rate, channels) (src/host.rs, lib/sound.warp; stereo interleaved left, right):
 			// the page plays them with WebAudio (playground.js playSound); a run without a page (tests, node) has no
-			// speakers and stays silent, as natively render_sound writes them, played or not, into a WAV (STD_ADAPTERS.sound.render)
+			// speakers and stays silent, as natively save sound writes them, played or not, into a WAV (STD_ADAPTERS.sound.render)
 			sound_samples: (samples, count, rate, channels) => {
 				holder.sounded(intsOfList(program(), samples, Number(count)) ?? plainOfTree(readNode(program(), samples)), Number(rate), Number(channels));
 			},
 		};
 	},
 	adapters: {
-		// MIDI (card midi-out, lib/sound.warp): files are bytes as render_sound's; a message goes to the page, which holds
+		// MIDI (card midi-out, lib/sound.warp): files are bytes as save sound's; a message goes to the page, which holds
 		// the Web MIDI access (playground.js sendMidi), timed on the voice's clock. A Worker cannot wait for the page's device list or its input
 		midi: {
 			write_file: (path, notes) => { keepWritten(contentText(path), midiFileOf(wholeNumbers(notes))); return null; },
@@ -320,7 +320,7 @@ addHostPart({
 			// stop_sound(handle) the sound play gave that handle (card sound-pro), handle 0 all of them
 			stop: handle => { Number(handle) ? self.stopSound?.(Number(handle)) : self.stopSoundFiles?.(); return null; },
 			last: () => self.lastSoundHandle?.() ?? 0,
-			// fade_sound(handle, gain, seconds) (src/sound/mod.rs fade): the page ramps the playing sound, render_sound from where
+			// fade_sound(handle, gain, seconds) (src/sound/mod.rs fade): the page ramps the playing sound, save sound from where
 			// the speaker stood on this voice
 			fade(handle, gain, seconds) {
 				[handle, gain, seconds] = [handle, gain, seconds].map(Number);
