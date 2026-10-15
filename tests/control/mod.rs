@@ -17,6 +17,7 @@ mod test_braceless_call_in_branch;
 mod test_braceless_output_calls;
 mod test_branch_assigned_variables;
 mod test_broadcast;
+mod test_call_result_reflection; // card name-function
 mod test_catch_binding;
 mod test_cell_truth;
 mod test_channels;
