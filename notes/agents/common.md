@@ -11,6 +11,10 @@ rules in wiki/Footguns.md. A missing setting takes a sensible default; an error 
 guess (user 2026-10-10: show() without a canvas gets a default size, not an error). Decisions reach you from the Interviewer or Supervisor;
 once built, the code, tests and wiki are the truth. notes/decisions.md is the history: look something up there only
 when a message or comment cites a number (P71, D5) and you need its wording; never read it front to back.
+No special cases, under any circumstances (user, 2026-10-15): a fix is the general rule, holding for the siblings of
+the example (other words of its kind, other statement positions, values passed in or returned) and for where the
+language is heading. If an existing test seems to force a special case, question the test through warp-interviewer
+instead of bending the code.
 
 - Only the Codex cron runs are announced to the user's Codex thread "Warp Boss" (start and end, codex_worker.sh).
   Claude spawns never notify it (user, 2026-10-12: a Claude spawn notice landing in Codex is "not at all what we want").
