@@ -1395,6 +1395,8 @@ PASSED:
   ✓ functions::test_lambda_spellings::other_lambda_keywords
   ✓ functions::test_lambda_spellings::pipe_parameters
   ✓ functions::test_lambda_spellings::ruby_block_parameters
+  ✓ functions::test_lambda_tuple_arguments::a_juxtaposed_lambda_still_applies
+  ✓ functions::test_lambda_tuple_arguments::a_lambda_argument_of_an_immediately_called_lambda
   ✓ functions::test_lambdas::test_a_lambda_that_cannot_be_inlined_is_a_closure_value
   ✓ functions::test_lambdas::test_assigned_lambda_is_a_function
   ✓ functions::test_lambdas::test_block_called_with_bindings
@@ -4803,6 +4805,7 @@ PASSED:
   ✓ web::test_deploy::a_program_without_routes_is_no_worker
   ✓ web::test_deploy::a_single_route_and_a_served_route_deploy
   ✓ web::test_deploy::deploy_names_a_browser_only_feature
+  ✓ web::test_deploy::deploy_refuses_server_parts_of_a_browser_program
   ✓ web::test_deploy::page_routes_deploy_as_rendered_pages
   ✓ web::test_deploy::the_playground_bundles_a_program_for_warp_hosting
   ✓ web::test_dev_marks::a_failure_without_an_excerpt_is_its_text
@@ -5521,4 +5524,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5516 passed, 0 failed, 5516 total tested
+13 ignored, 5519 passed, 0 failed, 5519 total tested
