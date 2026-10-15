@@ -25,7 +25,7 @@ self.addEventListener("unhandledrejection", event => {
 
 // what a task does for the page goes through the program's Worker (host-tasks.js relayed)
 const relay = (method, ...values) => program.postMessage({ relay: [method, ...values] });
-for (const method of ["playSoundFile", "stopSound", "stopSoundFiles", "fadeSound"]) self[method] = (...values) => relay(method, ...values);
+for (const method of RELAYED) self[method] = (...values) => relay(method, ...values);
 // the files a task writes go back with its result (host-tasks.js finishedTask), bytes as their numbers in its JSON
 let taskFiles = new Map();
 self.taskWrote = (path, content) => taskFiles.set(path, typeof content === "string" ? content : { bytes: Array.from(content) });
