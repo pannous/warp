@@ -61,6 +61,12 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   Later (card warp-format-strict, Soon): a second, opinionated mode rewriting code to best practices, with a preview
   (show the diff, apply nothing) before anything is applied; every rule goes to the user first. It is a verb of its
   own, `warp beautify` (synonyms canonical, idiomatic); hash-comments is its first rule.
+  beautify-preview (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable):
+  `warp beautify app.warp` prints the diff; in a terminal it asks "apply? y/n", piped or scripted it applies
+  nothing. `warp beautify yes app.warp` applies without asking (scripts), `warp beautify check app.warp` only
+  previews. Never a silent rewrite: unlike format, beautify changes words. Second rule (worker default, fits the
+  user's "synonyms canonical"): alias words the compiler already notes are rewritten to the warp word via their
+  I-meant fixes (`__add__` → plus).
 - cleanup-means-fewer-lines (2026-10-13): the cleanup's metric is lines removed: simpler, more general, more elegant
   code. Splitting files or functions alone is not a goal ("not that impressed by splitting"). Each cleanup merge
   request states its net src/ line delta; baseline 161132 lines of src/*.rs at eaa40f98b.

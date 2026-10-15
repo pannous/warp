@@ -69,6 +69,10 @@ let canvasFailure;
 // left the program waiting and the console saying "uncaught exception: undefined"; it is said as this instead
 const SILENT_FAILURE = "the browser's WebGPU failed without saying why";
 const NO_CANVAS_CONTEXT = "this browser gives a Worker's canvas no WebGPU context";
+// the task Worker's side: Firefox's WebGPU at times never answers for its adapter or device (card logs-uncaught: the
+// tour's shader example then waited until the run's time was up, and the Worker's replacement logged a bare "uncaught
+// exception: undefined"): a failure that says which, well within the run's time
+const GPU_DEVICE_WAIT_MS = 5000;
 const GPU_JOB_WAIT_MS = 30000; // the program's side: a task Worker that gives no answer in this time is said to
 const LOSS_WAIT_MS = 100; // the program's side: why painting into the page's canvas failed, after which pixels are painted
 const paintCanvases = new Map(); // the task Worker's: canvas id → {context, format}
@@ -279,12 +283,21 @@ function compiledOnce(cache, key, make) {
 const theGpuDevice = async () => gpuDevice ??= await gpuDeviceOrFailure();
 
 async function gpuDeviceOrFailure() {
-	const adapter = await self.navigator.gpu?.requestAdapter();
+	const adapter = await answeredWithin(self.navigator.gpu?.requestAdapter(), "adapter");
 	if (!adapter) throw new Error("this browser offers no WebGPU adapter");
-	const device = await adapter.requestDevice();
+	const device = await answeredWithin(adapter.requestDevice(), "device");
 	// a lost device (the GPU process restarted) is asked for anew by the next job, with all made on it
 	device.lost.then(() => forgetDevice(device));
 	return device;
+}
+
+// the browser's answer for `what`, or a failure once it has kept silent for GPU_DEVICE_WAIT_MS
+function answeredWithin(promise, what) {
+	let timer;
+	const silence = new Promise((_, fail) => {
+		timer = setTimeout(() => fail(new Error(`the browser's WebGPU gave no ${what} in ${GPU_DEVICE_WAIT_MS / 1000} s`)), GPU_DEVICE_WAIT_MS);
+	});
+	return Promise.race([promise, silence]).finally(() => clearTimeout(timer));
 }
 
 function forgetDevice(device) {
