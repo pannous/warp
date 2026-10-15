@@ -19,7 +19,10 @@ fn an_int_widens_to_a_float_variant() {
 
 #[test]
 fn an_argument_of_unknown_type_is_an_error() {
-	fails_with(&format!("{COMBINE}def g(p){{ combine(p, p) }}; g(2)"), "fits no single variant");
+	// card text-list: an argument of a type known only at run time dispatches there; a value fitting none is refused
+	is!(&format!("{COMBINE}def g(p){{ combine(p, p) }}; g(2)"), 4);
+	is!(&format!("{COMBINE}def g(p){{ combine(p, p) }}; g(1.5)"), 3);
+	fails_with(&format!("{COMBINE}def g(p){{ combine(p, p) }}; g(\"a\")"), "fits no variant");
 }
 
 const COMBINE_WITH: &str = "combine number with number = number#1 + number#2; combine int with int = $0 * $1; ";
@@ -66,4 +69,24 @@ fn a_list_parameter_overloads_a_text_parameter() {
 	is!(&format!("{variants}f(\"abc\", 1)"), 4);
 	is!(&format!("{variants}f([1, 2], 10)"), 20);
 	is!(&format!("{variants}xs = [1, 2, 3]; f(xs, 2) + f(\"ab\", 0)"), 8);
+}
+
+// card text-list (reviewer): every parameter type takes part in an overload, the variant is picked at compile time when
+// the argument's kind is known there and at run time otherwise; only a value fitting no variant is refused
+#[test]
+fn an_overload_is_picked_at_run_time_when_only_the_value_tells() {
+	let variants = "f(c: text, x) := c.length + x; f(b: list, x) := b.count * x; ";
+	is!(&format!("{variants}g() := [1 2]; f(g(), 1)"), 2);
+	is!(&format!("{variants}f(split(\"a b\"), 1)"), 2);
+	is!(&format!("{variants}f([], 1)"), 0);
+	is!(&format!("{variants}f(\"a\" + \"b\", 1)"), 3);
+	is!(&format!("{variants}ys = [[1, 2], \"abc\"]; f(ys#1, 2) + f(ys#2, 0)"), 7);
+	is!(&format!("{variants}h(xs) := f(xs, 1); h([1]) + h(\"ab\")"), 4);
+	fails_with(&format!("{variants}f(3, 1)"), "fits no variant");
+	fails_with(&format!("{variants}h(xs) := f(xs, 1); h(3)"), "fits no variant");
+	is!("f(c: text) := 1; f(m: map) := 2; x = {a:1}; f(x) * 10 + f(\"ab\")", 21);
+	is!("f(c: text) := 1; f(b: [int]) := 2; f([1 2])", 2);
+	is!("f(c: text) := 1; f(b: ints) := 2; xs = [1, 2]; f(xs) * 10 + f(\"a\")", 21);
+	// a class parameter dispatches through traits, at run time too
+	is!("class A{x:int}; area(a:A) := 1; area(b: list) := 2; h(v) := area(v); h([1]) * 10 + h(A(1))", 21);
 }
