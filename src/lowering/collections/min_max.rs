@@ -57,19 +57,46 @@ impl Lowering<'_> {
 		}
 	}
 
-	/// `max 3, 4` is `max 3 4`: the arguments after the comma join the braceless call before it (card braceless-calls)
+	/// `max 3, 4` is `max 3 4`: the arguments after the comma join the braceless call before them, wherever it stands
+	/// (`print max 3, 4`, `x = max 3, 4`; card braceless-calls)
 	fn comma_arguments(&self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
-		let (Bracket::None, Separator::Colon, [first, rest @ ..]) = (bracket, separator, items) else {
-			return None;
-		};
-		let Node::List(call, Bracket::None, Separator::Space) = first.drop_meta() else {
-			return None;
-		};
-		let is_builtin = |head: &Node| self.builtins.iter().any(|(builtin, _)| head.is_symbol(builtin));
-		if call.len() < 2 || !is_builtin(&call[0]) || rest.is_empty() {
+		// a comma list, or the arguments of a call (`print(1, 2)`, also written `print 1, 2`)
+		let is_call_arguments = *bracket == Bracket::Round && *separator == Separator::None;
+		// in a list literal the comma separates its elements: `[max 3, 4]` stays two
+		if (*separator != Separator::Colon || *bracket == Bracket::Square) && !is_call_arguments {
 			return None;
 		}
-		Some(Node::List([call.clone(), rest.to_vec()].concat(), Bracket::None, Separator::Space))
+		let call_at =
+			items[..items.len().saturating_sub(1)].iter().position(|item| self.braceless_call(item).is_some())?;
+		let rest = items[call_at + 1..].to_vec();
+		let joined = match items[call_at].drop_meta() {
+			Node::Key(target, op, value) => key(*target.clone(), *op, self.joined(value, rest)),
+			call => self.joined(call, rest),
+		};
+		let mut items = items[..call_at].to_vec();
+		if items.is_empty() && *bracket == Bracket::None {
+			return Some(joined);
+		}
+		items.push(joined);
+		Some(Node::List(items, bracket.clone(), separator.clone()))
+	}
+
+	/// `max 3`, also as the value of `x = max 3`
+	fn braceless_call<'n>(&self, node: &'n Node) -> Option<&'n [Node]> {
+		match node.drop_meta() {
+			Node::Key(_, Op::Assign | Op::Define, value) => self.braceless_call(value),
+			Node::List(call, Bracket::None, Separator::Space)
+				if call.len() > 1 && self.builtins.iter().any(|(builtin, _)| call[0].is_symbol(builtin)) =>
+			{
+				Some(call)
+			}
+			_ => None,
+		}
+	}
+
+	fn joined(&self, call: &Node, rest: Vec<Node>) -> Node {
+		let call = self.braceless_call(call).expect("a braceless call");
+		Node::List([call.to_vec(), rest].concat(), Bracket::None, Separator::Space)
 	}
 
 	fn extremum(&mut self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
