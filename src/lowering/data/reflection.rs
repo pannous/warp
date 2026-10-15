@@ -342,7 +342,9 @@ pub fn meta_entries(source: &Node, lowered: &Node, code: &str) -> Vec<(&'static 
 	let objects = Objects { layouts: crate::class_methods::class_layouts(source), ..Objects::default() };
 	let mut classes: Vec<&String> = objects.layouts.keys().collect();
 	classes.sort();
-	let is_method = |name: &String| objects.layouts.values().any(|layout| layout.methods.contains(name));
+	// a class-body method travels in its class's definition; one defined outside (`width(p:P)`) stays a function
+	let declared = crate::class_methods::declared_layouts(source);
+	let is_method = |name: &String| declared.values().any(|layout| layout.methods.contains(name));
 	// the program's own functions, not the library's its lowering brought in (html_render, prelude·replace)
 	let own = user_functions(source);
 	let functions: Vec<(String, Node)> = user_functions(lowered)

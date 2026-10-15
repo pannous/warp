@@ -84,7 +84,8 @@ const SYNONYMS: [(&str, &[&str]); 33] = [
 	(MAP_GET_OR, &["get"]),
 	// P35 default: `xs.index_of(x)` is the 1-based position (0 when absent)
 	(COLLECTION_POSITION, &["index_of"]),
-	("chars", &[]),
+	// card of-in-chain: `t.characters`, `characters in t`
+	("chars", &["characters"]),
 	("upper", &["uppercase"]),
 	("lower", &["lowercase"]),
 	// the text builtin trim (text_builtins.rs), Python's strip
@@ -211,7 +212,7 @@ const DICT_WORD: &str = "dict";
 /// lib/prelude.warp's fromkeys(ks, value), also called on the class as Python's `dict.fromkeys(ks, value)`
 const FROMKEYS: &str = "fromkeys";
 /// Conversions a method may name, `x.string` being `string(x)`
-const CONVERSION_METHODS: [&str; 4] = ["string", "str", "int", "float"];
+pub(crate) const CONVERSION_METHODS: [&str; 4] = ["string", "str", "int", "float"];
 const LIST_CONSTRUCTORS: [&str; 4] = ["listOf", "mutableListOf", "arrayOf", "arrayListOf"];
 /// Words that mean another word with that many arguments (receiver included): `round(x, 3)`, `x.round(3)` is x rounded
 /// to 3 digits after the point (`round(x)` stays the builtin); `xs.first(3)`, `first 3 of xs` the first 3 items,
@@ -588,7 +589,11 @@ impl Lowering {
 				if let Some(chained) = self.chained_field_assignment(&left, &right) {
 					return chained;
 				}
-				let left = self.expand(*left);
+				let written = *left;
+				let left = self.expand(written.clone());
+				if let Some(set) = self.functional_setter(&written, &left, &right) {
+					return set;
+				}
 				let right = self.in_definition(&left, *right);
 				self.field_assignment(&left, &right).unwrap_or(key(left, Op::Assign, right))
 			}

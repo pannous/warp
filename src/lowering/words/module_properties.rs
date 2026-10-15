@@ -63,7 +63,7 @@ pub fn lower(program: Node) -> Node {
 
 /// The names the program gives: variables, functions, their parameters (`def f(width) {…}` too), loop variables,
 /// fields; a property written (`canvas.width = 3`) binds no name
-fn bound_names(program: &Node) -> HashSet<String> {
+pub(crate) fn bound_names(program: &Node) -> HashSet<String> {
 	let mut bound = crate::soft_keywords::names_given(program);
 	program.visit(&mut |node| {
 		if let Some(head) = function_head(node) {

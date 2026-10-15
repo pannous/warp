@@ -17,3 +17,11 @@ fn a_setter_runs_when_the_property_is_assigned() {
 	is!(&format!("{WARP_STYLE}p = P(2000); p.age = 30; p.birthday"), 1996);
 	is!(&format!("{JS_STYLE}p = P(2000); p.age = 30; p.age"), 30);
 }
+
+/// `p.f = v` of a function f(p, v) read as `p.f`: `p = f(p, v)`, not a definition of f(p) (decision shared-buses)
+#[test]
+fn a_function_member_assigned_stores_its_call_back() {
+	is!("class P {x: int}; f(p: P, v) := P(v * 2); p = P(1); p.f = 5; p.x", 10);
+	is!("class B {x: int}; r(b: B, m) := B(m); r(xs: list, m) := xs; b = B(1); b.r = 5; b.x", 5);
+	is!("class P {x: int}; f(p: P, v) := P(v); p = P(1); p.f = 5; f(p, 3).x", 3);
+}

@@ -474,6 +474,12 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - Ranges (2026-10-09): `r: 1..n` is the range itself, same as `r = 1..n`. `upto` excludes the end with a hint.
 
 ## Functions and calls
+- random-forms (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable; card
+  random-should): bare `random` is its call where a value is used (a float in [0,1)). `random T` for a type is a
+  random value of T, one general rule instead of special cases: `random bool` a coin flip, `random int` the full
+  integer range (ids, hashes), `random codepoint`, `random float` = `random`. `random(n)` stays 0…n-1;
+  `random(a, b)` with whole numbers is a whole number from a to b inclusive, the die roll `random(1, 6)`; with a
+  float argument, a float in [a, b).
 - function-references (2026-10-15, user): a bare name of a function that needs arguments, compared with a type
   (`floor is function`) or in `type(floor)`, means the function itself (card bare-fn-type). `.floor` in argument
   position is a lambda on it, like Swift's .member: `xs.map(.floor)`, `people.sort(.age)` (card dot-lambda).
