@@ -84,6 +84,16 @@ PYTHON
 
 # the library assets of the pinned packages (packages.warp `library`), as the native loader downloads them
 # (src/modules/package_tools.rs library_directory); a tag never changes, so a file already there stays
+# a release tagged v<version> or <version>, as package_tools.rs download_release_asset tries them
+fetch_release_asset() {
+	local repository=$1 version=$2 file=$3 target=$4 tag
+	for tag in "v$version" "$version"; do
+		curl -fsSL -o "$target" "$repository/releases/download/$tag/$file" && return
+	done
+	echo "no release asset $file of $repository $version (tags v$version, $version)" >&2
+	return 1
+}
+
 fetch_package_libraries() {
 	local entry name repository version library file
 	grep -oE '^[a-z_]+: \{repository: "[^"]+", version: [0-9.]+, library: "[^"]+"' packages.warp | while read -r entry; do
@@ -93,7 +103,7 @@ fetch_package_libraries() {
 		library=$(grep -oE 'library: "[^"]+"' <<< "$entry" | cut -d'"' -f2)
 		mkdir -p "$page/packages/$name"
 		for file in "$library.wasm" "$library.h"; do
-			[ -s "$page/packages/$name/$file" ] || curl -fsSL -o "$page/packages/$name/$file" "$repository/releases/download/v$version/$file"
+			[ -s "$page/packages/$name/$file" ] || fetch_release_asset "$repository" "$version" "$file" "$page/packages/$name/$file"
 		done
 		echo "fetched $page/packages/$name/$library.wasm and .h ($name $version)"
 	done
@@ -111,7 +121,7 @@ print("// made by build.sh: the files the server has (host-files.js isUnserved)\
 # the repository's files, as the dev server and test_in_browser.py serve them from the repository root
 write_repository_served_files() {
 	# plus the built components and the fetched libraries, which git ignores (components/names.txt is what the compiler asks for)
-	{ git ls-files --cached --others --exclude-standard; find web/playground/components web/playground/packages -type f 2>/dev/null; } | write_served_files "$page/served-files.js"
+	{ git ls-files --cached --others --exclude-standard; find web/playground/components web/playground/packages -type f 2>/dev/null || true; } | write_served_files "$page/served-files.js"
 }
 
 case "${1:-all}" in
