@@ -248,6 +248,8 @@ const MODULE_PASSES: &[Pass] = &[
 
 /// Stored values, system values, signals and events, pages
 const SIGNAL_PASSES: &[Pass] = &[
+	// `divides(3, 12)`: the call form of a declared word operator, its own or a used module's
+	crate::lowering::word_operators::lower_call_forms,
 	crate::numbers::units::lower_sleep_durations,
 	// `now > 17h`, `now >= October`, `now ≈ 2026-10-14`: that part of now (partial_comparisons.rs), before units fold `time > 17h`
 	crate::time::partial_comparisons::lower,
