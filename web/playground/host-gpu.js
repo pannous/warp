@@ -451,6 +451,10 @@ function linearCells(memory, block) {
 
 addHostPart({
 	words: (holder, hooks, { program }) => {
+		holder.glslWgsl = glsl => {
+			if (typeof glslWgsl !== "function") throw new Error("twigl: GLSL is translated in the playground and by the warp CLI, not on a published site yet");
+			return glslWgsl(hooks, glsl); // host-compiler.js
+		};
 		const plain = node => plainOfTree(readNode(program(), node));
 		const list = (values, item) => buildValue(program(), { kind: SQUARE_LIST, items: values.map(item) });
 		// the kernel over the f32 copy of a block's cells, from `first` on read back; `kept` as gpuComputedFloats takes it
@@ -578,5 +582,13 @@ addHostPart({
 			draw_shape: () => { throw new Error(NO_GPU_DRAWING); },
 			draw_show: () => { throw new Error(NO_GPU_DRAWING); },
 		};
+	},
+	// lib/draw.warp twigl: GLSL functions as WGSL ones, by warp.wasm (host-compiler.js glslWgsl)
+	adapters: {
+		draw: {
+			glsl_wgsl(glsl) {
+				return this.holder.glslWgsl(glsl);
+			},
+		},
 	},
 });

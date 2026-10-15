@@ -1,4 +1,5 @@
 //! Pictures: paint and its window, the GPU and its canvas, text rasterized, shader holes
+pub mod glsl;
 #[cfg(feature = "native")]
 pub mod gpu;
 #[cfg(feature = "native")]

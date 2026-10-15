@@ -75,6 +75,9 @@ ureq = { version = "3.1.4", optional = true }
 tungstenite = { version = "0.30", optional = true, features = ["rustls-tls-webpki-roots"] }
 # gpu_compute natively (src/graphics/gpu.rs): WGSL compute shaders on Metal, Vulkan or DX12, as WebGPU runs them in the browser
 wgpu = { version = "30", optional = true, default-features = false, features = ["std", "parking_lot", "wgsl", "metal", "vulkan", "dx12"] }
+# twigl(code) in lib/draw.warp natively and in warp.wasm (src/graphics/glsl.rs): GLSL functions as WGSL ones (wgsl-in: naga
+# 30's GLSL front end needs its interpolation defaults)
+naga = { version = "30", default-features = false, features = ["glsl-in", "wgsl-in", "wgsl-out"] }
 pollster = { version = "0.4", optional = true } # wgpu answers with futures: block on them
 ab_glyph = { version = "0.2", optional = true } # label of use draw natively: text set in a system font (src/graphics/text_raster.rs)
 # paint() in a terminal shows its frames in a window (src/graphics/paint_window.rs), drawn through a wgpu surface (Metal on macOS)

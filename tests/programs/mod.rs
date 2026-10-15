@@ -65,5 +65,6 @@ mod test_sound_use; // card bizarre-global
 pub(crate) mod test_sound_voices; // card sound-pro; its rendered helper serves scope too
 mod test_sound_wavs; // card sound-wavs
 mod test_task_sound; // card task-sound
+mod test_twigl; // card create-little
 mod test_warp_command; // card midi-out // card values-number
 mod test_window_size; // card make-width

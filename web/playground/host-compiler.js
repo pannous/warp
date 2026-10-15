@@ -88,6 +88,15 @@ function spectrumLevels(hooks, window, rate, bands, low, high) {
 	return Array.from(new Float64Array(compiler.memory.buffer.slice(at, at + length)));
 }
 
+// GLSL functions as WGSL ones (lib/draw.warp twigl): naga in warp.wasm, as natively (src/graphics/glsl.rs, src/web/mod.rs
+// web_glsl_wgsl)
+function glslWgsl(hooks, glsl) {
+	const { compiler, length } = blockCompilerCall(hooks, "web_glsl_wgsl", [utf8.encode(glsl)]);
+	const { wgsl, error } = JSON.parse(readText(compiler, compiler.web_report(), length));
+	if (error !== undefined) throw new Error(error);
+	return wgsl;
+}
+
 // the `warp_host` imports of a compiler instance; `memory()` is its memory (known only after instantiation).
 // `awaited`: the instance's entry points are called through WebAssembly.promising (host.js JSPI, awaitedEntry), so a run
 // may wait for its program's promises, the compiler suspended meanwhile
