@@ -367,7 +367,13 @@ RUN_EXAMPLE = """await playground.chooseExample(%s);
 
 
 def run_sample(name):
-	browser("eval", f"(async () => {{ {RUN_EXAMPLE % json.dumps(name)} }})()")
+	"""what is wrong with the sample's run: its failed status (`cannot open mozart.mp3`, card open-mozart), as the console
+	shows no error for it"""
+	answer = browser("eval", f"""(async () => {{ {RUN_EXAMPLE % json.dumps(name)}
+		const status = document.getElementById("status");
+		return JSON.stringify(status.classList.contains("failed") ? status.textContent : ""); }})()""")
+	failed = json.loads(json.loads(answer)) if answer.startswith('"') else f"(page gave no answer: {answer or browser_complaint})"
+	return [f"status: {failed}"] if failed else []
 
 
 def reported(message):
@@ -895,8 +901,7 @@ def check_examples(names, page_url=None, site=None):
 	chosen = [(name, sample) for name, sample in chosen if not names or name in names]
 	for name, sample in chosen:
 		if sample:
-			run_sample(name)
-			verdict(f"samples/{name}", [])
+			verdict(f"samples/{name}", run_sample(name))
 		else:
 			expected, shown = examples[name], show_example(name)
 			if NO_GPU in str(shown.get("value")):
