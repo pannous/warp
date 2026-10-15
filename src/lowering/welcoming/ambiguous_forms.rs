@@ -159,10 +159,13 @@ impl SuffixWords {
 		self.unnamed(node).is_some_and(crate::library_words::is_library_word)
 	}
 
-	/// A library word of one value the program does not name itself, also libm's (`floor`, `sin`): a function value
+	/// A library word of one value the program does not name itself, also libm's (`floor`, `sin`) and the host's
+	/// (`print`): a function value
 	fn is_function_word(&self, node: &Node) -> bool {
-		let is_libm_word = |name: &str| crate::lowering::library_signatures::typed_first_arity(name) == Some(1);
-		self.is_library_word(node) || self.unnamed(node).is_some_and(is_libm_word)
+		let takes_one_value = |name: &str| {
+			crate::lowering::library_signatures::library_signature(name).is_some_and(|(params, _)| params.len() == 1)
+		};
+		self.is_library_word(node) || self.unnamed(node).is_some_and(takes_one_value)
 	}
 
 	/// The word `node` is, unless the program names it as a variable or function of its own
