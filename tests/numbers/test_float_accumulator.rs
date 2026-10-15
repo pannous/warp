@@ -20,6 +20,6 @@ fn a_captured_node_local_is_set_before_its_first_value() {
 	assert_eq!(
 		warp::wasm_emitter::eval("g(xs) := xs#1; v(xs) := { m = g(xs); f = x => [x, m]; f(1) }; v([\"b\", 4])")
 			.serialize(),
-		"[1 \"b\"]"
+		"[1 'b']"
 	);
 }
