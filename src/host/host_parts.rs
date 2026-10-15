@@ -18,6 +18,11 @@ pub const WASI_LIBRARY: &str = "wasi_snapshot_preview1";
 pub const TASK_WORD_PREFIXES: [&str; 3] = ["task_", "channel_", "shared_"];
 /// The words of WebGPU, which answers asynchronously: their jobs run on a task Worker (host-gpu.js)
 pub const GPU_WORDS: [&str; 5] = [GPU_COMPUTE, GPU_COMPUTE_LINEAR, GPU_MAP_LINEAR, GPU_REDUCE_LINEAR, GPU_RENDER];
+/// A deployed site runs the program in the visitor's browser, where server routes and functions have no server (card
+/// program-server)
+const SERVER_AND_BROWSER: &str = "this program uses the browser (it deploys as a site) and has server routes or \
+	server functions, which a deployed site cannot answer yet (card program-server): deploy the server part as a \
+	program of its own, or run both with `warp serve`";
 
 /// The text of web/playground scripts, joined; empty without the native feature, where only the names are needed
 #[cfg(feature = "native")]
@@ -73,7 +78,7 @@ pub const HOST_PARTS: [HostPart; 11] = [
 		needs: &[],
 	},
 	HostPart {
-		script: ("host-foreign.js", script_text!("exact.js", "host-foreign.js")),
+		script: ("host-foreign.js", script_text!("exact.js", "js-members.js", "host-foreign.js")),
 		gives: |module, name| {
 			(module == HOST_LIBRARY && name == FOREIGN_CALL)
 				|| ![HOST_LIBRARY, WASI_LIBRARY, STD_MODULES_SECTION].contains(&module)
@@ -221,6 +226,9 @@ pub fn deployable(code: &str) -> Result<Deployable, String> {
 		crate::pipeline::for_hosting(|| crate::pipeline::for_any_host(|| crate::pipeline::compile(code)))
 	})?;
 	if uses_the_browser(&module)? {
+		if crate::serve::has_server_parts(code) {
+			return Err(SERVER_AND_BROWSER.into());
+		}
 		let module = compiled(&|| crate::pipeline::for_a_page(|| crate::pipeline::compile(code)))?;
 		let layout = page_layout(&module, false)?;
 		return Ok(Deployable::Site { module, layout });

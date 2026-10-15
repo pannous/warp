@@ -33,10 +33,12 @@ impl Node {
 		self.serialize_recurse(false)
 	}
 
-	/// A list item: a character is quoted like a text, `["a" "bb"]`, and reads back as the character it is (P126)
-	fn item_text(&self) -> String {
+	/// A list item: one character in single quotes, a one-character text too, as the runtime prints it
+	/// (chars-codepoints: `['a' "bc"]`); in code without brackets in double quotes, as the hint `fail "?"` writes it
+	fn item_text(&self, bracket: &Bracket) -> String {
 		match self.drop_meta() {
-			Char(c) => quoted(&c.to_string()),
+			Char(c) if *bracket == Bracket::None => quoted(&c.to_string()),
+			Text(t) if t.chars().count() == 1 && *bracket != Bracket::None => quoted_by(t, '\''),
 			_ => self.serialize(),
 		}
 	}
@@ -104,9 +106,9 @@ impl Node {
 				if nodes.is_empty() {
 					format!("{}{}", bracket, close)
 				} else if nodes.len() == 1 {
-					format!("{}{}{}", bracket, nodes[0].item_text(), close)
+					format!("{}{}{}", bracket, nodes[0].item_text(bracket), close)
 				} else {
-					let items: Vec<String> = nodes.iter().map(Node::item_text).collect();
+					let items: Vec<String> = nodes.iter().map(|node| node.item_text(bracket)).collect();
 					format!("{}{}{}", bracket, items.join(&separator.joint()), close)
 				}
 			}

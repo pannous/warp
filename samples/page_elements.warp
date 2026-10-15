@@ -1,0 +1,9 @@
+#!/usr/bin/env warp
+// The page's elements by id (card browser-interaction): `$who` is the element of id who (document.getElementById), and
+// `.value` reads what was typed into it; `$document` and `$window` are the page's own. Run it in the playground.
+greeting = "Type a name"
+div{
+	input{ id: "who" placeholder: "name" aria-label: "name" }
+	button{ on click { greeting = "Hello " + $who.value + ", from " + $document.title } "Greet" }
+	p{ greeting }
+}

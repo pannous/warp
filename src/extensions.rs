@@ -1,4 +1,3 @@
-// These are shared user extensions for common use in the Rust language
 // INCLUDE: ln ~/dev/script/rust/extensions.rs
 // mod extensions; // also exports the macros declared #[macro_export]
 // use crate::extensions::*; // crate for F12

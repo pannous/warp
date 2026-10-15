@@ -1,9 +1,10 @@
 //! get_text_ptr / get_text_len: a host without GC field access (the browser page web/uniscript) reads result texts through them
 
-use warp::host::{create_host_linker, HostState};
+use warp::host::HostState;
+use warp::run::wasm_reader::{link_imports, Imports};
 use warp::util::{fueled_store, gc_engine};
 use warp::wasm_emitter::compile;
-use wasmtime::{Instance, Memory, Module, Rooted, Store, StructRef, Val};
+use wasmtime::{Instance, Linker, Memory, Module, Rooted, Store, StructRef, Val};
 
 const KIND_MASK: i64 = 0xff;
 const KIND_TEXT: i64 = 3;
@@ -23,7 +24,10 @@ impl Compiled {
 		let engine = gc_engine();
 		let module = Module::new(&engine, &module_bytes).unwrap();
 		let mut store = fueled_store(&engine, HostState::new());
-		let instance = create_host_linker(&engine).unwrap().instantiate(&mut store, &module).unwrap();
+		// the host words plus the modules it imports by path: `use uniscript` imports uniscript_c.wasm, as run_main links it
+		let mut linker = Linker::new(&engine);
+		link_imports(&mut linker, &engine, &module, Imports { host: true, ..Imports::default() }).unwrap();
+		let instance = linker.instantiate(&mut store, &module).unwrap();
 		Compiled { store, instance }
 	}
 

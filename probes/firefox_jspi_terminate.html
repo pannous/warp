@@ -1,0 +1,39 @@
+<!doctype html>
+<title>Firefox: terminating a Worker inside WebAssembly.promising</title>
+<!-- Minimal repro for a Firefox bug (card firefox-logs): open in Firefox, watch the console. Each terminate of a Worker
+busy inside a WebAssembly.promising call logs a bare "uncaught exception: undefined" on this page, which no
+error/unhandledrejection listener sees. The same plain wasm loop without promising logs nothing (the first round), and the same loop in plain JavaScript or with a MessagePort entangled to a second Worker logs nothing either; is logged; Chrome and Safari log
+nothing either way. Found by six repeats per variant in the Firefox tour (CI run 38670033608). -->
+<pre id="log"></pre>
+<script>
+const REPEATS = 6;
+const BUSY_MS = 200;
+// (module (func (export "spin") (loop br 0)))
+const SPIN_WASM = [0, 97, 115, 109, 1, 0, 0, 0, 1, 4, 1, 96, 0, 0, 3, 2, 1, 0, 7, 8, 1, 4, 115, 112, 105, 110, 0, 0, 10, 9, 1, 7, 0, 3, 64, 12, 0, 11, 11];
+const WORKER_SOURCE = `
+onmessage = async ({ data: promising }) => {
+	const { instance } = await WebAssembly.instantiate(new Uint8Array(${JSON.stringify(SPIN_WASM)}));
+	const spin = promising ? WebAssembly.promising(instance.exports.spin) : instance.exports.spin;
+	postMessage("busy");
+	spin();
+};`;
+const log = text => document.getElementById("log").textContent += text + "\n";
+addEventListener("error", event => log(`error event: ${event.message}`));
+addEventListener("unhandledrejection", event => log(`unhandledrejection: ${event.reason}`));
+const pause = milliseconds => new Promise(done => setTimeout(done, milliseconds));
+const url = URL.createObjectURL(new Blob([WORKER_SOURCE], { type: "text/javascript" }));
+
+async function terminateBusy(promising) {
+	for (let time = 0; time < REPEATS; time++) {
+		const busy = new Worker(url);
+		const started = new Promise(done => busy.onmessage = done);
+		busy.postMessage(promising);
+		await started;
+		await pause(BUSY_MS);
+		busy.terminate();
+		await pause(BUSY_MS);
+	}
+	log(`terminated ${REPEATS} busy Workers, promising: ${promising} (see the console)`);
+}
+terminateBusy(false).then(() => terminateBusy(true));
+</script>

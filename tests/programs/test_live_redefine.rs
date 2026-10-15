@@ -27,3 +27,10 @@ fn a_loop_defined_once_is_unchanged() {
 	assert_eq!(seconds, "1");
 	assert!(!silent(&samples));
 }
+
+// card playground-live: a named loop's block starts with live_cycle_started("drums") for the playground's handover;
+// natively it does nothing
+#[test]
+fn a_named_loop_announcing_its_cycles_still_runs() {
+	crate::is!("use sound\nlive_loop drums 2 { play(C4, 0.1s) }\nawait drums\n7", 7);
+}

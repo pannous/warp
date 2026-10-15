@@ -290,16 +290,24 @@ fn opened_input(name: &str) -> Result<Input, String> {
 	Ok(Input { _connection: connection, messages: Arc::new(Mutex::new(messages)) })
 }
 
-/// The device named `wanted` (exactly, else the first whose name contains it), "" the first one
-fn chosen_port(wanted: &str, names: &[String], direction: &str) -> Result<String, String> {
-	let found = match wanted.is_empty() {
-		true => names.first(),
-		false => names.iter().find(|name| *name == wanted).or_else(|| names.iter().find(|name| name.contains(wanted))),
-	};
-	found.cloned().ok_or_else(|| match names.is_empty() {
-		true => format!("no MIDI {direction} devices found"),
-		false => format!("no MIDI {direction} named {wanted}; there are {}", names.join(", ")),
-	})
+/// The device named `wanted` (exactly, else the one whose name contains it), "" the first one; a part several
+/// devices share is an error naming them (card port-name)
+pub fn chosen_port(wanted: &str, names: &[String], direction: &str) -> Result<String, String> {
+	if names.is_empty() {
+		return Err(format!("no MIDI {direction} devices found"));
+	}
+	if wanted.is_empty() || names.iter().any(|name| name == wanted) {
+		return Ok(if wanted.is_empty() { names[0].clone() } else { wanted.to_string() });
+	}
+	let matching: Vec<&String> = names.iter().filter(|name| name.contains(wanted)).collect();
+	match matching.as_slice() {
+		[only] => Ok(only.to_string()),
+		[] => Err(format!("no MIDI {direction} named {wanted}; there are {}", names.join(", "))),
+		several => Err(format!(
+			"several MIDI {direction}s match {wanted}: {}; name one of them",
+			several.iter().map(|name| name.as_str()).collect::<Vec<_>>().join(", ")
+		)),
+	}
 }
 
 fn midi_output() -> Result<MidiOutput, String> {

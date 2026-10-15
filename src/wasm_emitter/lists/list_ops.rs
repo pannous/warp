@@ -389,12 +389,12 @@ impl WasmGcEmitter {
 			return;
 		}
 		let node_ref = self.node_ref(false);
-		let kind = 1;
+		let (kind, pointer, end, byte) = (1, 2, 3, 4);
 		self.runtime_function(
 			crate::type_tests::NODE_TYPE_NAME,
 			vec![Ref(node_ref)],
 			vec![Ref(node_ref)],
-			vec![ValType::I64],
+			vec![ValType::I64, ValType::I32, ValType::I32, ValType::I32],
 			|s, f| {
 				s.emit_field(f, 0, 0);
 				#[rustfmt::skip]
@@ -409,6 +409,13 @@ impl WasmGcEmitter {
 					&[I::LocalGet(kind), I::I64Const(crate::type_kinds::BOOL_KIND), I::I64Eq, I::If(BlockType::Empty)],
 				);
 				s.emit_string_call(f, crate::analyzer::BOOL_TYPE, "new_symbol");
+				Self::emit_list(f, &[I::Return, I::End]);
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(kind), I::I64Const(crate::type_kinds::BUILTIN_FUNCTION_MARK), I::I64And, I::I64Const(0), I::I64Ne,
+					I::If(BlockType::Empty),
+				]);
+				s.emit_string_call(f, crate::type_tests::BUILTIN_TYPE, "new_symbol");
 				Self::emit_list(f, &[I::Return, I::End]);
 				if s.int_runtime() {
 					// an exact number that is no integer holds a $Ratio (exact.rs)
@@ -464,6 +471,17 @@ impl WasmGcEmitter {
 				f.instruction(&I::If(BlockType::Empty));
 				s.emit_string_call(f, crate::words::OPERATION_WORD, "new_symbol");
 				Self::emit_list(f, &[I::Return, I::End]);
+				// a one-character text is a character (chars-codepoints): what a parameter given "a" holds
+				#[rustfmt::skip]
+				Self::emit_list(f, &[
+					I::LocalGet(kind), I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::Text as i64), I::I64Eq,
+					I::If(BlockType::Empty),
+				]);
+				s.emit_text_bounds(f, pointer, end);
+				Self::emit_is_one_character(f, pointer, end, byte);
+				f.instruction(&I::If(BlockType::Empty));
+				s.emit_string_call(f, &Kind::Codepoint.to_string(), "new_symbol");
+				Self::emit_list(f, &[I::Return, I::End, I::End]);
 				for named in RUN_TIME_TYPE_KINDS {
 					#[rustfmt::skip]
 					Self::emit_list(f, &[

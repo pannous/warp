@@ -107,6 +107,22 @@ function fileUrl(path) {
 	return FILE_ROOT + filePath(path);
 }
 
+const PROGRAM_FILE_SECTION = "warp.program_file"; // src/host.rs
+// the program's file: its module's section (compiled from a file), else the playground's chosen sample (programFile)
+function programFileOf(run) {
+	const [section] = run?.module ? WebAssembly.Module.customSections(run.module, PROGRAM_FILE_SECTION) : [];
+	return section ? new TextDecoder().decode(section) : self.programFile;
+}
+
+// a relative path of a run from a program file is that file's neighbour when it is there, else as given, as natively
+// (src/modules/program_file.rs beside_program_if_there; card play-beside-program)
+function besideProgram(path, file) {
+	const folder = file?.slice(0, file.lastIndexOf("/") + 1);
+	if (!folder || path.startsWith("/") || path.startsWith(PAGE_PREFIX) || /^https?:/.test(path) || path.includes(SCHEME_MARK)) return path;
+	const beside = folder + filePath(path);
+	return writtenFiles.has(beside) || servedFileExists(beside) ? beside : path;
+}
+
 // the bytes of a file of the served repository, of the page or of a URL, failing in the words of the native read
 function readBytes(path) {
 	const written = writtenFiles.get(filePath(path));

@@ -182,6 +182,20 @@ fn deploy_names_a_browser_only_feature() {
 	assert_eq!((&routes["site"], &routes["query"]), (&false.into(), &"scripts=reader.js,host.js".into()), "{routes}");
 }
 
+/// A program using the browser with server routes or server functions deploys as neither silently (card
+/// program-server): its site would drop them, so Deploy refuses and names them; page routes stay the page's
+#[test]
+fn deploy_refuses_server_parts_of_a_browser_program() {
+	let error = |code: &str| warp::web::worker_bundle(code).0["error"].as_str().unwrap_or_default().to_string();
+	let painting = "surface = 4 int\npaint(surface, 2, 2)\n";
+	for server_part in ["get \"/api\" { \"from the server\" }", "server def greeting(name) { \"hello \" + name }"] {
+		let refused = error(&format!("{server_part}\n{painting}"));
+		assert!(refused.contains("server") && refused.contains("browser"), "{server_part}: {refused}");
+	}
+	let routed = warp::web::worker_bundle(&format!("route \"/\" {{ \"home\" }}\n{painting}")).0;
+	assert_eq!(routed["site"], true, "{routed}");
+}
+
 /// A program using the browser deploys as its site (card deploy-browser-site): the Worker serves the page, its scripts
 /// and app.wasm, cross-origin isolated, and the visitor's browser runs the program (painting checked in CI)
 #[test]

@@ -51,7 +51,7 @@ fn an_element_of_another_type_widens_the_list() {
 	is!("xs = [0, 0]; xs[0] = random(); xs[0] < 1", true);
 	is!("xs = [0, 0]; xs[0] = random(); type(xs)", "list of float");
 	is!("xs = [1, 2]; xs[0] = 2.5; print(xs[0] = 2.5); string(xs)", "[2.5 2]");
-	is!("xs = [1, 2]; xs[0] = 'a'; string(xs)", r#"["a" 2]"#);
+	is!("xs = [1, 2]; xs[0] = 'a'; string(xs)", r#"['a' 2]"#);
 }
 
 /// card global-arrays: a global array a function writes by index stays an array (each write rebuilt a Node list, O(n),

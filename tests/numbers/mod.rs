@@ -3,6 +3,7 @@ mod test_arrow_operators; // card easy-add
 mod test_as_compound_unit; // card compound-unit
 mod test_average; // card average-undefined
 mod test_bend_laws; // card bend-style
+mod test_big_int_bits; // card big-int
 mod test_big_int_text; // card out-fuel
 mod test_big_ratio;
 mod test_compound_accumulator; // card compound-accumulator
@@ -11,6 +12,7 @@ mod test_data_number_words; // card hint-data-word
 mod test_decimal_units;
 mod test_declared_float_exact_reals;
 mod test_degrees; // card angles-degrees
+mod test_dimension_types; // card dimensions-units
 mod test_div_assign;
 mod test_division_by_zero;
 mod test_duration_text;
@@ -41,6 +43,7 @@ mod test_law;
 mod test_libm_functions;
 mod test_literal_type_words; // card cleanup-closed-lists
 mod test_log_base;
+mod test_log_exact;
 mod test_log_glyphs; // P226
 mod test_long_decimals;
 mod test_math;
@@ -91,6 +94,7 @@ mod test_static_units_output;
 mod test_sum_of_decimals;
 mod test_superscript_variables;
 mod test_temperature; // card temperature
+mod test_text_float_exact; // card text-float
 mod test_text_then_conversion; // card print-km
 mod test_time_of_day;
 mod test_trailing_symbol; // card trailing-symbol

@@ -20,11 +20,11 @@ const PROGRAM_SCOPE: &str = "WorkerGlobalScope";
 /// types (WindowOrWorkerGlobalScope whole: fetch, setTimeout…), so a member it does not declare stays unchecked
 const SELF_GLOBALS: [&str; 3] = ["self", "globalThis", "window"];
 const PAGE_ONLY_SELF: &str = "window";
-/// What a program in a Worker writes for a page's global
-const WORKER_ALTERNATIVES: [(&str, &str); 3] = [
+/// What a program in a Worker writes for a page's global; any other page-only global (document, window) the page
+/// answers while the Worker waits (host-foreign.js callOnPage, card browser-interaction)
+const WORKER_ALTERNATIVES: [(&str, &str); 2] = [
 	("localStorage", "local[k] keeps values in the page's localStorage"),
 	("sessionStorage", "session[k] keeps values in its sessionStorage"),
-	("window", "self is the Worker's global"),
 ];
 /// Definitions that declare no members a program reaches
 const SKIPPED_KINDS: [&str; 4] = ["dictionary", "enum", "typedef", "callback"];
@@ -140,7 +140,7 @@ pub fn check(global: &str, member: &str, call: Option<usize>) -> Result<(), Stri
 pub fn global_interface(global: &str) -> Result<Option<String>, String> {
 	match interface_of_global(global, PROGRAM_SCOPE) {
 		Some(interface) => Ok(Some(interface)),
-		None => page_only(global).map(|_| None),
+		None => page_only(global),
 	}
 }
 
@@ -292,17 +292,18 @@ pub fn constructible(interface: &str) -> bool {
 	definitions().get(interface).is_some_and(|definition| !definition.constructors.is_empty())
 }
 
-/// A global of a page that the program's scope lacks (a Worker's: localStorage), else unchecked
-fn page_only(global: &str) -> Result<(), String> {
+/// A global of a page that the program's scope lacks: its page interface, which the page answers the Worker's calls
+/// of, or Err naming what a Worker writes instead (localStorage: local[k]); None for a global WebIDL does not declare
+fn page_only(global: &str) -> Result<Option<String>, String> {
 	let Some(interface) = interface_of_global(global, PAGE_SCOPE).filter(|_| PROGRAM_SCOPE != PAGE_SCOPE) else {
-		return Ok(());
+		return Ok(None);
 	};
-	let instead = WORKER_ALTERNATIVES
-		.iter()
-		.find(|(name, _)| *name == global)
-		.map(|(_, instead)| format!(": {instead}"))
-		.unwrap_or_default();
-	Err(format!("{global} ({interface}) exists on a page, not in the Worker this program runs in{instead}"))
+	match WORKER_ALTERNATIVES.iter().find(|(name, _)| *name == global) {
+		Some((_, instead)) => {
+			Err(format!("{global} ({interface}) exists on a page, not in the Worker this program runs in: {instead}"))
+		}
+		None => Ok(Some(interface)),
+	}
 }
 
 fn takes(arguments: &[Argument], count: usize) -> bool {

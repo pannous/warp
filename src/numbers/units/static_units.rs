@@ -347,6 +347,42 @@ pub(super) fn exact_amount(value: &Node) -> Option<Rational> {
 	}
 }
 
+/// Dimension names as types of quantities (card dimensions-units): `h: length`, `q is length²`, `speed: length/duration`.
+/// The time dimension is `duration`, a subtype of `time` (decision anchor-time), so `3 s is time` holds too
+const DIMENSION_NAMES: [(&str, Dimension); 4] = [
+	("length", Dimension::Length),
+	("mass", Dimension::Mass),
+	("temperature", Dimension::Temperature),
+	("duration", Dimension::Time),
+];
+
+/// The name of a signature of one dimension: `length` of m, none of m/s
+fn dimension_name(signature: &Signature) -> Option<&'static str> {
+	match signature.as_slice() {
+		[(dimension, 1)] => DIMENSION_NAMES.iter().find(|(_, known)| known == dimension).map(|(name, _)| *name),
+		_ => None,
+	}
+}
+
+/// `time` and `duration`, types of the time module too: a quantity of seconds is both, any other value's test stays
+/// the time module's (`now is time`, `2 hours is duration`)
+fn is_time_type(node: &Node, own_names: &HashMap<String, Signature>) -> bool {
+	let duration = crate::time::TimeForm::Duration.name();
+	[crate::time::TIME_WORD, duration]
+		.into_iter()
+		.any(|word| node.drop_meta().is_symbol(word) && !own_names.contains_key(word))
+}
+
+/// The signature a dimension expression names, `mass*length²`, unless the program names its words itself
+fn dimension_signature(node: &Node, own_names: &HashMap<String, Signature>) -> Option<Signature> {
+	let factors = super::factor_expression(node, &|leaf| {
+		let name = leaf.drop_meta().symbol_name().filter(|name| !own_names.contains_key(*name))?;
+		let (_, dimension) = DIMENSION_NAMES.iter().find(|(known, _)| *known == name)?;
+		Some(vec![Factor { unit: base_unit(*dimension), power: 1 }])
+	})?;
+	Some(signature(&factors))
+}
+
 fn base_unit(dimension: Dimension) -> &'static Unit {
 	let name = BASE_UNITS
 		.iter()
@@ -717,6 +753,17 @@ impl Inference {
 				let right = self.as_text(right, &right_signature, right_units, AMOUNT_TEXT)?;
 				Ok((Node::Key(Box::new(left), Op::Add, Box::new(right)), vec![]))
 			}
+			// `q is length`: the dimension of a quantity, known when compiled (card dimensions-units)
+			Node::Key(left, op @ (Op::Eq | Op::Ne), right)
+				if dimension_signature(&right, &self.variables).is_some() || is_time_type(&right, &self.variables) =>
+			{
+				let named = dimension_signature(&right, &self.variables).unwrap_or_else(|| vec![(Dimension::Time, 1)]);
+				let (_, given) = self.infer(left.as_ref().clone())?;
+				if given.is_empty() && is_time_type(&right, &self.variables) {
+					return self.unchecked_key(*left, op, *right);
+				}
+				Ok((Node::from((given == named) == (op == Op::Eq)), vec![]))
+			}
 			// `r.distance == ø` of an optional unit field: ø has no dimension, any value may be it; `x is list` asks its type
 			Node::Key(left, op @ (Op::Eq | Op::Ne), right)
 				if left.is_empty_node() || right.is_empty_node() || is_kinded_or_testable_type(&right) =>
@@ -884,10 +931,13 @@ impl Inference {
 		match target.drop_meta() {
 			Node::Symbol(name) => self.assign_variable(name.clone(), target, op, value, None),
 			Node::Key(name, Op::Colon, declared) if matches!(name.drop_meta(), Node::Symbol(_)) => {
-				match super::unit_expression(declared) {
-					// the unit is no type the emitter knows: the variable is a plain number with this signature
-					Some(units) => {
-						self.assign_variable(name.name(), name.as_ref().clone(), op, value, Some(signature(&units)))
+				let declared_signature = super::unit_expression(declared)
+					.map(|units| signature(&units))
+					.or_else(|| dimension_signature(declared, &self.variables));
+				match declared_signature {
+					// a unit or dimension is no type the emitter knows: the variable is a plain number with this signature
+					Some(declared_signature) => {
+						self.assign_variable(name.name(), name.as_ref().clone(), op, value, Some(declared_signature))
 					}
 					// `x: int = 1 m`: a number type holds plain numbers only (card units-annotation)
 					None if is_number_type(declared) => {
@@ -970,11 +1020,15 @@ impl Inference {
 		}
 		let (value, signature) = self.infer(value)?;
 		if let Some(declared) = declared.filter(|declared| *declared != signature) {
-			return Err(Stop::Error(format!(
-				"DimensionError: {name} is declared {}, is given {}",
-				shown(&declared),
-				shown(&signature)
-			)));
+			let declared = match dimension_name(&declared) {
+				Some(dimension) => format!("{dimension} ({})", shown(&declared)),
+				None => shown(&declared),
+			};
+			let given = match dimension_name(&signature) {
+				Some(dimension) => format!("{} ({dimension})", shown(&signature)),
+				None => shown(&signature),
+			};
+			return Err(Stop::Error(format!("DimensionError: {name} is declared {declared}, is given {given}")));
 		}
 		if let Some(earlier) = self.variables.get(&name).filter(|earlier| **earlier != signature) {
 			return Err(Stop::Error(super::reassigned_dimension(

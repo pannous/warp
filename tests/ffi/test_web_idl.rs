@@ -98,7 +98,6 @@ fn a_nullable_result_is_optional() {
 
 // the DOM: document is a Document; what an operation gives is typed too (getElementById: Element), and an Element
 // takes the members of the elements deriving from it (an input's value)
-#[cfg(feature = "native")] // a Worker has no document
 #[test]
 fn the_dom_is_typed() {
 	fails_with("use js document; document.getElementByID(\"x\")", "did you mean getElementById");
@@ -129,10 +128,11 @@ fn the_global_object_is_typed() {
 	eq!(warp::formats::web_idl::result_type("Response", "status", false), Some("int"));
 }
 
+// a Worker asks its page for window (host-foreign.js callOnPage)
 #[cfg(not(feature = "native"))]
 #[test]
-fn a_worker_has_no_window() {
-	fails_with("use js window; window.atob(\"aGk=\")", "self is the Worker's global");
+fn a_worker_reaches_the_pages_window() {
+	is!("use js window; window.atob(\"aGk=\")", "hi");
 }
 
 // a constructor is called as a function (JavaScript's `new`): checked against WebIDL's constructors, the value typed

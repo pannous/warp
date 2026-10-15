@@ -155,8 +155,9 @@ pub(super) struct Loader<'a> {
 	pub(super) wasm_modules: Vec<String>,
 	/// the definitions of the standard modules used: the program gets those it calls (with_needed_definitions)
 	pub(super) std_definitions: Vec<Node>,
-	/// the program's top-level variables: a module word of the same name is renamed apart in the module (shadowed_apart)
-	pub(super) program_variables: HashSet<String>,
+	/// the program's top-level variables and own functions: a module word of the same name is renamed apart in the module
+	/// (shadowed_apart)
+	pub(super) program_words: ProgramWords,
 	/// whether a standard module's source is being loaded: its `use`s are its own, not the program's
 	pub(super) inside_std_module: bool,
 	/// the standard modules the program (or a file module) uses, and those only standard modules use (hidden_apart)
@@ -175,7 +176,7 @@ impl<'a> Loader<'a> {
 			scope: None,
 			wasm_modules: vec![],
 			std_definitions: vec![],
-			program_variables: HashSet::new(),
+			program_words: ProgramWords::default(),
 			inside_std_module: false,
 			program_std_modules: HashSet::new(),
 			std_modules_of_std_modules: HashSet::new(),
@@ -333,18 +334,38 @@ impl<'a> Loader<'a> {
 			};
 		}
 		let mut directory = package_directory(name).map_err(|failure| error(&failure))?;
+		let mut library = package_library(name);
 		if let Some(requirement) = requirement {
 			let declared = package_module(&directory, name).and_then(|path| module_version(&path));
 			if !declared.is_some_and(|version| requirement.allows(&version)) {
 				directory = fetch_package_version(name, requirement).map_err(|failure| error(&failure))?;
+				library = None; // the library is the pinned version's release asset
 			}
 		}
 		let version = package_module(&directory, name).and_then(|path| module_version(&path));
 		self.packages.insert(name.to_string(), version);
+		if let Some(library) = library {
+			return crate::normalize::without_hints(|| self.use_library(name, &library));
+		}
 		match package_module(&directory, name) {
 			Some(path) => crate::normalize::without_hints(|| self.load(Import::Use, name, path)),
 			None => Ok(vec![]),
 		}
+	}
+
+	/// A package's prebuilt library through warp's binding, loaded as if it lay beside the library: its
+	/// `import <library>` finds `<library>.wasm` there (packages.warp `library`)
+	fn use_library(&mut self, name: &str, library: &str) -> Result<Vec<Node>, Node> {
+		let binding = library_binding(name).ok_or_else(|| {
+			error(&format!("package {name}: warp has no binding lib/packages/{name}.warp for {library}"))
+		})?;
+		#[cfg(feature = "native")]
+		let directory = crate::modules::package_tools::library_directory(name, library);
+		// browsers cannot fetch release assets: the page serves them (web/playground/build.sh libraries)
+		#[cfg(not(feature = "native"))]
+		let directory: Result<PathBuf, String> = Ok(PathBuf::from(format!("{}packages/{name}", crate::web::PAGE_PREFIX)));
+		let directory = directory.map_err(|failure| error(&failure))?;
+		self.load_source(Import::Use, directory.join(format!("{name}.warp")), binding)
 	}
 
 	/// The standard modules a program uses without `use`: those IMPLICIT_MODULES picks for it, the prelude words it
@@ -469,7 +490,7 @@ impl<'a> Loader<'a> {
 		Ok(match import {
 			Import::Use => {
 				let declarations =
-					shadowed_apart(statements.into_iter().filter(is_declaration).collect(), &self.program_variables);
+					shadowed_apart(statements.into_iter().filter(is_declaration).collect(), &self.program_words);
 				crate::compiler::compile_context::change(|context| {
 					context.module_definitions.extend(declarations.iter().filter_map(name_declared_by))
 				});
@@ -593,7 +614,11 @@ impl<'a> Loader<'a> {
 	/// `import fourty_two` of `fourty_two.wasm` / `.wat`: `use "<its absolute path>"`, which the FFI imports from
 	/// (wasm_modules.rs); `include` also runs its entry point, whose value it is (P139)
 	pub(super) fn use_wasm_module(&mut self, module: &Path, statement: &Node, import: Import) -> Vec<Node> {
-		let path = module.canonicalize().unwrap_or_else(|_| module.to_path_buf()).display().to_string();
+		// a page file or URL stays as written: a browser's file system shim made page:x into /page:x (card takes-three)
+		let address =
+			module.to_string_lossy().starts_with(crate::web::PAGE_PREFIX) || module.to_string_lossy().contains("://");
+		let canonical = if address { None } else { module.canonicalize().ok() };
+		let path = canonical.unwrap_or_else(|| module.to_path_buf()).display().to_string();
 		self.wasm_modules.push(path.clone());
 		let used = match as_use(statement) {
 			Node::List(_, bracket, separator) => {

@@ -365,18 +365,6 @@ impl WasmGcEmitter {
 			f.instruction(&I::End);
 		});
 
-		// int_xor(a, b), int_and(a, b), int_or(a, b): bitwise on the two's complement i64 values
-		for (name, combine) in [("int_xor", I::I64Xor), ("int_and", I::I64And), ("int_or", I::I64Or)] {
-			self.runtime_function(name, vec![i64t, i64t], vec![i64t], vec![], |s, f| {
-				f.instruction(&I::LocalGet(0));
-				s.call(f, "int_to_i64_wrap");
-				f.instruction(&I::LocalGet(1));
-				s.call(f, "int_to_i64_wrap");
-				f.instruction(&combine);
-				s.call(f, "int_from_i64");
-			});
-		}
-
 		// int_pow(base, exponent) by squaring; negative or huge exponents trap; locals: result
 		self.runtime_function("int_pow", vec![i64t, i64t], vec![i64t], vec![i64t], |s, f| {
 			let (base, exponent, result) = (0, 1, 2);

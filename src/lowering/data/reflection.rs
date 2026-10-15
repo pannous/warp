@@ -273,6 +273,11 @@ fn function_type(signature: &str) -> Node {
 	Node::Text(format!("{}: {signature}", crate::type_kinds::Kind::Function))
 }
 
+/// `type(function floor)`: `builtin: (x:number) -> int` (decision dir-lists)
+fn builtin_type(signature: &str) -> Node {
+	Node::Text(format!("{}: {signature}", crate::type_tests::BUILTIN_TYPE))
+}
+
 /// `(a, b) -> int` → `int`
 fn return_type(signature: &str) -> String {
 	signature.rsplit_once(" -> ").map_or("", |(_, result)| result).to_string()
@@ -307,7 +312,7 @@ fn function_word(node: &Node, functions: &Functions, defined: &HashSet<String>) 
 		return match word {
 			DIR_WORD => Some(text_list(&LIBRARY_FUNCTION_WORDS.map(String::from))),
 			HELP_WORD => Some(Node::Text(format!("{name}{signature}"))),
-			crate::type_tests::TYPE_WORD => Some(function_type(&signature)),
+			crate::type_tests::TYPE_WORD => Some(builtin_type(&signature)),
 			_ => None,
 		};
 	}
@@ -456,6 +461,10 @@ pub(crate) fn signature(function: &crate::compiler::context::UserFunctionDef) ->
 		.collect();
 	let result = match function.return_kind {
 		crate::type_kinds::Kind::Empty => String::new(),
+		// a bool is held as an Int (card bool-type)
+		crate::type_kinds::Kind::Int if crate::analyzer::gives_bool(function) => {
+			format!(" -> {}", crate::analyzer::BOOL_TYPE)
+		}
 		kind => format!(" -> {kind}"),
 	};
 	format!("({}){result}", params.join(", "))
@@ -846,6 +855,31 @@ fn dir_otherwise(subject: &Node) -> Node {
 		},
 	);
 	super::nodes::filled(DIR_OTHERWISE_TEMPLATE, [("RECEIVER", subject.clone()), ("OTHERWISE", methods)])
+}
+
+/// The type modules whose words `methods([1 2])` or `xs.methods` of a list value lists as functions: the program uses
+/// them, so the functions are there, as for `methods(list)` (card methods-last-n). Not yet the text module: all of
+/// its functions together don't compile (card methods-text), so `methods("hi")` still lists their names
+pub(crate) fn value_methods_modules(program: &Node) -> Vec<&'static str> {
+	if !program.mentions_any(&[METHODS_WORD]) {
+		return vec![];
+	}
+	let variables = literal_types(program);
+	let mut modules = vec![];
+	program.visit(&mut |part| {
+		let subject = match part.drop_meta() {
+			Node::List(items, Bracket::Round | Bracket::None, _)
+				if items.len() == 2 && items[0].symbol_name() == Some(METHODS_WORD) =>
+			{
+				&items[1]
+			}
+			Node::Key(subject, Op::Dot, word) if word.symbol_name() == Some(METHODS_WORD) => subject.as_ref(),
+			_ => return,
+		};
+		modules.extend(literal_type(subject).or_else(|| variables.get(subject.symbol_name()?).copied()));
+	});
+	modules.retain(|module| *module == crate::words::LIST_WORD);
+	modules
 }
 
 /// The type module of a text or list literal

@@ -39,7 +39,7 @@ fn an_executable_calls_python_and_node() {
 fn values_cross_both_ways_as_warp_does() {
 	assert_eq!(
 		printed("exe_python_json", "use python json\njson.loads(\"{\\\"a\\\": [1, 2.5, \\\"x\\\"]}\")"),
-		"{a:[1 2.5 \"x\"]}\n"
+		"{a:[1 2.5 'x']}\n"
 	);
 	assert_eq!(printed("exe_python_big", "use python math\nmath.factorial(25)"), "15511210043330985984000000\n");
 	assert_eq!(

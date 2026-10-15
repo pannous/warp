@@ -381,7 +381,7 @@ fn r_words_work_with_a_note_naming_warps_form() {
 fn types_built_from_type_parameters_drop_with_them() {
 	assert_eq!(shown("fn first<T>(xs: Vec<T>) -> T { xs[0] }; first([4, 5])"), "4");
 	assert_eq!(shown("fn wrap<T>(x: T) -> Vec<T> { [x] }; wrap(3)"), "[3]");
-	assert_eq!(shown("fn pair<A, B>(a: A, b: B) -> (A, B) { (a, b) }; pair(1, \"x\")"), "(1 \"x\")");
+	assert_eq!(shown("fn pair<A, B>(a: A, b: B) -> (A, B) { (a, b) }; pair(1, \"x\")"), "(1 'x')");
 }
 
 #[test]

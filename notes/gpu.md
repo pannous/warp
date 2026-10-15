@@ -343,3 +343,7 @@ plan: warp functions compiled to WGSL, so the work around a shader (spectrum(), 
   samples vanished after their first frame. paintingOf maps it in both places; a pixel frame is redrawn in place.
 - Probes: probes/firefox_webgpu/check.sh (WebGPU steps on the page and in a Worker), variants.sh (programs run one by
   one with the console after each); firefox_driver.mjs takes FIREFOX_PREFS and names an error's line and realm.
+- Firefox's "uncaught exception: undefined" during 400 GPU jobs (card firefox-gpu-jobs-uncaught) is no WebGPU fault: on
+  lavapipe 400 jobs take over 10 s, the playground stops the run, and terminating a Worker inside WebAssembly.promising
+  logs it (Firefox's bug, card firefox-logs). gpu_jobs.sh (run 38683768383): 1 and 50 jobs clean, every 400 stopped and
+  logged. The tour's check accepts a stop ("or says why not"), so it stays green there.

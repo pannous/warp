@@ -64,6 +64,8 @@ mod test_i18n;
 mod test_keyed_lists;
 #[cfg(feature = "native")] // runs python3
 mod test_keyword_registry; // card where-infix
+#[cfg(feature = "native")] // runs node
+mod test_live_handover; // card playground-live
 mod test_markup_holes;
 mod test_markup_lines; // card todo-app
 mod test_markup_mistakes; // card our-html
@@ -111,6 +113,8 @@ mod test_safari_imports;
 #[cfg(feature = "native")] // runs the warp binary
 mod test_sandbox_refusals; // card sandbox-exec
 mod test_sandboxed_programs; // card ferron-hosting
+#[cfg(feature = "native")] // reads web/playground's files
+mod test_script_scopes; // card test-page
 mod test_script_words; // card browser-twin
 mod test_select_options; // card select-shorthand
 #[cfg(feature = "native")] // a server on a port, HTTP requests
@@ -139,6 +143,8 @@ mod test_site_failure; // the dev overlay's message
 #[cfg(all(feature = "native", target_os = "macos"))] // the system web view
 mod test_site_holes;
 #[cfg(feature = "native")] // builds a site natively
+mod test_site_modules; // card takes-three
+#[cfg(feature = "native")] // builds a site natively
 mod test_site_tasks; // card site-tasks
 #[cfg(feature = "native")] // runs node
 mod test_sleep_run_limit; // card sleep-run-limit
@@ -148,6 +154,8 @@ mod test_style_rules;
 mod test_styles;
 mod test_tag_lists;
 mod test_task_files; // card task-sound-play
+#[cfg(feature = "native")] // runs node
+mod test_task_midi; // card inside-go
 mod test_task_voices; // card playground-go
 mod test_text_holes; // card web-fine-text-nodes
 mod test_transitions;
