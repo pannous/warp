@@ -24,8 +24,10 @@ fn a_trailing_percent_is_a_hundredth() {
 
 #[test] // card operator-word-reference
 fn an_operator_word_without_operand_is_a_function() {
-	is!("f = abs; f(-2)", 2);
-	is!("g = sqrt; g(16) + 1", 5.0);
+	is!("f = function abs; f(-2)", 2);
+	is!("g = function sqrt; g(16) + 1", 5.0);
+	// decision reflection: a bare name is never the function value implicitly (P82)
+	crate::common::fails_with("f = abs; f(-2)", "abs needs 1 argument");
 	is!("xs = [1, -2]; xs.map(abs)", warp::ints(vec![1, 2]));
 	is!("xs = [1, -2]; map xs abs", warp::ints(vec![1, 2]));
 	crate::common::fails_with("1 + 16 sqrt", "does `sqrt` in `1+16 sqrt`");

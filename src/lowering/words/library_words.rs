@@ -737,9 +737,13 @@ impl Lowering {
 			}
 		}
 		// `sin x`, `trunc x`: a library word of one typed value applies to the value after it, as `sin(x)` does, wherever
-		// it stands (card sin-cos)
+		// it stands (card sin-cos); a prelude word (`norm v`) is the prelude's function, called by its own pass
 		if let ([function, argument], Bracket::None, Separator::Space) = (items, bracket, separator) {
-			if crate::lowering::library_signatures::typed_first_arity(head) == Some(1) && !self.shadows(head) {
+			let is_prelude_word = crate::modules::prelude_word_arity(head).is_some();
+			if crate::lowering::library_signatures::typed_first_arity(head) == Some(1)
+				&& !is_prelude_word
+				&& !self.shadows(head)
+			{
 				// a synonym calls its library word: `sorted xs` is sort(xs)
 				let word = canonical_spelling(head);
 				let function = if word == head { function.clone() } else { Node::Symbol(word.to_string()) };
@@ -1126,7 +1130,7 @@ impl Lowering {
 		let (kept, rest) = arguments.split_at(wanted - 1);
 		let heads_with_word = matches!(rest[0].drop_meta(), Node::Symbol(name) if self.library_word(name).is_some());
 		let phrase = heads_with_word.then(|| self.word_call(rest, &Bracket::None, &Separator::Space)).flatten();
-		let phrase = phrase.unwrap_or_else(|| Node::List(rest.to_vec(), Bracket::None, Separator::Space));
+		let phrase = phrase.unwrap_or_else(|| crate::lowering::ambiguous_forms::spaced_phrase(rest.to_vec()));
 		[kept.to_vec(), vec![phrase]].concat()
 	}
 

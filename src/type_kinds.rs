@@ -28,6 +28,9 @@ pub const OPERATION_MASK_BIT: i64 = 61;
 pub const CODE_MASK_BIT: i64 = 60;
 /// Code is marked in its top node's kind field above the separator, whatever node it is (as_code)
 pub const CODE_MARK: i64 = 1 << 56;
+/// A closure of a built-in word (closures::is_builtin_function), whose type is builtin, in its kind field above the
+/// separator
+pub const BUILTIN_FUNCTION_MARK: i64 = 1 << 52;
 /// P215: the head cell of a declared list carries the run-time kinds its element type admits, its element mark, in the
 /// kind field above the bracket byte; everything that reads the bracket masks it with KIND_MASK
 pub const ELEMENT_MARK_SHIFT: i64 = 16;
@@ -46,6 +49,7 @@ const _: () =
 pub const UNMARKED_KIND: i64 = (1 << ELEMENT_MARK_SHIFT) - 1;
 const _: () = assert!(MARK_BOOL_BIT + ELEMENT_MARK_SHIFT < 63, "the element mark fits in the kind field");
 const _: () = assert!(CODE_MARK > SEPARATOR_MASK, "the code mark lies above the separator");
+const _: () = assert!(BUILTIN_FUNCTION_MARK > SEPARATOR_MASK && BUILTIN_FUNCTION_MARK < CODE_MARK, "a mark of its own");
 
 /// The element mark of a node_kind_in mask, shifted to its place in the kind field
 pub fn element_mark(mask: i64) -> i64 {
