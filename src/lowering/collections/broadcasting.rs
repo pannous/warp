@@ -13,6 +13,7 @@ use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::traits::InstanceTypes;
 use crate::type_kinds::Kind;
+use crate::words::EXTREMUM_WORDS;
 use crate::words::{ALL_WORD, COUNT_WORD, DOT_WORD, EACH_WORD, IMPLICIT_PARAMETER, LOG_WORD, MAP_WORD, SUM_WORD};
 use std::collections::{HashMap, HashSet};
 
@@ -240,11 +241,11 @@ fn rules_out_a_truth_value(parameter: &Node) -> bool {
 	}
 }
 
-/// `sum`, `max`, `upper`, `count` …: a library word with a signature (count's optional item has no notation yet), not
-/// redefined by the program
+/// `sum`, `max`, `upper`, `count` …: a library word of one value, not redefined by the program
 fn is_one_value_word(node: &Node, arities: &HashMap<String, Arity>) -> bool {
-	let is_word =
-		|name: &str| crate::lowering::library_signatures::library_signature(name).is_some() || name == COUNT_WORD;
+	let is_word = |name: &str| {
+		crate::library_words::is_library_word(name) || EXTREMUM_WORDS.contains(&name) || name == COUNT_WORD
+	};
 	matches!(node.drop_meta(), Node::Symbol(name) if arities.get(name).is_none_or(|takes| takes.library) && is_word(name))
 }
 
