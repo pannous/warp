@@ -99,11 +99,13 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   time); tests pin what always holds, `now <= now` → yes, not `now == now` (card flaky-browser-suite).
 - canvas-size (2026-10-14): `window.width/height`, `display.width/height`, `canvas.width/height` are writable properties,
   natively and in the playground; a bare top-level `width` works too, with a did-you-mean naming the three.
-- dollar-element (2026-10-14): in a page program `$xyz` is the element with id xyz (`$xyz.value`, `$xyz.focus()`);
-  `$window`, `$document` are those globals; misspelled members are compile-time errors. A route's `$title` stays the
-  submitted field's value.
-  separate-scopes (2026-10-15, user): two variable scopes never mix: page elements live only in the `$` scope, program variables in their own,
-  so a plain `who` never names an element (unlike JavaScript, where a local silently hides the element of that id).
+- page-ids (2026-10-15, user; card page-ids; replaces dollar-element of 2026-10-14): an id in the program's own
+  markup is a name in the program's scope: plain `who` is the element (`who.focus()`), as in JavaScript but checked;
+  an id clashing with a variable, function or word is a compile-time error naming both. `window`/`document` are plain
+  names. `$who` is always the element's value (text, number, yes/no for a checkbox, text content otherwise) and
+  `$who = "Ann"` writes it, like a route's `$title`. Dynamic or external ids go through `element("user-name")`, not
+  `${…}` (string interpolation). Misspelled members are compile-time errors. Principle: one meaning per spelling,
+  never two things under one name silently.
 - call-as-grouping (2026-10-15): `f x as T` is `f(x as T)` everywhere, like `f 2 + 1` = `f(2 + 1)`, with a warning
   naming `f(x as T)` and `(f x) as T`; dispatch on the result goes via `pdf p = render "x"` or `(render "x") as pdf`.
 - uniscript-binary-import (2026-10-15, user: "definitely yes"): ~/dev/uniscript gets wasm-only c/ffi additions
