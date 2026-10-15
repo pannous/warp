@@ -29,7 +29,7 @@ fn wav_path(name: &str) -> std::path::PathBuf {
 fn sounds_render_into_one_wav_file() {
 	let path = wav_path("song");
 	let printed = run(&format!(
-		"use sound\nplay(C4, 0.1s)\nmelody([C4 E4], 0.05s)\nround(render_sound(\"{}\") * 10)",
+		"use sound\nplay(C4, 0.1s)\nmelody([C4 E4], 0.05s)\nround(save(sound, \"{}\") * 10)",
 		path.display()
 	));
 	assert!(printed.contains('2'), "{printed}");
@@ -42,7 +42,7 @@ fn sounds_render_into_one_wav_file() {
 fn a_render_takes_the_sounds_after_the_last_one() {
 	let (first, second) = (wav_path("first"), wav_path("second"));
 	run(&format!(
-		"use sound\nplay(C4, 0.2s)\nrender_sound(\"{}\")\nplay(E4, 0.1s)\nrender_sound(\"{}\")",
+		"use sound\nplay(C4, 0.2s)\nsave sound as \"{}\"\nplay(E4, 0.1s)\nsave sound as \"{}\"",
 		first.display(),
 		second.display()
 	));
