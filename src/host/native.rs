@@ -569,7 +569,7 @@ fn foreign_call(
 		let mut result = [Val::AnyRef(None)];
 		apply
 			.call(&mut caller, &[Val::AnyRef(Some(function)), values], &mut result)
-			.map_err(|trap| trap.root_cause().to_string())?;
+			.map_err(|trap| raised_message(&mut caller).unwrap_or_else(|| trap.root_cause().to_string()))?;
 		given_node(&mut caller, result[0].unwrap_anyref().copied()).map_err(|problem| problem.to_string())
 	};
 	let answer =
@@ -682,6 +682,20 @@ fn response_header(mut caller: Caller<'_, HostState>, name: HostNode, value: Hos
 	};
 	caller.data_mut().answer_headers.push((name, value));
 	Ok(())
+}
+
+/// The message of the Error a trapped call raised (left in trap_detail), read once: a warp function called back from
+/// another runtime fails with its own words, not the engine's `unreachable`
+fn raised_message(caller: &mut Caller<'_, HostState>) -> Option<String> {
+	let detail = caller.get_export(crate::run::wasm_reader::TRAP_DETAIL).and_then(Extern::into_global)?;
+	let Val::AnyRef(Some(value)) = detail.get(&mut *caller) else {
+		return None;
+	};
+	let _ = detail.set(&mut *caller, Val::AnyRef(None));
+	match given_node(caller, Some(value)).ok()? {
+		Node::Error(reason) => Some(reason.drop_meta().name()),
+		_ => None,
+	}
 }
 
 /// What a failed route says to the client: the program's error message, read with the values the program left in
