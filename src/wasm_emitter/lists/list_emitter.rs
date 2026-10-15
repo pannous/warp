@@ -83,8 +83,20 @@ pub(in crate::wasm_emitter) fn called_word<'a>(
 
 fn printed_value(call: &[Node], bracket: &Bracket) -> Node {
 	match crate::warp_parser::print_arguments_of(call, bracket).as_slice() {
-		[single] => juxtaposed_text(single).unwrap_or_else(|| single.clone()),
+		[single] => juxtaposed_text(single).or_else(|| spaced_values_text(single)).unwrap_or_else(|| single.clone()),
 		several => super::super::joined_text(several, PRINT_ARGUMENT_SEPARATOR),
+	}
+}
+
+/// `print 1+1 2+2` prints each value, `2 4` (reconsider-spaced)
+fn spaced_values_text(argument: &Node) -> Option<Node> {
+	match argument.drop_meta() {
+		Node::List(values, Bracket::None, Separator::Space)
+			if crate::lowering::ambiguous_forms::are_spaced_values(values) =>
+		{
+			Some(super::super::joined_text(values, PRINT_ARGUMENT_SEPARATOR))
+		}
+		_ => None,
 	}
 }
 

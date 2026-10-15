@@ -260,6 +260,14 @@ pub(crate) fn word_applied(word: &str, arguments: Vec<Node>) -> Node {
 	let operator = crate::warp_parser::PREFIX_OPERATOR_WORDS.iter().find(|(spelled, _)| *spelled == word);
 	match (operator, arguments.as_slice()) {
 		(Some((_, op)), [operand]) => key(Node::Empty, *op, operand.clone()),
+		// `xs.add(x)`, `xs.insert(x, at: at)`: a list-changing method is called on its list
+		(None, [list, rest @ ..]) if crate::list_mutations::is_list_mutating_method(word) => {
+			let labeled = |param: &Node| match param.symbol_name() {
+				Some(crate::words::AT_WORD) => key(param.clone(), Op::Colon, param.clone()),
+				_ => param.clone(),
+			};
+			key(list.clone(), Op::Dot, call(word, rest.iter().map(labeled).collect()))
+		}
 		_ => call(word, arguments),
 	}
 }

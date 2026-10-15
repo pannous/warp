@@ -319,6 +319,20 @@ Prints show as they arrive, like paintings (card print-watch, 2026-10-09): `prin
 slow paint is read while it renders. Only an animation (after its first sleep) holds a text frame back until the next
 one begins (playground.js printedChunk). probes/print_watch.sh.
 
+### Frames: only what changed (card abysmally-slow, 2026-10-15)
+samples/finger_paint (1280×800, show() every loop pass) crawled in Safari on an iPad. probes/paint_speed.mjs runs the
+playground's worker scripts in node over probes/paint_speed.warp and times each step. Before: every show() turned the
+1M BigInt64 pixels into a Float64Array (147 ms in node's V8), cloned 8 MB to the page, which shaded each pixel from a
+double (87 ms), then putImageData'd the whole canvas; frames came every few ms, so the page fell further behind with
+each one. Now the program's Worker shades the pixels into RGBA words straight from the low and high 32 bits of each
+value (host-media.js paintFrame, ~3 ms in V8 for the whole frame, the compare included) and keeps the last frame: of a
+painting the size of the one before it posts (transfers) only the rectangle that changed, ~2.5 KB a stroke frame. The
+page (canvas.js wholePainting) writes that rectangle into the whole painting it keeps as an ImageData, and draws the
+rectangles of a screen frame joined, once per requestAnimationFrame (drawn); a new canvas is drawn whole at once.
+Without shared memory (no cross-origin isolation: GitHub Pages gets it from coi-serviceworker.js, which an app's
+in-app browser view may not run) reading mouse_x / mouse_y / mouse_down fails loudly, naming Safari as the way out: a
+running program never sees the pointer move there, so finger_paint painted nothing in that view.
+
 ### Wasm memory limit across Workers (card browser-test, 2026-10-06)
 Chrome holds ~124 live Wasm memories per page, all its Workers together (V8's sandbox: each 32-bit memory reserves
 ~8 GB of a 1 TB cage, whatever its size or declared maximum; Node without the sandbox ~16300). An isolate whose
@@ -355,6 +369,12 @@ fails. Next time a warning shows, its stage says where to look.
   inputs as shader holes (src/graphics/shader_holes.rs): `$mouse` (a list [mouse_x, mouse_y] → vec2f), `$mouse_down` (0/1)
   and `$seconds` (from clock()), read at each paint. The ⛶ box (.painted) is as wide as its paintings, so ⛶ sits on
   the painting's corner.
+- Fingers (card register-fingers, 2026-10-15): a touch is the pointer. Every painting canvas has `touch-action: none`
+  (canvas.js paintingElement), else iPad Safari takes a finger for scrolling and sends pointercancel right after
+  pointerdown; pointercancel releases mouse_down like pointerup; of several fingers only the first one down steers
+  mouse_x/mouse_y. Check: the Chrome tour drags a real touch over samples/finger_paint (touch_drag.mjs over the
+  DevTools protocol, test_in_browser.py fingers_wrong); with the browser's own touch handling the same drag paints
+  nothing, so the check can fail. A diagonal swipe there went back in the page's history (another example).
 
 ## The default canvas is the output pane (card draw-default, user 2026-10-10: defaults, no errors)
 System values `view_width`, `view_height`: playground.js viewSize tells the room below the output pane's text (CSS

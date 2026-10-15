@@ -1,0 +1,13 @@
+// swizzles (decision S1): .x .y .z .w and .xy .zyx .xyy of lists of 2 to 4 numbers, on the CPU and in shaders
+use math
+width = 32
+height = 24
+turned(p, angle) := [cos(angle) * p.x - sin(angle) * p.y, sin(angle) * p.x + cos(angle) * p.y]
+glow(x, y) := {
+	p = turned([x / width - 0.5, y / height - 0.5], 0.5)
+	c = [0.5 + 0.5 * sin(p.x * 6), 0.5 + 0.5 * cos(p.y * 6), 0.5]
+	c.zxy .* (1 - smoothstep(0.3, 0.5, norm(p.yx)))
+}
+print turned([1, 0], 0).yx
+print [1, 2, 3].zyx
+paint(glow, width, height)

@@ -79,7 +79,7 @@ fn a_variable_named_like_a_preposition_stays_a_variable() {
 #[test]
 fn play_and_melody_take_their_durations_after_for_and_each() {
 	let seconds = |name: &str, sounding: &str| {
-		crate::programs::test_sound_voices::rendered(name, &format!("use sound\n{sounding}\nrender_sound(\"SONG\")")).0
+		crate::programs::test_sound_voices::rendered(name, &format!("use sound\n{sounding}\nsave sound as \"SONG\"")).0
 	};
 	assert_eq!(seconds("for", "play 440Hz for 0.3s"), "0.3");
 	assert_eq!(seconds("colons", "play tone:440Hz for:0.3s"), "0.3");

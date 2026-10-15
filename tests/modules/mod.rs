@@ -5,6 +5,7 @@ mod test_agent_types; // card int-let
 mod test_checkout_std_lib; // card local-lib
 mod test_dir;
 mod test_dir_any_value;
+mod test_dir_builtin_members; // card dir-lists
 mod test_dir_value_methods; // card list-methods: dir([1 2]) lists its methods
 mod test_folder_scope;
 mod test_from_import; // card std-import
