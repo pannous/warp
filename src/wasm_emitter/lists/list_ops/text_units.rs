@@ -264,6 +264,7 @@ impl WasmGcEmitter {
 
 		// text_grapheme_count(text) -> i64
 		self.runtime_function("text_grapheme_count", vec![node_ref], vec![long], vec![int, int, long], |s, f| {
+			s.emit_codepoint_counts_one(f);
 			let (pointer, end, count) = (1, 2, 3);
 			s.emit_text_bounds(f, pointer, end);
 			// the text counted last (its bytes never change): its count
@@ -303,6 +304,7 @@ impl WasmGcEmitter {
 
 		// text_codepoint_count(text) -> i64: every byte but a continuation byte (10xxxxxx) starts a code point
 		self.runtime_function("text_codepoint_count", vec![node_ref], vec![long], vec![int, int, long], |s, f| {
+			s.emit_codepoint_counts_one(f);
 			let (pointer, end, count) = (1, 2, 3);
 			s.emit_text_bounds(f, pointer, end);
 			#[rustfmt::skip]
@@ -338,6 +340,13 @@ impl WasmGcEmitter {
 				func.instruction(&I::I32Or);
 			}
 		}
+	}
+
+	/// A one-character text, held as a codepoint in node local 0, is one code point and one grapheme
+	fn emit_codepoint_counts_one(&self, func: &mut Function) {
+		self.emit_field(func, 0, 0);
+		Self::emit_kind_test(func, Kind::Codepoint as i64, I::I64Eq);
+		Self::emit_list(func, &[I::If(BlockType::Empty), I::I64Const(1), I::Return, I::End]);
 	}
 
 	/// Locals `pointer` and `end` span the bytes of text node local 0

@@ -12,5 +12,5 @@ fn a_one_letter_text_counts_one_codepoint() {
 #[test]
 fn a_one_letter_text_counts_one_grapheme() {
 	is!("t = \"ä\"; t.graphemes", 1);
-	is!("xs = [\"é\", \"bc\"]; xs[0].graphemes", 1);
+	is!("xs = [\"é\", \"bc\"]; xs#1.graphemes", 1);
 }
