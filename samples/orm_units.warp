@@ -31,6 +31,6 @@ if count(rides) == 0 {
 	rides.add(Ride(10km, 50min, 3kg))
 	rides.add(Ride(2km, 20min, 500g))
 }
-for ride in rides { print ride.distance / ride.time as km/h }
+for ride in rides { print ride.distance / ride.time as km / h }
 print sum(rides.map(ride => ride.load))
 runs#2.distance

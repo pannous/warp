@@ -16,11 +16,11 @@ Multi-line documentation
 for the person record
 */
 person: {
-    // Name of the person
-    name: "Alice"
+	// Name of the person
+	name: "Alice"
 
-    /* Age in years */
-    age: 30
+	/* Age in years */
+	age: 30
 }
 
 // Inline comments work too
@@ -36,9 +36,9 @@ still in outer
 // Documentation comments for export (triple slash)
 /// Computes the factorial of n
 /// Returns n! for non-negative integers
-def factorial(n) {
-    if n <= 1 { return 1 }
-    return n * factorial(n - 1)
+	def factorial(n) {
+	if n <= 1 { return 1 }
+	return n * factorial(n - 1)
 }
 
 factorial(result)
