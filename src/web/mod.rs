@@ -548,6 +548,8 @@ fn is_unlisted(address: &str) -> bool {
 	LISTED_DIRECTORIES.with(|listed| {
 		listed.borrow().iter().any(|(directory, files)| {
 			let file = address.strip_prefix(directory.as_str()).and_then(|rest| rest.strip_prefix('/'));
+			// the search's own folder is `.`: dir/./x.wasm is dir/x.wasm
+			let file = file.map(|file| file.trim_start_matches("./"));
 			file.is_some_and(|file| !files.iter().any(|listed| listed == file))
 		})
 	})
