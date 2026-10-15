@@ -175,6 +175,7 @@ mod test_type_of_consistency; // card type-of-consistency
 mod test_type_of_lambda_variable; // card type-says-symbol
 mod test_type_of_node_values;
 mod test_type_of_real_variable;
+mod test_type_parameters; // card random-should
 mod test_type_static;
 mod test_type_test_is_only;
 mod test_type_tests;

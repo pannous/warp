@@ -42,3 +42,26 @@ fn random_of_a_type() {
 	is!("x = random float; type x", "float");
 	crate::common::fails_with("random text", "random int");
 }
+
+/// decision random-forms: random of a range picks one of its elements, `..` without its end, `...` and `to` with it; the
+/// type parameter takes the type itself, `random(int)` as `random int`
+#[test]
+fn random_of_a_range() {
+	is!("all([random 1..4 for i in 1 to 50], x => x >= 1 and x < 4)", true);
+	is!("any([random 1...4 for i in 1 to 80], x => x == 4)", true);
+	is!("random 1..2", 1);
+	is!("random 3...3", 3);
+	is!("random 4 to 4", 4);
+	is!("x = random(int); type x", "int");
+	is!("x = random 0.5..2; x >= 0.5 and x < 2", true);
+}
+
+/// decision random-forms: the result follows the argument, and a declared float target makes the random a float
+#[test]
+fn random_into_a_declared_type() {
+	is!("int z = random 1..2; z", 1);
+	is!("int z = random 1..10; z >= 1 and z < 10", true);
+	is!("float z = random 1..10; z >= 1 and z < 10", true);
+	is!("float z = random 1..10; type z", "float");
+	is!("z: float = random(1, 10); type z", "float");
+}

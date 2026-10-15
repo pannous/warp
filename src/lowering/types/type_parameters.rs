@@ -31,7 +31,7 @@ fn type_parameter_positions(node: &Node) -> HashMap<String, Vec<usize>> {
 	let mut typed = HashMap::new();
 	node.visit(&mut |part| {
 		let Some(head) = function_head(part) else { return };
-		let positions: Vec<usize> = (head.written_parameters.iter().enumerate())
+		let positions: Vec<usize> = (head.parameters().into_iter().enumerate())
 			.filter(|(_, parameter)| matches!(parameter.drop_meta(), Node::Key(_, Op::Colon, annotation) if is_type_annotation(annotation)))
 			.map(|(position, _)| position)
 			.collect();
@@ -48,7 +48,8 @@ fn misplaced_argument(node: &Node, typed: &HashMap<String, Vec<usize>>) -> Optio
 	node.visit(&mut |part| {
 		let Node::List(items, bracket, separator) = part.drop_meta() else { return };
 		let Some(positions) = called_name(items, bracket, separator).and_then(|name| typed.get(name)) else { return };
-		let literal = positions.iter().filter_map(|position| items.get(position + 1)).find(|argument| is_literal_value(argument));
+		let literal =
+			positions.iter().filter_map(|position| items.get(position + 1)).find(|argument| is_literal_value(argument));
 		if let (None, Some(argument)) = (&error, literal) {
 			error = Some(crate::node::error(&format!(
 				"{}: the parameter of type type takes a type like int, text or a class name, not the value {}",
