@@ -71,7 +71,9 @@ sounds queued before it, at an `at`'s time, in a task on its own voice; natively
 and the process's end wait for it, stop_sound drops it), headless the line names the place (`midi out : 90 40 64 at 0.500 s`),
 in the browser Web MIDI's own timestamp (host-sound.js voiceSounded(0).at → playground.js output.send(message, time)).
 `midi_note(pitch, duration, velocity, channel)` is on, the voice resting the duration (std_io sound.rest: the voice goes on
-without a sound), off. Messages from task Workers in the browser still go nowhere (not relayed to the page).
+without a sound), off. A task Worker in the browser posts its sounds and MIDI to the page itself (host-tasks.js
+addPageSoundWords, card playground-live): relayed through the program's Worker, which waits for the task in
+Atomics.wait, they arrived bunched once main returned; handles come from one counter the run's Workers share.
 A loop variable named `note` inside lib/sound.warp breaks: `note` is the module's own word ("not a list").
 
 ## Probes and quirks (from the warp-sound handover, 2026-10-10)
@@ -256,10 +258,15 @@ choosing each cycle among all the blocks, the later ones set `bass_since#k = sou
 playground voiceMoment on the Workers' shared clock) is where the voice's next sound would start; a cycle plays the
 latest block whose moment it reached, 50 ms early counting (voices start microseconds apart). The first definition's
 count stays; `live_loop name { … }` without one is endless (heard voices pace 0.5 s ahead, silent runs don't).
-Still open: playground live reload (Run again while playing keeps the clock and redefines loops by name), a
-redefined block's variables must exist when the voice starts.
-Still open: an endless loop (card live-redefine) whose block is redefined while it plays (needs the playground's live
-reload and voice stealing).
+Built (card playground-live, tests/web/test_live_handover.rs): playground live reload. A named loop's block starts
+with `live_cycle_started("drums")` (music_words LiveLoop::announced; natively a no-op). While named loops play,
+Ctrl/Cmd-Enter or editing reruns (the Run/Stop button still stops): playground.js handOver retires the old Worker
+(it keeps sounding) and starts the new run with liveHandover; the new run's loop of the same name moves its first
+cycle onto the old loop's grid ({start, period}, host-tasks.js liveCycleStarted), and endHandedOver clips the old
+loop's sounds at that cycle. Once all its loops are taken the old Worker is terminated; a loop the new code drops
+ends at its first cycle after LIVE_RETIRE_SECONDS (4) (Sonic Pi keeps it playing). Unnamed loops are not handed
+over; Stop terminates every retired Worker too. Still open: a redefined block's variables must exist when the voice
+starts.
 
 ## Our own API or the platform's? (card our-sound)
 

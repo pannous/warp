@@ -2,7 +2,8 @@
 // Firefox a Worker's own `new Worker` waits for the page's thread and, right after the browser started, that wait
 // sometimes never ends (card tour-firefox-stall: 4 fresh starts in 80 stalled, probes/firefox_start/starts.py). The
 // program's Worker asks {taskWorker: {id, url}} and gets {taskWorker: id, port}, a MessagePort to the new Worker;
-// {endTaskWorker: id} stops one. The program's Worker, terminated, takes its task Workers with it as before.
+// {endTaskWorker: id} stops one. The program's Worker, terminated, takes its task Workers with it as before. What a task
+// Worker posts itself (its sounds) reaches the program Worker's listeners, as if that Worker had said it.
 
 // call before setting programWorker.onmessage: these messages are answered here and reach no other listener
 function serveTaskWorkers(programWorker) {
@@ -21,6 +22,8 @@ function serveTaskWorkers(programWorker) {
 		made.postMessage({ port: channel.port1 }, [channel.port1]);
 		programWorker.postMessage({ taskWorker: taskWorker.id, port: channel.port2 }, [channel.port2]);
 		reportBareErrors(made, `task Worker ${taskWorker.id}`);
+		// its sounds and MIDI (host-tasks.js addPageSoundWords) are heard as the program Worker's own messages
+		made.onmessage = ({ data }) => programWorker.dispatchEvent(new MessageEvent("message", { data }));
 		taskWorkers.set(taskWorker.id, made);
 	});
 	// a message of the page's own to one of them (playground.js sendPaintCanvas)

@@ -148,6 +148,26 @@ fn left_out_argument(word: &str) -> Node {
 	}
 }
 
+/// The bases with an exact libm logarithm: `log(1000, 10)` is log10(1000) = 3, where ln(1000)/ln(10) is 2.9999999999999996
+const EXACT_LOG_BASES: [(i64, &str); 2] = [(10, "log10"), (2, "log2")];
+
+/// `log(value, base)`: libm's log takes one argument, so ln(value)/ln(base), exact for the EXACT_LOG_BASES;
+/// a list literal is the log of each item
+fn log_to_base(log_word: &Node, value: &Node, base: &Node) -> Node {
+	if let Node::List(values, Bracket::Square, separator) = value.drop_meta() {
+		let logs = values.iter().map(|item| log_to_base(log_word, item, base)).collect();
+		return Node::List(logs, Bracket::Square, separator.clone());
+	}
+	let exact_log = EXACT_LOG_BASES.iter().find(|(exact_base, _)| {
+		matches!(base.drop_meta(), Node::Number(crate::extensions::numbers::Number::Int(number)) if number == exact_base)
+	});
+	if let Some((_, exact_word)) = exact_log {
+		return parens(vec![symbol(exact_word), value.clone()]);
+	}
+	let log_of = |argument: &Node| parens(vec![log_word.clone(), argument.clone()]);
+	key(log_of(value), Op::Div, log_of(base))
+}
+
 /// `field_with(object, "name", value)`: a copy of the object with the field set; what `object.name = value` lowers to
 pub const FIELD_WITH: &str = "field_with";
 /// instance_copy(x): a new instance with x's field values (`p.copy()`, Kotlin's `p.copy(y = 5)`); any other value is x
@@ -443,6 +463,17 @@ fn field_or_word(receiver: &Node, word_node: &Node, name: &str, module: &str) ->
 	if_then_else(is_of_type, word_call(word_node, receiver, vec![]), field)
 }
 
+/// A variable or an element of one (`xs#i`, as a loop reads its element): read twice, it is the same value
+fn is_pure_read(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(_) => true,
+		Node::Key(list, Op::Hash, index) => {
+			list.symbol_name().is_some() && matches!(index.drop_meta(), Node::Symbol(_) | Node::Number(_))
+		}
+		_ => false,
+	}
+}
+
 /// The call `word(receiver, arguments…)`
 fn word_call(word_node: &Node, receiver: &Node, arguments: Vec<Node>) -> Node {
 	Node::List([vec![word_node.clone(), receiver.clone()], arguments].concat(), Bracket::Round, Separator::None)
@@ -698,8 +729,7 @@ impl Lowering {
 				return None;
 			}
 			if call_name(items, bracket, separator).is_some() {
-				let log_of = |argument: &Node| parens(vec![items[0].clone(), argument.clone()]);
-				return Some(key(log_of(value), Op::Div, log_of(base)));
+				return Some(log_to_base(&items[0], value, base));
 			}
 		}
 		// `first sorted xs` has one argument: a library word after it is its argument's prefix
@@ -821,7 +851,8 @@ impl Lowering {
 				Node::Key(_, Op::Hash, unit) | Node::Key(unit, Op::Dot, _) => unit.drop_meta(),
 				other => other,
 			};
-			unit.symbol_name().and_then(crate::analyzer::text_unit).is_some()
+			// a variable named so (`chars = ["a"]; "a" in chars`) is that variable
+			unit.symbol_name().filter(|name| !self.shadows(name)).and_then(crate::analyzer::text_unit).is_some()
 		};
 		let (collection, element) = match word.symbol_name()? {
 			IN_WORD if names_unit(left) || names_unit(right) => return None,
@@ -861,7 +892,17 @@ impl Lowering {
 			.library_word_for(name, arguments.len() + 1)
 			.filter(|_| is_called || counting_method(name, &self.context).is_none())
 		{
-			return Some(self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false));
+			let word_call = self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false);
+			// `m.first` of a parameter or loop element given `{first: 9}` (card map-field). Not a map's own word
+			// (`m.keys`), nor a word whose list or text result the code after it types (`it.chars.map(…)`): a field
+			// read there would hide that type
+			let is_element = matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _));
+			let keeps_word = crate::members::MAP_MEMBERS.contains(&name.as_str())
+				|| result_kind(word).or_else(|| result_kind(name)).is_some();
+			if !is_called && !has_arguments && !keeps_word && (is_element || self.may_hold_object(receiver)) {
+				return Some(self.map_field_or(receiver, name, word_node, word_call));
+			}
+			return Some(word_call);
 		}
 		if !is_called && self.reads_declared_field(receiver, name) {
 			return Some(field_lookup(receiver, name, word_node));
@@ -955,6 +996,19 @@ impl Lowering {
 			|| self.is_parameter(receiver)
 			|| is_call_result
 			|| self.instances.is_declared_field(name)
+	}
+
+	/// `x.word` of an x that may be a map holding the key `word`: `if x is a map holding the key then x["word"] else
+	/// word(x)`, so a map's own words (`m.count`) still answer on maps without such a key. A one-entry map in a list
+	/// (`[{first: 2}]`) is held as a key, which has that key too
+	fn map_field_or(&self, receiver: &Node, name: &str, word_node: &Node, word_call: Node) -> Node {
+		if !is_pure_read(receiver) {
+			return word_call;
+		}
+		let is_type = |type_word: &str| parens(vec![symbol(crate::words::IS_TYPE), receiver.clone(), text(type_word)]);
+		let is_map = key(is_type(crate::words::MAP_WORD), Op::Or, is_type(&crate::Kind::Key.to_string()));
+		let has_key = self.call(COLLECTION_CONTAINS, word_node, vec![receiver.clone(), text(name)], false);
+		if_then_else(key(parens(vec![is_map]), Op::And, has_key), field_lookup(receiver, name, word_node), word_call)
 	}
 
 	fn may_hold_object(&self, receiver: &Node) -> bool {

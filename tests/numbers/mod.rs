@@ -43,6 +43,7 @@ mod test_law;
 mod test_libm_functions;
 mod test_literal_type_words; // card cleanup-closed-lists
 mod test_log_base;
+mod test_log_exact;
 mod test_log_glyphs; // P226
 mod test_long_decimals;
 mod test_math;

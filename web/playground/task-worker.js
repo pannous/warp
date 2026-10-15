@@ -23,24 +23,26 @@ self.addEventListener("unhandledrejection", event => {
 	console.error("warp task Worker: a browser API failed without saying why", event.promise);
 });
 
-// what a task does for the page goes through the program's Worker (host-tasks.js relayed)
-const relay = (method, ...values) => program.postMessage({ relay: [method, ...values] });
-for (const method of RELAYED) self[method] = (...values) => relay(method, ...values);
+// a task's sounds and MIDI go to the page, which made this Worker (task-workers.js), straight: the program's Worker
+// may be waiting for the task
+addPageSoundWords(message => self.postMessage(message)); // host-tasks.js
 // the files a task writes go back with its result (host-tasks.js finishedTask), bytes as their numbers in its JSON
 let taskFiles = new Map();
 self.taskWrote = (path, content) => taskFiles.set(path, typeof content === "string" ? content : { bytes: Array.from(content) });
 
 
 // the starting program waits for the shared buffer, so every task writes it, a failure of this Worker's own too
-function runTaskInto({ module, name, values, shared, arrays, captured, control, channels, files, voice }) {
+function runTaskInto({ module, name, values, shared, arrays, captured, control, channels, files, voice, soundHandles, liveHandover }) {
 	Atomics.store(control, TASK_TAKEN_SLOT, 1);
 	Atomics.notify(control, TASK_TAKEN_SLOT);
 	let output = "";
 	self.takeWrittenFiles?.(files);
 	taskFiles = new Map();
 	self.joinVoice?.(voice);
+	self.joinSoundHandles(soundHandles); // host-tasks.js: the run's counter
+	self.liveHandover = liveHandover ?? {};
 	try {
-		const hooks = { print: text => { output += text; }, panicked: text => { output += text; }, sound: sound => relay("playSamples", sound) };
+		const hooks = { print: text => { output += text; }, panicked: text => { output += text; }, sound: sound => self.playSamples(sound) };
 		const record = runTask(module, hooks, [], name, values, arrays, captured, control, channels);
 		writeShared(shared, { ...record, value: taskTree(record.value), output, files: [...taskFiles] });
 	} catch (failure) {

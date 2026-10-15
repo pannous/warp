@@ -63,6 +63,7 @@ mod test_lists;
 mod test_lists_read_by_turns; // several long lists read by turns: a read cursor each
 mod test_long_list_copies;
 mod test_long_list_result;
+mod test_map_field_named_like_word; // card map-field
 mod test_map_get_kind;
 mod test_map_index;
 mod test_map_inside_loop; // card map-inside
@@ -104,6 +105,7 @@ mod test_tuples;
 mod test_type_word_items;
 mod test_typed_list_insert; // card w0-list-writes
 mod test_typed_lists;
+mod test_unit_named_variable_in; // card chars-chars
 mod test_unit_word_text_in; // card in-text-word
 mod test_unpacking;
 mod test_unpacking_declared;
