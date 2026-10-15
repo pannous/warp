@@ -12,6 +12,7 @@ the wiki).
 morning you present the decisions and we can still undo everything")
 Present each in the morning popup batch (keep / change), then move it to decisions.md as the user's or undo it.
 - unit-definitions: see decisions.md dimensions-units.
+- dimension-bridges (px ↔ length through display.dpi): see decisions.md dimensions-units.
 - letters: see decisions.md (Text).
 
 ## Parked (user: "later")

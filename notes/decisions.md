@@ -331,6 +331,17 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   `x * 1 m` (no `x m`). lib/units.warp uses the same lines. Rejected: `length cm := …` (a type word before a name
   already declares a variable's type) and `unit meter := 100 cm` (the anchor would hang on a smaller unit).
   Second opinion: the supervisor (refinements above are its).
+- dimension-bridges (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable):
+  two dimensions are connected by a conversion line `A as B := expression`, the shape of the reverse line above
+  (and of the user's own `meter as cm := it * 100`). Pixels stay their own dimension, as decided: in lib/units.warp,
+  `dimension pixels px`, `unit dpi := px / inch` (a derived unit, pixels per inch), `display.dpi := 96 dpi`, and
+  `length as pixels := it * display.dpi`. The way back (divide) is derived. The right side is read at each
+  conversion, not once, so `3 cm as px` uses the current density, and `display.dpi = 300 dpi` before printing changes
+  every later conversion. `display.dpi` is the density of the px warp draws with: 96 in the browser (one CSS
+  inch), the screen's real value in a native window. Plain arithmetic works without the line: `3 cm * display.dpi` is
+  px, `300 px / display.dpi` is a length. Without a conversion, `3 cm + 2 px` is a compile error naming
+  `as px`, never a silent mix. No SI prefixes on px. The same line serves other run-time rates
+  (`EUR as USD := it * rates.usd`).
 
 ## Text
 - letters (2026-10-15 evening, Interviewer's decision on the user's behalf, to present 2026-10-16; card of-in-chain,
