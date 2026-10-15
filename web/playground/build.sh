@@ -3,7 +3,7 @@
 # builds, samples.js (samples/*.warp for the example menu), keywords.js (the editor's hard and soft keywords) and
 # version.js (the commit built, shown in the ⋯ menu). Serve the repository root and open the page:
 #   web/playground/build.sh && python3 -m http.server 8000   →   http://localhost:8000/web/playground/  (?debug: debug build)
-# Usage: build.sh [optimized|debug|components|libraries|served <site>]   (all when omitted)
+# Usage: build.sh [optimized|debug|components|libraries|served <site>|site <site>]   (all when omitted)
 #   optimized → warp.wasm: release profile (opt-level z, fat LTO, one codegen unit, stripped), without the `validate`
 #               feature (wasmparser's validator, a quarter of the module: the browser validates anyway), then wasm-opt
 #   debug     → warp.debug.wasm: profile web-debug (opt-level 1, line tables, the name section kept), with `validate`, so
@@ -12,7 +12,8 @@
 #               components/names.txt: jco
 #               transpiles it (npm i -g @bytecodealliance/jco), the core modules go into the script as base64, the
 #               WIT signatures of its exports as JSON (wasm-tools component wit --json; cargo install wasm-tools)
-#   served <site> → <site>/served-files.js for a collected site (pages.yml); every build writes the repository's
+#   site <site> → collects the built page into a fresh <site> folder, as deployed (pages.yml, scripts/browser-dry-run.sh)
+#   served <site> → <site>/served-files.js for a collected site; every build writes the repository's
 #   libraries → packages/<name>/<library>.wasm and .h: the release assets of each package packages.warp gives a `library`
 #               (`use uniscript` calls uniscript_c.wasm; browsers cannot fetch release assets, so the page serves them)
 # Measured 2026-10-03: optimized 1.30 MB (545 KB gzipped); debug 22 MB (4.8 MB gzipped; full DWARF would be 53 MB).
@@ -20,6 +21,13 @@
 set -euo pipefail
 
 COMPONENTS=(tests/fixtures/components/*.wasm)
+# what `build.sh site <folder>` collects from web/playground into the deployed site (pages.yml)
+SITE_FILES=(index.html playground.css playground.js deploy.js assistant.js completion.js shortcuts.js entities.tsv guide.js
+	guide.md guide-expert.md primer.md markup.js markup-transitions.js markup-forms.js canvas.js worker.js task-worker.js
+	task-workers.js js-members.js coi-serviceworker.js host.js "host-*.js" components.js components foreign_python.py
+	reader.js imports.js exact.js std.js examples.js codemirror-warp-mode.js codemirror lib packages warp.wasm
+	warp.debug.wasm samples.js keywords.js keywords.txt assistant.json version.js)
+DOMAIN=warp.pannous.com
 
 STACK_BYTES=8388608 # the parser and the emitter recurse deeply; wasm32's default stack is 1 MB
 WASM_OPT_FLAGS=(-Oz --converge --strip-debug --strip-producers
@@ -126,15 +134,41 @@ write_repository_served_files() {
 	{ git ls-files --cached --others --exclude-standard; find web/playground/components web/playground/packages -type f 2>/dev/null || true; } | write_served_files "$page/served-files.js"
 }
 
+write_site_served_files() {
+	(cd "$1" && find . -type f | sed 's|^\./||') | write_served_files "$1/served-files.js"
+}
+
+# the deployed site from a built playground (pages.yml, scripts/browser-dry-run.sh): a fresh <site> folder
+collect_site() {
+	local site part
+	rm -rf "$1" && mkdir -p "$1" && site=$(cd "$1" && pwd)
+	(cd "$page" && cp -r ${SITE_FILES[@]} "$site/") # unquoted: host-*.js expands in the page folder
+	# the language primer for agents at the conventional path (llmstxt.org)
+	cp "$page/primer.md" "$site/llms.txt"
+	# every host part the worker imports (host.js HOST_PART_FILES) is shipped, else no deploy
+	for part in $(grep -o '"host-[a-z]*\.js"' "$page/host.js" | tr -d '"'); do
+		[ -f "$site/$part" ] || { echo "::error::$part missing from the site" >&2; exit 1; }
+	done
+	# the C module the tour imports (examples.js "C libraries"), at its repository path: the page's file root is the site
+	mkdir -p "$site/tests/fixtures/wasm" && cp tests/fixtures/wasm/zlib.wasm tests/fixtures/wasm/zlib.h "$site/tests/fixtures/wasm/"
+	# the warp-compiled module samples/import_compiled.warp imports by its bare name (samples/shapes.wasm links it)
+	mkdir -p "$site/samples" && cp tests/fixtures/compiled/shapes.wasm "$site/samples/"
+	echo "$DOMAIN" > "$site/CNAME"
+	# the files the site serves, so the compiler asks only for those (host-files.js): no 404 in the console
+	write_site_served_files "$site"
+	echo "collected $site"
+}
+
 case "${1:-all}" in
-	served) (cd "$2" && find . -type f | sed 's|^\./||') | write_served_files "$2/served-files.js"; exit ;;
+	served) write_site_served_files "$2"; exit ;;
+	site) collect_site "$2"; exit ;;
 	optimized) build_optimized ;;
 	debug) build_debug ;;
 	# test_in_browser.py builds only these, and the worker imports served-files.js (card browser-served)
 	components) build_components; fetch_package_libraries; write_repository_served_files; exit ;;
 	libraries) fetch_package_libraries; write_repository_served_files; exit ;;
 	all) build_optimized; build_debug; build_components; fetch_package_libraries ;;
-	*) echo "usage: $0 [optimized|debug|components|libraries|served <site>]" >&2; exit 2 ;;
+	*) echo "usage: $0 [optimized|debug|components|libraries|served <site>|site <site>]" >&2; exit 2 ;;
 esac
 
 write_repository_served_files
