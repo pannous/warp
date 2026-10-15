@@ -84,15 +84,33 @@ const TYPE_KEEPING_METHODS: [&str; 14] = [
 
 /// The methods of the value's type: the builtins, then the words of the module named after the type
 fn type_names(value_type: Option<ValueType>) -> Vec<String> {
-	let (builtins, module): (&[&str], &str) = match value_type {
-		Some(ValueType::List) => (&LIST_MEMBERS, LIST_WORD),
-		Some(ValueType::Text) => (&TEXT_MEMBERS, TEXT_WORD),
-		Some(ValueType::Map) => (&MAP_MEMBERS, MAP_WORD),
-		Some(ValueType::Number) => (&NUMBER_MEMBERS, ""),
+	let module = match value_type {
+		Some(ValueType::List) => LIST_WORD,
+		Some(ValueType::Text) => TEXT_WORD,
+		Some(ValueType::Map) => MAP_WORD,
+		Some(ValueType::Number) => "",
 		None => return vec![],
 	};
+	let builtins = if module.is_empty() { &NUMBER_MEMBERS[..] } else { builtin_members(module) };
 	let module_words = crate::modules::std_module_definitions(module).unwrap_or_default();
 	builtins.iter().map(|name| name.to_string()).chain(module_words.iter().cloned()).collect()
+}
+
+/// The builtin methods of the type a standard module is named after (list, text, map); none for any other module
+pub fn builtin_members(module: &str) -> &'static [&'static str] {
+	match module {
+		LIST_WORD => &LIST_MEMBERS,
+		TEXT_WORD => &TEXT_MEMBERS,
+		MAP_WORD => &MAP_MEMBERS,
+		_ => &[],
+	}
+}
+
+/// What `dir` lists of a type module or a value of its type (card dir-lists): the module's words in their order, then
+/// the builtin methods it doesn't define itself
+pub fn type_dir_names(module: &str, words: &[String]) -> Vec<String> {
+	let builtins = builtin_members(module).iter().filter(|name| !words.iter().any(|word| word == *name));
+	words.iter().cloned().chain(builtins.map(|name| name.to_string())).collect()
 }
 
 /// The type of a value written in the program: a variable's is its last assigned value's (followed through other

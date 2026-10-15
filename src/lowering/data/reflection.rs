@@ -839,11 +839,12 @@ fn type_dispatch(subject: &Node, class: &str, names: Node, otherwise: Node) -> N
 /// What `dir` lists of a value that is no instance of the program's classes: a map's keys, else its type's methods
 /// as Python's dir([1, 2]) does, the words of the module named after the type (`dir([1 2])` == `dir(list)`), else none
 fn dir_otherwise(subject: &Node) -> Node {
-	let methods = crate::modules::type_modules()
-		.into_iter()
-		.rev()
-		.filter(|(module, _)| *module != MAP_WORD)
-		.fold(text_list(&[]), |otherwise, (module, words)| type_dispatch(subject, module, text_list(words), otherwise));
+	let methods = crate::modules::type_modules().into_iter().rev().filter(|(module, _)| *module != MAP_WORD).fold(
+		text_list(&[]),
+		|otherwise, (module, words)| {
+			type_dispatch(subject, module, text_list(&super::members::type_dir_names(module, words)), otherwise)
+		},
+	);
 	super::nodes::filled(DIR_OTHERWISE_TEMPLATE, [("RECEIVER", subject.clone()), ("OTHERWISE", methods)])
 }
 

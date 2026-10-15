@@ -22,7 +22,9 @@ pub fn lower(node: Node) -> Node {
 fn listed_names(node: Node, words: &[&str], defined: &HashSet<String>) -> Node {
 	let answer = match module_word(&node) {
 		Some((word, module)) if words.contains(&word) => module_names(module, defined).map(|names| match word {
-			DIR_WORD => crate::reflection::text_list(names),
+			DIR_WORD => {
+				crate::reflection::text_list(&super::members::type_dir_names(&module.drop_meta().name(), names))
+			}
 			_ => crate::reflection::function_list(names),
 		}),
 		_ => None,
