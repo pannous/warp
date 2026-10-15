@@ -44,7 +44,9 @@ pub fn registry_entries(registry: &str) -> Vec<(String, Result<Registered, Strin
 	statements(WarpParser::parse(registry))
 		.iter()
 		.filter_map(|entry| match entry.drop_meta() {
-			Node::Symbol(name) => Some((name.clone(), Ok(Registered { url: repository_url(name), pinned: None, library: None }))),
+			Node::Symbol(name) => {
+				Some((name.clone(), Ok(Registered { url: repository_url(name), pinned: None, library: None })))
+			}
 			Node::Key(key, _, value) => match key.drop_meta() {
 				Node::Symbol(name) => Some((name.clone(), registry_entry(name, value))),
 				_ => None,
