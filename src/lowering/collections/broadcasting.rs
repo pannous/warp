@@ -13,7 +13,6 @@ use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::traits::InstanceTypes;
 use crate::type_kinds::Kind;
-use crate::words::EXTREMUM_WORDS;
 use crate::words::{ALL_WORD, COUNT_WORD, DOT_WORD, EACH_WORD, IMPLICIT_PARAMETER, LOG_WORD, MAP_WORD, SUM_WORD};
 use std::collections::{HashMap, HashSet};
 
@@ -241,11 +240,11 @@ fn rules_out_a_truth_value(parameter: &Node) -> bool {
 	}
 }
 
-/// `sum`, `max`, `upper`, `count` …: a library word of one value, not redefined by the program
+/// `sum`, `max`, `upper`, `count` …: a library word with a signature (count's optional item has no notation yet), not
+/// redefined by the program
 fn is_one_value_word(node: &Node, arities: &HashMap<String, Arity>) -> bool {
-	let is_word = |name: &str| {
-		crate::library_words::is_library_word(name) || EXTREMUM_WORDS.contains(&name) || name == COUNT_WORD
-	};
+	let is_word =
+		|name: &str| crate::lowering::library_signatures::library_signature(name).is_some() || name == COUNT_WORD;
 	matches!(node.drop_meta(), Node::Symbol(name) if arities.get(name).is_none_or(|takes| takes.library) && is_word(name))
 }
 
@@ -256,11 +255,12 @@ fn arity_of(node: &Node, arities: &HashMap<String, Arity>) -> Option<Arity> {
 	}
 }
 
-/// `say 3 == 3` of a function that takes anything reads both ways (P143): a loud error offering each reading
-fn ambiguous_call(at: &Node, name: &str, argument: &str, op: &Op, right: &str) -> Node {
-	let written = format!("{name} {argument} {op} {right}");
-	let call_compared = format!("({name} {argument}) {op} {right}");
-	let comparison_argument = format!("{name}({argument} {op} {right})");
+/// `say 3 == 3` of a function that takes anything reads both ways (P143): a loud error offering each reading; in a
+/// logical chain the call takes the first comparand, `(say 3) == 3 and yes`
+fn ambiguous_call(at: &Node, name: &str, argument: &Node) -> Node {
+	let written = format!("{name} {}", spaced(argument, &|first| first.serialize()));
+	let call_compared = spaced(argument, &|first| format!("({name} {})", first.serialize()));
+	let comparison_argument = format!("{name}({})", spaced(argument, &|first| first.serialize()));
 	crate::errors::diagnostic::Diagnostic::at(
 		at,
 		format!("{written} is ambiguous; write {call_compared} or {comparison_argument}"),
@@ -268,6 +268,16 @@ fn ambiguous_call(at: &Node, name: &str, argument: &str, op: &Op, right: &str) -
 	.offer("the call compared", &written, &call_compared)
 	.offer("the comparison as the argument", &written, &comparison_argument)
 	.into_error()
+}
+
+/// A comparison chain as written, its first comparand as `first` renders it: `3 == 3 and yes`
+fn spaced(node: &Node, first: &dyn Fn(&Node) -> String) -> String {
+	match node.drop_meta() {
+		Node::Key(left, op, right) if crate::library_words::is_comparison(node) => {
+			format!("{} {op} {}", spaced(left, first), right.serialize())
+		}
+		_ => first(node),
+	}
 }
 
 fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
@@ -314,15 +324,14 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 		}
 		// `square 3 == 9` parses as `square (3 == 9)`. P143 (user): a parameter typed as no truth value takes the call,
 		// `(square 3) == 9` (wiki/all.md `square [1 2 3] == [1 4 9]`); untyped, both readings work: a loud error
-		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, argument] if arity(head).is_some() && matches!(argument.drop_meta(), Node::Key(_, op, _) if op.is_comparison())) =>
+		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, argument] if arity(head).is_some() && crate::library_words::is_comparison(argument)) =>
 		{
 			let [head, argument]: [Node; 2] = items.try_into().expect("guarded");
-			let Node::Key(left, op, right) = argument.drop_meta().clone() else { unreachable!("guarded") };
 			if !arity(&head).expect("guarded").typed_first {
-				return ambiguous_call(&argument, &head.drop_meta().name(), &left.serialize(), &op, &right.serialize());
+				return ambiguous_call(&argument, &head.drop_meta().name(), &argument);
 			}
-			let call = Node::List(vec![head, *left], Bracket::None, Separator::Space);
-			key(nest_prefix_calls(call, arities), op, nest_prefix_calls(*right, arities))
+			let call = |operand| Node::List(vec![head.clone(), operand], Bracket::None, Separator::Space);
+			nest_prefix_calls(crate::library_words::with_first_comparand(argument, &call), arities)
 		}
 		// the same phrase the parser grouped the other way, `(f 3) == 9`, when it did not know f takes a value: as
 		// ambiguous when the body accepts anything (`f := print it`)
@@ -331,7 +340,8 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 				&& matches!(left.drop_meta(), Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, _] if arity(head).is_some_and(|takes| !takes.typed_first))) =>
 		{
 			let Node::List(items, _, _) = left.drop_meta() else { unreachable!("guarded") };
-			ambiguous_call(&left, &items[0].drop_meta().name(), &items[1].serialize(), &op, &right.serialize())
+			let argument = key(items[1].clone(), op, *right);
+			ambiguous_call(&left, &items[0].drop_meta().name(), &argument)
 		}
 		Node::List(items, Bracket::None, Separator::Colon) if items.len() > 1 => {
 			let items: Vec<Node> = items.into_iter().map(|item| nest_prefix_calls(item, arities)).collect();
