@@ -39,3 +39,11 @@ fn a_dot_word_is_the_written_lambda() {
 	assert_eq!(printed("[[1 2] [3]].map(.first)"), "[1 3]");
 	assert_eq!(printed("f = .name; f({name: 1})"), "1");
 }
+
+/// element attributes and data entries are no code positions: the dot word stays a symbol there
+#[test]
+fn a_dot_word_in_data_stays_a_symbol() {
+	assert_eq!(printed("div{ class: .card }"), "div:class:.card");
+	assert_eq!(printed("m = {sel: .x}; m"), "sel:.x");
+	assert_eq!(printed(&format!("{PEOPLE}people.sort(by: .age)")), "[{name:\"Bob\" age:1} {name:\"Ann\" age:3}]");
+}
