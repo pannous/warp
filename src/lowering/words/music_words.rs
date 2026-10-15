@@ -168,7 +168,7 @@ fn with_live_loops(statements: Vec<Node>, defined: &HashSet<String>) -> Vec<Node
 			(_, 1) => lowered.push(live_loop.voice(&blocks)),
 			(1, count) => {
 				lowered.push(substituted(
-					crate::warp_parser::parse(LIVE_SINCE_DECLARATION),
+					crate::warp_parser::parse_generated(LIVE_SINCE_DECLARATION),
 					&[(LIVE_SINCE, since.clone()), (LIVE_COUNT, Node::int(count as i64))],
 				));
 				lowered.extend((2..=count).map(|later| filled(LIVE_SINCE_UNSET, later)));
@@ -515,7 +515,7 @@ impl LiveLoop {
 	fn voice_choosing(&self, blocks: &[Node], since: &Node) -> Node {
 		let choice = blocks.iter().enumerate().skip(1).fold(blocks[0].clone(), |earlier, (index, block)| {
 			substituted(
-				crate::warp_parser::parse(LIVE_VERSION_TEMPLATE),
+				crate::warp_parser::parse_generated(LIVE_VERSION_TEMPLATE),
 				&[
 					(LIVE_SINCE, since.clone()),
 					(LIVE_VERSION, Node::int(index as i64 + 1)),
@@ -524,7 +524,7 @@ impl LiveLoop {
 				],
 			)
 		});
-		let body = substituted(crate::warp_parser::parse(LIVE_CHOICE), &[(LIVE_CHOICE_WORD, choice)]);
+		let body = substituted(crate::warp_parser::parse_generated(LIVE_CHOICE), &[(LIVE_CHOICE_WORD, choice)]);
 		self.voice(&[Node::List(body.sequence_statements().to_vec(), Bracket::Curly, Separator::Newline)])
 	}
 

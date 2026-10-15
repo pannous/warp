@@ -23,7 +23,7 @@ const LANGUAGE_GLOBALS: [&str; 14] = [
 pub fn lower(program: Node) -> Node {
 	let mut globals = BTreeSet::new();
 	let program = rewritten(program, &mut Vec::new(), &mut globals);
-	let uses = globals.iter().map(|global| crate::warp_parser::parse(&format!("use js {global}"))).collect();
+	let uses = globals.iter().map(|global| crate::warp_parser::parse_generated(&format!("use js {global}"))).collect();
 	with_statements_first(program, uses)
 }
 
@@ -81,5 +81,8 @@ fn is_global(name: &str) -> bool {
 
 /// `document.getElementById("xyz")`
 fn element_of_id(id: &str) -> Node {
-	crate::warp_parser::parse(&format!("{DOCUMENT}.getElementById({})", Node::Text(id.to_string()).serialize()))
+	crate::warp_parser::parse_generated(&format!(
+		"{DOCUMENT}.getElementById({})",
+		Node::Text(id.to_string()).serialize()
+	))
 }

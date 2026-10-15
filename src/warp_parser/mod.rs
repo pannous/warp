@@ -378,6 +378,11 @@ pub fn parse_template(template: &str, at: &Node) -> Node {
 	placed(parse(template), crate::errors::diagnostic::line_info(at).as_ref())
 }
 
+/// Code a lowering pass writes, without positions: an error inside it names the nearest written position around it
+pub fn parse_generated(code: &str) -> Node {
+	placed(parse(code), None)
+}
+
 /// Every position in `node` replaced by `position`, or dropped without one
 fn placed(node: Node, position: Option<&LineInfo>) -> Node {
 	match node {

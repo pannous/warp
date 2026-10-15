@@ -7,7 +7,6 @@ use crate::analyzer::call_name;
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
-use crate::warp_parser::parse;
 
 const EXTREMA: [(&str, Op); 2] = [("min", Op::Lt), ("max", Op::Gt)];
 const MIN_ARGUMENTS: usize = 2;
@@ -120,7 +119,7 @@ impl Lowering<'_> {
 
 	/// `max(xs)` for a list variable: the first item, improved by every later one; an empty list is an error
 	fn fold_list_at_runtime(&mut self, name: &str, list: &Node, better: &Op) -> Node {
-		let template = parse(&format!(
+		let template = crate::warp_parser::parse_generated(&format!(
 			"(if count({FOLD_LIST}) == 0 then {EMPTY_EXTREMUM_CALL}({name}) else ({FOLD_PREFIX}best={FOLD_LIST}#1; for {FOLD_PREFIX}item in {FOLD_LIST} {{ {FOLD_PREFIX}best = if {FOLD_PREFIX}item {better} {FOLD_PREFIX}best then {FOLD_PREFIX}item else {FOLD_PREFIX}best }}; {FOLD_PREFIX}best))"
 		));
 		crate::library_words::substitute(

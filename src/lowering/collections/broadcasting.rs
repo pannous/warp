@@ -1204,7 +1204,7 @@ fn ungrouped(node: &Node) -> &Node {
 /// Two lists, their items paired by index in `template`: a list of `left op right`, or their sum; `named` makes the
 /// template's names the rewrite's own
 pub(crate) fn paired_by(receiver: Node, op: Op, operand: Node, template: &str, named: impl Fn(&str) -> String) -> Node {
-	let item = match crate::warp_parser::parse(&named(PAIRED_ITEM)).drop_meta() {
+	let item = match crate::warp_parser::parse_generated(&named(PAIRED_ITEM)).drop_meta() {
 		Node::Key(left, _, right) => Node::Key(left.clone(), op, right.clone()),
 		other => unreachable!("{other:?}"),
 	};
