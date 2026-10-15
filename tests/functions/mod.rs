@@ -70,6 +70,7 @@ mod test_function_head; // card cleanup-definition-view
 mod test_function_keyword;
 mod test_function_ref_compare; // card function-ref-compare
 mod test_function_references;
+mod test_function_type_at_run_time; // card type-function
 mod test_function_values;
 mod test_functions;
 mod test_gap_feeding; // card gap-feeding
