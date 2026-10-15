@@ -44,3 +44,12 @@ fn a_parameter_named_like_a_module_word_needs_no_module() {
 	let error = warp::wasm_emitter::eval("f(x) := melody(x); f(1)").serialize();
 	assert!(error.contains("use sound"), "{error}");
 }
+
+/// card use-sound: a program function named like a module's helper is the program's; the module's own code still calls
+/// its own (lexical scope, as for a program variable): mix sums with sound's added, lowpass filters with its biquad
+#[test]
+fn a_program_function_named_like_a_module_helper_leaves_the_module_its_own() {
+	is!("use sound\nadded(x, y) := 7\nmix([0.1], [0.2])#1 ~ 0.3 and added(1, 2) == 7", true);
+	is!("use sound\nbiquad(a, k, f, q) := [9]\ncount(osc(C4, 0.01s) |> lowpass(500))", 220);
+	is!("use sound\nwave(shape, p) := 0.0\nmax(chord_amplitudes([440], 0.01, \"sine\")) > 0 and wave(1, 2) == 0", true);
+}

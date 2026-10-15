@@ -7,15 +7,44 @@ pub(crate) const SHADOWED_WORD_PREFIX: &str = "lib·";
 /// The names the program declares, but not its methods: `take()` of a class Box, `take(b:Box)` add to list's take
 /// (notes/dispatch.md "Methods"), a plain `take(xs, n)` is the program's own take
 pub(crate) fn own_functions(program: &Node) -> HashSet<String> {
+	let classes = class_names(program);
+	let mut own = classes.clone();
+	collect_own_functions(program, &classes, &mut own);
+	own
+}
+
+fn class_names(program: &Node) -> HashSet<String> {
 	let mut classes = HashSet::new();
 	program.visit(&mut |node| {
 		if let Node::Type { name, .. } = node {
 			classes.extend(leftmost_symbol(name));
 		}
 	});
-	let mut own = classes.clone();
-	collect_own_functions(program, &classes, &mut own);
-	own
+	classes
+}
+
+/// The program's variables and its own functions, which a module's words of the same name are renamed apart from
+/// (shadowed_apart): a program's `added(x, y) := 7` leaves sound's mix its own added (card use-sound)
+/// Methods (`play(s: Song)` of a class Song) stay out: they add to the module's word
+pub(crate) fn program_words(program: &Node) -> HashSet<String> {
+	let classes = class_names(program);
+	let is_method = |head: &Node| {
+		let mut typed_by_class = false;
+		head.visit(&mut |node| {
+			if let Node::Key(_, Op::Colon, class) = node {
+				typed_by_class |= class.symbol_name().is_some_and(|class| classes.contains(class));
+			}
+		});
+		typed_by_class
+	};
+	let functions = statements_of(program).iter().filter_map(|statement| {
+		let (head, _, _) = crate::type_tests::function_definition(statement)?;
+		if is_method(&head) {
+			return None;
+		}
+		leftmost_symbol(&head)
+	});
+	program_variables(program).into_iter().chain(functions).collect()
 }
 
 /// The program's declarations; in a function body only the nested functions, its variables are its own (a local
