@@ -335,6 +335,22 @@ fn built_stub(name: &str, features: &[&str]) -> std::path::PathBuf {
 	own_copy(&build, name).expect("copy the runtime stub")
 }
 
+/// The command's output, or a panic once it ran `limit` without ending (killed first): a run that should end, tested
+#[cfg(feature = "native")]
+pub fn output_within(command: &mut std::process::Command, limit: std::time::Duration) -> std::process::Output {
+	use std::process::Stdio;
+	let mut run = command.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().expect("the command starts");
+	let started = std::time::Instant::now();
+	while run.try_wait().expect("the command runs").is_none() {
+		if started.elapsed() > limit {
+			run.kill().expect("stop the command");
+			panic!("still running after {limit:?}: {:?}", run.wait_with_output().map(|output| output.stdout));
+		}
+		std::thread::sleep(std::time::Duration::from_millis(50));
+	}
+	run.wait_with_output().expect("the command's output")
+}
+
 /// A command running this checkout's warp binary. Every checkout builds the one shared target/debug/warp, so another
 /// worktree's build can replace it at any moment while these tests run, and versions overlap (`0.1.1` is a prefix of
 /// every branch's `0.1.1-<branch>`). So the binary is this checkout's own build in target/debug/deps (checkout_build:
