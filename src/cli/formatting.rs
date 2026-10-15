@@ -26,11 +26,34 @@ pub(crate) const FORMAT_USAGE: &str = "warp format [check] [hash-comments] <file
 const WARP_EXTENSION: &str = "warp";
 /// What hints on code given inline name instead of a file
 const CODE_LABEL: &str = "code";
-/// code.golf solutions count their bytes: a folder of them keeps its layout (a file named explicitly is formatted)
+/// code.golf solutions count their bytes: a folder of them keeps its layout, also when named (`warp fix *` names it);
+/// a file named explicitly is formatted
 const SKIPPED_FOLDERS: [&str; 1] = ["golf"];
+const SKIPPED_FOLDER_REASON: &str = "code golf counts bytes";
+/// `warp fix *` names every file of a folder: only warp code is formatted (cards fix-rewrote, fix-laid)
+const NOT_WARP_REASON: &str = "not a warp file";
 
 pub(crate) fn is_format_command(word: &str) -> bool {
 	FORMAT_COMMANDS.contains(&word) || BEAUTIFY_COMMANDS.contains(&word)
+}
+
+/// Why a named path or a folder's entry is not formatted: no warp file, or a golf folder
+fn skip_reason(path: &Path) -> Option<&'static str> {
+	if path.is_dir() {
+		let golf = path.file_name().is_some_and(|name| SKIPPED_FOLDERS.iter().any(|skip| name == *skip));
+		golf.then_some(SKIPPED_FOLDER_REASON)
+	} else {
+		let is_warp = path.extension().is_some_and(|extension| extension == WARP_EXTENSION);
+		(!is_warp).then_some(NOT_WARP_REASON)
+	}
+}
+
+/// The warp files of a named path; a named path that is skipped says why, a folder's entries are skipped silently
+fn named_warp_files(path: &Path, files: &mut Vec<PathBuf>) {
+	match skip_reason(path) {
+		Some(reason) if path.exists() => println!("{}: skipped: {reason}", path.display()),
+		_ => warp_files(path, files),
+	}
 }
 
 fn warp_files(path: &Path, files: &mut Vec<PathBuf>) {
@@ -38,12 +61,8 @@ fn warp_files(path: &Path, files: &mut Vec<PathBuf>) {
 		let mut entries: Vec<PathBuf> =
 			fs::read_dir(path).into_iter().flatten().flatten().map(|entry| entry.path()).collect();
 		entries.sort();
-		for entry in entries {
-			let skipped = entry.is_dir()
-				&& entry.file_name().is_some_and(|name| SKIPPED_FOLDERS.iter().any(|skip| name == *skip));
-			if !skipped && (entry.is_dir() || entry.extension().is_some_and(|extension| extension == WARP_EXTENSION)) {
-				warp_files(&entry, files);
-			}
+		for entry in entries.iter().filter(|entry| skip_reason(entry).is_none()) {
+			warp_files(entry, files);
 		}
 	} else {
 		files.push(path.to_path_buf());
@@ -159,7 +178,7 @@ pub(crate) fn format_command(command: &str, arguments: &[String]) -> i32 {
 	}
 	let mut files = Vec::new();
 	for path in paths {
-		warp_files(Path::new(path), &mut files);
+		named_warp_files(Path::new(path), &mut files);
 	}
 	if files.is_empty() {
 		eprintln!("warp {command}: name the warp files or folders to format, or give code\n  {FORMAT_USAGE}");
