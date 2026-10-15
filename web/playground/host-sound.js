@@ -296,8 +296,8 @@ addHostPart({
 		sound: {
 			// a written file (a rendered WAV) goes to the page as its bytes, a served or remote one by its URL; a local file
 			// that is not there fails as natively (card browser-play)
-			play_file: path => {
-				const name = contentText(path);
+			play_file(path) {
+				const name = besideProgram(contentText(path), programFileOf(this.holder.run)); // host-files.js
 				const written = writtenFiles.has(filePath(name));
 				if (!written && !/^https?:/.test(name) && !servedFileExists(name)) throw new Error(`cannot open ${name}: ${FILE_NOT_FOUND}`);
 				self.playSoundFile?.(fileUrl(name), written ? readBytes(name) : undefined);
