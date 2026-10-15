@@ -72,8 +72,9 @@ jobs:
         # the C module the tour imports (examples.js "C libraries"), at its repository path: the page's file root is the site
         mkdir -p _site/tests/fixtures/wasm && cp tests/fixtures/wasm/zlib.wasm tests/fixtures/wasm/zlib.h _site/tests/fixtures/wasm/
         # the samples' neighbours at their repository paths, as natively: `play "mozart.mp3"` beside samples/play_mp3.warp
-        # (card open-mozart), the files a sample reads, writes over or includes
-        git ls-files -z samples | xargs -0 cp --parents -t _site
+        # (card open-mozart), the files a sample reads, writes over or includes; the regular ones, not the links
+        # (samples/tests, samples/shapes.wasm)
+        git ls-files -z samples | while IFS= read -r -d '' file; do test -L "$file" || cp --parents "$file" _site; done
         # the warp-compiled module samples/import_compiled.warp imports by its bare name (samples/shapes.wasm links it)
         cp tests/fixtures/compiled/shapes.wasm _site/samples/
         echo "warp.pannous.com" > _site/CNAME
