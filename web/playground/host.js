@@ -154,6 +154,14 @@ function programImports(holder, hooks) {
 				if (known !== undefined) return BigInt(known);
 				throw new Error(`${value}: the playground cannot read it yet`);
 			},
+			// key_held(code) (crates/warp-runtime host_words.rs): whether that key is among those held (canvas.js trackKey),
+			// code 0 whether none is
+			key_held: code => {
+				const names = self.pagePointer?.names ?? [];
+				const read = name => Atomics.load(self.pagePointer.values, names.indexOf(name));
+				const held = names.filter(name => name === "key" || name.startsWith("held ")).map(read);
+				return BigInt(code === 0n ? held.every(heldCode => heldCode === 0) : held.includes(Number(code)));
+			},
 			// window.width = 800: the paintings' frame (crates/warp-runtime/src/system_values.rs write); the display reads only
 			set_system_value: (name, value) => {
 				const side = decode(cString(name));

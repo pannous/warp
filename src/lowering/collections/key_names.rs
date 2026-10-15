@@ -3,14 +3,17 @@
 //! `on key { if key == ESC { exit } }` reads as written. A program's own variable (`key`, `UP`) stays its own. A
 //! comparison with a word that names nothing (`key == ESCAPEE`, `key == q`) never holds, which a warning says.
 //! The key words compare with `held_key` anywhere too (card held-key): `held_key == LEFT` is `held_key == "ArrowLeft"`.
+//! A comparison with `held_key` asks whether that key is held, among others (card allow-diagonals): with LEFT and UP
+//! held, `held_key == LEFT` and `held_key == UP` both hold, so a program steers diagonally; `held_key` alone names the
+//! last to go down. `held_key == ""`: none is held.
 
-use super::nodes::key;
+use super::nodes::{call, key};
 use crate::errors::diagnostic::Diagnostic;
 use crate::event_signals::{main_level_variables, EVENT_WORD};
 use crate::node::{symbol, Node};
 use crate::operators::Op;
 use std::collections::HashSet;
-use warp_runtime::host_words::HELD_KEY;
+use warp_runtime::host_words::{HELD_KEY, KEY_HELD};
 
 const HANDLER_WORDS: [&str; 2] = ["on", "once"];
 const KEY_EVENT: &str = "key";
@@ -66,7 +69,12 @@ fn held_comparisons(node: Node, own: &HashSet<String>, warnings: &mut Vec<Diagno
 	match node.drop_meta() {
 		Node::Key(left, op @ (Op::Eq | Op::Ne), right) if left.is_symbol(HELD_KEY) || right.is_symbol(HELD_KEY) => {
 			let [left, right] = [left, right].map(|side| held_compared(side, own, warnings));
-			key(left, *op, right)
+			let compared = if left.is_symbol(HELD_KEY) { &right } else { &left };
+			if compared.is_symbol(HELD_KEY) {
+				return key(left, *op, right);
+			}
+			let held = call(KEY_HELD, vec![crate::system_signals::key_code(compared.clone())]);
+			key(held, if *op == Op::Eq { Op::Ne } else { Op::Eq }, Node::int(0))
 		}
 		_ => node.map_children(|child| held_comparisons(child, own, warnings)),
 	}

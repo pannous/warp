@@ -148,6 +148,18 @@ fn kept_push<T>(presses: &mut VecDeque<T>, press: T) {
 	presses.push_back(press);
 }
 
+/// Every key held over the paint window, in the order they went down (card allow-diagonals): the last is KEY_INPUT
+static KEYS_HELD: Mutex<Vec<i64>> = Mutex::new(Vec::new());
+
+pub fn tell_keys_held(codes: &[i64]) {
+	*KEYS_HELD.lock().unwrap() = codes.to_vec();
+}
+
+/// Whether the key of that code is held now, among others (KEY_HELD); code 0: whether none is
+pub fn key_held(code: i64) -> bool {
+	window_input()[KEY_INPUT] as i64 == code || KEYS_HELD.lock().unwrap().contains(&code)
+}
+
 /// The key held over the paint window alone, the pointer left as it is
 pub fn tell_window_key(key: f32) {
 	// a press: a key held that was not held before (another key, or none)

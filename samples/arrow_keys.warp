@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-// Hold the arrow keys to move the dot, Escape ends (in the playground: click the canvas first)
+// Hold the arrow keys to move the dot, two at once diagonally; Escape ends (in the playground: click the canvas first)
 use draw
 canvas(320, 240)
 x = 160

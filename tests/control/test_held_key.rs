@@ -36,3 +36,16 @@ fn held_key_compares_with_the_key_words() {
 		.count();
 	assert_eq!(warned, 1);
 }
+
+// card allow-diagonals: two keys held at once are both held, so a drawing loop steers diagonally with
+// `if held_key == LEFT {…}` and `if held_key == UP {…}`; the keys are told as the viewer's input line tells them
+#[cfg(feature = "native")]
+#[test]
+fn held_key_compares_with_every_key_held() {
+	let _window = crate::common::window_input_held();
+	warp_runtime::system_values::tell_keys_held(&[0xF702, 0xF700]);
+	is!("held_key == LEFT and UP == held_key and held_key != RIGHT and held_key != \"\"", true);
+	is!("arrow = \"ArrowUp\"; held_key == arrow", true);
+	warp_runtime::system_values::tell_keys_held(&[]);
+	is!("held_key == UP", false);
+}

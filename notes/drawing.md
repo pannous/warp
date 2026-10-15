@@ -31,3 +31,13 @@ set by paint.rs allow_windows): with a window on by default, `WARP_DRAW=gpu|cpu`
   Headless, an offscreen canvas is read back and written as paint's PNG.
 - The playground keeps the CPU path (gpu_drawing is 0 there); its draw_shape/draw_show stubs are in host-gpu.js.
 - Checks: tests/programs/test_gpu_draw.rs (GPU vs CPU pixels), probes/gpu_draw/compare.py <warp> scene.warp.
+
+## Saving a picture (card save-painting)
+`save "painting.png"`, `save canvas as "painting.png"`, `save(canvas, "painting.png")`: the canvas as drawn so far as a
+PNG (decision save-sound: one `save`, overloaded by type). src/lowering/words/saved_words.rs makes the word `canvas` as
+save's argument lib/draw.warp's `Picture()` (as `sound` is sound.warp's Recording); its save calls the host word
+`save_picture(canvas_pixels, width, height, file)`. Natively paint.rs save_png writes the file; on the GPU the pixels
+are in the window's process, so gpu_canvas.rs keeps the shapes since the last clear (UNMIRRORED) and snapshot draws them
+into the in-process OFFSCREEN canvas and reads it back (headless show uses the same). The playground shades the pixels
+as paint does (host-media.js), and the page makes a PNG of them (playground.js savePicture), downloads it at once and
+offers it beside the wasm link. tests/programs/test_save_painting.rs.

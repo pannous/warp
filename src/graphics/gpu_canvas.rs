@@ -54,15 +54,22 @@ fn box_of(kind: u32, place: vec4f) -> vec4f {
 
 /// The shapes drawn since the last show, as they cross to the GPU
 static SHAPES: Mutex<Vec<u8>> = Mutex::new(Vec::new());
+/// The shapes not yet drawn into OFFSCREEN, which keeps the canvas here too: a window's canvas lives in its process,
+/// so a saved picture (snapshot, card save-painting) is drawn here from them. From the last clear on, which covers all
+static UNMIRRORED: Mutex<Vec<u8>> = Mutex::new(Vec::new());
 
 /// draw_shape(kind, a, b, c, d, color): one more shape for the next show
 pub fn add_shape(kind: u32, place: [f64; 4], color: u32) {
-	let mut shapes = SHAPES.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-	shapes.extend(kind.to_le_bytes());
-	shapes.extend(color.to_le_bytes());
+	let mut shape = [kind.to_le_bytes(), color.to_le_bytes()].concat();
 	for coordinate in place {
-		shapes.extend((coordinate as f32).to_le_bytes());
+		shape.extend((coordinate as f32).to_le_bytes());
 	}
+	SHAPES.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).extend(&shape);
+	let mut unmirrored = UNMIRRORED.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+	if kind == CLEAR {
+		unmirrored.clear();
+	}
+	unmirrored.extend(shape);
 }
 
 /// The shapes since the last show, taken
@@ -213,11 +220,16 @@ pub fn show(width: usize, height: usize) -> Result<Option<std::path::PathBuf>, S
 		crate::graphics::paint_window::show(&crate::graphics::paint_window::shapes_message(width, height, &shapes))?;
 		return Ok(None);
 	}
-	let rgba = crate::graphics::gpu::with_device(|device, queue| {
+	crate::graphics::paint::paint_rgba(&snapshot(width, height)?, width, height)
+}
+
+/// The canvas as drawn so far, its RGBA bytes: the shapes not drawn here yet drawn into OFFSCREEN, which is read back
+pub fn snapshot(width: usize, height: usize) -> Result<Vec<u8>, String> {
+	let shapes = std::mem::take(&mut *UNMIRRORED.lock().unwrap_or_else(|poisoned| poisoned.into_inner()));
+	crate::graphics::gpu::with_device(|device, queue| {
 		let mut offscreen = OFFSCREEN.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 		let canvas = offscreen.get_or_insert_with(|| Canvas::new(device));
 		let encoder = canvas.draw(device, queue, width as u32, height as u32, &shapes);
 		crate::graphics::gpu::image_rgba(device, queue, encoder, canvas.texture())
-	})??;
-	crate::graphics::paint::paint_rgba(&rgba, width, height)
+	})?
 }

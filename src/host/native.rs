@@ -307,6 +307,7 @@ fn link_library_words(linker: &mut Linker<HostState>) -> Result<()> {
 		crate::graphics::gpu_canvas::add_shape(kind as u32, [a, b, c, d], color as u32)
 	})?;
 	linker.func_wrap(HOST_LIBRARY, DRAW_SHOW, draw_show)?;
+	linker.func_wrap(HOST_LIBRARY, SAVE_PICTURE, save_picture)?;
 	linker.func_wrap(HOST_LIBRARY, SOUND, sound)?;
 	Ok(())
 }
@@ -374,6 +375,31 @@ fn paint(
 		}
 	};
 	crate::graphics::paint::paint(&values, size.0, size.1).map(|_| ()).map_err(task_failure)
+}
+
+/// save_picture(pixels, width, height, file) (card save-painting): `use draw`'s canvas as a PNG at that path, its pixels
+/// as paint takes them, or, drawn on the GPU (no pixels then), the GPU canvas as drawn so far
+fn save_picture(
+	mut caller: Caller<'_, HostState>,
+	pixels: HostNode,
+	width: i64,
+	height: i64,
+	file: HostNode,
+) -> wasmtime::Result<()> {
+	let path = match given_node(&mut caller, file)? {
+		Node::Text(path) => path,
+		other => return Err(task_failure(format!("save: the file is a text, got {}", other.serialize()))),
+	};
+	let memory = module_memory(&mut caller, SAVE_PICTURE)?;
+	let size = (width.max(0) as usize, height.max(0) as usize);
+	let on_gpu = warp_runtime::system_values::read(warp_runtime::host_words::GPU_DRAWING) == Ok(1);
+	let saved = match list_values(&mut caller, memory, pixels, size.0 * size.1)? {
+		_ if on_gpu => crate::graphics::gpu_canvas::snapshot(size.0, size.1)
+			.and_then(|rgba| crate::graphics::paint::save_rgba_png(&rgba, size.0, size.1, &path)),
+		Ok(values) => crate::graphics::paint::save_png(&values, size.0, size.1, &path),
+		Err(other) => Err(format!("save: a picture's pixels are a list, got {}", other.serialize())),
+	};
+	saved.map_err(task_failure)
 }
 
 /// show() of `use draw` on the GPU (src/graphics/gpu_canvas.rs)

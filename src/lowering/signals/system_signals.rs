@@ -125,6 +125,25 @@ pub fn key_named(code: Node) -> Node {
 	super::nodes::filled(&format!("{choices}\"\" + chr(CODE)"), [("CODE", code)])
 }
 
+/// The code of the key of that name, as key_named names it, -1 (never held) for a name of none: a given name at once
+pub fn key_code(name: Node) -> Node {
+	if let Node::Text(text) = name.drop_meta() {
+		return Node::int(named_code(text));
+	}
+	let choices: String =
+		KEY_NAMES.iter().map(|(number, name)| format!("if NAME == \"{name}\" then {number} else ")).collect();
+	super::nodes::filled(&format!("{choices}if NAME.length == 1 then ord(NAME) else -1"), [("NAME", name)])
+}
+
+fn named_code(name: &str) -> i64 {
+	let mut letters = name.chars();
+	match (KEY_NAMES.iter().find(|(_, key)| *key == name), letters.next(), letters.next()) {
+		(Some((code, _)), _, _) => *code,
+		(None, Some(letter), None) => i64::from(u32::from(letter)),
+		_ => -1,
+	}
+}
+
 #[cfg(feature = "native")]
 fn clicks_reader() -> Node {
 	crate::warp_parser::parse(CLICKS_TEMPLATE)

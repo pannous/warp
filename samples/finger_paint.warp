@@ -1,6 +1,7 @@
 #!/usr/bin/env warp
 // finger painting: hold the mouse button over the window (in the playground, the canvas) and draw strokes whose color
-// turns as you go. mouse_x, mouse_y and mouse_down are the pointer over the painted picture, in its pixels
+// turns as you go; S saves the painting (in the playground, a download), space clears it. mouse_x, mouse_y and
+// mouse_down are the pointer over the painted picture, in its pixels
 use draw
 // 1024 pixels across or more show pixel for pixel: crisp on a Retina screen (640×400 points there)
 width = 1280
@@ -28,6 +29,7 @@ def stroke(x1, y1, x2, y2) {
 on key {
 	if key == ESC: exit()
 	if key == SPACE: clear(white)
+	if key == "s": save "painting.png"
 	show()
 }
 

@@ -196,6 +196,12 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   `key code held` once into `held·code` and names it by system_signals.rs key_named, which the native `on key` reader
   shares (KEY_NAMES); the playground's canvas.js KEY_CODES gives Enter, Escape, Backspace and Tab their codes too.
   Test: tests/control/test_held_key.rs; probe probes/held_key/steer.warp.
+- Several keys held (card allow-diagonals): a comparison with `held_key` asks whether that key is among those held,
+  so LEFT and UP held together make both `held_key == LEFT` and `held_key == UP` true (samples/arrow_keys.warp steers
+  diagonally); `held_key` alone names the last to go down, `held_key == ""` none held. The comparison lowers to the
+  host word `key_held(code) != 0` (system_signals.rs key_code, a given name's code at compile time). Natively the
+  viewer's input line carries every held code after the key (paint_window.rs, cleared when the window loses focus);
+  in the playground canvas.js keeps them in the shared slots "held 0" … "held 7" (host.js key_held).
 - A body after a colon (`on every 5 seconds: print n`, `at 9pm: print n`) is the rest of the line: it arrives as
   `on every (5 seconds: print) n`, the colon binding its neighbours, and words_and_body joins the words after it.
 - System values (P136, card system-values; tests/control/test_system_values.rs): `battery` (percent, an Int),
