@@ -28,7 +28,6 @@ impl WasmGcEmitter {
 		self.try_finish().unwrap_or_else(|message| panic!("{message}"))
 	}
 
-	/// The module's own memory, at least as many pages as its texts take
 	/// The program's file as given, for a program playing files; none for an absolute path, which would carry this
 	/// machine's folders into the module
 	fn program_file_for_the_host(&self) -> Option<String> {
@@ -39,6 +38,7 @@ impl WasmGcEmitter {
 		Some(file.to_string_lossy().into_owned())
 	}
 
+	/// The module's own memory, at least as many pages as its texts take
 	fn memory_section(&self) -> MemorySection {
 		let mut section = MemorySection::new();
 		if self.owns_memory {
