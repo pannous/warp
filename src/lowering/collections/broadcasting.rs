@@ -469,8 +469,13 @@ pub fn lower(program: Node) -> Node {
 	let mut found = Vec::new();
 	definitions(&program, &mut found);
 	implicit_definitions(&program, &mut found);
+	// `f(c: text)` beside `f(b: list)`: an overload takes the list itself (overloads.rs), no definition broadcasts
+	let every_overload_needs_a_scalar = |definition: &&Definition| {
+		found.iter().filter(|other| other.name == definition.name && other.params.len() == 1).all(needs_a_scalar)
+	};
 	let mut broadcasting: HashSet<String> = found
 		.iter()
+		.filter(every_overload_needs_a_scalar)
 		.filter(|definition| needs_a_scalar(definition))
 		.map(|definition| definition.name.clone())
 		.collect();
@@ -481,16 +486,19 @@ pub fn lower(program: Node) -> Node {
 		.iter()
 		.filter(|(word, _)| !defined.contains(&word.to_string()))
 		.map(|(word, scalars)| (word.to_string(), scalars.to_vec()));
-	let scalar_parameters: HashMap<String, Vec<bool>> = found
-		.iter()
-		.map(|definition| {
-			(
-				definition.name.clone(),
-				definition.params.iter().map(|param| takes_a_scalar(param, &definition.body)).collect(),
-			)
-		})
-		.chain(library_scalar_parameters)
-		.collect();
+	// a parameter takes a scalar when every overload of as many parameters takes one there
+	let mut scalar_parameters: HashMap<String, Vec<bool>> = library_scalar_parameters.collect();
+	for definition in &found {
+		let scalars: Vec<bool> =
+			definition.params.iter().map(|param| takes_a_scalar(param, &definition.body)).collect();
+		scalar_parameters
+			.entry(definition.name.clone())
+			.and_modify(|known| match known.len() == scalars.len() {
+				true => known.iter_mut().zip(&scalars).for_each(|(known, scalar)| *known &= scalar),
+				false => *known = scalars.clone(),
+			})
+			.or_insert(scalars);
+	}
 	let mut assigned = HashMap::new();
 	collect_list_variables(&program, &broadcasting, &scalar_parameters, &mut assigned);
 	let names: HashSet<String> = assigned.keys().cloned().collect();
