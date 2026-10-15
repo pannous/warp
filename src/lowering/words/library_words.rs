@@ -821,7 +821,8 @@ impl Lowering {
 				Node::Key(_, Op::Hash, unit) | Node::Key(unit, Op::Dot, _) => unit.drop_meta(),
 				other => other,
 			};
-			unit.symbol_name().and_then(crate::analyzer::text_unit).is_some()
+			// a variable named so (`chars = ["a"]; "a" in chars`) is that variable
+			unit.symbol_name().filter(|name| !self.shadows(name)).and_then(crate::analyzer::text_unit).is_some()
 		};
 		let (collection, element) = match word.symbol_name()? {
 			IN_WORD if names_unit(left) || names_unit(right) => return None,
