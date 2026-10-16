@@ -514,10 +514,11 @@ pub(super) fn analyse_user_functions(ctx: &mut Context, node: &Node) {
 	{
 		refine_return_kinds(ctx, &globals);
 	}
-	// a widened parameter can make the arguments it passes on floats too: until nothing changes (each round widens one)
+	// a widened parameter can make the arguments it passes on floats too, to functions and to the closures it calls
+	// (`h(x, f) := f(x); h(cos(0.5), a => a * a)`): until nothing changes (each round widens one)
 	let parameter_count: usize = ctx.user_functions.values().map(|function| function.params.len()).sum();
 	for _ in 0..parameter_count {
-		if !widen_parameters(ctx, node, &globals) {
+		if !(widen_parameters(ctx, node, &globals) | infer_closure_parameters(ctx, node)) {
 			break;
 		}
 		refine_return_kinds(ctx, &globals);
@@ -726,9 +727,14 @@ pub fn applicable_function_names(node: &Node) -> HashSet<String> {
 /// A lifted lambda is never called by name (closures.rs): its captured values take the kinds of the variables captured (a
 /// parameter of the enclosing function, a literal variable), its parameters the kinds of the literal arguments of the closure
 /// calls of its arity
-pub(super) fn infer_closure_parameters(ctx: &mut Context, program: &Node) {
+/// True when a parameter got a kind
+pub(super) fn infer_closure_parameters(ctx: &mut Context, program: &Node) -> bool {
 	let variable_kinds = variable_kinds(program, ctx, true);
-	while kinds_given(ctx, closure_parameter_kinds(ctx, program, &variable_kinds)) {}
+	let mut changed = false;
+	while kinds_given(ctx, closure_parameter_kinds(ctx, program, &variable_kinds)) {
+		changed = true;
+	}
+	changed
 }
 
 /// The kinds of the captured values and parameters of lifted lambdas, by lambda and index
@@ -740,9 +746,11 @@ fn closure_parameter_kinds(
 	let mut inferred: Vec<(String, usize, Kind)> = vec![];
 	// a closure call may call any lifted lambda of its arity: the kinds its arguments pass to each one
 	let mut passed: HashMap<(String, usize), HashSet<Kind>> = HashMap::new();
-	for (body, kinds) in scope_kinds(ctx, program) {
+	for (body, scope) in body_scopes(ctx, program) {
 		let value_kind = |value: &Node| match value.drop_meta() {
-			Node::Symbol(name) => kinds.get(name).or(variable_kinds.get(name)).copied(),
+			Node::Symbol(name) => scope.lookup(name).map(|local| local.kind).or(variable_kinds.get(name).copied()),
+			// an element of a list whose elements are of no known kind is held as its Node (`xs#1` of [cos(0.5), 1])
+			Node::Key(indexed, Op::Hash, _) => Some(inference::element_kind(indexed, &scope).unwrap_or(Kind::Empty)),
 			// a cell's value is a Node of any kind (a signal's new value, lowering/signals/signal_values.rs)
 			Node::List(items, _, _)
 				if items
@@ -770,15 +778,14 @@ fn closure_parameter_kinds(
 	inferred
 }
 
-/// The kinds of each scope's parameters and variables, the program's and each function's: `m = float(2.5)` captured
-/// by a closure is a float
-fn scope_kinds<'a>(ctx: &'a Context, program: &'a Node) -> Vec<(&'a Node, HashMap<String, Kind>)> {
+/// The scope of each body, the program's and each function's, with the kinds of its parameters and variables:
+/// `m = float(2.5)` captured by a closure is a float
+fn body_scopes<'a>(ctx: &'a Context, program: &'a Node) -> Vec<(&'a Node, Scope)> {
 	let function_kinds: FunctionKinds = FunctionKinds::new(
 		ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect(),
 	);
-	let kinds_of = |params: &[Param], body: &Node| -> HashMap<String, Kind> {
-		let scope = function_body_scope(params, body, &function_kinds, &HashMap::new(), &ctx.closure_variable_targets);
-		scope.locals.into_iter().map(|(name, local)| (name, local.kind)).collect()
+	let kinds_of = |params: &[Param], body: &Node| -> Scope {
+		function_body_scope(params, body, &function_kinds, &HashMap::new(), &ctx.closure_variable_targets)
 	};
 	std::iter::once((program, kinds_of(&[], program)))
 		.chain(

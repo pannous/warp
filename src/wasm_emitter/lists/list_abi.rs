@@ -172,7 +172,11 @@ impl WasmGcEmitter {
 					&& function.tuple_kinds.is_empty()
 					&& !self.is_closure_call(&function.name)
 			})
-			.filter(|function| crate::traits::witness_type(&function.name, crate::traits::COMPARE).is_none())
+			.filter(|function| {
+				super::super::reflection::witness::DISPATCHED_OPERATIONS
+					.iter()
+					.all(|operation| crate::traits::witness_type(&function.name, operation).is_none())
+			})
 			.cloned()
 			.collect()
 	}

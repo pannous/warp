@@ -31,11 +31,13 @@ mod test_c_style_definitions;
 mod test_call_arity;
 mod test_call_efficiency;
 mod test_call_result_fields;
+mod test_callable_parameter; // card callable
 mod test_captured_containers;
 mod test_captured_copy_of_global;
 mod test_captured_node_return; // card captured-node-return
 mod test_character_results;
 mod test_charged_getters;
+mod test_closure_float_arguments; // card if-list
 mod test_closure_value_arguments;
 mod test_closures;
 mod test_comma_calls;

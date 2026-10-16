@@ -138,10 +138,18 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 119] = [
 ];
 /// Spellings of a negated operator, each with the spelling it negates: `a nand b` is `not (a and b)` (wiki/operator.md:
 /// `nand ¬&`, Unicode's ⊼), `x is not 4` and `x isn't 4` are `not (x is 4)`
-pub(crate) const NEGATED_SPELLINGS: [(&str, &str); 6] =
-	[("nand", "and"), ("¬&", "and"), ("⊼", "and"), ("is not", "is"), ("isn't", "is"), ("isn’t", "is")];
+pub(crate) const NEGATED_SPELLINGS: [(&str, &str); 8] = [
+	("nand", "and"),
+	("¬&", "and"),
+	("⊼", "and"),
+	("is not", "is"),
+	("isn't", "is"),
+	("isn’t", "is"),
+	("not in", "in"), // Python's `x not in xs` (card parse-free)
+	("∉", "in"),
+];
 /// Glyphs that are fine as written, so no style hint suggests the ASCII spelling of their operator
-pub(crate) const PLAIN_GLYPHS: &str = "×÷≤≥≠≈⋍±¬⌞⌟…";
+pub(crate) const PLAIN_GLYPHS: &str = "×÷≤≥≠≈⋍±¬⌞⌟…∈∉∋";
 /// `xs .+ 4`: an arithmetic operator behind a dot applies to each element (D3)
 pub const ELEMENT_WISE_OPERATORS: [Op; 5] = [Op::Add, Op::Sub, Op::Mul, Op::Div, Op::Pow];
 /// The methods an operator on an instance calls (wiki/operator.md aliases, Python's special methods)
