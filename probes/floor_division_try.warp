@@ -1,0 +1,5 @@
+// floor division is /! (// is always a comment)
+x = 7 /! 2
+y = 9
+y /!= 2
+print x + y
