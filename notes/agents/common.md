@@ -143,7 +143,7 @@ instead of bending the code.
   (notes/agents/common.md "Wiki" for pushing). Say "docs: <page>" or "docs: none (internal)" in a `todo note` before `todo ready`.
   warp-docs sweeps for what slipped through.
   A result the user can see or use gets `--try "how to try it"`: one concrete line with the exact command or URL to paste (user 2026-10-10: "give me
-  the command because I'm lazy"), e.g. `--try "/Users/me/dev/bin/warp samples/sound_features.warp"`: always that full path
+  the command because I'm lazy"), e.g. `--try "/Users/me/dev/bin/warp samples/sound/sound_features.warp"`: always that full path
   (main built with the optimized quick-release profile, rebuilt in the background a few minutes after each pushed
   batch by the Integrator's refresh_main_binary.sh; plain `warp` is the older brew release). Agents who want main's
   debug build (assertions, backtraces) run /Users/me/dev/bin/warp-debug, installed right at the push. Time

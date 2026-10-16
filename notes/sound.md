@@ -238,7 +238,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
 
 Order of value: 1 + 5 (handles, clock, offline render) first, they change the architecture; then 2, 3, 4; 8 last.
 
-## Patterns and live loops (card patterns-live, samples/sound_patterns.warp, tests/programs/test_sound_patterns.rs)
+## Patterns and live loops (card patterns-live, samples/sound/sound_patterns.warp, tests/programs/test_sound_patterns.rs)
 Layer 6 built on the beat clock, in plain warp (lib/sound.warp), so the playground runs it too:
 `pattern "c4 e4 [g4 b4]*2 ~"` is one cycle (a bar, or `for 2 bars`) of steps sharing the cycle's seconds: `~` rest, `[ ]` a group
 in one step, `*n` n times in its step, `c4,e4,g4` a chord, `c4(3,8)` Euclidean (step i sounds when i·3 mod 8 < 3). The pattern is
