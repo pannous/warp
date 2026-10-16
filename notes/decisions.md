@@ -689,7 +689,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - foreign-signature (2026-10-16, Interviewer's decision on the user's behalf, the user left it open; to present;
   undoable): a libm function is declared in warp by a typed foreign line, `sin(x: float): float from 'm'`,
   `atan2(y: float, x: float): float from 'm'`: the signature is visible and needs no C header. `import (…) from 'm'`
-  keeps working for headers.
+  keeps working for headers. Builtin math words use the same line with warp as the library (use-reflection
+  default): `floor(x: number): int from warp`, `min(a: number, b: number, more...): number from warp`; the Rust
+  signature table goes. A bare `floor` is warp's; C's float floor only qualified (`m.floor`).
 - P169 `use math` loads a new math module with beautiful names ("we need to educate people about beautiful names");
   raw C math is `use cmath`; math may forward to cmath meanwhile.
 - P182 Set, Stack, Queue, Deque, Counter only in `collections`. P183 std modules are backed only by warp, host words or
