@@ -62,3 +62,10 @@ fn a_field_named_like_a_canvas_side_binds_only_inside_its_class() {
 	is!("p = {width: 5}; width == canvas.width", true);
 	is!("p = {width: 5}; p.width", 5);
 }
+
+// shadowing is per arity: the program's first(x) leaves first(xs, n) to the library
+#[test]
+fn a_program_word_shadows_only_its_own_arities() {
+	is!("first(x) := x * 2; first([5,6,7], 2) == [5, 6]", true);
+	is!("first(x) := x * 2; first(3)", 6);
+}

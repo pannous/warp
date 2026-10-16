@@ -403,6 +403,7 @@ pub fn lower(node: Node) -> Node {
 	Lowering {
 		context,
 		shadowed: RefCell::new(shadowed),
+		program: crate::program_names::ProgramNames::of(&node),
 		objects,
 		plain,
 		instances,
@@ -431,6 +432,12 @@ fn call_results(node: &Node, context: &Context) -> HashSet<String> {
 }
 
 /// `raise X`, `throw X`, `fail X`, `panic X`, `raise(X)`: the call `raise(X)`; `raise error "m"` raises the message m.
+/// The word `name` means with that many arguments
+fn arity_variant(name: &str, argument_count: usize) -> Option<&'static str> {
+	let variant = ARITY_VARIANTS.iter().find(|(word, count, _)| *word == name && *count == argument_count);
+	variant.map(|(_, _, variant)| *variant)
+}
+
 /// A word the program defines (`shadowed`) is its own
 fn raise_call(items: &[Node], shadowed: &HashSet<String>) -> Option<Node> {
 	let [word, raised] = items else { return None };
@@ -549,6 +556,8 @@ struct Lowering {
 	/// The names the program defines where the lowering is: its functions, the variables outside functions and those
 	/// the function being lowered assigns (a local in one function hides no library word in another)
 	shadowed: RefCell<HashSet<String>>,
+	/// The program's functions at the numbers of arguments they take
+	program: crate::program_names::ProgramNames,
 	objects: HashMap<String, Node>,
 	/// Variables assigned plain values (AssignedObjects::plain)
 	plain: HashSet<String>,
@@ -767,18 +776,14 @@ impl Lowering {
 		canonical_word(name).filter(|word| !self.shadows(name) && !self.shadows(word))
 	}
 
-	/// The library word a call of `name` with that many arguments (receiver included) means
+	/// The library word a call of `name` with that many arguments (receiver included) means; shadowing is per arity:
+	/// `first(x) := …` leaves `first(xs, 2)` to the library (notes/dispatch.md)
 	fn library_word_for(&self, name: &str, argument_count: usize) -> Option<&'static str> {
-		self.arity_variant(name, argument_count).or_else(|| self.library_word(name))
-	}
-
-	/// The word `name` means with that many arguments, unless the program defines `name`
-	fn arity_variant(&self, name: &str, argument_count: usize) -> Option<&'static str> {
-		let variant = ARITY_VARIANTS
-			.iter()
-			.find(|(word, count, _)| *word == name && *count == argument_count)
-			.map(|(_, _, variant)| *variant);
-		variant.filter(|_| !self.shadows(name))
+		let variant = arity_variant(name, argument_count);
+		if self.program.function_takes(name, argument_count) == Some(false) && !self.program.binds(name) {
+			return variant.or_else(|| canonical_word(name));
+		}
+		variant.filter(|_| !self.shadows(name)).or_else(|| self.library_word(name))
 	}
 
 	/// `word(x, args)` and `word x args`

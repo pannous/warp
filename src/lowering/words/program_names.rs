@@ -45,9 +45,13 @@ impl ProgramNames {
 	/// Does the program take the call of `word` with that many arguments: a variable of that name, or a function
 	/// taking them; `first(x) := …` leaves `first(xs, 3)` to the library
 	pub fn takes_call(&self, word: &str, arguments: usize) -> bool {
-		self.bound.contains(word)
-			|| (self.functions.get(word))
-				.is_some_and(|arities| arities.iter().any(|(fewest, most)| (*fewest..=*most).contains(&arguments)))
+		self.binds(word) || self.function_takes(word, arguments) == Some(true)
+	}
+
+	/// Does the program's function `word` take that many arguments; None when the program defines no function `word`
+	pub fn function_takes(&self, word: &str, arguments: usize) -> Option<bool> {
+		let arities = self.functions.get(word)?;
+		Some(arities.iter().any(|(fewest, most)| (*fewest..=*most).contains(&arguments)))
 	}
 
 	/// The names in scope inside `node` when it defines a function: its parameters and the names its body assigns
