@@ -132,7 +132,7 @@ fn crate_module(word: &Node, runtime: &Node, used: &Node) -> Option<Result<Node,
 		_ => return None,
 	};
 	let alias = alias.unwrap_or_else(|| symbol(&name.replace('-', "_")));
-	Some(crate_component(&name).map(|path| Node::Key(Box::new(Node::Text(path)), Op::As, Box::new(alias))))
+	Some(crate_component(&name).map(|path| key(Node::Text(path), Op::As, alias)))
 }
 
 #[cfg(feature = "native")]

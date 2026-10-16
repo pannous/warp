@@ -4,7 +4,7 @@ use crate::analyzer::*;
 use crate::extensions::numbers::Number;
 use crate::filled_lists::*;
 use crate::list_mutations::*;
-use crate::lowering::nodes::children_rewritten;
+use crate::lowering::nodes::{children_rewritten, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
@@ -385,7 +385,7 @@ pub(crate) fn assigns(body: &Node, name: &str) -> bool {
 pub(crate) fn with_copy(body: Node, name: &str, suffix: &str) -> Node {
 	let copy = format!("{name}{suffix}");
 	let renamed = rename_symbol(body, name, &copy);
-	let start = Node::Key(Box::new(Node::Symbol(copy)), Op::Assign, Box::new(Node::Symbol(name.to_string())));
+	let start = key(Node::Symbol(copy), Op::Assign, Node::Symbol(name.to_string()));
 	match renamed {
 		Node::List(items, Bracket::Curly, separator) => Node::List(
 			std::iter::once(start).chain(items).collect(),
@@ -477,7 +477,7 @@ pub(crate) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		phrase if let Some(rephrased) = rephrased(&phrase, variables) => lower(rephrased),
 		// `x : 100 int` and `x:int[100]` declare x as a zero-filled list of 100 ints
 		declaration if let Some((name, zeros)) = typed_array_declaration(&declaration, &names.values) => {
-			Node::Key(Box::new(name), Op::Assign, Box::new(zeros))
+			key(name, Op::Assign, zeros)
 		}
 		// `letters = char[3]` and `upcases = 26 * char` are zero-filled typed arrays like `x : 100 int`
 		Node::Key(target, Op::Assign, value) if let Some(zeros) = typed_array_value(&value, &names.values) => {
@@ -494,7 +494,7 @@ pub(crate) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		// `fast x=v` → `x:fast=v`, parsed either as `(fast x)=v` or as the statement pair `fast (x=v)`;
 		// `double(x) := x+x` and `double x := x+x` stay function definitions
 		Node::Key(target, Op::Assign, value) if let Some((type_name, name)) = number_type_prefix(&target) => {
-			lower(Node::Key(Box::new(Node::Key(Box::new(name), Op::Colon, Box::new(type_name))), Op::Assign, value))
+			lower(Node::Key(Box::new(key(name, Op::Colon, type_name)), Op::Assign, value))
 		}
 		Node::List(items, bracket, separator)
 			if items.windows(2).any(|pair| paired_declaration(&pair[0], &pair[1]).is_some()) =>
@@ -517,7 +517,7 @@ pub(crate) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		}
 		// x² and x³ are x^2 and x^3 for emission; the parse keeps the suffix operators
 		Node::Key(base, op, _) if let Some(exponent) = op.suffix_exponent() => {
-			Node::Key(Box::new(lower(*base)), Op::Pow, Box::new(Node::int(exponent)))
+			key(lower(*base), Op::Pow, Node::int(exponent))
 		}
 		// `const x=v` → `x=v`; check_constants already enforced the single assignment; `let x=v` and `var x=v` → `x=v`
 		Node::List(items, bracket, separator) if items.len() >= 2 && is_declaration_keyword(&items[0]) => {
@@ -644,9 +644,7 @@ fn postfix_list_declaration(items: &[Node], bracket: &Bracket, separator: &Separ
 		return None;
 	};
 	let element = element.symbol_name()?;
-	let typed_name = |name: &Node| {
-		Node::Key(Box::new(name.clone()), Op::Colon, Box::new(Node::Symbol(format!("{LIST_OF_PREFIX}{element}"))))
-	};
+	let typed_name = |name: &Node| key(name.clone(), Op::Colon, Node::Symbol(format!("{LIST_OF_PREFIX}{element}")));
 	let declared = match list.drop_meta() {
 		Node::Symbol(word) if word == LIST_WORD => typed_name(name),
 		Node::Key(word, op @ (Op::Assign | Op::Define), value) if word.is_symbol(LIST_WORD) => {
@@ -810,8 +808,7 @@ pub(crate) fn prefixed_declaration(type_name: &Node, next: &Node) -> Option<Node
 		Node::Key(name, op @ (Op::Assign | Op::Define), value)
 			if is_declaration_type(type_name) && matches!(name.drop_meta(), Node::Symbol(_)) =>
 		{
-			let target =
-				Node::Key(Box::new(name.drop_meta().clone()), Op::Colon, Box::new(type_name.drop_meta().clone()));
+			let target = key(name.drop_meta().clone(), Op::Colon, type_name.drop_meta().clone());
 			Some(Node::Key(Box::new(target), *op, value.clone()))
 		}
 		_ => None,

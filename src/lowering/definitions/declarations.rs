@@ -962,9 +962,7 @@ fn lower_lists(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> + Copy) ->
 
 fn lower_definition(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> + Copy) -> Node {
 	match node {
-		Node::Key(head, op, body) => {
-			Node::Key(Box::new(lower_definition_head(*head, lowering)), op, Box::new(lower_lists(*body, lowering)))
-		}
+		Node::Key(head, op, body) => key(lower_definition_head(*head, lowering), op, lower_lists(*body, lowering)),
 		meta @ Node::Meta { .. } => meta.under_meta(|node| lower_definition(node, lowering)),
 		other => other,
 	}
@@ -975,9 +973,7 @@ fn lower_definition_head(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> 
 		Node::List(items, bracket, separator) => {
 			Node::List(items.into_iter().map(|item| lower_lists(item, lowering)).collect(), bracket, separator)
 		}
-		Node::Key(head, op, result) => {
-			Node::Key(Box::new(lower_definition_head(*head, lowering)), op, Box::new(lower_lists(*result, lowering)))
-		}
+		Node::Key(head, op, result) => key(lower_definition_head(*head, lowering), op, lower_lists(*result, lowering)),
 		meta @ Node::Meta { .. } => meta.under_meta(|node| lower_definition_head(node, lowering)),
 		other => other,
 	}

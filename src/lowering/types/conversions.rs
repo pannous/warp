@@ -5,6 +5,7 @@
 //! (src/numbers/units/definitions.rs).
 
 use crate::lowering::declaration_forms::is_declaration_type;
+use crate::lowering::nodes::key;
 use crate::node::{call, Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::BTreeSet;
@@ -48,7 +49,7 @@ fn defined(node: Node, is_type: &dyn Fn(&Node) -> bool, targets: &mut BTreeSet<S
 				));
 			}
 			targets.insert(target.clone());
-			let parameter = Node::Key(Box::new(Node::Symbol(CONVERTED.into())), Op::Colon, Box::new(source));
+			let parameter = key(Node::Symbol(CONVERTED.into()), Op::Colon, source);
 			Node::Key(Box::new(call(&conversion_name(&target), vec![parameter])), Op::Define, body)
 		}
 		other => other.map_children(|child| defined(child, is_type, targets)),
@@ -96,6 +97,6 @@ fn defined_target(target: &Node, targets: &BTreeSet<String>) -> Option<String> {
 /// `converted_to_B(it) := it as B`: every value without a conversion of the program's converts the built-in way
 fn fallback(target: &str) -> Node {
 	let converted = Node::Symbol(CONVERTED.into());
-	let builtin = Node::Key(Box::new(converted.clone()), Op::As, Box::new(Node::Symbol(target.into())));
-	Node::Key(Box::new(call(&conversion_name(target), vec![converted])), Op::Define, Box::new(builtin))
+	let builtin = key(converted.clone(), Op::As, Node::Symbol(target.into()));
+	key(call(&conversion_name(target), vec![converted]), Op::Define, builtin)
 }

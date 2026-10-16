@@ -2,7 +2,7 @@
 
 use crate::analyzer::*;
 use crate::declaration_forms::lower_declarations;
-use crate::lowering::nodes::is_place;
+use crate::lowering::nodes::{is_place, key};
 use crate::node::{parens, prelude_call, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{AT_WORD, DELETE_WORD, POP_WORD};
@@ -88,7 +88,7 @@ pub(crate) fn popped_list(list: &Node, call: &Node) -> Option<Node> {
 /// familiar alias for `remove`; `x.pop(k)` is Python's pop of a key or a 0-based position (POPPED_ITEM_CALL).
 pub(crate) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
 	let name = map.symbol_name()?;
-	let (method, [key]) = call.call_parts()? else {
+	let (method, [map_key]) = call.call_parts()? else {
 		return None;
 	};
 	let (value_word, rest_word) = match method {
@@ -102,15 +102,11 @@ pub(crate) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
 		_ => return None,
 	};
 	let removed = Node::Symbol(format!("{name}{TEMPORARY_SEPARATOR}removed"));
-	let value = prelude_call(value_word, vec![map.clone(), key.clone()]);
-	let without = prelude_call(rest_word, vec![map.clone(), key.clone()]);
+	let value = prelude_call(value_word, vec![map.clone(), map_key.clone()]);
+	let without = prelude_call(rest_word, vec![map.clone(), map_key.clone()]);
 	let without = if rest_word == POPPED_REST_CALL { became(map, without) } else { without };
 	Some(Node::List(
-		vec![
-			Node::Key(Box::new(removed.clone()), Op::Assign, Box::new(value)),
-			Node::Key(Box::new(map.clone()), Op::Assign, Box::new(without)),
-			removed,
-		],
+		vec![key(removed.clone(), Op::Assign, value), key(map.clone(), Op::Assign, without), removed],
 		Bracket::Round,
 		Separator::Semicolon,
 	))

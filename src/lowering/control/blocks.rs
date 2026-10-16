@@ -645,7 +645,7 @@ impl Blocks {
 			Ok(lowered) => lowered,
 			Err(error) => return Some(error),
 		};
-		let object = Node::Key(Box::new(target.clone()), op, Box::new(object));
+		let object = key(target.clone(), op, object);
 		if definitions.is_empty() {
 			return Some(object);
 		}

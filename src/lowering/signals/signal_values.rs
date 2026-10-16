@@ -741,7 +741,7 @@ impl Signals {
 			_ => key(call(CELL_GET, vec![target.clone()]), op.base_op(), self.rewrite(value, signals, main)),
 		};
 		if main && self.escaping.contains(&name) && self.made.insert(name) {
-			return Node::Key(Box::new(target), Op::Assign, Box::new(call(SIGNAL_NEW, vec![value])));
+			return key(target, Op::Assign, call(SIGNAL_NEW, vec![value]));
 		}
 		call(SET_FUNCTION, vec![target, value])
 	}

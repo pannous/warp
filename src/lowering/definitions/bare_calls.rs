@@ -3,7 +3,7 @@
 //! or parameter of that name stays itself. A word of the host taking nothing, `random`, is called the same way, and also
 //! where the emitter calls a program's function by itself: as a statement, after `print` and `type` (card random-should).
 
-use super::nodes::{call, children_rewritten};
+use super::nodes::{call, children_rewritten, key};
 use crate::lowering::reflection::CALLING_WORDS;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
@@ -45,9 +45,7 @@ fn rewrite(node: Node, parameterless: &Parameterless) -> Node {
 	let host_called = |side: Node| called_value(side, &parameterless.host);
 	match children_rewritten(node, |child| rewrite(child, parameterless)) {
 		Node::Key(target, Op::Assign, value) => Node::Key(target, Op::Assign, Box::new(called(*value))),
-		Node::Key(left, op, right) if op.is_operation() => {
-			Node::Key(Box::new(called(*left)), op, Box::new(called(*right)))
-		}
+		Node::Key(left, op, right) if op.is_operation() => key(called(*left), op, called(*right)),
 		// `random as int`: the value cast, never the type
 		Node::Key(value, Op::As, type_name) => Node::Key(Box::new(called(*value)), Op::As, type_name),
 		Node::List(items, bracket, separator) if separator.separates_statements() => {

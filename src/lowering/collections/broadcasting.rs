@@ -1287,7 +1287,7 @@ pub const EACH_ELEMENT: &str = "each_element";
 pub fn element_wise(list: Node, op: Op, operand: Node) -> Node {
 	let element = || Box::new(Node::Symbol(EACH_ELEMENT.to_string()));
 	let lambda = Node::Key(element(), Op::Arrow, Box::new(Node::Key(element(), op, Box::new(operand))));
-	Node::Key(Box::new(list), Op::Dot, Box::new(call("map", vec![lambda])))
+	key(list, Op::Dot, call("map", vec![lambda]))
 }
 
 /// `xs .* 2` as the parser keeps it, the phrase [xs .* 2]: the operator applied to each element (element_wise)

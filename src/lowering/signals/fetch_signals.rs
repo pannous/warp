@@ -11,6 +11,7 @@
 use crate::element_events::{element_items, with_element_items};
 use crate::event_signals::{function_with_globals, main_level_variables};
 use crate::host::FETCH_WORD;
+use crate::lowering::nodes::key;
 use crate::node::{symbol, Node};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
@@ -89,8 +90,7 @@ fn with_live_regions(node: Node, names: &[String]) -> Node {
 		let sets_live = items
 			.iter()
 			.any(|item| matches!(item.drop_meta(), Node::Key(name, Op::Colon, _) if name.is_symbol(LIVE_ATTRIBUTE)));
-		let live = (!sets_live)
-			.then(|| Node::Key(Box::new(symbol(LIVE_ATTRIBUTE)), Op::Colon, Box::new(Node::Text(POLITE.to_string()))));
+		let live = (!sets_live).then(|| key(symbol(LIVE_ATTRIBUTE), Op::Colon, Node::Text(POLITE.to_string())));
 		live.into_iter().chain(items).collect()
 	})
 }

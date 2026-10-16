@@ -12,6 +12,7 @@
 
 use crate::errors::diagnostic::Diagnostic;
 use crate::lowering::blocks::DATA_WORD;
+use crate::lowering::nodes::key;
 use crate::modules::needed_definitions::with_statements_first;
 use crate::node::Node;
 use crate::operators::Op;
@@ -252,14 +253,14 @@ impl PageNames {
 						}
 					},
 				};
-				Node::Key(Box::new(receiver), Op::Dot, Box::new(self.member_rewritten(*member, enclosing)))
+				key(receiver, Op::Dot, self.member_rewritten(*member, enclosing))
 			}
 			Node::Key(target, op, value) if op == Op::Assign || op.is_compound_assign() => {
 				let target = match self.dollar_element(&target, enclosing) {
 					Some((id, member)) => self.value_of(&id, member),
 					None => self.rewritten(*target, enclosing),
 				};
-				Node::Key(Box::new(target), op, Box::new(self.rewritten(*value, enclosing)))
+				key(target, op, self.rewritten(*value, enclosing))
 			}
 			Node::Symbol(name) => self.symbol(name, enclosing),
 			jquery if self.jquery(&jquery, None).is_some() => self.jquery(&jquery, None).expect("checked"),
@@ -407,7 +408,7 @@ impl PageNames {
 	/// `document.getElementById("who").value`, the member the element's kind keeps its value in
 	fn value_of(&mut self, id: &str, member: &str) -> Node {
 		self.globals.insert(DOCUMENT.to_string());
-		Node::Key(Box::new(element_of_id(id)), Op::Dot, Box::new(Node::Symbol(member.to_string())))
+		key(element_of_id(id), Op::Dot, Node::Symbol(member.to_string()))
 	}
 
 	/// `element(x)` of a program that defines no element

@@ -160,7 +160,7 @@ pub fn lower_arrow_result_types(node: Node) -> Node {
 				Node::Key(head, Op::Arrow, result) if is_named_head(&head) => key(*head, Op::Colon, *result),
 				other => lower_arrow_result_types(other),
 			};
-			Node::Key(Box::new(target), op, Box::new(lower_arrow_result_types(*body)))
+			key(target, op, lower_arrow_result_types(*body))
 		}
 		other => other.map_children(lower_arrow_result_types),
 	}

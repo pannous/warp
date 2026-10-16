@@ -4,7 +4,7 @@
 //! walks the text by that unit, `for word in text`, `for line in text` and `for byte in text` by words, lines and bytes.
 
 use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
-use crate::lowering::nodes::arguments_rewritten;
+use crate::lowering::nodes::{arguments_rewritten, key};
 use crate::node::{call, parens, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{for_in_loop, mentions};
@@ -171,20 +171,14 @@ impl Headers {
 		};
 		let it = Node::Symbol(IMPLICIT_PARAMETER.to_string());
 		let type_test = self.type_test(&it, type_name)?;
-		let parity = |op: Op| {
-			Node::Key(
-				Box::new(Node::Key(Box::new(it.clone()), Op::Mod, Box::new(Node::int(2)))),
-				op,
-				Box::new(Node::int(0)),
-			)
-		};
+		let parity = |op: Op| Node::Key(Box::new(key(it.clone(), Op::Mod, Node::int(2))), op, Box::new(Node::int(0)));
 		let adjective_test = match adjective.as_str() {
 			word if self.functions.contains(word) => call(word, vec![it.clone()]),
 			EVEN_WORD => parity(Op::Eq),
 			ODD_WORD => parity(Op::Ne),
 			word => call(word, vec![it.clone()]),
 		};
-		Some(Node::Key(Box::new(type_test), Op::And, Box::new(adjective_test)))
+		Some(key(type_test, Op::And, adjective_test))
 	}
 
 	/// `value is T` for a loop filter: a declared type by its instances, a type word by its runtime kind; None for any other word
@@ -213,12 +207,9 @@ impl Headers {
 			return parts;
 		}
 		let part = Node::Symbol(format!("{unit}·part"));
-		let non_empty = Node::Key(
-			Box::new(part.clone()),
-			Op::Arrow,
-			Box::new(Node::Key(Box::new(part), Op::Ne, Box::new(Node::Text(String::new())))),
-		);
-		Node::Key(Box::new(parts), Op::Dot, Box::new(call(FILTER_WORD, vec![non_empty])))
+		let non_empty =
+			Node::Key(Box::new(part.clone()), Op::Arrow, Box::new(key(part, Op::Ne, Node::Text(String::new()))));
+		key(parts, Op::Dot, call(FILTER_WORD, vec![non_empty]))
 	}
 
 	/// A text literal or a variable given a text
@@ -275,8 +266,7 @@ fn type_filtered_body(
 
 /// `{ if test then body }`, the body of a filtering loop
 fn guarded_body(test: Node, body: Node) -> Node {
-	let guarded =
-		Node::Key(Box::new(Node::Key(Box::new(Node::Empty), Op::If, Box::new(test))), Op::Then, Box::new(body));
+	let guarded = key(key(Node::Empty, Op::If, test), Op::Then, body);
 	Node::List(vec![guarded], Bracket::Curly, Separator::Semicolon)
 }
 
@@ -332,8 +322,8 @@ fn unit_iteration(variable: &Node, iterable: &Node, body: &Node) -> Option<(Node
 /// The UTF-8 bytes of a text, `(0..text.bytes).map(i => byte_at(text, i))`
 fn bytes_of(text: &Node) -> Node {
 	let offset = Node::Symbol("byte·offset".to_string());
-	let count = Node::Key(Box::new(text.clone()), Op::Dot, Box::new(Node::Symbol(BYTES_WORD.to_string())));
-	let offsets = Node::Key(Box::new(Node::int(0)), Op::Range, Box::new(count));
-	let byte = Node::Key(Box::new(offset.clone()), Op::Arrow, Box::new(call("byte_at", vec![text.clone(), offset])));
-	Node::Key(Box::new(parens(vec![offsets])), Op::Dot, Box::new(call("map", vec![byte])))
+	let count = key(text.clone(), Op::Dot, Node::Symbol(BYTES_WORD.to_string()));
+	let offsets = key(Node::int(0), Op::Range, count);
+	let byte = key(offset.clone(), Op::Arrow, call("byte_at", vec![text.clone(), offset]));
+	key(parens(vec![offsets]), Op::Dot, call("map", vec![byte]))
 }

@@ -3,7 +3,7 @@
 use crate::analyzer::*;
 use crate::broadcasting::{element_wise, EACH_ELEMENT};
 use crate::extensions::numbers::Number;
-use crate::lowering::nodes::call;
+use crate::lowering::nodes::{call, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
@@ -24,7 +24,7 @@ pub(crate) fn zero_element(type_word: &str) -> Option<Node> {
 	Some(match type_word_kind(element)? {
 		Kind::Int => Node::int(0),
 		// `0.0f`: a bare 0.0 is an exact decimal, so an Int
-		Kind::Float => Node::Key(Box::new(Node::float(0.0)), Op::As, Box::new(Node::Symbol(FLOAT_WORD.to_string()))),
+		Kind::Float => key(Node::float(0.0), Op::As, Node::Symbol(FLOAT_WORD.to_string())),
 		Kind::Text => Node::Text(String::new()),
 		Kind::Codepoint => Node::Char('\0'),
 		_ => return None,
@@ -50,7 +50,7 @@ pub fn lower_list_times(node: Node) -> Node {
 				.unwrap_or_else(|| Node::Meta { node: Box::new(lower_list_times(*inner)), data })
 		}
 		Node::Key(left, op, right) => {
-			let key = Node::Key(Box::new(lower_list_times(*left)), op, Box::new(lower_list_times(*right)));
+			let key = key(lower_list_times(*left), op, lower_list_times(*right));
 			list_arithmetic(&key, &key).unwrap_or(key)
 		}
 		Node::List(items, bracket, separator) => {
@@ -102,8 +102,8 @@ pub(crate) fn is_list_literal(side: &Node) -> bool {
 
 /// `[1 2 3]+4` and `4+[1 2 3]` with a list literal and a number: append (prepend) or add to each element?
 /// Unanswered it is an error naming `[1 2 3] + [4]` and `[1 2 3] .+ 4`
-pub(crate) fn list_plus(key: &Node, positioned: &Node) -> Option<Node> {
-	let Node::Key(left, Op::Add, right) = key.drop_meta() else {
+pub(crate) fn list_plus(sum: &Node, positioned: &Node) -> Option<Node> {
+	let Node::Key(left, Op::Add, right) = sum.drop_meta() else {
 		return None;
 	};
 	let is_number = |side: &Node| matches!(side.drop_meta(), Node::Number(_));
@@ -112,7 +112,7 @@ pub(crate) fn list_plus(key: &Node, positioned: &Node) -> Option<Node> {
 		(false, true) if is_number(left) => (right.as_ref(), left.as_ref(), false),
 		_ => return None,
 	};
-	let written = key.drop_meta().serialize();
+	let written = sum.drop_meta().serialize();
 	let (list_text, number_text) = (crate::normalize::operand_text(list), crate::normalize::operand_text(number));
 	let (joining, joined) = match list_first {
 		true => ("append", format!("{list_text} + [{number_text}]")),
@@ -132,8 +132,8 @@ pub(crate) fn list_plus(key: &Node, positioned: &Node) -> Option<Node> {
 	.at_node(positioned);
 	let singleton = Node::List(vec![number.clone()], Bracket::Square, Separator::Space);
 	Some(match crate::errors::diagnostic::ask(&question) {
-		Ok(0) if list_first => Node::Key(Box::new(list.clone()), Op::Add, Box::new(singleton)),
-		Ok(0) => Node::Key(Box::new(singleton), Op::Add, Box::new(list.clone())),
+		Ok(0) if list_first => key(list.clone(), Op::Add, singleton),
+		Ok(0) => key(singleton, Op::Add, list.clone()),
 		Ok(_) => element_wise(list.clone(), Op::Add, number.clone()),
 		Err(error) => error,
 	})

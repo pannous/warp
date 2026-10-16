@@ -9,7 +9,7 @@
 //! name it assigns or takes as a parameter is its own, and a map of main stays one where the function only reads it.
 
 use super::memoization::definition_parts;
-use super::nodes::{any_part, call, parameter_name};
+use super::nodes::{any_part, call, key, parameter_name};
 use crate::library_words::{COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_GET_OR, MAP_WITHOUT};
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
@@ -147,12 +147,12 @@ fn keyed(node: Node, maps: &HashSet<String>) -> Node {
 	}
 	match node {
 		Node::Key(target, Op::Hash, index) if is_map(&target, maps) => {
-			let key = match (written_index(&index), crate::warp_parser::subscript_key(&index)) {
+			let map_key = match (written_index(&index), crate::warp_parser::subscript_key(&index)) {
 				(Some(number), _) => Node::Text(number.to_string()),
 				(None, Some(key)) => key_text(keyed(key.clone(), maps)),
 				(None, None) => return Node::Key(target, Op::Hash, Box::new(keyed(*index, maps))),
 			};
-			Node::Key(target, Op::Hash, Box::new(Node::Key(Box::new(key), Op::Add, Box::new(crate::node::int(1)))))
+			Node::Key(target, Op::Hash, Box::new(key(map_key, Op::Add, crate::node::int(1))))
 		}
 		// `d.remove(k)`, lowered by the analyzer after lower_key_words
 		Node::Key(target, Op::Dot, call) if is_map(&target, maps) => match call.drop_meta() {
