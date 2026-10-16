@@ -869,18 +869,45 @@ fn painted_function(node: &Node) -> Option<Node> {
 		}
 		None => on_cpu_painted(&name, &width, &height),
 	};
-	let lowered = match crate::warp_parser::parse_generated(&lowered).drop_meta() {
-		Node::List(statements, crate::node::Bracket::None, _) if statements.len() == 1 => statements[0].clone(),
-		single => single.clone(),
-	};
+	let lowered = expanded_paint_each(parsed_statement(&lowered));
 	// the prelude's name of pixel_color, which no parse gives (library_words names prelude words after this pass)
 	let pixel_color = crate::modules::prelude_name(PIXEL_COLOR).map(Node::Symbol)?;
 	Some(crate::law::substitute(&lowered, &HashMap::from([(PIXEL_COLOR.to_string(), pixel_color)])))
 }
 
-/// paint of f(x, y) at every pixel, computed on the CPU row by row
+/// One generated statement, not the list of one statement a parse gives
+fn parsed_statement(code: &str) -> Node {
+	match crate::warp_parser::parse_generated(code).drop_meta() {
+		Node::List(statements, crate::node::Bracket::None, _) if statements.len() == 1 => statements[0].clone(),
+		single => single.clone(),
+	}
+}
+
+/// paint of f(x, y) at every pixel, computed on the CPU row by row: the prelude's paint_each, which expanded_paint_each
+/// writes in place
 fn on_cpu_painted(name: &str, width: &str, height: &str) -> String {
-	format!("{PAINT_WORD}([{PIXEL_COLOR}({name}(i % ({width}), i//({width}))) for i in 0..(({width}) * ({height}))], {width}, {height})")
+	format!("{PAINT_EACH}({name}, ({width}), ({height}))")
+}
+
+/// `paint_each(f, width, height)` as the body of the prelude's paint_each with its parameters bound to the call's
+/// arguments, so f is called by its name: called as a value its parameters lose their types (twice as slow)
+fn expanded_paint_each(node: Node) -> Node {
+	let call = match node.drop_meta() {
+		Node::List(items, _, _) => match items.as_slice() {
+			[word, arguments @ ..] if word.is_symbol(PAINT_EACH) => Some(arguments.to_vec()),
+			_ => None,
+		},
+		_ => None,
+	};
+	let Some(arguments) = call else {
+		return node.map_children(expanded_paint_each);
+	};
+	let (parameters, body) =
+		crate::modules::prelude_definition(PAINT_EACH).expect("lib/prelude.warp defines paint_each");
+	let arguments =
+		spread_arguments(&arguments, parameters.len()).expect("on_cpu_painted passes paint_each's arguments");
+	let bindings = parameters.iter().map(|parameter| parameter.drop_meta().name()).zip(arguments.iter().cloned());
+	crate::law::substitute(&body, &bindings.collect())
 }
 
 /// `shader_of(f)`: the WGSL fragment shader paint(f, width, height) compiles f(x, y) to, as a text; an error where WGSL
