@@ -5,7 +5,10 @@
 //!
 //! An unknown `.word` after a name, a text or a list is a loud error (`undefined function: word`), never silent data.
 
-use super::nodes::{call, children_rewritten, if_then_else, in_block_as_written, is_words_call, key, Counter};
+use super::nodes::{
+	call, children_rewritten, if_then_else, in_block_as_written, is_assigned_data, is_words_call, key,
+	with_parts_rewritten, Counter,
+};
 use crate::analyzer::{call_name, counting_method};
 use crate::compiler::context::Context;
 use crate::errors::diagnostic::Diagnostic;
@@ -625,7 +628,14 @@ impl Lowering {
 		let mut locals = self.shadowed.borrow().clone();
 		collect_assigned_names(&right, &mut locals);
 		let outer = self.shadowed.replace(locals);
-		let lowered = self.within_function(name, parameters, || self.expand(self.body_statement(head, right)));
+		let lowered = self.within_function(name, parameters, || {
+			let body = self.body_statement(head, right);
+			// `x = {sum xs}` assigns that data: only its parts are lowered, the block stays no call
+			if is_assigned_data(head, &body) {
+				return with_parts_rewritten(body, &mut |part| self.expand(part));
+			}
+			self.expand(body)
+		});
 		self.shadowed.replace(outer);
 		lowered
 	}
