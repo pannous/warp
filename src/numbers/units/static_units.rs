@@ -545,20 +545,25 @@ fn written_power(op: Op, exponent: &Node) -> Option<i32> {
 	}
 }
 
-/// `3 cm as px`: a unit word of lib/units.warp whose amount turns `given` into `target` (dpi, px per inch), as the fix:
-/// multiply by an amount in it, or divide the other way
+/// `3 cm as px`, `3 m as s`: what turns `given` into `target` by a product, as the fix: a named quantity of
+/// lib/units.warp (`speed`, shown in its base units m/s) before a unit word of it (dpi, px per inch)
 fn conversion_fix(given: &Signature, target: &Signature) -> String {
 	let (times, divided) = (combined(target, given, -1), combined(given, target, -1));
-	let alias_signature =
-		|expression: &str| super::unit_expression(&crate::warp_parser::parse(expression)).map(|u| signature(&u));
-	super::unit_aliases()
-		.iter()
-		.find_map(|(name, expression)| match alias_signature(expression)? {
-			ratio if *ratio == *times => Some(format!("; multiply by an amount in {name}")),
-			ratio if *ratio == *divided => Some(format!("; divide by an amount in {name}")),
-			_ => None,
-		})
-		.unwrap_or_default()
+	let fix = |ratio: &Signature, amount: String| match () {
+		_ if **ratio == *times => Some(format!("; multiply by {amount}")),
+		_ if **ratio == *divided => Some(format!("; divide by {amount}")),
+		_ => None,
+	};
+	let quantities = dimension_names().map(|(name, powers)| {
+		let ratio = Signature::from(powers);
+		let amount = format!("a {name} ({})", shown(&ratio));
+		(ratio, amount)
+	});
+	let unit_words = super::unit_aliases().iter().filter_map(|(name, expression)| {
+		let units = super::unit_expression(&crate::warp_parser::parse(expression))?;
+		Some((signature(&units), format!("an amount in {name}")))
+	});
+	quantities.chain(unit_words).find_map(|(ratio, amount)| fix(&ratio, amount)).unwrap_or_default()
 }
 
 fn number_node(amount: &Rational) -> Option<Node> {
