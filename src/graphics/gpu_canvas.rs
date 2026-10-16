@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 /// draw_shape's kind of clear (lib/draw.warp clear_shape), from which on the shapes cover all
-const CLEAR: u32 = 0;
+pub const CLEAR: u32 = 0;
 /// kind u32, color u32 (0xAARRGGBB), four f32 coordinates: rect x y width height, circle x y radius
 pub const SHAPE_BYTES: usize = 24;
 /// The canvas before anything is drawn: paint's paper (pixels.rs, lib/draw.warp paper)
