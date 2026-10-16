@@ -148,7 +148,8 @@ impl WarpParser {
 			}
 
 			if let Some(updated) = self
-				.try_parse_evaluate_bang(&lhs, min_bp)
+				.try_parse_rust_macro(&lhs)
+				.or_else(|| self.try_parse_evaluate_bang(&lhs, min_bp))
 				.or_else(|| self.try_parse_times(&lhs, min_bp))
 				.or_else(|| self.try_parse_test_word(&lhs, min_bp))
 				.or_else(|| self.try_parse_elvis(&lhs, min_bp))
