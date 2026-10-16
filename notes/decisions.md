@@ -770,6 +770,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   lines in lib/math.warp with a "prefer ->" hint (→ ⟶ ➜ … for ->, ⇒ ⟹ for =>, ← ⟵ ⬅ for <-, ⬆ ⇧ for ↑, ⬇ ⇩ for ↓).
   ⇔ ⟺ ↔ ⇑ ⇓ get no built-in meaning for now; an example defines one, e.g.
   `infix operator ⇔(a: bool, b: bool) := a == b`.
+- implicit-words-reserved (2026-10-16, user; card it-reserved): `it`, `self` and `this` are reserved. Binding one
+  (`self = 3`, `it += 1`, `for this in xs`, destructuring) warns "`self` is reserved: it names the receiver of a
+  method; pick another name", an error under use strict. Writing it as the explicit parameter (`f(it) := …`,
+  `Point.norm(self) := …`) stays allowed.
 - test-consolidation (2026-10-16, user; card probes-check, worker warp-test-consolidator): a worker turns probes
   into tests where they check decided behaviour with a stable expected value, judging case by case (not every probe
   was meant to be a test: exploratory, visual, sound, timing and undecided ones stay probes). It also dedupes and
