@@ -32,11 +32,11 @@ const FLOAT_MAKERS: [&str; 4] = [
 const TEXT_ARGUMENT_USERS: [&str; 5] = [BYTE_AT, BYTE_SLICE, TEXT_TRIM, TEXT_STARTS_WITH, TEXT_ENDS_WITH];
 /// c_string(text) -> i32: a zero-terminated copy of a text known only at run time, for a C function's `char*`
 pub const C_STRING: &str = "c_string";
-const BYTE_AT: &str = "byte_at";
+pub(crate) const BYTE_AT: &str = "byte_at";
 const BYTE_SLICE: &str = "byte_slice";
 /// `memory_byte(address)`, `memory_set_byte(address, value)`: one byte of linear memory, what lib/memory.warp's
 /// `memory.slice` and `memory.copy` are made of (samples/wasm/wasm_interop.warp)
-const MEMORY_BYTE: &str = "memory_byte";
+pub(crate) const MEMORY_BYTE: &str = "memory_byte";
 const MEMORY_SET_BYTE: &str = "memory_set_byte";
 /// `trim(text)`: the text without the whitespace at either end, sharing its memory
 const TRIM: &str = "trim";
