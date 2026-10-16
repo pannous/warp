@@ -165,7 +165,9 @@ pub(crate) fn zero_filled_subscript(element: &Node, one_based: &Node, variables:
 /// unless the subscripted word is one of the variables (`chars=["a" "b"]; x=chars[1]` indexes)
 pub(crate) fn typed_array_value(value: &Node, variables: &HashSet<String>) -> Option<Node> {
 	match value.drop_meta() {
-		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(call)) if call == ZERO_FILL_CALL) => {
+		Node::List(items, _, _)
+			if items.first().and_then(Node::symbol_name).is_some_and(|call| call == ZERO_FILL_CALL) =>
+		{
 			Some(value.clone())
 		}
 		Node::Key(count, Op::Mul, element) => match element.drop_meta() {

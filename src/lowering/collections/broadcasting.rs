@@ -774,14 +774,20 @@ fn collect_list_variables(
 	node.visit(&mut |part| match part {
 		Node::Key(list, Op::Dot, call) => {
 			if let (Node::Symbol(name), Node::List(items, _, _)) = (list.drop_meta(), call.drop_meta()) {
-				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(method)) if crate::list_mutations::appends(method, items.len() - 1)) {
+				if items
+					.first()
+					.and_then(Node::symbol_name)
+					.is_some_and(|method| crate::list_mutations::appends(method, items.len() - 1))
+				{
 					appended.insert(name.clone());
 				}
 			}
 		}
 		Node::Key(target, Op::Assign, value) => {
 			if let (Node::Symbol(name), Node::Key(left, Op::Add, right)) = (target.drop_meta(), value.drop_meta()) {
-				if matches!(left.drop_meta(), Node::Symbol(same) if same == name) && matches!(right.drop_meta(), Node::List(_, Bracket::Square, _)) {
+				if matches!(left.drop_meta(), Node::Symbol(same) if same == name)
+					&& matches!(right.drop_meta(), Node::List(_, Bracket::Square, _))
+				{
 					appended.insert(name.clone());
 				}
 			}
@@ -923,7 +929,10 @@ impl Broadcast {
 				}
 				// `map square [1 2 3]`: the iteration word applies square itself (lambdas.rs), no broadcast inside it; a
 				// parenthesized argument is a value of its own, `(square xs) |> filter(…)` is `filter (square xs) …`
-				let iterates = matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::function_values::ITERATION_WORDS.contains(&word.as_str()));
+				let iterates = items
+					.first()
+					.and_then(Node::symbol_name)
+					.is_some_and(|word| crate::function_values::ITERATION_WORDS.contains(&word));
 				let items: Vec<Node> = items
 					.into_iter()
 					.map(|item| match item.drop_meta() {

@@ -60,7 +60,7 @@ fn with_constant_free_variables(statement: Node, statements: &[Node], index: usi
 	let Node::Key(head, op @ (Op::Define | Op::Assign), body) = statement.drop_meta() else {
 		return statement;
 	};
-	let is_head = matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if *name == function.name));
+	let is_head = matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().and_then(Node::symbol_name).is_some_and(|name| *name == function.name));
 	if !is_head || contains_definition(body) {
 		return statement;
 	}
@@ -557,6 +557,6 @@ fn is_expression(body: &Node) -> bool {
 fn calls(node: &Node, name: &str) -> bool {
 	any_part(
 		node,
-		|part| matches!(part, Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(called)) if called == name)),
+		|part| matches!(part, Node::List(items, Bracket::Round, _) if items.first().and_then(Node::symbol_name).is_some_and(|called| called == name)),
 	)
 }

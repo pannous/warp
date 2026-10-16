@@ -3,7 +3,7 @@
 //! name wins with a got-it note ("send is a keyword; here it is your variable"); redefining one at the top level is a
 //! loud error. Passes that give a soft keyword its meaning ask `program_names` whether the program took the word.
 
-use super::nodes::parameter_name;
+use super::nodes::{parameter_name, word_headed};
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
@@ -161,7 +161,7 @@ fn first_refused(node: &Node, top_level: bool) -> Option<Node> {
 
 /// A call `f a for=b` or `f(a, for=b)`: a function's name, then an argument named by a preposition
 fn preposition_arguments(items: &[Node]) -> bool {
-	matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))
+	word_headed(items).is_some()
 		&& items[1..]
 			.iter()
 			.any(|item| matches!(item.drop_meta(), Node::Key(name, Op::Assign, _) if is_preposition(name)))

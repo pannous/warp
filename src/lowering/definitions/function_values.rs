@@ -192,7 +192,9 @@ fn collect_assigned_results(node: &Node, returning: &HashMap<String, String>, re
 /// The call of a variable of `results`: `c()`, `c(1)`
 fn called_variable<'a>(node: &'a Node, results: &HashMap<String, String>) -> Option<&'a Node> {
 	match node.drop_meta() {
-		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if results.contains_key(name)) => {
+		Node::List(items, Bracket::Round, Separator::None)
+			if items.first().and_then(Node::symbol_name).is_some_and(|name| results.contains_key(name)) =>
+		{
 			Some(node)
 		}
 		Node::Key(left, _, right) => called_variable(left, results).or_else(|| called_variable(right, results)),
@@ -235,7 +237,12 @@ fn collect_function_uses(
 	};
 	match node.drop_meta() {
 		// `switch c {cases}` parses as [switch, (c {cases})]: the subject and its cases, no call of c
-		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::words::SWITCH_WORDS.contains(&word.as_str())) => {
+		Node::List(items, _, _)
+			if items
+				.first()
+				.and_then(Node::symbol_name)
+				.is_some_and(|word| crate::words::SWITCH_WORDS.contains(&word)) =>
+		{
 			for item in &items[1..] {
 				match item.drop_meta() {
 					Node::List(pair, _, _) if pair.len() == 2 => {
@@ -252,7 +259,8 @@ fn collect_function_uses(
 					let is_call = (*bracket == Bracket::Round && *separator == Separator::None)
 						|| (*bracket == Bracket::None && *separator == Separator::Space);
 					// `p in xs`, `p is int`: a word joining two values, no call of p
-					let infix = matches!(arguments.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::warp_parser::joins_operands(word));
+					let infix =
+						arguments.first().and_then(Node::symbol_name).is_some_and(crate::warp_parser::joins_operands);
 					if !arguments.is_empty() && is_call && !infix {
 						used.insert(name);
 					}
@@ -278,8 +286,7 @@ fn collect_function_uses(
 		}
 		Node::Key(receiver, Op::Dot, method) => {
 			if let Node::List(items, _, _) = method.drop_meta() {
-				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if ITERATION_WORDS.contains(&word.as_str()))
-				{
+				if items.first().and_then(Node::symbol_name).is_some_and(|word| ITERATION_WORDS.contains(&word)) {
 					if let Some(name) = items.last().and_then(is_param) {
 						used.insert(name);
 					}

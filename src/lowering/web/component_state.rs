@@ -280,7 +280,7 @@ fn lifecycle(statement: &Node) -> Option<(String, Node)> {
 	let Node::List(words, _, Separator::Space | Separator::None) = statement.drop_meta() else {
 		return None;
 	};
-	if !matches!(words.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == ON_WORD) {
+	if words.first().and_then(Node::symbol_name).is_none_or(|word| word != ON_WORD) {
 		return None;
 	}
 	let (word, body) = match &words[1..] {

@@ -7,7 +7,7 @@
 
 use super::nodes::{
 	call, children_rewritten, if_then_else, in_block_as_written, is_assigned_data, is_words_call, key, prelude_call,
-	with_parts_rewritten, Counter,
+	with_parts_rewritten, word_headed, Counter,
 };
 use crate::analyzer::{call_name, counting_method};
 use crate::compiler::context::Context;
@@ -421,7 +421,7 @@ fn call_results(node: &Node, context: &Context) -> HashSet<String> {
 	node.visit(&mut |part| {
 		if let Node::Key(target, Op::Assign | Op::Define, value) = part {
 			let calls_user_function = matches!(value.drop_meta(), Node::List(items, Bracket::Round, _)
-				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(function)) if context.user_functions.contains_key(function)));
+				if items.first().and_then(Node::symbol_name).is_some_and(|function| context.user_functions.contains_key(function)));
 			if let (Node::Symbol(name), true) = (target.drop_meta(), calls_user_function) {
 				names.insert(name.clone());
 			}
@@ -476,9 +476,7 @@ pub(crate) fn stepped(place: Node, step: Op) -> Node {
 fn method_parts(method: &Node) -> Option<(&Node, &str, Vec<Node>)> {
 	let (word_node, arguments) = match method.drop_meta() {
 		Node::Symbol(_) => (method, vec![]),
-		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
-			(&items[0], items[1..].to_vec())
-		}
+		Node::List(items, _, _) if word_headed(items).is_some() => (&items[0], items[1..].to_vec()),
 		_ => return None,
 	};
 	let name = word_node.symbol_name()?;
@@ -689,12 +687,11 @@ impl Lowering {
 	/// `def total(xs){sum xs}`: the body block of a function that is one braceless call is that statement, not the data
 	/// `{sum xs}`; an undefined word in it (`{square x}`) is then reported as one
 	fn body_statement(&self, head: &Node, right: Node) -> Node {
-		let defines_function = matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))));
+		let defines_function =
+			matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if word_headed(items).is_some());
 		match right {
 			Node::List(items, Bracket::Curly, Separator::Space)
-				if defines_function
-					&& items.len() > 1
-					&& matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
+				if defines_function && items.len() > 1 && word_headed(&items).is_some() =>
 			{
 				Node::List(
 					vec![Node::List(items, Bracket::None, Separator::Space)],
@@ -738,9 +735,7 @@ impl Lowering {
 	fn expand_method(&self, method: Node) -> Node {
 		match method {
 			meta @ Node::Meta { .. } => meta.under_meta(|node| self.expand_method(node)),
-			Node::List(items, bracket, separator)
-				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
-			{
+			Node::List(items, bracket, separator) if word_headed(&items).is_some() => {
 				let mut items = items.into_iter();
 				let word = items.next().expect("guarded");
 				Node::List(
@@ -1085,11 +1080,7 @@ impl Lowering {
 				!self.plain.contains(variable) && !self.context.user_functions.contains_key(variable)
 			}
 			// the value of a call: `f().name`, `lib.stats_of(t).words` (foreign_call)
-			Node::List(items, Bracket::Round, Separator::None)
-				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
-			{
-				true
-			}
+			Node::List(items, Bracket::Round, Separator::None) if word_headed(items).is_some() => true,
 			// a parenthesized object `({a:1}).a`, or quoted code `(data n*1).op` (node_api.rs)
 			Node::List(_, Bracket::Curly, _) => true,
 			_ if crate::blocks::quoted_data(variable).is_some() => true,

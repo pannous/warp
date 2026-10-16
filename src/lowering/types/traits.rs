@@ -6,7 +6,7 @@
 //! instance is known, `<`, `==` and operation calls call the witness and a missing conformance is a compile error naming
 //! the fix; elsewhere node_order asks the runtime witness table (wasm_emitter/reflection/witness.rs).
 
-use super::nodes::{call, called_name, children_rewritten, if_then, if_then_else, key};
+use super::nodes::{call, called_name, children_rewritten, if_then, if_then_else, key, word_headed};
 use crate::analyzer::{call_name, collect_all_types};
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -648,11 +648,7 @@ fn conform(node: Node, registry: &TypeRegistry, traits: &Traits, generics: &Hash
 /// The items of a definition head `f(a:T, b)`
 fn definition_head(head: &Node) -> Option<&[Node]> {
 	match head.drop_meta() {
-		Node::List(items, _, _)
-			if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) && items.len() > 1 =>
-		{
-			Some(items)
-		}
+		Node::List(items, _, _) if word_headed(items).is_some() && items.len() > 1 => Some(items),
 		_ => None,
 	}
 }

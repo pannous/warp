@@ -72,7 +72,9 @@ fn lower_in(node: Node, active: &[Getter]) -> Node {
 			};
 			key(lower_in(*left, active), Op::Dot, right)
 		}
-		Node::List(items, Bracket::Round, separator) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if is_active(active, head)) => {
+		Node::List(items, Bracket::Round, separator)
+			if items.first().and_then(Node::symbol_name).is_some_and(|head| is_active(active, head)) =>
+		{
 			arguments_rewritten(items, Bracket::Round, separator, |item| lower_in(item, active))
 		}
 		other => children_rewritten(other, |child| lower_in(child, active)),
@@ -119,7 +121,9 @@ pub(crate) fn shadowed_names(node: &Node) -> Vec<String> {
 			names
 		}
 		Node::Key(_, Op::Define | Op::Assign, _) => locals_of(node),
-		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if crate::operators::is_function_keyword(word)) => {
+		Node::List(items, _, _)
+			if items.first().and_then(Node::symbol_name).is_some_and(crate::operators::is_function_keyword) =>
+		{
 			locals_of(node)
 		}
 		_ => vec![],

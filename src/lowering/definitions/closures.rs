@@ -179,9 +179,7 @@ pub fn needs_a_function(needer: &str, parameter: Option<&str>, value: &Node, fix
 pub fn may_be_function_value(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(_) | Node::Key(_, Op::Hash, _) => true,
-		Node::List(items, Bracket::Round, Separator::None) => {
-			matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))
-		}
+		Node::List(items, Bracket::Round, Separator::None) => word_headed(items).is_some(),
 		other => arrow_lambda(other).is_some(),
 	}
 }
@@ -541,7 +539,12 @@ impl FunctionValues {
 			}
 			Node::Key(_, Op::Then, chosen) => self.is_function_value(chosen),
 			Node::Key(list, Op::Hash, _) => self.is_function_list(list),
-			Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.returning.contains(name) || self.variables.contains(name)) => {
+			Node::List(items, Bracket::Round, Separator::None)
+				if items
+					.first()
+					.and_then(Node::symbol_name)
+					.is_some_and(|name| self.returning.contains(name) || self.variables.contains(name)) =>
+			{
 				true
 			}
 			// `half(f)(half(f))`: the call of the function value a call returns may give one in turn
@@ -553,7 +556,14 @@ impl FunctionValues {
 				true
 			}
 			// `g(y => y*2)` of `g = x => x`: the function value it was given
-			Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.passing_through.get(name).and_then(|index| items.get(index + 1)).is_some_and(|argument| self.is_function_value(argument))) => {
+			Node::List(items, Bracket::Round, _)
+				if items.first().and_then(Node::symbol_name).is_some_and(|name| {
+					self.passing_through
+						.get(name)
+						.and_then(|index| items.get(index + 1))
+						.is_some_and(|argument| self.is_function_value(argument))
+				}) =>
+			{
 				true
 			}
 			Node::List(items, _, _) if matches!(items.as_slice(), [marker, _, _, ..] if matches!(marker.drop_meta(), Node::Symbol(word) if word == crate::warp_parser::TRY_MARKER)) => {

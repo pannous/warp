@@ -4,7 +4,7 @@ use crate::analyzer::*;
 use crate::extensions::numbers::Number;
 use crate::filled_lists::*;
 use crate::list_mutations::*;
-use crate::lowering::nodes::{children_rewritten, key};
+use crate::lowering::nodes::{children_rewritten, key, word_headed};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
@@ -35,7 +35,7 @@ pub(crate) fn parameter_copies(
 	texts: &HashSet<(String, usize)>,
 ) -> Node {
 	match node {
-		Node::Key(head, op @ (Op::Define | Op::Assign), body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) =>
+		Node::Key(head, op @ (Op::Define | Op::Assign), body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if word_headed(items).is_some()) =>
 		{
 			let Node::List(items, _, _) = head.drop_meta() else { unreachable!("guarded") };
 			let function = items[0].name();
@@ -94,9 +94,7 @@ impl TextCalls {
 	fn visit(&mut self, node: &Node, caller: Option<(&str, &[String])>) {
 		match node.drop_meta() {
 			Node::Key(head, Op::Define | Op::Assign, body) => match head.drop_meta() {
-				Node::List(items, Bracket::Round, _)
-					if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
-				{
+				Node::List(items, Bracket::Round, _) if word_headed(items).is_some() => {
 					let parameters: Vec<String> = items[1..].iter().filter_map(parameter_symbol).collect();
 					self.visit(body, Some((&items[0].name(), &parameters)));
 				}
@@ -318,7 +316,7 @@ pub(crate) fn assigned_from_call_in_loop(body: &Node, name: &str) -> bool {
 	let mut found = false;
 	body.visit(&mut |part| if let Node::Key(_, Op::While | Op::Do, _) = part {
 		part.visit(&mut |inner| if let Node::Key(target, Op::Assign, value) = inner {
-			let is_call = matches!(value.drop_meta(), Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))));
+			let is_call = matches!(value.drop_meta(), Node::List(items, Bracket::Round, Separator::None) if word_headed(items).is_some());
 			found |= is_call && target.is_symbol(name);
 		});
 	});
@@ -451,7 +449,7 @@ pub(crate) fn names_used_as_values(program: &Node) -> HashSet<String> {
 				visit(right, names);
 			}
 			Node::List(items, _, _) => {
-				let called = matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) && items.len() > 1;
+				let called = word_headed(items).is_some() && items.len() > 1;
 				items.iter().skip(called as usize).for_each(|item| visit(item, names))
 			}
 			_ => {}

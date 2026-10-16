@@ -1,6 +1,6 @@
 //! Tasks: `job = go f(x)`, `await job`, `await any`/`all`, `within` deadlines, task controls and handlers (wiki/async.md)
 use super::*;
-use crate::lowering::nodes::{fresh_number, phrase_words};
+use crate::lowering::nodes::{fresh_number, phrase_words, word_headed};
 use crate::node::parens;
 use crate::words::{ADD_WORD, ALL_WORD, RAISE_WORD};
 
@@ -110,7 +110,9 @@ pub(super) fn task_start(node: &Node) -> Option<(&String, &Vec<Node>)> {
 		return None;
 	};
 	match (head.drop_meta(), value.drop_meta()) {
-		(Node::Symbol(variable), Node::List(items, _, _)) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == TASK_WORDS[0]) => {
+		(Node::Symbol(variable), Node::List(items, _, _))
+			if items.first().and_then(Node::symbol_name).is_some_and(|word| word == TASK_WORDS[0]) =>
+		{
 			Some((variable, items))
 		}
 		_ => None,
@@ -287,9 +289,7 @@ pub(super) fn added_start(method: &Node) -> Option<(String, Vec<Node>)> {
 pub(super) fn started_call(rest: &[Node]) -> Option<(String, Vec<Node>)> {
 	match rest {
 		[call] => match call.drop_meta() {
-			Node::List(items, Bracket::Round, _)
-				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
-			{
+			Node::List(items, Bracket::Round, _) if word_headed(items).is_some() => {
 				Some((items[0].name(), items[1..].to_vec()))
 			}
 			Node::List(items, Bracket::None, Separator::Space) => started_call(items),
@@ -1030,7 +1030,11 @@ pub(super) fn guarded_calls(
 		{
 			let items: Vec<Node> = items.into_iter().map(|item| guarded_calls(item, guardable, wrapped)).collect();
 			let guarded = match items[1].drop_meta() {
-				Node::List(called, Bracket::Round, _) if matches!(called.first().map(Node::drop_meta), Some(Node::Symbol(function)) if guardable(function).is_some()) =>
+				Node::List(called, Bracket::Round, _)
+					if called
+						.first()
+						.and_then(Node::symbol_name)
+						.is_some_and(|function| guardable(function).is_some()) =>
 				{
 					let function = word(&called[0]);
 					wrapped.borrow_mut().insert(function.clone(), called.len() - 1);

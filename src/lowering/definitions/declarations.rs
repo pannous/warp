@@ -4,7 +4,8 @@
 //! `real f(real x, int n) { … }`, the C way, defines `f(x:real, n:int) := { … }`.
 
 use super::nodes::{
-	block, call, children_rewritten, grouped_parameters, if_then, if_then_else, is_kinded_type_word, key, Counter,
+	block, call, children_rewritten, grouped_parameters, if_then, if_then_else, is_kinded_type_word, key, word_headed,
+	Counter,
 };
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
@@ -721,7 +722,7 @@ fn definition_parts(definition: Node) -> Option<(Node, Op, Node)> {
 		// Python's `def apply(f, x): return f(x)`, early, so the function value passes see a definition; without
 		// parameters it stays a def form for late_binding, which would read `z() := e` as a getter (P71); a generator
 		// (`def numbers(): yield 1`) is no getter
-		Node::Key(head, Op::Colon, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if (items.len() > 1 || crate::blocks::contains_yield(&body)) && matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) => {
+		Node::Key(head, Op::Colon, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if (items.len() > 1 || crate::blocks::contains_yield(&body)) && word_headed(items).is_some()) => {
 			(*head, Op::Define, *body)
 		}
 		// `def hello {…}` without parentheses has no parameters, as `def hello() {…}`
@@ -785,9 +786,7 @@ fn extension_definition(definition: Node) -> Node {
 	let Node::List(call, Bracket::Round, separator) = call.drop_meta() else {
 		return Node::Key(head, op, rest);
 	};
-	if !matches!(receiver_type.drop_meta(), Node::Symbol(_))
-		|| !matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(_)))
-	{
+	if !matches!(receiver_type.drop_meta(), Node::Symbol(_)) || word_headed(call).is_none() {
 		return Node::Key(head, op, rest);
 	}
 	let head = with_receiver(call, separator, receiver_type, &rest);

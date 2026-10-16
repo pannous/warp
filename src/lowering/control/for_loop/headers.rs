@@ -171,7 +171,7 @@ impl Headers {
 		};
 		let it = Node::Symbol(IMPLICIT_PARAMETER.to_string());
 		let type_test = self.type_test(&it, type_name)?;
-		let parity = |op: Op| Node::Key(Box::new(key(it.clone(), Op::Mod, Node::int(2))), op, Box::new(Node::int(0)));
+		let parity = |op: Op| key(key(it.clone(), Op::Mod, Node::int(2)), op, Node::int(0));
 		let adjective_test = match adjective.as_str() {
 			word if self.functions.contains(word) => call(word, vec![it.clone()]),
 			EVEN_WORD => parity(Op::Eq),
@@ -207,8 +207,7 @@ impl Headers {
 			return parts;
 		}
 		let part = Node::Symbol(format!("{unit}·part"));
-		let non_empty =
-			Node::Key(Box::new(part.clone()), Op::Arrow, Box::new(key(part, Op::Ne, Node::Text(String::new()))));
+		let non_empty = key(part.clone(), Op::Arrow, key(part, Op::Ne, Node::Text(String::new())));
 		key(parts, Op::Dot, call(FILTER_WORD, vec![non_empty]))
 	}
 
@@ -284,7 +283,9 @@ fn type_filter_header(name: &str, iterable: &Node, body: &Node) -> Option<(Strin
 fn item_named(node: Node, name: &str, item: &Node) -> Node {
 	match node {
 		Node::Symbol(symbol) if symbol == name => item.clone(),
-		Node::List(items, Bracket::Round, Separator::None) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(head)) if head == name) => {
+		Node::List(items, Bracket::Round, Separator::None)
+			if items.first().and_then(Node::symbol_name).is_some_and(|head| head == name) =>
+		{
 			arguments_rewritten(items, Bracket::Round, Separator::None, |part| item_named(part, name, item))
 		}
 		other => other.map_children(|child| item_named(child, name, item)),

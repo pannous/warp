@@ -124,7 +124,7 @@ impl InstanceCalls {
 			return None;
 		};
 		let is_call = matches!(head.drop_meta(), Node::List(called, Bracket::Round, Separator::None)
-			if matches!(called.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.functions.contains(name)));
+			if called.first().and_then(Node::symbol_name).is_some_and(|name| self.functions.iter().any(|function| function == name)));
 		if *bracket == Bracket::Square || !is_call || arguments.is_empty() {
 			return None;
 		}

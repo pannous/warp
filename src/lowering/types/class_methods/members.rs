@@ -1,5 +1,6 @@
 //! Class bodies as their members: fields as Java, C#, Go and Python write them, properties and accessors, constructors as `init`, methods with their result types
 use super::*;
+use crate::lowering::nodes::word_headed;
 use crate::node::parens;
 use crate::words::SELF_WORD;
 
@@ -81,7 +82,7 @@ pub(super) fn python_method(words: &[Node]) -> Option<Node> {
 	match definition.drop_meta() {
 		Node::Key(head, Op::Colon, body)
 			if is_keyword
-				&& matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) =>
+				&& matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if word_headed(items).is_some()) =>
 		{
 			Some(Node::Key(head.clone(), Op::Define, body.clone()))
 		}
@@ -251,7 +252,7 @@ pub(super) fn auto_property(words: &[Node]) -> Option<Node> {
 
 /// TypeScript's method with its result type, `twice(): number { … }`: `twice():number := {…}`
 pub(super) fn typed_method(call: &Node, typed_block: &Node) -> Option<Node> {
-	let is_call = matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))));
+	let is_call = matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if word_headed(items).is_some());
 	let Node::List(parts, _, _) = typed_block.drop_meta() else {
 		return None;
 	};
@@ -484,7 +485,7 @@ pub(super) fn declared_with_classes(node: Node, classes: &[String]) -> Node {
 /// JavaScript's `sum() { return … }`: the method `sum() := {…}`
 pub(super) fn braced_method(words: &[Node]) -> Option<Node> {
 	let [call, block] = words else { return None };
-	let is_call = matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if !is_constructor_word(name)));
+	let is_call = matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().and_then(Node::symbol_name).is_some_and(|name| !is_constructor_word(name)));
 	let is_block = matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _));
 	(is_call && is_block).then(|| key(call.clone(), Op::Define, block.clone()))
 }
@@ -555,7 +556,9 @@ pub(super) fn constructor_parameters(word: &Node) -> Option<Vec<Node>> {
 	match word.drop_meta() {
 		Node::Symbol(name) if is_constructor_word(name) => Some(vec![]),
 		// `init(a, b)`, `init (n)`: the parameters may come as one group
-		Node::List(call, Bracket::Round, _) if matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(name)) if is_constructor_word(name)) => {
+		Node::List(call, Bracket::Round, _)
+			if call.first().and_then(Node::symbol_name).is_some_and(is_constructor_word) =>
+		{
 			Some(
 				call[1..]
 					.iter()

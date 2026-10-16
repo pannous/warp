@@ -53,8 +53,7 @@ fn has_memoizable_shape(function: &UserFunctionDef) -> bool {
 	let mut self_calls = 0;
 	function.body.visit(&mut |part| {
 		if let Node::List(items, _, _) = part.drop_meta() {
-			self_calls += matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if *name == function.name)
-				as usize;
+			self_calls += items.first().and_then(Node::symbol_name).is_some_and(|name| *name == function.name) as usize;
 		}
 	});
 	let mut expression = true;

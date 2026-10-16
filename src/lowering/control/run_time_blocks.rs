@@ -186,9 +186,10 @@ fn known_at_run_time(value: &Node, lists: &[String], context: &crate::compiler::
 			matches!(list.drop_meta(), Node::Symbol(list) if lists.contains(list))
 				|| known_at_run_time(list, lists, context)
 		}
-		Node::List(items, _, Separator::None | Separator::Space) => {
-			matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(function)) if context.user_functions.contains_key(function))
-		}
+		Node::List(items, _, Separator::None | Separator::Space) => items
+			.first()
+			.and_then(Node::symbol_name)
+			.is_some_and(|function| context.user_functions.contains_key(function)),
 		_ => false,
 	}
 }

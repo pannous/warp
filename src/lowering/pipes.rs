@@ -195,7 +195,7 @@ impl Pipes {
 	/// `square numbers then filter(p)`: a braceless call whose last argument pipes on with `then`
 	fn then_pipes_braceless_call(&self, items: &[Node]) -> bool {
 		let head_is_function =
-			matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if self.names_function(name, 0));
+			items.first().and_then(Node::symbol_name).is_some_and(|name| self.names_function(name, 0));
 		head_is_function
 			&& items.len() >= 2
 			&& matches!(items.last().map(Node::drop_meta), Some(Node::Key(argument, Op::Then, stage)) if !is_truth_value(argument) && self.then_call(stage, argument).is_some())

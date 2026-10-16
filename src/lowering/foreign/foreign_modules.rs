@@ -4,7 +4,7 @@
 //! (an empty argument list is ø on the way, so whether it is a call is said apart).
 //! Values cross as JSON; the result is any Node.
 
-use super::nodes::{any_part, call, children_rewritten, key, round_call};
+use super::nodes::{any_part, call, children_rewritten, key, round_call, word_headed};
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::FOR_WORD;
@@ -332,9 +332,7 @@ fn component_operator(op: &Op) -> Option<&'static str> {
 /// The items of a method call `name(arguments…)` after a dot
 fn called_method(member: &Node) -> Option<&Vec<Node>> {
 	match member.drop_meta() {
-		Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
-			Some(items)
-		}
+		Node::List(items, Bracket::Round, _) if word_headed(items).is_some() => Some(items),
 		_ => None,
 	}
 }
@@ -465,7 +463,7 @@ impl Foreign<'_> {
 			}
 			// `for x in a { … }`: over the items of a, as a list
 			Node::List(items, bracket, separator)
-				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == FOR_WORD)
+				if items.first().and_then(Node::symbol_name).is_some_and(|word| word == FOR_WORD)
 					&& items.len() >= 4 =>
 			{
 				let iterated = self.rewrite(items[3].clone());

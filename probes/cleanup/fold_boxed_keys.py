@@ -63,19 +63,20 @@ def fold(text):
 			out += text[index:at] + "Node::Key(" + inner + ")"
 		index = end + 1
 
-for path in sys.argv[1:]:
-	text = open(path).read()
-	changed, count = fold(text)
-	if not count:
-		continue
-	if not re.search(r"\bfn key\(", changed):
-		imported = re.search(r"^use (super|crate::lowering)::nodes::(\{[^}]*\}|\w+);", changed, re.M)
-		if imported:
-			names = {name.strip() for name in imported.group(2).strip("{}").split(",") if name.strip()} | {"key"}
-			ordered = sorted(n for n in names if n[0].islower()) + sorted(n for n in names if not n[0].islower())
-			changed = changed[:imported.start()] + f"use {imported.group(1)}::nodes::{{{', '.join(ordered)}}};" + changed[imported.end():]
-		else:
-			first = re.search(r"^use ", changed, re.M)
-			changed = changed[:first.start()] + "use crate::lowering::nodes::key;\n" + changed[first.start():]
-	open(path, "w").write(changed)
-	print(path, count)
+if __name__ == "__main__":
+	for path in sys.argv[1:]:
+		text = open(path).read()
+		changed, count = fold(text)
+		if not count:
+			continue
+		if not re.search(r"\bfn key\(", changed):
+			imported = re.search(r"^use (super|crate::lowering)::nodes::(\{[^}]*\}|\w+);", changed, re.M)
+			if imported:
+				names = {name.strip() for name in imported.group(2).strip("{}").split(",") if name.strip()} | {"key"}
+				ordered = sorted(n for n in names if n[0].islower()) + sorted(n for n in names if not n[0].islower())
+				changed = changed[:imported.start()] + f"use {imported.group(1)}::nodes::{{{', '.join(ordered)}}};" + changed[imported.end():]
+			else:
+				first = re.search(r"^use ", changed, re.M)
+				changed = changed[:first.start()] + "use crate::lowering::nodes::key;\n" + changed[first.start():]
+		open(path, "w").write(changed)
+		print(path, count)
