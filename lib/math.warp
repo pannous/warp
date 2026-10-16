@@ -101,6 +101,8 @@ gcd(a: int, b: int) := if b == 0 then a else gcd(b, a % b)
 lcm(a: int, b: int) := a / gcd(a, b) * b
 clamp(x, low, high) := if x < low then low else if x > high then high else x
 sign(x) := if x > 0 then 1 else if x < 0 then - 1 else 0
+// x rounded to the given number of decimal places: round_to(3.14159, 2) is 3.14
+round_to(x, digits) := round(x * 10 ^ digits) / 10 ^ digits
 factorial(n: int) := { out = 1; for i in 2 to n { out = out * i }; out }
 is_prime(n: int) := { if n < 2 { return false }; i = 2; while i * i <= n { if n % i == 0 { return false }; i++ }; true }
 // the value a fraction t of the way from a to b
@@ -142,6 +144,7 @@ bit_and(a: int, b: int) := (a + b - (a xor b)) / 2
 bit_or(a: int, b: int) := (a + b + (a xor b)) / 2
 // P169/P191: descriptive names; they forward to the C library (use cmath) until warp has its own implementations.
 // The C names still work after `use math`, each with a note naming the word here (modules STD_ALIASES)
+
 square(x) := x * x
 square_root(x) := sqrt(x)
 cube_root(x) := ∛x
