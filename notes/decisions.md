@@ -654,8 +654,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - setter-calls (2026-10-16, user): a setter overload is called four ways: `canvas.width = 12` (one general rule:
   assigning to a property with a one-parameter overload calls it; the form docs show), `canvas.width(12)`,
   `width(canvas, 12)` (falls out of uniform calls; allowed, not taught, reads awkwardly), and the English
-  `set width of canvas to 12`. That one is a universal pattern (user): `set x of y to z` is `y.x = z` for any field
-  or property, a plain rewrite (card english-setter).
+  `set width of canvas to 12`. The English form is a plain rewrite (user): `set x to y` is `x = y`, and with `of`
+  it is `set x of y to z` → `y.x = z`, for any variable, field or property. It works but gets a style hint: warp
+  doesn't do prose, write `x = y` (card english-setter).
 - saved-words (2026-10-16 night, Interviewer's proposal, kept by the user 2026-10-16; card
   graphics-saved-words): no save-only table and no symbol overload. The general bare-call rule (random-forms: a
   function word used as a value is its call) covers it: lib/draw.warp declares `canvas()` with no arguments as the
