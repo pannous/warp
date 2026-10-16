@@ -55,7 +55,7 @@ const fn rule(name: &'static str, edits: fn(&[String], &[LineScan]) -> Vec<Edit>
 	Rule { name, edits, hash_comments_only: false }
 }
 
-pub(super) const RULES: [Rule; 8] = [
+pub(super) const RULES: [Rule; 9] = [
 	Rule { name: "# comment", edits: hash_comments, hash_comments_only: true },
 	rule("trailing whitespace", trailing_whitespace),
 	rule("blank lines", blank_lines),
@@ -63,6 +63,7 @@ pub(super) const RULES: [Rule; 8] = [
 	rule("space after a comma or semicolon", separator_spacing),
 	rule("space after a key's colon", colon_spacing),
 	rule("spaces around an operator", operator_spacing),
+	rule("spaces around a minus inside a name", minus_inside_a_name_spacing),
 	rule("indentation", indentation),
 ];
 
@@ -215,8 +216,13 @@ fn is_operand_start(c: char) -> bool {
 	c.is_alphanumeric() || OPERAND_STARTS.contains(c)
 }
 
-/// The spaced operator starting at `at`, glued to no other operator character, between two operands
+/// The spaced operator starting at `at`, glued to no other operator character, between two operands, outside a name
 fn binary_operator(characters: &[(char, bool)], at: usize) -> Option<&'static str> {
+	spaced_operator(characters, at).filter(|_| !inside_a_name(characters, at))
+}
+
+/// The spaced operator starting at `at`, glued to no other operator character, between two operands
+fn spaced_operator(characters: &[(char, bool)], at: usize) -> Option<&'static str> {
 	let longest = SPACED_OPERATORS.first().map_or(0, |operator| operator.chars().count());
 	let rest: String = characters[at..].iter().take(longest).map(|(c, _)| c).collect();
 	let operator = *SPACED_OPERATORS.iter().find(|operator| rest.starts_with(**operator))?;
@@ -229,7 +235,7 @@ fn binary_operator(characters: &[(char, bool)], at: usize) -> Option<&'static st
 	}
 	let before = characters[..at].iter().rev().map(|(c, _)| *c).find(|c| !is_space(*c))?;
 	let next = characters[after..].iter().map(|(c, _)| *c).find(|c| !is_space(*c))?;
-	(is_operand_end(before) && is_operand_start(next) && !inside_a_name(characters, at)).then_some(operator)
+	(is_operand_end(before) && is_operand_start(next)).then_some(operator)
 }
 
 /// The `-` at `at` is part of a name, `my-var` or `o-b` (card chars-map): spaced it would split the name, so the line's
@@ -243,8 +249,23 @@ fn inside_a_name(characters: &[(char, bool)], at: usize) -> bool {
 }
 
 fn operator_spacing(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
+	spacing_operators(lines, scans, binary_operator)
+}
+
+/// `o-b` → `o - b` on its own line edit, after the other operators are spaced: the parsed tree changes, so `warp format`
+/// never keeps it (card chars-map), `warp beautify` does when the program lowers the same (card format-beautify)
+fn minus_inside_a_name_spacing(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
+	spacing_operators(lines, scans, |characters, at| {
+		spaced_operator(characters, at).filter(|_| inside_a_name(characters, at))
+	})
+}
+
+/// The operator to space at a position of a line's characters, if any
+type OperatorAt = fn(&[(char, bool)], usize) -> Option<&'static str>;
+
+fn spacing_operators(lines: &[String], scans: &[LineScan], operator_at: OperatorAt) -> Vec<Edit> {
 	rewrite_code(lines, scans, |characters, at, written, _| {
-		let Some(operator) = binary_operator(characters, at) else {
+		let Some(operator) = operator_at(characters, at) else {
 			written.push(characters[at].0);
 			return 1;
 		};
