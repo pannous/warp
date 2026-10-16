@@ -12,10 +12,10 @@ They differ in when they may be wiped (`diskutil apfs deleteVolume <disk>`, then
 | /Volumes/Junk | disk3s8 | scratch/, test and probe temp dirs, $TMPDIR warp*, cloud-test waiter files | any time; worst case a running test fails and is rerun |
 | /Volumes/Build | disk3s7 | shared cargo target, sccache cache | only with an empty test queue and no builds (Integrator idle); costs one full rebuild |
 
-Old worktrees (/Users/me/dev/angles/warp.worktrees.noindex) stay on the Data volume until retired; NEW worktrees go to
-/Volumes/Worktrees/warp.worktrees.noindex (disk3s9, user 2026-10-16, card new-worktrees; never wiped, Time Machine kept,
-no_log). cowtree needs a registered donor worktree on that volume: `base`, detached at origin/main. Worktrees are never wiped: they hold uncommitted work, so they must never be
-wiped with a volume, and Time Machine should keep backing them up. Their churn is small next to the target dir.
+Old worktrees (/Users/me/dev/angles/warp.worktrees.noindex) stay on the Data volume until retired; NEW worktrees go
+straight to /Volumes/Worktrees/<name> (disk3s9, user 2026-10-16, card new-worktrees): no_log, Spotlight off, Time Machine
+excluded for the whole volume (user: work is pushed per step), no .noindex subfolder. Never wiped. cowtree needs a
+registered donor worktree on that volume: /Volumes/Worktrees/base, detached at origin/main.
 data/ (kept logs and results) stays in the repo.
 
 ## Status
