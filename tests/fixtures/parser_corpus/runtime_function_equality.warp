@@ -1,0 +1,10 @@
+#!/usr/bin/env warp
+// card runtime-function: function values compare by their written definitions and captured values: yes no yes no
+xs = [x => x + 1, y => y + 1, z => z * 2]
+print xs#1 == xs#2
+print xs#1 == xs#3
+make(n) := x => x + n
+print make(1) == make(1)
+a = make(1)
+c = make(2)
+print a == c

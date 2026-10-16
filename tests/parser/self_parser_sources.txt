@@ -680,7 +680,7 @@ probes/readme/upto.warp
 probes/request_headers.warp
 probes/route_position.warp
 probes/ruby_yield/bare.warp
-probes/runtime_function_equality.warp
+tests/fixtures/parser_corpus/runtime_function_equality.warp
 probes/runtime_positions.warp
 probes/samples_uncaught/modules_try.warp
 probes/samples/cmp.warp
@@ -746,7 +746,7 @@ probes/text_ratio.warp
 probes/todo_app/forms.warp
 probes/typed_global/const_called_before.warp
 probes/typed_list/upper.warp
-probes/union_result.warp
+tests/fixtures/parser_corpus/union_result.warp
 probes/uniscript/loopfn.warp
 probes/uniscript/mod_probe.warp
 probes/uniscript/one.warp
