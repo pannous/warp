@@ -38,6 +38,15 @@ fn slash_slash_meant_as_floor_division_warns_naming_bang() {
 }
 
 #[test]
+fn pascal_div_divides_and_warns_naming_bang() {
+	take_warnings();
+	is!("7 div 2", 3);
+	assert!(take_warnings()
+		.iter()
+		.any(|warning| warning.message.contains("`div` divides") && warning.message.contains("/!")));
+}
+
+#[test]
 fn warp_fix_writes_the_floor_division_bang() {
 	let fixed = warp::formatting::beautify("n = 7//2\nx = 9\nx//=3\nm = 7 div 2\nn + x + m\n").unwrap().text;
 	assert_eq!(fixed, "n = 7 /! 2\nx = 9\nx /!= 3\nm = 7 /! 2\nn + x + m\n");

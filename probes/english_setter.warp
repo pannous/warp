@@ -1,3 +1,4 @@
+#!/usr/bin/env warp
 // card english-setter: `x of y` is an assignment target, `set A to B` is `A = B` (with a style hint)
 p = {width: 3}
 width of p = 12

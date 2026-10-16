@@ -24,9 +24,6 @@ const F_STRING_PREFIX: char = 'f';
 pub const OVERLINE: char = '\u{305}';
 /// The words of a WGSL block, `shader { … }` (card g_oFJc)
 const SHADER_WORDS: [&str; 2] = ["shader", "wgsl"];
-/// The shader dialects written as a block like a shader, verbatim: `twigl { … }` is `twigl("…")` of lib/draw.warp, code
-/// that warp format leaves as it is, the playground shows as code and `$name` holes reach (cards twigl-make, twigl-float)
-pub(crate) const SHADER_DIALECT_WORDS: [&str; 1] = ["twigl"];
 /// `\e` in a text: the start of terminal codes like `\e[H`
 const ESCAPE_CHARACTER: char = '\u{1b}';
 

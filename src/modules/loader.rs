@@ -166,6 +166,10 @@ pub(super) struct Loader<'a> {
 	/// the standard modules the program (or a file module) uses, and those only standard modules use (hidden_apart)
 	pub(super) program_std_modules: HashSet<String>,
 	pub(super) std_modules_of_std_modules: HashSet<String>,
+	/// whether a `fast f(x) := …` calls fast_math's words by their qualified names (fast_body)
+	pub(super) fast_functions: bool,
+	/// whether the module being loaded began with `fast`: each of its functions is fast
+	pub(super) fast_module: bool,
 }
 
 impl<'a> Loader<'a> {
@@ -184,6 +188,8 @@ impl<'a> Loader<'a> {
 			loading_implicitly: false,
 			program_std_modules: HashSet::new(),
 			std_modules_of_std_modules: HashSet::new(),
+			fast_functions: false,
+			fast_module: false,
 		}
 	}
 
@@ -231,6 +237,7 @@ impl<'a> Loader<'a> {
 			Node::List(items, bracket, separator) => {
 				let mut resolved = Vec::with_capacity(items.len());
 				for item in items {
+					let item = self.fast_body(item);
 					match (imported_words(&item), used_modules(&item)) {
 						(Some((used, statement, words)), _) => {
 							resolved.extend(self.import_words(&used, &statement, &words)?)
@@ -244,6 +251,41 @@ impl<'a> Loader<'a> {
 			Node::Meta { node, data } => Ok(Node::Meta { node: Box::new(self.resolve(*node)?), data }),
 			other => Ok(other),
 		}
+	}
+
+	/// `fast f(x) := …` (card fast-scope): its body calls fast_math's words (sin cos exp pow atan2) by their qualified
+	/// names `fast_math·sin`, which use_fast_functions loads, and divides Ints as floats; the emitter wraps its Ints
+	/// (compile_mode::is_fast). The rest of the program stays exact
+	fn fast_body(&mut self, statement: Node) -> Node {
+		let Some((name, body)) = fast_definition(&statement, self.fast_module) else {
+			return statement;
+		};
+		let words = std_module_definitions(FAST_MODULE).unwrap_or_default();
+		let body = words.iter().fold(float_division(body), |body, word| renamed_word(body, word, &fast_name(word)));
+		self.fast_functions = true;
+		if let Some(function) = leftmost_symbol(&name) {
+			crate::compiler::compile_context::change(|context| context.fast_functions.insert(function));
+		}
+		Node::Key(Box::new(name), Op::Define, Box::new(body))
+	}
+
+	/// fast_math's definitions named `fast_math·sin` …, for the `fast` functions (fast_body); loaded apart from a `use
+	/// fast_math`, which binds the plain words
+	pub(super) fn use_fast_functions(&mut self) -> Result<(), Node> {
+		if !self.fast_functions {
+			return Ok(());
+		}
+		let source = std_module(FAST_MODULE).expect("lib/fast_math.warp is embedded");
+		let path = std_path(&fast_name(FAST_MODULE));
+		let definitions = crate::normalize::without_hints(|| self.load_source(Import::Use, path, source))?;
+		let words = std_module_definitions(FAST_MODULE).unwrap_or_default();
+		let qualified =
+			|definition: Node| words.iter().fold(definition, |node, word| renamed_word(node, word, &fast_name(word)));
+		self.std_definitions.extend(definitions.into_iter().map(qualified));
+		crate::compiler::compile_context::change(|context| {
+			context.module_definitions.extend(words.iter().map(|word| fast_name(word)));
+		});
+		Ok(())
 	}
 
 	/// The statements of each module a `use` names
@@ -420,6 +462,7 @@ impl<'a> Loader<'a> {
 				}));
 			}
 		}
+		self.use_fast_functions()?;
 		self.use_prelude(program)
 	}
 
@@ -518,7 +561,10 @@ impl<'a> Loader<'a> {
 		let directory = path.parent().map(Path::to_path_buf).unwrap_or_default();
 		let module = with_module_directory(crate::pipeline::lower_module_source(module), &directory);
 		let outer_directory = self.including_directory.replace(directory);
+		let (module, fast) = without_fast_pragma(module);
+		let outer_fast = std::mem::replace(&mut self.fast_module, fast);
 		let module = self.resolve(module);
+		self.fast_module = outer_fast;
 		self.including_directory = outer_directory;
 		let statements = statements(module?);
 		Ok(match import {

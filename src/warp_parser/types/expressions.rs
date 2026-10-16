@@ -2,6 +2,9 @@
 use super::*;
 use crate::words::LIST_WORD;
 
+/// Two words naming one built-in type (user 2026-10-16, card fast-scope): `x: fast int` is i64, `fast float` f64
+const COMPOUND_TYPES: [(&str, &str, &str); 2] = [("fast", "int", "i64"), ("fast", "float", "f64")];
+
 /// A word that can take type arguments: a capitalised type, a built-in type word, a plural type word, `list`, `map` …
 pub(crate) fn names_a_type(word: &str) -> bool {
 	word.chars().next().is_some_and(char::is_uppercase)
@@ -48,6 +51,16 @@ impl WarpParser {
 
 	/// `full name` of a declared `class full name {…}` is the one name `full-name`, any other word itself
 	pub(crate) fn joined_type_name(&mut self, word: String) -> String {
+		let built_in = COMPOUND_TYPES.iter().find_map(|(first, second, name)| {
+			(*first == word)
+				.then(|| self.words_ahead_length(&[second.to_string()]))
+				.flatten()
+				.map(|length| (*name, length))
+		});
+		if let Some((name, length)) = built_in {
+			self.advance_by(length);
+			return name.to_string();
+		}
 		let found = self.multi_word_types.iter().find_map(|words| {
 			(words[0] == word)
 				.then(|| self.words_ahead_length(&words[1..]))

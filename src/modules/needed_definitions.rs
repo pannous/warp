@@ -308,10 +308,12 @@ pub(crate) fn with_statements_in_front(program: Node, needed: Vec<Node>) -> Node
 	Node::List([needed, statements].concat(), Bracket::None, separator)
 }
 
-/// A mentioned name, or the companion f_as of a mentioned f: overloads lowering calls it where f gives an expected type
+/// A mentioned name, or the companion f_as of a mentioned f: overloads lowering calls it where f gives an expected type;
+/// or a word operator called by its word, `matches(s, p)` of `infix operator matches` (word_operators lower_call_forms)
 pub(crate) fn is_needed(name: &str, mentioned: &HashSet<String>) -> bool {
 	mentioned.contains(name)
 		|| crate::lowering::overloads::companion_of(name).is_some_and(|function| mentioned.contains(function))
+		|| name.strip_prefix(crate::operators::OPERATOR_FUNCTION_PREFIX).is_some_and(|word| mentioned.contains(word))
 }
 
 /// The names the statements mention or call, as methods too (`"hé".to_utf8()`), in interpolations too, with the library
