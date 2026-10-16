@@ -123,8 +123,8 @@ impl Marker<'_> {
 				Node::Key(Box::new(with_declared_type_unmarked(*target)), Op::Assign, Box::new(value))
 			}
 			// `a, b = e, 2` parses as `a, (b = e), 2`: values bound to variables, no tuple stored
-			Node::List(items, bracket, Separator::Colon) if items.iter().any(is_assignment) => {
-				Node::List(items.into_iter().map(with_assigned_value_unmarked).collect(), bracket, Separator::Colon)
+			Node::List(items, bracket, Separator::Comma) if items.iter().any(is_assignment) => {
+				Node::List(items.into_iter().map(with_assigned_value_unmarked).collect(), bracket, Separator::Comma)
 			}
 			Node::Key(value, Op::As, declared) if node_admits_errors(&declared) => {
 				Node::Key(Box::new(unmarked(*value)), Op::As, declared)
@@ -209,9 +209,9 @@ fn with_declared_type_unmarked(target: Node) -> Node {
 /// `{k: e}`, `(e, 2)`: the items of a map or tuple literal given to a variable (a list literal marks its own)
 fn with_literal_items_marked(value: Node) -> Node {
 	value.under_meta(|value| match value {
-		Node::List(items, Bracket::Round, Separator::Colon) if items.len() > 1 => {
+		Node::List(items, Bracket::Round, Separator::Comma) if items.len() > 1 => {
 			let items = items.into_iter().map(|item| marked(item, Place::ListItem));
-			Node::List(items.collect(), Bracket::Round, Separator::Colon)
+			Node::List(items.collect(), Bracket::Round, Separator::Comma)
 		}
 		other => with_map_values_marked(other),
 	})
