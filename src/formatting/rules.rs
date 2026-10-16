@@ -128,15 +128,26 @@ fn rewrite_code(
 	scans: &[LineScan],
 	rewrite: impl Fn(&[(char, bool)], usize, &mut String, &LineScan) -> usize,
 ) -> Vec<Edit> {
+	rewrite_code_with(lines, scans, |_| (), |characters, at, written, scan, _| rewrite(characters, at, written, scan))
+}
+
+/// rewrite_code with what `prepare` finds once per line, handed to every `rewrite` of that line
+fn rewrite_code_with<T>(
+	lines: &[String],
+	scans: &[LineScan],
+	prepare: impl Fn(&[(char, bool)]) -> T,
+	rewrite: impl Fn(&[(char, bool)], usize, &mut String, &LineScan, &T) -> usize,
+) -> Vec<Edit> {
 	let mut edits = Vec::new();
 	for (index, line) in lines.iter().enumerate() {
 		let characters = characters(line, &scans[index]);
+		let prepared = prepare(&characters);
 		let indentation = indentation_length(&characters, &scans[index]);
 		let mut written: String = characters[..indentation].iter().map(|(c, _)| c).collect();
 		let mut at = indentation;
 		while at < characters.len() {
 			if characters[at].1 {
-				at += rewrite(&characters, at, &mut written, &scans[index]).max(1);
+				at += rewrite(&characters, at, &mut written, &scans[index], &prepared).max(1);
 			} else {
 				written.push(characters[at].0);
 				at += 1;
@@ -252,14 +263,9 @@ fn operator_spacing(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
 /// `o<97?65: 97` → `o < 97 ? 65 : 97` (card format-ternary): a `?` between operands with its `:` later on the line, and
 /// that `:`, are spaced; an optional `x?` and a key's colon stay
 fn ternary_spacing(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
-	rewrite_code(lines, scans, |characters, at, written, _| {
+	rewrite_code_with(lines, scans, ternary_marks, |characters, at, written, _, marks| {
 		let c = characters[at].0;
-		let ternary = match c {
-			'?' => ternary_colon(characters, at).is_some(),
-			':' => (0..at).any(|question| ternary_colon(characters, question) == Some(at)),
-			_ => false,
-		};
-		if !ternary {
+		if !marks.contains(&at) {
 			written.push(c);
 			return 1;
 		}
@@ -272,25 +278,38 @@ fn ternary_spacing(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
 	})
 }
 
+/// The positions of the line's ternary `?`s and their `:`s
+fn ternary_marks(characters: &[(char, bool)]) -> std::collections::HashSet<usize> {
+	(0..characters.len())
+		.filter_map(|question| ternary_colon(characters, question).map(|colon| [question, colon]))
+		.flatten()
+		.collect()
+}
+
+/// A `?` between operands: no optional `x?`
+fn is_ternary_question(characters: &[(char, bool)], at: usize) -> bool {
+	if characters.get(at) != Some(&('?', true)) {
+		return false;
+	}
+	let before = characters[..at].iter().rev().map(|(c, _)| *c).find(|c| !is_space(*c));
+	let after = characters[at + 1..].iter().map(|(c, _)| *c).find(|c| !is_space(*c));
+	before.is_some_and(is_operand_end) && after.is_some_and(is_operand_start)
+}
+
 /// The `:` of the ternary whose `?` is at `question`: the first plain colon after it at its bracket depth that no
 /// nested ternary takes, None when the `?` is no ternary
 fn ternary_colon(characters: &[(char, bool)], question: usize) -> Option<usize> {
+	if !is_ternary_question(characters, question) {
+		return None;
+	}
 	let code = |index: usize| characters.get(index).filter(|(_, code)| *code).map(|(c, _)| *c);
-	if code(question) != Some('?') {
-		return None;
-	}
-	let before = characters[..question].iter().rev().map(|(c, _)| *c).find(|c| !is_space(*c))?;
-	let after = characters[question + 1..].iter().map(|(c, _)| *c).find(|c| !is_space(*c))?;
-	if !is_operand_end(before) || !is_operand_start(after) {
-		return None;
-	}
 	let (mut depth, mut nested) = (0, 0);
 	for index in question + 1..characters.len() {
 		match code(index) {
 			Some('(' | '[' | '{') => depth += 1,
 			Some(')' | ']' | '}') if depth == 0 => return None,
 			Some(')' | ']' | '}') => depth -= 1,
-			Some('?') if depth == 0 => nested += 1,
+			Some('?') if depth == 0 && is_ternary_question(characters, index) => nested += 1,
 			Some(':') if depth == 0 => {
 				let plain = code(index + 1).is_none_or(|next| !":=".contains(next)) && code(index - 1) != Some(':');
 				match nested {
