@@ -21,7 +21,8 @@ REPO=pannous/warp
 MAIN_CHECKOUT=/Users/me/dev/angles/warp
 RESULTS_PREFIX=cloud-results
 ENVIRONMENTAL_LIST=scripts/cloud-test-environmental.txt
-MAX_PARALLEL_RUNS=3            # cloud sessions at once (they share the account's limits, notes/cloud_development.md)
+CARGO_FLAGS_WITH_VALUE='--test|--features|-F|-p|--package|--bin|--example|--bench|-j|--jobs|--target'   # `--test tests`: the next word is the flag's, not a filter
+MAX_PARALLEL_RUNS=3           # cloud sessions at once (they share the account's limits, notes/cloud_development.md)
 PENDING_HOURS=3                # a launch older than this without a result no longer counts as running
 POLL_SECONDS=60                # GitHub API quota is shared by every session: ls-remote once a minute
 WAIT_HOURS=4
@@ -38,8 +39,19 @@ credit_used() { "$USAGE_SCRIPT" 2>/dev/null | sed -n 's/^iguana_necktie: \$\([0-
 
 # ---------------------------------------------------------------- the cloud side
 
+# A run that can't get to testing (tip missing, merge conflict) still pushes a red result, so nobody waits for it
+abort() {
+	printf 'run: %s\nbranch: %s\ntip: %s\nverdict: red\nerror: %s\n' "$name" "$branch" "$tip" "$*" > "$HERE_WORK/result.md"
+	echo "$*" >> "$HERE_WORK/log.txt"
+	gzip -kf "$HERE_WORK/log.txt"
+	cd "$CLOUD_REPO" && push_result "$name"
+	exit 1
+}
+
 # The run itself, detached from the session's Bash tool: checkout, build, test, summarize, push
 run_tests_here() {
+	CLOUD_REPO=$PWD
+	mkdir -p "$HERE_WORK"
 	local base=""
 	[ "$1" = "--on" ] && base=$2 && shift 2
 	local branch=$1 tip=$2; shift 2
@@ -50,14 +62,14 @@ run_tests_here() {
 	for branch_ref in "$branch" main vendor $base; do
 		git fetch -q origin "+refs/heads/$branch_ref:refs/remotes/origin/$branch_ref" 2>&1 | tail -3
 	done
-	git cat-file -e "$tip^{commit}" 2>/dev/null || git fetch -q origin "$tip" || fail "tip $tip not found on origin"
+	git cat-file -e "$tip^{commit}" 2>/dev/null || git fetch -q origin "$tip" || abort "tip $tip not found on origin"
 	checkout=$HERE_WORK/tree
-	rm -rf "$checkout" && git worktree prune && git worktree add -q --detach "$checkout" "$tip" || fail "checkout of $tip failed"
+	rm -rf "$checkout" && git worktree prune && git worktree add -q --detach "$checkout" "$tip" || abort "checkout of $tip failed"
 	git show "origin/main:$ENVIRONMENTAL_LIST" > "$HERE_WORK/environmental.txt" 2>/dev/null
-	cd "$checkout" || fail "no checkout"
+	cd "$checkout" || abort "no checkout"
 	local tested=$tip
 	if [ -n "$base" ]; then
-		git -c user.name=pannous -c user.email=info@pannous.com merge -q --no-edit "origin/$base" || fail "$tip does not merge cleanly into origin/$base"
+		git -c user.name=pannous -c user.email=info@pannous.com merge -q --no-edit "origin/$base" || abort "$tip does not merge cleanly into origin/$base"
 		tested="$tip merged into origin/$base $(git rev-parse "origin/$base")"
 	fi
 	rustup target add $RUST_TARGETS >/dev/null 2>&1
@@ -67,14 +79,18 @@ run_tests_here() {
 		git archive origin/vendor vendor | tar -x
 		source_flags=(--offline --config 'source.crates-io.replace-with="vendored-sources"' --config 'source.vendored-sources.directory="vendor"')
 	fi
-	local test_args=() filters=() past_separator=""
+	local test_args=() filters=() past_separator="" flag_value_next=""
 	if [ "${1:-}" = "--full" ]; then
 		test_args=("${FULL_FLAGS[@]}")
 	else
 		for argument in "$@"; do
 			if [ "$argument" = "--" ]; then past_separator=1
+			elif [ -z "$past_separator" ] && [ -n "$flag_value_next" ]; then test_args+=("$argument"); flag_value_next=""
 			elif [ -n "$past_separator" ] || [[ "$argument" != -* ]]; then filters+=("$argument")
-			else test_args+=("$argument"); fi
+			else
+				test_args+=("$argument")
+				[[ "$argument" =~ ^($CARGO_FLAGS_WITH_VALUE)$ ]] && flag_value_next=1
+			fi
 		done
 	fi
 	export WARP_NO_WINDOW=1 WARP_CRASH_CARDS=0 CARGO_TERM_COLOR=never
@@ -140,7 +156,7 @@ push_result() {
 	tree=$(git write-tree)
 	unset GIT_INDEX_FILE
 	commit=$(git -c user.name=pannous -c user.email=info@pannous.com commit-tree "$tree" -m "cloud test result $name")
-	git push -q -f origin "$commit:refs/heads/$RESULTS_PREFIX/$name" && echo "pushed $RESULTS_PREFIX/$name"
+	[ -n "$commit" ] && git push -q -f origin "$commit:refs/heads/$RESULTS_PREFIX/$name" && echo "pushed $RESULTS_PREFIX/$name"
 }
 
 # What the cloud session calls, again and again until DONE: starts the run once, then waits for it a while
@@ -260,7 +276,7 @@ collect() {
 main() {
 	case "${1:-}" in
 		--run-here) shift; run_here "$@"; exit ;;
-		--run-detached) shift; run_tests_here "$@"; touch "$HERE_WORK/done"; exit ;;
+		--run-detached) shift; trap 'touch "$HERE_WORK/done"' EXIT; run_tests_here "$@"; exit ;;
 		--summarize) summarize "$2" "${3:-$ENVIRONMENTAL_LIST}"; exit ;;
 	esac
 	card="" wait=1 result_only="" base=()
