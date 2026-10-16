@@ -205,6 +205,11 @@ fn infix_iterations(node: Node, functions: &HashSet<String>) -> Node {
 	let is_list_operand =
 		|node: &Node| is_list_operand(node) && !node.symbol_name().is_some_and(|name| functions.contains(name));
 	match node {
+		// `ys = sort xs by >`: the parser hung the phrase on the operator, `(sort xs by) > ø`
+		Node::Key(..) if dangling_sort_operator(&node).is_some_and(|(words, label)| sorts_before(&words[..label])) => {
+			let (words, _) = dangling_sort_operator(&node).expect("checked");
+			infix_iterations(Node::List(words, Bracket::None, Separator::Space), functions)
+		}
 		Node::List(items, bracket, separator) if is_phrase(&bracket, &separator) => {
 			let items = items.into_iter().map(|item| infix_iterations(item, functions)).collect();
 			let mut pending: VecDeque<Node> = labeled_sort_functions(items).into();
@@ -260,12 +265,13 @@ fn labeled_sort_functions(items: Vec<Node>) -> Vec<Node> {
 	let mut after_iteration = false;
 	let mut rest = items.into_iter();
 	while let Some(item) = rest.next() {
+		// `by >` and `by > map f`: the parser hung the rest of the phrase on the operator
+		if let Some((words, _)) = dangling_sort_operator(&item).filter(|_| after_iteration) {
+			labeled.extend(words);
+			continue;
+		}
 		let function = match item.drop_meta() {
 			_ if !after_iteration => None,
-			// `by >`: the parser kept the operator as one dangling on the label
-			Node::Key(label, op, nothing) if is_sort_label(label) && nothing.is_empty_node() && *op != Op::Colon => {
-				Some((label.as_ref().clone(), key(Node::Empty, *op, Node::Empty)))
-			}
 			Node::Key(label, Op::Colon, function) if is_sort_label(label) => {
 				Some((label.as_ref().clone(), function.as_ref().clone()))
 			}
@@ -282,6 +288,36 @@ fn labeled_sort_functions(items: Vec<Node>) -> Vec<Node> {
 		});
 	}
 	labeled
+}
+
+/// An iteration word among the words, the one a sort label after them belongs to
+fn sorts_before(words: &[Node]) -> bool {
+	words.iter().any(|word| iteration_word(word).is_some())
+}
+
+/// The words of `… by > rest` with the operator as the labeled function, `… by: > rest`, and where that label stands,
+/// when the parser hung them on the operator after a sort label: `(sort xs by) > ø`, `by > (map f)`
+fn dangling_sort_operator(node: &Node) -> Option<(Vec<Node>, usize)> {
+	let Node::Key(left, op, right) = node.drop_meta() else { return None };
+	if !op.is_operation() || operator_symbol(*op).is_none() {
+		return None;
+	}
+	let mut words = phrase_words(left);
+	let label = words.pop().filter(is_sort_label)?;
+	let label_at = words.len();
+	words.push(key(label, Op::Colon, key(Node::Empty, *op, Node::Empty)));
+	words.extend(phrase_words(right).into_iter().filter(|word| !word.is_empty_node()));
+	Some((words, label_at))
+}
+
+/// The words of a phrase, nested phrases spliced in (`(sort xs) by`), or the one node
+fn phrase_words(node: &Node) -> Vec<Node> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::None, separator) if !separator.separates_statements() => {
+			items.iter().flat_map(phrase_words).collect()
+		}
+		_ => vec![node.clone()],
+	}
 }
 
 /// `ys map` of `f(ys) := ys map sq`, which the parser grouped before the function: its words
