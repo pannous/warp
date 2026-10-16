@@ -110,8 +110,14 @@ Landed on branch one-dispatch: slices 1, 3, 4, 5 and Q2.
   `typed_library_words::dispatched` (ambiguous_forms suffix_call).
   So the rule table's level 4 (the library's word for a value of its types) now comes before level 2 (the
   program's untyped definition).
-Next: slice 2 (one uniform-call arity rule), 7 (class-body library-named methods into generics), 9 (units, type
-words), rest of 3 (the users still on their own sets, above).
+- Gate round 2 (2026-10-17, one-dispatch-uniform): parameters and loop variables are unknown kinds (kinds are known by
+  name program-wide); another module's bare word on what may be an object reads its field as before (`p.center`,
+  `s.words` of a component result, `f(x).title`); a field write `m.title = v` takes no word unless the program defines
+  the setter (stored tables restore rows that way); a let/const receiver of unknown kind takes the program's word over
+  a list-changing library word (route path parameters, `add(a, b)`); the null check narrows after
+  `if x == ø { return … }` (the raytracer). std_aliases asks modules::says_use (main's json-parse-literal).
+Next: 9 (units, type words), rest of 3 (lambdas lower_infix_iterations, soft_keywords `program_names` users,
+type_tests, needed_definitions, modules.rs).
 
 ## Answered questions (user, 2026-10-16; decisions dispatch-untyped-library-words, type-words-reserved, field-forms)
 - Q1 untyped `first(x) := x*2`: dispatch. The library's `first(list)` is more specific than the program's untyped
