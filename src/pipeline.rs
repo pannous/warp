@@ -202,8 +202,8 @@ const DECLARATION_PASSES: &[Pass] = &[
 	// `class int` without a body is the int type (class_references.rs), before file_declarations takes `class Foo;`
 	crate::lowering::class_references::lower,
 	crate::lowering::file_declarations::lower,
-	// `Display(96)` of a field `density: dpi` is `Display(96 dpi)` with a fixable warning (unit_fields.rs)
-	crate::numbers::units::static_units::lower_plain_field_numbers,
+	// `density: dpi` keeps the word dpi for messages and fixes (unit_fields.rs)
+	crate::numbers::units::static_units::remember_field_unit_words,
 	// `60 mph` is `60 mi/h`, `q as km/h` converts to km/h, before any units pass reads them
 	crate::numbers::units::lower_unit_words,
 	// `class Part{length: m ± 1 mm}`: `Part(5 m)` holds `5 m ± 1 mm` (unit_fields.rs), a tolerance the next pass reads

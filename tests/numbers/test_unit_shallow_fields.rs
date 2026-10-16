@@ -29,3 +29,12 @@ fn a_plain_number_takes_the_fields_unit_with_a_warning() {
 	);
 	assert_eq!(shown("Display{density: 96, diagonal: 24 inch}.density == 96 dpi"), "yes");
 }
+
+// reviewer: any plain number, not only a written one, and a field assignment; messages name the unit as written
+#[test]
+fn a_plain_value_or_assignment_takes_the_fields_unit() {
+	assert_eq!(shown("x = 96\nDisplay(x, 24 inch).density == 96 dpi"), "yes");
+	assert_eq!(shown("Display(2*48, 24 inch).density == 96 dpi"), "yes");
+	assert_eq!(shown("d = Display(96 dpi, 24 inch)\nd.density = 120\nd.density == 120 dpi"), "yes");
+	fails_with(&format!("{DISPLAY}\nDisplay(3 kg, 24 inch)"), "Display.density holds px/m (dpi), is given kg");
+}
