@@ -452,17 +452,17 @@ function writeSharedWords(shared, words) {
 // the program's side: hand the job to a task Worker (by default the GPU's, gpuTaskWorker) and wait for the values it
 // gives, raw words as `Words` (a copy: the shared buffer takes the next answer)
 function gpuJob(word, job, transfer = [], Words = Float32Array, worker = hasTaskWorkers() && gpuTaskWorker()) {
-	if (!hasTaskWorkers()) throw new Error(`${word} needs task Workers, which only a cross-origin isolated page has (the playground)`);
-	if (!worker) throw new Error(`${word}: every task Worker is busy`);
+	if (!hasTaskWorkers()) throw new HostWordFailure(`${word} needs task Workers, which only a cross-origin isolated page has (the playground)`);
+	if (!worker) throw new HostWordFailure(`${word}: every task Worker is busy`);
 	const shared = takeAnswerBuffer();
 	worker.postMessage({ gpu: { word, job }, shared }, transfer);
 	const header = new Int32Array(shared, 0, 2);
 	// the buffer and the Worker stay out of their pools: the answer may still come
-	if (Atomics.wait(header, 0, 0, GPU_JOB_WAIT_MS) === "timed-out") throw new Error(`${word}: the GPU's task Worker gave no answer in ${GPU_JOB_WAIT_MS / 1000} s`);
+	if (Atomics.wait(header, 0, 0, GPU_JOB_WAIT_MS) === "timed-out") throw new HostWordFailure(`${word}: the GPU's task Worker gave no answer in ${GPU_JOB_WAIT_MS / 1000} s`);
 	const { values, error } = header[0] === WORDS_STATE ? { values: new Words(shared, TASK_HEADER, header[1]).slice() } : readShared(shared);
 	taskPool.push(worker);
 	returnAnswerBuffer(shared);
-	if (error) throw new Error(`${word}: ${error}`);
+	if (error) throw new HostWordFailure(`${word}: ${error}`);
 	return values;
 }
 

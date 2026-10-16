@@ -364,13 +364,17 @@ const COLON_KEY = String((1n << 8n) | KIND_KEY); // src/operators.rs OP_CODES: C
 // a codepoint (a WIT char, P94) as src/modules/foreign.rs sends it, since JSON would make it a text: `{$char: "b"}`
 const KIND_CODEPOINT = "4";
 const isCodepoint = value => value !== null && typeof value === "object" && Object.keys(value).length === 1 && typeof value.$char === "string" && [...value.$char].length === 1;
+// a host word failing for the program's reason (a shader that does not compile), as native TaskFailure
+class HostWordFailure extends Error {}
+
 // a host word's failure as the program's own error (card wgsl-error, as src/host/native.rs raised): in a program with a
 // `try` its message goes to trap_detail and the program's returned_error raises it, which a running `try` catches
-// (`catch e` binds the message) and which otherwise traps as `raise` does; without a `try` the failure as it was
+// (`catch e` binds the message) and which otherwise traps as `raise` does; without a `try`, or any other exception (a
+// bug of the host), the failure as it was
 function raisedInProgram(exports, failure) {
 	const returnedError = exports[RETURNED_ERROR_EXPORT], detail = exports[TRAP_DETAIL_EXPORT];
-	if (!returnedError || !detail) throw failure;
-	detail.value = buildValue(exports, treeOfPlain(String(failure?.message ?? failure)));
+	if (!(failure instanceof HostWordFailure) || !returnedError || !detail) throw failure;
+	detail.value = buildValue(exports, treeOfPlain(failure.message));
 	returnedError();
 	throw failure;
 }
