@@ -42,7 +42,7 @@ const fn system_side(
 	Property { object, property, getter, setter, module: None }
 }
 
-const PROPERTIES: [Property; 7] = [
+const PROPERTIES: [Property; 9] = [
 	canvas_side("width", "canvas_width", "canvas(it, canvas_height)"),
 	canvas_side("height", "canvas_height", "canvas(canvas_width, it)"),
 	// system values (warp-runtime system_values.rs), so `whenever window.width > 800 {…}` listens
@@ -50,9 +50,27 @@ const PROPERTIES: [Property; 7] = [
 	system_side("window", "height", "window_height", Some("set_system_value(\"window_height\", it)")),
 	system_side("display", "width", "display_width", None),
 	system_side("display", "height", "display_height", None),
-	// the device pixels per inch, a quantity in dpi that turns lengths into px, `3 cm * display.dpi`; a program sets it
-	// in dpi, `display.dpi = 300 dpi`
-	system_side("display", "dpi", "display_dpi * 1dpi", Some("set_system_value(\"display_dpi\", it / 1dpi)")),
+	// the device pixels per length (decision display-names), a quantity in dpi that turns lengths into px, `3 cm *
+	// display.density`; a program sets it in dpi, `display.density = 300 dpi`
+	system_side("display", "density", "display_dpi * 1dpi", Some("set_system_value(\"display_dpi\", it / 1dpi)")),
+	// width × height in px, and the diagonal as a length: its whole px at the density (quantities run as exact amounts,
+	// a run-time √ is a float)
+	system_side("display", "size", "[display_width, display_height] px", None),
+	system_side(
+		"display",
+		"diagonal",
+		"(√(display_width² + display_height²) as int) * 1px / (display_dpi * 1dpi)",
+		None,
+	),
+	// card graphics-properties moves these to lib lines (`display { density: dpi, size: px, diagonal: inch }`)
+];
+
+/// Other names of a property, each with the note naming the property (decision display-names)
+const PROPERTY_ALIASES: [(&str, &str, &str, &str); 4] = [
+	("display", "dpi", "density", "the pixels per length, in dpi"),
+	("display", "ppi", "density", "the pixels per length, in dpi"),
+	("display", "dimensions", "size", "dimension is a physical quantity (length, mass); size is width × height in px"),
+	("display", "resolution", "size", "resolution: density (dpi) or size (px)? size is width × height"),
 ];
 
 pub fn lower(program: Node) -> Node {
@@ -106,6 +124,13 @@ impl Rewrite {
 			return None;
 		};
 		let (object, property) = (object.drop_meta().symbol_name()?, property.drop_meta().symbol_name()?);
+		let property = match PROPERTY_ALIASES.iter().find(|(of, alias, ..)| *of == object && *alias == property) {
+			Some((_, alias, canonical, note)) if !self.bound.contains(object) => {
+				crate::normalize::hint(&format!("{object}.{alias}"), &format!("{object}.{canonical}"), note);
+				*canonical
+			}
+			_ => property,
+		};
 		PROPERTIES
 			.iter()
 			.find(|known| known.object == object && known.property == property && !self.bound.contains(object))
