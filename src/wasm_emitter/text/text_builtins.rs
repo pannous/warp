@@ -419,6 +419,32 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// `byte_at(text, offset)` without a call: a byte loop read a text through text_argument, text_of and byte_at,
+	/// three calls per byte (card loop-calls). A text takes the inline path; anything else goes through text_argument
+	/// (an Error fails there, a character becomes its text)
+	fn emit_byte_at_inline(&mut self, func: &mut Function, text: &Node, offset: &Node) {
+		let (held, at) = (self.node_scratch(), self.scratch(0));
+		// both evaluated before either is held: the offset's own code may use these scratch locals
+		self.emit_node_instructions(func, text);
+		self.emit_numeric_value(func, offset);
+		Self::emit_list(func, &[I::LocalSet(at), I::LocalSet(held)]);
+		if !matches!(text.drop_meta(), Node::Text(_)) {
+			func.instruction(&I::LocalGet(held));
+			func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 });
+			Self::emit_kind_test(func, Kind::Text as i64, I::I64Ne);
+			Self::emit_list(func, &[I::If(BlockType::Empty), I::LocalGet(held), I::RefAsNonNull]);
+			self.emit_call(func, TEXT_ARGUMENT);
+			Self::emit_list(func, &[I::LocalSet(held), I::End]);
+		}
+		func.instruction(&I::LocalGet(at));
+		self.emit_text_field(func, held, 1);
+		Self::emit_list(func, &[I::I64ExtendI32U, I::I64GeU, I::If(BlockType::Empty)]);
+		self.emit_call(func, "index_out_of_range");
+		func.instruction(&I::End);
+		self.emit_text_field(func, held, 0);
+		Self::emit_list(func, &[I::LocalGet(at), I::I32WrapI64, I::I32Add, I::I32Load8U(BYTE), I::I64ExtendI32U]);
+	}
+
 	/// `byte_at(text, offset)` and `is_error(x)` as raw i64
 	/// `bits_float(n)` as raw f64
 	pub(in crate::wasm_emitter) fn emit_float_builtin(&mut self, func: &mut Function, name: &str, arguments: &[Node]) {
@@ -444,11 +470,7 @@ impl WasmGcEmitter {
 				func.instruction(&I::I64ReinterpretF64);
 				self.emit_int_from_machine(func);
 			}
-			(BYTE_AT, [text, offset]) => {
-				self.emit_text_argument(func, text);
-				self.emit_numeric_value(func, offset);
-				self.emit_call(func, BYTE_AT);
-			}
+			(BYTE_AT, [text, offset]) => self.emit_byte_at_inline(func, text, offset),
 			(MEMORY_BYTE, [address]) => {
 				self.emit_numeric_value(func, address);
 				Self::emit_list(func, &[I::I32WrapI64, I::I32Load8U(BYTE), I::I64ExtendI32U]);

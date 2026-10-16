@@ -77,6 +77,9 @@ otherwise constant evaluation may hide the loop. Profile the generated module ap
   are proven fixnums or Int locals, one test of those locals and the result picks plain i64 code. 100M rounds of
   `t = t + i % 7; i = i + 1`: fast 490 → 234 ms, exact 254 ms, the same loop in hand-written wasm 115 ms.
   `byte_at` and `memory_byte` are proven 0…255. `x: i64` (`x: fast int`) wraps now; it was ignored.
+- **Byte loops** (card loop-calls, 2026-10-16): each `byte_at(t, i)` called text_argument, text_of and byte_at, and
+  each `t.bytes` node_bytes. With a text they are inline now (text_builtins.rs emit_byte_at_inline,
+  list_dispatch.rs emit_byte_count_inline). probes/text_search's warp find: 1.91 → 0.50 s (builtin 0.29 s).
 
 ## Measured as fine
 Closure calls cost what definition calls cost: 50 million calls of `add=(a,b)=>a+b`, of a capturing `x=>x*k` and of a
