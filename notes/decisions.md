@@ -248,13 +248,16 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   a panic.
 
 ## Comments, separators and lexing
-- `//` is a comment only before a space or the line end; otherwise floor division (`7//2`, `a //b`, `x//=3`)
-  (2026-10-08, emphatic). A comment hiding a closing bracket is a parse error naming the `//`.
+- floor-division (2026-10-16, user; card floor-division; supersedes the 2026-10-08 rule "`//` is floor division
+  unless a space or line end follows"): `//` is always a comment. Floor division is `/!` (`7 /! 2` = 3, `x /!= 2`).
+  Where the compiler can tell a `//` was meant as floor division (`n = 7//2`, `x//=3`), a strong warning names
+  `/!`, and `warp fix` rewrites it. `div` goes to `/!` too (`7 div 2` warns, fix `7 /! 2`); `div` stays the html
+  tag. All our code, samples, docs and tests move to `/!`, except one or two tests that check the hints. A comment
+  hiding a closing bracket is a parse error naming the `//`.
 - `#` glued to a non-space is the count expression (`#s`, `#f(x)`); `# text`, `#!`, `##` and the directives `#use`,
   `#include`, `#import` stay comments/directives.
 - hash-comments (2026-10-15, user): `# text` is the preferred comment; `//` clashes with floor division and reads
-  Java-esque. `warp format` has an opt-in option rewriting `// text` comments to `# text` (floor division and `/* */`
-  untouched), and the linter gives a soft hint on every `//` comment.
+  Java-esque. `warp format` has an opt-in option rewriting `// text` comments to `# text` (`/* */` untouched), and the linter gives a soft hint on every `//` comment.
 - `print a    print b` on one line is an error "two statements on one line? separate them with `;`".
 - P227 (2026-10-08) a comma next to `==` without parentheses is an error asking for them ("insist on braces to avoid
   errors"): `(2.0, 4) == 2.0, 4`.
@@ -303,7 +306,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   application to crash"): known ± values need `certainly`/`possibly`/`.value` (compile error), run-time ones count
   an overlap as not certain with a one-time warning. P233 a field typed with a tolerance gives each value that
   tolerance.
-- `x /= y` is exactly `x = x / y` (3/2 stays exact); floor division is `x //= y`; an `x:int` keeps a whole number.
+- `x /= y` is exactly `x = x / y` (3/2 stays exact); floor division is `x /!= y` (floor-division); an `x:int` keeps a whole number.
 - Trailing percent: `10%` is 1/10, `50 % of 200` is 100; infix `%` stays remainder; CSS values stay as written.
 - P184 English number words are numbers when no variable has that name, with a hint toward digits.
 - #11 exact reals may go into a declared float with precision loss (`float x = π`). rational-float (2026-10-10):
@@ -498,10 +501,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - #6 data as scope, warning when kebab parts are also variables. P81 the kebab-key warning offers three fixes.
 - stored-visits: `stored visits default 0`; `stored visits = 0` works with a note.
 - Ranges (2026-10-09): `r: 1..n` is the range itself, same as `r = 1..n`. `upto` excludes the end with a hint.
-- range-in-brackets (2026-10-16 night, Interviewer's decision on the user's behalf, to present; undoable; card
-  range-spread; asked by the reviewer): a range written as a literal item inside [ ] spreads into the list, as in
-  Haskell: `[1..3]` = [1 2], `[0, 1..3]` = [0 1 2], `[1...3]` = [1 2 3]. `[(1..3)]` or a variable `[r]` keeps one
-  range item. (Python's [range(1,3)] and Rust's vec![1..3] hold one range, but nobody writes [1..3] meaning that.)
+- range-in-brackets (2026-10-16, user; reverses the Interviewer's night decision to spread): no spreading, no
+  special rule: a range inside [ ] is one item, "pure logical": `[1..3, 5]` is a list whose first item is the range
+  (1, 2), `[1..3]` a list holding one range. An unneeded edge case (card literal-range obsolete).
 
 ## Functions and calls
 - random-forms (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable; card

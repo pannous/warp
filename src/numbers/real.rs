@@ -9,7 +9,7 @@ use crate::compiler::compile_time::{answer_of, fail, Stop};
 use crate::extensions::numbers::Number;
 use crate::extensions::reals::{Exact, Generator, Monomial, Rational, Real};
 use crate::lowering::nodes::children_rewritten;
-use crate::node::{error, Node, Separator};
+use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_tests::{is_float_type_word, is_real_type_word, is_text_type_word};
 use num_bigint::BigInt;
@@ -221,6 +221,8 @@ fn evaluate(node: &Node, scope: &mut Scope) -> Evaluated {
 		Node::Char(character) => Ok(Value::Text(character.to_string())),
 		Node::Symbol(name) => scope.get(name).cloned().ok_or(Stop::Unsupported),
 		Node::Key(left, op, right) => key(left, *op, right, scope),
+		// `[4]` is a list of one number, no number: `sin [4]` broadcasts at run time
+		Node::List(_, Bracket::Square, _) => Err(Stop::Unsupported),
 		Node::List(items, _, separator) => list(items, separator, scope),
 		_ => Err(Stop::Unsupported),
 	}
