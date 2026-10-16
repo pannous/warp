@@ -262,10 +262,13 @@ fn indentation(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
 	let mut previous_code = String::new();
 	for (index, line) in lines.iter().enumerate() {
 		let scan = &scans[index];
+		let code = code_text(line, scan);
 		if scan.starts_in_text || line.trim().is_empty() {
+			if scan.starts_in_text && !scan.code.is_empty() {
+				previous_code = code;
+			}
 			continue;
 		}
-		let code = code_text(line, scan);
 		let width = written_width(line);
 		while offside.last().is_some_and(|&header| width <= header) {
 			offside.pop();

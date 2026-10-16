@@ -133,14 +133,19 @@ pub(super) fn leading_closers(line: &str, scan: &LineScan) -> usize {
 		.count()
 }
 
-/// The code of the line without its trailing comment, trimmed (texts blanked to `""`)
+/// The code of the line without its trailing comment, trimmed (texts blanked to `""`, also one the line starts or
+/// ends in: `y = x + "` ends in an operand, not in `+`)
 pub(super) fn code_text(line: &str, scan: &LineScan) -> String {
+	let blank_text = "\"\"";
 	let mut text = String::new();
 	for (index, &(start, end)) in scan.code.iter().enumerate() {
-		if index > 0 {
-			text.push_str("\"\"");
+		if index > 0 || scan.starts_in_text {
+			text.push_str(blank_text);
 		}
 		text.push_str(&line[start..end]);
+	}
+	if scan.ends_in_text {
+		text.push_str(blank_text);
 	}
 	text.trim().to_string()
 }
