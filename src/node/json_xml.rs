@@ -216,14 +216,27 @@ pub fn json_key(key: &Node) -> String {
 
 /// The first part JSON cannot express (user 2026-10-15: never a silent loss): ∞, NaN, a complex number
 pub fn inexpressible_in_json(node: &Node) -> Option<Node> {
+	first_number_part(node, |number| match number {
+		Number::Float(x) => !x.is_finite(),
+		Number::Nan | Number::Inf | Number::NegInf | Number::Complex(..) => true,
+		_ => false,
+	})
+}
+
+/// The first number JSON writes only approximately, as its float: a fraction without decimal digits, 1/3, an exact
+/// real such as π/2 (decision json-exactness); a JSON number is decimal, so 0.1 and 19.99 are written exactly
+pub fn inexact_in_json(node: &Node) -> Option<Node> {
+	first_number_part(node, |number| match number {
+		Number::Quotient(..) | Number::BigQuotient(_) => number.exact_decimal().is_none(),
+		Number::Real(_) => true,
+		_ => false,
+	})
+}
+
+fn first_number_part(node: &Node, is_wanted: impl Fn(&Number) -> bool) -> Option<Node> {
 	let mut found = None;
 	node.visit(&mut |part| {
-		let inexpressible = match part.drop_meta() {
-			Node::Number(Number::Float(x)) => !x.is_finite(),
-			Node::Number(Number::Nan | Number::Inf | Number::NegInf | Number::Complex(..)) => true,
-			_ => false,
-		};
-		if inexpressible && found.is_none() {
+		if found.is_none() && matches!(part.drop_meta(), Node::Number(number) if is_wanted(number)) {
 			found = Some(part.clone());
 		}
 	});

@@ -6,3 +6,5 @@ parse_json(text: any) := std_pure("json", "parse", [text])
 to_json(value: any) := std_pure("json", "to_json", [value])
 // to_json in a program with classes (class_methods lower_json_classes): an instance is its fields
 to_json_of_classes(value: any, classes: any) := std_pure("json", "to_json", [value, classes])
+// to_json under `use strict` (class_methods lower_json_calls): a fraction is an error, not a float with a warning
+exact_json(value: any, classes: any) := std_pure("json", "exact_json", [value, classes])

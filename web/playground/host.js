@@ -298,6 +298,8 @@ function plainOfTree(tree) {
 		case 1:
 			if (String(kind) === BOOL_KIND) return Number(payload.int) !== 0;
 			if (payload.ratio) return Number(payload.ratio[0].int) / Number(payload.ratio[1].int);
+			// a big integer keeps its digits as a BigInt (exact.js, which the parts carrying big numbers start)
+			if (payload.big) return typeof integerOfPayload === "function" ? integerOfPayload(payload) : null;
 			return payload.int === undefined ? null : Number(payload.int);
 		case 2: return Number(payload.float);
 		case 3: case 5: return payload.text;

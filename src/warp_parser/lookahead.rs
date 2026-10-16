@@ -102,7 +102,17 @@ impl WarpParser {
 		let word_end = before.iter().rposition(|ch| !ch.is_whitespace()).map_or(0, |end| end + 1);
 		let word_start =
 			before[..word_end].iter().rposition(|ch| !is_identifier_char(*ch)).map_or(0, |start| start + 1);
-		word_start < word_end && word_start > 0 && before[word_start - 1] == ':'
+		word_start < word_end && word_start > 0 && before[word_start - 1] == ':' && !self.closes_ternary(word_start - 1)
+	}
+
+	/// The colon here closes a pending `?`: only the one symbol at `symbol_start` stands between them, `c ? :big :small`
+	fn closes_ternary(&self, symbol_start: usize) -> bool {
+		let before = &self.chars[..symbol_start];
+		let line_start = before.iter().rposition(|ch| *ch == '\n').map_or(0, |end| end + 1);
+		before[line_start..]
+			.iter()
+			.rposition(|ch| !ch.is_whitespace())
+			.is_some_and(|last| before[line_start + last] == '?')
 	}
 
 	/// The spelling starts here; a word ends here too: `and` but not `android`, `plus a` but not the call `plus(a, b)`

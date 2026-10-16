@@ -399,7 +399,11 @@ impl WarpParser {
 			return Some(self.parse_type_application(symbol.to_string()));
 		}
 		if !self.options.wit_mode && self.declares_type(symbol) {
-			return Some(self.parse_type_declaration());
+			return Some(if symbol == CLASS_KEYWORD {
+				self.parse_class_declaration()
+			} else {
+				self.parse_type_declaration()
+			});
 		}
 		// P178: `enum Shape { Circle(r), Rect(w, h), Dot }`, cases with values: the sum type `Circle(r) | Rect(w, h) | Dot`
 		if symbol == ENUM_WORD && self.in_code() && self.enum_with_values_ahead() {

@@ -490,6 +490,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - #6 data as scope, warning when kebab parts are also variables. P81 the kebab-key warning offers three fixes.
 - stored-visits: `stored visits default 0`; `stored visits = 0` works with a note.
 - Ranges (2026-10-09): `r: 1..n` is the range itself, same as `r = 1..n`. `upto` excludes the end with a hint.
+- range-in-brackets (2026-10-16 night, Interviewer's decision on the user's behalf, to present; undoable; card
+  range-spread; asked by the reviewer): a range written as a literal item inside [ ] spreads into the list, as in
+  Haskell: `[1..3]` = [1 2], `[0, 1..3]` = [0 1 2], `[1...3]` = [1 2 3]. `[(1..3)]` or a variable `[r]` keeps one
+  range item. (Python's [range(1,3)] and Rust's vec![1..3] hold one range, but nobody writes [1..3] meaning that.)
 
 ## Functions and calls
 - random-forms (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable; card

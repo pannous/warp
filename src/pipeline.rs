@@ -195,6 +195,8 @@ const SUGAR_PASSES: &[Pass] = &[
 const DECLARATION_PASSES: &[Pass] = &[
 	// the classes of used modules (`use shapes`, `use collections`) before class_methods lowers them with the program's
 	// `class Foo;` takes in the definitions after it before any pass reads class bodies (wiki/type.md)
+	// `class int` without a body is the int type (class_references.rs), before file_declarations takes `class Foo;`
+	crate::lowering::class_references::lower,
 	crate::lowering::file_declarations::lower,
 	// `60 mph` is `60 mi/h`, `q as km/h` converts to km/h, before any units pass reads them
 	crate::numbers::units::lower_unit_words,
@@ -229,7 +231,7 @@ const DECLARATION_PASSES: &[Pass] = &[
 	// `x as text?` keeps ø, after foreign_modules types a nullable WebIDL result so
 	crate::lowering::optional_casts::lower,
 	crate::lowering::std_aliases::lower,
-	crate::lowering::class_methods::lower_json_classes,
+	crate::lowering::class_methods::lower_json_calls,
 	crate::lowering::welcome_forms::lower,
 	crate::lowering::kebab_names::lower_kebab_members,
 	crate::lowering::number_keys::lower,

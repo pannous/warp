@@ -488,6 +488,9 @@ pub(super) fn analyse_user_functions(ctx: &mut Context, node: &Node) {
 	ctx.field_kinds = program_field_kinds(node);
 	let mut globals = with_closure_captures(ctx, node, globals);
 	refine_return_kinds(ctx, &globals);
+	if type_float_list_parameters(ctx, node) {
+		refine_return_kinds(ctx, &globals);
+	}
 	let return_kinds: FunctionKinds = FunctionKinds::new(
 		ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect(),
 	);
@@ -1049,6 +1052,69 @@ fn add_assigned_kinds(ctx: &Context, argument_kinds: &mut HashMap<(String, usize
 			}
 		}
 	}
+}
+
+/// The annotation an untyped list parameter takes when every call passes a list of floats
+const FLOAT_LIST_TYPE: &str = "floats";
+const FLOAT_ELEMENT: &str = "float";
+
+/// An untyped list parameter that every call, all of them at the main level, passes a list of floats (`xs = [i * 0.1 as
+/// float for i in 0..n]; sum(xs)`) takes `floats`, as if declared: its loop reads f64s instead of Nodes (card
+/// untyped-parameters, ~6x faster). A call inside a function body passes values of that body's scope: no say, no type.
+/// True when one was typed
+fn type_float_list_parameters(ctx: &mut Context, program: &Node) -> bool {
+	let called_in_bodies: HashSet<String> = ctx
+		.user_functions
+		.values()
+		.flat_map(|function| function_calls(&function.body).into_iter().map(|(name, _)| name))
+		.collect();
+	let mut main = Scope::with_function_kinds(known_function_kinds(ctx))
+		.with_closure_targets(ctx.closure_variable_targets.clone());
+	collect_variables(program, &mut main);
+	let mut element_types: HashMap<(String, usize), HashSet<String>> = HashMap::new();
+	for (name, arguments) in function_calls(program).into_iter().filter(|(name, _)| !called_in_bodies.contains(name)) {
+		let Some(function) = ctx.user_functions.get(&name) else {
+			continue;
+		};
+		for (index, argument) in arguments.iter().enumerate().take(function.params.len()) {
+			// the head `sum(values)` of the definition names the parameter itself: no call
+			if argument.drop_meta().is_symbol(&function.params[index].name) {
+				continue;
+			}
+			let list_type = crate::analyzer::list_type_name(argument, &main);
+			let element = list_type.strip_prefix(crate::analyzer::LIST_OF_PREFIX).unwrap_or("");
+			element_types.entry((name.clone(), index)).or_default().insert(element.to_string());
+		}
+	}
+	let mut typed_any = false;
+	for ((name, index), elements) in element_types {
+		let Some(param) = ctx.user_functions.get_mut(&name).and_then(|function| function.params.get_mut(index)) else {
+			continue;
+		};
+		let untyped =
+			param.annotation.is_none() && param.default.is_none() && matches!(param.used_as, None | Some(Kind::List));
+		if untyped && elements.len() == 1 && elements.contains(FLOAT_ELEMENT) {
+			param.annotation = Some(Node::Symbol(FLOAT_LIST_TYPE.to_string()));
+			param.used_as = Some(Kind::List);
+			typed_any = true;
+		}
+	}
+	typed_any
+}
+
+/// The calls of user-named functions within `node` and their arguments
+fn function_calls(node: &Node) -> Vec<(String, Vec<Node>)> {
+	let mut calls = vec![];
+	node.visit(&mut |part| {
+		if let Node::List(items, _, _) = part {
+			calls.extend(
+				called_functions(items)
+					.into_iter()
+					.map(|(name, arguments)| (name, arguments.into_iter().cloned().collect())),
+			);
+		}
+	});
+	calls
 }
 
 /// An untyped parameter given one kind holds it (Int stays the usage kind); given several kinds, any value

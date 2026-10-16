@@ -1396,6 +1396,7 @@ PASSED:
   ✓ functions::test_empty_function_bodies::a_function_with_an_empty_body_leaves_the_program_alone
   ✓ functions::test_empty_function_bodies::calling_a_function_with_an_empty_body_gives_empty
   ✓ functions::test_event_effects::an_emitted_event_is_a_named_effect
+  ✓ functions::test_fail_effect::a_library_word_that_answers_with_an_error_fails
   ✓ functions::test_fail_effect::dividing_by_a_number_and_try_do_not_fail
   ✓ functions::test_fail_effect::effects_of_names_fail
   ✓ functions::test_fail_effect::pure_refuses_fail_but_folding_does_not
@@ -1405,6 +1406,9 @@ PASSED:
   ✓ functions::test_field_function_values::test_function_in_nested_object
   ✓ functions::test_field_function_values::test_function_in_object_field
   ✓ functions::test_field_function_values::test_function_list_in_object_field
+  ✓ functions::test_float_list_parameters::a_call_inside_a_function_leaves_the_parameter_untyped
+  ✓ functions::test_float_list_parameters::a_parameter_given_only_float_lists_takes_floats
+  ✓ functions::test_float_list_parameters::a_parameter_given_other_lists_too_stays_untyped
   ✓ functions::test_float_to_int_parameter::a_float_for_an_int_parameter_is_refused
   ✓ functions::test_float_to_int_parameter::an_explicit_cast_or_an_int_passes
   ✓ functions::test_float_values_of_tuples::a_destructured_float_stays_a_float
@@ -2309,9 +2313,13 @@ PASSED:
   ✓ modules::test_netbase_package::a_query_is_a_url_path
   ✓ modules::test_netbase_package::without_a_server_the_failure_names_it
   ✓ modules::test_node_json::a_field_named_json_wins
+  ✓ modules::test_node_json::a_fraction_in_json_warns_of_its_loss
+  ✓ modules::test_node_json::decimal_fractions_are_exact_json
+  ✓ modules::test_node_json::exact_json_refuses_a_lossy_fraction
   ✓ modules::test_node_json::json_loses_nothing_silently
   ✓ modules::test_node_json::json_of_a_value_is_its_json_text
   ✓ modules::test_node_json::json_of_code_keeps_its_operations
+  ✓ modules::test_node_json::json_writes_numbers_exactly_or_says_so
   ✓ modules::test_node_json::the_browser_spells_each_operator_code_alike
   ✓ modules::test_package_forms::a_bare_name_is_a_repository_of_pannous
   ✓ modules::test_package_forms::a_full_url_stays_as_written
@@ -4187,6 +4195,9 @@ PASSED:
   ✓ types::test_array_types::test_typed_array_as_a_value
   ✓ types::test_as_number_variable::a_text_known_at_run_time_casts_to_its_number
   ✓ types::test_as_number_variable::a_variable_holds_the_cast_number
+  ✓ types::test_bare_class::a_bare_class_word_is_the_type
+  ✓ types::test_bare_class::a_bodyless_class_used_elsewhere_still_declares_it
+  ✓ types::test_bare_class::an_unknown_bare_class_names_the_nearest_type
   ✓ types::test_bare_function_type_test::a_function_compared_with_a_type_by_equality_is_no
   ✓ types::test_bare_function_type_test::a_lambda_parameter_of_the_name_is_the_value
   ✓ types::test_bare_function_type_test::a_library_word_is_a_function
@@ -5929,4 +5940,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5924 passed, 0 failed, 5924 total tested
+13 ignored, 5935 passed, 0 failed, 5935 total tested

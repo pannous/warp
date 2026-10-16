@@ -15,7 +15,7 @@ use std::ops::{Add, Div, Index, IndexMut, Mul, Not, Sub};
 mod serialization;
 pub use serialization::{NO, YES};
 mod json_xml;
-pub use json_xml::{inexpressible_in_json, json_key, json_of_json5};
+pub use json_xml::{inexact_in_json, inexpressible_in_json, json_key, json_of_json5};
 mod comparison;
 mod indexing;
 #[cfg(feature = "native")]
