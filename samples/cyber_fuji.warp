@@ -1,10 +1,10 @@
 #!/usr/bin/env warp
-# a compute.toys shader runs as it is (card compute-toys): `compute_toy { … }` of `use compute_toys` takes a
+# a compute.toys shader runs as it is (card compute-toys): `compute_toy(shader { … })` of `use compute_toys` takes a
 # single-pass compute.toys kernel, main_image writing textureStore(screen, id.xy, color), and makes it a WGSL shader
 # for paint. This one is a synthwave sunset: striped sun, Mount Fuji and a neon grid:
 # "Cyber Fuji 2020 [port]" by quilde, https://compute.toys/view/1396
 use compute_toys
-fuji = compute_toy {
+fuji = compute_toy(shader {
 	fn sun(uv: vec2f, battery: f32) -> f32 {
 	 	let val = 1. - smoothstep(0.29, 0.3, length(uv));
 
@@ -213,7 +213,7 @@ fuji = compute_toy {
 	    // Output to screen (linear colour space)
 	    textureStore(screen, id.xy, vec4f(col1, 1.));
 	}
-}
+})
 # ten seconds by the clock, however long a frame takes
 started = clock()
 while clock() - started < 10000 {

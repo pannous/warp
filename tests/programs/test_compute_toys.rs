@@ -15,7 +15,7 @@ fn said(program: &str) -> String {
 #[test]
 fn a_compute_toy_paints_each_pixel_with_rows_from_the_top() {
 	// red where id.x is 0, blue in the top row (compute.toys counts rows from the top), green when the screen is 2 wide
-	let program = "s = compute_toy {
+	let program = "s = compute_toy(shader {
 	@compute @workgroup_size(16, 16)
 	fn main_image(@builtin(global_invocation_id) id: vec3u) {
 		let screen_size = textureDimensions(screen);
@@ -23,7 +23,7 @@ fn a_compute_toy_paints_each_pixel_with_rows_from_the_top() {
 		let wide = select(0.0, 1.0, screen_size.x == 2u);
 		textureStore(screen, vec2i(id.xy), float4(select(0.0, 1.0, id.x == 0u), wide, select(0.0, 1.0, id.y == 0u), 1.0));
 	}
-}
+})
 pixels = gpu_render(s, 2, 2)
 [pixels#1 == 0xFFFFFFFF, pixels#4 == 0xFF00FF00]";
 	let said = said(program);

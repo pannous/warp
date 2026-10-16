@@ -1,10 +1,10 @@
 #!/usr/bin/env warp
-# a compute.toys shader runs as it is (card compute-toys): `compute_toy { … }` of `use compute_toys` takes a
+# a compute.toys shader runs as it is (card compute-toys): `compute_toy(shader { … })` of `use compute_toys` takes a
 # single-pass compute.toys kernel, main_image writing textureStore(screen, id.xy, color), and makes it a WGSL shader
 # for paint. This one is a soft pink and blue vortex:
 # "Wormhole" by Matchew123, https://compute.toys/view/2111
 use compute_toys
-wormhole = compute_toy {
+wormhole = compute_toy(shader {
 	const THUMBNAIL_TIME: f32 = 4.0; 
 
 	const NOISE_AMOUNT: f32 = 0.01;
@@ -121,7 +121,7 @@ wormhole = compute_toy {
 	    let final_color = vec4f(clamp(col, vec3f(0.0), vec3f(1.0)), 1.0);
 	    textureStore(screen, id.xy, final_color);
 	}
-}
+})
 # ten seconds by the clock, however long a frame takes
 started = clock()
 while clock() - started < 10000 {

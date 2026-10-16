@@ -1,10 +1,10 @@
 #!/usr/bin/env warp
-# a compute.toys shader runs as it is (card compute-toys): `compute_toy { … }` of `use compute_toys` takes a
+# a compute.toys shader runs as it is (card compute-toys): `compute_toy(shader { … })` of `use compute_toys` takes a
 # single-pass compute.toys kernel, main_image writing textureStore(screen, id.xy, color), and makes it a WGSL shader
 # for paint. This one is a black hole with a blue and orange accretion disk:
 # "Singularity" by Xor, https://compute.toys/view/2266
 use compute_toys
-singularity = compute_toy {
+singularity = compute_toy(shader {
 	/*
 	    "Singularity" by @XorDev
 
@@ -69,7 +69,7 @@ singularity = compute_toy {
 	    // Output to screen
 	    textureStore(screen, id.xy, pow(O,vec4<f32>(2.2)));
 	}
-}
+})
 # ten seconds by the clock, however long a frame takes
 started = clock()
 while clock() - started < 10000 {

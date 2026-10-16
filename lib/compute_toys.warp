@@ -79,7 +79,7 @@ compute_toys_main = "
 
 // what compute_toy cannot run, the pattern that finds it and why
 compute_toys_engine_only = [
-	["(?m)^\\s*#(storage|dispatch|workgroup_count|dispatch_once|dispatch_count)\\b", "it declares storage buffers or passes (#storage, #dispatch …), which need compute.toys' multi-pass engine"],
+	["(^|\\n)[ \\t]*#(storage|dispatch|workgroup_count|dispatch_once|dispatch_count)\\b", "it declares storage buffers or passes (#storage, #dispatch …), which need compute.toys' multi-pass engine"],
 	["\\b(channel0|channel1|pass_in|pass_out|passLoad|passStore|passSampleLevelBilinearRepeat)\\b", "it reads input textures or earlier passes (channel0, channel1, passLoad …), which warp's paint does not bind"],
 	["@stage\\(compute\\)", "it is written in the WGSL of 2022 (@stage(compute)): write @compute"],
 	["@compute[\\s\\S]*@compute", "it has more than one @compute entry point, each a pass of compute.toys' engine; compute_toy takes single-pass shaders"]
@@ -97,7 +97,7 @@ compute_toys_kernel(code: text) := {
 
 compute_toy(code: text) := {
 	for rule in compute_toys_engine_only {
-		if matches(code, rule#1) { raise "compute_toy cannot run this shader: " + rule#2 }
+		if code matches rule#1 { raise "compute_toy cannot run this shader: " + rule#2 }
 	}
 	if not (code contains "fn main_image") { raise "compute_toy takes a compute.toys shader: its kernel is fn main_image(@builtin(global_invocation_id) id: vec3u)" }
 	compute_toys_prelude + compute_toys_kernel(code) + compute_toys_main
