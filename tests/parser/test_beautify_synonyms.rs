@@ -28,3 +28,10 @@ fn test_beautify_spaces_a_minus_that_lowers_the_same() {
 	let named = "full-name = 3\nprint full-name\n";
 	assert_eq!(beautified(named), named);
 }
+
+// reviewer: a line whose reading is an assumption stays as written: `f it - 1` would read as f(it) - 1
+#[test]
+fn test_beautify_leaves_an_assumed_reading_alone() {
+	let assumed = "f(x) := x*2\nit = 5\nprint f it-1\n";
+	assert_eq!(beautified(assumed), "f(x) := x * 2\nit = 5\nprint f it-1\n");
+}

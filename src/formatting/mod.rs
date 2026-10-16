@@ -104,13 +104,17 @@ fn keeping_the_meaning(
 	lines: &[Line],
 	kept: Vec<Edit>,
 	candidates: &[Edit],
-	keeps: &dyn Fn(&str) -> bool,
+	keeps: &dyn Fn(&str, &[usize]) -> bool,
 ) -> Vec<Edit> {
 	if candidates.is_empty() {
 		return kept;
 	}
 	let trying: Vec<Edit> = kept.iter().chain(candidates).cloned().collect();
-	if keeps(&joined(&edited(lines, &trying))) {
+	let result = edited(lines, &trying);
+	let edited_numbers: Vec<usize> = trying.iter().map(|(index, _)| lines[*index].number).collect();
+	let changed: Vec<usize> =
+		(1..=result.len()).filter(|line| edited_numbers.contains(&result[line - 1].number)).collect();
+	if keeps(&joined(&result), &changed) {
 		return trying;
 	}
 	if candidates.len() == 1 {
@@ -121,10 +125,12 @@ fn keeping_the_meaning(
 	keeping_the_meaning(lines, kept, second, keeps)
 }
 
-/// The program as the emitter gets it, and what its warnings, assumptions and hints say; None when it does not lower
+/// The program as the emitter gets it, what its warnings, assumptions and hints say, and the lines of its assumptions;
+/// None when it does not lower
 struct Lowered {
 	program: String,
 	messages: Vec<String>,
+	assumed_lines: Vec<usize>,
 }
 
 pub(super) fn lowered(code: &str) -> Option<String> {
@@ -146,18 +152,21 @@ fn lowered_with_messages(code: &str) -> Option<Lowered> {
 	crate::errors::diagnostic::take_warnings(); // only this code's warnings
 	let (program, hints) = crate::errors::diagnostic::every_hint_of(|| lowered(code));
 	// an Ask's default is recorded even while quiet: `f it - 1` assumes f(it - 1)
-	let said =
-		crate::errors::diagnostic::take_warnings().into_iter().chain(crate::errors::diagnostic::take_assumptions());
+	let assumptions = crate::errors::diagnostic::take_assumptions();
+	let assumed_lines = assumptions.iter().map(|assumption| assumption.line).collect();
+	let said = crate::errors::diagnostic::take_warnings().into_iter().chain(assumptions);
 	let messages = said.chain(hints).map(|diagnostic| diagnostic.message).collect();
-	Some(Lowered { program: program?, messages })
+	Some(Lowered { program: program?, messages, assumed_lines })
 }
 
 /// beautify's second chance for an edit that changes the parsed tree (card format-beautify): `o-b` of two variables
 /// parses as one name and lowers to the subtraction `o - b` does, so the spacing keeps the program; an edit that
-/// lowers the same but makes the compiler say something new stays out
-fn lowers_the_same(original: &Lowered, candidate: &str) -> bool {
+/// lowers the same but makes the compiler say something new stays out, and so does one on a line that carries an
+/// assumption (reviewer): `print f it-1` spaced reads as f(it) - 1, where the program takes f(it - 1)
+fn lowers_the_same(original: &Lowered, candidate: &str, changed_lines: &[usize]) -> bool {
 	lowered_with_messages(candidate).is_some_and(|candidate| {
 		candidate.program == original.program
+			&& !candidate.assumed_lines.iter().any(|line| changed_lines.contains(line))
 			&& candidate.messages.iter().all(|message| original.messages.contains(message))
 	})
 }
@@ -188,9 +197,9 @@ fn formatted_after(
 		}
 		let tree = shape(&original);
 		let original_lowered = by_lowering.then(|| lowered_with_messages(code)).flatten();
-		let keeps = |text: &str| {
+		let keeps = |text: &str, changed_lines: &[usize]| {
 			shape(&parsed(text)) == tree
-				|| original_lowered.as_ref().is_some_and(|original| lowers_the_same(original, text))
+				|| original_lowered.as_ref().is_some_and(|original| lowers_the_same(original, text, changed_lines))
 		};
 		let mut lines: Vec<Line> =
 			code.lines().enumerate().map(|(index, text)| Line { number: index + 1, text: text.to_string() }).collect();
