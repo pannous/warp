@@ -100,9 +100,10 @@ fn first_word(statement: &Node) -> String {
 	}
 }
 
-/// The names the program binds: assigned, defined, parameters of functions and lambdas
+/// The names the program binds: assigned, defined, parameters of functions and lambdas, loop variables (`for now in
+/// times` reads its items, card library-word)
 pub(crate) fn assigned_symbols(program: &Node) -> HashSet<String> {
-	let mut bound = HashSet::new();
+	let mut bound: HashSet<String> = crate::lowering::for_loop::loop_variables(program).into_iter().collect();
 	program.visit(&mut |part| {
 		if let Node::Key(target, Op::Assign | Op::Define | Op::Arrow, _) = part {
 			bound.extend(crate::variable_signals::symbols(target));

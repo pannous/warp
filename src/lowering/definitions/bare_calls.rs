@@ -33,7 +33,9 @@ pub fn lower(node: Node) -> Node {
 /// The functions without parameters, the program's and the host's, whose names no variable or parameter takes
 fn parameterless_functions(node: &Node) -> Parameterless {
 	let functions = crate::analyzer::function_definitions(node).user_functions;
-	let assigned: HashSet<String> = node.assigned_names(|op| *op == Op::Assign);
+	// a loop variable too: `for random in xs { x = random }` reads the item (card library-word)
+	let mut assigned: HashSet<String> = node.assigned_names(|op| *op == Op::Assign);
+	assigned.extend(crate::lowering::for_loop::loop_variables(node));
 	let parameters: HashSet<&str> =
 		functions.values().flat_map(|function| function.params.iter().map(|param| param.name.as_str())).collect();
 	let free = |name: &str| !assigned.contains(name) && !parameters.contains(name);

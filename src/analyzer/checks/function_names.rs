@@ -43,10 +43,48 @@ pub fn check_operator_word_functions(program: &Node) -> Option<Diagnostic> {
 			},
 			_ => None,
 		};
-		clash = defined.map(|(word, op)| (node.clone(), word, op));
+		// `sqrt = 5` names a variable
+		let noun = match node {
+			Node::Key(head, Op::Assign, _) if matches!(head.drop_meta(), Node::Key(_, _, operand) if operand.is_nothing()) => {
+				VARIABLE_NOUN
+			}
+			_ => FUNCTION_NOUN,
+		};
+		let named = defined.map(|(word, op)| (word, op, noun)).or_else(|| bound_operator_word(node));
+		clash = named.map(|(word, op, noun)| (node.clone(), word, op, noun));
 	});
-	let (definition, word, op) = clash?;
-	Some(Diagnostic::at(&definition, format!("{word} is an operator ({op}); rename your function")))
+	let (definition, word, op, noun) = clash?;
+	Some(Diagnostic::at(&definition, format!("{word} is an operator ({op}); rename your {noun}")))
+}
+
+const FUNCTION_NOUN: &str = "function";
+const VARIABLE_NOUN: &str = "variable";
+const PARAMETER_NOUN: &str = "parameter";
+
+/// `for sqrt in xs`, `for each abs in xs`, `g(sqrt) := …`: a loop variable or parameter named by an operator word,
+/// which its body would read as the operator, as `sqrt = 5` would (card library-word)
+fn bound_operator_word(node: &Node) -> Option<(String, Op, &'static str)> {
+	let bare_operator = |part: &Node| match part.drop_meta() {
+		Node::Key(empty, op, operand) if empty.is_nothing() && operand.is_nothing() => {
+			operator_word(part).filter(|(_, known)| known == op)
+		}
+		_ => None,
+	};
+	match node {
+		Node::List(items, _, _) if items.first().is_some_and(|word| word.is_symbol("for")) => {
+			let variable = if items.get(1).is_some_and(|word| word.is_symbol("each")) { 2 } else { 1 };
+			let variable = items.get(variable)?;
+			let named = variable.drop_meta().symbol_name().and_then(operator_named);
+			named.or_else(|| bare_operator(variable)).map(|(word, op)| (word, op, VARIABLE_NOUN))
+		}
+		Node::Key(head, Op::Define | Op::Assign, _) => match head.drop_meta() {
+			Node::List(items, Bracket::Round, _) if items.first().is_some_and(|name| name.symbol_name().is_some()) => {
+				items[1..].iter().find_map(bare_operator).map(|(word, op)| (word, op, PARAMETER_NOUN))
+			}
+			_ => None,
+		},
+		_ => None,
+	}
 }
 
 /// The operator word a definition's head names: `norm(x)` keeps its name (the parser's defines_named), also as the
