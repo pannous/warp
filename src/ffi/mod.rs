@@ -112,9 +112,14 @@ impl FfiSignature {
 pub use crate::host::HostState as FfiState;
 
 mod header;
+#[cfg(feature = "native")]
 mod link;
 pub use header::*;
+#[cfg(feature = "native")]
 pub use link::*;
+
+/// The import module of libm
+pub const LIBM: &str = "m";
 
 const SDL_PREFIX: &str = "SDL_";
 /// The libc functions link_libc_functions defines by hand; any other libc import is linked from the process
