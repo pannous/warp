@@ -497,10 +497,21 @@ impl MethodVariants<'_> {
 		map_keys.into_iter().chain(fields).any(|members| members.iter().any(|member| member == name))
 	}
 
+	/// Is the receiver's type known: a class instance, a map variable or a literal (`3.f`); an unknown one (a call's
+	/// result, a parameter) keeps the member lookup at run time
+	fn is_known_receiver(&self, receiver: &Node) -> bool {
+		let literal = matches!(
+			receiver.drop_meta(),
+			Node::Number(_) | Node::Text(_) | Node::Char(_) | Node::List(_, Bracket::Square, _)
+		);
+		let map = receiver.drop_meta().symbol_name().is_some_and(|variable| self.maps.contains_key(variable));
+		literal || map || self.receiver_class(receiver).is_some()
+	}
+
 	/// The variant of `member` called on `receiver` with `arguments` in all, the receiver counted
 	fn renamed(&self, receiver: &Node, member: &Node, arguments: usize) -> Option<Node> {
 		let name = member.drop_meta().symbol_name()?;
-		if self.is_own_member(receiver, name) {
+		if !self.is_known_receiver(receiver) || self.is_own_member(receiver, name) {
 			return None;
 		}
 		let fitting: Vec<&Arity> = self.arities.get(name)?.iter().filter(|arity| arity.accepts(arguments)).collect();
