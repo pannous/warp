@@ -271,7 +271,7 @@ impl WasmGcEmitter {
 	}
 
 	/// `cube 3 as int`, the body of `def g() -> int { cube 3 }`: an unknown word is an error as without the cast
-	fn unknown_word_refusal(&self, value: &Node) -> Option<String> {
+	pub(in crate::wasm_emitter) fn unknown_word_refusal(&self, value: &Node) -> Option<String> {
 		match value.drop_meta() {
 			Node::List(items, bracket, separator) => self.unknown_word_error(items, bracket, separator),
 			_ => None,
