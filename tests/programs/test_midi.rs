@@ -142,3 +142,14 @@ fn a_port_name_shared_by_several_devices_is_ambiguous() {
 	assert_eq!(chosen_port("IAC Driver Bus 1", &names, "output").unwrap(), "IAC Driver Bus 1");
 	assert_eq!(chosen_port("", &names, "output").unwrap(), "IAC Driver Bus 1");
 }
+
+// card midi-send: with no output device, messages go out on warp's own virtual source, which other programs list as
+// a MIDI input, instead of failing with "no MIDI output devices found"
+#[cfg(target_os = "macos")]
+#[test]
+fn warp_opens_a_virtual_source_other_programs_can_listen_to() {
+	let _source = warp::sound::midi::virtual_output().unwrap();
+	let listener = midir::MidiInput::new("warp test listener").unwrap();
+	let names: Vec<String> = listener.ports().iter().filter_map(|port| listener.port_name(port).ok()).collect();
+	assert!(names.iter().any(|name| name == warp::sound::midi::CLIENT), "{names:?}");
+}

@@ -11,6 +11,8 @@
 
 #[cfg(target_os = "macos")]
 use super::midi_devices as devices;
+#[cfg(target_os = "macos")]
+pub use super::midi_devices::virtual_output;
 
 /// Live MIDI devices come through midir on macOS only so far (src/sound/midi_devices.rs); elsewhere there are none,
 /// so listing finds nothing and opening one is the loud "no MIDI … devices found"
@@ -37,7 +39,7 @@ const TICKS_PER_SECOND: f64 = TICKS_PER_QUARTER as f64 * 1_000_000.0 / MICROSECO
 const NOTE_ON: u8 = 0x90;
 const NOTE_OFF: u8 = 0x80;
 /// The name the system shows for warp's MIDI client and its connections
-pub(crate) const CLIENT: &str = "warp";
+pub const CLIENT: &str = "warp";
 /// A note's four numbers in the flat list
 pub const FIELDS: usize = 4;
 
