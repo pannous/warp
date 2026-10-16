@@ -7,6 +7,7 @@ use super::nodes::parameter_name;
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
+use crate::type_name_matching::is_preposition;
 
 pub const HARD_KEYWORDS: [&str; 26] = [
 	"if", "then", "else", "while", "for", "in", "return", "break", "continue", // control flow
@@ -157,8 +158,6 @@ fn first_refused(node: &Node, top_level: bool) -> Option<Node> {
 		_ => None,
 	}
 }
-
-use crate::type_name_matching::is_preposition;
 
 /// A call `f a for=b` or `f(a, for=b)`: a function's name, then an argument named by a preposition
 fn preposition_arguments(items: &[Node]) -> bool {

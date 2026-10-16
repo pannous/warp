@@ -2,7 +2,7 @@
 //! (`apply(f, x) := f(x)`) calls it round (`f x` is `f(x)`), and its calls give it a function value: a named function,
 //! `&name`, an alias (`g := double`), a lambda, an `it` expression, an operator (`+`), a block or a library word (both
 //! become functions of their own). A constant where a function is needed is a compile error. Every call passes a closure
-//! (closures.rs; one that captures nothing is made once, wasm_emitter/closures.rs).
+//! (closures.rs; one that captures nothing is made once, wasm_emitter/functions/closures.rs).
 
 use super::nodes::{call, children_rewritten, key, parameter_name, word_headed};
 use crate::closures::may_be_function_value;

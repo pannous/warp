@@ -495,7 +495,6 @@ fn call_listener_word(statement: &Node) -> Option<(String, Vec<Node>)> {
 	(keyword == AFTER_WORD || keyword == BEFORE_WORD).then(|| (keyword, items[1..].to_vec()))
 }
 
-/// Does the body read `old` or `previous`, which the program does not use as variables of its own
 /// A body reading `old` (or an alias the program does not use as a variable of its own): the body with a given
 /// value standing for it; None when it reads none. An alias gets a note naming `old`
 pub(crate) fn with_old(body: &Node, main_variables: &HashSet<String>) -> Option<impl Fn(&Node) -> Node> {

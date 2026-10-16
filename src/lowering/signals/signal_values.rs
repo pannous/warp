@@ -1,7 +1,7 @@
 //! Signals as values (notes/signals.md phase 5): a listener inside a function on one of its parameters, or on a
 //! main-level variable the function does not assign, subscribes when the function runs and stays after it returns:
 //! `watch(s) := on change s {print value}; x = 1; watch(x); x = 2` prints 2. Such a variable escapes into a $Signal, a
-//! cell with a list of listener closures (wasm_emitter/cells.rs); every other variable stays plain (P109).
+//! cell with a list of listener closures (wasm_emitter/functions/cells.rs); every other variable stays plain (P109).
 //! `subscribe` (before variable_signals) turns the listener into `signal_listeners_set(s, signal_listeners(s) +
 //! [(value, old) => {check; 0}])`. `lower` (after it) finds the escaping variables (the subscribed parameters, and
 //! through every call the variables passed for them) and makes their first main-level write `x = signal_new(e)`, every
@@ -556,7 +556,7 @@ impl Subscriptions {
 	}
 }
 
-/// `(value, signal·old) => {check; 0}`: every listener closure of one arity returns one kind (wasm_emitter/closures.rs)
+/// `(value, signal·old) => {check; 0}`: every listener closure of one arity returns one kind (wasm_emitter/functions/closures.rs)
 fn listener_closure(globals: Vec<Node>, check: Node) -> Node {
 	// a sequence, not a block: the declarations move to the main level, and a block of the check alone reads as data
 	let closure_check = Node::List(globals.into_iter().chain([check]).collect(), Bracket::Round, Separator::Semicolon);

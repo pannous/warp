@@ -9,7 +9,7 @@
 //! `on mount {…}` in a component runs when an instance first renders, `on cleanup {…}` when a render has fewer instances
 //! than the one before (the last ones left; card web-cleanup); their state entries go with them.
 //! A component whose markup holds a style sheet names itself on its root element (`data-warp-scope: "Card"`), so the
-//! sheet styles only its own elements (html.rs, card web-scoped).
+//! sheet styles only its own elements (web/markup.rs, card web-scoped).
 
 use super::nodes::{any_part, call, if_then, key, named_assignment};
 use crate::element_events::{element_items, handler_at, has_element_handler, HANDLER_ATTRIBUTE_PREFIX};

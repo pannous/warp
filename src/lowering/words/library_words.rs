@@ -119,7 +119,7 @@ const SYNONYMS: [(&str, &[&str]); 36] = [
 	(COUNT_PART, &[]),
 	(crate::words::UNWRAP, &[]),
 ];
-/// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/list_dispatch.rs):
+/// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/lists/list_dispatch.rs):
 /// a typed list sums its array, any other list runs the loop `sum` always lowered to
 pub const LIST_SUM: &str = "list_sum";
 

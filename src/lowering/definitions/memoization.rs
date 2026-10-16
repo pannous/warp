@@ -2,7 +2,7 @@
 //! parameter that returns an Int and calls itself more than once (fib-shaped, its calls overlap) keeps the results of
 //! arguments 0 to MEMO_SIZE-1: `f(n) := body` becomes `f(n) := if memo_known(id, n) then memo_value(id, n) else
 //! memo_store(id, n, body)` (one function, so it stays plainly recursive for folding and effects); the three words are
-//! the emitter's (wasm_emitter/text_builtins.rs), one cache per function id. Only an expression body (no statements, no
+//! the emitter's (wasm_emitter/text/text_builtins.rs), one cache per function id. Only an expression body (no statements, no
 //! `return`); effects, divergence aside, are never cached.
 
 use super::nodes::{is_call_head, key};

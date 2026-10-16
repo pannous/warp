@@ -37,7 +37,7 @@ const ITEM_WORD: &str = "item";
 const HELD_WORD: &str = "held";
 /// `$a` in a code pattern `data($a + 0)`: a hole that binds the subtree there (card code-holes)
 const HOLE_PREFIX: &str = "$";
-/// The parts of a key a code pattern reads (wasm_emitter/node_api.rs)
+/// The parts of a key a code pattern reads (wasm_emitter/reflection/node_api.rs)
 const OP_FIELD: &str = "op";
 const KEY_FIELD: &str = "key";
 const VALUE_FIELD: &str = "value";

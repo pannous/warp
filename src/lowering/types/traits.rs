@@ -4,7 +4,7 @@
 //! `compare(a:person, b:person) := a.age - b.age`, `area(s:square) := s.side*s.side` (structural conformance, T2).
 //! Such a definition becomes the witness `compare·person`, so every type has its own. Where the static type of an
 //! instance is known, `<`, `==` and operation calls call the witness and a missing conformance is a compile error naming
-//! the fix; elsewhere node_order asks the runtime witness table (wasm_emitter/witness.rs).
+//! the fix; elsewhere node_order asks the runtime witness table (wasm_emitter/reflection/witness.rs).
 
 use super::nodes::{call, called_name, children_rewritten, if_then, if_then_else, key};
 use crate::analyzer::{call_name, collect_all_types};
@@ -81,7 +81,7 @@ pub struct Operation {
 	/// What the operation returns, as the fix of a missing conformance explains it
 	pub contract: Option<&'static str>,
 	/// The body of a default method, `describe(s) := "area " + area(s)`: every conforming type that does not define the
-	/// operation gets it (`default_methods`)
+	/// operation gets it (`with_default_methods`)
 	pub default: Option<Node>,
 }
 

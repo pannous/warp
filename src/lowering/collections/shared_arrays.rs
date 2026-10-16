@@ -6,7 +6,7 @@
 //! whole is the list of its cells. A parameter given a shared array (by a call or a `go`) is shared too, of the same
 //! element type.
 //! Linear arrays (notes/linear_arrays.md): `linear xs = int[n]`, `linear xs = float[n]` are rewritten the same way into
-//! the module's own words over a block of linear memory (`linear_get`, `linear_set` … in wasm_emitter/linear_arrays.rs);
+//! the module's own words over a block of linear memory (`linear_get`, `linear_set` … in wasm_emitter/lists/linear_arrays.rs);
 //! they stay in their task's memory, so a `go` cannot take one. Declaring one is discouraged: the compiler picks where
 //! number lists live by itself; plain `xs = float[n]` arrays paired by dot or `.*`, or mapped by a numeric kernel,
 //! become linear ones (picked_linear).
@@ -692,7 +692,7 @@ impl Rewrite<'_> {
 }
 
 /// `xs.map(x => body)` or `map(xs, x => body)` of a linear float array whose body a float kernel computes: the array and
-/// the kernel's name (wasm_emitter/linear_arrays.rs, f64x2 lanes)
+/// the kernel's name (wasm_emitter/lists/linear_arrays.rs, f64x2 lanes)
 fn float_map(value: &Node, names: &HashMap<String, Shared>) -> Option<(Node, String)> {
 	let (array, lambda) = map_parts(value)?;
 	let Node::Key(parameter, Op::Arrow, body) = lambda.drop_meta() else {

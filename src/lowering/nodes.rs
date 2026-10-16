@@ -1,4 +1,5 @@
-//! The small node forms many lowering passes build and test: a call of a word, a word
+//! The small node forms many lowering passes build and take apart: calls, keys, blocks, conditions, words, the parts
+//! of a function definition
 
 use crate::analyzer::call_name;
 use crate::extensions::numbers::Number;

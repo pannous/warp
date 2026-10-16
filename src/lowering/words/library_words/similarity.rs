@@ -2,7 +2,7 @@
 use super::*;
 use crate::node::parens;
 
-/// values_similar(a, b, tolerance): `a ≈ b` (wasm_emitter/similarity.rs)
+/// values_similar(a, b, tolerance): `a ≈ b` (wasm_emitter/text/similarity.rs)
 pub const VALUES_SIMILAR: &str = "values_similar";
 /// values_rough(a, b, tolerance): `a ~ b`, looser (P211)
 pub const VALUES_ROUGH: &str = "values_rough";

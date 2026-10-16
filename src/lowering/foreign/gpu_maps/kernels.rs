@@ -960,7 +960,6 @@ fn is_assigning_op(op: Op) -> bool {
 	matches!(op, Op::Assign | Op::Define) || op.is_compound_assign()
 }
 
-/// `if c then t` (`if c { t }`): c and t
 /// The statements of a block: `{ … }`, or lines and `;` without brackets
 fn block_statements(node: &Node) -> Option<&[Node]> {
 	match node.drop_meta() {
