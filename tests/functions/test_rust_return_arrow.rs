@@ -13,5 +13,8 @@ fn a_rust_function_with_a_return_type_runs() {
 
 #[test]
 fn a_function_named_like_a_type_word_is_refused() {
-	crate::common::fails_with("fn double(x: i32) -> i32 { x * 2 } double(3)", "double is a type; name your function to_double");
+	crate::common::fails_with(
+		"fn double(x: i32) -> i32 { x * 2 } double(3)",
+		"double is a type; name your function to_double",
+	);
 }
