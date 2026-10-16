@@ -669,9 +669,7 @@ impl FunctionValues {
 		if self.is_function_list(value) {
 			lists.insert(path.to_string());
 		}
-		let entries = crate::library_words::object_entries(value)
-			.or_else(|| self.constructed_fields(value))
-			.or_else(|| listed_entries(value));
+		let entries = crate::library_words::object_entries(value).or_else(|| self.constructed_fields(value));
 		for (field, value) in entries.unwrap_or_default() {
 			self.record_holder(&format!("{path}.{field}"), &value, variables, lists);
 		}
@@ -711,23 +709,12 @@ impl FunctionValues {
 		let positional = arguments.iter().all(|argument| !matches!(argument.drop_meta(), Node::Key(_, Op::Colon, _)));
 		match positional {
 			true => Some(fields.iter().map(|(field, _)| field.clone()).zip(arguments.iter().cloned()).collect()),
-			// named arguments are the object's entries, also one alone: `Holder(d: x => x + 1)`
+			// named arguments are the object's entries: `Holder(d: x => x + 1)`
 			false => {
-				crate::library_words::object_entries(&Node::List(arguments.to_vec(), Bracket::Curly, Separator::None))
+				crate::library_words::object_entries(&Node::List(arguments.to_vec(), Bracket::Round, Separator::None))
 			}
 		}
 	}
-}
-
-/// `[d: x => x + 1]`: a list of entries only is a map, `xs.d` reads its entry (card held-lambda)
-fn listed_entries(value: &Node) -> Option<Vec<(String, Node)>> {
-	let Node::List(items, Bracket::Square, _) = value.drop_meta() else {
-		return None;
-	};
-	let all_entries =
-		!items.is_empty() && items.iter().all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _)));
-	all_entries
-		.then(|| crate::library_words::object_entries(&Node::List(items.clone(), Bracket::Curly, Separator::None)))?
 }
 
 /// A field of a variable: `s.f`, `s#("f"+1)`

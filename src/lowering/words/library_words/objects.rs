@@ -24,14 +24,15 @@ pub(super) fn is_field_lookup(node: &Node) -> bool {
 	}
 }
 
-/// The entries of an object literal `{a:1 b:2}` (or `{a:1}`): every item is a `key:value`
+/// The entries of an object literal `{a:1 b:2}` (or `{a:1}`, `[a:1]`, `(a:1)`): every item is a `key:value`
 pub(crate) fn object_entries(node: &Node) -> Option<Vec<(String, Node)>> {
 	let single;
 	let items: &[Node] = match node.drop_meta() {
 		Node::List(items, Bracket::Curly, _) => items, // `{}` is the empty object, grown by `d["k"] = v`
-		// a named tuple `(x: 10, y: 20)`: its entries are fields too
-		Node::List(items, Bracket::Round, _)
-			if items.len() > 1 && items.iter().all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _))) =>
+		// a named tuple `(x: 10, y: 20)`, a call's named arguments, `[d: x => x + 1]`: a list of only entries in any
+		// bracket, also of one, as a bare `x: 10` is
+		Node::List(items, Bracket::Round | Bracket::Square, _)
+			if !items.is_empty() && items.iter().all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _))) =>
 		{
 			items
 		}
