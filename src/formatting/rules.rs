@@ -229,7 +229,17 @@ fn binary_operator(characters: &[(char, bool)], at: usize) -> Option<&'static st
 	}
 	let before = characters[..at].iter().rev().map(|(c, _)| *c).find(|c| !is_space(*c))?;
 	let next = characters[after..].iter().map(|(c, _)| *c).find(|c| !is_space(*c))?;
-	(is_operand_end(before) && is_operand_start(next)).then_some(operator)
+	(is_operand_end(before) && is_operand_start(next) && !inside_a_name(characters, at)).then_some(operator)
+}
+
+/// The `-` at `at` is part of a name, `my-var` or `o-b` (card chars-map): spaced it would split the name, so the line's
+/// other operators could not be spaced either
+fn inside_a_name(characters: &[(char, bool)], at: usize) -> bool {
+	let word: Vec<char> =
+		characters[..at].iter().rev().map(|(c, _)| *c).take_while(|c| c.is_alphanumeric() || *c == '_').collect();
+	characters[at].0 == '-'
+		&& word.last().is_some_and(|first| !first.is_numeric())
+		&& characters.get(at + 1).is_some_and(|(next, _)| crate::warp_parser::hyphen_joins_word(*next))
 }
 
 fn operator_spacing(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {

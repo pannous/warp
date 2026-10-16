@@ -37,6 +37,7 @@ mod markup;
 mod scanning;
 pub use lookahead::PREFIX_OPERATOR_WORDS;
 mod atoms;
+pub(crate) use atoms::hyphen_joins_word;
 mod blocks;
 mod commands;
 mod comments;
