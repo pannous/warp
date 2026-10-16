@@ -294,6 +294,7 @@ impl WasmGcEmitter {
 		locals.extend([ValType::I32; 4]);
 		locals.extend([ValType::I64, nullable, ValType::I32, ValType::I64]);
 		let trap_detail = self.trap_detail_global(); // the item that cannot join, for its error to name
+		let radix_texts = self.radix_text_calls();
 		self.runtime_function(name, vec![nullable, node_ref], vec![node_ref], locals, |s, f| {
 			let (cell, element) = (2, 3);
 			let (bound, address, position, is_first, number, entry_value, operator_entry, list_kind) =
@@ -339,10 +340,7 @@ impl WasmGcEmitter {
 				s.call(f, "new_text");
 				Self::emit_list(f, &[I::End, I::LocalSet(element), I::End]);
 				// an Int shown in hex joins as 0xFF (card hex-printing), in binary as 0b101 (card binary-int)
-				for radix in super::super::super::numbers::radix::RADIXES
-					.iter()
-					.filter(|radix| s.ctx.func_registry.contains(radix.text_function))
-				{
+				for (radix, late) in &radix_texts {
 					s.emit_field(f, element, 0);
 					Self::emit_list(f, &[I::I64Const(radix.kind()), I::I64Eq, I::If(BlockType::Empty)]);
 					s.emit_field(f, element, 1);
@@ -353,7 +351,7 @@ impl WasmGcEmitter {
 							I::StructGet { struct_type_index: i64_box, field_index: 0 },
 						],
 					);
-					s.call(f, radix.text_function);
+					Self::emit_late_call(f, late);
 					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 				}
 				// an Error joins as its message (card catch-message): `print e`

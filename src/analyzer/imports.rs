@@ -26,7 +26,7 @@ pub fn analyze_required_functions(ctx: &mut Context, node: &Node) {
 		}
 		// `as hex`, `byte b`, `as binary`: values shown in hex or binary (cards hex-printing, binary-int)
 		Node::Symbol(name) if let Some(radix) = crate::wasm_emitter::numbers::radix::shown_radix(name) => {
-			ctx.required_functions.extend([radix.as_function, radix.text_function, "list_join", "new_text"]);
+			ctx.required_functions.extend([radix.as_function, "list_join", "new_text"]);
 		}
 		Node::Empty | Node::Symbol(_) | Node::Char(_) | Node::True | Node::False => {}
 		Node::Key(key, op, value) => operation_required(ctx, key, op, value),

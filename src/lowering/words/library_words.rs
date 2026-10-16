@@ -73,7 +73,7 @@ const COUNT_ITEM: &str = "count_item";
 const COUNT_PART: &str = "count_of";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 34] = [
+const SYNONYMS: [(&str, &[&str]); 36] = [
 	(crate::wasm_emitter::text::text_builtins::WARNING, &["warn"]),
 	// Python's tuple(xs) (card python-stdlib)
 	(LIST_WORD, &["tuple"]),
@@ -106,6 +106,9 @@ const SYNONYMS: [(&str, &[&str]); 34] = [
 	("is_alphanumeric", &["is_alnum", "isalnum"]),
 	("is_space", &["is_whitespace", "isspace"]),
 	("nearest", &[]),
+	// lib/prelude.warp's digits in a base up to 36 and back
+	("to_base", &[]),
+	("from_base", &[]),
 	// lib/prelude.warp's Euclidean length of a list, a number's absolute value (decision S3)
 	("norm", &[]),
 	("magnitude", &[]),
