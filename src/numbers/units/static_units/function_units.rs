@@ -387,10 +387,16 @@ impl Inference {
 					continue;
 				}
 			}
+			// a final construction `Display(96 dpi, 24 inch)` shows its fields in units, as a variable holding it does
+			let final_construction =
+				(statements && index + 1 == count && self.at_top).then(|| self.instance_fields(&item)).flatten();
 			let outer = std::mem::replace(&mut self.at_top, false);
 			let inferred = self.infer(item);
 			self.at_top = outer;
 			let (item, signature) = inferred?;
+			if let Some(fields) = final_construction {
+				self.result_fields = Some(fields.into_iter().filter(|(_, signature)| !signature.is_empty()).collect());
+			}
 			lowered.push(item);
 			signatures.push(signature);
 		}

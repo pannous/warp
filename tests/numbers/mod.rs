@@ -21,6 +21,7 @@ mod test_exact_parameters;
 mod test_exponent_texts; // card int-text
 mod test_fast_math; // card switch-rebinds
 mod test_fast_scope; // card fast-scope
+mod test_final_construction_units; // card printing-object
 mod test_fixed_width_ints;
 mod test_float_accumulator; // card float-accumulator
 mod test_float_as_rational; // decision float-as-rational
