@@ -1,6 +1,7 @@
 // The standard library module draw (notes/stdlib.md, card drawing-words): `use draw`, a canvas of colored pixels shown by
 // paint (the playground's canvas, natively a PNG). A color is a number 0xAARRGGBB: rgb, hsv, the named colors, with_alpha
 use math
+use regex
 // the canvas until canvas(width, height) sizes it: show() alone paints this one, the size of the playground's output pane,
 // natively 640×480 (user 2026-10-10: defaults, no errors)
 global canvas_width = view_width
@@ -147,20 +148,18 @@ glsl_shader(glsl: text, color: text) := {
 }
 
 // GLSL's backbuffer, the shader's previous frame (twigl's b; card twigl-glsl): warp_back(uv) of uv from 0 to 1, y up, as
-// GLSL counts. GLSL cannot reach WGSL's values.previous, so the GLSL gets a stub and the WGSL the stub turned into, cut
-// out up to its closing brace, gives way to back_frame
-back_stub = "vec4 warp_back(vec2 uv) { return vec4(0.); }\n"
+// GLSL counts. GLSL cannot reach WGSL's values.previous, so the GLSL calls a stub, and in the WGSL the stub's definition
+// gets another name and its calls go to back_frame's warp_back, which reads values.previous
+back_stub_name = "warp_back_stub"
+back_stub = "vec4 warp_back_stub(vec2 uv) { return vec4(0.); }\n"
 back_frame = "
 fn warp_back(uv: vec2<f32>) -> vec4<f32> {
 	return values.previous(vec2f(uv.x, 1.0 - uv.y) * values.size);
 }
 "
-def with_back_frame(wgsl: text) {
-	head = "fn warp_back("
-	if not (wgsl contains head) { return wgsl }
-	stub = wgsl.slice(wgsl.index_of(head) - 1)
-	wgsl.slice(0, wgsl.index_of(head) - 1) + back_frame + stub.slice(stub.index_of("\n}\n") + 2)
-}
+with_back_frame(wgsl: text) := if wgsl contains "fn " + back_stub_name + "(" then wgsl.replace("fn " + back_stub_name + "(", "fn warp_back_unused(").replace(back_stub_name + "(", "warp_back(") + back_frame else wgsl
+// twigl's `texture(b, uv)`, blanks anywhere, as a call of the stub
+twigl_back_read = "\\btexture\\(\\s*b\\s*,"
 
 // twigl's noise (card twigl-glsl): fsnoise and fsnoiseDigits hash a point to [0, 1), snoise2D and snoise3D are simplex
 // noise in [-1, 1] (Ian McEwan, Ashima Arts, webgl-noise, MIT license); glsl_shader adds them where they are called
@@ -263,8 +262,8 @@ mat3 rotate3D(float angle, vec3 axis) {
 		a.y * a.y * r + c, a.z * a.y * r + a.x * s, a.x * a.z * r + a.y * s, a.y * a.z * r - a.x * s, a.z * a.z * r + c);
 }
 "
-	reads_back = code contains "texture(b,"
-	drawing = "vec4 warp_twigl(vec4 FC, vec2 r, float t, vec2 m, float f) {\nvec4 o = vec4(0.);\n" + code.replace("texture(b,", "warp_back(") + "\nreturn o;\n}"
+	reads_back = matches(code, twigl_back_read)
+	drawing = "vec4 warp_twigl(vec4 FC, vec2 r, float t, vec2 m, float f) {\nvec4 o = vec4(0.);\n" + replace_all(code, twigl_back_read, back_stub_name + "(") + "\nreturn o;\n}"
 	glsl_shader(helpers + (if reads_back then back_stub else "") + drawing, "warp_twigl(flipped, size, values.time, pointer / size, values.frame)")
 }
 
