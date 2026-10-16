@@ -7,7 +7,8 @@
 //! the fix; elsewhere node_order asks the runtime witness table (wasm_emitter/reflection/witness.rs).
 
 use super::nodes::{
-	block, call, called_name, children_rewritten, grouped_parameters, if_then, if_then_else, key, word_headed,
+	assign, block, call, called_name, children_rewritten, grouped_parameters, if_then, if_then_else, key,
+	statement_list, word_headed,
 };
 use crate::analyzer::{call_name, collect_all_types};
 use crate::errors::diagnostic::Diagnostic;
@@ -859,24 +860,18 @@ fn instance_signatures(
 /// `(found = 0; at = 0; for item in xs { at = at + 1; if found == 0 and equals·T(item, x) != 0 { found = at } }; found)`:
 /// the 1-based position of the first item equal to x, 0 when there is none
 fn position_by_equals(list: &Node, element: &Node, type_name: &str) -> Node {
-	let symbol = |name: &str| symbol(name);
 	let (found, at, item) = (symbol(FOUND_VARIABLE), symbol(POSITION_VARIABLE), symbol(ITEM_VARIABLE));
-	let assign = |target: &Node, value: Node| key(target.clone(), Op::Assign, value);
 	let equal = key(witness_call(EQUALS, type_name, vec![item.clone(), element.clone()]), Op::Ne, Node::int(0));
 	let first = key(found.clone(), Op::Eq, Node::int(0));
 	let found_it = if_then(
 		key(first, Op::And, equal),
-		Node::List(vec![assign(&found, at.clone())], Bracket::Curly, Separator::None),
+		Node::List(vec![assign(found.clone(), at.clone())], Bracket::Curly, Separator::None),
 	);
-	let step = assign(&at, key(at.clone(), Op::Add, Node::int(1)));
+	let step = assign(at.clone(), key(at.clone(), Op::Add, Node::int(1)));
 	let body = block(vec![step, found_it]);
 	let search =
 		Node::List(vec![symbol(FOR_WORD), item, symbol(IN_WORD), list.clone(), body], Bracket::None, Separator::Space);
-	Node::List(
-		vec![assign(&found, Node::int(0)), assign(&at, Node::int(0)), search, found],
-		Bracket::Round,
-		Separator::Semicolon,
-	)
+	statement_list(vec![assign(found.clone(), Node::int(0)), assign(at, Node::int(0)), search, found], Bracket::Round)
 }
 const FOUND_VARIABLE: &str = "equals_found";
 const ITEM_VARIABLE: &str = "equals_item";
