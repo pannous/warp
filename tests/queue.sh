@@ -17,8 +17,10 @@ TARGETED_TEST_THREADS=4
 HOMEBREW_BIN=/opt/homebrew/bin
 # A run with a process using more memory than this is killed: on 2026-10-09 one test grew to 154 GB, swap ran out and
 # macOS took down the Claude app with every agent session. Per process, because parallel rustc jobs add up legitimately;
-# top's MEM counts compressed memory, ps's RSS doesn't.
+# top's MEM counts compressed memory, ps's RSS doesn't. Compilers and linkers are not capped: rustc building warp-lang
+# at opt-level 2 (test.sh) took 4.2–6.2 GB and was killed twice (notes/test_speed.md).
 MEMORY_CAP_GB="${WARP_TEST_MEMORY_CAP_GB:-4}"
+UNCAPPED_PROGRAMS='rustc|sccache|ld|ld64|ld-prime|clang|cc'
 MEMORY_POLL_SECONDS=1
 # A test binary running longer than this is killed, naming it and the program it waits for: batch 137 hung 294 s on
 # finger_paint.warp (card tests-queue). The tests binary takes ~150 s of a full run, 266 s at most so far.
@@ -152,6 +154,11 @@ kill_overdue_test_binaries() {
 }
 # runs beside the test run (our PID survives the exec below): kills its whole process tree above the memory cap
 # (Mac only: top's MEM) and a test binary over the time limit
+# the given PIDs but compilers and linkers (UNCAPPED_PROGRAMS)
+capped() {
+	ps -o pid=,command= -p "$(IFS=,; echo "$*")" 2>/dev/null | awk '{ print $1, $2 }' |
+		grep -vE " ([^ ]*/)?($UNCAPPED_PROGRAMS)$" | cut -d' ' -f1
+}
 watch_run() {
 	local run_pid=$1 cap_mb=$((MEMORY_CAP_GB * 1024)) pids used_mb
 	while kill -0 "$run_pid" 2>/dev/null; do
@@ -160,7 +167,7 @@ watch_run() {
 		[ ${#pids[@]} -eq 0 ] && continue
 		kill_overdue_test_binaries "${pids[@]}"
 		[ "$(uname)" = Darwin ] || continue
-		used_mb=$(largest_memory_mb "${pids[@]}")
+		used_mb=$(largest_memory_mb $(capped "${pids[@]}"))
 		if [ "$used_mb" -gt "$cap_mb" ]; then
 			echo "test queue: KILLED the run, a process used ${used_mb} MB, over the memory cap of ${MEMORY_CAP_GB} GB" \
 				"(WARP_TEST_MEMORY_CAP_GB): ${run[*]}" >&2
