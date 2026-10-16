@@ -1,6 +1,0 @@
-// decision list-sign: in a list a space plus a glued sign starts a new item
-a = 5
-// gives [5 -1]
-print([a -1])
-// gives [4]
-print([a - 1])

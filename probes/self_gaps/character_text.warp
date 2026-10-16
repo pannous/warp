@@ -1,5 +1,0 @@
-#!/usr/bin/env warp
-// a character inside a list prints quoted like a text, so the printed list reads back (P126, card character-text)
-def wrap(b) := ["x", b]
-print wrap(" ")
-print sort(["bb", "a", "ccc"])

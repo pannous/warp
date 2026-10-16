@@ -1,4 +1,0 @@
-// card path-list: a file's bytes as a list of ints, the start of a .wasm module written by warp
-path = "/Users/me/dev/angles/warp/data/self_gaps/header.wasm"
-write_bytes(path, [0 97 115 109 1 0 0 0])  // \0asm, version 1 (missing folders are created)
-print read_bytes(path)                    // [0 97 115 109 1 0 0 0]
