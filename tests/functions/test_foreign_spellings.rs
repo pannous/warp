@@ -70,3 +70,10 @@ fn dom_event_names_listen_to_warps_events() {
 	is!("count = 0; onkeydown { count += 1 }; emit key; count", 1);
 	assert!(notes_of("onclick { print 1 }; 1").contains(&"onclick → on click".to_string()));
 }
+
+/// reviewer: a release alias says the event fires on the press; a program's own `onclick` stays its function
+#[test]
+fn release_aliases_say_press_and_own_names_stay() {
+	assert!(notes_of("on keyup { print 1 }; 1").contains(&"keyup → key".to_string()));
+	is!("onclick(block) := 7; onclick { 1 }", 7);
+}

@@ -85,7 +85,7 @@ pub fn lower(node: Node) -> Node {
 		.chain(type_fields(&node))
 		.collect();
 	let node = qualified_module_calls(module_aliases(node));
-	let node = forms(method_aliases(node, &own));
+	let node = event_aliases(forms(method_aliases(node, &own)), &own);
 	let mut lambda_names = HashSet::new();
 	collect_lambda_names(&node, &mut lambda_names);
 	lambda_calls(node, &lambda_names)
@@ -184,9 +184,6 @@ fn forms(node: Node) -> Node {
 				return chain;
 			}
 			if let Some(listener) = when_listener(&items) {
-				return Node::List(aliased_event(&listener).unwrap_or(listener), bracket, separator);
-			}
-			if let Some(listener) = aliased_event(&items) {
 				return Node::List(listener, bracket, separator);
 			}
 			let endless = match items.as_slice() {
@@ -475,14 +472,26 @@ fn when_listener(items: &[Node]) -> Option<Vec<Node>> {
 	Some(vec![symbol(listener), subject.clone(), body.clone()])
 }
 
-/// `on keydown {…}`, `once keypress {…}`, `when keyup {…}`: the listener of the warp event, with the alias note; the
-/// DOM attribute `onclick {…}`, `onkeydown {…}` is `on click {…}`, `on key {…}`
-fn aliased_event(items: &[Node]) -> Option<Vec<Node>> {
+/// `on keydown {…}`, `once keypress {…}`, `when keyup {…}` (after forms made it `on`): the listener of the warp event,
+/// with the alias note; the DOM attribute `onclick {…}`, `onkeydown {…}` is `on click {…}`, `on key {…}` unless the
+/// program defines that name
+fn event_aliases(node: Node, own: &HashSet<String>) -> Node {
+	match node.map_children(|child| event_aliases(child, own)) {
+		Node::List(items, bracket, separator) => {
+			let items = aliased_event(&items, own).unwrap_or(items);
+			Node::List(items, bracket, separator)
+		}
+		other => other,
+	}
+}
+
+fn aliased_event(items: &[Node], own: &HashSet<String>) -> Option<Vec<Node>> {
 	if let [attribute, body] = items {
-		if let Some((written, event)) = attribute_event(attribute) {
+		if let Some((written, event, released)) =
+			attribute_event(attribute).filter(|(written, ..)| !own.contains(written))
+		{
 			if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
-				crate::normalize::set_position_of(attribute);
-				crate::errors::diagnostic::note_alias(&written, &format!("{ON_WORD} {event}"));
+				note_event_alias(attribute, &written, &format!("{ON_WORD} {event}"), released);
 				return Some(vec![symbol(ON_WORD), symbol(event), body.clone()]);
 			}
 		}
@@ -492,22 +501,36 @@ fn aliased_event(items: &[Node]) -> Option<Vec<Node>> {
 		return None;
 	}
 	let Node::Symbol(name) = event.drop_meta() else { return None };
-	let meant = aliased_event_name(name)?;
-	crate::normalize::set_position_of(event);
-	crate::errors::diagnostic::note_alias(name, meant);
+	let (meant, released) = aliased_event_name(name)?;
+	note_event_alias(event, name, meant, released);
 	Some([vec![listener.clone(), symbol(meant)], rest.to_vec()].concat())
 }
 
-fn aliased_event_name(name: &str) -> Option<&'static str> {
-	EVENT_ALIASES.iter().find(|(alias, _)| *alias == name).map(|(_, meant)| *meant)
+/// The got-it note of an event alias; a release (`keyup`) says the warp event fires on the press
+fn note_event_alias(at: &Node, written: &str, meant: &str, released: bool) {
+	use crate::errors::diagnostic::{educate_once, note_alias, ALIAS_TOPIC_PREFIX};
+	crate::normalize::set_position_of(at);
+	if released {
+		let reason = format!("warp says {meant}, which fires on the press: there is no release event");
+		educate_once(&format!("{ALIAS_TOPIC_PREFIX}{written}"), written, meant, &reason);
+	} else {
+		note_alias(written, meant);
+	}
 }
 
-/// `onclick`: the written word and the warp event its DOM attribute name stands for
-fn attribute_event(word: &Node) -> Option<(String, &'static str)> {
+fn aliased_event_name(name: &str) -> Option<(&'static str, bool)> {
+	EVENT_ALIASES.iter().find(|(alias, ..)| *alias == name).map(|(_, meant, released)| (*meant, *released))
+}
+
+/// `onclick`: the written word, the warp event its DOM attribute name stands for, whether it names a release
+fn attribute_event(word: &Node) -> Option<(String, &'static str, bool)> {
 	let Node::Symbol(written) = word.drop_meta() else { return None };
 	let name = written.strip_prefix(ON_WORD)?;
-	let event = PAGE_EVENTS.iter().copied().find(|event| *event == name).or_else(|| aliased_event_name(name))?;
-	Some((written.clone(), event))
+	let (event, released) = match PAGE_EVENTS.iter().find(|event| **event == name) {
+		Some(event) => (*event, false),
+		None => aliased_event_name(name)?,
+	};
+	Some((written.clone(), event, released))
 }
 
 /// The one warning of every `when`, its fix the word this shape means
