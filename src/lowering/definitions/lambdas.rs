@@ -16,6 +16,8 @@ use crate::warp_parser::parse_template;
 use crate::words::{EACH_WORD, IMPLICIT_PARAMETER, ON_WORD, SORT_WORD};
 use std::collections::{HashMap, HashSet, VecDeque};
 
+/// The most arguments an iteration gives its function: fold and reduce two
+const MOST_ITERATION_ARGUMENTS: usize = 2;
 const PARTIAL_LIST: &str = "partial_list";
 const LIST_PLACEHOLDER: &str = "loop_list";
 const START_PLACEHOLDER: &str = "loop_start";
@@ -1129,7 +1131,7 @@ impl Lowering {
 			|| operator_lambda(node).is_some()
 			|| matches!(node.drop_meta(), Node::Symbol(name)
 				if self.context.user_functions.contains_key(name) || crate::library_words::is_one_value_function(name)
-					|| (1..=2).any(|arguments| self.arity_variant(name, arguments).is_some()))
+					|| (1..=MOST_ITERATION_ARGUMENTS).any(|arguments| self.arity_variant(name, arguments).is_some()))
 	}
 
 	fn arity_variant(&self, name: &str, arguments: usize) -> Option<String> {

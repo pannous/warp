@@ -464,7 +464,8 @@ fn called_parameters(node: &Node) -> HashMap<(String, usize), usize> {
 	called
 }
 
-/// How many arguments `body` calls `parameter` with: 1 of `h(x)`, the first such call
+/// How many arguments `body` calls `parameter` with: 1 of `h(x)`; none when its calls differ (`h(x)` and `h(x, y)`), so
+/// no variant is picked silently for one of them
 fn called_arity(body: &Node, parameter: &str) -> Option<usize> {
 	let mut arities = Vec::new();
 	body.visit(&mut |node| {
@@ -474,7 +475,11 @@ fn called_arity(body: &Node, parameter: &str) -> Option<usize> {
 			}
 		}
 	});
-	arities.first().copied()
+	arities.dedup();
+	match arities.as_slice() {
+		[arity] => Some(*arity),
+		_ => None,
+	}
 }
 
 /// `twice(f)`, `apply(f, 3)` of f overloaded by arity (card arity-overloaded): f is no one function value, so the
