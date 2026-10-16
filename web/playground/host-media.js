@@ -68,8 +68,8 @@ function halvesOf(values) {
 }
 
 // the gray levels of paint: a nonzero pixel, a zero pixel; from PAINT_COLOR_FROM on a value is a color 0xAARRGGBB
-// (src/graphics/paint.rs shade, lib/draw.warp). A pixel shown is one opaque word of ImageData's R, G, B, A bytes
-// read little-endian, a signed 32-bit int like the Int32Array it is kept in
+// (src/graphics/pixels.rs, which tests/programs/test_paint_shades.rs holds these to; lib/draw.warp). A pixel shown is
+// one opaque word of ImageData's R, G, B, A bytes read little-endian, a signed 32-bit int like the Int32Array it is kept in
 const PAINT_INK = 29;
 const PAINT_PAPER = 250;
 const PAINT_COLOR_FROM = 2 ** 24;
