@@ -5,7 +5,7 @@ use super::*;
 /// wiki/operator.md). The canonical spelling is Op::as_str, every other one an alias; the parser takes the longest
 /// spelling that fits (lookahead.rs peek_operator), the style hints name the canonical one (normalize.rs). The math
 /// spellings (× ≤ √ …) are lib/math.warp's alias lines instead (aliases.rs, decision operator-alias)
-pub const OPERATOR_SPELLINGS: [(&str, Op); 121] = [
+pub const OPERATOR_SPELLINGS: [(&str, Op); 119] = [
 	(":", Op::Colon),
 	(".", Op::Dot),
 	("?.", Op::SafeDot),
@@ -34,13 +34,11 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 121] = [
 	// ("times", Op::Mul), // card word-operators: `3 times {…}` is a loop
 	("/", Op::Div),
 	("divided by", Op::Div),
-	// Python's floor division `7//2`, `x//=2` and `7 div 2`: the parser makes them floor_quotient calls
-	("//", Op::FloorDiv),
-	("div", Op::FloorDiv),
-	("//=", Op::FloorDivAssign),
-	// `7 /! 2`, `x /!= 2`: floor division that never reads as a comment (card floor-division, the user's spelling)
+	// floor division `7 /! 2`, `x /!= 2`: the parser makes them floor_quotient calls; `//` is always a comment and Pascal's
+	// `7 div 2` notes the warp spelling (decision floor-division)
 	("/!", Op::FloorDiv),
 	("/!=", Op::FloorDivAssign),
+	("div", Op::FloorDiv),
 	("%", Op::Mod),
 	// `a mod b` is Euclidean (0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the dividend, as C)
 	("mod", Op::Mod), // rest overloaded
@@ -135,6 +133,7 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 121] = [
 	("includes", Op::In),
 	("↑", Op::ArrowUp),
 	("↓", Op::ArrowDown),
+	// lib/math.warp's alias lines spell -> => <- ↑ ↓ with some of these arrows (card user-listed):
 	// Arrows ˂ ˃ ˄ ˅ ͍ ͎ ͢   ⃔ ⃕ ⃖ ⃗ ⃡  ← ↑ → ↓ ↔ ↕ ↖ ↗ ↘ ↙ ↚ ↛ ↜ ↝ ↞ ↟ ↠ ↡ ↢ ↣ ↤ ↥ ↦ ↧ ↨ ↩ ↪ ↫ ↬ ↭ ↮ ↯ ↰ ↱ ↲ ↳ ↴ ↵ ↶ ↷ ↸ ↹ ↺ ⇄ ⇅ ⇆ ⇇ ⇈ ⇉ ⇊ ⇍ ⇎ ⇏ ⇐ ⇑ ⇒ ⇓ ⇔ ⇕ ⇖ ⇗ ⇘ ⇙ ⇚ ⇛ ⇜ ⇝ ⇞ ⇟ ⇠ ⇡ ⇢ ⇣ ⇤ ⇦ ⇧ ⇨ ⇩ ⇪ ⇫ ⇬ ⇭ ⇮ ⇯ ⇰ ⇱ ⇲ ⇳ ⌁ ⌃ ⌄ ⌤ ⍇ ⍈ ⍐ ⍗ ⎋ ➔ ➘ ➙ ➚ ➛ ➜ ➝ ➞ ➟ ➠ ➡ ➢ ➣ ➤ ➥ ➦ ➧ ➨ ➩ ➪ ➫ ➬ ➭ ➮ ➯ ➱ ➲ ➳ ➴ ➵ ➶ ➷ ➸ ➹ ➺ ➻ ➼ ➽ ➾ ⽮ ￩ ￪ ￫ ￬ ⬀ ⬁ ⬂ ⬃ ⬄ ⬅ ⬆ ⬇ ⬈ ⬉ ⬊ ⬋ ⬌ ⬍ ⬎ ⬏ ⬐ ⬑ ⭠ ⭡ ⭢ ⭣ ⭤ ⭥ ⬰ ⬱ ⬲ ⬳ ⬴ ⬵ ⬶ ⬷ ⬸ ⬹ ⬺ ⬻ ⬼ ⬽ ⬾ ⬿ ⭀ ⭁ ⭂ ⭃ ⭄ ⭅ ⭆ ⭇ ⭈ ⭉ ⭊ ⭋ ⭌ ⟰ ⟱ ⟲ ⟳ ⟴ ⟵ ⟶ ⟷ ⟸ ⟹ ⟺ ⟻ ⟼ ⟽ ⟾ ⟿ ⤾ ⤿ ⥀ ⥁ ⥂ ⥃ ⥄ ⥅ ⥆ ⥇ ⥈ ⥉ ⥊ ⥋ ⥌ ⥍ ⥎ ⥏ ⥐ ⥑ ⥒ ⥓ ⥔ ⥕ ⥖
 ];
 /// Spellings of a negated operator, each with the spelling it negates: `a nand b` is `not (a and b)` (wiki/operator.md:
@@ -245,7 +244,7 @@ impl Op {
 			Op::In => "in",
 			Op::Mul => "*",
 			Op::Div => "/",
-			Op::FloorDiv => "//",
+			Op::FloorDiv => "/!",
 			Op::Mod => "%",
 			Op::Rem => "rem",
 			Op::Pow => "^",
@@ -259,7 +258,7 @@ impl Op {
 			Op::SubAssign => "-=",
 			Op::MulAssign => "*=",
 			Op::DivAssign => "/=",
-			Op::FloorDivAssign => "//=",
+			Op::FloorDivAssign => "/!=",
 			Op::ModAssign => "%=",
 			Op::PowAssign => "^=",
 			Op::AndAssign => "&&=",

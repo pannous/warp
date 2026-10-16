@@ -47,6 +47,10 @@ pub struct CompileContext {
 	pub module_files: Vec<PathBuf>,
 	/// the names a used module defines: their bodies never see the program's variables
 	pub module_definitions: HashSet<String>,
+	/// the program began with `fast`, and the functions written `fast f(x) := …` or in a module beginning with `fast`
+	/// (compile_mode::is_fast, card fast-scope)
+	pub fast_program: bool,
+	pub fast_functions: HashSet<String>,
 	/// the modules whose classes insert_module_classes put in front of the program: the loader leaves them out
 	pub early_class_modules: HashSet<PathBuf>,
 	/// the functions of those modules giving an instance of such a class (`note_value(C4)` a Note), with its class:
@@ -96,6 +100,8 @@ impl Default for CompileContext {
 			program_file: None,
 			module_files: vec![],
 			module_definitions: HashSet::new(),
+			fast_program: false,
+			fast_functions: HashSet::new(),
 			early_class_modules: HashSet::new(),
 			module_returned_classes: HashMap::new(),
 			shadowed_units: HashSet::new(),

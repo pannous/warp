@@ -5,7 +5,7 @@ use warp::normalize::capture_hints;
 
 fn slash_notes_and_value(code: &str) -> (usize, warp::Node) {
 	let (value, hints) = capture_hints(|| warp::wasm_emitter::eval(code));
-	let notes = hints.iter().filter(|hint| hint.canonical == "a//b").count();
+	let notes = hints.iter().filter(|hint| hint.canonical == "a /! b").count();
 	(notes, value)
 }
 

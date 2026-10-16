@@ -17,7 +17,7 @@ person = {name: "Ada", address: {city: "London"}}; person.address.city
 ## Numbers
 Integers are unbounded, fractions exact, decimals floats (compare with `≈`), `/` never truncates (`//` floors); `√ ∛ ² π` are operators.
 ```warp => [1267650600228229401496703205376 yes yes 3.5 3 2]
-[2^100, 0.1 + 0.2 ≈ 0.3, 1/3 + 1/6 == 1/2, 7/2, 7//2, √4]
+[2^100, 0.1 + 0.2 ≈ 0.3, 1/3 + 1/6 == 1/2, 7/2, 7/!2, √4]
 ```
 Numbers carry units, converted on arithmetic; `±` is an uncertain value.
 ```warp => 150min

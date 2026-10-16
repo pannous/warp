@@ -137,6 +137,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - chars-codepoints (2026-10-14, the user's draft `['a','b','c']`): `"abc".chars` is a list of characters (codepoints),
   printing `['a' 'b' 'c']`; a literal `['a' 'b']` keeps its characters; `'a' == "a"` stays yes. A one-character text is a character, so
   `["a" "b"]` prints `['a' 'b']` and `["a" "bc"]` prints `['a' "bc"]`.
+  Amended 2026-10-16 (user, card consists-characters): char is a shortcut for character, and a character is a
+  grapheme (a letter with its marks), not a code point; codepoint is the separate unit. "שָלוֹם" has 4 characters
+  (`s.chars`, `number of characters in s`, `for each char in s`) and 6 code points (`s.codepoints`,
+  `for each codepoint in s`).
 - body-code (2026-10-14, the user's draft "body should be block/code type?"): `type f.body` is `code` for any quoted
   program part (`f.body is code`); printing shows its source; `{x; x+1}` never types as map. No `.kind` member for now
   (parked: a body iterated as a list of statements, each with its kind).
@@ -760,6 +764,17 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   cli-words migrates the existing --fuel/--exe/--strict/… (older `--x` mentions below are superseded by it).
 - fast-math (2026-10-16, warp-types default; card switch-rebinds; undoable): the polynomial math module is
   `use fast_math` (`fast` is already an alias of float); the CLI switch is the word `warp fast app.warp`.
+- unicode-symbols (2026-10-16, user; card user-listed): warp parses a large range of Unicode symbol characters
+  (arrows, math symbols) even when nothing defines them yet; they are free operator names, and an undefined use is a
+  later "operator ⇔ is not defined" error, not "Unexpected character". Arrow spellings of existing operators are alias
+  lines in lib/math.warp with a "prefer ->" hint (→ ⟶ ➜ … for ->, ⇒ ⟹ for =>, ← ⟵ ⬅ for <-, ⬆ ⇧ for ↑, ⬇ ⇩ for ↓).
+  ⇔ ⟺ ↔ ⇑ ⇓ get no built-in meaning for now; an example defines one, e.g.
+  `infix operator ⇔(a: bool, b: bool) := a == b`.
+- test-consolidation (2026-10-16, user; card probes-check, worker warp-test-consolidator): a worker turns probes
+  into tests where they check decided behaviour with a stable expected value, judging case by case (not every probe
+  was meant to be a test: exploratory, visual, sound, timing and undecided ones stay probes). It also dedupes and
+  condenses tests, which widens the earlier "only probes condense": no distinct assertion is lost or weakened, and the
+  count drops only by duplicates named in the commit. A probe is deleted only once every case is asserted.
 - fast-scope (2026-10-16, user; card fast-scope): `fast` before a function or module makes everything machine
   inside it: polynomial sin/cos/exp/pow, `/` gives f64 (`fast f(x) := x/3; f(1)` → 0.3333333333333333), and plain
   ints are i64 that wrap at 2^63 (`fast g(n) := n * n; g(10^10)` wraps). `x: fast int` is i64, `x: fast float` f64;

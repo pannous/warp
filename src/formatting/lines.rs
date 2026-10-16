@@ -7,10 +7,10 @@ const CLOSERS: [char; 3] = [')', ']', '}'];
 
 #[derive(Clone, Debug, Default)]
 pub(super) struct LineScan {
-	/// the line starts inside a text or a block comment: its start belongs to them, not to the layout
-	pub starts_in_text: bool,
-	/// the line ends inside a text or a block comment (its trailing spaces may be the text's)
-	pub ends_in_text: bool,
+	/// what the line starts inside: a text or a block comment owns its start, not the layout
+	pub starts_inside: Inside,
+	/// what the line ends inside (trailing spaces in a text or a block comment may be theirs)
+	pub ends_inside: Inside,
 	/// byte ranges of code: outside texts and comments
 	pub code: Vec<(usize, usize)>,
 	/// where a comment to the end of the line starts
@@ -23,9 +23,21 @@ impl LineScan {
 	pub fn is_code(&self, at: usize) -> bool {
 		self.code.iter().any(|&(start, end)| at >= start && at < end)
 	}
+
+	/// the line starts inside a text or a block comment
+	pub fn starts_in_text(&self) -> bool {
+		self.starts_inside != Inside::Code
+	}
+
+	/// the line ends inside a text or a block comment
+	pub fn ends_in_text(&self) -> bool {
+		self.ends_inside != Inside::Code
+	}
 }
 
-enum Inside {
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(super) enum Inside {
+	#[default]
 	Code,
 	Text(char),
 	BlockComment(&'static str),
@@ -34,15 +46,15 @@ enum Inside {
 /// `#use lib`, `#include x`: a directive at the line start is a comment too (warp_parser/comments.rs)
 const DIRECTIVES: [&str; 3] = ["use", "include", "import"];
 
-/// `//` or `#` starting a comment at `at`, after a space or at the line start: `//` before a space, `/`, `!` or the
-/// end; `#` before a space, `!`, `#` or the end (`# note`, `#!`, `##`), or a directive. A glued `7//2` or `xs#1`, and
-/// `#xs` (a count), are code
+/// `//` or `#` starting a comment at `at`: `//` anywhere but in a URL's `://` (decision floor-division); `#` after a
+/// space or at the line start, before a space, `!`, `#` or the end (`# note`, `#!`, `##`), or a directive. `xs#1` and
+/// `#xs` (a count) are code
 fn starts_line_comment(line: &str, at: usize) -> bool {
 	let before_is_space = at == 0 || line[..at].ends_with([' ', '\t']);
 	let after = &line[at..];
 	let next = |prefix: &str| after[prefix.len()..].chars().next();
 	if after.starts_with("//") {
-		return before_is_space && next("//").is_none_or(|c| matches!(c, ' ' | '/' | '!'));
+		return !line[..at].ends_with(':');
 	}
 	if after.starts_with('#') && before_is_space {
 		let directive = line[..at].trim().is_empty() && DIRECTIVES.iter().any(|word| after[1..].starts_with(word));
@@ -57,11 +69,7 @@ pub(super) fn scan(lines: &[String]) -> Vec<LineScan> {
 	let mut open: Vec<usize> = Vec::new();
 	let mut scans = Vec::with_capacity(lines.len());
 	for (index, line) in lines.iter().enumerate() {
-		let mut scan = LineScan {
-			starts_in_text: !matches!(inside, Inside::Code),
-			open_before: open.clone(),
-			..Default::default()
-		};
+		let mut scan = LineScan { starts_inside: inside, open_before: open.clone(), ..Default::default() };
 		let mut code_start = matches!(inside, Inside::Code).then_some(0);
 		let mut chars = line.char_indices().peekable();
 		while let Some((at, c)) = chars.next() {
@@ -113,7 +121,7 @@ pub(super) fn scan(lines: &[String]) -> Vec<LineScan> {
 		if let (Some(start), None) = (code_start, scan.comment) {
 			scan.code.push((start, line.len()));
 		}
-		scan.ends_in_text = !matches!(inside, Inside::Code);
+		scan.ends_inside = inside;
 		scans.push(scan);
 	}
 	scans
@@ -133,14 +141,20 @@ pub(super) fn leading_closers(line: &str, scan: &LineScan) -> usize {
 		.count()
 }
 
-/// The code of the line without its trailing comment, trimmed (texts blanked to `""`)
+/// The code of the line without its trailing comment, trimmed (texts blanked to `""`, also one the line starts or
+/// ends in: `y = x + "` ends in an operand, not in `+`; a block comment it starts or ends in is dropped)
 pub(super) fn code_text(line: &str, scan: &LineScan) -> String {
+	let blank_text = "\"\"";
+	let is_text = |inside: Inside| matches!(inside, Inside::Text(_));
 	let mut text = String::new();
 	for (index, &(start, end)) in scan.code.iter().enumerate() {
-		if index > 0 {
-			text.push_str("\"\"");
+		if index > 0 || is_text(scan.starts_inside) {
+			text.push_str(blank_text);
 		}
 		text.push_str(&line[start..end]);
+	}
+	if is_text(scan.ends_inside) {
+		text.push_str(blank_text);
 	}
 	text.trim().to_string()
 }

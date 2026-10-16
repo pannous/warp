@@ -22,14 +22,14 @@ pub fn operand_text(node: &Node) -> String {
 	}
 }
 
-/// The node as its source spelled it where a pass lowered sugar: `floor_quotient(a, b)` is `a//b`, `area·square` is `area`
+/// The node as its source spelled it where a pass lowered sugar: `floor_quotient(a, b)` is `a /! b`, `area·square` is `area`
 fn as_written(node: Node) -> Node {
 	match node {
 		Node::List(ref items, _, _)
 			if let [word, dividend, divisor] = items.as_slice()
 				&& matches!(word.drop_meta(), Node::Symbol(name) if name == crate::warp_parser::FLOOR_QUOTIENT) =>
 		{
-			Node::Symbol(format!("{}//{}", operand_text(dividend), operand_text(divisor)))
+			Node::Symbol(format!("{} /! {}", operand_text(dividend), operand_text(divisor)))
 		}
 		// a witness `area·square` was written `area`
 		Node::Symbol(name) if name.contains('·') => {

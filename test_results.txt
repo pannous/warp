@@ -1448,9 +1448,12 @@ PASSED:
   ✓ functions::test_foreign_modifiers::test_meaningless_modifiers_are_skipped_with_a_note
   ✓ functions::test_foreign_spellings::a_field_of_a_foreign_method_name_stays_the_field
   ✓ functions::test_foreign_spellings::auto_is_var
+  ✓ functions::test_foreign_spellings::dom_event_names_listen_to_warps_events
   ✓ functions::test_foreign_spellings::foreign_method_names_are_warps_methods
+  ✓ functions::test_foreign_spellings::key_event_aliases_listen_to_key
   ✓ functions::test_foreign_spellings::module_qualified_iterations_are_warps_words
   ✓ functions::test_foreign_spellings::r_and_php_words_come_with_their_use
+  ✓ functions::test_foreign_spellings::release_aliases_say_press_and_own_names_stay
   ✓ functions::test_free_var_if_arms::capped_single_and_semantics
   ✓ functions::test_free_var_if_arms::free_var_arithmetic_without_if
   ✓ functions::test_free_var_if_arms::free_var_only_in_condition_stays
@@ -1485,6 +1488,8 @@ PASSED:
   ✓ functions::test_function_values::test_operators_as_values
   ✓ functions::test_function_values::test_ordinary_calls_are_untouched
   ✓ functions::test_function_values::test_partial_application_of_an_iteration_word
+  ✓ functions::test_functions_passed_by_name::a_function_passed_by_name_is_called_by_name
+  ✓ functions::test_functions_passed_by_name::recursive_passed_on_and_several_functions_by_name
   ✓ functions::test_functions::test_default_params
   ✓ functions::test_functions::test_fibonacci_auto_param
   ✓ functions::test_functions::test_fibonacci_auto_typed
@@ -1758,6 +1763,8 @@ PASSED:
   ✓ functions::test_property_access::test_non_objects_keep_the_undefined_function_rule
   ✓ functions::test_property_access::test_object_data_stays_data
   ✓ functions::test_property_access::test_of_and_possessive
+  ✓ functions::test_property_access::test_of_lookup_is_an_assignment_target
+  ✓ functions::test_property_access::test_print_of_lookup_prints_the_field
   ✓ functions::test_property_assign::test_a_one_entry_object_counts_one_pair
   ✓ functions::test_property_assign::test_assign_a_field
   ✓ functions::test_property_assign::test_assign_a_nested_field
@@ -1845,7 +1852,13 @@ PASSED:
   ✓ functions::test_sort_functions::sort_with_comparator
   ✓ functions::test_sort_functions::sort_with_defined_function
   ✓ functions::test_sort_functions::sort_with_key
+  ✓ functions::test_sort_functions::sorted_by_a_library_word
   ✓ functions::test_sort_functions::sorted_without_function
+  ✓ functions::test_sort_labels::a_prefix_sort_before_a_chain
+  ✓ functions::test_sort_labels::a_sort_label_before_a_field_or_block
+  ✓ functions::test_sort_labels::a_sort_label_before_an_operator
+  ✓ functions::test_sort_labels::a_sort_label_before_an_operator_in_a_value_or_chain
+  ✓ functions::test_sort_labels::a_word_named_like_a_label_elsewhere_stays
   ✓ functions::test_specialised_variants::a_constant_argument_unrolls_the_recursion
   ✓ functions::test_specialised_variants::an_unbounded_specialisation_keeps_the_call
   ✓ functions::test_statement_blocks::a_block_of_one_sound_word_plays
@@ -2731,6 +2744,11 @@ PASSED:
   ✓ numbers::test_fast_math::fast_words_are_close_to_the_c_library
   ✓ numbers::test_fast_math::fast_words_reach_the_math_module_and_stay_out_of_other_programs
   ✓ numbers::test_fast_math::warp_fast_uses_fast_math_also_for_a_kept_program_file
+  ✓ numbers::test_fast_scope::a_fast_function_is_machine_arithmetic
+  ✓ numbers::test_fast_scope::a_fast_function_takes_the_polynomial_math_alone
+  ✓ numbers::test_fast_scope::a_fast_module_makes_its_functions_fast
+  ✓ numbers::test_fast_scope::a_fast_program_is_machine_arithmetic
+  ✓ numbers::test_fast_scope::fast_types_are_machine_types
   ✓ numbers::test_fixed_width_ints::test_a_parameter_may_be_named_like_a_type
   ✓ numbers::test_fixed_width_ints::test_fixed_width_arithmetic_traps_on_overflow
   ✓ numbers::test_fixed_width_ints::test_fixed_width_assignment_traps_on_overflow
@@ -2800,6 +2818,9 @@ PASSED:
   ✓ numbers::test_implicit_libm::test_libm_on_a_runtime_value_without_import
   ✓ numbers::test_implicit_libm::test_user_function_named_like_libm_wins
   ✓ numbers::test_infinity::infinity_is_a_float_value
+  ✓ numbers::test_int_division::int_division_is_euclidean
+  ✓ numbers::test_int_division::int_programs_skip_the_ratio_runtime
+  ✓ numbers::test_int_division::ratios_keep_their_division
   ✓ numbers::test_law::test_law_asserted_at_call_sites
   ✓ numbers::test_law::test_law_does_not_change_program_result
   ✓ numbers::test_law::test_law_float_parameter_kinds
@@ -2894,6 +2915,8 @@ PASSED:
   ✓ numbers::test_number::test_number
   ✓ numbers::test_number::test_number_floats
   ✓ numbers::test_number::test_number_mix
+  ✓ numbers::test_pixel_unit::a_refused_conversion_names_a_quantity_first
+  ✓ numbers::test_pixel_unit::a_refused_conversion_names_the_unit_to_multiply_by
   ✓ numbers::test_pixel_unit::pixels_are_their_own_dimension
   ✓ numbers::test_pixel_unit::pixels_turn_into_lengths_through_the_displays_dpi
   ✓ numbers::test_pixel_unit::ppi_and_dots_are_dpi_and_pixels
@@ -3334,6 +3357,8 @@ PASSED:
   ✓ operators::test_truthiness_of_objects::empty_values_are_falsy
   ✓ operators::test_tuple_comparison_warning::a_parenthesized_tuple_comparison_does_not_warn
   ✓ operators::test_tuple_comparison_warning::a_tuple_compared_with_a_bare_comma_list_warns
+  ✓ operators::test_used_operator_call_form::a_function_the_program_names_wins
+  ✓ operators::test_used_operator_call_form::the_call_form_of_a_used_modules_operator_joins_it
   ✓ operators::test_xor_negated_group::xor_of_a_negated_group_combines_bits
   ✓ parser::test_and_after_comparison::a_call_with_parentheses_takes_the_comparison
   ✓ parser::test_and_after_comparison::a_group_compares_the_braceless_call
@@ -3349,7 +3374,6 @@ PASSED:
   ✓ parser::test_bare_operator_block::operators_with_operands_in_blocks_still_work
   ✓ parser::test_beautify_synonyms::test_foreign_words_become_the_warp_words
   ✓ parser::test_beautify_synonyms::test_format_keeps_the_words
-  ✓ parser::test_big_literals::a_100_kb_literal_compiles_in_linear_time
   ✓ parser::test_braceless_range_argument::a_braceless_argument_takes_a_range
   ✓ parser::test_braceless_range_argument::a_comparison_still_ends_the_argument
   ✓ parser::test_comment_hides_bracket::a_comment_after_an_open_bracket_without_its_closer_is_a_comment
@@ -3384,6 +3408,7 @@ PASSED:
   ✓ parser::test_explicit_symbols::a_colon_name_is_a_symbol
   ✓ parser::test_explicit_symbols::a_colon_without_space_before_stays_a_key
   ✓ parser::test_explicit_symbols::colon_names_uncharge_operators
+  ✓ parser::test_format_layout::test_a_hyphen_inside_a_name_leaves_the_rest_of_the_line_formatted
   ✓ parser::test_format_layout::test_canonical_layout
   ✓ parser::test_format_layout::test_every_binary_operator_spaced
   ✓ parser::test_format_layout::test_hash_comments_only_when_asked
@@ -3393,6 +3418,9 @@ PASSED:
   ✓ parser::test_format_layout::test_parameter_types_spaced
   ✓ parser::test_format_layout::test_soft_hints_never_rewrite
   ✓ parser::test_format_layout::test_unparsed_code_is_not_formatted
+  ✓ parser::test_format_multiline_text::a_multiline_comment_after_an_operator_still_continues_the_expression
+  ✓ parser::test_format_multiline_text::a_text_spliced_with_code_keeps_the_lines_after_it
+  ✓ parser::test_format_multiline_text::the_block_after_a_multiline_text_keeps_its_indentation
   ✓ parser::test_format_semicolons::a_semicolon_in_a_text_stays
   ✓ parser::test_format_semicolons::a_semicolon_is_followed_by_one_space
   ✓ parser::test_glued_method_block::a_glued_block_after_a_dot_is_a_call
@@ -3468,9 +3496,12 @@ PASSED:
   ✓ parser::test_number_glyphs::test_vulgar_fractions_are_exact
   ✓ parser::test_one_line_statements::separated_prints_still_run
   ✓ parser::test_one_line_statements::two_prints_on_one_line_need_a_separator
+  ✓ parser::test_operator_aliases::a_free_glyph_without_right_operand_is_a_value
   ✓ parser::test_operator_aliases::a_math_spelling_keeps_its_operator_and_precedence
   ✓ parser::test_operator_aliases::a_program_declares_its_own_alias
   ✓ parser::test_operator_aliases::an_alias_line_in_a_text_is_text
+  ✓ parser::test_operator_aliases::arrow_glyphs_spell_the_arrow_operators
+  ✓ parser::test_operator_aliases::free_unicode_symbols_parse
   ✓ parser::test_operator_aliases::lib_math_with_its_alias_lines_still_loads
   ✓ parser::test_operator_aliases::the_math_spellings_come_from_lib_math
   ✓ parser::test_operator_word_keys::a_prefix_operator_word_names_a_key
@@ -3925,18 +3956,6 @@ PASSED:
   ✓ programs::test_sound::the_note_table_matches_note
   ✓ programs::test_task_sound::a_sound_in_a_task_plays_its_length
   ✓ programs::test_task_sound::a_task_reads_the_programs_globals
-  ✓ programs::test_twigl_back::twigl_reads_its_previous_frame_through_b
-  ✓ programs::test_twigl_block::a_hole_in_a_twigl_block_reads_the_warp_variable
-  ✓ programs::test_twigl_block::a_painted_twigl_block_gets_its_holes_values
-  ✓ programs::test_twigl_block::a_twigl_block_is_the_twigl_call_of_its_code
-  ✓ programs::test_twigl_block::another_call_of_a_shader_takes_no_holes
-  ✓ programs::test_twigl_noise::a_twigl_shader_without_noise_gets_none
-  ✓ programs::test_twigl_noise::pasted_noise_stays_and_shadertoy_gets_noise_too
-  ✓ programs::test_twigl_noise::twigl_noise_varies_from_pixel_to_pixel
-  ✓ programs::test_twigl::a_glsl_mistake_shows_the_line
-  ✓ programs::test_twigl::a_shadertoy_shader_paints_through_the_same_wrapper
-  ✓ programs::test_twigl::a_twigl_shader_paints_with_glsl_rows_counted_from_the_bottom
-  ✓ programs::test_twigl::the_tunnel_demo_compiles_to_wgsl
   ✓ programs::test_warp_command::an_assigned_command_word_is_a_variable
   ✓ programs::test_warp_command::debug_build_names_its_commit
   ✓ programs::test_warp_command::version_names_the_branch
@@ -5898,8 +5917,11 @@ PASSED:
   ✓ welcoming::test_shell_words::rm_removes_a_file_with_guard_rails
   ✓ welcoming::test_shell_words::which_finds_a_program
   ✓ welcoming::test_slash_comment_after_value::a_comment_after_a_text_gets_no_division_note
+  ✓ welcoming::test_slash_comment_needs_space::pascal_div_divides_and_warns_naming_bang
+  ✓ welcoming::test_slash_comment_needs_space::slash_slash_glued_is_a_comment_too
+  ✓ welcoming::test_slash_comment_needs_space::slash_slash_meant_as_floor_division_warns_naming_bang
   ✓ welcoming::test_slash_comment_needs_space::slash_slash_with_space_is_a_comment
-  ✓ welcoming::test_slash_comment_needs_space::slash_slash_without_space_divides
+  ✓ welcoming::test_slash_comment_needs_space::warp_fix_writes_the_floor_division_bang
   ✓ welcoming::test_slash_comment_prose_operators::prose_with_operator_characters_gets_no_division_note
   ✓ welcoming::test_sleep_seconds::a_bare_sleep_number_counts_seconds
   ✓ welcoming::test_sleep_seconds::the_bare_sleep_warning_suggests_seconds
@@ -6022,7 +6044,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::an_answered_ask_compiles_the_chosen_reading
   ✓ welcoming::test_welcoming_sugar::an_unknown_word_as_statement_is_loud
   ✓ welcoming::test_welcoming_sugar::an_unknown_word_beside_a_value_is_loud_too
-  ✓ welcoming::test_welcoming_sugar::glued_double_slash_is_floor_division
+  ✓ welcoming::test_welcoming_sugar::floor_division_is_slash_bang
   ✓ welcoming::test_welcoming_sugar::insert_never_guesses_the_argument_order
   ✓ welcoming::test_welcoming_sugar::len_counts
   ✓ welcoming::test_welcoming_sugar::let_var_and_const_declare_inside_any_block
@@ -6031,6 +6053,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ parser::test_big_literals::a_100_kb_literal_compiles_in_linear_time
 
 SUMMARY:
-13 ignored, 6028 passed, 0 failed, 6028 total tested
+13 ignored, 6050 passed, 1 failed, 6051 total tested

@@ -95,6 +95,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::welcome_forms::lower_arrow_result_types,
 	// `a of b` is `b.a` (of_lookups.rs), before any pass reads a lookup
 	crate::lowering::of_lookups::lower,
+	// `set x to 5` is `x = 5`, after of_lookups: `set width of p to 12` is `p.width = 12` (welcome_forms.rs)
+	crate::lowering::welcome_forms::lower_set_phrases,
 	// `(p).a` is `p.a` (grouped_receivers.rs), before any pass reads a lookup
 	crate::lowering::grouped_receivers::lower,
 	// `window.width = 800`, `canvas.height`, a bare width (module_properties.rs): getters and setters, before any pass
@@ -362,6 +364,8 @@ const MEANING_PASSES: &[Pass] = &[
 	crate::lowering::library_words::lower_count_in,
 	// `room(signal)` of an instance whose type defines `call`, before the closure passes read it as a function value's call
 	crate::lowering::traits::lower_instance_calls,
+	// `each(ink, n)` of a function each calling its parameter: `each·ink(n)`, which calls ink by name (specialising.rs)
+	crate::lowering::specialising::lower,
 	crate::lowering::lambdas::lower,
 	crate::lowering::function_values::lower,
 	crate::lowering::closures::lower,
