@@ -1,12 +1,3 @@
-//! Properties of the standard objects (card make-width, decision canvas-size): `window.width`, `display.height`,
-//! `canvas.width` read like fields and, where the platform can, are written like them: `window.width = 800` resizes
-//! the paint window (the playground: the paintings' frame), `canvas.width = 300` the canvas of lib/draw.warp (a new,
-//! blank one, as an HTML canvas does), while `display.width = 5` is a loud error. Each property is a getter and a setter
-//! written in warp, `it` the value written; `+=` and its kin write what they read. A bare `width` or `height` the
-//! program does not bind is the canvas's, with a did-you-mean naming the three. A program binding the object or the
-//! word itself (`canvas = {width: 9}`, `f(width) := …`) keeps its own; a field name (`{width: 5}`, `p.width`) is none.
-//! Runs before modules::resolve, which then brings lib/draw.warp, and before system_values marks the window's reads.
-
 //! Properties of objects (decision property-accessors, card graphics-properties): `window.width`, `display.height`,
 //! `canvas.width` read like fields and, where they have a setter, are written like them. A property is defined in
 //! warp, its getter `canvas.width := canvas_width` and its setter the one-parameter overload `canvas.width(w) := canvas(w,
@@ -120,15 +111,39 @@ fn read_only_reason(properties: &Properties, object: &str, property: &str) -> St
 pub fn lower(program: Node) -> Node {
 	let mut properties = standard_properties();
 	let mut own = Properties::new();
+	let original = program.clone();
 	collect(&crate::modules::statements(program.clone()), None, &mut own);
 	let program = if own.is_empty() { program } else { without_definitions(program) };
+	let bound = bound_names(&program);
+	if let Some(error) = refused_definition(&original, &bound) {
+		return error;
+	}
 	properties.extend(own);
-	let mut rewrite = Rewrite { properties, bound: bound_names(&program), used: HashSet::new(), refused: None };
+	let mut rewrite = Rewrite { properties, bound, used: HashSet::new(), refused: None };
 	let lowered = rewrite.rewritten(program);
 	match rewrite.refused {
 		Some(error) => error,
 		None => crate::std_aliases::with_uses(lowered, rewrite.used),
 	}
+}
+
+/// A loud error for a property definition of a value the program binds, which no use would read: `p = {x: 1}; p.x := 5`
+/// (the field is written `p.x = 5`), or of a class, whose instances have none yet (card point-sum)
+fn refused_definition(program: &Node, bound: &HashSet<String>) -> Option<Node> {
+	let classes = crate::modules::needed_definitions::class_names(program);
+	crate::modules::statements(program.clone()).iter().find_map(|statement| {
+		let (object, property, _, _) = definition(statement)?;
+		let reason = if classes.contains(&object) {
+			format!(
+				"{object}.{property} := … defines no property of {object}'s instances yet (card point-sum): write it as a method of class {object}"
+			)
+		} else if bound.contains(&object) {
+			format!("{object} is a value, so {object}.{property} := … defines nothing: write {object}.{property} = … to set its field")
+		} else {
+			return None;
+		};
+		Some(Diagnostic::at(statement, reason).into_error())
+	})
 }
 
 /// The program without its property definitions, which each use has taken in place

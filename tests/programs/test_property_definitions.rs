@@ -23,3 +23,11 @@ fn the_setter_is_called_like_a_method() {
 	is!("canvas.width(12)\ncanvas.width", 12);
 	is!("display.dpi(200 dpi)\n(1 inch * display.dpi) == 200px", true);
 }
+
+#[test]
+fn a_property_of_a_value_or_class_is_refused_loudly() {
+	let of_value = format!("{:?}", eval("p = {x: 1}\np.x := 5\np.x"));
+	assert!(of_value.contains("p is a value") && of_value.contains("write p.x = …"), "{of_value}");
+	let of_class = format!("{:?}", eval("class Point{x;y}\nPoint.sum := it.x + it.y\nPoint(1,2).sum"));
+	assert!(of_class.contains("Point.sum := … defines no property") && of_class.contains("point-sum"), "{of_class}");
+}
