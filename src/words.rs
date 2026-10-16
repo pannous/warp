@@ -13,6 +13,19 @@ pub const MAP_WORD: &str = "map";
 pub const OF_WORD: &str = "of";
 pub const ON_WORD: &str = "on";
 pub const ONCE_WORD: &str = "once";
+/// Other systems' event names, listened to as the warp event with a got-it note (card key-aliases): one line per alias,
+/// marked when it names a release, which warp's events do not tell apart from the press
+pub const EVENT_ALIASES: [(&str, &str, bool); 9] = [
+	("keydown", "key", false),
+	("key_down", "key", false),
+	("keypress", "key", false),
+	("keyup", "key", true),
+	("key_up", "key", true),
+	("mousedown", "click", false),
+	("mouse_down", "click", false),
+	("mouseup", "click", true),
+	("mouse_up", "click", true),
+];
 pub const WHENEVER_WORD: &str = "whenever";
 pub const RETURN_WORD: &str = "return";
 pub const SUM_WORD: &str = "sum";
