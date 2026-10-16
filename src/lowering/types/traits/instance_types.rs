@@ -201,7 +201,13 @@ impl InstanceTypes {
 
 	/// Is `name` a field of any declared type: `v.x` then reads the field at run time, whatever v holds
 	pub fn is_declared_field(&self, name: &str) -> bool {
-		self.registry.types().iter().any(|type_def| type_def.fields.iter().any(|field| field.name == name))
+		!self.classes_with_field(name).is_empty()
+	}
+
+	/// The declared types with a field `name`: an instance of one has that member of its own
+	pub fn classes_with_field(&self, name: &str) -> Vec<String> {
+		let has_it = |type_def: &&crate::type_kinds::TypeDef| type_def.fields.iter().any(|field| field.name == name);
+		self.registry.types().iter().filter(has_it).map(|type_def| type_def.name.clone()).collect()
 	}
 
 	/// The field `name` names when `list` holds instances of a declared type with it, also in the plural: `people.name`

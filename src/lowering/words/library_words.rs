@@ -502,15 +502,30 @@ fn is_loaded_module_word(name: &str) -> bool {
 	crate::compiler::compile_context::read(|context| context.module_definitions.contains(name))
 }
 
-/// `x.word` of an x that may be an object: `if x is <module type> then word(x) else x["word"]`; a receiver that is no
-/// variable reads the field, as it is evaluated once
-fn field_or_word(receiver: &Node, word_node: &Node, name: &str, module: &str) -> Node {
-	let field = field_lookup(receiver, name, word_node);
-	if receiver.symbol_name().is_none() {
-		return field;
-	}
-	let is_of_type = parens(vec![symbol(crate::words::IS_TYPE), receiver.clone(), text(module)]);
-	if_then_else(is_of_type, word_call(word_node, receiver, vec![]), field)
+/// Whether the receiver of `x.word` has a member `word` of its own (level 1 of the one lookup, notes/dispatch.md)
+enum OwnMember {
+	/// known at compile time: the literal's entry, the field of its declared class
+	Has,
+	/// an object known to lack it: the word, else the field read that fails
+	Lacks,
+	/// a value known only at run time, which may be an object with it
+	Maybe,
+	/// no object: the word, else an error
+	Not,
+}
+
+/// What `x.word(args)` means for any value, below a member of the receiver's own (levels 2 to 4)
+enum WordMeaning {
+	/// a call; `typed`: a word whose result type the code after it relies on, which a run-time choice would hide
+	Call {
+		call: Node,
+		typed: bool,
+	},
+	/// a field read, which answers it at run time (a swizzle `p.zy`)
+	FieldRead,
+	/// a word a later step answers on the dot itself (`xs.count`, `xs.pop()`, `f.effects`)
+	Kept,
+	Undefined,
 }
 
 /// A variable or an element of one (`xs#i`, as a loop reads its element): read twice, it is the same value
@@ -902,7 +917,10 @@ impl Lowering {
 		Some(self.call(COLLECTION_CONTAINS, word, vec![collection.clone(), element.clone()], false))
 	}
 
-	/// `x.word` and `x.word(args)`; an unknown word on a value is an error
+	/// `x.word` and `x.word(args)`, one lookup (notes/dispatch.md "One lookup for every word"): a member of the
+	/// receiver's own wins over what the word means for any value (a program's function, a module's or the library's
+	/// word); `x.word` is `x.word()`. Known at compile time it is chosen there, else at run time; an unknown word on a
+	/// value is an error
 	fn method_call(&self, receiver: &Node, method: &Node) -> Option<Node> {
 		// `pair.0` is the first item of a tuple or list, counted from 0 like `pair[0]`
 		if let Node::Number(crate::extensions::numbers::Number::Int(_)) = method.drop_meta() {
@@ -912,61 +930,89 @@ impl Lowering {
 		if receiver.symbol_name() == Some(DICT_WORD) && name == FROMKEYS {
 			return Some(self.call(FROMKEYS, word_node, arguments, false));
 		}
-		let has_arguments = !arguments.is_empty();
-		let literal = self.object_literal(receiver);
-		let is_field = literal
-			.as_ref()
-			.and_then(object_entries)
-			.is_some_and(|entries| entries.iter().any(|(field, _)| field == name));
-		if is_field && !has_arguments {
-			return Some(field_lookup(receiver, name, word_node));
-		}
-		// `x.word` without brackets may read a field; `x.chars`, `x.chars()`, `chars x` and `chars(x)` are all the list
-		// (user 2026-10-14, card abc-chars). A bare word has no arguments
+		// `x.chars`, `x.chars()`, `chars x` and `chars(x)` are all the list (user 2026-10-14, card abc-chars)
 		let is_bare = !matches!(method.drop_meta(), Node::List(..));
-		// `n.first` of a person with a field first reads the field, not the library word first
-		if is_bare && self.instances.is_instance_field(receiver, name) {
-			return Some(field_lookup(receiver, name, word_node));
+		let meaning = self.word_meaning(receiver, name, word_node, &arguments, is_bare);
+		let field = || Some(field_lookup(receiver, name, word_node));
+		match (self.own_member(receiver, name, &arguments), meaning) {
+			(OwnMember::Has, _) => field(),
+			(OwnMember::Maybe, WordMeaning::Call { call, typed: false }) => {
+				Some(self.member_or(receiver, name, word_node, call))
+			}
+			(_, WordMeaning::Call { call, .. }) => Some(call),
+			(_, WordMeaning::Kept) => None,
+			(OwnMember::Maybe | OwnMember::Lacks, _) | (OwnMember::Not, WordMeaning::FieldRead) => field(),
+			(OwnMember::Not, WordMeaning::Undefined) => {
+				let is_value = matches!(
+					receiver.drop_meta(),
+					Node::Symbol(_)
+						| Node::Text(_) | Node::Char(_)
+						| Node::Number(_) | Node::List(_, Bracket::Square, _)
+				);
+				let call = key(receiver.clone(), Op::Dot, method.clone());
+				is_value.then(|| self.context.undefined_function_diagnostic(&call, name).into_error())
+			}
 		}
+	}
+
+	/// Whether the receiver has a member `name` of its own (level 1 of the one lookup): an entry of the object literal
+	/// it holds, a field of its declared class, or, for a value known only at run time, maybe
+	fn own_member(&self, receiver: &Node, name: &str, arguments: &[Node]) -> OwnMember {
+		// a member is read without arguments: `p.first`, `p.first()`
+		if !arguments.is_empty() {
+			return OwnMember::Not;
+		}
+		let literal = self.object_literal(receiver);
+		let literal_has_it = (literal.as_ref().and_then(object_entries))
+			.is_some_and(|entries| entries.iter().any(|(field, _)| field == name));
+		// `p.name` inside the function `name(p)`: a call would recurse with the same argument forever
+		if literal_has_it
+			|| self.instances.is_instance_field(receiver, name)
+			|| self.reads_own_parameter_field(receiver, name)
+		{
+			return OwnMember::Has;
+		}
+		if literal.is_some() || self.instances.shape(receiver).is_some() {
+			return OwnMember::Lacks;
+		}
+		let is_element = matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _));
+		let is_plain = receiver.symbol_name().is_some_and(|variable| self.plain.contains(variable));
+		match !is_plain && (is_element || self.is_object(receiver, name) || self.may_hold_object(receiver)) {
+			true => OwnMember::Maybe,
+			false => OwnMember::Not,
+		}
+	}
+
+	/// What `x.word(args)` means for any value, below a member of x's own: the library word, the program's function
+	/// taking x first, a conversion, a number word, `type`, or a swizzle
+	fn word_meaning(
+		&self,
+		receiver: &Node,
+		name: &str,
+		word_node: &Node,
+		arguments: &[Node],
+		is_bare: bool,
+	) -> WordMeaning {
+		let has_arguments = !arguments.is_empty();
+		let call = |call: Node| WordMeaning::Call { call, typed: false };
+		// a counting word without parentheses stays the count the emitter reads (`xs.count`)
 		if let Some(word) = self
 			.library_word_for(name, arguments.len() + 1)
 			.filter(|_| !is_bare || counting_method(name, &self.context).is_none())
 		{
-			let word_call = self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false);
-			// `m.first` of a parameter or loop element given `{first: 9}` (card map-field). Not a map's own word
-			// (`m.keys`), nor a word whose list or text result the code after it types (`it.chars.map(…)`): a field
-			// read there would hide that type
-			let is_element = matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _));
-			let keeps_word = crate::members::MAP_MEMBERS.contains(&name)
+			// a map's own word (`m.keys`), or a word whose list or text result the code after it types
+			// (`it.chars.map(…)`): no run-time choice, which would hide that type
+			let typed = crate::members::MAP_MEMBERS.contains(&name)
 				|| result_kind(word).or_else(|| result_kind(name)).is_some();
-			if is_bare && !keeps_word && (is_element || self.may_hold_object(receiver)) {
-				return Some(self.map_field_or(receiver, name, word_node, word_call));
-			}
-			return Some(word_call);
+			let call = self.call(word, word_node, [vec![receiver.clone()], arguments.to_vec()].concat(), false);
+			return WordMeaning::Call { call, typed };
 		}
-		if is_bare && self.reads_declared_field(receiver, name) {
-			return Some(field_lookup(receiver, name, word_node));
-		}
-		// `b.product` of a value that may be an object: its field if it is no value of the word's type, else the type
-		// module's word, as `b.product()` calls it (x.word is x.word(), user 2026-10-14)
-		// `p.center`, `s.items` of another module's word or one of more parameters: no call, as before the word was loaded
-		let is_loaded_word = is_bare && is_loaded_module_word(name);
-		let type_module = self.type_module_of(name).filter(|_| is_loaded_word);
-		let may_be_object = || self.is_object(receiver, name) || self.may_hold_object(receiver);
-		if is_loaded_word && may_be_object() {
-			// a parameter's or a user function result's type shows at run time; a loop's element or a foreign
-			// result (`r.stats_of(t).words`) reads the field, as a branch of the word would type the value
-			let is_generic = self.is_parameter(receiver)
-				|| receiver.symbol_name().is_some_and(|variable| self.call_results.contains(variable));
-			return Some(match type_module.filter(|_| is_generic) {
-				Some(module) => field_or_word(receiver, word_node, name, module),
-				None => field_lookup(receiver, name, word_node),
-			});
-		}
-		if !(is_loaded_word && type_module.is_none())
+		// `p.center`, `s.items` of another module's word: no call, as before the word was loaded
+		let is_other_modules_word = is_bare && is_loaded_module_word(name) && self.type_module_of(name).is_none();
+		if !is_other_modules_word
 			&& self.context.user_functions.get(name).is_some_and(|function| !function.params.is_empty())
 		{
-			return Some(word_call(word_node, receiver, arguments));
+			return call(word_call(word_node, receiver, arguments.to_vec()));
 		}
 		// `x.string`, `t.int`, `x.float()`, `2.double()`: the conversion `string(x)`, as written in call form; uncalled
 		// only the common conversions (not `e.text`, a common field); a counting word stays a count (`xs.number()`)
@@ -974,49 +1020,28 @@ impl Lowering {
 			&& crate::analyzer::type_word_kind(name).is_some()
 			&& counting_method(name, &self.context).is_none();
 		let is_conversion = CONVERSION_METHODS.contains(&name) || is_type_word_call;
-		if is_conversion && arguments.is_empty() && !self.instances.is_declared_field(name) {
-			return Some(word_call(word_node, receiver, vec![]));
+		if is_conversion && !has_arguments {
+			return call(word_call(word_node, receiver, vec![]));
 		}
-		let is_known = self.is_known_method(receiver, name);
+		if self.is_known_method(receiver, name) {
+			return WordMeaning::Kept;
+		}
+		if has_arguments {
+			return WordMeaning::Undefined;
+		}
 		// `x.round`, `x.sqrt`: the number word applied to x, as `x.round()` and `sqrt x` are (x.word is word(x))
-		let number_word = || {
-			prefix_operator_method(receiver, name).or_else(|| {
-				crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name).then(|| word_call(word_node, receiver, vec![]))
-			})
-		};
-		let may_be_object = self.is_object(receiver, name) || self.may_hold_object(receiver);
-		if (literal.is_some() || may_be_object) && !is_known && !has_arguments {
-			// a parameter's `x.floor` (`xs.map(.floor)`, card dot-lambda): its field if it is an object, else the word
-			return Some(match number_word().filter(|_| literal.is_none()) {
-				Some(operation) => self.map_field_or(receiver, name, word_node, operation),
-				None => field_lookup(receiver, name, word_node),
-			});
+		if let Some(operation) = prefix_operator_method(receiver, name) {
+			return call(operation);
 		}
-		if let Some(operation) = number_word().filter(|_| !has_arguments) {
-			return Some(operation);
+		// `x.type`, `x.type()`: `type(x)`
+		if crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name) || name == crate::type_tests::TYPE_WORD {
+			return call(word_call(word_node, receiver, vec![]));
 		}
-		// `x.type`, `x.type()`: `type(x)`, once no field of that name can be meant
-		if name == crate::type_tests::TYPE_WORD && !has_arguments {
-			return Some(word_call(word_node, receiver, vec![]));
-		}
-		let is_value = matches!(
-			receiver.drop_meta(),
-			Node::Symbol(_) | Node::Text(_) | Node::Char(_) | Node::Number(_) | Node::List(_, Bracket::Square, _)
-		);
 		// `p.x`, `p.zy` of a list: its components when it holds 2 to 4 numbers, read as a field (decision S1)
-		if is_value && !is_known && !has_arguments && crate::words::swizzle_components(name).is_some() {
-			return Some(field_lookup(receiver, name, word_node));
+		match crate::words::swizzle_components(name) {
+			Some(_) => WordMeaning::FieldRead,
+			None => WordMeaning::Undefined,
 		}
-		let call = key(receiver.clone(), Op::Dot, method.clone());
-		(!is_known && is_value).then(|| self.context.undefined_function_diagnostic(&call, name).into_error())
-	}
-
-	/// `x.square` and `x.add(y)` call the user function with the receiver as first argument; `l.start` of an object
-	/// with a field start reads the field, even beside a function start (`start(l) := l.start`)
-	fn reads_declared_field(&self, receiver: &Node, name: &str) -> bool {
-		(self.instances.is_declared_field(name)
-			&& (self.is_parameter(receiver) || self.instances.shape(receiver).is_some()))
-			|| self.reads_own_parameter_field(receiver, name)
 	}
 
 	/// The type module (lib/list.warp, text.warp) of a loaded word of one parameter, which `x.word` calls
@@ -1046,17 +1071,20 @@ impl Lowering {
 			|| self.instances.is_declared_field(name)
 	}
 
-	/// `x.word` of an x that may be a map holding the key `word`: `if x is a map holding the key then x["word"] else
-	/// word(x)`, so a map's own words (`m.count`) still answer on maps without such a key. A one-entry map in a list
-	/// (`[{first: 2}]`) is held as a key, which has that key too
-	fn map_field_or(&self, receiver: &Node, name: &str, word_node: &Node, word_call: Node) -> Node {
+	/// `x.word` of an x that may have a member `word` of its own, known only at run time: `if x has it then x["word"]
+	/// else <word_call>`. A map has it as a key (a one-entry map in a list, `[{first: 2}]`, is held as a key, which has
+	/// that key too), an instance of a declared class with that field; a map's own words (`m.count`) still answer on
+	/// maps without such a key
+	fn member_or(&self, receiver: &Node, name: &str, word_node: &Node, word_call: Node) -> Node {
 		if !is_pure_read(receiver) {
 			return word_call;
 		}
 		let is_type = |type_word: &str| parens(vec![symbol(crate::words::IS_TYPE), receiver.clone(), text(type_word)]);
 		let is_map = key(is_type(crate::words::MAP_WORD), Op::Or, is_type(&crate::Kind::Key.to_string()));
 		let has_key = self.call(COLLECTION_CONTAINS, word_node, vec![receiver.clone(), text(name)], false);
-		if_then_else(key(parens(vec![is_map]), Op::And, has_key), field_lookup(receiver, name, word_node), word_call)
+		let has_member = (self.instances.classes_with_field(name).into_iter())
+			.fold(key(parens(vec![is_map]), Op::And, has_key), |test, class| key(is_type(&class), Op::Or, test));
+		if_then_else(has_member, field_lookup(receiver, name, word_node), word_call)
 	}
 
 	fn may_hold_object(&self, receiver: &Node) -> bool {

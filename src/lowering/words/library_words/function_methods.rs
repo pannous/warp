@@ -24,9 +24,12 @@ pub fn lower_function_methods(node: Node) -> Node {
 	// `xs.map(square)` of a user function map(list, fn): the receiver is its first argument, before function values
 	// are made (function_values.rs), which would otherwise see map(square)
 	let takes_receiver = |name: &str, arguments: usize| arities.get(name) == Some(&(arguments + 1));
+	// `p.first()` of a value that may have a member first of its own: method_call's one lookup decides
+	let members = member_names(&node);
 	let node = list_constructor_calls(node, &defined);
-	function_methods_as_calls(node, &defined, &|name, arguments, defined| {
-		(is_builtin(name, arguments) && !defined.contains(name)) || takes_receiver(name, arguments)
+	function_methods_as_calls(node, &defined, &members, &|name, arguments, defined| {
+		let may_be_member = arguments == 0 && members.contains(name);
+		!may_be_member && ((is_builtin(name, arguments) && !defined.contains(name)) || takes_receiver(name, arguments))
 	})
 }
 
@@ -75,21 +78,23 @@ fn list_constructor_calls(node: Node, defined: &HashSet<String>) -> Node {
 fn function_methods_as_calls(
 	node: Node,
 	defined: &HashSet<String>,
+	members: &HashSet<String>,
 	is_function: &dyn Fn(&str, usize, &HashSet<String>) -> bool,
 ) -> Node {
 	if let Some(scoped) =
-		in_function_scope(&node, defined, |body, locals| function_methods_as_calls(body, locals, is_function))
+		in_function_scope(&node, defined, |body, locals| function_methods_as_calls(body, locals, members, is_function))
 	{
 		return scoped;
 	}
-	let lowered = |node: Node| function_methods_as_calls(node, defined, is_function);
+	let lowered = |node: Node| function_methods_as_calls(node, defined, members, is_function);
 	match node {
 		Node::Key(receiver, Op::Dot, method) => {
 			let (receiver, method) = (lowered(*receiver), lowered(*method));
 			match method.drop_meta() {
 				Node::List(items, Bracket::Round, _)
 					if let [word] = items.as_slice()
-						&& let Some(name) = word.symbol_name().filter(|name| !defined.contains(*name))
+						&& let Some(name) =
+							word.symbol_name().filter(|name| !defined.contains(*name) && !members.contains(*name))
 						&& let Some(operation) = prefix_operator_method(&receiver, name) =>
 				{
 					operation
