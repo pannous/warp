@@ -159,6 +159,7 @@ mod test_ported_calls;
 mod test_precomputed;
 mod test_preposition_calls; // card prepositions-call
 mod test_print_closure; // card print-closure
+mod test_print_effects_walked; // card print-effects-walked
 mod test_print_function_value; // card print-function
 mod test_property_access;
 mod test_property_assign;

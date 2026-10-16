@@ -93,7 +93,7 @@ fn print_walk(node: &Node, selectors: &[&str]) -> Option<Node> {
 		_ => selection,
 	};
 	let [selector, _, value] = selection else { return None };
-	if !print.is_symbol(PRINT_WORD) || !is_selection(selection, 1, selectors) {
+	if !print.is_symbol(PRINT_WORD) || !is_selector_preposition(selection, 1, selectors) {
 		return None;
 	}
 	let selected = member_of(rewrite(value.clone(), selectors), selector.clone());
@@ -121,11 +121,14 @@ fn is_selection(items: &[Node], at: usize, selectors: &[&str]) -> bool {
 	let before = &items[at - 1];
 	match items[at].symbol_name() {
 		Some(OF_WORD) => !is_type_head(before),
-		Some(word) if SELECTING_PREPOSITIONS.contains(&word) => {
-			before.symbol_name().is_some_and(|name| selectors.contains(&name))
-		}
+		_ if is_selector_preposition(items, at, selectors) => true,
 		_ => false,
 	}
+}
+
+fn is_selector_preposition(items: &[Node], at: usize, selectors: &[&str]) -> bool {
+	items[at].symbol_name().is_some_and(|word| SELECTING_PREPOSITIONS.contains(&word))
+		&& items[at - 1].symbol_name().is_some_and(|name| selectors.contains(&name))
 }
 
 /// The items with each `a of b` as `b.a`, the last `of` first: `a of b of c` is `a of c.b`, then `c.b.a`; `in` and

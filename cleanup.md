@@ -136,3 +136,10 @@
 - Keep `_` as an argument-consuming wildcard without treating it as a named local.
 - Reuse the normal function-definition path so the rule also covers multiple ignored parameters and other bodies.
 - Run the focused definition-form test before and after, then formatting, clippy, and the wasm32 check.
+
+# Effects-result printing cleanup
+
+- Reproduce `print effects of f` with the existing `probes/fail_effects.warp` example before changing production code.
+- Keep `effects of f` as one text value when it flows through statement-walking lowering; do not special-case `IO` or printing.
+- Reuse the shared value/list classification so other computed text expressions in walked statement positions behave the same way.
+- Add one focused regression under the existing test hierarchy, then run its queued filter, formatting, clippy, and the wasm32 check.
