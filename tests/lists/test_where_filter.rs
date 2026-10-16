@@ -28,7 +28,7 @@ fn where_with_an_assignment_binds() {
 
 #[test]
 fn a_where_condition_of_a_bare_word_suggests_the_field() {
-	// samples/netbase.warp: `results where country is germany`, of a list whose fields are known only at run time
+	// samples/storage/netbase.warp: `results where country is germany`, of a list whose fields are known only at run time
 	crate::common::fails_with(
 		"rows() := [{country: germany}]; results = rows(); results where country is germany",
 		"or results where it.country==germany for a field country",

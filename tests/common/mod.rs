@@ -19,6 +19,37 @@ const SERVER_START_LIMIT: std::time::Duration = std::time::Duration::from_secs(6
 #[cfg(feature = "native")]
 const ECHO_SERVER: &str = "post \"/post\" { {data: request.body, headers: request.headers} }";
 
+/// The sample programs, one folder per chapter of the playground's guide (notes/samples.md)
+pub const SAMPLES: &str = "samples";
+/// Folders of samples/ that hold no menu samples: golf counts bytes, wit holds interfaces, tests links the C++ ones
+const NOT_CHAPTERS: [&str; 3] = ["golf", "wit", "tests"];
+
+/// samples/<chapter>/<name>.warp, every one, sorted
+pub fn sample_files() -> Vec<std::path::PathBuf> {
+	let entries =
+		|folder: &std::path::Path| std::fs::read_dir(folder).into_iter().flatten().flatten().map(|entry| entry.path());
+	let chapters = entries(std::path::Path::new(SAMPLES)).filter(|path| {
+		path.is_dir() && !path.file_name().is_some_and(|name| NOT_CHAPTERS.iter().any(|other| name == *other))
+	});
+	let mut files: Vec<_> = chapters
+		.flat_map(|chapter| entries(&chapter))
+		.filter(|path| path.extension().is_some_and(|extension| extension == "warp"))
+		.collect();
+	files.sort();
+	files
+}
+
+/// The name of a sample (the playground menu's): its file name without .warp
+pub fn sample_name(path: &std::path::Path) -> String {
+	path.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default()
+}
+
+/// The file of the sample of that name, in whichever chapter folder (samples/<chapter>/<name>.warp when there is none)
+pub fn sample_path(name: &str) -> String {
+	let found = sample_files().into_iter().find(|path| sample_name(path) == name);
+	found.map(|path| path.to_string_lossy().into_owned()).unwrap_or_else(|| format!("{SAMPLES}/<chapter>/{name}.warp"))
+}
+
 /// Every SAMPLE_SLICES-th item from `slice` on
 pub fn sample_slice<T>(items: &[T], slice: usize) -> impl Iterator<Item = &T> {
 	items.iter().skip(slice).step_by(SAMPLE_SLICES)

@@ -8,8 +8,8 @@ use crate::words::IN_WORD;
 /// A loop body of one comma line holds code, one statement: `x, y = y, x + y` swaps, as `{a, b=2}` would be data
 pub(super) fn statement_block(block: Node) -> Node {
 	match block {
-		Node::List(items, Bracket::Curly, Separator::Colon) => {
-			Node::List(vec![Node::List(items, Bracket::None, Separator::Colon)], Bracket::Curly, Separator::Semicolon)
+		Node::List(items, Bracket::Curly, Separator::Comma) => {
+			Node::List(vec![Node::List(items, Bracket::None, Separator::Comma)], Bracket::Curly, Separator::Semicolon)
 		}
 		block => block,
 	}

@@ -36,7 +36,7 @@ pub const C_STRING: &str = "c_string";
 const BYTE_AT: &str = "byte_at";
 const BYTE_SLICE: &str = "byte_slice";
 /// `memory_byte(address)`, `memory_set_byte(address, value)`: one byte of linear memory, what lib/memory.warp's
-/// `memory.slice` and `memory.copy` are made of (samples/wasm_interop.warp)
+/// `memory.slice` and `memory.copy` are made of (samples/wasm/wasm_interop.warp)
 const MEMORY_BYTE: &str = "memory_byte";
 const MEMORY_SET_BYTE: &str = "memory_set_byte";
 /// `trim(text)`: the text without the whitespace at either end, sharing its memory

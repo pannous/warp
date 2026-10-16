@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
 # Fields checked by their variables' declared types (card web-validate): an int is a number field the browser refuses
-# 2.5 in, a float takes any step, a bool is a checkbox. Run it in the playground, or `warp samples/typed_form.warp`.
+# 2.5 in, a float takes any step, a bool is a checkbox. Run it in the playground, or `warp samples/web/typed_form.warp`.
 guests: int = 2
 float budget = 12.5  # C style, the same as budget: float = 12.5
 vegetarian: bool = no

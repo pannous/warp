@@ -1,4 +1,4 @@
-// card guest-type (samples/typed_form.warp): a field bound to a declared variable sets it only to a value of its type;
+// card guest-type (samples/web/typed_form.warp): a field bound to a declared variable sets it only to a value of its type;
 // 5.1 typed into the guests field of `guests: int = 2` leaves guests 2 while the page marks the field invalid
 #![cfg(feature = "native")]
 
