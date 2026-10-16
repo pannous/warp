@@ -1,5 +1,6 @@
 #!/bin/zsh
-# Removes finished agent worktrees from warp.worktrees.noindex and the branches merged into origin/main, which nobody
+# Removes finished agent worktrees from the warp.worktrees.noindex folders (WORKTREE_ROOTS) and the branches merged
+# into origin/main, which nobody
 # else removes (54 worktrees, 56 local and 39 remote branches on 2026-10-14). Nothing unmerged is touched:
 #   1. a worktree on a branch whose HEAD origin/main holds (also as equal patches after a rebase or squash), idle for
 #      IDLE_HOURS, whose only uncommitted changes are the Cargo version tweak (TWEAK_FILES) and with no untracked
@@ -7,12 +8,15 @@
 #   2. local and remote branches origin/main holds the same way, with no worktree checked out and a tip older than
 #      IDLE_HOURS
 #   3. loose files in the worktrees folder (logs, patches, dumps) older than LEFTOVER_DAYS: moved to data/
-# Detached worktrees (integrate, main-binary …) are never touched. Worktrees skipped for untracked files are listed.
+# Detached worktrees (integrate, main-binary …) are never removed; BASE, the donor cowtree clones new worktrees from on
+# the Worktrees volume (notes/churn_volume.md), is moved to origin/main when clean. Skips for untracked files are listed.
 #   prune-worktrees.sh            prune, print what it did
 #   prune-worktrees.sh --dry-run  only print what it would do
 # Run daily by cron.
 WARP=/Users/me/dev/angles/warp
-WORKTREES=/Users/me/dev/angles/warp.worktrees.noindex
+# new worktrees go to the Worktrees volume (user 2026-10-16, card new-worktrees); the Data volume's until they retire
+WORKTREE_ROOTS=(/Volumes/Worktrees /Users/me/dev/angles/warp.worktrees.noindex)
+BASE=/Volumes/Worktrees/base
 LEFTOVERS=$WARP/data/worktree-leftovers
 TWEAK_FILES=(Cargo.toml Cargo.lock crates/warp-runtime/Cargo.toml)
 IDLE_HOURS=${IDLE_HOURS:-6}
@@ -35,6 +39,8 @@ recently_written() {  # any file in the worktree written within IDLE_HOURS
   [[ -n $(/usr/bin/find $1 -path $1/.git -prune -o -type f -mmin -$(( IDLE_HOURS * 60 )) -print -quit) ]]
 }
 
+in_worktree_roots() { for root in $WORKTREE_ROOTS; do [[ $1 == $root/* ]] && return 0; done; return 1 }
+
 old_tip() { (( $(date +%s) - $($git log -1 --format=%ct $1) > IDLE_HOURS * 3600 )) }
 
 $git fetch --prune --quiet origin
@@ -42,7 +48,7 @@ $git fetch --prune --quiet origin
 checked_out=()
 $git worktree list --porcelain | awk '/^worktree /{path=$2} /^branch /{sub("refs/heads/","",$2); print path, $2}' |
 while read -r worktree branch; do
-  [[ $worktree == $WORKTREES/* ]] || { checked_out+=($branch); continue; }
+  in_worktree_roots $worktree || { checked_out+=($branch); continue; }
   worktree_status=$(git -C $worktree status --porcelain 2>/dev/null)
   changed=$(print -r -- $worktree_status | grep -v '^??' | cut -c4- | grep -vxF -f <(print -l $TWEAK_FILES))
   if ! merged $(git -C $worktree rev-parse HEAD) || [[ -n $changed ]] || recently_written $worktree; then
@@ -64,5 +70,10 @@ for remote in $($git for-each-ref --format='%(refname:lstrip=3)' refs/remotes/or
   merged origin/$remote && old_tip origin/$remote && act $git push --quiet origin --delete $remote
 done
 
+# the donor follows main, so new clones share most files with it
+if [[ -d $BASE && -z $(git -C $BASE status --porcelain --untracked-files=no 2>/dev/null) ]]; then
+  [[ $(git -C $BASE rev-parse HEAD) == $($git rev-parse origin/main) ]] || act git -C $BASE checkout --quiet --detach origin/main
+fi
+
 mkdir -p $LEFTOVERS
-/usr/bin/find $WORKTREES -maxdepth 1 -type f -mtime +$LEFTOVER_DAYS | while read -r file; do act mv $file $LEFTOVERS/; done
+/usr/bin/find ${^WORKTREE_ROOTS}(N/) -maxdepth 1 -type f -mtime +$LEFTOVER_DAYS | while read -r file; do act mv $file $LEFTOVERS/; done
