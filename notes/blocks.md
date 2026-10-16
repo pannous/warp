@@ -33,6 +33,10 @@ Next: code/block prefixes, block parameters for if/while/for/def.
   Card repeats-loop: `body()` runs it like `body!`; an untyped parameter named `block` or `code` is a block parameter
   (`def repeats(n: int, block) := …`); calls expand in every form, `repeats 4 {…}` too, and a last block parameter
   takes the rest of the call (`twice(print "hi")`, which the parser reads as the items twice, print, "hi").
+- Card callable: `f: callable` takes a function or a block (aliases invocable, runnable, hinted); the call expands as
+  for a block parameter, and the argument decides per call: code (`{…}`, `code e`, the rest of the call) is
+  substituted like a block, a name stands for its function (`f(3)` → `square(3)`), anything else (a lambda) is bound
+  to `f·mN` like a value. `callable` is a built-in type covering function and code (`square is callable`).
 
 ## Function entries of objects (branch object-functions)
 - `o = {a: 1, f := it*2}`, `f := x => …`, `f = x => …`, `f: x => …`, `f(x, y) := …`: the entry becomes the top-level

@@ -1,5 +1,5 @@
 // The standard library module markup (card web-ssr, notes/web_framework.md "Built sites"): `use markup` (not `html`,
-// which samples/html.warp would shadow). to_html(value) is the HTML of a markup value,
+// which samples/web/html.warp would shadow). to_html(value) is the HTML of a markup value,
 // `div{ class:"box" h1{"Hi"} }` → <div class="box"><h1>Hi</h1></div>, any other value as escaped text. Written in warp, so a page renders itself: the same function makes a built site's index.html at build
 // time and its updates in the browser (page·html). A key named after an HTML element is an element; inside it a key
 // named after an attribute with a plain value is an attribute (`style: { fontSize: 12 }` inline CSS), anything else a
@@ -20,9 +20,9 @@ html_attributes = ["class", "id", "href", "src", "alt", "title", "style", "type"
 	"role", "tabindex", "hidden", "download", "label", "media"]
 // attributes that are present or absent: `checked: done`
 html_boolean_attributes = ["checked", "disabled", "selected", "readonly", "required", "hidden", "multiple", "autofocus"]
-// CSS properties whose number has no unit; any other number is pixels
 // a meta element's own attributes: `meta{ charset: "utf-8" }` stays the element, `meta: { author: "Ann" }` names metas
 html_meta_attributes = ["charset", "name", "content", "http-equiv", "property", "media"]
+// CSS properties whose number has no unit; any other number is pixels
 html_unitless_properties = ["opacity", "z-index", "font-weight", "line-height", "flex", "flex-grow", "flex-shrink", "order", "zoom", "tab-size"]
 
 to_html(value: any) := html_render(value, ø, ø)

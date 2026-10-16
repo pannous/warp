@@ -13,3 +13,18 @@ fn a_site_ships_the_modules_its_program_imports() {
 	let imports = warp::host::host_parts::imports_of(&program).unwrap();
 	assert!(imports.iter().any(|(module, name)| module == "page:modules/shout.wasm" && name == "shout"), "{imports:?}");
 }
+
+// card imports-wasm: `warp compile --page` writes a module for a page of its own (web/uniscript) the same way, so the
+// committed module names no path of the building machine
+#[test]
+fn a_page_module_ships_the_modules_it_imports_beside_it() {
+	let directory = scratch_directory("shout-page");
+	let program = warp::pipeline::compile("import tests/fixtures/wasm/shout\nshout(\"ab\")").expect("it compiles");
+	let module = directory.join("shout_page.wasm");
+	let written = warp::web::site_modules::write_page_module(&program.bytes, &module).expect("the module is written");
+	assert_eq!(written, vec!["modules/shout.wasm".to_string()]);
+	assert!(directory.join("modules/shout.wasm").exists());
+	let imports = warp::host::host_parts::imports_of(&std::fs::read(&module).unwrap()).unwrap();
+	assert!(imports.iter().any(|(module, name)| module == "page:modules/shout.wasm" && name == "shout"), "{imports:?}");
+	assert!(!imports.iter().any(|(module, _)| module.starts_with('/')), "{imports:?}");
+}

@@ -15,7 +15,7 @@
 //! Unit fields: `class Run{distance: km}` (unit_fields.rs), an instance's fields have signatures like an object's.
 
 use super::{exponent_of, finest_units, unit_named, units_text, Dimension, Factor, Quantity, Unit};
-use crate::lowering::function_head;
+use crate::lowering::{function_head, DefinitionForm};
 use crate::words::{MAP_WORD, PRINT_WORD, RETURN_WORD, STR_WORD};
 
 mod function_units;
@@ -641,8 +641,9 @@ impl Definition {
 }
 
 fn function_definition(node: &Node) -> Option<(String, Definition)> {
-	let definition =
-		function_head(node).filter(|definition| definition.is_glued_head() && definition.plain_operator().is_some())?;
+	let definition = function_head(node).filter(|definition| {
+		(definition.is_glued_head() || definition.form == DefinitionForm::KeywordBlock) && definition.is_untyped_call()
+	})?;
 	let (parameters, (declared, defaults)) = definition
 		.written_parameters
 		.iter()
@@ -758,6 +759,14 @@ fn is_number_literal(amount: &Node) -> bool {
 }
 
 /// The last statement of a program or block
+/// What a call of a function with this body gives: its last statement, of a `def f(x) { body }` block too
+fn returned_value(body: &Node) -> Option<&Node> {
+	match body.drop_meta() {
+		Node::List(items, Bracket::Curly, _) if items.len() == 1 => returned_value(&items[0]),
+		_ => last_statement(body),
+	}
+}
+
 fn last_statement(node: &Node) -> Option<&Node> {
 	match node.drop_meta() {
 		Node::List(items, _, Separator::Semicolon | Separator::Newline) => items.last().and_then(last_statement),

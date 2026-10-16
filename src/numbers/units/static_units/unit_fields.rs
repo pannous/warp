@@ -3,7 +3,8 @@
 //! instance's class: a constructor call, a variable declared `r: Run`, an element of a list (or table) declared `[Run]`,
 //! a loop over such a list. A unit field read of an instance it cannot see is a loud error, never a silent SI number.
 
-use super::{shown, Fields, Inference, Signature, Stop};
+use super::list_units::CALLS_FOLLOWED;
+use super::{returned_value, shown, Fields, Inference, Signature, Stop};
 use crate::lowering::database_tables::OPTIONAL_MARK;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
@@ -269,8 +270,13 @@ fn declared_class(declared: &Node) -> Option<(String, bool)> {
 
 impl Inference {
 	/// The class of an instance static units can see: a variable holding one, a constructor call, an element of a list or
-	/// table of the class
+	/// table of the class, a call of a function whose last value is one of these
 	pub(super) fn instance_class(&self, node: &Node) -> Option<String> {
+		self.instance_class_within(node, CALLS_FOLLOWED)
+	}
+
+	/// `f(96)` of `f(n) := D(n * 1 inch)` is a D: the calls followed into function bodies are at most `calls_left` deep
+	fn instance_class_within(&self, node: &Node, calls_left: usize) -> Option<String> {
 		if let Some(class) = self.named_construction_class(node) {
 			return Some(class);
 		}
@@ -278,6 +284,10 @@ impl Inference {
 			Node::Symbol(name) => self.instances.get(name).cloned(),
 			Node::List(items, Bracket::Round, _) => match items.first().map(Node::drop_meta) {
 				Some(Node::Symbol(class)) if self.classes.contains_key(class) => Some(class.clone()),
+				_ if calls_left > 0 && self.called_definition(items).is_some() => {
+					let body = &self.called_definition(items).expect("guarded").body;
+					returned_value(body).and_then(|last| self.instance_class_within(last, calls_left - 1))
+				}
 				_ => {
 					crate::database_tables::element_table(node).and_then(|table| self.class_lists.get(&table).cloned())
 				}
