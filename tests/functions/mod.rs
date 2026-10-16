@@ -185,6 +185,7 @@ mod test_shadowed_log;
 mod test_soft_keywords;
 mod test_sort_comparator_speed; // card comparator-sort
 mod test_sort_functions;
+mod test_sort_labels; // card sort-xs
 mod test_spaced_assign_definition;
 mod test_specialised_variants;
 mod test_statement_blocks; // card statement-block
