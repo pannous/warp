@@ -511,13 +511,21 @@ impl MethodVariants<'_> {
 		}
 	}
 
+	/// `p.label = v` calls the setter only for a variant typed for a class (`Point.label(v)`, `label(it: Point, v)`) on
+	/// an instance of it; an untyped variant never turns an assignment into a call
+	fn setter(&self, receiver: &Node, member: &Node) -> Option<Node> {
+		let name = member.drop_meta().symbol_name()?;
+		let class = self.receiver_classes.get(&(name.to_string(), 2))?;
+		(self.receiver_class(receiver).as_ref() == Some(class)).then(|| self.renamed(receiver, member, 2)).flatten()
+	}
+
 	fn rewrite(&self, node: Node) -> Node {
 		let recurse = |child: Node| self.rewrite(child);
 		match node {
 			Node::Key(target, Op::Assign, value) => match *target {
 				// `p.label = v`: the setter, or the member itself
 				Node::Key(receiver, Op::Dot, member) => {
-					let member = self.renamed(&receiver, &member, 2).unwrap_or(*member);
+					let member = self.setter(&receiver, &member).unwrap_or(*member);
 					key(key(recurse(*receiver), Op::Dot, member), Op::Assign, recurse(*value))
 				}
 				target => key(recurse(target), Op::Assign, recurse(*value)),

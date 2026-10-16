@@ -69,3 +69,12 @@ fn an_unrelated_map_key_leaves_a_class_setter_in_place() {
 	is!(&format!("{point}cfg = {{label: 3}}\np = Point(1, \"a\")\np.label = \"b\"\np.label"), "b!");
 	is!(&format!("{point}cfg = {{label: 3}}\ncfg.label = 4\ncfg.label"), 4);
 }
+
+// card point-label (reviewer veto 3): an untyped f never turns `m.f = v` into a call, wherever the map comes from
+#[test]
+fn an_untyped_overload_never_turns_a_field_assignment_into_a_call() {
+	let pick = "pick(a, b) := b\npick(a) := a\n";
+	is!(&format!("{pick}f(m) := {{ m.pick = 5; m }}\nf({{pick: 1, other: 2}}).other"), 2);
+	is!(&format!("{pick}f(m) := {{ m.pick = 5; m }}\nf({{pick: 1, other: 2}}).pick"), 5);
+	is!(&format!("{pick}ms = [{{pick: 1}}]\nfor m in ms {{ m.pick = 5 }}\nms#1.pick"), 5);
+}
