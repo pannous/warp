@@ -118,6 +118,7 @@ enum ArithmeticWrap {
 ///   (field $value (ref null $Node)) ;; Child/value node (for Key, Pair, List, etc.)
 /// ))
 /// ```
+#[derive(Default)]
 pub struct WasmGcEmitter {
 	module: Module,
 	functions: FunctionSection,
@@ -230,89 +231,14 @@ pub struct WasmGcEmitter {
 	loop_variables: HashSet<String>,
 }
 
-impl Default for WasmGcEmitter {
-	fn default() -> Self {
-		Self::new()
-	}
-}
-
 impl WasmGcEmitter {
+	/// An emitter at the start of main, which returns a Node and whose list_text writes no operator but `:`; the
+	/// derived Default fills in the rest
 	pub fn new() -> Self {
 		WasmGcEmitter {
-			module: Module::new(),
-			functions: FunctionSection::new(),
-			code: CodeSection::new(),
-			exports: ExportSection::new(),
-			names: NameSection::new(),
-			main_index: None,
-			result_print: 0,
-			owns_memory: false,
-			globals: GlobalSection::new(),
-			tags: TagSection::new(),
-			guards_errors: false,
-			declares_list_types: false,
-			data_context: false,
-			error_catching: None,
-			memo_caches: HashMap::new(),
-			extra_global_names: Vec::new(),
-			number_constants: HashMap::new(),
-			config: EmitterConfig::default(),
-			type_manager: TypeManager::new(),
-			import_manager: ImportManager::new(),
-			string_table: StringTable::new(),
-			next_func_idx: 0,
-			next_global_idx: 0,
-			next_temp_local: 0,
-			ctx: Context::new(),
-			scope: Default::default(),
-			int_scratch: 0,
-			loop_values: LoopValues::default(),
-			wrapping_ints: false,
-			ratio_division: false,
-			int_division: false,
-			int_heap_global: 0,
-			int_count_global: 0,
-			list_cursor_global: None,
-			text_cursor_global: None,
-			map_index_global: None,
 			returns_node: true,
-			returns_float: false,
-			returned_tuple: vec![],
-			tuple_packers: HashMap::new(),
-			text_heap_global: None,
-			text_room_globals: None,
-			discovered_needs: Default::default(),
-			inherited_needs: Default::default(),
 			written_operator_bound: crate::operators::op_to_code(&crate::operators::Op::Colon),
-			writes_tags: false,
-			parses_code: false,
-			type_errors: Vec::new(),
-			std_modules: Default::default(),
-			live_loops: Default::default(),
-			source_position: None,
-			statement_position: None,
-			loop_labels: Vec::new(),
-			typed_lists: HashMap::new(),
-			typed_globals: HashMap::new(),
-			typed_capture_globals: HashMap::new(),
-			main_typed_lists: None,
-			bounded_counters: std::collections::HashSet::new(),
-			typed_map_globals: HashMap::new(),
-			typed_maps: std::collections::HashSet::new(),
-			typed_structs: HashMap::new(),
-			instance_types: HashMap::new(),
-			struct_abi: HashMap::new(),
-			struct_results: HashMap::new(),
-			moved_lists: Vec::new(),
-			list_abi: HashMap::new(),
-			returns_list: false,
-			compare_witness: None,
-			text_witness: None,
-			shown: None,
-			late_calls: vec![],
-			closures: functions::closures::ClosureTypes::default(),
-			compiling: None,
-			loop_variables: HashSet::new(),
+			..Default::default()
 		}
 	}
 
