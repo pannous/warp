@@ -525,3 +525,21 @@ card's −700: reflection's fields/methods/dir code is feature code, not `of` ha
 `params of f`, `a of xs` (a field of every element), `name of p + "b"`.
 Trap found: the old signal_values reflected_lists rebuilt every list and unwrapped one-item unbracketed lists on the
 way; `func add<T>(_ a: T, …)` relied on it, so the new walk keeps that unwrap explicitly.
+
+## Final pass (final-analyzer)
+
+Done on branch final-analyzer (behaviour-preserving): unused Node helpers out, definitions/imports/return-kind helpers,
+one Pratt try_parse chain, BOOL_TYPES / NONE_WORDS read from the type registry, stray doc lines back on their
+functions (probes/cleanup/stacked_docs.py finds them), `\:name` entity escape and `Index<&str>` flattened.
+
+Found, not done:
+- warp_parser/mod.rs holds ~200 keyword constants for every submodule: each belongs in its one user file
+  (left: conflicts with every open parser branch).
+- `matches!(x.drop_meta(), Node::List(_, Bracket::Curly, _))` is hand-written ~67× repo-wide while
+  lowering::nodes::is_block exists; `Node::is_block` in node/ is its home.
+- USE_WORD "use" is re-declared in 5 lowering files beside modules::USE_KEYWORD.
+- warp_parser::mentions (enters template holes) and Node::mentions differ only by the holes: name them precisely.
+- lookahead.rs group_holds_comma and comparison_follows_and repeat a quote/depth scan; a shared scanner needs the
+  two-glyph operator skip, so it was left.
+- analyzer/imports.rs extract_declared_ffi_imports: the `import: from lib` Key arm imports a function named
+  "import" (looks like a bug, kept); the nested `(use X from Y) …` arm also adds X as a library (kept).
