@@ -130,11 +130,11 @@ def text_starts(source, at, n) {
 	c == '«' or c == '"' or c == '`' or c == '\'' and not possessive(source, at, n)
 }
 
-// `shader {` or `wgsl {` at `at`: the index of its brace, else `at`
-// Rust twin: warp_parser/literals.rs parse_shader_block
+// `shader {`, `wgsl {` or a dialect's `twigl {` at `at`: the index of its brace, else `at`
+// Rust twin: warp_parser/literals.rs parse_shader_block (SHADER_WORDS, SHADER_DIALECT_WORDS)
 def shader_brace(source, at, n) {
 	if at > 0 and is_name_char(source[at - 1]) { return at }
-	for word in ["shader", "wgsl"] {
+	for word in ["shader", "wgsl", "twigl"] {
 		if starts_at(source, word, at) {
 			brace = at + word.length
 			if brace < n and is_name_char(source[brace]) { return at }

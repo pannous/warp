@@ -1,0 +1,5 @@
+use graphics
+glow = twigl {
+	o = vec4(FC.x / r.x, 0.5, 0., 1.);
+}
+paint(glow, 4, 4)

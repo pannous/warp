@@ -36,13 +36,16 @@ pub fn shader_blocks(code: &str) -> Vec<((usize, usize), Vec<DedentedLine>)> {
 
 impl WarpParser {
 	/// `shader { … }` (or `wgsl { … }`) at the cursor: WGSL as a sublanguage, the braces' content verbatim as text
-	/// without its common indentation (card g_oFJc); braces inside WGSL comments do not count
+	/// without its common indentation (card g_oFJc); braces inside WGSL comments do not count. A dialect's block
+	/// (`twigl { … }`) is the call of its word with that text
 	pub(crate) fn parse_shader_block(&mut self) -> Option<Node> {
 		if self.options.data_mode {
 			return None;
 		}
-		let word =
-			SHADER_WORDS.iter().find(|word| word.chars().enumerate().all(|(index, ch)| self.peek_char(index) == ch))?;
+		let word = SHADER_WORDS
+			.iter()
+			.chain(&SHADER_DIALECT_WORDS)
+			.find(|word| word.chars().enumerate().all(|(index, ch)| self.peek_char(index) == ch))?;
 		let mut open = word.len();
 		if self.is_identifier_start(open) || self.peek_char(open).is_ascii_digit() {
 			return None;
@@ -64,6 +67,10 @@ impl WarpParser {
 		};
 		let source: String = self.chars[start..end].iter().collect();
 		self.advance_by(end + 1 - self.pos);
-		Some(crate::graphics::shader_holes::shader_text(&without_common_indentation(&source)))
+		let text = crate::graphics::shader_holes::shader_text(&without_common_indentation(&source));
+		Some(match SHADER_DIALECT_WORDS.contains(word) {
+			true => crate::node::call(word, vec![text]),
+			false => text,
+		})
 	}
 }
