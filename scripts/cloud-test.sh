@@ -12,9 +12,12 @@
 #   scripts/cloud-test.sh --summarize <cargo test log> [environmental list]    the result's summary of any log
 # The cloud session runs this same script from origin/main (the tip may predate it) with --run-here, which checks out
 # the tip, builds, tests with --no-fail-fast and pushes result.md + log.txt.gz to the branch cloud-results/<run>.
+# Sessions are pooled (data/cloud/pool/): a finished session gets the next job as a follow-up message, so its VM keeps
+# the checkout and cargo's build output and the next build is incremental instead of cold.
 # Failures of tests that need the Mac (scripts/cloud-test-environmental.txt) are listed apart and don't make it red.
 # CLOUD_TEST_FAST=1: fast mode (Opus with faster output, burns the credit ~2x faster; off by default).
-# CLOUD_TEST_MODEL=<model>: the session's model (default: the cloud environment's).
+# CLOUD_TEST_MODEL=<model>: the session's model (default: the cloud environment's). Both apply to sessions the pool
+# starts, not to the ones it reuses.
 set -uo pipefail
 
 REPO=pannous/warp
@@ -23,12 +26,15 @@ RESULTS_PREFIX=cloud-results
 ENVIRONMENTAL_LIST=scripts/cloud-test-environmental.txt
 CARGO_FLAGS_WITH_VALUE='--test|--features|-F|-p|--package|--bin|--example|--bench|-j|--jobs|--target'   # `--test tests`: the next word is the flag's, not a filter
 MAX_PARALLEL_RUNS=3           # cloud sessions at once (they share the account's limits, notes/cloud_development.md)
-PENDING_HOURS=3                # a launch older than this without a result no longer counts as running
+PENDING_HOURS=3                # a job older than this without a result: its session is dropped from the pool
+POOL=/Users/me/dev/angles/warp/data/cloud/pool   # one file per cloud session: its current job, or idle
+JOBS_PER_SESSION=30            # then a fresh session: each job adds a little to the session's context
 POLL_SECONDS=60                # GitHub API quota is shared by every session: ls-remote once a minute
 WAIT_HOURS=4
 URL_WAIT_SECONDS=90
+TEST_TIME_LIMIT_SECONDS=2400  # the test run is killed after this (a hanging test), its unfinished tests named; the full suite takes ~900 s
 HERE_WAIT_SECONDS=570          # one --run-here call blocks at most this long, under the cloud Bash tool's 10 min
-HERE_WORK=${TMPDIR:-/tmp}/cloud-test
+HERE_ROOT=${TMPDIR:-/tmp}/cloud-test # in the VM: tree/ (the checkout, kept for the next job), jobs/<job>/
 FULL_FLAGS=(--all-features --config "profile.test.package.warp-lang.opt-level=2")
 USAGE_SCRIPT=$HOME/dev/bin/claude-usage.sh
 RUST_TARGETS="wasm32-wasip1 wasm32-wasip2 wasm32-unknown-unknown" # package and crate-wrapper builds in the tests
@@ -51,7 +57,6 @@ abort() {
 # The run itself, detached from the session's Bash tool: checkout, build, test, summarize, push
 run_tests_here() {
 	CLOUD_REPO=$PWD
-	mkdir -p "$HERE_WORK"
 	local base=""
 	[ "$1" = "--on" ] && base=$2 && shift 2
 	local branch=$1 tip=$2; shift 2
@@ -63,8 +68,16 @@ run_tests_here() {
 		git fetch -q origin "+refs/heads/$branch_ref:refs/remotes/origin/$branch_ref" 2>&1 | tail -3
 	done
 	git cat-file -e "$tip^{commit}" 2>/dev/null || git fetch -q origin "$tip" || abort "tip $tip not found on origin"
-	checkout=$HERE_WORK/tree
-	rm -rf "$checkout" && git worktree prune && git worktree add -q --detach "$checkout" "$tip" || abort "checkout of $tip failed"
+	checkout=$HERE_ROOT/tree
+	local warm=no
+	if [ -e "$checkout/.git" ]; then
+		warm=yes
+		git -C "$checkout" merge --abort 2>/dev/null
+		{ git -C "$checkout" reset -q --hard && git -C "$checkout" checkout -q -f --detach "$tip" && git -C "$checkout" clean -fdq; } ||
+			abort "checkout of $tip failed"
+	else
+		git worktree prune && git worktree add -q --detach "$checkout" "$tip" || abort "checkout of $tip failed"
+	fi
 	git show "origin/main:$ENVIRONMENTAL_LIST" > "$HERE_WORK/environmental.txt" 2>/dev/null
 	cd "$checkout" || abort "no checkout"
 	local tested=$tip
@@ -99,7 +112,9 @@ run_tests_here() {
 	local build_status=$?
 	build_seconds=$((SECONDS - build_start))
 	local test_start=$SECONDS
-	[ $build_status -eq 0 ] && cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast -- "${filters[@]}" >> "$HERE_WORK/log.txt" 2>&1
+	[ $build_status -eq 0 ] && timeout --kill-after=30 $TEST_TIME_LIMIT_SECONDS \
+		cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast -- "${filters[@]}" >> "$HERE_WORK/log.txt" 2>&1
+	[ $? -eq 124 ] && echo "cloud-test: KILLED after the time limit of $TEST_TIME_LIMIT_SECONDS s" >> "$HERE_WORK/log.txt"
 	test_seconds=$((SECONDS - test_start))
 	summarize "$HERE_WORK/log.txt" "$HERE_WORK/environmental.txt" > "$HERE_WORK/summary.txt"
 	{
@@ -112,6 +127,7 @@ run_tests_here() {
 		grep -v '^verdict: ' "$HERE_WORK/summary.txt"
 		echo "wall: build ${build_seconds} s, tests ${test_seconds} s, total $((SECONDS - started)) s"
 		echo "machine: $(nproc 2>/dev/null) cores, $(free -g 2>/dev/null | awk '/^Mem:/ { print $2 " GB" }'), $(rustc --version)"
+		echo "warm VM: $warm (the checkout and build output of an earlier job)"
 		echo "crates: $([ -n "$lock_matches" ] && echo "vendor branch (offline)" || echo "crates.io (vendor branch's Cargo.lock differs)")"
 		echo "finished: $(date -u +%FT%TZ)"
 	} > "$HERE_WORK/result.md"
@@ -127,6 +143,8 @@ summarize() {
 		/^test result:/ { for (i = 1; i <= NF; i++) { if ($(i) ~ /^(passed|failed|ignored)/) { key = $(i); sub(/[;,]/, "", key); total[key] += $(i - 1) } } finished++ }
 		/^ +(Running|Doc-tests) / { started++ }
 		/^test [^ ]+ \.\.\. .*FAILED/ { failed[$2] = 1; order[++failures] = $2 }
+		/^test [^ ]+ has been running for over/ { slow[$2] = 1 }
+		/^test [^ ]+ \.\.\. / { finished_test[$2] = 1 }
 		/^---- [^ ]+ stdout ----$/ { current = $2; want_panic = 1; next }
 		want_panic && / panicked at / { getline message; panic[current] = message; want_panic = 0 }
 		END {
@@ -140,7 +158,8 @@ summarize() {
 			real += incomplete
 			printf "verdict: %s\n", (real == 0 && started > 0) ? "green" : "red"
 			printf "passed: %d, failed: %d (%d environmental), ignored: %d\n", total["passed"], failures + incomplete, failures - (real - incomplete), total["ignored"]
-			if (incomplete) printf "crashed test binaries (no result line): %d\n", incomplete
+			if (incomplete) printf "crashed or killed test binaries (no result line): %d\n", incomplete
+			for (name in slow) if (!(name in finished_test)) printf "  never finished: %s\n", name
 			if (real_lines != "") printf "failures:\n%s", real_lines
 			if (environmental_lines != "") printf "environmental (Mac-only, %s):\n%s", "scripts/cloud-test-environmental.txt", environmental_lines
 		}' "$log"
@@ -164,10 +183,11 @@ push_result() {
 # What the cloud session calls, again and again until DONE: starts the run once, then waits for it a while. It prints
 # one line only, every token the session reads is paid from the credit: the result itself reaches the Mac through git
 run_here() {
+	HERE_WORK=$HERE_ROOT/jobs/$1; shift
 	mkdir -p "$HERE_WORK"
 	if [ ! -e "$HERE_WORK/started" ]; then
 		touch "$HERE_WORK/started"
-		nohup bash "$0" --run-detached "$@" > "$HERE_WORK/runner.log" 2>&1 &
+		nohup bash "$0" --run-detached "${HERE_WORK##*/}" "$@" > "$HERE_WORK/runner.log" 2>&1 &
 	fi
 	local waited=0
 	while [ ! -e "$HERE_WORK/done" ] && [ $waited -lt $HERE_WAIT_SECONDS ]; do sleep 15; waited=$((waited + 15)); done
@@ -185,7 +205,7 @@ run_here() {
 cloud_prompt() {
 	local script_args=$1
 	cat <<-EOF
-	You run one warp test job. Run this Bash command in the foreground with timeout 600000:
+	Next warp test job. Run this Bash command in the foreground with timeout 600000:
 	git fetch -q origin main && git show origin/main:scripts/cloud-test.sh > /tmp/cloud-test.sh && bash /tmp/cloud-test.sh --run-here $script_args
 	While it prints CLOUD TEST RUNNING, run the same command again. When it prints CLOUD TEST DONE, reply with only that line.
 	Nothing else: no other commands, no edits, no investigation.
@@ -194,53 +214,110 @@ cloud_prompt() {
 
 session_url() { grep -o 'https://claude.ai/code/session_[A-Za-z0-9_]*' "$1" | head -1; }
 
-pending_runs() {
-	local launch count=0
-	for launch in "$MAIN_CHECKOUT"/data/cloud/*/launch.txt; do
-		[ -e "$launch" ] || continue
-		[ -e "$(dirname "$launch")/result.md" ] && continue
-		[ -n "$(find "$launch" -mmin -$((PENDING_HOURS * 60)))" ] && count=$((count + 1))
+lock_pool() {
+	mkdir -p "$POOL"
+	until mkdir "$POOL.lock" 2>/dev/null; do
+		[ -n "$(find "$POOL.lock" -maxdepth 0 -mmin +2 2>/dev/null)" ] && rmdir "$POOL.lock" 2>/dev/null
+		sleep 1
 	done
-	echo $count
+}
+unlock_pool() { rmdir "$POOL.lock" 2>/dev/null; }
+pool_field() { sed -n "s/^$2: //p" "$1"; }
+mark_session() { printf 'job: %s\nsince: %s\njobs: %s\n' "$2" "$(date +%s)" "$3" > "$1"; }
+
+# A pooled session is free once its job's result is in (collected, or still on its results branch); a job that
+# never answered drops its session, which may be gone
+session_is_free() {
+	local file=$1 job since run
+	job=$(pool_field "$file" job); since=$(pool_field "$file" since)
+	[ "$job" = idle ] && return 0
+	run=${job%-*}
+	git -C "$MAIN_CHECKOUT" ls-remote --exit-code origin "refs/heads/$RESULTS_PREFIX/$run" > /dev/null && return 0
+	if [ $(($(date +%s) - since)) -gt $((PENDING_HOURS * 3600)) ]; then rm -f "$file"; fi
+	return 1
 }
 
-launch() {
-	local branch=$1 tip=$2; shift 2
-	local name folder tmux_name command
-	[[ "$tip" =~ ^[0-9a-f]{40}$ ]] || fail "the tip must be a full 40-hex commit id (git rev-parse output), not '$tip'"
-	git -C "$MAIN_CHECKOUT" fetch -q origin "$branch" || fail "branch $branch is not on origin"
-	git -C "$MAIN_CHECKOUT" merge-base --is-ancestor "$tip" "origin/$branch" || fail "tip $tip is not on origin/$branch: push first"
-	name=$(run_name "$branch" "$tip")
-	folder=$MAIN_CHECKOUT/data/cloud/$name
-	while [ "$(pending_runs)" -ge $MAX_PARALLEL_RUNS ]; do
-		echo "cloud-test: $MAX_PARALLEL_RUNS cloud runs pending, waiting for one to finish" >&2; sleep $POLL_SECONDS
+# Under the pool lock: a free session for the job (its id, marked busy), "new" when one may be started, else nothing
+claim_session() {
+	local job=$1 file jobs count=0
+	for file in "$POOL"/session_*; do
+		[ -e "$file" ] || continue
+		jobs=$(pool_field "$file" jobs)
+		if session_is_free "$file"; then
+			[ "$jobs" -ge $JOBS_PER_SESSION ] && { rm -f "$file"; continue; }
+			mark_session "$file" "$job" $((jobs + 1)); echo "${file##*/}"; return
+		fi
+		[ -e "$file" ] && count=$((count + 1))
 	done
-	mkdir -p "$folder"
-	cloud_prompt "$(printf '%q ' ${base[@]+"${base[@]}"} "$branch" "$tip" "$@")" > "$folder/prompt.txt"
+	count=$((count + $(ls "$POOL" | grep -c '^starting-')))
+	[ $count -lt $MAX_PARALLEL_RUNS ] && { mark_session "$POOL/starting-$job" "$job" 1; echo new; }
+}
+
+start_session() {
+	local job=$1 folder=$2 tmux_name command waited=0 url=""
 	command=(claude)
 	[ -n "${CLOUD_TEST_MODEL:-}" ] && command+=(--model "$CLOUD_TEST_MODEL")
 	[ "${CLOUD_TEST_FAST:-0}" = 1 ] && command+=(--settings '{"fastMode": true}')
 	command+=(--cloud "$(cat "$folder/prompt.txt")")
-	tmux_name=cloud-test-$(printf %s "$name" | tr -c 'A-Za-z0-9-' '-' | cut -c1-40)
-	tmux new-session -d -s "$tmux_name" -c "$MAIN_CHECKOUT" -x 250 \
-		"unset CLAUDECODE; $(printf '%q ' "${command[@]}"); sleep 600"
-	local waited=0 url=""
+	tmux_name=cloud-test-$(printf %s "$job" | tr -c 'A-Za-z0-9-' '-' | cut -c1-40)
+	tmux new-session -d -s "$tmux_name" -c "$MAIN_CHECKOUT" -x 250 "unset CLAUDECODE; $(printf '%q ' "${command[@]}"); sleep 600"
 	while [ -z "$url" ] && [ $waited -lt $URL_WAIT_SECONDS ]; do
 		sleep 3; waited=$((waited + 3))
 		tmux capture-pane -p -J -t "$tmux_name" > "$folder/pane.txt" 2>/dev/null
 		url=$(session_url "$folder/pane.txt")
 	done
+	[ -n "$url" ] || { rm -f "$POOL/starting-$job"; fail "no session URL after ${URL_WAIT_SECONDS} s; tmux attach -t $tmux_name"; }
+	mv "$POOL/starting-$job" "$POOL/${url##*/}"
+	echo "$url"
+}
+
+launch() {
+	local branch=$1 tip=$2; shift 2
+	local name folder job session url=""
+	[[ "$tip" =~ ^[0-9a-f]{40}$ ]] || fail "the tip must be a full 40-hex commit id (git rev-parse output), not '$tip'"
+	git -C "$MAIN_CHECKOUT" fetch -q origin "$branch" || fail "branch $branch is not on origin"
+	git -C "$MAIN_CHECKOUT" merge-base --is-ancestor "$tip" "origin/$branch" || fail "tip $tip is not on origin/$branch: push first"
+	name=$(run_name "$branch" "$tip")
+	job=$name-$(date +%s)
+	folder=$MAIN_CHECKOUT/data/cloud/$name
+	mkdir -p "$folder"
+	rm -f "$folder/result.md"
+	cloud_prompt "$(printf '%q ' "$job" ${base[@]+"${base[@]}"} "$branch" "$tip" "$@")" > "$folder/prompt.txt"
+	while [ -z "$url" ]; do
+		lock_pool; session=$(claim_session "$job"); unlock_pool
+		case "$session" in
+			new) url=$(start_session "$job" "$folder") || exit ;;
+			session_*)
+				if claude -p "$(cat "$folder/prompt.txt")" --cloud "$session" > "$folder/send.txt" 2>&1; then
+					url=https://claude.ai/code/$session
+				else
+					echo "cloud-test: session $session refused the job ($(tail -1 "$folder/send.txt")), dropping it" >&2
+					rm -f "$POOL/$session"
+				fi ;;
+			*) echo "cloud-test: $MAX_PARALLEL_RUNS cloud sessions busy, waiting for one" >&2; sleep $POLL_SECONDS ;;
+		esac
+	done
 	{
 		echo "branch: $branch"
 		echo "tip: $tip"
 		echo "tests: ${*:-all}"
-		echo "session: ${url:-unknown (tmux $tmux_name)}"
+		echo "job: $job"
+		echo "session: $url"
 		echo "fast: ${CLOUD_TEST_FAST:-0}, model: ${CLOUD_TEST_MODEL:-environment default}"
 		echo "launched: $(date -u +%FT%TZ)"
 		echo "credit used before: \$$(credit_used)"
 	} > "$folder/launch.txt"
-	[ -n "$url" ] || fail "no session URL after ${URL_WAIT_SECONDS} s; tmux attach -t $tmux_name"
 	echo "cloud-test: $name running in $url"
+}
+
+# The job's session takes the next job
+release_session() {
+	local job=$1 file
+	lock_pool
+	for file in "$POOL"/session_*; do
+		[ "$(pool_field "$file" job 2>/dev/null)" = "$job" ] && mark_session "$file" idle "$(pool_field "$file" jobs)"
+	done
+	unlock_pool
 }
 
 collect() {
@@ -262,6 +339,7 @@ collect() {
 	grep -h '^session:\|^credit used before' "$folder/launch.txt" >> "$folder/result.md" 2>/dev/null
 	git -C "$MAIN_CHECKOUT" push -q origin --delete "$RESULTS_PREFIX/$name" 2>/dev/null
 	git -C "$MAIN_CHECKOUT" update-ref -d "refs/remotes/origin/$RESULTS_PREFIX/$name"
+	release_session "$(pool_field "$folder/launch.txt" job)"
 	cat "$folder/result.md"
 	echo "(log: $folder/log.txt.gz)"
 	[ -n "$card" ] && todo note "$card" "cloud test $(sed -n 's/^verdict: //p' "$folder/result.md"): $(sed -n 's/^tests: //p' "$folder/result.md") at ${tip:0:8}, $(sed -n 's/^passed: //p' "$folder/result.md"); $(sed -n 's/^wall: //p' "$folder/result.md")$(sed -n '/^failures:/,/^[a-z]/{/^  /p;}' "$folder/result.md" | head -10 | tr '\n' ';')" > /dev/null
@@ -274,7 +352,7 @@ collect() {
 main() {
 	case "${1:-}" in
 		--run-here) shift; run_here "$@"; exit ;;
-		--run-detached) shift; trap 'touch "$HERE_WORK/done"' EXIT; run_tests_here "$@"; exit ;;
+		--run-detached) HERE_WORK=$HERE_ROOT/jobs/$2; shift 2; mkdir -p "$HERE_WORK"; trap 'touch "$HERE_WORK/done"' EXIT; run_tests_here "$@"; exit ;;
 		--summarize) summarize "$2" "${3:-$ENVIRONMENTAL_LIST}"; exit ;;
 	esac
 	card="" wait=1 result_only="" base=()

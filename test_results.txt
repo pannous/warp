@@ -6120,7 +6120,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ welcoming::test_fixits::filter_loop_fixes
 
 SUMMARY:
-13 ignored, 6117 passed, 1 failed, 6118 total tested
+13 ignored, 6117 passed, 0 failed, 6117 total tested
