@@ -178,7 +178,7 @@ impl WasmGcEmitter {
 		}
 		if name == crate::words::SLICE {
 			for bound in items.iter().skip(2) {
-				self.emit_integral_index_check(func, bound); // `a[0:n/2]` like `a[n/2]`: an integer, with the `n//2` hint
+				self.emit_integral_index_check(func, bound); // `a[0:n/2]` like `a[n/2]`: an integer, with the `n /! 2` hint
 			}
 		}
 		for argument in &items[1..] {

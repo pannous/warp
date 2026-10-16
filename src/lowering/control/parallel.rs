@@ -29,7 +29,7 @@ const SEQUENTIAL_PLACEHOLDER: &str = "go_let_sequential";
 
 /// The slices of `go_map_list` as tasks in `parallel_jobs`; `{work}` is the go block's body for `parallel_part`
 fn chunked(work: &str) -> String {
-	format!("parallel_list = {LIST_PLACEHOLDER}; parallel_size = #parallel_list; parallel_chunk = (parallel_size + {PARALLEL_CHUNKS} - 1)//{PARALLEL_CHUNKS}; \
+	format!("parallel_list = {LIST_PLACEHOLDER}; parallel_size = #parallel_list; parallel_chunk = (parallel_size + {PARALLEL_CHUNKS} - 1) /! {PARALLEL_CHUNKS}; \
 		parallel_jobs = []; parallel_start = 0; \
 		while parallel_start < parallel_size {{ parallel_part = parallel_list[parallel_start:parallel_start + parallel_chunk]; parallel_jobs.add({GO_WORD} {{ {work} }}); parallel_start += parallel_chunk }}; \
 		parallel_parts = await all parallel_jobs")

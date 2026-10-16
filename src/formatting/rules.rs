@@ -66,7 +66,7 @@ pub(super) const RULES: [Rule; 8] = [
 	rule("indentation", indentation),
 ];
 
-/// `// text` → `# text` (user, 2026-10-15: `//` also means floor division); `/// doc` → `## doc`; `//!` stays
+/// `// text` → `# text` (user, 2026-10-15: `//` reads like Python's floor division); `/// doc` → `## doc`; `//!` stays
 fn hash_comments(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
 	let mut edits = Vec::new();
 	for (index, line) in lines.iter().enumerate() {
