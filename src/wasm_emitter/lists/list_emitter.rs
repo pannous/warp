@@ -405,7 +405,7 @@ impl WasmGcEmitter {
 
 		// Check for introspection and math functions; `[count, a]` lists two items; a global `count` does not hide the word
 		// (lib/markup.warp's count(items) under a program's `count = 0`), a local one is an error (reject_variable_applied)
-		if items.len() == 2 && !(*bracket == Bracket::Square && *separator == Separator::Colon) {
+		if items.len() == 2 && !(*bracket == Bracket::Square && *separator == Separator::Comma) {
 			if let Node::Symbol(fn_name) = items[0].drop_meta() {
 				if self.reject_variable_applied(func, items, bracket, separator)
 					|| (self.scope.lookup(fn_name).is_none() && self.emit_introspection_fn(func, fn_name, &items[1]))
@@ -558,13 +558,17 @@ impl WasmGcEmitter {
 		} else {
 			// Check for pure numeric expressions; a square list and a comma tuple `(h + 1, 2)` keep all their items,
 			// whatever they compute
-			let is_tuple = *separator == Separator::Colon && items.len() > 1;
+			let is_tuple = *separator == Separator::Comma && items.len() > 1;
 			// a block with a field (`p{ class: "x" "c" + n }`) is a structure whose items stay items
 			let has_field =
 				items.len() > 1 && items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, Op::Colon, _)));
+			// spaced values (`y 1+1` of a variable y) keep every value, as `1+1 2+2` and `y 2` do (card print-prints)
+			let spaced = *separator == Separator::Space && items.len() > 1;
 			let has_arithmetic = *bracket != Bracket::Square
 				&& !is_tuple && !has_field
-				&& items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, op, _) if op.is_arithmetic()));
+				&& !spaced && items
+				.iter()
+				.any(|item| matches!(item.drop_meta(), Node::Key(_, op, _) if op.is_arithmetic()));
 			if has_arithmetic {
 				let node = Node::List(items.to_vec(), bracket.clone(), Separator::None);
 				if self.get_type(&node).is_float() {
@@ -1280,7 +1284,7 @@ impl WasmGcEmitter {
 				return;
 			}
 			// `S1 = -0.16, S2 = 0.0083`: assignments separated by commas are statements too, each of its own kind
-			Node::List(items, bracket, Separator::Colon)
+			Node::List(items, bracket, Separator::Comma)
 				if *bracket != Bracket::Square
 					&& items.iter().all(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _))) =>
 			{

@@ -14,7 +14,7 @@ mod test_global_declaration;
 mod test_global_float_widening;
 mod test_global_modifiers;
 mod test_global_node_widening;
-mod test_global_typed_list; // found writing samples/server.warp
+mod test_global_typed_list; // found writing samples/servers/server.warp
 mod test_globals;
 mod test_node_widening_in_loops;
 mod test_parameter_shadowing; // card two-signal-kinds

@@ -1,5 +1,0 @@
-f(a) := a
-xs = [1, 2]
-ys = f(xs)
-ys#1 = 7
-xs  # [7 2]: ys is xs, a function giving back its argument returns the same list

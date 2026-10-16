@@ -1,4 +1,4 @@
-//! Unit columns as a user edits samples/orm_units.warp (card units-stress): parentheses around a unit field, a column's
+//! Unit columns as a user edits samples/storage/orm_units.warp (card units-stress): parentheses around a unit field, a column's
 //! sum and maximum, and a filter on it keep the unit
 use warp::wasm_emitter::eval;
 

@@ -118,7 +118,7 @@ fn test_comments2() {
 	assert!(result[1].length() == 0); // `(y=0)` is a Key, not a list
 }
 
-#[test] // samples/comments.warp: "Nested block comments are supported"
+#[test] // samples/hello/comments.warp: "Nested block comments are supported"
 fn test_nested_block_comments() {
 	is!("/* a /* b */ c */ 3", 3);
 	is!("/# a /# b #/ #/ 4", 4);

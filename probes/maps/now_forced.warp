@@ -1,3 +1,0 @@
-// card map-now-bang: `now!` in a map is the time the run reads, not a value kept from compile time; prints yes
-x = {created: now!, n: 1}
-x.created.year >= 2026
