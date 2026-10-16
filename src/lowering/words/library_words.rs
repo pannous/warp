@@ -934,13 +934,14 @@ impl Lowering {
 		if !is_called && self.instances.is_instance_field(receiver, name) {
 			return Some(field_lookup(receiver, name, word_node));
 		}
-		// `info.size` of a map read at run time with an entry size reads the entry, else counts (card map-read)
-		let is_counted_property = !is_called && crate::analyzer::is_counting_property(name);
 		// `number of bytes in t` reads `bytes.number`: the unit, no variable
 		let is_unit =
 			receiver.symbol_name().filter(|unit| !self.shadows(unit)).and_then(crate::analyzer::text_unit).is_some();
-		if is_counted_property && !has_arguments && !is_unit && self.may_hold_object(receiver) {
-			let count = word_call(word_node, receiver, vec![]);
+		let may_read_entry = !is_called && !has_arguments && !is_unit;
+		// `info.size` of a map read at run time with an entry size reads the entry, else counts (card map-read)
+		if may_read_entry && crate::analyzer::is_counting_property(name) && self.may_hold_object(receiver) {
+			// `x.number` stays for the emitter's counter (counting_getter): `number(x)` would cast x
+			let count = key(receiver.clone(), Op::Dot, method.clone());
 			return Some(map_field_or(receiver, name, word_node, count));
 		}
 		if let Some(word) = self
@@ -948,13 +949,9 @@ impl Lowering {
 			.filter(|_| is_called || counting_method(name, &self.context).is_none())
 		{
 			let word_call = self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false);
-			// `m.first` of a parameter or loop element given `{first: 9}` (card map-field). Not a map's own word
-			// (`m.keys`), nor a word whose list or text result the code after it types (`it.chars.map(…)`): a field
-			// read there would hide that type
+			// `m.first` of a parameter or loop element given `{first: 9}` (card map-field)
 			let is_element = matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _));
-			let keeps_word = crate::members::MAP_MEMBERS.contains(&name.as_str())
-				|| result_kind(word).or_else(|| result_kind(name)).is_some();
-			if !is_called && !has_arguments && !keeps_word && (is_element || self.may_hold_object(receiver)) {
+			if may_read_entry && reads_entry_first(name, word) && (is_element || self.may_hold_object(receiver)) {
 				return Some(map_field_or(receiver, name, word_node, word_call));
 			}
 			return Some(word_call);

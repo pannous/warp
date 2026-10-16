@@ -590,14 +590,14 @@ fn operation_calls(node: Node, registry: &TypeRegistry, traits: &Traits, generic
 			};
 			let word = crate::node::leading_name(&member);
 			let name = Node::Symbol(word.clone());
-			let is_counted_property =
-				matches!(member.drop_meta(), Node::Symbol(_)) && crate::analyzer::is_counting_property(&word);
+			let reads_entry_first = matches!(member.drop_meta(), Node::Symbol(_))
+				&& crate::lowering::library_words::reads_entry_first(&word, &word);
 			let receiver = operation_calls(*receiver, registry, traits, generics);
 			let arguments = std::iter::once(receiver.clone())
 				.chain(arguments.into_iter().map(|argument| operation_calls(argument, registry, traits, generics)));
 			let operation_call = parens(std::iter::once(name).chain(arguments).collect());
 			// `info.size` of shell's size(file: Path): a map read at run time with an entry size reads it (card map-read)
-			match is_counted_property {
+			match reads_entry_first {
 				true => crate::lowering::library_words::map_field_or(&receiver, &word, &member, operation_call),
 				false => operation_call,
 			}

@@ -10,8 +10,18 @@ pub(crate) fn map_field_or(receiver: &Node, name: &str, word_node: &Node, otherw
 	}
 	let is_type = |type_word: &str| parens(vec![symbol(crate::words::IS_TYPE), receiver.clone(), text(type_word)]);
 	let is_map = key(is_type(crate::words::MAP_WORD), Op::Or, is_type(&crate::Kind::Key.to_string()));
-	let has_key = crate::node::call(COLLECTION_CONTAINS, vec![receiver.clone(), text(name)]);
+	let contains = symbol(COLLECTION_CONTAINS).with_meta_of(word_node);
+	let has_key = parens(vec![contains, receiver.clone(), text(name)]);
 	if_then_else(key(parens(vec![is_map]), Op::And, has_key), field_lookup(receiver, name, word_node), otherwise)
+}
+
+/// An uncalled word without arguments on a value that may be a map reads the map's entry of that name first: a
+/// counting word (`info.size`), or any other word but a map's own (`m.keys`) or one whose list or text result the code
+/// after it types (`it.chars.map(…)`), where a field read would hide that type (cards map-field, map-read)
+pub(crate) fn reads_entry_first(name: &str, word: &str) -> bool {
+	let keeps_word =
+		crate::members::MAP_MEMBERS.contains(&name) || result_kind(word).or_else(|| result_kind(name)).is_some();
+	crate::analyzer::is_counting_property(name) || !keeps_word
 }
 
 /// `object.name`, `name of object`, `object["name"]`: the entry named `name`, a subscript by a text key

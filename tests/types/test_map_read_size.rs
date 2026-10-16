@@ -23,3 +23,13 @@ fn the_size_entry_of_shell_info() {
 	is!(&format!("use shell\ni = info \"{path}\"\ni.size"), 6);
 	is!(&format!("use shell\np = Path(name: \"{path}\")\np.size"), 6);
 }
+
+/// reviewer: every uncalled word on a value that may be a map reads its entry first, not only counting words
+#[test]
+fn any_entry_of_shell_info() {
+	let folder = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("scratch/map_read");
+	std::fs::create_dir_all(&folder).expect("scratch folder");
+	let file = folder.join("kind.txt");
+	std::fs::write(&file, "hello\n").expect("a file");
+	is!(&format!("use shell\ni = info \"{}\"\ni.kind", file.display()), "file");
+}
