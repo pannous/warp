@@ -58,3 +58,11 @@ fn a_package_used_twice_is_loaded_once() {
 	let clash = warp::wasm_emitter::eval("use uniscript; use uniscript version 1.0.0; 1").serialize();
 	assert!(clash.contains("use uniscript version 1.0.0: uniscript ") && clash.contains(" is used already"), "{clash}");
 }
+
+/// card crash-2: the empty symbol of a stray indented line is no version (its lowering unwrapped no version)
+#[test]
+fn an_empty_symbol_is_no_version() {
+	let code = "\tif disc < 0 { return - 1.0 }\n\treturn (-b - sqrt(disc)) / (2.0 * a)";
+	let result = warp::wasm_emitter::eval(code).serialize();
+	assert!(result.contains("undefined variable"), "{result}");
+}
