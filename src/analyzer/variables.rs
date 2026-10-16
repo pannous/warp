@@ -76,10 +76,7 @@ pub(super) fn function_definition_body(node: &Node) -> Option<&Node> {
 		Node::Key(left, Op::Assign | Op::Define, body) if matches!(left.drop_meta(), Node::List(items, _, _) if starts_with_symbol(items)) => {
 			Some(body)
 		}
-		Node::List(items, _, _)
-			if items.len() >= 2
-				&& matches!(items[0].drop_meta(), Node::Symbol(keyword) if is_function_keyword(keyword)) =>
-		{
+		Node::List(items, _, _) if items.len() >= 2 && items[0].symbol_name().is_some_and(is_function_keyword) => {
 			items.last()
 		}
 		_ => None,

@@ -1087,19 +1087,13 @@ fn writes_as_prefix(op: &Op) -> bool {
 /// An item of a class body that is code, a method in any of its forms (`f() := …`, `fn f() {…}`, `f = x => …`), not a
 /// field declaration (`name: text`, `age: int = 0`): the lowering passes reach it as they reach a function
 fn is_class_code(item: &Node) -> bool {
-	let is_name = |node: &Node| matches!(node.drop_meta(), Symbol(_));
+	let is_name = |node: &Node| node.symbol_name().is_some();
 	match item.drop_meta() {
 		Key(name, Op::Colon, _) if is_name(name) => return false,
 		Key(declared, Op::Assign, _) if matches!(declared.drop_meta(), Key(name, Op::Colon, _) if is_name(name)) => {
 			return false;
 		}
-		List(words, _, _)
-			if words.first().is_some_and(
-				|first| matches!(first.drop_meta(), Symbol(word) if crate::operators::is_function_keyword(word)),
-			) =>
-		{
-			return true;
-		}
+		List(words, _, _) if words.first().and_then(Node::symbol_name).is_some_and(is_function_keyword) => return true,
 		_ => {}
 	}
 	let mut code = false;
