@@ -71,3 +71,4 @@
 - 2026-10-15 if-yes: library-word lowering had a shared predicate for a braceless call used as the only statement of a
   curly block, but its main prefix-call path duplicated a narrower bracket check and never used it. Reusing
   `is_spaced_call` and `in_block_as_written` makes `if yes {sum ...}` follow the same general call rule.
+2026-10-16 print-effects-walked: `print_walk` reused the broad `is_selection` predicate, whose `of` arm accepts every property lookup; that turned text properties such as `effects of f` and `name of p` into character walks. Print walks need the narrower selector-preposition rule (`in`/`from` plus a known selector).
