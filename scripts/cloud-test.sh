@@ -10,19 +10,22 @@
 #       origin/<base>, e.g. a batch branch)
 #   scripts/cloud-test.sh --result [--card <card>] <branch> <tip>     wait for and collect a launched run's result
 #   scripts/cloud-test.sh --summarize <cargo test log> [environmental list]    the result's summary of any log
-# The cloud session runs this same script from origin/main (the tip may predate it) with --run-here, which checks out
+# The cloud session runs this same script from origin/main (the tip may predate it) with --job <job>, which reads the
+# job's arguments from the branch cloud-jobs/<job> and runs them as --run-here: it checks out
 # the tip, builds, tests with --no-fail-fast and pushes result.md + log.txt.gz to the branch cloud-results/<run>.
 # Sessions are pooled (data/cloud/pool/): a finished session gets the next job as a follow-up message, so its VM keeps
 # the checkout and cargo's build output and the next build is incremental instead of cold.
 # Failures of tests that need the Mac (scripts/cloud-test-environmental.txt) are listed apart and don't make it red.
 # CLOUD_TEST_FAST=1: fast mode (Opus with faster output, burns the credit ~2x faster; off by default).
-# CLOUD_TEST_MODEL=<model>: the session's model (default haiku: it only repeats one command). Both apply to sessions the pool
-# starts, not to the ones it reuses.
+# CLOUD_TEST_MODEL=<model>: the session's model (default haiku: it only repeats one command); a reused session gets it as
+# `/model` before each job (`--model` on a follow-up message doesn't switch it). Fast mode applies to new sessions only.
 set -uo pipefail
+MODEL=${CLOUD_TEST_MODEL:-haiku}
 
 REPO=pannous/warp
 MAIN_CHECKOUT=/Users/me/dev/angles/warp
 RESULTS_PREFIX=cloud-results
+JOBS_PREFIX=cloud-jobs         # cloud-jobs/<job>: the job's arguments, so the session's prompt stays one short line
 ENVIRONMENTAL_LIST=scripts/cloud-test-environmental.txt
 CARGO_FLAGS_WITH_VALUE='--test|--features|-F|-p|--package|--bin|--example|--bench|-j|--jobs|--target'   # `--test tests`: the next word is the flag's, not a filter
 MAX_PARALLEL_RUNS=5           # cloud sessions running a job at once (they share the account's limits, notes/cloud_development.md)
@@ -36,6 +39,8 @@ POLL_SECONDS=60                # GitHub API quota is shared by every session: ls
 WAIT_HOURS=4
 URL_WAIT_SECONDS=90
 TEST_TIME_LIMIT_SECONDS=2400  # the test run is killed after this (a hanging test), its unfinished tests named; the full suite takes ~900 s
+STALL_SECONDS=900              # …or once no test has finished for this long (the slowest, the self-parser, takes ~230 s alone)
+WATCH_SECONDS=30               # how often the stall watchdog counts finished tests
 HERE_WAIT_SECONDS=570          # one --run-here call blocks at most this long, under the cloud Bash tool's 10 min
 HERE_ROOT=${TMPDIR:-/tmp}/cloud-test # in the VM: tree/ (the checkout, kept for the next job), jobs/<job>/
 FULL_FLAGS=(--all-features --config "profile.test.package.warp-lang.opt-level=2")
@@ -115,9 +120,8 @@ run_tests_here() {
 	local build_status=$?
 	build_seconds=$((SECONDS - build_start))
 	local test_start=$SECONDS
-	[ $build_status -eq 0 ] && timeout --kill-after=30 $TEST_TIME_LIMIT_SECONDS \
-		cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast -- "${filters[@]}" >> "$HERE_WORK/log.txt" 2>&1
-	[ $? -eq 124 ] && echo "cloud-test: KILLED after the time limit of $TEST_TIME_LIMIT_SECONDS s" >> "$HERE_WORK/log.txt"
+	[ $build_status -eq 0 ] && run_watched "$HERE_WORK/log.txt" \
+		cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast -- "${filters[@]}"
 	test_seconds=$((SECONDS - test_start))
 	summarize "$HERE_WORK/log.txt" "$HERE_WORK/environmental.txt" > "$HERE_WORK/summary.txt"
 	{
@@ -136,6 +140,26 @@ run_tests_here() {
 	} > "$HERE_WORK/result.md"
 	gzip -kf "$HERE_WORK/log.txt"
 	push_result "$name"
+}
+
+# The command, its output appended to the log, killed with all its processes after TEST_TIME_LIMIT_SECONDS or once no
+# test finished for STALL_SECONDS (a hang held batch-3's session 85 min); the summary then names the unfinished tests
+run_watched() {
+	local log=$1 runner finished last_finished=-1 still=0; shift
+	timeout --kill-after=30 $TEST_TIME_LIMIT_SECONDS "$@" >> "$log" 2>&1 &   # its own process group: a kill reaches the test binaries
+	runner=$!
+	while kill -0 $runner 2>/dev/null; do
+		sleep $WATCH_SECONDS
+		finished=$(grep -c '^test .* \.\.\. ' "$log")
+		if [ "$finished" = "$last_finished" ]; then still=$((still + WATCH_SECONDS)); else still=0 last_finished=$finished; fi
+		if [ $still -ge $STALL_SECONDS ]; then
+			echo "cloud-test: KILLED: no test finished for $STALL_SECONDS s" >> "$log"
+			kill -TERM $runner
+			break
+		fi
+	done
+	wait $runner
+	[ $? -eq 124 ] && echo "cloud-test: KILLED after the time limit of $TEST_TIME_LIMIT_SECONDS s" >> "$log"
 }
 
 # Counts, failing tests with the first line of their panic, environmental ones apart; verdict green|red
@@ -203,16 +227,36 @@ run_here() {
 	fi
 }
 
+# --run-here with the arguments of cloud-jobs/<job>, fetched once per job
+run_job() {
+	local job=$1 arguments=$HERE_ROOT/jobs/$1/arguments
+	if [ ! -s "$arguments" ]; then
+		mkdir -p "${arguments%/*}"
+		git fetch -q origin "refs/heads/$JOBS_PREFIX/$job" && git show FETCH_HEAD:arguments > "$arguments" ||
+			{ echo "CLOUD TEST DONE: red, no job $JOBS_PREFIX/$job on origin"; return 1; }
+	fi
+	local job_arguments=()
+	mapfile -t job_arguments < "$arguments"
+	run_here "$job" "${job_arguments[@]}"
+}
+
 # ---------------------------------------------------------------- the Mac side
 
 cloud_prompt() {
-	local script_args=$1
 	cat <<-EOF
-	Next warp test job. Run this Bash command in the foreground with timeout 600000:
-	git fetch -q origin main && git show origin/main:scripts/cloud-test.sh > /tmp/cloud-test.sh && bash /tmp/cloud-test.sh --run-here $script_args
-	While it prints CLOUD TEST RUNNING, run the same command again. When it prints CLOUD TEST DONE, reply with only that line.
-	Nothing else: no other commands, no edits, no investigation.
+	Run this in the foreground (timeout 600000), again while it prints CLOUD TEST RUNNING, then reply with only its last line. Nothing else.
+	git fetch -q origin main && git show origin/main:scripts/cloud-test.sh > /tmp/cloud-test.sh && bash /tmp/cloud-test.sh --job $1
 	EOF
+}
+
+# The job's arguments, one per line, as the one commit of cloud-jobs/<job>
+push_job() {
+	local job=$1 blob tree commit output; shift
+	blob=$(printf '%s\n' "$@" | git -C "$MAIN_CHECKOUT" hash-object -w --stdin)
+	tree=$(printf '100644 blob %s\targuments\n' "$blob" | git -C "$MAIN_CHECKOUT" mktree)
+	commit=$(git -C "$MAIN_CHECKOUT" commit-tree "$tree" -m "cloud test job $job")
+	output=$(git -C "$MAIN_CHECKOUT" push -q origin "$commit:refs/heads/$JOBS_PREFIX/$job" 2>&1) ||
+		fail "push of $JOBS_PREFIX/$job failed: $output"   # quiet otherwise: GitHub offers a pull request for every new branch
 }
 
 session_url() { grep -o 'https://claude.ai/code/session_[A-Za-z0-9_]*' "$1" | head -1; }
@@ -269,7 +313,7 @@ claim_session() {
 start_session() {
 	local job=$1 folder=$2 tmux_name command waited=0 url=""
 	command=(claude)
-	command+=(--model "${CLOUD_TEST_MODEL:-haiku}" --name "$SESSION_NAME")
+	command+=(--model "$MODEL" --name "$SESSION_NAME")
 	[ "${CLOUD_TEST_FAST:-0}" = 1 ] && command+=(--settings '{"fastMode": true}')
 	command+=(--cloud "$(cat "$folder/prompt.txt")")
 	tmux_name=cloud-test-$(printf %s "$job" | tr -c 'A-Za-z0-9-' '-' | cut -c1-40)
@@ -295,13 +339,15 @@ launch() {
 	folder=$MAIN_CHECKOUT/data/cloud/$name
 	mkdir -p "$folder"
 	rm -f "$folder/result.md"
-	cloud_prompt "$(printf '%q ' "$job" ${base[@]+"${base[@]}"} "$branch" "$tip" "$@")" > "$folder/prompt.txt"
+	push_job "$job" ${base[@]+"${base[@]}"} "$branch" "$tip" "$@"
+	cloud_prompt "$job" > "$folder/prompt.txt"
 	while [ -z "$url" ]; do
 		lock_pool; session=$(claim_session "$job"); unlock_pool
 		case "$session" in
 			new) url=$(start_session "$job" "$folder") || exit ;;
 			session_*)
 				[ "$(pool_field "$POOL/$session" jobs)" = 1 ] && claude -p /clear --cloud "$session" > "$folder/clear.txt" 2>&1
+				claude -p "/model $MODEL" --cloud "$session" > "$folder/model.txt" 2>&1
 				if claude -p "$(cat "$folder/prompt.txt")" --cloud "$session" > "$folder/send.txt" 2>&1; then
 					url=https://claude.ai/code/$session
 				else
@@ -316,7 +362,7 @@ launch() {
 		echo "tests: ${*:-all}"
 		echo "job: $job"
 		echo "session: $url"
-		echo "fast: ${CLOUD_TEST_FAST:-0}, model: ${CLOUD_TEST_MODEL:-haiku}"
+		echo "fast: ${CLOUD_TEST_FAST:-0}, model: $MODEL"
 		echo "launched: $(date -u +%FT%TZ)"
 		echo "credit used before: \$$(credit_used)"
 	} > "$folder/launch.txt"
@@ -350,7 +396,7 @@ collect() {
 	git -C "$MAIN_CHECKOUT" show "origin/$RESULTS_PREFIX/$name:log.txt.gz" > "$folder/log.txt.gz"
 	echo "credit used after: \$$(credit_used) (shared by all cloud sessions running meanwhile)" >> "$folder/result.md"
 	grep -h '^session:\|^credit used before' "$folder/launch.txt" >> "$folder/result.md" 2>/dev/null
-	git -C "$MAIN_CHECKOUT" push -q origin --delete "$RESULTS_PREFIX/$name" 2>/dev/null
+	git -C "$MAIN_CHECKOUT" push -q origin --delete "$RESULTS_PREFIX/$name" "$JOBS_PREFIX/$(pool_field "$folder/launch.txt" job)" 2>/dev/null
 	git -C "$MAIN_CHECKOUT" update-ref -d "refs/remotes/origin/$RESULTS_PREFIX/$name"
 	release_session "$(pool_field "$folder/launch.txt" job)"
 	cat "$folder/result.md"
@@ -364,6 +410,7 @@ collect() {
 # one function, parsed whole before it runs: editing this file during a long wait then can't break the waiting run
 main() {
 	case "${1:-}" in
+		--job) run_job "$2"; exit ;;
 		--run-here) shift; run_here "$@"; exit ;;
 		--run-detached) HERE_WORK=$HERE_ROOT/jobs/$2; shift 2; mkdir -p "$HERE_WORK"; trap 'touch "$HERE_WORK/done"' EXIT; run_tests_here "$@"; exit ;;
 		--summarize) summarize "$2" "${3:-$ENVIRONMENTAL_LIST}"; exit ;;
