@@ -7,8 +7,6 @@ use crate::words::{ANY_TYPE, LIST_WORD};
 mod definitions;
 pub(crate) use definitions::*;
 
-/// Extract user-defined functions from the AST into context
-/// Infer return type of a function body given its parameters
 /// The parameters and variables of a function body, typed
 pub fn function_body_scope(
 	params: &[Param],
@@ -62,21 +60,14 @@ fn widen_globals(globals: &mut HashMap<String, Local>, seen: &HashMap<String, Lo
 
 /// The kinds of the values `return a, b` gives back, position by position over every such return:
 /// one kind when all agree, Float for Int mixed with Float, else a Node
-pub(super) fn infer_tuple_kinds(
-	params: &[Param],
-	body: &Node,
-	function_kinds: &FunctionKinds,
-	globals: &HashMap<String, Local>,
-	closure_variable_targets: &ClosureTargets,
-) -> Vec<Kind> {
+pub(super) fn infer_tuple_kinds(body: &Node, scope: &Scope) -> Vec<Kind> {
 	let Some(arity) = crate::tuples::tuple_arity(body) else {
 		return vec![];
 	};
-	let scope = function_body_scope(params, body, function_kinds, globals, closure_variable_targets);
 	let mut kinds: Vec<Option<Kind>> = vec![None; arity];
 	body.visit(&mut |node| {
 		for (kind, value) in kinds.iter_mut().zip(crate::tuples::returned_values(node).unwrap_or_default()) {
-			let value_kind = infer_type(value, &scope);
+			let value_kind = infer_type(value, scope);
 			*kind = Some(match *kind {
 				None => value_kind,
 				Some(known) if known == value_kind => known,
@@ -94,17 +85,11 @@ pub(super) fn infer_tuple_kinds(
 	kinds.into_iter().map(|kind| kind.unwrap_or(Kind::Data)).collect()
 }
 
-pub(super) fn infer_function_return_kind(
-	params: &[Param],
-	body: &Node,
-	function_kinds: &FunctionKinds,
-	globals: &HashMap<String, Local>,
-	closure_variable_targets: &ClosureTargets,
-) -> Kind {
+/// The kind a function body returns, its parameters and variables typed in `scope` (function_body_scope)
+pub(super) fn infer_function_return_kind(body: &Node, scope: &Scope) -> Kind {
 	if crate::tuples::tuple_arity(body).is_some() {
 		return Kind::List; // used whole, a tuple function's values are packed into a list
 	}
-	let scope = function_body_scope(params, body, function_kinds, globals, closure_variable_targets);
 	// `return error "…"` is the failure path: it does not decide what the function returns
 	let is_error = |value: &Node| {
 		let value = match value.drop_meta() {
@@ -124,7 +109,7 @@ pub(super) fn infer_function_return_kind(
 				let kind = if matches!(items[1].drop_meta(), Node::Empty) {
 					Kind::Empty
 				} else {
-					infer_type(&items[1], &scope)
+					infer_type(&items[1], scope)
 				};
 				returned.push(kind);
 				if kind.is_ref() && !returned_nodes.contains(&kind) {
@@ -146,7 +131,7 @@ pub(super) fn infer_function_return_kind(
 		(true, Some(first)) if returned.iter().all(|kind| kind == first) => *first,
 		(true, Some(_)) => Kind::Empty, // returns of different kinds: a Node of unknown kind
 		// `while true { …; return left }` with left a float: a float function, whatever the loop is worth
-		_ => match infer_type(last, &scope) {
+		_ => match infer_type(last, scope) {
 			// a loop the function returns from inside: the returns decide, the loop's own value (a number or ø) does not
 			Kind::Data if is_while_do(last) && !returned.is_empty() => {
 				if returned.contains(&Kind::Float) {
@@ -200,8 +185,8 @@ pub fn param_kind(param: &Param) -> Kind {
 /// Every definition form (`f(x) := …`, `fn`, `def`, `function`) infers its parameter and return kinds alike
 pub(super) fn user_function(name: &str, params: Vec<Param>, body: Node) -> UserFunctionDef {
 	let params = with_usage_kinds(params, &body);
-	let return_kind =
-		infer_function_return_kind(&params, &body, &Default::default(), &HashMap::new(), &Default::default());
+	let scope = function_body_scope(&params, &body, &Default::default(), &HashMap::new(), &Default::default());
+	let return_kind = infer_function_return_kind(&body, &scope);
 	UserFunctionDef {
 		name: name.to_string(),
 		params,
@@ -1222,9 +1207,8 @@ fn settled_return_kind(
 	function_kinds: &FunctionKinds,
 	globals: &HashMap<String, Local>,
 ) -> Kind {
-	let returned = |kinds: &FunctionKinds| {
-		infer_function_return_kind(&function.params, &function.body, kinds, globals, &ctx.closure_variable_targets)
-	};
+	let returned =
+		|kinds: &FunctionKinds| infer_function_return_kind(&function.body, &body_scope(function, ctx, kinds, globals));
 	let kind = crate::closures::closure_call_kind(&function.name, ctx, function_kinds)
 		.unwrap_or_else(|| returned(function_kinds));
 	// `if t == ø { return [] }; return f(t.left) + [x]`: assumed to return an Int, the recursion makes an error of the
@@ -1238,6 +1222,16 @@ fn settled_return_kind(
 	}
 }
 
+/// The scope of a user function's body, given the kinds of the functions it calls
+fn body_scope(
+	function: &UserFunctionDef,
+	ctx: &Context,
+	function_kinds: &FunctionKinds,
+	globals: &HashMap<String, Local>,
+) -> Scope {
+	function_body_scope(&function.params, &function.body, function_kinds, globals, &ctx.closure_variable_targets)
+}
+
 /// The kinds of the elements of the tuple function returns: (function, element key, kind)
 fn element_kinds(
 	function: &UserFunctionDef,
@@ -1245,9 +1239,10 @@ fn element_kinds(
 	function_kinds: &FunctionKinds,
 	globals: &HashMap<String, Local>,
 ) -> Vec<(String, String, Kind)> {
-	let kinds =
-		infer_tuple_kinds(&function.params, &function.body, function_kinds, globals, &ctx.closure_variable_targets);
-	kinds
+	if crate::tuples::tuple_arity(&function.body).is_none() {
+		return vec![];
+	}
+	infer_tuple_kinds(&function.body, &body_scope(function, ctx, function_kinds, globals))
 		.into_iter()
 		.enumerate()
 		.map(|(index, kind)| (function.name.clone(), crate::tuples::element_key(&function.name, index), kind))
