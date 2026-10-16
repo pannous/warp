@@ -211,10 +211,11 @@ impl WarpParser {
 					if crate::analyzer::text_unit(word).is_some() || crate::operators::is_function_keyword(word));
 
 			// `sleep 1s and print "x"`: the statement ends before the `and`, the statement list runs both (parse_list_with_separators);
-			// after a comparison it joins conditions: `sq 2 == 4 and sq 3 == 8`
+			// between two comparisons it joins conditions: `sq 2 == 4 and sq 3 == 8`
+			let joins_conditions = crate::library_words::is_comparison(&lhs) && self.comparison_follows_and();
 			let ends_command = op == Op::And
 				&& (self.in_command || (min_bp == 0 && is_command(&lhs)))
-				&& !crate::library_words::is_comparison(&lhs)
+				&& !joins_conditions
 				&& self.and_starts_statement();
 			// Stop if operator binds less tightly than our minimum
 			if ends_command || membership_word || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {

@@ -206,6 +206,33 @@ impl WarpParser {
 		(next.is_alphanumeric() || matches!(next, '"' | '\'' | '[' | '{')) && !joins_operands(&argument_word)
 	}
 
+	/// At an `and`: a comparison follows before the statement ends, `sq 2 == 4 and sq 3 == 8` joins two conditions,
+	/// `x == 2 and print "x"` runs a second statement
+	pub(super) fn comparison_follows_and(&self) -> bool {
+		let (mut offset, mut depth, mut quote) = (AND_KEYWORD.len(), 0i32, None);
+		loop {
+			let ch = self.peek_char(offset);
+			// `<=` is a comparison, `->` and `=>` are none: a two-glyph operator is read whole
+			let pair: String = [ch, self.peek_char(offset + 1)].iter().collect();
+			let operator = crate::operators::spelled_operator(&pair)
+				.inspect(|_| offset += 1)
+				.or_else(|| crate::operators::spelled_operator(&ch.to_string()));
+			match (quote, ch) {
+				(_, '\0') => return false,
+				(Some(open), _) if ch == open => quote = None,
+				(Some(_), _) => {}
+				(None, '"' | '\'') => quote = Some(ch),
+				(None, '(' | '[') => depth += 1,
+				(None, ')' | ']') if depth == 0 => return false,
+				(None, ')' | ']') => depth -= 1,
+				(None, ';' | '\n' | '{' | '}') if depth == 0 => return false,
+				_ if operator.is_some_and(|op| op.is_comparison()) => return true,
+				_ => {}
+			}
+			offset += 1;
+		}
+	}
+
 	/// Peek for prefix operators (unary operators that bind to right operand)
 	pub(super) fn peek_prefix_operator(&self) -> Option<(Op, usize)> {
 		// `{abs:5}`: the word names a key, as an infix operator word does
