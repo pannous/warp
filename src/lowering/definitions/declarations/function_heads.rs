@@ -182,15 +182,15 @@ pub(super) fn typed_returns(body: Node, result_types: &Node) -> Node {
 	let is_return = |node: &Node| matches!(node.drop_meta(), Node::List(words, Bracket::None, Separator::Space) if words.len() == 2 && words[0].is_symbol(RETURN_WORD));
 	match body {
 		// `return a, b` parses as `(return a), b`
-		Node::List(items, bracket, Separator::Colon) if items.first().is_some_and(is_return) => {
+		Node::List(items, bracket, Separator::Comma) if items.first().is_some_and(is_return) => {
 			let Node::List(words, _, _) = items[0].drop_meta() else { unreachable!("guarded") };
 			let values: Vec<Node> = std::iter::once(words[1].clone()).chain(items[1..].iter().cloned()).collect();
 			match converted(&values) {
 				Some(mut values) => {
 					let first = Node::List(vec![words[0].clone(), values.remove(0)], Bracket::None, Separator::Space);
-					Node::List([vec![first], values].concat(), bracket, Separator::Colon)
+					Node::List([vec![first], values].concat(), bracket, Separator::Comma)
 				}
-				None => Node::List(items, bracket, Separator::Colon),
+				None => Node::List(items, bracket, Separator::Comma),
 			}
 		}
 		other => other.map_children(|child| typed_returns(child, result_types)),
@@ -355,7 +355,7 @@ pub(super) fn function_head(head: &Node) -> Node {
 	match head.drop_meta() {
 		Node::Symbol(_) => parens(vec![head.clone()]),
 		Node::List(items, Bracket::Round, separator) if items.len() > 2 => {
-			let parameters = Node::List(items[1..].to_vec(), Bracket::Round, Separator::Colon);
+			let parameters = Node::List(items[1..].to_vec(), Bracket::Round, Separator::Comma);
 			Node::List(vec![items[0].clone(), parameters], Bracket::Round, separator.clone())
 		}
 		_ => head.clone(),

@@ -275,7 +275,7 @@ impl WasmGcEmitter {
 		});
 		let no_bracket = self.allocate_string("");
 		let separator_texts =
-			[Separator::Colon, Separator::Semicolon, Separator::Newline, Separator::Tab].map(|separator| {
+			[Separator::Comma, Separator::Semicolon, Separator::Newline, Separator::Tab].map(|separator| {
 				(crate::wasm_emitter::separator_code(&separator), self.allocate_string(&separator.joint()))
 			});
 		let space = self.allocate_string(" ");
