@@ -349,7 +349,11 @@ impl<'a> Reader<'a> {
 		}
 		match (unit_of(&targeted(expression, target), &self.units)?, target) {
 			(Some((dimension, scale, zero)), _) => self.units.push(Read { name, dimension, scale, zero }),
-			(None, None) => self.aliases.push((name, expression)),
+			// `unit ppi := dpi`: a word for another word's expression
+			(None, None) => {
+				let known = self.aliases.iter().find(|(alias, _)| *alias == expression.trim());
+				self.aliases.push((name, known.map_or(expression, |(_, expression)| *expression)))
+			}
 			(None, Some(target)) => return Err(format!("{name}: {expression} is no amount of {target}")),
 		}
 		Ok(())

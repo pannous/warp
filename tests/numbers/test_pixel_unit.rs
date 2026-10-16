@@ -20,3 +20,11 @@ fn pixels_turn_into_lengths_through_the_displays_dpi() {
 	is!("a = (10px)²\n(a / display.dpi²) as inch² == (10px / display.dpi)²", true);
 	is!("display.dpi = 300 dpi\n(1 inch * display.dpi) == 300px", true);
 }
+
+// display-names (user 2026-10-16): ppi is dpi, a dot is a px; `unit ppi := dpi` names another word's expression
+#[test]
+fn ppi_and_dots_are_dpi_and_pixels() {
+	is!("3ppi == 3dpi", true);
+	is!("1inch * 96ppi == 96px", true);
+	is!("2dot + 3px == 5px", true);
+}
