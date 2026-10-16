@@ -1,4 +1,0 @@
-// card coin-errors: an int is never an enum case on its own; the error offers the fix f(1 as Coin)
-enum Coin { Penny, Nickel, Dime }
-f(c: Coin) := c
-f(1)

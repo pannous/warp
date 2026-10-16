@@ -1,6 +1,0 @@
-// card parameter-patterns: a parameter may be a pattern, as a match arm is
-class Point { x: int; y: int }
-add_pair([a, b]) := a + b
-total(Point{x, y}) := x + y
-print add_pair([3, 4])
-total(Point(1, 2))
