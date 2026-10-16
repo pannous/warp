@@ -164,11 +164,14 @@ So branches are official, and every branch lives in a worktree under warp.worktr
 /Users/me/dev/angles/warp stays the user's own and agents do not edit it.
 
 ## Enforcement
-- `tests/queue.sh`: every test run waits for one machine-wide lock (`~/.cargo/warp-tests.lock`, lockf), so at most one
-  test binary runs at a time; `./test.sh` re-enters through it. The holder is in `~/.cargo/warp-tests.lock.owner`.
-  Waiters are served first come, first served by ticket files in `~/.cargo/warp-tests.lock.queue/` (named
-  `<priority>-<time>-<pid>`, tickets of dead PIDs are dropped); a full `./test.sh` (the Integrator) has priority 0 and
-  takes the next slot ahead of targeted runs. Plain lockf alone was not FIFO: a full run waited 15 min behind workers.
+- `tests/queue.sh`: every test run waits for one of 3 machine-wide slot locks (`~/.cargo/warp-tests.lock`, `.lock.2`,
+  `.lock.3`, lockf), so at most 3 targeted runs go at once (4 test threads each, nice 10); a full `./test.sh` holds all
+  three and runs alone, and re-enters through it. Each slot's holder is in its `.owner` file (`warp-tests.lock.owner`
+  for slot 1). Waiters are served first come, first served by ticket files in `~/.cargo/warp-tests.lock.queue/` (named
+  `<priority>-<time>-<pid>`, tickets of dead PIDs are dropped, a run's ticket goes once it holds its slots): only the
+  first in line takes a slot, so a waiting full run (priority 0, like the Integrator's integrate* targeted runs) keeps
+  any later run from starting until the slots drain. Plain lockf alone was not FIFO: a full run waited 15 min behind
+  workers; one slot alone left the Mac at load 7 of 10 with 37 runs queued (card test-queue-slots).
 - `.claude/hooks/test-gate.py` (PreToolUse, Bash): blocks `cargo test`, `cargo browser-test` and direct `deps/tests-*`
   binaries that bypass the queue; `cargo test --no-run` (build only) passes. It applies to every session whose project
   directory is this checkout, which includes all spawned workers.
