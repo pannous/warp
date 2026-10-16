@@ -370,6 +370,11 @@ impl WasmGcEmitter {
 						Self::emit_list(f, &[I32Const(pointer as i32), I32Const(length as i32)]);
 						s.call(f, "new_text");
 					};
+					// a type value as `class int` (emit_type_value_text)
+					s.emit_is_type_value(f, element);
+					f.instruction(&I::If(BlockType::Empty));
+					s.emit_type_value_text(f, element);
+					Self::emit_list(f, &[I::LocalSet(element), I::End]);
 					// a symbol (a map's key) as its name
 					is_kind(f, Kind::Symbol);
 					Self::emit_list(f, &[I::If(BlockType::Empty), I::I64Const(Kind::Text as i64)]);

@@ -389,6 +389,56 @@ impl WasmGcEmitter {
 		self.emit_call(func, constructor);
 	}
 
+	/// The type value `name` (`int`, `Person`): its symbol marked TYPE_VALUE_MARK, which printing shows as `class int`
+	pub(crate) fn emit_type_value(&mut self, func: &mut Function, name: &str) {
+		let prefix = crate::type_kinds::TYPE_VALUE_PREFIX.len() as u32;
+		let (shown, shown_len) = self.allocate_string(&format!("{}{name}", crate::type_kinds::TYPE_VALUE_PREFIX));
+		let (ptr, len) = (shown + prefix, shown_len - prefix);
+		let (node_type, string) = (self.type_manager.node_type, self.type_manager.string_type);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::I64Const(crate::type_kinds::TYPE_VALUE_KIND), I32Const(ptr as i32), I32Const(len as i32),
+			I::StructNew(string), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
+		]);
+	}
+
+	/// The text `class int` of the type value in Node local `local`: its name widened over the prefix stored before it
+	pub(crate) fn emit_type_value_text(&self, func: &mut Function, local: u32) {
+		let prefix = I32Const(crate::type_kinds::TYPE_VALUE_PREFIX.len() as i32);
+		func.instruction(&I::I64Const(Kind::Text as i64));
+		self.emit_text_field(func, local, 0);
+		Self::emit_list(func, &[prefix.clone(), I::I32Sub]);
+		self.emit_text_field(func, local, 1);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			prefix, I::I32Add, I::StructNew(self.type_manager.string_type),
+			I::RefNull(HeapType::Concrete(self.type_manager.node_type)), I::StructNew(self.type_manager.node_type),
+		]);
+	}
+
+	/// Whether the Node in local `local` is a type value (TYPE_VALUE_MARK), as an i32
+	pub(crate) fn emit_is_type_value(&self, func: &mut Function, local: u32) {
+		self.emit_field(func, local, 0);
+		Self::emit_type_value_test(func);
+	}
+
+	/// The kind field on the stack, as an i32: whether it is a type value's (TYPE_VALUE_KIND); a zoned time's kind with a
+	/// negative offset has every high bit set, so the Symbol tag is tested too
+	pub(crate) fn emit_type_value_test(func: &mut Function) {
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::I64Const(crate::type_kinds::TYPE_VALUE_MARK | KIND_MASK), I::I64And,
+			I::I64Const(crate::type_kinds::TYPE_VALUE_KIND), I::I64Eq,
+		]);
+	}
+
+	/// A word standing for a type as a value: a built-in type's or a declared class's name
+	pub(crate) fn names_a_type_value(&self, word: &str) -> bool {
+		crate::type_tests::is_builtin_type_word(word)
+			|| word == crate::type_tests::TYPE_WORD
+			|| self.ctx.type_registry.types().iter().any(|t| t.name == word)
+	}
+
 	/// Append String struct field names (ptr, len) to an IndirectNameMap
 	fn append_string_field_names(type_field_names: &mut IndirectNameMap, type_idx: u32) {
 		let mut names = NameMap::new();
@@ -940,6 +990,10 @@ impl WasmGcEmitter {
 						self.emit_type_error(func, message);
 						return;
 					}
+				}
+				if !self.data_context && self.names_a_type_value(s) {
+					self.emit_type_value(func, s);
+					return;
 				}
 				self.emit_string_call(func, s, "new_symbol");
 			}

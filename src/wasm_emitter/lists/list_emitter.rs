@@ -633,6 +633,8 @@ impl WasmGcEmitter {
 			crate::Kind::Int => self.int_runtime(),
 			// a key may be an instance of a declared type or an operation (`parse("1+1")`)
 			crate::Kind::Key => true,
+			// a symbol may be a type value, whose type is type (TYPE_VALUE_MARK)
+			crate::Kind::Symbol => true,
 			crate::Kind::List => self.may_be_map(subject),
 			// a text value may be a character (`"abc".chars#1`, chars-codepoints): one-character texts are held as such
 			crate::Kind::Text => !matches!(subject.drop_meta(), Node::Text(_)),
@@ -882,9 +884,7 @@ impl WasmGcEmitter {
 			}
 			"type" => {
 				let type_name = self.static_type_name(arg);
-				let (ptr, len) = self.allocate_string(&type_name);
-				Self::emit_list(func, &[I::I32Const(ptr as i32), I::I32Const(len as i32)]);
-				self.emit_call(func, "new_symbol");
+				self.emit_type_value(func, &type_name);
 				true
 			}
 			// an exact number floors exactly, also beyond the f64 range
