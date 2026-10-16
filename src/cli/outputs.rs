@@ -112,6 +112,20 @@ pub(crate) fn write_wagi(code: &str, target: &str) {
 	}
 }
 
+/// `warp compile --page`: the module next to the program file with the modules it imports by path in modules/
+pub(crate) fn write_page_module(code: &str, target: &str) {
+	let output_path = compiled_output_path(target);
+	let written = warp::pipeline::for_any_host(|| wasm_emitter::compile(code))
+		.map_err(|final_value| format!("nothing to compile: {}", final_value.serialize()))
+		.and_then(|module| {
+			warp::web::site_modules::write_page_module(&module.bytes, std::path::Path::new(&output_path))
+		});
+	match written {
+		Ok(files) => println!("compiled {output_path} for a page, beside it: {}", files.join(", ")),
+		Err(failure) => fail(format!("warp compile --page: {failure}")),
+	}
+}
+
 /// `warp build --site`: the site next to the program file, its report or failure
 pub(crate) fn write_site(code: &str, target: &str) {
 	let file = std::path::Path::new(target);

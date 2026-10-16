@@ -15,9 +15,12 @@ use std::collections::HashSet;
 /// The got-it topic of a filtering loop (`for friend in xs`, `for (it>2) in xs`)
 pub(crate) const FILTER_LOOP_TOPIC: &str = "for-filter";
 /// The unit words a for loop walks a text by, the item being `it` (wiki/string.md)
-const UNIT_LOOP_WORDS: [&str; 4] = ["chars", "characters", "codepoints", "bytes"];
+const UNIT_LOOP_WORDS: [&str; 5] = ["chars", "characters", "glyphs", CODE_POINTS_WORD, BYTES_WORD];
 const BYTES_WORD: &str = "bytes";
 const BYTE_WORD: &str = "byte";
+const CODE_POINTS_WORD: &str = "codepoints";
+/// `for each codepoint in t`: the loop variable that walks a text by code point, not by character
+const CODE_POINT_WORD: &str = "codepoint";
 const WORD_UNIT: &str = "word";
 /// The loop variable names that walk a text by a unit other than the character, and the text between two units
 const TEXT_UNIT_NAMES: [(&str, &str); 2] = [(WORD_UNIT, " "), ("line", "\n")];
@@ -93,11 +96,10 @@ impl Headers {
 		if let Some(condition) = self.loop_condition(&variable) {
 			let shown = crate::normalize::operand_text(&condition);
 			let collection = crate::normalize::operand_text(&iterable);
-			let header =
-				(format!("for ({shown}) in {collection}"), format!("for it in {collection}.filter(it => {shown})"));
+			let header = (format!("for ({shown}) in {collection}"), filter_loop_header(&collection, &shown));
 			let body = filtered_body(
 				&format!("for ({shown}) in …"),
-				&format!("for it in … {{ if {shown} {{ … }} }}"),
+				&filter_loop_block(&shown),
 				Some(header),
 				condition,
 				body,
@@ -111,6 +113,9 @@ impl Headers {
 			Node::Symbol(name) if name == BYTE_WORD && self.is_text(&iterable) => {
 				return Ok(for_in_loop(variable, bytes_of(&iterable), body));
 			}
+			Node::Symbol(name) if name == CODE_POINT_WORD && self.is_text(&iterable) => {
+				return Ok(for_in_loop(variable, code_points_of(&iterable), body));
+			}
 			// `for friend in xs`: a declared type's name visits only its instances, as `it`; the name in the body is the
 			// item (P46), a call `friend(…)` still constructs
 			Node::Symbol(name) if self.declared_types.contains(name) => {
@@ -118,8 +123,7 @@ impl Headers {
 				let header = type_filter_header(name, &iterable, &body);
 				let body = item_named(body, name, &it);
 				let written = format!("for {name} in …");
-				let explicit = format!("for x in … {{ if x is {name} {{ … }} }}");
-				(it, filtered_body(&written, &explicit, header, test, body, at)?)
+				(it, filtered_body(&written, &filter_loop_block(&format!("it is {name}")), header, test, body, at)?)
 			}
 			// `for number in xs`: a type word visits only the items of that type, under its own name; a literal list whose
 			// items all are of the type needs no filter
@@ -259,7 +263,7 @@ fn type_filtered_body(
 	at: (usize, usize),
 ) -> Node {
 	let question =
-		filter_question(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), header, at);
+		filter_question(&format!("for {name} in …"), &filter_loop_block(&format!("it is {name}")), header, at);
 	guarded_body(test.with_meta_data(FilterLoop { question, iterable: iterable.clone() }), body)
 }
 
@@ -269,14 +273,25 @@ fn guarded_body(test: Node, body: Node) -> Node {
 	Node::List(vec![guarded], Bracket::Curly, Separator::Semicolon)
 }
 
-/// `for int in xs` as the explicit filter `for x in xs.filter(x => x is int)`, the body unchanged; None when the body
+/// `for int in xs` as the explicit filter `for xs.filter(it is int)`, the body unchanged; None when the body
 /// names the item by the type word (then the body would change too)
 fn type_filter_header(name: &str, iterable: &Node, body: &Node) -> Option<(String, String)> {
 	if mentions(body, name) {
 		return None;
 	}
 	let collection = crate::normalize::operand_text(iterable);
-	Some((format!("for {name} in {collection}"), format!("for x in {collection}.filter(x => x is {name})")))
+	Some((format!("for {name} in {collection}"), filter_loop_header(&collection, &format!("it is {name}"))))
+}
+
+/// The explicit header of a filtering loop, `for xs.filter(it > 2)`: no loop variable, so the body keeps reading the
+/// item as `it`, which a loop may not bind by name (implicit-words-reserved)
+fn filter_loop_header(collection: &str, test: &str) -> String {
+	format!("for {collection}.filter({test})")
+}
+
+/// The explicit block form of a filtering loop, `for … { if it > 2 { … } }`
+pub(crate) fn filter_loop_block(test: &str) -> String {
+	format!("for … {{ if {test} {{ … }} }}")
 }
 
 /// `name` in a loop body as the item: every bare use, not the head of a call `name(…)`
@@ -316,8 +331,17 @@ fn unit_iteration(variable: &Node, iterable: &Node, body: &Node) -> Option<(Node
 	if !UNIT_LOOP_WORDS.contains(&word) || body.mentions(word) {
 		return None;
 	}
-	let walked = if word == BYTES_WORD { bytes_of(iterable) } else { call("chars", vec![iterable.clone()]) };
+	let walked = match word {
+		BYTES_WORD => bytes_of(iterable),
+		CODE_POINTS_WORD => code_points_of(iterable),
+		_ => call(crate::library_words::CHARS_WORD, vec![iterable.clone()]),
+	};
 	Some((Node::Symbol(IMPLICIT_PARAMETER.to_string()), walked))
+}
+
+/// The code points of a text, `codepoint·list(text)`
+fn code_points_of(text: &Node) -> Node {
+	call(crate::library_words::CODE_POINT_LIST, vec![text.clone()])
 }
 
 /// The UTF-8 bytes of a text, `(0..text.bytes).map(i => byte_at(text, i))`
