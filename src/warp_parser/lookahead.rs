@@ -150,6 +150,26 @@ impl WarpParser {
 			&& self.value_before()
 	}
 
+	/// The word before the blank here is an iteration word, `map` of `ps map .a`, or a sort label after one or after
+	/// its list, `by` of `ps sort by .a` and `sort ps by .a`: `.a` stands as the function argument
+	fn after_iteration_word(&self) -> bool {
+		let is_iteration = |word: &String| !word.is_empty() && crate::lambdas::is_iteration_word(word);
+		let [word, before, before_that] = self.words_before(self.pos);
+		is_iteration(&word)
+			|| crate::lambdas::is_sort_label(&crate::node::symbol(&word))
+				&& (is_iteration(&before) || is_iteration(&before_that))
+	}
+
+	/// The N words ending right before position `end`, the nearest first
+	fn words_before<const N: usize>(&self, mut end: usize) -> [String; N] {
+		std::array::from_fn(|_| {
+			let word = self.word_ending_before(end);
+			end = self.chars[..end].iter().rposition(|c| !matches!(c, ' ' | '\t')).map_or(0, |last| last + 1);
+			end -= word.chars().count();
+			word
+		})
+	}
+
 	/// The spelling starts here; a word ends here too: `and` but not `android`, `plus a` but not the call `plus(a, b)`
 	fn spelled_here(&self, spelling: &str) -> bool {
 		let length = spelling.chars().count();
@@ -183,7 +203,8 @@ impl WarpParser {
 				// `xs contains x` in code only, data keeps the words as they are
 				"contains" | "has" | "includes" => !self.options.data_mode && self.operand_after(spelling.len()),
 				// `a .5` is a list of two values, `a.5` a member access
-				"." => !(prev.is_whitespace() && self.number_starts_at(0)),
+				// `ps map .a`, `ps sort by .a`: after an iteration word `.a` is the field-read function (cards map-dot, infix-map)
+				"." => !(prev.is_whitespace() && (self.number_starts_at(0) || self.after_iteration_word())),
 				"&" => !(self.starts_function_reference() && prev.is_whitespace()), // `map &square xs`
 				_ => true,
 			};
