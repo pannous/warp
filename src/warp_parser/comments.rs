@@ -57,6 +57,7 @@ pub(super) fn glued_floor_division(diagnostic: Diagnostic, input: &str, line: us
 	diagnostic.offer("floor division", written, format!("{} {FLOOR_DIVISION} {}", text[before], text[after]))
 }
 
+/// The error `message`, fixed by adding the missing `closer` at `at` (line, column)
 pub(super) fn missing_closer(message: String, closer: impl Into<String>, at: (usize, usize)) -> Node {
 	let closer = closer.into();
 	Diagnostic::default()

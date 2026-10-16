@@ -299,6 +299,7 @@ impl WarpParser {
 		}
 	}
 
+	/// `🌍`, `🇩🇪`, `👍🏽` in code, one user-perceived character: one code point is a codepoint, several a text
 	pub(crate) fn parse_emoji(&mut self) -> Node {
 		let ahead: String = self.chars[self.pos..].iter().take(LONGEST_EMOJI).collect();
 		let emoji = crate::extensions::strings::grapheme_clusters(&ahead)[0].to_string();

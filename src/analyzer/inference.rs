@@ -132,7 +132,6 @@ pub fn written_kind(node: &Node, scope: &Scope) -> Kind {
 	}
 }
 
-/// A math word's result: a Node when its argument is one, which may be a ± interval (crate::numbers::uncertain::INTERVAL_WORDS)
 /// The number a text literal spells: `"4"` is 4
 pub fn literal_number(value: &Node) -> Option<Node> {
 	match value.drop_meta() {
@@ -142,6 +141,7 @@ pub fn literal_number(value: &Node) -> Option<Node> {
 	}
 }
 
+/// A math word's result: a Node when its argument is one, which may be a ± interval (crate::numbers::uncertain::INTERVAL_WORDS)
 fn interval_or(kind: Kind, argument: &Node, scope: &Scope) -> Kind {
 	if is_run_time_kind(&infer_type(argument, scope)) {
 		Kind::Data
@@ -329,7 +329,6 @@ pub(crate) fn is_output_call(node: &Node) -> bool {
 		if word.symbol_name().is_some_and(|name| crate::wasm_emitter::OUTPUT_CALLS.contains(&name))))
 }
 
-/// The kind of a non-empty list: a call's result, a statement sequence's last value, or a data list
 /// The type word of a cast `int 4`, `int("5")`, `double 2`: a type word applied to one value. A list `[int, 4]`, a comma
 /// group `(int, 4)` or a variable named like a type word (`int = 3; int 4`) casts nothing (card variable-named)
 pub fn type_cast_of<'a>(
@@ -359,6 +358,7 @@ pub fn applied_word<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separa
 	(!listed && !declared).then_some((name.as_str(), value))
 }
 
+/// The kind of a non-empty list: a call's result, a statement sequence's last value, or a data list
 pub(super) fn infer_list_type(
 	node: &Node,
 	items: &[Node],
@@ -576,7 +576,6 @@ pub(super) fn element_kind(indexed: &Node, scope: &Scope) -> Option<Kind> {
 	}
 }
 
-/// A branch `{a; b}` is worth its last statement
 /// A branch that is `error …` (or a block ending in it): the bottom kind, it never gives a value to its if
 pub(crate) fn raises_error(branch: &Node) -> bool {
 	match branch.drop_meta() {
@@ -619,6 +618,7 @@ fn choice_kind(then_expr: &Node, else_expr: &Node, scope: &Scope) -> Kind {
 	}
 }
 
+/// A branch `{a; b}` is worth its last statement
 pub(crate) fn branch_kind(branch: &Node, scope: &Scope) -> Kind {
 	if let Some(result) = block_result(branch) {
 		return branch_kind(&result, scope);

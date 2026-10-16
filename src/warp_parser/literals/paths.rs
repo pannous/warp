@@ -39,7 +39,6 @@ pub fn is_written_path(argument: &Node, path_variables: &std::collections::HashS
 }
 
 impl WarpParser {
-	/// `&name`: a reference to the function `name`, an `&` glued to the word after it and not to a word before it (`a &b`, `f(&g)`)
 	/// A file path without quotes starts here, glued to what follows and not to an operand before it (card unix-words):
 	/// `./mozart.mp3`, `../songs/a.wav`, `./` alone (`ls ./`; `xs ./ 2` and `xs./2` divide each element); `~/notes.txt`, and `~` alone (`cd ~`;
 	/// `a ~ b` stays the comparison); `/etc/hosts` where no operand stands before it (`x = /tmp`, `[/a, /b]`) or after

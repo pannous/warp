@@ -348,6 +348,7 @@ pub const FLOOR_QUOTIENT: &str = "floor_quotient";
 /// `a | b`: the logical or, or `b(a)` when b names a function (pipes.rs)
 const PIPE_GLYPH: &str = "|";
 
+/// Read and parse a WARP file
 pub fn parse_file(path: &str) -> Node {
 	let options = if path.ends_with(".wit") { ParserOptions::wit() } else { ParserOptions::default() };
 	match read_to_string(path) {
