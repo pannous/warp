@@ -247,6 +247,7 @@ impl Inference {
 			empty_lists: HashSet::new(),
 			objects: HashMap::new(),
 			classes,
+			field_unit_names: unit_fields::field_unit_names(program),
 			instances: HashMap::new(),
 			class_lists: HashMap::new(),
 			result_fields: None,
@@ -703,6 +704,8 @@ struct Inference {
 	objects: HashMap<String, Fields>,
 	/// The classes with unit fields, the variables holding an instance of one and the lists of one (unit_fields.rs)
 	classes: HashMap<String, Fields>,
+	/// the unit each unit field is written in, which its errors name
+	field_unit_names: HashMap<(String, String), String>,
 	instances: HashMap<String, String>,
 	class_lists: HashMap<String, String>,
 	/// The quantity fields of the program's final value, when it is such an object
@@ -733,6 +736,11 @@ struct Inference {
 }
 
 /// The last statement of a program or block
+/// `n km`, `D(n inch)`: units bind only after a number (notes/decisions.md), the way that works
+fn unit_after_name_advice(value: &Node, unit: &Node) -> String {
+	format!("a unit binds only after a number, write {} * 1 {}", value.serialize().trim(), unit.serialize().trim())
+}
+
 fn last_statement(node: &Node) -> Option<&Node> {
 	match node.drop_meta() {
 		Node::List(items, _, Separator::Semicolon | Separator::Newline) => items.last().and_then(last_statement),
@@ -932,6 +940,9 @@ impl Inference {
 				self.infer(list_units::each_in_unit(&list, op, &unit))
 			}
 			Node::Key(amount, Op::Mul, unit) if self.unit_word(&unit).is_some() => {
+				if self.is_plain_scalar_name(&amount)? {
+					return Err(Stop::Error(format!("DimensionError: {}", unit_after_name_advice(&amount, &unit))));
+				}
 				self.amount_in(*amount, self.unit_word(&unit).expect("guarded"))
 			}
 			Node::Key(left, op, right) if matches!(op, Op::Add | Op::Sub | Op::Mul | Op::Div) || op.is_comparison() => {
@@ -1125,10 +1136,13 @@ impl Inference {
 				let held = self.field_signature(object, field).expect("guarded");
 				let (value, given) = self.infer(value)?;
 				if given != held {
+					let held_text = match self.instance_class(object) {
+						Some(class) => self.held_text(&class, &field.drop_meta().name(), &held),
+						None => shown(&held),
+					};
 					return Err(Stop::Error(format!(
-						"DimensionError: {} holds {}, is given {}",
+						"DimensionError: {} holds {held_text}, is given {}",
 						target.serialize().trim(),
-						shown(&held),
 						shown(&given)
 					)));
 				}
@@ -1365,6 +1379,19 @@ impl Inference {
 	}
 
 	/// `40°C`: an amount in a unit as an SI amount, counted from the unit's zero
+	/// `n` of `n km`: a variable holding one plain number, which a unit word after it doesn't bind to (decision
+	/// unit-definitions: units bind only after a number); a list `xs cm` is each element's, a quantity stays one
+	fn is_plain_scalar_name(&mut self, amount: &Node) -> Result<bool, Stop> {
+		let Node::Symbol(name) = amount.drop_meta() else {
+			return Ok(false);
+		};
+		if name.starts_with(list_units::ITEM) || self.plain_list_depth(amount) > 0 {
+			return Ok(false);
+		}
+		let (_, signature) = self.infer(amount.clone())?;
+		Ok(signature.is_empty() && signature.depth == 0)
+	}
+
 	fn amount_in(&mut self, amount: Node, unit: &'static Unit) -> Result<(Node, Signature), Stop> {
 		let plain_depth = self.plain_list_depth(&amount);
 		let (amount, given) = self.infer(amount)?;

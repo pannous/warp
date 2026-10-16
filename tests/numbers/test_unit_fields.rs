@@ -17,8 +17,8 @@ fn a_unit_field_holds_a_quantity() {
 
 #[test]
 fn a_unit_field_refuses_another_quantity_or_a_plain_number() {
-	fails_with(&format!("{RUN}\nRun(5 s, \"x\").distance"), "Run.distance holds m");
-	fails_with(&format!("{RUN}\nRun(5, \"x\").distance"), "Run.distance holds m");
+	fails_with(&format!("{RUN}\nRun(5 s, \"x\").distance"), "Run.distance holds km");
+	fails_with(&format!("{RUN}\nRun(5, \"x\").distance"), "Run.distance holds km");
 }
 
 #[test]

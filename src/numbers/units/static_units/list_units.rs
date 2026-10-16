@@ -4,7 +4,7 @@
 use super::*;
 
 /// The element of a list a computation maps: `map(xs, quantity_item1 => quantity_item1 * 0.01)`, one name per depth
-const ITEM: &str = "quantity_item";
+pub(super) const ITEM: &str = "quantity_item";
 /// Where the list goes in a mapped list and in the text of a whole list, and the body in a mapped one
 const LIST_PLACEHOLDER: &str = "quantity_list";
 const BODY_PLACEHOLDER: &str = "quantity_body";
@@ -71,7 +71,12 @@ pub(super) fn each_in_unit(amount: &Node, op: Op, unit: &Node) -> Node {
 			Bracket::Square,
 			separator.clone(),
 		),
-		_ => Node::Key(Box::new(amount.clone()), op, Box::new(unit.clone())),
+		Node::Number(_) => Node::Key(Box::new(amount.clone()), op, Box::new(unit.clone())),
+		// `[n, 4] cm`: an element named n is in the unit as `n * 1 cm`, which a written `n cm` is not (decisions.md)
+		_ => {
+			let one_unit = Node::Key(Box::new(Node::Number(Number::Int(1))), Op::Mul, Box::new(unit.clone()));
+			Node::Key(Box::new(amount.clone()), op, Box::new(one_unit))
+		}
 	}
 }
 

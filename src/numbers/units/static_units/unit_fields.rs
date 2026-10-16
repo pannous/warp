@@ -27,6 +27,19 @@ pub(super) fn unit_classes(program: &Node) -> HashMap<String, Fields> {
 		.collect()
 }
 
+/// The unit each unit field is written in, by class and field (`inch` of `class D{diagonal: inch}`): the unit its errors
+/// name (decision unit-types: the written unit is the field's display unit)
+pub(super) fn field_unit_names(program: &Node) -> HashMap<(String, String), String> {
+	crate::class_methods::class_fields(program)
+		.into_iter()
+		.flat_map(|(class, fields)| {
+			fields.into_iter().filter(|(_, type_name)| field_unit(type_name).is_some()).map(move |(name, type_name)| {
+				((class.clone(), name), type_name.trim_end_matches(OPTIONAL_MARK).to_string())
+			})
+		})
+		.collect()
+}
+
 /// Each field typed with a tolerance (`length: m ± 1 mm`) by class: its position among the fields, its name, its spread
 type Tolerances = HashMap<String, Vec<(usize, String, Node)>>;
 
@@ -326,7 +339,7 @@ impl Inference {
 			if let Some((field, held)) = fields.get(index).filter(|(_, held)| *held != given) {
 				return Some(Err(Stop::Error(format!(
 					"DimensionError: {class}.{field} holds {}, is given {}{}",
-					shown(held),
+					self.held_text(&class, field, held),
 					shown(&given),
 					self.unit_after_variable_hint(&arguments[index], arguments.get(index + 1))
 				))));
@@ -336,15 +349,19 @@ impl Inference {
 		Some(Ok((Node::List(lowered, Bracket::Round, crate::node::Separator::None), Signature::plain())))
 	}
 
+	/// What a field of a class holds, in the unit it is written in (`inch`, not `m`)
+	pub(super) fn held_text(&self, class: &str, field: &str, held: &Signature) -> String {
+		match self.field_unit_names.get(&(class.to_string(), field.to_string())) {
+			Some(unit) => unit.clone(),
+			None => shown(held),
+		}
+	}
+
 	/// `D(n inch)`, `D{diagonal: n inch}`: the unit after a variable is read as the next value, as units bind only after
 	/// a number (notes/decisions.md); the hint names the way that works
 	fn unit_after_variable_hint(&self, value: &Node, next: Option<&Node>) -> String {
 		match next {
-			Some(unit) if self.unit_word(unit).is_some() => format!(
-				"; a unit binds only after a number, write {} * 1 {}",
-				value.serialize().trim(),
-				unit.serialize().trim()
-			),
+			Some(unit) if self.unit_word(unit).is_some() => format!("; {}", super::unit_after_name_advice(value, unit)),
 			_ => String::new(),
 		}
 	}
@@ -391,7 +408,7 @@ impl Inference {
 				return Some(Err(Stop::Error(format!(
 					"DimensionError: {class}.{} holds {}, is given {}{}",
 					field.drop_meta().name(),
-					shown(held),
+					self.held_text(&class, &field.drop_meta().name(), held),
 					shown(&given),
 					self.unit_after_variable_hint(&value, entries.get(index + 1))
 				))));
@@ -461,7 +478,10 @@ impl Inference {
 						"DimensionError: the default of {} is {}, the field holds {}",
 						declaration.serialize().trim(),
 						shown(&given),
-						shown(&held)
+						match declaration.drop_meta() {
+							Node::Key(_, Op::Colon, unit) => unit.serialize().trim().to_string(),
+							_ => shown(&held),
+						}
 					)));
 				}
 				Ok(Node::Key(Box::new(self.numeric_field(*declaration, fields)?), Op::Assign, Box::new(default)))
