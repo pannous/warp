@@ -473,6 +473,17 @@ pub(crate) fn word_headed(items: &[Node]) -> Option<(&str, &[Node])> {
 	Some((head.symbol_name()?, rest))
 }
 
+/// `word x` or `word(x)`: the one subject the word is applied to
+pub(crate) fn word_applied<'a>(node: &'a Node, word: &str) -> Option<&'a Node> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round | Bracket::None, _) => match items.as_slice() {
+			[head, subject] if head.is_symbol(word) => Some(subject),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
 /// `f(a, b)` (round brackets, any separator) taken apart: the word called and its arguments
 pub(crate) fn round_call(node: &Node) -> Option<(&str, &[Node])> {
 	match node.drop_meta() {
