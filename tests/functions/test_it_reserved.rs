@@ -38,3 +38,25 @@ fn every_binding_of_it_warns() {
 		assert!(!warnings.iter().any(|warning| warning.contains("reserved")), "{code}: {warnings:?}");
 	}
 }
+
+/// user decision implicit-words-reserved: self and this name a method's receiver, reserved as it is
+#[test]
+fn self_and_this_are_reserved_too() {
+	for (code, name) in [
+		("self = 3; self", "self"),
+		("this = 1; this += 1; this", "this"),
+		("for self in [1 2] { x = self }; 1", "self"),
+	] {
+		let (_, warnings) = warnings_of(code);
+		let expected = format!("`{name}` is reserved: it names the receiver of a method");
+		assert!(warnings.iter().any(|warning| warning.contains(&expected)), "{code}: {warnings:?}");
+	}
+	for code in [
+		"class Point { x: int; norm(self) := self.x * 2 }\nPoint(x: 3).norm()",
+		"class Point { x: int; norm() := this.x * 2 }\nPoint(x: 3).norm()",
+	] {
+		let (value, warnings) = warnings_of(code);
+		assert_eq!(value, warp::Node::int(6), "{code}");
+		assert!(!warnings.iter().any(|warning| warning.contains("reserved")), "{code}: {warnings:?}");
+	}
+}
