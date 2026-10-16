@@ -83,4 +83,3 @@ x = twice "ab"
 once [0]
 twice {a: 1}
 s.once
-def twice { 5 }
