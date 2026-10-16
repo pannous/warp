@@ -281,6 +281,9 @@ main` calling warp_twigl with values.size/time/mouse/frame, FC and m with y flip
   the GLSL naga reads, put back as `values.name` in its WGSL (crates/warp-glsl with_hole_globals); the holes pass sees
   through the call (shader_holes.rs holes_of). Holes are floats only (twigl has t, m, r, f for the built-ins).
 - Not yet: twigl's backbuffer b (would be $previous), noise functions (snoise2D…), sound s, other twigl modes
+- twigl's noise (fsnoise, fsnoiseDigits, snoise2D, snoise3D: lib/draw.warp twigl_noise) goes into a shader that calls
+  it; probes/twigl/noise.warp.
+- Not yet: twigl's backbuffer b (would be $previous), snoise4D, sound s, other twigl modes
   (classic, geeker: full `void main` sources, gl_FragColor), Shadertoy's iChannel textures.
 
 ## Paint window, default canvas, probes (from the warp-sound handover, 2026-10-10)

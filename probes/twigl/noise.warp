@@ -1,0 +1,4 @@
+#!/usr/bin/env warp
+# twigl's noise (card twigl-glsl): simplex noise 2D and 3D, moving with the time
+use draw
+paint(twigl("o += vec4(snoise3D(vec3(FC.xy / 40., t)) * .5 + .5, fsnoise(FC.xy) * .2, snoise2D(FC.xy / 90.) * .5 + .5, 1);"), 160, 120)
