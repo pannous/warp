@@ -90,9 +90,10 @@ binary alone: o0 50 s wall / 61 s CPU, o1 74 s / 268 s, o2 106 s / 355 s. rustc 
    its own ticket by PID (`*-$$`) so a rename can't wedge it.
 
 ## Status (2026-10-16 evening)
-- 1 gate-opt (card full-suite): in the Integrator's batch. 2+3 gate-direct (on top of it): full run 415 s for the
-  tests binary (summed 6609 s); running the binary directly needs the [env] of .cargo/config.toml (WARP_TEST_TABLES),
-  which test.sh now exports as cargo does. 7 queue-prebuild (card tests-queue): Ready. 6: card cache-lowered.
+- On main: 1 gate-opt (fa3d09c60), o2-gate (gate-no-incremental: CARGO_INCREMENTAL=0, the o2 build reused stale
+  codegen units and failed to link), 7 queue-prebuild, 2+3 gate-direct (0fddc30ac, first gate 6117 passed / 0
+  failed): tests binary 415 s (summed 6609 s); running it directly needs the [env] of .cargo/config.toml
+  (WARP_TEST_TABLES), which test.sh exports as cargo does. 6: card cache-lowered.
 - Memory: rustc of warp-lang at o2 took 6.2 GB in a cold integrate build with other builds alongside and the 6 GB cap
   killed the gate (the Integrator reran it at 8 GB). queue-prebuild caps only tests now, never rustc/sccache/linkers
   (UNCAPPED_PROGRAMS); until it lands test.sh's default cap is 8 GB (gate-direct).
