@@ -89,6 +89,16 @@ binary alone: o0 50 s wall / 61 s CPU, o1 74 s / 268 s, o2 106 s / 355 s. rustc 
    in line while its process waited under its old name; the lock stayed free while 20 runs waited. queue.sh could find
    its own ticket by PID (`*-$$`) so a rename can't wedge it.
 
+## Status (2026-10-16 evening)
+- 1 gate-opt (card full-suite): in the Integrator's batch. 2+3 gate-direct (on top of it): full run 415 s for the
+  tests binary (summed 6609 s); running the binary directly needs the [env] of .cargo/config.toml (WARP_TEST_TABLES),
+  which test.sh now exports as cargo does. 7 queue-prebuild (card tests-queue): Ready. 6: card cache-lowered.
+- 4 and 5 decided by the user (notes/decisions.md gate-cuts): branches samples-once and twins-gate.
+- **The nightly tier**: tests/nightly.sh (branch twins-gate), crontab 03:10, runs the tests the gate samples
+  (`parser::test_self_`, WARP_NIGHTLY=1: every source) on origin/main in the detached worktree
+  warp.worktrees.noindex/nightly, log data/nightly/<date>.log, a failure files a card. Not GitHub's "Rust CI"
+  nightly: it fails every night on Linux before testing (card github-rust).
+
 Not worth cutting: sleeps (117 calls, all ≤200 ms polling for servers), the small tests (<0.3 s, 261 test-s total).
 Tests that could move to a nightly tier if the gate must shrink further: the twins (5), the sample sweeps beyond one
 pass (4), types::test_type_model's Lean proofs (110 s cold, 3 s warm), ffi::test_cargo_crates (cold 90 s each).

@@ -767,6 +767,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   default branch; a pin is `{repository: pannous/uniscript, version: 1.0.7}`.
 
 ## CLI, building and tests
+- gate-cuts (2026-10-16, user via the Integrator; notes/test_speed.md): each sample runs once in the gate:
+  test_playground_samples checks the playground menu (no error at all), test_samples_run_cleanly only the samples
+  outside it (no compiler error). The self-hosting twins check every 4th source in the gate and all sources in the
+  nightly run (tests/nightly.sh, cron 03:10 on origin/main; a failure files a card).
 - cli-words (2026-10-15, user): warp's own command options are words, never `--flags` ("we don't like this minus
   minus style, ever"), e.g. `warp format check …`, `warp format hash-comments …`; the style guide says so. Card
   cli-words migrates the existing --fuel/--exe/--strict/… (older `--x` mentions below are superseded by it).
