@@ -106,6 +106,7 @@ pub const IS_WORD: &str = "is";
 pub const LET_WORD: &str = "let";
 pub const RAISE_WORD: &str = "raise";
 pub const SELF_WORD: &str = "self";
+pub const THIS_WORD: &str = "this";
 /// Library words: `xs.add(x)`, `chr(n)`, `dir(x)`, `dot(xs, ys)`, `error "e"`, `xs.pop()`, `print x`, `str(x)` …
 pub const ADD_WORD: &str = "add";
 pub const CHR_WORD: &str = "chr";
