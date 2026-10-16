@@ -464,7 +464,7 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 		None => node,
 	};
 	if let Some(answer) = crate::numbers::real::answer(&node) {
-		return Err(answer);
+		return Err(crate::numbers::units::static_units::with_answer_units(answer));
 	}
 	let node = run_passes(node, MEANING_PASSES);
 	if let Some(error) = crate::errors::diagnostic::first_located_error(&node) {
