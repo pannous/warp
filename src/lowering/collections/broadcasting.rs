@@ -107,12 +107,12 @@ pub fn lower_prefix_calls(program: Node) -> Node {
 	// `text hex 255`, `text(byte 65)`: a built-in type converts one value, nesting like a function of one parameter.
 	// Next to a comparison it follows the user functions' rule: its value is typed as the type itself, `int 3 == 3` is
 	// `(int 3) == 3` like `f(x: int)`; a truth type (`bool 3 == 3`) takes anything and is ambiguous like `same(x) := x`
-	for name in type_calls_used(&program) {
+	for name in used_words(&program, |name| crate::analyzer::is_type_call_word(name).then_some(())).into_keys() {
 		let typed = !TRUTH_TYPES.contains(&name.to_lowercase().as_str());
 		arities.entry(name).or_insert(Arity { fewest: 1, most: 1, typed_first: typed, converts: true, library: true });
 	}
 	// `round(floor x)`, `upper(lower t)`: a library word of a typed value nests like a function of its parameters
-	for (name, (fewest, most)) in library_calls_used(&program) {
+	for (name, (fewest, most)) in used_words(&program, crate::lowering::library_signatures::typed_first_parameters) {
 		arities.entry(name).or_insert(Arity { fewest, most, typed_first: true, converts: false, library: true });
 	}
 	if arities.is_empty() {
@@ -202,28 +202,13 @@ struct Arity {
 	library: bool,
 }
 
-/// The built-in type words the program calls and does not name itself: `int`, `text`, `hex`, `byte` … (analyzer::applied_word)
-fn type_calls_used(program: &Node) -> HashSet<String> {
-	let mut used = HashSet::new();
-	program.visit(&mut |node| {
-		if let Node::Symbol(name) = node {
-			if crate::analyzer::is_type_call_word(name) {
-				used.insert(name.clone());
-			}
-		}
-	});
-	let names = crate::soft_keywords::names_given(program);
-	used.retain(|name| !names.contains(name));
-	used
-}
-
-/// The library words the program calls and does not name itself whose first parameter is typed, with their arity
-fn library_calls_used(program: &Node) -> HashMap<String, (usize, usize)> {
+/// The words the program calls and does not name itself that `known` recognises, with what it says about each
+fn used_words<V>(program: &Node, known: impl Fn(&str) -> Option<V>) -> HashMap<String, V> {
 	let mut used = HashMap::new();
 	program.visit(&mut |node| {
 		if let Node::Symbol(name) = node {
-			if let Some(parameters) = crate::lowering::library_signatures::typed_first_parameters(name) {
-				used.insert(name.clone(), parameters);
+			if let Some(value) = known(name) {
+				used.insert(name.clone(), value);
 			}
 		}
 	});
