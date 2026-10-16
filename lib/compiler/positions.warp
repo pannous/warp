@@ -1,3 +1,10 @@
 // Positions in a source text, as the lexer counts them (card self-differential; Rust twin: warp_parser/scanning.rs
-// advance, a column per character)
-line_widths(text) := [count(line) for line in split(text, "\n")]
+// advance, a column per code point: a character such as שָ of a letter and its vowel point takes two)
+line_widths(text) := [count(code_points(line)) for line in split(text, "\n")]
+
+// The code points of a text as a list, what a position indexes
+def code_points(text: text) {
+	found = []
+	for each codepoint in text { found += [codepoint] }
+	found
+}

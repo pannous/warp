@@ -1,0 +1,6 @@
+// lexer twins on a text whose characters are several code points each (card probes-makes)
+use "lib/compiler/positions.warp"
+use "lib/compiler/lexer.warp"
+s = read("probes/shalom_characters.warp")
+print line_widths(s)   // Rust: code points per line [12 …]
+print spans(s)         // Rust: [[4 12] …]
