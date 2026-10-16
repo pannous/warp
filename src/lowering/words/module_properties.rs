@@ -252,30 +252,8 @@ pub(crate) fn bound_names(program: &Node) -> HashSet<String> {
 /// The variables the program's destructurings bind: `a, b = …`, `[a, b] = …`, `{x, y} = …`, `{x: a} = …`
 fn destructured_names(program: &Node) -> HashSet<String> {
 	let mut names = HashSet::new();
-	program.visit(&mut |node| match node {
-		Node::Key(target, Op::Assign, _) => names.extend(pattern_names(target)),
-		Node::List(..) => names.extend(crate::tuples::destructured_names(node)),
-		_ => {}
-	});
+	program.visit(&mut |node| names.extend(crate::tuples::destructured_names(node)));
 	names
-}
-
-/// The variables a destructuring pattern binds: `[a, b]`, `(a, *rest)`, `{x, y}`, `{x: a}` (a, not the field x)
-fn pattern_names(pattern: &Node) -> Vec<String> {
-	match pattern.drop_meta() {
-		Node::List(items, Bracket::Round | Bracket::Square | Bracket::Curly, _) => {
-			items.iter().flat_map(pattern_item_names).collect()
-		}
-		_ => vec![],
-	}
-}
-
-fn pattern_item_names(item: &Node) -> Vec<String> {
-	match item.drop_meta() {
-		Node::Key(_, Op::Colon, renamed) => pattern_item_names(renamed),
-		Node::List(..) => pattern_names(item),
-		other => other.symbol_name().map(|name| crate::tuples::unstarred(name).to_string()).into_iter().collect(),
-	}
 }
 
 /// `height` of a write's target `height` or a declared `height: length`

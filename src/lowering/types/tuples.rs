@@ -129,28 +129,45 @@ fn with_trailing_return(node: &Node, more: &[Node]) -> Option<Node> {
 	}
 }
 
-/// The variables a destructuring statement assigns: `x, y = v, w`, `(x, y) = v`, `a, *rest = …`
+/// The variables a destructuring statement assigns: `x, y = v, w`, `(x, y) = v`, `[x, y] = v`, `a, *rest = …`,
+/// `{x, y} = p`, `{x: a} = p`
 pub(crate) fn destructured_names(statement: &Node) -> Vec<String> {
-	let targets: Vec<Node> = match statement.drop_meta() {
+	match statement.drop_meta() {
 		Node::List(items, Bracket::None, Separator::Colon) => {
 			let assignment = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)));
-			match assignment.map(|at| (at, items[at].drop_meta())) {
-				Some((at, Node::Key(last, _, _))) => items[..at].iter().chain([last.as_ref()]).cloned().collect(),
+			let targets: Vec<&Node> = match assignment.map(|at| (at, items[at].drop_meta())) {
+				Some((at, Node::Key(last, _, _))) => items[..at].iter().chain([last.as_ref()]).collect(),
 				_ => vec![],
+			};
+			if targets.iter().all(|target| is_target(target)) {
+				targets.into_iter().flat_map(pattern_names).collect()
+			} else {
+				vec![]
 			}
 		}
-		Node::Key(left, Op::Assign, _) => bracketed_targets(left).map(<[Node]>::to_vec).unwrap_or_default(),
+		Node::Key(left, Op::Assign, _) if is_pattern(left) => pattern_names(left),
 		_ => vec![],
-	};
-	let mut names = vec![];
-	if targets.iter().all(is_target) {
-		targets.iter().for_each(|target| {
-			target.visit(&mut |part| {
-				names.extend(part.symbol_name().map(|name| name.trim_start_matches(STARRED).to_string()))
-			})
-		});
 	}
-	names
+}
+
+/// The variables a pattern binds, in every shape a destructuring or a match arm writes: `a`, `*rest` (rest),
+/// `(a, b)`, `[a, b]`, `{x, y}`, `{x: a}` (a, not the field x), nested
+pub(crate) fn pattern_names(pattern: &Node) -> Vec<String> {
+	match pattern.drop_meta() {
+		Node::List(items, _, _) if is_pattern(pattern) => items.iter().flat_map(pattern_item_names).collect(),
+		other => other.symbol_name().map(|name| unstarred(name).to_string()).into_iter().collect(),
+	}
+}
+
+fn pattern_item_names(item: &Node) -> Vec<String> {
+	match item.drop_meta() {
+		Node::Key(_, Op::Colon, renamed) => pattern_names(renamed),
+		_ => pattern_names(item),
+	}
+}
+
+fn is_pattern(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::List(_, Bracket::Round | Bracket::Square | Bracket::Curly, _))
 }
 
 /// `x, (y = v), w` → `$destructure (x, y) v w`; `(x, y) = v, w` the same
