@@ -387,10 +387,6 @@ fn called_function(node: &Node) -> Option<(String, Vec<Node>)> {
 	Some((head.clone(), items[1..].to_vec()))
 }
 
-fn builtin(word: &str, arguments: Vec<Node>) -> Node {
-	call(word, arguments)
-}
-
 struct Rewrite<'a> {
 	declared: HashMap<String, Shared>,
 	functions: &'a HashMap<String, Vec<String>>,
@@ -459,7 +455,7 @@ impl Rewrite<'_> {
 			// a read of a shared value
 			Node::Symbol(_) if let Some(kind) = shared_value(&node, &self.names(function)) => {
 				let [get, _, _] = element_words(kind);
-				let read = builtin(get, vec![node, crate::node::int(VALUE_CELL)]);
+				let read = call(get, vec![node, crate::node::int(VALUE_CELL)]);
 				match kind.element {
 					Element::Bool => key(read, Op::Ne, crate::node::int(0)),
 					_ => read,
@@ -472,13 +468,13 @@ impl Rewrite<'_> {
 	/// `shared xs = int[n]`: the array of n cells; a shared value one cell, set once the name holds it
 	fn declared(&self, name: String, first: Node, kind: Shared, function: Option<&str>) -> Node {
 		let count = if kind.value { crate::node::int(VALUE_CELL) } else { self.node(first.clone(), function) };
-		let created = key(Node::Symbol(name.clone()), Op::Assign, builtin(kind.storage.new_and_count().0, vec![count]));
+		let created = key(Node::Symbol(name.clone()), Op::Assign, call(kind.storage.new_and_count().0, vec![count]));
 		if !kind.value {
 			return created;
 		}
 		// `n = shared_new(1); shared_set(n, 1, v)`: the value is set once the name holds its cell
 		let [_, set, _] = element_words(kind);
-		let first = builtin(
+		let first = call(
 			set,
 			vec![
 				Node::Symbol(name),
@@ -528,7 +524,7 @@ impl Rewrite<'_> {
 		}
 		// `ys = xs.map(x => x * 0.5 + 1)` of a linear float array: its float kernel makes ys, a new linear array
 		if let Some((array, kernel)) = float_map(value, names) {
-			let mapped = builtin(&kernel, vec![array.clone()]);
+			let mapped = call(&kernel, vec![array.clone()]);
 			return Some(match value.attribute(crate::parallel::SPLIT_ATTRIBUTE) {
 				Some(_) => split_mapped(target, &array, &kernel, mapped),
 				None => key(target.clone(), Op::Assign, mapped),
@@ -554,7 +550,7 @@ impl Rewrite<'_> {
 	) -> Option<Node> {
 		let kind = shared_value(name, names)?;
 		let [_, set, add] = element_words(kind);
-		let cell = |word: &str, value: Node| builtin(word, vec![name.clone(), crate::node::int(VALUE_CELL), value]);
+		let cell = |word: &str, value: Node| call(word, vec![name.clone(), crate::node::int(VALUE_CELL), value]);
 		match op {
 			Op::Assign if let Some((op, added)) = self_update(name, value) => {
 				Some(cell(add, signed(self.node(added, function), op)))
@@ -578,25 +574,23 @@ impl Rewrite<'_> {
 		match (target, op) {
 			(Node::Key(array, Op::Hash, index), Op::Assign) => {
 				let [_, set, _] = element_words(shared(array, names)?);
-				Some(builtin(set, vec![array.as_ref().clone(), rewritten(index), rewritten(value)]))
+				Some(call(set, vec![array.as_ref().clone(), rewritten(index), rewritten(value)]))
 			}
 			(Node::Key(array, Op::Hash, index), Op::AddAssign | Op::SubAssign) => {
 				let [_, _, add] = element_words(shared(array, names)?);
-				Some(builtin(add, vec![array.as_ref().clone(), rewritten(index), signed(rewritten(value), op)]))
+				Some(call(add, vec![array.as_ref().clone(), rewritten(index), signed(rewritten(value), op)]))
 			}
 			(array, Op::Hash)
 				if !value.is_empty_node()
 					&& let Some(kind) = shared(array, names) =>
 			{
 				let [get, _, _] = element_words(kind);
-				Some(builtin(get, vec![array.clone(), rewritten(value)]))
+				Some(call(get, vec![array.clone(), rewritten(value)]))
 			}
 			// `#xs`, `xs.count`
-			(Node::Empty, Op::Hash) => {
-				Some(builtin(shared(value, names)?.storage.new_and_count().1, vec![value.clone()]))
-			}
+			(Node::Empty, Op::Hash) => Some(call(shared(value, names)?.storage.new_and_count().1, vec![value.clone()])),
 			(array, Op::Dot) if crate::analyzer::is_counting_word(&value.name()) => {
-				Some(builtin(shared(array, names)?.storage.new_and_count().1, vec![array.clone()]))
+				Some(call(shared(array, names)?.storage.new_and_count().1, vec![array.clone()]))
 			}
 			_ => None,
 		}
@@ -630,8 +624,7 @@ impl Rewrite<'_> {
 			_ => None,
 		};
 		if let Some((word, item, in_word, array, body, kind)) = over_cells {
-			let indexes =
-				key(crate::node::int(1), Op::To, builtin(kind.storage.new_and_count().1, vec![array.clone()]));
+			let indexes = key(crate::node::int(1), Op::To, call(kind.storage.new_and_count().1, vec![array.clone()]));
 			let index = Node::Symbol(format!("{}{}index", array.name(), crate::analyzer::TEMPORARY_SEPARATOR));
 			let body = self.cells_looped(item, array, &index, kind, body, function);
 			return Node::List(vec![word.clone(), index, in_word.clone(), indexes, body], bracket, separator);
@@ -659,17 +652,17 @@ impl Rewrite<'_> {
 				Some(array.clone())
 			}
 			[word, array] if crate::analyzer::is_counting_word(&word.name()) => {
-				Some(builtin(shared(array, names)?.storage.new_and_count().1, vec![array.clone()]))
+				Some(call(shared(array, names)?.storage.new_and_count().1, vec![array.clone()]))
 			}
 			[word, left, right]
 				if word.name() == LINEAR_DOT && is_linear_floats(left, names) && is_linear_floats(right, names) =>
 			{
-				Some(builtin(&word.name(), vec![left.clone(), right.clone()]))
+				Some(call(&word.name(), vec![left.clone(), right.clone()]))
 			}
 			[word, shader, array, workgroups]
 				if word.name() == crate::host::GPU_COMPUTE && is_linear_floats(array, names) =>
 			{
-				Some(builtin(
+				Some(call(
 					crate::host::GPU_COMPUTE_LINEAR,
 					vec![self.node(shader.clone(), function), array.clone(), self.node(workgroups.clone(), function)],
 				))
@@ -688,7 +681,7 @@ impl Rewrite<'_> {
 		body: &Node,
 		function: Option<&str>,
 	) -> Node {
-		let read = key(item.clone(), Op::Assign, builtin(element_words(kind)[0], vec![array.clone(), index.clone()]));
+		let read = key(item.clone(), Op::Assign, call(element_words(kind)[0], vec![array.clone(), index.clone()]));
 		let statements = match self.node(body.clone(), function).drop_meta().clone() {
 			Node::List(statements, Bracket::Curly, Separator::Semicolon | Separator::Newline) => statements,
 			Node::List(statement, Bracket::Curly, separator) => vec![Node::List(statement, Bracket::None, separator)],
@@ -963,7 +956,7 @@ fn block_mapped(target: &Node, array: &Node, lambda: &Node, mapped: &str, fills:
 	));
 	let separator = crate::analyzer::TEMPORARY_SEPARATOR;
 	let index = Node::Symbol(format!("{}{separator}map{separator}index", target.name()));
-	let item = substitute(body.as_ref().clone(), &parameter.name(), &builtin(get, vec![array.clone(), index.clone()]));
+	let item = substitute(body.as_ref().clone(), &parameter.name(), &call(get, vec![array.clone(), index.clone()]));
 	[("map_target", target.clone()), ("map_source", array.clone()), ("map_index", index), ("map_item", item)]
 		.into_iter()
 		.chain(fills.iter().cloned())

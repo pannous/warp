@@ -407,10 +407,7 @@ fn named_subject(item: &Node) -> Option<(Node, Node)> {
 	if !matches!(name.drop_meta(), Node::Symbol(_)) || !super::nodes::is_block(cases) || expression.is_empty() {
 		return None;
 	}
-	let expression = match expression {
-		[single] => single.clone(),
-		many => Node::List(many.to_vec(), bracket.clone(), separator.clone()),
-	};
+	let expression = Node::single_or_list(expression.to_vec(), bracket.clone(), separator.clone());
 	Some((key(name.as_ref().clone(), Op::Assign, expression), cases.clone()))
 }
 
@@ -1037,10 +1034,7 @@ fn function_parameters(head: &Node) -> Option<Node> {
 				Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [name, kind] if is_kinded_type_word(kind) && !is_kinded_type_word(name)) => Some(words[0].clone()),
 				_ => None,
 			}).collect();
-			match names.as_slice() {
-				[single] => Some(single.clone()),
-				_ => Some(Node::List(names, Bracket::Round, Separator::Colon)),
-			}
+			Some(Node::single_or_list(names, Bracket::Round, Separator::Colon))
 		}
 	}
 }

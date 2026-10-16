@@ -521,10 +521,6 @@ fn is_infix_arithmetic(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::Key(_, op, _) if ARITHMETIC.contains(op))
 }
 
-fn grouped(node: Node) -> Node {
-	parens(vec![node])
-}
-
 /// `x squared` is `square(x)`; after ungrouped arithmetic (`1+2 squared`) the user is asked what the word applies to (D9)
 fn apply_suffix_words(items: Vec<Node>, functions: &SuffixWords, bracket: Bracket, separator: Separator) -> Node {
 	if !matches!(bracket, Bracket::None | Bracket::Round) || separator != Separator::Space {
@@ -586,7 +582,7 @@ fn suffix_precedence(operand: &Node, word: &Node) -> Result<bool, Node> {
 		nearest = leaf.clone();
 		Node::List(vec![leaf, word.clone()], Bracket::Round, Separator::Space)
 	});
-	let loose = Node::List(vec![grouped(operand.clone()), word.clone()], Bracket::None, Separator::Space);
+	let loose = Node::List(vec![parens(vec![operand.clone()]), word.clone()], Bracket::None, Separator::Space);
 	let (word_text, whole_text) = (word.serialize(), operand.serialize());
 	let written = format!("{whole_text} {word_text}");
 	let readings = vec![
