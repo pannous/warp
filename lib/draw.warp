@@ -40,7 +40,7 @@ def hsv(h, s, v) {
 }
 // alpha from 0 (invisible) to 1 (opaque)
 with_alpha(color, alpha) := (round(clamp(alpha, 0, 1) * 255) as int) * 16777216 + color % 16777216
-alpha_of(color) := color//16777216
+alpha_of(color) := color /! 16777216
 
 // what draw_shape's kind says (src/graphics/gpu_canvas.rs)
 clear_shape = 0
@@ -71,7 +71,7 @@ def mixed(below, color) {
 }
 
 // one channel (its place 65536, 256 or 1) of color over under, by alpha a from 0 to 255
-channel_mix(color, under, a, place) := ((color//place % 256) * a + (under//place % 256) * (255 - a))//255
+channel_mix(color, under, a, place) := ((color /! place % 256) * a + (under /! place % 256) * (255 - a)) /! 255
 
 def dot(x, y, color) {
 	col = cell(x)
@@ -127,7 +127,7 @@ def label(x, y, words, color, size = 12) {
 	width = covered[0]
 	for at in 0..width * covered[1] {
 		amount = covered[at + 2]
-		if amount > 0 { dot(x + at % width, y + at//width, with_alpha(color, amount / 255)) }
+		if amount > 0 { dot(x + at % width, y + at /! width, with_alpha(color, amount / 255)) }
 	}
 }
 

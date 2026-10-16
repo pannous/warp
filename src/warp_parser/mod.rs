@@ -269,6 +269,10 @@ pub(crate) const TIMES_WORD: &str = "times";
 pub const TEXT_TIMES: &str = "times·text";
 /// The acknowledge-once note that a spaced `//` after code is a comment, not Python's floor division
 const SLASH_COMMENT_TOPIC: &str = "slash-comment";
+/// The severe warning on a `//` comment meant as floor division, `7//2` (decision floor-division)
+pub const FLOOR_DIVISION_TOPIC: &str = "floor-division-comment";
+const FLOOR_DIVISION: &str = "/!";
+const FLOOR_DIVISION_ASSIGN: &str = "/!=";
 const ELVIS_WORD: &str = "elvis";
 /// `N times` takes everything up to an assignment: `n+1 times {…}`
 const TIMES_BP: u8 = 50;
@@ -595,7 +599,7 @@ impl WarpParser {
 
 	pub fn parse_with_options(input: &str, options: ParserOptions) -> Node {
 		if let Some((line, column, closer)) = comment_hiding_a_closer(input).filter(|_| !options.data_mode) {
-			let message = format!("`//` at {line}:{column} starts a comment that hides the closing `{closer}`: floor division is written glued, a//b");
+			let message = format!("`//` at {line}:{column} starts a comment that hides the closing `{closer}`: floor division is written a {FLOOR_DIVISION} b");
 			return glued_floor_division(Diagnostic::default().message(message), input, line, column).into_error();
 		}
 		let mut parser = WarpParser::new_with_options(input.to_string(), options);

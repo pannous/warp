@@ -27,7 +27,7 @@ pub(super) fn divided_index(index: &Node) -> Option<(&Node, &Node)> {
 }
 
 /// How to fix a runtime error, appended to its message: the trap knows no source position, so the fix is generic
-pub(super) const WHOLE_NUMBER_FIX: &str = "fix: compute it with // (floor division) or `… as int`";
+pub(super) const WHOLE_NUMBER_FIX: &str = "fix: compute it with /! (floor division) or `… as int`";
 pub(super) const RUNTIME_ERROR_FIXES: [(&str, &str); 7] = [
 	(
 		super::super::super::numbers::casts::INVALID_CODE_POINT,
@@ -193,7 +193,7 @@ impl WasmGcEmitter {
 		func.instruction(&I::End);
 	}
 
-	/// `xs[n/2]`: an index that divides traps unless the division is exact; floor division (`n//2`) or `n/2 as int` is hinted
+	/// `xs[n/2]`: an index that divides traps unless the division is exact; floor division (`n /! 2`) or `n/2 as int` is hinted
 	pub(in crate::wasm_emitter) fn emit_integral_index_check(&mut self, func: &mut Function, index: &Node) {
 		let Some((dividend, divisor)) = divided_index(index) else {
 			return;
@@ -203,7 +203,7 @@ impl WasmGcEmitter {
 		crate::normalize::set_position_of(index);
 		crate::normalize::hint(
 			&format!("{dividend_text}/{divisor_text}"),
-			&format!("{dividend_text}//{divisor_text}"),
+			&format!("{dividend_text} /! {divisor_text}"),
 			"an index must be an integer: floor division, or `as int`",
 		);
 		let remainder = Node::Key(Box::new(dividend.clone()), crate::operators::Op::Mod, Box::new(divisor.clone()));

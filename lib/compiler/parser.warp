@@ -170,12 +170,12 @@ def continued(p, left, min_power) {
 		} else if floor_division_at(p).length > 0 {
 			written = floor_division_at(p)
 			powers = binding_powers("/")
-			if written == "//=" { powers = binding_powers("=") }
+			if written == "/!=" { powers = binding_powers("=") }
 			if powers#1 < min_power { break }
 			p.at = p.at + written.length
 			skip_blanks(p)
 			quotient = listed("(", "", [["symbol", "floor_quotient"], left, expression(p, powers#2)])
-			if written == "//=" { quotient = ["key", "=", left, quotient] }
+			if written == "/!=" { quotient = ["key", "=", left, quotient] }
 			left = quotient
 		} else if membership_at(p).length > 0 and not counts_units(left) {
 			word = membership_at(p)
@@ -261,13 +261,13 @@ def counts_pairs(node) {
 	true
 }
 
-// `7//2`, `x //= 2`, `7 div 2`: the floor division written at the parser's position, else ""; `x // note` is a comment
-// Rust twin: expressions.rs special_infix, scanning.rs at_floor_division
+// `7 /! 2`, `x /!= 2`, `7 div 2`: the floor division written at the parser's position, else ""; `//` is a comment
+// Rust twin: operators/spellings.rs `/!`, `/!=`, `div`
 def floor_division_at(p) {
 	if keyword_at(p, "div") and not opens_block(p, 3) { return "div" }
-	if not starts_at(p.code, "//", p.at) or is_blank(peek(p.code, p.at + 2, p.n)) { return "" }
-	if is_at(p.code, p.at + 2, '=', p.n) { return "//=" }
-	"//"
+	if starts_at(p.code, "/!=", p.at) { return "/!=" }
+	if starts_at(p.code, "/!", p.at) { return "/!" }
+	""
 }
 
 // A block opens after the `width` characters at the parser's position and blanks: `div {…}` is the html tag

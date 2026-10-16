@@ -80,6 +80,8 @@ pub fn operator(written: &str, is_prefix: bool) {
 		("**" | "^", false) => power_operator(written),
 		("?", false) => conditional(true),
 		("if", true) => conditional(false),
+		// Pascal's `7 div 2` (decision floor-division)
+		("div", false) => crate::errors::diagnostic::note_alias(written, "/!"),
 		_ => {}
 	}
 }
