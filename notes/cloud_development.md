@@ -244,6 +244,11 @@ branch's tests there:
   (a command, 0 turns) and goes on, instead of a fresh session. A session that refuses a job or never answers (3 h)
   is dropped, loudly, into data/cloud/dropped-sessions.txt: archive those in the web UI.
 - New sessions are named "Cloud Test Lane" (`--name` carries to the cloud); the pool addresses them by session_id only.
+- The prompt is two short lines whatever the filters: the job's arguments go to the branch cloud-jobs/<job> (pushed
+  by the Mac, deleted with the result), the session runs `cloud-test.sh --job <job>`. A filter list of 80 test files
+  used to fill the prompt and every repeated command (~2,000 characters each).
+- A session keeps the model it was created with: `--model` on a follow-up message doesn't switch it, a `/model haiku`
+  message does (0 turns). Every reused session gets `/model` before its job; early pool sessions had run on Opus.
 - A run that can't reach its tests (merge conflict, missing tip) pushes a red result naming why, and the test run is
   killed after 40 min with the tests that never finished named (a hang held batch-3's session).
 - The one Linux compiler warning (CLIENT unused in src/sound/midi.rs) is fixed on branch midi-client-warning (Ready).
