@@ -10,6 +10,7 @@ mod test_argument_labels;
 mod test_arity_and_type_overloads; // card use-sound-play
 mod test_arity_overloads;
 mod test_arrow_defaults_and_types;
+mod test_arrow_result_type; // card undefined-function
 mod test_bare_calls; // card assigning-bare
 mod test_bare_function_name;
 mod test_bare_host_words; // card random-should

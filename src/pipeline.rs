@@ -91,6 +91,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::text::interpolation::lower_program,
 	// `pattern => body` and `_ => v` arms of a match as `pattern: body` and `default: v`, the one form later passes read
 	crate::lowering::welcome_forms::lower_match_arms,
+	// `x(p:P) -> int := …` is `x(p:P): int := …` (welcome_forms.rs) before any pass reads a definition's head
+	crate::lowering::welcome_forms::lower_arrow_result_types,
 	// `a of b` is `b.a` (of_lookups.rs), before any pass reads a lookup
 	crate::lowering::of_lookups::lower,
 	// `(p).a` is `p.a` (grouped_receivers.rs), before any pass reads a lookup
