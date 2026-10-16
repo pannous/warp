@@ -53,22 +53,20 @@ const PROPERTIES: [Property; 9] = [
 	// the device pixels per length (decision display-names), a quantity in dpi that turns lengths into px, `3 cm *
 	// display.density`; a program sets it in dpi, `display.density = 300 dpi`
 	system_side("display", "density", "display_dpi * 1dpi", Some("set_system_value(\"display_dpi\", it / 1dpi)")),
-	// width × height in px, and the diagonal as a length: its whole px at the density (quantities run as exact amounts,
-	// a run-time √ is a float)
+	// width × height in px, and the diagonal as a length: its nearest whole px at the density (quantities run as exact
+	// amounts, a run-time √ is a float)
 	system_side("display", "size", "[display_width, display_height] px", None),
-	system_side(
-		"display",
-		"diagonal",
-		"(√(display_width² + display_height²) as int) * 1px / (display_dpi * 1dpi)",
-		None,
-	),
-	// card graphics-properties moves these to lib lines (`display { density: dpi, size: px, diagonal: inch }`)
+	system_side("display", "diagonal", "round(√(display_width² + display_height²)) * 1px / (display_dpi * 1dpi)", None),
+	// card graphics-properties moves these to lib lines (`display { density: dpi, size: px, diagonal: inch }`), their
+	// other names below to the common alias mechanism
 ];
+
+const DENSITY_NOTE: &str = "the pixels per length, in dpi";
 
 /// Other names of a property, each with the note naming the property (decision display-names)
 const PROPERTY_ALIASES: [(&str, &str, &str, &str); 4] = [
-	("display", "dpi", "density", "the pixels per length, in dpi"),
-	("display", "ppi", "density", "the pixels per length, in dpi"),
+	("display", "dpi", "density", DENSITY_NOTE),
+	("display", "ppi", "density", DENSITY_NOTE),
 	("display", "dimensions", "size", "dimension is a physical quantity (length, mass); size is width × height in px"),
 	("display", "resolution", "size", "resolution: density (dpi) or size (px)? size is width × height"),
 ];
