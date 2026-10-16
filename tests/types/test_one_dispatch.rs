@@ -26,3 +26,9 @@ fn a_property_is_called_in_function_form() {
 	is!("width(canvas, 12); canvas.width", 12);
 	is!("global kept = 1\nbox.size := kept\nbox.size(n) := kept = n\nsize(box, 5)\nsize box", 5);
 }
+
+// inside its own setter, writing the property stores the field (it recursed until the heap ran out)
+#[test]
+fn a_setter_writing_its_own_field_stores_it() {
+	is!("class Box{w:int; set w(v) { w = v * 2 }}; b = Box(1); b.w = 5; b.w", 10);
+}
