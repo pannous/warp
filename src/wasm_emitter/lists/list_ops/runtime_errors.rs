@@ -124,7 +124,13 @@ impl WasmGcEmitter {
 			self.declare_error_catching(); // the error functions throw while a `try` runs
 		}
 		for (error_id, name) in self.runtime_error_names().into_iter().enumerate() {
-			self.runtime_function(name, vec![], vec![], vec![], |s, f| s.emit_error_body(f, error_id as i32));
+			let function =
+				self.runtime_function(name, vec![], vec![], vec![], |s, f| s.emit_error_body(f, error_id as i32));
+			// a host word failing inside a `try` raises through them as the program's own error (host/native.rs raised)
+			if self.guards_errors && name == RETURNED_ERROR {
+				self.exports.export(RETURNED_ERROR, ExportKind::Func, function);
+				self.trap_detail_global();
+			}
 		}
 	}
 
