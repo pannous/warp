@@ -1194,11 +1194,13 @@ impl Lowering {
 		match literal_function(function) {
 			Some(lambda) => Some(lambda.params.len()),
 			None => match function.drop_meta() {
-				Node::Symbol(name) if self.context.user_functions.contains_key(name) => {
-					self.context.user_functions.get(name).map(|defined| defined.params.len())
-				}
 				// `sort(xs, by: count)`: a library word of one value is a key
-				Node::Symbol(name) if crate::library_words::is_one_value_function(name) => Some(1),
+				Node::Symbol(name) => self
+					.context
+					.user_functions
+					.get(name)
+					.map(|defined| defined.params.len())
+					.or_else(|| crate::library_words::is_one_value_function(name).then_some(1)),
 				_ => None,
 			},
 		}
