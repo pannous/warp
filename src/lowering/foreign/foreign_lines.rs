@@ -10,7 +10,7 @@ const FROM_WORD: &str = "from";
 pub fn lower(node: Node) -> Node {
 	match foreign_line_of(&node) {
 		Some((name, library)) if library == crate::ffi::BUILTIN_LIBRARY => builtin_line(&node, &name),
-		Some((name, library)) => crate::warp_parser::parse(&format!("import ({name}) from '{library}'")),
+		Some((name, library)) => crate::warp_parser::parse_generated(&format!("import ({name}) from '{library}'")),
 		None => node.map_children(lower),
 	}
 }

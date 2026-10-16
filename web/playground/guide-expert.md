@@ -154,7 +154,7 @@ def adder(k) = x => x + k; adder(3)(4)
 
 `type`, `is` tests, `as` converts; classes declare typed fields.
 
-```warp => [int yes 3 1]
+```warp => [class int yes 3 1]
 class Point { x: int y: int }; [type(3), "3" is text, "3" as int, Point{x: 1 y: 2}.x]
 ```
 

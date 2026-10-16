@@ -127,7 +127,7 @@ infix operator divides(d: int, n: int) := n % d == 0; 3 divides 12
 `type(x)`, `x is T` tests (`3 is number`), `x as T` converts; a bare type name is a type value and `==` between
 types is exact (`type(3) == int`, `type(3) == number` is `no`); classes declare typed fields or defaults, methods with `:=`, `extends`.
 Instances are shared references: `==` compares values, `===` identity, `copy(x)` duplicates.
-```warp => [int yes 3 "Rex barks"]
+```warp => [class int yes 3 "Rex barks"]
 class Animal { name: "?"; speak := "..." }
 class Dog extends Animal { speak := name + " barks" }
 [type(3), "3" is text, "3" as int, Dog{name: "Rex"}.speak]
