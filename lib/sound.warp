@@ -253,6 +253,7 @@ call(b: Bus, signal) := out(signal, b)
 added(a, b) := [(if i < count(a) then a[i] else 0.0) + (if i < count(b) then b[i] else 0.0) for i in 0..max(count(a), count(b))]
 out(signal) := sound(clamped_samples(signal))
 // the sound's handle: its number in the run, for stop_sound(handle)
+
 // where the notes sound between the left (-1) and the right speaker (1), 0 in the middle (card stereo-pan)
 global pan = 0.0 as float
 // the samples for the speakers: mono in the middle, else interleaved left, right, the far side quieter by the pan
@@ -295,6 +296,7 @@ play_signal(signal, seconds) := std_io("sound", "signal", [signal, si_amount(sec
 // block-wise: hum(block, t) := for i in 1 to #block { block#i = 0.3 * sin(2 * pi * 220 * (t + (i - 1) / sample_rate)) };
 // play_blocks(hum, 2s) calls hum once a block, block a linear float array of its samples, t the first one's time;
 // the compiler writes its call out (music_words.rs with_block_signals)
+
 // play returns at once, its sound queued behind those before it: sound_queued() is how many seconds its voice still sounds,
 // wait_sound waits for them (a program's end does too)
 sound_queued() := std_io("sound", "queued", [])
@@ -351,13 +353,13 @@ play_sample(clip: Sample, rate) := {
 	std_io("sound", "last", [])
 }
 play(tone) := if tone is text then play_file(tone) else if tone is Sample then play_sample(tone, 1) else sound(chord_samples(pitches_of(tone), note_seconds, wave_shape))
-// one note (or chord) after another: melody([C4 E4 G4]), melody([C4 E4 G4], 250ms)
 // plain seconds: the unit check reads a quantity parameter in a loop as unsupported (notes/units_runtime.md)
 melody_samples(notes, seconds) := {
 	samples = []
 	for pitch in notes { samples = samples + chord_samples(pitches_of(pitch), seconds, wave_shape) }
 	samples
 }
+// one note (or chord) after another: melody([C4 E4 G4]), melody([C4 E4 G4], 250ms)
 melody(notes, each duration) := sound(melody_samples(notes, si_amount(duration)))
 melody(notes) := melody(notes, note_seconds)
 

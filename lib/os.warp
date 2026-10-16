@@ -7,6 +7,7 @@ args = std_io("os", "args", [])
 // only, the browser runs no processes
 exec(command: any) := std_io("os", "exec", [command])
 // The scripting words (decision use-script, all of them in `use script`):
+
 // the command line arguments, as args gives them
 arguments = args
 // the folder the program runs in, now: after `cd` the new one

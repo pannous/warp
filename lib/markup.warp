@@ -20,9 +20,9 @@ html_attributes = ["class", "id", "href", "src", "alt", "title", "style", "type"
 	"role", "tabindex", "hidden", "download", "label", "media"]
 // attributes that are present or absent: `checked: done`
 html_boolean_attributes = ["checked", "disabled", "selected", "readonly", "required", "hidden", "multiple", "autofocus"]
-// CSS properties whose number has no unit; any other number is pixels
 // a meta element's own attributes: `meta{ charset: "utf-8" }` stays the element, `meta: { author: "Ann" }` names metas
 html_meta_attributes = ["charset", "name", "content", "http-equiv", "property", "media"]
+// CSS properties whose number has no unit; any other number is pixels
 html_unitless_properties = ["opacity", "z-index", "font-weight", "line-height", "flex", "flex-grow", "flex-shrink", "order", "zoom", "tab-size"]
 
 to_html(value: any) := html_render(value, ø, ø)
