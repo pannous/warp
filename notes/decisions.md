@@ -770,6 +770,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   lines in lib/math.warp with a "prefer ->" hint (→ ⟶ ➜ … for ->, ⇒ ⟹ for =>, ← ⟵ ⬅ for <-, ⬆ ⇧ for ↑, ⬇ ⇩ for ↓).
   ⇔ ⟺ ↔ ⇑ ⇓ get no built-in meaning for now; an example defines one, e.g.
   `infix operator ⇔(a: bool, b: bool) := a == b`.
+- text-unit-plurals (2026-10-16, user; card text-unit): every plural unit word of a text is the list:
+  `"👍🏽".chars` → ['👍🏽'], `.codepoints` → ['👍' '🏽'], `.graphemes`, `.bytes` → [240 159 …], like words and lines.
+  Counting is `count t.codepoints` or `number of bytes in t`. Code reading `t.codepoints` as a number migrates to
+  `count` (a `warp fix` rewrite where detectable).
 - implicit-words-reserved (2026-10-16, user; card it-reserved): `it`, `self` and `this` are reserved. Binding one
   (`self = 3`, `it += 1`, `for this in xs`, destructuring) warns "`self` is reserved: it names the receiver of a
   method; pick another name", an error under use strict. Writing it as the explicit parameter (`f(it) := …`,
