@@ -72,6 +72,10 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   <example>… for a tour failure. Never check out another commit in the integrate worktree while gate.sh runs, and
   TaskStop a running gate before re-merging there. A JS-only follow-up tip can be merged off-tree
   (`git merge-tree --write-tree` + `git commit-tree`), pushed as a branch for the runner check while the gate finishes.
+- Small fixes first (user, 2026-10-16): when a failure comes from a worker's change and the fix looks like a couple of
+  lines (a stale path, `//` → `/!`, a missing cfg, a test's spelling after a decided syntax change, a renamed name),
+  fix it yourself in the batch, in its own commit, at once: no card, no `fixnow` ignore. Tell the worker in one line.
+  If the fix does not work on the first try, stop and delegate back (fixnow ignore + card, or bounce as below).
 - Failures: up to 10 per batch are ignored as `fixnow` and pushed (notes/roles.md "Fix forward"); report test name + first panic line to the worker (the fixnow card, or the bounce note on its card). A failure that passes alone is shared state: find and
   fix the cause in a small commit with a test (known flake: tests running the shared debug/warp binary; rerun).
 - Batch branches that arrive close together. After each push: one line to the Supervisor and the board.
