@@ -74,14 +74,17 @@ fn operator_named(name: &str) -> Option<(String, Op)> {
 		.map(|(word, op)| (word.to_string(), *op))
 }
 
+/// A type word or a conversion word (`int`, `double`, `hex`), which never names a function
+pub(crate) fn is_type_word(name: &str) -> bool {
+	type_word_kind(name).is_some() || crate::wasm_emitter::is_called_conversion(name)
+}
+
 /// `double := it*2`, `double(x) := …` or `hex(x) := …`: a type word names a type, never a function, a conversion word
 /// too (user decisions P20, type-words-reserved)
 pub(crate) fn check_type_word_functions(program: &Node) -> Option<Diagnostic> {
 	let mut ctx = Context::new();
 	extract_user_functions_inner(&mut ctx, program);
-	let is_type_word =
-		|name: &&String| type_word_kind(name).is_some() || crate::wasm_emitter::is_called_conversion(name);
-	let mut clashes: Vec<&String> = ctx.user_functions.keys().filter(is_type_word).collect();
+	let mut clashes: Vec<&String> = ctx.user_functions.keys().filter(|name| is_type_word(name)).collect();
 	clashes.sort();
 	let name = clashes.first()?;
 	let mut definition = None;

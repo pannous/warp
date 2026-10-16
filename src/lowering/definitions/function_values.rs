@@ -106,12 +106,11 @@ fn refused_partial_definition(program: &Node, found: &[Definition]) -> Option<No
 		}
 		let written: Vec<String> = arguments.iter().map(|argument| argument.serialize()).collect();
 		let holes = vec![PARTIAL_HOLE.to_string(); definition.params.len() - arguments.len()];
-		let partial = format!("{}({})", definition.name, [written.clone(), holes].concat().join(", "));
+		let function = crate::lowering::typed_library_words::written(&definition.name);
+		let partial = format!("{function}({})", [written.clone(), holes].concat().join(", "));
 		let message = format!(
-			"{} needs {} arguments, {name} := {} {} leaves some out",
-			definition.name,
+			"{function} needs {} arguments, {name} := {function} {} leaves some out",
 			definition.params.len(),
-			definition.name,
 			written.join(" ")
 		);
 		refused = Some(

@@ -60,6 +60,11 @@ pub fn lower_list_spreads(node: Node) -> Node {
 
 /// `*xs`, `...xs` (parsed as `*xs`) and `xs...` (an open range of xs): the name xs; typed `*xs: int` (Python) and
 /// `xs: Int...` (Swift) too
+/// `xs...`, `...xs`, `*xs`: a parameter collecting the remaining arguments
+pub(crate) fn is_rest_parameter(parameter: &Node) -> bool {
+	starred(parameter).is_some()
+}
+
 fn starred(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Symbol(name) => {

@@ -57,7 +57,11 @@ fn definitions(program: &Node) -> Vec<Definition> {
 			let parameters = head.parameters();
 			let defaulted = parameters.iter().filter(|p| matches!(p.drop_meta(), Node::Key(_, Op::Assign, _))).count();
 			let first_type = parameters.first().and_then(|first| crate::lowering::overloads::parameter_type(first));
-			let arity = (parameters.len() - defaulted, parameters.len());
+			let arity = match parameters.iter().any(|parameter| crate::lowering::variadic::is_rest_parameter(parameter))
+			{
+				true => (parameters.len() - 1, usize::MAX),
+				false => (parameters.len() - defaulted, parameters.len()),
+			};
 			found.push(Definition { name: head.name.to_string(), arity, first_type, node: node.clone() });
 		}
 	});
@@ -100,7 +104,8 @@ fn untyped_redefinitions(program: &Node) -> HashMap<String, Redefined> {
 	let mut typed = vec![];
 	for Definition { name, arity, first_type, node: definition } in definitions(program) {
 		let types = library_types(&name);
-		if types.is_empty() || !library_takes(&name, arity) {
+		// a type word is refused as a function name (check_type_word_functions)
+		if types.is_empty() || !library_takes(&name, arity) || crate::analyzer::is_type_word(&name) {
 			continue;
 		}
 		if first_type.is_some() {
@@ -131,7 +136,10 @@ impl Dispatch {
 		if let Some(dispatched) = self.dispatched_call(&node) {
 			return dispatched;
 		}
-		if self.call_of(&node).is_some() {
+		// a braceless `add 1 square 3` is no count of arguments yet
+		let braceless = matches!(node.drop_meta(), Node::List(_, Bracket::None, _));
+		let call = self.call_of(&node).filter(|_| !braceless);
+		if call.is_some_and(|(name, arguments)| self.more_than_the_programs(&name, arguments.len())) {
 			return self.kept_call(node);
 		}
 		match node {
@@ -140,7 +148,12 @@ impl Dispatch {
 		}
 	}
 
-	/// `first(xs, 2)`: a call of a number of values only the library's word takes stays the library's
+	/// More values than the program's word takes: `first(xs, 2)` beside `first(x) := …`; fewer are its own partial forms
+	fn more_than_the_programs(&self, name: &str, count: usize) -> bool {
+		self.redefined[name].arities.iter().all(|(_, most)| count > *most)
+	}
+
+	/// `first(xs, 2)`: a call of more values than the program's word takes stays the library's
 	fn kept_call(&self, node: Node) -> Node {
 		match node {
 			meta @ Node::Meta { .. } => meta.under_meta(|node| self.kept_call(node)),
@@ -219,6 +232,11 @@ fn own_name(name: &str) -> String {
 /// `count` of the program's `count·any`, the library word it stands beside
 pub fn library_word_of(own: &str) -> Option<&str> {
 	own.strip_suffix(ANY_TYPE)?.strip_suffix(crate::traits::WITNESS_SEPARATOR)
+}
+
+/// The name as the program wrote it: `log` for its `log·any`
+pub fn written(name: &str) -> &str {
+	library_word_of(name).unwrap_or(name)
 }
 
 /// A call of the library word `name` the program also defines untyped (`4 trimmed` of `trim(x) := x-1`), chosen by
