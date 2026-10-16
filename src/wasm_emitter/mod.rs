@@ -459,14 +459,13 @@ impl WasmGcEmitter {
 	fn get_type(&self, node: &Node) -> Kind {
 		let node = node.drop_meta();
 		match node {
-			// Check user_globals for symbols
+			// a local or parameter, then a global of that name: `g(x) := x as list` never takes a global x's kind
 			Node::Symbol(name) => {
-				if let Some(&(_, kind)) = self.ctx.user_globals.get(name) {
-					return kind;
-				}
-				// Fall back to scope lookup
 				if let Some(local) = self.scope.lookup(name) {
 					return local.kind;
+				}
+				if let Some(&(_, kind)) = self.ctx.user_globals.get(name) {
+					return kind;
 				}
 				Kind::Symbol
 			}

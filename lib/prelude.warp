@@ -3,6 +3,8 @@
 // spellings and method forms onto them (`isdigit(c)`, `xs.first()`, `round(x, 2)` → round_to)
 first(xs) := xs#1
 last(xs) := xs#(count(xs))
+// Python's `list(x)`: the list itself, a text's characters
+as_list(x) := x as list
 // `count x in y`, `y.count(x)`: how often x occurs as an item of a list or a character of a text, and how often part
 // occurs in a text, not overlapping: count_of("banana", "an") is 2; # counts, so a program's own count leaves them be
 count_item(xs, x) := #filter(xs, item => item == x)
