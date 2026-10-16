@@ -144,7 +144,7 @@ glsl_shader(glsl: text, color: text) := {
 	return vec4f((" + color + ").rgb, 1.0);
 }
 "
-	}
+}
 
 // twigl's noise (card twigl-glsl): fsnoise and fsnoiseDigits hash a point to [0, 1), snoise2D and snoise3D are simplex
 // noise in [-1, 1] (Ian McEwan, Ashima Arts, webgl-noise, MIT license); glsl_shader adds them where they are called
