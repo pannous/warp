@@ -308,6 +308,14 @@ fn link_library_words(linker: &mut Linker<HostState>) -> Result<()> {
 		crate::graphics::gpu_canvas::add_shape(kind as u32, [a, b, c, d], color as u32)
 	})?;
 	linker.func_wrap(HOST_LIBRARY, DRAW_SHOW, draw_show)?;
+	linker.func_wrap(HOST_LIBRARY, DRAW_SHADER, |mut caller: Caller<'_, HostState>, code: HostNode| {
+		let code = given_node(&mut caller, code)?;
+		let shader = code
+			.text_value()
+			.ok_or_else(|| task_failure(format!("{DRAW_SHADER} takes a text, got {}", code.serialize())))?;
+		crate::graphics::gpu_canvas::use_shader(shader);
+		Ok(())
+	})?;
 	linker.func_wrap(HOST_LIBRARY, SAVE_PICTURE, save_picture)?;
 	linker.func_wrap(HOST_LIBRARY, SOUND, sound)?;
 	Ok(())
