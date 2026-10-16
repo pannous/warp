@@ -794,6 +794,7 @@ impl WasmGcEmitter {
 	pub fn emit_node_main(&mut self, node: &Node) {
 		// an error in main never points into the user or prelude function compiled last (lib/prelude.warp:30:272)
 		self.source_position = None;
+		self.wrapping_ints = crate::compiler::compile_mode::is_fast_program();
 		self.result_print = if config::compile_mode().prints_result { last_statement_items(node) } else { 0 };
 		self.live_loops = crate::lowering::music_words::live_loop_names(node);
 		// Pre-pass: collect variables first so scope is populated
