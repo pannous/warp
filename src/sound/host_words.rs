@@ -1,10 +1,13 @@
 //! The sound module's host words natively (src/host/native.rs links them): sound_samples, play_signal and
 //! play_blocks calling the program's functions back for each sample or block
 
-use super::*;
+use crate::host::tasks::task_failure;
+use crate::host::{calling_back, linear_doubles, list_values, module_memory, number_of, HostNode, HostState};
+use crate::node::Node;
+use wasmtime::{Caller, Extern};
 
 /// sound_samples(samples, count, rate) natively: a WAV file, played unless headless (src/sound/mod.rs)
-pub(super) fn sound(
+pub(crate) fn sound(
 	mut caller: Caller<'_, HostState>,
 	samples: HostNode,
 	count: i64,
@@ -20,7 +23,7 @@ pub(super) fn sound(
 
 /// play_signal(f, seconds) (sound.rs play_signal): the program's f(t: float) called for each sample, in stereo a
 /// pair [left, right] of them; its handle
-pub(super) fn played_signal(caller: &mut Caller<'_, HostState>, arguments: &Node) -> wasmtime::Result<Node> {
+pub(crate) fn played_signal(caller: &mut Caller<'_, HostState>, arguments: &Node) -> wasmtime::Result<Node> {
 	let ([functions, seconds, rate], word) =
 		(sound_arguments(arguments, "play_signal(f, seconds) needs a function and its seconds")?, "play_signal");
 	let signals = channels_of(&functions, word)?
@@ -46,7 +49,7 @@ pub(super) fn played_signal(caller: &mut Caller<'_, HostState>, arguments: &Node
 /// play_blocks(fill, seconds) (music_words.rs with_block_signals): the program's `fill·blocks(t: float)` called for
 /// each block, t its first sample's time, which fills the linear float arrays at `blocks` (one, or left and right)
 /// through fill; its handle
-pub(super) fn played_blocks(caller: &mut Caller<'_, HostState>, arguments: &Node) -> wasmtime::Result<Node> {
+pub(crate) fn played_blocks(caller: &mut Caller<'_, HostState>, arguments: &Node) -> wasmtime::Result<Node> {
 	let ([function, blocks, seconds, rate], word) =
 		(sound_arguments(arguments, "play_blocks(fill, seconds) needs a function and its seconds")?, "play_blocks");
 	let fill = called_back(

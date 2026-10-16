@@ -1,10 +1,11 @@
 //! The sound module's adapter words (lib/sound.warp's std_io "sound" and "midi" calls, src/modules/std_adapters.rs
 //! answers them through here): plays, buses, renders, MIDI files and ports
 
-use super::*;
+use crate::modules::std_adapters::{list_of, no_such_word, number_of, text_of, texts, whole_numbers, write_file};
+use crate::node::Node;
 
 /// `play "song.mp3"`, `stop_sound`, `fade_sound` (lib/sound.warp, cards sound-library, sound-pro, native-sound)
-pub(super) fn sound(member: &str, arguments: &[Node]) -> Result<Node, String> {
+pub(crate) fn sound(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	match (member, arguments) {
 		("play_file", [path]) => {
 			return crate::sound::play_file(&beside_program(path)?).map(|handle| Node::int(handle as i64))
@@ -97,7 +98,7 @@ fn effect_of(effect: &Node) -> Result<crate::sound::effects::Effect, String> {
 }
 
 /// MIDI (card midi-out, src/sound/midi.rs): notes cross as flat whole numbers [start ms, key, length ms, velocity …]
-pub(super) fn midi(member: &str, arguments: &[Node]) -> Result<Node, String> {
+pub(crate) fn midi(member: &str, arguments: &[Node]) -> Result<Node, String> {
 	match (member, arguments) {
 		("write_file", [path, notes]) => {
 			write_file(&text_of(path)?, crate::sound::midi::encode(&whole_numbers(notes)?)?)

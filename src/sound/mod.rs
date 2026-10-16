@@ -11,11 +11,13 @@
 //! they sound, by the voices' places on the clock (counted in samples, not in real time): offline, headless too.
 
 // DONE turn this into a module, albeit built-in one: the sound module is lib/sound.warp (its words), this folder (the
-// engine, effects, MIDI, audio files), adapters.rs (its std_io words, a child of modules/std_adapters.rs) and
-// host_words.rs (its native host words, a child of host/native.rs); both children by path, kept here (card turn-src)
+// engine, effects, MIDI, audio files), adapters.rs (its std_io words, which modules/std_adapters.rs
+// answers through) and host_words.rs (its native host words, which host/native.rs links) (cards turn-src, src-sound)
 
+pub(crate) mod adapters;
 pub mod audio_files;
 pub mod effects;
+pub(crate) mod host_words;
 pub mod midi;
 pub mod sound_engine;
 pub mod spectrum;

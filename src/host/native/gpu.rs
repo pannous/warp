@@ -105,7 +105,7 @@ fn array_computed(
 	Ok(Node::List(left, crate::node::Bracket::Square, crate::node::Separator::Space))
 }
 
-pub(super) fn number_of(node: &Node, failure: &impl Fn(String) -> wasmtime::Error) -> wasmtime::Result<Number> {
+pub(crate) fn number_of(node: &Node, failure: &impl Fn(String) -> wasmtime::Error) -> wasmtime::Result<Number> {
 	match node.drop_meta() {
 		Node::Number(number) => Ok(*number),
 		other => Err(failure(format!("it computes over numbers, got {}", other.serialize()))),
@@ -236,7 +236,7 @@ pub(super) fn linear_floats(
 }
 
 /// A linear float array's cells
-pub(super) fn linear_doubles(
+pub(crate) fn linear_doubles(
 	caller: &mut Caller<'_, HostState>,
 	block: i64,
 	failure: &impl Fn(String) -> wasmtime::Error,
@@ -348,7 +348,7 @@ pub(super) fn list_of_ints(caller: &mut Caller<'_, HostState>, ints: &[u32], wor
 }
 
 /// The module's memory, or the task failure "`word`: the module exports no memory"
-pub(super) fn module_memory(caller: &mut Caller<'_, HostState>, word: &str) -> wasmtime::Result<Memory> {
+pub(crate) fn module_memory(caller: &mut Caller<'_, HostState>, word: &str) -> wasmtime::Result<Memory> {
 	match caller.get_export("memory") {
 		Some(Extern::Memory(memory)) => Ok(memory),
 		_ => Err(task_failure(format!("{word}: the module exports no memory"))),
