@@ -125,7 +125,7 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
   under `try … catch`; a failure rolls back, then each open table's `people·restore()` gives the instances the program
   holds their rows' values again (an instance whose row is gone gets id 0) and loads anew, then the failure is raised
   again. Its value is the block's. The browser's store snapshots the file's tables at begin (host-files.js).
-  Sample: samples/orm_transaction.warp.
+  Sample: samples/storage/orm_transaction.warp.
 
 ## Migrations: stored schema vs class layout, at registration
 | change | what happens |
@@ -197,7 +197,7 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
 - Gaps: a loop reading `t.players` of every team runs a SELECT per team (the getter is a query at each read, so a moved
   row shows at once; foreign keys are batched, one-to-many lists are not); a required back key
   (`team: Team`) makes `people·found` load the table, as any filter of such a table does.
-- Sample: samples/orm.warp (native and playground) has `team: Team?` and `players: [Person]`: optional, so databases
+- Sample: samples/storage/orm.warp (native and playground) has `team: Team?` and `players: [Person]`: optional, so databases
   the sample wrote before the column read ø (card orm-dangling); `climbers.players.add(bo)` writes bo.team through.
 - An add or field write in a one-statement block (`if … { teams.add(t) }`) is lowered like a statement of its own.
 
@@ -238,5 +238,5 @@ keeping its fields with id 0; the lazy `people·remove` drops bo from the loaded
      entry of a unit field carries its quantity and SI amount per unit (`[distance km ø ø m 1000]`, the 4th entry ø
      unless renamed; units::static_units::unit_type), the store keeps each unit column's quantity (`quantities`).
      An optional unit field (`climb: m?`, card unit-field) is a nullable `NUMERIC m` column declared `number?`; ø has
-     no dimension, so `Run(5 km, ø)` and `r.climb == ø` pass static units. Sample: samples/orm_units.warp.
+     no dimension, so `Run(5 km, ø)` and `r.climb == ø` pass static units. Sample: samples/storage/orm_units.warp.
    - A field named size/count/length reads as the builtin count off a typed list element (card field-named-size).

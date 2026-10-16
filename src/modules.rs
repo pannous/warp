@@ -41,9 +41,21 @@ pub use program_file::*;
 mod use_statements;
 pub(crate) use use_statements::*;
 
-/// Where modules are looked for, in this order: the current directory, the samples, the library (lib/extra: modules
-/// that are not standard, like netbase, P194)
-pub const SEARCH_DIRECTORIES: [&str; 7] = [".", "include", "lib", "lib/extra", "src", "source", "samples"];
+/// Where modules are looked for, in this order: the current directory, the library (lib/extra: modules
+/// that are not standard, like netbase, P194), the modules among the samples (samples/modules: lib, square;
+/// samples/wasm: shapes.wasm)
+pub const SEARCH_DIRECTORIES: [&str; 8] =
+	[".", "include", "lib", "lib/extra", "src", "source", SAMPLE_MODULES[0], SAMPLE_MODULES[1]];
+/// The samples' modules never stand in for a standard module: samples/modules/agent.warp is a sample, `use agent` from
+/// the repository root means lib/agent.warp (card samples-name)
+pub const SAMPLE_MODULES: [&str; 2] = ["samples/modules", "samples/wasm"];
+
+/// A sample's file named like a standard module (samples/modules/agent.warp for `use agent`): never that module
+pub fn shadows_with_a_sample(path: &std::path::Path) -> bool {
+	let standard =
+		path.file_stem().and_then(|stem| stem.to_str()).is_some_and(|name| std_module_source(name).is_some());
+	standard && path.parent().is_some_and(|folder| SAMPLE_MODULES.iter().any(|samples| folder.ends_with(samples)))
+}
 pub const MODULE_EXTENSIONS: [&str; 2] = ["wasp", "warp"];
 
 /// Replace every `use <module>` of the program by the definitions of that module, each module once.

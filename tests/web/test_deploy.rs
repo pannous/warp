@@ -3,7 +3,7 @@
 use crate::common::scratch_directory;
 use std::time::{Duration, Instant};
 
-const PROGRAM: &str = include_str!("../../samples/worker.warp");
+const PROGRAM: &str = include_str!("../../samples/servers/worker.warp");
 const START_LIMIT: Duration = Duration::from_secs(90);
 
 struct WranglerDev(std::process::Child);
@@ -72,7 +72,7 @@ fn a_program_without_routes_is_no_worker() {
 /// anything is sent
 #[test]
 fn the_playground_bundles_a_program_for_warp_hosting() {
-	let (report, module) = warp::web::worker_bundle(include_str!("../../samples/hosting.warp"));
+	let (report, module) = warp::web::worker_bundle(include_str!("../../samples/servers/hosting.warp"));
 	assert_eq!(&module[..4], b"\0asm");
 	assert_eq!(report["module_length"], module.len());
 	let scripts: Vec<&str> =
@@ -156,10 +156,11 @@ fn page_routes_deploy_as_rendered_pages() {
 	std::fs::remove_dir_all(directory).ok();
 }
 
-/// samples/route_headers.warp deployed: a route's `status 418` is its answer's status in the Worker too
+/// samples/servers/route_headers.warp deployed: a route's `status 418` is its answer's status in the Worker too
 #[test]
 fn a_deployed_route_answers_its_status() {
-	let (_running, base, directory) = running_worker(include_str!("../../samples/route_headers.warp"), "route-headers");
+	let (_running, base, directory) =
+		running_worker(include_str!("../../samples/servers/route_headers.warp"), "route-headers");
 	assert_eq!(answer(&base, "/teapot"), (418, "text/plain; charset=utf-8".into(), "short and stout".into()));
 	std::fs::remove_dir_all(directory).ok();
 }
@@ -169,16 +170,16 @@ fn a_deployed_route_answers_its_status() {
 #[test]
 fn deploy_names_a_browser_only_feature() {
 	let report = |code: &str| warp::web::worker_bundle(code).0;
-	let painting = report(include_str!("../../samples/filled_circle.warp"));
+	let painting = report(include_str!("../../samples/advanced/filled_circle.warp"));
 	assert_eq!(painting["site"], true, "{painting}");
 	let query = painting["query"].as_str().unwrap_or_default();
 	assert!(
 		query.starts_with("site=") && query.contains("canvas.js") && query.contains("&worker=reader.js"),
 		"{query}"
 	);
-	let framing = report(include_str!("../../samples/shader_trails.warp"));
+	let framing = report(include_str!("../../samples/graphics/shader_trails.warp"));
 	assert_eq!(framing["site"], true, "{framing}");
-	let routes = report(include_str!("../../samples/hosting.warp"));
+	let routes = report(include_str!("../../samples/servers/hosting.warp"));
 	assert_eq!((&routes["site"], &routes["query"]), (&false.into(), &"scripts=reader.js,host.js".into()), "{routes}");
 }
 
@@ -200,7 +201,8 @@ fn deploy_refuses_server_parts_of_a_browser_program() {
 /// and app.wasm, cross-origin isolated, and the visitor's browser runs the program (painting checked in CI)
 #[test]
 fn a_painting_program_deploys_as_its_site() {
-	let (_running, base, directory) = running_worker(include_str!("../../samples/filled_circle.warp"), "painting");
+	let (_running, base, directory) =
+		running_worker(include_str!("../../samples/advanced/filled_circle.warp"), "painting");
 	let (status, content_type, page) = answer(&base, "/");
 	assert_eq!((status, content_type.as_str()), (200, "text/html; charset=utf-8"), "{page}");
 	assert!(

@@ -10,7 +10,7 @@ cargo build --offline -p warp-runtime 2>&1 | tail -2
 WARP=${1:-$TARGET/debug/warp}
 STUB=$TARGET/debug/warp-runtime
 mkdir -p scratch/aot
-cp -f samples/ackermann.warp scratch/aot/ackermann.warp
+cp -f samples/functions/ackermann.warp scratch/aot/ackermann.warp
 
 # Positive: standalone exe prints ackermann(3,3)=61 with no Rust toolchain for the user
 WARP_RUNTIME_STUB=$STUB "$WARP" build --exe scratch/aot/ackermann.warp

@@ -106,7 +106,7 @@ constants, so `pi = …` / `pi := …` is the compile error "pi is a constant; f
 (`f() := pi * r`), everywhere else `pi` stays the constant (parser state `type_fields`).
 src/warp_parser/atoms.rs `refuse_constant_assignment`, tests/welcoming/test_constant_shadowing.rs.
 
-Control flow as other languages write it (samples/control_flow.warp, tests/control/test_match_guards_and_finally.rs):
+Control flow as other languages write it (samples/conditions/control_flow.warp, tests/control/test_match_guards_and_finally.rs):
 - match guards (Rust, Scala): `n if n < 0 => "negative"` binds n to the subject and holds when the condition does;
   a list pattern takes a guard too (`[a, b] if a > b => …`). switch.rs split_guard.
 - an assigned match `d = match v {k => …, _ => …}` parses as `match (v {…})`; welcome_forms turns its arrow cases into
@@ -114,7 +114,7 @@ Control flow as other languages write it (samples/control_flow.warp, tests/contr
 - `try … catch/else/except … finally {Z}` (Java, Python): `(finally·N = try…; Z; finally·N)`, Z runs either way and
   the value stays the try's or the catch's. lookahead.rs with_finally. `try X finally Z` without a catch is not parsed.
 - `global a, b` (Python) declares both; several `global` lines in a block are no duplicate key.
-- English operator words are aliases (samples/natural.warp, wiki/operator.md): `plus`, `minus`, `divided by`,
+- English operator words are aliases (samples/hello/natural.warp, wiki/operator.md): `plus`, `minus`, `divided by`,
   `equals`, `is greater than`, `greater than`, `is less than`, `less than`, `is at least`, `is at most`, `through`
   (= `to`), `is in` (= `in`), `for each x in xs`; a word operator needs a blank after it, so `plus(a, b)` stays a call.
   `10 down to 1` is `reverse(1 to 10)`; letters make ranges (`'a' to 'e'`, `c to 'z'` counts codepoints).

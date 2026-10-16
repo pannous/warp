@@ -1,5 +1,5 @@
 // End-to-end test of warp-hosting against the real Cloudflare API (no mocks): runs the control Worker under
-// wrangler dev, deploys samples/hosting.warp by `warp deploy --hosted` as warp-hosting-test and by the playground's
+// wrangler dev, deploys samples/servers/hosting.warp by `warp deploy --hosted` as warp-hosting-test and by the playground's
 // ☁ Deploy button (headless agent-browser, the GitHub session already stored) as warp-hosting-ui-test, reads their
 // live routes on workers.dev, removes them.
 // node web/hosting/test_hosting.mjs   needs: scratch/warp (scripts/own-warp.sh), web/playground/build.sh built,
@@ -26,7 +26,7 @@ const NAME = "hosting-test";
 const PLAYGROUND_NAME = "hosting-ui-test";
 const PLAYGROUND_PORT = Number(process.env.WARP_HOSTING_PLAYGROUND_PORT ?? 8896);
 const BROWSER_SESSION = "warp-hosting-test";
-const SAMPLE = join(ROOT, "samples/hosting.warp");
+const SAMPLE = join(ROOT, "samples/servers/hosting.warp");
 const EXPECTED_ROOT = "hello from the edge";
 const EXPECTED_FIB = { n: 20, fib: 6765 };
 const WRANGLER_CONFIG = join(homedir(), "Library/Preferences/.wrangler/config/default.toml");

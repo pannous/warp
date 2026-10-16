@@ -1,4 +1,4 @@
-// `round(x, n)` and `x.round(n)`: x rounded to n digits after the point (samples/neural_net.warp); round(x) stays whole
+// `round(x, n)` and `x.round(n)`: x rounded to n digits after the point (samples/advanced/neural_net.warp); round(x) stays whole
 use crate::is;
 
 #[test]

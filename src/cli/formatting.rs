@@ -149,7 +149,7 @@ fn confirmed(shown: &str, old: &str, new: &str) -> bool {
 	answered && matches!(answer.trim(), "y" | "yes")
 }
 
-/// A name that means a file, never code: `x.warp`, `samples/hello`
+/// A name that means a file, never code: `x.warp`, `samples/hello/hello`
 fn looks_like_path(argument: &str) -> bool {
 	has_warp_extension(argument) || (argument.contains('/') && !argument.contains(char::is_whitespace))
 }

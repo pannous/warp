@@ -1,4 +1,4 @@
-// cards server-path and route-star and the plain-JSON default (supervisor 2026-10-09), found editing samples/server.warp:
+// cards server-path and route-star and the plain-JSON default (supervisor 2026-10-09), found editing samples/servers/server.warp:
 // a get route's path takes typed parameters as a page route's; an /api/ path no route takes answers JSON 404; instances
 // are plain JSON objects. A page path answers the one page (user 2026-10-07, single page), `route "*"` included, and
 // 404 only when no route of the page matches it
