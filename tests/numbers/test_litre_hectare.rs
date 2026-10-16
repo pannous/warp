@@ -9,7 +9,7 @@ fn litre_and_hectare_are_units() {
 	assert_eq!(eval("2 l in cm³").serialize(), "2000cm³");
 	assert_eq!(eval("2 L").serialize(), "2dm³");
 	is!("3 ha is area", true);
-	is!("l = 2; 3 l", 6);
+	is!("l = 2; 3*l", 6);
 }
 
 #[test]

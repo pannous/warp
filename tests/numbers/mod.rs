@@ -106,6 +106,7 @@ mod test_text_then_conversion; // card print-km
 mod test_time_of_day;
 mod test_trailing_symbol; // card trailing-symbol
 mod test_unbounded_int;
+mod test_unit_beside_variable; // card unit-glued
 mod test_unit_columns; // card units-stress
 mod test_unit_composites;
 mod test_unit_conversion;
