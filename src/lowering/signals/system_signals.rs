@@ -19,7 +19,7 @@
 //! `on "file system full" {…}`. `raise` stays inside the program (event_signals.rs).
 
 use super::listeners;
-use super::nodes::call;
+use super::nodes::{call, head_symbol};
 use crate::declarations::word;
 use crate::errors::diagnostic::Diagnostic;
 use crate::event_signals::{event_name, function_with_globals, main_level_variables};
@@ -477,11 +477,8 @@ fn defines(program: &Node, name: &str) -> bool {
 	let mut defined = false;
 	program.visit(&mut |part| {
 		if let Node::Key(target, op, _) = part {
-			let head = match target.drop_meta() {
-				Node::List(items, _, _) => items.first().map(word).unwrap_or_default(),
-				other => word(other),
-			};
-			defined |= head == name && matches!(op, crate::operators::Op::Assign | crate::operators::Op::Define);
+			defined |= head_symbol(target) == Some(name)
+				&& matches!(op, crate::operators::Op::Assign | crate::operators::Op::Define);
 		}
 	});
 	defined

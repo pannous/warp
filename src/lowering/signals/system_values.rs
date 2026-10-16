@@ -12,7 +12,7 @@
 //! Browser names (P188): `clipboard.read()` is `clipboard`, `clipboard.write(text)` the std word
 //! `std_io("clipboard", "write", [text])` (std_adapters.rs; host-files.js in a page).
 
-use super::nodes::{arguments_rewritten, assign, block, call, key};
+use super::nodes::{arguments_rewritten, assign, block, call, key, word_headed};
 use crate::declarations::word;
 use crate::lowering::signals::system_signals::CHANGE_WORDS;
 use crate::lowering::web::listeners;
@@ -61,7 +61,7 @@ pub fn name(program: Node) -> Node {
 	// listens to nothing, so a headless run still ends after its frame (card full-screen)
 	let listens = |statement: &Node| {
 		let trigger = listeners::read(statement, &LISTENER_WORDS).map(|listener| listener.trigger);
-		LISTENER_WORDS.contains(&first_word(statement).as_str())
+		matches!(statement.drop_meta(), Node::List(items, _, _) if word_headed(items).is_some_and(|(word, _)| LISTENER_WORDS.contains(&word)))
 			&& !marked_names(trigger.as_ref().unwrap_or(statement)).is_empty()
 	};
 	let Some(first_listener) = statements.iter().position(listens) else {
@@ -91,13 +91,6 @@ pub fn marked_names(node: &Node) -> HashSet<String> {
 		}
 	});
 	names
-}
-
-fn first_word(statement: &Node) -> String {
-	match statement.drop_meta() {
-		Node::List(items, _, _) => items.first().map(word).unwrap_or_default(),
-		_ => String::new(),
-	}
 }
 
 /// The names the program binds: assigned, defined, parameters of functions and lambdas

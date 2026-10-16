@@ -473,6 +473,14 @@ pub(crate) fn word_headed(items: &[Node]) -> Option<(&str, &[Node])> {
 	Some((head.symbol_name()?, rest))
 }
 
+/// The name a definition head starts with: `name` of `name` or `(name x)`
+pub(crate) fn head_symbol(head: &Node) -> Option<&str> {
+	match head.drop_meta() {
+		Node::List(items, _, _) => items.first()?.symbol_name(),
+		other => other.symbol_name(),
+	}
+}
+
 /// `word x` or `word(x)`: the one subject the word is applied to
 pub(crate) fn word_applied<'a>(node: &'a Node, word: &str) -> Option<&'a Node> {
 	match node.drop_meta() {

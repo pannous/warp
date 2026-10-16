@@ -10,7 +10,7 @@
 //! kept the same way: the runtime calls their handlers (notes/system_signals.md).
 
 use super::listeners;
-use super::nodes::{assign, block, call, children_rewritten, if_then, key};
+use super::nodes::{assign, block, call, children_rewritten, head_symbol, if_then, key};
 use crate::declarations::word;
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -391,11 +391,9 @@ fn defines_timer(statement: &Node) -> bool {
 	let Node::Key(head, _, _) = statement.drop_meta() else {
 		return false;
 	};
-	let name = match head.drop_meta() {
-		Node::List(items, _, _) => items.first().map(Node::drop_meta),
-		other => Some(other),
-	};
-	matches!(name, Some(Node::Symbol(name)) if name.starts_with(crate::host::TIMER_HANDLER_PREFIX) || name.starts_with(crate::host::FETCH_HANDLER_PREFIX))
+	head_symbol(head).is_some_and(|name| {
+		name.starts_with(crate::host::TIMER_HANDLER_PREFIX) || name.starts_with(crate::host::FETCH_HANDLER_PREFIX)
+	})
 }
 
 /// The body guarded by a fresh flag: `if once_fired_0 == false { once_fired_0 = true; body }`
