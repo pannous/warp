@@ -324,8 +324,9 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 			Node::List(items, bracket, separator)
 		}
 		// `square 3 == 9` parses as `square (3 == 9)`. P143 (user): a parameter typed as no truth value takes the call,
-		// `(square 3) == 9` (wiki/all.md `square [1 2 3] == [1 4 9]`); untyped, both readings work: a loud error
-		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, argument] if arity(head).is_some() && crate::library_words::is_comparison(argument)) =>
+		// `(square 3) == 9` (wiki/all.md `square [1 2 3] == [1 4 9]`); untyped, both readings work: a loud error. Also in
+		// a group, `(square 3 == 9)`; a call `square(3 == 9)` has no spaces
+		Node::List(items, Bracket::None | Bracket::Round, Separator::Space) if matches!(items.as_slice(), [head, argument] if arity(head).is_some() && crate::library_words::is_comparison(argument)) =>
 		{
 			let [head, argument]: [Node; 2] = items.try_into().expect("guarded");
 			if !arity(&head).expect("guarded").typed_first {

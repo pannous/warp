@@ -1,3 +1,4 @@
+mod test_and_after_comparison; // card print-sq
 mod test_as_prefixed_name;
 mod test_attributes;
 mod test_bare_operator_block;
