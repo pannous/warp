@@ -28,7 +28,8 @@ fn runs_here(name: &str) -> bool {
 		|| !fs::read_to_string(sample_path(name)).is_ok_and(|source| PAINTING.iter().any(|word| source.contains(word)))
 }
 
-fn slice_runs_without_an_error(slice: usize) {
+/// The names of the samples this test runs, sorted; test_samples_run_cleanly runs the others
+pub(crate) fn playground_menu() -> Vec<String> {
 	let excluded = excluded_samples();
 	let mut menu: Vec<String> = sample_files()
 		.iter()
@@ -36,6 +37,11 @@ fn slice_runs_without_an_error(slice: usize) {
 		.filter(|name| !excluded.contains(name) && runs_here(name))
 		.collect();
 	menu.sort();
+	menu
+}
+
+fn slice_runs_without_an_error(slice: usize) {
+	let menu = playground_menu();
 	let failures: Vec<String> =
 		crate::common::sample_slice(&menu, slice).filter_map(|name| sample_failure(name)).collect();
 	assert!(

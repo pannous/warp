@@ -827,7 +827,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   `warp fuel N app.warp`, and tests that pin a step count.
   Numbers (warp-types default, Interviewer's amendment, undoable): `warp app.warp` gets 60 s of CPU time (waits for
   sleep or input don't count), set with WARP_TIME_LIMIT=<seconds>, and WARP_FUEL selects fuel. Compile-time folding
-  of constant calls gets 2 s. `warp build` executables get no limit by default, since a built app runs as long as it
+  of constant calls counts fuel instead (Interviewer's decision after the reviewer's point: a 2 s wall-clock limit made
+  compiled output and error timing depend on machine load; the budget is roughly 2 s' worth). `warp build` executables get no limit by default, since a built app runs as long as it
   likes. Windowed and event-loop programs aren't killed after 60 s in total. A stop after the limit says loudly what
   happened and how to raise it.
 - ready-queue (2026-10-16, user via the boss and the supervisor): the board's Ready column is the merge queue. A
@@ -845,7 +846,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - text-unit-plurals (2026-10-16, user; card text-unit): every plural unit word of a text is the list:
   `"👍🏽".chars` → ['👍🏽'], `.codepoints` → ['👍' '🏽'], `.graphemes`, `.bytes` → [240 159 …], like words and lines.
   Counting is `count t.codepoints` or `number of bytes in t`. Code reading `t.codepoints` as a number migrates to
-  `count` (a `warp fix` rewrite where detectable).
+  `count` (a `warp fix` rewrite where detectable). `.bytes` is the byte list for every value, not only texts (user:
+  the memory size via `.bytes` was barely used). The size is `x.bytes.count` or `x.bytecount`; `byte_size(x)` and
+  `byte count of x` stay.
 - implicit-words-reserved (2026-10-16, user; card it-reserved): `it`, `self` and `this` are reserved. Binding one
   (`self = 3`, `it += 1`, `for this in xs`, destructuring) warns "`self` is reserved: it names the receiver of a
   method; pick another name", an error under use strict. Writing it as the explicit parameter (`f(it) := …`,

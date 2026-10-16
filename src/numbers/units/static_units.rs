@@ -327,7 +327,24 @@ pub(crate) fn result_units_entry() -> Option<(&'static str, Node)> {
 
 /// The result of running a module, as the quantity its `units` entry names (unchanged without it)
 pub fn with_module_units(bytes: &[u8], result: Node) -> Node {
-	match module_units(bytes) {
+	with_units(result, module_units(bytes))
+}
+
+/// The answer of a program computed whole at compile time (`√(4 m²)`, numbers::real) in the units its result has: 2 m;
+/// an irrational amount as the float print shows, `√(2 m²)` is 1.4142135623730951m
+pub(crate) fn with_answer_units(answer: Node) -> Node {
+	let Some(units) = take_result_units() else {
+		return answer;
+	};
+	let answer = match answer.drop_meta() {
+		Node::Number(Number::Real(real)) => Node::Number(Number::Float(real.to_f64())),
+		_ => answer,
+	};
+	with_units(answer, Some(units))
+}
+
+fn with_units(result: Node, units: Option<ResultUnits>) -> Node {
+	match units {
 		Some(ResultUnits::Whole(units)) => quantity_of(result, &units),
 		Some(ResultUnits::Fields(fields)) => with_field_units(result, &fields),
 		None => result,
