@@ -213,12 +213,12 @@ impl<'a> Loader<'a> {
 				names.insert(format!("{SHADOWED_WORD_PREFIX}{word}"));
 			});
 		});
-		self.std_definitions
-			.iter()
+		crate::lowering::word_operators::lower_call_forms_in(self.std_definitions.clone())
+			.into_iter()
 			.map(|definition| {
-				hidden.iter().fold(definition.clone(), |node, word| {
-					renamed_word(node, word, &format!("{SHADOWED_WORD_PREFIX}{word}"))
-				})
+				hidden
+					.iter()
+					.fold(definition, |node, word| renamed_word(node, word, &format!("{SHADOWED_WORD_PREFIX}{word}")))
 			})
 			.collect()
 	}
