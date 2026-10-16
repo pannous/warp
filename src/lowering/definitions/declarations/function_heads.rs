@@ -1,6 +1,6 @@
 //! Function heads: result types (`-> int`, `as int or text`, curried, function and tuple results), parameter labels and types, Ruby's `end` and bodiless definitions
 use super::*;
-use crate::lowering::nodes::{round_call, word_headed};
+use crate::lowering::nodes::{assign, round_call, word_headed};
 use crate::node::parens;
 use crate::words::ANY_TYPE;
 
@@ -244,7 +244,7 @@ pub(super) fn labeled_parameter(parameter: Node, labeled_names: &mut Vec<Node>) 
 	if label == WILDCARD_LABEL {
 		return preferred;
 	}
-	labeled_names.push(key(name.clone(), Op::Assign, symbol(label)));
+	labeled_names.push(assign(name.clone(), symbol(label)));
 	preferred
 }
 

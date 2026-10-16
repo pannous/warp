@@ -118,7 +118,7 @@ pub fn lower(program: Node) -> Node {
 		declarations.push(filled(SHOWN_DECLARATION, &[("SHOWN", SHOWN)]));
 	}
 	let resets = components.iter().map(|component| filled(RESET, &[("COUNTER", &component.counter)]));
-	let rendered = crate::variable_signals::assign(SHOWN, shown);
+	let rendered = crate::variable_signals::assign_variable(SHOWN, shown);
 	let after = components.iter().flat_map(Component::after_render);
 	let render_body = resets.chain([rendered]).chain(after).chain([symbol(SHOWN)]).collect();
 	let render = key(symbol(RENDER), Op::Define, Node::List(render_body, Bracket::Curly, Separator::Semicolon));

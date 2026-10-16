@@ -6,7 +6,7 @@
 //! in `<program>.database.sqlite` (in memory for code without a file, database.rs); the browser keeps them in IndexedDB
 //! (web/playground/host-files.js), where a filter stays the list comprehension over the rows.
 
-use super::nodes::{block, key};
+use super::nodes::{assign, block, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::numbers::units::static_units::si_quantity;
 use crate::operators::Op;
@@ -376,7 +376,7 @@ fn with_stored_tables(node: Node, classes: &HashMap<String, Node>) -> Node {
 	match stored_table(&node) {
 		Some(stored) if classes.contains_key(&stored.class) => {
 			let list_type = Node::List(vec![symbol(&stored.class)], Bracket::Square, Separator::None);
-			key(key(symbol(&stored.variable), Op::Colon, list_type), Op::Assign, table_store(&stored.table))
+			assign(key(symbol(&stored.variable), Op::Colon, list_type), table_store(&stored.table))
 		}
 		_ => node.map_children(|child| with_stored_tables(child, classes)),
 	}
@@ -610,12 +610,12 @@ fn opened(statement: &Node, tables: &BTreeMap<String, Table>, file: &str, open: 
 		// `people = database.people` again (a served route at each request): the next read loads the rows anew; an
 		// assignment still, so a block of it and a value stays a block (`{ p = …; p#1 }`), no list
 		let reset = called(lazy_name(&variable, "reset"), None);
-		return Some(vec![key(target.drop_meta().clone(), Op::Assign, reset)]);
+		return Some(vec![assign(target.drop_meta().clone(), reset)]);
 	}
 	let empty = crate::warp_parser::parse_generated("[]");
 	Some(
 		[
-			vec![key(target.drop_meta().clone(), Op::Assign, empty)],
+			vec![assign(target.drop_meta().clone(), empty)],
 			generated(&table_program(table, &variable, file), table_placeholders(table, &variable, file)).children(),
 		]
 		.concat(),

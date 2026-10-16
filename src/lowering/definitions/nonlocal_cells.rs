@@ -4,7 +4,7 @@
 //! `y += e` → `cell_set(y·cell, cell_get(y·cell) + e)`, a read of y → `cell_get(y·cell)`. Variables only read keep the
 //! captures of wasm_emitter `refresh_enclosing_captures`.
 
-use super::nodes::{block, call, children_rewritten, key};
+use super::nodes::{assign, block, call, children_rewritten, key};
 use crate::late_binding::{changes_in, declared_nonlocals, NONLOCAL};
 use crate::lowering::{function_head, FunctionHead};
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -63,7 +63,7 @@ fn written_nonlocals(body: &Node) -> Vec<String> {
 fn celled(body: Node, variable: &str, is_param: bool) -> Node {
 	let cell = Node::Symbol(format!("{variable}{CELL_SUFFIX}"));
 	let initial = if is_param { symbol(variable) } else { Node::Empty };
-	let made = key(cell.clone(), Op::Assign, call(CELL_NEW, vec![initial]));
+	let made = assign(cell.clone(), call(CELL_NEW, vec![initial]));
 	match through_cell(body, variable, &cell) {
 		Node::List(
 			items,

@@ -1,6 +1,6 @@
 //! Tasks: `job = go f(x)`, `await job`, `await any`/`all`, `within` deadlines, task controls and handlers (wiki/async.md)
 use super::*;
-use crate::lowering::nodes::{block, fresh_number, phrase_words, word_headed};
+use crate::lowering::nodes::{assign, block, fresh_number, phrase_words, word_headed};
 use crate::node::parens;
 use crate::words::{ADD_WORD, ALL_WORD, RAISE_WORD};
 
@@ -145,7 +145,7 @@ pub(super) fn awaited_starts(node: Node, counter: &Counter) -> Node {
 					let job = fresh_job(counter);
 					let start =
 						Node::List([vec![go_word.clone()], started.to_vec()].concat(), Bracket::None, Separator::Space);
-					let assignment = key(job.clone(), Op::Assign, start);
+					let assignment = assign(job.clone(), start);
 					let awaited = Node::List(vec![await_word.clone(), job], Bracket::None, Separator::Space);
 					Node::List(vec![assignment, awaited], Bracket::Round, Separator::Semicolon)
 				}
@@ -177,7 +177,7 @@ pub(super) fn awaited_starts(node: Node, counter: &Counter) -> Node {
 						.map(|item| match is_start(&item) {
 							true => {
 								let job = fresh_job(counter);
-								starts.push(key(job.clone(), Op::Assign, item));
+								starts.push(assign(job.clone(), item));
 								if racing {
 									job
 								} else {
@@ -483,7 +483,7 @@ impl Tasks<'_> {
 	/// where it is written: `(started·0 = clock(); while job runs and clock() - started·0 < 100 {sleep(1)}; if job
 	/// runs then {stop job; 0} else await job)`
 	pub(super) fn within(&self, items: &[Node], fallback: Option<Node>) -> Option<Node> {
-		use crate::variable_signals::assign;
+		use crate::variable_signals::assign_variable;
 		// `(await job) within …`: the await arrives grouped
 		let items: Vec<Node> = match items.split_first() {
 			Some((first, rest)) => match first.drop_meta() {
@@ -546,7 +546,7 @@ impl Tasks<'_> {
 			awaited_job,
 		);
 		Some(Node::List(
-			vec![assign(&started, call(crate::host::CLOCK, vec![])), waiting, result],
+			vec![assign_variable(&started, call(crate::host::CLOCK, vec![])), waiting, result],
 			Bracket::Round,
 			Separator::Semicolon,
 		))
@@ -608,7 +608,7 @@ impl Tasks<'_> {
 	/// `(race·0 = 0; while race·0 == 0 { if task_status(a) is finished or failed {race·0 = 1}; …; if race·0 == 0
 	/// {sleep(1)} }; if race·0 == 1 then await a else …)`: the tasks keep running, the first one's result (or failure)
 	pub(super) fn race(&self, list: &Node) -> Option<Node> {
-		use crate::variable_signals::assign;
+		use crate::variable_signals::assign_variable;
 		let Node::List(listed, Bracket::Square, _) = list.drop_meta() else {
 			return None;
 		};
@@ -632,7 +632,7 @@ impl Tasks<'_> {
 			.map(|(index, job)| {
 				if_then(
 					key(winner_is(0), Op::And, ended(job)),
-					block(vec![assign(&winner, crate::node::int(index as i64 + 1))]),
+					block(vec![assign_variable(&winner, crate::node::int(index as i64 + 1))]),
 				)
 			})
 			.collect();
@@ -647,7 +647,7 @@ impl Tasks<'_> {
 			if_then_else(winner_is(index + 1), awaited_job(job), otherwise)
 		});
 		Some(Node::List(
-			vec![assign(&winner, crate::node::int(0)), waiting, result],
+			vec![assign_variable(&winner, crate::node::int(0)), waiting, result],
 			Bracket::Round,
 			Separator::Semicolon,
 		))
@@ -776,7 +776,7 @@ pub(super) struct TaskHandler {
 
 impl TaskHandler {
 	pub(super) fn check(&self) -> Node {
-		use crate::variable_signals::assign;
+		use crate::variable_signals::assign_variable;
 		let not_handled = key(Node::Empty, Op::Not, Node::Symbol(self.flag.clone()));
 		let status = key(
 			call(crate::host::TASK_STATUS, vec![self.job.clone()]),
@@ -784,7 +784,7 @@ impl TaskHandler {
 			Node::Number(crate::extensions::numbers::Number::Int(self.status)),
 		);
 		let condition = key(not_handled, Op::And, status);
-		if_then(condition, block(vec![assign(&self.flag, Node::True), self.body.clone()]))
+		if_then(condition, block(vec![assign_variable(&self.flag, Node::True), self.body.clone()]))
 	}
 
 	/// At the end of the block: a finish or stop handler waits for the task, a pause handler does not
@@ -854,7 +854,7 @@ impl TaskHandlers<'_> {
 				_ => crate::host::TASK_STOPPED, // stop, cancel
 			};
 			let flag = format!("{HANDLED_PREFIX}{}", self.count.next_number());
-			out.push(crate::variable_signals::assign(&flag, Node::False));
+			out.push(crate::variable_signals::assign_variable(&flag, Node::False));
 			let handler = TaskHandler { job, status, body, flag };
 			active.push(handler.clone());
 			own.push(handler);
@@ -905,7 +905,7 @@ pub(crate) fn with_node_wrappers(node: Node, wrapped: &std::collections::BTreeMa
 			};
 			let call = call(&function.clone(), (0..*count).map(argument).collect());
 			let result = symbol(WRAPPER_RESULT);
-			let body = block(vec![key(result.clone(), Op::Assign, call), result]);
+			let body = block(vec![assign(result.clone(), call), result]);
 			key(head, Op::Define, body)
 		})
 		.collect();

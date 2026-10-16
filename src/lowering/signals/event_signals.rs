@@ -10,13 +10,13 @@
 //! kept the same way: the runtime calls their handlers (notes/system_signals.md).
 
 use super::listeners;
-use super::nodes::{block, call, children_rewritten, if_then, key};
+use super::nodes::{assign, block, call, children_rewritten, if_then, key};
 use crate::declarations::word;
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::signal_values::listeners_subject;
-use crate::variable_signals::{assign, symbols};
+use crate::variable_signals::{assign_variable, symbols};
 use crate::words::{COUNT_WORD, FROM_WORD, ONCE_WORD, ON_WORD};
 use crate::words::{EMIT_ALIASES, EMIT_WORDS};
 use crate::words::{ERROR_WORD, RETURN_WORD};
@@ -125,7 +125,7 @@ pub fn lower(program: Node) -> Node {
 		return failure;
 	}
 	let statements: Vec<Node> =
-		flags.iter().map(|(flag, initial)| assign(flag, initial.clone())).chain(statements).collect();
+		flags.iter().map(|(flag, initial)| assign_variable(flag, initial.clone())).chain(statements).collect();
 	let handlers: Vec<Handler> =
 		handlers.into_iter().map(|(index, name, body)| (index + flags.len(), name, body)).collect();
 	#[cfg(feature = "native")]
@@ -403,7 +403,7 @@ fn run_once(body: Node, flags: &mut Vec<(String, Node)>) -> Node {
 	let flag = format!("{FIRED_PREFIX}{}", flags.len());
 	flags.push((flag.clone(), Node::False));
 	let not_fired = key(Node::Symbol(flag.clone()), Op::Eq, Node::False);
-	if_then(not_fired, block(vec![assign(&flag, Node::True), body]))
+	if_then(not_fired, block(vec![assign_variable(&flag, Node::True), body]))
 }
 
 /// `for i in 1 to 3 { on tick {…} }`: a handler inside a block subscribes each time the block runs (Node's emitter.on):
@@ -452,7 +452,7 @@ fn subscriptions(node: Node, raised: &HashSet<String>, subscribed: &mut Vec<Stri
 		if !subscribed.contains(&event) {
 			subscribed.push(event);
 		}
-		return key(list, Op::Assign, added);
+		return assign(list, added);
 	}
 	let in_loop = in_loop || is_loop(&node);
 	match node.drop_meta() {
@@ -550,7 +550,7 @@ impl Listeners {
 	fn removal(&self, removed: &Node, event: &str) -> Node {
 		let name = word(removed);
 		if self.place(&name, event).is_some() {
-			return assign(&listening_flag(&name), Node::False);
+			return assign_variable(&listening_flag(&name), Node::False);
 		}
 		let listens_elsewhere = self.named.iter().any(|(listener, _)| *listener == name);
 		if !name.is_empty() && (listens_elsewhere || !self.bound.contains(&name)) {
@@ -560,9 +560,9 @@ impl Listeners {
 		let place = symbol(REMOVED_PLACE);
 		let at_place = |(index, flag): (usize, String)| {
 			let condition = key(place.clone(), Op::Eq, Node::int(index as i64 + 1));
-			if_then(condition, block(vec![assign(&flag, Node::False)]))
+			if_then(condition, block(vec![assign_variable(&flag, Node::False)]))
 		};
-		let removal = std::iter::once(assign(REMOVED_PLACE, reflected(removed.clone(), self)));
+		let removal = std::iter::once(assign_variable(REMOVED_PLACE, reflected(removed.clone(), self)));
 		block(removal.chain(self.flags(event).into_iter().enumerate().map(at_place)).collect())
 	}
 
@@ -625,7 +625,7 @@ fn reflected(statement: Node, listeners: &Listeners) -> Node {
 					.named
 					.iter()
 					.filter(|(_, other)| *other == event)
-					.map(|(listener, _)| assign(&listening_flag(listener), Node::False))
+					.map(|(listener, _)| assign_variable(&listening_flag(listener), Node::False))
 					.collect(),
 			)
 		}
@@ -923,9 +923,10 @@ fn each_its_event(bodies: &[Node]) -> Vec<Node> {
 	// an event is an object, so a reference (P200b): kept and handed on as copies
 	let copy_of = |name: &str| crate::library_words::copy_call(symbol(name), Node::False);
 	let restored = |index: usize| {
-		(index > 0 && bodies[..index].iter().any(changes_event)).then(|| assign(EVENT_WORD, copy_of(RAISED_EVENT)))
+		(index > 0 && bodies[..index].iter().any(changes_event))
+			.then(|| assign_variable(EVENT_WORD, copy_of(RAISED_EVENT)))
 	};
-	let kept = assign(RAISED_EVENT, copy_of(EVENT_WORD));
+	let kept = assign_variable(RAISED_EVENT, copy_of(EVENT_WORD));
 	std::iter::once(kept)
 		.chain(bodies.iter().enumerate().flat_map(|(index, body)| restored(index).into_iter().chain([body.clone()])))
 		.collect()

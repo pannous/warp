@@ -12,7 +12,7 @@
 //! Browser names (P188): `clipboard.read()` is `clipboard`, `clipboard.write(text)` the std word
 //! `std_io("clipboard", "write", [text])` (std_adapters.rs; host-files.js in a page).
 
-use super::nodes::{arguments_rewritten, block, call, key};
+use super::nodes::{arguments_rewritten, assign, block, call, key};
 use crate::declarations::word;
 use crate::lowering::signals::system_signals::CHANGE_WORDS;
 use crate::lowering::web::listeners;
@@ -113,7 +113,7 @@ pub(crate) fn assigned_symbols(program: &Node) -> HashSet<String> {
 
 /// `held_key`: the name of the key held now, as `on key` names a press (system_signals.rs key_named)
 fn held_key() -> Node {
-	let read = key(symbol(HELD_CODE), Op::Assign, call(SYSTEM_VALUE, vec![Node::Text(KEY_CODE_HELD.to_string())]));
+	let read = assign(symbol(HELD_CODE), call(SYSTEM_VALUE, vec![Node::Text(KEY_CODE_HELD.to_string())]));
 	let named = crate::system_signals::key_named(symbol(HELD_CODE));
 	block(vec![read, named])
 }

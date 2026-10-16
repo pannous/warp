@@ -15,7 +15,7 @@
 //! Kept as built (user decision cleanup-cuts): `shared` for any atomic variable, not only Int and float arrays and
 //! one-cell values, is the general form for later.
 
-use super::nodes::{any_part, block, call, key};
+use super::nodes::{any_part, assign, block, call, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{DOT_WORD, MAP_WORD, SUM_WORD};
@@ -468,7 +468,7 @@ impl Rewrite<'_> {
 	/// `shared xs = int[n]`: the array of n cells; a shared value one cell, set once the name holds it
 	fn declared(&self, name: String, first: Node, kind: Shared, function: Option<&str>) -> Node {
 		let count = if kind.value { crate::node::int(VALUE_CELL) } else { self.node(first.clone(), function) };
-		let created = key(Node::Symbol(name.clone()), Op::Assign, call(kind.storage.new_and_count().0, vec![count]));
+		let created = assign(Node::Symbol(name.clone()), call(kind.storage.new_and_count().0, vec![count]));
 		if !kind.value {
 			return created;
 		}
@@ -527,15 +527,14 @@ impl Rewrite<'_> {
 			let mapped = call(&kernel, vec![array.clone()]);
 			return Some(match value.attribute(crate::parallel::SPLIT_ATTRIBUTE) {
 				Some(_) => split_mapped(target, &array, &kernel, mapped),
-				None => key(target.clone(), Op::Assign, mapped),
+				None => assign(target.clone(), mapped),
 			});
 		}
 		if let Some((array, lambda)) = numeric_map(value, names) {
 			return Some(block_mapped(target, &array, &lambda, "map_loop", &[]));
 		}
 		// `ys = gpu_compute(shader, xs, w)` of a linear float array: ys names the same block
-		gpu_compute_of_linear_floats(value, names)
-			.then(|| key(target.clone(), Op::Assign, self.node(value.clone(), function)))
+		gpu_compute_of_linear_floats(value, names).then(|| assign(target.clone(), self.node(value.clone(), function)))
 	}
 
 	/// `n = v`, `n += v` of a shared value; `n = n + v`, `n = n - v` as the atomic add, as `n += v`, so no task's update
@@ -681,7 +680,7 @@ impl Rewrite<'_> {
 		body: &Node,
 		function: Option<&str>,
 	) -> Node {
-		let read = key(item.clone(), Op::Assign, call(element_words(kind)[0], vec![array.clone(), index.clone()]));
+		let read = assign(item.clone(), call(element_words(kind)[0], vec![array.clone(), index.clone()]));
 		let statements = match self.node(body.clone(), function).drop_meta().clone() {
 			Node::List(statements, Bracket::Curly, Separator::Semicolon | Separator::Newline) => statements,
 			Node::List(statement, Bracket::Curly, separator) => vec![Node::List(statement, Bracket::None, separator)],

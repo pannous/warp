@@ -4,7 +4,7 @@ use crate::analyzer::*;
 use crate::extensions::numbers::Number;
 use crate::filled_lists::*;
 use crate::list_mutations::*;
-use crate::lowering::nodes::{block, children_rewritten, key, word_headed};
+use crate::lowering::nodes::{assign, block, children_rewritten, key, word_headed};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
@@ -383,7 +383,7 @@ pub(crate) fn assigns(body: &Node, name: &str) -> bool {
 pub(crate) fn with_copy(body: Node, name: &str, suffix: &str) -> Node {
 	let copy = format!("{name}{suffix}");
 	let renamed = rename_symbol(body, name, &copy);
-	let start = key(Node::Symbol(copy), Op::Assign, Node::Symbol(name.to_string()));
+	let start = assign(Node::Symbol(copy), Node::Symbol(name.to_string()));
 	match renamed {
 		Node::List(items, Bracket::Curly, separator) => Node::List(
 			std::iter::once(start).chain(items).collect(),
@@ -475,7 +475,7 @@ pub(crate) fn lower_declarations_among(node: Node, names: &Names) -> Node {
 		phrase if let Some(rephrased) = rephrased(&phrase, variables) => lower(rephrased),
 		// `x : 100 int` and `x:int[100]` declare x as a zero-filled list of 100 ints
 		declaration if let Some((name, zeros)) = typed_array_declaration(&declaration, &names.values) => {
-			key(name, Op::Assign, zeros)
+			assign(name, zeros)
 		}
 		// `letters = char[3]` and `upcases = 26 * char` are zero-filled typed arrays like `x : 100 int`
 		Node::Key(target, Op::Assign, value) if let Some(zeros) = typed_array_value(&value, &names.values) => {

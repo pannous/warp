@@ -3,7 +3,8 @@
 //! One list argument is the list of candidates: `max([1 5 2])`; a list variable `max(xs)` is folded at runtime.
 
 use super::nodes::{
-	children_rewritten, in_block_as_written, is_assigned_data, is_spaced_call, key, with_parts_rewritten, Counter,
+	assign, children_rewritten, in_block_as_written, is_assigned_data, is_spaced_call, key, with_parts_rewritten,
+	Counter,
 };
 use crate::analyzer::call_name;
 use crate::errors::diagnostic::Diagnostic;
@@ -56,7 +57,7 @@ impl Lowering<'_> {
 			}
 			// `x = {max 3 4}` assigns that data
 			Node::Key(target, Op::Assign, value) if is_assigned_data(&target, &value) => {
-				key(*target, Op::Assign, with_parts_rewritten(*value, &mut |part| self.expand(part)))
+				assign(*target, with_parts_rewritten(*value, &mut |part| self.expand(part)))
 			}
 			other => children_rewritten(other, |child| self.expand(child)),
 		}
@@ -82,7 +83,7 @@ impl Lowering<'_> {
 				.into_error(),
 				_ => {
 					let temporary = Node::Symbol(self.temporary());
-					let binding = key(temporary.clone(), Op::Assign, list.clone());
+					let binding = assign(temporary.clone(), list.clone());
 					with_bindings(vec![binding], self.fold_list_at_runtime(name, &temporary, &better))
 				}
 			});
@@ -107,7 +108,7 @@ impl Lowering<'_> {
 	/// `temporary = value` appended to the bindings; the temporary stands for the value
 	fn bind(&mut self, bindings: &mut Vec<Node>, value: Node) -> Node {
 		let temporary = Node::Symbol(self.temporary());
-		bindings.push(key(temporary.clone(), Op::Assign, value));
+		bindings.push(assign(temporary.clone(), value));
 		temporary
 	}
 

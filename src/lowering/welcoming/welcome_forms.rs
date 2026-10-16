@@ -7,7 +7,7 @@
 //! - OCaml / F# `let f x = body in rest`: the definition `f(x) := body`, then rest
 //! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
-use super::nodes::{block, call, children_rewritten, is_kinded_type_word, key};
+use super::nodes::{assign, block, call, children_rewritten, is_kinded_type_word, key};
 use crate::lowering::signals::event_signals::PAGE_EVENTS;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -141,7 +141,7 @@ fn set_assignment(node: &Node) -> Option<Node> {
 	if !set.is_symbol(SET_WORD) || !is_assignable(target) {
 		return None;
 	}
-	let assignment = key(target.as_ref().clone(), Op::Assign, value.as_ref().clone());
+	let assignment = assign(target.as_ref().clone(), value.as_ref().clone());
 	crate::normalize::set_position_of(set);
 	let written = format!("{SET_WORD} {} to {}", target.serialize(), value.serialize());
 	crate::normalize::hint(&written, &assignment.serialize(), SET_PROSE_REASON);
@@ -382,14 +382,10 @@ fn named_switch_subjects(node: Node) -> Node {
 			Node::List(result, bracket, separator)
 		}
 		Node::Key(left, Op::Assign, right) => match left.drop_meta() {
-			Node::List(words, _, _) if words.len() == 2 && is_switch_word(&words[0]) => {
-				named_switch_subjects(Node::List(
-					vec![words[0].clone(), key(words[1].clone(), Op::Assign, *right)],
-					Bracket::None,
-					Separator::Space,
-				))
-			}
-			_ => key(named_switch_subjects(*left), Op::Assign, named_switch_subjects(*right)),
+			Node::List(words, _, _) if words.len() == 2 && is_switch_word(&words[0]) => named_switch_subjects(
+				Node::List(vec![words[0].clone(), assign(words[1].clone(), *right)], Bracket::None, Separator::Space),
+			),
+			_ => assign(named_switch_subjects(*left), named_switch_subjects(*right)),
 		},
 		other => children_rewritten(other, named_switch_subjects),
 	}
@@ -408,7 +404,7 @@ fn named_subject(item: &Node) -> Option<(Node, Node)> {
 		return None;
 	}
 	let expression = Node::single_or_list(expression.to_vec(), bracket.clone(), separator.clone());
-	Some((key(name.as_ref().clone(), Op::Assign, expression), cases.clone()))
+	Some((assign(name.as_ref().clone(), expression), cases.clone()))
 }
 
 /// The items of a match, `[match, subject, cases]`, `[match, (subject cases)]` or, as a body or an arm parses it,
@@ -903,7 +899,7 @@ fn destructured_parameters(parameters: &Node) -> Option<(Node, Vec<Node>)> {
 				if !names.is_empty() && names.iter().all(|name| matches!(name.drop_meta(), Node::Symbol(_))) =>
 			{
 				let object = Node::Symbol(format!("{DESTRUCTURED_OBJECT}{index}"));
-				let field = |name: &Node| key(name.clone(), Op::Assign, key(object.clone(), Op::Dot, name.clone()));
+				let field = |name: &Node| assign(name.clone(), key(object.clone(), Op::Dot, name.clone()));
 				fields.extend(names.iter().map(field));
 				object
 			}

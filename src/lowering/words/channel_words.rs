@@ -7,7 +7,7 @@
 //! `chat = channel "chat"` is the machine-wide channel (src/host/channels.rs) with the same words: it listens from its
 //! assignment on, `chat.send(v)` and `send v to chat` are `channel_send(chat, v)`, `chat.receive()` waits for a message.
 
-use super::nodes::{block, call, filled, key};
+use super::nodes::{assign, block, call, filled};
 use crate::declarations::word;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -80,7 +80,7 @@ fn with_listeners(node: Node, machine: &HashMap<String, i64>) -> Node {
 	}
 	let items = items.iter().flat_map(|item| match listened(item, machine) {
 		Some((name, id, target)) => {
-			vec![key(target, Op::Assign, name.clone()), call(crate::host::CHANNEL_LISTEN, vec![Node::int(id), name])]
+			vec![assign(target, name.clone()), call(crate::host::CHANNEL_LISTEN, vec![Node::int(id), name])]
 		}
 		None => vec![item.clone()],
 	});

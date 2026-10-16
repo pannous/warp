@@ -4,8 +4,8 @@
 //! `real f(real x, int n) { … }`, the C way, defines `f(x:real, n:int) := { … }`.
 
 use super::nodes::{
-	block, call, children_rewritten, grouped_parameters, if_then, if_then_else, is_kinded_type_word, key, word_headed,
-	Counter,
+	assign, block, call, children_rewritten, grouped_parameters, if_then, if_then_else, is_kinded_type_word, key,
+	word_headed, Counter,
 };
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
@@ -97,7 +97,7 @@ fn rewrite_flags(node: Node, types: &[(String, Vec<String>)]) -> Node {
 				key(Node::Symbol(member.clone()), Op::Colon, value)
 			})
 			.collect();
-		key(name.clone(), Op::Assign, Node::List(entries, Bracket::Curly, Separator::Space))
+		assign(name.clone(), Node::List(entries, Bracket::Curly, Separator::Space))
 	};
 	match node {
 		Node::List(items, bracket, separator) => {
@@ -182,7 +182,7 @@ fn collection_declarations(node: Node, named: &[&str]) -> Node {
 				crate::errors::diagnostic::note_alias(written, meaning);
 			}
 			let target = Node::Key(name, Op::Colon, Box::new(symbol(meaning)));
-			key(target, Op::Assign, collection_declarations(*value, named))
+			assign(target, collection_declarations(*value, named))
 		}
 		None => node.map_children(|child| collection_declarations(child, named)),
 	}
@@ -226,7 +226,7 @@ fn zero_declaration(statement: &Node, assigned: &std::collections::HashSet<Strin
 	let exact_zero = || crate::type_tests::type_matches("int", type_name).then(|| Node::int(0));
 	let zero = zero_value(crate::analyzer::type_word_kind(type_name)?).or_else(exact_zero)?;
 	let typed = key(name.clone(), Op::Colon, type_word.clone());
-	Some(key(typed, Op::Assign, zero))
+	Some(assign(typed, zero))
 }
 
 pub(crate) fn zero_value(kind: crate::type_kinds::Kind) -> Option<Node> {

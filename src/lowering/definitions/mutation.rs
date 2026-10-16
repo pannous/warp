@@ -3,7 +3,7 @@
 //! `x = x.upper` in the parser; in `upper x!` the parser only sees `x!`, so it marks x and `lower` turns the call into
 //! `x = upper x`. A lone `x!`, `f!` or `{…}!` keeps evaluating, as does `x!` after an output word (`print friends!`).
 
-use super::nodes::{call, children_rewritten, int, key, written_entry};
+use super::nodes::{assign, call, children_rewritten, int, written_entry};
 use crate::errors::diagnostic::Diagnostic;
 use crate::extensions::numbers::Number;
 use crate::node::{Bracket, Node, Separator};
@@ -190,7 +190,7 @@ pub fn lower(node: Node) -> Node {
 						&& !matches!(separator, Separator::Semicolon | Separator::Newline) =>
 				{
 					let variable = unmarked(items[1].clone());
-					key(variable, Op::Assign, strip_marks(call, false))
+					assign(variable, strip_marks(call, false))
 				}
 				_ => strip_marks(call, true),
 			}
