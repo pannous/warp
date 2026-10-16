@@ -9,6 +9,7 @@ use super::super::layout::BYTE;
 use super::super::lists::list_ops::TEXT_AS_FLOAT;
 use super::super::numbers::float_text::FLOAT_TEXT;
 use super::super::reflection::library_ops::NODE_ORDER;
+use super::super::runtime_dependencies::{any, Dependency};
 use super::super::text::similarity::NUMBERS_SIMILAR;
 use super::super::text::text_builtins::TEXT_CONCAT;
 use super::super::WasmGcEmitter;
@@ -85,21 +86,25 @@ const ROUNDS_TO_TEN: f64 = 9.5;
 const ROUNDS_TO_HUNDRED: f64 = 99.5;
 
 /// A program that makes uncertain values gets the whole family: any arithmetic may meet one
-pub fn add_dependencies(required: &mut std::collections::HashSet<&'static str>) {
-	if required.contains(UNCERTAIN_NEW) || required.contains(GAUSSIAN_NEW) {
-		required.extend(UNCERTAIN_FUNCTIONS);
-		required.extend(UNCERTAIN_ARITHMETIC);
-		required.extend(GAUSSIAN_ARITHMETIC);
-		required.extend([
-			TEXT_AS_FLOAT,
-			NUMBERS_SIMILAR,
-			NEGATIVE_UNCERTAINTY,
-			INTERVAL_AND_GAUSSIAN,
-			"new_float",
-			UNCERTAIN_ORDER,
-			NODE_ORDER,
-		]);
-	}
+pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
+	let makers = [UNCERTAIN_NEW, GAUSSIAN_NEW];
+	vec![
+		any(&makers, &UNCERTAIN_FUNCTIONS),
+		any(&makers, &UNCERTAIN_ARITHMETIC),
+		any(&makers, &GAUSSIAN_ARITHMETIC),
+		any(
+			&makers,
+			&[
+				TEXT_AS_FLOAT,
+				NUMBERS_SIMILAR,
+				NEGATIVE_UNCERTAINTY,
+				INTERVAL_AND_GAUSSIAN,
+				"new_float",
+				UNCERTAIN_ORDER,
+				NODE_ORDER,
+			],
+		),
+	]
 }
 
 impl WasmGcEmitter {

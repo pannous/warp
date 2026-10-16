@@ -33,6 +33,7 @@ pub(crate) mod maps;
 pub(crate) use control::loop_control::{is_step, mark_step, split_step};
 pub use maps::map_backend::MAP_COPY_SUFFIX;
 pub(crate) mod reflection;
+mod runtime_dependencies;
 mod string_table;
 pub(crate) mod text;
 mod type_manager;
@@ -648,10 +649,10 @@ impl WasmGcEmitter {
 		self.written_operator_bound = key_operators.fold(self.written_operator_bound, i64::max);
 		self.writes_tags = reflection::library_ops::mentions_quoted_tag(node);
 		host::component_adapters::add_dependencies(&mut self.ctx.required_functions);
-		numbers::uncertain::add_dependencies(&mut self.ctx.required_functions); // before the similarity's: uncertain_similar needs numbers_similar
-		self.require_function_text(); // before the similarity's: function_text needs values_equal
-		text::similarity::add_dependencies(&mut self.ctx.required_functions); // before the text builtins': values_equal needs text_of
-		text::text_builtins::add_dependencies(&mut self.ctx.required_functions);
+		let dependencies: Vec<_> =
+			runtime_dependencies::every_dependency().into_iter().chain(self.function_text_dependency()).collect();
+		runtime_dependencies::require_dependencies(&mut self.ctx.required_functions, &dependencies);
+		text::text_builtins::require_float_text(&mut self.ctx.required_functions);
 		self.require_list_marks(); // before any function emits a list writer, which reads marks_lists
 		self.guards_errors = control::try_guard::guards_errors(node);
 		let len = self.ctx.required_functions.len();

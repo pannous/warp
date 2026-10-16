@@ -6,6 +6,7 @@
 use crate::node::{Bracket, Node, Separator};
 use crate::type_kinds::Kind;
 use crate::wasm_emitter::layout::BYTE;
+use crate::wasm_emitter::runtime_dependencies::{all, any, Dependency};
 use crate::wasm_emitter::{WasmGcEmitter, RAN_WITHOUT_ERROR};
 use crate::words::{CHR_WORD, ERROR_WORD, IS_ERROR_WORD, RAISE_WORD};
 use std::collections::HashSet;
@@ -126,173 +127,22 @@ pub fn concatenates(left: Kind, right: Kind) -> bool {
 	[left, right].iter().any(is_text) && !matches!(left, Kind::Function) && !matches!(right, Kind::Function)
 }
 
-/// Runtime functions the text builtins call
-pub fn add_dependencies(required: &mut HashSet<&'static str>) {
-	super::super::reflection::node_api::add_dependencies(required);
-	// `catch e`: the caught error becomes an Error through error_of
-	if required.contains(crate::wasm_emitter::CAUGHT_ERROR) {
-		required.insert(ERROR_OF);
-	}
-	if required.contains(super::super::reflection::library_ops::LIST_TEXT) {
-		required.insert("list_join"); // emitted together, with the same helpers
-	}
-	if required.contains(super::super::reflection::library_ops::NODE_SLICE) {
-		required.extend(["text_chars", "list_join", "list_reverse"]);
-	}
-	if crate::library_words::MAP_WORD_FUNCTIONS.iter().any(|name| required.contains(name)) {
-		required.insert("map_find");
-	}
-	if required.contains(super::super::lists::list_ops::ELEMENT_BODY) {
-		required.insert(super::super::lists::list_ops::ELEMENT_CHILDREN);
-	}
-	if required.contains(super::super::lists::list_ops::ELEMENTS_FIELD) {
-		use super::super::lists::list_ops::{STRUCT_BODY, TAGGED_FIELD};
-		required.extend(["map_find", TAGGED_FIELD, STRUCT_BODY]);
-	}
-	if required.contains(super::super::lists::list_ops::NODE_AT_KEY) {
-		required.extend(["node_index_at", "map_get"]);
-	}
-	// instance_copy is emitted with field_with, both looking into an instance's fields; `shallow` is tested for truth
-	if required.contains(crate::library_words::INSTANCE_COPY) {
-		required.extend([crate::library_words::FIELD_WITH, super::super::reflection::equality::IS_TRUTHY]);
-	}
-	if required.contains(crate::library_words::FIELD_WITH) {
-		required.insert(super::super::lists::list_ops::STRUCT_BODY); // an instance keeps its type
-	}
-	if required.contains(super::super::lists::list_ops::NODE_WITH_KEY) {
-		required.extend([super::super::lists::list_ops::NODE_WITH_NODE_AT, crate::library_words::FIELD_WITH]);
-	}
-	if required.contains(super::super::lists::list_ops::NODE_WITH_NODE_AT) {
-		required.extend(["node_with_at", "get_int_value"]);
-	}
-	// a map variable held as a hash table names its keys by map_key_name, emitted with map_get; a map node found or set
-	// by name gets an index of the same tables (map_index.rs)
-	if ["map_get", "map_find", "field_with"].iter().any(|name| required.contains(name)) {
-		required.insert(super::super::maps::map_backend::NODE_MAP_NEW);
-	}
-	if super::super::maps::map_backend::NODE_MAP_FUNCTIONS.iter().any(|name| required.contains(name)) {
-		required.extend(super::super::maps::map_backend::NODE_MAP_FUNCTIONS);
-		required.insert("map_get");
-	}
-	// maps compare keys by name: map_key_name reads a character key as its text
-	if ["map_get", "map_find", "field_with"].iter().any(|name| required.contains(name)) {
-		required.extend([TEXT_OF, crate::wasm_emitter::VALUES_EQUAL]);
-	}
-	if required.contains("node_list_of") {
-		required.insert("node_list_push");
-	}
-	if required.contains("exact_euclid_div") {
-		required.insert(super::super::INT_RUNTIME);
-	}
-	if required.contains(super::super::numbers::float_text::FLOAT_AS_EXACT) {
-		required.extend([super::super::INT_RUNTIME, "new_int"]);
-	}
-	if required.contains(super::super::lists::list_ops::LIST_EXTEND) {
-		required.insert("list_concat"); // of a non-list
-	}
-	if required.contains(super::super::lists::list_ops::NODE_ADD) {
-		required.extend(["list_concat", TEXT_CONCAT, TEXT_OF, super::super::reflection::library_ops::LIST_JOIN]);
-		// two lists added are concatenated, two texts too, a text and a number joined
-	}
-	if required.contains(super::super::numbers::casts::TEXT_AS_NUMBER) {
-		required.extend([
-			super::super::lists::list_ops::TEXT_AS_FLOAT,
-			super::super::INT_RUNTIME,
-			"exact_div",
-			"new_text",
-			"new_int",
-			"new_float",
-		]);
-	}
-	if super::super::lists::list_ops::NODE_ARITHMETIC.iter().any(|(name, _, _)| required.contains(name)) {
-		required.extend([
-			super::super::lists::list_ops::TEXT_AS_FLOAT,
-			super::super::INT_RUNTIME,
-			"exact_add",
-			"exact_sub",
-			"exact_mul",
-			"exact_div",
-			"new_float",
-		]);
-		required.extend(
-			super::super::lists::list_ops::NODE_ARITHMETIC
-				.iter()
-				.filter(|(name, _, _)| required.contains(name))
-				.map(|(_, _, exact)| *exact)
-				.collect::<Vec<_>>(),
-		);
-		if required.contains(super::super::lists::list_ops::NODE_POW) {
-			required.extend(["is_ratio", "invalid_number"]);
-		}
-	}
-	if required.contains(super::super::lists::list_ops::TEXT_AS_INT)
-		|| required.contains(super::super::lists::list_ops::TEXT_AS_FLOAT)
-	{
-		required.insert("get_int_value");
-	}
-	if required.contains(super::super::lists::list_ops::TEXT_AS_FLOAT) {
-		required.insert(super::super::lists::list_ops::TEXT_AS_INT);
-		if required.contains(super::super::INT_RUNTIME) {
-			required.insert("exact_to_f64");
-		}
-	}
-	if required.contains(super::super::lists::list_ops::TEXT_AS_INT) && required.contains(super::super::INT_RUNTIME) {
-		required.extend(["exact_mul", "exact_add", "exact_sub"]);
-	}
-	if required.contains("list_sort") {
-		required.insert(super::super::reflection::library_ops::LIST_SORTED_BY);
-	}
-	if required.contains(super::super::reflection::library_ops::LIST_SORTED_BY) {
-		required.extend([super::super::reflection::library_ops::NODE_ORDER, "text_chars", "list_join"]);
-	}
-	if [TEXT_FIND, TEXT_STARTS_WITH, TEXT_ENDS_WITH].iter().any(|name| required.contains(name)) {
-		required.insert(TEXT_MATCHES_AT);
-	}
-	// a text searched for a text (`s.contains("b")`, `"b" in s`); the map words are emitted together
-	if crate::library_words::MAP_WORD_FUNCTIONS.iter().any(|name| required.contains(name)) {
-		required.extend([TEXT_FIND, TEXT_MATCHES_AT, TEXT_OF]);
-	}
-	if required.contains(super::super::host::wasi_emitter::PRINT_VALUE)
-		|| required.contains(super::super::host::wasi_emitter::PUT_VALUE)
-	{
-		required.insert("list_join");
-	}
-	// the text of a list (list_text) is emitted with join, as the analyzer requires list_join for both
-	if required.contains("list_join") {
-		required.extend([
-			TEXT_CONCAT,
-			super::super::reflection::library_ops::LIST_TEXT,
-			super::super::reflection::library_ops::TEXT_QUOTED,
-		]); // a nested list joins as "[…]", a text quoted
-	  // a float joins as its text, made only by a program with floats (analyzer::makes_floats)
-		if FLOAT_MAKERS.iter().any(|name| required.contains(name)) {
-			required.insert(super::super::numbers::float_text::FLOAT_TEXT);
-		}
-		if required.contains(super::super::numbers::uncertain::UNCERTAIN_NEW) {
-			required.insert(super::super::numbers::uncertain::UNCERTAIN_TEXT); // `7.0 ± 2.0`
-		}
-		if required.contains(super::super::time::times::TIME_FIELD) {
-			required.insert(super::super::time::times::TIME_TEXT); // `2026-10-10T14:43:33.682Z`
-		}
-	} else {
-		required.remove(super::super::numbers::float_text::FLOAT_TEXT); // no float is shown as text
-	}
-	// numbers that are no fixnum (big integers, ratios) join as their exact text, built by text_concat
-	if required.contains("list_join") && required.contains(super::super::INT_RUNTIME) {
-		required.extend([super::super::numbers::exact::EXACT_TEXT, TEXT_CONCAT]);
-	}
-	// codepoint_of reads a one-character text as its character
-	if required.contains(super::super::reflection::library_ops::CODEPOINT_OF) {
-		required.extend(["string_char_at", "text_grapheme_count"]);
-	}
-	if TEXT_ARGUMENT_USERS.iter().any(|name| required.contains(name)) {
-		required.insert(TEXT_ARGUMENT);
-	}
-	if required.contains(TEXT_ARGUMENT) {
-		required.insert(TEXT_OF);
-	}
+/// Runtime functions the text builtins call, and the list, map and number functions emitted with them
+pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
+	use super::super::host::wasi_emitter::{PRINT_VALUE, PUT_VALUE};
+	use super::super::lists::list_ops::*;
+	use super::super::maps::map_backend::{NODE_MAP_FUNCTIONS, NODE_MAP_NEW};
+	use super::super::numbers::uncertain::{UNCERTAIN_NEW, UNCERTAIN_TEXT};
+	use super::super::numbers::{casts::TEXT_AS_NUMBER, exact::EXACT_TEXT, float_text::FLOAT_AS_EXACT};
+	use super::super::reflection::equality::IS_TRUTHY;
+	use super::super::reflection::library_ops::{
+		CODEPOINT_OF, LIST_JOIN, LIST_SORTED_BY, LIST_TEXT, NODE_ORDER, NODE_SLICE, TEXT_QUOTED,
+	};
+	use super::super::time::times::{TIME_FIELD, TIME_TEXT};
+	use super::super::{CAUGHT_ERROR, INT_RUNTIME, VALUES_EQUAL};
+	use crate::library_words::{FIELD_WITH, INSTANCE_COPY, MAP_WORD_FUNCTIONS};
 	let calls_text_of = [
-		crate::wasm_emitter::VALUES_EQUAL,
+		VALUES_EQUAL,
 		TEXT_CONCAT,
 		TEXT_APPEND,
 		BYTE_AT,
@@ -309,19 +159,71 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		"list_reverse",
 		"text_chars",
 		"list_sort",
-		super::super::reflection::library_ops::NODE_ORDER,
+		NODE_ORDER,
 	];
-	if calls_text_of.iter().any(|name| required.contains(name)) {
-		required.insert(TEXT_OF);
-	}
-	if required.contains("text_chars") {
-		required.extend(["list_reverse", "text_reverse"]); // the characters are collected backwards, and list_reverse hands texts on
-	}
-	if required.contains("list_reverse") {
-		required.insert("text_reverse");
-	}
-	if required.contains(TEXT_OF) {
-		required.insert(CHARACTER_ENCODER);
+	vec![
+		// `catch e`: the caught error becomes an Error through error_of
+		any(&[CAUGHT_ERROR], &[ERROR_OF]),
+		any(&[LIST_TEXT], &["list_join"]), // emitted together, with the same helpers
+		any(&[NODE_SLICE], &["text_chars", "list_join", "list_reverse"]),
+		// a text searched for a text (`s.contains("b")`, `"b" in s`); the map words are emitted together
+		any(&MAP_WORD_FUNCTIONS, &["map_find", TEXT_FIND, TEXT_MATCHES_AT, TEXT_OF]),
+		any(&[ELEMENT_BODY], &[ELEMENT_CHILDREN]),
+		any(&[ELEMENTS_FIELD], &["map_find", TAGGED_FIELD, STRUCT_BODY]),
+		any(&[NODE_AT_KEY], &["node_index_at", "map_get"]),
+		// instance_copy is emitted with field_with, both looking into an instance's fields; `shallow` is tested for truth
+		any(&[INSTANCE_COPY], &[FIELD_WITH, IS_TRUTHY]),
+		any(&[FIELD_WITH], &[STRUCT_BODY]), // an instance keeps its type
+		any(&[NODE_WITH_KEY], &[NODE_WITH_NODE_AT, FIELD_WITH]),
+		any(&[NODE_WITH_NODE_AT], &["node_with_at", "get_int_value"]),
+		// a map variable held as a hash table names its keys by map_key_name, emitted with map_get; a map node found or
+		// set by name gets an index of the same tables (map_index.rs); maps compare keys by name: map_key_name reads a
+		// character key as its text
+		any(&["map_get", "map_find", FIELD_WITH], &[NODE_MAP_NEW, TEXT_OF, VALUES_EQUAL]),
+		any(&NODE_MAP_FUNCTIONS, &NODE_MAP_FUNCTIONS),
+		any(&NODE_MAP_FUNCTIONS, &["map_get"]),
+		any(&["node_list_of"], &["node_list_push"]),
+		any(&["exact_euclid_div"], &[INT_RUNTIME]),
+		any(&[FLOAT_AS_EXACT], &[INT_RUNTIME, "new_int"]),
+		any(&[LIST_EXTEND], &["list_concat"]), // of a non-list
+		// two lists added are concatenated, two texts too, a text and a number joined
+		any(&[NODE_ADD], &["list_concat", TEXT_CONCAT, TEXT_OF, LIST_JOIN]),
+		any(&[TEXT_AS_NUMBER], &[TEXT_AS_FLOAT, INT_RUNTIME, "exact_div", "new_text", "new_int", "new_float"]),
+		any(&[TEXT_AS_FLOAT], &[TEXT_AS_INT]),
+		any(&[TEXT_AS_INT], &["get_int_value"]),
+		all(&[TEXT_AS_FLOAT, INT_RUNTIME], &["exact_to_f64"]),
+		all(&[TEXT_AS_INT, INT_RUNTIME], &["exact_mul", "exact_add", "exact_sub"]),
+		any(&["list_sort"], &[LIST_SORTED_BY]),
+		any(&[LIST_SORTED_BY], &[NODE_ORDER, "text_chars", "list_join"]),
+		any(&[TEXT_FIND, TEXT_STARTS_WITH, TEXT_ENDS_WITH], &[TEXT_MATCHES_AT]),
+		any(&[PRINT_VALUE, PUT_VALUE], &["list_join"]),
+		// the text of a list (list_text) is emitted with join, as the analyzer requires list_join for both; a nested
+		// list joins as "[…]", a text quoted
+		any(&["list_join"], &[TEXT_CONCAT, LIST_TEXT, TEXT_QUOTED]),
+		all(&["list_join", UNCERTAIN_NEW], &[UNCERTAIN_TEXT]), // `7.0 ± 2.0`
+		all(&["list_join", TIME_FIELD], &[TIME_TEXT]),         // `2026-10-10T14:43:33.682Z`
+		// numbers that are no fixnum (big integers, ratios) join as their exact text, built by text_concat
+		all(&["list_join", INT_RUNTIME], &[EXACT_TEXT, TEXT_CONCAT]),
+		// codepoint_of reads a one-character text as its character
+		any(&[CODEPOINT_OF], &["string_char_at", "text_grapheme_count"]),
+		any(&TEXT_ARGUMENT_USERS, &[TEXT_ARGUMENT]),
+		any(&[TEXT_ARGUMENT], &[TEXT_OF]),
+		any(&calls_text_of, &[TEXT_OF]),
+		// the characters are collected backwards, and list_reverse hands texts on
+		any(&["text_chars"], &["list_reverse", "text_reverse"]),
+		any(&["list_reverse"], &["text_reverse"]),
+		any(&[TEXT_OF], &[CHARACTER_ENCODER]),
+	]
+}
+
+/// A float joins as its text, made only by a program with floats (analyzer::makes_floats): float_text when a list is
+/// joined and a float may be made, none otherwise
+pub(in crate::wasm_emitter) fn require_float_text(required: &mut HashSet<&'static str>) {
+	use super::super::numbers::float_text::FLOAT_TEXT;
+	if required.contains("list_join") && FLOAT_MAKERS.iter().any(|name| required.contains(name)) {
+		required.insert(FLOAT_TEXT);
+	} else {
+		required.remove(FLOAT_TEXT);
 	}
 }
 
