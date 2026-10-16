@@ -849,7 +849,7 @@ samples/voices.warp
 samples/word_lengths.warp
 samples/worker.warp
 probes/self_hosting/parser/glued_units.warp
-probes/thrice_block.warp
+tests/fixtures/parser_corpus/thrice_block.warp
 probes/self_hosting/parser/count_word_definition.warp
 tests/fixtures/parser_corpus/break.warp
 tests/fixtures/parser_corpus/elements.warp

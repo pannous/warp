@@ -1,0 +1,3 @@
+thrice { print "hi" }
+x = twice "ab"
+print x
