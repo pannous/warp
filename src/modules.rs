@@ -216,13 +216,5 @@ pub fn insert_module_classes(program: Node) -> Node {
 	crate::compiler::compile_context::change(|context| context.module_returned_classes = returned);
 	let file_classes: Vec<Node> = file_classes.into_iter().filter(is_foreign).collect();
 	let program = with_implicit_class_modules(with_statements_in_front(program, std_classes));
-	match file_classes.is_empty() {
-		true => program,
-		false => match program {
-			Node::List(statements, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
-				Node::List([file_classes, statements].concat(), Bracket::None, separator)
-			}
-			single => Node::List([file_classes, vec![single]].concat(), Bracket::None, Separator::Semicolon),
-		},
-	}
+	with_statements_in_front(program, file_classes)
 }

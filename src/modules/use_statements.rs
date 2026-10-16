@@ -67,6 +67,11 @@ pub(super) fn fast_name(word: &str) -> String {
 	format!("{FAST_MODULE}{QUALIFIER}{word}")
 }
 
+/// The node with fast_math's `words` called by their qualified names (fast_name)
+pub(super) fn with_fast_names(node: Node, words: &[String]) -> Node {
+	words.iter().fold(node, |node, word| renamed_word(node, word, &fast_name(word)))
+}
+
 /// `a / b` of fast code as `(a as float) / b`: a float, never an exact ratio
 pub(crate) fn float_division(node: Node) -> Node {
 	match node {
