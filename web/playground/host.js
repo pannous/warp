@@ -281,7 +281,7 @@ function buildValue(module, tree) {
 }
 
 // src/operators/codes.rs OP_CODES as written (Op::as_str), by the code a key carries above the kind bits
-const OPERATOR_SPELLINGS = ["", ":", "=", ":=", ".", "?.", "::", "->", "+", "-", "*", "/", "%", "rem", "^", "<<", ">>", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^^=", "<", ">", "<=", ">=", "==", "!=", "≈", "and", "or", "xor", "not", "-", "√", "∛", "‖", "++", "--", "²", "³", "?", "if", "then", "else", "while", "do", "#", "..", "to", "as", "±", "??", "===", "!==", "~", "⌞", "⌟", "&", "|", "↑", "↓", "//", "//="];
+const OPERATOR_SPELLINGS = ["", ":", "=", ":=", ".", "?.", "::", "->", "+", "-", "*", "/", "%", "rem", "^", "<<", ">>", "+=", "-=", "*=", "/=", "%=", "^=", "&&=", "||=", "^^=", "<", ">", "<=", ">=", "==", "!=", "≈", "and", "or", "xor", "not", "-", "√", "∛", "‖", "++", "--", "²", "³", "?", "if", "then", "else", "while", "do", "#", "..", "to", "as", "±", "??", "===", "!==", "~", "⌞", "⌟", "&", "|", "↑", "↓", "/!", "/!="];
 // the keys that are entries of an object; the others are operations
 const ENTRY_OPERATORS = ["", ":", "=", ":="];
 const ROUND_BRACKET = 2n; // src/wasm_emitter bracket info: Curly 0, Square 1, Round 2

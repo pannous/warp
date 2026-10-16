@@ -19,12 +19,13 @@ prints its hints as `code:<line>: hint: …` and then its formatted text; `check
   docs print signatures that way); one space after a comma or semicolon, none before; none just inside `(…)` and `[…]`
 - every binary operator spaced: `x = a + b * 2`, `1 < 2`, `3 ≤ 4` (card format-spaces: every symbol spelling of the
   operator table, src/operators/spellings.rs; GLUED_SPELLINGS in rules.rs keep `.`, ranges `..`, prefix/postfix and
-  the unit `·` as written; the tree check keeps `list<int>` and `7//2` glued)
+  the unit `·` as written; the tree check keeps `list<int>` glued)
 - list separators stay as written (commas or spaces)
 - no trailing whitespace, at most one blank line in a row, one final newline; the spaces before a trailing comment and
   comment text stay
-- `hash-comments`: `// text` → `# text`, `/// doc` → `## doc` (user: `//` also means floor division); belongs to
-  `warp beautify`
+- `hash-comments`: `// text` → `# text`, `/// doc` → `## doc` (user: `//` reads like Python's floor division);
+  belongs to `warp beautify`, which also rewrites a `//` comment meant as floor division (`7//2`, `x//=3`) to `/!`
+  and `div` to `/!` (decision floor-division)
 - synonyms canonical (beautify only, src/formatting/synonyms.rs): the compiler's alias notes (note_alias, topic
   `alias-…`: `auto` → var, `__add__` → plus) heard by diagnostic::every_hint_of (got-its ignored, nothing printed),
   their "I meant" fixes applied last-first, each kept only when `lower` of the program stays the same

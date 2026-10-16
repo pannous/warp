@@ -25,7 +25,7 @@ def render(width, height, max_iter) {
 		for col in 0..width {
 			cx = (col - width / 2) * 4.0 / width
 			iter = mandelbrot(cx, cy, max_iter)
-			idx = iter * (chars.length - 1)//max_iter  # floor division: / is exact
+			idx = iter * (chars.length - 1) /! max_iter  # floor division: / is exact
 			line = line + chars[idx]
 		}
 		print line

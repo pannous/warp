@@ -27,7 +27,7 @@ Left as is, and why:
 
 ## Measurements
 Program (first entry of probes/multi_value/bench.rs, copy to examples/ to run it): digit sum of 1000!
-`fac(n) := n<2 ? 1 : n*fac(n-1); f = fac(1000); s = 0; while f > 0 { s += f % 10; f = f//10 }; s` → 10539.
+`fac(n) := n<2 ? 1 : n*fac(n-1); f = fac(1000); s = 0; while f > 0 { s += f % 10; f = f /! 10 }; s` → 10539.
 Release build, 9 alternating rounds of wasmtime compile + run (`wasm_reader::read_bytes`), machine under heavy load:
 
 | module | bytes | bytes after wasm-opt -O3 | min | median |
@@ -38,9 +38,9 @@ Release build, 9 alternating rounds of wasmtime compile + run (`wasm_reader::rea
 
 - Replacing the global by a second result alone is neutral (a global.set/get against the stack, lost in noise) and
   3 bytes smaller; it mainly removes a global and lets wasm-opt see the data flow.
-- The win comes from what a two-result division enables: `f//10` is `(f - f%10)/10`, and the exact division of a big
+- The win comes from what a two-result division enables: `f /! 10` is `(f - f%10)/10`, and the exact division of a big
   integer used to run a gcd loop of big divisions before ratio_new; now it is one divmod. About -26 % on this program.
-- Done 2026-10-04 (night): `a//b` is the pseudo-call `floor_quotient(a, b)` (warp_parser.rs `floor_division`), emitted
+- Done 2026-10-04 (night): `a /! b` (then spelled `a//b`) is the pseudo-call `floor_quotient(a, b)` (warp_parser.rs `floor_division`), emitted
   as `exact_euclid_div` (exact_div, then exact_floor; ceil for a negative divisor) or the f64 quotient rounded the same
   way: each operand evaluated once. Building it on `int_divmod_slow` directly would save the gcd of exact_div.
 
@@ -60,7 +60,7 @@ Release build, 9 alternating rounds of wasmtime compile + run (`wasm_reader::rea
 - `x, y = y, x` swaps (all values first, then the stores).
 
 Measured (same bench, release, 9 rounds, compile + run): 200000 calls of a divmod,
-`dm(a, b) := [a//b, a%b]` with `p#1 + p#2` against `dm(a, b) := return a//b, a%b` with `q, r = dm(i, 7)`:
+`dm(a, b) := [a /! b, a%b]` with `p#1 + p#2` against `dm(a, b) := return a /! b, a%b` with `q, r = dm(i, 7)`:
 | version | bytes | min | median |
 |---|---|---|---|
 | list return | 11565 | 374 ms | 387 ms |

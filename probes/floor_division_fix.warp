@@ -1,0 +1,5 @@
+n = 7//2
+x = 9
+x//=3
+m = 7 div 2
+print n + x + m

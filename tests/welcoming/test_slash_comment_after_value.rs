@@ -4,7 +4,7 @@ use warp::errors::diagnostic::{use_acknowledgements_file, with_acknowledger, Ack
 use warp::normalize::capture_hints;
 
 fn slash_notes(code: &str) -> usize {
-	capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "a//b").count()
+	capture_hints(|| warp::wasm_emitter::eval(code)).1.iter().filter(|hint| hint.canonical == "a /! b").count()
 }
 
 #[test]

@@ -175,7 +175,6 @@ impl WarpParser {
 				"+-" => after.is_whitespace() && prev.is_whitespace(),
 				":" => !(self.at_explicit_symbol() && self.after_explicit_symbol()), // `[:a :plus :b]`
 				"/" => after != '/',                                                 // Don't treat // as division - it's a comment
-				"//" | "//=" => self.at_floor_division(),                            // `x // note` stays a comment
 				// `div{…}` and `div {…}` are the html tag, and data never computes
 				"div" => !self.word_opens_block("div"),
 				// `2 add 3` between operands only, `do add 4 to pixel` is the verb

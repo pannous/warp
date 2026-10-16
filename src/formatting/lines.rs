@@ -34,15 +34,15 @@ enum Inside {
 /// `#use lib`, `#include x`: a directive at the line start is a comment too (warp_parser/comments.rs)
 const DIRECTIVES: [&str; 3] = ["use", "include", "import"];
 
-/// `//` or `#` starting a comment at `at`, after a space or at the line start: `//` before a space, `/`, `!` or the
-/// end; `#` before a space, `!`, `#` or the end (`# note`, `#!`, `##`), or a directive. A glued `7//2` or `xs#1`, and
-/// `#xs` (a count), are code
+/// `//` or `#` starting a comment at `at`: `//` anywhere but in a URL's `://` (decision floor-division); `#` after a
+/// space or at the line start, before a space, `!`, `#` or the end (`# note`, `#!`, `##`), or a directive. `xs#1` and
+/// `#xs` (a count) are code
 fn starts_line_comment(line: &str, at: usize) -> bool {
 	let before_is_space = at == 0 || line[..at].ends_with([' ', '\t']);
 	let after = &line[at..];
 	let next = |prefix: &str| after[prefix.len()..].chars().next();
 	if after.starts_with("//") {
-		return before_is_space && next("//").is_none_or(|c| matches!(c, ' ' | '/' | '!'));
+		return !line[..at].ends_with(':');
 	}
 	if after.starts_with('#') && before_is_space {
 		let directive = line[..at].trim().is_empty() && DIRECTIVES.iter().any(|word| after[1..].starts_with(word));
