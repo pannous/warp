@@ -172,6 +172,14 @@ impl Variadic {
 		}
 		match node {
 			Node::List(items, bracket, separator) if self.is_call(&items, &bracket, &separator) => self.call(items),
+			// the uniform call `3.f(4, 5)` of `f(xs...)` is `f(3, 4, 5)`: the receiver is the first value collected
+			Node::Key(receiver, Op::Dot, member) if self.takes_rest(&member) => {
+				let (name, arguments) = match member.drop_meta().clone() {
+					Node::List(items, Bracket::Round, _) => (items[0].clone(), items[1..].to_vec()),
+					name => (name, vec![]),
+				};
+				self.call([vec![name, *receiver], arguments].concat())
+			}
 			other => children_rewritten(other, |child| self.rewrite(child)),
 		}
 	}
@@ -190,6 +198,15 @@ impl Variadic {
 			}
 			other => other.clone(),
 		}
+	}
+
+	/// The method form `.f` or `.f(…)` of a program function with a rest parameter
+	fn takes_rest(&self, member: &Node) -> bool {
+		let name = match member.drop_meta() {
+			Node::List(items, Bracket::Round, _) => items.first().and_then(Node::symbol_name),
+			other => other.symbol_name(),
+		};
+		name.and_then(|name| self.signatures.get(name)).is_some_and(|signature| signature.rest)
 	}
 
 	/// `f(…)` with a spread argument, a call of a function with a rest parameter, also `f 1 2 3`

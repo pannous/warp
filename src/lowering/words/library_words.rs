@@ -1032,9 +1032,11 @@ impl Lowering {
 		}
 		// `p.center`, `s.items` of another module's word: no call, as before the word was loaded
 		let is_other_modules_word = is_bare && is_loaded_module_word(name) && self.type_module_of(name).is_none();
-		if !is_other_modules_word
-			&& self.context.user_functions.get(name).is_some_and(|function| !function.params.is_empty())
-		{
+		// the uniform call: `x.f(args)` is `f(x, args)` when the program's f takes args + 1 values
+		let is_users =
+			|name: &str| self.context.user_functions.get(name).is_some_and(|function| !function.params.is_empty());
+		let takes_receiver = self.program.function_takes(name, arguments.len() + 1) == Some(true);
+		if !is_other_modules_word && is_users(name) && takes_receiver {
 			return call(word_call(word_node, receiver, arguments.to_vec()));
 		}
 		// `x.string`, `t.int`, `x.float()`, `2.double()`: the conversion `string(x)`, as written in call form; uncalled
@@ -1045,6 +1047,10 @@ impl Lowering {
 		let is_conversion = CONVERSION_METHODS.contains(&name) || is_type_word_call;
 		if is_conversion && !has_arguments {
 			return call(word_call(word_node, receiver, vec![]));
+		}
+		// a program function of other arities: its call names what is missing or extra
+		if !is_other_modules_word && is_users(name) {
+			return call(word_call(word_node, receiver, arguments.to_vec()));
 		}
 		if self.is_known_method(receiver, name) {
 			return WordMeaning::Kept;

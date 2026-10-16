@@ -20,9 +20,7 @@ impl ProgramNames {
 		let mut functions: HashMap<String, Vec<(usize, usize)>> = HashMap::new();
 		program.visit(&mut |part| {
 			if let Some(head) = function_head(part) {
-				let parameters = head.parameters();
-				let required = parameters.iter().filter(|parameter| !has_default(parameter)).count();
-				functions.entry(head.name.to_string()).or_default().push((required, parameters.len()));
+				functions.entry(head.name.to_string()).or_default().push(head.arity());
 			}
 		});
 		let mut bound = HashSet::new();
@@ -108,10 +106,6 @@ fn binds_inside(node: &Node, names: &ProgramNames, word: &str) -> bool {
 }
 
 /// `x = 1` of a parameter `x = 1`: a default value, which may be left out
-fn has_default(parameter: &Node) -> bool {
-	matches!(parameter.drop_meta(), Node::Key(_, crate::operators::Op::Assign, _))
-}
-
 /// The loop variables outside function bodies
 fn outer_loop_variables(node: &Node) -> Vec<String> {
 	if function_head(node).is_some() {

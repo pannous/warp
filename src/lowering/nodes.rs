@@ -365,6 +365,18 @@ impl<'a> FunctionHead<'a> {
 		}
 	}
 
+	/// The fewest and most values it takes: `f(a, b = 2)` (1, 2), `f(a, xs...)` (1, unbounded)
+	pub fn arity(&self) -> (usize, usize) {
+		let parameters = self.parameters();
+		let is_rest = |parameter: &&Node| crate::lowering::variadic::is_rest_parameter(parameter);
+		let has_default = |parameter: &&Node| matches!(parameter.drop_meta(), Node::Key(_, Op::Assign, _));
+		let required = parameters.iter().filter(|parameter| !has_default(parameter) && !is_rest(parameter)).count();
+		match parameters.iter().any(is_rest) {
+			true => (required, usize::MAX),
+			false => (required, parameters.len()),
+		}
+	}
+
 	/// `f(x) := body`, `f(x) = body` with a round head and no result type: its operator
 	pub fn plain_operator(&self) -> Option<Op> {
 		match self.form {

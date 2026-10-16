@@ -54,14 +54,9 @@ fn definitions(program: &Node) -> Vec<Definition> {
 	let mut found = vec![];
 	program.visit(&mut |node| {
 		if let Some(head) = function_head(node) {
-			let parameters = head.parameters();
-			let defaulted = parameters.iter().filter(|p| matches!(p.drop_meta(), Node::Key(_, Op::Assign, _))).count();
-			let first_type = parameters.first().and_then(|first| crate::lowering::overloads::parameter_type(first));
-			let arity = match parameters.iter().any(|parameter| crate::lowering::variadic::is_rest_parameter(parameter))
-			{
-				true => (parameters.len() - 1, usize::MAX),
-				false => (parameters.len() - defaulted, parameters.len()),
-			};
+			let first_type =
+				head.parameters().first().and_then(|first| crate::lowering::overloads::parameter_type(first));
+			let arity = head.arity();
 			found.push(Definition { name: head.name.to_string(), arity, first_type, node: node.clone() });
 		}
 	});

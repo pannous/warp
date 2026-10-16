@@ -114,3 +114,14 @@ fn every_library_parameter_type_chooses() {
 	is!("trim(x):=x-1; \" a \" trimmed", "a");
 	is!("sum(xs) := 7; t=[1 2]; t.sum", 3);
 }
+
+// one uniform-call rule (slice 2): `x.f(args)` is `f(x, args)` when the program's f takes args + 1 values, defaults
+// and a rest parameter counted; another arity is f's call still, whose error names what is missing or extra
+#[test]
+fn a_method_form_call_takes_the_receiver_first() {
+	is!("f(a, b=2) := a+b; 3.f()", 5);
+	is!("f(xs...) := #xs; 3.f(4, 5)", 3);
+	is!("f(a, xs...) := a + #xs; 10.f(4, 5)", 12);
+	crate::common::fails_with("f(a, b) := a+b; 3.f()", "parameter b");
+	crate::common::fails_with("f(a) := a; 3.f(1, 2)", "got 3");
+}
