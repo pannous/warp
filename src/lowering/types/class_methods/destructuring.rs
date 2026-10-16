@@ -96,13 +96,13 @@ pub(super) fn taken_apart(node: Node, fields: &ClassFields, class_of: &ClassOf) 
 		}
 		// Python's `a, b = p`: the parser reads `a, (b = p)`
 		Node::List(items, bracket, separator)
-			if separator == Separator::Colon && last_assigns_instance(&items, class_of) =>
+			if separator == Separator::Comma && last_assigns_instance(&items, class_of) =>
 		{
 			let Some(Node::Key(last, Op::Assign, value)) = items.last().map(|item| item.drop_meta().clone()) else {
 				return Node::List(items, bracket, separator);
 			};
 			let names = [&items[..items.len() - 1], &[*last]].concat();
-			let target = Node::List(names, Bracket::Round, Separator::Colon);
+			let target = Node::List(names, Bracket::Round, Separator::Comma);
 			recurse(Node::Key(Box::new(target), Op::Assign, value))
 		}
 		Node::List(items, bracket, separator) if is_match(&items) => {

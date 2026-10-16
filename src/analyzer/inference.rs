@@ -354,7 +354,7 @@ pub fn applied_word<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separa
 	let Node::Symbol(name) = word.drop_meta() else {
 		return None;
 	};
-	let listed = *bracket == Bracket::Square || *separator == Separator::Colon || separator.separates_statements(); // Colon is the comma
+	let listed = *bracket == Bracket::Square || *separator == Separator::Comma || separator.separates_statements();
 	let declared = matches!(value.drop_meta(), Node::Key(_, Op::Assign | Op::Define, _));
 	(!listed && !declared).then_some((name.as_str(), value))
 }
@@ -387,7 +387,7 @@ pub(super) fn infer_list_type(
 	}
 	// Function call with parentheses: a library word has its own result, any other call is assumed Int. A comma list
 	// `(y, 4)` is a tuple, never the call y(4) (`f(a, b)` parses as `(f a b)`)
-	if *bracket == Bracket::Round && items.len() >= 2 && *separator != Separator::Colon {
+	if *bracket == Bracket::Round && items.len() >= 2 && *separator != Separator::Comma {
 		if let Some(name) = head {
 			return library_call_kind(name, items, scope);
 		}

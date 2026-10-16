@@ -61,7 +61,7 @@ impl WarpParser {
 		self.skip_spaces();
 		let parameters = match names.len() {
 			1 => names.remove(0),
-			_ => Node::List(names, Bracket::Round, Separator::Colon),
+			_ => Node::List(names, Bracket::Round, Separator::Comma),
 		};
 		let body = self.parse_expr(Op::Assign.binding_power().1);
 		Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body))

@@ -486,7 +486,7 @@ pub(super) fn summed_list(node: &Node) -> Option<&Node> {
 /// (card quantity-sum)
 pub(super) fn quantities_reduced(quantities: Node) -> Node {
 	let [sum, item] = REDUCED_NAMES.map(symbol);
-	let parameters = Node::List(vec![sum.clone(), item.clone()], Bracket::Round, Separator::Colon);
+	let parameters = Node::List(vec![sum.clone(), item.clone()], Bracket::Round, Separator::Comma);
 	let added = key(parameters, Op::Arrow, method_call(sum, operator_method(Op::Add).expect("plus"), vec![item]));
 	let reduced = key(quantities, Op::Dot, call(REDUCE_WORD, vec![added]));
 	Node::meta(
