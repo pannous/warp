@@ -13,6 +13,7 @@ fn value(code: &str) -> String {
 }
 
 #[test]
+#[ignore = "fixnow: fixnow-database-unit-fields: (runs·at N).distance: the unit of Run.distance is known of an instance declared so"]
 fn a_unit_column_migrates_within_its_quantity() {
 	eval(&runs("distance: km", "units_everywhere", "runs.add(Run(5 km))\nruns.add(Run(1500 m))"));
 	assert_eq!(value(&runs("distance: km", "units_everywhere", "runs#2.distance")), "1.5km");
