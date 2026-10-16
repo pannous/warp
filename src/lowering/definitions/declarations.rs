@@ -4,7 +4,8 @@
 //! `real f(real x, int n) { … }`, the C way, defines `f(x:real, n:int) := { … }`.
 
 use super::nodes::{
-	block, call, children_rewritten, grouped_parameters, if_then, if_then_else, is_kinded_type_word, key, Counter,
+	block, call, children_rewritten, grouped_parameters, if_then, if_then_else, is_kinded_type_word, key, word_headed,
+	Counter,
 };
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
@@ -252,9 +253,7 @@ pub fn lower_sized_arrays(node: Node) -> Node {
 
 fn sized_array(items: &[Node]) -> Option<Node> {
 	let [binding, element_type] = items else { return None };
-	let Node::Symbol(type_name) = element_type.drop_meta() else {
-		return None;
-	};
+	let type_name = element_type.symbol_name()?;
 	let Node::Key(name, Op::Assign | Op::Colon, count) = binding.drop_meta() else {
 		return None;
 	};
@@ -328,9 +327,7 @@ fn haskell_definition(statement: &Node, later: &[Node]) -> Option<Node> {
 	let Node::Key(last_name, Op::Assign, body) = last.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(function) = name.drop_meta() else {
-		return None;
-	};
+	let function = name.symbol_name()?;
 	let is_parameter = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if word == PLACEHOLDER || crate::warp_parser::mentions(body, word));
 	let is_free_name = !is_function_keyword(function)
 		&& !crate::analyzer::is_declaration_word(function) // `let x = p.x; let y = …` declares x
@@ -506,7 +503,7 @@ pub(crate) fn glued_block(method: &Node) -> Option<(Node, Node)> {
 	let Node::Key(word, Op::Colon, block) = method.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(_) = word.drop_meta() else { return None };
+	let _ = word.symbol_name()?;
 	matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _))
 		.then(|| (word.as_ref().clone(), block.as_ref().clone()))
 }
@@ -523,7 +520,7 @@ fn one_parameter(head: &Node) -> Option<String> {
 	let [name, parameter] = items.as_slice() else {
 		return None;
 	};
-	let Node::Symbol(_) = name.drop_meta() else { return None };
+	let _ = name.symbol_name()?;
 	let parameter = match parameter.drop_meta() {
 		Node::Key(parameter, Op::Colon, _) => parameter.drop_meta(),
 		other => other,
@@ -655,7 +652,7 @@ pub(crate) fn keyword_definition(items: &[Node]) -> Option<Node> {
 		return None;
 	};
 	let (name, arguments) = head_items.split_first()?;
-	let Node::Symbol(_) = name.drop_meta() else { return None };
+	let _ = name.symbol_name()?;
 	let mut labeled_names = vec![];
 	let parameters = written_parameters(arguments, keyword.is_symbol(SWIFT_FUNCTION_KEYWORD), &mut labeled_names);
 	let body = with_label_names(body, labeled_names);
@@ -725,7 +722,7 @@ fn definition_parts(definition: Node) -> Option<(Node, Op, Node)> {
 		// Python's `def apply(f, x): return f(x)`, early, so the function value passes see a definition; without
 		// parameters it stays a def form for late_binding, which would read `z() := e` as a getter (P71); a generator
 		// (`def numbers(): yield 1`) is no getter
-		Node::Key(head, Op::Colon, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if (items.len() > 1 || crate::blocks::contains_yield(&body)) && matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) => {
+		Node::Key(head, Op::Colon, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if (items.len() > 1 || crate::blocks::contains_yield(&body)) && word_headed(items).is_some()) => {
 			(*head, Op::Define, *body)
 		}
 		// `def hello {…}` without parentheses has no parameters, as `def hello() {…}`
@@ -789,9 +786,7 @@ fn extension_definition(definition: Node) -> Node {
 	let Node::List(call, Bracket::Round, separator) = call.drop_meta() else {
 		return Node::Key(head, op, rest);
 	};
-	if !matches!(receiver_type.drop_meta(), Node::Symbol(_))
-		|| !matches!(call.first().map(Node::drop_meta), Some(Node::Symbol(_)))
-	{
+	if !matches!(receiver_type.drop_meta(), Node::Symbol(_)) || word_headed(call).is_none() {
 		return Node::Key(head, op, rest);
 	}
 	let head = with_receiver(call, separator, receiver_type, &rest);
@@ -814,9 +809,7 @@ fn with_receiver(call: &[Node], separator: &Separator, receiver_type: &Node, bod
 /// method of the type, `it` the value it is called on: `Square(self:Number) := self*self`, so `3.Square` is 9
 fn smart_scope(items: &[Node]) -> Option<Node> {
 	let [receiver_type, block] = items else { return None };
-	let Node::Symbol(type_name) = receiver_type.drop_meta() else {
-		return None;
-	};
+	let type_name = receiver_type.symbol_name()?;
 	let Node::List(definitions, Bracket::Curly, separator) = block.drop_meta() else {
 		return None;
 	};
@@ -968,9 +961,7 @@ fn lower_lists(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> + Copy) ->
 
 fn lower_definition(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> + Copy) -> Node {
 	match node {
-		Node::Key(head, op, body) => {
-			Node::Key(Box::new(lower_definition_head(*head, lowering)), op, Box::new(lower_lists(*body, lowering)))
-		}
+		Node::Key(head, op, body) => key(lower_definition_head(*head, lowering), op, lower_lists(*body, lowering)),
 		meta @ Node::Meta { .. } => meta.under_meta(|node| lower_definition(node, lowering)),
 		other => other,
 	}
@@ -981,9 +972,7 @@ fn lower_definition_head(node: Node, lowering: impl Fn(&[Node]) -> Option<Node> 
 		Node::List(items, bracket, separator) => {
 			Node::List(items.into_iter().map(|item| lower_lists(item, lowering)).collect(), bracket, separator)
 		}
-		Node::Key(head, op, result) => {
-			Node::Key(Box::new(lower_definition_head(*head, lowering)), op, Box::new(lower_lists(*result, lowering)))
-		}
+		Node::Key(head, op, result) => key(lower_definition_head(*head, lowering), op, lower_lists(*result, lowering)),
 		meta @ Node::Meta { .. } => meta.under_meta(|node| lower_definition_head(node, lowering)),
 		other => other,
 	}
@@ -998,9 +987,7 @@ const SWIFT_FUNCTION_KEYWORD: &str = "func";
 /// block); the result kind is inferred as for any definition
 pub(crate) fn c_function(items: &[Node]) -> Option<Node> {
 	let [result_type, definition] = items else { return None };
-	let Node::Symbol(result_type) = result_type.drop_meta() else {
-		return None;
-	};
+	let result_type = result_type.symbol_name()?;
 	if crate::analyzer::type_word_kind(result_type).is_none() && result_type != "void" {
 		return None;
 	}
@@ -1017,7 +1004,7 @@ pub(crate) fn c_function(items: &[Node]) -> Option<Node> {
 		return None;
 	};
 	let (name, arguments) = head_items.split_first()?;
-	let Node::Symbol(_) = name.drop_meta() else { return None };
+	let _ = name.symbol_name()?;
 	let parameters = arguments.iter().flat_map(|argument| match argument.drop_meta() {
 		Node::List(group, Bracket::Round, Separator::Comma) => group.clone(), // `(real a, int b)`
 		Node::List(group, Bracket::Curly, _) => group.clone(), // Dart's named parameters `{required int a, int b = 2}`

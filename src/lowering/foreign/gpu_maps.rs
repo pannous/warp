@@ -386,10 +386,8 @@ fn gpu_assignment(statement: &Node) -> Option<(String, Node)> {
 	let Node::Key(target, Op::Assign, value) = statement.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(name) = target.drop_meta() else {
-		return None;
-	};
-	gpu_map(value).map(|_| (name.clone(), value.as_ref().clone()))
+	let name = target.symbol_name()?;
+	gpu_map(value).map(|_| (name.to_string(), value.as_ref().clone()))
 }
 
 /// Whether `node` assigns `name` or one of its items

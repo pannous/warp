@@ -7,7 +7,7 @@
 
 use super::nodes::{
 	call, children_rewritten, if_then_else, in_block_as_written, is_assigned_data, is_words_call, key, prelude_call,
-	with_parts_rewritten, Counter,
+	with_parts_rewritten, word_headed, Counter,
 };
 use crate::analyzer::{call_name, counting_method};
 use crate::compiler::context::Context;
@@ -119,7 +119,7 @@ const SYNONYMS: [(&str, &[&str]); 36] = [
 	(COUNT_PART, &[]),
 	(crate::words::UNWRAP, &[]),
 ];
-/// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/list_dispatch.rs):
+/// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/lists/list_dispatch.rs):
 /// a typed list sums its array, any other list runs the loop `sum` always lowered to
 pub const LIST_SUM: &str = "list_sum";
 
@@ -421,7 +421,7 @@ fn call_results(node: &Node, context: &Context) -> HashSet<String> {
 	node.visit(&mut |part| {
 		if let Node::Key(target, Op::Assign | Op::Define, value) = part {
 			let calls_user_function = matches!(value.drop_meta(), Node::List(items, Bracket::Round, _)
-				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(function)) if context.user_functions.contains_key(function)));
+				if items.first().and_then(Node::symbol_name).is_some_and(|function| context.user_functions.contains_key(function)));
 			if let (Node::Symbol(name), true) = (target.drop_meta(), calls_user_function) {
 				names.insert(name.clone());
 			}
@@ -473,17 +473,13 @@ pub(crate) fn stepped(place: Node, step: Op) -> Node {
 }
 
 /// The word of a method and its arguments: `x.word`, `x.word(args)`
-fn method_parts(method: &Node) -> Option<(&Node, &String, Vec<Node>)> {
+fn method_parts(method: &Node) -> Option<(&Node, &str, Vec<Node>)> {
 	let (word_node, arguments) = match method.drop_meta() {
 		Node::Symbol(_) => (method, vec![]),
-		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
-			(&items[0], items[1..].to_vec())
-		}
+		Node::List(items, _, _) if word_headed(items).is_some() => (&items[0], items[1..].to_vec()),
 		_ => return None,
 	};
-	let Node::Symbol(name) = word_node.drop_meta() else {
-		return None;
-	};
+	let name = word_node.symbol_name()?;
 	Some((word_node, name, arguments))
 }
 
@@ -691,12 +687,11 @@ impl Lowering {
 	/// `def total(xs){sum xs}`: the body block of a function that is one braceless call is that statement, not the data
 	/// `{sum xs}`; an undefined word in it (`{square x}`) is then reported as one
 	fn body_statement(&self, head: &Node, right: Node) -> Node {
-		let defines_function = matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))));
+		let defines_function =
+			matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if word_headed(items).is_some());
 		match right {
 			Node::List(items, Bracket::Curly, Separator::Space)
-				if defines_function
-					&& items.len() > 1
-					&& matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
+				if defines_function && items.len() > 1 && word_headed(&items).is_some() =>
 			{
 				Node::List(
 					vec![Node::List(items, Bracket::None, Separator::Space)],
@@ -740,9 +735,7 @@ impl Lowering {
 	fn expand_method(&self, method: Node) -> Node {
 		match method {
 			meta @ Node::Meta { .. } => meta.under_meta(|node| self.expand_method(node)),
-			Node::List(items, bracket, separator)
-				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
-			{
+			Node::List(items, bracket, separator) if word_headed(&items).is_some() => {
 				let mut items = items.into_iter();
 				let word = items.next().expect("guarded");
 				Node::List(
@@ -928,35 +921,36 @@ impl Lowering {
 		if is_field && !has_arguments {
 			return Some(field_lookup(receiver, name, word_node));
 		}
-		// `x.chars`, `x.chars()`, `chars x` and `chars(x)` are all the list (user 2026-10-14, card abc-chars)
-		let is_called = matches!(method.drop_meta(), Node::List(..));
+		// `x.word` without brackets may read a field; `x.chars`, `x.chars()`, `chars x` and `chars(x)` are all the list
+		// (user 2026-10-14, card abc-chars). A bare word has no arguments
+		let is_bare = !matches!(method.drop_meta(), Node::List(..));
 		// `n.first` of a person with a field first reads the field, not the library word first
-		if !is_called && self.instances.is_instance_field(receiver, name) {
+		if is_bare && self.instances.is_instance_field(receiver, name) {
 			return Some(field_lookup(receiver, name, word_node));
 		}
 		if let Some(word) = self
 			.library_word_for(name, arguments.len() + 1)
-			.filter(|_| is_called || counting_method(name, &self.context).is_none())
+			.filter(|_| !is_bare || counting_method(name, &self.context).is_none())
 		{
 			let word_call = self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false);
 			// `m.first` of a parameter or loop element given `{first: 9}` (card map-field). Not a map's own word
 			// (`m.keys`), nor a word whose list or text result the code after it types (`it.chars.map(…)`): a field
 			// read there would hide that type
 			let is_element = matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _));
-			let keeps_word = crate::members::MAP_MEMBERS.contains(&name.as_str())
+			let keeps_word = crate::members::MAP_MEMBERS.contains(&name)
 				|| result_kind(word).or_else(|| result_kind(name)).is_some();
-			if !is_called && !has_arguments && !keeps_word && (is_element || self.may_hold_object(receiver)) {
+			if is_bare && !keeps_word && (is_element || self.may_hold_object(receiver)) {
 				return Some(self.map_field_or(receiver, name, word_node, word_call));
 			}
 			return Some(word_call);
 		}
-		if !is_called && self.reads_declared_field(receiver, name) {
+		if is_bare && self.reads_declared_field(receiver, name) {
 			return Some(field_lookup(receiver, name, word_node));
 		}
 		// `b.product` of a value that may be an object: its field if it is no value of the word's type, else the type
 		// module's word, as `b.product()` calls it (x.word is x.word(), user 2026-10-14)
 		// `p.center`, `s.items` of another module's word or one of more parameters: no call, as before the word was loaded
-		let is_loaded_word = !is_called && is_loaded_module_word(name);
+		let is_loaded_word = is_bare && is_loaded_module_word(name);
 		let type_module = self.type_module_of(name).filter(|_| is_loaded_word);
 		let may_be_object = || self.is_object(receiver, name) || self.may_hold_object(receiver);
 		if is_loaded_word && may_be_object() {
@@ -976,10 +970,10 @@ impl Lowering {
 		}
 		// `x.string`, `t.int`, `x.float()`, `2.double()`: the conversion `string(x)`, as written in call form; uncalled
 		// only the common conversions (not `e.text`, a common field); a counting word stays a count (`xs.number()`)
-		let is_type_word_call = is_called
+		let is_type_word_call = !is_bare
 			&& crate::analyzer::type_word_kind(name).is_some()
 			&& counting_method(name, &self.context).is_none();
-		let is_conversion = CONVERSION_METHODS.contains(&name.as_str()) || is_type_word_call;
+		let is_conversion = CONVERSION_METHODS.contains(&name) || is_type_word_call;
 		if is_conversion && arguments.is_empty() && !self.instances.is_declared_field(name) {
 			return Some(word_call(word_node, receiver, vec![]));
 		}
@@ -987,9 +981,7 @@ impl Lowering {
 		// `x.round`, `x.sqrt`: the number word applied to x, as `x.round()` and `sqrt x` are (x.word is word(x))
 		let number_word = || {
 			prefix_operator_method(receiver, name).or_else(|| {
-				crate::wasm_emitter::ROUNDING_FUNCTIONS
-					.contains(&name.as_str())
-					.then(|| word_call(word_node, receiver, vec![]))
+				crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name).then(|| word_call(word_node, receiver, vec![]))
 			})
 		};
 		let may_be_object = self.is_object(receiver, name) || self.may_hold_object(receiver);
@@ -1088,11 +1080,7 @@ impl Lowering {
 				!self.plain.contains(variable) && !self.context.user_functions.contains_key(variable)
 			}
 			// the value of a call: `f().name`, `lib.stats_of(t).words` (foreign_call)
-			Node::List(items, Bracket::Round, Separator::None)
-				if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) =>
-			{
-				true
-			}
+			Node::List(items, Bracket::Round, Separator::None) if word_headed(items).is_some() => true,
 			// a parenthesized object `({a:1}).a`, or quoted code `(data n*1).op` (node_api.rs)
 			Node::List(_, Bracket::Curly, _) => true,
 			_ if crate::blocks::quoted_data(variable).is_some() => true,

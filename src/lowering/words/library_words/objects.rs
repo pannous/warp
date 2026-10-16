@@ -1,5 +1,6 @@
 //! Objects and their fields: `object.name`, `name of object`, `object["name"]`, field assignments and `?.`, the variables only ever holding object literals
 use super::*;
+use crate::lowering::nodes::word_headed;
 
 /// `object.name`, `name of object`, `object["name"]`: the entry named `name`, a subscript by a text key
 pub(super) fn field_lookup(object: &Node, name: &str, position: &Node) -> Node {
@@ -116,9 +117,7 @@ pub(super) fn collect_assigned_objects(node: &Node, assigned: &mut AssignedObjec
 pub(super) fn may_hold_object(value: &Node) -> bool {
 	match value.drop_meta() {
 		Node::Key(_, Op::Hash | Op::Dot, _) => true,
-		Node::List(items, Bracket::Round, Separator::None) => {
-			matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))
-		}
+		Node::List(items, Bracket::Round, Separator::None) => word_headed(items).is_some(),
 		other => object_entries(other).is_some(),
 	}
 }

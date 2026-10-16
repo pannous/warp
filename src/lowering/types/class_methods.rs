@@ -842,9 +842,7 @@ fn gives_value(body: &Node) -> bool {
 		Node::Key(then, Op::Else, otherwise) => gives_value(then) || gives_value(otherwise),
 		// a nested sequence gives what its last statement gives
 		Node::List(_, Bracket::Round, Separator::Semicolon) | Node::List(_, Bracket::Curly, _) => gives_value(&last),
-		Node::Key(_, op, _) if matches!(op, Op::Assign | Op::Define | Op::Inc | Op::Dec) || op.is_compound_assign() => {
-			false
-		}
+		Node::Key(_, op, _) if *op == Op::Define || op.is_write() => false,
 		// a body giving its object back already (a constructor)
 		Node::Symbol(name) if name == SELF_WORD => false,
 		Node::Key(_, Op::Dot, call) => {
@@ -870,7 +868,9 @@ struct Readable<'a> {
 /// Java), `this` as self; the member name right of a dot stays as it is
 fn receiver_reads(node: Node, readable: &Readable) -> Node {
 	let on_receiver = |member: Node| key(symbol(readable.receiver), Op::Dot, member);
-	let is_call_of = |items: &[Node], names: &[&String]| matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if names.contains(&name));
+	let is_call_of = |items: &[Node], names: &[&String]| {
+		items.first().and_then(Node::symbol_name).is_some_and(|name| names.iter().any(|known| *known == name))
+	};
 	match node {
 		Node::Symbol(name) if readable.statics.contains(&&name) => Node::Symbol(static_name(readable.class, &name)),
 		Node::Symbol(name) if readable.fields.contains(&&name) => on_receiver(Node::Symbol(name)),
@@ -892,10 +892,7 @@ fn changes_fields_of(body: &Node, variable: &str) -> bool {
 	body.visit(&mut |part| {
 		changes |= match part {
 			Node::Key(target, Op::Dot, call) if is_field_of(target, variable) => mutating_call(call),
-			Node::Key(target, op, _) => {
-				(*op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec))
-					&& is_field_of(target, variable)
-			}
+			Node::Key(target, op, _) => op.is_write() && is_field_of(target, variable),
 			_ => false,
 		};
 	});
@@ -915,5 +912,5 @@ fn is_field_of(target: &Node, variable: &str) -> bool {
 
 /// `add(x)`, `insert(x, at:1)`: a call of a method that changes the list it is called on
 fn mutating_call(call: &Node) -> bool {
-	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if crate::list_mutations::is_list_mutating_method(name)))
+	matches!(call.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().and_then(Node::symbol_name).is_some_and(crate::list_mutations::is_list_mutating_method))
 }

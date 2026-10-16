@@ -4,9 +4,9 @@
 //! `compare(a:person, b:person) := a.age - b.age`, `area(s:square) := s.side*s.side` (structural conformance, T2).
 //! Such a definition becomes the witness `compare·person`, so every type has its own. Where the static type of an
 //! instance is known, `<`, `==` and operation calls call the witness and a missing conformance is a compile error naming
-//! the fix; elsewhere node_order asks the runtime witness table (wasm_emitter/witness.rs).
+//! the fix; elsewhere node_order asks the runtime witness table (wasm_emitter/reflection/witness.rs).
 
-use super::nodes::{call, called_name, children_rewritten, if_then, if_then_else, key};
+use super::nodes::{call, called_name, children_rewritten, if_then, if_then_else, key, word_headed};
 use crate::analyzer::{call_name, collect_all_types};
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -81,7 +81,7 @@ pub struct Operation {
 	/// What the operation returns, as the fix of a missing conformance explains it
 	pub contract: Option<&'static str>,
 	/// The body of a default method, `describe(s) := "area " + area(s)`: every conforming type that does not define the
-	/// operation gets it (`default_methods`)
+	/// operation gets it (`with_default_methods`)
 	pub default: Option<Node>,
 }
 
@@ -161,7 +161,7 @@ pub struct Traits(Vec<Trait>);
 impl Traits {
 	pub fn of(node: &Node) -> Self {
 		let mut traits = builtin_traits();
-		collect_declarations(node, &mut traits);
+		collect_declared(node, &mut traits);
 		Traits(traits)
 	}
 
@@ -253,7 +253,7 @@ pub fn lower_declarations(node: Node) -> Node {
 		return error;
 	}
 	let mut declared = vec![];
-	collect_declarations(&node, &mut declared);
+	collect_declared(&node, &mut declared);
 	let node = with_default_methods(node, &declared);
 	let names: Vec<String> = declared.into_iter().map(|declared| declared.name).collect();
 	// again for the definitions later passes made (Go's `func total(s Shape) float64 {…}` is `total(s:Shape)` now)
@@ -352,10 +352,6 @@ fn collect_typed_definitions(node: &Node, defined: &mut Vec<(String, String)>) {
 	});
 }
 
-fn collect_declarations(node: &Node, traits: &mut Vec<Trait>) {
-	collect_declared(node, traits)
-}
-
 /// The values the declarations of the program carry (a Trait, a Likeness), in order
 fn collect_declared<T: Clone + 'static>(node: &Node, found: &mut Vec<T>) {
 	match node {
@@ -394,9 +390,7 @@ fn declaration(node: &Node) -> Option<Result<Trait, Node>> {
 	if !TRAIT_KEYWORDS.contains(&keyword_name.as_str()) {
 		return None;
 	}
-	let Node::Symbol(name) = name.drop_meta() else {
-		return None;
-	};
+	let name = name.symbol_name()?;
 	if keyword_name != TRAIT_KEYWORDS[0] {
 		let written = format!("{keyword_name} {name}{{…}}");
 		crate::normalize::set_position_of(node);
@@ -432,7 +426,7 @@ fn declaration(node: &Node) -> Option<Result<Trait, Node>> {
 					.into_error()
 			})
 	});
-	Some(operations.collect::<Result<Vec<_>, _>>().map(|operations| Trait { name: name.clone(), operations }))
+	Some(operations.collect::<Result<Vec<_>, _>>().map(|operations| Trait { name: name.to_string(), operations }))
 }
 
 fn operation(requirement: &Node) -> Option<Operation> {
@@ -485,16 +479,14 @@ fn function_type_member(requirement: &Node) -> Option<Operation> {
 	let Node::Key(name, Op::Colon, parameter_types) = member.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(name) = name.drop_meta() else {
-		return None;
-	};
+	let name = name.symbol_name()?;
 	let count = match parameter_types.drop_meta() {
 		Node::List(types, Bracket::Round, _) => types.len(),
 		Node::Empty => 0,
 		_ => 1,
 	};
 	let parameters = (1..=count).map(|position| format!("p{position}")).collect();
-	Some(Operation { name: name.clone(), parameters, symmetric: false, contract: None, default: None })
+	Some(Operation { name: name.to_string(), parameters, symmetric: false, contract: None, default: None })
 }
 
 /// The name and parameters of the first call in a signature, through its keyword, result type and modifiers
@@ -656,11 +648,7 @@ fn conform(node: Node, registry: &TypeRegistry, traits: &Traits, generics: &Hash
 /// The items of a definition head `f(a:T, b)`
 fn definition_head(head: &Node) -> Option<&[Node]> {
 	match head.drop_meta() {
-		Node::List(items, _, _)
-			if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) && items.len() > 1 =>
-		{
-			Some(items)
-		}
+		Node::List(items, _, _) if word_headed(items).is_some() && items.len() > 1 => Some(items),
 		_ => None,
 	}
 }
@@ -690,10 +678,8 @@ fn parameter_type<'a>(parameter: &'a Node, registry: &TypeRegistry) -> Option<&'
 	let Node::Key(_, Op::Colon, type_node) = parameter.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(type_name) = type_node.drop_meta() else {
-		return None;
-	};
-	registry.get_by_name(type_name).map(|_| type_name.as_str())
+	let type_name = type_node.symbol_name()?;
+	registry.get_by_name(type_name).map(|_| type_name)
 }
 
 /// The parameters `name:T` of a definition head that name a declared type T
@@ -751,9 +737,7 @@ fn typed_parameters(head: Node, registry: &TypeRegistry) -> Node {
 /// symmetric one) takes a declared type T
 fn witness_of(head: &Node, registry: &TypeRegistry, traits: &Traits) -> Option<String> {
 	let items = definition_head(head)?;
-	let Node::Symbol(name) = items[0].drop_meta() else {
-		return None;
-	};
+	let name = items[0].symbol_name()?;
 	let (_, operation) = traits.operation(name)?;
 	let parameters = &items[1..];
 	let type_name = parameter_type(&parameters[0], registry)?;

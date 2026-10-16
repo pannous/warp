@@ -337,11 +337,9 @@ impl Lowering {
 	/// `docx d = …`: the type word of a typed declaration
 	fn typed_declaration(&self, items: &[Node]) -> Option<String> {
 		let [type_word, declaration] = items else { return None };
-		let Node::Symbol(type_word) = type_word.drop_meta() else {
-			return None;
-		};
+		let type_word = type_word.symbol_name()?;
 		let is_declaration = matches!(declaration.drop_meta(), Node::Key(target, Op::Assign | Op::Define, _) if matches!(target.drop_meta(), Node::Symbol(_)));
-		(is_declaration && self.is_type(type_word)).then(|| type_word.clone())
+		(is_declaration && self.is_type(type_word)).then(|| type_word.to_string())
 	}
 
 	/// The declared parameter types of the function a call names
@@ -530,15 +528,12 @@ impl VariantRenaming for ArityOverloads {
 		let Node::List(items, bracket, separator) = node.drop_meta() else {
 			return None;
 		};
+		// `(quantity("5 m"))`: parentheses around a call are no call of it without arguments
 		let [head, arguments @ ..] = items.as_slice() else {
 			return None;
 		};
-		// `(quantity("5 m"))`: parentheses around a call are no call of it without arguments
-		let Node::Symbol(name) = head.drop_meta() else {
-			return None;
-		};
-		let name = name.clone();
-		let variants = self.arities.get(&name)?.clone();
+		let name = head.symbol_name()?;
+		let variants = self.arities.get(name)?.clone();
 		if !is_call(items, bracket, separator) {
 			return None;
 		}
@@ -573,7 +568,7 @@ impl VariantRenaming for ArityOverloads {
 			}
 		};
 		let arguments: Vec<Node> = arguments.iter().map(|argument| self.rewrite(argument.clone())).collect();
-		Some(call(&arity_variant(&name, chosen), arguments))
+		Some(call(&arity_variant(name, chosen), arguments))
 	}
 }
 

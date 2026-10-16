@@ -905,7 +905,7 @@ fn each_its_event(bodies: &[Node]) -> Vec<Node> {
 	let changes_event = |body: &Node| {
 		let mut changes = false;
 		body.visit(&mut |part| match part {
-			Node::Key(target, op, _) if *op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec) => {
+			Node::Key(target, op, _) if op.is_write() => {
 				changes |= crate::variable_signals::root_variable(target).is_some_and(|name| name == EVENT_WORD);
 			}
 			Node::Key(target, Op::Dot, call) => {

@@ -8,7 +8,7 @@
 //! - `f(**m)` spreads an object: into a `**kw` parameter it is the object, into fixed parameters the fields named like
 //!   the parameters the other arguments leave, `g(1, **m)` → `g(1, b=m.b)`.
 
-use super::nodes::{call, called_name, children_rewritten, if_then_else, key, parameter_name};
+use super::nodes::{any_part, call, called_name, children_rewritten, if_then_else, key, parameter_name, word_headed};
 use crate::analyzer::call_name;
 use crate::named_arguments::named_argument;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -95,9 +95,7 @@ fn definition_head(node: &Node) -> Option<&[Node]> {
 
 fn head_items(head: &Node) -> Option<&[Node]> {
 	match head.drop_meta() {
-		Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
-			Some(items)
-		}
+		Node::List(items, Bracket::Round, _) if word_headed(items).is_some() => Some(items),
 		Node::Key(head, Op::Colon | Op::Arrow, _) => head_items(head),
 		_ => None,
 	}
@@ -132,14 +130,10 @@ fn collect_signatures(node: &Node, signatures: &mut HashMap<String, Signature>) 
 }
 
 fn has_spread(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| {
-		if let Node::List(items, bracket, separator) = part {
-			found |= call_name(items, bracket, separator).is_some()
-				&& items[1..].iter().any(|item| starred(item).is_some() || double_starred(item).is_some());
-		}
-	});
-	found
+	any_part(
+		node,
+		|part| matches!(part, Node::List(items, bracket, separator) if call_name(items, bracket, separator).is_some() && items[1..].iter().any(|item| starred(item).is_some() || double_starred(item).is_some())),
+	)
 }
 
 struct Variadic {

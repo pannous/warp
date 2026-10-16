@@ -46,9 +46,7 @@ fn module_word(node: &Node) -> Option<(&str, &Node)> {
 
 /// The names of the standard module `module` names, unless the program names something so itself
 fn module_names(module: &Node, defined: &std::collections::HashSet<String>) -> Option<&'static [String]> {
-	let Node::Symbol(name) = module.drop_meta() else {
-		return None;
-	};
+	let name = module.symbol_name()?;
 	if defined.contains(name) {
 		return None;
 	}

@@ -39,7 +39,7 @@ fn as_map(node: Node) -> Node {
 }
 
 /// The program's functions, each with whether its parameters take a map: an untyped `x` or `m:map` does, `p:photo`
-/// does not (a typed parameter checks the fields of the pair it is given, test_like.rs)
+/// does not (a typed parameter checks the fields of the pair it is given, tests/operators/test_like.rs)
 type Functions = HashMap<String, Vec<bool>>;
 
 fn takes_map(parameter: &Node) -> bool {

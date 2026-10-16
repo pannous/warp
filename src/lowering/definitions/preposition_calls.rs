@@ -6,7 +6,7 @@
 //! range (P52); in a call of a function it labels, the bare word is an error naming the colon form, a warning where it
 //! cannot mean anything else (UNAMBIGUOUS_LABELS).
 
-use super::nodes::{key, parameter_word};
+use super::nodes::{any_part, key, parameter_word, word_headed};
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{parens, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -93,14 +93,10 @@ fn functions(node: &Node) -> HashMap<String, Labels> {
 
 /// `f b=1 a=5`: a call without brackets naming an argument
 fn has_spaced_named_call(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| {
-		if let Node::List(items, Bracket::None, Separator::Space) = part {
-			found |= matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))
-				&& items[1..].iter().any(|item| super::named_arguments::named_argument(item).is_some());
-		}
-	});
-	found
+	any_part(
+		node,
+		|part| matches!(part, Node::List(items, Bracket::None, Separator::Space) if word_headed(items).is_some() && items[1..].iter().any(|item| super::named_arguments::named_argument(item).is_some())),
+	)
 }
 
 fn rewrite(node: Node, functions: &Functions) -> Node {

@@ -5,7 +5,7 @@
 //! The values come from running the definitions and the calls as one small module, so they are exactly what the
 //! program computes; a call that fails or runs out of fuel stays a call.
 
-use super::nodes::{branches, call, children_rewritten, key};
+use super::nodes::{any_part, branches, call, children_rewritten, key, round_call, word_headed};
 use crate::analyzer::effects::EffectReport;
 use crate::analyzer::{captured_variables, collect_variables, Scope, CHECKED_RESULT};
 use crate::extensions::numbers::Number;
@@ -60,7 +60,7 @@ fn with_constant_free_variables(statement: Node, statements: &[Node], index: usi
 	let Node::Key(head, op @ (Op::Define | Op::Assign), body) = statement.drop_meta() else {
 		return statement;
 	};
-	let is_head = matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if *name == function.name));
+	let is_head = matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().and_then(Node::symbol_name).is_some_and(|name| *name == function.name));
 	if !is_head || contains_definition(body) {
 		return statement;
 	}
@@ -114,9 +114,7 @@ fn is_plain_symbol(node: &Node) -> bool {
 
 /// A function or lambda defined inside the body: its parameters could shadow a main-level name
 fn contains_definition(body: &Node) -> bool {
-	let mut found = false;
-	body.visit(&mut |node| found |= matches!(node, Node::Key(_, Op::Define | Op::Arrow, _)));
-	found
+	any_part(body, |node| matches!(node, Node::Key(_, Op::Define | Op::Arrow, _)))
 }
 
 /// Is every use of `name` in `node` a read of its value: not a property (`m.k`), a key (`m#k`, `{k: 1}`), a target
@@ -247,12 +245,9 @@ fn constant_call<T>(node: &Node, functions: &HashMap<String, T>) -> Option<(Stri
 	let Node::List(items, Bracket::Round | Bracket::None, _) = node.drop_meta() else {
 		return None;
 	};
-	let (head, arguments) = items.split_first()?;
-	let Node::Symbol(name) = head.drop_meta() else {
-		return None;
-	};
+	let (name, arguments) = word_headed(items)?;
 	(functions.contains_key(name) && !arguments.is_empty() && arguments.iter().all(is_constant))
-		.then(|| (name.clone(), arguments.to_vec()))
+		.then(|| (name.to_string(), arguments.to_vec()))
 }
 
 /// The type of a body's checked result (type_name_matching checked_result: `the result: int = v`, the type kept on the
@@ -391,13 +386,7 @@ impl Specialiser {
 	/// `f(y, 3)` → `f·n3(y)`, or None when f is no pure function, no argument or every argument is constant (folding
 	/// takes that), or the chain of variants would be too deep
 	fn specialised_call(&mut self, called: &Node, depth: usize) -> Option<Node> {
-		let Node::List(items, Bracket::Round, _) = called.drop_meta() else {
-			return None;
-		};
-		let (head, arguments) = items.split_first()?;
-		let Node::Symbol(name) = head.drop_meta() else {
-			return None;
-		};
+		let (name, arguments) = round_call(called)?;
 		let definition = self.definitions.get(name)?.clone();
 		let parameters = definition.param_names();
 		if parameters.len() != arguments.len() {
@@ -566,7 +555,8 @@ fn is_expression(body: &Node) -> bool {
 
 /// Does `node` call the function `name`
 fn calls(node: &Node, name: &str) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(called)) if called == name)));
-	found
+	any_part(
+		node,
+		|part| matches!(part, Node::List(items, Bracket::Round, _) if items.first().and_then(Node::symbol_name).is_some_and(|called| called == name)),
+	)
 }

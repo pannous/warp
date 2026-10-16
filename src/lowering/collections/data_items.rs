@@ -5,6 +5,7 @@
 //! A place declared to admit an Error (`xs: [int or error]`, `[int?]`, a field `x: int or error`) stays unmarked.
 //! Only lists as written are marked: the lists later passes build (`guarded_call`'s arguments) hold what they are given
 
+use crate::lowering::nodes::key;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
 use std::collections::HashSet;
@@ -79,7 +80,7 @@ impl Marker {
 			),
 			Node::Key(target, Op::Assign, value) => {
 				let value = self.written(&target, *value);
-				Node::Key(Box::new(with_declared_type_unmarked(*target)), Op::Assign, Box::new(value))
+				key(with_declared_type_unmarked(*target), Op::Assign, value)
 			}
 			Node::Key(value, Op::As, declared) if node_admits_errors(&declared) => {
 				Node::Key(Box::new(unmarked(*value)), Op::As, declared)

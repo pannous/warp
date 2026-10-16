@@ -83,7 +83,7 @@ const BLOCK_TEMPLATES: [&str; 2] = [
 ];
 const STEREO_FILL_PARAMETERS: usize = 3;
 const PLAY_WORD: &str = "play";
-/// The samples a signal computes at once (sound.rs play_signal, play_blocks): 23 ms at 22050 Hz
+/// The samples a signal computes at once (sound/mod.rs play_signal, play_blocks): 23 ms at 22050 Hz
 pub const BLOCK_SAMPLES: usize = 512;
 
 /// The names of the program's named live loops, from the `live_cycle_started("drums")` each cycle says (host.rs
@@ -194,7 +194,7 @@ pub fn lower(program: Node) -> Node {
 }
 
 /// The functions `play_signal(hum, 2s)` plays are of floats to a float: an untyped parameter is the time in seconds the
-/// host calls them with for every sample (sound.rs play_signal), their value a float even where it is whole (`3.0`)
+/// host calls them with for every sample (sound/mod.rs play_signal), their value a float even where it is whole (`3.0`)
 fn with_float_signals(program: Node) -> Node {
 	let mut signals = HashSet::new();
 	program.visit(&mut |node| {

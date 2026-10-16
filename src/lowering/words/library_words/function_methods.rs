@@ -94,7 +94,12 @@ fn function_methods_as_calls(
 				{
 					operation
 				}
-				Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(name)) if is_function(name, items.len() - 1, defined)) => {
+				Node::List(items, Bracket::Round, _)
+					if items
+						.first()
+						.and_then(Node::symbol_name)
+						.is_some_and(|name| is_function(name, items.len() - 1, defined)) =>
+				{
 					parens([vec![items[0].clone(), receiver], items[1..].to_vec()].concat())
 				}
 				_ => key(receiver, Op::Dot, method),

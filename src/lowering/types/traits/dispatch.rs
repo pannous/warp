@@ -373,10 +373,8 @@ impl Dispatch {
 			self.declared.borrow_mut().last_mut().expect("main's scope").insert(name.clone(), declared.clone());
 			return Some((name, declared));
 		}
-		let Node::Symbol(name) = target.drop_meta() else {
-			return None;
-		};
-		self.declared.borrow().last()?.get(name).map(|declared| (name.clone(), declared.clone()))
+		let name = target.symbol_name()?;
+		self.declared.borrow().last()?.get(name).map(|declared| (name.to_string(), declared.clone()))
 	}
 
 	/// `b.content = v` is `b = field_with(b, "content", v)` here: the error of a value the field's declared class does not take

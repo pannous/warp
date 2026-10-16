@@ -160,7 +160,7 @@ pub fn lower_arrow_result_types(node: Node) -> Node {
 				Node::Key(head, Op::Arrow, result) if is_named_head(&head) => key(*head, Op::Colon, *result),
 				other => lower_arrow_result_types(other),
 			};
-			Node::Key(Box::new(target), op, Box::new(lower_arrow_result_types(*body)))
+			key(target, op, lower_arrow_result_types(*body))
 		}
 		other => other.map_children(lower_arrow_result_types),
 	}
@@ -407,10 +407,7 @@ fn named_subject(item: &Node) -> Option<(Node, Node)> {
 	if !matches!(name.drop_meta(), Node::Symbol(_)) || !super::nodes::is_block(cases) || expression.is_empty() {
 		return None;
 	}
-	let expression = match expression {
-		[single] => single.clone(),
-		many => Node::List(many.to_vec(), bracket.clone(), separator.clone()),
-	};
+	let expression = Node::single_or_list(expression.to_vec(), bracket.clone(), separator.clone());
 	Some((key(name.as_ref().clone(), Op::Assign, expression), cases.clone()))
 }
 
@@ -560,7 +557,7 @@ fn aliased_event(items: &[Node], own: &HashSet<String>) -> Option<Vec<Node>> {
 	if !listener.is_symbol(ON_WORD) && !listener.is_symbol(ONCE_WORD) {
 		return None;
 	}
-	let Node::Symbol(name) = event.drop_meta() else { return None };
+	let name = event.symbol_name()?;
 	let (meant, released) = aliased_event_name(name)?;
 	note_event_alias(event, name, meant, released);
 	Some([vec![listener.clone(), symbol(meant)], rest.to_vec()].concat())
@@ -584,13 +581,13 @@ fn aliased_event_name(name: &str) -> Option<(&'static str, bool)> {
 
 /// `onclick`: the written word, the warp event its DOM attribute name stands for, whether it names a release
 fn attribute_event(word: &Node) -> Option<(String, &'static str, bool)> {
-	let Node::Symbol(written) = word.drop_meta() else { return None };
+	let written = word.symbol_name()?;
 	let name = written.strip_prefix(ON_WORD)?;
 	let (event, released) = match PAGE_EVENTS.iter().find(|event| **event == name) {
 		Some(event) => (*event, false),
 		None => aliased_event_name(name)?,
 	};
-	Some((written.clone(), event, released))
+	Some((written.to_string(), event, released))
 }
 
 /// The one warning of every `when`, its fix the word this shape means
@@ -794,11 +791,9 @@ fn aliased_module(keyword: &Node, used: &Node) -> Option<(Node, String)> {
 	};
 	let is_use =
 		matches!(keyword.drop_meta(), Node::Symbol(word) if crate::modules::USE_KEYWORDS.contains(&word.as_str()));
-	let Node::Symbol(alias) = alias.drop_meta() else {
-		return None;
-	};
+	let alias = alias.symbol_name()?;
 	(is_use && crate::modules::names_a_module(&crate::modules::path_of(module)?))
-		.then(|| (module.as_ref().clone(), alias.clone()))
+		.then(|| (module.as_ref().clone(), alias.to_string()))
 }
 
 pub(crate) fn module_calls(node: Node, modules: &[&str]) -> Node {
@@ -1039,10 +1034,7 @@ fn function_parameters(head: &Node) -> Option<Node> {
 				Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [name, kind] if is_kinded_type_word(kind) && !is_kinded_type_word(name)) => Some(words[0].clone()),
 				_ => None,
 			}).collect();
-			match names.as_slice() {
-				[single] => Some(single.clone()),
-				_ => Some(Node::List(names, Bracket::Round, Separator::Comma)),
-			}
+			Some(Node::single_or_list(names, Bracket::Round, Separator::Comma))
 		}
 	}
 }

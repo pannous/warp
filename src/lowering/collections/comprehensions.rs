@@ -281,9 +281,7 @@ fn loop_over_filtered(items: &[Node], lists: &mut Lists) -> Option<Vec<Node>> {
 	{
 		return None;
 	}
-	let Node::Symbol(name) = variable.drop_meta() else {
-		return None;
-	};
+	let name = variable.symbol_name()?;
 	let condition = substitute(condition.clone(), name, &symbol(crate::words::IMPLICIT_PARAMETER));
 	let filter = Node::List(vec![sequence.clone(), where_word.clone(), condition], Bracket::None, Separator::Space);
 	Some(vec![
@@ -310,9 +308,7 @@ fn comprehension_over_table(items: &[Node], lists: &mut Lists) -> Option<Vec<Nod
 	if !in_word.is_symbol(IN_WORD) || !filters || rest.is_empty() || rest.iter().any(starts_with_for) {
 		return None;
 	}
-	let Node::Symbol(name) = variable.drop_meta() else {
-		return None;
-	};
+	let name = variable.symbol_name()?;
 	let condition = phrase(rest);
 	if condition.mentions(crate::words::IMPLICIT_PARAMETER) {
 		return None;
@@ -355,12 +351,10 @@ fn field_condition(condition: &Node) -> Option<(String, String)> {
 	let Node::Key(field, op, value) = condition.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(name) = field.drop_meta() else {
-		return None;
-	};
+	let name = field.symbol_name()?;
 	let it = symbol(crate::words::IMPLICIT_PARAMETER);
 	let field_of_it = Node::Key(Box::new(it), Op::Dot, field.clone());
-	Some((name.clone(), Node::Key(Box::new(field_of_it), *op, value.clone()).serialize()))
+	Some((name.to_string(), Node::Key(Box::new(field_of_it), *op, value.clone()).serialize()))
 }
 
 /// `xs where it > 1` parses as `(xs where it) > 1`: the operators right of `where` join its condition,
