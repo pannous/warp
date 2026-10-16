@@ -69,16 +69,16 @@ cargo build --release && cargo build --release -p warp-runtime   # binaries in t
 ## Run
 
 ```bash
-warp run samples/fibonacci.warp   # run a file
-warp samples/fibonacci.warp       # run it too (WARP_EXECUTABLE=1: also leave the standalone executable samples/fibonacci)
-warp build samples/fibonacci.warp # the standalone executable samples/fibonacci
+warp run samples/functions/fibonacci.warp   # run a file
+warp samples/functions/fibonacci.warp       # run it too (WARP_EXECUTABLE=1: also leave the standalone executable samples/functions/fibonacci)
+warp build samples/functions/fibonacci.warp # the standalone executable samples/functions/fibonacci
 warp eval "6*7"                   # evaluate code: 42
 warp repl                         # interactive console
 warp help                         # all commands
 ```
 
 `samples/` contains classics (game of life, Dijkstra, Levenshtein, a JSON parser, a neural net) in both a
-Python-like style and an idiomatic Warp style.
+Python-like style and an idiomatic Warp style, one folder per chapter of the guide (samples/graphics, samples/sound …).
 
 ## Rust ⇄ Wasm GC round trip
 

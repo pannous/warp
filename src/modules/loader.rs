@@ -606,9 +606,12 @@ impl<'a> Loader<'a> {
 		}
 		let program = program_file().and_then(|file| file.canonicalize().ok());
 		let is_program = |path: &PathBuf| program.is_some() && path.canonicalize().ok() == program;
-		self.candidates_with(name, extensions)
-			.into_iter()
-			.find(|path| module_exists(path) && !is_program(path) && !is_embedded_std_file(path))
+		self.candidates_with(name, extensions).into_iter().find(|path| {
+			module_exists(path)
+				&& !is_program(path)
+				&& !is_embedded_std_file(path)
+				&& !crate::modules::shadows_with_a_sample(path)
+		})
 	}
 
 	pub(super) fn candidates(&self, name: &str) -> Vec<PathBuf> {

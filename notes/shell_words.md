@@ -39,4 +39,4 @@ A map key named like a module word inside a module function is renamed (`{lines:
 modules/needed_definitions.rs renamed_word); wc quotes its keys meanwhile (card queued).
 A pipe after a braceless call (`print cat "/etc/hosts" | count`) traps: card pipes-after.
 A sample named like a standard module (samples/shell.warp) shadows it when warp runs in the repo root: the sample is
-samples/unix_commands.warp.
+samples/system/unix_commands.warp.

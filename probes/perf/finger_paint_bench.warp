@@ -1,6 +1,6 @@
-// runtime-speed benchmark: the costs of samples/finger_paint.warp without a mouse (WARP_NO_WINDOW=1)
+// runtime-speed benchmark: the costs of samples/graphics/finger_paint.warp without a mouse (WARP_NO_WINDOW=1)
 // clear: a 1280×800 canvas filled; stroke: one 100-pixel drag of brush dabs from exact decimals; host stroke: the same
-// from the pointer (mouse_x, mouse_y: float sources, 0 headless), as samples/finger_paint.warp draws; show: the frame handed to paint
+// from the pointer (mouse_x, mouse_y: float sources, 0 headless), as samples/graphics/finger_paint.warp draws; show: the frame handed to paint
 use draw
 width = 1280
 height = 800

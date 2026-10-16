@@ -130,7 +130,7 @@ pub(super) fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separa
 		return Node::List(vec![items[0].clone(), one_expression(&items[1..])], bracket, separator);
 	}
 	// `{ print i, i*2 }`: the block of the one call print(i, i*2)
-	if let (Bracket::Curly, Separator::Colon, Some(Node::List(head, Bracket::None, Separator::Space))) =
+	if let (Bracket::Curly, Separator::Comma, Some(Node::List(head, Bracket::None, Separator::Space))) =
 		(&bracket, &separator, items.first().map(Node::drop_meta))
 	{
 		if is_print_word(&head[0]) {
@@ -141,7 +141,7 @@ pub(super) fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separa
 			);
 		}
 	}
-	if bracket != Bracket::None || !matches!(separator, Separator::Space | Separator::Colon) {
+	if bracket != Bracket::None || !matches!(separator, Separator::Space | Separator::Comma) {
 		return Node::List(items, bracket, separator);
 	}
 	match (&separator, items[0].drop_meta()) {
@@ -152,7 +152,7 @@ pub(super) fn grouped_list(items: Vec<Node>, bracket: Bracket, separator: Separa
 		(Separator::Space, head) if is_print_word(head) && items.len() > 2 => {
 			Node::List(vec![items[0].clone(), one_expression(&items[1..])], bracket, separator)
 		}
-		(Separator::Colon, Node::List(head, Bracket::None, Separator::Space)) if is_print_word(&head[0]) => {
+		(Separator::Comma, Node::List(head, Bracket::None, Separator::Space)) if is_print_word(&head[0]) => {
 			print_call(head[1..].iter().chain(&items[1..]).cloned())
 		}
 		_ => Node::List(items, bracket, separator),

@@ -1,8 +1,8 @@
 #!/usr/bin/env warp
 # a brush drawn by a WGSL fragment shader itself: the pointer is the hole $mouse, the button $mouse_down, and $time
 # moves the colors. The host fills these holes at each paint, so each frame is one render on the GPU.
-# Not needed for speed: `use draw` (samples/finger_paint.warp) draws its shapes on the GPU anyway when a window shows.
-# This brush glows where the pointer is instead of leaving strokes behind; samples/shader_trails.warp keeps them
+# Not needed for speed: `use draw` (samples/graphics/finger_paint.warp) draws its shapes on the GPU anyway when a window shows.
+# This brush glows where the pointer is instead of leaving strokes behind; samples/graphics/shader_trails.warp keeps them
 # through $previous, its own last frame, and finger_paint's canvas keeps them too.
 # A click sends a ripple out: the program's own hole $ripple, where the last click was and the seconds since.
 ripple = [0.0, 0.0, 1000.0] # no click yet: long gone

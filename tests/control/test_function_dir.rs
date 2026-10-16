@@ -1,4 +1,4 @@
-//! card dir-function, found editing samples/reflection.warp: the reflection words take a function itself, never call it
+//! card dir-function, found editing samples/types/reflection.warp: the reflection words take a function itself, never call it
 //! (P83, supervisor 2026-10-09). `dir(area)` was "undefined function: dir", and with a class in the program it called
 //! the bare area, failing "area needs 2 arguments" at an earlier line
 use crate::is;

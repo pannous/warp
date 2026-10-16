@@ -55,7 +55,7 @@ impl WarpParser {
 			}
 			self.advance();
 		}
-		Some(Node::single_or_list(names, bracket, Separator::Colon))
+		Some(Node::single_or_list(names, bracket, Separator::Comma))
 	}
 
 	/// `(i=0;i<n;i++)`: a group here whose top level holds a `;`

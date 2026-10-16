@@ -1,5 +1,5 @@
 //! `help(x)` and `function(name).dump` of a standard module and its words (cards help-undefined, joinable-error,
-//! samples/sound_features.warp): a module's help is its index (`warp help sound`), a word's help its head with the
+//! samples/sound/sound_features.warp): a module's help is its index (`warp help sound`), a word's help its head with the
 //! comment above it; a name known only at run time (`for trick in dir(sound)`) is looked up in a table of the words
 use crate::common::fails_with;
 use warp::wasm_emitter::eval;

@@ -1,4 +1,4 @@
-//! Floats that live in declared fields, conditionals and globals (samples/raytracer.warp)
+//! Floats that live in declared fields, conditionals and globals (samples/advanced/raytracer.warp)
 use crate::is;
 
 #[test] // `def dot(a, b) := a.x * b.x …` of `type V {x: float}` read the field as an Int: "not an int"
