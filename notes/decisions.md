@@ -760,6 +760,12 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   cli-words migrates the existing --fuel/--exe/--strict/… (older `--x` mentions below are superseded by it).
 - fast-math (2026-10-16, warp-types default; card switch-rebinds; undoable): the polynomial math module is
   `use fast_math` (`fast` is already an alias of float); the CLI switch is the word `warp fast app.warp`.
+- unicode-symbols (2026-10-16, user; card user-listed): warp parses a large range of Unicode symbol characters
+  (arrows, math symbols) even when nothing defines them yet; they are free operator names, and an undefined use is a
+  later "operator ⇔ is not defined" error, not "Unexpected character". Arrow spellings of existing operators are alias
+  lines in lib/math.warp with a "prefer ->" hint (→ ⟶ ➜ … for ->, ⇒ ⟹ for =>, ← ⟵ ⬅ for <-, ⬆ ⇧ for ↑, ⬇ ⇩ for ↓).
+  ⇔ ⟺ ↔ ⇑ ⇓ get no built-in meaning for now; an example defines one, e.g.
+  `infix operator ⇔(a: bool, b: bool) := a == b`.
 - fast-scope (2026-10-16, user; card fast-scope): `fast` before a function or module makes everything machine
   inside it: polynomial sin/cos/exp/pow, `/` gives f64 (`fast f(x) := x/3; f(1)` → 0.3333333333333333), and plain
   ints are i64 that wrap at 2^63 (`fast g(n) := n * n; g(10^10)` wraps). `x: fast int` is i64, `x: fast float` f64;
