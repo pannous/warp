@@ -8,6 +8,7 @@ import subprocess
 import sys
 
 TIMEOUT_SECONDS = 20
+RESULT_MARK = '»'
 IS_CALL = re.compile(r'is!\(\s*"((?:[^"\\]|\\.)*)"', re.S)
 ESCAPES = {'n': '\n', 't': '\t', '"': '"', '\\': '\\', "'": "'", '0': '\0'}
 
@@ -23,7 +24,9 @@ def result_of(binary, code):
     except subprocess.TimeoutExpired:
         return 'TIMEOUT'
     lines = [line for line in (run.stdout + run.stderr).splitlines() if line.strip()]
-    return lines[-1] if lines else ''
+    # the result line, not a warning printed after it; temporary file names differ on every run
+    results = [line for line in lines if line.startswith(RESULT_MARK)] or lines[-1:]
+    return re.sub(r'\d+\.wav', 'N.wav', results[-1]) if results else ''
 
 
 def main():
