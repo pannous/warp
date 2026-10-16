@@ -59,7 +59,12 @@ impl ProgramWords {
 
 /// `use sound; def play(x) := …`: a program function taking a module function's arguments replaces it for the
 /// program's calls, which is never silent (card use-sound-def); the module's own code keeps its own (shadowed_apart)
-pub(crate) fn warn_replaced(definitions: &[Node], words: &ProgramWords, module: &str) {
+pub(crate) fn warn_replaced(
+	definitions: &[Node],
+	words: &ProgramWords,
+	module: &str,
+	level: crate::errors::diagnostic::Level,
+) {
 	let mut warned = HashSet::new();
 	for definition in definitions {
 		let Some((head, _, _)) = crate::type_tests::function_definition(definition) else { continue };
@@ -72,6 +77,7 @@ pub(crate) fn warn_replaced(definitions: &[Node], words: &ProgramWords, module: 
 			);
 			crate::errors::diagnostic::say(
 				crate::errors::diagnostic::Diagnostic::at(replacing, message)
+					.level(level)
 					.about(REPLACED_MODULE_FUNCTION_TOPIC, &name),
 			);
 		}
@@ -311,8 +317,13 @@ pub(crate) fn is_needed(name: &str, mentioned: &HashSet<String>) -> bool {
 /// The names the statements mention or call, as methods too (`"hé".to_utf8()`), in interpolations too, with the library
 /// words they spell
 pub(crate) fn called_names(statements: &[Node]) -> HashSet<String> {
-	let implied =
-		[crate::lowering::broadcasting::implied_words(statements), crate::gpu_maps::implied_words(statements)].concat();
+	let implied = [
+		crate::lowering::broadcasting::implied_words(statements),
+		crate::gpu_maps::implied_words(statements),
+		crate::lowering::library_words::implied_count_words(statements),
+		crate::wasm_emitter::numbers::radix::implied_words(statements),
+	]
+	.concat();
 	with_library_words(mentioned_names(statements).into_iter().chain(method_names(statements)).chain(implied).collect())
 }
 
@@ -417,11 +428,27 @@ pub(crate) fn renamed_apart(definitions: Vec<Node>, names: &[String]) -> Vec<Nod
 		.collect()
 }
 
-/// `from` as a word renamed `to`; a field `x.from` keeps its name
+/// `from` as a word renamed `to`; a field `x.from` and a map's key `{from: …}` keep their name (card map-key)
 pub(crate) fn renamed_word(node: Node, from: &str, to: &str) -> Node {
 	match node {
 		Node::Symbol(name) if name == from => Node::Symbol(to.to_string()),
 		Node::Key(receiver, Op::Dot, field) => Node::Key(Box::new(renamed_word(*receiver, from, to)), Op::Dot, field),
+		Node::List(items, Bracket::Curly, separator) => Node::List(
+			items.into_iter().map(|item| renamed_entry_value(item, from, to)).collect(),
+			Bracket::Curly,
+			separator,
+		),
 		other => other.map_children(|child| renamed_word(child, from, to)),
+	}
+}
+
+/// A map entry `from: value` with only its value renamed; any other item as a whole
+fn renamed_entry_value(item: Node, from: &str, to: &str) -> Node {
+	match item {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(renamed_entry_value(*node, from, to)), data },
+		Node::Key(name, Op::Colon, value) if matches!(name.drop_meta(), Node::Symbol(_)) => {
+			Node::Key(name, Op::Colon, Box::new(renamed_word(*value, from, to)))
+		}
+		other => renamed_word(other, from, to),
 	}
 }

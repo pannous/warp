@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::lowering::nodes::children_rewritten;
-use crate::words::ANY_TYPE;
+use crate::words::{ANY_TYPE, LIST_WORD};
 
 mod definitions;
 pub(crate) use definitions::*;
@@ -272,6 +272,14 @@ impl Usages {
 		if let Node::Key(list, Op::AddAssign, added) = node {
 			if let (Node::Symbol(name), Node::List(_, Bracket::Square, _)) = (list.drop_meta(), added.drop_meta()) {
 				self.indexed.insert(name.clone());
+			}
+		}
+		// `x as list`: a sequence, its characters when a text comes in
+		if let Node::Key(value, Op::As, target) = node {
+			if let Node::Symbol(name) = value.drop_meta() {
+				if crate::type_tests::canonical_spec_word(&target.drop_meta().name().to_lowercase()) == LIST_WORD {
+					self.indexed.insert(name.clone());
+				}
 			}
 		}
 		if let Node::Key(alias, Op::Assign | Op::Define, source) = node {

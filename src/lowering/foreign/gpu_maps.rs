@@ -91,6 +91,8 @@ const SHADER_OF_WORD: &str = "shader_of";
 const RGB_WORD: &str = "rgb";
 /// The prelude's pixel of a painted function on the CPU: a vector of 3 numbers is that color
 const PIXEL_COLOR: &str = "pixel_color";
+/// The prelude word painting a warp function on the CPU, pixel by pixel (lib/prelude.warp)
+const PAINT_EACH: &str = "paint_each";
 /// The WGSL function of a warp function giving a color, a vec4f: colors stay exact (no 0xAARRGGBB in an f32)
 const COLOR_SUFFIX: &str = "_color";
 /// The uniforms of a painted shader (src/graphics/gpu.rs), the program's numbers its function reads

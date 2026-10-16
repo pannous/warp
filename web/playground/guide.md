@@ -516,7 +516,7 @@ Examples: closures
 
 Every value has a type: a number, a text, a list...
 
-```warp => int
+```warp => class int
 type(3)
 ```
 

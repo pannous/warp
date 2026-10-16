@@ -23,11 +23,13 @@ mod test_midi;
 mod test_music_values; // card music-values
 mod test_note_values; // card note-value
 mod test_paint;
+mod test_paint_each; // card graphics-cpu-paint
 mod test_paint_function; // card gpu-functions
 mod test_paint_function_fallback; // card paint-function
 mod test_paint_in_window; // card paint-keeps
 mod test_paint_lists;
 mod test_paint_shader; // P234
+mod test_paint_shades; // card graphics-shade
 mod test_paint_window_ends; // card exit-key
 mod test_plain_hints_when_piped;
 mod test_playground_samples;
@@ -69,6 +71,9 @@ pub(crate) mod test_sound_voices; // card sound-pro; its rendered helper serves 
 mod test_sound_wavs; // card sound-wavs
 mod test_task_sound; // card task-sound
 mod test_twigl; // card create-little
+mod test_twigl_back; // card twigl-glsl
+mod test_twigl_block; // cards twigl-make, twigl-float
+mod test_twigl_noise; // card twigl-glsl
 mod test_warp_command; // card midi-out // card values-number
 mod test_window_closed_by_user; // card escape-window
 mod test_window_size; // card make-width

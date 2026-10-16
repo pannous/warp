@@ -6,7 +6,7 @@
 //! delta, second, third]` maps each code point from start to last a stride apart (1, or 2 for alternating pairs like
 //! Āā) to itself plus delta; a mapping to several code points (`ß` is `SS`) is a range of one with the others after it.
 
-use crate::type_kinds::SQUARE_LIST_KIND;
+use crate::type_kinds::{Kind, KIND_MASK, SQUARE_LIST_KIND};
 use crate::wasm_emitter::layout::{utf8, BYTE, WORD};
 use crate::wasm_emitter::WasmGcEmitter;
 use wasm_encoder::*;
@@ -290,7 +290,8 @@ impl WasmGcEmitter {
 		});
 	}
 
-	/// text_chars(text): the list of its code points as characters
+	/// text_chars(text): the list of its code points as characters; a list comes back as it is, so that `x as list` of a
+	/// value whose static type is unknown calls it (casts.rs)
 	pub(in crate::wasm_emitter) fn emit_text_chars(&mut self) {
 		if !self.should_emit_function("text_chars") {
 			return;
@@ -301,6 +302,12 @@ impl WasmGcEmitter {
 		locals.extend([ValType::I32; 3]);
 		self.runtime_function("text_chars", vec![node_ref], vec![node_ref], locals, |s, f| {
 			let (characters, pointer, end, code_point) = (1, 2, 3, 4);
+			s.emit_field(f, 0, 0);
+			#[rustfmt::skip]
+			Self::emit_list(f, &[
+				I::I64Const(KIND_MASK), I::I64And, I::I64Const(Kind::List as i64), I::I64Eq,
+				I::If(BlockType::Empty), I::LocalGet(0), I::Return, I::End,
+			]);
 			s.emit_text_argument_bounds(f, pointer, end);
 			#[rustfmt::skip]
 			Self::emit_list(f, &[

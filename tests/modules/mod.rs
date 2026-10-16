@@ -19,6 +19,7 @@ mod test_module_cache;
 mod test_module_classes;
 mod test_module_error_file; // card module-error-file
 mod test_module_function_dir; // card use-math
+mod test_module_map_keys;
 mod test_module_meta; // card reflection-foreign-meta
 mod test_module_signals;
 mod test_netbase_package;
@@ -31,6 +32,7 @@ mod test_package_shadow; // card sample-local
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_package_tools;
 mod test_packages;
+mod test_prelude_shadowing; // card program-own
 mod test_replaced_module_function; // card use-sound-def
 mod test_std_aliases;
 mod test_std_args; // card std-args
@@ -67,4 +69,4 @@ mod test_use_modules;
 mod test_use_several; // card std-use
 #[cfg(feature = "native")] // wasmtime, files or network: not in the browser build
 mod test_versions;
-mod test_wasm_modules; // card read-chron
+mod test_wasm_modules; // card read-chron // card map-key

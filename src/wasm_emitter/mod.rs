@@ -216,6 +216,7 @@ pub struct WasmGcEmitter {
 	/// The function being compiled returns a $NodeList
 	returns_list: bool,
 	compare_witness: Option<reflection::witness::WitnessTable>, // runtime dispatch of Comparable to user types (witness.rs)
+	late_calls: Vec<functions::late_calls::LateCall>,           // runtime calls of warp-written functions (late_calls.rs)
 	closures: functions::closures::ClosureTypes,
 	/// The user function whose body is being compiled; None in main
 	compiling: Option<String>,
@@ -298,6 +299,7 @@ impl WasmGcEmitter {
 			list_abi: HashMap::new(),
 			returns_list: false,
 			compare_witness: None,
+			late_calls: vec![],
 			closures: functions::closures::ClosureTypes::default(),
 			compiling: None,
 			loop_variables: HashSet::new(),
@@ -387,6 +389,56 @@ impl WasmGcEmitter {
 		let (ptr, len) = self.allocate_string(s); // a text the pre-scan did not see is added to the table, never read from offset 0
 		Self::emit_list(func, &[I32Const(ptr as i32), I32Const(len as i32)]);
 		self.emit_call(func, constructor);
+	}
+
+	/// The type value `name` (`int`, `Person`): its symbol marked TYPE_VALUE_MARK, which printing shows as `class int`
+	pub(crate) fn emit_type_value(&mut self, func: &mut Function, name: &str) {
+		let prefix = crate::type_kinds::TYPE_VALUE_PREFIX.len() as u32;
+		let (shown, shown_len) = self.allocate_string(&format!("{}{name}", crate::type_kinds::TYPE_VALUE_PREFIX));
+		let (ptr, len) = (shown + prefix, shown_len - prefix);
+		let (node_type, string) = (self.type_manager.node_type, self.type_manager.string_type);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::I64Const(crate::type_kinds::TYPE_VALUE_KIND), I32Const(ptr as i32), I32Const(len as i32),
+			I::StructNew(string), I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type),
+		]);
+	}
+
+	/// The text `class int` of the type value in Node local `local`: its name widened over the prefix stored before it
+	pub(crate) fn emit_type_value_text(&self, func: &mut Function, local: u32) {
+		let prefix = I32Const(crate::type_kinds::TYPE_VALUE_PREFIX.len() as i32);
+		func.instruction(&I::I64Const(Kind::Text as i64));
+		self.emit_text_field(func, local, 0);
+		Self::emit_list(func, &[prefix.clone(), I::I32Sub]);
+		self.emit_text_field(func, local, 1);
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			prefix, I::I32Add, I::StructNew(self.type_manager.string_type),
+			I::RefNull(HeapType::Concrete(self.type_manager.node_type)), I::StructNew(self.type_manager.node_type),
+		]);
+	}
+
+	/// Whether the Node in local `local` is a type value (TYPE_VALUE_MARK), as an i32
+	pub(crate) fn emit_is_type_value(&self, func: &mut Function, local: u32) {
+		self.emit_field(func, local, 0);
+		Self::emit_type_value_test(func);
+	}
+
+	/// The kind field on the stack, as an i32: whether it is a type value's (TYPE_VALUE_KIND); a zoned time's kind with a
+	/// negative offset has every high bit set, so the Symbol tag is tested too
+	pub(crate) fn emit_type_value_test(func: &mut Function) {
+		#[rustfmt::skip]
+		Self::emit_list(func, &[
+			I::I64Const(crate::type_kinds::TYPE_VALUE_MARK | KIND_MASK), I::I64And,
+			I::I64Const(crate::type_kinds::TYPE_VALUE_KIND), I::I64Eq,
+		]);
+	}
+
+	/// A word standing for a type as a value: a built-in type's or a declared class's name
+	pub(crate) fn names_a_type_value(&self, word: &str) -> bool {
+		crate::type_tests::is_builtin_type_word(word)
+			|| word == crate::type_tests::TYPE_WORD
+			|| self.ctx.type_registry.types().iter().any(|t| t.name == word)
 	}
 
 	/// Append String struct field names (ptr, len) to an IndirectNameMap
@@ -740,6 +792,8 @@ impl WasmGcEmitter {
 
 	/// Emit main function that constructs the node
 	pub fn emit_node_main(&mut self, node: &Node) {
+		// an error in main never points into the user or prelude function compiled last (lib/prelude.warp:30:272)
+		self.source_position = None;
 		self.result_print = if config::compile_mode().prints_result { last_statement_items(node) } else { 0 };
 		self.live_loops = crate::lowering::music_words::live_loop_names(node);
 		// Pre-pass: collect variables first so scope is populated
@@ -775,6 +829,7 @@ impl WasmGcEmitter {
 		let mut func = Function::new(locals);
 		self.emit_node_local_defaults(&mut func, node, 0);
 		self.emit_witness_installation(&mut func);
+		self.emit_late_call_installation(&mut func);
 		// a program with `on interrupt {…}` watches for ctrl-c from its start and takes one that came at its end
 		let signal_poll = self.ffi_func_index(crate::host::SIGNAL_POLL);
 		signal_poll.iter().for_each(|poll| {
@@ -850,6 +905,9 @@ impl WasmGcEmitter {
 		}
 		if let Some((value, declared)) = declared_values::declared_field_value(node) {
 			return self.emit_declared_value(func, Some(declared), value, Kind::Empty);
+		}
+		if let Some(item) = crate::lowering::data_items::marked_item(node) {
+			return self.emit_data_item(func, item);
 		}
 		if let Some((name, fields)) = crate::type_constructor::instance_parts(node) {
 			let fields = self.with_declared_field_types(name, fields);
@@ -940,6 +998,10 @@ impl WasmGcEmitter {
 						self.emit_type_error(func, message);
 						return;
 					}
+				}
+				if !self.data_context && self.names_a_type_value(s) {
+					self.emit_type_value(func, s);
+					return;
 				}
 				self.emit_string_call(func, s, "new_symbol");
 			}

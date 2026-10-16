@@ -432,16 +432,29 @@ impl<'a> Loader<'a> {
 			return Ok(());
 		}
 		let source = std_module(PRELUDE_MODULE).expect("lib/prelude.warp is embedded");
+		// a program's own `first(xs) := …` takes its calls from the prelude's: a hint, as a used module's is a warning
+		let declarations: Vec<Node> = statements(crate::normalize::without_hints(|| WarpParser::parse(source)))
+			.into_iter()
+			.filter(is_declaration)
+			.collect();
+		warn_replaced(&declarations, &self.program_words, PRELUDE_MODULE, crate::errors::diagnostic::Level::Hint);
 		let definitions =
 			crate::normalize::without_hints(|| self.load_source(Import::Use, std_path(PRELUDE_MODULE), source))?;
 		// an operator (`infix operator ↑(x: number, n: number)`) keeps its name: a program's own `infix operator ↑(v: V,
 		// n: int)` overloads it by parameter type (card easy-add)
 		let qualified_words: Vec<&String> =
 			prelude.iter().filter(|word| !word.starts_with(crate::operators::OPERATOR_FUNCTION_PREFIX)).collect();
+		// a word the program defines too came back `lib·round_to` (shadowed_apart): the prelude's is qualified all the
+		// same, so the library's spellings (`round(x, 2)`) keep calling it while the program's calls reach its own
 		let qualified = |definition: Node| {
-			qualified_words
-				.iter()
-				.fold(definition, |node, word| renamed_word(node, word, &prelude_name(word).unwrap_or_default()))
+			qualified_words.iter().fold(definition, |node, word| {
+				let prelude_word = prelude_name(word).unwrap_or_default();
+				renamed_word(
+					renamed_word(node, word, &prelude_word),
+					&format!("{SHADOWED_WORD_PREFIX}{word}"),
+					&prelude_word,
+				)
+			})
 		};
 		self.std_definitions.extend(definitions.into_iter().map(qualified));
 		crate::compiler::compile_context::change(|context| {
@@ -514,7 +527,12 @@ impl<'a> Loader<'a> {
 				// a module the program named: its words were the program's before its own definition took them
 				if self.std_module_depth <= 1 && !self.loading_implicitly {
 					let module = path.file_stem().unwrap_or_default().to_string_lossy();
-					warn_replaced(&declarations, &self.program_words, &module);
+					warn_replaced(
+						&declarations,
+						&self.program_words,
+						&module,
+						crate::errors::diagnostic::Level::Normal,
+					);
 				}
 				let declarations = shadowed_apart(declarations, &self.program_words);
 				crate::compiler::compile_context::change(|context| {

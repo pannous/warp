@@ -49,6 +49,18 @@ impl CompileMode {
 	}
 }
 
+/// `warp fast <file>`: every program of this process compiles as if it began with `use fast_math` (lib/fast_math.warp, card
+/// switch-rebinds)
+static FAST_MATH: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_fast_math(on: bool) {
+	FAST_MATH.store(on, std::sync::atomic::Ordering::Relaxed)
+}
+
+pub fn fast_math() -> bool {
+	FAST_MATH.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// `run` with the program granted only what a sandboxed program gets (`warp --sandbox`, Capability::GRANTED_SANDBOXED)
 pub fn sandboxed<T>(run: impl FnOnce() -> T) -> T {
 	with_granted(&crate::analyzer::effects::Capability::GRANTED_SANDBOXED, || {

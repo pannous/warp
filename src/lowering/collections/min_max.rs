@@ -2,7 +2,9 @@
 //! share the arithmetic emitters. Arguments beyond plain values and arithmetic are computed once into temporaries.
 //! One list argument is the list of candidates: `max([1 5 2])`; a list variable `max(xs)` is folded at runtime.
 
-use super::nodes::{children_rewritten, key, Counter};
+use super::nodes::{
+	children_rewritten, in_block_as_written, is_assigned_data, is_spaced_call, key, with_parts_rewritten, Counter,
+};
 use crate::analyzer::call_name;
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{Bracket, Node, Separator};
@@ -47,15 +49,23 @@ impl Lowering<'_> {
 		match node {
 			Node::List(items, bracket, separator) => {
 				let items: Vec<Node> = items.into_iter().map(|item| self.expand(item)).collect();
-				self.extremum(&items, &bracket, &separator).unwrap_or(Node::List(items, bracket, separator))
+				match self.extremum(&items, &bracket, &separator) {
+					Some(call) => in_block_as_written(&bracket, call),
+					None => Node::List(items, bracket, separator),
+				}
+			}
+			// `x = {max 3 4}` assigns that data
+			Node::Key(target, Op::Assign, value) if is_assigned_data(&target, &value) => {
+				key(*target, Op::Assign, with_parts_rewritten(*value, &mut |part| self.expand(part)))
 			}
 			other => children_rewritten(other, |child| self.expand(child)),
 		}
 	}
 
 	fn extremum(&mut self, items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Node> {
-		// `max xs`, `max [1 5 2]`, `max 3 4`: arguments without parentheses are a call too
-		let prefix = matches!((bracket, separator, items), (Bracket::None, Separator::Space, [head, _, ..]) if matches!(head.drop_meta(), Node::Symbol(_)));
+		// `max xs`, `max [1 5 2]`, `max 3 4`, `{max 3 4}`: arguments without parentheses are a call too
+		let prefix = is_spaced_call(bracket, separator)
+			&& matches!(items, [head, _, ..] if matches!(head.drop_meta(), Node::Symbol(_)));
 		let head = items.first()?.drop_meta().name();
 		let name = call_name(items, bracket, separator).map(str::to_string).or_else(|| prefix.then_some(head))?;
 		let name = name.as_str();

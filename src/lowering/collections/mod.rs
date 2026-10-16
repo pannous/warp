@@ -6,6 +6,7 @@ use super::*;
 
 pub mod broadcasting;
 pub mod comprehensions;
+pub mod data_items;
 pub mod filled_lists;
 pub mod grouped_receivers;
 pub mod index_positions;

@@ -5,7 +5,10 @@
 //!
 //! An unknown `.word` after a name, a text or a list is a loud error (`undefined function: word`), never silent data.
 
-use super::nodes::{call, children_rewritten, if_then_else, key, Counter};
+use super::nodes::{
+	call, children_rewritten, if_then_else, in_block_as_written, is_assigned_data, is_words_call, key, prelude_call,
+	with_parts_rewritten, Counter,
+};
 use crate::analyzer::{call_name, counting_method};
 use crate::compiler::context::Context;
 use crate::errors::diagnostic::Diagnostic;
@@ -65,13 +68,12 @@ pub const MAP_WORD_FUNCTIONS: [&str; 8] = [
 const TYPE_MODULES: [&str; 2] = ["list", "text"];
 /// The name `catch e` binds, in lower_try_binding's template
 const CAUGHT_BINDING_PLACEHOLDER: &str = "caught_binding";
-const COUNT_HAYSTACK: &str = "counted_haystack";
-const COUNT_NEEDLE: &str = "counted_needle";
-const COUNT_ITEM_TEMPLATE: &str = "count(filter(counted_haystack, counted_item => counted_item == counted_needle))";
-const COUNT_SUBSTRING_TEMPLATE: &str = "count(split(counted_haystack, counted_needle)) - 1";
+/// lib/prelude.warp's words of `count x in y`: how often an item or character occurs, how often a part of a text
+const COUNT_ITEM: &str = "count_item";
+const COUNT_PART: &str = "count_of";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 33] = [
+const SYNONYMS: [(&str, &[&str]); 36] = [
 	(crate::wasm_emitter::text::text_builtins::WARNING, &["warn"]),
 	// Python's tuple(xs) (card python-stdlib)
 	(LIST_WORD, &["tuple"]),
@@ -104,12 +106,17 @@ const SYNONYMS: [(&str, &[&str]); 33] = [
 	("is_alphanumeric", &["is_alnum", "isalnum"]),
 	("is_space", &["is_whitespace", "isspace"]),
 	("nearest", &[]),
+	// lib/prelude.warp's digits in a base up to 36 and back
+	("to_base", &[]),
+	("from_base", &[]),
 	// lib/prelude.warp's Euclidean length of a list, a number's absolute value (decision S3)
 	("norm", &[]),
 	("magnitude", &[]),
 	// lib/prelude.warp's map of [key value] pairs, Python's dict(pairs)
 	(DICT_WORD, &[]),
 	(FROMKEYS, &[]),
+	// lib/prelude.warp's count of a part of a text (`count "an" in t` calls it too)
+	(COUNT_PART, &[]),
 	(crate::words::UNWRAP, &[]),
 ];
 /// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/list_dispatch.rs):
@@ -205,6 +212,15 @@ const EXPANDED_WORDS: [(&str, usize, &str); 3] = [
 	// `x!` (mutation.rs): the value, a loud error when it is ø; an Error value stays that Error
 	(crate::words::UNWRAP, 1, "if hidden_value == ø then error \"unwrapped ø\" else hidden_value"),
 ];
+
+/// An expanded word as the warp definition it stands for, for readers that take definitions (the law type model):
+/// `sum(hidden_value) := (hidden_sum=0; …; hidden_sum)`
+pub(crate) fn expanded_word_definition(word: &str) -> Option<String> {
+	let (name, arity, template) = EXPANDED_WORDS.iter().find(|(name, _, _)| *name == word)?;
+	let after_receiver = (2..=*arity).map(|index| format!(", {RECEIVER_PLACEHOLDER}_{index}"));
+	let parameters: String = std::iter::once(TEMPORARY.to_string()).chain(after_receiver).collect();
+	Some(format!("{name}({parameters}) := {template}"))
+}
 const IS_DIGIT: &str = "is_digit";
 const DICT_WORD: &str = "dict";
 /// lib/prelude.warp's fromkeys(ks, value), also called on the class as Python's `dict.fromkeys(ks, value)`
@@ -625,7 +641,14 @@ impl Lowering {
 		let mut locals = self.shadowed.borrow().clone();
 		collect_assigned_names(&right, &mut locals);
 		let outer = self.shadowed.replace(locals);
-		let lowered = self.within_function(name, parameters, || self.expand(self.body_statement(head, right)));
+		let lowered = self.within_function(name, parameters, || {
+			let body = self.body_statement(head, right);
+			// `x = {sum xs}` assigns that data: only its parts are lowered, the block stays no call
+			if is_assigned_data(head, &body) {
+				return with_parts_rewritten(body, &mut |part| self.expand(part));
+			}
+			self.expand(body)
+		});
 		self.shadowed.replace(outer);
 		lowered
 	}
@@ -799,8 +822,7 @@ impl Lowering {
 		}
 		let is_call = call_name(items, bracket, separator).is_some();
 		// `(sort xs)` is `sort xs` in parentheses
-		let is_prefix =
-			matches!(bracket, Bracket::None | Bracket::Round) && *separator == Separator::Space && items.len() > 1;
+		let is_prefix = is_words_call(bracket, separator) && items.len() > 1;
 		// `[sum xs]`: a word with exactly its arguments in a list is its one computed element
 		// (a bare word that names no variable keeps the list data: `[first last]`)
 		let is_value = |argument: &Node| !matches!(argument.drop_meta(), Node::Symbol(name) if !self.shadows(name));
@@ -815,7 +837,7 @@ impl Lowering {
 		if !is_call && !is_prefix {
 			return None;
 		}
-		Some(self.call(word, &items[0], items[1..].to_vec(), is_prefix && !is_call))
+		Some(in_block_as_written(bracket, self.call(word, &items[0], items[1..].to_vec(), is_prefix && !is_call)))
 	}
 
 	/// `for k in m` walks the keys of a map, as in Python; `for k, v in m` and `for (k, v) in m` bind each value too:

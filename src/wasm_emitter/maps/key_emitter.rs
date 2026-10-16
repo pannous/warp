@@ -336,8 +336,11 @@ impl WasmGcEmitter {
 		op: &Op,
 	) {
 		match left.drop_meta() {
-			// `{x: x}`: the name of an entry is its name, also when a variable or parameter is called so
-			Node::Symbol(name) if *op == Op::Colon => self.emit_string_call(func, name, "new_symbol"),
+			// `{x: x}`: the name of an entry is its name, also when a variable or parameter is called so; an instance's
+			// `Point{…}` its class's name, no type value (TYPE_VALUE_MARK)
+			Node::Symbol(name) if *op == Op::Colon || self.names_a_type_value(name) => {
+				self.emit_string_call(func, name, "new_symbol")
+			}
 			_ => self.emit_node_instructions(func, left),
 		}
 		// For struct instances like Person{...}, emit block as list; the value of an entry `a:{b:1}` stays a map

@@ -40,38 +40,51 @@ const LIBC_SIGNATURES: [(&str, &[wasm_encoder::ValType], wasm_encoder::ValType);
 	]
 };
 
-/// libm f64 functions linked by link_ffi_functions, with their arity.
-/// Fallback when system headers declare them via macros (glibc __MATHCALL).
-/// A libm name missing here compiled to its last argument (`hypot(3, 4)` was 4): the browser host takes them from Math.
-pub const LIBM_F64_FUNCTIONS: [(&str, usize); 27] = [
-	("fmin", 2),
-	("fmax", 2),
-	("fabs", 1),
-	("floor", 1),
-	("ceil", 1),
-	("round", 1),
-	("sqrt", 1),
-	("sin", 1),
-	("cos", 1),
-	("tan", 1),
-	("fmod", 2),
-	("pow", 2),
-	("exp", 1),
-	("log", 1),
-	("log10", 1),
-	("asin", 1),
-	("acos", 1),
-	("atan", 1),
-	("atan2", 2),
-	("sinh", 1),
-	("cosh", 1),
-	("tanh", 1),
-	("hypot", 2),
-	("log2", 1),
-	("trunc", 1),
-	("log1p", 1),
-	("expm1", 1),
-];
+/// libm f64 functions linked by link_ffi_functions, with their arity: lib/math.warp's foreign lines
+/// `atan2(y: float, x: float): float from 'm'` (decision foreign-signature), so headers that declare them by macros
+/// (glibc __MATHCALL) don't hide them. A libm name missing there compiled to its last argument (`hypot(3, 4)` was 4):
+/// the browser host takes them from Math.
+pub fn libm_f64_functions() -> &'static [(&'static str, usize)] {
+	static FUNCTIONS: OnceLock<Vec<(&'static str, usize)>> = OnceLock::new();
+	FUNCTIONS.get_or_init(|| math_foreign_lines(LIBM).map(|line| (line.name, line.arity())).collect())
+}
+
+const MATH_SOURCE: &str = include_str!("../../lib/math.warp");
+/// `floor(x: number): int from warp`: a word warp computes itself, declared with its signature like a foreign one
+pub const BUILTIN_LIBRARY: &str = "warp";
+
+/// `atan2(y: float, x: float): float from 'm'`: a function's name, parameters and result as its foreign line writes them
+pub struct ForeignLine<'a> {
+	pub name: &'a str,
+	pub parameters: &'a str,
+	pub result: &'a str,
+}
+
+impl ForeignLine<'_> {
+	pub fn arity(&self) -> usize {
+		if self.parameters.trim().is_empty() {
+			0
+		} else {
+			self.parameters.split(',').count()
+		}
+	}
+}
+
+/// lib/math.warp's foreign lines of one library: `'m'` (libm) or warp itself (BUILTIN_LIBRARY)
+pub fn math_foreign_lines(library: &str) -> impl Iterator<Item = ForeignLine<'static>> + '_ {
+	MATH_SOURCE.lines().filter_map(move |line| foreign_line(line, library))
+}
+
+/// `atan2(y: float, x: float): float from 'm'`, `floor(x: number): int from warp`: a foreign line of `library`
+pub fn foreign_line<'a>(line: &'a str, library: &str) -> Option<ForeignLine<'a>> {
+	let line = line.trim();
+	let signature =
+		line.strip_suffix(&format!(" from '{library}'")).or_else(|| line.strip_suffix(&format!(" from {library}")))?;
+	let (name, rest) = signature.split_once('(')?;
+	let (parameters, result) = rest.rsplit_once(')')?;
+	let result = result.trim().strip_prefix(':').unwrap_or_default().trim();
+	crate::warp_parser::is_plain_name(name).then_some(ForeignLine { name, parameters, result })
+}
 
 /// FFI function signature descriptor
 /// Uses wasm_encoder::ValType for consistency with emitter
@@ -318,7 +331,7 @@ fn hand_linked_signatures() -> HashMap<String, FfiSignature> {
 	for (name, params, result) in LIBC_SIGNATURES {
 		sigs.insert(name.to_string(), FfiSignature::new(name, "c", params.to_vec(), vec![result]));
 	}
-	for (name, arity) in LIBM_F64_FUNCTIONS {
+	for &(name, arity) in libm_f64_functions() {
 		sigs.entry(name.to_string()).or_insert_with(|| {
 			FfiSignature::new(name, "m", vec![wasm_encoder::ValType::F64; arity], vec![wasm_encoder::ValType::F64])
 		});

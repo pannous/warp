@@ -17,6 +17,7 @@ mod test_braceless_call_in_branch;
 mod test_braceless_output_calls;
 mod test_branch_assigned_variables;
 mod test_broadcast;
+mod test_call_condition_block; // card if-exists
 mod test_call_result_reflection; // card name-function
 mod test_catch_binding;
 mod test_cell_truth;
@@ -31,6 +32,7 @@ mod test_colon_handlers;
 mod test_condition_block;
 mod test_constant_listener;
 mod test_control_words;
+mod test_count_word_blocks; // card thrice-block
 mod test_ctrl_c_rule;
 mod test_daily_timer;
 mod test_data_quoting; // card data-quoting
@@ -60,6 +62,7 @@ mod test_empty_bodies;
 mod test_empty_reset_in_if;
 mod test_error_branch_kind;
 mod test_error_fields; // card error-field
+mod test_error_not_in_data;
 mod test_error_value_return;
 mod test_error_values;
 mod test_error_words; // card raise-boom

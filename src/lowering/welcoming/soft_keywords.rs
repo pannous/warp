@@ -19,13 +19,14 @@ pub const SOFT_KEYWORDS: [&str; 12] =
 	["emit", "send", "broadcast", "every", "whenever", "init", "new", "root", "listeners", "stored", "undo", "redo"];
 /// Keyword-like words in neither list: the playground editor colors them like soft keywords (web/playground/keywords.py
 /// makes keywords.js; it also colors every `const …_KEYWORD: &str` in src/, so a pass registers its word by that name). Display only: P165 gives them no meaning; moving one into a list above is a user decision
-pub const HIGHLIGHTED_WORDS: [&str; 62] = [
+pub const HIGHLIGHTED_WORDS: [&str; 63] = [
 	"try",
 	"catch",
 	"except",
 	"switch",
 	"match",
 	"case",
+	"when",
 	"do",
 	"yield",
 	"await",
@@ -83,6 +84,15 @@ pub const HIGHLIGHTED_WORDS: [&str; 62] = [
 	"trigger",
 	"signal",
 ];
+/// Keyword-like words that stand for a value: a word operator after them takes them as its left operand, `result plus 1`
+const VALUE_WORDS: [&str; 6] = ["true", "false", "ø", "null", "nil", "result"];
+
+/// A word of the keyword lists that starts or joins a statement and is no value of its own: `do`, `return`, `on`, `emit`
+pub fn is_statement_word(word: &str) -> bool {
+	HARD_KEYWORDS.iter().chain(&SOFT_KEYWORDS).chain(&HIGHLIGHTED_WORDS).any(|keyword| *keyword == word)
+		&& !VALUE_WORDS.contains(&word)
+}
+
 const TOPIC: &str = "soft-keyword";
 
 pub fn lower(program: Node) -> Node {

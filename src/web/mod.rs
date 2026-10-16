@@ -396,6 +396,9 @@ fn cell_node(cell: &Value, value: Option<Node>) -> Node {
 		tag if tag == Kind::Float as i64 => Node::Number(Number::Float(payload_float(data).unwrap_or(0.0))),
 		tag if tag == Kind::Text as i64 => Node::Text(text()),
 		tag if tag == Kind::Error as i64 => Node::Error(Box::new(Node::Text(text()))),
+		tag if tag == Kind::Symbol as i64 && kind & crate::type_kinds::TYPE_VALUE_MARK != 0 => {
+			Node::type_value(&text())
+		}
 		tag if tag == Kind::Symbol as i64 => Node::Symbol(text()),
 		tag if tag == Kind::Codepoint as i64 => Node::Char(
 			data.get("i31").and_then(Value::as_u64).and_then(|code| char::from_u32(code as u32)).unwrap_or('\0'),

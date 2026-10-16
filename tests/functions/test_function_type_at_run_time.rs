@@ -32,5 +32,5 @@ fn a_function_value_has_its_params_at_run_time() {
 
 #[test]
 fn other_values_keep_their_type() {
-	assert_eq!(printed("x = [1]; type(x#1)"), "int");
+	assert_eq!(printed("x = [1]; type(x#1)"), "class int");
 }

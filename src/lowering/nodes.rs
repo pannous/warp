@@ -7,7 +7,7 @@ use crate::operators::Op;
 use crate::words::{EACH_WORD, FOR_WORD, IN_WORD, MATCH_WORD};
 use std::cell::Cell;
 
-pub(crate) use crate::node::{call, children_rewritten, int, symbol};
+pub(crate) use crate::node::{call, children_rewritten, int, prelude_call, symbol};
 
 pub(crate) fn key(left: Node, op: Op, right: Node) -> Node {
 	Node::Key(Box::new(left), op, Box::new(right))

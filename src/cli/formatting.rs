@@ -130,16 +130,23 @@ fn print_diff(shown: &str, old: &str, new: &str) {
 	}
 }
 
-/// Shows the diff; whether to apply it: asked in a terminal, never when scripted (decision beautify-preview)
+/// Shows the diff; whether to apply it: asked in a terminal (decision beautify-preview), answered by the next piped
+/// line (`yes y | warp fix *`, card yes-fix; the end of the input is no); never when the terminal can't see the question
 fn confirmed(shown: &str, old: &str, new: &str) -> bool {
 	print_diff(shown, old, new);
-	if !(std::io::stdin().is_terminal() && std::io::stdout().is_terminal()) {
+	let piped = !std::io::stdin().is_terminal();
+	if !piped && !std::io::stdout().is_terminal() {
 		return false;
 	}
 	print!("apply? y/n ");
 	let _ = std::io::stdout().flush();
 	let mut answer = String::new();
-	std::io::stdin().read_line(&mut answer).is_ok() && matches!(answer.trim(), "y" | "yes")
+	let answered = std::io::stdin().read_line(&mut answer).is_ok_and(|read| read > 0);
+	if piped {
+		// a piped answer is not echoed by the terminal
+		println!("{}", answer.trim());
+	}
+	answered && matches!(answer.trim(), "y" | "yes")
 }
 
 /// A name that means a file, never code: `x.warp`, `samples/hello`

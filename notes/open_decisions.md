@@ -8,19 +8,6 @@ the wiki).
 ## Pending
 (none)
 
-## To present (Interviewer's decisions, 2026-10-15 evening; user: "you make the decisions tonight and tomorrow
-morning you present the decisions and we can still undo everything")
-Present each in the morning popup batch (keep / change), then move it to decisions.md as the user's or undo it.
-- unit-definitions: see decisions.md dimensions-units.
-- dimension-bridges (px ↔ length through display.dpi): see decisions.md dimensions-units.
-- letters: see decisions.md (Text).
-- json-exactness (big ints exact digits, fractions float + warning): see decisions.md (Text).
-- range-in-brackets (`[1..3]` spreads to [1 2], `[(1..3)]` keeps one range): see decisions.md (Ranges).
-- fail-effect (raises, maybe-zero division, library Errors; not indexing/casts): see decisions.md (Classes… P230).
-- foreign-signature (`sin(x: float): float from 'm'` in lib/math.warp): see decisions.md (Modules).
-- beautify-preview (diff + "apply? y/n" in a terminal, `beautify yes` for scripts): see decisions.md warp-format.
-- random-forms (`random T` any type, `random(1, 6)` and `random 1...6` die roll inclusive, `random 1..6` excludes 6 like the range, Type parameters take bare type words): see decisions.md (Functions and calls).
-
 ## Parked (user: "later")
 - body-statements (2026-10-14): a function body looped like a list of statements, each statement with its kind
   (operation, call, assignment…); `.kind` was dropped from body-code until then.

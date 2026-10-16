@@ -387,7 +387,7 @@ impl WasmGcEmitter {
 	/// node_type_name(node) -> ref $Node: `type(x)` of a value whose static type is unknown (held as a Node), the symbol
 	/// naming its run-time kind as the static names do: bool, rational, int, text, …
 	pub(crate) fn emit_node_type_name(&mut self) {
-		// only when a program asks type(): it calls new_symbol, which emitting all runtimes must not mark used
+		// only when a program asks type(): emitting all runtimes must not allocate its type names
 		if !self.ctx.required_functions.contains(crate::type_tests::NODE_TYPE_NAME) {
 			return;
 		}
@@ -415,20 +415,26 @@ impl WasmGcEmitter {
 					I::LocalTee(kind), I::I64Const(crate::type_kinds::CODE_MARK), I::I64And, I::I64Const(0), I::I64Ne,
 					I::If(BlockType::Empty),
 				]);
-				s.emit_string_call(f, crate::words::CODE_WORD, "new_symbol");
+				s.emit_type_value(f, crate::words::CODE_WORD);
 				Self::emit_list(f, &[I::Return, I::End]);
 				Self::emit_list(
 					f,
 					&[I::LocalGet(kind), I::I64Const(crate::type_kinds::BOOL_KIND), I::I64Eq, I::If(BlockType::Empty)],
 				);
-				s.emit_string_call(f, crate::analyzer::BOOL_TYPE, "new_symbol");
+				s.emit_type_value(f, crate::analyzer::BOOL_TYPE);
 				Self::emit_list(f, &[I::Return, I::End]);
 				#[rustfmt::skip]
 				Self::emit_list(f, &[
 					I::LocalGet(kind), I::I64Const(crate::type_kinds::BUILTIN_FUNCTION_MARK), I::I64And, I::I64Const(0), I::I64Ne,
 					I::If(BlockType::Empty),
 				]);
-				s.emit_string_call(f, crate::type_tests::BUILTIN_TYPE, "new_symbol");
+				s.emit_type_value(f, crate::type_tests::BUILTIN_TYPE);
+				Self::emit_list(f, &[I::Return, I::End]);
+				// the type of a type value is type (type(int) is type)
+				f.instruction(&I::LocalGet(kind));
+				Self::emit_type_value_test(f);
+				f.instruction(&I::If(BlockType::Empty));
+				s.emit_type_value(f, crate::type_tests::TYPE_WORD);
 				Self::emit_list(f, &[I::Return, I::End]);
 				if s.int_runtime() {
 					// an exact number that is no integer holds a $Ratio (exact.rs)
@@ -441,7 +447,7 @@ impl WasmGcEmitter {
 						f,
 						&[I::RefTestNonNull(HeapType::Concrete(s.type_manager.ratio_type)), I::If(BlockType::Empty)],
 					);
-					s.emit_string_call(f, crate::analyzer::RATIONAL_WORD, "new_symbol");
+					s.emit_type_value(f, crate::analyzer::RATIONAL_WORD);
 					Self::emit_list(f, &[I::Return, I::End, I::End]);
 				}
 				// an instance of a declared type is a Key whose data is the type's name
@@ -456,10 +462,10 @@ impl WasmGcEmitter {
 					for type_name in &type_names {
 						s.emit_field(f, 0, 1);
 						f.instruction(&I::RefCastNonNull(HeapType::Concrete(s.type_manager.node_type)));
-						s.emit_string_call(f, type_name, "new_symbol");
+						s.emit_type_value(f, type_name);
 						s.emit_call(f, VALUES_EQUAL);
 						f.instruction(&I::If(BlockType::Empty));
-						s.emit_string_call(f, type_name, "new_symbol");
+						s.emit_type_value(f, type_name);
 						Self::emit_list(f, &[I::Return, I::End]);
 					}
 					f.instruction(&I::End);
@@ -467,7 +473,7 @@ impl WasmGcEmitter {
 				Self::emit_list(f, &[I::LocalGet(0)]);
 				s.emit_is_map(f);
 				f.instruction(&I::If(BlockType::Empty));
-				s.emit_string_call(f, MAP_WORD, "new_symbol");
+				s.emit_type_value(f, MAP_WORD);
 				Self::emit_list(f, &[I::Return, I::End]);
 				for form in crate::time::TIME_FORMS {
 					s.emit_time_form(f, 0);
@@ -476,13 +482,13 @@ impl WasmGcEmitter {
 						I::I64Const(form as i64), I::I64Eq, I::LocalGet(kind), I::I64Const(KIND_MASK), I::I64And,
 						I::I64Const(Kind::Time as i64), I::I64Eq, I::I32And, I::If(BlockType::Empty),
 					]);
-					s.emit_string_call(f, form.name(), "new_symbol");
+					s.emit_type_value(f, form.name());
 					Self::emit_list(f, &[I::Return, I::End]);
 				}
 				// an operator node `1+1` is an operation, a pair `a:1` (or an instance's entry) stays a key
 				Self::emit_is_operation(f, kind);
 				f.instruction(&I::If(BlockType::Empty));
-				s.emit_string_call(f, crate::words::OPERATION_WORD, "new_symbol");
+				s.emit_type_value(f, crate::words::OPERATION_WORD);
 				Self::emit_list(f, &[I::Return, I::End]);
 				// a one-character text is a character (chars-codepoints): what a parameter given "a" holds
 				#[rustfmt::skip]
@@ -493,7 +499,7 @@ impl WasmGcEmitter {
 				s.emit_text_bounds(f, pointer, end);
 				Self::emit_is_one_character(f, pointer, end, byte);
 				f.instruction(&I::If(BlockType::Empty));
-				s.emit_string_call(f, &Kind::Codepoint.to_string(), "new_symbol");
+				s.emit_type_value(f, &Kind::Codepoint.to_string());
 				Self::emit_list(f, &[I::Return, I::End, I::End]);
 				for named in RUN_TIME_TYPE_KINDS {
 					#[rustfmt::skip]
@@ -501,10 +507,10 @@ impl WasmGcEmitter {
 						I::LocalGet(kind), I::I64Const(KIND_MASK), I::I64And, I::I64Const(named as i64), I::I64Eq,
 						I::If(BlockType::Empty),
 					]);
-					s.emit_string_call(f, &named.to_string(), "new_symbol");
+					s.emit_type_value(f, &named.to_string());
 					Self::emit_list(f, &[I::Return, I::End]);
 				}
-				s.emit_string_call(f, &Kind::Data.to_string(), "new_symbol");
+				s.emit_type_value(f, &Kind::Data.to_string());
 			},
 		);
 	}

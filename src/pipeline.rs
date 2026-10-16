@@ -91,6 +91,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::text::interpolation::lower_program,
 	// `pattern => body` and `_ => v` arms of a match as `pattern: body` and `default: v`, the one form later passes read
 	crate::lowering::welcome_forms::lower_match_arms,
+	// `x(p:P) -> int := …` is `x(p:P): int := …` (welcome_forms.rs) before any pass reads a definition's head
+	crate::lowering::welcome_forms::lower_arrow_result_types,
 	// `a of b` is `b.a` (of_lookups.rs), before any pass reads a lookup
 	crate::lowering::of_lookups::lower,
 	// `(p).a` is `p.a` (grouped_receivers.rs), before any pass reads a lookup
@@ -106,6 +108,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::graphics::shader_holes::lower,
 	// `Person as text := it.name` and `p as text` (conversions.rs) before any pass reads `as` as a cast
 	crate::lowering::conversions::lower,
+	// `cbrt(x: float): float from 'm'` (foreign_lines.rs) as the import it declares, before any pass reads it as a call
+	crate::lowering::foreign_lines::lower,
 	crate::lowering::inline_unions::lower_inline_unions,
 	// `on ask {…} in {…}` before any pass reads `{…} in {…}` as membership or an emit as nothing
 	crate::lowering::scoped_handlers::lower,
@@ -415,6 +419,8 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	let node = crate::lowering::for_loop::headers::lower(node);
 	// `data e` as written: no sugar pass rewrites inside e
 	let node = crate::lowering::blocks::seal_quoted(node);
+	// the list items as written, before passes build lists of their own
+	let node = crate::lowering::data_items::lower(node);
 
 	if let Some(clash) = crate::analyzer::check_operator_word_functions(&node) {
 		return Err(clash.into_error());

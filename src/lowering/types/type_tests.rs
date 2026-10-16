@@ -417,19 +417,29 @@ fn comparison(left: Node, op: Op, right: Node, shadowed: &Names) -> Node {
 /// `type(x) == "int"` is no: a type never equals a text, though it prints as one (decision type-equal), so the
 /// comparison hints the type word (card type-text-compare)
 fn hint_type_compared_with_text(type_value: &Node, op: &Op, other: &Node) {
-	let (Some(argument), Node::Text(word)) = (typed_argument(type_value), other.drop_meta()) else {
+	let (Some(argument), Node::Text(word)) = (compared_type_argument(type_value), other.drop_meta()) else {
 		return;
 	};
 	if type_spec(&[word.as_str()], &Names::default()).is_none() {
 		return;
 	}
 	let typed = format!("{TYPE_WORD}({})", crate::normalize::operand_text(&argument));
+	let joined = typed_argument(type_value).is_none();
+	let written = if joined { crate::normalize::operand_text(type_value) } else { typed.clone() };
 	crate::normalize::set_position_of(other);
 	crate::normalize::hint(
-		&format!("{typed} {op} \"{word}\""),
+		&format!("{written} {op} \"{word}\""),
 		&format!("{typed} {op} {word}"),
 		"a type never equals a text; compare with the type word",
 	);
+}
+
+/// The x of `type(x)`, also joined to a text: `"" + type(x)` is the text `class int`, never "int" (decision type-text)
+fn compared_type_argument(node: &Node) -> Option<Node> {
+	match node.drop_meta() {
+		Node::Key(left, Op::Add, right) => compared_type_argument(left).or_else(|| compared_type_argument(right)),
+		_ => typed_argument(node),
+	}
 }
 
 /// A marked side of == or != by the canonical name of its type; a variable of that name stays the variable

@@ -61,9 +61,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   Later (card warp-format-strict, Soon): a second, opinionated mode rewriting code to best practices, with a preview
   (show the diff, apply nothing) before anything is applied; every rule goes to the user first. It is a verb of its
   own, `warp beautify` (synonyms canonical, idiomatic); hash-comments is its first rule.
-  beautify-preview (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable):
+  beautify-preview (2026-10-15 night, Interviewer's proposal, kept by the user 2026-10-16):
   `warp beautify app.warp` prints the diff; in a terminal it asks "apply? y/n", piped or scripted it applies
-  nothing. `warp beautify yes app.warp` applies without asking (scripts), `warp beautify check app.warp` only
+  nothing. Amended by the user's card yes-fix (2026-10-16): piped lines answer it, one per file (`yes y | warp fix *`),
+  the end of the input is no; a terminal that cannot see the question (output piped) still applies nothing. `warp beautify yes app.warp` applies without asking (scripts), `warp beautify check app.warp` only
   previews. Never a silent rewrite: unlike format, beautify changes words. Second rule (worker default, fits the
   user's "synonyms canonical"): alias words the compiler already notes are rewritten to the warp word via their
   I-meant fixes (`__add__` → plus).
@@ -247,13 +248,16 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   a panic.
 
 ## Comments, separators and lexing
-- `//` is a comment only before a space or the line end; otherwise floor division (`7//2`, `a //b`, `x//=3`)
-  (2026-10-08, emphatic). A comment hiding a closing bracket is a parse error naming the `//`.
+- floor-division (2026-10-16, user; card floor-division; supersedes the 2026-10-08 rule "`//` is floor division
+  unless a space or line end follows"): `//` is always a comment. Floor division is `/!` (`7 /! 2` = 3, `x /!= 2`).
+  Where the compiler can tell a `//` was meant as floor division (`n = 7//2`, `x//=3`), a strong warning names
+  `/!`, and `warp fix` rewrites it. `div` goes to `/!` too (`7 div 2` warns, fix `7 /! 2`); `div` stays the html
+  tag. All our code, samples, docs and tests move to `/!`, except one or two tests that check the hints. A comment
+  hiding a closing bracket is a parse error naming the `//`.
 - `#` glued to a non-space is the count expression (`#s`, `#f(x)`); `# text`, `#!`, `##` and the directives `#use`,
   `#include`, `#import` stay comments/directives.
 - hash-comments (2026-10-15, user): `# text` is the preferred comment; `//` clashes with floor division and reads
-  Java-esque. `warp format` has an opt-in option rewriting `// text` comments to `# text` (floor division and `/* */`
-  untouched), and the linter gives a soft hint on every `//` comment.
+  Java-esque. `warp format` has an opt-in option rewriting `// text` comments to `# text` (`/* */` untouched), and the linter gives a soft hint on every `//` comment.
 - `print a    print b` on one line is an error "two statements on one line? separate them with `;`".
 - P227 (2026-10-08) a comma next to `==` without parentheses is an error asking for them ("insist on braces to avoid
   errors"): `(2.0, 4) == 2.0, 4`.
@@ -302,7 +306,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   application to crash"): known ± values need `certainly`/`possibly`/`.value` (compile error), run-time ones count
   an overlap as not certain with a one-time warning. P233 a field typed with a tolerance gives each value that
   tolerance.
-- `x /= y` is exactly `x = x / y` (3/2 stays exact); floor division is `x //= y`; an `x:int` keeps a whole number.
+- `x /= y` is exactly `x = x / y` (3/2 stays exact); floor division is `x /!= y` (floor-division); an `x:int` keeps a whole number.
 - Trailing percent: `10%` is 1/10, `50 % of 200` is 100; infix `%` stays remainder; CSS values stay as written.
 - P184 English number words are numbers when no variable has that name, with a hint toward digits.
 - #11 exact reals may go into a declared float with precision loss (`float x = π`). rational-float (2026-10-10):
@@ -329,7 +333,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   device pixel, its own dimension, converting to lengths through display.dpi at run time. A unit after a list applies
   to each element (`[3, 4] cm` = `[3 cm, 4 cm]`, `v: length[3]`, matrices alike). Predefined derived names: speed,
   area, volume, frequency.
-- unit-definitions (2026-10-15 evening, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable):
+- unit-definitions (2026-10-15 evening, Interviewer's proposal, kept by the user 2026-10-16):
   every dimension has an SI anchor unit, every other unit is a marked conversion to a known unit. Built on the user's
   sketch: `dimension length meter` declares a base dimension and its anchor; `unit m := 1 meter` (aliases use the
   same rule); `unit cm := meter / 100`, `unit furlong := 201.168 m`: the right side is an amount in a known unit,
@@ -341,40 +345,56 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   `x * 1 m` (no `x m`). lib/units.warp uses the same lines. Rejected: `length cm := …` (a type word before a name
   already declares a variable's type) and `unit meter := 100 cm` (the anchor would hang on a smaller unit).
   Second opinion: the supervisor (refinements above are its).
-- dimension-bridges (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable):
-  two dimensions are connected by a conversion line `A as B := expression`, the shape of the reverse line above
-  (and of the user's own `meter as cm := it * 100`). Pixels stay their own dimension, as decided: in lib/units.warp,
-  `dimension pixels px`, `unit dpi := px / inch` (a derived unit, pixels per inch), `display.dpi := 96 dpi`, and
-  `length as pixels := it * display.dpi`. The way back (divide) is derived. The right side is read at each
-  conversion, not once, so `3 cm as px` uses the current density, and `display.dpi = 300 dpi` before printing changes
-  every later conversion. `display.dpi` is the density of the px warp draws with: 96 in the browser (one CSS
-  inch), the screen's real value in a native window. Plain arithmetic works without the line: `3 cm * display.dpi` is
-  px, `300 px / display.dpi` is a length. Without a conversion, `3 cm + 2 px` is a compile error naming
-  `as px`, never a silent mix. No SI prefixes on px. The same line serves other run-time rates
-  (`EUR as USD := it * rates.usd`).
+- pixel-lengths (2026-10-16, user via the supervisor; replaces the Interviewer's night decision dimension-bridges):
+  no bridge or setting machinery in the compiler. px stays its own quantity (`unit dpi := px / inch`); a length
+  becomes px by plain arithmetic, `3 cm * display.dpi`, and back by dividing. `length as pixels := …` and
+  `display.dpi := 96 dpi` are gone from lib/units.warp; `3 cm as px` is a plain DimensionError. No SI prefixes on px.
+- display-names (2026-10-16, user via the supervisor): display.density is pixels per length in dpi (aliases
+  display.dpi, display.ppi; `unit ppi := dpi`, `unit dot := px`); display.size is width × height in px (alias
+  display.dimensions, with a hint that "dimension" is ambiguous); display.diagonal in inch/cm (density derivable from
+  it when the host reports none); display.resolution is an ambiguous alias with the hint "resolution: density (dpi)
+  or size (px)?". Library lines only, through the common alias machinery.
 - unit-target (2026-10-15 night, user, told to use-reflection): a unit line may name its target the way a function
   names its return type: `unit °C as K := it + 273.15`, `unit °F as K := (it + 459.67) * 5/9`; the right side is
   then a plain amount, `it` the amount in the new unit. `(it + 273.15) K` stays accepted.
 - general-conversions (2026-10-15 night, user, told to use-reflection; card general-conversions): one conversion
   mechanism for any types, `A as B := body`, e.g. `Person as text := it.name`, then `p as text`. A program's
-  conversions are looked up before the built-in ones. Unit lines and dimension bridges are its unit cases. Today
+  conversions are looked up before the built-in ones. Unit lines are its unit cases. Today
   `P as text := it.name` is silently ignored (the card fixes that).
-- units-library (2026-10-16, user; card discuss-moving): partial move into warp. Units, dimensions, prefixes and
-  bridges are lines in lib/units.warp, run-time quantities its Quantity class; next, conversions become warp
+- units-library (2026-10-16, user; card discuss-moving): partial move into warp. Units, dimensions and prefixes
+  are lines in lib/units.warp, run-time quantities its Quantity class; next, conversions become warp
   `A as B := body` definitions. The compile-time dimension check (static_units.rs, P64) stays Rust until types can
   be parameterized by a dimension. Not Julia's unit values (`3km = 3*km`): they would bring back clashes with
   variables named m or s.
 - unit-after-number (2026-10-16, user; card variable-named-like): after a number a unit symbol is always the unit,
   even with a variable of that name in scope: `m = 5; 3m` is 3m (meters), with a hint "a variable m exists; write
   3*m to multiply"; `m * 3` is 15. Supersedes the agent-pinned test_variable_shadows_the_unit (`3m` → 15).
+- unit-types (2026-10-16, user, via the supervisor): a unit can be used as a shallow number type:
+  `display { density: dpi, size: px, diagonal: inch }`. The unit fixes the field's kind of quantity, not the exact
+  unit: `118 px/cm` is accepted and converted, `3 kg` is a type error. The written unit is the default and display
+  unit. A line like `dimension speed m/s` only names a kind and isn't needed for typing.
+- unit-field-plain-number (2026-10-16, user, via the supervisor): a plain number assigned to a unit-typed field
+  (`display.density = 96`) gives a fixable warning to use the right unit; the fix adds it (`96 dpi`).
+- quantity-naming (2026-10-16, user: "Yes, perfect"): "dimension" is ambiguous (an image of 28 × 28 px is a tensor
+  with 2 dimensions, and its width and height both are dimensions and have dimensions), so warp says quantity (ISO
+  80000 kind of quantity) for length, speed, density (`quantity length meter`); axis for width/height; rank for the
+  number of axes; shape for 28 × 28 px. `dimension` stays only as an alias with a hint asking which is meant.
+  Older entries above saying "dimension" mean quantity.
+- unit-prefix-lines (2026-10-16, use-reflection default; undoable): lib/units.warp spells SI prefixes `prefix k :=
+  10^3` and marks the dimensions taking them `SI dimension length meter`. Conversion-only long names
+  (`name hour := h`) stay for now, until durations and units are one (below).
+- duration-units (2026-10-16 night, Interviewer's proposal, kept by the user 2026-10-16; card
+  time-module): the time module's durations and the unit h become one thing, as dimensions-units already makes
+  duration the time dimension: `unit hour := 1 h`, `2 hour + 1 h` is 3 hours (today a DimensionError), printing
+  keeps the long names ("3 hours"). The `name` form then goes.
 
 ## Text
-- letters (2026-10-15 evening, Interviewer's decision on the user's behalf, to present 2026-10-16; card of-in-chain,
+- letters (2026-10-15 evening, Interviewer's proposal, kept by the user 2026-10-16; card of-in-chain,
   low priority): `letters of "a1 b!"` → ['a' 'b'], alphabetic only, the common meaning (Unicode letter, like
   Python's isalpha and Java's isLetter); `characters` is an alias of `chars`.
 - parse-json (2026-10-15, user): quoted code's `.json` is the readable operator-as-key shape
   (`parse("a * (b + 1)").json` → {"*":["a",{"+":["b",1]}]}); what it can't express is a warning or error, never `{}`.
-- json-exactness (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable):
+- json-exactness (2026-10-15 night, Interviewer's proposal, kept by the user 2026-10-16):
   following the user's "a warning, or even an error": big ints are written with all their digits as a JSON number
   (`(2^70).json` → 1180591620717411303424; JSON numbers have no size limit, only some readers do); a fraction is
   written as JSON's float with a warning naming the loss (`(1/3).json` → 0.3333333333333333, "JSON has no exact
@@ -490,13 +510,12 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - #6 data as scope, warning when kebab parts are also variables. P81 the kebab-key warning offers three fixes.
 - stored-visits: `stored visits default 0`; `stored visits = 0` works with a note.
 - Ranges (2026-10-09): `r: 1..n` is the range itself, same as `r = 1..n`. `upto` excludes the end with a hint.
-- range-in-brackets (2026-10-16 night, Interviewer's decision on the user's behalf, to present; undoable; card
-  range-spread; asked by the reviewer): a range written as a literal item inside [ ] spreads into the list, as in
-  Haskell: `[1..3]` = [1 2], `[0, 1..3]` = [0 1 2], `[1...3]` = [1 2 3]. `[(1..3)]` or a variable `[r]` keeps one
-  range item. (Python's [range(1,3)] and Rust's vec![1..3] hold one range, but nobody writes [1..3] meaning that.)
+- range-in-brackets (2026-10-16, user; reverses the Interviewer's night decision to spread): no spreading, no
+  special rule: a range inside [ ] is one item, "pure logical": `[1..3, 5]` is a list whose first item is the range
+  (1, 2), `[1..3]` a list holding one range. An unneeded edge case (card literal-range obsolete).
 
 ## Functions and calls
-- random-forms (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable; card
+- random-forms (2026-10-15 night, Interviewer's proposal, kept by the user 2026-10-16; card
   random-should): bare `random` is its call where a value is used (a float in [0,1)). `random T` for a type is a
   random value of T, one general rule instead of special cases: `random bool` a coin flip, `random int` the full
   integer range (ids, hashes), `random codepoint`, `random float` = `random`. `random(n)` stays 0…n-1;
@@ -625,6 +644,16 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - #39 `==` never chains: `a<b<c` chains, `1<2==2` is `(1<2)==2`.
 
 ## Classes, objects and enums
+- property-accessors (2026-10-16, user, changed from the Interviewer's night proposal `width: get{…} set{…}`; cards
+  property-get, graphics-properties): accessors are assignment-shaped definitions: the getter defines the field,
+  `canvas.width := canvas_width`; the setter defines the assignment, `canvas.width = it := canvas(it,
+  canvas_height)`, `it` the written value. A field with a getter and no setter is read-only: `display.width = 5` is
+  a loud error. lib/draw.warp replaces the Rust table this way.
+- saved-words (2026-10-16 night, Interviewer's proposal, kept by the user 2026-10-16; card
+  graphics-saved-words): no save-only table and no symbol overload. The general bare-call rule (random-forms: a
+  function word used as a value is its call) covers it: lib/draw.warp declares `canvas()` with no arguments as the
+  current Picture beside `canvas(width, height)`, so `save canvas as: "painting.png"` passes a Picture; the sound
+  module likewise (`sound()` the current Recording).
 - P115 bare field names read the receiver (`self`/`this` too). P116 `c.inc()` updates c. P117 a body definition
   without parentheses is a getter; `class b extends a` inherits.
 - P122 static members need `static`; plain `pi = 3` is a per-instance default.
@@ -645,7 +674,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - P114 `x.meta` / `x.@key` stay; comments fill them only when activated (`use comments`). Meta on objects: `@key` in
   a literal is never a field; field first, then meta when reading `point.source`; iteration skips `@` keys.
 - P230 `effects of f` gives symbols.
-- fail-effect (2026-10-16 night, Interviewer's decision on the user's behalf, to present; undoable; card fail-effect):
+- fail-effect (2026-10-16 night, Interviewer's proposal, kept by the user 2026-10-16; card fail-effect):
   the `Fail` effect tracks explicit raises (raise/throw/fail/panic/error "…"), division by a value that may be 0
   (`f(x) := 10/x` is Fail, `x/2` stays Pure) and library calls that answer with an Error. Index out of range,
   missing fields and failed casts are program bugs, like Rust panics, not tracked; otherwise almost every function
@@ -679,10 +708,13 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - operator-alias (2026-10-16, user; card standalone-math-units): math spellings of operators are alias lines in
   lib/math.warp, keeping the operator's precedence: `operator × := *`, `operator ≤ := <=`, `prefix operator √ :=
   sqrt`; they replace the Rust table.
-- foreign-signature (2026-10-16, Interviewer's decision on the user's behalf, the user left it open; to present;
-  undoable): a libm function is declared in warp by a typed foreign line, `sin(x: float): float from 'm'`,
+- foreign-signature (2026-10-16, Interviewer's proposal, kept by the user 2026-10-16): a libm function is declared in warp by a typed foreign line, `sin(x: float): float from 'm'`,
   `atan2(y: float, x: float): float from 'm'`: the signature is visible and needs no C header. `import (…) from 'm'`
-  keeps working for headers.
+  keeps working for headers. Builtin math words use the same line with warp as the library (use-reflection
+  default): `floor(x: number): int from warp`, `min(a: number, b: number, more...): number from warp`; the Rust
+  signature table goes. A bare `floor` is warp's; C's float floor only qualified (`m.floor`).
+  keeps working for headers. Open (card foreign-line): a program's own line still takes the header's signature;
+  it should register the written one, and a disagreeing header be an error.
 - P169 `use math` loads a new math module with beautiful names ("we need to educate people about beautiful names");
   raw C math is `use cmath`; math may forward to cmath meanwhile.
 - P182 Set, Stack, Queue, Deque, Counter only in `collections`. P183 std modules are backed only by warp, host words or
@@ -713,6 +745,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - cli-words (2026-10-15, user): warp's own command options are words, never `--flags` ("we don't like this minus
   minus style, ever"), e.g. `warp format check …`, `warp format hash-comments …`; the style guide says so. Card
   cli-words migrates the existing --fuel/--exe/--strict/… (older `--x` mentions below are superseded by it).
+- fast-math (2026-10-16, warp-types default; card switch-rebinds; undoable): the polynomial math module is
+  `use fast_math` (`fast` is already an alias of float); the CLI switch is the word `warp fast app.warp`.
 - unix-words (2026-10-15, user): `use script` has shell words with warp results: ls pwd cd cat echo mkdir cp mv touch
   head tail wc grep which rm, plus find, size/info (du/stat), sort/uniq, open (native), curl/wget as aliases of
   fetch/download. `export a=b` clashes with the WebAssembly export, so it's left out. Not now: basename/dirname,

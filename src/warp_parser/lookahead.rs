@@ -1,6 +1,7 @@
 //! Looking ahead: what can start an atom, operators ahead
 
 use super::*;
+use crate::operators::AliasPosition;
 
 /// After these a glued `:name` is an explicit symbol: `[:a`, `(:a`, `f(x, :a)`, `x = :a`
 const EXPLICIT_SYMBOL_STARTS_AFTER: [char; 5] = ['(', '[', '{', ',', '='];
@@ -78,6 +79,9 @@ impl WarpParser {
 		if let Some(length) = self.down_to_length() {
 			return Some((Op::To, length));
 		}
+		if let Some(found) = self.alias_here(AliasPosition::Infix) {
+			return Some(found);
+		}
 		LONGEST_SPELLINGS_FIRST
 			.iter()
 			.filter(|(spelling, _)| self.spelled_here(spelling))
@@ -115,6 +119,37 @@ impl WarpParser {
 			.is_some_and(|last| before[line_start + last] == '?')
 	}
 
+	/// An alias the program declares (`operator ⊕ := +`), or for a prefix operator one of lib/math.warp (`prefix operator
+	/// √ := sqrt`); lib/math.warp's infix aliases are spellings of the table (operators::all_spellings)
+	fn alias_here(&self, position: AliasPosition) -> Option<(Op, usize)> {
+		let math = crate::operators::math_aliases().iter().filter(|_| position == AliasPosition::Prefix);
+		self.source_aliases
+			.iter()
+			.chain(math)
+			.filter(|alias| alias.position == position && self.spelled_here(&alias.spelling))
+			.max_by_key(|alias| alias.spelling.chars().count())
+			.map(|alias| (alias.op, alias.spelling.chars().count()))
+	}
+
+	/// A value stands before the blank here, the left operand of a word operator: not a statement word (`do add 4 to xs`,
+	/// `on add {…}`, `return minus 1`) or another operator word; a variable named like an arithmetic word is one, `add
+	/// subtract 1`
+	fn value_before(&self) -> bool {
+		let word = self.word_ending_before(self.pos);
+		!(crate::soft_keywords::is_statement_word(&word)
+			|| crate::operators::is_operator_word(&word) && !crate::operators::is_arithmetic_word(&word))
+	}
+
+	/// One rule for every arithmetic word, `2 plus 3`, `7 div 2`, `2 add 3`: an operator in code only, not a member
+	/// `xs.add`, after a value (`when add {…}` names an event), and a program's own function of that name wins,
+	/// `def plus(a,b) := …; 2 plus 3`
+	fn arithmetic_word_in_code(&self, spelling: &str) -> bool {
+		!self.options.data_mode
+			&& self.prev_char() != '.'
+			&& !self.program_functions.contains(spelling)
+			&& self.value_before()
+	}
+
 	/// The spelling starts here; a word ends here too: `and` but not `android`, `plus a` but not the call `plus(a, b)`
 	fn spelled_here(&self, spelling: &str) -> bool {
 		let length = spelling.chars().count();
@@ -126,28 +161,32 @@ impl WarpParser {
 	/// The operator a fitting spelling is here, None where the context reads it otherwise
 	fn operator_in_context<'a>(&self, spelling: &'a str, op: Op) -> Option<(Op, &'a str)> {
 		let (after, prev) = (self.peek_char(spelling.chars().count()), self.prev_char());
-		let allowed = match spelling {
-			"else" => !self.else_arm_key(),
-			"if" => !self.condition_has_branch(2),
-			"?." => after.is_alphabetic() || after == '_', // `x?.name`; `x ?.5 : 1` is a ternary
-			// R's `x <- 3` assigns with a note, the cramped `x<-3` is an error (P145, left_arrow_assignment)
-			"<-" => after.is_whitespace() || !prev.is_whitespace(),
-			"<<" | "<" | ">" => !self.options.wit_mode, // angle brackets only delimit type arguments
-			// `list<list<int>>` closes two generics, a shift has an operand behind it
-			">>" => !self.options.wit_mode && self.operand_follows(2),
-			"+-" => after.is_whitespace() && prev.is_whitespace(),
-			":" => !(self.at_explicit_symbol() && self.after_explicit_symbol()), // `[:a :plus :b]`
-			"/" => after != '/',                                                 // Don't treat // as division - it's a comment
-			"//" | "//=" => self.at_floor_division(),                            // `x // note` stays a comment
-			// `div{…}` and `div {…}` are the html tag, and data never computes
-			"div" => !self.options.data_mode && !self.word_opens_block("div"),
-			// `xs contains x` in code only, data keeps the words as they are
-			"contains" | "has" | "includes" => !self.options.data_mode && self.operand_after(spelling.len()),
-			// `a .5` is a list of two values, `a.5` a member access
-			"." => !(prev.is_whitespace() && self.number_starts_at(0)),
-			"&" => !(self.starts_function_reference() && prev.is_whitespace()), // `map &square xs`
-			_ => true,
-		};
+		let in_code = !crate::operators::is_arithmetic_word(spelling) || self.arithmetic_word_in_code(spelling);
+		let allowed = in_code
+			&& match spelling {
+				"else" => !self.else_arm_key(),
+				"if" => !self.condition_has_branch(2),
+				"?." => after.is_alphabetic() || after == '_', // `x?.name`; `x ?.5 : 1` is a ternary
+				// R's `x <- 3` assigns with a note, the cramped `x<-3` is an error (P145, left_arrow_assignment)
+				"<-" => after.is_whitespace() || !prev.is_whitespace(),
+				"<<" | "<" | ">" => !self.options.wit_mode, // angle brackets only delimit type arguments
+				// `list<list<int>>` closes two generics, a shift has an operand behind it
+				">>" => !self.options.wit_mode && self.operand_follows(2),
+				"+-" => after.is_whitespace() && prev.is_whitespace(),
+				":" => !(self.at_explicit_symbol() && self.after_explicit_symbol()), // `[:a :plus :b]`
+				"/" => after != '/',                                                 // Don't treat // as division - it's a comment
+				"//" | "//=" => self.at_floor_division(),                            // `x // note` stays a comment
+				// `div{…}` and `div {…}` are the html tag, and data never computes
+				"div" => !self.word_opens_block("div"),
+				// `2 add 3` between operands only, `do add 4 to pixel` is the verb
+				"add" | "subtract" => self.operand_after(spelling.len()),
+				// `xs contains x` in code only, data keeps the words as they are
+				"contains" | "has" | "includes" => !self.options.data_mode && self.operand_after(spelling.len()),
+				// `a .5` is a list of two values, `a.5` a member access
+				"." => !(prev.is_whitespace() && self.number_starts_at(0)),
+				"&" => !(self.starts_function_reference() && prev.is_whitespace()), // `map &square xs`
+				_ => true,
+			};
 		// `solid #8884`: the color is the next word of the value; `#main .x`: the descendant selector's next part
 		let selector_part =
 			self.in_style_sheet && matches!(spelling, "." | "#") && prev.is_whitespace() && self.is_identifier_start(1);
@@ -206,6 +245,33 @@ impl WarpParser {
 		(next.is_alphanumeric() || matches!(next, '"' | '\'' | '[' | '{')) && !joins_operands(&argument_word)
 	}
 
+	/// At an `and`: a comparison follows before the statement ends, `sq 2 == 4 and sq 3 == 8` joins two conditions,
+	/// `x == 2 and print "x"` runs a second statement
+	pub(super) fn comparison_follows_and(&self) -> bool {
+		let (mut offset, mut depth, mut quote) = (AND_KEYWORD.len(), 0i32, None);
+		loop {
+			let ch = self.peek_char(offset);
+			// `<=` is a comparison, `->` and `=>` are none: a two-glyph operator is read whole
+			let pair: String = [ch, self.peek_char(offset + 1)].iter().collect();
+			let operator = crate::operators::spelled_operator(&pair)
+				.inspect(|_| offset += 1)
+				.or_else(|| crate::operators::spelled_operator(&ch.to_string()));
+			match (quote, ch) {
+				(_, '\0') => return false,
+				(Some(open), _) if ch == open => quote = None,
+				(Some(_), _) => {}
+				(None, '"' | '\'') => quote = Some(ch),
+				(None, '(' | '[') => depth += 1,
+				(None, ')' | ']') if depth == 0 => return false,
+				(None, ')' | ']') => depth -= 1,
+				(None, ';' | '\n' | '{' | '}') if depth == 0 => return false,
+				_ if operator.is_some_and(|op| op.is_comparison()) => return true,
+				_ => {}
+			}
+			offset += 1;
+		}
+	}
+
 	/// Peek for prefix operators (unary operators that bind to right operand)
 	pub(super) fn peek_prefix_operator(&self) -> Option<(Op, usize)> {
 		// `{abs:5}`: the word names a key, as an infix operator word does
@@ -221,6 +287,9 @@ impl WarpParser {
 		if self.matches_keyword("if") {
 			return Some((Op::If, 2));
 		}
+		if let Some(found) = self.alias_here(AliasPosition::Prefix) {
+			return Some(found);
+		}
 
 		let (c1, c2, c3) = (self.current_char(), self.peek_char(1), self.peek_char(2));
 		let variable_follows = c3.is_alphabetic() || c3 == '_';
@@ -234,8 +303,7 @@ impl WarpParser {
 			'-' => Some((Op::Neg, 1)),
 			dash if glyph_operator(dash) == Some(Op::Sub) => Some((Op::Neg, 1)),
 			'!' | '¬' => Some((Op::Not, 1)),
-			'√' | FOURTH_ROOT => Some((Op::Sqrt, 1)), // ∜x is √√x (expressions.rs)
-			'∛' => Some((Op::Cbrt, 1)),
+			FOURTH_ROOT => Some((Op::Sqrt, 1)), // ∜x is √√x (expressions.rs)
 			'‖' => Some((Op::Abs, 1)),
 			'#' => self.css_color_length().is_none().then_some((Op::Hash, 1)), // prefix # means count/length
 			// `> 100 => "big"` (C#'s relational pattern): a comparison without its left side, a match arm compares the

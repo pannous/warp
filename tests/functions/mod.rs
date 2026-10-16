@@ -1,3 +1,4 @@
+mod test_abs_square_comparison; // card abs-square
 mod test_alias_definition;
 mod test_all_calls;
 mod test_analysis_memo;
@@ -10,6 +11,7 @@ mod test_argument_labels;
 mod test_arity_and_type_overloads; // card use-sound-play
 mod test_arity_overloads;
 mod test_arrow_defaults_and_types;
+mod test_arrow_result_type; // card undefined-function
 mod test_bare_calls; // card assigning-bare
 mod test_bare_function_name;
 mod test_bare_host_words; // card random-should
@@ -18,6 +20,7 @@ mod test_body_statement;
 mod test_braced_it_warning;
 mod test_braceless_call_in_logic; // card braceless-call
 mod test_braceless_calls; // card braceless-calls
+mod test_braceless_closure_call; // card calling-closure
 mod test_broadcast_of_list_variables; // card round-floor-xs
 mod test_broadcast_reassigned;
 mod test_broadcasting;
@@ -43,6 +46,7 @@ mod test_conversion_methods;
 mod test_counting_word_result;
 mod test_csharp_functions;
 mod test_deep_recursion;
+mod test_def_block_without_parentheses; // card def-hello
 mod test_def_bool_result;
 mod test_def_forms;
 mod test_def_without_parameters;
@@ -108,6 +112,7 @@ mod test_map_function_first; // card map-function
 mod test_map_library_word_first; // cards map-library-first, map-library-word
 mod test_map_list_fields; // card field-list
 mod test_map_phrase;
+mod test_map_real_function; // card map-sin
 mod test_math_broadcast; // card cos-instead
 mod test_member_phrases; // card xs-insert
 mod test_memoization;
@@ -128,6 +133,7 @@ mod test_nonlocal_lambdas;
 mod test_nonlocal_passed_around;
 mod test_object_arguments;
 mod test_ocaml_fun; // card fun-x-loud
+mod test_one_item_list_math; // card sin-scalar
 mod test_operator_arguments;
 mod test_operator_word_methods;
 mod test_optional_parameters;

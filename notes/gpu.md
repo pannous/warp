@@ -275,7 +275,17 @@ main` calling warp_twigl with values.size/time/mouse/frame, FC and m with y flip
   bytes after wasm-opt (+705 KB, +254 KB gzipped). So the translation is crates/warp-glsl: natively a dependency of the
   native feature (std_adapters.rs draw glsl_wgsl), in the browser glsl.wasm of its own (build.sh build_glsl), which
   host-gpu.js glslWgsl loads at a program's first translation; warp.wasm stays as it was.
+- Block form (cards twigl-make, twigl-float, 2026-10-16): `twigl { … }` parses like `shader { … }` (verbatim, dedented,
+  src/warp_parser/literals/shaders.rs SHADER_DIALECT_WORDS) into the call twigl("…"), so format leaves it and the
+  playground shows code, not a text. `$name` holes: the shader's `values.name` is a float global `warp_values_name` in
+  the GLSL naga reads, put back as `values.name` in its WGSL (crates/warp-glsl with_hole_globals); the holes pass sees
+  through the call (shader_holes.rs holes_of). Holes are floats only (twigl has t, m, r, f for the built-ins).
 - Not yet: twigl's backbuffer b (would be $previous), noise functions (snoise2D…), sound s, other twigl modes
+- twigl's noise (fsnoise, fsnoiseDigits, snoise2D, snoise3D: lib/draw.warp twigl_noise) goes into a shader that calls
+  it; probes/twigl/noise.warp.
+- twigl's backbuffer `texture(b, uv)` is the previous frame: twigl() writes it as a GLSL stub warp_back(uv), and
+  glsl_shader swaps the stub's WGSL for a call of values.previous ($previous, gpu.rs binds the frame); probes/twigl/back.warp.
+- Not yet: snoise4D, sound s, other twigl modes
   (classic, geeker: full `void main` sources, gl_FragColor), Shadertoy's iChannel textures.
 
 ## Paint window, default canvas, probes (from the warp-sound handover, 2026-10-10)

@@ -220,6 +220,10 @@ enum EvidentKind {
 
 impl EvidentKind {
 	fn of(value: &Node, results: &HashMap<String, Kind>) -> Option<EvidentKind> {
+		// `function upper`, `&add`: the mark sits on the meta that drop_meta removes
+		if crate::closures::referenced_function(value).is_some() {
+			return Some(EvidentKind::Function);
+		}
 		match value.drop_meta() {
 			Node::True | Node::False => Some(EvidentKind::Bool),
 			Node::Key(_, op, _) if op.is_comparison() => Some(EvidentKind::Bool),

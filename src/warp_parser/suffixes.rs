@@ -134,9 +134,10 @@ impl WarpParser {
 		}
 
 		let start = self.pos;
-		// `while i < count t {…}`: a block after an operand's argument is the body, as after a loop header's
+		// `while i < count t {…}`: a block after an operand's argument is the body, as after a loop header's; so is a
+		// block after any call's argument in a condition, `if exists profile {…}`
 		let outer_header = self.in_for_header;
-		self.in_for_header = outer_header || !applies_otherwise;
+		self.in_for_header = outer_header || !applies_otherwise || self.equals_compares;
 		let arg = self.labelled_argument(argument_bp).unwrap_or_else(|| self.parse_expr(argument_bp));
 		self.in_for_header = outer_header;
 		if arg == Empty && self.pos == start {

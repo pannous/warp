@@ -150,3 +150,13 @@ number, yes, no or ø as itself, every other node a list tagged by its kind (["k
   into `"\∞`: text_or_comment_end now skips escapes (same card). A Data node without a unit description is written
   `Data(…)`, so its view carries that text. Small floats keep their exponent on both sides (`2.5e-6`, decision
   float-text): Node's Display writes numbers as Number does (writes-node).
+
+## Runtime calls into prelude words (card hex-binary, late calls)
+Runtime wasm functions (list_join …) are compiled before the user functions, so they cannot `call` a warp-written
+word by index. `late_call(callee, params, results)` (src/wasm_emitter/functions/late_calls.rs) gives the callee a
+funcref global `late·<callee>` that main fills with ref.func before anything runs; the runtime calls it with call_ref
+(as witness.rs does for Comparable). The loader must load the word although the program never calls it: an
+`implied_words` hook in modules::called_names (radix.rs: a named `hex`, `binary`, `byte` … implies hex_text /
+binary_text). First user: lib/prelude.warp hex_text, binary_text over to_base.
+- Size: a warp word with `%` or `//` on int pulls the exact-rational runtime (~5 KB): card int-i64.
+- A host calling an exported runtime function before main would find the global null (trap): only main-run code uses it.

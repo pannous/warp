@@ -210,9 +210,13 @@ impl WarpParser {
 				&& matches!(lhs.drop_meta(), Node::Symbol(word)
 					if crate::analyzer::text_unit(word).is_some() || crate::operators::is_function_keyword(word));
 
-			// `sleep 1s and print "x"`: the statement ends before the `and`, the statement list runs both (parse_list_with_separators)
-			let ends_command =
-				op == Op::And && (self.in_command || (min_bp == 0 && is_command(&lhs))) && self.and_starts_statement();
+			// `sleep 1s and print "x"`: the statement ends before the `and`, the statement list runs both (parse_list_with_separators);
+			// between two comparisons it joins conditions: `sq 2 == 4 and sq 3 == 8`
+			let joins_conditions = crate::library_words::is_comparison(&lhs) && self.comparison_follows_and();
+			let ends_command = op == Op::And
+				&& (self.in_command || (min_bp == 0 && is_command(&lhs)))
+				&& !joins_conditions
+				&& self.and_starts_statement();
 			// Stop if operator binds less tightly than our minimum
 			if ends_command || membership_word || l_bp < min_bp || (op == Op::Else && self.stops_at_else) {
 				break;
@@ -445,6 +449,18 @@ impl WarpParser {
 			// `#m#1` counts `m#1`: indexing a count is never meant
 			Op::Hash => self.parse_expr(left_bp - 1),
 			Op::Add => self.parse_expr(Op::Neg.binding_power().1), // `+2^2` like `-2^2`
+			// `-floor 2.5` negates the call `floor 2.5`, as `1 + floor 2.5` adds it (card leading-minus); a variable takes
+			// no argument, and in `[-x 1]` the space starts the next item
+			Op::Neg => {
+				let operand = self.parse_expr(right_bp);
+				let summand_bp = Op::Add.binding_power().1;
+				match operand.drop_meta() {
+					Node::Symbol(name) if !self.in_spaced_list && !self.variables.contains(name) => self
+						.try_parse_implicit_application(&operand, summand_bp, ARGUMENT_BP, summand_bp)
+						.unwrap_or(operand),
+					_ => operand,
+				}
+			}
 			_ => self.parse_expr(right_bp),
 		}
 	}

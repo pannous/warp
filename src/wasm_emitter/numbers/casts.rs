@@ -165,7 +165,8 @@ impl WasmGcEmitter {
 				self.emit_node_instructions(func, &Node::List(vec![value.clone()], Bracket::Square, Separator::Space))
 			}
 			_ if self.get_type(value) == Kind::List => self.emit_node_instructions(func, value),
-			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint) => {
+			// a value of unknown static type (a parameter given lists and texts): a list as it is, a text's characters
+			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty) => {
 				self.emit_node_instructions(func, value);
 				self.emit_call(func, "text_chars");
 			}
@@ -299,6 +300,7 @@ impl WasmGcEmitter {
 		};
 
 		let (written, value) = (value, value.drop_meta());
+		self.note_position(written); // `ff as hex`: an error in the value points at it
 		if let Some(refusal) = self.unknown_word_refusal(value).or_else(|| self.cast_refusal(value, target_type)) {
 			self.emit_type_error(func, refusal);
 			return;

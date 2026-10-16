@@ -3,6 +3,10 @@
 // spellings and method forms onto them (`isdigit(c)`, `xs.first()`, `round(x, 2)` → round_to)
 first(xs) := xs#1
 last(xs) := xs#(count(xs))
+// `count x in y`, `y.count(x)`: how often x occurs as an item of a list or a character of a text, and how often part
+// occurs in a text, not overlapping: count_of("banana", "an") is 2; # counts, so a program's own count leaves them be
+count_item(xs, x) := #filter(xs, item => item == x)
+count_of(t, part) := #split(t, part) - 1
 // the first or last n items (fewer when xs has fewer): `xs.first(3)`, `first 3 of xs`
 first_items(xs, n) := xs[0: min(n, count(xs))]
 last_items(xs, n) := xs[max(count(xs) - n, 0): count(xs)]
@@ -20,6 +24,16 @@ is_digit(c) := c >= '0' and c <= '9'
 is_alpha(c) := (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z')
 is_alphanumeric(c) := is_alpha(c) or is_digit(c)
 is_space(c) := c == ' ' or c == '\t' or c == '\n' or c == '\r'
+// the digits of n in a base up to 36, letters past 9 (upper: true capitals): to_base(255, 16) is "ff",
+// from_base("ff", 16) is 255; a digit is its code point ('0' is 48, 'A' 10 + 55, 'a' 10 + 87), not an index into a text of
+// symbols, which needs the grapheme runtime
+to_base(n: int, base: int, upper = false) := { if n == 0 { return "0" }; out = ""; rest = abs(n); while rest > 0 { digit = rest % base; out = (digit + (if digit < 10 then 48 else if upper then 55 else 87)) as char + out; rest = rest//base }; if n < 0 then "-" + out else out }
+from_base(t: text, base: int) := { symbols = "0123456789abcdefghijklmnopqrstuvwxyz"; out = 0; for c in lower(t) { out = out * base + index_of(symbols, c) - 1 }; out }
+// how an int shown in hex or binary prints (cards hex-printing, binary-int): hex_text(255) is "0xFF", binary_text(-5)
+// "-0b101"; the printer of such values calls them (wasm_emitter/numbers/radix.rs)
+radix_text(n: int, base: int, prefix: text) := (if n < 0 then "-" else "") + prefix + to_base(abs(n), base, upper: true)
+hex_text(n: int) := radix_text(n, 16, "0x")
+binary_text(n: int) := radix_text(n, 2, "0b")
 // x as a fraction, by its continued fraction (src/numbers/real.rs computes it exactly for √2, π, … written in the program):
 // `within: 1e-6` the first convergent that close, a limit the closest fraction whose denominator is at most that
 // (Python's limit_denominator and its default 1000000, user decision); limit 0 the exact fraction, of a float the first
@@ -69,6 +83,9 @@ magnitude(x: any) := norm(x)
 // that color as 0xAARRGGBB, as the shader paints it; a number stays itself
 pixel_color(v: any) := if v is list then 0xFF000000 + pixel_channel(v#1) * 65536 + pixel_channel(v#2) * 256 + pixel_channel(v#3) else v
 pixel_channel(c) := round(255 * min(max(c, 0), 1)) as int
+// paint(f, width, height) of a warp function on the CPU, where no shader paints it (gpu_maps painted_functions): f(column,
+// row) of every pixel, row by row
+paint_each(f, width, height) := paint([pixel_color(f(i % width, i//width)) for i in 0..width * height], width, height)
 // random(a, b) (decision random-forms): of whole numbers a whole number from a to b, both included (random(1, 6) rolls
 // a die), else a float in [a, b); random a..b one of the range's elements, a to b-1
 random_fraction(a, b) := a + random() * (b - a)

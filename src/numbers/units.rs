@@ -56,29 +56,12 @@ fn unit_aliases() -> &'static [(&'static str, &'static str)] {
 	&definitions::definitions().aliases
 }
 
-/// The long names a conversion target may use, singular or plural: `2 h in minutes` (P36). Quantities keep the short
-/// names, `2 minutes` stays a duration of the time module.
-const LONG_NAMES: [(&str, &str); 19] = [
-	("millisecond", "ms"),
-	("second", "s"),
-	("minute", "min"),
-	("hour", "h"),
-	("millimeter", "mm"),
-	("centimeter", "cm"),
-	("meter", "m"),
-	("metre", "m"),
-	("kilometer", "km"),
-	("inches", "inch"),
-	("foot", "ft"),
-	("feet", "ft"),
-	("yard", "yd"),
-	("mile", "mi"),
-	("milligram", "mg"),
-	("gram", "g"),
-	("kilogram", "kg"),
-	("pound", "lb"),
-	("lbs", "lb"),
-];
+/// The long names a conversion target may use, singular or plural: `2 h in minutes` (P36), lib/units.warp's `name hour :=
+/// h` lines. Quantities keep the short names, `2 minutes` stays a duration of the time module.
+fn long_names() -> &'static [(&'static str, &'static str)] {
+	&definitions::definitions().long_names
+}
+
 // `100 cm in m`: the word of a conversion written with spaces (`as` is an operator)
 /// `now` compared with a duration is its local time of day, unless the program names something so (card time-day-value);
 /// a bare `time` is the type (user decision print-time), so `time < 12h` fails with the fix `now < 12h`
@@ -229,7 +212,10 @@ fn target_unit(node: &Node) -> Option<&'static Unit> {
 	};
 	let singular = name.strip_suffix('s').unwrap_or(name);
 	unit_named(name).or_else(|| {
-		LONG_NAMES.iter().find(|(long, _)| *long == singular || *long == name).and_then(|(_, short)| unit_named(short))
+		long_names()
+			.iter()
+			.find(|(long, _)| *long == singular || *long == name)
+			.and_then(|(_, short)| unit_named(short))
 	})
 }
 
@@ -270,20 +256,36 @@ fn statements_of(node: Node) -> Vec<Node> {
 	}
 }
 
-/// The word starting a unit line, `unit furlong := 201.168 m`
-const UNIT_LINE_WORD: &str = "unit";
+/// The words starting a program's unit lines, each with how a refused one is written right: `unit furlong := 201.168 m`
+const SI_WORD: &str = "SI";
+const PREFIX_LINE_WORD: &str = "prefix";
+const NAME_LINE_WORD: &str = "name";
+const POWER_OF_TEN: &str = "10^";
+const DIMENSION_WORD: &str = "dimension";
+const UNIT_LINE_WORDS: [(&str, &str); 3] = [
+	("unit", "the right side is no amount of a known unit (`unit furlong := 201.168 m`)"),
+	(
+		PREFIX_LINE_WORD,
+		"a prefix is a power of ten that keeps every unit whole nanometers, nanoseconds … (`prefix k := 10^3`)",
+	),
+	(NAME_LINE_WORD, "the right side is no unit (`name furlong := fur`)"),
+];
 
 /// The program without its unit lines, which definitions.rs read before it was parsed (program_unit_lines); Err for a
 /// line that defines no unit (`unit x := 3 foo`: foo is no unit)
 pub fn without_unit_lines(program: Node) -> Result<Node, Node> {
 	let unit_line = |statement: &Node| match statement.drop_meta() {
 		Node::List(items, Bracket::None, Separator::Space) => match items.as_slice() {
-			[word, definition, ..] if word.drop_meta() == &Node::Symbol(UNIT_LINE_WORD.to_string()) => {
+			[word, definition, ..] => {
+				let word =
+					UNIT_LINE_WORDS.iter().find(|(line_word, _)| word.drop_meta().symbol_name() == Some(line_word))?;
 				match definition.drop_meta() {
+					// `name p := p.first` is a function of a parameter p: a line is a unit line where its right side reads as one
+					Node::Key(_, Op::Define, right) if !reads_as_unit_line(word.0, right) => None,
 					// `unit °C as K := …` names °C
 					Node::Key(name, Op::Define, _) => match name.drop_meta() {
-						Node::Key(name, Op::As, _) => Some(name.drop_meta().serialize()),
-						name => Some(name.serialize()),
+						Node::Key(name, Op::As, _) => Some((word, name.drop_meta().serialize())),
+						name => Some((word, name.serialize())),
 					},
 					_ => None,
 				}
@@ -293,16 +295,44 @@ pub fn without_unit_lines(program: Node) -> Result<Node, Node> {
 		_ => None,
 	};
 	let statements = statements_of(program.clone());
+	if let Some(line) = statements.iter().find(|statement| is_dimension_line(statement)) {
+		return Err(error(&format!(
+			"{}: dimensions are lib/units.warp's, a program defines units, prefixes and names",
+			line.serialize().trim()
+		)));
+	}
 	if !statements.iter().any(|statement| unit_line(statement).is_some()) {
 		return Ok(program);
 	}
-	if let Some(unknown) = statements.iter().filter_map(unit_line).find(|name| !names_unit(name)) {
-		return Err(error(&format!(
-			"unit {unknown}: the right side is no amount of a known unit (`unit furlong := 201.168 m`)"
-		)));
+	if let Some(((word, fix), unknown)) =
+		statements.iter().filter_map(unit_line).find(|(word, name)| !definitions::defines(word.0, name))
+	{
+		return Err(error(&format!("{word} {unknown}: {fix}")));
 	}
 	let kept: Vec<Node> = statements.into_iter().filter(|statement| unit_line(statement).is_none()).collect();
 	Ok(Node::List(kept, Bracket::None, Separator::Newline))
+}
+
+/// The right side of a program's `unit`, `prefix` or `name` line as one reads: an amount of a unit (a wrong one is
+/// reported), a power of ten `10^3`, a unit word; anything else leaves the line a definition (`prefix s := s#1`)
+fn reads_as_unit_line(line_word: &str, right: &Node) -> bool {
+	match line_word {
+		PREFIX_LINE_WORD => {
+			let written: String = right.serialize().split_whitespace().collect();
+			written.strip_prefix(POWER_OF_TEN).is_some_and(|exponent| exponent.parse::<i32>().is_ok())
+		}
+		NAME_LINE_WORD => right.drop_meta().symbol_name().is_some_and(names_unit),
+		_ => true,
+	}
+}
+
+/// `SI dimension length meter`: a line only lib/units.warp writes
+fn is_dimension_line(statement: &Node) -> bool {
+	let Node::List(items, Bracket::None, Separator::Space) = statement.drop_meta() else {
+		return false;
+	};
+	let words: Vec<Option<&str>> = items.iter().take(2).map(|item| item.drop_meta().symbol_name()).collect();
+	words == [Some(SI_WORD), Some(DIMENSION_WORD)]
 }
 
 /// `x as quantity`, and `x as unit` with a got-it note: the run-time quantity(x) (card unit-possible)
@@ -479,7 +509,7 @@ pub fn dimension_and_factor(name: &str) -> Option<(String, i64)> {
 /// `h` as its unit's long name `hour` (the unit word where it has none); none when `program` defines the word itself
 pub fn unit_long_name(name: &str, program: &Node) -> Option<&'static str> {
 	let unit = shadowing(program, || unit_named(name))?;
-	let long_name = LONG_NAMES.iter().find(|(_, short)| *short == unit.name);
+	let long_name = long_names().iter().find(|(_, short)| *short == unit.name);
 	Some(long_name.map_or(unit.name, |(long, _)| *long))
 }
 

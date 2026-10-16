@@ -1,4 +1,5 @@
 mod test_browser_dollar_names; // card browser-interaction
+mod test_builtin_lines;
 #[cfg(feature = "native")] // cargo builds the crate: native only
 mod test_cargo_crates; // card use-cargo
 #[cfg(feature = "native")] // wasmtime components: not in the browser build
@@ -33,6 +34,7 @@ mod test_ffi_warning_once;
 mod test_foreign_bools; // card booleans-foreign
 mod test_foreign_handles;
 mod test_foreign_js;
+mod test_foreign_lines; // decision foreign-signature, card standalone-math-units
 mod test_foreign_member_assignment;
 mod test_foreign_operators;
 #[cfg(feature = "native")] // a python3 child process: not in the browser build
@@ -51,4 +53,4 @@ mod test_libm_header_functions;
 mod test_libm_linking;
 mod test_page_ids; // card page-ids
 mod test_wasi;
-mod test_web_idl;
+mod test_web_idl; // card standalone-math-units step 3

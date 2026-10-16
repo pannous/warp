@@ -2,7 +2,7 @@
 use super::*;
 
 /// The standard library's modules written in warp (notes/stdlib.md), embedded so `use list` needs no files
-pub(crate) const STD_MODULES: [(&str, &str); 27] = [
+pub(crate) const STD_MODULES: [(&str, &str); 28] = [
 	(PRELUDE_MODULE, include_str!("../../lib/prelude.warp")),
 	("memory", include_str!("../../lib/memory.warp")),
 	("net", include_str!("../../lib/net.warp")),
@@ -15,6 +15,7 @@ pub(crate) const STD_MODULES: [(&str, &str); 27] = [
 	("shell", include_str!("../../lib/shell.warp")),
 	("list", include_str!("../../lib/list.warp")),
 	("math", include_str!("../../lib/math.warp")),
+	("fast_math", include_str!("../../lib/fast_math.warp")),
 	("text", include_str!("../../lib/text.warp")),
 	("random", include_str!("../../lib/random.warp")),
 	("map", include_str!("../../lib/map.warp")),
@@ -193,29 +194,15 @@ pub fn prelude_word_defaults(word: &str) -> usize {
 /// The arguments of a call of a prelude word in parameter order: one may be named (`nearest(x, rational, within:
 /// 1e-6)`), one left out is its default (`limit = 0`); unchanged for no prelude word
 pub fn prelude_arguments(word: &str, arguments: Vec<Node>) -> Vec<Node> {
-	let source = std_module(PRELUDE_MODULE).unwrap_or_default();
-	let parameters =
-		statements(crate::normalize::without_hints(|| WarpParser::parse(source))).into_iter().find_map(|statement| {
-			match statement.drop_meta() {
-				Node::Key(head, Op::Define, _) if leftmost_symbol(head).as_deref() == Some(word) => {
-					match head.drop_meta() {
-						Node::List(items, _, _) => Some(
-							items[1..]
-								.iter()
-								.map(|item| match item.drop_meta() {
-									Node::Key(name, Op::Assign, default) => {
-										(name.drop_meta().name(), Some(default.as_ref().clone()))
-									}
-									other => (other.name(), None),
-								})
-								.collect::<Vec<_>>(),
-						),
-						_ => None,
-					}
-				}
-				_ => None,
-			}
-		});
+	let parameters = prelude_definition(word).map(|(parameters, _)| {
+		parameters
+			.iter()
+			.map(|parameter| match parameter.drop_meta() {
+				Node::Key(name, Op::Assign, default) => (name.drop_meta().name(), Some(default.as_ref().clone())),
+				other => (other.name(), None),
+			})
+			.collect::<Vec<_>>()
+	});
 	let Some(parameters) = parameters else { return arguments };
 	let mut slots: Vec<Option<Node>> = vec![None; parameters.len()];
 	let named_slot = |argument: &Node| match argument.drop_meta() {
@@ -236,6 +223,22 @@ pub fn prelude_arguments(word: &str, arguments: Vec<Node>) -> Vec<Node> {
 	let filled: Option<Vec<Node>> =
 		slots.into_iter().zip(&parameters).map(|(slot, (_, default))| slot.or_else(|| default.clone())).collect();
 	filled.unwrap_or(arguments)
+}
+
+/// The parameters and the body of the prelude word's definition (`paint_each(f, width, height) := …`)
+pub fn prelude_definition(word: &str) -> Option<(Vec<Node>, Node)> {
+	let source = std_module(PRELUDE_MODULE).unwrap_or_default();
+	statements(crate::normalize::without_hints(|| WarpParser::parse(source))).into_iter().find_map(|statement| {
+		match statement.drop_meta() {
+			Node::Key(head, Op::Define, body) if leftmost_symbol(head).as_deref() == Some(word) => {
+				match head.drop_meta() {
+					Node::List(items, _, _) => Some((items[1..].to_vec(), body.as_ref().clone())),
+					_ => None,
+				}
+			}
+			_ => None,
+		}
+	})
 }
 
 pub(super) fn prelude_word_parameters(word: &str) -> Option<(usize, usize)> {

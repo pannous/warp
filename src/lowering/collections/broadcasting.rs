@@ -324,8 +324,9 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 			Node::List(items, bracket, separator)
 		}
 		// `square 3 == 9` parses as `square (3 == 9)`. P143 (user): a parameter typed as no truth value takes the call,
-		// `(square 3) == 9` (wiki/all.md `square [1 2 3] == [1 4 9]`); untyped, both readings work: a loud error
-		Node::List(items, Bracket::None, Separator::Space) if matches!(items.as_slice(), [head, argument] if arity(head).is_some() && crate::library_words::is_comparison(argument)) =>
+		// `(square 3) == 9` (wiki/all.md `square [1 2 3] == [1 4 9]`); untyped, both readings work: a loud error. Also in
+		// a group, `(square 3 == 9)`; a call `square(3 == 9)` has no spaces
+		Node::List(items, Bracket::None | Bracket::Round, Separator::Space) if matches!(items.as_slice(), [head, argument] if arity(head).is_some() && crate::library_words::is_comparison(argument)) =>
 		{
 			let [head, argument]: [Node; 2] = items.try_into().expect("guarded");
 			if !arity(&head).expect("guarded").typed_first {
@@ -692,7 +693,7 @@ fn takes_a_scalar(param: &Node, body: &Node) -> bool {
 
 /// SCALAR_LIBRARY_WORDS and libm's words of one number
 fn scalar_library_words() -> impl Iterator<Item = &'static str> {
-	let libm_words = crate::ffi::LIBM_F64_FUNCTIONS.iter().filter(|(_, arity)| *arity == 1).map(|(word, _)| *word);
+	let libm_words = crate::ffi::libm_f64_functions().iter().filter(|(_, arity)| *arity == 1).map(|(word, _)| *word);
 	SCALAR_LIBRARY_WORDS.into_iter().chain(libm_words)
 }
 

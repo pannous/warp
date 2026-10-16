@@ -1,3 +1,4 @@
+mod test_and_after_comparison; // card print-sq
 mod test_as_prefixed_name;
 mod test_attributes;
 mod test_bare_operator_block;
@@ -15,6 +16,7 @@ mod test_entity_table;
 mod test_escaped_quote_slashes; // card self-serializer
 mod test_explicit_symbols;
 mod test_format_layout; // card warp-format
+mod test_format_semicolons; // card linter-should
 mod test_glued_method_block;
 mod test_glued_pair_value;
 mod test_glyph_aliases;
@@ -29,6 +31,7 @@ mod test_meta_attributes;
 mod test_newline_precedence;
 mod test_number_glyphs;
 mod test_one_line_statements;
+mod test_operator_aliases;
 mod test_operator_word_keys; // card abs-fails
 mod test_parameter_scope; // card path-parameter-scope
 mod test_parse_long_sources;
@@ -69,4 +72,4 @@ mod test_warp_position;
 mod test_wisp_def_params;
 mod test_wisp_malformed;
 mod test_wisp_roundtrip;
-mod test_xml; // card pannous-com
+mod test_xml; // card pannous-com // decision operator-alias, card standalone-math-units

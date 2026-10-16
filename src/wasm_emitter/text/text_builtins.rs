@@ -1004,6 +1004,11 @@ impl WasmGcEmitter {
 				f.instruction(&I::LocalGet(side));
 				s.call(f, TEXT_OF);
 				f.instruction(&I::LocalSet(side));
+				// a type value joins as it prints, `class int` (decision type-print)
+				s.emit_is_type_value(f, side);
+				f.instruction(&I::If(BlockType::Empty));
+				s.emit_type_value_text(f, side);
+				Self::emit_list(f, &[I::LocalSet(side), I::End]);
 			}
 			s.emit_text_field(f, 0, 1);
 			f.instruction(&I::LocalTee(left_length));

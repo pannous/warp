@@ -131,7 +131,8 @@ impl WarpParser {
 			}
 			ch if ch.is_alphabetic() || ch == '_' => {
 				let atom = self
-					.parse_elixir_function()
+					.try_parse_count_word()
+					.or_else(|| self.parse_elixir_function())
 					.or_else(|| self.parse_python_lambda())
 					.or_else(|| self.parse_f_string())
 					.or_else(|| self.parse_shader_block())
