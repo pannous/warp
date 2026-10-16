@@ -9,6 +9,8 @@ pub(crate) const QUANTITY: &str = "quantity";
 pub(crate) const ROUTE_PARTS: [&str; 3] = ["route_segment", "route_parameter", "route_matches"];
 /// lib/agent.warp: `agent "prompt"` asks Claude (card g_X_F0)
 pub(crate) const AGENT_MODULE: &str = "agent";
+/// lib/fast_math.warp: sin cos exp pow atan2 as wasm polynomials, `use fast_math` or for every program `warp --fast`
+pub(crate) const FAST_MODULE: &str = "fast_math";
 /// lib/sound.warp: `play(440Hz, 0.5s)`, `beep` (card basic-sound), loaded when a program calls one of its words
 pub(crate) const SOUND_MODULE: &str = "sound";
 pub(crate) const SOUND_WORDS: [&str; 21] = [
@@ -42,7 +44,7 @@ pub(crate) type NeededBy = fn(&Node) -> bool;
 /// The standard modules a program needs without `use`: P183 a file URL → file, a page or a hosted page route → markup (lowering/web/page_html.rs, serve.rs answered_page),
 /// routes or a server route's path parameters → router, a route's regular expression → regex (lowering/web/routes.rs), a call of quantity → units (run-time units),
 /// a call of agent → agent, a call of play, beep, stop_sound or wait_sound → sound, a WAGI build (`warp build --wagi`) → wagi
-pub(crate) const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
+pub(crate) const IMPLICIT_MODULES: [(&str, NeededBy); 9] = [
 	("file", mentions_file_url),
 	("markup", |program| {
 		let mode = crate::pipeline::compile_mode();
@@ -62,6 +64,7 @@ pub(crate) const IMPLICIT_MODULES: [(&str, NeededBy); 8] = [
 	(AGENT_MODULE, |program| calls_undefined(program, AGENT_MODULE)),
 	(SOUND_MODULE, |program| first_called_undefined(program, SOUND_SETUP_FREE_WORDS).is_some()),
 	("wagi", |_| crate::pipeline::compile_mode().for_wagi),
+	(FAST_MODULE, |_| crate::pipeline::fast_math()),
 ];
 
 /// units: `quantity("5 km")` gives a Quantity whose methods read the module's own number words (bound_of), which work

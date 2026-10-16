@@ -1,0 +1,74 @@
+// The standard module fast_math (card switch-rebinds): `use fast_math`, or `warp --fast` for the whole program, rebinds sin, cos,
+// exp, pow and atan2 to polynomials of plain wasm arithmetic instead of calls into the C library, for hot loops such as
+// shaders run on the CPU: 10^7 calls of sin or atan2 take ~0.6 s through the C library, ~0.05 s so (probes/fast_math.sh).
+// sqrt is the wasm instruction already; `^` stays the C library's pow. Each word then takes and gives floats; the
+// largest error against the C library, measured on 20001 points by probes/fast_math.sh:
+//   sin cos      6e-12 for |x| ≤ 1000 (grows with |x|: the reduction by τ loses the digits of x / τ beyond 2^52)
+//   exp          8e-14 relative, from x = -700 to 700
+//   pow          1e-14 relative, base > 0; a negative base takes whole exponents only (others give nan)
+//   atan2        3e-12 radians
+
+// sin of x reduced to [-π/2, π/2]: its Taylor series to x^15, whose next term is below 1e-11 there
+sin(x: float) := {
+	r = x - round(x / tau) * tau
+	if r > pi / 2 { r = pi - r } else if r < -pi / 2 { r = -pi - r }
+	s = r * r
+	r * (1.0 + s * (-0.16666666666666666 + s * (0.008333333333333333 + s * (-0.0001984126984126984 + s * (2.7557319223985893e-06 + s * (-2.505210838544172e-08 + s * (1.6059043836821613e-10 + s * -7.647163731819816e-13)))))))
+}
+cos(x: float) := sin(x + pi / 2)
+// e^x = 2^k · e^r with r in [-ln 2 / 2, ln 2 / 2]: the Taylor series of e^r to r^13, then 2^k by squaring halves
+exp(x: float) := {
+	if x > 709.78 { return 1.0 / 0.0 }
+	if x < -745.2 { return 0.0 }
+	k = round(x / 0.6931471805599453)
+	r = x - k * 0.6931471805599453
+	e = 1.0 + r * (1.0 + r * (0.5 + r * (0.16666666666666666 + r * (0.041666666666666664 + r * (0.008333333333333333 + r * (0.001388888888888889 + r * (0.0001984126984126984 + r * (2.48015873015873e-05 + r * (2.755731922398589e-06 + r * (2.755731922398589e-07 + r * (2.505210838544172e-08 + r * (2.08767569878681e-09 + r * 1.6059043836821613e-10))))))))))))
+	e * two_to(k)
+}
+// 2^k of a whole k by repeated squaring, halved into two factors so 2^-1074 … 2^1023 stay in range
+two_to(k: float) := {
+	out = 1.0
+	base = if k < 0 then 0.5 else 2.0
+	rest = abs(k)
+	while rest > 0 { if rest % 2 == 1 { out = out * base }; base = base * base; rest = floor(rest / 2) }
+	out
+}
+// ln x (x > 0) = 2 atanh((m - 1) / (m + 1)) + e ln 2 for x = m · 2^e, m in [√½, √2): the atanh series to the 31st power
+positive_ln(x: float) := {
+	if x <= 0 { return if x == 0 then -1.0 / 0.0 else 0.0 / 0.0 }
+	m = x
+	e = 0
+	while m >= 1.4142135623730951 { m = m / 2; e = e + 1 }
+	while m < 0.7071067811865476 { m = m * 2; e = e - 1 }
+	t = (m - 1) / (m + 1)
+	s = t * t
+	sum = 0.0
+	n = 31
+	while n > 0 { sum = sum * s + 1.0 / n; n = n - 2 }
+	2 * t * sum + e * 0.6931471805599453
+}
+pow(base: float, exponent: float) := {
+	if exponent == 0 { return 1.0 }
+	if base > 0 { return exp(exponent * positive_ln(base)) }
+	if base == 0 { return if exponent > 0 then 0.0 else 1.0 / 0.0 }
+	if exponent - floor(exponent) > 0 { return 0.0 / 0.0 }
+	magnitude = exp(exponent * positive_ln(-base))
+	if exponent % 2 == 0 then magnitude else -magnitude
+}
+// atan of t in [0, 1]: reduced to [0, tan π/12] by atan t = π/6 + atan((t√3 - 1) / (t + √3)), then its series to t^17
+small_atan(t: float) := {
+	shifted = t > 0.2679491924311227
+	u = if shifted then (t * 1.7320508075688772 - 1) / (t + 1.7320508075688772) else t
+	s = u * u
+	a = u * (1.0 + s * (-0.3333333333333333 + s * (0.2 + s * (-0.14285714285714285 + s * (0.1111111111111111 + s * (-0.09090909090909091 + s * (0.07692307692307693 + s * (-0.06666666666666667 + s * 0.058823529411764705))))))))
+	if shifted then a + pi / 6 else a
+}
+// the angle of the point (x, y) from the x axis in (-π, π], y first as C's atan2
+atan2(y: float, x: float) := {
+	if x == 0 and y == 0 { return 0.0 }
+	ay = abs(y)
+	ax = abs(x)
+	a = if ay <= ax then small_atan(ay / ax) else pi / 2 - small_atan(ax / ay)
+	if x < 0 { a = pi - a }
+	if y < 0 then -a else a
+}

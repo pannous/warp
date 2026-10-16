@@ -14,6 +14,8 @@ pub(crate) const HINTS_VARIABLE: &str = "WARP_HINTS";
 pub(crate) const WARNINGS_FLAG: &str = "--warnings";
 /// `--strict` (normal and severe warnings are errors, as `use strict`), `--strict=<level>` from another level
 pub(crate) const STRICT_FLAG: &str = "--strict";
+/// `--fast`: every program as if it began with `use fast_math` (lib/fast_math.warp: sin cos exp pow atan2 as wasm polynomials)
+pub(crate) const FAST_FLAG: &str = "--fast";
 /// The last line of a run that showed hints while nobody chose to see them (neither the flag nor WARP_HINTS was given)
 pub(crate) const HIDE_HINTS_TIP: &str = "hide hints with: warp --no-hints (or WARP_HINTS=0)";
 
@@ -25,7 +27,7 @@ pub(crate) fn command_argument<'a>(arg_string: &'a str, command: &str) -> Option
 	(!assigned).then_some(argument)
 }
 
-/// `--fuel <steps>`, `--strict`, `--no-ask`, `--no-hints` take effect and leave the arguments; the answers file is read
+/// `--fuel <steps>`, `--fast`, `--strict`, `--no-ask`, `--no-hints` take effect and leave the arguments; the answers file is read
 #[cfg(not(test))]
 pub(crate) fn apply_flags(args: &mut Vec<String>) {
 	// `--fuel <steps>`: execution budget of every run (default util::DEFAULT_FUEL, env WARP_FUEL)
@@ -38,6 +40,11 @@ pub(crate) fn apply_flags(args: &mut Vec<String>) {
 			}
 		}
 		args.drain(flag..flag + 2);
+	}
+
+	if let Some(flag) = args.iter().position(|arg| arg == FAST_FLAG) {
+		args.remove(flag);
+		warp::pipeline::set_fast_math(true);
 	}
 
 	// `--strict[=level]`: warnings of that level and up are errors (as `use strict` in the program)
