@@ -226,7 +226,7 @@ impl Inference {
 		let written = written_factors(program, &classes);
 		let mut temperatures: Vec<&'static Unit> = vec![];
 		for factor in &written {
-			if factor.unit.dimension == Dimension::Temperature
+			if factor.unit.dimension == Dimension::temperature()
 				&& !temperatures.iter().any(|unit| std::ptr::eq(*unit, factor.unit))
 			{
 				temperatures.push(factor.unit)
@@ -878,7 +878,7 @@ impl Inference {
 				if dimension_signature(&right, &self.variables).is_some() || is_time_type(&right, &self.variables) =>
 			{
 				let named =
-					dimension_signature(&right, &self.variables).unwrap_or_else(|| vec![(Dimension::Time, 1)].into());
+					dimension_signature(&right, &self.variables).unwrap_or_else(|| vec![(Dimension::time(), 1)].into());
 				let (_, given) = self.infer(left.as_ref().clone())?;
 				if given.is_empty() && is_time_type(&right, &self.variables) {
 					return self.unchecked_key(*left, op, *right);
@@ -1354,8 +1354,8 @@ impl Inference {
 	/// The zero of the unit a temperature shows in, 0 for any other signature
 	fn temperature_zero(&self, signature: &Signature) -> Rational {
 		match &**signature {
-			[(Dimension::Temperature, 1)] if !signature.is_list() => {
-				si_zero(display_unit(&self.display, Dimension::Temperature))
+			[(dimension, 1)] if *dimension == Dimension::temperature() && !signature.is_list() => {
+				si_zero(display_unit(&self.display, Dimension::temperature()))
 			}
 			_ => Rational::integer(0),
 		}

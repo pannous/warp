@@ -61,6 +61,7 @@ unit_definitions = data {
 	unit kHz := 1/ms
 	unit ° := π/180
 	unit dpi := px/inch
+	quantity density px/inch
 	unit ppi := dpi
 	unit dot := px
 	name millisecond := ms
@@ -86,7 +87,7 @@ unit_definitions = data {
 
 // At run time the block above stands for the tables the Quantity class reads (src/numbers/units.rs): unit_names,
 // unit_scales (each unit's SI amount) and unit_dimensions, which packs the powers of length, mass and time as
-// length + 256·mass + 65536·time, so multiplying quantities adds dimensions
+// one byte per base quantity in written order (length + 256·mass + 65536·duration …), so multiplying quantities adds them
 
 class Quantity {
 	amount: number

@@ -20,15 +20,43 @@ use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use std::fmt;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum Dimension {
-	Length,
-	Mass,
-	Era,
-	Time,
-	Temperature,
-	/// the device pixel (`px`), its own dimension (decision dimensions-units)
-	Pixel,
+/// A base quantity of lib/units.warp (`quantity length meter`, card unit-shallow): its place among them, in written
+/// order; lib/units.warp declares them, any word whose anchor is a new unit (`quantity pixels px`)
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct Dimension(u8);
+
+/// The base quantities the compiler itself reads: durations (`sleep 2s`) and temperatures (their zero)
+const DURATION_QUANTITY: &str = "duration";
+const TEMPERATURE_QUANTITY: &str = "temperature";
+
+impl Dimension {
+	/// The base quantity lib/units.warp declares by `name`
+	fn named(name: &str) -> Dimension {
+		let known = definitions::definitions().dimensions.iter().find(|(known, _)| *known == name);
+		known.map(|(_, dimension)| *dimension).unwrap_or_else(|| panic!("lib/units.warp declares no quantity {name}"))
+	}
+
+	fn time() -> Dimension {
+		Dimension::named(DURATION_QUANTITY)
+	}
+
+	fn temperature() -> Dimension {
+		Dimension::named(TEMPERATURE_QUANTITY)
+	}
+
+	fn name(self) -> &'static str {
+		let known = definitions::definitions().dimensions.iter().find(|(_, dimension)| *dimension == self);
+		known.map_or("?", |(name, _)| name)
+	}
+}
+
+/// `Length`: the quantity's name, capitalized (the Lean model's dimension names)
+impl fmt::Debug for Dimension {
+	fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let mut name = self.name().chars();
+		let first = name.next().map(|first| first.to_uppercase().collect::<String>()).unwrap_or_default();
+		write!(formatter, "{first}{}", name.as_str())
+	}
 }
 
 #[derive(Debug, PartialEq)]
@@ -655,7 +683,8 @@ fn unit_text(node: &Node) -> Option<String> {
 
 /// `meters`, `kilogram`: a long name of a quantity's unit; durations (`2 minutes`) belong to the time module
 pub fn is_long_unit_name(name: &str) -> bool {
-	!is_unit(name) && target_unit(&Node::Symbol(name.to_string())).is_some_and(|unit| unit.dimension != Dimension::Time)
+	!is_unit(name)
+		&& target_unit(&Node::Symbol(name.to_string())).is_some_and(|unit| unit.dimension != Dimension::time())
 }
 
 /// A unit to a power within a quantity: km¹, h⁻¹, m²
@@ -756,7 +785,7 @@ fn added(powers: &[(Dimension, i32)], dimension: Dimension, power: i32) -> Vec<(
 		None => added.push((dimension, power)),
 	}
 	added.retain(|(_, power)| *power != 0);
-	added.sort_by_key(|(dimension, _)| *dimension as u8);
+	added.sort_by_key(|(dimension, _)| dimension.0);
 	added
 }
 
@@ -1002,7 +1031,7 @@ pub(crate) fn milliseconds(node: &Node) -> Option<i64> {
 		return duration_milliseconds(data.downcast_ref::<crate::time::Duration>()?, "ms").ok().flatten();
 	}
 	match static_units::constant(&with_written_amount(node.clone())) {
-		Ok(Some((seconds, signature))) if signature == [(Dimension::Time, 1)] => {
+		Ok(Some((seconds, signature))) if signature == [(Dimension::time(), 1)] => {
 			whole(&static_units::exact_amount(&seconds)?.mul(&Rational::integer(MILLISECONDS_PER_SECOND)))
 		}
 		_ => None,

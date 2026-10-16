@@ -38,3 +38,12 @@ fn a_plain_value_or_assignment_takes_the_fields_unit() {
 	assert_eq!(shown("d = Display(96 dpi, 24 inch)\nd.density = 120\nd.density == 120 dpi"), "yes");
 	fails_with(&format!("{DISPLAY}\nDisplay(3 kg, 24 inch)"), "Display.density holds px/m (dpi), is given kg");
 }
+
+// base quantities are lib/units.warp's lines, not a Rust list: `quantity pixels px` declares one, `quantity density
+// px/inch` names units of known ones
+#[test]
+fn quantities_come_from_the_library() {
+	assert_eq!(shown("type(3 dpi)"), "\"density\"");
+	assert_eq!(shown("x: density = 118 px/cm\nx == 118 px/cm"), "yes");
+	fails_with(&format!("{DISPLAY}\nx: density = 3 kg"), "x is declared density");
+}
