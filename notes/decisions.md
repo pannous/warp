@@ -790,6 +790,17 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - dispatch-untyped-library-words (2026-10-16, user; card one-dispatch): an untyped program function named like a
   library word (`first(x) := x * 2`) covers every value the library word doesn't: the library's `first(list)` is
   more specific, so `first(3)` → 6 but `first([1,2])` → 1, with a hint that first of a list stays the library word.
+- class-members-free (2026-10-16, user; card one-dispatch; limits default-methods and library-words-typed):
+  width, height and every other built-in or library word are not keywords. A class field or method gets its own
+  dispatch signature, with that class as the receiver, so it never conflicts with them: `class Box{width:int,
+  height:int}`, `class P{count:int}` and a method `first()` in a class are all fine, and a local variable may shadow
+  one (`width = 5`). The "immutable" and "loud error" rules only forbid redefining a library word for the library's
+  own types (list, text, number…), never members of user classes.
+- library-words-typed (2026-10-16, user; cards library-typed, one-dispatch): harden the library. Every library word
+  gets a full type signature (`square(x: number): number`, `count(xs: list): int`), and typed library words are
+  immutable for their types until further notice. A program's untyped definition covers only other values, with a
+  hint: `count(x) := 7; count([1,2])` → 2, `square(x) := 777; square(4)` → 16, `floor(x) := x+10; floor(2.5)` → 2.
+  This extends dispatch-untyped-library-words from collection words to all library words.
 - type-words-reserved (2026-10-16, user; card one-dispatch): every type word is reserved as a function name,
   `double(x) := …` and `hex(x) := …` alike; the error offers "name it to_double".
 - field-forms (2026-10-16, user; card one-dispatch): plain fields keep only `.` and `of` (read, and set with

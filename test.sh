@@ -25,8 +25,9 @@ FEATURES="--all-features" # native + ffi: the default build plus the FFI tests
 # the tests binary ran 2x faster (summed test time 14424 → 7059 s), the build takes ~130 s longer (notes/test_speed.md).
 # Debug assertions and overflow checks stay on. Gate only: workers' targeted runs keep opt-level 0, which builds faster
 OPTIMIZED_COMPILER="profile.test.package.warp-lang.opt-level=2"
-# incremental builds at opt-level 2 can link objects whose ThinLTO-local symbols (`….llvm.<hash>`) are gone: the first
-# o2 gate failed to link the lib tests so (2026-10-16); the gate's build changes most of warp anyway
+# no incremental build at opt-level 2: reusing the previous gate's codegen units left warp's own functions undefined at
+# the lib tests' link (`precompiled_for_tasks`, `….llvm.<hash>`, twice in integrate 2026-10-16); the gate's build
+# changes most of warp anyway
 export CARGO_INCREMENTAL=0
 TEST_EXECUTABLES=$(mktemp)
 cargo --offline test $FEATURES --color=always --profile test --no-fail-fast --config "$RUNNER" --config "$OPTIMIZED_COMPILER" --no-run --message-format=json-render-diagnostics |
