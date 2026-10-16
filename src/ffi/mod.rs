@@ -46,18 +46,44 @@ const LIBC_SIGNATURES: [(&str, &[wasm_encoder::ValType], wasm_encoder::ValType);
 /// the browser host takes them from Math.
 pub fn libm_f64_functions() -> &'static [(&'static str, usize)] {
 	static FUNCTIONS: OnceLock<Vec<(&'static str, usize)>> = OnceLock::new();
-	FUNCTIONS.get_or_init(|| MATH_SOURCE.lines().filter_map(|line| foreign_line(line, LIBM)).collect())
+	FUNCTIONS.get_or_init(|| math_foreign_lines(LIBM).map(|line| (line.name, line.arity())).collect())
 }
 
 const MATH_SOURCE: &str = include_str!("../../lib/math.warp");
+/// `floor(x: number): int from warp`: a word warp computes itself, declared with its signature like a foreign one
+pub const BUILTIN_LIBRARY: &str = "warp";
 
-/// `atan2(y: float, x: float): float from 'm'`: the name and the number of parameters of a foreign line of `library`
-pub fn foreign_line<'a>(line: &'a str, library: &str) -> Option<(&'a str, usize)> {
-	let signature = line.trim().strip_suffix(&format!(" from '{library}'"))?;
+/// `atan2(y: float, x: float): float from 'm'`: a function's name, parameters and result as its foreign line writes them
+pub struct ForeignLine<'a> {
+	pub name: &'a str,
+	pub parameters: &'a str,
+	pub result: &'a str,
+}
+
+impl ForeignLine<'_> {
+	pub fn arity(&self) -> usize {
+		if self.parameters.trim().is_empty() {
+			0
+		} else {
+			self.parameters.split(',').count()
+		}
+	}
+}
+
+/// lib/math.warp's foreign lines of one library: `'m'` (libm) or warp itself (BUILTIN_LIBRARY)
+pub fn math_foreign_lines(library: &str) -> impl Iterator<Item = ForeignLine<'static>> + '_ {
+	MATH_SOURCE.lines().filter_map(move |line| foreign_line(line, library))
+}
+
+/// `atan2(y: float, x: float): float from 'm'`, `floor(x: number): int from warp`: a foreign line of `library`
+pub fn foreign_line<'a>(line: &'a str, library: &str) -> Option<ForeignLine<'a>> {
+	let line = line.trim();
+	let signature =
+		line.strip_suffix(&format!(" from '{library}'")).or_else(|| line.strip_suffix(&format!(" from {library}")))?;
 	let (name, rest) = signature.split_once('(')?;
-	let (parameters, _result) = rest.rsplit_once(')')?;
-	let arity = if parameters.trim().is_empty() { 0 } else { parameters.split(',').count() };
-	crate::warp_parser::is_plain_name(name).then_some((name, arity))
+	let (parameters, result) = rest.rsplit_once(')')?;
+	let result = result.trim().strip_prefix(':').unwrap_or_default().trim();
+	crate::warp_parser::is_plain_name(name).then_some(ForeignLine { name, parameters, result })
 }
 
 /// FFI function signature descriptor
