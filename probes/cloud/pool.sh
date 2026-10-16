@@ -36,5 +36,9 @@ expect "below MAX_CLOUD_SESSIONS: start one" new "$(claim_session job-e)"
 reset_pool; busy_sessions $MAX_CLOUD_SESSIONS
 expect "MAX_CLOUD_SESSIONS exist: wait" "" "$(claim_session job-f)"
 
+reset_pool; mark_session "$POOL/session_running" "some-branch-0123abcd-1792000000" 1
+expect "a second launch of a running run finds its session" session_running "$(pending_session_of some-branch-0123abcd)"
+expect "another run finds none" "" "$(pending_session_of other-branch-0123abcd)"
+
 rm -rf "$POOL" "$DROPPED_SESSIONS"
 [ $failures = 0 ] && echo "pool probe: all ok" || { echo "pool probe: $failures failed"; exit 1; }
