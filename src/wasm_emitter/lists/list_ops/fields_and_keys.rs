@@ -190,6 +190,10 @@ impl WasmGcEmitter {
 						self.emit_call(func, ELEMENTS_FIELD);
 						func.instruction(&I::BrOnNonNull(0));
 					}
+					// a field of an Error is the Error: `(try 10/0).name` fails with divide by zero (card error-field)
+					Self::emit_list(func, &[I::LocalGet(held), I::RefIsNull, I::I32Eqz, I::If(BlockType::Empty)]);
+					self.emit_fail_if_error(func, held);
+					func.instruction(&I::End);
 					Self::emit_list(
 						func,
 						&[I::Call(self.func_index(&format!("{NO_FIELD_PREFIX}{name}"))), I::Unreachable, I::End],
