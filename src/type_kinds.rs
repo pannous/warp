@@ -466,7 +466,11 @@ pub fn field_storage(type_name: &str) -> FieldStorage {
 	};
 	let numeric = matches!(storage, FieldStorage::I64 | FieldStorage::F64 | FieldStorage::I32 | FieldStorage::F32);
 	// `age: int?` may be ø: a number has no room for it, a Node does (card optional-int)
-	if optional && numeric { FieldStorage::Node } else { storage }
+	if optional && numeric {
+		FieldStorage::Node
+	} else {
+		storage
+	}
 }
 
 /// Convert FieldDef to ValType for function parameters
