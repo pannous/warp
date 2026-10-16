@@ -6,7 +6,6 @@ use warp::wasm_emitter::eval;
 use warp::Node;
 
 const EXCLUDED_LIST: &str = "web/playground/excluded_samples.txt";
-const SAMPLES: &str = "samples";
 /// paint directly or through the draw module (lib/draw.warp show)
 const PAINTING: [&str; 2] = ["paint(", "use draw"];
 /// A sample on the GPU (samples/webgpu.warp) is skipped, loudly, on a machine without one (CI)
@@ -23,7 +22,7 @@ fn excluded_samples() -> Vec<String> {
 }
 
 fn sample_path(name: &str) -> String {
-	format!("{SAMPLES}/{name}.warp")
+	crate::common::samples_run_folder().join(format!("{name}.warp")).to_string_lossy().into_owned()
 }
 
 /// A sample that paints needs the page's canvas, which the browser suite's worker has not: natively it writes a PNG
@@ -34,8 +33,8 @@ fn runs_here(name: &str) -> bool {
 
 fn slice_runs_without_an_error(slice: usize) {
 	let excluded = excluded_samples();
-	let mut menu: Vec<String> = fs::read_dir(SAMPLES)
-		.expect(SAMPLES)
+	let mut menu: Vec<String> = fs::read_dir(crate::common::samples_run_folder())
+		.expect("samples/")
 		.filter_map(|entry| entry.ok()?.path().file_name()?.to_str()?.strip_suffix(".warp").map(str::to_string))
 		.filter(|name| !excluded.contains(name) && runs_here(name))
 		.collect();
@@ -96,7 +95,7 @@ fn sample_outcome(name: &str) -> Result<Option<String>, ()> {
 		let (finished, outcome_of_run) = std::sync::mpsc::channel();
 		let path = sample_path(name);
 		// a sample's <name>.args, as `use os; args` gives them (a song visualizer plays its first seconds only)
-		let arguments = crate::common::arguments_beside(&std::path::Path::new(SAMPLES).join(name));
+		let arguments = crate::common::arguments_beside(&crate::common::samples_run_folder().join(name));
 		std::thread::spawn(move || {
 			warp::modules::std_adapters::set_program_arguments(arguments);
 			finished.send(outcome(&path))

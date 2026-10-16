@@ -9,10 +9,12 @@ const NEEDS_A_WINDOW: [&str; 2] = ["raylib", "sdl"];
 const MINIMUM_SAMPLES: usize = 50; // guards against an empty directory listing (the browser reads it over HTTP)
 
 fn runnable_samples() -> Vec<String> {
-	let mut names: Vec<String> = fs::read_dir("samples")
+	let folder = crate::common::samples_run_folder();
+	let mut names: Vec<String> = fs::read_dir(folder)
 		.expect("samples/")
-		.filter_map(|entry| entry.ok().map(|entry| entry.path().to_string_lossy().to_string()))
+		.filter_map(|entry| entry.ok()?.file_name().into_string().ok())
 		.filter(|name| name.ends_with(".warp") && !NEEDS_A_WINDOW.iter().any(|word| name.contains(word)))
+		.map(|name| folder.join(name).to_string_lossy().into_owned())
 		.collect();
 	names.sort();
 	names
@@ -32,6 +34,18 @@ fn slice_runs_cleanly(slice: usize) {
 	let failures: Vec<String> =
 		crate::common::sample_slice(&samples, slice).filter_map(|sample| compiler_failure(sample)).collect();
 	assert!(failures.is_empty(), "compiler errors in samples:\n{}", failures.join("\n"));
+}
+
+/// card samples-store: samples/store.warp kept its values in samples/store.stored.json of the checkout
+#[cfg(feature = "native")]
+#[test]
+fn samples_keep_their_stored_values_out_of_the_checkout() {
+	let kept_in_checkout = || fs::read("samples/store.stored.json").ok();
+	let before = kept_in_checkout();
+	let folder = crate::common::samples_run_folder();
+	let outcome = eval(&folder.join("store.warp").to_string_lossy()).serialize();
+	assert_eq!(kept_in_checkout(), before, "a sample run changed samples/store.stored.json of the checkout: {outcome}");
+	assert!(folder.join("store.stored.json").exists(), "the run keeps its values beside the copy it ran: {outcome}");
 }
 
 #[test]

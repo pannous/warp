@@ -8,6 +8,7 @@ const CLOUD_SESSION_VAR: &str = "CLAUDE_CODE_REMOTE";
 /// The browser suite stops a test after 120 s and running every sample came close and then over it: a test over all
 /// samples is SAMPLE_SLICES tests, each over one slice
 const SAMPLE_SLICES: usize = 4;
+const SAMPLES_FOLDER: &str = "samples";
 /// How a failed request reads when it never got an answer (src/extensions/utils.rs network_reason, ureq's io errors,
 /// host-files.js): worth one retry
 const NETWORK_FAILURES: [&str; 5] = ["timeout", "timed out", "dns", "connection", "network error"];
@@ -282,6 +283,51 @@ pub fn scratch_directory(name: &str) -> std::path::PathBuf {
 		std::env::var("TMPDIR").expect("the browser test page names its temp dir (wasi.js)"),
 	)
 	.join(name);
+}
+
+/// The folder the samples run from. Natively a scratch copy of the committed samples (git ls-files): what a run keeps
+/// beside its program (stored values, database tables) stays out of the checkout, and every test run starts from the
+/// samples as committed (card samples-store). The checkout's other top-level entries are linked beside the copy, so
+/// paths like ../tests/fixtures still reach them. The browser suite's file system is in memory: samples/ itself
+pub fn samples_run_folder() -> &'static std::path::Path {
+	#[cfg(feature = "native")]
+	{
+		static FOLDER: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+		FOLDER.get_or_init(copy_of_the_samples)
+	}
+	#[cfg(not(feature = "native"))]
+	std::path::Path::new(SAMPLES_FOLDER)
+}
+
+#[cfg(feature = "native")]
+fn copy_of_the_samples() -> std::path::PathBuf {
+	use std::fs;
+	let root = scratch_directory("samples_run");
+	let _ = fs::remove_dir_all(&root);
+	let listing = std::process::Command::new("git")
+		.args(["ls-files", "-z", SAMPLES_FOLDER])
+		.output()
+		.expect("git lists the samples");
+	for file in listing.stdout.split(|byte| *byte == 0).filter(|file| !file.is_empty()) {
+		let file = std::path::Path::new(std::str::from_utf8(file).expect("a sample path in UTF-8"));
+		let copy = root.join(file);
+		fs::create_dir_all(copy.parent().expect("a sample lies in a folder")).expect("the copy's folder");
+		// a link stays a link (samples/shapes.wasm → ../tests/fixtures/…), resolved against the linked siblings
+		let copied = match fs::read_link(file) {
+			Ok(target) => std::os::unix::fs::symlink(target, &copy),
+			Err(_) => fs::copy(file, &copy).map(drop),
+		};
+		copied.unwrap_or_else(|error| panic!("copying {}: {error}", file.display()));
+	}
+	let checkout = std::env::current_dir().expect("the checkout");
+	for entry in fs::read_dir(&checkout).expect("the checkout").flatten() {
+		if entry.file_name() != SAMPLES_FOLDER {
+			// the entry's own path, not its resolved one: a dangling link of the checkout stays a dangling link
+			std::os::unix::fs::symlink(entry.path(), root.join(entry.file_name()))
+				.expect("a link beside the samples' copy");
+		}
+	}
+	root.join(SAMPLES_FOLDER)
 }
 
 /// What the warp binary writes to stdout running `code` (no questions asked)
