@@ -180,6 +180,7 @@ mod test_round8_call_forms;
 mod test_rounding_builtins;
 mod test_runtime_function_equality; // card runtime-function
 mod test_runtime_kind_arithmetic;
+mod test_rust_return_arrow;
 mod test_sequence_values; // cards sequence-value, block-data-sound
 mod test_several_arguments;
 mod test_shadowed_log;
@@ -207,4 +208,4 @@ mod test_user_add_and_map;
 mod test_user_method_form;
 mod test_variadic;
 mod test_whole_float_to_int_parameter;
-mod test_words_in_phrases; // card arctan-allow // card render-as
+mod test_words_in_phrases; // card arctan-allow // card render-as // card rust-fn-arrow
