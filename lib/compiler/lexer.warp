@@ -2,10 +2,11 @@
 // (tests/parser/test_self_lexer.rs); positions count code points, as the Rust parser does
 use "lib/compiler/positions.warp"
 
-// Where the comments and texts of a source start and end, in characters: [[start, end], …]
+// Where the comments and texts of a source start and end, in code points: [[start, end], …]
 // Rust twin: warp_parser comment_and_text_spans
-def spans(text) {
-	source = code_points(text)
+def spans(text) := if one_point_each(text) then spans_in(text) else spans_in(code_points(text))
+
+def spans_in(source) {
 	found = []
 	at = 0
 	n = source.length
@@ -58,15 +59,16 @@ def starts_at(source, part, at) {
 
 // Where the numbers of a source start: [[line, column], …], both from 1
 // Rust twin: read_atoms, the number atoms the parser reads
-def numbers(source) := positions(source, "number")
+def numbers(text) := atoms(text, "number")
 
 // Where the texts of a source start: [[line, column], …], both from 1
 // Rust twin: read_atoms, the text atoms the parser reads
-def texts(source) := positions(source, "text")
+def texts(text) := atoms(text, "text")
+
+def atoms(text, kind) := if one_point_each(text) then positions(text, kind) else positions(code_points(text), kind)
 
 // Where the atoms of `kind` ("number" or "text") start
-def positions(text, kind) {
-	source = code_points(text)
+def positions(source, kind) {
 	found = []
 	line = 1
 	column = 1
