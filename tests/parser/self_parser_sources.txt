@@ -991,3 +991,5 @@ samples/sound/voices.warp
 samples/text/word_lengths.warp
 samples/servers/worker.warp
 probes/self_hosting/parser/glued_units.warp
+probes/thrice_block.warp
+probes/self_hosting/parser/count_word_definition.warp

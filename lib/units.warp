@@ -1,26 +1,26 @@
 // The standard library units module (card units-dynamic, notes/units_runtime.md): quantities whose unit is known only
 // at run time, `quantity("5 km")` read from text or `quantity(5, unit)` of a unit named by data. A quantity carries its
-// unit as data: the amount in SI base units (exact where the text is), its dimension and the unit it shows in.
+// unit as data: the amount in SI base units (exact where the text is), its kind of quantity and the unit it shows in.
 // Units written in the program stay static (src/units): checked at compile time, plain numbers at run time.
 
-// The dimensions and units warp knows (card dimensions-units Q2, decision unit-definitions, read by
-// src/numbers/units/definitions.rs): `dimension length meter` declares a dimension and its SI anchor unit, `dimension
-// speed m/s` names the dimension of an expression of units; every other unit is an amount of a known one, `unit cm :=
-// meter/100`, which fixes its dimension and factor, `unit m := 1 meter` one of the same amount, `unit °C as K := it +
-// 273.15` one in K computed from `it`, the amount in °C (decision unit-target); a unit of several units or none
-// (`unit mph := mi/h`, `unit ° := π/180`) is a word for that expression; px is a dimension of its own, a length turns
+// The quantities and units warp knows (card dimensions-units Q2, decisions unit-definitions and quantity-naming, read by
+// src/numbers/units/definitions.rs): `quantity length meter` declares a kind of quantity and its SI anchor unit,
+// `quantity speed m/s` names the quantity of an expression of units; every other unit is an amount of a known one,
+// `unit cm := meter/100`, which fixes its quantity and factor, `unit m := 1 meter` one of the same amount, `unit °C as K
+// := it + 273.15` one in K computed from `it`, the amount in °C (decision unit-target); a unit of several units or none
+// (`unit mph := mi/h`, `unit ° := π/180`) is a word for that expression; px is a quantity of its own, a length turns
 // into px by plain arithmetic with the screen's density, `3 cm * display.dpi`; a unit added here is known everywhere,
 // also in conversions
 unit_definitions = data {
-	// `SI dimension` gives the units of a dimension the SI prefixes, `prefix k := 10^3` is one of them (giga down to
-	// nano keep every unit a whole number of its dimension's finest step within 64 bits), `name hour := h` a long name
+	// `SI quantity` gives the units of a quantity the SI prefixes, `prefix k := 10^3` is one of them (giga down to
+	// nano keep every unit a whole number of its quantity's finest step within 64 bits), `name hour := h` a long name
 	// a conversion target may use, singular or plural (`2 h in minutes`)
-	SI dimension length meter
-	SI dimension mass kilogram
-	SI dimension duration second
-	dimension era AD
-	SI dimension temperature kelvin
-	dimension pixels px
+	SI quantity length meter
+	SI quantity mass kilogram
+	SI quantity duration second
+	quantity era AD
+	SI quantity temperature kelvin
+	quantity pixels px
 	prefix G := 10^9
 	prefix M := 10^6
 	prefix k := 10^3
@@ -35,10 +35,10 @@ unit_definitions = data {
 	unit kg := 1 kilogram
 	unit s := 1 second
 	unit K := 1 kelvin
-	dimension speed m/s
-	dimension area m²
-	dimension volume m³
-	dimension frequency 1/s
+	quantity speed m/s
+	quantity area m²
+	quantity volume m³
+	quantity frequency 1/s
 	unit mm := m/1000
 	unit cm := m/100
 	unit km := 1000 m
@@ -61,6 +61,7 @@ unit_definitions = data {
 	unit kHz := 1/ms
 	unit ° := π/180
 	unit dpi := px/inch
+	quantity density px/inch
 	unit ppi := dpi
 	unit dot := px
 	name millisecond := ms
@@ -85,24 +86,24 @@ unit_definitions = data {
 }
 
 // At run time the block above stands for the tables the Quantity class reads (src/numbers/units.rs): unit_names,
-// unit_scales (each unit's SI amount) and unit_dimensions, which packs the powers of length, mass and time as
-// length + 256·mass + 65536·time, so multiplying quantities adds dimensions
+// unit_scales (each unit's SI amount) and unit_dimensions, which packs the powers of every base quantity, one
+// byte each in written order (length + 256·mass + 65536·duration …), so multiplying quantities adds them
 
 class Quantity {
 	amount: number
 	dims: int
 	unit: text
 	scale: number
-	plus(o) := Quantity(amount + same_dimension(this, o, "add").amount, dims, unit, scale)
-	minus(o) := Quantity(amount - same_dimension(this, o, "subtract").amount, dims, unit, scale)
+	plus(o) := Quantity(amount + same_quantity(this, o, "add").amount, dims, unit, scale)
+	minus(o) := Quantity(amount - same_quantity(this, o, "subtract").amount, dims, unit, scale)
 	times(o: any) := if o is Quantity then Quantity(amount * o.amount, dims + o.dims, unit_product(unit, o.unit), scale * o.scale) else Quantity(amount * o, dims, unit, scale)
 	divide(o: any) := if o is Quantity then Quantity(amount / o.amount, dims - o.dims, unit + "/" + o.unit, scale / o.scale) else Quantity(amount / o, dims, unit, scale)
-	less(o) := amount < same_dimension(this, o, "compare").amount
-	more(o) := amount > same_dimension(this, o, "compare").amount
+	less(o) := amount < same_quantity(this, o, "compare").amount
+	more(o) := amount > same_quantity(this, o, "compare").amount
 	equals(o) := o is Quantity and dims == o.dims and amount == o.amount
-	// the same quantity shown in another unit of its dimension: `q.to("m")`
-	to(u) := { target = same_dimension(this, quantity(1, u), "convert"); Quantity(amount, dims, u, target.scale) }
-	// its amount counted in a unit of its dimension: `q.in("m")` is a plain number
+	// the same quantity shown in another unit of its kind: `q.to("m")`
+	to(u) := { target = same_quantity(this, quantity(1, u), "convert"); Quantity(amount, dims, u, target.scale) }
+	// its amount counted in a unit of its kind: `q.in("m")` is a plain number
 	in(u) := to(u).shown()
 	shown() := amount / scale
 	// the bounds of an amount with tolerance in the same unit, `rope.low` of `rope = 5 m ± 1 cm`; an exact amount is its own
@@ -114,7 +115,7 @@ class Quantity {
 }
 
 // o when it measures what q measures, else the loud DimensionError
-same_dimension(q: Quantity, o: any, action) := {
+same_quantity(q: Quantity, o: any, action) := {
 	if not (o is Quantity) { raise "DimensionError: cannot " + action + " " + quantity_text(q) + " and the plain number " + str(o) }
 	other: Quantity = o
 	if q.dims != other.dims { raise "DimensionError: cannot " + action + " " + quantity_text(q) + " and " + quantity_text(other) }

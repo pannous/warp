@@ -11,7 +11,9 @@ demo = shader {
 	}
 }
 
-120 times {
+# two seconds by the clock, however long a frame takes (headless, every frame is also written to a file)
+started = clock()
+while clock() - started < 2000 {
 	paint(demo)
 	sleep 20ms
 }

@@ -179,3 +179,15 @@ every_sample_runs_without_a_compiler_error 15.6 s, test_upper_and_lower 14.9 s, 
 - A plain run of a fresh file costs ~85 ms more: the printing variant compiled once more and its machine code
   written into the executable; unchanged files skip it (the executable is newer).
 
+
+## Why samples/quicksort.warp's executable grew (card samples-quicksort, 2026-10-16)
+
+No single commit: the wasm of the sample grew steadily, 21838 bytes at the tree-shaking commit 5dabc3882 (2026-10-09), 23785
+(10-11), 25472 (10-14), 26094 (10-15), 26436 (10-16), and the carried machine code with it (~45 KB → ~60 KB). Per function
+(`probes/wasm_function_sizes.py old.wasm new.wasm`, builds per commit with `probes/quicksort_size_at.sh <commit>`), 10-11 → 10-16:
+- list_text +604: `str(numbers)` prints a list of unknown items, and that printer learned each shape's written form (brackets and
+  separators of nested lists, bool text, instance text, key operators: card print-shows, bool-type, print-parse).
+- text_grapheme_offset/back/count +414: `arr[j]` on a parameter of unknown type may index a text, which counts graphemes (not bytes) now.
+- quicksort, partitioned, main +~600 together: the same untyped arithmetic and comparison going through exact_* and node_order.
+Intended correctness, each paid for by programs that need it; the carried-size limit follows it. Shrinking further is a general
+job (typed parameters shrink the generic paths: `arr: list`), not a revert.
