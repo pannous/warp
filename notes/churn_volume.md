@@ -18,9 +18,9 @@ data/ (kept logs and results) stays in the repo.
 
 ## Status
 - [x] volumes created, Spotlight off
-- [ ] user (sudo), then remount both:
-  `for v in Build Junk; do sudo touch /Volumes/$v/.fseventsd/no_log; sudo tmutil addexclusion -v /Volumes/$v; done`
-- [ ] move when the fleet is quiet, symlink the old paths: target-dir in ~/.cargo/config.toml → /Volumes/Build/target,
-  SCCACHE_DIR → /Volumes/Build/sccache, scratch/ → /Volumes/Junk/warp-scratch
+- [x] user (sudo), remounted 2026-10-16: no_log + Time Machine exclusion on both
+- [ ] move when the fleet is quiet: target-dir in ~/.cargo/config.toml → /Volumes/Build/target (no copy: the old
+  ~/.cargo/shared-target.noindex was 223 GB with 93 GB free; sccache makes the cold rebuild cheap), then delete the old
+  dir once `lsof +D` shows no cargo/rustc in it; SCCACHE_DIR → /Volumes/Build/sccache; scratch/ → /Volumes/Junk/warp-scratch
 - [ ] scripts/prune-cargo-target.sh: offer a full Build wipe when the target grows past its limit and the queue is empty
 - [ ] check that editors still get live file-change events there (no_log should only stop the on-disk log)
