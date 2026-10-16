@@ -60,7 +60,7 @@ pub(super) const RULES: [Rule; 8] = [
 	rule("trailing whitespace", trailing_whitespace),
 	rule("blank lines", blank_lines),
 	rule("spaces", spaces),
-	rule("space after a comma", comma_spacing),
+	rule("space after a comma or semicolon", separator_spacing),
 	rule("space after a key's colon", colon_spacing),
 	rule("spaces around an operator", operator_spacing),
 	rule("indentation", indentation),
@@ -155,7 +155,7 @@ fn byte_at(characters: &[(char, bool)], index: usize) -> usize {
 	characters[..index].iter().map(|(c, _)| c.len_utf8()).sum()
 }
 
-/// Runs of spaces become one; none just inside `(…)` and `[…]` or before a comma; the spaces before a trailing comment stay
+/// Runs of spaces become one; none just inside `(…)` and `[…]` or before a comma or semicolon; the spaces before a trailing comment stay
 fn spaces(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
 	rewrite_code(lines, scans, |characters, at, written, scan| {
 		let c = characters[at].0;
@@ -170,7 +170,7 @@ fn spaces(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
 		match next {
 			_ if before_comment => characters[at..at + run].iter().for_each(|(c, _)| written.push(*c)),
 			None => {}
-			Some((')' | ']' | ',', true)) => {}
+			Some((')' | ']' | ',' | ';', true)) => {}
 			_ if after_opener => {}
 			_ => written.push(' '),
 		}
@@ -178,12 +178,13 @@ fn spaces(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
 	})
 }
 
-fn comma_spacing(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
+/// `a,b` → `a, b`, `a=1;b=2` → `a=1; b=2`
+fn separator_spacing(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
 	rewrite_code(lines, scans, |characters, at, written, _| {
 		let c = characters[at].0;
 		written.push(c);
 		let next = characters.get(at + 1).map(|(c, _)| *c);
-		if c == ',' && next.is_some_and(|next| !is_space(next) && !")]},".contains(next)) {
+		if ",;".contains(c) && next.is_some_and(|next| !is_space(next) && !")]},;".contains(next)) {
 			written.push(' ');
 		}
 		1
