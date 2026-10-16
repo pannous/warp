@@ -1,4 +1,5 @@
 mod test_browser_dollar_names; // card browser-interaction
+mod test_builtin_lines;
 #[cfg(feature = "native")] // cargo builds the crate: native only
 mod test_cargo_crates; // card use-cargo
 #[cfg(feature = "native")] // wasmtime components: not in the browser build
@@ -50,4 +51,4 @@ mod test_libm_header_functions;
 mod test_libm_linking;
 mod test_page_ids; // card page-ids
 mod test_wasi;
-mod test_web_idl;
+mod test_web_idl; // card standalone-math-units step 3

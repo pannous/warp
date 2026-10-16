@@ -9,6 +9,8 @@ const FROM_WORD: &str = "from";
 
 pub fn lower(node: Node) -> Node {
 	match foreign_line_of(&node) {
+		// `floor(x: number): int from warp`: warp computes it, its signature is lib/math.warp's (library_signatures.rs)
+		Some((_, library)) if library == crate::ffi::BUILTIN_LIBRARY => Node::Empty,
 		Some((name, library)) => crate::warp_parser::parse(&format!("import ({name}) from '{library}'")),
 		None => node.map_children(lower),
 	}
@@ -39,6 +41,7 @@ fn foreign_line(items: &[Node]) -> Option<(String, String)> {
 	// `'m'`, one letter in single quotes, reads as a character
 	let library = match library.drop_meta() {
 		Node::Text(_) | Node::Char(_) => library.drop_meta().text_or_name(),
+		Node::Symbol(name) if name == crate::ffi::BUILTIN_LIBRARY => name.clone(),
 		_ => return None,
 	};
 	let head = match signature.drop_meta() {

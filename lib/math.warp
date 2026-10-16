@@ -25,6 +25,24 @@ operator ± := +-
 prefix operator √ := sqrt
 prefix operator ∛ := cbrt
 
+// The math words warp computes itself, with their signatures (decision foreign-signature, `from warp`): exact on
+// exact values where they can be, so floor gives an int where C's floor gives a float
+sqrt(x: number): number from warp
+cbrt(x: number): number from warp
+abs(x: number): number from warp
+floor(x: number): int from warp
+ceil(x: number): int from warp
+round(x: number): int from warp
+trunc(x: float): float from warp
+// the real functions, exact on exact values (src/numbers/real.rs), else libm's
+sin(x: float): float from warp
+cos(x: float): float from warp
+tan(x: float): float from warp
+exp(x: float): float from warp
+ln(x: float): float from warp
+min(a: number, b: number, more...): number from warp
+max(a: number, b: number, more...): number from warp
+
 // The C library's math functions (libm), f64 each: the host links them (src/ffi reads these lines, decision
 // foreign-signature), the browser takes them from Math. Every program calls them without `use math`
 fmin(a: float, b: float): float from 'm'
