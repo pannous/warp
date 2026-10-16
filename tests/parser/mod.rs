@@ -42,6 +42,7 @@ mod test_path_after_function; // card name-after
 mod test_path_literal; // card play-mozart
 mod test_references;
 mod test_rust_paths;
+mod test_rust_macros;
 mod test_scheme_relative_url;
 #[cfg(feature = "native")]
 mod test_self_differential; // card self-differential
