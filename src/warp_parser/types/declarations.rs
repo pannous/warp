@@ -49,6 +49,21 @@ impl WarpParser {
 		declaration
 	}
 
+	/// `class Foo` as written, its name marked when no body follows (BARE_CLASS_MARK: class_references.rs reads it as the
+	/// type Foo unless the program declares Foo so); `class Foo {}`, `sealed class Foo` and `type Foo` stay declarations
+	pub(in crate::warp_parser) fn parse_class_declaration(&mut self) -> Node {
+		let before = self.mark();
+		let declaration = self.parse_type_declaration();
+		let written = self.chars[before.pos..self.pos].iter().collect::<String>();
+		match declaration {
+			Node::Type { name, body } if !written.contains(['{', ':']) => Node::Type {
+				name: Box::new(name.with_attribute(crate::words::BARE_CLASS_MARK, Node::True)),
+				body,
+			},
+			other => other,
+		}
+	}
+
 	pub(crate) fn parse_type_declaration_body(&mut self) -> Node {
 		self.skip_whitespace();
 		let type_name = or_return_error!(self.parse_symbol());
