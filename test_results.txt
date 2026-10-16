@@ -4300,6 +4300,7 @@ PASSED:
   ✓ types::test_bool_type::test_strict_equality_compares_the_type
   ✓ types::test_cast_bugs::a_cast_to_char_can_be_stored
   ✓ types::test_cast_bugs::a_one_character_text_can_be_indexed
+  ✓ types::test_cast_bugs::a_parameter_as_list_takes_lists_and_texts
   ✓ types::test_cast_bugs::a_runtime_value_as_string
   ✓ types::test_cast_bugs::a_text_as_list_is_its_characters
   ✓ types::test_cast_bugs::nonsense_casts_are_loud
@@ -6017,4 +6018,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6012 passed, 0 failed, 6012 total tested
+13 ignored, 6013 passed, 0 failed, 6013 total tested
