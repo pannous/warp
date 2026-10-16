@@ -7,7 +7,7 @@
 
 use super::nodes::{
 	call, children_rewritten, if_then_else, in_block_as_written, is_assigned_data, is_words_call, key,
-	with_parts_rewritten, Counter,
+	with_parts_rewritten, prelude_call, Counter,
 };
 use crate::analyzer::{call_name, counting_method};
 use crate::compiler::context::Context;
@@ -68,13 +68,12 @@ pub const MAP_WORD_FUNCTIONS: [&str; 8] = [
 const TYPE_MODULES: [&str; 2] = ["list", "text"];
 /// The name `catch e` binds, in lower_try_binding's template
 const CAUGHT_BINDING_PLACEHOLDER: &str = "caught_binding";
-const COUNT_HAYSTACK: &str = "counted_haystack";
-const COUNT_NEEDLE: &str = "counted_needle";
-const COUNT_ITEM_TEMPLATE: &str = "count(filter(counted_haystack, counted_item => counted_item == counted_needle))";
-const COUNT_SUBSTRING_TEMPLATE: &str = "count(split(counted_haystack, counted_needle)) - 1";
+/// lib/prelude.warp's words of `count x in y`: how often an item or character occurs, how often a part of a text
+const COUNT_ITEM: &str = "count_item";
+const COUNT_PART: &str = "count_of";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 33] = [
+const SYNONYMS: [(&str, &[&str]); 34] = [
 	(crate::wasm_emitter::text::text_builtins::WARNING, &["warn"]),
 	// Python's tuple(xs) (card python-stdlib)
 	(LIST_WORD, &["tuple"]),
@@ -113,6 +112,8 @@ const SYNONYMS: [(&str, &[&str]); 33] = [
 	// lib/prelude.warp's map of [key value] pairs, Python's dict(pairs)
 	(DICT_WORD, &[]),
 	(FROMKEYS, &[]),
+	// lib/prelude.warp's count of a part of a text (`count "an" in t` calls it too)
+	(COUNT_PART, &[]),
 	(crate::words::UNWRAP, &[]),
 ];
 /// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/list_dispatch.rs):

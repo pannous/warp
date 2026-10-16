@@ -1046,6 +1046,12 @@ pub fn call(function: &str, arguments: Vec<Node>) -> Node {
 	Node::List([vec![symbol(function)], arguments].concat(), Bracket::Round, Separator::None)
 }
 
+/// A call of a prelude word as library_words writes it, `prelude·word(arguments…)`: a program's own word of that name
+/// never meets it
+pub fn prelude_call(word: &str, arguments: Vec<Node>) -> Node {
+	call(&crate::modules::prelude_name(word).unwrap_or_else(|| word.to_string()), arguments)
+}
+
 /// The node with `rewrite` applied to its direct children: a list's items, a key's left then right, the node under its
 /// metadata; any other node as it is. Unlike Node::map_children it leaves a class body (Node::Type) alone
 pub fn children_rewritten(node: Node, mut rewrite: impl FnMut(Node) -> Node) -> Node {

@@ -311,8 +311,12 @@ pub(crate) fn is_needed(name: &str, mentioned: &HashSet<String>) -> bool {
 /// The names the statements mention or call, as methods too (`"hé".to_utf8()`), in interpolations too, with the library
 /// words they spell
 pub(crate) fn called_names(statements: &[Node]) -> HashSet<String> {
-	let implied =
-		[crate::lowering::broadcasting::implied_words(statements), crate::gpu_maps::implied_words(statements)].concat();
+	let implied = [
+		crate::lowering::broadcasting::implied_words(statements),
+		crate::gpu_maps::implied_words(statements),
+		crate::lowering::library_words::implied_count_words(statements),
+	]
+	.concat();
 	with_library_words(mentioned_names(statements).into_iter().chain(method_names(statements)).chain(implied).collect())
 }
 
