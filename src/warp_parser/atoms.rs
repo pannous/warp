@@ -272,6 +272,7 @@ impl WarpParser {
 		}
 
 		self.read_function_name_suffix(&symbol);
+		self.skip_turbofish();
 
 		if let Some(reference) = self.function_reference_after(&symbol) {
 			return reference;
@@ -358,6 +359,20 @@ impl WarpParser {
 			let written: String = self.chars[self.pos + 1..self.pos + length - 1].iter().collect();
 			self.advance_by(length);
 			self.generic_names = Some((symbol.to_string(), type_parameter_names(&written)));
+		}
+	}
+
+	/// Rust's turbofish `sum::<i32>()`, `collect::<Vec<i32>>()`: the type arguments say nothing warp needs, the call is
+	/// `sum()` (card rust-paths)
+	fn skip_turbofish(&mut self) {
+		if self.current_char() != ':' || self.peek_char(1) != ':' || self.peek_char(2) != '<' {
+			return;
+		}
+		let start = self.mark();
+		self.advance_by(2);
+		match self.generic_parameters_length() {
+			Some(length) => self.advance_by(length),
+			None => self.rewind(start),
 		}
 	}
 
