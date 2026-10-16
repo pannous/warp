@@ -87,24 +87,17 @@ const ROUNDS_TO_HUNDRED: f64 = 99.5;
 
 /// A program that makes uncertain values gets the whole family: any arithmetic may meet one
 pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
-	let makers = [UNCERTAIN_NEW, GAUSSIAN_NEW];
-	vec![
-		any(&makers, &UNCERTAIN_FUNCTIONS),
-		any(&makers, &UNCERTAIN_ARITHMETIC),
-		any(&makers, &GAUSSIAN_ARITHMETIC),
-		any(
-			&makers,
-			&[
-				TEXT_AS_FLOAT,
-				NUMBERS_SIMILAR,
-				NEGATIVE_UNCERTAINTY,
-				INTERVAL_AND_GAUSSIAN,
-				"new_float",
-				UNCERTAIN_ORDER,
-				NODE_ORDER,
-			],
-		),
-	]
+	let helpers = [
+		TEXT_AS_FLOAT,
+		NUMBERS_SIMILAR,
+		NEGATIVE_UNCERTAINTY,
+		INTERVAL_AND_GAUSSIAN,
+		"new_float",
+		UNCERTAIN_ORDER,
+		NODE_ORDER,
+	];
+	let needed = [&UNCERTAIN_FUNCTIONS[..], &UNCERTAIN_ARITHMETIC, &GAUSSIAN_ARITHMETIC, &helpers].concat();
+	vec![any(&[UNCERTAIN_NEW, GAUSSIAN_NEW], &needed)]
 }
 
 impl WasmGcEmitter {

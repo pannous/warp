@@ -20,6 +20,11 @@ pub(in crate::wasm_emitter) fn all(when: &[&'static str], then: &[&'static str])
 	Dependency { all: true, ..any(when, then) }
 }
 
+/// The functions of `then`, needed by every program
+pub(in crate::wasm_emitter) fn always(then: &[&'static str]) -> Dependency {
+	all(&[], then)
+}
+
 impl Dependency {
 	fn holds(&self, required: &HashSet<&'static str>) -> bool {
 		let is_required = |name: &&str| required.contains(name);
@@ -33,8 +38,9 @@ impl Dependency {
 
 /// The dependencies of every module's runtime functions
 pub(in crate::wasm_emitter) fn every_dependency() -> Vec<Dependency> {
-	use super::{lists, numbers, reflection, text};
+	use super::{host, lists, numbers, reflection, text};
 	[
+		host::component_adapters::dependencies(),
 		reflection::node_api::dependencies(),
 		numbers::uncertain::dependencies(),
 		lists::list_ops::node_arithmetic_dependencies(),
