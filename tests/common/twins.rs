@@ -1,7 +1,7 @@
 //! Twins, checked (card self-differential, notes/self_hosting.md step 4): a word of a warp-written compiler part in
 //! lib/compiler/ runs over every sample and probe next to its Rust twin, and the first file where the two differ fails
-//! the test with both texts around the first difference. The gate checks every GATE_SHARE-th source, the nightly run
-//! (tests/nightly.sh) all of them (user 2026-10-16, notes/test_speed.md).
+//! the test with both texts around the first difference. The gate checks every GATE_SHARE-th source (a different
+//! share each day), the nightly run (tests/nightly.sh) all of them (user 2026-10-16, notes/test_speed.md).
 use crate::common::nightly;
 use std::path::{Path, PathBuf};
 use warp::warp_parser::parse;
@@ -19,6 +19,7 @@ const SOURCES_PER_PROGRAM: usize = 64;
 const LISTED: usize = 12;
 /// Outside the nightly run the twins check every GATE_SHARE-th source: they were 1100 s of the suite's test time
 const GATE_SHARE: usize = 4;
+const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
 
 /// Every sample and probe source, sorted; a file that is not UTF-8 text is no source
 pub fn sources() -> Vec<PathBuf> {
@@ -118,10 +119,18 @@ pub fn differential_on(paths: &[PathBuf], part: &str, word: &str, rust_twin: imp
 	report(word, &differences(&checked_share(paths), part, word, rust_twin));
 }
 
-/// All sources in the nightly run, every GATE_SHARE-th otherwise
+/// All sources in the nightly run, every GATE_SHARE-th otherwise, starting at the day's offset: the gates of four
+/// days sweep every source at the cost of one share
 fn checked_share(paths: &[PathBuf]) -> Vec<PathBuf> {
-	let share = if nightly() { 1 } else { GATE_SHARE };
-	paths.iter().step_by(share).cloned().collect()
+	if nightly() {
+		return paths.to_vec();
+	}
+	paths.iter().skip(todays_offset()).step_by(GATE_SHARE).cloned().collect()
+}
+
+fn todays_offset() -> usize {
+	let since_epoch = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+	(since_epoch.as_secs() / SECONDS_PER_DAY) as usize % GATE_SHARE
 }
 
 /// `word(view)` of lib/compiler/<part>.warp for the node view of every parsed source, against the Rust parse of the

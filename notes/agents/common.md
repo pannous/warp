@@ -43,7 +43,8 @@ instead of bending the code.
   crates/warp-runtime/Cargo.toml, and to the `version = "…"` of the warp-runtime path dependency in Cargo.toml (a
   pre-release version doesn't satisfy the plain requirement; otherwise its stale warp-runtime replaces other branches'
   build in the shared target dir). Check with `grep -n version Cargo.toml crates/warp-runtime/Cargo.toml`: a sed
-  written for an old version number silently changes nothing. The Integrator's version_tweak.sh does the same.
+  written for an old version number silently changes nothing. `scripts/version-tweak.sh <suffix>` does all of it in
+  the current worktree (`restore` puts the committed manifests back); the Integrator's version_tweak.sh does the same.
   In /Users/me/dev/angles/warp itself (the user's checkout) only small changes on main, and never the user's
   uncommitted files.
 - The user's uncommitted edits are the Integrator's to adopt (user 2026-10-12, "I told the agents ten times"): whoever
