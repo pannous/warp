@@ -68,7 +68,7 @@ impl WarpParser {
 		let type_name = or_return_error!(self.parse_symbol());
 		let type_name = self.joined_type_name(type_name);
 		// `class Box<T>{item:T}`: a field or parameter of a type parameter holds any value
-		// `type Option[T] = Some(T) | None` (samples/types.warp) is warp's own spelling; P157: warp has no generic syntax, a
+		// `type Option[T] = Some(T) | None` (samples/types/types.warp) is warp's own spelling; P157: warp has no generic syntax, a
 		// ported `class Box<T>` compiles untyped, with a note
 		let angled = self.current_char() == '<';
 		let type_parameters = match self.current_char() {
