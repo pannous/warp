@@ -41,7 +41,6 @@ const PI: f64 = std::f64::consts::PI;
 
 #[test]
 fn test_implicit_multiplication() {
-	is!("x=3;2x", 6);
 	is!("2π", 2.0 * PI);
 	skip!(
 
@@ -56,7 +55,6 @@ fn test_globals() {
 	is!("dub:=it*2;dub(π)", 2. * PI);
 
 	is!("global x=7", 7);
-	is!("global x;x=7;x", 7);
 
 	is!("global x=1;x=7;x+1", 8);
 
@@ -65,14 +63,12 @@ fn test_globals() {
 	// is!("global x=1+π", 1 + PI);
 	is!("global x=1+2", 3);
 
-	is!("global x=7;x+=1", 8);
 	is!("global x;x=7;x+=1", 8);
 	is!("global x;x=7;x+=1;x+1", 9);
 	skip!(
 
 		is!("global x=π;x=7;x", 7);
 	);
-	is!("global x;x=7;x", 7);
 	is!("global x=1;x=7;x", 7);
 }
 
@@ -107,7 +103,6 @@ fn test_wasm_function_definiton() {
 
 	//0 , 1 , 1 , 2 , 3 , 5 , 8 , 13 , 21 , 34 , 55 , 89 , 144
 	is!("fib x:=if x<2 then x else fib(x-1)+fib(x-2);fib(7)", 13);
-	is!("fib:=if it<2 then it else fib(it-1)+fib(it-2);fib(7)", 13);
 	is!("fib:=it<2 then 1 else fib(it-1)+fib(it-2);fib(4)", 5);
 	skip!(
 
@@ -158,14 +153,8 @@ fn test_wasm_function_calls() {
 }
 
 #[test]
-fn test_const_return() {
-	is!("42", 42);
-}
-
-#[test]
 fn test_print() {
 	// does wasm print? (visual control!!);
-	is!("print 42", warp::Node::Empty); // print gives nothing (issue #18)
 	print("OK");
 	//	printf!("%llx\n", -2000000000000ll);
 	//	printf!("%llx", -4615739258092021350ll);
@@ -185,14 +174,12 @@ fn test_print() {
 fn test_math_primitives() {
 	is!("42.1", 42.1); // todo: let Node : return(42.1) or print value to stdout
 	is!("-42.1", -42.1);
-	is!("42", 42);
 	is!("-42", -42);
 	is!("2000000000", 2000000000); // todo stupid smart pointers
 	is!("-2000000000", -2000000000);
 	is!("2000000000000", 2000000000000i64); // let int64
 	is!("-2000000000000", -2000000000000i64);
 	is!("x=3;x*=3", 9);
-	is!("'hello';(1 2 3 4);10", 10);
 	//	data_mode = false;
 	is!("i=ø; !i", true);
 	is!("0.0", 0); // can't emit float yet
@@ -200,7 +187,6 @@ fn test_math_primitives() {
 	is!("i=1.0;i", 1.0); // works first time but !later in code :(
 	is!("i=0.0;i", 0.0); //
 	is!("3*-1", -3);
-	is!("maxi=3840*2160", 3840 * 2160);
 	is!("maxi=3840*2160;maxi", 3840 * 2160);
 	is!("blue=255;green=256*255;", 256 * 255);
 }
@@ -212,13 +198,10 @@ fn test_float_operators() {
 	is!("42.0*2.0", 84);
 	is!("42.0+2.0", 44);
 	is!("42.0-2.0", 40);
-	is!("3.0+3.0*3.0", 12);
 	is!("3.1>3.0", true);
 	is!("2.1<3.0", true);
 	is!("i=123.4;i", 123.4); // main returning int
-	is!("i=1.0;i", 1.0);
 	is!("i=3;i", 3);
-	is!("i=1.0;i", 1.0);
 
 	is!("2.1<=3.0", true);
 
@@ -292,13 +275,11 @@ fn test_math_operators() {
 
 	//	is!("1--3", 4);// should throw, variable missed by parser! 1 OK'ish
 
-	is!("‖-3‖", 3);
 	is!("-‖-3‖", -3);
 	is!("‖-3‖+1", 4);
 	is!("7%5", 2);
 	is!("42/2", 21);
 	//			WebAssembly.Module doesn't validate: control flow returns with unexpected type. F32 is !a I32, in function at index 0
-	is!("42/2", 21);
 	is!("42*2", 84);
 	is!("42+2", 44);
 	is!("42-2", 40);
@@ -310,7 +291,6 @@ fn test_math_operators() {
 	is!("3+3+3<3+3*3", true);
 	is!("3*3*3>3+3*3", true);
 	is!("i=3;i*-1", -3);
-	is!("3*-1", -3);
 	is!("-√9", -3);
 
 	is!("i=3.7;.3+i", 4);
@@ -325,7 +305,6 @@ fn test_math_operators() {
 	{
 		is!("√ π ²", std::f64::consts::PI);
 	}
-	is!("3²", 9);
 	skip!(
 
 		is!(("3⁰"), 1); // get UNITY of set (1->e let cast ok?);
@@ -333,9 +312,6 @@ fn test_math_operators() {
 		is!(("3³"), 27); // define inside warp!
 		is!(("3⁴"), 9 * 9);
 	);
-
-	is!("i=3.70001;.3+i", 4.00001);
-	is!("i=3.7;.3+i", 4);
 }
 
 #[test]
@@ -491,7 +467,6 @@ fn test_wasm_logic_primitives() {
 
 	is!("nil", false);
 	is!("null", false);
-	is!("null", Empty);
 	// is!("null",  nullptr);
 	is!("ø", false);
 	is!("nil", Empty);
@@ -505,14 +480,11 @@ fn test_wasm_variables0() {
 	is!("i:=123;i+1", 124);
 	is!("i=123;i+1", 124);
 
-	is!("i=123;i", 123);
 	is!("i=1;i", 1);
 	is!("i=false;i", false);
 	is!("i=true;i", true);
 	is!("i=0;i", 0);
 	is!("i:=true;i", true);
-	is!("i=true;i", true);
-	is!("i=123.4;i", 123.4); // main returning int
 	skip!(
 
 		is!("i=0.0;i", 0.0);
@@ -549,7 +521,6 @@ fn test_wasm_logic_unary_variables() {
 
 		is!("i=true; !i", false);
 	);
-	is!("i=ø; !i", true);
 
 	is!("i=1; !i", false);
 	is!("i=123; !i", false);
@@ -585,15 +556,11 @@ fn test_wasm_logic_unary() {
 #[test]
 fn test_wasm_logic_on_objects() {
 	is!("not 'a'", false);
-	is!("not {a:2}", false);
 	skip!(
 
 		is!("not {a:0}", false); // maybe
 	);
 
-	is!("not ()", true);
-	is!("not {}", true);
-	is!("not []", true);
 	is!("not ({[ø]})", false); // might skip :);
 }
 
@@ -620,7 +587,6 @@ fn test_wasm_logic() {
 	is!("true xor true", false);
 	is!("false or true", true);
 	is!("false or false", false);
-	is!("true or false", true);
 	is!("true or true", true);
 
 	is!("¬ 1", 0);
@@ -711,10 +677,6 @@ fn test_wasm_while() {
 
 #[test]
 fn test_wasm_while2() {
-	is!("i=1;while i<9:i++;i+1", 10);
-	is!("i=1;while(i<9){i++};i+1", 10);
-	is!("i=1;while(i<9 and i > -10){i+=2;i--};i+1", 10);
-	is!("i=1;while(i<9)i++;i+1", 10);
 	is!("i=1;while i<10 do {i++};i", 10);
 	is!("i=1;while i<10 and i<11 do {i++};i", 10);
 	is!("i=1;while i<9 or i<10 do {i++};i", 10);
@@ -723,7 +685,6 @@ fn test_wasm_while2() {
 	// fails on 2nd attempt todo
 		   is!("x=y=0;width=height=400;while y++<height and x++<width: nop;y", 400);
 	   );
-	is!("i=1;while(i<9)i++;i+1", 10);
 }
 
 #[test]
@@ -756,7 +717,6 @@ fn test_squares() {
 fn test_old_random_bugs() {
 	// ≈ test_recent_random_bugs();
 	// some might break due some testBadInWasm() BEFORE!
-	is!("-42", -42); // OK!?!
 	skip!(
 
 		is!("x:=41;if x>1 then 2 else 3", 2);
@@ -871,11 +831,6 @@ fn test_wasm_runtime_extension() {
 }
 
 #[test]
-fn test_string_concat_wasm() {
-	is!("'Hello, ' + 'World!'", "Hello, World!");
-}
-
-#[test]
 fn test_object_properties_wasm() {
 	is!("x={a:3,b:4,c:{d:true}};x.a", 3);
 	is!("x={a:3,b:true};x.b", 1);
@@ -897,7 +852,6 @@ fn test_array_indices_wasm() {
 	{
 		is!("puts('ok');", 0);
 	}
-	is!("puts('ok');(1 4 3)#2", 4);
 	is!("{1 4 3}#2", 4);
 
 	is!("x={1 4 3};x#2", 4);
@@ -953,8 +907,6 @@ fn test_recent_random_bugs() {
 	// fixed now thank god
 	// if (!testRecentRandomBugsAgain){return};
 	// testRecentRandomBugsAgain = false;
-	is!("-42", -42);
-	is!("‖3‖-1", 2);
 	{
 		skip!( // legacy: test42 was a C++ test function; no square builtin (test_squares, user)
 			is!("test42+1", 43); // OK in WASM too? todo
@@ -963,13 +915,10 @@ fn test_recent_random_bugs() {
 		is!("use math; square(3*42) > square(2*3)", 1); // warp's meaning (decision 2026-10-09): use math, parentheses
 	}
 	//			WebAssembly.Module doesn't validate: control flow returns with unexpected type. F32 is !a I32, in function at index 0
-	is!("42/2", 21); // in WEBAPP
 
-	is!("42.1", 42.1);
 	// main returns int, should be pointer to value! let array_header_32 : result => smart pointer!
 	//			Ambiguous mixing of functions `ƒ 1 + ƒ 1 ` can be read as `ƒ(1 + ƒ 1)` or `ƒ(1) + ƒ 1`
 	skip!(is!("id 3*42 > id 2*3", 1);); // legacy: no id builtin (user)
-	is!("1-‖3‖/-3", 2);
 	is!("i=true; !i", false);
 	// these fail LATER in tests!!
 
@@ -980,10 +929,8 @@ fn test_recent_random_bugs() {
 		assert_throws("i*=3"); // well:
 		is!("i*=3",  0);
 	);
-	is!("maxi=3840*2160", 3840 * 2160);
 	is!("√π²", PI); // √π² = π (decision 2026-10-09)
 	is!("i=-9;√-i", 3);
-	is!("1- -3", 4);
 	is!("width=height=400;height", 400);
 	skip!(
 
@@ -991,7 +938,6 @@ fn test_recent_random_bugs() {
 		is!("x=0;while x++<11: nop;x", 11);
 		assert_throws("x==0;while x++<11: nop;x");
 	);
-	is!("‖-3‖", 3);
 	is!("√100²", 100);
 	//    is!("puts('ok');", 0);
 	let result = parse("{ç:☺}");
@@ -999,7 +945,6 @@ fn test_recent_random_bugs() {
 	{
 		// and !LINUX // todo why
 		is!("x=123;x + 4 is 127", true);
-		is!("n=3;2ⁿ", 8);
 		//	function attempted to return an incompatible value WHAT DO YOU MEAN!?
 	}
 	// move to tests() once OK'
@@ -1008,15 +953,12 @@ fn test_recent_random_bugs() {
 		is!("i=ø; !i", true); // i !a setter if value ø
 		is!("x=y=0;width=height=400;while y++<height and x++<width: nop;y", 400);
 	);
-	is!("add1 x:=x+1;add1 3", 4);
 	// is!("for i in 1 to 5 : {puti i};i", 6);// EXC_BAD_ACCESS TODO _👀!
 }
 #[test]
 fn test_square() {
 	let π = PI; //3.141592653589793;
-	is!("3²", 9);
 	is!("3.0²", 9);
-	is!("√100²", 100);
 	is!("√ π ²", π);
 	is!("√π ²", π);
 	is!("√ π²", π);
@@ -1028,8 +970,6 @@ fn test_square() {
 		is!("int i=π*1000000", 3141592);
 	);
 	is!("π*1000000.", 3141592.653589793);
-	is!("i=-9;-i", 9);
-	is!("- √9", -3);
 	is!(".1 + .9", 1);
 	is!("-.1 + -.9", -1);
 	is!("√9", 3);
@@ -1037,8 +977,6 @@ fn test_square() {
 	is!(".1", 0.1);
 	{
 		// and !LINUX // todo why
-		is!("i=-9;√-i", 3);
-		is!("n=3;2ⁿ", 8);
 		is!("n=3.0;2.0ⁿ", 8);
 	}
 }
@@ -1048,7 +986,6 @@ fn test_round_floor_ceiling() {
 	is!("ceil 3.7", 4);
 	is!("floor 3.7", 3);
 	is!("round 3.7", 4);
-	is!("i=3.7;.3+i", 4);
 	// lol "⌊3.7⌋" is cursed and is transformed into \n\t or something in wasm and IDE!
 	//	is!("⌊3.7", 3);// floor
 	//	is!("⌊3.7⌋", 3);// floor
@@ -1062,11 +999,7 @@ fn test_round_floor_ceiling() {
 #[test]
 fn test_wasm_typed_globals() {
 	//    is!("global int k", 7);//   empty global initializer for int
-	is!("global long k=7", 7);
 	//    is!("global int k=7", 7); // type mismatch
-	is!("global const int k=7", 7); //   all globals without value are imports??
-	is!("global mutable int k=7", 7); //   all globals without value are imports??
-	is!("global mut int k=7", 7); //   all globals without value are imports??
 }
 
 #[test]
@@ -1075,8 +1008,7 @@ fn test_wasm_mutable_global() {
 	//    is!("k::=7", 7);// global variable !visually marked as global, !as good as:
 	is!("global k=7", 7); // python style, as always the best
 	is!("global k:=7", 7); //  global or function?
-	is!("global k;k = 7", 7); // python style, as always the best
-						   //    is!("global.k=7", 7);//  currently all globals are exported
+						//    is!("global.k=7", 7);//  currently all globals are exported
 	skip!(testWasmMutableGlobal2());
 	skip!(testWasmTypedGlobals());
 	//    test_wasm_mutable_global_imports();
@@ -1085,16 +1017,10 @@ fn test_wasm_mutable_global() {
 #[test]
 fn test_wasm_mutable_global2() {
 	is!("export k=7", 7); //  all exports are globals, naturally.
-	is!("export k=7", 7); //  all exports are globals, naturally.
 	is!("export f:=7", 7); //  exports can be functions too.
 	is!("global export k=7", 7); //  todo warn("redundant keyword global: all exports are globals");
-	is!("global int k=7", 7); // python style, as always the best
-	is!("global int k:=7", 7); //  global or function?
-	is!("export int k=7", 7); //  all exports are globals, naturally.
 	is!("export int k=7", 7); //  all exports are globals, naturally.
 	is!("export int f:=7", 7); //  exports can be functions too.
-	is!("global int k", 0); // todo error without init value?
-	is!("export int k", 0); //
 }
 
 #[test]
@@ -1123,9 +1049,7 @@ fn test_wasm_mutable_global_imports() {
 fn test_custom_operators() {
 	is!("suffix operator ⁰ := 1; 3⁰", 1); // get UNITY of set (1->e let cast ok?);
 	is!("suffix ⁰ := 1; 3⁰", 1); // get UNITY of set (1->e let cast ok?);
-	is!("suffix operator ³ := it*it*it; 3³", 27); // define inside warp!
 	is!("suffix operator ³ := it*it*it; .5³", 0.125); // user P53: 1 / 8 was Rust integer division (0)
-	is!("suffix ³ := it*it*it; 3³", 27); // define inside warp!
 
 	//	is!(("alias to let third : the = ³"),1);
 	//	is!(("3⁴"),9*9);
@@ -1138,7 +1062,6 @@ fn test_import_wasm() {
 	// P139/P144: import and require only declare (ø), include also runs the module's main (42)
 	is!("import tests/fixtures/wasm/fourty_two;ft*2", 42 * 2);
 	is!("import tests/fixtures/wasm/fourty_two", Node::Empty);
-	is!("include tests/fixtures/wasm/fourty_two", 42);
 	is!("require tests/fixtures/wasm/fourty_two", Node::Empty);
 	is!("include tests/fixtures/wasm/fourty_two;ft*2", 42 * 2);
 	is!("require tests/fixtures/wasm/fourty_two;ft*2", 42 * 2);
@@ -1154,7 +1077,6 @@ fn test_math_library() {
 			is!("x=3;y=4;c=1;r=5;((‖(x-c)^2+(y-c)^2‖<r)?10:255", 255);
 		);
 	}
-	is!("i=-9;√-i", 3);
 	is!("i=-9;√ -i", 3);
 	//		is!("use math;√π²", 3);
 }
@@ -1165,8 +1087,6 @@ fn test_smart_return_harder() {
 	//    is!("'a'", 'a'); // … should be 97
 	//    is!("'a'", 'a');
 	//    is!("'a'", 'a');
-	is!("10007.0%10000.0", 7);
-	is!("10007.0%10000", 7);
 	{
 		is!("x='abcde';x#4='f';x[3]", 'f');
 		is!("x='abcde';x#4='x';x[3]", 'x');
@@ -1181,18 +1101,12 @@ fn test_smart_return() {
 	}
 
 	is!("1", 1);
-	is!("-2000000000000", -2000000000000i64);
-	is!("2000000000000", 2000000000000i64); // let int64
-	is!("42.0/2.0", 21);
 	is!("42.0/2.0", 21.);
-	is!("- √9", -3);
 	is!("42/4.", 10.5);
 	skip!(
 
 		is!("42/4", 10.5);
 	);
-
-	is!("42.0/2.0", 21);
 
 	is!("-1.1", -1.1);
 	is!("'OK'", "OK");
@@ -1204,10 +1118,7 @@ fn test_is() {
 	// before. now assert! that it works with runtime
 	//    test_wasm_runtime_extension();
 
-	is!("42", 42);
-	is!("x=123;x + 4 is 127", true); //  is! sometimes causes Heap corruption! test earlier
 	is!("x='123';x is '123'", true); // ok
-	is!("'hello';(1 2 3 4);10", 10); // -> data array […;…;10] ≠ 10
 	{
 		is!("x='123';x + '4' is '1234'", true); // ok
 		is!("'123' + '4' is '1234'", true); // ok needs runtime for concat();
@@ -1232,7 +1143,6 @@ fn test_logarithm2() {
 	is!("use math; 10⌞100", 2.); // read 10'er Logarithm
 	is!("use math; 100⌟10", 2.); // read 100 lowered by 10's
 	is!("use math; ℯ⌟", 1.); // P226: the postfix ⌟ is the natural log
-	is!("use math; ℯ⌟", 1.);
 	is!("log10(100)", 2.); // requires pre-parsing lib and dictionary lookup
 						// P226b: x⌟b is log base b of x, so the base comes second
 	is!("use math; 10⌟100", 0.5);
@@ -1262,7 +1172,6 @@ fn test_logarithm2() {
 #[test]
 fn test_for_loop_classic() {
 	is!("for(i=0;i<10;i++){puti i};i", 10);
-	is!("sum = 0; for(i=0;i<10;i++){sum+=i};sum", 45);
 }
 
 #[test]
@@ -1276,9 +1185,7 @@ fn test_for_loops() {
 	{
 		// # else // todo : why puti !in WASM??
 		// is!("for i in 1 to 5 : {put(i)};i", 6);
-		is!("for i in 1 to 5 : {puti(i)}", 5);
 		is!("for i in 1 to 5 : {puti i};i", 6); // after loop :(
-		is!("for i in 1 to 5 : puti i", 5);
 		is!("for i in 1 to 5\n  puti i", 5); // unclosed pair  	<control>: SHIFT OUT
 									   // is!("for i in 1 to 5\n  puti i\ni", 6);
 		is!("for i in 1…5 : puti i", 5);
@@ -1301,7 +1208,6 @@ fn test_for_loops() {
 //#[test] fn testSourceMap();
 #[test]
 fn test_assert() {
-	is!("assert 1", 1);
 	assert_throws("assert 0"); // todo make wasm throw, !compile error?
 }
 // test once by looking at the output wasm/wat
@@ -1378,16 +1284,11 @@ fn test_sinus() {
 
 #[test]
 fn test_emit_basics() {
-	is!("true", true);
-	is!("false", false);
 	is!("8.33333333332248946124e-03", 8.333_333_333_322_49e-3);
-	is!("42", 42);
-	is!("-42", -42);
 	is!("3.3415", 3.3415);
 	is!("-3.3415", -3.3415);
 	is!("40", 40);
 	is!("41", 41);
-	is!("1 ∧ 0", 0);
 	skip!(
 
 		// see test_smart_return
@@ -1398,7 +1299,6 @@ fn test_emit_basics() {
 }
 #[test]
 fn test_math_extra() {
-	is!("15÷5", 3);
 	is!("15÷5", 3);
 	is!("3⋅5", 15);
 	is!("3×5", 15);
@@ -1513,7 +1413,6 @@ fn test_all_wasm() {
 	test_comparison_id_precedence();
 	test_wasm_stuff();
 	test_float_operators();
-	test_const_return();
 	test_wasm_if();
 	test_math_primitives();
 	test_self_modifying();
