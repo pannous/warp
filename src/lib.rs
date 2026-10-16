@@ -77,7 +77,7 @@ pub use formats::wisp_parser::{emit_wisp, parse_wisp, WispEmitter, WispParser};
 pub use warp_parser::{parse, parse_data, parse_file, parse_xml, WarpParser};
 // Type system
 pub use type_kinds::{
-	extract_instance_values, AstKind, FieldDef, Kind, NodeKind, RawFieldValue, TypeDef, TypeRegistry,
+	extract_instance_values, FieldDef, Kind, NodeKind, RawFieldValue, TypeDef, TypeRegistry,
 	USER_TYPE_TAG_START,
 };
 // Metadata
