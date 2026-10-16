@@ -2381,6 +2381,7 @@ PASSED:
   ✓ modules::test_include::including_a_file_twice_includes_it_once_and_cycles_terminate
   ✓ modules::test_include::require_and_import_are_use
   ✓ modules::test_include::use_imports_only_the_declarations
+  ✓ modules::test_json_parse_form::bare_parse_after_use_json_is_json_parse
   ✓ modules::test_json_parse_form::json_parse_reads_json
   ✓ modules::test_json_parse_form::parse_json_is_an_alias_of_json_parse
   ✓ modules::test_json5::json_of_a_text_parses_it
@@ -2703,6 +2704,7 @@ PASSED:
   ✓ node::test_text_operand_quotes::a_text_operand_keeps_its_quotes
   ✓ node::test_trailing_comment::comment_ending_a_line_belongs_to_its_item
   ✓ normalize::tests::test_hint_mode
+  ✓ normalize::tests::test_hint_position
   ✓ normalize::tests::test_style_swap
   ✓ numbers::test_angle::test_call
   ✓ numbers::test_angle::test_function_params
@@ -3044,6 +3046,8 @@ PASSED:
   ✓ numbers::test_shift_operators::test_shift_precedence_and_variables
   ✓ numbers::test_shift_operators::test_shift_right_floors_by_a_power_of_two
   ✓ numbers::test_shift_operators::test_shifts_of_big_exact_ints
+  ✓ numbers::test_sqrt_quantity_unit::a_square_root_keeps_the_unit
+  ✓ numbers::test_sqrt_quantity_unit::an_irrational_root_shows_as_a_float_with_the_unit
   ✓ numbers::test_static_units_compiled::test_a_compiled_quantity_carries_its_unit
   ✓ numbers::test_static_units_compiled::test_a_whole_list_of_quantities_shows_its_units
   ✓ numbers::test_static_units_compiled::test_eval_reads_the_same_section
@@ -3533,6 +3537,7 @@ PASSED:
   ✓ parser::test_meta::test_meta_field
   ✓ parser::test_meta::test_parent
   ✓ parser::test_meta::test_parent_context
+  ✓ parser::test_named_argument_lambda::a_named_argument_holds_the_lambda
   ✓ parser::test_newline_precedence::a_method_call_starting_the_next_line_continues_the_expression
   ✓ parser::test_newline_precedence::test_fibonacci_auto_param_newline
   ✓ parser::test_newline_precedence::test_fibonacci_auto_typed_newline
@@ -4620,6 +4625,10 @@ PASSED:
   ✓ types::test_duration_comparison::test_bounds_that_hold_on_every_date
   ✓ types::test_duration_comparison::test_durations_order
   ✓ types::test_duration_comparison::test_durations_order_at_run_time
+  ✓ types::test_duration_units::a_time_unit_adds_to_a_duration
+  ✓ types::test_duration_units::a_time_unit_alone_stays_a_quantity
+  ✓ types::test_duration_units::a_time_unit_compares_with_a_duration
+  ✓ types::test_duration_units::a_time_unit_moves_a_time
   ✓ types::test_element_field_writes::a_character_stored_into_a_list_of_unknown_type_stays_a_character
   ✓ types::test_element_field_writes::a_field_of_a_list_element_changes
   ✓ types::test_element_field_writes::a_list_field_of_an_element_checks_its_items
@@ -6142,7 +6151,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ normalize::tests::test_hint_position
 
 SUMMARY:
-13 ignored, 6139 passed, 1 failed, 6140 total tested
+13 ignored, 6148 passed, 0 failed, 6148 total tested

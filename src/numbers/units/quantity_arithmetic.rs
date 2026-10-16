@@ -82,8 +82,6 @@ pub(crate) fn is_global_keyword(node: &Node) -> bool {
 /// `150 cm in m` is `3/2 m`, `6 m² in cm²` is `60000 cm²`, `36 km/h in m/s` is `10 m/s`; other dimensions: DimensionError
 /// A duration of the time module in a time unit: `2 hours in minutes` is `120 min` (P36). None when the word names no
 /// time unit; an error for months (no fixed length) or a part of a millisecond
-/// A duration of the time module in a time unit: `2 hours in minutes` is `120 min` (P36). None when the word names no
-/// time unit; an error for months (no fixed length) or a part of a millisecond
 pub fn duration_in(duration: &crate::time::Duration, unit_word: &str) -> Option<Node> {
 	let target = target_unit(&Node::Symbol(unit_word.to_string()))?;
 	if target.dimension != Dimension::duration() {
@@ -99,6 +97,15 @@ pub fn duration_in(duration: &crate::time::Duration, unit_word: &str) -> Option<
 			.mul(&Rational::new(BigInt::from(millisecond.factor), BigInt::from(target.factor))),
 		factors: vec![Factor { unit: target, power: 1 }],
 	}))
+}
+
+/// One of a time unit as the time module's exact duration (decision duration-units): `h` is 1 hour; none for a unit of
+/// another quantity or one that is no whole number of nanoseconds
+pub(super) fn unit_duration(unit: &Unit) -> Option<crate::time::Duration> {
+	let millisecond = unit_named("ms").expect("a unit");
+	let steps = unit.factor as i128 * NANOS_PER_MILLISECOND;
+	let exact = unit.dimension == Dimension::duration() && steps % millisecond.factor as i128 == 0;
+	exact.then(|| crate::time::Duration { nanos: steps / millisecond.factor as i128, ..Default::default() })
 }
 
 /// A duration of the time module in whole milliseconds; an error for months (no fixed length in `target`) or a part of
