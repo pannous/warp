@@ -147,7 +147,7 @@ instead of bending the code.
   (notes/agents/common.md "Wiki" for pushing). Say "docs: <page>" or "docs: none (internal)" in a `todo note` before `todo ready`.
   warp-docs sweeps for what slipped through.
   A result the user can see or use gets `--try "how to try it"`: one concrete line with the exact command or URL to paste (user 2026-10-10: "give me
-  the command because I'm lazy"), e.g. `--try "/Users/me/dev/bin/warp samples/sound.warp"`: always that full path
+  the command because I'm lazy"), e.g. `--try "/Users/me/dev/bin/warp samples/sound/sound_features.warp"`: always that full path
   (main built with the optimized quick-release profile, rebuilt in the background a few minutes after each pushed
   batch by the Integrator's refresh_main_binary.sh; plain `warp` is the older brew release). Agents who want main's
   debug build (assertions, backtraces) run /Users/me/dev/bin/warp-debug, installed right at the push. Time
@@ -192,7 +192,7 @@ instead of bending the code.
   topic's column unless you name one, and `todo move <topic> <column> --all` moves the topic's waiting cards along.
   Roadmaps holds the topics nobody prioritized yet. A misfiled card: `todo sub <right topic> <card>`.
 - Crash cards (user, 2026-10-12: "on a crash a new agent is spawned. I will paste him the trace log"): a panic of a
-  warp built from a checkout files a card in Now (src/diagnostics/crash_card.rs) naming its fingerprint and the branch it was
+  warp built from a checkout files a card in Now (src/errors/crash_card.rs) naming its fingerprint and the branch it was
   built from. Cron (urgent-card-watch) folds a repeated crash into its open card as a note, gives the crash of a
   worktree build to the session on that branch (the Agent of the card keyed like the branch, else tmux warp-<branch>),
   and spawns a new worker warp-<card key> for a crash of a main build; the user pastes the trace there. Crash fixes
