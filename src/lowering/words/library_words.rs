@@ -409,6 +409,7 @@ pub fn lower(node: Node) -> Node {
 	let instances = crate::traits::InstanceTypes::of(&node);
 	let call_results = call_results(&node, &context);
 	let times = crate::time::time_variables(&node);
+	let entry_names = entry_names(&node);
 	Lowering {
 		context,
 		shadowed: RefCell::new(shadowed),
@@ -419,6 +420,7 @@ pub fn lower(node: Node) -> Node {
 		defining: RefCell::new(vec![]),
 		call_results,
 		times,
+		entry_names,
 		temporaries: Counter::default(),
 	}
 	.expand(node)
@@ -560,6 +562,8 @@ struct Lowering {
 	call_results: HashSet<String>,
 	/// Variables holding a time (time::time_variables): `(x + 1 hour).hour` reads the field
 	times: HashSet<String>,
+	/// The keys the program's map literals give entries: only a counting word named so may read an entry (`{size: 9}`)
+	entry_names: HashSet<String>,
 	temporaries: Counter,
 }
 
@@ -943,19 +947,31 @@ impl Lowering {
 		if !is_called && self.instances.is_instance_field(receiver, name) {
 			return Some(field_lookup(receiver, name, word_node));
 		}
+		// `number of bytes in t` reads `bytes.number`: the unit, no variable
+		let is_unit =
+			receiver.symbol_name().filter(|unit| !self.shadows(unit)).and_then(crate::analyzer::text_unit).is_some();
+		let may_read_entry = !is_called && !has_arguments && !is_unit;
+		// `m.size` of a map read at run time with an entry size reads the entry, else counts (card map-read); only where
+		// the program writes such an entry, as the check makes the count no longer known to be an Int (`xs.length - 1`)
+		let is_entry_name = self.entry_names.contains(name);
+		if may_read_entry
+			&& is_entry_name
+			&& crate::analyzer::is_counting_property(name)
+			&& self.may_hold_object(receiver)
+		{
+			// `x.number` stays for the emitter's counter (counting_getter): `number(x)` would cast x
+			let count = key(receiver.clone(), Op::Dot, method.clone());
+			return Some(map_field_or(receiver, name, word_node, count));
+		}
 		if let Some(word) = self
 			.library_word_for(name, arguments.len() + 1)
 			.filter(|_| is_called || counting_method(name, &self.context).is_none())
 		{
 			let word_call = self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false);
-			// `m.first` of a parameter or loop element given `{first: 9}` (card map-field). Not a map's own word
-			// (`m.keys`), nor a word whose list or text result the code after it types (`it.chars.map(…)`): a field
-			// read there would hide that type
+			// `m.first` of a parameter or loop element given `{first: 9}` (card map-field)
 			let is_element = matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _));
-			let keeps_word = crate::members::MAP_MEMBERS.contains(&name.as_str())
-				|| result_kind(word).or_else(|| result_kind(name)).is_some();
-			if !is_called && !has_arguments && !keeps_word && (is_element || self.may_hold_object(receiver)) {
-				return Some(self.map_field_or(receiver, name, word_node, word_call));
+			if may_read_entry && reads_entry_first(name, word) && (is_element || self.may_hold_object(receiver)) {
+				return Some(map_field_or(receiver, name, word_node, word_call));
 			}
 			return Some(word_call);
 		}
@@ -1009,7 +1025,7 @@ impl Lowering {
 		if (literal.is_some() || may_be_object) && !is_known && !has_arguments {
 			// a parameter's `x.floor` (`xs.map(.floor)`, card dot-lambda): its field if it is an object, else the word
 			return Some(match number_word().filter(|_| literal.is_none()) {
-				Some(operation) => self.map_field_or(receiver, name, word_node, operation),
+				Some(operation) => map_field_or(receiver, name, word_node, operation),
 				None => field_lookup(receiver, name, word_node),
 			});
 		}
@@ -1065,19 +1081,6 @@ impl Lowering {
 			|| self.is_parameter(receiver)
 			|| is_call_result
 			|| self.instances.is_declared_field(name)
-	}
-
-	/// `x.word` of an x that may be a map holding the key `word`: `if x is a map holding the key then x["word"] else
-	/// word(x)`, so a map's own words (`m.count`) still answer on maps without such a key. A one-entry map in a list
-	/// (`[{first: 2}]`) is held as a key, which has that key too
-	fn map_field_or(&self, receiver: &Node, name: &str, word_node: &Node, word_call: Node) -> Node {
-		if !is_pure_read(receiver) {
-			return word_call;
-		}
-		let is_type = |type_word: &str| parens(vec![symbol(crate::words::IS_TYPE), receiver.clone(), text(type_word)]);
-		let is_map = key(is_type(crate::words::MAP_WORD), Op::Or, is_type(&crate::Kind::Key.to_string()));
-		let has_key = self.call(COLLECTION_CONTAINS, word_node, vec![receiver.clone(), text(name)], false);
-		if_then_else(key(parens(vec![is_map]), Op::And, has_key), field_lookup(receiver, name, word_node), word_call)
 	}
 
 	fn may_hold_object(&self, receiver: &Node) -> bool {
