@@ -18,3 +18,11 @@ fn an_instance_of_unknown_class_reads_its_own_member_at_run_time() {
 	is!(&format!("{PERSON}; f(p) := p.first(); f(P(3))"), 3);
 	is!(&format!("{PERSON}; f(p) := p.first; f([4, 5])"), 4);
 }
+
+// decision setter-calls: a property's getter and setter by uniform calls too, `width(canvas)` and `width(canvas, 12)`
+#[test]
+fn a_property_is_called_in_function_form() {
+	is!("canvas.width = 30; width(canvas)", 30);
+	is!("width(canvas, 12); canvas.width", 12);
+	is!("global kept = 1\nbox.size := kept\nbox.size(n) := kept = n\nsize(box, 5)\nsize box", 5);
+}

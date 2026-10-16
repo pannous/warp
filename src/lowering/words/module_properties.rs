@@ -12,7 +12,7 @@
 
 use super::nodes::{for_in_variable, function_head, key, parameter_name};
 use crate::errors::diagnostic::Diagnostic;
-use crate::node::{Bracket, Node};
+use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
 
@@ -233,6 +233,20 @@ impl Rewrite {
 			if let Node::List(items, Bracket::Round, _) = member.drop_meta() {
 				if let Some(name) = self.property_of(object, &items[0]).filter(|_| items.len() == 2) {
 					return self.written(&name, Op::Assign, items[1].clone(), &node);
+				}
+			}
+		}
+		// `width(canvas)`, `width canvas`, `width(canvas, 300)`: the uniform calls of the getter and the setter
+		// (decision setter-calls, notes/dispatch.md)
+		if let Node::List(items, Bracket::Round, Separator::None) | Node::List(items, Bracket::None, Separator::Space) =
+			node.drop_meta()
+		{
+			if let [word, object, value @ ..] = items.as_slice() {
+				if let Some(name) = self.property_of(object, word).filter(|_| value.len() <= 1) {
+					match value {
+						[value] => return self.written(&name, Op::Assign, value.clone(), &node),
+						_ => return self.read(&name).unwrap_or(node),
+					}
 				}
 			}
 		}
