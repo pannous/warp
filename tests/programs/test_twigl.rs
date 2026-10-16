@@ -24,7 +24,9 @@ fn a_twigl_shader_paints_with_glsl_rows_counted_from_the_bottom() {
 #[test]
 fn the_tunnel_demo_compiles_to_wgsl() {
 	let demo = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/twigl.warp")).unwrap();
-	let code = demo.lines().find(|line| line.starts_with("tunnel = twigl(")).expect("the demo's twigl line");
+	// the demo's twigl block (cards twigl-make, twigl-float), from `tunnel = twigl {` to its closing line
+	let start = demo.find("tunnel = twigl {").expect("the demo's twigl block");
+	let code = &demo[start..start + demo[start..].find("\n}").expect("the block's end") + 2];
 	let said = said(&format!("{code}\n\"fn warp_twigl\" in tunnel and \"@fragment fn main\" in tunnel"));
 	assert!(said.contains("yes"), "{said}");
 }
