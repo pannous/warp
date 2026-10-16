@@ -39,8 +39,19 @@ credit_used() { "$USAGE_SCRIPT" 2>/dev/null | sed -n 's/^iguana_necktie: \$\([0-
 
 # ---------------------------------------------------------------- the cloud side
 
+# A run that can't get to testing (tip missing, merge conflict) still pushes a red result, so nobody waits for it
+abort() {
+	printf 'run: %s\nbranch: %s\ntip: %s\nverdict: red\nerror: %s\n' "$name" "$branch" "$tip" "$*" > "$HERE_WORK/result.md"
+	echo "$*" >> "$HERE_WORK/log.txt"
+	gzip -kf "$HERE_WORK/log.txt"
+	cd "$CLOUD_REPO" && push_result "$name"
+	exit 1
+}
+
 # The run itself, detached from the session's Bash tool: checkout, build, test, summarize, push
 run_tests_here() {
+	CLOUD_REPO=$PWD
+	mkdir -p "$HERE_WORK"
 	local base=""
 	[ "$1" = "--on" ] && base=$2 && shift 2
 	local branch=$1 tip=$2; shift 2
@@ -51,14 +62,14 @@ run_tests_here() {
 	for branch_ref in "$branch" main vendor $base; do
 		git fetch -q origin "+refs/heads/$branch_ref:refs/remotes/origin/$branch_ref" 2>&1 | tail -3
 	done
-	git cat-file -e "$tip^{commit}" 2>/dev/null || git fetch -q origin "$tip" || fail "tip $tip not found on origin"
+	git cat-file -e "$tip^{commit}" 2>/dev/null || git fetch -q origin "$tip" || abort "tip $tip not found on origin"
 	checkout=$HERE_WORK/tree
-	rm -rf "$checkout" && git worktree prune && git worktree add -q --detach "$checkout" "$tip" || fail "checkout of $tip failed"
+	rm -rf "$checkout" && git worktree prune && git worktree add -q --detach "$checkout" "$tip" || abort "checkout of $tip failed"
 	git show "origin/main:$ENVIRONMENTAL_LIST" > "$HERE_WORK/environmental.txt" 2>/dev/null
-	cd "$checkout" || fail "no checkout"
+	cd "$checkout" || abort "no checkout"
 	local tested=$tip
 	if [ -n "$base" ]; then
-		git -c user.name=pannous -c user.email=info@pannous.com merge -q --no-edit "origin/$base" || fail "$tip does not merge cleanly into origin/$base"
+		git -c user.name=pannous -c user.email=info@pannous.com merge -q --no-edit "origin/$base" || abort "$tip does not merge cleanly into origin/$base"
 		tested="$tip merged into origin/$base $(git rev-parse "origin/$base")"
 	fi
 	rustup target add $RUST_TARGETS >/dev/null 2>&1
@@ -145,7 +156,7 @@ push_result() {
 	tree=$(git write-tree)
 	unset GIT_INDEX_FILE
 	commit=$(git -c user.name=pannous -c user.email=info@pannous.com commit-tree "$tree" -m "cloud test result $name")
-	git push -q -f origin "$commit:refs/heads/$RESULTS_PREFIX/$name" && echo "pushed $RESULTS_PREFIX/$name"
+	[ -n "$commit" ] && git push -q -f origin "$commit:refs/heads/$RESULTS_PREFIX/$name" && echo "pushed $RESULTS_PREFIX/$name"
 }
 
 # What the cloud session calls, again and again until DONE: starts the run once, then waits for it a while
@@ -265,7 +276,7 @@ collect() {
 main() {
 	case "${1:-}" in
 		--run-here) shift; run_here "$@"; exit ;;
-		--run-detached) shift; run_tests_here "$@"; touch "$HERE_WORK/done"; exit ;;
+		--run-detached) shift; trap 'touch "$HERE_WORK/done"' EXIT; run_tests_here "$@"; exit ;;
 		--summarize) summarize "$2" "${3:-$ENVIRONMENTAL_LIST}"; exit ;;
 	esac
 	card="" wait=1 result_only="" base=()
