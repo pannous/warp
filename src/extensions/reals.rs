@@ -424,14 +424,6 @@ impl Exact {
 		self.0.keys().map(|monomial| monomial.exponent(&Generator::Epsilon)).min()
 	}
 
-	/// The standard part st(x): the real nearest to a finite hyperreal; an error for an infinite one
-	pub fn standard_part(&self) -> Result<Exact, String> {
-		match self.lowest_epsilon_power() {
-			Some(power) if power < 0 => Err(format!("st({self}): {self} is infinite, it has no standard part")),
-			_ => Ok(self.epsilon_part(0)),
-		}
-	}
-
 	pub fn add(&self, other: &Exact) -> Exact {
 		let mut terms = self.0.clone();
 		for (monomial, coefficient) in &other.0 {
