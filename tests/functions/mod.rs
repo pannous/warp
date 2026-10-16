@@ -185,6 +185,7 @@ mod test_round8_call_forms;
 mod test_rounding_builtins;
 mod test_runtime_function_equality; // card runtime-function
 mod test_runtime_kind_arithmetic;
+mod test_rust_references;
 mod test_sequence_values; // cards sequence-value, block-data-sound
 mod test_several_arguments;
 mod test_shadowed_log;

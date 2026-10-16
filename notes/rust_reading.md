@@ -25,7 +25,7 @@ names its warp form.
 5. Paths `A::b` (card rust-paths): `C::Red` of an enum, `String::from("hi")`, `HashMap::new()`, turbofish
    `sum::<i32>()` and `collect::<Vec<i32>>()` (the `<` opens a group that never closes).
 6. Option and control (card rust-option): `Some(v)`/`None`, `if let Some(v) = o`, `?`, `.unwrap()`, and `loop { … break }`.
-7. References (card rust-refs): `&x` and `*r` read as the value itself (`*r` stays the symbol).
+7. References (card rust-refs, done): `&x`, `&mut x`, `&&x`, `&5`, `*r`, `**r`, `*(&x)` read as the value itself. A `*name` stays a star (rest or spread) after a comma or an opening bracket, and at a statement start before `,` or `=` (src/warp_parser/definitions/functions.rs starts_rust_reference).
 8. Generics `<T>` in fn and struct type parameters (card rust-generics).
 
 Warp forms the gaps map onto:

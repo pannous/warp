@@ -23,6 +23,12 @@ impl WarpParser {
 		}
 
 		let node = match self.current_char() {
+			// Rust's `&x`, `&mut x`, `&&x` and `*r`: values need no references, so a reference and its dereference read as the
+			// value itself (card rust-refs); `&name` of a function stays below
+			'&' | '*' if self.starts_rust_reference() => {
+				self.skip_reference_prefix();
+				return self.parse_atom();
+			}
 			// `&name` is the function `name` itself: a name is already a function value where a function is expected
 			'&' if self.starts_function_reference() => self.symbol_after(1, crate::closures::function_reference),
 			// Elixir's capture `&(&1 * 2)`: the block `{$0 * 2}`; its `&1`, `&2` are `$0`, `$1`
