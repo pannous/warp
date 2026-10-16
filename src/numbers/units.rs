@@ -86,10 +86,135 @@ use crate::time::{NOW_WORD, TIME_WORD};
 use crate::words::IN_WORD;
 
 fn unit_named(name: &str) -> Option<&'static Unit> {
-	if crate::compiler::compile_context::read(|context| context.shadowed_units.contains(name)) {
-		return None;
-	}
+	let name = match name.strip_prefix(AFTER_NUMBER) {
+		Some(unit) => unit,
+		None if crate::compiler::compile_context::read(|context| context.shadowed_units.contains(name)) => return None,
+		None => name,
+	};
 	units().iter().find(|unit| unit.name == name)
+}
+
+/// The mark of a unit word after a number whose name the program also defines (`s = sample(…); 0.5s`): decision
+/// unit-definitions, unit symbols bind after a number, the program's names everywhere else (card variable-named-like)
+const AFTER_NUMBER: char = '\u{2060}';
+
+/// Each unit word after a number, or continuing a unit after one (`3 km/h`, `9.8 m/s²`), marked where the program
+/// also defines its name, so the shadowing of that name spares it
+fn with_units_after_numbers(program: Node) -> Node {
+	let shadowed = defined_unit_names(&program);
+	if shadowed.is_empty() {
+		return program;
+	}
+	marked_after_numbers(program, &shadowed)
+}
+
+fn marked_after_numbers(node: Node, shadowed: &std::collections::HashSet<String>) -> Node {
+	match node {
+		Node::Key(left, op @ (Op::Mul | Op::Div), right)
+			if (op == Op::Mul && is_amount(&left) && is_juxtaposed(&right)) || is_quantity(&left) =>
+		{
+			if op == Op::Mul {
+				hint_multiplying_variable(&left, &right, shadowed);
+			}
+			let left = marked_after_numbers(*left, shadowed);
+			Node::Key(Box::new(left), op, Box::new(marked_unit(*right, shadowed)))
+		}
+		// `v: km/h`, a compound unit as a variable's declared type (`Err(m): m` is a match arm)
+		Node::Key(target, Op::Colon, unit)
+			if matches!(target.drop_meta(), Node::Symbol(_))
+				&& matches!(unit.drop_meta(), Node::Key(_, Op::Mul | Op::Div, _))
+				&& is_unit_type(&unit) =>
+		{
+			Node::Key(target, Op::Colon, Box::new(marked_unit(*unit, shadowed)))
+		}
+		other => other.map_children(|child| marked_after_numbers(child, shadowed)),
+	}
+}
+
+/// `km/h`, `m`: unit words alone
+fn is_unit_type(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Key(left, Op::Mul | Op::Div, right) => is_unit_type(left) && is_unit_term(right),
+		other => {
+			is_unit_term(other)
+				&& !matches!(other, Node::Symbol(name) if crate::lowering::declaration_forms::is_declaration_type(&Node::Symbol(name.clone())))
+		}
+	}
+}
+
+/// `m = 5; 3m` is 3 meters (user decision on variable-named-like): the hint says how to multiply by the variable
+fn hint_multiplying_variable(amount: &Node, unit: &Node, shadowed: &std::collections::HashSet<String>) {
+	let Node::Symbol(name) = unit.drop_meta() else {
+		return;
+	};
+	if !shadowed.contains(name) {
+		return;
+	}
+	let amount = amount.drop_meta().serialize();
+	let (written, multiplied) = (format!("{amount}{name}"), format!("{amount}*{name}"));
+	crate::normalize::set_position_of(unit);
+	let reason =
+		format!("{written} is {amount} of the unit {name}; to multiply by the variable {name} write {multiplied}");
+	crate::normalize::advise(&written, &multiplied, &reason, None);
+}
+
+/// `3`, `2*1000`: an amount a unit word after it binds to
+fn is_amount(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Number(_) => true,
+		Node::Key(left, Op::Mul | Op::Div, right) => is_amount(left) && is_amount(right),
+		_ => false,
+	}
+}
+
+/// `3 km`, `3 km/h`: an amount times unit words
+fn is_quantity(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Key(left, Op::Mul, right) if is_amount(left) => is_juxtaposed(right) && is_unit_term(right),
+		Node::Key(left, Op::Mul | Op::Div, right) => is_quantity(left) && is_unit_term(right),
+		_ => false,
+	}
+}
+
+/// A unit word the parser joined to its number (`3m`, `3 m`), not the right side of a written `*` (`3 * m`)
+fn is_juxtaposed(node: &Node) -> bool {
+	let mut layer = node;
+	while let Node::Meta { node: inner, .. } = layer {
+		if let Some(position) = layer.get_lineinfo() {
+			return position.after_number;
+		}
+		layer = inner;
+	}
+	false
+}
+
+/// `km`, `m²`, `s^2`
+fn is_unit_term(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(name) => names_unit(name.strip_prefix(AFTER_NUMBER).unwrap_or(name)) || shadowed_unit(name),
+		Node::Key(base, _, power) if matches!(power.drop_meta(), Node::Empty | Node::Number(_)) => is_unit_term(base),
+		_ => false,
+	}
+}
+
+fn shadowed_unit(name: &str) -> bool {
+	units().iter().any(|unit| unit.name == name) || unit_aliases().iter().any(|(alias, _)| *alias == name)
+}
+
+fn marked_unit(node: Node, shadowed: &std::collections::HashSet<String>) -> Node {
+	match node {
+		Node::Symbol(name) if shadowed.contains(&name) && units().iter().any(|unit| unit.name == name) => {
+			Node::Symbol(format!("{AFTER_NUMBER}{name}"))
+		}
+		Node::Key(base, op, power) if matches!(power.drop_meta(), Node::Empty | Node::Number(_)) => {
+			Node::Key(Box::new(marked_unit(*base, shadowed)), op, power)
+		}
+		Node::Meta { node, data } => Node::Meta { node: Box::new(marked_unit(*node, shadowed)), data },
+		Node::Key(left, op @ (Op::Mul | Op::Div), right) if is_unit_type(&left) => {
+			Node::Key(Box::new(marked_unit(*left, shadowed)), op, Box::new(marked_unit(*right, shadowed)))
+		}
+		other => marked_after_numbers(other, shadowed),
+	}
 }
 
 /// `run` with the unit words `program` defines as its names, not units: `g(x) := x + 1 m` keeps m a unit
@@ -110,7 +235,7 @@ fn target_unit(node: &Node) -> Option<&'static Unit> {
 
 /// The unit words as the units passes read them: aliases expanded (`60 mph`), the whole unit after `as` (`q as km/h`)
 pub fn lower_unit_words(program: Node) -> Node {
-	let program = lower_unit_aliases(with_run_time_unit_tables(program));
+	let program = with_units_after_numbers(lower_unit_aliases(with_run_time_unit_tables(program)));
 	let program = match QUANTITY_CAST_WORDS.iter().any(|word| crate::soft_keywords::program_names(&program, word)) {
 		true => program,
 		false => with_quantity_casts(program),
@@ -284,34 +409,47 @@ fn lower_unit_aliases(program: Node) -> Node {
 	}
 	let defined = defined_unit_names(&program);
 	let aliases: Vec<(&str, &str)> = aliases.into_iter().filter(|(alias, _)| !defined.contains(*alias)).collect();
-	with_unit_aliases(program, &aliases)
+	with_unit_aliases(program, &aliases, &defined)
 }
 
-fn with_unit_aliases(node: Node, aliases: &[(&str, &str)]) -> Node {
+/// An alias's expansion: unit words even where the program defines their names (`s = …; 440Hz` is 440/s)
+fn marked_expansion(node: Node, defined: &std::collections::HashSet<String>) -> Node {
+	match node {
+		Node::Symbol(name) if defined.contains(&name) => Node::Symbol(format!("{AFTER_NUMBER}{name}")),
+		other => other.map_children(|child| marked_expansion(child, defined)),
+	}
+}
+
+fn with_unit_aliases(node: Node, aliases: &[(&str, &str)], defined: &std::collections::HashSet<String>) -> Node {
 	let expansion = |unit: &Node| match unit.drop_meta() {
-		Node::Symbol(name) => {
-			aliases.iter().find(|(alias, _)| alias == name).map(|(_, expression)| crate::warp_parser::parse(expression))
-		}
+		Node::Symbol(name) => aliases
+			.iter()
+			.find(|(alias, _)| alias == name)
+			.map(|(_, expression)| marked_expansion(crate::warp_parser::parse(expression), defined)),
 		_ => None,
 	};
 	match node {
 		// `60 mph`, `60*mph`: the amount joins the first unit, `60 mi / h`, as a written `60 mi/h` reads
 		Node::List(items, Bracket::None, Separator::Space) if items.len() == 2 && expansion(&items[1]).is_some() => {
 			let [amount, unit] = <[Node; 2]>::try_from(items).expect("two items");
-			times_first_unit(with_unit_aliases(amount, aliases), expansion(&unit).expect("guarded"))
+			times_first_unit(with_unit_aliases(amount, aliases, defined), expansion(&unit).expect("guarded"))
 		}
 		Node::Key(amount, Op::Mul, unit) if expansion(&unit).is_some() => {
-			times_first_unit(with_unit_aliases(*amount, aliases), expansion(&unit).expect("guarded"))
+			times_first_unit(with_unit_aliases(*amount, aliases, defined), expansion(&unit).expect("guarded"))
 		}
 		Node::Symbol(name) => expansion(&Node::Symbol(name.clone())).unwrap_or(Node::Symbol(name)),
 		// a field's type, `speed: mph`
 		Node::Type { name, body } if body.is_empty_node() && expansion(&name).is_some() => {
 			expansion(&name).expect("guarded")
 		}
-		Node::Type { name, body } => Node::Type { name, body: Box::new(with_unit_aliases(*body, aliases)) },
-		Node::Key(object, Op::Dot, field) => Node::Key(Box::new(with_unit_aliases(*object, aliases)), Op::Dot, field),
-		Node::Key(field, Op::Colon, value) => Node::Key(field, Op::Colon, Box::new(with_unit_aliases(*value, aliases))),
-		other => other.map_children(|child| with_unit_aliases(child, aliases)),
+		Node::Type { name, body } => Node::Type { name, body: Box::new(with_unit_aliases(*body, aliases, defined)) },
+		Node::Key(object, Op::Dot, field) => {
+			Node::Key(Box::new(with_unit_aliases(*object, aliases, defined)), Op::Dot, field)
+		}
+		Node::Key(field, Op::Colon, value) => {
+			Node::Key(field, Op::Colon, Box::new(with_unit_aliases(*value, aliases, defined)))
+		}
+		other => other.map_children(|child| with_unit_aliases(child, aliases, defined)),
 	}
 }
 
