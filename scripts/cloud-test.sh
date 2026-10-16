@@ -27,7 +27,7 @@ PENDING_HOURS=3                # a launch older than this without a result no lo
 POLL_SECONDS=60                # GitHub API quota is shared by every session: ls-remote once a minute
 WAIT_HOURS=4
 URL_WAIT_SECONDS=90
-HERE_WAIT_SECONDS=540          # one --run-here call blocks at most this long, under the cloud Bash tool's 10 min
+HERE_WAIT_SECONDS=570          # one --run-here call blocks at most this long, under the cloud Bash tool's 10 min
 HERE_WORK=${TMPDIR:-/tmp}/cloud-test
 FULL_FLAGS=(--all-features --config "profile.test.package.warp-lang.opt-level=2")
 USAGE_SCRIPT=$HOME/dev/bin/claude-usage.sh
@@ -156,26 +156,27 @@ push_result() {
 	tree=$(git write-tree)
 	unset GIT_INDEX_FILE
 	commit=$(git -c user.name=pannous -c user.email=info@pannous.com commit-tree "$tree" -m "cloud test result $name")
-	[ -n "$commit" ] && git push -q -f origin "$commit:refs/heads/$RESULTS_PREFIX/$name" && echo "pushed $RESULTS_PREFIX/$name"
+	if [ -n "$commit" ] && git push -q -f origin "$commit:refs/heads/$RESULTS_PREFIX/$name" > "$HERE_WORK/push.log" 2>&1; then
+		touch "$HERE_WORK/pushed"
+	fi
 }
 
-# What the cloud session calls, again and again until DONE: starts the run once, then waits for it a while
+# What the cloud session calls, again and again until DONE: starts the run once, then waits for it a while. It prints
+# one line only, every token the session reads is paid from the credit: the result itself reaches the Mac through git
 run_here() {
 	mkdir -p "$HERE_WORK"
 	if [ ! -e "$HERE_WORK/started" ]; then
 		touch "$HERE_WORK/started"
 		nohup bash "$0" --run-detached "$@" > "$HERE_WORK/runner.log" 2>&1 &
-		echo "started the run (pid $!)"
 	fi
 	local waited=0
 	while [ ! -e "$HERE_WORK/done" ] && [ $waited -lt $HERE_WAIT_SECONDS ]; do sleep 15; waited=$((waited + 15)); done
-	if [ -e "$HERE_WORK/done" ]; then
-		cat "$HERE_WORK/result.md" "$HERE_WORK/runner.log"
-		echo "CLOUD TEST DONE"
+	if [ ! -e "$HERE_WORK/done" ]; then
+		echo "CLOUD TEST RUNNING ($(grep -c '^test .* \.\.\. ' "$HERE_WORK/log.txt" 2>/dev/null) tests so far): call the same command again"
+	elif [ -e "$HERE_WORK/pushed" ]; then
+		echo "CLOUD TEST DONE: $(sed -n 's/^verdict: //p' "$HERE_WORK/result.md"), $(sed -n 's/^passed: //p; s/^error: //p' "$HERE_WORK/result.md")"
 	else
-		echo "still running: $(grep -c '^test .* \.\.\. ' "$HERE_WORK/log.txt" 2>/dev/null) tests reported so far;" \
-			"last line: $(tail -1 "$HERE_WORK/log.txt" 2>/dev/null | cut -c1-160)"
-		echo "CLOUD TEST RUNNING: call the same command again"
+		echo "CLOUD TEST DONE, but the result was not pushed: $(tail -2 "$HERE_WORK/push.log" "$HERE_WORK/runner.log" 2>/dev/null | tr '\n' ' ' | cut -c1-300)"
 	fi
 }
 
@@ -184,13 +185,10 @@ run_here() {
 cloud_prompt() {
 	local script_args=$1
 	cat <<-EOF
-	Repository pannous/warp: you are a test runner of the warp cloud test lane (scripts/cloud-test.sh). Do exactly this, nothing else:
-	1. git fetch origin main && git show origin/main:scripts/cloud-test.sh > /tmp/cloud-test.sh
-	2. bash /tmp/cloud-test.sh --run-here $script_args
-	   Run it in the foreground with a 600000 ms timeout. Each call waits up to 9 minutes: while it prints "CLOUD TEST RUNNING",
-	   call the same command again (it never starts a second run). Stop when it prints "CLOUD TEST DONE".
-	3. Reply with the result lines it printed. Do not edit, commit or push anything yourself (the script pushes the result);
-	   do not fix failing tests or investigate them.
+	You run one warp test job. Run this Bash command in the foreground with timeout 600000:
+	git fetch -q origin main && git show origin/main:scripts/cloud-test.sh > /tmp/cloud-test.sh && bash /tmp/cloud-test.sh --run-here $script_args
+	While it prints CLOUD TEST RUNNING, run the same command again. When it prints CLOUD TEST DONE, reply with only that line.
+	Nothing else: no other commands, no edits, no investigation.
 	EOF
 }
 
