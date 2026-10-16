@@ -778,6 +778,11 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   lines in lib/math.warp with a "prefer ->" hint (→ ⟶ ➜ … for ->, ⇒ ⟹ for =>, ← ⟵ ⬅ for <-, ⬆ ⇧ for ↑, ⬇ ⇩ for ↓).
   ⇔ ⟺ ↔ ⇑ ⇓ get no built-in meaning for now; an example defines one, e.g.
   `infix operator ⇔(a: bool, b: bool) := a == b`.
+- default-methods (2026-10-16, user; cards library-words, method-call-bare-words): `x.word` and `x.word()` are
+  identical, both resolved by multi-dispatch on the receiver's type. A library word belongs to its type: `first` is
+  a list word, so an object or class with its own member `first` (`p = {first: 1}; p.first` → 1) or a class method
+  `first` is the more specific match and wins. Redefining a library word for its own type (an extension changing
+  `first` for lists) is not allowed, a loud error. No extra override keyword is needed for that.
 - fuel-metering (2026-10-16, user; card fuel-metering): runaway loops are stopped by the epoch timer with a time
   limit by default (about 1–5% overhead, stops at a slightly different step each run). Fuel, the exact step budget
   that cost 4.4× on calls (40M calls: 218 ms against 49 ms), runs only on request: `use fuel`, the CLI word
