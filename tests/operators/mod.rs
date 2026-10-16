@@ -1,6 +1,7 @@
 mod test_add_to;
 mod test_approximately; // cards approximately, approximately-all
 mod test_bar_pipe;
+mod test_bar_pipe_module_calls; // card pipes-after
 mod test_bit_operators_on_ints;
 mod test_braceless_operator_words; // card braceless-prefix
 mod test_comma_next_to_comparison; // P227
