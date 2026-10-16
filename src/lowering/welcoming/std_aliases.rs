@@ -7,6 +7,7 @@
 
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::program_names::ProgramNames;
 use std::collections::HashSet;
 
 /// `module.member(…)` of another ecosystem: warp's `word` of `std_module` (none for a prelude word), its arguments the
@@ -73,10 +74,11 @@ pub fn lower(program: Node) -> Node {
 	// (decision used-module-bare-words, notes/dispatch.md level 3)
 	let used_modules = used_module_names(&program);
 	let bare_forms: Vec<&StdAlias> = (BARE_FORMS.iter().filter(|form| !kept.contains(&form.member)))
-		.chain(WARP_FORMS.iter().filter(|form| used_modules.contains(form.module) && !defined.contains(form.member)))
+		.chain(WARP_FORMS.iter().filter(|form| used_modules.contains(form.module)))
 		.collect();
 	let mut used = HashSet::new();
-	let program = aliased(program, &Aliases { kept, bare_forms }, &mut used);
+	let names = ProgramNames::of(&program);
+	let program = aliased(program, &Aliases { kept, bare_forms }, &names, &mut used);
 	with_uses(program, used)
 }
 
@@ -139,8 +141,11 @@ fn first_call_of<'a>(node: &'a Node, word: &str) -> Option<&'a Node> {
 	}
 }
 
-fn aliased(node: Node, aliases: &Aliases, used: &mut HashSet<&'static str>) -> Node {
-	match aliased_call(&node, aliases) {
+/// Every alias call rewritten; a bare form only where the program takes no word of that name and arity in scope
+fn aliased(node: Node, aliases: &Aliases, names: &ProgramNames, used: &mut HashSet<&'static str>) -> Node {
+	let inner = names.inside(&node);
+	let names = inner.as_ref().unwrap_or(names);
+	match aliased_call(&node, aliases, names) {
 		Some((alias, arguments)) => {
 			crate::normalize::set_position_of(&node);
 			if !alias.module.is_empty() && !WARP_FORMS.iter().any(|form| std::ptr::eq(form, alias)) {
@@ -152,18 +157,22 @@ fn aliased(node: Node, aliases: &Aliases, used: &mut HashSet<&'static str>) -> N
 			if !alias.std_module.is_empty() {
 				used.insert(alias.std_module);
 			}
-			let arguments = alias.order.iter().map(|&index| aliased(arguments[index].clone(), aliases, used));
+			let arguments = alias.order.iter().map(|&index| aliased(arguments[index].clone(), aliases, names, used));
 			parens(std::iter::once(symbol(alias.word)).chain(arguments).collect())
 		}
-		None => node.map_children(|child| aliased(child, aliases, used)),
+		None => node.map_children(|child| aliased(child, aliases, names, used)),
 	}
 }
 
 /// `module.member(arguments…)` of a known alias with as many arguments as it takes; a shape tuple stands for its items
 /// (`np.zeros((2, 3))` is zeros(2, 3))
-fn aliased_call<'a>(node: &'a Node, aliases: &Aliases) -> Option<(&'static StdAlias, &'a [Node])> {
+fn aliased_call<'a>(
+	node: &'a Node,
+	aliases: &Aliases,
+	names: &ProgramNames,
+) -> Option<(&'static StdAlias, &'a [Node])> {
 	let kept = aliases.kept.as_slice();
-	if let Some(bare) = bare_call(node, &aliases.bare_forms).or_else(|| member_read(node, kept)) {
+	if let Some(bare) = bare_call(node, &aliases.bare_forms, names).or_else(|| member_read(node, kept)) {
 		return Some(bare);
 	}
 	let Node::Key(module, Op::Dot, call) = node.drop_meta() else {
@@ -193,8 +202,12 @@ fn aliased_call<'a>(node: &'a Node, aliases: &Aliases) -> Option<(&'static StdAl
 		})
 }
 
-/// `json(t)`, `json t`: a bare form called with as many arguments as it takes
-fn bare_call<'a>(node: &'a Node, forms: &[&'static StdAlias]) -> Option<(&'static StdAlias, &'a [Node])> {
+/// `json(t)`, `json t`: a bare form called with as many arguments as it takes, unless the program takes that call
+fn bare_call<'a>(
+	node: &'a Node,
+	forms: &[&'static StdAlias],
+	names: &ProgramNames,
+) -> Option<(&'static StdAlias, &'a [Node])> {
 	let (Node::List(items, Bracket::Round, _) | Node::List(items, Bracket::None, Separator::Space)) = node.drop_meta()
 	else {
 		return None;
@@ -203,6 +216,7 @@ fn bare_call<'a>(node: &'a Node, forms: &[&'static StdAlias]) -> Option<(&'stati
 	let word = word.drop_meta().symbol_name()?;
 	(forms.iter().copied())
 		.find(|form| form.member == word && form.order.len() == arguments.len())
+		.filter(|_| !names.takes_call(word, arguments.len()))
 		.map(|form| (form, arguments))
 }
 

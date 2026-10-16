@@ -135,3 +135,13 @@ fn a_class_method_named_like_a_library_word_joins_its_generic_function() {
 	is!("class C{x:int; int() := x+1}; g(v) := int(v); g(C(5)) + g(\"2\")", 8);
 	is!("class A{n:int; pop() := 1}; class B{n:int; pop() := 2}; f(x) := x.pop(); f(A(0)) + f(B(0)) + f([4, 5])", 8);
 }
+
+// slice 3, std_aliases: a used module's bare word gives way only where the program takes that call, per function and
+// per arity (ProgramNames)
+#[test]
+fn a_used_module_word_gives_way_per_scope_and_arity() {
+	is!("use json; parse(a, b) := a + b; parse(\"[1, 2]\") == [1, 2]", true);
+	is!("use json; parse(a, b) := a + b; parse(1, 2)", 3);
+	is!("use json; f(t) := { parse = x => 7; parse(t) }; f(\"[1]\")", 7);
+	is!("use json; f(t) := { parse = x => 7; parse(t) }; g(t) := parse(t); g(\"[1, 2]\") == [1, 2]", true);
+}
