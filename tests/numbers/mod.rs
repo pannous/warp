@@ -19,6 +19,7 @@ mod test_duration_text;
 mod test_dynamic_units; // card units-dynamic
 mod test_exact_parameters;
 mod test_exponent_texts; // card int-text
+mod test_fast_int; // card fast-int
 mod test_fast_math; // card switch-rebinds
 mod test_fast_scope; // card fast-scope
 mod test_fixed_width_ints;

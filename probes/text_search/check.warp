@@ -1,0 +1,2 @@
+include words
+[w_trim("  a b \n"), w_trim("   "), w_starts_with("hello", "he"), w_starts_with("he", "hello"), w_ends_with("hello", "lo"), w_ends_with("o", "lo"), w_find("banana", "nan"), w_find("banana", "x"), w_find("ab", "")]

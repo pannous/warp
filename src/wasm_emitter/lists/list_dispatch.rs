@@ -40,6 +40,7 @@ const TYPED_LIST_ITEMS: u32 = 1;
 /// Capacity of the first items array a push into an empty list allocates; it doubles when full
 const FIRST_CAPACITY: i32 = 4;
 const NODE_COUNT: &str = "node_count";
+const NODE_BYTES: &str = "node_bytes";
 const SQUARE_BRACKET_INFO: i64 = 1;
 
 /// The list operations that go through the dispatch layer
@@ -361,6 +362,21 @@ impl WasmGcEmitter {
 	}
 
 	/// Push the element count (i64) of `target`; `counter` is the runtime counter of the generic backend (node_count, node_bytes …)
+	/// `t.bytes` without a call when t holds a text, its length field; anything else through node_bytes (card
+	/// loop-calls: a byte loop asked node_bytes each round)
+	fn emit_byte_count_inline(&mut self, func: &mut Function, target: &Node) {
+		let held = self.node_scratch();
+		self.emit_node_instructions(func, target);
+		func.instruction(&I::LocalTee(held));
+		func.instruction(&I::StructGet { struct_type_index: self.type_manager.node_type, field_index: 0 });
+		Self::emit_kind_test(func, Kind::Text as i64, I::I64Eq);
+		func.instruction(&I::If(BlockType::Result(ValType::I64)));
+		self.emit_text_field(func, held, 1);
+		Self::emit_list(func, &[I::I64ExtendI32U, I::Else, I::LocalGet(held), I::RefAsNonNull]);
+		self.emit_call(func, NODE_BYTES);
+		func.instruction(&I::End);
+	}
+
 	pub(in crate::wasm_emitter) fn emit_list_count(
 		&mut self,
 		func: &mut Function,
@@ -387,6 +403,7 @@ impl WasmGcEmitter {
 					&[slot.get(), I::StructGet { struct_type_index: list_type, field_index: 0 }, I::I64ExtendI32U],
 				);
 			}
+			(_, NODE_BYTES) => self.emit_byte_count_inline(func, target),
 			_ => {
 				self.emit_node_instructions(func, target);
 				self.emit_call(func, counter);
