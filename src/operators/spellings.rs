@@ -5,7 +5,7 @@ use super::*;
 /// wiki/operator.md). The canonical spelling is Op::as_str, every other one an alias; the parser takes the longest
 /// spelling that fits (lookahead.rs peek_operator), the style hints name the canonical one (normalize.rs). The math
 /// spellings (× ≤ √ …) are lib/math.warp's alias lines instead (aliases.rs, decision operator-alias)
-pub const OPERATOR_SPELLINGS: [(&str, Op); 117] = [
+pub const OPERATOR_SPELLINGS: [(&str, Op); 119] = [
 	(":", Op::Colon),
 	(".", Op::Dot),
 	("?.", Op::SafeDot),
@@ -19,10 +19,10 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 117] = [
 	("=>", Op::FatArrow),
 	("+", Op::Add),
 	("plus", Op::Add),
-	// ("add", Op::Add), // card word-operators: clashes with xs.add(…), add:(…) members, `add x to y`
+	("add", Op::Add), // only between operands (lookahead operator_in_context, card add-subtract)
 	("-", Op::Sub),
 	("minus", Op::Sub),
-	// ("subtract", Op::Sub), // card word-operators
+	("subtract", Op::Sub),
 	// the dashes 0x2010..0x2015 all mean `-` (the minus sign − is lib/math.warp's alias line)
 	("‐", Op::Sub),
 	("‑", Op::Sub),
@@ -188,6 +188,12 @@ pub(crate) fn table_operator(spelling: &str) -> Option<Op> {
 pub fn glyph_operator(glyph: char) -> Option<Op> {
 	let mut spelling = [0; 4];
 	spelled_operator(glyph.encode_utf8(&mut spelling)).filter(|_| !glyph.is_ascii() && !PLAIN_GLYPHS.contains(glyph))
+}
+
+/// A word that spells an arithmetic operator: `plus`, `minus`, `add`, `subtract`, `div`, `mod` (card add-subtract)
+pub fn is_arithmetic_word(word: &str) -> bool {
+	word.chars().all(char::is_alphabetic)
+		&& spelled_operator(word).is_some_and(|op| op.is_arithmetic() || op == Op::FloorDiv)
 }
 
 /// A word that spells an operator, alone or as the first word of a phrase: `and`, `mod`, `is` (of `is less than`)

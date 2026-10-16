@@ -1,3 +1,4 @@
+mod test_add_subtract_words; // card add-subtract
 mod test_add_to;
 mod test_approximately; // cards approximately, approximately-all
 mod test_bar_pipe;
