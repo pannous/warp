@@ -97,28 +97,9 @@ pub(super) fn type_arguments(path: &Value) -> Vec<&Value> {
 	path["args"]["angle_bracketed"]["args"].as_array().into_iter().flatten().filter_map(|arg| arg.get("type")).collect()
 }
 
+/// The WIT name of a Rust name, if it is a valid one (each segment starts with a lowercase letter)
 pub(super) fn kebab(rust: &str) -> Option<String> {
-	let mut kebab = String::new();
-	let mut previous_lower = false;
-	for c in rust.chars() {
-		match c {
-			'_' => {
-				kebab.push('-');
-				previous_lower = false;
-			}
-			c if c.is_ascii_uppercase() => {
-				if previous_lower {
-					kebab.push('-');
-				}
-				kebab.push(c.to_ascii_lowercase());
-				previous_lower = false;
-			}
-			c => {
-				kebab.push(c);
-				previous_lower = c.is_ascii_lowercase() || c.is_ascii_digit();
-			}
-		}
-	}
+	let kebab = crate::modules::components::kebab_case(rust);
 	let valid = kebab.split('-').all(|segment| {
 		segment.starts_with(|c: char| c.is_ascii_lowercase()) && segment.chars().all(|c| c.is_ascii_alphanumeric())
 	});
