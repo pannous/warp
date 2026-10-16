@@ -233,6 +233,7 @@ fn fetch_into_memory(caller: &mut Caller<'_, HostState>, url_ptr: i32, url_len: 
 
 /// Link host functions into a wasmtime Linker
 pub fn link_host_functions(linker: &mut Linker<HostState>, _engine: &Engine) -> Result<()> {
+	warp_runtime::system_values::tell_gpu_painter(crate::graphics::paint::paints_shaders);
 	link_memory_words(linker)?;
 	link_library_words(linker)
 }

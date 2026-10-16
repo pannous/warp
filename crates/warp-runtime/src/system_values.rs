@@ -15,8 +15,8 @@
 //! what another one copied, so the text is read only when the program asks for it (`clipboard`, clipboard_text).
 use crate::host_words::{
 	BATTERY, CHARGING, CLICK_PRESSED, CLICK_X, CLICK_Y, CLIPBOARD_COUNT, DARK_MODE, DISPLAY_DPI, DISPLAY_HEIGHT,
-	DISPLAY_WIDTH, ESCAPE_KEPT, GPU_DRAWING, KEY_CODE_HELD, KEY_DOWN, KEY_PRESSED, MOUSE_DOWN, MOUSE_X, MOUSE_Y,
-	ONLINE, SYSTEM_VALUES, TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH, WINDOW_HEIGHT, WINDOW_OPEN, WINDOW_WIDTH,
+	DISPLAY_WIDTH, ESCAPE_KEPT, GPU_DRAWING, GPU_PAINTS, KEY_CODE_HELD, KEY_DOWN, KEY_PRESSED, MOUSE_DOWN, MOUSE_X,
+	MOUSE_Y, ONLINE, SYSTEM_VALUES, TIME_OF_DAY, VIEW_HEIGHT, VIEW_WIDTH, WINDOW_HEIGHT, WINDOW_OPEN, WINDOW_WIDTH,
 };
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
@@ -145,6 +145,12 @@ static CLICK_READ: Mutex<(f32, f32)> = Mutex::new((0.0, 0.0));
 
 /// Whether `use draw` draws on the GPU: the warp binary decides at its start (src/graphics/paint.rs allow_windows)
 static DRAWING_ON_GPU: AtomicBool = AtomicBool::new(false);
+/// Whether a shader can paint (GPU_PAINTS): the warp library's answer; none without it
+static GPU_PAINTER: OnceLock<fn() -> bool> = OnceLock::new();
+
+pub fn tell_gpu_painter(paints: fn() -> bool) {
+	let _ = GPU_PAINTER.set(paints);
+}
 
 pub fn tell_gpu_drawing(on_gpu: bool) {
 	DRAWING_ON_GPU.store(on_gpu, Ordering::Relaxed);
@@ -235,6 +241,9 @@ pub fn read(name: &str) -> Result<i64, String> {
 	if name == ESCAPE_KEPT {
 		ESCAPE_KEPT_BY_PROGRAM.store(true, Ordering::Relaxed);
 		return Ok(1);
+	}
+	if name == GPU_PAINTS {
+		return Ok(GPU_PAINTER.get().is_some_and(|paints| paints()) as i64);
 	}
 	if name == KEY_PRESSED {
 		return Ok(KEY_PRESSES.lock().unwrap().pop_front().unwrap_or(0));

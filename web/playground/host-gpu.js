@@ -404,7 +404,25 @@ const GPU_JOBS = {
 	gpu_render: async job => ({ words: await gpuRendered(job) }),
 	gpu_canvas: async job => ({ values: await gpuCanvas(job) }),
 	gpu_paint: async job => ({ values: (await gpuRendered(job), job.canvas) }),
+	gpu_paints: async () => ({ values: [await theGpuDevice().then(() => 1, failure => failureText(failure))] }),
 };
+
+// the system value "gpu paints" (crates/warp-runtime host_words.rs GPU_PAINTS): whether a shader can paint, asked of the
+// GPU's task Worker: a yes is kept for the page, a no only for the run (a slow first answer, a timed-out adapter, is asked
+// again by the next run, and not on every frame of this one); without, paint(f, …) of a warp function paints f on the
+// CPU, as the run's warning says once
+const GPU_PAINTS = "gpu paints";
+const PAINTS_ON_CPU = "paint: a function paints on the CPU"; // src/graphics/paint.rs
+let gpuPaintsHere = false;
+function gpuPaints(holder) {
+	if (gpuPaintsHere) return true;
+	if (!holder.warnings.some(warning => warning.startsWith(PAINTS_ON_CPU))) {
+		const [answer] = hasTaskWorkers() ? gpuJob("gpu_paints", {}) : ["only a cross-origin isolated page has task Workers"];
+		gpuPaintsHere = answer === 1;
+		if (!gpuPaintsHere) holder.warnings.push(`${PAINTS_ON_CPU}: ${answer}`);
+	}
+	return gpuPaintsHere;
+}
 
 const failureText = failure => failure === undefined || failure === null ? SILENT_FAILURE : String(failure.message ?? failure);
 
@@ -478,6 +496,7 @@ function glslWgsl(glsl) {
 }
 
 addHostPart({
+	systemValue: (value, holder) => value === GPU_PAINTS ? gpuPaints(holder) : undefined,
 	words: (holder, hooks, { program }) => {
 		const plain = node => plainOfTree(readNode(program(), node));
 		const list = (values, item) => buildValue(program(), { kind: SQUARE_LIST, items: values.map(item) });

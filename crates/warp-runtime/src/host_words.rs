@@ -71,6 +71,10 @@ pub const DISPLAY_DPI: &str = "display_dpi";
 /// The next key pressed over the paint window, its code (0: none left), each press read once: natively `on key {…}`
 /// (lowering/signals/system_signals.rs); not a value a program names
 pub const KEY_PRESSED: &str = "key_pressed";
+/// Whether a shader can paint here (1) or not (0): `paint(f, w, h)` of a warp function reads it before painting f's
+/// fragment shader, else paints f on the CPU (card paint-function, src/lowering/foreign/gpu_maps/kernels.rs); not a value
+/// a program names
+pub const GPU_PAINTS: &str = "gpu paints";
 /// Read once as a program naming the Escape key starts (`key == ESC`): Escape over the paint window is then its key,
 /// else it ends the run (card escape-window, src/graphics/paint_window.rs); not a value a program names
 pub const ESCAPE_KEPT: &str = "escape kept";
