@@ -101,3 +101,16 @@ fn a_typed_redefinition_of_a_library_word_is_refused() {
 	crate::common::fails_with("count(xs: list) := 1; count([5])", "count of a list is the library's word");
 	crate::common::fails_with("floor(x: float) := 1; floor(2.5)", "floor of a number is the library's word");
 }
+
+// every typed parameter of the library word counts, a value known not to fit makes the call the program's; a call of a
+// number of values only the library's word takes stays the library's; a suffix word chooses the same way
+#[test]
+fn every_library_parameter_type_chooses() {
+	is!("filter(xs, f):=42; filter([1 2], 3)", 42);
+	is!("filter(xs, f):=42; filter([1 2 3], x => x > 1) == [2 3]", true);
+	is!("first(x) := x * 2; first([5,6,7], 2) == [5, 6]", true);
+	is!("add(t, n) := 5; xs=[1]; add(xs, 2); xs == [1 2]", true);
+	is!("trim(x):=x-1; 4 trimmed", 3);
+	is!("trim(x):=x-1; \" a \" trimmed", "a");
+	is!("sum(xs) := 7; t=[1 2]; t.sum", 3);
+}

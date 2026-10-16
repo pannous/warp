@@ -22,16 +22,16 @@ const NAMED_SIGNATURES: [(&str, &str); 9] = [
 /// value like the others (card dir-lists: methods(x) lists what dir(x) does)
 const MEMBER_SIGNATURES: [(&str, &str); 19] = [
 	("count", "(xs) -> int"),
-	("map", "(xs, f)"),
-	("filter", "(xs, f)"),
-	("reduce", "(xs, f)"),
-	("fold", "(xs, start, f)"),
-	("any", "(xs, f) -> bool"),
-	("all", "(xs, f) -> bool"),
-	("find", "(xs, f)"),
-	("each", "(xs, f)"),
+	("map", "(xs, f: function)"),
+	("filter", "(xs, f: function)"),
+	("reduce", "(xs, f: function)"),
+	("fold", "(xs, start, f: function)"),
+	("any", "(xs, f: function) -> bool"),
+	("all", "(xs, f: function) -> bool"),
+	("find", "(xs, f: function)"),
+	("each", "(xs, f: function)"),
 	("add", "(xs, x)"),
-	("insert", "(xs, x, at)"),
+	("insert", "(xs, x, at: int)"),
 	("remove", "(xs, x)"),
 	("pop", "(xs)"),
 	("clear", "(xs)"),
@@ -97,11 +97,24 @@ pub fn library_types(word: &str) -> Vec<String> {
 		.collect()
 }
 
-/// `text` of `(t:text, separator:text) -> …`; a float parameter (libm's) takes any number
+/// `text` of `(t:text, separator:text) -> …`
 fn first_parameter_type(signature: &str) -> Option<String> {
-	let first = signature.trim_start_matches('(').split([',', ')']).next()?;
-	let type_name = first.split_once(':')?.1.trim();
-	Some(if type_name == LIBM_PARAMETER_TYPE { crate::words::NUMBER_WORD } else { type_name }.to_string())
+	signature_parameter_types(signature).into_iter().next().flatten()
+}
+
+/// The type of each parameter of a library word, None where it takes any value: filter's `[None, function]`
+pub fn library_parameter_types(word: &str) -> Vec<Option<String>> {
+	library_signature(word).map(|(_, signature)| signature_parameter_types(&signature)).unwrap_or_default()
+}
+
+/// `(t:text, separator:text) -> …` → `[text, text]`; a float parameter (libm's) takes any number
+fn signature_parameter_types(signature: &str) -> Vec<Option<String>> {
+	let inside = signature.strip_prefix('(').and_then(|rest| rest.split(')').next()).unwrap_or_default();
+	let type_of = |parameter: &str| {
+		let type_name = parameter.split('=').next()?.split_once(':')?.1.trim();
+		Some(if type_name == LIBM_PARAMETER_TYPE { crate::words::NUMBER_WORD } else { type_name }.to_string())
+	};
+	inside.split(',').filter(|parameter| !parameter.trim().is_empty()).map(type_of).collect()
 }
 
 /// The number of values a library word takes, fewest and most, when its signature names them

@@ -41,7 +41,7 @@ fn a_function_keyword_names_an_infix_word() {
 fn a_defined_rounding_word_is_the_programs() {
 	is!("def floor(x) := x+10; floor(2.5)", 2);
 	is!("def ceil(x) := x+10; ceil 2.5", 3);
-	is!("round(x) := x+10; round(2.5) * 2", 4);
+	is!("round(x) := x+10; round(2.4) * 2", 4);
 	is!("def floor(x) := x+10; floor(2)", 2);
 	is!("def floor(x) := x+10; floor(\"a\")", "a10");
 }

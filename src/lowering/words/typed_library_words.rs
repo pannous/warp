@@ -6,7 +6,7 @@
 //! (decision class-members-free): class_methods named them `count·Bag` before this pass.
 //! Runs on the program only, before modules::resolve loads the library words it calls.
 
-use super::library_signatures::{library_arity, library_types};
+use super::library_signatures::{library_arity, library_parameter_types, library_types, typed_first_parameters};
 use super::nodes::{call, function_head, if_then_else, key};
 use crate::analyzer::type_word_kind;
 use crate::errors::diagnostic::{Diagnostic, Level};
@@ -14,7 +14,7 @@ use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
 use crate::words::{ANY_TYPE, LIST_WORD, NUMBER_WORD, TEXT_WORD};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// The "got it" topic of the hint that a library word keeps its types
 const TOPIC: &str = "library-words-typed";
@@ -38,11 +38,19 @@ pub fn lower(program: Node) -> Node {
 	let variables = crate::analyzer::agreeing_kinds(&program, HashMap::new(), |_, value| {
 		Some(crate::lowering::overloads::argument_kind(value, &HashMap::new()))
 	});
-	Dispatch { redefined, variables }.rewrite(program)
+	let shared = crate::lowering::shared_arrays::shared_names(&program).into_iter().collect();
+	Dispatch { redefined, variables, shared }.rewrite(program)
 }
 
-/// Each definition: its name, arguments (fewest, most) and the type of its first parameter
-fn definitions(program: &Node) -> Vec<(String, (usize, usize), Option<String>, Node)> {
+/// A function the program defines: its name, arguments (fewest, most) and the type of its first parameter
+struct Definition {
+	name: String,
+	arity: (usize, usize),
+	first_type: Option<String>,
+	node: Node,
+}
+
+fn definitions(program: &Node) -> Vec<Definition> {
 	let mut found = vec![];
 	program.visit(&mut |node| {
 		if let Some(head) = function_head(node) {
@@ -50,7 +58,7 @@ fn definitions(program: &Node) -> Vec<(String, (usize, usize), Option<String>, N
 			let defaulted = parameters.iter().filter(|p| matches!(p.drop_meta(), Node::Key(_, Op::Assign, _))).count();
 			let first_type = parameters.first().and_then(|first| crate::lowering::overloads::parameter_type(first));
 			let arity = (parameters.len() - defaulted, parameters.len());
-			found.push((head.name.to_string(), arity, first_type, node.clone()));
+			found.push(Definition { name: head.name.to_string(), arity, first_type, node: node.clone() });
 		}
 	});
 	found
@@ -63,7 +71,7 @@ fn library_takes(word: &str, arity: (usize, usize)) -> bool {
 
 /// `count(xs: list) := …`: the loud error for redefining a library word for its own types
 fn typed_redefinition(program: &Node) -> Option<Node> {
-	definitions(program).into_iter().find_map(|(name, arity, first_type, definition)| {
+	definitions(program).into_iter().find_map(|Definition { name, arity, first_type, node: definition }| {
 		let first_type = first_type?;
 		let types = library_types(&name);
 		let owned = types.iter().find(|library_type| covers(library_type, &first_type))?;
@@ -90,7 +98,7 @@ fn covers(library_type: &str, parameter_type: &str) -> bool {
 fn untyped_redefinitions(program: &Node) -> HashMap<String, Redefined> {
 	let mut redefined: HashMap<String, Redefined> = HashMap::new();
 	let mut typed = vec![];
-	for (name, arity, first_type, definition) in definitions(program) {
+	for Definition { name, arity, first_type, node: definition } in definitions(program) {
 		let types = library_types(&name);
 		if types.is_empty() || !library_takes(&name, arity) {
 			continue;
@@ -111,13 +119,11 @@ fn untyped_redefinitions(program: &Node) -> HashMap<String, Redefined> {
 struct Dispatch {
 	redefined: HashMap<String, Redefined>,
 	variables: HashMap<String, Option<Kind>>,
+	/// `shared xs = float[n]`: an array of the host's, no list the library's words change (shared_arrays.rs)
+	shared: HashSet<String>,
 }
 
 impl Dispatch {
-	fn own_name(name: &str) -> String {
-		crate::traits::witness_name(name, ANY_TYPE)
-	}
-
 	fn rewrite(&self, node: Node) -> Node {
 		if let Some(renamed) = self.renamed_definition(&node) {
 			return renamed;
@@ -125,9 +131,32 @@ impl Dispatch {
 		if let Some(dispatched) = self.dispatched_call(&node) {
 			return dispatched;
 		}
+		if self.call_of(&node).is_some() {
+			return self.kept_call(node);
+		}
 		match node {
-			Node::Symbol(name) if self.redefined.contains_key(&name) => Node::Symbol(Self::own_name(&name)),
+			Node::Symbol(name) if self.redefined.contains_key(&name) => Node::Symbol(own_name(&name)),
 			other => other.map_children(|child| self.rewrite(child)),
+		}
+	}
+
+	/// `first(xs, 2)`: a call of a number of values only the library's word takes stays the library's
+	fn kept_call(&self, node: Node) -> Node {
+		match node {
+			meta @ Node::Meta { .. } => meta.under_meta(|node| self.kept_call(node)),
+			Node::List(items, bracket, separator) => {
+				let mut items = items.into_iter();
+				let head = items.next().into_iter();
+				Node::List(head.chain(items.map(|item| self.rewrite(item))).collect(), bracket, separator)
+			}
+			Node::Key(receiver, Op::Dot, member) => {
+				let member = match member.drop_meta() {
+					Node::List(..) => self.kept_call(*member),
+					_ => *member,
+				};
+				key(self.rewrite(*receiver), Op::Dot, member)
+			}
+			other => other,
 		}
 	}
 
@@ -137,7 +166,7 @@ impl Dispatch {
 		let name = head.name.to_string();
 		self.redefined.get(&name)?;
 		let mut renamed = false;
-		let node = renamed_first(node.clone(), &name, &Self::own_name(&name), &mut renamed);
+		let node = renamed_first(node.clone(), &name, &own_name(&name), &mut renamed);
 		Some(node.map_children(|child| self.rewrite(child)))
 	}
 
@@ -149,28 +178,11 @@ impl Dispatch {
 		if !redefined.arities.iter().any(|(fewest, most)| (*fewest..=*most).contains(&count)) {
 			return None;
 		}
-		let mut arguments: Vec<Node> = arguments.into_iter().map(|argument| self.rewrite(argument)).collect();
-		let own = |arguments: Vec<Node>| call(&Self::own_name(&name), arguments);
-		let library = |arguments: Vec<Node>| call(&name, arguments);
-		match self.known_fit(&arguments[0], &redefined.types) {
-			Some(true) => return Some(library(arguments)),
-			Some(false) => return Some(own(arguments)),
-			None => {}
+		let arguments: Vec<Node> = arguments.into_iter().map(|argument| self.rewrite(argument)).collect();
+		if arguments[0].drop_meta().symbol_name().is_some_and(|receiver| self.shared.contains(receiver)) {
+			return Some(call(&own_name(&name), arguments));
 		}
-		let mut bindings = vec![];
-		if !matches!(arguments[0].drop_meta(), Node::Symbol(_)) {
-			let temporary = Node::Symbol(format!("{TESTED_VALUE}·{}", super::nodes::fresh_number()));
-			bindings.push(key(temporary.clone(), Op::Assign, arguments[0].clone()));
-			arguments[0] = temporary;
-		}
-		let test = (redefined.types.iter())
-			.filter_map(|type_name| crate::lowering::type_tests::declared_type_test(arguments[0].clone(), type_name))
-			.reduce(|either, test| key(either, Op::Or, test))?;
-		let choice = if_then_else(test, library(arguments.clone()), own(arguments));
-		Some(match bindings.is_empty() {
-			true => choice,
-			false => Node::List([bindings, vec![choice]].concat(), Bracket::Round, Separator::Semicolon),
-		})
+		Some(chosen_call(&name, &redefined.types, arguments, &self.variables))
 	}
 
 	/// The word called and its arguments, the receiver first
@@ -197,17 +209,91 @@ impl Dispatch {
 			_ => None,
 		}
 	}
+}
 
-	/// Whether a value of a kind known at compile time is of the library's types; None when only the run time knows
-	fn known_fit(&self, value: &Node, types: &[String]) -> Option<bool> {
-		let kind = crate::lowering::overloads::argument_kind(value, &self.variables)?;
-		let type_name = match kind {
-			kind if kind.is_int() || kind.is_float() => NUMBER_WORD,
-			Kind::Text | Kind::Codepoint => TEXT_WORD,
-			Kind::List => LIST_WORD,
-			_ => return None,
-		};
-		Some(types.iter().any(|library_type| library_type == type_name))
+/// The program's own word for a library word it defines untyped: `count·any`
+fn own_name(name: &str) -> String {
+	crate::traits::witness_name(name, ANY_TYPE)
+}
+
+/// `count` of the program's `count·any`, the library word it stands beside
+pub fn library_word_of(own: &str) -> Option<&str> {
+	own.strip_suffix(ANY_TYPE)?.strip_suffix(crate::traits::WITNESS_SEPARATOR)
+}
+
+/// A call of the library word `name` the program also defines untyped (`4 trimmed` of `trim(x) := x-1`), chosen by
+/// its values like every other call of it
+pub fn dispatched(name: &str, arguments: Vec<Node>) -> Node {
+	chosen_call(name, &library_types(name), arguments, &HashMap::new())
+}
+
+/// The library's call when the values are of its types, else the program's: known at compile time, or tested at run
+/// time by the receiver's type only (testing a function would call it)
+fn chosen_call(
+	name: &str,
+	types: &[String],
+	mut arguments: Vec<Node>,
+	variables: &HashMap<String, Option<Kind>>,
+) -> Node {
+	let own = |arguments: Vec<Node>| call(&own_name(name), arguments);
+	let misfits = (arguments.iter().zip(library_parameter_types(name)).skip(1))
+		.filter_map(|(argument, parameter_type)| Some((argument, parameter_type?)))
+		.any(|(argument, parameter_type)| known_fit(argument, &[parameter_type], variables) == Some(false));
+	if misfits {
+		return own(arguments);
+	}
+	match known_fit(&arguments[0], types, variables) {
+		Some(true) => return library_call(name, arguments),
+		Some(false) => return own(arguments),
+		None => {}
+	}
+	let mut bindings = vec![];
+	if !matches!(arguments[0].drop_meta(), Node::Symbol(_)) {
+		let temporary = Node::Symbol(format!("{TESTED_VALUE}·{}", super::nodes::fresh_number()));
+		bindings.push(key(temporary.clone(), Op::Assign, arguments[0].clone()));
+		arguments[0] = temporary;
+	}
+	let tested = arguments[0].clone();
+	let test = (types.iter())
+		.filter_map(|type_name| crate::lowering::type_tests::declared_type_test(tested.clone(), type_name))
+		.reduce(|either, test| key(either, Op::Or, test));
+	let Some(test) = test else {
+		return own(arguments);
+	};
+	let choice = if_then_else(test, library_call(name, arguments.clone()), own(arguments));
+	match bindings.is_empty() {
+		true => choice,
+		false => Node::List([bindings, vec![choice]].concat(), Bracket::Round, Separator::Semicolon),
+	}
+}
+
+/// `floor(x)`; a builtin method of a type that is no library function is called on its receiver, `t.add(n)`
+fn library_call(name: &str, mut arguments: Vec<Node>) -> Node {
+	match typed_first_parameters(name).is_some() || crate::library_words::is_library_word(name) {
+		true => call(name, arguments),
+		false => {
+			let receiver = arguments.remove(0);
+			super::nodes::method_call(receiver, name, arguments)
+		}
+	}
+}
+
+/// Whether a value of a kind known at compile time is of one of the types; None when only the run time knows
+fn known_fit(value: &Node, types: &[String], variables: &HashMap<String, Option<Kind>>) -> Option<bool> {
+	let kind = crate::lowering::overloads::argument_kind(value, variables)?;
+	let known =
+		kind.is_int() || kind.is_float() || matches!(kind, Kind::Text | Kind::Codepoint | Kind::List | Kind::Function);
+	known.then(|| types.iter().any(|type_name| kind_fits(kind, type_name)))
+}
+
+/// Is a value of the kind of the type: `number` takes ints and floats, `text` codepoints too, `list` every list type,
+/// `function` only functions
+fn kind_fits(kind: Kind, type_name: &str) -> bool {
+	match type_name {
+		NUMBER_WORD => kind.is_int() || kind.is_float(),
+		TEXT_WORD => matches!(kind, Kind::Text | Kind::Codepoint),
+		list_type if crate::analyzer::names_list_type(list_type) => kind == Kind::List,
+		_ => type_word_kind(type_name) == Some(kind) || kind.to_string() == type_name,
 	}
 }
 
