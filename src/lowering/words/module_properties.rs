@@ -50,8 +50,8 @@ const PROPERTIES: [Property; 7] = [
 	system_side("window", "height", "window_height", Some("set_system_value(\"window_height\", it)")),
 	system_side("display", "width", "display_width", None),
 	system_side("display", "height", "display_height", None),
-	// the device pixels per inch, a quantity in dpi that turns lengths into px (lib/units.warp `length as pixels := it *
-	// display.dpi`, decision dimension-bridges); a program sets it in dpi, `display.dpi = 300 dpi`
+	// the device pixels per inch, a quantity in dpi that turns lengths into px, `3 cm * display.dpi`; a program sets it
+	// in dpi, `display.dpi = 300 dpi`
 	system_side("display", "dpi", "display_dpi * 1dpi", Some("set_system_value(\"display_dpi\", it / 1dpi)")),
 ];
 
