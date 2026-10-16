@@ -30,6 +30,8 @@ fn a_property_of_a_value_or_an_instance_setter_is_refused_loudly() {
 	assert!(of_value.contains("p is a value") && of_value.contains("write p.x = …"), "{of_value}");
 	let of_class = format!("{:?}", eval("class Point{x;y}\nPoint.label(v) := print v\nPoint(1,2).x"));
 	assert!(of_class.contains("defines no setter of Point's instances"), "{of_class}");
+	let of_field = format!("{:?}", eval("class Point{x: int; y: int}\nPoint.x := 99\nPoint(1, 2).x"));
+	assert!(of_field.contains("Point.x is a field of Point"), "{of_field}");
 }
 
 // card point-sum: a property of a class's instances, `it` the instance
