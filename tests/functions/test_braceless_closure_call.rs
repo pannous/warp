@@ -8,3 +8,9 @@ fn a_function_variable_is_called_without_parentheses() {
 	assert_eq!(warp::wasm_emitter::eval("f = function upper; [f \"a\", f \"b\"]").serialize(), "['A' 'B']");
 	is!("f = x => x + 1; f 3 == 4", true);
 }
+
+#[test]
+fn a_function_variable_given_a_number_is_refused() {
+	crate::common::fails_with("f = function upper; f = 5; f \"a\"", "f was a function, is given an Int");
+	is!("f = function upper; f = function lower; f \"A\"", "a");
+}
