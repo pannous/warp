@@ -29,4 +29,5 @@ fn a_blank_colon_after_an_operand_keeps_its_meaning() {
 	is!("x = 1 > 0 ? 2 :y; x", 2);
 	is!("class P{ n :int }\nP(3).n", 3);
 	is!("p = {name :ann}; p.name", "ann");
+	is!("x = 1 > 0 ? :big :small; x == symbol(\"big\")", true);
 }
