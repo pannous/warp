@@ -228,11 +228,14 @@ def repeated(p) {
 }
 
 COUNT_WORDS = [["once", 1], ["twice", 2], ["thrice", 3]]
+FUNCTION_KEYWORDS = ["fun", "fn", "def", "define", "function", "func"]
 
-// `thrice {…}`, `twice "ab"`: the count word and what follows, as `3 times {…}`, else ø; `twice {a: 1}` stays the call
+// `thrice {…}`, `twice "ab"`: the count word and what follows, as `3 times {…}`, else ø; `twice {a: 1}` stays the call,
+// `def twice {…}` the definition. Not mirrored yet: a program's own `once` wins (card parser-warp-scope)
 // Rust twin: control/loops.rs try_parse_count_word
 def count_worded(p) {
 	if p.at > 0 and p.code[p.at - 1] == '.' { return ø }
+	if FUNCTION_KEYWORDS contains word_before(p) { return ø }
 	for word in COUNT_WORDS {
 		if keyword_at(p, word#1) {
 			at = p.at + word#1.length
@@ -250,6 +253,16 @@ def count_worded(p) {
 		}
 	}
 	ø
+}
+
+// The name before the parser's position and blanks, else ""
+// Rust twin: definitions/functions.rs after_function_keyword_word
+def word_before(p) {
+	end = p.at
+	while end > 0 and is_blank(p.code[end - 1]) { end = end - 1 }
+	start = end
+	while start > 0 and is_name_char(p.code[start - 1]) { start = start - 1 }
+	p.code[start .. end]
 }
 
 // A block of `key: value` entries only, an object rather than code
