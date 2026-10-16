@@ -63,7 +63,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   own, `warp beautify` (synonyms canonical, idiomatic); hash-comments is its first rule.
   beautify-preview (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable):
   `warp beautify app.warp` prints the diff; in a terminal it asks "apply? y/n", piped or scripted it applies
-  nothing. `warp beautify yes app.warp` applies without asking (scripts), `warp beautify check app.warp` only
+  nothing. Amended by the user's card yes-fix (2026-10-16): piped lines answer it, one per file (`yes y | warp fix *`),
+  the end of the input is no; a terminal that cannot see the question (output piped) still applies nothing. `warp beautify yes app.warp` applies without asking (scripts), `warp beautify check app.warp` only
   previews. Never a silent rewrite: unlike format, beautify changes words. Second rule (worker default, fits the
   user's "synonyms canonical"): alias words the compiler already notes are rewritten to the warp word via their
   I-meant fixes (`__add__` → plus).
