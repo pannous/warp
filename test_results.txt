@@ -1514,6 +1514,12 @@ PASSED:
   ✓ functions::test_ignored_parameters::a_placeholder_in_a_call_stays_a_partial_application
   ✓ functions::test_ignored_parameters::an_ignored_parameter_without_a_keyword
   ✓ functions::test_ignored_parameters::ignored_parameters_still_consume_arguments
+  ✓ functions::test_infix_iteration::a_calling_word_before_a_prefix_iteration_stays
+  ✓ functions::test_infix_iteration::a_dot_name_after_an_iteration_word_reads_the_field
+  ✓ functions::test_infix_iteration::a_sort_label_before_the_function
+  ✓ functions::test_infix_iteration::an_iteration_word_between_list_and_function
+  ✓ functions::test_infix_iteration::prefix_iteration_stays
+  ✓ functions::test_infix_iteration::the_list_is_the_rightmost_operand_before_the_word
   ✓ functions::test_inlining::a_helper_with_free_variables_or_recursion_is_called
   ✓ functions::test_inlining::an_inlined_helper_leaves_its_argument_unchanged
   ✓ functions::test_inlining::an_inlined_helper_updates_the_list_handed_back
@@ -6027,4 +6033,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6022 passed, 0 failed, 6022 total tested
+13 ignored, 6028 passed, 0 failed, 6028 total tested
