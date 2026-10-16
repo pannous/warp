@@ -58,7 +58,7 @@ const WARP_FORMS: [StdAlias; 1] = [alias("json", "parse", "json", "parse_json", 
 const BARE_FORMS: [StdAlias; 1] = [alias("", "json", "json", "parse_json", &[0])];
 /// Standard words read as a member of any value, `value.member`: `x.json` is to_json(x) (card node-json)
 const MEMBER_FORMS: [StdAlias; 1] = [alias("", "json", "json", "to_json", &[0])];
-const USE_WORD: &str = "use";
+pub(crate) const USE_WORD: &str = "use";
 /// Old names of standard words, still working, and how warp writes them now: called by hand, a got-it note names it
 const OLD_NAMES: [(&str, &str); 1] = [("render_sound", "save sound as: file")];
 

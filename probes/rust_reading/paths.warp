@@ -1,0 +1,4 @@
+// card rust-paths: turbofish, std paths, constructors
+let s = String::from("hi");
+println!("{} {}", s, std::cmp::max(i32::MAX, 3));
+[1, 2, 3].iter().map(|x| x * 2).sum::<i32>() // 12

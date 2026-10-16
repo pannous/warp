@@ -33,6 +33,21 @@ fn slice_runs_cleanly(slice: usize) {
 	assert!(failures.is_empty(), "compiler errors in samples:\n{}", failures.join("\n"));
 }
 
+/// card samples-store: samples/storage/store.warp kept its values in samples/storage/store.stored.json of the checkout
+#[cfg(feature = "native")]
+#[test]
+fn samples_keep_their_stored_values_out_of_the_checkout() {
+	let sample = std::path::PathBuf::from(crate::common::sample_path("store"));
+	let beside_the_copy = sample.with_extension("stored.json");
+	let in_checkout = std::path::Path::new(crate::common::SAMPLES)
+		.join(beside_the_copy.strip_prefix(crate::common::samples_run_folder()).expect("a sample of the copy"));
+	let kept_in_checkout = || std::fs::read(&in_checkout).ok();
+	let before = kept_in_checkout();
+	let outcome = eval(&sample.to_string_lossy()).serialize();
+	assert_eq!(kept_in_checkout(), before, "a sample run changed {} of the checkout: {outcome}", in_checkout.display());
+	assert!(beside_the_copy.exists(), "the run keeps its values beside the copy it ran: {outcome}");
+}
+
 #[test]
 fn every_sample_runs_without_a_compiler_error() {
 	slice_runs_cleanly(0);

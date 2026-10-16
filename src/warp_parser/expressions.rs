@@ -122,6 +122,7 @@ impl WarpParser {
 				.or_else(|| self.try_parse_user_infix(&lhs, min_bp))
 				.or_else(|| self.try_parse_empty_call(&lhs))
 				.or_else(|| self.try_parse_subscript(&lhs, min_bp, SUBSCRIPT_BP))
+				.or_else(|| self.try_parse_rust_macro(&lhs))
 				.or_else(|| self.try_parse_evaluate_bang(&lhs, min_bp))
 				.or_else(|| self.try_parse_times(&lhs, min_bp))
 				.or_else(|| self.try_parse_test_word(&lhs, min_bp))

@@ -60,6 +60,7 @@ pub use scanning::read_atoms;
 use scanning::*;
 mod annotations;
 mod math_notation;
+mod rust_macros;
 mod suffixes;
 mod types;
 pub(crate) use math_notation::*;

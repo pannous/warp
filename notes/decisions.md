@@ -376,6 +376,13 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   `A as B := body` definitions. The compile-time dimension check (static_units.rs, P64) stays Rust until types can
   be parameterized by a dimension. Not Julia's unit values (`3km = 3*km`): they would bring back clashes with
   variables named m or s.
+- litre-suffix (2026-10-16, user; card list-literal): a glued unit beats a number suffix, so `2L` and `2l` are
+  2 litres (`2L in cm³` → 2000cm³). The old exact suffix L goes: exactness is `2 as exact`, with a hint where the
+  suffix was meant. lib/units.warp gains `unit l := L` and `unit ha := hm²`. Ambiguous glued units need
+  `use units` (user): unambiguous units (`3kg`, `5cm`, km/h) keep working without the import. Glued letters that
+  also mean something else, such as L and l (the old suffix) or a unit named like a variable, are an error without
+  `use units`, with a fix that adds the line: "2L: L is the litre unit here; add `use units` (for an exact number
+  write 2 as exact)".
 - unit-after-number (2026-10-16, user; card variable-named-like): after a number a unit symbol is always the unit,
   even with a variable of that name in scope: `m = 5; 3m` is 3m (meters), with a hint "a variable m exists; write
   3*m to multiply"; `m * 3` is 15. Supersedes the agent-pinned test_variable_shadows_the_unit (`3m` → 15).
@@ -396,7 +403,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - duration-units (2026-10-16 night, Interviewer's proposal, kept by the user 2026-10-16; card
   time-module): the time module's durations and the unit h become one thing, as dimensions-units already makes
   duration the time dimension: `unit hour := 1 h`, `2 hour + 1 h` is 3 hours (today a DimensionError), printing
-  keeps the long names ("3 hours"). The `name` form then goes.
+  keeps the long names ("3 hours"). Amended 2026-10-16 (user, "leave as is"): the `name` form stays (`name hour := h`,
+  `2 h in minutes` → 120min); step 1, where `1 h` beside a duration is a duration, is enough.
 
 ## Text
 - letters (2026-10-15 evening, Interviewer's proposal, kept by the user 2026-10-16; card of-in-chain,
@@ -847,6 +855,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   was meant to be a test: exploratory, visual, sound, timing and undecided ones stay probes). It also dedupes and
   condenses tests, which widens the earlier "only probes condense": no distinct assertion is lost or weakened, and the
   count drops only by duplicates named in the commit. A probe is deleted only once every case is asserted.
+  Probes the user touched are never deleted (a "(user)" commit, a shebang or executable bit, commented wish lines);
+  wish lines that don't work yet become cards. The 21:37 check found english_setter fully covered, but it and
+  function_values_tour were user scripts, so both were restored (2026-10-16).
 - fast-scope (2026-10-16, user; card fast-scope): `fast` before a function or module makes everything machine
   inside it: polynomial sin/cos/exp/pow, `/` gives f64 (`fast f(x) := x/3; f(1)` → 0.3333333333333333), and plain
   ints are i64 that wrap at 2^63 (`fast g(n) := n * n; g(10^10)` wraps). `x: fast int` is i64, `x: fast float` f64;

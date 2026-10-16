@@ -230,3 +230,25 @@ branch's tests there:
   time. $219 left ≈ 400+ runs; the remaining limit is the account's (≤ 3 cloud sessions at once).
 - Speed: a targeted run's 5–6 min is mostly the cold build (no cache between sessions); the Mac's queue wait was
   30–60 min. A setup script that pre-builds would be cached by the environment (section 1), not tried yet.
+
+### Lean sessions and the pool (2026-10-16 evening)
+- The cloud session reads and writes one line per call: one combined command, `CLOUD TEST RUNNING (n tests so far)` or
+  `CLOUD TEST DONE: <verdict>, <counts>`; the result and log reach the Mac through git only. Look deeper on demand in
+  data/cloud/<run>/log.txt.gz on the Mac, no cloud tokens needed.
+- `--model` carries to cloud sessions (the log's init line read claude-haiku-5-5), so the runner defaults to Haiku.
+- Pool (data/cloud/pool/, one file per session): a finished session gets the next job as a follow-up message
+  (`claude -p … --cloud <id>`); its VM keeps the checkout (tmp/cloud-test/tree) and cargo's output. Measured: the same
+  branch's second job built in 0 s, 11 s in total, against 350 s cold. Up to 5 busy at once (MAX_PARALLEL_RUNS, user 2026-10-16) and
+  8 sessions in total (MAX_CLOUD_SESSIONS, pool files plus starting ones): every session stays in the user's session
+  list until archived there, and the CLI can't archive. After 30 jobs a session gets `claude -p /clear --cloud <id>`
+  (a command, 0 turns) and goes on, instead of a fresh session. A session that refuses a job or never answers (3 h)
+  is dropped, loudly, into data/cloud/dropped-sessions.txt: archive those in the web UI.
+- New sessions are named "Cloud Test Lane" (`--name` carries to the cloud); the pool addresses them by session_id only.
+- The prompt is two short lines whatever the filters: the job's arguments go to the branch cloud-jobs/<job> (pushed
+  by the Mac, deleted with the result), the session runs `cloud-test.sh --job <job>`. A filter list of 80 test files
+  used to fill the prompt and every repeated command (~2,000 characters each).
+- A session keeps the model it was created with: `--model` on a follow-up message doesn't switch it, a `/model haiku`
+  message does (0 turns). Every reused session gets `/model` before its job; early pool sessions had run on Opus.
+- A run that can't reach its tests (merge conflict, missing tip) pushes a red result naming why, and the test run is
+  killed after 40 min with the tests that never finished named (a hang held batch-3's session).
+- The one Linux compiler warning (CLIENT unused in src/sound/midi.rs) is fixed on branch midi-client-warning (Ready).
