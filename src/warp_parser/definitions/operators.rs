@@ -71,7 +71,7 @@ pub(crate) fn declared_operators(source: &str) -> Vec<UserOperator> {
 	let mut found: Vec<UserOperator> = Vec::new();
 	let declarations = source.lines().flat_map(|line| line.split(';'));
 	// `operator × := *` is an alias (operators/aliases.rs), no function
-	for statement in declarations.filter(|statement| crate::operators::alias_line(statement).is_none()) {
+	for statement in declarations.filter(|statement| crate::operators::alias_line(&code_only(statement)).is_none()) {
 		let words: Vec<&str> = statement.split_whitespace().collect();
 		let by_kind = words.split_first().and_then(|(word, rest)| {
 			let kind = declared_kind(word)?;
@@ -300,7 +300,7 @@ impl WarpParser {
 			});
 		}
 		// `operator × := *`: the pre-scan made it an alias (source_aliases), nothing is left to define
-		let statement = format!("{word} {rest}");
+		let statement = code_only(&format!("{word} {rest}"));
 		if crate::operators::alias_line(&statement).is_some() {
 			while !matches!(self.current_char(), '\n' | ';' | '\0') {
 				self.advance();

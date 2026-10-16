@@ -8,7 +8,6 @@ const MATH_SOURCE: &str = include_str!("../../lib/math.warp");
 const OPERATOR_WORD: &str = "operator";
 const PREFIX_WORD: &str = "prefix";
 const DEFINE: &str = ":=";
-const COMMENT: &str = " //";
 const STATEMENT_END: char = ';';
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,16 +29,16 @@ pub fn math_aliases() -> &'static [OperatorAlias] {
 	ALIASES.get_or_init(|| source_aliases(MATH_SOURCE))
 }
 
-/// The alias lines of a source
+/// The alias lines of a source's code: an alias line in a text or a comment declares nothing
 pub fn source_aliases(source: &str) -> Vec<OperatorAlias> {
-	source.lines().flat_map(|line| line.split(STATEMENT_END)).filter_map(alias_line).collect()
+	let code = crate::warp_parser::code_only(source);
+	code.lines().flat_map(|line| line.split(STATEMENT_END)).filter_map(alias_line).collect()
 }
 
 /// `operator × := *`, `prefix operator √ := sqrt`: the alias a statement declares; the target is a spelling of the
 /// parser's own table (an infix operator) or a prefix operator word
 pub fn alias_line(statement: &str) -> Option<OperatorAlias> {
-	let code = statement.split(COMMENT).next()?;
-	let words: Vec<&str> = code.split_whitespace().collect();
+	let words: Vec<&str> = statement.split_whitespace().collect();
 	let (position, rest) = match words.as_slice() {
 		[PREFIX_WORD, OPERATOR_WORD, rest @ ..] => (AliasPosition::Prefix, rest),
 		[OPERATOR_WORD, rest @ ..] => (AliasPosition::Infix, rest),

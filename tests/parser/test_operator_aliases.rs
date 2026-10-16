@@ -23,6 +23,14 @@ fn a_math_spelling_keeps_its_operator_and_precedence() {
 fn a_program_declares_its_own_alias() {
 	is!("operator ⊕ := +\n1 ⊕ 2 * 3", 7);
 	is!("prefix operator ∂ := sqrt\n∂16", 4.0);
+	is!("operator ⊕ := + // plus\n1 ⊕ 2", 3);
+}
+
+/// reviewer: an alias line in a text or a comment declares nothing
+#[test]
+fn an_alias_line_in_a_text_is_text() {
+	is!("note = \"\noperator ⊕ := +\n\"\n// operator ⊗ := *\nsize(note)", 17);
+	assert!(warp::operators::source_aliases("note = \"\noperator ⊕ := +\n\"").is_empty());
 }
 
 #[test]
