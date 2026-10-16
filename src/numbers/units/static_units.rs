@@ -545,6 +545,27 @@ fn written_power(op: Op, exponent: &Node) -> Option<i32> {
 	}
 }
 
+/// `3 cm as px`, `3 m as s`: what turns `given` into `target` by a product, as the fix: a named quantity of
+/// lib/units.warp (`speed`, shown in its base units m/s) before a unit word of it (dpi, px per inch)
+fn conversion_fix(given: &Signature, target: &Signature) -> String {
+	let (times, divided) = (combined(target, given, -1), combined(given, target, -1));
+	let fix = |ratio: &Signature, amount: String| match () {
+		_ if **ratio == *times => Some(format!("; multiply by {amount}")),
+		_ if **ratio == *divided => Some(format!("; divide by {amount}")),
+		_ => None,
+	};
+	let quantities = dimension_names().map(|(name, powers)| {
+		let ratio = Signature::from(powers);
+		let amount = format!("a {name} ({})", shown(&ratio));
+		(ratio, amount)
+	});
+	let unit_words = super::unit_aliases().iter().filter_map(|(name, expression)| {
+		let units = super::unit_expression(&crate::warp_parser::parse(expression))?;
+		Some((signature(&units), format!("an amount in {name}")))
+	});
+	quantities.chain(unit_words).find_map(|(ratio, amount)| fix(&ratio, amount)).unwrap_or_default()
+}
+
 fn number_node(amount: &Rational) -> Option<Node> {
 	let numerator = amount.numerator.to_i64()?;
 	Some(match amount.denominator.to_i64()? {
@@ -1047,9 +1068,10 @@ impl Inference {
 		// a list converts each element: `[3, 4] cm in m`
 		if *given != *target {
 			return Err(Stop::Error(format!(
-				"DimensionError: {} cannot be converted to {}",
+				"DimensionError: {} cannot be converted to {}{}",
 				shown(&given),
-				shown(&target)
+				shown(&target),
+				conversion_fix(&given, &target)
 			)));
 		}
 		Ok((quantity, given))

@@ -1,0 +1,8 @@
+s = "שָלוֹם"
+print count s          // 4 characters
+print s.codepoints     // 6 code points
+print s.chars          // the characters, a letter with its vowel point each
+n = 0
+for each codepoint in s { n += 1 }
+print n                // 6
+print number of glyphs in s  // 4

@@ -865,7 +865,7 @@ fn gpu_reduced(
 	let [get, _, _] = LINEAR_FLOAT_WORDS;
 	let (size, fewest) = (crate::gpu_maps::WORKGROUP_SIZE, crate::gpu_maps::fewest_items(keeping));
 	let combined = reduction.combined("reduce_value", &format!("{get}(reduce_partials, reduce_index)"));
-	let template = crate::warp_parser::parse_generated(&format!("reduce_partials = {LINEAR_NEW}(({LINEAR_COUNT}(reduce_source) + {size} - 1)//{size}); \
+	let template = crate::warp_parser::parse_generated(&format!("reduce_partials = {LINEAR_NEW}(({LINEAR_COUNT}(reduce_source) + {size} - 1) /! {size}); \
 		reduce_target = if {LINEAR_COUNT}(reduce_source) < {fewest} or {}(gpu_shader, reduce_source, gpu_values, reduce_partials, {LINEAR_COUNT}(reduce_partials), {keeping}) == 0 then reduce_on_cpu \
 		else (reduce_value = {get}(reduce_partials, 1); for reduce_index in 2 to {LINEAR_COUNT}(reduce_partials) {{ reduce_value = {combined} }}; reduce_value)", crate::host::GPU_REDUCE_LINEAR));
 	let (copy, source) = if is_linear_floats(array, names) {
@@ -921,7 +921,7 @@ fn gpu_mapped(target: &Node, array: &Node, lambda: &Node, kernel: crate::gpu_map
 	use crate::wasm_emitter::lists::linear_arrays::LINEAR_COUNT;
 	let size = crate::gpu_maps::WORKGROUP_SIZE;
 	let fewest = crate::gpu_maps::fewest_items(keeping);
-	let mapped = format!("if {LINEAR_COUNT}(map_source) < {fewest} or {}(gpu_shader, map_source, gpu_values, map_target, ({LINEAR_COUNT}(map_source) + {size} - 1)//{size}, {keeping}) == 0 {{ map_loop }}", crate::host::GPU_MAP_LINEAR);
+	let mapped = format!("if {LINEAR_COUNT}(map_source) < {fewest} or {}(gpu_shader, map_source, gpu_values, map_target, ({LINEAR_COUNT}(map_source) + {size} - 1) /! {size}, {keeping}) == 0 {{ map_loop }}", crate::host::GPU_MAP_LINEAR);
 	block_mapped(
 		target,
 		array,

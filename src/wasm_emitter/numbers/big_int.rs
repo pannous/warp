@@ -245,19 +245,21 @@ impl WasmGcEmitter {
 				self.emit_nonzero_divisor(func, b, right);
 				let unproven = self.unproven(&[(a, left), (b, right)]);
 				self.emit_fixnum_test(func, &unproven);
-				self.emit_fast_or_slow(func, &euclidean_remainder(a, b, r), "exact_mod");
+				let slow = self.division_runtime(super::exact::INT_MOD, "exact_mod");
+				self.emit_fast_or_slow(func, &euclidean_remainder(a, b, r), slow);
 			}
 			Op::Rem => {
 				self.emit_nonzero_divisor(func, b, right);
 				let unproven = self.unproven(&[(a, left), (b, right)]);
 				self.emit_fixnum_test(func, &unproven);
-				self.emit_fast_or_slow(func, &[I::LocalGet(a), I::LocalGet(b), I::I64RemS], "exact_rem");
+				let slow = self.division_runtime("int_rem", "exact_rem");
+				self.emit_fast_or_slow(func, &[I::LocalGet(a), I::LocalGet(b), I::I64RemS], slow);
 			}
 			_ => unreachable!("not an Int operator: {:?}", op),
 		}
 	}
 
-	/// Stack [a, b] (Ints) → [a // b], the Euclidean quotient: (a - a % b) / b is exact on fixnums, else exact_euclid_div
+	/// Stack [a, b] (Ints) → [a // b], the Euclidean quotient: (a - a % b) / b is exact on fixnums, else int_euclid_div or exact_euclid_div
 	pub(in crate::wasm_emitter) fn emit_euclidean_quotient(
 		&mut self,
 		func: &mut Function,
@@ -275,7 +277,8 @@ impl WasmGcEmitter {
 		let mut quotient = vec![I::LocalGet(a)];
 		quotient.extend(euclidean_remainder(a, b, r));
 		quotient.extend([I::I64Sub, I::LocalGet(b), I::I64DivS]);
-		self.emit_fast_or_slow(func, &quotient, "exact_euclid_div");
+		let slow = self.division_runtime(super::exact::INT_EUCLID_DIV, "exact_euclid_div");
+		self.emit_fast_or_slow(func, &quotient, slow);
 	}
 
 	/// `a % 0` fails with the named error divide_by_zero (try catches it), never the engine's divide trap; skipped when the
@@ -302,6 +305,15 @@ impl WasmGcEmitter {
 		func.instruction(&I::Else);
 		self.emit_scratch_call(func, slow);
 		func.instruction(&I::End);
+	}
+
+	/// The slow path of `%`, `rem` or `//`: `exact` when ratios may reach it, else `int` (emit_module checks that)
+	fn division_runtime(&mut self, int: &'static str, exact: &'static str) -> &'static str {
+		if self.ratio_division {
+			return exact;
+		}
+		self.int_division = true;
+		int
 	}
 
 	/// Push i32 1 when all locals are in [-2^31, 2^31)

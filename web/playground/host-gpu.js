@@ -73,6 +73,9 @@ const NO_CANVAS_CONTEXT = "this browser gives a Worker's canvas no WebGPU contex
 // tour's shader example then waited until the run's time was up, and the Worker's replacement logged a bare "uncaught
 // exception: undefined"): a failure that says which, well within the run's time
 const GPU_DEVICE_WAIT_MS = 5000;
+// a step doing real work, compiling a shader or reading back a heavy compute shader's result (a slow or software GPU):
+// silent this long it fails naming itself, still before the program's side stops waiting (GPU_JOB_WAIT_MS)
+const GPU_WORK_WAIT_MS = 25000;
 const GPU_JOB_WAIT_MS = 30000; // the program's side: a task Worker that gives no answer in this time is said to
 const LOSS_WAIT_MS = 100; // the program's side: why painting into the page's canvas failed, after which pixels are painted
 const paintCanvases = new Map(); // the task Worker's: canvas id → {context, format}
@@ -155,7 +158,7 @@ const paintCanvasArrived = ({ id, canvas }) => arrivingCanvas(id).arrived(canvas
 // the task Worker's side of a page canvas: the OffscreenCanvas the page sent, drawn on through WebGPU
 async function gpuCanvas({ id, replaces }) {
 	const device = await theGpuDevice(); // without an adapter that error, as gpu_render's
-	const canvas = await arrivingCanvas(id).canvas;
+	const canvas = await answeredWithin(arrivingCanvas(id).canvas, "canvas from the page");
 	arrivingCanvases.delete(id);
 	paintCanvases.delete(replaces);
 	const context = canvas.getContext("webgpu");
@@ -291,11 +294,12 @@ async function gpuDeviceOrFailure() {
 	return device;
 }
 
-// the browser's answer for `what`, or a failure once it has kept silent for GPU_DEVICE_WAIT_MS
-function answeredWithin(promise, what) {
+// the browser's answer for `what`, or a failure once it has kept silent for `waitMs` (GPU_DEVICE_WAIT_MS): every awaited step
+// (adapter, device, page canvas, compilation, validation, read-back) names itself, within the run's own stop
+function answeredWithin(promise, what, waitMs = GPU_DEVICE_WAIT_MS) {
 	let timer;
 	const silence = new Promise((_, fail) => {
-		timer = setTimeout(() => fail(new Error(`the browser's WebGPU gave no ${what} in ${GPU_DEVICE_WAIT_MS / 1000} s`)), GPU_DEVICE_WAIT_MS);
+		timer = setTimeout(() => fail(new Error(`the browser's WebGPU gave no ${what} in ${waitMs / 1000} s`)), waitMs);
 	});
 	return Promise.race([promise, silence]).finally(() => clearTimeout(timer));
 }
@@ -320,7 +324,7 @@ const gpuModule = (device, shader) => compiledOnce(compiledModules, shader, () =
 // the shader's module; one that does not compile throws where and why
 async function checkedModule(device, shader) {
 	const module = device.createShaderModule({ code: shader });
-	const problems = (await module.getCompilationInfo()).messages.filter(message => message.type === "error");
+	const problems = (await answeredWithin(module.getCompilationInfo(), "compilation report", GPU_WORK_WAIT_MS)).messages.filter(message => message.type === "error");
 	if (problems.length) throw new Error(problems.map(problem => `${problem.lineNum}:${problem.linePos}: ${essence(problem.message)}`).join("; "));
 	return module;
 }
@@ -339,7 +343,7 @@ const gpuReadBack = async (device, encoder, readback) => (await gpuReadBacks(dev
 // submit the encoded work; the validation error it raised throws
 async function gpuSubmitted(device, encoder) {
 	device.queue.submit([encoder.finish()]);
-	const invalid = await device.popErrorScope();
+	const invalid = await answeredWithin(device.popErrorScope(), "validation report");
 	if (invalid) throw new Error(invalid.message);
 }
 
@@ -347,7 +351,7 @@ async function gpuSubmitted(device, encoder) {
 async function gpuReadBacks(device, encoder, readbacks) {
 	await gpuSubmitted(device, encoder);
 	return Promise.all(readbacks.map(async readback => {
-		await readback.mapAsync(GPUMapMode.READ);
+		await answeredWithin(readback.mapAsync(GPUMapMode.READ), "read-back result", GPU_WORK_WAIT_MS);
 		const bytes = readback.getMappedRange().slice(0);
 		readback.destroy();
 		return bytes;
@@ -478,21 +482,6 @@ function gpuTaskWorker() {
 function linearCells(memory, block) {
 	const count = Number(new DataView(memory.buffer).getBigInt64(Number(block), true));
 	return new Float64Array(memory.buffer, Number(block) + Float64Array.BYTES_PER_ELEMENT, count);
-}
-
-// GLSL functions as WGSL ones (lib/draw.warp glsl_shader): naga as natively (crates/warp-glsl), in glsl.wasm of its own,
-// loaded at the first translation so warp.wasm stays without it (web/playground/build.sh); the answer is the WGSL, or
-// the error after a leading NUL
-const GLSL_URL = new URL("glsl.wasm", self.location.href).href;
-let glslExports;
-function glslWgsl(glsl) {
-	glslExports ??= new WebAssembly.Instance(new WebAssembly.Module(getSync(GLSL_URL, 0, true))).exports;
-	const bytes = utf8.encode(glsl);
-	new Uint8Array(glslExports.memory.buffer, glslExports.glsl_buffer(bytes.length), bytes.length).set(bytes);
-	const length = glslExports.glsl_wgsl(bytes.length);
-	const answer = new TextDecoder().decode(new Uint8Array(glslExports.memory.buffer, glslExports.glsl_buffer(0), length));
-	if (answer.startsWith("\0")) throw new Error(answer.slice(1));
-	return answer;
 }
 
 addHostPart({
@@ -626,6 +615,4 @@ addHostPart({
 			draw_show: () => { throw new Error(NO_GPU_DRAWING); },
 		};
 	},
-	// lib/draw.warp glsl_shader (twigl, shadertoy): GLSL functions as WGSL ones
-	adapters: { draw: { glsl_wgsl: glslWgsl } },
 });

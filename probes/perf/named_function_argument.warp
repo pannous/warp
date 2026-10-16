@@ -1,0 +1,11 @@
+# a function passed by name to a higher-order function (card specialise-named-functions): called as a value its
+# parameters lose their types; called by name inside a copy specialised for it they keep them
+ink(x, y) := (x * 3 + y) % 7
+each(f, n) := { total = 0; for i in 0..n { total = total + f(i, i + 1) }; total }
+direct(n) := { total = 0; for i in 0..n { total = total + ink(i, i + 1) }; total }
+started = clock()
+a = each(ink, 3000000)
+passed = clock() - started
+started = clock()
+b = direct(3000000)
+print "passed by name ${passed} ms, called directly ${clock() - started} ms, same: ${a == b}"

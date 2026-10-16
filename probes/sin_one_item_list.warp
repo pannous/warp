@@ -1,0 +1,2 @@
+print sin [4.0]
+print sqrt [4]

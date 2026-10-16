@@ -162,8 +162,12 @@ pub fn unresolved_import_message(name: &str, library: &str) -> String {
 }
 
 /// The error of a call nothing resolves, always "undefined function: name", then where the name is found: a standard
-/// module or a libc function says how to bring it in
+/// module or a libc function says how to bring it in; a free symbol used as an operator (`1 ⇔ 1`, decision
+/// unicode-symbols) says how to define it
 pub fn undefined_function_message(name: &str) -> String {
+	if let Some(glyph) = name.strip_prefix(crate::operators::OPERATOR_FUNCTION_PREFIX) {
+		return format!("operator {glyph} is not defined (define it with infix operator {glyph}(a, b) := …)");
+	}
 	match where_undefined_function_is(name) {
 		Some(hint) => format!("undefined function: {name} ({hint})"),
 		None => format!("undefined function: {name}"),

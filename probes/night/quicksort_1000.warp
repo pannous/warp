@@ -4,7 +4,7 @@
 def quicksort(arr) {
     if arr.length <= 1 { return arr }
 
-    pivot = arr[arr.length//2]
+    pivot = arr[arr.length /! 2]
     left = arr.filter(x => x < pivot)
     middle = arr.filter(x => x == pivot)
     right = arr.filter(x => x > pivot)

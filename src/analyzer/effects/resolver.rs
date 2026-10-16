@@ -171,7 +171,7 @@ impl FunctionEffects {
 	}
 }
 
-/// `raise "no"`, `throw e`, `fail`, `panic`, `error "neg"`, and the floor division `x // y` of a divisor that may be 0
+/// `raise "no"`, `throw e`, `fail`, `panic`, `error "neg"`, and the floor division `x /! y` of a divisor that may be 0
 fn raises(items: &[Node]) -> bool {
 	match items {
 		[word, _] => matches!(word.drop_meta(), Node::Symbol(word)

@@ -191,7 +191,9 @@ async function workerBundle(code) {
 	try {
 		const length = await webWorkerBundle(...codeText);
 		const report = JSON.parse(compilerText(compiler.web_report(), length));
-		const module = report.error ? undefined : new Uint8Array(compiler.memory.buffer, compiler.web_bundle_module(), report.module_length).slice();
+		// the call first: memory it grows would detach a buffer read before it
+		const modulePointer = report.error ? undefined : compiler.web_bundle_module();
+		const module = report.error ? undefined : new Uint8Array(compiler.memory.buffer, modulePointer, report.module_length).slice();
 		compiler.web_free(...codeText);
 		return { query: report.query, module, error: report.error };
 	} catch (crash) {

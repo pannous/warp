@@ -24,6 +24,27 @@ operator ⊻ := xor
 operator ± := +-
 prefix operator √ := sqrt
 prefix operator ∛ := cbrt
+// The arrows of src/operators/spellings.rs's list that spell an operator (card user-listed); the rest stay unread
+operator → := ->
+operator ⟶ := ->
+operator ➔ := ->
+operator ➜ := ->
+operator ➝ := ->
+operator ➞ := ->
+operator ➡ := ->
+operator ⭢ := ->
+operator ⇒ := =>
+operator ⟹ := =>
+operator ← := <-
+operator ⟵ := <-
+operator ⬅ := <-
+operator ⭠ := <-
+operator ⬆ := ↑
+operator ⇧ := ↑
+operator ⭡ := ↑
+operator ⬇ := ↓
+operator ⇩ := ↓
+operator ⭣ := ↓
 
 // The math words warp computes itself, with their signatures (decision foreign-signature, `from warp`): exact on
 // exact values where they can be, so floor gives an int where C's floor gives a float
@@ -99,11 +120,11 @@ reflect(i, n) := i .- (2 * dot(n, i)) .* n
 is_even(n: int) := n % 2 == 0
 is_odd(n: int) := n % 2 != 0
 // the decimal digits of a whole number: digits(1234) is [1 2 3 4]
-digits(n: int) := { out = []; rest = abs(n); while rest >= 10 { out = [rest % 10] + out; rest = rest//10 }; [rest] + out }
+digits(n: int) := { out = []; rest = abs(n); while rest >= 10 { out = [rest % 10] + out; rest = rest /! 10 }; [rest] + out }
 // the number of ways to choose k of n (the binomial coefficient)
-choose(n: int, k: int) := { if k < 0 or k > n { return 0 }; out = 1; for i in 1 to min(k, n - k) { out = out * (n - min(k, n - k) + i)//i }; out }
+choose(n: int, k: int) := { if k < 0 or k > n { return 0 }; out = 1; for i in 1 to min(k, n - k) { out = out * (n - min(k, n - k) + i) /! i }; out }
 // base^exponent % modulus without the huge power
-mod_pow(base: int, exponent: int, modulus: int) := { out = 1; b = base % modulus; e = exponent; while e > 0 { if e % 2 == 1 { out = out * b % modulus }; b = b * b % modulus; e = e//2 }; out }
+mod_pow(base: int, exponent: int, modulus: int) := { out = 1; b = base % modulus; e = exponent; while e > 0 { if e % 2 == 1 { out = out * b % modulus }; b = b * b % modulus; e = e /! 2 }; out }
 // part as a percentage of whole: percent(1, 4) is 25
 percent(part, whole) := part * 100.0 / whole
 to_radians(degrees) := degrees * pi / 180
@@ -112,9 +133,9 @@ to_degrees(radians) := radians * 180 / pi
 isqrt(n: int) := { r = floor(sqrt(n)) as int; while r * r > n { r = r - 1 }; while (r + 1) * (r + 1) <= n { r = r + 1 }; r }
 is_square(n: int) := n >= 0 and isqrt(n) * isqrt(n) == n
 divisors(n: int) := [d for d in 1..n + 1 if n % d == 0]
-prime_factors(n: int) := { out = []; rest = n; d = 2; while d * d <= rest { while rest % d == 0 { out = out + [d]; rest = rest//d }; d++ }; if rest > 1 { out = out + [rest] }; out }
+prime_factors(n: int) := { out = []; rest = n; d = 2; while d * d <= rest { while rest % d == 0 { out = out + [d]; rest = rest /! d }; d++ }; if rest > 1 { out = out + [rest] }; out }
 // the one bits of whole numbers ≥ 0 (`&` and `|` are logical, `xor` is bitwise already): bit_count(6) is 2
-bit_count(n: int) := { out = 0; rest = n; while rest > 0 { out = out + rest % 2; rest = rest//2 }; out }
+bit_count(n: int) := { out = 0; rest = n; while rest > 0 { out = out + rest % 2; rest = rest /! 2 }; out }
 // two's-complement bits of any whole numbers, by a + b = (a xor b) + 2 * bit_and(a, b): bit_and(-129, 127) is 127
 bit_and(a: int, b: int) := (a + b - (a xor b)) / 2
 bit_or(a: int, b: int) := (a + b + (a xor b)) / 2

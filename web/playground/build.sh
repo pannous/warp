@@ -6,8 +6,6 @@
 # Usage: build.sh [optimized|debug|components|pinned|served <site>|site <site>]   (all when omitted)
 #   optimized → warp.wasm: release profile (opt-level z, fat LTO, one codegen unit, stripped), without the `validate`
 #               feature (wasmparser's validator, a quarter of the module: the browser validates anyway), then wasm-opt
-#   both also → glsl.wasm: crates/warp-glsl (naga, GLSL as WGSL for lib/draw.warp glsl_shader), release profile, loaded
-#               only when a program translates GLSL (host-gpu.js glslWgsl): 705 KB, which warp.wasm leaves out
 #   debug     → warp.debug.wasm: profile web-debug (opt-level 1, line tables, the name section kept), with `validate`, so
 #               emitter bugs are named and stack traces and the browser's debugger show Rust functions and lines
 #   components → components/<name>.js for every COMPONENTS component (`use <name>`, components.js), and their names in
@@ -28,7 +26,7 @@ SITE_FILES=(index.html playground.css playground.js deploy.js assistant.js compl
 	guide.md guide-expert.md primer.md markup.js markup-transitions.js markup-forms.js canvas.js worker.js task-worker.js
 	task-workers.js js-members.js coi-serviceworker.js host.js "host-*.js" components.js components foreign_python.py
 	reader.js imports.js exact.js std.js examples.js codemirror-warp-mode.js codemirror lib warp.wasm
-	warp.debug.wasm glsl.wasm samples.js keywords.js keywords.txt assistant.json version.js)
+	warp.debug.wasm samples.js keywords.js keywords.txt assistant.json version.js)
 DOMAIN=warp.pannous.com
 
 STACK_BYTES=8388608 # the parser and the emitter recurse deeply; wasm32's default stack is 1 MB
@@ -50,16 +48,7 @@ compile() {
 	echo "$target_dir/wasm32-unknown-unknown/$profile/warp.wasm"
 }
 
-# crates/warp-glsl as glsl.wasm, optimized for size as warp.wasm is
-build_glsl() {
-	cargo rustc $offline -p warp-glsl --lib --crate-type cdylib --profile release --target wasm32-unknown-unknown >&2
-	local compiled="$target_dir/wasm32-unknown-unknown/release/warp_glsl.wasm"
-	wasm-opt "${WASM_OPT_FLAGS[@]}" "$compiled" -o "$page/glsl.wasm" || cp "$compiled" "$page/glsl.wasm"
-	echo "built $page/glsl.wasm ($(wc -c < "$page/glsl.wasm") bytes)"
-}
-
 build_optimized() {
-	build_glsl
 	local compiled
 	compiled=$(compile release)
 	# without wasm-opt (or an older one refusing a feature) the module of the LTO build serves, a seventh larger
@@ -68,7 +57,6 @@ build_optimized() {
 }
 
 build_debug() {
-	[ -f "$page/glsl.wasm" ] || build_glsl
 	cp "$(compile web-debug --features validate)" "$page/warp.debug.wasm"
 	echo "built $page/warp.debug.wasm ($(wc -c < "$page/warp.debug.wasm") bytes)"
 }
