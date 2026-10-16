@@ -26,6 +26,10 @@ pub(crate) const DATA_WORD: &str = "data";
 const BLOCK_TOPIC: &str = "uncharged-block";
 /// Prefixes of a block: `code e`, `block e` (synonyms, wiki/charged.md section 4)
 const BLOCK_WORDS: [&str; 2] = ["code", "block"];
+/// The type word of a parameter taking a function or a block (card callable): `run(f: callable) := f()` runs
+/// `run(square)`, `run(x => x * 2)` and `run({ print 1 })`; the others are its aliases, hinted
+pub(crate) const CALLABLE_WORD: &str = "callable";
+const CALLABLE_ALIASES: [&str; 2] = ["invocable", "runnable"];
 /// The got-it topic of `!` on data
 const DATA_RUN_TOPIC: &str = "data-as-code";
 /// `body·m0`: a parameter of an expanded block function, bound once
@@ -35,6 +39,7 @@ pub fn lower(program: Node) -> Node {
 	let mut functions = HashMap::new();
 	program.visit(&mut |node| {
 		if let Some((name, function)) = block_function(node) {
+			hint_callable_alias(node);
 			functions.insert(name, function);
 		}
 	});
@@ -50,11 +55,30 @@ pub fn lower(program: Node) -> Node {
 	lowering.statement(program)
 }
 
-/// A function with a `block` parameter: its parameters (name, whether a block) and body
+/// A function with a `block` parameter: its parameters (name, what it takes) and body
 #[derive(Clone)]
 struct BlockFunction {
-	parameters: Vec<(String, bool)>,
+	parameters: Vec<(String, Takes)>,
 	body: Node,
+}
+
+/// What a parameter of a block function takes
+#[derive(Clone, Copy, PartialEq)]
+enum Takes {
+	Value,
+	Block,
+	/// a block or a function, as the argument is written
+	Callable,
+}
+
+impl Takes {
+	fn of_type(word: &str) -> Takes {
+		match word {
+			_ if BLOCK_WORDS.contains(&word) => Takes::Block,
+			_ if word == CALLABLE_WORD || CALLABLE_ALIASES.contains(&word) => Takes::Callable,
+			_ => Takes::Value,
+		}
+	}
 }
 
 /// `f(c, body:block) := …`: a definition with at least one `block` (or `code`) parameter; a parameter named `block` or
@@ -70,23 +94,47 @@ fn block_function(node: &Node) -> Option<(String, BlockFunction)> {
 	let Node::Symbol(name) = name.drop_meta() else {
 		return None;
 	};
-	let parameters: Vec<(String, bool)> = parameters
+	let parameters: Vec<(String, Takes)> = parameters
 		.iter()
 		.map(|parameter| match parameter.drop_meta() {
 			Node::Symbol(name) => {
-				Some((name.clone(), BLOCK_WORDS.contains(&name.as_str()) && runs_anywhere(body, name)))
+				let block = BLOCK_WORDS.contains(&name.as_str()) && runs_anywhere(body, name);
+				Some((name.clone(), if block { Takes::Block } else { Takes::Value }))
 			}
-			Node::Key(name, Op::Colon, kind) => Some((
-				name.name(),
-				matches!(kind.drop_meta(), Node::Symbol(word) if BLOCK_WORDS.contains(&word.as_str())),
-			)),
+			Node::Key(name, Op::Colon, kind) => {
+				Some((name.name(), kind.drop_meta().symbol_name().map_or(Takes::Value, Takes::of_type)))
+			}
 			_ => None,
 		})
 		.collect::<Option<_>>()?;
 	parameters
 		.iter()
-		.any(|(_, block)| *block)
+		.any(|(_, takes)| *takes != Takes::Value)
 		.then(|| (name.clone(), BlockFunction { parameters, body: body.as_ref().clone() }))
+}
+
+/// The argument of a callable parameter that is code to run: `{ print 1 }`, `code e`, the rest of a call
+fn is_code_argument(argument: &Node) -> bool {
+	is_block(argument)
+		|| prefixed(argument, &BLOCK_WORDS).is_some()
+		|| matches!(argument.drop_meta(), Node::List(_, Bracket::None, Separator::Space))
+}
+
+/// `f(x: invocable)`: the hint to write callable
+fn hint_callable_alias(node: &Node) {
+	node.visit(&mut |part| {
+		if let Node::Key(name, Op::Colon, kind) = part.drop_meta() {
+			if let Some(alias) = kind.drop_meta().symbol_name().filter(|word| CALLABLE_ALIASES.contains(word)) {
+				crate::normalize::set_position_of(part);
+				let name = name.name();
+				crate::normalize::hint(
+					&format!("{name}: {alias}"),
+					&format!("{name}: {CALLABLE_WORD}"),
+					"callable is the type word for a function or a block",
+				);
+			}
+		}
+	});
 }
 
 /// The prefixed value `code e` / `data e`: the prefix and e
@@ -215,11 +263,11 @@ fn runs_anywhere(body: &Node, parameter: &str) -> bool {
 
 /// The arguments of a call to a function with these parameters: one each, or, when the last parameter is a block, the
 /// rest of the call as its argument (`twice(print "hi")` is read as the items twice, print, "hi")
-fn fitted_arguments(parameters: &[(String, bool)], arguments: &[Node]) -> Option<Vec<Node>> {
+fn fitted_arguments(parameters: &[(String, Takes)], arguments: &[Node]) -> Option<Vec<Node>> {
 	if arguments.len() == parameters.len() {
 		return Some(arguments.to_vec());
 	}
-	let last_is_block = parameters.last().is_some_and(|(_, block)| *block);
+	let last_is_block = parameters.last().is_some_and(|(_, takes)| *takes != Takes::Value);
 	if !last_is_block || arguments.len() < parameters.len() {
 		return None;
 	}
@@ -827,9 +875,13 @@ impl Blocks {
 		self.expansions += 1;
 		let mut statements = vec![];
 		let mut body = function.body;
-		for ((parameter, is_block), argument) in function.parameters.iter().zip(&arguments) {
-			if *is_block {
+		for ((parameter, takes), argument) in function.parameters.iter().zip(&arguments) {
+			let callable = *takes == Takes::Callable;
+			if *takes == Takes::Block || callable && is_code_argument(argument) {
 				body = substitute_block(body, parameter, argument);
+			} else if callable && argument.drop_meta().symbol_name().is_some() {
+				// a function's name stands for the function: `f(3)` is `square(3)`
+				body = crate::library_words::substitute(body, parameter, argument);
 			} else {
 				let bound = Node::Symbol(format!("{parameter}{EXPANSION_SEPARATOR}{number}"));
 				statements.push(key(bound.clone(), Op::Assign, self.rewrite(argument.clone())));

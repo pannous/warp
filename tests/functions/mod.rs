@@ -31,6 +31,7 @@ mod test_c_style_definitions;
 mod test_call_arity;
 mod test_call_efficiency;
 mod test_call_result_fields;
+mod test_callable_parameter; // card callable
 mod test_captured_containers;
 mod test_captured_copy_of_global;
 mod test_captured_node_return; // card captured-node-return
