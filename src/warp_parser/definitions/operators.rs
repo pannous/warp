@@ -75,7 +75,28 @@ pub(crate) fn scan_user_operators(source: &str) -> Vec<UserOperator> {
 	for module in used_std_modules(source) {
 		found.extend(declared_operators(module));
 	}
+	let library_glyphs_used: Vec<UserOperator> = library_glyph_operators()
+		.iter()
+		.filter(|library| !found.iter().any(|operator| operator.glyph == library.glyph))
+		.filter(|library| source.contains(&library.glyph.iter().collect::<String>()))
+		.cloned()
+		.collect();
+	found.extend(library_glyphs_used);
+	found.sort_by_key(|operator| std::cmp::Reverse(operator.glyph.len()));
 	found
+}
+
+/// The glyph operators the standard modules declare, with their precedence: `[1] ∪ [2] ∩ [3]` reads ∩ first as
+/// lib/list.warp says, without `use list`; word operators (`matches`) stay behind their module's `use`
+fn library_glyph_operators() -> &'static [UserOperator] {
+	static OPERATORS: std::sync::OnceLock<Vec<UserOperator>> = std::sync::OnceLock::new();
+	OPERATORS.get_or_init(|| {
+		crate::modules::STD_MODULES
+			.iter()
+			.flat_map(|(_, source)| declared_operators(source))
+			.filter(|operator| !is_operator_word(&operator.glyph))
+			.collect()
+	})
 }
 
 /// The kind a declaration's first word declares: `prefix|suffix|infix operator ⊕`, and `operator ⊕` alone is infix (card

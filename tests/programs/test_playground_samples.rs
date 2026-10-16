@@ -1,15 +1,15 @@
-// Every sample of the playground menu (samples/*.warp but those web/playground/excluded_samples.txt names) runs to a
+// Every sample of the playground menu (samples/<chapter>/*.warp but those web/playground/excluded_samples.txt names) runs to a
 // value, never to an error (card g-_fHI): an excluded sample is back in the menu once it works and its line is deleted.
 // The browser suite runs it too.
+use crate::common::{sample_files, sample_name, sample_path};
 use std::fs;
 use warp::wasm_emitter::eval;
 use warp::Node;
 
 const EXCLUDED_LIST: &str = "web/playground/excluded_samples.txt";
-const SAMPLES: &str = "samples";
 /// paint directly or through the draw module (lib/draw.warp show)
 const PAINTING: [&str; 2] = ["paint(", "use draw"];
-/// A sample on the GPU (samples/webgpu.warp) is skipped, loudly, on a machine without one (CI)
+/// A sample on the GPU (samples/graphics/webgpu.warp) is skipped, loudly, on a machine without one (CI)
 const NO_GPU: &str = "no WebGPU adapter";
 
 /// The names excluded_samples.txt lists: the first word of each line that is no comment
@@ -22,10 +22,6 @@ fn excluded_samples() -> Vec<String> {
 		.collect()
 }
 
-fn sample_path(name: &str) -> String {
-	format!("{SAMPLES}/{name}.warp")
-}
-
 /// A sample that paints needs the page's canvas, which the browser suite's worker has not: natively it writes a PNG
 fn runs_here(name: &str) -> bool {
 	cfg!(feature = "native")
@@ -34,9 +30,9 @@ fn runs_here(name: &str) -> bool {
 
 fn slice_runs_without_an_error(slice: usize) {
 	let excluded = excluded_samples();
-	let mut menu: Vec<String> = fs::read_dir(SAMPLES)
-		.expect(SAMPLES)
-		.filter_map(|entry| entry.ok()?.path().file_name()?.to_str()?.strip_suffix(".warp").map(str::to_string))
+	let mut menu: Vec<String> = sample_files()
+		.iter()
+		.map(|path| sample_name(path))
 		.filter(|name| !excluded.contains(name) && runs_here(name))
 		.collect();
 	menu.sort();
@@ -96,7 +92,7 @@ fn sample_outcome(name: &str) -> Result<Option<String>, ()> {
 		let (finished, outcome_of_run) = std::sync::mpsc::channel();
 		let path = sample_path(name);
 		// a sample's <name>.args, as `use os; args` gives them (a song visualizer plays its first seconds only)
-		let arguments = crate::common::arguments_beside(&std::path::Path::new(SAMPLES).join(name));
+		let arguments = crate::common::arguments_beside(std::path::Path::new(&path).with_extension("").as_path());
 		std::thread::spawn(move || {
 			warp::modules::std_adapters::set_program_arguments(arguments);
 			finished.send(outcome(&path))

@@ -1,4 +1,4 @@
-// card first-first, found serving `get "/api/newest" { last 2 of users }` (samples/server.warp): a one-line route block
+// card first-first, found serving `get "/api/newest" { last 2 of users }` (samples/servers/server.warp): a one-line route block
 // of words reading a table is one statement, not each word one ("undefined variable: last")
 use std::io::{Read, Write};
 use std::time::Duration;

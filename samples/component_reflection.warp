@@ -1,7 +1,0 @@
-#!/usr/bin/env warp
-# A component's exports, read off its binary when the program compiles: natively and in the page (notes/reflection.md)
-use wasm "../tests/fixtures/components/rust_demo.wasm" as demo
-
-print "the component exports ${demo.exports}"
-print "fib(20) = ${demo.fib(20)}"
-dir(demo)

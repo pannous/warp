@@ -50,9 +50,19 @@ var<private> time: Time;
 var<private> mouse: Mouse;
 var<private> warp_color: vec4f;
 var<private> warp_where: vec2i;
+var<private> warp_stored: bool;
+var<private> warp_scattered: bool;
 fn warp_store(pixel: vec2i, color: vec4f) {
+	warp_scattered = warp_scattered || (warp_stored && any(pixel != warp_where));
+	warp_stored = true;
 	warp_where = pixel;
 	warp_color = color;
+}
+fn warp_run(id: vec2i) {
+	warp_where = id;
+	warp_stored = false;
+	warp_scattered = false;
+	main_image(vec3u(vec2u(id), 0u));
 }
 fn keyDown(keycode: uint) -> bool {
 	return u32(values.key) == keycode;
@@ -61,17 +71,20 @@ fn keyDown(keycode: uint) -> bool {
 
 // The fragment main: compute.toys' uniforms from paint's values, the kernel for this pixel, its color sRGB-encoded.
 // A fragment colors only its own pixel: a kernel storing elsewhere, as a mirror does ((x, height - 1 - y)), runs again
-// from where it stored, which for a mirror is the pixel that stores here
+// from where it stored, which for a mirror is the pixel that stores here. Any other kernel storing elsewhere (an
+// offset, several pixels in a loop) cannot run as a fragment: its pixels are magenta (0xFFFF00FF), loud, not wrong
 compute_toys_main = "
 @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
 	time = Time(values.time, 1.0 / 60.0, u32(values.frame));
 	let pointer = vec2i(values.mouse);
 	mouse = Mouse(pointer, 1.0, i32(values.mouse_down), pointer, vec2i(0));
 	let here = vec2i(at.xy);
-	warp_where = here;
-	main_image(vec3u(vec2u(here), 0u));
-	if (any(warp_where != here) && all(warp_where >= vec2i(0))) {
-		main_image(vec3u(vec2u(warp_where), 0u));
+	warp_run(here);
+	if (!warp_scattered && any(warp_where != here) && all(warp_where >= vec2i(0))) {
+		warp_run(warp_where);
+	}
+	if (warp_scattered || any(warp_where != here)) {
+		return vec4f(1.0, 0.0, 1.0, 1.0);
 	}
 	return vec4f(pow(clamp(warp_color.rgb, vec3f(0.0), vec3f(1.0)), vec3f(1.0 / 2.2)), 1.0);
 }

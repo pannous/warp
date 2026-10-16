@@ -1,4 +1,0 @@
-# doubles a number
-twice(x) := x*2
-print twice.doc
-help(twice)

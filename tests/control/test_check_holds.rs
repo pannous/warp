@@ -1,5 +1,5 @@
 // card check-assert: a `check` whose condition holds lets the program go on; `check` stays free as a function name.
-// samples/polymorphism.warp combines numbers by typed variants (user: float stays IEEE)
+// samples/types/polymorphism.warp combines numbers by typed variants (user: float stays IEEE)
 use crate::is;
 
 const COMBINE: &str = "combine(a:number, b:number) := a + b; combine(a:int, b:int) := a * b; ";

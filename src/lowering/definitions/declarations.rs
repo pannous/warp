@@ -8,7 +8,7 @@ use super::nodes::{
 };
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::{is_function_keyword, Op};
-use crate::words::{IMPLICIT_PARAMETER, ON_WORD, RETURN_WORD, SELF_WORD};
+use crate::words::{IMPLICIT_PARAMETER, ON_WORD, RETURN_WORD, SELF_WORD, THIS_WORD};
 
 mod tasks;
 pub use tasks::*;
@@ -16,7 +16,6 @@ mod function_heads;
 pub(crate) use function_heads::*;
 
 /// The receiver of an extension method, as Kotlin (`this`) and Swift (`self`) name it
-const THIS_WORD: &str = "this";
 /// `map data = {…}`: the collection words a typed declaration takes, as the annotation they mean (type() answers map,
 /// list, tuple); dict and array are other languages' words for map and list (card declaration-type)
 const COLLECTION_DECLARATION_WORDS: [(&str, &str); 5] =
@@ -467,7 +466,7 @@ fn bind_it(node: Node, parameter: &str, is_value: bool) -> Node {
 		Node::List(
 			items,
 			bracket @ (Bracket::Round | Bracket::None),
-			separator @ (Separator::Space | Separator::None | Separator::Colon),
+			separator @ (Separator::Space | Separator::None | Separator::Comma),
 		) if items.len() > 1 && is_callee(&items[0]) => Node::List(values(items), bracket, separator),
 		// `xs.map{ it + x }` glued: the block is the method's lambda, its `it` is its own
 		Node::Key(receiver, Op::Dot, method) if glued_block(&method).is_some() => {
@@ -628,7 +627,7 @@ fn partial_application(items: &[Node]) -> Option<Node> {
 	let call = parens(std::iter::once(items[0].clone()).chain(arguments).collect());
 	let head = match parameters.as_slice() {
 		[single] => single.clone(),
-		_ => Node::List(parameters, Bracket::Round, Separator::Colon),
+		_ => Node::List(parameters, Bracket::Round, Separator::Comma),
 	};
 	Some(key(head, Op::Arrow, call))
 }
@@ -767,7 +766,7 @@ fn written_parameters(arguments: &[Node], is_swift: bool, labeled_names: &mut Ve
 	// a comma separates parameters, so `def f(p, number)` keeps two
 	let comma_separated = arguments
 		.iter()
-		.any(|argument| matches!(argument.drop_meta(), Node::List(_, Bracket::Round, Separator::Colon)));
+		.any(|argument| matches!(argument.drop_meta(), Node::List(_, Bracket::Round, Separator::Comma)));
 	if let (false, [parameter, type_word]) = (comma_separated, parameters.as_slice()) {
 		let is_type_name = matches!(type_word.drop_meta(), Node::Symbol(word) if word.starts_with(char::is_uppercase));
 		if matches!(parameter.drop_meta(), Node::Symbol(_)) && (is_kinded_type_word(type_word) || is_type_name) {
@@ -821,7 +820,7 @@ fn smart_scope(items: &[Node]) -> Option<Node> {
 		return None;
 	};
 	let separated =
-		matches!(separator, Separator::Semicolon | Separator::Newline | Separator::Colon) || definitions.len() == 1;
+		matches!(separator, Separator::Semicolon | Separator::Newline | Separator::Comma) || definitions.len() == 1;
 	if !separated {
 		return None;
 	}
@@ -1019,13 +1018,13 @@ pub(crate) fn c_function(items: &[Node]) -> Option<Node> {
 	let (name, arguments) = head_items.split_first()?;
 	let Node::Symbol(_) = name.drop_meta() else { return None };
 	let parameters = arguments.iter().flat_map(|argument| match argument.drop_meta() {
-		Node::List(group, Bracket::Round, Separator::Colon) => group.clone(), // `(real a, int b)`
+		Node::List(group, Bracket::Round, Separator::Comma) => group.clone(), // `(real a, int b)`
 		Node::List(group, Bracket::Curly, _) => group.clone(), // Dart's named parameters `{required int a, int b = 2}`
 		Node::Empty => vec![],                                 // `f()`
 		_ => vec![argument.clone()],
 	});
 	let parameters: Option<Vec<Node>> = parameters.map(|parameter| c_parameter(&parameter)).collect();
-	let head = Node::List([vec![name.clone()], parameters?].concat(), Bracket::Round, Separator::Colon);
+	let head = Node::List([vec![name.clone()], parameters?].concat(), Bracket::Round, Separator::Comma);
 	Some(key(head, Op::Define, body.clone()))
 }
 

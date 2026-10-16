@@ -19,6 +19,8 @@ pub mod audio_files;
 pub mod effects;
 pub(crate) mod host_words;
 pub mod midi;
+#[cfg(target_os = "macos")]
+mod midi_devices;
 pub mod sound_engine;
 pub mod spectrum;
 

@@ -356,6 +356,7 @@ fn lift_closures(program: Node) -> Node {
 		variables: HashSet::new(),
 		lists: HashSet::new(),
 		passing_through: passing_through.clone(),
+		class_fields: crate::class_methods::class_fields(&program),
 	};
 	values.settle(&context, &program);
 	let FunctionValues {
@@ -530,6 +531,8 @@ struct FunctionValues {
 	lists: HashSet<String>,
 	/// Functions returning one of their parameters, by its position (`g = x => x`)
 	passing_through: HashMap<String, usize>,
+	/// Each class's fields in order: `Holder(x => x + 1)` fills the field d of `class Holder {d}`
+	class_fields: crate::class_methods::ClassFields,
 }
 
 impl FunctionValues {
@@ -652,8 +655,25 @@ impl FunctionValues {
 		if self.is_function_list(value) {
 			lists.insert(path.to_string());
 		}
-		for (field, value) in crate::library_words::object_entries(value).unwrap_or_default() {
+		let entries = crate::library_words::object_entries(value).or_else(|| self.constructed_fields(value));
+		for (field, value) in entries.unwrap_or_default() {
 			self.record_holder(&format!("{path}.{field}"), &value, variables, lists);
+		}
+	}
+
+	/// `Holder(x => x + 1)` of `class Holder {d}`: the field d given the lambda, as `{d: x => x + 1}` gives it
+	fn constructed_fields(&self, value: &Node) -> Option<Vec<(String, Node)>> {
+		let Node::List(items, Bracket::Round, Separator::None) = value.drop_meta() else {
+			return None;
+		};
+		let (class, arguments) = items.split_first()?;
+		let fields = self.class_fields.get(class.symbol_name()?)?;
+		let positional = arguments.iter().all(|argument| !matches!(argument.drop_meta(), Node::Key(_, Op::Colon, _)));
+		match positional {
+			true => Some(fields.iter().map(|(field, _)| field.clone()).zip(arguments.iter().cloned()).collect()),
+			false => {
+				crate::library_words::object_entries(&Node::List(arguments.to_vec(), Bracket::Round, Separator::None))
+			}
 		}
 	}
 }
@@ -767,6 +787,15 @@ impl Lifting {
 				let arguments = arguments.into_iter().map(|argument| self.walk(argument, bound)).collect();
 				closure_call(Node::Key(list, Op::Hash, Box::new(position)), arguments)
 			}
+			// `h.d(5)` of a field d holding a function: that function called, as `(h.d)(5)` (card lambda-held)
+			Node::Key(receiver, Op::Dot, call) if self.held_call(&receiver, &call).is_some() => {
+				let (field, arguments) = self.held_call(&receiver, &call).expect("guarded");
+				let arguments = arguments.into_iter().map(|argument| {
+					let walked = self.walk(argument, bound);
+					self.function_value(walked, bound)
+				});
+				closure_call(Node::Key(receiver, Op::Dot, Box::new(field)), arguments.collect())
+			}
 			Node::List(items, bracket, separator) => {
 				let items: Vec<Node> = items.into_iter().map(|item| self.walk(item, bound)).collect();
 				self.called_value(items, bracket, separator, bound)
@@ -801,6 +830,13 @@ impl Lifting {
 				return items[0].clone();
 			}
 		}
+		// `5 |> h.d`, `(h.d 5)`: the function a field holds, called
+		if let (true, [head, arguments @ ..]) = (is_call, items.as_slice()) {
+			if is_field(head) && self.is_function_held(head) {
+				let arguments = arguments.iter().map(|argument| self.function_value(argument.clone(), bound)).collect();
+				return closure_call(head.clone(), arguments);
+			}
+		}
 		if let (true, Some(name)) = (is_call, &head_name) {
 			let arguments: Vec<Node> =
 				items[1..].iter().map(|argument| self.function_value(argument.clone(), bound)).collect();
@@ -826,7 +862,8 @@ impl Lifting {
 				(!groups.is_empty() && self.returns_closure(head, bound), argument_lists)
 			{
 				let function = match head.drop_meta() {
-					Node::List(inner, Bracket::Round, _) if matches!(inner.as_slice(), [Node::Key(_, Op::Hash, _)]) => {
+					// `(fs#2)`, `(h.d)`: the value in the group
+					Node::List(inner, Bracket::Round, _) if matches!(inner.as_slice(), [held] if !matches!(held.drop_meta(), Node::Symbol(_))) => {
 						inner[0].clone()
 					}
 					_ => head.clone(),
@@ -848,7 +885,10 @@ impl Lifting {
 			return false;
 		};
 		match items.first().map(Node::drop_meta) {
-			Some(Node::Key(list, Op::Hash, _)) if items.len() == 1 => self.is_function_list(list),
+			Some(Node::Key(list, Op::Hash, _)) if items.len() == 1 && self.is_function_list(list) => true,
+			// `(h.d)(5)`: a field holding a function value, or the closure an object's function entry became (card
+			// lambda-held)
+			Some(held) if items.len() == 1 && self.is_function_held(held) => true,
 			Some(Node::Symbol(name)) => {
 				self.returns_function.contains(name)
 					|| self.may_hold_function(name, bound)
@@ -868,6 +908,22 @@ impl Lifting {
 			Node::Symbol(held) => self.functions.contains(held) || self.may_hold_function(held, bound),
 			other => arrow_lambda(other).is_some() || as_closure_new(other).is_some(),
 		}
+	}
+
+	/// `h.d`, `h#("d"+1)` of a field assigned a function value, or `closure_new(h·d)`: a function value itself
+	fn is_function_held(&self, node: &Node) -> bool {
+		as_closure_new(node).is_some()
+			|| (is_field(node) && holder_path(node).is_some_and(|path| self.function_variables.contains(&path)))
+	}
+
+	/// `h.d(5)`: the field `d` and the arguments, when h.d holds a function value
+	fn held_call(&self, receiver: &Node, call: &Node) -> Option<(Node, Vec<Node>)> {
+		let Node::List(items, Bracket::Round, Separator::None) = call.drop_meta() else {
+			return None;
+		};
+		let (field, arguments) = items.split_first()?;
+		let path = format!("{}.{}", holder_path(receiver)?, field.symbol_name()?);
+		self.function_variables.contains(&path).then(|| (field.clone(), arguments.to_vec()))
 	}
 
 	fn is_function_list(&self, list: &Node) -> bool {
