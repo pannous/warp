@@ -288,6 +288,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   `x as decimal` writes the period overlined. Never for floats.
 - D16 Int is unbounded (big-int promotion); `byte`, `int8..int64` are declared FFI types that trap on overflow; no
   `overflow` value. unknown-word (2026-10-11): `u8` = `uint8` = `byte`.
+  i64-wraps (2026-10-16, user; card fast-int) replaces the trap for 64 bits: `i64` and `int64` are the same machine
+  type and wrap silently at 2^63 (`a: int64 = 2^63 - 1; a + 1` → -9223372036854775808), like `fast int`; only
+  `use strict` catches the overflow. The smaller sized types (int8…int32, byte) were not asked about and keep
+  trapping for now.
 - hex-printing (2026-10-11): `255 as hex` is an int shown as 0xFF (uppercase), a byte shows so too; arithmetic gives
   a plain int (notes/hex_ints.md). binary-int (2026-10-12): `5 as binary` shows 0b101, `0b101 + 1` is 6.
 - footgun-divzero (2026-10-10, Interviewer default, revisit any time): exact numbers raise divide by zero (catchable,
