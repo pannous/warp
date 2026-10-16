@@ -18,6 +18,8 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 
 pub const FUNCTIONS: [&str; 5] = ["sin", "cos", "tan", "ln", "exp"]; // todo: via builtin math.warp
+/// The prefix operators of one number, evaluated by `call` under the name of the function they spell
+const PREFIX_FUNCTIONS: [(Op, &str); 4] = [(Op::Sqrt, "sqrt"), (Op::Cbrt, "cbrt"), (Op::Neg, "neg"), (Op::Abs, "abs")];
 
 /// `nearest(x, rational, limit, within: ε)` of an exact x is computed here, exactly (Exact::nearest_fraction); of a
 /// float at run time by lib/prelude.warp
@@ -282,7 +284,7 @@ fn list(items: &[Node], separator: &Separator, scope: &mut Scope) -> Evaluated {
 	}
 }
 
-// Todo why have the special logic over here? Numbers are just hashable keys, and keys can take any value.  key:value ?
+/// An operator is a key like any other (`√x` is the key `ø √ x`): its arm only chooses the evaluation
 fn key(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Evaluated {
 	match op {
 		Op::Assign | Op::Define => {
@@ -299,8 +301,9 @@ fn key(left: &Node, op: Op, right: &Node, scope: &mut Scope) -> Evaluated {
 				_ => Err(Stop::Unsupported),
 			}
 		}
-		// To do why does to have the special logic over here?
-		Op::Sqrt | Op::Cbrt | Op::Neg | Op::Abs if left.is_empty_node() => unary(op, evaluate(right, scope)?),
+		_ if left.is_empty_node() && prefix_function(op).is_some() => {
+			call(prefix_function(op).unwrap_or_default(), evaluate(right, scope)?)
+		}
 		Op::Square | Op::Cube if right.is_empty_node() => {
 			let exponent = if op == Op::Square { 2 } else { 3 };
 			arithmetic(evaluate(left, scope)?, Op::Pow, Value::Real(Real::Exact(Exact::integer(exponent))))
@@ -408,22 +411,8 @@ fn real_operand(value: Value) -> Result<Real, Stop> {
 	}
 }
 
-fn unary(op: Op, value: Value) -> Evaluated {
-	if let Value::Float(f) = value {
-		return Ok(Value::Float(match op {
-			Op::Sqrt => f.sqrt(),
-			Op::Cbrt => f.cbrt(),
-			Op::Neg => -f,
-			_ => f.abs(),
-		}));
-	}
-	let real = real_operand(value)?;
-	Ok(Value::Real(match op {
-		Op::Sqrt => root(real, 2)?,
-		Op::Cbrt => root(real, 3)?,
-		Op::Neg => real.neg(),
-		_ => absolute(real)?,
-	}))
+fn prefix_function(op: Op) -> Option<&'static str> {
+	PREFIX_FUNCTIONS.iter().find(|(prefix, _)| *prefix == op).map(|(_, name)| *name)
 }
 
 fn absolute(real: Real) -> Result<Real, Stop> {
@@ -605,6 +594,10 @@ fn power(base: Real, exponent: Real) -> Result<Real, Stop> {
 fn call(function: &str, argument: Value) -> Evaluated {
 	if let Value::Float(f) = argument {
 		return Ok(Value::Float(match function {
+			"sqrt" => f.sqrt(),
+			"cbrt" => f.cbrt(),
+			"neg" => -f,
+			"abs" => f.abs(),
 			"sin" => f.sin(),
 			"cos" => f.cos(),
 			"tan" => f.tan(),
@@ -614,6 +607,10 @@ fn call(function: &str, argument: Value) -> Evaluated {
 	}
 	let real = real_operand(argument)?;
 	Ok(Value::Real(match function {
+		"sqrt" => root(real, 2)?,
+		"cbrt" => root(real, 3)?,
+		"neg" => real.neg(),
+		"abs" => absolute(real)?,
 		"sin" | "cos" | "tan" => trigonometric(function, real)?,
 		"ln" => logarithm(real)?,
 		_ => exp(real)?,

@@ -21,3 +21,10 @@ ran like a tmux worker: todo take, cowtree worktree, background builds, notes, p
 under warp.worktrees.noindex/ were deleted by a background prune while the session was idle, as the branch tip still equalled
 main (merged, only the version tweak changed), together with the untracked probe files. A desktop session that waits on long
 builds should commit and push its branch early.
+
+## Findings: card why-sqrt as a nested session (2026-10-16)
+Worked: the brief carried everything (card, worktree command, test rules), so the session needed no question; todo,
+cowtree and tests/queue.sh behave the same as in tmux. Not so smooth: queued test runs sometimes outlast the 10-minute
+foreground tool limit (they continue as background tasks and notify), and a `( … ) &` subshell is killed when its
+call returns, so long gates must use the tool's own run_in_background. The session cannot see the other sessions' load,
+only the queue's wait.
