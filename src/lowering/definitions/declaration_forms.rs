@@ -4,7 +4,7 @@ use crate::analyzer::*;
 use crate::extensions::numbers::Number;
 use crate::filled_lists::*;
 use crate::list_mutations::*;
-use crate::lowering::nodes::{children_rewritten, key, word_headed};
+use crate::lowering::nodes::{block, children_rewritten, key, word_headed};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::type_kinds::Kind;
@@ -393,7 +393,7 @@ pub(crate) fn with_copy(body: Node, name: &str, suffix: &str) -> Node {
 				_ => Separator::Semicolon,
 			},
 		),
-		other => Node::List(vec![start, other], Bracket::Curly, Separator::Semicolon),
+		other => block(vec![start, other]),
 	}
 }
 

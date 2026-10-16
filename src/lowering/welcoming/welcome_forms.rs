@@ -7,7 +7,7 @@
 //! - OCaml / F# `let f x = body in rest`: the definition `f(x) := body`, then rest
 //! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
-use super::nodes::{call, children_rewritten, is_kinded_type_word, key};
+use super::nodes::{block, call, children_rewritten, is_kinded_type_word, key};
 use crate::lowering::signals::event_signals::PAGE_EVENTS;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -261,7 +261,7 @@ fn forms(node: Node) -> Node {
 		}
 		Node::Key(parameters, Op::Arrow, body) if destructured_parameters(&parameters).is_some() => {
 			let (parameters, fields) = destructured_parameters(&parameters).expect("guarded");
-			lambda(parameters, Node::List([fields, vec![forms(*body)]].concat(), Bracket::Curly, Separator::Semicolon))
+			lambda(parameters, block([fields, vec![forms(*body)]].concat()))
 		}
 		// `f = lambda *xs: …`, JS `f = (...xs) => …`: the definition `f(*xs) := …`, which variadic.rs reads
 		Node::Key(name, Op::Assign, value) if starred_lambda(&name, &value).is_some() => {

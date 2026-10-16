@@ -12,11 +12,11 @@
 //! Browser names (P188): `clipboard.read()` is `clipboard`, `clipboard.write(text)` the std word
 //! `std_io("clipboard", "write", [text])` (std_adapters.rs; host-files.js in a page).
 
-use super::nodes::{arguments_rewritten, call, key};
+use super::nodes::{arguments_rewritten, block, call, key};
 use crate::declarations::word;
 use crate::lowering::signals::system_signals::CHANGE_WORDS;
 use crate::lowering::web::listeners;
-use crate::node::{symbol, Bracket, Node, Separator};
+use crate::node::{symbol, Bracket, Node};
 use crate::operators::Op;
 use crate::time::NOW_WORD;
 use crate::words::{FLOAT_WORD, ON_WORD};
@@ -115,7 +115,7 @@ pub(crate) fn assigned_symbols(program: &Node) -> HashSet<String> {
 fn held_key() -> Node {
 	let read = key(symbol(HELD_CODE), Op::Assign, call(SYSTEM_VALUE, vec![Node::Text(KEY_CODE_HELD.to_string())]));
 	let named = crate::system_signals::key_named(symbol(HELD_CODE));
-	Node::List(vec![read, named], Bracket::Curly, Separator::Semicolon)
+	block(vec![read, named])
 }
 
 /// Each read of a system value as its mark; a field name (`{battery: 5}`, `p.battery`) is no read

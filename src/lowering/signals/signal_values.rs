@@ -295,7 +295,7 @@ fn with_function_listeners(node: Node) -> Node {
 	if listener_parts(&listener).is_none() {
 		return node;
 	}
-	Node::Key(function.clone(), Op::Define, Box::new(Node::List(vec![listener], Bracket::Curly, Separator::Semicolon)))
+	Node::Key(function.clone(), Op::Define, Box::new(block(vec![listener])))
 }
 
 /// The variables a listener watches: `on set x` and `on change x` the one, `whenever` and `once` those of the condition

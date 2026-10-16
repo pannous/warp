@@ -15,7 +15,7 @@
 //! Kept as built (user decision cleanup-cuts): `shared` for any atomic variable, not only Int and float arrays and
 //! one-cell values, is the general form for later.
 
-use super::nodes::{any_part, call, key};
+use super::nodes::{any_part, block, call, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{DOT_WORD, MAP_WORD, SUM_WORD};
@@ -687,7 +687,7 @@ impl Rewrite<'_> {
 			Node::List(statement, Bracket::Curly, separator) => vec![Node::List(statement, Bracket::None, separator)],
 			other => vec![other],
 		};
-		Node::List([vec![read], statements].concat(), Bracket::Curly, Separator::Semicolon)
+		block([vec![read], statements].concat())
 	}
 }
 

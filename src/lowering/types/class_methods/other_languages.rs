@@ -1,6 +1,7 @@
 //! Classes as other languages write them: Rust's `impl Point {…}`, Go's `func (p Point) Sum() int {…}`, Ruby's
 //! `Point.new(1, 2)`, and the text, equality and order methods by their other names (`toString`, `__eq__`, `compareTo`)
 use super::*;
+use crate::lowering::nodes::block;
 use crate::node::parens;
 use crate::words::SELF_WORD;
 
@@ -28,14 +29,7 @@ pub(super) fn taking_in_impls(node: Node, impls: &[(String, Vec<Node>)]) -> Node
 				impls.iter().filter(|(owner, _)| *owner == class).flat_map(|(_, items)| items.clone()).collect();
 			match added.is_empty() {
 				true => Node::Type { name, body },
-				false => Node::Type {
-					name,
-					body: Box::new(Node::List(
-						[class_items(&body), added].concat(),
-						Bracket::Curly,
-						Separator::Semicolon,
-					)),
-				},
+				false => Node::Type { name, body: Box::new(block([class_items(&body), added].concat())) },
 			}
 		}
 		Node::List(items, bracket, separator) => {
@@ -116,7 +110,7 @@ pub(super) fn go_method(words: &[Node]) -> Option<(String, Vec<Node>)> {
 		&Node::List([vec![keyword.clone()], rest].concat(), Bracket::None, Separator::Space),
 		&bindings,
 	);
-	Some((class.clone(), class_items(&Node::List(vec![method], Bracket::Curly, Separator::Semicolon))))
+	Some((class.clone(), class_items(&block(vec![method]))))
 }
 
 /// Ruby's `Point.new(1, 2)` of a declared class that defines no `new`: the construction `Point(1, 2)`, with a note

@@ -4,7 +4,7 @@
 //! `y += e` → `cell_set(y·cell, cell_get(y·cell) + e)`, a read of y → `cell_get(y·cell)`. Variables only read keep the
 //! captures of wasm_emitter `refresh_enclosing_captures`.
 
-use super::nodes::{call, children_rewritten, key};
+use super::nodes::{block, call, children_rewritten, key};
 use crate::late_binding::{changes_in, declared_nonlocals, NONLOCAL};
 use crate::lowering::{function_head, FunctionHead};
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -70,7 +70,7 @@ fn celled(body: Node, variable: &str, is_param: bool) -> Node {
 			bracket @ (Bracket::Curly | Bracket::None),
 			separator @ (Separator::Semicolon | Separator::Newline),
 		) => Node::List([vec![made], items].concat(), bracket, separator),
-		single => Node::List(vec![made, single], Bracket::Curly, Separator::Semicolon),
+		single => block(vec![made, single]),
 	}
 }
 
@@ -168,9 +168,9 @@ fn with_first(statements: Vec<Node>, body: Node) -> Node {
 	}
 	match body {
 		Node::List(items, Bracket::Curly, Separator::Semicolon | Separator::Newline) => {
-			Node::List([statements, items].concat(), Bracket::Curly, Separator::Semicolon)
+			block([statements, items].concat())
 		}
-		single => Node::List([statements, vec![single]].concat(), Bracket::Curly, Separator::Semicolon),
+		single => block([statements, vec![single]].concat()),
 	}
 }
 

@@ -2,7 +2,7 @@
 //! `fibonacci number = …` → `fibonacci(number:number) := …`,
 //! `foo of int = it+it` → `foo(it:int) := …`; the `to` phrase `to square a number:` shares `parameter_slots`.
 
-use super::nodes::{call, is_block, is_call_head, key, spaced_statement};
+use super::nodes::{block, call, is_block, is_call_head, key, spaced_statement};
 use super::nodes::{is_return, typed};
 use crate::analyzer::type_word_kind;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -226,7 +226,7 @@ pub(crate) fn is_checked_result(word: &str) -> bool {
 /// literal when compiled, a fraction known at run time with "an int must be a whole number"
 fn checked_result(value: Node, type_name: &Node) -> Node {
 	let declared = key(key(symbol(crate::analyzer::CHECKED_RESULT), Op::Colon, type_name.clone()), Op::Assign, value);
-	Node::List(vec![declared, symbol(crate::analyzer::CHECKED_RESULT)], Bracket::Curly, Separator::Semicolon)
+	block(vec![declared, symbol(crate::analyzer::CHECKED_RESULT)])
 }
 
 /// `error "e"`

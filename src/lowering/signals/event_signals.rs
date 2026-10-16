@@ -1032,7 +1032,7 @@ fn emits_as_calls(node: Node, handled: &HashMap<String, Vec<Node>>, verbs: &[Str
 		};
 		// `{ emit alarm }` is a block of one statement: it stays a block
 		let braced = matches!(node.drop_meta(), Node::List(_, Bracket::Curly, _));
-		return if braced { Node::List(vec![call], Bracket::Curly, Separator::Semicolon) } else { call };
+		return if braced { block(vec![call]) } else { call };
 	}
 	children_rewritten(node, |child| emits_as_calls(child, handled, verbs, shows_page))
 }

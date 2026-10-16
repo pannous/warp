@@ -7,7 +7,7 @@
 //! the fix; elsewhere node_order asks the runtime witness table (wasm_emitter/reflection/witness.rs).
 
 use super::nodes::{
-	call, called_name, children_rewritten, grouped_parameters, if_then, if_then_else, key, word_headed,
+	block, call, called_name, children_rewritten, grouped_parameters, if_then, if_then_else, key, word_headed,
 };
 use crate::analyzer::{call_name, collect_all_types};
 use crate::errors::diagnostic::Diagnostic;
@@ -869,7 +869,7 @@ fn position_by_equals(list: &Node, element: &Node, type_name: &str) -> Node {
 		Node::List(vec![assign(&found, at.clone())], Bracket::Curly, Separator::None),
 	);
 	let step = assign(&at, key(at.clone(), Op::Add, Node::int(1)));
-	let body = Node::List(vec![step, found_it], Bracket::Curly, Separator::Semicolon);
+	let body = block(vec![step, found_it]);
 	let search =
 		Node::List(vec![symbol(FOR_WORD), item, symbol(IN_WORD), list.clone(), body], Bracket::None, Separator::Space);
 	Node::List(

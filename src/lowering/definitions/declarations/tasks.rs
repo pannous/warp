@@ -1,6 +1,6 @@
 //! Tasks: `job = go f(x)`, `await job`, `await any`/`all`, `within` deadlines, task controls and handlers (wiki/async.md)
 use super::*;
-use crate::lowering::nodes::{fresh_number, phrase_words, word_headed};
+use crate::lowering::nodes::{block, fresh_number, phrase_words, word_headed};
 use crate::node::parens;
 use crate::words::{ADD_WORD, ALL_WORD, RAISE_WORD};
 
@@ -690,7 +690,7 @@ impl Tasks<'_> {
 		}
 		if FINISH_EVENTS.contains(&event) {
 			return match self.value_of(&subject.name()) {
-				Some(value) => Node::List(vec![value, body.clone()], Bracket::Curly, Separator::Semicolon),
+				Some(value) => block(vec![value, body.clone()]),
 				None => body.clone(),
 			};
 		}
@@ -905,8 +905,7 @@ pub(crate) fn with_node_wrappers(node: Node, wrapped: &std::collections::BTreeMa
 			};
 			let call = call(&function.clone(), (0..*count).map(argument).collect());
 			let result = symbol(WRAPPER_RESULT);
-			let body =
-				Node::List(vec![key(result.clone(), Op::Assign, call), result], Bracket::Curly, Separator::Semicolon);
+			let body = block(vec![key(result.clone(), Op::Assign, call), result]);
 			key(head, Op::Define, body)
 		})
 		.collect();

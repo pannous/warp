@@ -7,7 +7,7 @@
 //! `chat = channel "chat"` is the machine-wide channel (src/host/channels.rs) with the same words: it listens from its
 //! assignment on, `chat.send(v)` and `send v to chat` are `channel_send(chat, v)`, `chat.receive()` waits for a message.
 
-use super::nodes::{call, filled, key};
+use super::nodes::{block, call, filled, key};
 use crate::declarations::word;
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
@@ -171,9 +171,7 @@ fn lowered(node: Node, local: &HashSet<String>, machine: &HashMap<String, i64>) 
 			[send, value_to] if word(send) == SEND_WORD => match value_to.drop_meta() {
 				// `{ send 7 to ch }` is a block of one statement: it stays a block
 				Node::Key(value, Op::To, channel) => match sent(channel, value) {
-					Some(put) if *bracket == Bracket::Curly => {
-						Node::List(vec![put], Bracket::Curly, Separator::Semicolon)
-					}
+					Some(put) if *bracket == Bracket::Curly => block(vec![put]),
 					Some(put) => put,
 					None => node,
 				},

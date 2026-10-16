@@ -6,7 +6,7 @@
 //! in `<program>.database.sqlite` (in memory for code without a file, database.rs); the browser keeps them in IndexedDB
 //! (web/playground/host-files.js), where a filter stays the list comprehension over the rows.
 
-use super::nodes::key;
+use super::nodes::{block, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::numbers::units::static_units::si_quantity;
 use crate::operators::Op;
@@ -499,10 +499,8 @@ fn with_id(body: Node) -> Node {
 			Node::List(items, Bracket::Curly, Separator::Semicolon)
 		}
 		// `{int x}`: one field of words
-		Node::List(words, Bracket::Curly, separator) => {
-			Node::List(vec![Node::List(words, Bracket::None, separator), id], Bracket::Curly, Separator::Semicolon)
-		}
-		body => Node::List(vec![body, id], Bracket::Curly, Separator::Semicolon),
+		Node::List(words, Bracket::Curly, separator) => block(vec![Node::List(words, Bracket::None, separator), id]),
+		body => block(vec![body, id]),
 	}
 }
 

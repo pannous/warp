@@ -275,7 +275,7 @@ pub fn lower_spaced_definitions(node: Node) -> Node {
 		}
 		// `1…5 do print it` (wiki/range.md): a loop over the range, the item is `it`
 		Node::Key(range, Op::Do, body) if matches!(range.drop_meta(), Node::Key(_, Op::Range | Op::To, _)) => {
-			let block = Node::List(vec![lower_spaced_definitions(*body)], Bracket::Curly, Separator::Semicolon);
+			let block = block(vec![lower_spaced_definitions(*body)]);
 			Node::List(vec![symbol("for"), *range, block], Bracket::None, Separator::Space)
 		}
 		// a phrase `name p… = body`, never the items of a comma list (`(a, b = a * 2) => …` has a default)
@@ -379,7 +379,7 @@ fn colon_iteration(items: &[Node]) -> Option<Node> {
 		}
 		_ => (list, body),
 	};
-	let block = Node::List(vec![body], Bracket::Curly, Separator::Semicolon);
+	let block = block(vec![body]);
 	Some(Node::List(vec![symbol("for"), list, block], Bracket::None, Separator::Space))
 }
 

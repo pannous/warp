@@ -6,7 +6,7 @@
 //! `class dog extends animal {…}` (P117) gives dog the fields and methods of animal, its own ones override them, and
 //! declares `dog like animal`, so a dog is accepted where an animal is wanted.
 
-use super::nodes::{arguments_rewritten, call, grouped_parameters, if_then, is_place, key, Counter};
+use super::nodes::{any_part, arguments_rewritten, call, grouped_parameters, if_then, is_place, key, Counter};
 use crate::words::COPY_WORD;
 use crate::words::SELF_WORD;
 use crate::words::{GLOBAL_WORD, MAP_WORD, RETURN_WORD, SUM_WORD};
@@ -888,15 +888,11 @@ fn receiver_reads(node: Node, readable: &Readable) -> Node {
 /// Does the body assign a field of the variable (`self.n = …`, `self.n += 1`, `self.n++`) or change a list in one
 /// (`self.items.add(x)`)
 fn changes_fields_of(body: &Node, variable: &str) -> bool {
-	let mut changes = false;
-	body.visit(&mut |part| {
-		changes |= match part {
-			Node::Key(target, Op::Dot, call) if is_field_of(target, variable) => mutating_call(call),
-			Node::Key(target, op, _) => op.is_write() && is_field_of(target, variable),
-			_ => false,
-		};
-	});
-	changes
+	any_part(body, |part| match part {
+		Node::Key(target, Op::Dot, call) if is_field_of(target, variable) => mutating_call(call),
+		Node::Key(target, op, _) => op.is_write() && is_field_of(target, variable),
+		_ => false,
+	})
 }
 
 /// `self.items`, `self.stack.items`, an element `self.counts#i`

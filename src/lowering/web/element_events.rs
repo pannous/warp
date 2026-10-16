@@ -9,7 +9,7 @@
 //! `input{ bind: age }` a number field of step 1, which the browser refuses 2.5 in, `float` one of any step, `bool` a
 //! checkbox; an attribute the element sets itself wins.
 
-use super::nodes::{any_part, key};
+use super::nodes::{any_part, block, key};
 use crate::event_signals::{is_element_event, ELEMENT_EVENT_JOINER};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -171,7 +171,7 @@ fn bound(variable: Node, property: &str, declared: &HashMap<String, Option<Strin
 		}
 		_ => assign,
 	};
-	let update = Node::List(vec![assign], Bracket::Curly, Separator::Semicolon);
+	let update = block(vec![assign]);
 	[attribute, symbol(ON_WORD), symbol(INPUT_EVENT), update]
 }
 

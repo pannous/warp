@@ -1,6 +1,6 @@
 //! Class bodies as their members: fields as Java, C#, Go and Python write them, properties and accessors, constructors as `init`, methods with their result types
 use super::*;
-use crate::lowering::nodes::word_headed;
+use crate::lowering::nodes::{block, word_headed};
 use crate::node::parens;
 use crate::words::SELF_WORD;
 
@@ -435,9 +435,8 @@ pub(super) fn method_calls_named(node: &Node) -> std::collections::HashSet<Strin
 pub(super) fn with_members(node: Node) -> Node {
 	match node {
 		Node::Type { name, body } if name.attribute(crate::warp_parser::MIXIN_WORD).is_none() => {
-			let members = Node::List(class_items(&body), Bracket::Curly, Separator::Semicolon);
-			let changed = members.serialize()
-				!= Node::List(class_items_as_written(&body), Bracket::Curly, Separator::Semicolon).serialize();
+			let members = block(class_items(&body));
+			let changed = members.serialize() != block(class_items_as_written(&body)).serialize();
 			Node::Type { name, body: Box::new(if changed { members } else { *body }) }
 		}
 		other => other.map_children(with_members),
@@ -536,7 +535,7 @@ pub(super) fn curly(body: Node) -> Node {
 		Node::List(items, Bracket::None, separator @ (Separator::Semicolon | Separator::Newline)) => {
 			Node::List(items, Bracket::Curly, separator)
 		}
-		other => Node::List(vec![other], Bracket::Curly, Separator::Semicolon),
+		other => block(vec![other]),
 	}
 }
 
