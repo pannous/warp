@@ -769,10 +769,8 @@ fn collect_list_variables(
 			}
 		}
 		Node::Key(target, Op::Assign, value) => {
-			if let (Node::Symbol(name), Node::Key(left, Op::Add, right)) = (target.drop_meta(), value.drop_meta()) {
-				if matches!(left.drop_meta(), Node::Symbol(same) if same == name)
-					&& matches!(right.drop_meta(), Node::List(_, Bracket::Square, _))
-				{
+			if let Node::Symbol(name) = target.drop_meta() {
+				if appends_literal(value, name) {
 					appended.insert(name.clone());
 				}
 			}
@@ -803,17 +801,18 @@ fn collect_list_variables(
 							};
 							broadcasts_a_list(items, bracket, separator, functions, scalar_parameters, is_list_argument)
 						}
-						// `xs = xs + [i]`
-						Node::Key(left, Op::Add, right) => {
-							matches!(left.drop_meta(), Node::Symbol(same) if same == name)
-								&& matches!(right.drop_meta(), Node::List(_, Bracket::Square, _))
-						}
-						_ => false,
+						_ => appends_literal(value, name),
 					};
 				*assigned.entry(name.clone()).or_insert(true) &= is_list;
 			}
 		}
 	});
+}
+
+/// `xs + [i]` of the variable xs
+fn appends_literal(value: &Node, name: &str) -> bool {
+	matches!(value.drop_meta(), Node::Key(left, Op::Add, right)
+		if left.is_symbol(name) && matches!(right.drop_meta(), Node::List(_, Bracket::Square, _)))
 }
 
 /// The variable `x = …` or `x: type = …` assigns, and its declared type
