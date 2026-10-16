@@ -28,3 +28,12 @@ fn test_known_words_are_untouched() {
 	assert_eq!(shown("print 3"), "ø"); // print gives nothing (issue #18)
 	assert_eq!(shown("3 km"), "3km");
 }
+
+#[test]
+fn test_an_unknown_function_passed_to_an_iteration_word_is_named_when_compiled() {
+	fails_with("[1 2].map(odd)", "undefined function: odd");
+	fails_with("[1 2].filter(odd)", "undefined function: odd");
+	fails_with("[1 2].map(x => odd x)", "in `odd x`");
+	assert_eq!(shown("odd(x) := x % 2; [1 2 3].filter(odd)"), "[1 3]");
+	assert_eq!(shown("f = x => x * 2; [1 2].map(f)"), "[2 4]");
+}
