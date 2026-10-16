@@ -645,18 +645,8 @@ pub(crate) fn subject_and_body(rest: &[Node]) -> Option<(Node, Node)> {
 /// `big() {body}` arrives as `big(ø) {body}`: the call `big()`
 fn without_empty_argument(call: &Node) -> Node {
 	match call.drop_meta() {
-		Node::List(items, _, _) if items.len() == 2 && is_nothing_or_empty_list(&items[1]) => {
-			parens(vec![items[0].clone()])
-		}
+		Node::List(items, _, _) if items.len() == 2 && items[1].as_items().is_empty() => parens(vec![items[0].clone()]),
 		_ => call.clone(),
-	}
-}
-
-fn is_nothing_or_empty_list(node: &Node) -> bool {
-	match node.drop_meta() {
-		Node::Empty => true,
-		Node::List(items, _, _) => items.is_empty(),
-		_ => false,
 	}
 }
 
@@ -702,7 +692,7 @@ fn inlined(check: Node) -> Vec<Node> {
 
 /// The variable `x = …`, `x += …`, `x++`, `x--` writes; a field or item write `p.age = 2`, `xs#1 = 9` writes p, xs
 fn written_variable(target: &Node, op: Op) -> Option<String> {
-	let writes = op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec);
+	let writes = op.is_write();
 	writes.then(|| written_path(target)).flatten()
 }
 

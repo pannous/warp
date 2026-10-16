@@ -240,7 +240,7 @@ fn changes(node: &Node, name: &str) -> bool {
 	let mut found = false;
 	node.visit(&mut |part| {
 		let Node::Key(target, op, _) = part else { return };
-		let changing = matches!(op, Op::Assign | Op::Define | Op::Inc | Op::Dec) || op.is_compound_assign();
+		let changing = *op == Op::Define || op.is_write();
 		let target = match target.drop_meta() {
 			Node::Key(owner, Op::Hash | Op::Dot, _) => owner.drop_meta(),
 			other => other,

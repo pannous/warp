@@ -842,9 +842,7 @@ fn gives_value(body: &Node) -> bool {
 		Node::Key(then, Op::Else, otherwise) => gives_value(then) || gives_value(otherwise),
 		// a nested sequence gives what its last statement gives
 		Node::List(_, Bracket::Round, Separator::Semicolon) | Node::List(_, Bracket::Curly, _) => gives_value(&last),
-		Node::Key(_, op, _) if matches!(op, Op::Assign | Op::Define | Op::Inc | Op::Dec) || op.is_compound_assign() => {
-			false
-		}
+		Node::Key(_, op, _) if *op == Op::Define || op.is_write() => false,
 		// a body giving its object back already (a constructor)
 		Node::Symbol(name) if name == SELF_WORD => false,
 		Node::Key(_, Op::Dot, call) => {
@@ -892,10 +890,7 @@ fn changes_fields_of(body: &Node, variable: &str) -> bool {
 	body.visit(&mut |part| {
 		changes |= match part {
 			Node::Key(target, Op::Dot, call) if is_field_of(target, variable) => mutating_call(call),
-			Node::Key(target, op, _) => {
-				(*op == Op::Assign || op.is_compound_assign() || matches!(op, Op::Inc | Op::Dec))
-					&& is_field_of(target, variable)
-			}
+			Node::Key(target, op, _) => op.is_write() && is_field_of(target, variable),
 			_ => false,
 		};
 	});
