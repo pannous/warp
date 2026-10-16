@@ -23,6 +23,7 @@ fn test_an_optional_type_before_a_name_or_as_a_result() {
 	is!("int? i = 3; i", 3);
 	is!("int? i = ø; if i is ø then 1 else 2", 1);
 	is!("def f(x) as int? := x; f(2)", 2);
+	is!("def f(x) -> int? := x; f(2)", 2);
 	is!("def f(x) as int? := if x < 0 then error(\"neg\") else x; r = f(-1); if r failed then 1 else 2", 1);
 	is!("c = 1; c ? 2 : 3", 2);
 	fails_with("int? i = \"a\"", "declared int?,");
