@@ -122,22 +122,29 @@ impl WarpParser {
 		Some(self.consume_to_line_end()).filter(|text| !text.is_empty())
 	}
 
+	/// `written` here meant floor division, spelled `replacement` in warp: a warning with that fix, which `warp fix`
+	/// applies (`//` reads as a comment, severe; Pascal's `div` still divides, normal; decision floor-division)
+	pub(super) fn warn_floor_division_spelling(&self, written: &str, replacement: &str, level: Level) {
+		let reading = if written == DIV_WORD { "divides" } else { "starts a comment" };
+		let warning = Diagnostic {
+			message: format!("`{written}` {reading}: floor division is written {replacement}"),
+			line: self.line_nr,
+			column: self.column,
+			..Default::default()
+		}
+		.offer("floor division", written, replacement)
+		.about(FLOOR_DIVISION_TOPIC, written)
+		.level(level);
+		let _ = crate::errors::diagnostic::report(&[warning]);
+	}
+
 	/// The `//` at the cursor after code: glued, `7//2` or `x//=3`, it was meant as floor division, a severe warning
 	/// whose fix `warp fix` applies; spaced before a divisor, `a // 2`, a got-it note that it is a comment
 	fn warn_on_floor_division_comment(&mut self) {
 		if self.meant_floor_division() {
 			let assigns = self.peek_char(2) == '=';
 			let (written, replacement) = if assigns { ("//=", FLOOR_DIVISION_ASSIGN) } else { ("//", FLOOR_DIVISION) };
-			let warning = Diagnostic {
-				message: format!("`{written}` starts a comment: floor division is written {replacement}"),
-				line: self.line_nr,
-				column: self.column,
-				..Default::default()
-			}
-			.offer("floor division", written, replacement)
-			.about(FLOOR_DIVISION_TOPIC, written)
-			.severe();
-			let _ = crate::errors::diagnostic::report(&[warning]);
+			self.warn_floor_division_spelling(written, replacement, Level::Severe);
 		} else if self.follows_operand_on_its_line() && !self.is_set_apart() && self.comment_reads_like_divisor() {
 			self.set_hint_pos();
 			crate::errors::diagnostic::educate_once(

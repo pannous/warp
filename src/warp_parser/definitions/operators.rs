@@ -353,6 +353,9 @@ impl WarpParser {
 	pub(crate) fn hint_operator(&self, chars: usize, is_prefix: bool) -> String {
 		let written: String = (0..chars).map(|offset| self.peek_char(offset)).collect();
 		self.set_hint_pos();
+		if written == DIV_WORD && !is_prefix {
+			self.warn_floor_division_spelling(DIV_WORD, FLOOR_DIVISION, Level::Normal);
+		}
 		norm::operator(&written, is_prefix);
 		written
 	}
