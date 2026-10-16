@@ -346,6 +346,24 @@ impl Inference {
 				return inferred;
 			}
 		}
+		// `2 g0` of a quantity g0 (`g0 = …`, or `g0 := …`, a call `(g0)` by now): spaced, a number and a name stay a
+		// list (decisions.md, juxtaposition only glued)
+		if let ([number @ Node::Number(_), quantity], Separator::Space) =
+			(items.iter().map(Node::drop_meta).collect::<Vec<_>>().as_slice(), &separator)
+		{
+			if self.infer((*quantity).clone()).is_ok_and(|(_, signature)| !signature.is_empty()) {
+				let name = match quantity {
+					Node::List(call, Bracket::Round, _) if call.len() == 1 => call[0].serialize(),
+					other => other.serialize(),
+				};
+				let (number, name) = (number.serialize(), name);
+				let (number, name) = (number.trim(), name.trim());
+				return Err(Stop::Error(format!(
+					"`{number} {name}` is a list of {number} and {name}, a spaced number multiplies only a unit: \
+					 write {number}{name} or {number} * {name}"
+				)));
+			}
+		}
 		let is_host_call = bracket == Bracket::Round
 			&& matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if word == HOST_CALL);
 		// `(r.distance)`, `(a + b)`: parentheses around one expression group it (a lone word `(f)` may be a call)

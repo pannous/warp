@@ -91,6 +91,7 @@ mod test_rounding_in_functions;
 mod test_run_time_power;
 mod test_run_time_remainder;
 mod test_shift_operators;
+mod test_spaced_number_quantity; // card constant-quantity
 mod test_static_units;
 mod test_static_units_compiled;
 mod test_static_units_data;
