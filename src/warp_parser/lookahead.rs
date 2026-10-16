@@ -82,6 +82,16 @@ impl WarpParser {
 			.map(|(op, spelling)| (op, spelling.chars().count()))
 	}
 
+	/// The word before the blank here is an iteration word, `map` of `ps map .a`
+	fn after_iteration_word(&self) -> bool {
+		let before = &self.chars[..self.pos];
+		let word_end = before.iter().rposition(|ch| !ch.is_whitespace()).map_or(0, |end| end + 1);
+		let word_start =
+			before[..word_end].iter().rposition(|ch| !is_identifier_char(*ch)).map_or(0, |start| start + 1);
+		let word: String = before[word_start..word_end].iter().collect();
+		!word.is_empty() && crate::lambdas::is_iteration_word(&word)
+	}
+
 	/// The spelling starts here; a word ends here too: `and` but not `android`, `plus a` but not the call `plus(a, b)`
 	fn spelled_here(&self, spelling: &str) -> bool {
 		let length = spelling.chars().count();
@@ -110,7 +120,8 @@ impl WarpParser {
 			// `xs contains x` in code only, data keeps the words as they are
 			"contains" | "has" | "includes" => !self.options.data_mode && self.operand_after(spelling.len()),
 			// `a .5` is a list of two values, `a.5` a member access
-			"." => !(prev.is_whitespace() && self.number_starts_at(0)),
+			// `ps map .a`: after an iteration word `.a` is the field-read function (cards map-dot, infix-map)
+			"." => !(prev.is_whitespace() && (self.number_starts_at(0) || self.after_iteration_word())),
 			"&" => !(self.starts_function_reference() && prev.is_whitespace()), // `map &square xs`
 			_ => true,
 		};

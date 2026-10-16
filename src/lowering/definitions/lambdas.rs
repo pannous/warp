@@ -191,6 +191,68 @@ fn literal_function(node: &Node) -> Option<Lambda> {
 		.or_else(|| arrow_lambda(&it_function(node)?))
 }
 
+/// `xs map f`, `ps map .a`, `xs filter {it > 2}` (cards infix-map, map-dot): an iteration word between a list and its
+/// function is the method call `xs.map(f)`, left to right, `xs map f filter g` is `xs.map(f).filter(g)`; a prefix
+/// `map f xs` stays
+pub fn lower_infix_iterations(node: Node) -> Node {
+	match node {
+		Node::List(items, Bracket::None, separator)
+			if !separator.separates_statements() && separator != Separator::Colon =>
+		{
+			let mut combined: Vec<Node> = Vec::with_capacity(items.len());
+			let mut rest = items.into_iter().map(lower_infix_iterations).peekable();
+			while let Some(item) = rest.next() {
+				let after_list = combined.last().is_some_and(is_list_operand);
+				// `xs map f`, or `xs (map f)` where the phrase grouped the prefix call first (`ys = xs map f`)
+				let iteration = match grouped_iteration(&item) {
+					Some(grouped) => Some(grouped),
+					None if iteration_word(&item).is_some() && rest.peek().is_some() => {
+						Some((item.name(), rest.next().expect("peeked")))
+					}
+					None => None,
+				};
+				match (after_list, iteration) {
+					(true, Some((word, function))) => {
+						let list = combined.pop().expect("a list before");
+						combined.push(key(list, Op::Dot, call(&word, vec![function])));
+					}
+					(_, Some((word, function))) => combined.extend([symbol(&word), function]),
+					(_, None) => combined.push(item),
+				}
+			}
+			match combined.len() {
+				1 => combined.pop().expect("one"),
+				_ => Node::List(combined, Bracket::None, separator),
+			}
+		}
+		other => other.map_children(lower_infix_iterations),
+	}
+}
+
+/// `map f` of a phrase grouped as a call without brackets: the iteration word and its one function
+fn grouped_iteration(node: &Node) -> Option<(String, Node)> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::None, separator) if !separator.separates_statements() => match items.as_slice() {
+			[word, function] if iteration_word(word).is_some() => Some((word.name(), function.clone())),
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// What may stand left of an infix iteration word: not a word that calls what follows, `print map f xs`,
+/// `return find x`, `count filter f xs`
+fn is_list_operand(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::Symbol(name) => {
+			!(crate::library_words::is_calling_word(name)
+				|| is_iteration_word(name)
+				|| name == crate::words::RETURN_WORD)
+		}
+		_ => true,
+	}
+}
+
 /// `xs.map(.floor)`, `people.sort(by: .age)`, `f = .name`: a leading-dot word in a code position, an argument in a call's
 /// parentheses or the value of `=` / `:=`, is the lambda `it => it.age` on its member, as Swift's `.member` (card
 /// dot-lambda), written out before any pass reads it so it goes the way of a written lambda. Element attributes and data
