@@ -28,7 +28,7 @@ impl Inference {
 			Node::List(items, Bracket::Square, _) => 1 + items.iter().map(depth_of).max().unwrap_or(0),
 			Node::List(items, Bracket::Round, _) if calls_left > 0 && self.called_definition(items).is_some() => {
 				let body = &self.called_definition(items).expect("guarded").body;
-				last_statement(body).map_or(0, |last| self.plain_list_depth_within(last, calls_left - 1))
+				returned_value(body).map_or(0, |last| self.plain_list_depth_within(last, calls_left - 1))
 			}
 			Node::List(items, Bracket::Round, _) if items.len() == 1 => depth_of(&items[0]),
 			_ => 0,

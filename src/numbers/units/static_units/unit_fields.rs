@@ -4,7 +4,7 @@
 //! a loop over such a list. A unit field read of an instance it cannot see is a loud error, never a silent SI number.
 
 use super::list_units::CALLS_FOLLOWED;
-use super::{last_statement, shown, Fields, Inference, Signature, Stop};
+use super::{returned_value, shown, Fields, Inference, Signature, Stop};
 use crate::lowering::database_tables::OPTIONAL_MARK;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
@@ -220,7 +220,7 @@ impl Inference {
 				Some(Node::Symbol(class)) if self.classes.contains_key(class) => Some(class.clone()),
 				_ if calls_left > 0 && self.called_definition(items).is_some() => {
 					let body = &self.called_definition(items).expect("guarded").body;
-					last_statement(body).and_then(|last| self.instance_class_within(last, calls_left - 1))
+					returned_value(body).and_then(|last| self.instance_class_within(last, calls_left - 1))
 				}
 				_ => {
 					crate::database_tables::element_table(node).and_then(|table| self.class_lists.get(&table).cloned())

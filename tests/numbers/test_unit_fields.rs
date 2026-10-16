@@ -31,4 +31,5 @@ fn unit_fields_add_up_in_loops_over_lists_of_the_class() {
 fn a_function_returning_an_instance_gives_its_class() {
 	assert_eq!(shown("long(n) := Run(n * 1 km, \"far\")\nlong(5).distance"), "5km");
 	assert_eq!(shown("def long(n) = Run(n * 1 km, \"far\")\nr = long(5)\nr.distance"), "5km");
+	assert_eq!(shown("def long(n) { Run(n * 1 km, \"far\") }\nlong(5).distance"), "5km");
 }
