@@ -31,9 +31,7 @@ fn test_compiled_module_cache_compiles_once_then_maps_the_compiled_module() {
 	assert_eq!(second, Origin::Cached);
 	assert_eq!(main_result(&engine, &compiled), 42);
 	// another engine with the same settings reuses the module compiled for the first one
-	let mut config = warp::util::deterministic_config();
-	config.consume_fuel(true);
-	let other_engine = wasmtime::Engine::new(&config).unwrap();
+	let other_engine = wasmtime::Engine::new(&warp::util::metered_config(false)).unwrap();
 	let (reused, origin) = compiled_module_in(&cache, &other_engine, ANSWER_MODULE.as_bytes()).unwrap();
 	assert_eq!(origin, Origin::Cached);
 	assert_eq!(main_result(&other_engine, &reused), 42);

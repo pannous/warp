@@ -6,7 +6,7 @@ use std::{env, fs};
 use wasmtime::{Engine, Store};
 
 #[cfg(feature = "native")]
-pub use warp_runtime::engine::deterministic_config;
+pub use warp_runtime::engine::{deterministic_config, metered_config};
 pub use warp_runtime::fuel::{DEFAULT_FUEL, DEFAULT_TIME_LIMIT, FUEL_VARIABLE, TIME_LIMIT_VARIABLE};
 
 thread_local! {
