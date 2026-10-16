@@ -69,6 +69,18 @@ pub fn rewritten_where_free(program: Node, word: &str, rewrite: &dyn Fn(Node) ->
 	where_free(program, &names, word, rewrite)
 }
 
+/// `rewrite` of every node bottom-up, given the names the program takes where the node stands
+pub fn rewritten_by_scope(program: Node, rewrite: &dyn Fn(Node, &ProgramNames) -> Node) -> Node {
+	let names = ProgramNames::of(&program);
+	by_scope(program, &names, rewrite)
+}
+
+fn by_scope(node: Node, names: &ProgramNames, rewrite: &dyn Fn(Node, &ProgramNames) -> Node) -> Node {
+	let inner = names.inside(&node);
+	let names = inner.as_ref().unwrap_or(names);
+	rewrite(node.map_children(|child| by_scope(child, names, rewrite)), names)
+}
+
 fn where_free(node: Node, names: &ProgramNames, word: &str, rewrite: &dyn Fn(Node) -> Node) -> Node {
 	if names.takes(word) {
 		return node;

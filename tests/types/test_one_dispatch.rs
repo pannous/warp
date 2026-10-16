@@ -47,3 +47,10 @@ fn parse_bound_inside_a_function_stays_the_code_outside() {
 	is!("f(eval) := eval + 1; f(1)", 2);
 	is!("f(eval) := eval + 1; eval(\"2*3\")", 6);
 }
+
+// a field takes no bare word: `hex` stays the conversion beside a field named hex
+#[test]
+fn a_conversion_word_beside_a_field_of_that_name() {
+	is!("p = {hex: 1}; hex(255) == 255 as hex", true);
+	is!("f(hex) := hex + 1; f(1)", 2);
+}
