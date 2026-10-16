@@ -21,3 +21,13 @@ fn a_name_line_is_a_conversion_target() {
 	is!("2 hours in minutes == 120 min", true);
 	is!("3 feet in inches == 36 inch", true);
 }
+
+// reviewer: a program writes the same lines as lib/units.warp, except dimensions
+#[test]
+fn a_program_writes_its_own_prefix_and_name_lines() {
+	is!("prefix x := 10^4\n3 xm in km == 30 km", true);
+	is!("unit fur := 201 m\nname furlong := fur\n3 fur in furlongs == 3 fur", true);
+	fails_with("prefix T := 10^12\n3 Tm", "prefix T: a prefix is a power of ten");
+	fails_with("name foo := bar\n1", "name foo: the right side is no unit");
+	fails_with("SI dimension length meter\n1", "dimensions are lib/units.warp's");
+}

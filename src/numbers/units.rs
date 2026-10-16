@@ -131,20 +131,28 @@ fn statements_of(node: Node) -> Vec<Node> {
 	}
 }
 
-/// The word starting a unit line, `unit furlong := 201.168 m`
-const UNIT_LINE_WORD: &str = "unit";
+/// The words starting a program's unit lines, each with how a refused one is written right: `unit furlong := 201.168 m`
+const SI_WORD: &str = "SI";
+const DIMENSION_WORD: &str = "dimension";
+const UNIT_LINE_WORDS: [(&str, &str); 3] = [
+	("unit", "the right side is no amount of a known unit (`unit furlong := 201.168 m`)"),
+	("prefix", "a prefix is a power of ten that keeps every unit whole nanometers, nanoseconds … (`prefix k := 10^3`)"),
+	("name", "the right side is no unit (`name furlong := fur`)"),
+];
 
 /// The program without its unit lines, which definitions.rs read before it was parsed (program_unit_lines); Err for a
 /// line that defines no unit (`unit x := 3 foo`: foo is no unit)
 pub fn without_unit_lines(program: Node) -> Result<Node, Node> {
 	let unit_line = |statement: &Node| match statement.drop_meta() {
 		Node::List(items, Bracket::None, Separator::Space) => match items.as_slice() {
-			[word, definition, ..] if word.drop_meta() == &Node::Symbol(UNIT_LINE_WORD.to_string()) => {
+			[word, definition, ..] => {
+				let word =
+					UNIT_LINE_WORDS.iter().find(|(line_word, _)| word.drop_meta().symbol_name() == Some(line_word))?;
 				match definition.drop_meta() {
 					// `unit °C as K := …` names °C
 					Node::Key(name, Op::Define, _) => match name.drop_meta() {
-						Node::Key(name, Op::As, _) => Some(name.drop_meta().serialize()),
-						name => Some(name.serialize()),
+						Node::Key(name, Op::As, _) => Some((word, name.drop_meta().serialize())),
+						name => Some((word, name.serialize())),
 					},
 					_ => None,
 				}
@@ -154,16 +162,31 @@ pub fn without_unit_lines(program: Node) -> Result<Node, Node> {
 		_ => None,
 	};
 	let statements = statements_of(program.clone());
+	if let Some(line) = statements.iter().find(|statement| is_dimension_line(statement)) {
+		return Err(error(&format!(
+			"{}: dimensions are lib/units.warp's, a program defines units, prefixes and names",
+			line.serialize().trim()
+		)));
+	}
 	if !statements.iter().any(|statement| unit_line(statement).is_some()) {
 		return Ok(program);
 	}
-	if let Some(unknown) = statements.iter().filter_map(unit_line).find(|name| !names_unit(name)) {
-		return Err(error(&format!(
-			"unit {unknown}: the right side is no amount of a known unit (`unit furlong := 201.168 m`)"
-		)));
+	if let Some(((word, fix), unknown)) =
+		statements.iter().filter_map(unit_line).find(|(word, name)| !definitions::defines(word.0, name))
+	{
+		return Err(error(&format!("{word} {unknown}: {fix}")));
 	}
 	let kept: Vec<Node> = statements.into_iter().filter(|statement| unit_line(statement).is_none()).collect();
 	Ok(Node::List(kept, Bracket::None, Separator::Newline))
+}
+
+/// `SI dimension length meter`: a line only lib/units.warp writes
+fn is_dimension_line(statement: &Node) -> bool {
+	let Node::List(items, Bracket::None, Separator::Space) = statement.drop_meta() else {
+		return false;
+	};
+	let words: Vec<Option<&str>> = items.iter().take(2).map(|item| item.drop_meta().symbol_name()).collect();
+	words == [Some(SI_WORD), Some(DIMENSION_WORD)]
 }
 
 /// `x as quantity`, and `x as unit` with a got-it note: the run-time quantity(x) (card unit-possible)
