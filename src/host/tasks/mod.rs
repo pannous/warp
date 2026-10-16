@@ -161,6 +161,7 @@ pub fn link(
 	Ok(table)
 }
 
+/// The epoch advances while the table lives, so tasks reach their checks (stop, pause)
 fn tick_while_running(table: Weak<TaskTable>) {
 	std::thread::spawn(move || loop {
 		std::thread::sleep(EPOCH_TICK);

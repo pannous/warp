@@ -355,7 +355,6 @@ pub(super) fn is_struct_type(name: &str) -> bool {
 			.is_some_and(|names| names.contains(name))
 }
 
-/// The position of the `)` closing the `(` at `open`
 /// A C type without its surrounding spaces and leading `const`
 pub(crate) fn bare_c_type(c_type: &str) -> &str {
 	let t = c_type.trim();
@@ -368,6 +367,7 @@ pub(crate) fn split_pointer_marks(word: &str) -> (String, String) {
 	(name.to_string(), "*".repeat(word.len() - name.len()))
 }
 
+/// The position of the `)` closing the `(` at `open`
 pub(crate) fn matching_paren(text: &str, open: usize) -> Option<usize> {
 	let mut depth = 0;
 	for (position, c) in text[open..].char_indices() {

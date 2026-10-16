@@ -83,7 +83,6 @@ fn registry_entry(name: &str, value: &Node) -> Result<Registered, String> {
 	Ok(Registered { url, pinned, library })
 }
 
-
 /// The git url of a written repository: a url, ssh address or path stays; `github:owner/repo`, `owner/repo` and a
 /// bare `repo` (of DEFAULT_PACKAGE_OWNER) are GitHub repositories
 fn repository_url(written: &str) -> String {
