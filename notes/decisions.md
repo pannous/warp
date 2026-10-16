@@ -368,8 +368,12 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   even with a variable of that name in scope: `m = 5; 3m` is 3m (meters), with a hint "a variable m exists; write
   3*m to multiply"; `m * 3` is 15. Supersedes the agent-pinned test_variable_shadows_the_unit (`3m` → 15).
 - unit-prefix-lines (2026-10-16, use-reflection default; undoable): lib/units.warp spells SI prefixes `prefix k :=
-  10^3` and marks the dimensions taking them `SI dimension length meter`. Long names are unit-line aliases
-  (`unit hour := 1 h`), no separate `name` form.
+  10^3` and marks the dimensions taking them `SI dimension length meter`. Conversion-only long names
+  (`name hour := h`) stay for now, until durations and units are one (below).
+- duration-units (2026-10-16 night, Interviewer's decision on the user's behalf, to present; undoable; card
+  time-module): the time module's durations and the unit h become one thing, as dimensions-units already makes
+  duration the time dimension: `unit hour := 1 h`, `2 hour + 1 h` is 3 hours (today a DimensionError), printing
+  keeps the long names ("3 hours"). The `name` form then goes.
 
 ## Text
 - letters (2026-10-15 evening, Interviewer's decision on the user's behalf, to present 2026-10-16; card of-in-chain,
