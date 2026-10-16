@@ -105,7 +105,8 @@ fn every_example_a_chapter_links_exists() {
 	for name in &samples {
 		assert!(std::path::Path::new(&format!("samples/{name}.warp")).exists(), "the guide links samples/{name}.warp");
 		assert!(
-			!EXCLUDED_SAMPLES.lines().any(|line| line.starts_with(&format!("{name}\t"))),
+			// a fixnow exclusion is temporary (notes/roles.md "Fix forward"): the link stays
+			!EXCLUDED_SAMPLES.lines().any(|line| line.starts_with(&format!("{name}\t")) && !line.contains("\tfixnow:")),
 			"{name} is not in the playground menu"
 		);
 	}
