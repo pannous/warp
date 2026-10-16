@@ -25,9 +25,18 @@ fn the_setter_is_called_like_a_method() {
 }
 
 #[test]
-fn a_property_of_a_value_or_class_is_refused_loudly() {
+fn a_property_of_a_value_or_an_instance_setter_is_refused_loudly() {
 	let of_value = format!("{:?}", eval("p = {x: 1}\np.x := 5\np.x"));
 	assert!(of_value.contains("p is a value") && of_value.contains("write p.x = …"), "{of_value}");
-	let of_class = format!("{:?}", eval("class Point{x;y}\nPoint.sum := it.x + it.y\nPoint(1,2).sum"));
-	assert!(of_class.contains("Point.sum := … defines no property") && of_class.contains("point-sum"), "{of_class}");
+	let of_class = format!("{:?}", eval("class Point{x;y}\nPoint.label(v) := print v\nPoint(1,2).x"));
+	assert!(of_class.contains("defines no setter of Point's instances"), "{of_class}");
+	let of_field = format!("{:?}", eval("class Point{x: int; y: int}\nPoint.x := 99\nPoint(1, 2).x"));
+	assert!(of_field.contains("Point.x is a field of Point"), "{of_field}");
+}
+
+// card point-sum: a property of a class's instances, `it` the instance
+#[test]
+fn a_class_defines_a_property_of_its_instances() {
+	is!("class Point{x;y}\nPoint.sum := it.x + it.y\nPoint(1,2).sum", 3);
+	is!("class Point{x;y}\nPoint.sum := it.x + it.y\np = Point(3,4)\np.sum + sum([1, 2])", 10);
 }
