@@ -65,3 +65,8 @@ fn test_only_the_written_place_declared_or_error_holds_an_error() {
 	is!(&format!("{E}f(xs: [int or error], v) := {{xs#1 = v; xs}}; count(f([1, 2], e))"), 2);
 	fails_with(&format!("{E}f(xs: [int], v) := {{xs#1 = v; 3}}; f([1, 2], e)"), "a list item holds no error");
 }
+
+#[test]
+fn test_an_error_written_by_a_variable_key_into_a_map_names_the_field() {
+	fails_with(&format!("{E}m = {{a: 1}}; k = \"b\"; m[k] = e; m"), "divide by zero: a field holds no error");
+}

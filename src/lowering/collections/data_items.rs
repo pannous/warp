@@ -35,7 +35,22 @@ pub fn lower(node: Node) -> Node {
 	let instances = crate::class_methods::instance_classes(&node, &classes);
 	let mut variables = HashSet::new();
 	collect_variables_admitting_errors(&node, &mut variables);
-	Marker { variables_admitting_errors: variables, class_fields: &class_fields, instances: &instances }.lower(node)
+	let maps = map_variables(&node);
+	Marker { variables_admitting_errors: variables, class_fields: &class_fields, instances: &instances, maps: &maps }
+		.lower(node)
+}
+
+/// The variables given a map literal: `m = {a: 1}`, whose `m[k] = e` writes an entry
+fn map_variables(node: &Node) -> HashSet<String> {
+	let mut maps = HashSet::new();
+	node.visit(&mut |part| {
+		if let Node::Key(target, Op::Assign, value) = part {
+			if let (Some(name), Node::List(_, Bracket::Curly, _)) = (target.symbol_name(), value.drop_meta()) {
+				maps.insert(name.to_string());
+			}
+		}
+	});
+	maps
 }
 
 /// Does a declared type admit an Error: `int or error`, `[int or error]`, the optional `int?` (decision error-optional)
@@ -89,6 +104,7 @@ struct Marker<'a> {
 	class_fields: &'a HashMap<String, Vec<(String, String)>>,
 	/// the class of each variable holding an instance, whose fields' declared types decide
 	instances: &'a HashMap<String, String>,
+	maps: &'a HashSet<String>,
 }
 
 impl Marker<'_> {
@@ -124,7 +140,7 @@ impl Marker<'_> {
 	fn inside_definition(&self, head: &Node) -> Self {
 		let mut variables = self.variables_admitting_errors.clone();
 		parameters_admitting_errors(head, &mut variables);
-		Marker { variables_admitting_errors: variables, class_fields: self.class_fields, instances: self.instances }
+		Marker { variables_admitting_errors: variables, ..*self }
 	}
 
 	/// The value of `target = value`, marked as what the target's place holds
@@ -138,7 +154,9 @@ impl Marker<'_> {
 			{
 				unmarked(value)
 			}
-			Node::Key(_, Op::Hash, index) if names_a_key(index) => marked(value, Place::Field),
+			Node::Key(receiver, Op::Hash, index) if names_a_key(index) || self.is_map(receiver) => {
+				marked(value, Place::Field)
+			}
 			Node::Key(_, Op::Hash, _) => marked(value, Place::ListItem),
 			Node::Key(_, Op::Dot, _) => marked(value, Place::Field),
 			Node::Symbol(_) | Node::Key(_, Op::Colon, _) => with_literal_items_marked(value),
@@ -154,6 +172,10 @@ impl Marker<'_> {
 			Node::Key(instance, Op::Dot, field) => self.field_admits_errors(instance, field),
 			_ => false,
 		}
+	}
+
+	fn is_map(&self, receiver: &Node) -> bool {
+		receiver.symbol_name().is_some_and(|name| self.maps.contains(name))
 	}
 
 	fn field_admits_errors(&self, instance: &Node, field: &Node) -> bool {
@@ -220,7 +242,8 @@ fn field_marked(value: Node) -> Node {
 	}
 }
 
-/// `m["k"] = e` (shifted to `m#("k" + 1)` like a 0-based index): an entry of a map, no list item
+/// `m["k"] = e` (shifted to `m#("k" + 1)` like a 0-based index): an entry of a map, no list item (as `m[k] = e` of a
+/// map variable)
 fn names_a_key(index: &Node) -> bool {
 	match index.drop_meta() {
 		Node::Text(_) | Node::Char(_) => true,
