@@ -95,6 +95,7 @@ mod test_ignored_parameters;
 mod test_infix_iteration; // cards infix-map, map-dot
 mod test_inlining;
 mod test_it_arguments; // card map-it
+mod test_it_reserved; // card it-reserved
 mod test_kebab_members;
 mod test_kind_tested_parameter; // card function-whose
 mod test_lambda_global;
