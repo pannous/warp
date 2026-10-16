@@ -96,3 +96,14 @@ fn set_glyphs_bind_like_math() {
 	is!("[1] ⊆ [2] ∪ [1]", true);
 	is!("[3 1 2 3] ∩ [3 2]", parse("[3 2]"));
 }
+
+// gate (std coverage): each set word of lib/list.warp by name and by its glyph
+#[test]
+fn intersection_and_superset() {
+	is!("intersection([1 2 3], [2 3 4])", parse("[2 3]"));
+	is!("[1 2 3] ∩ [3 4]", parse("[3]"));
+	is!("superset([1 2 3], [2])", true);
+	is!("superset([1], [1 2])", false);
+	is!("[1 2 3] ⊇ [1 3]", true);
+	is!("union([1], [1 2])", parse("[1 2]"));
+}
