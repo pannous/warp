@@ -48,8 +48,10 @@ const ASCII_LOWERCASE_BIT: i32 = 0x20;
 pub(in crate::wasm_emitter) const ELEMENT_CHILDREN: &str = "element_children";
 pub(in crate::wasm_emitter) const ELEMENT_BODY: &str = "element_body";
 /// Runtime functions that read text by one of its units (byte, code point, grapheme)
-const TEXT_UNIT_USERS: [&str; 8] = [
+const TEXT_UNIT_USERS: [&str; 9] = [
 	crate::library_words::TEXT_GRAPHEMES,
+	// grapheme_end walks the characters it reverses
+	"text_reverse",
 	"node_count",
 	"node_bytes",
 	"string_char_at",
