@@ -1,5 +1,5 @@
 // card gpu-visualizer-mp3: spectrum("song.mp3", seconds, bands) measures an audio file at a moment (decoded once by the
-// host, src/sound/spectrum.rs), sound_seconds(file) is how long it sounds; samples/gpu/gpu_visualizer_warp.warp lights its
+// host, src/sound/spectrum.rs), sound_seconds(file) is how long it sounds; samples/sound/gpu_visualizer_warp.warp lights its
 // bars with it while the file plays. shader_of(f) is the WGSL paint(f, …) compiles f to
 #![cfg(feature = "native")]
 use crate::is;

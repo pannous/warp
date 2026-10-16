@@ -37,7 +37,7 @@ fn test_parameter_passed_a_float_returning_call() {
 	is!("def f() := 0.5 * random() + 1.5; def g(s) := s * 2; g(f()) >= 3", true);
 }
 
-#[test] // samples/gpu/gpu_visualizer_warp.warp: `turned(p.xy, p.z * 0.12 + time * 0.4)` and `turned(q, time * 1.3)` typed angle as Int
+#[test] // samples/sound/gpu_visualizer_warp.warp: `turned(p.xy, p.z * 0.12 + time * 0.4)` and `turned(q, time * 1.3)` typed angle as Int
 fn test_parameter_passed_a_float_and_a_run_time_number() {
 	is!("global t = float(0); g(a) := a; f(z) := g(z#1 + t); h(z) := g(t); t = 2.5 as float; f([1 2]) + h(0)", 6.0);
 }

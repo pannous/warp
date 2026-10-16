@@ -64,6 +64,7 @@ item.price }`); an import no header declares says so; `xs where country is germa
 - The menu and the address (#fizzbuzz) still name a sample by its file name, so names stay unique across folders
   (build.sh refuses twins); samples.js has SAMPLE_FILES name → path for the runs' neighbour files (play "mozart.mp3").
 - Tests find a sample by name with tests/common sample_path / sample_files (never format!("samples/{name}.warp")).
-- `use lib` / `use square` find the module samples through SEARCH_DIRECTORIES "samples/modules" (src/modules.rs).
+- `use lib`, `use square` and `import shapes` find the module samples through SEARCH_DIRECTORIES "samples/modules"
+  and "samples/wasm" (src/modules.rs). A sample naming a repository file climbs two folders (`../../tests/fixtures`).
 - probes/samples_paths.py [checkout] rewrites flat paths (samples/x.warp) of a branch or the wiki to the folders;
   `--move x.warp <folder>` first moves a flat sample a merge brought in.

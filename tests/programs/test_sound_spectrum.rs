@@ -77,7 +77,8 @@ fn the_gpu_visualizer_raymarches_while_it_plays() {
 #[cfg(feature = "native")]
 #[test]
 fn the_gpu_visualizer_written_in_warp_raymarches_while_it_plays() {
-	if animates_while_it_plays(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/gpu/gpu_visualizer_warp.warp")).is_none() {
+	if animates_while_it_plays(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/sound/gpu_visualizer_warp.warp")).is_none()
+	{
 		crate::common::announce_skip("a WebGPU adapter", module_path!());
 	}
 }

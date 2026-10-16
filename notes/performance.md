@@ -110,7 +110,7 @@ instead of copying all of them. std_module_definitions parsed all 24 std modules
 module is now parsed when first asked: a tiny program compiles in 0.02 s instead of 0.04.
 Tried, no gain: a per-thread cache of parsed std modules (insert_module_classes and the loader parse the same
 source): cloning the tree costs about what parsing it does (visualizer 0.30 → 0.29 s), not kept.
-Start of samples/gpu/gpu_visualizer_warp.warp (2026-10-15, card shader-start): the time to the first frame is the
+Start of samples/sound/gpu_visualizer_warp.warp (2026-10-15, card shader-start): the time to the first frame is the
 compile, not the GPU. The first paint makes the shader in ~0.2–0.5 s and later paints take ~0.1 s, both for the WGSL
 sample too (probes/perf/shader_start/*_first_frame.warp print the ms to the first paint, the first and the second
 paint). Compiling takes 1.23 s of CPU in release against 0.63 s for samples/gpu/gpu_visualizer.warp; in the debug build
