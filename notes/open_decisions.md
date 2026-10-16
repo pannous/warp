@@ -6,16 +6,12 @@ notes/decisions.md, work goes on the board (`todo add`), rules go where they are
 the wiki).
 
 ## Pending
-- quantity-naming (2026-10-16, the supervisor asks the user directly): words replacing the ambiguous "dimension".
-  Proposal: kind of quantity (ISO 80000) for length/speed/density, axis for width/height, rank for the number of
-  axes, shape for 28 × 28 px; `dimension` stays only as an alias with a hint (`dimension length meter` would read
-  `quantity length meter`?). Default meanwhile: code keeps `dimension`.
+(none)
 
 ## To present (Interviewer's decisions, 2026-10-15 evening; user: "you make the decisions tonight and tomorrow
 morning you present the decisions and we can still undo everything")
 Present each in the morning popup batch (keep / change), then move it to decisions.md as the user's or undo it.
 - unit-definitions: see decisions.md dimensions-units.
-- dimension-bridges (px ↔ length through display.dpi): see decisions.md dimensions-units.
 - letters: see decisions.md (Text).
 - json-exactness (big ints exact digits, fractions float + warning): see decisions.md (Text).
 - property-accessors (`width: get{…} set{…}`, no set = read-only): see decisions.md (Classes).

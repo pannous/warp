@@ -345,26 +345,24 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   `x * 1 m` (no `x m`). lib/units.warp uses the same lines. Rejected: `length cm := …` (a type word before a name
   already declares a variable's type) and `unit meter := 100 cm` (the anchor would hang on a smaller unit).
   Second opinion: the supervisor (refinements above are its).
-- dimension-bridges (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable):
-  two dimensions are connected by a conversion line `A as B := expression`, the shape of the reverse line above
-  (and of the user's own `meter as cm := it * 100`). Pixels stay their own dimension, as decided: in lib/units.warp,
-  `dimension pixels px`, `unit dpi := px / inch` (a derived unit, pixels per inch), `display.dpi := 96 dpi`, and
-  `length as pixels := it * display.dpi`. The way back (divide) is derived. The right side is read at each
-  conversion, not once, so `3 cm as px` uses the current density, and `display.dpi = 300 dpi` before printing changes
-  every later conversion. `display.dpi` is the density of the px warp draws with: 96 in the browser (one CSS
-  inch), the screen's real value in a native window. Plain arithmetic works without the line: `3 cm * display.dpi` is
-  px, `300 px / display.dpi` is a length. Without a conversion, `3 cm + 2 px` is a compile error naming
-  `as px`, never a silent mix. No SI prefixes on px. The same line serves other run-time rates
-  (`EUR as USD := it * rates.usd`).
+- pixel-lengths (2026-10-16, user via the supervisor; replaces the Interviewer's night decision dimension-bridges):
+  no bridge or setting machinery in the compiler. px stays its own quantity (`unit dpi := px / inch`); a length
+  becomes px by plain arithmetic, `3 cm * display.dpi`, and back by dividing. `length as pixels := …` and
+  `display.dpi := 96 dpi` are gone from lib/units.warp; `3 cm as px` is a plain DimensionError. No SI prefixes on px.
+- display-names (2026-10-16, user via the supervisor): display.density is pixels per length in dpi (aliases
+  display.dpi, display.ppi; `unit ppi := dpi`, `unit dot := px`); display.size is width × height in px (alias
+  display.dimensions, with a hint that "dimension" is ambiguous); display.diagonal in inch/cm (density derivable from
+  it when the host reports none); display.resolution is an ambiguous alias with the hint "resolution: density (dpi)
+  or size (px)?". Library lines only, through the common alias machinery.
 - unit-target (2026-10-15 night, user, told to use-reflection): a unit line may name its target the way a function
   names its return type: `unit °C as K := it + 273.15`, `unit °F as K := (it + 459.67) * 5/9`; the right side is
   then a plain amount, `it` the amount in the new unit. `(it + 273.15) K` stays accepted.
 - general-conversions (2026-10-15 night, user, told to use-reflection; card general-conversions): one conversion
   mechanism for any types, `A as B := body`, e.g. `Person as text := it.name`, then `p as text`. A program's
-  conversions are looked up before the built-in ones. Unit lines and dimension bridges are its unit cases. Today
+  conversions are looked up before the built-in ones. Unit lines are its unit cases. Today
   `P as text := it.name` is silently ignored (the card fixes that).
-- units-library (2026-10-16, user; card discuss-moving): partial move into warp. Units, dimensions, prefixes and
-  bridges are lines in lib/units.warp, run-time quantities its Quantity class; next, conversions become warp
+- units-library (2026-10-16, user; card discuss-moving): partial move into warp. Units, dimensions and prefixes
+  are lines in lib/units.warp, run-time quantities its Quantity class; next, conversions become warp
   `A as B := body` definitions. The compile-time dimension check (static_units.rs, P64) stays Rust until types can
   be parameterized by a dimension. Not Julia's unit values (`3km = 3*km`): they would bring back clashes with
   variables named m or s.
@@ -377,9 +375,11 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   unit. A line like `dimension speed m/s` only names a kind and isn't needed for typing.
 - unit-field-plain-number (2026-10-16, user, via the supervisor): a plain number assigned to a unit-typed field
   (`display.density = 96`) gives a fixable warning to use the right unit; the fix adds it (`96 dpi`).
-- Naming: "dimension" is ambiguous (an image of 28 × 28 px is a tensor with 2 dimensions, and its width and height
-  both are dimensions and have dimensions); notes/units_runtime.md says so. The replacement words are open
-  (open_decisions.md quantity-naming).
+- quantity-naming (2026-10-16, user: "Yes, perfect"): "dimension" is ambiguous (an image of 28 × 28 px is a tensor
+  with 2 dimensions, and its width and height both are dimensions and have dimensions), so warp says quantity (ISO
+  80000 kind of quantity) for length, speed, density (`quantity length meter`); axis for width/height; rank for the
+  number of axes; shape for 28 × 28 px. `dimension` stays only as an alias with a hint asking which is meant.
+  Older entries above saying "dimension" mean quantity.
 - unit-prefix-lines (2026-10-16, use-reflection default; undoable): lib/units.warp spells SI prefixes `prefix k :=
   10^3` and marks the dimensions taking them `SI dimension length meter`. Conversion-only long names
   (`name hour := h`) stay for now, until durations and units are one (below).
