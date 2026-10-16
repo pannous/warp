@@ -14,7 +14,7 @@ They differ in when they may be wiped (`diskutil apfs deleteVolume <disk>`, then
 
 Old worktrees (/Users/me/dev/angles/warp.worktrees.noindex) stay on the Data volume until retired; NEW worktrees go to
 /Volumes/Worktrees/warp.worktrees.noindex (disk3s9, user 2026-10-16, card new-worktrees; never wiped, Time Machine kept,
-no_log). cowtree needs a registered donor worktree on that volume: `base`, detached at origin/main. Reason for the old rule:: they hold uncommitted work, so they must never be
+no_log). cowtree needs a registered donor worktree on that volume: `base`, detached at origin/main. Worktrees are never wiped: they hold uncommitted work, so they must never be
 wiped with a volume, and Time Machine should keep backing them up. Their churn is small next to the target dir.
 data/ (kept logs and results) stays in the repo.
 
