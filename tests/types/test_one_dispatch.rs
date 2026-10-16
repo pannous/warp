@@ -145,3 +145,19 @@ fn a_used_module_word_gives_way_per_scope_and_arity() {
 	is!("use json; f(t) := { parse = x => 7; parse(t) }; f(\"[1]\")", 7);
 	is!("use json; f(t) := { parse = x => 7; parse(t) }; g(t) := parse(t); g(\"[1, 2]\") == [1, 2]", true);
 }
+
+// decision library-words-typed: the program's untyped add loses a list's call to the library word, and says so
+#[test]
+fn the_library_word_keeps_a_lists_call_with_a_hint() {
+	let code = "add(a, b) := a + b; xs = [1]; add(xs, 2); xs";
+	let (value, hints) = warp::normalize::capture_hints(|| warp::wasm_emitter::eval(code));
+	assert_eq!(value, warp::ints(vec![1, 2]));
+	let hint = "add of a list stays the library word";
+	assert!(hints.iter().any(|said| said.reason.contains(hint)), "no hint {hint:?}: {hints:?}");
+}
+
+// writing a field of a value known only at run time writes the field, named like a library word too (stored tables)
+#[test]
+fn a_field_named_like_a_library_word_is_written() {
+	is!("class N{title:text}; f(m) := { m.title = \"b\"; m }; f(N(\"a\")).title", "b");
+}

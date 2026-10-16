@@ -638,7 +638,7 @@ impl Lowering {
 					return chained;
 				}
 				let written = *left;
-				let left = self.expanded_head(written.clone());
+				let left = self.expanded_place(written.clone());
 				if let Some(set) = self.functional_setter(&written, &left, &right) {
 					return set;
 				}
@@ -682,6 +682,26 @@ impl Lowering {
 				Node::List(name.chain(items.map(|item| self.expand(item))).collect(), bracket, separator)
 			}
 			other => self.expand(other),
+		}
+	}
+
+	/// The target of `place = value`: `m.title = v` of an object writes its field, with no run-time choice between its
+	/// member and the word title, unless the program defines the setter
+	fn expanded_place(&self, place: Node) -> Node {
+		match place {
+			Node::Key(receiver, Op::Dot, field) if matches!(field.drop_meta(), Node::Symbol(_)) => {
+				let receiver = self.expand(*receiver);
+				let name = field.name();
+				// a setter is the program's function of the receiver and the value (`size(box, n)`)
+				let has_setter = self.program.function_takes(&name, 2) == Some(true) && !is_loaded_module_word(&name);
+				let may_hold_field =
+					matches!(self.own_member(&receiver, &name, &[]), OwnMember::Maybe | OwnMember::Lacks);
+				if may_hold_field && !has_setter {
+					return field_lookup(&receiver, &name, &field);
+				}
+				self.method_call(&receiver, &field).unwrap_or(key(receiver, Op::Dot, *field))
+			}
+			other => self.expanded_head(other),
 		}
 	}
 
@@ -966,7 +986,24 @@ impl Lowering {
 		let is_bare = !matches!(method.drop_meta(), Node::List(..));
 		let meaning = self.word_meaning(receiver, name, word_node, &arguments, is_bare);
 		let field = || Some(field_lookup(receiver, name, word_node));
-		match (self.own_member(receiver, name, &arguments), meaning) {
+		let own_member = self.own_member(receiver, name, &arguments);
+		// `p.center`, `s.words` of another module's word on what may be an object: its field, as before the word was
+		// loaded; a parameter or a user function's result may be of the word's type module, chosen at run time
+		let is_module_word = is_bare && is_loaded_module_word(name) && self.library_word_for(name, 1).is_none();
+		let may_be_object = match own_member {
+			OwnMember::Maybe => true,
+			OwnMember::Not => self.is_object(receiver, name),
+			OwnMember::Has | OwnMember::Lacks => false,
+		};
+		if is_module_word && may_be_object {
+			let is_generic = self.is_parameter(receiver)
+				|| receiver.symbol_name().is_some_and(|variable| self.call_results.contains(variable));
+			return match self.type_module_of(name).filter(|_| is_generic) {
+				Some(_) => Some(self.member_or(receiver, name, word_node, word_call(word_node, receiver, vec![]))),
+				None => field(),
+			};
+		}
+		match (own_member, meaning) {
 			(OwnMember::Has, _) => field(),
 			(OwnMember::Maybe, WordMeaning::Call { call, typed: false }) => {
 				Some(self.member_or(receiver, name, word_node, call))
