@@ -185,7 +185,7 @@ pub fn fold_constant_calls(program: Node) -> Node {
 		.iter()
 		.filter(|statement| functions_in(statement).iter().any(|function| foldable.contains(&function.name)));
 	let probe =
-		[definitions.cloned().collect(), vec![Node::List(calls.clone(), Bracket::Square, Separator::Colon)]].concat();
+		[definitions.cloned().collect(), vec![Node::List(calls.clone(), Bracket::Square, Separator::Comma)]].concat();
 	let Ok(module) = crate::wasm_emitter::emit_module(&Node::List(probe, Bracket::None, Separator::Newline)) else {
 		return program;
 	};
@@ -227,7 +227,7 @@ pub fn refuse_result_misfits(program: Node) -> Result<Node, Node> {
 		.filter(|statement| functions_in(statement).iter().any(|function| foldable.contains(&function.name)))
 		.map(|definition| without_result_checks(definition.clone()));
 	let computed = calls.iter().map(|(_, name, arguments)| call(name, arguments.clone())).collect();
-	let probe = [definitions.collect(), vec![Node::List(computed, Bracket::Square, Separator::Colon)]].concat();
+	let probe = [definitions.collect(), vec![Node::List(computed, Bracket::Square, Separator::Comma)]].concat();
 	let Ok(module) = crate::wasm_emitter::emit_module(&Node::List(probe, Bracket::None, Separator::Newline)) else {
 		return Ok(program);
 	};

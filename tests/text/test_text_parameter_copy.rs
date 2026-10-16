@@ -3,7 +3,7 @@
 //! (declaration_forms::indexed_parameter_copies) held the whole text as its one item
 use crate::is;
 
-const SOURCE: &str = "samples/hello.warp";
+const SOURCE: &str = "samples/hello/hello.warp";
 
 /// `first_newline(source)` called from two places, then `program_end`
 fn program(program_end: &str) -> String {

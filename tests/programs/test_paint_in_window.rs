@@ -1,6 +1,6 @@
 // card paint-keeps (step a of gpu-functions): a window's paint(shader, …) sends the shader and its values to the paint
 // window, which renders them on its own GPU device; no frame of pixels crosses (the 8 MB readback and pipe of
-// samples/gpu_visualizer.warp). No window opens here
+// samples/gpu/gpu_visualizer.warp). No window opens here
 #![cfg(feature = "native")]
 use warp::graphics::gpu::ShaderValue;
 use warp::graphics::paint_window::{read_message, shader_message, Message};

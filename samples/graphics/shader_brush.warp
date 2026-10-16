@@ -1,0 +1,31 @@
+#!/usr/bin/env warp
+# a brush drawn by a WGSL fragment shader itself: the pointer is the hole $mouse, the button $mouse_down, and $time
+# moves the colors. The host fills these holes at each paint, so each frame is one render on the GPU.
+# Not needed for speed: `use draw` (samples/graphics/finger_paint.warp) draws its shapes on the GPU anyway when a window shows.
+# This brush glows where the pointer is instead of leaving strokes behind; samples/graphics/shader_trails.warp keeps them
+# through $previous, its own last frame, and finger_paint's canvas keeps them too.
+# A click sends a ripple out: the program's own hole $ripple, where the last click was and the seconds since.
+ripple = [0.0, 0.0, 1000.0] # no click yet: long gone
+
+brush = shader {
+	@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
+		let away = distance(at.xy, $mouse);
+		let radius = select(40.0, 90.0, $mouse_down > 0.5);
+		let glow = exp(-away * away / (radius * radius));
+		let hue = vec3f(0.5) + 0.5 * cos($time + at.x / $width * 3.0 + vec3f(0.0, 2.1, 4.2));
+		let paper = vec3f(0.98);
+		let ring = distance(at.xy, $ripple.xy) - $ripple.z * 500.0;
+		let wave = exp(-ring * ring / 300.0 - $ripple.z * 1.5);
+		return vec4f(mix(mix(paper, hue, glow), vec3f(0.1, 0.2, 0.6), wave), 1.0);
+	}
+}
+
+on click {
+	ripple = [event.x, event.y, 0.0]
+}
+
+# each frame of the window, until it closes; the first paint opens it (headless: one frame, as a PNG)
+on frame {
+	ripple = [ripple#1, ripple#2, ripple#3 + 1 / 60]
+	paint(brush) # at the view's size: in the playground the screen's in full screen (⛶)
+}

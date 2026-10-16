@@ -4,17 +4,19 @@
 # GitHub login's signed state; the deploy window (card user-click) links the program and opens it once it answers
 # (deploying_window.mjs runs its script in node). No browser (user, 2026-10-09: no local Chrome).
 PORT=8896
-TICKET=probe$(date +%s)abcdefghijklmn # local KV keeps values between runs
+TICKET=probe$(date +%s)abcdefghijklmn
 HOSTING="http://127.0.0.1:$PORT"
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 HOSTING_SCRATCH="$REPO/scratch/hosting"
+# a fresh local KV per run: kept names (probe-free-*) count against the per-user limit of the next runs
+KV_STATE="$HOSTING_SCRATCH/kv-$$"
 mkdir -p "$HOSTING_SCRATCH"
 cd "$(dirname "$0")/../../web/hosting" || exit 1
 CLOUDFLARE_API_TOKEN=$(source ~/.keys 2>/dev/null; echo "$CLOUDFLARE_API_TOKEN")
-wrangler dev --port $PORT --ip 127.0.0.1 --var SESSION_SECRET:probe --var GITHUB_CLIENT_ID:probe-client --var CLOUDFLARE_OAUTH_CLIENT_ID:probe-client \
+wrangler dev --port $PORT --ip 127.0.0.1 --persist-to "$KV_STATE" --var SESSION_SECRET:probe --var GITHUB_CLIENT_ID:probe-client --var CLOUDFLARE_OAUTH_CLIENT_ID:probe-client \
 	--var CLOUDFLARE_API_TOKEN:"$CLOUDFLARE_API_TOKEN" >/dev/null 2>&1 &
 WRANGLER=$!
-trap 'kill $WRANGLER' EXIT
+trap 'kill $WRANGLER; rm -rf "$KV_STATE"' EXIT
 for _ in $(seq 60); do curl -s "$HOSTING/" >/dev/null && break; sleep 1; done
 
 failures=0
