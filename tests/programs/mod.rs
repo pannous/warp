@@ -38,6 +38,7 @@ mod test_property_definitions; // card graphics-properties
 mod test_samples;
 mod test_samples_run_cleanly;
 mod test_save_painting; // card save-painting
+mod test_shader_block_places; // card shader-blocks-code
 mod test_shader_blocks; // card g_oFJc
 mod test_shader_builtins; // card shader-builtins
 mod test_shader_errors; // card wgsl-error
