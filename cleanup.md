@@ -144,3 +144,10 @@
 - Apply the standard-library-wide rule there, without hiding hints from the user's program.
 - Run the focused test before and after, then formatting, clippy, and the wasm32 check.
 - Record the diagnostic boundary in `notes/`, commit only the task files, merge current `origin/main`, push, and verify Playground CI.
+
+# Package sub-build workspace cleanup
+
+- Reproduce the fresh-checkout package-tool failure with the existing focused package tests before changing production configuration.
+- Keep runtime-fetched packages outside Warp's Cargo workspace without changing or copying a fetched package's sources.
+- Cover the workspace boundary with one focused regression test under `tests/modules/`.
+- Run the focused package filters, formatting, clippy, and the wasm32 check; keep the worktree-only version suffix uncommitted.

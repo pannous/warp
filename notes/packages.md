@@ -26,6 +26,8 @@
   It comes from `<package>/<name>.wasm`, else the GitHub release asset `<name>.wasm` of the pinned tag (v1.2.3 or 1.2.3),
   else (loudly) `cargo build --target wasm32-wasip1 --bin <name>` with CARGO_TARGET_DIR in the package's own build
   directory: `~/.cache/warp/packages/<name>@<version>.build` (pinned clone) or `packages/.build/<name>` (anything else).
+  Warp's Cargo workspace excludes the `packages/` tree, so a source fallback below a fresh checkout is independent;
+  otherwise Cargo rejects it as an undeclared member of Warp's workspace before the package can build.
   Why: on 2026-10-02 16:54 tests/web/test_uniscript.rs `the_index_matches_the_readable_entities` ran `cargo run --release
   -- check` inside the fetched ~/.cache/warp/packages/uniscript@1.0.0 without CARGO_TARGET_DIR, so cargo used
   ~/.cargo/config.toml's shared target-dir and, as the same crate uniscript 1.0.0, overwrote ~/dev/uniscript's binary

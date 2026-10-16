@@ -7,6 +7,7 @@
 # crates/warp-runtime: running compiled programs without the compiler; its binary is the stub of `warp build --exe`
 [workspace]
 members = ["crates/warp-runtime"]
+exclude = ["packages"]
 resolver = "2"
 
 [package]

@@ -3,8 +3,11 @@
 //! the binary of a uniscript checkout.
 
 use std::path::Path;
+use std::process::Command;
 use warp::modules::package_tools::{package_tool, run_package_tool};
 use warp::modules::{cached_package, pinned_version};
+
+const WORKSPACE_BOUNDARY_PACKAGE: &str = "packages/workspace-boundary-test";
 
 #[test]
 fn a_package_tool_runs_in_the_package_directory() {
@@ -31,4 +34,23 @@ fn a_package_tool_lives_in_the_package_build_directory() {
 fn a_package_without_a_tool_says_so() {
 	let failure = run_package_tool("nosuchpackage", &[]).unwrap_err();
 	assert!(failure.contains("unknown package: nosuchpackage"), "{failure}");
+}
+
+#[test]
+fn a_package_source_is_outside_the_warp_workspace() {
+	let package = Path::new(WORKSPACE_BOUNDARY_PACKAGE);
+	std::fs::remove_dir_all(package).ok();
+	std::fs::create_dir_all(package.join("src")).unwrap();
+	std::fs::write(package.join("Cargo.toml"), "[package]\nname = \"workspace-boundary-test\"\nversion = \"0.1.0\"\n")
+		.unwrap();
+	std::fs::write(package.join("src/lib.rs"), "pub fn value() -> u8 { 1 }\n").unwrap();
+
+	let metadata = Command::new("cargo")
+		.args(["metadata", "--offline", "--no-deps", "--format-version", "1", "--manifest-path"])
+		.arg(package.join("Cargo.toml"))
+		.output()
+		.unwrap();
+	std::fs::remove_dir_all(package).unwrap();
+
+	assert!(metadata.status.success(), "{}", String::from_utf8_lossy(&metadata.stderr));
 }
