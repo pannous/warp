@@ -146,6 +146,23 @@ pub(crate) fn imported_module_exports(program: &Node) -> HashSet<String> {
 /// module the program names (`use collections; s = Stack()`). class_methods, which turns a class's methods into
 /// functions and its method calls into theirs, runs before `resolve` loads a module's other definitions; the loader
 /// then leaves these modules' classes out (early_class_modules). A class the program declares itself wins.
+/// `Bus{id:7}` of a used module's class constructs a Bus, as the parser reads it when the program declares Bus: its
+/// pre-scan sees only the program, so the module's class name came out as the tagged data `Bus:{id:7}` (D4)
+fn as_constructions(node: Node, classes: &HashSet<String>) -> Node {
+	if classes.is_empty() {
+		return node;
+	}
+	match node.map_children(|child| as_constructions(child, classes)) {
+		Node::Key(name, Op::Colon, block)
+			if name.symbol_name().is_some_and(|name| classes.contains(name))
+				&& matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+		{
+			Node::Key(name, Op::None, block)
+		}
+		other => other,
+	}
+}
+
 pub fn insert_module_classes(program: Node) -> Node {
 	let mut program = with_type_module_uses(program);
 	let loader = program_loader();
@@ -215,6 +232,8 @@ pub fn insert_module_classes(program: Node) -> Node {
 	let returned = crate::lowering::class_methods::returned_classes(&module_code, &class_names);
 	crate::compiler::compile_context::change(|context| context.module_returned_classes = returned);
 	let file_classes: Vec<Node> = file_classes.into_iter().filter(is_foreign).collect();
+	let inserted: HashSet<String> = std_classes.iter().chain(&file_classes).filter_map(name_declared_by).collect();
+	let program = as_constructions(program, &inserted);
 	let program = with_implicit_class_modules(with_statements_in_front(program, std_classes));
 	match file_classes.is_empty() {
 		true => program,
