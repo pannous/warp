@@ -176,3 +176,74 @@ Lessons:
 6. **Cheap wins to do first**: (a) user: Edit cloud environment → Network access Trusted (crates.io), so runs build
    without the vendor branch and the package tests pass, and add `BASH_MAX_TIMEOUT_MS=1800000`; (b) add the packages'
    lockfiles to the vendor refresh workflow; (c) spend the credit before 2026-11-05: it is lost afterwards.
+
+## 5. Cloud test lane (card cloud-test-lane, 2026-10-16)
+
+The Mac has one test queue (tests/queue.sh, 3 slots) and held ~37 waiting runs; each cloud session is a VM of its own
+(Ubuntu x86_64, 4 cores, 15 GB, rustc 1.97), paid by the Cloud session credit. `scripts/cloud-test.sh` runs a
+branch's tests there:
+
+    scripts/cloud-test.sh [--card <card>] [--no-wait] [--on-main|--on <base>] <branch> <tip> [filters…|--full]
+    scripts/cloud-test.sh --result [--card <card>] <branch> <tip>      # collect a --no-wait run later
+
+- The tip must be pushed (a full commit id from `git rev-parse`): the cloud tests commits, never a worktree's
+  uncommitted edits. Filters as for tests/queue.sh; `--full` = test.sh's flags (--all-features, warp-lang at opt-level 2).
+  `--on-main` tests the tip merged into origin/main, as the gate will; `--on <base>` into another branch.
+- How: `claude --cloud` in detached tmux (it needs a TTY) with a fixed prompt; the session fetches
+  scripts/cloud-test.sh from origin/main (the tip may predate it) and calls it with `--run-here` until it prints
+  CLOUD TEST DONE (each call waits ≤ 9 min, under the cloud Bash tool's 10 min). The run itself is detached: it checks
+  out the tip in a worktree, adds the wasm32 targets (no setup script in the environment), builds from crates.io (the
+  `vendor` branch only when its Cargo.lock matches), tests with --no-fail-fast and pushes `result.md` + `log.txt.gz`
+  as one commit to `cloud-results/<branch>-<tip8>` (no CI trigger: rust.yml runs on main and claude/* only).
+- The Mac side polls that branch once a minute (`git ls-remote`, cheap on the API quota), saves the result to
+  data/cloud/<run>/ (launch.txt with the session URL and credit before, result.md, log.txt.gz), deletes the results
+  branch, prints the result and, with `--card`, adds a `todo note`. Exit status 0 = green.
+- At most 3 runs at once: a launch waits while 3 launches younger than 3 h have no result.
+- Environmental failures: scripts/cloud-test-environmental.txt, one regex per line with its reason; matching failures
+  are listed apart and don't make the verdict red. Grown only from real runs. Current reasons: the cloud's TLS proxy
+  (webpki roots reject its issuer), no SDL2, no Lean, no GPU adapter, no wrangler, glibc's erf last digit, /usr/bin/sh,
+  the VM runs as root (/no/such/folder gets created, card tests-as-root), Linux's stack (card linux-deep-recursion).
+  `scripts/cloud-test.sh --summarize <log> [list]` re-summarizes a saved log after the list changed.
+- `CLOUD_TEST_FAST=1` (off by default; user 2026-10-16: turned on from 2026-11-02 to use up the credit before it
+  expires 11-05): passes `--settings '{"fastMode": true}'` to `claude --cloud`. Undocumented whether a cloud session
+  takes CLI settings. Fast mode speeds up the model's output only; the runner session spends its time waiting for
+  cargo, so the tests run no faster, the credit just goes faster. `CLOUD_TEST_MODEL=<model>` likewise. Pilot: the
+  fast run's log shows nothing about fast mode and cost the same as its normal twin, so whether it took is unverified.
+
+### Pilot numbers (2026-10-16)
+
+| run | wall (build + tests) | credit | result |
+|---|---|---|---|
+| linux-build 37842b28, test_midi | 360 s (329 + 12, cold build) | $0.30 | 10 passed |
+| linux-build a01f9c22 (= main + the Linux fix), --full | 1496 s (611 + 866) | $0.49 | 6037 passed, 33 failed, 168 ignored |
+| types-queue 318778ea on linux-build, its 8 queued filters | 349 s (293 + 31) | $0.33 (two runs together $0.66) | 111 passed, 1 environmental |
+| time-module 13770295 on linux-build, its 3 queued filters, CLOUD_TEST_FAST=1 | 427 s (393 + 4) | $0.33 | 15 passed |
+
+- The first find: warp did not build on Linux at all (midir is a macOS-only dependency, src/sound/midi.rs used it
+  everywhere; also why the vendor refresh and the nightly Rust CI failed: card github-rust, branch linux-build).
+- Full run vs the Mac (baseline 74c5faff9, 18:03Z, about the same main): Mac 6088 passed, 0 failed, 13 ignored, gate
+  15–18 min plus its queue wait; cloud 25 min, 155 more ignored (tests that skip themselves off macOS). Of the 33
+  failures 22 are environmental (list above), 8 were the crate wrappers' missing wasm32-wasip2 target (now added by
+  the runner) and 3 a real bug a fresh machine hits (card package-build-workspace: a package built inside the warp
+  repo is taken for a member of its cargo workspace).
+- Cost: ~$0.30 per targeted run, ~$0.50 per full run: the credit is charged for the session's tokens, not for VM
+  time. $219 left ≈ 400+ runs; the remaining limit is the account's (≤ 3 cloud sessions at once).
+- Speed: a targeted run's 5–6 min is mostly the cold build (no cache between sessions); the Mac's queue wait was
+  30–60 min. A setup script that pre-builds would be cached by the environment (section 1), not tried yet.
+
+### Lean sessions and the pool (2026-10-16 evening)
+- The cloud session reads and writes one line per call: one combined command, `CLOUD TEST RUNNING (n tests so far)` or
+  `CLOUD TEST DONE: <verdict>, <counts>`; the result and log reach the Mac through git only. Look deeper on demand in
+  data/cloud/<run>/log.txt.gz on the Mac, no cloud tokens needed.
+- `--model` carries to cloud sessions (the log's init line read claude-haiku-5-5), so the runner defaults to Haiku.
+- Pool (data/cloud/pool/, one file per session): a finished session gets the next job as a follow-up message
+  (`claude -p … --cloud <id>`); its VM keeps the checkout (tmp/cloud-test/tree) and cargo's output. Measured: the same
+  branch's second job built in 0 s, 11 s in total, against 350 s cold. Up to 5 busy at once (MAX_PARALLEL_RUNS, user 2026-10-16) and
+  8 sessions in total (MAX_CLOUD_SESSIONS, pool files plus starting ones): every session stays in the user's session
+  list until archived there, and the CLI can't archive. After 30 jobs a session gets `claude -p /clear --cloud <id>`
+  (a command, 0 turns) and goes on, instead of a fresh session. A session that refuses a job or never answers (3 h)
+  is dropped, loudly, into data/cloud/dropped-sessions.txt: archive those in the web UI.
+- New sessions are named "Cloud Test Lane" (`--name` carries to the cloud); the pool addresses them by session_id only.
+- A run that can't reach its tests (merge conflict, missing tip) pushes a red result naming why, and the test run is
+  killed after 40 min with the tests that never finished named (a hang held batch-3's session).
+- The one Linux compiler warning (CLIENT unused in src/sound/midi.rs) is fixed on branch midi-client-warning (Ready).

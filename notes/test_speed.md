@@ -89,6 +89,23 @@ binary alone: o0 50 s wall / 61 s CPU, o1 74 s / 268 s, o2 106 s / 355 s. rustc 
    in line while its process waited under its old name; the lock stayed free while 20 runs waited. queue.sh could find
    its own ticket by PID (`*-$$`) so a rename can't wedge it.
 
+## Status (2026-10-16 evening)
+- On main: 1 gate-opt (fa3d09c60), o2-gate (gate-no-incremental: CARGO_INCREMENTAL=0, the o2 build reused stale
+  codegen units and failed to link), 7 queue-prebuild, 2+3 gate-direct (0fddc30ac, first gate 6117 passed / 0
+  failed): tests binary 415 s (summed 6609 s); running it directly needs the [env] of .cargo/config.toml
+  (WARP_TEST_TABLES), which test.sh exports as cargo does. 6: card cache-lowered.
+- Memory: rustc of warp-lang at o2 took 6.2 GB in a cold integrate build with other builds alongside and the 6 GB cap
+  killed the gate (the Integrator reran it at 8 GB). queue-prebuild caps only tests now, never rustc/sccache/linkers
+  (UNCAPPED_PROGRAMS); until it lands test.sh's default cap is 8 GB (gate-direct).
+- Queue slots (card test-queue-slots, on main): targeted runs go 3 at once, a full run alone. A slot holder still
+  waits on cargo's build-dir lock in its second `cargo test` while other worktrees build (~90 s each of two real
+  runs); running the tests binary directly (3, gate-direct) would free the slot sooner for targeted runs too.
+- 4 and 5 decided by the user (notes/decisions.md gate-cuts): branches samples-once and twins-gate.
+- **The nightly tier**: tests/nightly.sh (branch twins-gate), crontab 03:10, runs the tests the gate samples
+  (`parser::test_self_`, WARP_NIGHTLY=1: every source) on origin/main in the detached worktree
+  warp.worktrees.noindex/nightly, log data/nightly/<date>.log, a failure files a card. Not GitHub's "Rust CI"
+  nightly: it fails every night on Linux before testing (card github-rust).
+
 Not worth cutting: sleeps (117 calls, all ≤200 ms polling for servers), the small tests (<0.3 s, 261 test-s total).
 Tests that could move to a nightly tier if the gate must shrink further: the twins (5), the sample sweeps beyond one
 pass (4), types::test_type_model's Lean proofs (110 s cold, 3 s warm), ffi::test_cargo_crates (cold 90 s each).

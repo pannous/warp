@@ -36,6 +36,23 @@ pub fn with_shipped_modules(program: &[u8]) -> Result<(Vec<u8>, Vec<SiteFile>), 
 	Ok((renamed.finish(), files))
 }
 
+/// `warp compile --page`: the program's module at `path` for a page of its own (web/uniscript), its path imports
+/// renamed as a site's and the modules they name written to modules/ beside it; the files written there
+pub fn write_page_module(program: &[u8], path: &Path) -> Result<Vec<String>, String> {
+	let (renamed, files) = with_shipped_modules(program)?;
+	let write = |file: &Path, bytes: &[u8]| {
+		std::fs::create_dir_all(file.parent().unwrap_or(Path::new(".")))
+			.and_then(|_| std::fs::write(file, bytes))
+			.map_err(|failure| format!("{}: {failure}", file.display()))
+	};
+	write(path, &renamed)?;
+	let folder = path.parent().unwrap_or(Path::new("."));
+	for (file, bytes) in &files {
+		write(&folder.join(file), bytes)?;
+	}
+	Ok(files.into_iter().map(|(file, _)| file).collect())
+}
+
 /// module path → the name the page knows it by
 #[derive(Default)]
 struct Renaming(HashMap<String, String>);

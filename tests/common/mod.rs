@@ -15,6 +15,9 @@ const NETWORK_FAILURES: [&str; 5] = ["timeout", "timed out", "dns", "connection"
 const ANSWERED: &str = "http status";
 #[cfg(feature = "native")]
 const SERVER_START_LIMIT: std::time::Duration = std::time::Duration::from_secs(60);
+/// Set by test.sh once it built the runtime stubs (built_stub)
+#[cfg(feature = "native")]
+const STUBS_BUILT_VARIABLE: &str = "WARP_TEST_STUBS_BUILT";
 /// The echo server of echo_url: what a POST sent, as httpbin.org/post answers it
 #[cfg(feature = "native")]
 const ECHO_SERVER: &str = "post \"/post\" { {data: request.body, headers: request.headers} }";
@@ -341,13 +344,17 @@ pub fn page_runtime_stub() -> &'static std::path::Path {
 
 #[cfg(feature = "native")]
 fn built_stub(name: &str, features: &[&str]) -> std::path::PathBuf {
-	let built = std::process::Command::new(env!("CARGO"))
-		.args(["build", "--offline", "--quiet", "-p", "warp-runtime", "--bin", name])
-		.args(features)
-		.current_dir(env!("CARGO_MANIFEST_DIR"))
-		.status()
-		.expect("cargo runs");
-	assert!(built.success(), "cargo build -p warp-runtime --bin {name} failed");
+	// test.sh builds both stubs before the run: cargo here would wait for the shared target dir's lock while other
+	// worktrees build (notes/test_speed.md)
+	if std::env::var_os(STUBS_BUILT_VARIABLE).is_none() {
+		let built = std::process::Command::new(env!("CARGO"))
+			.args(["build", "--offline", "--quiet", "-p", "warp-runtime", "--bin", name])
+			.args(features)
+			.current_dir(env!("CARGO_MANIFEST_DIR"))
+			.status()
+			.expect("cargo runs");
+		assert!(built.success(), "cargo build -p warp-runtime --bin {name} failed");
+	}
 	let shared = std::path::Path::new(env!("CARGO_BIN_EXE_warp")).with_file_name(name);
 	let runtime_manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("crates").join("warp-runtime");
 	let build = checkout_build(
