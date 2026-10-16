@@ -525,3 +525,18 @@ card's −700: reflection's fields/methods/dir code is feature code, not `of` ha
 `params of f`, `a of xs` (a field of every element), `name of p + "b"`.
 Trap found: the old signal_values reflected_lists rebuilt every list and unwrapped one-item unbracketed lists on the
 way; `func add<T>(_ a: T, …)` relied on it, so the new walk keeps that unwrap explicitly.
+
+## Final pass (final-lowering, 2026-10-16)
+Behaviour-preserving pass over src/lowering/ (≈ −430 lines net). Shared helpers in `nodes.rs` now carry what was written
+by hand across the passes: `word_headed`, `round_call`, `any_part` (28 found-flag visits), `word_applied`, `assign`
+(70 spelled-out `key(x, Op::Assign, v)`), `block` (30), `head_symbol` (the defined name of `name` / `(name x)`),
+plus `let x = y.symbol_name()?` (69), `key` instead of hand-boxed `Node::Key` (45), `Op::is_write`; blocks.rs
+`as_data`; broadcasting `used_words` and `appends_literal`. Stale comment paths (24) fixed. Renames that ended
+shadowing of the nodes helpers: `variable_signals::assign_variable`, `component_state::filled_with_names`,
+`Foreign::rewritten_argument_list`, `inlining::renamed_names`.
+Scripts (re-runnable, skip the files warp-dispatch owns): probes/cleanup/fold_*.py, round_call_sites.py.
+Left: the signal-family listener reader (event/system/variable signals each read `on`/`whenever` statements their own
+way); folding `int_value` (an Int test written several ways) and `probe_values` (fold_constant_calls vs
+refuse_result_misfits); shared_arrays definitions/called_function nesting; element_events/component_state/markup_tags
+handler_at loops; `declarations::word` (= `symbol_name().unwrap_or_default()`, ~40 callers). probes/cleanup/stacked_docs.py
+(from final-analyzer) reports 141 stacked docs over lowering, mostly false positives.
