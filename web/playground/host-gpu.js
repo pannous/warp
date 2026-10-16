@@ -155,7 +155,7 @@ const paintCanvasArrived = ({ id, canvas }) => arrivingCanvas(id).arrived(canvas
 // the task Worker's side of a page canvas: the OffscreenCanvas the page sent, drawn on through WebGPU
 async function gpuCanvas({ id, replaces }) {
 	const device = await theGpuDevice(); // without an adapter that error, as gpu_render's
-	const canvas = await arrivingCanvas(id).canvas;
+	const canvas = await answeredWithin(arrivingCanvas(id).canvas, "canvas from the page");
 	arrivingCanvases.delete(id);
 	paintCanvases.delete(replaces);
 	const context = canvas.getContext("webgpu");
@@ -291,7 +291,8 @@ async function gpuDeviceOrFailure() {
 	return device;
 }
 
-// the browser's answer for `what`, or a failure once it has kept silent for GPU_DEVICE_WAIT_MS
+// the browser's answer for `what`, or a failure once it has kept silent for GPU_DEVICE_WAIT_MS: every awaited step
+// (adapter, device, page canvas, compilation, validation, read-back) names itself, within the run's own stop
 function answeredWithin(promise, what) {
 	let timer;
 	const silence = new Promise((_, fail) => {
@@ -320,7 +321,7 @@ const gpuModule = (device, shader) => compiledOnce(compiledModules, shader, () =
 // the shader's module; one that does not compile throws where and why
 async function checkedModule(device, shader) {
 	const module = device.createShaderModule({ code: shader });
-	const problems = (await module.getCompilationInfo()).messages.filter(message => message.type === "error");
+	const problems = (await answeredWithin(module.getCompilationInfo(), "compilation report")).messages.filter(message => message.type === "error");
 	if (problems.length) throw new Error(problems.map(problem => `${problem.lineNum}:${problem.linePos}: ${essence(problem.message)}`).join("; "));
 	return module;
 }
@@ -339,7 +340,7 @@ const gpuReadBack = async (device, encoder, readback) => (await gpuReadBacks(dev
 // submit the encoded work; the validation error it raised throws
 async function gpuSubmitted(device, encoder) {
 	device.queue.submit([encoder.finish()]);
-	const invalid = await device.popErrorScope();
+	const invalid = await answeredWithin(device.popErrorScope(), "validation report");
 	if (invalid) throw new Error(invalid.message);
 }
 
@@ -347,7 +348,7 @@ async function gpuSubmitted(device, encoder) {
 async function gpuReadBacks(device, encoder, readbacks) {
 	await gpuSubmitted(device, encoder);
 	return Promise.all(readbacks.map(async readback => {
-		await readback.mapAsync(GPUMapMode.READ);
+		await answeredWithin(readback.mapAsync(GPUMapMode.READ), "read-back pixels");
 		const bytes = readback.getMappedRange().slice(0);
 		readback.destroy();
 		return bytes;
