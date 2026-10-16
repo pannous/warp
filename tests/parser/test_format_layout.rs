@@ -79,3 +79,11 @@ fn test_no_soft_hints_inside_a_shader_block() {
 	let hints: Vec<String> = soft_hints(named).into_iter().map(|hint| hint.message).collect();
 	assert_eq!(hints.len(), 2, "{hints:?}");
 }
+
+/// card chars-map: a hyphen inside a name (`o-b`, `my-var`) stays glued and the line's other operators are spaced;
+/// spacing it changed the parsed tree, which left the whole line unformatted
+#[test]
+fn test_a_hyphen_inside_a_name_leaves_the_rest_of_the_line_formatted() {
+	assert_eq!(formatted("my-var = 3\nprint my-var+1\n"), "my-var = 3\nprint my-var + 1\n");
+	assert_eq!(formatted("f(o, b) := {x=(o-b+13)%26+b; x}\n"), "f(o, b) := {x = (o-b + 13) % 26 + b; x}\n");
+}

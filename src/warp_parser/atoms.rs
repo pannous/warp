@@ -532,8 +532,7 @@ impl WarpParser {
 			let ch = self.current_char();
 			// Include alphanumeric, underscore, and hyphen (for kebab-case)
 			// BUT: a hyphen joins only a following word, so `i--` and `x-1` end the symbol at the hyphen
-			let next = self.peek_char(1);
-			let is_hyphen_in_symbol = ch == '-' && (next.is_alphabetic() || next == '_');
+			let is_hyphen_in_symbol = ch == '-' && hyphen_joins_word(self.peek_char(1));
 			if (ch.is_alphanumeric() && !is_number_glyph(ch))
 				|| ch == '_' || is_hyphen_in_symbol
 				|| !symbol.is_empty() && is_music_accidental(ch)
@@ -571,6 +570,11 @@ fn argument_group(arguments: Node) -> Node {
 		Node::Empty => Node::List(vec![], Bracket::Round, Separator::None),
 		other => Node::List(vec![other], Bracket::Round, Separator::None),
 	}
+}
+
+/// `full-name`: inside a name a hyphen joins the word that follows (`x-1` and `i--` end the name at the hyphen)
+pub(crate) fn hyphen_joins_word(next: char) -> bool {
+	next.is_alphabetic() || next == '_'
 }
 
 /// A got-it note on another language's word, pointing at where the word starts
