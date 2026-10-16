@@ -438,12 +438,21 @@ pub(crate) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 	if let Node::Key(_, Op::Assign, assigned) = value.drop_meta() {
 		return assignment_mismatch(assignment, name, type_name, assigned);
 	}
-	if let Some(base) = type_name.strip_suffix('?') {
-		return match value.drop_meta() {
-			Node::Empty => None,
-			_ => assignment_mismatch(assignment, name, base, value),
-		};
+	// `int? i = "a"`: checked against int, the error names the type as written, "declared int?"
+	match (type_name.strip_suffix('?'), value.drop_meta()) {
+		(Some(_), Node::Empty) => None,
+		(Some(base), _) => base_type_mismatch(assignment, name, base, type_name, value),
+		(None, _) => base_type_mismatch(assignment, name, type_name, type_name, value),
 	}
+}
+
+fn base_type_mismatch(
+	assignment: &Node,
+	name: &str,
+	type_name: &str,
+	written: &str,
+	value: &Node,
+) -> Option<Diagnostic> {
 	if value.is_empty_node() && builtin_type_kind(type_name).is_some() {
 		let message = format!("type mismatch: {name} is declared {type_name}, cannot assign ø");
 		return Some(Diagnostic::at(assignment, message).fix(format!("declare {name}:{type_name}? to allow ø")).offer(
@@ -458,7 +467,7 @@ pub(crate) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 	let actual = literal_misfit(type_name, value)?;
 	let value_text = value.serialize();
 	let message = format!(
-		"type mismatch: {name} is declared {type_name}, cannot assign {} {value_text}",
+		"type mismatch: {name} is declared {written}, cannot assign {} {value_text}",
 		format!("{actual:?}").to_lowercase()
 	);
 	let actual = format!("{actual:?}").to_lowercase();
