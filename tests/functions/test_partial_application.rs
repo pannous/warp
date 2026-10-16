@@ -1,4 +1,4 @@
-// `add(1, _)` is the lambda of the left-out arguments (samples/functions.warp), and a zero-argument closure is called
+// `add(1, _)` is the lambda of the left-out arguments (samples/functions/functions.warp), and a zero-argument closure is called
 use crate::is;
 use warp::ints;
 

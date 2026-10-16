@@ -31,11 +31,13 @@ mod test_c_style_definitions;
 mod test_call_arity;
 mod test_call_efficiency;
 mod test_call_result_fields;
+mod test_callable_parameter; // card callable
 mod test_captured_containers;
 mod test_captured_copy_of_global;
 mod test_captured_node_return; // card captured-node-return
 mod test_character_results;
 mod test_charged_getters;
+mod test_closure_float_arguments; // card if-list
 mod test_closure_value_arguments;
 mod test_closures;
 mod test_comma_calls;
@@ -95,9 +97,11 @@ mod test_ignored_parameters;
 mod test_infix_iteration; // cards infix-map, map-dot
 mod test_inlining;
 mod test_it_arguments; // card map-it
+mod test_it_reserved; // card it-reserved
 mod test_kebab_members;
 mod test_kind_tested_parameter; // card function-whose
 mod test_lambda_global;
+mod test_lambda_held_by_field; // card lambda-held
 mod test_lambda_spaced_body;
 mod test_lambda_spellings;
 mod test_lambda_tuple_arguments; // card errors-needs
@@ -110,6 +114,7 @@ mod test_library_word_assigned; // card floor-says
 mod test_library_word_values;
 mod test_list_conversion;
 mod test_list_fields; // card people-map
+mod test_list_word; // card sum-list
 mod test_map_function_first; // card map-function
 mod test_map_library_word_first; // cards map-library-first, map-library-word
 mod test_map_list_fields; // card field-list
@@ -180,6 +185,8 @@ mod test_round8_call_forms;
 mod test_rounding_builtins;
 mod test_runtime_function_equality; // card runtime-function
 mod test_runtime_kind_arithmetic;
+mod test_rust_references;
+mod test_rust_return_arrow;
 mod test_sequence_values; // cards sequence-value, block-data-sound
 mod test_several_arguments;
 mod test_shadowed_log;
@@ -207,4 +214,4 @@ mod test_user_add_and_map;
 mod test_user_method_form;
 mod test_variadic;
 mod test_whole_float_to_int_parameter;
-mod test_words_in_phrases; // card arctan-allow // card render-as
+mod test_words_in_phrases; // card arctan-allow // card render-as // card rust-fn-arrow

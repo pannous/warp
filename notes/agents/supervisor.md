@@ -35,6 +35,9 @@ notes/agents/common.md.
 - Idle workers (user, 2026-10-08, "why did the fleet stop working"): whenever a worker reports idle, run
   `todo list Next` and give it the real cards of its area, the user's drafts marked "(user)" first before letting it idle; workers file cards there all the
   time, and the fleet stood still overnight with a dozen of them waiting.
+- No web research in my own context (user, 2026-10-10 and 2026-10-16): a quick search or side question goes to an
+  Agent-tool subagent (background) that returns a short answer with sources; larger research that writes notes goes
+  to a warp-research session. I relay only the short answer.
 - No merging, no test runs, no decision questions to the user: decisions go to the Interviewer, merges to the
   Integrator. Relay user decisions you hear directly to the Interviewer so it records them verbatim.
 - Report to the user at the end of each answer: what merged (suite count), what runs, what needs them. Delete merged

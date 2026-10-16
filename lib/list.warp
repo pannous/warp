@@ -57,3 +57,20 @@ extend(xs, ys) := { for y in ys { xs.append(y) }; xs }
 // JavaScript's concat: a new list of xs then ys
 concat(xs, ys) := xs + ys
 index(xs, x) := { at = index_of(xs, x); if at == 0 { raise "ValueError: " + str(x) + " is not in the list" }; at - 1 }
+// sets of list items (card parse-free): the words and their math glyphs; ⊂ and ⊃ are proper, ⊆ and ⊇ allow equal sets
+union(a, b) := unique(a + b)
+intersection(a, b) := { out = []; for x in unique(a) { if x in b { out.append(x) } }; out }
+subset(a, b) := { for x in a { if not (x in b) { return false } }; true }
+superset(a, b) := subset(b, a)
+infix operator ∪(a, b) := union(a, b)
+infix operator ∩(a, b) := intersection(a, b)
+infix operator ⊆(a, b) := subset(a, b)
+infix operator ⊇(a, b) := subset(b, a)
+infix operator ⊂(a, b) := subset(a, b) and not subset(b, a)
+infix operator ⊃(a, b) := subset(b, a) and not subset(a, b)
+// ∩ binds tighter than ∪ as * does than +; the subset tests compare what the set operators build: a ⊆ b ∪ c
+operator ∩ has precedence above +
+operator ⊆ has precedence below +
+operator ⊇ has precedence below +
+operator ⊂ has precedence below +
+operator ⊃ has precedence below +

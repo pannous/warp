@@ -1,6 +1,6 @@
-//! The dimensions and units warp knows, read once from lib/units.warp's `unit_definitions` block (card dimensions-units
-//! Q2, decision unit-definitions): `dimension length meter` names a dimension and its anchor unit, `dimension speed m/s`
-//! the dimension of an expression of units; `unit cm := m/100` is a unit that is an amount of another, `unit °C := (it +
+//! The quantities and units warp knows, read once from lib/units.warp's `unit_definitions` block (card dimensions-units
+//! Q2, decisions unit-definitions and quantity-naming): `quantity length meter` names a kind of quantity and its anchor
+//! unit, `quantity speed m/s` the quantity of an expression of units; `unit cm := m/100` is a unit that is an amount of another, `unit °C := (it +
 //! 273.15) K` one counting from another zero. A unit of several units or of none (`unit mph := mi/h`, `unit ° := π/180`)
 //! is an alias, a word for its expression. Read by its own small reader, not the parser: the parser asks these
 //! definitions whether a word is a unit.
@@ -14,16 +14,16 @@ use std::sync::{Mutex, OnceLock};
 
 const SOURCE: &str = include_str!("../../../lib/units.warp");
 const BLOCK_END: &str = "}";
-const DIMENSION_WORD: &str = "dimension ";
+const QUANTITY_WORD: &str = "quantity ";
 const UNIT_WORD: &str = "unit ";
-/// `SI dimension length meter`: its units take the SI prefixes (decision unit-definitions: not pixels, not eras)
+/// `SI quantity length meter`: its units take the SI prefixes (decision unit-definitions: not pixels, not eras)
 const SI_MARK: &str = "SI ";
 /// `prefix k := 10^3`: an SI prefix and its power of ten
 const PREFIX_WORD: &str = "prefix ";
 const POWER_OF_TEN: &str = "10^";
 /// `name hour := h`: a long name a conversion target may use, singular or plural (`2 h in minutes`, P36)
 const NAME_WORD: &str = "name ";
-/// The lines a program may write itself; dimensions are lib/units.warp's
+/// The lines a program may write itself; quantities are lib/units.warp's
 const PROGRAM_LINE_WORDS: [&str; 3] = [UNIT_WORD, PREFIX_WORD, NAME_WORD];
 const DEFINE: &str = ":=";
 /// `unit m := 1 meter`: a unit of the same amount as an anchor
@@ -44,18 +44,12 @@ pub(super) const BLOCK_NAME: &str = "unit_definitions";
 const RUN_TIME_NAMES: &str = "unit_names";
 const RUN_TIME_SCALES: &str = "unit_scales";
 const RUN_TIME_DIMENSIONS: &str = "unit_dimensions";
-/// The dimensions a run-time quantity knows, packed into one int: length + 256·mass + 65536·time
-const RUN_TIME_DIMENSION_WEIGHTS: [(Dimension, i64); 3] =
-	[(Dimension::Length, 1), (Dimension::Mass, 256), (Dimension::Time, 65536)];
-/// The dimension each name of lib/units.warp stands for: time's is `duration` (decision anchor-time)
-const DIMENSION_WORDS: [(&str, Dimension); 6] = [
-	("length", Dimension::Length),
-	("mass", Dimension::Mass),
-	("duration", Dimension::Time),
-	("era", Dimension::Era),
-	("temperature", Dimension::Temperature),
-	("pixels", Dimension::Pixel),
-];
+/// A run-time quantity packs its powers of the base quantities into one int, one byte each in written order (length +
+/// 256·mass + 65536·duration …, skipping NOT_AT_RUN_TIME), so multiplying quantities adds them; seven fit in 64 bits
+const RUN_TIME_BYTE: i64 = 256;
+const RUN_TIME_QUANTITIES: u8 = 7;
+/// Base quantities whose units count from another zero (`°C`) or a calendar's (`AD`) don't compute at run time
+const NOT_AT_RUN_TIME: [&str; 2] = ["era", "temperature"];
 
 pub(super) struct Definitions {
 	/// The dimensions by name, in written order, and the names of products of them (`speed := length/duration`)
@@ -115,7 +109,7 @@ pub(super) fn defines(line_word: &str, name: &str) -> bool {
 }
 
 /// The run-time tables of lib/units.warp's Quantity (`quantity(5, "km")`), in place of the block itself: each unit and
-/// each alias of units (`mph`, `Hz`) with its SI amount and its dimension packed as length + 256·mass + 65536·time
+/// each alias of units (`mph`, `Hz`) with its SI amount and its base quantities packed (RUN_TIME_BYTE)
 pub(super) fn run_time_tables() -> String {
 	let rows: Vec<(&str, Rational, i64)> = definitions()
 		.units
@@ -143,8 +137,15 @@ fn si_amount(unit: &Unit) -> Rational {
 	Rational::new(BigInt::from(unit.factor), BigInt::from(steps))
 }
 
+/// One byte per run-time base quantity: its place among them, so era and temperature take no byte
 fn packed(dimension: Dimension) -> Option<i64> {
-	RUN_TIME_DIMENSION_WEIGHTS.iter().find(|(known, _)| *known == dimension).map(|(_, weight)| *weight)
+	let run_time = run_time_quantities(&definitions().dimensions);
+	let place = run_time.iter().position(|known| *known == dimension)?;
+	Some(RUN_TIME_BYTE.pow(place as u32))
+}
+
+fn run_time_quantities(dimensions: &[(&str, Dimension)]) -> Vec<Dimension> {
+	dimensions.iter().filter(|(name, _)| !NOT_AT_RUN_TIME.contains(name)).map(|(_, dimension)| *dimension).collect()
 }
 
 /// `mi/h`, `1/s`, `kg*m/s²`: the SI amount and packed dimension of an alias made of units; None for one of other words
@@ -290,9 +291,9 @@ impl<'a> Reader<'a> {
 			let (_, dimension) = self
 				.dimensions
 				.last()
-				.filter(|_| line.starts_with(DIMENSION_WORD))
+				.filter(|_| line.starts_with(QUANTITY_WORD))
 				.copied()
-				.ok_or(format!("{line}: SI marks a base dimension"))?;
+				.ok_or(format!("{line}: SI marks a base quantity"))?;
 			self.si_dimensions.push(dimension);
 			return Ok(());
 		}
@@ -311,15 +312,25 @@ impl<'a> Reader<'a> {
 			self.long_names.push((long_name, symbol));
 			return Ok(());
 		}
-		if let Some((name, anchor)) = definition(DIMENSION_WORD, " ") {
-			match DIMENSION_WORDS.iter().find(|(word, _)| *word == name) {
-				Some((_, dimension)) => {
-					self.dimensions.push((name, *dimension));
-					self.base_units.push((*dimension, anchor));
+		if let Some((name, anchor)) = definition(QUANTITY_WORD, " ") {
+			// `quantity length meter`: a new anchor word makes a base quantity; `quantity speed m/s` names units known
+			match tokens(anchor).len() == 1 && !self.knows(powered(anchor).0) {
+				true => {
+					let dimension = Dimension(
+						u8::try_from(self.dimensions.len()).map_err(|_| format!("{line}: too many quantities"))?,
+					);
+					let run_time = run_time_quantities(&self.dimensions).len() as u8;
+					if run_time >= RUN_TIME_QUANTITIES && !NOT_AT_RUN_TIME.contains(&name) {
+						return Err(format!(
+							"{line}: too many base quantities for run time, {RUN_TIME_QUANTITIES} fit"
+						));
+					}
+					self.dimensions.push((name, dimension));
+					self.base_units.push((dimension, anchor));
 					let scale = Rational::integer(1);
-					self.units.push(Read { name: anchor, dimension: *dimension, scale, zero: Rational::zero() });
+					self.units.push(Read { name: anchor, dimension, scale, zero: Rational::zero() });
 				}
-				None => self.derived_dimensions.push((name, powers_of(anchor, &self.units)?)),
+				false => self.derived_dimensions.push((name, powers_of(anchor, &self.units)?)),
 			}
 			return Ok(());
 		}

@@ -83,9 +83,12 @@ pub(crate) fn declaring_name_and_type(target: &Node) -> Option<(String, String)>
 	};
 	match (name, type_name) {
 		(Node::Symbol(name), Node::Symbol(type_name)) => Some((name, type_name)),
-		// `xs: [int]` is `xs: list of int`
+		// `xs: [int]` is `xs: list of int`, `xs: [int or error]` a list of `int or error`, no union itself
 		(Node::Symbol(name), Node::List(items, Bracket::Square, _)) => match items.as_slice() {
-			[element] => Some((name, format!("{LIST_OF_PREFIX}{}", element.drop_meta().name()))),
+			[element] => match union_type_name(element.drop_meta()) {
+				Some(union) => Some((name, format!("{LIST_OF_PREFIX}{union}"))),
+				None => Some((name, format!("{LIST_OF_PREFIX}{}", element.drop_meta().name()))),
+			},
 			_ => None,
 		},
 		(Node::Symbol(name), union) => Some((name, union_type_name(&union)?)),
@@ -99,9 +102,11 @@ pub(crate) const UNION_JOINER: &str = " or ";
 /// The empty part of a union, `int | ø`, makes it optional: `int?`
 pub(super) const NONE_WORDS: [&str; 3] = ["none", "nil", "null"];
 
-/// The parts of an inline union type name: "int or text" → int, text; None for a single type
+/// The parts of an inline union type name: "int or text" → int, text; None for a single type and a list of a union
+/// ("list of int or text")
 pub(crate) fn union_parts(type_name: &str) -> Option<Vec<&str>> {
-	type_name.contains(UNION_JOINER).then(|| type_name.split(UNION_JOINER).collect())
+	(type_name.contains(UNION_JOINER) && !type_name.starts_with(LIST_OF_PREFIX))
+		.then(|| type_name.split(UNION_JOINER).collect())
 }
 
 /// The type name of an inline union `int | text`, `(int or text)`: its parts with a part another part covers dropped

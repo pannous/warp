@@ -32,8 +32,8 @@ mod statics;
 use crate::node::{leading_name, parens, symbol, text, Bracket, Node, Separator};
 use crate::operators::{operator_method, Op, OPERATOR_METHODS};
 use inheritance::*;
-pub(crate) use operators::is_library_method;
 use operators::*;
+pub(crate) use operators::{is_library_method, ClassFields};
 use other_languages::*;
 use statics::*;
 
@@ -80,7 +80,7 @@ const IMPL_WORD: &str = "impl";
 /// lib/units.warp's `q.to("km/h")`: a run-time quantity in other units
 const CONVERSION_METHOD: &str = "to";
 /// lib/units.warp's check that two quantities measure the same, and a quantity's amount in base units
-const SAME_DIMENSION: &str = "same_dimension";
+const SAME_QUANTITY: &str = "same_quantity";
 const QUANTITY_AMOUNT: &str = "amount";
 /// The sum of a list of run-time quantities folds their `plus` (quantities_reduced)
 const REDUCE_WORD: &str = "reduce";

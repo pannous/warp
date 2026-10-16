@@ -1,4 +1,4 @@
-//! Welcoming C habits (samples/sin.warp, samples/sine.warp): `real f(real x) { … }` definitions and
+//! Welcoming C habits (samples/numbers/sin.warp, samples/numbers/sine.warp): `real f(real x) { … }` definitions and
 //! `if (condition) statement` without braces
 use crate::is;
 

@@ -3,10 +3,10 @@ use crate::is;
 // natural first draft: blocked by `else if` inside blocks, `0..size {…}`, fun params typed Int for list variables, `return count`, tuple destructuring
 #[test]
 fn test_life() {
-	is!("samples/life.warp", 131);
+	is!("samples/loops/life.warp", 131);
 }
 
 #[test]
 fn test_life_idiomatic() {
-	is!("samples/life_idiomatic.warp", 131);
+	is!("samples/loops/life_idiomatic.warp", 131);
 }

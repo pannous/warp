@@ -32,13 +32,21 @@ pub const PREVIOUS_HOLE: &str = "previous";
 pub const PREVIOUS_WORDS: [&str; 3] = ["last", "feedback", "before"];
 
 /// Underscore spellings of a built-in hole's member, aliases that hint at the dotted form (user 2026-10-14, card
-/// values-number): `$mouse_x` is `$mouse.x`
-pub const HOLE_ALIASES: [(&str, &str); 2] = [("mouse_x", "mouse.x"), ("mouse_y", "mouse.y")];
-const ALIAS_REASON: &str = "the pointer is the built-in hole $mouse, a vec2f";
+/// values-number): `$mouse_x` is `$mouse.x`; and The Book of Shaders' uniform names (glslCanvas, GLSL Sandbox; card
+/// compute-toys): `$u_time` is `$time`, `$u_resolution` `$size`, `$u_mouse` `$mouse`
+pub const HOLE_ALIASES: [(&str, &str, &str); 5] = [
+	("mouse_x", "mouse.x", POINTER_REASON),
+	("mouse_y", "mouse.y", POINTER_REASON),
+	("u_time", "time", BOOK_OF_SHADERS_REASON),
+	("u_resolution", "size", BOOK_OF_SHADERS_REASON),
+	("u_mouse", "mouse", BOOK_OF_SHADERS_REASON),
+];
+const POINTER_REASON: &str = "the pointer is the built-in hole $mouse, a vec2f";
+const BOOK_OF_SHADERS_REASON: &str = "The Book of Shaders' uniform names are aliases of warp's built-in holes";
 
 /// The dotted form of an aliased hole (`mouse_x` → `mouse.x`), any other name itself
 fn dotted(name: &str) -> &str {
-	HOLE_ALIASES.iter().find(|(alias, _)| *alias == name).map_or(name, |(_, dotted)| dotted)
+	HOLE_ALIASES.iter().find(|(alias, ..)| *alias == name).map_or(name, |(_, dotted, _)| dotted)
 }
 
 /// what a shader missing the value `name` may have meant ("" for nothing)
@@ -91,13 +99,13 @@ pub fn shader_text(wgsl: &str) -> Node {
 
 /// `$mouse_x` works as `$mouse.x`, with a hint to write that
 fn hint_aliases(wgsl: &str) {
-	for (alias, dotted) in HOLE_ALIASES {
+	for (alias, dotted, reason) in HOLE_ALIASES {
 		let written = format!("${alias}");
 		let found = wgsl
 			.match_indices(&written)
 			.any(|(at, _)| !wgsl[at + written.len()..].starts_with(|ch: char| ch.is_alphanumeric() || ch == '_'));
 		if found {
-			crate::normalize::hint(&written, &format!("${dotted}"), ALIAS_REASON);
+			crate::normalize::hint(&written, &format!("${dotted}"), reason);
 		}
 	}
 }
@@ -205,7 +213,7 @@ fn with_values(
 			.collect::<Vec<_>>()
 	};
 	match items.get(VALUES_INDEX).map(|values| values.drop_meta().clone()) {
-		None => items.push(Node::List(entries(&[]), Bracket::Curly, Separator::Colon)),
+		None => items.push(Node::List(entries(&[]), Bracket::Curly, Separator::Comma)),
 		Some(Node::List(given, Bracket::Curly, map_separator)) => {
 			let added = entries(&given);
 			items[VALUES_INDEX] = Node::List(given.into_iter().chain(added).collect(), Bracket::Curly, map_separator)
