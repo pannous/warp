@@ -43,7 +43,25 @@ pub fn lower(program: Node) -> Node {
 	variables.extend(unassigned.iter().map(|name| (name.clone(), None)));
 	let shared = crate::lowering::shared_arrays::shared_names(&program).into_iter().collect();
 	let instances = crate::traits::InstanceTypes::of(&program);
-	Dispatch { redefined, variables, shared, instances, unassigned }.rewrite(program)
+	let constants = constant_names(&program);
+	Dispatch { redefined, variables, shared, instances, unassigned, constants }.rewrite(program)
+}
+
+/// The names `let` or `const` binds anywhere in the program (a route's path parameters too): no list a library word
+/// changes
+fn constant_names(program: &Node) -> HashSet<String> {
+	let mut names = HashSet::new();
+	program.visit(&mut |node| {
+		if let Node::List(items, _, _) = node.drop_meta() {
+			if let [keyword, declaration, ..] = items.as_slice() {
+				let is_constant =
+					crate::analyzer::is_constant_keyword(keyword) || keyword.is_symbol(crate::words::LET_WORD);
+				let bound = is_constant.then(|| crate::analyzer::declared_bindings(declaration)).flatten();
+				names.extend(bound.into_iter().flat_map(|(bindings, _)| bindings.into_iter().map(|(name, _)| name)));
+			}
+		}
+	});
+	names
 }
 
 /// The parameters and loop variables anywhere in the program: names bound without an assignment
@@ -141,6 +159,8 @@ struct Dispatch {
 	instances: crate::traits::InstanceTypes,
 	/// The parameters and loop variables (names_bound_unassigned)
 	unassigned: HashSet<String>,
+	/// The names `let` or `const` binds (constant_names)
+	constants: HashSet<String>,
 }
 
 impl Dispatch {
@@ -209,8 +229,13 @@ impl Dispatch {
 		let arguments: Vec<Node> = arguments.into_iter().map(|argument| self.rewrite(argument)).collect();
 		// `add(all xs, 10)` applies the program's word to each item, as the program asks
 		let broadcast = arguments.iter().any(|argument| crate::broadcasting::all_marked(argument).is_some());
-		let is_shared = arguments[0].drop_meta().symbol_name().is_some_and(|receiver| self.shared.contains(receiver));
-		if broadcast || is_shared || self.holds_instance(&arguments[0]) {
+		let receiver = arguments[0].drop_meta().symbol_name();
+		let is_shared = receiver.is_some_and(|receiver| self.shared.contains(receiver));
+		// a constant of a kind only the run time knows: the library's word changing a list could not change it
+		let is_unchangeable = crate::list_mutations::is_list_mutating_method(&name)
+			&& receiver.is_some_and(|receiver| self.constants.contains(receiver))
+			&& known_fit(&arguments[0], &redefined.types, &self.variables).is_none();
+		if broadcast || is_shared || is_unchangeable || self.holds_instance(&arguments[0]) {
 			return Some(call(&own_name(&name), arguments));
 		}
 		Some(chosen_call(&name, &redefined.types, arguments, &self.variables))
