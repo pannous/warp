@@ -97,22 +97,44 @@ pub fn lower(node: Node) -> Node {
 	lambda_calls(node, &lambda_names)
 }
 
-/// `it = 5` (user 2026-10-16): `it` is reserved, it names the parameter of a function that names none, so a variable
-/// of that name warns (an error under `use strict`)
+/// `it = 5` (user 2026-10-16): `it` is reserved, it names the parameter of a function that names none, so a program
+/// binding it otherwise warns (an error under `use strict`): `it += 1`, `let it = …`, `[it, b] = …`, `for it in xs`.
+/// A parameter written `it` (`f(it) := …`, `it => …`) is that parameter, named as warp names it
 fn warn_assigned_it(node: &Node) -> Option<Node> {
-	let mut assigned = None;
-	node.visit(&mut |node| {
-		if let Node::Key(target, Op::Assign | Op::Define, _) = node {
-			if assigned.is_none() && target.drop_meta().is_symbol(IMPLICIT_PARAMETER) {
-				assigned = Some(target.as_ref().clone());
-			}
+	let mut bound = None;
+	node.visit(&mut |part| {
+		if bound.is_none() {
+			bound = binding_of_it(part);
 		}
 	});
 	let message = format!(
 		"`{IMPLICIT_PARAMETER}` is reserved: it names the parameter of a function that names none \
 		 (`square := {IMPLICIT_PARAMETER} * {IMPLICIT_PARAMETER}`); pick another name"
 	);
-	crate::errors::diagnostic::report(&[crate::errors::diagnostic::Diagnostic::at(&assigned?, message)]).err()
+	crate::errors::diagnostic::report(&[crate::errors::diagnostic::Diagnostic::at(&bound?, message)]).err()
+}
+
+/// The written `it` a write, definition or loop binds
+fn binding_of_it(part: &Node) -> Option<Node> {
+	match part {
+		Node::Key(target, op, _) if op.is_write() || *op == Op::Define => named_it(target, *op == Op::Assign),
+		Node::List(items, _, _) => super::nodes::for_in_variable(items)
+			.filter(|variable| variable == IMPLICIT_PARAMETER)
+			.and_then(|_| items.get(1).cloned()),
+		_ => None,
+	}
+}
+
+/// `it`, `it: int` or, assigned, a destructured `[it, b]`; never a function head's parameter `f(it)`
+fn named_it(target: &Node, destructures: bool) -> Option<Node> {
+	match target.drop_meta() {
+		Node::Symbol(name) if name == IMPLICIT_PARAMETER => Some(target.clone()),
+		Node::Key(name, Op::Colon, _) => named_it(name, destructures),
+		Node::List(items, Bracket::Square | Bracket::None, _) if destructures => {
+			items.iter().find_map(|item| named_it(item, destructures))
+		}
+		_ => None,
+	}
 }
 
 /// Swift's and Rust's result arrow before `:=`: `def x(p:P) -> int := p.n` is `x(p:P): int := p.n`, the one typed head
