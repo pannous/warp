@@ -202,7 +202,10 @@ impl WasmGcEmitter {
 		emit_number: fn(&mut Self, &mut Function, &Node),
 	) {
 		self.warn_bits_as_truth(condition);
-		if self.is_structural_operand(condition)
+		// `if odd x`: an unknown word is an error as in any other code, never a truthy list (card undefined-word)
+		if let Some(message) = self.unknown_word_refusal(condition) {
+			self.emit_type_error(func, message);
+		} else if self.is_structural_operand(condition)
 			|| self.is_held_cell_value(condition)
 			|| self.holds_run_time_kind(condition)
 		{

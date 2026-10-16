@@ -16,7 +16,7 @@ Old worktrees (/Users/me/dev/angles/warp.worktrees.noindex) stay on the Data vol
 straight to /Volumes/Worktrees/<name> (disk3s9, user 2026-10-16, card new-worktrees): no_log, Spotlight off, Time Machine
 excluded for the whole volume (user: work is pushed per step), no .noindex subfolder. Never wiped. cowtree needs a
 registered donor worktree on that volume, one per project named after it: /Volumes/Worktrees/warp, detached at origin/main
-(the volume may hold other projects later).
+(the volume may hold other projects later), never removed (scripts/prune-worktrees.sh keeps it on origin/main).
 data/ (kept logs and results) stays in the repo.
 
 ## Status
