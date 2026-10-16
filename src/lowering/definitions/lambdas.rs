@@ -6,7 +6,7 @@
 //! - a lambda anywhere else is a closure (closures.rs); `map` over a value that is no function is the error `map needs a function, got …`
 
 use super::nodes::{call, children_rewritten, is_kinded_type_word, key, named_assignment, Counter};
-use crate::analyzer::call_name;
+use crate::analyzer::{call_name, function_definitions};
 use crate::compiler::context::{Context, UserFunctionDef};
 use crate::errors::diagnostic::Diagnostic;
 use crate::library_words::substitute;
@@ -14,7 +14,7 @@ use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse_template;
 use crate::words::{EACH_WORD, IMPLICIT_PARAMETER, ON_WORD, SORT_WORD};
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 
 const PARTIAL_LIST: &str = "partial_list";
 const LIST_PLACEHOLDER: &str = "loop_list";
@@ -193,39 +193,116 @@ fn literal_function(node: &Node) -> Option<Lambda> {
 
 /// `xs map f`, `ps map .a`, `xs filter {it > 2}` (cards infix-map, map-dot): an iteration word between a list and its
 /// function is the method call `xs.map(f)`, left to right, `xs map f filter g` is `xs.map(f).filter(g)`; a prefix
-/// `map f xs` stays
-pub fn lower_infix_iterations(node: Node) -> Node {
+/// `map f xs` stays. The list is the rightmost operand before the word: `f() := xs map g` maps xs, `return xs map g`
+/// returns the mapped list, `ps sort by .a` labels the function. A function of the program calls what follows,
+/// `f sorted xs`
+pub fn lower_infix_iterations(program: Node) -> Node {
+	let functions: HashSet<String> = function_definitions(&program).user_functions.into_keys().collect();
+	infix_iterations(program, &functions)
+}
+
+fn infix_iterations(node: Node, functions: &HashSet<String>) -> Node {
+	let is_list_operand =
+		|node: &Node| is_list_operand(node) && !node.symbol_name().is_some_and(|name| functions.contains(name));
 	match node {
-		Node::List(items, Bracket::None, separator)
-			if !separator.separates_statements() && separator != Separator::Colon =>
-		{
-			let mut combined: Vec<Node> = Vec::with_capacity(items.len());
-			let mut rest = items.into_iter().map(lower_infix_iterations).peekable();
-			while let Some(item) = rest.next() {
-				let after_list = combined.last().is_some_and(is_list_operand);
+		Node::List(items, bracket, separator) if is_phrase(&bracket, &separator) => {
+			let mut pending: VecDeque<Node> = items.into_iter().map(|item| infix_iterations(item, functions)).collect();
+			let mut combined: Vec<Node> = Vec::with_capacity(pending.len());
+			let mut changed = false;
+			while let Some(item) = pending.pop_front() {
+				// `ys map` grouped as a phrase of its own before the function: its words are this phrase's
+				if let Some(words) = phrase_ending_in_iteration(&item, is_list_operand).filter(|_| !pending.is_empty())
+				{
+					words.into_iter().rev().for_each(|word| pending.push_front(word));
+					continue;
+				}
+				let after_list = combined.last().is_some_and(|left| is_list_operand(rightmost_operand(left)));
 				// `xs map f`, or `xs (map f)` where the phrase grouped the prefix call first (`ys = xs map f`)
-				let iteration = match grouped_iteration(&item) {
-					Some(grouped) => Some(grouped),
-					None if iteration_word(&item).is_some() && rest.peek().is_some() => {
-						Some((item.name(), rest.next().expect("peeked")))
+				let iteration = after_list
+					.then(|| grouped_iteration(&item).or_else(|| bare_iteration(&item, &mut pending)))
+					.flatten();
+				match iteration {
+					Some((word, function)) => {
+						let left = combined.pop().expect("a list before");
+						combined.push(attach_iteration(left, &word, function));
+						changed = true;
 					}
-					None => None,
-				};
-				match (after_list, iteration) {
-					(true, Some((word, function))) => {
-						let list = combined.pop().expect("a list before");
-						combined.push(key(list, Op::Dot, call(&word, vec![function])));
-					}
-					(_, Some((word, function))) => combined.extend([symbol(&word), function]),
-					(_, None) => combined.push(item),
+					None => combined.push(item),
 				}
 			}
-			match combined.len() {
-				1 => combined.pop().expect("one"),
-				_ => Node::List(combined, Bracket::None, separator),
+			match (changed, &bracket) {
+				(true, Bracket::None | Bracket::Round) if combined.len() == 1 => combined.pop().expect("one"),
+				_ => Node::List(combined, bracket, separator),
 			}
 		}
-		other => other.map_children(lower_infix_iterations),
+		other => other.map_children(|child| infix_iterations(child, functions)),
+	}
+}
+
+/// Words side by side in one statement: `xs map f`, `(xs map f)`, a block's one phrase `{ return xs map f }`
+fn is_phrase(bracket: &Bracket, separator: &Separator) -> bool {
+	matches!(bracket, Bracket::None | Bracket::Round | Bracket::Curly)
+		&& !separator.separates_statements()
+		&& *separator != Separator::Colon
+}
+
+/// `map f` with the iteration word as its own item: the function after it, labeled when a sort label comes first
+/// (`ps sort by .a`)
+fn bare_iteration(item: &Node, pending: &mut VecDeque<Node>) -> Option<(String, Node)> {
+	iteration_word(item)?;
+	let function = pending.pop_front()?;
+	let function = match pending.front() {
+		Some(_) if is_sort_label(&function) => key(function, Op::Colon, pending.pop_front().expect("peeked")),
+		_ => function,
+	};
+	Some((item.name(), function))
+}
+
+/// `ys map` of `f(ys) := ys map sq`, which the parser grouped before the function: its words
+fn phrase_ending_in_iteration(node: &Node, is_list_operand: impl Fn(&Node) -> bool) -> Option<Vec<Node>> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::None, separator) if !separator.separates_statements() => match items.as_slice() {
+			[.., left, word] if iteration_word(word).is_some() && is_list_operand(rightmost_operand(left)) => {
+				Some(items.clone())
+			}
+			_ => None,
+		},
+		_ => None,
+	}
+}
+
+/// An operator that takes a whole phrase on its right: `f() := xs map g`, `n = xs map g`, `a + xs map g`; a lookup
+/// `p.xs map g` keeps its receiver
+fn takes_phrase_on_the_right(op: &Op) -> bool {
+	matches!(op, Op::Assign | Op::Define | Op::Colon)
+		|| op.is_compound_assign()
+		|| op.is_operation() && !op.is_prefix() && !op.is_suffix()
+}
+
+/// The operand right before the next word: `xs` of `f() := xs`, of `return xs`
+fn rightmost_operand(node: &Node) -> &Node {
+	match node.drop_meta() {
+		Node::Key(_, op, right) if takes_phrase_on_the_right(op) => rightmost_operand(right),
+		Node::List(items, Bracket::None, separator) if !separator.separates_statements() && !items.is_empty() => {
+			rightmost_operand(items.last().expect("an item"))
+		}
+		other => other,
+	}
+}
+
+/// `xs.word(function)` in place of the rightmost operand
+fn attach_iteration(left: Node, word: &str, function: Node) -> Node {
+	match left {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(attach_iteration(*node, word, function)), data },
+		Node::Key(target, op, right) if takes_phrase_on_the_right(&op) => {
+			Node::Key(target, op, Box::new(attach_iteration(*right, word, function)))
+		}
+		Node::List(mut items, Bracket::None, separator) if !separator.separates_statements() && !items.is_empty() => {
+			let last = items.pop().expect("an item");
+			items.push(attach_iteration(last, word, function));
+			Node::List(items, Bracket::None, separator)
+		}
+		list => key(list, Op::Dot, call(word, vec![function])),
 	}
 }
 
@@ -296,6 +373,11 @@ fn member_of(node: &Node) -> Option<&str> {
 
 /// `map`, `filter`, `sorted` … as a word, whether or not the program defines a function of that name
 /// `find`, `map`, `filter`, … under any spelling: a class's method of that name keeps them for other values
+/// `by` of `sort by: f`, `key` of `sort(key=f)`
+pub(crate) fn is_sort_label(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Symbol(word) if SORT_LABELS.contains(&word.as_str()))
+}
+
 pub(crate) fn is_iteration_word(name: &str) -> bool {
 	iteration_word(&Node::Symbol(name.to_string())).is_some()
 }
@@ -374,11 +456,10 @@ pub(crate) fn labeled_list(argument: &Node) -> Option<(Node, Vec<Node>)> {
 
 /// The sorting function without its label: `by: >`, `key: s => s.length`, `key=f`
 fn unlabeled(function: Node) -> Node {
-	let is_label = |node: &Node| matches!(node.drop_meta(), Node::Symbol(word) if SORT_LABELS.contains(&word.as_str()));
 	match function.drop_meta() {
-		Node::Key(label, Op::Colon | Op::Assign, inner) if is_label(label) => inner.as_ref().clone(),
+		Node::Key(label, Op::Colon | Op::Assign, inner) if is_sort_label(label) => inner.as_ref().clone(),
 		Node::Key(head, arrow @ Op::Arrow, body) => match head.drop_meta() {
-			Node::Key(label, Op::Colon, parameters) if is_label(label) => {
+			Node::Key(label, Op::Colon, parameters) if is_sort_label(label) => {
 				Node::Key(parameters.clone(), *arrow, body.clone())
 			}
 			_ => function,

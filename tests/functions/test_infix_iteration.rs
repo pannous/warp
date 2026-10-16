@@ -31,3 +31,18 @@ fn prefix_iteration_stays() {
 fn a_calling_word_before_a_prefix_iteration_stays() {
 	assert_eq!(printed("f(xs) := { return map {it*2} xs }; f([1 2])"), "[2 4]");
 }
+
+#[test]
+fn the_list_is_the_rightmost_operand_before_the_word() {
+	assert_eq!(printed("def sq(x):=x*x; f():=[1 2] map sq; f()"), "[1 4]");
+	assert_eq!(printed("def sq(x):=x*x; def f(){ return [1 2] map sq }; f()"), "[1 4]");
+	assert_eq!(printed("def sq(x):=x*x; def f(){ [1 2] map sq }; f()"), "[1 4]");
+	assert_eq!(printed("def sq(x):=x*x; f():=([1 2] map sq); f()"), "[1 4]");
+	assert_eq!(printed("def sq(x):=x*x; f(ys:list):=ys map sq; f [1 2]"), "[1 4]");
+	assert_eq!(printed("p={xs:[1 2]}; p.xs map {it*3}"), "[3 6]");
+}
+
+#[test]
+fn a_sort_label_before_the_function() {
+	assert_eq!(printed("ps=[{a:2} {a:1}]; ps sort by .a"), "[a:1 a:2]");
+}
