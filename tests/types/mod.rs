@@ -44,7 +44,6 @@ mod test_collection_declarations;
 mod test_conformance_claims;
 mod test_construction_checks;
 mod test_construction_defaults;
-mod test_text_defaults; // card empty-text-default
 mod test_constructor_vs_data;
 mod test_copies;
 mod test_cycle_mark_depth; // card cycle-mark-depth
@@ -151,6 +150,7 @@ mod test_tagged_objects;
 mod test_tagged_unions; // card tagged-unions
 mod test_text_as_bool; // card yes-print
 mod test_text_as_number; // card units-dynamic
+mod test_text_defaults; // card empty-text-default
 mod test_text_of_text; // text(text(5)) is "5"
 mod test_time_kinds_are_types; // card anchor-time
 mod test_time_now; // cards print-time, time-now
@@ -180,12 +180,12 @@ mod test_type_of_lambda_variable; // card type-says-symbol
 mod test_type_of_node_values;
 mod test_type_of_real_variable;
 mod test_type_parameters; // card random-should
-mod test_type_values; // card type-values
 mod test_type_static;
 mod test_type_test_is_only;
 mod test_type_tests;
 mod test_type_tests_anywhere;
 mod test_type_upgrading;
+mod test_type_values; // card type-values
 mod test_type_word_scopes;
 mod test_type_word_user_function;
 mod test_type_words;

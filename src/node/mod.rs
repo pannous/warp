@@ -413,7 +413,9 @@ impl Node {
 	/// The name of a type value (type_value), None for anything else
 	pub fn type_value_name(&self) -> Option<&str> {
 		match self {
-			Meta { node, data } if matches!(data.as_ref(), Key(key, _, _) if key.name() == TYPE_VALUE_KEY) => node.symbol_name(),
+			Meta { node, data } if matches!(data.as_ref(), Key(key, _, _) if key.name() == TYPE_VALUE_KEY) => {
+				node.symbol_name()
+			}
 			Meta { node, .. } => node.type_value_name(),
 			_ => None,
 		}
