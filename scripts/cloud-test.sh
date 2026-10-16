@@ -21,6 +21,7 @@
 # `/model` before each job (`--model` on a follow-up message doesn't switch it). Fast mode applies to new sessions only.
 set -uo pipefail
 MODEL=${CLOUD_TEST_MODEL:-haiku}
+THIS_SCRIPT=$0                 # sent along with each job
 
 REPO=pannous/warp
 MAIN_CHECKOUT=/Users/me/dev/angles/warp
@@ -29,7 +30,7 @@ JOBS_PREFIX=cloud-jobs         # cloud-jobs/<job>: the job's arguments, so the s
 ENVIRONMENTAL_LIST=scripts/cloud-test-environmental.txt
 CARGO_FLAGS_WITH_VALUE='--test|--features|-F|-p|--package|--bin|--example|--bench|-j|--jobs|--target'   # `--test tests`: the next word is the flag's, not a filter
 MAX_PARALLEL_RUNS=5           # cloud sessions running a job at once (they share the account's limits, notes/cloud_development.md)
-PENDING_HOURS=3                # a job older than this without a result: its session is dropped from the pool
+PENDING_MINUTES=90             # a job older than this without a result: its session is dropped from the pool (a full run takes ~25)
 POOL=/Users/me/dev/angles/warp/data/cloud/pool   # one file per cloud session: its current job, or idle
 MAX_CLOUD_SESSIONS=8           # pool files plus starting ones: every session stays in the user's session list
 JOBS_PER_SESSION=30            # then the session's context is cleared (/clear): each job adds a little to it
@@ -232,7 +233,7 @@ run_job() {
 	local job=$1 arguments=$HERE_ROOT/jobs/$1/arguments
 	if [ ! -s "$arguments" ]; then
 		mkdir -p "${arguments%/*}"
-		git fetch -q origin "refs/heads/$JOBS_PREFIX/$job" && git show FETCH_HEAD:arguments > "$arguments" ||
+		git fetch -q origin "+refs/heads/$JOBS_PREFIX/$job:refs/$JOBS_PREFIX/$job" && git show "refs/$JOBS_PREFIX/$job:arguments" > "$arguments" ||
 			{ echo "CLOUD TEST DONE: red, no job $JOBS_PREFIX/$job on origin"; return 1; }
 	fi
 	local job_arguments=()
@@ -245,15 +246,17 @@ run_job() {
 cloud_prompt() {
 	cat <<-EOF
 	Run this in the foreground (timeout 600000), again while it prints CLOUD TEST RUNNING, then reply with only its last line. Nothing else.
-	git fetch -q origin main && git show origin/main:scripts/cloud-test.sh > /tmp/cloud-test.sh && bash /tmp/cloud-test.sh --job $1
+	git fetch -q origin $JOBS_PREFIX/$1 && git show FETCH_HEAD:cloud-test.sh > /tmp/cloud-test.sh && bash /tmp/cloud-test.sh --job $1
 	EOF
 }
 
-# The job's arguments, one per line, as the one commit of cloud-jobs/<job>
+# The job's arguments, one per line, and this script as the one commit of cloud-jobs/<job>: the cloud runs the very
+# version that launched the job, never a newer or older origin/main
 push_job() {
-	local job=$1 blob tree commit output; shift
-	blob=$(printf '%s\n' "$@" | git -C "$MAIN_CHECKOUT" hash-object -w --stdin)
-	tree=$(printf '100644 blob %s\targuments\n' "$blob" | git -C "$MAIN_CHECKOUT" mktree)
+	local job=$1 arguments script tree commit output; shift
+	arguments=$(printf '%s\n' "$@" | git -C "$MAIN_CHECKOUT" hash-object -w --stdin)
+	script=$(git -C "$MAIN_CHECKOUT" hash-object -w --stdin < "$THIS_SCRIPT")
+	tree=$(printf '100644 blob %s\targuments\n100644 blob %s\tcloud-test.sh\n' "$arguments" "$script" | git -C "$MAIN_CHECKOUT" mktree)
 	commit=$(git -C "$MAIN_CHECKOUT" commit-tree "$tree" -m "cloud test job $job")
 	output=$(git -C "$MAIN_CHECKOUT" push -q origin "$commit:refs/heads/$JOBS_PREFIX/$job" 2>&1) ||
 		fail "push of $JOBS_PREFIX/$job failed: $output"   # quiet otherwise: GitHub offers a pull request for every new branch
@@ -280,7 +283,7 @@ session_is_free() {
 	[ "$job" = idle ] && return 0
 	run=${job%-*}
 	git -C "$MAIN_CHECKOUT" ls-remote --exit-code origin "refs/heads/$RESULTS_PREFIX/$run" > /dev/null && return 0
-	[ $(($(date +%s) - since)) -gt $((PENDING_HOURS * 3600)) ] && drop_session "$file" "its job $job never answered"
+	[ $(($(date +%s) - since)) -gt $((PENDING_MINUTES * 60)) ] && drop_session "$file" "its job $job never answered"
 	return 1
 }
 
@@ -290,6 +293,16 @@ drop_session() {
 	rm -f "$file"
 	echo "$(date -u +%FT%TZ) $url $reason" >> "$DROPPED_SESSIONS"
 	echo "cloud-test: dropped $url from the pool ($reason): archive it in the web UI ($DROPPED_SESSIONS)" >&2
+}
+
+# Under the pool lock: the session already running a job of this run (a second launch of the same branch and tip)
+pending_session_of() {
+	local name=$1 file job
+	for file in "$POOL"/session_* "$POOL"/starting-*; do
+		[ -e "$file" ] || continue
+		job=$(pool_field "$file" job)
+		[[ "$job" == "$name"-* ]] && ! session_is_free "$file" && { echo "${file##*/}"; return; }
+	done
 }
 
 # Under the pool lock: a free session for the job (its id, marked busy; jobs 1 = its context is to be cleared first),
@@ -339,6 +352,11 @@ launch() {
 	folder=$MAIN_CHECKOUT/data/cloud/$name
 	mkdir -p "$folder"
 	rm -f "$folder/result.md"
+	lock_pool; session=$(pending_session_of "$name"); unlock_pool
+	if [ -n "$session" ]; then
+		echo "cloud-test: $name already runs in https://claude.ai/code/${session#starting-}: waiting for that result" >&2
+		return
+	fi
 	push_job "$job" ${base[@]+"${base[@]}"} "$branch" "$tip" "$@"
 	cloud_prompt "$job" > "$folder/prompt.txt"
 	while [ -z "$url" ]; do

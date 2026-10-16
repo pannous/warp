@@ -245,7 +245,11 @@ branch's tests there:
   is dropped, loudly, into data/cloud/dropped-sessions.txt: archive those in the web UI.
 - New sessions are named "Cloud Test Lane" (`--name` carries to the cloud); the pool addresses them by session_id only.
 - The prompt is two short lines whatever the filters: the job's arguments go to the branch cloud-jobs/<job> (pushed
-  by the Mac, deleted with the result), the session runs `cloud-test.sh --job <job>`. A filter list of 80 test files
+  by the Mac, deleted with the result), the session runs `cloud-test.sh --job <job>`. The job commit also carries the
+  launching script, which the cloud runs: a job launched between my commit and push once met an origin/main script
+  without --job and never answered. A second launch of a pending run (same branch and tip) only waits for its result:
+  two owners relaunching at once made two jobs racing for one results branch. A job without a result frees its
+  session after 90 min. A filter list of 80 test files
   used to fill the prompt and every repeated command (~2,000 characters each).
 - A session keeps the model it was created with: `--model` on a follow-up message doesn't switch it, a `/model haiku`
   message does (0 turns). Every reused session gets `/model` before its job; early pool sessions had run on Opus.
