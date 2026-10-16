@@ -6,7 +6,7 @@
 // into the first input before the clicks; `animated` that the clicks started an animation; `clickedPrinted`: all
 // printed text after the clicks; `address` the address bar's path after
 // them).
-// samples.js (made by build.sh) adds samples/*.warp.
+// samples.js (made by build.sh) adds samples/<chapter>/*.warp.
 const EXAMPLES = {
 	hello: { value: '"Hello, world"', code: `// your first program: the value of the last line shows below
 "Hello, world"` },

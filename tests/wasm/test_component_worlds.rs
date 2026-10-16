@@ -1,4 +1,4 @@
-// A component's world (card wasm-interop-rest, samples/wasm_interop.warp): `component name { import …: {…} export …: … }`
+// A component's world (card wasm-interop-rest, samples/wasm/wasm_interop.warp): `component name { import …: {…} export …: … }`
 // declares what a component imports and exports; its WIT is what `warp build --wit` writes. The declaration does
 // nothing when the program runs.
 use crate::is;

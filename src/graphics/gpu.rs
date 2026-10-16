@@ -648,7 +648,7 @@ struct Painter {
 }
 
 /// The painter of a shader text, compiled once: compiling a pipeline anew for every frame costs more than drawing it
-/// (over 100 ms for a raymarching shader on Metal, samples/gpu_visualizer.warp)
+/// (over 100 ms for a raymarching shader on Metal, samples/gpu/gpu_visualizer.warp)
 fn painter(device: &wgpu::Device, source: String, takes_values: bool, reads_previous: bool) -> Result<Painter, String> {
 	static PAINTERS: LazyLock<Mutex<HashMap<String, Painter>>> = LazyLock::new(Default::default);
 	let mut painters = PAINTERS.lock().unwrap();

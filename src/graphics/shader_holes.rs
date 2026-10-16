@@ -219,7 +219,7 @@ fn with_values(
 			.collect::<Vec<_>>()
 	};
 	match items.get(VALUES_INDEX).map(|values| values.drop_meta().clone()) {
-		None => items.push(Node::List(entries(&[]), Bracket::Curly, Separator::Colon)),
+		None => items.push(Node::List(entries(&[]), Bracket::Curly, Separator::Comma)),
 		Some(Node::List(given, Bracket::Curly, map_separator)) => {
 			let added = entries(&given);
 			items[VALUES_INDEX] = Node::List(given.into_iter().chain(added).collect(), Bracket::Curly, map_separator)

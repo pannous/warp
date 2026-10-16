@@ -499,7 +499,7 @@ impl Exporter {
 					other => outside_w0(other),
 				}
 			}
-			Node::List(items, Bracket::None, Separator::Colon) if destructuring_assignment(items).is_some() => {
+			Node::List(items, Bracket::None, Separator::Comma) if destructuring_assignment(items).is_some() => {
 				let (names, values) = destructuring_assignment(items).expect("a destructuring");
 				match values[..] {
 					[list] => self.destructure(&names, list),

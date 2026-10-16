@@ -1,6 +1,5 @@
 use std::fs;
 use std::io::{stdout, Write};
-use std::path::Path;
 use warp::warp_parser::WarpParser;
 use warp::Node;
 /// Test that all sample .warp files can be parsed without errors
@@ -11,24 +10,13 @@ fn test_parse_all_samples() {
 	// if 1 > 0 {
 	//     todo!("currently STALLS after parsing 4 files!?");
 	// }
-	let samples_dir = Path::new("samples");
-	assert!(samples_dir.exists(), "samples/ directory not found");
+	let sample_files = crate::common::sample_files();
+	assert!(!sample_files.is_empty(), "no samples/<chapter>/*.warp found");
 
 	let mut parsed_count = 0;
 	let mut failed_files = Vec::new();
 
-	// Read all .warp files in samples directory
-	let entries = fs::read_dir(samples_dir).expect("Failed to read samples directory");
-
-	for entry in entries {
-		let entry = entry.expect("Failed to read directory entry");
-		let path = entry.path();
-
-		// Only process .warp files
-		if path.extension().and_then(|s| s.to_str()) != Some("warp") {
-			continue;
-		}
-
+	for path in sample_files {
 		let filename = path.file_name().unwrap().to_str().unwrap();
 		print!("  Parsing {}... ", filename);
 		stdout().flush().ok();

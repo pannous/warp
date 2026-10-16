@@ -66,7 +66,7 @@ fn test_colon_lists() {
 
 #[test]
 fn test_sample() {
-	let _result = parse("samples/comments.warp");
+	let _result = parse("samples/hello/comments.warp");
 }
 
 #[test]

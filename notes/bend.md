@@ -128,7 +128,7 @@ the affine-only discipline (it would break warp's mutation and aliasing-free cop
 ## 4. Cards
 
 First (one card): **parallel let** `a b = f(x) g(y)` lowered onto go/await with a fork-depth cutoff, plus
-`samples/parallel_let.warp` (tree sum / pow2 like Bend's README) and a timing probe native vs sequential.
+`samples/tasks/parallel_let.warp` (tree sum / pow2 like Bend's README) and a timing probe native vs sequential.
 Done (card lower-parallel, 2026-10-11), notes/go_blocks.md "Parallel let".
 
 After it:

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Fails loudly when a tracked file under probes/ is not a small hand-written source:
 # repo copies (src/ tests/ target/ vendor/ .git paths), blobs over 100 KB, or extensions outside the .gitignore allowlist.
-# Also fails on a top-level samples/*.warp that does not run directly (shebang line and chmod +x).
+# Also fails on a samples/<chapter>/*.warp that does not run directly (shebang line and chmod +x).
 # Usage: probes/check_layout.sh [tree-ish]   (default: the index; pass a commit to check what was committed)
 MAX_BYTES=102400
 FORBIDDEN_PATH='(^|/)(src|tests|target|vendor|\.git)/'
@@ -41,7 +41,7 @@ else
 fi
 not_executable=()
 while read -r mode blob path; do
-	[[ $path =~ ^samples/[^/]+\.warp$ ]] || continue
+	[[ $path =~ ^samples/[^/]+/[^/]+\.warp$ && $path != samples/golf/* ]] || continue
 	if [[ $mode != 100755 ]]; then not_executable+=("$path (not chmod +x)")
 	elif [[ $(git cat-file -p "$blob" | head -1) != "$SAMPLE_SHEBANG" ]]; then not_executable+=("$path (first line is not $SAMPLE_SHEBANG)")
 	fi

@@ -22,5 +22,5 @@ fn used_words_stay_parameters() {
 #[ignore = "cleanup-edge: cleanup-park-phrases: phrase forms parked until card prepositions-call"]
 #[test]
 fn the_phrases_sample_runs() {
-	is!("samples/phrases.warp", "hi for a@b: see you");
+	is!("samples/hello/phrases.warp", "hi for a@b: see you");
 }
