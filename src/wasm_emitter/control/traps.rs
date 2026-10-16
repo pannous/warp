@@ -164,10 +164,12 @@ pub fn trap_error(trace: &str, trap: String) -> Node {
 		.contains(lists::list_ops::INDEX_OUT_OF_RANGE_OF)
 		.then(|| index_range_message(&trap_detail(trace)?))
 		.flatten();
-	// `[e 2]` of an Error e: its own message, then why it stops here
-	let error_in_data =
-		trace.contains(lists::list_ops::ERROR_IN_DATA).then(|| trap_detail(trace)).flatten().map(|detail| {
-			format!("{}: {}", unquoted(&detail), lists::list_ops::runtime_error_message(lists::list_ops::ERROR_IN_DATA))
+	// `[e 2]`, `q.k = e` of an Error e: its own message, then why it stops here
+	let error_in_data = [lists::list_ops::ERROR_IN_DATA, lists::list_ops::ERROR_IN_FIELD]
+		.into_iter()
+		.find(|error| trace.contains(error))
+		.and_then(|error| {
+			Some(format!("{}: {}", unquoted(&trap_detail(trace)?), lists::list_ops::runtime_error_message(error)))
 		});
 	let unjoinable = trace
 		.contains(lists::list_ops::NOT_JOINABLE)

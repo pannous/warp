@@ -685,6 +685,28 @@ fn response_header(mut caller: Caller<'_, HostState>, name: HostNode, value: Hos
 	Ok(())
 }
 
+/// A host word's failure as the program's own error (card wgsl-error): in a program with a `try`, its message goes to
+/// trap_detail and the module's returned_error raises it, which a running `try` catches (`catch e` binds the message)
+/// and which otherwise traps as `raise` does; any other failure, or a module without a `try`, stays as it was
+pub(super) fn raised<T>(caller: &mut Caller<'_, HostState>, result: wasmtime::Result<T>) -> wasmtime::Result<T> {
+	use crate::wasm_emitter::lists::list_ops::RETURNED_ERROR;
+	let failure = match result {
+		Err(failure) if failure.is::<crate::host::tasks::TaskFailure>() => failure,
+		done => return done,
+	};
+	let exports = (caller.get_export(RETURNED_ERROR), caller.get_export(crate::run::wasm_reader::TRAP_DETAIL));
+	let (Some(Extern::Func(returned_error)), Some(Extern::Global(detail))) = exports else {
+		return Err(failure);
+	};
+	let message = Node::Text(failure.to_string());
+	let raise = |caller: &mut Caller<'_, HostState>| -> wasmtime::Result<()> {
+		let message = built_in_program(caller, &message, RETURNED_ERROR)?;
+		detail.set(&mut *caller, Val::AnyRef(message))?;
+		returned_error.typed::<(), ()>(&*caller)?.call(&mut *caller, ())
+	};
+	Err(raise(caller).err().unwrap_or(failure))
+}
+
 /// The message of the Error a trapped call raised (left in trap_detail), read once: a warp function called back from
 /// another runtime fails with its own words, not the engine's `unreachable`
 fn raised_message(caller: &mut Caller<'_, HostState>) -> Option<String> {
