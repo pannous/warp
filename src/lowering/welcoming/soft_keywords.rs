@@ -19,13 +19,14 @@ pub const SOFT_KEYWORDS: [&str; 12] =
 	["emit", "send", "broadcast", "every", "whenever", "init", "new", "root", "listeners", "stored", "undo", "redo"];
 /// Keyword-like words in neither list: the playground editor colors them like soft keywords (web/playground/keywords.py
 /// makes keywords.js; it also colors every `const …_KEYWORD: &str` in src/, so a pass registers its word by that name). Display only: P165 gives them no meaning; moving one into a list above is a user decision
-pub const HIGHLIGHTED_WORDS: [&str; 62] = [
+pub const HIGHLIGHTED_WORDS: [&str; 63] = [
 	"try",
 	"catch",
 	"except",
 	"switch",
 	"match",
 	"case",
+	"when",
 	"do",
 	"yield",
 	"await",

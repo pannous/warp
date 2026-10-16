@@ -125,16 +125,13 @@ impl WarpParser {
 	}
 
 	/// One rule for every arithmetic word, `2 plus 3`, `7 div 2`, `2 add 3`: an operator in code only, not a member
-	/// `xs.add`, between a value and an operand that is no block (`when add {…}` names an event), and a program's own
-	/// function of that name wins, `def plus(a,b) := …; 2 plus 3`
+	/// `xs.add`, after a value (`when add {…}` names an event), and a program's own function of that name wins,
+	/// `def plus(a,b) := …; 2 plus 3`
 	fn arithmetic_word_in_code(&self, spelling: &str) -> bool {
-		let length = spelling.chars().count();
-		let block_after = (length..).map(|at| self.peek_char(at)).find(|ch| !matches!(ch, ' ' | '\t')) == Some('{');
 		!self.options.data_mode
 			&& self.prev_char() != '.'
 			&& !self.program_functions.contains(spelling)
 			&& self.value_before()
-			&& !block_after
 	}
 
 	/// The spelling starts here; a word ends here too: `and` but not `android`, `plus a` but not the call `plus(a, b)`
