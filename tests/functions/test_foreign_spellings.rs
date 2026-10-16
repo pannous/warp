@@ -52,3 +52,28 @@ fn r_and_php_words_come_with_their_use() {
 	let error = warp::wasm_emitter::eval("sapply([1, 2], x => x)").serialize();
 	assert!(error.contains("use R"), "{error}");
 }
+
+#[test]
+fn key_event_aliases_listen_to_key() {
+	is!("count = 0; on keydown { count += 1 }; emit key; count", 1);
+	is!("count = 0; on key_down { count += 1 }; emit key; emit key; count", 2);
+	is!("count = 0; once keypress { count += 1 }; emit key; emit key; count", 1);
+	assert!(notes_of("on keydown { print key }; 1").contains(&"keydown → key".to_string()));
+}
+
+/// reviewer: every listener word and the DOM attribute form read the same table
+#[test]
+fn dom_event_names_listen_to_warps_events() {
+	is!("count = 0; when keyup { count += 1 }; emit key; count", 1);
+	is!("count = 0; on mousedown { count += 1 }; emit click; count", 1);
+	is!("count = 0; onclick { count += 1 }; emit click; count", 1);
+	is!("count = 0; onkeydown { count += 1 }; emit key; count", 1);
+	assert!(notes_of("onclick { print 1 }; 1").contains(&"onclick → on click".to_string()));
+}
+
+/// reviewer: a release alias says the event fires on the press; a program's own `onclick` stays its function
+#[test]
+fn release_aliases_say_press_and_own_names_stay() {
+	assert!(notes_of("on keyup { print 1 }; 1").contains(&"keyup → key".to_string()));
+	is!("onclick(block) := 7; onclick { 1 }", 7);
+}

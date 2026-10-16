@@ -81,3 +81,11 @@ fn sort_with_boolean_comparator() {
 	);
 	assert_eq!(printed("def before(a,b){ a > b and yes }; sorted([1,3,2], before)"), "[3 2 1]");
 }
+
+#[test]
+fn sorted_by_a_library_word() {
+	assert_eq!(printed(r#"xs=["ccc","aa","bbbb"]; sort(xs, by: count)"#), r#"["aa" "ccc" "bbbb"]"#);
+	assert_eq!(printed(r#"xs=["ccc","aa","bbbb"]; xs.sort(by: count)"#), r#"["aa" "ccc" "bbbb"]"#);
+	assert_eq!(printed(r#"xs=["ccc","aa","bbbb"]; sort(xs, key: len)"#), r#"["aa" "ccc" "bbbb"]"#);
+	assert_eq!(printed("sort([3,-1,2], by: abs)"), "[-1 2 3]");
+}

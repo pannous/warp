@@ -261,32 +261,13 @@ block has that place, says `<word>: why at line:column` in the program, which th
 Columns count `$name` as written, not as `values.name`. Two blocks that both have the place: the message stays as the
 GPU said it (no guess). Not relocated: shaders from imported modules, shaders given as quoted text.
 
-## GLSL from twigl.app (card create-little, user 2026-10-15)
-`paint(twigl(code))` runs twigl's geekest-mode shorthand as it is (samples/twigl.warp), `paint(shadertoy(code))` a
-Shadertoy mainImage (iResolution, iTime, iMouse, iFrame as GLSL private globals set by a wrapper function). Both are thin
-calls of lib/draw.warp glsl_shader(glsl, color): GLSL functions plus the WGSL expression giving a pixel's color. twigl
-writes the GLSL around the code: `vec4 warp_twigl(vec4 FC, vec2 r, float t, vec2 m, float f) { vec4 o = vec4(0.); …; return o; }` plus
-twigl's hsv, rotate2D, rotate3D and an empty `main`; naga (glsl-in, wgsl-out; crates/warp-glsl) turns it into WGSL
-functions, dropping the entry point and renaming GLSL's main to warp_glsl_main; the lib appends a WGSL `@fragment fn
-main` calling warp_twigl with values.size/time/mouse/frame, FC and m with y flipped (GLSL counts rows from the bottom).
-- naga 30's glsl-in does not compile without wgsl-in (front/interpolator.rs is gated on spv-in/wgsl-in).
-- A module without an entry point is refused by the GLSL front end ("Missing entry point"): hence the empty main.
-- Size (reviewer, probes/twigl/wasm_size.sh, 2026-10-15): naga inside warp.wasm made it 5 909 527 instead of 5 204 210
-  bytes after wasm-opt (+705 KB, +254 KB gzipped). So the translation is crates/warp-glsl: natively a dependency of the
-  native feature (std_adapters.rs draw glsl_wgsl), in the browser glsl.wasm of its own (build.sh build_glsl), which
-  host-gpu.js glslWgsl loads at a program's first translation; warp.wasm stays as it was.
-- Block form (cards twigl-make, twigl-float, 2026-10-16): `twigl { … }` parses like `shader { … }` (verbatim, dedented,
-  src/warp_parser/literals/shaders.rs SHADER_DIALECT_WORDS) into the call twigl("…"), so format leaves it and the
-  playground shows code, not a text. `$name` holes: the shader's `values.name` is a float global `warp_values_name` in
-  the GLSL naga reads, put back as `values.name` in its WGSL (crates/warp-glsl with_hole_globals); the holes pass sees
-  through the call (shader_holes.rs holes_of). Holes are floats only (twigl has t, m, r, f for the built-ins).
-- Not yet: twigl's backbuffer b (would be $previous), noise functions (snoise2D…), sound s, other twigl modes
-- twigl's noise (fsnoise, fsnoiseDigits, snoise2D, snoise3D: lib/draw.warp twigl_noise) goes into a shader that calls
-  it; probes/twigl/noise.warp.
-- twigl's backbuffer `texture(b, uv)` is the previous frame: twigl() writes it as a GLSL stub warp_back(uv), and
-  glsl_shader swaps the stub's WGSL for a call of values.previous ($previous, gpu.rs binds the frame); probes/twigl/back.warp.
-- Not yet: snoise4D, sound s, other twigl modes
-  (classic, geeker: full `void main` sources, gl_FragColor), Shadertoy's iChannel textures.
+## GLSL from twigl.app: removed (user 2026-10-16)
+twigl and shadertoy shaders (`twigl { … }`, `paint(twigl(code))`, shadertoy(code), lib/draw.warp glsl_shader) are gone
+from the compiler, to keep Rust lean: naga's GLSL front end (crates/warp-glsl, in the browser a 705 KB glsl.wasm loaded
+on first use), the parser's dialect block, the draw.glsl_wgsl adapter, samples/twigl.warp, tests/programs/test_twigl*.rs
+and probes/twigl. The last state with all of it is commit b04da3e2c (`git show b04da3e2c:notes/gpu.md` has this
+section in full): a `use twigl` module can come back from there (card twigl-module). Translating GLSL to WGSL helps no
+WebGL-only browser: its WGSL still needs WebGPU.
 
 ## Paint window, default canvas, probes (from the warp-sound handover, 2026-10-10)
 - src/graphics/paint_window.rs is a separate `warp paint-window` process fed RGBA frames on stdin; it writes

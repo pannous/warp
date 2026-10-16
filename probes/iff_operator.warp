@@ -1,0 +1,3 @@
+// ⇔ as "if and only if": warp parses free Unicode symbols, a program gives them a meaning (decision unicode-symbols)
+infix operator ⇔(a: bool, b: bool) := a == b
+(1 > 0) ⇔ (2 > 0)

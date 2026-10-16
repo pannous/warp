@@ -20,6 +20,7 @@ mod test_dynamic_units; // card units-dynamic
 mod test_exact_parameters;
 mod test_exponent_texts; // card int-text
 mod test_fast_math; // card switch-rebinds
+mod test_fast_scope; // card fast-scope
 mod test_fixed_width_ints;
 mod test_float_accumulator; // card float-accumulator
 mod test_float_as_rational; // decision float-as-rational
@@ -40,6 +41,7 @@ mod test_host_floats;
 mod test_hyperreals;
 mod test_implicit_libm;
 mod test_infinity;
+mod test_int_division; // card int-i64
 mod test_law;
 mod test_libm_functions;
 mod test_literal_type_words; // card cleanup-closed-lists

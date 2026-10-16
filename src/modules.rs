@@ -53,7 +53,21 @@ pub fn resolve(program: Node) -> Node {
 }
 
 pub fn resolve_in(program: Node, directories: &[&str]) -> Node {
-	crate::compiler::compile_context::change(|context| context.module_definitions.clear());
+	let (program, fast_program) = match without_fast_pragma(program) {
+		(Node::List(items, bracket, separator), true) => {
+			(Node::List([vec![fast_math_use()], items].concat(), bracket, separator), true)
+		}
+		(program, fast) => (program, fast),
+	};
+	let program = match fast_program || crate::pipeline::fast_math() {
+		true => float_division(program),
+		false => program,
+	};
+	crate::compiler::compile_context::change(|context| {
+		context.module_definitions.clear();
+		context.fast_program = fast_program;
+		context.fast_functions.clear();
+	});
 	let own_names: Vec<String> = statements_of(&program).iter().filter_map(name_declared_by).collect();
 	let file = program_file();
 	let mut loader = Loader::new(directories, file.as_deref().map(folder_of));

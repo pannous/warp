@@ -137,6 +137,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - chars-codepoints (2026-10-14, the user's draft `['a','b','c']`): `"abc".chars` is a list of characters (codepoints),
   printing `['a' 'b' 'c']`; a literal `['a' 'b']` keeps its characters; `'a' == "a"` stays yes. A one-character text is a character, so
   `["a" "b"]` prints `['a' 'b']` and `["a" "bc"]` prints `['a' "bc"]`.
+  Amended 2026-10-16 (user, card consists-characters): char is a shortcut for character, and a character is a
+  grapheme (a letter with its marks), not a code point; codepoint is the separate unit. "שָלוֹם" has 4 characters
+  (`s.chars`, `number of characters in s`, `for each char in s`) and 6 code points (`s.codepoints`,
+  `for each codepoint in s`).
 - body-code (2026-10-14, the user's draft "body should be block/code type?"): `type f.body` is `code` for any quoted
   program part (`f.body is code`); printing shows its source; `{x; x+1}` never types as map. No `.kind` member for now
   (parked: a body iterated as a list of statements, each with its kind).
@@ -766,6 +770,26 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   lines in lib/math.warp with a "prefer ->" hint (→ ⟶ ➜ … for ->, ⇒ ⟹ for =>, ← ⟵ ⬅ for <-, ⬆ ⇧ for ↑, ⬇ ⇩ for ↓).
   ⇔ ⟺ ↔ ⇑ ⇓ get no built-in meaning for now; an example defines one, e.g.
   `infix operator ⇔(a: bool, b: bool) := a == b`.
+- ready-queue (2026-10-16, user via the boss and the supervisor): the board's Ready column is the merge queue. A
+  worker runs its targeted tests, pushes the finished branch, makes sure it merges cleanly into origin/main, and
+  hands it off with `todo ready <card> [branch]` (tip read from git); only the re-run after a clean update is dropped. `todo ready` refuses
+  a branch only when it doesn't merge cleanly into current origin/main (`git merge-tree --write-tree origin/main
+  <tip>`); being behind is fine, and `--force` covers carrier branches. Reason: a rebase goes stale as main moves,
+  workers can't see each other's unmerged branches, and the gate re-runs the suite anyway. The Integrator merges only
+  Ready cards and resolves only trivial conflicts itself (formatting, mod/use lists, adjacent additions). Logic changed
+  on both sides goes back to the owner with `todo move <card> Now` plus a `todo note` holding the conflicting hunk.
+  Unmerged branches without a card are only reported (`todo ready --stray`). Refinements (user, same day):
+  - a batch holds at most about 8 Ready cards; wide refactors and carrier branches land alone and first;
+  - the orphan watcher reports bounced cards whose agent is gone, and the Supervisor reassigns them;
+  - the reviewer takes its work from Ready, and a veto moves the card back to Now.
+- text-unit-plurals (2026-10-16, user; card text-unit): every plural unit word of a text is the list:
+  `"👍🏽".chars` → ['👍🏽'], `.codepoints` → ['👍' '🏽'], `.graphemes`, `.bytes` → [240 159 …], like words and lines.
+  Counting is `count t.codepoints` or `number of bytes in t`. Code reading `t.codepoints` as a number migrates to
+  `count` (a `warp fix` rewrite where detectable).
+- implicit-words-reserved (2026-10-16, user; card it-reserved): `it`, `self` and `this` are reserved. Binding one
+  (`self = 3`, `it += 1`, `for this in xs`, destructuring) warns "`self` is reserved: it names the receiver of a
+  method; pick another name", an error under use strict. Writing it as the explicit parameter (`f(it) := …`,
+  `Point.norm(self) := …`) stays allowed.
 - test-consolidation (2026-10-16, user; card probes-check, worker warp-test-consolidator): a worker turns probes
   into tests where they check decided behaviour with a stable expected value, judging case by case (not every probe
   was meant to be a test: exploratory, visual, sound, timing and undecided ones stay probes). It also dedupes and
