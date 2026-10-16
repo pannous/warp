@@ -417,6 +417,8 @@ struct FunctionArguments {
 	/// Function name → the indexes of its parameters that are functions
 	higher_order: HashMap<String, Vec<usize>>,
 	variables: HashSet<String>,
+	/// `h.d` of `h = Holder(x => x + 1)`: fields given a function value, passed as they are (card untyped-field)
+	function_fields: HashSet<String>,
 	lambda_definitions: Vec<Node>,
 }
 
@@ -427,7 +429,12 @@ impl FunctionArguments {
 		if let Some(lambda) = crate::lambdas::it_function(argument) {
 			return Ok(lambda);
 		}
-		if crate::lambdas::arrow_lambda(argument).is_some() || self.definitions.contains(&argument.drop_meta().name()) {
+		let is_function_field =
+			crate::closures::holder_path(argument).is_some_and(|path| self.function_fields.contains(&path));
+		if crate::lambdas::arrow_lambda(argument).is_some()
+			|| self.definitions.contains(&argument.drop_meta().name())
+			|| is_function_field
+		{
 			return Ok(argument.clone());
 		}
 		let lambda_name = format!("{LAMBDA_PREFIX}{}", self.lambda_definitions.len() + 1);
@@ -580,6 +587,7 @@ pub fn lower(program: Node) -> Node {
 		higher_order,
 		// a lambda reading one of these (a loop variable too) is a closure, not a function of its own
 		variables: crate::closures::captured_variables_of(&program),
+		function_fields: crate::closures::function_holding_fields(&program),
 		lambda_definitions: Vec::new(),
 	};
 	let program = arguments.rewrite(with_round_calls(program, &arguments.higher_order), &params);

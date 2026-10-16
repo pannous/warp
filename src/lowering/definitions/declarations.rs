@@ -364,7 +364,10 @@ fn colon_iteration(items: &[Node]) -> Option<Node> {
 				format!("`{written}: …` visits only the items that pass its filter"),
 				vec![crate::errors::diagnostic::reading(
 					"filter the items",
-					&format!("for it in … {{ if it {op} {} {{ … }} }}", crate::normalize::operand_text(value)),
+					&crate::for_loop::headers::filter_loop_block(&format!(
+						"it {op} {}",
+						crate::normalize::operand_text(value)
+					)),
 				)],
 				crate::errors::diagnostic::Fallback::Warning,
 			)

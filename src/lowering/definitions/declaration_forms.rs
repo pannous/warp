@@ -743,10 +743,10 @@ pub fn constant_field_name(key: &Node) -> Option<String> {
 	(!name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-')).then_some(name)
 }
 
-/// The type `[number]`: `list of number` for one element type word
+/// The type `[number]`: `list of number` for one element type word or union (`[int or error]`)
 pub(crate) fn bracketed_list_type(type_node: &Node) -> Option<Node> {
 	let word = bracketed_element(type_node)?;
-	type_word_kind(&word)?;
+	type_word_kind(&word).or_else(|| union_parts(&word).map(|_| Kind::Empty))?;
 	Some(Node::Symbol(format!("list of {word}")))
 }
 

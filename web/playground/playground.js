@@ -324,11 +324,15 @@ function notification(text) {
 }
 
 // the system values a Worker cannot read itself (host.js system_value), sent again when they change. window_open: the
-// canvas shows the pictures to someone once the page was clicked or typed in; before (the CI tour, as for sounds) a
-// `while window_open` drawing loop ends at once instead of waiting for input forever
+// canvas shows the pictures to someone while the page is visible, so a `while window_open` loop run on load keeps
+// drawing (card playground-means). A browser driven by a test (the CI tour, navigator.webdriver) shows them once the
+// page was clicked or typed in: before, such a loop ends at once instead of waiting for input forever. heard (host-sound.js
+// paces sound by it): the page was clicked or typed in, as a browser plays sound only then
 const darkMode = matchMedia(DARK_MODE_QUERY);
-const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(!beforeUserActivation()), display_width: screen.width, display_height: screen.height, display_dpi: Math.round(CSS_PIXELS_PER_INCH * devicePixelRatio), ...viewSize() } });
+const windowOpen = () => (navigator.webdriver ? !beforeUserActivation() : document.visibilityState === "visible");
+const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(windowOpen()), heard: Number(!beforeUserActivation()), display_width: screen.width, display_height: screen.height, display_dpi: Math.round(CSS_PIXELS_PER_INCH * devicePixelRatio), ...viewSize() } });
 darkMode.addEventListener("change", tellSystemValues);
+document.addEventListener("visibilitychange", () => worker && tellSystemValues());
 ["pointerdown", "keydown"].forEach(type => addEventListener(type, () => worker && tellSystemValues(), { once: true, capture: true }));
 new ResizeObserver(() => worker && tellSystemValues()).observe($("output"));
 document.addEventListener("fullscreenchange", () => worker && tellSystemValues());
