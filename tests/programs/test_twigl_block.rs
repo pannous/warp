@@ -38,3 +38,12 @@ fn a_painted_twigl_block_gets_its_holes_values() {
 			.serialize();
 	assert!(lowered.contains("green:green") || lowered.contains("green: green"), "{lowered}");
 }
+
+// reviewer: only a dialect's call takes its block's holes; another function given a shader returns what it likes
+#[test]
+fn another_call_of_a_shader_takes_no_holes() {
+	let lowered = warp::pipeline::lower("use graphics\nx = 1.0\nf(s) := s\ns = f(shader { $x })\npaint(s, 2, 2)")
+		.expect("a program")
+		.serialize();
+	assert!(!lowered.contains("x:x") && !lowered.contains("x: x"), "{lowered}");
+}
