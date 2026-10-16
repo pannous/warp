@@ -79,7 +79,8 @@ fn operator_named(name: &str) -> Option<(String, Op)> {
 pub(crate) fn check_type_word_functions(program: &Node) -> Option<Diagnostic> {
 	let mut ctx = Context::new();
 	extract_user_functions_inner(&mut ctx, program);
-	let is_type_word = |name: &&String| type_word_kind(name).is_some() || crate::wasm_emitter::is_called_conversion(name);
+	let is_type_word =
+		|name: &&String| type_word_kind(name).is_some() || crate::wasm_emitter::is_called_conversion(name);
 	let mut clashes: Vec<&String> = ctx.user_functions.keys().filter(is_type_word).collect();
 	clashes.sort();
 	let name = clashes.first()?;
