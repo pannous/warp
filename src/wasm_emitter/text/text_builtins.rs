@@ -137,7 +137,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		required.insert("list_join"); // emitted together, with the same helpers
 	}
 	if required.contains(super::super::reflection::library_ops::NODE_SLICE) {
-		required.extend(["text_chars", "list_join", "list_reverse"]);
+		required.extend(["text_chars", "list_join", "list_reverse", super::super::lists::list_ops::TEXT_SLICE]);
 	}
 	if crate::library_words::MAP_WORD_FUNCTIONS.iter().any(|name| required.contains(name)) {
 		required.insert("map_find");
