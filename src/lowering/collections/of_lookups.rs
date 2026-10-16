@@ -101,7 +101,9 @@ fn print_walk(node: &Node, selectors: &[&str]) -> Option<Node> {
 		_ => selection,
 	};
 	let [selector, _, value] = selection else { return None };
-	if !print.is_symbol(PRINT_WORD) || !is_selection(selection, 1, selectors) {
+	// `print w of p` prints one field: only a selection of parts is walked
+	let selects_parts = selector.symbol_name().is_some_and(|name| selectors.contains(&name));
+	if !print.is_symbol(PRINT_WORD) || !selects_parts || !is_selection(selection, 1, selectors) {
 		return None;
 	}
 	let selected = member_of(rewrite(value.clone(), selectors), selector.clone());
