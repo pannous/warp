@@ -380,13 +380,14 @@ fn grouped_iteration(node: &Node) -> Option<(String, Node)> {
 }
 
 /// What may stand left of an infix iteration word: not a word that calls what follows, `print map f xs`,
-/// `return find x`, `count filter f xs`
+/// `count filter f xs`, or a statement word, `return find x`, `await all jobs`
 fn is_list_operand(node: &Node) -> bool {
 	match node.drop_meta() {
 		Node::Symbol(name) => {
 			!(crate::library_words::is_calling_word(name)
 				|| is_iteration_word(name)
-				|| name == crate::words::RETURN_WORD)
+				|| crate::soft_keywords::is_statement_word(name)
+				|| crate::operators::is_operator_word(name))
 		}
 		_ => true,
 	}

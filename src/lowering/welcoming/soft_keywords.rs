@@ -83,6 +83,15 @@ pub const HIGHLIGHTED_WORDS: [&str; 62] = [
 	"trigger",
 	"signal",
 ];
+/// Keyword-like words that stand for a value: a word operator after them takes them as its left operand, `result plus 1`
+const VALUE_WORDS: [&str; 6] = ["true", "false", "ø", "null", "nil", "result"];
+
+/// A word of the keyword lists that starts or joins a statement and is no value of its own: `do`, `return`, `on`, `emit`
+pub fn is_statement_word(word: &str) -> bool {
+	HARD_KEYWORDS.iter().chain(&SOFT_KEYWORDS).chain(&HIGHLIGHTED_WORDS).any(|keyword| *keyword == word)
+		&& !VALUE_WORDS.contains(&word)
+}
+
 const TOPIC: &str = "soft-keyword";
 
 pub fn lower(program: Node) -> Node {
