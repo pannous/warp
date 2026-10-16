@@ -4,7 +4,7 @@
 //! become functions of their own). A constant where a function is needed is a compile error. Every call passes a closure
 //! (closures.rs; one that captures nothing is made once, wasm_emitter/closures.rs).
 
-use super::nodes::{call, children_rewritten, key, parameter_name};
+use super::nodes::{call, children_rewritten, key, parameter_name, word_headed};
 use crate::closures::may_be_function_value;
 use crate::lambdas::lambda_definition;
 use crate::library_words::{arity, canonical_spelling, is_standard_function};
@@ -38,11 +38,8 @@ impl Definition {
 		let Node::List(items, Bracket::Round, Separator::None) = head.drop_meta() else {
 			return None;
 		};
-		let (name, params) = items.split_first()?;
-		let Node::Symbol(name) = name.drop_meta() else {
-			return None;
-		};
-		Some(Definition { name: name.clone(), params: params.to_vec(), body: body.as_ref().clone() })
+		let (name, params) = word_headed(items)?;
+		Some(Definition { name: name.to_string(), params: params.to_vec(), body: body.as_ref().clone() })
 	}
 
 	pub(crate) fn param_names(&self) -> Vec<String> {
@@ -487,10 +484,7 @@ impl FunctionArguments {
 		separator: &Separator,
 		params: &HashMap<String, Vec<String>>,
 	) -> Option<Node> {
-		let (head, arguments) = items.split_first()?;
-		let Node::Symbol(name) = head.drop_meta() else {
-			return None;
-		};
+		let (name, arguments) = word_headed(items)?;
 		let indexes = self.higher_order.get(name)?.clone();
 		if !(*bracket == Bracket::Round && *separator == Separator::None
 			|| *bracket == Bracket::None && *separator == Separator::Space)

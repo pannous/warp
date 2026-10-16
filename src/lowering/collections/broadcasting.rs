@@ -6,7 +6,7 @@
 //! A field read on a list of instances reads it of each: `people's name`, `people.name`, `name of people` are
 //! `people.map(p => p.name)` (card people-map).
 
-use super::nodes::{call, called_name, children_rewritten, is_colon_pair, key, parameter_name, Counter};
+use super::nodes::{call, called_name, children_rewritten, is_colon_pair, key, parameter_name, word_headed, Counter};
 use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -1041,10 +1041,7 @@ impl Broadcast {
 			(bracket, separator),
 			(Bracket::Round, Separator::None) | (Bracket::None | Bracket::Round, Separator::Space)
 		);
-		let (head, arguments) = items.split_first()?;
-		let Node::Symbol(name) = head.drop_meta() else {
-			return None;
-		};
+		let (name, arguments) = word_headed(items)?;
 		if !is_call || arguments.is_empty() {
 			return None;
 		}

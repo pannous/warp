@@ -4,7 +4,7 @@
 //! (an empty argument list is ø on the way, so whether it is a call is said apart).
 //! Values cross as JSON; the result is any Node.
 
-use super::nodes::{call, children_rewritten, key};
+use super::nodes::{call, children_rewritten, key, round_call};
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::FOR_WORD;
@@ -578,13 +578,7 @@ impl Foreign<'_> {
 	/// `URL("https://…")` of `use js URL`: the constructor called, JavaScript's `new`, checked by WebIDL when it declares
 	/// the interface
 	fn constructed(&mut self, node: &Node) -> Option<Node> {
-		let Node::List(items, Bracket::Round, _) = node.drop_meta() else {
-			return None;
-		};
-		let (head, arguments) = items.split_first()?;
-		let Node::Symbol(name) = head.drop_meta() else {
-			return None;
-		};
+		let (name, arguments) = round_call(node)?;
 		let (runtime, module) = self.modules.get(name).filter(|(runtime, _)| runtime == JS_RUNTIME)?.clone();
 		if let Err(problem) = crate::formats::web_idl::check_constructor(&module, arguments.len()) {
 			return Some(crate::errors::diagnostic::Diagnostic::at(node, problem).into_error());

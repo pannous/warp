@@ -12,7 +12,7 @@
 //! its other parameters bound to fresh names, `body!` the argument's code, so names resolve where the call is written.
 //! Any `!` left (known only at run time) is mutation.rs's: a name unwraps, any other expression is a loud error.
 
-use super::nodes::{call, children_rewritten, is_block, key};
+use super::nodes::{call, children_rewritten, is_block, key, word_headed};
 use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
 use crate::mutation::bang_target;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -90,10 +90,7 @@ fn block_function(node: &Node) -> Option<(String, BlockFunction)> {
 	let Node::List(items, Bracket::Round, Separator::None) = head.drop_meta() else {
 		return None;
 	};
-	let (name, parameters) = items.split_first()?;
-	let Node::Symbol(name) = name.drop_meta() else {
-		return None;
-	};
+	let (name, parameters) = word_headed(items)?;
 	let parameters: Vec<(String, Takes)> = parameters
 		.iter()
 		.map(|parameter| match parameter.drop_meta() {
@@ -110,7 +107,7 @@ fn block_function(node: &Node) -> Option<(String, BlockFunction)> {
 	parameters
 		.iter()
 		.any(|(_, takes)| *takes != Takes::Value)
-		.then(|| (name.clone(), BlockFunction { parameters, body: body.as_ref().clone() }))
+		.then(|| (name.to_string(), BlockFunction { parameters, body: body.as_ref().clone() }))
 }
 
 /// The argument of a callable parameter that is code to run: `{ print 1 }`, `code e`, the rest of a call
@@ -873,10 +870,7 @@ impl Blocks {
 
 	/// `f(a, b)` of a function with a `block` parameter: its body with the block arguments' code and the other parameters bound
 	fn expand(&mut self, items: &[Node]) -> Option<Node> {
-		let (head, arguments) = items.split_first()?;
-		let Node::Symbol(name) = head.drop_meta() else {
-			return None;
-		};
+		let (name, arguments) = word_headed(items)?;
 		let function = self.functions.get(name)?.clone();
 		let arguments = fitted_arguments(&function.parameters, arguments)?;
 		if self.expansions > MAX_EXPANSIONS {

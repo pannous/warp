@@ -459,13 +459,25 @@ fn result_and_body(written_body: &Node) -> (Option<&Node>, &Node) {
 	}
 }
 
+/// `f a b` taken apart: the word heading the items and the items after it
+pub(crate) fn word_headed(items: &[Node]) -> Option<(&str, &[Node])> {
+	let (head, rest) = items.split_first()?;
+	Some((head.symbol_name()?, rest))
+}
+
+/// `f(a, b)` (round brackets, any separator) taken apart: the word called and its arguments
+pub(crate) fn round_call(node: &Node) -> Option<(&str, &[Node])> {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) => word_headed(items),
+		_ => None,
+	}
+}
+
 /// The function a list calls: `f(a, b)`, or spaced `f a b`
 pub(crate) fn called_name<'a>(items: &'a [Node], bracket: &Bracket, separator: &Separator) -> Option<&'a str> {
-	let Node::Symbol(name) = items.first()?.drop_meta() else {
-		return None;
-	};
+	let (name, _) = word_headed(items)?;
 	let spaced = *separator == Separator::Space && matches!(bracket, Bracket::None | Bracket::Round);
-	(call_name(items, bracket, separator).is_some() || spaced).then_some(name.as_str())
+	(call_name(items, bracket, separator).is_some() || spaced).then_some(name)
 }
 
 /// The statements of a template with its placeholders filled in, its match arms in the form the passes read

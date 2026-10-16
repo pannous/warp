@@ -5,7 +5,7 @@
 //! The values come from running the definitions and the calls as one small module, so they are exactly what the
 //! program computes; a call that fails or runs out of fuel stays a call.
 
-use super::nodes::{branches, call, children_rewritten, key};
+use super::nodes::{branches, call, children_rewritten, key, round_call, word_headed};
 use crate::analyzer::effects::EffectReport;
 use crate::analyzer::{captured_variables, collect_variables, Scope, CHECKED_RESULT};
 use crate::extensions::numbers::Number;
@@ -247,12 +247,9 @@ fn constant_call<T>(node: &Node, functions: &HashMap<String, T>) -> Option<(Stri
 	let Node::List(items, Bracket::Round | Bracket::None, _) = node.drop_meta() else {
 		return None;
 	};
-	let (head, arguments) = items.split_first()?;
-	let Node::Symbol(name) = head.drop_meta() else {
-		return None;
-	};
+	let (name, arguments) = word_headed(items)?;
 	(functions.contains_key(name) && !arguments.is_empty() && arguments.iter().all(is_constant))
-		.then(|| (name.clone(), arguments.to_vec()))
+		.then(|| (name.to_string(), arguments.to_vec()))
 }
 
 /// The type of a body's checked result (type_name_matching checked_result: `the result: int = v`, the type kept on the
@@ -391,13 +388,7 @@ impl Specialiser {
 	/// `f(y, 3)` → `f·n3(y)`, or None when f is no pure function, no argument or every argument is constant (folding
 	/// takes that), or the chain of variants would be too deep
 	fn specialised_call(&mut self, called: &Node, depth: usize) -> Option<Node> {
-		let Node::List(items, Bracket::Round, _) = called.drop_meta() else {
-			return None;
-		};
-		let (head, arguments) = items.split_first()?;
-		let Node::Symbol(name) = head.drop_meta() else {
-			return None;
-		};
+		let (name, arguments) = round_call(called)?;
 		let definition = self.definitions.get(name)?.clone();
 		let parameters = definition.param_names();
 		if parameters.len() != arguments.len() {
