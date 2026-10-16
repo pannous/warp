@@ -654,7 +654,12 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - setter-calls (2026-10-16, user): a setter overload is called four ways: `canvas.width = 12` (one general rule:
   assigning to a property with a one-parameter overload calls it; the form docs show), `canvas.width(12)`,
   `width(canvas, 12)` (falls out of uniform calls; allowed, not taught, reads awkwardly), and the English
-  `set width of canvas to 12` (new syntax, lowers to `canvas.width = 12`; card set-of-to).
+  `set width of canvas to 12`. Two independent rules compose, no special `set … of … to` logic (user):
+  1. `width of canvas = 12` is `canvas.width = 12`: an `x of y` read is also an assignment target, for ordinary
+     fields and setters alike.
+  2. `set x to y` is `x = y` for any assignment target. It works but gets a style hint: warp doesn't do prose,
+     write `x = y`.
+  So `set width of canvas to 12` = `(width of canvas) = 12` = `canvas.width = 12` (card english-setter).
 - saved-words (2026-10-16 night, Interviewer's proposal, kept by the user 2026-10-16; card
   graphics-saved-words): no save-only table and no symbol overload. The general bare-call rule (random-forms: a
   function word used as a value is its call) covers it: lib/draw.warp declares `canvas()` with no arguments as the
@@ -753,6 +758,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   cli-words migrates the existing --fuel/--exe/--strict/… (older `--x` mentions below are superseded by it).
 - fast-math (2026-10-16, warp-types default; card switch-rebinds; undoable): the polynomial math module is
   `use fast_math` (`fast` is already an alias of float); the CLI switch is the word `warp fast app.warp`.
+- fast-scope (2026-10-16, user; card fast-scope): `fast` before a function or module makes everything machine
+  inside it: polynomial sin/cos/exp/pow, `/` gives f64 (`fast f(x) := x/3; f(1)` → 0.3333333333333333), and plain
+  ints are i64 that wrap at 2^63 (`fast g(n) := n * n; g(10^10)` wraps). `x: fast int` is i64, `x: fast float` f64;
+  exact/precise is the opposite word if fast ever becomes the default.
 - unix-words (2026-10-15, user): `use script` has shell words with warp results: ls pwd cd cat echo mkdir cp mv touch
   head tail wc grep which rm, plus find, size/info (du/stat), sort/uniq, open (native), curl/wget as aliases of
   fetch/download. `export a=b` clashes with the WebAssembly export, so it's left out. Not now: basename/dirname,
