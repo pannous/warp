@@ -590,17 +590,17 @@ fn function_arguments(
 	arguments: HostNode,
 ) -> wasmtime::Result<Vec<HostNode>> {
 	use crate::run::wasm_reader::{FIELD_DATA, FIELD_KIND, FIELD_VALUE};
-	use crate::type_kinds::{Kind, KIND_MASK};
+	use crate::type_kinds::Kind;
 	let node_of = |value: &Val, store: &wasmtime::StoreContextMut<'_, HostState>| {
 		value.unwrap_anyref().and_then(|reference| reference.unwrap_struct(store).ok())
 	};
 	let kind_of = |node: &wasmtime::StructRef, store: &mut wasmtime::StoreContextMut<'_, HostState>| {
-		node.field(&mut *store, FIELD_KIND).map(|kind| (kind.unwrap_i64() & KIND_MASK) as u8)
+		node.field(&mut *store, FIELD_KIND).map(|kind| Kind::of_field(kind.unwrap_i64()))
 	};
 	let mut items = vec![];
 	let mut cell = node_of(&Val::AnyRef(arguments), store);
 	match &cell {
-		Some(node) if kind_of(node, store)? == Kind::List as u8 => {}
+		Some(node) if kind_of(node, store)? == Some(Kind::List) => {}
 		_ => cell = None,
 	}
 	if cell.is_none() {
@@ -617,7 +617,7 @@ fn function_arguments(
 		.iter()
 		.map(|item| {
 			Ok(match node_of(item, store) {
-				Some(node) if kind_of(&node, store)? == Kind::Function as u8 => item.unwrap_anyref().copied(),
+				Some(node) if kind_of(&node, store)? == Some(Kind::Function) => item.unwrap_anyref().copied(),
 				_ => None,
 			})
 		})

@@ -230,8 +230,8 @@ impl Builders {
 			return self.read(value, store);
 		};
 		let kind = node.field(&mut *store, KIND_FIELD)?.unwrap_i64();
-		match (kind & crate::type_kinds::KIND_MASK) as u8 {
-			tag if tag == crate::type_kinds::Kind::Function as u8 => {
+		match crate::type_kinds::Kind::of_field(kind) {
+			Some(crate::type_kinds::Kind::Function) => {
 				let name =
 					crate::run::wasm_reader::node_in(&node.field(&mut *store, VALUE_FIELD)?, store, self.memory).name();
 				let closure = node.field(&mut *store, DATA_FIELD)?;
@@ -242,7 +242,7 @@ impl Builders {
 				};
 				Ok(TaskValue::Closure(name, Box::new(captured)))
 			}
-			tag if tag == crate::type_kinds::Kind::List as u8 => {
+			Some(crate::type_kinds::Kind::List) => {
 				let (mut items, mut cell) = (vec![], Some(node));
 				while let Some(current) = cell {
 					let first = current.field(&mut *store, DATA_FIELD)?;
