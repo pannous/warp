@@ -204,10 +204,8 @@ pub(super) fn is_type_tuple(node: &Node) -> bool {
 
 /// Swift's `label name: T`: the label (`_` for none)
 pub(super) fn argument_label<'a>(label: &'a Node, typed: &Node) -> Option<&'a str> {
-	let Node::Symbol(label) = label.drop_meta() else {
-		return None;
-	};
-	typed_parameter_name(typed).is_some().then_some(label.as_str())
+	let label = label.symbol_name()?;
+	typed_parameter_name(typed).is_some().then_some(label)
 }
 
 /// The name of a typed parameter `name: T`, also of a function type `name: (Int) -> Int`

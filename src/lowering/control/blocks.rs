@@ -304,10 +304,8 @@ pub(crate) fn uncharged(node: &Node) -> Option<(String, Node)> {
 	let Node::Key(target, Op::Colon, value) = node.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(name) = target.drop_meta() else {
-		return None;
-	};
-	is_computed(value).then(|| (name.clone(), value.as_ref().clone()))
+	let name = target.symbol_name()?;
+	is_computed(value).then(|| (name.to_string(), value.as_ref().clone()))
 }
 
 /// Code that computes: an operation or a call, not a literal, a word, a type or an object/list literal
@@ -463,9 +461,7 @@ fn code_entry(entry: &Node) -> Option<(String, Node)> {
 	let Node::Key(target, Op::Colon, value) = entry.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(field) = target.drop_meta() else {
-		return None;
-	};
+	let field = target.symbol_name()?;
 	let Node::List(items, Bracket::Curly, separator) = value.drop_meta() else {
 		return None;
 	};
@@ -476,7 +472,7 @@ fn code_entry(entry: &Node) -> Option<(String, Node)> {
 		_ if *separator == Separator::Space && is_statement(&statement) => statement,
 		_ => return None,
 	};
-	Some((field.clone(), block))
+	Some((field.to_string(), block))
 }
 
 /// An entry the object lowering rewrites: a block, a function, a value entry, or a nested object holding one
@@ -493,11 +489,9 @@ fn nested_object(entry: &Node) -> Option<(String, &Node, &Vec<Node>)> {
 	let Node::Key(key, Op::Colon, value) = entry.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(field) = key.drop_meta() else {
-		return None;
-	};
+	let field = key.symbol_name()?;
 	let entries = object_entries(value).filter(|entries| entries.iter().any(is_rewritten_entry))?;
-	Some((field.clone(), value, entries))
+	Some((field.to_string(), value, entries))
 }
 
 /// `o·f`: the top-level function of the function entry `f` of the object `o` (no name the parser reads)

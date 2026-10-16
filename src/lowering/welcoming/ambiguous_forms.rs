@@ -447,9 +447,7 @@ fn suffix_function(word: &Node, functions: &SuffixWords) -> Option<Suffix> {
 	if let Some(op) = operator_reference(word) {
 		return Some(Suffix::Operator(op));
 	}
-	let Node::Symbol(word) = word.drop_meta() else {
-		return None;
-	};
+	let word = word.symbol_name()?;
 	functions.words.get(word).cloned().map(Suffix::Function)
 }
 

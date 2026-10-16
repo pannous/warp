@@ -750,10 +750,8 @@ fn broadcasting_call<'a>(
 		(Bracket::Round, Separator::None) | (Bracket::None | Bracket::Round, Separator::Space)
 	); // also `(f [1 2])`
 	let [head, argument] = items else { return None };
-	let Node::Symbol(name) = head.drop_meta() else {
-		return None;
-	};
-	(is_call && functions.contains(name)).then_some((name.as_str(), argument))
+	let name = head.symbol_name()?;
+	(is_call && functions.contains(name)).then_some((name, argument))
 }
 
 /// Variable → whether every value assigned to it is a list literal that is no object; a broadcast over the variable itself

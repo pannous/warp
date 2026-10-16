@@ -236,10 +236,8 @@ fn foreign_use(items: &[Node]) -> Option<(String, (String, String))> {
 	if !word.is_symbol(USE_WORD) {
 		return None;
 	}
-	let Node::Symbol(runtime) = runtime.drop_meta() else {
-		return None;
-	};
-	if !FOREIGN_RUNTIMES.contains(&runtime.as_str()) {
+	let runtime = runtime.symbol_name()?;
+	if !FOREIGN_RUNTIMES.contains(&runtime) {
 		return None;
 	}
 	let name = |node: &Node| match node.drop_meta() {
@@ -262,7 +260,7 @@ fn foreign_use(items: &[Node]) -> Option<(String, (String, String))> {
 		}
 	};
 	let module = if runtime == COMPONENT_RUNTIME { crate::modules::beside_program(&module) } else { module };
-	Some((alias, (runtime.clone(), module)))
+	Some((alias, (runtime.to_string(), module)))
 }
 
 /// The modules `use` names, and the variables holding a value of another runtime (`d = datetime.date(2020, 1, 2)`):
@@ -599,9 +597,7 @@ impl Foreign<'_> {
 		let Node::Key(receiver, Op::Dot, member) = target.drop_meta() else {
 			return None;
 		};
-		let Node::Symbol(member) = member.drop_meta() else {
-			return None;
-		};
+		let member = member.symbol_name()?;
 		let receiver = self.rewrite(receiver.as_ref().clone());
 		let (runtime, module) = self.receiver(&receiver)?;
 		let checked = match runtime == JS_RUNTIME {

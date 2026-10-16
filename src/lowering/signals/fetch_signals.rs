@@ -106,15 +106,13 @@ fn async_fetch(statement: &Node) -> Option<Fetched> {
 	let Node::Key(target, Op::Define, value) = statement.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(name) = target.drop_meta() else {
-		return None;
-	};
+	let name = target.symbol_name()?;
 	let (fetch, default) = match value.drop_meta() {
 		Node::Key(fetch, Op::Coalesce, default) => (fetch.as_ref(), Some(default.as_ref().clone())),
 		fetch => (fetch, None),
 	};
 	match crate::host::fetch_call(fetch)? {
-		(url, None) => Some(Fetched { name: name.clone(), url, default }),
+		(url, None) => Some(Fetched { name: name.to_string(), url, default }),
 		_ => None,
 	}
 }

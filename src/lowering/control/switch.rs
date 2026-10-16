@@ -115,10 +115,8 @@ impl Lowering<'_> {
 			let switch = self.switch(&[head.clone(), subject.clone(), block.clone()])?;
 			return Some(with_leftmost_operand(cases.clone(), switch));
 		}
-		let Node::Symbol(word) = head.drop_meta() else {
-			return None;
-		};
-		if !self.words.contains(&word.as_str()) {
+		let word = head.symbol_name()?;
+		if !self.words.contains(&word) {
 			return None;
 		}
 		let number = self.switches.next_number();

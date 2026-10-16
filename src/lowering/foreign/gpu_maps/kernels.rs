@@ -114,10 +114,8 @@ pub(crate) fn kernel(lambda: &Node) -> Option<Kernel> {
 	let Node::Key(parameter, Op::Arrow, body) = lambda.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(parameter) = parameter.drop_meta() else {
-		return None;
-	};
-	let mut translation = Translation { parameter: parameter.clone(), ..Translation::default() };
+	let parameter = parameter.symbol_name()?;
+	let mut translation = Translation { parameter: parameter.to_string(), ..Translation::default() };
 	let computed = translation.expression(body)?;
 	let Translation { outer, heavy, functions, .. } = translation;
 	Some(Kernel {
@@ -640,14 +638,12 @@ impl Translation {
 		}
 		match node.drop_meta() {
 			Node::Key(target, op, value) if is_assigning_op(*op) => {
-				let Node::Symbol(name) = target.drop_meta() else {
-					return None;
-				};
+				let name = target.symbol_name()?;
 				let (value, width) = match op {
 					Op::Assign | Op::Define => self.typed(value)?,
 					compound => self.typed(&Node::Key(target.clone(), compound.base_op(), value.clone()))?,
 				};
-				self.widths.insert(name.clone(), width);
+				self.widths.insert(name.to_string(), width);
 				*out += &format!("{VARIABLE_PREFIX}{name} = {value};\n");
 				Some(())
 			}
@@ -997,11 +993,9 @@ fn range_loop(node: &Node) -> Option<(String, &Node, Op, &Node, &Node)> {
 	if !for_word.is_symbol(FOR_WORD) || !in_word.is_symbol(IN_WORD) {
 		return None;
 	}
-	let Node::Symbol(variable) = variable.drop_meta() else {
-		return None;
-	};
+	let variable = variable.symbol_name()?;
 	match range.drop_meta() {
-		Node::Key(from, op @ (Op::Range | Op::To), to) => Some((variable.clone(), from, *op, to, body)),
+		Node::Key(from, op @ (Op::Range | Op::To), to) => Some((variable.to_string(), from, *op, to, body)),
 		_ => None,
 	}
 }

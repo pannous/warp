@@ -643,9 +643,7 @@ fn postfix_list_declaration(items: &[Node], bracket: &Bracket, separator: &Separ
 	let Node::Key(name, Op::Colon, element) = declaration.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(element) = element.drop_meta() else {
-		return None;
-	};
+	let element = element.symbol_name()?;
 	let typed_name = |name: &Node| {
 		Node::Key(Box::new(name.clone()), Op::Colon, Box::new(Node::Symbol(format!("{LIST_OF_PREFIX}{element}"))))
 	};
@@ -682,9 +680,7 @@ pub(crate) fn of_type_declaration(items: &[Node], bracket: &Bracket, separator: 
 		match item.drop_meta() {
 			Node::Symbol(word) => type_name = format!("{type_name} of {word}"),
 			Node::Key(word, op, value) => {
-				let Node::Symbol(word) = word.drop_meta() else {
-					return None;
-				};
+				let word = word.symbol_name()?;
 				type_name = format!("{type_name} of {word}");
 				assignment = Some((*op, value.clone()));
 				break;

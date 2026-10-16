@@ -260,9 +260,7 @@ impl Pipes {
 	/// The function a marked stage names: the word itself, unless it is a variable
 	fn function(&self, stage: &Node) -> Option<Node> {
 		let Node::Meta { node, .. } = stage else { return None };
-		let Node::Symbol(name) = node.drop_meta() else {
-			return None;
-		};
+		let name = node.symbol_name()?;
 		let is_user_function =
 			self.context.user_functions.get(name).is_some_and(|function| !function.params.is_empty())
 				|| self.spaced_functions.contains(name);

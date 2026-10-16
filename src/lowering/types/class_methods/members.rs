@@ -202,9 +202,7 @@ pub(super) fn without_modifiers(item: Node) -> Node {
 /// wiki/class.md's `address { street; city; zip? }`: the field address holding a block of fields, `address:{…}`
 pub(super) fn nested_fields(words: &[Node]) -> Option<Node> {
 	let [name, block] = words else { return None };
-	let Node::Symbol(word) = name.drop_meta() else {
-		return None;
-	};
+	let word = name.symbol_name()?;
 	let Node::List(fields, Bracket::Curly, _) = block.drop_meta() else {
 		return None;
 	};
@@ -218,7 +216,7 @@ pub(super) fn nested_fields(words: &[Node]) -> Option<Node> {
 	};
 	let is_member_word = crate::operators::is_function_keyword(word)
 		|| is_constructor_word(word)
-		|| crate::warp_parser::ACCESSOR_WORDS.contains(&word.as_str());
+		|| crate::warp_parser::ACCESSOR_WORDS.contains(&word);
 	(!is_member_word && !fields.is_empty() && fields.iter().all(is_field))
 		.then(|| key(name.clone(), Op::Colon, block.clone()))
 }

@@ -76,9 +76,7 @@ fn tag<'a>(node: &'a Node, defined: &HashSet<String>) -> Option<&'a [Node]> {
 	let Node::Key(name, Op::Colon, body) = node.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(name) = name.drop_meta() else {
-		return None;
-	};
+	let name = name.symbol_name()?;
 	match body.drop_meta() {
 		Node::List(items, Bracket::Curly, _) if !defined.contains(name) => Some(items),
 		_ => None,
@@ -175,12 +173,10 @@ fn attributes(node: &Node, defined: &HashSet<String>) -> Option<(String, Vec<Nod
 		},
 		_ => pairs,
 	};
-	let Node::Symbol(name) = name.drop_meta() else {
-		return None;
-	};
+	let name = name.symbol_name()?;
 	let all_pairs =
 		!pairs.is_empty() && pairs.iter().all(|pair| matches!(pair.drop_meta(), Node::Key(_, Op::Colon, _)));
-	(all_pairs && !defined.contains(name)).then(|| (name.clone(), pairs.to_vec()))
+	(all_pairs && !defined.contains(name)).then(|| (name.to_string(), pairs.to_vec()))
 }
 
 /// `form post "/todos" { body }` → `form{ method:"post" action:"/todos" body }`, unless the program defines form

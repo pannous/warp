@@ -175,10 +175,8 @@ fn float_array_assignment(node: &Node) -> Option<String> {
 	let Node::Key(element, Op::Hash, _) = value.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(name) = target.drop_meta() else {
-		return None;
-	};
-	FLOAT_WORDS.contains(&element.name().as_str()).then(|| name.clone())
+	let name = target.symbol_name()?;
+	FLOAT_WORDS.contains(&element.name().as_str()).then(|| name.to_string())
 }
 
 /// Whether every mention of name is one a linear array supports, and one of them pairs it with another of `picked` or
@@ -268,17 +266,15 @@ fn declaration(node: &Node) -> Option<(String, Node, Shared)> {
 	let Node::Key(target, Op::Assign, value) = assignment.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(name) = target.drop_meta() else {
-		return None;
-	};
+	let name = target.symbol_name()?;
 	let Node::Key(element, Op::Hash, index) = value.drop_meta() else {
 		// a linear value would be a variable: only arrays are linear
 		return (storage == Storage::Host).then(|| {
-			(name.clone(), value.as_ref().clone(), Shared { element: value_element(value), value: true, storage })
+			(name.to_string(), value.as_ref().clone(), Shared { element: value_element(value), value: true, storage })
 		});
 	};
 	let element = if FLOAT_WORDS.contains(&element.name().as_str()) { Element::Float } else { Element::Int };
-	Some((name.clone(), written_count(index), Shared { element, value: false, storage }))
+	Some((name.to_string(), written_count(index), Shared { element, value: false, storage }))
 }
 
 /// The type of a shared value from its first value: `false`, `0.5`, `-1.5`, else an Int
@@ -709,9 +705,7 @@ fn float_map(value: &Node, names: &HashMap<String, Shared>) -> Option<(Node, Str
 	let Node::Key(parameter, Op::Arrow, body) = lambda.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(parameter) = parameter.drop_meta() else {
-		return None;
-	};
+	let parameter = parameter.symbol_name()?;
 	(is_linear_floats(array, names) && crate::wasm_emitter::lists::linear_arrays::is_float_kernel(parameter, body))
 		.then(|| (array.clone(), crate::wasm_emitter::lists::linear_arrays::kernel_name(parameter, body)))
 }

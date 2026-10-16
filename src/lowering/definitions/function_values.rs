@@ -444,12 +444,10 @@ impl FunctionArguments {
 	/// A library word given as a function (`f(is_letter)`, `twice(upper, t)`) is a function calling it with as many
 	/// parameters as the word takes: `lambda_value_1(argument·1) := is_letter(argument·1)`
 	fn library_word_lambda(&self, name: &str, argument: &Node) -> Option<Node> {
-		let Node::Symbol(word) = argument.drop_meta() else {
-			return None;
-		};
+		let word = argument.symbol_name()?;
 		// `sqrt`, `abs`: an operator word known by its signature
 		let operator_arity = crate::lowering::library_signatures::library_signature(word)
-			.filter(|_| crate::warp_parser::PREFIX_OPERATOR_WORDS.iter().any(|(spelled, _)| spelled == word))
+			.filter(|_| crate::warp_parser::PREFIX_OPERATOR_WORDS.iter().any(|(spelled, _)| *spelled == word))
 			.map(|(params, _)| params.len());
 		let known = is_standard_function(word) || prelude_word_arity(word).is_some() || operator_arity.is_some();
 		if !known || self.variables.contains(word) {

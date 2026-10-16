@@ -321,10 +321,8 @@ fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
 /// `for chars in text {…it…}` (also characters, codepoints, bytes): the variable `it` over `chars(text)`, or over the
 /// bytes `(0..text.bytes).map(i => byte_at(text, i))`; None when the body reads the word itself (a variable named chars)
 fn unit_iteration(variable: &Node, iterable: &Node, body: &Node) -> Option<(Node, Node)> {
-	let Node::Symbol(word) = variable.drop_meta() else {
-		return None;
-	};
-	if !UNIT_LOOP_WORDS.contains(&word.as_str()) || body.mentions(word) {
+	let word = variable.symbol_name()?;
+	if !UNIT_LOOP_WORDS.contains(&word) || body.mentions(word) {
 		return None;
 	}
 	let walked = if word == BYTES_WORD { bytes_of(iterable) } else { call("chars", vec![iterable.clone()]) };

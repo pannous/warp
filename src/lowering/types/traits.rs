@@ -394,9 +394,7 @@ fn declaration(node: &Node) -> Option<Result<Trait, Node>> {
 	if !TRAIT_KEYWORDS.contains(&keyword_name.as_str()) {
 		return None;
 	}
-	let Node::Symbol(name) = name.drop_meta() else {
-		return None;
-	};
+	let name = name.symbol_name()?;
 	if keyword_name != TRAIT_KEYWORDS[0] {
 		let written = format!("{keyword_name} {name}{{…}}");
 		crate::normalize::set_position_of(node);
@@ -432,7 +430,7 @@ fn declaration(node: &Node) -> Option<Result<Trait, Node>> {
 					.into_error()
 			})
 	});
-	Some(operations.collect::<Result<Vec<_>, _>>().map(|operations| Trait { name: name.clone(), operations }))
+	Some(operations.collect::<Result<Vec<_>, _>>().map(|operations| Trait { name: name.to_string(), operations }))
 }
 
 fn operation(requirement: &Node) -> Option<Operation> {
@@ -485,16 +483,14 @@ fn function_type_member(requirement: &Node) -> Option<Operation> {
 	let Node::Key(name, Op::Colon, parameter_types) = member.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(name) = name.drop_meta() else {
-		return None;
-	};
+	let name = name.symbol_name()?;
 	let count = match parameter_types.drop_meta() {
 		Node::List(types, Bracket::Round, _) => types.len(),
 		Node::Empty => 0,
 		_ => 1,
 	};
 	let parameters = (1..=count).map(|position| format!("p{position}")).collect();
-	Some(Operation { name: name.clone(), parameters, symmetric: false, contract: None, default: None })
+	Some(Operation { name: name.to_string(), parameters, symmetric: false, contract: None, default: None })
 }
 
 /// The name and parameters of the first call in a signature, through its keyword, result type and modifiers
@@ -690,10 +686,8 @@ fn parameter_type<'a>(parameter: &'a Node, registry: &TypeRegistry) -> Option<&'
 	let Node::Key(_, Op::Colon, type_node) = parameter.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(type_name) = type_node.drop_meta() else {
-		return None;
-	};
-	registry.get_by_name(type_name).map(|_| type_name.as_str())
+	let type_name = type_node.symbol_name()?;
+	registry.get_by_name(type_name).map(|_| type_name)
 }
 
 /// The parameters `name:T` of a definition head that name a declared type T
@@ -751,9 +745,7 @@ fn typed_parameters(head: Node, registry: &TypeRegistry) -> Node {
 /// symmetric one) takes a declared type T
 fn witness_of(head: &Node, registry: &TypeRegistry, traits: &Traits) -> Option<String> {
 	let items = definition_head(head)?;
-	let Node::Symbol(name) = items[0].drop_meta() else {
-		return None;
-	};
+	let name = items[0].symbol_name()?;
 	let (_, operation) = traits.operation(name)?;
 	let parameters = &items[1..];
 	let type_name = parameter_type(&parameters[0], registry)?;

@@ -310,10 +310,8 @@ pub(crate) fn program_names(node: &Node) -> Names {
 
 /// `is_type(subject, spec)` when the word names a type (`int`, `ints`, `Circle`) and no variable
 pub(crate) fn type_test(subject: &Node, word: &Node, names: &Names) -> Option<Node> {
-	let Node::Symbol(word) = word.drop_meta() else {
-		return None;
-	};
-	type_spec(&[word.as_str()], names).map(|spec| is_type_call(subject.clone(), spec, names))
+	let word = word.symbol_name()?;
+	type_spec(&[word], names).map(|spec| is_type_call(subject.clone(), spec, names))
 }
 
 /// `x is (int or text)`: a type union, x is one of the types (`or` is also the type union, user); a value among them
@@ -611,10 +609,8 @@ fn spaced_type_test(items: &[Node], shadowed: &Names) -> Option<Node> {
 	if is_equality_operand(right) {
 		return None;
 	}
-	let Node::Symbol(word) = right.drop_meta() else {
-		return None;
-	};
-	let mut words = vec![word.as_str()];
+	let word = right.symbol_name()?;
+	let mut words = vec![word];
 	words.extend(symbol_words(tail)?);
 	Some(is_type_call(subject.as_ref().clone(), type_spec(&words, shadowed)?, shadowed))
 }

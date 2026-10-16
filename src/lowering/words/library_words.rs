@@ -473,7 +473,7 @@ pub(crate) fn stepped(place: Node, step: Op) -> Node {
 }
 
 /// The word of a method and its arguments: `x.word`, `x.word(args)`
-fn method_parts(method: &Node) -> Option<(&Node, &String, Vec<Node>)> {
+fn method_parts(method: &Node) -> Option<(&Node, &str, Vec<Node>)> {
 	let (word_node, arguments) = match method.drop_meta() {
 		Node::Symbol(_) => (method, vec![]),
 		Node::List(items, _, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_))) => {
@@ -481,9 +481,7 @@ fn method_parts(method: &Node) -> Option<(&Node, &String, Vec<Node>)> {
 		}
 		_ => return None,
 	};
-	let Node::Symbol(name) = word_node.drop_meta() else {
-		return None;
-	};
+	let name = word_node.symbol_name()?;
 	Some((word_node, name, arguments))
 }
 
@@ -943,7 +941,7 @@ impl Lowering {
 			// (`m.keys`), nor a word whose list or text result the code after it types (`it.chars.map(…)`): a field
 			// read there would hide that type
 			let is_element = matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _));
-			let keeps_word = crate::members::MAP_MEMBERS.contains(&name.as_str())
+			let keeps_word = crate::members::MAP_MEMBERS.contains(&name)
 				|| result_kind(word).or_else(|| result_kind(name)).is_some();
 			if !is_called && !has_arguments && !keeps_word && (is_element || self.may_hold_object(receiver)) {
 				return Some(self.map_field_or(receiver, name, word_node, word_call));
@@ -979,7 +977,7 @@ impl Lowering {
 		let is_type_word_call = is_called
 			&& crate::analyzer::type_word_kind(name).is_some()
 			&& counting_method(name, &self.context).is_none();
-		let is_conversion = CONVERSION_METHODS.contains(&name.as_str()) || is_type_word_call;
+		let is_conversion = CONVERSION_METHODS.contains(&name) || is_type_word_call;
 		if is_conversion && arguments.is_empty() && !self.instances.is_declared_field(name) {
 			return Some(word_call(word_node, receiver, vec![]));
 		}
@@ -987,9 +985,7 @@ impl Lowering {
 		// `x.round`, `x.sqrt`: the number word applied to x, as `x.round()` and `sqrt x` are (x.word is word(x))
 		let number_word = || {
 			prefix_operator_method(receiver, name).or_else(|| {
-				crate::wasm_emitter::ROUNDING_FUNCTIONS
-					.contains(&name.as_str())
-					.then(|| word_call(word_node, receiver, vec![]))
+				crate::wasm_emitter::ROUNDING_FUNCTIONS.contains(&name).then(|| word_call(word_node, receiver, vec![]))
 			})
 		};
 		let may_be_object = self.is_object(receiver, name) || self.may_hold_object(receiver);

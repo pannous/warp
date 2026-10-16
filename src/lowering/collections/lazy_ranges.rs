@@ -215,9 +215,7 @@ fn replaceable(statements: &[Node], position: usize, readers: &RangeReaders) -> 
 	let Node::Key(target, Op::Assign | Op::Define, value) = statements[position].drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(name) = target.drop_meta() else {
-		return None;
-	};
+	let name = target.symbol_name()?;
 	let range = range_of(value)?;
 	// a short range of literals is its list already (counting.rs range_elements)
 	if crate::analyzer::range_elements(&range.whole).is_some() {
@@ -234,7 +232,7 @@ fn replaceable(statements: &[Node], position: usize, readers: &RangeReaders) -> 
 		&& bound_names
 			.iter()
 			.all(|bound| unchanged(bound) && !after.iter().any(|statement| is_parameter(statement, bound))))
-	.then(|| (name.clone(), parens(vec![range.whole.clone()])))
+	.then(|| (name.to_string(), parens(vec![range.whole.clone()])))
 }
 
 /// Whether `node` assigns or updates `name`, its items or its fields

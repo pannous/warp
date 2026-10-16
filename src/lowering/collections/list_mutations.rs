@@ -87,9 +87,7 @@ pub(crate) fn popped_list(list: &Node, call: &Node) -> Option<Node> {
 /// list variable the first element equal to k removed, and the list it gives (REMOVED_VALUE_CALL). `delete` is the
 /// familiar alias for `remove`; `x.pop(k)` is Python's pop of a key or a 0-based position (POPPED_ITEM_CALL).
 pub(crate) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
-	let Node::Symbol(name) = map.drop_meta() else {
-		return None;
-	};
+	let name = map.symbol_name()?;
 	let (method, [key]) = call.call_parts()? else {
 		return None;
 	};
@@ -120,9 +118,7 @@ pub(crate) fn removed_key(map: &Node, call: &Node) -> Option<Node> {
 
 /// `x.clear()` when x is a variable: `x = cleared(x)`, emptied in place (CLEAR_METHOD)
 pub(crate) fn cleared_collection(collection: &Node, call: &Node) -> Option<Node> {
-	let Node::Symbol(_) = collection.drop_meta() else {
-		return None;
-	};
+	let _ = collection.symbol_name()?;
 	matches!(call.call_parts()?, (CLEAR_METHOD, [])).then(|| {
 		Node::Key(
 			Box::new(collection.clone()),

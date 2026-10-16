@@ -917,10 +917,8 @@ fn defined_as(statement: &Node, call: &Node) -> Option<String> {
 	let Node::Key(target, Op::Define, value) = statement.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(name) = target.drop_meta() else {
-		return None;
-	};
-	(value.serialize() == call.serialize()).then(|| name.clone())
+	let name = target.symbol_name()?;
+	(value.serialize() == call.serialize()).then(|| name.to_string())
 }
 
 /// The calls of server functions in the page's code, each once, outer before inner

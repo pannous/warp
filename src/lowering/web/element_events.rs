@@ -180,9 +180,7 @@ pub(crate) fn element_items(node: &Node) -> Option<&Vec<Node>> {
 	let Node::Key(tag, Op::Colon | Op::None, content) = node else {
 		return None;
 	};
-	let Node::Symbol(tag) = tag.drop_meta() else {
-		return None;
-	};
+	let tag = tag.symbol_name()?;
 	match content.drop_meta() {
 		Node::List(items, Bracket::Curly, _) if crate::web::markup::is_element_tag(tag) => Some(items),
 		_ => None,

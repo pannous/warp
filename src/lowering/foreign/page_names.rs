@@ -396,9 +396,7 @@ impl PageNames {
 
 	/// `$who` of an id of the markup: the id and the member of its value
 	fn dollar_element(&self, node: &Node, enclosing: &[String]) -> Option<(String, &'static str)> {
-		let Node::Symbol(name) = node.drop_meta() else {
-			return None;
-		};
+		let name = node.symbol_name()?;
 		let id = name.strip_prefix(SIGIL)?;
 		if enclosing.iter().any(|node| node == id) {
 			return None;

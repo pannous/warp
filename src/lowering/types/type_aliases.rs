@@ -39,10 +39,8 @@ fn alias(node: &Node) -> Option<(String, String)> {
 	let Node::Type { name, body } = declared.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(target) = target.drop_meta() else {
-		return None;
-	};
-	body.is_empty_node().then(|| (name.drop_meta().name(), target.clone()))
+	let target = target.symbol_name()?;
+	body.is_empty_node().then(|| (name.drop_meta().name(), target.to_string()))
 }
 
 /// The type an alias names in the end, `Age?` of `Years?` when `type Years = Age; type Age = int` gives `int?`

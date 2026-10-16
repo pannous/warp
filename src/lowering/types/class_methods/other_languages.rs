@@ -73,11 +73,9 @@ pub(super) fn impl_block(node: &Node) -> Option<(String, Vec<Node>)> {
 		}
 		_ => return go_method(words),
 	};
-	let Node::Symbol(class) = class.drop_meta() else {
-		return None;
-	};
+	let class = class.symbol_name()?;
 	match block.drop_meta() {
-		Node::List(_, Bracket::Curly, _) => Some((class.clone(), class_items(block))),
+		Node::List(_, Bracket::Curly, _) => Some((class.to_string(), class_items(block))),
 		_ => None,
 	}
 }

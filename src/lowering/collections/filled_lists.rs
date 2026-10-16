@@ -150,9 +150,7 @@ pub fn filled_list(count: Node, list: &Node) -> Option<Node> {
 
 /// `int[n]` parsed as the subscript `int#(n+1)`: the list of n zeros when the type word is no variable
 pub(crate) fn zero_filled_subscript(element: &Node, one_based: &Node, variables: &HashSet<String>) -> Option<Node> {
-	let Node::Symbol(word) = element.drop_meta() else {
-		return None;
-	};
+	let word = element.symbol_name()?;
 	if variables.contains(word) {
 		return None;
 	}
@@ -184,7 +182,7 @@ pub(crate) fn typed_array_declaration(node: &Node, variables: &HashSet<String>) 
 	let Node::Key(name, Op::Colon, type_node) = node.drop_meta() else {
 		return None;
 	};
-	let Node::Symbol(_) = name.drop_meta() else { return None };
+	let _ = name.symbol_name()?;
 	Some((name.drop_meta().clone(), typed_array_value(type_node, variables)?))
 }
 
