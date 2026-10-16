@@ -23,5 +23,5 @@ fn the_hosts_shade_pixels_as_pixels_rs_says() {
 	assert_eq!(number_after(HOST_MEDIA, "const PAINT_INK = "), INK as u64);
 	assert_eq!(number_after(HOST_MEDIA, "const PAINT_PAPER = "), PAPER as u64);
 	assert_eq!(number_after(HOST_MEDIA, "const PAINT_COLOR_FROM = "), COLOR_FROM);
-	assert_eq!(number_after(DRAW, "paper = "), 0xFF000000 | PAPER as u64 * 0x010101);
+	assert_eq!(number_after(DRAW, "paper = "), 0xFF000000 | (PAPER as u64 * 0x010101));
 }
