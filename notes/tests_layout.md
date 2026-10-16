@@ -73,3 +73,15 @@ A test running the warp binary (common::warp_command) reports a failed run whole
 code, or the signal that killed it under load), its stdout and stderr, as tests/programs/test_sound_spectrum.rs
 run_report does. An assert printing only stderr hid why the visualizer run failed in a loaded gate (cards
 visualizer-test-exits, visualizer-test-flakes). An environment skip (no WebGPU adapter) stays separate from a failure.
+
+## Consolidation by judgment (card probes-check, user 2026-10-16)
+A probe becomes test assertions only when it checks decided behaviour with a stable value; exploratory, visual,
+sound, timing and undecided ones stay. A probe listed in tests/parser/self_parser_sources.txt keeps its parse parity:
+its text moves into tests/fixtures/parser_corpus/<folder>.warp (snippets concatenated, names as comments).
+- welcoming (consolidate-welcoming): probes/{listparams,maps,slices,listexpr,elements,break,print,globals}/ deleted.
+- functions (consolidate-functions): english_setter, function_ref_compare, runtime_function_equality,
+  returned_list_alias, union_result, quantity_default, methods_extension, thrice_block, calling_closure,
+  function_values_tour, function_objects/doc_strings, function_values/ deleted. Kept: print_closure (`print &f, g`
+  undecided), effects_last, fail_effects (card print-effects), functions/deep_recursion (stack size),
+  functions/fade_unit_argument (sound), function_objects/print_parse (exploratory).
+- algo/ (549 bisection snippets, no expected values; samples/<algo>.warp are the tests): kept.

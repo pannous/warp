@@ -76,7 +76,7 @@ Warp notation text (parsed by the reader we already have), one map:
    snake_case), reflection::lower_component_words right before foreign_modules. In the page too (card
    reflect-page-meta): wasm_modules::component_export_names reads them with wasmparser's validator (no wasmtime), the
    compiler fetching the binary like an imported core module's (web::read_bytes); the validator was linked into the
-   browser build already, the optimized warp.wasm kept its size. Sample samples/component_reflection.warp.
+   browser build already, the optimized warp.wasm kept its size. Sample samples/wasm/component_reflection.warp.
 5. warp.meta section (absorbing warp.units) + the run-time host call for `any`-typed values; playground reader too.
    Done first: run-time names of the program's own classes by type dispatch (Sources 2). Agreed with warp-worker
    (2026-10-08): web switches static_units with_result_units / module_units and the playground reader to the `units`

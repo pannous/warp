@@ -15,10 +15,12 @@ cd "$repo/samples"
 normalized() { sed -E 's#/(var|tmp|private)/[^ ]*#<path>#g; s/[0-9]+\.[0-9]+ ?(s|ms|µs)\b/<time>/g' "$1"; }
 
 kept=0 differing=0
-for sample in *.warp; do
-	name="${sample%.warp}"
+# samples/<chapter>/<name>.warp; golf/ counts bytes
+for sample in */*.warp; do
+	[[ $sample == golf/* ]] && continue
+	name="$(basename "${sample%.warp}")"
 	arguments=()
-	[ -f "$name.args" ] && read -ra arguments <"$name.args"
+	[ -f "${sample%.warp}.args" ] && read -ra arguments <"${sample%.warp}.args"
 	for run in 1 2; do
 		timeout "$seconds_per_run" "$warp" --no-ask "$sample" ${arguments[@]+"${arguments[@]}"} </dev/null >"$results/$name.$run" 2>&1
 		echo "exit $?" >>"$results/$name.$run"

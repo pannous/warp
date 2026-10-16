@@ -1,5 +1,5 @@
 // card for-where: `for x in xs where x > 1 { … }` walks the elements the condition keeps, the loop variable or `it`
-// naming each (found editing samples/orm.warp: it was "undefined variable: where")
+// naming each (found editing samples/storage/orm.warp: it was "undefined variable: where")
 use crate::is;
 
 #[test]

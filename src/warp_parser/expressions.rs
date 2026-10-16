@@ -7,6 +7,8 @@ pub(crate) const BODY_ENDS: [char; 7] = ['\0', ';', ',', '\n', '}', ')', ']'];
 /// A braceless argument takes arithmetic and ranges, stops at comparisons: f 3-1 > 5, sqrt 4 + 5 > 2, y = sum 1..4
 /// (card braceless-argument: every callable as at statement level, `sum 1..4`)
 const ARGUMENT_BP: u8 = Op::Range.binding_power().0;
+/// `x not in xs`: the negated membership, no prefix `not`
+const NOT_IN_SPELLING: &str = "not in";
 
 impl WarpParser {
 	/// Pratt parser: parse expression with given minimum binding power
@@ -175,7 +177,7 @@ impl WarpParser {
 			// Step 3: Check for infix operator
 			// `whenever not x {…}`, `waiting = xs where not done`: the word `not` negates what follows, it is no infix
 			// (the effect constraint `f := … ! IO` is written with `!`)
-			let prefix_not = self.matches_keyword("not");
+			let prefix_not = self.matches_keyword("not") && !self.matches_keyword(NOT_IN_SPELLING);
 			let (op, chars) = match self.peek_operator().filter(|_| !prefix_not) {
 				Some(pair) => pair,
 				None if self.stops_at_else && self.at_else_if_word().is_some() => break, // `if c: x elif d: y`

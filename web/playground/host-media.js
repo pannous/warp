@@ -83,7 +83,7 @@ function shadeWord(low, high) {
 }
 
 // a paint call as the page draws it (canvas.js wholePainting): its pixels shown as words, and when the painting before
-// had the same size only the rectangle that changed since, often empty. A stroke of samples/finger_paint changes a few
+// had the same size only the rectangle that changed since, often empty. A stroke of samples/graphics/finger_paint changes a few
 // hundred of 1280×800 pixels: the whole frame shaded as Numbers, cloned to the page and shaded there again took
 // hundreds of milliseconds each in Safari (card abysmally-slow). {x, y, columns, rows, words}, words row by row
 function paintFrame(holder, halves, width, height) {

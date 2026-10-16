@@ -173,7 +173,7 @@ function prepareTaskPool(size = TASK_POOL_SIZE) {
 }
 
 // resolves once every task Worker of the pool has loaded: a run that starts before would run its tasks inline, where
-// `stop` cannot end one (samples/threads.warp's endless spin hung the browser suite, card flaky-browser)
+// `stop` cannot end one (samples/tasks/threads.warp's endless spin hung the browser suite, card flaky-browser)
 function taskPoolReady() {
 	if (!hasTaskWorkers()) return Promise.resolve();
 	const deadline = performance.now() + TASK_POOL_WAIT_MS;

@@ -450,7 +450,7 @@ fn test_type_node() {
 			Node::Key(Box::new(Node::Symbol("age".to_string())), Op::Colon, Box::new(Node::Symbol("Int".to_string()))),
 		],
 		Bracket::Curly,
-		Separator::Colon, // Colon is comma separator
+		Separator::Comma,
 	));
 	let type_node = Node::Type { name, body: fields };
 
@@ -535,7 +535,7 @@ fn test_type_registry_from_node() {
 				),
 			],
 			Bracket::Curly,
-			Separator::Colon,
+			Separator::Comma,
 		)),
 	};
 

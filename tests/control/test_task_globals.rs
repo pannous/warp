@@ -1,4 +1,4 @@
-//! Card error-undefined (user's samples/music.warp: `play C4` in a go block fell silent): a task's instance gets the
+//! Card error-undefined (user's samples/sound/music.warp: `play C4` in a go block fell silent): a task's instance gets the
 //! program's globals as they are, an exact number too (2.5, 261.63, 10^30), whose Int is a handle into the instance
 //! that made it, not a value of its own
 use crate::is;
