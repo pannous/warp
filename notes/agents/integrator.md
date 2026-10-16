@@ -66,7 +66,7 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   <example>… for a tour failure. Never check out another commit in the integrate worktree while gate.sh runs, and
   TaskStop a running gate before re-merging there. A JS-only follow-up tip can be merged off-tree
   (`git merge-tree --write-tree` + `git commit-tree`), pushed as a branch for the runner check while the gate finishes.
-- Failures: report test name + first panic line to the worker (the bounce note on its card, above). A failure that passes alone is shared state: find and
+- Failures: up to 10 per batch are ignored as `fixnow` and pushed (notes/roles.md "Fix forward"); report test name + first panic line to the worker (the fixnow card, or the bounce note on its card). A failure that passes alone is shared state: find and
   fix the cause in a small commit with a test (known flake: tests running the shared debug/warp binary; rerun).
 - Batch branches that arrive close together. After each push: one line to the Supervisor and the board.
 - GitHub CI runs only on demand (`gh workflow run "Rust CI" -R pannous/warp`), when the Supervisor asks.
