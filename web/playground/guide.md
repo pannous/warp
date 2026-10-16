@@ -765,7 +765,7 @@ block or function when every digit counts; `@gpu` asks for the graphics card fro
 
 [[#Pictures]] above shows how to draw directly on the GPU.
 
-Examples: shader; samples: gpu_map, gpu_arrays, manual_3d_object_viewer, gpu_visualizer, warp_compiled_wgsl_shader
+Examples: shader; samples: gpu_map, gpu_arrays, manual_3d_object_viewer, gpu_visualizer, warp_compiled_wgsl_shader, cyber_fuji, singularity, wormhole
 
 ## Sound and music
 
