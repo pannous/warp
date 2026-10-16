@@ -402,7 +402,7 @@ pub(crate) fn are_spaced_values(items: &[Node]) -> bool {
 /// (reconsider-spaced, user 2026-10-15) unless a later value has a glued sign: `x = 5 -2` still asks. A function body
 /// alike: `f() := 1+1 2+2` gives [2 4]
 fn bare_list_assignment(items: &[Node], bracket: &Bracket, separator: &Separator) -> Option<Result<Node, Node>> {
-	if *bracket != Bracket::None || !matches!(separator, Separator::Space | Separator::Colon) {
+	if *bracket != Bracket::None || !matches!(separator, Separator::Space | Separator::Comma) {
 		return None;
 	}
 	let (first, rest) = items.split_first()?;

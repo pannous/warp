@@ -118,7 +118,7 @@ pub fn check_style(program: &Node) {
 	walk(program, &mut |node, positioned| match node {
 		// `[int, 3]` and `[double, f]` are items, never the call int(3)
 		Node::List(items, bracket, separator)
-			if *bracket != Bracket::Square && *separator != crate::node::Separator::Colon =>
+			if *bracket != Bracket::Square && *separator != crate::node::Separator::Comma =>
 		{
 			check_items(items, positioned)
 		}
