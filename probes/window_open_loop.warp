@@ -1,0 +1,10 @@
+# card playground-means: in the playground this counts frames while the page is visible, without a click first
+# (before, window_open waited for a click or key, so the loop ended at once on load)
+use draw
+frames = 0
+while window_open and frames < 300 {
+	clear(hsv(frames, 0.6, 0.9))
+	show()
+	frames += 1
+}
+print "frames drawn: " + frames

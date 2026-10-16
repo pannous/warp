@@ -168,7 +168,7 @@ impl WasmGcEmitter {
 			// a value of unknown static type (a parameter given lists and texts): a list as it is, a text's characters
 			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty) => {
 				self.emit_node_instructions(func, value);
-				self.emit_call(func, "text_chars");
+				self.emit_call(func, crate::library_words::TEXT_GRAPHEMES);
 			}
 			_ => {
 				let kind = self.get_type(value);

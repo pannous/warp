@@ -16,7 +16,7 @@
 # the checkout and cargo's build output and the next build is incremental instead of cold.
 # Failures of tests that need the Mac (scripts/cloud-test-environmental.txt) are listed apart and don't make it red.
 # CLOUD_TEST_FAST=1: fast mode (Opus with faster output, burns the credit ~2x faster; off by default).
-# CLOUD_TEST_MODEL=<model>: the session's model (default: the cloud environment's). Both apply to sessions the pool
+# CLOUD_TEST_MODEL=<model>: the session's model (default haiku: it only repeats one command). Both apply to sessions the pool
 # starts, not to the ones it reuses.
 set -uo pipefail
 
@@ -25,10 +25,13 @@ MAIN_CHECKOUT=/Users/me/dev/angles/warp
 RESULTS_PREFIX=cloud-results
 ENVIRONMENTAL_LIST=scripts/cloud-test-environmental.txt
 CARGO_FLAGS_WITH_VALUE='--test|--features|-F|-p|--package|--bin|--example|--bench|-j|--jobs|--target'   # `--test tests`: the next word is the flag's, not a filter
-MAX_PARALLEL_RUNS=3           # cloud sessions at once (they share the account's limits, notes/cloud_development.md)
+MAX_PARALLEL_RUNS=5           # cloud sessions running a job at once (they share the account's limits, notes/cloud_development.md)
 PENDING_HOURS=3                # a job older than this without a result: its session is dropped from the pool
 POOL=/Users/me/dev/angles/warp/data/cloud/pool   # one file per cloud session: its current job, or idle
-JOBS_PER_SESSION=30            # then a fresh session: each job adds a little to the session's context
+MAX_CLOUD_SESSIONS=8           # pool files plus starting ones: every session stays in the user's session list
+JOBS_PER_SESSION=30            # then the session's context is cleared (/clear): each job adds a little to it
+SESSION_NAME="Cloud Test Lane" # display name of new sessions; the pool addresses them by session_id
+DROPPED_SESSIONS=/Users/me/dev/angles/warp/data/cloud/dropped-sessions.txt   # to archive in the web UI
 POLL_SECONDS=60                # GitHub API quota is shared by every session: ls-remote once a minute
 WAIT_HOURS=4
 URL_WAIT_SECONDS=90
@@ -233,30 +236,40 @@ session_is_free() {
 	[ "$job" = idle ] && return 0
 	run=${job%-*}
 	git -C "$MAIN_CHECKOUT" ls-remote --exit-code origin "refs/heads/$RESULTS_PREFIX/$run" > /dev/null && return 0
-	if [ $(($(date +%s) - since)) -gt $((PENDING_HOURS * 3600)) ]; then rm -f "$file"; fi
+	[ $(($(date +%s) - since)) -gt $((PENDING_HOURS * 3600)) ] && drop_session "$file" "its job $job never answered"
 	return 1
 }
 
-# Under the pool lock: a free session for the job (its id, marked busy), "new" when one may be started, else nothing
+# Loud: the session stays in the user's session list until it is archived there
+drop_session() {
+	local file=$1 reason=$2 url=https://claude.ai/code/${1##*/}
+	rm -f "$file"
+	echo "$(date -u +%FT%TZ) $url $reason" >> "$DROPPED_SESSIONS"
+	echo "cloud-test: dropped $url from the pool ($reason): archive it in the web UI ($DROPPED_SESSIONS)" >&2
+}
+
+# Under the pool lock: a free session for the job (its id, marked busy; jobs 1 = its context is to be cleared first),
+# "new" when one may be started, else nothing
 claim_session() {
-	local job=$1 file jobs count=0
+	local job=$1 file jobs busy=0 sessions
 	for file in "$POOL"/session_*; do
 		[ -e "$file" ] || continue
 		jobs=$(pool_field "$file" jobs)
 		if session_is_free "$file"; then
-			[ "$jobs" -ge $JOBS_PER_SESSION ] && { rm -f "$file"; continue; }
+			[ "$jobs" -ge $JOBS_PER_SESSION ] && jobs=0
 			mark_session "$file" "$job" $((jobs + 1)); echo "${file##*/}"; return
 		fi
-		[ -e "$file" ] && count=$((count + 1))
+		[ -e "$file" ] && busy=$((busy + 1))
 	done
-	count=$((count + $(ls "$POOL" | grep -c '^starting-')))
-	[ $count -lt $MAX_PARALLEL_RUNS ] && { mark_session "$POOL/starting-$job" "$job" 1; echo new; }
+	busy=$((busy + $(ls "$POOL" | grep -c '^starting-')))
+	sessions=$(ls "$POOL" | grep -c -E '^(session_|starting-)')
+	[ $busy -lt $MAX_PARALLEL_RUNS ] && [ $sessions -lt $MAX_CLOUD_SESSIONS ] && { mark_session "$POOL/starting-$job" "$job" 1; echo new; }
 }
 
 start_session() {
 	local job=$1 folder=$2 tmux_name command waited=0 url=""
 	command=(claude)
-	[ -n "${CLOUD_TEST_MODEL:-}" ] && command+=(--model "$CLOUD_TEST_MODEL")
+	command+=(--model "${CLOUD_TEST_MODEL:-haiku}" --name "$SESSION_NAME")
 	[ "${CLOUD_TEST_FAST:-0}" = 1 ] && command+=(--settings '{"fastMode": true}')
 	command+=(--cloud "$(cat "$folder/prompt.txt")")
 	tmux_name=cloud-test-$(printf %s "$job" | tr -c 'A-Za-z0-9-' '-' | cut -c1-40)
@@ -288,13 +301,13 @@ launch() {
 		case "$session" in
 			new) url=$(start_session "$job" "$folder") || exit ;;
 			session_*)
+				[ "$(pool_field "$POOL/$session" jobs)" = 1 ] && claude -p /clear --cloud "$session" > "$folder/clear.txt" 2>&1
 				if claude -p "$(cat "$folder/prompt.txt")" --cloud "$session" > "$folder/send.txt" 2>&1; then
 					url=https://claude.ai/code/$session
 				else
-					echo "cloud-test: session $session refused the job ($(tail -1 "$folder/send.txt")), dropping it" >&2
-					rm -f "$POOL/$session"
+					lock_pool; drop_session "$POOL/$session" "refused the job: $(tail -1 "$folder/send.txt")"; unlock_pool
 				fi ;;
-			*) echo "cloud-test: $MAX_PARALLEL_RUNS cloud sessions busy, waiting for one" >&2; sleep $POLL_SECONDS ;;
+			*) echo "cloud-test: all pooled cloud sessions busy (at most $MAX_PARALLEL_RUNS runs, $MAX_CLOUD_SESSIONS sessions), waiting for one" >&2; sleep $POLL_SECONDS ;;
 		esac
 	done
 	{
@@ -303,7 +316,7 @@ launch() {
 		echo "tests: ${*:-all}"
 		echo "job: $job"
 		echo "session: $url"
-		echo "fast: ${CLOUD_TEST_FAST:-0}, model: ${CLOUD_TEST_MODEL:-environment default}"
+		echo "fast: ${CLOUD_TEST_FAST:-0}, model: ${CLOUD_TEST_MODEL:-haiku}"
 		echo "launched: $(date -u +%FT%TZ)"
 		echo "credit used before: \$$(credit_used)"
 	} > "$folder/launch.txt"
