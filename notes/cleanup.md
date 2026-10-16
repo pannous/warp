@@ -525,3 +525,19 @@ card's −700: reflection's fields/methods/dir code is feature code, not `of` ha
 `params of f`, `a of xs` (a field of every element), `name of p + "b"`.
 Trap found: the old signal_values reflected_lists rebuilt every list and unwrapped one-item unbracketed lists on the
 way; `func add<T>(_ a: T, …)` relied on it, so the new walk keeps that unwrap explicitly.
+
+## Final pass (final-host, 2026-10-16)
+Area: src/host/, src/ffi/, src/gc_traits/, src/modules/, top-level src/*.rs (not extensions.rs). Net −410 lines.
+- ffi: one `NativeCall` wrapper for every C function; aliases interned once (resolve_library_alias leaked a string
+  per call); header signatures in one collect; header.rs comments match the code
+- host: `exported_memory` (one lookup of a caller's memory for host words, gpu, tasks, foreign calls, module linking),
+  `answer_for_text`, one `HostNode` type; database.rs's SQLite API as one `sqlite_api!` table
+- gc_traits/wasm_name_resolver.rs matches on wasmparser's own types (the Parsed* mirrors gone, −245)
+- modules: one program_loader, `qualified_call`, `instance_memory`; rustdoc's `Conversion::list_of/option_of/borrowed`
+  and its `kebab` = components' `kebab_case` + validity check
+- pipeline `without_located_errors`, law `add_free_variables`, type_kinds `field_storage` lists each number word once
+Left on purpose:
+- type_kinds `AstKind` has no user but the design comment in node/mod.rs ("via Meta(node, AstKind)"): kept for it
+- needed_definitions `with_statements_first` / `with_statements_in_front` differ in Meta handling and separator
+- main.rs's long if/else command dispatch: not touched
+- gc_traits ObjFieldValue / obj! and the GcObject reading API: the documented rasm pattern
