@@ -283,7 +283,9 @@ main` calling warp_twigl with values.size/time/mouse/frame, FC and m with y flip
 - Not yet: twigl's backbuffer b (would be $previous), noise functions (snoise2D…), sound s, other twigl modes
 - twigl's noise (fsnoise, fsnoiseDigits, snoise2D, snoise3D: lib/draw.warp twigl_noise) goes into a shader that calls
   it; probes/twigl/noise.warp.
-- Not yet: twigl's backbuffer b (would be $previous), snoise4D, sound s, other twigl modes
+- twigl's backbuffer `texture(b, uv)` is the previous frame: twigl() writes it as a GLSL stub warp_back(uv), and
+  glsl_shader swaps the stub's WGSL for a call of values.previous ($previous, gpu.rs binds the frame); probes/twigl/back.warp.
+- Not yet: snoise4D, sound s, other twigl modes
   (classic, geeker: full `void main` sources, gl_FragColor), Shadertoy's iChannel textures.
 
 ## Paint window, default canvas, probes (from the warp-sound handover, 2026-10-10)
