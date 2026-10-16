@@ -84,6 +84,7 @@ mod test_function_references;
 mod test_function_type_at_run_time; // card type-function
 mod test_function_values;
 mod test_functions;
+mod test_functions_passed_by_name; // card specialise-named-functions
 mod test_gap_feeding; // card gap-feeding
 mod test_generator_arguments;
 mod test_generators; // card generators-function
@@ -185,6 +186,7 @@ mod test_shadowed_log;
 mod test_soft_keywords;
 mod test_sort_comparator_speed; // card comparator-sort
 mod test_sort_functions;
+mod test_sort_labels; // card sort-xs
 mod test_spaced_assign_definition;
 mod test_specialised_variants;
 mod test_statement_blocks; // card statement-block

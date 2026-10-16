@@ -3,6 +3,27 @@ use super::*;
 
 /// The got-it note on `infix divides(d, n) := …`, the alias of `infix operator divides(d, n) := …` (card g_mnvA)
 const INFIX_WORD_TOPIC: &str = "infix-operator-word";
+/// The Unicode blocks of symbols a program may use before anything defines them (decision unicode-symbols): arrows,
+/// math operators, technical and geometric symbols, dingbat arrows, the supplemental math and arrow blocks
+const FREE_SYMBOL_BLOCKS: [(char, char); 7] = [
+	('\u{2190}', '\u{23FF}'),
+	('\u{25A0}', '\u{25FF}'),
+	('\u{2794}', '\u{27BF}'),
+	('\u{27C0}', '\u{27FF}'),
+	('\u{2900}', '\u{2AFF}'),
+	('\u{2B00}', '\u{2BFF}'),
+	('\u{FFE9}', '\u{FFEC}'),
+];
+
+/// `1 ⇔ 1`, `x = ↯`: a symbol character with no built-in or alias meaning, a free operator or symbol name
+pub(crate) fn is_free_symbol(c: char) -> bool {
+	let mut spelling = [0; 4];
+	let spelled = &*c.encode_utf8(&mut spelling);
+	FREE_SYMBOL_BLOCKS.iter().any(|(first, last)| (*first..=*last).contains(&c))
+		&& !crate::extensions::strings::starts_an_emoji(c)
+		&& crate::operators::spelled_operator(spelled).is_none()
+		&& !crate::operators::math_aliases().iter().any(|alias| alias.spelling == spelled)
+}
 
 /// A glyph a program may declare as an operator: symbols with a non-ASCII character (`‼`, `⊕`), never a letter or digit.
 /// Superscript digits and signs too (P48, user-decided) (`suffix operator ³`, `prefix operator ⁻`, wiki/operator.md)
@@ -252,6 +273,35 @@ impl WarpParser {
 	/// `2 ⊕ 3`: the call of the infix operator on both operands
 	pub(crate) fn try_parse_user_infix(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
 		let operator = self.user_operator_at(&[UserOperatorKind::Infix])?;
+		self.parse_user_infix(operator, lhs, min_bp)
+	}
+
+	/// `1 ⇔ 1` with no `infix operator ⇔` declared: the call of the operator, which lowering reports as undefined
+	/// (reviewer) only with an operand after it on its line: `[↯ ↯]` and `print ↯` read the glyph as a value
+	pub(crate) fn try_parse_free_infix(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
+		let glyph = self.current_char();
+		if !is_free_symbol(glyph) || !self.operand_follows(1) || self.free_symbol_follows(1) {
+			return None;
+		}
+		let (line, column) = self.get_position();
+		let operator = UserOperator { glyph: vec![glyph], kind: UserOperatorKind::Infix, level: USER_INFIX_BP.0 };
+		let Node::List(mut items, bracket, separator) = self.parse_user_infix(operator, lhs, min_bp)? else {
+			unreachable!("operator_call makes a list")
+		};
+		// the error of an undefined operator points at the glyph, not at the left operand
+		items[0] = items[0].clone().with_meta_data(LineInfo::at(line, column, &self.current_line));
+		Some(Node::List(items, bracket, separator))
+	}
+
+	/// `[↯ ↯]`: another free glyph after the blanks is the next value, no operand
+	fn free_symbol_follows(&self, offset: usize) -> bool {
+		(offset..)
+			.map(|position| self.peek_char(position))
+			.find(|c| !matches!(c, ' ' | '\t'))
+			.is_some_and(is_free_symbol)
+	}
+
+	fn parse_user_infix(&mut self, operator: UserOperator, lhs: &Node, min_bp: u8) -> Option<Node> {
 		let (left_bp, right_bp) = (operator.level, operator.level + 1);
 		// `print matches("abd", "a.c$")`: a word glued to `(both, operands)` is its call, as `f(x, y)` is; a right operand
 		// never holds a comma, so `"abc" matches("a.c")` stays infix (card use-regex)
@@ -353,6 +403,9 @@ impl WarpParser {
 	pub(crate) fn hint_operator(&self, chars: usize, is_prefix: bool) -> String {
 		let written: String = (0..chars).map(|offset| self.peek_char(offset)).collect();
 		self.set_hint_pos();
+		if written == DIV_WORD && !is_prefix {
+			self.warn_floor_division_spelling(DIV_WORD, "divides", FLOOR_DIVISION, Level::Normal);
+		}
 		norm::operator(&written, is_prefix);
 		written
 	}

@@ -61,6 +61,20 @@ pub fn fast_math() -> bool {
 	FAST_MATH.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+/// A fast program (card fast-scope): `warp fast`, or a first statement `fast`; its Ints wrap as i64
+pub fn is_fast_program() -> bool {
+	fast_math() || compile_context::read(|context| context.fast_program)
+}
+
+/// A fast function: one of a fast program, one written `fast f(x) := …` (or an overload `f·1` of it), one of a module
+/// beginning with `fast`
+pub fn is_fast(function: &str) -> bool {
+	let of = |fast: &String| {
+		function == fast || function.strip_prefix(fast.as_str()).is_some_and(|rest| rest.starts_with('·'))
+	};
+	is_fast_program() || compile_context::read(|context| context.fast_functions.iter().any(of))
+}
+
 /// `run` with the program granted only what a sandboxed program gets (`warp --sandbox`, Capability::GRANTED_SANDBOXED)
 pub fn sandboxed<T>(run: impl FnOnce() -> T) -> T {
 	with_granted(&crate::analyzer::effects::Capability::GRANTED_SANDBOXED, || {

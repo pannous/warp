@@ -1,6 +1,0 @@
-use graphics
-red = 0.5
-glow = twigl {
-	o = vec4(FC.x / r.x, $red, 0., 1.);
-}
-paint(glow, 4, 4)

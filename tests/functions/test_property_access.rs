@@ -67,3 +67,8 @@ fn test_of_lookup_is_an_assignment_target() {
 	is!("class Box { w = 1; set size(v) { w = v * 2 } }; b = Box(); set size of b to 5; b.w", 10);
 	is!("square of a number = number*number; square 3", 9);
 }
+
+#[test]
+fn test_print_of_lookup_prints_the_field() {
+	is!("p={w:1}; print w of p; w of p + 1", 2);
+}
