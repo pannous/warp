@@ -147,6 +147,7 @@ mod test_object_functions;
 mod test_on_error_of_function;
 mod test_on_set_value; // card on-set-value
 mod test_one_method_form; // card one-method-form
+mod test_or_error_type;
 mod test_page_events;
 mod test_parallel_let; // card lower-parallel
 mod test_parallel_map;

@@ -19,6 +19,12 @@ struct Optionals {
 
 impl Optionals {
 	fn rewrite(&self, node: Node) -> Node {
+		// `def f(x) as int? := …`, `x as int? = …`: the head declares an optional result, no cast
+		if let Node::Key(head, op @ (Op::Define | Op::Assign), body) = node.drop_meta() {
+			if matches!(head.drop_meta(), Node::Key(_, Op::As, _)) {
+				return key(head.as_ref().clone(), *op, self.rewrite(body.as_ref().clone())).with_meta_of(&node);
+			}
+		}
 		if let Node::Key(value, Op::As, target) = node.drop_meta() {
 			if let Node::Symbol(target) = target.drop_meta() {
 				if let Some(warp_type) = target.strip_suffix(OPTIONAL_MARK).filter(|name| !name.is_empty()) {

@@ -310,7 +310,8 @@ impl WarpParser {
 		if self.current_char() == '?'
 			&& (self.ends_optional_type(self.peek_char(1), self.peek_char(2))
 				|| self.closes_after_blanks(1)
-				|| self.next_field_follows(1))
+				|| self.next_field_follows(1)
+				|| self.declaration_follows(&symbol, 1))
 		{
 			self.advance();
 			return Symbol(format!("{symbol}?"));

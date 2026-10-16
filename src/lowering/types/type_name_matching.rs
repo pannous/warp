@@ -144,7 +144,8 @@ fn spaced_definition(items: &[Node]) -> Option<Node> {
 fn typed_return(type_name: &Node, definition: &Node) -> Option<Node> {
 	// `function square(n){…}` names no return type: a definition keyword is no type word here
 	type_name.symbol_name().filter(|word| {
-		(is_kinded_type_or_any(word) || is_union(word)) && !crate::operators::FUNCTION_KEYWORDS.contains(word)
+		(is_kinded_type_or_any(word.trim_end_matches('?')) || is_union(word))
+			&& !crate::operators::FUNCTION_KEYWORDS.contains(word)
 	})?;
 	let type_name = type_name.drop_meta();
 	match definition.drop_meta() {
@@ -214,8 +215,10 @@ fn is_union(word: &str) -> bool {
 }
 
 /// A result checked rather than converted, where converting could lose something: a union (user 2026-10-12, `-> int or
-/// text`) and a whole-number type (decision float-result: `-> int { 2.5 }` is no 2); `-> text { 3 }` still converts
+/// text`) and a whole-number type (decision float-result: `-> int { 2.5 }` is no 2), optional too (`-> int?`: an int, ø
+/// or an Error, decision error-optional); `-> text { 3 }` still converts
 pub(crate) fn is_checked_result(word: &str) -> bool {
+	let word = word.strip_suffix('?').unwrap_or(word);
 	is_union(word) || (crate::analyzer::is_whole_type(word) && !crate::analyzer::is_bool_type(word))
 }
 

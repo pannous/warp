@@ -45,6 +45,7 @@ impl KnownTypes {
 
 	pub(super) fn is_known_name(&self, name: &str) -> bool {
 		type_word_kind(name).is_some()
+			|| crate::type_tests::builtin_type_name(name).is_some()
 			|| name == ANY_TYPE
 			|| crate::lowering::declarations::is_collection_type_word(name)
 			|| self.user_types.get_by_name(name).is_some()
@@ -212,7 +213,12 @@ pub(in crate::analyzer) fn check_union_fields(program: &Node) -> Option<Diagnost
 pub(crate) fn unsupported_union_part<'a>(type_name: &'a str, classes: &HashSet<String>) -> Option<&'a str> {
 	union_parts(type_name.trim_end_matches('?'))?
 		.into_iter()
-		.find(|part| builtin_type_kind(part).is_none() && !classes.contains(*part))
+		.find(|part| !is_builtin_type(part) && !classes.contains(*part))
+}
+
+/// A type held by a kind (`int16`, `String`) or a builtin type word held as a Node (`symbol`, `error`, `time`)
+fn is_builtin_type(word: &str) -> bool {
+	builtin_type_kind(word).is_some() || crate::type_tests::builtin_type_name(word).is_some()
 }
 
 /// The names of the classes a program declares
@@ -363,7 +369,10 @@ pub(crate) fn admits(type_name: &str, actual: Kind) -> bool {
 		return parts.iter().any(|part| admits(part, actual));
 	}
 	let Some(expected) = builtin_type_kind(type_name) else {
-		return true;
+		// symbol, key, error, time …: a builtin type held as a Node admits a number only among the kinds it holds
+		let refused_number = matches!(actual, Kind::Int | Kind::Float)
+			&& crate::type_tests::runtime_kind_mask(type_name).is_some_and(|mask| mask & 1 << actual as i64 == 0);
+		return !refused_number;
 	};
 	// a type held as a Node (`real`: an exact Int or a float) admits the kinds it holds at run time
 	if expected == Kind::Empty {
@@ -434,12 +443,21 @@ pub(crate) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 	if let Node::Key(_, Op::Assign, assigned) = value.drop_meta() {
 		return assignment_mismatch(assignment, name, type_name, assigned);
 	}
-	if let Some(base) = type_name.strip_suffix('?') {
-		return match value.drop_meta() {
-			Node::Empty => None,
-			_ => assignment_mismatch(assignment, name, base, value),
-		};
+	// `int? i = "a"`: checked against int, the error names the type as written, "declared int?"
+	match (type_name.strip_suffix('?'), value.drop_meta()) {
+		(Some(_), Node::Empty) => None,
+		(Some(base), _) => base_type_mismatch(assignment, name, base, type_name, value),
+		(None, _) => base_type_mismatch(assignment, name, type_name, type_name, value),
 	}
+}
+
+fn base_type_mismatch(
+	assignment: &Node,
+	name: &str,
+	type_name: &str,
+	written: &str,
+	value: &Node,
+) -> Option<Diagnostic> {
 	if value.is_empty_node() && builtin_type_kind(type_name).is_some() {
 		let message = format!("type mismatch: {name} is declared {type_name}, cannot assign ø");
 		return Some(Diagnostic::at(assignment, message).fix(format!("declare {name}:{type_name}? to allow ø")).offer(
@@ -454,7 +472,7 @@ pub(crate) fn assignment_mismatch(assignment: &Node, name: &str, type_name: &str
 	let actual = literal_misfit(type_name, value)?;
 	let value_text = value.serialize();
 	let message = format!(
-		"type mismatch: {name} is declared {type_name}, cannot assign {} {value_text}",
+		"type mismatch: {name} is declared {written}, cannot assign {} {value_text}",
 		format!("{actual:?}").to_lowercase()
 	);
 	let actual = format!("{actual:?}").to_lowercase();
@@ -505,7 +523,8 @@ pub(crate) fn literal_misfit(type_name: &str, value: &Node) -> Option<Kind> {
 	if is_bool_type(type_name) {
 		return bool_misfit(value);
 	}
-	if !is_builtin_or_union(type_name) {
+	let parts = union_parts(type_name).unwrap_or_else(|| vec![type_name]);
+	if !parts.iter().all(|part| is_builtin_type(part)) {
 		return None;
 	}
 	// a list literal fits no scalar type: `x: int = [1 2]`

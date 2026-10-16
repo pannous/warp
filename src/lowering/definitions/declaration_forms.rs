@@ -787,9 +787,10 @@ pub(crate) fn declared_type(target: &Node) -> Option<&Node> {
 	}
 }
 
-/// A builtin type written before a declaration: `int`, `string`, `float`, `real`, `fast` … (type_tests BUILTIN_TYPES)
+/// A builtin type written before a declaration: `int`, `string`, `float`, `real`, `fast` … (type_tests BUILTIN_TYPES),
+/// optional as `int?`
 pub(crate) fn is_declaration_type(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(name) if builtin_type_kind(name).is_some() || plural_element_type(name).is_some())
+	matches!(node.drop_meta(), Node::Symbol(name) if builtin_type_kind(name.trim_end_matches('?')).is_some() || plural_element_type(name).is_some())
 }
 
 /// `(fast x)` as the target of `fast x=v`: the type and the name
