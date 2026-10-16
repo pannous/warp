@@ -325,14 +325,28 @@ impl Inference {
 			};
 			if let Some((field, held)) = fields.get(index).filter(|(_, held)| *held != given) {
 				return Some(Err(Stop::Error(format!(
-					"DimensionError: {class}.{field} holds {}, is given {}",
+					"DimensionError: {class}.{field} holds {}, is given {}{}",
 					shown(held),
-					shown(&given)
+					shown(&given),
+					self.unit_after_variable_hint(&arguments[index], arguments.get(index + 1))
 				))));
 			}
 			lowered.push(argument);
 		}
 		Some(Ok((Node::List(lowered, Bracket::Round, crate::node::Separator::None), Signature::plain())))
+	}
+
+	/// `D(n inch)`, `D{diagonal: n inch}`: the unit after a variable is read as the next value, as units bind only after
+	/// a number (notes/decisions.md); the hint names the way that works
+	fn unit_after_variable_hint(&self, value: &Node, next: Option<&Node>) -> String {
+		match next {
+			Some(unit) if self.unit_word(unit).is_some() => format!(
+				"; a unit binds only after a number, write {} * 1 {}",
+				value.serialize().trim(),
+				unit.serialize().trim()
+			),
+			_ => String::new(),
+		}
 	}
 
 	/// `Run` and the fields of a construction with named fields `Run{distance: 5 km}` of a class with unit fields; the
@@ -363,7 +377,7 @@ impl Inference {
 			return None;
 		};
 		let mut lowered = vec![];
-		for entry in entries {
+		for (index, entry) in entries.iter().enumerate() {
 			let Node::Key(field, op, value) = entry.drop_meta() else {
 				lowered.push(entry.clone());
 				continue;
@@ -375,10 +389,11 @@ impl Inference {
 			let held = fields.iter().find(|(name, _)| *name == field.drop_meta().name()).map(|(_, held)| held);
 			if let Some(held) = held.filter(|held| **held != given && !value.is_empty_node()) {
 				return Some(Err(Stop::Error(format!(
-					"DimensionError: {class}.{} holds {}, is given {}",
+					"DimensionError: {class}.{} holds {}, is given {}{}",
 					field.drop_meta().name(),
 					shown(held),
-					shown(&given)
+					shown(&given),
+					self.unit_after_variable_hint(&value, entries.get(index + 1))
 				))));
 			}
 			lowered.push(Node::Key(field.clone(), *op, Box::new(value)));
