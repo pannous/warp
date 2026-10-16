@@ -67,11 +67,16 @@ passes unedited needs no question; editing its assertions still needs a decision
 The only session that runs the full suite and the only one that pushes code to main.
 - Keeps one integration worktree (/Users/me/dev/angles/warp.worktrees.noindex/integrate, detached, follows origin/main;
   created with `cowtree add --detach <path> origin/main`).
-- Workers send it "branch, tip, filters"; it merges the branch (union-resolves todo.md / tests/main.rs, sends real
-  conflicts back to the worker), runs `./test.sh` with the integration build tweak, and pushes to main only at 0 failed
-  and no drop in the test count. Otherwise it reports the failures to the worker (and the supervisor if it's a decision).
-- Batches branches that arrive close together into one run; runs a worker's targeted check on request.
-- Express (user, 2026-10-10: "faster results for an agent"): a branch sent as "express" (the user asked for that
+- Its queue is the board's Ready column (user, 2026-10-16): workers push and run `todo ready <card>`, which records
+  branch and tip and refuses a branch that does not merge cleanly into origin/main; `todo list Ready` shows them. Only
+  Ready cards are merged; `todo ready --stray` reports unmerged branches without a card (never merged). It merges
+  the tips (resolving only trivial conflicts: formatting, mod/use lists, adjacent list additions; logic touched on
+  both sides bounces to the owner), runs `./test.sh` with the integration build tweak, and pushes to main only at 0
+  failed and no drop in the test count, then `todo done <card> <commit>` (Ready → Done). Otherwise the card bounces:
+  `todo move <card> Now` + `todo note` with the failure (and the supervisor hears if it's a decision).
+- Batches of at most ~8 Ready cards per run; wide refactors and carrier branches land alone and first. Runs a
+  worker's targeted check on request.
+- Express (user, 2026-10-10: "faster results for an agent"): a card readied with `--express` (the user asked for that
   agent's result) is not batched: it goes next, alone on main, its full suite ahead of the batch run (a running suite
   finishes first). It skips the waiting, never the suite: one red branch on main stops every worker. To try a result
   even sooner, the worker's early-try binary (notes/agents/common.md) needs no merge at all.
@@ -92,10 +97,10 @@ The only session that runs the full suite and the only one that pushes code to m
 
 ## Reviewer
 User 2026-10-14 invented it: "makes sure that everything is sound and beautiful according to standards", so the
-Integrator has less to do. It reads each merge request's diff in parallel with the gate: two signals for the
+Integrator has less to do. It reads each Ready card's diff in parallel with the gate: two signals for the
 worker (user 2026-10-15), the gate's "it works" and the Reviewer's "here it can generalize or read better", which the
 worker makes its next commit. The Reviewer approves nothing and sends the Integrator nothing but a rare veto
-(unsound: the Integrator leaves the branch out of the push).
+(unsound: the card goes back to Now with a note, the Integrator leaves it out of the push).
 Structural findings become cards for the Refactorer. Prompt: notes/agents/reviewer.md; a default service.
 
 ## Refactorer
@@ -135,8 +140,9 @@ Interviewer. Prompt: notes/agents/refactorer.md.
   half-done edits.
 - Test first, then implement. While developing, only targeted tests and only through the queue:
   `tests/queue.sh -- <filter>`. Never the whole tests binary, never an extra export copy for verification.
-- Done = commit on the branch, push the branch, SendMessage the Integrator "branch, tip, new tests, filters". The
-  Integrator's full-suite result is the check; the worker fixes what it reports.
+- Done = commit on the branch, targeted tests, merge origin/main (conflicts are the worker's to resolve), push the
+  branch, `todo ready <card>` (notes/agents/common.md "Done"). The Integrator's full-suite result is the check; a
+  bounced card comes back to Now with a note, the worker fixes it and readies it again.
 - Closing a card whose result the user can see or use (a feature, a visible fix, a sample, a playground change):
   `todo done <card> <commit> --try "how to try it"`: one concrete line (a command, a playground snippet, a sample
   file), only once it is on main and, for web changes, deployed. Internal work (cleanup, tests, notes) has no --try.
