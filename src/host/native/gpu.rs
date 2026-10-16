@@ -289,10 +289,7 @@ pub(super) fn text_coverage(
 	words: HostNode,
 	size: i64,
 ) -> wasmtime::Result<HostNode> {
-	let words = match given_node(&mut caller, words)? {
-		Node::Text(text) => text,
-		other => other.serialize(),
-	};
+	let words = text_or_written(given_node(&mut caller, words)?);
 	let covered = crate::graphics::text_raster::coverage(&words, size as f32)
 		.map_err(|problem| task_failure(format!("{TEXT_COVERAGE}: {problem}")))?;
 	list_of_ints(&mut caller, &covered, TEXT_COVERAGE)
