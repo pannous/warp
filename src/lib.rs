@@ -95,6 +95,3 @@ pub use compiler::local::Local;
 // Note: gc_struct!, obj!, and wasm_struct! macros are exported at crate root via #[macro_export]
 #[cfg(feature = "native")]
 pub use gc_traits::{register_gc_types_from_wasm, FieldIndex, FromVal, GcReadable, GcStructWrapper, ToVal};
-// GcComparable trait for Node comparison with wasm_struct types
-#[cfg(feature = "native")]
-pub use node::GcComparable;

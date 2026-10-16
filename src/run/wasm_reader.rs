@@ -299,7 +299,7 @@ pub fn read_exports_after_main(bytes: &[u8], imports: Imports, names: &[&str]) -
 		.collect()
 }
 
-pub use crate::wasm_emitter::{trap_detail_line, trap_position_line, TRAP_DETAIL, TRAP_DETAIL_PREFIX, TRAP_POSITION};
+pub use crate::wasm_emitter::{trap_detail_line, trap_position_line, TRAP_DETAIL, TRAP_POSITION};
 
 /// A trapped run, with the value the program left in `trap_detail` before trapping as the error's context
 pub(crate) fn with_trap_detail<T, R>(
