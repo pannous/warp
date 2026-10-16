@@ -119,8 +119,11 @@ pub fn lower(program: Node) -> Node {
 	collect(&crate::modules::statements(program.clone()), None, &mut own);
 	let program = if own.is_empty() { program } else { without_definitions(program) };
 	let bound = bound_names(&program);
-	// a value, not a function: `canvas() := Picture()` beside `canvas.width := …` is fine
-	let values = original.assigned_names(|op| *op == Op::Assign);
+	// a value (a variable, parameter or loop variable), not a function: `canvas() := Picture()` beside
+	// `canvas.width := …` is fine
+	let functions = crate::analyzer::function_definitions(&original).user_functions;
+	let values: HashSet<String> =
+		bound_names(&original).into_iter().filter(|name| !functions.contains_key(name)).collect();
 	if let Some(error) = refused_definition(&original, &values) {
 		return error;
 	}
@@ -203,7 +206,14 @@ fn map_statements(node: Node, map: &impl Fn(Node) -> Node) -> Node {
 /// A loud error for a property definition of a value the program binds, which no use would read: `p = {x: 1}; p.x := 5`
 /// (the field is written `p.x = 5`)
 fn refused_definition(program: &Node, values: &HashSet<String>) -> Option<Node> {
-	crate::modules::statements(program.clone()).iter().find_map(|statement| {
+	// also inside a body: `f(p) := { p.x := 5; p }`
+	let mut definitions = Vec::new();
+	program.visit(&mut |node| {
+		if definition(node).is_some() {
+			definitions.push(node.clone());
+		}
+	});
+	definitions.iter().find_map(|statement| {
 		let (object, property, _, _) = definition(statement).filter(|(object, ..)| values.contains(object))?;
 		let reason = format!("{object} is a value, so {object}.{property} := … defines nothing: write {object}.{property} = … to set its field");
 		Some(Diagnostic::at(statement, reason).into_error())

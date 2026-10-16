@@ -30,6 +30,10 @@ fn a_property_of_a_value_or_an_instance_setter_is_refused_loudly() {
 	assert!(of_value.contains("p is a value") && of_value.contains("write p.x = …"), "{of_value}");
 	let of_field = format!("{:?}", eval("class Point{x: int; y: int}\nPoint.x := 99\nPoint(1, 2).x"));
 	assert!(of_field.contains("Point.x is a field of Point"), "{of_field}");
+	for program in ["f(p) := { p.x := 5; p }\nf({x: 1})", "for p in [{x: 1}] { p.x := 5 }"] {
+		let of_parameter = format!("{:?}", eval(program));
+		assert!(of_parameter.contains("p is a value"), "{of_parameter}");
+	}
 }
 
 // card point-sum: a property of a class's instances, `it` the instance
