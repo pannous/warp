@@ -50,7 +50,7 @@ fn a_hand_wrapped_comment_is_the_whole_doc_of_its_word() {
 	let mark = markdown_entry(&page, "route_part_mark(part: any)");
 	assert!(mark.contains("\"?\" at most once") && mark.ends_with("\"\" exactly once"), "{mark}");
 	let units = markdown_entry(&page, "unit_definitions");
-	assert!(units.contains("The dimensions and units warp knows") && units.ends_with("in conversions"), "{units}");
+	assert!(units.contains("The quantities and units warp knows") && units.ends_with("in conversions"), "{units}");
 	let signal = markdown_entry(&page, "play_signal(signal, seconds)");
 	assert!(signal.contains("a signal computed") && signal.ends_with("the last is queued"), "{signal}");
 	let square = markdown_entry(&page, "square(x)");

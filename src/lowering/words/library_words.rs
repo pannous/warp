@@ -200,10 +200,10 @@ pub fn shallow_flag(argument: &Node) -> Node {
 
 /// Source of the words expanded here, with their number of arguments; `word_argument` is the receiver, `hidden_value` a
 /// temporary that holds it once (each `hidden_x` becomes the temporary `word·x·3`), `word_argument_2` … the arguments after the receiver. The words written in warp
-/// (first, last, round_to, replace, is_digit …) are lib/prelude.warp's; these three the emitter dispatches on
-const EXPANDED_WORDS: [(&str, usize, &str); 3] = [
-	// Python's `list(x)`: the list itself, a text's characters
-	(LIST_WORD, 1, "hidden_value as list"),
+/// (first, last, as_list, round_to, replace, is_digit …) are lib/prelude.warp's. These two stay: sum's list_sum is the
+/// hook of the typed-list fast path (typed_list_finding.rs), and `x!` as a prelude call was 12% slower in a loop
+/// (card sum-list: the engine does not inline calls)
+const EXPANDED_WORDS: [(&str, usize, &str); 2] = [
 	(
 		SUM_WORD,
 		1,
@@ -230,9 +230,16 @@ pub(crate) const CONVERSION_METHODS: [&str; 4] = ["string", "str", "int", "float
 const LIST_CONSTRUCTORS: [&str; 4] = ["listOf", "mutableListOf", "arrayOf", "arrayListOf"];
 /// Words that mean another word with that many arguments (receiver included): `round(x, 3)`, `x.round(3)` is x rounded
 /// to 3 digits after the point (`round(x)` stays the builtin); `xs.first(3)`, `first 3 of xs` the first 3 items,
-/// `last(xs, 2)` the last 2 (lib/prelude.warp)
-const ARITY_VARIANTS: [(&str, usize, &str); 3] =
-	[("round", 2, "round_to"), ("first", 2, "first_items"), ("last", 2, "last_items")];
+/// `last(xs, 2)` the last 2; Python's `list(x)` as_list(x), its own word: the prelude's `list` would rename the type
+/// `x as list` too (lib/prelude.warp)
+const ARITY_VARIANTS: [(&str, usize, &str); 5] = [
+	("round", 2, "round_to"),
+	("first", 2, "first_items"),
+	("last", 2, "last_items"),
+	(LIST_WORD, 1, AS_LIST),
+	("tuple", 1, AS_LIST),
+];
+const AS_LIST: &str = "as_list";
 /// Methods a later pass lowers to prelude words: `x.pop(k)` (and `delete x[k]`, mutation::lower_deletes) to popped_item
 /// and popped_rest, `x.clear()` to cleared (list_mutations removed_key, cleared_collection)
 const POPPED_WORDS: &[&str] = &["popped_item", "popped_rest"];
