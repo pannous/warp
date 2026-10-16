@@ -774,6 +774,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   lines in lib/math.warp with a "prefer ->" hint (→ ⟶ ➜ … for ->, ⇒ ⟹ for =>, ← ⟵ ⬅ for <-, ⬆ ⇧ for ↑, ⬇ ⇩ for ↓).
   ⇔ ⟺ ↔ ⇑ ⇓ get no built-in meaning for now; an example defines one, e.g.
   `infix operator ⇔(a: bool, b: bool) := a == b`.
+- fuel-metering (2026-10-16, user; card fuel-metering): runaway loops are stopped by the epoch timer with a time
+  limit by default (about 1–5% overhead, stops at a slightly different step each run). Fuel, the exact step budget
+  that cost 4.4× on calls (40M calls: 218 ms against 49 ms), runs only on request: `use fuel`, the CLI word
+  `warp fuel N app.warp`, and tests that pin a step count.
 - ready-queue (2026-10-16, user via the boss and the supervisor): the board's Ready column is the merge queue. A
   worker runs its targeted tests, pushes the finished branch, makes sure it merges cleanly into origin/main, and
   hands it off with `todo ready <card> [branch]` (tip read from git); only the re-run after a clean update is dropped. `todo ready` refuses
@@ -901,3 +905,8 @@ P103, P104 → no-executable-by-default + build-should. P110 → P163. P118, P21
 D1 → P6 + brace-hole. D7/#33 → wiki/charged.md. D8 → approx-zero. D9, D12, D13 asks → got-it rule + list-sign. D14 →
 in-bool. exact-default → exact-decimals. #40 → list-sign. P85, P87, P93, P95, P96, P98, P99, P101, P137, P144, P181,
 P53, P59, P79, P80, P9, P10, P16, P19, #14b–d, #15–20, the Original questions 1–41: test edits and housekeeping done.
+- fix-forward (2026-10-16, user): merges don't wait on a few failing tests. The Integrator may ignore up to 10
+  failing tests per batch as `#[ignore = "fixnow: <card>: <reason>"]`, push, and card each for the breaking
+  branch's owner, who fixes forward and drops the ignore. Backtracking only above 10 or when forward fixing isn't
+  possible. A fixnow test pinning an old edge case may be reconsidered through the Interviewer instead of
+  restored. Rules: notes/roles.md "Fix forward".

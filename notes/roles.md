@@ -74,6 +74,14 @@ The only session that runs the full suite and the only one that pushes code to m
   both sides bounces to the owner), runs `./test.sh` with the integration build tweak, and pushes to main only at 0
   failed and no drop in the test count, then `todo done <card> <commit>` (Ready → Done). Otherwise the card bounces:
   `todo move <card> Now` + `todo note` with the failure (and the supervisor hears if it's a decision).
+- Fix forward, don't hold the batch (user, 2026-10-16): when up to 10 tests fail after a merge, the Integrator marks
+  each one `#[ignore = "fixnow: <card>: <first panic line>"]` in its own commit and pushes the batch; for each test
+  it adds a `fixnow-<test>` card in Now for the owner of the branch that broke it (or the area worker). The owner
+  fixes forward and drops the ignore; `grep -rn 'fixnow' tests/` lists what's open. When the ignored test pins an
+  old edge case the new behaviour arguably improves on, the owner doesn't force the old one back: the question
+  goes to warp-interviewer (keep the old case, or change the test to the new one), the ignore stays until answered. Only more than 10 failures,
+  or a failure nobody can fix forward (wrong output across a whole feature, a crash at start), leads to real
+  backtracking: the branch leaves the batch and bounces. The test-count check counts fixnow ignores as present.
 - Batches of at most ~8 Ready cards per run; wide refactors and carrier branches land alone and first. Runs a
   worker's targeted check on request.
 - Express (user, 2026-10-10: "faster results for an agent"): a card readied with `--express` (the user asked for that
