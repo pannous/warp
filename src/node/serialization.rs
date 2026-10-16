@@ -145,6 +145,9 @@ impl Node {
 				if let Some(literal) = self.source_literal() {
 					return literal.to_string();
 				}
+				if let Some(name) = self.type_value_name() {
+					return format!("class {name}");
+				}
 				let own_prefix = if attributes { self.own_attribute_prefix() } else { String::new() };
 				let inner = format!("{own_prefix}{}", node.serialize_with(meta, attributes));
 				if meta {

@@ -9,8 +9,8 @@ fn shown(code: &str) -> String {
 
 #[test]
 fn every_number_type_word_types_a_literal() {
-	assert_eq!(shown("type(3:long)"), "int");
-	assert_eq!(shown("type(0.5:rational)"), "rational");
+	assert_eq!(shown("type(3:long)"), "class int");
+	assert_eq!(shown("type(0.5:rational)"), "class rational");
 	assert_eq!(shown("(0.5:rational) + 1/3"), "5/6");
 	is!("2:float64 / 4", 0.5);
 	is!("1.5:int", 1);

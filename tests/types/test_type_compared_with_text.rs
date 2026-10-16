@@ -7,7 +7,7 @@ use warp::normalize::capture_hints;
 fn type_compared_with_text_stays_no() {
 	is!("x=3; type(x) == \"int\"", 0);
 	is!("x=3; type(x) == int", 1);
-	is!("x=3; \"\" + type(x) == \"int\"", 1);
+	is!("x=3; \"\" + type(x) == \"int\"", 0); // a type joins as `class int` (decision type-text)
 }
 
 #[test]

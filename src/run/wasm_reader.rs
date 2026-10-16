@@ -399,6 +399,9 @@ fn struct_node<T>(
 		t if t == Kind::Float as u8 => Node::Number(Number::Float(boxed_f64(store, &data).unwrap_or(0.0))),
 		t if t == Kind::Codepoint as u8 => char_node(store, &data),
 		t if t == Kind::Text as u8 => Node::Text(text_of(store, &data, memory)),
+		t if t == Kind::Symbol as u8 && kind & crate::type_kinds::TYPE_VALUE_MARK != 0 => {
+			Node::type_value(&text_of(store, &data, memory))
+		}
 		t if t == Kind::Symbol as u8 => Node::Symbol(text_of(store, &data, memory)),
 		t if t == Kind::Error as u8 => Node::Error(Box::new(Node::Text(text_of(store, &data, memory)))),
 		t if t == Kind::Key as u8 => {

@@ -42,6 +42,8 @@ const SOURCE_LITERAL: &str = "literal";
 
 /// The key of the Meta layer holding a comment (with_comment)
 pub const COMMENT_KEY: &str = "comment";
+/// The meta key of a type value read back from a run (card type-values): `int` shown as `class int` (decision type-print)
+pub const TYPE_VALUE_KEY: &str = "type value";
 
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Node {
@@ -401,6 +403,20 @@ impl Node {
 	pub fn with_comment(self, comment: String) -> Self {
 		let comment = Node::key(COMMENT_KEY, Node::text(&comment));
 		Meta { node: Box::new(self), data: Box::new(comment) }
+	}
+
+	/// The type value of the type named `name`: its symbol, shown as `class name` (TYPE_VALUE_KEY)
+	pub fn type_value(name: &str) -> Self {
+		Meta { node: Box::new(Symbol(name.to_string())), data: Box::new(Node::key(TYPE_VALUE_KEY, Node::True)) }
+	}
+
+	/// The name of a type value (type_value), None for anything else
+	pub fn type_value_name(&self) -> Option<&str> {
+		match self {
+			Meta { node, data } if matches!(data.as_ref(), Key(key, _, _) if key.name() == TYPE_VALUE_KEY) => node.symbol_name(),
+			Meta { node, .. } => node.type_value_name(),
+			_ => None,
+		}
 	}
 
 	/// Annotate with `@name(value)`; the attribute key keeps its `@` so it never mixes with comments or line info
