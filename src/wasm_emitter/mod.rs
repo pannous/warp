@@ -176,8 +176,8 @@ pub struct WasmGcEmitter {
 	text_cursor_global: Option<u32>,
 	/// the indexes of maps held as cons lists: the first of their globals (map_index.rs emit_map_index_globals)
 	map_index_global: Option<u32>,
-	returns_node: bool, // the function being compiled returns a Node (main does), so `return x` returns x's Node
-	returns_float: bool, // the function being compiled returns an f64, so `return 7` returns 7.0
+	returns_number: bool, // the function being compiled returns an i64 or f64; main returns a Node, so `return x` gives x's Node
+	returns_float: bool,  // the function being compiled returns an f64, so `return 7` returns 7.0
 	returned_tuple: Vec<Kind>, // the value kinds of the tuple function being compiled (`return a, b`), else empty
 	tuple_packers: HashMap<String, u32>, // tuple function → its `f$list` packer (tuple_emitter.rs)
 	text_heap_global: Option<u32>, // bump pointer for texts built at runtime, in memory grown past the string table
@@ -186,8 +186,8 @@ pub struct WasmGcEmitter {
 	discovered_needs: std::collections::HashSet<Need>,
 	/// The needs this emitter was rerun with: one still missing after the rerun cannot be provided, another rerun would loop
 	inherited_needs: std::collections::HashSet<Need>,
-	/// The highest operator code list_text writes as written, from the needs (any code above it is written `:`)
-	written_operator_bound: i64,
+	/// The highest operator code the needs ask list_text to write as written (see written_operator_bound)
+	highest_key_operator: i64,
 	/// The program quotes a tag (`data point{x:1}`), which list_text writes as an instance: only then does it check for one
 	writes_tags: bool,
 	/// The program parses code at run time (`parse(t)`): only then does a structure joining a text become its literal
@@ -232,14 +232,14 @@ pub struct WasmGcEmitter {
 }
 
 impl WasmGcEmitter {
-	/// An emitter at the start of main, which returns a Node and whose list_text writes no operator but `:`; the
-	/// derived Default fills in the rest
+	/// An emitter at the start of main, which returns a Node and whose list_text writes no operator but `:`
 	pub fn new() -> Self {
-		WasmGcEmitter {
-			returns_node: true,
-			written_operator_bound: crate::operators::op_to_code(&crate::operators::Op::Colon),
-			..Default::default()
-		}
+		Self::default()
+	}
+
+	/// The highest operator code list_text writes as written: `:` at least, any code above the bound is written `:`
+	fn written_operator_bound(&self) -> i64 {
+		self.highest_key_operator.max(crate::operators::op_to_code(&crate::operators::Op::Colon))
 	}
 
 	/// Enable/disable emitting Kind globals for documentation
@@ -533,7 +533,7 @@ impl WasmGcEmitter {
 		if node.mentions_any(&[crate::host::PARSE_CODE]) {
 			self.ctx.required_functions.insert(reflection::library_ops::LIST_TEXT);
 			self.parses_code = true;
-			self.written_operator_bound = (crate::operators::OP_CODES.len() - 1) as i64;
+			self.highest_key_operator = (crate::operators::OP_CODES.len() - 1) as i64;
 		}
 		if crate::analyzer::makes_floats(&self.ctx, node) {
 			self.ctx.required_functions.insert(numbers::float_text::FLOAT_TEXT);
@@ -549,9 +549,8 @@ impl WasmGcEmitter {
 				None
 			}
 		});
-		self.written_operator_bound = key_operators.fold(self.written_operator_bound, i64::max);
+		self.highest_key_operator = key_operators.fold(self.highest_key_operator, i64::max);
 		self.writes_tags = reflection::library_ops::mentions_quoted_tag(node);
-		host::component_adapters::add_dependencies(&mut self.ctx.required_functions);
 		let dependencies: Vec<_> =
 			runtime_dependencies::every_dependency().into_iter().chain(self.function_text_dependency()).collect();
 		runtime_dependencies::require_dependencies(&mut self.ctx.required_functions, &dependencies);
@@ -591,7 +590,7 @@ impl WasmGcEmitter {
 			Need::Function(name) => self.ctx.required_functions.contains(name),
 			Need::MathImport(key) => self.ctx.ffi_imports.contains_key(*key),
 			Need::KeyOperator(code) => {
-				*code <= self.written_operator_bound
+				*code <= self.written_operator_bound()
 					|| !self.ctx.required_functions.contains(reflection::library_ops::LIST_TEXT)
 			}
 		}
