@@ -122,7 +122,7 @@ Interviewer. Prompt: notes/agents/refactorer.md.
 ## Workers
 - One task, one branch, one worktree: `cowtree add -b <name> /Volumes/Worktrees/<name> origin/main`, on the Worktrees
   volume (user 2026-10-16, notes/churn_volume.md: Spotlight off, no fseventsd log, cowtree clones the donor
-  /Volumes/Worktrees/base, which nobody removes). Outside the repo, so grep/IDE/cargo of the main checkout never see it.
+  /Volumes/Worktrees/warp, which nobody removes). Outside the repo, so grep/IDE/cargo of the main checkout never see it.
   Older worktrees in /Users/me/dev/angles/warp.worktrees.noindex stay there until they retire.
   Uncommitted build tweak in it: `version = "0.1.1-<name>"` (notes/build_speed.md).
 - Small changes on main (user, 2026-10-12, "new very important rule": "Agents can work on the main branch without

@@ -8,7 +8,7 @@
 #   2. local and remote branches origin/main holds the same way, with no worktree checked out and a tip older than
 #      IDLE_HOURS
 #   3. loose files in the worktrees folder (logs, patches, dumps) older than LEFTOVER_DAYS: moved to data/
-# Detached worktrees (integrate, main-binary …) are never removed; BASE, the donor cowtree clones new worktrees from on
+# Detached worktrees (integrate, main-binary …) are never removed; DONOR, which cowtree clones new worktrees from on
 # the Worktrees volume (notes/churn_volume.md), is moved to origin/main when clean. Skips for untracked files are listed.
 #   prune-worktrees.sh            prune, print what it did
 #   prune-worktrees.sh --dry-run  only print what it would do
@@ -16,7 +16,7 @@
 WARP=/Users/me/dev/angles/warp
 # new worktrees go to the Worktrees volume (user 2026-10-16, card new-worktrees); the Data volume's until they retire
 WORKTREE_ROOTS=(/Volumes/Worktrees /Users/me/dev/angles/warp.worktrees.noindex)
-BASE=/Volumes/Worktrees/base
+DONOR=/Volumes/Worktrees/warp  # named after the project: the volume may hold other projects
 LEFTOVERS=$WARP/data/worktree-leftovers
 TWEAK_FILES=(Cargo.toml Cargo.lock crates/warp-runtime/Cargo.toml)
 IDLE_HOURS=${IDLE_HOURS:-6}
@@ -71,8 +71,8 @@ for remote in $($git for-each-ref --format='%(refname:lstrip=3)' refs/remotes/or
 done
 
 # the donor follows main, so new clones share most files with it
-if [[ -d $BASE && -z $(git -C $BASE status --porcelain --untracked-files=no 2>/dev/null) ]]; then
-  [[ $(git -C $BASE rev-parse HEAD) == $($git rev-parse origin/main) ]] || act git -C $BASE checkout --quiet --detach origin/main
+if [[ -d $DONOR && -z $(git -C $DONOR status --porcelain --untracked-files=no 2>/dev/null) ]]; then
+  [[ $(git -C $DONOR rev-parse HEAD) == $($git rev-parse origin/main) ]] || act git -C $DONOR checkout --quiet --detach origin/main
 fi
 
 mkdir -p $LEFTOVERS
