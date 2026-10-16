@@ -4,8 +4,9 @@ How close warp comes to running Rust as written. Probe: `probes/rust_reading/for
 forms, each with its expected value (2026-10-13, branch hint-cards).
 
 ## Works (16 of 37)
+## Works (15 of 37)
 `let`, `let mut`, `let x: i32 = 3`, `if c { a } else { b }`, `match n { 1 => …, _ => … }` (literal arms), `for i in 0..5`,
-`while`, `fn square(x: i32) -> i32 { x * x }` (with or without `return`; a function named like a type word, `fn double`,
+`1..=5` (in `for`, match arms and as a value), `while`, `fn square(x: i32) -> i32 { x * x }` (with or without `return`; a function named like a type word, `fn double`,
 is refused by decision P20), closures `|a, b| a + b`, `3.7 as i32`, tuples `t.1`, shadowing `let x = x * 2`, `//` and `///` comments,
 generic functions `fn id<T>(x: T) -> T`, `const N: i32 = 10`.
 
@@ -26,13 +27,13 @@ names its warp form.
 5. Option and control (card rust-option): `Some(v)`/`None`, `if let Some(v) = o`, `?`, `.unwrap()`, and `loop { … break }`.
 6. References (card rust-refs, done): `&x`, `&mut x`, `&&x`, `&5`, `*r`, `**r`, `*(&x)` read as the value itself. A `*name` stays a star (rest or spread) after a comma or an opening bracket, and at a statement start before `,` or `=` (src/warp_parser/definitions/functions.rs starts_rust_reference).
 7. Generics `<T>` in fn and struct type parameters (card rust-generics).
+6. References (card rust-refs): `&x` and `*r` read as the value itself (`*r` stays the symbol).
 
 Warp forms the gaps map onto:
 | card | Rust | warp (canonical) |
 |---|---|---|
 | (works) | `fn square(x: i32) -> i32 { x * x }` | `square(x:int) := x * x` |
 | rust-macros | `println!("{}", x)`, `format!("a={}", 1)`, `vec![1, 2, 3]` | `print "\(x)"`, `"a=\(1)"`, `[1 2 3]` |
-| rust-inclusive-range | `1..=5` | `1…5`, `1 to 5` |
 | rust-items | `struct P { x: i32 }`, `impl P { fn sum(&self) … }`, `impl T for S` | `class P { x:int; sum() := x + y }`, `class S {…} is T` |
 | rust-paths | `C::Red`, `String::from("hi")`, `HashMap::new()` | `C.Red`, `"hi"`, `{}` |
 | rust-option | `Some(v)`/`None`, `if let Some(v) = o`, `o.unwrap_or(0)` | the value / `ø`, `if o {…}`, `o ?? 0` |
