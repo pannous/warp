@@ -73,6 +73,9 @@ pub(crate) fn show_hint(
 		return false;
 	}
 	let position = compile_context::read(|context| context.hint_position.clone());
+	if position.file.as_deref().is_some_and(crate::modules::is_std_source) {
+		return false;
+	}
 	let hint = crate::errors::diagnostic::Diagnostic {
 		message: reason.to_string(),
 		line: position.line,
