@@ -16,7 +16,7 @@ fn fresh_cache(name: &str) -> PathBuf {
 }
 
 fn main_result(engine: &wasmtime::Engine, module: &Module) -> i64 {
-	let mut store = warp::util::fueled_store(engine, ());
+	let mut store = warp::util::limited_store(engine, ());
 	let instance = Linker::new(engine).instantiate(&mut store, module).unwrap();
 	instance.get_typed_func::<(), i64>(&mut store, "main").unwrap().call(&mut store, ()).unwrap()
 }

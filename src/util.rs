@@ -90,10 +90,6 @@ pub fn limited_store<T: 'static>(engine: &Engine, data: T) -> Store<T> {
 	warp_runtime::engine::limited_store(engine, data, fuel_budget(), time_limit())
 }
 
-/// limited_store under the name of the time when every run counted fuel
-#[cfg(feature = "native")]
-pub use limited_store as fueled_store;
-
 /// The body at `url`, empty (and reported on stderr) when the download fails
 #[cfg(feature = "native")]
 pub fn fetch(url: &str) -> String {
