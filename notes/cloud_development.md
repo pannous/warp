@@ -250,5 +250,8 @@ branch's tests there:
 - A session keeps the model it was created with: `--model` on a follow-up message doesn't switch it, a `/model haiku`
   message does (0 turns). Every reused session gets `/model` before its job; early pool sessions had run on Opus.
 - A run that can't reach its tests (merge conflict, missing tip) pushes a red result naming why, and the test run is
-  killed after 40 min with the tests that never finished named (a hang held batch-3's session).
+  killed after 40 min, or once no test finished for 15 min (STALL_SECONDS), with the tests that never finished named.
+  batch-3's --full run hung 85 min in parser::test_self_parser::the_listed_sources_parse_as_in_rust at 222% CPU; the
+  same test alone on main took 227 s in the cloud (131–150 s on the Mac), so it hangs only inside the full run.
+  Killing cargo by hand (`pkill cargo`) left the test binary running: the watchdog kills timeout's process group.
 - The one Linux compiler warning (CLIENT unused in src/sound/midi.rs) is fixed on branch midi-client-warning (Ready).
