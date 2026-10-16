@@ -19,7 +19,7 @@ print await posts
 
 # a block runs as a task too; the program waits for its go blocks before it ends
 go {
-	sleep(100ms)
+	sleep(50ms)
 	print "from a go block"
 }
 
