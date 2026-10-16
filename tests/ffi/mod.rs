@@ -33,6 +33,7 @@ mod test_ffi_warning_once;
 mod test_foreign_bools; // card booleans-foreign
 mod test_foreign_handles;
 mod test_foreign_js;
+mod test_foreign_lines; // decision foreign-signature, card standalone-math-units
 mod test_foreign_member_assignment;
 mod test_foreign_operators;
 #[cfg(feature = "native")] // a python3 child process: not in the browser build

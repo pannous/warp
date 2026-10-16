@@ -1,6 +1,7 @@
 //! Looking ahead: what can start an atom, operators ahead
 
 use super::*;
+use crate::operators::AliasPosition;
 
 /// After these a glued `:name` is an explicit symbol: `[:a`, `(:a`, `f(x, :a)`, `x = :a`
 const EXPLICIT_SYMBOL_STARTS_AFTER: [char; 5] = ['(', '[', '{', ',', '='];
@@ -78,6 +79,9 @@ impl WarpParser {
 		if let Some(length) = self.down_to_length() {
 			return Some((Op::To, length));
 		}
+		if let Some(found) = self.alias_here(AliasPosition::Infix) {
+			return Some(found);
+		}
 		LONGEST_SPELLINGS_FIRST
 			.iter()
 			.filter(|(spelling, _)| self.spelled_here(spelling))
@@ -113,6 +117,18 @@ impl WarpParser {
 			.iter()
 			.rposition(|ch| !ch.is_whitespace())
 			.is_some_and(|last| before[line_start + last] == '?')
+	}
+
+	/// An alias the program declares (`operator ⊕ := +`), or for a prefix operator one of lib/math.warp (`prefix operator
+	/// √ := sqrt`); lib/math.warp's infix aliases are spellings of the table (operators::all_spellings)
+	fn alias_here(&self, position: AliasPosition) -> Option<(Op, usize)> {
+		let math = crate::operators::math_aliases().iter().filter(|_| position == AliasPosition::Prefix);
+		self.source_aliases
+			.iter()
+			.chain(math)
+			.filter(|alias| alias.position == position && self.spelled_here(&alias.spelling))
+			.max_by_key(|alias| alias.spelling.chars().count())
+			.map(|alias| (alias.op, alias.spelling.chars().count()))
 	}
 
 	/// The spelling starts here; a word ends here too: `and` but not `android`, `plus a` but not the call `plus(a, b)`
@@ -221,6 +237,9 @@ impl WarpParser {
 		if self.matches_keyword("if") {
 			return Some((Op::If, 2));
 		}
+		if let Some(found) = self.alias_here(AliasPosition::Prefix) {
+			return Some(found);
+		}
 
 		let (c1, c2, c3) = (self.current_char(), self.peek_char(1), self.peek_char(2));
 		let variable_follows = c3.is_alphabetic() || c3 == '_';
@@ -234,8 +253,7 @@ impl WarpParser {
 			'-' => Some((Op::Neg, 1)),
 			dash if glyph_operator(dash) == Some(Op::Sub) => Some((Op::Neg, 1)),
 			'!' | '¬' => Some((Op::Not, 1)),
-			'√' | FOURTH_ROOT => Some((Op::Sqrt, 1)), // ∜x is √√x (expressions.rs)
-			'∛' => Some((Op::Cbrt, 1)),
+			FOURTH_ROOT => Some((Op::Sqrt, 1)), // ∜x is √√x (expressions.rs)
 			'‖' => Some((Op::Abs, 1)),
 			'#' => self.css_color_length().is_none().then_some((Op::Hash, 1)), // prefix # means count/length
 			// `> 100 => "big"` (C#'s relational pattern): a comparison without its left side, a match arm compares the

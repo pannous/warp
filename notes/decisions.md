@@ -701,6 +701,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   keeps working for headers. Builtin math words use the same line with warp as the library (use-reflection
   default): `floor(x: number): int from warp`, `min(a: number, b: number, more...): number from warp`; the Rust
   signature table goes. A bare `floor` is warp's; C's float floor only qualified (`m.floor`).
+  keeps working for headers. Open (card foreign-line): a program's own line still takes the header's signature;
+  it should register the written one, and a disagreeing header be an error.
 - P169 `use math` loads a new math module with beautiful names ("we need to educate people about beautiful names");
   raw C math is `use cmath`; math may forward to cmath meanwhile.
 - P182 Set, Stack, Queue, Deque, Counter only in `collections`. P183 std modules are backed only by warp, host words or

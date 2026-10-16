@@ -24,7 +24,7 @@ pub(crate) fn call_arity_error(node: &Node, context: &Context) -> Option<Diagnos
 		}
 		Node::List(items, bracket, _) => {
 			if let (Bracket::Round, Some(Node::Symbol(name))) = (bracket, items.first().map(Node::drop_meta)) {
-				let libm = crate::ffi::LIBM_F64_FUNCTIONS
+				let libm = crate::ffi::libm_f64_functions()
 					.iter()
 					.filter(|(function, _)| function == name)
 					.map(|(_, arity)| *arity);

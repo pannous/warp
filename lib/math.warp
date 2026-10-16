@@ -1,6 +1,60 @@
 // The standard library module math (notes/stdlib.md): `use math`, together with the C library libm.
 // Whole-number words declare int parameters, which their signatures show; the others take any number
 
+// The math spellings of operators (decision operator-alias), every program reads them: each keeps the precedence
+// of the operator it spells
+operator × := *
+operator · := *
+operator ⋅ := *
+operator ÷ := /
+operator − := -
+operator ≤ := <=
+operator ≥ := >=
+operator ≠ := !=
+operator ≟ := ==
+operator ≡ := ==
+operator ﹦ := ==
+operator ≈ := approximately
+operator ⋍ := approximately
+operator ∧ := and
+operator ⋀ := and
+operator ∨ := or
+operator ⋁ := or
+operator ⊻ := xor
+operator ± := +-
+prefix operator √ := sqrt
+prefix operator ∛ := cbrt
+
+// The C library's math functions (libm), f64 each: the host links them (src/ffi reads these lines, decision
+// foreign-signature), the browser takes them from Math. Every program calls them without `use math`
+fmin(a: float, b: float): float from 'm'
+fmax(a: float, b: float): float from 'm'
+fabs(x: float): float from 'm'
+floor(x: float): float from 'm'
+ceil(x: float): float from 'm'
+round(x: float): float from 'm'
+sqrt(x: float): float from 'm'
+sin(x: float): float from 'm'
+cos(x: float): float from 'm'
+tan(x: float): float from 'm'
+fmod(a: float, b: float): float from 'm'
+pow(base: float, exponent: float): float from 'm'
+exp(x: float): float from 'm'
+log(x: float): float from 'm'
+log10(x: float): float from 'm'
+asin(x: float): float from 'm'
+acos(x: float): float from 'm'
+atan(x: float): float from 'm'
+atan2(y: float, x: float): float from 'm'
+sinh(x: float): float from 'm'
+cosh(x: float): float from 'm'
+tanh(x: float): float from 'm'
+hypot(a: float, b: float): float from 'm'
+log2(x: float): float from 'm'
+trunc(x: float): float from 'm'
+log1p(x: float): float from 'm'
+expm1(x: float): float from 'm'
+
 gcd(a: int, b: int) := if b == 0 then a else gcd(b, a % b)
 lcm(a: int, b: int) := a / gcd(a, b) * b
 clamp(x, low, high) := if x < low then low else if x > high then high else x
