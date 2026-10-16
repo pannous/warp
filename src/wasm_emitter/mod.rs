@@ -263,9 +263,13 @@ impl WasmGcEmitter {
 
 	/// Emit user-defined struct types from TypeRegistry
 	pub fn emit_user_types(&mut self, registry: &TypeRegistry) {
-		self.type_manager.emit_user_types(registry);
-		// Sync user type indices back to context
-		for type_def in registry.types() {
+		self.emit_struct_types(registry.types());
+	}
+
+	/// The struct types of the declared types, their indices noted in the context
+	fn emit_struct_types(&mut self, types: &[TypeDef]) {
+		for type_def in types {
+			self.type_manager.emit_single_user_type(type_def);
 			if let Some(idx) = self.type_manager.get_user_type_idx(&type_def.name) {
 				self.ctx.user_type_indices.insert(type_def.name.clone(), idx);
 			}
@@ -302,13 +306,10 @@ impl WasmGcEmitter {
 
 	/// Get function call index by name
 	fn func_index(&self, name: &str) -> u32 {
-		// First check user functions
-		if let Some(user_fn) = self.ctx.user_functions.get(name) {
-			if let Some(idx) = user_fn.func_index {
-				return idx;
-			}
+		if let Some(idx) = self.ctx.user_functions.get(name).and_then(|user_fn| user_fn.func_index) {
+			return idx;
 		}
-		// Then check registry (builtins/imports)
+		// then the builtins and imports
 		self.ctx
 			.func_registry
 			.get(name)
@@ -391,26 +392,20 @@ impl WasmGcEmitter {
 		let node = node.drop_meta();
 		match node {
 			// a local or parameter, then a global of that name: `g(x) := x as list` never takes a global x's kind
-			Node::Symbol(name) => {
-				if let Some(local) = self.scope.lookup(name) {
-					return local.kind;
-				}
-				if let Some(&(_, kind)) = self.ctx.user_globals.get(name) {
-					return kind;
-				}
-				Kind::Symbol
-			}
+			Node::Symbol(name) => self
+				.scope
+				.lookup(name)
+				.map(|local| local.kind)
+				.or_else(|| self.ctx.user_globals.get(name).map(|&(_, kind)| kind))
+				.unwrap_or(Kind::Symbol),
 			// Call of a user function, also braceless: `f 3`
 			Node::List(items, _, _)
 				if items.len() >= 2
-					&& matches!(items[0].drop_meta(), Node::Symbol(name) if self.ctx.user_functions.contains_key(name)) =>
+					&& let Some(name) =
+						items[0].symbol_name().filter(|name| self.ctx.user_functions.contains_key(*name)) =>
 			{
-				let Node::Symbol(name) = items[0].drop_meta() else { unreachable!() };
 				if let Some(arity) = crate::closures::closure_call_arity(name) {
-					let callee = items.get(1).and_then(|argument| match argument.drop_meta() {
-						Node::Symbol(variable) => Some(variable.as_str()),
-						_ => None,
-					});
+					let callee = items.get(1).and_then(Node::symbol_name);
 					let kinds = self.user_function_kinds();
 					return crate::closures::closure_call_site_kind(callee, arity, &self.ctx, &kinds);
 				}
@@ -455,34 +450,15 @@ impl WasmGcEmitter {
 		self.import_manager.emit_imports(&self.config, &mut self.type_manager, &mut self.ctx);
 		self.next_func_idx = self.import_manager.import_count();
 		self.emit_gc_types();
-		// Emit user-defined struct types from type_registry (must come after gc_types, before functions)
-		self.emit_registered_user_types();
+		// the declared types' structs come after the GC types, before the functions
+		self.emit_struct_types(&self.ctx.type_registry.types().to_vec());
 		self.emit_instance_types();
 		if self.config.emit_kind_globals {
 			self.emit_kind_globals();
 		}
 		self.emit_constructors();
-		// Emit constructors for registered user types
-		self.emit_registered_user_type_constructors();
-	}
-
-	/// Emit user types from internal type_registry
-	fn emit_registered_user_types(&mut self) {
-		let types: Vec<TypeDef> = self.ctx.type_registry.types().to_vec();
-		for type_def in &types {
-			self.type_manager.emit_single_user_type(type_def);
-			// Update context with type indices
-			if let Some(idx) = self.type_manager.get_user_type_idx(&type_def.name) {
-				self.ctx.user_type_indices.insert(type_def.name.clone(), idx);
-			}
-		}
-	}
-
-	/// Emit constructors for registered user types
-	fn emit_registered_user_type_constructors(&mut self) {
-		let types: Vec<TypeDef> = self.ctx.type_registry.types().to_vec();
-		for type_def in &types {
-			self.emit_user_type_constructor(type_def);
+		for type_def in self.ctx.type_registry.types().to_vec() {
+			self.emit_user_type_constructor(&type_def);
 		}
 	}
 

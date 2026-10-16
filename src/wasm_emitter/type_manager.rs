@@ -1,6 +1,6 @@
 //! Type management for WASM GC emitter
 
-use crate::type_kinds::{any_heap_type, FieldDef, TypeDef, TypeRegistry};
+use crate::type_kinds::{any_heap_type, FieldDef, TypeDef};
 use std::collections::HashMap;
 use wasm_encoder::*;
 use StorageType::Val;
@@ -205,13 +205,6 @@ impl TypeManager {
 		]);
 		self.ratio_type = self.next_type_idx;
 		self.next_type_idx += 1;
-	}
-
-	/// Emit user-defined struct types from TypeRegistry
-	pub fn emit_user_types(&mut self, registry: &TypeRegistry) {
-		for type_def in registry.types() {
-			self.emit_single_user_type(type_def);
-		}
 	}
 
 	/// Emit a single user-defined struct type
