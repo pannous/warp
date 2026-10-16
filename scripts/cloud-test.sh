@@ -21,7 +21,8 @@ REPO=pannous/warp
 MAIN_CHECKOUT=/Users/me/dev/angles/warp
 RESULTS_PREFIX=cloud-results
 ENVIRONMENTAL_LIST=scripts/cloud-test-environmental.txt
-MAX_PARALLEL_RUNS=3            # cloud sessions at once (they share the account's limits, notes/cloud_development.md)
+CARGO_FLAGS_WITH_VALUE='--test|--features|-F|-p|--package|--bin|--example|--bench|-j|--jobs|--target'   # `--test tests`: the next word is the flag's, not a filter
+MAX_PARALLEL_RUNS=3           # cloud sessions at once (they share the account's limits, notes/cloud_development.md)
 PENDING_HOURS=3                # a launch older than this without a result no longer counts as running
 POLL_SECONDS=60                # GitHub API quota is shared by every session: ls-remote once a minute
 WAIT_HOURS=4
@@ -67,14 +68,18 @@ run_tests_here() {
 		git archive origin/vendor vendor | tar -x
 		source_flags=(--offline --config 'source.crates-io.replace-with="vendored-sources"' --config 'source.vendored-sources.directory="vendor"')
 	fi
-	local test_args=() filters=() past_separator=""
+	local test_args=() filters=() past_separator="" flag_value_next=""
 	if [ "${1:-}" = "--full" ]; then
 		test_args=("${FULL_FLAGS[@]}")
 	else
 		for argument in "$@"; do
 			if [ "$argument" = "--" ]; then past_separator=1
+			elif [ -z "$past_separator" ] && [ -n "$flag_value_next" ]; then test_args+=("$argument"); flag_value_next=""
 			elif [ -n "$past_separator" ] || [[ "$argument" != -* ]]; then filters+=("$argument")
-			else test_args+=("$argument"); fi
+			else
+				test_args+=("$argument")
+				[[ "$argument" =~ ^($CARGO_FLAGS_WITH_VALUE)$ ]] && flag_value_next=1
+			fi
 		done
 	fi
 	export WARP_NO_WINDOW=1 WARP_CRASH_CARDS=0 CARGO_TERM_COLOR=never
