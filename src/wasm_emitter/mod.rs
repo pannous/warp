@@ -668,6 +668,7 @@ impl WasmGcEmitter {
 		} else if !missing.is_empty() {
 			let mut rerun = Self::new();
 			rerun.config = self.config.clone();
+			rerun.ratio_division = self.ratio_division;
 			rerun.discovered_needs = std::mem::take(&mut self.discovered_needs);
 			rerun.inherited_needs = rerun.discovered_needs.clone();
 			crate::normalize::without_hints(|| rerun.emit_for_node(node)); // the first pass already hinted the same program
@@ -1057,7 +1058,8 @@ fn last_statement_items(program: &Node) -> usize {
 pub(crate) fn emit_module(node: &Node) -> Result<CompiledModule, Node> {
 	let (compiled, int_division) = emit_module_with(node, false)?;
 	if int_division && makes_ratios(&compiled.bytes) {
-		return Ok(emit_module_with(node, true)?.0);
+		// the first emission already hinted the same program
+		return Ok(crate::normalize::without_hints(|| emit_module_with(node, true))?.0);
 	}
 	Ok(compiled)
 }

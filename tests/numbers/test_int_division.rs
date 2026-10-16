@@ -24,6 +24,8 @@ fn ratios_keep_their_division() {
 	is!("x = -7.5; x % 2", 0.5);
 	is!("x = 1/2; x % 3", 0.5);
 	is!("x = 1/2; x//1", 0);
+	// draw's hsv takes `h % 360` of a ratio in a module the emitter emits twice for its own needs (samples/visualizer.warp)
+	is!("use draw\ncolors = [hsv(band * 280 / 16, 1, 1) for band in 0..16]\ncolors#4", 4294958848i64);
 }
 
 #[test]
