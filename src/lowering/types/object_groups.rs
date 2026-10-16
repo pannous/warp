@@ -11,11 +11,11 @@ pub fn lower(node: Node) -> Node {
 	let Node::List(items, Bracket::Curly, separator) = node.drop_meta() else {
 		return node;
 	};
-	let regrouped = *separator != Separator::Colon || items.iter().any(is_field_group);
+	let regrouped = *separator != Separator::Comma || items.iter().any(is_field_group);
 	if items.is_empty() || !regrouped || !items.iter().all(|item| is_colon_pair(item) || is_field_group(item)) {
 		return node;
 	}
-	let flat = Node::List(items.iter().flat_map(fields).collect(), Bracket::Curly, Separator::Colon);
+	let flat = Node::List(items.iter().flat_map(fields).collect(), Bracket::Curly, Separator::Comma);
 	match node {
 		Node::Meta { data, .. } => Node::Meta { node: Box::new(flat), data },
 		_ => flat,

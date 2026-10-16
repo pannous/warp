@@ -886,7 +886,7 @@ impl fmt::Display for Bracket {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Separator {
 	Space,     // ' ' - tightest binding
-	Colon,     // ',' Comma
+	Comma,     // ','
 	Semicolon, // ';'
 	Newline,   // '\n'
 	Tab,       // '\t'
@@ -912,7 +912,7 @@ impl Separator {
 	pub fn to_char(&self) -> Option<char> {
 		match self {
 			Separator::Space => Some(' '),
-			Separator::Colon => Some(','),
+			Separator::Comma => Some(','),
 			Separator::Semicolon => Some(';'),
 			Separator::Newline => Some('\n'),
 			Separator::Tab => Some('\t'),
@@ -926,7 +926,7 @@ impl Separator {
 			Separator::Space => 0,
 			// Separator::Tab => 1, //  "a,b,c d,e,f"  == "a b (c d) e f " in csv!
 			// todo Tab depends on context!, also indent vs dedent !!
-			Separator::Colon => 2,
+			Separator::Comma => 2,
 			Separator::Semicolon => 3,
 			Separator::Tab => 4, //  "a;b;c d;e;f"  == "((a b c) (d e f))" in tsv!
 			Separator::Newline => 5,
@@ -940,7 +940,7 @@ impl fmt::Display for Separator {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Separator::Space => write!(f, " "),
-			Separator::Colon => write!(f, ","),
+			Separator::Comma => write!(f, ","),
 			Separator::Semicolon => write!(f, ";"),
 			Separator::Newline => writeln!(f),
 			Separator::Tab => write!(f, "\t"),

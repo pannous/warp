@@ -611,7 +611,7 @@ pub(crate) fn without_case_keyword(case: &Node) -> Node {
 /// The items of a block or parameter list `{a; b}`, `(a, b)`; a block of one statement `{fun sum() = x}` is that one
 pub(crate) fn statements(block: Node) -> Vec<Node> {
 	match block {
-		Node::List(items, _, Separator::Colon | Separator::Semicolon | Separator::Newline) => items,
+		Node::List(items, _, Separator::Comma | Separator::Semicolon | Separator::Newline) => items,
 		Empty => vec![],
 		Node::List(items, Bracket::Curly | Bracket::Round, separator) => {
 			vec![Node::List(items, Bracket::None, separator)]
