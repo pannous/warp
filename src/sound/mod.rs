@@ -30,8 +30,10 @@ use std::time::{Duration, Instant};
 
 /// The samples cross as whole numbers ≥ 0: amplitude + 32768 (lib/sound.warp sample_offset)
 pub const SAMPLE_OFFSET: i64 = 32_768;
-const FOLDER: &str = "warp-sound";
-const FILE_STEM: &str = "sound";
+/// Where the WAVs go below the temp dir, named <FILE_STEM>-<process id>[-<handle>].wav (tests sweep those of ended
+/// processes, tests/common scratch_root)
+pub const FOLDER: &str = "warp-sound";
+pub const FILE_STEM: &str = "sound";
 const PCM_FORMAT: u16 = 1;
 const MONO: u16 = 1;
 const BITS_PER_SAMPLE: u16 = 16;

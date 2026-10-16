@@ -10,7 +10,7 @@ const COLOR_TYPE_AT: usize = 25;
 const TRUECOLOR: u8 = 2;
 
 fn saved_path(name: &str) -> std::path::PathBuf {
-	let folder = std::env::temp_dir().join(format!("warp-save-painting-{}", std::process::id()));
+	let folder = crate::common::scratch_root().join("save-painting");
 	std::fs::create_dir_all(&folder).unwrap();
 	folder.join(format!("{name}.png"))
 }

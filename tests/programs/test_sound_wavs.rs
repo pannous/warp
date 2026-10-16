@@ -20,3 +20,14 @@ fn each_run_writes_wavs_of_its_own() {
 	assert!(first.iter().all(|path| !second.contains(path)), "{first:?} {second:?}");
 	assert!(first.iter().chain(&second).all(|path| std::path::Path::new(path).exists()));
 }
+
+/// card tests-leak: a test's warp writes its temporary files into the test's scratch root, which the next test run sweeps
+#[test]
+fn a_tests_warp_writes_its_wavs_into_the_scratch_root() {
+	let run = crate::common::warp_command().args(["--no-ask", "eval", "play(C4, 5ms)\n7"]).output().unwrap();
+	let errors = String::from_utf8_lossy(&run.stderr).into_owned();
+	let path = errors.lines().find_map(|line| line.split_once(" s: ").map(|(_, path)| path.to_string()));
+	let root = crate::common::scratch_root().canonicalize().unwrap();
+	let written = std::path::Path::new(path.as_deref().unwrap_or_else(|| panic!("no sound line in {errors}")));
+	assert!(written.canonicalize().unwrap().starts_with(&root), "{} is not below {}", written.display(), root.display());
+}
