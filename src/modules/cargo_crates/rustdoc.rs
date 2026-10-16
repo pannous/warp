@@ -16,6 +16,19 @@ impl Conversion {
 	fn same(wit: &str, rust: &str) -> Conversion {
 		Conversion::new(wit, rust, "{}")
 	}
+	/// `list<T>` / `Vec<T>` of `element`'s types
+	fn list_of(element: &Conversion, expression: &str) -> Conversion {
+		Conversion::new(&format!("list<{}>", element.wit), &format!("Vec<{}>", element.rust), expression)
+	}
+	/// `option<T>` / `Option<T>` of `inner`'s types
+	fn option_of(inner: &Conversion, expression: &str) -> Conversion {
+		Conversion::new(&format!("option<{}>", inner.wit), &format!("Option<{}>", inner.rust), expression)
+	}
+	/// `borrow<regex-set>` / `RegexSetBorrow<'_>` of the resource wrapping the Rust type `resource`
+	fn borrowed(resource: &str, expression: &str) -> Option<Conversion> {
+		let kebab = kebab(resource)?;
+		Some(Conversion::new(&format!("borrow<{kebab}>"), &format!("{}Borrow<'_>", camel(&kebab)), expression))
+	}
 	pub(super) fn of(&self, value: &str) -> String {
 		self.expression.replace("{}", value)
 	}
@@ -229,13 +242,11 @@ impl<'a> Reader<'a> {
 			let inner = &reference["type"];
 			let mutable = reference["is_mutable"] == true;
 			if let Some(resource) = self.resource_of(inner, self_type) {
-				let kebab = kebab(&resource)?;
 				let borrow = if mutable { "borrow_mut" } else { "borrow" };
-				return Some(Conversion::new(
-					&format!("borrow<{kebab}>"),
-					&format!("{}Borrow<'_>", camel(&kebab)),
+				return Conversion::borrowed(
+					&resource,
 					&format!("&{}*{{}}.get::<{resource}Resource>().0.{borrow}()", if mutable { "mut " } else { "" }),
-				));
+				);
 			}
 			if mutable {
 				return None;
@@ -246,12 +257,9 @@ impl<'a> Reader<'a> {
 			if let Some(element) = inner.get("slice") {
 				let element = self.element(element)?;
 				return Some(match element.is_identity() {
-					true => {
-						Conversion::new(&format!("list<{}>", element.wit), &format!("Vec<{}>", element.rust), "&{}")
-					}
-					false => Conversion::new(
-						&format!("list<{}>", element.wit),
-						&format!("Vec<{}>", element.rust),
+					true => Conversion::list_of(&element, "&{}"),
+					false => Conversion::list_of(
+						&element,
 						&format!("&{{}}.iter().map(|x| {}).collect::<Vec<_>>()", element.of("x")),
 					),
 				});
@@ -264,12 +272,7 @@ impl<'a> Reader<'a> {
 			return None;
 		}
 		if let Some(resource) = self.resource_of(ty, self_type) {
-			let kebab = kebab(&resource)?;
-			return Some(Conversion::new(
-				&format!("borrow<{kebab}>"),
-				&format!("{}Borrow<'_>", camel(&kebab)),
-				&format!("{{}}.get::<{resource}Resource>().0.borrow().clone()"),
-			));
+			return Conversion::borrowed(&resource, &format!("{{}}.get::<{resource}Resource>().0.borrow().clone()"));
 		}
 		let path = ty.get("resolved_path")?;
 		let arguments = type_arguments(path);
@@ -278,7 +281,7 @@ impl<'a> Reader<'a> {
 			("PathBuf", []) => Some(Conversion::new("string", "String", "{}.into()")),
 			("Vec", [element]) => {
 				let element = self.parameter(element, generics, self_type).filter(Conversion::is_identity)?;
-				Some(Conversion::same(&format!("list<{}>", element.wit), &format!("Vec<{}>", element.rust)))
+				Some(Conversion::list_of(&element, "{}"))
 			}
 			("Option", [inner]) => {
 				let inner = self.parameter(inner, generics, self_type)?;
@@ -287,7 +290,7 @@ impl<'a> Reader<'a> {
 					"&{}" => "{}.as_deref()",
 					_ => return None,
 				};
-				Some(Conversion::new(&format!("option<{}>", inner.wit), &format!("Option<{}>", inner.rust), expression))
+				Some(Conversion::option_of(&inner, expression))
 			}
 			_ => None,
 		}
@@ -327,11 +330,7 @@ impl<'a> Reader<'a> {
 				return Some(Conversion::new("string", "String", "{}.to_string()"));
 			}
 			let element = self.result(inner.get("slice")?, self_type).filter(Conversion::is_identity)?;
-			return Some(Conversion::new(
-				&format!("list<{}>", element.wit),
-				&format!("Vec<{}>", element.rust),
-				"{}.to_vec()",
-			));
+			return Some(Conversion::list_of(&element, "{}.to_vec()"));
 		}
 		if let Some(items) = ty["tuple"].as_array() {
 			let items: Vec<Conversion> = items
@@ -352,30 +351,23 @@ impl<'a> Reader<'a> {
 			}
 			("Cow", [inner]) => {
 				let element = self.result(inner.get("slice")?, self_type).filter(Conversion::is_identity)?;
-				Some(Conversion::new(
-					&format!("list<{}>", element.wit),
-					&format!("Vec<{}>", element.rust),
-					"{}.into_owned()",
-				))
+				Some(Conversion::list_of(&element, "{}.into_owned()"))
 			}
 			("Vec", [element]) => {
 				let element = self.result(element, self_type)?;
-				let list = |expression: &str| {
-					Conversion::new(&format!("list<{}>", element.wit), &format!("Vec<{}>", element.rust), expression)
-				};
 				Some(match element.is_identity() {
-					true => list("{}"),
-					false => list(&format!("{{}}.into_iter().map(|x| {}).collect()", element.of("x"))),
+					true => Conversion::list_of(&element, "{}"),
+					false => Conversion::list_of(
+						&element,
+						&format!("{{}}.into_iter().map(|x| {}).collect()", element.of("x")),
+					),
 				})
 			}
 			("Option", [inner]) => {
 				let inner = self.result(inner, self_type)?;
-				let option = |expression: &str| {
-					Conversion::new(&format!("option<{}>", inner.wit), &format!("Option<{}>", inner.rust), expression)
-				};
 				Some(match inner.is_identity() {
-					true => option("{}"),
-					false => option(&format!("{{}}.map(|x| {})", inner.of("x"))),
+					true => Conversion::option_of(&inner, "{}"),
+					false => Conversion::option_of(&inner, &format!("{{}}.map(|x| {})", inner.of("x"))),
 				})
 			}
 			("Result", [ok, ..]) => {
