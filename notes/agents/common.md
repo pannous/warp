@@ -37,7 +37,8 @@ instead of bending the code.
   asks the user and relays the answer verbatim; that relayed answer is the user's confirmation.
 - Small or non-conflicting changes may go straight onto main in the main checkout, no worktree (user, 2026-10-12,
   "new very important rule"; how: notes/roles.md "Small changes on main"). Everything else:
-- Work in a git worktree outside the repo: `cowtree add -b <branch> /Users/me/dev/angles/warp.worktrees.noindex/<branch> origin/main`,
+- Work in a git worktree outside the repo, on the Worktrees volume: `cowtree add -b <branch> /Volumes/Worktrees/<branch> origin/main`
+  (never touch /Volumes/Worktrees/warp, cowtree's donor; old worktrees in /Users/me/dev/angles/warp.worktrees.noindex stay),
   with the uncommitted build tweak: append `-<branch>` to the current `version = "…"` of both Cargo.toml and
   crates/warp-runtime/Cargo.toml, and to the `version = "…"` of the warp-runtime path dependency in Cargo.toml (a
   pre-release version doesn't satisfy the plain requirement; otherwise its stale warp-runtime replaces other branches'
