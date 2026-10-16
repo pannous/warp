@@ -2,7 +2,7 @@
 use super::*;
 
 /// The standard library's modules written in warp (notes/stdlib.md), embedded so `use list` needs no files
-pub(crate) const STD_MODULES: [(&str, &str); 27] = [
+pub(crate) const STD_MODULES: [(&str, &str); 28] = [
 	(PRELUDE_MODULE, include_str!("../../lib/prelude.warp")),
 	("memory", include_str!("../../lib/memory.warp")),
 	("net", include_str!("../../lib/net.warp")),
@@ -15,6 +15,7 @@ pub(crate) const STD_MODULES: [(&str, &str); 27] = [
 	("shell", include_str!("../../lib/shell.warp")),
 	("list", include_str!("../../lib/list.warp")),
 	("math", include_str!("../../lib/math.warp")),
+	("fast_math", include_str!("../../lib/fast_math.warp")),
 	("text", include_str!("../../lib/text.warp")),
 	("random", include_str!("../../lib/random.warp")),
 	("map", include_str!("../../lib/map.warp")),
