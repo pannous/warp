@@ -197,6 +197,12 @@ pub fn glyph_operator(glyph: char) -> Option<Op> {
 	spelled_operator(glyph.encode_utf8(&mut spelling)).filter(|_| !glyph.is_ascii() && !PLAIN_GLYPHS.contains(glyph))
 }
 
+/// A word that spells an arithmetic operator: `plus`, `minus`, `add`, `subtract`, `div`, `mod` (card add-subtract)
+pub fn is_arithmetic_word(word: &str) -> bool {
+	word.chars().all(char::is_alphabetic)
+		&& spelled_operator(word).is_some_and(|op| op.is_arithmetic() || op == Op::FloorDiv)
+}
+
 /// A word that spells an operator, alone or as the first word of a phrase: `and`, `mod`, `is` (of `is less than`)
 pub fn is_operator_word(word: &str) -> bool {
 	all_spellings()

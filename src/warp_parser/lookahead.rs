@@ -115,14 +115,22 @@ impl WarpParser {
 			.is_some_and(|last| before[line_start + last] == '?')
 	}
 
-	/// The word before the blank here is a keyword, not an operand: `do add 4 to xs`, `return add …`
+	/// The word before the blank here is a keyword, not an operand: `do add 4 to xs`, `return add …`; a variable named
+	/// like an arithmetic word is an operand, `add subtract 1`
 	fn after_keyword(&self) -> bool {
 		let before = &self.chars[..self.pos];
 		let word_end = before.iter().rposition(|ch| !ch.is_whitespace()).map_or(0, |end| end + 1);
 		let word_start =
 			before[..word_end].iter().rposition(|ch| !is_identifier_char(*ch)).map_or(0, |start| start + 1);
 		let word: String = before[word_start..word_end].iter().collect();
-		crate::operators::is_operator_word(&word) || word == crate::words::RETURN_WORD
+		crate::operators::is_operator_word(&word) && !crate::operators::is_arithmetic_word(&word)
+			|| word == crate::words::RETURN_WORD
+	}
+
+	/// One rule for every arithmetic word, `2 plus 3`, `7 div 2`, `2 add 3`: an operator in code only, not a member
+	/// `xs.add`, and a program's own function of that name wins, `def plus(a,b) := …; 2 plus 3`
+	fn arithmetic_word_in_code(&self, spelling: &str) -> bool {
+		!self.options.data_mode && self.prev_char() != '.' && !self.program_functions.contains(spelling)
 	}
 
 	/// The spelling starts here; a word ends here too: `and` but not `android`, `plus a` but not the call `plus(a, b)`
@@ -136,35 +144,32 @@ impl WarpParser {
 	/// The operator a fitting spelling is here, None where the context reads it otherwise
 	fn operator_in_context<'a>(&self, spelling: &'a str, op: Op) -> Option<(Op, &'a str)> {
 		let (after, prev) = (self.peek_char(spelling.chars().count()), self.prev_char());
-		let allowed = match spelling {
-			"else" => !self.else_arm_key(),
-			"if" => !self.condition_has_branch(2),
-			"?." => after.is_alphabetic() || after == '_', // `x?.name`; `x ?.5 : 1` is a ternary
-			// R's `x <- 3` assigns with a note, the cramped `x<-3` is an error (P145, left_arrow_assignment)
-			"<-" => after.is_whitespace() || !prev.is_whitespace(),
-			"<<" | "<" | ">" => !self.options.wit_mode, // angle brackets only delimit type arguments
-			// `list<list<int>>` closes two generics, a shift has an operand behind it
-			">>" => !self.options.wit_mode && self.operand_follows(2),
-			"+-" => after.is_whitespace() && prev.is_whitespace(),
-			":" => !(self.at_explicit_symbol() && self.after_explicit_symbol()), // `[:a :plus :b]`
-			"/" => after != '/',                                                 // Don't treat // as division - it's a comment
-			"//" | "//=" => self.at_floor_division(),                            // `x // note` stays a comment
-			// `div{…}` and `div {…}` are the html tag, and data never computes
-			"div" => !self.options.data_mode && !self.word_opens_block("div"),
-			// `2 add 3` between operands only: `xs.add(…)`, `{add: 7}`, a program's own add keep the word
-			"add" | "subtract" => {
-				!self.options.data_mode
-					&& prev != '.' && self.operand_after(spelling.len())
-					&& !self.program_functions.contains(spelling)
-					&& !self.after_keyword()
-			}
-			// `xs contains x` in code only, data keeps the words as they are
-			"contains" | "has" | "includes" => !self.options.data_mode && self.operand_after(spelling.len()),
-			// `a .5` is a list of two values, `a.5` a member access
-			"." => !(prev.is_whitespace() && self.number_starts_at(0)),
-			"&" => !(self.starts_function_reference() && prev.is_whitespace()), // `map &square xs`
-			_ => true,
-		};
+		let in_code = !crate::operators::is_arithmetic_word(spelling) || self.arithmetic_word_in_code(spelling);
+		let allowed = in_code
+			&& match spelling {
+				"else" => !self.else_arm_key(),
+				"if" => !self.condition_has_branch(2),
+				"?." => after.is_alphabetic() || after == '_', // `x?.name`; `x ?.5 : 1` is a ternary
+				// R's `x <- 3` assigns with a note, the cramped `x<-3` is an error (P145, left_arrow_assignment)
+				"<-" => after.is_whitespace() || !prev.is_whitespace(),
+				"<<" | "<" | ">" => !self.options.wit_mode, // angle brackets only delimit type arguments
+				// `list<list<int>>` closes two generics, a shift has an operand behind it
+				">>" => !self.options.wit_mode && self.operand_follows(2),
+				"+-" => after.is_whitespace() && prev.is_whitespace(),
+				":" => !(self.at_explicit_symbol() && self.after_explicit_symbol()), // `[:a :plus :b]`
+				"/" => after != '/',                                                 // Don't treat // as division - it's a comment
+				"//" | "//=" => self.at_floor_division(),                            // `x // note` stays a comment
+				// `div{…}` and `div {…}` are the html tag, and data never computes
+				"div" => !self.word_opens_block("div"),
+				// `2 add 3` between operands only, `do add 4 to pixel` is the verb
+				"add" | "subtract" => self.operand_after(spelling.len()) && !self.after_keyword(),
+				// `xs contains x` in code only, data keeps the words as they are
+				"contains" | "has" | "includes" => !self.options.data_mode && self.operand_after(spelling.len()),
+				// `a .5` is a list of two values, `a.5` a member access
+				"." => !(prev.is_whitespace() && self.number_starts_at(0)),
+				"&" => !(self.starts_function_reference() && prev.is_whitespace()), // `map &square xs`
+				_ => true,
+			};
 		// `solid #8884`: the color is the next word of the value; `#main .x`: the descendant selector's next part
 		let selector_part =
 			self.in_style_sheet && matches!(spelling, "." | "#") && prev.is_whitespace() && self.is_identifier_start(1);

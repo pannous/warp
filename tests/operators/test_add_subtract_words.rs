@@ -17,3 +17,16 @@ fn other_adds_keep_their_meaning() {
 	is!("add(a, b) := a * b; add(2, 3)", 6);
 	is!("n = 0; 3 times { n = n + 1 }; n", 3);
 }
+
+/// One rule for every arithmetic word (reviewer): a program's own function of that name wins, a variable named like one
+/// is an operand
+#[test]
+fn every_arithmetic_word_follows_one_rule() {
+	for code in ["def add(a,b):=a*b; 2 add 3", "def minus(a,b):=a*b; 2 minus 3", "def plus(a,b):=a*b; 2 plus 3"] {
+		assert!(warp::wasm_emitter::eval(code).serialize().contains("needs 2 arguments"), "{code}");
+	}
+	is!("add = 5; add subtract 1", 4);
+	is!("5 subtract -2", 7);
+	is!("2 add 3 times 4", 14);
+	is!("7 div 2", 3);
+}
