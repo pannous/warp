@@ -253,7 +253,6 @@ fn uses_the_browser(module: &[u8]) -> Result<bool, String> {
 	Ok(imports_of(module)?.iter().any(|(library, name)| library == HOST_LIBRARY && browser_word(name)))
 }
 
-/// The text of an error, else the value written out
 /// Why `code` gave no module: its error with the excerpt, as the CLI says it; a program whose value is all it has
 /// (no error) has nothing to compile
 pub(crate) fn compile_failure(code: &str, failure: &Node) -> String {
@@ -264,12 +263,10 @@ pub(crate) fn compile_failure(code: &str, failure: &Node) -> String {
 	}
 }
 
+/// The text of an error, else the value written out
 pub(crate) fn message_of(failure: &Node) -> String {
 	match failure.drop_meta() {
-		Node::Error(message) => match message.drop_meta() {
-			Node::Text(text) => text.clone(),
-			other => other.serialize(),
-		},
+		Node::Error(message) => super::text_or_written(message.drop_meta().clone()),
 		other => other.serialize(),
 	}
 }

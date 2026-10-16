@@ -244,10 +244,7 @@ pub(super) fn linear_memory(
 	caller: &mut Caller<'_, HostState>,
 	failure: &impl Fn(String) -> wasmtime::Error,
 ) -> wasmtime::Result<wasmtime::Memory> {
-	match caller.get_export("memory") {
-		Some(Extern::Memory(memory)) => Ok(memory),
-		_ => Err(failure("the module exports no memory".into())),
-	}
+	exported_memory(caller).ok_or_else(|| failure("the module exports no memory".into()))
 }
 
 /// A linear float array's cells as f32, as the GPU takes them
@@ -322,10 +319,7 @@ fn text_coverage_or_failure(
 	words: HostNode,
 	size: i64,
 ) -> wasmtime::Result<HostNode> {
-	let words = match given_node(caller, words)? {
-		Node::Text(text) => text,
-		other => other.serialize(),
-	};
+	let words = text_or_written(given_node(caller, words)?);
 	let covered = crate::graphics::text_raster::coverage(&words, size as f32)
 		.map_err(|problem| task_failure(format!("{TEXT_COVERAGE}: {problem}")))?;
 	list_of_ints(caller, &covered, TEXT_COVERAGE)
@@ -382,10 +376,7 @@ pub(super) fn list_of_ints(caller: &mut Caller<'_, HostState>, ints: &[u32], wor
 
 /// The module's memory, or the task failure "`word`: the module exports no memory"
 pub(super) fn module_memory(caller: &mut Caller<'_, HostState>, word: &str) -> wasmtime::Result<Memory> {
-	match caller.get_export("memory") {
-		Some(Extern::Memory(memory)) => Ok(memory),
-		_ => Err(task_failure(format!("{word}: the module exports no memory"))),
-	}
+	exported_memory(caller).ok_or_else(|| task_failure(format!("{word}: the module exports no memory")))
 }
 
 pub(super) fn gpu_failure(word: &'static str) -> impl Fn(String) -> wasmtime::Error {
