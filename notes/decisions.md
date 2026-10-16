@@ -770,6 +770,11 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   lines in lib/math.warp with a "prefer ->" hint (→ ⟶ ➜ … for ->, ⇒ ⟹ for =>, ← ⟵ ⬅ for <-, ⬆ ⇧ for ↑, ⬇ ⇩ for ↓).
   ⇔ ⟺ ↔ ⇑ ⇓ get no built-in meaning for now; an example defines one, e.g.
   `infix operator ⇔(a: bool, b: bool) := a == b`.
+- ready-queue (2026-10-16, user via the boss and the supervisor): the board's Ready column is the merge queue. A
+  worker hands off a finished branch with `todo ready <card> [branch]` (tip read from git) after merging origin/main
+  into it, re-running its targeted tests and pushing; `todo ready` refuses a tip behind origin/main (`--force` for
+  carrier branches). The Integrator merges only Ready cards; unmerged branches without a card are only reported
+  (`todo ready --stray`).
 - text-unit-plurals (2026-10-16, user; card text-unit): every plural unit word of a text is the list:
   `"👍🏽".chars` → ['👍🏽'], `.codepoints` → ['👍' '🏽'], `.graphemes`, `.bytes` → [240 159 …], like words and lines.
   Counting is `count t.codepoints` or `number of bytes in t`. Code reading `t.codepoints` as a number migrates to
