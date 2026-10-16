@@ -133,6 +133,7 @@ mod test_nonlocal_lambdas;
 mod test_nonlocal_passed_around;
 mod test_object_arguments;
 mod test_ocaml_fun; // card fun-x-loud
+mod test_one_item_list_math; // card sin-scalar
 mod test_operator_arguments;
 mod test_operator_word_methods;
 mod test_optional_parameters;
