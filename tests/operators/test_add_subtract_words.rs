@@ -16,6 +16,7 @@ fn other_adds_keep_their_meaning() {
 	is!("pixel=[1 2 3]; do add 4 to pixel; count(pixel)", 4);
 	is!("add(a, b) := a * b; add(2, 3)", 6);
 	is!("n = 0; 3 times { n = n + 1 }; n", 3);
+	is!("n = 0; on subtract { n = 5 }; emit subtract; n", 5);
 }
 
 /// One rule for every arithmetic word (reviewer): a program's own function of that name wins, a variable named like one

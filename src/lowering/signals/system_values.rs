@@ -33,7 +33,7 @@ pub const SYSTEM_PREFIX: &str = "system·";
 /// Host readings that are measurements, not counts: float sources (decision exact-decimals), so the exact decimals
 /// they meet (`col + 0.5 - mouse_x`) convert once at that use instead of making every later step exact
 const FLOAT_VALUES: [&str; 2] = [MOUSE_X, MOUSE_Y];
-const LISTENER_WORDS: [&str; 3] = ["whenever", "once", "on"];
+pub(crate) const LISTENER_WORDS: [&str; 3] = ["whenever", "once", "on"];
 /// The timer that keeps a listening program and wakes it for the checks
 const KEEP_LISTENING: &str = "on every 1000ms {}";
 const CLIPBOARD_READ: &str = "read";

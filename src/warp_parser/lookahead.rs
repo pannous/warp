@@ -115,8 +115,8 @@ impl WarpParser {
 			.is_some_and(|last| before[line_start + last] == '?')
 	}
 
-	/// The word before the blank here is a keyword, not an operand: `do add 4 to xs`, `return add …`; a variable named
-	/// like an arithmetic word is an operand, `add subtract 1`
+	/// The word before the blank here is a keyword, not an operand: `do add 4 to xs`, `return add …`, the event name of
+	/// `on add {…}` and `emit add{…}`; a variable named like an arithmetic word is an operand, `add subtract 1`
 	fn after_keyword(&self) -> bool {
 		let before = &self.chars[..self.pos];
 		let word_end = before.iter().rposition(|ch| !ch.is_whitespace()).map_or(0, |end| end + 1);
@@ -125,6 +125,8 @@ impl WarpParser {
 		let word: String = before[word_start..word_end].iter().collect();
 		crate::operators::is_operator_word(&word) && !crate::operators::is_arithmetic_word(&word)
 			|| word == crate::words::RETURN_WORD
+			|| crate::system_values::LISTENER_WORDS.contains(&word.as_str())
+			|| crate::words::EMIT_WORDS.into_iter().chain(crate::words::EMIT_ALIASES).any(|emit| emit == word)
 	}
 
 	/// One rule for every arithmetic word, `2 plus 3`, `7 div 2`, `2 add 3`: an operator in code only, not a member
