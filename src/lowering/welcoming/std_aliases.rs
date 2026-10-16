@@ -69,9 +69,35 @@ pub fn lower(program: Node) -> Node {
 	// `def parse_json(t) {…}` too: the program's own word gets no note (card hint-own-definition)
 	let defined = crate::library_words::defined_names(&program);
 	note_internal_words(&program, &names.union(&defined).cloned().collect());
+	// after `use json`, json's words are called bare too: `parse(t)` is json.parse(t), unless the program defines parse
+	// (decision used-module-bare-words, notes/dispatch.md level 3)
+	let used_modules = used_module_names(&program);
+	let bare_forms: Vec<&StdAlias> = (BARE_FORMS.iter().filter(|form| !kept.contains(&form.member)))
+		.chain(WARP_FORMS.iter().filter(|form| used_modules.contains(form.module) && !defined.contains(form.member)))
+		.collect();
 	let mut used = HashSet::new();
-	let program = aliased(program, &kept, &mut used);
+	let program = aliased(program, &Aliases { kept, bare_forms }, &mut used);
 	with_uses(program, used)
+}
+
+/// The modules a program uses by name: `use json`
+fn used_module_names(program: &Node) -> HashSet<String> {
+	let mut modules = HashSet::new();
+	program.visit(&mut |part| {
+		if let Node::List(items, Bracket::None, Separator::Space) = part.drop_meta() {
+			if let [word, module] = items.as_slice() {
+				modules.extend(module.symbol_name().filter(|_| word.is_symbol(USE_WORD)).map(String::from));
+			}
+		}
+	});
+	modules
+}
+
+/// The aliases a program's calls may mean: the modules it names itself (`JSON.parse` of its own JSON stays its own)
+/// and the standard words it may call bare
+struct Aliases<'a> {
+	kept: Vec<&'a str>,
+	bare_forms: Vec<&'static StdAlias>,
 }
 
 /// How warp writes a standard word: `json.parse` for parse_json, else the word itself
@@ -113,8 +139,8 @@ fn first_call_of<'a>(node: &'a Node, word: &str) -> Option<&'a Node> {
 	}
 }
 
-fn aliased(node: Node, kept: &[&str], used: &mut HashSet<&'static str>) -> Node {
-	match aliased_call(&node, kept) {
+fn aliased(node: Node, aliases: &Aliases, used: &mut HashSet<&'static str>) -> Node {
+	match aliased_call(&node, aliases) {
 		Some((alias, arguments)) => {
 			crate::normalize::set_position_of(&node);
 			if !alias.module.is_empty() && !WARP_FORMS.iter().any(|form| std::ptr::eq(form, alias)) {
@@ -126,17 +152,18 @@ fn aliased(node: Node, kept: &[&str], used: &mut HashSet<&'static str>) -> Node 
 			if !alias.std_module.is_empty() {
 				used.insert(alias.std_module);
 			}
-			let arguments = alias.order.iter().map(|&index| aliased(arguments[index].clone(), kept, used));
+			let arguments = alias.order.iter().map(|&index| aliased(arguments[index].clone(), aliases, used));
 			parens(std::iter::once(symbol(alias.word)).chain(arguments).collect())
 		}
-		None => node.map_children(|child| aliased(child, kept, used)),
+		None => node.map_children(|child| aliased(child, aliases, used)),
 	}
 }
 
 /// `module.member(arguments…)` of a known alias with as many arguments as it takes; a shape tuple stands for its items
 /// (`np.zeros((2, 3))` is zeros(2, 3))
-fn aliased_call<'a>(node: &'a Node, kept: &[&str]) -> Option<(&'static StdAlias, &'a [Node])> {
-	if let Some(bare) = bare_call(node, kept).or_else(|| member_read(node, kept)) {
+fn aliased_call<'a>(node: &'a Node, aliases: &Aliases) -> Option<(&'static StdAlias, &'a [Node])> {
+	let kept = aliases.kept.as_slice();
+	if let Some(bare) = bare_call(node, &aliases.bare_forms).or_else(|| member_read(node, kept)) {
 		return Some(bare);
 	}
 	let Node::Key(module, Op::Dot, call) = node.drop_meta() else {
@@ -166,16 +193,16 @@ fn aliased_call<'a>(node: &'a Node, kept: &[&str]) -> Option<(&'static StdAlias,
 		})
 }
 
-/// `json(t)`: a bare form called with as many arguments as it takes, where the program names no such word itself
-fn bare_call<'a>(node: &'a Node, kept: &[&str]) -> Option<(&'static StdAlias, &'a [Node])> {
-	let Node::List(items, Bracket::Round, _) = node.drop_meta() else {
+/// `json(t)`, `json t`: a bare form called with as many arguments as it takes
+fn bare_call<'a>(node: &'a Node, forms: &[&'static StdAlias]) -> Option<(&'static StdAlias, &'a [Node])> {
+	let (Node::List(items, Bracket::Round, _) | Node::List(items, Bracket::None, Separator::Space)) = node.drop_meta()
+	else {
 		return None;
 	};
 	let (word, arguments) = items.split_first()?;
 	let word = word.drop_meta().symbol_name()?;
-	BARE_FORMS
-		.iter()
-		.find(|form| form.member == word && form.order.len() == arguments.len() && !kept.contains(&form.member))
+	(forms.iter().copied())
+		.find(|form| form.member == word && form.order.len() == arguments.len())
 		.map(|form| (form, arguments))
 }
 
