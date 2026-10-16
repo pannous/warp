@@ -206,7 +206,8 @@ fn infix_iterations(node: Node, functions: &HashSet<String>) -> Node {
 		|node: &Node| is_list_operand(node) && !node.symbol_name().is_some_and(|name| functions.contains(name));
 	match node {
 		Node::List(items, bracket, separator) if is_phrase(&bracket, &separator) => {
-			let mut pending: VecDeque<Node> = items.into_iter().map(|item| infix_iterations(item, functions)).collect();
+			let items = items.into_iter().map(|item| infix_iterations(item, functions)).collect();
+			let mut pending: VecDeque<Node> = labeled_sort_functions(items).into();
 			let mut combined: Vec<Node> = Vec::with_capacity(pending.len());
 			let mut changed = false;
 			while let Some(item) = pending.pop_front() {
@@ -246,16 +247,41 @@ fn is_phrase(bracket: &Bracket, separator: &Separator) -> bool {
 		&& *separator != Separator::Colon
 }
 
-/// `map f` with the iteration word as its own item: the function after it, labeled when a sort label comes first
-/// (`ps sort by .a`)
+/// `map f` with the iteration word as its own item: the function after it
 fn bare_iteration(item: &Node, pending: &mut VecDeque<Node>) -> Option<(String, Node)> {
 	iteration_word(item)?;
-	let function = pending.pop_front()?;
-	let function = match pending.front() {
-		Some(_) if is_sort_label(&function) => key(function, Op::Colon, pending.pop_front().expect("peeked")),
-		_ => function,
-	};
-	Some((item.name(), function))
+	Some((item.name(), pending.pop_front()?))
+}
+
+/// A sort label after an iteration word and the function after it are the labeled function, `by: f`, the way a call's
+/// parentheses write it: `sort xs by >`, `xs sort by >`, `sort ps by .a`, `sort ps by {it.a}` (card sort-xs)
+fn labeled_sort_functions(items: Vec<Node>) -> Vec<Node> {
+	let mut labeled = Vec::with_capacity(items.len());
+	let mut after_iteration = false;
+	let mut rest = items.into_iter();
+	while let Some(item) = rest.next() {
+		let function = match item.drop_meta() {
+			_ if !after_iteration => None,
+			// `by >`: the parser kept the operator as one dangling on the label
+			Node::Key(label, op, nothing) if is_sort_label(label) && nothing.is_empty_node() && *op != Op::Colon => {
+				Some((label.as_ref().clone(), key(Node::Empty, *op, Node::Empty)))
+			}
+			Node::Key(label, Op::Colon, function) if is_sort_label(label) => {
+				Some((label.as_ref().clone(), function.as_ref().clone()))
+			}
+			_ if is_sort_label(&item) => rest.next().map(|function| (item.clone(), function)),
+			_ => None,
+		};
+		after_iteration |= iteration_word(&item).is_some();
+		labeled.push(match function {
+			Some((label, function)) if member_of(&function).is_some() => {
+				key(label, Op::Colon, member_lambda(&function))
+			}
+			Some((label, function)) => key(label, Op::Colon, function),
+			None => item,
+		});
+	}
+	labeled
 }
 
 /// `ys map` of `f(ys) := ys map sq`, which the parser grouped before the function: its words

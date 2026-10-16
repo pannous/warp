@@ -1,0 +1,29 @@
+//! card sort-xs: a sort label and the function after it, written without the colon or parentheses, are the labeled
+//! function of a call, `sort xs by >` is `sort(xs, by: >)`, in prefix and infix form
+use warp::wasm_emitter::eval;
+
+fn printed(code: &str) -> String {
+	eval(code).serialize()
+}
+
+#[test]
+fn a_sort_label_before_an_operator() {
+	assert_eq!(printed("xs=[3 1 2]; sort xs by >"), "[3 2 1]");
+	assert_eq!(printed("xs=[3 1 2]; xs sort by >"), "[3 2 1]");
+	assert_eq!(printed("xs=[3 1 2]; sort xs by: >"), "[3 2 1]");
+	assert_eq!(printed("xs=[3 1 2]; xs sort by: >"), "[3 2 1]");
+}
+
+#[test]
+fn a_sort_label_before_a_field_or_block() {
+	assert_eq!(printed("ps=[{a:2} {a:1}]; sort ps by {it.a}"), "[a:1 a:2]");
+	assert_eq!(printed("ps=[{a:2} {a:1}]; sort ps by .a"), "[a:1 a:2]");
+	assert_eq!(printed("ps=[{a:2} {a:1}]; sort ps by: .a"), "[a:1 a:2]");
+	assert_eq!(printed("ps=[{a:2} {a:1}]; ps sort by .a"), "[a:1 a:2]");
+}
+
+#[test]
+fn a_word_named_like_a_label_elsewhere_stays() {
+	assert_eq!(printed("by=2; by > 1"), "yes");
+	assert_eq!(printed("xs=[3 1 2]; sort xs"), "[1 2 3]");
+}
