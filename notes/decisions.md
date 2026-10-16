@@ -651,6 +651,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   implicit parameter, `canvas.width := canvas_width = it` (the same thing). `canvas.width = 5` calls the setter.
   A field with a getter and no setter is read-only: `display.width = 5` is a loud error. lib/draw.warp replaces
   the Rust table this way.
+- setter-calls (2026-10-16, user): a setter overload is called four ways: `canvas.width = 12` (one general rule:
+  assigning to a property with a one-parameter overload calls it; the form docs show), `canvas.width(12)`,
+  `width(canvas, 12)` (falls out of uniform calls; allowed, not taught, reads awkwardly), and the English
+  `set width of canvas to 12` (new syntax, lowers to `canvas.width = 12`; card set-of-to).
 - saved-words (2026-10-16 night, Interviewer's proposal, kept by the user 2026-10-16; card
   graphics-saved-words): no save-only table and no symbol overload. The general bare-call rule (random-forms: a
   function word used as a value is its call) covers it: lib/draw.warp declares `canvas()` with no arguments as the
