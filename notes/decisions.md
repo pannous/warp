@@ -61,7 +61,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   Later (card warp-format-strict, Soon): a second, opinionated mode rewriting code to best practices, with a preview
   (show the diff, apply nothing) before anything is applied; every rule goes to the user first. It is a verb of its
   own, `warp beautify` (synonyms canonical, idiomatic); hash-comments is its first rule.
-  beautify-preview (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable):
+  beautify-preview (2026-10-15 night, Interviewer's proposal, kept by the user 2026-10-16):
   `warp beautify app.warp` prints the diff; in a terminal it asks "apply? y/n", piped or scripted it applies
   nothing. Amended by the user's card yes-fix (2026-10-16): piped lines answer it, one per file (`yes y | warp fix *`),
   the end of the input is no; a terminal that cannot see the question (output piped) still applies nothing. `warp beautify yes app.warp` applies without asking (scripts), `warp beautify check app.warp` only
@@ -333,7 +333,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   device pixel, its own dimension, converting to lengths through display.dpi at run time. A unit after a list applies
   to each element (`[3, 4] cm` = `[3 cm, 4 cm]`, `v: length[3]`, matrices alike). Predefined derived names: speed,
   area, volume, frequency.
-- unit-definitions (2026-10-15 evening, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable):
+- unit-definitions (2026-10-15 evening, Interviewer's proposal, kept by the user 2026-10-16):
   every dimension has an SI anchor unit, every other unit is a marked conversion to a known unit. Built on the user's
   sketch: `dimension length meter` declares a base dimension and its anchor; `unit m := 1 meter` (aliases use the
   same rule); `unit cm := meter / 100`, `unit furlong := 201.168 m`: the right side is an amount in a known unit,
@@ -383,18 +383,18 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - unit-prefix-lines (2026-10-16, use-reflection default; undoable): lib/units.warp spells SI prefixes `prefix k :=
   10^3` and marks the dimensions taking them `SI dimension length meter`. Conversion-only long names
   (`name hour := h`) stay for now, until durations and units are one (below).
-- duration-units (2026-10-16 night, Interviewer's decision on the user's behalf, to present; undoable; card
+- duration-units (2026-10-16 night, Interviewer's proposal, kept by the user 2026-10-16; card
   time-module): the time module's durations and the unit h become one thing, as dimensions-units already makes
   duration the time dimension: `unit hour := 1 h`, `2 hour + 1 h` is 3 hours (today a DimensionError), printing
   keeps the long names ("3 hours"). The `name` form then goes.
 
 ## Text
-- letters (2026-10-15 evening, Interviewer's decision on the user's behalf, to present 2026-10-16; card of-in-chain,
+- letters (2026-10-15 evening, Interviewer's proposal, kept by the user 2026-10-16; card of-in-chain,
   low priority): `letters of "a1 b!"` → ['a' 'b'], alphabetic only, the common meaning (Unicode letter, like
   Python's isalpha and Java's isLetter); `characters` is an alias of `chars`.
 - parse-json (2026-10-15, user): quoted code's `.json` is the readable operator-as-key shape
   (`parse("a * (b + 1)").json` → {"*":["a",{"+":["b",1]}]}); what it can't express is a warning or error, never `{}`.
-- json-exactness (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable):
+- json-exactness (2026-10-15 night, Interviewer's proposal, kept by the user 2026-10-16):
   following the user's "a warning, or even an error": big ints are written with all their digits as a JSON number
   (`(2^70).json` → 1180591620717411303424; JSON numbers have no size limit, only some readers do); a fraction is
   written as JSON's float with a warning naming the loss (`(1/3).json` → 0.3333333333333333, "JSON has no exact
@@ -515,7 +515,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   (1, 2), `[1..3]` a list holding one range. An unneeded edge case (card literal-range obsolete).
 
 ## Functions and calls
-- random-forms (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable; card
+- random-forms (2026-10-15 night, Interviewer's proposal, kept by the user 2026-10-16; card
   random-should): bare `random` is its call where a value is used (a float in [0,1)). `random T` for a type is a
   random value of T, one general rule instead of special cases: `random bool` a coin flip, `random int` the full
   integer range (ids, hashes), `random codepoint`, `random float` = `random`. `random(n)` stays 0…n-1;
@@ -644,11 +644,12 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - #39 `==` never chains: `a<b<c` chains, `1<2==2` is `(1<2)==2`.
 
 ## Classes, objects and enums
-- property-accessors (2026-10-16 night, Interviewer's decision on the user's behalf, to present; undoable; cards
-  property-get, graphics-properties): a field declares its getter and setter side by side, as wiki/property.md
-  plans: `width: get{canvas_width} set{canvas(it, canvas_height)}`, `it` the written value. A field with get{} and
-  no set{} is read-only: `display.width = 5` is a loud error. lib/draw.warp replaces the Rust table this way.
-- saved-words (2026-10-16 night, Interviewer's decision on the user's behalf, to present; undoable; card
+- property-accessors (2026-10-16, user, changed from the Interviewer's night proposal `width: get{…} set{…}`; cards
+  property-get, graphics-properties): accessors are assignment-shaped definitions: the getter defines the field,
+  `canvas.width := canvas_width`; the setter defines the assignment, `canvas.width = it := canvas(it,
+  canvas_height)`, `it` the written value. A field with a getter and no setter is read-only: `display.width = 5` is
+  a loud error. lib/draw.warp replaces the Rust table this way.
+- saved-words (2026-10-16 night, Interviewer's proposal, kept by the user 2026-10-16; card
   graphics-saved-words): no save-only table and no symbol overload. The general bare-call rule (random-forms: a
   function word used as a value is its call) covers it: lib/draw.warp declares `canvas()` with no arguments as the
   current Picture beside `canvas(width, height)`, so `save canvas as: "painting.png"` passes a Picture; the sound
@@ -673,7 +674,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - P114 `x.meta` / `x.@key` stay; comments fill them only when activated (`use comments`). Meta on objects: `@key` in
   a literal is never a field; field first, then meta when reading `point.source`; iteration skips `@` keys.
 - P230 `effects of f` gives symbols.
-- fail-effect (2026-10-16 night, Interviewer's decision on the user's behalf, to present; undoable; card fail-effect):
+- fail-effect (2026-10-16 night, Interviewer's proposal, kept by the user 2026-10-16; card fail-effect):
   the `Fail` effect tracks explicit raises (raise/throw/fail/panic/error "…"), division by a value that may be 0
   (`f(x) := 10/x` is Fail, `x/2` stays Pure) and library calls that answer with an Error. Index out of range,
   missing fields and failed casts are program bugs, like Rust panics, not tracked; otherwise almost every function
@@ -707,8 +708,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - operator-alias (2026-10-16, user; card standalone-math-units): math spellings of operators are alias lines in
   lib/math.warp, keeping the operator's precedence: `operator × := *`, `operator ≤ := <=`, `prefix operator √ :=
   sqrt`; they replace the Rust table.
-- foreign-signature (2026-10-16, Interviewer's decision on the user's behalf, the user left it open; to present;
-  undoable): a libm function is declared in warp by a typed foreign line, `sin(x: float): float from 'm'`,
+- foreign-signature (2026-10-16, Interviewer's proposal, kept by the user 2026-10-16): a libm function is declared in warp by a typed foreign line, `sin(x: float): float from 'm'`,
   `atan2(y: float, x: float): float from 'm'`: the signature is visible and needs no C header. `import (…) from 'm'`
   keeps working for headers. Builtin math words use the same line with warp as the library (use-reflection
   default): `floor(x: number): int from warp`, `min(a: number, b: number, more...): number from warp`; the Rust
