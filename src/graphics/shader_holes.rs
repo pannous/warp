@@ -65,7 +65,7 @@ pub fn written(wgsl: &str) -> (String, Vec<String>) {
 	while let Some(at) = rest.find('$') {
 		text.push_str(&rest[..at]);
 		let after = &rest[at + 1..];
-		let length = after.find(|ch: char| !(ch.is_alphanumeric() || ch == '_')).unwrap_or(after.len());
+		let length = after.find(|ch: char| !is_name_character(ch)).unwrap_or(after.len());
 		let name = &after[..length];
 		if name.is_empty() || name.starts_with(|ch: char| ch.is_ascii_digit()) {
 			text.push('$');
@@ -101,13 +101,19 @@ pub fn shader_text(wgsl: &str) -> Node {
 fn hint_aliases(wgsl: &str) {
 	for (alias, dotted, reason) in HOLE_ALIASES {
 		let written = format!("${alias}");
-		let found = wgsl
-			.match_indices(&written)
-			.any(|(at, _)| !wgsl[at + written.len()..].starts_with(|ch: char| ch.is_alphanumeric() || ch == '_'));
-		if found {
+		if mentions(wgsl, &written) {
 			crate::normalize::hint(&written, &format!("${dotted}"), reason);
 		}
 	}
+}
+
+/// Whether the text has `name` where no letter, digit or underscore continues it
+pub fn mentions(text: &str, name: &str) -> bool {
+	text.match_indices(name).any(|(at, _)| !text[at + name.len()..].starts_with(is_name_character))
+}
+
+fn is_name_character(character: char) -> bool {
+	character.is_alphanumeric() || character == '_'
 }
 
 pub fn lower(program: Node) -> Node {
