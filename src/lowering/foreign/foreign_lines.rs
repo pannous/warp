@@ -9,11 +9,25 @@ const FROM_WORD: &str = "from";
 
 pub fn lower(node: Node) -> Node {
 	match foreign_line_of(&node) {
-		// `floor(x: number): int from warp`: warp computes it, its signature is lib/math.warp's (library_signatures.rs)
-		Some((_, library)) if library == crate::ffi::BUILTIN_LIBRARY => Node::Empty,
+		Some((name, library)) if library == crate::ffi::BUILTIN_LIBRARY => builtin_line(&node, &name),
 		Some((name, library)) => crate::warp_parser::parse(&format!("import ({name}) from '{library}'")),
 		None => node.map_children(lower),
 	}
+}
+
+/// `floor(x: number): int from warp`: warp computes it and lib/math.warp says so (library_signatures.rs reads the
+/// signature there); a program may repeat that line, never declare another word or signature
+fn builtin_line(node: &Node, name: &str) -> Node {
+	let line = crate::ffi::math_foreign_lines(crate::ffi::BUILTIN_LIBRARY).find(|line| line.name == name);
+	let Some(line) = line else {
+		return crate::node::error(&format!("warp computes no {name}: `from warp` declares a word of lib/math.warp"));
+	};
+	let declared = format!("{name}({}): {}", line.parameters, line.result);
+	let parsed = crate::warp_parser::parse_generated(&format!("{declared} from {}", crate::ffi::BUILTIN_LIBRARY));
+	if parsed.serialize() == node.serialize() {
+		return Node::Empty;
+	}
+	crate::node::error(&format!("warp's {name} is `{declared}`: a `from warp` line repeats lib/math.warp's"))
 }
 
 fn foreign_line_of(node: &Node) -> Option<(String, String)> {

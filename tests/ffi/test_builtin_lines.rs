@@ -18,3 +18,14 @@ fn a_builtin_line_declares_and_imports_nothing() {
 	is!("sin(x: float): float from warp\nsin(0)", 0);
 	is!("type(floor(2.5))", "int");
 }
+
+/// reviewer: a program's `from warp` line names a word warp computes, with lib/math.warp's signature
+#[test]
+fn a_programs_builtin_line_must_be_warps() {
+	crate::common::fails_with("blub(x: number): int from warp\nblub(2)", "warp computes no blub");
+	crate::common::fails_with(
+		"floor(x: number): float from warp\nfloor(2.5)",
+		"warp's floor is `floor(x: number): int`",
+	);
+	is!("floor(x: number): int from warp\nfloor(2.5)", 2);
+}
