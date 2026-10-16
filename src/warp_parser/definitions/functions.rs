@@ -74,8 +74,8 @@ pub(crate) fn typed_parameter(arguments: Node) -> Node {
 /// Every argument of `f(int x, float y)` as its typed parameter
 pub(crate) fn typed_parameters(arguments: Node) -> Node {
 	match arguments.drop_meta() {
-		Node::List(items, bracket, Separator::Colon) => {
-			Node::List(items.iter().cloned().map(typed_parameter).collect(), bracket.clone(), Separator::Colon)
+		Node::List(items, bracket, Separator::Comma) => {
+			Node::List(items.iter().cloned().map(typed_parameter).collect(), bracket.clone(), Separator::Comma)
 		}
 		_ => typed_parameter(arguments),
 	}
@@ -247,6 +247,53 @@ impl WarpParser {
 		self.current_char() == '&' && self.peek_char(1).is_alphabetic() && !is_identifier_char(self.prev_char())
 	}
 
+	/// Rust's reference `&x`, `&mut x`, `&&x`, `&5`, `&(a + b)` and dereference `*r`, `**r`, `*(&x)`: where an operand starts,
+	/// not a function reference `&name` nor a capture. A `*name` is a dereference unless it is a star of a rest or spread
+	/// (`a, *rest = xs`, `f(*xs)`, `*init, last = xs`, Python's `**kw`): after a comma or an opening bracket, or at a statement start
+	/// followed by a comma or `=`
+	pub(crate) fn starts_rust_reference(&self) -> bool {
+		let next = self.peek_char(1);
+		match self.current_char() {
+			'&' => {
+				let reference_to_value = next == '&'
+					|| next == '(' && !self.starts_capture()
+					|| next == '[' || next == '"'
+					|| next.is_ascii_digit() && !self.in_capture;
+				reference_to_value || self.mutable_reference_follows()
+			}
+			'*' => {
+				let operand = self.is_identifier_start(1) || matches!(next, '(' | '*' | '&');
+				operand && !self.star_is_rest_or_spread()
+			}
+			_ => false,
+		}
+	}
+
+	fn mutable_reference_follows(&self) -> bool {
+		let word: String = (1..).map(|at| self.peek_char(at)).take_while(|ch| is_identifier_char(*ch)).collect();
+		word == crate::words::MUT_WORD && matches!(self.peek_char(1 + word.len()), ' ' | '\t')
+	}
+
+	fn star_is_rest_or_spread(&self) -> bool {
+		let before = (1..=self.pos).map(|back| self.chars[self.pos - back]).find(|ch| !matches!(ch, ' ' | '\t'));
+		match before {
+			Some(',' | '(' | '[') => true,
+			None | Some('\n' | ';' | '{') => {
+				let name = (1..).take_while(|&at| is_identifier_char(self.peek_char(at))).count();
+				let after = (1 + name..).map(|at| self.peek_char(at)).find(|ch| !matches!(ch, ' ' | '\t'));
+				let assigned = after == Some('=') && self.peek_char(1 + name + 1) != '=';
+				after == Some(',') || assigned
+			}
+			Some(_) => false,
+		}
+	}
+
+	/// The `&`, `&mut ` or `*` of a reference
+	pub(crate) fn skip_reference_prefix(&mut self) {
+		let mutable = self.mutable_reference_follows();
+		self.advance_by(if mutable { 1 + crate::words::MUT_WORD.len() } else { 1 });
+	}
+
 	/// Elixir's capture `&(&1 * 2)`: an `&(` not glued to a word before it, whose group reads an `&1`
 	pub(crate) fn starts_capture(&self) -> bool {
 		if self.current_char() != '&' || self.peek_char(1) != '(' || is_identifier_char(self.prev_char()) {
@@ -325,7 +372,7 @@ impl WarpParser {
 		let parameters = match names.as_slice() {
 			[single] => Node::Symbol(single.clone()),
 			several => {
-				Node::List(several.iter().cloned().map(Node::Symbol).collect(), Bracket::Round, Separator::Colon)
+				Node::List(several.iter().cloned().map(Node::Symbol).collect(), Bracket::Round, Separator::Comma)
 			}
 		};
 		Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body)))

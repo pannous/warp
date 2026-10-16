@@ -462,7 +462,7 @@ addHostPart({
 		// the playground's key), its folder the served root that relative paths start from
 		os: {
 			env: name => self.pageEnvironment?.[name] ?? null,
-			args: () => [],
+			args: () => self.programArguments ?? [], // a sample's <name>.args (playground.js programArguments)
 			cwd: () => ".",
 			stdin: () => "",
 			input: () => null,

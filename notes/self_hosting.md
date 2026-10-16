@@ -17,7 +17,7 @@ Decided (user, 2026-10-12, notes/decisions.md "self-hosting"):
 - Language gaps: fixed in the language as cards of this topic, never worked around in the warp code.
 
 Size of the job (Rust lines, 2026-10-12): parser 7.4k (src/warp_parser), Node 2.1k (src/node), analyzer 6.6k, emitter
-23k, lowering + top-level src ~59k. The warp written so far: lib/*.warp 1.5k, samples/json_parser.warp 95.
+23k, lowering + top-level src ~59k. The warp written so far: lib/*.warp 1.5k, samples/objects/json_parser.warp 95.
 
 ## What warp can do today (probes/self_hosting/, 2026-10-12)
 Works:

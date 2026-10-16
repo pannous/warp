@@ -35,7 +35,7 @@ pub const C_STRING: &str = "c_string";
 pub(crate) const BYTE_AT: &str = "byte_at";
 const BYTE_SLICE: &str = "byte_slice";
 /// `memory_byte(address)`, `memory_set_byte(address, value)`: one byte of linear memory, what lib/memory.warp's
-/// `memory.slice` and `memory.copy` are made of (samples/wasm_interop.warp)
+/// `memory.slice` and `memory.copy` are made of (samples/wasm/wasm_interop.warp)
 pub(crate) const MEMORY_BYTE: &str = "memory_byte";
 const MEMORY_SET_BYTE: &str = "memory_set_byte";
 /// `trim(text)`: the text without the whitespace at either end, sharing its memory
@@ -137,7 +137,7 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		required.insert("list_join"); // emitted together, with the same helpers
 	}
 	if required.contains(super::super::reflection::library_ops::NODE_SLICE) {
-		required.extend(["text_chars", "list_join", "list_reverse"]);
+		required.extend([crate::library_words::TEXT_GRAPHEMES, "list_join", "list_reverse"]);
 	}
 	if crate::library_words::MAP_WORD_FUNCTIONS.iter().any(|name| required.contains(name)) {
 		required.insert("map_find");
@@ -243,7 +243,11 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		required.insert(super::super::reflection::library_ops::LIST_SORTED_BY);
 	}
 	if required.contains(super::super::reflection::library_ops::LIST_SORTED_BY) {
-		required.extend([super::super::reflection::library_ops::NODE_ORDER, "text_chars", "list_join"]);
+		required.extend([
+			super::super::reflection::library_ops::NODE_ORDER,
+			crate::library_words::TEXT_GRAPHEMES,
+			"list_join",
+		]);
 	}
 	if [TEXT_FIND, TEXT_STARTS_WITH, TEXT_ENDS_WITH].iter().any(|name| required.contains(name)) {
 		required.insert(TEXT_MATCHES_AT);
@@ -307,14 +311,18 @@ pub fn add_dependencies(required: &mut HashSet<&'static str>) {
 		"text_lower",
 		"text_split",
 		"list_reverse",
-		"text_chars",
+		crate::library_words::TEXT_CODE_POINTS,
+		crate::library_words::TEXT_GRAPHEMES,
 		"list_sort",
 		super::super::reflection::library_ops::NODE_ORDER,
 	];
 	if calls_text_of.iter().any(|name| required.contains(name)) {
 		required.insert(TEXT_OF);
 	}
-	if required.contains("text_chars") {
+	if [crate::library_words::TEXT_CODE_POINTS, crate::library_words::TEXT_GRAPHEMES]
+		.iter()
+		.any(|name| required.contains(name))
+	{
 		required.extend(["list_reverse", "text_reverse"]); // the characters are collected backwards, and list_reverse hands texts on
 	}
 	if required.contains("list_reverse") {

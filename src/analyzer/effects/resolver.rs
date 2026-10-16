@@ -150,6 +150,9 @@ impl Resolver<'_> {
 				if DIVISIONS.contains(op) && !is_nonzero_number(right) {
 					function.perform(Fail); // 10/x fails for x = 0
 				}
+				if may_miss(left, op, right) {
+					function.perform(Fail); // xs#5 of a shorter list, a missing key, "a" as int
+				}
 				self.collect(left, function);
 				self.collect(right, function);
 			}
@@ -177,6 +180,29 @@ fn raises(items: &[Node]) -> bool {
 		[word, _] => matches!(word.drop_meta(), Node::Symbol(word)
 			if crate::errors::run_time::RAISE_WORDS.contains(&word.as_str()) || word == crate::words::ERROR_WORD),
 		[word, _, divisor] => word.is_symbol(crate::warp_parser::FLOOR_QUOTIENT) && !is_nonzero_number(divisor),
+		_ => false,
+	}
+}
+
+/// `xs#i` out of range or a missing key (`q.k` is `q#("k"+1)` by then), `x as int` of a text; not `#xs` (its count),
+/// a literal index within a literal list (`[x, x]#1`), a number cast to a number
+fn may_miss(left: &Node, op: &Op, right: &Node) -> bool {
+	match op {
+		Op::Hash => !left.is_empty_node() && !within_literal_list(left, right),
+		Op::As => {
+			let to_number = crate::analyzer::builtin_type_kind(&right.drop_meta().name())
+				.is_some_and(|kind| matches!(kind, crate::type_kinds::Kind::Int | crate::type_kinds::Kind::Float));
+			to_number && !matches!(left.drop_meta(), Node::Number(_))
+		}
+		_ => false,
+	}
+}
+
+fn within_literal_list(list: &Node, index: &Node) -> bool {
+	match (list.drop_meta(), index.drop_meta()) {
+		(Node::List(items, Bracket::Square, _), Node::Number(number)) => {
+			(1.0..=items.len() as f64).contains(&f64::from(*number))
+		}
 		_ => false,
 	}
 }

@@ -74,7 +74,7 @@ pub fn reply(id: i64) -> Node {
 		Ok(body) => (crate::web::web_server::value_of_body(body), Node::Empty),
 		Err(failure) => (Node::Empty, Node::Text(failure)),
 	};
-	Node::List(vec![value, error], Bracket::Square, Separator::Colon)
+	Node::List(vec![value, error], Bracket::Square, Separator::Comma)
 }
 
 /// The value a server function's JSON reply holds, a number or a text too; else the text

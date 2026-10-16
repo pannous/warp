@@ -1,8 +1,8 @@
 //! The command line's flags: hints and warning levels, strictness, the sandbox, compile flags
 use super::*;
 
-pub(crate) const COMPILE_FLAGS: [&str; 7] =
-	[EXE_FLAG, WASM_FLAG, AOT_FLAG, SITE_FLAG, WIT_FLAG, COMPONENT_FLAG, WAGI_FLAG];
+pub(crate) const COMPILE_FLAGS: [&str; 8] =
+	[EXE_FLAG, WASM_FLAG, AOT_FLAG, SITE_FLAG, PAGE_FLAG, WIT_FLAG, COMPONENT_FLAG, WAGI_FLAG];
 /// Where earlier versions remembered "got it", in the current folder: their `ack:` lines are adopted
 pub(crate) const LOCAL_ACKNOWLEDGEMENTS_FILES: [&str; 2] = [".warp-answers", ACKNOWLEDGEMENTS_FILE];
 /// Never prompt "got it?" after a warning or note (as in CI or a pipe)

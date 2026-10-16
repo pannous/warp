@@ -307,6 +307,10 @@ impl Exporter {
 			let event = self.returning.clone().ok_or("not in W0: a return outside a function body")?;
 			return Ok(format!(".emit {} ({})", quoted(&event), self.expression(&value)?));
 		}
+		// an item written into a list or field raises when it is a stored error, as warp's emitter checks it
+		if let Some((item, place)) = crate::lowering::data_items::marked_item(node) {
+			return Ok(format!(".written ({}) {}", self.expression(item)?, quoted(&place.holds_no_error())));
+		}
 		match node.drop_meta() {
 			Node::Number(Number::Int(n)) => Ok(format!(".int ({n})")),
 			Node::Number(Number::Float(x)) if Number::is_exact_decimal(*x) => {

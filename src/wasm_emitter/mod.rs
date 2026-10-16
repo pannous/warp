@@ -219,7 +219,9 @@ pub struct WasmGcEmitter {
 	/// The function being compiled returns a $NodeList
 	returns_list: bool,
 	compare_witness: Option<reflection::witness::WitnessTable>, // runtime dispatch of Comparable to user types (witness.rs)
-	late_calls: Vec<functions::late_calls::LateCall>,           // runtime calls of warp-written functions (late_calls.rs)
+	text_witness: Option<reflection::witness::WitnessTable>,    // runtime dispatch of Printable to user types (witness.rs)
+	shown: Option<u32>, // the function giving main's value with printable instances as their texts (witness.rs)
+	late_calls: Vec<functions::late_calls::LateCall>, // runtime calls of warp-written functions (late_calls.rs)
 	closures: functions::closures::ClosureTypes,
 	/// The user function whose body is being compiled; None in main
 	compiling: Option<String>,
@@ -304,6 +306,8 @@ impl WasmGcEmitter {
 			list_abi: HashMap::new(),
 			returns_list: false,
 			compare_witness: None,
+			text_witness: None,
+			shown: None,
 			late_calls: vec![],
 			closures: functions::closures::ClosureTypes::default(),
 			compiling: None,
@@ -662,6 +666,7 @@ impl WasmGcEmitter {
 		self.compile_user_functions();
 		self.emit_component_adapters();
 		self.emit_compare_dispatcher();
+		self.emit_text_dispatcher();
 		self.emit_node_main(node);
 		let missing: Vec<Need> = self.discovered_needs.iter().filter(|need| !self.is_provided(need)).copied().collect();
 		if let Some(unprovidable) = missing.iter().find(|need| self.inherited_needs.contains(need)) {
@@ -842,6 +847,7 @@ impl WasmGcEmitter {
 			func.instruction(&I::Call(*poll));
 		});
 		self.emit_node_instructions(&mut func, node);
+		self.emit_shown_value(&mut func);
 		signal_poll.iter().for_each(|poll| {
 			func.instruction(&I::Call(*poll));
 		});
@@ -1117,7 +1123,7 @@ pub fn bracket_info(bracket: &Bracket) -> i64 {
 
 /// The separators of a list by their code above SEPARATOR_SHIFT (None is 0: a list made at run time names none)
 pub const SEPARATORS: [Separator; 6] =
-	[Separator::None, Separator::Space, Separator::Colon, Separator::Semicolon, Separator::Newline, Separator::Tab];
+	[Separator::None, Separator::Space, Separator::Comma, Separator::Semicolon, Separator::Newline, Separator::Tab];
 
 /// The code of a list's separator, as `separated` and `n.separator` know it
 pub fn separator_code(separator: &Separator) -> i64 {

@@ -48,7 +48,8 @@ const ASCII_LOWERCASE_BIT: i32 = 0x20;
 pub(in crate::wasm_emitter) const ELEMENT_CHILDREN: &str = "element_children";
 pub(in crate::wasm_emitter) const ELEMENT_BODY: &str = "element_body";
 /// Runtime functions that read text by one of its units (byte, code point, grapheme)
-const TEXT_UNIT_USERS: [&str; 7] = [
+const TEXT_UNIT_USERS: [&str; 8] = [
+	crate::library_words::TEXT_GRAPHEMES,
 	"node_count",
 	"node_bytes",
 	"string_char_at",
@@ -59,7 +60,7 @@ const TEXT_UNIT_USERS: [&str; 7] = [
 ];
 /// Runtime functions that read text code point by code point (utf8_next, utf8_decode) without its unit cursors
 const CODE_POINT_READERS: [&str; 4] =
-	["text_chars", "text_upper", "text_lower", super::super::text::similarity::TEXT_FOLD];
+	[crate::library_words::TEXT_CODE_POINTS, "text_upper", "text_lower", super::super::text::similarity::TEXT_FOLD];
 
 /// The globals of the list cursor (emit_list_cursor_globals): the list indexed last, the cell and index found there, the
 /// list counted last and its count, the list extended last and its last cell
@@ -764,21 +765,28 @@ impl WasmGcEmitter {
 			s.call(f, "text_grapheme_offset");
 			f.instruction(&I::LocalSet(start));
 			s.emit_text_bounds(f, stop, end);
-			Self::emit_list(f, &[I::LocalGet(start), I::LocalGet(end)]);
-			s.call(f, "grapheme_end");
-			Self::emit_list(f, &[I::LocalSet(stop), I::LocalGet(start), I::LocalGet(end)]);
-			s.call(f, "utf8_next");
-			#[rustfmt::skip]
-			Self::emit_list(f, &[
-				I::LocalGet(stop), I::I32Eq, I::If(BlockType::Result(node_ref)),
-					I::LocalGet(start), I::LocalGet(end),
-			]);
-			s.call(f, "utf8_decode");
-			s.call(f, "new_codepoint");
-			Self::emit_list(f, &[I::Else, I::LocalGet(start), I::LocalGet(stop), I::LocalGet(start), I::I32Sub]);
-			s.call(f, "new_text");
-			f.instruction(&I::End);
+			s.emit_grapheme_node(f, start, stop, end);
 		});
+	}
+
+	/// The grapheme starting at the local `start` of a text ending at `end` as a node, its end left in `stop`: a Codepoint
+	/// when it is one code point, else the cluster as Text sharing the bytes (string_char_at, text_graphemes)
+	pub(in crate::wasm_emitter) fn emit_grapheme_node(&self, f: &mut Function, start: u32, stop: u32, end: u32) {
+		let node_ref = Ref(self.node_ref(false));
+		Self::emit_list(f, &[I::LocalGet(start), I::LocalGet(end)]);
+		self.call(f, "grapheme_end");
+		Self::emit_list(f, &[I::LocalSet(stop), I::LocalGet(start), I::LocalGet(end)]);
+		self.call(f, "utf8_next");
+		#[rustfmt::skip]
+		Self::emit_list(f, &[
+			I::LocalGet(stop), I::I32Eq, I::If(BlockType::Result(node_ref)),
+				I::LocalGet(start), I::LocalGet(end),
+		]);
+		self.call(f, "utf8_decode");
+		self.call(f, "new_codepoint");
+		Self::emit_list(f, &[I::Else, I::LocalGet(start), I::LocalGet(stop), I::LocalGet(start), I::I32Sub]);
+		self.call(f, "new_text");
+		f.instruction(&I::End);
 	}
 }
 

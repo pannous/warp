@@ -2,7 +2,7 @@
 
 Roadmap card: sound (board topic; its sub-cards are the steps and leftovers below, notes/roadmaps.md).
 
-`lib/sound.warp` (sample: samples/music.warp), loaded without `use` when a program calls play, beep, stop_sound or
+`lib/sound.warp` (sample: samples/sound/music.warp), loaded without `use` when a program calls play, beep, stop_sound or
 wait_sound (src/modules.rs SOUND_SETUP_FREE_WORDS). Every other sound word (melody, tone, pattern, live_loop,
 render_sound, sound_queued, play_file, the midi words) needs `use sound`; called bare it is the error naming the use
 (card bizarre-global, P171; user, 2026-10-11):
@@ -47,14 +47,14 @@ shadowed_apart leaves globals alone; other program variables named like a module
 `spectrum_window` (512) samples from `seconds` on, 0 to 1: one Hann-weighted DFT term per band (`band_level`), bands
 spaced evenly in pitch from `band_low` 60 Hz to `band_high` 5 kHz (`band_frequency`, `nearest_band`). Plain warp, so the
 playground computes the same; 16 bands take about 11 ms natively. A single tone at loudness 0.3 reads about 0.16 in its
-band. samples/visualizer.warp plays a tune and paints the bars with falling peaks each 40 ms of real time (clock),
+band. samples/sound/visualizer.warp plays a tune and paints the bars with falling peaks each 40 ms of real time (clock),
 natively a window, headless PNG frames (tests/programs/test_sound_spectrum.rs).
 Bugs it found, fixed on the way: float elements of a comprehension or a function's list read as ints in loop bodies, as
 arguments of a parameter that also gets ints, and in `==` ("not an int", tests/lists/test_number_list_elements.rs).
 `shown = [0.0, 0.0]` is still a list of ints (0.0 is exact), so the sample writes `[0.0 as float for …]` until the
 exact-decimal list decision (warp-numbers) lands.
 
-## MIDI (card midi-out, layer 7 started; samples/midi.warp, tests/programs/test_midi.rs)
+## MIDI (card midi-out, layer 7 started; samples/sound/midi.warp, tests/programs/test_midi.rs)
 `write_midi(path, notes)` / `read_midi(path)`: Standard MIDI Files (format 0, 480 ticks a quarter at 120 bpm; reading takes
 formats 0 and 1, running status, tempo changes) of notes `[start s, pitch, length s, velocity]`; they cross to the host as
 flat whole numbers `[start ms, key, length ms, velocity …]` (src/sound/midi.rs natively, host-files.js midiFileOf / midiNotesOf in
@@ -107,11 +107,11 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    `stop_sound(h)` drops that one from the queue or stops its player, `stop_sound` (handle 0) all of them
    (tests/programs/test_sound_handles.rs). lib/sound.warp's sound names the handle before returning it: card
    block-data-sound.
-   Tempo built (step 4, 2026-10-10, samples/rhythm.warp): `1/4 beat`, `2 beats`, `1 bar` are seconds at the
+   Tempo built (step 4, 2026-10-10, samples/sound/rhythm.warp): `1/4 beat`, `2 beats`, `1 bar` are seconds at the
    module's `tempo` (beats per minute, 120) and `beats_per_bar` (4), anywhere in a program that uses sound: the
    amount is the item before the word, of an assignment its value (src/lowering/words/music_words.rs → lib beat_seconds,
    bar_seconds; tests/programs/test_sound_tempo.rs). Not units of the static unit checker: a beat is no SI time.
-   Voices built (step 5, 2026-10-10, samples/voices.warp): every task (`go { }`) is a voice. It forks its starter's
+   Voices built (step 5, 2026-10-10, samples/sound/voices.warp): every task (`go { }`) is a voice. It forks its starter's
    place in time (src/sound/mod.rs Voice, joined in src/host/tasks.rs spawn), so a task's notes sound along with the
    starter's instead of after them; each queued sound plays from its own sleeping thread (overlapping players, the OS
    mixes), and render_sound mixes the sounds at their logical places (tests/programs/test_sound_voices.rs).
@@ -121,7 +121,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    Worker is back in its event loop (after `await`), so a start already past plays at once. A task's sounds go back
    with its result to the starter's run (host-tasks.js withTaskSounds), each at its place on its voice
    (voiceSounded), and render_sound mixes them as natively (host-files.js mixed; card playground-drops).
-   Scheduling built (card sample-accurate, samples/arrangement.warp): `at 2 beats play C4`, `at 1 bar { … }` is the
+   Scheduling built (card sample-accurate, samples/sound/arrangement.warp): `at 2 beats play C4`, `at 1 bar { … }` is the
    statement between sound_at(time) and sound_at_end() (music_words.rs): its sounds start at that time counted from
    the voice's first sound (Voice origin), then the voice goes on where it stood. Exact to the sample in render_sound,
    which now counts from where the last render ended (so the silence before an `at` stays) and in the browser's
@@ -131,7 +131,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    equal-tempered frequency to a hundredth of a Hz (A4 = 440), when the program uses sound and doesn't define that
    name; `F#4` parses as `F # 4` and counts as the note unless the program defines `F` (music_words.rs; the parser
    lets ♯ ♭ continue a name). tests/programs/test_sound_notes.rs.
-   Music values built (card music-values, samples/harmony.warp, tests/programs/test_music_values.rs): a note name
+   Music values built (card music-values, samples/sound/harmony.warp, tests/programs/test_music_values.rs): a note name
    lowers to `midi_hertz(midi)`, so `tuning = 442` (A4, default 440) tunes every note; `midi(pitch)`,
    `note_name(pitch)` (sharps: "D#4"); `transpose(pitch or list, semitones)` keeps a note a note (transpose(C4, 12)
    == C5 to the hundredth) and multiplies any other frequency; `chord(root, kind)`, `scale(root, kind)` are lists of
@@ -149,12 +149,12 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    modules in front (units excepted: it still moves whole, MODULES_COMPILED_AS_PROGRAM, its methods need its number
    words as program code), and records the module functions returning such a class (module_returned_classes) so
    class_methods types `n = note(C4)` for `n + 7`. Still to build: just intonation, velocity, named intervals.
-3. Built (2026-10-10, samples/synth.warp, tests/programs/test_sound_synth.rs): the ADSR envelope of every note,
+3. Built (2026-10-10, samples/sound/synth.warp, tests/programs/test_sound_synth.rs): the ADSR envelope of every note,
    module settings `attack`, `decay` (seconds), `sustain` (a share), `release` (seconds), defaults 5 ms / 0 / 1 / 5 ms
    = the old click-free fade; `wave_shape = "noise"`; gain in decibels, `loudness = -6 dB` (`-6dB`, `x = -6 dB`;
    music_words.rs → lib decibels). The float settings are declared `= 0.3 as float` (card float-global: a float
    assigned to a global declared with a decimal fails "not an int" in the functions that read it).
-   Built (card synth-filters, samples/filters.warp, tests/programs/test_sound_filters.rs): settings `filter`
+   Built (card synth-filters, samples/sound/filters.warp, tests/programs/test_sound_filters.rs): settings `filter`
    ("lowpass", "highpass", "bandpass": an RBJ-cookbook biquad over each note's amplitudes), `cutoff` (Hz),
    `resonance` (Q, 0.707 flat), `vibrato` (semitones) at `vibrato_rate`, `tremolo` (a share) at `tremolo_rate`,
    `unison` voices spread over `detune` semitones. Plain numbers: `cutoff = 1.2kHz` fails (card quantity-global).
@@ -177,7 +177,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    nodes and buses as values, effects (delay, reverb, compressor, distortion, EQ), a mixer.
 5. Samples and files. Load WAV/MP3/OGG/FLAC, play at a pitch or rate, slice, loop points (card sound-samples); render offline to a file
    (`render 8 bars to "song.wav"`), which is also how tests check audio without speakers.
-   Samples built (card sound-samples, samples/sound_kick_samples.warp, tests/programs/test_sound_samples.rs): lib/sound.warp
+   Samples built (card sound-samples, samples/sound/sound_kick_samples.warp, tests/programs/test_sound_samples.rs): lib/sound.warp
    `class Sample {rate, channels, frames}`; `sample(path)` reads a file through the host word sound.load
    (src/sound/audio_files.rs: WAV decoded in Rust, other formats converted by afconvert or ffmpeg first), then
    sample_seconds, sample_slice(clip, from, to), sample_slices(clip, n), sample_looped(clip, seconds, from, to),
@@ -194,7 +194,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    browser and in a CoreAudio render callback natively: the same code both ways, which is where wasm-first warp beats
    other languages. Needs f32 arrays without boxing (today samples cross as a list of Ints), no allocation in the
    callback, 44.1/48 kHz stereo.
-   Native first step built (card real-time, samples/siren_sound.warp, tests/programs/test_sound_signal.rs):
+   Native first step built (card real-time, samples/sound/siren_sound.warp, tests/programs/test_sound_signal.rs):
    `play_signal(hum, 2s)` calls the program's `hum(t)` for every sample (t in seconds, at sample_rate), mono. The
    host word (host/native.rs played_signal) calls the export typed (f64) -> f64; music_words.rs makes the function
    of floats to a float (untyped parameters `: float`, body `as float`, so `hum(t) := 3.0` works too). On warp's own
@@ -206,7 +206,7 @@ The words above are layer 1, the toy layer. Each layer below keeps the ones abov
    (`global level = 0.0`) is an exact ratio whose denominator gains about a bit a sample (the blow-up beyond that,
    unreduced ratios, is fixed: card exact-decimals), so floats stay the way for DSP state.
    About 10× faster than real time in a debug build (20 s of two sines in 2.3 s, compile included).
-   Block-wise built (samples/stereo_sound.warp, same test file): `play_blocks(fill, 2s)` calls `fill(block, t)` once
+   Block-wise built (samples/sound/stereo_sound.warp, same test file): `play_blocks(fill, 2s)` calls `fill(block, t)` once
    a block, block a linear float array (notes/linear_arrays.md) of 512 cells to write, t its first sample's time.
    music_words.rs with_block_signals declares `linear fill·block = float[512]` and `fill·blocks(t: float)`, which
    calls fill with it (so fill's parameter is the linear array), and writes the call out as std_io("sound", "blocks",
@@ -305,13 +305,13 @@ So: Web Audio semantics, warp words, one engine for rendering, cpal (CoreAudio/A
 destination for output. Not a wrapper over each platform's own high-level API (AVAudioEngine, GStreamer): those
 differ in model and would make the browser and native sound differ.
 
-## Signal graph built (card signal-graph, 2026-10-10, samples/signal_graph.warp, tests/programs/test_sound_effects.rs)
+## Signal graph built (card signal-graph, 2026-10-10, samples/sound/signal_graph.warp, tests/programs/test_sound_effects.rs)
 The simple form of layer 4: every sound passes a fixed effect chain distortion → delay → reverb between the voices and the
 output (lib/sound.warp `through_effects`, run in `sound()` over the whole phrase, so a melody has one tail). Module settings
 `distortion` (soft-clipper drive), `delay_time` / `delay_feedback` / `delay_mix`, `reverb_mix` (four Schroeder combs, 0.6 s
 tail); all off by default (no cost). The settings at the time of `play` are that sound's sends, so each voice (task) sets its
 own. Pure warp, so the playground runs the same. The pipe form is built (card sound-pipe-graph,
-samples/sound_pipes.warp, tests/programs/test_sound_pipes.rs): a signal is the list of its amplitudes, a node a function
+samples/sound/sound_pipes.warp, tests/programs/test_sound_pipes.rs): a signal is the list of its amplitudes, a node a function
 of it, so `osc(C4, 1s, "saw") |> lowpass(900) |> delay(0.25) |> reverb(0.3) |> gain(0.5) |> out`; nodes osc, lowpass /
 highpass / bandpass (frequency, q), delay (seconds, feedback, mix), reverb (mix), distort (drive), gain, out (plays it
 through `sound`, so the settings chain and pan still apply); `mix(a, b[, c, d])` sums signals to the longest, a bus as a

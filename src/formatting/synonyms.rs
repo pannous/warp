@@ -1,18 +1,13 @@
 //! `warp beautify`'s rule "synonyms canonical" (decision warp-format, card warp-format-strict): a word the compiler
 //! notes as another language's word for a warp word (diagnostic::note_alias: `auto` → var, `__add__` → plus) becomes
 //! the warp word by the note's "I meant" fix. A fix is kept only when the program still lowers to the same code
-use super::Change;
+use super::{lowered, Change};
 use crate::errors::diagnostic::{every_hint_of, take_warnings, Diagnostic, ALIAS_TOPIC_PREFIX};
 use crate::errors::fixits;
 use crate::warp_parser::FLOOR_DIVISION_TOPIC;
 
 const RULE: &str = "synonyms canonical";
 const FLOOR_DIVISION_RULE: &str = "floor division /!";
-
-/// The program as the emitter gets it, to compare; None when it does not lower
-fn lowered(code: &str) -> Option<String> {
-	crate::pipeline::lower(code).ok().map(|program| program.serialize())
-}
 
 fn is_alias_note(hint: &Diagnostic) -> bool {
 	hint.topic.as_deref().is_some_and(|topic| topic.starts_with(ALIAS_TOPIC_PREFIX)) && !hint.fixes.is_empty()
