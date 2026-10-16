@@ -6,7 +6,12 @@ notes/decisions.md, work goes on the board (`todo add`), rules go where they are
 the wiki).
 
 ## Pending
-(none)
+- floor-division (card floor-division, the user's `/!` idea; warp-parser asks, 2026-10-16 night): the card says
+  "`//` always a comment, `div` stays the html tag, `warp fix` rewrites `7//2` and `7 div 2` to `/!`", which
+  conflicts with decisions.md (`//` is floor division unless a space or line end follows; `x //= y`). (a) keep `//`
+  as floor division too, `/!` an extra spelling [default, shipping]; (b) `//` only a comment, `/!` the one floor
+  division, `warp fix` rewrites `7//2` → `7 /! 2` (`n = 7//2` becomes 7 plus a comment). Separately: `7 div 2` stays
+  floor division, or only the html tag? Left for the user (their own card text vs an earlier decision).
 
 ## To present (Interviewer's decisions, 2026-10-15 evening; user: "you make the decisions tonight and tomorrow
 morning you present the decisions and we can still undo everything")
