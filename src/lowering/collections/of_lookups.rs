@@ -2,7 +2,8 @@
 //! `first 3 of xs` is `xs.first(3)`, `a of b of c` is `c.b.a`; the passes after this one read only the dot form.
 //! `of` binds tighter than any operator: `name of p + 1` is `p.name + 1`, `listeners of alarm -= h` is
 //! `alarm.listeners -= h`. Not lookups: a type phrase `list of int` (a type word before `of`) and a spaced definition
-//! `square of a number = …`. The object is one item with its qualifier: `name of people with age > 20` reads the field of
+//! `square of a number = …` (a type word names its parameter). A lookup is an assignment target too:
+//! `width of p = 12` is `p.width = 12` (decision setter-calls). The object is one item with its qualifier: `name of people with age > 20` reads the field of
 //! the filtered list. `type of x` is the call `type(x)`, so both spellings answer alike (card type-of-consistency).
 //! `in` and `from` select the same way after a selector word the program does not define (card of-in-chain):
 //! `length of characters in text` is `text.characters.length`; otherwise `x in xs` stays the membership test, and the
@@ -47,7 +48,7 @@ fn rewrite(node: Node, selectors: &[&str]) -> Node {
 			items,
 			bracket @ (Bracket::None | Bracket::Round | Bracket::Curly),
 			separator @ (Separator::Space | Separator::None),
-		) if spaced_statement(&items).is_none() => {
+		) if !is_spaced_definition(&items) => {
 			let items = looked_up(type_of_called(items), selectors);
 			match (items.len(), &bracket) {
 				(1, Bracket::None) => items.into_iter().next().expect("one item"),
@@ -58,6 +59,13 @@ fn rewrite(node: Node, selectors: &[&str]) -> Node {
 		other if type_of_body(&other).is_some() => type_of_called(vec![other]).pop().expect("one item"),
 		other => other,
 	}
+}
+
+/// `square of a number = …`, `f x = …`: a definition head; `width of p = 12` without a type word assigns the lookup
+fn is_spaced_definition(items: &[Node]) -> bool {
+	spaced_statement(items).is_some_and(|(_, words, body)| {
+		!words.contains(&OF_WORD) || crate::lowering::type_name_matching::spaced_parameters(&words, body).is_some()
+	})
 }
 
 /// An assigned value arrives grouped, `x = sum of xs` as `sum (of xs)`, `x = name of q with a` as
