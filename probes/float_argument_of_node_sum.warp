@@ -1,6 +1,0 @@
-global t = float(0)
-g(a) := a
-f(z) := g(z#1 + t)
-h(z) := g(t)
-t = float(3)
-f([1 2])

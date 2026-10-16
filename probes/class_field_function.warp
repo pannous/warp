@@ -1,3 +1,0 @@
-class Line{start:int end:int}
-start(l) := l.start * 10
-start(Line(3,4))

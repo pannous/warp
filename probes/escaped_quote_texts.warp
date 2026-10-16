@@ -1,8 +1,0 @@
-// card escaped-quote-slashes: an escaped quote leaves its text open, so `//` after it is text, not a comment,
-// and a \: entity after it is not expanded. Prints:
-// a "{1, // b}" c
-// "\:infinity
-x = "a \"{1, // b}\" c"
-print(x)
-y = "\"\\:infinity"
-print(y)

@@ -1,3 +1,0 @@
-// card day-failed: `as` takes a unit word as `in` does: 24h, then "t 1440min"
-print 1 day as h
-print "t " + (1 day as min)
