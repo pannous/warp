@@ -78,3 +78,9 @@ fn a_class_member_or_variable_may_take_a_library_word() {
 	is!("class P{count:int}; P(2).count", 2);
 	is!("class B{w:int; first() := w * 2}; B(4).first()", 8);
 }
+
+// a destructured parameter binds its names inside the function: `width` there is no canvas side
+#[test]
+fn a_destructured_parameter_named_like_a_canvas_side() {
+	is!("area({width, height}) := width * height\nm = {width: 3, height: 4}\narea(m)", 12);
+}

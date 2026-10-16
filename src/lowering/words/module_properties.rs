@@ -215,14 +215,17 @@ fn without_definitions(node: Node) -> Node {
 	}
 }
 
-/// The names the program gives: variables, functions, their parameters (`def f(width) {…}` too), loop variables,
-/// fields; a property written (`canvas.width = 3`) binds no name
+/// The names the program gives: variables, functions, their parameters (`def f(width) {…}` and the destructured
+/// `area({width, height})` too), loop variables; a field binds its name only inside its object or class
+/// (Rewrite::rewritten), a property written (`canvas.width = 3`) binds no name
 pub(crate) fn bound_names(program: &Node) -> HashSet<String> {
 	let names = crate::soft_keywords::names_given_with_kinds(program).into_iter();
 	let mut bound: HashSet<String> = names.filter(|(_, kind)| *kind != "field").map(|(name, _)| name).collect();
 	program.visit(&mut |node| {
 		if let Some(head) = function_head(node) {
-			bound.extend(head.parameters().into_iter().filter_map(parameter_name));
+			let parameters = head.parameters();
+			bound.extend(parameters.iter().flat_map(|parameter| destructured_names(parameter)));
+			bound.extend(parameters.into_iter().filter_map(parameter_name));
 		}
 		match node {
 			Node::Key(target, op, _) if op.is_write() || *op == Op::Define => {
@@ -233,6 +236,16 @@ pub(crate) fn bound_names(program: &Node) -> HashSet<String> {
 		}
 	});
 	bound
+}
+
+/// `width` and `h` of a destructuring parameter `{width, height: h}`
+fn destructured_names(parameter: &Node) -> Vec<String> {
+	let Node::List(entries, Bracket::Curly, _) = parameter.drop_meta() else { return vec![] };
+	let name = |entry: &Node| match entry.drop_meta() {
+		Node::Key(_, Op::Colon, name) => name.drop_meta().symbol_name().map(String::from),
+		other => other.symbol_name().map(String::from),
+	};
+	entries.iter().filter_map(name).collect()
 }
 
 /// The fields `{width: 5}` or `class R{width: int}` declares
