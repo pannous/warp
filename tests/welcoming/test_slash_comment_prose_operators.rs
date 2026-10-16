@@ -1,5 +1,5 @@
 // card comment-after: prose after `//` stays prose though it holds an operator character (`// GET /api/users`,
-// samples/server.warp): two words side by side divide nothing; `// n*2` and `// (n - 1)` still read like a divisor
+// samples/servers/server.warp): two words side by side divide nothing; `// n*2` and `// (n - 1)` still read like a divisor
 use warp::errors::diagnostic::{use_acknowledgements_file, with_acknowledger, Acknowledging};
 use warp::normalize::capture_hints;
 

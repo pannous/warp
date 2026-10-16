@@ -58,7 +58,7 @@ const WARP_FORMS: [StdAlias; 1] = [alias("json", "parse", "json", "parse_json", 
 const BARE_FORMS: [StdAlias; 1] = [alias("", "json", "json", "parse_json", &[0])];
 /// Standard words read as a member of any value, `value.member`: `x.json` is to_json(x) (card node-json)
 const MEMBER_FORMS: [StdAlias; 1] = [alias("", "json", "json", "to_json", &[0])];
-const USE_WORD: &str = "use";
+pub(crate) const USE_WORD: &str = "use";
 /// Old names of standard words, still working, and how warp writes them now: called by hand, a got-it note names it
 const OLD_NAMES: [(&str, &str); 1] = [("render_sound", "save sound as: file")];
 
@@ -149,7 +149,7 @@ fn aliased_call<'a>(node: &'a Node, kept: &[&str]) -> Option<(&'static StdAlias,
 	let (module, member) = (module.drop_meta().name(), member.drop_meta().name());
 	let shape_items = |arguments: &'a [Node]| match arguments {
 		[tuple] => match tuple.drop_meta() {
-			Node::List(items, Bracket::Round, Separator::Colon) => items.as_slice(),
+			Node::List(items, Bracket::Round, Separator::Comma) => items.as_slice(),
 			_ => arguments,
 		},
 		_ => arguments,

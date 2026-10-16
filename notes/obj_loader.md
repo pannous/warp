@@ -1,4 +1,4 @@
-# The .obj loader of samples/manual_3d_object_viewer.warp (card mv-would, 2026-10-10)
+# The .obj loader of samples/gpu/manual_3d_object_viewer.warp (card mv-would, 2026-10-10)
 
 User: "Would it make sense to create a library with an optimized object loader, or is our own implementation optimized?"
 Answer: no library for now; the warp loader (`triangles(obj)`, 15 lines) is linear and fast enough, and the viewer's

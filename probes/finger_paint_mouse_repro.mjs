@@ -1,4 +1,4 @@
-// Mouse drag over samples/finger_paint on the deployed playground, in headless Chromium and Firefox (Playwright), with
+// Mouse drag over samples/graphics/finger_paint on the deployed playground, in headless Chromium and Firefox (Playwright), with
 // web/playground/canvas.js as deployed or as given (card register-fingers: desktop finger paint said broken after it).
 // Runs on pannous.com (decision browser-server): `node finger_paint_mouse_repro.mjs [directory of files to serve instead]`;
 // FRESH=1 drags right after the page loaded the sample from its address, without a click first, as the user does;
@@ -19,7 +19,7 @@ const overridden = name => overrides && name && existsSync(`${overrides}/${name}
 // UNACTIVATED=1: the page counts as not yet clicked until its first click or key, as for a visitor; Playwright's pages
 // count as activated from the start, so the run on load saw window_open 1 there and never the user's bug
 const unactivated = Boolean(process.env.UNACTIVATED);
-// CODE=<file>: that program runs instead of the deployed sample, before any click (a branch's samples/finger_paint.warp)
+// CODE=<file>: that program runs instead of the deployed sample, before any click (a branch's samples/graphics/finger_paint.warp)
 const code = process.env.CODE && readFileSync(process.env.CODE, "utf8");
 const fresh = Boolean(process.env.FRESH);
 const real = Boolean(process.env.REAL);

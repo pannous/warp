@@ -397,8 +397,8 @@ test_zoned_time_records_its_rules_version, test_rule_change_is_not_silent, test_
   `number of codepoints in "👍🏽"` → 2. Lowered in `declaration_forms::lower_declarations` (`counting_phrase`, `unit_count`) onto
   the existing `t.bytes`/`t.chars`/`t.graphemes` methods; `number of pixels` keeps lowering to `count pixels`.
   The parser no longer takes `#(` at line start as a shell comment (`#x` already counted after a statement).
-- Decided: a `char` is a code point (as `x.chars`, the `char` type, Rust's `chars()`); the user-perceived character is a
-  grapheme. Bare `#t`, `count`, `length`, `number of t` count graphemes, consistent with grapheme indexing `t#i`;
+- Decided (user, 2026-10-16, card consists-characters): a `char` is short for character (alias glyph), a grapheme as
+  `x.chars` and `letters` walk; a code point is its own unit (`t.codepoints`, `for each codepoint in t`). Bare `#t`, `count`, `length`, `number of t` count graphemes, consistent with grapheme indexing `t#i`;
   `size`/`size of t` counts bytes (memory).
 - Decided: case mapping is locale-independent, Unicode default (`"i".upper` → "I", `"İ".lower` → "i̇", `"straße".upper`
   → "STRASSE"), as JS `toUpperCase` and Rust `to_uppercase`. Locale-aware mapping (Turkish/Azeri dotted İ/ı, Lithuanian)
@@ -413,9 +413,10 @@ test_zoned_time_records_its_rules_version, test_rule_change_is_not_silent, test_
 `"👍🏽"` is 8 bytes (Go `len`), 4 UTF-16 units (JS `.length`), 2 code points (Python `len`), 1 grapheme (Swift `.count`).
 **Warp (solved):** the unit is named when it matters. `#t`, `count t`, `length t`, `number of t` count graphemes, the same
 unit `t#i` indexes by; `size` is a synonym of `count` (2026-09-29, was: bytes). Bytes only by explicit unit: `byte count of t` / `number of bytes in t` / `#(byte in t)` / `#(t as bytes)` /
-`t.bytes`; `number of chars in t` = `number of codepoints in t` = `t.chars`; `number of graphemes in t` = `t.graphemes`.
+`t.bytes`; `number of chars in t` = `number of characters in t` = `number of glyphs in t` = `number of graphemes in t`
+(`t.chars` lists them); `number of codepoints in t` = `t.codepoints`.
 `number of chars in "héllo"` → 5, `number of bytes in "héllo"` → 6, `number of codepoints in "👍🏽"` → 2,
-`number of graphemes in "👍🏽"` → 1. A `char` is a code point; a user-perceived character is a grapheme.
+`number of graphemes in "👍🏽"` → 1. A `char` is short for character, a grapheme (user, 2026-10-16: "שָלוֹם" is 4 characters, 6 code points).
 Tests: test_footguns.rs test_number_of_{chars,graphemes,bytes,codepoints}_in_text, test_count_of_text_without_unit.
 
 ### Case mapping and the Turkish İ
@@ -537,7 +538,7 @@ Tests still pinning the old rule (not edited, supervisor decides): tests/welcomi
   `xs#i = v`, `y = n; n = y+1`. A body whose first mention is a fresh `name = value` not reading it (`primes = []`)
   is ambiguous and asks (topic `local-or-global`, analyzer::resolve_main_variable_assignments): "a new local of f"
   (default, explicit form `let n = …`) or "the main-level n" (`global n`, which turns main's first `n = …` into the
-  global declaration). Unanswered it warns and takes the local, as Python does (samples/sieve_idiomatic.warp relies on
+  global declaration). Unanswered it warns and takes the local, as Python does (samples/lists/sieve_idiomatic.warp relies on
   this); `use strict` makes it an error. `let`/`var n = …`, a parameter of the same name, or a local whose name main does
   not use, is the function's own without a question.
 - Tests: tests/welcoming/test_welcoming_globals.rs.

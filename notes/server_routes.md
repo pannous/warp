@@ -112,7 +112,7 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
    check), printing "serving http://localhost:8080 (routes found; `warp run app.warp` runs it once without serving)";
    `warp run` and `warp test` never serve. Probe: probes/warp_serve/app.warp; tests/web/test_warp_serve.rs.
 
-7. **samples/server.warp** (card sample-server, 2026-10-09) runs under `warp serve` and in the playground. Found on the way:
+7. **samples/servers/server.warp** (card sample-server, 2026-10-09) runs under `warp serve` and in the playground. Found on the way:
    - The serving instance lives as long as the server, but a page render runs in an instance of its own and may add
      rows. So every served route (get/post/RPC) starts with `global users; users = database.users` for each table
      variable (serve.rs reading_tables), and database_tables.rs reopens a registered table for that plain assignment.
@@ -129,7 +129,7 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
      answers `[]` (card served-empty). A `server def` whose value is one (or a call of such a function) is a list word
      too, so its POST /rpc/f answers `[]` (serve.rs ServerData, card server-def-giving).
 
-8. **samples/todo_app.warp** (card todo-app, 2026-10-09): a stored `Todo{title: text; done: bool}` table, a list page,
+8. **samples/storage/todo_app.warp** (card todo-app, 2026-10-09): a stored `Todo{title: text; done: bool}` table, a list page,
    a form POSTing a todo, `post "/todos/:id:int/toggle"`, `todos where not done`. It runs under `warp serve`, `warp run`
    and in the playground. Checks: tests/web/test_served_forms.rs `the_todo_sample_creates_toggles_and_lists` (create,
    toggle, list over HTTP), probes/todo_app/check_served.sh (the same with curl against a running `warp serve`), and the
@@ -177,4 +177,4 @@ all. The page build now takes the definition: tests/web/test_server_functions_in
 - A page path: the single page answers every path a route matches, `route "*"` included, with 200 (user 2026-10-07,
   supervisor 2026-10-09). The answer is 404 only when no route matches at all (site.rs matches_no_route_at) or when a
   matched route's lookup misses (`users#9`).
-- Check by hand: `probes/server_edits/curl_checks.sh <warp binary> samples/server.warp <port>`.
+- Check by hand: `probes/server_edits/curl_checks.sh <warp binary> samples/servers/server.warp <port>`.

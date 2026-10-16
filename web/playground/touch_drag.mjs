@@ -1,7 +1,7 @@
 // A finger dragged across the playground's last painting, as a touch screen sends it (Input.dispatchTouchEvent over the
 // DevTools protocol): `node touch_drag.mjs <cdp url> <from> <to>` drags from `from` to `to` of the canvas's width and
 // height, a diagonal, so neither a sideways nor an upright pan fits it; prints "dragged x1,y1 → x2,y2" in CSS pixels,
-// or why not. test_in_browser.py --examples checks that samples/finger_paint painted along it (card
+// or why not. test_in_browser.py --examples checks that samples/graphics/finger_paint painted along it (card
 // register-fingers: the iPad's Safari took the touch over for scrolling, so no finger reached the pointer)
 const STEPS = 20;
 const STEP_MS = 30;

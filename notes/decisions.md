@@ -376,6 +376,13 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   `A as B := body` definitions. The compile-time dimension check (static_units.rs, P64) stays Rust until types can
   be parameterized by a dimension. Not Julia's unit values (`3km = 3*km`): they would bring back clashes with
   variables named m or s.
+- litre-suffix (2026-10-16, user; card list-literal): a glued unit beats a number suffix, so `2L` and `2l` are
+  2 litres (`2L in cm³` → 2000cm³). The old exact suffix L goes: exactness is `2 as exact`, with a hint where the
+  suffix was meant. lib/units.warp gains `unit l := L` and `unit ha := hm²`. Ambiguous glued units need
+  `use units` (user): unambiguous units (`3kg`, `5cm`, km/h) keep working without the import. Glued letters that
+  also mean something else, such as L and l (the old suffix) or a unit named like a variable, are an error without
+  `use units`, with a fix that adds the line: "2L: L is the litre unit here; add `use units` (for an exact number
+  write 2 as exact)".
 - unit-after-number (2026-10-16, user; card variable-named-like): after a number a unit symbol is always the unit,
   even with a variable of that name in scope: `m = 5; 3m` is 3m (meters), with a hint "a variable m exists; write
   3*m to multiply"; `m * 3` is 15. Supersedes the agent-pinned test_variable_shadows_the_unit (`3m` → 15).
@@ -396,7 +403,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - duration-units (2026-10-16 night, Interviewer's proposal, kept by the user 2026-10-16; card
   time-module): the time module's durations and the unit h become one thing, as dimensions-units already makes
   duration the time dimension: `unit hour := 1 h`, `2 hour + 1 h` is 3 hours (today a DimensionError), printing
-  keeps the long names ("3 hours"). The `name` form then goes.
+  keeps the long names ("3 hours"). Amended 2026-10-16 (user, "leave as is"): the `name` form stays (`name hour := h`,
+  `2 h in minutes` → 120min); step 1, where `1 h` beside a duration is a duration, is enough.
 
 ## Text
 - letters (2026-10-15 evening, Interviewer's proposal, kept by the user 2026-10-16; card of-in-chain,
@@ -767,6 +775,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   default branch; a pin is `{repository: pannous/uniscript, version: 1.0.7}`.
 
 ## CLI, building and tests
+- gate-cuts (2026-10-16, user via the Integrator; notes/test_speed.md): each sample runs once in the gate:
+  test_playground_samples checks the playground menu (no error at all), test_samples_run_cleanly only the samples
+  outside it (no compiler error). The self-hosting twins check every 4th source in the gate and all sources in the
+  nightly run (tests/nightly.sh, cron 03:10 on origin/main; a failure files a card).
 - cli-words (2026-10-15, user): warp's own command options are words, never `--flags` ("we don't like this minus
   minus style, ever"), e.g. `warp format check …`, `warp format hash-comments …`; the style guide says so. Card
   cli-words migrates the existing --fuel/--exe/--strict/… (older `--x` mentions below are superseded by it).
@@ -778,10 +790,47 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   lines in lib/math.warp with a "prefer ->" hint (→ ⟶ ➜ … for ->, ⇒ ⟹ for =>, ← ⟵ ⬅ for <-, ⬆ ⇧ for ↑, ⬇ ⇩ for ↓).
   ⇔ ⟺ ↔ ⇑ ⇓ get no built-in meaning for now; an example defines one, e.g.
   `infix operator ⇔(a: bool, b: bool) := a == b`.
+- default-methods (2026-10-16, user; cards library-words, method-call-bare-words): `x.word` and `x.word()` are
+  identical, both resolved by multi-dispatch on the receiver's type. A library word belongs to its type: `first` is
+  a list word, so an object or class with its own member `first` (`p = {first: 1}; p.first` → 1) or a class method
+  `first` is the more specific match and wins. Redefining a library word for its own type (an extension changing
+  `first` for lists) is not allowed, a loud error. No extra override keyword is needed for that.
+- dispatch-untyped-library-words (2026-10-16, user; card one-dispatch): an untyped program function named like a
+  library word (`first(x) := x * 2`) covers every value the library word doesn't: the library's `first(list)` is
+  more specific, so `first(3)` → 6 but `first([1,2])` → 1, with a hint that first of a list stays the library word.
+- round-halves (2026-10-16, user; card round-half-up): `round` rounds halves away from zero (`round(2.5)` → 3,
+  `round(-2.5)` → -3), like school rounding, C and Rust; banker's rounding is `round_even` (2). Where the compiler
+  sees an exact half (a literal or folded constant), a hint says Python would round to even. Unicode spellings
+  (Interviewer's default, from the user's idea): `⌊x⌋` floor, `⌈x⌉` ceil, `⌊x⌉` round (the usual nearest-integer
+  bracket). `x as int` truncates toward zero (`2.7` → 2, `-2.7` → -2), so it rounds down only for positive numbers.
+- class-members-free (2026-10-16, user; card one-dispatch; limits default-methods and library-words-typed):
+  width, height and every other built-in or library word are not keywords. A class field or method gets its own
+  dispatch signature, with that class as the receiver, so it never conflicts with them: `class Box{width:int,
+  height:int}`, `class P{count:int}` and a method `first()` in a class are all fine, and a local variable may shadow
+  one (`width = 5`). The "immutable" and "loud error" rules only forbid redefining a library word for the library's
+  own types (list, text, number…), never members of user classes.
+- library-words-typed (2026-10-16, user; cards library-typed, one-dispatch): harden the library. Every library word
+  gets a full type signature (`square(x: number): number`, `count(xs: list): int`), and typed library words are
+  immutable for their types until further notice. A program's untyped definition covers only other values, with a
+  hint: `count(x) := 7; count([1,2])` → 2, `square(x) := 777; square(4)` → 16, `floor(x) := x+10; floor(2.5)` → 2.
+  This extends dispatch-untyped-library-words from collection words to all library words.
+- type-words-reserved (2026-10-16, user; card one-dispatch): every type word is reserved as a function name,
+  `double(x) := …` and `hex(x) := …` alike; the error offers "name it to_double".
+- field-forms (2026-10-16, user; card one-dispatch): plain fields keep only `.` and `of` (read, and set with
+  `b.w = 5` / `w of b = 5`); `w(b)`, `b.w(5)` and `w(b, 5)` stay errors for a plain field. Only properties (accessor
+  definitions) answer every call form.
+- is-union (2026-10-16, implied by union-return; card int-text): after `is`, `int or text` is a type, so
+  `v is int or text` means `v is (int or text)`.
 - fuel-metering (2026-10-16, user; card fuel-metering): runaway loops are stopped by the epoch timer with a time
   limit by default (about 1–5% overhead, stops at a slightly different step each run). Fuel, the exact step budget
   that cost 4.4× on calls (40M calls: 218 ms against 49 ms), runs only on request: `use fuel`, the CLI word
   `warp fuel N app.warp`, and tests that pin a step count.
+  Numbers (warp-types default, Interviewer's amendment, undoable): `warp app.warp` gets 60 s of CPU time (waits for
+  sleep or input don't count), set with WARP_TIME_LIMIT=<seconds>, and WARP_FUEL selects fuel. Compile-time folding
+  of constant calls counts fuel instead (Interviewer's decision after the reviewer's point: a 2 s wall-clock limit made
+  compiled output and error timing depend on machine load; the budget is roughly 2 s' worth). `warp build` executables get no limit by default, since a built app runs as long as it
+  likes. Windowed and event-loop programs aren't killed after 60 s in total. A stop after the limit says loudly what
+  happened and how to raise it.
 - ready-queue (2026-10-16, user via the boss and the supervisor): the board's Ready column is the merge queue. A
   worker runs its targeted tests, pushes the finished branch, makes sure it merges cleanly into origin/main, and
   hands it off with `todo ready <card> [branch]` (tip read from git); only the re-run after a clean update is dropped. `todo ready` refuses
@@ -797,7 +846,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - text-unit-plurals (2026-10-16, user; card text-unit): every plural unit word of a text is the list:
   `"👍🏽".chars` → ['👍🏽'], `.codepoints` → ['👍' '🏽'], `.graphemes`, `.bytes` → [240 159 …], like words and lines.
   Counting is `count t.codepoints` or `number of bytes in t`. Code reading `t.codepoints` as a number migrates to
-  `count` (a `warp fix` rewrite where detectable).
+  `count` (a `warp fix` rewrite where detectable). `.bytes` is the byte list for every value, not only texts (user:
+  the memory size via `.bytes` was barely used). The size is `x.bytes.count` or `x.bytecount`; `byte_size(x)` and
+  `byte count of x` stay.
 - implicit-words-reserved (2026-10-16, user; card it-reserved): `it`, `self` and `this` are reserved. Binding one
   (`self = 3`, `it += 1`, `for this in xs`, destructuring) warns "`self` is reserved: it names the receiver of a
   method; pick another name", an error under use strict. Writing it as the explicit parameter (`f(it) := …`,
@@ -807,6 +858,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   was meant to be a test: exploratory, visual, sound, timing and undecided ones stay probes). It also dedupes and
   condenses tests, which widens the earlier "only probes condense": no distinct assertion is lost or weakened, and the
   count drops only by duplicates named in the commit. A probe is deleted only once every case is asserted.
+  Probes the user touched are never deleted (a "(user)" commit, a shebang or executable bit, commented wish lines);
+  wish lines that don't work yet become cards. The 21:37 check found english_setter fully covered, but it and
+  function_values_tour were user scripts, so both were restored (2026-10-16).
 - fast-scope (2026-10-16, user; card fast-scope): `fast` before a function or module makes everything machine
   inside it: polynomial sin/cos/exp/pow, `/` gives f64 (`fast f(x) := x/3; f(1)` → 0.3333333333333333), and plain
   ints are i64 that wrap at 2^63 (`fast g(n) := n * n; g(10^10)` wraps). `x: fast int` is i64, `x: fast float` f64;
