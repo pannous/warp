@@ -1662,6 +1662,8 @@ PASSED:
   ✓ functions::test_object_arguments::the_to_phrase_types_its_parameter_by_the_class
   ✓ functions::test_ocaml_fun::ocaml_fun_is_an_error_naming_the_arrow_lambda
   ✓ functions::test_ocaml_fun::warps_lambda_and_kotlins_fun_still_work
+  ✓ functions::test_one_item_list_math::a_list_of_one_number_stays_a_list
+  ✓ functions::test_one_item_list_math::one_number_stays_one_number
   ✓ functions::test_operator_arguments::a_word_operator_alone_stays_a_name
   ✓ functions::test_operator_arguments::an_operator_argument_is_the_operator
   ✓ functions::test_operator_word_methods::a_definition_of_an_operator_word_without_parentheses_is_refused
@@ -6024,4 +6026,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6019 passed, 0 failed, 6019 total tested
+13 ignored, 6021 passed, 0 failed, 6021 total tested
