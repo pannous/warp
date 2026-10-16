@@ -1265,6 +1265,7 @@ PASSED:
   ✓ functions::test_braceless_calls::print_prints_the_braceless_call_of_the_joined_arguments
   ✓ functions::test_braceless_calls::real_functions_nest_without_parentheses
   ✓ functions::test_braceless_calls::the_arguments_after_a_comma_join_a_braceless_call_wherever_it_stands
+  ✓ functions::test_braceless_closure_call::a_function_variable_given_a_number_is_refused
   ✓ functions::test_braceless_closure_call::a_function_variable_is_called_without_parentheses
   ✓ functions::test_broadcast_of_list_variables::a_broadcast_of_a_list_variable_assigned_is_a_list_variable
   ✓ functions::test_broadcast_of_list_variables::a_word_around_a_broadcast_of_a_list_variable_maps_too
@@ -3381,6 +3382,8 @@ PASSED:
   ✓ parser::test_format_layout::test_parameter_types_spaced
   ✓ parser::test_format_layout::test_soft_hints_never_rewrite
   ✓ parser::test_format_layout::test_unparsed_code_is_not_formatted
+  ✓ parser::test_format_semicolons::a_semicolon_in_a_text_stays
+  ✓ parser::test_format_semicolons::a_semicolon_is_followed_by_one_space
   ✓ parser::test_glued_method_block::a_glued_block_after_a_dot_is_a_call
   ✓ parser::test_glued_method_block::a_glued_block_starting_an_item_stays_data
   ✓ parser::test_glued_pair_value::a_glued_pair_ends_at_its_word
@@ -6018,4 +6021,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6013 passed, 0 failed, 6013 total tested
+13 ignored, 6016 passed, 0 failed, 6016 total tested
