@@ -728,10 +728,15 @@ fn definition_parts(definition: Node) -> Option<(Node, Op, Node)> {
 		Node::Key(head, Op::Colon, body) if matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if (items.len() > 1 || crate::blocks::contains_yield(&body)) && matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))) => {
 			(*head, Op::Define, *body)
 		}
+		// `def hello {…}` without parentheses has no parameters, as `def hello() {…}`
 		Node::List(parts, Bracket::Round, _)
 			if parts.len() == 2 && matches!(parts[1].drop_meta(), Node::List(_, Bracket::Curly, _)) =>
 		{
-			(parts[0].clone(), Op::Define, parts[1].clone())
+			let head = match parts[0].drop_meta() {
+				Node::Symbol(_) => parens(vec![parts[0].clone()]),
+				_ => parts[0].clone(),
+			};
+			(head, Op::Define, parts[1].clone())
 		}
 		_ => return None,
 	})
