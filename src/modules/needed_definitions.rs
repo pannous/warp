@@ -417,11 +417,27 @@ pub(crate) fn renamed_apart(definitions: Vec<Node>, names: &[String]) -> Vec<Nod
 		.collect()
 }
 
-/// `from` as a word renamed `to`; a field `x.from` keeps its name
+/// `from` as a word renamed `to`; a field `x.from` and a map's key `{from: …}` keep their name (card map-key)
 pub(crate) fn renamed_word(node: Node, from: &str, to: &str) -> Node {
 	match node {
 		Node::Symbol(name) if name == from => Node::Symbol(to.to_string()),
 		Node::Key(receiver, Op::Dot, field) => Node::Key(Box::new(renamed_word(*receiver, from, to)), Op::Dot, field),
+		Node::List(items, Bracket::Curly, separator) => Node::List(
+			items.into_iter().map(|item| renamed_entry_value(item, from, to)).collect(),
+			Bracket::Curly,
+			separator,
+		),
 		other => other.map_children(|child| renamed_word(child, from, to)),
+	}
+}
+
+/// A map entry `from: value` with only its value renamed; any other item as a whole
+fn renamed_entry_value(item: Node, from: &str, to: &str) -> Node {
+	match item {
+		Node::Meta { node, data } => Node::Meta { node: Box::new(renamed_entry_value(*node, from, to)), data },
+		Node::Key(name, Op::Colon, value) if matches!(name.drop_meta(), Node::Symbol(_)) => {
+			Node::Key(name, Op::Colon, Box::new(renamed_word(*value, from, to)))
+		}
+		other => renamed_word(other, from, to),
 	}
 }
