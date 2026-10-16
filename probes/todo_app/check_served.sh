@@ -1,16 +1,16 @@
 #!/bin/bash
-# samples/todo_app.warp under `warp serve`, checked with curl: create, toggle and list (as
+# samples/storage/todo_app.warp under `warp serve`, checked with curl: create, toggle and list (as
 # tests/web/test_served_forms.rs the_todo_sample_creates_toggles_and_lists does). Usage: check_served.sh [warp binary]
 set -e
 WARP=${1:-warp}
 PORT=18648
 cd "$(dirname "$0")/../.."
-rm -f samples/todo_app.database.sqlite
-"$WARP" serve samples/todo_app.warp $PORT > /dev/null 2>&1 &
+rm -f samples/storage/todo_app.database.sqlite
+"$WARP" serve samples/storage/todo_app.warp $PORT > /dev/null 2>&1 &
 SERVER=$!
-trap 'kill $SERVER; rm -f samples/todo_app.database.sqlite' EXIT
+trap 'kill $SERVER; rm -f samples/storage/todo_app.database.sqlite' EXIT
 until curl -s -o /dev/null localhost:$PORT/; do
-	kill -0 $SERVER 2>/dev/null || { echo "FAIL $WARP serve samples/todo_app.warp exited before answering"; exit 1; }
+	kill -0 $SERVER 2>/dev/null || { echo "FAIL $WARP serve samples/storage/todo_app.warp exited before answering"; exit 1; }
 	sleep 0.5
 done
 expect() {

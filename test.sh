@@ -2,6 +2,8 @@
 # Simplified test runner - matches IDE configuration exactly
 # Creates clean test_results.txt with just pass/fail lists
 
+# rustc building warp-lang at opt-level 2 (OPTIMIZED_COMPILER below) peaks at ~4.2 GB, over the queue's 4 GB default cap
+export WARP_TEST_MEMORY_CAP_GB="${WARP_TEST_MEMORY_CAP_GB:-6}"
 [ -z "$WARP_TEST_LOCKED" ] && exec "$(dirname "$0")/tests/queue.sh" "$0" "$@"
 
 OUTPUT_FILE="${1:-test_results.txt}"
@@ -18,7 +20,11 @@ COMPILE_START=$SECONDS
 # Match RustRover's runner injection exactly
 RUNNER="target.aarch64-apple-darwin.runner=['/Applications/RustRover.app/Contents/bin/native-helper/intellij-rust-native-helper']"
 FEATURES="--all-features" # native + ffi: the default build plus the FFI tests
-cargo --offline test $FEATURES --color=always --profile test --no-fail-fast --config "$RUNNER" --no-run || exit 1
+# the compiler at opt-level 2 for the full suite: the tests' time is mostly warp lowering programs and their std modules;
+# the tests binary ran 2x faster (summed test time 14424 → 7059 s), the build takes ~130 s longer (notes/test_speed.md).
+# Debug assertions and overflow checks stay on. Gate only: workers' targeted runs keep opt-level 0, which builds faster
+OPTIMIZED_COMPILER="profile.test.package.warp-lang.opt-level=2"
+cargo --offline test $FEATURES --color=always --profile test --no-fail-fast --config "$RUNNER" --config "$OPTIMIZED_COMPILER" --no-run || exit 1
 
 COMPILE_SECONDS=$((SECONDS - COMPILE_START))
 
@@ -27,7 +33,7 @@ TEST_THREADS=16
 RUN_START=$SECONDS
 # --report-time appends each test's duration (<1.234s>) for the slowest list; libtest takes unstable options only on
 # nightly, which RUSTC_BOOTSTRAP=1 stands in for (it rebuilds nothing)
-RUSTC_BOOTSTRAP=1 cargo --offline test $FEATURES --color=always --profile test --no-fail-fast --config "$RUNNER" -- --test-threads=$TEST_THREADS -Zunstable-options --report-time 2>&1 | tee "$TEMP_FILE"
+RUSTC_BOOTSTRAP=1 cargo --offline test $FEATURES --color=always --profile test --no-fail-fast --config "$RUNNER" --config "$OPTIMIZED_COMPILER" -- --test-threads=$TEST_THREADS -Zunstable-options --report-time 2>&1 | tee "$TEMP_FILE"
 RUN_SECONDS=$((SECONDS - RUN_START))
 
 # Strip ANSI color codes so the summary greps work on the raw log

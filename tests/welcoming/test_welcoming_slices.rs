@@ -1,5 +1,5 @@
 //! Slices `a[start:end]`, `a[start..end]`, `a[start...last]`, `s.slice(start)` of lists and texts, and `a.copy()`
-//! (Sorting field test, probes/slices/). A negative index never wraps around (Footguns.md): it is an error naming last(x).
+//! (Sorting field test). A negative index never wraps around (Footguns.md): it is an error naming last(x).
 
 use crate::common::fails_with;
 use crate::is;
@@ -33,6 +33,7 @@ fn slices_of_a_text_are_texts_of_characters() {
 fn the_slice_method_takes_an_optional_end() {
 	is!("s=\"hello\"; s.slice(1)", "ello");
 	is!("a=[1,2,3,4]; b=a.slice(1, 3); b#1*10 + count(b)", 22);
+	is!("slice([1,2,3], 1, 2) == [2]", true);
 }
 
 #[test]
@@ -48,6 +49,7 @@ fn a_negative_index_or_bound_is_an_error_that_names_last() {
 	fails_with("a=[1,2,3,4]; a[-2:]", "negative index -2");
 	fails_with("s=\"hello\"; s[-3:-1]", "the last element is last(s)");
 	fails_with("a=[1,2,3]; k=-2; a[k:]", "index out of range");
+	fails_with("x=[1,2,3]; k=1; x[-k]", "index out of range");
 	fails_with("a=[1,2,3]; a.slice(0, -1)", "index out of range");
 }
 
@@ -77,7 +79,7 @@ fn a_hint_is_given_once_per_compilation() {
 	assert_eq!(hints.iter().filter(|hint| hint.canonical == "3 /! 2").count(), 1, "{hints:?}");
 }
 
-/// The trap knows no source, so the message itself names the fix of a fractional index (samples/sorting.warp: `mid = len(items)/2`)
+/// The trap knows no source, so the message itself names the fix of a fractional index (samples/lists/sorting.warp: `mid = len(items)/2`)
 #[test]
 fn a_fractional_index_error_names_the_fix() {
 	let fix =

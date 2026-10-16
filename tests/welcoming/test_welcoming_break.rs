@@ -21,6 +21,7 @@ fn continue_skips_to_the_next_pass_and_keeps_the_for_step() {
 	is!("s=0; for x in [1,2,3,4,5] { if x==2 { continue }; if x==5 { break }; s+=x }; s", 8);
 	is!("s=0; for(i=0;i<6;i++){ if i==2 { continue }; s+=i }; s", 13);
 	is!(r#"s=""; for i in 0..4 { if i==2 { continue }; s += "x" }; s"#, "xxx");
+	is!(r#"s=""; for c in ["a","b","c","d"] { if c=="c" { continue }; s += c }; s"#, "abd");
 	is!("found=0; for i in 1..5 { for j in 1..5 { if j==i { continue }; if i*j==6 { found=i*10+j; break } }; if found>0 { break } }; found", 23);
 }
 

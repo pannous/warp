@@ -1,5 +1,5 @@
 // card phrase-in-call: a list phrase as a call's argument `str(xs.take first 3)` (it was "take is in the standard
-// module list"), and `xs.sort by it` sorting by an expression of `it` (it was "no field it"); found editing samples/orm.warp
+// module list"), and `xs.sort by it` sorting by an expression of `it` (it was "no field it"); found editing samples/storage/orm.warp
 use crate::is;
 use warp::ints;
 

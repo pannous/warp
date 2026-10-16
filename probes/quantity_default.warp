@@ -1,3 +1,0 @@
-// card quantity-default: a left-out quantity parameter takes its default: 2s
-twice(t = 1s) := t * 2
-twice()

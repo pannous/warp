@@ -122,6 +122,7 @@ mod test_passed_list_identity; // card xs-xs
 mod test_person_struct;
 mod test_plain_enum; // card plain-enum
 mod test_printable;
+mod test_printable_items; // card list-printable-items
 mod test_program_conversions;
 mod test_real_references;
 mod test_real_text;

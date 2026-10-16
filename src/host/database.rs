@@ -32,7 +32,7 @@ const UNIT_COLUMN: &str = "NUMERIC";
 const BUSY_MILLISECONDS: c_int = 5000;
 /// A folder set by cargo's test runs (.cargo/config.toml): each test thread keeps a sample's tables in its own copy there
 const TEST_TABLES: &str = "WARP_TEST_TABLES";
-/// The folder of the samples, which several tests run at once
+/// The folder of the samples (samples/<chapter>/), which several tests run at once
 const SAMPLES_FOLDER: &str = "samples";
 
 /// The program's function by name, called with the list of its arguments (src/host.rs calls back into the instance)
@@ -559,7 +559,7 @@ fn connection(file: &str) -> Result<Handle, String> {
 /// sample's file, so tests running one sample at once neither lock nor change each other's rows
 fn test_thread_copy(file: &str) -> Option<String> {
 	let file = std::path::Path::new(file);
-	let in_samples = file.parent().and_then(|folder| folder.file_name()).is_some_and(|folder| folder == SAMPLES_FOLDER);
+	let in_samples = file.ancestors().any(|folder| folder.file_name().is_some_and(|name| name == SAMPLES_FOLDER));
 	let folder = std::env::var(TEST_TABLES).ok().filter(|_| in_samples)?;
 	let thread = std::thread::current().name().filter(|name| *name != "main")?.replace("::", ".");
 	let folder = std::path::Path::new(&folder).join(thread);

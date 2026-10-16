@@ -1,4 +1,4 @@
-// card samples-serving: `warp samples/route_headers.warp` from a terminal serves and opens its page in the browser;
+// card samples-serving: `warp samples/servers/route_headers.warp` from a terminal serves and opens its page in the browser;
 // the CLI asks web_server::when_listening for that, which hands the address over once the server listens
 use std::sync::Mutex;
 use std::time::Duration;
