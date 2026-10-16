@@ -62,6 +62,7 @@ mod test_effects_value;
 mod test_empty_call;
 mod test_empty_function_bodies;
 mod test_event_effects;
+mod test_fail_effect;
 mod test_failed_word;
 mod test_field_function_values;
 mod test_float_to_int_parameter;
@@ -158,6 +159,7 @@ mod test_property_assign;
 mod test_property_words;
 mod test_python_higher_order;
 mod test_python_ruby_definitions;
+mod test_random_dispatch; // card random-dispatches
 mod test_real_function_values; // card sin-cos
 mod test_recursive_list_functions;
 mod test_render_as;

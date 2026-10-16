@@ -2,6 +2,9 @@
 
 use super::*;
 
+/// After these a glued `:name` is an explicit symbol: `[:a`, `(:a`, `f(x, :a)`, `x = :a`
+const EXPLICIT_SYMBOL_STARTS_AFTER: [char; 5] = ['(', '[', '{', ',', '='];
+
 /// `∜x`, read as `√√x`
 pub(super) const FOURTH_ROOT: char = '∜';
 /// The prefix operators written as words: `sqrt x`, `cbrt x`, `abs x`, `not x` (`norm x` is the prelude's word: the
@@ -82,6 +85,26 @@ impl WarpParser {
 			.map(|(op, spelling)| (op, spelling.chars().count()))
 	}
 
+	/// `:src` of `x = :src`, `[:a :plus :b]` (card explicit-symbol): a colon glued to the name after a blank, a bracket
+	/// or the start; `a:b` and `a : b` stay keys
+	pub(super) fn at_explicit_symbol(&self) -> bool {
+		let previous = self.prev_char();
+		self.current_char() == ':'
+			&& self.is_identifier_start(1)
+			&& !self.in_style_sheet
+			&& (self.pos == 0 || previous.is_whitespace() || EXPLICIT_SYMBOL_STARTS_AFTER.contains(&previous))
+	}
+
+	/// The word before the blank here is an explicit symbol itself, `:a` of `[:a :plus :b]`; after any other operand
+	/// ` :b` keeps closing a ternary (`c ? 2 :y`), annotating a field (`n :int`) or making a key (`{name :ann}`)
+	fn after_explicit_symbol(&self) -> bool {
+		let before = &self.chars[..self.pos];
+		let word_end = before.iter().rposition(|ch| !ch.is_whitespace()).map_or(0, |end| end + 1);
+		let word_start =
+			before[..word_end].iter().rposition(|ch| !is_identifier_char(*ch)).map_or(0, |start| start + 1);
+		word_start < word_end && word_start > 0 && before[word_start - 1] == ':'
+	}
+
 	/// The spelling starts here; a word ends here too: `and` but not `android`, `plus a` but not the call `plus(a, b)`
 	fn spelled_here(&self, spelling: &str) -> bool {
 		let length = spelling.chars().count();
@@ -103,8 +126,9 @@ impl WarpParser {
 			// `list<list<int>>` closes two generics, a shift has an operand behind it
 			">>" => !self.options.wit_mode && self.operand_follows(2),
 			"+-" => after.is_whitespace() && prev.is_whitespace(),
-			"/" => after != '/',                      // Don't treat // as division - it's a comment
-			"//" | "//=" => self.at_floor_division(), // `x // note` stays a comment
+			":" => !(self.at_explicit_symbol() && self.after_explicit_symbol()), // `[:a :plus :b]`
+			"/" => after != '/',                                                 // Don't treat // as division - it's a comment
+			"//" | "//=" => self.at_floor_division(),                            // `x // note` stays a comment
 			// `div{…}` and `div {…}` are the html tag, and data never computes
 			"div" => !self.options.data_mode && !self.word_opens_block("div"),
 			// `xs contains x` in code only, data keeps the words as they are

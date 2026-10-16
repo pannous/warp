@@ -300,7 +300,7 @@ pub fn collect_all_types(registry: &mut crate::type_kinds::TypeRegistry, node: &
 }
 
 /// The kind of an FFI call's result: a C string is a text (ffi.rs text_node), a host word's Node is known at run time
-/// only (task_await_value), a void or integer result an Int
+/// only (task_await_value), a host word that only acts gives nothing, another void or integer result an Int
 pub(super) fn ffi_call_kind(name: &str) -> Kind {
 	crate::ffi::get_ffi_signature(name).map_or(Kind::Int, |signature| signature_kind(&signature))
 }
@@ -318,6 +318,8 @@ pub(crate) fn signature_kind(signature: &crate::ffi::FfiSignature) -> Kind {
 		Some(wasm_encoder::ValType::F64 | wasm_encoder::ValType::F32) => Kind::Float,
 		Some(wasm_encoder::ValType::Ref(_)) if signature.library != crate::host::HOST_LIBRARY => Kind::Text,
 		Some(wasm_encoder::ValType::Ref(_)) => Kind::Empty,
+		// a host word that only acts (paint, sleep) gives nothing, as print does: `if c { paint(…) }` shows no » 0
+		None if signature.library == crate::host::HOST_LIBRARY => Kind::Empty,
 		_ => Kind::Int,
 	}
 }
@@ -513,9 +515,15 @@ pub fn extract_host_words(ctx: &mut Context, node: &Node) {
 				if crate::host::HOST_WORDS.contains(&name.as_str()) && !ctx.user_functions.contains_key(name) {
 					add_ffi_import(ctx, name, crate::host::HOST_LIBRARY);
 					// the host builds a caught stack overflow's, a failed adapter's or a failed parse's Error with the
-					// module's own error_of
-					if [crate::host::GUARDED_CALL, crate::host::STD_PURE, crate::host::STD_IO, crate::host::PARSE_CODE]
-						.contains(&name.as_str())
+					// module's own error_of, and so does a crate's or component's Err
+					if [
+						crate::host::GUARDED_CALL,
+						crate::host::STD_PURE,
+						crate::host::STD_IO,
+						crate::host::PARSE_CODE,
+						crate::host::FOREIGN_CALL,
+					]
+					.contains(&name.as_str())
 					{
 						ctx.required_functions.insert(crate::wasm_emitter::text::text_builtins::ERROR_OF);
 					}

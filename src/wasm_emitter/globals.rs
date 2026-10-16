@@ -117,7 +117,7 @@ impl WasmGcEmitter {
 		_ = crate::analyzer::widen_globals_by_functions(
 			&mut main.globals,
 			self.ctx.user_functions.values(),
-			&self.user_function_kinds(),
+			&main.function_kinds.clone(),
 			&self.ctx.closure_variable_targets,
 		);
 		let mut names: Vec<&String> =

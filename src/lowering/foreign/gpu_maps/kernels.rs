@@ -1,6 +1,7 @@
 //! WGSL from warp: a numeric lambda as a compute kernel (with its reductions), a painted function as a fragment shader
 use super::*;
 use std::collections::{HashMap, HashSet};
+use warp_runtime::host_words::GPU_PAINTS;
 
 /// A lambda as a WGSL compute kernel: the item it computes in WGSL, the program's numbers it reads (`outer`, appended
 /// to `data` after the items, in this order) and whether it is worth the GPU (math words, powers: `heavy`)
@@ -858,11 +859,15 @@ fn painted_function(node: &Node) -> Option<Node> {
 				true => String::new(),
 				false => format!(", {{{}}}", entries.join(", ")),
 			};
-			format!("{PAINT_WORD}({}, {width}, {height}{values})", Node::Text(shader).serialize())
+			let on_gpu = format!("{PAINT_WORD}({}, {width}, {height}{values})", Node::Text(shader).serialize());
+			// card paint-function: without a GPU to paint the shader, f of every pixel on the CPU, as a map falls back
+			format!(
+				"if system_value({}) != 0 {{ {on_gpu} }} else {{ {} }}",
+				Node::Text(GPU_PAINTS.into()).serialize(),
+				on_cpu_painted(&name, &width, &height)
+			)
 		}
-		None => format!(
-			"{PAINT_WORD}([{PIXEL_COLOR}({name}(i % ({width}), i//({width}))) for i in 0..(({width}) * ({height}))], {width}, {height})"
-		),
+		None => on_cpu_painted(&name, &width, &height),
 	};
 	let lowered = match crate::warp_parser::parse_generated(&lowered).drop_meta() {
 		Node::List(statements, crate::node::Bracket::None, _) if statements.len() == 1 => statements[0].clone(),
@@ -871,6 +876,11 @@ fn painted_function(node: &Node) -> Option<Node> {
 	// the prelude's name of pixel_color, which no parse gives (library_words names prelude words after this pass)
 	let pixel_color = crate::modules::prelude_name(PIXEL_COLOR).map(Node::Symbol)?;
 	Some(crate::law::substitute(&lowered, &HashMap::from([(PIXEL_COLOR.to_string(), pixel_color)])))
+}
+
+/// paint of f(x, y) at every pixel, computed on the CPU row by row
+fn on_cpu_painted(name: &str, width: &str, height: &str) -> String {
+	format!("{PAINT_WORD}([{PIXEL_COLOR}({name}(i % ({width}), i//({width}))) for i in 0..(({width}) * ({height}))], {width}, {height})")
 }
 
 /// `shader_of(f)`: the WGSL fragment shader paint(f, width, height) compiles f(x, y) to, as a text; an error where WGSL

@@ -28,7 +28,7 @@ impl WarpParser {
 			self.hint_glued_unit(&number);
 		}
 		self.skip_spaces();
-		let factor = self.parse_atom();
+		let factor = after_number(self.parse_atom());
 		let factor = self.try_parse_superscript_power(&factor, 0).unwrap_or(factor);
 		Node::Key(Box::new(number), Op::Mul, Box::new(factor))
 	}
@@ -124,5 +124,17 @@ impl WarpParser {
 		let count: i64 = rest[spaces..spaces + digits].iter().collect::<String>().parse().ok()?;
 		let (unit, length) = self.time_unit_at(spaces + digits)?;
 		Some((unit.times(count), spaces + digits + length))
+	}
+}
+
+/// The unit word joined to the number before it, its position marked so: where the program also names a variable so,
+/// `3m` is the unit and `3 * m` the variable (units.rs with_units_after_numbers)
+fn after_number(factor: Node) -> Node {
+	match (factor.get_lineinfo(), factor) {
+		(Some(mut position), Node::Meta { node, .. }) => {
+			position.after_number = true;
+			node.with_meta_data(position)
+		}
+		(_, factor) => factor,
 	}
 }

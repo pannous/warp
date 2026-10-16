@@ -180,6 +180,7 @@ PASSED:
   ✓ control::test_error_branch_kind::test_else_if_chains_and_switch_defaults
   ✓ control::test_error_branch_kind::test_taking_the_error_branch_is_the_error
   ✓ control::test_error_branch_kind::test_try_catches_an_error_branch
+  ✓ control::test_error_fields::a_field_of_an_error_is_the_error
   ✓ control::test_error_value_return::test_a_returned_error_raises_where_used_as_a_number
   ✓ control::test_error_value_return::test_a_returned_error_stays_a_value
   ✓ control::test_error_values::a_stored_error_fails_when_an_operation_runs_on_it
@@ -981,6 +982,8 @@ PASSED:
   ✓ ffi::test_components::test_handles_of_another_thread_do_not_shift_the_numbering
   ✓ ffi::test_components::test_resource_failures_are_loud
   ✓ ffi::test_components::test_resources_of_a_component_are_handles
+  ✓ ffi::test_crate_errors::an_uncaught_crate_error_says_only_what_the_crate_said
+  ✓ ffi::test_crate_errors::try_catches_a_crate_error
   ✓ ffi::test_download::a_failed_download_is_an_error_value
   ✓ ffi::test_download::download_fetches_like_fetch
   ✓ ffi::test_fetch_computed_url::fetch_of_a_parameter_and_a_concatenation
@@ -1393,6 +1396,10 @@ PASSED:
   ✓ functions::test_empty_function_bodies::a_function_with_an_empty_body_leaves_the_program_alone
   ✓ functions::test_empty_function_bodies::calling_a_function_with_an_empty_body_gives_empty
   ✓ functions::test_event_effects::an_emitted_event_is_a_named_effect
+  ✓ functions::test_fail_effect::dividing_by_a_number_and_try_do_not_fail
+  ✓ functions::test_fail_effect::effects_of_names_fail
+  ✓ functions::test_fail_effect::pure_refuses_fail_but_folding_does_not
+  ✓ functions::test_fail_effect::raising_and_dividing_by_a_variable_fail
   ✓ functions::test_failed_word::test_failed_ends_a_condition_like_the_other_test_words
   ✓ functions::test_failed_word::test_failed_tests_for_an_error_value
   ✓ functions::test_field_function_values::test_function_in_nested_object
@@ -1731,6 +1738,10 @@ PASSED:
   ✓ functions::test_python_ruby_definitions::test_ruby_def_end
   ✓ functions::test_python_ruby_definitions::test_ruby_loops_in_def
   ✓ functions::test_python_ruby_definitions::test_ruby_yield_calls_the_block
+  ✓ functions::test_random_dispatch::random_compared_takes_the_first_comparand
+  ✓ functions::test_random_dispatch::random_of_a_fraction_is_a_float_below_it
+  ✓ functions::test_random_dispatch::random_of_a_list_is_one_of_its_elements
+  ✓ functions::test_random_dispatch::random_of_a_whole_number_variable_stays_whole
   ✓ functions::test_real_function_values::a_program_defining_sin_keeps_its_own
   ✓ functions::test_real_function_values::a_real_function_applies_to_the_value_after_it
   ✓ functions::test_real_function_values::a_real_function_defined_is_its_alias
@@ -3028,6 +3039,9 @@ PASSED:
   ✓ numbers::test_unit_word_keys::a_quantity_held_in_a_variable
   ✓ numbers::test_unit_word_keys::a_unit_word_key_after_a_number
   ✓ numbers::test_unit_word_keys::minutes_are_a_time_unit
+  ✓ numbers::test_units_after_numbers::a_parameter_named_like_a_unit_leaves_the_unit_to_the_rest
+  ✓ numbers::test_units_after_numbers::a_unit_after_a_number_is_the_unit_though_a_variable_has_its_name
+  ✓ numbers::test_units_after_numbers::an_alias_and_a_declared_unit_type_see_through_the_variable
   ✓ numbers::test_units_arithmetic::test_incompatible_units_are_an_error
   ✓ numbers::test_units_arithmetic::test_scaling_a_quantity
   ✓ numbers::test_units_arithmetic::test_spaced_known_unit_multiplies
@@ -3088,6 +3102,8 @@ PASSED:
   ✓ operators::test_contains_infix::contains_in_a_condition
   ✓ operators::test_equality_never_chains::equality_compares_the_result_of_an_ordering
   ✓ operators::test_equality_never_chains::orderings_still_chain
+  ✓ operators::test_floor_division_operator::floor_division_and_true_division_compute_apart
+  ✓ operators::test_floor_division_operator::floor_division_has_its_own_operators
   ✓ operators::test_floor_quotient::floor_division_is_euclidean
   ✓ operators::test_floor_quotient::floor_division_warns_nothing_about_percent
   ✓ operators::test_floor_quotient::floor_of_an_exact_number_beyond_f64
@@ -3293,6 +3309,10 @@ PASSED:
   ✓ parser::test_entity_table::the_entity_table_is_the_pinned_uniscript_index
   ✓ parser::test_escaped_quote_slashes::entities_after_an_escaped_quote_stay_text
   ✓ parser::test_escaped_quote_slashes::slashes_after_an_escaped_quote_are_text
+  ✓ parser::test_explicit_symbols::a_blank_colon_after_an_operand_keeps_its_meaning
+  ✓ parser::test_explicit_symbols::a_colon_name_is_a_symbol
+  ✓ parser::test_explicit_symbols::a_colon_without_space_before_stays_a_key
+  ✓ parser::test_explicit_symbols::colon_names_uncharge_operators
   ✓ parser::test_format_layout::test_canonical_layout
   ✓ parser::test_format_layout::test_every_binary_operator_spaced
   ✓ parser::test_format_layout::test_hash_comments_only_when_asked
@@ -3595,6 +3615,9 @@ PASSED:
   ✓ programs::test_note_values::notes_are_the_ends_of_an_interval
   ✓ programs::test_note_values::semitones_move_a_note
   ✓ programs::test_note_values::something_else_is_no_pitch
+  ✓ programs::test_paint_function_fallback::a_painted_function_has_its_cpu_painting_beside_its_shader
+  ✓ programs::test_paint_function_fallback::a_painting_program_shows_no_value
+  ✓ programs::test_paint_function_fallback::a_shader_paints_where_the_gpu_does
   ✓ programs::test_paint_function::a_function_wgsl_cannot_compute_paints_on_the_cpu
   ✓ programs::test_paint_function::a_painted_function_becomes_a_fragment_shader
   ✓ programs::test_paint_function::a_painted_function_calls_a_function_of_no_parameters
@@ -5906,4 +5929,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 5901 passed, 0 failed, 5901 total tested
+13 ignored, 5924 passed, 0 failed, 5924 total tested

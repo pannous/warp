@@ -520,7 +520,8 @@ impl WasmGcEmitter {
 				vec![ValType::I64],
 				vec![ValType::I64, Ref(node_ref_nullable)],
 				|s, func| {
-					// a text counts its user-perceived characters (grapheme clusters)
+					s.emit_fail_if_error(func, 0); // `(try 10/0).count` is the Error, not 1 (card error-field)
+									// a text counts its user-perceived characters (grapheme clusters)
 					s.emit_is_text(func);
 					Self::emit_list(func, &[I::If(BlockType::Empty), I::LocalGet(0)]);
 					s.call(func, "text_grapheme_count");

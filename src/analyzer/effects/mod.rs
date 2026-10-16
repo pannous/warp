@@ -46,12 +46,14 @@ pub enum Effect {
 	Div,
 	/// Runs a block known only at run time (`interpret e`, host run_block): its code is not known to the compiler
 	Eval,
+	/// May raise an error: `raise`, `error "…"`, a division by a variable (card fail-effect); `try` handles it
+	Fail,
 }
 
 impl Effect {
-	pub const ALL: [Effect; 8] = [State, Allocation, IO, FFI, Async, Unsafe, Div, Eval];
+	pub const ALL: [Effect; 9] = [State, Allocation, IO, FFI, Async, Unsafe, Div, Eval, Fail];
 
-	const fn bit(self) -> u8 {
+	const fn bit(self) -> u16 {
 		1 << self as u8
 	}
 
@@ -61,7 +63,9 @@ impl Effect {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
-pub struct EffectSet(u8);
+pub struct EffectSet(u16);
+
+const FAILS: EffectSet = EffectSet(Fail.bit());
 
 impl EffectSet {
 	pub const PURE: EffectSet = EffectSet(0);
@@ -85,8 +89,10 @@ impl EffectSet {
 		self.0 & effect.bit() != 0
 	}
 
+	/// Pure as far as running it twice goes: a failure is deterministic, so a failing function folds and memoizes like
+	/// a pure one (the same Error each time); `! Pure` refuses it all the same (check_constraints)
 	pub fn is_pure(self) -> bool {
-		self.observable() == Self::PURE
+		self.observable().minus(FAILS) == Self::PURE
 	}
 
 	/// The effects but those only the memory use shows
@@ -182,6 +188,8 @@ pub struct FunctionEffects {
 	pub own: EffectSet,
 	/// Directly resolved callees (user functions and externals)
 	pub calls: BTreeSet<String>,
+	/// The callees called only inside `try`, which handles their Fail
+	pub tried_calls: BTreeSet<String>,
 	pub declared: Option<Constraint>,
 	/// The events the function emits (card effect-handlers): named effects
 	pub events: BTreeSet<String>,
@@ -273,8 +281,10 @@ impl EffectReport {
 			let mut changed = false;
 			let names: Vec<String> = self.functions.keys().cloned().collect();
 			for name in names {
-				let inferred = self.functions[&name].calls.iter().fold(self.functions[&name].effects, |all, callee| {
-					all.union(self.effects_of(callee).unwrap_or_default())
+				let function = &self.functions[&name];
+				let inferred = function.calls.iter().fold(function.effects, |all, callee| {
+					let effects = self.effects_of(callee).unwrap_or_default();
+					all.union(if function.tried_calls.contains(callee) { effects.minus(FAILS) } else { effects })
 				});
 				let function = self.functions.get_mut(&name).expect("known function");
 				changed |= function.effects != inferred;

@@ -1,0 +1,48 @@
+//! The Fail effect (card fail-effect, wiki/effects.md): a function that can raise an error says so in `effects of f`;
+//! `try` handles it, `! Pure` refuses it, and a failing function still folds like a pure one. The rule: it raises
+//! (raise, throw, fail, panic, error "…"), divides by what may be 0 (/ // div % rem), or calls a library word or crate
+//! that answers with an Error. Not tracked yet, though `try` catches them: an index out of range, a missing field, a
+//! failed cast (card fail-effect-indexing)
+use crate::common::fails_with;
+use crate::is;
+use warp::analyzer::effects::{effects_of, Effect::*, EffectSet};
+
+fn fails(code: &str, function: &str) -> bool {
+	effects_of(code, function).is_some_and(|effects| effects.contains(Fail))
+}
+
+#[test]
+fn raising_and_dividing_by_a_variable_fail() {
+	assert!(fails("f(x) := 10/x", "f"));
+	assert!(fails("f(x) := x % x", "f"));
+	assert!(fails("f(x, y) := x div y", "f"));
+	assert!(!fails("f(x) := x div 2", "f"));
+	assert!(fails("g(x) := raise \"no\"", "g"));
+	assert!(fails("g(x) := throw \"no\"", "g"));
+	assert!(fails("h(x) := if x < 0 then error \"neg\" else x", "h"));
+	assert!(fails("f(x) := 10/x\nk(x) := f(x) + 1", "k"));
+}
+
+#[test]
+fn dividing_by_a_number_and_try_do_not_fail() {
+	assert_eq!(effects_of("half(x) := x/2", "half"), Some(EffectSet::PURE));
+	assert_eq!(effects_of("f(x) := try 10/x else 0", "f"), Some(EffectSet::PURE));
+	assert_eq!(effects_of("f(x) := 10/x\nk(x) := try f(x) else 0", "k"), Some(EffectSet::PURE));
+	assert!(fails("f(x) := 10/x\nk(x) := (try f(x) else 0) + f(x)", "k"));
+}
+
+#[test]
+fn effects_of_names_fail() {
+	is!("f(x) := 10/x\neffects of f", warp::Node::Symbol("Fail".into()));
+	let answer = warp::wasm_emitter::eval("g(x) := { puts x; raise \"no\" }\neffects of g").serialize();
+	assert_eq!(answer, "(IO Fail)");
+}
+
+#[test]
+fn pure_refuses_fail_but_folding_does_not() {
+	fails_with("f(x) := 10/x ! Pure\nf(2)", "f is declared ! Pure but performs Fail");
+	is!("f(x) := 10/x ! Fail\nf(2)", 5);
+	is!("f(x) := (try 10/x else 0) ! Pure\nf(0)", 0);
+	is!("f(x) := 10/x\nk(x) := (try f(x) else 0) ! Pure\nk(0)", 0);
+	is!("f(x) := 10/x\nf(2)", 5);
+}
