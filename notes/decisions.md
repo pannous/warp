@@ -367,6 +367,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - unit-after-number (2026-10-16, user; card variable-named-like): after a number a unit symbol is always the unit,
   even with a variable of that name in scope: `m = 5; 3m` is 3m (meters), with a hint "a variable m exists; write
   3*m to multiply"; `m * 3` is 15. Supersedes the agent-pinned test_variable_shadows_the_unit (`3m` → 15).
+- unit-prefix-lines (2026-10-16, use-reflection default; undoable): lib/units.warp spells SI prefixes `prefix k :=
+  10^3` and marks the dimensions taking them `SI dimension length meter`. Long names are unit-line aliases
+  (`unit hour := 1 h`), no separate `name` form.
 
 ## Text
 - letters (2026-10-15 evening, Interviewer's decision on the user's behalf, to present 2026-10-16; card of-in-chain,
