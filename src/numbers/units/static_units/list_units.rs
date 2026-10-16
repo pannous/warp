@@ -9,7 +9,7 @@ const ITEM: &str = "quantity_item";
 const LIST_PLACEHOLDER: &str = "quantity_list";
 const BODY_PLACEHOLDER: &str = "quantity_body";
 /// How many calls deep a plain list is followed into function bodies (`g() := h()`, `h() := [1, 2]`)
-const CALLS_FOLLOWED: usize = 4;
+pub(super) const CALLS_FOLLOWED: usize = 4;
 /// One level of a mapped list and of a list's text
 const MAPPED: &str = "map(quantity_list, quantity_item => quantity_body)";
 const SHOWN: &str = r#"("[" + join(map(quantity_list, quantity_item => quantity_body), " ") + "]")"#;
@@ -36,7 +36,7 @@ impl Inference {
 	}
 
 	/// The user function a call `(f a b)` calls
-	fn called_definition(&self, call: &[Node]) -> Option<&Definition> {
+	pub(super) fn called_definition(&self, call: &[Node]) -> Option<&Definition> {
 		let (head, arguments) = call.split_first()?;
 		self.definitions.get(&(head.drop_meta().symbol_name()?.to_string(), arguments.len()))
 	}

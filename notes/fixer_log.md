@@ -299,3 +299,4 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - 2026-10-16 is-text-method, number-words, methods-text: already worked on main e04ca61ed; methods(text) pinned in tests/types/test_printable_items.rs
 - 2026-10-16 callable: `f: callable` parameter takes a function or a block (blocks.rs Takes::Callable; builtin type callable covering function and code; tests/functions/test_callable_parameter.rs)
 - 2026-10-16 literal-test-load: the 100 KB-literal test measures the compiling thread's CPU time (clock_gettime), not wall-clock (tests/parser/test_big_literals.rs)
+- 2026-10-16 function-returning-instance: unit_fields.rs `instance_class` follows a user function call into its body's last value (≤ CALLS_FOLLOWED deep), so `f(n) := D(n * 1 inch); f(96).diagonal` is 96inch. `D(n inch)` stays refused: units bind only after a number (decisions.md).

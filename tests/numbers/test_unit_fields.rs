@@ -26,3 +26,9 @@ fn unit_fields_add_up_in_loops_over_lists_of_the_class() {
 	assert_eq!(shown("runs: [Run] = [Run(1 km, \"a\"), Run(2 km, \"b\")]\ntotal = 0 m\nfor r in runs { total += r.distance }\ntotal"), "3000m");
 	assert_eq!(shown("rs = [Run(3 km, \"a\"), Run(2 km, \"b\")]\nrs#1.distance"), "3km");
 }
+
+#[test]
+fn a_function_returning_an_instance_gives_its_class() {
+	assert_eq!(shown("long(n) := Run(n * 1 km, \"far\")\nlong(5).distance"), "5km");
+	assert_eq!(shown("def long(n) = Run(n * 1 km, \"far\")\nr = long(5)\nr.distance"), "5km");
+}
