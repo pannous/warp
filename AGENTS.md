@@ -222,8 +222,9 @@ Don't cargo clean unless absolutely necessary!
 
 The /probes/ folder is NOT a place to doublicate worktrees!
 Small or non-conflicting changes may go straight onto main without a worktree (user, 2026-10-12; notes/roles.md
-"Small changes on main"). Otherwise one branch per task, in a git worktree outside the repo: /Users/me/dev/angles/warp.worktrees.noindex/<name>
-(notes/roles.md), or work on the same branch for small changes.
+"Small changes on main"). Otherwise one branch per task, in a git worktree outside the repo: /Volumes/Worktrees/<name>
+(older ones stay in /Users/me/dev/angles/warp.worktrees.noindex until retired; /Volumes/Worktrees/warp is cowtree's
+donor, never removed; notes/roles.md), or work on the same branch for small changes.
 Create worktrees with `cowtree add <path> -b <branch> [<commit>]` (same arguments as `git worktree add`, which a hook blocks).
 
 ## Folders

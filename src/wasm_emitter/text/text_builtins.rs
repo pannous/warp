@@ -140,7 +140,7 @@ pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
 	};
 	use super::super::time::times::{TIME_FIELD, TIME_TEXT};
 	use super::super::{CAUGHT_ERROR, INT_RUNTIME, VALUES_EQUAL};
-	use crate::library_words::{FIELD_WITH, INSTANCE_COPY, MAP_WORD_FUNCTIONS};
+	use crate::library_words::{FIELD_WITH, INSTANCE_COPY, MAP_WORD_FUNCTIONS, TEXT_CODE_POINTS, TEXT_GRAPHEMES};
 	let calls_text_of = [
 		VALUES_EQUAL,
 		TEXT_CONCAT,
@@ -157,7 +157,8 @@ pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
 		"text_lower",
 		"text_split",
 		"list_reverse",
-		"text_chars",
+		TEXT_CODE_POINTS,
+		TEXT_GRAPHEMES,
 		"list_sort",
 		NODE_ORDER,
 	];
@@ -165,7 +166,7 @@ pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
 		// `catch e`: the caught error becomes an Error through error_of
 		any(&[CAUGHT_ERROR], &[ERROR_OF]),
 		any(&[LIST_TEXT], &["list_join"]), // emitted together, with the same helpers
-		any(&[NODE_SLICE], &["text_chars", "list_join", "list_reverse"]),
+		any(&[NODE_SLICE], &[TEXT_GRAPHEMES, "list_join", "list_reverse"]),
 		// a text searched for a text (`s.contains("b")`, `"b" in s`); the map words are emitted together
 		any(&MAP_WORD_FUNCTIONS, &["map_find", TEXT_FIND, TEXT_MATCHES_AT, TEXT_OF]),
 		any(&[ELEMENT_BODY], &[ELEMENT_CHILDREN]),
@@ -194,7 +195,7 @@ pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
 		all(&[TEXT_AS_FLOAT, INT_RUNTIME], &["exact_to_f64"]),
 		all(&[TEXT_AS_INT, INT_RUNTIME], &["exact_mul", "exact_add", "exact_sub"]),
 		any(&["list_sort"], &[LIST_SORTED_BY]),
-		any(&[LIST_SORTED_BY], &[NODE_ORDER, "text_chars", "list_join"]),
+		any(&[LIST_SORTED_BY], &[NODE_ORDER, TEXT_GRAPHEMES, "list_join"]),
 		any(&[TEXT_FIND, TEXT_STARTS_WITH, TEXT_ENDS_WITH], &[TEXT_MATCHES_AT]),
 		any(&[PRINT_VALUE, PUT_VALUE], &["list_join"]),
 		// the text of a list (list_text) is emitted with join, as the analyzer requires list_join for both; a nested
@@ -210,7 +211,7 @@ pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
 		any(&[TEXT_ARGUMENT], &[TEXT_OF]),
 		any(&calls_text_of, &[TEXT_OF]),
 		// the characters are collected backwards, and list_reverse hands texts on
-		any(&["text_chars"], &["list_reverse", "text_reverse"]),
+		any(&[TEXT_CODE_POINTS, TEXT_GRAPHEMES], &["list_reverse", "text_reverse"]),
 		any(&["list_reverse"], &["text_reverse"]),
 		any(&[TEXT_OF], &[CHARACTER_ENCODER]),
 	]
