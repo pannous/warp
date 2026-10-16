@@ -566,8 +566,9 @@ impl WasmGcEmitter {
 			let spaced = *separator == Separator::Space && items.len() > 1;
 			let has_arithmetic = *bracket != Bracket::Square
 				&& !is_tuple && !has_field
-				&& !spaced
-				&& items.iter().any(|item| matches!(item.drop_meta(), Node::Key(_, op, _) if op.is_arithmetic()));
+				&& !spaced && items
+				.iter()
+				.any(|item| matches!(item.drop_meta(), Node::Key(_, op, _) if op.is_arithmetic()));
 			if has_arithmetic {
 				let node = Node::List(items.to_vec(), bracket.clone(), Separator::None);
 				if self.get_type(&node).is_float() {
