@@ -59,6 +59,7 @@ mod test_declared_int_of_float_expression;
 mod test_declared_list_marks;
 mod test_dispatch;
 mod test_duration_comparison; // cards day-day, day-hours
+mod test_duration_units; // card time-module
 mod test_element_field_writes;
 mod test_empty_literal_kind;
 mod test_empty_named_key; // card object-empty-field
