@@ -904,4 +904,5 @@ P53, P59, P79, P80, P9, P10, P16, P19, #14b–d, #15–20, the Original question
 - fix-forward (2026-10-16, user): merges don't wait on a few failing tests. The Integrator may ignore up to 10
   failing tests per batch as `#[ignore = "fixnow: <card>: <reason>"]`, push, and card each for the breaking
   branch's owner, who fixes forward and drops the ignore. Backtracking only above 10 or when forward fixing isn't
-  possible. Rules: notes/roles.md "Fix forward".
+  possible. A fixnow test pinning an old edge case may be reconsidered through the Interviewer instead of
+  restored. Rules: notes/roles.md "Fix forward".
