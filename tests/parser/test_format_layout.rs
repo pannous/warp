@@ -68,3 +68,11 @@ fn test_every_binary_operator_spaced() {
 	let generic = "xs = list<int>\n";
 	assert_eq!(formatted(generic), generic);
 }
+
+#[test]
+fn test_no_soft_hints_inside_a_shader_block() {
+	let code = "obj = shader {\n\t// WGSL\n\tfn main() -> f32 { return 1.0; }\n}\nwave = wgsl { fn f() {} }\n";
+	let hints: Vec<String> =
+		soft_hints(code).into_iter().map(|hint| format!("{}: {}", hint.line, hint.message)).collect();
+	assert_eq!(hints, ["1: warp avoids abbreviations: obj → object (in obj)"]);
+}

@@ -4,8 +4,31 @@ use super::*;
 /// Each `shader { … }` (or `wgsl { … }`) block of `code`: the line and column right after its `{`, and its text's lines
 pub fn shader_blocks(code: &str) -> Vec<((usize, usize), Vec<DedentedLine>)> {
 	let chars: Vec<char> = code.chars().collect();
+	shader_texts(&chars)
+		.into_iter()
+		.map(|text| {
+			let before = &chars[..text.start];
+			let line = 1 + before.iter().filter(|&&ch| ch == '\n').count();
+			let column = 1 + before.iter().rev().take_while(|&&ch| ch != '\n').count();
+			let source: String = chars[text].iter().collect();
+			((line, column), dedented_lines(&source))
+		})
+		.collect()
+}
+
+/// `code` with the text of each shader block blanked to spaces (line breaks kept): only its warp is left to read
+pub fn without_shader_texts(code: &str) -> String {
+	let mut chars: Vec<char> = code.chars().collect();
+	for text in shader_texts(&chars) {
+		chars[text].iter_mut().filter(|ch| **ch != '\n').for_each(|ch| *ch = ' ');
+	}
+	chars.into_iter().collect()
+}
+
+/// Where the text between the braces of each shader block is, in characters
+fn shader_texts(chars: &[char]) -> Vec<std::ops::Range<usize>> {
 	let is_name_part = |at: usize| chars.get(at).is_some_and(|ch| ch.is_alphanumeric() || *ch == '_');
-	let mut blocks = vec![];
+	let mut texts = vec![];
 	let mut at = 0;
 	while at < chars.len() {
 		let word = SHADER_WORDS.iter().find(|word| {
@@ -24,14 +47,10 @@ pub fn shader_blocks(code: &str) -> Vec<((usize, usize), Vec<DedentedLine>)> {
 			at = open;
 			continue;
 		};
-		let before = &chars[..start];
-		let line = 1 + before.iter().filter(|&&ch| ch == '\n').count();
-		let column = 1 + before.iter().rev().take_while(|&&ch| ch != '\n').count();
-		let source: String = chars[start..start + length].iter().collect();
-		blocks.push(((line, column), dedented_lines(&source)));
+		texts.push(start..start + length);
 		at = start + length;
 	}
-	blocks
+	texts
 }
 
 impl WarpParser {
