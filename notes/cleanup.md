@@ -528,7 +528,7 @@ way; `func add<T>(_ a: T, …)` relied on it, so the new walk keeps that unwrap 
 
 ## Final pass (final-emitter, 2026-10-16): src/wasm_emitter/, src/run/, src/type_kinds.rs
 Behaviour-preserving, +352 −587 lines. Byte check: every probe and sample compiles to the same wasm as before
-(probes/cleanup/same_wasm.sh), except the intended superset below.
+(probes/cleanup/same_wasm.sh), except the intended superset below and embedded doc text naming moved sample paths.
 - Runtime function dependencies (src/wasm_emitter/runtime_dependencies.rs): each module declares `dependencies()`
   (`Dependency`, `any`/`all`), `require_dependencies()` closes them to a fixed point. The old ordered if chain missed
   `function_text` when `list_join` was required late; vector_shader, zero_argument_shader, math_signatures and
