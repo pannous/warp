@@ -216,6 +216,7 @@ pub struct WasmGcEmitter {
 	/// The function being compiled returns a $NodeList
 	returns_list: bool,
 	compare_witness: Option<reflection::witness::WitnessTable>, // runtime dispatch of Comparable to user types (witness.rs)
+	late_calls: Vec<functions::late_calls::LateCall>,           // runtime calls of warp-written functions (late_calls.rs)
 	closures: functions::closures::ClosureTypes,
 	/// The user function whose body is being compiled; None in main
 	compiling: Option<String>,
@@ -298,6 +299,7 @@ impl WasmGcEmitter {
 			list_abi: HashMap::new(),
 			returns_list: false,
 			compare_witness: None,
+			late_calls: vec![],
 			closures: functions::closures::ClosureTypes::default(),
 			compiling: None,
 			loop_variables: HashSet::new(),
@@ -790,6 +792,8 @@ impl WasmGcEmitter {
 
 	/// Emit main function that constructs the node
 	pub fn emit_node_main(&mut self, node: &Node) {
+		// an error in main never points into the user or prelude function compiled last (lib/prelude.warp:30:272)
+		self.source_position = None;
 		self.result_print = if config::compile_mode().prints_result { last_statement_items(node) } else { 0 };
 		self.live_loops = crate::lowering::music_words::live_loop_names(node);
 		// Pre-pass: collect variables first so scope is populated
@@ -825,6 +829,7 @@ impl WasmGcEmitter {
 		let mut func = Function::new(locals);
 		self.emit_node_local_defaults(&mut func, node, 0);
 		self.emit_witness_installation(&mut func);
+		self.emit_late_call_installation(&mut func);
 		// a program with `on interrupt {…}` watches for ctrl-c from its start and takes one that came at its end
 		let signal_poll = self.ffi_func_index(crate::host::SIGNAL_POLL);
 		signal_poll.iter().for_each(|poll| {

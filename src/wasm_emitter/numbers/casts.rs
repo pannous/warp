@@ -300,6 +300,7 @@ impl WasmGcEmitter {
 		};
 
 		let (written, value) = (value, value.drop_meta());
+		self.note_position(written); // `ff as hex`: an error in the value points at it
 		if let Some(refusal) = self.unknown_word_refusal(value).or_else(|| self.cast_refusal(value, target_type)) {
 			self.emit_type_error(func, refusal);
 			return;

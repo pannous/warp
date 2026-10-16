@@ -65,8 +65,13 @@ impl WasmGcEmitter {
 		}
 		self.module.section(&self.exports);
 		// functions taken by ref.func: one declarative element segment for all (a module has one element section)
-		let declared_functions: Vec<u32> =
-			self.closures.declared_functions().into_iter().chain(self.witness_dispatcher()).collect();
+		let declared_functions: Vec<u32> = self
+			.closures
+			.declared_functions()
+			.into_iter()
+			.chain(self.witness_dispatcher())
+			.chain(self.late_called_functions())
+			.collect();
 		if !declared_functions.is_empty() {
 			let mut elements = ElementSection::new();
 			elements.declared(Elements::Functions(declared_functions.into()));

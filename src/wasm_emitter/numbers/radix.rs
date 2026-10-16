@@ -4,11 +4,11 @@
 //! radix and the readers read back as the Int showing its literal
 use super::super::*;
 use crate::type_kinds;
-use crate::wasm_emitter::layout::BYTE;
+use crate::wasm_emitter::functions::late_calls::LateCall;
 
-/// A radix an Int may show in: its type word, its mark above the kind bits, its literal prefix, the bits per digit and
-/// its runtime functions `as_<word>(node) -> ref $Node` (an Int marked, any other node as it is) and
-/// `<word>_text(i64) -> ref $Node` (the text 0xFF)
+/// A radix an Int may show in: its type word, its mark above the kind bits, its literal prefix, the bits per digit, its
+/// runtime function `as_<word>(node) -> ref $Node` (an Int marked, any other node as it is) and lib/prelude.warp's
+/// `<word>_text(n: int)`, the text 0xFF, which list_join calls (by its prelude name)
 #[derive(PartialEq)]
 pub struct Radix {
 	pub word: &'static str,
@@ -16,6 +16,7 @@ pub struct Radix {
 	prefix: &'static str,
 	digit_bits: i64,
 	pub as_function: &'static str,
+	text_word: &'static str,
 	pub text_function: &'static str,
 }
 
@@ -25,7 +26,8 @@ pub const HEX: Radix = Radix {
 	prefix: "0x",
 	digit_bits: 4,
 	as_function: "as_hex",
-	text_function: "hex_text",
+	text_word: "hex_text",
+	text_function: "prelude·hex_text",
 };
 pub const BINARY: Radix = Radix {
 	word: "binary",
@@ -33,13 +35,12 @@ pub const BINARY: Radix = Radix {
 	prefix: "0b",
 	digit_bits: 1,
 	as_function: "as_binary",
-	text_function: "binary_text",
+	text_word: "binary_text",
+	text_function: "prelude·binary_text",
 };
 pub static RADIXES: [Radix; 2] = [HEX, BINARY];
 /// Python's `bin`: warp says binary
 const BINARY_ALIAS: &str = "bin";
-/// From the digit 9 to the letter A in ASCII
-const LETTER_DIGIT_GAP: i32 = (b'A' - b'9' - 1) as i32;
 
 impl Radix {
 	/// The kind field of an Int shown in this radix
@@ -55,10 +56,6 @@ impl Radix {
 			_ => format!("{:X}", value.unsigned_abs()),
 		};
 		format!("{sign}{}{digits}", self.prefix)
-	}
-
-	fn digit_mask(&self) -> i64 {
-		(1 << self.digit_bits) - 1
 	}
 }
 
@@ -77,6 +74,20 @@ pub fn shown_radix(type_name: &str) -> Option<&'static Radix> {
 			.is_some_and(|width| width.high == u8::MAX as i128 && width.low == 0)
 			.then_some(&HEX)
 	})
+}
+
+/// The prelude words that print the radixes the statements name (`as hex`, `byte b`), for modules::resolve: the printer
+/// calls them, the program does not
+pub(crate) fn implied_words(statements: &[Node]) -> Vec<String> {
+	let mut words = Vec::new();
+	for statement in statements {
+		statement.visit(&mut |node| {
+			if let Some(radix) = node.symbol_name().and_then(shown_radix) {
+				words.push(radix.text_word.to_string());
+			}
+		});
+	}
+	words
 }
 
 /// The radix of an Int's info bits, None for a plain Int
@@ -114,6 +125,17 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// The radixes whose prelude text word the program loaded, each with the late call list_join prints it by
+	pub(in crate::wasm_emitter) fn radix_text_calls(&mut self) -> Vec<(&'static Radix, LateCall)> {
+		let node_ref = Ref(self.node_ref(false));
+		let loaded: Vec<&'static Radix> =
+			RADIXES.iter().filter(|radix| self.ctx.user_functions.contains_key(radix.text_function)).collect();
+		loaded
+			.into_iter()
+			.map(|radix| (radix, self.late_call(radix.text_function, vec![ValType::I64], vec![node_ref])))
+			.collect()
+	}
+
 	pub(in crate::wasm_emitter) fn emit_radix_runtimes(&mut self) {
 		for radix in &RADIXES {
 			self.emit_radix_runtime(radix);
@@ -122,7 +144,7 @@ impl WasmGcEmitter {
 
 	fn emit_radix_runtime(&mut self, radix: &Radix) {
 		// a declared byte asks for as_hex only once emitted (discovered_needs): its type word is gone before the analysis
-		if !self.should_emit_function(radix.text_function) && !self.should_emit_function(radix.as_function) {
+		if !self.should_emit_function(radix.as_function) {
 			return;
 		}
 		self.emit_text_heap_global();
@@ -142,68 +164,5 @@ impl WasmGcEmitter {
 				I::End,
 			]);
 		});
-		let (i32t, i64t) = (ValType::I32, ValType::I64);
-		let (prefix, digit_bits, digit_mask) = (radix.prefix, radix.digit_bits, radix.digit_mask());
-		self.runtime_function(
-			radix.text_function,
-			vec![i64t],
-			vec![node_ref],
-			vec![i32t, i64t, i64t, i32t, i32t, i32t, i32t],
-			|s, f| {
-				let (value, negative, magnitude, rest, address, length, position, digit) = (0, 1, 2, 3, 4, 5, 6, 7);
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::LocalGet(value), I::I64Const(0), I::I64LtS, I::LocalSet(negative),
-					I::I64Const(0), I::LocalGet(value), I::I64Sub, I::LocalGet(value), I::LocalGet(negative), I::Select,
-					I::LocalSet(magnitude),
-				]);
-				// length: sign, prefix and one digit, one more for each digit above the last
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::LocalGet(negative), I::I32Const(prefix.len() as i32 + 1), I::I32Add, I::LocalSet(length),
-					I::LocalGet(magnitude), I::LocalSet(rest),
-					I::Block(BlockType::Empty),
-						I::Loop(BlockType::Empty),
-							I::LocalGet(rest), I::I64Const(digit_bits), I::I64ShrU, I::LocalTee(rest), I::I64Eqz,
-							I::BrIf(1),
-							I::LocalGet(length), I::I32Const(1), I::I32Add, I::LocalSet(length),
-							I::Br(0),
-					I::End, I::End,
-				]);
-				s.emit_text_allocation(f, length, address);
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::LocalGet(negative), I::If(BlockType::Empty),
-						I::LocalGet(address), I::I32Const(b'-' as i32), I::I32Store8(BYTE),
-					I::End,
-				]);
-				for (offset, byte) in prefix.bytes().enumerate() {
-					#[rustfmt::skip]
-					Self::emit_list(f, &[
-						I::LocalGet(address), I::LocalGet(negative), I::I32Add, I::I32Const(offset as i32), I::I32Add,
-						I::I32Const(byte as i32), I::I32Store8(BYTE),
-					]);
-				}
-				// the digits from the last one back to the prefix: the digit's character, a letter past 9
-				#[rustfmt::skip]
-				Self::emit_list(f, &[
-					I::LocalGet(length), I::LocalSet(position),
-					I::Block(BlockType::Empty),
-						I::Loop(BlockType::Empty),
-							I::LocalGet(position), I::LocalGet(negative), I::I32Const(prefix.len() as i32), I::I32Add,
-							I::I32LeU, I::BrIf(1),
-							I::LocalGet(position), I::I32Const(1), I::I32Sub, I::LocalSet(position),
-							I::LocalGet(magnitude), I::I64Const(digit_mask), I::I64And, I::I32WrapI64,
-							I::LocalSet(digit),
-							I::LocalGet(address), I::LocalGet(position), I::I32Add, I::LocalGet(digit),
-							I::I32Const(b'0' as i32), I::I32Add, I::LocalGet(digit), I::I32Const(9), I::I32GtU,
-							I::I32Const(LETTER_DIGIT_GAP), I::I32Mul, I::I32Add, I::I32Store8(BYTE),
-							I::LocalGet(magnitude), I::I64Const(digit_bits), I::I64ShrU, I::LocalSet(magnitude),
-							I::Br(0),
-					I::End, I::End,
-				]);
-				s.emit_new_text(f, address, length);
-			},
-		);
 	}
 }
