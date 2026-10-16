@@ -79,3 +79,12 @@ fn test_no_soft_hints_inside_a_shader_block() {
 	let hints: Vec<String> = soft_hints(named).into_iter().map(|hint| hint.message).collect();
 	assert_eq!(hints.len(), 2, "{hints:?}");
 }
+
+// card format-ternary: the ternary's `?` and `:` are spaced, nested ones too; an optional type and a key's colon stay
+#[test]
+fn test_ternary_spaced() {
+	assert_eq!(formatted("b = o<97?65: 97\n"), "b = o < 97 ? 65 : 97\n");
+	assert_eq!(formatted("c = x>0?1:x<0?-1:0\n"), "c = x > 0 ? 1 : x < 0 ? -1 : 0\n");
+	let kept = "m = {a: 1}\n";
+	assert_eq!(formatted(kept), kept);
+}

@@ -55,7 +55,7 @@ const fn rule(name: &'static str, edits: fn(&[String], &[LineScan]) -> Vec<Edit>
 	Rule { name, edits, hash_comments_only: false }
 }
 
-pub(super) const RULES: [Rule; 8] = [
+pub(super) const RULES: [Rule; 9] = [
 	Rule { name: "# comment", edits: hash_comments, hash_comments_only: true },
 	rule("trailing whitespace", trailing_whitespace),
 	rule("blank lines", blank_lines),
@@ -63,6 +63,7 @@ pub(super) const RULES: [Rule; 8] = [
 	rule("space after a comma or semicolon", separator_spacing),
 	rule("space after a key's colon", colon_spacing),
 	rule("spaces around an operator", operator_spacing),
+	rule("spaces around a ternary", ternary_spacing),
 	rule("indentation", indentation),
 ];
 
@@ -246,6 +247,62 @@ fn operator_spacing(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
 		let length = operator.chars().count();
 		length + characters[at + length..].iter().take_while(|(c, code)| is_space(*c) && *code).count()
 	})
+}
+
+/// `o<97?65: 97` → `o < 97 ? 65 : 97` (card format-ternary): a `?` between operands with its `:` later on the line, and
+/// that `:`, are spaced; an optional `x?` and a key's colon stay
+fn ternary_spacing(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
+	rewrite_code(lines, scans, |characters, at, written, _| {
+		let c = characters[at].0;
+		let ternary = match c {
+			'?' => ternary_colon(characters, at).is_some(),
+			':' => (0..at).any(|question| ternary_colon(characters, question) == Some(at)),
+			_ => false,
+		};
+		if !ternary {
+			written.push(c);
+			return 1;
+		}
+		let kept = written.trim_end_matches([' ', '\t']).len();
+		written.truncate(kept);
+		written.push(' ');
+		written.push(c);
+		written.push(' ');
+		1 + characters[at + 1..].iter().take_while(|(c, code)| is_space(*c) && *code).count()
+	})
+}
+
+/// The `:` of the ternary whose `?` is at `question`: the first plain colon after it at its bracket depth that no
+/// nested ternary takes, None when the `?` is no ternary
+fn ternary_colon(characters: &[(char, bool)], question: usize) -> Option<usize> {
+	let code = |index: usize| characters.get(index).filter(|(_, code)| *code).map(|(c, _)| *c);
+	if code(question) != Some('?') {
+		return None;
+	}
+	let before = characters[..question].iter().rev().map(|(c, _)| *c).find(|c| !is_space(*c))?;
+	let after = characters[question + 1..].iter().map(|(c, _)| *c).find(|c| !is_space(*c))?;
+	if !is_operand_end(before) || !is_operand_start(after) {
+		return None;
+	}
+	let (mut depth, mut nested) = (0, 0);
+	for index in question + 1..characters.len() {
+		match code(index) {
+			Some('(' | '[' | '{') => depth += 1,
+			Some(')' | ']' | '}') if depth == 0 => return None,
+			Some(')' | ']' | '}') => depth -= 1,
+			Some('?') if depth == 0 => nested += 1,
+			Some(':') if depth == 0 => {
+				let plain = code(index + 1).is_none_or(|next| !":=".contains(next)) && code(index - 1) != Some(':');
+				match nested {
+					_ if !plain => {}
+					0 => return Some(index),
+					_ => nested -= 1,
+				}
+			}
+			_ => {}
+		}
+	}
+	None
 }
 
 /// The indentation as written, a tab counting TAB_WIDTH
