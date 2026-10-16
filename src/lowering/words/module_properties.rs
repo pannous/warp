@@ -121,9 +121,13 @@ pub fn lower(program: Node) -> Node {
 	let bound = bound_names(&program);
 	// a value (a variable, parameter or loop variable), not a function: `canvas() := Picture()` beside
 	// `canvas.width := …` is fine
+	// before tuples::lower the analyzer reads `[p, q] = …` as a definition of p: a destructured name is a value
 	let functions = crate::analyzer::function_definitions(&original).user_functions;
-	let values: HashSet<String> =
-		bound_names(&original).into_iter().filter(|name| !functions.contains_key(name)).collect();
+	let destructured = destructured_names(&original);
+	let values: HashSet<String> = bound_names(&original)
+		.into_iter()
+		.filter(|name| destructured.contains(name) || !functions.contains_key(name))
+		.collect();
 	if let Some(error) = refused_definition(&original, &values) {
 		return error;
 	}
@@ -229,6 +233,7 @@ fn without_definitions(node: Node) -> Node {
 /// fields; a property written (`canvas.width = 3`) binds no name
 pub(crate) fn bound_names(program: &Node) -> HashSet<String> {
 	let mut bound = crate::soft_keywords::names_given(program);
+	bound.extend(destructured_names(program));
 	program.visit(&mut |node| {
 		if let Some(head) = function_head(node) {
 			bound.extend(head.parameters().into_iter().filter_map(parameter_name));
@@ -242,6 +247,35 @@ pub(crate) fn bound_names(program: &Node) -> HashSet<String> {
 		}
 	});
 	bound
+}
+
+/// The variables the program's destructurings bind: `a, b = …`, `[a, b] = …`, `{x, y} = …`, `{x: a} = …`
+fn destructured_names(program: &Node) -> HashSet<String> {
+	let mut names = HashSet::new();
+	program.visit(&mut |node| match node {
+		Node::Key(target, Op::Assign, _) => names.extend(pattern_names(target)),
+		Node::List(..) => names.extend(crate::tuples::destructured_names(node)),
+		_ => {}
+	});
+	names
+}
+
+/// The variables a destructuring pattern binds: `[a, b]`, `(a, *rest)`, `{x, y}`, `{x: a}` (a, not the field x)
+fn pattern_names(pattern: &Node) -> Vec<String> {
+	match pattern.drop_meta() {
+		Node::List(items, Bracket::Round | Bracket::Square | Bracket::Curly, _) => {
+			items.iter().flat_map(pattern_item_names).collect()
+		}
+		_ => vec![],
+	}
+}
+
+fn pattern_item_names(item: &Node) -> Vec<String> {
+	match item.drop_meta() {
+		Node::Key(_, Op::Colon, renamed) => pattern_item_names(renamed),
+		Node::List(..) => pattern_names(item),
+		other => other.symbol_name().map(|name| crate::tuples::unstarred(name).to_string()).into_iter().collect(),
+	}
 }
 
 /// `height` of a write's target `height` or a declared `height: length`
