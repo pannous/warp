@@ -248,11 +248,12 @@ pub(super) fn bound_parts(value: Node, bindings: &[(Node, String)], body: Option
 	Node::List(statements, Bracket::Round, Separator::Semicolon)
 }
 
-/// `(a, b)`: the names in order
+/// `(a, b)`: the names in order; a glued `long(n)` is the head of a function (`def long(n) = Run(…)`), no names
 pub(super) fn positional_names(target: &Node) -> Option<Vec<String>> {
-	let Node::List(items, Bracket::Round, _) = target.drop_meta() else {
+	let Node::List(items, Bracket::Round, separator) = target.drop_meta() else {
 		return None;
 	};
+	(*separator != Separator::None).then_some(())?;
 	(items.len() > 1).then_some(())?;
 	items.iter().map(|item| item.symbol_name().map(String::from)).collect()
 }

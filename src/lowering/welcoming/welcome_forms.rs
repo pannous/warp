@@ -12,6 +12,7 @@ use crate::lowering::signals::event_signals::PAGE_EVENTS;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::GENERIC_MARK;
+use crate::words::IMPLICIT_PARAMETER;
 use crate::words::IS_WORD;
 use crate::words::LET_WORD;
 use crate::words::{EVENT_ALIASES, ONCE_WORD, ON_WORD, WHENEVER_WORD};
@@ -80,6 +81,9 @@ const METHOD_ALIASES: [(&str, &str); 18] = [
 ];
 
 pub fn lower(node: Node) -> Node {
+	if let Some(error) = warn_assigned_it(&node) {
+		return error;
+	}
 	// the program's own names keep their meaning: a field `Count`, Go's method `Sum()`
 	let own: HashSet<String> = crate::library_words::defined_names(&node)
 		.into_iter()
@@ -91,6 +95,24 @@ pub fn lower(node: Node) -> Node {
 	let mut lambda_names = HashSet::new();
 	collect_lambda_names(&node, &mut lambda_names);
 	lambda_calls(node, &lambda_names)
+}
+
+/// `it = 5` (user 2026-10-16): `it` is reserved, it names the parameter of a function that names none, so a variable
+/// of that name warns (an error under `use strict`)
+fn warn_assigned_it(node: &Node) -> Option<Node> {
+	let mut assigned = None;
+	node.visit(&mut |node| {
+		if let Node::Key(target, Op::Assign | Op::Define, _) = node {
+			if assigned.is_none() && target.drop_meta().is_symbol(IMPLICIT_PARAMETER) {
+				assigned = Some(target.as_ref().clone());
+			}
+		}
+	});
+	let message = format!(
+		"`{IMPLICIT_PARAMETER}` is reserved: it names the parameter of a function that names none \
+		 (`square := {IMPLICIT_PARAMETER} * {IMPLICIT_PARAMETER}`); pick another name"
+	);
+	crate::errors::diagnostic::report(&[crate::errors::diagnostic::Diagnostic::at(&assigned?, message)]).err()
 }
 
 /// Swift's and Rust's result arrow before `:=`: `def x(p:P) -> int := p.n` is `x(p:P): int := p.n`, the one typed head

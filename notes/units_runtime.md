@@ -178,12 +178,13 @@ compile error (append or map), `type(xs)` is `list of length`. The program's val
 Test: tests/numbers/test_dimension_types.rs.
 
 ## Unit definitions in lib/units.warp (card dimensions-units Q2; decisions unit-definitions, dimension-bridges)
-The dimensions and units are no Rust tables: lib/units.warp's `unit_definitions = data { … }` block names them in unit
+The quantities and units are no Rust tables: lib/units.warp's `unit_definitions = data { … }` block names them in unit
 lines, and src/numbers/units/definitions.rs reads it once with its own small line reader (the parser asks `is_unit` to
 read `201.168 m`, so it cannot parse the block that defines m):
-- `dimension length meter`: a base dimension and its SI anchor (a new base dimension also needs its `Dimension`
+- `quantity length meter` (`SI quantity …` takes the SI prefixes; decision quantity-naming, the old word `dimension`
+  is refused with a hint): a base quantity and its SI anchor (a new base quantity also needs its `Dimension`
   variant); `unit m := 1 meter` its symbol, which takes the anchor's place (shown as m), `meter` an alias of it.
-- `dimension speed m/s`: the name of the dimension of an expression of units (`type(5 m/s)` is speed).
+- `quantity speed m/s`: the name of the quantity of an expression of units (`type(5 m/s)` is speed).
 - `unit cm := m/100`, `unit furlong := 201.168 m`: an amount of one known unit, which fixes dimension and factor;
   `unit °C := (it + 273.15) K` / `unit °R := it * 5/9 K` count from another zero, `it` the amount in the new unit.
 - `unit mph := mi/h`, `unit N := kg*m/s²`, `unit L := dm³`, `unit ° := π/180`: several units or none, an alias (a
@@ -191,11 +192,11 @@ read `201.168 m`, so it cannot parse the block that defines m):
 - SI prefixes (G M k h da d c m µ n) come by themselves on units of the SI dimensions (length, mass, duration,
   temperature) that are powers of ten of their anchor and carry no prefix (m, g, s, K, not kg/cm/furlong/px).
   Giga..nano keeps every unit whole steps of its dimension in i64 (GK at 9e18 steps is the tightest).
-- `length as pixels := it * display.dpi`: a bridge; static_units.rs bridged() turns `q as px` into `q * (dpi · SI
-  amount of 1 dpi)` with the dpi read at run time (system_value "display_dpi"), the way back divides; a mixed `3cm + 2px`
-  names `as px`. `display.dpi := 96 dpi` is a setting: module_properties.rs reads it as `display_dpi * 1dpi`, writes it
-  by `set_system_value("display_dpi", it / 1dpi)`; warp-runtime system_values.rs keeps the set value, else the screen's
-  (CoreGraphics, xrandr), else DEFAULT_DPI 96; the playground host.js keeps holder.displayDpi, else 96·devicePixelRatio.
+- No bridges between quantities (user 2026-10-16, decision pixel-lengths): px is its own quantity, `cm as px` a
+  DimensionError; a length becomes px by arithmetic, `3 cm * display.dpi`. module_properties.rs reads display.dpi as
+  `display_dpi * 1dpi`, writes it by `set_system_value("display_dpi", it / 1dpi)`; warp-runtime system_values.rs keeps
+  the set value, else the screen's (CoreGraphics, xrandr), else DEFAULT_DPI 96; the playground host.js keeps
+  holder.displayDpi, else 96·devicePixelRatio.
 Each unit becomes whole steps of its dimension (amount × lcm of the dimension's denominators); only ratios matter. The
 block is also the run-time table (card lib-units): with_run_time_unit_tables replaces the statement by
 unit_names/unit_scales/unit_dimensions (aliases of packable units too), so `quantity(1, "furlong")` works.

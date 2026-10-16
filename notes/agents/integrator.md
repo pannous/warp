@@ -5,6 +5,12 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
 
 - Integration worktree W=/Users/me/dev/angles/warp.worktrees.noindex/integrate (create it with `cowtree add --detach "$W"
   origin/main` if missing). Always absolute paths and `git -C "$W"`.
+- Prep worktree P=/Users/me/dev/angles/warp.worktrees.noindex/integrate2 (user, 2026-10-16): while the gate or a
+  test run holds W, assemble the next batch in P: merge the Ready tips, resolve conflicts, `python3
+  web/playground/keywords.py`, cargo check (native and `--target wasm32-unknown-unknown --no-default-features`), fmt.
+  P gets its own version tweak (`-integrate2`), so its builds don't overwrite W's artifacts in the shared target dir.
+  Only one gate runs at a time (the machine's single test queue): when W is free, bring the prepared batch over
+  (`git -C "$W" checkout --detach <P's HEAD>`) and gate it there. Never wait idle on a test run.
 - The queue is the board (user, 2026-10-16): `todo list Ready` (`--json`: branch, tip, express per card). Only Ready
   cards are merged, each at the tip its card names (`git merge <tip>`, not `origin/<branch>`: the worker may have
   pushed since). A worker's SendMessage is a nudge, never the queue. `todo ready --stray` lists unmerged origin
@@ -66,7 +72,7 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   <example>… for a tour failure. Never check out another commit in the integrate worktree while gate.sh runs, and
   TaskStop a running gate before re-merging there. A JS-only follow-up tip can be merged off-tree
   (`git merge-tree --write-tree` + `git commit-tree`), pushed as a branch for the runner check while the gate finishes.
-- Failures: report test name + first panic line to the worker (the bounce note on its card, above). A failure that passes alone is shared state: find and
+- Failures: up to 10 per batch are ignored as `fixnow` and pushed (notes/roles.md "Fix forward"); report test name + first panic line to the worker (the fixnow card, or the bounce note on its card). A failure that passes alone is shared state: find and
   fix the cause in a small commit with a test (known flake: tests running the shared debug/warp binary; rerun).
 - Batch branches that arrive close together. After each push: one line to the Supervisor and the board.
 - GitHub CI runs only on demand (`gh workflow run "Rust CI" -R pannous/warp`), when the Supervisor asks.

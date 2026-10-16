@@ -9,6 +9,9 @@ the wiki).
 (none)
 
 ## Parked (user: "later")
+- maybe-javascript (2026-10-16, card maybe-javascript in Later): typed `js "…"` / `wgsl "…"` templates like `sql`
+  and `sh`. Parked until we need glue code that warp/wasm can't produce; until then shaders stay `shader {…}` and
+  JavaScript stays `use js`.
 - body-statements (2026-10-14): a function body looped like a list of statements, each statement with its kind
   (operation, call, assignment…); `.kind` was dropped from body-code until then.
 - unit-edges (warp-operator-shall, cards cleanup-units-answer and cleanup-units-interpreter): eight ignored

@@ -15,7 +15,7 @@
 //! Unit fields: `class Run{distance: km}` (unit_fields.rs), an instance's fields have signatures like an object's.
 
 use super::{exponent_of, finest_units, unit_named, units_text, Dimension, Factor, Quantity, Unit};
-use crate::lowering::function_head;
+use crate::lowering::{function_head, DefinitionForm};
 use crate::words::{MAP_WORD, PRINT_WORD, RETURN_WORD, STR_WORD};
 
 mod function_units;
@@ -32,7 +32,7 @@ use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use std::collections::{HashMap, HashSet};
 pub(crate) use unit_fields::unit_type;
-pub(crate) use unit_fields::{lower_field_tolerances, si_quantity};
+pub(crate) use unit_fields::{lower_field_tolerances, remember_field_unit_words, si_quantity};
 
 const LOOP_WORDS: [&str; 2] = ["for", "while"];
 /// `speed·u0`: a function specialised for one unit signature of its arguments
@@ -226,7 +226,7 @@ impl Inference {
 		let written = written_factors(program, &classes);
 		let mut temperatures: Vec<&'static Unit> = vec![];
 		for factor in &written {
-			if factor.unit.dimension == Dimension::Temperature
+			if factor.unit.dimension == Dimension::temperature()
 				&& !temperatures.iter().any(|unit| std::ptr::eq(*unit, factor.unit))
 			{
 				temperatures.push(factor.unit)
@@ -641,8 +641,9 @@ impl Definition {
 }
 
 fn function_definition(node: &Node) -> Option<(String, Definition)> {
-	let definition =
-		function_head(node).filter(|definition| definition.is_glued_head() && definition.plain_operator().is_some())?;
+	let definition = function_head(node).filter(|definition| {
+		(definition.is_glued_head() || definition.form == DefinitionForm::KeywordBlock) && definition.is_untyped_call()
+	})?;
 	let (parameters, (declared, defaults)) = definition
 		.written_parameters
 		.iter()
@@ -733,6 +734,14 @@ struct Inference {
 }
 
 /// The last statement of a program or block
+/// What a call of a function with this body gives: its last statement, of a `def f(x) { body }` block too
+fn returned_value(body: &Node) -> Option<&Node> {
+	match body.drop_meta() {
+		Node::List(items, Bracket::Curly, _) if items.len() == 1 => returned_value(&items[0]),
+		_ => last_statement(body),
+	}
+}
+
 fn last_statement(node: &Node) -> Option<&Node> {
 	match node.drop_meta() {
 		Node::List(items, _, Separator::Semicolon | Separator::Newline) => items.last().and_then(last_statement),
@@ -898,8 +907,8 @@ impl Inference {
 			Node::Key(left, op @ (Op::Eq | Op::Ne), right)
 				if dimension_signature(&right, &self.variables).is_some() || is_time_type(&right, &self.variables) =>
 			{
-				let named =
-					dimension_signature(&right, &self.variables).unwrap_or_else(|| vec![(Dimension::Time, 1)].into());
+				let named = dimension_signature(&right, &self.variables)
+					.unwrap_or_else(|| vec![(Dimension::duration(), 1)].into());
 				let (_, given) = self.infer(left.as_ref().clone())?;
 				if given.is_empty() && is_time_type(&right, &self.variables) {
 					return self.unchecked_key(*left, op, *right);
@@ -1123,15 +1132,9 @@ impl Inference {
 			}
 			Node::Key(object, Op::Dot, field) if self.field_signature(object, field).is_some() => {
 				let held = self.field_signature(object, field).expect("guarded");
-				let (value, given) = self.infer(value)?;
-				if given != held {
-					return Err(Stop::Error(format!(
-						"DimensionError: {} holds {}, is given {}",
-						target.serialize().trim(),
-						shown(&held),
-						shown(&given)
-					)));
-				}
+				let class = self.instance_class(object).unwrap_or_default();
+				let key = format!("{class}.{}", field.drop_meta().name());
+				let value = self.field_value(target.serialize().trim(), &key, Some(&held), &value)?;
 				Ok((Node::Key(Box::new(target), op, Box::new(value)), held))
 			}
 			_ => self.plain_key(target, op, value),
@@ -1382,8 +1385,8 @@ impl Inference {
 	/// The zero of the unit a temperature shows in, 0 for any other signature
 	fn temperature_zero(&self, signature: &Signature) -> Rational {
 		match &**signature {
-			[(Dimension::Temperature, 1)] if !signature.is_list() => {
-				si_zero(display_unit(&self.display, Dimension::Temperature))
+			[(dimension, 1)] if *dimension == Dimension::temperature() && !signature.is_list() => {
+				si_zero(display_unit(&self.display, Dimension::temperature()))
 			}
 			_ => Rational::integer(0),
 		}

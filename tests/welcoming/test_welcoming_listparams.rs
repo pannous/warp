@@ -39,6 +39,7 @@ fn list_annotations_on_parameters() {
 	is!("fn get(xs:int[]) { xs#2 }; get([0 4 0])", 4);
 	is!("fn get(int[] xs) { xs#2 }; get([0 4 0])", 4);
 	is!("fn get(xs:list<int>) { xs#2 }; get([0 4 0])", 4);
+	is!("fun f(g:list<int>) { g[1] }; f([0 4 0])", 4);
 	is!("fn get(xs:ints) { xs#2 }; get([0 4 0])", 4);
 	is!("fn get(xs:numbers) { xs#2 }; get([0 4 0])", 4);
 	is!("get(xs:list) := xs[1]; get([0 4 0])", 4);
