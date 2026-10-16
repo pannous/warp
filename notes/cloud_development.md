@@ -238,8 +238,12 @@ branch's tests there:
 - `--model` carries to cloud sessions (the log's init line read claude-haiku-5-5), so the runner defaults to Haiku.
 - Pool (data/cloud/pool/, one file per session): a finished session gets the next job as a follow-up message
   (`claude -p … --cloud <id>`); its VM keeps the checkout (tmp/cloud-test/tree) and cargo's output. Measured: the same
-  branch's second job built in 0 s, 11 s in total, against 350 s cold. Up to 3 sessions, each retired after 30 jobs; a
-  session that refuses a job or never answers (3 h) is dropped.
+  branch's second job built in 0 s, 11 s in total, against 350 s cold. Up to 3 busy at once (MAX_PARALLEL_RUNS) and
+  8 sessions in total (MAX_CLOUD_SESSIONS, pool files plus starting ones): every session stays in the user's session
+  list until archived there, and the CLI can't archive. After 30 jobs a session gets `claude -p /clear --cloud <id>`
+  (a command, 0 turns) and goes on, instead of a fresh session. A session that refuses a job or never answers (3 h)
+  is dropped, loudly, into data/cloud/dropped-sessions.txt: archive those in the web UI.
+- New sessions are named "Cloud Test Lane" (`--name` carries to the cloud); the pool addresses them by session_id only.
 - A run that can't reach its tests (merge conflict, missing tip) pushes a red result naming why, and the test run is
   killed after 40 min with the tests that never finished named (a hang held batch-3's session).
 - The one Linux compiler warning (CLIENT unused in src/sound/midi.rs) is fixed on branch midi-client-warning (Ready).
