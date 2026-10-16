@@ -275,7 +275,9 @@ main` calling warp_twigl with values.size/time/mouse/frame, FC and m with y flip
   bytes after wasm-opt (+705 KB, +254 KB gzipped). So the translation is crates/warp-glsl: natively a dependency of the
   native feature (std_adapters.rs draw glsl_wgsl), in the browser glsl.wasm of its own (build.sh build_glsl), which
   host-gpu.js glslWgsl loads at a program's first translation; warp.wasm stays as it was.
-- Not yet: twigl's backbuffer b (would be $previous), noise functions (snoise2D…), sound s, other twigl modes
+- twigl's noise (fsnoise, fsnoiseDigits, snoise2D, snoise3D: lib/draw.warp twigl_noise) goes into a shader that calls
+  it; probes/twigl/noise.warp.
+- Not yet: twigl's backbuffer b (would be $previous), snoise4D, sound s, other twigl modes
   (classic, geeker: full `void main` sources, gl_FragColor), Shadertoy's iChannel textures.
 
 ## Paint window, default canvas, probes (from the warp-sound handover, 2026-10-10)
