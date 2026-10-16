@@ -20,6 +20,8 @@ const RANDOM_BETWEEN: &str = "random_between";
 const RANDOM_UNTIL: &str = "random_until";
 const RANDOM_FRACTION: &str = "random_fraction";
 const RANDOM_WORD: &str = "random";
+const RANDOM_ELEMENT: &str = "random_element";
+const RANDOM_OF: &str = "random_of";
 
 /// `download url` → `fetch url`: an alias at the head of an application or call, unless the program defines the alias itself
 pub fn lower_aliases(node: Node) -> Node {
@@ -79,6 +81,9 @@ fn comprehension_head(node: Node) -> Result<(Node, Vec<Node>, Bracket, Separator
 }
 
 fn random_call(node: Node) -> Node {
+	if let Some(compared) = random_compared(&node) {
+		return compared;
+	}
 	let Some(arguments) = random_arguments(&node) else { return node };
 	if let Some((low, high, ends)) = random_ends(arguments) {
 		let word = if ends == Op::Range { RANDOM_UNTIL } else { RANDOM_BETWEEN };
@@ -93,10 +98,35 @@ fn random_call(node: Node) -> Node {
 					 random float, random(n) for 0…n-1 or random(a, b) for a to b"
 				)),
 			},
-			None => node,
+			None => random_of_value(type_word).unwrap_or(node),
 		},
 		_ => node,
 	}
+}
+
+/// `random [a b c]` one of the elements, `random 2.5` a float from 0 up to 2.5, `random xs` by its value's type at run
+/// time (card random-dispatches); `random 6` stays the host's random_below
+fn random_of_value(argument: &Node) -> Option<Node> {
+	match argument.drop_meta() {
+		Node::Number(number) if number.is_integer() => None,
+		Node::Number(_) => Some(prelude_call(RANDOM_FRACTION, vec![Node::Number(Number::Int(0)), argument.clone()])),
+		Node::List(_, Bracket::Square, _) => Some(prelude_call(RANDOM_ELEMENT, vec![argument.clone()])),
+		_ => Some(prelude_call(RANDOM_OF, vec![argument.clone()])),
+	}
+}
+
+/// `random 6 < 6` is (random 6) < 6: random never takes a truth value, so a comparison or logical chain after it
+/// compares its result, as nest_prefix_calls groups a function whose first parameter rules out one (`random(6 < 6)`
+/// written with parentheses stays the call)
+fn random_compared(node: &Node) -> Option<Node> {
+	let Node::List(items, Bracket::None, separator) = node.drop_meta() else { return None };
+	let [random, argument] = items.as_slice() else { return None };
+	let Node::Key(left, op, right) = argument.drop_meta() else { return None };
+	if !random.is_symbol(RANDOM_WORD) || !(op.is_relation() || matches!(op, Op::And | Op::Or)) {
+		return None;
+	}
+	let called = Node::List(vec![random.clone(), left.as_ref().clone()], Bracket::None, separator.clone());
+	Some(crate::lowering::nodes::key(random_call(called), *op, right.as_ref().clone()))
 }
 
 fn prelude_call(word: &str, arguments: Vec<Node>) -> Node {

@@ -74,6 +74,10 @@ pixel_channel(c) := round(255 * min(max(c, 0), 1)) as int
 random_fraction(a, b) := a + random() * (b - a)
 random_until(a, b) := if a is int and b is int then a + random_below(b - a) else random_fraction(a, b)
 random_between(a, b) := if a is int and b is int then random_until(a, b + 1) else random_fraction(a, b)
+// random(x) by the value's type (card random-dispatches): of a list one of its elements, of a whole number n one of 0…n-1,
+// of a fraction a float from 0 up to it
+random_element(xs) := xs#(random_below(count(xs)) + 1)
+random_of(x) := if x is list then random_element(x) else if x is int then random_below(x) else random_fraction(0, x)
 // random int, random bool, random codepoint: a random value of the type; random int spans the whole 64-bit range
 random_int() := (random_below(4294967296) - 2147483648) * 4294967296 + random_below(4294967296)
 random_bool() := random_below(2) == 1
