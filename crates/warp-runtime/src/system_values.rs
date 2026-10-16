@@ -90,7 +90,7 @@ fn window_size() -> (i64, i64) {
 	WINDOW_SIZE.lock().unwrap().unwrap_or(NATIVE_VIEW)
 }
 
-/// lib/units.warp's `display.dpi := 96 dpi`: the dots per inch where the screen tells none (decision dimension-bridges)
+/// display.dpi: the dots per inch where the screen tells none (96, one CSS pixel per CSS inch)
 const DEFAULT_DPI: i64 = 96;
 /// `display.dpi = 300 dpi`: the dpi the program set, in place of the screen's
 static DPI_SET: Mutex<Option<i64>> = Mutex::new(None);

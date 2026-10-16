@@ -30,10 +30,10 @@ fn test_offside_block_indented_by_tabs() {
 
 #[test]
 fn test_hash_comments_only_when_asked() {
-	let code = "x = 7//2 // half\n/// doc\nprint x\n";
+	let code = "x = 7 /! 2 // half\n/// doc\nprint x\n";
 	assert_eq!(formatted(code), code);
 	let hashed = format(code, Options { hash_comments: true }).unwrap().text;
-	assert_eq!(hashed, "x = 7//2 # half\n## doc\nprint x\n");
+	assert_eq!(hashed, "x = 7 /! 2 # half\n## doc\nprint x\n");
 }
 
 #[test]

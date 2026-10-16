@@ -57,7 +57,7 @@ pub enum Op {
 	Sub,      // -
 	Mul,      // *  ×  ⋅
 	Div,      // /  ÷
-	FloorDiv, // //  div  the Euclidean quotient that goes with %: floor_quotient (warp_parser FLOOR_QUOTIENT)
+	FloorDiv, // /!  div  the Euclidean quotient that goes with %: floor_quotient (warp_parser FLOOR_QUOTIENT)
 	Mod,      // %  mod  Euclidean: 0 ≤ a % b < |b|
 	Rem,      // rem  truncated remainder, sign of the dividend (C, Java, JS, Rust %)
 	Pow,      // ^  **

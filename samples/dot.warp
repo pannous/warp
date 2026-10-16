@@ -16,4 +16,4 @@ t1 = clock()
 print "dot of \(n) items: \(d) in \(t1 - t0) ms (about n/6)"
 
 zs = xs .* ys
-print "xs .* ys pairs the items: \(#zs) products, the middle one \(zs#(n//2))"
+print "xs .* ys pairs the items: \(#zs) products, the middle one \(zs#(n /! 2))"

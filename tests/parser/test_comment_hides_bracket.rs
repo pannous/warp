@@ -12,5 +12,5 @@ fn a_comment_that_hides_a_closing_bracket_is_an_error() {
 #[test]
 fn a_comment_after_an_open_bracket_without_its_closer_is_a_comment() {
 	is!("x = [1, 2, // first two\n3]; x#3", 3);
-	is!("col=7; (col//3)*3", 6);
+	is!("col=7; (col /! 3)*3", 6);
 }

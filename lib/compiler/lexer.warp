@@ -105,11 +105,11 @@ RAISED_LETTERS = "abcdefghijklmnoprstuvwxyz"
 def is_blank(c) := c == ' ' or c == '\t' or c == '\n' or c == '\r'
 
 // The end of what the parser skips at `at`, a comment as it reads one or a text, else `at`
-// Rust twin: warp_parser/scanning.rs skip_whitespace_and_comments, at_floor_division, at_hash_comment
+// Rust twin: warp_parser/scanning.rs skip_whitespace_and_comments, at_line_comment, at_hash_comment
 def skipped_end(source, at, n) {
 	c = source[at]
 	next = peek(source, at + 1, n)
-	if c == '/' and next == '/' and (at == 0 or source[at - 1] != ':') and not floor_division(source, at, n) {
+	if c == '/' and next == '/' and (at == 0 or source[at - 1] != ':') {
 		return index_of(source, "\n", at, n)
 	}
 	if c == '#' and (at == 0 or is_blank(source[at - 1])) and hash_comment(source, at, n) {
@@ -225,16 +225,6 @@ def possessive(source, at, n) {
 }
 
 def is_name_start(c) := is_alpha(c) or c == '_'
-
-// `a//b`: a divisor glued to `//` after an operand on its line
-def floor_division(source, at, n) := at + 2 < n and not is_blank(source[at + 2]) and follows_operand(source, at)
-
-// Code that could be divided ends before `at` on its line: a name, a number, `)` or `]`
-def follows_operand(source, at) {
-	i = at - 1
-	while i >= 0 and source[i] != '\n' and is_blank(source[i]) { i = i - 1 }
-	i >= 0 and source[i] != '\n' and (is_name_char(source[i]) or source[i] == ')' or source[i] == ']')
-}
 
 // `# note`, `#!`, `##`, `#use lib`: a comment; `#s`, `#a-1`, `#f(x)` count
 def hash_comment(source, at, n) {

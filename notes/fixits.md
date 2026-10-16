@@ -82,7 +82,8 @@ something wrong use a `Diagnostic` (error) or a warning (`diagnostic::ask`). Tes
 | kebab data key `a-b:2`, a and b variables (P81) | analyzer `kebab_fixes` | the data key | `"a-b":2` (only when nothing reads `a-b` bare); the subtraction `a - b` at every bare read (the key quoted); the key renamed `a_b` at the key and every bare read |
 | `for int in xs`, `for Friend in xs`, `for (it>2) in xs` (for-filter) | warp_parser `filtered_body` | the filter | the header `for x in xs.filter(x => x is int)` / `for it in xs.filter(it => it>2)`, the body unchanged (none when the body names the item by the type word) |
 | unterminated string, `(`/`[`/`{` open to the end, `name { …` never closed, `‖x` (errors, card more-fixes) | warp_parser `missing_closer` | none | add the closer: a quote at the end of the opening line, a bracket at the end of the input, `‖` at the end of the line |
-| `(7 // 2)`: the comment hides the closer (error) | warp_parser `glued_floor_division` | none | `7//2` |
+| `(7 // 2)`: the comment hides the closer (error) | warp_parser `glued_floor_division` | none | `7 /! 2` |
+| `7//2`, `x//=3`: a `//` comment meant as floor division (severe warning) | comments.rs `warn_on_floor_division_comment` | beautify (synonyms.rs `meant_rewrites`) | `/!`, `/!=` |
 | `\alpha` (error) | atoms.rs | none | `\:alpha` |
 | undefined variable / function / word near a name (`coutn`, `sqaure(3)`) (errors) | wasm_emitter `offer_near_name` | none | the near name; an undefined word also `data …` |
 | `x is 5` of an undefined x (error) | wasm_emitter `emit_undefined_comparison` | none | `x be 5` |

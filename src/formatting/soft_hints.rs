@@ -109,10 +109,7 @@ pub fn soft_hints(code: &str) -> Vec<Hint> {
 	if let Some(&first) = slash_comments.first() {
 		hints.push(Hint {
 			line: first + 1,
-			message: format!(
-				"prefer # comments: `//` also means floor division ({} // comments)",
-				slash_comments.len()
-			),
+			message: format!("prefer # comments: `//` reads like division ({} // comments)", slash_comments.len()),
 			beautify_fixes: true,
 		});
 	}

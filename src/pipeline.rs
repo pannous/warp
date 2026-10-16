@@ -95,6 +95,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	crate::lowering::welcome_forms::lower_arrow_result_types,
 	// `a of b` is `b.a` (of_lookups.rs), before any pass reads a lookup
 	crate::lowering::of_lookups::lower,
+	// `set x to 5` is `x = 5`, after of_lookups: `set width of p to 12` is `p.width = 12` (welcome_forms.rs)
+	crate::lowering::welcome_forms::lower_set_phrases,
 	// `(p).a` is `p.a` (grouped_receivers.rs), before any pass reads a lookup
 	crate::lowering::grouped_receivers::lower,
 	// `window.width = 800`, `canvas.height`, a bare width (module_properties.rs): getters and setters, before any pass
@@ -164,6 +166,8 @@ const SUGAR_PASSES: &[Pass] = &[
 	// `.card { padding: 8px }` in a style block: the selector and the length as texts (style_rules.rs), before markup_tags
 	// reads `p.note{…}` as a tag
 	crate::lowering::style_rules::lower,
+	// `xs map f`: an iteration word between a list and its function is the method call (lambdas.rs)
+	crate::lowering::lambdas::lower_infix_iterations,
 	// `xs.map(.floor)`: a leading-dot word is the lambda on its member (lambdas.rs), once no selector is left
 	crate::lowering::lambdas::lower_member_lambdas,
 	// `label{ for: name "Name" }`: the value ends before the content after it (glued_attributes.rs), before the options

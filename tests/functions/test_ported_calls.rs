@@ -29,7 +29,7 @@ const CASES: [(&str, &str); 305] = [
 	(r#"def f(x?){x ?? 5}; f(2)"#, r#"2"#),
 	(r#"def f(x):int{return x+1}; f(1)"#, r#"2"#),
 	(r#"def f(x){if x>0 {return 1}; return 2}; f(-1)"#, r#"2"#),
-	(r#"def divmod(a,b){(a//b, a%b)}; q,r = divmod(7,2); q*10+r"#, r#"31"#),
+	(r#"def divmod(a,b){(a /! b, a%b)}; q,r = divmod(7,2); q*10+r"#, r#"31"#),
 	(r#"def f(a){a}; def f(a,b){a+b}; f(1)*10 + f(2,3)"#, r#"15"#),
 	(r#"def f(x:int){1}; def f(x:text){2}; f(3)*10+f("a")"#, r#"12"#),
 	(r#"def adder(n){ x => x + n }; add2 = adder(2); add2(3)"#, r#"5"#),
