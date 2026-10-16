@@ -76,39 +76,7 @@ fn negate_calls(
 			let call = negate_calls(Node::List(items, bracket, separator), functions, bound, locals);
 			Node::Key(Box::new(Node::Empty), Op::Neg, Box::new(call))
 		}
-		// `1 + -floor 2.5`, `x = -floor 2.5`: the negated call is the right operand (card leading-minus)
-		Node::List(items, Bracket::None, Separator::Space)
-			if items.len() > 1
-				&& rightmost_operand(&items[0])
-					.and_then(negated_word)
-					.is_some_and(|function| is_function(function, Op::Sub)) =>
-		{
-			let mut items = items.into_iter();
-			let first = items.next().expect("guarded");
-			let negated = rightmost_operand(&first).expect("guarded").clone();
-			let call = Node::List(vec![negated].into_iter().chain(items).collect(), Bracket::None, Separator::Space);
-			negate_calls(with_rightmost_operand(first, call), functions, bound, locals)
-		}
 		other => children_rewritten(other, |child| negate_calls(child, functions, bound, locals)),
-	}
-}
-
-/// The innermost right operand of a binary operator or assignment: `-floor` of `1 + -floor`
-fn rightmost_operand(node: &Node) -> Option<&Node> {
-	match node.drop_meta() {
-		Node::Key(left, _, right) if !left.is_empty_node() => rightmost_operand(right).or(Some(right)),
-		_ => None,
-	}
-}
-
-/// `node` with its innermost right operand replaced by `operand`
-fn with_rightmost_operand(node: Node, operand: Node) -> Node {
-	match node.drop_meta() {
-		Node::Key(left, op, right) if !left.is_empty_node() && rightmost_operand(right).is_some() => {
-			Node::Key(left.clone(), *op, Box::new(with_rightmost_operand(*right.clone(), operand)))
-		}
-		Node::Key(left, op, _) => Node::Key(left.clone(), *op, Box::new(operand)),
-		_ => operand,
 	}
 }
 
