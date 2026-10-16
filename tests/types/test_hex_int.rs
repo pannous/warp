@@ -44,6 +44,7 @@ fn print_shows_hex() {
 // card hex-binary: the printer calls lib/prelude.warp's hex_text and binary_text (late_calls.rs), which a program's own
 // words of those names leave be
 #[test]
+#[cfg(feature = "native")]
 fn print_shows_radix_through_the_prelude() {
 	assert_eq!(crate::common::printed("print [-5 as binary, 4095 as hex, 0 as hex]").trim(), "[-0b101 0xFFF 0x0]");
 	assert_eq!(
