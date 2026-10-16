@@ -6,7 +6,7 @@
 #   tests/queue.sh ./test.sh              a script (test.sh re-enters through here by itself)
 # A run that already holds the lock (WARP_TEST_LOCKED) runs directly, so nesting never deadlocks.
 # Waiters are served first come, first served by ticket files in $QUEUE; a full ./test.sh (the Integrator's run)
-# gets priority and takes the next slot ahead of targeted runs. Tickets of dead processes are dropped.
+# and targeted runs from the Integrator's integrate* worktrees get priority and take the next slot ahead of workers' runs. Tickets of dead processes are dropped.
 # Targeted runs are niced so the user's apps stay responsive and use at most TARGETED_TEST_THREADS threads
 # (RUST_TEST_THREADS); the full suite keeps normal priority, because its task-overlap tests measure wall clock.
 LOCK="${WARP_TEST_LOCK:-$HOME/.cargo/warp-tests.lock}"
@@ -71,6 +71,8 @@ case "${run[0]}" in
 	*test.sh) priority=0; niceness=0 ;;
 	*) priority=1; niceness=$TARGETED_NICENESS; export RUST_TEST_THREADS="${RUST_TEST_THREADS:-$TARGETED_TEST_THREADS}" ;;
 esac
+# The Integrator's targeted re-runs of a batch's failures hold up main: they go ahead of the workers' runs too
+[[ "$PWD" == */warp.worktrees.noindex/integrate* ]] && priority=0
 mkdir -p "$QUEUE"
 ticket="$QUEUE/$priority-$(date +%s)-$$"
 echo "$PWD ${run[*]}" > "$ticket"
