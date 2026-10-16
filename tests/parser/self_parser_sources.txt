@@ -886,8 +886,6 @@ probes/system_values_push.warp
 probes/task_position.warp
 probes/text_ratio.warp
 probes/todo_app/forms.warp
-probes/typed_global/const_called_before.warp
-probes/typed_list/upper.warp
 probes/union_result.warp
 probes/uniscript/loopfn.warp
 probes/uniscript/mod_probe.warp
@@ -991,3 +989,4 @@ samples/voices.warp
 samples/word_lengths.warp
 samples/worker.warp
 probes/self_hosting/parser/glued_units.warp
+tests/fixtures/parser_corpus/types.warp

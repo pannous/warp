@@ -1,5 +1,0 @@
-// cards data-run-now, data-bare: now! in data is the date the run reads, a bare now stays the symbol now
-friends{peter james created: now!}
-print friends.created
-x = {created: now}
-print x.created

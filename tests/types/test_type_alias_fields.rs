@@ -39,4 +39,5 @@ fn a_literal_is_tested_against_the_type_an_alias_names() {
 	is!("type Age = int\n30 is Age", true);
 	is!("type Age = int\n\"a\" is Age", false);
 	is!("type Name = text\n\"a\" is a Name", true);
+	is!("enum Color { red green }\ntype Paint = Color\n3 is Paint", false);
 }
