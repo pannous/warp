@@ -32,7 +32,7 @@ mod statics;
 use crate::node::{leading_name, parens, symbol, text, Bracket, Node, Separator};
 use crate::operators::{operator_method, Op, OPERATOR_METHODS};
 use inheritance::*;
-pub(crate) use operators::is_library_method;
+pub(crate) use operators::{is_library_method, ClassFields};
 use operators::*;
 use other_languages::*;
 use statics::*;

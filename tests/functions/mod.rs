@@ -99,6 +99,7 @@ mod test_it_reserved; // card it-reserved
 mod test_kebab_members;
 mod test_kind_tested_parameter; // card function-whose
 mod test_lambda_global;
+mod test_lambda_held_by_field; // card lambda-held
 mod test_lambda_spaced_body;
 mod test_lambda_spellings;
 mod test_lambda_tuple_arguments; // card errors-needs
