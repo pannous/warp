@@ -73,6 +73,25 @@ case "${run[0]}" in
 esac
 # The Integrator's targeted re-runs of a batch's failures hold up main: they go ahead of the workers' runs too
 [[ "$PWD" == */warp.worktrees.noindex/integrate* ]] && priority=0
+
+# A `cargo test` builds before it queues: the build waits only for cargo's own lock on the shared target dir, which
+# serializes builds anyway, and the test lock is held for running tests, not compiling (a third of its time was builds,
+# notes/test_speed.md). The locked run then finds everything fresh.
+prebuild_command() {
+	[ "${run[0]}" = cargo ] || return 1
+	local argument before=()
+	for argument in "${run[@]}"; do
+		[ "$argument" = "--" ] && break
+		[ "$argument" = "--no-run" ] && return 1
+		before+=("$argument")
+	done
+	[[ " ${before[*]} " == *" test "* ]] || return 1
+	prebuild=("${before[@]}" --no-run)
+}
+if prebuild_command; then
+	nice -n "$niceness" "${prebuild[@]}" || exit $?
+fi
+
 mkdir -p "$QUEUE"
 ticket="$QUEUE/$priority-$(date +%s)-$$"
 echo "$PWD ${run[*]}" > "$ticket"
@@ -83,13 +102,22 @@ drop_stale_tickets() {
 	done
 }
 first_ticket() { ls "$QUEUE" | sort | head -1; }
+# Our ticket is found by our PID, whatever its name: a ticket renamed by hand (1- → 0- for priority) once kept its
+# waiting run from seeing itself first while it blocked all others with the lock free (2026-10-16, 25 min); a deleted
+# one is written again
+own_ticket() {
+	local name
+	name=$(ls "$QUEUE" | grep -E -- "-$$\$" | head -1)
+	[ -z "$name" ] && echo "$PWD ${run[*]}" > "$ticket" && name=${ticket##*/}
+	echo "$name"
+}
 
 drop_stale_tickets
-if [ "$(first_ticket)" != "${ticket##*/}" ] || ! "${lock_is_free[@]}"; then
+if [ "$(first_ticket)" != "$(own_ticket)" ] || ! "${lock_is_free[@]}"; then
 	echo "test queue: waiting for the warp test lock ($(cat "$LOCK.owner" 2>/dev/null || echo unknown holder)," \
-		"$(($(ls "$QUEUE" | sort | grep -n "^${ticket##*/}$" | cut -d: -f1) - 1)) ahead of us)" >&2
+		"$(($(ls "$QUEUE" | sort | grep -n "^$(own_ticket)$" | cut -d: -f1) - 1)) ahead of us)" >&2
 fi
-while drop_stale_tickets; [ "$(first_ticket)" != "${ticket##*/}" ]; do sleep $POLL_SECONDS; done
+while drop_stale_tickets; [ "$(first_ticket)" != "$(own_ticket)" ]; do sleep $POLL_SECONDS; done
 
 descendants() {
 	local child
@@ -143,8 +171,9 @@ watch_run() {
 }
 watch_run $$ &
 
-# exec keeps our PID, so the ticket stays valid while we wait for the lock and run; it is removed when the run ends
+# exec keeps our PID, so the ticket stays valid while we wait for the lock and run; it is removed when the run ends,
+# by PID like own_ticket finds it (the glob is expanded by the trap)
 export WARP_TEST_LOCKED=1
 export WARP_NO_WINDOW=1 # a painting program writes PNGs, never a window during tests (src/graphics/paint.rs)
 exec "${hold_lock[@]}" bash -c 'trap "rm -f $1" EXIT; echo "$PPID $PWD ${*:2}" > "$0.owner"; "${@:2}"' \
-	"$LOCK" "$ticket" nice -n "$niceness" "${run[@]}"
+	"$LOCK" "$QUEUE/*-$$" nice -n "$niceness" "${run[@]}"
