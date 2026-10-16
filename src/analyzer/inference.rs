@@ -7,7 +7,7 @@ use crate::words::{ANY_TYPE, MAP_WORD, NUMBER_WORD, PRINT_WORD, REAL_WORD};
 pub(super) fn is_update(node: &Node) -> bool {
 	match node {
 		Node::Key(target, Op::Assign, value) => {
-			matches!(target.drop_meta(), Node::Symbol(name) if crate::warp_parser::mentions(value, name))
+			target.symbol_name().is_some_and(|name| crate::warp_parser::mentions(value, name))
 		}
 		Node::Key(target, op, _) if matches!(op, Op::Inc | Op::Dec) || op.is_compound_assign() => {
 			matches!(target.drop_meta(), Node::Symbol(_))
@@ -326,7 +326,7 @@ fn loop_kind(body: &Node, scope: &Scope) -> Kind {
 /// `print x`, `puts x`: an output word applied to one value
 pub(crate) fn is_output_call(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(), [word, _]
-		if matches!(word.drop_meta(), Node::Symbol(name) if crate::wasm_emitter::OUTPUT_CALLS.contains(&name.as_str()))))
+		if word.symbol_name().is_some_and(|name| crate::wasm_emitter::OUTPUT_CALLS.contains(&name))))
 }
 
 /// The kind of a non-empty list: a call's result, a statement sequence's last value, or a data list

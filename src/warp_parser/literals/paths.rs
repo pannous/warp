@@ -35,7 +35,7 @@ pub fn path_variables(node: &Node) -> std::collections::HashSet<String> {
 
 /// A path written without quotes, or one of the `path_variables`: a Path where a method takes one
 pub fn is_written_path(argument: &Node, path_variables: &std::collections::HashSet<String>) -> bool {
-	is_path_literal(argument) || matches!(argument.drop_meta(), Node::Symbol(name) if path_variables.contains(name))
+	is_path_literal(argument) || argument.symbol_name().is_some_and(|name| path_variables.contains(name))
 }
 
 impl WarpParser {

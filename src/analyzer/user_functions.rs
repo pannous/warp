@@ -280,7 +280,9 @@ impl Usages {
 			return;
 		};
 		// `t.left = 3` lowers to `t = field_with(t, "left", 3)`: t is an object too
-		let is_map_word = matches!(word.drop_meta(), Node::Symbol(call) if crate::library_words::MAP_WORD_FUNCTIONS.contains(&call.as_str()) || call == crate::library_words::FIELD_WITH);
+		let is_map_word = word.symbol_name().is_some_and(|call| {
+			crate::library_words::MAP_WORD_FUNCTIONS.contains(&call) || call == crate::library_words::FIELD_WITH
+		});
 		if is_map_word {
 			self.indexed.insert(name.clone());
 		}
@@ -379,7 +381,7 @@ fn joined_to(node: &Node, is_joined: fn(&Node) -> bool) -> Option<&str> {
 
 /// The sequence a node uses: indexed `xs#2`, counted `#xs`, `count xs`, `xs.length`
 pub(super) fn used_sequence(node: &Node) -> Option<&Node> {
-	let is_counting_word = |word: &Node| matches!(word.drop_meta(), Node::Symbol(name) if is_counting_word(name));
+	let is_counting_word = |word: &Node| word.symbol_name().is_some_and(is_counting_word);
 	match node {
 		Node::Key(list, Op::Hash, counted) => Some(if list.is_nothing() { counted } else { list }),
 		Node::Key(list, Op::Dot, property) if is_counting_word(property) => Some(list),
@@ -943,7 +945,7 @@ pub(super) fn infer_parameters_from_calls(ctx: &mut Context, program: &Node) {
 			for (index, argument) in arguments.into_iter().enumerate().take(function.params.len()) {
 				let param = &function.params[index];
 				// the head `show(b)` and a recursive `show(b)` pass the parameter itself: no say in its kind
-				if !matches!(argument.drop_meta(), Node::Symbol(passed) if *passed == param.name) {
+				if !argument.is_symbol(&param.name) {
 					*given_bools.entry((name.clone(), index)).or_insert(true) &= judge.is_bool(argument);
 				}
 				ctx.parameter_conflicts.extend(judge.digits_lost(argument, param));
@@ -995,13 +997,13 @@ impl ArgumentJudge {
 	/// is every argument a parameter is given a bool (`show(1<2)`, `show(ok)` of `ok = x > 2`)
 	fn is_bool(&self, argument: &Node) -> bool {
 		crate::analyzer::is_boolean(argument, &Scope::new())
-			|| matches!(argument.drop_meta(), Node::Symbol(name) if self.bool_variables.contains(name))
+			|| argument.symbol_name().is_some_and(|name| self.bool_variables.contains(name))
 	}
 
 	fn has_digits_an_int_loses(&self, argument: &Node) -> bool {
 		is_decimal_literal(argument)
 			|| self.kind(argument) == Some(Kind::Float)
-			|| matches!(argument.drop_meta(), Node::Symbol(name) if self.decimal_variables.contains(name))
+			|| argument.symbol_name().is_some_and(|name| self.decimal_variables.contains(name))
 	}
 
 	/// A float passed to a declared int parameter loses digits: a compile error (P49); `real`, `exact` are Ints that

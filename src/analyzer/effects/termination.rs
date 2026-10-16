@@ -196,9 +196,8 @@ fn assigns(node: &Node, parameter: &str) -> bool {
 					| Op::OrAssign | Op::XorAssign
 					| Op::Inc | Op::Dec
 			);
-			(writes && matches!(left.drop_meta(), Node::Symbol(name) if name == parameter))
-				|| (matches!(op, Op::Inc | Op::Dec)
-					&& matches!(right.drop_meta(), Node::Symbol(name) if name == parameter))
+			(writes && left.is_symbol(parameter))
+				|| (matches!(op, Op::Inc | Op::Dec) && right.is_symbol(parameter))
 				|| assigns(left, parameter)
 				|| assigns(right, parameter)
 		}

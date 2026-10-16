@@ -602,11 +602,11 @@ impl Scope {
 }
 
 pub(crate) fn is_constant_keyword(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if CONSTANT_KEYWORDS.contains(&word.as_str()))
+	node.symbol_name().is_some_and(|word| CONSTANT_KEYWORDS.contains(&word))
 }
 
 pub(crate) fn is_declaration_keyword(node: &Node) -> bool {
-	matches!(node.drop_meta(), Node::Symbol(word) if is_declaration_word(word))
+	node.symbol_name().is_some_and(is_declaration_word)
 }
 
 /// `var`, `let`, `const`, `val` …: a word declaring the name after it
