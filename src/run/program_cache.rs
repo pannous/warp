@@ -2,7 +2,8 @@
 //! to, so the next run of the same program skips the compile (1.2 s for samples/gpu_visualizer_warp.warp, whose paint
 //! functions become a shader). The key covers everything the compile reads: warp itself (the binary's size and time),
 //! the source, the program's path, the working directory, the WARP_ settings, `warp fast`, and the files of the folders where its
-//! `use`s look (modules::SEARCH_DIRECTORIES below the program's folder and the working directory: names, sizes, times).
+//! `use`s look (modules::SEARCH_DIRECTORIES below the program's folder and the working directory: names, sizes, times
+//! of the module files there, so a file the program writes beside it, `save "x.png"`, leaves the key as it was).
 //! A compile that reads beyond them (packages, `use project`, a path, a C library) or says anything (a hint, a warning)
 //! is not kept: its next run compiles and says it again. Kept next to the compiled machine code (module_cache.rs),
 //! `WARP_MODULE_CACHE=off` turns both off.
@@ -121,15 +122,19 @@ fn searched_folders(program: &Path, working: &Path) -> Vec<PathBuf> {
 		.collect()
 }
 
-/// A folder's files with their size and time, sorted; empty when there is no such folder. Subfolders are left out:
-/// their times change with whatever they hold (the cache itself may lie below), and a `use` naming a subfolder file is
-/// not kept (modules::reads_beyond_folders)
+/// A folder's module files (.warp, .wasp, .wasm, .wat: what a `use` loads) with their size and time, sorted; empty when
+/// there is no such folder. Subfolders are left out: their times change with whatever they hold (the cache itself may lie
+/// below), and a `use` naming a subfolder file is not kept (modules::reads_beyond_folders)
 fn listing(folder: &Path) -> Vec<(String, Option<(u64, std::time::SystemTime)>)> {
+	let modules = crate::modules::MODULE_EXTENSIONS.iter().chain(&crate::modules::wasm_modules::MODULE_EXTENSIONS);
+	let extensions: Vec<&str> = modules.copied().collect();
+	let is_module =
+		|path: &Path| path.extension().is_some_and(|extension| extensions.iter().any(|known| extension == *known));
 	let mut files: Vec<_> = std::fs::read_dir(folder)
 		.into_iter()
 		.flatten()
 		.flatten()
-		.filter(|entry| !entry.path().is_dir())
+		.filter(|entry| !entry.path().is_dir() && is_module(&entry.path()))
 		.map(|entry| (entry.file_name().to_string_lossy().into_owned(), stamp(&entry.path())))
 		.collect();
 	files.sort();
