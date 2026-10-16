@@ -12,6 +12,7 @@ fn a_union_result_gives_back_each_part() {
 	is!("def f(x:int) as int | text { x * 2 }; f(2)", 4);
 	is!("f(x:int): int or text := \"a\"; f(2)", "a");
 	is!("def f(x:int) as int or text { if x > 1 then return \"big\"; x }; f(2)", "big");
+	is!("def f(x:int) as int or text { if x > 1 then return \"big\"; x }; f(1)", 1);
 	is!(&format!("{SHAPES}def f(x:int) as Circle or Square {{ Square(x) }}; f(2).side"), 2);
 }
 

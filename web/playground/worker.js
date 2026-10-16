@@ -319,6 +319,7 @@ async function handleMessage(data) {
 	self.newSoundHandles(); // host-tasks.js
 	self.liveHandover = data.liveHandover ?? {}; // the page's live loops of the run before (host-tasks.js liveCycleStarted)
 	self.programFile = data.file; // host-files.js besideProgram
+	self.programArguments = data.arguments ?? []; // host-files.js os.args
 	const started = performance.now();
 	const report = await evaluate(data.code, data.acknowledged ?? {});
 	post({ type: "report", id: data.id, report, milliseconds: performance.now() - started });

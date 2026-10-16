@@ -1,4 +1,4 @@
-// card frame-event (user TODOs in samples/shader_brush.warp: "on frame { }", "remove artificial sleeps"): `on frame {…}`
+// card frame-event (user TODOs in samples/graphics/shader_brush.warp: "on frame { }", "remove artificial sleeps"): `on frame {…}`
 // runs its body once per frame of the paint window while that shows, in place of `while window_open { …; sleep 16ms }`;
 // the run ends when the window closes. Without a window (headless) the body runs once, as one paint would, and the run
 // ends instead of staying

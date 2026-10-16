@@ -3,7 +3,7 @@
 // Usage: node probes/tour_check.mjs <warp binary> [name…]   (from the repository root)
 // The CLI writes a top-level text bare where the page quotes it, and has no page: examples that render, click, listen
 // or load a playground component are listed as "page only"; a shown value counts when any output line is it.
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import vm from "node:vm";
 
@@ -12,9 +12,11 @@ const SECONDS_PER_EXAMPLE = 30;
 const PAGE_ONLY_FIELDS = ["clicks", "typed", "wait", "kept", "keyed", "animated", "address"];
 const PAGE_ONLY_CODE = /\b(div|button|ul|svg|canvas|page|every|use component)\b|rust_demo/;
 
+// samples/<chapter>/<name>.warp
+const sampleFile = name => readdirSync("samples").map(chapter => `samples/${chapter}/${name}.warp`).find(existsSync);
 const [warp, ...only] = process.argv.slice(2);
 const context = {
-	SAMPLES: new Proxy({}, { get: (_, name) => readFileSync(`samples/${String(name)}.warp`, "utf8") }),
+	SAMPLES: new Proxy({}, { get: (_, name) => readFileSync(sampleFile(String(name)), "utf8") }),
 };
 vm.runInNewContext(`${readFileSync("web/playground/examples.js", "utf8")}; this.EXAMPLES = EXAMPLES`, context);
 mkdirSync(SNIPPET_DIRECTORY, { recursive: true });

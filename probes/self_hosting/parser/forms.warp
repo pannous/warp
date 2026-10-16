@@ -78,3 +78,8 @@ a.b²
 [2⁻¹ 2⁰ 2¹]
 xs#1²
 2x²
+thrice { print "hi" }
+x = twice "ab"
+once [0]
+twice {a: 1}
+s.once

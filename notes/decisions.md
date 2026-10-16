@@ -288,6 +288,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   `x as decimal` writes the period overlined. Never for floats.
 - D16 Int is unbounded (big-int promotion); `byte`, `int8..int64` are declared FFI types that trap on overflow; no
   `overflow` value. unknown-word (2026-10-11): `u8` = `uint8` = `byte`.
+  i64-wraps (2026-10-16, user; card fast-int) replaces the trap for 64 bits: `i64` and `int64` are the same machine
+  type and wrap silently at 2^63 (`a: int64 = 2^63 - 1; a + 1` → -9223372036854775808), like `fast int`; only
+  `use strict` catches the overflow. The smaller sized types (int8…int32, byte) were not asked about and keep
+  trapping for now.
 - hex-printing (2026-10-11): `255 as hex` is an int shown as 0xFF (uppercase), a byte shows so too; arithmetic gives
   a plain int (notes/hex_ints.md). binary-int (2026-10-12): `5 as binary` shows 0b101, `0b101 + 1` is 6.
 - footgun-divzero (2026-10-10, Interviewer default, revisit any time): exact numbers raise divide by zero (catchable,
@@ -400,6 +404,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   Python's isalpha and Java's isLetter); `characters` is an alias of `chars`.
 - parse-json (2026-10-15, user): quoted code's `.json` is the readable operator-as-key shape
   (`parse("a * (b + 1)").json` → {"*":["a",{"+":["b",1]}]}); what it can't express is a warning or error, never `{}`.
+- used-module-bare-words (2026-10-16, warp-shaders default, undoable; card json-parse-literal): after `use json`, a
+  bare `parse(t)` is json's parse (a map), not warp's code parse. General rule: a used module's own qualified words
+  (WARP_FORMS, today only json.parse) may also be called bare; a program's own definition wins, and without the `use`
+  the word keeps its warp meaning. The alternative was to keep the code parse and warn about the ambiguity.
 - json-exactness (2026-10-15 night, Interviewer's proposal, kept by the user 2026-10-16):
   following the user's "a warning, or even an error": big ints are written with all their digits as a JSON number
   (`(2^70).json` → 1180591620717411303424; JSON numbers have no size limit, only some readers do); a fraction is
@@ -759,6 +767,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   default branch; a pin is `{repository: pannous/uniscript, version: 1.0.7}`.
 
 ## CLI, building and tests
+- gate-cuts (2026-10-16, user via the Integrator; notes/test_speed.md): each sample runs once in the gate:
+  test_playground_samples checks the playground menu (no error at all), test_samples_run_cleanly only the samples
+  outside it (no compiler error). The self-hosting twins check every 4th source in the gate and all sources in the
+  nightly run (tests/nightly.sh, cron 03:10 on origin/main; a failure files a card).
 - cli-words (2026-10-15, user): warp's own command options are words, never `--flags` ("we don't like this minus
   minus style, ever"), e.g. `warp format check …`, `warp format hash-comments …`; the style guide says so. Card
   cli-words migrates the existing --fuel/--exe/--strict/… (older `--x` mentions below are superseded by it).
@@ -770,6 +782,61 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   lines in lib/math.warp with a "prefer ->" hint (→ ⟶ ➜ … for ->, ⇒ ⟹ for =>, ← ⟵ ⬅ for <-, ⬆ ⇧ for ↑, ⬇ ⇩ for ↓).
   ⇔ ⟺ ↔ ⇑ ⇓ get no built-in meaning for now; an example defines one, e.g.
   `infix operator ⇔(a: bool, b: bool) := a == b`.
+- default-methods (2026-10-16, user; cards library-words, method-call-bare-words): `x.word` and `x.word()` are
+  identical, both resolved by multi-dispatch on the receiver's type. A library word belongs to its type: `first` is
+  a list word, so an object or class with its own member `first` (`p = {first: 1}; p.first` → 1) or a class method
+  `first` is the more specific match and wins. Redefining a library word for its own type (an extension changing
+  `first` for lists) is not allowed, a loud error. No extra override keyword is needed for that.
+- dispatch-untyped-library-words (2026-10-16, user; card one-dispatch): an untyped program function named like a
+  library word (`first(x) := x * 2`) covers every value the library word doesn't: the library's `first(list)` is
+  more specific, so `first(3)` → 6 but `first([1,2])` → 1, with a hint that first of a list stays the library word.
+- class-members-free (2026-10-16, user; card one-dispatch; limits default-methods and library-words-typed):
+  width, height and every other built-in or library word are not keywords. A class field or method gets its own
+  dispatch signature, with that class as the receiver, so it never conflicts with them: `class Box{width:int,
+  height:int}`, `class P{count:int}` and a method `first()` in a class are all fine, and a local variable may shadow
+  one (`width = 5`). The "immutable" and "loud error" rules only forbid redefining a library word for the library's
+  own types (list, text, number…), never members of user classes.
+- library-words-typed (2026-10-16, user; cards library-typed, one-dispatch): harden the library. Every library word
+  gets a full type signature (`square(x: number): number`, `count(xs: list): int`), and typed library words are
+  immutable for their types until further notice. A program's untyped definition covers only other values, with a
+  hint: `count(x) := 7; count([1,2])` → 2, `square(x) := 777; square(4)` → 16, `floor(x) := x+10; floor(2.5)` → 2.
+  This extends dispatch-untyped-library-words from collection words to all library words.
+- type-words-reserved (2026-10-16, user; card one-dispatch): every type word is reserved as a function name,
+  `double(x) := …` and `hex(x) := …` alike; the error offers "name it to_double".
+- field-forms (2026-10-16, user; card one-dispatch): plain fields keep only `.` and `of` (read, and set with
+  `b.w = 5` / `w of b = 5`); `w(b)`, `b.w(5)` and `w(b, 5)` stay errors for a plain field. Only properties (accessor
+  definitions) answer every call form.
+- is-union (2026-10-16, implied by union-return; card int-text): after `is`, `int or text` is a type, so
+  `v is int or text` means `v is (int or text)`.
+- fuel-metering (2026-10-16, user; card fuel-metering): runaway loops are stopped by the epoch timer with a time
+  limit by default (about 1–5% overhead, stops at a slightly different step each run). Fuel, the exact step budget
+  that cost 4.4× on calls (40M calls: 218 ms against 49 ms), runs only on request: `use fuel`, the CLI word
+  `warp fuel N app.warp`, and tests that pin a step count.
+  Numbers (warp-types default, Interviewer's amendment, undoable): `warp app.warp` gets 60 s of CPU time (waits for
+  sleep or input don't count), set with WARP_TIME_LIMIT=<seconds>, and WARP_FUEL selects fuel. Compile-time folding
+  of constant calls gets 2 s. `warp build` executables get no limit by default, since a built app runs as long as it
+  likes. Windowed and event-loop programs aren't killed after 60 s in total. A stop after the limit says loudly what
+  happened and how to raise it.
+- ready-queue (2026-10-16, user via the boss and the supervisor): the board's Ready column is the merge queue. A
+  worker runs its targeted tests, pushes the finished branch, makes sure it merges cleanly into origin/main, and
+  hands it off with `todo ready <card> [branch]` (tip read from git); only the re-run after a clean update is dropped. `todo ready` refuses
+  a branch only when it doesn't merge cleanly into current origin/main (`git merge-tree --write-tree origin/main
+  <tip>`); being behind is fine, and `--force` covers carrier branches. Reason: a rebase goes stale as main moves,
+  workers can't see each other's unmerged branches, and the gate re-runs the suite anyway. The Integrator merges only
+  Ready cards and resolves only trivial conflicts itself (formatting, mod/use lists, adjacent additions). Logic changed
+  on both sides goes back to the owner with `todo move <card> Now` plus a `todo note` holding the conflicting hunk.
+  Unmerged branches without a card are only reported (`todo ready --stray`). Refinements (user, same day):
+  - a batch holds at most about 8 Ready cards; wide refactors and carrier branches land alone and first;
+  - the orphan watcher reports bounced cards whose agent is gone, and the Supervisor reassigns them;
+  - the reviewer takes its work from Ready, and a veto moves the card back to Now.
+- text-unit-plurals (2026-10-16, user; card text-unit): every plural unit word of a text is the list:
+  `"👍🏽".chars` → ['👍🏽'], `.codepoints` → ['👍' '🏽'], `.graphemes`, `.bytes` → [240 159 …], like words and lines.
+  Counting is `count t.codepoints` or `number of bytes in t`. Code reading `t.codepoints` as a number migrates to
+  `count` (a `warp fix` rewrite where detectable).
+- implicit-words-reserved (2026-10-16, user; card it-reserved): `it`, `self` and `this` are reserved. Binding one
+  (`self = 3`, `it += 1`, `for this in xs`, destructuring) warns "`self` is reserved: it names the receiver of a
+  method; pick another name", an error under use strict. Writing it as the explicit parameter (`f(it) := …`,
+  `Point.norm(self) := …`) stays allowed.
 - test-consolidation (2026-10-16, user; card probes-check, worker warp-test-consolidator): a worker turns probes
   into tests where they check decided behaviour with a stable expected value, judging case by case (not every probe
   was meant to be a test: exploratory, visual, sound, timing and undecided ones stay probes). It also dedupes and
@@ -877,3 +944,8 @@ P103, P104 → no-executable-by-default + build-should. P110 → P163. P118, P21
 D1 → P6 + brace-hole. D7/#33 → wiki/charged.md. D8 → approx-zero. D9, D12, D13 asks → got-it rule + list-sign. D14 →
 in-bool. exact-default → exact-decimals. #40 → list-sign. P85, P87, P93, P95, P96, P98, P99, P101, P137, P144, P181,
 P53, P59, P79, P80, P9, P10, P16, P19, #14b–d, #15–20, the Original questions 1–41: test edits and housekeeping done.
+- fix-forward (2026-10-16, user): merges don't wait on a few failing tests. The Integrator may ignore up to 10
+  failing tests per batch as `#[ignore = "fixnow: <card>: <reason>"]`, push, and card each for the breaking
+  branch's owner, who fixes forward and drops the ignore. Backtracking only above 10 or when forward fixing isn't
+  possible. A fixnow test pinning an old edge case may be reconsidered through the Interviewer instead of
+  restored. Rules: notes/roles.md "Fix forward".

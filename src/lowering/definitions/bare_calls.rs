@@ -2,17 +2,23 @@
 //! `x = a` holds what a returns, `a + 1` adds to it (card assigning-bare). `function a` stays the function, a variable
 //! or parameter of that name stays itself. A word of the host taking nothing, `random`, is called the same way, and also
 //! where the emitter calls a program's function by itself: as a statement, after `print` and `type` (card random-should).
+//! A name overloaded by arity with a variant taking nothing, `canvas()` beside `canvas(width, height)`, calls that
+//! variant `canvas·0`, also as a call's argument: `save(canvas, "x.png")` (decision saved-words).
 
 use super::nodes::{call, children_rewritten};
 use crate::lowering::reflection::CALLING_WORDS;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-/// The names a bare word calls: every function without parameters, and of them the host's
+/// A bare name and the function it calls
+type Calls = HashMap<String, String>;
+
+/// The names a bare word calls: every function without parameters, of them the host's, and the arity overloads'
 struct Parameterless {
-	all: HashSet<String>,
-	host: HashSet<String>,
+	all: Calls,
+	host: Calls,
+	overloaded: Calls,
 }
 
 pub fn lower(node: Node) -> Node {
@@ -31,13 +37,24 @@ fn parameterless_functions(node: &Node) -> Parameterless {
 	let parameters: HashSet<&str> =
 		functions.values().flat_map(|function| function.params.iter().map(|param| param.name.as_str())).collect();
 	let free = |name: &str| !assigned.contains(name) && !parameters.contains(name);
-	let host: HashSet<String> = crate::host::parameterless_host_words()
+	let host: Calls = crate::host::parameterless_host_words()
 		.filter(|name| free(name) && !functions.contains_key(*name))
-		.map(String::from)
+		.map(|name| (name.to_string(), name.to_string()))
 		.collect();
-	let program = functions.iter().filter(|(name, function)| function.params.is_empty() && free(name));
-	let all = program.map(|(name, _)| name.clone()).chain(host.iter().cloned()).collect();
-	Parameterless { all, host }
+	let parameterless = functions.iter().filter(|(_, function)| function.params.is_empty());
+	let overloaded: Calls = parameterless
+		.clone()
+		.filter_map(|(name, _)| zero_arity_base(name).map(|base| (base.to_string(), name.clone())))
+		.filter(|(base, _)| free(base) && !functions.contains_key(base))
+		.collect();
+	let program = parameterless.filter(|(name, _)| free(name)).map(|(name, _)| (name.clone(), name.clone()));
+	let all = program.chain(host.clone()).chain(overloaded.clone()).collect();
+	Parameterless { all, host, overloaded }
+}
+
+/// `canvas` of `canvas·0`, the variant of an arity overload taking nothing
+fn zero_arity_base(name: &str) -> Option<&str> {
+	name.strip_suffix(&format!("{}0", crate::traits::WITNESS_SEPARATOR))
 }
 
 fn rewrite(node: Node, parameterless: &Parameterless) -> Node {
@@ -60,16 +77,24 @@ fn rewrite(node: Node, parameterless: &Parameterless) -> Node {
 			items.push(argument);
 			Node::List(items, bracket, separator)
 		}
+		// `save(canvas, "x.png")`: an overloaded name is no one function value, so as an argument it is its call
+		Node::List(items, Bracket::Round, separator)
+			if items.first().is_some_and(|head| head.symbol_name().is_some()) =>
+		{
+			let mut items = items.into_iter();
+			let head = items.next().expect("the called name");
+			let arguments = items.map(|argument| called_value(argument, &parameterless.overloaded));
+			Node::List(std::iter::once(head).chain(arguments).collect(), Bracket::Round, separator)
+		}
 		other => other,
 	}
 }
 
 /// `a()` of the bare name a, written without `function`
-fn called_value(value: Node, parameterless: &HashSet<String>) -> Node {
-	match value.drop_meta().symbol_name().map(String::from) {
-		Some(name) if parameterless.contains(&name) && crate::closures::referenced_function(&value).is_none() => {
-			call(&name, vec![])
-		}
+fn called_value(value: Node, calls: &Calls) -> Node {
+	let called = value.drop_meta().symbol_name().and_then(|name| calls.get(name)).cloned();
+	match called {
+		Some(function) if crate::closures::referenced_function(&value).is_none() => call(&function, vec![]),
 		_ => value,
 	}
 }

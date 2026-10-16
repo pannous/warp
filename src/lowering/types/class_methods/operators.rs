@@ -449,7 +449,7 @@ pub(super) fn with_certain_amounts(certainty: &Node, operands: &Operands) -> Nod
 	let (left, class, right) = with_run_time_units(left, class, right, right_class, operands);
 	let compared = match class.as_deref() == Some(crate::numbers::units::RUN_TIME_QUANTITY) {
 		true => {
-			let comparable = call(SAME_DIMENSION, vec![left.clone(), right, text("compare")]);
+			let comparable = call(SAME_QUANTITY, vec![left.clone(), right, text("compare")]);
 			key(amount_of(left), *op, amount_of(comparable))
 		}
 		false => key(left, *op, right),
@@ -486,7 +486,7 @@ pub(super) fn summed_list(node: &Node) -> Option<&Node> {
 /// (card quantity-sum)
 pub(super) fn quantities_reduced(quantities: Node) -> Node {
 	let [sum, item] = REDUCED_NAMES.map(symbol);
-	let parameters = Node::List(vec![sum.clone(), item.clone()], Bracket::Round, Separator::Colon);
+	let parameters = Node::List(vec![sum.clone(), item.clone()], Bracket::Round, Separator::Comma);
 	let added = key(parameters, Op::Arrow, method_call(sum, operator_method(Op::Add).expect("plus"), vec![item]));
 	let reduced = key(quantities, Op::Dot, call(REDUCE_WORD, vec![added]));
 	Node::meta(

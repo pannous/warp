@@ -26,6 +26,8 @@ instead of bending the code.
   by role (`warp-integrator`, `warp-types`) and write role names, not session hashes like warp-3f, in messages,
   cards and reports to the user. Older sessions are renamed with `/rename warp-<role>` while idle
   (~/dev/bin/rename-when-idle; typed into a busy session it is lost).
+- Session swaps are never reported to the user (user, 2026-10-16: "I don't care"): no line about a session being
+  replaced, renamed or resumed. Peers still get the swap message; the user hears only about work.
 - Never block on a decision: take the recommended default, mark it as an assumption (an existing-test edit goes in its
   own commit, named in the message), keep working, and SendMessage the Interviewer the question.
 - Never ask the user yourself (user, 2026-10-06: questions go "either through the Supervisor or through the
@@ -70,8 +72,8 @@ instead of bending the code.
 - Samples (user, 2026-10-08): every major or semi-major feature (a new syntax form, library area, server/ORM/GPU
   capability, playground ability) ships with a sample in samples/<topic>.warp that shows it the way a user would
   write it, in the same branch. tests/programs/test_all_samples.rs and the playground menu pick it up; a sample that
-  cannot run in the browser goes in web/playground/excluded_samples.txt. Name the sample in the Integrator message.
-- Before a merge request: `cargo fmt` and `cargo clippy --lib --bins -- -D warnings` on your branch. The gate checks
+  cannot run in the browser goes in web/playground/excluded_samples.txt. Name the sample in a `todo note` on the card.
+- Before `todo ready`: `cargo fmt` and `cargo clippy --lib --bins -- -D warnings` on your branch. The gate checks
   both (user, 2026-10-12, card cargo-fmt: the whole repo is formatted once, then enforced).
   .warp files you wrote or changed (samples/, lib/, probes/): `scratch/warp format <files>` (your own build,
   scripts/own-warp.sh), the canonical layout that keeps the meaning (notes/warp_format.md); the gate reports the rest.
@@ -79,17 +81,31 @@ instead of bending the code.
   `git merge 78607d62e^` (resolve real conflicts as usual); `cargo fmt` and commit; `git merge -X ours 78607d62e`
   (the format commit alone; your formatted side wins, and it is the same formatting); then `git merge origin/main`.
   Never "take your side" on a conflict that also holds main's changes.
-- Done = push the branch, SendMessage the Integrator and warp-reviewer together "branch, tip, new tests, filters"
-  (one message each, same text; notes/agents/reviewer.md), fix what they report (a reviewer veto like a gate failure), clean up,
-  report one line to the Supervisor. Write "express" in that message when the user or the Supervisor asked for your
-  result to land fast: the Integrator then runs your branch alone and next (notes/roles.md).
-- Post-hoc changes don't block (user, 2026-10-16): a tip once sent lands as gated. A small reviewer point or polish
-  you fix afterwards is a follow-up commit and its own merge request, never "hold my branch". Only real breakage
+- Done = the card is the handoff (user, 2026-10-16: the board's Ready column is the merge queue; a forgotten
+  "branch, tip" message left work silently unmerged):
+  1. Run your own targeted tests (`tests/queue.sh -- <filters>`), commit, fmt and clippy (above).
+  2. Make sure the branch merges cleanly into origin/main: `git fetch origin && git merge origin/main` (the merge
+     rules above). Conflicts are resolved by you, who knows the code, never by the Integrator in the gate. No need to
+     re-run the tests after a clean update.
+  3. Push the branch, then `todo ready <card>` (branch: the current one, or name it). It reads the tip itself and
+     refuses a branch that is not pushed, differs from origin, or does not merge cleanly into origin/main (naming the
+     conflicting files); `--force` only for a branch carrying other branches. Several cards on one branch: ready each.
+     What a merge request message used to say (new tests, filters, "docs: <page>", the sample) goes into a
+     `todo note <card>` first. Express (the user or the Supervisor asked for your result fast, a crash fix):
+     `todo ready <card> --express` (or a note saying "express"): the Integrator runs it alone and next (notes/roles.md).
+  4. Optional: one line to warp-reviewer by SendMessage ("<card> ready"); it reads `todo list Ready` anyway. Report
+     one line to the Supervisor.
+  The Integrator merges only Ready cards and closes them (`todo done <card> <commit>`). A bounce (failing test,
+  semantic conflict, reviewer veto) is your card back in Now with a `todo note` saying why: fix, push, `todo ready`
+  again. A newer tip you want merged instead: `todo ready` again, so the card names it.
+- Post-hoc changes don't block (user, 2026-10-16): a tip once readied lands as gated. A small reviewer point or
+  polish you fix afterwards is a follow-up commit readied with its own card, never "hold my branch". Only real breakage
   (a reviewer veto, a failing test) holds a branch.
 - Never retire with a card still yours (user, 2026-10-12: "cards disconnected from their agent"): before you stop, or
-  hand over, every card you took is either `todo done <card> <commit>` or released with `todo release <card>
-  "done: …; left: …; branch: …"`, which puts it back in Next with that note and no agent. Partial work that isn't
-  merged gets pushed to its branch first. This applies to Codex runs too.
+  hand over, every card you took is either `todo done <card> <commit>`, in Ready (`todo ready`: handed off, the
+  Integrator closes it), or released with `todo release <card> "done: …; left: …; branch: …"`, which puts it back in
+  Next with that note and no agent. Partial work that isn't merged gets pushed to its branch first. This applies to
+  Codex runs too.
 - Clean up after the merge: you are allowed and expected to remove your own worktree and branch, nobody else will.
   `git -C /Users/me/dev/angles/warp worktree remove --force <worktree> && git -C /Users/me/dev/angles/warp branch -D <branch>`.
   The git hook lets both through once nothing is lost: a worktree whose only uncommitted change is the Cargo.toml /
@@ -101,6 +117,15 @@ instead of bending the code.
   `#[ignore]` from a test that passes unedited needs no question; editing its assertions still needs a decision.
 - Use absolute paths and `git -C <worktree>` in scripts. Conventional commit messages; no Co-Authored-By, session
   trailers or links. Unrelated problems you meet go on the to-do board: `todo add "…"` (column Next; when the board stays unreachable it says "CARD QUEUED" and keeps the card in ~/.cache/todo-board/pending.json5, which `todo flush` and the hourly cron add later; never into todo.md).
+- Fix tiny things on the spot instead of carding them (user, 2026-10-16: small cards cost more than the fix). Tiny
+  means all of: a few minutes, one obvious fix with no choice to make (a missing .gitignore line, a typo, a wrong
+  path, a stale comment, a leaked temp file), no change to what a user sees or what a test asserts, and outside
+  files another session is working on. Make it its own commit on your current branch (`fix:`/`chore:`, so it can be
+  reverted alone) and name it in your `todo ready` note. Anything else, or any doubt, still becomes a card.
+- Suspected non-issues go through the Interviewer (user, 2026-10-16, on `96px/inch` vs `96dpi`: "a nothing
+  burger"): when a small bug you found may not matter (the same value shown another way, a cosmetic difference),
+  SendMessage warp-interviewer the case before carding or fixing it. A confirmed non-issue gets no work: its card,
+  if any, goes to Later with the verdict as a `todo note`.
 - GitHub's API quota (5000 requests/h) is shared by every session; on 2026-10-10 `gh run watch` polling every 3 s ran
   it out and blocked CI watching for 10 min. Watch runs with `gh run watch --interval 60` or more, and never poll
   `todo list` in a loop. A whole-board `todo list` costs ~12 points (1200 cards on 2026-10-12, when the quota ran out
@@ -115,15 +140,16 @@ instead of bending the code.
   <commit>` (a commit URL for wiki changes), never `gh issue close`; `todo move <card> Done` refuses without a link.
 - Docs are part of done (user, 2026-10-13): a card that changes what users write or see (syntax, words, flags,
   messages, defaults) updates the wiki page of that concept in the same task: a minimal example and one sentence
-  (notes/agents/common.md "Wiki" for pushing). Say "docs: <page>" or "docs: none (internal)" in the merge request.
+  (notes/agents/common.md "Wiki" for pushing). Say "docs: <page>" or "docs: none (internal)" in a `todo note` before `todo ready`.
   warp-docs sweeps for what slipped through.
   A result the user can see or use gets `--try "how to try it"`: one concrete line with the exact command or URL to paste (user 2026-10-10: "give me
   the command because I'm lazy"), e.g. `--try "/Users/me/dev/bin/warp samples/sound.warp"`: always that full path
   (main built with the optimized quick-release profile, rebuilt in the background a few minutes after each pushed
   batch by the Integrator's refresh_main_binary.sh; plain `warp` is the older brew release). Agents who want main's
   debug build (assertions, backtraces) run /Users/me/dev/bin/warp-debug, installed right at the push. Time
-  performance only with an optimized build: debug made finger paint's show() 250 ms instead of 20-40 ms. Run `todo done` only
-  after your branch is on main; the Interviewer announces it (notes/roles.md "Ready to try").
+  performance only with an optimized build: debug made finger paint's show() 250 ms instead of 20-40 ms. The
+  Integrator closes your card after the merge; then add the try line: `todo done <card> <commit> --try "…"` (on a
+  Done card it only sets Try); the Interviewer announces it (notes/roles.md "Ready to try").
   Early try (user 2026-10-10: "if it runs the test just for this one feature, we could already present it"): as soon
   as the feature's targeted test passes on your branch, build your binary with scripts/own-warp.sh and SendMessage
   warp-interviewer a try line with that path: `echo '…' | <worktree>/scratch/warp` plus the expected output. Don't
@@ -166,7 +192,7 @@ instead of bending the code.
   built from. Cron (urgent-card-watch) folds a repeated crash into its open card as a note, gives the crash of a
   worktree build to the session on that branch (the Agent of the card keyed like the branch, else tmux warp-<branch>),
   and spawns a new worker warp-<card key> for a crash of a main build; the user pastes the trace there. Crash fixes
-  are express: mark the merge request "express (crash fix)".
+  are express: `todo ready <card> --express`.
 - Deleting old stuff needs no confirmation (user, 2026-10-03): merged branches, stale copies, leftover stashes.
 - Wiki (`wiki/`, its own repo pannous/warp.wiki): GitHub wikis can only serve `master` (notes/wiki_branch.md), so wiki
   edits go to master (`git push origin HEAD:master`); there is no `main` branch in the wiki.

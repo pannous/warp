@@ -1,4 +1,4 @@
-//! card split-without: `s.split` with no separator splits at spaces (the user's samples/word_count.warp)
+//! card split-without: `s.split` with no separator splits at spaces (the user's samples/text/word_count.warp)
 use crate::is;
 
 #[test]

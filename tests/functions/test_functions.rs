@@ -47,7 +47,7 @@ fn test_default_params() {
 
 #[test]
 fn test_rename_wasm_function() {
-	// let module1 = loadModule("samples/test.wasm");
+	// let module1 = loadModule("samples/advanced/test.wasm");
 	// module1.functions.at(0).name = "test";
 	// module1.save("samples/test2.wasm");
 	// todo: assert! by loadModule("samples/test2.wasm");

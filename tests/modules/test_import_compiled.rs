@@ -79,8 +79,8 @@ fn a_compiled_fixtures_change_of_an_instance_is_the_programs() {
 	is!(&format!("{COMPILED_SHAPES}p = P(1, 2)\nmoved(p)\np.x"), 9);
 }
 
-// card import-bare: a bare name finds a compiled module in a search folder, samples/shapes.wasm for
-// samples/import_compiled.warp
+// card import-bare: a bare name finds a compiled module in a search folder, samples/wasm/shapes.wasm for
+// samples/wasm/import_compiled.warp
 #[test]
 fn a_bare_name_imports_a_compiled_module() {
 	is!("import shapes\narea(2, 3)", 6);

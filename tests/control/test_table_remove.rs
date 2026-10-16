@@ -1,6 +1,6 @@
 #![cfg(feature = "native")]
 // card table-remove: `people.remove(p)` deletes p's row, p keeping its fields without one (id 0); before and after the
-// table loaded (found editing samples/orm.warp); `for p in people where … { … }` walks the filtered rows
+// table loaded (found editing samples/storage/orm.warp); `for p in people where … { … }` walks the filtered rows
 use crate::is;
 use warp::wasm_emitter::eval;
 

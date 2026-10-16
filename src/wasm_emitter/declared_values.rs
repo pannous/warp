@@ -3,6 +3,7 @@
 //! when it runs: it has the declared type, else the error "not a <type>". Unannotated places stay lax.
 use super::WasmGcEmitter;
 use crate::extensions::numbers::Number;
+use crate::lowering::data_items;
 use crate::node::{Bracket, Node};
 use crate::type_kinds::{Kind, BOOL_MASK_BIT};
 use wasm_encoder::*;
@@ -112,10 +113,14 @@ impl WasmGcEmitter {
 				match type_def.fields.iter().find(|declared| declared.name == field.name()) {
 					Some(declared) => {
 						let data = Node::key(DECLARED_TYPE, Node::Symbol(declared.type_name.clone()));
+						let value = match data_items::type_admits_errors(&declared.type_name) {
+							true => value.as_ref().clone(),
+							false => data_items::marked(value.as_ref().clone(), data_items::Place::Field),
+						};
 						Node::Key(
 							field.clone(),
 							*op,
-							Box::new(Node::Meta { node: value.clone(), data: Box::new(data) }),
+							Box::new(Node::Meta { node: Box::new(value), data: Box::new(data) }),
 						)
 					}
 					None => entry.clone(),

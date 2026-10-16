@@ -195,7 +195,7 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
      variable of `for s in xs {…}` over its parameter xs takes a list of signals; the variables of a list literal
      passed there (`watch_all([a, b])`, or `watched = [a, b]; watch_all(watched)`) become signals and the list holds
      the signals themselves (the one place a list keeps no copy).
-   - Signals in fields (branch signal-fields, tests/control/test_signal_fields.rs, samples/signal_fields.warp; cards
+   - Signals in fields (branch signal-fields, tests/control/test_signal_fields.rs, samples/signals/signal_fields.warp; cards
      signal-param-field, signal-field-escape): a field signal is named by its path `p.age` in the same name sets.
      `watch(p) := on change p.age {…}` subscribes to that field of its argument; the object literal assigned to a
      variable passed there keeps a cell in the field (`map_of_entry` of a one-entry literal too), and a variable kept
@@ -222,7 +222,7 @@ Educate rather than refuse: `whenever x { … }` with a non-boolean `x` is "did 
    rendering itself, is `dispatch_event(name, data)` (card page-custom-event, branch page-custom-event): host.js
    dispatches it as `CustomEvent(name, {detail})` on the document (markup.js dispatchToPage; a Worker posts it to its
    page), natively the headless Page keeps it (`Page::dispatched`; tests/web/test_page_custom_events.rs,
-   samples/page_custom_event.warp). A handler body inside an element stays code: markup_tags::handlers_kept keeps
+   samples/web/page_custom_event.warp). A handler body inside an element stays code: markup_tags::handlers_kept keeps
    `emit saved{id: 7}` from turning into the tag `emit{saved{…}}`. A plain program's unhandled emit does nothing (P202). Tour
    example `events`; tests/control/test_page_events.rs). `broadcast` / channel listeners: done natively (notes/system_signals.md, Channels); still open
    (stdlib, wiki/signal.md). System signals (OS, devices, page): notes/system_signals.md.
