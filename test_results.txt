@@ -1730,9 +1730,12 @@ PASSED:
   ✓ functions::test_parameter_map_patterns::a_map_without_the_field_is_an_error
   ✓ functions::test_parameter_map_patterns::pattern_names_are_no_main_level_variables
   ✓ functions::test_parameter_overloads::a_call_takes_the_variant_its_arguments_fit
+  ✓ functions::test_parameter_overloads::a_list_parameter_overloads_a_text_parameter
   ✓ functions::test_parameter_overloads::an_argument_of_unknown_type_is_an_error
   ✓ functions::test_parameter_overloads::an_int_widens_to_a_float_variant
+  ✓ functions::test_parameter_overloads::an_overload_is_picked_at_run_time_when_only_the_value_tells
   ✓ functions::test_parameter_overloads::an_untyped_variant_is_the_fallback
+  ✓ functions::test_parameter_overloads::of_any_is_the_fallback_variant
   ✓ functions::test_parameter_patterns::a_class_parameter_names_its_fields
   ✓ functions::test_parameter_patterns::a_list_parameter_names_its_items
   ✓ functions::test_parameter_patterns::a_value_of_another_shape_is_an_error
@@ -1945,7 +1948,6 @@ PASSED:
   ✓ functions::test_undefined_calls::test_unresolved_call_inside_collections
   ✓ functions::test_undefined_calls::test_unresolved_call_is_an_error
   ✓ functions::test_undefined_calls::test_variable_is_not_callable
-  ✓ functions::test_untyped_predicate_passed::an_untyped_predicate_passed_as_a_value
   ✓ functions::test_user_add_and_map::map_and_filter_beside_a_user_add
   ✓ functions::test_user_method_form::a_method_form_call_passes_the_further_arguments
   ✓ functions::test_user_method_form::a_user_function_is_called_in_method_form
@@ -3634,6 +3636,9 @@ PASSED:
   ✓ parser::test_scheme_relative_url::a_url_may_start_at_its_colon_slash_slash
   ✓ parser::test_scheme_relative_url::natively_it_is_fetched_over_https
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
+  ✓ parser::test_self_lexer::numbers_match_their_rust_twin
+  ✓ parser::test_self_lexer::texts_match_their_rust_twin
+  ✓ parser::test_self_parser::the_listed_sources_parse_as_in_rust
   ✓ parser::test_self_serializer::a_view_is_json
   ✓ parser::test_self_serializer::serialize_matches_its_rust_twin
   ✓ parser::test_semicolon_square::test_square_brackets_keep_all_newline_items
@@ -3727,6 +3732,7 @@ PASSED:
   ✓ programs::test_algo_queens::test_queens
   ✓ programs::test_algo_queens::test_queens_idiomatic
   ✓ programs::test_algo_sieve::test_sieve
+  ✓ programs::test_algo_sieve::test_sieve_idiomatic
   ✓ programs::test_algo_sorting::test_sorting
   ✓ programs::test_algo_sorting::test_sorting_idiomatic
   ✓ programs::test_all_samples::test_parse_all_samples
@@ -3834,6 +3840,7 @@ PASSED:
   ✓ programs::test_playground_samples::every_excluded_sample_exists
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_2
+  ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_3
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_4
   ✓ programs::test_program_cache::a_changed_file_of_the_folder_compiles_again
   ✓ programs::test_program_cache::a_module_looking_beyond_the_keyed_folders_is_not_kept
@@ -4737,9 +4744,6 @@ PASSED:
   ✓ types::test_loop_item_into_annotated::a_mixed_loop_item_into_an_annotated_place_is_checked_at_run_time
   ✓ types::test_loop_text_arithmetic::list_arithmetic_in_a_loop_body_stays_a_type_error
   ✓ types::test_loop_text_arithmetic::text_arithmetic_in_a_loop_body_is_no_type_error
-  ✓ types::test_map_read_size::a_size_entry_of_a_map_read_at_run_time
-  ✓ types::test_map_read_size::any_entry_of_shell_info
-  ✓ types::test_map_read_size::the_size_entry_of_shell_info
   ✓ types::test_map_runtime_kind::a_map_parameter_is_a_map
   ✓ types::test_map_runtime_kind::map_is_a_type_word
   ✓ types::test_map_type_tests::a_map_is_a_map
@@ -4759,7 +4763,6 @@ PASSED:
   ✓ types::test_method_bodies::filters_and_comprehensions_in_a_method
   ✓ types::test_method_bodies::units_in_a_method
   ✓ types::test_method_result_text::an_interpolated_method_result_uses_its_text
-  ✓ types::test_mixed_list_parameter_kinds::a_parameter_in_a_mixed_list_literal_takes_any_value
   ✓ types::test_multi_word_class::a_class_of_several_words_is_its_kebab_name
   ✓ types::test_multi_word_class::a_kebab_class_constructs
   ✓ types::test_multi_word_class::a_phrase_slot_matches_the_class_as_a_whole
@@ -5184,6 +5187,7 @@ PASSED:
   ✓ wasm::test_executable_output::test_executable_trap_names_main
   ✓ wasm::test_executable_size::test_executable_exports_only_what_the_stub_calls
   ✓ wasm::test_executable_size::test_executable_keeps_its_handlers
+  ✓ wasm::test_executable_size::test_quicksort_executable_is_tree_shaken
   ✓ wasm::test_gc_name_registry::struct_types_of_many_engines_share_the_name_cache
   ✓ wasm::test_gc_struct::test_class_instance_raw
   ✓ wasm::test_gc_struct::test_gc_object_index_access
@@ -6097,6 +6101,7 @@ PASSED:
   ✓ welcoming::test_welcoming_listparams::list_parameters_inferred_in_every_definition_form
   ✓ welcoming::test_welcoming_listparams::parameters_shadow_literal_variables
   ✓ welcoming::test_welcoming_maps::test_absent_key
+  ✓ welcoming::test_welcoming_maps::test_dijkstra_core
   ✓ welcoming::test_welcoming_maps::test_dijkstra_step_over_an_edge_list
   ✓ welcoming::test_welcoming_maps::test_empty_map_grows
   ✓ welcoming::test_welcoming_maps::test_for_destructures_pairs
@@ -6152,32 +6157,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ functions::test_parameter_overloads::a_list_parameter_overloads_a_text_parameter
-  ✗ functions::test_parameter_overloads::an_overload_is_picked_at_run_time_when_only_the_value_tells
-  ✗ functions::test_parameter_overloads::of_any_is_the_fallback_variant
-  ✗ parser::test_self_lexer::numbers_match_their_rust_twin
-  ✗ parser::test_self_lexer::texts_match_their_rust_twin
-  ✗ parser::test_self_parser::the_listed_sources_parse_as_in_rust
-  ✗ programs::test_algo_sieve::test_sieve_idiomatic
-  ✗ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_3
-  ✗ wasm::test_executable_size::test_quicksort_executable_is_tree_shaken
-  ✗ welcoming::test_welcoming_maps::test_dijkstra_core
-  ✗ INCOMPLETE: 1 test binaries ended without a result (crashed or killed)
-    RERUN of tests/main.rs: 40 unfinished or failed tests
-    ✗ functions::test_parameter_overloads::a_list_parameter_overloads_a_text_parameter: panicked at tests/functions/test_parameter_overloads.rs:69:5: assertion `left == right` failed
-    ✗ functions::test_parameter_overloads::an_overload_is_picked_at_run_time_when_only_the_value_tells: panicked at tests/functions/test_parameter_overloads.rs:82:5: assertion `left == right` failed
-    ✗ functions::test_parameter_overloads::of_any_is_the_fallback_variant: panicked at tests/functions/test_parameter_overloads.rs:61:5: assertion `left == right` failed
-    ✗ parser::test_self_lexer::numbers_match_their_rust_twin: (no output)
-    ✗ parser::test_self_lexer::numbers_match_their_rust_twin: panicked at tests/common/twins.rs:151:5: numbers differs from its Rust twin on 42 sources, first on probes/async/go_block.warp:
-    ✗ parser::test_self_lexer::texts_match_their_rust_twin: (no output)
-    ✗ parser::test_self_lexer::texts_match_their_rust_twin: panicked at tests/common/twins.rs:151:5: texts differs from its Rust twin on 42 sources, first on probes/async/go_block.warp:
-    ✗ parser::test_self_parser::the_listed_sources_parse_as_in_rust: (no output)
-    ✗ parser::test_self_parser::the_listed_sources_parse_as_in_rust: panicked at tests/common/twins.rs:151:5: tree differs from its Rust twin on 215 sources, first on probes/algo/dijkstra/01c_map_list_value_index.warp:
-    ✗ programs::test_algo_sieve::test_sieve_idiomatic: panicked at tests/programs/test_algo_sieve.rs:35:5: assertion `left == right` failed
-    ✗ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_3: panicked at tests/programs/test_playground_samples.rs:47:5: playground samples with an error (fix them or list them in web/playground/excluded_samples.txt):
-    ✗ wasm::test_executable_size::test_quicksort_executable_is_tree_shaken: panicked at tests/wasm/test_executable_size.rs:60:5: 68096 bytes carried
-    ✗ welcoming::test_welcoming_maps::test_dijkstra_core: panicked at tests/welcoming/test_welcoming_maps.rs:91:5: assertion `left == right` failed
-    rerun: 30 passed, 13 failed
 
 SUMMARY:
-13 ignored, 6149 passed, 11 failed, 6160 total tested
+13 ignored, 6154 passed, 0 failed, 6154 total tested
