@@ -366,14 +366,16 @@ fn test_text_is_indexed_by_grapheme() {
 fn test_text_units_are_explicit() {
 	is!("x=\"👍🏽\";x.size", 1);
 	is!("byte count of \"👍🏽\"", 8);
-	is!("x=\"👍🏽\";x.chars.count", 2); // x.chars is the list (user 2026-10-14, card abc-chars)
+	is!("x=\"👍🏽\";x.chars.count", 1); // x.chars is the list of characters (user 2026-10-14, card abc-chars; char = character 2026-10-16)
+	is!("x=\"👍🏽\";x.codepoints", 2);
 	is!("x=\"👍🏽\";x.graphemes", 1);
 	is!("pixels=(1,2,3);byte count of pixels", 24); // lists keep 8 bytes per element
 }
 
-#[test] // Swift: s.unicodeScalars.count; a char is a code point, as x.chars and Rust's chars()
+#[test] // a char is a character, a grapheme as x.chars (user 2026-10-16); Swift's s.unicodeScalars.count is codepoints
 fn test_number_of_chars_in_text() {
-	is!("number of chars in \"👍🏽\"", 2);
+	is!("number of chars in \"👍🏽\"", 1);
+	is!("number of codepoints in \"👍🏽\"", 2);
 	is!("t=\"héllo\";number of chars in t", 5);
 	is!("#(char in \"héllo\")", 5);
 }

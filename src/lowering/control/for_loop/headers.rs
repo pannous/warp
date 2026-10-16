@@ -15,9 +15,12 @@ use std::collections::HashSet;
 /// The got-it topic of a filtering loop (`for friend in xs`, `for (it>2) in xs`)
 pub(crate) const FILTER_LOOP_TOPIC: &str = "for-filter";
 /// The unit words a for loop walks a text by, the item being `it` (wiki/string.md)
-const UNIT_LOOP_WORDS: [&str; 4] = ["chars", "characters", "codepoints", "bytes"];
+const UNIT_LOOP_WORDS: [&str; 5] = ["chars", "characters", "glyphs", CODE_POINTS_WORD, BYTES_WORD];
 const BYTES_WORD: &str = "bytes";
 const BYTE_WORD: &str = "byte";
+const CODE_POINTS_WORD: &str = "codepoints";
+/// `for each codepoint in t`: the loop variable that walks a text by code point, not by character
+const CODE_POINT_WORD: &str = "codepoint";
 const WORD_UNIT: &str = "word";
 /// The loop variable names that walk a text by a unit other than the character, and the text between two units
 const TEXT_UNIT_NAMES: [(&str, &str); 2] = [(WORD_UNIT, " "), ("line", "\n")];
@@ -110,6 +113,9 @@ impl Headers {
 			// the UTF-8 bytes, rather than filtering the characters (none is a byte)
 			Node::Symbol(name) if name == BYTE_WORD && self.is_text(&iterable) => {
 				return Ok(for_in_loop(variable, bytes_of(&iterable), body));
+			}
+			Node::Symbol(name) if name == CODE_POINT_WORD && self.is_text(&iterable) => {
+				return Ok(for_in_loop(variable, code_points_of(&iterable), body));
 			}
 			// `for friend in xs`: a declared type's name visits only its instances, as `it`; the name in the body is the
 			// item (P46), a call `friend(…)` still constructs
@@ -327,8 +333,17 @@ fn unit_iteration(variable: &Node, iterable: &Node, body: &Node) -> Option<(Node
 	if !UNIT_LOOP_WORDS.contains(&word.as_str()) || body.mentions(word) {
 		return None;
 	}
-	let walked = if word == BYTES_WORD { bytes_of(iterable) } else { call("chars", vec![iterable.clone()]) };
+	let walked = match word.as_str() {
+		BYTES_WORD => bytes_of(iterable),
+		CODE_POINTS_WORD => code_points_of(iterable),
+		_ => call(crate::library_words::CHARS_WORD, vec![iterable.clone()]),
+	};
 	Some((Node::Symbol(IMPLICIT_PARAMETER.to_string()), walked))
+}
+
+/// The code points of a text, `codepoint·list(text)`
+fn code_points_of(text: &Node) -> Node {
+	call(crate::library_words::CODE_POINT_LIST, vec![text.clone()])
 }
 
 /// The UTF-8 bytes of a text, `(0..text.bytes).map(i => byte_at(text, i))`
