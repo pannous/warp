@@ -158,11 +158,14 @@ inductive Expr where
   | call (f : String) (arg : Expr)
   | error (msg : String)
   | tryCatch (e handler : Expr)
-  /-- a stored error, `error("x")` as a value (Decided #1, errors as values): a name, a list item or an argument keeps
-  it, `if` takes it as false, `try` and `failed` test for it, any other operation given one raises -/
+  /-- a stored error, `error("x")` as a value (Decided #1, errors as values): a name or an argument keeps it, `if`
+  takes it as false, `try` and `failed` test for it, any other operation given one raises -/
   | fail (msg : String)
   /-- `e failed`: is the value of e a stored error -/
   | failed (e : Expr)
+  /-- e written into data, a list item or field as written (`[e 2]`, `xs#1 = e`, decision error-optional): its value,
+  or the error msg when that is a stored error (warp's lowering/collections/data_items.rs marks these) -/
+  | written (e : Expr) (msg : String)
   /-- `a ?? b`: a unless it is ø, else b (only ø falls back: `0 ?? 9` is 0) -/
   | orElse (a b : Expr)
   /-- the run-time check warp inserts where a value of unknown type goes to a declared place (`names = f()` of a
@@ -261,6 +264,7 @@ def subst (e : Expr) (y : String) (v : Expr) : Expr :=
   | set e f w => set (e.subst y v) f (w.subst y v)
   | isA e c => isA (e.subst y v) c
   | failed e => failed (e.subst y v)
+  | written e m => written (e.subst y v) m
   | handle ev h b => handle ev (if y = eventLocal then h else h.subst y v) (b.subst y v)
   | emit ev e => emit ev (e.subst y v)
   | scope k e => scope k (e.subst y v)
@@ -284,7 +288,8 @@ def assigned : Expr → List String
   | forIn _ e b d => e.assigned ++ b.assigned ++ d.assigned
   | letIn _ _ e b => e.assigned ++ b.assigned
   | set a _ b => a.assigned ++ b.assigned
-  | call _ e | cast e _ | conv e _ | broadcast _ e | get e _ | isA e _ | failed e | emit _ e | scope _ e | abort _ _ e | lam _ e
+  | call _ e | cast e _ | conv e _ | broadcast _ e | get e _ | isA e _ | failed e | written e _ | emit _ e | scope _ e
+  | abort _ _ e | lam _ e
   | share e _ => e.assigned
   | _ => []
 
