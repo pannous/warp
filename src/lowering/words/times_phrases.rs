@@ -1,18 +1,13 @@
 //! `n times …`: the parser keeps the phrase [n times operand] as written (suffixes.rs parse_times_loop), this pass
 //! gives it its meaning. A block is a loop with a hidden counter of its own, so nested loops do not meet; `n times [x]`
 //! is the list of n x; any other operand is repeated by `times·text` (`3 times "ab"`, `3 times 4` multiplies).
-//! `once`, `twice`, `thrice` before a block are its count (`thrice{…}` is `3 times {…}`, card thrice-block), unless
-//! the program uses the word otherwise: `twice(x) := x*2` keeps it a function.
 
-use super::nodes::{assign, call, int, is_assigned_data, key, symbol};
+use super::nodes::{assign, call, int, key, symbol};
 use crate::node::{error, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::{for_in_loop, TEXT_TIMES, TIMES_WORD};
 
-const COUNT_WORDS: [(&str, i64); 3] = [("once", 1), ("twice", 2), ("thrice", 3)];
-
 pub fn lower(node: Node) -> Node {
-	let node = COUNT_WORDS.iter().fold(node, |node, &(word, count)| with_count_word(node, word, count));
 	if !node.mentions_any(&[TIMES_WORD]) {
 		return node;
 	}
@@ -59,36 +54,4 @@ fn rounds(count: Node, body: Node, number: usize) -> Node {
 		Bracket::Round,
 		Separator::Semicolon,
 	)
-}
-
-/// `thrice{…}`, `thrice {…}` as `3 times {…}`, when the program has no other use of the word
-fn with_count_word(program: Node, word: &str, count: i64) -> Node {
-	if !program.mentions(word) {
-		return program;
-	}
-	let counted = counted_blocks(program.clone(), word, count);
-	if counted.mentions(word) {
-		return program;
-	}
-	counted
-}
-
-fn counted_blocks(node: Node, word: &str, count: i64) -> Node {
-	// `x = {twice: {a: 1}}` is data with the field twice
-	if matches!(node.drop_meta(), Node::Key(target, Op::Assign, value) if is_assigned_data(target, value)) {
-		return node;
-	}
-	let node = node.map_children(|child| counted_blocks(child, word, count));
-	let block = match node.drop_meta() {
-		Node::Key(head, Op::Colon, block) if head.is_symbol(word) => block.as_ref(),
-		Node::List(items, Bracket::None, Separator::Space) => match items.as_slice() {
-			[head, block] if head.is_symbol(word) => block,
-			_ => return node,
-		},
-		_ => return node,
-	};
-	if !matches!(block.drop_meta(), Node::List(_, Bracket::Curly, _)) {
-		return node;
-	}
-	Node::List(vec![int(count), symbol(TIMES_WORD), block.clone()], Bracket::None, Separator::Space).with_meta_of(&node)
 }

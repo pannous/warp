@@ -310,6 +310,46 @@ impl WarpParser {
 		Some(self.parse_times_loop(lhs.clone()))
 	}
 
+	/// `thrice {…}`, `twice [x]`, `once "ab"` starting a statement: `3 times {…}` (card thrice-block). `twice: …` stays a
+	/// key and `twice{a: 1}`, a block of `key: value` pairs, a tag; a binding of the word in scope keeps it, asked loudly
+	pub(crate) fn try_parse_count_word(&mut self) -> Option<Node> {
+		if self.options.data_mode || self.in_data_literal {
+			return None;
+		}
+		let (word, count) = COUNT_WORDS.into_iter().find(|(word, _)| self.matches_keyword(word))?;
+		let after = (word.len()..).find(|at| !matches!(self.peek_char(*at), ' ' | '\t')).unwrap_or(word.len());
+		if !matches!(self.peek_char(after), '{' | '[' | '"' | '\'') || self.keeps_bound_count_word(word, count) {
+			return None;
+		}
+		let mark = self.mark();
+		self.advance_by(word.len());
+		let counted = self.parse_times_loop(Node::int(count));
+		if counts_pairs(&counted) {
+			self.rewind(mark);
+			return None;
+		}
+		Some(counted)
+	}
+
+	/// A variable, function or parameter named like the count word is the program's own: the warning asks which is meant
+	fn keeps_bound_count_word(&self, word: &str, count: i64) -> bool {
+		let bound = self.variables.contains(word)
+			|| self.functions.contains(word)
+			|| self.program_functions.contains(word)
+			|| self.parameters_in_scope.iter().any(|parameter| parameter == word);
+		if !bound {
+			return false;
+		}
+		let (line, column) = self.get_position();
+		let question = format!("is `{word} {{…}}` your {word} or the block {count} times? (your {word} wins here)");
+		let readings = vec![
+			reading(&format!("your {word}"), &format!("{word}({{…}})")),
+			reading(&format!("{count} times"), &format!("{count} times {{…}}")),
+		];
+		let _ = ask(&Ask::new(COUNT_WORD, question, readings, Fallback::Warning).written(word).at(line, column));
+		true
+	}
+
 	/// `times [x]` fills a list, binding to the count right before it: `xs = 100 times [0]`
 	pub(crate) fn times_fills_list(&self) -> bool {
 		let after_word = TIMES_WORD.len();
@@ -378,4 +418,15 @@ pub(crate) fn for_in_loop(variable: Node, iterable: Node, body: Node) -> Node {
 pub(crate) fn while_do(condition: Node, body: Node) -> Node {
 	let head = Node::Key(Box::new(Empty), Op::While, Box::new(condition));
 	Node::Key(Box::new(head), Op::Do, Box::new(body))
+}
+
+/// The words a statement may start counting with: `thrice {…}` is `3 times {…}`
+const COUNT_WORDS: [(&str, i64); 3] = [("once", 1), ("twice", 2), ("thrice", 3)];
+const COUNT_WORD: &str = "count-word";
+
+/// `[2 times {a: 1}]`: the block is `key: value` data, the word its tag
+fn counts_pairs(counted: &Node) -> bool {
+	let Node::List(items, _, _) = counted else { return false };
+	matches!(items.last().map(Node::drop_meta), Some(Node::List(entries, Bracket::Curly, _))
+		if !entries.is_empty() && entries.iter().all(|entry| matches!(entry.drop_meta(), Node::Key(_, Op::Colon, _))))
 }
