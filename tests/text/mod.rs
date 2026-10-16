@@ -45,6 +45,7 @@ mod test_runtime_kind_texts;
 mod test_runtime_text_as_int;
 mod test_scan_by_index; // card self-text-index
 mod test_selector_prepositions; // card of-in-chain
+mod test_shalom_units;
 mod test_sort_of_a_call; // card count-sorted
 mod test_split_default; // card split-without
 mod test_split_element_kind;
@@ -73,4 +74,4 @@ mod test_text_type_words; // card cleanup-closed-lists
 mod test_text_variable_assignment;
 mod test_trim;
 mod test_unicode_escape;
-mod test_utf8_bytes;
+mod test_utf8_bytes; // card consists-characters
