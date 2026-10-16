@@ -1008,7 +1008,9 @@ impl Lowering {
 			return OwnMember::Lacks;
 		}
 		let is_element = matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _));
-		let is_plain = receiver.symbol_name().is_some_and(|variable| self.plain.contains(variable));
+		// a parameter named like a variable assigned a plain value elsewhere holds any value
+		let is_plain = receiver.symbol_name().is_some_and(|variable| self.plain.contains(variable))
+			&& !self.is_parameter(receiver);
 		match !is_plain && (is_element || self.is_object(receiver, name) || self.may_hold_object(receiver)) {
 			true => OwnMember::Maybe,
 			false => OwnMember::Not,

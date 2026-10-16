@@ -35,11 +35,26 @@ pub fn lower(program: Node) -> Node {
 	if redefined.is_empty() {
 		return program;
 	}
-	let variables = crate::analyzer::agreeing_kinds(&program, HashMap::new(), |_, value| {
+	let mut variables = crate::analyzer::agreeing_kinds(&program, HashMap::new(), |_, value| {
 		Some(crate::lowering::overloads::argument_kind(value, &HashMap::new()))
 	});
+	// kinds are known by name: a parameter or loop variable of that name holds any value, so it is tested at run time
+	let unassigned: HashSet<String> = names_bound_unassigned(&program).into_iter().collect();
+	variables.extend(unassigned.iter().map(|name| (name.clone(), None)));
 	let shared = crate::lowering::shared_arrays::shared_names(&program).into_iter().collect();
-	Dispatch { redefined, variables, shared }.rewrite(program)
+	let instances = crate::traits::InstanceTypes::of(&program);
+	Dispatch { redefined, variables, shared, instances, unassigned }.rewrite(program)
+}
+
+/// The parameters and loop variables anywhere in the program: names bound without an assignment
+fn names_bound_unassigned(program: &Node) -> Vec<String> {
+	let mut names = crate::for_loop::loop_variables(program);
+	program.visit(&mut |node| {
+		if let Some(head) = function_head(node) {
+			names.extend(head.parameters().into_iter().filter_map(super::nodes::parameter_name));
+		}
+	});
+	names
 }
 
 /// A function the program defines: its name, arguments (fewest, most) and the type of its first parameter
@@ -107,7 +122,8 @@ fn untyped_redefinitions(program: &Node) -> HashMap<String, Redefined> {
 			typed.push(name);
 			continue;
 		}
-		let reason = format!("{name} of a {} stays the library word; yours takes the other values", types.join(" or "));
+		let types_text = crate::analyzer::with_article(&types.join(" or "));
+		let reason = format!("{name} of {types_text} stays the library word; yours takes the other values");
 		crate::errors::diagnostic::say(Diagnostic::at(&definition, reason).level(Level::Hint).about(TOPIC, &name));
 		redefined.entry(name).or_insert_with(|| Redefined { types, arities: vec![] }).arities.push(arity);
 	}
@@ -121,6 +137,10 @@ struct Dispatch {
 	variables: HashMap<String, Option<Kind>>,
 	/// `shared xs = float[n]`: an array of the host's, no list the library's words change (shared_arrays.rs)
 	shared: HashSet<String>,
+	/// Values of declared types: never of a library type, so the program's word takes them
+	instances: crate::traits::InstanceTypes,
+	/// The parameters and loop variables (names_bound_unassigned)
+	unassigned: HashSet<String>,
 }
 
 impl Dispatch {
@@ -187,10 +207,27 @@ impl Dispatch {
 			return None;
 		}
 		let arguments: Vec<Node> = arguments.into_iter().map(|argument| self.rewrite(argument)).collect();
-		if arguments[0].drop_meta().symbol_name().is_some_and(|receiver| self.shared.contains(receiver)) {
+		// `add(all xs, 10)` applies the program's word to each item, as the program asks
+		let broadcast = arguments.iter().any(|argument| crate::broadcasting::all_marked(argument).is_some());
+		let is_shared = arguments[0].drop_meta().symbol_name().is_some_and(|receiver| self.shared.contains(receiver));
+		if broadcast || is_shared || self.holds_instance(&arguments[0]) {
 			return Some(call(&own_name(&name), arguments));
 		}
 		Some(chosen_call(&name, &redefined.types, arguments, &self.variables))
+	}
+
+	/// Is the value an instance of a declared type: constructed, a variable assigned one (not a parameter or loop
+	/// variable of the same name), or a field declared of such a type (`r.origin` of `origin: Vec3`)
+	fn holds_instance(&self, value: &Node) -> bool {
+		match value.drop_meta() {
+			Node::Symbol(name) if self.unassigned.contains(name) => false,
+			Node::Key(_, Op::Dot, field)
+				if field.symbol_name().is_some_and(|field| self.instances.field_holds_instances(field)) =>
+			{
+				true
+			}
+			_ => matches!(self.instances.shape(value), Some(crate::traits::Shape::Instance(_))),
+		}
 	}
 
 	/// The word called and its arguments, the receiver first
@@ -256,7 +293,7 @@ fn chosen_call(
 		return own(arguments);
 	}
 	match known_fit(&arguments[0], types, variables) {
-		Some(true) => return library_call(name, arguments),
+		Some(true) => return library_or_prelude_call(name, arguments),
 		Some(false) => return own(arguments),
 		None => {}
 	}
@@ -273,16 +310,27 @@ fn chosen_call(
 	let Some(test) = test else {
 		return own(arguments);
 	};
-	let choice = if_then_else(test, library_call(name, arguments.clone()), own(arguments));
+	let choice = if_then_else(test, library_or_prelude_call(name, arguments.clone()), own(arguments));
 	match bindings.is_empty() {
 		true => choice,
 		false => Node::List([bindings, vec![choice]].concat(), Bracket::Round, Separator::Semicolon),
 	}
 }
 
-/// `floor(x)`; a builtin method of a type that is no library function is called on its receiver, `t.add(n)`
+/// A prelude word's call reaches its loaded definition `prelude·hex_text` directly: library_words, which writes it so,
+/// takes the program's `hex_text·any` beside it for the program's own word
+fn library_or_prelude_call(name: &str, arguments: Vec<Node>) -> Node {
+	match crate::modules::prelude_name(name) {
+		Some(qualified) => call(&qualified, crate::modules::prelude_arguments(name, arguments)),
+		None => library_call(name, arguments),
+	}
+}
+
+/// `floor(x)`; a builtin method of a type that is no library function (a list mutation) is called on its receiver,
+/// `t.add(n)`
 pub(crate) fn library_call(name: &str, mut arguments: Vec<Node>) -> Node {
-	match typed_first_parameters(name).is_some() || crate::library_words::is_library_word(name) {
+	let is_function = typed_first_parameters(name).is_some() || crate::library_words::is_library_word(name);
+	match is_function && !crate::list_mutations::is_list_mutating_method(name) {
 		true => call(name, arguments),
 		false => {
 			let receiver = arguments.remove(0);

@@ -266,7 +266,10 @@ pub(crate) fn warn_missing_colon(function: &Node, label: &Node, value: &Node) {
 
 /// `move 1 from 2 to: 3`: the label `from` without its colon, offering `from: 2` when its value follows
 fn missing_colon(function: &Node, label: &Node, word: &str, value: Option<&Node>) -> Diagnostic {
-	let message = format!("{word} labels an argument of {} with a colon: `{word}: …`", function.name());
+	let message = format!(
+		"{word} labels an argument of {} with a colon: `{word}: …`",
+		crate::lowering::typed_library_words::written(&function.name())
+	);
 	let diagnostic = Diagnostic::at(label, message);
 	match value.map(|value| value.serialize().trim().to_string()) {
 		Some(value) => diagnostic.offer("the label's colon", format!("{word} {value}"), format!("{word}: {value}")),
