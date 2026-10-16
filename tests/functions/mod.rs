@@ -65,6 +65,7 @@ mod test_event_effects;
 mod test_fail_effect;
 mod test_failed_word;
 mod test_field_function_values;
+mod test_float_list_parameters; // card untyped-parameters
 mod test_float_to_int_parameter;
 mod test_float_values_of_tuples;
 mod test_folding_in_bodies;

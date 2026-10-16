@@ -35,7 +35,9 @@ impl Program<'_> {
 			return if declares { unmarked(node) } else { self.reference(&name) };
 		}
 		match node {
-			Node::List(items, bracket, separator) if separator.separates_statements() || is_statement && are_classes(&items) => {
+			Node::List(items, bracket, separator)
+				if separator.separates_statements() || is_statement && are_classes(&items) =>
+			{
 				Node::List(items.into_iter().map(|item| self.rewritten(item, true)).collect(), bracket, separator)
 			}
 			other => children_rewritten(other, |child| self.rewritten(child, false)),
@@ -96,7 +98,9 @@ fn unmarked(node: Node) -> Node {
 
 fn without_bare_mark(name: Node) -> Node {
 	match name {
-		Node::Meta { node, data } if matches!(data.as_ref(), Node::Key(key, _, _) if key.name().ends_with(crate::words::BARE_CLASS_MARK)) => *node,
+		Node::Meta { node, data } if matches!(data.as_ref(), Node::Key(key, _, _) if key.name().ends_with(crate::words::BARE_CLASS_MARK)) => {
+			*node
+		}
 		Node::Meta { node, data } => Node::Meta { node: Box::new(without_bare_mark(*node)), data },
 		other => other,
 	}

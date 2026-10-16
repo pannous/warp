@@ -1,0 +1,24 @@
+xs = [i * 0.001 as float for i in 0..8192]
+def untyped_sum(values) {
+	last = 0.0
+	for x in values { last = x + 0.5 * last }
+	last
+}
+def float_sum(values) {
+	last = 0.0 as float
+	for x in values { last = x + 0.5 * last }
+	last
+}
+t0 = clock()
+for k in 1..200 {
+last = 0.0
+for x in xs { last = x + 0.5 * last }
+}
+t1 = clock()
+for k in 1..200 { a = untyped_sum(xs) }
+t2 = clock()
+for k in 1..200 { b = float_sum(xs) }
+t3 = clock()
+print("top level ms: " + (t1 - t0))
+print("untyped function ms: " + (t2 - t1))
+print("float accumulator function ms: " + (t3 - t2))

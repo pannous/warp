@@ -56,10 +56,9 @@ impl WarpParser {
 		let declaration = self.parse_type_declaration();
 		let written = self.chars[before.pos..self.pos].iter().collect::<String>();
 		match declaration {
-			Node::Type { name, body } if !written.contains(['{', ':']) => Node::Type {
-				name: Box::new(name.with_attribute(crate::words::BARE_CLASS_MARK, Node::True)),
-				body,
-			},
+			Node::Type { name, body } if !written.contains(['{', ':']) => {
+				Node::Type { name: Box::new(name.with_attribute(crate::words::BARE_CLASS_MARK, Node::True)), body }
+			}
 			other => other,
 		}
 	}
