@@ -36,8 +36,6 @@ const MICROSECONDS_PER_QUARTER: u32 = 500_000;
 const TICKS_PER_SECOND: f64 = TICKS_PER_QUARTER as f64 * 1_000_000.0 / MICROSECONDS_PER_QUARTER as f64;
 const NOTE_ON: u8 = 0x90;
 const NOTE_OFF: u8 = 0x80;
-/// The name the system shows for warp's MIDI client and its connections
-pub(crate) const CLIENT: &str = "warp";
 /// A note's four numbers in the flat list
 pub const FIELDS: usize = 4;
 
