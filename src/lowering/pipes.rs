@@ -109,12 +109,18 @@ impl Pipes {
 				let value = self.rewrite(Node::List(items, Bracket::None, Separator::Space));
 				self.then_call(&self.rewrite(*stage), &value).expect("guarded")
 			}
-			Node::List(mut items, Bracket::None, Separator::Space) if self.pipes_braceless_call(&items) => {
+			Node::List(mut items, Bracket::None, Separator::Space) if self.piped_call_start(&items).is_some() => {
+				let start = self.piped_call_start(&items).expect("guarded");
 				let Some(Node::Key(argument, Op::Or, stage)) = items.pop().map(|last| last.drop_meta().clone()) else {
 					unreachable!("guarded")
 				};
 				items.push(*argument);
-				self.applied(&stage, self.rewrite(Node::List(items, Bracket::None, Separator::Space)))
+				let call = items.split_off(start);
+				let piped = self.applied(&stage, self.rewrite(Node::List(call, Bracket::None, Separator::Space)));
+				match items.is_empty() {
+					true => piped,
+					false => Node::List(items.into_iter().chain([piped]).collect(), Bracket::None, Separator::Space),
+				}
 			}
 			// `n | m` of no function: the bits of two whole numbers, else the logical or (card operator-shall)
 			Node::Key(value, Op::Or, operand)
@@ -265,18 +271,29 @@ impl Pipes {
 	}
 
 	/// `square 2 | root`: a braceless call of a function whose last argument pipes into a function
-	fn pipes_braceless_call(&self, items: &[Node]) -> bool {
-		let head_is_function = match items.first().map(Node::drop_meta) {
-			Some(Node::Symbol(name)) => {
+	/// `ls "/tmp" | count`, `print cat "x" | count`: where the call starts whose last argument pipes on with `|`: the
+	/// word before that argument, when it may name a function (also a used module's, which joins the program later);
+	/// else the whole phrase of a function (`sum 1 2 3 | print`)
+	fn piped_call_start(&self, items: &[Node]) -> Option<usize> {
+		if items.len() < 2
+			|| !matches!(items.last().map(Node::drop_meta), Some(Node::Key(_, Op::Or, stage)) if self.is_stage(stage))
+		{
+			return None;
+		}
+		let names_a_call = |item: &Node, known: bool| match item.drop_meta() {
+			Node::Symbol(name) if known => {
 				self.context.user_functions.contains_key(name)
 					|| self.spaced_functions.contains(name)
 					|| is_function_word(name, &self.context)
 			}
+			Node::Symbol(name) => !self.variables.contains(name) && crate::type_name_matching::names_a_function(name),
 			_ => false,
 		};
-		head_is_function
-			&& items.len() >= 2
-			&& matches!(items.last().map(Node::drop_meta), Some(Node::Key(_, Op::Or, stage)) if self.is_stage(stage))
+		let before_argument = items.len() - 2;
+		if names_a_call(&items[before_argument], false) {
+			return Some(before_argument);
+		}
+		names_a_call(&items[0], true).then_some(0)
 	}
 }
 
