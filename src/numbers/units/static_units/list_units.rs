@@ -26,19 +26,23 @@ impl Inference {
 		match value.drop_meta() {
 			Node::Symbol(name) => self.plain_lists.get(name).copied().unwrap_or(0),
 			Node::List(items, Bracket::Square, _) => 1 + items.iter().map(depth_of).max().unwrap_or(0),
-			Node::List(items, Bracket::Round, _) if calls_left > 0 && self.called_definition(items).is_some() => {
-				let body = &self.called_definition(items).expect("guarded").body;
-				returned_value(body).map_or(0, |last| self.plain_list_depth_within(last, calls_left - 1))
-			}
-			Node::List(items, Bracket::Round, _) if items.len() == 1 => depth_of(&items[0]),
+			Node::List(items, Bracket::Round, _) => match self.returned_by_call(items, calls_left) {
+				Some(last) => self.plain_list_depth_within(last, calls_left - 1),
+				None if items.len() == 1 => depth_of(&items[0]),
+				None => 0,
+			},
 			_ => 0,
 		}
 	}
 
-	/// The user function a call `(f a b)` calls
-	pub(super) fn called_definition(&self, call: &[Node]) -> Option<&Definition> {
+	/// What a call `(f a b)` of a user function gives, while `calls_left` allows following one more call
+	pub(super) fn returned_by_call(&self, call: &[Node], calls_left: usize) -> Option<&Node> {
+		if calls_left == 0 {
+			return None;
+		}
 		let (head, arguments) = call.split_first()?;
-		self.definitions.get(&(head.drop_meta().symbol_name()?.to_string(), arguments.len()))
+		let definition = self.definitions.get(&(head.drop_meta().symbol_name()?.to_string(), arguments.len()))?;
+		returned_value(&definition.body)
 	}
 
 	/// `cm`, `km/h`: a unit or an expression of units, as written after a value
