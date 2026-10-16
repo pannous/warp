@@ -421,13 +421,13 @@ pub(crate) fn declared_element_type(annotation: &Node) -> Option<&str> {
 	}
 }
 
-/// Do the elements of a list of type `list_type` (list_type_name: `list of int`) fit the declared element type? A list
-/// whose elements are known only at run time (`list of node`, a plain `list`) is checked there
 /// Is the type `word` (an alias too: `double`, `exact`) the type `within` or one it covers (BUILTIN_TYPES)
 pub(super) fn is_type_within(word: &str, within: &str) -> bool {
 	crate::type_tests::type_matches(crate::type_tests::canonical_spec_word(word), within)
 }
 
+/// Do the elements of a list of type `list_type` (list_type_name: `list of int`) fit the declared element type? A list
+/// whose elements are known only at run time (`list of node`, a plain `list`) is checked there
 pub(crate) fn elements_fit(declared_element: &str, list_type: &str) -> bool {
 	let Some(element) = list_type.strip_prefix(LIST_OF_PREFIX) else {
 		return true;

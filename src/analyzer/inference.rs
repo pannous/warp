@@ -16,16 +16,13 @@ pub(super) fn is_update(node: &Node) -> bool {
 	}
 }
 
-/// Infer the Kind for an expression
-/// Returns Int, Float, Text, etc. based on the expression's result type
-/// Result kind of `left op right`: exact (Int, which includes ratios like `1/4`) unless an f64 is involved
-/// The runtime function of `a op b` when an operand's kind is known only at run time (a field of a map parameter, an
-/// element of a parsed JSON value): Int or Float is decided by the values (wasm_emitter list_ops NODE_ARITHMETIC)
 /// A value whose kind is known only at run time, held as a Node: maybe a number, maybe a ± interval
 pub fn is_run_time_kind(kind: &Kind) -> bool {
 	matches!(kind, Kind::Data | Kind::Empty)
 }
 
+/// The runtime function of `a op b` when an operand's kind is known only at run time (a field of a map parameter, an
+/// element of a parsed JSON value): Int or Float is decided by the values (wasm_emitter list_ops NODE_ARITHMETIC)
 pub fn node_arithmetic(left: Kind, op: &Op, right: Kind) -> Option<&'static str> {
 	let numeric = |kind: &Kind| matches!(kind, Kind::Int | Kind::Float) || is_run_time_kind(kind);
 	// a value of run-time kind added to a list: node_add concatenates when it is a list too
@@ -41,6 +38,7 @@ pub fn node_arithmetic(left: Kind, op: &Op, right: Kind) -> Option<&'static str>
 		.map(|(name, _, _)| *name)
 }
 
+/// Result kind of `left op right`: exact (Int, which includes ratios like `1/4`) unless an f64 is involved
 pub fn arithmetic_kind(left: Kind, op: &Op, right: Kind) -> Kind {
 	if node_arithmetic(left, op, right).is_some() {
 		return Kind::Data; // Int or Float, decided at run time

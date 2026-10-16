@@ -116,8 +116,6 @@ impl WarpParser {
 		Node::Text(path).with_meta_data(PathLiteral)
 	}
 
-	/// Parse symbol with optional suffix: name{...}, name<...>, name(...)
-	/// Does NOT handle infix operators like : or = (those are handled by parse_expr)
 	/// The soft keyword `version` before digits takes them as written: `version 1.10` is one value, not the float 1.1
 	pub(crate) fn version_operand(&mut self, symbol: &str) -> Option<Node> {
 		if symbol != crate::words::VERSION_KEYWORD || self.options.data_mode {
