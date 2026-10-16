@@ -164,16 +164,9 @@ fn renders(items: &[Node]) -> bool {
 	matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(word)) if RENDERING_WORDS.contains(&word.as_str()))
 }
 
-/// The holes of a shader text, or of a dialect's block (`twigl { … }`, the call of its word with the text); another
-/// call given a shader (`f(shader { … })`) gives what f returns, not the shader
 fn holes_of(node: &Node) -> Option<Vec<String>> {
-	let is_dialect =
-		|word: &Node| crate::warp_parser::SHADER_DIALECT_WORDS.iter().any(|dialect| word.is_symbol(dialect));
-	match (node.attribute(HOLES_ATTRIBUTE).map(Node::drop_meta), node.drop_meta()) {
-		(Some(Node::List(names, _, _)), _) => Some(names.iter().map(Node::name).collect()),
-		(None, Node::List(items, Bracket::Round, _)) if items.len() == 2 && is_dialect(&items[0]) => {
-			holes_of(&items[1])
-		}
+	match node.attribute(HOLES_ATTRIBUTE)?.drop_meta() {
+		Node::List(names, _, _) => Some(names.iter().map(Node::name).collect()),
 		_ => None,
 	}
 }

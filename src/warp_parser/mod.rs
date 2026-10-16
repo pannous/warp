@@ -1,5 +1,5 @@
 use crate::compiler::meta::LineInfo;
-use crate::errors::diagnostic::{ask, reading, Ask, Diagnostic, Fallback};
+use crate::errors::diagnostic::{ask, reading, Ask, Diagnostic, Fallback, Level};
 use crate::extensions::numbers::Number;
 use crate::extensions::reals::{Exact, Rational, Real};
 use crate::node::call;
@@ -37,6 +37,7 @@ mod markup;
 mod scanning;
 pub use lookahead::PREFIX_OPERATOR_WORDS;
 mod atoms;
+pub(crate) use atoms::hyphen_joins_word;
 mod blocks;
 mod commands;
 mod comments;
@@ -272,6 +273,8 @@ const SLASH_COMMENT_TOPIC: &str = "slash-comment";
 /// The severe warning on a `//` comment meant as floor division, `7//2` (decision floor-division)
 pub const FLOOR_DIVISION_TOPIC: &str = "floor-division-comment";
 const FLOOR_DIVISION: &str = "/!";
+/// Pascal's floor division `7 div 2`, also the html tag `div {…}`
+const DIV_WORD: &str = "div";
 const FLOOR_DIVISION_ASSIGN: &str = "/!=";
 const ELVIS_WORD: &str = "elvis";
 /// `N times` takes everything up to an assignment: `n+1 times {…}`

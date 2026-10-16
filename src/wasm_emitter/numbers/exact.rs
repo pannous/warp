@@ -27,6 +27,11 @@ pub const EXACT_TEXT: &str = "exact_text";
 /// (card repeating-decimals); a period longer than MAX_PERIOD digits stays the ratio's text
 pub const DECIMAL_TEXT: &str = "decimal_text";
 pub const DECIMAL_WORD: &str = "decimal";
+/// `a % b` and `a // b` of two Ints beyond the fixnum fast path (big_int.rs emit_int_op)
+pub const INT_MOD: &str = "int_mod";
+pub const INT_EUCLID_DIV: &str = "int_euclid_div";
+/// Makes every ratio of a module: without it a module holds none
+pub const RATIO_NEW: &str = "ratio_new";
 const MAX_PERIOD: i32 = 1000;
 /// The bits int_and, int_or and int_xor combine per step of an Int beyond the fixnums
 const BIT_CHUNK: i64 = 32;
@@ -206,7 +211,7 @@ impl WasmGcEmitter {
 		f.instruction(&I::If(BlockType::Result(ValType::I64)));
 		self.emit_inline_ratio(f, SMALL_NUMERATOR, SMALL_DENOMINATOR);
 		Self::emit_list(f, &[I::Else, I::LocalGet(SMALL_NUMERATOR), I::LocalGet(SMALL_DENOMINATOR)]);
-		self.call(f, "ratio_new");
+		self.call(f, RATIO_NEW);
 		Self::emit_list(f, &[I::End, I::End]);
 	}
 
@@ -288,6 +293,31 @@ impl WasmGcEmitter {
 			});
 		}
 
+		// int_mod(a, b), int_euclid_div(a, b): `%` and `//` of two Ints, Euclidean (0 ≤ r < |b|, a = b·q + r), from the
+		// truncated int_rem / int_quot without the ratio runtime (card int-i64): a negative remainder takes |b| more, its
+		// quotient one step away from b's sign. locals: the result, the remainder
+		for (name, truncated, step, for_negative_b, for_positive_b) in [
+			(INT_MOD, "int_rem", I::LocalGet(1), "int_sub", "int_add"),
+			(INT_EUCLID_DIV, "int_quot", I::I64Const(1), "int_add", "int_sub"),
+		] {
+			self.runtime_function(name, vec![i64t, i64t], vec![i64t], vec![i64t, i64t], |s, f| {
+				let (result, remainder) = (2, 3);
+				Self::emit_list(f, &[I::LocalGet(0), I::LocalGet(1)]);
+				s.call(f, truncated);
+				Self::emit_list(f, &[I::LocalSet(result), I::LocalGet(0), I::LocalGet(1)]);
+				s.call(f, "int_rem");
+				f.instruction(&I::LocalSet(remainder));
+				s.is_negative(f, remainder);
+				f.instruction(&I::If(BlockType::Empty));
+				s.is_negative(f, 1);
+				Self::emit_list(f, &[I::If(BlockType::Result(i64t)), I::LocalGet(result), step.clone()]);
+				s.call(f, for_negative_b);
+				Self::emit_list(f, &[I::Else, I::LocalGet(result), step]);
+				s.call(f, for_positive_b);
+				Self::emit_list(f, &[I::End, I::LocalSet(result), I::End, I::LocalGet(result)]);
+			});
+		}
+
 		// int_gcd(a, b) >= 0 by Euclid; locals: remainder
 		self.runtime_function(INT_GCD, vec![i64t, i64t], vec![i64t], vec![i64t], |s, f| {
 			for local in [0, 1] {
@@ -366,7 +396,7 @@ impl WasmGcEmitter {
 		}
 
 		// ratio_new(n, d): normalized n/d for integers, d nonzero; locals: gcd
-		self.runtime_function("ratio_new", vec![i64t, i64t], vec![i64t], vec![i64t], |s, f| {
+		self.runtime_function(RATIO_NEW, vec![i64t, i64t], vec![i64t], vec![i64t], |s, f| {
 			s.is_negative(f, 1);
 			f.instruction(&I::If(BlockType::Empty));
 			s.negate_local(f, 0);
@@ -406,7 +436,7 @@ impl WasmGcEmitter {
 			let ratio_of_both = |f: &mut Function| {
 				s.cross_product(f, 0, 1);
 				s.cross_product(f, 1, 0);
-				s.call(f, "ratio_new");
+				s.call(f, RATIO_NEW);
 			};
 			// P66: an exact division by zero is the catchable error divide_by_zero (0 is the fixnum 0)
 			Self::emit_list(f, &[I::LocalGet(1), I::I64Eqz]);
@@ -479,7 +509,7 @@ impl WasmGcEmitter {
 					s.cross_product(f, 1, 0);
 					s.call(f, combine);
 					s.part_product(f, 0, "exact_denominator", 1, "exact_denominator");
-					s.call(f, "ratio_new");
+					s.call(f, RATIO_NEW);
 				},
 				integer_op,
 			);
@@ -499,7 +529,7 @@ impl WasmGcEmitter {
 			|s, f| {
 				s.part_product(f, 0, "exact_numerator", 1, "exact_numerator");
 				s.part_product(f, 0, "exact_denominator", 1, "exact_denominator");
-				s.call(f, "ratio_new");
+				s.call(f, RATIO_NEW);
 			},
 			"int_mul_slow",
 		);
@@ -573,7 +603,7 @@ impl WasmGcEmitter {
 				s.call(f, "int_sub");
 				f.instruction(&I::LocalGet(0));
 				s.call(f, "exact_denominator");
-				s.call(f, "ratio_new");
+				s.call(f, RATIO_NEW);
 			},
 			"int_neg_slow",
 		);
@@ -722,7 +752,7 @@ impl WasmGcEmitter {
 				f.instruction(&I::LocalGet(1));
 				s.call(f, "int_pow");
 			}
-			s.call(f, "ratio_new");
+			s.call(f, RATIO_NEW);
 			Self::emit_list(f, &[I::Else, I::LocalGet(0), I::LocalGet(1)]);
 			s.call(f, "int_pow");
 			f.instruction(&I::End);

@@ -50,4 +50,5 @@ mod test_text_or_number; // cards golf-text, golf-sum
 mod test_then_pipe;
 mod test_truthiness_of_objects;
 mod test_tuple_comparison_warning; // int -3 is int(-3), f - 2 subtracts
+mod test_used_operator_call_form; // card used-module
 mod test_xor_negated_group; // card xor-xor

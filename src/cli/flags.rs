@@ -16,7 +16,7 @@ pub(crate) const WARNINGS_FLAG: &str = "--warnings";
 pub(crate) const STRICT_FLAG: &str = "--strict";
 /// `warp fast …`: every program as if it began with `use fast_math` (lib/fast_math.warp: sin cos exp pow atan2 as wasm
 /// polynomials)
-pub(crate) const FAST_WORD: &str = "fast";
+pub(crate) use warp::words::FAST_WORD;
 /// The last line of a run that showed hints while nobody chose to see them (neither the flag nor WARP_HINTS was given)
 pub(crate) const HIDE_HINTS_TIP: &str = "hide hints with: warp --no-hints (or WARP_HINTS=0)";
 
