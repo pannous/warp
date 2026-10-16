@@ -128,20 +128,10 @@ impl WarpParser {
 				match escaped {
 					'\0' => continue, // `"\` ends the source: the loop reports the unterminated text
 					':' if interpolates && self.peek_char(1).is_ascii_alphabetic() => {
-						let Some((name, length)) =
-							crate::text::uniscript_entities::entity_name_at(&self.chars, self.pos - 1)
-						else {
-							unreachable!("a letter follows")
+						let characters = match self.entity_escape() {
+							Ok(characters) => characters,
+							Err(strict) => return strict,
 						};
-						let Some(characters) = crate::text::uniscript_entities::entity(&name) else {
-							if let Err(strict) = self.warn_unknown_entity(&name, self.column - 1) {
-								return strict;
-							}
-							s.push('\\');
-							template.push('\\');
-							continue; // the name follows as written
-						};
-						self.advance_by(length - 1);
 						s.push_str(characters);
 						template.push_str(characters);
 						continue;
@@ -181,7 +171,9 @@ impl WarpParser {
 		};
 		match self.number_cast_follows().filter(|_| interpolates && !c.is_ascii_digit()) {
 			Some(number_type) => {
-				let message = format!("\"{c}\" as {number_type}: a text is no number (user decision #35); codepoint('{c}') is the code point of the character");
+				let message = format!(
+					"\"{c}\" as {number_type}: a text is no number (user decision #35); codepoint('{c}') is the code point of the character"
+				);
 				let explicit = format!("{}('{c}') as {number_type}", crate::words::CODEPOINT);
 				Diagnostic { message, line, column, ..Default::default() }
 					.fix(&explicit)
@@ -190,6 +182,20 @@ impl WarpParser {
 			}
 			None => Node::codepoint(c),
 		}
+	}
+
+	/// At the `:` of `\:name` in a text: the entity's characters, read past the name; an unknown name gives the
+	/// backslash alone, the name follows as written
+	fn entity_escape(&mut self) -> Result<&'static str, Node> {
+		let Some((name, length)) = crate::text::uniscript_entities::entity_name_at(&self.chars, self.pos - 1) else {
+			unreachable!("a letter follows")
+		};
+		let Some(characters) = crate::text::uniscript_entities::entity(&name) else {
+			self.warn_unknown_entity(&name, self.column - 1)?;
+			return Ok("\\");
+		};
+		self.advance_by(length - 1);
+		Ok(characters)
 	}
 
 	/// `\:xyzzy` names no entity: it stays as written and warns; in strict mode the warning is the error
