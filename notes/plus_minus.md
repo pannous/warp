@@ -38,7 +38,7 @@ unchanged (`f(x) := x*x; f(3 ± 0.1)` is 9.00 ± 0.61).
 - Card plus-minus-print (done): print and `str(x)` show `6.0 ± 1.0` (uncertain_text in list_join, the format of
   the read-back); `x.value`, `x.low`, `x.high`, `x.uncertainty` as floats (uncertain_field, in the constant-field
   lookup like `e.message`); `-x` of any run-time number is node_sub(0, x). Sorting orders intervals by their values
-  (node_order). Tests: tests/numbers/test_plus_minus_print.rs, sample samples/measurements.warp.
+  (node_order). Tests: tests/numbers/test_plus_minus_print.rs, sample samples/numbers/measurements.warp.
 - Comparisons (P224, P224b): `y certainly < x` (the whole interval: y.high < x.low), `y possibly < x` (some of it:
   y.low < x.high), also `certainly(y < x)`; crate::uncertain::lower_certainty makes the infix form the builtin call,
   wasm_emitter/uncertain.rs uncertain_order answers it. A bare `<` `>` `<=` `>=` on a value the compiler knows to be ±
@@ -63,7 +63,7 @@ Unsupported), so span comparisons and final-value tolerances stay compile time. 
 value (type_tests.rs runtime_kind_mask; `float` stays strict). Function parameters get their class from the calls
 (class_methods.rs parameter_classes), so `f(x) := x * 2; f(5 m ± 1 cm)` dispatches to Quantity.times.
 A final Quantity value shows its text (card instance-final). `f` called with a quantity and with a plain number calls
-a copy `f_Quantity(x:Quantity)` for the quantity (card mixed-arguments, class_methods.rs specialized_calls). Tests: tests/numbers/test_plus_minus_units.rs, samples/measurements.warp.
+a copy `f_Quantity(x:Quantity)` for the quantity (card mixed-arguments, class_methods.rs specialized_calls). Tests: tests/numbers/test_plus_minus_units.rs, samples/numbers/measurements.warp.
 
 ## Quantities with tolerance (card quantity-tolerance, 2026-10-09)
 - `rope certainly > 4 m`: lower_certainty runs before class_methods, whose with_certain_amounts compares

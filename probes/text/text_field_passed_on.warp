@@ -8,5 +8,5 @@ def first_space(letters) {
 	at
 }
 def other(letters) := first_space(letters)
-s = Scanner{code: read("samples/hello.warp")}
+s = Scanner{code: read("samples/hello/hello.warp")}
 print first_space(s.code)

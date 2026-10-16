@@ -34,5 +34,6 @@ fn a_bare_builtin_assigned_needs_its_arguments() {
 fn a_bare_builtin_passed_to_map_stays_the_function() {
 	assert_eq!(printed("[4 9].map(sqrt)"), "[2 3]");
 	assert_eq!(printed("[1.5 2.5].map(function floor)"), "[1 2]");
+	assert_eq!(printed("[1.5 2.5].map(floor)"), "[1 2]");
 	assert_eq!(printed("map([1.5 2.5], function floor)"), "[1 2]");
 }

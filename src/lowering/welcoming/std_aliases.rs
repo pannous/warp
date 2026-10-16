@@ -149,7 +149,7 @@ fn aliased_call<'a>(node: &'a Node, kept: &[&str]) -> Option<(&'static StdAlias,
 	let (module, member) = (module.drop_meta().name(), member.drop_meta().name());
 	let shape_items = |arguments: &'a [Node]| match arguments {
 		[tuple] => match tuple.drop_meta() {
-			Node::List(items, Bracket::Round, Separator::Colon) => items.as_slice(),
+			Node::List(items, Bracket::Round, Separator::Comma) => items.as_slice(),
 			_ => arguments,
 		},
 		_ => arguments,

@@ -8,7 +8,6 @@ const CLOUD_SESSION_VAR: &str = "CLAUDE_CODE_REMOTE";
 /// The browser suite stops a test after 120 s and running every sample came close and then over it: a test over all
 /// samples is SAMPLE_SLICES tests, each over one slice
 const SAMPLE_SLICES: usize = 4;
-const SAMPLES_FOLDER: &str = "samples";
 /// How a failed request reads when it never got an answer (src/extensions/utils.rs network_reason, ureq's io errors,
 /// host-files.js): worth one retry
 const NETWORK_FAILURES: [&str; 5] = ["timeout", "timed out", "dns", "connection", "network error"];
@@ -19,6 +18,37 @@ const SERVER_START_LIMIT: std::time::Duration = std::time::Duration::from_secs(6
 /// The echo server of echo_url: what a POST sent, as httpbin.org/post answers it
 #[cfg(feature = "native")]
 const ECHO_SERVER: &str = "post \"/post\" { {data: request.body, headers: request.headers} }";
+
+/// The sample programs, one folder per chapter of the playground's guide (notes/samples.md)
+pub const SAMPLES: &str = "samples";
+/// Folders of samples/ that hold no menu samples: golf counts bytes, wit holds interfaces, tests links the C++ ones
+const NOT_CHAPTERS: [&str; 3] = ["golf", "wit", "tests"];
+
+/// samples/<chapter>/<name>.warp, every one, sorted, in the folder the samples run from (samples_run_folder)
+pub fn sample_files() -> Vec<std::path::PathBuf> {
+	let entries =
+		|folder: &std::path::Path| std::fs::read_dir(folder).into_iter().flatten().flatten().map(|entry| entry.path());
+	let chapters = entries(samples_run_folder()).filter(|path| {
+		path.is_dir() && !path.file_name().is_some_and(|name| NOT_CHAPTERS.iter().any(|other| name == *other))
+	});
+	let mut files: Vec<_> = chapters
+		.flat_map(|chapter| entries(&chapter))
+		.filter(|path| path.extension().is_some_and(|extension| extension == "warp"))
+		.collect();
+	files.sort();
+	files
+}
+
+/// The name of a sample (the playground menu's): its file name without .warp
+pub fn sample_name(path: &std::path::Path) -> String {
+	path.file_stem().map(|stem| stem.to_string_lossy().into_owned()).unwrap_or_default()
+}
+
+/// The file of the sample of that name, in whichever chapter folder (samples/<chapter>/<name>.warp when there is none)
+pub fn sample_path(name: &str) -> String {
+	let found = sample_files().into_iter().find(|path| sample_name(path) == name);
+	found.map(|path| path.to_string_lossy().into_owned()).unwrap_or_else(|| format!("{SAMPLES}/<chapter>/{name}.warp"))
+}
 
 /// Every SAMPLE_SLICES-th item from `slice` on
 pub fn sample_slice<T>(items: &[T], slice: usize) -> impl Iterator<Item = &T> {
@@ -296,7 +326,7 @@ pub fn samples_run_folder() -> &'static std::path::Path {
 		FOLDER.get_or_init(copy_of_the_samples)
 	}
 	#[cfg(not(feature = "native"))]
-	std::path::Path::new(SAMPLES_FOLDER)
+	std::path::Path::new(SAMPLES)
 }
 
 #[cfg(feature = "native")]
@@ -304,10 +334,8 @@ fn copy_of_the_samples() -> std::path::PathBuf {
 	use std::fs;
 	let root = scratch_directory("samples_run");
 	let _ = fs::remove_dir_all(&root);
-	let listing = std::process::Command::new("git")
-		.args(["ls-files", "-z", SAMPLES_FOLDER])
-		.output()
-		.expect("git lists the samples");
+	let listing =
+		std::process::Command::new("git").args(["ls-files", "-z", SAMPLES]).output().expect("git lists the samples");
 	for file in listing.stdout.split(|byte| *byte == 0).filter(|file| !file.is_empty()) {
 		let file = std::path::Path::new(std::str::from_utf8(file).expect("a sample path in UTF-8"));
 		let copy = root.join(file);
@@ -321,13 +349,13 @@ fn copy_of_the_samples() -> std::path::PathBuf {
 	}
 	let checkout = std::env::current_dir().expect("the checkout");
 	for entry in fs::read_dir(&checkout).expect("the checkout").flatten() {
-		if entry.file_name() != SAMPLES_FOLDER {
+		if entry.file_name() != SAMPLES {
 			// the entry's own path, not its resolved one: a dangling link of the checkout stays a dangling link
 			std::os::unix::fs::symlink(entry.path(), root.join(entry.file_name()))
 				.expect("a link beside the samples' copy");
 		}
 	}
-	root.join(SAMPLES_FOLDER)
+	root.join(SAMPLES)
 }
 
 /// What the warp binary writes to stdout running `code` (no questions asked)

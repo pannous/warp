@@ -67,11 +67,24 @@ passes unedited needs no question; editing its assertions still needs a decision
 The only session that runs the full suite and the only one that pushes code to main.
 - Keeps one integration worktree (/Users/me/dev/angles/warp.worktrees.noindex/integrate, detached, follows origin/main;
   created with `cowtree add --detach <path> origin/main`).
-- Workers send it "branch, tip, filters"; it merges the branch (union-resolves todo.md / tests/main.rs, sends real
-  conflicts back to the worker), runs `./test.sh` with the integration build tweak, and pushes to main only at 0 failed
-  and no drop in the test count. Otherwise it reports the failures to the worker (and the supervisor if it's a decision).
-- Batches branches that arrive close together into one run; runs a worker's targeted check on request.
-- Express (user, 2026-10-10: "faster results for an agent"): a branch sent as "express" (the user asked for that
+- Its queue is the board's Ready column (user, 2026-10-16): workers push and run `todo ready <card>`, which records
+  branch and tip and refuses a branch that does not merge cleanly into origin/main; `todo list Ready` shows them. Only
+  Ready cards are merged; `todo ready --stray` reports unmerged branches without a card (never merged). It merges
+  the tips (resolving only trivial conflicts: formatting, mod/use lists, adjacent list additions; logic touched on
+  both sides bounces to the owner), runs `./test.sh` with the integration build tweak, and pushes to main only at 0
+  failed and no drop in the test count, then `todo done <card> <commit>` (Ready → Done). Otherwise the card bounces:
+  `todo move <card> Now` + `todo note` with the failure (and the supervisor hears if it's a decision).
+- Fix forward, don't hold the batch (user, 2026-10-16): when up to 10 tests fail after a merge, the Integrator marks
+  each one `#[ignore = "fixnow: <card>: <first panic line>"]` in its own commit and pushes the batch; for each test
+  it adds a `fixnow-<test>` card in Now for the owner of the branch that broke it (or the area worker). The owner
+  fixes forward and drops the ignore; `grep -rn 'fixnow' tests/` lists what's open. When the ignored test pins an
+  old edge case the new behaviour arguably improves on, the owner doesn't force the old one back: the question
+  goes to warp-interviewer (keep the old case, or change the test to the new one), the ignore stays until answered. Only more than 10 failures,
+  or a failure nobody can fix forward (wrong output across a whole feature, a crash at start), leads to real
+  backtracking: the branch leaves the batch and bounces. The test-count check counts fixnow ignores as present.
+- Batches of at most ~8 Ready cards per run; wide refactors and carrier branches land alone and first. Runs a
+  worker's targeted check on request.
+- Express (user, 2026-10-10: "faster results for an agent"): a card readied with `--express` (the user asked for that
   agent's result) is not batched: it goes next, alone on main, its full suite ahead of the batch run (a running suite
   finishes first). It skips the waiting, never the suite: one red branch on main stops every worker. To try a result
   even sooner, the worker's early-try binary (notes/agents/common.md) needs no merge at all.
@@ -92,10 +105,10 @@ The only session that runs the full suite and the only one that pushes code to m
 
 ## Reviewer
 User 2026-10-14 invented it: "makes sure that everything is sound and beautiful according to standards", so the
-Integrator has less to do. It reads each merge request's diff in parallel with the gate: two signals for the
+Integrator has less to do. It reads each Ready card's diff in parallel with the gate: two signals for the
 worker (user 2026-10-15), the gate's "it works" and the Reviewer's "here it can generalize or read better", which the
 worker makes its next commit. The Reviewer approves nothing and sends the Integrator nothing but a rare veto
-(unsound: the Integrator leaves the branch out of the push).
+(unsound: the card goes back to Now with a note, the Integrator leaves it out of the push).
 Structural findings become cards for the Refactorer. Prompt: notes/agents/reviewer.md; a default service.
 
 ## Refactorer
@@ -135,8 +148,17 @@ Interviewer. Prompt: notes/agents/refactorer.md.
   half-done edits.
 - Test first, then implement. While developing, only targeted tests and only through the queue:
   `tests/queue.sh -- <filter>`. Never the whole tests binary, never an extra export copy for verification.
-- Done = commit on the branch, push the branch, SendMessage the Integrator "branch, tip, new tests, filters". The
-  Integrator's full-suite result is the check; the worker fixes what it reports.
+- Cloud test lane (card cloud-test-lane, 2026-10-16; notes/cloud_development.md section 5): a pushed tip's targeted
+  tests can run on a cloud VM of their own instead of the Mac's queue:
+  `scripts/cloud-test.sh --card <card> <branch> <tip from git rev-parse HEAD> <filters>`, in the background (~6 min,
+  ~$0.30 of the Cloud session credit; exit 0 = green, the result goes on the card). Use it when more than a few runs
+  wait in the queue (`ls ~/.cargo/warp-tests.lock.queue | wc -l`) and the change is committed and pushed. Keep
+  tests/queue.sh for uncommitted edits, quick re-runs of one test, and tests that need the Mac (sound devices, GPU,
+  windows, Lean, SDL: scripts/cloud-test-environmental.txt). A green cloud run counts as the targeted run before
+  `todo ready`; the Integrator's gate stays the check. At most 3 cloud runs at once (the script waits for a free one).
+- Done = commit on the branch, targeted tests, merge origin/main (conflicts are the worker's to resolve), push the
+  branch, `todo ready <card>` (notes/agents/common.md "Done"). The Integrator's full-suite result is the check; a
+  bounced card comes back to Now with a note, the worker fixes it and readies it again.
 - Closing a card whose result the user can see or use (a feature, a visible fix, a sample, a playground change):
   `todo done <card> <commit> --try "how to try it"`: one concrete line (a command, a playground snippet, a sample
   file), only once it is on main and, for web changes, deployed. Internal work (cleanup, tests, notes) has no --try.
@@ -150,11 +172,14 @@ So branches are official, and every branch lives in a worktree under warp.worktr
 /Users/me/dev/angles/warp stays the user's own and agents do not edit it.
 
 ## Enforcement
-- `tests/queue.sh`: every test run waits for one machine-wide lock (`~/.cargo/warp-tests.lock`, lockf), so at most one
-  test binary runs at a time; `./test.sh` re-enters through it. The holder is in `~/.cargo/warp-tests.lock.owner`.
-  Waiters are served first come, first served by ticket files in `~/.cargo/warp-tests.lock.queue/` (named
-  `<priority>-<time>-<pid>`, tickets of dead PIDs are dropped); a full `./test.sh` (the Integrator) has priority 0 and
-  takes the next slot ahead of targeted runs. Plain lockf alone was not FIFO: a full run waited 15 min behind workers.
+- `tests/queue.sh`: every test run waits for one of 3 machine-wide slot locks (`~/.cargo/warp-tests.lock`, `.lock.2`,
+  `.lock.3`, lockf), so at most 3 targeted runs go at once (4 test threads each, nice 10); a full `./test.sh` holds all
+  three and runs alone, and re-enters through it. Each slot's holder is in its `.owner` file (`warp-tests.lock.owner`
+  for slot 1). Waiters are served first come, first served by ticket files in `~/.cargo/warp-tests.lock.queue/` (named
+  `<priority>-<time>-<pid>`, tickets of dead PIDs are dropped, a run's ticket goes once it holds its slots): only the
+  first in line takes a slot, so a waiting full run (priority 0, like the Integrator's integrate* targeted runs) keeps
+  any later run from starting until the slots drain. Plain lockf alone was not FIFO: a full run waited 15 min behind
+  workers; one slot alone left the Mac at load 7 of 10 with 37 runs queued (card test-queue-slots).
 - `.claude/hooks/test-gate.py` (PreToolUse, Bash): blocks `cargo test`, `cargo browser-test` and direct `deps/tests-*`
   binaries that bypass the queue; `cargo test --no-run` (build only) passes. It applies to every session whose project
   directory is this checkout, which includes all spawned workers.

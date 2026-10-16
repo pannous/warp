@@ -4,7 +4,7 @@ Branch: `algo-levenshtein`. The natural version fails (`test_levenshtein` is `#[
 Probe runner: `cargo --offline test --all-features --test test_algo_levenshtein probe -- --ignored --nocapture` evaluates every snippet in this folder.
 
 ## Natural program
-`samples/levenshtein.warp` → `Error("undefined variable: let")`, expected 11.
+`samples/text/levenshtein.warp` → `Error("undefined variable: let")`, expected 11.
 
 ## Failures (minimal snippet → actual vs expected; cause)
 1. **`let`/`var` inside any block** (fun, for, if): `fun f(n) { let m = n + 1; return m }; f(2)` → `undefined variable: let`, expected 3.

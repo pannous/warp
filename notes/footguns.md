@@ -522,7 +522,7 @@ Tests still pinning the old rule (not edited, supervisor decides): tests/welcomi
   -9223372036854775807. Required with list_join whenever the int runtime is (text_builtins::add_dependencies).
 - Fixed: an exact variable later assigned an f64 (`import floor from "m"; x=10.0; x=floor(2.5)`, `x=1; x=2.5 as float`)
   holds an f64 throughout (analyzer `widen_to_float`), as expressions mixing in an f64 do; before, WASM validation failed.
-- Tests: tests/welcoming/test_welcoming_print.rs, probes/print/.
+- Tests: tests/welcoming/test_welcoming_print.rs.
 
 ## For wiki/Footguns.md
 
@@ -537,7 +537,7 @@ Tests still pinning the old rule (not edited, supervisor decides): tests/welcomi
   `xs#i = v`, `y = n; n = y+1`. A body whose first mention is a fresh `name = value` not reading it (`primes = []`)
   is ambiguous and asks (topic `local-or-global`, analyzer::resolve_main_variable_assignments): "a new local of f"
   (default, explicit form `let n = …`) or "the main-level n" (`global n`, which turns main's first `n = …` into the
-  global declaration). Unanswered it warns and takes the local, as Python does (samples/sieve_idiomatic.warp relies on
+  global declaration). Unanswered it warns and takes the local, as Python does (samples/lists/sieve_idiomatic.warp relies on
   this); `use strict` makes it an error. `let`/`var n = …`, a parameter of the same name, or a local whose name main does
   not use, is the function's own without a question.
 - Tests: tests/welcoming/test_welcoming_globals.rs.

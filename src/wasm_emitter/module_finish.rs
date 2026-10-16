@@ -69,7 +69,7 @@ impl WasmGcEmitter {
 			.closures
 			.declared_functions()
 			.into_iter()
-			.chain(self.witness_dispatcher())
+			.chain(self.witness_dispatchers())
 			.chain(self.late_called_functions())
 			.collect();
 		if !declared_functions.is_empty() {

@@ -275,7 +275,7 @@ impl WarpParser {
 			_ if self.at_group_end(close) => Separator::None,
 			',' => {
 				self.advance();
-				Separator::Colon
+				Separator::Comma
 			}
 			';' => {
 				self.advance();
