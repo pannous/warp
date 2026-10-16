@@ -32,7 +32,7 @@ use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use std::collections::{HashMap, HashSet};
 pub(crate) use unit_fields::unit_type;
-pub(crate) use unit_fields::{lower_field_tolerances, si_quantity};
+pub(crate) use unit_fields::{lower_field_tolerances, lower_plain_field_numbers, si_quantity};
 
 const LOOP_WORDS: [&str; 2] = ["for", "while"];
 /// `speed·u0`: a function specialised for one unit signature of its arguments

@@ -75,11 +75,66 @@ fn tolerance_parts(member: &Node) -> Option<(String, &Node, &Node)> {
 }
 
 fn with_field_tolerances(node: Node, tolerances: &Tolerances) -> Node {
-	let toleranced = |value: Node, spread: &Node| match value.drop_meta() {
-		Node::Key(_, Op::PlusMinus, _) => value,
-		_ => Node::Key(Box::new(value), Op::PlusMinus, Box::new(spread.clone())),
+	let toleranced = |class: &str, field: &str, value: Node| {
+		let spread = tolerances.get(class).and_then(|fields| fields.iter().find(|(_, name, _)| name == field));
+		match (spread, value.drop_meta()) {
+			(None, _) | (_, Node::Key(_, Op::PlusMinus, _)) => value,
+			(Some((_, _, spread)), _) => Node::Key(Box::new(value), Op::PlusMinus, Box::new(spread.clone())),
+		}
 	};
-	let class_tolerances = |class: &Node| tolerances.get(&class.drop_meta().name());
+	let fields = crate::class_methods::class_fields(&node);
+	let field_names = |class: &str| {
+		tolerances
+			.contains_key(class)
+			.then(|| fields.get(class).map(|fields| fields.iter().map(|(name, _)| name.clone()).collect()))
+			.flatten()
+	};
+	let node = with_field_values(node, &field_names, &toleranced);
+	without_field_spreads(node)
+}
+
+/// `class Display{density: dpi}`: a plain number given to a unit field, `Display(96)`, is `96 dpi` with a warning whose
+/// fix writes the unit (decision unit-field-plain-number); before lower_unit_words expands `dpi`
+pub(crate) fn lower_plain_field_numbers(program: Node) -> Node {
+	let unit_fields: HashMap<String, Vec<(String, String)>> = crate::class_methods::class_fields(&program)
+		.into_iter()
+		.filter(|(_, fields)| fields.iter().any(|(_, type_name)| is_unit_type(type_name)))
+		.collect();
+	if unit_fields.is_empty() {
+		return program;
+	}
+	let field_names = |class: &str| Some(unit_fields.get(class)?.iter().map(|(name, _)| name.clone()).collect());
+	let with_unit = |class: &str, field: &str, value: Node| {
+		let unit = unit_fields[class]
+			.iter()
+			.find(|(name, _)| name == field)
+			.map(|(_, unit)| unit.trim_end_matches(OPTIONAL_MARK));
+		match (unit.filter(|unit| is_unit_type(unit)), value.drop_meta()) {
+			(Some(unit), Node::Number(_)) => {
+				let number = value.serialize().trim().to_string();
+				let message = format!("{class}.{field} holds {unit}: write the unit, `{number} {unit}`");
+				let warning = crate::errors::diagnostic::Diagnostic::at(&value, message);
+				crate::errors::diagnostic::say(warning.offer(
+					"the field's unit",
+					number.clone(),
+					format!("{number} {unit}"),
+				));
+				crate::warp_parser::parse(&format!("{number} {unit}"))
+			}
+			_ => value,
+		}
+	};
+	with_field_values(program, &field_names, &with_unit)
+}
+
+/// `km`, `km/h`, and before lower_unit_words a unit word `dpi` (a word for px/inch)
+fn is_unit_type(type_name: &str) -> bool {
+	let unit = type_name.trim_end_matches(OPTIONAL_MARK);
+	field_units(unit).is_some() || crate::numbers::units::names_unit(unit)
+}
+
+/// `class Part{length: m ± 1 mm}` declares the plain unit `length: m`
+fn without_field_spreads(node: Node) -> Node {
 	match node {
 		Node::Type { name, body } => Node::Type {
 			name,
@@ -88,35 +143,46 @@ fn with_field_tolerances(node: Node, tolerances: &Tolerances) -> Node {
 				None => member,
 			})),
 		},
-		Node::List(items, Bracket::Round, separator) if items.first().and_then(class_tolerances).is_some() => {
-			let fields = class_tolerances(&items[0]).unwrap();
-			let items = items.into_iter().enumerate().map(|(index, item)| {
-				let tolerance = fields.iter().find(|(position, _, _)| index == position + 1);
-				let item = with_field_tolerances(item, tolerances);
-				tolerance.map_or(item.clone(), |(_, _, spread)| toleranced(item, spread))
+		other => other.map_children(without_field_spreads),
+	}
+}
+
+/// Each value given to a field of a class `fields_of` names the fields of, in a construction `Run(5 km)`, `Run(distance:
+/// 5 km)` or `Run{distance: 5 km}`, as `value_for(class, field, value)` makes it
+fn with_field_values(
+	node: Node,
+	fields_of: &dyn Fn(&str) -> Option<Vec<String>>,
+	value_for: &dyn Fn(&str, &str, Node) -> Node,
+) -> Node {
+	let walk = |child: Node| with_field_values(child, fields_of, value_for);
+	let class_fields = |class: &Node| Some((class.drop_meta().name(), fields_of(&class.drop_meta().name())?));
+	let named = |class: &str, fields: &[String], entry: Node| match entry.drop_meta() {
+		Node::Key(field, op @ (Op::Colon | Op::None), value) if fields.contains(&field.drop_meta().name()) => {
+			let value = value_for(class, &field.drop_meta().name(), walk(*value.clone()));
+			Some(Node::Key(field.clone(), *op, Box::new(value)))
+		}
+		_ => None,
+	};
+	match node {
+		Node::List(items, Bracket::Round, separator) if items.first().and_then(class_fields).is_some() => {
+			let (class, fields) = items.first().and_then(class_fields).unwrap();
+			let items = items.into_iter().enumerate().map(|(index, item)| match index {
+				0 => item,
+				_ => named(&class, &fields, item.clone()).unwrap_or_else(|| match fields.get(index - 1) {
+					Some(field) if !item.is_empty_node() => value_for(&class, field, walk(item)),
+					_ => walk(item),
+				}),
 			});
 			Node::List(items.collect(), Bracket::Round, separator)
 		}
 		Node::Key(class, op @ (Op::Colon | Op::None), body)
-			if class_tolerances(&class).is_some() && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
+			if class_fields(&class).is_some() && matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) =>
 		{
-			let fields = class_tolerances(&class).unwrap();
-			let body = body.map_children(|entry| match entry.drop_meta() {
-				Node::Key(field, entry_op, value) => {
-					match fields.iter().find(|(_, name, _)| *name == field.drop_meta().name()) {
-						Some((_, _, spread)) => Node::Key(
-							field.clone(),
-							*entry_op,
-							Box::new(toleranced(with_field_tolerances(*value.clone(), tolerances), spread)),
-						),
-						None => with_field_tolerances(entry, tolerances),
-					}
-				}
-				_ => with_field_tolerances(entry, tolerances),
-			});
+			let (name, fields) = class_fields(&class).unwrap();
+			let body = body.map_children(|entry| named(&name, &fields, entry.clone()).unwrap_or_else(|| walk(entry)));
 			Node::Key(class, op, Box::new(body))
 		}
-		other => other.map_children(|child| with_field_tolerances(child, tolerances)),
+		other => other.map_children(walk),
 	}
 }
 
@@ -319,11 +385,26 @@ impl Inference {
 				lowered.push(argument.clone());
 				continue;
 			}
-			let (argument, given) = match self.infer(written_quantity(argument)) {
+			// `Run(distance: 5 km)`: a named argument has its field's signature
+			let named = match argument.drop_meta() {
+				Node::Key(name, Op::Colon, value) => {
+					fields.iter().find(|(field, _)| *field == name.drop_meta().name()).map(|field| (name, value, field))
+				}
+				_ => None,
+			};
+			let (written, field) = match named {
+				Some((_, value, field)) => (value.as_ref(), Some(field)),
+				None => (argument, fields.get(index)),
+			};
+			let (value, given) = match self.infer(written_quantity(written)) {
 				Ok(inferred) => inferred,
 				Err(stop) => return Some(Err(stop)),
 			};
-			if let Some((field, held)) = fields.get(index).filter(|(_, held)| *held != given) {
+			let argument = match named {
+				Some((name, ..)) => Node::Key(name.clone(), Op::Colon, Box::new(value)),
+				None => value,
+			};
+			if let Some((field, held)) = field.filter(|(_, held)| *held != given) {
 				return Some(Err(Stop::Error(format!(
 					"DimensionError: {class}.{field} holds {}, is given {}",
 					shown(held),
