@@ -180,7 +180,7 @@ every_sample_runs_without_a_compiler_error 15.6 s, test_upper_and_lower 14.9 s, 
   written into the executable; unchanged files skip it (the executable is newer).
 
 
-## Why samples/quicksort.warp's executable grew (card samples-quicksort, 2026-10-16)
+## Why samples/lists/quicksort.warp's executable grew (card samples-quicksort, 2026-10-16)
 
 No single commit: the wasm of the sample grew steadily, 21838 bytes at the tree-shaking commit 5dabc3882 (2026-10-09), 23785
 (10-11), 25472 (10-14), 26094 (10-15), 26436 (10-16), and the carried machine code with it (~45 KB → ~60 KB). Per function
