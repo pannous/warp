@@ -767,6 +767,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   default branch; a pin is `{repository: pannous/uniscript, version: 1.0.7}`.
 
 ## CLI, building and tests
+- gate-cuts (2026-10-16, user via the Integrator; notes/test_speed.md): each sample runs once in the gate:
+  test_playground_samples checks the playground menu (no error at all), test_samples_run_cleanly only the samples
+  outside it (no compiler error). The self-hosting twins check every 4th source in the gate and all sources in the
+  nightly run (tests/nightly.sh, cron 03:10 on origin/main; a failure files a card).
 - cli-words (2026-10-15, user): warp's own command options are words, never `--flags` ("we don't like this minus
   minus style, ever"), e.g. `warp format check …`, `warp format hash-comments …`; the style guide says so. Card
   cli-words migrates the existing --fuel/--exe/--strict/… (older `--x` mentions below are superseded by it).
@@ -783,6 +787,16 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   a list word, so an object or class with its own member `first` (`p = {first: 1}; p.first` → 1) or a class method
   `first` is the more specific match and wins. Redefining a library word for its own type (an extension changing
   `first` for lists) is not allowed, a loud error. No extra override keyword is needed for that.
+- dispatch-untyped-library-words (2026-10-16, user; card one-dispatch): an untyped program function named like a
+  library word (`first(x) := x * 2`) covers every value the library word doesn't: the library's `first(list)` is
+  more specific, so `first(3)` → 6 but `first([1,2])` → 1, with a hint that first of a list stays the library word.
+- type-words-reserved (2026-10-16, user; card one-dispatch): every type word is reserved as a function name,
+  `double(x) := …` and `hex(x) := …` alike; the error offers "name it to_double".
+- field-forms (2026-10-16, user; card one-dispatch): plain fields keep only `.` and `of` (read, and set with
+  `b.w = 5` / `w of b = 5`); `w(b)`, `b.w(5)` and `w(b, 5)` stay errors for a plain field. Only properties (accessor
+  definitions) answer every call form.
+- is-union (2026-10-16, implied by union-return; card int-text): after `is`, `int or text` is a type, so
+  `v is int or text` means `v is (int or text)`.
 - fuel-metering (2026-10-16, user; card fuel-metering): runaway loops are stopped by the epoch timer with a time
   limit by default (about 1–5% overhead, stops at a slightly different step each run). Fuel, the exact step budget
   that cost 4.4× on calls (40M calls: 218 ms against 49 ms), runs only on request: `use fuel`, the CLI word
