@@ -100,3 +100,16 @@ random_int() := (random_below(4294967296) - 2147483648) * 4294967296 + random_be
 random_bool() := random_below(2) == 1
 // a Unicode scalar value: the surrogates 0xD800…0xDFFF are no characters
 random_codepoint() := { n = random_below(1112064); if n >= 55296 then n = n + 2048; n as codepoint }
+// the paint window's size (the playground: the paintings' frame), system values, so `whenever window.width > 800 {…}`
+// listens; written, the window resizes
+window.width := window_width
+window.width(new_width) := set_system_value("window_width", new_width)
+window.height := window_height
+window.height(new_height) := set_system_value("window_height", new_height)
+// a program cannot resize the display: set window.width or canvas.width instead
+display.width := display_width
+display.height := display_height
+// the device pixels per inch, a quantity in dpi that turns lengths into px, `3 cm * display.dpi`; a program sets it in
+// dpi, `display.dpi = 300 dpi`
+display.dpi := display_dpi * 1dpi
+display.dpi(density) := set_system_value("display_dpi", density / 1dpi)
