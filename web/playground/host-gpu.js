@@ -93,26 +93,37 @@ async function gpuComputedFloats({ shader, numbers, workgroups, first = 0, sourc
 	const keptBytes = (kept?.count ?? 0) * Float32Array.BYTES_PER_ELEMENT;
 	const size = keptBytes + input.byteLength;
 	const offset = first * Float32Array.BYTES_PER_ELEMENT;
-	const usage = GPUBufferUsage;
-	const storage = device.createBuffer({ size, usage: usage.STORAGE | usage.COPY_SRC | usage.COPY_DST });
-	const readback = device.createBuffer({ size: size - offset, usage: usage.MAP_READ | usage.COPY_DST });
+	const storage = storageBuffer(device, size);
+	const readback = readbackBuffer(device, size - offset);
 	if (input.length) device.queue.writeBuffer(storage, keptBytes, input);
-	const module = await gpuModule(device, shader);
-	device.pushErrorScope("validation");
-	const pipeline = compiledOnce(compiledPipelines, shader, () => device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: GPU_ENTRY_POINT } }));
-	const bindings = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [{ binding: GPU_BINDING, resource: { buffer: storage } }] });
-	const encoder = device.createCommandEncoder();
-	if (kept) encoder.copyBufferToBuffer(kept.storage, 0, storage, 0, keptBytes);
-	const pass = encoder.beginComputePass();
-	pass.setPipeline(pipeline);
-	pass.setBindGroup(0, bindings);
-	pass.dispatchWorkgroups(workgroups);
-	pass.end();
+	const copyKept = encoder => kept && encoder.copyBufferToBuffer(kept.storage, 0, storage, 0, keptBytes);
+	const encoder = await encodedComputePass(device, shader, workgroups, [{ binding: GPU_BINDING, buffer: storage }], copyKept);
 	encoder.copyBufferToBuffer(storage, offset, readback, 0, size - offset);
 	const floats = new Elements(await gpuReadBack(device, encoder, readback));
 	if (keep === undefined) storage.destroy();
 	else keepBuffer(keep.block, { storage, count: keep.count });
 	return floats;
+}
+
+const storageBuffer = (device, size) => device.createBuffer({ size, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
+const readbackBuffer = (device, size) => device.createBuffer({ size, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+
+// one pass of the compute shader over the buffers bound as [{binding, buffer}], after `before(encoder)`'s copies;
+// the encoder, for the copies that read the results back
+async function encodedComputePass(device, shader, workgroups, bound, before = () => {}) {
+	const module = await gpuModule(device, shader);
+	device.pushErrorScope("validation");
+	const pipeline = compiledOnce(compiledPipelines, shader, () => device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: GPU_ENTRY_POINT } }));
+	const entries = bound.map(({ binding, buffer }) => ({ binding, resource: { buffer } }));
+	const bindings = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries });
+	const encoder = device.createCommandEncoder();
+	before(encoder);
+	const pass = encoder.beginComputePass();
+	pass.setPipeline(pipeline);
+	pass.setBindGroup(0, bindings);
+	pass.dispatchWorkgroups(workgroups);
+	pass.end();
+	return encoder;
 }
 
 // an earlier run's buffer for the same block address is stale; the oldest goes beyond MOST_KEPT
@@ -208,7 +219,7 @@ async function gpuRendered({ shader, width, height, values, canvas }) {
 		encoder.copyTextureToTexture({ texture: image }, { texture: canvasImage }, [Math.min(width, canvasImage.width), Math.min(height, canvasImage.height)]);
 	if (painted) return gpuSubmitted(device, encoder).finally(() => uniform?.buffer?.destroy());
 	const rowBytes = Math.ceil(width * PIXEL_BYTES / ROW_ALIGNMENT) * ROW_ALIGNMENT;
-	const readback = device.createBuffer({ size: rowBytes * height, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+	const readback = readbackBuffer(device, rowBytes * height);
 	encoder.copyTextureToBuffer({ texture: image }, { buffer: readback, bytesPerRow: rowBytes, rowsPerImage: height }, [width, height]);
 	const bytes = new Uint8Array(await gpuReadBack(device, encoder, readback));
 	if (!readsPrevious) image.destroy();
@@ -378,23 +389,14 @@ async function gpuComputedArrays({ shader, arrays, workgroups }) {
 		return { ...array, numbers: new array.Elements(numbers) };
 	});
 	const device = await theGpuDevice();
-	const usage = GPUBufferUsage;
 	const storages = given.map(({ numbers }) => {
-		const storage = device.createBuffer({ size: numbers.byteLength, usage: usage.STORAGE | usage.COPY_SRC | usage.COPY_DST });
+		const storage = storageBuffer(device, numbers.byteLength);
 		device.queue.writeBuffer(storage, 0, numbers);
 		return storage;
 	});
-	const readbacks = storages.map(storage => device.createBuffer({ size: storage.size, usage: usage.MAP_READ | usage.COPY_DST }));
-	const module = await gpuModule(device, shader);
-	device.pushErrorScope("validation");
-	const pipeline = compiledOnce(compiledPipelines, shader, () => device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: GPU_ENTRY_POINT } }));
-	const bindings = device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: given.map(({ binding }, at) => ({ binding, resource: { buffer: storages[at] } })) });
-	const encoder = device.createCommandEncoder();
-	const pass = encoder.beginComputePass();
-	pass.setPipeline(pipeline);
-	pass.setBindGroup(0, bindings);
-	pass.dispatchWorkgroups(workgroups);
-	pass.end();
+	const readbacks = storages.map(storage => readbackBuffer(device, storage.size));
+	const bound = given.map(({ binding }, at) => ({ binding, buffer: storages[at] }));
+	const encoder = await encodedComputePass(device, shader, workgroups, bound);
 	storages.forEach((storage, at) => encoder.copyBufferToBuffer(storage, 0, readbacks[at], 0, storage.size));
 	const left = await gpuReadBacks(device, encoder, readbacks).finally(() => storages.forEach(storage => storage.destroy()));
 	return Object.fromEntries(given.map(({ name, Elements }, at) => [name, Array.from(new Elements(left[at]))]));
