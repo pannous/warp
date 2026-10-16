@@ -490,6 +490,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - #6 data as scope, warning when kebab parts are also variables. P81 the kebab-key warning offers three fixes.
 - stored-visits: `stored visits default 0`; `stored visits = 0` works with a note.
 - Ranges (2026-10-09): `r: 1..n` is the range itself, same as `r = 1..n`. `upto` excludes the end with a hint.
+- range-in-brackets (2026-10-16 night, Interviewer's decision on the user's behalf, to present; undoable; card
+  range-spread; asked by the reviewer): a range written as a literal item inside [ ] spreads into the list, as in
+  Haskell: `[1..3]` = [1 2], `[0, 1..3]` = [0 1 2], `[1...3]` = [1 2 3]. `[(1..3)]` or a variable `[r]` keeps one
+  range item. (Python's [range(1,3)] and Rust's vec![1..3] hold one range, but nobody writes [1..3] meaning that.)
 
 ## Functions and calls
 - random-forms (2026-10-15 night, Interviewer's decision on the user's behalf, to present 2026-10-16; undoable; card
@@ -709,6 +713,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - cli-words (2026-10-15, user): warp's own command options are words, never `--flags` ("we don't like this minus
   minus style, ever"), e.g. `warp format check …`, `warp format hash-comments …`; the style guide says so. Card
   cli-words migrates the existing --fuel/--exe/--strict/… (older `--x` mentions below are superseded by it).
+- fast-math (2026-10-16, warp-types default; card switch-rebinds; undoable): the polynomial math module is
+  `use fast_math` (`fast` is already an alias of float); the CLI switch is the word `warp fast app.warp`.
 - unix-words (2026-10-15, user): `use script` has shell words with warp results: ls pwd cd cat echo mkdir cp mv touch
   head tail wc grep which rm, plus find, size/info (du/stat), sort/uniq, open (native), curl/wget as aliases of
   fetch/download. `export a=b` clashes with the WebAssembly export, so it's left out. Not now: basename/dirname,

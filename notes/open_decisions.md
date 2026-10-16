@@ -15,6 +15,7 @@ Present each in the morning popup batch (keep / change), then move it to decisio
 - dimension-bridges (px ↔ length through display.dpi): see decisions.md dimensions-units.
 - letters: see decisions.md (Text).
 - json-exactness (big ints exact digits, fractions float + warning): see decisions.md (Text).
+- range-in-brackets (`[1..3]` spreads to [1 2], `[(1..3)]` keeps one range): see decisions.md (Ranges).
 - fail-effect (raises, maybe-zero division, library Errors; not indexing/casts): see decisions.md (Classes… P230).
 - foreign-signature (`sin(x: float): float from 'm'` in lib/math.warp): see decisions.md (Modules).
 - beautify-preview (diff + "apply? y/n" in a terminal, `beautify yes` for scripts): see decisions.md warp-format.
