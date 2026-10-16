@@ -29,7 +29,7 @@ def rewritten(text, folders):
 def rewrite_checkout(checkout, folders):
 	listed = subprocess.run(["git", "-C", checkout, "ls-files"], capture_output=True, text=True, check=True).stdout
 	for path in filter(None, listed.split("\n")):
-		if path.startswith(("samples/golf/", "samples/wit/")):
+		if path.startswith(("samples/golf/", "samples/wit/")) or path == "probes/samples_paths.py":
 			continue
 		full = os.path.join(checkout, path)
 		try:
