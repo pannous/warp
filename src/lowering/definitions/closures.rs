@@ -995,7 +995,7 @@ fn changed_capture(body: &Node, captured: &[String]) -> Option<Node> {
 /// The helpers `closure_call_n(f, a1…an)` the program calls, as user functions: a closure and n values of any kind (Data)
 pub fn register_closure_calls(context: &mut Context, program: &Node) {
 	context.closure_targets = closure_targets(program);
-	context.closure_variable_targets = settle_closure_variable_targets(context, program);
+	context.closure_variable_targets = settle_closure_variable_targets(context, program).into();
 	program.visit(&mut |node| {
 		let Node::List(items, Bracket::Round, Separator::None) = node else {
 			return;

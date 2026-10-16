@@ -10,7 +10,7 @@ use crate::ffi::FfiSignature;
 use crate::node::Node;
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 const SWITCH_VARIABLE: &str = "WARP_ANALYSIS_CACHE";
@@ -26,7 +26,7 @@ pub struct Analysis {
 	enclosing_functions: HashMap<String, String>,
 	parameter_conflicts: Vec<String>,
 	closure_targets: Vec<(String, usize)>,
-	closure_variable_targets: HashMap<String, HashSet<String>>,
+	closure_variable_targets: crate::analyzer::ClosureTargets,
 }
 
 impl Analysis {
