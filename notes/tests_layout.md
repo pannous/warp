@@ -85,6 +85,7 @@ its text moves into tests/fixtures/parser_corpus/<folder>.warp (snippets concate
   undecided), effects_last, fail_effects (card print-effects), functions/deep_recursion (stack size),
   functions/fade_unit_argument (sound), function_objects/print_parse (exploratory).
 - algo/ (549 bisection snippets, no expected values; samples/<algo>.warp are the tests): kept.
-- matching (consolidate-matching): 28 of probes/matching/ deleted, their cases asserted in tests/control/test_match_*,
+- matching (consolidate-matching): 25 of probes/matching/ deleted, their cases asserted in tests/control/test_match_*,
   test_tree_find, test_parameter_patterns, test_plain_enum. Kept: definition_cases (its diagnostic is cut,
-  cleanup-cuts-2), gap_feeding (phrase calls parked), tree_patterns (design examples), inventory.sh (spec inventory).
+  cleanup-cuts-2), gap_feeding (phrase calls parked), tree_patterns (design examples), inventory.sh (spec inventory),
+  enum_int_fix, parameter_patterns, variant_equality (executable: user-touched, never deleted).
