@@ -269,7 +269,7 @@ Seven constants spell "it" (card duplicate-constants).
 
 ### Duplicate constants (card duplicate-constants, split-emitter, 2026-10-14)
 
-Finder: `probes/duplicate_constants.py` (constants holding the same text or word list); merger:
+Finder: `probes/cleanup/duplicate_constants.py` (constants holding the same text or word list); merger:
 `scripts/merge_constant.py [--home <file>] NAME file:LOCAL…` (spec of the first round: data/split-emitter/merges.txt).
 - Merged into src/words.rs (branch words-table): `IMPLICIT_PARAMETER` (seven "it"s) and 36 language words: FOR IN EACH
   COUNT RETURN OF MAP GLOBAL ANY ADD ALL AT CHR DELETE DIR DOT ERROR FLOAT GO IS IS_ERROR LET LIST NUMBER ON PAIR POP

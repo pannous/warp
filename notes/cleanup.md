@@ -4,7 +4,7 @@ Repo-wide leftovers: oversized files (cleanup-big-files), never-called functions
 fmt/clippy drift (cargo-fmt, clippy-reports), probe-script proliferation (cleanup-probe-scripts), stale notes
 (cleanup-stale-notes).
 
-Dead scan (cleanup-dead-scan, 2026-10-13, probes/dead_scan.py): 15 never-used pub functions removed, unused in the default,
+Dead scan (cleanup-dead-scan, 2026-10-13, probes/cleanup/dead_scan.py): 15 never-used pub functions removed, unused in the default,
 all-features and wasm32 builds alike. Removed: TypeManager len/is_empty/next_type_idx/user_type_indices_mut,
 StringTable next_offset/table, ImportManager is_empty, Scope child, Real is_exact, Signature merge, Node get_op/from_json,
 text_node/error_node/key_op. Kept: function.rs builders, set_hint_file and create_host_linker (in-file unit tests or

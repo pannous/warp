@@ -1,5 +1,5 @@
 #!/bin/zsh
-# usage: r3-meta_fuel.sh <binary> <program>: the fuel (wasm steps) the program needs, by binary search
+# usage: probes/fuel_steps.sh <binary> <program>: the fuel (wasm steps) the program needs, by binary search
 lo=1; hi=2000000000
 while (( hi - lo > hi / 1000 )); do
 	mid=$(( (lo + hi) / 2 ))
