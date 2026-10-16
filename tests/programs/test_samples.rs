@@ -199,3 +199,8 @@ fn test_kitchensink() {
 fn test_y_combinator() {
 	is!("samples/functions/y_combinator.warp", 6765);
 }
+
+#[test] // one-noun phrase calls and `as`-picked definitions stay after park-phrases (card samples-phrases)
+fn test_phrases() {
+	is!("samples/hello/phrases.warp", "<w:t>hello MS</w:t>");
+}
