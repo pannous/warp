@@ -133,11 +133,17 @@ fn statements_of(node: Node) -> Vec<Node> {
 
 /// The words starting a program's unit lines, each with how a refused one is written right: `unit furlong := 201.168 m`
 const SI_WORD: &str = "SI";
+const PREFIX_LINE_WORD: &str = "prefix";
+const NAME_LINE_WORD: &str = "name";
+const POWER_OF_TEN: &str = "10^";
 const DIMENSION_WORD: &str = "dimension";
 const UNIT_LINE_WORDS: [(&str, &str); 3] = [
 	("unit", "the right side is no amount of a known unit (`unit furlong := 201.168 m`)"),
-	("prefix", "a prefix is a power of ten that keeps every unit whole nanometers, nanoseconds … (`prefix k := 10^3`)"),
-	("name", "the right side is no unit (`name furlong := fur`)"),
+	(
+		PREFIX_LINE_WORD,
+		"a prefix is a power of ten that keeps every unit whole nanometers, nanoseconds … (`prefix k := 10^3`)",
+	),
+	(NAME_LINE_WORD, "the right side is no unit (`name furlong := fur`)"),
 ];
 
 /// The program without its unit lines, which definitions.rs read before it was parsed (program_unit_lines); Err for a
@@ -149,6 +155,8 @@ pub fn without_unit_lines(program: Node) -> Result<Node, Node> {
 				let word =
 					UNIT_LINE_WORDS.iter().find(|(line_word, _)| word.drop_meta().symbol_name() == Some(line_word))?;
 				match definition.drop_meta() {
+					// `name p := p.first` is a function of a parameter p: a line is a unit line where its right side reads as one
+					Node::Key(_, Op::Define, right) if !reads_as_unit_line(word.0, right) => None,
 					// `unit °C as K := …` names °C
 					Node::Key(name, Op::Define, _) => match name.drop_meta() {
 						Node::Key(name, Op::As, _) => Some((word, name.drop_meta().serialize())),
@@ -178,6 +186,19 @@ pub fn without_unit_lines(program: Node) -> Result<Node, Node> {
 	}
 	let kept: Vec<Node> = statements.into_iter().filter(|statement| unit_line(statement).is_none()).collect();
 	Ok(Node::List(kept, Bracket::None, Separator::Newline))
+}
+
+/// The right side of a program's `unit`, `prefix` or `name` line as one reads: an amount of a unit (a wrong one is
+/// reported), a power of ten `10^3`, a unit word; anything else leaves the line a definition (`prefix s := s#1`)
+fn reads_as_unit_line(line_word: &str, right: &Node) -> bool {
+	match line_word {
+		PREFIX_LINE_WORD => {
+			let written: String = right.serialize().split_whitespace().collect();
+			written.strip_prefix(POWER_OF_TEN).is_some_and(|exponent| exponent.parse::<i32>().is_ok())
+		}
+		NAME_LINE_WORD => right.drop_meta().symbol_name().is_some_and(names_unit),
+		_ => true,
+	}
 }
 
 /// `SI dimension length meter`: a line only lib/units.warp writes

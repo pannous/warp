@@ -28,6 +28,12 @@ fn a_program_writes_its_own_prefix_and_name_lines() {
 	is!("prefix x := 10^4\n3 xm in km == 30 km", true);
 	is!("unit fur := 201 m\nname furlong := fur\n3 fur in furlongs == 3 fur", true);
 	fails_with("prefix T := 10^12\n3 Tm", "prefix T: a prefix is a power of ten");
-	fails_with("name foo := bar\n1", "name foo: the right side is no unit");
 	fails_with("SI dimension length meter\n1", "dimensions are lib/units.warp's");
+}
+
+// reviewer veto: `name` and `prefix` stay function names; a line is a unit line where its right side reads as one
+#[test]
+fn a_definition_named_name_or_prefix_stays_a_definition() {
+	is!("name p := p.first; name {first: \"Bo\"}", "Bo");
+	is!("prefix s := s#1; prefix \"ab\"", 'a');
 }
