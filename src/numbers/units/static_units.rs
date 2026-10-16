@@ -282,6 +282,11 @@ pub(crate) fn take_result_units() -> Option<ResultUnits> {
 	crate::compiler::compile_context::change(|context| context.result_units.take())
 }
 
+/// Does the last lowered program's result have units, which only a module's `warp.meta` carries
+pub(crate) fn has_result_units() -> bool {
+	crate::compiler::compile_context::read(|context| context.result_units.is_some())
+}
+
 /// The entry of the module's `warp.meta` section (meta_section.rs) naming the units of `main`'s result (`km:1 h:-1`), or
 /// of its result's fields (`dist=km:1;time=s:1`): a module that returns SI amounts says which quantities they are, and
 /// running it reads them back (wasm_reader)
