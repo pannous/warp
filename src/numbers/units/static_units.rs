@@ -744,7 +744,7 @@ pub(super) fn with_unit_written(amount: &Node, unit: &str) -> String {
 	let text = amount.serialize().trim().to_string();
 	match amount.drop_meta() {
 		_ if is_number_literal(amount) => format!("{text} {unit}"),
-		Node::Key(_, Op::Add | Op::Sub | Op::Mul | Op::Div, _) => format!("({text}) * 1 {unit}"),
+		Node::Key(_, op, _) if *op != Op::Dot => format!("({text}) * 1 {unit}"),
 		_ => format!("{text} * 1 {unit}"),
 	}
 }

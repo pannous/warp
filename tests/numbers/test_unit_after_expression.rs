@@ -25,3 +25,10 @@ fn the_advised_forms_work() {
 	assert_eq!(shown("-3 km"), "-3km");
 	assert_eq!(shown("(5) km"), "5km");
 }
+
+// reviewer: every operator but `.` keeps its parentheses in the advice, so `* 1 km` multiplies the whole amount
+#[test]
+fn the_advice_parenthesizes_any_operator() {
+	fails_with(&format!("{SETUP}\ny = (a ?? b) km\ny"), "write (a??b) * 1 km");
+	assert_eq!(shown("(a ?? b) * 1 km"), "1km");
+}
