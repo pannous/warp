@@ -51,3 +51,12 @@ fn an_overloaded_name_called_on_a_receiver_is_the_variant_counting_it() {
 	is!("class P{name: text}\nf(it: P) := it.name\nf(it: P, v) := { it.name = v; it }\np = P(\"ab\")\np.f = \"cd\"\np.f", "cd");
 	is!("class P{f: int}\nf(x) := x * 2\nf(x, y) := x + y\nP(5).f", 5);
 }
+
+// card point-label (reviewer veto): only an instance of the class the setter takes sets through it; a map's field
+// named like an overloaded function is the map's own
+#[test]
+fn a_map_field_named_like_an_overloaded_function_is_set_on_the_map() {
+	is!("pick(a, b) := b\npick(a) := a\nm = {pick: 1}\nm.pick = 5\nm.pick", 5);
+	is!("pick(a, b) := b\npick(a) := a\nm = {pick: 1, other: 2}\nm.pick = 5\nm.other", 2);
+	is!("pick(a, b) := b\npick(a) := a\nm = {pick: 1}\nm.pick", 1);
+}

@@ -445,52 +445,112 @@ pub fn lower_arity_overloads(node: Node) -> Node {
 		return node;
 	}
 	let called_parameters = called_parameters(&node);
-	let fields: HashSet<String> =
-		crate::lowering::class_methods::class_fields(&node).into_values().flatten().map(|(field, _)| field).collect();
-	let node = method_variants(node, &arities, &fields);
+	let class_fields = crate::lowering::class_methods::class_fields(&node);
+	let classes: Vec<String> = class_fields.keys().cloned().collect();
+	let node = MethodVariants {
+		arities: &arities,
+		fields: class_fields.into_values().flatten().map(|(field, _)| field).chain(map_keys(&node)).collect(),
+		setter_classes: setter_classes(&node),
+		instances: crate::lowering::class_methods::instance_classes(&node, &classes),
+	}
+	.rewrite(node);
 	let node = ArityOverloads { arities: arities.clone() }.rewrite(node);
 	passed_variants(node, &arities, &called_parameters)
 }
 
 /// `p.label`, `p.label(x)` and `p.label = v` of label overloaded by arity: the variant taking the receiver too, label·1,
 /// label·2 (read `label·2(p, x)`, set `p = label·2(p, v)` by library_words), unless a class has a field label
-fn method_variants(node: Node, arities: &HashMap<String, Vec<Arity>>, fields: &HashSet<String>) -> Node {
-	let variant = |name: &str, arguments: usize| {
-		let fitting: Vec<&Arity> = arities.get(name)?.iter().filter(|arity| arity.accepts(arguments)).collect();
+struct MethodVariants<'a> {
+	arities: &'a HashMap<String, Vec<Arity>>,
+	fields: HashSet<String>,
+	/// setter name → the class its two-parameter variant takes first: `label` of `label(it: Point, v)`
+	setter_classes: HashMap<String, String>,
+	/// variable → the class of the instance it holds
+	instances: HashMap<String, String>,
+}
+
+impl MethodVariants<'_> {
+	fn variant(&self, name: &str, arguments: usize) -> Option<String> {
+		let fitting: Vec<&Arity> = self.arities.get(name)?.iter().filter(|arity| arity.accepts(arguments)).collect();
 		match fitting.as_slice() {
-			[arity] if !fields.contains(name) => Some(arity_variant(name, **arity)),
+			[arity] if !self.fields.contains(name) => Some(arity_variant(name, **arity)),
 			_ => None,
 		}
-	};
-	let recurse = |child: Node| method_variants(child, arities, fields);
-	let renamed = |member: Node, arguments: usize| match member.drop_meta() {
-		Node::Symbol(name) => variant(name, arguments).map(Node::Symbol),
-		_ => None,
-	};
-	match node {
-		Node::Key(target, Op::Assign, value) => match *target {
-			Node::Key(receiver, Op::Dot, member) if renamed(member.as_ref().clone(), 2).is_some() => {
-				let member = renamed(*member, 2).expect("a variant of two");
-				key(key(recurse(*receiver), Op::Dot, member), Op::Assign, recurse(*value))
-			}
-			target => key(recurse(target), Op::Assign, recurse(*value)),
-		},
-		Node::Key(receiver, Op::Dot, member) => {
-			let member = match member.drop_meta().clone() {
-				Node::List(items, Bracket::Round, separator) if !items.is_empty() => {
-					let arguments = items.len();
-					let mut items: Vec<Node> = items.into_iter().map(recurse).collect();
-					if let Some(head) = renamed(items[0].clone(), arguments) {
-						items[0] = head;
-					}
-					Node::List(items, Bracket::Round, separator)
-				}
-				symbol => renamed(symbol, 1).unwrap_or(*member),
-			};
-			key(recurse(*receiver), Op::Dot, member)
-		}
-		other => children_rewritten(other, recurse),
 	}
+
+	fn renamed(&self, member: &Node, arguments: usize) -> Option<Node> {
+		match member.drop_meta() {
+			Node::Symbol(name) => self.variant(name, arguments).map(Node::Symbol),
+			_ => None,
+		}
+	}
+
+	/// `p.label = v` sets through the setter only when p holds an instance of the class the setter takes: a map's
+	/// `m.label = v` stays the map's own field
+	fn setter(&self, receiver: &Node, member: &Node) -> Option<Node> {
+		let class = self.setter_classes.get(&member.drop_meta().name())?;
+		let held = self.instances.get(receiver.drop_meta().symbol_name()?)?;
+		(held == class).then(|| self.renamed(member, 2)).flatten()
+	}
+
+	fn rewrite(&self, node: Node) -> Node {
+		let recurse = |child: Node| self.rewrite(child);
+		match node {
+			Node::Key(target, Op::Assign, value) => match *target {
+				Node::Key(receiver, Op::Dot, member) if self.setter(&receiver, &member).is_some() => {
+					let member = self.setter(&receiver, &member).expect("guarded");
+					key(key(recurse(*receiver), Op::Dot, member), Op::Assign, recurse(*value))
+				}
+				// `m.pick = v` without a setter sets the field itself, no getter call
+				Node::Key(receiver, Op::Dot, member) => {
+					key(key(recurse(*receiver), Op::Dot, *member), Op::Assign, recurse(*value))
+				}
+				target => key(recurse(target), Op::Assign, recurse(*value)),
+			},
+			Node::Key(receiver, Op::Dot, member) => {
+				let member = match member.drop_meta().clone() {
+					Node::List(items, Bracket::Round, separator) if !items.is_empty() => {
+						let arguments = items.len();
+						let mut items: Vec<Node> = items.into_iter().map(recurse).collect();
+						if let Some(head) = self.renamed(&items[0], arguments) {
+							items[0] = head;
+						}
+						Node::List(items, Bracket::Round, separator)
+					}
+					symbol => self.renamed(&symbol, 1).unwrap_or(*member),
+				};
+				key(recurse(*receiver), Op::Dot, member)
+			}
+			other => children_rewritten(other, recurse),
+		}
+	}
+}
+
+/// The keys of the program's map literals, `pick` of `{pick: 1}`: a field like a class's, read and set on the map
+fn map_keys(node: &Node) -> Vec<String> {
+	let mut keys = vec![];
+	node.visit(&mut |part| {
+		if let Node::List(items, Bracket::Curly, _) = part {
+			keys.extend(items.iter().filter_map(|item| match item.drop_meta() {
+				Node::Key(name, Op::Colon, _) => name.drop_meta().symbol_name().map(str::to_string),
+				_ => None,
+			}));
+		}
+	});
+	keys
+}
+
+/// name → the class the first parameter of its two-parameter definition is typed with: `f(it: P, v) := …`
+fn setter_classes(node: &Node) -> HashMap<String, String> {
+	let mut classes = HashMap::new();
+	each_definition(node, &mut |definition| {
+		if let [name, receiver, _] = definition.head {
+			if let Node::Key(_, Op::Colon, class) = receiver.drop_meta() {
+				classes.insert(name.name(), class.drop_meta().name());
+			}
+		}
+	});
+	classes
 }
 
 /// (function, parameter index) → how many arguments the function's body calls that parameter with: 0 of
