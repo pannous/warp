@@ -87,3 +87,12 @@ fn test_a_hyphen_inside_a_name_leaves_the_rest_of_the_line_formatted() {
 	assert_eq!(formatted("my-var = 3\nprint my-var+1\n"), "my-var = 3\nprint my-var + 1\n");
 	assert_eq!(formatted("f(o, b) := {x=(o-b+13)%26+b; x}\n"), "f(o, b) := {x = (o-b + 13) % 26 + b; x}\n");
 }
+
+// card format-ternary: the ternary's `?` and `:` are spaced, nested ones too; an optional type and a key's colon stay
+#[test]
+fn test_ternary_spaced() {
+	assert_eq!(formatted("b = o<97?65: 97\n"), "b = o < 97 ? 65 : 97\n");
+	assert_eq!(formatted("c = x>0?1:x<0?-1:0\n"), "c = x > 0 ? 1 : x < 0 ? -1 : 0\n");
+	let kept = "m = {a: 1}\n";
+	assert_eq!(formatted(kept), kept);
+}

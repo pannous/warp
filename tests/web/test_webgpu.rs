@@ -1,5 +1,6 @@
 // card web-apis (WebGPU): gpu_compute(shader, numbers, workgroups) runs a WGSL compute shader over the numbers in the
 // browser (web/playground/host-gpu.js, on a task Worker) and natively (src/graphics/gpu.rs, wgpu) and gives back what it left
+use crate::is;
 use warp::wasm_emitter::eval;
 use warp::Node;
 
@@ -49,6 +50,18 @@ fn a_render_shader_that_does_not_compile_says_where() {
 		matches!(&failed, Node::Error(message) if message.to_string().contains("gpu_render") && message.to_string().contains("1:")),
 		"{failed:?}"
 	);
+}
+
+// card wgsl-error: a shader's error is the program's to catch, also in a function called inside the `try`
+#[test]
+fn a_shader_error_is_caught_by_try() {
+	let caught = eval(
+		"bad = \"@fragment fn main( {\"\ndraw() := gpu_render(bad, 2, 2)\ntry { draw() } catch e { \"caught ${e}\" }",
+	);
+	assert!(caught.to_string().starts_with("caught gpu_render: "), "{caught:?}");
+	let caught = eval("try { gpu_compute(\"fn main( {\", [1.0], 1) } catch e { \"caught ${e}\" }");
+	assert!(caught.to_string().starts_with("caught gpu_compute: "), "{caught:?}");
+	is!("try gpu_render(\"@fragment fn main( {\", 2, 2) else 7", 7);
 }
 
 // gpu_render's values: a map of numbers (f32) and lists of two to four numbers (vec2f…vec4f) the shader reads as

@@ -1,5 +1,6 @@
 //! Class fields typed with a unit (card unit-fields): `class Run{distance: km}` holds its amount like any quantity, a
-//! value of another quantity or a plain number is a DimensionError
+//! value of another quantity is a DimensionError, a plain number takes the field's unit with a warning (user decision
+//! unit-field-plain-number)
 use crate::common::fails_with;
 use warp::wasm_emitter::eval;
 
@@ -17,8 +18,8 @@ fn a_unit_field_holds_a_quantity() {
 
 #[test]
 fn a_unit_field_refuses_another_quantity_or_a_plain_number() {
-	fails_with(&format!("{RUN}\nRun(5 s, \"x\").distance"), "Run.distance holds km");
-	fails_with(&format!("{RUN}\nRun(5, \"x\").distance"), "Run.distance holds km");
+	fails_with(&format!("{RUN}\nRun(5 s, \"x\").distance"), "Run.distance holds m");
+	assert_eq!(shown("Run(5, \"x\").distance"), "5km");
 }
 
 #[test]

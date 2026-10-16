@@ -1,6 +1,6 @@
 //! A unit after a variable is no quantity, units bind only after a number (notes/decisions.md): a constructor refusing
-//! `D(n inch)` names the way that works, `n * 1 inch` (card diagonal-holds)
-use crate::common::fails_with;
+//! `D(n inch)` names the way that works, `n * 1 inch` (cards diagonal-holds, decisions-md)
+use crate::common::{fails_with, warnings_of};
 use warp::wasm_emitter::eval;
 
 const DISPLAY: &str = "class D{diagonal: inch}\nn = 96";
@@ -22,7 +22,8 @@ fn a_unit_after_a_variable_holding_a_number_is_refused_everywhere() {
 }
 
 #[test]
-fn a_unit_field_error_names_the_unit_the_field_is_written_in() {
-	fails_with(&format!("{DISPLAY}\nD(5)"), "D.diagonal holds inch, is given a plain number");
-	fails_with(&format!("{DISPLAY}\nd = D(1 inch)\nd.diagonal = 3 s"), "d.diagonal holds inch, is given s");
+fn a_plain_variable_for_a_unit_field_suggests_the_multiplication() {
+	let (value, warnings) = warnings_of(&format!("{DISPLAY}\nD(n).diagonal"));
+	assert_eq!(value.serialize().trim(), "96inch");
+	assert!(warnings.iter().any(|warning| warning.contains("write the unit, `n * 1 inch`")), "{warnings:?}");
 }

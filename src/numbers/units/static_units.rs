@@ -32,7 +32,7 @@ use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use std::collections::{HashMap, HashSet};
 pub(crate) use unit_fields::unit_type;
-pub(crate) use unit_fields::{lower_field_tolerances, si_quantity};
+pub(crate) use unit_fields::{lower_field_tolerances, remember_field_unit_words, si_quantity};
 
 const LOOP_WORDS: [&str; 2] = ["for", "while"];
 /// `speed·u0`: a function specialised for one unit signature of its arguments
@@ -226,7 +226,7 @@ impl Inference {
 		let written = written_factors(program, &classes);
 		let mut temperatures: Vec<&'static Unit> = vec![];
 		for factor in &written {
-			if factor.unit.dimension == Dimension::Temperature
+			if factor.unit.dimension == Dimension::temperature()
 				&& !temperatures.iter().any(|unit| std::ptr::eq(*unit, factor.unit))
 			{
 				temperatures.push(factor.unit)
@@ -247,7 +247,6 @@ impl Inference {
 			empty_lists: HashSet::new(),
 			objects: HashMap::new(),
 			classes,
-			field_unit_names: unit_fields::field_unit_names(program),
 			instances: HashMap::new(),
 			class_lists: HashMap::new(),
 			result_fields: None,
@@ -704,8 +703,6 @@ struct Inference {
 	objects: HashMap<String, Fields>,
 	/// The classes with unit fields, the variables holding an instance of one and the lists of one (unit_fields.rs)
 	classes: HashMap<String, Fields>,
-	/// the unit each unit field is written in, which its errors name
-	field_unit_names: HashMap<(String, String), String>,
 	instances: HashMap<String, String>,
 	class_lists: HashMap<String, String>,
 	/// The quantity fields of the program's final value, when it is such an object
@@ -906,8 +903,8 @@ impl Inference {
 			Node::Key(left, op @ (Op::Eq | Op::Ne), right)
 				if dimension_signature(&right, &self.variables).is_some() || is_time_type(&right, &self.variables) =>
 			{
-				let named =
-					dimension_signature(&right, &self.variables).unwrap_or_else(|| vec![(Dimension::Time, 1)].into());
+				let named = dimension_signature(&right, &self.variables)
+					.unwrap_or_else(|| vec![(Dimension::duration(), 1)].into());
 				let (_, given) = self.infer(left.as_ref().clone())?;
 				if given.is_empty() && is_time_type(&right, &self.variables) {
 					return self.unchecked_key(*left, op, *right);
@@ -1134,18 +1131,9 @@ impl Inference {
 			}
 			Node::Key(object, Op::Dot, field) if self.field_signature(object, field).is_some() => {
 				let held = self.field_signature(object, field).expect("guarded");
-				let (value, given) = self.infer(value)?;
-				if given != held {
-					let held_text = match self.instance_class(object) {
-						Some(class) => self.held_text(&class, &field.drop_meta().name(), &held),
-						None => shown(&held),
-					};
-					return Err(Stop::Error(format!(
-						"DimensionError: {} holds {held_text}, is given {}",
-						target.serialize().trim(),
-						shown(&given)
-					)));
-				}
+				let class = self.instance_class(object).unwrap_or_default();
+				let key = format!("{class}.{}", field.drop_meta().name());
+				let value = self.field_value(target.serialize().trim(), &key, Some(&held), &value)?;
 				Ok((Node::Key(Box::new(target), op, Box::new(value)), held))
 			}
 			_ => self.plain_key(target, op, value),
@@ -1409,8 +1397,8 @@ impl Inference {
 	/// The zero of the unit a temperature shows in, 0 for any other signature
 	fn temperature_zero(&self, signature: &Signature) -> Rational {
 		match &**signature {
-			[(Dimension::Temperature, 1)] if !signature.is_list() => {
-				si_zero(display_unit(&self.display, Dimension::Temperature))
+			[(dimension, 1)] if *dimension == Dimension::temperature() && !signature.is_list() => {
+				si_zero(display_unit(&self.display, Dimension::temperature()))
 			}
 			_ => Rational::integer(0),
 		}

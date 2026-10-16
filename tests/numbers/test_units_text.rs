@@ -30,6 +30,6 @@ fn mph_is_miles_per_hour() {
 	assert_eq!(shown("60 mph in km/h"), "96.56064km/h");
 	assert_eq!(shown("v = 60 mph\nt = 30 min\nv * t"), "30mi");
 	assert_eq!(shown("class Car{speed: mph}\nCar(30 mph).speed"), "30mi/h");
-	fails_with("class Car{speed: mph}\nCar(30 km).speed", "Car.speed holds mi/h");
+	fails_with("class Car{speed: mph}\nCar(30 km).speed", "Car.speed holds m/s");
 	assert_eq!(shown("mph = 3\nmph * 2"), "6");
 }
