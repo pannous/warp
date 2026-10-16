@@ -32,7 +32,8 @@ impl WarpParser {
 		self.advance();
 		let start = self.pos;
 		let arguments = group_items(self.parse_bracketed(open));
-		let written: String = self.chars[start + 1..self.pos.saturating_sub(1)].iter().collect();
+		let inside_end = self.pos.saturating_sub(1).max(start + 1); // an unclosed `a!(` ends at the source end
+		let written: String = self.chars[start + 1..inside_end].iter().collect();
 		Some(rust_macro(name, arguments, &written))
 	}
 }
