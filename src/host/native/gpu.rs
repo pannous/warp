@@ -9,13 +9,17 @@ pub(super) fn gpu_compute(
 	workgroups: i64,
 ) -> wasmtime::Result<HostNode> {
 	let failure = gpu_failure(GPU_COMPUTE);
-	let shader = given_shader(&mut caller, shader, &failure)?;
-	let numbers = given_node(&mut caller, numbers)?;
-	let workgroups = u32::try_from(workgroups).map_err(|_| failure(format!("{workgroups} workgroups")))?;
-	let left = match named_arrays(&numbers) {
-		Some(arrays) => named_arrays_computed(&shader, arrays, workgroups, &failure)?,
-		None => array_computed(&shader, &numbers, workgroups, &failure)?,
+	let mut computed = || {
+		let shader = given_shader(&mut caller, shader, &failure)?;
+		let numbers = given_node(&mut caller, numbers)?;
+		let workgroups = u32::try_from(workgroups).map_err(|_| failure(format!("{workgroups} workgroups")))?;
+		match named_arrays(&numbers) {
+			Some(arrays) => named_arrays_computed(&shader, arrays, workgroups, &failure),
+			None => array_computed(&shader, &numbers, workgroups, &failure),
+		}
 	};
+	let left = computed();
+	let left = raised(&mut caller, left)?;
 	built_in_program(&mut caller, &left, GPU_COMPUTE)
 }
 
@@ -272,10 +276,10 @@ pub(super) fn gpu_render(
 	values: HostNode,
 ) -> wasmtime::Result<HostNode> {
 	let failure = gpu_failure(GPU_RENDER);
-	let shader = given_shader(&mut caller, shader, &failure)?;
-	let pixels: Vec<u32> =
-		crate::graphics::gpu::opaque_colors(&rendered(&mut caller, &shader, width, height, values, &failure)?)
-			.collect();
+	let shader = given_shader(&mut caller, shader, &failure);
+	let image = shader.and_then(|shader| rendered(&mut caller, &shader, width, height, values, &failure));
+	let image = raised(&mut caller, image)?;
+	let pixels: Vec<u32> = crate::graphics::gpu::opaque_colors(&image).collect();
 	list_of_ints(&mut caller, &pixels, GPU_RENDER)
 }
 
