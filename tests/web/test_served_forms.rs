@@ -147,11 +147,11 @@ fn routes_without_a_server_wait_for_the_page() {
 	crate::is!(&format!("items = [1]\n{PROGRAM}\npost \"/items\" {{ items.add(2) }}\ncount(items)"), 1);
 }
 
-// samples/todo_app.warp served, as the samples check asks it with curl: a todo is created, toggled and listed
+// samples/storage/todo_app.warp served, as the samples check asks it with curl: a todo is created, toggled and listed
 #[test]
 fn the_todo_sample_creates_toggles_and_lists() {
 	const TODO_PORT: u16 = 18647;
-	const TODO_APP: &str = include_str!("../../samples/todo_app.warp");
+	const TODO_APP: &str = include_str!("../../samples/storage/todo_app.warp");
 	let program = program_with_rows("served_todo_app", TODO_APP, TODO_APP);
 	let server = served_from(TODO_PORT, TODO_APP, Some(program), 5);
 	let at = |path: &str| format!("http://127.0.0.1:{TODO_PORT}{path}");

@@ -74,8 +74,8 @@ pub(crate) fn typed_parameter(arguments: Node) -> Node {
 /// Every argument of `f(int x, float y)` as its typed parameter
 pub(crate) fn typed_parameters(arguments: Node) -> Node {
 	match arguments.drop_meta() {
-		Node::List(items, bracket, Separator::Colon) => {
-			Node::List(items.iter().cloned().map(typed_parameter).collect(), bracket.clone(), Separator::Colon)
+		Node::List(items, bracket, Separator::Comma) => {
+			Node::List(items.iter().cloned().map(typed_parameter).collect(), bracket.clone(), Separator::Comma)
 		}
 		_ => typed_parameter(arguments),
 	}
@@ -325,7 +325,7 @@ impl WarpParser {
 		let parameters = match names.as_slice() {
 			[single] => Node::Symbol(single.clone()),
 			several => {
-				Node::List(several.iter().cloned().map(Node::Symbol).collect(), Bracket::Round, Separator::Colon)
+				Node::List(several.iter().cloned().map(Node::Symbol).collect(), Bracket::Round, Separator::Comma)
 			}
 		};
 		Some(Node::Key(Box::new(parameters), Op::FatArrow, Box::new(body)))

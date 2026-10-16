@@ -1,5 +1,5 @@
 // card sorted-by-phrase: `xs sorted by <key>` sorts by a key of each element `it`, as `xs.sort(by: it => key)`;
-// `by -key` (read as `by - key`) sorts descending (found editing samples/orm.warp)
+// `by -key` (read as `by - key`) sorts descending (found editing samples/storage/orm.warp)
 use crate::is;
 use warp::ints;
 

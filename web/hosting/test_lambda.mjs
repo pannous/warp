@@ -18,7 +18,7 @@ const DOMAIN = "lambda.pannous.com";
 const NAME = "lambda-test";
 const PLAYGROUND_NAME = "lambda-ui-test";
 const PLAYGROUND_PORT = Number(process.env.WARP_LAMBDA_PLAYGROUND_PORT ?? 8898);
-const SAMPLE = join(ROOT, "samples/hosting.warp");
+const SAMPLE = join(ROOT, "samples/servers/hosting.warp");
 const EXPECTED_FIB = { n: 20, fib: 6765 };
 const STARTS = 40;
 

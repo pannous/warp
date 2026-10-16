@@ -1,4 +1,4 @@
-// card visualizer-speed: the CPU part of one samples/gpu_visualizer.warp frame without paint: spectrum and the band loop
+// card visualizer-speed: the CPU part of one samples/gpu/gpu_visualizer.warp frame without paint: spectrum and the band loop
 use sound
 bands = 16
 tune = [C4 E4 G4 [C4 E4 G4] A4 G4 E4 [C3 G3 C4] D4 F4 A4 [D4 F4 A4] G4 B4 D5 [G3 B3 D4 G4] C5 G4 E4 [C3 E4 G4 C5]]

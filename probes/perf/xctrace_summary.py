@@ -3,7 +3,7 @@
 function. Records when given a command, else summarizes an exported time-profile table.
 Usage: xctrace_summary.py <trace dir> [--callers <name part>] [-- command args…]
        --callers: the time of the outermost function naming the part, by the two frames calling it   (WARP_* environment passes through)
-       e.g. probes/perf/xctrace_summary.py data/perf/vis.trace -- ~/dev/bin/warp compile --wasm samples/visualizer.warp"""
+       e.g. probes/perf/xctrace_summary.py data/perf/vis.trace -- ~/dev/bin/warp compile --wasm samples/sound/visualizer.warp"""
 import collections, os, re, subprocess, sys, xml.etree.ElementTree as ElementTree
 
 SHOWN = 30

@@ -1,6 +1,7 @@
 # Warp Language Samples
 
-This directory contains sample programs demonstrating various features of the Warp language.
+This directory contains sample programs demonstrating various features of the Warp language, one folder per chapter
+of the playground's guide (golf/ and wit/ aside).
 
 ## ✅ Working Samples (11)
 
@@ -69,7 +70,7 @@ These samples need specific features to be implemented:
 
 ```bash
 # Run a working sample
-cargo run -- samples/fibonacci.warp
+cargo run -- samples/functions/fibonacci.warp
 
 # Or use the test suite
 cargo test --test test_samples
@@ -78,7 +79,8 @@ cargo test --test test_samples
 ## Adding New Samples
 
 When adding a new sample:
-1. Add it to `samples/` directory with `.warp` extension
+1. Add it to the folder of its guide chapter, `samples/<chapter>/` (graphics, sound, text …: the playground menu's
+   groups, notes/samples.md), with `.warp` extension, and name it in that chapter's `Examples:` line of web/playground/guide.md
 2. If it should work, add a test in `tests/programs/test_samples.rs`
 3. Use `#[ignore]` attribute with explanation if feature not yet implemented
 4. Update this README
