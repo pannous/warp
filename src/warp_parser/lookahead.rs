@@ -115,24 +115,26 @@ impl WarpParser {
 			.is_some_and(|last| before[line_start + last] == '?')
 	}
 
-	/// The word before the blank here is a keyword, not an operand: `do add 4 to xs`, `return add …`, the event name of
-	/// `on add {…}` and `emit add{…}`; a variable named like an arithmetic word is an operand, `add subtract 1`
-	fn after_keyword(&self) -> bool {
-		let before = &self.chars[..self.pos];
-		let word_end = before.iter().rposition(|ch| !ch.is_whitespace()).map_or(0, |end| end + 1);
-		let word_start =
-			before[..word_end].iter().rposition(|ch| !is_identifier_char(*ch)).map_or(0, |start| start + 1);
-		let word: String = before[word_start..word_end].iter().collect();
-		crate::operators::is_operator_word(&word) && !crate::operators::is_arithmetic_word(&word)
-			|| word == crate::words::RETURN_WORD
-			|| crate::system_values::LISTENER_WORDS.contains(&word.as_str())
-			|| crate::words::EMIT_WORDS.into_iter().chain(crate::words::EMIT_ALIASES).any(|emit| emit == word)
+	/// A value stands before the blank here, the left operand of a word operator: not a statement word (`do add 4 to xs`,
+	/// `on add {…}`, `return minus 1`) or another operator word; a variable named like an arithmetic word is one, `add
+	/// subtract 1`
+	fn value_before(&self) -> bool {
+		let word = self.word_ending_before(self.pos);
+		!(crate::soft_keywords::is_statement_word(&word)
+			|| crate::operators::is_operator_word(&word) && !crate::operators::is_arithmetic_word(&word))
 	}
 
 	/// One rule for every arithmetic word, `2 plus 3`, `7 div 2`, `2 add 3`: an operator in code only, not a member
-	/// `xs.add`, and a program's own function of that name wins, `def plus(a,b) := …; 2 plus 3`
+	/// `xs.add`, between a value and an operand that is no block (`when add {…}` names an event), and a program's own
+	/// function of that name wins, `def plus(a,b) := …; 2 plus 3`
 	fn arithmetic_word_in_code(&self, spelling: &str) -> bool {
-		!self.options.data_mode && self.prev_char() != '.' && !self.program_functions.contains(spelling)
+		let length = spelling.chars().count();
+		let block_after = (length..).map(|at| self.peek_char(at)).find(|ch| !matches!(ch, ' ' | '\t')) == Some('{');
+		!self.options.data_mode
+			&& self.prev_char() != '.'
+			&& !self.program_functions.contains(spelling)
+			&& self.value_before()
+			&& !block_after
 	}
 
 	/// The spelling starts here; a word ends here too: `and` but not `android`, `plus a` but not the call `plus(a, b)`
@@ -164,7 +166,7 @@ impl WarpParser {
 				// `div{…}` and `div {…}` are the html tag, and data never computes
 				"div" => !self.word_opens_block("div"),
 				// `2 add 3` between operands only, `do add 4 to pixel` is the verb
-				"add" | "subtract" => self.operand_after(spelling.len()) && !self.after_keyword(),
+				"add" | "subtract" => self.operand_after(spelling.len()),
 				// `xs contains x` in code only, data keeps the words as they are
 				"contains" | "has" | "includes" => !self.options.data_mode && self.operand_after(spelling.len()),
 				// `a .5` is a list of two values, `a.5` a member access
