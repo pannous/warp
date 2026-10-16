@@ -39,3 +39,11 @@ fn a_host_word_bound_inside_a_function_stays_the_hosts_outside() {
 	is!("f(x) := { random = 4; random + x }; r = random; r < 1", true);
 	is!("f(x) := { random = 4; random + x }; f(1)", 5);
 }
+
+#[test]
+fn parse_bound_inside_a_function_stays_the_code_outside() {
+	is!("f(x) := { parse = 4; parse + x }; parse(\"1 + 2\") == data (1 + 2)", true);
+	is!("f(x) := { parse = 4; parse + x }; f(1)", 5);
+	is!("f(eval) := eval + 1; f(1)", 2);
+	is!("f(eval) := eval + 1; eval(\"2*3\")", 6);
+}
