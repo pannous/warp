@@ -85,7 +85,7 @@ copy_to_server() {
 [ -n "$again" ] || { build && copy_to_server; }
 
 remote_arguments=$(printf '%q ' "$run_dir" "$(workflow_value AGENT_BROWSER_ARGS)" "$(workflow_value FIREFOX_PREFS)" "${checks[*]}" "${names[@]+"${names[@]}"}")
-# the token goes in on stdin, never on a command line the server's ps shows (api.github.com's limit, samples/live_region)
+# the token goes in on stdin, never on a command line the server's ps shows (api.github.com's limit, samples/web/live_region)
 {
 	echo "export GITHUB_TOKEN=$(printf '%q' "$(gh auth token 2>/dev/null || true)")"
 	echo "SERVER_HOME=$SERVER_HOME SERVER_USER=$SERVER_USER MEMORY_MAX=$MEMORY_MAX CHECK_TIME_LIMIT=$CHECK_TIME_LIMIT RUNS_KEPT_DAYS=$RUNS_KEPT_DAYS"

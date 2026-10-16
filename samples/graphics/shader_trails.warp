@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-# a brush that leaves strokes behind (samples/shader_brush.warp only glows where the pointer is): $previous(at) is
+# a brush that leaves strokes behind (samples/graphics/shader_brush.warp only glows where the pointer is): $previous(at) is
 # the color this shader left at that pixel the frame before, kept on the GPU, so each frame paints over the last.
 # The first frame finds black, which is the paper here; a light paper would start with
 # select(paper, $previous(at.xy), $frame > 0). The strokes fade a little each frame, faster without a press.

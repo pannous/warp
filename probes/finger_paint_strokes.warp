@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-// probe of samples/finger_paint.warp strokes without a mouse (WARP_NO_WINDOW=1 writes the PNG)
+// probe of samples/graphics/finger_paint.warp strokes without a mouse (WARP_NO_WINDOW=1 writes the PNG)
 // finger painting: hold the mouse button over the window (in the playground, the canvas) and draw strokes whose color
 // turns as you go. mouse_x, mouse_y and mouse_down are the pointer over the painted picture, in its pixels
 use draw

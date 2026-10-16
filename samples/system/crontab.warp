@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-# The cron table, read only (card read-chron): `warp samples/crontab.warp` shows it in a window (its value is an html page).
+# The cron table, read only (card read-chron): `warp samples/system/crontab.warp` shows it in a window (its value is an html page).
 # A job is its schedule (five fields, or one like @reboot) and the command after it; comments and settings (PATH=…) are no jobs.
 # The schedule reads as words (every 10 minutes, daily at 06:35), the log file the output goes to gets a column of its own.
 fields(line) := split(line, " ")

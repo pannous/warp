@@ -35,7 +35,7 @@ A comment is a note for people. The computer skips it.
 3 // a note
 ```
 
-Examples: hello; samples: comments, sample, natural
+Examples: hello; samples: comments, sample, natural, phrases
 
 ## Numbers
 
@@ -94,7 +94,7 @@ Numbers can have units.
 2h + 30min
 ```
 
-Examples: numbers; samples: factorial, power, gcd, collatz, quadratic, sum, sin, sine, measurements, units_dynamic, dates
+Examples: numbers; samples: factorial, power, gcd, collatz, quadratic, sum, sin, sine, measurements, units_dynamic, dates, bits
 
 ## Text
 
@@ -122,7 +122,7 @@ Text is anything in quotes: a word, a name, a sentence.
 "1 + 1 = $(1 + 1)"
 ```
 
-Examples: text; samples: levenshtein, palindrome, word_count, sort_words, word_lengths, replace_word, find_text, levenshtein_idiomatic, calculator, regexes
+Examples: text; samples: levenshtein, palindrome, word_count, sort_words, word_lengths, replace_word, find_text, levenshtein_idiomatic, calculator, regexes, uniscript_text
 
 ## Variables
 
@@ -441,7 +441,7 @@ while n < 3 { n += 1 }
 n
 ```
 
-Examples: loops; samples: fizzbuzz, sieve, life, mandelbrot, game_of_life, life_idiomatic
+Examples: loops; samples: fizzbuzz, sieve, life, mandelbrot, game_of_life, life_idiomatic, iterators
 
 ## Functions
 
@@ -491,7 +491,7 @@ def fib(n) = if n < 2 then n else fib(n - 1) + fib(n - 2)
 fib(10)
 ```
 
-Examples: functions, arguments, "polyglot calls"; samples: functions, fibonacci, ackermann, queens, queens_idiomatic, sudoku, block_arguments, y_combinator
+Examples: functions, arguments, "polyglot calls"; samples: functions, fibonacci, ackermann, queens, queens_idiomatic, sudoku, block_arguments, y_combinator, code_as_data
 
 ## Closures
 
@@ -539,7 +539,7 @@ class Point { x: int y: int }
 Point{x: 1 y: 2}.x
 ```
 
-Examples: classes, properties; samples: types, polymorphism, dispatch, reflection
+Examples: classes, properties; samples: types, polymorphism, dispatch, reflection, return_polymorphism, return_polymorphism2
 
 ## Data and storage
 
@@ -655,7 +655,7 @@ emit ping
 pong
 ```
 
-Examples: "emit and on", events, timers, animation, mouse, "game of life", "system values", "on exit"; samples: effects
+Examples: "emit and on", events, timers, animation, mouse, "game of life", "system values", "on exit"; samples: effects, arrow_keys
 
 ## Tasks and channels
 
@@ -745,7 +745,7 @@ Examples: forms; samples: server, route_headers, hosting, worker
 
 `use draw` paints pixels on a canvas, and `show()` shows it. A shader colors every pixel at once on the graphics card.
 
-Examples: frames, shader, "shader mouse"; samples: paint_text, finger_paint, shader, webgpu, shader_brush, shader_trails
+Examples: frames, shader, "shader mouse"; samples: paint_text, finger_paint, shader, webgpu, shader_brush, shader_trails, paint_function, window_size
 
 ## Acceleration
 
@@ -765,14 +765,14 @@ block or function when every digit counts; `@gpu` asks for the graphics card fro
 
 [[#Pictures]] above shows how to draw directly on the GPU.
 
-Examples: shader; samples: gpu_map, gpu_arrays, manual_3d_object_viewer, gpu_visualizer
+Examples: shader; samples: gpu_map, gpu_arrays, manual_3d_object_viewer, gpu_visualizer, warp_compiled_wgsl_shader
 
 ## Sound and music
 
 `use sound` plays notes by name, chords, rhythms and whole songs. A function can also compute the sound itself.
 `play "mozart.mp3"` plays a music file; a relative name is the program file's neighbour.
 
-Examples: melody; samples: play_mp3, music, rhythm, harmony, synth, filters, voices, arrangement, sound_patterns, signal_graph, siren_sound, stereo_sound, midi, visualizer
+Examples: melody; samples: play_mp3, music, rhythm, harmony, synth, filters, voices, arrangement, sound_patterns, signal_graph, siren_sound, stereo_sound, midi, visualizer, sound_features, sound_kick_samples, sound_pipes, gpu_visualizer_warp
 
 ## WebAssembly
 
