@@ -1,6 +1,9 @@
 //! The keywords and marks the parser and several lowering passes look for, a leaf module: it depends on nothing
 
 pub const COUNT_WORD: &str = "count";
+/// `warp fast …`, a first statement `fast`, `fast f(x) := …`: sin cos exp pow atan2 as wasm polynomials (lib/fast_math.warp,
+/// card fast-scope); `x: fast int` is i64
+pub const FAST_WORD: &str = "fast";
 /// The class of a path written without quotes where a word has a method for it (lib/shell.warp, `sort ./names.txt`)
 pub const PATH_CLASS: &str = "Path";
 pub const PATH_FIELD: &str = "name";
