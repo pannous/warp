@@ -149,6 +149,7 @@ impl WasmGcEmitter {
 			.chain(self.closures.entry_names())
 			.chain(self.tuple_packers.iter().map(|(function, index)| (*index, crate::tuples::packer_name(function))))
 			.chain(self.main_index.map(|index| (index, "main".to_string())))
+			.chain(self.start_index.map(|index| (index, super::START_FUNCTION.to_string())))
 			.collect();
 		self.names.functions(&name_map(&mut functions.iter().map(|(idx, name)| (*idx, name.as_str())).collect()));
 

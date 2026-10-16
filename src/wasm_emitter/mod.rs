@@ -60,6 +60,8 @@ const FALSY_TEXTS: [&str; 8] = ["", "0", "false", "no", "ø", "nil", "null", "no
 const ENGINE_DIVIDE_BY_ZERO: &str = "integer divide by zero";
 /// Node locals every function has after its Int scratch: node_scratch and container_scratch (globals.rs)
 const NODE_SCRATCH_LOCALS: u32 = 2;
+/// The name section's name of the start function, which installs witness tables and late calls in each instance
+const START_FUNCTION: &str = "install";
 /// What `use { memory, table } from "env"` imports instead of defining: the linear memory and a function table
 pub const MEMORY_ENTITY: &str = "memory";
 pub const TABLE_ENTITY: &str = "table";

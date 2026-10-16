@@ -3,8 +3,9 @@
 //! `text·witness` for the text of one (card list-printable-items: `[N(1), N(2)]` prints `[n1 n2]`). Each holds a
 //! dispatcher (`instance_compare`, `text·dispatch`), which matches the type name of the instance and calls that type's
 //! witness `compare·T` / `text·T` (traits.rs). The dispatchers are compiled after the user functions, whose indices
-//! they need, and the start function installs them in every instance; runtime functions compiled earlier reach them through the
-//! globals with call_ref. `text·shown` gives main's value with every printable instance in it as the symbol of its text.
+//! they need, and the start function installs them in every instance; runtime functions compiled earlier reach them
+//! through the globals with call_ref. `text·shown` gives main's value with every printable instance in it as the
+//! symbol of its text.
 
 use super::super::WasmGcEmitter;
 use crate::traits::{witness_name, witness_type, COMPARE};
