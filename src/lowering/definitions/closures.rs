@@ -675,22 +675,27 @@ impl FunctionValues {
 		}
 	}
 
-	/// The fields `x.d(5)` calls the value of: a declared class field or an object entry given a function value
-	/// (`hs = [{d: x => x * 3}]`), unless a function or method is named so (card lambda-held, reviewer)
+	/// The fields `x.d(5)` calls the value of: a class field a construction fills with a function value
+	/// (`Holder(x => x + 1)`) or an object entry given one (`hs = [{d: x => x * 3}]`), unless a function or method is
+	/// named so. A field named like a library method (`join`, `size`) is called only on a path assigned the function:
+	/// other receivers keep the method, as a class's method of such a name does (card lambda-held, reviewer)
 	fn callable_fields(&self, program: &Node) -> HashSet<String> {
-		let mut fields: HashSet<String> =
-			self.class_fields.values().flatten().map(|(field, _)| field.clone()).collect();
+		let mut fields = HashSet::new();
 		program.visit(&mut |node| {
-			if let Node::Key(key, Op::Colon, value) = node {
-				if let (Some(name), true) = (key.symbol_name(), self.is_function_value(value)) {
-					fields.insert(name.to_string());
+			let entries = match node {
+				Node::Key(key, Op::Colon, value) => {
+					key.symbol_name().map(|name| vec![(name.to_string(), *value.clone())])
 				}
-			}
+				_ => self.constructed_fields(node),
+			};
+			let given_functions =
+				entries.unwrap_or_default().into_iter().filter(|(_, value)| self.is_function_value(value));
+			fields.extend(given_functions.map(|(field, _)| field));
 		});
 		let is_function_name = |field: &String| {
 			self.functions.iter().any(|function| function == field || function.ends_with(&format!("·{field}")))
 		};
-		fields.retain(|field| !is_function_name(field));
+		fields.retain(|field| !is_function_name(field) && !crate::class_methods::is_library_method(field));
 		fields
 	}
 
@@ -745,7 +750,7 @@ struct Lifting {
 	function_lists: HashSet<String>,
 	/// Functions returning one of their parameters, by its position: given a function value there, the call is one
 	passing_through: HashMap<String, usize>,
-	/// Declared class fields no function or method is named like: `x.d(5)` calls the value of the field d
+	/// Fields the program gives a function value, named unlike any function or method: `x.d(5)` calls the value of d
 	callable_fields: HashSet<String>,
 	lifted: Vec<Node>,
 	/// The functions whose bodies the walk is in, innermost last, by their full names (`outer·inner`)
@@ -954,8 +959,8 @@ impl Lifting {
 			|| (is_field(node) && holder_path(node).is_some_and(|path| self.function_variables.contains(&path)))
 	}
 
-	/// `h.d(5)`: the field `d` and the arguments, when h.d holds a function value: a path assigned one, or a declared
-	/// field of a class that no function or method is named like (`k.d(5)` of a parameter, `make().d(5)`)
+	/// `h.d(5)`: the field `d` and the arguments, when h.d holds a function value: a path assigned one, or a callable
+	/// field (`k.d(5)` of a parameter, `make().d(5)`)
 	fn held_call(&self, receiver: &Node, call: &Node) -> Option<(Node, Vec<Node>)> {
 		let Node::List(items, Bracket::Round, Separator::None) = call.drop_meta() else {
 			return None;

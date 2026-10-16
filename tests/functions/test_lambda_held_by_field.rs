@@ -42,3 +42,14 @@ fn a_held_lambda_is_called_whatever_holds_it() {
 	}
 	is!("hs = [{d: x => x * 3}]\nhs#1.d(5)", 15);
 }
+
+/// reviewer: a class field named like a library method leaves that method to other receivers; a field given no
+/// function value is no function either
+#[test]
+fn a_field_named_like_a_library_method_keeps_the_method() {
+	is!("class Box {join}\nb = Box(1)\n[1, 2].join(\"-\")", "1-2");
+	is!("class Doc {split}\nd = Doc(1)\nwords = \"a b\".split(\" \")\n#words", 2);
+	is!("class Item {size}\nx = Item(2)\n\"abc\".size()", 3);
+	is!("class Box {join}\nb = Box(x => x + 1)\n[1, 2].join(\"-\")", "1-2");
+	is!("class Box {join}\nb = Box(x => x + 1)\nb.join(5)", 6);
+}
