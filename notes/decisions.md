@@ -404,6 +404,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   Python's isalpha and Java's isLetter); `characters` is an alias of `chars`.
 - parse-json (2026-10-15, user): quoted code's `.json` is the readable operator-as-key shape
   (`parse("a * (b + 1)").json` → {"*":["a",{"+":["b",1]}]}); what it can't express is a warning or error, never `{}`.
+- used-module-bare-words (2026-10-16, warp-shaders default, undoable; card json-parse-literal): after `use json`, a
+  bare `parse(t)` is json's parse (a map), not warp's code parse. General rule: a used module's own qualified words
+  (WARP_FORMS, today only json.parse) may also be called bare; a program's own definition wins, and without the `use`
+  the word keeps its warp meaning. The alternative was to keep the code parse and warn about the ambiguity.
 - json-exactness (2026-10-15 night, Interviewer's proposal, kept by the user 2026-10-16):
   following the user's "a warning, or even an error": big ints are written with all their digits as a JSON number
   (`(2^70).json` → 1180591620717411303424; JSON numbers have no size limit, only some readers do); a fraction is
