@@ -3,7 +3,7 @@
 //! (`def fib(n): …; fib(10)` compiles to 55), also inside a function body or a loop (an invariant part hoisted to
 //! compile time). Only `compile` folds: `eval` would do the same work twice.
 //! The values come from running the definitions and the calls as one small module, so they are exactly what the
-//! program computes; a call that fails or computes past FOLDING_TIME_LIMIT stays a call.
+//! program computes; a call that fails or computes past FOLDING_FUEL stays a call.
 
 use super::nodes::{branches, call, children_rewritten, key};
 use crate::analyzer::effects::EffectReport;
@@ -20,8 +20,10 @@ use std::collections::{HashMap, HashSet};
 const MAX_VARIANTS: usize = 32;
 /// Between a function's name and the constant arguments of its variant: `power·n3`
 const VARIANT_SEPARATOR: &str = "·";
-/// The computing a compile spends on its constant calls; a call taking longer is computed when the program runs
-const FOLDING_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(2);
+/// The steps a compile spends on its constant calls, counted as fuel so the compiled program doesn't depend on the
+/// machine's load (decision fuel-metering); a call taking more is computed when the program runs. About 0.5 to 2 s:
+/// a tight loop burns ~1.5e10 steps a second, calls ~4 times fewer (probes/fast_int/fuel_cost.sh)
+const FOLDING_FUEL: u64 = 10_000_000_000;
 
 /// The function a variant was made of, as its messages name it: `f` of `f·a1`
 pub fn unspecialised_name(name: &str) -> &str {
@@ -573,7 +575,7 @@ fn calls(node: &Node, name: &str) -> bool {
 	found
 }
 
-/// The values of the constant calls `module` computes, within FOLDING_TIME_LIMIT
+/// The values of the constant calls `module` computes, within FOLDING_FUEL
 fn computed_at_compile_time(module: crate::pipeline::CompiledModule) -> Node {
-	crate::util::with_time_limit(FOLDING_TIME_LIMIT, || crate::pipeline::run_module(module))
+	crate::util::with_fuel(FOLDING_FUEL, || crate::pipeline::run_module(module))
 }

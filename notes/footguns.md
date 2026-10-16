@@ -290,7 +290,7 @@ User decision 2026-09-28: exact numbers beyond Q with π, ℯ and square/cube ro
   restarts it too (accepted gap).
   A store on a fuel engine gets the fuel budget instead: `use fuel` (custom section `warp.fuel`), `warp fuel N`,
   `WARP_FUEL`, `with_fuel` pick `shared_engine(true)`. Tasks check stop/pause and the time at the same ticks. Executables
-  (`warp build`) have no time limit unless WARP_TIME_LIMIT is set (Interviewer's default: a built app runs freely). Compile-time folding computes within 2 s. 40M calls: 363 M cycles against
+  (`warp build`) have no time limit unless WARP_TIME_LIMIT is set (Interviewer's default: a built app runs freely). Compile-time folding computes within 1e10 fuel steps (about 0.5-2 s), counted so the compiled program never depends on machine load (Interviewer's decision). 40M calls: 363 M cycles against
   681 M with fuel. Tests: test_time_limit.
 - Implemented: `Div` effect (src/analyzer/effects.rs). A function has Div if its body has a `while` (unless the condition is literally
   false), if it recurses through another function (mutual recursion), or if its self-recursion has no measure: a parameter
