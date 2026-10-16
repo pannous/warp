@@ -144,3 +144,13 @@ pub(super) fn code_text(line: &str, scan: &LineScan) -> String {
 	}
 	text.trim().to_string()
 }
+
+/// For each character of `code`, whether it is warp code: outside texts and comments
+pub(crate) fn code_characters(code: &str) -> Vec<bool> {
+	let lines: Vec<String> = code.split('\n').map(str::to_string).collect();
+	lines
+		.iter()
+		.zip(scan(&lines))
+		.flat_map(|(line, scan)| line.char_indices().map(move |(at, _)| scan.is_code(at)).chain([false]))
+		.collect()
+}
