@@ -74,6 +74,7 @@ fn a_real_field_named_fields_wins() {
 fn a_functions_params() {
 	is!("f(a:int, b:int) := a+b\nf.params", warp::texts(vec!["a", "b"]));
 	is!("def g(x){x*2}\ng.parameters", warp::texts(vec!["x"]));
+	is!("twice = x => x * 2\ntwice.params", warp::texts(vec!["x"]));
 }
 
 #[test]

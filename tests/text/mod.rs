@@ -34,6 +34,7 @@ mod test_print_juxtaposed;
 mod test_print_list_shapes; // card print-shows
 mod test_print_lists;
 mod test_print_runtime_number;
+mod test_print_spaced_variable; // card print-prints
 mod test_print_type_error;
 mod test_print_walk;
 mod test_put_runtime_values;

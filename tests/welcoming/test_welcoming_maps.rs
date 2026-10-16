@@ -20,6 +20,7 @@ fn test_key_in_a_variable() {
 	is!(r#"m = {A: 7}; k = "A"; m[k] + 1"#, 8);
 	is!(r#"graph = {A: [[1, 4], [3, 2]]}; k = "A"; graph[k][1][1]"#, 2);
 	is!(r#"m = {AB: 1}; k = "AB"; m[k]"#, 1);
+	is!(r#"m = {"A": 7}; k = "A"; m[k]"#, 7);
 }
 
 #[test]
@@ -27,11 +28,13 @@ fn test_empty_map_grows() {
 	is!(r#"dist = {}; dist["A"] = 5; dist["A"]"#, 5);
 	is!(r#"fun f() { d = {}; d["A"] = 3; return d }; r = f(); r["A"]"#, 3);
 	is!(r#"d = {}; for k in ["A", "B"] { d[k] = 1 }; d["A"] + d.B"#, 2);
+	is!(r#"m = {A: 1}; m["A"] = 9; m.A"#, 9);
 }
 
 #[test]
 fn test_absent_key() {
 	fails_with(r#"m = {A: 1}; m["Z"]"#, "no field Z"); // like Python's KeyError
+	fails_with(r#"d = {}; d["A"] = 1; d["B"]"#, "no field B");
 	is!(r#"m = {A: 1}; m.get("Z")"#, Node::Empty);
 	is!(r#"m = {"A": 1}; m.get("Z", 7) + m.get("A", 7)"#, 8);
 }
@@ -39,7 +42,10 @@ fn test_absent_key() {
 #[test]
 fn test_keys_values_has() {
 	is!(r#"graph = {"A": 1, "B": 2}; graph.keys().length"#, 2);
+	is!(r#"m = {"A": 1, B: 2}; m.keys() == ["A", "B"]"#, true);
+	is!(r#"m = {A: 1, B: 2}; m.values()"#, ints![1, 2]);
 	is!(r#"m = {"A": 3, B: 4}; vs = m.values(); s = 0; for v in vs { s = s + v }; s"#, 7);
+	is!(r#"m = {"A": 3, B: 4}; s = 0; for v in m.values() { s = s + v }; s"#, 7);
 	is!(r#"m = {"A": 1}; m.has("A")"#, 1);
 	is!(r#"m = {"A": 1}; m.has("B")"#, 0);
 }
@@ -48,6 +54,8 @@ fn test_keys_values_has() {
 fn test_in_and_contains() {
 	is!(r#"m = {"A": 1}; "A" in m"#, 1);
 	is!(r#"v = ["A"]; "A" in v"#, 1);
+	is!(r#"v = ["A"]; if "Z" in v { 1 } else { 0 }"#, 0);
+	is!(r#"m = {AB: 1}; k = "AB"; if k in m then 1 else 0"#, 1);
 	is!(r#"v = [1, 2, 3]; v.contains(2)"#, 1);
 	is!(r#"v = [1, 2, 3]; v.includes(5)"#, 0);
 	is!(r#"visited = ["A"]; !visited.contains("B")"#, 1);
@@ -110,6 +118,14 @@ fun dijkstra(graph, start) {
 }
 dijkstra(graph, "A")"#,
 		13
+	);
+}
+
+#[test]
+fn test_dijkstra_step_over_an_edge_list() {
+	is!(
+		r#"graph = {"A": [["B", 4], ["C", 1]], "B": [], "C": [["B", 2]]}; dist = {}; dist["A"] = 0; best = 99; for edge in graph["A"] { if edge[1] < best { best = edge[1] } }; dist["A"] + best"#,
+		1
 	);
 }
 

@@ -295,6 +295,7 @@ impl WasmGcEmitter {
 		locals.extend([ValType::I64, nullable, ValType::I32, ValType::I64]);
 		let trap_detail = self.trap_detail_global(); // the item that cannot join, for its error to name
 		let radix_texts = self.radix_text_calls();
+		let text_witness = self.text_witness_table();
 		self.runtime_function(name, vec![nullable, node_ref], vec![node_ref], locals, |s, f| {
 			let (cell, element) = (2, 3);
 			let (bound, address, position, is_first, number, entry_value, operator_entry, list_kind) =
@@ -362,6 +363,10 @@ impl WasmGcEmitter {
 					f,
 					&[I::RefNull(HeapType::Concrete(node_type)), I::StructNew(node_type), I::LocalSet(element), I::End],
 				);
+				// an instance of a type with text() joins as that text, unquoted (card list-printable-items)
+				if let Some(table) = text_witness {
+					s.emit_instance_as_text(f, table, element);
+				}
 				// list_text: a nested list as its literal, its bracket + list_text(item, its separator) + its bracket
 				if nested {
 					let new_text = |f: &mut Function, (pointer, length): (u32, u32)| {
