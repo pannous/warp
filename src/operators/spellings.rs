@@ -5,7 +5,7 @@ use super::*;
 /// wiki/operator.md). The canonical spelling is Op::as_str, every other one an alias; the parser takes the longest
 /// spelling that fits (lookahead.rs peek_operator), the style hints name the canonical one (normalize.rs). The math
 /// spellings (× ≤ √ …) are lib/math.warp's alias lines instead (aliases.rs, decision operator-alias)
-pub const OPERATOR_SPELLINGS: [(&str, Op); 119] = [
+pub const OPERATOR_SPELLINGS: [(&str, Op); 120] = [
 	(":", Op::Colon),
 	(".", Op::Dot),
 	("?.", Op::SafeDot),
@@ -117,6 +117,7 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 119] = [
 	("to", Op::To),
 	("...", Op::To),
 	("…", Op::To),
+	("..=", Op::To), // Rust's inclusive range (card rust-inclusive-range)
 	("through", Op::To),
 	("as", Op::As),
 	// element-wise arithmetic `xs .+ 4` maps the operator over the list (D3: `xs + 4` asks, `xs + [4]` joins)
