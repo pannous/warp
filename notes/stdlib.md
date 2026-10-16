@@ -114,7 +114,7 @@ Next:
    math: round_to factorial is_prime lerp; list: scan take_while drop_while argmax argmin (from 0, like xs[i]; 1-based like index_of asked at warp-e9);
    map: entries; text: is_blank, class Cursor (at_end peek advance looking_at skip take_while skip_while rest; slices copy); random: seed(n) (host word random_seed: xorshift64* natively and in host.js, per run).
    math: is_even is_odd digits choose mod_pow; list: pairwise split_at cartesian mode variance stdev; text: is_upper
-   is_lower remove_prefix remove_suffix count_of is_palindrome; map: get_or; time: is_leap_year days_in_month. Fixed on
+   is_lower remove_prefix remove_suffix count_of (in the prelude since card count-rs) is_palindrome; map: get_or; time: is_leap_year days_in_month. Fixed on
    the way: a lambda reading the loop variable given to a function (mode's count_by(xs, y => y == x)) was specialised
    into a function reading the variable before the loop; loop variables now make it a closure
    (closures::captured_variables_of).

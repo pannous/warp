@@ -3,7 +3,7 @@
 use crate::analyzer::*;
 use crate::declaration_forms::lower_declarations;
 use crate::lowering::nodes::is_place;
-use crate::node::{parens, Bracket, Node, Separator};
+use crate::node::{parens, prelude_call, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{AT_WORD, DELETE_WORD, POP_WORD};
 
@@ -135,12 +135,6 @@ pub(crate) fn cleared_collection(collection: &Node, call: &Node) -> Option<Node>
 /// `list_become(place, fresh)`: the place takes the fresh list's items in place (LIST_BECOME)
 fn became(place: &Node, fresh: Node) -> Node {
 	parens(vec![Node::Symbol(LIST_BECOME.to_string()), place.clone(), fresh])
-}
-
-/// A call of a prelude word written after library_words, which names them `prelude·word`, has run
-fn prelude_call(word: &str, arguments: Vec<Node>) -> Node {
-	let word = crate::modules::prelude_name(word).unwrap_or(word.to_string());
-	parens([vec![Node::Symbol(word)], arguments].concat())
 }
 
 /// `xs.insert(a, b)` when xs is a variable. Warp writes `insert(value, position)`, Python `insert(position, value)`:

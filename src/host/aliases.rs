@@ -1,5 +1,6 @@
 //! Other spellings of the host words, renamed to the host word unless the program defines them
 use super::*;
+use crate::node::prelude_call;
 use crate::operators::Op;
 
 /// Other spellings of the host words, for any number of arguments or only for the given one (user decision #14e:
@@ -127,11 +128,6 @@ fn random_compared(node: &Node) -> Option<Node> {
 	}
 	let called = Node::List(vec![random.clone(), left.as_ref().clone()], Bracket::None, separator.clone());
 	Some(crate::lowering::nodes::key(random_call(called), *op, right.as_ref().clone()))
-}
-
-fn prelude_call(word: &str, arguments: Vec<Node>) -> Node {
-	let word = crate::modules::prelude_name(word).unwrap_or_else(|| word.to_string());
-	crate::lowering::nodes::call(&word, arguments)
 }
 
 /// The arguments of `random …`, `random(…)`

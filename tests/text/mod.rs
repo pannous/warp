@@ -15,6 +15,7 @@ mod test_constant_expression_text;
 mod test_count_in;
 mod test_count_method;
 mod test_count_of_split; // card count-split
+mod test_counts_in_warp; // card count-rs
 mod test_declared_text_one_character;
 mod test_error_as_text;
 mod test_for_each_char;
