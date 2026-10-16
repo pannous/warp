@@ -790,6 +790,11 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - dispatch-untyped-library-words (2026-10-16, user; card one-dispatch): an untyped program function named like a
   library word (`first(x) := x * 2`) covers every value the library word doesn't: the library's `first(list)` is
   more specific, so `first(3)` → 6 but `first([1,2])` → 1, with a hint that first of a list stays the library word.
+- library-words-typed (2026-10-16, user; cards library-typed, one-dispatch): harden the library. Every library word
+  gets a full type signature (`square(x: number): number`, `count(xs: list): int`), and typed library words are
+  immutable for their types until further notice. A program's untyped definition covers only other values, with a
+  hint: `count(x) := 7; count([1,2])` → 2, `square(x) := 777; square(4)` → 16, `floor(x) := x+10; floor(2.5)` → 2.
+  This extends dispatch-untyped-library-words from collection words to all library words.
 - type-words-reserved (2026-10-16, user; card one-dispatch): every type word is reserved as a function name,
   `double(x) := …` and `hex(x) := …` alike; the error offers "name it to_double".
 - field-forms (2026-10-16, user; card one-dispatch): plain fields keep only `.` and `of` (read, and set with
