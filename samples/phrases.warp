@@ -9,7 +9,7 @@ to greet a full name:
 
 ann = full name{given: "Ann", family: "Lee"}
 print type of ann          # full-name
-print greet ann            # hello Ann Lee
+print greet(ann)           # hello Ann Lee
 
 class pdf { body: text }
 class docx { body: text }
@@ -20,6 +20,6 @@ to render text as pdf:
 to render text as docx:
 	return docx("<w:t>" + text + "</w:t>")
 
-print ((render "hello") as pdf).body   # %PDF hello
-docx letter = render "hello MS"
-print letter.body                      # <w:t>hello MS</w:t>
+print (render("hello") as pdf).body   # %PDF hello
+docx letter = render("hello MS")
+print letter.body                     # <w:t>hello MS</w:t>
