@@ -238,8 +238,26 @@ branch's tests there:
 - `--model` carries to cloud sessions (the log's init line read claude-haiku-5-5), so the runner defaults to Haiku.
 - Pool (data/cloud/pool/, one file per session): a finished session gets the next job as a follow-up message
   (`claude -p … --cloud <id>`); its VM keeps the checkout (tmp/cloud-test/tree) and cargo's output. Measured: the same
-  branch's second job built in 0 s, 11 s in total, against 350 s cold. Up to 3 sessions, each retired after 30 jobs; a
-  session that refuses a job or never answers (3 h) is dropped.
+  branch's second job built in 0 s, 11 s in total, against 350 s cold. Up to 5 busy at once (MAX_PARALLEL_RUNS, user 2026-10-16) and
+  8 sessions in total (MAX_CLOUD_SESSIONS, pool files plus starting ones): every session stays in the user's session
+  list until archived there, and the CLI can't archive. After 30 jobs a session gets `claude -p /clear --cloud <id>`
+  (a command, 0 turns) and goes on, instead of a fresh session. A session that refuses a job or never answers (3 h)
+  is dropped, loudly, into data/cloud/dropped-sessions.txt: archive those in the web UI.
+- New sessions are named "Cloud Test Lane" (`--name` carries to the cloud); the pool addresses them by session_id only.
+- The prompt is two short lines whatever the filters: the job's arguments go to the branch cloud-jobs/<job> (pushed
+  by the Mac, deleted with the result), the session runs `cloud-test.sh --job <job>`. The job commit also carries the
+  launching script, which the cloud runs: a job launched between my commit and push once met an origin/main script
+  without --job and never answered. A second launch of a pending run (same branch and tip) only waits for its result:
+  two owners relaunching at once made two jobs racing for one results branch. A job without a result frees its
+  session after 90 min. A filter list of 80 test files
+  used to fill the prompt and every repeated command (~2,000 characters each).
+- A session keeps the model it was created with: `--model` on a follow-up message doesn't switch it, a `/model haiku`
+  message does (0 turns). Every reused session gets `/model` before its job; early pool sessions had run on Opus.
 - A run that can't reach its tests (merge conflict, missing tip) pushes a red result naming why, and the test run is
-  killed after 40 min with the tests that never finished named (a hang held batch-3's session).
+  killed after 40 min, or once no test finished for 15 min (STALL_SECONDS), with the tests that never finished named.
+  batch-3's --full run hung 85 min in parser::test_self_parser::the_listed_sources_parse_as_in_rust at 222% CPU; the
+  same test alone on main took 227 s in the cloud (131–150 s on the Mac), and main's --full passed it (tests 780 s
+  in all): batch-3's content or a one-off. Main's cloud-only reds: package-build-workspace, gpu-visualizer-cpu,
+  sample-never (cards).
+  Killing cargo by hand (`pkill cargo`) left the test binary running: the watchdog kills timeout's process group.
 - The one Linux compiler warning (CLIENT unused in src/sound/midi.rs) is fixed on branch midi-client-warning (Ready).

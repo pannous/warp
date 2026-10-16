@@ -182,6 +182,7 @@ mod test_signal_in_loop;
 mod test_signal_lists;
 mod test_signal_reflection;
 mod test_signal_values;
+mod test_slow_handler; // card timer-handler
 mod test_soft_tests;
 mod test_split_kernel; // card go-split-kernel
 mod test_storage;

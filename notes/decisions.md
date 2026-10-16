@@ -213,7 +213,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - Vendoring is deactivated for now, kept for a later offline agent (P8); the cdylib is built only by
   web/playground/build.sh (P7).
 - warp-ast.wit lives at samples/wit/warp-ast.wit (2026-10-09). scripts/own-warp.sh stays while callers use it.
-- Bee/wasp entity names go into uniscript and are regenerated into src/uniscript_entities.tsv, never by hand.
+- Bee/wasp entity names go into uniscript and are regenerated into src/text/uniscript_entities.tsv, never by hand.
 - libm FFI: header-driven linking first, the LIBM_UNARY/LIBM_BINARY table only as fallback and as deliberate
   examples of hand-linked FFI (P13).
 
@@ -376,6 +376,13 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   `A as B := body` definitions. The compile-time dimension check (static_units.rs, P64) stays Rust until types can
   be parameterized by a dimension. Not Julia's unit values (`3km = 3*km`): they would bring back clashes with
   variables named m or s.
+- litre-suffix (2026-10-16, user; card list-literal): a glued unit beats a number suffix, so `2L` and `2l` are
+  2 litres (`2L in cm³` → 2000cm³). The old exact suffix L goes: exactness is `2 as exact`, with a hint where the
+  suffix was meant. lib/units.warp gains `unit l := L` and `unit ha := hm²`. Ambiguous glued units need
+  `use units` (user): unambiguous units (`3kg`, `5cm`, km/h) keep working without the import. Glued letters that
+  also mean something else, such as L and l (the old suffix) or a unit named like a variable, are an error without
+  `use units`, with a fix that adds the line: "2L: L is the litre unit here; add `use units` (for an exact number
+  write 2 as exact)".
 - unit-after-number (2026-10-16, user; card variable-named-like): after a number a unit symbol is always the unit,
   even with a variable of that name in scope: `m = 5; 3m` is 3m (meters), with a hint "a variable m exists; write
   3*m to multiply"; `m * 3` is 15. Supersedes the agent-pinned test_variable_shadows_the_unit (`3m` → 15).
@@ -820,7 +827,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   `warp fuel N app.warp`, and tests that pin a step count.
   Numbers (warp-types default, Interviewer's amendment, undoable): `warp app.warp` gets 60 s of CPU time (waits for
   sleep or input don't count), set with WARP_TIME_LIMIT=<seconds>, and WARP_FUEL selects fuel. Compile-time folding
-  of constant calls gets 2 s. `warp build` executables get no limit by default, since a built app runs as long as it
+  of constant calls counts fuel instead (Interviewer's decision after the reviewer's point: a 2 s wall-clock limit made
+  compiled output and error timing depend on machine load; the budget is roughly 2 s' worth). `warp build` executables get no limit by default, since a built app runs as long as it
   likes. Windowed and event-loop programs aren't killed after 60 s in total. A stop after the limit says loudly what
   happened and how to raise it.
 - ready-queue (2026-10-16, user via the boss and the supervisor): the board's Ready column is the merge queue. A
@@ -838,7 +846,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - text-unit-plurals (2026-10-16, user; card text-unit): every plural unit word of a text is the list:
   `"👍🏽".chars` → ['👍🏽'], `.codepoints` → ['👍' '🏽'], `.graphemes`, `.bytes` → [240 159 …], like words and lines.
   Counting is `count t.codepoints` or `number of bytes in t`. Code reading `t.codepoints` as a number migrates to
-  `count` (a `warp fix` rewrite where detectable).
+  `count` (a `warp fix` rewrite where detectable). `.bytes` is the byte list for every value, not only texts (user:
+  the memory size via `.bytes` was barely used). The size is `x.bytes.count` or `x.bytecount`; `byte_size(x)` and
+  `byte count of x` stay.
 - implicit-words-reserved (2026-10-16, user; card it-reserved): `it`, `self` and `this` are reserved. Binding one
   (`self = 3`, `it += 1`, `for this in xs`, destructuring) warns "`self` is reserved: it names the receiver of a
   method; pick another name", an error under use strict. Writing it as the explicit parameter (`f(it) := …`,
@@ -848,6 +858,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   was meant to be a test: exploratory, visual, sound, timing and undecided ones stay probes). It also dedupes and
   condenses tests, which widens the earlier "only probes condense": no distinct assertion is lost or weakened, and the
   count drops only by duplicates named in the commit. A probe is deleted only once every case is asserted.
+  Probes the user touched are never deleted (a "(user)" commit, a shebang or executable bit, commented wish lines);
+  wish lines that don't work yet become cards. The 21:37 check found english_setter fully covered, but it and
+  function_values_tour were user scripts, so both were restored (2026-10-16).
 - fast-scope (2026-10-16, user; card fast-scope): `fast` before a function or module makes everything machine
   inside it: polynomial sin/cos/exp/pow, `/` gives f64 (`fast f(x) := x/3; f(1)` → 0.3333333333333333), and plain
   ints are i64 that wrap at 2^63 (`fast g(n) := n * n; g(10^10)` wraps). `x: fast int` is i64, `x: fast float` f64;

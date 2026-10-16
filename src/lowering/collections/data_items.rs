@@ -22,6 +22,11 @@ pub enum Place {
 }
 
 impl Place {
+	/// What writing an Error into the place raises: "a list item holds no error"
+	pub fn holds_no_error(self) -> String {
+		format!("a {} holds no error", self.word())
+	}
+
 	fn word(self) -> &'static str {
 		match self {
 			Place::ListItem => "list item",

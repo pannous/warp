@@ -78,8 +78,7 @@ pub use formats::wisp_parser::{emit_wisp, parse_wisp, WispEmitter, WispParser};
 pub use warp_parser::{parse, parse_data, parse_file, parse_xml, WarpParser};
 // Type system
 pub use type_kinds::{
-	extract_instance_values, AstKind, FieldDef, Kind, NodeKind, RawFieldValue, TypeDef, TypeRegistry,
-	USER_TYPE_TAG_START,
+	extract_instance_values, FieldDef, Kind, NodeKind, RawFieldValue, TypeDef, TypeRegistry, USER_TYPE_TAG_START,
 };
 // Metadata
 pub use compiler::meta::{DataType, DataValue, LineInfo};
@@ -96,6 +95,3 @@ pub use compiler::local::Local;
 // Note: gc_struct!, obj!, and wasm_struct! macros are exported at crate root via #[macro_export]
 #[cfg(feature = "native")]
 pub use gc_traits::{register_gc_types_from_wasm, FieldIndex, FromVal, GcReadable, GcStructWrapper, ToVal};
-// GcComparable trait for Node comparison with wasm_struct types
-#[cfg(feature = "native")]
-pub use node::GcComparable;

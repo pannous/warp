@@ -327,7 +327,24 @@ pub(crate) fn result_units_entry() -> Option<(&'static str, Node)> {
 
 /// The result of running a module, as the quantity its `units` entry names (unchanged without it)
 pub fn with_module_units(bytes: &[u8], result: Node) -> Node {
-	match module_units(bytes) {
+	with_units(result, module_units(bytes))
+}
+
+/// The answer of a program computed whole at compile time (`√(4 m²)`, numbers::real) in the units its result has: 2 m;
+/// an irrational amount as the float print shows, `√(2 m²)` is 1.4142135623730951m
+pub(crate) fn with_answer_units(answer: Node) -> Node {
+	let Some(units) = take_result_units() else {
+		return answer;
+	};
+	let answer = match answer.drop_meta() {
+		Node::Number(Number::Real(real)) => Node::Number(Number::Float(real.to_f64())),
+		_ => answer,
+	};
+	with_units(answer, Some(units))
+}
+
+fn with_units(result: Node, units: Option<ResultUnits>) -> Node {
+	match units {
 		Some(ResultUnits::Whole(units)) => quantity_of(result, &units),
 		Some(ResultUnits::Fields(fields)) => with_field_units(result, &fields),
 		None => result,
@@ -408,32 +425,32 @@ pub(super) fn exact_amount(value: &Node) -> Option<Rational> {
 	}
 }
 
-/// Dimension names as types of quantities (card dimensions-units), from lib/units.warp: `h: length`, `q is length²`,
+/// Quantity names as types (card dimensions-units), from lib/units.warp: `h: length`, `q is length²`,
 /// `speed: length/duration`, and the derived names (`a: area = 3 m²`, Q4). The time dimension is `duration`, a subtype
 /// of `time` (decision anchor-time), so `3 s is time` holds too
-fn dimension_names() -> impl Iterator<Item = (&'static str, Vec<(Dimension, i32)>)> {
+fn quantity_names() -> impl Iterator<Item = (&'static str, Vec<(Dimension, i32)>)> {
 	let definitions = super::definitions::definitions();
 	let named = definitions.dimensions.iter().map(|(name, dimension)| (*name, vec![(*dimension, 1)]));
 	named.chain(definitions.derived_dimensions.iter().map(|(name, powers)| (*name, powers.clone())))
 }
 
-/// The base units a dimension name stands for: `length` → m, `speed` → m/s
-fn named_dimension(name: &str) -> Option<Vec<Factor>> {
-	let (_, powers) = dimension_names().find(|(known, _)| *known == name)?;
+/// The base units a quantity name stands for: `length` → m, `speed` → m/s
+fn named_quantity(name: &str) -> Option<Vec<Factor>> {
+	let (_, powers) = quantity_names().find(|(known, _)| *known == name)?;
 	Some(powers.iter().map(|(dimension, power)| Factor { unit: base_unit(*dimension), power: *power }).collect())
 }
 
 /// The name of a signature: `length` of m, `speed` of m/s, none of kg/m
-fn dimension_name(signature: &Signature) -> Option<&'static str> {
-	dimension_names()
+fn quantity_name(signature: &Signature) -> Option<&'static str> {
+	quantity_names()
 		.map(|(name, _)| name)
-		.find(|name| named_dimension(name).is_some_and(|factors| self::signature(&factors) == *signature))
+		.find(|name| named_quantity(name).is_some_and(|factors| self::signature(&factors) == *signature))
 }
 
 /// The type of a quantity: its dimension's name, else its base units, in lists as deep as it is (`list of length`)
 fn type_name(signature: &Signature) -> String {
 	let element = signature.clone().nested(0);
-	let dimension = dimension_name(&element).map_or_else(|| shown(&element), str::to_string);
+	let dimension = quantity_name(&element).map_or_else(|| shown(&element), str::to_string);
 	"list of ".repeat(signature.depth) + &dimension
 }
 
@@ -477,7 +494,7 @@ fn is_time_type(node: &Node, own_names: &HashMap<String, Signature>) -> bool {
 fn dimension_signature(node: &Node, own_names: &HashMap<String, Signature>) -> Option<Signature> {
 	let factors = super::factor_expression(node, &|leaf| {
 		let name = leaf.drop_meta().symbol_name().filter(|name| !own_names.contains_key(*name))?;
-		named_dimension(name)
+		named_quantity(name)
 	})?;
 	Some(signature(&factors))
 }
@@ -549,12 +566,16 @@ fn written_power(op: Op, exponent: &Node) -> Option<i32> {
 /// lib/units.warp (`speed`, shown in its base units m/s) before a unit word of it (dpi, px per inch)
 fn conversion_fix(given: &Signature, target: &Signature) -> String {
 	let (times, divided) = (combined(target, given, -1), combined(given, target, -1));
-	let fix = |ratio: &Signature, amount: String| match () {
-		_ if **ratio == *times => Some(format!("; multiply by {amount}")),
-		_ if **ratio == *divided => Some(format!("; divide by {amount}")),
-		_ => None,
+	let fix = |ratio: &Signature, amount: String| {
+		if **ratio == *times {
+			Some(format!("; multiply by {amount}"))
+		} else if **ratio == *divided {
+			Some(format!("; divide by {amount}"))
+		} else {
+			None
+		}
 	};
-	let quantities = dimension_names().map(|(name, powers)| {
+	let quantities = quantity_names().map(|(name, powers)| {
 		let ratio = Signature::from(powers);
 		let amount = format!("a {name} ({})", shown(&ratio));
 		(ratio, amount)
@@ -1177,7 +1198,7 @@ impl Inference {
 		let (value, signature) = self.infer(value)?;
 		if let Some(declared) = declared.filter(|declared| declared.signature != signature) {
 			let declared = declared.shown;
-			let given = match dimension_name(&signature) {
+			let given = match quantity_name(&signature) {
 				Some(dimension) => format!("{} ({dimension})", shown(&signature)),
 				None => shown(&signature),
 			};

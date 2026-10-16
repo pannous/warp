@@ -72,27 +72,13 @@ pub fn lower(program: Node) -> Node {
 	note_internal_words(&program, &names.union(&defined).cloned().collect());
 	// after `use json`, json's words are called bare too: `parse(t)` is json.parse(t), unless the program defines parse
 	// (decision used-module-bare-words, notes/dispatch.md level 3)
-	let used_modules = used_module_names(&program);
 	let bare_forms: Vec<&StdAlias> = (BARE_FORMS.iter().filter(|form| !kept.contains(&form.member)))
-		.chain(WARP_FORMS.iter().filter(|form| used_modules.contains(form.module)))
+		.chain(WARP_FORMS.iter().filter(|form| crate::modules::says_use(&program, form.module)))
 		.collect();
 	let mut used = HashSet::new();
 	let names = ProgramNames::of(&program);
 	let program = aliased(program, &Aliases { kept, bare_forms }, &names, &mut used);
 	with_uses(program, used)
-}
-
-/// The modules a program uses by name: `use json`
-fn used_module_names(program: &Node) -> HashSet<String> {
-	let mut modules = HashSet::new();
-	program.visit(&mut |part| {
-		if let Node::List(items, Bracket::None, Separator::Space) = part.drop_meta() {
-			if let [word, module] = items.as_slice() {
-				modules.extend(module.symbol_name().filter(|_| word.is_symbol(USE_WORD)).map(String::from));
-			}
-		}
-	});
-	modules
 }
 
 /// The aliases a program's calls may mean: the modules it names itself (`JSON.parse` of its own JSON stays its own)

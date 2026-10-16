@@ -183,6 +183,7 @@ PASSED:
   ✓ control::test_error_branch_kind::test_try_catches_an_error_branch
   ✓ control::test_error_fields::a_field_of_an_error_is_the_error
   ✓ control::test_error_not_in_data::test_a_list_of_values_and_a_handled_error_stay
+  ✓ control::test_error_not_in_data::test_a_parameter_declared_a_list_of_a_union_takes_index_writes
   ✓ control::test_error_not_in_data::test_a_place_declared_or_error_holds_an_error
   ✓ control::test_error_not_in_data::test_an_error_in_a_list_literal_raises
   ✓ control::test_error_not_in_data::test_an_error_still_travels_as_an_argument_and_a_local
@@ -630,6 +631,7 @@ PASSED:
   ✓ control::test_run_time_blocks::interpret_of_a_constant_block_runs_it_where_written
   ✓ control::test_run_time_blocks::interpret_runs_a_block_known_only_at_run_time
   ✓ control::test_run_time_blocks::running_a_run_time_block_is_the_eval_effect
+  ✓ control::test_run_time_blocks::running_a_whole_run_time_block_is_the_eval_effect_alone
   ✓ control::test_rust_inclusive_range::an_inclusive_range_in_a_for_header
   ✓ control::test_rust_inclusive_range::an_inclusive_range_in_a_match_arm
   ✓ control::test_rust_inclusive_range::an_inclusive_range_is_the_range_to_its_end
@@ -680,6 +682,7 @@ PASSED:
   ✓ control::test_signal_values::two_subscriptions_both_run_in_order
   ✓ control::test_signal_values::writes_before_the_subscription_are_not_seen
   ✓ control::test_signal_values::writes_in_loops_and_functions_notify
+  ✓ control::test_slow_handler::a_handler_slower_than_its_period_does_not_call_itself
   ✓ control::test_soft_tests::a_plain_run_skips_the_tests
   ✓ control::test_soft_tests::a_program_naming_test_keeps_its_word
   ✓ control::test_soft_tests::under_test_the_value_is_the_summary
@@ -1437,6 +1440,8 @@ PASSED:
   ✓ functions::test_fail_effect::a_library_word_that_answers_with_an_error_fails
   ✓ functions::test_fail_effect::dividing_by_a_number_and_try_do_not_fail
   ✓ functions::test_fail_effect::effects_of_names_fail
+  ✓ functions::test_fail_effect::indexing_a_key_and_a_number_cast_fail
+  ✓ functions::test_fail_effect::print_effects_of_prints_the_effects
   ✓ functions::test_fail_effect::pure_refuses_fail_but_folding_does_not
   ✓ functions::test_fail_effect::raising_and_dividing_by_a_variable_fail
   ✓ functions::test_failed_word::test_failed_ends_a_condition_like_the_other_test_words
@@ -2377,6 +2382,7 @@ PASSED:
   ✓ modules::test_include::including_a_file_twice_includes_it_once_and_cycles_terminate
   ✓ modules::test_include::require_and_import_are_use
   ✓ modules::test_include::use_imports_only_the_declarations
+  ✓ modules::test_json_parse_form::bare_parse_after_use_json_is_json_parse
   ✓ modules::test_json_parse_form::json_parse_reads_json
   ✓ modules::test_json_parse_form::parse_json_is_an_alias_of_json_parse
   ✓ modules::test_json5::json_of_a_text_parses_it
@@ -2532,6 +2538,8 @@ PASSED:
   ✓ modules::test_std_qualified::a_variable_of_the_modules_name_keeps_its_methods
   ✓ modules::test_std_random::use_random_brings_choice_shuffle_sample
   ✓ modules::test_std_random::use_random_seed_repeats_the_numbers
+  ✓ modules::test_std_reflection_hints::reflecting_on_standard_module_functions_gives_no_hints_from_the_module
+  ✓ modules::test_std_reflection_hints::reflection_still_gives_hints_for_the_programs_own_code
   ✓ modules::test_std_regex::a_match_prints_yes_or_no
   ✓ modules::test_std_regex::use_regex_matches_finds_and_replaces
   ✓ modules::test_std_regex::what_one_engine_lacks_is_an_error_in_both
@@ -2773,6 +2781,10 @@ PASSED:
   ✓ numbers::test_exact_parameters::float64_is_the_word_float
   ✓ numbers::test_exponent_texts::float_of_an_exponent_text
   ✓ numbers::test_exponent_texts::int_of_an_exponent_text
+  ✓ numbers::test_fast_int::a_fast_int_variable_wraps
+  ✓ numbers::test_fast_int::a_fast_loop_counts_as_the_exact_one
+  ✓ numbers::test_fast_int::int64_wraps_and_traps_only_when_strict
+  ✓ numbers::test_fast_int::nested_fast_operations_wrap
   ✓ numbers::test_fast_math::fast_words_are_close_to_the_c_library
   ✓ numbers::test_fast_math::fast_words_reach_the_math_module_and_stay_out_of_other_programs
   ✓ numbers::test_fast_math::warp_fast_uses_fast_math_also_for_a_kept_program_file
@@ -3039,6 +3051,8 @@ PASSED:
   ✓ numbers::test_shift_operators::test_shift_precedence_and_variables
   ✓ numbers::test_shift_operators::test_shift_right_floors_by_a_power_of_two
   ✓ numbers::test_shift_operators::test_shifts_of_big_exact_ints
+  ✓ numbers::test_sqrt_quantity_unit::a_square_root_keeps_the_unit
+  ✓ numbers::test_sqrt_quantity_unit::an_irrational_root_shows_as_a_float_with_the_unit
   ✓ numbers::test_static_units_compiled::test_a_compiled_quantity_carries_its_unit
   ✓ numbers::test_static_units_compiled::test_a_whole_list_of_quantities_shows_its_units
   ✓ numbers::test_static_units_compiled::test_eval_reads_the_same_section
@@ -3528,6 +3542,8 @@ PASSED:
   ✓ parser::test_meta::test_meta_field
   ✓ parser::test_meta::test_parent
   ✓ parser::test_meta::test_parent_context
+  ✓ parser::test_named_argument_lambda::a_listed_entry_holds_the_lambda
+  ✓ parser::test_named_argument_lambda::a_named_argument_holds_the_lambda
   ✓ parser::test_newline_precedence::a_method_call_starting_the_next_line_continues_the_expression
   ✓ parser::test_newline_precedence::test_fibonacci_auto_param_newline
   ✓ parser::test_newline_precedence::test_fibonacci_auto_typed_newline
@@ -3838,6 +3854,7 @@ PASSED:
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error_slice_2
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error_slice_3
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error_slice_4
+  ✓ programs::test_samples_run_cleanly::samples_keep_their_stored_values_out_of_the_checkout
   ✓ programs::test_samples::test_ackermann
   ✓ programs::test_samples::test_binary_tree
   ✓ programs::test_samples::test_calculator
@@ -4614,6 +4631,10 @@ PASSED:
   ✓ types::test_duration_comparison::test_bounds_that_hold_on_every_date
   ✓ types::test_duration_comparison::test_durations_order
   ✓ types::test_duration_comparison::test_durations_order_at_run_time
+  ✓ types::test_duration_units::a_time_unit_adds_to_a_duration
+  ✓ types::test_duration_units::a_time_unit_alone_stays_a_quantity
+  ✓ types::test_duration_units::a_time_unit_compares_with_a_duration
+  ✓ types::test_duration_units::a_time_unit_moves_a_time
   ✓ types::test_element_field_writes::a_character_stored_into_a_list_of_unknown_type_stays_a_character
   ✓ types::test_element_field_writes::a_field_of_a_list_element_changes
   ✓ types::test_element_field_writes::a_list_field_of_an_element_checks_its_items
@@ -6021,6 +6042,7 @@ PASSED:
   ✓ welcoming::test_unknown_prefix_word::an_unknown_word_applied_to_a_value_warns
   ✓ welcoming::test_unknown_prefix_word::known_words_and_plain_data_do_not_warn
   ✓ welcoming::test_unknown_prefix_word::the_call_form_stays_an_error
+  ✓ welcoming::test_unknown_word_error::test_an_unknown_word_in_a_condition_is_an_error
   ✓ welcoming::test_unknown_word_error::test_an_unknown_word_with_a_value_is_an_error_in_code
   ✓ welcoming::test_unknown_word_error::test_data_contexts_keep_unknown_words
   ✓ welcoming::test_unknown_word_error::test_known_words_are_untouched
@@ -6137,4 +6159,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6132 passed, 0 failed, 6132 total tested
+13 ignored, 6154 passed, 0 failed, 6154 total tested

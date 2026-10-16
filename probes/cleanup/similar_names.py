@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Cluster suspiciously similar (not identical) function names in src/ and rank the pairs by body similarity.
 
-Usage: probes/similar_names.py [repo] [out.md]   (defaults: this checkout, data/restructuring/similar_names_raw.md)
-       probes/similar_names.py show <name>...      prints every definition of these names with its body
+Usage: probes/cleanup/similar_names.py [repo] [out.md]   (defaults: this checkout, data/restructuring/similar_names_raw.md)
+       probes/cleanup/similar_names.py show <name>...      prints every definition of these names with its body
 Clusters: same word stems after dropping filler words and folding synonyms, and small edit distance.
 Each pair gets a body similarity (difflib over tokens, own names masked) and the lines a merge could save.
 """
@@ -11,7 +11,7 @@ from collections import defaultdict
 from pathlib import Path
 
 SHOW = sys.argv[1:2] == ["show"]
-REPO = Path(sys.argv[1] if len(sys.argv) > 1 and not SHOW else Path(__file__).resolve().parent.parent)
+REPO = Path(sys.argv[1] if len(sys.argv) > 1 and not SHOW else Path(__file__).resolve().parents[2])
 OUT = Path(sys.argv[2]) if len(sys.argv) > 2 and not SHOW else REPO / "data/restructuring/similar_names_raw.md"
 FILLER = {"a", "the", "of", "in", "on", "at", "to", "from", "for", "with", "by", "as", "and", "or", "into", "all",
           "get", "is", "has", "do", "emit", "try", "make", "new", "maybe", "any", "some", "fn", "impl", "inner", "helper"}
