@@ -56,29 +56,12 @@ fn unit_aliases() -> &'static [(&'static str, &'static str)] {
 	&definitions::definitions().aliases
 }
 
-/// The long names a conversion target may use, singular or plural: `2 h in minutes` (P36). Quantities keep the short
-/// names, `2 minutes` stays a duration of the time module.
-const LONG_NAMES: [(&str, &str); 19] = [
-	("millisecond", "ms"),
-	("second", "s"),
-	("minute", "min"),
-	("hour", "h"),
-	("millimeter", "mm"),
-	("centimeter", "cm"),
-	("meter", "m"),
-	("metre", "m"),
-	("kilometer", "km"),
-	("inches", "inch"),
-	("foot", "ft"),
-	("feet", "ft"),
-	("yard", "yd"),
-	("mile", "mi"),
-	("milligram", "mg"),
-	("gram", "g"),
-	("kilogram", "kg"),
-	("pound", "lb"),
-	("lbs", "lb"),
-];
+/// The long names a conversion target may use, singular or plural: `2 h in minutes` (P36), lib/units.warp's `name hour :=
+/// h` lines. Quantities keep the short names, `2 minutes` stays a duration of the time module.
+fn long_names() -> &'static [(&'static str, &'static str)] {
+	&definitions::definitions().long_names
+}
+
 // `100 cm in m`: the word of a conversion written with spaces (`as` is an operator)
 /// `now` compared with a duration is its local time of day, unless the program names something so (card time-day-value);
 /// a bare `time` is the type (user decision print-time), so `time < 12h` fails with the fix `now < 12h`
@@ -104,7 +87,10 @@ fn target_unit(node: &Node) -> Option<&'static Unit> {
 	};
 	let singular = name.strip_suffix('s').unwrap_or(name);
 	unit_named(name).or_else(|| {
-		LONG_NAMES.iter().find(|(long, _)| *long == singular || *long == name).and_then(|(_, short)| unit_named(short))
+		long_names()
+			.iter()
+			.find(|(long, _)| *long == singular || *long == name)
+			.and_then(|(_, short)| unit_named(short))
 	})
 }
 
@@ -341,7 +327,7 @@ pub fn dimension_and_factor(name: &str) -> Option<(String, i64)> {
 /// `h` as its unit's long name `hour` (the unit word where it has none); none when `program` defines the word itself
 pub fn unit_long_name(name: &str, program: &Node) -> Option<&'static str> {
 	let unit = shadowing(program, || unit_named(name))?;
-	let long_name = LONG_NAMES.iter().find(|(_, short)| *short == unit.name);
+	let long_name = long_names().iter().find(|(_, short)| *short == unit.name);
 	Some(long_name.map_or(unit.name, |(long, _)| *long))
 }
 

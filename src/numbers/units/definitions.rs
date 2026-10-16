@@ -16,6 +16,13 @@ const SOURCE: &str = include_str!("../../../lib/units.warp");
 const BLOCK_END: &str = "}";
 const DIMENSION_WORD: &str = "dimension ";
 const UNIT_WORD: &str = "unit ";
+/// `SI dimension length meter`: its units take the SI prefixes (decision unit-definitions: not pixels, not eras)
+const SI_MARK: &str = "SI ";
+/// `prefix k := 10^3`: an SI prefix and its power of ten
+const PREFIX_WORD: &str = "prefix ";
+const POWER_OF_TEN: &str = "10^";
+/// `name hour := h`: a long name a conversion target may use, singular or plural (`2 h in minutes`, P36)
+const NAME_WORD: &str = "name ";
 const DEFINE: &str = ":=";
 /// `unit m := 1 meter`: a unit of the same amount as an anchor
 const ONE: &str = "1 ";
@@ -52,13 +59,6 @@ const DIMENSION_WORDS: [(&str, Dimension); 6] = [
 	("pixels", Dimension::Pixel),
 ];
 
-/// The dimensions whose units take SI prefixes (decision unit-definitions: not pixels, not eras, not furlongs)
-const SI_DIMENSIONS: [Dimension; 4] = [Dimension::Length, Dimension::Mass, Dimension::Time, Dimension::Temperature];
-/// The SI prefixes a unit of an SI dimension takes by itself (`km`, `µs`, `GK`), each a power of ten; giga down to nano
-/// keep every unit a whole number of its dimension's finest step within 64 bits
-const SI_PREFIXES: [(&str, i32); 10] =
-	[("G", 9), ("M", 6), ("k", 3), ("h", 2), ("da", 1), ("d", -1), ("c", -2), ("m", -3), ("µ", -6), ("n", -9)];
-
 pub(super) struct Definitions {
 	/// The dimensions by name, in written order, and the names of products of them (`speed := length/duration`)
 	pub(super) dimensions: Vec<(&'static str, Dimension)>,
@@ -69,6 +69,8 @@ pub(super) struct Definitions {
 	pub(super) aliases: Vec<(&'static str, &'static str)>,
 	pub(super) bridges: Vec<Bridge<'static>>,
 	pub(super) settings: Vec<Setting<'static>>,
+	/// `name hour := h`: long name → unit symbol
+	pub(super) long_names: Vec<(&'static str, &'static str)>,
 }
 
 /// `length as pixels := it * display.dpi`: an amount of `from` is `factor` times as much of `to`, the factor read at
@@ -228,7 +230,7 @@ fn lib_reader() -> Reader<'static> {
 	let read = || -> Result<Reader<'static>, String> {
 		let mut reader = Reader::default();
 		lib_lines().try_for_each(|line| reader.line(line))?;
-		let prefixed = with_si_prefixes(&reader.units, &reader.aliases);
+		let prefixed = with_si_prefixes(&reader);
 		reader.units.extend(prefixed);
 		Ok(reader)
 	};
@@ -239,9 +241,10 @@ fn lib_reader() -> Reader<'static> {
 fn read(program_lines: impl Iterator<Item = &'static str>) -> Result<Definitions, String> {
 	let mut reader = lib_reader();
 	program_lines.into_iter().try_for_each(|line| reader.line(line))?;
-	let Reader { dimensions, derived_dimensions, base_units, units, aliases, bridges, settings } = reader;
+	let Reader { dimensions, derived_dimensions, base_units, units, aliases, bridges, settings, long_names, .. } =
+		reader;
 	let units = in_whole_steps(units)?;
-	Ok(Definitions { dimensions, derived_dimensions, units, base_units, aliases, bridges, settings })
+	Ok(Definitions { dimensions, derived_dimensions, units, base_units, aliases, bridges, settings, long_names })
 }
 
 /// The definitions read so far, one line at a time
@@ -254,6 +257,10 @@ struct Reader<'a> {
 	aliases: Vec<(&'a str, &'a str)>,
 	bridges: Vec<Bridge<'a>>,
 	settings: Vec<Setting<'a>>,
+	/// The dimensions whose units take the SI prefixes, and the prefixes with their powers of ten
+	si_dimensions: Vec<Dimension>,
+	prefixes: Vec<(&'a str, u32, bool)>,
+	long_names: Vec<(&'a str, &'a str)>,
 }
 
 impl<'a> Reader<'a> {
@@ -274,6 +281,32 @@ impl<'a> Reader<'a> {
 			let (name, expression) = line.strip_prefix(keyword)?.split_once(separator)?;
 			Some((name.trim(), expression.trim()))
 		};
+		if let Some(line) = line.strip_prefix(SI_MARK) {
+			self.line(line)?;
+			let (_, dimension) = self
+				.dimensions
+				.last()
+				.filter(|_| line.starts_with(DIMENSION_WORD))
+				.copied()
+				.ok_or(format!("{line}: SI marks a base dimension"))?;
+			self.si_dimensions.push(dimension);
+			return Ok(());
+		}
+		if let Some((prefix, power)) = definition(PREFIX_WORD, DEFINE) {
+			let exponent: i32 = power
+				.strip_prefix(POWER_OF_TEN)
+				.and_then(|exponent| exponent.parse().ok())
+				.ok_or(format!("{line}: a prefix is 10^n"))?;
+			self.prefixes.push((prefix, exponent.unsigned_abs(), exponent > 0));
+			return Ok(());
+		}
+		if let Some((long_name, symbol)) = definition(NAME_WORD, DEFINE) {
+			if !self.knows(symbol) {
+				return Err(format!("{line}: {symbol} is no unit"));
+			}
+			self.long_names.push((long_name, symbol));
+			return Ok(());
+		}
 		if let Some((name, anchor)) = definition(DIMENSION_WORD, " ") {
 			match DIMENSION_WORDS.iter().find(|(word, _)| *word == name) {
 				Some((_, dimension)) => {
@@ -359,24 +392,25 @@ fn targeted(expression: &str, target: Option<&str>) -> String {
 
 /// `km`, `µg`, `ns`: each SI prefix on each unit of an SI dimension that is a power of ten of its anchor and carries no
 /// prefix itself (`g` takes them, `kg` and `cm` do not); a unit written in lib/units.warp keeps its own definition
-fn with_si_prefixes<'a>(units: &[Read<'a>], aliases: &[(&'a str, &'a str)]) -> Vec<Read<'a>> {
-	let known =
-		|name: &str| units.iter().any(|unit| unit.name == name) || aliases.iter().any(|(alias, _)| *alias == name);
-	let prefixed = |name: &str| SI_PREFIXES.iter().any(|(prefix, _)| name.strip_prefix(prefix).is_some_and(known));
+fn with_si_prefixes<'a>(reader: &Reader<'a>) -> Vec<Read<'a>> {
+	let known = |name: &str| reader.knows(name);
+	let prefixed =
+		|name: &str| reader.prefixes.iter().any(|(prefix, _, _)| name.strip_prefix(prefix).is_some_and(known));
 	let takes_prefixes = |unit: &&Read<'a>| {
-		SI_DIMENSIONS.contains(&unit.dimension)
+		reader.si_dimensions.contains(&unit.dimension)
 			&& unit.zero.is_zero()
 			&& power_of_ten(&unit.scale)
 			&& !prefixed(unit.name)
 	};
-	units
+	reader
+		.units
 		.iter()
 		.filter(takes_prefixes)
-		.flat_map(|unit| SI_PREFIXES.iter().map(move |(prefix, power)| (unit, prefix, power)))
-		.filter_map(|(unit, prefix, power)| {
+		.flat_map(|unit| reader.prefixes.iter().map(move |(prefix, power, up)| (unit, prefix, *power, *up)))
+		.filter_map(|(unit, prefix, power, up)| {
 			let name: &'static str = Box::leak(format!("{prefix}{}", unit.name).into_boxed_str());
-			let ten = Rational::integer(BigInt::from(10).pow(power.unsigned_abs()));
-			let factor = if *power > 0 { ten } else { ten.inverse()? };
+			let ten = Rational::integer(BigInt::from(10).pow(power));
+			let factor = if up { ten } else { ten.inverse()? };
 			(!known(name)).then(|| Read {
 				name,
 				dimension: unit.dimension,

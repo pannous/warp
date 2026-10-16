@@ -12,12 +12,25 @@
 // bridges two dimensions by a value read at each conversion, `display.dpi := 96 dpi` a setting, the screen's where it
 // tells (decision dimension-bridges); a unit added here is known everywhere, also in conversions
 unit_definitions = data {
-	dimension length meter
-	dimension mass kilogram
-	dimension duration second
+	// `SI dimension` gives the units of a dimension the SI prefixes, `prefix k := 10^3` is one of them (giga down to
+	// nano keep every unit a whole number of its dimension's finest step within 64 bits), `name hour := h` a long name
+	// a conversion target may use, singular or plural (`2 h in minutes`)
+	SI dimension length meter
+	SI dimension mass kilogram
+	SI dimension duration second
 	dimension era AD
-	dimension temperature kelvin
+	SI dimension temperature kelvin
 	dimension pixels px
+	prefix G := 10^9
+	prefix M := 10^6
+	prefix k := 10^3
+	prefix h := 10^2
+	prefix da := 10^1
+	prefix d := 10^-1
+	prefix c := 10^-2
+	prefix m := 10^-3
+	prefix µ := 10^-6
+	prefix n := 10^-9
 	unit m := 1 meter
 	unit kg := 1 kilogram
 	unit s := 1 second
@@ -50,6 +63,25 @@ unit_definitions = data {
 	unit dpi := px/inch
 	display.dpi := 96 dpi
 	length as pixels := it * display.dpi
+	name millisecond := ms
+	name second := s
+	name minute := min
+	name hour := h
+	name millimeter := mm
+	name centimeter := cm
+	name meter := m
+	name metre := m
+	name kilometer := km
+	name inches := inch
+	name foot := ft
+	name feet := ft
+	name yard := yd
+	name mile := mi
+	name milligram := mg
+	name gram := g
+	name kilogram := kg
+	name pound := lb
+	name lbs := lb
 }
 
 // At run time the block above stands for the tables the Quantity class reads (src/numbers/units.rs): unit_names,
