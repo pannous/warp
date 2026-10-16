@@ -768,9 +768,11 @@ impl Lowering {
 		canonical_word(name).filter(|word| !self.shadows(name) && !self.shadows(word))
 	}
 
-	/// The library word a call of `name` with that many arguments (receiver included) means
+	/// The library word a call of `name` with that many arguments (receiver included) means; a prelude word answers to
+	/// its own name too (`round_to(x, 2)` as `round(x, 2)` does, card lib-math)
 	fn library_word_for(&self, name: &str, argument_count: usize) -> Option<&'static str> {
-		self.arity_variant(name, argument_count).or_else(|| self.library_word(name))
+		let prelude_word = || crate::modules::prelude_word(name).filter(|_| !self.shadows(name));
+		self.arity_variant(name, argument_count).or_else(|| self.library_word(name)).or_else(prelude_word)
 	}
 
 	/// The word `name` means with that many arguments, unless the program defines `name`
