@@ -34,6 +34,7 @@ mod test_paint_window_ends; // card exit-key
 mod test_plain_hints_when_piped;
 mod test_playground_samples;
 mod test_program_cache; // card cache-compiled-shader
+mod test_property_definitions; // card graphics-properties
 mod test_samples;
 mod test_samples_run_cleanly;
 mod test_save_painting; // card save-painting

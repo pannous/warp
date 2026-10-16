@@ -121,7 +121,7 @@ pub fn written_at(body: &Node) -> Option<crate::compiler::meta::LineInfo> {
 }
 
 /// The comment the parser put on the first word of a statement
-fn leading_comment(node: &Node) -> Option<&str> {
+pub(crate) fn leading_comment(node: &Node) -> Option<&str> {
 	match node {
 		Node::Meta { node, data } => entry_text(data, COMMENT_KEY).or_else(|| leading_comment(node)),
 		Node::Key(left, _, _) => leading_comment(left),
