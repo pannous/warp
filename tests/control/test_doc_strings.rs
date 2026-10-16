@@ -13,6 +13,7 @@ fn a_leading_text_is_the_doc_and_not_evaluated() {
 fn the_comment_above_a_definition_is_the_doc() {
 	is!("# doubles a number\nfun twice(x) { x*2 }\ntwice.doc", "doubles a number");
 	is!("// doubles a number\ntwice(x) := x*2\ntwice.doc", "doubles a number");
+	is!("# doubles a number\ntwice(x) := x*2\nhelp(twice)", "twice(x) -> int\ndoubles a number");
 }
 
 #[test]
