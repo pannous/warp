@@ -667,7 +667,7 @@ impl FunctionValues {
 			return None;
 		};
 		let (class, arguments) = items.split_first()?;
-		let fields = self.class_fields.get(&class.symbol_name()?.to_string())?;
+		let fields = self.class_fields.get(class.symbol_name()?)?;
 		let positional = arguments.iter().all(|argument| !matches!(argument.drop_meta(), Node::Key(_, Op::Colon, _)));
 		match positional {
 			true => Some(fields.iter().map(|(field, _)| field.clone()).zip(arguments.iter().cloned()).collect()),
