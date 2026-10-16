@@ -629,7 +629,7 @@ impl Lowering {
 					return chained;
 				}
 				let written = *left;
-				let left = self.expand(written.clone());
+				let left = self.expanded_head(written.clone());
 				if let Some(set) = self.functional_setter(&written, &left, &right) {
 					return set;
 				}
@@ -645,7 +645,7 @@ impl Lowering {
 			}
 			Node::Key(left, Op::Coalesce, right) => self.lower_coalesce(self.expand(*left), self.expand(*right)),
 			Node::Key(left, Op::Define, right) => {
-				let left = self.expand(*left);
+				let left = self.expanded_head(*left);
 				let right = self.in_definition(&left, *right);
 				key(left, Op::Define, right)
 			}
@@ -655,6 +655,24 @@ impl Lowering {
 				key(as_float(self.expand(*left)), Op::Div, as_float(*right))
 			}
 			other => children_rewritten(other, |child| self.expand(child)),
+		}
+	}
+
+	/// The left side of `head := right`: the program's own function keeps its name, whatever its parameters look like
+	/// as a call (`get [int] xs` of `fn get(int[] xs)` is no call of the library's get)
+	fn expanded_head(&self, head: Node) -> Node {
+		match head {
+			Node::List(items, bracket @ Bracket::Round, separator)
+				if items
+					.first()
+					.and_then(Node::symbol_name)
+					.is_some_and(|name| self.program.function_takes(name, 0).is_some()) =>
+			{
+				let mut items = items.into_iter();
+				let name = items.next().into_iter();
+				Node::List(name.chain(items.map(|item| self.expand(item))).collect(), bracket, separator)
+			}
+			other => self.expand(other),
 		}
 	}
 
