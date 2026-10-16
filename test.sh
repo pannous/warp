@@ -2,8 +2,9 @@
 # Simplified test runner - matches IDE configuration exactly
 # Creates clean test_results.txt with just pass/fail lists
 
-# rustc building warp-lang at opt-level 2 (OPTIMIZED_COMPILER below) peaks at ~4.2 GB, over the queue's 4 GB default cap
-export WARP_TEST_MEMORY_CAP_GB="${WARP_TEST_MEMORY_CAP_GB:-6}"
+# rustc building warp-lang at opt-level 2 (OPTIMIZED_COMPILER below) took 4.2–6.2 GB, over the queue's 4 GB default
+# cap; moot once tests/queue.sh caps only tests (branch queue-prebuild)
+export WARP_TEST_MEMORY_CAP_GB="${WARP_TEST_MEMORY_CAP_GB:-8}"
 [ -z "$WARP_TEST_LOCKED" ] && exec "$(dirname "$0")/tests/queue.sh" "$0" "$@"
 
 OUTPUT_FILE="${1:-test_results.txt}"
@@ -24,16 +25,49 @@ FEATURES="--all-features" # native + ffi: the default build plus the FFI tests
 # the tests binary ran 2x faster (summed test time 14424 → 7059 s), the build takes ~130 s longer (notes/test_speed.md).
 # Debug assertions and overflow checks stay on. Gate only: workers' targeted runs keep opt-level 0, which builds faster
 OPTIMIZED_COMPILER="profile.test.package.warp-lang.opt-level=2"
-cargo --offline test $FEATURES --color=always --profile test --no-fail-fast --config "$RUNNER" --config "$OPTIMIZED_COMPILER" --no-run || exit 1
+# incremental builds at opt-level 2 can link objects whose ThinLTO-local symbols (`….llvm.<hash>`) are gone: the first
+# o2 gate failed to link the lib tests so (2026-10-16); the gate's build changes most of warp anyway
+export CARGO_INCREMENTAL=0
+TEST_EXECUTABLES=$(mktemp)
+cargo --offline test $FEATURES --color=always --profile test --no-fail-fast --config "$RUNNER" --config "$OPTIMIZED_COMPILER" --no-run --message-format=json-render-diagnostics |
+	jq -r 'select(.reason == "compiler-artifact" and .profile.test and .executable != null) | "\(.target.src_path)\t\(.executable)"' > "$TEST_EXECUTABLES"
+[ "${PIPESTATUS[0]}" -eq 0 ] || exit 1
+# the runtime stubs the executable tests copy (tests/common runtime_stub): built here, so no test runs cargo, whose lock
+# on the shared target dir made 14 tests wait ~175 s each while other worktrees built (notes/test_speed.md)
+cargo --offline build --quiet -p warp-runtime --bin warp-runtime || exit 1
+cargo --offline build --quiet -p warp-runtime --bin warp-page-runtime --features webview || exit 1
+export WARP_TEST_STUBS_BUILT=1
 
 COMPILE_SECONDS=$((SECONDS - COMPILE_START))
 
 echo "Running all tests..."
 TEST_THREADS=16
 RUN_START=$SECONDS
+RUNNER_PROGRAM=$(echo "$RUNNER" | sed -E "s/.*\['([^']*)'\].*/\1/")
+# the [env] of .cargo/config.toml as cargo gives it to the programs it runs: a value relative to the config's folder
+# becomes absolute, a variable already set is kept unless the entry says force
+cargo_config_env() {
+	python3 -I -c 'import os, tomllib
+for name, entry in tomllib.load(open(".cargo/config.toml", "rb")).get("env", {}).items():
+    entry = entry if isinstance(entry, dict) else {"value": entry}
+    value = os.path.abspath(entry["value"]) if entry.get("relative") else entry["value"]
+    if entry.get("force") or name not in os.environ:
+        print(f"export {name}={value!r}")'
+}
+# the test executables run directly, as cargo test would run them (through the runner, in the package folder, with
+# CARGO and the config's [env] set): a second `cargo test` only waited 18–47 s for the shared target dir's lock.
 # --report-time appends each test's duration (<1.234s>) for the slowest list; libtest takes unstable options only on
-# nightly, which RUSTC_BOOTSTRAP=1 stands in for (it rebuilds nothing)
-RUSTC_BOOTSTRAP=1 cargo --offline test $FEATURES --color=always --profile test --no-fail-fast --config "$RUNNER" --config "$OPTIMIZED_COMPILER" -- --test-threads=$TEST_THREADS -Zunstable-options --report-time 2>&1 | tee "$TEMP_FILE"
+# nightly, which RUSTC_BOOTSTRAP=1 stands in for
+eval "$(cargo_config_env)" || exit 1
+run_test_executables() {
+	local source executable
+	while IFS=$'\t' read -r source executable; do
+		echo "     Running ${source#"$PWD/"} ($executable)"
+		RUSTC_BOOTSTRAP=1 CARGO="$(command -v cargo)" "$RUNNER_PROGRAM" "$executable" --test-threads=$TEST_THREADS \
+			-Zunstable-options --report-time
+	done < "$TEST_EXECUTABLES"
+}
+run_test_executables 2>&1 | tee "$TEMP_FILE"
 RUN_SECONDS=$((SECONDS - RUN_START))
 
 # Strip ANSI color codes so the summary greps work on the raw log
