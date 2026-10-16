@@ -445,8 +445,52 @@ pub fn lower_arity_overloads(node: Node) -> Node {
 		return node;
 	}
 	let called_parameters = called_parameters(&node);
+	let fields: HashSet<String> =
+		crate::lowering::class_methods::class_fields(&node).into_values().flatten().map(|(field, _)| field).collect();
+	let node = method_variants(node, &arities, &fields);
 	let node = ArityOverloads { arities: arities.clone() }.rewrite(node);
 	passed_variants(node, &arities, &called_parameters)
+}
+
+/// `p.label`, `p.label(x)` and `p.label = v` of label overloaded by arity: the variant taking the receiver too, label·1,
+/// label·2 (read `label·2(p, x)`, set `p = label·2(p, v)` by library_words), unless a class has a field label
+fn method_variants(node: Node, arities: &HashMap<String, Vec<Arity>>, fields: &HashSet<String>) -> Node {
+	let variant = |name: &str, arguments: usize| {
+		let fitting: Vec<&Arity> = arities.get(name)?.iter().filter(|arity| arity.accepts(arguments)).collect();
+		match fitting.as_slice() {
+			[arity] if !fields.contains(name) => Some(arity_variant(name, **arity)),
+			_ => None,
+		}
+	};
+	let recurse = |child: Node| method_variants(child, arities, fields);
+	let renamed = |member: Node, arguments: usize| match member.drop_meta() {
+		Node::Symbol(name) => variant(name, arguments).map(Node::Symbol),
+		_ => None,
+	};
+	match node {
+		Node::Key(target, Op::Assign, value) => match *target {
+			Node::Key(receiver, Op::Dot, member) if renamed(member.as_ref().clone(), 2).is_some() => {
+				let member = renamed(*member, 2).expect("a variant of two");
+				key(key(recurse(*receiver), Op::Dot, member), Op::Assign, recurse(*value))
+			}
+			target => key(recurse(target), Op::Assign, recurse(*value)),
+		},
+		Node::Key(receiver, Op::Dot, member) => {
+			let member = match member.drop_meta().clone() {
+				Node::List(items, Bracket::Round, separator) if !items.is_empty() => {
+					let arguments = items.len();
+					let mut items: Vec<Node> = items.into_iter().map(recurse).collect();
+					if let Some(head) = renamed(items[0].clone(), arguments) {
+						items[0] = head;
+					}
+					Node::List(items, Bracket::Round, separator)
+				}
+				symbol => renamed(symbol, 1).unwrap_or(*member),
+			};
+			key(recurse(*receiver), Op::Dot, member)
+		}
+		other => children_rewritten(other, recurse),
+	}
 }
 
 /// (function, parameter index) → how many arguments the function's body calls that parameter with: 0 of

@@ -12,7 +12,7 @@
 
 use super::nodes::{for_in_variable, function_head, key, parameter_name};
 use crate::errors::diagnostic::Diagnostic;
-use crate::node::{Bracket, Node};
+use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use std::collections::{HashMap, HashSet};
 
@@ -134,8 +134,10 @@ pub fn lower(program: Node) -> Node {
 }
 
 /// `Point.sum := it.x + it.y` of a class Point (card point-sum): a property of its instances, `it` the instance, which is
-/// the function `sum(it: Point) := it.x + it.y`, read `Point(1, 2).sum` as any function of one instance is. A property
-/// named as one of the class's fields would never be read: a loud error
+/// the function `sum(it: Point) := it.x + it.y`, read `Point(1, 2).sum` as any function of one instance is. Its setter
+/// `Point.label(v) := it.name = v` (card point-label) is `label(it: Point, v) := { it.name = v; it }`, which
+/// `p.label = "b"` calls as `p = label(p, "b")`, so it gives back the instance it changed. A property named as one of
+/// the class's fields would never be read: a loud error
 fn with_instance_getters(program: Node) -> Result<Node, Node> {
 	let classes = crate::modules::needed_definitions::class_names(&program);
 	if classes.is_empty() {
@@ -144,24 +146,33 @@ fn with_instance_getters(program: Node) -> Result<Node, Node> {
 	let fields = crate::lowering::class_methods::class_fields(&program);
 	let refused = std::cell::RefCell::new(None);
 	let program = map_statements(program, &|statement| match instance_getter(&statement, &classes) {
-		Some((class, property, _))
+		Some((class, property, ..))
 			if fields.get(&class).is_some_and(|own| own.iter().any(|(field, _)| *field == property)) =>
 		{
 			let reason = format!("{class}.{property} is a field of {class}: a property cannot share its name");
 			refused.borrow_mut().get_or_insert_with(|| Diagnostic::at(&statement, reason).into_error());
 			statement
 		}
-		Some((class, property, body)) => {
-			let instance = Node::Key(Box::new(Node::Symbol(WRITTEN.into())), Op::Colon, Box::new(Node::Symbol(class)));
-			key(crate::node::call(&property, vec![instance]), Op::Define, body)
+		Some((class, property, None, body)) => {
+			key(crate::node::call(&property, vec![instance(class)]), Op::Define, body)
+		}
+		Some((class, property, Some(value), body)) => {
+			let changed = Node::List(vec![body, Node::Symbol(WRITTEN.into())], Bracket::Curly, Separator::Semicolon);
+			key(crate::node::call(&property, vec![instance(class), value]), Op::Define, changed)
 		}
 		None => statement,
 	});
 	refused.into_inner().map_or(Ok(program), Err)
 }
 
-/// Class, property and body of `Point.sum := …`, a getter of a class's instances: any body, `it` being the instance
-fn instance_getter(statement: &Node, classes: &HashSet<String>) -> Option<(String, String, Node)> {
+/// `it: Point`, the instance a property of class Point reads
+fn instance(class: String) -> Node {
+	Node::Key(Box::new(Node::Symbol(WRITTEN.into())), Op::Colon, Box::new(Node::Symbol(class)))
+}
+
+/// Class, property, the setter's parameter and body of `Point.sum := …` (a getter of a class's instances) and
+/// `Point.label(v) := …` (a setter): any body, `it` being the instance
+fn instance_getter(statement: &Node, classes: &HashSet<String>) -> Option<(String, String, Option<Node>, Node)> {
 	let Node::Key(head, Op::Define, body) = statement.drop_meta() else {
 		return None;
 	};
@@ -169,8 +180,13 @@ fn instance_getter(statement: &Node, classes: &HashSet<String>) -> Option<(Strin
 		return None;
 	};
 	let class = object.drop_meta().symbol_name().filter(|class| classes.contains(*class))?;
-	let property = member.drop_meta().symbol_name()?;
-	Some((class.to_string(), property.to_string(), body.as_ref().clone()))
+	let (property, value) = match member.drop_meta() {
+		Node::List(items, Bracket::Round, _) if items.len() == 2 => {
+			(items[0].drop_meta().symbol_name()?, Some(items[1].clone()))
+		}
+		member => (member.symbol_name()?, None),
+	};
+	Some((class.to_string(), property.to_string(), value, body.as_ref().clone()))
 }
 
 /// The program with each top-level statement (also inside a block) mapped
@@ -185,20 +201,11 @@ fn map_statements(node: Node, map: &impl Fn(Node) -> Node) -> Node {
 }
 
 /// A loud error for a property definition of a value the program binds, which no use would read: `p = {x: 1}; p.x := 5`
-/// (the field is written `p.x = 5`), or a setter of a class's instances, which have none yet (card point-sum)
+/// (the field is written `p.x = 5`)
 fn refused_definition(program: &Node, values: &HashSet<String>) -> Option<Node> {
-	let classes = crate::modules::needed_definitions::class_names(program);
 	crate::modules::statements(program.clone()).iter().find_map(|statement| {
-		let (object, property, _, _) = definition(statement)?;
-		let reason = if classes.contains(&object) {
-			format!(
-				"{object}.{property}(value) := … defines no setter of {object}'s instances yet (card point-label): write it as a method of class {object}"
-			)
-		} else if values.contains(&object) {
-			format!("{object} is a value, so {object}.{property} := … defines nothing: write {object}.{property} = … to set its field")
-		} else {
-			return None;
-		};
+		let (object, property, _, _) = definition(statement).filter(|(object, ..)| values.contains(object))?;
+		let reason = format!("{object} is a value, so {object}.{property} := … defines nothing: write {object}.{property} = … to set its field");
 		Some(Diagnostic::at(statement, reason).into_error())
 	})
 }

@@ -43,3 +43,11 @@ fn an_overloaded_name_given_as_a_function_is_the_variant_called() {
 	is!("f() := 1\nf(a, b) := a + b\n[1, 2, 3].reduce(f)", 6);
 	is!("f() := 7\nf(x) := x\ny = f\ny + 1", 8);
 }
+
+// card point-label: x.f, x.f(y) and x.f = v of f overloaded by arity call the variant counting x too
+#[test]
+fn an_overloaded_name_called_on_a_receiver_is_the_variant_counting_it() {
+	is!("f(x) := x * 2; f(x, y) := x + y; 3.f + 3.f(4)", 13);
+	is!("class P{name: text}\nf(it: P) := it.name\nf(it: P, v) := { it.name = v; it }\np = P(\"ab\")\np.f = \"cd\"\np.f", "cd");
+	is!("class P{f: int}\nf(x) := x * 2\nf(x, y) := x + y\nP(5).f", 5);
+}
