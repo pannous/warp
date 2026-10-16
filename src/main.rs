@@ -30,6 +30,9 @@ const HELP_PREFIX: &str = "help ";
 const HELP_MARKDOWN: &str = "help --markdown";
 /// `warp build --site app.warp`: the directory app-site/ a web server serves (src/web/site.rs, card web-ssr)
 const SITE_FLAG: &str = "--site";
+/// `warp compile --page app.warp`: app.wasm for a page of its own, its path imports named page:modules/<file> and those
+/// modules written to modules/ beside it, as a site ships them (web/uniscript/build.sh, card imports-wasm)
+const PAGE_FLAG: &str = "--page";
 /// The site of inline code
 const DEFAULT_SITE_NAME: &str = "site";
 /// `warp build --wit app.warp`: the WIT world of the program's `component` declaration, app.wit (card wasm-interop-rest)
@@ -57,10 +60,10 @@ const DEPLOY_COMMAND: &str = "deploy";
 /// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
 const SERVE_COMMAND: &str = "serve";
 /// The first words the command line takes as commands, for unknown_command's suggestion
-const COMMAND_WORDS: [&str; 30] = [
+const COMMAND_WORDS: [&str; 29] = [
 	"run", "test", "eval", "lower", "parse", "verify", "format", "lint", "beautify", "fix", "types", "data", "tool",
-	"dev", "serve", "deploy", "repl", "console", "register", "compile", "build", "link", "app", "help", "version",
-	"docs", "wiki", "home", "lsp", "start",
+	"dev", "serve", "deploy", "repl", "console", "compile", "build", "link", "app", "help", "version", "docs", "wiki",
+	"home", "lsp", "start",
 ];
 /// How far a mistyped command may be from the command it suggests (`formt` → format)
 const MISTYPED_LETTERS: usize = 2;
@@ -236,6 +239,9 @@ fn run_command(args: &[String]) {
 		let code = source_of(&target);
 		if flags.contains(&SITE_FLAG) {
 			return write_site(&code, &target);
+		}
+		if flags.contains(&PAGE_FLAG) {
+			return write_page_module(&code, &target);
 		}
 		if flags.contains(&WIT_FLAG) {
 			return write_wit(&code, &target);
@@ -428,7 +434,6 @@ fn usage() {
 	);
 	println!("  warp deploy [--dev|--dry-run|--hosted] <file>  The program's routes as a Cloudflare Worker, by wrangler (--dev: on this machine, --dry-run: only <file>-worker/, --hosted: at warp-<file>.pannous.workers.dev, by your GitHub login)");
 	println!("  warp repl            Start interactive console");
-	println!("  warp register        Let Finder and `open` run .warp files (macOS)");
 	println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
 	println!("  warp fast <file|code> sin cos exp pow atan2 as quick wasm polynomials, as `use fast_math` (errors: lib/fast_math.warp)");
 	println!("  --no-ask             Never prompt \"got it?\" after a warning or note");
@@ -441,6 +446,7 @@ fn usage() {
 		"  warp compile --wasm <file|code>  Only the module, <file>.wasm (out.wasm for inline code), without running"
 	);
 	println!("  warp compile --aot <file|code>   The module and its machine code for this machine, <file>.cwasm");
+	println!("  warp compile --page <file>  The module for a page of its own, the modules it imports by path in modules/ beside it");
 	println!("  warp build <file.warp>  The standalone executable <file> and <file>.wasm (--exe: only the executable, --wasm: only the module)");
 	println!("  warp {APP_COMMAND} <file.warp>    Show the program's page in a window of its own (macOS web view; {APP_CHECK}: print its text)");
 	println!("  warp test            Run tests");
