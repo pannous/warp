@@ -86,7 +86,7 @@ pub(crate) fn is_global_keyword(node: &Node) -> bool {
 /// time unit; an error for months (no fixed length) or a part of a millisecond
 pub fn duration_in(duration: &crate::time::Duration, unit_word: &str) -> Option<Node> {
 	let target = target_unit(&Node::Symbol(unit_word.to_string()))?;
-	if target.dimension != Dimension::Time {
+	if target.dimension != Dimension::duration() {
 		return Some(error(&format!("DimensionError: {duration} cannot be converted to {}", target.name)));
 	}
 	let milliseconds = match duration_milliseconds(duration, target.name) {

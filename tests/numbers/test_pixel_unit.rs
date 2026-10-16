@@ -42,3 +42,11 @@ fn a_refused_conversion_names_a_quantity_first() {
 	fails_with("3m as s", "divide by a speed (m/s)");
 	fails_with("3m as m²", "multiply by a length (m)");
 }
+
+// card runtime-pixel-units: run-time quantities know pixels, so units named by data work for px, dot, dpi, ppi
+#[test]
+fn run_time_quantities_know_pixels() {
+	is!("quantity(5, \"px\") + quantity(3, \"dot\") == quantity(8, \"px\")", true);
+	is!("(quantity(1, \"inch\") * quantity(96, \"ppi\")).to(\"px\") == quantity(96, \"px\")", true);
+	fails_with("quantity(5, \"px\") + quantity(3, \"m\")", "cannot add 5px and 3m");
+}
