@@ -8,6 +8,8 @@ mod codes;
 pub use codes::*;
 mod spellings;
 pub use spellings::*;
+mod aliases;
+pub use aliases::*;
 
 /// Keywords that introduce function definitions
 pub const FUNCTION_KEYWORDS: [&str; 6] = ["fun", "fn", "def", "define", "function", "func"];

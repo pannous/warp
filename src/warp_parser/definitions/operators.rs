@@ -69,7 +69,9 @@ fn declared_kind(word: &str) -> Option<UserOperatorKind> {
 /// The operators a source itself declares: `[prefix|suffix|infix] operator ⊕ := body` and the pattern `a ⊕ b := body` (infix)
 pub(crate) fn declared_operators(source: &str) -> Vec<UserOperator> {
 	let mut found: Vec<UserOperator> = Vec::new();
-	for statement in source.lines().flat_map(|line| line.split(';')) {
+	let declarations = source.lines().flat_map(|line| line.split(';'));
+	// `operator × := *` is an alias (operators/aliases.rs), no function
+	for statement in declarations.filter(|statement| crate::operators::alias_line(statement).is_none()) {
 		let words: Vec<&str> = statement.split_whitespace().collect();
 		let by_kind = words.split_first().and_then(|(word, rest)| {
 			let kind = declared_kind(word)?;
@@ -296,6 +298,14 @@ impl WarpParser {
 				)),
 				Err(message) => error(&message),
 			});
+		}
+		// `operator × := *`: the pre-scan made it an alias (source_aliases), nothing is left to define
+		let statement = format!("{word} {rest}");
+		if crate::operators::alias_line(&statement).is_some() {
+			while !matches!(self.current_char(), '\n' | ';' | '\0') {
+				self.advance();
+			}
+			return Some(Empty);
 		}
 		let kind = declared_kind(word)?;
 		let glyph: Vec<char> = declared_operator(kind, &words)?.chars().collect();

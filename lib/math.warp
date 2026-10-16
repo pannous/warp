@@ -1,6 +1,30 @@
 // The standard library module math (notes/stdlib.md): `use math`, together with the C library libm.
 // Whole-number words declare int parameters, which their signatures show; the others take any number
 
+// The math spellings of operators (decision operator-alias), every program reads them: each keeps the precedence
+// of the operator it spells
+operator × := *
+operator · := *
+operator ⋅ := *
+operator ÷ := /
+operator − := -
+operator ≤ := <=
+operator ≥ := >=
+operator ≠ := !=
+operator ≟ := ==
+operator ≡ := ==
+operator ﹦ := ==
+operator ≈ := approximately
+operator ⋍ := approximately
+operator ∧ := and
+operator ⋀ := and
+operator ∨ := or
+operator ⋁ := or
+operator ⊻ := xor
+operator ± := +-
+prefix operator √ := sqrt
+prefix operator ∛ := cbrt
+
 // The C library's math functions (libm), f64 each: the host links them (src/ffi reads these lines, decision
 // foreign-signature), the browser takes them from Math. Every program calls them without `use math`
 fmin(a: float, b: float): float from 'm'

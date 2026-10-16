@@ -496,6 +496,8 @@ pub struct WarpParser {
 	functions_with_parameters: std::collections::HashSet<String>,
 	/// Operators the program declares (`suffix operator ‼ := it*2`), longest glyph first, found by a pre-scan of the source
 	user_operators: Vec<UserOperator>,
+	/// Operator aliases the program declares (`operator ⊕ := +`), found by a pre-scan of the source (operators/aliases.rs)
+	source_aliases: Vec<crate::operators::OperatorAlias>,
 	/// Types the program declares (`class point{…}`), found by a pre-scan of the source: `point{x:1}` constructs one (D4)
 	declared_types: std::collections::HashSet<String>,
 	/// The words of the declared types of several words (`class full name {…}`), longest first: read as one name `full-name`
@@ -526,6 +528,8 @@ impl WarpParser {
 		let current_line = lines.first().cloned().unwrap_or_default();
 		let chars: Vec<char> = input.chars().collect();
 		let user_operators = if options == ParserOptions::default() { scan_user_operators(&input) } else { Vec::new() };
+		let source_aliases =
+			if options == ParserOptions::default() { crate::operators::source_aliases(&input) } else { Vec::new() };
 		let (declared_types, multi_word_types, program_functions) = if options == ParserOptions::default() {
 			(scan_declared_types(&input), scan_multi_word_types(&input), scan_function_names(&input))
 		} else {
@@ -533,6 +537,7 @@ impl WarpParser {
 		};
 		WarpParser {
 			user_operators,
+			source_aliases,
 			declared_types,
 			multi_word_types,
 			phrase_definitions: Default::default(),
