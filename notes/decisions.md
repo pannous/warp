@@ -396,7 +396,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - duration-units (2026-10-16 night, Interviewer's proposal, kept by the user 2026-10-16; card
   time-module): the time module's durations and the unit h become one thing, as dimensions-units already makes
   duration the time dimension: `unit hour := 1 h`, `2 hour + 1 h` is 3 hours (today a DimensionError), printing
-  keeps the long names ("3 hours"). The `name` form then goes.
+  keeps the long names ("3 hours"). Amended 2026-10-16 (user, "leave as is"): the `name` form stays (`name hour := h`,
+  `2 h in minutes` → 120min); step 1, where `1 h` beside a duration is a duration, is enough.
 
 ## Text
 - letters (2026-10-15 evening, Interviewer's proposal, kept by the user 2026-10-16; card of-in-chain,
