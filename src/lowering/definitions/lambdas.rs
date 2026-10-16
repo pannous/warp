@@ -16,6 +16,8 @@ use crate::warp_parser::parse_template;
 use crate::words::{EACH_WORD, IMPLICIT_PARAMETER, ON_WORD, SORT_WORD};
 use std::collections::{HashMap, HashSet, VecDeque};
 
+/// The most arguments an iteration gives its function: fold and reduce two
+const MOST_ITERATION_ARGUMENTS: usize = 2;
 const PARTIAL_LIST: &str = "partial_list";
 const LIST_PLACEHOLDER: &str = "loop_list";
 const START_PLACEHOLDER: &str = "loop_start";
@@ -1221,7 +1223,12 @@ impl Lowering {
 			|| block_lambda(node).is_some()
 			|| operator_lambda(node).is_some()
 			|| matches!(node.drop_meta(), Node::Symbol(name)
-				if self.context.user_functions.contains_key(name) || crate::library_words::is_one_value_function(name))
+				if self.context.user_functions.contains_key(name) || crate::library_words::is_one_value_function(name)
+					|| (1..=MOST_ITERATION_ARGUMENTS).any(|arguments| self.arity_variant(name, arguments).is_some()))
+	}
+
+	fn arity_variant(&self, name: &str, arguments: usize) -> Option<String> {
+		crate::overloads::variant_called_with(name, arguments, |name| self.context.user_functions.contains_key(name))
 	}
 
 	/// The function applied to the symbols `arguments`: the body of a literal function with its parameters replaced, or the call of a
@@ -1251,6 +1258,10 @@ impl Lowering {
 			None => match function.drop_meta() {
 				Node::Symbol(name) if self.context.user_functions.contains_key(name) => {
 					Ok(call(name, arguments.to_vec()))
+				}
+				// `map(f)` of f overloaded by arity: the variant taking as many arguments as the iteration gives
+				Node::Symbol(name) if self.arity_variant(name, arguments.len()).is_some() => {
+					Ok(call(&self.arity_variant(name, arguments.len()).expect("guarded"), arguments.to_vec()))
 				}
 				// `map floor xs`: a library word of one value applies to each item as a defined function does
 				Node::Symbol(name) if arguments.len() == 1 && crate::library_words::is_one_value_function(name) => {

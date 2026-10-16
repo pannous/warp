@@ -122,6 +122,10 @@ instead of bending the code.
   path, a stale comment, a leaked temp file), no change to what a user sees or what a test asserts, and outside
   files another session is working on. Make it its own commit on your current branch (`fix:`/`chore:`, so it can be
   reverted alone) and name it in your `todo ready` note. Anything else, or any doubt, still becomes a card.
+- Suspected non-issues go through the Interviewer (user, 2026-10-16, on `96px/inch` vs `96dpi`: "a nothing
+  burger"): when a small bug you found may not matter (the same value shown another way, a cosmetic difference),
+  SendMessage warp-interviewer the case before carding or fixing it. A confirmed non-issue gets no work: its card,
+  if any, goes to Later with the verdict as a `todo note`.
 - GitHub's API quota (5000 requests/h) is shared by every session; on 2026-10-10 `gh run watch` polling every 3 s ran
   it out and blocked CI watching for 10 min. Watch runs with `gh run watch --interval 60` or more, and never poll
   `todo list` in a loop. A whole-board `todo list` costs ~12 points (1200 cards on 2026-10-12, when the quota ran out

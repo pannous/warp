@@ -23,7 +23,7 @@ remove() {
 trap remove EXIT
 until curl -s -o /dev/null "$HOSTING"; do sleep 1; done
 
-cp "$ROOT/samples/filled_circle.warp" "$WORK/$NAME.warp"
+cp "$ROOT/samples/advanced/filled_circle.warp" "$WORK/$NAME.warp"
 URL=$(WARP_HOSTING=$HOSTING WARP_HOSTING_TOKEN=$GITHUB "$ROOT/scratch/warp" deploy --hosted "$WORK/$NAME.warp" | sed -n 's/^deployed: //p')
 echo "deployed: $URL"
 for _ in $(seq 90); do curl -sf -o /dev/null "$URL/canvas.js" && break; sleep 2; done
