@@ -10,6 +10,7 @@ mod test_brush_ripples; // card shader-click-ripples
 mod test_calculator_fixes;
 mod test_cli_help;
 mod test_code_golf; // card code-golf
+mod test_compute_toys; // card compute-toys
 mod test_data_structure_fixes;
 mod test_draw;
 mod test_draw_label; // card paint-text
