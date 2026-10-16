@@ -399,13 +399,13 @@ impl EffectReport {
 	/// level has no effect: nothing to run, so the program needs no module (its functions may not even compile yet)
 	pub fn answer(&self, program: &Node) -> Option<Node> {
 		if let Some(violation) = self.violations.first() {
-			return Some(Node::Error(Box::new(Node::Text(violation.to_string()))));
+			return Some(crate::node::error(&violation.to_string()));
 		}
 		if let Some((name, constraint)) = self.misplaced.first() {
-			return Some(Node::Error(Box::new(Node::Text(format!(
+			return Some(crate::node::error(&format!(
 				"misplaced effect constraint at {}:{}: {name} is not a function, `! {}` needs a function definition",
 				constraint.line, constraint.column, constraint.allowed
-			)))));
+			)));
 		}
 		let name = effects_query(last_statement(program))?;
 		// the query mentions f, which reads as a call of it: the top level without the query
@@ -425,14 +425,7 @@ impl EffectReport {
 		match (self.functions.get(name), self.effects_of(name)) {
 			(Some(function), _) => effects_node(function.effects, &function.events),
 			(None, Some(effects)) => effects_node(effects, &BTreeSet::new()),
-			(None, None) => Node::Error(Box::new(Node::Text(format!("effects of {name}: unknown function")))),
+			(None, None) => crate::node::error(&format!("effects of {name}: unknown function")),
 		}
 	}
 }
-
-// ── Termination of self-recursion ────────────────────────────────────────────────────────────────
-// Total if one parameter p is a measure: every recursive call sits in a branch whose guard bounds p
-// by a number literal (`p<2 ? … : f(p-1)` bounds p ≥ 2 below) and passes `p - k` (or `p + k` toward
-// an upper bound) at p's position, k a positive literal. p then moves by at least k per call and the
-// call is only reached inside the bound, so every call chain is finite. p must not be assigned in the body.
-// Assumes finite numbers: a float NaN or ∞ argument can still run away (exact numbers are the default).
