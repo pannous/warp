@@ -677,7 +677,7 @@ impl Foreign<'_> {
 		if let Some(items) = called_method(member)
 			.filter(|items| self.holds_component_value(&receiver) && !is_warp_method(&items[0].name()))
 		{
-			let arguments = self.arguments_rewritten(&items[1..]);
+			let arguments = self.rewritten_argument_list(&items[1..]);
 			// `semver.Version.parse(t)`: the static function `[static]version.parse` of the component
 			return Some(match type_read(&receiver) {
 				Some((path, resource)) => {
@@ -689,7 +689,7 @@ impl Foreign<'_> {
 		// `v.major` of a handle whose resource has a method `major` without arguments (a Rust struct's field)
 		if let (Node::Symbol(field), Some((path, kind))) = (member.drop_meta(), self.component_handle(&receiver)) {
 			if has_method(&path, &kind, field) {
-				return Some(foreign_call(COMPONENT_RUNTIME, receiver, field, true, self.arguments_rewritten(&[])));
+				return Some(foreign_call(COMPONENT_RUNTIME, receiver, field, true, self.rewritten_argument_list(&[])));
 			}
 		}
 		None
@@ -702,7 +702,7 @@ impl Foreign<'_> {
 			Node::Symbol(member) => (member.clone(), false, Node::Empty),
 			Node::List(items, Bracket::Round, _) => match items.split_first() {
 				Some((head, arguments)) if matches!(head.drop_meta(), Node::Symbol(_)) => {
-					(head.name(), true, self.arguments_rewritten(arguments))
+					(head.name(), true, self.rewritten_argument_list(arguments))
 				}
 				_ => return node.clone(),
 			},
@@ -721,7 +721,7 @@ impl Foreign<'_> {
 		}
 	}
 
-	fn arguments_rewritten(&mut self, arguments: &[Node]) -> Node {
+	fn rewritten_argument_list(&mut self, arguments: &[Node]) -> Node {
 		let arguments = arguments.iter().cloned().map(|argument| self.rewrite(argument)).collect();
 		Node::List(arguments, Bracket::Square, Separator::Space)
 	}
