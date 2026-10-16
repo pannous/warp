@@ -3,7 +3,8 @@ use super::*;
 
 /// `{f: x => x * 2}`: `:` binds tighter than `=>`, so the entry parses as the lambda `(f:x) => x*2` with a parameter f of
 /// type x; in an object a lowercase word that is no type after the key is the lambda's parameter: the field f holds
-/// `x => x * 2`. A typed lambda `{x: int => x * 2}` or `{p: Person => p.name}` stays one.
+/// `x => x * 2`. A typed lambda `{x: int => x * 2}` or `{p: Person => p.name}` stays one. The same in a call's named
+/// argument: `Holder(d: x => x + 1)` gives the field d the lambda (card holder-says).
 pub(crate) fn field_holding_lambda(item: Node) -> Node {
 	match item {
 		meta @ Node::Meta { .. } => meta.under_meta(field_holding_lambda),
