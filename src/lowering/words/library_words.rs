@@ -84,8 +84,8 @@ const SYNONYMS: [(&str, &[&str]); 36] = [
 	(MAP_GET_OR, &["get"]),
 	// P35 default: `xs.index_of(x)` is the 1-based position (0 when absent)
 	(COLLECTION_POSITION, &["index_of"]),
-	// card of-in-chain: `t.characters`, `characters in t`
-	("chars", &["characters"]),
+	// card of-in-chain: `t.characters`, `characters in t`; a glyph is a character too
+	(CHARS_WORD, &["characters", "glyphs"]),
 	("upper", &["uppercase"]),
 	("lower", &["lowercase"]),
 	// the text builtin trim (text_builtins.rs), Python's strip
@@ -122,9 +122,16 @@ const SYNONYMS: [(&str, &[&str]); 36] = [
 /// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/lists/list_dispatch.rs):
 /// a typed list sums its array, any other list runs the loop `sum` always lowered to
 pub const LIST_SUM: &str = "list_sum";
+/// `t.chars`: the list of a text's characters, a grapheme cluster each (`char` is short for character)
+pub const CHARS_WORD: &str = "chars";
+/// The list of a text's code points, which `for codepoints in t` and `for each codepoint in t` walk
+pub const CODE_POINT_LIST: &str = "codepoint·list";
+/// The runtime functions behind them: text_graphemes(text), the list of its characters; text_chars(text), of its code points
+pub const TEXT_GRAPHEMES: &str = "text_graphemes";
+pub const TEXT_CODE_POINTS: &str = "text_chars";
 
 /// Words the emitter implements as runtime functions, with the number of arguments including the receiver
-pub const RUNTIME_WORDS: [(&str, usize); 20] = [
+pub const RUNTIME_WORDS: [(&str, usize); 21] = [
 	(crate::wasm_emitter::host::wasi_emitter::WASI_ENVIRONMENT, 0),
 	(ORD_WORD, 1),
 	("upper", 1),
@@ -133,7 +140,8 @@ pub const RUNTIME_WORDS: [(&str, usize); 20] = [
 	("sort", 1),
 	("split", 2),
 	("join", 2),
-	("chars", 1),
+	(CHARS_WORD, 1),
+	(CODE_POINT_LIST, 1),
 	(FIELD_WITH, 3),
 	(MAP_KEYS, 1),
 	(MAP_VALUES, 1),
@@ -262,8 +270,9 @@ const SAFE_BASE: &str = "safe";
 /// Library words whose result is always a text, and those whose result is always a list
 const TEXT_RESULT_WORDS: [&str; 5] =
 	["upper", "lower", "trim", "join", crate::wasm_emitter::host::wasi_emitter::WASI_ENVIRONMENT];
-const LIST_RESULT_WORDS: [&str; 8] = [
-	"chars",
+const LIST_RESULT_WORDS: [&str; 9] = [
+	CHARS_WORD,
+	CODE_POINT_LIST,
 	"sort",
 	"split",
 	MAP_KEYS,
@@ -1029,6 +1038,11 @@ impl Lowering {
 				|| result_kind(word).or_else(|| result_kind(name)).is_some();
 			let call = self.call(word, word_node, [vec![receiver.clone()], arguments.to_vec()].concat(), false);
 			return WordMeaning::Call { call, typed };
+		}
+		// x.word is x.word(): a bare `xs.pop` changes xs as `xs.pop()` does (card xs-xs)
+		if is_bare && is_list_mutating_method(name) {
+			let call = key(receiver.clone(), Op::Dot, crate::lowering::nodes::call(name, vec![]));
+			return WordMeaning::Call { call, typed: true };
 		}
 		// `p.center`, `s.items` of another module's word: no call, as before the word was loaded
 		let is_other_modules_word = is_bare && is_loaded_module_word(name) && self.type_module_of(name).is_none();

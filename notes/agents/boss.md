@@ -15,6 +15,14 @@ Read notes/agents/common.md and notes/agents/supervisor.md: the fleet rules appl
 - Wait for the user's instructions. When asked for parallel tasks, pick easy cards from Soon and run each as a nested
   session. Afterwards, write down in notes/agents/boss.md what worked and what didn't, for the comparison.
 
+## rust-refs trial (2026-10-16)
+A nested desktop-app session took one card end to end (worktree, test first, parser fix, queue run, clippy). What worked:
+the brief naming the card and the rules was enough, no questions needed. What hurt: `tests/queue.sh` waited 10-30 minutes
+behind other sessions' runs, and the foreground Bash timeout (10 min) moved long queue runs into the background, so
+runs go to a log file in data/ with a `done` marker and are polled.
+||||||| fa7c2024b
+
+
 ## Findings of the first nested sessions (2026-10-16)
 Session samples-quicksort was started by the boss session without any click (start_session with the card as its task) and
 ran like a tmux worker: todo take, cowtree worktree, background builds, notes, push. What did not work: the worktrees

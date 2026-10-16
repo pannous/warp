@@ -12,10 +12,10 @@ use crate::lowering::signals::event_signals::PAGE_EVENTS;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::GENERIC_MARK;
-use crate::words::IMPLICIT_PARAMETER;
 use crate::words::IS_WORD;
 use crate::words::LET_WORD;
 use crate::words::{EVENT_ALIASES, ONCE_WORD, ON_WORD, WHENEVER_WORD};
+use crate::words::{IMPLICIT_PARAMETER, SELF_WORD, THIS_WORD};
 use std::collections::HashSet;
 
 use crate::words::{MATCH_WORD, SWITCH_WORDS};
@@ -59,7 +59,7 @@ const BLOCK_REDUCTIONS: [(&str, &str); 2] = [("sum", "map"), ("count", "filter")
 const CPP_AUTO_WORD: &str = "auto";
 /// Other languages' method names for warp's words (the alias rule: they work, with a note naming warp's word): C#'s
 /// LINQ, Ruby's conversions and cases, Kotlin's `xs.sumOf {…}`
-const METHOD_ALIASES: [(&str, &str); 18] = [
+const METHOD_ALIASES: [(&str, &str); 19] = [
 	("Select", "map"),
 	("Where", "filter"),
 	("Aggregate", "reduce"),
@@ -75,13 +75,14 @@ const METHOD_ALIASES: [(&str, &str); 18] = [
 	("to_s", "string"),
 	("to_i", "int"),
 	("to_f", "float"),
+	("to_string", "string"),
 	("upcase", "upper"),
 	("downcase", "lower"),
 	("sumOf", "sum"),
 ];
 
 pub fn lower(node: Node) -> Node {
-	if let Some(error) = warn_assigned_it(&node) {
+	if let Some(error) = warn_reserved_bound(&node) {
 		return error;
 	}
 	// the program's own names keep their meaning: a field `Count`, Go's method `Sum()`
@@ -97,22 +98,56 @@ pub fn lower(node: Node) -> Node {
 	lambda_calls(node, &lambda_names)
 }
 
-/// `it = 5` (user 2026-10-16): `it` is reserved, it names the parameter of a function that names none, so a variable
-/// of that name warns (an error under `use strict`)
-fn warn_assigned_it(node: &Node) -> Option<Node> {
-	let mut assigned = None;
-	node.visit(&mut |node| {
-		if let Node::Key(target, Op::Assign | Op::Define, _) = node {
-			if assigned.is_none() && target.drop_meta().is_symbol(IMPLICIT_PARAMETER) {
-				assigned = Some(target.as_ref().clone());
-			}
+/// The words warp gives a meaning a program cannot rebind (user 2026-10-16, decision implicit-words-reserved), with that
+/// meaning
+const RESERVED_NAMES: [(&str, &str); 3] = [
+	(IMPLICIT_PARAMETER, "the parameter of a function that names none (`square := it * it`)"),
+	(SELF_WORD, "the receiver of a method"),
+	(THIS_WORD, "the receiver of a method"),
+];
+
+/// `it = 5`, `self = 3`: a reserved name bound by the program warns (an error under `use strict`): `it += 1`,
+/// `let it = …`, `[it, b] = …`, `for self in xs`. A parameter written so (`f(it) := …`, `it => …`,
+/// `Point.norm(self) := …`) is that parameter, named as warp names it
+fn warn_reserved_bound(node: &Node) -> Option<Node> {
+	let mut bound = None;
+	node.visit(&mut |part| {
+		if bound.is_none() {
+			bound = binding_of_reserved(part);
 		}
 	});
-	let message = format!(
-		"`{IMPLICIT_PARAMETER}` is reserved: it names the parameter of a function that names none \
-		 (`square := {IMPLICIT_PARAMETER} * {IMPLICIT_PARAMETER}`); pick another name"
-	);
-	crate::errors::diagnostic::report(&[crate::errors::diagnostic::Diagnostic::at(&assigned?, message)]).err()
+	let (written, name) = bound?;
+	let meaning = RESERVED_NAMES.iter().find(|(reserved, _)| *reserved == name).map(|(_, meaning)| *meaning)?;
+	let message = format!("`{name}` is reserved: it names {meaning}; pick another name");
+	crate::errors::diagnostic::report(&[crate::errors::diagnostic::Diagnostic::at(&written, message)]).err()
+}
+
+fn reserved_name(name: &str) -> Option<String> {
+	RESERVED_NAMES.iter().any(|(reserved, _)| *reserved == name).then(|| name.to_string())
+}
+
+/// The written reserved name a write, definition or loop binds, and that name
+fn binding_of_reserved(part: &Node) -> Option<(Node, String)> {
+	match part {
+		Node::Key(target, op, _) if op.is_write() || *op == Op::Define => named_reserved(target, *op == Op::Assign),
+		Node::List(items, _, _) => {
+			let name = super::nodes::for_in_variable(items).and_then(|variable| reserved_name(&variable))?;
+			Some((items.iter().find(|item| item.is_symbol(&name))?.clone(), name))
+		}
+		_ => None,
+	}
+}
+
+/// `it`, `self: Point` or, assigned, a destructured `[it, b]`; never a function head's parameter `f(it)`
+fn named_reserved(target: &Node, destructures: bool) -> Option<(Node, String)> {
+	match target.drop_meta() {
+		Node::Symbol(name) => Some((target.clone(), reserved_name(name)?)),
+		Node::Key(name, Op::Colon, _) => named_reserved(name, destructures),
+		Node::List(items, Bracket::Square | Bracket::None, _) if destructures => {
+			items.iter().find_map(|item| named_reserved(item, destructures))
+		}
+		_ => None,
+	}
 }
 
 /// Swift's and Rust's result arrow before `:=`: `def x(p:P) -> int := p.n` is `x(p:P): int := p.n`, the one typed head
