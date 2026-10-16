@@ -758,6 +758,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   cli-words migrates the existing --fuel/--exe/--strict/… (older `--x` mentions below are superseded by it).
 - fast-math (2026-10-16, warp-types default; card switch-rebinds; undoable): the polynomial math module is
   `use fast_math` (`fast` is already an alias of float); the CLI switch is the word `warp fast app.warp`.
+- fast-scope (2026-10-16, user; card fast-scope): `fast` before a function or module makes everything machine
+  inside it: polynomial sin/cos/exp/pow, `/` gives f64 (`fast f(x) := x/3; f(1)` → 0.3333333333333333), and plain
+  ints are i64 that wrap at 2^63 (`fast g(n) := n * n; g(10^10)` wraps). `x: fast int` is i64, `x: fast float` f64;
+  exact/precise is the opposite word if fast ever becomes the default.
 - unix-words (2026-10-15, user): `use script` has shell words with warp results: ls pwd cd cat echo mkdir cp mv touch
   head tail wc grep which rm, plus find, size/info (du/stat), sort/uniq, open (native), curl/wget as aliases of
   fetch/download. `export a=b` clashes with the WebAssembly export, so it's left out. Not now: basename/dirname,
