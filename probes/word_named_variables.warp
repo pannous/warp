@@ -1,5 +1,5 @@
 // card library-word: a loop variable or parameter named like a word reads its value
 for random in [3] { x = random; print x }   // 3
-f(upper) := { x = upper; x }
+f(upper) := { kept = upper; kept }
 print f(2)                                    // 2
 for each codepoint in "ab" { y = codepoint; print y }  // a b
