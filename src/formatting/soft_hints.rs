@@ -1,6 +1,7 @@
 //! The soft hints of `warp format`: reported, never rewritten (decision warp-format)
 
 use super::lines::{scan, LineScan};
+use crate::warp_parser::without_shader_texts;
 
 /// Abbreviations warp avoids, with the word it writes (user, 2026-10-15: "fmt, str, cnt"), every word, built-ins too
 const ABBREVIATIONS: [(&str, &str); 35] = [
@@ -68,9 +69,22 @@ fn words_of_code(line: &str, scan: &LineScan) -> Vec<String> {
 	code.split(|c: char| !c.is_alphanumeric() && c != '_').filter(|word| !word.is_empty()).map(str::to_string).collect()
 }
 
-/// Each abbreviation once, at its first line; then one hint for the `//` comments
+/// For each character of `code`, whether it is warp code: outside texts and comments
+fn code_characters(code: &str) -> Vec<bool> {
+	let lines: Vec<String> = code.split('\n').map(str::to_string).collect();
+	lines
+		.iter()
+		.zip(scan(&lines))
+		.flat_map(|(line, scan)| line.char_indices().map(move |(at, _)| scan.is_code(at)).chain([false]))
+		.collect()
+}
+
+/// Each abbreviation once, at its first line; then one hint for the `//` comments. A shader block's text is another
+/// language: no hints there (WGSL writes `fn` and `//`)
 pub fn soft_hints(code: &str) -> Vec<Hint> {
-	let lines: Vec<String> = code.lines().map(str::to_string).collect();
+	let code_chars = code_characters(code);
+	let lines: Vec<String> =
+		without_shader_texts(code, |at| code_chars.get(at) == Some(&true)).lines().map(str::to_string).collect();
 	let scans = scan(&lines);
 	let mut hints = Vec::new();
 	let mut seen = Vec::new();
