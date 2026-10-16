@@ -248,13 +248,16 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   a panic.
 
 ## Comments, separators and lexing
-- `//` is a comment only before a space or the line end; otherwise floor division (`7//2`, `a //b`, `x//=3`)
-  (2026-10-08, emphatic). A comment hiding a closing bracket is a parse error naming the `//`.
+- floor-division (2026-10-16, user; card floor-division; supersedes the 2026-10-08 rule "`//` is floor division
+  unless a space or line end follows"): `//` is always a comment. Floor division is `/!` (`7 /! 2` = 3, `x /!= 2`).
+  Where the compiler can tell a `//` was meant as floor division (`n = 7//2`, `x//=3`), a strong warning names
+  `/!`, and `warp fix` rewrites it. `div` goes to `/!` too (`7 div 2` warns, fix `7 /! 2`); `div` stays the html
+  tag. All our code, samples, docs and tests move to `/!`, except one or two tests that check the hints. A comment
+  hiding a closing bracket is a parse error naming the `//`.
 - `#` glued to a non-space is the count expression (`#s`, `#f(x)`); `# text`, `#!`, `##` and the directives `#use`,
   `#include`, `#import` stay comments/directives.
 - hash-comments (2026-10-15, user): `# text` is the preferred comment; `//` clashes with floor division and reads
-  Java-esque. `warp format` has an opt-in option rewriting `// text` comments to `# text` (floor division and `/* */`
-  untouched), and the linter gives a soft hint on every `//` comment.
+  Java-esque. `warp format` has an opt-in option rewriting `// text` comments to `# text` (`/* */` untouched), and the linter gives a soft hint on every `//` comment.
 - `print a    print b` on one line is an error "two statements on one line? separate them with `;`".
 - P227 (2026-10-08) a comma next to `==` without parentheses is an error asking for them ("insist on braces to avoid
   errors"): `(2.0, 4) == 2.0, 4`.
@@ -303,7 +306,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   application to crash"): known ± values need `certainly`/`possibly`/`.value` (compile error), run-time ones count
   an overlap as not certain with a one-time warning. P233 a field typed with a tolerance gives each value that
   tolerance.
-- `x /= y` is exactly `x = x / y` (3/2 stays exact); floor division is `x //= y`; an `x:int` keeps a whole number.
+- `x /= y` is exactly `x = x / y` (3/2 stays exact); floor division is `x /!= y` (floor-division); an `x:int` keeps a whole number.
 - Trailing percent: `10%` is 1/10, `50 % of 200` is 100; infix `%` stays remainder; CSS values stay as written.
 - P184 English number words are numbers when no variable has that name, with a hint toward digits.
 - #11 exact reals may go into a declared float with precision loss (`float x = π`). rational-float (2026-10-10):
