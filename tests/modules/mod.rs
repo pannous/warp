@@ -61,6 +61,7 @@ mod test_std_net;
 mod test_std_prelude;
 mod test_std_qualified;
 mod test_std_random;
+mod test_std_reflection_hints; // card function-repeat
 mod test_std_regex;
 mod test_std_shadowed_names; // card libm-function
 mod test_std_time;
