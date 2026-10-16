@@ -15,7 +15,8 @@ They differ in when they may be wiped (`diskutil apfs deleteVolume <disk>`, then
 Old worktrees (/Users/me/dev/angles/warp.worktrees.noindex) stay on the Data volume until retired; NEW worktrees go
 straight to /Volumes/Worktrees/<name> (disk3s9, user 2026-10-16, card new-worktrees): no_log, Spotlight off, Time Machine
 excluded for the whole volume (user: work is pushed per step), no .noindex subfolder. Never wiped. cowtree needs a
-registered donor worktree on that volume: /Volumes/Worktrees/base, detached at origin/main.
+registered donor worktree on that volume, one per project named after it: /Volumes/Worktrees/warp, detached at origin/main
+(the volume may hold other projects later).
 data/ (kept logs and results) stays in the repo.
 
 ## Status
