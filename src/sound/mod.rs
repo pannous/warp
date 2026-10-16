@@ -72,10 +72,8 @@ const FILE_PLAYERS: [Command; 5] = [
 	("aplay", &["-q"], &["wav"]),
 ];
 /// The decoders that read a music file without playing it, the first the system has that knows its format
-const FILE_PROBES: [Command; 2] = [
-	("ffprobe", &["-v", "error"], &FORMATS),
-	("afinfo", &[], &["wav", "mp3", "flac", "aiff", "m4a"]),
-];
+const FILE_PROBES: [Command; 2] =
+	[("ffprobe", &["-v", "error"], &FORMATS), ("afinfo", &[], &["wav", "mp3", "flac", "aiff", "m4a"])];
 /// A player failing at once (a file it cannot decode) fails play itself; a later failure is printed when it happens
 const EARLY_FAILURE: Duration = Duration::from_millis(300);
 const PLAYER_POLL: Duration = Duration::from_millis(50);

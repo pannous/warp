@@ -89,7 +89,8 @@ impl Bus {
 		let due: Vec<_> = self.changes.drain(..due).collect();
 		if self.fed || !self.chain.rung_out() {
 			let at = |frame: u64| frame.saturating_sub(from) as usize * channels;
-			self.chain.process_changing(&mut self.mix, due.iter().map(|(frame, effects)| (at(*frame), effects.as_slice())));
+			self.chain
+				.process_changing(&mut self.mix, due.iter().map(|(frame, effects)| (at(*frame), effects.as_slice())));
 		} else {
 			due.iter().for_each(|(_, effects)| self.chain.retune(effects));
 		}

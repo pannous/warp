@@ -273,7 +273,9 @@ impl Stage {
 		}
 		match *effect {
 			Effect::Gain(gain) => Stage::Gain(gain),
-			Effect::Filter { kind, frequency, q } => Stage::Filter(each(channels, || Biquad::new(kind, frequency, q, rate))),
+			Effect::Filter { kind, frequency, q } => {
+				Stage::Filter(each(channels, || Biquad::new(kind, frequency, q, rate)))
+			}
 			Effect::Delay { seconds, feedback, mix } => {
 				Stage::Delay { combs: each(channels, || Comb::new(seconds, feedback, rate)), mix }
 			}
