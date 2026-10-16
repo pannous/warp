@@ -276,20 +276,20 @@ pub fn parse_header_file(path: &str, library: &str) -> Vec<FfiHeaderSignature> {
 		}
 
 		struct_types.read(line);
-		// Skip empty lines and typedefs/structs in the middle of accumulation
+		// an empty line ends whatever was accumulating
 		if line.is_empty() {
 			current_decl.clear();
 			continue;
 		}
 
-		// Strip inline comments (// ...) for processing but keep declaration
-		let line_for_check = if let Some(comment_pos) = line.find("//") { line[..comment_pos].trim() } else { line };
+		let line_for_check = line.find("//").map_or(line, |comment_start| line[..comment_start].trim());
 
-		// Accumulate multi-line declarations (use original line content)
+		// a declaration may span lines: accumulate them without their trailing comments
 		current_decl.push_str(line_for_check);
 		current_decl.push(' ');
 
-		// If we have a complete declaration (ends with ; or })
+		// `…);` ends a function declaration; `}` or a `;` without parameters ends anything else (typedefs are refused by
+		// extract_function_signature)
 		if line_for_check.ends_with(';') && current_decl.contains('(') {
 			if let Some(sig) = extract_function_signature(&current_decl, library) {
 				signatures.push(sig);
