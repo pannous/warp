@@ -1,4 +1,4 @@
-// card thrice-block (user): `thrice{print "hi"}` printed hi once and gave the tag thrice:ø. A statement starting with
+// card thrice-block (user): `thrice{print "hi"}` printed hi once and gave the tag thrice:ø. An operand starting with
 // once, twice or thrice is read as `1/2/3 times …` (warp_parser/control/loops.rs try_parse_count_word); keys, tags of
 // `key: value` blocks and a binding of the word in scope keep their meaning
 use crate::is;
@@ -14,6 +14,13 @@ fn count_words_count_like_times() {
 	is!("n=0; for x in [1 2] { thrice {n+=1} }; n", 6);
 	is!("p={thrice:1}; n=0; thrice{n+=1}; n", 3);
 	is!("twice \"ab\"", "abab");
+}
+
+#[test]
+fn count_words_count_in_value_positions() {
+	is!("x = twice \"ab\"; x", "abab");
+	is!("xs = thrice [0]; xs.count", 3);
+	is!("n=0; if yes then twice {n+=1}; n", 2);
 }
 
 #[test]

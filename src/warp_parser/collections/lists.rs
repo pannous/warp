@@ -163,11 +163,7 @@ impl WarpParser {
 			self.tag_block = ch == '{'
 				&& matches!(items_with_seps.last(), Some((previous, Separator::Space)) if matches!(previous.drop_meta(), Symbol(_)));
 			let item_position = self.get_position();
-			let starts_statement = items_with_seps.len() == statement_start && !tag_block;
-			let item = match starts_statement.then(|| self.try_parse_count_word()).flatten() {
-				Some(counted) => counted,
-				None => self.parse_value(),
-			};
+			let item = self.parse_value();
 			self.tag_block = false;
 			self.pipe_takes_call = outer_pipe;
 			self.in_command = outer_command;

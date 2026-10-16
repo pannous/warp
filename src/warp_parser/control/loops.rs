@@ -2,6 +2,10 @@
 
 use super::*;
 
+/// The words an operand may start counting with: `thrice {…}` is `3 times {…}`
+const COUNT_WORDS: [(&str, i64); 3] = [("once", 1), ("twice", 2), ("thrice", 3)];
+const COUNT_WORD: &str = "count-word";
+
 impl WarpParser {
 	/// The iterable of a for header and the word that opens the body: `:`, `do` or none.
 	/// In the header `xs {` is the collection and the body, as in any for loop, not a construction of xs
@@ -310,10 +314,11 @@ impl WarpParser {
 		Some(self.parse_times_loop(lhs.clone()))
 	}
 
-	/// `thrice {…}`, `twice [x]`, `once "ab"` starting a statement: `3 times {…}` (card thrice-block). `twice: …` stays a
-	/// key and `twice{a: 1}`, a block of `key: value` pairs, a tag; a binding of the word in scope keeps it, asked loudly
+	/// `thrice {…}`, `twice [x]`, `once "ab"` wherever an operand starts in code: `3 times {…}` (card thrice-block).
+	/// `twice: …` stays a key and `twice{a: 1}`, a block of `key: value` pairs, a tag; a function named so (`def twice`),
+	/// a member (`p.twice`) and a binding of the word in scope keep it, the binding asked loudly
 	pub(crate) fn try_parse_count_word(&mut self) -> Option<Node> {
-		if self.options.data_mode || self.in_data_literal {
+		if self.options.data_mode || self.in_data_literal || self.after_function_keyword || self.prev_char() == '.' {
 			return None;
 		}
 		let (word, count) = COUNT_WORDS.into_iter().find(|(word, _)| self.matches_keyword(word))?;
@@ -419,10 +424,6 @@ pub(crate) fn while_do(condition: Node, body: Node) -> Node {
 	let head = Node::Key(Box::new(Empty), Op::While, Box::new(condition));
 	Node::Key(Box::new(head), Op::Do, Box::new(body))
 }
-
-/// The words a statement may start counting with: `thrice {…}` is `3 times {…}`
-const COUNT_WORDS: [(&str, i64); 3] = [("once", 1), ("twice", 2), ("thrice", 3)];
-const COUNT_WORD: &str = "count-word";
 
 /// `[2 times {a: 1}]`: the block is `key: value` data, the word its tag
 fn counts_pairs(counted: &Node) -> bool {
