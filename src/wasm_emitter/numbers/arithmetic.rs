@@ -825,6 +825,16 @@ impl WasmGcEmitter {
 			self.emit_float_comparison(func, op);
 			return;
 		}
+		// arithmetic with an i64 variable wraps as a fast function's does
+		if !self.wrapping_ints && [left, right].iter().any(|side| self.declared_wrapping(side)) {
+			let outer = std::mem::replace(&mut self.wrapping_ints, true);
+			self.emit_int_operands_op(func, left, op, right);
+			self.wrapping_ints = outer;
+			return;
+		}
+		if self.computes_on_machine(left, op, right) {
+			return self.emit_machine_root(func, left, op, right);
+		}
 		// comparisons keep a character's code point (`c >= '0'`); arithmetic refuses it (P65)
 		let operand = if op.is_comparison() { Self::emit_numeric_value } else { Self::emit_arithmetic_operand };
 		operand(self, func, left);
