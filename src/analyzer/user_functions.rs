@@ -200,7 +200,8 @@ pub fn param_kind(param: &Param) -> Kind {
 /// Every definition form (`f(x) := …`, `fn`, `def`, `function`) infers its parameter and return kinds alike
 pub(super) fn user_function(name: &str, params: Vec<Param>, body: Node) -> UserFunctionDef {
 	let params = with_usage_kinds(params, &body);
-	let return_kind = infer_function_return_kind(&params, &body, &Default::default(), &HashMap::new(), &Default::default());
+	let return_kind =
+		infer_function_return_kind(&params, &body, &Default::default(), &HashMap::new(), &Default::default());
 	UserFunctionDef {
 		name: name.to_string(),
 		params,
@@ -487,8 +488,9 @@ pub(super) fn analyse_user_functions(ctx: &mut Context, node: &Node) {
 	ctx.field_kinds = program_field_kinds(node);
 	let mut globals = with_closure_captures(ctx, node, globals);
 	refine_return_kinds(ctx, &globals);
-	let return_kinds: FunctionKinds =
-		FunctionKinds::new(ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect());
+	let return_kinds: FunctionKinds = FunctionKinds::new(
+		ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect(),
+	);
 	// `global g = 0.3; g = f(-9)` with an f that returns a Node: only the return kinds tell that main's g holds one
 	let widened_by_main =
 		widen_globals(&mut globals, &declared_globals_in(Scope::with_function_kinds(return_kinds.clone()), node));
@@ -760,8 +762,9 @@ fn closure_parameter_kinds(
 /// The kinds of each scope's parameters and variables, the program's and each function's: `m = float(2.5)` captured
 /// by a closure is a float
 fn scope_kinds<'a>(ctx: &'a Context, program: &'a Node) -> Vec<(&'a Node, HashMap<String, Kind>)> {
-	let function_kinds: FunctionKinds =
-		FunctionKinds::new(ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect());
+	let function_kinds: FunctionKinds = FunctionKinds::new(
+		ctx.user_functions.iter().map(|(name, function)| (name.clone(), function.return_kind)).collect(),
+	);
 	let kinds_of = |params: &[Param], body: &Node| -> HashMap<String, Kind> {
 		let scope = function_body_scope(params, body, &function_kinds, &HashMap::new(), &ctx.closure_variable_targets);
 		scope.locals.into_iter().map(|(name, local)| (name, local.kind)).collect()
