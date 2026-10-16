@@ -15,12 +15,25 @@ pub(crate) fn implied_count_words(statements: &[Node]) -> Vec<String> {
 	let mut words = Vec::new();
 	for statement in statements {
 		statement.visit(&mut |node| {
-			if let Some(Node::List(call, _, _)) = counted(node, library_count) {
+			// `[count v in s for v in vowels]`: comprehensions::lower, a later pass, makes its element `count v in s`
+			let element = match node {
+				Node::List(items, _, _) => items.iter().position(starts_a_loop).and_then(|at| count_in(&items[..at])),
+				_ => None,
+			};
+			if let Some(Node::List(call, _, _)) = counted(node, library_count).or(element) {
 				words.extend(call.first().map(Node::name));
 			}
 		});
 	}
 	words
+}
+
+/// `for v in vowels` after a comprehension's element
+fn starts_a_loop(item: &Node) -> bool {
+	match item.drop_meta() {
+		Node::List(parts, _, _) => parts.first().is_some_and(|first| first.is_symbol(FOR_WORD)),
+		other => other.is_symbol(FOR_WORD),
+	}
 }
 
 fn defines_count(statements: &[Node]) -> bool {

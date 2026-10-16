@@ -10,6 +10,8 @@ fn every_count_spelling_calls_the_prelude_words() {
 	is!(r#""banana".count("a")"#, 3);
 	is!("xs = [1, 2, 2]; xs.count(2)", 2);
 	is!(r#"f(t) := t.count("an"); f("banana")"#, 2);
+	// a comprehension's element is split off after the loader picked the prelude words
+	is!(r#"[count "an" in t for t in ["banana", "an"]]#1"#, 2);
 }
 
 #[test]
