@@ -16,6 +16,15 @@ const SOURCE: &str = include_str!("../../../lib/units.warp");
 const BLOCK_END: &str = "}";
 const DIMENSION_WORD: &str = "dimension ";
 const UNIT_WORD: &str = "unit ";
+/// `SI dimension length meter`: its units take the SI prefixes (decision unit-definitions: not pixels, not eras)
+const SI_MARK: &str = "SI ";
+/// `prefix k := 10^3`: an SI prefix and its power of ten
+const PREFIX_WORD: &str = "prefix ";
+const POWER_OF_TEN: &str = "10^";
+/// `name hour := h`: a long name a conversion target may use, singular or plural (`2 h in minutes`, P36)
+const NAME_WORD: &str = "name ";
+/// The lines a program may write itself; dimensions are lib/units.warp's
+const PROGRAM_LINE_WORDS: [&str; 3] = [UNIT_WORD, PREFIX_WORD, NAME_WORD];
 const DEFINE: &str = ":=";
 /// `unit m := 1 meter`: a unit of the same amount as an anchor
 const ONE: &str = "1 ";
@@ -52,13 +61,6 @@ const DIMENSION_WORDS: [(&str, Dimension); 6] = [
 	("pixels", Dimension::Pixel),
 ];
 
-/// The dimensions whose units take SI prefixes (decision unit-definitions: not pixels, not eras, not furlongs)
-const SI_DIMENSIONS: [Dimension; 4] = [Dimension::Length, Dimension::Mass, Dimension::Time, Dimension::Temperature];
-/// The SI prefixes a unit of an SI dimension takes by itself (`km`, `µs`, `GK`), each a power of ten; giga down to nano
-/// keep every unit a whole number of its dimension's finest step within 64 bits
-const SI_PREFIXES: [(&str, i32); 10] =
-	[("G", 9), ("M", 6), ("k", 3), ("h", 2), ("da", 1), ("d", -1), ("c", -2), ("m", -3), ("µ", -6), ("n", -9)];
-
 pub(super) struct Definitions {
 	/// The dimensions by name, in written order, and the names of products of them (`speed := length/duration`)
 	pub(super) dimensions: Vec<(&'static str, Dimension)>,
@@ -69,6 +71,9 @@ pub(super) struct Definitions {
 	pub(super) aliases: Vec<(&'static str, &'static str)>,
 	pub(super) bridges: Vec<Bridge<'static>>,
 	pub(super) settings: Vec<Setting<'static>>,
+	/// `name hour := h`: long name → unit symbol
+	pub(super) long_names: Vec<(&'static str, &'static str)>,
+	pub(super) prefixes: Vec<(&'static str, i32)>,
 }
 
 /// `length as pixels := it * display.dpi`: an amount of `from` is `factor` times as much of `to`, the factor read at
@@ -109,16 +114,27 @@ fn with_program_units(lines: String) -> &'static Definitions {
 	})
 }
 
-/// A program's own units (decision unit-definitions): its lines `unit furlong := 201.168 m` at the start of a line,
-/// read before the program is parsed, so `3 furlong` binds like `3 m`; a line the reader can't read stays in the
-/// program, where the units lowering reports it
+/// A program's own units (decision unit-definitions): its lines `unit furlong := 201.168 m`, `prefix T := 10^12` and
+/// `name furlong := fur` at the start of a line, read before the program is parsed, so `3 furlong` binds like `3 m`; a
+/// line the reader can't read stays in the program, where the units lowering reports it
 pub fn program_unit_lines(source: &str) -> String {
 	let mut reader = lib_reader();
 	// `unit furlong := 201.168m; print(…)`: a unit line ends at its line's `;`
 	let code = crate::warp_parser::code_only(source);
 	let lines = code.lines().map(|line| line.split(STATEMENT_END).next().unwrap_or_default().trim_end());
-	let lines = lines.filter(|line| line.starts_with(UNIT_WORD) && line.contains(DEFINE));
-	lines.filter(|line| reader.knows_words_of(line) && reader.line(line).is_ok()).collect::<Vec<_>>().join("\n")
+	let lines =
+		lines.filter(|line| PROGRAM_LINE_WORDS.iter().any(|word| line.starts_with(word)) && line.contains(DEFINE));
+	lines.filter(|line| reader.takes(line)).collect::<Vec<_>>().join("\n")
+}
+
+/// Whether the definitions hold what a program's line `unit fur …`, `prefix T …` or `name furlong …` defines
+pub(super) fn defines(line_word: &str, name: &str) -> bool {
+	let definitions = definitions();
+	match format!("{line_word} ").as_str() {
+		PREFIX_WORD => definitions.prefixes.iter().any(|(prefix, _)| *prefix == name),
+		NAME_WORD => definitions.long_names.iter().any(|(long_name, _)| *long_name == name),
+		_ => super::names_unit(name),
+	}
 }
 
 /// The bridges between dimensions (`length as pixels := it * display.dpi`): each with the host's system value its factor
@@ -228,7 +244,7 @@ fn lib_reader() -> Reader<'static> {
 	let read = || -> Result<Reader<'static>, String> {
 		let mut reader = Reader::default();
 		lib_lines().try_for_each(|line| reader.line(line))?;
-		let prefixed = with_si_prefixes(&reader.units, &reader.aliases);
+		let prefixed = with_si_prefixes(&reader);
 		reader.units.extend(prefixed);
 		Ok(reader)
 	};
@@ -239,9 +255,33 @@ fn lib_reader() -> Reader<'static> {
 fn read(program_lines: impl Iterator<Item = &'static str>) -> Result<Definitions, String> {
 	let mut reader = lib_reader();
 	program_lines.into_iter().try_for_each(|line| reader.line(line))?;
-	let Reader { dimensions, derived_dimensions, base_units, units, aliases, bridges, settings } = reader;
+	// a program's own prefixes reach every unit, its own units take every prefix
+	let prefixed = with_si_prefixes(&reader);
+	reader.units.extend(prefixed);
+	let Reader {
+		dimensions,
+		derived_dimensions,
+		base_units,
+		units,
+		aliases,
+		bridges,
+		settings,
+		long_names,
+		prefixes,
+		..
+	} = reader;
 	let units = in_whole_steps(units)?;
-	Ok(Definitions { dimensions, derived_dimensions, units, base_units, aliases, bridges, settings })
+	Ok(Definitions {
+		dimensions,
+		derived_dimensions,
+		units,
+		base_units,
+		aliases,
+		bridges,
+		settings,
+		long_names,
+		prefixes,
+	})
 }
 
 /// The definitions read so far, one line at a time
@@ -254,6 +294,10 @@ struct Reader<'a> {
 	aliases: Vec<(&'a str, &'a str)>,
 	bridges: Vec<Bridge<'a>>,
 	settings: Vec<Setting<'a>>,
+	/// The dimensions whose units take the SI prefixes, and the prefixes with their powers of ten
+	si_dimensions: Vec<Dimension>,
+	prefixes: Vec<(&'a str, i32)>,
+	long_names: Vec<(&'a str, &'a str)>,
 }
 
 impl<'a> Reader<'a> {
@@ -269,11 +313,60 @@ impl<'a> Reader<'a> {
 			.all(|token| [DIVIDE, IT].contains(&token) || decimal(token).is_some() || self.knows(powered(token).0))
 	}
 
+	/// Reads a program's line when its words are known and every unit with it stays whole steps; else leaves it
+	fn takes(&mut self, line: &'a str) -> bool {
+		let mut taken = self.clone();
+		let readable = (!line.starts_with(UNIT_WORD) || taken.knows_words_of(line)) && taken.line(line).is_ok();
+		let fits = || {
+			let mut units = taken.units.clone();
+			units.extend(with_si_prefixes(&taken));
+			whole_steps(&units).is_ok()
+		};
+		if readable && fits() {
+			*self = taken;
+		}
+		readable && self.knows_line(line)
+	}
+
+	fn knows_line(&self, line: &str) -> bool {
+		let defined =
+			line.split_once(DEFINE).map_or("", |(name, _)| name).split_whitespace().nth(1).unwrap_or_default();
+		self.knows(defined)
+			|| self.prefixes.iter().any(|(prefix, _)| *prefix == defined)
+			|| self.long_names.iter().any(|(name, _)| *name == defined)
+	}
+
 	fn line(&mut self, line: &'a str) -> Result<(), String> {
 		let definition = |keyword: &str, separator: &str| {
 			let (name, expression) = line.strip_prefix(keyword)?.split_once(separator)?;
 			Some((name.trim(), expression.trim()))
 		};
+		if let Some(line) = line.strip_prefix(SI_MARK) {
+			self.line(line)?;
+			let (_, dimension) = self
+				.dimensions
+				.last()
+				.filter(|_| line.starts_with(DIMENSION_WORD))
+				.copied()
+				.ok_or(format!("{line}: SI marks a base dimension"))?;
+			self.si_dimensions.push(dimension);
+			return Ok(());
+		}
+		if let Some((prefix, power)) = definition(PREFIX_WORD, DEFINE) {
+			let exponent: i32 = power
+				.strip_prefix(POWER_OF_TEN)
+				.and_then(|exponent| exponent.parse().ok())
+				.ok_or(format!("{line}: a prefix is 10^n"))?;
+			self.prefixes.push((prefix, exponent));
+			return Ok(());
+		}
+		if let Some((long_name, symbol)) = definition(NAME_WORD, DEFINE) {
+			if !self.knows(symbol) {
+				return Err(format!("{line}: {symbol} is no unit"));
+			}
+			self.long_names.push((long_name, symbol));
+			return Ok(());
+		}
 		if let Some((name, anchor)) = definition(DIMENSION_WORD, " ") {
 			match DIMENSION_WORDS.iter().find(|(word, _)| *word == name) {
 				Some((_, dimension)) => {
@@ -359,24 +452,24 @@ fn targeted(expression: &str, target: Option<&str>) -> String {
 
 /// `km`, `µg`, `ns`: each SI prefix on each unit of an SI dimension that is a power of ten of its anchor and carries no
 /// prefix itself (`g` takes them, `kg` and `cm` do not); a unit written in lib/units.warp keeps its own definition
-fn with_si_prefixes<'a>(units: &[Read<'a>], aliases: &[(&'a str, &'a str)]) -> Vec<Read<'a>> {
-	let known =
-		|name: &str| units.iter().any(|unit| unit.name == name) || aliases.iter().any(|(alias, _)| *alias == name);
-	let prefixed = |name: &str| SI_PREFIXES.iter().any(|(prefix, _)| name.strip_prefix(prefix).is_some_and(known));
+fn with_si_prefixes<'a>(reader: &Reader<'a>) -> Vec<Read<'a>> {
+	let known = |name: &str| reader.knows(name);
+	let prefixed = |name: &str| reader.prefixes.iter().any(|(prefix, _)| name.strip_prefix(prefix).is_some_and(known));
 	let takes_prefixes = |unit: &&Read<'a>| {
-		SI_DIMENSIONS.contains(&unit.dimension)
+		reader.si_dimensions.contains(&unit.dimension)
 			&& unit.zero.is_zero()
 			&& power_of_ten(&unit.scale)
 			&& !prefixed(unit.name)
 	};
-	units
+	reader
+		.units
 		.iter()
 		.filter(takes_prefixes)
-		.flat_map(|unit| SI_PREFIXES.iter().map(move |(prefix, power)| (unit, prefix, power)))
+		.flat_map(|unit| reader.prefixes.iter().map(move |(prefix, power)| (unit, prefix, *power)))
 		.filter_map(|(unit, prefix, power)| {
 			let name: &'static str = Box::leak(format!("{prefix}{}", unit.name).into_boxed_str());
 			let ten = Rational::integer(BigInt::from(10).pow(power.unsigned_abs()));
-			let factor = if *power > 0 { ten } else { ten.inverse()? };
+			let factor = if power > 0 { ten } else { ten.inverse()? };
 			(!known(name)).then(|| Read {
 				name,
 				dimension: unit.dimension,
@@ -511,6 +604,16 @@ fn decimal(token: &str) -> Option<Rational> {
 /// Units in whole steps of their dimension: each amount times the least common multiple of the dimension's
 /// denominators (only their ratios matter: 1 m is 50 steps of cm's 1, km 50000)
 fn in_whole_steps(units: Vec<Read<'static>>) -> Result<Vec<Unit>, String> {
+	let steps = whole_steps(&units)?;
+	Ok(units
+		.iter()
+		.zip(steps)
+		.map(|(read, (factor, zero))| Unit { name: read.name, dimension: read.dimension, factor, zero })
+		.collect())
+}
+
+/// Each unit's factor and zero as whole numbers of its dimension's finest step, within 64 bits
+fn whole_steps(units: &[Read<'_>]) -> Result<Vec<(i64, i64)>, String> {
 	let step = |dimension: Dimension| {
 		units
 			.iter()
@@ -528,7 +631,7 @@ fn in_whole_steps(units: Vec<Read<'static>>) -> Result<Vec<Unit>, String> {
 			let steps = step(read.dimension);
 			let factor = whole(&read.scale, &steps).ok_or(format!("{} is too fine", read.name))?;
 			let zero = whole(&read.zero, &steps).ok_or(format!("{} has too fine a zero", read.name))?;
-			Ok(Unit { name: read.name, dimension: read.dimension, factor, zero })
+			Ok((factor, zero))
 		})
 		.collect()
 }
