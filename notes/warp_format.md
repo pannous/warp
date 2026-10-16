@@ -16,7 +16,7 @@ prints its hints as `code:<line>: hint: …` and then its formatted text; `check
   (`def f(x):` and the lines indented below it) one more; a continued line (after `=`, `+`, `|>`, … or starting
   with `|>`, `.`, `then`) one more
 - `name: value`, a parameter's type too: `f(x: int)` (user: "spaced everywhere", so help and the standard-library
-  docs print signatures that way); one space after a comma, none before; none just inside `(…)` and `[…]`
+  docs print signatures that way); one space after a comma or semicolon, none before; none just inside `(…)` and `[…]`
 - every binary operator spaced: `x = a + b * 2`, `1 < 2`, `3 ≤ 4` (card format-spaces: every symbol spelling of the
   operator table, src/operators/spellings.rs; GLUED_SPELLINGS in rules.rs keep `.`, ranges `..`, prefix/postfix and
   the unit `·` as written; the tree check keeps `list<int>` and `7//2` glued)
