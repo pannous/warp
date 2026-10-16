@@ -49,7 +49,7 @@ Manual list of what should normally be cards in the project. These can be cleare
 - DONE: `print "a"` followed by a line starting with `√` (`print "a"\n√9`) evaluates to ø, without print it is 3. (web-playground 2026-10-03) (gives 3 on main 2026-10-03, fixer)
 - `xs=[3 1 2]; print sort(xs)` → Error("not a joinable item"); `sort(xs)` alone is fine. (web-playground 2026-10-03)
 - DONE: The indexing hint for a map with a text key is wrong: `ages["alice"]` hints `ages#("alice"+1)`. (web-playground 2026-10-03)
-- In the browser samples/quicksort.warp overflows V8's wasm stack inside the compiler ("Maximum call stack size exceeded"); natively it reaches its error at 41:7. A deep recursion in the analyzer/emitter. (web-playground 2026-10-03)
+- In the browser samples/lists/quicksort.warp overflows V8's wasm stack inside the compiler ("Maximum call stack size exceeded"); natively it reaches its error at 41:7. A deep recursion in the analyzer/emitter. (web-playground 2026-10-03)
 - The browser playground has no packages (`use netbase` → module not found) and no native FFI (raylib, SDL, libc): libm only, via Math. (web-playground 2026-10-03)
 - `try X else Y` catches the named runtime errors (wasm exception tag `warp_error`, wasm_emitter/try_guard.rs) but not raw engine traps: a `ref.cast` failure elsewhere than get_int_value (get_float_value, struct field casts, text payload casts), a null dereference, stack overflow, running out of fuel. Turn each into a named runtime error like `not_an_int`. (r3-try 2026-10-03)
 - DONE: A `return`, `break` or `continue` that leaves a `try X else Y` from inside X skips the depth decrement: an error after it throws instead of trapping and ends as an uncaught wasm exception rather than its message. (r3-try 2026-10-03)

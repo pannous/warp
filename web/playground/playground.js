@@ -40,7 +40,7 @@ const PENDING_VALUE = "…"; // the value shown from Run until the new one arriv
 const DEFAULT_EXAMPLE = "hello";
 const COMMIT_URL = "https://github.com/pannous/warp/commit/";
 const SHORT_COMMIT = 9;
-// terminal codes in printed text (`print "\e[H"`, samples/game_of_life.warp): clearing the screen or moving the cursor
+// terminal codes in printed text (`print "\e[H"`, samples/loops/game_of_life.warp): clearing the screen or moving the cursor
 // home starts the text anew, the other codes (colors, cursor moves) are dropped
 const TERMINAL_RESTART = /\x1b\[(?:2J|H|1;1H)/g;
 const TERMINAL_CODE = /\x1b\[[0-9;?]*[A-Za-z]/g;
@@ -324,11 +324,15 @@ function notification(text) {
 }
 
 // the system values a Worker cannot read itself (host.js system_value), sent again when they change. window_open: the
-// canvas shows the pictures to someone once the page was clicked or typed in; before (the CI tour, as for sounds) a
-// `while window_open` drawing loop ends at once instead of waiting for input forever
+// canvas shows the pictures to someone while the page is visible, so a `while window_open` loop run on load keeps
+// drawing (card playground-means). A browser driven by a test (the CI tour, navigator.webdriver) shows them once the
+// page was clicked or typed in: before, such a loop ends at once instead of waiting for input forever. heard (host-sound.js
+// paces sound by it): the page was clicked or typed in, as a browser plays sound only then
 const darkMode = matchMedia(DARK_MODE_QUERY);
-const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(!beforeUserActivation()), display_width: screen.width, display_height: screen.height, display_dpi: Math.round(CSS_PIXELS_PER_INCH * devicePixelRatio), ...viewSize() } });
+const windowOpen = () => (navigator.webdriver ? !beforeUserActivation() : document.visibilityState === "visible");
+const tellSystemValues = () => worker.postMessage({ system: { "dark mode": darkMode.matches, window_open: Number(windowOpen()), heard: Number(!beforeUserActivation()), display_width: screen.width, display_height: screen.height, display_dpi: Math.round(CSS_PIXELS_PER_INCH * devicePixelRatio), ...viewSize() } });
 darkMode.addEventListener("change", tellSystemValues);
+document.addEventListener("visibilitychange", () => worker && tellSystemValues());
 ["pointerdown", "keydown"].forEach(type => addEventListener(type, () => worker && tellSystemValues(), { once: true, capture: true }));
 new ResizeObserver(() => worker && tellSystemValues()).observe($("output"));
 document.addEventListener("fullscreenchange", () => worker && tellSystemValues());
@@ -643,7 +647,7 @@ async function runInWorker(code) {
 		Object.assign(worker, { runId: run.id, liveLoops: new Map() });
 		paintingWindow = undefined; // canvas.js: each run's paintings at their own size until it sets window.width
 		tellSystemValues();
-		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file: programFile(), liveHandover });
+		worker.postMessage({ id: run.id, code, acknowledged: acknowledgements(), file: programFile(), arguments: programArguments(), liveHandover });
 		liveHandover = {};
 	});
 }
@@ -1068,8 +1072,10 @@ const exampleSource = name => EXAMPLES[name]?.code ?? SAMPLES[name];
 // the file of the chosen sample, whose neighbours its runs name relatively (host-files.js besideProgram)
 function programFile() {
 	const name = $("examples").value;
-	return EXAMPLES[name] === undefined && SAMPLES[name] !== undefined ? `samples/${name}.warp` : undefined;
+	return EXAMPLES[name] === undefined ? SAMPLE_FILES[name] : undefined;
 }
+// the chosen sample's arguments, from its <name>.args (build.sh SAMPLE_ARGUMENTS): `use os; args` gives them
+const programArguments = () => (programFile() && SAMPLE_ARGUMENTS[$("examples").value]) || [];
 
 // puts the code in the editor and runs it once; resolves once its report is shown
 function runCode(source) {

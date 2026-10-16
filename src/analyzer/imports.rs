@@ -93,7 +93,7 @@ fn conversion_required(ctx: &mut Context, value: &Node) {
 		]); // `x as decimal`: a text
 	}
 	if value.name().to_lowercase() == "list" {
-		ctx.required_functions.extend(["text_chars", "list_reverse", "text_reverse"]);
+		ctx.required_functions.extend([crate::library_words::TEXT_GRAPHEMES, "list_reverse", "text_reverse"]);
 		// `x as list` of a text
 	}
 }

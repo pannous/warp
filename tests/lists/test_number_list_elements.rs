@@ -12,7 +12,7 @@ fn a_mixed_number_list_keeps_each_elements_kind() {
 }
 
 // The float elements of a comprehension or of a function's list, read in a loop body or passed to a function that also
-// gets ints, were unboxed as ints ("not an int", samples/visualizer.warp); a loop keeps such an element as its Node, and a
+// gets ints, were unboxed as ints ("not an int", samples/sound/visualizer.warp); a loop keeps such an element as its Node, and a
 // parameter passed Nodes and ints takes the Node; == compares a Node by value
 #[test]
 fn float_elements_stay_floats_in_loops_and_calls() {

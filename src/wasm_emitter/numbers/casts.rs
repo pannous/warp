@@ -168,7 +168,7 @@ impl WasmGcEmitter {
 			// a value of unknown static type (a parameter given lists and texts): a list as it is, a text's characters
 			_ if matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty) => {
 				self.emit_node_instructions(func, value);
-				self.emit_call(func, "text_chars");
+				self.emit_call(func, crate::library_words::TEXT_GRAPHEMES);
 			}
 			_ => {
 				let kind = self.get_type(value);
@@ -528,7 +528,7 @@ impl WasmGcEmitter {
 			None if matches!(self.get_type(value), Kind::Text | Kind::Codepoint | Kind::Empty) => {
 				use crate::lowering::nodes::call;
 				let falsy = FALSY_TEXTS.iter().map(|text| Node::Text(text.to_string())).collect();
-				let falsy = Node::List(falsy, Bracket::Square, Separator::Colon);
+				let falsy = Node::List(falsy, Bracket::Square, Separator::Comma);
 				let spells_falsy =
 					call(crate::library_words::COLLECTION_CONTAINS, vec![falsy, call("lower", vec![value.clone()])]);
 				self.emit_node_instructions(func, &Node::Key(Box::new(Node::Empty), Op::Not, Box::new(spells_falsy)));

@@ -49,7 +49,7 @@ pub(super) fn moved_through(owner: &str, statements: &[Node], last: &Node) -> Op
 pub(super) fn is_tuple_or_object(value: &Node) -> bool {
 	use crate::node::Separator;
 	match value.drop_meta() {
-		Node::List(_, Bracket::Curly, _) | Node::List(_, Bracket::Round, Separator::Colon) => true,
+		Node::List(_, Bracket::Curly, _) | Node::List(_, Bracket::Round, Separator::Comma) => true,
 		Node::List(items, Bracket::Round, Separator::Space | Separator::None) => {
 			!matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(_)))
 		}

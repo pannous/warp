@@ -23,6 +23,12 @@ impl WarpParser {
 		}
 
 		let node = match self.current_char() {
+			// Rust's `&x`, `&mut x`, `&&x` and `*r`: values need no references, so a reference and its dereference read as the
+			// value itself (card rust-refs); `&name` of a function stays below
+			'&' | '*' if self.starts_rust_reference() => {
+				self.skip_reference_prefix();
+				return self.parse_atom();
+			}
 			// `&name` is the function `name` itself: a name is already a function value where a function is expected
 			'&' if self.starts_function_reference() => self.symbol_after(1, crate::closures::function_reference),
 			// Elixir's capture `&(&1 * 2)`: the block `{$0 * 2}`; its `&1`, `&2` are `$0`, `$1`
@@ -272,6 +278,7 @@ impl WarpParser {
 		}
 
 		self.read_function_name_suffix(&symbol);
+		self.skip_turbofish();
 
 		if let Some(reference) = self.function_reference_after(&symbol) {
 			return reference;
@@ -358,6 +365,20 @@ impl WarpParser {
 			let written: String = self.chars[self.pos + 1..self.pos + length - 1].iter().collect();
 			self.advance_by(length);
 			self.generic_names = Some((symbol.to_string(), type_parameter_names(&written)));
+		}
+	}
+
+	/// Rust's turbofish `sum::<i32>()`, `collect::<Vec<i32>>()`: the type arguments say nothing warp needs, the call is
+	/// `sum()` (card rust-paths)
+	fn skip_turbofish(&mut self) {
+		if self.current_char() != ':' || self.peek_char(1) != ':' || self.peek_char(2) != '<' {
+			return;
+		}
+		let start = self.mark();
+		self.advance_by(2);
+		match self.generic_parameters_length() {
+			Some(length) => self.advance_by(length),
+			None => self.rewind(start),
 		}
 	}
 

@@ -1,0 +1,119 @@
+// card json-parse: a JSON parser written in warp, to compare with the adapter (serde_json natively)
+json_space(c) := c == ' ' or c == '\n' or c == '\t' or c == '\r'
+json_number_part(c) := c == '-' or c == '+' or c == '.' or c == 'e' or c == 'E' or is_digit(c)
+
+// Cursor's skip, skip_while and take_while without slicing the text (a slice costs the whole text's length, card
+// text-slice) and without indexing other texts (they take the source's grapheme cursor)
+json_skip(cursor: Cursor, c) := {
+	if cursor.at < count(cursor.source) and cursor.peek() == c {
+		cursor.at += 1
+		return true
+	}
+	false
+}
+
+json_skip_spaces(cursor: Cursor) := {
+	while cursor.at < count(cursor.source) and json_space(cursor.peek()) { cursor.at += 1 }
+}
+
+json_number(cursor: Cursor) := {
+	var digits = ""
+	while cursor.at < count(cursor.source) and json_number_part(cursor.peek()) { digits = digits + cursor.advance() }
+	number(digits)
+}
+
+json_value(cursor: Cursor) := {
+	json_skip_spaces(cursor)
+	c = cursor.peek()
+	if c == '{' { return json_object(cursor) }
+	if c == '[' { return json_array(cursor) }
+	if c == '"' { return json_string(cursor) }
+	if c == 't' { cursor.at += 4; return true }
+	if c == 'f' { cursor.at += 5; return false }
+	if c == 'n' { cursor.at += 4; return ø }
+	json_number(cursor)
+}
+
+json_string(cursor: Cursor) := {
+	cursor.advance()
+	var out = ""
+	while cursor.peek() != '"' {
+		c = cursor.advance()
+		if c == '\\' {
+			e = cursor.advance()
+			out = out + (if e == 'n' then "\n" else if e == 't' then "\t" else if e == 'r' then "\r" else if e == 'u' then chr(hex(cursor.advance() + cursor.advance() + cursor.advance() + cursor.advance())) else e)
+		} else { out = out + c }
+	}
+	cursor.advance()
+	out
+}
+
+json_array(cursor: Cursor) := {
+	cursor.advance()
+	var items = []
+	json_skip_spaces(cursor)
+	if json_skip(cursor, ']') { return items }
+	while true {
+		items = items + [json_value(cursor)]
+		json_skip_spaces(cursor)
+		if json_skip(cursor, ']') { return items }
+		json_skip(cursor, ',')
+	}
+}
+
+json_object(cursor: Cursor) := {
+	cursor.advance()
+	var fields = {}
+	json_skip_spaces(cursor)
+	if json_skip(cursor, '}') { return fields }
+	while true {
+		json_skip_spaces(cursor)
+		key = json_string(cursor)
+		json_skip_spaces(cursor)
+		json_skip(cursor, ':')
+		fields[key] = json_value(cursor)
+		json_skip_spaces(cursor)
+		if json_skip(cursor, '}') { return fields }
+		json_skip(cursor, ',')
+	}
+}
+
+parse_json_in_warp(text: text) := json_value(Cursor(text))
+
+// the writer: plain JSON, without the adapter's exact big numbers, fraction warnings and class tags
+json_quoted(t) := "\"" + join([if c == '"' then "\\\"" else if c == '\\' then "\\\\" else if c == '\n' then "\\n" else "" + c for c in t], "") + "\""
+to_json_in_warp(value) := {
+	if value == ø { return "null" }
+	if value is bool { return if value then "true" else "false" }
+	if value is number { return "" + value }
+	if value is text { return json_quoted(value) }
+	if value is list { return "[" + join([to_json_in_warp(item) for item in value], ",") + "]" }
+	"{" + join([json_quoted(key) + ":" + to_json_in_warp(value[key]) for key in keys(value)], ",") + "}"
+}
+
+sample = {a: 1, b: [true, ø, "x\ny"], c: {d: -25.5}}
+print sample.json
+print parse_json_in_warp(sample.json)
+print json(sample.json)
+print parse_json_in_warp(sample.json).json == sample.json
+
+// benchmark: a document of 2000 records, the adapter against the parser in warp
+records = [{id: i, name: "name " + i, tags: ["a", "b"], score: i + 0.5, ok: i % 2 == 0} for i in 1 to 2000]
+document = records.json
+print "bytes: " + count(document)
+began = clock()
+adapter = json(document)
+halfway = clock()
+in_warp = parse_json_in_warp(document)
+finished = clock()
+print "adapter ms: " + (halfway - began)
+print "in warp ms: " + (finished - halfway)
+print "same: " + (in_warp.json == adapter.json)
+written_at = clock()
+written_by_adapter = records.json
+written_halfway = clock()
+written_in_warp = to_json_in_warp(records)
+written_finished = clock()
+print "to_json adapter ms: " + (written_halfway - written_at)
+print "to_json in warp ms: " + (written_finished - written_halfway)
+print "same text: " + (written_in_warp == written_by_adapter)

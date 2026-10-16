@@ -21,7 +21,7 @@ fn a_comment_after_a_text_gets_no_division_note() {
 	let _ = std::fs::remove_file(path);
 }
 
-/// a prose comment (`// property with value list`, samples/html.warp) reads like no divisor: no note; `// 2`,
+/// a prose comment (`// property with value list`, samples/web/html.warp) reads like no divisor: no note; `// 2`,
 /// `// n` and `// n + 1` still do
 #[test]
 #[ignore = "cleanup-edge: diffs-mid-diagnostics: `// n + 1` gets no floor-division note"]

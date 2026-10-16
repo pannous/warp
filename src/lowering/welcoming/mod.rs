@@ -7,6 +7,7 @@ use super::*;
 pub mod ambiguous_forms;
 pub mod kebab_names;
 pub mod rust_options;
+pub mod rust_paths;
 pub mod soft_keywords;
 pub mod std_aliases;
 pub mod welcome_forms;

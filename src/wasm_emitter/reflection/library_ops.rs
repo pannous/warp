@@ -34,7 +34,7 @@ const COPY_BYTES: I<'static> = I::MemoryCopy { src_mem: 0, dst_mem: 0 };
 const EMPTY_TEXT: &str = "ø";
 
 /// Names of the runtime functions, keyed by the library word
-pub const LIBRARY_FUNCTIONS: [(&str, &str); 20] = [
+pub const LIBRARY_FUNCTIONS: [(&str, &str); 21] = [
 	(super::super::host::wasi_emitter::WASI_ENVIRONMENT, super::super::host::wasi_emitter::WASI_ENVIRONMENT),
 	(crate::words::MAP_KEYS, crate::words::MAP_KEYS),
 	(crate::library_words::MAP_VALUES, crate::library_words::MAP_VALUES),
@@ -45,7 +45,8 @@ pub const LIBRARY_FUNCTIONS: [(&str, &str); 20] = [
 	(crate::library_words::MAP_WITHOUT, crate::library_words::MAP_WITHOUT),
 	(crate::one_entry_maps::MAP_OF_ENTRY, crate::one_entry_maps::MAP_OF_ENTRY),
 	(ORD_WORD, CODEPOINT_OF),
-	("chars", "text_chars"),
+	(crate::library_words::CHARS_WORD, crate::library_words::TEXT_GRAPHEMES),
+	(crate::library_words::CODE_POINT_LIST, crate::library_words::TEXT_CODE_POINTS),
 	("field_with", "field_with"),
 	(crate::library_words::INSTANCE_COPY, crate::library_words::INSTANCE_COPY),
 	("reverse", "list_reverse"),
@@ -80,7 +81,7 @@ impl WasmGcEmitter {
 		self.emit_text_reverse(); // list_reverse hands a text to it
 		self.emit_list_reverse();
 		self.emit_int_lists();
-		self.emit_text_chars(); // and it ends with list_reverse
+		self.emit_text_items(); // and they end with list_reverse
 		if self.should_emit_function(NODE_ORDER) {
 			self.emit_node_order();
 		}
@@ -287,7 +288,7 @@ impl WasmGcEmitter {
 			self.emit_field(f, local, 0);
 			Self::emit_kind_test(f, kind as i64, I::I64Eq);
 			Self::emit_list(f, &[I::If(BlockType::Empty), I::LocalGet(local), I::RefAsNonNull]);
-			self.call(f, "text_chars");
+			self.call(f, crate::library_words::TEXT_GRAPHEMES);
 			Self::emit_list(f, &[I::LocalSet(local), I::I32Const(1), I::LocalSet(is_text), I::End]);
 		}
 		f.instruction(&I::End);

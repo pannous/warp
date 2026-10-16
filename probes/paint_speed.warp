@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-// card abysmally-slow: samples/finger_paint's loop with a scripted pointer, a stroke, show() and sleep 2ms per pass,
+// card abysmally-slow: samples/graphics/finger_paint's loop with a scripted pointer, a stroke, show() and sleep 2ms per pass,
 // timed per frame by probes/paint_speed.mjs (node, the playground's worker scripts)
 use draw
 width = 1280

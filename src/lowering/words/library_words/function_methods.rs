@@ -64,7 +64,7 @@ fn list_constructor_calls(node: Node, defined: &HashSet<String>) -> Node {
 				false => Node::List(
 					elements.into_iter().map(|element| list_constructor_calls(element, defined)).collect(),
 					Bracket::Square,
-					Separator::Colon,
+					Separator::Comma,
 				),
 			}
 		}

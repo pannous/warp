@@ -1,6 +1,7 @@
 //! List literals with computed elements, min/max of any expressions, and `+=` next to a function with a same-named local
-//! (Levenshtein field test, probes/listexpr/)
+//! (Levenshtein field test)
 
+use crate::common::fails_with;
 use crate::is;
 
 #[test]
@@ -29,6 +30,7 @@ fn min_and_max_take_any_expressions() {
 	is!("max([1, 5, 2])", 5);
 	is!("xs=[3,1,2]; min(xs)", 1);
 	is!("def f(x){[x, 9, 4]}; min(f(3))", 3);
+	fails_with("min(5)", "min takes at least 2 arguments or one list, got 1");
 }
 
 #[test]
