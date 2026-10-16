@@ -218,15 +218,14 @@ impl Monomial {
 			}
 			*imaginary = imaginary.rem_euclid(2);
 		}
-		let (outside, inside) = extract_power(&square, 2);
-		coefficient = coefficient.mul(&Rational::integer(outside));
-		if !inside.is_one() {
-			powers.insert(Generator::SquareRoot(inside), 1);
-		}
-		let (outside, inside) = extract_power(&cube, 3);
-		coefficient = coefficient.mul(&Rational::integer(outside));
-		if !inside.is_one() {
-			powers.insert(Generator::CubeRoot(inside), 1);
+		let roots: [(BigInt, u32, fn(BigInt) -> Generator); 2] =
+			[(square, 2, Generator::SquareRoot), (cube, 3, Generator::CubeRoot)];
+		for (radicand, index, root) in roots {
+			let (outside, inside) = extract_power(&radicand, index);
+			coefficient = coefficient.mul(&Rational::integer(outside));
+			if !inside.is_one() {
+				powers.insert(root(inside), 1);
+			}
 		}
 		(coefficient, Monomial(powers.into_iter().filter(|(_, e)| *e != 0).collect()))
 	}
@@ -677,6 +676,11 @@ impl Interval {
 		Interval { lo: value.clone(), hi: value }
 	}
 
+	/// The interval of a value truncated to `whole`
+	fn truncated(whole: BigInt) -> Interval {
+		Interval { lo: whole.clone(), hi: whole + 1 }
+	}
+
 	/// Product of two positive intervals
 	fn times(&self, other: &Interval, precision: usize) -> Interval {
 		Interval { lo: (&self.lo * &other.lo) >> precision, hi: ((&self.hi * &other.hi) >> precision) + 1 }
@@ -725,14 +729,8 @@ fn generator_interval(generator: &Generator, precision: usize) -> Interval {
 		// Machin: π = 16·atan(1/5) - 4·atan(1/239)
 		Generator::Pi => widen(arctan_inverse(5, precision + GUARD) * 16 - arctan_inverse(239, precision + GUARD) * 4),
 		Generator::Euler => widen(euler(precision + GUARD)),
-		Generator::SquareRoot(r) => {
-			let root = (r << (2 * precision)).sqrt();
-			Interval { lo: root.clone(), hi: root + 1 }
-		}
-		Generator::CubeRoot(r) => {
-			let root = (r << (3 * precision)).cbrt();
-			Interval { lo: root.clone(), hi: root + 1 }
-		}
+		Generator::SquareRoot(r) => Interval::truncated((r << (2 * precision)).sqrt()),
+		Generator::CubeRoot(r) => Interval::truncated((r << (3 * precision)).cbrt()),
 		Generator::Imaginary => unreachable!("complex values are rejected before interval evaluation"),
 		Generator::Epsilon => unreachable!("hyperreals are signed by their ε powers before interval evaluation"),
 	}
