@@ -111,6 +111,7 @@ mod test_key_down; // card keyboard-state
 mod test_key_name_case; // key names in any case
 mod test_key_names; // card key-if
 mod test_library_signatures; // card reflect-library-signatures
+mod test_lifted_loop_literals; // card loop-literal-list
 mod test_list_without; // people without team (card people-where)
 mod test_listener_removal;
 mod test_listener_removal_in_functions;
