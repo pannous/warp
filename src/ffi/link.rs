@@ -372,7 +372,8 @@ fn link_single_function(
 	if func_ptr == 0 {
 		return Err(anyhow::anyhow!("Null function pointer for {}", name));
 	}
-	let wasm_params: Vec<ValType> = warp_parameters(&sig.param_types).filter_map(|t| c_type_to_wasm_valtype(t)).collect();
+	let wasm_params: Vec<ValType> =
+		warp_parameters(&sig.param_types).filter_map(|t| c_type_to_wasm_valtype(t)).collect();
 	let result = pointer_result(sig);
 	let wasm_results: Vec<ValType> = match result {
 		Some(CPointer::Text) => vec![ValType::ANYREF],
@@ -563,7 +564,12 @@ struct NativeCall {
 /// (call_native_function), whatever the signature. `sqlite3_column_text(stmt, i)` takes a handle and gives a text,
 /// `sqlite3_open(name)` gives the handle its out-pointer received (NULL there is an error naming the C status), a
 /// `char *` result is copied into the module as a warp text (NULL is ø)
-fn link_native_call(linker: &mut Linker<FfiState>, lib_name: &str, func_type: FuncType, call: NativeCall) -> Result<()> {
+fn link_native_call(
+	linker: &mut Linker<FfiState>,
+	lib_name: &str,
+	func_type: FuncType,
+	call: NativeCall,
+) -> Result<()> {
 	let name = call.name.clone();
 	link_native(linker, lib_name, &name, func_type, move |mut caller, params, results| {
 		// lives through the call: a `char **` out-pointer (strtod's endptr) is written there

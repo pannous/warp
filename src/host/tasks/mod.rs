@@ -6,12 +6,15 @@
 //! The task's instance starts with the spawning instance's capture globals: what its closures captured and the
 //! program's globals (`capture·global·<name>`, card task-sound), as they are at the spawn.
 
+use crate::host::{HostNode, TASK_WORDS};
 use crate::host::{
 	HostState, HOST_LIBRARY, TASK_AWAIT_VALUE, TASK_CONTROL, TASK_FAILURE, TASK_JOIN, TASK_PAUSE, TASK_SPAWN_VALUES,
 	TASK_STATUS, TASK_STOP, TEXT_HEAP_EXPORT,
 };
 use crate::node::{Bracket, Node};
 use crate::run::wasm_reader::Imports;
+use crate::wasm_emitter::EXACT_BUILDERS;
+use crate::wasm_emitter::NODE_AT;
 use anyhow::{anyhow, Result};
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
@@ -19,11 +22,9 @@ use std::sync::{Arc, Condvar, Mutex, Weak};
 use std::thread::JoinHandle;
 use std::time::Duration;
 use wasmtime::{
-	AnyRef, AsContextMut, Caller, Engine, Func, Global, Linker, Memory, Module, Rooted, StoreContextMut,
-	UpdateDeadline, Val, ValType,
+	AsContextMut, Caller, Engine, Func, Global, Linker, Memory, Module, StoreContextMut, UpdateDeadline, Val, ValType,
 };
 
-/// The bytes of a linear array's header (its count) and of each of its cells (linear_arrays.rs)
 mod channels;
 use channels::*;
 mod pool;
@@ -31,16 +32,14 @@ pub use pool::*;
 mod values;
 pub use values::*;
 
+/// The bytes of a linear array's header (its count) and of each of its cells (linear_arrays.rs)
 const CELL_BYTES: usize = 8;
 /// How often the engine's epoch ticks while tasks run: a stop or pause takes effect within about this long
 const EPOCH_TICK: Duration = Duration::from_millis(5);
 /// The main program's epoch deadline: it never stops at an epoch check
 pub const MAIN_EPOCH_DEADLINE: u64 = 1 << 62;
-use crate::host::TASK_WORDS;
 /// The failure a stopped task ends with (TaskControl::checkpoint), told apart by task_status
 const STOPPED: &str = "task stopped";
-use crate::wasm_emitter::EXACT_BUILDERS;
-use crate::wasm_emitter::NODE_AT;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Control {
@@ -56,6 +55,10 @@ struct TaskControl {
 }
 
 impl TaskControl {
+	fn running() -> Arc<Self> {
+		Arc::new(TaskControl { state: Mutex::new(Control::Run), changed: Condvar::new() })
+	}
+
 	/// At an epoch check: a paused task waits for resume (or stop), a stopped one ends with `task stopped`
 	fn checkpoint(&self) -> wasmtime::Result<UpdateDeadline> {
 		let mut state = self.state.lock().expect("task control");
@@ -199,10 +202,7 @@ impl TaskTable {
 		linker.func_wrap(
 			HOST_LIBRARY,
 			TASK_SPAWN_VALUES,
-			move |mut caller: Caller<'_, HostState>,
-			      name: i32,
-			      arguments: Option<Rooted<AnyRef>>|
-			      -> wasmtime::Result<i64> {
+			move |mut caller: Caller<'_, HostState>, name: i32, arguments: HostNode| -> wasmtime::Result<i64> {
 				let name = c_string(&mut caller, name).map_err(host_error)?;
 				let unreadable = |failure: anyhow::Error| task_failure(format!("task {}: {failure}", task_name(&name)));
 				let arguments = match read_in(&mut caller, arguments).map_err(unreadable)? {
@@ -218,7 +218,7 @@ impl TaskTable {
 		linker.func_wrap(
 			HOST_LIBRARY,
 			TASK_AWAIT_VALUE,
-			move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<Option<Rooted<AnyRef>>> {
+			move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<HostNode> {
 				let value = value_awaiter.take(id).map_err(task_failure)?;
 				build_in(&mut caller, &value)
 			},
@@ -238,7 +238,7 @@ impl TaskTable {
 		linker.func_wrap(
 			HOST_LIBRARY,
 			TASK_FAILURE,
-			move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<Option<Rooted<AnyRef>>> {
+			move |mut caller: Caller<'_, HostState>, id: i64| -> wasmtime::Result<HostNode> {
 				let message = reporter.take(id).err().unwrap_or_default();
 				build_in(&mut caller, &TaskValue::Text(message))
 			},
@@ -296,10 +296,7 @@ impl TaskTable {
 		linker.func_wrap(
 			HOST_LIBRARY,
 			crate::host::SIGNAL_SEND,
-			move |mut caller: Caller<'_, HostState>,
-			      handler: i32,
-			      arguments: Option<Rooted<AnyRef>>|
-			      -> wasmtime::Result<i64> {
+			move |mut caller: Caller<'_, HostState>, handler: i32, arguments: HostNode| -> wasmtime::Result<i64> {
 				let handler = c_string(&mut caller, handler).map_err(host_error)?;
 				let arguments = read_in(&mut caller, arguments).map_err(host_error)?;
 				sender.signals.lock().expect("task signals").push((handler, arguments));
@@ -377,7 +374,7 @@ impl TaskTable {
 
 	fn spawn(self: &Arc<Self>, function: String, arguments: Vec<TaskValue>, captured: Vec<(String, Captured)>) -> i64 {
 		let id = self.next_id.fetch_add(1, Ordering::Relaxed);
-		let control = Arc::new(TaskControl { state: Mutex::new(Control::Run), changed: Condvar::new() });
+		let control = TaskControl::running();
 		self.controls.lock().expect("task controls").insert(id, control.clone());
 		let voice = crate::sound::voice(); // the task is a voice of its own, starting where this one stands
 		self.running.fetch_add(1, Ordering::Relaxed);
@@ -458,7 +455,7 @@ impl TaskTable {
 	/// The kernel's results for `cells` (f64s as bytes) into `results`, in an instance of their own
 	fn map_slice(self: &Arc<Self>, kernel: &str, cells: &[u8], results: &mut [u8]) -> Result<()> {
 		use crate::wasm_emitter::lists::linear_arrays::SPLIT_BLOCK_NEW;
-		let control = Arc::new(TaskControl { state: Mutex::new(Control::Run), changed: Condvar::new() });
+		let control = TaskControl::running();
 		let (mut store, instance) = self.instance(control)?;
 		let memory = instance.get_memory(&mut store, "memory").ok_or_else(|| anyhow!("no exported memory"))?;
 		let new = instance.get_typed_func::<i64, i64>(&mut store, SPLIT_BLOCK_NEW)?;
@@ -615,12 +612,12 @@ fn host_error(failure: anyhow::Error) -> wasmtime::Error {
 	wasmtime::Error::msg(failure.to_string())
 }
 
-/// What went wrong in a task, in the words a failure of the main program gets (wasm_emitter::failed_run)
 /// The task's function as the program wrote it: `f`, not its wrapper `f·node`; a go block as `go block 1`
 fn task_name(function: &str) -> String {
 	crate::go_blocks::written_name(function.strip_suffix(crate::declarations::NODE_WRAPPER_SUFFIX).unwrap_or(function))
 }
 
+/// What went wrong in a task, in the words a failure of the main program gets (wasm_emitter::failed_run)
 pub(crate) fn failure_message(failure: anyhow::Error) -> String {
 	match crate::wasm_emitter::failed_run(failure) {
 		crate::node::Node::Error(message) => message.drop_meta().to_string(),

@@ -269,16 +269,13 @@ impl Builders {
 }
 
 /// A task value as the calling module's GC value
-pub(crate) fn build_in(
-	caller: &mut Caller<'_, HostState>,
-	value: &TaskValue,
-) -> wasmtime::Result<Option<Rooted<AnyRef>>> {
+pub(crate) fn build_in(caller: &mut Caller<'_, HostState>, value: &TaskValue) -> wasmtime::Result<HostNode> {
 	let builders = Builders::of(&mut |export| caller.get_export(export)).map_err(host_error)?;
 	let built = builders.build(value, &mut caller.as_context_mut()).map_err(host_error)?;
 	Ok(built.unwrap_anyref().copied())
 }
 
 /// The calling module's GC value as a task value
-pub(crate) fn read_in(caller: &mut Caller<'_, HostState>, value: Option<Rooted<AnyRef>>) -> Result<TaskValue> {
+pub(crate) fn read_in(caller: &mut Caller<'_, HostState>, value: HostNode) -> Result<TaskValue> {
 	Builders::of(&mut |export| caller.get_export(export))?.read_value(&Val::AnyRef(value), &mut caller.as_context_mut())
 }

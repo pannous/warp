@@ -9,7 +9,7 @@ mod sound_words; // the sound module's host words, kept in src/sound (a child he
 use sound_words::*;
 
 /// A program value as a host word gets and gives it: a reference to a Node of the instance
-type HostNode = Option<wasmtime::Rooted<wasmtime::AnyRef>>;
+pub(crate) type HostNode = Option<wasmtime::Rooted<wasmtime::AnyRef>>;
 
 const PAGE_BITS: u32 = 16;
 const I64_BYTES: usize = 8;
@@ -17,11 +17,7 @@ const I64_BYTES: usize = 8;
 /// guarded_call(name, arguments): the node wrapper `name` called with the argument list in the caller's own instance;
 /// a stack overflow inside is the Error "call stack exhausted" (what the aborted call wrote to globals and memory stays),
 /// any other failure, running out of fuel included, ends the run as before
-fn guarded_call(
-	mut caller: Caller<'_, HostState>,
-	name: i32,
-	arguments: HostNode,
-) -> wasmtime::Result<HostNode> {
+fn guarded_call(mut caller: Caller<'_, HostState>, name: i32, arguments: HostNode) -> wasmtime::Result<HostNode> {
 	let message = |failure: anyhow::Error| wasmtime::Error::msg(failure.to_string());
 	let name = crate::host::tasks::c_string(&mut caller, name).map_err(message)?;
 	let function = caller
@@ -531,10 +527,7 @@ pub fn with_block_values<R>(values: Vec<crate::host::tasks::TaskValue>, body: im
 }
 
 /// The host side of block·value: the value at `index`, built in the block's module
-fn block_value(
-	mut caller: Caller<'_, HostState>,
-	index: i64,
-) -> wasmtime::Result<HostNode> {
+fn block_value(mut caller: Caller<'_, HostState>, index: i64) -> wasmtime::Result<HostNode> {
 	let failure = |message: String| wasmtime::Error::msg(message);
 	let value = BLOCK_VALUES
 		.with(|stack| stack.borrow().last().and_then(|values| values.get(index as usize).cloned()))
