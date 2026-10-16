@@ -6,7 +6,10 @@ notes/decisions.md, work goes on the board (`todo add`), rules go where they are
 the wiki).
 
 ## Pending
-(none)
+- quantity-naming (2026-10-16, the supervisor asks the user directly): words replacing the ambiguous "dimension".
+  Proposal: kind of quantity (ISO 80000) for length/speed/density, axis for width/height, rank for the number of
+  axes, shape for 28 × 28 px; `dimension` stays only as an alias with a hint (`dimension length meter` would read
+  `quantity length meter`?). Default meanwhile: code keeps `dimension`.
 
 ## To present (Interviewer's decisions, 2026-10-15 evening; user: "you make the decisions tonight and tomorrow
 morning you present the decisions and we can still undo everything")

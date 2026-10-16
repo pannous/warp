@@ -371,6 +371,15 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - unit-after-number (2026-10-16, user; card variable-named-like): after a number a unit symbol is always the unit,
   even with a variable of that name in scope: `m = 5; 3m` is 3m (meters), with a hint "a variable m exists; write
   3*m to multiply"; `m * 3` is 15. Supersedes the agent-pinned test_variable_shadows_the_unit (`3m` → 15).
+- unit-types (2026-10-16, user, via the supervisor): a unit can be used as a shallow number type:
+  `display { density: dpi, size: px, diagonal: inch }`. The unit fixes the field's kind of quantity, not the exact
+  unit: `118 px/cm` is accepted and converted, `3 kg` is a type error. The written unit is the default and display
+  unit. A line like `dimension speed m/s` only names a kind and isn't needed for typing.
+- unit-field-plain-number (2026-10-16, user, via the supervisor): a plain number assigned to a unit-typed field
+  (`display.density = 96`) gives a fixable warning to use the right unit; the fix adds it (`96 dpi`).
+- Naming: "dimension" is ambiguous (an image of 28 × 28 px is a tensor with 2 dimensions, and its width and height
+  both are dimensions and have dimensions); notes/units_runtime.md says so. The replacement words are open
+  (open_decisions.md quantity-naming).
 - unit-prefix-lines (2026-10-16, use-reflection default; undoable): lib/units.warp spells SI prefixes `prefix k :=
   10^3` and marks the dimensions taking them `SI dimension length meter`. Conversion-only long names
   (`name hour := h`) stay for now, until durations and units are one (below).

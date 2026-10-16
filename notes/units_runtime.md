@@ -1,5 +1,11 @@
 # Quantities at run time: survey and proposal
 
+Naming (user 2026-10-16): avoid the bare word "dimension", it is ambiguous. An image of 28 × 28 px as a tensor has
+2 dimensions (width, height), so width and height both *are* dimensions and *have* dimensions (length, in px).
+Proposed words, not yet decided (open_decisions.md quantity-naming): kind of quantity (ISO 80000) for length, speed,
+density; axis for width/height; rank for the number of axes; shape for 28 × 28 px; `dimension` only an alias with a
+hint. Until decided, say "kind of quantity" in prose when length/speed is meant.
+
 ## Today (src/numbers/units/static_units.rs, card cleanup-units-answer 2026-10-13)
 Every program with quantities takes one path: static_units checks the unit signatures at compile time and runs the
 amounts as exact SI numbers (`1 km/h + 1 m/s` → 23/18 m/s). The compile-time interpreter `units::answer` is gone.
