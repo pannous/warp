@@ -77,12 +77,39 @@ pub fn typed_first_arity(word: &str) -> Option<usize> {
 /// The fewest and most values a library word with a typed first parameter takes: `floor` (1, 1), `max` (2, unbounded)
 pub fn typed_first_parameters(word: &str) -> Option<(usize, usize)> {
 	let (params, signature) = library_signature(word)?;
-	let first = signature.trim_start_matches('(').split([',', ')']).next()?;
-	if !first.contains(':') {
-		return None;
-	}
+	first_parameter_type(&signature)?;
 	let is_variadic = params.last().is_some_and(|last| last.ends_with(REST_MARK));
 	Some(if is_variadic { (params.len() - 1, usize::MAX) } else { (params.len(), params.len()) })
+}
+
+/// The types a library word is defined for, by its typed first parameter, else by the builtin methods of each type
+/// (members.rs): `floor` number, `upper` text, `count` list, text and map; empty for a word of any value (`print`)
+/// or no library word. A library word is immutable for these types (decision library-words-typed)
+pub fn library_types(word: &str) -> Vec<String> {
+	let word = crate::library_words::canonical_spelling(word);
+	if let Some(typed) = library_signature(word).and_then(|(_, signature)| first_parameter_type(&signature)) {
+		return vec![typed];
+	}
+	crate::lowering::members::MEMBERS_BY_TYPE
+		.iter()
+		.filter(|(_, members)| members.contains(&word))
+		.map(|(type_name, _)| type_name.to_string())
+		.collect()
+}
+
+/// `text` of `(t:text, separator:text) -> …`; a float parameter (libm's) takes any number
+fn first_parameter_type(signature: &str) -> Option<String> {
+	let first = signature.trim_start_matches('(').split([',', ')']).next()?;
+	let type_name = first.split_once(':')?.1.trim();
+	Some(if type_name == LIBM_PARAMETER_TYPE { crate::words::NUMBER_WORD } else { type_name }.to_string())
+}
+
+/// The number of values a library word takes, fewest and most, when its signature names them
+pub fn library_arity(word: &str) -> Option<(usize, usize)> {
+	let (params, signature) = library_signature(word)?;
+	let is_variadic = params.last().is_some_and(|last| last.ends_with(REST_MARK));
+	let defaulted = signature.matches('=').count();
+	Some(if is_variadic { (params.len() - 1, usize::MAX) } else { (params.len() - defaulted, params.len()) })
 }
 
 /// The library words of one typed value with a signature here or in libm: `floor`, `sin`, `upper`, `log10`

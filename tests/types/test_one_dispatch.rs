@@ -84,3 +84,20 @@ fn a_class_member_or_variable_may_take_a_library_word() {
 fn a_destructured_parameter_named_like_a_canvas_side() {
 	is!("area({width, height}) := width * height\nm = {width: 3, height: 4}\narea(m)", 12);
 }
+
+// decisions library-words-typed, dispatch-untyped-library-words: a library word stays the library's for its own types,
+// at compile time when the value's kind is known, else at run time; the program's untyped word takes the other values
+#[test]
+fn a_library_word_keeps_its_types() {
+	is!("first(x) := x * 2; first(3)", 6);
+	is!("first(x) := x * 2; first([1,2])", 1);
+	is!("first(x) := x * 2; g(v) := first(v); g([4,5]) + g(3)", 10);
+	is!("upper(t) := \"U\"; upper(\"a\")", "A");
+	is!("count(x) := 7; [1,2].count", 2);
+}
+
+#[test]
+fn a_typed_redefinition_of_a_library_word_is_refused() {
+	crate::common::fails_with("count(xs: list) := 1; count([5])", "count of a list is the library's word");
+	crate::common::fails_with("floor(x: float) := 1; floor(2.5)", "floor of a number is the library's word");
+}

@@ -260,6 +260,8 @@ const DECLARATION_PASSES: &[Pass] = &[
 const MODULE_PASSES: &[Pass] = &[
 	// `random(1, 6)`, `random int`: the prelude words they call, which resolve then loads, and only those
 	crate::host::lower_random_forms,
+	// `count(x) := 7`: the program's count·any for the values the library's count is not for (typed_library_words.rs)
+	crate::lowering::typed_library_words::lower,
 	crate::modules::resolve,
 	// `fourty_two.exports`, `dir(fourty_two)` of an imported core module, once resolve found its file (reflection.rs)
 	crate::lowering::reflection::lower_module_words,

@@ -17,4 +17,5 @@ pub mod phrase_words;
 pub mod picked_calls;
 pub mod program_names;
 pub mod times_phrases;
+pub mod typed_library_words;
 pub mod word_operators;
