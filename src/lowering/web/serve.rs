@@ -878,11 +878,11 @@ impl ServerCalls {
 	/// The prerender's functions RPC_REQUESTS and RPC_VALUES, first: the last statement shows the page
 	fn with_rpc_functions(&self, kept: &mut Vec<Node>, main_variables: HashSet<String>) {
 		let values =
-			Node::List(self.names.iter().cloned().map(Node::Symbol).collect(), Bracket::Square, Separator::Colon);
+			Node::List(self.names.iter().cloned().map(Node::Symbol).collect(), Bracket::Square, Separator::Comma);
 		let requests = Node::List(
 			(0..self.calls.len()).map(|index| rpc_request(&self.asking(index).0)).collect(),
 			Bracket::Square,
-			Separator::Colon,
+			Separator::Comma,
 		);
 		let globals: HashSet<String> = main_variables.into_iter().chain(self.names.iter().cloned()).collect();
 		kept.insert(0, crate::event_signals::function_with_globals(RPC_VALUES, false, &[values], &globals));
@@ -966,9 +966,9 @@ fn rpc_request(call: &Node) -> Node {
 	let items = call_items(call);
 	let path = Node::Text(format!("{RPC_PREFIX}{}", callee(call)));
 	Node::List(
-		vec![path, Node::List(items[1..].to_vec(), Bracket::Square, Separator::Colon)],
+		vec![path, Node::List(items[1..].to_vec(), Bracket::Square, Separator::Comma)],
 		Bracket::Square,
-		Separator::Colon,
+		Separator::Comma,
 	)
 }
 
@@ -1120,9 +1120,9 @@ fn serving(port: Node, routes: Vec<Route>, server_data: &ServerData, count: &mut
 			entry.push(text(LIST_ANSWER));
 		}
 		statements.push(route_function(&function, reading_tables(body, &server_data.tables)));
-		table.push(Node::List(entry, Bracket::Square, Separator::Colon));
+		table.push(Node::List(entry, Bracket::Square, Separator::Comma));
 	}
-	let routes = Node::List(table, Bracket::Square, Separator::Colon);
+	let routes = Node::List(table, Bracket::Square, Separator::Comma);
 	statements.push(call(crate::host::SERVE_ROUTES, vec![port, routes]));
 	statements
 }

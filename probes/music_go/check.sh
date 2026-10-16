@@ -1,5 +1,5 @@
 #!/bin/sh
-# card error-undefined: samples/music.warp (or the file given) in the deployed playground, headless Firefox:
+# card error-undefined: samples/sound/music.warp (or the file given) in the deployed playground, headless Firefox:
 # probes/music_go/check.sh [file.warp]
 [ -n "${CI:-}" ] || { echo "browser tests run in CI only: skipped, Firefox is not started outside CI (user, 2026-10-09)"; exit 0; }
 PLAYGROUND="$(cd "$(dirname "$0")/../../web/playground" && pwd)"

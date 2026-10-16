@@ -1,4 +1,4 @@
-//! A text computed at run time converts to a float: `s as float`, `float(s)` (samples/calculator.warp)
+//! A text computed at run time converts to a float: `s as float`, `float(s)` (samples/text/calculator.warp)
 use crate::common::fails_with;
 use crate::is;
 

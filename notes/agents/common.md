@@ -26,6 +26,8 @@ instead of bending the code.
   by role (`warp-integrator`, `warp-types`) and write role names, not session hashes like warp-3f, in messages,
   cards and reports to the user. Older sessions are renamed with `/rename warp-<role>` while idle
   (~/dev/bin/rename-when-idle; typed into a busy session it is lost).
+- Session swaps are never reported to the user (user, 2026-10-16: "I don't care"): no line about a session being
+  replaced, renamed or resumed. Peers still get the swap message; the user hears only about work.
 - Never block on a decision: take the recommended default, mark it as an assumption (an existing-test edit goes in its
   own commit, named in the message), keep working, and SendMessage the Interviewer the question.
 - Never ask the user yourself (user, 2026-10-06: questions go "either through the Supervisor or through the
@@ -35,7 +37,8 @@ instead of bending the code.
   asks the user and relays the answer verbatim; that relayed answer is the user's confirmation.
 - Small or non-conflicting changes may go straight onto main in the main checkout, no worktree (user, 2026-10-12,
   "new very important rule"; how: notes/roles.md "Small changes on main"). Everything else:
-- Work in a git worktree outside the repo: `cowtree add -b <branch> /Users/me/dev/angles/warp.worktrees.noindex/<branch> origin/main`,
+- Work in a git worktree outside the repo, on the Worktrees volume: `cowtree add -b <branch> /Volumes/Worktrees/<branch> origin/main`
+  (never touch /Volumes/Worktrees/warp, cowtree's donor; old worktrees in /Users/me/dev/angles/warp.worktrees.noindex stay),
   with the uncommitted build tweak: append `-<branch>` to the current `version = "…"` of both Cargo.toml and
   crates/warp-runtime/Cargo.toml, and to the `version = "…"` of the warp-runtime path dependency in Cargo.toml (a
   pre-release version doesn't satisfy the plain requirement; otherwise its stale warp-runtime replaces other branches'
@@ -120,6 +123,10 @@ instead of bending the code.
   path, a stale comment, a leaked temp file), no change to what a user sees or what a test asserts, and outside
   files another session is working on. Make it its own commit on your current branch (`fix:`/`chore:`, so it can be
   reverted alone) and name it in your `todo ready` note. Anything else, or any doubt, still becomes a card.
+- Suspected non-issues go through the Interviewer (user, 2026-10-16, on `96px/inch` vs `96dpi`: "a nothing
+  burger"): when a small bug you found may not matter (the same value shown another way, a cosmetic difference),
+  SendMessage warp-interviewer the case before carding or fixing it. A confirmed non-issue gets no work: its card,
+  if any, goes to Later with the verdict as a `todo note`.
 - GitHub's API quota (5000 requests/h) is shared by every session; on 2026-10-10 `gh run watch` polling every 3 s ran
   it out and blocked CI watching for 10 min. Watch runs with `gh run watch --interval 60` or more, and never poll
   `todo list` in a loop. A whole-board `todo list` costs ~12 points (1200 cards on 2026-10-12, when the quota ran out

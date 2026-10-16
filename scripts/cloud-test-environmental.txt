@@ -1,0 +1,18 @@
+# Tests that fail in the cloud test lane's Linux VM for want of the Mac (scripts/cloud-test.sh): one awk regex per
+# line, matched against the failing test's path; their failures are listed apart and don't make the verdict red.
+# Grown from real cloud runs only (notes/cloud_development.md "Cloud test lane"); a test fixed to skip itself on Linux
+# leaves the list.
+ffi::test_cargo_crates::test_cargo_crate_prebuilt_download   # the cloud's TLS proxy: invalid peer certificate, UnknownIssuer
+modules::test_agent::agent_with_a_wrong_key                   # the cloud's TLS proxy, as above
+ffi::test_ffi::test_ffi_sdl_                                  # SDL2 is not installed in the VM
+ffi::test_foreign_lines::a_foreign_line_imports_its_function # glibc's erf differs from Apple's in the last digit
+numbers::test_bend_laws::the_project_laws_file                # Lean is not installed in the cloud
+programs::test_brush_ripples::                                # no GPU adapter (wgpu)
+programs::test_sound_spectrum::the_gpu_visualizer             # no GPU adapter
+web::test_webgpu::                                            # no GPU adapter
+programs::test_playground_samples::.*slice_2                  # its GPU samples without an adapter (gpu_visualizer, wgsl shader loop)
+web::test_deploy::                                            # wrangler is not installed
+welcoming::test_shell_words::which_finds_a_program            # Linux's sh is /usr/bin/sh
+control::test_try_host_failure::try_catches_a_file_or_http    # the VM runs as root: write() creates /no/such/folder
+modules::test_std_exec::a_failing_command_is_an_error         # the same /no/such/folder, created by the test above
+functions::test_deep_recursion::the_warp_command_recurses     # Linux's 8 MB main stack (card linux-deep-recursion)

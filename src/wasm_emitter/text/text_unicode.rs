@@ -1,5 +1,6 @@
 //! Texts as Unicode: `upper` and `lower` with the case mapping of Rust's `char::to_uppercase` / `to_lowercase` for every
-//! code point (user decision #26), `reverse` of a text and `chars` (the list of characters) by code points.
+//! code point (user decision #26), `reverse` of a text by code points, and `chars` (the list of characters, a grapheme
+//! cluster each) with its twin by code points.
 //!
 //! The case mapping is a table in linear memory of ranges, sorted by their first code point and binary searched (card
 //! web-bundle: a twelfth of a table with an entry per code point, 1.2 KB gzipped for lower): `[start, last, stride,
@@ -290,17 +291,24 @@ impl WasmGcEmitter {
 		});
 	}
 
-	/// text_chars(text): the list of its code points as characters; a list comes back as it is, so that `x as list` of a
-	/// value whose static type is unknown calls it (casts.rs)
-	pub(in crate::wasm_emitter) fn emit_text_chars(&mut self) {
-		if !self.should_emit_function("text_chars") {
+	/// text_chars(text): the list of its code points as characters; text_graphemes(text): of its characters, a
+	/// grapheme cluster each (`"שָלוֹם".chars`, decision chars-codepoints amended). A list comes back as it is, so that
+	/// `x as list` of a value whose static type is unknown calls them (casts.rs)
+	pub(in crate::wasm_emitter) fn emit_text_items(&mut self) {
+		self.emit_text_item_list(crate::library_words::TEXT_CODE_POINTS, false);
+		self.emit_text_item_list(crate::library_words::TEXT_GRAPHEMES, true);
+	}
+
+	fn emit_text_item_list(&mut self, name: &'static str, by_grapheme: bool) {
+		if !self.should_emit_function(name) {
 			return;
 		}
 		let (node_ref, nullable) = (Ref(self.node_ref(false)), Ref(self.node_ref(true)));
 		let node_type = self.type_manager.node_type;
 		let mut locals = vec![nullable];
 		locals.extend([ValType::I32; 3]);
-		self.runtime_function("text_chars", vec![node_ref], vec![node_ref], locals, |s, f| {
+		self.runtime_function(name, vec![node_ref], vec![node_ref], locals, |s, f| {
+			// code_point holds the grapheme's end when walking by grapheme
 			let (characters, pointer, end, code_point) = (1, 2, 3, 4);
 			s.emit_field(f, 0, 0);
 			#[rustfmt::skip]
@@ -315,9 +323,15 @@ impl WasmGcEmitter {
 					I::Loop(BlockType::Empty),
 						I::LocalGet(pointer), I::LocalGet(end), I::I32GeU, I::BrIf(1),
 			]);
-			s.emit_next_code_point(f, pointer, end, code_point);
-			Self::emit_list(f, &[I::I64Const(SQUARE_LIST_KIND), I::LocalGet(code_point)]);
-			s.call(f, "new_codepoint");
+			f.instruction(&I::I64Const(SQUARE_LIST_KIND));
+			if by_grapheme {
+				s.emit_grapheme_node(f, pointer, code_point, end);
+				Self::emit_list(f, &[I::LocalGet(code_point), I::LocalSet(pointer)]);
+			} else {
+				s.emit_next_code_point(f, pointer, end, code_point);
+				f.instruction(&I::LocalGet(code_point));
+				s.call(f, "new_codepoint");
+			}
 			#[rustfmt::skip]
 			Self::emit_list(f, &[
 				I::LocalGet(characters), I::StructNew(node_type), I::LocalSet(characters),

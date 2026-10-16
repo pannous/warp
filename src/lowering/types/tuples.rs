@@ -26,7 +26,7 @@ pub fn lower(node: Node) -> Node {
 		}
 		Node::List(items, bracket, separator) => {
 			// `(a, b) = 1, 2` arrives as `((a, b) = 1), 2`: the first item stays an assignment for regroup_destructuring
-			let takes_more_values = bracket == Bracket::None && separator == Separator::Colon;
+			let takes_more_values = bracket == Bracket::None && separator == Separator::Comma;
 			if takes_more_values {
 				if let Err(error) = refuse_comma_next_to_comparison(&items) {
 					return error;
@@ -42,11 +42,11 @@ pub fn lower(node: Node) -> Node {
 			};
 			let items: Vec<Node> = items.into_iter().enumerate().map(lower_item).collect();
 			let regrouped = match (&bracket, &separator) {
-				(Bracket::None, Separator::Colon) => regroup_return(&items)
+				(Bracket::None, Separator::Comma) => regroup_return(&items)
 					.or_else(|| regroup_destructuring(&items))
 					.or_else(|| regroup_declared_destructuring(&items)),
 				// `{ return a, b }` keeps its one statement; `{a, b=2}` stays data
-				(Bracket::Curly, Separator::Colon) => regroup_return(&items)
+				(Bracket::Curly, Separator::Comma) => regroup_return(&items)
 					.map(|statement| Node::List(vec![statement], Bracket::Curly, Separator::Semicolon)),
 				_ => None,
 			};
@@ -133,7 +133,7 @@ fn with_trailing_return(node: &Node, more: &[Node]) -> Option<Node> {
 /// `{x, y} = p`, `{x: a} = p`
 pub(crate) fn destructured_names(statement: &Node) -> Vec<String> {
 	match statement.drop_meta() {
-		Node::List(items, Bracket::None, Separator::Colon) => {
+		Node::List(items, Bracket::None, Separator::Comma) => {
 			let assignment = items.iter().position(|item| matches!(item.drop_meta(), Node::Key(_, Op::Assign, _)));
 			let targets: Vec<&Node> = match assignment.map(|at| (at, items[at].drop_meta())) {
 				Some((at, Node::Key(last, _, _))) => items[..at].iter().chain([last.as_ref()]).collect(),
@@ -185,7 +185,7 @@ fn regroup_destructuring(items: &[Node]) -> Option<Node> {
 		return None;
 	}
 	let values: Vec<Node> = std::iter::once(first_value.as_ref()).chain(&items[assignment + 1..]).cloned().collect();
-	let written = Node::List(items.to_vec(), Bracket::None, Separator::Colon).serialize();
+	let written = Node::List(items.to_vec(), Bracket::None, Separator::Comma).serialize();
 	Some(destructure(names, values, written.trim(), ""))
 }
 
@@ -222,7 +222,7 @@ fn regroup_bracketed_destructuring(left: &Node, value: &Node) -> Option<Node> {
 /// (`f(i) = …` defines f)
 fn bracketed_targets(node: &Node) -> Option<&[Node]> {
 	match node.drop_meta() {
-		Node::List(items, Bracket::Round | Bracket::Square, Separator::Colon)
+		Node::List(items, Bracket::Round | Bracket::Square, Separator::Comma)
 			if items.len() >= 2 && items.iter().all(is_target) =>
 		{
 			Some(items)
@@ -243,7 +243,7 @@ fn destructure(names: Vec<Node>, values: Vec<Node>, written: &str, path: &str) -
 	}
 	// `a, *rest = 1, 2, 3` unpacks the list [1 2 3]; how many items the rest takes is known at run time
 	let values = if starred == 1 && values.len() > 1 {
-		vec![Node::List(values, Bracket::Square, Separator::Colon)]
+		vec![Node::List(values, Bracket::Square, Separator::Comma)]
 	} else {
 		values
 	};
@@ -264,7 +264,7 @@ fn destructure(names: Vec<Node>, values: Vec<Node>, written: &str, path: &str) -
 		})
 		.collect();
 	let head = symbol(DESTRUCTURE);
-	let names = Node::List(names, Bracket::Round, Separator::Colon);
+	let names = Node::List(names, Bracket::Round, Separator::Comma);
 	let statement = Node::List([head, names].into_iter().chain(values).collect(), Bracket::None, Separator::Space);
 	if nested.is_empty() {
 		return statement;

@@ -74,6 +74,14 @@ The only session that runs the full suite and the only one that pushes code to m
   both sides bounces to the owner), runs `./test.sh` with the integration build tweak, and pushes to main only at 0
   failed and no drop in the test count, then `todo done <card> <commit>` (Ready → Done). Otherwise the card bounces:
   `todo move <card> Now` + `todo note` with the failure (and the supervisor hears if it's a decision).
+- Fix forward, don't hold the batch (user, 2026-10-16): when up to 10 tests fail after a merge, the Integrator marks
+  each one `#[ignore = "fixnow: <card>: <first panic line>"]` in its own commit and pushes the batch; for each test
+  it adds a `fixnow-<test>` card in Now for the owner of the branch that broke it (or the area worker). The owner
+  fixes forward and drops the ignore; `grep -rn 'fixnow' tests/` lists what's open. When the ignored test pins an
+  old edge case the new behaviour arguably improves on, the owner doesn't force the old one back: the question
+  goes to warp-interviewer (keep the old case, or change the test to the new one), the ignore stays until answered. Only more than 10 failures,
+  or a failure nobody can fix forward (wrong output across a whole feature, a crash at start), leads to real
+  backtracking: the branch leaves the batch and bounces. The test-count check counts fixnow ignores as present.
 - Batches of at most ~8 Ready cards per run; wide refactors and carrier branches land alone and first. Runs a
   worker's targeted check on request.
 - Express (user, 2026-10-10: "faster results for an agent"): a card readied with `--express` (the user asked for that
@@ -112,8 +120,10 @@ machinery. Every chunk goes on its own branch to the Integrator, stating its net
 Interviewer. Prompt: notes/agents/refactorer.md.
 
 ## Workers
-- One task, one branch, one worktree: `cowtree add -b <name> /Users/me/dev/angles/warp.worktrees.noindex/<name>
-  origin/main`. Outside the repo, so grep/IDE/cargo of the main checkout never see it, and `.noindex` keeps Spotlight out.
+- One task, one branch, one worktree: `cowtree add -b <name> /Volumes/Worktrees/<name> origin/main`, on the Worktrees
+  volume (user 2026-10-16, notes/churn_volume.md: Spotlight off, no fseventsd log, cowtree clones the donor
+  /Volumes/Worktrees/warp, which nobody removes). Outside the repo, so grep/IDE/cargo of the main checkout never see it.
+  Older worktrees in /Users/me/dev/angles/warp.worktrees.noindex stay there until they retire.
   Uncommitted build tweak in it: `version = "0.1.1-<name>"` (notes/build_speed.md).
 - Small changes on main (user, 2026-10-12, "new very important rule": "Agents can work on the main branch without
   work tree if their changes are small or not conflicting with other work"; narrowed the same day after "maybe my new
@@ -140,6 +150,14 @@ Interviewer. Prompt: notes/agents/refactorer.md.
   half-done edits.
 - Test first, then implement. While developing, only targeted tests and only through the queue:
   `tests/queue.sh -- <filter>`. Never the whole tests binary, never an extra export copy for verification.
+- Cloud test lane (card cloud-test-lane, 2026-10-16; notes/cloud_development.md section 5): a pushed tip's targeted
+  tests can run on a cloud VM of their own instead of the Mac's queue:
+  `scripts/cloud-test.sh --card <card> <branch> <tip from git rev-parse HEAD> <filters>`, in the background (~6 min,
+  ~$0.30 of the Cloud session credit; exit 0 = green, the result goes on the card). Use it when more than a few runs
+  wait in the queue (`ls ~/.cargo/warp-tests.lock.queue | wc -l`) and the change is committed and pushed. Keep
+  tests/queue.sh for uncommitted edits, quick re-runs of one test, and tests that need the Mac (sound devices, GPU,
+  windows, Lean, SDL: scripts/cloud-test-environmental.txt). A green cloud run counts as the targeted run before
+  `todo ready`; the Integrator's gate stays the check. At most 3 cloud runs at once (the script waits for a free one).
 - Done = commit on the branch, targeted tests, merge origin/main (conflicts are the worker's to resolve), push the
   branch, `todo ready <card>` (notes/agents/common.md "Done"). The Integrator's full-suite result is the check; a
   bounced card comes back to Now with a note, the worker fixes it and readies it again.
@@ -152,15 +170,18 @@ Interviewer. Prompt: notes/agents/refactorer.md.
 A worktree is a second checkout of the same repository: same .git object store, its own branch, `git status` and
 commits work as usual, no clone or archive needed. The earlier "copies" (git archive exports, probes/*_work) were
 plain directories without git: committing from them needed private index tricks and they piled up inside the repo.
-So branches are official, and every branch lives in a worktree under warp.worktrees.noindex/. The main checkout
+So branches are official, and every branch lives in a worktree under /Volumes/Worktrees/. The main checkout
 /Users/me/dev/angles/warp stays the user's own and agents do not edit it.
 
 ## Enforcement
-- `tests/queue.sh`: every test run waits for one machine-wide lock (`~/.cargo/warp-tests.lock`, lockf), so at most one
-  test binary runs at a time; `./test.sh` re-enters through it. The holder is in `~/.cargo/warp-tests.lock.owner`.
-  Waiters are served first come, first served by ticket files in `~/.cargo/warp-tests.lock.queue/` (named
-  `<priority>-<time>-<pid>`, tickets of dead PIDs are dropped); a full `./test.sh` (the Integrator) has priority 0 and
-  takes the next slot ahead of targeted runs. Plain lockf alone was not FIFO: a full run waited 15 min behind workers.
+- `tests/queue.sh`: every test run waits for one of 3 machine-wide slot locks (`~/.cargo/warp-tests.lock`, `.lock.2`,
+  `.lock.3`, lockf), so at most 3 targeted runs go at once (4 test threads each, nice 10); a full `./test.sh` holds all
+  three and runs alone, and re-enters through it. Each slot's holder is in its `.owner` file (`warp-tests.lock.owner`
+  for slot 1). Waiters are served first come, first served by ticket files in `~/.cargo/warp-tests.lock.queue/` (named
+  `<priority>-<time>-<pid>`, tickets of dead PIDs are dropped, a run's ticket goes once it holds its slots): only the
+  first in line takes a slot, so a waiting full run (priority 0, like the Integrator's integrate* targeted runs) keeps
+  any later run from starting until the slots drain. Plain lockf alone was not FIFO: a full run waited 15 min behind
+  workers; one slot alone left the Mac at load 7 of 10 with 37 runs queued (card test-queue-slots).
 - `.claude/hooks/test-gate.py` (PreToolUse, Bash): blocks `cargo test`, `cargo browser-test` and direct `deps/tests-*`
   binaries that bypass the queue; `cargo test --no-run` (build only) passes. It applies to every session whose project
   directory is this checkout, which includes all spawned workers.

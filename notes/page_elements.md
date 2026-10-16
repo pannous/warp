@@ -62,4 +62,4 @@ Limits: a callback (a warp function given to the page, `addEventListener`) canno
 
 Checks: tests/ffi/test_page_ids.rs, tests/ffi/test_browser_dollar_names.rs (old forms), tests/ffi/test_web_idl.rs
 (browser suite: window and document from the Worker), the tour check "(a handler reads the value of the page's
-element of an id: $who)", samples/page_elements.warp, wiki/html.md "Elements by id".
+element of an id: $who)", samples/web/page_elements.warp, wiki/html.md "Elements by id".

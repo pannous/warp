@@ -5,7 +5,7 @@ fn b(x: &Bracket) -> &'static str {
 	match x { Bracket::Curly => "{}", Bracket::Square => "[]", Bracket::Round => "()", Bracket::Less => "<>", _ => "-" }
 }
 fn sp(x: &Separator) -> &'static str {
-	match x { Separator::Space => "sp", Separator::Colon => ",", Separator::Semicolon => ";", Separator::Newline => "nl", _ => "-" }
+	match x { Separator::Space => "sp", Separator::Comma => ",", Separator::Semicolon => ";", Separator::Newline => "nl", _ => "-" }
 }
 
 fn dump(n: &Node) -> String {
