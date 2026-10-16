@@ -161,7 +161,7 @@ pub struct Traits(Vec<Trait>);
 impl Traits {
 	pub fn of(node: &Node) -> Self {
 		let mut traits = builtin_traits();
-		collect_declarations(node, &mut traits);
+		collect_declared(node, &mut traits);
 		Traits(traits)
 	}
 
@@ -253,7 +253,7 @@ pub fn lower_declarations(node: Node) -> Node {
 		return error;
 	}
 	let mut declared = vec![];
-	collect_declarations(&node, &mut declared);
+	collect_declared(&node, &mut declared);
 	let node = with_default_methods(node, &declared);
 	let names: Vec<String> = declared.into_iter().map(|declared| declared.name).collect();
 	// again for the definitions later passes made (Go's `func total(s Shape) float64 {…}` is `total(s:Shape)` now)
@@ -350,10 +350,6 @@ fn collect_typed_definitions(node: &Node, defined: &mut Vec<(String, String)>) {
 		};
 		defined.push((name.clone(), type_node.drop_meta().name()));
 	});
-}
-
-fn collect_declarations(node: &Node, traits: &mut Vec<Trait>) {
-	collect_declared(node, traits)
 }
 
 /// The values the declarations of the program carry (a Trait, a Likeness), in order

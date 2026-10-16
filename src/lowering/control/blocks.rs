@@ -168,10 +168,12 @@ fn sealed_code(node: &Node) -> Option<&Node> {
 
 /// `as_code(data e)`: e as code, of the type code (decision body-code)
 pub(crate) fn quoted_code(code: Node) -> Node {
-	crate::node::call(
-		crate::words::AS_CODE,
-		vec![Node::List(vec![symbol(DATA_WORD), code], Bracket::None, Separator::Space)],
-	)
+	crate::node::call(crate::words::AS_CODE, vec![as_data(code)])
+}
+
+/// `data e`: e as written, data rather than code
+pub(crate) fn as_data(code: Node) -> Node {
+	Node::List(vec![symbol(DATA_WORD), code], Bracket::None, Separator::Space)
 }
 
 /// `data e` with e sealed
@@ -180,7 +182,7 @@ pub(crate) fn quote(code: Node) -> Node {
 		Some(_) => code,
 		None => Node::data(QuotedCode(code)),
 	};
-	Node::List(vec![symbol(DATA_WORD), code], Bracket::None, Separator::Space)
+	as_data(code)
 }
 
 /// Every `data e` sealed, so the passes after blocks leave e as written
@@ -236,9 +238,7 @@ fn substitute_block(node: Node, parameter: &str, argument: &Node) -> Node {
 		return parens(vec![argument.clone()]);
 	}
 	match node {
-		Node::Symbol(name) if name == parameter => {
-			Node::List(vec![symbol(DATA_WORD), argument.clone()], Bracket::None, Separator::Space)
-		}
+		Node::Symbol(name) if name == parameter => as_data(argument.clone()),
 		other => children_rewritten(other, |child| substitute_block(child, parameter, argument)),
 	}
 }
@@ -668,7 +668,7 @@ impl Blocks {
 					Node::Key(head, _, value) if matches!(head.drop_meta(), Node::Symbol(_)) => value.as_ref().clone(),
 					whole => whole.clone(),
 				};
-				let written = Node::List(vec![symbol(DATA_WORD), written], Bracket::None, Separator::Space);
+				let written = as_data(written);
 				lowered.push(key(Node::Symbol(field), Op::Colon, written));
 				continue;
 			}
@@ -692,7 +692,7 @@ impl Blocks {
 				Some((field, block)) => {
 					let block = self.rewrite(block);
 					self.blocks.insert(format!("{path}.{field}"), block.clone());
-					let data = Node::List(vec![symbol(DATA_WORD), block], Bracket::None, Separator::Space);
+					let data = as_data(block);
 					key(Node::Symbol(field), Op::Colon, data)
 				}
 				// `s3 = a+b`, `s3 := a+b` (P71 open: now): a value entry, evaluated now
@@ -933,9 +933,7 @@ impl Blocks {
 			});
 		}
 		match node {
-			Node::Symbol(name) if self.blocks.contains_key(&name) => {
-				Node::List(vec![symbol(DATA_WORD), self.blocks[&name].clone()], Bracket::None, Separator::Space)
-			}
+			Node::Symbol(name) if self.blocks.contains_key(&name) => as_data(self.blocks[&name].clone()),
 			// `x = …` ends the block named x
 			Node::Key(target, op @ (Op::Assign | Op::Define), value) => {
 				let value = self.rewrite(*value);

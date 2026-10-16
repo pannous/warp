@@ -192,15 +192,3 @@ fn lambda_parameters(parameters: &Node) -> Vec<String> {
 		_ => vec![],
 	}
 }
-
-fn untyped_parameters(head: &Node) -> Vec<String> {
-	let parameters = definition_head(head).map(|items| items[1..].to_vec()).unwrap_or_default();
-	parameters
-		.iter()
-		.filter_map(|parameter| match parameter.drop_meta() {
-			Node::Symbol(name) => Some(name.clone()),
-			Node::Key(name, Op::Assign, _) => Some(name.name()),
-			_ => None,
-		})
-		.collect()
-}

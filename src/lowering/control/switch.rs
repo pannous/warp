@@ -5,7 +5,7 @@
 //! pair `k: v` matches a pair whose key is k. A rest `[first, ...rest]` (`*rest`, `rest...`, unnamed `..`) matches a list of at least the other items,
 //! binding the rest as a slice; items after it count from the end. A guard `n if n < 0 => …` binds n to the subject and tests the condition; a relational pattern `> 100 => …` compares it. The shape tests are ordinary type tests (`is_type(x, "list") and count(x) == n`).
 
-use super::blocks::{quoted_data, DATA_WORD};
+use super::blocks::{as_data, quoted_data, DATA_WORD};
 use super::for_loop::walking_loop;
 use super::library_words::COLLECTION_CONTAINS;
 use super::nodes::{
@@ -513,11 +513,7 @@ fn code_tests(code: &Node, path: Node, tests: &mut Vec<Node>, bindings: &mut Vec
 				code_tests(part, item(&path, index + 1), tests, bindings);
 			}
 		}
-		_ => tests.push(key(
-			path,
-			Op::Eq,
-			Node::List(vec![Node::Symbol(DATA_WORD.to_string()), code.clone()], Bracket::None, Separator::Space),
-		)),
+		_ => tests.push(key(path, Op::Eq, as_data(code.clone()))),
 	}
 }
 
