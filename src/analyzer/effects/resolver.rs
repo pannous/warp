@@ -56,6 +56,10 @@ impl Resolver<'_> {
 			// warp's own host words (serve_routes, sleep, gpu_render …) are the Host capability, not C: a sandboxed program
 			// (warp --sandbox) keeps them
 			let host_word = import.library == crate::host::HOST_LIBRARY;
+			// a host word with a trusted signature keeps it: lib/json.warp's parse_json calls std_pure, which may Fail
+			if let Some(trusted) = trusted_external(name).filter(|_| host_word) {
+				return Some(trusted);
+			}
 			let capability = if host_word { Host } else { Ffi };
 			return Some(match (pure_library, host_word && crate::host::TASK_WORDS.contains(&name)) {
 				(true, _) => External { capability: Libm, effects: EffectSet::PURE },

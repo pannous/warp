@@ -38,6 +38,13 @@ fn effects_of_names_fail() {
 	assert_eq!(answer, "(IO Fail)");
 }
 
+#[test] // lib/json.warp's parse_json calls the host word std_pure, whose failure is raised in the program
+fn a_library_word_that_answers_with_an_error_fails() {
+	is!("use json\nf(s) := parse_json(s)\neffects of f", warp::Node::Symbol("Fail".into()));
+	let answer = warp::wasm_emitter::eval("use json\nf(s) := try parse_json(s) else 0\neffects of f").serialize();
+	assert!(!answer.contains("Fail"), "{answer}");
+}
+
 #[test]
 fn pure_refuses_fail_but_folding_does_not() {
 	fails_with("f(x) := 10/x ! Pure\nf(2)", "f is declared ! Pure but performs Fail");
