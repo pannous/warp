@@ -1,3 +1,4 @@
+mod test_abs_square_comparison; // card abs-square
 mod test_alias_definition;
 mod test_all_calls;
 mod test_analysis_memo;
