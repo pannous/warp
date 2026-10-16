@@ -164,6 +164,7 @@ mod test_reactive_ports;
 mod test_reflect_inferred; // card reflect-inferred
 mod test_reflection_mode; // card use-reflection
 mod test_reflection_synonyms; // card reflection-synonyms
+mod test_rust_option; // card rust-option
 mod test_reflection_words; // card reflection
 mod test_relational_arms;
 mod test_rest_patterns;

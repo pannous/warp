@@ -115,6 +115,8 @@ const FOREIGN_MODIFIER_TOPIC: &str = "foreign-modifier";
 const FUNCTION_REFERENCE_WORDS: [&str; 2] = ["function", "func"];
 /// `nonlocal y` in a nested function: it reads the enclosing function's current y (lowering/definitions/late_binding.rs)
 const NONLOCAL_WORD: &str = "nonlocal";
+/// Rust's endless `loop { … }`
+const LOOP_WORD: &str = "loop";
 
 const SIGNED_OPERAND_TOPIC: &str = "signed-operand";
 const LEFT_ARROW_TOPIC: &str = "left-arrow";

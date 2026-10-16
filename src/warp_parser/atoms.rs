@@ -388,6 +388,13 @@ impl WarpParser {
 			}
 		}
 
+		// Rust's `loop { … }` is `while true { … }`, its statement ends with the block as a while's does (card rust-option)
+		if symbol == LOOP_WORD && self.in_code() && self.blanks_then('{') {
+			self.skip_blanks();
+			let body = self.parse_bracketed('{');
+			return Some(while_do(Node::True, body));
+		}
+
 		if symbol == "global" || symbol == "export" {
 			if let Some(declaration) = self.try_parse_global_declaration(symbol) {
 				return Some(declaration);
