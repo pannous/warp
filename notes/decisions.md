@@ -827,7 +827,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   `warp fuel N app.warp`, and tests that pin a step count.
   Numbers (warp-types default, Interviewer's amendment, undoable): `warp app.warp` gets 60 s of CPU time (waits for
   sleep or input don't count), set with WARP_TIME_LIMIT=<seconds>, and WARP_FUEL selects fuel. Compile-time folding
-  of constant calls gets 2 s. `warp build` executables get no limit by default, since a built app runs as long as it
+  of constant calls counts fuel instead (Interviewer's decision after the reviewer's point: a 2 s wall-clock limit made
+  compiled output and error timing depend on machine load; the budget is roughly 2 s' worth). `warp build` executables get no limit by default, since a built app runs as long as it
   likes. Windowed and event-loop programs aren't killed after 60 s in total. A stop after the limit says loudly what
   happened and how to raise it.
 - ready-queue (2026-10-16, user via the boss and the supervisor): the board's Ready column is the merge queue. A
