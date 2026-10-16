@@ -926,15 +926,16 @@ impl Lowering {
 		if is_field && !has_arguments {
 			return Some(field_lookup(receiver, name, word_node));
 		}
-		// `x.chars`, `x.chars()`, `chars x` and `chars(x)` are all the list (user 2026-10-14, card abc-chars)
-		let is_called = matches!(method.drop_meta(), Node::List(..));
+		// `x.word` without brackets may read a field; `x.chars`, `x.chars()`, `chars x` and `chars(x)` are all the list
+		// (user 2026-10-14, card abc-chars). A bare word has no arguments
+		let is_bare = !matches!(method.drop_meta(), Node::List(..));
 		// `n.first` of a person with a field first reads the field, not the library word first
-		if !is_called && self.instances.is_instance_field(receiver, name) {
+		if is_bare && self.instances.is_instance_field(receiver, name) {
 			return Some(field_lookup(receiver, name, word_node));
 		}
 		if let Some(word) = self
 			.library_word_for(name, arguments.len() + 1)
-			.filter(|_| is_called || counting_method(name, &self.context).is_none())
+			.filter(|_| !is_bare || counting_method(name, &self.context).is_none())
 		{
 			let word_call = self.call(word, word_node, [vec![receiver.clone()], arguments].concat(), false);
 			// `m.first` of a parameter or loop element given `{first: 9}` (card map-field). Not a map's own word
@@ -943,18 +944,18 @@ impl Lowering {
 			let is_element = matches!(receiver.drop_meta(), Node::Key(_, Op::Hash, _));
 			let keeps_word = crate::members::MAP_MEMBERS.contains(&name)
 				|| result_kind(word).or_else(|| result_kind(name)).is_some();
-			if !is_called && !has_arguments && !keeps_word && (is_element || self.may_hold_object(receiver)) {
+			if is_bare && !keeps_word && (is_element || self.may_hold_object(receiver)) {
 				return Some(self.map_field_or(receiver, name, word_node, word_call));
 			}
 			return Some(word_call);
 		}
-		if !is_called && self.reads_declared_field(receiver, name) {
+		if is_bare && self.reads_declared_field(receiver, name) {
 			return Some(field_lookup(receiver, name, word_node));
 		}
 		// `b.product` of a value that may be an object: its field if it is no value of the word's type, else the type
 		// module's word, as `b.product()` calls it (x.word is x.word(), user 2026-10-14)
 		// `p.center`, `s.items` of another module's word or one of more parameters: no call, as before the word was loaded
-		let is_loaded_word = !is_called && is_loaded_module_word(name);
+		let is_loaded_word = is_bare && is_loaded_module_word(name);
 		let type_module = self.type_module_of(name).filter(|_| is_loaded_word);
 		let may_be_object = || self.is_object(receiver, name) || self.may_hold_object(receiver);
 		if is_loaded_word && may_be_object() {
@@ -974,7 +975,7 @@ impl Lowering {
 		}
 		// `x.string`, `t.int`, `x.float()`, `2.double()`: the conversion `string(x)`, as written in call form; uncalled
 		// only the common conversions (not `e.text`, a common field); a counting word stays a count (`xs.number()`)
-		let is_type_word_call = is_called
+		let is_type_word_call = !is_bare
 			&& crate::analyzer::type_word_kind(name).is_some()
 			&& counting_method(name, &self.context).is_none();
 		let is_conversion = CONVERSION_METHODS.contains(&name) || is_type_word_call;
