@@ -84,8 +84,8 @@ const SYNONYMS: [(&str, &[&str]); 36] = [
 	(MAP_GET_OR, &["get"]),
 	// P35 default: `xs.index_of(x)` is the 1-based position (0 when absent)
 	(COLLECTION_POSITION, &["index_of"]),
-	// card of-in-chain: `t.characters`, `characters in t`
-	("chars", &["characters"]),
+	// card of-in-chain: `t.characters`, `characters in t`; a glyph is a character too
+	(CHARS_WORD, &["characters", "glyphs"]),
 	("upper", &["uppercase"]),
 	("lower", &["lowercase"]),
 	// the text builtin trim (text_builtins.rs), Python's strip
@@ -122,9 +122,16 @@ const SYNONYMS: [(&str, &[&str]); 36] = [
 /// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/list_dispatch.rs):
 /// a typed list sums its array, any other list runs the loop `sum` always lowered to
 pub const LIST_SUM: &str = "list_sum";
+/// `t.chars`: the list of a text's characters, a grapheme cluster each (`char` is short for character)
+pub const CHARS_WORD: &str = "chars";
+/// The list of a text's code points, which `for codepoints in t` and `for each codepoint in t` walk
+pub const CODE_POINT_LIST: &str = "codepoint·list";
+/// The runtime functions behind them: text_graphemes(text), the list of its characters; text_chars(text), of its code points
+pub const TEXT_GRAPHEMES: &str = "text_graphemes";
+pub const TEXT_CODE_POINTS: &str = "text_chars";
 
 /// Words the emitter implements as runtime functions, with the number of arguments including the receiver
-pub const RUNTIME_WORDS: [(&str, usize); 20] = [
+pub const RUNTIME_WORDS: [(&str, usize); 21] = [
 	(crate::wasm_emitter::host::wasi_emitter::WASI_ENVIRONMENT, 0),
 	(ORD_WORD, 1),
 	("upper", 1),
@@ -133,7 +140,8 @@ pub const RUNTIME_WORDS: [(&str, usize); 20] = [
 	("sort", 1),
 	("split", 2),
 	("join", 2),
-	("chars", 1),
+	(CHARS_WORD, 1),
+	(CODE_POINT_LIST, 1),
 	(FIELD_WITH, 3),
 	(MAP_KEYS, 1),
 	(MAP_VALUES, 1),
@@ -200,10 +208,10 @@ pub fn shallow_flag(argument: &Node) -> Node {
 
 /// Source of the words expanded here, with their number of arguments; `word_argument` is the receiver, `hidden_value` a
 /// temporary that holds it once (each `hidden_x` becomes the temporary `word·x·3`), `word_argument_2` … the arguments after the receiver. The words written in warp
-/// (first, last, round_to, replace, is_digit …) are lib/prelude.warp's; these three the emitter dispatches on
-const EXPANDED_WORDS: [(&str, usize, &str); 3] = [
-	// Python's `list(x)`: the list itself, a text's characters
-	(LIST_WORD, 1, "hidden_value as list"),
+/// (first, last, as_list, round_to, replace, is_digit …) are lib/prelude.warp's. These two stay: sum's list_sum is the
+/// hook of the typed-list fast path (typed_list_finding.rs), and `x!` as a prelude call was 12% slower in a loop
+/// (card sum-list: the engine does not inline calls)
+const EXPANDED_WORDS: [(&str, usize, &str); 2] = [
 	(
 		SUM_WORD,
 		1,
@@ -230,9 +238,16 @@ pub(crate) const CONVERSION_METHODS: [&str; 4] = ["string", "str", "int", "float
 const LIST_CONSTRUCTORS: [&str; 4] = ["listOf", "mutableListOf", "arrayOf", "arrayListOf"];
 /// Words that mean another word with that many arguments (receiver included): `round(x, 3)`, `x.round(3)` is x rounded
 /// to 3 digits after the point (`round(x)` stays the builtin); `xs.first(3)`, `first 3 of xs` the first 3 items,
-/// `last(xs, 2)` the last 2 (lib/prelude.warp)
-const ARITY_VARIANTS: [(&str, usize, &str); 3] =
-	[("round", 2, "round_to"), ("first", 2, "first_items"), ("last", 2, "last_items")];
+/// `last(xs, 2)` the last 2; Python's `list(x)` as_list(x), its own word: the prelude's `list` would rename the type
+/// `x as list` too (lib/prelude.warp)
+const ARITY_VARIANTS: [(&str, usize, &str); 5] = [
+	("round", 2, "round_to"),
+	("first", 2, "first_items"),
+	("last", 2, "last_items"),
+	(LIST_WORD, 1, AS_LIST),
+	("tuple", 1, AS_LIST),
+];
+const AS_LIST: &str = "as_list";
 /// Methods a later pass lowers to prelude words: `x.pop(k)` (and `delete x[k]`, mutation::lower_deletes) to popped_item
 /// and popped_rest, `x.clear()` to cleared (list_mutations removed_key, cleared_collection)
 const POPPED_WORDS: &[&str] = &["popped_item", "popped_rest"];
@@ -255,8 +270,9 @@ const SAFE_BASE: &str = "safe";
 /// Library words whose result is always a text, and those whose result is always a list
 const TEXT_RESULT_WORDS: [&str; 5] =
 	["upper", "lower", "trim", "join", crate::wasm_emitter::host::wasi_emitter::WASI_ENVIRONMENT];
-const LIST_RESULT_WORDS: [&str; 8] = [
-	"chars",
+const LIST_RESULT_WORDS: [&str; 9] = [
+	CHARS_WORD,
+	CODE_POINT_LIST,
 	"sort",
 	"split",
 	MAP_KEYS,
@@ -945,6 +961,10 @@ impl Lowering {
 		}
 		if !is_called && self.reads_declared_field(receiver, name) {
 			return Some(field_lookup(receiver, name, word_node));
+		}
+		// x.word is x.word(): a bare `xs.pop` changes xs as `xs.pop()` does (card xs-xs)
+		if !is_called && is_list_mutating_method(name) {
+			return Some(key(receiver.clone(), Op::Dot, call(name, vec![])));
 		}
 		// `b.product` of a value that may be an object: its field if it is no value of the word's type, else the type
 		// module's word, as `b.product()` calls it (x.word is x.word(), user 2026-10-14)

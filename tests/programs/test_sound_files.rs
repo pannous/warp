@@ -33,8 +33,8 @@ fn a_music_file_plays_in_the_background() {
 	);
 }
 
-/// card play-beside-program: a program file plays a file named relative to it, wherever warp runs from (samples/play_mp3
-/// plays samples/mozart.mp3 run from the repository root)
+/// card play-beside-program: a program file plays a file named relative to it, wherever warp runs from (samples/sound/play_mp3
+/// plays samples/sound/mozart.mp3 run from the repository root)
 #[test]
 fn a_program_plays_the_file_beside_it() {
 	let wav = sound_file("sound-beside", "beep.wav", &warp::sound::wav(&[32768, 40000, 32768], 22050));

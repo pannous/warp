@@ -751,25 +751,25 @@ pub fn constant_field_name(key: &Node) -> Option<String> {
 	(!name.is_empty() && name.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-')).then_some(name)
 }
 
-/// The type `[number]`: `list of number` for one element type word
+/// The type `[number]`: `list of number` for one element type word or union (`[int or error]`)
 pub(crate) fn bracketed_list_type(type_node: &Node) -> Option<Node> {
 	let word = bracketed_element(type_node)?;
-	type_word_kind(word)?;
+	type_word_kind(&word).or_else(|| union_parts(&word).map(|_| Kind::Empty))?;
 	Some(Node::Symbol(format!("list of {word}")))
 }
 
-/// The element word of `[word]`
-fn bracketed_element(type_node: &Node) -> Option<&str> {
+/// The element type of `[word]` and of `[int or error]`
+fn bracketed_element(type_node: &Node) -> Option<String> {
 	let Node::List(items, Bracket::Square, _) = type_node.drop_meta() else {
 		return None;
 	};
 	match items.as_slice() {
-		[element] => element.symbol_name(),
+		[element] => element.symbol_name().map(str::to_string).or_else(|| union_type_name(element.drop_meta())),
 		_ => None,
 	}
 }
 
-/// The declared type of `x:[T]=v`: `list of T`, of a builtin type or a class (`xs:[Circle]=[c]`)
+/// The declared type of `x:[T]=v`: `list of T`, of a builtin type, a class (`xs:[Circle]=[c]`) or a union
 fn declared_bracketed_list_type(type_node: &Node) -> Option<Node> {
 	Some(Node::Symbol(format!("list of {}", bracketed_element(type_node)?)))
 }

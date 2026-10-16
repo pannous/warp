@@ -1,0 +1,26 @@
+#!/usr/bin/env warp
+# card compute-toys: renders each compute.toys shader saved under data/shaders/compute_toys (research, not tracked)
+# through compute_toy into a PNG next to it, or says why it cannot run
+use compute_toys
+use file
+use graphics
+# run from the main checkout, whose data/ holds the research (data/ is not in worktrees)
+folder = "data/shaders/compute_toys/"
+width = 480
+height = 270
+for name in list_files(folder) {
+	if ends_with(name, ".wgsl") and name != "dandelion.wgsl" {
+		try {
+			pixels = gpu_render(compute_toy(read(folder + name)), width, height)
+			save_picture(pixels, width, height, folder + "rendered/" + name + ".png")
+			print name + ": rendered"
+		} catch problem {
+			print name + ": " + str(problem)
+		}
+	}
+}
+# dandelion's sliders (custom.*) as paint's values, at their compute.toys defaults
+dandelion = {r1: 0.591, g1: 0.009, b1: 0.217, r2: 0.015, g2: 0.711, b2: 1, r3: 0, g3: 0.016, b3: 0.052, nn: 0.462, R0: 1, R1: 0.185, noise1: 0.228, noise2: 0.897, shape1: 0.516, shape2: 0.507}
+pixels = gpu_render(compute_toy(read(folder + "dandelion.wgsl")), width, height, dandelion)
+save_picture(pixels, width, height, folder + "rendered/dandelion.wgsl.png")
+print "dandelion.wgsl: rendered"

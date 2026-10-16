@@ -1,5 +1,5 @@
 // card parser-tag: a glued pair `for:email` takes the one word as its value, so a text after it is the next item:
-// `label{ for:email "Email address:" }` is the attribute and the label's text (samples/html.warp); a spaced pair
+// `label{ for:email "Email address:" }` is the attribute and the label's text (samples/web/html.warp); a spaced pair
 // `x: upper "c"` still takes the call
 use warp::warp_parser::parse;
 use warp::{Node, Op};

@@ -16,7 +16,7 @@ in the playground the browser's canvas 2D fillText on an OffscreenCanvas (host.j
 Worker), natively ab_glyph over a system font (src/graphics/text_raster.rs: Helvetica on a Mac, DejaVu Sans or Liberation Sans
 on Linux, Arial on Windows, WARP_FONT names another; none is a loud error). label blends it into canvas_pixels, so
 show()/paint stays the one pipeline. `text` cannot be the word: "text is a type". A first version with a 3×5 pixel
-font was dropped (user: "the classical canvas"). samples/paint_text.warp, tests/programs/test_draw_label.rs.
+font was dropped (user: "the classical canvas"). samples/graphics/paint_text.warp, tests/programs/test_draw_label.rs.
 
 ## On the GPU (card gpu-draw)
 A second implementation of `use draw`, chosen by the system value `gpu_drawing` (crates/warp-runtime system_values,

@@ -54,6 +54,11 @@ def canvas(width, height) {
 	canvas_height = height
 	canvas_pixels = int[pixels_for(width, height)]
 }
+// the canvas's size as properties (decision property-accessors): written, it is a new blank canvas, as an HTML canvas is
+canvas.width := canvas_width
+canvas.width(new_width) := canvas(new_width, canvas_height)
+canvas.height := canvas_height
+canvas.height(new_height) := canvas(canvas_width, new_height)
 
 def clear(color) {
 	if drawing_on_gpu { draw_shape(clear_shape, 0, 0, 0, 0, color) }
@@ -112,9 +117,12 @@ def show() {
 }
 
 // save canvas as: "painting.png", save(canvas, "painting.png") or save "painting.png" (card save-painting): the canvas
-// as drawn so far as a PNG, natively that file, in the playground a download; the word canvas as save's argument is a
-// Picture (src/lowering/words/saved_words.rs). On the GPU the pixels are there, not here: the host draws them again
+// as drawn so far as a PNG, natively that file, in the playground a download. On the GPU the pixels are there, not
+// here: the host draws them again
 class Picture {}
+// the canvas as drawn so far (decision saved-words): canvas() beside canvas(width, height), so the bare word canvas,
+// its call, is a Picture
+canvas() := Picture()
 save(made: Picture, as file) := save_picture(canvas_pixels, canvas_width, canvas_height, file)
 save(file: text) := save(Picture(), file)
 

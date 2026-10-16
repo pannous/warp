@@ -194,11 +194,11 @@ Superseded (P214): floats on the GPU only with @gpu or float32[n]; (b) automatic
    No GPU dot: a multiply-add is ~1 ns an item in lanes, so uploading the two arrays (16 MB at 10^6) already costs
    more than the CPU's whole dot. It pays only for data already on the GPU (a dot of two @gpu maps: kept buffers).
    `float[n]` of a variable count was no list to broadcasting (`xs .* ys` was a float * list error): fixed.
-   Sample: samples/dot.warp.
+   Sample: samples/lists/dot.warp.
    Browser (done, host-gpu.js gpu_kernel): the block's cells go to the task Worker as a transferred Float32Array and
    come back as raw f32 bytes in the shared buffer (writeSharedFloats, state FLOATS_STATE), only from the first cell
    needed (the partials of a reduction). Before, 10^6 floats went as a JS array and came back as JSON: 160–350 ms, slower
-   than the CPU. Measured with samples/gpu_map.warp (headless Chrome, Apple Metal, `sin(x) * exp(x) + cos(x * 3)`,
+   than the CPU. Measured with samples/gpu/gpu_map.warp (headless Chrome, Apple Metal, `sin(x) * exp(x) + cos(x * 3)`,
    10^6, ms): sum GPU 8–17 / CPU 80–160, the mapped list back 12–16; the first run 86 (device + shader). Raw WebGPU for
    that kernel is ~3 ms. SwiftShader (CI): correct, sum 464 ms, sin less precise (2e-5 relative). Chrome's Tint
    refuses the f32 literal 3.4028235e38 (it rounds above the largest f32): LARGEST_F32 is a bitcast. Careful when
@@ -213,9 +213,9 @@ Superseded (P214): floats on the GPU only with @gpu or float32[n]; (b) automatic
    kept block replaces an earlier run's buffer for the same address (addresses recur across runs in one process).
    Browser (card gpu-kept): GPU jobs go to the task Worker of the last GPU job (host-gpu.js gpuTaskWorker), which keeps
    the buffers (keptBuffers, by block and count); busy or missing → another worker / an upload (KEPT_MISSING, retried).
-   Headless Chrome, samples/gpu_map.warp: the kept-buffer map 18 ms at 10^6, same result as native.
+   Headless Chrome, samples/gpu/gpu_map.warp: the kept-buffer map 18 ms at 10^6, same result as native.
 
-## Painting a shader every frame (samples/gpu_visualizer.warp, 2026-10-10)
+## Painting a shader every frame (samples/gpu/gpu_visualizer.warp, 2026-10-10)
 - src/graphics/gpu.rs `painter` keeps the compiled module and render pipeline per shader text (16, as host-gpu.js
   MOST_COMPILED): before, every paint compiled the pipeline anew, 10–20 ms for the raymarching sample on Metal plus
   driver work, now only the uniform's bind group is made per frame. Test: test_webgpu a_kept_shader_reads_each_frames_values.
@@ -243,7 +243,7 @@ Costs nothing for a shader that doesn't mention them.
 ## $previous: a shader's own last frame (card shader-read, user wish 2026-10-12)
 `$previous(at)` is the color the shader left at pixel `at` (vec2f, clamped to the image) in its previous render of
 the same size, black before the first (another paper: `select(paper, $previous(at), $frame > 0)`): painting with
-memory (samples/shader_trails.warp). $last, $feedback, $before are not taken from programs; a value missing under
+memory (samples/graphics/shader_trails.warp). $last, $feedback, $before are not taken from programs; a value missing under
 them hints at $previous (shader_holes.rs PREVIOUS_WORDS, user's Interviewer: canonical word plus hints). Not a value but a
 function: BUILTIN_HOLES has "previous" so no values entry is made; the host rewrites `values.previous(` to
 `warp_previous(` and appends PREVIOUS_FRAME (texture_2d at @group(0) @binding(1), textureLoad). Each render draws
@@ -326,7 +326,7 @@ plan: warp functions compiled to WGSL, so the work around a shader (spectrum(), 
   2. Calls of user functions, with a callee closure and a recursion check.
   3. Map kernels calling user functions.
   4. paint(f, …) of a warp function.
-  5. Acceptance: samples/gpu_visualizer.warp's tunnel shader written in warp gives the same frame as the WGSL one.
+  5. Acceptance: samples/gpu/gpu_visualizer.warp's tunnel shader written in warp gives the same frame as the WGSL one.
 - **Progress.** Done 2026-10-13: steps 1–3 (gpu_maps.rs `Translation::function`, tests/web/test_gpu_functions.rs; 1M items of
   a function with a loop of cos: 324 ms @cpu → 29 ms on the GPU). Step 4: `paint(f, width, height)` lowers to a
   fragment shader of f (gpu_maps.rs `painted_functions`, tests/programs/test_paint_function.rs), the program's
@@ -334,7 +334,7 @@ plan: warp functions compiled to WGSL, so the work around a shader (spectrum(), 
   (probes/gpu/paint_mandelbrot.warp, full HD, debug build: 18.4 s on the CPU → 1.6 s, mostly the PNG). Open: no
   adapter falls back to the CPU only for maps, a painted function fails like a shader text (card paint-function).
   Next, after the Rust cleanup (user decision cleanup-only, 2026-10-13): step 5, the tunnel shader of
-  samples/gpu_visualizer.warp written in warp. It needs vectors (vec2f…vec4f) in the translation, and arrays as
+  samples/gpu/gpu_visualizer.warp written in warp. It needs vectors (vec2f…vec4f) in the translation, and arrays as
   values (`levels`).
 
 ## Shaders in the browsers' playground (cards shaders-firefox, https-pannous, very-fast, 2026-10-14)

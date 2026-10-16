@@ -206,6 +206,8 @@ const DECLARATION_PASSES: &[Pass] = &[
 	// `class int` without a body is the int type (class_references.rs), before file_declarations takes `class Foo;`
 	crate::lowering::class_references::lower,
 	crate::lowering::file_declarations::lower,
+	// `density: dpi` keeps the word dpi for messages and fixes (unit_fields.rs)
+	crate::numbers::units::static_units::remember_field_unit_words,
 	// `60 mph` is `60 mi/h`, `q as km/h` converts to km/h, before any units pass reads them
 	crate::numbers::units::lower_unit_words,
 	// `class Part{length: m ± 1 mm}`: `Part(5 m)` holds `5 m ± 1 mm` (unit_fields.rs), a tolerance the next pass reads
@@ -238,6 +240,8 @@ const DECLARATION_PASSES: &[Pass] = &[
 	crate::lowering::foreign_modules::lower,
 	// `x as text?` keeps ø, after foreign_modules types a nullable WebIDL result so
 	crate::lowering::optional_casts::lower,
+	// `std::cmp::max(a, b)`, `String::from("hi")` (rust_paths.rs), before std_aliases reads a module call
+	crate::lowering::rust_paths::lower,
 	crate::lowering::std_aliases::lower,
 	crate::lowering::class_methods::lower_json_calls,
 	crate::lowering::welcome_forms::lower,
@@ -249,8 +253,6 @@ const DECLARATION_PASSES: &[Pass] = &[
 	crate::lowering::one_entry_maps::lower,
 	// the used modules join the program before the signal passes: a listener of the program sees the writes of their functions
 	// note names (`play F#4`) while the program is its own, before the sound module joins it
-	// `save sound as "song.wav"`, `save canvas as "painting.png"`: what the word names, before music_words reads the sound
-	crate::lowering::saved_words::lower,
 	crate::lowering::music_words::lower,
 	crate::lowering::routes::lower,
 	crate::lowering::page_html::use_markup,

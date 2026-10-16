@@ -324,7 +324,7 @@ pub(crate) fn map_field(part: &Node) -> Option<(String, &Node)> {
 pub(crate) fn is_list_pattern(pattern: &Node) -> bool {
 	match pattern.drop_meta() {
 		Node::List(_, Bracket::Square, _) => true,
-		Node::List(items, Bracket::Round, Separator::Colon) => items.len() > 1,
+		Node::List(items, Bracket::Round, Separator::Comma) => items.len() > 1,
 		_ => false,
 	}
 }
@@ -789,7 +789,7 @@ fn cases_of(block: &Node) -> Option<Vec<Case>> {
 /// The items of a comma list inside a case block, else the item itself
 fn comma_items(item: &Node) -> Vec<Node> {
 	match item.drop_meta() {
-		Node::List(items, Bracket::None, Separator::Colon) => items.clone(),
+		Node::List(items, Bracket::None, Separator::Comma) => items.clone(),
 		_ => vec![item.clone()],
 	}
 }

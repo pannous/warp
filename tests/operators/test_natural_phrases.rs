@@ -1,4 +1,4 @@
-// English phrasings of samples/natural.warp (card natural-phrases)
+// English phrasings of samples/hello/natural.warp (card natural-phrases)
 use crate::is;
 
 /// operator.md lists `mod modulo %`: `modulo` is the word `mod`

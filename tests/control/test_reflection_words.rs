@@ -74,6 +74,7 @@ fn a_real_field_named_fields_wins() {
 fn a_functions_params() {
 	is!("f(a:int, b:int) := a+b\nf.params", warp::texts(vec!["a", "b"]));
 	is!("def g(x){x*2}\ng.parameters", warp::texts(vec!["x"]));
+	is!("twice = x => x * 2\ntwice.params", warp::texts(vec!["x"]));
 }
 
 #[test]
@@ -137,7 +138,7 @@ fn a_warp_modules_classes() {
 	is!(&format!("{SHAPES}; dir(shapes.P)"), warp::texts(vec!["x", "y", "sq"]));
 }
 
-// card reflection-area: `f.dump` is the whole definition as written, to copy and paste (samples/reflection.warp)
+// card reflection-area: `f.dump` is the whole definition as written, to copy and paste (samples/types/reflection.warp)
 #[test]
 fn a_functions_dump() {
 	is!("area(width: int, height: int) := width * height\narea.dump", "area(width: int, height: int) := width*height");
