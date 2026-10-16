@@ -36,3 +36,5 @@ the tests' own_copy into target tmp/) stay inside the target dir, so they keep w
 Data or Junk (scripts/own-warp.sh → scratch/warp) is a real copy of ~225 MB.
 - [ ] scripts/prune-cargo-target.sh: offer a full Build wipe when the target grows past its limit and the queue is empty
 - [ ] check that editors still get live file-change events there (no_log should only stop the on-disk log)
+
+General guide (setup commands, copy-on-write rules, reuse for other projects): ~/dev/bin/notes/apfs-churn-volumes.md
