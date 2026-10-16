@@ -1225,6 +1225,7 @@ PASSED:
   ✓ functions::test_arity_overloads::a_call_takes_the_definition_of_its_argument_count
   ✓ functions::test_arity_overloads::a_count_no_definition_fits_or_two_fit_is_an_error
   ✓ functions::test_arity_overloads::an_overload_may_call_another_one
+  ✓ functions::test_arity_overloads::an_overloaded_name_given_as_a_function_is_the_variant_called
   ✓ functions::test_arity_overloads::calls_without_parentheses_pick_by_count_too
   ✓ functions::test_arity_overloads::defaults_count_for_the_arguments_a_definition_accepts
   ✓ functions::test_arrow_defaults_and_types::an_arrow_function_takes_defaults_and_types
@@ -2350,6 +2351,7 @@ PASSED:
   ✓ modules::test_import_words::every_use_keyword_brings_a_module
   ✓ modules::test_include::a_missing_include_lists_the_searched_paths
   ✓ modules::test_include::a_nested_include_is_found_next_to_the_including_file
+  ✓ modules::test_include::a_sample_never_shadows_a_standard_module
   ✓ modules::test_include::include_splices_the_whole_file_and_runs_it
   ✓ modules::test_include::including_a_file_twice_includes_it_once_and_cycles_terminate
   ✓ modules::test_include::require_and_import_are_use
@@ -3782,14 +3784,16 @@ PASSED:
   ✓ programs::test_paint::the_paint_window_hears_the_pointer_unfocused
   ✓ programs::test_plain_hints_when_piped::a_hint_on_piped_stderr_has_no_escape_codes
   ✓ programs::test_playground_samples::every_excluded_sample_exists
+  ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_2
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_3
   ✓ programs::test_playground_samples::every_playground_sample_runs_without_an_error_slice_4
   ✓ programs::test_program_cache::a_changed_file_of_the_folder_compiles_again
   ✓ programs::test_program_cache::a_module_looking_beyond_the_keyed_folders_is_not_kept
   ✓ programs::test_program_cache::a_program_runs_again_from_its_cached_module
+  ✓ programs::test_property_definitions::a_class_defines_a_property_of_its_instances
   ✓ programs::test_property_definitions::a_program_defines_a_property_with_a_setter
-  ✓ programs::test_property_definitions::a_property_of_a_value_or_class_is_refused_loudly
+  ✓ programs::test_property_definitions::a_property_of_a_value_or_an_instance_setter_is_refused_loudly
   ✓ programs::test_property_definitions::a_property_without_a_setter_is_read_only
   ✓ programs::test_property_definitions::the_setter_is_called_like_a_method
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error
@@ -5252,6 +5256,7 @@ PASSED:
   ✓ web::test_accessibility::ternaries_and_number_fields_are_no_elements
   ✓ web::test_accessibility::typed_names_are_no_elements
   ✓ web::test_accessibility::unusable_markup_is_warned_about
+  ✓ web::test_app_keys::exit_in_a_key_handler_ends_the_app_with_its_code
   ✓ web::test_app_keys::on_key_hears_the_app_pages_key_presses
   ✓ web::test_assistant_edits::a_diff_changes_only_the_lines_it_names
   ✓ web::test_assistant_edits::a_diff_that_no_longer_fits_says_so
@@ -5365,6 +5370,7 @@ PASSED:
   ✓ web::test_guide_heading_links::a_wiki_heading_link_is_a_markdown_heading_link
   ✓ web::test_guide_heading_links::every_heading_link_of_the_guides_names_a_heading
   ✓ web::test_guide_sections::whole_lists_at_once_is_a_section_of_lists
+  ✓ web::test_guide::every_chapter_has_its_own_sample_folder
   ✓ web::test_guide::every_example_a_chapter_links_exists
   ✓ web::test_guide::every_guide_snippet_prints_what_the_guide_shows
   ✓ web::test_guide::every_guide_snippet_shows_its_value
@@ -5531,6 +5537,7 @@ PASSED:
   ✓ web::test_site_animation::an_endless_sleeping_loop_builds
   ✓ web::test_site_failure::a_site_that_does_not_compile_says_why
   ✓ web::test_site_holes::a_built_site_patches_only_its_holes
+  ✓ web::test_site_modules::a_page_module_ships_the_modules_it_imports_beside_it
   ✓ web::test_site_modules::a_site_ships_the_modules_its_program_imports
   ✓ web::test_site_tasks::a_site_renders_what_its_tasks_computed
   ✓ web::test_site::a_painting_site_runs_in_a_worker_with_its_canvas
@@ -6084,14 +6091,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ control::test_database_optional_units::an_optional_unit_field_holds_a_distance_or_nothing
-  ✗ control::test_database_tables::a_unit_field_is_stored_and_migrates_within_its_quantity
-  ✗ control::test_database_units_everywhere::a_unit_column_migrates_within_its_quantity
-  ✗ control::test_database_units_everywhere::plain_numbers_given_a_unit_are_read_as_it
-  ✗ parser::test_self_differential::line_widths_match_their_rust_twin
-  ✗ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
-  ✗ programs::test_playground_samples::every_playground_sample_runs_without_an_error
-  ✗ web::test_app_keys::exit_in_a_key_handler_ends_the_app_with_its_code
 
 SUMMARY:
-13 ignored, 6081 passed, 8 failed, 6089 total tested
+13 ignored, 6088 passed, 0 failed, 6088 total tested
