@@ -17,8 +17,10 @@ TARGETED_TEST_THREADS=4
 HOMEBREW_BIN=/opt/homebrew/bin
 # A run with a process using more memory than this is killed: on 2026-10-09 one test grew to 154 GB, swap ran out and
 # macOS took down the Claude app with every agent session. Per process, because parallel rustc jobs add up legitimately;
-# top's MEM counts compressed memory, ps's RSS doesn't.
+# top's MEM counts compressed memory, ps's RSS doesn't. Compilers and linkers are not capped: rustc building warp-lang
+# at opt-level 2 (test.sh) took 4.2–6.2 GB and was killed twice (notes/test_speed.md).
 MEMORY_CAP_GB="${WARP_TEST_MEMORY_CAP_GB:-4}"
+UNCAPPED_PROGRAMS='rustc|sccache|ld|ld64|ld-prime|clang|cc'
 MEMORY_POLL_SECONDS=1
 # A test binary running longer than this is killed, naming it and the program it waits for: batch 137 hung 294 s on
 # finger_paint.warp (card tests-queue). The tests binary takes ~150 s of a full run, 266 s at most so far.
@@ -73,6 +75,25 @@ case "${run[0]}" in
 esac
 # The Integrator's targeted re-runs of a batch's failures hold up main: they go ahead of the workers' runs too
 [[ "$PWD" == */warp.worktrees.noindex/integrate* ]] && priority=0
+
+# A `cargo test` builds before it queues: the build waits only for cargo's own lock on the shared target dir, which
+# serializes builds anyway, and the test lock is held for running tests, not compiling (a third of its time was builds,
+# notes/test_speed.md). The locked run then finds everything fresh.
+prebuild_command() {
+	[ "${run[0]}" = cargo ] || return 1
+	local argument before=()
+	for argument in "${run[@]}"; do
+		[ "$argument" = "--" ] && break
+		[ "$argument" = "--no-run" ] && return 1
+		before+=("$argument")
+	done
+	[[ " ${before[*]} " == *" test "* ]] || return 1
+	prebuild=("${before[@]}" --no-run)
+}
+if prebuild_command; then
+	nice -n "$niceness" "${prebuild[@]}" || exit $?
+fi
+
 mkdir -p "$QUEUE"
 ticket="$QUEUE/$priority-$(date +%s)-$$"
 echo "$PWD ${run[*]}" > "$ticket"
@@ -83,13 +104,22 @@ drop_stale_tickets() {
 	done
 }
 first_ticket() { ls "$QUEUE" | sort | head -1; }
+# Our ticket is found by our PID, whatever its name: a ticket renamed by hand (1- → 0- for priority) once kept its
+# waiting run from seeing itself first while it blocked all others with the lock free (2026-10-16, 25 min); a deleted
+# one is written again
+own_ticket() {
+	local name
+	name=$(ls "$QUEUE" | grep -E -- "-$$\$" | head -1)
+	[ -z "$name" ] && echo "$PWD ${run[*]}" > "$ticket" && name=${ticket##*/}
+	echo "$name"
+}
 
 drop_stale_tickets
-if [ "$(first_ticket)" != "${ticket##*/}" ] || ! "${lock_is_free[@]}"; then
+if [ "$(first_ticket)" != "$(own_ticket)" ] || ! "${lock_is_free[@]}"; then
 	echo "test queue: waiting for the warp test lock ($(cat "$LOCK.owner" 2>/dev/null || echo unknown holder)," \
-		"$(($(ls "$QUEUE" | sort | grep -n "^${ticket##*/}$" | cut -d: -f1) - 1)) ahead of us)" >&2
+		"$(($(ls "$QUEUE" | sort | grep -n "^$(own_ticket)$" | cut -d: -f1) - 1)) ahead of us)" >&2
 fi
-while drop_stale_tickets; [ "$(first_ticket)" != "${ticket##*/}" ]; do sleep $POLL_SECONDS; done
+while drop_stale_tickets; [ "$(first_ticket)" != "$(own_ticket)" ]; do sleep $POLL_SECONDS; done
 
 descendants() {
 	local child
@@ -124,6 +154,11 @@ kill_overdue_test_binaries() {
 }
 # runs beside the test run (our PID survives the exec below): kills its whole process tree above the memory cap
 # (Mac only: top's MEM) and a test binary over the time limit
+# the given PIDs but compilers and linkers (UNCAPPED_PROGRAMS)
+capped() {
+	ps -o pid=,command= -p "$(IFS=,; echo "$*")" 2>/dev/null | awk '{ print $1, $2 }' |
+		grep -vE " ([^ ]*/)?($UNCAPPED_PROGRAMS)$" | cut -d' ' -f1
+}
 watch_run() {
 	local run_pid=$1 cap_mb=$((MEMORY_CAP_GB * 1024)) pids used_mb
 	while kill -0 "$run_pid" 2>/dev/null; do
@@ -132,7 +167,7 @@ watch_run() {
 		[ ${#pids[@]} -eq 0 ] && continue
 		kill_overdue_test_binaries "${pids[@]}"
 		[ "$(uname)" = Darwin ] || continue
-		used_mb=$(largest_memory_mb "${pids[@]}")
+		used_mb=$(largest_memory_mb $(capped "${pids[@]}"))
 		if [ "$used_mb" -gt "$cap_mb" ]; then
 			echo "test queue: KILLED the run, a process used ${used_mb} MB, over the memory cap of ${MEMORY_CAP_GB} GB" \
 				"(WARP_TEST_MEMORY_CAP_GB): ${run[*]}" >&2
@@ -143,8 +178,9 @@ watch_run() {
 }
 watch_run $$ &
 
-# exec keeps our PID, so the ticket stays valid while we wait for the lock and run; it is removed when the run ends
+# exec keeps our PID, so the ticket stays valid while we wait for the lock and run; it is removed when the run ends,
+# by PID like own_ticket finds it (the glob is expanded by the trap)
 export WARP_TEST_LOCKED=1
 export WARP_NO_WINDOW=1 # a painting program writes PNGs, never a window during tests (src/graphics/paint.rs)
 exec "${hold_lock[@]}" bash -c 'trap "rm -f $1" EXIT; echo "$PPID $PWD ${*:2}" > "$0.owner"; "${@:2}"' \
-	"$LOCK" "$ticket" nice -n "$niceness" "${run[@]}"
+	"$LOCK" "$QUEUE/*-$$" nice -n "$niceness" "${run[@]}"
