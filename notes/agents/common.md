@@ -93,7 +93,9 @@ instead of bending the code.
      refuses a branch that is not pushed, differs from origin, or does not merge cleanly into origin/main (naming the
      conflicting files); `--force` only for a branch carrying other branches. Several cards on one branch: ready each.
      What a merge request message used to say (new tests, filters, "docs: <page>", the sample) goes into a
-     `todo note <card>` first. Express (the user or the Supervisor asked for your result fast, a crash fix):
+     `todo note <card>` first, as one line in this fixed form (Integrator, 2026-10-16):
+     `card | branch | tip (full sha) | filters | passed/failed (queue or cloud) | clippy+wasm32 ok`, then prose if needed.
+     Never message warp-integrator with FYIs or swap notices: the card is the merge request. Express (the user or the Supervisor asked for your result fast, a crash fix):
      `todo ready <card> --express` (or a note saying "express"): the Integrator runs it alone and next (notes/roles.md).
   4. Optional: one line to warp-reviewer by SendMessage ("<card> ready"); it reads `todo list Ready` anyway. Report
      one line to the Supervisor.
