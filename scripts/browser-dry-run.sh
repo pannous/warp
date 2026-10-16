@@ -64,7 +64,8 @@ build() {
 	if wants suite; then build_suite; fi
 }
 
-copy() { rsync -a --delete --chown="$SERVER_USER:$SERVER_USER" "$@"; }
+# ownership is set on the server afterwards: macOS system rsync (openrsync) has no --chown
+copy() { rsync -a --delete "$@"; }
 
 copy_to_server() {
 	echo "copying to $SERVER:$run_dir"
@@ -80,12 +81,13 @@ copy_to_server() {
 		# the pinned packages (build.sh pinned): their contents, not the links into ~/.cache
 		copy --copy-links --exclude .git packages/ "$SERVER:$run_dir/packages/"
 	fi
+	ssh "$SERVER" "chown -R $SERVER_USER: $run_dir"
 }
 
 [ -n "$again" ] || { build && copy_to_server; }
 
 remote_arguments=$(printf '%q ' "$run_dir" "$(workflow_value AGENT_BROWSER_ARGS)" "$(workflow_value FIREFOX_PREFS)" "${checks[*]}" "${names[@]+"${names[@]}"}")
-# the token goes in on stdin, never on a command line the server's ps shows (api.github.com's limit, samples/live_region)
+# the token goes in on stdin, never on a command line the server's ps shows (api.github.com's limit, samples/web/live_region)
 {
 	echo "export GITHUB_TOKEN=$(printf '%q' "$(gh auth token 2>/dev/null || true)")"
 	echo "SERVER_HOME=$SERVER_HOME SERVER_USER=$SERVER_USER MEMORY_MAX=$MEMORY_MAX CHECK_TIME_LIMIT=$CHECK_TIME_LIMIT RUNS_KEPT_DAYS=$RUNS_KEPT_DAYS"

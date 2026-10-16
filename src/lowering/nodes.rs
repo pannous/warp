@@ -355,9 +355,14 @@ impl<'a> FunctionHead<'a> {
 	/// `f(x) := body`, `f(x) = body` with a round head and no result type: its operator
 	pub fn plain_operator(&self) -> Option<Op> {
 		match self.form {
-			DefinitionForm::Operator(op) if self.result.is_none() && is_call_head(self.head) => Some(op),
+			DefinitionForm::Operator(op) if self.is_untyped_call() => Some(op),
 			_ => None,
 		}
+	}
+
+	/// `f(x) := body`, `def f(x) = body`, `def f(x) { body }`: a call head without a declared result type, in any form
+	pub fn is_untyped_call(&self) -> bool {
+		self.result.is_none() && is_call_head(self.head)
 	}
 
 	/// `f(x)` written without a space before its parenthesis

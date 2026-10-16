@@ -33,7 +33,7 @@ fn a_caught_error_and_a_value_keep_their_status() {
 	assert_eq!(file_status("three", "3"), Some(3));
 }
 
-// a float result is a measurement, not a status: samples/visualizer.warp ends in its loop's elapsed seconds
+// a float result is a measurement, not a status: samples/sound/visualizer.warp ends in its loop's elapsed seconds
 #[test]
 fn a_program_ending_in_a_float_exits_with_status_0() {
 	assert_eq!(file_status("float", "4.5"), Some(0));

@@ -57,7 +57,7 @@ fn ternaries_and_number_fields_are_no_elements() {
 	);
 }
 
-/// attributes in the head, `label(for:pwd): "Password"` (samples/html.warp), label the field like `label{ for:pwd … }`
+/// attributes in the head, `label(for:pwd): "Password"` (samples/web/html.warp), label the field like `label{ for:pwd … }`
 #[test]
 fn head_attributes_count() {
 	assert!(warnings_of("html{ lang:\"en\" body{ label(for:pwd):\"Password\"\n input{ id:pwd type:password } } }")

@@ -45,6 +45,9 @@ operator ⭡ := ↑
 operator ⬇ := ↓
 operator ⇩ := ↓
 operator ⭣ := ↓
+// membership (card parse-free); ∉ is `not in`, a negated spelling (src/operators/spellings.rs)
+operator ∈ := in
+operator ∋ := contains
 
 // The math words warp computes itself, with their signatures (decision foreign-signature, `from warp`): exact on
 // exact values where they can be, so floor gives an int where C's floor gives a float

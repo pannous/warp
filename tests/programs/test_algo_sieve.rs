@@ -3,7 +3,7 @@ use crate::is;
 // 25 primes below 100 sum to 1060; 97 sits at index 24; 50 is absent (-1)
 #[test]
 fn test_sieve() {
-	is!("samples/sieve.warp", 1083);
+	is!("samples/lists/sieve.warp", 1083);
 }
 
 // scratch bisection: evaluates every probes/algo/sieve/*.warp snippet and prints its result
@@ -32,5 +32,5 @@ fn probe_sieve_snippets() {
 
 #[test]
 fn test_sieve_idiomatic() {
-	is!("samples/sieve_idiomatic.warp", 1083);
+	is!("samples/lists/sieve_idiomatic.warp", 1083);
 }

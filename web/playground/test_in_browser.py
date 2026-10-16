@@ -66,7 +66,7 @@ CONSOLE_SETTLE_SECONDS = 0.3  # a shown example's last messages reach the watche
 # browser-tour): Chrome without WebGPU says this on every navigator.gpu.requestAdapter(); @gpu then maps on the CPU and
 # says so in the program's own warning, gpu_render fails with the program's error (shown on the page, not the console)
 # Chrome's Dawn says the second when the next example ends the task Worker of an animating GPU sample while a frame of
-# its OffscreenCanvas is in flight (samples/manual_3d_object_viewer, cards flaky-viewer, flaky-deploy): the stopped
+# its OffscreenCanvas is in flight (samples/gpu/manual_3d_object_viewer, cards flaky-viewer, flaky-deploy): the stopped
 # program's device is gone, nothing the next example sees
 BROWSER_OWN_WARNINGS = {"No available adapters.", "A valid external Instance reference no longer exists."}
 # an example on the GPU (paint of a shader) in a browser without WebGPU (the runner's Firefox): skipped, loudly
@@ -136,7 +136,7 @@ SHADER_EXCERPT = "┌─"  # naga's excerpt of the shader (Firefox): the error s
 CANVAS_FAILED = "the page's canvas failed"  # host-gpu.js CANVAS_FAILED: the shader painted through pixels instead
 CANVAS_SETTLE_MS = 300  # the task Worker's frame reaches the page's canvas after its task
 # card webgpu-safari: a paint of the view's size makes the output pane taller; the view's size must not grow with it
-# (it did by ~40 px a frame, until Safari ran out of memory painting samples/webgpu)
+# (it did by ~40 px a frame, until Safari ran out of memory painting samples/graphics/webgpu)
 VIEW_STEADY = "(the view's size stays as paintings of that size are shown)"
 VIEW_STEADY_CODE = """paint(int[view_width * view_height], view_width, view_height)
 [view_width, view_height]"""
@@ -174,17 +174,17 @@ total = 0
 for i in 1 to 400 { total += await go twice(i) }
 total"""
 MANY_TASKS_SHOWN = "160400"
-# card shader-brush: samples/shader_brush.warp colors the paper under the pointer (its $mouse), not only a corner
-BRUSH = "(samples/shader_brush colors the paper under the pointer)"
+# card shader-brush: samples/graphics/shader_brush.warp colors the paper under the pointer (its $mouse), not only a corner
+BRUSH = "(samples/graphics/shader_brush colors the paper under the pointer)"
 BRUSH_SAMPLE = "shader_brush"
 BRUSH_WAIT_MS = 8000  # the sample paints a frame every 16 ms; a software GPU takes far longer for its 1280×800
 BRUSH_POLL_MS = 250
 PAPER_FROM = 240  # a channel this light or lighter on all three: the sample's paper (0.98), no brush
-# card register-fingers: a finger dragged over samples/finger_paint's canvas paints a stroke (the iPad's Safari took the
+# card register-fingers: a finger dragged over samples/graphics/finger_paint's canvas paints a stroke (the iPad's Safari took the
 # touch over for scrolling). Then, only told, a drag over the canvas set back to the browser's touch handling, on a
 # part the first stroke didn't reach: whether this browser takes a touch over at all (else the check can't fail); it
 # goes last, as Chrome's swipe went back in the page's history, to another example
-FINGERS = "(a finger paints in samples/finger_paint)"
+FINGERS = "(a finger paints in samples/graphics/finger_paint)"
 FINGERS_SAMPLE = "finger_paint"
 FINGER_DRAG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "touch_drag.mjs")
 FINGERS_BROWSER_TOUCH = (0.1, 0.4)
