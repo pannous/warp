@@ -912,8 +912,8 @@ impl WasmGcEmitter {
 		if let Some((value, declared)) = declared_values::declared_field_value(node) {
 			return self.emit_declared_value(func, Some(declared), value, Kind::Empty);
 		}
-		if let Some(item) = crate::lowering::data_items::marked_item(node) {
-			return self.emit_data_item(func, item);
+		if let Some((item, place)) = crate::lowering::data_items::marked_item(node) {
+			return self.emit_data_item(func, item, place);
 		}
 		if let Some((name, fields)) = crate::type_constructor::instance_parts(node) {
 			let fields = self.with_declared_field_types(name, fields);
