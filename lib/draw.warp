@@ -9,7 +9,7 @@ global canvas_height = view_height
 // here then, show() sends the shapes drawn since the last one
 global drawing_on_gpu = gpu_drawing
 global canvas_pixels = int[pixels_for(view_width, view_height)]
-// paper: the canvas before anything is drawn, as paint shows 0 (src/graphics/paint.rs PAPER)
+// paper: the canvas before anything is drawn, as paint shows 0 (src/graphics/pixels.rs PAPER; test_paint_shades)
 paper = 0xFFFAFAFA
 black = 0xFF000000
 white = 0xFFFFFFFF

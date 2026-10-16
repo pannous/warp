@@ -14,8 +14,9 @@ pub const RECT: u32 = 1;
 pub const CIRCLE: u32 = 2;
 /// kind u32, color u32 (0xAARRGGBB), four f32 coordinates: rect x y width height, circle x y radius
 pub const SHAPE_BYTES: usize = 24;
-/// The canvas before anything is drawn (lib/draw.warp paper, paint.rs PAPER)
-const PAPER: wgpu::Color = wgpu::Color { r: 250.0 / 255.0, g: 250.0 / 255.0, b: 250.0 / 255.0, a: 1.0 };
+/// The canvas before anything is drawn: paint's paper (pixels.rs, lib/draw.warp paper)
+const PAPER_LEVEL: f64 = super::pixels::PAPER as f64 / 255.0;
+const PAPER: wgpu::Color = wgpu::Color { r: PAPER_LEVEL, g: PAPER_LEVEL, b: PAPER_LEVEL, a: 1.0 };
 /// Bytes, mixed as bytes: CPU's mixed() mixes 0–255 channels, not light
 const CANVAS_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const LABEL: &str = "draw canvas";

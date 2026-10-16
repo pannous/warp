@@ -28,6 +28,7 @@ mod test_paint_function_fallback; // card paint-function
 mod test_paint_in_window; // card paint-keeps
 mod test_paint_lists;
 mod test_paint_shader; // P234
+mod test_paint_shades; // card graphics-shade
 mod test_paint_window_ends; // card exit-key
 mod test_plain_hints_when_piped;
 mod test_playground_samples;
