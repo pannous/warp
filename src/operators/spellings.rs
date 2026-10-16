@@ -4,7 +4,7 @@ use super::*;
 /// Every spelling of an infix or prefix operator the parser reads: symbols, Unicode glyphs and words (wiki/alias.md,
 /// wiki/operator.md). The canonical spelling is Op::as_str, every other one an alias; the parser takes the longest
 /// spelling that fits (lookahead.rs peek_operator), the style hints name the canonical one (normalize.rs)
-pub const OPERATOR_SPELLINGS: [(&str, Op); 136] = [
+pub const OPERATOR_SPELLINGS: [(&str, Op); 138] = [
 	(":", Op::Colon),
 	(".", Op::Dot),
 	("?.", Op::SafeDot),
@@ -43,6 +43,9 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 136] = [
 	("//", Op::FloorDiv),
 	("div", Op::FloorDiv),
 	("//=", Op::FloorDivAssign),
+	// `7 /! 2`, `x /!= 2`: floor division that never reads as a comment (card floor-division, the user's spelling)
+	("/!", Op::FloorDiv),
+	("/!=", Op::FloorDivAssign),
 	("%", Op::Mod),
 	// `a mod b` is Euclidean (0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the dividend, as C)
 	("mod", Op::Mod), // rest overloaded

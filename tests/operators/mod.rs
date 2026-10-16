@@ -7,6 +7,7 @@ mod test_comma_next_to_comparison; // P227
 mod test_compound_assignment;
 mod test_contains_infix;
 mod test_equality_never_chains;
+mod test_floor_division_bang; // card floor-division
 mod test_floor_division_operator;
 mod test_floor_quotient;
 mod test_in_position;
