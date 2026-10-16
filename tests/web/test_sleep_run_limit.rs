@@ -1,4 +1,4 @@
-//! Card sleep-run-limit: the playground stops a run after RUN_TIMEOUT_MS of running, not of sleeping (samples/music.warp
+//! Card sleep-run-limit: the playground stops a run after RUN_TIMEOUT_MS of running, not of sleeping (samples/sound/music.warp
 //! plays in the background behind sleep(10s)); playground.js's timer functions under node with a fake clock
 use std::process::Command;
 

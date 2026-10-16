@@ -19,8 +19,15 @@ pub enum AliasPosition {
 #[derive(Clone, Debug)]
 pub struct OperatorAlias {
 	pub spelling: String,
+	/// the spelling it stands for: `contains` for `∋`, which In reads by its word
+	pub target: String,
 	pub op: Op,
 	pub position: AliasPosition,
+}
+
+/// The spelling a lib/math.warp alias stands for: `in` for `∈`
+pub fn alias_target(spelling: &str) -> Option<&'static str> {
+	math_aliases().iter().find(|alias| alias.spelling == spelling).map(|alias| alias.target.as_str())
 }
 
 /// The alias lines of lib/math.warp, read once
@@ -53,5 +60,5 @@ pub fn alias_line(statement: &str) -> Option<OperatorAlias> {
 			crate::warp_parser::PREFIX_OPERATOR_WORDS.into_iter().find(|(word, _)| word == target)?.1
 		}
 	};
-	Some(OperatorAlias { spelling: spelling.to_string(), op, position })
+	Some(OperatorAlias { spelling: spelling.to_string(), target: target.to_string(), op, position })
 }

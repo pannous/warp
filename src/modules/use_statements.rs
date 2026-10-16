@@ -94,7 +94,7 @@ pub(crate) fn is_builtin_library(name: &str) -> bool {
 /// The words of a statement, commas flattened: the parser groups `use list` before the comma of `use list, text`
 pub(crate) fn statement_words(node: &Node) -> Option<Vec<&Node>> {
 	match node.drop_meta() {
-		Node::List(items, _, Separator::Colon) => match items.split_first()?.0.drop_meta() {
+		Node::List(items, _, Separator::Comma) => match items.split_first()?.0.drop_meta() {
 			Node::List(head, _, _) => Some(head.iter().chain(&items[1..]).collect()),
 			_ => None,
 		},

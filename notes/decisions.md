@@ -404,6 +404,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   Python's isalpha and Java's isLetter); `characters` is an alias of `chars`.
 - parse-json (2026-10-15, user): quoted code's `.json` is the readable operator-as-key shape
   (`parse("a * (b + 1)").json` → {"*":["a",{"+":["b",1]}]}); what it can't express is a warning or error, never `{}`.
+- used-module-bare-words (2026-10-16, warp-shaders default, undoable; card json-parse-literal): after `use json`, a
+  bare `parse(t)` is json's parse (a map), not warp's code parse. General rule: a used module's own qualified words
+  (WARP_FORMS, today only json.parse) may also be called bare; a program's own definition wins, and without the `use`
+  the word keeps its warp meaning. The alternative was to keep the code parse and warn about the ambiguity.
 - json-exactness (2026-10-15 night, Interviewer's proposal, kept by the user 2026-10-16):
   following the user's "a warning, or even an error": big ints are written with all their digits as a JSON number
   (`(2^70).json` → 1180591620717411303424; JSON numbers have no size limit, only some readers do); a fraction is
@@ -778,6 +782,11 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   limit by default (about 1–5% overhead, stops at a slightly different step each run). Fuel, the exact step budget
   that cost 4.4× on calls (40M calls: 218 ms against 49 ms), runs only on request: `use fuel`, the CLI word
   `warp fuel N app.warp`, and tests that pin a step count.
+  Numbers (warp-types default, Interviewer's amendment, undoable): `warp app.warp` gets 60 s of CPU time (waits for
+  sleep or input don't count), set with WARP_TIME_LIMIT=<seconds>, and WARP_FUEL selects fuel. Compile-time folding
+  of constant calls gets 2 s. `warp build` executables get no limit by default, since a built app runs as long as it
+  likes. Windowed and event-loop programs aren't killed after 60 s in total. A stop after the limit says loudly what
+  happened and how to raise it.
 - ready-queue (2026-10-16, user via the boss and the supervisor): the board's Ready column is the merge queue. A
   worker runs its targeted tests, pushes the finished branch, makes sure it merges cleanly into origin/main, and
   hands it off with `todo ready <card> [branch]` (tip read from git); only the re-run after a clean update is dropped. `todo ready` refuses

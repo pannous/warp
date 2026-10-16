@@ -13,7 +13,11 @@ pub(crate) fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Opti
 		(_, Some((start, end))) if op == Op::Hash => call(SLICE_WORD, vec![lhs, start, end]),
 		// membership `x in xs` is kept as the list [x in xs]: `if "Z" in v {…}`, `found = x in xs`, `xs contains x`
 		_ if op == Op::In => {
-			let word = if written.ends_with(IN_WORD) { IN_WORD } else { written };
+			let word = match crate::operators::alias_target(written) {
+				_ if written.ends_with(IN_WORD) => IN_WORD,
+				Some(target) => target, // `∈`, `∋`
+				None => written,
+			};
 			Node::List(vec![lhs, Symbol(word.to_string()), rhs], Bracket::None, Separator::Space)
 		}
 		_ if op == Op::Pipe => piped(lhs, rhs),

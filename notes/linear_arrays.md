@@ -14,7 +14,7 @@ picking it automatically."
   assigned once, paired by `dot` or `.*` with another such float array, every other mention a cell read/write/add,
   `#xs`, `count(xs)`, `xs.count` or `for x in xs`, becomes `linear xs = float[n]`. dot of 10^6 then runs as
   linear_dotf (2–3 ms) instead of over GC lists (13 ms). Anything else (a reassignment, `print(xs)`, a call, an
-  append, a GC list partner) keeps both as GC lists. samples/dot.warp has no `linear` any more.
+  append, a GC list partner) keeps both as GC lists. samples/lists/dot.warp has no `linear` any more.
 - Mapped by a numeric kernel (card auto-linear-floats, 2026-10-12): `xs.map(x => body)` / `map(xs, x => body)` whose
   lambda gpu_maps::kernel translates (arithmetic, sqrt, sin, max …, captured numbers) counts like a dot pairing, so a
   plain `xs = float[n]` becomes linear and the map runs as the f64x2 kernel or one loop into a new block. A lambda

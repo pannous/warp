@@ -1,4 +1,4 @@
-// samples/manual_3d_object_viewer.warp's loader as written, on the model in OBJ_FILE: prints its triangle count
+// samples/gpu/manual_3d_object_viewer.warp's loader as written, on the model in OBJ_FILE: prints its triangle count
 use os
 def triangles(obj) {
 	points = []
