@@ -5,7 +5,7 @@
 //! definition. Not getters: `name := {…}` (a block or a list), `name := x => …` and `name := …it…` (functions), and a
 //! name applied to arguments later (`sum := fold +; sum [1 2 3]`, a function value).
 
-use super::nodes::{arguments_rewritten, call, children_rewritten, is_binding, key};
+use super::nodes::{any_part, arguments_rewritten, call, children_rewritten, is_binding, key};
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
@@ -104,9 +104,7 @@ fn is_active(active: &[Getter], name: &str) -> bool {
 }
 
 fn mentions_define(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::Key(_, Op::Define, _)));
-	found
+	any_part(node, |part| matches!(part, Node::Key(_, Op::Define, _)))
 }
 
 /// The names a lambda or a function definition binds itself: its parameters, the variables its body assigns and its loop

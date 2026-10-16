@@ -12,7 +12,7 @@
 //! its other parameters bound to fresh names, `body!` the argument's code, so names resolve where the call is written.
 //! Any `!` left (known only at run time) is mutation.rs's: a name unwraps, any other expression is a loud error.
 
-use super::nodes::{call, children_rewritten, is_block, key, word_headed};
+use super::nodes::{any_part, call, children_rewritten, is_block, key, word_headed};
 use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
 use crate::mutation::bang_target;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -985,9 +985,7 @@ pub fn lower_trailing_blocks(program: Node) -> Node {
 const YIELD_WORD: &str = "yield";
 
 pub(crate) fn contains_yield(body: &Node) -> bool {
-	let mut found = false;
-	body.visit(&mut |part| found |= part.is_symbol(YIELD_WORD));
-	found
+	any_part(body, |part| part.is_symbol(YIELD_WORD))
 }
 
 fn with_yield_parameters(node: Node) -> Node {

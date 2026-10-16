@@ -13,7 +13,7 @@
 //! sleep, the end of the run): the watched values are compared with those seen last, and the listener runs on a change.
 
 use super::listeners;
-use super::nodes::{block, call, children_rewritten, for_in_variable, if_then, key};
+use super::nodes::{any_part, block, call, children_rewritten, for_in_variable, if_then, key};
 use crate::declarations::word;
 use crate::lowering::{function_head, DefinitionForm};
 use crate::node::{symbol, Bracket, Node, Separator};
@@ -331,9 +331,7 @@ fn removal(statement: &Node) -> Option<(String, String)> {
 }
 
 fn contains_removal(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= removal(part).is_some());
-	found
+	any_part(node, |part| removal(part).is_some())
 }
 
 /// A removal inside a function or a block (`stop() := { remove b from listeners of t }`): the places it changes are

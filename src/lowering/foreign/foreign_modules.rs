@@ -4,7 +4,7 @@
 //! (an empty argument list is ø on the way, so whether it is a call is said apart).
 //! Values cross as JSON; the result is any Node.
 
-use super::nodes::{call, children_rewritten, key, round_call};
+use super::nodes::{any_part, call, children_rewritten, key, round_call};
 use crate::node::{symbol, text, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::FOR_WORD;
@@ -625,13 +625,10 @@ impl Foreign<'_> {
 
 	/// Does the node name a used foreign module or a variable holding a foreign value
 	fn mentions_foreign_name(&self, node: &Node) -> bool {
-		let mut found = false;
-		node.visit(&mut |part| {
-			if let Node::Symbol(name) = part {
-				found |= self.modules.contains_key(name) || self.values.contains_key(name);
-			}
-		});
-		found
+		any_part(
+			node,
+			|part| matches!(part, Node::Symbol(name) if self.modules.contains_key(name) || self.values.contains_key(name)),
+		)
 	}
 
 	/// The runtime and the module (its name as text) or the handle (the value itself) a receiver names

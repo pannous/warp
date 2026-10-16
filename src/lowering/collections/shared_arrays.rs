@@ -15,7 +15,7 @@
 //! Kept as built (user decision cleanup-cuts): `shared` for any atomic variable, not only Int and float arrays and
 //! one-cell values, is the general form for later.
 
-use super::nodes::{call, key};
+use super::nodes::{any_part, call, key};
 use crate::node::{symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{DOT_WORD, MAP_WORD, SUM_WORD};
@@ -839,10 +839,10 @@ fn mentions_any(node: &Node, names: &HashMap<String, Shared>) -> bool {
 
 /// Whether the program has a `s = sum(xs.map(f) @gpu)` that may run on the GPU, of any list of floats
 fn reduces_on_gpu(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part.drop_meta(), Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Symbol(_))
-		&& crate::gpu_maps::gpu_reduction(value).is_some_and(|(_, map)| gpu_kernel_map(&map).is_some())));
-	found
+	any_part(node, |part| {
+		matches!(part.drop_meta(), Node::Key(target, Op::Assign, value) if matches!(target.drop_meta(), Node::Symbol(_))
+		&& crate::gpu_maps::gpu_reduction(value).is_some_and(|(_, map)| gpu_kernel_map(&map).is_some()))
+	})
 }
 
 /// The program's numbers a kernel reads, as the list its host word takes

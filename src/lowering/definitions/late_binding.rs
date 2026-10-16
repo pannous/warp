@@ -12,7 +12,7 @@
 //! its captures as they are at each call the enclosing body makes (directly, through a sibling or passed as a value:
 //! wasm_emitter `refresh_enclosing_captures`); a variable inner writes lives in a cell (nonlocal_cells.rs).
 
-use super::nodes::children_rewritten;
+use super::nodes::{any_part, children_rewritten};
 use crate::analyzer::effects::EffectReport;
 use crate::analyzer::{captured_variables, collect_variables, declare_global, find_assignments, param_kind, Scope};
 use crate::compiler::context::{Context, UserFunctionDef};
@@ -174,9 +174,7 @@ fn is_nonlocal_declaration(node: &Node) -> bool {
 
 /// The program without its `nonlocal y` declarations: once its cells are made they have no code
 fn without_nonlocal_declarations(program: Node) -> Node {
-	let mut found = false;
-	program.visit(&mut |node| found |= is_nonlocal_declaration(node));
-	if !found {
+	if !any_part(&program, is_nonlocal_declaration) {
 		return program;
 	}
 	without_statements(program, &is_nonlocal_declaration)

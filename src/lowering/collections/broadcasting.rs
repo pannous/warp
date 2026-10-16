@@ -6,7 +6,9 @@
 //! A field read on a list of instances reads it of each: `people's name`, `people.name`, `name of people` are
 //! `people.map(p => p.name)` (card people-map).
 
-use super::nodes::{call, called_name, children_rewritten, is_colon_pair, key, parameter_name, word_headed, Counter};
+use super::nodes::{
+	any_part, call, called_name, children_rewritten, is_colon_pair, key, parameter_name, word_headed, Counter,
+};
 use crate::analyzer::{annotated_kind, list_element_type};
 use crate::function_values::{definitions, Definition};
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -699,24 +701,18 @@ fn scalar_library_words() -> impl Iterator<Item = &'static str> {
 
 /// `cos(x)`, `floor x`: name is the one argument of a scalar library word in body
 fn is_scalar_word_argument(body: &Node, name: &str) -> bool {
-	let mut found = false;
-	body.visit(&mut |node| {
-		if let Node::List(items, _, _) = node.drop_meta() {
-			found |= matches!(items.as_slice(), [word, argument] if argument.is_symbol(name) && scalar_library_words().any(|scalar| word.is_symbol(scalar)));
-		}
-	});
-	found
+	any_part(
+		body,
+		|node| matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(), [word, argument] if argument.is_symbol(name) && scalar_library_words().any(|scalar| word.is_symbol(scalar)))),
+	)
 }
 
 /// `x is number` (`is_type x "number"`): a function testing its parameter's kind takes every kind itself
 fn tests_kind_of(body: &Node, name: &str) -> bool {
-	let mut found = false;
-	body.visit(&mut |node| {
-		if let Node::List(items, _, _) = node.drop_meta() {
-			found |= matches!(items.as_slice(), [test, tested, _] if test.is_symbol(crate::words::IS_TYPE) && tested.is_symbol(name));
-		}
-	});
-	found
+	any_part(
+		body,
+		|node| matches!(node.drop_meta(), Node::List(items, _, _) if matches!(items.as_slice(), [test, tested, _] if test.is_symbol(crate::words::IS_TYPE) && tested.is_symbol(name))),
+	)
 }
 
 fn is_arithmetic_operand(body: &Node, name: &str) -> bool {

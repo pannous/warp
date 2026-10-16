@@ -11,7 +11,7 @@
 //! A component whose markup holds a style sheet names itself on its root element (`data-warp-scope: "Card"`), so the
 //! sheet styles only its own elements (html.rs, card web-scoped).
 
-use super::nodes::{call, if_then, key, named_assignment};
+use super::nodes::{any_part, call, if_then, key, named_assignment};
 use crate::element_events::{element_items, handler_at, has_element_handler, HANDLER_ATTRIBUTE_PREFIX};
 use crate::event_signals::{function_with_globals, hole_name, last_statement, text_hole_name};
 use crate::law::substitute;
@@ -295,9 +295,7 @@ fn lifecycle(statement: &Node) -> Option<(String, Node)> {
 }
 
 fn has_lifecycle(statement: &Node) -> bool {
-	let mut found = false;
-	statement.visit(&mut |part| found |= lifecycle(part).is_some());
-	found
+	any_part(statement, |part| lifecycle(part).is_some())
 }
 
 /// A component's head, its statements and its state: each variable its handlers mention, with its first value

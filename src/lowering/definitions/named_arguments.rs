@@ -4,7 +4,7 @@
 //! where it is called, as the body read it before. A parameter is never taken from a same-named variable: a missing
 //! argument stays an error.
 
-use super::nodes::{children_rewritten, key, parameter_word, Counter};
+use super::nodes::{any_part, children_rewritten, key, parameter_word, Counter};
 use crate::errors::diagnostic::Diagnostic;
 use crate::min_max::{is_plain, with_bindings};
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -330,12 +330,9 @@ fn call_of<'a>(node: &'a Node, functions: &HashMap<String, Function>) -> Option<
 }
 
 fn has_named_call(node: &Node, functions: &HashMap<String, Function>) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| {
-		found |=
-			call_of(part, functions).is_some_and(|(_, arguments)| arguments.iter().any(|a| named_argument(a).is_some()))
-	});
-	found
+	any_part(node, |part| {
+		call_of(part, functions).is_some_and(|(_, arguments)| arguments.iter().any(|a| named_argument(a).is_some()))
+	})
 }
 
 /// The bodies, by function name

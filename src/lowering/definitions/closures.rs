@@ -4,7 +4,7 @@
 //! becomes `closure_call_1(f, x)`, a helper per arity that call_refs the closure's entry (wasm_emitter/closures.rs).
 //! notes/closures.md describes the representation.
 
-use super::nodes::{call, children_rewritten, is_return, key, parameter_name, word_headed};
+use super::nodes::{any_part, call, children_rewritten, is_return, key, parameter_name, word_headed};
 use crate::compiler::context::{Context, Param, UserFunctionDef};
 use crate::errors::diagnostic::Diagnostic;
 use crate::lambdas::arrow_lambda;
@@ -472,9 +472,7 @@ fn with_capture_readers(node: Node, hoisted: &HashMap<String, (String, usize)>) 
 }
 
 fn calls_closure(node: &Node, variable: &str) -> bool {
-	let mut found = false;
-	node.visit(&mut |inner| found |= called_closure(inner) == Some(variable));
-	found
+	any_part(node, |inner| called_closure(inner) == Some(variable))
 }
 
 /// The last statement of a body: its value

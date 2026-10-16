@@ -5,7 +5,7 @@
 //! The values come from running the definitions and the calls as one small module, so they are exactly what the
 //! program computes; a call that fails or runs out of fuel stays a call.
 
-use super::nodes::{branches, call, children_rewritten, key, round_call, word_headed};
+use super::nodes::{any_part, branches, call, children_rewritten, key, round_call, word_headed};
 use crate::analyzer::effects::EffectReport;
 use crate::analyzer::{captured_variables, collect_variables, Scope, CHECKED_RESULT};
 use crate::extensions::numbers::Number;
@@ -114,9 +114,7 @@ fn is_plain_symbol(node: &Node) -> bool {
 
 /// A function or lambda defined inside the body: its parameters could shadow a main-level name
 fn contains_definition(body: &Node) -> bool {
-	let mut found = false;
-	body.visit(&mut |node| found |= matches!(node, Node::Key(_, Op::Define | Op::Arrow, _)));
-	found
+	any_part(body, |node| matches!(node, Node::Key(_, Op::Define | Op::Arrow, _)))
 }
 
 /// Is every use of `name` in `node` a read of its value: not a property (`m.k`), a key (`m#k`, `{k: 1}`), a target
@@ -557,7 +555,8 @@ fn is_expression(body: &Node) -> bool {
 
 /// Does `node` call the function `name`
 fn calls(node: &Node, name: &str) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= matches!(part, Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(called)) if called == name)));
-	found
+	any_part(
+		node,
+		|part| matches!(part, Node::List(items, Bracket::Round, _) if matches!(items.first().map(Node::drop_meta), Some(Node::Symbol(called)) if called == name)),
+	)
 }

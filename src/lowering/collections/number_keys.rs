@@ -9,7 +9,7 @@
 //! name it assigns or takes as a parameter is its own, and a map of main stays one where the function only reads it.
 
 use super::memoization::definition_parts;
-use super::nodes::{call, parameter_name};
+use super::nodes::{any_part, call, parameter_name};
 use crate::library_words::{COLLECTION_CONTAINS, COLLECTION_POSITION, MAP_GET_OR, MAP_WITHOUT};
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
@@ -51,9 +51,7 @@ fn map_assigned(part: &Node) -> Option<&str> {
 }
 
 fn has_map_variable(node: &Node) -> bool {
-	let mut found = false;
-	node.visit(&mut |part| found |= map_assigned(part).is_some());
-	found
+	any_part(node, |part| map_assigned(part).is_some())
 }
 
 /// The map variables of one scope, not those of the functions it defines

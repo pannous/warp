@@ -459,6 +459,13 @@ fn result_and_body(written_body: &Node) -> (Option<&Node>, &Node) {
 	}
 }
 
+/// Whether some part of the tree, as `Node::visit` walks it (class code, no metadata), is one `wanted` accepts
+pub(crate) fn any_part(node: &Node, wanted: impl Fn(&Node) -> bool) -> bool {
+	let mut found = false;
+	node.visit(&mut |part| found |= wanted(part));
+	found
+}
+
 /// `f a b` taken apart: the word heading the items and the items after it
 pub(crate) fn word_headed(items: &[Node]) -> Option<(&str, &[Node])> {
 	let (head, rest) = items.split_first()?;
