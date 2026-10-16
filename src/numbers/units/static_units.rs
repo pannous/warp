@@ -32,7 +32,7 @@ use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use std::collections::{HashMap, HashSet};
 pub(crate) use unit_fields::unit_type;
-pub(crate) use unit_fields::{lower_field_tolerances, lower_plain_field_numbers, si_quantity};
+pub(crate) use unit_fields::{lower_field_tolerances, remember_field_unit_words, si_quantity};
 
 const LOOP_WORDS: [&str; 2] = ["for", "while"];
 /// `speed·u0`: a function specialised for one unit signature of its arguments
@@ -1101,15 +1101,9 @@ impl Inference {
 			}
 			Node::Key(object, Op::Dot, field) if self.field_signature(object, field).is_some() => {
 				let held = self.field_signature(object, field).expect("guarded");
-				let (value, given) = self.infer(value)?;
-				if given != held {
-					return Err(Stop::Error(format!(
-						"DimensionError: {} holds {}, is given {}",
-						target.serialize().trim(),
-						shown(&held),
-						shown(&given)
-					)));
-				}
+				let class = self.instance_class(object).unwrap_or_default();
+				let key = format!("{class}.{}", field.drop_meta().name());
+				let value = self.field_value(target.serialize().trim(), &key, Some(&held), &value)?;
 				Ok((Node::Key(Box::new(target), op, Box::new(value)), held))
 			}
 			_ => self.plain_key(target, op, value),

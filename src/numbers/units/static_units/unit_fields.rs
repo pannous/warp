@@ -93,38 +93,41 @@ fn with_field_tolerances(node: Node, tolerances: &Tolerances) -> Node {
 	without_field_spreads(node)
 }
 
-/// `class Display{density: dpi}`: a plain number given to a unit field, `Display(96)`, is `96 dpi` with a warning whose
-/// fix writes the unit (decision unit-field-plain-number); before lower_unit_words expands `dpi`
-pub(crate) fn lower_plain_field_numbers(program: Node) -> Node {
-	let unit_fields: HashMap<String, Vec<(String, String)>> = crate::class_methods::class_fields(&program)
+/// `class Display{density: dpi}`: each unit field's unit word as written, kept for the program's messages and fixes
+/// (`Display.density holds dpi`), before lower_unit_words expands `dpi` to `px/inch`
+pub(crate) fn remember_field_unit_words(program: Node) -> Node {
+	let words = crate::class_methods::class_fields(&program)
 		.into_iter()
-		.filter(|(_, fields)| fields.iter().any(|(_, type_name)| is_unit_type(type_name)))
-		.collect();
-	if unit_fields.is_empty() {
-		return program;
-	}
-	let field_names = |class: &str| Some(unit_fields.get(class)?.iter().map(|(name, _)| name.clone()).collect());
-	let with_unit = |class: &str, field: &str, value: Node| {
-		let unit = unit_fields[class]
-			.iter()
-			.find(|(name, _)| name == field)
-			.map(|(_, unit)| unit.trim_end_matches(OPTIONAL_MARK));
-		match (unit.filter(|unit| is_unit_type(unit)), value.drop_meta()) {
-			(Some(unit), Node::Number(_)) => {
-				let number = value.serialize().trim().to_string();
-				let message = format!("{class}.{field} holds {unit}: write the unit, `{number} {unit}`");
-				let warning = crate::errors::diagnostic::Diagnostic::at(&value, message);
-				crate::errors::diagnostic::say(warning.offer(
-					"the field's unit",
-					number.clone(),
-					format!("{number} {unit}"),
-				));
-				crate::warp_parser::parse(&format!("{number} {unit}"))
-			}
-			_ => value,
-		}
+		.flat_map(|(class, fields)| fields.into_iter().map(move |(field, type_name)| (class.clone(), field, type_name)))
+		.filter(|(_, _, type_name)| is_unit_type(type_name))
+		.map(|(class, field, type_name)| {
+			(format!("{class}.{field}"), type_name.trim_end_matches(OPTIONAL_MARK).to_string())
+		});
+	let words = words.collect();
+	crate::compiler::compile_context::change(|context| context.field_unit_words = words);
+	program
+}
+
+/// The unit word a field `Display.density` was written with, `dpi`
+pub(super) fn field_unit_word(field: &str) -> Option<String> {
+	crate::compiler::compile_context::read(|context| context.field_unit_words.get(field).cloned())
+}
+
+/// `96` given to a field of `unit` (`dpi`): its amount in SI units, `96 · 5000/127`, with the warning offering `96 dpi`
+fn in_unit(field: &str, unit: &str, written: &Node, value: Node) -> Option<Node> {
+	let aliases = crate::numbers::units::unit_aliases();
+	let expression = aliases.iter().find(|(alias, _)| *alias == unit).map_or(unit, |(_, expression)| expression);
+	let one_unit = crate::numbers::units::unit_expression(&crate::warp_parser::parse(expression))?;
+	let per_unit = crate::numbers::units::scale(&one_unit, |factor| super::base_unit(factor.unit.dimension));
+	let text = written.serialize().trim().to_string();
+	let amount = match written.drop_meta() {
+		Node::Number(_) | Node::Symbol(_) => text.clone(),
+		_ => format!("({text})"),
 	};
-	with_field_values(program, &field_names, &with_unit)
+	let message = format!("{field} holds {unit}: write the unit, `{amount} {unit}`");
+	let warning = crate::errors::diagnostic::Diagnostic::at(written, message);
+	crate::errors::diagnostic::say(warning.offer("the field's unit", text, format!("{amount} {unit}")));
+	Some(Node::Key(Box::new(value), Op::Mul, Box::new(super::number_node(&per_unit)?)))
 }
 
 /// `km`, `km/h`, and before lower_unit_words a unit word `dpi` (a word for px/inch)
@@ -373,6 +376,32 @@ impl Inference {
 		}
 	}
 
+	/// The value written for a unit field (`Display.density`, shown as `field`): a quantity of its kind, or a plain
+	/// number taken in the field's written unit with a warning whose fix writes it (decision unit-field-plain-number);
+	/// anything else is a DimensionError naming the unit as written
+	pub(super) fn field_value(
+		&mut self,
+		field: &str,
+		key: &str,
+		held: Option<&Signature>,
+		written: &Node,
+	) -> Result<Node, Stop> {
+		let (value, given) = self.infer(written_quantity(written))?;
+		let Some(held) = held.filter(|held| **held != given && !value.is_empty_node()) else {
+			return Ok(value);
+		};
+		let unit = field_unit_word(key).unwrap_or_else(|| shown(held));
+		// `holds m/s (mph)`: the kind of quantity, and the unit as written where it differs
+		let holds = match unit == shown(held) {
+			true => unit.clone(),
+			false => format!("{} ({unit})", shown(held)),
+		};
+		match given.is_empty() && !given.is_list() {
+			true => in_unit(field, &unit, written, value).ok_or(Stop::Unsupported),
+			false => Err(Stop::Error(format!("DimensionError: {field} holds {holds}, is given {}", shown(&given)))),
+		}
+	}
+
 	/// `Run(5 km, "park")`: each argument has its field's signature (a plain number for a unit field is a DimensionError);
 	/// ø has no dimension, whether a field may hold nothing is its type's matter (`distance: km?`)
 	pub(super) fn constructed(&mut self, items: &[Node]) -> Option<Result<(Node, Signature), Stop>> {
@@ -396,22 +425,15 @@ impl Inference {
 				Some((_, value, field)) => (value.as_ref(), Some(field)),
 				None => (argument, fields.get(index)),
 			};
-			let (value, given) = match self.infer(written_quantity(written)) {
-				Ok(inferred) => inferred,
+			let key = format!("{class}.{}", field.map_or("", |(name, _)| name.as_str()));
+			let value = match self.field_value(&key, &key, field.map(|(_, held)| held), written) {
+				Ok(value) => value,
 				Err(stop) => return Some(Err(stop)),
 			};
-			let argument = match named {
+			lowered.push(match named {
 				Some((name, ..)) => Node::Key(name.clone(), Op::Colon, Box::new(value)),
 				None => value,
-			};
-			if let Some((field, held)) = field.filter(|(_, held)| *held != given) {
-				return Some(Err(Stop::Error(format!(
-					"DimensionError: {class}.{field} holds {}, is given {}",
-					shown(held),
-					shown(&given)
-				))));
-			}
-			lowered.push(argument);
+			});
 		}
 		Some(Ok((Node::List(lowered, Bracket::Round, crate::node::Separator::None), Signature::plain())))
 	}
@@ -449,19 +471,12 @@ impl Inference {
 				lowered.push(entry.clone());
 				continue;
 			};
-			let (value, given) = match self.infer(written_quantity(value)) {
-				Ok(inferred) => inferred,
+			let held = fields.iter().find(|(name, _)| *name == field.drop_meta().name()).map(|(_, held)| held);
+			let key = format!("{class}.{}", field.drop_meta().name());
+			let value = match self.field_value(&key, &key, held, value) {
+				Ok(value) => value,
 				Err(stop) => return Some(Err(stop)),
 			};
-			let held = fields.iter().find(|(name, _)| *name == field.drop_meta().name()).map(|(_, held)| held);
-			if let Some(held) = held.filter(|held| **held != given && !value.is_empty_node()) {
-				return Some(Err(Stop::Error(format!(
-					"DimensionError: {class}.{} holds {}, is given {}",
-					field.drop_meta().name(),
-					shown(held),
-					shown(&given)
-				))));
-			}
 			lowered.push(Node::Key(field.clone(), *op, Box::new(value)));
 		}
 		Some(Ok((

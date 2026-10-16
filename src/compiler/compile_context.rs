@@ -57,6 +57,9 @@ pub struct CompileContext {
 	/// the program's own unit lines (`unit furlong := 201.168 m`, units/definitions.rs), set before it is parsed and kept
 	/// until the next program, so its result reads back in them
 	pub program_unit_lines: String,
+	/// `Display.density` → `dpi`: each unit field's unit as written, before lower_unit_words expands its words, so
+	/// messages and fixes name it (unit_fields.rs)
+	pub(crate) field_unit_words: HashMap<String, String>,
 	/// the units of the last lowered program's final value, to convert its run-time amount back
 	pub(crate) result_units: Option<ResultUnits>,
 	/// the program's declared types: `pic{width:5}` constructs and `s:shape` declares, neither names an argument
@@ -100,6 +103,7 @@ impl Default for CompileContext {
 			module_returned_classes: HashMap::new(),
 			shadowed_units: HashSet::new(),
 			program_unit_lines: String::new(),
+			field_unit_words: HashMap::new(),
 			result_units: None,
 			declared_types: HashSet::new(),
 			bool_functions: HashSet::new(),
