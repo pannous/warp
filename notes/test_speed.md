@@ -81,7 +81,8 @@ binary alone: o0 50 s wall / 61 s CPU, o1 74 s / 268 s, o2 106 s / 355 s. rustc 
    module-using tests' compile; speeds up users' runs too. Expected: a large share of the remaining test time; needs a
    design for the context the lowering reads (program_std_modules, hidden words).
 7. **Queue: build outside the lock** (tests/queue.sh): every targeted run holds the machine lock through its build
-   (~50–150 s, lock samples in data/perf/queue_samples.log alternate building/running); `cargo test --no-run` before
+   (~50–150 s): of 354 ten-second samples of the lock holder 16:37–17:40 (probes/perf/queue_sampler.sh), 121 were
+   building, 227 running tests, 6 idle, i.e. **a third of the lock time is builds**; `cargo test --no-run` before
    taking the ticket (builds still serialize on the target lock) would let the queue run tests back to back. Not the
    gate's wall clock but every worker's wait (20 runs queued at 16:30, the oldest 50 min).
 8. **Queue robustness**: 16:10–16:37 the queue deadlocked: a ticket renamed by hand (1- → 0-, for priority) was first
