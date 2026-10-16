@@ -1369,6 +1369,8 @@ PASSED:
   ✓ functions::test_csharp_functions::a_typed_parameter_with_a_default
   ✓ functions::test_csharp_functions::an_expression_bodied_method
   ✓ functions::test_deep_recursion::the_warp_command_recurses_a_million_frames_deep
+  ✓ functions::test_def_block_without_parentheses::a_def_name_and_block_is_a_function
+  ✓ functions::test_def_block_without_parentheses::a_def_name_and_block_runs_its_statements
   ✓ functions::test_def_bool_result::every_definition_form_returns_a_comparison_as_bool
   ✓ functions::test_def_forms::a_comma_keeps_a_type_named_parameter
   ✓ functions::test_def_forms::a_def_function_calls_its_function_parameter
@@ -4569,6 +4571,7 @@ PASSED:
   ✓ types::test_hex_int::hex_acts_as_its_int
   ✓ types::test_hex_int::hex_shows_as_hex
   ✓ types::test_hex_int::print_shows_hex
+  ✓ types::test_hex_int::print_shows_radix_through_the_prelude
   ✓ types::test_hex_word::hex_literals_are_written_0x
   ✓ types::test_hex_word::hex_word_is_the_hex_call
   ✓ types::test_index_position::a_missing_position_is_out_of_range
@@ -6021,4 +6024,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6016 passed, 0 failed, 6016 total tested
+13 ignored, 6019 passed, 0 failed, 6019 total tested
