@@ -1,16 +1,24 @@
 #!/bin/bash
-# The one gate for running warp tests on this machine (notes/roles.md, "Enforcement"): every test run waits for one
-# machine-wide lock, so at most one test binary runs at a time; the others queue instead of overloading the Mac.
+# The one gate for running warp tests on this machine (notes/roles.md, "Enforcement"): every test run waits for one of
+# TARGETED_SLOTS machine-wide slot locks, so at most that many targeted runs go at once and a full ./test.sh runs alone
+# (it holds every slot); the others queue instead of overloading the Mac.
 #   tests/queue.sh [cargo test args]      e.g. tests/queue.sh -- test_traits      (cargo --offline test …)
 #   tests/queue.sh cargo browser-test x   any cargo command
 #   tests/queue.sh ./test.sh              a script (test.sh re-enters through here by itself)
-# A run that already holds the lock (WARP_TEST_LOCKED) runs directly, so nesting never deadlocks.
-# Waiters are served first come, first served by ticket files in $QUEUE; a full ./test.sh (the Integrator's run)
-# and targeted runs from the Integrator's integrate* worktrees get priority and take the next slot ahead of workers' runs. Tickets of dead processes are dropped.
+# A run that already holds a slot (WARP_TEST_LOCKED) runs directly, so nesting never deadlocks.
+# Waiters are served first come, first served by ticket files in $QUEUE: only the first in line takes a slot, so a full
+# run that waits for the slots to drain keeps every later run from starting. A full ./test.sh (the Integrator's run)
+# and targeted runs from the Integrator's integrate* worktrees get priority and go ahead of workers' runs. Tickets of
+# dead processes are dropped; a ticket leaves the queue once its run holds its slots.
+# Slot 1 is the lock file of the one-lock queue before slots: copies of that version still waiting take only it, and
+# their targeted tickets (no SLOT_TICKET_MARK) don't hold up the runs behind them. Install a new version of this file
+# by rename (git does, mv does), never by writing into it: bash reads a running script from the file as it goes.
 # Targeted runs are niced so the user's apps stay responsive and use at most TARGETED_TEST_THREADS threads
 # (RUST_TEST_THREADS); the full suite keeps normal priority, because its task-overlap tests measure wall clock.
 LOCK="${WARP_TEST_LOCK:-$HOME/.cargo/warp-tests.lock}"
 QUEUE="$LOCK.queue"
+TARGETED_SLOTS=3 # one slot left the 10-core Mac at load 7 with 37 runs queued (card test-queue-slots)
+SLOT_TICKET_MARK=slots # second line of a ticket written by this version
 POLL_SECONDS=2
 TARGETED_NICENESS=10
 TARGETED_TEST_THREADS=4
@@ -60,9 +68,9 @@ if [ "$1" = "cargo" ] || [ -x "$1" ]; then run=("$@"); else with_target_flags_fi
 
 # lockf is the Mac's (BSD) lock tool, Linux (cloud VMs) has flock; with neither there is no lock to take
 if command -v lockf >/dev/null; then
-	lock_is_free=(lockf -s -t 0 "$LOCK" true); hold_lock=(lockf -k "$LOCK")
+	lock_is_free() { lockf -s -t 0 "$1" true; }; hold_lock=(lockf -k)
 elif command -v flock >/dev/null; then
-	lock_is_free=(flock -n "$LOCK" true); hold_lock=(flock "$LOCK")
+	lock_is_free() { flock -n "$1" true; }; hold_lock=(flock)
 else
 	echo "test queue: neither lockf nor flock found, running WITHOUT the warp test lock" >&2
 	WARP_TEST_LOCKED=1 exec "${run[@]}"
@@ -70,8 +78,8 @@ fi
 mkdir -p "$(dirname "$LOCK")"
 
 case "${run[0]}" in
-	*test.sh) priority=0; niceness=0 ;;
-	*) priority=1; niceness=$TARGETED_NICENESS; export RUST_TEST_THREADS="${RUST_TEST_THREADS:-$TARGETED_TEST_THREADS}" ;;
+	*test.sh) priority=0; niceness=0; exclusive=1 ;;
+	*) priority=1; niceness=$TARGETED_NICENESS; exclusive=""; export RUST_TEST_THREADS="${RUST_TEST_THREADS:-$TARGETED_TEST_THREADS}" ;;
 esac
 # The Integrator's targeted re-runs of a batch's failures hold up main: they go ahead of the workers' runs too
 [[ "$PWD" == */warp.worktrees.noindex/integrate* ]] && priority=0
@@ -96,30 +104,66 @@ fi
 
 mkdir -p "$QUEUE"
 ticket="$QUEUE/$priority-$(date +%s)-$$"
-echo "$PWD ${run[*]}" > "$ticket"
+write_ticket() { printf '%s\n%s\n' "$PWD ${run[*]}" "$SLOT_TICKET_MARK" > "$ticket"; }
+write_ticket
 
+slot_lock() { [ "$1" -eq 1 ] && echo "$LOCK" || echo "$LOCK.$1"; }
 drop_stale_tickets() {
 	for t in "$QUEUE"/*; do
 		[ -e "$t" ] && ! kill -0 "${t##*-}" 2>/dev/null && rm -f "$t"
 	done
 }
-first_ticket() { ls "$QUEUE" | sort | head -1; }
 # Our ticket is found by our PID, whatever its name: a ticket renamed by hand (1- → 0- for priority) once kept its
 # waiting run from seeing itself first while it blocked all others with the lock free (2026-10-16, 25 min); a deleted
 # one is written again
 own_ticket() {
 	local name
 	name=$(ls "$QUEUE" | grep -E -- "-$$\$" | head -1)
-	[ -z "$name" ] && echo "$PWD ${run[*]}" > "$ticket" && name=${ticket##*/}
+	[ -z "$name" ] && write_ticket && name=${ticket##*/}
 	echo "$name"
+}
+# the tickets before ours that hold us up; a targeted run of an old copy (ticket without SLOT_TICKET_MARK) does not:
+# it only ever takes slot 1, the lock file, and keeps its ticket while it runs
+tickets_ahead() {
+	local own path name mark
+	own=$(own_ticket)
+	for path in "$QUEUE"/*; do
+		name=${path##*/} mark=""
+		[ "$name" = "$own" ] && return
+		[[ "$name" == 1-* ]] && { read -r _ && read -r mark; } 2>/dev/null < "$path"
+		[[ "$name" == 1-* ]] && [ "$mark" != "$SLOT_TICKET_MARK" ] && continue
+		echo "$name"
+	done
+}
+# the slots for our run when we are first in line: all of them for a full run, else a free one (slot 1 last, which old
+# copies' runs compete for); none free → fails
+pick_slots() {
+	local slot
+	slots=()
+	[ -z "$(tickets_ahead)" ] || return 1
+	for slot in $(seq 2 "$TARGETED_SLOTS") 1; do
+		if lock_is_free "$(slot_lock "$slot")"; then
+			slots+=("$(slot_lock "$slot")")
+			[ -z "$exclusive" ] && return 0
+		elif [ -n "$exclusive" ]; then
+			return 1
+		fi
+	done
+	[ ${#slots[@]} -gt 0 ]
+}
+slot_holders() {
+	local slot
+	for slot in $(seq 1 "$TARGETED_SLOTS"); do
+		lock_is_free "$(slot_lock "$slot")" || cat "$(slot_lock "$slot").owner" 2>/dev/null || echo "unknown holder"
+	done | paste -sd ';' - | sed 's/;/; /g'
 }
 
 drop_stale_tickets
-if [ "$(first_ticket)" != "$(own_ticket)" ] || ! "${lock_is_free[@]}"; then
-	echo "test queue: waiting for the warp test lock ($(cat "$LOCK.owner" 2>/dev/null || echo unknown holder)," \
-		"$(($(ls "$QUEUE" | sort | grep -n "^$(own_ticket)$" | cut -d: -f1) - 1)) ahead of us)" >&2
+if ! pick_slots; then
+	echo "test queue: waiting for a warp test slot (busy: $(slot_holders); $(tickets_ahead | wc -l | tr -d ' ') ahead" \
+		"of us)" >&2
+	while sleep $POLL_SECONDS; drop_stale_tickets; ! pick_slots; do :; done
 fi
-while drop_stale_tickets; [ "$(first_ticket)" != "$(own_ticket)" ]; do sleep $POLL_SECONDS; done
 
 descendants() {
 	local child
@@ -178,9 +222,12 @@ watch_run() {
 }
 watch_run $$ &
 
-# exec keeps our PID, so the ticket stays valid while we wait for the lock and run; it is removed when the run ends,
-# by PID like own_ticket finds it (the glob is expanded by the trap)
+# exec keeps our PID, so the ticket stays valid until the lockf of every slot holds; then the ticket goes, found by PID
+# like own_ticket finds it, so the runs behind us move up, and each slot's owner file names us
 export WARP_TEST_LOCKED=1
 export WARP_NO_WINDOW=1 # a painting program writes PNGs, never a window during tests (src/graphics/paint.rs)
-exec "${hold_lock[@]}" bash -c 'trap "rm -f $1" EXIT; echo "$PPID $PWD ${*:2}" > "$0.owner"; "${@:2}"' \
-	"$LOCK" "$QUEUE/*-$$" nice -n "$niceness" "${run[@]}"
+hold_slots=()
+for slot in "${slots[@]}"; do hold_slots+=("${hold_lock[@]}" "$slot"); done
+exec "${hold_slots[@]}" bash -c 'pid=$1 queue=$2 slots=$3; shift 3; rm -f "$queue"/*-"$pid"
+	for slot in $slots; do echo "$pid $PWD $*" > "$slot.owner"; done; exec "$@"' \
+	queue-run "$$" "$QUEUE" "${slots[*]}" nice -n "$niceness" "${run[@]}"
