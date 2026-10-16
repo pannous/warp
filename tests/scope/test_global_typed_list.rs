@@ -1,5 +1,5 @@
 // `global xs` in a function of a typed main-level list (`xs: [int]`, `stored users: [User]`): the function reads and
-// changes the list itself, as it does an untyped one (found writing samples/server.warp)
+// changes the list itself, as it does an untyped one (found writing samples/servers/server.warp)
 use crate::is;
 
 #[test]

@@ -283,9 +283,9 @@ impl Site {
 		let values = Node::List(
 			self.variables.iter().map(|name| Node::Symbol(name.clone())).collect(),
 			Bracket::Square,
-			Separator::Colon,
+			Separator::Comma,
 		);
-		let definitions = as_data(Node::List(self.definitions.clone(), Bracket::Square, Separator::Colon));
+		let definitions = as_data(Node::List(self.definitions.clone(), Bracket::Square, Separator::Comma));
 		call(crate::host::RUN_BLOCK, vec![block, names, values, definitions])
 	}
 
