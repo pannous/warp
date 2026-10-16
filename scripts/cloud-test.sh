@@ -1,12 +1,13 @@
 #!/bin/bash
 # The cloud test lane (card cloud-test-lane, notes/cloud_development.md "Cloud test lane"): a branch's tests run in a
 # `claude --cloud` session, a Linux VM of its own paid by the Cloud session credit, instead of the Mac's tests/queue.sh.
-#   scripts/cloud-test.sh [--card <card>] [--no-wait] [--on-main] <branch> <tip> [filters…|--full]
+#   scripts/cloud-test.sh [--card <card>] [--no-wait] [--on-main|--on <base>] <branch> <tip> [filters…|--full]
 #       filters as for tests/queue.sh (`-- x y` or plain `x y`; `--test tests -- x` passes target flags to cargo);
 #       --full: the whole suite as test.sh runs it (--all-features, warp-lang at opt-level 2)
 #       waits for the result (run it in the background), prints it, keeps it in data/cloud/<run>/ and, with --card,
 #       adds it to the card (`todo note`); --no-wait only launches: fetch later with --result;
-#       --on-main tests the tip merged into the current origin/main, as the Integrator's gate will
+#       --on-main tests the tip merged into the current origin/main, as the Integrator's gate will (--on <base>: into
+#       origin/<base>, e.g. a batch branch)
 #   scripts/cloud-test.sh --result [--card <card>] <branch> <tip>     wait for and collect a launched run's result
 #   scripts/cloud-test.sh --summarize <cargo test log> [environmental list]    the result's summary of any log
 # The cloud session runs this same script from origin/main (the tip may predate it) with --run-here, which checks out
@@ -20,7 +21,8 @@ REPO=pannous/warp
 MAIN_CHECKOUT=/Users/me/dev/angles/warp
 RESULTS_PREFIX=cloud-results
 ENVIRONMENTAL_LIST=scripts/cloud-test-environmental.txt
-MAX_PARALLEL_RUNS=3            # cloud sessions at once (they share the account's limits, notes/cloud_development.md)
+CARGO_FLAGS_WITH_VALUE='--test|--features|-F|-p|--package|--bin|--example|--bench|-j|--jobs|--target'   # `--test tests`: the next word is the flag's, not a filter
+MAX_PARALLEL_RUNS=3           # cloud sessions at once (they share the account's limits, notes/cloud_development.md)
 PENDING_HOURS=3                # a launch older than this without a result no longer counts as running
 POLL_SECONDS=60                # GitHub API quota is shared by every session: ls-remote once a minute
 WAIT_HOURS=4
@@ -29,6 +31,7 @@ HERE_WAIT_SECONDS=540          # one --run-here call blocks at most this long, u
 HERE_WORK=${TMPDIR:-/tmp}/cloud-test
 FULL_FLAGS=(--all-features --config "profile.test.package.warp-lang.opt-level=2")
 USAGE_SCRIPT=$HOME/dev/bin/claude-usage.sh
+RUST_TARGETS="wasm32-wasip1 wasm32-wasip2 wasm32-unknown-unknown" # package and crate-wrapper builds in the tests
 
 fail() { echo "cloud-test: $*" >&2; exit 1; }
 run_name() { echo "$(printf %s "$1" | tr -c 'A-Za-z0-9._-' '-')-${2:0:8}"; }
@@ -38,14 +41,14 @@ credit_used() { "$USAGE_SCRIPT" 2>/dev/null | sed -n 's/^iguana_necktie: \$\([0-
 
 # The run itself, detached from the session's Bash tool: checkout, build, test, summarize, push
 run_tests_here() {
-	local on_main=""
-	[ "$1" = "--on-main" ] && on_main=1 && shift
+	local base=""
+	[ "$1" = "--on" ] && base=$2 && shift 2
 	local branch=$1 tip=$2; shift 2
 	local name started build_seconds test_seconds checkout lock_matches=""
 	name=$(run_name "$branch" "$tip")
 	started=$SECONDS
 	local branch_ref
-	for branch_ref in "$branch" main vendor; do
+	for branch_ref in "$branch" main vendor $base; do
 		git fetch -q origin "+refs/heads/$branch_ref:refs/remotes/origin/$branch_ref" 2>&1 | tail -3
 	done
 	git cat-file -e "$tip^{commit}" 2>/dev/null || git fetch -q origin "$tip" || fail "tip $tip not found on origin"
@@ -54,25 +57,29 @@ run_tests_here() {
 	git show "origin/main:$ENVIRONMENTAL_LIST" > "$HERE_WORK/environmental.txt" 2>/dev/null
 	cd "$checkout" || fail "no checkout"
 	local tested=$tip
-	if [ -n "$on_main" ]; then
-		git -c user.name=pannous -c user.email=info@pannous.com merge -q --no-edit origin/main || fail "$tip does not merge cleanly into origin/main"
-		tested="$tip merged into origin/main $(git rev-parse origin/main)"
+	if [ -n "$base" ]; then
+		git -c user.name=pannous -c user.email=info@pannous.com merge -q --no-edit "origin/$base" || fail "$tip does not merge cleanly into origin/$base"
+		tested="$tip merged into origin/$base $(git rev-parse "origin/$base")"
 	fi
-	rustup target add wasm32-wasip1 >/dev/null 2>&1 # the package/uniscript tests build wasm32-wasip1 guests
+	rustup target add $RUST_TARGETS >/dev/null 2>&1
 	local source_flags=(--config net.offline=false)
 	if git diff --quiet origin/vendor HEAD -- Cargo.lock 2>/dev/null; then
 		lock_matches=1
 		git archive origin/vendor vendor | tar -x
 		source_flags=(--offline --config 'source.crates-io.replace-with="vendored-sources"' --config 'source.vendored-sources.directory="vendor"')
 	fi
-	local test_args=() filters=() past_separator=""
+	local test_args=() filters=() past_separator="" flag_value_next=""
 	if [ "${1:-}" = "--full" ]; then
 		test_args=("${FULL_FLAGS[@]}")
 	else
 		for argument in "$@"; do
 			if [ "$argument" = "--" ]; then past_separator=1
+			elif [ -z "$past_separator" ] && [ -n "$flag_value_next" ]; then test_args+=("$argument"); flag_value_next=""
 			elif [ -n "$past_separator" ] || [[ "$argument" != -* ]]; then filters+=("$argument")
-			else test_args+=("$argument"); fi
+			else
+				test_args+=("$argument")
+				[[ "$argument" =~ ^($CARGO_FLAGS_WITH_VALUE)$ ]] && flag_value_next=1
+			fi
 		done
 	fi
 	export WARP_NO_WINDOW=1 WARP_CRASH_CARDS=0 CARGO_TERM_COLOR=never
@@ -155,7 +162,7 @@ run_here() {
 		cat "$HERE_WORK/result.md" "$HERE_WORK/runner.log"
 		echo "CLOUD TEST DONE"
 	else
-		echo "still running: $(grep -c '^test .* \.\.\. ' "$HERE_WORK/log.txt" 2>/dev/null || echo 0) tests reported so far;" \
+		echo "still running: $(grep -c '^test .* \.\.\. ' "$HERE_WORK/log.txt" 2>/dev/null) tests reported so far;" \
 			"last line: $(tail -1 "$HERE_WORK/log.txt" 2>/dev/null | cut -c1-160)"
 		echo "CLOUD TEST RUNNING: call the same command again"
 	fi
@@ -200,7 +207,7 @@ launch() {
 		echo "cloud-test: $MAX_PARALLEL_RUNS cloud runs pending, waiting for one to finish" >&2; sleep $POLL_SECONDS
 	done
 	mkdir -p "$folder"
-	cloud_prompt "$(printf '%q ' ${on_main[@]+"${on_main[@]}"} "$branch" "$tip" "$@")" > "$folder/prompt.txt"
+	cloud_prompt "$(printf '%q ' ${base[@]+"${base[@]}"} "$branch" "$tip" "$@")" > "$folder/prompt.txt"
 	command=(claude)
 	[ -n "${CLOUD_TEST_MODEL:-}" ] && command+=(--model "$CLOUD_TEST_MODEL")
 	[ "${CLOUD_TEST_FAST:-0}" = 1 ] && command+=(--settings '{"fastMode": true}')
@@ -261,13 +268,14 @@ main() {
 		--run-detached) shift; run_tests_here "$@"; touch "$HERE_WORK/done"; exit ;;
 		--summarize) summarize "$2" "${3:-$ENVIRONMENTAL_LIST}"; exit ;;
 	esac
-	card="" wait=1 result_only="" on_main=()
+	card="" wait=1 result_only="" base=()
 	while [[ "${1:-}" == --* ]]; do
 		case "$1" in
 			--card) card=$2; shift 2 ;;
 			--no-wait) wait=""; shift ;;
 			--result) result_only=1; shift ;;
-			--on-main) on_main=(--on-main); shift ;;
+			--on-main) base=(--on main); shift ;;
+			--on) base=(--on "$2"); shift 2 ;;
 			*) break ;;
 		esac
 	done
