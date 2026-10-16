@@ -281,7 +281,7 @@ fn chosen_call(
 }
 
 /// `floor(x)`; a builtin method of a type that is no library function is called on its receiver, `t.add(n)`
-fn library_call(name: &str, mut arguments: Vec<Node>) -> Node {
+pub(crate) fn library_call(name: &str, mut arguments: Vec<Node>) -> Node {
 	match typed_first_parameters(name).is_some() || crate::library_words::is_library_word(name) {
 		true => call(name, arguments),
 		false => {
