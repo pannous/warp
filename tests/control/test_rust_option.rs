@@ -52,3 +52,9 @@ fn option_type_is_optional() {
 fn loop_runs_until_break() {
 	is!("let mut i = 0; loop { i += 1; if i == 3 { break; } } i", 3);
 }
+
+#[test]
+fn a_programs_own_option_method_keeps_its_meaning() {
+	is!("expect(x, y) := x + y; o = 3; o.expect(5)", 8);
+	is!("unwrap_or(x, y) := x * y; o = Some(3); o.unwrap_or(5)", 15);
+}

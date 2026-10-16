@@ -7,6 +7,7 @@ use super::nodes::{call, key};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{LET_WORD, MATCH_WORD, RAISE_WORD};
+use std::collections::HashSet;
 
 const SOME_WORD: &str = "Some";
 const WILDCARD: &str = "_";
@@ -16,29 +17,30 @@ const IS_SOME: &str = "is_some";
 const IS_NONE: &str = "is_none";
 
 pub fn lower(program: Node) -> Node {
-	// a program's own Some keeps its meaning
-	if !mentions_option(&program) || crate::library_words::defined_names(&program).contains(SOME_WORD) {
+	// a program's own Some keeps its meaning, its own expect or unwrap_or theirs
+	let defined = crate::library_words::defined_names(&program);
+	if !mentions_option(&program, &defined) || defined.contains(SOME_WORD) {
 		return program;
 	}
-	rewritten(program)
+	rewritten(program, &defined)
 }
 
-fn mentions_option(node: &Node) -> bool {
+fn mentions_option(node: &Node, defined: &HashSet<String>) -> bool {
 	let mut found = false;
 	node.visit(&mut |node| {
 		found |= some_value(node).is_some()
-			|| matches!(node, Node::Key(_, Op::Dot, method) if option_method(method).is_some())
+			|| matches!(node, Node::Key(_, Op::Dot, method) if option_method(method, defined).is_some())
 	});
 	found
 }
 
-fn rewritten(node: Node) -> Node {
+fn rewritten(node: Node, defined: &HashSet<String>) -> Node {
 	if let Some(lowered) = if_let_some(&node).or_else(|| option_match(&node)) {
-		return rewritten(lowered);
+		return rewritten(lowered, defined);
 	}
-	let node = node.map_children(rewritten);
+	let node = node.map_children(|child| rewritten(child, defined));
 	match node.drop_meta() {
-		Node::Key(receiver, Op::Dot, method) => match option_method(method) {
+		Node::Key(receiver, Op::Dot, method) => match option_method(method, defined) {
 			Some((IS_SOME, _)) => key(receiver.as_ref().clone(), Op::Ne, Node::Empty),
 			Some((IS_NONE, _)) => key(receiver.as_ref().clone(), Op::Eq, Node::Empty),
 			Some((UNWRAP_OR, Some(fallback))) => key(receiver.as_ref().clone(), Op::Coalesce, fallback),
@@ -61,8 +63,8 @@ fn some_value(node: &Node) -> Option<Node> {
 	}
 }
 
-/// `o.unwrap_or(d)`, `o.is_some()`: the method's name and its one argument
-fn option_method(method: &Node) -> Option<(&'static str, Option<Node>)> {
+/// `o.unwrap_or(d)`, `o.is_some()`: the method's name and its one argument, unless the program defines that word
+fn option_method(method: &Node, defined: &HashSet<String>) -> Option<(&'static str, Option<Node>)> {
 	let Node::List(items, Bracket::Round, _) = method.drop_meta() else {
 		return None;
 	};
@@ -70,7 +72,7 @@ fn option_method(method: &Node) -> Option<(&'static str, Option<Node>)> {
 	let argument = items.get(1).cloned();
 	[(UNWRAP_OR, 2), (EXPECT, 2), (IS_SOME, 1), (IS_NONE, 1)]
 		.into_iter()
-		.find(|(word, arity)| *word == name && items.len() == *arity)
+		.find(|(word, arity)| *word == name && items.len() == *arity && !defined.contains(*word))
 		.map(|(word, _)| (word, argument))
 }
 
