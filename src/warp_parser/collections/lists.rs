@@ -231,7 +231,7 @@ impl WarpParser {
 				// Dedent - push item and exit this level
 				items_with_seps.push((item, Separator::None));
 				break;
-			} else if bracket == Bracket::Curly {
+			} else if matches!(bracket, Bracket::Curly | Bracket::Round) {
 				field_holding_lambda(item)
 			} else {
 				item
