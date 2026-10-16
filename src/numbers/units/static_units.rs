@@ -1302,8 +1302,7 @@ impl Inference {
 						"DimensionError: {list} holds {}, is given {}",
 						shown(&element),
 						shown(&given)
-					shown(&given),
-					self.unit_after_variable_hint(&value, entries.get(index + 1))
+					)));
 				}
 				let call =
 					Node::List(vec![Node::Symbol(method.to_string()), argument], Bracket::Round, Separator::None);
