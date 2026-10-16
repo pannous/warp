@@ -13,7 +13,7 @@ use crate::operators::Op;
 use crate::words::GENERIC_MARK;
 use crate::words::IS_WORD;
 use crate::words::LET_WORD;
-use crate::words::{ON_WORD, WHENEVER_WORD};
+use crate::words::{EVENT_ALIASES, ONCE_WORD, ON_WORD, WHENEVER_WORD};
 use std::collections::HashSet;
 
 use crate::words::{MATCH_WORD, SWITCH_WORDS};
@@ -182,7 +182,7 @@ fn forms(node: Node) -> Node {
 			if let Some(chain) = when_chain(&items) {
 				return chain;
 			}
-			if let Some(listener) = when_listener(&items) {
+			if let Some(listener) = when_listener(&items).or_else(|| aliased_event(&items)) {
 				return Node::List(listener, bracket, separator);
 			}
 			let endless = match items.as_slice() {
@@ -469,6 +469,19 @@ fn when_listener(items: &[Node]) -> Option<Vec<Node>> {
 	let listener = if matches!(subject.drop_meta(), Node::Symbol(_)) { ON_WORD } else { WHENEVER_WORD };
 	when_meant(word, listener);
 	Some(vec![symbol(listener), subject.clone(), body.clone()])
+}
+
+/// `on keydown {…}`, `once keypress {…}`: the listener of the warp event, with the alias note
+fn aliased_event(items: &[Node]) -> Option<Vec<Node>> {
+	let [listener, event, rest @ ..] = items else { return None };
+	if !listener.is_symbol(ON_WORD) && !listener.is_symbol(ONCE_WORD) {
+		return None;
+	}
+	let Node::Symbol(name) = event.drop_meta() else { return None };
+	let (alias, meant) = EVENT_ALIASES.iter().find(|(alias, _)| alias == name)?;
+	crate::normalize::set_position_of(event);
+	crate::errors::diagnostic::note_alias(alias, meant);
+	Some([vec![listener.clone(), symbol(meant)], rest.to_vec()].concat())
 }
 
 /// The one warning of every `when`, its fix the word this shape means

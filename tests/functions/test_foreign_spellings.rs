@@ -52,3 +52,11 @@ fn r_and_php_words_come_with_their_use() {
 	let error = warp::wasm_emitter::eval("sapply([1, 2], x => x)").serialize();
 	assert!(error.contains("use R"), "{error}");
 }
+
+#[test]
+fn key_event_aliases_listen_to_key() {
+	is!("count = 0; on keydown { count += 1 }; emit key; count", 1);
+	is!("count = 0; on key_down { count += 1 }; emit key; emit key; count", 2);
+	is!("count = 0; once keypress { count += 1 }; emit key; emit key; count", 1);
+	assert!(notes_of("on keydown { print key }; 1").contains(&"keydown → key".to_string()));
+}
