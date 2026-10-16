@@ -261,7 +261,11 @@ const SI_WORD: &str = "SI";
 const PREFIX_LINE_WORD: &str = "prefix";
 const NAME_LINE_WORD: &str = "name";
 const POWER_OF_TEN: &str = "10^";
+const QUANTITY_LINE_WORD: &str = "quantity";
+/// `dimension`, the old word of a quantity line: a quantity, a tensor's axis, its rank or its shape (decision
+/// quantity-naming)
 const DIMENSION_WORD: &str = "dimension";
+const DIMENSION_AMBIGUOUS: &str = "dimension: quantity, axis, rank or shape? a unit line names a kind of quantity";
 const UNIT_LINE_WORDS: [(&str, &str); 3] = [
 	("unit", "the right side is no amount of a known unit (`unit furlong := 201.168 m`)"),
 	(
@@ -295,9 +299,14 @@ pub fn without_unit_lines(program: Node) -> Result<Node, Node> {
 		_ => None,
 	};
 	let statements = statements_of(program.clone());
-	if let Some(line) = statements.iter().find(|statement| is_dimension_line(statement)) {
+	if let Some((line, word)) =
+		statements.iter().find_map(|statement| Some((statement, quantity_line_word(statement)?)))
+	{
+		if word == DIMENSION_WORD {
+			crate::normalize::hint(DIMENSION_WORD, QUANTITY_LINE_WORD, DIMENSION_AMBIGUOUS);
+		}
 		return Err(error(&format!(
-			"{}: dimensions are lib/units.warp's, a program defines units, prefixes and names",
+			"{}: quantities (dimensions) are lib/units.warp's, a program defines units, prefixes and names",
 			line.serialize().trim()
 		)));
 	}
@@ -326,13 +335,16 @@ fn reads_as_unit_line(line_word: &str, right: &Node) -> bool {
 	}
 }
 
-/// `SI dimension length meter`: a line only lib/units.warp writes
-fn is_dimension_line(statement: &Node) -> bool {
+/// `SI quantity length meter` (or the old `SI dimension …`): a line only lib/units.warp writes; its second word
+fn quantity_line_word(statement: &Node) -> Option<&str> {
 	let Node::List(items, Bracket::None, Separator::Space) = statement.drop_meta() else {
-		return false;
+		return None;
 	};
-	let words: Vec<Option<&str>> = items.iter().take(2).map(|item| item.drop_meta().symbol_name()).collect();
-	words == [Some(SI_WORD), Some(DIMENSION_WORD)]
+	let mut words = items.iter().take(2).map(|item| item.drop_meta().symbol_name());
+	match (words.next()??, words.next()??) {
+		(SI_WORD, word @ (QUANTITY_LINE_WORD | DIMENSION_WORD)) => Some(word),
+		_ => None,
+	}
 }
 
 /// `x as quantity`, and `x as unit` with a got-it note: the run-time quantity(x) (card unit-possible)
