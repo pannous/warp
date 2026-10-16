@@ -216,6 +216,7 @@ pub(crate) fn is_version_list(node: &Node) -> bool {
 	matches!(node.drop_meta(), Node::List(items, _, _) if items.first().is_some_and(is_version_keyword))
 }
 
+/// A path or a repository as written: a text, a word, or `folder/name`, `owner/repo.js` without quotes
 pub(crate) fn path_of(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Symbol(name) | Node::Text(name) => Some(name.clone()),

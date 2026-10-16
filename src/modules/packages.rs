@@ -61,7 +61,7 @@ fn registry_entry(name: &str, value: &Node) -> Result<Registered, String> {
 		Node::List(_, Bracket::Curly, _) => (&value["repository"], &value["version"]),
 		_ => (value, &Node::Empty),
 	};
-	let url = repository_url(&spelled(repository).ok_or(format!(
+	let url = repository_url(&path_of(repository).ok_or(format!(
 		"package {name}: no repository in {}: quote it, \"owner/repository\"",
 		repository.serialize().trim()
 	))?);
@@ -83,15 +83,6 @@ fn registry_entry(name: &str, value: &Node) -> Result<Registered, String> {
 	Ok(Registered { url, pinned, library })
 }
 
-/// A repository as written: a text, a word, or `owner/repo` and `owner/repo.js` without quotes
-fn spelled(node: &Node) -> Option<String> {
-	match node.drop_meta() {
-		Node::Text(text) | Node::Symbol(text) => Some(text.clone()),
-		Node::Key(owner, Op::Div, repository) => Some(format!("{}/{}", spelled(owner)?, spelled(repository)?)),
-		Node::Key(name, Op::Dot, suffix) => Some(format!("{}.{}", spelled(name)?, spelled(suffix)?)),
-		_ => None,
-	}
-}
 
 /// The git url of a written repository: a url, ssh address or path stays; `github:owner/repo`, `owner/repo` and a
 /// bare `repo` (of DEFAULT_PACKAGE_OWNER) are GitHub repositories

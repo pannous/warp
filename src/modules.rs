@@ -117,11 +117,6 @@ fn used_and_implicit_modules(program: &Node) -> Vec<String> {
 	names
 }
 
-/// The loader of the modules the program uses: the search folders, then the program file's own folder
-fn program_loader() -> Loader<'static> {
-	Loader::new(&SEARCH_DIRECTORIES, program_file().as_deref().map(folder_of))
-}
-
 /// The WebAssembly module a used name finds, when no warp source of that name exists
 fn wasm_module_path(loader: &Loader, name: &str) -> Option<std::path::PathBuf> {
 	loader
