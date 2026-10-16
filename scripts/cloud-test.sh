@@ -16,7 +16,7 @@
 # the checkout and cargo's build output and the next build is incremental instead of cold.
 # Failures of tests that need the Mac (scripts/cloud-test-environmental.txt) are listed apart and don't make it red.
 # CLOUD_TEST_FAST=1: fast mode (Opus with faster output, burns the credit ~2x faster; off by default).
-# CLOUD_TEST_MODEL=<model>: the session's model (default: the cloud environment's). Both apply to sessions the pool
+# CLOUD_TEST_MODEL=<model>: the session's model (default haiku: it only repeats one command). Both apply to sessions the pool
 # starts, not to the ones it reuses.
 set -uo pipefail
 
@@ -256,7 +256,7 @@ claim_session() {
 start_session() {
 	local job=$1 folder=$2 tmux_name command waited=0 url=""
 	command=(claude)
-	[ -n "${CLOUD_TEST_MODEL:-}" ] && command+=(--model "$CLOUD_TEST_MODEL")
+	command+=(--model "${CLOUD_TEST_MODEL:-haiku}")
 	[ "${CLOUD_TEST_FAST:-0}" = 1 ] && command+=(--settings '{"fastMode": true}')
 	command+=(--cloud "$(cat "$folder/prompt.txt")")
 	tmux_name=cloud-test-$(printf %s "$job" | tr -c 'A-Za-z0-9-' '-' | cut -c1-40)
@@ -303,7 +303,7 @@ launch() {
 		echo "tests: ${*:-all}"
 		echo "job: $job"
 		echo "session: $url"
-		echo "fast: ${CLOUD_TEST_FAST:-0}, model: ${CLOUD_TEST_MODEL:-environment default}"
+		echo "fast: ${CLOUD_TEST_FAST:-0}, model: ${CLOUD_TEST_MODEL:-haiku}"
 		echo "launched: $(date -u +%FT%TZ)"
 		echo "credit used before: \$$(credit_used)"
 	} > "$folder/launch.txt"
