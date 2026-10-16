@@ -30,15 +30,11 @@ const DEFINE: &str = ":=";
 const ONE: &str = "1 ";
 /// `(it + 273.15) K`: a unit counting from another zero shifts its amount `it` first
 const SHIFT_START: &str = "(it +";
-/// `unit °R := it * 5/9 K`: a unit of the same zero, its amount `it` scaled
-const IT_TIMES: &str = "it *";
 /// `it`, the amount in the unit a unit line defines; `unit °C as K := it + 273.15` shifts it
 const IT: &str = "it";
 const IT_PLUS: &str = "it +";
-/// `length as pixels := it * display.dpi`: a bridge between two dimensions
-const BRIDGE_WORD: &str = " as ";
-/// `display.dpi := 96 dpi`: a setting, a property of a platform object
-const SETTING_DOT: char = '.';
+/// `unit °C as K := …`: the unit the right side counts in
+const TARGET_WORD: &str = " as ";
 const TIMES: char = '*';
 const STATEMENT_END: char = ';';
 const DIVIDE: &str = "/";
@@ -69,28 +65,9 @@ pub(super) struct Definitions {
 	/// The base unit of each dimension, by name: the unit a quantity's amount counts in at run time
 	pub(super) base_units: Vec<(Dimension, &'static str)>,
 	pub(super) aliases: Vec<(&'static str, &'static str)>,
-	pub(super) bridges: Vec<Bridge<'static>>,
-	pub(super) settings: Vec<Setting<'static>>,
 	/// `name hour := h`: long name → unit symbol
 	pub(super) long_names: Vec<(&'static str, &'static str)>,
 	pub(super) prefixes: Vec<(&'static str, i32)>,
-}
-
-/// `length as pixels := it * display.dpi`: an amount of `from` is `factor` times as much of `to`, the factor read at
-/// each conversion (decision dimension-bridges); the way back divides by it
-#[derive(Clone)]
-pub(super) struct Bridge<'a> {
-	pub(super) from: Dimension,
-	pub(super) to: Dimension,
-	pub(super) factor: &'a str,
-}
-
-/// `display.dpi := 96 dpi`: a value of the platform a program may set and the unit it counts in; the default is the
-/// host's (warp-runtime system_values.rs DEFAULT_DPI, where the screen tells none)
-#[derive(Clone)]
-pub(super) struct Setting<'a> {
-	pub(super) name: &'a str,
-	pub(super) unit: &'a str,
 }
 
 /// lib/units.warp's definitions, and the program's own unit lines while it is compiled (context.program_unit_lines)
@@ -135,16 +112,6 @@ pub(super) fn defines(line_word: &str, name: &str) -> bool {
 		NAME_WORD => definitions.long_names.iter().any(|(long_name, _)| *long_name == name),
 		_ => super::names_unit(name),
 	}
-}
-
-/// The bridges between dimensions (`length as pixels := it * display.dpi`): each with the host's system value its factor
-/// reads (`display_dpi`) and the SI amount of one of the setting's unit (1 dpi is 5000/127 px/m)
-pub(super) fn bridges() -> Vec<(Dimension, Dimension, String, Rational)> {
-	let factor = |bridge: &Bridge| {
-		let setting = definitions().settings.iter().find(|setting| setting.name == bridge.factor)?;
-		Some((bridge.from, bridge.to, setting.name.replace(SETTING_DOT, "_"), measure(setting.unit)?.0))
-	};
-	definitions().bridges.iter().filter_map(factor).collect()
 }
 
 /// The run-time tables of lib/units.warp's Quantity (`quantity(5, "km")`), in place of the block itself: each unit and
@@ -264,8 +231,6 @@ fn read(program_lines: impl Iterator<Item = &'static str>) -> Result<Definitions
 		base_units,
 		units,
 		aliases,
-		bridges,
-		settings,
 		long_names,
 		prefixes,
 		..
@@ -277,8 +242,6 @@ fn read(program_lines: impl Iterator<Item = &'static str>) -> Result<Definitions
 		units,
 		base_units,
 		aliases,
-		bridges,
-		settings,
 		long_names,
 		prefixes,
 	})
@@ -292,8 +255,6 @@ struct Reader<'a> {
 	base_units: Vec<(Dimension, &'a str)>,
 	units: Vec<Read<'a>>,
 	aliases: Vec<(&'a str, &'a str)>,
-	bridges: Vec<Bridge<'a>>,
-	settings: Vec<Setting<'a>>,
 	/// The dimensions whose units take the SI prefixes, and the prefixes with their powers of ten
 	si_dimensions: Vec<Dimension>,
 	prefixes: Vec<(&'a str, i32)>,
@@ -305,7 +266,7 @@ impl<'a> Reader<'a> {
 	/// name words of no unit, `unit ° := π/180`)
 	fn knows_words_of(&self, line: &str) -> bool {
 		let (name, expression) = line.split_once(DEFINE).unwrap_or_default();
-		let target = name.split_once(BRIDGE_WORD).map(|(_, target)| target.trim());
+		let target = name.split_once(TARGET_WORD).map(|(_, target)| target.trim());
 		let expression = targeted(expression.trim(), target);
 		let expression = shifted(&expression).map_or(expression.as_str(), |(_, rest)| rest);
 		tokens(expression)
@@ -382,28 +343,12 @@ impl<'a> Reader<'a> {
 		if let Some((name, expression)) = definition(UNIT_WORD, DEFINE) {
 			return self.unit_line(name, expression);
 		}
-		if let Some((name, expression)) = definition("", DEFINE).filter(|(name, _)| name.contains(SETTING_DOT)) {
-			let (amount, unit) = expression.split_once(' ').ok_or(format!("{line}: an amount and its unit"))?;
-			decimal(amount).ok_or(format!("{line}: {amount} is no number"))?;
-			self.settings.push(Setting { name, unit: unit.trim() });
-			return Ok(());
-		}
-		if let Some((dimensions, expression)) = definition("", DEFINE).filter(|(name, _)| name.contains(BRIDGE_WORD)) {
-			let (from, to) = dimensions.split_once(BRIDGE_WORD).ok_or(format!("unreadable line {line}"))?;
-			let dimension = |name: &str| {
-				let known = self.dimensions.iter().find(|(known, _)| *known == name.trim());
-				known.map(|(_, dimension)| *dimension).ok_or(format!("{line}: {name} is no dimension"))
-			};
-			let factor = expression.strip_prefix(IT_TIMES).ok_or(format!("{line}: the right side is it * a value"))?;
-			self.bridges.push(Bridge { from: dimension(from)?, to: dimension(to)?, factor: factor.trim() });
-			return Ok(());
-		}
 		Err(format!("unreadable line {line}"))
 	}
 
 	/// `unit cm := m/100`, `unit °C as K := it + 273.15` (the unit `as` names is the right side's, decision unit-target)
 	fn unit_line(&mut self, name: &'a str, expression: &'a str) -> Result<(), String> {
-		let (name, target) = match name.split_once(BRIDGE_WORD) {
+		let (name, target) = match name.split_once(TARGET_WORD) {
 			Some((name, target)) => (name.trim(), Some(self.symbol_of(target.trim()))),
 			None => (name, None),
 		};

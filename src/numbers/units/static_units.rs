@@ -17,7 +17,6 @@
 use super::{exponent_of, finest_units, unit_named, units_text, Dimension, Factor, Quantity, Unit};
 use crate::lowering::function_head;
 use crate::words::{MAP_WORD, PRINT_WORD, RETURN_WORD, STR_WORD};
-use warp_runtime::host_words::SYSTEM_VALUE;
 
 mod function_units;
 mod list_units;
@@ -546,28 +545,6 @@ fn written_power(op: Op, exponent: &Node) -> Option<i32> {
 	}
 }
 
-/// `q as mm` of pixels, `l as px` of a length: a bridge of lib/units.warp (`length as pixels := it * display.dpi`,
-/// decision dimension-bridges) trades one dimension for another by a factor the host tells at run time; the factor the
-/// SI amount takes when `given` turns into `target` that way, None when they differ in more
-fn bridged(given: &Signature, target: &Signature) -> Option<Node> {
-	super::definitions::bridges().into_iter().find_map(|(from, to, value, scale)| {
-		let power = |powers: &Powers| powers.iter().find(|(dimension, _)| *dimension == to).map_or(0, |p| p.1);
-		let traded = power(&given.powers) - power(&target.powers);
-		let as_from = super::added(&super::added(&given.powers, to, -traded), from, traded);
-		if traded == 0 || as_from != target.powers {
-			return None;
-		}
-		let value = crate::lowering::nodes::call(SYSTEM_VALUE, vec![Node::Text(value)]);
-		// one of `from` is value·scale of `to`
-		let one = match traded > 0 {
-			true => Node::Key(Box::new(number_node(&scale.inverse()?)?), Op::Div, Box::new(value)),
-			false => Node::Key(Box::new(value), Op::Mul, Box::new(number_node(&scale)?)),
-		};
-		let product = |product: Node, _| Node::Key(Box::new(product), Op::Mul, Box::new(one.clone()));
-		Some((1..traded.abs()).fold(one.clone(), product))
-	})
-}
-
 fn number_node(amount: &Rational) -> Option<Node> {
 	let numerator = amount.numerator.to_i64()?;
 	Some(match amount.denominator.to_i64()? {
@@ -621,12 +598,7 @@ fn declared_name(declaration: &Node) -> Option<String> {
 }
 
 fn dimension_error(op: Op, left: &Signature, right: &Signature) -> Stop {
-	// `3cm + 2px`: dimensions a bridge of lib/units.warp connects convert by `as` (decision dimension-bridges)
-	let why = match bridged(left, right) {
-		Some(_) => format!("convert first, `(…) as {}`", shown(right)),
-		None => "incompatible units".to_string(),
-	};
-	Stop::Error(format!("DimensionError: {} {op} {}: {why}", shown(left), shown(right)))
+	Stop::Error(format!("DimensionError: {} {op} {}: incompatible units", shown(left), shown(right)))
 }
 
 /// A user function `name(params) := body`: its parameter names and body
@@ -1072,9 +1044,6 @@ impl Inference {
 	fn converted(&mut self, quantity: Node, unit: &Node) -> Result<(Node, Signature), Stop> {
 		let target = signature(&super::unit_expression(unit).ok_or(Stop::Unsupported)?);
 		let (quantity, given) = self.infer(quantity)?;
-		if let Some(per_pixel) = (given.depth == 0).then(|| bridged(&given, &target)).flatten() {
-			return Ok((Node::Key(Box::new(quantity), Op::Mul, Box::new(per_pixel)), target));
-		}
 		// a list converts each element: `[3, 4] cm in m`
 		if *given != *target {
 			return Err(Stop::Error(format!(

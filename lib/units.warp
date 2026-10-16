@@ -8,9 +8,9 @@
 // speed m/s` names the dimension of an expression of units; every other unit is an amount of a known one, `unit cm :=
 // meter/100`, which fixes its dimension and factor, `unit m := 1 meter` one of the same amount, `unit °C as K := it +
 // 273.15` one in K computed from `it`, the amount in °C (decision unit-target); a unit of several units or none
-// (`unit mph := mi/h`, `unit ° := π/180`) is a word for that expression; `length as pixels := it * display.dpi`
-// bridges two dimensions by a value read at each conversion, `display.dpi := 96 dpi` a setting, the screen's where it
-// tells (decision dimension-bridges); a unit added here is known everywhere, also in conversions
+// (`unit mph := mi/h`, `unit ° := π/180`) is a word for that expression; px is a dimension of its own, a length turns
+// into px by plain arithmetic with the screen's density, `3 cm * display.dpi`; a unit added here is known everywhere,
+// also in conversions
 unit_definitions = data {
 	// `SI dimension` gives the units of a dimension the SI prefixes, `prefix k := 10^3` is one of them (giga down to
 	// nano keep every unit a whole number of its dimension's finest step within 64 bits), `name hour := h` a long name
@@ -61,8 +61,6 @@ unit_definitions = data {
 	unit kHz := 1/ms
 	unit ° := π/180
 	unit dpi := px/inch
-	display.dpi := 96 dpi
-	length as pixels := it * display.dpi
 	name millisecond := ms
 	name second := s
 	name minute := min

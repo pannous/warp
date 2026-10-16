@@ -1,8 +1,8 @@
 //! A program's conversions (decision general-conversions): `Person as text := it.name` defines how a Person turns into
 //! text, `p as text` then calls it. Each target B gets one function `converted_to_B` with a variant per source type A, and a
 //! fallback for every other value that does the built-in `it as B`; the variants dispatch on their parameter's type
-//! (traits.rs), so a program's conversions are looked up before the built-in ones. Unit lines and dimension bridges are
-//! its unit cases (src/numbers/units/definitions.rs).
+//! (traits.rs), so a program's conversions are looked up before the built-in ones. Unit lines are its unit cases
+//! (src/numbers/units/definitions.rs).
 
 use crate::lowering::declaration_forms::is_declaration_type;
 use crate::node::{call, Bracket, Node, Separator};
