@@ -80,7 +80,7 @@ const IMPL_WORD: &str = "impl";
 /// lib/units.warp's `q.to("km/h")`: a run-time quantity in other units
 const CONVERSION_METHOD: &str = "to";
 /// lib/units.warp's check that two quantities measure the same, and a quantity's amount in base units
-const SAME_DIMENSION: &str = "same_dimension";
+const SAME_QUANTITY: &str = "same_quantity";
 const QUANTITY_AMOUNT: &str = "amount";
 /// The sum of a list of run-time quantities folds their `plus` (quantities_reduced)
 const REDUCE_WORD: &str = "reduce";
