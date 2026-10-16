@@ -774,6 +774,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   lines in lib/math.warp with a "prefer ->" hint (→ ⟶ ➜ … for ->, ⇒ ⟹ for =>, ← ⟵ ⬅ for <-, ⬆ ⇧ for ↑, ⬇ ⇩ for ↓).
   ⇔ ⟺ ↔ ⇑ ⇓ get no built-in meaning for now; an example defines one, e.g.
   `infix operator ⇔(a: bool, b: bool) := a == b`.
+- fuel-metering (2026-10-16, user; card fuel-metering): runaway loops are stopped by the epoch timer with a time
+  limit by default (about 1–5% overhead, stops at a slightly different step each run). Fuel, the exact step budget
+  that cost 4.4× on calls (40M calls: 218 ms against 49 ms), runs only on request: `use fuel`, the CLI word
+  `warp fuel N app.warp`, and tests that pin a step count.
 - ready-queue (2026-10-16, user via the boss and the supervisor): the board's Ready column is the merge queue. A
   worker runs its targeted tests, pushes the finished branch, makes sure it merges cleanly into origin/main, and
   hands it off with `todo ready <card> [branch]` (tip read from git); only the re-run after a clean update is dropped. `todo ready` refuses
