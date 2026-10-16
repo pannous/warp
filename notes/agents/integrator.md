@@ -12,8 +12,9 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   Only one gate runs at a time (the machine's single test queue): when W is free, bring the prepared batch over
   (`git -C "$W" checkout --detach <P's HEAD>`) and gate it there. Never wait idle on a test run.
 - The queue is the board (user, 2026-10-16): `todo list Ready` (`--json`: branch, tip, express per card). Only Ready
-  cards are merged, each at the tip its card names (`git merge <tip>`, not `origin/<branch>`: the worker may have
-  pushed since). A worker's SendMessage is a nudge, never the queue. `todo ready --stray` lists unmerged origin
+  cards are merged, each at origin/<branch> when that descends from the tip its card names (owners push newer tips
+  without updating the card; a stale tip re-resolved a hand-resolved conflict), else at the card tip; the tip is fixed
+  once merged, push_tested.sh's ancestry check catches a push during the run. A worker's SendMessage is a nudge, never the queue. `todo ready --stray` lists unmerged origin
   branches without a Ready card and Ready cards whose tip is gone: a report, never merged; check it once per batch
   and tell the Supervisor about lost-looking work.
 - Batches of at most ~8 Ready cards (user, 2026-10-16). Express cards (and crash fixes) go alone and next. Wide
