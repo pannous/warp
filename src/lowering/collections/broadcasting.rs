@@ -347,12 +347,12 @@ fn nest_prefix_calls(node: Node, arities: &HashMap<String, Arity>) -> Node {
 			let argument = key(items[1].clone(), op, *right);
 			ambiguous_call(&left, &items[0].drop_meta().name(), &argument)
 		}
-		Node::List(items, Bracket::None, Separator::Colon) if items.len() > 1 => {
+		Node::List(items, Bracket::None, Separator::Comma) if items.len() > 1 => {
 			let items: Vec<Node> = items.into_iter().map(|item| nest_prefix_calls(item, arities)).collect();
 			match comma_joined(&items, arities) {
 				Some(mut joined) if joined.len() == 1 => joined.pop().expect("one item"),
-				Some(joined) => Node::List(joined, Bracket::None, Separator::Colon),
-				None => Node::List(items, Bracket::None, Separator::Colon),
+				Some(joined) => Node::List(joined, Bracket::None, Separator::Comma),
+				None => Node::List(items, Bracket::None, Separator::Comma),
 			}
 		}
 		other => other.map_children(|child| nest_prefix_calls(child, arities)),

@@ -343,7 +343,7 @@ fn go_destructuring(mut items: Vec<Node>, separator: &Separator) -> Vec<Node> {
 	let Node::Key(name, Op::Define, value) = items[position].drop_meta() else {
 		return items;
 	};
-	if *separator != Separator::Colon || position == 0 || !is_name(name) || !items[..position].iter().all(is_name) {
+	if *separator != Separator::Comma || position == 0 || !is_name(name) || !items[..position].iter().all(is_name) {
 		return items;
 	}
 	items[position] = Node::Key(name.clone(), Op::Assign, value.clone());
@@ -447,8 +447,8 @@ fn colon_cases(block: &Node) -> Node {
 fn colon_case(case: &Node) -> Node {
 	match case.drop_meta() {
 		// `1, 2 => …`: the alternatives and the case
-		Node::List(items, Bracket::None, Separator::Colon) => {
-			Node::List(items.iter().map(colon_case).collect(), Bracket::None, Separator::Colon)
+		Node::List(items, Bracket::None, Separator::Comma) => {
+			Node::List(items.iter().map(colon_case).collect(), Bracket::None, Separator::Comma)
 		}
 		// Swift's `case .north: 1` (read as the member `case.north`) and `case Direction.north: 1`
 		Node::Key(label, Op::Colon, body) if matches!(label.drop_meta(), Node::Key(word, Op::Dot, _) if word.is_symbol(CASE_WORD)) =>
@@ -1034,7 +1034,7 @@ fn function_parameters(head: &Node) -> Option<Node> {
 				Node::List(words, _, Separator::Space) if matches!(words.as_slice(), [name, kind] if is_kinded_type_word(kind) && !is_kinded_type_word(name)) => Some(words[0].clone()),
 				_ => None,
 			}).collect();
-			Some(Node::single_or_list(names, Bracket::Round, Separator::Colon))
+			Some(Node::single_or_list(names, Bracket::Round, Separator::Comma))
 		}
 	}
 }

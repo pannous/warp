@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use warp_runtime::standalone::{embedded_machine_code, standalone_engine, without_machine_code};
 
 const OUTPUT_DIRECTORY: &str = env!("CARGO_TARGET_TMPDIR");
-/// samples/quicksort.warp carried 198768 bytes of machine code before tree shaking and deflating (~45 KB after); it
+/// samples/lists/quicksort.warp carried 198768 bytes of machine code before tree shaking and deflating (~45 KB after); it
 /// grew to ~60 KB, and the chunked big-int text (card out-fuel) took it to 60_000: raised to 62_000 by the user, card
 /// samples-quicksort finds what grew it
 const QUICKSORT_CARRIED_LIMIT: usize = 62_000;
@@ -53,7 +53,7 @@ fn test_executable_keeps_its_handlers() {
 
 #[test]
 fn test_quicksort_executable_is_tree_shaken() {
-	let source = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/quicksort.warp")).unwrap();
+	let source = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/samples/lists/quicksort.warp")).unwrap();
 	let executable = built_executable("size_quicksort", &source);
 	let bytes = std::fs::read(&executable).unwrap();
 	let carried = bytes.len() - without_machine_code(&bytes).len();

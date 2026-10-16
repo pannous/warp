@@ -1,5 +1,5 @@
 //! `help(sound)`, `help(midi)`, `function(name).dump` of the standard modules' words (cards help-undefined,
-//! joinable-error, samples/sound_features.warp). A module's help is its index (`warp help sound`, std_docs.rs), a word's
+//! joinable-error, samples/sound/sound_features.warp). A module's help is its index (`warp help sound`, std_docs.rs), a word's
 //! its head with the comment above it, a word's dump its definitions as written. A name known only at run time
 //! (`for trick in dir(sound): print help(trick)`) is looked up in a table of the words the program knows: those of the
 //! modules it uses and its own functions. `function trick` is the function named trick (P82), so a trick that is no

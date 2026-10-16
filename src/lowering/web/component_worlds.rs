@@ -1,4 +1,4 @@
-//! A component's world (card wasm-interop-rest, samples/wasm_interop.warp):
+//! A component's world (card wasm-interop-rest, samples/wasm/wasm_interop.warp):
 //! `component my_component { import host: { print: (string) -> () } export api: calculator }` declares what the
 //! component imports and exports. `warp build --wit` writes it as a WIT world, each warp interface (`interface calculator
 //! { add: (i32, i32) -> i32 }`) as a WIT interface. The declaration does nothing when the program runs.

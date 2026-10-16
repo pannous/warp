@@ -308,7 +308,7 @@ fn definition_call(head: &Node) -> Option<&Node> {
 fn is_phrase(bracket: &Bracket, separator: &Separator) -> bool {
 	matches!(bracket, Bracket::None | Bracket::Round | Bracket::Curly)
 		&& !separator.separates_statements()
-		&& *separator != Separator::Colon
+		&& *separator != Separator::Comma
 }
 
 /// `map f` with the iteration word as its own item: the function after it
@@ -679,7 +679,7 @@ pub(crate) fn arrow_lambda(node: &Node) -> Option<Lambda> {
 					let parameters = Node::List(
 						leading.iter().chain([head.as_ref()]).cloned().collect(),
 						Bracket::Round,
-						Separator::Colon,
+						Separator::Comma,
 					);
 					arrow_parts(&parameters, body)
 				}
@@ -752,12 +752,12 @@ fn c_style_parameters(head: &Node) -> Node {
 		Node::List(_, Bracket::None, Separator::Space)
 			if keyword_and_names(head).is_some_and(|names| names.len() > 1) =>
 		{
-			Node::List(keyword_and_names(head).expect("guarded"), Bracket::Round, Separator::Colon)
+			Node::List(keyword_and_names(head).expect("guarded"), Bracket::Round, Separator::Comma)
 		}
 		Node::List(words, Bracket::Round | Bracket::None, Separator::Space)
 			if words.len() == 2 && words.iter().any(is_kinded_type_word) && typed(head) != *head =>
 		{
-			Node::List(vec![typed(head)], Bracket::Round, Separator::Colon)
+			Node::List(vec![typed(head)], Bracket::Round, Separator::Comma)
 		}
 		Node::List(words, Bracket::Round, separator) if words.iter().any(|word| typed(word) != *word) => {
 			Node::List(words.iter().map(typed).collect(), Bracket::Round, separator.clone())
@@ -919,7 +919,7 @@ pub(crate) fn block_as_arrow(node: &Node) -> Option<Node> {
 	let lambda = block_lambda(node).filter(|lambda| !lambda.params.is_empty())?;
 	let parameters = match lambda.params.as_slice() {
 		[single] => Node::Symbol(single.clone()),
-		several => Node::List(several.iter().cloned().map(Node::Symbol).collect(), Bracket::Round, Separator::Colon),
+		several => Node::List(several.iter().cloned().map(Node::Symbol).collect(), Bracket::Round, Separator::Comma),
 	};
 	Some(key(parameters, Op::Arrow, lambda.body))
 }
@@ -1037,7 +1037,7 @@ impl Lowering {
 				let items: Vec<Node> = items.into_iter().map(|item| self.expand(item)).collect();
 				// in a list literal `[(x => x + 1) (x => x + 2)]` the functions are elements, never one applied to the next
 				// nor in a comma list `(y -> y + 3, 7)`, the arguments of a call (card errors-needs)
-				let is_sequence = bracket == Bracket::Square || separator == Separator::Colon;
+				let is_sequence = bracket == Bracket::Square || separator == Separator::Comma;
 				let immediate = if is_sequence { None } else { self.immediate_call(&items) };
 				immediate
 					.or_else(|| self.iteration_call(&items, &bracket, &separator))

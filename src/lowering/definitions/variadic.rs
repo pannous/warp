@@ -282,7 +282,7 @@ fn keyword_object(arguments: Vec<Node>, fixed: &[String]) -> (Vec<Node>, Option<
 		.filter_map(named_argument)
 		.map(|(name, value)| key(Node::Symbol(name), Op::Colon, value.clone()))
 		.collect();
-	let separator = if entries.len() > 1 { Separator::Colon } else { Separator::None };
+	let separator = if entries.len() > 1 { Separator::Comma } else { Separator::None };
 	(others, Some(Node::List(entries, Bracket::Curly, separator)))
 }
 

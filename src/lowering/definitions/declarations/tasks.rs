@@ -953,7 +953,7 @@ pub(super) fn forwarded_raises(
 				let Node::List(items, _, _) = head.drop_meta() else { unreachable!("guarded") };
 				let function = word(&items[0]);
 				wrapped.borrow_mut().insert(function.clone(), items.len() - 1);
-				let arguments = Node::List(items[1..].to_vec(), Bracket::Square, Separator::Colon);
+				let arguments = Node::List(items[1..].to_vec(), Bracket::Square, Separator::Comma);
 				let send = call(
 					crate::host::SIGNAL_SEND,
 					vec![Node::Text(format!("{function}{NODE_WRAPPER_SUFFIX}")), arguments],
@@ -1038,7 +1038,7 @@ pub(super) fn guarded_calls(
 				{
 					let function = word(&called[0]);
 					wrapped.borrow_mut().insert(function.clone(), called.len() - 1);
-					let arguments = Node::List(called[1..].to_vec(), Bracket::Square, Separator::Colon);
+					let arguments = Node::List(called[1..].to_vec(), Bracket::Square, Separator::Comma);
 					let guarded = call(
 						crate::host::GUARDED_CALL,
 						vec![Node::Text(format!("{function}{NODE_WRAPPER_SUFFIX}")), arguments],
@@ -1106,7 +1106,7 @@ pub(super) fn resolved(
 							let started = format!("{function}{NODE_WRAPPER_SUFFIX}");
 							call(
 								TASK_SPAWN_VALUES,
-								vec![Node::Text(started), Node::List(arguments, Bracket::Square, Separator::Colon)],
+								vec![Node::Text(started), Node::List(arguments, Bracket::Square, Separator::Comma)],
 							)
 						}
 						TaskPath::Inline => parens(items[1..].to_vec()),

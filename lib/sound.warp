@@ -506,7 +506,7 @@ read_midi(path) := {
 	[[flat#(4 * i + 1) / 1000.0, midi_hertz(flat#(4 * i + 2)), flat#(4 * i + 3) / 1000.0, flat#(4 * i + 4)] for i in 0..((count(flat) / 4) as int)]
 }
 
-// how loud each frequency band sounds at a moment of the samples (card winamp-like, samples/visualizer.warp), or of an
+// how loud each frequency band sounds at a moment of the samples (card winamp-like, samples/sound/visualizer.warp), or of an
 // audio file, spectrum("song.mp3", seconds, bands), decoded once: the bands spaced evenly in pitch from band_low to
 // band_high Hz, each level from 0 to 1 (a full-scale sine is 1). The window Hann-weighted, each band measured by
 // Goertzel's recurrence, in Rust for both (src/sound/spectrum.rs, decision sound-dsp)

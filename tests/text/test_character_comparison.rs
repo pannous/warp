@@ -1,6 +1,6 @@
 use crate::is;
 
-// samples/calculator.warp, samples/json_parser.warp: a character held in a variable compares by code point
+// samples/text/calculator.warp, samples/objects/json_parser.warp: a character held in a variable compares by code point
 // (was "not an int": the variable was unboxed as an Int)
 
 #[test]

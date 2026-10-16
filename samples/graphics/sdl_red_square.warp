@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
 # SDL2 Red Square Demo - Pure FFI, no compile-time dependencies
-# Run with: ./warp samples/sdl_red_square.warp
+# Run with: ./warp samples/graphics/sdl_red_square.warp
 
 import SDL_Init from 'SDL2'
 import SDL_CreateWindow from 'SDL2'

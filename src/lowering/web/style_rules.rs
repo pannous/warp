@@ -60,8 +60,7 @@ fn style_items(
 	output: &mut Vec<Node>,
 	pending: &mut Vec<PendingSelector>,
 ) {
-	// Separator::Colon is the comma: `h1, h2 { … }`
-	let list_joiner = if *separator == Separator::Colon { ", " } else { " " };
+	let list_joiner = if *separator == Separator::Comma { ", " } else { " " };
 	for (index, item) in items.into_iter().flat_map(split_chained).enumerate() {
 		let joiner = if index == 0 { leading_joiner.unwrap_or(list_joiner) } else { list_joiner };
 		if let Node::List(group, Bracket::None, group_separator) = item.drop_meta() {

@@ -103,10 +103,41 @@ fn every_example_a_chapter_links_exists() {
 		assert!(TOUR.contains(&key), "the guide links the tour example {name}, examples.js has none");
 	}
 	for name in &samples {
-		assert!(std::path::Path::new(&format!("samples/{name}.warp")).exists(), "the guide links samples/{name}.warp");
+		assert!(std::path::Path::new(&crate::common::sample_path(name)).exists(), "the guide links the sample {name}");
 		assert!(
-			!EXCLUDED_SAMPLES.lines().any(|line| line.starts_with(&format!("{name}\t"))),
+			// a fixnow exclusion is temporary (notes/roles.md "Fix forward"): the link stays
+			!EXCLUDED_SAMPLES.lines().any(|line| line.starts_with(&format!("{name}\t")) && !line.contains("\tfixnow:")),
 			"{name} is not in the playground menu"
 		);
+	}
+}
+
+// samples/ has a folder per chapter, as the example menu has a group per chapter (guide.js groupExamplesByChapter): the
+// samples a chapter links first lie in one folder, which no other chapter's samples share (notes/samples.md)
+#[test]
+fn every_chapter_has_its_own_sample_folder() {
+	let mut chapter = "";
+	let mut folders_of_chapter = std::collections::BTreeMap::<&str, std::collections::BTreeSet<String>>::new();
+	let mut seen = HashSet::new();
+	for line in GUIDE.lines() {
+		if let Some(title) = line.strip_prefix("## ") {
+			chapter = title;
+		}
+		let Some((_, samples)) = line.strip_prefix(EXAMPLES_LINE).and_then(|line| line.split_once("; samples: "))
+		else {
+			continue;
+		};
+		for name in samples.split(", ").map(str::trim).filter(|name| seen.insert(name.to_string())) {
+			let path = crate::common::sample_path(name);
+			let folder = std::path::Path::new(&path).parent().and_then(|folder| folder.file_name()).unwrap_or_default();
+			folders_of_chapter.entry(chapter).or_default().insert(folder.to_string_lossy().into_owned());
+		}
+	}
+	let mut owners = std::collections::HashMap::new();
+	for (chapter, folders) in &folders_of_chapter {
+		assert_eq!(folders.len(), 1, "the samples chapter {chapter} links first lie in several folders: {folders:?}");
+		let folder = folders.first().unwrap();
+		let owner = owners.insert(folder.clone(), *chapter);
+		assert!(owner.is_none(), "samples/{folder} holds samples of the chapters {} and {chapter}", owner.unwrap());
 	}
 }
