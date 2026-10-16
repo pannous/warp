@@ -1,0 +1,4 @@
+# Tests that fail in the cloud test lane's Linux VM for want of the Mac (scripts/cloud-test.sh): one awk regex per
+# line, matched against the failing test's path; their failures are listed apart and don't make the verdict red.
+# Grown from real cloud runs only (notes/cloud_development.md "Cloud test lane"); a test fixed to skip itself on Linux
+# leaves the list.
