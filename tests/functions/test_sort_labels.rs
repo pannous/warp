@@ -31,6 +31,16 @@ fn a_sort_label_before_an_operator_in_a_value_or_chain() {
 	assert_eq!(printed("ps=[{a:2} {a:1}]; ps sort by .a map .a"), "[1 2]");
 }
 
+/// reviewer: a prefix sort before a chain ends at its labeled function, `(sort xs by >) map f`
+#[test]
+fn a_prefix_sort_before_a_chain() {
+	assert_eq!(printed("xs=[3 1 2]; sort xs by > map {it*10}"), "[30 20 10]");
+	assert_eq!(printed("xs=[3 1 2]; sort xs by: > map {it*10}"), "[30 20 10]");
+	assert_eq!(printed("ps=[{a:2} {a:1}]; sort ps by .a map .a"), "[1 2]");
+	assert_eq!(printed("xs=[3 1 2]; (sort xs by: >)"), "[3 2 1]");
+	assert_eq!(printed("xs=[3 1 2]; (sort xs by >) map {it*10}"), "[30 20 10]");
+}
+
 #[test]
 fn a_word_named_like_a_label_elsewhere_stays() {
 	assert_eq!(printed("by=2; by > 1"), "yes");

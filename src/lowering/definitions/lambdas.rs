@@ -212,7 +212,7 @@ fn infix_iterations(node: Node, functions: &HashSet<String>) -> Node {
 		}
 		Node::List(items, bracket, separator) if is_phrase(&bracket, &separator) => {
 			let items = items.into_iter().map(|item| infix_iterations(item, functions)).collect();
-			let mut pending: VecDeque<Node> = labeled_sort_functions(items).into();
+			let mut pending: VecDeque<Node> = prefix_sort_grouped(labeled_sort_functions(items), &bracket).into();
 			let mut combined: Vec<Node> = Vec::with_capacity(pending.len());
 			let mut changed = false;
 			while let Some(item) = pending.pop_front() {
@@ -290,6 +290,27 @@ fn labeled_sort_functions(items: Vec<Node>) -> Vec<Node> {
 	labeled
 }
 
+/// `sort xs by: > map f`: the prefix sort ends at its labeled function, the call `sort(xs, by: >)` the list of what
+/// follows; `(sort xs by: >)` is that call too
+fn prefix_sort_grouped(mut items: Vec<Node>, bracket: &Bracket) -> Vec<Node> {
+	let labeled = |item: &Node| matches!(item.drop_meta(), Node::Key(label, Op::Colon, _) if is_sort_label(label));
+	let Some(word) = items.first().filter(|first| iteration_word(first).is_some()).map(Node::name) else {
+		return items;
+	};
+	let last = items.len() - 1;
+	let call_ends_at = (1..=last).find(|&at| {
+		labeled(&items[at])
+			&& if at == last { *bracket == Bracket::Round } else { iteration_word(&items[at + 1]).is_some() }
+	});
+	match call_ends_at {
+		Some(at) => {
+			let rest = items.split_off(at + 1);
+			[vec![call(&word, items.split_off(1))], rest].concat()
+		}
+		None => items,
+	}
+}
+
 /// An iteration word among the words, the one a sort label after them belongs to
 fn sorts_before(words: &[Node]) -> bool {
 	words.iter().any(|word| iteration_word(word).is_some())
@@ -298,6 +319,15 @@ fn sorts_before(words: &[Node]) -> bool {
 /// The words of `… by > rest` with the operator as the labeled function, `… by: > rest`, and where that label stands,
 /// when the parser hung them on the operator after a sort label: `(sort xs by) > ø`, `by > (map f)`
 fn dangling_sort_operator(node: &Node) -> Option<(Vec<Node>, usize)> {
+	// `by: > map f`: the colon's value is the operator with the rest hung on it, as `by > map f`
+	if let Node::Key(label, Op::Colon, value) = node.drop_meta() {
+		return match value.drop_meta() {
+			Node::Key(nothing, op, rest) if nothing.is_empty_node() && !rest.is_empty_node() => {
+				dangling_sort_operator(&key(label.as_ref().clone(), *op, rest.as_ref().clone()))
+			}
+			_ => None,
+		};
+	}
 	let Node::Key(left, op, right) = node.drop_meta() else { return None };
 	if !op.is_operation() || operator_symbol(*op).is_none() {
 		return None;
