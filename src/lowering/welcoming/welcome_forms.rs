@@ -90,6 +90,26 @@ pub fn lower(node: Node) -> Node {
 	lambda_calls(node, &lambda_names)
 }
 
+/// Swift's and Rust's result arrow before `:=`: `def x(p:P) -> int := p.n` is `x(p:P): int := p.n`, the one typed head
+/// every pass reads (card undefined-function: it was read as a lambda, `undefined function: x`)
+pub fn lower_arrow_result_types(node: Node) -> Node {
+	match node {
+		Node::Key(target, op @ (Op::Define | Op::Assign), body) => {
+			let target = match *target {
+				Node::Key(head, Op::Arrow, result) if is_named_head(&head) => key(*head, Op::Colon, *result),
+				other => lower_arrow_result_types(other),
+			};
+			Node::Key(Box::new(target), op, Box::new(lower_arrow_result_types(*body)))
+		}
+		other => other.map_children(lower_arrow_result_types),
+	}
+}
+
+/// `x(p:P)`: a function's name and parameters in round brackets
+fn is_named_head(head: &Node) -> bool {
+	matches!(head.drop_meta(), Node::List(items, Bracket::Round, _) if items.first().is_some_and(|name| matches!(name.drop_meta(), Node::Symbol(_))))
+}
+
 /// The names assigned a lambda: `f = x => …`, `f = { |x| … }`
 fn collect_lambda_names(node: &Node, names: &mut HashSet<String>) {
 	match node.drop_meta() {
