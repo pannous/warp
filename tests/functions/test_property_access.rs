@@ -70,5 +70,5 @@ fn test_of_lookup_is_an_assignment_target() {
 
 #[test]
 fn test_print_of_lookup_prints_the_field() {
-	is!("p={w:1}; print w of p", 1);
+	is!("p={w:1}; print w of p; w of p + 1", 2);
 }
