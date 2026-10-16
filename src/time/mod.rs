@@ -235,11 +235,52 @@ pub const TZDATA_FIELD: &str = "tzdata";
 /// A program that uses dates or times, its constant time expressions folded for the run time (stage B4: no
 /// program is answered whole at compile time any more)
 pub fn lower(program: Node) -> Node {
-	if !mentions_time(&program) || !needs_folding(&program) {
+	if !mentions_time(&program) {
+		return program;
+	}
+	let times = temporal_variables(&program);
+	let program = with_unit_durations(program, &times);
+	if !needs_folding(&program) {
 		return program;
 	}
 	let constants = time_constants(&program);
 	fold_constants(program, &constants)
+}
+
+/// The variables a time or duration is assigned: `d = 1 day`, `t = now + 1 hour`
+fn temporal_variables(program: &Node) -> HashSet<String> {
+	let mut times = time_variables(program);
+	program.visit(&mut |part| {
+		if let Node::Key(target, Op::Assign | Op::Define, value) = part {
+			if let (Node::Symbol(name), true) = (target.drop_meta(), mentions_time(value)) {
+				times.insert(name.clone());
+			}
+		}
+	});
+	times
+}
+
+/// `2 hours + 1 h`, `now + 90 min`, `1 h == 60 minutes`: an amount of a time unit beside a time or a duration is the
+/// exact duration it is (decision duration-units); elsewhere it stays a quantity of the units
+fn with_unit_durations(node: Node, times: &HashSet<String>) -> Node {
+	let node = node.map_children(|child| with_unit_durations(child, times));
+	let Node::Key(left, op, right) = node.drop_meta() else {
+		return node;
+	};
+	if !(op.is_arithmetic() || op.is_comparison()) {
+		return node;
+	}
+	// `2 hours in minutes == 120 min` compares quantities
+	let temporal = |side: &Node| (mentions_time(side) || holds_time(side, times)) && !is_unit_conversion(side);
+	let as_duration = |side: &Node, other: &Node| match crate::numbers::units::duration_quantity(side) {
+		Some(duration) if temporal(other) => Node::data(duration),
+		_ => side.clone(),
+	};
+	let (new_left, new_right) = (as_duration(left, right), as_duration(right, left));
+	if new_left == **left && new_right == **right {
+		return node;
+	}
+	Node::Key(Box::new(new_left), *op, Box::new(new_right))
 }
 
 /// The variables assigned a constant time expression once and never a parameter: `d = 1 day` (card
@@ -374,6 +415,18 @@ fn only_time_words(node: &Node) -> bool {
 	}
 }
 
+/// `2 hours in minutes`, `d as h`: a duration converted to a unit, a quantity
+fn is_unit_conversion(node: &Node) -> bool {
+	match node.drop_meta() {
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_unit_conversion(&items[0]),
+		Node::List(items, _, _) => converted_to_unit(items),
+		Node::Key(_, Op::As, unit) => {
+			matches!(unit.drop_meta(), Node::Symbol(word) if crate::numbers::units::names_unit(word))
+		}
+		_ => false,
+	}
+}
+
 fn converted_to_unit(items: &[Node]) -> bool {
 	match items {
 		[_, keyword, unit] => {
@@ -436,7 +489,8 @@ fn zone_placement(node: &Node) -> Option<(Node, i64, i64)> {
 	Some((time.clone(), index as i64, choice))
 }
 
-fn mentions_time(node: &Node) -> bool {
+/// Holds a date, time or duration of the time module (a key or member name aside)
+pub(crate) fn mentions_time(node: &Node) -> bool {
 	match node.drop_meta() {
 		// a key or member name (`{date: 5}`, `x.date`) is no use of the time
 		Node::Key(key, Op::Colon, value) if matches!(key.drop_meta(), Node::Symbol(_)) => mentions_time(value),

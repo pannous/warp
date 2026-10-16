@@ -5,6 +5,9 @@ use warp::Node;
 
 /// Set to "true" in Claude Code cloud sessions
 const CLOUD_SESSION_VAR: &str = "CLAUDE_CODE_REMOTE";
+/// Set by tests/nightly.sh: the nightly run checks what the gate only samples (twins.rs)
+#[cfg(feature = "native")]
+const NIGHTLY_VARIABLE: &str = "WARP_NIGHTLY";
 /// The browser suite stops a test after 120 s and running every sample came close and then over it: a test over all
 /// samples is SAMPLE_SLICES tests, each over one slice
 const SAMPLE_SLICES: usize = 4;
@@ -51,6 +54,12 @@ pub fn sample_name(path: &std::path::Path) -> String {
 pub fn sample_path(name: &str) -> String {
 	let found = sample_files().into_iter().find(|path| sample_name(path) == name);
 	found.map(|path| path.to_string_lossy().into_owned()).unwrap_or_else(|| format!("{SAMPLES}/<chapter>/{name}.warp"))
+}
+
+/// Whether this is the nightly run (tests/nightly.sh), which checks in full what the gate samples
+#[cfg(feature = "native")]
+pub fn nightly() -> bool {
+	std::env::var_os(NIGHTLY_VARIABLE).is_some()
 }
 
 /// Every SAMPLE_SLICES-th item from `slice` on
