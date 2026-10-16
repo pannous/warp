@@ -4,7 +4,7 @@ use super::*;
 /// Each `shader { … }` (or `wgsl { … }`) block of `code`: the line and column right after its `{`, and its text's lines
 pub fn shader_blocks(code: &str) -> Vec<((usize, usize), Vec<DedentedLine>)> {
 	let chars: Vec<char> = code.chars().collect();
-	shader_texts(&chars)
+	shader_texts(&chars, |_| true)
 		.into_iter()
 		.map(|text| {
 			let before = &chars[..text.start];
@@ -16,23 +16,26 @@ pub fn shader_blocks(code: &str) -> Vec<((usize, usize), Vec<DedentedLine>)> {
 		.collect()
 }
 
-/// `code` with the text of each shader block blanked to spaces (line breaks kept): only its warp is left to read
-pub fn without_shader_texts(code: &str) -> String {
+/// `code` with the text of each shader block blanked to spaces (line breaks kept): only its warp is left to read.
+/// `is_code(at)`: whether the character at `at` is warp code, so a comment or a text naming `wgsl {` starts no block
+pub fn without_shader_texts(code: &str, is_code: impl Fn(usize) -> bool) -> String {
 	let mut chars: Vec<char> = code.chars().collect();
-	for text in shader_texts(&chars) {
+	for text in shader_texts(&chars, is_code) {
 		chars[text].iter_mut().filter(|ch| **ch != '\n').for_each(|ch| *ch = ' ');
 	}
 	chars.into_iter().collect()
 }
 
 /// Where the text between the braces of each shader block is, in characters
-fn shader_texts(chars: &[char]) -> Vec<std::ops::Range<usize>> {
+fn shader_texts(chars: &[char], is_code: impl Fn(usize) -> bool) -> Vec<std::ops::Range<usize>> {
 	let is_name_part = |at: usize| chars.get(at).is_some_and(|ch| ch.is_alphanumeric() || *ch == '_');
 	let mut texts = vec![];
 	let mut at = 0;
 	while at < chars.len() {
 		let word = SHADER_WORDS.iter().find(|word| {
-			!is_name_part(at.wrapping_sub(1)) && chars[at..].starts_with(&word.chars().collect::<Vec<_>>())
+			is_code(at)
+				&& !is_name_part(at.wrapping_sub(1))
+				&& chars[at..].starts_with(&word.chars().collect::<Vec<_>>())
 		});
 		let Some(word) = word.filter(|word| !is_name_part(at + word.len())) else {
 			at += 1;

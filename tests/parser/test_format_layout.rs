@@ -75,4 +75,7 @@ fn test_no_soft_hints_inside_a_shader_block() {
 	let hints: Vec<String> =
 		soft_hints(code).into_iter().map(|hint| format!("{}: {}", hint.line, hint.message)).collect();
 	assert_eq!(hints, ["1: warp avoids abbreviations: obj → object (in obj)"]);
+	let named = "point = {\n\t# a wgsl { block reads it\n\tcnt: 1\n}\nnote = \"shader {\"\nmsg = \"}\"\n";
+	let hints: Vec<String> = soft_hints(named).into_iter().map(|hint| hint.message).collect();
+	assert_eq!(hints.len(), 2, "{hints:?}");
 }
