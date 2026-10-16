@@ -404,6 +404,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   Python's isalpha and Java's isLetter); `characters` is an alias of `chars`.
 - parse-json (2026-10-15, user): quoted code's `.json` is the readable operator-as-key shape
   (`parse("a * (b + 1)").json` → {"*":["a",{"+":["b",1]}]}); what it can't express is a warning or error, never `{}`.
+- used-module-bare-words (2026-10-16, warp-shaders default, undoable; card json-parse-literal): after `use json`, a
+  bare `parse(t)` is json's parse (a map), not warp's code parse. General rule: a used module's own qualified words
+  (WARP_FORMS, today only json.parse) may also be called bare; a program's own definition wins, and without the `use`
+  the word keeps its warp meaning. The alternative was to keep the code parse and warn about the ambiguity.
 - json-exactness (2026-10-15 night, Interviewer's proposal, kept by the user 2026-10-16):
   following the user's "a warning, or even an error": big ints are written with all their digits as a JSON number
   (`(2^70).json` → 1180591620717411303424; JSON numbers have no size limit, only some readers do); a fraction is
@@ -774,6 +778,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   lines in lib/math.warp with a "prefer ->" hint (→ ⟶ ➜ … for ->, ⇒ ⟹ for =>, ← ⟵ ⬅ for <-, ⬆ ⇧ for ↑, ⬇ ⇩ for ↓).
   ⇔ ⟺ ↔ ⇑ ⇓ get no built-in meaning for now; an example defines one, e.g.
   `infix operator ⇔(a: bool, b: bool) := a == b`.
+- fuel-metering (2026-10-16, user; card fuel-metering): runaway loops are stopped by the epoch timer with a time
+  limit by default (about 1–5% overhead, stops at a slightly different step each run). Fuel, the exact step budget
+  that cost 4.4× on calls (40M calls: 218 ms against 49 ms), runs only on request: `use fuel`, the CLI word
+  `warp fuel N app.warp`, and tests that pin a step count.
 - ready-queue (2026-10-16, user via the boss and the supervisor): the board's Ready column is the merge queue. A
   worker runs its targeted tests, pushes the finished branch, makes sure it merges cleanly into origin/main, and
   hands it off with `todo ready <card> [branch]` (tip read from git); only the re-run after a clean update is dropped. `todo ready` refuses
@@ -904,4 +912,5 @@ P53, P59, P79, P80, P9, P10, P16, P19, #14b–d, #15–20, the Original question
 - fix-forward (2026-10-16, user): merges don't wait on a few failing tests. The Integrator may ignore up to 10
   failing tests per batch as `#[ignore = "fixnow: <card>: <reason>"]`, push, and card each for the breaking
   branch's owner, who fixes forward and drops the ignore. Backtracking only above 10 or when forward fixing isn't
-  possible. Rules: notes/roles.md "Fix forward".
+  possible. A fixnow test pinning an old edge case may be reconsidered through the Interviewer instead of
+  restored. Rules: notes/roles.md "Fix forward".

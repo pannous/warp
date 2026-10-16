@@ -5,6 +5,12 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
 
 - Integration worktree W=/Users/me/dev/angles/warp.worktrees.noindex/integrate (create it with `cowtree add --detach "$W"
   origin/main` if missing). Always absolute paths and `git -C "$W"`.
+- Prep worktree P=/Users/me/dev/angles/warp.worktrees.noindex/integrate2 (user, 2026-10-16): while the gate or a
+  test run holds W, assemble the next batch in P: merge the Ready tips, resolve conflicts, `python3
+  web/playground/keywords.py`, cargo check (native and `--target wasm32-unknown-unknown --no-default-features`), fmt.
+  P gets its own version tweak (`-integrate2`), so its builds don't overwrite W's artifacts in the shared target dir.
+  Only one gate runs at a time (the machine's single test queue): when W is free, bring the prepared batch over
+  (`git -C "$W" checkout --detach <P's HEAD>`) and gate it there. Never wait idle on a test run.
 - The queue is the board (user, 2026-10-16): `todo list Ready` (`--json`: branch, tip, express per card). Only Ready
   cards are merged, each at the tip its card names (`git merge <tip>`, not `origin/<branch>`: the worker may have
   pushed since). A worker's SendMessage is a nudge, never the queue. `todo ready --stray` lists unmerged origin
