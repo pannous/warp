@@ -32,3 +32,10 @@ fn a_property_is_called_in_function_form() {
 fn a_setter_writing_its_own_field_stores_it() {
 	is!("class Box{w:int; set w(v) { w = v * 2 }}; b = Box(1); b.w = 5; b.w", 10);
 }
+
+// shadowing is scoped: a function binding a host word keeps it to itself, the rest of the program has the host's
+#[test]
+fn a_host_word_bound_inside_a_function_stays_the_hosts_outside() {
+	is!("f(x) := { random = 4; random + x }; r = random; r < 1", true);
+	is!("f(x) := { random = 4; random + x }; f(1)", 5);
+}

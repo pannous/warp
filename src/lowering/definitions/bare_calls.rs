@@ -2,21 +2,51 @@
 //! `x = a` holds what a returns, `a + 1` adds to it (card assigning-bare). `function a` stays the function, a variable
 //! or parameter of that name stays itself. A word of the host taking nothing, `random`, is called the same way, and also
 //! where the emitter calls a program's function by itself: as a statement, after `print` and `type` (card random-should).
+//! A name is called only where the program leaves it free: `f(x) := { random = 4; … }` keeps its own random inside f.
 
 use super::nodes::{call, children_rewritten, key};
 use crate::lowering::reflection::CALLING_WORDS;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
+use crate::program_names::ProgramNames;
 use std::collections::HashSet;
 
-/// The names a bare word calls: every function without parameters, and of them the host's
+/// The names a bare word calls where they are free: every function without parameters, and of them the host's
 struct Parameterless {
 	all: HashSet<String>,
 	host: HashSet<String>,
+	names: ProgramNames,
+}
+
+impl Parameterless {
+	/// The functions without parameters, the program's and the host's, whose names no top-level variable takes
+	fn of(node: &Node) -> Self {
+		let functions = crate::analyzer::function_definitions(node).user_functions;
+		let host: HashSet<String> = crate::host::parameterless_host_words()
+			.filter(|name| !functions.contains_key(*name))
+			.map(String::from)
+			.collect();
+		let program = functions.iter().filter(|(_, function)| function.params.is_empty()).map(|(name, _)| name.clone());
+		let all = program.chain(host.iter().cloned()).collect();
+		Parameterless { all, host, names: ProgramNames::of(node) }.free()
+	}
+
+	/// Inside the function `node` defines: without the names its parameters and assignments take
+	fn inside(&self, node: &Node) -> Option<Self> {
+		let names = self.names.inside(node)?;
+		Some(Parameterless { all: self.all.clone(), host: self.host.clone(), names }.free())
+	}
+
+	fn free(mut self) -> Self {
+		let names = &self.names;
+		self.all.retain(|name| !names.binds(name));
+		self.host.retain(|name| !names.binds(name));
+		self
+	}
 }
 
 pub fn lower(node: Node) -> Node {
-	let parameterless = parameterless_functions(&node);
+	let parameterless = Parameterless::of(&node);
 	if parameterless.all.is_empty() {
 		return node;
 	}
@@ -24,23 +54,9 @@ pub fn lower(node: Node) -> Node {
 	called_value(node, &parameterless.host)
 }
 
-/// The functions without parameters, the program's and the host's, whose names no variable or parameter takes
-fn parameterless_functions(node: &Node) -> Parameterless {
-	let functions = crate::analyzer::function_definitions(node).user_functions;
-	let assigned: HashSet<String> = node.assigned_names(|op| *op == Op::Assign);
-	let parameters: HashSet<&str> =
-		functions.values().flat_map(|function| function.params.iter().map(|param| param.name.as_str())).collect();
-	let free = |name: &str| !assigned.contains(name) && !parameters.contains(name);
-	let host: HashSet<String> = crate::host::parameterless_host_words()
-		.filter(|name| free(name) && !functions.contains_key(*name))
-		.map(String::from)
-		.collect();
-	let program = functions.iter().filter(|(name, function)| function.params.is_empty() && free(name));
-	let all = program.map(|(name, _)| name.clone()).chain(host.iter().cloned()).collect();
-	Parameterless { all, host }
-}
-
 fn rewrite(node: Node, parameterless: &Parameterless) -> Node {
+	let inner = parameterless.inside(&node);
+	let parameterless = inner.as_ref().unwrap_or(parameterless);
 	let called = |side: Node| called_value(side, &parameterless.all);
 	let host_called = |side: Node| called_value(side, &parameterless.host);
 	match children_rewritten(node, |child| rewrite(child, parameterless)) {
