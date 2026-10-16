@@ -2,7 +2,6 @@
 // only lib.rs allows reexporting as:
 // use warp::extensions::*; etc
 // use crate::extensions::*; // crate for F12
-#[rustfmt::skip] // the user's hand layout, hard-linked to ~/dev/script/rust/extensions.rs
 pub mod extensions;
 pub use extensions::lists::*;
 pub use extensions::numbers::*;
