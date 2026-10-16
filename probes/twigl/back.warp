@@ -1,0 +1,5 @@
+#!/usr/bin/env warp
+# twigl's backbuffer b (card twigl-glsl): each frame keeps 96% of the last one, so a circle following the time leaves a trail
+use draw
+trail = twigl("vec2 p = (FC.xy * 2. - r) / r.y; vec2 c = vec2(sin(t * 2.), cos(t * 3.)) * .6; o = texture(b, FC.xy / r) * .96 + vec4(hsv(t * .1, .8, 1.), 1.) * step(length(p - c), .1);")
+for frame in 1..120 { paint(trail, 240, 180) }
