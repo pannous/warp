@@ -69,3 +69,12 @@ fn a_program_word_shadows_only_its_own_arities() {
 	is!("first(x) := x * 2; first([5,6,7], 2) == [5, 6]", true);
 	is!("first(x) := x * 2; first(3)", 6);
 }
+
+// decision class-members-free: library and built-in words are no keywords; a class member or a variable may take one
+#[test]
+fn a_class_member_or_variable_may_take_a_library_word() {
+	is!("class Box{width:int, height:int}; b = Box(3, 4); b.width * b.height", 12);
+	is!("width = 5; width + 1", 6);
+	is!("class P{count:int}; P(2).count", 2);
+	is!("class B{w:int; first() := w * 2}; B(4).first()", 8);
+}
