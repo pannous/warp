@@ -20,6 +20,7 @@ pub mod midi;
 pub mod sound_engine;
 pub mod spectrum;
 
+use crate::graphics::paint::shows_windows;
 use effects::Effect;
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
@@ -46,6 +47,8 @@ static SOUNDED: AtomicUsize = AtomicUsize::new(0);
 static RUN_CLOCK: std::sync::LazyLock<Instant> = std::sync::LazyLock::new(Instant::now);
 /// The handles stop_sound(handle) stopped one by one
 static STOPPED: Mutex<Vec<usize>> = Mutex::new(Vec::new());
+/// The music file formats warp plays and reads
+const FORMATS: [&str; 6] = ["wav", "mp3", "ogg", "flac", "aiff", "m4a"];
 /// The music files' formats by their first bytes: (format, magic bytes, offset of the magic)
 const FILE_FORMATS: [(&str, &[u8], usize); 7] = [
 	("wav", b"WAVE", 8),
@@ -64,13 +67,13 @@ type Command = (&'static str, &'static [&'static str], &'static [&'static str]);
 const FILE_PLAYERS: [Command; 5] = [
 	("afplay", &[], &["wav", "mp3", "flac", "aiff", "m4a"]),
 	("paplay", &[], &["wav", "ogg", "flac", "aiff"]),
-	("ffplay", &["-nodisp", "-autoexit", "-loglevel", "error"], &["wav", "mp3", "ogg", "flac", "aiff", "m4a"]),
-	("mpv", &["--no-video", "--msg-level=all=error"], &["wav", "mp3", "ogg", "flac", "aiff", "m4a"]),
+	("ffplay", &["-nodisp", "-autoexit", "-loglevel", "error"], &FORMATS),
+	("mpv", &["--no-video", "--msg-level=all=error"], &FORMATS),
 	("aplay", &["-q"], &["wav"]),
 ];
 /// The decoders that read a music file without playing it, the first the system has that knows its format
 const FILE_PROBES: [Command; 2] = [
-	("ffprobe", &["-v", "error"], &["wav", "mp3", "ogg", "flac", "aiff", "m4a"]),
+	("ffprobe", &["-v", "error"], &FORMATS),
 	("afinfo", &[], &["wav", "mp3", "flac", "aiff", "m4a"]),
 ];
 /// A player failing at once (a file it cannot decode) fails play itself; a later failure is printed when it happens
@@ -163,7 +166,7 @@ pub fn play_file(path: &str) -> Result<usize, String> {
 	let format = file_format(path)?;
 	probe(path, format)?;
 	let handle = next_handle();
-	if !crate::graphics::paint::shows_windows() {
+	if !shows_windows() {
 		eprintln!("sound file {format}: {path}");
 		return Ok(handle);
 	}
@@ -233,7 +236,7 @@ fn watched(child: Player, player: &str, queued: &Queued, label: &str) {
 /// stop_sound: the queued sounds dropped, the playing sounds and music files stopped
 pub fn stop() {
 	STOPS.fetch_add(1, Ordering::Relaxed);
-	crate::sound::sound_engine::stop(0);
+	sound_engine::stop(0);
 	killed(|_| true);
 }
 
@@ -245,7 +248,7 @@ pub fn stop_one(handle: usize) -> Result<(), String> {
 	if let Ok(mut stopped) = STOPPED.lock() {
 		stopped.push(handle);
 	}
-	crate::sound::sound_engine::stop(handle);
+	sound_engine::stop(handle);
 	killed(|playing| playing == handle);
 	Ok(())
 }
@@ -260,12 +263,12 @@ pub fn fade(handle: usize, gain: f64, seconds: f64) -> Result<(), String> {
 		return Err(format!("fade_sound({handle}, {gain}, {seconds}): the gain is 0…1 and the seconds not negative"));
 	}
 	// headless nothing is heard: the render places the fade at the start, not wherever the program's slowness put it
-	let place = if crate::graphics::paint::shows_windows() { voice().seconds - queued_seconds() } else { 0.0 };
+	let place = if shows_windows() { voice().seconds - queued_seconds() } else { 0.0 };
 	if let Ok(mut fades) = FADES.lock() {
 		fades.push(Fade { run: voice().run, handle, place, gain, seconds });
 	}
-	let faded = crate::sound::sound_engine::fade(handle, gain as f32, seconds);
-	if !faded && crate::graphics::paint::shows_windows() && last_handle() > 0 {
+	let faded = sound_engine::fade(handle, gain as f32, seconds);
+	if !faded && shows_windows() && last_handle() > 0 {
 		return Err("fade_sound: the sounds play by afplay here (no output stream of warp's own), which can't change a playing sound's gain".into());
 	}
 	Ok(())
@@ -294,7 +297,7 @@ pub fn queued_seconds() -> f64 {
 /// wait_sound, and the process's end: until the players and our output stream played what is queued (headless
 /// nothing is)
 pub fn wait() {
-	while PENDING.load(Ordering::Relaxed) > 0 || crate::sound::sound_engine::busy() {
+	while PENDING.load(Ordering::Relaxed) > 0 || sound_engine::busy() {
 		std::thread::sleep(PLAYER_POLL);
 	}
 }
@@ -317,12 +320,12 @@ pub fn define_bus(bus: usize, effects: Vec<Effect>) -> Result<usize, String> {
 	match bus {
 		0 => {
 			buses.push(vec![(place, effects.clone())]);
-			crate::sound::sound_engine::set_bus(buses.len(), &effects);
+			sound_engine::set_bus(buses.len(), &effects);
 			Ok(buses.len())
 		}
 		_ => {
 			buses.get_mut(bus - 1).ok_or_else(|| format!("no sound bus {bus}"))?.push((place, effects.clone()));
-			crate::sound::sound_engine::change_bus(bus, start, &effects);
+			sound_engine::change_bus(bus, start, &effects);
 			Ok(bus)
 		}
 	}
@@ -418,10 +421,16 @@ pub fn on_clock(run: impl FnOnce() -> Result<(), String> + Send + 'static) -> Re
 
 /// The voice goes on that many seconds without a sound (midi_note's length); heard, paced as a sound is
 pub fn rest(seconds: f64) {
-	if crate::graphics::paint::shows_windows() && BEFORE_AT.with(|before| before.borrow().is_empty()) {
+	paced_when_heard();
+	scheduled(seconds.max(0.0));
+}
+
+/// Heard, until the voice is within PLAY_AHEAD of the speaker, except in an `at`, which places its sounds itself (an
+/// arrangement's later bars come before its earlier ones)
+fn paced_when_heard() {
+	if shows_windows() && BEFORE_AT.with(|before| before.borrow().is_empty()) {
 		paced(PLAY_AHEAD);
 	}
-	scheduled(seconds.max(0.0));
 }
 
 /// The sound's seconds added to its voice behind the sounds queued there before it: when it starts in real time, and
@@ -592,7 +601,7 @@ fn file_format(path: &str) -> Result<&'static str, String> {
 		.iter()
 		.find(|(_, magic, at)| start[..read].get(*at..at + magic.len()) == Some(magic))
 		.map(|(format, _, _)| *format)
-		.ok_or_else(|| format!("{path} is not a sound file (wav, mp3, ogg, flac, aiff, m4a)"))
+		.ok_or_else(|| format!("{path} is not a sound file ({})", FORMATS.join(", ")))
 }
 
 /// Queue the samples on the audio clock: when the user may hear them in our own output stream (sound_engine.rs), else
@@ -634,7 +643,7 @@ pub fn play_blocks(
 	let total = (seconds.max(0.0) * rate as f64).round() as usize;
 	let handle = next_handle();
 	let stops = STOPS.load(Ordering::Relaxed);
-	let streamed = crate::graphics::paint::shows_windows() && crate::sound::sound_engine::available();
+	let streamed = shows_windows() && sound_engine::available();
 	let mut samples = Vec::new();
 	for first in (0..total).step_by(block.max(1)) {
 		if streamed {
@@ -661,7 +670,7 @@ pub fn play_blocks(
 }
 
 /// A signal's value, full scale -1…1, as a 16-bit amplitude
-fn signal_pcm(value: f64) -> i16 {
+pub(crate) fn signal_pcm(value: f64) -> i16 {
 	(value.clamp(-1.0, 1.0) * i16::MAX as f64).round() as i16
 }
 
@@ -672,18 +681,15 @@ pub fn paced(ahead: Duration) {
 	}
 }
 
-/// The 16-bit samples queued as the sound of the handle; heard, once the voice is within PLAY_AHEAD of the speaker,
-/// except in an `at`, which places its sounds itself (an arrangement's later bars come before its earlier ones)
+/// The 16-bit samples queued as the sound of the handle, paced when heard
 fn sounded(handle: usize, samples: Vec<i16>, rate: u32, channels: u16) -> Result<(), String> {
-	let audible = crate::graphics::paint::shows_windows();
-	if audible && BEFORE_AT.with(|before| before.borrow().is_empty()) {
-		paced(PLAY_AHEAD);
-	}
+	let audible = shows_windows();
+	paced_when_heard();
 	let seconds = samples.len() as f64 / channels as f64 / rate.max(1) as f64;
 	let (start, place) = scheduled(seconds);
 	let bus = SENT_TO.with(Cell::get);
 	let effects = bus_effects(bus);
-	if audible && crate::sound::sound_engine::play(handle, (bus, &effects), start, &samples, rate, channels) {
+	if audible && sound_engine::play(handle, (bus, &effects), start, &samples, rate, channels) {
 		wait_at_exit();
 	} else {
 		let path = wav_file(&wav_of(&samples, rate, channels), handle)?;
@@ -700,17 +706,8 @@ fn sounded(handle: usize, samples: Vec<i16>, rate: u32, channels: u16) -> Result
 }
 
 fn wav_file(wav: &[u8], handle: usize) -> Result<PathBuf, String> {
-	let folder = std::env::temp_dir().join(FOLDER);
-	std::fs::create_dir_all(&folder)
-		.map_err(|failure| format!("sound: cannot create {}: {failure}", folder.display()))?;
-	let process = std::process::id();
-	let path = folder.join(if handle == 1 {
-		format!("{FILE_STEM}-{process}.wav")
-	} else {
-		format!("{FILE_STEM}-{process}-{handle}.wav")
-	});
-	std::fs::write(&path, wav).map_err(|failure| format!("sound: cannot write {}: {failure}", path.display()))?;
-	Ok(path)
+	let stem = format!("{FILE_STEM}-{}", std::process::id());
+	crate::extensions::utils::numbered_temporary_file(FOLDER, &stem, handle, "wav", wav, "sound")
 }
 
 /// save sound as path: the sounds since the last render (or the start) in one WAV file, each at its place in its
@@ -749,20 +746,14 @@ pub fn render(path: &str) -> Result<f64, String> {
 					.map(move |channel| (frame[channel.min(frame.len() - 1)] as f64 * gain).round() as i16)
 			})
 			.collect();
-		if mixed.len() < start + samples.len() {
-			mixed.resize(start + samples.len(), 0);
-		}
-		mixed[start..].iter_mut().zip(samples).for_each(|(sum, sample)| *sum += sample as i32);
+		added_into(mixed, start, samples.into_iter().map(i32::from));
 	}
 	let mut mixed = buses.remove(&0).unwrap_or_default();
 	for (bus, sum) in buses {
 		let amplitudes: Vec<f32> = sum.iter().map(|&sample| sample as f32 / i16::MAX as f32).collect();
 		let (effects, changes) = bus_changes(bus, first_place, rate);
 		let processed = effects::processed(&amplitudes, &effects, &changes, rate, channels);
-		if mixed.len() < processed.len() {
-			mixed.resize(processed.len(), 0);
-		}
-		mixed.iter_mut().zip(processed).for_each(|(out, sample)| *out += (sample * i16::MAX as f32).round() as i32);
+		added_into(&mut mixed, 0, processed.into_iter().map(|sample| (sample * i16::MAX as f32).round() as i32));
 	}
 	let seconds = mixed.len() as f64 / channels as f64 / rate as f64;
 	rendered_until.insert(run, first_place + seconds);
@@ -773,6 +764,15 @@ pub fn render(path: &str) -> Result<f64, String> {
 }
 
 const POISONED: &str = "the rendered sounds are poisoned";
+
+/// The samples added into the mix from `start` on, the mix grown to hold them
+fn added_into(mix: &mut Vec<i32>, start: usize, samples: impl ExactSizeIterator<Item = i32>) {
+	let end = start + samples.len();
+	if mix.len() < end {
+		mix.resize(end, 0);
+	}
+	mix[start..].iter_mut().zip(samples).for_each(|(sum, sample)| *sum += sample);
+}
 
 /// The items of the run taken out of the shared list, the other runs' left in it
 fn of_run<T>(shared: &Mutex<Vec<T>>, run: usize, run_of: impl Fn(&T) -> usize) -> Result<Vec<T>, String> {
