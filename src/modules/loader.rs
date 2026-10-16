@@ -248,7 +248,7 @@ impl<'a> Loader<'a> {
 		let Some((name, body)) = fast_definition(&statement, self.fast_module) else {
 			return statement;
 		};
-		let body = with_fast_names(float_division(body), &std_module_definitions(FAST_MODULE).unwrap_or_default());
+		let body = with_fast_names(float_division(body), std_module_definitions(FAST_MODULE).unwrap_or_default());
 		self.fast_functions = true;
 		if let Some(function) = leftmost_symbol(&name) {
 			crate::compiler::compile_context::change(|context| context.fast_functions.insert(function));
@@ -266,7 +266,7 @@ impl<'a> Loader<'a> {
 		let path = std_path(&fast_name(FAST_MODULE));
 		let definitions = self.load_unhinted(path, source)?;
 		let words = std_module_definitions(FAST_MODULE).unwrap_or_default();
-		self.std_definitions.extend(definitions.into_iter().map(|definition| with_fast_names(definition, &words)));
+		self.std_definitions.extend(definitions.into_iter().map(|definition| with_fast_names(definition, words)));
 		crate::compiler::compile_context::change(|context| {
 			context.module_definitions.extend(words.iter().map(|word| fast_name(word)));
 		});
