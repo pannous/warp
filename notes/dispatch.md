@@ -99,7 +99,19 @@ Landed on branch one-dispatch: slices 1, 3, 4, 5 and Q2.
   your function to_hex"); lib/compiler/parser.warp's decimal is decimal_number.
 - probes/dispatch/compare_binaries.py: every `is!` snippet of the given test files with two binaries, the result lines
   compared; the quick behaviour check while the test queue is long.
-Next: slice 8 with card library-typed (decision library-words-typed): typed library words immutable for their types.
+- 8 (branch one-dispatch-typed, card library-typed, decision library-words-typed): typed_library_words.rs at the start
+  of MODULE_PASSES. A typed redefinition for the library's types is an error; an untyped one `count(x) := 7` becomes
+  `count·any` with a hint, and every call `count(v)`, `count v`, `v.count`, `v.count()` of an arity the program's
+  takes is chosen: every typed library parameter (library_parameter_types; MEMBER_SIGNATURES type `f: function`,
+  `at: int`) with a value known not to fit → the program's; the receiver's kind known → library or program; else an
+  `is_type` test of the receiver at run time (never of a function argument: testing calls it). A call of an arity only
+  the library takes stays the library's (`first(xs, 2)`); a builtin method that is no library function is called on
+  its receiver (`t.add(n)`); a shared array is the program's. Suffix words: `trim·any` gives `trimmed` →
+  `typed_library_words::dispatched` (ambiguous_forms suffix_call).
+  So the rule table's level 4 (the library's word for a value of its types) now comes before level 2 (the
+  program's untyped definition).
+Next: slice 2 (one uniform-call arity rule), 7 (class-body library-named methods into generics), 9 (units, type
+words), rest of 3 (the users still on their own sets, above).
 
 ## Answered questions (user, 2026-10-16; decisions dispatch-untyped-library-words, type-words-reserved, field-forms)
 - Q1 untyped `first(x) := x*2`: dispatch. The library's `first(list)` is more specific than the program's untyped
