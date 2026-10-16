@@ -26,3 +26,11 @@ fn callable_is_a_type() {
 	is!("3 is callable", false);
 	is!("\"a\" is callable", false);
 }
+
+#[test]
+fn a_value_for_a_callable_parameter_is_a_type_error() {
+	for argument in ["5", "\"a\"", "[1]"] {
+		let shown = warp::wasm_emitter::eval(&format!("run(f: callable) := f()\nrun({argument})")).serialize();
+		assert!(shown.contains("takes a function or a block for f: callable"), "run({argument}) gave {shown}");
+	}
+}

@@ -17,6 +17,7 @@ use crate::errors::diagnostic::{ask, reading, Ask, Fallback};
 use crate::mutation::bang_target;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
+use crate::type_kinds::Kind;
 use crate::words::IMPLICIT_PARAMETER;
 use std::collections::HashMap;
 
@@ -27,9 +28,8 @@ const BLOCK_TOPIC: &str = "uncharged-block";
 /// Prefixes of a block: `code e`, `block e` (synonyms, wiki/charged.md section 4)
 const BLOCK_WORDS: [&str; 2] = ["code", "block"];
 /// The type word of a parameter taking a function or a block (card callable): `run(f: callable) := f()` runs
-/// `run(square)`, `run(x => x * 2)` and `run({ print 1 })`; the others are its aliases, hinted
+/// `run(square)`, `run(x => x * 2)` and `run({ print 1 })`; its aliases (type_tests BUILTIN_TYPES) are hinted
 pub(crate) const CALLABLE_WORD: &str = "callable";
-const CALLABLE_ALIASES: [&str; 2] = ["invocable", "runnable"];
 /// The got-it topic of `!` on data
 const DATA_RUN_TOPIC: &str = "data-as-code";
 /// `body·m0`: a parameter of an expanded block function, bound once
@@ -75,7 +75,7 @@ impl Takes {
 	fn of_type(word: &str) -> Takes {
 		match word {
 			_ if BLOCK_WORDS.contains(&word) => Takes::Block,
-			_ if word == CALLABLE_WORD || CALLABLE_ALIASES.contains(&word) => Takes::Callable,
+			_ if crate::type_tests::builtin_type_name(word) == Some(CALLABLE_WORD) => Takes::Callable,
 			_ => Takes::Value,
 		}
 	}
@@ -124,7 +124,8 @@ fn is_code_argument(argument: &Node) -> bool {
 fn hint_callable_alias(node: &Node) {
 	node.visit(&mut |part| {
 		if let Node::Key(name, Op::Colon, kind) = part.drop_meta() {
-			if let Some(alias) = kind.drop_meta().symbol_name().filter(|word| CALLABLE_ALIASES.contains(word)) {
+			let alias = kind.drop_meta().symbol_name().filter(|word| *word != CALLABLE_WORD);
+			if let Some(alias) = alias.filter(|word| Takes::of_type(word) == Takes::Callable) {
 				crate::normalize::set_position_of(part);
 				let name = name.name();
 				crate::normalize::hint(
@@ -534,6 +535,16 @@ fn type_error(name: &str, block: &Node) -> Node {
 	))
 }
 
+/// `run(5)` of `run(f: callable)`: a value that is neither a function nor a block
+fn not_callable(function: &str, parameter: &str, argument: &Node, kind: Kind) -> Node {
+	let written = crate::normalize::operand_text(argument);
+	crate::node::error(&format!(
+		"type error: {function} takes a function or a block for {parameter}: {CALLABLE_WORD}, not {} {written}; fix: \
+		 {function}({{ {written} }}) to run code, or {function}(() => {written}) for a function giving it",
+		crate::analyzer::kind_with_article(if kind == Kind::Codepoint { Kind::Text } else { kind })
+	))
+}
+
 fn applied(function: &Node, argument: Node) -> Node {
 	parens(vec![function.clone(), argument])
 }
@@ -877,6 +888,11 @@ impl Blocks {
 		let mut body = function.body;
 		for ((parameter, takes), argument) in function.parameters.iter().zip(&arguments) {
 			let callable = *takes == Takes::Callable;
+			if let Some(kind) =
+				crate::analyzer::argument_literal_kind(argument).filter(|kind| callable && *kind != Kind::Function)
+			{
+				return Some(not_callable(name, parameter, argument, kind));
+			}
 			if *takes == Takes::Block || callable && is_code_argument(argument) {
 				body = substitute_block(body, parameter, argument);
 			} else if callable && argument.drop_meta().symbol_name().is_some() {
