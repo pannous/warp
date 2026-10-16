@@ -104,7 +104,7 @@ modules.rs, wasm_modules.rs, cargo_crates.rs, effects.rs), whose table is added 
 - modules/: modules.rs + modules/, wasm_modules, components, component_builder, cargo_crates, package_tools,
   std_adapters, std_docs, foreign, binaryen
 - host/: host.rs + host/, host_parts, sandbox, channels, tasks, shared, database
-- run/: wasm_reader, file_type (`warp register`)
+- run/: wasm_reader
 - web/: markup, accessibility
 - law.rs + law/, graphics/, sound/, gc_traits/, ffi/: stay
 
@@ -285,5 +285,5 @@ Finder: `probes/cleanup/duplicate_constants.py` (constants holding the same text
 - Left: the non-word duplicates, each into one home with `--home`: UNION_JOINER (law/type_model + declared_types),
   MODULE_FILE ×3 (web/route_split, deploy, site), JSON_TYPE/TEXT_TYPE (web_server + dev_server), STACK_EXHAUSTED
   (law + host), MISSING_TARGET_SIGN (package_tools + cargo_crates), WARP_CALL, FIRED_PREFIX ("once_fired_" ×2;
-  signal_values' "signal·fired·" differs), STYLE ×6, the same word lists EXTREMA/EXTREMUM_WORDS, run/file_type
-  EXTENSIONS = modules MODULE_EXTENSIONS, CHANGE_WORDS ×2.
+  signal_values' "signal·fired·" differs), STYLE ×6, the same word lists EXTREMA/EXTREMUM_WORDS,
+  CHANGE_WORDS ×2.

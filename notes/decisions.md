@@ -396,7 +396,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - duration-units (2026-10-16 night, Interviewer's proposal, kept by the user 2026-10-16; card
   time-module): the time module's durations and the unit h become one thing, as dimensions-units already makes
   duration the time dimension: `unit hour := 1 h`, `2 hour + 1 h` is 3 hours (today a DimensionError), printing
-  keeps the long names ("3 hours"). The `name` form then goes.
+  keeps the long names ("3 hours"). Amended 2026-10-16 (user, "leave as is"): the `name` form stays (`name hour := h`,
+  `2 h in minutes` → 120min); step 1, where `1 h` beside a duration is a duration, is enough.
 
 ## Text
 - letters (2026-10-15 evening, Interviewer's proposal, kept by the user 2026-10-16; card of-in-chain,
@@ -790,6 +791,17 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - dispatch-untyped-library-words (2026-10-16, user; card one-dispatch): an untyped program function named like a
   library word (`first(x) := x * 2`) covers every value the library word doesn't: the library's `first(list)` is
   more specific, so `first(3)` → 6 but `first([1,2])` → 1, with a hint that first of a list stays the library word.
+- round-halves (2026-10-16, user; card round-half-up): `round` rounds halves away from zero (`round(2.5)` → 3,
+  `round(-2.5)` → -3), like school rounding, C and Rust; banker's rounding is `round_even` (2). Where the compiler
+  sees an exact half (a literal or folded constant), a hint says Python would round to even. Unicode spellings
+  (Interviewer's default, from the user's idea): `⌊x⌋` floor, `⌈x⌉` ceil, `⌊x⌉` round (the usual nearest-integer
+  bracket). `x as int` truncates toward zero (`2.7` → 2, `-2.7` → -2), so it rounds down only for positive numbers.
+- class-members-free (2026-10-16, user; card one-dispatch; limits default-methods and library-words-typed):
+  width, height and every other built-in or library word are not keywords. A class field or method gets its own
+  dispatch signature, with that class as the receiver, so it never conflicts with them: `class Box{width:int,
+  height:int}`, `class P{count:int}` and a method `first()` in a class are all fine, and a local variable may shadow
+  one (`width = 5`). The "immutable" and "loud error" rules only forbid redefining a library word for the library's
+  own types (list, text, number…), never members of user classes.
 - library-words-typed (2026-10-16, user; cards library-typed, one-dispatch): harden the library. Every library word
   gets a full type signature (`square(x: number): number`, `count(xs: list): int`), and typed library words are
   immutable for their types until further notice. A program's untyped definition covers only other values, with a
