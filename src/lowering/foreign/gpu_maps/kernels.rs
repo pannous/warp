@@ -890,7 +890,8 @@ fn on_cpu_painted(name: &str, width: &str, height: &str) -> String {
 }
 
 /// `paint_each(f, width, height)` as the body of the prelude's paint_each with its parameters bound to the call's
-/// arguments, so f is called by its name: called as a value its parameters lose their types (twice as slow)
+/// arguments, so f is called by its name: called as a value its parameters lose their types (twice as slow). Card
+/// specialise-named-functions makes this the general rule for higher-order words
 fn expanded_paint_each(node: Node) -> Node {
 	let call = match node.drop_meta() {
 		Node::List(items, _, _) => match items.as_slice() {
@@ -907,7 +908,7 @@ fn expanded_paint_each(node: Node) -> Node {
 	let arguments =
 		spread_arguments(&arguments, parameters.len()).expect("on_cpu_painted passes paint_each's arguments");
 	let bindings = parameters.iter().map(|parameter| parameter.drop_meta().name()).zip(arguments.iter().cloned());
-	crate::law::substitute(&body, &bindings.collect())
+	crate::lowering::definitions::inlining::substituted_hygienically(&body, &bindings.collect())
 }
 
 /// `shader_of(f)`: the WGSL fragment shader paint(f, width, height) compiles f(x, y) to, as a text; an error where WGSL

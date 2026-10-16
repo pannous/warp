@@ -5,7 +5,7 @@
 //! Only functions whose meaning cannot change by moving their body: not recursive, no free variables (every name is a
 //! parameter or a local), no nested definitions, lambdas, globals or early returns, and a few statements at most.
 
-use super::nodes::{children_rewritten, key, Counter};
+use super::nodes::{children_rewritten, for_in_variable, key, Counter};
 use crate::node::{Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::{GLOBAL_WORD, RETURN_WORD};
@@ -14,6 +14,8 @@ use std::collections::{HashMap, HashSet};
 /// The most statements a body may have to be inlined
 const MAX_STATEMENTS: usize = 8;
 const NAME_SEPARATOR: &str = "·";
+/// A body's own variable renamed where an argument of its inlined call names it (substituted_hygienically)
+const INLINED_SUFFIX: &str = "inlined";
 
 struct Inlinable {
 	parameters: Vec<String>,
@@ -185,6 +187,28 @@ fn inlined_call(
 	let body =
 		bindings.chain(function.statements.iter().map(renamed)).chain(std::iter::once(renamed(&function.result)));
 	Some(Node::List(body.collect(), Bracket::Round, Separator::Semicolon))
+}
+
+/// `body` with its parameters replaced by the arguments `bindings` holds, its own variables (assigned, or a `for … in`'s)
+/// renamed first where an argument names one: paint_each's `for i in` keeps apart from the caller's `paint(ink, i, 2)`
+pub(crate) fn substituted_hygienically(body: &Node, bindings: &HashMap<String, Node>) -> Node {
+	let mut argument_names = HashSet::new();
+	for argument in bindings.values() {
+		argument.visit(&mut |part| {
+			if let Node::Symbol(name) = part {
+				argument_names.insert(name.clone());
+			}
+		});
+	}
+	let mut bound = HashSet::new();
+	body.visit(&mut |part| match part.drop_meta() {
+		Node::List(items, _, _) => bound.extend((0..items.len()).filter_map(|at| for_in_variable(&items[at..]))),
+		Node::Key(name, Op::Assign, _) => bound.extend(name.drop_meta().symbol_name().map(String::from)),
+		_ => {}
+	});
+	let clashing: HashSet<String> = bound.intersection(&argument_names).cloned().collect();
+	let renamed = renamed_names(body.clone(), &clashing, &|name| format!("{name}{NAME_SEPARATOR}{INLINED_SUFFIX}"));
+	crate::law::substitute(&renamed, bindings)
 }
 
 pub(crate) fn renamed_names(node: Node, names: &HashSet<String>, rename: &dyn Fn(&str) -> String) -> Node {

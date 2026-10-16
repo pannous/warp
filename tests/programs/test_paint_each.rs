@@ -10,4 +10,9 @@ fn paint_each_paints_a_function_pixel_by_pixel() {
 	let each = painted_rows_by(on_cpu, "ink(x, y) := (x + y) % 2\npaint(ink, 2 + 2, 2)", "paint_each");
 	let listed = painted_rows("paint([0, 1, 0, 1, 1, 0, 1, 0], 4, 2)", "paint_each_listed");
 	assert_eq!(each, listed);
+	// reviewer: paint_each's own `for i in` does not capture the caller's i
+	let mut on_cpu = crate::common::warp_command();
+	on_cpu.env("WARP_GPU", "off");
+	let named_i = painted_rows_by(on_cpu, "i = 4\nink(x, y) := (x + y) % 2\npaint(ink, i, 2)", "paint_each_i");
+	assert_eq!(named_i, listed);
 }
