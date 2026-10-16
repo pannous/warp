@@ -218,8 +218,7 @@ impl Monomial {
 			}
 			*imaginary = imaginary.rem_euclid(2);
 		}
-		let roots: [(BigInt, u32, fn(BigInt) -> Generator); 2] =
-			[(square, 2, Generator::SquareRoot), (cube, 3, Generator::CubeRoot)];
+		let roots = [(square, 2, Generator::SquareRoot as fn(BigInt) -> Generator), (cube, 3, Generator::CubeRoot)];
 		for (radicand, index, root) in roots {
 			let (outside, inside) = extract_power(&radicand, index);
 			coefficient = coefficient.mul(&Rational::integer(outside));
