@@ -334,10 +334,8 @@ fn for_loop_parts(node: &Node) -> Option<(&str, &Node)> {
 	}
 }
 
-fn lift_closures(program: Node) -> Node {
-	let context = crate::analyzer::function_context(&program);
-	let variables = captured_variables_of(&program);
-	let functions: HashSet<String> = context.user_functions.keys().cloned().collect();
+/// What may hold a function value in the program, settled
+fn settled_function_values(program: &Node, context: &Context) -> FunctionValues {
 	// `g = x => x`: the parameter a function hands back, so `g(y => y*2)(4)` calls what it was given
 	let passing_through: HashMap<String, usize> = context
 		.user_functions
@@ -351,19 +349,34 @@ fn lift_closures(program: Node) -> Node {
 		})
 		.collect();
 	let mut values = FunctionValues {
-		functions,
+		functions: context.user_functions.keys().cloned().collect(),
 		returning: HashSet::new(),
 		variables: HashSet::new(),
 		lists: HashSet::new(),
-		passing_through: passing_through.clone(),
-		class_fields: crate::class_methods::class_fields(&program),
+		passing_through,
+		class_fields: crate::class_methods::class_fields(program),
 	};
-	values.settle(&context, &program);
+	values.settle(context, program);
+	values
+}
+
+/// The fields the program gives a function value: `h.d` of `h = Holder(x => x + 1)` (card untyped-field)
+pub(crate) fn function_holding_fields(program: &Node) -> HashSet<String> {
+	let context = crate::analyzer::function_context(program);
+	settled_function_values(program, &context).variables.into_iter().filter(|path| path.contains('.')).collect()
+}
+
+fn lift_closures(program: Node) -> Node {
+	let context = crate::analyzer::function_context(&program);
+	let variables = captured_variables_of(&program);
+	let values = settled_function_values(&program, &context);
+	let callable_fields = values.callable_fields(&program);
 	let FunctionValues {
 		functions,
 		returning: returns_function,
 		variables: function_variables,
 		lists: function_lists,
+		passing_through,
 		..
 	} = values;
 	let mut lifting = Lifting {
@@ -373,6 +386,7 @@ fn lift_closures(program: Node) -> Node {
 		function_lists,
 		returns_function,
 		passing_through,
+		callable_fields,
 		lifted: vec![],
 		enclosing: vec![],
 		locals: vec![crate::lowering::for_loop::loop_variables(&program).into_iter().collect()],
@@ -503,7 +517,7 @@ fn gives_reference(node: &Node) -> bool {
 }
 
 /// The variable or field a node names: `s`, `s.fs` (a field lookup `s#("fs"+1)` after mutation.rs), `s.a.fs`
-fn holder_path(node: &Node) -> Option<String> {
+pub(crate) fn holder_path(node: &Node) -> Option<String> {
 	match node.drop_meta() {
 		Node::Symbol(name) => Some(name.clone()),
 		Node::Key(object, Op::Dot, field) => Some(format!("{}.{}", holder_path(object)?, field_word(field)?)),
@@ -661,6 +675,25 @@ impl FunctionValues {
 		}
 	}
 
+	/// The fields `x.d(5)` calls the value of: a declared class field or an object entry given a function value
+	/// (`hs = [{d: x => x * 3}]`), unless a function or method is named so (card lambda-held, reviewer)
+	fn callable_fields(&self, program: &Node) -> HashSet<String> {
+		let mut fields: HashSet<String> =
+			self.class_fields.values().flatten().map(|(field, _)| field.clone()).collect();
+		program.visit(&mut |node| {
+			if let Node::Key(key, Op::Colon, value) = node {
+				if let (Some(name), true) = (key.symbol_name(), self.is_function_value(value)) {
+					fields.insert(name.to_string());
+				}
+			}
+		});
+		let is_function_name = |field: &String| {
+			self.functions.iter().any(|function| function == field || function.ends_with(&format!("·{field}")))
+		};
+		fields.retain(|field| !is_function_name(field));
+		fields
+	}
+
 	/// `Holder(x => x + 1)` of `class Holder {d}`: the field d given the lambda, as `{d: x => x + 1}` gives it
 	fn constructed_fields(&self, value: &Node) -> Option<Vec<(String, Node)>> {
 		let Node::List(items, Bracket::Round, Separator::None) = value.drop_meta() else {
@@ -712,6 +745,8 @@ struct Lifting {
 	function_lists: HashSet<String>,
 	/// Functions returning one of their parameters, by its position: given a function value there, the call is one
 	passing_through: HashMap<String, usize>,
+	/// Declared class fields no function or method is named like: `x.d(5)` calls the value of the field d
+	callable_fields: HashSet<String>,
 	lifted: Vec<Node>,
 	/// The functions whose bodies the walk is in, innermost last, by their full names (`outer·inner`)
 	enclosing: Vec<String>,
@@ -788,14 +823,17 @@ impl Lifting {
 				closure_call(Node::Key(list, Op::Hash, Box::new(position)), arguments)
 			}
 			// `h.d(5)` of a field d holding a function: that function called, as `(h.d)(5)` (card lambda-held)
-			Node::Key(receiver, Op::Dot, call) if self.held_call(&receiver, &call).is_some() => {
-				let (field, arguments) = self.held_call(&receiver, &call).expect("guarded");
-				let arguments = arguments.into_iter().map(|argument| {
-					let walked = self.walk(argument, bound);
-					self.function_value(walked, bound)
-				});
-				closure_call(Node::Key(receiver, Op::Dot, Box::new(field)), arguments.collect())
-			}
+			Node::Key(receiver, Op::Dot, call) => match self.held_call(&receiver, &call) {
+				Some((field, arguments)) => {
+					let receiver = self.walk(*receiver, bound);
+					let arguments = arguments.into_iter().map(|argument| {
+						let walked = self.walk(argument, bound);
+						self.function_value(walked, bound)
+					});
+					closure_call(Node::Key(Box::new(receiver), Op::Dot, Box::new(field)), arguments.collect())
+				}
+				None => children_rewritten(Node::Key(receiver, Op::Dot, call), |child| self.walk(child, bound)),
+			},
 			Node::List(items, bracket, separator) => {
 				let items: Vec<Node> = items.into_iter().map(|item| self.walk(item, bound)).collect();
 				self.called_value(items, bracket, separator, bound)
@@ -916,14 +954,17 @@ impl Lifting {
 			|| (is_field(node) && holder_path(node).is_some_and(|path| self.function_variables.contains(&path)))
 	}
 
-	/// `h.d(5)`: the field `d` and the arguments, when h.d holds a function value
+	/// `h.d(5)`: the field `d` and the arguments, when h.d holds a function value: a path assigned one, or a declared
+	/// field of a class that no function or method is named like (`k.d(5)` of a parameter, `make().d(5)`)
 	fn held_call(&self, receiver: &Node, call: &Node) -> Option<(Node, Vec<Node>)> {
 		let Node::List(items, Bracket::Round, Separator::None) = call.drop_meta() else {
 			return None;
 		};
 		let (field, arguments) = items.split_first()?;
-		let path = format!("{}.{}", holder_path(receiver)?, field.symbol_name()?);
-		self.function_variables.contains(&path).then(|| (field.clone(), arguments.to_vec()))
+		let name = field.symbol_name()?;
+		let is_assigned_one =
+			holder_path(receiver).is_some_and(|path| self.function_variables.contains(&format!("{path}.{name}")));
+		(is_assigned_one || self.callable_fields.contains(name)).then(|| (field.clone(), arguments.to_vec()))
 	}
 
 	fn is_function_list(&self, list: &Node) -> bool {

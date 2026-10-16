@@ -16,3 +16,29 @@ fn a_lambda_in_a_map_entry_is_called() {
 	is!("h = {d: x => x * 3}\n(h.d)(5)", 15);
 	is!("h = {d: x => x * 3}\nh.d(5)", 15);
 }
+
+/// card untyped-field: a field given a function value is passed as one; a field of another kind still says it needs
+/// a function
+#[test]
+fn a_field_holding_a_lambda_is_passed_as_a_function() {
+	let apply = "apply(f, v) := f(v)\n";
+	is!(&format!("{apply}{HOLDER}apply(h.d, 5)"), 6);
+	is!(&format!("{apply}h = {{d: x => x * 3}}\napply(h.d, 5)"), 15);
+	let typed = warp::wasm_emitter::eval(&format!("{apply}class P {{n: int}}\np = P(3)\napply(p.n, 5)")).serialize();
+	assert!(typed.contains("apply needs a function for parameter f"), "{typed}");
+}
+
+/// reviewer: the holder may arrive any way, the field is called by its declared or inferred kind, not by the path
+/// assigned the lambda: a parameter, a call's result, a variable assigned a call, a loop variable, a list item
+#[test]
+fn a_held_lambda_is_called_whatever_holds_it() {
+	for program in [
+		"call(k) := k.d(5)\ncall(Holder(x => x + 1))",
+		"make() := Holder(x => x + 1)\nmake().d(5)",
+		"make() := Holder(x => x + 1)\nh = make()\nh.d(5)",
+		"out = 0\nfor h in [Holder(x => x + 1)] { out = h.d(5) }\nout",
+	] {
+		is!(&format!("class Holder {{d}}\n{program}"), 6);
+	}
+	is!("hs = [{d: x => x * 3}]\nhs#1.d(5)", 15);
+}
