@@ -1,6 +1,19 @@
 //! Objects and their fields: `object.name`, `name of object`, `object["name"]`, field assignments and `?.`, the variables only ever holding object literals
 use super::*;
 
+/// `x.word` of an x that may be a map holding the key `word`: `if x is a map holding the key then x["word"] else
+/// otherwise` (word(x)), so a map's own words (`m.count`) still answer on maps without such a key. A one-entry map in a
+/// list (`[{first: 2}]`) is held as a key, which has that key too
+pub(crate) fn map_field_or(receiver: &Node, name: &str, word_node: &Node, otherwise: Node) -> Node {
+	if !is_pure_read(receiver) {
+		return otherwise;
+	}
+	let is_type = |type_word: &str| parens(vec![symbol(crate::words::IS_TYPE), receiver.clone(), text(type_word)]);
+	let is_map = key(is_type(crate::words::MAP_WORD), Op::Or, is_type(&crate::Kind::Key.to_string()));
+	let has_key = crate::node::call(COLLECTION_CONTAINS, vec![receiver.clone(), text(name)]);
+	if_then_else(key(parens(vec![is_map]), Op::And, has_key), field_lookup(receiver, name, word_node), otherwise)
+}
+
 /// `object.name`, `name of object`, `object["name"]`: the entry named `name`, a subscript by a text key
 pub(super) fn field_lookup(object: &Node, name: &str, position: &Node) -> Node {
 	let key = match position {
