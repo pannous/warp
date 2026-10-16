@@ -57,10 +57,10 @@ const DEPLOY_COMMAND: &str = "deploy";
 /// `warp serve [app.warp] [port]`: serves the program, its page, server functions and routes (P222)
 const SERVE_COMMAND: &str = "serve";
 /// The first words the command line takes as commands, for unknown_command's suggestion
-const COMMAND_WORDS: [&str; 30] = [
+const COMMAND_WORDS: [&str; 29] = [
 	"run", "test", "eval", "lower", "parse", "verify", "format", "lint", "beautify", "fix", "types", "data", "tool",
-	"dev", "serve", "deploy", "repl", "console", "register", "compile", "build", "link", "app", "help", "version",
-	"docs", "wiki", "home", "lsp", "start",
+	"dev", "serve", "deploy", "repl", "console", "compile", "build", "link", "app", "help", "version", "docs", "wiki",
+	"home", "lsp", "start",
 ];
 /// How far a mistyped command may be from the command it suggests (`formt` → format)
 const MISTYPED_LETTERS: usize = 2;
@@ -428,7 +428,6 @@ fn usage() {
 	);
 	println!("  warp deploy [--dev|--dry-run|--hosted] <file>  The program's routes as a Cloudflare Worker, by wrangler (--dev: on this machine, --dry-run: only <file>-worker/, --hosted: at warp-<file>.pannous.workers.dev, by your GitHub login)");
 	println!("  warp repl            Start interactive console");
-	println!("  warp register        Let Finder and `open` run .warp files (macOS)");
 	println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
 	println!("  warp fast <file|code> sin cos exp pow atan2 as quick wasm polynomials, as `use fast_math` (errors: lib/fast_math.warp)");
 	println!("  --no-ask             Never prompt \"got it?\" after a warning or note");
