@@ -29,6 +29,8 @@ pub struct CompileContext {
 	pub sandboxed: bool,
 	/// the source of the program, for excerpts and its `// got it` comments
 	pub source: String,
+	/// a line of the source says `use strict` (in_source_mode, the one reader of it)
+	pub says_strict: bool,
 	pub warning_mode: WarningMode,
 	/// the program said `use comments` (P114: off by default)
 	pub comments_as_meta: bool,
@@ -94,6 +96,7 @@ impl Default for CompileContext {
 			serving_port: None,
 			sandboxed: false,
 			source: String::new(),
+			says_strict: false,
 			warning_mode: WarningMode::default(),
 			comments_as_meta: false,
 			reflection_mode: false,
@@ -137,21 +140,39 @@ pub fn change<R>(write: impl FnOnce(&mut CompileContext) -> R) -> R {
 	CONTEXT.with(|context| write(&mut context.borrow_mut()))
 }
 
-/// `run` with the context's `field` holding `value`, then the value it held before, also when `run` panics
-pub fn scoped<T: 'static, R>(field: fn(&mut CompileContext) -> &mut T, value: T, run: impl FnOnce() -> R) -> R {
-	struct Restore<T: 'static> {
-		field: fn(&mut CompileContext) -> &mut T,
-		outer: Option<T>,
+/// A context field set for a while: dropping it puts back the value the field held before
+struct Restore<T: 'static> {
+	field: fn(&mut CompileContext) -> &mut T,
+	outer: Option<T>,
+}
+
+impl<T> Restore<T> {
+	fn set(field: fn(&mut CompileContext) -> &mut T, value: T) -> Self {
+		let outer = change(|context| std::mem::replace(field(context), value));
+		Restore { field, outer: Some(outer) }
 	}
-	impl<T> Drop for Restore<T> {
-		fn drop(&mut self) {
-			if let Some(outer) = self.outer.take() {
-				// try_with: a thread's locals may already be gone when it unwinds at exit
-				let _ = CONTEXT.try_with(|context| *(self.field)(&mut context.borrow_mut()) = outer);
-			}
+}
+
+impl<T> Drop for Restore<T> {
+	fn drop(&mut self) {
+		if let Some(outer) = self.outer.take() {
+			// try_with: a thread's locals may already be gone when it unwinds at exit
+			let _ = CONTEXT.try_with(|context| *(self.field)(&mut context.borrow_mut()) = outer);
 		}
 	}
-	let outer = change(|context| std::mem::replace(field(context), value));
-	let _restore = Restore { field, outer: Some(outer) };
+}
+
+/// A switch of the context, such as the one a pragma turns on
+pub type Flag = fn(&mut CompileContext) -> &mut bool;
+
+/// `run` with the context's `field` holding `value`, then the value it held before, also when `run` panics
+pub fn scoped<T: 'static, R>(field: fn(&mut CompileContext) -> &mut T, value: T, run: impl FnOnce() -> R) -> R {
+	let _restore = Restore::set(field, value);
+	run()
+}
+
+/// `run` with each flag holding its value, then the values they held before, also when `run` panics
+pub fn scoped_flags<R>(flags: &[(Flag, bool)], run: impl FnOnce() -> R) -> R {
+	let _restores: Vec<Restore<bool>> = flags.iter().map(|&(field, value)| Restore::set(field, value)).collect();
 	run()
 }

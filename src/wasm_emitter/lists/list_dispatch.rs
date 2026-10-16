@@ -361,7 +361,6 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// Push the element count (i64) of `target`; `counter` is the runtime counter of the generic backend (node_count, node_bytes …)
 	/// `t.bytes` without a call when t holds a text, its length field; anything else through node_bytes (card
 	/// loop-calls: a byte loop asked node_bytes each round)
 	fn emit_byte_count_inline(&mut self, func: &mut Function, target: &Node) {
@@ -377,6 +376,7 @@ impl WasmGcEmitter {
 		func.instruction(&I::End);
 	}
 
+	/// Push the element count (i64) of `target`; `counter` is the runtime counter of the generic backend (node_count, node_bytes …)
 	pub(in crate::wasm_emitter) fn emit_list_count(
 		&mut self,
 		func: &mut Function,
