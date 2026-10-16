@@ -87,3 +87,12 @@ fn set_glyphs_are_membership_and_set_words() {
 	is!("[1 2] ⊇ [3]", false);
 	is!("subset([1], [1 2])", true);
 }
+
+// reviewer: ∩ binds tighter than ∪ as * does than +, and the subset tests compare what the set operators build;
+// lib/list.warp declares the precedence, user code gets it without `use list`
+#[test]
+fn set_glyphs_bind_like_math() {
+	is!("[1 2] ∪ [2 3] ∩ [3]", parse("[1 2 3]"));
+	is!("[1] ⊆ [2] ∪ [1]", true);
+	is!("[3 1 2 3] ∩ [3 2]", parse("[3 2]"));
+}
