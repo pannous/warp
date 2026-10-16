@@ -375,6 +375,8 @@ impl TypeRegistry {
 				let name = Self::written_name(name_node)?;
 				let type_name = match type_node.drop_meta() {
 					Node::Type { name: type_name_node, .. } => Self::written_name(type_name_node),
+					// a text is a default (`name = ""`, `name: "x"`), never the name of the field's type
+					Node::Text(_) => None,
 					// `size: int | text`: the union's name, `int or text`
 					written => Self::written_name(written).or_else(|| crate::analyzer::union_type_name(written)), // none for a default value `x=0` or `x:0`
 				};

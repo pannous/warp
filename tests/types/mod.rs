@@ -44,6 +44,7 @@ mod test_collection_declarations;
 mod test_conformance_claims;
 mod test_construction_checks;
 mod test_construction_defaults;
+mod test_text_defaults; // card empty-text-default
 mod test_constructor_vs_data;
 mod test_copies;
 mod test_cycle_mark_depth; // card cycle-mark-depth
