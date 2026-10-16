@@ -57,3 +57,12 @@ fn test_object_data_stays_data() {
 	is!("p={a:1 b:2}; p.a + p.b", 3);
 	assert_eq!(warp::wasm_emitter::eval("{a:1 b:2}").serialize(), "{a:1 b:2}");
 }
+
+#[test]
+fn test_of_lookup_is_an_assignment_target() {
+	is!("p={width:3}; width of p = 12; p.width", 12);
+	is!("p={width:3}; set width of p to 12; p.width", 12);
+	is!("x=1; set x to 5; x", 5);
+	is!("class Box { w = 1; set size(v) { w = v * 2 } }; b = Box(); set size of b to 5; b.w", 10);
+	is!("square of a number = number*number; square 3", 9);
+}
