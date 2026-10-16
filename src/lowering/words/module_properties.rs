@@ -161,7 +161,8 @@ fn without_definitions(node: Node) -> Node {
 /// The names the program gives: variables, functions, their parameters (`def f(width) {…}` too), loop variables,
 /// fields; a property written (`canvas.width = 3`) binds no name
 pub(crate) fn bound_names(program: &Node) -> HashSet<String> {
-	let mut bound = crate::soft_keywords::names_given(program);
+	let names = crate::soft_keywords::names_given_with_kinds(program).into_iter();
+	let mut bound: HashSet<String> = names.filter(|(_, kind)| *kind != "field").map(|(name, _)| name).collect();
 	program.visit(&mut |node| {
 		if let Some(head) = function_head(node) {
 			bound.extend(head.parameters().into_iter().filter_map(parameter_name));
@@ -175,6 +176,21 @@ pub(crate) fn bound_names(program: &Node) -> HashSet<String> {
 		}
 	});
 	bound
+}
+
+/// The fields `{width: 5}` or `class R{width: int}` declares
+fn declared_fields(node: &Node) -> Vec<String> {
+	let entries = match node.drop_meta() {
+		Node::Type { body, .. } => body.drop_meta(),
+		literal @ Node::List(_, Bracket::Curly, _) => literal,
+		_ => return vec![],
+	};
+	let Node::List(entries, _, _) = entries else { return vec![] };
+	let field = |entry: &Node| match entry.drop_meta() {
+		Node::Key(name, Op::Colon, _) => name.drop_meta().symbol_name().map(String::from),
+		_ => None,
+	};
+	entries.iter().filter_map(field).collect()
 }
 
 /// `height` of a write's target `height` or a declared `height: length`
@@ -261,7 +277,16 @@ impl Rewrite {
 			// a field's name is no read of the word: `{width: 5}`, `p.width`, `rect(width: 3)`
 			Node::Key(name, Op::Colon, value) => Node::Key(name, Op::Colon, Box::new(self.rewritten(*value))),
 			Node::Key(object, Op::Dot, member) => Node::Key(Box::new(self.rewritten(*object)), Op::Dot, member),
-			other => other.map_children(|child| self.rewritten(child)),
+			other => {
+				// a field binds its name inside the object or class declaring it, not elsewhere (`p = {width: 5}; width`)
+				let fields: Vec<String> =
+					declared_fields(&other).into_iter().filter(|field| self.bound.insert(field.clone())).collect();
+				let rewritten = other.map_children(|child| self.rewritten(child));
+				fields.iter().for_each(|field| {
+					self.bound.remove(field);
+				});
+				rewritten
+			}
 		}
 	}
 

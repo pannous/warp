@@ -54,3 +54,11 @@ fn a_conversion_word_beside_a_field_of_that_name() {
 	is!("p = {hex: 1}; hex(255) == 255 as hex", true);
 	is!("f(hex) := hex + 1; f(1)", 2);
 }
+
+// a field binds its name inside its object or class only: elsewhere a bare width is the canvas's
+#[test]
+fn a_field_named_like_a_canvas_side_binds_only_inside_its_class() {
+	is!("class R{width:int; height:int; area() := width * height}; R(2,3).area()", 6);
+	is!("p = {width: 5}; width == canvas.width", true);
+	is!("p = {width: 5}; p.width", 5);
+}
