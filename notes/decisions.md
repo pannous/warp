@@ -645,10 +645,12 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 
 ## Classes, objects and enums
 - property-accessors (2026-10-16, user, changed from the Interviewer's night proposal `width: get{…} set{…}`; cards
-  property-get, graphics-properties): accessors are assignment-shaped definitions: the getter defines the field,
-  `canvas.width := canvas_width`; the setter defines the assignment, `canvas.width = it := canvas(it,
-  canvas_height)`, `it` the written value. A field with a getter and no setter is read-only: `display.width = 5` is
-  a loud error. lib/draw.warp replaces the Rust table this way.
+  property-get, graphics-properties), refined the same morning ("polymorphism, no special syntax needed"):
+  accessors are plain overloads by arity. The getter takes no argument, `canvas.width := canvas_width`; the setter
+  is the same name with one parameter, `canvas.width(new_width) := canvas_width = new_width`, or with `it` as the
+  implicit parameter, `canvas.width := canvas_width = it` (the same thing). `canvas.width = 5` calls the setter.
+  A field with a getter and no setter is read-only: `display.width = 5` is a loud error. lib/draw.warp replaces
+  the Rust table this way.
 - saved-words (2026-10-16 night, Interviewer's proposal, kept by the user 2026-10-16; card
   graphics-saved-words): no save-only table and no symbol overload. The general bare-call rule (random-forms: a
   function word used as a value is its call) covers it: lib/draw.warp declares `canvas()` with no arguments as the
