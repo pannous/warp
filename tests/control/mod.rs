@@ -31,6 +31,7 @@ mod test_colon_handlers;
 mod test_condition_block;
 mod test_constant_listener;
 mod test_control_words;
+mod test_count_word_blocks; // card thrice-block
 mod test_ctrl_c_rule;
 mod test_daily_timer;
 mod test_data_quoting; // card data-quoting
