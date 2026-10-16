@@ -30,6 +30,9 @@ const HELP_PREFIX: &str = "help ";
 const HELP_MARKDOWN: &str = "help --markdown";
 /// `warp build --site app.warp`: the directory app-site/ a web server serves (src/web/site.rs, card web-ssr)
 const SITE_FLAG: &str = "--site";
+/// `warp compile --page app.warp`: app.wasm for a page of its own, its path imports named page:modules/<file> and those
+/// modules written to modules/ beside it, as a site ships them (web/uniscript/build.sh, card imports-wasm)
+const PAGE_FLAG: &str = "--page";
 /// The site of inline code
 const DEFAULT_SITE_NAME: &str = "site";
 /// `warp build --wit app.warp`: the WIT world of the program's `component` declaration, app.wit (card wasm-interop-rest)
@@ -237,6 +240,9 @@ fn run_command(args: &[String]) {
 		if flags.contains(&SITE_FLAG) {
 			return write_site(&code, &target);
 		}
+		if flags.contains(&PAGE_FLAG) {
+			return write_page_module(&code, &target);
+		}
 		if flags.contains(&WIT_FLAG) {
 			return write_wit(&code, &target);
 		}
@@ -440,6 +446,7 @@ fn usage() {
 		"  warp compile --wasm <file|code>  Only the module, <file>.wasm (out.wasm for inline code), without running"
 	);
 	println!("  warp compile --aot <file|code>   The module and its machine code for this machine, <file>.cwasm");
+	println!("  warp compile --page <file>  The module for a page of its own, the modules it imports by path in modules/ beside it");
 	println!("  warp build <file.warp>  The standalone executable <file> and <file>.wasm (--exe: only the executable, --wasm: only the module)");
 	println!("  warp {APP_COMMAND} <file.warp>    Show the program's page in a window of its own (macOS web view; {APP_CHECK}: print its text)");
 	println!("  warp test            Run tests");
