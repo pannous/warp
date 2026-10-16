@@ -1,4 +1,4 @@
-//! Data stays clean (decision error-optional): a name or call written as an item of a list literal is marked, and the
+//! Data stays clean (decision error-optional): every item but a literal written in a list literal is marked, and the
 //! emitter fails where it holds an Error (wasm_emitter data_item); results, locals and arguments carry an Error on.
 //! Only lists as written are marked: the lists later passes build (`guarded_call`'s arguments) hold what they are given
 
@@ -7,7 +7,7 @@ use crate::node::{Bracket, Node};
 /// Meta key marking an item written in a list literal
 pub const DATA_ITEM: &str = "data item";
 
-/// Every name and call written as an item of a `[…]` list, marked
+/// Every item but a literal written in a `[…]` list, marked
 pub fn lower(node: Node) -> Node {
 	match crate::node::children_rewritten(node, lower) {
 		Node::List(items, Bracket::Square, separator) => {
@@ -25,13 +25,18 @@ fn marked(item: Node) -> Node {
 	}
 }
 
-/// A name `e` or a call `f(x)`, `(try x else 0)`: an item whose value is known only when it runs
+/// Any item but a literal and a nested list (whose items are marked themselves): `e`, `f(x)`, `e+1`, `c ? e : 1`
 fn may_hold_an_error(item: &Node) -> bool {
-	match item {
-		Node::Symbol(_) => true,
-		Node::List(parts, Bracket::Round | Bracket::None, _) => !parts.is_empty(),
-		_ => false,
-	}
+	!matches!(
+		item,
+		Node::Number(_)
+			| Node::Text(_)
+			| Node::Char(_)
+			| Node::True
+			| Node::False
+			| Node::Empty
+			| Node::List(_, Bracket::Square, _)
+	)
 }
 
 /// The item under the mark, through any other metadata around it

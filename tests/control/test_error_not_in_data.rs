@@ -9,6 +9,8 @@ const E: &str = "e = try 10/0; ";
 fn test_an_error_in_a_list_literal_raises() {
 	fails_with(&format!("{E}xs = [e 2]; xs"), "divide by zero: a list item holds no error");
 	fails_with(&format!("{E}f(x) := x; xs = [1 f(e)]; xs"), "a list item holds no error");
+	fails_with(&format!("{E}xs = [if 1 then e else 1, 2]; xs"), "a list item holds no error");
+	fails_with(&format!("{E}c = 1; xs = [c ? e : 1, 2]; xs"), "a list item holds no error");
 }
 
 #[test]
