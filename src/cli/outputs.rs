@@ -8,7 +8,6 @@ pub(crate) const COMPONENT_EXTENSION: &str = "component.wasm";
 pub(crate) const WAGI_EXTENSION: &str = "wagi.wasm";
 pub(crate) const SPIN_MANIFEST_EXTENSION: &str = "spin.toml";
 
-/// `dir/program.warp` compiles to `dir/program.wasm`; inline code compiles to `out.wasm`
 /// `warp build`: the WebAssembly module next to the program file (out.wasm for inline code), with `--aot` its machine
 /// code too
 pub(crate) fn write_module(code: &str, target: &str, ahead_of_time: bool) {
