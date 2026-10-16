@@ -425,9 +425,6 @@ pub(super) fn extract_declared_ffi_imports(ctx: &mut Context, node: &Node) {
 				extract_declared_ffi_imports(ctx, item);
 			}
 		}
-		Node::Key(key, _, value) if key.name() == IMPORT_KEYWORD && from_library(value).is_some() => {
-			add_ffi_import(ctx, &key.name(), &from_library(value).expect("guarded"));
-		}
 		Node::Key(key, _, value) => {
 			extract_declared_ffi_imports(ctx, key);
 			extract_declared_ffi_imports(ctx, value);
