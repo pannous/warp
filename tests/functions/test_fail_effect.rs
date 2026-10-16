@@ -66,3 +66,10 @@ fn indexing_a_key_and_a_number_cast_fail() {
 	assert!(!fails("f(x) := x as text", "f"));
 	assert!(!fails("f(xs) := try xs#5 else 0", "f"));
 }
+
+#[test] // cards print-effects, print-effects-walked: the effects print as one value, not one letter per line
+#[cfg(feature = "native")]
+fn print_effects_of_prints_the_effects() {
+	assert_eq!(crate::common::printed("f(x) := 10/x\nprint effects of f").trim(), "Fail");
+	assert_eq!(crate::common::printed("g(x) := { puts x; raise \"no\" }\nprint effects of g").trim(), "(IO Fail)");
+}
