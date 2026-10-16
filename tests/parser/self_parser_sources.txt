@@ -567,7 +567,6 @@ probes/class_field_from_map.warp
 probes/class_field_function_def.warp
 probes/class_field_function_map.warp
 probes/cli_exit/serve_fails.warp
-probes/closures/captured_node_return.warp
 probes/compile_path/undefined_in_sum.warp
 probes/component_drop.warp
 probes/component_operators.warp
@@ -766,21 +765,6 @@ probes/paint_text/hello.warp
 probes/parallel/sum_branch.warp
 probes/parallel/tree_sum_sequential.warp
 probes/parallel/tree_sum.warp
-probes/parse/adjacent_index.warp
-probes/parse/bare_return.warp
-probes/parse/elseif_block.warp
-probes/parse/elseif_top.warp
-probes/parse/for_tuple.warp
-probes/parse/fun_elseif_return.warp
-probes/parse/in_assign.warp
-probes/parse/in_condition.warp
-probes/parse/in_counting.warp
-probes/parse/property_still.warp
-probes/parse/return_count.warp
-probes/parse/return_expr.warp
-probes/parse/return_list.warp
-probes/parse/return_negative.warp
-probes/parse/space_bracket_list.warp
 probes/passed_list_identity.warp
 probes/pause_spin.warp
 probes/perf/auto_linear_map.warp
@@ -813,7 +797,6 @@ probes/readme/oob.warp
 probes/readme/upto.warp
 probes/request_headers.warp
 probes/route_position.warp
-probes/ruby_yield/bare.warp
 probes/runtime_function_equality.warp
 probes/runtime_positions.warp
 probes/samples_uncaught/modules_try.warp
@@ -991,3 +974,4 @@ samples/voices.warp
 samples/word_lengths.warp
 samples/worker.warp
 probes/self_hosting/parser/glued_units.warp
+tests/fixtures/parser_corpus/parser.warp

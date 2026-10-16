@@ -2,7 +2,7 @@ use crate::is;
 use warp::warp_parser::parse;
 use warp::{Node, Op};
 
-// foreign keyword forms (Python, JS, Ruby, PHP) compile to their intent; snippets in probes/parse/
+// foreign keyword forms (Python, JS, Ruby, PHP) compile to their intent
 
 #[test]
 fn else_if_chains_another_if() {
@@ -21,6 +21,13 @@ fn elif_elsif_and_elseif_are_else_if() {
 	is!("x = 0\nn = 1\nif n == 2 { x = 1 } elsif n == 3 { x = 2 } else { x = 3 }\nx", 3);
 	is!("x = 0\nn = 3\nif n == 2 { x = 1 } elseif n == 3 { x = 2 }\nx", 2);
 	is!("x = 0\nn = 3\nif n == 2: x = 1 elif n == 3: x = 2 else: x = 3\nx", 2);
+	is!("x = 0\nn = 3\nif n == 2: x = 1 elif n == 3: x = 2\nx", 2);
+}
+
+#[test]
+fn in_is_a_value_and_a_condition() {
+	is!("v = [\"A\"]\nx = \"Z\" in v\nx", false);
+	is!("v = [\"A\"]\nif \"Z\" in v { 1 } else { 0 }", 0);
 }
 
 #[test]
