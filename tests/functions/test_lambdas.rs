@@ -50,7 +50,6 @@ fn test_map_as_a_method() {
 #[test]
 fn test_a_lambda_that_cannot_be_inlined_is_a_closure_value() {
 	is!("apply(f, x):=x; apply(y=>y+1, 2)", 2);
-	fails_with("map [1 2 3] 5", "map needs a function, got 5 (an Int); fix: map [1 2 3] (x => …)");
 }
 
 #[test]

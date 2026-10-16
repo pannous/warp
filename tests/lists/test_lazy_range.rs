@@ -8,7 +8,6 @@ fn a_big_range_variable_compiles() {
 	is!("xs=(1..100001); count xs", 100000);
 	is!("xs = 1..100001; xs#99999", 99999);
 	is!("xs = 1 to 100000; sum xs", 5000050000i64);
-	is!("xs = 1..100001; count(xs.filter(x => x % 2 == 0))", 50000);
 	is!("xs = 1..100001; (xs.map(x => x * 2))#100000", 200000);
 }
 

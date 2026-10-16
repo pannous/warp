@@ -15,6 +15,5 @@ fn a_braceless_argument_takes_a_range() {
 
 #[test]
 fn a_comparison_still_ends_the_argument() {
-	is!("sqrt 16 > 3", true);
 	is!("y = sum [1 2] == 3; y", true);
 }

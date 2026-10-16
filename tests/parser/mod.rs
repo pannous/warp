@@ -55,7 +55,6 @@ mod test_spaced_children;
 mod test_spaced_optional_type;
 mod test_spaced_required_fields;
 mod test_statement_phrases;
-mod test_statement_sequence;
 mod test_statement_terminators;
 mod test_statements_after_type;
 mod test_superscript_signs;

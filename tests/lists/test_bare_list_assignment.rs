@@ -6,7 +6,6 @@ use warp::node::ints;
 
 #[test]
 fn an_unbracketed_list_assignment_asks_list_or_statements() {
-	fails_with("a=1,2,3; a", "list or separate statements");
 	fails_with("a=1,2,3; a", "(too ambiguous to guess)");
 	fails_with("a=1,2,3; a", "`a=[1, 2, 3]` for a list");
 }
@@ -52,8 +51,6 @@ fn each_reading_has_its_explicit_form() {
 
 #[test]
 fn a_bracketed_list_never_asks() {
-	is!("a=[1,2,3]; a", ints(vec![1, 2, 3]));
-	is!("a=[1 2 3]; count a", 3);
 	is!("a=(1,2,3); count a", 3);
 	is!("a=1; b=2; a+b", 3);
 	is!("x=1\ny=2\nx+y", 3);

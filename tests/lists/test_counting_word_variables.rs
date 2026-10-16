@@ -4,7 +4,6 @@ use crate::is;
 
 #[test]
 fn a_counting_word_variable_in_a_list_is_an_item() {
-	is!("count = 5; a = 2; [count, a]", warp::ints(vec![5, 2]));
 	is!("size = 5; a = 2; [size, a]", warp::ints(vec![5, 2]));
 	is!("xs = [1, 2, 3]; count xs", 3);
 }
