@@ -1,8 +1,10 @@
 //! A function passed by name to a higher-order function gets a copy of that function made for it, which calls it by
 //! name: `each(f, n) := { … f(i, i + 1) … }; each(ink, 3000000)` adds `each·ink(n) := { … ink(i, i + 1) … }` and calls
 //! `each·ink(3000000)`. Called as a value its parameters would lose their types (a closure call, 2–3× slower).
-//! Only top-level functions defined once, whose parameter is only called or passed on, and only names no part of the
-//! program binds otherwise; a copy's own calls are specialised in turn (`fold(f, xs) := … fold(f, rest)`), up to a cap.
+//! Only top-level functions defined once, whose parameter is only called or passed on, and only names no assignment,
+//! parameter or one-parameter lambda binds too (a loop variable or a destructured name of the same name is not looked
+//! for: a call's head is the function anyway); a copy's own calls are specialised in turn (`fold(f, xs) := … fold(f,
+//! rest)`), up to a cap.
 
 use super::nodes::{children_rewritten, key, parameter_name};
 use crate::node::{Bracket, Node, Separator};
