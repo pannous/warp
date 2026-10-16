@@ -138,8 +138,7 @@ fn si_amount(unit: &Unit) -> Rational {
 }
 
 fn packed(dimension: Dimension) -> Option<i64> {
-	let at_run_time = dimension.0 < RUN_TIME_QUANTITIES && !NOT_AT_RUN_TIME.contains(&dimension.name());
-	at_run_time.then(|| RUN_TIME_BYTE.pow(dimension.0 as u32))
+	(!NOT_AT_RUN_TIME.contains(&dimension.name())).then(|| RUN_TIME_BYTE.pow(dimension.0 as u32))
 }
 
 /// `mi/h`, `1/s`, `kg*m/s²`: the SI amount and packed dimension of an alias made of units; None for one of other words
@@ -313,6 +312,11 @@ impl<'a> Reader<'a> {
 					let dimension = Dimension(
 						u8::try_from(self.dimensions.len()).map_err(|_| format!("{line}: too many quantities"))?,
 					);
+					if dimension.0 >= RUN_TIME_QUANTITIES && !NOT_AT_RUN_TIME.contains(&name) {
+						return Err(format!(
+							"{line}: too many base quantities for run time, {RUN_TIME_QUANTITIES} fit"
+						));
+					}
 					self.dimensions.push((name, dimension));
 					self.base_units.push((dimension, anchor));
 					let scale = Rational::integer(1);

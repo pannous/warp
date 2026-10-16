@@ -86,8 +86,8 @@ unit_definitions = data {
 }
 
 // At run time the block above stands for the tables the Quantity class reads (src/numbers/units.rs): unit_names,
-// unit_scales (each unit's SI amount) and unit_dimensions, which packs the powers of length, mass and time as
-// one byte per base quantity in written order (length + 256·mass + 65536·duration …), so multiplying quantities adds them
+// unit_scales (each unit's SI amount) and unit_dimensions, which packs the powers of every base quantity, one
+// byte each in written order (length + 256·mass + 65536·duration …), so multiplying quantities adds them
 
 class Quantity {
 	amount: number

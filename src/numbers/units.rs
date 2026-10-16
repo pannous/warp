@@ -36,7 +36,7 @@ impl Dimension {
 		known.map(|(_, dimension)| *dimension).unwrap_or_else(|| panic!("lib/units.warp declares no quantity {name}"))
 	}
 
-	fn time() -> Dimension {
+	fn duration() -> Dimension {
 		Dimension::named(DURATION_QUANTITY)
 	}
 
@@ -684,7 +684,7 @@ fn unit_text(node: &Node) -> Option<String> {
 /// `meters`, `kilogram`: a long name of a quantity's unit; durations (`2 minutes`) belong to the time module
 pub fn is_long_unit_name(name: &str) -> bool {
 	!is_unit(name)
-		&& target_unit(&Node::Symbol(name.to_string())).is_some_and(|unit| unit.dimension != Dimension::time())
+		&& target_unit(&Node::Symbol(name.to_string())).is_some_and(|unit| unit.dimension != Dimension::duration())
 }
 
 /// A unit to a power within a quantity: km¹, h⁻¹, m²
@@ -1031,7 +1031,7 @@ pub(crate) fn milliseconds(node: &Node) -> Option<i64> {
 		return duration_milliseconds(data.downcast_ref::<crate::time::Duration>()?, "ms").ok().flatten();
 	}
 	match static_units::constant(&with_written_amount(node.clone())) {
-		Ok(Some((seconds, signature))) if signature == [(Dimension::time(), 1)] => {
+		Ok(Some((seconds, signature))) if signature == [(Dimension::duration(), 1)] => {
 			whole(&static_units::exact_amount(&seconds)?.mul(&Rational::integer(MILLISECONDS_PER_SECOND)))
 		}
 		_ => None,
