@@ -69,6 +69,9 @@ magnitude(x: any) := norm(x)
 // that color as 0xAARRGGBB, as the shader paints it; a number stays itself
 pixel_color(v: any) := if v is list then 0xFF000000 + pixel_channel(v#1) * 65536 + pixel_channel(v#2) * 256 + pixel_channel(v#3) else v
 pixel_channel(c) := round(255 * min(max(c, 0), 1)) as int
+// paint(f, width, height) of a warp function on the CPU, where no shader paints it (gpu_maps painted_functions): f(column,
+// row) of every pixel, row by row
+paint_each(f, width, height) := paint([pixel_color(f(i % width, i//width)) for i in 0..width * height], width, height)
 // random(a, b) (decision random-forms): of whole numbers a whole number from a to b, both included (random(1, 6) rolls
 // a die), else a float in [a, b); random a..b one of the range's elements, a to b-1
 random_fraction(a, b) := a + random() * (b - a)
