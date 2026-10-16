@@ -28,7 +28,7 @@ pub(super) fn divided_index(index: &Node) -> Option<(&Node, &Node)> {
 
 /// How to fix a runtime error, appended to its message: the trap knows no source position, so the fix is generic
 pub(super) const WHOLE_NUMBER_FIX: &str = "fix: compute it with // (floor division) or `… as int`";
-pub(super) const RUNTIME_ERROR_FIXES: [(&str, &str); 6] = [
+pub(super) const RUNTIME_ERROR_FIXES: [(&str, &str); 7] = [
 	(
 		super::super::super::numbers::casts::INVALID_CODE_POINT,
 		"a code point is 0…0x10FFFF, outside the surrogates 0xD800…0xDFFF",
@@ -38,6 +38,7 @@ pub(super) const RUNTIME_ERROR_FIXES: [(&str, &str); 6] = [
 	(COUNT_NOT_INTEGRAL, WHOLE_NUMBER_FIX),
 	(INT_NOT_WHOLE, WHOLE_NUMBER_FIX),
 	(super::super::super::declared_values::LIST_CANNOT_HOLD, "its declared element type does not admit it (P215)"),
+	(ERROR_IN_DATA, "handle it with try … else, or declare `or error`"),
 ];
 
 /// The message of the runtime error trapped in the function `name`: its words, then its fix if it has one
@@ -64,10 +65,13 @@ pub const DIVIDE_BY_ZERO: &str = "divide_by_zero";
 /// `print [f]`, `join`: an item that is no text, number or other value with a text form; the item is the trap detail
 pub(in crate::wasm_emitter) const NOT_JOINABLE: &str = "not_a_joinable_item";
 
+/// `[e 2]` of an Error e: data holds no error (decision error-optional); the Error is the trap detail
+pub(in crate::wasm_emitter) const ERROR_IN_DATA: &str = "a_list_item_holds_no_error";
+
 /// `x.keys`, `x.values`, `x.entries` of a value that is no map (card keys-value)
 pub(super) const NOT_A_MAP: &str = "not_a_map";
 
-pub const RUNTIME_ERRORS: [&str; 32] = [
+pub const RUNTIME_ERRORS: [&str; 33] = [
 	"index_out_of_range",
 	INDEX_NOT_INTEGRAL,
 	"invalid_number",
@@ -100,6 +104,7 @@ pub const RUNTIME_ERRORS: [&str; 32] = [
 	NOT_A_MAP,
 	super::super::super::numbers::casts::INVALID_CODE_POINT,
 	super::super::super::numbers::float_text::NOT_FINITE,
+	ERROR_IN_DATA,
 ];
 
 impl WasmGcEmitter {
@@ -131,12 +136,31 @@ impl WasmGcEmitter {
 
 	/// Fail with the Error in Node local `local` as it is (its own message, the trap detail), when it holds one
 	pub(in crate::wasm_emitter) fn emit_fail_if_error(&mut self, func: &mut Function, local: u32) {
+		self.emit_fail_as_if_error(func, local, RETURNED_ERROR);
+	}
+
+	/// Fail with the runtime error `error` when Node local `local` holds an Error, the Error its trap detail
+	pub(in crate::wasm_emitter) fn emit_fail_as_if_error(
+		&mut self,
+		func: &mut Function,
+		local: u32,
+		error: &'static str,
+	) {
 		let trap_detail = self.trap_detail_global();
 		self.emit_field(func, local, 0);
 		Self::emit_kind_test(func, Kind::Error as i64, I::I64Eq);
 		Self::emit_list(func, &[I::If(BlockType::Empty), I::LocalGet(local), I::GlobalSet(trap_detail)]);
-		self.call(func, RETURNED_ERROR);
+		self.call(func, error);
 		func.instruction(&I::End);
+	}
+
+	/// A list item as written (lowering data_items): its Node, failing with a_list_item_holds_no_error when it is an Error
+	pub(in crate::wasm_emitter) fn emit_data_item(&mut self, func: &mut Function, item: &Node) {
+		self.emit_node_instructions(func, item);
+		let held = self.node_scratch();
+		Self::emit_list(func, &[I::RefAsNonNull, I::LocalSet(held)]);
+		self.emit_fail_as_if_error(func, held, ERROR_IN_DATA);
+		Self::emit_list(func, &[I::LocalGet(held), I::RefAsNonNull]);
 	}
 
 	/// Trap when the i32 condition on the stack is true
