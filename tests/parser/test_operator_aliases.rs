@@ -61,3 +61,12 @@ fn free_unicode_symbols_parse() {
 	let error = warp::wasm_emitter::eval("1 ⇔ 1").serialize();
 	assert!(error.contains("operator ⇔ is not defined (define it with infix operator ⇔(a, b) := …)"), "{error}");
 }
+
+/// reviewer: a free glyph is infix only before an operand on its line, else a value; the error points at the glyph
+#[test]
+fn a_free_glyph_without_right_operand_is_a_value() {
+	is!("[↯ ↯]", parse("[↯ ↯]"));
+	is!("f(x) := x; f ↯", parse("↯"));
+	let error = warp::wasm_emitter::eval("1 ⇔ 1").serialize();
+	assert!(error.contains("at 1:3"), "{error}");
+}

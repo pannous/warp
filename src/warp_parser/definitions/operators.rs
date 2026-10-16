@@ -277,13 +277,28 @@ impl WarpParser {
 	}
 
 	/// `1 ⇔ 1` with no `infix operator ⇔` declared: the call of the operator, which lowering reports as undefined
+	/// (reviewer) only with an operand after it on its line: `[↯ ↯]` and `print ↯` read the glyph as a value
 	pub(crate) fn try_parse_free_infix(&mut self, lhs: &Node, min_bp: u8) -> Option<Node> {
 		let glyph = self.current_char();
-		if !is_free_symbol(glyph) {
+		if !is_free_symbol(glyph) || !self.operand_follows(1) || self.free_symbol_follows(1) {
 			return None;
 		}
+		let (line, column) = self.get_position();
 		let operator = UserOperator { glyph: vec![glyph], kind: UserOperatorKind::Infix, level: USER_INFIX_BP.0 };
-		self.parse_user_infix(operator, lhs, min_bp)
+		let Node::List(mut items, bracket, separator) = self.parse_user_infix(operator, lhs, min_bp)? else {
+			unreachable!("operator_call makes a list")
+		};
+		// the error of an undefined operator points at the glyph, not at the left operand
+		items[0] = items[0].clone().with_meta_data(LineInfo::at(line, column, &self.current_line));
+		Some(Node::List(items, bracket, separator))
+	}
+
+	/// `[↯ ↯]`: another free glyph after the blanks is the next value, no operand
+	fn free_symbol_follows(&self, offset: usize) -> bool {
+		(offset..)
+			.map(|position| self.peek_char(position))
+			.find(|c| !matches!(c, ' ' | '\t'))
+			.is_some_and(is_free_symbol)
 	}
 
 	fn parse_user_infix(&mut self, operator: UserOperator, lhs: &Node, min_bp: u8) -> Option<Node> {
