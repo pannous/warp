@@ -209,6 +209,15 @@ const EXPANDED_WORDS: [(&str, usize, &str); 3] = [
 	// `x!` (mutation.rs): the value, a loud error when it is ø; an Error value stays that Error
 	(crate::words::UNWRAP, 1, "if hidden_value == ø then error \"unwrapped ø\" else hidden_value"),
 ];
+
+/// An expanded word as the warp definition it stands for, for readers that take definitions (the law type model):
+/// `sum(hidden_value) := (hidden_sum=0; …; hidden_sum)`
+pub(crate) fn expanded_word_definition(word: &str) -> Option<String> {
+	let (name, arity, template) = EXPANDED_WORDS.iter().find(|(name, _, _)| *name == word)?;
+	let after_receiver = (2..=*arity).map(|index| format!(", {RECEIVER_PLACEHOLDER}_{index}"));
+	let parameters: String = std::iter::once(TEMPORARY.to_string()).chain(after_receiver).collect();
+	Some(format!("{name}({parameters}) := {template}"))
+}
 const IS_DIGIT: &str = "is_digit";
 const DICT_WORD: &str = "dict";
 /// lib/prelude.warp's fromkeys(ks, value), also called on the class as Python's `dict.fromkeys(ks, value)`

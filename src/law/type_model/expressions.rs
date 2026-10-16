@@ -348,7 +348,10 @@ impl Exporter {
 				.fold(EMPTY_LIST.to_string(), |tail, head| format!(".cons ({head}) ({tail})"))),
 			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.expression(&items[0]),
 			Node::List(items, Bracket::Curly, _) if !items.is_empty() => self.block(node),
-			Node::List(items, Bracket::None, Separator::Semicolon | Separator::Newline) if items.len() > 1 => {
+			// `a; b` and `(a; b)`: the statements in order, the value the last one's
+			Node::List(items, Bracket::None | Bracket::Round, Separator::Semicolon | Separator::Newline)
+				if items.len() > 1 =>
+			{
 				self.sequence(items)
 			}
 			_ if effect(node).is_some() => self.effect(effect(node).expect("an effect")),
