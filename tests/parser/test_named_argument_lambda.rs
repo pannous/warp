@@ -23,3 +23,12 @@ fn a_named_argument_holds_the_lambda() {
 	assert!(matches!(head.drop_meta(), Node::Key(_, Op::Colon, _)), "a typed lambda stays: {head:?}");
 	is!("apply(f, v) := f(v)\napply(x: int => x * 2, 5)", 10);
 }
+
+/// reviewer: a `key: value` item is an entry in any bracket, `[d: x => x + 1]` holds the lambda too
+#[test]
+fn a_listed_entry_holds_the_lambda() {
+	let Node::List(items, _, _) = WarpParser::parse("[d: x => x + 1]").drop_meta().clone() else { panic!("no list") };
+	let Node::Key(name, Op::Colon, value) = items[0].drop_meta() else { panic!("no entry: {items:?}") };
+	assert!(name.drop_meta().is_symbol("d"));
+	assert!(matches!(value.drop_meta(), Node::Key(_, Op::Arrow, _)), "{value:?}");
+}
