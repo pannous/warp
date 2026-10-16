@@ -29,6 +29,7 @@ fn spaced_values_in_every_statement_position_are_a_list() {
 	is!("if yes { 1+1 2+2 }", ints(vec![2, 4]));
 	is!("f() := 1+1 2+2; f()", ints(vec![2, 4]));
 	is!("sum 1+1 2+2", 6);
+	is!("max 1+1 2+2", 4);
 	is!("sum 2 4", 6);
 }
 
