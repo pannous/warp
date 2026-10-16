@@ -135,7 +135,7 @@ def label(x, y, words, color, size = 12) {
 // with `flipped`, the pixel as GLSL counts it (rows from the bottom), `size`, `pointer` (in pixels, y up) and the
 // shader's built-in values (values.time, values.frame …). twigl and shadertoy are the dialects written so far
 glsl_shader(glsl: text, color: text) := {
-	wgsl = std_pure("draw", "glsl_wgsl", ["#version 450\n" + glsl + "\nvoid main() {}\n"])
+	wgsl = std_pure("draw", "glsl_wgsl", ["#version 450\n" + noise_for(glsl) + glsl + "\nvoid main() {}\n"])
 	wgsl + "
 @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
 	let size = values.size;
@@ -147,7 +147,7 @@ glsl_shader(glsl: text, color: text) := {
 	}
 
 // twigl's noise (card twigl-glsl): fsnoise and fsnoiseDigits hash a point to [0, 1), snoise2D and snoise3D are simplex
-// noise in [-1, 1] (Ian McEwan, Ashima Arts, webgl-noise, MIT license); a shader gets them only when it calls one
+// noise in [-1, 1] (Ian McEwan, Ashima Arts, webgl-noise, MIT license); glsl_shader adds them where they are called
 twigl_noise = "
 float fsnoise(vec2 c) { return fract(sin(dot(c, vec2(12.9898, 78.233))) * 43758.5453); }
 float fsnoiseDigits(vec2 c) { return fract(sin(dot(c, vec2(0.129898, 0.78233))) * 437.585453); }
@@ -222,8 +222,9 @@ float snoise3D(vec3 v) {
 	return 42. * dot(m * m, vec4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));
 }
 "
-// the noise of twigl_noise a twigl code calls: all of it or none
-	noise_for(code: text) := if code contains "snoise" or code contains "fsnoise" then twigl_noise else ""
+// twigl_noise for GLSL that calls snoise or fsnoise (both contain "snoise") and defines no noise of its own, as an include
+// guard would: pasted shaders often bring theirs, with mod289
+noise_for(glsl: text) := if glsl contains "snoise" and not (glsl contains "mod289" or glsl contains "float snoise" or glsl contains "float fsnoise") then twigl_noise else ""
 
 // twigl(code): a shader in the shorthand of twigl.app's geekest mode: the code draws the color o of the pixel FC from
 // r, the size in pixels, t, the seconds, m, the pointer from 0 to 1, and f, the frame, with twigl's hsv, rotate2D,
@@ -246,7 +247,7 @@ mat3 rotate3D(float angle, vec3 axis) {
 }
 "
 	drawing = "vec4 warp_twigl(vec4 FC, vec2 r, float t, vec2 m, float f) {\nvec4 o = vec4(0.);\n" + code + "\nreturn o;\n}"
-	glsl_shader(helpers + noise_for(code) + drawing, "warp_twigl(flipped, size, values.time, pointer / size, values.frame)")
+	glsl_shader(helpers + drawing, "warp_twigl(flipped, size, values.time, pointer / size, values.frame)")
 }
 
 // shadertoy(code): a shader as shadertoy.com writes them: mainImage(out vec4 fragColor, in vec2 fragCoord) with

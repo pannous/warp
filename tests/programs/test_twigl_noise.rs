@@ -24,3 +24,16 @@ fn a_twigl_shader_without_noise_gets_none() {
 	let said = said("\"snoise2D\" in twigl(\"o = vec4(1.);\")");
 	assert!(said.contains("no"), "{said}");
 }
+
+// reviewer: a pasted shader bringing its own noise keeps it, no redefinition (twigl's code is a function body, so a
+// shadertoy one), and shadertoy gets the noise as twigl does
+#[test]
+fn pasted_noise_stays_and_shadertoy_gets_noise_too() {
+	let own = "s = twigl(\"o = vec4(fsnoise(FC.xy));\")\nt = twigl(\"o = vec4(1.);\")";
+	let pasted = "shadertoy(\"float fsnoise(vec2 c) { return 0.5; }\\nvoid mainImage(out vec4 fragColor, in vec2 fragCoord) { fragColor = vec4(fsnoise(fragCoord)); }\")";
+	let toy = "shadertoy(\"void mainImage(out vec4 fragColor, in vec2 fragCoord) { fragColor = vec4(snoise2D(fragCoord)); }\")";
+	let said = said(&format!(
+		"{own}\np = {pasted}\nq = {toy}\n[count(s) > count(t), \"fn snoise2D\" in p, \"fn snoise2D\" in q]"
+	));
+	assert!(said.contains("[yes no yes]"), "{said}");
+}
