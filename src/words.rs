@@ -33,6 +33,8 @@ pub const EMIT_WORDS: [&str; 2] = ["emit", "send"];
 pub const EMIT_ALIASES: [&str; 4] = ["fire", "trigger", "signal", "ask"];
 /// The parser's attribute on the name of a class declared `class Foo;`
 pub const FILE_CLASS_MARK: &str = "file_class";
+/// The parser's attribute on the name of a `class Foo` written without a body (class_references.rs)
+pub const BARE_CLASS_MARK: &str = "bare_class";
 /// The parser's attribute on a sum type's name: its variants without payload
 pub const VARIANTS_MARK: &str = "variants";
 /// P74 (user, 2026-10-05): "make codepoint the default name": the spelling hints, fixes and docs use
