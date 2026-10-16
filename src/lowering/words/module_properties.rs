@@ -111,6 +111,7 @@ fn read_only_reason(properties: &Properties, object: &str, property: &str) -> St
 pub fn lower(program: Node) -> Node {
 	let mut properties = standard_properties();
 	let mut own = Properties::new();
+	let program = with_instance_getters(program);
 	let original = program.clone();
 	collect(&crate::modules::statements(program.clone()), None, &mut own);
 	let program = if own.is_empty() { program } else { without_definitions(program) };
@@ -127,15 +128,55 @@ pub fn lower(program: Node) -> Node {
 	}
 }
 
+/// `Point.sum := it.x + it.y` of a class Point (card point-sum): a property of its instances, `it` the instance, which is
+/// the function `sum(it: Point) := it.x + it.y`, read `Point(1, 2).sum` as any function of one instance is
+fn with_instance_getters(program: Node) -> Node {
+	let classes = crate::modules::needed_definitions::class_names(&program);
+	if classes.is_empty() {
+		return program;
+	}
+	map_statements(program, &|statement| match instance_getter(&statement, &classes) {
+		Some((class, property, body)) => {
+			let instance = Node::Key(Box::new(Node::Symbol(WRITTEN.into())), Op::Colon, Box::new(Node::Symbol(class)));
+			key(crate::node::call(&property, vec![instance]), Op::Define, body)
+		}
+		None => statement,
+	})
+}
+
+/// Class, property and body of `Point.sum := …`, a getter of a class's instances: any body, `it` being the instance
+fn instance_getter(statement: &Node, classes: &HashSet<String>) -> Option<(String, String, Node)> {
+	let Node::Key(head, Op::Define, body) = statement.drop_meta() else {
+		return None;
+	};
+	let Node::Key(object, Op::Dot, member) = head.drop_meta() else {
+		return None;
+	};
+	let class = object.drop_meta().symbol_name().filter(|class| classes.contains(*class))?;
+	let property = member.drop_meta().symbol_name()?;
+	Some((class.to_string(), property.to_string(), body.as_ref().clone()))
+}
+
+/// The program with each top-level statement (also inside a block) mapped
+fn map_statements(node: Node, map: &impl Fn(Node) -> Node) -> Node {
+	match node {
+		Node::List(items, bracket, separator) if bracket != Bracket::Curly => {
+			Node::List(items.into_iter().map(|item| map_statements(item, map)).collect(), bracket, separator)
+		}
+		Node::Meta { node, data } => Node::Meta { node: Box::new(map_statements(*node, map)), data },
+		statement => map(statement),
+	}
+}
+
 /// A loud error for a property definition of a value the program binds, which no use would read: `p = {x: 1}; p.x := 5`
-/// (the field is written `p.x = 5`), or of a class, whose instances have none yet (card point-sum)
+/// (the field is written `p.x = 5`), or a setter of a class's instances, which have none yet (card point-sum)
 fn refused_definition(program: &Node, bound: &HashSet<String>) -> Option<Node> {
 	let classes = crate::modules::needed_definitions::class_names(program);
 	crate::modules::statements(program.clone()).iter().find_map(|statement| {
 		let (object, property, _, _) = definition(statement)?;
 		let reason = if classes.contains(&object) {
 			format!(
-				"{object}.{property} := … defines no property of {object}'s instances yet (card point-sum): write it as a method of class {object}"
+				"{object}.{property}(value) := … defines no setter of {object}'s instances yet (card point-label): write it as a method of class {object}"
 			)
 		} else if bound.contains(&object) {
 			format!("{object} is a value, so {object}.{property} := … defines nothing: write {object}.{property} = … to set its field")
