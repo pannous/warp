@@ -6,8 +6,8 @@
 //! An unknown `.word` after a name, a text or a list is a loud error (`undefined function: word`), never silent data.
 
 use super::nodes::{
-	call, children_rewritten, if_then_else, in_block_as_written, is_assigned_data, is_words_call, key,
-	with_parts_rewritten, prelude_call, Counter,
+	call, children_rewritten, if_then_else, in_block_as_written, is_assigned_data, is_words_call, key, prelude_call,
+	with_parts_rewritten, Counter,
 };
 use crate::analyzer::{call_name, counting_method};
 use crate::compiler::context::Context;
