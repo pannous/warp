@@ -766,6 +766,11 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   lines in lib/math.warp with a "prefer ->" hint (→ ⟶ ➜ … for ->, ⇒ ⟹ for =>, ← ⟵ ⬅ for <-, ⬆ ⇧ for ↑, ⬇ ⇩ for ↓).
   ⇔ ⟺ ↔ ⇑ ⇓ get no built-in meaning for now; an example defines one, e.g.
   `infix operator ⇔(a: bool, b: bool) := a == b`.
+- test-consolidation (2026-10-16, user; card probes-check, worker warp-test-consolidator): a worker turns probes
+  into tests where they check decided behaviour with a stable expected value, judging case by case (not every probe
+  was meant to be a test: exploratory, visual, sound, timing and undecided ones stay probes). It also dedupes and
+  condenses tests, which widens the earlier "only probes condense": no distinct assertion is lost or weakened, and the
+  count drops only by duplicates named in the commit. A probe is deleted only once every case is asserted.
 - fast-scope (2026-10-16, user; card fast-scope): `fast` before a function or module makes everything machine
   inside it: polynomial sin/cos/exp/pow, `/` gives f64 (`fast f(x) := x/3; f(1)` → 0.3333333333333333), and plain
   ints are i64 that wrap at 2^63 (`fast g(n) := n * n; g(10^10)` wraps). `x: fast int` is i64, `x: fast float` f64;
