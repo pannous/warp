@@ -1,3 +1,4 @@
+use crate::common::fails_with;
 use crate::is;
 
 // card types-constructor: a type called as a function converts as in Python, `hex(123)` is `123 as hex`
@@ -11,9 +12,10 @@ fn a_type_called_converts_as_the_cast() {
 	is!("int(\"12\") + 1", 13);
 }
 
+// decision type-words-reserved: a conversion word names no function either
 #[test]
 fn a_function_of_the_program_keeps_its_name() {
-	is!("hex(x) := x * 2; hex(4)", 8);
+	fails_with("hex(x) := x * 2; hex(4)", "hex is a type; name your function to_hex");
 }
 
 // a braceless call is the braced one: `byte 65` is `byte(65)`, one call shape for every callable
@@ -31,5 +33,5 @@ fn a_type_called_braceless_converts_like_braced() {
 
 #[test]
 fn a_function_of_the_program_keeps_its_name_braceless() {
-	is!("hex(x) := x * 2; y = 4; hex y", 8);
+	fails_with("hex(x) := x * 2; y = 4; hex y", "hex is a type");
 }

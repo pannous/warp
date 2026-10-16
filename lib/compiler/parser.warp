@@ -678,7 +678,7 @@ def atom(p) {
 			p.at = p.at + 2
 			return radix_value(p, 2)
 		}
-		written = decimal(p)
+		written = decimal_number(p)
 		amount = if written.contains(".") or written.contains("e-") or written.contains("E-") then float(written) else int(written)
 		return with_glued_factor(p, amount)
 	}
@@ -843,7 +843,7 @@ def digit_value(c) {
 // A decimal number as written, read: digits (`_` between them dropped), a fraction unless `..` or a name follows the
 // point, an exponent
 // Rust twin: literals.rs push_digits, read_number_value, parse_exponent
-def decimal(p) {
+def decimal_number(p) {
 	written = digits_read(p)
 	after_point = peek(p.code, p.at + 1, p.n)
 	if is_at(p.code, p.at, '.', p.n) and after_point != '.' and not is_name_start(after_point) {

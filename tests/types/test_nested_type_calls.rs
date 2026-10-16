@@ -1,5 +1,6 @@
 // A braceless call of a built-in type nests like a user function's (`square square 2`): `text hex 255` is
 // `text(hex(255))`, `text(byte 65)` is `b = byte 65; text(b)`, one call shape for every callable
+use crate::common::fails_with;
 use crate::is;
 use warp::wasm_emitter::eval;
 
@@ -32,7 +33,8 @@ fn a_braceless_type_call_nests_like_a_user_function() {
 
 #[test]
 fn a_type_named_by_the_program_keeps_its_meaning() {
-	is!("hex(x) := x * 2; text hex 4", "8");
+	// decision type-words-reserved: a conversion word names no function
+	fails_with("hex(x) := x * 2; text hex 4", "hex is a type");
 }
 
 #[test]
