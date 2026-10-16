@@ -480,24 +480,6 @@ function linearCells(memory, block) {
 	return new Float64Array(memory.buffer, Number(block) + Float64Array.BYTES_PER_ELEMENT, count);
 }
 
-// GLSL functions as WGSL ones (lib/draw.warp glsl_shader): naga as natively (crates/warp-glsl), in glsl.wasm of its own,
-// loaded at the first translation so warp.wasm stays without it (web/playground/build.sh); the answer is the WGSL, or
-// the error after a leading NUL
-const GLSL_URL = new URL("glsl.wasm", self.location.href).href;
-let glslExports;
-function glslWgsl(glsl) {
-	glslExports ??= new WebAssembly.Instance(new WebAssembly.Module(getSync(GLSL_URL, 0, true))).exports;
-	const bytes = utf8.encode(glsl);
-	// each call may grow glsl.wasm's memory, which detaches the buffer read before it: read it after the call
-	const input = glslExports.glsl_buffer(bytes.length);
-	new Uint8Array(glslExports.memory.buffer, input, bytes.length).set(bytes);
-	const length = glslExports.glsl_wgsl(bytes.length);
-	const output = glslExports.glsl_buffer(0);
-	const answer = new TextDecoder().decode(new Uint8Array(glslExports.memory.buffer, output, length));
-	if (answer.startsWith("\0")) throw new Error(answer.slice(1));
-	return answer;
-}
-
 addHostPart({
 	systemValue: (value, holder) => value === GPU_PAINTS ? gpuPaints(holder) : undefined,
 	words: (holder, hooks, { program }) => {
@@ -629,6 +611,4 @@ addHostPart({
 			draw_show: () => { throw new Error(NO_GPU_DRAWING); },
 		};
 	},
-	// lib/draw.warp glsl_shader (twigl, shadertoy): GLSL functions as WGSL ones
-	adapters: { draw: { glsl_wgsl: glslWgsl } },
 });
