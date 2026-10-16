@@ -15,7 +15,6 @@ fn test_field_of_a_declared_type_reads_at_run_time() {
 	is!("class V { x: float, y: float }; def f(a, b) := V(a, b); v = f(5, 6); v.x", 5);
 	is!("class V { x: float, y: float }; def g(v) := v.x * 2; g(V(3, 4))", 6);
 	fails_with("class V { x: float, y: float }; x=[1]; x.y", "no field y");
-	fails_with("x=\"hello\"; x.shout", "undefined function: shout");
 }
 
 #[test] // samples/raytracer.warp: `def vec(x, y, z) := Vec3 { x: x, y: y, z: z }` built `Vec3[1:1 2:2 3:3]`

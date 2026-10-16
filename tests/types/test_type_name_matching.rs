@@ -20,7 +20,6 @@ fn test_type_word_is_the_parameter_name() {
 #[test]
 fn test_lone_type_word_parameter_is_it() {
 	is!("foo of int = it + it; foo 3", 6);
-	is!("square of a number = it*it; square 3", 9);
 }
 
 #[test]

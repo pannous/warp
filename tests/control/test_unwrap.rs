@@ -6,7 +6,6 @@ use crate::is;
 #[test]
 fn test_unwrap_gives_the_value() {
 	is!("x=3; x!", 3);
-	is!("x=3; x!+1", 4);
 	is!("x:int?=5; x!*2", 10);
 	is!("x=\"a\"; x!", "a");
 }

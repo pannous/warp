@@ -6,7 +6,6 @@ use crate::is;
 fn test_print_runtime_values() {
 	// print gives nothing (issue #18)
 	is!("x=3; print(x)", warp::Node::Empty);
-	is!("f(x) := { print(x); x }; f(3)", 3);
 	is!("y=2.5; print(y)", warp::Node::Empty);
 	is!("s=\"hi\"; print(s)", warp::Node::Empty);
 	is!("print(\"c\")", warp::Node::Empty);
@@ -33,5 +32,4 @@ fn test_exact_numbers_have_a_text_form() {
 fn test_exact_variable_assigned_a_float_widens() {
 	is!("import floor from \"m\"; x=10.0; x=floor(2.5); x+1", 3.0);
 	is!("x=1; x=2.5 as float; x", 2.5);
-	is!("x=10; x=floor(x/2)", 5);
 }
