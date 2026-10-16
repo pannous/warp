@@ -214,6 +214,12 @@ pub fn duration_quantity(node: &Node) -> Option<crate::time::Duration> {
 	is_juxtaposed(unit).then(|| duration.times(*count))
 }
 
+/// `y / 1s`, a quantity of time as its plain count of seconds; the unit marked, so a program's own `s` leaves it the unit
+pub(crate) fn seconds_of(quantity: Node) -> Node {
+	let one_second = Node::Key(Box::new(Node::int(1)), Op::Mul, Box::new(Node::Symbol(format!("{AFTER_NUMBER}s"))));
+	Node::Key(Box::new(quantity), Op::Div, Box::new(one_second))
+}
+
 /// `km`, `m²`, `s^2`
 fn is_unit_term(node: &Node) -> bool {
 	match node.drop_meta() {
