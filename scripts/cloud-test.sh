@@ -254,21 +254,25 @@ collect() {
 
 # ---------------------------------------------------------------- arguments
 
-case "${1:-}" in
-	--run-here) shift; run_here "$@"; exit ;;
-	--run-detached) shift; run_tests_here "$@"; touch "$HERE_WORK/done"; exit ;;
-	--summarize) summarize "$2" "${3:-$ENVIRONMENTAL_LIST}"; exit ;;
-esac
-card="" wait=1 result_only="" on_main=()
-while [[ "${1:-}" == --* ]]; do
-	case "$1" in
-		--card) card=$2; shift 2 ;;
-		--no-wait) wait=""; shift ;;
-		--result) result_only=1; shift ;;
-		--on-main) on_main=(--on-main); shift ;;
-		*) break ;;
+# one function, parsed whole before it runs: editing this file during a long wait then can't break the waiting run
+main() {
+	case "${1:-}" in
+		--run-here) shift; run_here "$@"; exit ;;
+		--run-detached) shift; run_tests_here "$@"; touch "$HERE_WORK/done"; exit ;;
+		--summarize) summarize "$2" "${3:-$ENVIRONMENTAL_LIST}"; exit ;;
 	esac
-done
-[ $# -ge 2 ] || { sed -n '2,16p' "$0"; exit 2; }
-if [ -z "$result_only" ]; then launch "$@" || exit; fi
-[ -n "$wait$result_only" ] && collect "$1" "$2" "$card"
+	card="" wait=1 result_only="" on_main=()
+	while [[ "${1:-}" == --* ]]; do
+		case "$1" in
+			--card) card=$2; shift 2 ;;
+			--no-wait) wait=""; shift ;;
+			--result) result_only=1; shift ;;
+			--on-main) on_main=(--on-main); shift ;;
+			*) break ;;
+		esac
+	done
+	[ $# -ge 2 ] || { sed -n '2,16p' "$0"; exit 2; }
+	if [ -z "$result_only" ]; then launch "$@" || exit; fi
+	[ -n "$wait$result_only" ] && collect "$1" "$2" "$card"
+}
+main "$@"; exit
