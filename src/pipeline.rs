@@ -443,10 +443,7 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	crate::errors::diagnostic::report(&crate::analyzer::source_warnings(&node))?;
 	// emits and handler blocks as written: the passes lower them to calls, the named effects are read from them
 	let as_written = node.clone();
-	let node = SOURCE_PHASES.iter().fold(node, |node, phase| run_passes(node, phase));
-	if let Some(error) = crate::errors::diagnostic::first_located_error(&node) {
-		return Err(error);
-	}
+	let node = without_located_errors(SOURCE_PHASES.iter().fold(node, |node, phase| run_passes(node, phase)))?;
 	if let Some(kind_change) = crate::analyzer::check_kind_changes(&node) {
 		return Err(kind_change.into_error());
 	}
@@ -466,18 +463,12 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	if let Some(answer) = crate::numbers::real::answer(&node) {
 		return Err(answer);
 	}
-	let node = run_passes(node, MEANING_PASSES);
-	if let Some(error) = crate::errors::diagnostic::first_located_error(&node) {
-		return Err(error);
-	}
+	let node = without_located_errors(run_passes(node, MEANING_PASSES))?;
 	let effects = EffectReport::of(&node).with_events_of(&as_written);
 	if let Some(answer) = effects.answer(&node) {
 		return Err(answer);
 	}
-	let node = effects.answer_queries(node);
-	if let Some(error) = crate::errors::diagnostic::first_located_error(&node) {
-		return Err(error);
-	}
+	let node = without_located_errors(effects.answer_queries(node))?;
 	if let Some((name, capability)) = effects.denied(compile_context::read(|context| context.granted)) {
 		return Err(crate::node::error(&if crate::host::sandbox::is_sandboxed() {
 			crate::host::sandbox::denial(&name, capability.name())
@@ -498,6 +489,14 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	Ok(crate::lowering::declaration_forms::indexed_parameter_copies(crate::lowering::inlining::lower(
 		crate::lowering::declaration_forms::lower_declarations(crate::lowering::kebab_names::resolve_data_scope(node)),
 	)))
+}
+
+/// The node, or the first error a pass left in it at a source position
+fn without_located_errors(node: Node) -> Result<Node, Node> {
+	match crate::errors::diagnostic::first_located_error(&node) {
+		Some(error) => Err(error),
+		None => Ok(node),
+	}
 }
 
 /// The program as the emitter sees it after every lowering pass (`warp lower <code>`); `Err` is its final value
