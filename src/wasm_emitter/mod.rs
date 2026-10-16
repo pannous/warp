@@ -459,14 +459,13 @@ impl WasmGcEmitter {
 	fn get_type(&self, node: &Node) -> Kind {
 		let node = node.drop_meta();
 		match node {
-			// Check user_globals for symbols
+			// a local or parameter, then a global of that name: `g(x) := x as list` never takes a global x's kind
 			Node::Symbol(name) => {
-				if let Some(&(_, kind)) = self.ctx.user_globals.get(name) {
-					return kind;
-				}
-				// Fall back to scope lookup
 				if let Some(local) = self.scope.lookup(name) {
 					return local.kind;
+				}
+				if let Some(&(_, kind)) = self.ctx.user_globals.get(name) {
+					return kind;
 				}
 				Kind::Symbol
 			}
@@ -913,8 +912,8 @@ impl WasmGcEmitter {
 		if let Some((value, declared)) = declared_values::declared_field_value(node) {
 			return self.emit_declared_value(func, Some(declared), value, Kind::Empty);
 		}
-		if let Some(item) = crate::lowering::data_items::marked_item(node) {
-			return self.emit_data_item(func, item);
+		if let Some((item, place)) = crate::lowering::data_items::marked_item(node) {
+			return self.emit_data_item(func, item, place);
 		}
 		if let Some((name, fields)) = crate::type_constructor::instance_parts(node) {
 			let fields = self.with_declared_field_types(name, fields);

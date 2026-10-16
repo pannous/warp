@@ -1,0 +1,4 @@
+// card wgsl-error: an invalid field accessor (values.missing) in gpu_render's shader is catchable
+shader = "@fragment fn main() -> @location(0) vec4f { return vec4f(values.missing, 0.0, 0.0, 1.0); }"
+try { gpu_render(shader, 1, 1, {red: 1.0}) } catch e { print "caught: ${e}" }
+print "after"
