@@ -541,5 +541,5 @@ Found, not done:
 - warp_parser::mentions (enters template holes) and Node::mentions differ only by the holes: name them precisely.
 - lookahead.rs group_holds_comma and comparison_follows_and repeat a quote/depth scan; a shared scanner needs the
   two-glyph operator skip, so it was left.
-- analyzer/imports.rs extract_declared_ffi_imports: the `import: from lib` Key arm imports a function named
-  "import" (looks like a bug, kept); the nested `(use X from Y) …` arm also adds X as a library (kept).
+- analyzer/imports.rs extract_declared_ffi_imports: the nested `(use X from Y) …` arm also adds X as a library
+  (kept). The `import: from lib` arm that declared a function named "import" went (import-lib, Interviewer).
