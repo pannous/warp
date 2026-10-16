@@ -18,6 +18,7 @@ mod test_body_statement;
 mod test_braced_it_warning;
 mod test_braceless_call_in_logic; // card braceless-call
 mod test_braceless_calls; // card braceless-calls
+mod test_braceless_closure_call; // card calling-closure
 mod test_broadcast_of_list_variables; // card round-floor-xs
 mod test_broadcast_reassigned;
 mod test_broadcasting;

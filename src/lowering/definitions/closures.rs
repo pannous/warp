@@ -787,7 +787,14 @@ impl Lifting {
 			Some(Node::Symbol(name)) => Some(name.clone()),
 			_ => None,
 		};
-		let is_call = bracket == Bracket::Round && separator == Separator::None;
+		// `f = function upper; f "a"`: a variable holding a function is called without parentheses too
+		let braceless_call = bracket == Bracket::None
+			&& separator == Separator::Space
+			&& items.len() > 1
+			&& head_name
+				.as_ref()
+				.is_some_and(|name| self.function_variables.contains(name) && !self.functions.contains(name));
+		let is_call = (bracket == Bracket::Round && separator == Separator::None) || braceless_call;
 		// `sqrt(angle)` parses as `√ (angle)`: the group of a local is its value
 		if let (true, [_], Some(name)) = (bracket == Bracket::Round, items.as_slice(), &head_name) {
 			if self.is_local_value(name) && self.function_named(name).is_some() {
