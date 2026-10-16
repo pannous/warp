@@ -488,9 +488,12 @@ let glslExports;
 function glslWgsl(glsl) {
 	glslExports ??= new WebAssembly.Instance(new WebAssembly.Module(getSync(GLSL_URL, 0, true))).exports;
 	const bytes = utf8.encode(glsl);
-	new Uint8Array(glslExports.memory.buffer, glslExports.glsl_buffer(bytes.length), bytes.length).set(bytes);
+	// each call may grow glsl.wasm's memory, which detaches the buffer read before it: read it after the call
+	const input = glslExports.glsl_buffer(bytes.length);
+	new Uint8Array(glslExports.memory.buffer, input, bytes.length).set(bytes);
 	const length = glslExports.glsl_wgsl(bytes.length);
-	const answer = new TextDecoder().decode(new Uint8Array(glslExports.memory.buffer, glslExports.glsl_buffer(0), length));
+	const output = glslExports.glsl_buffer(0);
+	const answer = new TextDecoder().decode(new Uint8Array(glslExports.memory.buffer, output, length));
 	if (answer.startsWith("\0")) throw new Error(answer.slice(1));
 	return answer;
 }
