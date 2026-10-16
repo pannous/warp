@@ -849,3 +849,11 @@ samples/voices.warp
 samples/word_lengths.warp
 samples/worker.warp
 probes/self_hosting/parser/glued_units.warp
+tests/fixtures/parser_corpus/break.warp
+tests/fixtures/parser_corpus/elements.warp
+tests/fixtures/parser_corpus/globals.warp
+tests/fixtures/parser_corpus/listexpr.warp
+tests/fixtures/parser_corpus/listparams.warp
+tests/fixtures/parser_corpus/maps.warp
+tests/fixtures/parser_corpus/print.warp
+tests/fixtures/parser_corpus/slices.warp
