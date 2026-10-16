@@ -953,6 +953,10 @@ impl Lowering {
 		if !is_called && self.reads_declared_field(receiver, name) {
 			return Some(field_lookup(receiver, name, word_node));
 		}
+		// x.word is x.word(): a bare `xs.pop` changes xs as `xs.pop()` does (card xs-xs)
+		if !is_called && is_list_mutating_method(name) {
+			return Some(key(receiver.clone(), Op::Dot, call(name, vec![])));
+		}
 		// `b.product` of a value that may be an object: its field if it is no value of the word's type, else the type
 		// module's word, as `b.product()` calls it (x.word is x.word(), user 2026-10-14)
 		// `p.center`, `s.items` of another module's word or one of more parameters: no call, as before the word was loaded
