@@ -81,11 +81,15 @@ table, no `canvas()`; `width(canvas, 12)` reaches no setter; three setter mechan
 9. Units and type words through the same lookup (unit-after-number mark, type-word definitions per Q2).
    test_units_after_numbers, test_type_calls.
 
-## Open questions (sent to warp-interviewer, defaults taken)
-- Q1 untyped `count(x) := 7`: default (a) the program's own word for every value at its arities (other arities keep
-  the library word), no error; only a typed redefinition for the type's own type errs.
-- Q2 type words as function names (`double(x) := x*2` refused today, `hex(x) :=` allowed): default (a) one rule, a
-  program may define an untyped function named like a type word (level 2); `x: double` stays the type.
+## Answered questions (user, 2026-10-16; decisions dispatch-untyped-library-words, type-words-reserved, field-forms)
+- Q1 untyped `first(x) := x*2`: dispatch. The library's `first(list)` is more specific than the program's untyped
+  `first(x)`, so lists keep the library word, every other value takes the program's: `first(3)` → 6, `first([1,2])`
+  → 1, with the hint "first of a list stays the library word". No error. test_builtin_clash
+  library_words_stay_redefinable pinned the old meaning and is updated (user decision).
+- Q2 type words as function names: reserved, all of them. `double(x) := …` and `hex(x) := …` are errors with the fix
+  "name it to_double" / "to_hex".
+- Q3 plain fields in call forms: unchanged. Fields are read with `.` and `of` and set with `b.w = 5` / `w of b = 5`;
+  `w(b)`, `b.w(5)`, `w(b, 5)` stay errors for plain fields. Only properties (accessor definitions) answer all forms.
 
 # Dispatch on return type (D10)
 
