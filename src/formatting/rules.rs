@@ -91,14 +91,14 @@ fn changed(index: usize, line: &str, new: String) -> Option<Edit> {
 
 fn trailing_whitespace(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
 	let trimmed = |(index, line): (usize, &String)| {
-		(!scans[index].ends_in_text()).then(|| changed(index, line, line.trim_end().to_string())).flatten()
+		(!scans[index].ends_in_text_or_comment()).then(|| changed(index, line, line.trim_end().to_string())).flatten()
 	};
 	lines.iter().enumerate().filter_map(trimmed).collect()
 }
 
 /// At most one blank line in a row, none at the start or the end
 fn blank_lines(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
-	let is_blank = |index: usize| lines[index].trim().is_empty() && !scans[index].starts_in_text();
+	let is_blank = |index: usize| lines[index].trim().is_empty() && !scans[index].starts_in_text_or_comment();
 	let last_content = (0..lines.len()).rev().find(|&index| !is_blank(index));
 	(0..lines.len())
 		.filter(|&index| {
@@ -114,7 +114,7 @@ fn characters(line: &str, scan: &LineScan) -> Vec<(char, bool)> {
 }
 
 fn indentation_length(characters: &[(char, bool)], scan: &LineScan) -> usize {
-	if scan.starts_in_text() {
+	if scan.starts_in_text_or_comment() {
 		return 0;
 	}
 	characters.iter().take_while(|(c, _)| *c == ' ' || *c == '\t').count()
@@ -273,8 +273,8 @@ fn indentation(lines: &[String], scans: &[LineScan]) -> Vec<Edit> {
 	for (index, line) in lines.iter().enumerate() {
 		let scan = &scans[index];
 		let code = code_text(line, scan);
-		if scan.starts_in_text() || line.trim().is_empty() {
-			if scan.starts_in_text() && !code.is_empty() {
+		if scan.starts_in_text_or_comment() || line.trim().is_empty() {
+			if scan.starts_in_text_or_comment() && !code.is_empty() {
 				previous_code = code;
 			}
 			continue;
