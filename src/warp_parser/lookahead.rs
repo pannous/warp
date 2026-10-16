@@ -264,6 +264,23 @@ impl WarpParser {
 		matches!(next, ')' | ']' | '}' | ',' | ';' | '\n' | '\r' | '\0') || (next == '=' && after != '=')
 	}
 
+	/// After a type word, blanks and then the definition `:=` or a declared name `i =` after `width` characters:
+	/// `int? i = 3` and `as int? := …` are optional types, no ternary
+	pub(super) fn declaration_follows(&self, type_word: &str, width: usize) -> bool {
+		let is_type =
+			crate::type_tests::builtin_type_name(type_word).is_some() || self.declared_types.contains(type_word);
+		let blanks = (width..).take_while(|at| matches!(self.peek_char(*at), ' ' | '\t')).count();
+		let start = width + blanks;
+		let name = self.word_at(start).chars().count();
+		let after_name = start + name + (start + name..).take_while(|at| self.peek_char(*at) == ' ').count();
+		let assigns = |at: usize| match self.peek_char(at) {
+			':' => self.peek_char(at + 1) == '=',
+			'=' => self.peek_char(at + 1) != '=',
+			_ => false,
+		};
+		is_type && blanks > 0 && if name == 0 { assigns(start) } else { assigns(after_name) }
+	}
+
 	/// In a type's fields, blanks and then the next field `right: …` after `width` characters: `left: Node? right: Node?` on
 	/// one line is two optional fields, no ternary
 	pub(super) fn next_field_follows(&self, width: usize) -> bool {

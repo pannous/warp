@@ -364,7 +364,10 @@ pub(crate) fn admits(type_name: &str, actual: Kind) -> bool {
 		return parts.iter().any(|part| admits(part, actual));
 	}
 	let Some(expected) = builtin_type_kind(type_name) else {
-		return true;
+		// symbol, key, error, time …: a builtin type held as a Node admits a number only among the kinds it holds
+		let refused_number = matches!(actual, Kind::Int | Kind::Float)
+			&& crate::type_tests::runtime_kind_mask(type_name).is_some_and(|mask| mask & 1 << actual as i64 == 0);
+		return !refused_number;
 	};
 	// a type held as a Node (`real`: an exact Int or a float) admits the kinds it holds at run time
 	if expected == Kind::Empty {
@@ -506,7 +509,8 @@ pub(crate) fn literal_misfit(type_name: &str, value: &Node) -> Option<Kind> {
 	if is_bool_type(type_name) {
 		return bool_misfit(value);
 	}
-	if !is_builtin_or_union(type_name) {
+	let parts = union_parts(type_name).unwrap_or_else(|| vec![type_name]);
+	if !parts.iter().all(|part| crate::type_tests::builtin_type_name(part).is_some()) {
 		return None;
 	}
 	// a list literal fits no scalar type: `x: int = [1 2]`
