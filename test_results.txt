@@ -47,6 +47,7 @@ PASSED:
   ✓ control::test_broadcast::a_broadcast_reaches_another_program
   ✓ control::test_broadcast::a_program_hears_its_own_broadcast
   ✓ control::test_broadcast::nobody_listening_is_no_error
+  ✓ control::test_call_condition_block::the_block_after_a_call_on_a_variable_is_the_body
   ✓ control::test_call_result_reflection::a_field_of_a_call_reads_its_result
   ✓ control::test_call_result_reflection::the_function_itself_keeps_its_name
   ✓ control::test_catch_binding::a_caught_error_reads_as_its_message_in_text
@@ -967,7 +968,9 @@ PASSED:
   ✓ ffi::test_builtin_lines::a_builtin_line_declares_and_imports_nothing
   ✓ ffi::test_builtin_lines::a_builtin_words_signature_is_its_line
   ✓ ffi::test_builtin_lines::a_programs_builtin_line_must_be_warps
+  ✓ ffi::test_cargo_crates::test_cargo_crate_errors_are_loud
   ✓ ffi::test_cargo_crates::test_cargo_crate_free_functions
+  ✓ ffi::test_cargo_crates::test_cargo_crate_prebuilt_download
   ✓ ffi::test_cargo_crates::test_cargo_crate_struct_is_a_resource
   ✓ ffi::test_cargo_crates::test_cargo_crate_texts_pass_as_bytes
   ✓ ffi::test_cargo_crates::test_cargo_crate_trap_names_rust_functions
@@ -1227,6 +1230,8 @@ PASSED:
   ✓ functions::test_arity_overloads::calls_without_parentheses_pick_by_count_too
   ✓ functions::test_arity_overloads::defaults_count_for_the_arguments_a_definition_accepts
   ✓ functions::test_arrow_defaults_and_types::an_arrow_function_takes_defaults_and_types
+  ✓ functions::test_arrow_result_type::a_result_arrow_before_define
+  ✓ functions::test_arrow_result_type::arrow_lambdas_stay
   ✓ functions::test_bare_calls::test_assigned_bare_name_holds_the_result
   ✓ functions::test_bare_calls::test_bare_name_as_an_operand
   ✓ functions::test_bare_calls::test_function_reference_stays_the_function
@@ -1260,6 +1265,7 @@ PASSED:
   ✓ functions::test_braceless_calls::print_prints_the_braceless_call_of_the_joined_arguments
   ✓ functions::test_braceless_calls::real_functions_nest_without_parentheses
   ✓ functions::test_braceless_calls::the_arguments_after_a_comma_join_a_braceless_call_wherever_it_stands
+  ✓ functions::test_braceless_closure_call::a_function_variable_is_called_without_parentheses
   ✓ functions::test_broadcast_of_list_variables::a_broadcast_of_a_list_variable_assigned_is_a_list_variable
   ✓ functions::test_broadcast_of_list_variables::a_word_around_a_broadcast_of_a_list_variable_maps_too
   ✓ functions::test_broadcast_reassigned::a_broadcast_over_a_variable_alone_does_not_make_it_a_list
@@ -2273,6 +2279,7 @@ PASSED:
   ✓ modules::test_agent_types::a_typed_declaration_asks_the_agent_for_its_type
   ✓ modules::test_agent_types::without_an_expected_type_the_agent_answers_text
   ✓ modules::test_agent::agent_answers_a_prompt_when_a_key_is_set
+  ✓ modules::test_agent::agent_with_a_wrong_key_fails_with_the_api_reason
   ✓ modules::test_agent::agent_without_a_key_names_the_variable
   ✓ modules::test_agent::agent_without_a_key_says_where_to_set_it
   ✓ modules::test_checkout_std_lib::a_lib_file_edited_since_the_build_is_used_quietly
@@ -2326,6 +2333,7 @@ PASSED:
   ✓ modules::test_module_classes::the_programs_own_class_wins
   ✓ modules::test_module_error_file::a_modules_unknown_word_names_its_file
   ✓ modules::test_module_function_dir::a_used_module_function_reflects_like_the_program_own
+  ✓ modules::test_module_map_keys::a_renamed_local_keeps_its_map_key
   ✓ modules::test_module_meta::an_imported_warp_module_reflects_its_functions
   ✓ modules::test_module_meta::the_meta_section_names_functions_and_classes
   ✓ modules::test_module_signals::a_listener_sees_the_writes_of_a_used_module
@@ -2362,6 +2370,8 @@ PASSED:
   ✓ modules::test_packages::module_directory_is_where_the_module_lives
   ✓ modules::test_packages::the_registry_names_repositories
   ✓ modules::test_packages::use_loads_the_module_of_a_package
+  ✓ modules::test_prelude_shadowing::library_spellings_keep_the_prelude_word
+  ✓ modules::test_prelude_shadowing::the_program_word_takes_its_own_calls_with_a_hint
   ✓ modules::test_replaced_module_function::a_function_adding_to_a_module_word_or_a_variable_does_not_warn
   ✓ modules::test_replaced_module_function::a_program_function_replacing_a_module_function_warns
   ✓ modules::test_std_aliases::a_foreign_name_says_the_warp_word
@@ -2506,7 +2516,10 @@ PASSED:
   ✓ modules::test_use_several::a_use_with_a_version_stays_one_module
   ✓ modules::test_use_several::a_use_with_commas_uses_each_module
   ✓ modules::test_use_several::a_use_with_spaces_uses_each_module
+  ✓ modules::test_versions::a_package_used_twice_is_loaded_once
+  ✓ modules::test_versions::an_older_version_comes_from_its_git_tag
   ✓ modules::test_versions::tagged_version_literals
+  ✓ modules::test_versions::use_requires_a_version_of_a_package
   ✓ modules::test_versions::version_is_a_soft_keyword
   ✓ modules::test_versions::version_literals_have_two_dots_or_more
   ✓ modules::test_versions::versions_compare_part_by_part
@@ -3310,6 +3323,11 @@ PASSED:
   ✓ operators::test_tuple_comparison_warning::a_parenthesized_tuple_comparison_does_not_warn
   ✓ operators::test_tuple_comparison_warning::a_tuple_compared_with_a_bare_comma_list_warns
   ✓ operators::test_xor_negated_group::xor_of_a_negated_group_combines_bits
+  ✓ parser::test_and_after_comparison::a_call_with_parentheses_takes_the_comparison
+  ✓ parser::test_and_after_comparison::a_group_compares_the_braceless_call
+  ✓ parser::test_and_after_comparison::and_after_a_comparison_joins_braceless_calls
+  ✓ parser::test_and_after_comparison::and_before_a_statement_still_sequences_after_a_comparison
+  ✓ parser::test_and_after_comparison::print_shows_the_joined_condition
   ✓ parser::test_as_prefixed_name::as_still_casts
   ✓ parser::test_as_prefixed_name::def_of_an_as_prefixed_name
   ✓ parser::test_attributes::assigning_an_at_key_annotates_any_node_in_insertion_order
@@ -3496,6 +3514,7 @@ PASSED:
   ✓ parser::test_references::bracketed_attributes_before_a_body_are_meta_entries
   ✓ parser::test_references::references_survive_a_round_trip
   ✓ parser::test_scheme_relative_url::a_url_may_start_at_its_colon_slash_slash
+  ✓ parser::test_scheme_relative_url::natively_it_is_fetched_over_https
   ✓ parser::test_self_differential::every_sample_and_probe_is_a_source
   ✓ parser::test_self_differential::line_widths_match_their_rust_twin
   ✓ parser::test_self_lexer::comment_and_text_spans_match_their_rust_twin
@@ -3892,6 +3911,7 @@ PASSED:
   ✓ programs::test_sound::the_note_table_matches_note
   ✓ programs::test_task_sound::a_sound_in_a_task_plays_its_length
   ✓ programs::test_task_sound::a_task_reads_the_programs_globals
+  ✓ programs::test_twigl_back::twigl_reads_its_previous_frame_through_b
   ✓ programs::test_twigl_block::a_hole_in_a_twigl_block_reads_the_warp_variable
   ✓ programs::test_twigl_block::a_painted_twigl_block_gets_its_holes_values
   ✓ programs::test_twigl_block::a_twigl_block_is_the_twigl_call_of_its_code
@@ -4063,6 +4083,8 @@ PASSED:
   ✓ text::test_count_method::count_as_a_method_or_a_call_of_two
   ✓ text::test_count_of_split::count_of_a_split_counts_the_parts
   ✓ text::test_count_of_split::count_of_an_item_in_a_list_stays
+  ✓ text::test_counts_in_warp::count_of_is_a_word_of_every_program
+  ✓ text::test_counts_in_warp::every_count_spelling_calls_the_prelude_words
   ✓ text::test_declared_text_one_character::a_declared_text_takes_a_one_character_text
   ✓ text::test_error_as_text::a_text_builtin_of_an_error_fails_with_the_error
   ✓ text::test_for_each_char::a_loop_over_the_characters_of_a_text_takes_linear_time
@@ -5170,6 +5192,7 @@ PASSED:
   ✓ web::test_assistant_edits::a_diff_changes_only_the_lines_it_names
   ✓ web::test_assistant_edits::a_diff_that_no_longer_fits_says_so
   ✓ web::test_assistant_edits::a_whole_program_replaces_only_the_lines_that_differ
+  ✓ web::test_assistant_proxy::the_assistant_proxy_answers_only_the_playground
   ✓ web::test_async_data::a_body_that_is_no_json_is_the_text
   ✓ web::test_async_data::a_changed_url_variable_fetches_anew
   ✓ web::test_async_data::a_failed_fetch_is_the_error
@@ -5517,6 +5540,7 @@ PASSED:
   ✓ web::test_web_server::serve_answers_routes
   ✓ web::test_web::test_canvas
   ✓ web::test_web::test_dom
+  ✓ web::test_web::test_fetch
   ✓ web::test_web::test_html_warp
   ✓ web::test_web::test_inner_html
   ✓ web::test_web::test_js
@@ -5991,15 +6015,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ ffi::test_cargo_crates::test_cargo_crate_errors_are_loud
-  ✗ ffi::test_cargo_crates::test_cargo_crate_prebuilt_download
-  ✗ modules::test_agent::agent_with_a_wrong_key_fails_with_the_api_reason
-  ✗ modules::test_versions::a_package_used_twice_is_loaded_once
-  ✗ modules::test_versions::an_older_version_comes_from_its_git_tag
-  ✗ modules::test_versions::use_requires_a_version_of_a_package
-  ✗ parser::test_scheme_relative_url::natively_it_is_fetched_over_https
-  ✗ web::test_assistant_proxy::the_assistant_proxy_answers_only_the_playground
-  ✗ web::test_web::test_fetch
 
 SUMMARY:
-13 ignored, 5988 passed, 9 failed, 5997 total tested
+13 ignored, 6012 passed, 0 failed, 6012 total tested
