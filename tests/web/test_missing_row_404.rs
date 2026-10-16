@@ -1,5 +1,5 @@
 // card missing-row-404: a served page whose route looks up a row that is not there (`users#id` of /users/9) answers
-// 404 with the readable error, not 500 "trap detail: 9:3" (found editing samples/server.warp)
+// 404 with the readable error, not 500 "trap detail: 9:3" (found editing samples/servers/server.warp)
 use std::io::{Read, Write};
 use std::time::Duration;
 

@@ -2,12 +2,12 @@ use crate::is;
 
 #[test]
 fn test_dijkstra() {
-	is!("samples/dijkstra.warp", "ACBDEF:13");
+	is!("samples/objects/dijkstra.warp", "ACBDEF:13");
 }
 
 #[test]
 fn test_dijkstra_idiomatic() {
-	is!("samples/dijkstra_idiomatic.warp", 13245613);
+	is!("samples/objects/dijkstra_idiomatic.warp", 13245613);
 }
 
 // bisection helper: cargo test --test test_algo_dijkstra probe_snippets -- --ignored --nocapture
