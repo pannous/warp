@@ -51,3 +51,12 @@ fn a_class_defines_a_setter_of_its_instances() {
 	is!(&format!("{point}p = Point(1, \"ab\")\np.label = \"cd\"\np.label"), "<cd>");
 	is!(&format!("{point}p = Point(1, \"ab\")\np.label = \"cd\"\np.x"), 1);
 }
+
+// card point-norm: the instance written self or this, also as the explicit parameter (decision implicit-words-reserved)
+#[test]
+fn a_class_property_names_its_instance_self_or_this() {
+	is!("class Point{x: int; y: int}\nPoint.norm(self) := self.x * 2\nPoint(3, 4).norm", 6);
+	is!("class Point{x: int; y: int}\nPoint.norm() := self.x\nPoint(3, 4).norm", 3);
+	is!("class Point{x: int; y: int}\nPoint.sum := this.x + this.y\nPoint(3, 4).sum", 7);
+	is!("class Point{x: int; y: int}\nPoint.shift(d) := self.x = self.x + d\np = Point(3, 4)\np.shift = 10\np.x", 13);
+}

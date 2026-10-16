@@ -139,8 +139,10 @@ pub fn lower(program: Node) -> Node {
 /// `Point.sum := it.x + it.y` of a class Point (card point-sum): a property of its instances, `it` the instance, which is
 /// the function `sum(it: Point) := it.x + it.y`, read `Point(1, 2).sum` as any function of one instance is. Its setter
 /// `Point.label(v) := it.name = v` (card point-label) is `label(it: Point, v) := { it.name = v; it }`, which
-/// `p.label = "b"` calls as `p = label(p, "b")`, so it gives back the instance it changed. A property named as one of
-/// the class's fields would never be read: a loud error
+/// `p.label = "b"` calls as `p = label(p, "b")`, so it gives back the instance it changed. The instance may be written
+/// `self` or `this` too, also as the explicit parameter: `Point.norm(self) := self.x * 2`, `Point.norm() := self.x`
+/// (card point-norm, decision implicit-words-reserved). A property named as one of the class's fields would never be
+/// read: a loud error
 fn with_instance_getters(program: Node) -> Result<Node, Node> {
 	let classes = crate::modules::needed_definitions::class_names(&program);
 	if classes.is_empty() {
@@ -148,34 +150,50 @@ fn with_instance_getters(program: Node) -> Result<Node, Node> {
 	}
 	let fields = crate::lowering::class_methods::class_fields(&program);
 	let refused = std::cell::RefCell::new(None);
-	let program = map_statements(program, &|statement| match instance_getter(&statement, &classes) {
-		Some((class, property, ..))
-			if fields.get(&class).is_some_and(|own| own.iter().any(|(field, _)| *field == property)) =>
+	let program = map_statements(program, &|statement| match instance_property(&statement, &classes) {
+		Some(found)
+			if fields.get(&found.class).is_some_and(|own| own.iter().any(|(field, _)| *field == found.property)) =>
 		{
+			let InstanceProperty { class, property, .. } = found;
 			let reason = format!("{class}.{property} is a field of {class}: a property cannot share its name");
 			refused.borrow_mut().get_or_insert_with(|| Diagnostic::at(&statement, reason).into_error());
 			statement
 		}
-		Some((class, property, None, body)) => {
-			key(crate::node::call(&property, vec![instance(class)]), Op::Define, body)
-		}
-		Some((class, property, Some(value), body)) => {
-			let changed = Node::List(vec![body, Node::Symbol(WRITTEN.into())], Bracket::Curly, Separator::Semicolon);
-			key(crate::node::call(&property, vec![instance(class), value]), Op::Define, changed)
-		}
+		Some(found) => found.definition(),
 		None => statement,
 	});
 	refused.into_inner().map_or(Ok(program), Err)
 }
 
-/// `it: Point`, the instance a property of class Point reads
-fn instance(class: String) -> Node {
-	Node::Key(Box::new(Node::Symbol(WRITTEN.into())), Op::Colon, Box::new(Node::Symbol(class)))
+/// The words a property of a class's instances may name the instance by
+const RECEIVERS: [&str; 3] = [WRITTEN, crate::words::SELF_WORD, "this"];
+
+/// `Point.sum := …` (a getter of a class's instances) or `Point.label(v) := …` (a setter, `value` its parameter)
+struct InstanceProperty {
+	class: String,
+	property: String,
+	receiver: String,
+	value: Option<Node>,
+	body: Node,
 }
 
-/// Class, property, the setter's parameter and body of `Point.sum := …` (a getter of a class's instances) and
-/// `Point.label(v) := …` (a setter): any body, `it` being the instance
-fn instance_getter(statement: &Node, classes: &HashSet<String>) -> Option<(String, String, Option<Node>, Node)> {
+impl InstanceProperty {
+	/// `sum(it: Point) := …`, `label(it: Point, v) := { …; it }`
+	fn definition(self) -> Node {
+		let receiver = || Node::Symbol(self.receiver.clone());
+		let instance = Node::Key(Box::new(receiver()), Op::Colon, Box::new(Node::Symbol(self.class.clone())));
+		let (parameters, body) = match self.value {
+			None => (vec![instance], self.body),
+			Some(value) => {
+				let changed = Node::List(vec![self.body, receiver()], Bracket::Curly, Separator::Semicolon);
+				(vec![instance, value], changed)
+			}
+		};
+		key(crate::node::call(&self.property, parameters), Op::Define, body)
+	}
+}
+
+fn instance_property(statement: &Node, classes: &HashSet<String>) -> Option<InstanceProperty> {
 	let Node::Key(head, Op::Define, body) = statement.drop_meta() else {
 		return None;
 	};
@@ -183,13 +201,28 @@ fn instance_getter(statement: &Node, classes: &HashSet<String>) -> Option<(Strin
 		return None;
 	};
 	let class = object.drop_meta().symbol_name().filter(|class| classes.contains(*class))?;
-	let (property, value) = match member.drop_meta() {
-		Node::List(items, Bracket::Round, _) if items.len() == 2 => {
-			(items[0].drop_meta().symbol_name()?, Some(items[1].clone()))
-		}
-		member => (member.symbol_name()?, None),
+	let receiver_word =
+		|node: &Node| node.drop_meta().symbol_name().filter(|word| RECEIVERS.contains(word)).map(String::from);
+	let (property, explicit, value) = match member.drop_meta() {
+		Node::List(items, Bracket::Round, _) => match items.as_slice() {
+			[property] => (property, None, None),
+			[property, receiver] if receiver_word(receiver).is_some() => (property, receiver_word(receiver), None),
+			[property, value] => (property, None, Some(value.clone())),
+			_ => return None,
+		},
+		_ => (member.as_ref(), None, None),
 	};
-	Some((class.to_string(), property.to_string(), value, body.as_ref().clone()))
+	let mut read = None;
+	body.visit(&mut |node| {
+		read = read.take().or_else(|| receiver_word(node));
+	});
+	Some(InstanceProperty {
+		class: class.to_string(),
+		property: property.drop_meta().symbol_name()?.to_string(),
+		receiver: explicit.or(read).unwrap_or(WRITTEN.to_string()),
+		value,
+		body: body.as_ref().clone(),
+	})
 }
 
 /// The program with each top-level statement (also inside a block) mapped
