@@ -2890,6 +2890,7 @@ PASSED:
   ✓ numbers::test_number::test_number_mix
   ✓ numbers::test_pixel_unit::pixels_are_their_own_dimension
   ✓ numbers::test_pixel_unit::pixels_turn_into_lengths_through_the_displays_dpi
+  ✓ numbers::test_pixel_unit::ppi_and_dots_are_dpi_and_pixels
   ✓ numbers::test_plus_minus_gaussian::a_gaussian_reads_back_as_it_is_written
   ✓ numbers::test_plus_minus_gaussian::a_math_word_scales_the_deviation_by_its_slope
   ✓ numbers::test_plus_minus_gaussian::a_number_scales_the_deviation
@@ -6026,4 +6027,4 @@ PASSED:
 FAILED:
 
 SUMMARY:
-13 ignored, 6021 passed, 0 failed, 6021 total tested
+13 ignored, 6022 passed, 0 failed, 6022 total tested
