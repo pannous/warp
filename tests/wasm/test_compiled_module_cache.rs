@@ -44,8 +44,8 @@ fn test_compiled_module_cache_compiles_once_then_maps_the_compiled_module() {
 fn test_compiled_module_cache_keys_on_the_engine_settings() {
 	let cache = fresh_cache("engine_settings");
 	compiled_module_in(&cache, &gc_engine(), ANSWER_MODULE.as_bytes()).unwrap();
-	// the task engine adds epoch interruption: other machine code, so another cache entry
-	let (_, origin) = compiled_module_in(&cache, &warp::util::task_engine(), ANSWER_MODULE.as_bytes()).unwrap();
+	// the fuel engine counts steps: other machine code, so another cache entry
+	let (_, origin) = compiled_module_in(&cache, &warp::util::shared_engine(true), ANSWER_MODULE.as_bytes()).unwrap();
 	assert_eq!(origin, Origin::Compiled);
 }
 
