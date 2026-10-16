@@ -1,0 +1,40 @@
+// parse corpus of tests/parser/test_self_parser.rs: the former probes/print/ snippets, asserted in tests/welcoming/
+// 01_print_variable
+x=3; print(x)
+
+// 02_print_char
+print("c")
+
+// 03_print_in_function
+f(x) := { print(x); x }; f(3)
+
+// 04_print_ratio
+y=2.5; print(y)
+
+// 05_print_list
+xs=[1,2]; print(xs)
+
+// 06_ratio_concat
+y=2.5; "x"+y
+
+// 07_ratio_cast
+y=-1/8; y as string
+
+// 08_repeating_ratio
+y=1/3; "v="+y
+
+// 09_infinity
+y=1/0; "a"+y
+
+// 10_big_int_text
+x=2^70; "v"+x
+
+// 11_print_value
+y=print("c"); y
+
+// 12_imported_floor_reassign
+import floor from "m"; x=10.0; x=floor(2.5); x+1
+
+// 13_float_widening
+x=1; x=2.5 as float; x
+

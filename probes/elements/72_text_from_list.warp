@@ -1,3 +1,0 @@
-names = ["A", "B"]
-p = names[1]
-p

@@ -522,7 +522,7 @@ Tests still pinning the old rule (not edited, supervisor decides): tests/welcomi
   -9223372036854775807. Required with list_join whenever the int runtime is (text_builtins::add_dependencies).
 - Fixed: an exact variable later assigned an f64 (`import floor from "m"; x=10.0; x=floor(2.5)`, `x=1; x=2.5 as float`)
   holds an f64 throughout (analyzer `widen_to_float`), as expressions mixing in an f64 do; before, WASM validation failed.
-- Tests: tests/welcoming/test_welcoming_print.rs, probes/print/.
+- Tests: tests/welcoming/test_welcoming_print.rs.
 
 ## For wiki/Footguns.md
 
