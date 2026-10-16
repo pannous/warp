@@ -2876,6 +2876,7 @@ PASSED:
   ✓ numbers::test_math::test_runtime_equality_autocast
   ✓ numbers::test_math::test_simple_variables
   ✓ numbers::test_math::test_sin
+  ✓ numbers::test_math::test_sinus_warp_import
   ✓ numbers::test_math::test_sqrt_alias
   ✓ numbers::test_math::test_superscript_powers
   ✓ numbers::test_math::test_ternary_with_comparison
@@ -5536,6 +5537,7 @@ PASSED:
   ✓ web::test_site_animation::an_endless_sleeping_loop_builds
   ✓ web::test_site_failure::a_site_that_does_not_compile_says_why
   ✓ web::test_site_holes::a_built_site_patches_only_its_holes
+  ✓ web::test_site_modules::a_page_module_ships_the_modules_it_imports_beside_it
   ✓ web::test_site_modules::a_site_ships_the_modules_its_program_imports
   ✓ web::test_site_tasks::a_site_renders_what_its_tasks_computed
   ✓ web::test_site::a_painting_site_runs_in_a_worker_with_its_canvas
@@ -6089,7 +6091,6 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ numbers::test_math::test_sinus_warp_import
 
 SUMMARY:
-13 ignored, 6086 passed, 1 failed, 6087 total tested
+13 ignored, 6088 passed, 0 failed, 6088 total tested

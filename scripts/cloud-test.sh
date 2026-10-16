@@ -44,7 +44,10 @@ run_tests_here() {
 	local name started build_seconds test_seconds checkout lock_matches=""
 	name=$(run_name "$branch" "$tip")
 	started=$SECONDS
-	git fetch -q origin "+refs/heads/$branch:refs/remotes/origin/$branch" main vendor 2>&1 | tail -3
+	local branch_ref
+	for branch_ref in "$branch" main vendor; do
+		git fetch -q origin "+refs/heads/$branch_ref:refs/remotes/origin/$branch_ref" 2>&1 | tail -3
+	done
 	git cat-file -e "$tip^{commit}" 2>/dev/null || git fetch -q origin "$tip" || fail "tip $tip not found on origin"
 	checkout=$HERE_WORK/tree
 	rm -rf "$checkout" && git worktree prune && git worktree add -q --detach "$checkout" "$tip" || fail "checkout of $tip failed"
@@ -251,21 +254,25 @@ collect() {
 
 # ---------------------------------------------------------------- arguments
 
-case "${1:-}" in
-	--run-here) shift; run_here "$@"; exit ;;
-	--run-detached) shift; run_tests_here "$@"; touch "$HERE_WORK/done"; exit ;;
-	--summarize) summarize "$2" "${3:-$ENVIRONMENTAL_LIST}"; exit ;;
-esac
-card="" wait=1 result_only="" on_main=()
-while [[ "${1:-}" == --* ]]; do
-	case "$1" in
-		--card) card=$2; shift 2 ;;
-		--no-wait) wait=""; shift ;;
-		--result) result_only=1; shift ;;
-		--on-main) on_main=(--on-main); shift ;;
-		*) break ;;
+# one function, parsed whole before it runs: editing this file during a long wait then can't break the waiting run
+main() {
+	case "${1:-}" in
+		--run-here) shift; run_here "$@"; exit ;;
+		--run-detached) shift; run_tests_here "$@"; touch "$HERE_WORK/done"; exit ;;
+		--summarize) summarize "$2" "${3:-$ENVIRONMENTAL_LIST}"; exit ;;
 	esac
-done
-[ $# -ge 2 ] || { sed -n '2,16p' "$0"; exit 2; }
-if [ -z "$result_only" ]; then launch "$@" || exit; fi
-[ -n "$wait$result_only" ] && collect "$1" "$2" "$card"
+	card="" wait=1 result_only="" on_main=()
+	while [[ "${1:-}" == --* ]]; do
+		case "$1" in
+			--card) card=$2; shift 2 ;;
+			--no-wait) wait=""; shift ;;
+			--result) result_only=1; shift ;;
+			--on-main) on_main=(--on-main); shift ;;
+			*) break ;;
+		esac
+	done
+	[ $# -ge 2 ] || { sed -n '2,16p' "$0"; exit 2; }
+	if [ -z "$result_only" ]; then launch "$@" || exit; fi
+	[ -n "$wait$result_only" ] && collect "$1" "$2" "$card"
+}
+main "$@"; exit
