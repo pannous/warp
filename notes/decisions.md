@@ -108,6 +108,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   `now > 17h` / `now >= October` / `now ≈ 2026-10-14` compare the matching part; `==` stays exact (`now == 2026-10-14` no).
   `now.time` is the local time of day, printing 22:27:46 (`now.date` the date); the old `time > 18h` special case
   goes: an error with the fix `now > 18h`.
+- type-text (2026-10-16, warp-types default under type-print; card type-values; undoable): a type value is
+  `class int` in every text form, not only print: `"type is " + type 3` → "type is class int", `t as text` and
+  `"\(t)"` alike (one rule, like Python's str(int)); compare types as types (`type(x) == int`), so
+  `"" + type(x) == "int"` is no. `type(int)` is class type.
 - now-live (2026-10-15, user): `now` stays a live clock (each read is the current instant, `now - start` measures
   time); tests pin what always holds, `now <= now` → yes, not `now == now` (card flaky-browser-suite).
 - canvas-size (2026-10-14): `window.width/height`, `display.width/height`, `canvas.width/height` are writable properties,
