@@ -901,6 +901,9 @@ impl WasmGcEmitter {
 		if let Some((value, declared)) = declared_values::declared_field_value(node) {
 			return self.emit_declared_value(func, Some(declared), value, Kind::Empty);
 		}
+		if let Some(item) = crate::lowering::data_items::marked_item(node) {
+			return self.emit_data_item(func, item);
+		}
 		if let Some((name, fields)) = crate::type_constructor::instance_parts(node) {
 			let fields = self.with_declared_field_types(name, fields);
 			self.emit_default_key(func, name, &fields, &Op::None); // an instance is no data: its own op code (D4)

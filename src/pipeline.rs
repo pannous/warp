@@ -417,6 +417,8 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 	let node = crate::lowering::for_loop::headers::lower(node);
 	// `data e` as written: no sugar pass rewrites inside e
 	let node = crate::lowering::blocks::seal_quoted(node);
+	// the list items as written, before passes build lists of their own
+	let node = crate::lowering::data_items::lower(node);
 
 	if let Some(clash) = crate::analyzer::check_operator_word_functions(&node) {
 		return Err(clash.into_error());
