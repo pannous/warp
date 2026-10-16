@@ -444,7 +444,61 @@ pub fn lower_arity_overloads(node: Node) -> Node {
 	if arities.is_empty() {
 		return node;
 	}
-	ArityOverloads { arities }.rewrite(node)
+	let called_parameters = called_parameters(&node);
+	let node = ArityOverloads { arities: arities.clone() }.rewrite(node);
+	passed_variants(node, &arities, &called_parameters)
+}
+
+/// (function, parameter index) → how many arguments the function's body calls that parameter with: 0 of
+/// `twice(h) := h() + h()`
+fn called_parameters(node: &Node) -> HashMap<(String, usize), usize> {
+	let mut called = HashMap::new();
+	each_definition(node, &mut |definition| {
+		for (index, parameter) in definition.head[1..].iter().enumerate() {
+			let Some(name) = super::nodes::parameter_name(parameter) else { continue };
+			if let Some(arguments) = called_arity(definition.body, &name) {
+				called.insert((definition.head[0].name(), index), arguments);
+			}
+		}
+	});
+	called
+}
+
+/// How many arguments `body` calls `parameter` with: 1 of `h(x)`, the first such call
+fn called_arity(body: &Node, parameter: &str) -> Option<usize> {
+	let mut arities = Vec::new();
+	body.visit(&mut |node| {
+		if let Node::List(items, Bracket::Round, Separator::None) = node {
+			if items.first().is_some_and(|head| head.drop_meta().is_symbol(parameter)) {
+				arities.push(items.len() - 1);
+			}
+		}
+	});
+	arities.first().copied()
+}
+
+/// `twice(f)`, `apply(f, 3)` of f overloaded by arity (card arity-overloaded): f is no one function value, so the
+/// argument is the variant taking as many arguments as the called function calls that parameter with
+fn passed_variants(
+	node: Node,
+	arities: &HashMap<String, Vec<Arity>>,
+	called_parameters: &HashMap<(String, usize), usize>,
+) -> Node {
+	let node = children_rewritten(node, |child| passed_variants(child, arities, called_parameters));
+	let Node::List(items, Bracket::Round, separator) = node else {
+		return node;
+	};
+	let callee = items.first().map(|head| head.drop_meta().name()).unwrap_or_default();
+	let variant = |index: usize, argument: &Node| {
+		let base = argument.drop_meta().symbol_name()?;
+		let arguments = *called_parameters.get(&(callee.clone(), index))?;
+		let fitting = arities.get(base)?.iter().find(|arity| arity.accepts(arguments))?;
+		Some(Node::Symbol(arity_variant(base, *fitting)))
+	};
+	let mut items = items.into_iter();
+	let head = items.next();
+	let arguments = items.enumerate().map(|(index, argument)| variant(index, &argument).unwrap_or(argument));
+	Node::List(head.into_iter().chain(arguments).collect(), Bracket::Round, separator)
 }
 
 /// Calls `visit` with every definition, also the ones nested in bodies
@@ -469,6 +523,13 @@ struct ArityOverloads {
 
 fn arity_variant(name: &str, arity: Arity) -> String {
 	witness_name(name, &arity.total.to_string())
+}
+
+/// `f·1` of f given as a function called with one argument (card arity-overloaded): the arity overload taking that
+/// many, when f is overloaded by arity (`f() := 0`, `f(x) := x * 2`) and `defined` knows it
+pub(crate) fn variant_called_with(name: &str, arguments: usize, defined: impl Fn(&str) -> bool) -> Option<String> {
+	let variant = witness_name(name, &arguments.to_string());
+	(!defined(name) && defined(&variant)).then_some(variant)
 }
 
 /// `f·2`: the variant of f for two arguments that lower_arity_overloads made, which may still overload by type
