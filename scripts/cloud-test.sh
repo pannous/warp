@@ -44,7 +44,10 @@ run_tests_here() {
 	local name started build_seconds test_seconds checkout lock_matches=""
 	name=$(run_name "$branch" "$tip")
 	started=$SECONDS
-	git fetch -q origin "+refs/heads/$branch:refs/remotes/origin/$branch" main vendor 2>&1 | tail -3
+	local branch_ref
+	for branch_ref in "$branch" main vendor; do
+		git fetch -q origin "+refs/heads/$branch_ref:refs/remotes/origin/$branch_ref" 2>&1 | tail -3
+	done
 	git cat-file -e "$tip^{commit}" 2>/dev/null || git fetch -q origin "$tip" || fail "tip $tip not found on origin"
 	checkout=$HERE_WORK/tree
 	rm -rf "$checkout" && git worktree prune && git worktree add -q --detach "$checkout" "$tip" || fail "checkout of $tip failed"
