@@ -60,3 +60,13 @@ fn key_event_aliases_listen_to_key() {
 	is!("count = 0; once keypress { count += 1 }; emit key; emit key; count", 1);
 	assert!(notes_of("on keydown { print key }; 1").contains(&"keydown → key".to_string()));
 }
+
+/// reviewer: every listener word and the DOM attribute form read the same table
+#[test]
+fn dom_event_names_listen_to_warps_events() {
+	is!("count = 0; when keyup { count += 1 }; emit key; count", 1);
+	is!("count = 0; on mousedown { count += 1 }; emit click; count", 1);
+	is!("count = 0; onclick { count += 1 }; emit click; count", 1);
+	is!("count = 0; onkeydown { count += 1 }; emit key; count", 1);
+	assert!(notes_of("onclick { print 1 }; 1").contains(&"onclick → on click".to_string()));
+}

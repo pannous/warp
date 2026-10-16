@@ -8,6 +8,7 @@
 //! - JS destructured parameters `({a, b}) => a + b`: the object taken apart into its fields
 
 use super::nodes::{call, children_rewritten, is_kinded_type_word, key};
+use crate::lowering::signals::event_signals::PAGE_EVENTS;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::words::GENERIC_MARK;
@@ -182,7 +183,10 @@ fn forms(node: Node) -> Node {
 			if let Some(chain) = when_chain(&items) {
 				return chain;
 			}
-			if let Some(listener) = when_listener(&items).or_else(|| aliased_event(&items)) {
+			if let Some(listener) = when_listener(&items) {
+				return Node::List(aliased_event(&listener).unwrap_or(listener), bracket, separator);
+			}
+			if let Some(listener) = aliased_event(&items) {
 				return Node::List(listener, bracket, separator);
 			}
 			let endless = match items.as_slice() {
@@ -471,17 +475,39 @@ fn when_listener(items: &[Node]) -> Option<Vec<Node>> {
 	Some(vec![symbol(listener), subject.clone(), body.clone()])
 }
 
-/// `on keydown {…}`, `once keypress {…}`: the listener of the warp event, with the alias note
+/// `on keydown {…}`, `once keypress {…}`, `when keyup {…}`: the listener of the warp event, with the alias note; the
+/// DOM attribute `onclick {…}`, `onkeydown {…}` is `on click {…}`, `on key {…}`
 fn aliased_event(items: &[Node]) -> Option<Vec<Node>> {
+	if let [attribute, body] = items {
+		if let Some((written, event)) = attribute_event(attribute) {
+			if matches!(body.drop_meta(), Node::List(_, Bracket::Curly, _)) {
+				crate::normalize::set_position_of(attribute);
+				crate::errors::diagnostic::note_alias(&written, &format!("{ON_WORD} {event}"));
+				return Some(vec![symbol(ON_WORD), symbol(event), body.clone()]);
+			}
+		}
+	}
 	let [listener, event, rest @ ..] = items else { return None };
 	if !listener.is_symbol(ON_WORD) && !listener.is_symbol(ONCE_WORD) {
 		return None;
 	}
 	let Node::Symbol(name) = event.drop_meta() else { return None };
-	let (alias, meant) = EVENT_ALIASES.iter().find(|(alias, _)| alias == name)?;
+	let meant = aliased_event_name(name)?;
 	crate::normalize::set_position_of(event);
-	crate::errors::diagnostic::note_alias(alias, meant);
+	crate::errors::diagnostic::note_alias(name, meant);
 	Some([vec![listener.clone(), symbol(meant)], rest.to_vec()].concat())
+}
+
+fn aliased_event_name(name: &str) -> Option<&'static str> {
+	EVENT_ALIASES.iter().find(|(alias, _)| *alias == name).map(|(_, meant)| *meant)
+}
+
+/// `onclick`: the written word and the warp event its DOM attribute name stands for
+fn attribute_event(word: &Node) -> Option<(String, &'static str)> {
+	let Node::Symbol(written) = word.drop_meta() else { return None };
+	let name = written.strip_prefix(ON_WORD)?;
+	let event = PAGE_EVENTS.iter().copied().find(|event| *event == name).or_else(|| aliased_event_name(name))?;
+	Some((written.clone(), event))
 }
 
 /// The one warning of every `when`, its fix the word this shape means

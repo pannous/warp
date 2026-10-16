@@ -14,7 +14,17 @@ pub const OF_WORD: &str = "of";
 pub const ON_WORD: &str = "on";
 pub const ONCE_WORD: &str = "once";
 /// Other systems' event names, listened to as the warp event with a got-it note (card key-aliases): one line per alias
-pub const EVENT_ALIASES: [(&str, &str); 3] = [("keydown", "key"), ("key_down", "key"), ("keypress", "key")];
+pub const EVENT_ALIASES: [(&str, &str); 9] = [
+	("keydown", "key"),
+	("key_down", "key"),
+	("keypress", "key"),
+	("keyup", "key"),
+	("key_up", "key"),
+	("mousedown", "click"),
+	("mouse_down", "click"),
+	("mouseup", "click"),
+	("mouse_up", "click"),
+];
 pub const WHENEVER_WORD: &str = "whenever";
 pub const RETURN_WORD: &str = "return";
 pub const SUM_WORD: &str = "sum";
