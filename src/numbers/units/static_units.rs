@@ -14,7 +14,7 @@
 //! text; `xs.add(q)` checks the element signature.
 //! Unit fields: `class Run{distance: km}` (unit_fields.rs), an instance's fields have signatures like an object's.
 
-use super::{Dimension, Factor, Quantity, Unit, exponent_of, finest_units, unit_named, units_text};
+use super::{exponent_of, finest_units, unit_named, units_text, Dimension, Factor, Quantity, Unit};
 use crate::lowering::function_head;
 use crate::words::{MAP_WORD, PRINT_WORD, RETURN_WORD, STR_WORD};
 

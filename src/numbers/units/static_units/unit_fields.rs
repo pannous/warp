@@ -3,7 +3,7 @@
 //! instance's class: a constructor call, a variable declared `r: Run`, an element of a list (or table) declared `[Run]`,
 //! a loop over such a list. A unit field read of an instance it cannot see is a loud error, never a silent SI number.
 
-use super::{Fields, Inference, Signature, Stop, shown};
+use super::{shown, Fields, Inference, Signature, Stop};
 use crate::lowering::database_tables::OPTIONAL_MARK;
 use crate::node::{Bracket, Node};
 use crate::operators::Op;
