@@ -98,6 +98,7 @@ mod test_handler_globals;
 mod test_handler_unwinding; // card on-error-abort
 mod test_held_key; // card held-key
 mod test_help_word;
+mod test_host_word_failures; // card host-word
 mod test_if_call_condition;
 mod test_if_empty_branch;
 mod test_if_instance_branches; // card if-instance-branch
