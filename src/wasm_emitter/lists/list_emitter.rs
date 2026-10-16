@@ -35,9 +35,9 @@ const NODE_ARGUMENT_CALLS: [(&str, usize); 4] = [
 ];
 
 const BUILTIN_CALLS: [&str; 28] = [
-	"return",
+	crate::words::RETURN_WORD,
 	crate::words::AS_CODE,
-	"fetch",
+	crate::host::FETCH_WORD,
 	"puts",
 	"puti",
 	"putl",
@@ -246,7 +246,7 @@ impl WasmGcEmitter {
 	/// `return value`: leaves the open tries and the function
 	fn emit_return_statement(&mut self, func: &mut Function, items: &[Node]) -> bool {
 		let [word, value] = items else { return false };
-		if !matches!(word.drop_meta(), Node::Symbol(s) if s == "return") {
+		if !word.is_symbol(crate::words::RETURN_WORD) {
 			return false;
 		}
 		self.emit_returned_value(func, value);

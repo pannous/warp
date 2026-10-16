@@ -311,7 +311,7 @@ impl WasmGcEmitter {
 			return;
 		}
 		// `return value`: the value as the Node a Node-returning function gives back; the 0 after it types the block
-		if items.len() == 2 && items[0].is_symbol("return") {
+		if items.len() == 2 && items[0].is_symbol(crate::words::RETURN_WORD) {
 			self.emit_returned_value(func, &items[1]);
 			Self::emit_list(func, &[I::Return, I::I64Const(0)]);
 			return;

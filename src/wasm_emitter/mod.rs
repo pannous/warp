@@ -824,12 +824,8 @@ impl WasmGcEmitter {
 		let func_type = self.type_manager.function_type(vec![], vec![Ref(node_ref)]);
 		self.functions.function(func_type);
 
-		// Build locals list based on variable types
-		// Each variable gets its own entry, then temp locals (all i64)
-		let mut locals: Vec<(u32, ValType)> = Vec::new();
-		locals.extend(self.local_declarations(0));
-
-		// Add temp locals (i64 for now)
+		// each variable its own entry, then the temp locals, all i64
+		let mut locals = self.local_declarations(0);
 		if temp_locals > 0 {
 			locals.push((temp_locals, ValType::I64));
 		}
@@ -1030,11 +1026,8 @@ impl WasmGcEmitter {
 			Node::Meta { .. } => {
 				self.emit_call(func, "new_empty");
 			}
-			Node::Error(inner) => {
-				// Emit the inner node, but mark as error in kind
-				// For now, just emit the inner
-				self.emit_node_instructions(func, inner);
-			}
+			// an Error node of the source emits its inner node (AGENTS.md "Serialization")
+			Node::Error(inner) => self.emit_node_instructions(func, inner),
 			Node::Type { name, body } => {
 				// Emit type as a tagged block with name and fields
 				self.emit_node_instructions(func, name);
