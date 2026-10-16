@@ -545,6 +545,22 @@ fn written_power(op: Op, exponent: &Node) -> Option<i32> {
 	}
 }
 
+/// `3 cm as px`: a unit word of lib/units.warp whose amount turns `given` into `target` (dpi, px per inch), as the fix:
+/// multiply by an amount in it, or divide the other way
+fn conversion_fix(given: &Signature, target: &Signature) -> String {
+	let (times, divided) = (combined(target, given, -1), combined(given, target, -1));
+	let alias_signature =
+		|expression: &str| super::unit_expression(&crate::warp_parser::parse(expression)).map(|u| signature(&u));
+	super::unit_aliases()
+		.iter()
+		.find_map(|(name, expression)| match alias_signature(expression)? {
+			ratio if *ratio == *times => Some(format!("; multiply by an amount in {name}")),
+			ratio if *ratio == *divided => Some(format!("; divide by an amount in {name}")),
+			_ => None,
+		})
+		.unwrap_or_default()
+}
+
 fn number_node(amount: &Rational) -> Option<Node> {
 	let numerator = amount.numerator.to_i64()?;
 	Some(match amount.denominator.to_i64()? {
@@ -1047,9 +1063,10 @@ impl Inference {
 		// a list converts each element: `[3, 4] cm in m`
 		if *given != *target {
 			return Err(Stop::Error(format!(
-				"DimensionError: {} cannot be converted to {}",
+				"DimensionError: {} cannot be converted to {}{}",
 				shown(&given),
-				shown(&target)
+				shown(&target),
+				conversion_fix(&given, &target)
 			)));
 		}
 		Ok((quantity, given))

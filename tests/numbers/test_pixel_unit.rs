@@ -28,3 +28,10 @@ fn ppi_and_dots_are_dpi_and_pixels() {
 	is!("1inch * 96ppi == 96px", true);
 	is!("2dot + 3px == 5px", true);
 }
+
+// reviewer: the refusal names the way, a unit word of lib/units.warp whose amount turns one quantity into the other
+#[test]
+fn a_refused_conversion_names_the_unit_to_multiply_by() {
+	fails_with("3cm as px", "multiply by an amount in dpi");
+	fails_with("3px as cm", "divide by an amount in dpi");
+}
