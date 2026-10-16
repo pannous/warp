@@ -3,7 +3,7 @@
 //! numbers of arguments they take, and the variables it assigns at the top level. Inside a function: also its
 //! parameters and the names its body assigns. A field of an object literal takes no bare word.
 
-use super::nodes::{function_head, parameter_name};
+use super::nodes::{function_head, parameter_name, FunctionHead};
 use crate::node::Node;
 use std::collections::{HashMap, HashSet};
 
@@ -56,11 +56,17 @@ impl ProgramNames {
 	pub fn inside(&self, node: &Node) -> Option<ProgramNames> {
 		let head = function_head(node)?;
 		let mut inner = self.clone();
-		inner.bound.extend(head.parameters().into_iter().filter_map(parameter_name));
-		crate::library_words::collect_assigned_names(head.body, &mut inner.bound);
-		inner.bound.extend(crate::for_loop::loop_variables(head.body));
+		inner.bound.extend(bound_in_function(&head));
 		Some(inner)
 	}
+}
+
+/// The names a function binds inside: its parameters, the names its body assigns and its loop variables
+fn bound_in_function(head: &FunctionHead) -> HashSet<String> {
+	let mut bound: HashSet<String> = head.parameters().into_iter().filter_map(parameter_name).collect();
+	crate::library_words::collect_assigned_names(head.body, &mut bound);
+	bound.extend(crate::for_loop::loop_variables(head.body));
+	bound
 }
 
 /// `rewrite` of a pass giving `word` its library or host meaning, applied where the program leaves the word free:
@@ -87,7 +93,7 @@ fn where_free(node: Node, names: &ProgramNames, word: &str, rewrite: &dyn Fn(Nod
 	if names.takes(word) {
 		return node;
 	}
-	if !binds_inside(&node, names, word) {
+	if !binds_inside(&node, word) {
 		return rewrite(node);
 	}
 	let inner = names.inside(&node);
@@ -98,10 +104,10 @@ fn where_free(node: Node, names: &ProgramNames, word: &str, rewrite: &dyn Fn(Nod
 	}
 }
 
-/// Does a function inside `node` (itself too) bind `word`
-fn binds_inside(node: &Node, names: &ProgramNames, word: &str) -> bool {
+/// Does a function inside `node` (itself too) bind `word`, which the names outside leave free
+fn binds_inside(node: &Node, word: &str) -> bool {
 	let mut binds = false;
-	node.visit(&mut |part| binds |= names.inside(part).is_some_and(|inner| inner.takes(word)));
+	node.visit(&mut |part| binds |= function_head(part).is_some_and(|head| bound_in_function(&head).contains(word)));
 	binds
 }
 
