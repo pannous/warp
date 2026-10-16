@@ -282,6 +282,16 @@ User decision 2026-09-28: exact numbers beyond Q with π, ℯ and square/cube ro
   `while 1 {}` used to fail at compile time (`cannot extract a numeric value from ø`): an empty body `{}` (parsed as ø)
   is now a spinning loop. Tests: test_infinite_loop_runs_out_of_fuel, test_fuel_budget_can_be_raised. The CI test step
   took about as long as before (5m07s, the same as the preceding green runs).
+- Implemented (card fuel-metering, 2026-10-16): fuel only on request. Engines (`warp_runtime::engine::metered_config`)
+  check epochs; the shared one (`util::shared_engine(false)`) ticks every 10 ms and each store (`limited_store`) compares
+  its thread's CPU time with `util::time_limit()` (WARP_TIME_LIMIT, `with_time_limit`, default 60 s) → `OutOfTime`.
+  The limit counts per turn: a call hook restarts the clock at each call from the host into wasm (main, a frame, an
+  event handler), so windowed and event-loop programs run as long as they like; a host word calling back into wasm
+  restarts it too (accepted gap).
+  A store on a fuel engine gets the fuel budget instead: `use fuel` (custom section `warp.fuel`), `warp fuel N`,
+  `WARP_FUEL`, `with_fuel` pick `shared_engine(true)`. Tasks check stop/pause and the time at the same ticks. Executables
+  (`warp build`) have no time limit unless WARP_TIME_LIMIT is set (Interviewer's default: a built app runs freely). Compile-time folding computes within 2 s. 40M calls: 363 M cycles against
+  681 M with fuel. Tests: test_time_limit.
 - Implemented: `Div` effect (src/analyzer/effects.rs). A function has Div if its body has a `while` (unless the condition is literally
   false), if it recurses through another function (mutual recursion), or if its self-recursion has no measure: a parameter
   that each recursive call moves by a positive literal toward a literal bound known from its guard (`n<2 ? n : f(n-1)`,
@@ -337,8 +347,10 @@ Test: test_nan_bits_are_canonical.
 
 ### Termination (halting problem)
 Truly impossible to decide in general; Warp handles both sides without a proof assistant.
-Runtime: every run has a fuel budget (default 10^11 steps, `WARP_FUEL=<steps>` or `warp --fuel <steps>`); `while 1 {}` ends
-with `Error('out of fuel after N steps: the program may not terminate …')` instead of hanging.
+Runtime: every run stops after 60 s of computing (CPU time; sleeping and waiting don't count; `WARP_TIME_LIMIT=<seconds>`):
+`while 1 {}` ends with `Error('out of time after 60 s of computing: the program may not terminate …')` instead of hanging.
+Exact step counts on request: `use fuel` in the program, `warp fuel <steps> app.warp` or `WARP_FUEL=<steps>` count fuel
+(default 10^11 steps, `out of fuel after N steps`), which makes calls about four times slower.
 Compile time: the effect system has Koka's `Div`. Recursion that moves one parameter by a positive literal toward a guarded
 literal bound (`fib(n) := n<2 ? n : fib(n-1)+fib(n-2)`) is total; `while`, unguarded or unbounded recursion
 (`f(n) := n==0 ? 1 : n*f(n-1)` diverges for n<0) and mutual recursion are Div. `f ! Pure` rejects a function that may

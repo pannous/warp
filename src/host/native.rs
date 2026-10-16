@@ -195,7 +195,7 @@ fn answer_in_memory(
 /// Run WASM bytes and return i64 result (for simple modules returning i64)
 fn run_wasm_simple(bytes: &[u8]) -> Result<i64> {
 	let engine = gc_engine();
-	let mut store = crate::util::fueled_store(&engine, ());
+	let mut store = crate::util::limited_store(&engine, ());
 	let module = crate::run::module_cache::compiled_module(&engine, bytes)?;
 	let linker = Linker::new(&engine);
 	let instance = linker.instantiate(&mut store, &module)?;

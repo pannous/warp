@@ -5,6 +5,9 @@ pub(crate) const COMPILE_FLAGS: [&str; 7] =
 	[EXE_FLAG, WASM_FLAG, AOT_FLAG, SITE_FLAG, WIT_FLAG, COMPONENT_FLAG, WAGI_FLAG];
 /// Where earlier versions remembered "got it", in the current folder: their `ack:` lines are adopted
 pub(crate) const LOCAL_ACKNOWLEDGEMENTS_FILES: [&str; 2] = [".warp-answers", ACKNOWLEDGEMENTS_FILE];
+/// `warp fuel <steps> …` (an option word like `fast`) and its flag spelling `--fuel <steps>`
+pub(crate) const FUEL_WORD: &str = "fuel";
+pub(crate) const FUEL_FLAG: &str = "--fuel";
 /// Never prompt "got it?" after a warning or note (as in CI or a pipe)
 pub(crate) const NO_ASK_FLAG: &str = "--no-ask";
 /// Hints and notes (`prefer ^ over **`) are shown by default; `--no-hints` or WARP_HINTS=0 hide them (card hints-toggle)
@@ -31,12 +34,14 @@ pub(crate) fn command_argument<'a>(arg_string: &'a str, command: &str) -> Option
 /// `--fuel <steps>`, `fast`, `--strict`, `--no-ask`, `--no-hints` take effect and leave the arguments; the answers file is read
 #[cfg(not(test))]
 pub(crate) fn apply_flags(args: &mut Vec<String>) {
-	// `--fuel <steps>`: execution budget of every run (default util::DEFAULT_FUEL, env WARP_FUEL)
-	if let Some(flag) = args.iter().position(|arg| arg == "--fuel") {
+	// `warp fuel <steps> <file|code …>` or `--fuel <steps>`: every run counts fuel steps instead of stopping at the time
+	// limit (decision fuel-metering; env WARP_FUEL)
+	let fuel_word_at = (args.len() > 3 && args[1] == FUEL_WORD).then_some(1);
+	if let Some(flag) = args.iter().position(|arg| arg == FUEL_FLAG).or(fuel_word_at) {
 		match args.get(flag + 1).and_then(|steps| steps.replace('_', "").parse::<u64>().ok()) {
 			Some(steps) => util::set_fuel_budget(steps),
 			None => {
-				eprintln!("--fuel needs a number of steps, e.g. --fuel 100000000000");
+				eprintln!("{} needs a number of steps, e.g. warp fuel 100000000000 app.warp", args[flag]);
 				std::process::exit(2);
 			}
 		}

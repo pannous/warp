@@ -34,6 +34,8 @@ pub struct CompileContext {
 	pub comments_as_meta: bool,
 	/// the program said `use reflection` (decision reflection): function values tell where and how they were made
 	pub reflection_mode: bool,
+	/// the program said `use fuel` (decision fuel-metering): its runs count fuel steps instead of a time limit
+	pub counts_fuel: bool,
 	pub style: Style,
 	pub hint_mode: HintMode,
 	/// a stage that repeats work already hinted (the emitter's rerun) says nothing twice
@@ -95,6 +97,7 @@ impl Default for CompileContext {
 			warning_mode: WarningMode::default(),
 			comments_as_meta: false,
 			reflection_mode: false,
+			counts_fuel: false,
 			style: Style::default(),
 			hint_mode: HintMode::Always,
 			hints_muted: false,

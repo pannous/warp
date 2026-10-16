@@ -253,6 +253,8 @@ const SCRIPT_MODULES: [&str; 4] = ["os", "file", "net", "shell"];
 const COMMENTS_PRAGMA: &str = "comments";
 /// `use reflection` (or `use reflection mode`): function values answer where and how they were made
 const REFLECTION_PRAGMA: &str = "reflection";
+/// `use fuel`: the program's runs count fuel steps instead of stopping at the time limit (decision fuel-metering)
+const FUEL_PRAGMA: &str = "fuel";
 /// A "got it" is remembered as the line `ack:<topic> = acknowledged` in the acknowledgements file
 const ACKNOWLEDGED: &str = "acknowledged";
 const ACKNOWLEDGED_PREFIX: &str = "ack:";
@@ -563,10 +565,21 @@ fn without_relaxed_pragma(program: Node) -> (Node, bool) {
 
 /// Run `body` with warnings as errors when the program says `use strict`, and comments as meta information when it
 /// says `use comments`, and without hints when it says `use relaxed` or `use script`; `use reflection` turns on
-/// reflection mode
+/// reflection mode, `use fuel` fuel counting
 pub fn in_program_mode<R>(program: Node, body: impl FnOnce(Node) -> R) -> R {
 	let (program, reflection) = without_pragma(program, REFLECTION_PRAGMA);
-	compile_context::scoped(|context| &mut context.reflection_mode, reflection, || in_written_mode(program, body))
+	let (program, fuel) = without_pragma(program, FUEL_PRAGMA);
+	compile_context::scoped(
+		|context| &mut context.counts_fuel,
+		fuel,
+		|| {
+			compile_context::scoped(
+				|context| &mut context.reflection_mode,
+				reflection,
+				|| in_written_mode(program, body),
+			)
+		},
+	)
 }
 
 fn in_written_mode<R>(program: Node, body: impl FnOnce(Node) -> R) -> R {

@@ -177,7 +177,7 @@ pub fn run_raw_struct(wasm_bytes: &[u8]) -> Result<Node, String> {
 	let module_id = crate::gc_traits::register_gc_types_from_wasm(wasm_bytes).ok();
 
 	let engine = gc_engine();
-	let mut store = crate::util::fueled_store(&engine, ());
+	let mut store = crate::util::limited_store(&engine, ());
 	let module =
 		crate::run::module_cache::compiled_module(&engine, wasm_bytes).map_err(|e: wasmtime::Error| e.to_string())?;
 

@@ -116,6 +116,9 @@ pub const PROGRAM_FILE_SECTION: &str = "warp.program_file";
 /// The custom section naming the program's named live loops, joined by USER_FUNCTIONS_SEPARATOR: the playground fades a
 /// loop of the run before that the new run lacks as soon as it is compiled (decision deleted-loop)
 pub const LIVE_LOOPS_SECTION: &str = "warp.live_loops";
+/// The custom section of a program saying `use fuel`: its runs count fuel steps instead of stopping at the time limit
+/// (decision fuel-metering)
+pub const FUEL_SECTION: &str = "warp.fuel";
 /// The std module whose words name files relative to the program (lib/sound.warp play)
 pub const FILE_NAMING_STD_MODULE: &str = "sound";
 /// The custom section naming the program's own functions (`def`, lib/*.warp), joined by the separator: exported for tasks

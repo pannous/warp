@@ -1,15 +1,17 @@
 use std::cell::Cell;
 use std::thread::LocalKey;
+use std::time::Duration;
 use std::{env, fs};
 #[cfg(feature = "native")]
 use wasmtime::{Engine, Store};
 
 #[cfg(feature = "native")]
 pub use warp_runtime::engine::deterministic_config;
-pub use warp_runtime::fuel::{DEFAULT_FUEL, FUEL_VARIABLE};
+pub use warp_runtime::fuel::{DEFAULT_FUEL, DEFAULT_TIME_LIMIT, FUEL_VARIABLE, TIME_LIMIT_VARIABLE};
 
 thread_local! {
 	static FUEL_OVERRIDE: Cell<Option<u64>> = const { Cell::new(None) };
+	static TIME_LIMIT_OVERRIDE: Cell<Option<Duration>> = const { Cell::new(None) };
 }
 
 /// A thread-local cell whose value can be swapped: `Cell` and `RefCell`
@@ -48,26 +50,49 @@ pub fn scoped<C: Swappable<T>, T: 'static, R>(key: &'static LocalKey<C>, value: 
 	run()
 }
 
-/// Fuel budget of the next runs on this thread: `with_fuel`, else `WARP_FUEL`, else `DEFAULT_FUEL`
-pub fn fuel_budget() -> u64 {
-	FUEL_OVERRIDE.with(Cell::get).or_else(warp_runtime::fuel::fuel_from_environment).unwrap_or(DEFAULT_FUEL)
+/// Fuel the next runs on this thread ask for: `with_fuel` or `warp fuel <steps>`, else `WARP_FUEL`; none runs them
+/// with the time limit
+pub fn requested_fuel() -> Option<u64> {
+	FUEL_OVERRIDE.with(Cell::get).or_else(warp_runtime::fuel::fuel_from_environment)
 }
 
-/// Set the fuel budget for every later run on this thread (the CLI's `--fuel`)
+/// Fuel budget of runs that count fuel on this thread: the requested fuel, else `DEFAULT_FUEL` (`use fuel`)
+pub fn fuel_budget() -> u64 {
+	requested_fuel().unwrap_or(DEFAULT_FUEL)
+}
+
+/// Set the fuel budget for every later run on this thread (the CLI's `warp fuel <steps>`)
 pub fn set_fuel_budget(steps: u64) {
 	FUEL_OVERRIDE.with(|budget| budget.set(Some(steps)));
 }
 
-/// Run `body` with a different fuel budget on this thread, then restore the previous one
+/// Run `body` with a different fuel budget on this thread, then restore the previous one: its runs count fuel
 pub fn with_fuel<R>(steps: u64, body: impl FnOnce() -> R) -> R {
 	scoped(&FUEL_OVERRIDE, Some(steps), body)
 }
 
-/// A store for a `gc_engine` with the current fuel budget
-#[cfg(feature = "native")]
-pub fn fueled_store<T>(engine: &Engine, data: T) -> Store<T> {
-	warp_runtime::engine::fueled_store(engine, data, fuel_budget())
+/// Computing time of runs without fuel on this thread: `with_time_limit`, else `WARP_TIME_LIMIT`, else
+/// `DEFAULT_TIME_LIMIT`
+pub fn time_limit() -> Duration {
+	(TIME_LIMIT_OVERRIDE.with(Cell::get))
+		.or_else(warp_runtime::fuel::time_limit_from_environment)
+		.unwrap_or(DEFAULT_TIME_LIMIT)
 }
+
+/// Run `body` with a different time limit on this thread, then restore the previous one
+pub fn with_time_limit<R>(limit: Duration, body: impl FnOnce() -> R) -> R {
+	scoped(&TIME_LIMIT_OVERRIDE, Some(limit), body)
+}
+
+/// A store for `engine` that stops its run: with the fuel budget on an engine counting fuel, else at the time limit
+#[cfg(feature = "native")]
+pub fn limited_store<T: 'static>(engine: &Engine, data: T) -> Store<T> {
+	warp_runtime::engine::limited_store(engine, data, fuel_budget(), time_limit())
+}
+
+/// limited_store under the name of the time when every run counted fuel
+#[cfg(feature = "native")]
+pub use limited_store as fueled_store;
 
 /// The body at `url`, empty (and reported on stderr) when the download fails
 #[cfg(feature = "native")]
@@ -75,26 +100,38 @@ pub fn fetch(url: &str) -> String {
 	crate::extensions::utils::download(url)
 }
 
-/// The engine of a program that starts tasks (tasks.rs): gc_engine's settings plus epoch interruption, the check
-/// points where a task stops or pauses
+/// The engine of a program that starts tasks (tasks.rs), counting fuel when the runs ask for it (`requested_fuel`)
 #[cfg(feature = "native")]
 pub fn task_engine() -> Engine {
-	let mut config = warp_runtime::engine::fueled_config();
-	config.epoch_interruption(true);
-	Engine::new(&config).expect("Failed to create WASM engine")
+	metered_task_engine(requested_fuel().is_some())
 }
 
-/// The WASM engine with GC, function references, canonical NaNs and fuel metering, one per process: every run shares
-/// it, so a module compiled once runs again without compiling (run/module_cache.rs); stores and their fuel stay per
-/// run (`fueled_store`). Programs that start tasks get an engine of their own (task_engine): their epoch ticks would
-/// reach every store of a shared engine.
+/// The engine of a program that starts tasks, with fuel metering when `fuel`: an engine of its own, whose epoch the
+/// program's task table advances while it runs (a shared engine's ticks would reach every store)
+#[cfg(feature = "native")]
+pub fn metered_task_engine(fuel: bool) -> Engine {
+	Engine::new(&warp_runtime::engine::metered_config(fuel)).expect("Failed to create WASM engine")
+}
+
+/// The WASM engine with GC, function references and epoch interruption, one per process: every run shares it, so a
+/// module compiled once runs again without compiling (run/module_cache.rs); stores and their limits stay per run
+/// (`limited_store`). Runs that ask for fuel (`requested_fuel`) get the shared engine counting fuel instead.
 #[cfg(feature = "native")]
 pub fn gc_engine() -> Engine {
-	// todo move to wasm / runner / ... ?
-	static SHARED: std::sync::OnceLock<Engine> = std::sync::OnceLock::new();
-	SHARED
-		.get_or_init(|| Engine::new(&warp_runtime::engine::fueled_config()).expect("Failed to create WASM engine"))
-		.clone()
+	shared_engine(requested_fuel().is_some())
+}
+
+/// The shared engine counting fuel or the shared one checking the time (its epoch ticking all along)
+#[cfg(feature = "native")]
+pub fn shared_engine(fuel: bool) -> Engine {
+	use std::sync::OnceLock;
+	static TIMED: OnceLock<Engine> = OnceLock::new();
+	static FUELED: OnceLock<Engine> = OnceLock::new();
+	let new_engine = || Engine::new(&warp_runtime::engine::metered_config(fuel)).expect("Failed to create WASM engine");
+	match fuel {
+		true => FUELED.get_or_init(new_engine).clone(),
+		false => TIMED.get_or_init(|| warp_runtime::engine::ticking(new_engine())).clone(),
+	}
 }
 
 pub fn show_type_name<T>(_: &T) {

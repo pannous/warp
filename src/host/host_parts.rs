@@ -161,6 +161,14 @@ pub fn section_names(module: &[u8], section_name: &str, separator: &str) -> Resu
 	Ok(Vec::new())
 }
 
+/// Whether the module carries the custom section `section_name`
+pub fn has_section(module: &[u8], section_name: &str) -> bool {
+	wasmparser::Parser::new(0)
+		.parse_all(module)
+		.filter_map(Result::ok)
+		.any(|payload| matches!(payload, wasmparser::Payload::CustomSection(section) if section.name() == section_name))
+}
+
 /// The (module, name) of each import of a module
 pub fn imports_of(module: &[u8]) -> Result<Vec<(String, String)>, String> {
 	let mut imports = Vec::new();

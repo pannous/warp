@@ -429,7 +429,7 @@ fn usage() {
 	println!("  warp deploy [--dev|--dry-run|--hosted] <file>  The program's routes as a Cloudflare Worker, by wrangler (--dev: on this machine, --dry-run: only <file>-worker/, --hosted: at warp-<file>.pannous.workers.dev, by your GitHub login)");
 	println!("  warp repl            Start interactive console");
 	println!("  warp register        Let Finder and `open` run .warp files (macOS)");
-	println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
+	println!("  warp fuel <steps> <file|code>  Count steps, 'out of fuel' after them (env WARP_FUEL, `use fuel`); else a run stops after 60 s of computing (env WARP_TIME_LIMIT=<seconds>)");
 	println!("  warp fast <file|code> sin cos exp pow atan2 as quick wasm polynomials, as `use fast_math` (errors: lib/fast_math.warp)");
 	println!("  --no-ask             Never prompt \"got it?\" after a warning or note");
 	println!("  --no-hints           Hide hints and notes (prefer ^ over **), shown by default (env WARP_HINTS=0)");
