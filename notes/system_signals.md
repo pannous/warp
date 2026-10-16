@@ -168,7 +168,7 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   shifts nothing; a one-shot timer is dropped after it fired, so `warp run` ends then ("listening: at 9:00",
   "listening: every monday at 9:00"). Tests: tests/control/test_daily_timer.rs, test_time_of_day.rs.
   Not yet: several days (`on every monday and friday`), dates (`at 2026-12-24 18:00`), cron strings.
-- Frames (card frame-event, user TODOs in samples/shader_brush.warp, 2026-10-12): `on frame {…}` is the handler
+- Frames (card frame-event, user TODOs in samples/graphics/shader_brush.warp, 2026-10-12): `on frame {…}` is the handler
   `on·every·N` started by `signal_listen(1, N, 16)` (Trigger::WindowShows): it runs every 16 ms while the paint window
   shows and the timer ends as the window closes, so `warp run` ends with the window; without a window (headless) it
   runs once, one paint = one PNG. "listening: …" leaves frames out. The page (host-timers.js) runs it every 16 ms until
@@ -197,7 +197,7 @@ connectors. Board card: signals-system (phase 7 of notes/signals.md, split out).
   shares (KEY_NAMES); the playground's canvas.js KEY_CODES gives Enter, Escape, Backspace and Tab their codes too.
   Test: tests/control/test_held_key.rs; probe probes/held_key/steer.warp.
 - Several keys held (card allow-diagonals): a comparison with `held_key` asks whether that key is among those held,
-  so LEFT and UP held together make both `held_key == LEFT` and `held_key == UP` true (samples/arrow_keys.warp steers
+  so LEFT and UP held together make both `held_key == LEFT` and `held_key == UP` true (samples/events/arrow_keys.warp steers
   diagonally); `held_key` alone names the last to go down, `held_key == ""` none held. The comparison lowers to the
   host word `key_held(code) != 0` (system_signals.rs key_code). Natively the
   viewer's input line carries every held code after the key (paint_window.rs, cleared when the window loses focus);

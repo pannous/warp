@@ -1,7 +1,7 @@
 # Importing a module warp compiled (card import-compiled, 2026-10-08)
 
 `import "shapes.wasm"` works for a module warp compiled, as for any WebAssembly module, and its functions on values
-(texts, lists, instances: Nodes) and its classes are the program's too. Sample: samples/import_compiled.warp, test:
+(texts, lists, instances: Nodes) and its classes are the program's too. Sample: samples/wasm/import_compiled.warp, test:
 tests/modules/test_import_compiled.rs (the browser too).
 
 ## How

@@ -1,4 +1,4 @@
-# `use netbase` (card netbase-package, samples/netbase.warp)
+# `use netbase` (card netbase-package, samples/storage/netbase.warp)
 
 ```warp
 use netbase

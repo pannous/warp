@@ -3,7 +3,7 @@ name: Playground
 
 # The browser playground (web/playground, notes/web_playground.md) on GitHub Pages, custom domain warp.pannous.com:
 # the warp compiler built for wasm32-unknown-unknown without the native feature (warp.wasm optimized, warp.debug.wasm
-# with names and line tables: ?debug), the page, samples/*.warp and the jco-transpiled components (components.js).
+# with names and line tables: ?debug), the page, samples/<chapter>/*.warp and the jco-transpiled components (components.js).
 # Stage 2 of 2 (user 2026-10-15): the Integrator pushes main after the native gate (stage 1) and never waits for this.
 # Hourly, the latest main is built, checked in the browsers and deployed, if it changed the compiler, the page or the
 # samples since the last green run; by hand at once (`gh workflow run Playground -R pannous/warp`) for an urgent fix or
@@ -34,7 +34,7 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CARGO_NET_OFFLINE: false
-  # the runner has no GPU: headless Chrome gets SwiftShader's software WebGPU adapter, else samples/webgpu logs
+  # the runner has no GPU: headless Chrome gets SwiftShader's software WebGPU adapter, else samples/graphics/webgpu logs
   # "No available adapters." and the tour refuses the deploy
   AGENT_BROWSER_ARGS: --enable-unsafe-webgpu,--enable-unsafe-swiftshader,--use-webgpu-adapter=swiftshader,--enable-features=Vulkan
 
@@ -175,7 +175,7 @@ jobs:
       run: npm install -g agent-browser && agent-browser install --with-deps
     - name: The tour in headless Chrome
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # api.github.com's limit for samples/live_region (console_watch.mjs)
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # api.github.com's limit for samples/web/live_region (console_watch.mjs)
       run: python3 web/playground/test_in_browser.py --examples --site _site
 
   # the same in headless Firefox: the runner's own, driven by firefox_driver.mjs
@@ -196,7 +196,7 @@ jobs:
       # Firefox); a real bug fails both
       timeout-minutes: 25
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # api.github.com's limit for samples/live_region (firefox_driver.mjs)
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # api.github.com's limit for samples/web/live_region (firefox_driver.mjs)
         # Linux Firefox keeps WebGPU off; on lavapipe it runs the GPU samples as the user's Firefox does (card shaders-firefox)
         FIREFOX_PREFS: "{'dom.webgpu.enabled': true, 'gfx.webgpu.ignore-blocklist': true}"
       run: |
@@ -209,7 +209,7 @@ jobs:
         echo "::warning title=Firefox tour failed once, running it again::${stall:-the first attempt is in the log above} (card tour-firefox-stall)"
         tour second-attempt.log
 
-  # the painting checks in Safari on a macOS runner (card webgpu-safari: samples/webgpu ran Safari out of memory). The
+  # the painting checks in Safari on a macOS runner (card webgpu-safari: samples/graphics/webgpu ran Safari out of memory). The
   # runner's Safari has navigator.gpu but no adapter, so the GPU samples show their no-adapter error. Beside the deploy,
   # not before it: macOS runners queue longer
   tour-safari:

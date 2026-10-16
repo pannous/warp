@@ -32,3 +32,14 @@ fn a_count_no_definition_fits_or_two_fit_is_an_error() {
 	fails_with("f(a) := a; f(a,b) := a+b; f(1,2,3)", "f takes 1 or 2 arguments, got 3");
 	fails_with("f(a) := 1; f(a, b=2) := 2; f(5)", "`f(5)` fits two definitions");
 }
+
+// card arity-overloaded: an overloaded name given as a function is the variant the callee calls it as; as a plain value
+// it is the call of the one taking nothing
+#[test]
+fn an_overloaded_name_given_as_a_function_is_the_variant_called() {
+	is!("apply(h, x) := h(x)\nf() := 0\nf(x) := x * 2\napply(f, 3)", 6);
+	is!("twice(h) := h() + h()\nf() := 5\nf(x) := x\ntwice(f)", 10);
+	is!("f() := 0\nf(x) := x * 2\nsum([1, 2].map(f))", 6);
+	is!("f() := 1\nf(a, b) := a + b\n[1, 2, 3].reduce(f)", 6);
+	is!("f() := 7\nf(x) := x\ny = f\ny + 1", 8);
+}
