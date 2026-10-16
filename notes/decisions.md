@@ -713,6 +713,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - cli-words (2026-10-15, user): warp's own command options are words, never `--flags` ("we don't like this minus
   minus style, ever"), e.g. `warp format check …`, `warp format hash-comments …`; the style guide says so. Card
   cli-words migrates the existing --fuel/--exe/--strict/… (older `--x` mentions below are superseded by it).
+- fast-math (2026-10-16, warp-types default; card switch-rebinds; undoable): the polynomial math module is
+  `use fast_math` (`fast` is already an alias of float); the CLI switch is the word `warp fast app.warp`.
 - unix-words (2026-10-15, user): `use script` has shell words with warp results: ls pwd cd cat echo mkdir cp mv touch
   head tail wc grep which rm, plus find, size/info (du/stat), sort/uniq, open (native), curl/wget as aliases of
   fetch/download. `export a=b` clashes with the WebAssembly export, so it's left out. Not now: basename/dirname,
