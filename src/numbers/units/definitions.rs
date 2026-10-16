@@ -1,6 +1,6 @@
-//! The dimensions and units warp knows, read once from lib/units.warp's `unit_definitions` block (card dimensions-units
-//! Q2, decision unit-definitions): `dimension length meter` names a dimension and its anchor unit, `dimension speed m/s`
-//! the dimension of an expression of units; `unit cm := m/100` is a unit that is an amount of another, `unit °C := (it +
+//! The quantities and units warp knows, read once from lib/units.warp's `unit_definitions` block (card dimensions-units
+//! Q2, decisions unit-definitions and quantity-naming): `quantity length meter` names a kind of quantity and its anchor
+//! unit, `quantity speed m/s` the quantity of an expression of units; `unit cm := m/100` is a unit that is an amount of another, `unit °C := (it +
 //! 273.15) K` one counting from another zero. A unit of several units or of none (`unit mph := mi/h`, `unit ° := π/180`)
 //! is an alias, a word for its expression. Read by its own small reader, not the parser: the parser asks these
 //! definitions whether a word is a unit.
@@ -14,16 +14,16 @@ use std::sync::{Mutex, OnceLock};
 
 const SOURCE: &str = include_str!("../../../lib/units.warp");
 const BLOCK_END: &str = "}";
-const DIMENSION_WORD: &str = "dimension ";
+const QUANTITY_WORD: &str = "quantity ";
 const UNIT_WORD: &str = "unit ";
-/// `SI dimension length meter`: its units take the SI prefixes (decision unit-definitions: not pixels, not eras)
+/// `SI quantity length meter`: its units take the SI prefixes (decision unit-definitions: not pixels, not eras)
 const SI_MARK: &str = "SI ";
 /// `prefix k := 10^3`: an SI prefix and its power of ten
 const PREFIX_WORD: &str = "prefix ";
 const POWER_OF_TEN: &str = "10^";
 /// `name hour := h`: a long name a conversion target may use, singular or plural (`2 h in minutes`, P36)
 const NAME_WORD: &str = "name ";
-/// The lines a program may write itself; dimensions are lib/units.warp's
+/// The lines a program may write itself; quantities are lib/units.warp's
 const PROGRAM_LINE_WORDS: [&str; 3] = [UNIT_WORD, PREFIX_WORD, NAME_WORD];
 const DEFINE: &str = ":=";
 /// `unit m := 1 meter`: a unit of the same amount as an anchor
@@ -290,9 +290,9 @@ impl<'a> Reader<'a> {
 			let (_, dimension) = self
 				.dimensions
 				.last()
-				.filter(|_| line.starts_with(DIMENSION_WORD))
+				.filter(|_| line.starts_with(QUANTITY_WORD))
 				.copied()
-				.ok_or(format!("{line}: SI marks a base dimension"))?;
+				.ok_or(format!("{line}: SI marks a base quantity"))?;
 			self.si_dimensions.push(dimension);
 			return Ok(());
 		}
@@ -311,7 +311,7 @@ impl<'a> Reader<'a> {
 			self.long_names.push((long_name, symbol));
 			return Ok(());
 		}
-		if let Some((name, anchor)) = definition(DIMENSION_WORD, " ") {
+		if let Some((name, anchor)) = definition(QUANTITY_WORD, " ") {
 			match DIMENSION_WORDS.iter().find(|(word, _)| *word == name) {
 				Some((_, dimension)) => {
 					self.dimensions.push((name, *dimension));
