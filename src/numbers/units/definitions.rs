@@ -45,7 +45,7 @@ const RUN_TIME_NAMES: &str = "unit_names";
 const RUN_TIME_SCALES: &str = "unit_scales";
 const RUN_TIME_DIMENSIONS: &str = "unit_dimensions";
 /// A run-time quantity packs its powers of the base quantities into one int, one byte each in written order (length +
-/// 256·mass + 65536·duration …), so multiplying quantities adds them; seven fit in 64 bits
+/// 256·mass + 65536·duration …, skipping NOT_AT_RUN_TIME), so multiplying quantities adds them; seven fit in 64 bits
 const RUN_TIME_BYTE: i64 = 256;
 const RUN_TIME_QUANTITIES: u8 = 7;
 /// Base quantities whose units count from another zero (`°C`) or a calendar's (`AD`) don't compute at run time
@@ -137,8 +137,15 @@ fn si_amount(unit: &Unit) -> Rational {
 	Rational::new(BigInt::from(unit.factor), BigInt::from(steps))
 }
 
+/// One byte per run-time base quantity: its place among them, so era and temperature take no byte
 fn packed(dimension: Dimension) -> Option<i64> {
-	(!NOT_AT_RUN_TIME.contains(&dimension.name())).then(|| RUN_TIME_BYTE.pow(dimension.0 as u32))
+	let run_time = run_time_quantities(&definitions().dimensions);
+	let place = run_time.iter().position(|known| *known == dimension)?;
+	Some(RUN_TIME_BYTE.pow(place as u32))
+}
+
+fn run_time_quantities(dimensions: &[(&str, Dimension)]) -> Vec<Dimension> {
+	dimensions.iter().filter(|(name, _)| !NOT_AT_RUN_TIME.contains(name)).map(|(_, dimension)| *dimension).collect()
 }
 
 /// `mi/h`, `1/s`, `kg*m/s²`: the SI amount and packed dimension of an alias made of units; None for one of other words
@@ -312,7 +319,8 @@ impl<'a> Reader<'a> {
 					let dimension = Dimension(
 						u8::try_from(self.dimensions.len()).map_err(|_| format!("{line}: too many quantities"))?,
 					);
-					if dimension.0 >= RUN_TIME_QUANTITIES && !NOT_AT_RUN_TIME.contains(&name) {
+					let run_time = run_time_quantities(&self.dimensions).len() as u8;
+					if run_time >= RUN_TIME_QUANTITIES && !NOT_AT_RUN_TIME.contains(&name) {
 						return Err(format!(
 							"{line}: too many base quantities for run time, {RUN_TIME_QUANTITIES} fit"
 						));
