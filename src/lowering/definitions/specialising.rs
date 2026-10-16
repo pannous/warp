@@ -181,7 +181,10 @@ impl Specialiser {
 
 	/// The top-level function a copy (of a copy) was made from: its copies follow it in the program
 	fn original_of(&self, name: &str) -> String {
-		self.copies.iter().find(|(_, copy)| copy.name == name).map_or(name.to_string(), |(original, _)| original.clone())
+		self.copies
+			.iter()
+			.find(|(_, copy)| copy.name == name)
+			.map_or(name.to_string(), |(original, _)| original.clone())
 	}
 }
 
@@ -199,7 +202,9 @@ fn statements_of(node: &Node) -> Vec<&Node> {
 /// Each copy right after the definition of the function it copies
 fn with_copies(node: Node, copies: &[(String, Definition)]) -> Node {
 	match node {
-		Node::List(items, bracket, separator @ (Separator::Semicolon | Separator::Newline)) if bracket != Bracket::Curly => {
+		Node::List(items, bracket, separator @ (Separator::Semicolon | Separator::Newline))
+			if bracket != Bracket::Curly =>
+		{
 			let mut statements = vec![];
 			for item in items {
 				let defined = Definition::from(&item).map(|definition| definition.name);

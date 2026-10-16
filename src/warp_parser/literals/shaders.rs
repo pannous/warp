@@ -63,9 +63,8 @@ impl WarpParser {
 		if self.options.data_mode {
 			return None;
 		}
-		let word = SHADER_WORDS
-			.iter()
-			.find(|word| word.chars().enumerate().all(|(index, ch)| self.peek_char(index) == ch))?;
+		let word =
+			SHADER_WORDS.iter().find(|word| word.chars().enumerate().all(|(index, ch)| self.peek_char(index) == ch))?;
 		let mut open = word.len();
 		if self.is_identifier_start(open) || self.peek_char(open).is_ascii_digit() {
 			return None;
