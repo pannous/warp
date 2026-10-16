@@ -32,6 +32,7 @@ JOBS_PER_SESSION=30            # then a fresh session: each job adds a little to
 POLL_SECONDS=60                # GitHub API quota is shared by every session: ls-remote once a minute
 WAIT_HOURS=4
 URL_WAIT_SECONDS=90
+TEST_TIME_LIMIT_SECONDS=2400  # the test run is killed after this (a hanging test), its unfinished tests named; the full suite takes ~900 s
 HERE_WAIT_SECONDS=570          # one --run-here call blocks at most this long, under the cloud Bash tool's 10 min
 HERE_ROOT=${TMPDIR:-/tmp}/cloud-test # in the VM: tree/ (the checkout, kept for the next job), jobs/<job>/
 FULL_FLAGS=(--all-features --config "profile.test.package.warp-lang.opt-level=2")
@@ -111,7 +112,9 @@ run_tests_here() {
 	local build_status=$?
 	build_seconds=$((SECONDS - build_start))
 	local test_start=$SECONDS
-	[ $build_status -eq 0 ] && cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast -- "${filters[@]}" >> "$HERE_WORK/log.txt" 2>&1
+	[ $build_status -eq 0 ] && timeout --kill-after=30 $TEST_TIME_LIMIT_SECONDS \
+		cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast -- "${filters[@]}" >> "$HERE_WORK/log.txt" 2>&1
+	[ $? -eq 124 ] && echo "cloud-test: KILLED after the time limit of $TEST_TIME_LIMIT_SECONDS s" >> "$HERE_WORK/log.txt"
 	test_seconds=$((SECONDS - test_start))
 	summarize "$HERE_WORK/log.txt" "$HERE_WORK/environmental.txt" > "$HERE_WORK/summary.txt"
 	{
@@ -140,6 +143,8 @@ summarize() {
 		/^test result:/ { for (i = 1; i <= NF; i++) { if ($(i) ~ /^(passed|failed|ignored)/) { key = $(i); sub(/[;,]/, "", key); total[key] += $(i - 1) } } finished++ }
 		/^ +(Running|Doc-tests) / { started++ }
 		/^test [^ ]+ \.\.\. .*FAILED/ { failed[$2] = 1; order[++failures] = $2 }
+		/^test [^ ]+ has been running for over/ { slow[$2] = 1 }
+		/^test [^ ]+ \.\.\. / { finished_test[$2] = 1 }
 		/^---- [^ ]+ stdout ----$/ { current = $2; want_panic = 1; next }
 		want_panic && / panicked at / { getline message; panic[current] = message; want_panic = 0 }
 		END {
@@ -153,7 +158,8 @@ summarize() {
 			real += incomplete
 			printf "verdict: %s\n", (real == 0 && started > 0) ? "green" : "red"
 			printf "passed: %d, failed: %d (%d environmental), ignored: %d\n", total["passed"], failures + incomplete, failures - (real - incomplete), total["ignored"]
-			if (incomplete) printf "crashed test binaries (no result line): %d\n", incomplete
+			if (incomplete) printf "crashed or killed test binaries (no result line): %d\n", incomplete
+			for (name in slow) if (!(name in finished_test)) printf "  never finished: %s\n", name
 			if (real_lines != "") printf "failures:\n%s", real_lines
 			if (environmental_lines != "") printf "environmental (Mac-only, %s):\n%s", "scripts/cloud-test-environmental.txt", environmental_lines
 		}' "$log"
