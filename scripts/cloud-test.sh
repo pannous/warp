@@ -39,6 +39,8 @@ POLL_SECONDS=60                # GitHub API quota is shared by every session: ls
 WAIT_HOURS=4
 URL_WAIT_SECONDS=90
 TEST_TIME_LIMIT_SECONDS=2400  # the test run is killed after this (a hanging test), its unfinished tests named; the full suite takes ~900 s
+STALL_SECONDS=900              # …or once no test has finished for this long (the slowest, the self-parser, takes ~230 s alone)
+WATCH_SECONDS=30               # how often the stall watchdog counts finished tests
 HERE_WAIT_SECONDS=570          # one --run-here call blocks at most this long, under the cloud Bash tool's 10 min
 HERE_ROOT=${TMPDIR:-/tmp}/cloud-test # in the VM: tree/ (the checkout, kept for the next job), jobs/<job>/
 FULL_FLAGS=(--all-features --config "profile.test.package.warp-lang.opt-level=2")
@@ -118,9 +120,8 @@ run_tests_here() {
 	local build_status=$?
 	build_seconds=$((SECONDS - build_start))
 	local test_start=$SECONDS
-	[ $build_status -eq 0 ] && timeout --kill-after=30 $TEST_TIME_LIMIT_SECONDS \
-		cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast -- "${filters[@]}" >> "$HERE_WORK/log.txt" 2>&1
-	[ $? -eq 124 ] && echo "cloud-test: KILLED after the time limit of $TEST_TIME_LIMIT_SECONDS s" >> "$HERE_WORK/log.txt"
+	[ $build_status -eq 0 ] && run_watched "$HERE_WORK/log.txt" \
+		cargo test "${source_flags[@]}" "${test_args[@]}" --no-fail-fast -- "${filters[@]}"
 	test_seconds=$((SECONDS - test_start))
 	summarize "$HERE_WORK/log.txt" "$HERE_WORK/environmental.txt" > "$HERE_WORK/summary.txt"
 	{
@@ -139,6 +140,26 @@ run_tests_here() {
 	} > "$HERE_WORK/result.md"
 	gzip -kf "$HERE_WORK/log.txt"
 	push_result "$name"
+}
+
+# The command, its output appended to the log, killed with all its processes after TEST_TIME_LIMIT_SECONDS or once no
+# test finished for STALL_SECONDS (a hang held batch-3's session 85 min); the summary then names the unfinished tests
+run_watched() {
+	local log=$1 runner finished last_finished=-1 still=0; shift
+	timeout --kill-after=30 $TEST_TIME_LIMIT_SECONDS "$@" >> "$log" 2>&1 &   # its own process group: a kill reaches the test binaries
+	runner=$!
+	while kill -0 $runner 2>/dev/null; do
+		sleep $WATCH_SECONDS
+		finished=$(grep -c '^test .* \.\.\. ' "$log")
+		if [ "$finished" = "$last_finished" ]; then still=$((still + WATCH_SECONDS)); else still=0 last_finished=$finished; fi
+		if [ $still -ge $STALL_SECONDS ]; then
+			echo "cloud-test: KILLED: no test finished for $STALL_SECONDS s" >> "$log"
+			kill -TERM $runner
+			break
+		fi
+	done
+	wait $runner
+	[ $? -eq 124 ] && echo "cloud-test: KILLED after the time limit of $TEST_TIME_LIMIT_SECONDS s" >> "$log"
 }
 
 # Counts, failing tests with the first line of their panic, environmental ones apart; verdict green|red

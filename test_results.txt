@@ -183,6 +183,7 @@ PASSED:
   ✓ control::test_error_branch_kind::test_try_catches_an_error_branch
   ✓ control::test_error_fields::a_field_of_an_error_is_the_error
   ✓ control::test_error_not_in_data::test_a_list_of_values_and_a_handled_error_stay
+  ✓ control::test_error_not_in_data::test_a_parameter_declared_a_list_of_a_union_takes_index_writes
   ✓ control::test_error_not_in_data::test_a_place_declared_or_error_holds_an_error
   ✓ control::test_error_not_in_data::test_an_error_in_a_list_literal_raises
   ✓ control::test_error_not_in_data::test_an_error_still_travels_as_an_argument_and_a_local
@@ -630,6 +631,7 @@ PASSED:
   ✓ control::test_run_time_blocks::interpret_of_a_constant_block_runs_it_where_written
   ✓ control::test_run_time_blocks::interpret_runs_a_block_known_only_at_run_time
   ✓ control::test_run_time_blocks::running_a_run_time_block_is_the_eval_effect
+  ✓ control::test_run_time_blocks::running_a_whole_run_time_block_is_the_eval_effect_alone
   ✓ control::test_rust_inclusive_range::an_inclusive_range_in_a_for_header
   ✓ control::test_rust_inclusive_range::an_inclusive_range_in_a_match_arm
   ✓ control::test_rust_inclusive_range::an_inclusive_range_is_the_range_to_its_end
@@ -1437,6 +1439,8 @@ PASSED:
   ✓ functions::test_fail_effect::a_library_word_that_answers_with_an_error_fails
   ✓ functions::test_fail_effect::dividing_by_a_number_and_try_do_not_fail
   ✓ functions::test_fail_effect::effects_of_names_fail
+  ✓ functions::test_fail_effect::indexing_a_key_and_a_number_cast_fail
+  ✓ functions::test_fail_effect::print_effects_of_prints_the_effects
   ✓ functions::test_fail_effect::pure_refuses_fail_but_folding_does_not
   ✓ functions::test_fail_effect::raising_and_dividing_by_a_variable_fail
   ✓ functions::test_failed_word::test_failed_ends_a_condition_like_the_other_test_words
@@ -2532,6 +2536,8 @@ PASSED:
   ✓ modules::test_std_qualified::a_variable_of_the_modules_name_keeps_its_methods
   ✓ modules::test_std_random::use_random_brings_choice_shuffle_sample
   ✓ modules::test_std_random::use_random_seed_repeats_the_numbers
+  ✓ modules::test_std_reflection_hints::reflecting_on_standard_module_functions_gives_no_hints_from_the_module
+  ✓ modules::test_std_reflection_hints::reflection_still_gives_hints_for_the_programs_own_code
   ✓ modules::test_std_regex::a_match_prints_yes_or_no
   ✓ modules::test_std_regex::use_regex_matches_finds_and_replaces
   ✓ modules::test_std_regex::what_one_engine_lacks_is_an_error_in_both
@@ -2697,7 +2703,6 @@ PASSED:
   ✓ node::test_text_operand_quotes::a_text_operand_keeps_its_quotes
   ✓ node::test_trailing_comment::comment_ending_a_line_belongs_to_its_item
   ✓ normalize::tests::test_hint_mode
-  ✓ normalize::tests::test_hint_position
   ✓ normalize::tests::test_style_swap
   ✓ numbers::test_angle::test_call
   ✓ numbers::test_angle::test_function_params
@@ -3838,6 +3843,7 @@ PASSED:
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error_slice_2
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error_slice_3
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error_slice_4
+  ✓ programs::test_samples_run_cleanly::samples_keep_their_stored_values_out_of_the_checkout
   ✓ programs::test_samples::test_ackermann
   ✓ programs::test_samples::test_binary_tree
   ✓ programs::test_samples::test_calculator
@@ -6021,6 +6027,7 @@ PASSED:
   ✓ welcoming::test_unknown_prefix_word::an_unknown_word_applied_to_a_value_warns
   ✓ welcoming::test_unknown_prefix_word::known_words_and_plain_data_do_not_warn
   ✓ welcoming::test_unknown_prefix_word::the_call_form_stays_an_error
+  ✓ welcoming::test_unknown_word_error::test_an_unknown_word_in_a_condition_is_an_error
   ✓ welcoming::test_unknown_word_error::test_an_unknown_word_with_a_value_is_an_error_in_code
   ✓ welcoming::test_unknown_word_error::test_data_contexts_keep_unknown_words
   ✓ welcoming::test_unknown_word_error::test_known_words_are_untouched
@@ -6135,6 +6142,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
+  ✗ normalize::tests::test_hint_position
 
 SUMMARY:
-13 ignored, 6132 passed, 0 failed, 6132 total tested
+13 ignored, 6139 passed, 1 failed, 6140 total tested

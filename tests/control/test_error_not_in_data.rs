@@ -70,3 +70,10 @@ fn test_only_the_written_place_declared_or_error_holds_an_error() {
 fn test_an_error_written_by_a_variable_key_into_a_map_names_the_field() {
 	fails_with(&format!("{E}m = {{a: 1}}; k = \"b\"; m[k] = e; m"), "divide by zero: a field holds no error");
 }
+
+#[test] // cards writing-error-list, parameter-declared: a list-of-union parameter takes the list, not each item
+fn test_a_parameter_declared_a_list_of_a_union_takes_index_writes() {
+	is!("f(xs: [int or text], v) := {xs#1 = v; xs}; f([1, 2], 'a')#1", "a");
+	is!(&format!("{E}g(ys: [int or error]) := {{ys#1 = e; ys}}; if g([1])#1 failed then 1 else 2"), 1);
+	is!("f(xs: [int or text], v) := {xs#1 = v; 3}; f([1, 2], 7)", 3);
+}

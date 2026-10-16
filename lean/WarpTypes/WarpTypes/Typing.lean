@@ -77,6 +77,8 @@ inductive HasType (P : Program) : Ctx → Expr → Ty → Prop where
   /-- a stored error is dynamic data: it goes wherever a run-time check takes it -/
   | fail {Γ m} : HasType P Γ (.fail m) .any
   | failed {Γ e te} : HasType P Γ e te → HasType P Γ (.failed e) .bool
+  /-- a value written into data has its own type: a stored error raises instead -/
+  | written {Γ e te m} : HasType P Γ e te → HasType P Γ (.written e m) te
   | tryCatch {Γ e h te th} : HasType P Γ e te → HasType P Γ h th → HasType P Γ (.tryCatch e h) (join te th)
   /-- `a ?? b`: a's values other than ø, or b's -/
   | orElse {Γ a b ta tb} : HasType P Γ a ta → HasType P Γ b tb → HasType P Γ (.orElse a b) (join (strip ta) tb)

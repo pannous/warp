@@ -1,0 +1,5 @@
+// card rust-macros: println!, format!, vec!
+let x = 3;
+println!("{} and {x}", x + 1); // 4 and 3
+let v = vec![1, 2, 3];
+format!("{} items", v.len()) // "3 items"
