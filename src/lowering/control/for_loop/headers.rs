@@ -96,11 +96,10 @@ impl Headers {
 		if let Some(condition) = self.loop_condition(&variable) {
 			let shown = crate::normalize::operand_text(&condition);
 			let collection = crate::normalize::operand_text(&iterable);
-			let header =
-				(format!("for ({shown}) in {collection}"), format!("for it in {collection}.filter(it => {shown})"));
+			let header = (format!("for ({shown}) in {collection}"), filter_loop_header(&collection, &shown));
 			let body = filtered_body(
 				&format!("for ({shown}) in …"),
-				&format!("for it in … {{ if {shown} {{ … }} }}"),
+				&filter_loop_block(&shown),
 				Some(header),
 				condition,
 				body,
@@ -124,8 +123,7 @@ impl Headers {
 				let header = type_filter_header(name, &iterable, &body);
 				let body = item_named(body, name, &it);
 				let written = format!("for {name} in …");
-				let explicit = format!("for x in … {{ if x is {name} {{ … }} }}");
-				(it, filtered_body(&written, &explicit, header, test, body, at)?)
+				(it, filtered_body(&written, &filter_loop_block(&format!("it is {name}")), header, test, body, at)?)
 			}
 			// `for number in xs`: a type word visits only the items of that type, under its own name; a literal list whose
 			// items all are of the type needs no filter
@@ -275,7 +273,7 @@ fn type_filtered_body(
 	at: (usize, usize),
 ) -> Node {
 	let question =
-		filter_question(&format!("for {name} in …"), &format!("for x in … {{ if x is {name} {{ … }} }}"), header, at);
+		filter_question(&format!("for {name} in …"), &filter_loop_block(&format!("it is {name}")), header, at);
 	guarded_body(test.with_meta_data(FilterLoop { question, iterable: iterable.clone() }), body)
 }
 
@@ -286,14 +284,25 @@ fn guarded_body(test: Node, body: Node) -> Node {
 	Node::List(vec![guarded], Bracket::Curly, Separator::Semicolon)
 }
 
-/// `for int in xs` as the explicit filter `for x in xs.filter(x => x is int)`, the body unchanged; None when the body
+/// `for int in xs` as the explicit filter `for xs.filter(it is int)`, the body unchanged; None when the body
 /// names the item by the type word (then the body would change too)
 fn type_filter_header(name: &str, iterable: &Node, body: &Node) -> Option<(String, String)> {
 	if mentions(body, name) {
 		return None;
 	}
 	let collection = crate::normalize::operand_text(iterable);
-	Some((format!("for {name} in {collection}"), format!("for x in {collection}.filter(x => x is {name})")))
+	Some((format!("for {name} in {collection}"), filter_loop_header(&collection, &format!("it is {name}"))))
+}
+
+/// The explicit header of a filtering loop, `for xs.filter(it > 2)`: no loop variable, so the body keeps reading the
+/// item as `it`, which a loop may not bind by name (implicit-words-reserved)
+fn filter_loop_header(collection: &str, test: &str) -> String {
+	format!("for {collection}.filter({test})")
+}
+
+/// The explicit block form of a filtering loop, `for … { if it > 2 { … } }`
+pub(crate) fn filter_loop_block(test: &str) -> String {
+	format!("for … {{ if {test} {{ … }} }}")
 }
 
 /// `name` in a loop body as the item: every bare use, not the head of a call `name(…)`
