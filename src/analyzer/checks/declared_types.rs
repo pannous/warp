@@ -45,6 +45,7 @@ impl KnownTypes {
 
 	pub(super) fn is_known_name(&self, name: &str) -> bool {
 		type_word_kind(name).is_some()
+			|| crate::type_tests::builtin_type_name(name).is_some()
 			|| name == ANY_TYPE
 			|| crate::lowering::declarations::is_collection_type_word(name)
 			|| self.user_types.get_by_name(name).is_some()
@@ -212,7 +213,7 @@ pub(in crate::analyzer) fn check_union_fields(program: &Node) -> Option<Diagnost
 pub(crate) fn unsupported_union_part<'a>(type_name: &'a str, classes: &HashSet<String>) -> Option<&'a str> {
 	union_parts(type_name.trim_end_matches('?'))?
 		.into_iter()
-		.find(|part| builtin_type_kind(part).is_none() && !classes.contains(*part))
+		.find(|part| crate::type_tests::builtin_type_name(part).is_none() && !classes.contains(*part))
 }
 
 /// The names of the classes a program declares
