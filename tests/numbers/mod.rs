@@ -40,6 +40,7 @@ mod test_host_floats;
 mod test_hyperreals;
 mod test_implicit_libm;
 mod test_infinity;
+mod test_int_division; // card int-i64
 mod test_law;
 mod test_libm_functions;
 mod test_literal_type_words; // card cleanup-closed-lists

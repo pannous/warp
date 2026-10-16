@@ -4,7 +4,7 @@
 //! only through exports, so a dropped function is one nothing can call. Imports stay: the linker provides them.
 use std::collections::HashMap;
 use wasm_encoder::reencode::{utils, Error, Reencode};
-use wasmparser::{ConstExpr, ElementItems, ExternalKind, Name, Operator, Parser, Payload, TypeRef};
+use wasmparser::{ConstExpr, ElementItems, ExternalKind, Name, NameSectionReader, Operator, Parser, Payload, TypeRef};
 
 /// `module` without the functions nothing reaches; the very bytes when every function is live
 pub fn without_dead_functions(module: &[u8]) -> Result<Vec<u8>, String> {
@@ -248,4 +248,26 @@ impl Reencode for Renumbering {
 		}
 		Ok(())
 	}
+}
+
+/// The names of the module's functions (its name section), by function index
+pub(crate) fn function_names(module: &[u8]) -> wasmparser::Result<HashMap<u32, String>> {
+	let mut names = HashMap::new();
+	for payload in Parser::new(0).parse_all(module) {
+		let Payload::CustomSection(section) = payload? else {
+			continue;
+		};
+		let wasmparser::KnownCustom::Name(reader) = section.as_known() else {
+			continue;
+		};
+		for subsection in NameSectionReader::from(reader) {
+			if let Name::Function(map) = subsection? {
+				for naming in map {
+					let naming = naming?;
+					names.insert(naming.index, naming.name.to_string());
+				}
+			}
+		}
+	}
+	Ok(names)
 }
