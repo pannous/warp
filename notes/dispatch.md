@@ -81,6 +81,26 @@ table, no `canvas()`; `width(canvas, 12)` reaches no setter; three setter mechan
 9. Units and type words through the same lookup (unit-after-number mark, type-word definitions per Q2).
    test_units_after_numbers, test_type_calls.
 
+## Status (2026-10-16 evening)
+Landed on branch one-dispatch: slices 1, 3, 4, 5 and Q2.
+- 1: method_call = OwnMember × WordMeaning (12977c0e4).
+- 3: `ProgramNames` (src/lowering/words/program_names.rs): `of`, `takes`, `binds`, `takes_call`, `function_takes`,
+  `inside` (a function's parameters and assignments), `rewritten_where_free` (a rewrite applied where the program
+  leaves a word free) and `rewritten_by_scope` (a bottom-up rewrite given the names in scope). Users: host aliases and
+  random forms, bare_calls (scoped `Parameterless`), parse_word (parse and eval), type_constructor (conversion calls),
+  library_words `library_word_for` (per arity: `first(x)` leaves `first(xs, 2)` to the library). module_properties:
+  a field binds its name only inside its object literal or class (a class field `width` was the canvas's side inside
+  its methods), a destructured parameter `{width, height}` binds its names.
+  Still on their own sets: music_words, std_aliases, soft_keywords `program_names` users (units, test_blocks,
+  undo_history, stored_values), type_tests `program_names`, needed_definitions, modules.rs.
+- 4: used-module bare words. 5: properties by uniform call, class setter writing its own field.
+- 6 was done on main by card graphics-saved-words (canvas() := Picture(), bare overloaded names call `name·0`).
+- Q2 (type-words-reserved): every type word and conversion word is refused as a function name ("hex is a type; name
+  your function to_hex"); lib/compiler/parser.warp's decimal is decimal_number.
+- probes/dispatch/compare_binaries.py: every `is!` snippet of the given test files with two binaries, the result lines
+  compared; the quick behaviour check while the test queue is long.
+Next: slice 8 with card library-typed (decision library-words-typed): typed library words immutable for their types.
+
 ## Answered questions (user, 2026-10-16; decisions dispatch-untyped-library-words, type-words-reserved, field-forms)
 - Q1 untyped `first(x) := x*2`: dispatch. The library's `first(list)` is more specific than the program's untyped
   `first(x)`, so lists keep the library word, every other value takes the program's: `first(3)` → 6, `first([1,2])`
