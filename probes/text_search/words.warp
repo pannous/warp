@@ -1,0 +1,31 @@
+// card-3: trim, starts_with, ends_with, find as warp over byte_at / byte_slice (candidates for lib/prelude.warp)
+is_space_byte(b) := b == 32 or b == 9 or b == 10 or b == 13
+// part's bytes at the 0-based offset of t, within its bounds
+matches_at(t, part, offset) := {
+	n = part.bytes
+	if offset < 0 or offset + n > t.bytes then return 0
+	i = 0
+	while i < n {
+		if byte_at(t, offset + i) != byte_at(part, i) then return 0
+		i = i + 1
+	}
+	1
+}
+w_find(t, part) := {
+	offset = 0
+	last = t.bytes - part.bytes
+	while offset <= last {
+		if matches_at(t, part, offset) then return offset + 1
+		offset = offset + 1
+	}
+	0
+}
+w_starts_with(t, part) := matches_at(t, part, 0)
+w_ends_with(t, part) := matches_at(t, part, t.bytes - part.bytes)
+w_trim(t) := {
+	start = 0
+	end = t.bytes
+	while start < end and is_space_byte(byte_at(t, start)) { start = start + 1 }
+	while end > start and is_space_byte(byte_at(t, end - 1)) { end = end - 1 }
+	byte_slice(t, start, end)
+}

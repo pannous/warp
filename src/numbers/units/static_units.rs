@@ -15,7 +15,7 @@
 //! Unit fields: `class Run{distance: km}` (unit_fields.rs), an instance's fields have signatures like an object's.
 
 use super::{exponent_of, finest_units, unit_named, units_text, Dimension, Factor, Quantity, Unit};
-use crate::lowering::function_head;
+use crate::lowering::{function_head, DefinitionForm};
 use crate::words::{MAP_WORD, PRINT_WORD, RETURN_WORD, STR_WORD};
 
 mod function_units;
@@ -327,7 +327,24 @@ pub(crate) fn result_units_entry() -> Option<(&'static str, Node)> {
 
 /// The result of running a module, as the quantity its `units` entry names (unchanged without it)
 pub fn with_module_units(bytes: &[u8], result: Node) -> Node {
-	match module_units(bytes) {
+	with_units(result, module_units(bytes))
+}
+
+/// The answer of a program computed whole at compile time (`√(4 m²)`, numbers::real) in the units its result has: 2 m;
+/// an irrational amount as the float print shows, `√(2 m²)` is 1.4142135623730951m
+pub(crate) fn with_answer_units(answer: Node) -> Node {
+	let Some(units) = take_result_units() else {
+		return answer;
+	};
+	let answer = match answer.drop_meta() {
+		Node::Number(Number::Real(real)) => Node::Number(Number::Float(real.to_f64())),
+		_ => answer,
+	};
+	with_units(answer, Some(units))
+}
+
+fn with_units(result: Node, units: Option<ResultUnits>) -> Node {
+	match units {
 		Some(ResultUnits::Whole(units)) => quantity_of(result, &units),
 		Some(ResultUnits::Fields(fields)) => with_field_units(result, &fields),
 		None => result,
@@ -641,8 +658,9 @@ impl Definition {
 }
 
 fn function_definition(node: &Node) -> Option<(String, Definition)> {
-	let definition =
-		function_head(node).filter(|definition| definition.is_glued_head() && definition.plain_operator().is_some())?;
+	let definition = function_head(node).filter(|definition| {
+		(definition.is_glued_head() || definition.form == DefinitionForm::KeywordBlock) && definition.is_untyped_call()
+	})?;
 	let (parameters, (declared, defaults)) = definition
 		.written_parameters
 		.iter()
@@ -733,6 +751,14 @@ struct Inference {
 }
 
 /// The last statement of a program or block
+/// What a call of a function with this body gives: its last statement, of a `def f(x) { body }` block too
+fn returned_value(body: &Node) -> Option<&Node> {
+	match body.drop_meta() {
+		Node::List(items, Bracket::Curly, _) if items.len() == 1 => returned_value(&items[0]),
+		_ => last_statement(body),
+	}
+}
+
 fn last_statement(node: &Node) -> Option<&Node> {
 	match node.drop_meta() {
 		Node::List(items, _, Separator::Semicolon | Separator::Newline) => items.last().and_then(last_statement),

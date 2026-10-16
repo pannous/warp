@@ -45,6 +45,9 @@ operator ⭡ := ↑
 operator ⬇ := ↓
 operator ⇩ := ↓
 operator ⭣ := ↓
+// membership (card parse-free); ∉ is `not in`, a negated spelling (src/operators/spellings.rs)
+operator ∈ := in
+operator ∋ := contains
 
 // The math words warp computes itself, with their signatures (decision foreign-signature, `from warp`): exact on
 // exact values where they can be, so floor gives an int where C's floor gives a float
@@ -141,6 +144,7 @@ bit_and(a: int, b: int) := (a + b - (a xor b)) / 2
 bit_or(a: int, b: int) := (a + b + (a xor b)) / 2
 // P169/P191: descriptive names; they forward to the C library (use cmath) until warp has its own implementations.
 // The C names still work after `use math`, each with a note naming the word here (modules STD_ALIASES)
+
 square(x) := x * x
 square_root(x) := sqrt(x)
 cube_root(x) := ∛x

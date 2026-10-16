@@ -54,11 +54,12 @@ const STD_ALIASES: [StdAlias; 21] = [
 ];
 /// The standard words warp writes qualified by their module: `json.parse(t)` (card g_ogQg), lowered as the aliases are
 const WARP_FORMS: [StdAlias; 1] = [alias("json", "parse", "json", "parse_json", &[0])];
-/// Standard words called bare, `member(…)`, module "": `json(t)` is json.parse(t) (card json5-parse)
+/// Standard words called bare, `member(…)`, module "": `json(t)` is json.parse(t) (card json5-parse); a used module's
+/// WARP_FORMS are called bare too: `use json; parse(t)` is json.parse(t), not warp's code parse (card json-parse-literal)
 const BARE_FORMS: [StdAlias; 1] = [alias("", "json", "json", "parse_json", &[0])];
 /// Standard words read as a member of any value, `value.member`: `x.json` is to_json(x) (card node-json)
 const MEMBER_FORMS: [StdAlias; 1] = [alias("", "json", "json", "to_json", &[0])];
-const USE_WORD: &str = "use";
+pub(crate) const USE_WORD: &str = "use";
 /// Old names of standard words, still working, and how warp writes them now: called by hand, a got-it note names it
 const OLD_NAMES: [(&str, &str); 1] = [("render_sound", "save sound as: file")];
 
@@ -69,8 +70,15 @@ pub fn lower(program: Node) -> Node {
 	// `def parse_json(t) {…}` too: the program's own word gets no note (card hint-own-definition)
 	let defined = crate::library_words::defined_names(&program);
 	note_internal_words(&program, &names.union(&defined).cloned().collect());
+	let bare = Bare {
+		kept: &kept,
+		said: WARP_FORMS
+			.iter()
+			.filter(|form| !defined.contains(form.member) && crate::modules::says_use(&program, form.module))
+			.collect(),
+	};
 	let mut used = HashSet::new();
-	let program = aliased(program, &kept, &mut used);
+	let program = aliased(program, &bare, &mut used);
 	with_uses(program, used)
 }
 
@@ -113,8 +121,15 @@ fn first_call_of<'a>(node: &'a Node, word: &str) -> Option<&'a Node> {
 	}
 }
 
-fn aliased(node: Node, kept: &[&str], used: &mut HashSet<&'static str>) -> Node {
-	match aliased_call(&node, kept) {
+/// What a call may be aliased as: `kept` the alias modules the program names itself, `said` the WARP_FORMS of the
+/// modules it says `use` for, called bare
+struct Bare<'a> {
+	kept: &'a [&'a str],
+	said: Vec<&'static StdAlias>,
+}
+
+fn aliased(node: Node, bare: &Bare, used: &mut HashSet<&'static str>) -> Node {
+	match aliased_call(&node, bare) {
 		Some((alias, arguments)) => {
 			crate::normalize::set_position_of(&node);
 			if !alias.module.is_empty() && !WARP_FORMS.iter().any(|form| std::ptr::eq(form, alias)) {
@@ -126,18 +141,19 @@ fn aliased(node: Node, kept: &[&str], used: &mut HashSet<&'static str>) -> Node 
 			if !alias.std_module.is_empty() {
 				used.insert(alias.std_module);
 			}
-			let arguments = alias.order.iter().map(|&index| aliased(arguments[index].clone(), kept, used));
+			let arguments = alias.order.iter().map(|&index| aliased(arguments[index].clone(), bare, used));
 			parens(std::iter::once(symbol(alias.word)).chain(arguments).collect())
 		}
-		None => node.map_children(|child| aliased(child, kept, used)),
+		None => node.map_children(|child| aliased(child, bare, used)),
 	}
 }
 
 /// `module.member(arguments…)` of a known alias with as many arguments as it takes; a shape tuple stands for its items
 /// (`np.zeros((2, 3))` is zeros(2, 3))
-fn aliased_call<'a>(node: &'a Node, kept: &[&str]) -> Option<(&'static StdAlias, &'a [Node])> {
-	if let Some(bare) = bare_call(node, kept).or_else(|| member_read(node, kept)) {
-		return Some(bare);
+fn aliased_call<'a>(node: &'a Node, bare: &Bare) -> Option<(&'static StdAlias, &'a [Node])> {
+	let kept = bare.kept;
+	if let Some(found) = bare_call(node, bare).or_else(|| member_read(node, kept)) {
+		return Some(found);
 	}
 	let Node::Key(module, Op::Dot, call) = node.drop_meta() else {
 		return None;
@@ -149,7 +165,7 @@ fn aliased_call<'a>(node: &'a Node, kept: &[&str]) -> Option<(&'static StdAlias,
 	let (module, member) = (module.drop_meta().name(), member.drop_meta().name());
 	let shape_items = |arguments: &'a [Node]| match arguments {
 		[tuple] => match tuple.drop_meta() {
-			Node::List(items, Bracket::Round, Separator::Colon) => items.as_slice(),
+			Node::List(items, Bracket::Round, Separator::Comma) => items.as_slice(),
 			_ => arguments,
 		},
 		_ => arguments,
@@ -166,16 +182,18 @@ fn aliased_call<'a>(node: &'a Node, kept: &[&str]) -> Option<(&'static StdAlias,
 		})
 }
 
-/// `json(t)`: a bare form called with as many arguments as it takes, where the program names no such word itself
-fn bare_call<'a>(node: &'a Node, kept: &[&str]) -> Option<(&'static StdAlias, &'a [Node])> {
+/// `json(t)`: a bare form called with as many arguments as it takes, where the program names no such word itself;
+/// `parse(t)` after `use json`
+fn bare_call<'a>(node: &'a Node, bare: &Bare) -> Option<(&'static StdAlias, &'a [Node])> {
 	let Node::List(items, Bracket::Round, _) = node.drop_meta() else {
 		return None;
 	};
 	let (word, arguments) = items.split_first()?;
 	let word = word.drop_meta().symbol_name()?;
-	BARE_FORMS
-		.iter()
-		.find(|form| form.member == word && form.order.len() == arguments.len() && !kept.contains(&form.member))
+	let unnamed = BARE_FORMS.iter().filter(|form| !bare.kept.contains(&form.member));
+	unnamed
+		.chain(bare.said.iter().copied())
+		.find(|form| form.member == word && form.order.len() == arguments.len())
 		.map(|form| (form, arguments))
 }
 

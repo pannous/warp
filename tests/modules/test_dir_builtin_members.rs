@@ -5,6 +5,7 @@ use crate::is;
 #[test]
 fn dir_of_a_list_lists_its_builtin_methods() {
 	is!("(\"count\" in dir([1 2])) > 0", true);
+	is!("\"add\" in dir([1 2])", true);
 	is!("xs = [3 4]; (\"sort\" in dir(xs)) > 0", true);
 	is!("(\"sum\" in dir(list)) > 0", true);
 	is!("(\"unique\" in dir([1 2])) > 0", true);

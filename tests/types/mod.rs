@@ -59,6 +59,7 @@ mod test_declared_int_of_float_expression;
 mod test_declared_list_marks;
 mod test_dispatch;
 mod test_duration_comparison; // cards day-day, day-hours
+mod test_duration_units; // card time-module
 mod test_element_field_writes;
 mod test_empty_literal_kind;
 mod test_empty_named_key; // card object-empty-field
@@ -124,6 +125,7 @@ mod test_passed_list_identity; // card xs-xs
 mod test_person_struct;
 mod test_plain_enum; // card plain-enum
 mod test_printable;
+mod test_printable_items; // card list-printable-items
 mod test_program_conversions;
 mod test_real_references;
 mod test_real_text;

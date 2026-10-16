@@ -37,12 +37,14 @@ instead of bending the code.
   asks the user and relays the answer verbatim; that relayed answer is the user's confirmation.
 - Small or non-conflicting changes may go straight onto main in the main checkout, no worktree (user, 2026-10-12,
   "new very important rule"; how: notes/roles.md "Small changes on main"). Everything else:
-- Work in a git worktree outside the repo: `cowtree add -b <branch> /Users/me/dev/angles/warp.worktrees.noindex/<branch> origin/main`,
+- Work in a git worktree outside the repo, on the Worktrees volume: `cowtree add -b <branch> /Volumes/Worktrees/<branch> origin/main`
+  (never touch /Volumes/Worktrees/warp, cowtree's donor; old worktrees in /Users/me/dev/angles/warp.worktrees.noindex stay),
   with the uncommitted build tweak: append `-<branch>` to the current `version = "…"` of both Cargo.toml and
   crates/warp-runtime/Cargo.toml, and to the `version = "…"` of the warp-runtime path dependency in Cargo.toml (a
   pre-release version doesn't satisfy the plain requirement; otherwise its stale warp-runtime replaces other branches'
   build in the shared target dir). Check with `grep -n version Cargo.toml crates/warp-runtime/Cargo.toml`: a sed
-  written for an old version number silently changes nothing. The Integrator's version_tweak.sh does the same.
+  written for an old version number silently changes nothing. `scripts/version-tweak.sh <suffix>` does all of it in
+  the current worktree (`restore` puts the committed manifests back); the Integrator's version_tweak.sh does the same.
   In /Users/me/dev/angles/warp itself (the user's checkout) only small changes on main, and never the user's
   uncommitted files.
 - The user's uncommitted edits are the Integrator's to adopt (user 2026-10-12, "I told the agents ten times"): whoever
@@ -91,7 +93,9 @@ instead of bending the code.
      refuses a branch that is not pushed, differs from origin, or does not merge cleanly into origin/main (naming the
      conflicting files); `--force` only for a branch carrying other branches. Several cards on one branch: ready each.
      What a merge request message used to say (new tests, filters, "docs: <page>", the sample) goes into a
-     `todo note <card>` first. Express (the user or the Supervisor asked for your result fast, a crash fix):
+     `todo note <card>` first, as one line in this fixed form (Integrator, 2026-10-16):
+     `card | branch | tip (full sha) | filters | passed/failed (queue or cloud) | clippy+wasm32 ok`, then prose if needed.
+     Never message warp-integrator with FYIs or swap notices: the card is the merge request. Express (the user or the Supervisor asked for your result fast, a crash fix):
      `todo ready <card> --express` (or a note saying "express"): the Integrator runs it alone and next (notes/roles.md).
   4. Optional: one line to warp-reviewer by SendMessage ("<card> ready"); it reads `todo list Ready` anyway. Report
      one line to the Supervisor.
@@ -122,6 +126,10 @@ instead of bending the code.
   path, a stale comment, a leaked temp file), no change to what a user sees or what a test asserts, and outside
   files another session is working on. Make it its own commit on your current branch (`fix:`/`chore:`, so it can be
   reverted alone) and name it in your `todo ready` note. Anything else, or any doubt, still becomes a card.
+- Suspected non-issues go through the Interviewer (user, 2026-10-16, on `96px/inch` vs `96dpi`: "a nothing
+  burger"): when a small bug you found may not matter (the same value shown another way, a cosmetic difference),
+  SendMessage warp-interviewer the case before carding or fixing it. A confirmed non-issue gets no work: its card,
+  if any, goes to Later with the verdict as a `todo note`.
 - GitHub's API quota (5000 requests/h) is shared by every session; on 2026-10-10 `gh run watch` polling every 3 s ran
   it out and blocked CI watching for 10 min. Watch runs with `gh run watch --interval 60` or more, and never poll
   `todo list` in a loop. A whole-board `todo list` costs ~12 points (1200 cards on 2026-10-12, when the quota ran out

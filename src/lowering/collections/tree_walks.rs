@@ -197,7 +197,7 @@ fn found_result(pattern: &Node, node: &Node) -> Node {
 		names => Node::List(
 			names.iter().map(|name| Node::Key(Box::new(name.clone()), Op::Colon, Box::new(name.clone()))).collect(),
 			Bracket::Curly,
-			Separator::Colon,
+			Separator::Comma,
 		),
 	}
 }

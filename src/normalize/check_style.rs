@@ -55,9 +55,9 @@ fn walk<'a>(node: &'a Node, action: &mut dyn FnMut(&'a Node, &'a Node)) {
 
 /// The position where the node starts: its own, else that of its leftmost child; unknown positions are cleared, never stale
 pub fn set_position_of(node: &Node) {
-	fn start_of(node: &Node) -> Option<(usize, usize)> {
+	fn start_of(node: &Node) -> Option<crate::compiler::meta::LineInfo> {
 		if let Some(info) = node.get_lineinfo() {
-			return Some((info.line_nr, info.column));
+			return Some(info);
 		}
 		match node {
 			Node::Meta { node, .. } => start_of(node),
@@ -68,7 +68,7 @@ pub fn set_position_of(node: &Node) {
 		}
 	}
 	match start_of(node) {
-		Some((line, column)) => set_hint_position(line, column),
+		Some(position) => set_hint_position_in(position.file, position.line_nr, position.column),
 		None => clear_hint_position(),
 	}
 }
@@ -118,7 +118,7 @@ pub fn check_style(program: &Node) {
 	walk(program, &mut |node, positioned| match node {
 		// `[int, 3]` and `[double, f]` are items, never the call int(3)
 		Node::List(items, bracket, separator)
-			if *bracket != Bracket::Square && *separator != crate::node::Separator::Colon =>
+			if *bracket != Bracket::Square && *separator != crate::node::Separator::Comma =>
 		{
 			check_items(items, positioned)
 		}

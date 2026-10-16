@@ -33,6 +33,24 @@ pixels = gpu_render(s, 2, 2)
 	assert!(said.contains("[yes yes]"), "{said}");
 }
 
+// the reviewer's case: a kernel storing at an offset cannot run as a fragment, so its pixels are magenta, not wrong
+#[test]
+fn a_compute_toy_storing_elsewhere_paints_magenta() {
+	let program = "s = compute_toy(shader {
+	@compute @workgroup_size(16, 16)
+	fn main_image(@builtin(global_invocation_id) id: vec3u) {
+		textureStore(screen, id.xy + vec2u(1u, 0u), float4(0.0, 1.0, 0.0, 1.0));
+	}
+})
+pixels = gpu_render(s, 2, 2)
+[pixels#1 == 0xFFFF00FF, pixels#4 == 0xFFFF00FF]";
+	let said = said(program);
+	if said.contains("no WebGPU adapter") {
+		return crate::common::announce_skip("a WebGPU adapter", module_path!());
+	}
+	assert!(said.contains("[yes yes]"), "{said}");
+}
+
 #[test]
 fn a_compute_toy_with_passes_says_it_needs_their_engine() {
 	let said = said("compute_toy(\"#storage particles array<float4>\\n@compute @workgroup_size(16, 16)\\nfn main_image(@builtin(global_invocation_id) id: vec3u) {}\")");

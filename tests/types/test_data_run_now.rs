@@ -6,6 +6,7 @@ use crate::is;
 #[test]
 fn a_forced_now_is_a_time_value() {
 	is!("t = now!; t.year >= 2026", true);
+	is!("x = {created: now!, n: 1}; x.created.year >= 2026", true); // card map-now-bang: read when the run reads it
 }
 
 #[cfg(feature = "native")]

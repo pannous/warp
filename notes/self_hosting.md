@@ -17,7 +17,7 @@ Decided (user, 2026-10-12, notes/decisions.md "self-hosting"):
 - Language gaps: fixed in the language as cards of this topic, never worked around in the warp code.
 
 Size of the job (Rust lines, 2026-10-12): parser 7.4k (src/warp_parser), Node 2.1k (src/node), analyzer 6.6k, emitter
-23k, lowering + top-level src ~59k. The warp written so far: lib/*.warp 1.5k, samples/json_parser.warp 95.
+23k, lowering + top-level src ~59k. The warp written so far: lib/*.warp 1.5k, samples/objects/json_parser.warp 95.
 
 ## What warp can do today (probes/self_hosting/, 2026-10-12)
 Works:
@@ -160,3 +160,17 @@ funcref global `late·<callee>` that main fills with ref.func before anything ru
 binary_text). First user: lib/prelude.warp hex_text, binary_text over to_base.
 - Size: a warp word with `%` or `//` on int pulls the exact-rational runtime (~5 KB): card int-i64.
 - A host calling an exported runtime function before main would find the global null (trap): only main-run code uses it.
+
+## Text search words in warp: measured, not moved (card card-3, 2026-10-16)
+probes/text_search/words.warp writes trim, starts_with, ends_with and find over byte_at / byte_slice; check.warp
+gives the builtins' answers. Benchmark: bench_find_builtin.warp vs bench_find_warp.warp (20 000 finds in a 2 KB
+text, 40 M byte comparisons), `warp compile --wasm` each, then `hyperfine -N -i 'warp bench_find_builtin.wasm' 'warp
+bench_find_warp.wasm'` (-i: the exit code is the result mod 256).
+- Speed: warp find 2.0 s vs 0.30 s builtin, 6.2x slower; `t: text, offset: int` types change nothing, `fast` on the
+  words nothing either. trim / starts_with / ends_with on short edges: ~2x on the time after the ~12 ms startup.
+- Size: the same, ~17 KB modules either way (±1.5%); the warp words are small, the hand loops too.
+- Why (WAT of matches_at): every `+` and `<` still tests the 2^62 range and branches to exact_add / exact_cmp, also
+  under fast (card fast-int), and each byte_at is a call that re-resolves the text (text_argument) instead of one
+  i32.load8_u on an address held outside the loop (card loop-calls). A prelude call is also never inlined (sum-list).
+- So the builtins stay until both cards land; then rerun the two bench files. TEXT_FIND has a second caller, `in` /
+  contains (fields_and_keys.rs), which needs a late_call (above) once find moves.

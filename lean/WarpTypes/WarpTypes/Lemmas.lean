@@ -627,6 +627,10 @@ theorem narrow {Γ e t} (h : HasType P Γ e t) : ∀ {Γ'}, CtxSub Γ' Γ → �
     intro Γ' hs
     obtain ⟨_, h1, _⟩ := ih hs
     exact ⟨_, .failed h1, sub_refl _⟩
+  | written _ ih =>
+    intro Γ' hs
+    obtain ⟨_, h1, s1⟩ := ih hs
+    exact ⟨_, .written h1, s1⟩
   | handle hR _ sh _ ih1 ih2 =>
     intro Γ' hs
     obtain ⟨_, h1, s1⟩ := ih1 (hs.set _ _)
@@ -739,6 +743,7 @@ theorem subst_typed {Γ0 e t} (h : HasType P Γ0 e t) :
   | set _ hw _ st ih1 ih2 => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .set (ih1 hΓ hv htv) hw (ih2 hΓ hv htv) st
   | isA _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .isA (ih hΓ hv htv)
   | failed _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .failed (ih hΓ hv htv)
+  | written _ ih => intro Γ y tv v hΓ hv htv; simp only [Expr.subst]; exact .written (ih hΓ hv htv)
   | @handle Γ0 ev h b th tb R hR hh sh hb ih1 ih2 =>
     intro Γ y tv v hΓ hv htv
     simp only [Expr.subst]

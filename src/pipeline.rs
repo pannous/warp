@@ -240,6 +240,8 @@ const DECLARATION_PASSES: &[Pass] = &[
 	crate::lowering::foreign_modules::lower,
 	// `x as text?` keeps ø, after foreign_modules types a nullable WebIDL result so
 	crate::lowering::optional_casts::lower,
+	// `std::cmp::max(a, b)`, `String::from("hi")` (rust_paths.rs), before std_aliases reads a module call
+	crate::lowering::rust_paths::lower,
 	crate::lowering::std_aliases::lower,
 	crate::lowering::class_methods::lower_json_calls,
 	crate::lowering::welcome_forms::lower,
@@ -251,8 +253,6 @@ const DECLARATION_PASSES: &[Pass] = &[
 	crate::lowering::one_entry_maps::lower,
 	// the used modules join the program before the signal passes: a listener of the program sees the writes of their functions
 	// note names (`play F#4`) while the program is its own, before the sound module joins it
-	// `save sound as "song.wav"`, `save canvas as "painting.png"`: what the word names, before music_words reads the sound
-	crate::lowering::saved_words::lower,
 	crate::lowering::music_words::lower,
 	crate::lowering::routes::lower,
 	crate::lowering::page_html::use_markup,
@@ -464,7 +464,7 @@ fn lower_with_sealed_quotes(node: Node) -> Result<Node, Node> {
 		None => node,
 	};
 	if let Some(answer) = crate::numbers::real::answer(&node) {
-		return Err(answer);
+		return Err(crate::numbers::units::static_units::with_answer_units(answer));
 	}
 	let node = run_passes(node, MEANING_PASSES);
 	if let Some(error) = crate::errors::diagnostic::first_located_error(&node) {

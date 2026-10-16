@@ -1,9 +1,0 @@
-#!/usr/bin/env warp
-// card function-ref-compare: a function chosen at run time compared with &g or an alias of it: no no yes
-f(x) := x + 1
-g(y) := y * 2
-h = if clock() > 0 then &f else &g
-print h == &g
-k = &g
-print h == k
-print h != k

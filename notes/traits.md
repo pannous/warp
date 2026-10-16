@@ -70,6 +70,11 @@ area·square(x)` picks the witness at run time (traits::with_dispatchers; `insta
   it, `ref.func` is declared in an element segment). The dispatcher is compiled after the user functions because it
   needs their indices, while node_order is compiled before them; the global bridges the two. A type without a witness
   traps `not comparable`.
+  Printable the same way (card list-printable-items): `text·witness` holds `text·dispatch`, which gives an instance of a
+  type with text() its text (any other node itself); list_text joins each item through it (`[N(1), N(2)]` prints
+  `[n1 n2]`, `print x` of an instance known only at run time too), and main's value passes through `text·shown`, which
+  turns each printable instance at any depth of lists and entries into the symbol of its text. Dispatched witnesses
+  take Nodes, no struct or array convention (list_abi.rs directly_called_functions).
 
 ## Default methods (2026-10-04)
 `trait shape{area; describe(s) := area(s) * 2}`: a requirement written as a definition is an operation with a default

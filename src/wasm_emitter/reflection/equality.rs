@@ -28,7 +28,7 @@ impl WasmGcEmitter {
 			Node::Empty | Node::Text(_) | Node::List(_, Bracket::Square, _) => true,
 			Node::List(items, Bracket::Round, _) if items.len() == 1 => self.is_structured_value(&items[0]),
 			// a tuple `(y, 4)`: compared element by element, never as its last value
-			Node::List(_, Bracket::Round, Separator::Colon) => true,
+			Node::List(_, Bracket::Round, Separator::Comma) => true,
 			// a call whose result is a text or a list: `lower(a) == lower(b)`
 			Node::List(_, Bracket::Round, Separator::None) => {
 				matches!(self.get_type(node), Kind::Text | Kind::Codepoint | Kind::List)
@@ -202,7 +202,10 @@ impl WasmGcEmitter {
 		emit_number: fn(&mut Self, &mut Function, &Node),
 	) {
 		self.warn_bits_as_truth(condition);
-		if self.is_structural_operand(condition)
+		// `if odd x`: an unknown word is an error as in any other code, never a truthy list (card undefined-word)
+		if let Some(message) = self.unknown_word_refusal(condition) {
+			self.emit_type_error(func, message);
+		} else if self.is_structural_operand(condition)
 			|| self.is_held_cell_value(condition)
 			|| self.holds_run_time_kind(condition)
 		{

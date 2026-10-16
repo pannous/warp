@@ -3,12 +3,12 @@ use crate::is;
 // natural scripting-style version: `let` inside blocks, string parameters indexed with [], push of indexed values, Kotlin-inclusive 0..n
 #[test]
 fn test_levenshtein() {
-	is!("samples/levenshtein.warp", 11);
+	is!("samples/text/levenshtein.warp", 11);
 }
 
 #[test]
 fn test_levenshtein_idiomatic() {
-	is!("samples/levenshtein_idiomatic.warp", 11);
+	is!("samples/text/levenshtein_idiomatic.warp", 11);
 }
 
 // Bisection helper: evaluates every probes/algo/levenshtein/*.warp and prints the result

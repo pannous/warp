@@ -5,13 +5,27 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
 
 - Integration worktree W=/Users/me/dev/angles/warp.worktrees.noindex/integrate (create it with `cowtree add --detach "$W"
   origin/main` if missing). Always absolute paths and `git -C "$W"`.
+- Prep worktree P=/Users/me/dev/angles/warp.worktrees.noindex/integrate2 (user, 2026-10-16): while the gate or a
+  test run holds W, assemble the next batch in P: merge the Ready tips, resolve conflicts, `python3
+  web/playground/keywords.py`, cargo check (native and `--target wasm32-unknown-unknown --no-default-features`), fmt.
+  P gets its own version tweak (`-integrate2`), so its builds don't overwrite W's artifacts in the shared target dir.
+  Only one gate runs at a time (the machine's single test queue): when W is free, bring the prepared batch over
+  (`git -C "$W" checkout --detach <P's HEAD>`) and gate it there. Never wait idle on a test run.
 - The queue is the board (user, 2026-10-16): `todo list Ready` (`--json`: branch, tip, express per card). Only Ready
-  cards are merged, each at the tip its card names (`git merge <tip>`, not `origin/<branch>`: the worker may have
-  pushed since). A worker's SendMessage is a nudge, never the queue. `todo ready --stray` lists unmerged origin
+  cards are merged, each at origin/<branch> when that descends from the tip its card names (owners push newer tips
+  without updating the card; a stale tip re-resolved a hand-resolved conflict), else at the card tip; the tip is fixed
+  once merged, push_tested.sh's ancestry check catches a push during the run. A worker's SendMessage is a nudge, never the queue. `todo ready --stray` lists unmerged origin
   branches without a Ready card and Ready cards whose tip is gone: a report, never merged; check it once per batch
   and tell the Supervisor about lost-looking work.
 - Batches of at most ~8 Ready cards (user, 2026-10-16). Express cards (and crash fixes) go alone and next. Wide
   refactors (many files, e.g. renames) and carrier branches land alone and first; the rest is merged against them.
+- Scripts (card integrator-scripts): `integrator_tools/batch_build.sh [--worktree "$P"] [--base <ref>] [--cloud]
+  [<card>…]` assembles a batch from the Ready cards (express alone, ≤8 tips, held tips in ../integrate_held.txt
+  skipped), merges them with merge_batch.sh (`<branch>@<tip>`), runs keywords.py, native + wasm32 cargo check and fmt,
+  writes ../<worktree>_batch.txt and prints the bounces as todo commands (~2 min). After push_tested.sh,
+  `integrator_tools/batch_close.sh [--dry-run] [<batch file>]` closes each landed card with its merge commit, deletes
+  the landed remote branches in one push and removes the landed worktrees of owners in ../integrate_retired.txt (or
+  of none) when only the tweak/leftovers are uncommitted and nothing is newer than 2 h. The steps below are what they do.
 - Per batch: `git -C "$W" checkout Cargo.toml Cargo.lock test_results.txt`, fetch, `merge --ff-only origin/main`,
   merge each card's tip. Conflicts in todo.md or tests/main.rs: union-merge the three stages (check the result is not
   empty and tests/main.rs has no duplicate lines). Other trivial conflicts you resolve yourself (merge or rebase):
@@ -49,7 +63,7 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   is carded and fixed forward with priority, the last good site stays up meanwhile. An urgent fix (the user waiting to
   try it) is deployed at once: `gh workflow run Playground -R pannous/warp` (main). The local gate cannot see the
   runner's environment:
-  GitHub's runner has no GPU and is slower (a "ready" status raced the first run; samples/webgpu logged Chrome's
+  GitHub's runner has no GPU and is slower (a "ready" status raced the first run; samples/graphics/webgpu logged Chrome's
   "No available adapters." — fixed by AGENT_BROWSER_ARGS SwiftShader in pages.yml). So a batch that adds or changes a
   sample, web/playground/** or pages.yml gets the runner's verdict before main: push the tested tip as a branch and
   `gh workflow run Playground -R pannous/warp --ref <branch>`; job build green = both tours pass on the runner (its
@@ -66,6 +80,10 @@ Read notes/agents/common.md and notes/roles.md ("Integrator").
   <example>… for a tour failure. Never check out another commit in the integrate worktree while gate.sh runs, and
   TaskStop a running gate before re-merging there. A JS-only follow-up tip can be merged off-tree
   (`git merge-tree --write-tree` + `git commit-tree`), pushed as a branch for the runner check while the gate finishes.
+- Small fixes first (user, 2026-10-16): when a failure comes from a worker's change and the fix looks like a couple of
+  lines (a stale path, `//` → `/!`, a missing cfg, a test's spelling after a decided syntax change, a renamed name),
+  fix it yourself in the batch, in its own commit, at once: no card, no `fixnow` ignore. Tell the worker in one line.
+  If the fix does not work on the first try, stop and delegate back (fixnow ignore + card, or bounce as below).
 - Failures: up to 10 per batch are ignored as `fixnow` and pushed (notes/roles.md "Fix forward"); report test name + first panic line to the worker (the fixnow card, or the bounce note on its card). A failure that passes alone is shared state: find and
   fix the cause in a small commit with a test (known flake: tests running the shared debug/warp binary; rerun).
 - Batch branches that arrive close together. After each push: one line to the Supervisor and the board.
