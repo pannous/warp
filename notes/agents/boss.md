@@ -13,3 +13,10 @@ Read notes/agents/common.md and notes/agents/supervisor.md: the fleet rules appl
 - warp-supervisor (tmux) runs the main fleet: tell it which cards you take, so no card is worked twice.
 - Wait for the user's instructions. When asked for parallel tasks, pick easy cards from Soon and run each as a nested
   session. Afterwards, write down in notes/agents/boss.md what worked and what didn't, for the comparison.
+
+## Findings of the first nested sessions (2026-10-16)
+Session samples-quicksort was started by the boss session without any click (start_session with the card as its task) and
+ran like a tmux worker: todo take, cowtree worktree, background builds, notes, push. What did not work: the worktrees
+under warp.worktrees.noindex/ were deleted by a background prune while the session was idle, as the branch tip still equalled
+main (merged, only the version tweak changed), together with the untracked probe files. A desktop session that waits on long
+builds should commit and push its branch early.
