@@ -297,3 +297,5 @@ Running list of the small fixes done by the fixer session (branches fix-<topic>)
 - 2026-10-16 list-printable-items: instances of a class with text() show as their text inside lists, interpolations and values of run-time type: a Printable witness table like Comparable's (witness.rs text·dispatch, text·shown; list_text hook in text_words.rs; tests/types/test_printable_items.rs)
 - 2026-10-16 if-list: a closure takes the float a parameter widened to after the first inference (widen loop reruns infer_closure_parameters), and an element of a list of unknown element kind is passed as a Node (user_functions.rs; tests/functions/test_closure_float_arguments.rs)
 - 2026-10-16 is-text-method, number-words, methods-text: already worked on main e04ca61ed; methods(text) pinned in tests/types/test_printable_items.rs
+- 2026-10-16 callable: `f: callable` parameter takes a function or a block (blocks.rs Takes::Callable; builtin type callable covering function and code; tests/functions/test_callable_parameter.rs)
+- 2026-10-16 literal-test-load: the 100 KB-literal test measures the compiling thread's CPU time (clock_gettime), not wall-clock (tests/parser/test_big_literals.rs)
