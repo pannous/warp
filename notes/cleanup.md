@@ -542,3 +542,18 @@ way; `func add<T>(_ a: T, …)` relied on it, so the new walk keeps that unwrap 
   helpers; worker.js reuses host-compiler's passedBytes.
 - lib/: `round_to` is defined in lib/prelude.warp and lib/math.warp alike; dropping math's would take it out of
   `dir(math)`, so it stays (card). lib/compiler's lexer `is_blank` is prelude's `is_space`, kept as the Rust twin's name.
+## Final pass (final-emitter, 2026-10-16): src/wasm_emitter/, src/run/, src/type_kinds.rs
+Behaviour-preserving, +352 −587 lines. Byte check: every probe and sample compiles to the same wasm as before
+(probes/cleanup/same_wasm.sh), except the intended superset below and embedded doc text naming moved sample paths.
+- Runtime function dependencies (src/wasm_emitter/runtime_dependencies.rs): each module declares `dependencies()`
+  (`Dependency`, `any`/`all`), `require_dependencies()` closes them to a fixed point. The old ordered if chain missed
+  `function_text` when `list_join` was required late; vector_shader, zero_argument_shader, math_signatures and
+  warp_compiled_wgsl_shader now also emit it. A new runtime function = one line in its module's table.
+- `Kind::of_field` / `Kind::ALL` replace tag comparisons in wasm_reader; RawFieldValue conversions by one macro;
+  unused `AstKind` gone.
+- WasmGcEmitter, TypeManager, ImportManager derive Default (−120 lines of initializers); one `emit_struct_types`.
+- Emitter words via `words::GLOBAL_WORD` / `RETURN_WORD` / `host::FETCH_WORD`; BUILTIN_CALLS no longer repeats
+  NODE_ARGUMENT_CALLS.
+Left for later (cards): emit_kind_globals' hand-written name table (derive from Kind::ALL); module_cache and
+program_cache each hash to hex (one shared hex_digest, also modules/cargo_crates); host/native.rs and
+host/tasks/values.rs could match Kind::of_field (host area); list_emitter KNOWN_WORDS as a mechanism.
