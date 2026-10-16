@@ -225,26 +225,9 @@ fn read(program_lines: impl Iterator<Item = &'static str>) -> Result<Definitions
 	// a program's own prefixes reach every unit, its own units take every prefix
 	let prefixed = with_si_prefixes(&reader);
 	reader.units.extend(prefixed);
-	let Reader {
-		dimensions,
-		derived_dimensions,
-		base_units,
-		units,
-		aliases,
-		long_names,
-		prefixes,
-		..
-	} = reader;
+	let Reader { dimensions, derived_dimensions, base_units, units, aliases, long_names, prefixes, .. } = reader;
 	let units = in_whole_steps(units)?;
-	Ok(Definitions {
-		dimensions,
-		derived_dimensions,
-		units,
-		base_units,
-		aliases,
-		long_names,
-		prefixes,
-	})
+	Ok(Definitions { dimensions, derived_dimensions, units, base_units, aliases, long_names, prefixes })
 }
 
 /// The definitions read so far, one line at a time
