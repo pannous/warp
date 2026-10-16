@@ -45,8 +45,17 @@ fn foreign_line(items: &[Node]) -> Option<(String, String)> {
 		Node::Key(head, Op::Colon, _) => head.drop_meta(),
 		head => head,
 	};
-	let Node::List(call, Bracket::Round, _) = head else {
-		return None;
-	};
-	Some((call.first()?.drop_meta().symbol_name()?.to_string(), library))
+	Some((function_name(head)?, library))
+}
+
+/// `cbrt(x: float)`, or `sqrt(x: float)` as the parser reads it: the prefix operator √ applied
+fn function_name(call: &Node) -> Option<String> {
+	match call {
+		Node::List(items, Bracket::Round, _) => Some(items.first()?.drop_meta().symbol_name()?.to_string()),
+		Node::Key(_, op, _) => {
+			let (word, _) = crate::warp_parser::PREFIX_OPERATOR_WORDS.into_iter().find(|(_, known)| known == op)?;
+			Some(word.to_string())
+		}
+		_ => None,
+	}
 }

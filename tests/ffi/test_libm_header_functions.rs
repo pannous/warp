@@ -21,7 +21,7 @@ fn the_table_serves_every_listed_libm_function() {
 	let mut linker: wasmtime::Linker<warp::ffi::FfiState> = wasmtime::Linker::new(&engine);
 	warp::ffi::link_libm(&mut linker, &engine, &[]).unwrap();
 	let mut store = wasmtime::Store::new(&engine, warp::ffi::FfiState::new());
-	let missing: Vec<&str> = warp::ffi::LIBM_F64_FUNCTIONS
+	let missing: Vec<&str> = warp::ffi::libm_f64_functions()
 		.iter()
 		.map(|(name, _)| *name)
 		.filter(|name| linker.get(&mut store, "m", name).is_err())
