@@ -70,3 +70,20 @@ fn a_free_glyph_without_right_operand_is_a_value() {
 	let error = warp::wasm_emitter::eval("1 ⇔ 1").serialize();
 	assert!(error.contains("at 1:3"), "{error}");
 }
+
+/// card parse-free: the set glyphs mean what math writes, as alias lines and list.warp's set words
+#[test]
+fn set_glyphs_are_membership_and_set_words() {
+	is!("1 ∈ [1 2]", true);
+	is!("3 ∉ [1 2]", true);
+	is!("3 not in [1 2]", true);
+	is!("[1 2] ∋ 2", true);
+	is!("[1 2] ∪ [2 3]", parse("[1 2 3]"));
+	is!("[1 2] ∩ [2 3]", parse("[2]"));
+	is!("[1] ⊂ [1 2]", true);
+	is!("[1 2] ⊂ [1 2]", false);
+	is!("[1 2] ⊆ [1 2]", true);
+	is!("[1 2] ⊃ [1]", true);
+	is!("[1 2] ⊇ [3]", false);
+	is!("subset([1], [1 2])", true);
+}
