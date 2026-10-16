@@ -44,11 +44,12 @@ pub(crate) use use_statements::*;
 /// Where modules are looked for, in this order: the current directory, the library (lib/extra: modules
 /// that are not standard, like netbase, P194), the modules among the samples (samples/modules: lib, square;
 /// samples/wasm: shapes.wasm)
-pub const SEARCH_DIRECTORIES: [&str; 8] =
-	[".", "include", "lib", "lib/extra", "src", "source", SAMPLE_MODULES[0], SAMPLE_MODULES[1]];
+pub const SEARCH_DIRECTORIES: [&str; 9] =
+	[".", "include", "lib", "lib/extra", "src", "source", SAMPLE_MODULES[0], SAMPLE_MODULES[1], SAMPLE_MODULES[2]];
 /// The samples' modules never stand in for a standard module: samples/modules/agent.warp is a sample, `use agent` from
 /// the repository root means lib/agent.warp (card samples-name)
-pub const SAMPLE_MODULES: [&str; 2] = ["samples/modules", "samples/wasm"];
+/// samples/numbers: sin.warp, which `use sin` imports (test_sinus_warp_import) and the Numbers chapter links
+pub const SAMPLE_MODULES: [&str; 3] = ["samples/modules", "samples/wasm", "samples/numbers"];
 
 /// A sample's file named like a standard module (samples/modules/agent.warp for `use agent`): never that module
 pub fn shadows_with_a_sample(path: &std::path::Path) -> bool {

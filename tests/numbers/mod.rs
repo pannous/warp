@@ -19,6 +19,7 @@ mod test_duration_text;
 mod test_dynamic_units; // card units-dynamic
 mod test_exact_parameters;
 mod test_exponent_texts; // card int-text
+mod test_fast_int; // card fast-int
 mod test_fast_math; // card switch-rebinds
 mod test_fast_scope; // card fast-scope
 mod test_fixed_width_ints;
@@ -91,6 +92,7 @@ mod test_rounding_in_functions;
 mod test_run_time_power;
 mod test_run_time_remainder;
 mod test_shift_operators;
+mod test_sqrt_quantity_unit; // card sqrt-quantity-unit
 mod test_static_units;
 mod test_static_units_compiled;
 mod test_static_units_data;

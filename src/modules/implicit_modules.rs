@@ -157,9 +157,13 @@ pub fn uses_sound(program: &Node) -> bool {
 	says_use(program, SOUND_MODULE) || first_called_undefined(program, SOUND_WORDS).is_some()
 }
 
-/// Whether the program says `use <module>`
+/// Whether the program says `use <module>`, also first in a line of several (`use json; m = …` before other lines)
 pub(crate) fn says_use(program: &Node, module: &str) -> bool {
-	statements_of(program).iter().filter_map(used_module).any(|used| used.name == module)
+	statements_of(program)
+		.iter()
+		.flat_map(Node::sequence_statements)
+		.filter_map(used_module)
+		.any(|used| used.name == module)
 }
 
 /// A rare sound word the program calls: without `use sound` its error names the `use` (card bizarre-global)

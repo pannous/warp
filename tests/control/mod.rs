@@ -170,6 +170,7 @@ mod test_rest_patterns;
 mod test_run_tests; // card run-tests
 mod test_run_time_block_cache;
 mod test_run_time_blocks;
+mod test_rust_inclusive_range;
 mod test_schema_cast; // card loaded-config
 mod test_schemas; // card schemas
 mod test_scoped_handlers;
@@ -181,6 +182,7 @@ mod test_signal_in_loop;
 mod test_signal_lists;
 mod test_signal_reflection;
 mod test_signal_values;
+mod test_slow_handler; // card timer-handler
 mod test_soft_tests;
 mod test_split_kernel; // card go-split-kernel
 mod test_storage;
@@ -264,4 +266,4 @@ mod test_while_value;
 mod test_window_clicks; // card native-window
 #[cfg(feature = "native")] // the warp binary's window opener
 mod test_window_opens; // card window-loop
-mod test_word_statements; // card error-beep // card rest-patterns // card member-completion
+mod test_word_statements; // card error-beep // card rest-patterns // card member-completion // card rust-inclusive-range

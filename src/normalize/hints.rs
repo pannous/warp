@@ -1,7 +1,6 @@
 //! The hints of each axis: a form other than the canonical one of `style()` gets its hint
 use super::*;
 
-/// Type constructor vs 'as' operator
 /// The type word in its canonical spelling: `str` and `String` become `string` when that is preferred
 fn canonical_type_word(used: &str) -> &str {
 	if style().prefer_string_over_str && STRING_TYPE_NAMES.contains(&used) {

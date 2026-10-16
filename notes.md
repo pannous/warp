@@ -71,3 +71,7 @@
 - 2026-10-15 if-yes: library-word lowering had a shared predicate for a braceless call used as the only statement of a
   curly block, but its main prefix-call path duplicated a narrower bracket check and never used it. Reusing
   `is_spaced_call` and `in_block_as_written` makes `if yes {sum ...}` follow the same general call rule.
+- 2026-10-16 git-push: 'fatal: failed to store: -61' after a successful push came from Homebrew's system gitconfig
+  helper osxkeychain (errSecWrPerm: the keychain refuses writes from headless sessions) running after gh's helper.
+  ~/.config/git/config now resets the list (`helper =`) before `helper = !gh auth git-credential` for github.com and
+  gist.github.com, the form `gh auth setup-git` writes; git credential then asks gh only.

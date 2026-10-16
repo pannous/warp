@@ -4,6 +4,7 @@
 //! written to a return area as pointer and length. `cabi_realloc` lets the host place arguments in the text heap.
 //! Each function the world imports (`host.time`) is a core import of the module its import names, called the way the
 //! canonical ABI lowers it: a text argument as pointer and length, a text result through a return area.
+use super::super::runtime_dependencies::{always, Dependency};
 use super::super::WasmGcEmitter;
 use crate::analyzer::param_kind;
 use crate::component_worlds::{import_name, Signature, WIT_STRING};
@@ -44,10 +45,8 @@ fn crosses_the_boundary() -> bool {
 }
 
 /// The runtime functions a component's adapters and import calls need, when it has any
-pub(in crate::wasm_emitter) fn add_dependencies(required: &mut std::collections::HashSet<&'static str>) {
-	if crosses_the_boundary() {
-		required.extend(ADAPTER_NEEDS);
-	}
+pub(in crate::wasm_emitter) fn dependencies() -> Vec<Dependency> {
+	crosses_the_boundary().then(|| always(&ADAPTER_NEEDS)).into_iter().collect()
 }
 
 /// The function the component being compiled imports under `name` (`host.time`)

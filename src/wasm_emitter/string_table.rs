@@ -20,16 +20,11 @@ pub struct StringTable {
 
 impl Default for StringTable {
 	fn default() -> Self {
-		Self::new()
+		Self { table: HashMap::new(), next_offset: WASI_SCRATCH_BYTES, data_section: DataSection::new() }
 	}
 }
 
 impl StringTable {
-	/// Create a new empty string table
-	pub fn new() -> Self {
-		Self { table: HashMap::new(), next_offset: WASI_SCRATCH_BYTES, data_section: DataSection::new() }
-	}
-
 	/// Allocate a string in linear memory, returning (ptr, len)
 	/// Deduplicates strings - if the string is already allocated, returns existing offset
 	pub fn allocate(&mut self, s: &str) -> (u32, u32) {

@@ -3,7 +3,8 @@ use super::*;
 
 /// The program as the Lean list of W0 items, or why it is outside W0
 pub fn export(code: &str) -> Result<String, String> {
-	let program = crate::warp_parser::parse(code);
+	// the items written into lists and fields, marked as warp's pipeline marks them
+	let program = crate::lowering::data_items::lower(crate::warp_parser::parse(code));
 	let items = Exporter::default().items(&program)?;
 	Ok(format!("[{}]", items.join(",\n  ")))
 }
