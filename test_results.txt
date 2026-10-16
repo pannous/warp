@@ -183,10 +183,14 @@ PASSED:
   ✓ control::test_error_branch_kind::test_try_catches_an_error_branch
   ✓ control::test_error_fields::a_field_of_an_error_is_the_error
   ✓ control::test_error_not_in_data::test_a_list_of_values_and_a_handled_error_stay
+  ✓ control::test_error_not_in_data::test_a_parameter_declared_a_list_of_a_union_takes_index_writes
   ✓ control::test_error_not_in_data::test_a_place_declared_or_error_holds_an_error
   ✓ control::test_error_not_in_data::test_an_error_in_a_list_literal_raises
   ✓ control::test_error_not_in_data::test_an_error_still_travels_as_an_argument_and_a_local
+  ✓ control::test_error_not_in_data::test_an_error_written_by_a_variable_key_into_a_map_names_the_field
   ✓ control::test_error_not_in_data::test_an_error_written_into_a_list_or_field_raises
+  ✓ control::test_error_not_in_data::test_an_error_written_into_a_tuple_entry_or_inserted_raises
+  ✓ control::test_error_not_in_data::test_only_the_written_place_declared_or_error_holds_an_error
   ✓ control::test_error_not_in_data::test_try_catches_an_error_in_data
   ✓ control::test_error_value_return::test_a_returned_error_raises_where_used_as_a_number
   ✓ control::test_error_value_return::test_a_returned_error_stays_a_value
@@ -627,6 +631,7 @@ PASSED:
   ✓ control::test_run_time_blocks::interpret_of_a_constant_block_runs_it_where_written
   ✓ control::test_run_time_blocks::interpret_runs_a_block_known_only_at_run_time
   ✓ control::test_run_time_blocks::running_a_run_time_block_is_the_eval_effect
+  ✓ control::test_run_time_blocks::running_a_whole_run_time_block_is_the_eval_effect_alone
   ✓ control::test_rust_inclusive_range::an_inclusive_range_in_a_for_header
   ✓ control::test_rust_inclusive_range::an_inclusive_range_in_a_match_arm
   ✓ control::test_rust_inclusive_range::an_inclusive_range_is_the_range_to_its_end
@@ -1434,6 +1439,8 @@ PASSED:
   ✓ functions::test_fail_effect::a_library_word_that_answers_with_an_error_fails
   ✓ functions::test_fail_effect::dividing_by_a_number_and_try_do_not_fail
   ✓ functions::test_fail_effect::effects_of_names_fail
+  ✓ functions::test_fail_effect::indexing_a_key_and_a_number_cast_fail
+  ✓ functions::test_fail_effect::print_effects_of_prints_the_effects
   ✓ functions::test_fail_effect::pure_refuses_fail_but_folding_does_not
   ✓ functions::test_fail_effect::raising_and_dividing_by_a_variable_fail
   ✓ functions::test_failed_word::test_failed_ends_a_condition_like_the_other_test_words
@@ -1547,6 +1554,9 @@ PASSED:
   ✓ functions::test_kebab_members::an_existing_kebab_field_is_read
   ✓ functions::test_kind_tested_parameter::a_kind_tested_parameter_takes_a_list_whole
   ✓ functions::test_lambda_global::a_lambda_with_global_changes_mains_variable
+  ✓ functions::test_lambda_held_by_field::a_field_holding_a_lambda_is_passed_as_a_function
+  ✓ functions::test_lambda_held_by_field::a_field_named_like_a_library_method_keeps_the_method
+  ✓ functions::test_lambda_held_by_field::a_held_lambda_is_called_whatever_holds_it
   ✓ functions::test_lambda_held_by_field::a_lambda_in_a_map_entry_is_called
   ✓ functions::test_lambda_held_by_field::a_lambda_in_an_untyped_class_field_is_called
   ✓ functions::test_lambda_spaced_body::a_lambda_body_may_be_a_spaced_call
@@ -2227,6 +2237,7 @@ PASSED:
   ✓ lists::test_picked_linear::float_arrays_paired_by_dot_are_linear
   ✓ lists::test_picked_linear::float_arrays_used_otherwise_stay_lists
   ✓ lists::test_picked_linear::the_linear_hint_names_float_arrays
+  ✓ lists::test_pop::a_bare_pop_or_clear_changes_the_list_as_the_call_does
   ✓ lists::test_pop::pop_gives_the_last_item
   ✓ lists::test_pop::pop_removes_the_last_item
   ✓ lists::test_python_collections::a_missing_index_is_an_error
@@ -2441,6 +2452,7 @@ PASSED:
   ✓ modules::test_std_coverage::every_library_word_is_called_by_a_test
   ✓ modules::test_std_docs_comment_association::a_hand_wrapped_comment_is_the_whole_doc_of_its_word
   ✓ modules::test_std_docs_comment_association::a_wrapped_comment_is_the_whole_doc_of_its_word
+  ✓ modules::test_std_docs_comment_association::the_comment_block_directly_above_is_the_doc_of_its_word
   ✓ modules::test_std_docs_comment_association::words_use_the_comment_line_directly_above_their_definition
   ✓ modules::test_std_exec::a_failing_command_is_an_error
   ✓ modules::test_std_exec::exec_gives_what_the_command_printed
@@ -2524,6 +2536,8 @@ PASSED:
   ✓ modules::test_std_qualified::a_variable_of_the_modules_name_keeps_its_methods
   ✓ modules::test_std_random::use_random_brings_choice_shuffle_sample
   ✓ modules::test_std_random::use_random_seed_repeats_the_numbers
+  ✓ modules::test_std_reflection_hints::reflecting_on_standard_module_functions_gives_no_hints_from_the_module
+  ✓ modules::test_std_reflection_hints::reflection_still_gives_hints_for_the_programs_own_code
   ✓ modules::test_std_regex::a_match_prints_yes_or_no
   ✓ modules::test_std_regex::use_regex_matches_finds_and_replaces
   ✓ modules::test_std_regex::what_one_engine_lacks_is_an_error_in_both
@@ -2689,7 +2703,6 @@ PASSED:
   ✓ node::test_text_operand_quotes::a_text_operand_keeps_its_quotes
   ✓ node::test_trailing_comment::comment_ending_a_line_belongs_to_its_item
   ✓ normalize::tests::test_hint_mode
-  ✓ normalize::tests::test_hint_position
   ✓ normalize::tests::test_style_swap
   ✓ numbers::test_angle::test_call
   ✓ numbers::test_angle::test_function_params
@@ -3830,6 +3843,7 @@ PASSED:
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error_slice_2
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error_slice_3
   ✓ programs::test_samples_run_cleanly::every_sample_runs_without_a_compiler_error_slice_4
+  ✓ programs::test_samples_run_cleanly::samples_keep_their_stored_values_out_of_the_checkout
   ✓ programs::test_samples::test_ackermann
   ✓ programs::test_samples::test_binary_tree
   ✓ programs::test_samples::test_calculator
@@ -4255,6 +4269,12 @@ PASSED:
   ✓ text::test_selector_prepositions::letters_are_the_alphabetic_characters
   ✓ text::test_selector_prepositions::printing_a_selection_prints_each_part
   ✓ text::test_selector_prepositions::selectors_chain_to_the_right
+  ✓ text::test_shalom_units::a_glyph_is_a_character
+  ✓ text::test_shalom_units::a_loop_by_character_walks_the_characters
+  ✓ text::test_shalom_units::a_loop_by_code_point_walks_the_code_points
+  ✓ text::test_shalom_units::letters_are_whole_characters
+  ✓ text::test_shalom_units::shalom_counts_four_characters_and_six_code_points
+  ✓ text::test_shalom_units::the_chars_of_a_text_are_its_characters
   ✓ text::test_sort_of_a_call::a_library_word_chain_binds_tighter_than_a_comparison
   ✓ text::test_sort_of_a_call::a_library_word_chain_takes_the_first_operand_of_a_logical_chain
   ✓ text::test_sort_of_a_call::a_library_word_where_a_value_is_expected_calls_the_value_after_it
@@ -5744,6 +5764,7 @@ PASSED:
   ✓ welcoming::test_fixits::braceless_call_fixes
   ✓ welcoming::test_fixits::codepoint_is_the_preferred_name
   ✓ welcoming::test_fixits::declared_type_mismatch_fixes
+  ✓ welcoming::test_fixits::filter_loop_fixes
   ✓ welcoming::test_fixits::int_for_enum_parameter_fix
   ✓ welcoming::test_fixits::kebab_key_fixes
   ✓ welcoming::test_fixits::list_operator_fixes
@@ -6006,6 +6027,7 @@ PASSED:
   ✓ welcoming::test_unknown_prefix_word::an_unknown_word_applied_to_a_value_warns
   ✓ welcoming::test_unknown_prefix_word::known_words_and_plain_data_do_not_warn
   ✓ welcoming::test_unknown_prefix_word::the_call_form_stays_an_error
+  ✓ welcoming::test_unknown_word_error::test_an_unknown_word_in_a_condition_is_an_error
   ✓ welcoming::test_unknown_word_error::test_an_unknown_word_with_a_value_is_an_error_in_code
   ✓ welcoming::test_unknown_word_error::test_data_contexts_keep_unknown_words
   ✓ welcoming::test_unknown_word_error::test_known_words_are_untouched
@@ -6120,7 +6142,7 @@ PASSED:
   ✓ welcoming::test_welcoming_sugar::the_let_note_is_shown_until_acknowledged
 
 FAILED:
-  ✗ welcoming::test_fixits::filter_loop_fixes
+  ✗ normalize::tests::test_hint_position
 
 SUMMARY:
-13 ignored, 6117 passed, 1 failed, 6118 total tested
+13 ignored, 6139 passed, 1 failed, 6140 total tested

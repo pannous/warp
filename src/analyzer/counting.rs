@@ -42,12 +42,15 @@ pub fn counting_method(name: &str, ctx: &Context) -> Option<&'static str> {
 }
 
 /// The counting method of a text unit, named in the singular or the plural: `byte`, `chars`, `codepoint`, `graphemes`.
-/// A char is a code point, as `x.chars` and the `char` type; the user-perceived character is a grapheme.
+/// A char is a character (glyph), a grapheme cluster as `x.chars`; a code point is its own unit (`"שָלוֹם"` is 4
+/// characters, 6 code points: decision chars-codepoints amended).
 pub(crate) fn text_unit(word: &str) -> Option<&'static str> {
 	match word {
 		"byte" | "bytes" => Some("bytes"),
-		"char" | "chars" | "character" | "characters" | "codepoint" | "codepoints" => Some("codepoints"),
-		"grapheme" | "graphemes" => Some("graphemes"),
+		"codepoint" | "codepoints" => Some("codepoints"),
+		"char" | "chars" | "character" | "characters" | "glyph" | "glyphs" | "grapheme" | "graphemes" => {
+			Some("graphemes")
+		}
 		_ => None,
 	}
 }
