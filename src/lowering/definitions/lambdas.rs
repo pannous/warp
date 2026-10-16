@@ -298,7 +298,8 @@ fn prefix_sort_grouped(mut items: Vec<Node>, bracket: &Bracket) -> Vec<Node> {
 		return items;
 	};
 	let last = items.len() - 1;
-	let call_ends_at = (1..=last).find(|&at| {
+	// the list comes first: `sort xs by: >`; `.sorted(by: >)` is a method's arguments
+	let call_ends_at = (2..=last).find(|&at| {
 		labeled(&items[at])
 			&& if at == last { *bracket == Bracket::Round } else { iteration_word(&items[at + 1]).is_some() }
 	});
