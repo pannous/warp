@@ -835,8 +835,8 @@ fn test_typed_literals_bind_tightly() {
 	is!("3f", 3.0);
 	is!("0.1F + 0.2F == 0.3", false);
 	is!("0.1d + 0.2D == 0.3", false); // Java, C#: double
-	is!("0.1l + 0.2l == 0.3", true); // C's long double suffix: exact, as without suffix
-	is!(".1L + .2L == .3", true);
+	fails_with("0.1l + 0.2l == 0.3", "is the litre unit here"); // C's long double: the litre (decision litre-suffix)
+	fails_with(".1L + .2L == .3", "is the litre unit here");
 	is!("2 * 1.5:int", 2);
 	assert!(warp::analyzer::lint(&warp::parse("2 * 1.5:int")).is_empty(), "typed literals are not ambiguous");
 }

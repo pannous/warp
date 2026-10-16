@@ -75,9 +75,9 @@ const BROADCAST_ITEM: &str = "broadcast_item";
 /// Words that make a parameter the rest parameter: Kotlin `vararg xs: Int`, C# `params int[] xs`
 const REST_MARKERS: [&str; 2] = ["vararg", "params"];
 const MAX_INTEGER_EXPONENT: i64 = 4096;
-/// Literal suffixes of C, Java and C#, a tight conversion: `0.1f`, `0.1d` (double) → float; `0.1l` (long double) → exact, the default anyway
-const LITERAL_SUFFIXES: [(char, &str); 6] =
-	[('f', "float"), ('F', "float"), ('d', "float"), ('D', "float"), ('l', "exact"), ('L', "exact")];
+/// Literal suffixes of C, Java and C#, a tight conversion: `0.1f`, `0.1d` (double) → float; C's `0.1l` (long double) is
+/// the litre unit instead (decision litre-suffix)
+const LITERAL_SUFFIXES: [(char, &str); 4] = [('f', "float"), ('F', "float"), ('d', "float"), ('D', "float")];
 /// Words that may precede the name of a global besides a type word (`int`, `long` … see `analyzer::type_word_kind`)
 pub(crate) const ORDINAL_SUFFIXES: [&str; 4] = ["st", "nd", "rd", "th"];
 
