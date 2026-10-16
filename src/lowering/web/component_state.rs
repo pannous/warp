@@ -585,24 +585,20 @@ impl Component {
 		Node::List(lowered, Bracket::Curly, Separator::Semicolon)
 	}
 
+	/// Each state variable as the `read` code reading it from its list (STATE) at the instance (KEY)
+	fn state_reads(&self, read: &str) -> HashMap<String, Node> {
+		let key = Node::Symbol(self.key.clone());
+		let filled =
+			|list: &String| super::nodes::filled(read, [("STATE", Node::Symbol(list.clone())), ("KEY", key.clone())]);
+		self.state.iter().map(|(variable, _, list)| (variable.clone(), filled(list))).collect()
+	}
+
 	/// The node reading the instance's entries: in a handler the event's instance, elsewhere the render's
 	fn read(&self, node: Node) -> Node {
 		if element_items(&node).is_some() {
 			return self.element(node);
 		}
-		let reads: HashMap<String, Node> = self
-			.state
-			.iter()
-			.map(|(variable, _, list)| {
-				(
-					variable.clone(),
-					super::nodes::filled(
-						READ,
-						vec![("STATE", Node::Symbol(list.clone())), ("KEY", Node::Symbol(self.key.clone()))],
-					),
-				)
-			})
-			.collect();
+		let reads = self.state_reads(READ);
 		match node {
 			Node::Symbol(ref name) => reads.get(name).cloned().unwrap_or(node),
 			other => other.map_children(|child| self.read(child)),
@@ -622,19 +618,7 @@ impl Component {
 			match handler_at(&items, index) {
 				Some((_, body, length)) => {
 					kept.extend(items[index..index + length - 1].iter().cloned());
-					let handled = substitute(
-						&body,
-						&self
-							.state
-							.iter()
-							.map(|(variable, _, list)| {
-								(
-									variable.clone(),
-									super::nodes::filled(HANDLER_READ, vec![("STATE", Node::Symbol(list.clone()))]),
-								)
-							})
-							.collect(),
-					);
+					let handled = substitute(&body, &self.state_reads(HANDLER_READ));
 					// `on click {…}` as a block reads it is `on`, `click: {…}`
 					match items[index + length - 1].drop_meta() {
 						Node::Key(event, Op::Colon, _) if length == 2 => {
