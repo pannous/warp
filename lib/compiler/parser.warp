@@ -227,6 +227,40 @@ def repeated(p) {
 	atom(p)
 }
 
+COUNT_WORDS = [["once", 1], ["twice", 2], ["thrice", 3]]
+
+// `thrice {…}`, `twice "ab"`: the count word and what follows, as `3 times {…}`, else ø; `twice {a: 1}` stays the call
+// Rust twin: control/loops.rs try_parse_count_word
+def count_worded(p) {
+	if p.at > 0 and p.code[p.at - 1] == '.' { return ø }
+	for word in COUNT_WORDS {
+		if keyword_at(p, word#1) {
+			at = p.at + word#1.length
+			while is_at(p.code, at, ' ', p.n) or is_at(p.code, at, '\t', p.n) { at = at + 1 }
+			c = peek(p.code, at, p.n)
+			if c != '{' and c != '[' and c != '"' and c != '\'' { return ø }
+			start = p.at
+			p.at = at
+			body = repeated(p)
+			if counts_pairs(body) {
+				p.at = start
+				return ø
+			}
+			return listed("", " ", [word#2, ["symbol", "times"], body])
+		}
+	}
+	ø
+}
+
+// A block of `key: value` entries only, an object rather than code
+def counts_pairs(node) {
+	if not is_block(node) or node.length < 4 { return false }
+	for entry in node[3:] {
+		if not (entry is list and entry.length > 1 and entry#1 == "key" and entry#2 == ":") { return false }
+	}
+	true
+}
+
 // `7//2`, `x //= 2`, `7 div 2`: the floor division written at the parser's position, else ""; `x // note` is a comment
 // Rust twin: expressions.rs special_infix, scanning.rs at_floor_division
 def floor_division_at(p) {
@@ -403,6 +437,8 @@ def prefixed(p) {
 		}
 	}
 	if keyword_at(p, "for") { return looped(p) }
+	counted = count_worded(p)
+	if counted != ø { return counted }
 	for word in PREFIX_WORDS {
 		if keyword_at(p, word#1) { return word_prefixed(p, word) }
 	}
