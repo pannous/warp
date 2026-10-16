@@ -50,7 +50,7 @@ fn rust_macro(name: &str, arguments: Vec<Node>, written: &str) -> Node {
 		return formatted(arguments);
 	}
 	if name == VEC_MACRO {
-		return Node::List(arguments, Bracket::Square, Separator::Colon);
+		return Node::List(arguments, Bracket::Square, Separator::Comma);
 	}
 	if PRINT_MACROS.contains(&name) {
 		return call(PRINT_WORD, vec![formatted(arguments)]);
@@ -97,7 +97,7 @@ fn formatted(arguments: Vec<Node>) -> Node {
 	let Node::Text(template) = template.drop_meta() else {
 		return call(
 			FORMAT_MACRO,
-			vec![template.clone(), Node::List(arguments.collect(), Bracket::Square, Separator::Colon)],
+			vec![template.clone(), Node::List(arguments.collect(), Bracket::Square, Separator::Comma)],
 		);
 	};
 	let positional: Vec<Node> = arguments.collect();
@@ -105,7 +105,7 @@ fn formatted(arguments: Vec<Node>) -> Node {
 	if values.is_empty() {
 		return Node::Text(template);
 	}
-	call(FORMAT_MACRO, vec![Node::Text(template), Node::List(values, Bracket::Square, Separator::Colon)])
+	call(FORMAT_MACRO, vec![Node::Text(template), Node::List(values, Bracket::Square, Separator::Comma)])
 }
 
 fn placeholders_in_order(template: &str, positional: &[Node]) -> (String, Vec<Node>) {

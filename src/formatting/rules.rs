@@ -55,7 +55,7 @@ const fn rule(name: &'static str, edits: fn(&[String], &[LineScan]) -> Vec<Edit>
 	Rule { name, edits, hash_comments_only: false }
 }
 
-pub(super) const RULES: [Rule; 9] = [
+pub(super) const RULES: [Rule; 10] = [
 	Rule { name: "# comment", edits: hash_comments, hash_comments_only: true },
 	rule("trailing whitespace", trailing_whitespace),
 	rule("blank lines", blank_lines),
