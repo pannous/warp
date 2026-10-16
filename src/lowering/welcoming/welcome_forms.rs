@@ -59,7 +59,7 @@ const BLOCK_REDUCTIONS: [(&str, &str); 2] = [("sum", "map"), ("count", "filter")
 const CPP_AUTO_WORD: &str = "auto";
 /// Other languages' method names for warp's words (the alias rule: they work, with a note naming warp's word): C#'s
 /// LINQ, Ruby's conversions and cases, Kotlin's `xs.sumOf {…}`
-const METHOD_ALIASES: [(&str, &str); 18] = [
+const METHOD_ALIASES: [(&str, &str); 19] = [
 	("Select", "map"),
 	("Where", "filter"),
 	("Aggregate", "reduce"),
@@ -75,6 +75,7 @@ const METHOD_ALIASES: [(&str, &str); 18] = [
 	("to_s", "string"),
 	("to_i", "int"),
 	("to_f", "float"),
+	("to_string", "string"),
 	("upcase", "upper"),
 	("downcase", "lower"),
 	("sumOf", "sum"),
