@@ -120,12 +120,7 @@ fn in_unit(field: &str, unit: &str, written: &Node, value: Node) -> Option<Node>
 	let one_unit = crate::numbers::units::unit_expression(&crate::warp_parser::parse(expression))?;
 	let per_unit = crate::numbers::units::scale(&one_unit, |factor| super::base_unit(factor.unit.dimension));
 	let text = written.serialize().trim().to_string();
-	// a unit binds only after a number (notes/decisions.md): `n * 1 dpi` for a variable or an expression
-	let with_unit = match written.drop_meta() {
-		Node::Number(_) => format!("{text} {unit}"),
-		Node::Symbol(_) => format!("{text} * 1 {unit}"),
-		_ => format!("({text}) * 1 {unit}"),
-	};
+	let with_unit = super::with_unit_written(written, unit);
 	let message = format!("{field} holds {unit}: write the unit, `{with_unit}`");
 	let warning = crate::errors::diagnostic::Diagnostic::at(written, message);
 	crate::errors::diagnostic::say(warning.offer("the field's unit", text, with_unit));
@@ -443,12 +438,15 @@ impl Inference {
 		Some(Ok((Node::List(lowered, Bracket::Round, crate::node::Separator::None), Signature::plain())))
 	}
 
-	/// `D(n inch)`, `D{diagonal: n inch}`: the unit after a variable is read as the next value, as units bind only after
-	/// a number (notes/decisions.md); the error names the way that works
-	fn unit_after_variable(&self, value: &Node, next: Option<&Node>) -> Option<Stop> {
+	/// `D(n inch)`, `D{diagonal: p.n inch}`: the unit after a value not written as a number is read as the next value, as
+	/// units bind only after a number (notes/decisions.md); the error names the way that works
+	fn unit_after_variable(&mut self, value: &Node, next: Option<&Node>) -> Option<Stop> {
 		let unit = next.filter(|unit| self.unit_word(unit).is_some())?;
-		matches!(value.drop_meta(), Node::Symbol(_))
-			.then(|| Stop::Error(format!("DimensionError: {}", super::unit_after_name_advice(value, unit))))
+		match self.is_unbound_amount(value) {
+			Ok(true) => Some(Stop::Error(format!("DimensionError: {}", super::unit_after_name_advice(value, unit)))),
+			Ok(false) => None,
+			Err(stop) => Some(stop),
+		}
 	}
 
 	/// `Run` and the fields of a construction with named fields `Run{distance: 5 km}` of a class with unit fields; the

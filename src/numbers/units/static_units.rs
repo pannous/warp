@@ -732,12 +732,32 @@ struct Inference {
 	started: HashMap<String, String>,
 }
 
-/// The last statement of a program or block
 /// `n km`, `D(n inch)`: units bind only after a number (notes/decisions.md), the way that works
 fn unit_after_name_advice(value: &Node, unit: &Node) -> String {
-	format!("a unit binds only after a number, write {} * 1 {}", value.serialize().trim(), unit.serialize().trim())
+	format!("a unit binds only after a number, write {}", with_unit_written(value, unit.serialize().trim()))
 }
 
+/// `amount` in `unit` as written: `96 dpi` after a number literal, otherwise multiplied by one unit, as units bind only
+/// after a number (decision unit-definitions): `n * 1 dpi`, `p.n * 1 dpi`, `(a + b) * 1 dpi`
+pub(super) fn with_unit_written(amount: &Node, unit: &str) -> String {
+	let text = amount.serialize().trim().to_string();
+	match amount.drop_meta() {
+		_ if is_number_literal(amount) => format!("{text} {unit}"),
+		Node::Key(_, Op::Add | Op::Sub | Op::Mul | Op::Div, _) => format!("({text}) * 1 {unit}"),
+		_ => format!("{text} * 1 {unit}"),
+	}
+}
+
+/// `5`, `(5)`: the amount a unit word binds to
+fn is_number_literal(amount: &Node) -> bool {
+	match amount.drop_meta() {
+		Node::Number(_) => true,
+		Node::List(items, Bracket::Round, _) if items.len() == 1 => is_number_literal(&items[0]),
+		_ => false,
+	}
+}
+
+/// The last statement of a program or block
 fn last_statement(node: &Node) -> Option<&Node> {
 	match node.drop_meta() {
 		Node::List(items, _, Separator::Semicolon | Separator::Newline) => items.last().and_then(last_statement),
@@ -937,7 +957,7 @@ impl Inference {
 				self.infer(list_units::each_in_unit(&list, op, &unit))
 			}
 			Node::Key(amount, Op::Mul, unit) if self.unit_word(&unit).is_some() => {
-				if self.is_plain_scalar_name(&amount)? {
+				if self.is_unbound_amount(&amount)? {
 					return Err(Stop::Error(format!("DimensionError: {}", unit_after_name_advice(&amount, &unit))));
 				}
 				self.amount_in(*amount, self.unit_word(&unit).expect("guarded"))
@@ -1366,20 +1386,20 @@ impl Inference {
 		}
 	}
 
-	/// `40°C`: an amount in a unit as an SI amount, counted from the unit's zero
-	/// `n` of `n km`: a variable holding one plain number, which a unit word after it doesn't bind to (decision
-	/// unit-definitions: units bind only after a number); a list `xs cm` is each element's, a quantity stays one
-	fn is_plain_scalar_name(&mut self, amount: &Node) -> Result<bool, Stop> {
-		let Node::Symbol(name) = amount.drop_meta() else {
-			return Ok(false);
-		};
-		if name.starts_with(list_units::ITEM) || self.plain_list_depth(amount) > 0 {
+	/// `n`, `p.n`, `f(x)`, `(a + b)` before a unit word: one plain number not written as a number, which the unit
+	/// doesn't bind to (decision unit-definitions: units bind only after a number); a list `xs cm` is each element's,
+	/// a quantity stays one
+	pub(super) fn is_unbound_amount(&mut self, amount: &Node) -> Result<bool, Stop> {
+		let written_item = matches!(amount.drop_meta(), Node::Symbol(name) if name.starts_with(list_units::ITEM));
+		let not_a_number = matches!(amount.drop_meta(), Node::Text(_) | Node::Char(_) | Node::Empty);
+		if is_number_literal(amount) || written_item || not_a_number || self.plain_list_depth(amount) > 0 {
 			return Ok(false);
 		}
 		let (_, signature) = self.infer(amount.clone())?;
 		Ok(signature.is_empty() && signature.depth == 0)
 	}
 
+	/// `40°C`: an amount in a unit as an SI amount, counted from the unit's zero
 	fn amount_in(&mut self, amount: Node, unit: &'static Unit) -> Result<(Node, Signature), Stop> {
 		let plain_depth = self.plain_list_depth(&amount);
 		let (amount, given) = self.infer(amount)?;

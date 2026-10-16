@@ -341,7 +341,7 @@ impl Inference {
 		};
 		if let ([amount, unit], Bracket::None, Separator::Space) = (items.as_slice(), &bracket, &separator) {
 			if let Some(unit_word) = self.unit_word(unit).filter(|_| is_amount(amount)) {
-				if self.is_plain_scalar_name(amount)? {
+				if self.is_unbound_amount(amount)? {
 					return Err(Stop::Error(format!("DimensionError: {}", unit_after_name_advice(amount, unit))));
 				}
 				let unit = unit_word;
