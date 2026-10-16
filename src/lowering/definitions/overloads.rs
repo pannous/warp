@@ -449,9 +449,13 @@ pub fn lower_arity_overloads(node: Node) -> Node {
 	let classes: Vec<String> = class_fields.keys().cloned().collect();
 	let node = MethodVariants {
 		arities: &arities,
-		fields: class_fields.into_values().flatten().map(|(field, _)| field).chain(map_keys(&node)).collect(),
-		setter_classes: setter_classes(&node),
+		class_fields: class_fields
+			.into_iter()
+			.map(|(class, fields)| (class, fields.into_iter().map(|(field, _)| field).collect()))
+			.collect(),
+		receiver_classes: receiver_classes(&node),
 		instances: crate::lowering::class_methods::instance_classes(&node, &classes),
+		maps: map_variables(&node),
 	}
 	.rewrite(node);
 	let node = ArityOverloads { arities: arities.clone() }.rewrite(node);
@@ -459,51 +463,62 @@ pub fn lower_arity_overloads(node: Node) -> Node {
 }
 
 /// `p.label`, `p.label(x)` and `p.label = v` of label overloaded by arity: the variant taking the receiver too, label·1,
-/// label·2 (read `label·2(p, x)`, set `p = label·2(p, v)` by library_words), unless a class has a field label
+/// label·2 (read `label·2(p, x)`, set `p = label·2(p, v)` by library_words). The receiver decides (decision
+/// default-methods): its own member, a map's key or a class's field, wins; a variant whose first parameter is a class
+/// (`label(it: Point, v)`) is only for instances of that class
 struct MethodVariants<'a> {
 	arities: &'a HashMap<String, Vec<Arity>>,
-	fields: HashSet<String>,
-	/// setter name → the class its two-parameter variant takes first: `label` of `label(it: Point, v)`
-	setter_classes: HashMap<String, String>,
+	/// class → its fields
+	class_fields: HashMap<String, Vec<String>>,
+	/// (name, parameter count) → the class its first parameter is typed with: `label(it: Point, v)`
+	receiver_classes: HashMap<(String, usize), String>,
 	/// variable → the class of the instance it holds
 	instances: HashMap<String, String>,
+	/// variable → the keys of the map literal it holds: `m = {pick: 1}`
+	maps: HashMap<String, Vec<String>>,
 }
 
 impl MethodVariants<'_> {
-	fn variant(&self, name: &str, arguments: usize) -> Option<String> {
+	/// The class of the instance `receiver` is: a variable holding one or a construction `Point(1, 2)`
+	fn receiver_class(&self, receiver: &Node) -> Option<String> {
+		match receiver.drop_meta() {
+			Node::Symbol(name) => self.instances.get(name).cloned(),
+			Node::List(items, Bracket::Round, _) => {
+				items.first().map(|head| head.drop_meta().name()).filter(|class| self.class_fields.contains_key(class))
+			}
+			_ => None,
+		}
+	}
+
+	/// `m.pick` of `m = {pick: 1}`, `p.name` of a Point with a field name: the receiver's own member
+	fn is_own_member(&self, receiver: &Node, name: &str) -> bool {
+		let map_keys = receiver.drop_meta().symbol_name().and_then(|variable| self.maps.get(variable));
+		let fields = self.receiver_class(receiver).and_then(|class| self.class_fields.get(&class));
+		map_keys.into_iter().chain(fields).any(|members| members.iter().any(|member| member == name))
+	}
+
+	/// The variant of `member` called on `receiver` with `arguments` in all, the receiver counted
+	fn renamed(&self, receiver: &Node, member: &Node, arguments: usize) -> Option<Node> {
+		let name = member.drop_meta().symbol_name()?;
+		if self.is_own_member(receiver, name) {
+			return None;
+		}
 		let fitting: Vec<&Arity> = self.arities.get(name)?.iter().filter(|arity| arity.accepts(arguments)).collect();
-		match fitting.as_slice() {
-			[arity] if !self.fields.contains(name) => Some(arity_variant(name, **arity)),
-			_ => None,
+		let [arity] = fitting.as_slice() else { return None };
+		match self.receiver_classes.get(&(name.to_string(), arity.total)) {
+			Some(class) if self.receiver_class(receiver).as_ref() != Some(class) => None,
+			_ => Some(Node::Symbol(arity_variant(name, **arity))),
 		}
-	}
-
-	fn renamed(&self, member: &Node, arguments: usize) -> Option<Node> {
-		match member.drop_meta() {
-			Node::Symbol(name) => self.variant(name, arguments).map(Node::Symbol),
-			_ => None,
-		}
-	}
-
-	/// `p.label = v` sets through the setter only when p holds an instance of the class the setter takes: a map's
-	/// `m.label = v` stays the map's own field
-	fn setter(&self, receiver: &Node, member: &Node) -> Option<Node> {
-		let class = self.setter_classes.get(&member.drop_meta().name())?;
-		let held = self.instances.get(receiver.drop_meta().symbol_name()?)?;
-		(held == class).then(|| self.renamed(member, 2)).flatten()
 	}
 
 	fn rewrite(&self, node: Node) -> Node {
 		let recurse = |child: Node| self.rewrite(child);
 		match node {
 			Node::Key(target, Op::Assign, value) => match *target {
-				Node::Key(receiver, Op::Dot, member) if self.setter(&receiver, &member).is_some() => {
-					let member = self.setter(&receiver, &member).expect("guarded");
-					key(key(recurse(*receiver), Op::Dot, member), Op::Assign, recurse(*value))
-				}
-				// `m.pick = v` without a setter sets the field itself, no getter call
+				// `p.label = v`: the setter, or the member itself
 				Node::Key(receiver, Op::Dot, member) => {
-					key(key(recurse(*receiver), Op::Dot, *member), Op::Assign, recurse(*value))
+					let member = self.renamed(&receiver, &member, 2).unwrap_or(*member);
+					key(key(recurse(*receiver), Op::Dot, member), Op::Assign, recurse(*value))
 				}
 				target => key(recurse(target), Op::Assign, recurse(*value)),
 			},
@@ -512,12 +527,12 @@ impl MethodVariants<'_> {
 					Node::List(items, Bracket::Round, separator) if !items.is_empty() => {
 						let arguments = items.len();
 						let mut items: Vec<Node> = items.into_iter().map(recurse).collect();
-						if let Some(head) = self.renamed(&items[0], arguments) {
+						if let Some(head) = self.renamed(&receiver, &items[0], arguments) {
 							items[0] = head;
 						}
 						Node::List(items, Bracket::Round, separator)
 					}
-					symbol => self.renamed(&symbol, 1).unwrap_or(*member),
+					symbol => self.renamed(&receiver, &symbol, 1).unwrap_or(*member),
 				};
 				key(recurse(*receiver), Op::Dot, member)
 			}
@@ -526,27 +541,36 @@ impl MethodVariants<'_> {
 	}
 }
 
-/// The keys of the program's map literals, `pick` of `{pick: 1}`: a field like a class's, read and set on the map
-fn map_keys(node: &Node) -> Vec<String> {
-	let mut keys = vec![];
-	node.visit(&mut |part| {
-		if let Node::List(items, Bracket::Curly, _) = part {
-			keys.extend(items.iter().filter_map(|item| match item.drop_meta() {
-				Node::Key(name, Op::Colon, _) => name.drop_meta().symbol_name().map(str::to_string),
-				_ => None,
-			}));
-		}
+/// The keys of a map literal `{pick: 1}`
+fn map_literal_keys(value: &Node) -> Option<Vec<String>> {
+	let Node::List(items, Bracket::Curly, _) = value.drop_meta() else { return None };
+	let keys = items.iter().map(|item| match item.drop_meta() {
+		Node::Key(name, Op::Colon, _) => name.drop_meta().symbol_name().map(str::to_string),
+		_ => None,
 	});
-	keys
+	keys.collect()
 }
 
-/// name → the class the first parameter of its two-parameter definition is typed with: `f(it: P, v) := …`
-fn setter_classes(node: &Node) -> HashMap<String, String> {
+/// variable → the keys of the map literal assigned to it
+fn map_variables(node: &Node) -> HashMap<String, Vec<String>> {
+	let mut maps = HashMap::new();
+	node.visit(&mut |part| {
+		if let Node::Key(variable, Op::Assign, value) = part {
+			if let (Some(variable), Some(keys)) = (variable.drop_meta().symbol_name(), map_literal_keys(value)) {
+				maps.insert(variable.to_string(), keys);
+			}
+		}
+	});
+	maps
+}
+
+/// (name, parameter count) → the class the first parameter of that definition is typed with: `f(it: P, v) := …`
+fn receiver_classes(node: &Node) -> HashMap<(String, usize), String> {
 	let mut classes = HashMap::new();
 	each_definition(node, &mut |definition| {
-		if let [name, receiver, _] = definition.head {
+		if let [name, receiver, ..] = definition.head {
 			if let Node::Key(_, Op::Colon, class) = receiver.drop_meta() {
-				classes.insert(name.name(), class.drop_meta().name());
+				classes.insert((name.name(), definition.head.len() - 1), class.drop_meta().name());
 			}
 		}
 	});

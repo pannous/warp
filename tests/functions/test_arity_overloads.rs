@@ -60,3 +60,12 @@ fn a_map_field_named_like_an_overloaded_function_is_set_on_the_map() {
 	is!("pick(a, b) := b\npick(a) := a\nm = {pick: 1, other: 2}\nm.pick = 5\nm.other", 2);
 	is!("pick(a, b) := b\npick(a) := a\nm = {pick: 1}\nm.pick", 1);
 }
+
+// card point-label (reviewer veto 2): the receiver decides, not the name: a map elsewhere with a key label leaves a
+// class's getter and setter of instances in place
+#[test]
+fn an_unrelated_map_key_leaves_a_class_setter_in_place() {
+	let point = "class Point { x: int; name: text }\nPoint.label := it.name + \"!\"\nPoint.label(v) := it.name = v\n";
+	is!(&format!("{point}cfg = {{label: 3}}\np = Point(1, \"a\")\np.label = \"b\"\np.label"), "b!");
+	is!(&format!("{point}cfg = {{label: 3}}\ncfg.label = 4\ncfg.label"), 4);
+}
