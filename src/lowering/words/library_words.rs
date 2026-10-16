@@ -409,6 +409,7 @@ pub fn lower(node: Node) -> Node {
 	let instances = crate::traits::InstanceTypes::of(&node);
 	let call_results = call_results(&node, &context);
 	let times = crate::time::time_variables(&node);
+	let entry_names = entry_names(&node);
 	Lowering {
 		context,
 		shadowed: RefCell::new(shadowed),
@@ -419,6 +420,7 @@ pub fn lower(node: Node) -> Node {
 		defining: RefCell::new(vec![]),
 		call_results,
 		times,
+		entry_names,
 		temporaries: Counter::default(),
 	}
 	.expand(node)
@@ -560,6 +562,8 @@ struct Lowering {
 	call_results: HashSet<String>,
 	/// Variables holding a time (time::time_variables): `(x + 1 hour).hour` reads the field
 	times: HashSet<String>,
+	/// The keys the program's map literals give entries: only a counting word named so may read an entry (`{size: 9}`)
+	entry_names: HashSet<String>,
 	temporaries: Counter,
 }
 
@@ -947,8 +951,14 @@ impl Lowering {
 		let is_unit =
 			receiver.symbol_name().filter(|unit| !self.shadows(unit)).and_then(crate::analyzer::text_unit).is_some();
 		let may_read_entry = !is_called && !has_arguments && !is_unit;
-		// `info.size` of a map read at run time with an entry size reads the entry, else counts (card map-read)
-		if may_read_entry && crate::analyzer::is_counting_property(name) && self.may_hold_object(receiver) {
+		// `m.size` of a map read at run time with an entry size reads the entry, else counts (card map-read); only where
+		// the program writes such an entry, as the check makes the count no longer known to be an Int (`xs.length - 1`)
+		let is_entry_name = self.entry_names.contains(name);
+		if may_read_entry
+			&& is_entry_name
+			&& crate::analyzer::is_counting_property(name)
+			&& self.may_hold_object(receiver)
+		{
 			// `x.number` stays for the emitter's counter (counting_getter): `number(x)` would cast x
 			let count = key(receiver.clone(), Op::Dot, method.clone());
 			return Some(map_field_or(receiver, name, word_node, count));

@@ -15,6 +15,21 @@ pub(crate) fn map_field_or(receiver: &Node, name: &str, word_node: &Node, otherw
 	if_then_else(key(parens(vec![is_map]), Op::And, has_key), field_lookup(receiver, name, word_node), otherwise)
 }
 
+/// The keys of the map literals in the program: `size` of `{size: 9}`
+pub(super) fn entry_names(node: &Node) -> HashSet<String> {
+	let mut names = HashSet::new();
+	node.visit(&mut |node| {
+		if let Node::List(items, Bracket::Curly, _) = node.drop_meta() {
+			let keys = items.iter().filter_map(|item| match item.drop_meta() {
+				Node::Key(key, Op::Colon, _) => field_name(key),
+				_ => None,
+			});
+			names.extend(keys);
+		}
+	});
+	names
+}
+
 /// An uncalled word without arguments on a value that may be a map reads the map's entry of that name first: a
 /// counting word (`info.size`), or any other word but a map's own (`m.keys`) or one whose list or text result the code
 /// after it types (`it.chars.map(…)`), where a field read would hide that type (cards map-field, map-read)
