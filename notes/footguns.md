@@ -282,7 +282,7 @@ User decision 2026-09-28: exact numbers beyond Q with π, ℯ and square/cube ro
   `while 1 {}` used to fail at compile time (`cannot extract a numeric value from ø`): an empty body `{}` (parsed as ø)
   is now a spinning loop. Tests: test_infinite_loop_runs_out_of_fuel, test_fuel_budget_can_be_raised. The CI test step
   took about as long as before (5m07s, the same as the preceding green runs).
-- Implemented: `Div` effect (src/analyzer/effects.rs). A function has Div if its body has a `while` (unless the condition is literally
+- Implemented: `Div` effect (src/analyzer/effects/mod.rs). A function has Div if its body has a `while` (unless the condition is literally
   false), if it recurses through another function (mutual recursion), or if its self-recursion has no measure: a parameter
   that each recursive call moves by a positive literal toward a literal bound known from its guard (`n<2 ? n : f(n-1)`,
   `n>0 ? f(n-1) : 0`, `n>=10 ? n : f(n+1)`), and that the body never assigns. Div propagates to callers; `f ! Pure` then

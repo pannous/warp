@@ -138,7 +138,7 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
 - libc in the browser (P147, 2026-10-06): host.js `c` calls web/playground/lib/libc.wasm, wasi-libc built by
   lib/build_libc.sh (21 KB, deployed with the page: pages.yml SITE_FILES `lib`), one instance per worker. Its exports
   have the native FFI's types (lib/libc.c wraps strlen, strncmp, strspn, strcspn, atol, labs to 64 bits), so numbers
-  pass through; texts cross by the program's custom section warp.c_calls (src/modules/wasm_modules.rs c_calls: `t` a
+  pass through; texts cross by the program's custom section warp.c_calls (src/modules/wasm_modules/mod.rs c_calls: `t` a
   NUL-terminated text, `l` the length after strcmp's text, `n` a number; result `t` a text): copied into libc.wasm's
   malloc and freed after the call, a char * result read back (NULL is ø). Functions: lib/libc.h; anything else of libc
   throws "c.X is not available in the browser". The hand-written shims of 2026-10-04 are gone.
@@ -155,7 +155,7 @@ web/playground/tests.html in headless Chrome (agent-browser, session warp-browse
 - With every Worker of the pool busy, a task used to run inline in the program's isolate, where a channel's sender can
   never meet its receiver: `ch.send waits forever` (card primer-channel-flake: the primer's channel snippet once in
   ~100 CI runs, when the pool was short; tests/control/test_channels.rs a_sender_queued_behind_busy_tasks_is_received
-  makes it certain with 6 sleeping tasks). Now it is queued, as natively behind the fixed thread pool (src/host/tasks.rs):
+  makes it certain with 6 sleeping tasks). Now it is queued, as natively behind the fixed thread pool (src/host/tasks/mod.rs):
   startQueuedTasks moves queued tasks onto Workers whose tasks are done (released before their record is read) at
   every wait for a task or channel, check point and loop start. Inline remains in a task (its Worker has no pool), in
   a run without Workers, and when the run holds no Worker that could free.

@@ -15,7 +15,7 @@ Draft by functions (warp-64), adapters section by async (warp-f0). Defaults belo
 - **P165 soft keywords.** Module names and module words are soft: a program may name a local variable `text` or a
   parameter `count`; a top-level redefinition of a *prelude* word stays allowed as today (user function wins, e.g.
   `def sum(xs)`), unless the word is in `soft_keywords::SOFT_KEYWORDS`.
-- **Capabilities.** Modules that touch the outside declare it (src/analyzer/effects.rs): file → Wasi/Host, net → Host, os/process
+- **Capabilities.** Modules that touch the outside declare it (src/analyzer/effects/mod.rs): file → Wasi/Host, net → Host, os/process
   → Process. `eval_untrusted` gets math, text, list, map, json, random-with-seed only.
 
 ## 2. Module layout

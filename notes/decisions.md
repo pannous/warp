@@ -213,7 +213,7 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - Vendoring is deactivated for now, kept for a later offline agent (P8); the cdylib is built only by
   web/playground/build.sh (P7).
 - warp-ast.wit lives at samples/wit/warp-ast.wit (2026-10-09). scripts/own-warp.sh stays while callers use it.
-- Bee/wasp entity names go into uniscript and are regenerated into src/uniscript_entities.tsv, never by hand.
+- Bee/wasp entity names go into uniscript and are regenerated into src/text/uniscript_entities.tsv, never by hand.
 - libm FFI: header-driven linking first, the LIBM_UNARY/LIBM_BINARY table only as fallback and as deliberate
   examples of hand-linked FFI (P13).
 

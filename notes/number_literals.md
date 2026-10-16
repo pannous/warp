@@ -96,7 +96,7 @@ the declared type).
 ## Repeating decimals (card repeating-decimals)
 
 `0.3̅` (U+0305 COMBINING OVERLINE after each period digit) is the exact ratio 1/3: parser
-`repeating_decimal_literal` (src/warp_parser/literals.rs) → `Number::repeating_decimal` (n = integer·fixed·period −
+`repeating_decimal_literal` (src/warp_parser/literals/mod.rs) → `Number::repeating_decimal` (n = integer·fixed·period −
 integer·fixed, d = 10^|fixed| · (10^|period| − 1)). No parentheses form `0.(3)` (user decision, notes/decisions.md):
 `0.5(3)` stays juxtaposition, 1.5. A plain digit after an overlined one (`0.3̅4`) is an error ("Unexpected character").
 `x as decimal` is a Text (wasm runtime `decimal_text`, src/wasm_emitter/numbers/exact.rs): the period found as the order of 10
