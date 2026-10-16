@@ -25,12 +25,12 @@ impl LineScan {
 	}
 
 	/// the line starts inside a text or a block comment
-	pub fn starts_in_text(&self) -> bool {
+	pub fn starts_in_text_or_comment(&self) -> bool {
 		self.starts_inside != Inside::Code
 	}
 
 	/// the line ends inside a text or a block comment
-	pub fn ends_in_text(&self) -> bool {
+	pub fn ends_in_text_or_comment(&self) -> bool {
 		self.ends_inside != Inside::Code
 	}
 }
@@ -157,4 +157,14 @@ pub(super) fn code_text(line: &str, scan: &LineScan) -> String {
 		text.push_str(blank_text);
 	}
 	text.trim().to_string()
+}
+
+/// For each character of `code`, whether it is warp code: outside texts and comments
+pub(crate) fn code_characters(code: &str) -> Vec<bool> {
+	let lines: Vec<String> = code.split('\n').map(str::to_string).collect();
+	lines
+		.iter()
+		.zip(scan(&lines))
+		.flat_map(|(line, scan)| line.char_indices().map(move |(at, _)| scan.is_code(at)).chain([false]))
+		.collect()
 }

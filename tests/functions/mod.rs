@@ -95,6 +95,7 @@ mod test_ignored_parameters;
 mod test_infix_iteration; // cards infix-map, map-dot
 mod test_inlining;
 mod test_it_arguments; // card map-it
+mod test_it_reserved; // card it-reserved
 mod test_kebab_members;
 mod test_kind_tested_parameter; // card function-whose
 mod test_lambda_global;
@@ -110,6 +111,7 @@ mod test_library_word_assigned; // card floor-says
 mod test_library_word_values;
 mod test_list_conversion;
 mod test_list_fields; // card people-map
+mod test_list_word; // card sum-list
 mod test_map_function_first; // card map-function
 mod test_map_library_word_first; // cards map-library-first, map-library-word
 mod test_map_list_fields; // card field-list
