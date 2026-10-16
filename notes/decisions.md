@@ -771,10 +771,14 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   ⇔ ⟺ ↔ ⇑ ⇓ get no built-in meaning for now; an example defines one, e.g.
   `infix operator ⇔(a: bool, b: bool) := a == b`.
 - ready-queue (2026-10-16, user via the boss and the supervisor): the board's Ready column is the merge queue. A
-  worker hands off a finished branch with `todo ready <card> [branch]` (tip read from git) after merging origin/main
-  into it, re-running its targeted tests and pushing; `todo ready` refuses a tip behind origin/main (`--force` for
-  carrier branches). The Integrator merges only Ready cards; unmerged branches without a card are only reported
-  (`todo ready --stray`).
+  worker pushes a finished branch, makes sure it merges cleanly into origin/main, and hands it off with
+  `todo ready <card> [branch]` (tip read from git); no re-test is required after a clean rebase. `todo ready` refuses
+  a branch only when it doesn't merge cleanly into current origin/main (`git merge-tree --write-tree origin/main
+  <tip>`); being behind is fine, and `--force` covers carrier branches. Reason: a rebase goes stale as main moves,
+  workers can't see each other's unmerged branches, and the gate re-runs the suite anyway. The Integrator merges only
+  Ready cards and resolves trivial conflicts itself (formatting drift, adjacent edits). Semantic conflicts go back to
+  the owner with `todo move <card> Now` plus a `todo note` holding the conflicting hunk. Unmerged branches without a
+  card are only reported (`todo ready --stray`).
 - text-unit-plurals (2026-10-16, user; card text-unit): every plural unit word of a text is the list:
   `"👍🏽".chars` → ['👍🏽'], `.codepoints` → ['👍' '🏽'], `.graphemes`, `.bytes` → [240 159 …], like words and lines.
   Counting is `count t.codepoints` or `number of bytes in t`. Code reading `t.codepoints` as a number migrates to
