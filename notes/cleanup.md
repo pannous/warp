@@ -530,7 +530,7 @@ way; `func add<T>(_ a: T, …)` relied on it, so the new walk keeps that unwrap 
 - Dead scan (probes/cleanup/dead_scan.py, now keeping glob re-exports and those naming items used outside, which made
   97 false hits under src/law and the CLI's users): across default, all-features and wasm32 only the kept items of
   the first pass are left (gc_traits reading API, last_item, set_hint_file) plus `Exact::standard_part`
-  (src/extensions/reals.rs, hyperreal st(): told warp-media-cleanup). Two re-exports nothing read went.
+  (src/extensions/reals.rs; removed on branch final-media). Two re-exports nothing read went.
 - Probes: the code-cleanup tools live in probes/cleanup/ (dead_scan, similar_names, duplicate_constants,
   drop_function, call_to_method, move_module_joins); the shared-checkout hunk selector and the early Lean probes
   went; the reusable checks nobody listed are in notes/probes_layout.md. Still unreferenced by notes, tests, probes
