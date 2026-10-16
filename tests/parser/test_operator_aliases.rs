@@ -38,3 +38,15 @@ fn lib_math_with_its_alias_lines_still_loads() {
 	is!("use math; 2 × square 3", 18);
 	is!("include math; 2 × square 3", 18);
 }
+
+/// card user-listed: the arrows that spell ->, =>, <-, ↑ and ↓, the rest of the listed arrows stay unread
+#[test]
+fn arrow_glyphs_spell_the_arrow_operators() {
+	is!("f = x → x*2; f(3)", 6);
+	is!("f = x ⇒ x*2; f(3)", 6);
+	is!("x ← 3; x+1", 4);
+	is!("2 ⬆ 3", 8);
+	is!("8 ⬇ 2", 3);
+	assert_eq!(spelled_operator("⟶"), Some(Op::Arrow));
+	assert_eq!(spelled_operator("↯"), None);
+}

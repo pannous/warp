@@ -24,6 +24,27 @@ operator ⊻ := xor
 operator ± := +-
 prefix operator √ := sqrt
 prefix operator ∛ := cbrt
+// The arrows of src/operators/spellings.rs's list that spell an operator (card user-listed); the rest stay unread
+operator → := ->
+operator ⟶ := ->
+operator ➔ := ->
+operator ➜ := ->
+operator ➝ := ->
+operator ➞ := ->
+operator ➡ := ->
+operator ⭢ := ->
+operator ⇒ := =>
+operator ⟹ := =>
+operator ← := <-
+operator ⟵ := <-
+operator ⬅ := <-
+operator ⭠ := <-
+operator ⬆ := ↑
+operator ⇧ := ↑
+operator ⭡ := ↑
+operator ⬇ := ↓
+operator ⇩ := ↓
+operator ⭣ := ↓
 
 // The math words warp computes itself, with their signatures (decision foreign-signature, `from warp`): exact on
 // exact values where they can be, so floor gives an int where C's floor gives a float
