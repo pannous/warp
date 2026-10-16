@@ -376,6 +376,13 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   `A as B := body` definitions. The compile-time dimension check (static_units.rs, P64) stays Rust until types can
   be parameterized by a dimension. Not Julia's unit values (`3km = 3*km`): they would bring back clashes with
   variables named m or s.
+- litre-suffix (2026-10-16, user; card list-literal): a glued unit beats a number suffix, so `2L` and `2l` are
+  2 litres (`2L in cm³` → 2000cm³). The old exact suffix L goes: exactness is `2 as exact`, with a hint where the
+  suffix was meant. lib/units.warp gains `unit l := L` and `unit ha := hm²`. Ambiguous glued units need
+  `use units` (user): unambiguous units (`3kg`, `5cm`, km/h) keep working without the import. Glued letters that
+  also mean something else, such as L and l (the old suffix) or a unit named like a variable, are an error without
+  `use units`, with a fix that adds the line: "2L: L is the litre unit here; add `use units` (for an exact number
+  write 2 as exact)".
 - unit-after-number (2026-10-16, user; card variable-named-like): after a number a unit symbol is always the unit,
   even with a variable of that name in scope: `m = 5; 3m` is 3m (meters), with a hint "a variable m exists; write
   3*m to multiply"; `m * 3` is 15. Supersedes the agent-pinned test_variable_shadows_the_unit (`3m` → 15).

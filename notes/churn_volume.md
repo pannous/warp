@@ -15,8 +15,8 @@ They differ in when they may be wiped (`diskutil apfs deleteVolume <disk>`, then
 Old worktrees (/Users/me/dev/angles/warp.worktrees.noindex) stay on the Data volume until retired; NEW worktrees go
 straight to /Volumes/Worktrees/<name> (disk3s9, user 2026-10-16, card new-worktrees): no_log, Spotlight off, Time Machine
 excluded for the whole volume (user: work is pushed per step), no .noindex subfolder. Never wiped. cowtree needs a
-registered donor worktree on that volume, named after the project: /Volumes/Worktrees/warp, detached at origin/main,
-never removed (scripts/prune-worktrees.sh keeps it on origin/main).
+registered donor worktree on that volume, one per project named after it: /Volumes/Worktrees/warp, detached at origin/main
+(the volume may hold other projects later), never removed (scripts/prune-worktrees.sh keeps it on origin/main).
 data/ (kept logs and results) stays in the repo.
 
 ## Status
@@ -36,3 +36,5 @@ the tests' own_copy into target tmp/) stay inside the target dir, so they keep w
 Data or Junk (scripts/own-warp.sh → scratch/warp) is a real copy of ~225 MB.
 - [ ] scripts/prune-cargo-target.sh: offer a full Build wipe when the target grows past its limit and the queue is empty
 - [ ] check that editors still get live file-change events there (no_log should only stop the on-disk log)
+
+General guide (setup commands, copy-on-write rules, reuse for other projects): ~/dev/bin/notes/apfs-churn-volumes.md
