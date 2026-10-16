@@ -9,7 +9,7 @@ pub(crate) const QUANTITY: &str = "quantity";
 pub(crate) const ROUTE_PARTS: [&str; 3] = ["route_segment", "route_parameter", "route_matches"];
 /// lib/agent.warp: `agent "prompt"` asks Claude (card g_X_F0)
 pub(crate) const AGENT_MODULE: &str = "agent";
-/// lib/fast_math.warp: sin cos exp pow atan2 as wasm polynomials, `use fast_math` or for every program `warp --fast`
+/// lib/fast_math.warp: sin cos exp pow atan2 as wasm polynomials, `use fast_math` or for every program `warp fast <file>`
 pub(crate) const FAST_MODULE: &str = "fast_math";
 /// lib/sound.warp: `play(440Hz, 0.5s)`, `beep` (card basic-sound), loaded when a program calls one of its words
 pub(crate) const SOUND_MODULE: &str = "sound";

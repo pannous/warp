@@ -49,7 +49,7 @@ impl CompileMode {
 	}
 }
 
-/// `warp --fast`: every program of this process compiles as if it began with `use fast_math` (lib/fast_math.warp, card
+/// `warp fast <file>`: every program of this process compiles as if it began with `use fast_math` (lib/fast_math.warp, card
 /// switch-rebinds)
 static FAST_MATH: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 

@@ -1,7 +1,7 @@
 //! Compiled programs cached on disk (card cache-compiled-shader): `warp <file>` keeps the module its program compiles
 //! to, so the next run of the same program skips the compile (1.2 s for samples/gpu_visualizer_warp.warp, whose paint
 //! functions become a shader). The key covers everything the compile reads: warp itself (the binary's size and time),
-//! the source, the program's path, the working directory, the WARP_ settings, `--fast`, and the files of the folders where its
+//! the source, the program's path, the working directory, the WARP_ settings, `warp fast`, and the files of the folders where its
 //! `use`s look (modules::SEARCH_DIRECTORIES below the program's folder and the working directory: names, sizes, times).
 //! A compile that reads beyond them (packages, `use project`, a path, a C library) or says anything (a hint, a warning)
 //! is not kept: its next run compiles and says it again. Kept next to the compiled machine code (module_cache.rs),

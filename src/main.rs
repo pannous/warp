@@ -430,7 +430,7 @@ fn usage() {
 	println!("  warp repl            Start interactive console");
 	println!("  warp register        Let Finder and `open` run .warp files (macOS)");
 	println!("  --fuel <steps>       Execution budget before 'out of fuel' (env WARP_FUEL)");
-	println!("  --fast               sin cos exp pow atan2 as quick wasm polynomials, as `use fast_math` (errors: lib/fast_math.warp)");
+	println!("  warp fast <file|code> sin cos exp pow atan2 as quick wasm polynomials, as `use fast_math` (errors: lib/fast_math.warp)");
 	println!("  --no-ask             Never prompt \"got it?\" after a warning or note");
 	println!("  --no-hints           Hide hints and notes (prefer ^ over **), shown by default (env WARP_HINTS=0)");
 	println!("  --warnings=<level>   Show diagnostics from hint (default), weak, normal or severe up");

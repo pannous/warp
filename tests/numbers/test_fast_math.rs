@@ -1,4 +1,4 @@
-//! `use fast_math` and `warp --fast` rebind sin cos exp pow atan2 to wasm polynomials (lib/fast_math.warp, card
+//! `use fast_math` and `warp fast <file>` rebind sin cos exp pow atan2 to wasm polynomials (lib/fast_math.warp, card
 //! switch-rebinds); the errors its header states, here at a few points against the C library's digits
 use crate::is;
 
@@ -24,7 +24,7 @@ fn fast_words_reach_the_math_module_and_stay_out_of_other_programs() {
 
 #[cfg(feature = "native")]
 #[test]
-fn the_fast_flag_uses_fast_math_also_for_a_kept_program_file() {
+fn warp_fast_uses_fast_math_also_for_a_kept_program_file() {
 	let folder = crate::common::scratch_directory("fast_flag");
 	std::fs::create_dir_all(&folder).unwrap();
 	let program = folder.join("fast.warp");
@@ -34,5 +34,5 @@ fn the_fast_flag_uses_fast_math_also_for_a_kept_program_file() {
 		String::from_utf8_lossy(&output.stdout).trim().to_string()
 	};
 	assert_eq!(printed(&["--no-ask"]), "0");
-	assert_ne!(printed(&["--no-ask", "--fast"]), "0");
+	assert_ne!(printed(&["fast", "--no-ask"]), "0");
 }
