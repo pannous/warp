@@ -137,6 +137,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - chars-codepoints (2026-10-14, the user's draft `['a','b','c']`): `"abc".chars` is a list of characters (codepoints),
   printing `['a' 'b' 'c']`; a literal `['a' 'b']` keeps its characters; `'a' == "a"` stays yes. A one-character text is a character, so
   `["a" "b"]` prints `['a' 'b']` and `["a" "bc"]` prints `['a' "bc"]`.
+  Amended 2026-10-16 (user, card consists-characters): char is a shortcut for character, and a character is a
+  grapheme (a letter with its marks), not a code point; codepoint is the separate unit. "שָלוֹם" has 4 characters
+  (`s.chars`, `number of characters in s`, `for each char in s`) and 6 code points (`s.codepoints`,
+  `for each codepoint in s`).
 - body-code (2026-10-14, the user's draft "body should be block/code type?"): `type f.body` is `code` for any quoted
   program part (`f.body is code`); printing shows its source; `{x; x+1}` never types as map. No `.kind` member for now
   (parked: a body iterated as a list of statements, each with its kind).
