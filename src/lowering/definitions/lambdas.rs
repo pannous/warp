@@ -14,7 +14,7 @@ use crate::node::{parens, symbol, Bracket, Node, Separator};
 use crate::operators::Op;
 use crate::warp_parser::parse_template;
 use crate::words::{EACH_WORD, IMPLICIT_PARAMETER, ON_WORD, SORT_WORD};
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 const PARTIAL_LIST: &str = "partial_list";
 const LIST_PLACEHOLDER: &str = "loop_list";
@@ -209,23 +209,24 @@ pub fn lower_infix_iterations(program: Node) -> Node {
 }
 
 /// `variables`: the words the program assigns or takes as parameters; any other word before an iteration word is
-/// a function or a module's word, `square all 1 to 5`, and the iteration stays prefix. `labels`: the parameter labels
-/// of its functions, `f(xs, each y)`, which stay labels in a call, `f [1 2 3] each 2`
+/// a function or a module's word, `square all 1 to 5`, and the iteration stays prefix. `labels`: each function's
+/// parameter labels, `f(xs, each y)`, which stay labels in a call of that function, `f [1 2 3] each 2`
 struct ProgramWords {
 	variables: HashSet<String>,
-	labels: HashSet<String>,
+	labels: HashMap<String, HashSet<String>>,
 }
 
-/// `f(ys:list, n, each d) := …`: the parameter names ys, n and d, typed or not, and the labels (each)
-fn definition_parameters(program: &Node) -> (Vec<String>, HashSet<String>) {
-	let (mut names, mut labels) = (Vec::new(), HashSet::new());
+/// `f(ys:list, n, each d) := …`: the parameter names ys, n and d, typed or not, and each function's labels (f: each)
+fn definition_parameters(program: &Node) -> (Vec<String>, HashMap<String, HashSet<String>>) {
+	let (mut names, mut labels) = (Vec::new(), HashMap::<String, HashSet<String>>::new());
 	program.visit(&mut |node| {
 		let Node::Key(head, Op::Define | Op::Assign, _) = node else { return };
 		let Some(Node::List(items, _, _)) = definition_call(head) else { return };
+		let function = crate::node::leading_name(&items[0]);
 		for parameter in &items[1..] {
 			match parameter.drop_meta() {
 				Node::List(words, Bracket::None, _) if words.len() > 1 => {
-					labels.insert(crate::node::leading_name(&words[0]));
+					labels.entry(function.clone()).or_default().insert(crate::node::leading_name(&words[0]));
 					names.push(crate::node::leading_name(&words[words.len() - 1]));
 				}
 				_ => names.push(crate::node::leading_name(parameter)),
@@ -239,13 +240,16 @@ fn infix_iterations(node: Node, words: &ProgramWords) -> Node {
 	let is_list_operand = |node: &Node| {
 		is_list_operand(node) && node.drop_meta().symbol_name().is_none_or(|name| words.variables.contains(name))
 	};
-	let is_label = |node: &Node| words.labels.contains(&crate::node::leading_name(node));
 	match node {
 		// `melody(notes, each duration) := …`: a definition's head names its parameters, `each` a label
 		Node::Key(head, op @ (Op::Define | Op::Assign), body) if definition_call(&head).is_some() => {
 			Node::Key(head, op, Box::new(infix_iterations(*body, words)))
 		}
 		Node::List(items, bracket, separator) if is_phrase(&bracket, &separator) => {
+			// a label of the function this phrase calls
+			let called_labels = items.first().and_then(|head| words.labels.get(&crate::node::leading_name(head)));
+			let is_label =
+				|node: &Node| called_labels.is_some_and(|labels| labels.contains(&crate::node::leading_name(node)));
 			let mut pending: VecDeque<Node> = items.into_iter().map(|item| infix_iterations(item, words)).collect();
 			let mut combined: Vec<Node> = Vec::with_capacity(pending.len());
 			let mut changed = false;
@@ -257,8 +261,8 @@ fn infix_iterations(node: Node, words: &ProgramWords) -> Node {
 					phrase.into_iter().rev().for_each(|word| pending.push_front(word));
 					continue;
 				}
-				let after_list = combined.last().is_some_and(|left| is_list_operand(rightmost_operand(left)))
-					&& !is_label(&item);
+				let after_list =
+					combined.last().is_some_and(|left| is_list_operand(rightmost_operand(left))) && !is_label(&item);
 				// `xs map f`, or `xs (map f)` where the phrase grouped the prefix call first (`ys = xs map f`)
 				let iteration = after_list
 					.then(|| grouped_iteration(&item).or_else(|| bare_iteration(&item, &mut pending)))
