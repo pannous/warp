@@ -61,3 +61,11 @@ fn a_lambda_given_by_name_is_called() {
 		is!(&format!("class Holder {{d}}\nh = Holder(d: x => x + 1)\n{call}"), 6);
 	}
 }
+
+/// card held-lambda: a lambda in a list of entries is called as a map entry's is
+#[test]
+fn a_lambda_in_a_listed_entry_is_called() {
+	for call in ["(xs.d)(5)", "xs.d(5)"] {
+		is!(&format!("xs = [d: x => x + 1]\n{call}"), 6);
+	}
+}
