@@ -3,7 +3,7 @@ use super::*;
 
 /// Every operator by its code in the kind field of a Key node (`(code << 8) | Kind::Key`); the first five are the
 /// codes earlier modules stored, the rest follow, so a quoted expression (`data 1+2`) reads back with its operator
-pub const OP_CODES: [Op; 66] = [
+pub const OP_CODES: [Op; 68] = [
 	Op::None,
 	Op::Colon,
 	Op::Assign,
@@ -70,6 +70,8 @@ pub const OP_CODES: [Op; 66] = [
 	Op::BitOr,
 	Op::ArrowUp,
 	Op::ArrowDown,
+	Op::FloorDiv,
+	Op::FloorDivAssign,
 ];
 
 /// The bits of the operation codes (Op::is_operation), codes 0..64 then 64..128, for a run-time test of a Key's code

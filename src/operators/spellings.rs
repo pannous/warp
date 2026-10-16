@@ -40,9 +40,9 @@ pub const OPERATOR_SPELLINGS: [(&str, Op); 136] = [
 	("÷", Op::Div),
 	("divided by", Op::Div),
 	// Python's floor division `7//2`, `x//=2` and `7 div 2`: the parser makes them floor_quotient calls
-	("//", Op::Div), // todo cleaner? ^^
-	("div", Op::Div),
-	("//=", Op::DivAssign), // todo /= ≠ //=
+	("//", Op::FloorDiv),
+	("div", Op::FloorDiv),
+	("//=", Op::FloorDivAssign),
 	("%", Op::Mod),
 	// `a mod b` is Euclidean (0 ≤ r < |b|), `a rem b` the truncated remainder (sign of the dividend, as C)
 	("mod", Op::Mod), // rest overloaded
@@ -243,6 +243,7 @@ impl Op {
 			Op::In => "in",
 			Op::Mul => "*",
 			Op::Div => "/",
+			Op::FloorDiv => "//",
 			Op::Mod => "%",
 			Op::Rem => "rem",
 			Op::Pow => "^",
@@ -256,6 +257,7 @@ impl Op {
 			Op::SubAssign => "-=",
 			Op::MulAssign => "*=",
 			Op::DivAssign => "/=",
+			Op::FloorDivAssign => "//=",
 			Op::ModAssign => "%=",
 			Op::PowAssign => "^=",
 			Op::AndAssign => "&&=",

@@ -51,28 +51,30 @@ pub enum Op {
 	ArrowDown, // ↓ e.g. logarithmic   log(x)/log(base)
 
 	// Arithmetic operators
-	Add,     // +
-	Sub,     // -
-	Mul,     // *  ×  ⋅
-	Div,     // /  ÷
-	Mod,     // %  mod  Euclidean: 0 ≤ a % b < |b|
-	Rem,     // rem  truncated remainder, sign of the dividend (C, Java, JS, Rust %)
-	Pow,     // ^  **
-	LogBase, // ⌞  b⌞x: log base b of x (P226)
-	LogOf,   // ⌟  x⌟: the natural log of x, x⌟b: log base b of x (P226)
-	Shl,     // <<  shift left: a * 2^n
-	Shr,     // >>  shift right: floor(a / 2^n)
+	Add,      // +
+	Sub,      // -
+	Mul,      // *  ×  ⋅
+	Div,      // /  ÷
+	FloorDiv, // //  div  the Euclidean quotient that goes with %: floor_quotient (warp_parser FLOOR_QUOTIENT)
+	Mod,      // %  mod  Euclidean: 0 ≤ a % b < |b|
+	Rem,      // rem  truncated remainder, sign of the dividend (C, Java, JS, Rust %)
+	Pow,      // ^  **
+	LogBase,  // ⌞  b⌞x: log base b of x (P226)
+	LogOf,    // ⌟  x⌟: the natural log of x, x⌟b: log base b of x (P226)
+	Shl,      // <<  shift left: a * 2^n
+	Shr,      // >>  shift right: floor(a / 2^n)
 
 	// Compound assignment operators (x op= y → x = x op y)
-	AddAssign, // +=
-	SubAssign, // -=
-	MulAssign, // *=
-	DivAssign, // /=
-	ModAssign, // %=
-	PowAssign, // ^=  **=
-	AndAssign, // &&=  and=
-	OrAssign,  // ||=  or=
-	XorAssign, // ^=   xor=
+	AddAssign,      // +=
+	SubAssign,      // -=
+	MulAssign,      // *=
+	DivAssign,      // /=
+	FloorDivAssign, // //=
+	ModAssign,      // %=
+	PowAssign,      // ^=  **=
+	AndAssign,      // &&=  and=
+	OrAssign,       // ||=  or=
+	XorAssign,      // ^=   xor=
 
 	// Comparison operators
 	Lt,           // <
@@ -173,7 +175,7 @@ impl Op {
 
 	/// Check if this is a binary arithmetic operator
 	pub fn is_arithmetic(&self) -> bool {
-		matches!(self, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Mod | Op::Rem | Op::Pow)
+		matches!(self, Op::Add | Op::Sub | Op::Mul | Op::Div | Op::FloorDiv | Op::Mod | Op::Rem | Op::Pow)
 	}
 
 	/// Check if this is a shift operator, defined on exact Ints only
@@ -244,6 +246,7 @@ impl Op {
 				| Op::SubAssign
 				| Op::MulAssign
 				| Op::DivAssign
+				| Op::FloorDivAssign
 				| Op::ModAssign
 				| Op::PowAssign
 				| Op::AndAssign
@@ -264,6 +267,7 @@ impl Op {
 			Op::SubAssign => Op::Sub,
 			Op::MulAssign => Op::Mul,
 			Op::DivAssign => Op::Div,
+			Op::FloorDivAssign => Op::FloorDiv,
 			Op::ModAssign => Op::Mod,
 			Op::PowAssign => Op::Pow,
 			Op::AndAssign => Op::And,

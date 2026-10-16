@@ -27,8 +27,8 @@ pub(crate) fn combined(lhs: Node, op: Op, written: &str, rhs: Node, middle: Opti
 		_ if crate::operators::element_wise_operator(written).is_some() => {
 			Node::List(vec![lhs, Symbol(written.to_string()), rhs], Bracket::None, Separator::Space)
 		}
-		_ if FLOOR_DIVISION_SPELLINGS.contains(&written) => call(FLOOR_QUOTIENT, vec![lhs, rhs]),
-		_ if written == FLOOR_DIVISION_ASSIGNMENT => {
+		_ if op == Op::FloorDiv => call(FLOOR_QUOTIENT, vec![lhs, rhs]),
+		_ if op == Op::FloorDivAssign => {
 			let quotient = call(FLOOR_QUOTIENT, vec![lhs.clone(), rhs]);
 			Node::Key(Box::new(lhs), Op::Assign, Box::new(quotient))
 		}

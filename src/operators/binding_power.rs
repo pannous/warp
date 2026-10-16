@@ -30,7 +30,7 @@ impl Op {
 			Op::LogBase | Op::LogOf => (160, 161),
 
 			// Multiplicative (left-assoc)
-			Op::Mul | Op::Div | Op::Mod | Op::Rem => (150, 151),
+			Op::Mul | Op::Div | Op::FloorDiv | Op::Mod | Op::Rem => (150, 151),
 
 			// Shifts sit between additive and range: 1 << 2 + 3 → 1 << (2+3)
 			Op::Shl | Op::Shr => (135, 136),
@@ -87,6 +87,7 @@ impl Op {
 			| Op::SubAssign
 			| Op::MulAssign
 			| Op::DivAssign
+			| Op::FloorDivAssign
 			| Op::ModAssign
 			| Op::PowAssign
 			| Op::AndAssign
