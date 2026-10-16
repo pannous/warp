@@ -252,6 +252,8 @@ branch's tests there:
 - A run that can't reach its tests (merge conflict, missing tip) pushes a red result naming why, and the test run is
   killed after 40 min, or once no test finished for 15 min (STALL_SECONDS), with the tests that never finished named.
   batch-3's --full run hung 85 min in parser::test_self_parser::the_listed_sources_parse_as_in_rust at 222% CPU; the
-  same test alone on main took 227 s in the cloud (131–150 s on the Mac), so it hangs only inside the full run.
+  same test alone on main took 227 s in the cloud (131–150 s on the Mac), and main's --full passed it (tests 780 s
+  in all): batch-3's content or a one-off. Main's cloud-only reds: package-build-workspace, gpu-visualizer-cpu,
+  sample-never (cards).
   Killing cargo by hand (`pkill cargo`) left the test binary running: the watchdog kills timeout's process group.
 - The one Linux compiler warning (CLIENT unused in src/sound/midi.rs) is fixed on branch midi-client-warning (Ready).
