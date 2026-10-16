@@ -73,3 +73,10 @@ fn decimal_fractions_are_exact_json() {
 	is!("use strict\np = {price: 2.5}\np.json", "{\"price\":2.5}");
 	is!("(-1/8).json", "-0.125");
 }
+
+/// exact_json, what to_json is under `use strict`, called by hand: a fraction without decimal digits is an error
+#[test]
+fn exact_json_refuses_a_lossy_fraction() {
+	is!("use json; exact_json({a: 0.5}, [])", "{\"a\":0.5}");
+	assert!(warp::wasm_emitter::eval("use json; exact_json(1/3, [])").serialize().contains("JSON has no exact 1/3"));
+}
