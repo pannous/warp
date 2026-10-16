@@ -144,6 +144,7 @@ bit_and(a: int, b: int) := (a + b - (a xor b)) / 2
 bit_or(a: int, b: int) := (a + b + (a xor b)) / 2
 // P169/P191: descriptive names; they forward to the C library (use cmath) until warp has its own implementations.
 // The C names still work after `use math`, each with a note naming the word here (modules STD_ALIASES)
+
 square(x) := x * x
 square_root(x) := sqrt(x)
 cube_root(x) := ∛x

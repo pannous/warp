@@ -117,9 +117,12 @@ def show() {
 }
 
 // save canvas as: "painting.png", save(canvas, "painting.png") or save "painting.png" (card save-painting): the canvas
-// as drawn so far as a PNG, natively that file, in the playground a download; the word canvas as save's argument is a
-// Picture (src/lowering/words/saved_words.rs). On the GPU the pixels are there, not here: the host draws them again
+// as drawn so far as a PNG, natively that file, in the playground a download. On the GPU the pixels are there, not
+// here: the host draws them again
 class Picture {}
+// the canvas as drawn so far (decision saved-words): canvas() beside canvas(width, height), so the bare word canvas,
+// its call, is a Picture
+canvas() := Picture()
 save(made: Picture, as file) := save_picture(canvas_pixels, canvas_width, canvas_height, file)
 save(file: text) := save(Picture(), file)
 

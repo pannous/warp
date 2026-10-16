@@ -1,0 +1,4 @@
+class Holder {d}
+h = Holder(x => x + 1)
+print h.d(5)
+print (h.d)(5)

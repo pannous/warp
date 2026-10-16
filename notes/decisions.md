@@ -396,7 +396,8 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - duration-units (2026-10-16 night, Interviewer's proposal, kept by the user 2026-10-16; card
   time-module): the time module's durations and the unit h become one thing, as dimensions-units already makes
   duration the time dimension: `unit hour := 1 h`, `2 hour + 1 h` is 3 hours (today a DimensionError), printing
-  keeps the long names ("3 hours"). The `name` form then goes.
+  keeps the long names ("3 hours"). Amended 2026-10-16 (user, "leave as is"): the `name` form stays (`name hour := h`,
+  `2 h in minutes` → 120min); step 1, where `1 h` beside a duration is a duration, is enough.
 
 ## Text
 - letters (2026-10-15 evening, Interviewer's proposal, kept by the user 2026-10-16; card of-in-chain,
@@ -767,6 +768,10 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   default branch; a pin is `{repository: pannous/uniscript, version: 1.0.7}`.
 
 ## CLI, building and tests
+- gate-cuts (2026-10-16, user via the Integrator; notes/test_speed.md): each sample runs once in the gate:
+  test_playground_samples checks the playground menu (no error at all), test_samples_run_cleanly only the samples
+  outside it (no compiler error). The self-hosting twins check every 4th source in the gate and all sources in the
+  nightly run (tests/nightly.sh, cron 03:10 on origin/main; a failure files a card).
 - cli-words (2026-10-15, user): warp's own command options are words, never `--flags` ("we don't like this minus
   minus style, ever"), e.g. `warp format check …`, `warp format hash-comments …`; the style guide says so. Card
   cli-words migrates the existing --fuel/--exe/--strict/… (older `--x` mentions below are superseded by it).
@@ -783,6 +788,32 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   a list word, so an object or class with its own member `first` (`p = {first: 1}; p.first` → 1) or a class method
   `first` is the more specific match and wins. Redefining a library word for its own type (an extension changing
   `first` for lists) is not allowed, a loud error. No extra override keyword is needed for that.
+- dispatch-untyped-library-words (2026-10-16, user; card one-dispatch): an untyped program function named like a
+  library word (`first(x) := x * 2`) covers every value the library word doesn't: the library's `first(list)` is
+  more specific, so `first(3)` → 6 but `first([1,2])` → 1, with a hint that first of a list stays the library word.
+- round-halves (2026-10-16, user; card round-half-up): `round` rounds halves away from zero (`round(2.5)` → 3,
+  `round(-2.5)` → -3), like school rounding, C and Rust; banker's rounding is `round_even` (2). Where the compiler
+  sees an exact half (a literal or folded constant), a hint says Python would round to even. Unicode spellings
+  (Interviewer's default, from the user's idea): `⌊x⌋` floor, `⌈x⌉` ceil, `⌊x⌉` round (the usual nearest-integer
+  bracket). `x as int` truncates toward zero (`2.7` → 2, `-2.7` → -2), so it rounds down only for positive numbers.
+- class-members-free (2026-10-16, user; card one-dispatch; limits default-methods and library-words-typed):
+  width, height and every other built-in or library word are not keywords. A class field or method gets its own
+  dispatch signature, with that class as the receiver, so it never conflicts with them: `class Box{width:int,
+  height:int}`, `class P{count:int}` and a method `first()` in a class are all fine, and a local variable may shadow
+  one (`width = 5`). The "immutable" and "loud error" rules only forbid redefining a library word for the library's
+  own types (list, text, number…), never members of user classes.
+- library-words-typed (2026-10-16, user; cards library-typed, one-dispatch): harden the library. Every library word
+  gets a full type signature (`square(x: number): number`, `count(xs: list): int`), and typed library words are
+  immutable for their types until further notice. A program's untyped definition covers only other values, with a
+  hint: `count(x) := 7; count([1,2])` → 2, `square(x) := 777; square(4)` → 16, `floor(x) := x+10; floor(2.5)` → 2.
+  This extends dispatch-untyped-library-words from collection words to all library words.
+- type-words-reserved (2026-10-16, user; card one-dispatch): every type word is reserved as a function name,
+  `double(x) := …` and `hex(x) := …` alike; the error offers "name it to_double".
+- field-forms (2026-10-16, user; card one-dispatch): plain fields keep only `.` and `of` (read, and set with
+  `b.w = 5` / `w of b = 5`); `w(b)`, `b.w(5)` and `w(b, 5)` stay errors for a plain field. Only properties (accessor
+  definitions) answer every call form.
+- is-union (2026-10-16, implied by union-return; card int-text): after `is`, `int or text` is a type, so
+  `v is int or text` means `v is (int or text)`.
 - fuel-metering (2026-10-16, user; card fuel-metering): runaway loops are stopped by the epoch timer with a time
   limit by default (about 1–5% overhead, stops at a slightly different step each run). Fuel, the exact step budget
   that cost 4.4× on calls (40M calls: 218 ms against 49 ms), runs only on request: `use fuel`, the CLI word
