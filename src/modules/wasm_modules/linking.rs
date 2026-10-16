@@ -65,9 +65,7 @@ pub(crate) fn call_c(
 	results: &mut [wasmtime::Val],
 ) -> wasmtime::Result<()> {
 	let name = export.signature.name;
-	let program_memory = caller
-		.get_export("memory")
-		.and_then(|memory| memory.into_memory())
+	let program_memory = crate::host::exported_memory(caller)
 		.ok_or_else(|| wasmtime::format_err!("{name}: the program has no memory for its text"))?;
 	let memory = instance
 		.get_memory(&mut *caller, "memory")

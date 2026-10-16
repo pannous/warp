@@ -6,7 +6,7 @@
 //! The task's instance starts with the spawning instance's capture globals: what its closures captured and the
 //! program's globals (`capture·global·<name>`, card task-sound), as they are at the spawn.
 
-use crate::host::{HostNode, TASK_WORDS};
+use crate::host::{exported_memory, HostNode, TASK_WORDS};
 use crate::host::{
 	HostState, HOST_LIBRARY, TASK_AWAIT_VALUE, TASK_CONTROL, TASK_FAILURE, TASK_JOIN, TASK_PAUSE, TASK_SPAWN_VALUES,
 	TASK_STATUS, TASK_STOP, TEXT_HEAP_EXPORT,
@@ -628,10 +628,7 @@ pub(crate) fn failure_message(failure: anyhow::Error) -> String {
 
 /// The zero-terminated text at `pointer` in the caller's memory: the function name
 pub(crate) fn c_string(caller: &mut Caller<'_, HostState>, pointer: i32) -> Result<String> {
-	let memory = caller
-		.get_export("memory")
-		.and_then(|export| export.into_memory())
-		.ok_or_else(|| anyhow!("no memory export"))?;
+	let memory = exported_memory(caller).ok_or_else(|| anyhow!("no memory export"))?;
 	let bytes = memory.data(&*caller);
 	let start = pointer as usize;
 	let end = bytes[start..].iter().position(|byte| *byte == 0).map_or(bytes.len(), |length| start + length);
@@ -656,10 +653,7 @@ fn split_threads() -> usize {
 }
 
 fn caller_memory(caller: &mut Caller<'_, HostState>) -> Result<Memory> {
-	match caller.get_export("memory") {
-		Some(wasmtime::Extern::Memory(memory)) => Ok(memory),
-		_ => Err(anyhow!("no exported memory")),
-	}
+	exported_memory(caller).ok_or_else(|| anyhow!("no exported memory"))
 }
 
 /// The count in the header of the linear array at `block`

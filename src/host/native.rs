@@ -154,6 +154,11 @@ pub fn write_bytes(
 
 pub use warp_runtime::gc_values::{write_at, write_to_heap};
 
+/// The calling module's linear memory, if it exports one (host words, tasks and foreign calls read texts out of it)
+pub(crate) fn exported_memory<T>(caller: &mut Caller<'_, T>) -> Option<Memory> {
+	caller.get_export(crate::wasm_emitter::MEMORY_ENTITY)?.into_memory()
+}
+
 /// The file at the path in WASM memory, written back like a fetched body: (ptr, len), or (ptr, -len) of the failure reason
 fn read_into_memory(caller: &mut Caller<'_, HostState>, path_ptr: i32, path_len: i32) -> (i32, i32) {
 	answer_for_text(caller, (path_ptr, path_len), "read", "path", |path| {
@@ -170,7 +175,7 @@ fn answer_for_text(
 	argument: &str,
 	answer: impl FnOnce(&str) -> Result<Vec<u8>, String>,
 ) -> (i32, i32) {
-	let Some(Extern::Memory(memory)) = caller.get_export("memory") else {
+	let Some(memory) = exported_memory(caller) else {
 		trace!("host.{word}: no memory export");
 		return (0, 0);
 	};
@@ -313,7 +318,7 @@ fn link_library_words(linker: &mut Linker<HostState>) -> Result<()> {
 }
 
 fn warn(mut caller: Caller<'_, HostState>, message_ptr: i32, message_len: i32) {
-	if let Some(Extern::Memory(memory)) = caller.get_export("memory") {
+	if let Some(memory) = exported_memory(&mut caller) {
 		match read_string_from_memory(&memory, &caller, message_ptr as u32, message_len as u32) {
 			Ok(message) => crate::errors::diagnostic::report_runtime_warning(&message),
 			Err(e) => trace!("host.warn: unreadable message: {e}"),
@@ -323,7 +328,7 @@ fn warn(mut caller: Caller<'_, HostState>, message_ptr: i32, message_len: i32) {
 
 /// host.run: the wasm bytes in memory run as a module of their own, its main's i64 (-1 when it fails)
 fn run_wasm_bytes(mut caller: Caller<'_, HostState>, wasm_ptr: i32, wasm_len: i32) -> i64 {
-	let Some(Extern::Memory(memory)) = caller.get_export("memory") else {
+	let Some(memory) = exported_memory(&mut caller) else {
 		trace!("host.run: no memory export");
 		return -1;
 	};
@@ -837,9 +842,7 @@ fn calling_back<T>(
 
 /// The node a host word was given, read out of the caller's instance
 fn given_node(caller: &mut Caller<'_, HostState>, value: HostNode) -> wasmtime::Result<Node> {
-	let Some(Extern::Memory(memory)) = caller.get_export("memory") else {
-		return Err(wasmtime::Error::msg("the module exports no memory"));
-	};
+	let memory = exported_memory(caller).ok_or_else(|| wasmtime::Error::msg("the module exports no memory"))?;
 	Ok(crate::run::wasm_reader::node_in(&Val::AnyRef(value), &mut caller.as_context_mut(), memory))
 }
 

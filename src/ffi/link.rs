@@ -176,8 +176,7 @@ fn link_libc_functions(linker: &mut Linker<FfiState>) -> Result<()> {
 
 /// The module's linear memory, if it exports one
 fn memory_bytes<'caller>(caller: &'caller mut wasmtime::Caller<'_, FfiState>) -> Option<&'caller [u8]> {
-	let memory = caller.get_export("memory")?.into_memory()?;
-	Some(memory.data(caller))
+	Some(crate::host::exported_memory(caller)?.data(caller))
 }
 
 /// `parse` (atoi, atol, atof) of the null-terminated string the pointer `ptr` names, none outside the memory
@@ -640,7 +639,7 @@ pub(crate) fn text_node(caller: &mut wasmtime::Caller<'_, FfiState>, bytes: Opti
 
 /// Get pointer into WASM linear memory
 fn get_memory_ptr(caller: &mut wasmtime::Caller<'_, FfiState>, offset: usize) -> *const u8 {
-	if let Some(memory) = caller.get_export("memory").and_then(|e| e.into_memory()) {
+	if let Some(memory) = crate::host::exported_memory(caller) {
 		unsafe { memory.data_ptr(&caller).add(offset) }
 	} else {
 		std::ptr::null()
