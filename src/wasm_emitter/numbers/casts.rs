@@ -654,7 +654,6 @@ impl WasmGcEmitter {
 		}
 	}
 
-	/// Emit the numeric value of a node onto the stack (as i64)
 	/// `print x`, `puti x`: an output builtin (not shadowed by a user function), whose value is the printed node
 	pub(in crate::wasm_emitter) fn is_output_call(&self, node: &Node) -> bool {
 		crate::analyzer::is_output_call(node)

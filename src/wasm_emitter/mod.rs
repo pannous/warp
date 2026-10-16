@@ -451,14 +451,15 @@ impl WasmGcEmitter {
 		self.next_func_idx = self.import_manager.import_count();
 		self.emit_gc_types();
 		// the declared types' structs come after the GC types, before the functions
-		self.emit_struct_types(&self.ctx.type_registry.types().to_vec());
+		let declared_types = self.ctx.type_registry.types().to_vec();
+		self.emit_struct_types(&declared_types);
 		self.emit_instance_types();
 		if self.config.emit_kind_globals {
 			self.emit_kind_globals();
 		}
 		self.emit_constructors();
-		for type_def in self.ctx.type_registry.types().to_vec() {
-			self.emit_user_type_constructor(&type_def);
+		for type_def in &declared_types {
+			self.emit_user_type_constructor(type_def);
 		}
 	}
 

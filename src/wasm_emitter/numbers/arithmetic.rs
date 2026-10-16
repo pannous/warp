@@ -678,7 +678,6 @@ impl WasmGcEmitter {
 		Self::emit_list(func, &[I::F64Mul, I::F64Sub]);
 	}
 
-	/// base ^ exponent through libm's pow; a NaN (negative base with a fractional exponent) traps as invalid_number
 	/// Call a libm function (`m.pow`), imported once the emitter has found it is needed: false while it is not yet
 	pub(in crate::wasm_emitter) fn emit_libm_call(&mut self, func: &mut Function, key: &'static str) -> bool {
 		let Some(index) = self.ffi_func_index(key) else {
@@ -722,6 +721,7 @@ impl WasmGcEmitter {
 		}
 	}
 
+	/// base ^ exponent through libm's pow; a NaN (negative base with a fractional exponent) traps as invalid_number
 	pub(in crate::wasm_emitter) fn emit_float_power(&mut self, func: &mut Function) {
 		if !self.emit_libm_call(func, LIBM_POW) {
 			return;
