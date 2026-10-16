@@ -1,0 +1,4 @@
+sq(x:int) := x*x
+print sq 2 == 4 and sq 3 == 9
+print sq 2 == 4 and sq 3 == 8
+print 2 == 2 and print "x"
