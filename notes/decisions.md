@@ -353,7 +353,9 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
   display.dpi, display.ppi; `unit ppi := dpi`, `unit dot := px`); display.size is width × height in px (alias
   display.dimensions, with a hint that "dimension" is ambiguous); display.diagonal in inch/cm (density derivable from
   it when the host reports none); display.resolution is an ambiguous alias with the hint "resolution: density (dpi)
-  or size (px)?". Library lines only, through the common alias machinery.
+  or size (px)?". Library lines only, through the common alias machinery. Default (use-reflection, undoable):
+  display.resolution reads display.size, the hint adding "size is width × height", since a screen's "resolution"
+  usually names its pixel size.
 - unit-target (2026-10-15 night, user, told to use-reflection): a unit line may name its target the way a function
   names its return type: `unit °C as K := it + 273.15`, `unit °F as K := (it + 459.67) * 5/9`; the right side is
   then a plain amount, `it` the amount in the new unit. `(it + 273.15) K` stays accepted.
