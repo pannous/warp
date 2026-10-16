@@ -632,6 +632,15 @@ Numbering: P = interview questions, D = wiki-survey questions (notes/wiki_featur
 - #39 `==` never chains: `a<b<c` chains, `1<2==2` is `(1<2)==2`.
 
 ## Classes, objects and enums
+- property-accessors (2026-10-16 night, Interviewer's decision on the user's behalf, to present; undoable; cards
+  property-get, graphics-properties): a field declares its getter and setter side by side, as wiki/property.md
+  plans: `width: get{canvas_width} set{canvas(it, canvas_height)}`, `it` the written value. A field with get{} and
+  no set{} is read-only: `display.width = 5` is a loud error. lib/draw.warp replaces the Rust table this way.
+- saved-words (2026-10-16 night, Interviewer's decision on the user's behalf, to present; undoable; card
+  graphics-saved-words): no save-only table and no symbol overload. The general bare-call rule (random-forms: a
+  function word used as a value is its call) covers it: lib/draw.warp declares `canvas()` with no arguments as the
+  current Picture beside `canvas(width, height)`, so `save canvas as: "painting.png"` passes a Picture; the sound
+  module likewise (`sound()` the current Recording).
 - P115 bare field names read the receiver (`self`/`this` too). P116 `c.inc()` updates c. P117 a body definition
   without parentheses is a getter; `class b extends a` inherits.
 - P122 static members need `static`; plain `pi = 3` is a per-instance default.

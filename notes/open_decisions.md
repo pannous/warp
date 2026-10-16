@@ -20,6 +20,8 @@ Present each in the morning popup batch (keep / change), then move it to decisio
 - dimension-bridges (px ↔ length through display.dpi): see decisions.md dimensions-units.
 - letters: see decisions.md (Text).
 - json-exactness (big ints exact digits, fractions float + warning): see decisions.md (Text).
+- property-accessors (`width: get{…} set{…}`, no set = read-only): see decisions.md (Classes).
+- saved-words (bare `canvas` = `canvas()` the current Picture, no save table): see decisions.md (Classes).
 - duration-units (durations and unit h unify, `2 hour + 1 h` works): see decisions.md (unit lines).
 - range-in-brackets (`[1..3]` spreads to [1 2], `[(1..3)]` keeps one range): see decisions.md (Ranges).
 - fail-effect (raises, maybe-zero division, library Errors; not indexing/casts): see decisions.md (Classes… P230).
