@@ -709,8 +709,9 @@ impl FunctionValues {
 		let positional = arguments.iter().all(|argument| !matches!(argument.drop_meta(), Node::Key(_, Op::Colon, _)));
 		match positional {
 			true => Some(fields.iter().map(|(field, _)| field.clone()).zip(arguments.iter().cloned()).collect()),
+			// named arguments are the object's entries, also one alone: `Holder(d: x => x + 1)`
 			false => {
-				crate::library_words::object_entries(&Node::List(arguments.to_vec(), Bracket::Round, Separator::None))
+				crate::library_words::object_entries(&Node::List(arguments.to_vec(), Bracket::Curly, Separator::None))
 			}
 		}
 	}

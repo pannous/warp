@@ -53,3 +53,11 @@ fn a_field_named_like_a_library_method_keeps_the_method() {
 	is!("class Box {join}\nb = Box(x => x + 1)\n[1, 2].join(\"-\")", "1-2");
 	is!("class Box {join}\nb = Box(x => x + 1)\nb.join(5)", 6);
 }
+
+/// card holder-says with untyped-field: a lambda given by a named argument is called in every form
+#[test]
+fn a_lambda_given_by_name_is_called() {
+	for call in ["(h.d)(5)", "h.d(5)", "5 |> h.d"] {
+		is!(&format!("class Holder {{d}}\nh = Holder(d: x => x + 1)\n{call}"), 6);
+	}
+}
