@@ -334,7 +334,7 @@ fn literal_items_of_type(iterable: &Node, type_name: &str) -> bool {
 }
 
 /// `for chars in text {…it…}` (also characters, codepoints, bytes): the variable `it` over `chars(text)`, or over the
-/// bytes `(0..text.bytes).map(i => byte_at(text, i))`; None when the body reads the word itself (a variable named chars)
+/// bytes `(0..byte_size(text)).map(i => byte_at(text, i))`; None when the body reads the word itself (a variable named chars)
 fn unit_iteration(variable: &Node, iterable: &Node, body: &Node) -> Option<(Node, Node)> {
 	let Node::Symbol(word) = variable.drop_meta() else {
 		return None;
@@ -355,10 +355,10 @@ fn code_points_of(text: &Node) -> Node {
 	call(crate::library_words::CODE_POINT_LIST, vec![text.clone()])
 }
 
-/// The UTF-8 bytes of a text, `(0..text.bytes).map(i => byte_at(text, i))`
+/// The UTF-8 bytes of a text, `(0..byte_size(text)).map(i => byte_at(text, i))`
 fn bytes_of(text: &Node) -> Node {
 	let offset = Node::Symbol("byte·offset".to_string());
-	let count = Node::Key(Box::new(text.clone()), Op::Dot, Box::new(Node::Symbol(BYTES_WORD.to_string())));
+	let count = call(crate::analyzer::BYTE_SIZE, vec![text.clone()]);
 	let offsets = Node::Key(Box::new(Node::int(0)), Op::Range, Box::new(count));
 	let byte = Node::Key(Box::new(offset.clone()), Op::Arrow, Box::new(call("byte_at", vec![text.clone(), offset])));
 	Node::Key(Box::new(parens(vec![offsets])), Op::Dot, Box::new(call("map", vec![byte])))

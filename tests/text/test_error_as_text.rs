@@ -7,9 +7,9 @@ use warp::error;
 fn a_text_builtin_of_an_error_fails_with_the_error() {
 	is!("e = error(\"boom\"); byte_slice(e, 0, 2)", error("boom at 1:20"));
 	is!("e = error(\"boom\"); byte_at(e, 1)", error("boom at 1:20"));
-	is!("e = error(\"boom\"); e.bytes", error("boom at 1:20"));
+	is!("e = error(\"boom\"); e.bytecount", error("boom at 1:20"));
 	is!("e = error(\"boom\"); trim(e)", error("boom at 1:20"));
 	is!("e = error(\"boom\"); starts_with(e, \"b\")", error("boom at 1:20"));
 	is!("t = \"boom\"; byte_slice(t, 0, 2)", "bo");
-	is!("t = \"boom\"; t.bytes", 4);
+	is!("t = \"boom\"; t.bytecount", 4);
 }

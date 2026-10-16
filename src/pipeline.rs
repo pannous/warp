@@ -386,6 +386,8 @@ const MEANING_PASSES: &[Pass] = &[
 	crate::lowering::variadic::lower_list_spreads,
 	crate::lowering::phrase_words::lower,
 	crate::lowering::library_words::lower,
+	// `count x.bytes` is `byte_size(x)`, after library_words wrote x.bytes as the prelude call
+	crate::lowering::library_words::lower_byte_counts,
 	// `xs[xs.index_of(x)]`: a position meeting brackets, an index meeting `#` (index_positions.rs), once index_of is named
 	crate::lowering::index_positions::lower,
 	crate::lowering::number_keys::lower_key_words,

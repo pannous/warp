@@ -71,9 +71,11 @@ const CAUGHT_BINDING_PLACEHOLDER: &str = "caught_binding";
 /// lib/prelude.warp's words of `count x in y`: how often an item or character occurs, how often a part of a text
 const COUNT_ITEM: &str = "count_item";
 const COUNT_PART: &str = "count_of";
+/// lib/prelude.warp's byte list of a text, `t.bytes`
+pub(crate) const BYTE_LIST: &str = "bytes";
 
 /// Canonical word and the spellings that mean it
-const SYNONYMS: [(&str, &[&str]); 36] = [
+const SYNONYMS: [(&str, &[&str]); 38] = [
 	(crate::wasm_emitter::text::text_builtins::WARNING, &["warn"]),
 	// Python's tuple(xs) (card python-stdlib)
 	(LIST_WORD, &["tuple"]),
@@ -85,7 +87,9 @@ const SYNONYMS: [(&str, &[&str]); 36] = [
 	// P35 default: `xs.index_of(x)` is the 1-based position (0 when absent)
 	(COLLECTION_POSITION, &["index_of"]),
 	// card of-in-chain: `t.characters`, `characters in t`; a glyph is a character too
-	(CHARS_WORD, &["characters", "glyphs"]),
+	// decision text-unit-plurals: `t.graphemes`, `t.codepoints` are the lists
+	(CHARS_WORD, &["characters", "glyphs", "graphemes"]),
+	(CODE_POINT_LIST, &["codepoints"]),
 	("upper", &["uppercase"]),
 	("lower", &["lowercase"]),
 	// the text builtin trim (text_builtins.rs), Python's strip
@@ -117,6 +121,7 @@ const SYNONYMS: [(&str, &[&str]); 36] = [
 	(FROMKEYS, &[]),
 	// lib/prelude.warp's count of a part of a text (`count "an" in t` calls it too)
 	(COUNT_PART, &[]),
+	(BYTE_LIST, &[]),
 	(crate::words::UNWRAP, &[]),
 ];
 /// `list_sum(list, loop)`: the sum of a list variable as one operation the emitter dispatches (wasm_emitter/list_dispatch.rs):

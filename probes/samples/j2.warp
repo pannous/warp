@@ -5,7 +5,7 @@
 global input = ""
 global pos = 0
 
-def peek() := if pos < input.bytes then byte_slice(input, pos, pos + 1) else ""
+def peek() := if pos < input.bytecount then byte_slice(input, pos, pos + 1) else ""
 def advance() { pos = pos + 1; return byte_slice(input, pos - 1, pos) }
 def is_digit_text(c) := c != "" and c >= "0" and c <= "9"
 def skip_whitespace() {
