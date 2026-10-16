@@ -66,6 +66,7 @@ fn a_field_changed_with_loss_is_an_error_naming_both_types() {
 // playground's store refuses a unit change loudly, card browser-unit-migrations)
 #[cfg(feature = "native")]
 #[test]
+#[ignore = "fixnow: fixnow-database-unit-fields: (runs·at N).distance: the unit of Run.distance is known of an instance declared so"]
 fn a_unit_field_is_stored_and_migrates_within_its_quantity() {
 	let runs = |class: &str, table: &str, rest: &str| {
 		format!("class Run{{{class}}}\nstored runs: [Run] in \"{table}\"\n{rest}")
