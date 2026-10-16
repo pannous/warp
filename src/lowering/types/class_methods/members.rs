@@ -559,15 +559,7 @@ pub(super) fn constructor_parameters(word: &Node) -> Option<Vec<Node>> {
 		Node::List(call, Bracket::Round, _)
 			if call.first().and_then(Node::symbol_name).is_some_and(is_constructor_word) =>
 		{
-			Some(
-				call[1..]
-					.iter()
-					.flat_map(|parameter| match parameter.drop_meta() {
-						Node::List(group, Bracket::Round, _) => group.clone(),
-						_ => vec![parameter.clone()],
-					})
-					.collect(),
-			)
+			Some(call[1..].iter().flat_map(grouped_parameters).collect())
 		}
 		_ => None,
 	}

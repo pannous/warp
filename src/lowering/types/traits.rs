@@ -6,7 +6,9 @@
 //! instance is known, `<`, `==` and operation calls call the witness and a missing conformance is a compile error naming
 //! the fix; elsewhere node_order asks the runtime witness table (wasm_emitter/reflection/witness.rs).
 
-use super::nodes::{call, called_name, children_rewritten, if_then, if_then_else, key, word_headed};
+use super::nodes::{
+	call, called_name, children_rewritten, grouped_parameters, if_then, if_then_else, key, word_headed,
+};
 use crate::analyzer::{call_name, collect_all_types};
 use crate::errors::diagnostic::Diagnostic;
 use crate::node::{parens, symbol, Bracket, Node, Separator};
@@ -493,16 +495,7 @@ fn function_type_member(requirement: &Node) -> Option<Operation> {
 fn signature_call(node: &Node) -> Option<(String, Vec<Node>)> {
 	match node.drop_meta() {
 		Node::List(items, Bracket::Round, _) => match items.split_first()?.0.drop_meta() {
-			Node::Symbol(name) => Some((
-				name.clone(),
-				items[1..]
-					.iter()
-					.flat_map(|parameter| match parameter.drop_meta() {
-						Node::List(group, Bracket::Round, _) => group.clone(),
-						_ => vec![parameter.clone()],
-					})
-					.collect(),
-			)),
+			Node::Symbol(name) => Some((name.clone(), items[1..].iter().flat_map(grouped_parameters).collect())),
 			_ => None,
 		},
 		Node::List(items, _, _) => items.iter().find_map(signature_call),
