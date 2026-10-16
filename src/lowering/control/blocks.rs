@@ -948,7 +948,7 @@ fn yielded(node: &Node) -> Option<Vec<Node>> {
 		Node::List(items, _, Separator::Space | Separator::None) if items.first()?.is_symbol(YIELD_WORD) => {
 			Some(items[1..].to_vec())
 		}
-		Node::List(items, _, Separator::Colon) => Some([yielded(items.first()?)?, items[1..].to_vec()].concat()),
+		Node::List(items, _, Separator::Comma) => Some([yielded(items.first()?)?, items[1..].to_vec()].concat()),
 		_ => None,
 	}
 }
@@ -1013,7 +1013,7 @@ fn call_parts(node: &Node, parameter_counts: &HashMap<String, usize>) -> Option<
 /// `(3)` and `(a, b)` hold the arguments
 fn grouped_arguments(node: &Node) -> Vec<Node> {
 	match node.drop_meta() {
-		Node::List(items, Bracket::Round, Separator::Colon) => items.clone(),
+		Node::List(items, Bracket::Round, Separator::Comma) => items.clone(),
 		Node::List(items, Bracket::Round, _) if items.len() == 1 => items.clone(),
 		_ => vec![node.clone()],
 	}

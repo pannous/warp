@@ -1118,7 +1118,7 @@ pub fn bracket_info(bracket: &Bracket) -> i64 {
 
 /// The separators of a list by their code above SEPARATOR_SHIFT (None is 0: a list made at run time names none)
 pub const SEPARATORS: [Separator; 6] =
-	[Separator::None, Separator::Space, Separator::Colon, Separator::Semicolon, Separator::Newline, Separator::Tab];
+	[Separator::None, Separator::Space, Separator::Comma, Separator::Semicolon, Separator::Newline, Separator::Tab];
 
 /// The code of a list's separator, as `separated` and `n.separator` know it
 pub fn separator_code(separator: &Separator) -> i64 {

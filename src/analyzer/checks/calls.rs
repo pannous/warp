@@ -39,7 +39,7 @@ pub(crate) fn call_arity_error(node: &Node, context: &Context) -> Option<Diagnos
 		}
 		Node::Key(empty, op @ (Op::Sqrt | Op::Cbrt | Op::Abs), operand) if empty.is_nothing() => {
 			match operand.drop_meta() {
-				Node::List(items, Bracket::Round, Separator::Colon) if items.len() > 1 => {
+				Node::List(items, Bracket::Round, Separator::Comma) if items.len() > 1 => {
 					Some(Diagnostic::at(node, format!("{op} takes 1 value, got {}", operand.serialize())))
 				}
 				_ => call_arity_error(operand, context),

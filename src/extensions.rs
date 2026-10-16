@@ -32,7 +32,7 @@ macro_rules! s {
 #[macro_export]
 macro_rules! texts { // Texts // boxed list of Text nodes
 	($($lit:literal),* $(,)?) => {
-		Node::List(vec![$(Node::Text(($lit).to_string())),*], Bracket::None, Separator::Colon)
+		Node::List(vec![$(Node::Text(($lit).to_string())),*], Bracket::None, Separator::Comma)
 	};
 }
 
