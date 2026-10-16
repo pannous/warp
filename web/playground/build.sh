@@ -184,6 +184,11 @@ with open(sys.argv[1], "w", encoding="utf-8") as script:
 	script.write("// made by build.sh from samples/<chapter>/*.warp\nconst SAMPLES = " + json.dumps(samples, ensure_ascii=False, indent="\t") + ";\n")
 	script.write("// each sample's file, which its runs name their neighbours beside (playground.js programFile)\n")
 	script.write("const SAMPLE_FILES = " + json.dumps(names, indent="\t") + ";\n")
+	# a sample's <name>.args beside it, one argument a line, as `use os; args` gives them natively in the tests
+	# (tests/common arguments_beside): a song visualizer plays its first seconds only (card playground-browser)
+	beside = {name: path[:-len(".warp")] + ".args" for name, path in names.items()}
+	arguments = {name: open(file, encoding="utf-8").read().splitlines() for name, file in beside.items() if os.path.exists(file)}
+	script.write("const SAMPLE_ARGUMENTS = " + json.dumps(arguments, ensure_ascii=False) + ";\n")
 PYTHON
 echo "built $page/samples.js"
 
