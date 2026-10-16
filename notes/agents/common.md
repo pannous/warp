@@ -83,6 +83,9 @@ instead of bending the code.
   (one message each, same text; notes/agents/reviewer.md), fix what they report (a reviewer veto like a gate failure), clean up,
   report one line to the Supervisor. Write "express" in that message when the user or the Supervisor asked for your
   result to land fast: the Integrator then runs your branch alone and next (notes/roles.md).
+- Post-hoc changes don't block (user, 2026-10-16): a tip once sent lands as gated. A small reviewer point or polish
+  you fix afterwards is a follow-up commit and its own merge request, never "hold my branch". Only real breakage
+  (a reviewer veto, a failing test) holds a branch.
 - Never retire with a card still yours (user, 2026-10-12: "cards disconnected from their agent"): before you stop, or
   hand over, every card you took is either `todo done <card> <commit>` or released with `todo release <card>
   "done: …; left: …; branch: …"`, which puts it back in Next with that note and no agent. Partial work that isn't
