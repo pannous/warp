@@ -17,10 +17,17 @@ const TRUSTED_EXTERNALS: &[(&str, Capability, &[Effect])] = &[
 	("wasi_environment", Wasi, &[IO]),
 	("execute", Sql, &[IO]),
 	("exec", Process, &[IO]),
-	// the standard library's adapters (src/modules/std_adapters.rs): std_pure's words are pure like libm's, std_io's do IO
-	("std_pure", Libm, &[]),
-	("std_io", Host, &[IO]),
+	// the standard library's adapters (src/modules/std_adapters.rs): std_pure's words are pure like libm's, std_io's do IO;
+	// a failed adapter gives back its Error, raised in the program (Fail)
+	("std_pure", Libm, &[Fail]),
+	("std_io", Host, &[IO, Fail]),
 ];
+
+/// The operators that fail for a divisor of 0
+const DIVISIONS: [Op; 5] = [Op::Div, Op::Mod, Op::Rem, Op::DivAssign, Op::ModAssign];
+/// `try x else y` as parsed, then as lowered: the block that may stop at an error, the guarded call of a function
+const TRY_HEADS: [&str; 3] =
+	[crate::warp_parser::TRY_MARKER, crate::wasm_emitter::RAN_WITHOUT_ERROR, crate::host::GUARDED_CALL];
 
 pub(super) struct Resolver<'a> {
 	pub(super) context: &'a Context,
@@ -34,8 +41,13 @@ impl Resolver<'_> {
 		if name == crate::host::RUN_BLOCK {
 			return Some(External { capability: Host, effects: EffectSet::of(&[Eval]) });
 		}
+		// the host calls the program's own function back (`try f(x) else …`): nothing from outside
+		if name == crate::host::GUARDED_CALL {
+			return Some(External { capability: Host, effects: EffectSet::PURE });
+		}
 		if name == crate::host::FOREIGN_CALL {
-			return Some(External { capability: Foreign, effects: EffectSet::of(&[IO, FFI]) });
+			// a crate's or component's Err is raised in the program
+			return Some(External { capability: Foreign, effects: EffectSet::of(&[IO, FFI, Fail]) });
 		}
 		if let Some(import) = self.context.ffi_imports.get(name) {
 			// libm is pure (P26): untrusted code and `! Pure` functions may call it; so are the module's own linear arrays
@@ -85,6 +97,25 @@ impl Resolver<'_> {
 			),
 			Node::Symbol(name) if self.resolves(name) => {
 				function.calls.insert(name.clone());
+				function.tried_calls.remove(name);
+			}
+			// `try x else y` handles x's failure: its other effects stay
+			Node::List(items, _, _)
+				if items.first().is_some_and(|head| TRY_HEADS.iter().any(|word| head.is_symbol(word))) =>
+			{
+				let mut tried = FunctionEffects::default();
+				items.iter().for_each(|item| self.collect(item, &mut tried));
+				for callee in tried.calls {
+					if function.calls.insert(callee.clone()) {
+						function.tried_calls.insert(callee);
+					}
+				}
+				function.own = function.own.union(tried.own.minus(FAILS));
+				function.effects = function.effects.union(tried.effects.minus(FAILS));
+			}
+			Node::List(items, _, _) if raises(items) => {
+				function.perform(Fail);
+				items.iter().for_each(|item| self.collect(item, function))
 			}
 			// the arguments a lowering pass builds for a host word (`run_block xs#1 "xs" [xs]`) are no construction of
 			// the program's own: the call keeps their other effects only
@@ -112,6 +143,9 @@ impl Resolver<'_> {
 				if *op == Op::Add && [left, right].iter().any(|operand| matches!(operand.drop_meta(), Node::Text(_))) {
 					function.perform(Allocation); // a text joined: "hi " + name
 				}
+				if DIVISIONS.contains(op) && !is_nonzero_number(right) {
+					function.perform(Fail); // 10/x fails for x = 0
+				}
 				self.collect(left, function);
 				self.collect(right, function);
 			}
@@ -131,6 +165,20 @@ impl FunctionEffects {
 		self.own = self.own.union(effect);
 		self.effects = self.effects.union(effect);
 	}
+}
+
+/// `raise "no"`, `throw e`, `fail`, `panic`, `error "neg"`, and the floor division `x // y` of a divisor that may be 0
+fn raises(items: &[Node]) -> bool {
+	match items {
+		[word, _] => matches!(word.drop_meta(), Node::Symbol(word)
+			if crate::errors::run_time::RAISE_WORDS.contains(&word.as_str()) || word == crate::words::ERROR_WORD),
+		[word, _, divisor] => word.is_symbol(crate::warp_parser::FLOOR_QUOTIENT) && !is_nonzero_number(divisor),
+		_ => false,
+	}
+}
+
+fn is_nonzero_number(node: &Node) -> bool {
+	matches!(node.drop_meta(), Node::Number(number) if f64::from(*number) != 0.0)
 }
 
 pub(super) fn trusted_external(name: &str) -> Option<External> {

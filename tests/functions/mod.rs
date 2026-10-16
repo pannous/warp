@@ -62,6 +62,7 @@ mod test_effects_value;
 mod test_empty_call;
 mod test_empty_function_bodies;
 mod test_event_effects;
+mod test_fail_effect;
 mod test_failed_word;
 mod test_field_function_values;
 mod test_float_to_int_parameter;
