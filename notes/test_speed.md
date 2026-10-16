@@ -93,6 +93,9 @@ binary alone: o0 50 s wall / 61 s CPU, o1 74 s / 268 s, o2 106 s / 355 s. rustc 
 - 1 gate-opt (card full-suite): in the Integrator's batch. 2+3 gate-direct (on top of it): full run 415 s for the
   tests binary (summed 6609 s); running the binary directly needs the [env] of .cargo/config.toml (WARP_TEST_TABLES),
   which test.sh now exports as cargo does. 7 queue-prebuild (card tests-queue): Ready. 6: card cache-lowered.
+- Memory: rustc of warp-lang at o2 took 6.2 GB in a cold integrate build with other builds alongside and the 6 GB cap
+  killed the gate (the Integrator reran it at 8 GB). queue-prebuild caps only tests now, never rustc/sccache/linkers
+  (UNCAPPED_PROGRAMS); until it lands test.sh's default cap is 8 GB (gate-direct).
 - 4 and 5 decided by the user (notes/decisions.md gate-cuts): branches samples-once and twins-gate.
 - **The nightly tier**: tests/nightly.sh (branch twins-gate), crontab 03:10, runs the tests the gate samples
   (`parser::test_self_`, WARP_NIGHTLY=1: every source) on origin/main in the detached worktree
