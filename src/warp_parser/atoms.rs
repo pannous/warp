@@ -174,6 +174,10 @@ impl WarpParser {
 				))
 			}
 			ch if crate::extensions::strings::starts_an_emoji(ch) => self.parse_emoji(),
+			ch if crate::warp_parser::definitions::is_free_symbol(ch) => {
+				self.advance();
+				Node::Symbol(ch.to_string())
+			}
 			ch => {
 				warn!("Unexpected character '{}' at line {}, column {}", ch, line_nr, column);
 				self.advance();

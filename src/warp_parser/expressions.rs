@@ -193,9 +193,9 @@ impl WarpParser {
 					//     (including identifiers), `1 + count xs` is `1 + count(xs)`
 					//   - In colon and the like (between): only non-identifier args
 					//   This allows `fetch url` but prevents `a: b c d` from chaining
-					if let Some(updated) =
+					if let Some(updated) = self.try_parse_free_infix(&lhs, min_bp).or_else(|| {
 						self.try_parse_implicit_application(&lhs, min_bp, ARGUMENT_BP, MAX_BP_FOR_APPLICATION)
-					{
+					}) {
 						lhs = updated;
 						continue;
 					}

@@ -3,6 +3,7 @@
 //! program reads, in place of the parser's Rust table
 use crate::is;
 use warp::operators::{math_aliases, spelled_operator, Op};
+use warp::parse;
 
 #[test]
 fn the_math_spellings_come_from_lib_math() {
@@ -49,4 +50,14 @@ fn arrow_glyphs_spell_the_arrow_operators() {
 	is!("8 ⬇ 2", 3);
 	assert_eq!(spelled_operator("⟶"), Some(Op::Arrow));
 	assert_eq!(spelled_operator("↯"), None);
+}
+
+/// decision unicode-symbols: a symbol character nothing defines parses as a free operator or symbol name, an undefined
+/// operator says how to define it
+#[test]
+fn free_unicode_symbols_parse() {
+	is!("infix operator ⇔(a: bool, b: bool) := a == b; (1 > 0) ⇔ (2 > 0)", true);
+	is!("x = ↯; x", parse("↯"));
+	let error = warp::wasm_emitter::eval("1 ⇔ 1").serialize();
+	assert!(error.contains("operator ⇔ is not defined (define it with infix operator ⇔(a, b) := …)"), "{error}");
 }
